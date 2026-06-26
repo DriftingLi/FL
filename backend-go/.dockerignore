@@ -1,0 +1,20 @@
+# .dockerignore：排除不需要的文件，加速构建
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+.env
+.env.local
+.env.*.local
+.git
+.gitignore
+.vscode
+.idea
+*.md
+docs/
+testdata/
+coverage.txt

@@ -1,0 +1,8 @@
+# 复制本文件为 docker-compose.override.yml 以自定义本地配置
+# 例：修改端口映射或卷位置
+# services:
+#   postgres:
+#     ports:
+#       - "15432:5432"
+#     volumes:
+#       - /path/to/local/pgdata:/var/lib/postgresql/data

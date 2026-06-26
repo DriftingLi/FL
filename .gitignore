@@ -1,0 +1,66 @@
+# ===== Go (backend-go) =====
+backend-go/bin/
+backend-go/*.exe
+backend-go/migrate-data.exe
+backend-go/server
+*.test
+*.out
+coverage.txt
+
+# ===== Frontend (frontend) =====
+frontend/node_modules/
+frontend/node_modules_old/
+frontend/dist/
+frontend/.vite/
+frontend/build*.log
+
+# ===== Node (通用) =====
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ===== 环境变量与密钥 =====
+.env
+.env.local
+.env.*.local
+**/private_key.pem
+*.pem
+
+# ===== 数据库文件 =====
+*.db
+*.sqlite
+*.sqlite3
+
+# ===== 上传内容（保留目录，忽略内容）=====
+backend-go/static/uploads/chapters/*
+backend-go/static/uploads/slides/*
+!backend-go/static/uploads/chapters/.gitkeep
+!backend-go/static/uploads/slides/.gitkeep
+
+# ===== 日志 =====
+*.log
+logs/
+
+# ===== PDF 报告输出 =====
+backend-go/storage/
+
+# ===== IDE / 编辑器 =====
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ===== 操作系统 =====
+.DS_Store
+Thumbs.db
+
+# ===== 临时与备份目录 =====
+_ftmp_clean/
+.empty_tmp/
+残值评估/
+维修培训/
+node_modules_old/
+
+# ===== Trae 临时文档（可选保留）=====
+# .trae/documents/

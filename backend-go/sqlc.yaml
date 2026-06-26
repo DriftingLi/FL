@@ -1,0 +1,67 @@
+# sqlc 配置文件
+# 用于根据 queries/*.sql 自动生成类型安全的 Go 数据访问代码
+
+version: "2"
+sql:
+  # 后端引擎：postgresql
+  - engine: "postgresql"
+    # 生成的代码输出目录：internal/repository
+    queries: "queries"
+    schema: "migrations/000001_init.up.sql"
+    gen:
+      go:
+        package: "repository"
+        out: "internal/repository"
+        # 生成 sqlc 兼容的标准方法
+        sql_package: "pgx/v5"
+        # 启用数据库接口，便于测试 mock
+        emit_interface: false
+        # emit_json_tags: true
+        # emit_prepared_queries: false
+        # emit_empty_slices: true
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+          # DECIMAL 字段统一映射为 float64，便于后续业务计算
+          - column: "brands.k_brand"
+            go_type: "float64"
+          - column: "part_configs.category_weight"
+            go_type: "float64"
+          - column: "part_configs.item_weight"
+            go_type: "float64"
+          - column: "coefficient_configs.value"
+            go_type: "float64"
+          - column: "evaluations.original_price"
+            go_type: "float64"
+          - column: "evaluations.k_time"
+            go_type: "float64"
+          - column: "evaluations.k_hours"
+            go_type: "float64"
+          - column: "evaluations.k_work"
+            go_type: "float64"
+          - column: "evaluations.k_brand"
+            go_type: "float64"
+          - column: "evaluations.k_condition"
+            go_type: "float64"
+          - column: "evaluations.k_market"
+            go_type: "float64"
+          - column: "evaluations.estimated_value"
+            go_type: "float64"
+          - column: "evaluations.confidence_low"
+            go_type: "float64"
+          - column: "evaluations.confidence_high"
+            go_type: "float64"
+          - column: "evaluation_items.category_weight"
+            go_type: "float64"
+          - column: "evaluation_items.item_weight"
+            go_type: "float64"
+          - column: "evaluation_items.score"
+            go_type: "float64"
+          - column: "historical_sales.original_price"
+            go_type: "float64"
+          - column: "historical_sales.sale_price"
+            go_type: "float64"

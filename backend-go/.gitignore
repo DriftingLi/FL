@@ -1,0 +1,46 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+server
+
+# Test
+*.test
+*.out
+coverage.txt
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Secrets
+private_key.pem
+*.pem
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+*.sqlite
+
+# Uploads (keep directories, ignore content)
+static/uploads/chapters/*
+static/uploads/slides/*
+!static/uploads/chapters/.gitkeep
+!static/uploads/slides/.gitkeep
+
+# Logs
+*.log
+logs/

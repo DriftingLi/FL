@@ -1,0 +1,190 @@
+/*
+ * 残值评估模块设计 token + 工具类
+ * - token 作用域化到 .valuation-root，避免覆盖维修培训 design-tokens.css 中的同名变量
+ *   （如 --color-border / --color-text-tertiary / --radius-sm/md/lg / --font-display 等值不同）
+ * - 工具类 .app-container / .card-surface / .section-title / .num-hero 在维修培训中不存在，
+ *   全局定义安全；它们引用的变量按 DOM 作用域解析，仅 valuation 视图会命中 .valuation-root
+ */
+
+.valuation-root {
+  /* ===== 主色（唯一彩色） ===== */
+  --color-primary: #3E6AE1;            /* Electric Blue - 主 CTA */
+  --color-primary-hover: #3457b8;
+  --color-primary-active: #2a4a9c;
+
+  /* ===== 表面与背景 ===== */
+  --color-bg: #FFFFFF;
+  --color-bg-elevated: #FFFFFF;
+  --color-bg-muted: #F4F4F4;
+  --color-bg-dark: #171A20;
+
+  /* ===== 边框与分隔 ===== */
+  --color-border: #EEEEEE;
+  --color-border-strong: #D0D1D2;
+
+  /* ===== 文字层级 ===== */
+  --color-text: #171A20;
+  --color-text-secondary: #393C41;
+  --color-text-tertiary: #5C5E62;
+  --color-text-muted: #8E8E8E;
+  --color-text-inverse: #FFFFFF;
+
+  /* ===== 字体 ===== */
+  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-text: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Source Code Pro', Consolas, monospace;
+
+  /* ===== 字号 ===== */
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-base: 14px;
+  --fs-md: 15px;
+  --fs-lg: 17px;
+  --fs-xl: 22px;
+  --fs-2xl: 28px;
+  --fs-3xl: 40px;
+
+  /* ===== 字重 ===== */
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+
+  /* ===== 间距 ===== */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 28px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+  --sp-24: 96px;
+
+  /* ===== 圆角 ===== */
+  --radius-sm: 4px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-image: 12px;
+
+  /* ===== 阴影 ===== */
+  --shadow-none: none;
+  --shadow-frost: 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --shadow-overlay: 0 0 0 1px rgba(0, 0, 0, 0.06);
+
+  /* ===== 过渡 ===== */
+  --t-base: 0.33s;
+  --ease: cubic-bezier(0.5, 0, 0, 0.75);
+
+  /* ===== 容器 ===== */
+  --container-max: 1280px;
+  --header-h: 64px;
+
+  /* 基础排版（仅作用域内） */
+  font-family: var(--font-text);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-regular);
+  line-height: 1.43;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.valuation-root h1,
+.valuation-root h2,
+.valuation-root h3,
+.valuation-root h4,
+.valuation-root h5,
+.valuation-root h6 {
+  font-family: var(--font-text);
+  font-weight: var(--fw-medium);
+  color: var(--color-text);
+  letter-spacing: normal;
+  margin: 0;
+}
+
+.valuation-root a {
+  color: var(--color-text);
+  text-decoration: none;
+  transition: color var(--t-base) var(--ease);
+}
+.valuation-root a:hover {
+  color: var(--color-primary);
+}
+
+.valuation-root code,
+.valuation-root pre,
+.valuation-root .num {
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum' 1;
+}
+
+/* ===== 通用容器（维修培训无此类，全局定义安全） ===== */
+.app-container {
+  max-width: var(--container-max, 1280px);
+  margin: 0 auto;
+  padding: 0 28px;
+}
+
+/* ===== 卡片基类（无阴影，仅边界） ===== */
+.card-surface {
+  background: var(--color-bg-elevated, #FFFFFF);
+  border: 1px solid var(--color-border, #EEEEEE);
+  border-radius: var(--radius-lg, 8px);
+  padding: var(--sp-6, 24px) var(--sp-7, 28px);
+}
+
+/* ===== 章节标题 ===== */
+.section-title {
+  font-size: var(--fs-lg, 17px);
+  font-weight: var(--fw-medium, 500);
+  color: var(--color-text, #171A20);
+  margin: 0 0 var(--sp-5, 20px);
+}
+
+/* ===== 残值主数字（白底 + Electric Blue） ===== */
+.num-hero {
+  font-family: var(--font-mono);
+  font-size: 64px;
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary);
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* 路由切换淡入（残值评估内部过渡） */
+.valuation-root .fade-enter-active,
+.valuation-root .fade-leave-active {
+  transition: opacity 0.2s var(--ease);
+}
+.valuation-root .fade-enter-from,
+.valuation-root .fade-leave-to {
+  opacity: 0;
+}
+
+/* ===== 移动端适配（仅 valuation 作用域） ===== */
+@media (max-width: 768px) {
+  .valuation-root .app-container {
+    padding: 0 16px;
+  }
+  .valuation-root .card-surface {
+    padding: 20px 16px;
+  }
+  .valuation-root .section-title {
+    margin: 0 0 16px;
+  }
+  .valuation-root .num-hero {
+    font-size: 44px;
+  }
+  .valuation-root h1 {
+    font-size: var(--fs-2xl);
+  }
+  .valuation-root h2 {
+    font-size: var(--fs-xl);
+  }
+}
