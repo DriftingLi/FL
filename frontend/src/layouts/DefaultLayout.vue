@@ -99,7 +99,7 @@ import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import {
   HomeFilled, Notebook, MagicStick, SetUp, EditPen,
-  User, SwitchButton, ArrowDown, Document
+  User, SwitchButton, ArrowDown, Document, DataAnalysis
 } from '@element-plus/icons-vue'
 
 const authStore = useAuthStore()
