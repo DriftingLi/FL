@@ -58,9 +58,7 @@ Thumbs.db
 # ===== 临时与备份目录 =====
 _ftmp_clean/
 .empty_tmp/
-残值评估/
-维修培训/
 node_modules_old/
 
 # ===== Trae 相关文件 =====
-# .trae
+.trae/
