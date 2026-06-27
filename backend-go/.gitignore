@@ -5,7 +5,7 @@ bin/
 *.dll
 *.so
 *.dylib
-server
+/server
 
 # Test
 *.test
