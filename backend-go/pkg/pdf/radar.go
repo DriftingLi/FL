@@ -14,10 +14,10 @@ import (
 var radarDimensionOrder = []string{
 	"时间维度", // 顶部 -90°
 	"使用强度", // 右上 -30°
-	"工况",    // 右下 30°
-	"品牌",    // 底部 90°
-	"车况",    // 左下 150°
-	"市场",    // 左上 210°
+	"工况",   // 右下 30°
+	"品牌",   // 底部 90°
+	"车况",   // 左下 150°
+	"市场",   // 左上 210°
 }
 
 // radarMaxValue 雷达图最大刻度值
@@ -37,21 +37,28 @@ func drawRadarChart(pdf *gofpdf.Fpdf, cx, cy, radius float64, dimensionScores ma
 		angles[i] = (-90.0 + float64(i)*60.0) * math.Pi / 180.0
 	}
 
-	// 2. 绘制同心网格（4 圈，对应 0.325/0.65/0.975/1.3）
-	// 网格刻度值：0.325, 0.65, 0.975, 1.3
+	// 2. 绘制同心网格(4 圈:25% / 50% / 75% / 100%)
 	gridLevels := []float64{0.325, 0.65, 0.975, 1.3}
-	pdf.SetDrawColor(220, 220, 220) // 浅灰色网格线
+	pdf.SetDrawColor(226, 232, 240) // #E2E8F0 浅灰
 	pdf.SetLineWidth(0.2)
-	for _, level := range gridLevels {
+	for i, level := range gridLevels {
 		ratio := level / radarMaxValue
 		r := radius * ratio
 		points := make([]gofpdf.PointType, len(radarDimensionOrder))
-		for i := range radarDimensionOrder {
-			x := cx + r*math.Cos(angles[i])
-			y := cy + r*math.Sin(angles[i])
-			points[i] = gofpdf.PointType{X: x, Y: y}
+		for j := range radarDimensionOrder {
+			x := cx + r*math.Cos(angles[j])
+			y := cy + r*math.Sin(angles[j])
+			points[j] = gofpdf.PointType{X: x, Y: y}
 		}
-		pdf.Polygon(points, "D") // D = 仅描边
+		// 最外圈用稍深色,模拟设计稿 100% 边框
+		if i == len(gridLevels)-1 {
+			pdf.SetDrawColor(203, 213, 225) // #CBD5E1
+		}
+		pdf.Polygon(points, "D")
+		// 恢复内圈浅色
+		if i == len(gridLevels)-1 {
+			pdf.SetDrawColor(226, 232, 240)
+		}
 	}
 
 	// 3. 绘制轴线（从中心到外圈）
@@ -76,7 +83,7 @@ func drawRadarChart(pdf *gofpdf.Fpdf, cx, cy, radius float64, dimensionScores ma
 		pdf.CellFormat(10, 3, fmt.Sprintf("%.2f", level), "", 0, "L", false, 0, "")
 	}
 
-	// 5. 绘制数据多边形（填充蓝色 + 描边）
+	// 5. 绘制数据多边形(浅蓝填充 + 深蓝描边,匹配设计稿)
 	// 评分值按 value/radarMaxValue 归一化到 0~1 范围用于绘图
 	dataPoints := make([]gofpdf.PointType, len(radarDimensionOrder))
 	for i, dimName := range radarDimensionOrder {
@@ -93,21 +100,22 @@ func drawRadarChart(pdf *gofpdf.Fpdf, cx, cy, radius float64, dimensionScores ma
 		y := cy + r*math.Sin(angles[i])
 		dataPoints[i] = gofpdf.PointType{X: x, Y: y}
 	}
-	// 填充：Electric Blue（gofpdf 不支持透明度，用浅色模拟）
-	pdf.SetFillColor(180, 200, 245) // 浅蓝色填充
-	pdf.SetDrawColor(62, 106, 225)  // Electric Blue 描边
-	pdf.SetLineWidth(0.8)
+	// 填充色:近似 rgba(30,64,175,0.15) 在白底上的效果 → (220, 230, 250)
+	pdf.SetFillColor(220, 230, 250)
+	// 描边色:#1E40AF = (30, 64, 175)
+	pdf.SetDrawColor(30, 64, 175)
+	pdf.SetLineWidth(0.6)
 	pdf.Polygon(dataPoints, "DF") // DF = 描边 + 填充
 
-	// 6. 绘制数据点（每个顶点画实心圆点）
-	pdf.SetFillColor(62, 106, 225) // Electric Blue
+	// 6. 绘制数据点(每个顶点画实心圆点)
+	pdf.SetFillColor(30, 64, 175)
 	for _, p := range dataPoints {
-		pdf.Circle(p.X, p.Y, 1.0, "F") // 半径 1.0mm 的实心圆点
+		pdf.Circle(p.X, p.Y, 1.2, "F") // 半径 1.2mm 的实心圆点
 	}
 
 	// 7. 绘制维度标签（在外圈外侧，根据角度精确定位）
-	pdf.SetFont(FontSimHei, "", smallSize)
-	pdf.SetTextColor(60, 60, 60)
+	pdf.SetFont(FontSimHei, "", 8.5)
+	pdf.SetTextColor(71, 85, 105) // #475569
 	for i, dimName := range radarDimensionOrder {
 		// 标签位置：外圈外侧 8mm
 		labelR := radius + 8.0
