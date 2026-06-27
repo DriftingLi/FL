@@ -62,5 +62,5 @@ _ftmp_clean/
 维修培训/
 node_modules_old/
 
-# ===== Trae 临时文档（可选保留）=====
-# .trae/documents/
+# ===== Trae 相关文件 =====
+# .trae
