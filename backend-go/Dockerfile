@@ -35,13 +35,13 @@ RUN apk add --no-cache ca-certificates tzdata && \
 RUN addgroup -S app && adduser -S app -G app
 
 # 创建上传目录
-RUN mkdir -p /app/static/uploads/chapters /app/static/uploads/slides && \
+RUN mkdir -p /app/bin /app/static/uploads/chapters /app/static/uploads/slides && \
     chown -R app:app /app
 
 WORKDIR /app
 
 # 从 builder 复制编译产物
-COPY --from=builder /bin/server /app/server
+COPY --from=builder /bin/server /app/bin/server
 
 # 复制迁移文件（启动时自动迁移需要）
 COPY --from=builder /build/migrations /app/migrations
@@ -56,4 +56,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -qO- http://localhost:8080/api/health || exit 1
 
 # 启动命令
-ENTRYPOINT ["/app/server"]
+ENTRYPOINT ["/app/bin/server"]
