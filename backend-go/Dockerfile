@@ -2,7 +2,7 @@
 # 目标：产出精简镜像 (< 100MB)，不含 LibreOffice（转换服务通过 sidecar 提供）
 
 # ----- Builder 阶段：编译静态二进制 -----
-FROM golang:1.22-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 # 安装构建依赖（git 用于 go module 下载）
 RUN apk add --no-cache git ca-certificates tzdata

@@ -2,7 +2,7 @@
 # https://nixpacks.com/docs/configuration/file
 
 [phases.setup]
-nixPkgs = ["go_1_22", "gcc"]
+nixPkgs = ["go_1_26", "gcc"]
 
 [phases.build]
 cmds = [
@@ -14,4 +14,4 @@ cmd = "./bin/server"
 
 [variables]
 CGO_ENABLED = "0"
-GO_VERSION = "1.22"
+GO_VERSION = "1.26"
