@@ -1,5 +1,5 @@
 {
-  "name": "forklift-training-frontend",
+  "name": "fl",
   "compatibility_date": "2026-05-08",
   "assets": {
     "directory": "./dist",
