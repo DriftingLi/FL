@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 评估结果页（Tesla 极简：白底 + Electric Blue 残值 + 维度雷达 + 系数卡 + 建议）
+// 评估结果页（Tesla 极简：白底 + Electric Blue 残值 + 维度雷达 + 建议）
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useEvaluationStore } from '@/stores/valuationEvaluation'
@@ -8,8 +8,6 @@ import PageHeader from '@/components/valuation/PageHeader.vue'
 import ResultCard from '@/components/valuation/ResultCard.vue'
 import DimensionRadar from '@/components/valuation/DimensionRadar.vue'
 import { downloadEvaluationReportBlob } from '@/api/valuation/evaluation'
-import { COEFFICIENT_DEFS } from '@/utils/valuationConstants'
-import { formatCoefficient } from '@/utils/valuationFormat'
 
 const router = useRouter()
 const store = useEvaluationStore()
@@ -57,12 +55,6 @@ const dimensionScoresMap = computed(() => {
   for (const d of arr) map[d.label] = d.value
   return map
 })
-
-// 系数取值（安全访问）
-function coefValue(key: string): number {
-  const v = (r.value as unknown as Record<string, number> | null)?.[key]
-  return typeof v === 'number' ? v : 0
-}
 </script>
 
 <template>
@@ -95,21 +87,6 @@ function coefValue(key: string): number {
         </section>
       </el-col>
     </el-row>
-
-    <!-- 系数列表 -->
-    <section class="card-surface section-block">
-      <h2 class="section-title">
-        <span class="title-icon">∑</span>
-        系数列表
-      </h2>
-      <div class="coef-grid">
-        <div v-for="def in COEFFICIENT_DEFS" :key="def.key" class="coef-cell">
-          <div class="coef-label" :style="{ color: def.color }">{{ def.label }}</div>
-          <div class="coef-value num">{{ formatCoefficient(coefValue(def.key)) }}</div>
-          <div class="coef-desc">{{ def.description }}</div>
-        </div>
-      </div>
-    </section>
 
     <!-- 评估建议 -->
     <section class="card-surface section-block">
@@ -154,34 +131,6 @@ function coefValue(key: string): number {
   color: var(--color-primary);
   font-size: 18px;
 }
-.coef-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: var(--sp-4);
-}
-.coef-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: var(--sp-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-muted);
-}
-.coef-label {
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-medium);
-}
-.coef-value {
-  font-size: 22px;
-  font-weight: var(--fw-semibold);
-  color: var(--color-text);
-}
-.coef-desc {
-  font-size: var(--fs-xs);
-  color: var(--color-text-tertiary);
-  line-height: 1.5;
-}
 .suggestion-list {
   margin: 0;
   padding: 0;
@@ -215,9 +164,6 @@ function coefValue(key: string): number {
 @media (max-width: 768px) {
   .suggestion-list {
     grid-template-columns: 1fr;
-  }
-  .coef-grid {
-    grid-template-columns: 1fr 1fr;
   }
   .radar-block,
   .section-block {

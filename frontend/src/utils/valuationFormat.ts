@@ -1,10 +1,10 @@
 // 通用格式化工具
 import dayjs from 'dayjs'
 
-/** 金额（万元）格式化：保留 2 位小数 + 单位 */
+/** 金额（万元）格式化：入参为元，自动除以 10000 转万元，保留 2 位小数 + 单位 */
 export function formatWan(value: number | undefined | null, digits = 2): string {
   if (value == null || Number.isNaN(value)) return '-'
-  return `${value.toFixed(digits)} 万元`
+  return `${(value / 10000).toFixed(digits)} 万元`
 }
 
 /** 系数格式化：4 位小数 */

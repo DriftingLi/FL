@@ -27,7 +27,7 @@ const rate = computed(() => {
 
     <!-- 主数字：64px Electric Blue（数字 + 同号大字单位） -->
     <div class="result-card-value num-hero">
-      <span>{{ Number(estimatedValue).toFixed(2) }}</span>
+      <span>{{ (Number(estimatedValue) / 10000).toFixed(2) }}</span>
       <span class="result-card-unit">万元</span>
     </div>
 
