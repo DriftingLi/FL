@@ -23,11 +23,11 @@ type EvaluationRequest struct {
 	Tonnage      float64 `json:"tonnage"        binding:"required"` // 吨位
 	ConfigType   string  `json:"config_type"    binding:"required"` // 配置类型
 	MastType     string  `json:"mast_type"      binding:"required"` // 门架类型
-	MastHeightMM int     `json:"mast_height_mm" binding:"required"` // 门架高度(mm)
+	MastHeightMM int     `json:"mast_height_mm"`                   // 门架高度(mm)，0 表示"无"，由 Validate 校验
 	// 使用信息
 	FactoryYear   int     `json:"factory_year"   binding:"required"` // 出厂年份
 	SaleYear       int     `json:"sale_year"      binding:"required"` // 成交年份
-	UsageHours     int     `json:"usage_hours"    binding:"required"` // 累计使用小时数
+	UsageHours     int     `json:"usage_hours"`                      // 累计使用小时数，0 表示新车，由 Validate 校验
 	OriginalPaint bool    `json:"original_paint"`                   // 是否原厂漆
 	BatteryType    *string `json:"battery_type,omitempty"`            // 电池类型（电动叉车必填，内燃可为空）
 	// 区域信息
