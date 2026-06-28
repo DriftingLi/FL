@@ -1,5 +1,9 @@
 // 表单状态与提交 composable（统一表单，供 ValuationInputView 使用）
-// 重构说明：删除旧的 ForkliftType 分支 + itemStatusMap；改为字典驱动的统一表单
+// 重构说明：改为三行级联布局
+//   行1 品牌类型：品牌 → 车辆类型（brand_type 由品牌自动派生，不再手选）
+//   行2 系列吨位：系列 → 吨位
+//   行3 配置门架：配置类型 → 门架类型 → 门架高度
+//   "无" 选项：series / config_type / mast_type 可选 "无"；mast_height_mm 用 0 表示 "无"
 import { reactive, ref, computed, type ComputedRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -10,6 +14,11 @@ import type {
   CreateEvaluationRequest
 } from '@/types/valuation/evaluation'
 import { validateForm, type FormValidationContext } from '@/utils/valuationValidator'
+
+/** "无" 常量：用于表示字段不适用 */
+export const NONE_VALUE = '无'
+/** mast_height_mm 的 "无" 值 */
+export const NONE_MAST_HEIGHT = 0
 
 /** 基础表单状态：覆盖 CreateEvaluationRequest 全部字段 */
 export interface BaseFormState {

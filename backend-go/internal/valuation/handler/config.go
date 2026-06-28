@@ -56,8 +56,20 @@ func (h *ConfigHandler) ListBrands(c *gin.Context) {
 	OK(c, list)
 }
 
-// ListVehicleTypes 处理 GET /api/valuation/dictionaries/vehicle-types
+// ListVehicleTypes 处理 GET /api/valuation/dictionaries/vehicle-types?brand=林德
+// brand 可选：传入时基于 original_prices 级联过滤；不传时返回全部车型
 func (h *ConfigHandler) ListVehicleTypes(c *gin.Context) {
+	brand := c.Query("brand")
+	if brand != "" {
+		list, err := h.dictRepo.ListVehicleTypesByBrand(c.Request.Context(), brand)
+		if err != nil {
+			h.logger.Error("级联查询车型失败", zap.Error(err))
+			Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询车型失败")
+			return
+		}
+		OK(c, list)
+		return
+	}
 	list, err := h.dictRepo.ListVehicleTypes(c.Request.Context())
 	if err != nil {
 		h.logger.Error("查询车型失败", zap.Error(err))
@@ -67,10 +79,21 @@ func (h *ConfigHandler) ListVehicleTypes(c *gin.Context) {
 	OK(c, list)
 }
 
-// ListSeries 处理 GET /api/valuation/dictionaries/series?brand=林德
-// brand 可选，为空时返回全部系列
+// ListSeries 处理 GET /api/valuation/dictionaries/series?brand=林德&vehicle_type=电动平衡重式
+// brand + vehicle_type 可选：同时传入时基于 original_prices 级联过滤
 func (h *ConfigHandler) ListSeries(c *gin.Context) {
 	brand := c.Query("brand")
+	vehicleType := c.Query("vehicle_type")
+	if brand != "" && vehicleType != "" {
+		list, err := h.dictRepo.ListSeriesByCascade(c.Request.Context(), brand, vehicleType)
+		if err != nil {
+			h.logger.Error("级联查询系列失败", zap.Error(err))
+			Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询系列失败")
+			return
+		}
+		OK(c, list)
+		return
+	}
 	list, err := h.dictRepo.ListSeries(c.Request.Context(), brand)
 	if err != nil {
 		h.logger.Error("查询系列失败", zap.Error(err))
@@ -80,8 +103,22 @@ func (h *ConfigHandler) ListSeries(c *gin.Context) {
 	OK(c, list)
 }
 
-// ListTonnages 处理 GET /api/valuation/dictionaries/tonnages
+// ListTonnages 处理 GET /api/valuation/dictionaries/tonnages?brand=&vehicle_type=&series=
+// 级联参数全传时基于 original_prices 过滤；否则返回全部吨位
 func (h *ConfigHandler) ListTonnages(c *gin.Context) {
+	brand := c.Query("brand")
+	vehicleType := c.Query("vehicle_type")
+	series := c.Query("series")
+	if brand != "" && vehicleType != "" && series != "" {
+		list, err := h.dictRepo.ListTonnagesByCascade(c.Request.Context(), brand, vehicleType, series)
+		if err != nil {
+			h.logger.Error("级联查询吨位失败", zap.Error(err))
+			Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询吨位失败")
+			return
+		}
+		OK(c, list)
+		return
+	}
 	list, err := h.dictRepo.ListTonnages(c.Request.Context())
 	if err != nil {
 		h.logger.Error("查询吨位失败", zap.Error(err))
@@ -91,8 +128,23 @@ func (h *ConfigHandler) ListTonnages(c *gin.Context) {
 	OK(c, list)
 }
 
-// ListConfigTypes 处理 GET /api/valuation/dictionaries/config-types
+// ListConfigTypes 处理 GET /api/valuation/dictionaries/config-types?brand=&vehicle_type=&series=&tonnage=
+// 级联参数全传时基于 original_prices 过滤；否则返回全部配置类型
 func (h *ConfigHandler) ListConfigTypes(c *gin.Context) {
+	brand := c.Query("brand")
+	vehicleType := c.Query("vehicle_type")
+	series := c.Query("series")
+	tonnage := c.Query("tonnage")
+	if brand != "" && vehicleType != "" && series != "" && tonnage != "" {
+		list, err := h.dictRepo.ListConfigTypesByCascade(c.Request.Context(), brand, vehicleType, series, tonnage)
+		if err != nil {
+			h.logger.Error("级联查询配置类型失败", zap.Error(err))
+			Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询配置类型失败")
+			return
+		}
+		OK(c, list)
+		return
+	}
 	list, err := h.dictRepo.ListConfigTypes(c.Request.Context())
 	if err != nil {
 		h.logger.Error("查询配置类型失败", zap.Error(err))
@@ -102,8 +154,24 @@ func (h *ConfigHandler) ListConfigTypes(c *gin.Context) {
 	OK(c, list)
 }
 
-// ListMastTypes 处理 GET /api/valuation/dictionaries/mast-types
+// ListMastTypes 处理 GET /api/valuation/dictionaries/mast-types?brand=&vehicle_type=&series=&tonnage=&config_type=
+// 级联参数全传时基于 original_prices 过滤；否则返回全部门架类型
 func (h *ConfigHandler) ListMastTypes(c *gin.Context) {
+	brand := c.Query("brand")
+	vehicleType := c.Query("vehicle_type")
+	series := c.Query("series")
+	tonnage := c.Query("tonnage")
+	configType := c.Query("config_type")
+	if brand != "" && vehicleType != "" && series != "" && tonnage != "" && configType != "" {
+		list, err := h.dictRepo.ListMastTypesByCascade(c.Request.Context(), brand, vehicleType, series, tonnage, configType)
+		if err != nil {
+			h.logger.Error("级联查询门架类型失败", zap.Error(err))
+			Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询门架类型失败")
+			return
+		}
+		OK(c, list)
+		return
+	}
 	list, err := h.dictRepo.ListMastTypes(c.Request.Context())
 	if err != nil {
 		h.logger.Error("查询门架类型失败", zap.Error(err))
@@ -113,8 +181,25 @@ func (h *ConfigHandler) ListMastTypes(c *gin.Context) {
 	OK(c, list)
 }
 
-// ListMastHeights 处理 GET /api/valuation/dictionaries/mast-heights
+// ListMastHeights 处理 GET /api/valuation/dictionaries/mast-heights?brand=&vehicle_type=&series=&tonnage=&config_type=&mast_type=
+// 级联参数全传时基于 original_prices 过滤；否则返回全部门架高度
 func (h *ConfigHandler) ListMastHeights(c *gin.Context) {
+	brand := c.Query("brand")
+	vehicleType := c.Query("vehicle_type")
+	series := c.Query("series")
+	tonnage := c.Query("tonnage")
+	configType := c.Query("config_type")
+	mastType := c.Query("mast_type")
+	if brand != "" && vehicleType != "" && series != "" && tonnage != "" && configType != "" && mastType != "" {
+		list, err := h.dictRepo.ListMastHeightsByCascade(c.Request.Context(), brand, vehicleType, series, tonnage, configType, mastType)
+		if err != nil {
+			h.logger.Error("级联查询门架高度失败", zap.Error(err))
+			Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询门架高度失败")
+			return
+		}
+		OK(c, list)
+		return
+	}
 	list, err := h.dictRepo.ListMastHeights(c.Request.Context())
 	if err != nil {
 		h.logger.Error("查询门架高度失败", zap.Error(err))

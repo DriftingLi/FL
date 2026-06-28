@@ -948,18 +948,32 @@ func (r *DictionaryRepository) FindOriginalPriceMatch(
 
 // FindOriginalPriceFuzzy 模糊匹配原价：按 brand_type + brand + vehicle_type + series + tonnage 查询
 // 忽略 config_type / mast_type / mast_height_mm / battery_type
+// 当 series 为空字符串时，忽略 series 条件（用于 series="无" 的降级匹配）
 // 多条命中时取 original_price 最高的（高配置与标准配置中偏高者，对卖家更友好）
 func (r *DictionaryRepository) FindOriginalPriceFuzzy(
 	ctx context.Context, brandType, brand, vehicleType, series string, tonnage float64,
 ) (OriginalPrice, error) {
-	row := r.pool.QueryRow(ctx, `
-		SELECT id, brand_type, brand, vehicle_type, series, tonnage,
-		       config_type, mast_type, mast_height_mm, battery_type, original_price, is_active, updated_at
-		FROM original_prices
-		WHERE brand_type = $1 AND brand = $2 AND vehicle_type = $3 AND series = $4
-		  AND tonnage = $5 AND is_active = TRUE
-		ORDER BY original_price DESC LIMIT 1`,
-		brandType, brand, vehicleType, series, tonnage)
+	var row pgx.Row
+	if series == "" {
+		// series 为空：忽略 series 条件
+		row = r.pool.QueryRow(ctx, `
+			SELECT id, brand_type, brand, vehicle_type, series, tonnage,
+			       config_type, mast_type, mast_height_mm, battery_type, original_price, is_active, updated_at
+			FROM original_prices
+			WHERE brand_type = $1 AND brand = $2 AND vehicle_type = $3
+			  AND tonnage = $4 AND is_active = TRUE
+			ORDER BY original_price DESC LIMIT 1`,
+			brandType, brand, vehicleType, tonnage)
+	} else {
+		row = r.pool.QueryRow(ctx, `
+			SELECT id, brand_type, brand, vehicle_type, series, tonnage,
+			       config_type, mast_type, mast_height_mm, battery_type, original_price, is_active, updated_at
+			FROM original_prices
+			WHERE brand_type = $1 AND brand = $2 AND vehicle_type = $3 AND series = $4
+			  AND tonnage = $5 AND is_active = TRUE
+			ORDER BY original_price DESC LIMIT 1`,
+			brandType, brand, vehicleType, series, tonnage)
+	}
 	var o OriginalPrice
 	var updatedAt time.Time
 	if err := row.Scan(&o.ID, &o.BrandType, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
@@ -1031,6 +1045,160 @@ func (r *DictionaryRepository) UpdateCoefficientByKey(ctx context.Context, key s
 	}
 	c.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
 	return c, nil
+}
+
+// =====================================================
+// 级联过滤方法：基于 original_prices 表查询有效组合
+// 设计：以 original_prices 为真实数据源，DISTINCT 查询各级可选值
+// =====================================================
+
+// CascadeFilter 级联过滤参数
+// 每个字段对应前序已选层级；为空字符串表示该层级未选，不过滤
+type CascadeFilter struct {
+	Brand       string // 品牌
+	VehicleType string // 车辆类型
+	Series      string // 系列
+	Tonnage     string // 吨位（字符串便于 SQL 拼接，调用方自行格式化）
+	ConfigType  string // 配置类型
+	MastType    string // 门架类型
+}
+
+// ListVehicleTypesByBrand 按品牌列出可选车辆类型（从 original_prices DISTINCT 查询）
+func (r *DictionaryRepository) ListVehicleTypesByBrand(ctx context.Context, brand string) ([]VehicleType, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT DISTINCT vt.id, vt.name, vt.power_type
+		FROM original_prices op
+		JOIN vehicle_types vt ON vt.name = op.vehicle_type
+		WHERE op.brand = $1 AND op.is_active = TRUE
+		ORDER BY vt.id ASC`, brand)
+	if err != nil {
+		return nil, fmt.Errorf("级联查询车型失败: %w", err)
+	}
+	defer rows.Close()
+	out := make([]VehicleType, 0, 8)
+	for rows.Next() {
+		var v VehicleType
+		if err := rows.Scan(&v.ID, &v.Name, &v.PowerType); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// ListSeriesByCascade 按品牌+车辆类型级联查询系列
+func (r *DictionaryRepository) ListSeriesByCascade(ctx context.Context, brand, vehicleType string) ([]Series, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT DISTINCT s.id, s.brand, s.name
+		FROM original_prices op
+		JOIN series s ON s.brand = op.brand AND s.name = op.series
+		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.is_active = TRUE
+		ORDER BY s.id ASC`, brand, vehicleType)
+	if err != nil {
+		return nil, fmt.Errorf("级联查询系列失败: %w", err)
+	}
+	defer rows.Close()
+	out := make([]Series, 0, 16)
+	for rows.Next() {
+		var s Series
+		if err := rows.Scan(&s.ID, &s.Brand, &s.Name); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// ListTonnagesByCascade 按品牌+车辆类型+系列级联查询吨位
+func (r *DictionaryRepository) ListTonnagesByCascade(ctx context.Context, brand, vehicleType, series string) ([]Tonnage, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT DISTINCT t.id, t.value
+		FROM original_prices op
+		JOIN tonnages t ON t.value = op.tonnage
+		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.is_active = TRUE
+		ORDER BY t.value ASC`, brand, vehicleType, series)
+	if err != nil {
+		return nil, fmt.Errorf("级联查询吨位失败: %w", err)
+	}
+	defer rows.Close()
+	out := make([]Tonnage, 0, 16)
+	for rows.Next() {
+		var t Tonnage
+		if err := rows.Scan(&t.ID, &t.Value); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// ListConfigTypesByCascade 按品牌+车辆类型+系列+吨位级联查询配置类型
+func (r *DictionaryRepository) ListConfigTypesByCascade(ctx context.Context, brand, vehicleType, series, tonnage string) ([]ConfigType, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT DISTINCT c.id, c.name
+		FROM original_prices op
+		JOIN config_types c ON c.name = op.config_type
+		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.tonnage::text = $4 AND op.is_active = TRUE
+		ORDER BY c.id ASC`, brand, vehicleType, series, tonnage)
+	if err != nil {
+		return nil, fmt.Errorf("级联查询配置类型失败: %w", err)
+	}
+	defer rows.Close()
+	out := make([]ConfigType, 0, 8)
+	for rows.Next() {
+		var c ConfigType
+		if err := rows.Scan(&c.ID, &c.Name); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// ListMastTypesByCascade 按前序层级+配置类型级联查询门架类型
+func (r *DictionaryRepository) ListMastTypesByCascade(ctx context.Context, brand, vehicleType, series, tonnage, configType string) ([]MastType, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT DISTINCT m.id, m.name
+		FROM original_prices op
+		JOIN mast_types m ON m.name = op.mast_type
+		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.tonnage::text = $4 AND op.config_type = $5 AND op.is_active = TRUE
+		ORDER BY m.id ASC`, brand, vehicleType, series, tonnage, configType)
+	if err != nil {
+		return nil, fmt.Errorf("级联查询门架类型失败: %w", err)
+	}
+	defer rows.Close()
+	out := make([]MastType, 0, 8)
+	for rows.Next() {
+		var m MastType
+		if err := rows.Scan(&m.ID, &m.Name); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// ListMastHeightsByCascade 按前序层级+门架类型级联查询门架高度
+func (r *DictionaryRepository) ListMastHeightsByCascade(ctx context.Context, brand, vehicleType, series, tonnage, configType, mastType string) ([]MastHeight, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT DISTINCT mh.id, mh.value_mm
+		FROM original_prices op
+		JOIN mast_heights mh ON mh.value_mm = op.mast_height_mm
+		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.tonnage::text = $4 AND op.config_type = $5 AND op.mast_type = $6 AND op.is_active = TRUE
+		ORDER BY mh.value_mm ASC`, brand, vehicleType, series, tonnage, configType, mastType)
+	if err != nil {
+		return nil, fmt.Errorf("级联查询门架高度失败: %w", err)
+	}
+	defer rows.Close()
+	out := make([]MastHeight, 0, 8)
+	for rows.Next() {
+		var m MastHeight
+		if err := rows.Scan(&m.ID, &m.ValueMM); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
 }
 
 // =====================================================

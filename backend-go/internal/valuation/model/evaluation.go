@@ -42,6 +42,7 @@ type EvaluationRequest struct {
 }
 
 // Validate 业务级参数校验（在 binding 之后补充校验）
+// 支持字段值为 "无"（字符串）或 0（mast_height_mm）表示该属性不适用
 func (r *EvaluationRequest) Validate() error {
 	if r.BrandType == "" || r.Brand == "" || r.VehicleType == "" || r.Series == "" {
 		return ErrInvalidDictField
@@ -52,7 +53,8 @@ func (r *EvaluationRequest) Validate() error {
 	if r.Tonnage <= 0 {
 		return ErrInvalidTonnage
 	}
-	if r.MastHeightMM <= 0 {
+	// mast_height_mm 允许 0（表示 "无"）
+	if r.MastHeightMM < 0 {
 		return ErrInvalidMastHeight
 	}
 	if r.FactoryYear < 1900 || r.SaleYear < r.FactoryYear {

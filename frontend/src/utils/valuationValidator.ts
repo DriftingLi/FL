@@ -73,7 +73,7 @@ export function validateUsageHours(hours: number | undefined | null): Validation
   return { valid: true }
 }
 
-/** 校验吨位：> 0 且 ≤ 100 */
+/** 校验吨位：> 0 且 ≤ 100（吨位始终必填，不允许 "无"） */
 export function validateTonnage(tonnage: number | undefined | null): ValidationResult {
   if (tonnage == null || Number.isNaN(tonnage)) {
     return { valid: false, message: '请选择吨位' }
@@ -87,13 +87,17 @@ export function validateTonnage(tonnage: number | undefined | null): ValidationR
   return { valid: true }
 }
 
-/** 校验门架高度：> 0 且 ≤ 20000（mm） */
+/** 校验门架高度：允许 0（表示 "无"），否则 > 0 且 ≤ 20000（mm） */
 export function validateMastHeight(value: number | undefined | null): ValidationResult {
   if (value == null || Number.isNaN(value)) {
     return { valid: false, message: '请选择门架高度' }
   }
-  if (value <= 0) {
-    return { valid: false, message: '门架高度必须大于 0' }
+  // 0 表示 "无"，合法
+  if (value === 0) {
+    return { valid: true }
+  }
+  if (value < 0) {
+    return { valid: false, message: '门架高度不能为负数' }
   }
   if (value > 20000) {
     return { valid: false, message: '门架高度超出合理范围' }

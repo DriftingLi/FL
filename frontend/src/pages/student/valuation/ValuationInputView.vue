@@ -1,14 +1,16 @@
 <script setup lang="ts">
 // 叉车残值评估参数录入（统一表单，Tesla 极简风）
-// 重构说明：合并旧 Electric/Combustion 两个录入页；所有字段选项从后端字典动态加载
-//         字段可见性规则：字典为空则隐藏字段；车辆类型字典无 electric → 隐藏电池类型字段
+// 三行级联布局：
+//   行1 品牌类型：品牌 → 车辆类型（brand_type 由品牌自动派生）
+//   行2 系列吨位：系列 → 吨位
+//   行3 配置门架：配置类型 → 门架类型 → 门架高度
+// "无" 选项：series / config_type / mast_type 可选 "无"；mast_height_mm 用 0 表示 "无"
 import { computed, onMounted, ref, watch } from 'vue'
 import { Refresh, Promotion } from '@element-plus/icons-vue'
 import PageHeader from '@/components/valuation/PageHeader.vue'
-import { useEvaluationForm } from '@/composables/useEvaluationForm'
+import { useEvaluationForm, NONE_VALUE, NONE_MAST_HEIGHT } from '@/composables/useEvaluationForm'
 import {
-  listBrandTypes,
-  listBrandsByType,
+  listBrands,
   listVehicleTypes,
   listSeries,
   listTonnages,
@@ -21,7 +23,6 @@ import {
   listCities
 } from '@/api/valuation/dictionaries'
 import type {
-  BrandTypeOption,
   VehicleTypeOption,
   SeriesOption,
   TonnageOption,
@@ -34,9 +35,8 @@ import type {
 import type { Brand } from '@/types/valuation/brand'
 
 // ========== 字典数据 ==========
-const brandTypes = ref<BrandTypeOption[]>([])
-const vehicleTypes = ref<VehicleTypeOption[]>([])
 const brands = ref<Brand[]>([])
+const vehicleTypes = ref<VehicleTypeOption[]>([])
 const seriesList = ref<SeriesOption[]>([])
 const tonnages = ref<TonnageOption[]>([])
 const configTypes = ref<ConfigTypeOption[]>([])
@@ -48,42 +48,170 @@ const provinces = ref<string[]>([])
 const cities = ref<string[]>([])
 const loadingDict = ref(false)
 
-// 车辆类型字典是否含电动 → 控制 battery_type 字段可见性
+// ========== "无" 选项（前端常量，附加到下拉列表末尾） ==========
+const noneSeriesOption: SeriesOption = { id: -1, brand: '', name: NONE_VALUE }
+const noneConfigOption: ConfigTypeOption = { id: -1, name: NONE_VALUE }
+const noneMastTypeOption: MastTypeOption = { id: -1, name: NONE_VALUE }
+const noneMastHeightOption: MastHeightOption = { id: -1, value_mm: NONE_MAST_HEIGHT }
+
+// 合并 "无" 选项后的可选项列表
+const seriesOptions = computed(() => [...seriesList.value, noneSeriesOption])
+const configTypeOptions = computed(() => [...configTypes.value, noneConfigOption])
+const mastTypeOptions = computed(() => [...mastTypes.value, noneMastTypeOption])
+const mastHeightOptions = computed(() => [...mastHeights.value, noneMastHeightOption])
+
+// ========== 表单 ==========
+// hasElectricVehicleType 需在 form 之前定义
 const hasElectricVehicleType = computed(() =>
   vehicleTypes.value.some((v) => v.power_type === 'electric')
 )
-
-// ========== 表单 ==========
 const { form, submitting, isValid, reset, submit } = useEvaluationForm({
   hasElectricVehicleType
 })
 
-// ========== 级联加载 ==========
-watch(
-  () => form.brand_type,
-  async (bt) => {
-    // 切换品牌类型：清空品牌及下游字段
-    form.brand = undefined
-    form.series = undefined
-    seriesList.value = []
-    if (!bt) {
-      brands.value = []
-      return
-    }
-    brands.value = await listBrandsByType(bt)
-  }
+// 当前选中的车辆类型是否电动
+const isElectricVehicle = computed(() => {
+  if (!form.vehicle_type) return false
+  const vt = vehicleTypes.value.find((v) => v.name === form.vehicle_type)
+  return vt?.power_type === 'electric'
+})
+
+// 电池类型字段可见性：仅电动车辆且字典含电池类型时显示
+const showBatteryType = computed(
+  () => batteryTypes.value.length > 0 && isElectricVehicle.value
 )
 
+// ========== 级联加载 ==========
+// 级联顺序：品牌 → 车辆类型 → 系列 → 吨位 → 配置类型 → 门架类型 → 门架高度
+
+// 品牌 → 车辆类型 + 自动填充 brand_type
 watch(
   () => form.brand,
   async (b) => {
+    // 清空下游全部字段
+    form.vehicle_type = undefined
     form.series = undefined
+    form.tonnage = undefined
+    form.config_type = undefined
+    form.mast_type = undefined
+    form.mast_height_mm = undefined
+    vehicleTypes.value = []
     seriesList.value = []
-    if (!b) return
-    seriesList.value = await listSeries(b)
+    tonnages.value = []
+    configTypes.value = []
+    mastTypes.value = []
+    mastHeights.value = []
+
+    if (!b) {
+      form.brand_type = undefined
+      return
+    }
+    // 自动填充 brand_type（从品牌字典派生，无需用户手选）
+    const brandData = brands.value.find((br) => br.name === b)
+    form.brand_type = brandData?.brand_type
+    // 加载该品牌可选车辆类型
+    vehicleTypes.value = await listVehicleTypes(b)
   }
 )
 
+// 车辆类型 → 系列
+watch(
+  () => form.vehicle_type,
+  async (vt) => {
+    form.series = undefined
+    form.tonnage = undefined
+    form.config_type = undefined
+    form.mast_type = undefined
+    form.mast_height_mm = undefined
+    seriesList.value = []
+    tonnages.value = []
+    configTypes.value = []
+    mastTypes.value = []
+    mastHeights.value = []
+
+    // 非电动车辆清空电池类型
+    if (vt) {
+      const matched = vehicleTypes.value.find((v) => v.name === vt)
+      if (matched && matched.power_type !== 'electric') {
+        form.battery_type = undefined
+      }
+    }
+
+    if (!form.brand || !vt) return
+    seriesList.value = await listSeries(form.brand, vt)
+  }
+)
+
+// 系列 → 吨位
+watch(
+  () => form.series,
+  async (s) => {
+    form.tonnage = undefined
+    form.config_type = undefined
+    form.mast_type = undefined
+    form.mast_height_mm = undefined
+    tonnages.value = []
+    configTypes.value = []
+    mastTypes.value = []
+    mastHeights.value = []
+
+    if (!form.brand || !form.vehicle_type || !s) return
+    // 系列为 "无" 时，吨位查询不传 series 参数（后端返回该品牌+车型的全部吨位）
+    const seriesParam = s === NONE_VALUE ? undefined : s
+    tonnages.value = await listTonnages(form.brand, form.vehicle_type, seriesParam)
+  }
+)
+
+// 吨位 → 配置类型
+watch(
+  () => form.tonnage,
+  async (t) => {
+    form.config_type = undefined
+    form.mast_type = undefined
+    form.mast_height_mm = undefined
+    configTypes.value = []
+    mastTypes.value = []
+    mastHeights.value = []
+
+    if (!form.brand || !form.vehicle_type || !form.series || t == null) return
+    configTypes.value = await listConfigTypes(
+      form.brand, form.vehicle_type, form.series, t
+    )
+  }
+)
+
+// 配置类型 → 门架类型
+watch(
+  () => form.config_type,
+  async (ct) => {
+    form.mast_type = undefined
+    form.mast_height_mm = undefined
+    mastTypes.value = []
+    mastHeights.value = []
+
+    if (!form.brand || !form.vehicle_type || !form.series || form.tonnage == null || !ct) return
+    mastTypes.value = await listMastTypes(
+      form.brand, form.vehicle_type, form.series, form.tonnage, ct
+    )
+  }
+)
+
+// 门架类型 → 门架高度
+watch(
+  () => form.mast_type,
+  async (mt) => {
+    form.mast_height_mm = undefined
+    mastHeights.value = []
+
+    if (!form.brand || !form.vehicle_type || !form.series || form.tonnage == null ||
+        !form.config_type || !mt) return
+    mastHeights.value = await listMastHeights(
+      form.brand, form.vehicle_type, form.series, form.tonnage, form.config_type, mt
+    )
+  }
+)
+
+// 省份 → 城市
 watch(
   () => form.province,
   async (p) => {
@@ -94,49 +222,17 @@ watch(
   }
 )
 
-// 车辆类型切换：若是非电动，清空已选电池类型（避免脏数据）
-watch(
-  () => form.vehicle_type,
-  (vt) => {
-    if (!vt) return
-    const matched = vehicleTypes.value.find((v) => v.name === vt)
-    if (matched && matched.power_type !== 'electric') {
-      form.battery_type = undefined
-    }
-  }
-)
-
-// ========== 初始化：并行加载所有静态字典 ==========
+// ========== 初始化：并行加载静态字典 ==========
 onMounted(async () => {
   loadingDict.value = true
   try {
-    const [
-      btList,
-      vtList,
-      tnList,
-      ctList,
-      mtList,
-      mhList,
-      batList,
-      crList,
-      provList
-    ] = await Promise.all([
-      listBrandTypes(),
-      listVehicleTypes(),
-      listTonnages(),
-      listConfigTypes(),
-      listMastTypes(),
-      listMastHeights(),
+    const [brandsList, batList, crList, provList] = await Promise.all([
+      listBrands(),
       listBatteryTypes(),
       listConditionRatings(),
       listProvinces()
     ])
-    brandTypes.value = btList
-    vehicleTypes.value = vtList
-    tonnages.value = tnList
-    configTypes.value = ctList
-    mastTypes.value = mtList
-    mastHeights.value = mhList
+    brands.value = brandsList
     batteryTypes.value = batList
     conditionRatings.value = crList
     provinces.value = provList
@@ -145,18 +241,14 @@ onMounted(async () => {
   }
 })
 
-// ========== 字段可见性（字典为空则隐藏） ==========
-const showBrandType = computed(() => brandTypes.value.length > 0)
+// ========== 字段可见性 ==========
 const showBrand = computed(() => brands.value.length > 0)
 const showVehicleType = computed(() => vehicleTypes.value.length > 0)
-const showSeries = computed(() => seriesList.value.length > 0)
-const showTonnage = computed(() => tonnages.value.length > 0)
-const showConfigType = computed(() => configTypes.value.length > 0)
-const showMastType = computed(() => mastTypes.value.length > 0)
-const showMastHeight = computed(() => mastHeights.value.length > 0)
-const showBatteryType = computed(
-  () => batteryTypes.value.length > 0 && hasElectricVehicleType.value
-)
+const showSeries = computed(() => form.vehicle_type !== undefined)
+const showTonnage = computed(() => form.series !== undefined)
+const showConfigType = computed(() => form.tonnage != null)
+const showMastType = computed(() => form.config_type !== undefined)
+const showMastHeight = computed(() => form.mast_type !== undefined)
 const showConditionRating = computed(() => conditionRatings.value.length > 0)
 const showProvince = computed(() => provinces.value.length > 0)
 const showCity = computed(() => cities.value.length > 0)
@@ -165,13 +257,6 @@ const showCity = computed(() => cities.value.length > 0)
 const sortedConditionRatings = computed(() =>
   [...conditionRatings.value].sort((a, b) => a.rating.localeCompare(b.rating))
 )
-
-// 车辆类型按 power_type 分组展示更友好
-const vehicleTypeGrouped = computed(() => {
-  const electric = vehicleTypes.value.filter((v) => v.power_type === 'electric')
-  const combustion = vehicleTypes.value.filter((v) => v.power_type === 'combustion')
-  return { electric, combustion }
-})
 
 function onSubmit() {
   submit()
@@ -199,27 +284,12 @@ function onSubmit() {
     </PageHeader>
 
     <div v-loading="loadingDict">
-      <!-- 基础信息：品牌类型 → 品牌 → 系列 → 吨位 -->
+      <!-- 品牌与车型（三行级联） -->
       <section class="input-section card-surface">
         <h2 class="section-title">品牌与车型</h2>
+
+        <!-- 行1：品牌类型（品牌 → 车辆类型） -->
         <el-row :gutter="24">
-          <el-col v-if="showBrandType" :xs="24" :md="12" :lg="6">
-            <el-form-item label="品牌类型" required>
-              <el-select
-                v-model="form.brand_type"
-                placeholder="请选择品牌类型"
-                filterable
-                clearable
-              >
-                <el-option
-                  v-for="bt in brandTypes"
-                  :key="bt.name"
-                  :value="bt.name"
-                  :label="`${bt.name}（K=${bt.k_type.toFixed(2)}）`"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
           <el-col v-if="showBrand" :xs="24" :md="12" :lg="6">
             <el-form-item label="品牌" required>
               <el-select
@@ -227,7 +297,6 @@ function onSubmit() {
                 placeholder="请选择品牌"
                 filterable
                 clearable
-                :disabled="!form.brand_type"
               >
                 <el-option
                   v-for="b in brands"
@@ -238,17 +307,39 @@ function onSubmit() {
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col v-if="showSeries" :xs="24" :md="12" :lg="6">
+          <el-col v-if="showVehicleType" :xs="24" :md="12" :lg="6">
+            <el-form-item label="车辆类型" required>
+              <el-select
+                v-model="form.vehicle_type"
+                placeholder="请选择车辆类型"
+                filterable
+                clearable
+                :disabled="!form.brand"
+              >
+                <el-option
+                  v-for="vt in vehicleTypes"
+                  :key="vt.id"
+                  :value="vt.name"
+                  :label="vt.name"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <!-- 行2：系列吨位（系列 → 吨位） -->
+        <el-row v-if="showSeries" :gutter="24">
+          <el-col :xs="24" :md="12" :lg="6">
             <el-form-item label="系列" required>
               <el-select
                 v-model="form.series"
                 placeholder="请选择系列"
                 filterable
                 clearable
-                :disabled="!form.brand"
+                :disabled="!form.vehicle_type"
               >
                 <el-option
-                  v-for="s in seriesList"
+                  v-for="s in seriesOptions"
                   :key="s.id"
                   :value="s.name"
                   :label="s.name"
@@ -263,6 +354,7 @@ function onSubmit() {
                 placeholder="请选择吨位"
                 filterable
                 clearable
+                :disabled="!form.series"
               >
                 <el-option
                   v-for="t in tonnages"
@@ -275,50 +367,19 @@ function onSubmit() {
           </el-col>
         </el-row>
 
-        <el-row :gutter="24">
-          <el-col v-if="showVehicleType" :xs="24" :md="12" :lg="6">
-            <el-form-item label="车辆类型" required>
-              <el-select
-                v-model="form.vehicle_type"
-                placeholder="请选择车辆类型"
-                filterable
-                clearable
-              >
-                <el-option-group
-                  v-if="vehicleTypeGrouped.electric.length"
-                  label="电动"
-                >
-                  <el-option
-                    v-for="vt in vehicleTypeGrouped.electric"
-                    :key="vt.id"
-                    :value="vt.name"
-                    :label="vt.name"
-                  />
-                </el-option-group>
-                <el-option-group
-                  v-if="vehicleTypeGrouped.combustion.length"
-                  label="内燃"
-                >
-                  <el-option
-                    v-for="vt in vehicleTypeGrouped.combustion"
-                    :key="vt.id"
-                    :value="vt.name"
-                    :label="vt.name"
-                  />
-                </el-option-group>
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col v-if="showConfigType" :xs="24" :md="12" :lg="6">
+        <!-- 行3：配置门架（配置类型 → 门架类型 → 门架高度） -->
+        <el-row v-if="showConfigType" :gutter="24">
+          <el-col :xs="24" :md="12" :lg="6">
             <el-form-item label="配置类型" required>
               <el-select
                 v-model="form.config_type"
                 placeholder="请选择配置类型"
                 filterable
                 clearable
+                :disabled="form.tonnage == null"
               >
                 <el-option
-                  v-for="c in configTypes"
+                  v-for="c in configTypeOptions"
                   :key="c.id"
                   :value="c.name"
                   :label="c.name"
@@ -333,9 +394,10 @@ function onSubmit() {
                 placeholder="请选择门架类型"
                 filterable
                 clearable
+                :disabled="!form.config_type"
               >
                 <el-option
-                  v-for="m in mastTypes"
+                  v-for="m in mastTypeOptions"
                   :key="m.id"
                   :value="m.name"
                   :label="m.name"
@@ -350,18 +412,20 @@ function onSubmit() {
                 placeholder="请选择门架高度"
                 filterable
                 clearable
+                :disabled="!form.mast_type"
               >
                 <el-option
-                  v-for="mh in mastHeights"
+                  v-for="mh in mastHeightOptions"
                   :key="mh.id"
                   :value="mh.value_mm"
-                  :label="`${mh.value_mm} mm`"
+                  :label="mh.value_mm === NONE_MAST_HEIGHT ? '无' : `${mh.value_mm} mm`"
                 />
               </el-select>
             </el-form-item>
           </el-col>
         </el-row>
 
+        <!-- 电池类型（仅电动车辆显示） -->
         <el-row v-if="showBatteryType" :gutter="24">
           <el-col :xs="24" :md="12" :lg="6">
             <el-form-item label="电池类型">

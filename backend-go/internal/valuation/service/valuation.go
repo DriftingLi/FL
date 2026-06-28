@@ -183,6 +183,7 @@ func (s *ValuationService) Persist(ctx context.Context, result *model.Evaluation
 }
 
 // lookupOriginalPrice 查询基准原价：先精确匹配，未命中则模糊匹配
+// 当字段值为 "无"（字符串）或 0（mast_height_mm）时，模糊匹配会忽略该字段
 func (s *ValuationService) lookupOriginalPrice(ctx context.Context, req *model.EvaluationRequest) (float64, error) {
 	// 1. 精确匹配
 	op, err := s.dictRepo.FindOriginalPriceMatch(ctx,
@@ -195,8 +196,13 @@ func (s *ValuationService) lookupOriginalPrice(ctx context.Context, req *model.E
 		return 0, fmt.Errorf("精确匹配原价失败: %w", err)
 	}
 	// 2. 模糊匹配（按 brand_type + brand + vehicle_type + series + tonnage）
+	//    若 series 为 "无"，降级为仅按 brand_type + brand + vehicle_type + tonnage 匹配
+	seriesForFuzzy := req.Series
+	if seriesForFuzzy == "无" {
+		seriesForFuzzy = ""
+	}
 	op, err = s.dictRepo.FindOriginalPriceFuzzy(ctx,
-		req.BrandType, req.Brand, req.VehicleType, req.Series, req.Tonnage)
+		req.BrandType, req.Brand, req.VehicleType, seriesForFuzzy, req.Tonnage)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return 0, model.ErrOriginalPriceNotFound
