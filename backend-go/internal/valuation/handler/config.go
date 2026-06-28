@@ -534,7 +534,7 @@ func (h *ConfigHandler) DeleteVehicleType(c *gin.Context) {
 // --- series ---
 
 // CreateSeries 处理 POST /api/valuation/admin/series
-// Body: {"brand":"林德","name":"E系列"}
+// Body: {"brand":"林德","name":"E系列","earliest_factory_year":2015}
 func (h *ConfigHandler) CreateSeries(c *gin.Context) {
 	var body repository.Series
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -545,7 +545,11 @@ func (h *ConfigHandler) CreateSeries(c *gin.Context) {
 		Error(c, http.StatusBadRequest, CodeBadRequest, "brand 与 name 必填")
 		return
 	}
-	s, err := h.dictRepo.CreateSeries(c.Request.Context(), body.Brand, body.Name)
+	// earliest_factory_year 默认 2000
+	if body.EarliestFactoryYear == 0 {
+		body.EarliestFactoryYear = 2000
+	}
+	s, err := h.dictRepo.CreateSeries(c.Request.Context(), body.Brand, body.Name, body.EarliestFactoryYear)
 	if err != nil {
 		h.logger.Error("新增系列失败", zap.Error(err))
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增系列失败")
@@ -555,7 +559,7 @@ func (h *ConfigHandler) CreateSeries(c *gin.Context) {
 }
 
 // UpdateSeries 处理 PUT /api/valuation/admin/series/:id
-// Body: {"brand":"林德","name":"E系列"}
+// Body: {"brand":"林德","name":"E系列","earliest_factory_year":2015}
 func (h *ConfigHandler) UpdateSeries(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -563,14 +567,18 @@ func (h *ConfigHandler) UpdateSeries(c *gin.Context) {
 		return
 	}
 	var body struct {
-		Brand string `json:"brand" binding:"required"`
-		Name  string `json:"name" binding:"required"`
+		Brand               string `json:"brand" binding:"required"`
+		Name                string `json:"name" binding:"required"`
+		EarliestFactoryYear int    `json:"earliest_factory_year"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
 		return
 	}
-	if err := h.dictRepo.UpdateSeries(c.Request.Context(), id, body.Brand, body.Name); err != nil {
+	if body.EarliestFactoryYear == 0 {
+		body.EarliestFactoryYear = 2000
+	}
+	if err := h.dictRepo.UpdateSeries(c.Request.Context(), id, body.Brand, body.Name, body.EarliestFactoryYear); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			Error(c, http.StatusNotFound, CodeNotFound, "系列不存在")
 			return
@@ -579,7 +587,7 @@ func (h *ConfigHandler) UpdateSeries(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "更新系列失败")
 		return
 	}
-	OK(c, gin.H{"id": id, "brand": body.Brand, "name": body.Name})
+	OK(c, gin.H{"id": id, "brand": body.Brand, "name": body.Name, "earliest_factory_year": body.EarliestFactoryYear})
 }
 
 // DeleteSeries 处理 DELETE /api/valuation/admin/series/:id

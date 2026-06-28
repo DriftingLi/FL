@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // 叉车残值评估参数录入（统一表单，Tesla 极简风）
 // 三行级联布局：
-//   行1 品牌类型：品牌 → 车辆类型 → 出厂年份（brand_type 由品牌自动派生；出厂年份 min 由车型 earliest_factory_year 决定）
-//   行2 系列吨位：系列 → 吨位
+//   行1 品牌类型：品牌 → 车辆类型（brand_type 由品牌自动派生）
+//   行2 系列吨位：系列 → 吨位 → 出厂年份（出厂年份 min 由所选系列 earliest_factory_year 决定）
 //   行3 配置门架：配置类型 → 门架类型 → 门架高度
 // "无" 选项：series / config_type / mast_type 可选 "无"；mast_height_mm 用 0 表示 "无"
 import { computed, onMounted, ref, watch } from 'vue'
@@ -49,7 +49,7 @@ const cities = ref<string[]>([])
 const loadingDict = ref(false)
 
 // ========== "无" 选项（前端常量，附加到下拉列表末尾） ==========
-const noneSeriesOption: SeriesOption = { id: -1, brand: '', name: NONE_VALUE }
+const noneSeriesOption: SeriesOption = { id: -1, brand: '', name: NONE_VALUE, earliest_factory_year: 1980 }
 const noneConfigOption: ConfigTypeOption = { id: -1, name: NONE_VALUE }
 const noneMastTypeOption: MastTypeOption = { id: -1, name: NONE_VALUE }
 const noneMastHeightOption: MastHeightOption = { id: -1, value_mm: NONE_MAST_HEIGHT }
@@ -81,19 +81,19 @@ const showBatteryType = computed(
   () => batteryTypes.value.length > 0 && isElectricVehicle.value
 )
 
-// 当前所选车型的最早出厂年份（未选车型时返回默认下限 1980）
-// 用于级联限制出厂年份选择：选完车型后才允许选出厂年份，且最小值为车型最早年份
-const currentVehicleEarliestYear = computed(() => {
-  if (!form.vehicle_type) return 1980
-  const vt = vehicleTypes.value.find((v) => v.name === form.vehicle_type)
-  return vt?.earliest_factory_year ?? 1980
+// 当前所选系列的最早出厂年份（未选系列时返回默认下限 1980）
+// 用于级联限制出厂年份选择：选完系列+吨位后才允许选出厂年份，且最小值为该系列最早发布年份
+const currentSeriesEarliestYear = computed(() => {
+  if (!form.series) return 1980
+  const s = seriesList.value.find((it) => it.name === form.series)
+  return s?.earliest_factory_year ?? 1980
 })
 
-// 出厂年份字段可见性：选完车型后才显示
-const showFactoryYear = computed(() => form.vehicle_type !== undefined)
+// 出厂年份字段可见性：选完吨位后才显示
+const showFactoryYear = computed(() => form.tonnage != null)
 
 // ========== 级联加载 ==========
-// 级联顺序：品牌 → 车辆类型 → 系列 → 吨位 → 配置类型 → 门架类型 → 门架高度
+// 级联顺序：品牌 → 车辆类型 → 系列 → 吨位 → 出厂年份 → 配置类型 → 门架类型 → 门架高度
 
 // 品牌 → 车辆类型 + 自动填充 brand_type
 watch(
@@ -165,6 +165,8 @@ watch(
     form.config_type = undefined
     form.mast_type = undefined
     form.mast_height_mm = undefined
+    // 系列变更时清空出厂年份（新系列最早年份可能大于当前值）
+    form.factory_year = undefined
     tonnages.value = []
     configTypes.value = []
     mastTypes.value = []
@@ -177,7 +179,7 @@ watch(
   }
 )
 
-// 吨位 → 配置类型
+// 吨位 → 配置类型 + 出厂年份解锁
 watch(
   () => form.tonnage,
   async (t) => {
@@ -303,7 +305,7 @@ function onSubmit() {
       <section class="input-section card-surface">
         <h2 class="section-title">品牌与车型</h2>
 
-        <!-- 行1：品牌类型（品牌 → 车辆类型 → 出厂年份） -->
+        <!-- 行1：品牌类型（品牌 → 车辆类型） -->
         <el-row :gutter="24">
           <el-col v-if="showBrand" :xs="24" :md="12" :lg="6">
             <el-form-item label="品牌" required>
@@ -340,22 +342,9 @@ function onSubmit() {
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col v-if="showFactoryYear" :xs="24" :md="12" :lg="6">
-            <el-form-item label="出厂年份" required>
-              <el-input-number
-                v-model="form.factory_year"
-                :min="currentVehicleEarliestYear"
-                :max="new Date().getFullYear()"
-                :step="1"
-                :disabled="!form.vehicle_type"
-                style="width: 100%"
-                placeholder="如 2021"
-              />
-            </el-form-item>
-          </el-col>
         </el-row>
 
-        <!-- 行2：系列吨位（系列 → 吨位） -->
+        <!-- 行2：系列吨位（系列 → 吨位 → 出厂年份） -->
         <el-row v-if="showSeries" :gutter="24">
           <el-col :xs="24" :md="12" :lg="6">
             <el-form-item label="系列" required>
@@ -391,6 +380,19 @@ function onSubmit() {
                   :label="`${t.value} 吨`"
                 />
               </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col v-if="showFactoryYear" :xs="24" :md="12" :lg="6">
+            <el-form-item label="出厂年份" required>
+              <el-input-number
+                v-model="form.factory_year"
+                :min="currentSeriesEarliestYear"
+                :max="new Date().getFullYear()"
+                :step="1"
+                :disabled="form.tonnage == null"
+                style="width: 100%"
+                placeholder="如 2021"
+              />
             </el-form-item>
           </el-col>
         </el-row>

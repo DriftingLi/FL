@@ -38,6 +38,8 @@ export interface SeriesOption {
   id: number
   brand: string
   name: string
+  /** 该系列最早出厂年份（用于前端级联限制出厂年份选择） */
+  earliest_factory_year: number
 }
 
 /** 吨位字典项 */

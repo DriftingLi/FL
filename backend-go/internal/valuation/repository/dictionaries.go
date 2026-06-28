@@ -41,9 +41,10 @@ type VehicleType struct {
 
 // Series 系列
 type Series struct {
-	ID    int    `json:"id"`
-	Brand string `json:"brand"`
-	Name  string `json:"name"`
+	ID                  int    `json:"id"`
+	Brand               string `json:"brand"`
+	Name                string `json:"name"`
+	EarliestFactoryYear int    `json:"earliest_factory_year"`
 }
 
 // Tonnage 吨位
@@ -356,9 +357,9 @@ func (r *DictionaryRepository) ListSeries(ctx context.Context, brand string) ([]
 	var rows pgx.Rows
 	var err error
 	if brand != "" {
-		rows, err = r.pool.Query(ctx, `SELECT id, brand, name FROM series WHERE brand = $1 ORDER BY id ASC`, brand)
+		rows, err = r.pool.Query(ctx, `SELECT id, brand, name, earliest_factory_year FROM series WHERE brand = $1 ORDER BY id ASC`, brand)
 	} else {
-		rows, err = r.pool.Query(ctx, `SELECT id, brand, name FROM series ORDER BY id ASC`)
+		rows, err = r.pool.Query(ctx, `SELECT id, brand, name, earliest_factory_year FROM series ORDER BY id ASC`)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("查询系列失败: %w", err)
@@ -367,7 +368,7 @@ func (r *DictionaryRepository) ListSeries(ctx context.Context, brand string) ([]
 	out := make([]Series, 0, 16)
 	for rows.Next() {
 		var s Series
-		if err := rows.Scan(&s.ID, &s.Brand, &s.Name); err != nil {
+		if err := rows.Scan(&s.ID, &s.Brand, &s.Name, &s.EarliestFactoryYear); err != nil {
 			return nil, err
 		}
 		out = append(out, s)
@@ -381,20 +382,20 @@ func (r *DictionaryRepository) ListSeriesByBrand(ctx context.Context, brand stri
 }
 
 // CreateSeries 新增系列
-func (r *DictionaryRepository) CreateSeries(ctx context.Context, brand, name string) (Series, error) {
+func (r *DictionaryRepository) CreateSeries(ctx context.Context, brand, name string, earliestFactoryYear int) (Series, error) {
 	var id int
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO series (brand, name) VALUES ($1, $2) ON CONFLICT (brand, name) DO NOTHING RETURNING id`,
-		brand, name).Scan(&id)
+		`INSERT INTO series (brand, name, earliest_factory_year) VALUES ($1, $2, $3) ON CONFLICT (brand, name) DO NOTHING RETURNING id`,
+		brand, name, earliestFactoryYear).Scan(&id)
 	if err != nil {
 		return Series{}, fmt.Errorf("新增系列失败: %w", err)
 	}
-	return Series{ID: id, Brand: brand, Name: name}, nil
+	return Series{ID: id, Brand: brand, Name: name, EarliestFactoryYear: earliestFactoryYear}, nil
 }
 
 // UpdateSeries 更新系列
-func (r *DictionaryRepository) UpdateSeries(ctx context.Context, id int, brand, name string) error {
-	ct, err := r.pool.Exec(ctx, `UPDATE series SET brand = $2, name = $3 WHERE id = $1`, id, brand, name)
+func (r *DictionaryRepository) UpdateSeries(ctx context.Context, id int, brand, name string, earliestFactoryYear int) error {
+	ct, err := r.pool.Exec(ctx, `UPDATE series SET brand = $2, name = $3, earliest_factory_year = $4 WHERE id = $1`, id, brand, name, earliestFactoryYear)
 	if err != nil {
 		return fmt.Errorf("更新系列失败: %w", err)
 	}
@@ -1092,7 +1093,7 @@ func (r *DictionaryRepository) ListVehicleTypesByBrand(ctx context.Context, bran
 // ListSeriesByCascade 按品牌+车辆类型级联查询系列
 func (r *DictionaryRepository) ListSeriesByCascade(ctx context.Context, brand, vehicleType string) ([]Series, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT DISTINCT s.id, s.brand, s.name
+		SELECT DISTINCT s.id, s.brand, s.name, s.earliest_factory_year
 		FROM original_prices op
 		JOIN series s ON s.brand = op.brand AND s.name = op.series
 		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.is_active = TRUE
@@ -1104,7 +1105,7 @@ func (r *DictionaryRepository) ListSeriesByCascade(ctx context.Context, brand, v
 	out := make([]Series, 0, 16)
 	for rows.Next() {
 		var s Series
-		if err := rows.Scan(&s.ID, &s.Brand, &s.Name); err != nil {
+		if err := rows.Scan(&s.ID, &s.Brand, &s.Name, &s.EarliestFactoryYear); err != nil {
 			return nil, err
 		}
 		out = append(out, s)

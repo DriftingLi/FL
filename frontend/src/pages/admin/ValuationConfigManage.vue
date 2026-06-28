@@ -126,14 +126,16 @@ const SCHEMAS: Record<AdminResourceKey, ResourceSchema> = {
         type: 'input',
         required: true,
         width: 140
-      }
+      },
+      { prop: 'earliest_factory_year', label: '最早出厂年份', type: 'number', width: 160 }
     ]
   },
   series: {
     title: '系列',
     fields: [
       { prop: 'brand', label: '品牌', type: 'input', required: true, width: 160 },
-      { prop: 'name', label: '系列名称', type: 'input', required: true, width: 200 }
+      { prop: 'name', label: '系列名称', type: 'input', required: true, width: 200 },
+      { prop: 'earliest_factory_year', label: '最早出厂年份', type: 'number', width: 160 }
     ]
   },
   tonnages: {
