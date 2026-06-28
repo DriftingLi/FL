@@ -45,22 +45,16 @@ export function validateNonNegativeNumber(value: number | undefined | null, labe
   return { valid: true }
 }
 
-/** 校验年份：出厂年份与评估年份合法性 */
-export function validateYears(factory: number | undefined, sale: number | undefined): ValidationResult {
-  if (factory == null || sale == null) {
-    return { valid: false, message: '请填写出厂与评估年份' }
+/** 校验年份：出厂年份合法性（评估年份默认今年，无需校验） */
+export function validateYears(factory: number | undefined): ValidationResult {
+  if (factory == null) {
+    return { valid: false, message: '请填写出厂年份' }
   }
-  if (!Number.isInteger(factory) || !Number.isInteger(sale)) {
+  if (!Number.isInteger(factory)) {
     return { valid: false, message: '年份必须为整数' }
   }
   if (factory < 1980 || factory > CURRENT_YEAR) {
     return { valid: false, message: `出厂年份应在 1980~${CURRENT_YEAR} 之间` }
-  }
-  if (sale < factory) {
-    return { valid: false, message: '评估年份不能早于出厂年份' }
-  }
-  if (sale > CURRENT_YEAR + 1) {
-    return { valid: false, message: `评估年份不合法（>${CURRENT_YEAR + 1}）` }
   }
   return { valid: true }
 }
@@ -149,7 +143,7 @@ export function validateForm(ctx: FormValidationContext): ValidationResult {
     () => validateRequiredString(ctx.config_type, '配置类型'),
     () => validateRequiredString(ctx.mast_type, '门架类型'),
     () => validateMastHeight(ctx.mast_height_mm),
-    () => validateYears(ctx.factory_year, ctx.sale_year),
+    () => validateYears(ctx.factory_year),
     () => validateUsageHours(ctx.usage_hours),
     () => validateRequiredString(ctx.province, '所在省份'),
     () => validateRequiredString(ctx.city, '所在城市'),

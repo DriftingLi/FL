@@ -400,18 +400,6 @@ function onSubmit() {
             </el-form-item>
           </el-col>
           <el-col :xs="24" :md="12" :lg="6">
-            <el-form-item label="评估年份" required>
-              <el-input-number
-                v-model="form.sale_year"
-                :min="1980"
-                :max="new Date().getFullYear() + 1"
-                :step="1"
-                style="width: 100%"
-                placeholder="如 2024"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :md="12" :lg="6">
             <el-form-item label="累计工时" required>
               <el-input-number
                 v-model="form.usage_hours"

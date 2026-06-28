@@ -174,9 +174,13 @@ const SCHEMAS: Record<AdminResourceKey, ResourceSchema> = {
   }
 }
 
-/** 表格列：包含 id + 各字段 + 操作列 */
+/** 表格列：含 id 列 + 各字段 + 操作列；brand-types 后端无 id 字段，跳过 id 列 */
 function tableColumns(key: AdminResourceKey): FieldDef[] {
-  return [{ prop: 'id', label: 'ID', type: 'number', width: 70 }, ...SCHEMAS[key].fields]
+  const idCol =
+    key === 'brandTypes'
+      ? []
+      : [{ prop: 'id', label: 'ID', type: 'number' as const, width: 70 }]
+  return [...idCol, ...SCHEMAS[key].fields]
 }
 
 /** 打开新增对话框 */
@@ -223,8 +227,10 @@ async function handleSubmit() {
   submitting.value = true
   try {
     const payload: Record<string, unknown> = { ...formData }
-    if (editingRow.value?.id) {
-      await adminResources[key].update(editingRow.value.id, payload)
+    // 通过资源 idField 提取标识符：通常用 id，brand-types 用 name
+    const id = adminResources[key].getIdOf(editingRow.value)
+    if (id != null) {
+      await adminResources[key].update(id, payload)
       ElMessage.success('更新成功')
     } else {
       await adminResources[key].create(payload)
@@ -241,12 +247,14 @@ async function handleSubmit() {
 
 /** 删除 */
 async function handleDelete(key: AdminResourceKey, row: AdminRow) {
-  if (!row.id) return
+  // 通过资源 idField 提取标识符（brand-types 用 name）
+  const id = adminResources[key].getIdOf(row)
+  if (id == null) return
   try {
     await ElMessageBox.confirm(`确定删除该${SCHEMAS[key].title}记录？`, '删除确认', {
       type: 'warning'
     })
-    await adminResources[key].remove(row.id)
+    await adminResources[key].remove(id)
     ElMessage.success('已删除')
     await loadList(key)
   } catch {

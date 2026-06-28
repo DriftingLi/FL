@@ -34,6 +34,15 @@ func NewValuationService(
 	dictRepo *repository.DictionaryRepository,
 	evalRepo *repository.EvaluationRepository,
 ) *ValuationService {
+	if pool == nil {
+		panic("NewValuationService: pool 不能为 nil")
+	}
+	if dictRepo == nil {
+		panic("NewValuationService: dictRepo 不能为 nil")
+	}
+	if evalRepo == nil {
+		panic("NewValuationService: evalRepo 不能为 nil")
+	}
 	return &ValuationService{
 		pool:     pool,
 		dictRepo: dictRepo,
