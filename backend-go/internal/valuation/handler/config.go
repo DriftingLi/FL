@@ -457,7 +457,7 @@ func (h *ConfigHandler) DeleteBrand(c *gin.Context) {
 // --- vehicle_types ---
 
 // CreateVehicleType 处理 POST /api/valuation/admin/vehicle-types
-// Body: {"name":"电动平衡重","power_type":"electric"}
+// Body: {"name":"电动平衡重","power_type":"electric","earliest_factory_year":1995}
 func (h *ConfigHandler) CreateVehicleType(c *gin.Context) {
 	var body repository.VehicleType
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -468,7 +468,10 @@ func (h *ConfigHandler) CreateVehicleType(c *gin.Context) {
 		Error(c, http.StatusBadRequest, CodeBadRequest, "name 与 power_type 必填")
 		return
 	}
-	v, err := h.dictRepo.CreateVehicleType(c.Request.Context(), body.Name, body.PowerType)
+	if body.EarliestFactoryYear == 0 {
+		body.EarliestFactoryYear = 1980
+	}
+	v, err := h.dictRepo.CreateVehicleType(c.Request.Context(), body.Name, body.PowerType, body.EarliestFactoryYear)
 	if err != nil {
 		h.logger.Error("新增车型失败", zap.Error(err))
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增车型失败")
@@ -478,7 +481,7 @@ func (h *ConfigHandler) CreateVehicleType(c *gin.Context) {
 }
 
 // UpdateVehicleType 处理 PUT /api/valuation/admin/vehicle-types/:id
-// Body: {"name":"电动平衡重","power_type":"electric"}
+// Body: {"name":"电动平衡重","power_type":"electric","earliest_factory_year":1995}
 func (h *ConfigHandler) UpdateVehicleType(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -486,14 +489,18 @@ func (h *ConfigHandler) UpdateVehicleType(c *gin.Context) {
 		return
 	}
 	var body struct {
-		Name      string `json:"name" binding:"required"`
-		PowerType string `json:"power_type" binding:"required"`
+		Name                string `json:"name" binding:"required"`
+		PowerType           string `json:"power_type" binding:"required"`
+		EarliestFactoryYear int    `json:"earliest_factory_year"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
 		return
 	}
-	if err := h.dictRepo.UpdateVehicleType(c.Request.Context(), id, body.Name, body.PowerType); err != nil {
+	if body.EarliestFactoryYear == 0 {
+		body.EarliestFactoryYear = 1980
+	}
+	if err := h.dictRepo.UpdateVehicleType(c.Request.Context(), id, body.Name, body.PowerType, body.EarliestFactoryYear); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			Error(c, http.StatusNotFound, CodeNotFound, "车型不存在")
 			return
@@ -502,7 +509,7 @@ func (h *ConfigHandler) UpdateVehicleType(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "更新车型失败")
 		return
 	}
-	OK(c, gin.H{"id": id, "name": body.Name, "power_type": body.PowerType})
+	OK(c, gin.H{"id": id, "name": body.Name, "power_type": body.PowerType, "earliest_factory_year": body.EarliestFactoryYear})
 }
 
 // DeleteVehicleType 处理 DELETE /api/valuation/admin/vehicle-types/:id

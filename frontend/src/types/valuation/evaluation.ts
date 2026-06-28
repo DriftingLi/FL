@@ -29,6 +29,8 @@ export interface VehicleTypeOption {
   id: number
   name: string
   power_type: PowerType
+  /** 该车型最早出厂年份（用于前端级联限制出厂年份选择） */
+  earliest_factory_year: number
 }
 
 /** 系列字典项 */
