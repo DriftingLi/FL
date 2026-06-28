@@ -130,9 +130,9 @@ export interface FormValidationContext {
   province: string | undefined
   city: string | undefined
   condition_rating: string | undefined
-  /** 电池类型是否必填（电动车辆时） */
+  /** 电池类型（电动车辆必填） */
   battery_type?: string | undefined
-  /** 车辆类型字典中是否含电动（用于判断 battery_type 必填性） */
+  /** 当前所选车辆类型是否电动（用于判断 battery_type 必填性） */
   hasElectricVehicleType?: boolean
 }
 
@@ -153,7 +153,7 @@ export function validateForm(ctx: FormValidationContext): ValidationResult {
     () => validateRequiredString(ctx.city, '所在城市'),
     () => validateConditionRating(ctx.condition_rating),
     () => {
-      // 仅当车辆类型字典含电动时，battery_type 才被要求
+      // 仅当前所选车辆类型为电动时，battery_type 才被要求
       if (ctx.hasElectricVehicleType && !ctx.battery_type) {
         return { valid: false, message: '电动车辆需选择电池类型' }
       }

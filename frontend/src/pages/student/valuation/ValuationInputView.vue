@@ -61,24 +61,20 @@ const mastTypeOptions = computed(() => [...mastTypes.value, noneMastTypeOption])
 const mastHeightOptions = computed(() => [...mastHeights.value, noneMastHeightOption])
 
 // ========== 表单 ==========
-// hasElectricVehicleType 需在 form 之前定义
-const hasElectricVehicleType = computed(() =>
-  vehicleTypes.value.some((v) => v.power_type === 'electric')
-)
-const { form, submitting, isValid, reset, submit } = useEvaluationForm({
-  hasElectricVehicleType
-})
-
-// 当前选中的车辆类型是否电动
-const isElectricVehicle = computed(() => {
+// hasElectricVehicleType：当前所选车辆类型是否电动（用于决定 battery_type 必填性/payload 是否下发）
+// 注意：computed 惰性求值，.value 首次访问发生在 isValid 校验时，此时 form 已由 useEvaluationForm 返回
+const hasElectricVehicleType = computed(() => {
   if (!form.vehicle_type) return false
   const vt = vehicleTypes.value.find((v) => v.name === form.vehicle_type)
   return vt?.power_type === 'electric'
 })
+const { form, submitting, isValid, reset, submit } = useEvaluationForm({
+  hasElectricVehicleType
+})
 
 // 电池类型字段可见性：电动车辆 + 已选吨位 + 级联结果非空时显示
 const showBatteryType = computed(
-  () => isElectricVehicle.value && form.tonnage != null && batteryTypes.value.length > 0
+  () => hasElectricVehicleType.value && form.tonnage != null && batteryTypes.value.length > 0
 )
 
 // 当前所选系列的最早出厂年份（未选系列时返回默认下限 1980）
@@ -195,7 +191,7 @@ watch(
     const seriesParam = form.series === NONE_VALUE ? undefined : form.series
     const [configList, batList] = await Promise.all([
       listConfigTypes(form.brand, form.vehicle_type, form.series, t),
-      isElectricVehicle.value
+      hasElectricVehicleType.value
         ? listBatteryTypes(form.brand, form.vehicle_type, seriesParam, t)
         : Promise.resolve([])
     ])

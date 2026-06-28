@@ -626,7 +626,7 @@ func (r *DictionaryRepository) ListBatteryTypesByCascade(ctx context.Context, br
 		SELECT DISTINCT bt.id, bt.name
 		FROM original_prices op
 		JOIN battery_types bt ON bt.name = op.battery_type
-		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.tonnage::text = $4
+		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.tonnage = $4::numeric
 		      AND op.battery_type IS NOT NULL AND op.is_active = TRUE
 		ORDER BY bt.id ASC`, brand, vehicleType, series, tonnage)
 	if err != nil {
@@ -1167,7 +1167,7 @@ func (r *DictionaryRepository) ListConfigTypesByCascade(ctx context.Context, bra
 		SELECT DISTINCT c.id, c.name
 		FROM original_prices op
 		JOIN config_types c ON c.name = op.config_type
-		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.tonnage::text = $4 AND op.is_active = TRUE
+		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.tonnage = $4::numeric AND op.is_active = TRUE
 		ORDER BY c.id ASC`, brand, vehicleType, series, tonnage)
 	if err != nil {
 		return nil, fmt.Errorf("级联查询配置类型失败: %w", err)
@@ -1190,7 +1190,7 @@ func (r *DictionaryRepository) ListMastTypesByCascade(ctx context.Context, brand
 		SELECT DISTINCT m.id, m.name
 		FROM original_prices op
 		JOIN mast_types m ON m.name = op.mast_type
-		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.tonnage::text = $4 AND op.config_type = $5 AND op.is_active = TRUE
+		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.tonnage = $4::numeric AND op.config_type = $5 AND op.is_active = TRUE
 		ORDER BY m.id ASC`, brand, vehicleType, series, tonnage, configType)
 	if err != nil {
 		return nil, fmt.Errorf("级联查询门架类型失败: %w", err)
@@ -1213,7 +1213,7 @@ func (r *DictionaryRepository) ListMastHeightsByCascade(ctx context.Context, bra
 		SELECT DISTINCT mh.id, mh.value_mm
 		FROM original_prices op
 		JOIN mast_heights mh ON mh.value_mm = op.mast_height_mm
-		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.tonnage::text = $4 AND op.config_type = $5 AND op.mast_type = $6 AND op.is_active = TRUE
+		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.tonnage = $4::numeric AND op.config_type = $5 AND op.mast_type = $6 AND op.is_active = TRUE
 		ORDER BY mh.value_mm ASC`, brand, vehicleType, series, tonnage, configType, mastType)
 	if err != nil {
 		return nil, fmt.Errorf("级联查询门架高度失败: %w", err)

@@ -44,7 +44,7 @@ export interface BaseFormState {
 }
 
 export interface UseEvaluationFormOptions {
-  /** 车辆类型字典中是否含电动（用于决定 battery_type 字段可见性/必填性） */
+  /** 当前所选车辆类型是否电动（用于决定 battery_type 字段可见性/必填性） */
   hasElectricVehicleType: ComputedRef<boolean>
 }
 
