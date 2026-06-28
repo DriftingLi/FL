@@ -1,86 +1,47 @@
 // Package service 实现核心业务逻辑
-// 本文件：系数配置加载器
-// 从 PostgreSQL 加载并缓存衰减率、权重、市场系数等可调参数
+// 本文件：系数配置实时查询
+// 重构后不再使用内存加载器，所有系数从 coefficient_configs 实时查询
 package service
 
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"forklift-training/internal/valuation/model"
 	"forklift-training/internal/valuation/repository"
 )
 
-// CoefficientLoader 系数配置加载器
-// 提供线程安全的懒加载与刷新能力
-type CoefficientLoader struct {
-	queries *repository.Queries
-
-	mu     sync.RWMutex
-	cached map[string]float64
+// CoefficientProvider 系数配置提供者（实时查 DB）
+// 提供按 key 查询的能力，供各 K 系数计算使用
+type CoefficientProvider struct {
+	dictRepo *repository.DictionaryRepository
 }
 
-// NewCoefficientLoader 构造系数加载器
-func NewCoefficientLoader(q *repository.Queries) *CoefficientLoader {
-	return &CoefficientLoader{
-		queries: q,
-		cached:  make(map[string]float64),
-	}
+// NewCoefficientProvider 构造系数提供者
+func NewCoefficientProvider(dictRepo *repository.DictionaryRepository) *CoefficientProvider {
+	return &CoefficientProvider{dictRepo: dictRepo}
 }
 
-// LoadAll 加载所有系数到内存缓存
-// 应用启动时调用一次即可，后续业务计算走缓存
-func (c *CoefficientLoader) LoadAll(ctx context.Context) error {
-	rows, err := c.queries.ListCoefficientConfigs(ctx)
-	if err != nil {
-		return fmt.Errorf("加载系数配置失败: %w", err)
-	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	// 重置缓存，避免删除的 key 残留
-	c.cached = make(map[string]float64, len(rows))
-	for _, r := range rows {
-		c.cached[r.Key] = r.Value
-	}
-	return nil
-}
-
-// Get 从缓存中读取某个系数
+// Get 按 key 读取系数
 // 未找到时返回 model.ErrCoefficientNotFound
-func (c *CoefficientLoader) Get(key string) (float64, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	v, ok := c.cached[key]
-	if !ok {
+func (p *CoefficientProvider) Get(ctx context.Context, key string) (float64, error) {
+	c, err := p.dictRepo.GetCoefficientByKey(ctx, key)
+	if err != nil {
 		return 0, fmt.Errorf("%w: %s", model.ErrCoefficientNotFound, key)
 	}
-	return v, nil
+	return c.Value, nil
 }
 
-// MustGet 读取系数，找不到则 panic（仅用于内部必填系数）
-func (c *CoefficientLoader) MustGet(key string) float64 {
-	v, err := c.Get(key)
-	if err != nil {
-		panic(err)
-	}
-	return v
-}
-
-// Reload 重新加载（用于系数更新后热刷新）
-func (c *CoefficientLoader) Reload(ctx context.Context) error {
-	return c.LoadAll(ctx)
-}
-
-// Keys 系数键常量集中定义，避免散落字符串
+// 系数键常量集中定义，避免散落字符串
+// 重构后保留 lambda_electric / lambda_combustion / annual_usage_hours / confidence_range
+// 以及 Kh 区间阈值 4 个键
 const (
-	KeyLambdaElectric   = "lambda_electric"   // 电动叉车时间衰减率 λ
-	KeyLambdaCombustion = "lambda_combustion" // 内燃叉车时间衰减率 λ
-	KeyWWorkCondition   = "w_work_condition"  // 工况权重 w₁
-	KeyWBrand           = "w_brand"           // 品牌权重 w₂
-	KeyWCondition       = "w_condition"       // 车况权重 w₃
-	KeyWMarket          = "w_market"          // 市场权重 w₄
-	KeyKMarket          = "k_market"          // 市场系数 Km
-	KeyConfidenceRange  = "confidence_range"  // 95% 置信水平对应的置信区间范围 ±5%
+	KeyLambdaElectric    = "lambda_electric"      // 电动叉车时间衰减系数 λ
+	KeyLambdaCombustion  = "lambda_combustion"    // 内燃叉车时间衰减系数 λ
+	KeyAnnualUsageHours  = "annual_usage_hours"   // 年度标准使用小时
+	KeyConfidenceRange   = "confidence_range"     // 残值置信区间幅度 ±
+	KeyKHoursRatioLow    = "k_hours_ratio_low"   // Kh 区间阈值：低
+	KeyKHoursRatioMid    = "k_hours_ratio_mid"   // Kh 区间阈值：中
+	KeyKHoursRatioHigh   = "k_hours_ratio_high"  // Kh 区间阈值：高
+	KeyKHoursRatioMax    = "k_hours_ratio_max"   // Kh 区间阈值：最大
 )

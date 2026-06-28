@@ -1,6 +1,6 @@
 // Package pdf 实现 PDF 报告生成
-// 本文件：6 维雷达图渲染，直接使用 gofpdf 矢量原语绘制（Line/Polygon/Circle）
-// 维度顺序：时间维度、使用强度、工况、品牌、车况、市场（顺时针从顶部开始）
+// 本文件：5 维雷达图渲染，直接使用 gofpdf 矢量原语绘制（Line/Polygon/Circle）
+// 维度顺序：时间维度、使用强度、品牌、车况、市场（顺时针从顶部开始）
 package pdf
 
 import (
@@ -10,31 +10,30 @@ import (
 	"github.com/jung-kurt/gofpdf"
 )
 
-// radarDimensionOrder 6 维度的固定展示顺序（顺时针从顶部开始）
+// radarDimensionOrder 5 维度的固定展示顺序（顺时针从顶部开始）
+// 重构后从 6 维（时间/使用强度/工况/品牌/车况/市场）改为 5 维（去掉工况）
 var radarDimensionOrder = []string{
 	"时间维度", // 顶部 -90°
-	"使用强度", // 右上 -30°
-	"工况",   // 右下 30°
-	"品牌",   // 底部 90°
-	"车况",   // 左下 150°
-	"市场",   // 左上 210°
+	"使用强度", // 右上 -18°
+	"品牌",   // 右下 54°
+	"车况",   // 左下 126°
+	"市场",   // 左上 -162° / 198°
 }
 
 // radarMaxValue 雷达图最大刻度值
 // K 系数范围通常在 0.3~1.3 之间，设 1.3 为满刻度
 const radarMaxValue = 1.3
 
-// drawRadarChart 在 PDF 上绘制 6 维雷达图
+// drawRadarChart 在 PDF 上绘制 5 维雷达图
 // pdf: gofpdf 实例
 // cx, cy: 雷达图中心坐标（mm）
 // radius: 雷达图半径（mm）
 // dimensionScores: 维度名 → 评分（实际 K 系数值，如 0.74/1.10/1.05 等）
 func drawRadarChart(pdf *gofpdf.Fpdf, cx, cy, radius float64, dimensionScores map[string]float64) {
-	// 1. 计算每个维度的角度（弧度），从顶部 -90° 开始顺时针
+	// 1. 计算每个维度的角度（弧度），从顶部 -90° 开始顺时针，每维间隔 72°
 	angles := make([]float64, len(radarDimensionOrder))
 	for i := range radarDimensionOrder {
-		// -90° + i*60°，转为弧度
-		angles[i] = (-90.0 + float64(i)*60.0) * math.Pi / 180.0
+		angles[i] = (-90.0 + float64(i)*72.0) * math.Pi / 180.0
 	}
 
 	// 2. 绘制同心网格(4 圈:25% / 50% / 75% / 100%)
@@ -127,7 +126,7 @@ func drawRadarChart(pdf *gofpdf.Fpdf, cx, cy, radius float64, dimensionScores ma
 		label := fmt.Sprintf("%s %.2f", dimName, value)
 
 		// 根据角度精确调整标签位置和对齐方式
-		angleDeg := -90.0 + float64(i)*60.0
+		angleDeg := -90.0 + float64(i)*72.0
 
 		// 标签宽度估算（每个字符约 3mm，9pt 字体）
 		labelWidth := float64(len([]rune(label))) * 3.0
@@ -137,10 +136,6 @@ func drawRadarChart(pdf *gofpdf.Fpdf, cx, cy, radius float64, dimensionScores ma
 		case angleDeg == -90:
 			// 顶部：标签在上方，水平居中
 			pdf.SetXY(x-labelWidth/2, y-labelHeight-1)
-			pdf.CellFormat(labelWidth, labelHeight, label, "", 0, "C", false, 0, "")
-		case angleDeg == 90:
-			// 底部：标签在下方，水平居中
-			pdf.SetXY(x-labelWidth/2, y+1)
 			pdf.CellFormat(labelWidth, labelHeight, label, "", 0, "C", false, 0, "")
 		case angleDeg > -90 && angleDeg < 90:
 			// 右半部分（右上、右下）：标签在右侧，左对齐

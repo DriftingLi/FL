@@ -2,7 +2,7 @@
 // 本文件:简洁版叉车残值评估报告,3 页 A4 布局。
 //   - 第 1 页:封面(渐变蓝带 + Logo + 报告元信息卡片)
 //   - 第 2 页:评估基本信息 + 评估结果摘要(Hero 卡片 + 置信区间 + 雷达图/维度进度条)
-//   - 第 3 页:核心部件状态 + 评估结论与建议 + 免责声明
+//   - 第 3 页:计算系数 + 车况评级 + 处置建议 + 风险提示 + 免责声明
 //
 // 设计稿: .trae/design-exports/简洁版评估报告.html
 package pdf
@@ -97,8 +97,8 @@ func NewGenerator(outputDir string) *Generator {
 }
 
 // GenerateReport 生成 3 页简洁版评估报告 PDF。
-// 入参 r 含评估详情,items 是部件状态,weights 保留签名兼容(新模板不再展示计算过程)。
-func (g *Generator) GenerateReport(r *model.EvaluationDetailResponse, items []model.EvaluationItemDTO, _ model.CalcWeights) (string, error) {
+// 入参 r 含评估详情(含输入字段与计算结果);dimensionScores 为 5 维评分;suggestions 为处置建议文本列表。
+func (g *Generator) GenerateReport(r *model.EvaluationDetail, dimensionScores map[string]float64, suggestions []string) (string, error) {
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(pageMargin, pageMargin, pageMargin)
 	// 关闭自动分页,由 3 个 render 方法自行控制 AddPage
@@ -113,11 +113,11 @@ func (g *Generator) GenerateReport(r *model.EvaluationDetailResponse, items []mo
 
 	// 第 2 页:评估基本信息 + 评估结果摘要
 	pdf.AddPage()
-	g.renderBasicInfoAndSummary(pdf, r)
+	g.renderBasicInfoAndSummary(pdf, r, dimensionScores)
 
-	// 第 3 页:核心部件状态 + 评估结论与建议
+	// 第 3 页:计算系数 + 车况评级 + 处置建议
 	pdf.AddPage()
-	g.renderComponentsAndConclusion(pdf, r, items)
+	g.renderCoefficientsAndConclusion(pdf, r, suggestions)
 
 	filename := fmt.Sprintf("evaluation_report_%d_%s.pdf",
 		r.ID, time.Now().Format("20060102150405"))
@@ -144,7 +144,7 @@ func joinPath(dir, filename string) string {
 // 第 1 页:封面
 // =====================================================
 
-func (g *Generator) renderCover(pdf *gofpdf.Fpdf, r *model.EvaluationDetailResponse) {
+func (g *Generator) renderCover(pdf *gofpdf.Fpdf, r *model.EvaluationDetail) {
 	// 顶部蓝色渐变条(5mm)
 	drawHGradientBar(pdf, 0, 0, pageWidth, 5, primary, primaryLite, primary)
 
@@ -198,7 +198,7 @@ func (g *Generator) renderCover(pdf *gofpdf.Fpdf, r *model.EvaluationDetailRespo
 	drawCoverMetaRow(pdf, metaX+10, metaY+26, metaW-20, "生成日期",
 		time.Now().Format("2006-01-02"), false, text, textLabel)
 	drawCoverMetaRow(pdf, metaX+10, metaY+43, metaW-20, "叉车类型",
-		forkliftTypeName(r.ForkliftType), false, primary, textLabel)
+		coverVehicleLabel(r), false, primary, textLabel)
 
 	// 装饰线
 	drawCenterFadeBar(pdf, cx, 244, 30, 0.6, primary)
@@ -213,6 +213,24 @@ func (g *Generator) renderCover(pdf *gofpdf.Fpdf, r *model.EvaluationDetailRespo
 
 	// 底部蓝色渐变条(3mm)
 	drawHGradientBar(pdf, 0, pageHeight-3, pageWidth, 3, primary, primaryLite, primary)
+}
+
+// coverVehicleLabel 封面"叉车类型"展示:车型 + 品牌(取品牌短名)
+// 例如:"电动叉车 / 合力 (HELI)"
+func coverVehicleLabel(r *model.EvaluationDetail) string {
+	if r == nil {
+		return "-"
+	}
+	if r.VehicleType == "" && r.Brand == "" {
+		return "-"
+	}
+	if r.Brand == "" {
+		return r.VehicleType
+	}
+	if r.VehicleType == "" {
+		return r.Brand
+	}
+	return r.VehicleType + " / " + r.Brand
 }
 
 func drawCoverMetaRow(pdf *gofpdf.Fpdf, x, y, w float64, label, value string, valueBold bool, vc, lc rgb) {
@@ -309,19 +327,11 @@ func absF(v float64) float64 {
 	return v
 }
 
-// forkliftTypeName 叉车类型中文名
-func forkliftTypeName(t model.ForkliftType) string {
-	if t == model.ForkliftTypeCombustion {
-		return "内燃叉车"
-	}
-	return "电动叉车"
-}
-
 // =====================================================
 // 第 2 页:评估基本信息 + 评估结果摘要
 // =====================================================
 
-func (g *Generator) renderBasicInfoAndSummary(pdf *gofpdf.Fpdf, r *model.EvaluationDetailResponse) {
+func (g *Generator) renderBasicInfoAndSummary(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, dimensionScores map[string]float64) {
 	drawPageHeader(pdf, r)
 
 	// 评估基本信息
@@ -329,7 +339,7 @@ func (g *Generator) renderBasicInfoAndSummary(pdf *gofpdf.Fpdf, r *model.Evaluat
 	drawBasicInfoTable(pdf, r, pageMargin, 45, contentWidth)
 
 	// 评估结果摘要
-	summaryY := 95.0
+	summaryY := 102.0
 	drawSectionHeader(pdf, "评估结果摘要", pageMargin, summaryY)
 
 	// Hero 卡片
@@ -342,13 +352,13 @@ func (g *Generator) renderBasicInfoAndSummary(pdf *gofpdf.Fpdf, r *model.Evaluat
 
 	// 雷达图 + 维度评分明细
 	radarY := confY + 22
-	drawRadarAndDimensions(pdf, pageMargin, radarY, contentWidth, r)
+	drawRadarAndDimensions(pdf, pageMargin, radarY, contentWidth, dimensionScores)
 
 	// 页脚
 	drawPageFooter(pdf, 2, 3)
 }
 
-func drawPageHeader(pdf *gofpdf.Fpdf, r *model.EvaluationDetailResponse) {
+func drawPageHeader(pdf *gofpdf.Fpdf, r *model.EvaluationDetail) {
 	y := 18.0
 	// 左:报告名
 	pdf.SetFont(FontSimHeiBold, "B", 14)
@@ -410,33 +420,47 @@ type basicInfoRow struct {
 	span1          bool // value1 是否跨 3 列(独占该行)
 }
 
-func drawBasicInfoTable(pdf *gofpdf.Fpdf, r *model.EvaluationDetailResponse, x, y, w float64) {
-	rowH := 7.0
+// drawBasicInfoTable 评估基本信息表(2 列布局,共 7 行)
+// 展示重构后的全部输入字段:
+//   - 品牌类型 / 品牌
+//   - 车型 / 系列
+//   - 吨位 / 配置类型
+//   - 门架类型 / 门架高度
+//   - 出厂年份 / 成交年份
+//   - 累计使用小时 / 原厂漆
+//   - 电池类型 / 车况评级
+//   - 区域 / 维保记录
+//   - 车牌 / 登记证
+func drawBasicInfoTable(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, x, y, w float64) {
+	rowH := 6.5
 	colLabelW := w * 0.18
 	colValueW := w * 0.32
 	colTotal := colLabelW + colValueW // 1/2 列宽
 
 	rows := []basicInfoRow{
-		{label1: "叉车类型", value1: forkliftTypeName(r.ForkliftType), label2: "品牌", value2: r.Brand},
-		{label1: "型号", value1: defaultIfEmpty(r.Model, "-"), label2: "原始购买价格", value2: fmt.Sprintf("%.2f 万元", r.OriginalPrice)},
-		{label1: "购置年份", value1: fmt.Sprintf("%d 年", r.PurchaseYear), label2: "成交年份", value2: fmt.Sprintf("%d 年", r.SaleYear)},
-		{label1: "使用年限", value1: fmt.Sprintf("%d 年", r.SaleYear-r.PurchaseYear), label2: "累计使用小时", value2: fmt.Sprintf("%d 小时", r.UsageHours)},
-		{label1: "使用工况", value1: string(r.WorkCondition), label2: "能否正常行驶", value2: statusText(r.CanDrive), badge2: true},
-		{label1: "液压功能是否正常", value1: statusText(r.HydraulicOk), badge1: true, span1: true},
+		{label1: "品牌类型", value1: defaultIfEmpty(r.BrandType, "-"), label2: "品牌", value2: defaultIfEmpty(r.Brand, "-")},
+		{label1: "车型", value1: defaultIfEmpty(r.VehicleType, "-"), label2: "系列", value2: defaultIfEmpty(r.Series, "-")},
+		{label1: "吨位", value1: fmt.Sprintf("%.1f 吨", r.Tonnage), label2: "配置类型", value2: defaultIfEmpty(r.ConfigType, "-")},
+		{label1: "门架类型", value1: defaultIfEmpty(r.MastType, "-"), label2: "门架高度", value2: fmt.Sprintf("%d mm", r.MastHeightMM)},
+		{label1: "出厂年份", value1: fmt.Sprintf("%d 年", r.FactoryYear), label2: "成交年份", value2: fmt.Sprintf("%d 年", r.SaleYear)},
+		{label1: "累计使用小时", value1: fmt.Sprintf("%d 小时", r.UsageHours), label2: "原厂漆", value2: statusText(r.OriginalPaint), badge2: true},
+		{label1: "电池类型", value1: defaultIfEmpty(r.BatteryType, "-"), label2: "车况评级", value2: defaultIfEmpty(r.ConditionRating, "-")},
+		{label1: "区域", value1: formatRegion(r.Province, r.City), label2: "维保记录", value2: statusText(r.HasMaintenanceRecords), badge2: true},
+		{label1: "车牌", value1: statusText(r.HasLicensePlate), badge1: true, label2: "登记证", value2: statusText(r.HasRegistrationCertificate), badge2: true},
 	}
 
 	for i, row := range rows {
-		ry := y + float64(i)*rowH
+		ry := y + float64(i)*float64(rowH)
 		// 偶数行浅底
 		if i%2 == 0 {
 			pdf.SetFillColor(bgMuted[0], bgMuted[1], bgMuted[2])
-			pdf.Rect(x, ry, w, rowH, "F")
+			pdf.Rect(x, ry, w, float64(rowH), "F")
 		}
 		// 第一组 label
 		pdf.SetFont(FontSimHei, "", 10)
 		pdf.SetTextColor(textMuted[0], textMuted[1], textMuted[2])
 		pdf.SetXY(x+3, ry+1.5)
-		pdf.CellFormat(colLabelW-3, rowH-1.5, row.label1, "", 0, "L", false, 0, "")
+		pdf.CellFormat(colLabelW-3, float64(rowH)-1.5, row.label1, "", 0, "L", false, 0, "")
 		// 第一组 value
 		if row.badge1 {
 			drawStatusBadge(pdf, x+colLabelW+3, ry+1.5, colValueW-6, row.value1)
@@ -444,35 +468,49 @@ func drawBasicInfoTable(pdf *gofpdf.Fpdf, r *model.EvaluationDetailResponse, x, 
 			pdf.SetFont(FontSimHei, "", 10)
 			pdf.SetTextColor(text[0], text[1], text[2])
 			pdf.SetXY(x+colLabelW+3, ry+1.5)
-			pdf.CellFormat(colValueW-3, rowH-1.5, row.value1, "", 0, "L", false, 0, "")
+			pdf.CellFormat(colValueW-3, float64(rowH)-1.5, row.value1, "", 0, "L", false, 0, "")
 		}
 		// 第二组(非跨列)
 		if !row.span1 {
 			pdf.SetFont(FontSimHei, "", 10)
 			pdf.SetTextColor(textMuted[0], textMuted[1], textMuted[2])
 			pdf.SetXY(x+colTotal+3, ry+1.5)
-			pdf.CellFormat(colLabelW-3, rowH-1.5, row.label2, "", 0, "L", false, 0, "")
+			pdf.CellFormat(colLabelW-3, float64(rowH)-1.5, row.label2, "", 0, "L", false, 0, "")
 			if row.badge2 {
 				drawStatusBadge(pdf, x+colTotal+colLabelW+3, ry+1.5, colValueW-6, row.value2)
 			} else {
 				pdf.SetFont(FontSimHei, "", 10)
 				pdf.SetTextColor(text[0], text[1], text[2])
 				pdf.SetXY(x+colTotal+colLabelW+3, ry+1.5)
-				pdf.CellFormat(colValueW-3, rowH-1.5, row.value2, "", 0, "L", false, 0, "")
+				pdf.CellFormat(colValueW-3, float64(rowH)-1.5, row.value2, "", 0, "L", false, 0, "")
 			}
 		}
 	}
 	// 表格外框 + 内部网格
 	pdf.SetDrawColor(border[0], border[1], border[2])
 	pdf.SetLineWidth(0.2)
-	totalH := rowH * float64(len(rows))
+	totalH := float64(rowH) * float64(len(rows))
 	pdf.Rect(x, y, w, totalH, "D")
 	// 列分隔(只画两条,把表分 4 列)
 	pdf.Line(x+colTotal, y, x+colTotal, y+totalH)
 	// 行分隔
 	for i := 1; i < len(rows); i++ {
-		pdf.Line(x, y+float64(i)*rowH, x+w, y+float64(i)*rowH)
+		pdf.Line(x, y+float64(i)*float64(rowH), x+w, y+float64(i)*float64(rowH))
 	}
+}
+
+// formatRegion 拼接省份与城市(空值降级为 -)
+func formatRegion(province, city string) string {
+	if province == "" && city == "" {
+		return "-"
+	}
+	if province == "" {
+		return city
+	}
+	if city == "" {
+		return province
+	}
+	return province + " " + city
 }
 
 // statusText 布尔 → 状态文本
@@ -489,6 +527,8 @@ func drawStatusBadge(pdf *gofpdf.Fpdf, x, y, w float64, text string) {
 	switch text {
 	case "正常":
 		c, bg = success, successBg
+	case "异常":
+		c, bg = errColor, errBg
 	case "轻微磨损":
 		c, bg = info, infoBg
 	case "需维修":
@@ -514,7 +554,7 @@ func drawStatusBadge(pdf *gofpdf.Fpdf, x, y, w float64, text string) {
 }
 
 // drawValueHero 渲染蓝色 Hero 卡片,显示估算残值
-func drawValueHero(pdf *gofpdf.Fpdf, x, y, w, h float64, r *model.EvaluationDetailResponse) {
+func drawValueHero(pdf *gofpdf.Fpdf, x, y, w, h float64, r *model.EvaluationDetail) {
 	// 渐变背景(深蓝 → 中蓝)
 	pdf.LinearGradient(x, y, w, h,
 		primaryDk[0], primaryDk[1], primaryDk[2],
@@ -596,7 +636,7 @@ func gradeFromRate(rate float64) (gradeInfo, rgb) {
 }
 
 // drawConfidenceBar 置信区间可视化
-func drawConfidenceBar(pdf *gofpdf.Fpdf, x, y, w float64, r *model.EvaluationDetailResponse) {
+func drawConfidenceBar(pdf *gofpdf.Fpdf, x, y, w float64, r *model.EvaluationDetail) {
 	// 文字行
 	pdf.SetFont(FontSimHei, "", 9.5)
 	pdf.SetTextColor(textLabel[0], textLabel[1], textLabel[2])
@@ -634,7 +674,7 @@ func drawConfidenceBar(pdf *gofpdf.Fpdf, x, y, w float64, r *model.EvaluationDet
 }
 
 // drawRadarAndDimensions 雷达图 + 维度进度条(并排)
-func drawRadarAndDimensions(pdf *gofpdf.Fpdf, x, y, w float64, r *model.EvaluationDetailResponse) {
+func drawRadarAndDimensions(pdf *gofpdf.Fpdf, x, y, w float64, dimensionScores map[string]float64) {
 	// 左侧雷达图
 	radarW := 70.0
 	dimX := x + radarW + 4
@@ -649,10 +689,10 @@ func drawRadarAndDimensions(pdf *gofpdf.Fpdf, x, y, w float64, r *model.Evaluati
 	pdf.CellFormat(dimW, 4, "维度评分明细", "", 0, "L", false, 0, "")
 
 	// 雷达图(尺寸需容纳外圈标签)
-	if len(r.DimensionScores) > 0 {
+	if len(dimensionScores) > 0 {
 		rcx := x + radarW/2
 		rcy := y + 32
-		drawRadarChart(pdf, rcx, rcy, 18, r.DimensionScores)
+		drawRadarChart(pdf, rcx, rcy, 18, dimensionScores)
 	} else {
 		pdf.SetFont(FontSimHei, "", 9.5)
 		pdf.SetTextColor(textLite[0], textLite[1], textLite[2])
@@ -669,7 +709,7 @@ func drawRadarAndDimensions(pdf *gofpdf.Fpdf, x, y, w float64, r *model.Evaluati
 	barW := dimW - labelW - valW
 
 	for i, dim := range radarDimensionOrder {
-		v := r.DimensionScores[dim]
+		v := dimensionScores[dim]
 		rowY := dimY0 + float64(i)*rowH
 		// 维度名
 		pdf.SetFont(FontSimHei, "", 9.5)
@@ -681,8 +721,8 @@ func drawRadarAndDimensions(pdf *gofpdf.Fpdf, x, y, w float64, r *model.Evaluati
 		barY := rowY + 0.9
 		pdf.SetFillColor(border[0], border[1], border[2])
 		pdf.RoundedRect(barX, barY, barW, barH, 0.9, "1234", "F")
-		// 进度条填充
-		fillRatio := v
+		// 进度条填充(以雷达图满刻度 1.3 为基准归一化)
+		fillRatio := v / radarMaxValue
 		if fillRatio > 1.0 {
 			fillRatio = 1.0
 		}
@@ -718,31 +758,21 @@ func dimensionBarColor(v float64) rgb {
 }
 
 // =====================================================
-// 第 3 页:核心部件状态 + 评估结论与建议
+// 第 3 页:计算系数 + 车况评级 + 处置建议 + 风险提示 + 免责声明
 // =====================================================
 
-func (g *Generator) renderComponentsAndConclusion(pdf *gofpdf.Fpdf, r *model.EvaluationDetailResponse, items []model.EvaluationItemDTO) {
+// renderCoefficientsAndConclusion 渲染第 3 页
+// 顺序:计算系数表 → 车况评级卡 → 处置建议 → 风险提示 → 免责声明
+func (g *Generator) renderCoefficientsAndConclusion(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, suggestions []string) {
 	drawPageHeader(pdf, r)
 
-	// 核心部件状态
-	drawSectionHeader(pdf, "核心部件状态", pageMargin, 35)
-	tableY := 45.0
-	drawComponentTable(pdf, items, pageMargin, tableY, contentWidth)
+	// 计算系数表
+	drawSectionHeader(pdf, "计算系数", pageMargin, 35)
+	drawCoefficientsTable(pdf, r, pageMargin, 45, contentWidth)
 
-	// 状态图例
-	_, order := groupByCategory(items)
-	rowCount := len(order)
-	if rowCount == 0 {
-		rowCount = 1
-	}
-	legendY := tableY + 7*float64(rowCount) + 6
-	drawStatusLegend(pdf, pageMargin, legendY, contentWidth)
-
-	// 评估结论与建议
-	conclusionY := legendY + 10
-	drawSectionHeader(pdf, "评估结论与建议", pageMargin, conclusionY)
-
-	// 综合等级 + 估算残值双卡
+	// 车况评级 + 估算残值双卡
+	conclusionY := 88.0
+	drawSectionHeader(pdf, "评估结论", pageMargin, conclusionY)
 	rate := 0.0
 	if r.OriginalPrice > 0 {
 		rate = r.EstimatedValue / r.OriginalPrice * 100
@@ -751,13 +781,13 @@ func (g *Generator) renderComponentsAndConclusion(pdf *gofpdf.Fpdf, r *model.Eva
 	cardY := conclusionY + 10
 	drawGradeCards(pdf, pageMargin, cardY, contentWidth, grade, rate, r.EstimatedValue)
 
-	// 处置建议(取前 4 条,空则降级为 1 条占位)
-	suggs := r.Suggestions
+	// 处置建议
+	suggs := suggestions
 	if len(suggs) == 0 {
 		suggs = []string{"暂无建议"}
 	}
-	if len(suggs) > 4 {
-		suggs = suggs[:4]
+	if len(suggs) > 6 {
+		suggs = suggs[:6]
 	}
 	suggY := cardY + 32
 	drawRecommendations(pdf, pageMargin, suggY, contentWidth, suggs)
@@ -774,139 +804,57 @@ func (g *Generator) renderComponentsAndConclusion(pdf *gofpdf.Fpdf, r *model.Eva
 	drawPageFooter(pdf, 3, 3)
 }
 
-// groupByCategory 按类别分组并保持首次出现顺序
-func groupByCategory(items []model.EvaluationItemDTO) (map[string][]model.EvaluationItemDTO, []string) {
-	groups := make(map[string][]model.EvaluationItemDTO)
-	order := []string{}
-	for _, it := range items {
-		if _, ok := groups[it.CategoryCode]; !ok {
-			order = append(order, it.CategoryCode)
-		}
-		groups[it.CategoryCode] = append(groups[it.CategoryCode], it)
-	}
-	return groups, order
-}
-
-// drawComponentTable 核心部件状态汇总表
-func drawComponentTable(pdf *gofpdf.Fpdf, items []model.EvaluationItemDTO, x, y, w float64) {
-	if len(items) == 0 {
-		pdf.SetFont(FontSimHei, "", 10)
-		pdf.SetTextColor(textLabel[0], textLabel[1], textLabel[2])
-		pdf.SetXY(x, y)
-		pdf.CellFormat(w, 6, "(无部件状态数据)", "", 0, "L", false, 0, "")
-		return
-	}
-	groups, order := groupByCategory(items)
-
-	// 列宽
-	colW := []float64{w * 0.40, w * 0.15, w * 0.20, w * 0.25}
+// drawCoefficientsTable 计算系数表
+// 展示:基准原价、Kt(时间)、Kh(使用强度)、Kb(品牌)、Kc(车况)、Km(市场)、最终残值
+// 采用 4 列布局(label-value-label-value),共 4 行
+func drawCoefficientsTable(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, x, y, w float64) {
 	rowH := 7.0
+	colLabelW := w * 0.18
+	colValueW := w * 0.32
+	colTotal := colLabelW + colValueW // 1/2 列宽
 
-	// 蓝色表头
-	pdf.SetFillColor(primary[0], primary[1], primary[2])
-	pdf.SetTextColor(255, 255, 255)
-	pdf.SetFont(FontSimHei, "", 10)
-	headers := []string{"类别", "条目数", "平均得分", "状态"}
-	for i, h := range headers {
-		align := "C"
-		if i == 0 {
-			align = "L"
-		}
-		pdf.SetXY(x+sumW(colW, i), y)
-		pdf.CellFormat(colW[i], rowH, h, "", 0, align, true, 0, "")
+	rows := []basicInfoRow{
+		{label1: "基准原价", value1: fmt.Sprintf("%.2f 万元", r.OriginalPrice), label2: "时间系数 Kt", value2: fmt.Sprintf("%.4f", r.KTime)},
+		{label1: "使用强度 Kh", value1: fmt.Sprintf("%.4f", r.KHours), label2: "品牌系数 Kb", value2: fmt.Sprintf("%.4f", r.KBrand)},
+		{label1: "车况系数 Kc", value1: fmt.Sprintf("%.4f", r.KCondition), label2: "市场系数 Km", value2: fmt.Sprintf("%.4f", r.KMarket)},
+		{label1: "估算残值", value1: fmt.Sprintf("%.2f 万元", r.EstimatedValue), label2: "置信区间", value2: fmt.Sprintf("%.2f ~ %.2f", r.ConfidenceLow, r.ConfidenceHigh)},
 	}
 
-	// 数据行
-	statusPriority := map[model.ItemStatus]int{
-		model.ItemStatusNormal:      0,
-		model.ItemStatusSlightWear:  1,
-		model.ItemStatusNeedRepair:  2,
-		model.ItemStatusNeedReplace: 3,
-	}
-	statusTextMap := map[model.ItemStatus]string{
-		model.ItemStatusNormal:      "正常",
-		model.ItemStatusSlightWear:  "轻微磨损",
-		model.ItemStatusNeedRepair:  "需维修",
-		model.ItemStatusNeedReplace: "需更换",
-	}
-	ry := y + rowH
-	for idx, code := range order {
-		group := groups[code]
-		categoryName := group[0].CategoryName
-		sumScore := 0.0
-		worstStatus := model.ItemStatusNormal
-		for _, it := range group {
-			sumScore += it.Score
-			if statusPriority[it.Status] > statusPriority[worstStatus] {
-				worstStatus = it.Status
-			}
-		}
-		avg := sumScore / float64(len(group))
+	for i, row := range rows {
+		ry := y + float64(i)*rowH
 		// 偶数行浅底
-		if idx%2 == 1 {
-			pdf.SetFillColor(250, 251, 252)
+		if i%2 == 0 {
+			pdf.SetFillColor(bgMuted[0], bgMuted[1], bgMuted[2])
 			pdf.Rect(x, ry, w, rowH, "F")
 		}
-		// 类别名
+		// 第一组 label
 		pdf.SetFont(FontSimHei, "", 10)
-		pdf.SetTextColor(textSub[0], textSub[1], textSub[2])
+		pdf.SetTextColor(textMuted[0], textMuted[1], textMuted[2])
 		pdf.SetXY(x+3, ry+1.5)
-		pdf.CellFormat(colW[0]-3, rowH-1.5, categoryName, "", 0, "L", false, 0, "")
-		// 条目数
-		pdf.SetTextColor(text[0], text[1], text[2])
-		pdf.SetXY(x+sumW(colW, 1), ry+1.5)
-		pdf.CellFormat(colW[1], rowH-1.5, fmt.Sprintf("%d", len(group)), "", 0, "C", false, 0, "")
-		// 平均得分
+		pdf.CellFormat(colLabelW-3, rowH-1.5, row.label1, "", 0, "L", false, 0, "")
+		// 第一组 value
 		pdf.SetFont(FontSimHeiBold, "B", 10)
-		pdf.SetXY(x+sumW(colW, 2), ry+1.5)
-		pdf.CellFormat(colW[2], rowH-1.5, fmt.Sprintf("%.1f", avg), "", 0, "C", false, 0, "")
-		// 状态徽章
-		badgeX := x + sumW(colW, 3) + 4
-		drawStatusBadge(pdf, badgeX, ry+1.5, colW[3]-8, statusTextMap[worstStatus])
-		ry += rowH
+		pdf.SetTextColor(text[0], text[1], text[2])
+		pdf.SetXY(x+colLabelW+3, ry+1.5)
+		pdf.CellFormat(colValueW-3, rowH-1.5, row.value1, "", 0, "L", false, 0, "")
+		// 第二组
+		pdf.SetFont(FontSimHei, "", 10)
+		pdf.SetTextColor(textMuted[0], textMuted[1], textMuted[2])
+		pdf.SetXY(x+colTotal+3, ry+1.5)
+		pdf.CellFormat(colLabelW-3, rowH-1.5, row.label2, "", 0, "L", false, 0, "")
+		pdf.SetFont(FontSimHeiBold, "B", 10)
+		pdf.SetTextColor(text[0], text[1], text[2])
+		pdf.SetXY(x+colTotal+colLabelW+3, ry+1.5)
+		pdf.CellFormat(colValueW-3, rowH-1.5, row.value2, "", 0, "L", false, 0, "")
 	}
-
-	// 表格外框 + 网格
+	// 表格外框 + 内部网格
 	pdf.SetDrawColor(border[0], border[1], border[2])
 	pdf.SetLineWidth(0.2)
-	totalH := rowH * float64(len(order)+1)
+	totalH := rowH * float64(len(rows))
 	pdf.Rect(x, y, w, totalH, "D")
-	for i := 1; i < len(colW); i++ {
-		pdf.Line(x+sumW(colW, i), y, x+sumW(colW, i), y+totalH)
-	}
-	for i := 0; i <= len(order); i++ {
+	pdf.Line(x+colTotal, y, x+colTotal, y+totalH)
+	for i := 1; i < len(rows); i++ {
 		pdf.Line(x, y+float64(i)*rowH, x+w, y+float64(i)*rowH)
-	}
-}
-
-// sumW 累计列宽
-func sumW(widths []float64, n int) float64 {
-	s := 0.0
-	for i := 0; i < n; i++ {
-		s += widths[i]
-	}
-	return s
-}
-
-func drawStatusLegend(pdf *gofpdf.Fpdf, x, y, w float64) {
-	items := []struct {
-		text string
-		c    rgb
-	}{
-		{"正常", success},
-		{"轻微磨损", info},
-		{"需维修", warningDk},
-		{"需更换", errColor},
-	}
-	pdf.SetFont(FontSimHei, "", 9)
-	colW := w / 4
-	for i, it := range items {
-		lx := x + float64(i)*colW
-		pdf.SetFillColor(it.c[0], it.c[1], it.c[2])
-		pdf.Circle(lx+2, y+1.8, 1.5, "F")
-		pdf.SetTextColor(textLabel[0], textLabel[1], textLabel[2])
-		pdf.SetXY(lx+6, y)
-		pdf.CellFormat(colW-6, 4, it.text, "", 0, "L", false, 0, "")
 	}
 }
 

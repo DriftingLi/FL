@@ -129,17 +129,12 @@ func setupValuation(r *gin.Engine, cfg *config.Config) func() {
 	}
 	slog.Info("valuation pgx 连接池就绪")
 
-	// 3. 装配数据访问层（sqlc 生成）
-	queries := vrepo.New(pool)
+	// 3. 装配数据访问层（手写 pgx 仓储）
+	dictRepo := vrepo.NewDictionaryRepository(pool)
+	evalRepo := vrepo.NewEvaluationRepository(pool)
 
-	// 4. 装配业务服务与内存加载器
-	coefficientLoader := vservice.NewCoefficientLoader(queries)
-	brandLoader := vservice.NewBrandLoader(queries)
-	partConfigLoader := vservice.NewPartConfigLoader(queries)
-	if err := loadValuationConfig(ctx, coefficientLoader, brandLoader, partConfigLoader, vLogger); err != nil {
-		vLogger.Fatal("加载 valuation 配置数据失败", zap.Error(err))
-	}
-	valuationSvc := vservice.NewValuationService(coefficientLoader, brandLoader, partConfigLoader)
+	// 4. 装配业务服务（系数从 DB 实时查询，不再使用内存加载器）
+	valuationSvc := vservice.NewValuationService(pool, dictRepo, evalRepo)
 	batterySvc := vservice.NewBatteryRULService()
 
 	// 5. 装配 PDF 生成器
@@ -153,34 +148,13 @@ func setupValuation(r *gin.Engine, cfg *config.Config) func() {
 	pdfGen := pdf.NewGenerator(pdfDir)
 
 	// 6. 注册路由（/api/valuation/*，启用 JWTAuth）
-	vhandler.RegisterRoutes(r, cfg, vLogger, pool, queries, valuationSvc, brandLoader, batterySvc, pdfGen, pdfDir)
+	vhandler.RegisterRoutes(r, cfg, vLogger, pool, dictRepo, evalRepo, valuationSvc, batterySvc, pdfGen, pdfDir)
 	slog.Info("valuation 路由注册完成", "prefix", "/api/valuation")
 
 	return func() {
 		pool.Close()
 		_ = vLogger.Sync()
 	}
-}
-
-// loadValuationConfig 从数据库加载所有配置到内存加载器。
-func loadValuationConfig(
-	ctx context.Context,
-	coef *vservice.CoefficientLoader,
-	brand *vservice.BrandLoader,
-	parts *vservice.PartConfigLoader,
-	logger *zap.Logger,
-) error {
-	if err := coef.LoadAll(ctx); err != nil {
-		return err
-	}
-	if err := brand.LoadAll(ctx); err != nil {
-		return err
-	}
-	if err := parts.LoadAll(ctx); err != nil {
-		return err
-	}
-	logger.Info("valuation 配置数据加载完成")
-	return nil
 }
 
 // ensureUploadDirs 确保上传与静态资源目录存在。

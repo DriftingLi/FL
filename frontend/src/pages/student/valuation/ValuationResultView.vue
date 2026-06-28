@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 评估结果页（Tesla 极简：白底 + Electric Blue 残值 + 6 维雷达 + 建议）
+// 评估结果页（Tesla 极简：白底 + Electric Blue 残值 + 维度雷达 + 系数卡 + 建议）
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useEvaluationStore } from '@/stores/valuationEvaluation'
@@ -7,8 +7,9 @@ import { Edit, Document, Download } from '@element-plus/icons-vue'
 import PageHeader from '@/components/valuation/PageHeader.vue'
 import ResultCard from '@/components/valuation/ResultCard.vue'
 import DimensionRadar from '@/components/valuation/DimensionRadar.vue'
-import { getReportDownloadUrl } from '@/api/valuation/report'
-import client from '@/api/valuation/client'
+import { downloadEvaluationReportBlob } from '@/api/valuation/evaluation'
+import { COEFFICIENT_DEFS } from '@/utils/valuationConstants'
+import { formatCoefficient } from '@/utils/valuationFormat'
 
 const router = useRouter()
 const store = useEvaluationStore()
@@ -20,38 +21,47 @@ if (!store.currentResult) {
 
 const r = computed(() => store.currentResult)
 const id = computed(() => store.currentId)
-const type = computed(() => store.currentType)
 
 function goEdit() {
-  if (type.value === 'electric') router.push('/valuation/input/electric')
-  else router.push('/valuation/input/combustion')
+  router.push('/valuation/input')
 }
 
 function goReport() {
   if (id.value) router.push(`/valuation/report/${id.value}`)
 }
 
-function downloadPdf() {
+async function downloadPdf() {
   if (!id.value) return
-  // axios blob + a.download：避免 window.open 触发「开新 tab + 弹下载」的双窗口
   const fileName = `evaluation_report_${id.value}.pdf`
-  client
-    .get(getReportDownloadUrl(id.value), { responseType: 'blob' })
-    .then((resp) => {
-      const blob = resp.data as Blob
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = fileName
-      a.style.display = 'none'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      setTimeout(() => URL.revokeObjectURL(url), 1500)
-    })
-    .catch(() => {
-      // 拦截器已 ElMessage.error
-    })
+  try {
+    const blob = await downloadEvaluationReportBlob(id.value)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    a.style.display = 'none'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    // 延迟释放，确保浏览器已开始下载
+    setTimeout(() => URL.revokeObjectURL(url), 1500)
+  } catch {
+    // 拦截器已 ElMessage.error
+  }
+}
+
+// 维度评分 → Record<string, number>（兼容 DimensionRadar 旧 props 签名）
+const dimensionScoresMap = computed(() => {
+  const arr = r.value?.dimension_scores ?? []
+  const map: Record<string, number> = {}
+  for (const d of arr) map[d.label] = d.value
+  return map
+})
+
+// 系数取值（安全访问）
+function coefValue(key: string): number {
+  const v = (r.value as unknown as Record<string, number> | null)?.[key]
+  return typeof v === 'number' ? v : 0
 }
 </script>
 
@@ -81,10 +91,25 @@ function downloadPdf() {
       <el-col :xs="24" :lg="10">
         <section class="card-surface radar-block">
           <h2 class="section-title">维度评分</h2>
-          <DimensionRadar :scores="r.dimension_scores || {}" height="320px" />
+          <DimensionRadar :scores="dimensionScoresMap" height="320px" />
         </section>
       </el-col>
     </el-row>
+
+    <!-- 系数列表 -->
+    <section class="card-surface section-block">
+      <h2 class="section-title">
+        <span class="title-icon">∑</span>
+        系数列表
+      </h2>
+      <div class="coef-grid">
+        <div v-for="def in COEFFICIENT_DEFS" :key="def.key" class="coef-cell">
+          <div class="coef-label" :style="{ color: def.color }">{{ def.label }}</div>
+          <div class="coef-value num">{{ formatCoefficient(coefValue(def.key)) }}</div>
+          <div class="coef-desc">{{ def.description }}</div>
+        </div>
+      </div>
+    </section>
 
     <!-- 评估建议 -->
     <section class="card-surface section-block">
@@ -129,6 +154,34 @@ function downloadPdf() {
   color: var(--color-primary);
   font-size: 18px;
 }
+.coef-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--sp-4);
+}
+.coef-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--sp-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-muted);
+}
+.coef-label {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+.coef-value {
+  font-size: 22px;
+  font-weight: var(--fw-semibold);
+  color: var(--color-text);
+}
+.coef-desc {
+  font-size: var(--fs-xs);
+  color: var(--color-text-tertiary);
+  line-height: 1.5;
+}
 .suggestion-list {
   margin: 0;
   padding: 0;
@@ -162,6 +215,9 @@ function downloadPdf() {
 @media (max-width: 768px) {
   .suggestion-list {
     grid-template-columns: 1fr;
+  }
+  .coef-grid {
+    grid-template-columns: 1fr 1fr;
   }
   .radar-block,
   .section-block {

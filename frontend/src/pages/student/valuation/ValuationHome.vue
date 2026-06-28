@@ -1,18 +1,22 @@
-// 首页：100vh 极简 hero + 两张白卡入口（Tesla 风格）
+// 首页：100vh 极简 hero + 卡片入口（Tesla 风格）
+// 重构说明：入口从「电动/内燃」改为「叉车残值评估」与「电池 RUL 评估」
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
-function goElectric() {
-  router.push('/valuation/input/electric')
+function goValuation() {
+  router.push('/valuation/input')
 }
-function goCombustion() {
-  router.push('/valuation/input/combustion')
+function goBattery() {
+  router.push('/valuation/battery')
+}
+function goHistory() {
+  router.push('/valuation/history')
 }
 
 interface EntryCard {
-  key: 'electric' | 'combustion'
+  key: 'valuation' | 'battery' | 'history'
   title: string
   subtitle: string
   meta: string
@@ -22,20 +26,28 @@ interface EntryCard {
 
 const cards: readonly EntryCard[] = [
   {
-    key: 'electric',
-    title: '电动叉车',
-    subtitle: 'Electric Forklift',
-    meta: '10 部件大类 · 68 评估项',
-    icon: '⚡',
-    onClick: goElectric
+    key: 'valuation',
+    title: '叉车残值评估',
+    subtitle: 'Forklift Residual Value',
+    meta: '基于品牌/车型/车况/区域的统一残值模型',
+    icon: '🚜',
+    onClick: goValuation
   },
   {
-    key: 'combustion',
-    title: '内燃叉车',
-    subtitle: 'Internal Combustion',
-    meta: '12 部件大类 · 75 评估项',
-    icon: '🔥',
-    onClick: goCombustion
+    key: 'battery',
+    title: '电池健康度评估',
+    subtitle: 'Battery RUL',
+    meta: '基于循环数据的剩余寿命预测',
+    icon: '🔋',
+    onClick: goBattery
+  },
+  {
+    key: 'history',
+    title: '评估历史记录',
+    subtitle: 'Evaluation History',
+    meta: '查看历次残值评估记录',
+    icon: '📋',
+    onClick: goHistory
   }
 ] as const
 </script>
@@ -46,16 +58,16 @@ const cards: readonly EntryCard[] = [
     <section class="hero">
       <div class="hero-inner">
         <p class="hero-eyebrow">forklift residual value</p>
-        <h1 class="hero-title">选择叉车类型<br />开始残值评估</h1>
-        <p class="hero-sub">基于车况 / 品牌 / 使用强度 / 工况 / 时间的五维残值模型</p>
+        <h1 class="hero-title">叉车残值与电池健康度<br />一站式评估</h1>
+        <p class="hero-sub">基于品牌 / 车型 / 车况 / 区域 / 使用强度的统一残值模型</p>
       </div>
     </section>
 
-    <!-- Category 入口：两张白卡 -->
+    <!-- 残值评估主入口：叉车残值评估（单卡居中） -->
     <section class="entry-section">
-      <div class="entry-grid">
+      <div class="entry-grid entry-grid-primary">
         <article
-          v-for="card in cards"
+          v-for="card in cards.slice(0, 1)"
           :key="card.key"
           class="entry-card"
           @click="card.onClick"
@@ -68,6 +80,29 @@ const cards: readonly EntryCard[] = [
           <p class="entry-card-meta">{{ card.meta }}</p>
           <a class="entry-card-cta">
             开始评估 <span class="entry-card-arrow">→</span>
+          </a>
+        </article>
+      </div>
+    </section>
+
+    <!-- 更多功能：电池评估 + 历史记录 -->
+    <section class="entry-section entry-section-secondary">
+      <h2 class="section-label">更多功能</h2>
+      <div class="entry-grid entry-grid-secondary">
+        <article
+          v-for="card in cards.slice(1)"
+          :key="card.key"
+          class="entry-card entry-card-secondary"
+          @click="card.onClick"
+        >
+          <div class="entry-card-icon">
+            <span>{{ card.icon }}</span>
+          </div>
+          <h3 class="entry-card-title">{{ card.title }}</h3>
+          <p class="entry-card-subtitle">{{ card.subtitle }}</p>
+          <p class="entry-card-meta">{{ card.meta }}</p>
+          <a class="entry-card-cta">
+            进入 <span class="entry-card-arrow">→</span>
           </a>
         </article>
       </div>
@@ -129,6 +164,42 @@ const cards: readonly EntryCard[] = [
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--sp-4);
+}
+/* 主入口（叉车残值评估）：单卡居中、更突出 */
+.entry-grid-primary {
+  max-width: 720px;
+  grid-template-columns: 1fr;
+}
+.entry-grid-primary .entry-card {
+  min-height: 360px;
+  padding: var(--sp-12) var(--sp-10);
+}
+.entry-grid-primary .entry-card-icon {
+  font-size: 48px;
+  margin-bottom: var(--sp-5);
+}
+
+/* ===== 更多功能区域 ===== */
+.entry-section-secondary {
+  padding-top: 0;
+  padding-bottom: var(--sp-12);
+}
+.section-label {
+  max-width: 960px;
+  margin: 0 auto var(--sp-5);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--color-text-tertiary);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.entry-card-secondary {
+  min-height: 240px;
+  padding: var(--sp-8) var(--sp-6);
+}
+.entry-card-secondary .entry-card-icon {
+  font-size: 32px;
+  margin-bottom: var(--sp-4);
 }
 .entry-card {
   background: var(--color-bg);

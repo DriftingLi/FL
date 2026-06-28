@@ -1,5 +1,7 @@
 // 前端参数校验工具
 // 与后端 model/evaluation.go 中的校验逻辑保持一致
+// 重构说明：删除旧 brand/workCondition/items 校验，改用新字典化字段
+import type { ConditionRating } from '@/types/valuation/evaluation'
 
 const CURRENT_YEAR = new Date().getFullYear()
 
@@ -8,82 +10,161 @@ export interface ValidationResult {
   message?: string
 }
 
-/** 校验品牌：非空 */
-export function validateBrand(brand: string | undefined | null): ValidationResult {
-  if (!brand || !brand.trim()) {
-    return { valid: false, message: '请选择品牌' }
+/** 校验字符串非空 */
+function isNonEmpty(v: string | undefined | null): v is string {
+  return !!v && v.trim().length > 0
+}
+
+/** 校验必填字符串字段 */
+export function validateRequiredString(value: string | undefined | null, label: string): ValidationResult {
+  if (!isNonEmpty(value)) {
+    return { valid: false, message: `请选择${label}` }
   }
   return { valid: true }
 }
 
-/** 校验价格：> 0 且 ≤ 9999 */
-export function validateOriginalPrice(price: number | undefined | null): ValidationResult {
-  if (price == null || Number.isNaN(price)) {
-    return { valid: false, message: '请输入原始价格' }
+/** 校验数值（> 0） */
+export function validatePositiveNumber(value: number | undefined | null, label: string): ValidationResult {
+  if (value == null || Number.isNaN(value)) {
+    return { valid: false, message: `请填写${label}` }
   }
-  if (price <= 0) {
-    return { valid: false, message: '价格必须大于 0' }
-  }
-  if (price > 9999) {
-    return { valid: false, message: '价格超出合理范围' }
+  if (value <= 0) {
+    return { valid: false, message: `${label}必须大于 0` }
   }
   return { valid: true }
 }
 
-/** 校验年份：购置/成交年份合法性 */
-export function validateYears(purchase: number | undefined, sale: number | undefined): ValidationResult {
-  if (purchase == null || sale == null) {
-    return { valid: false, message: '请填写购置与成交年份' }
+/** 校验数值（≥ 0） */
+export function validateNonNegativeNumber(value: number | undefined | null, label: string): ValidationResult {
+  if (value == null || Number.isNaN(value)) {
+    return { valid: false, message: `请填写${label}` }
   }
-  if (!Number.isInteger(purchase) || !Number.isInteger(sale)) {
+  if (value < 0) {
+    return { valid: false, message: `${label}不能为负数` }
+  }
+  return { valid: true }
+}
+
+/** 校验年份：出厂年份与评估年份合法性 */
+export function validateYears(factory: number | undefined, sale: number | undefined): ValidationResult {
+  if (factory == null || sale == null) {
+    return { valid: false, message: '请填写出厂与评估年份' }
+  }
+  if (!Number.isInteger(factory) || !Number.isInteger(sale)) {
     return { valid: false, message: '年份必须为整数' }
   }
-  if (purchase < 1980 || purchase > CURRENT_YEAR) {
-    return { valid: false, message: `购置年份应在 1980~${CURRENT_YEAR} 之间` }
+  if (factory < 1980 || factory > CURRENT_YEAR) {
+    return { valid: false, message: `出厂年份应在 1980~${CURRENT_YEAR} 之间` }
   }
-  if (sale < purchase) {
-    return { valid: false, message: '成交年份不能早于购置年份' }
+  if (sale < factory) {
+    return { valid: false, message: '评估年份不能早于出厂年份' }
   }
   if (sale > CURRENT_YEAR + 1) {
-    return { valid: false, message: `成交年份不合法（>${CURRENT_YEAR + 1}）` }
+    return { valid: false, message: `评估年份不合法（>${CURRENT_YEAR + 1}）` }
   }
   return { valid: true }
 }
 
-/** 校验使用小时：≥ 0 且 ≤ 100000 */
+/** 校验累计工时：≥ 0 且 ≤ 100000 */
 export function validateUsageHours(hours: number | undefined | null): ValidationResult {
   if (hours == null || Number.isNaN(hours)) {
-    return { valid: false, message: '请填写累计使用小时' }
+    return { valid: false, message: '请填写累计使用工时' }
   }
   if (hours < 0) {
-    return { valid: false, message: '使用小时不能为负数' }
+    return { valid: false, message: '使用工时不能为负数' }
   }
   if (hours > 100000) {
-    return { valid: false, message: '使用小时超出合理范围' }
+    return { valid: false, message: '使用工时超出合理范围' }
   }
   return { valid: true }
 }
 
-/** 校验工况 */
-export function validateWorkCondition(condition: string | undefined | null): ValidationResult {
-  const valid = ['仓储', '港口', '冷库', '工地', '其他']
-  if (!condition || !valid.includes(condition)) {
-    return { valid: false, message: '请选择使用工况' }
+/** 校验吨位：> 0 且 ≤ 100 */
+export function validateTonnage(tonnage: number | undefined | null): ValidationResult {
+  if (tonnage == null || Number.isNaN(tonnage)) {
+    return { valid: false, message: '请选择吨位' }
+  }
+  if (tonnage <= 0) {
+    return { valid: false, message: '吨位必须大于 0' }
+  }
+  if (tonnage > 100) {
+    return { valid: false, message: '吨位超出合理范围' }
   }
   return { valid: true }
 }
 
-/** 校验部件状态：是否所有类别下的条目都有状态 */
-export function validateAllItemsAssigned(
-  itemCodes: string[],
-  statusMap: Record<string, string | undefined>
-): ValidationResult {
-  if (itemCodes.length === 0) {
-    return { valid: false, message: '未配置部件条目' }
+/** 校验门架高度：> 0 且 ≤ 20000（mm） */
+export function validateMastHeight(value: number | undefined | null): ValidationResult {
+  if (value == null || Number.isNaN(value)) {
+    return { valid: false, message: '请选择门架高度' }
   }
-  const missing = itemCodes.filter((c) => !statusMap[c])
-  if (missing.length > 0) {
-    return { valid: false, message: `还有 ${missing.length} 个部件未评估` }
+  if (value <= 0) {
+    return { valid: false, message: '门架高度必须大于 0' }
+  }
+  if (value > 20000) {
+    return { valid: false, message: '门架高度超出合理范围' }
+  }
+  return { valid: true }
+}
+
+/** 校验车况评级：必须为 A/B/C/D/E */
+const VALID_RATINGS: ConditionRating[] = ['A', 'B', 'C', 'D', 'E']
+export function validateConditionRating(rating: string | undefined | null): ValidationResult {
+  if (!rating || !VALID_RATINGS.includes(rating as ConditionRating)) {
+    return { valid: false, message: '请选择车况评级' }
+  }
+  return { valid: true }
+}
+
+/** 整体表单校验：返回第一个失败的 message */
+export interface FormValidationContext {
+  brand_type: string | undefined
+  brand: string | undefined
+  vehicle_type: string | undefined
+  series: string | undefined
+  tonnage: number | undefined
+  config_type: string | undefined
+  mast_type: string | undefined
+  mast_height_mm: number | undefined
+  factory_year: number | undefined
+  sale_year: number | undefined
+  usage_hours: number | undefined
+  province: string | undefined
+  city: string | undefined
+  condition_rating: string | undefined
+  /** 电池类型是否必填（电动车辆时） */
+  battery_type?: string | undefined
+  /** 车辆类型字典中是否含电动（用于判断 battery_type 必填性） */
+  hasElectricVehicleType?: boolean
+}
+
+/** 整体校验：依次检查关键字段 */
+export function validateForm(ctx: FormValidationContext): ValidationResult {
+  const checks: Array<() => ValidationResult> = [
+    () => validateRequiredString(ctx.brand_type, '品牌类型'),
+    () => validateRequiredString(ctx.brand, '品牌'),
+    () => validateRequiredString(ctx.vehicle_type, '车辆类型'),
+    () => validateRequiredString(ctx.series, '系列'),
+    () => validateTonnage(ctx.tonnage),
+    () => validateRequiredString(ctx.config_type, '配置类型'),
+    () => validateRequiredString(ctx.mast_type, '门架类型'),
+    () => validateMastHeight(ctx.mast_height_mm),
+    () => validateYears(ctx.factory_year, ctx.sale_year),
+    () => validateUsageHours(ctx.usage_hours),
+    () => validateRequiredString(ctx.province, '所在省份'),
+    () => validateRequiredString(ctx.city, '所在城市'),
+    () => validateConditionRating(ctx.condition_rating),
+    () => {
+      // 仅当车辆类型字典含电动时，battery_type 才被要求
+      if (ctx.hasElectricVehicleType && !ctx.battery_type) {
+        return { valid: false, message: '电动车辆需选择电池类型' }
+      }
+      return { valid: true }
+    }
+  ]
+  for (const c of checks) {
+    const r = c()
+    if (!r.valid) return r
   }
   return { valid: true }
 }

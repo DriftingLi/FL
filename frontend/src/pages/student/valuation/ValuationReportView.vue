@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 评估报告页（Tesla 极简：白底 + Electric Blue 残值 + 6 维雷达 + 极简表格）
+// 评估报告页（Tesla 极简：白底 + Electric Blue 残值 + 维度雷达 + 系数计算过程）
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Download, CircleCheck } from '@element-plus/icons-vue'
@@ -8,10 +8,19 @@ import ResultCard from '@/components/valuation/ResultCard.vue'
 import DimensionRadar from '@/components/valuation/DimensionRadar.vue'
 import { getEvaluationDetail } from '@/api/valuation/evaluation'
 import { generateReport, getReportDownloadUrl } from '@/api/valuation/report'
-import client from '@/api/valuation/client'
-import { formatBytes, formatDateTime, formatInt, formatWan } from '@/utils/valuationFormat'
+import { downloadEvaluationReportBlob } from '@/api/valuation/evaluation'
+import {
+  formatBoolean,
+  formatBytes,
+  formatDateTime,
+  formatInt,
+  formatMastHeight,
+  formatTonnage,
+  formatWan,
+  formatCoefficient
+} from '@/utils/valuationFormat'
+import { COEFFICIENT_DEFS, CONDITION_RATING_COLOR } from '@/utils/valuationConstants'
 import type { EvaluationDetailResponse } from '@/types/valuation/evaluation'
-import type { ItemStatus } from '@/types/valuation/evaluation'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,10 +37,6 @@ const loading = ref(false)
 const generating = ref(false)
 const pdfInfo = ref<{ file_name: string; file_size: number } | null>(null)
 
-// el-collapse v-model：报告部件明细默认全收起
-const reportActiveNames = ref<string[]>([])
-
-// 部件配置用于显示条目权重
 onMounted(async () => {
   await loadDetail()
 })
@@ -41,7 +46,7 @@ async function loadDetail() {
   loading.value = true
   try {
     data.value = await getEvaluationDetail(id.value)
-    // 如果已经有 pdf 路径
+    // 若已有 pdf 路径，恢复 pdf 信息
     const pdfPath = data.value?.report_pdf_path
     if (pdfPath) {
       const filename = pdfPath.split(/[\\/]/).pop() ?? ''
@@ -63,61 +68,51 @@ async function onGenerate() {
   }
 }
 
-function onDownload() {
+async function onDownload() {
   if (!id.value) return
-  // 改为 axios blob + a.download：避免 window.open 触发「开新 tab + 弹下载」的双窗口行为
   const fileName = pdfInfo.value?.file_name || `evaluation_report_${id.value}.pdf`
-  client
-    .get(getReportDownloadUrl(id.value), { responseType: 'blob' })
-    .then((resp) => {
-      const blob = resp.data as Blob
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = fileName
-      a.style.display = 'none'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      // 延迟释放，确保浏览器已开始下载
-      setTimeout(() => URL.revokeObjectURL(url), 1500)
-    })
-    .catch(() => {
-      // 拦截器已 ElMessage.error 提示；此处静默即可
-    })
+  try {
+    // 优先用 downloadEvaluationReportBlob（统一接口）；fallback 用 getReportDownloadUrl + window open
+    const blob = await downloadEvaluationReportBlob(id.value)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    a.style.display = 'none'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1500)
+  } catch {
+    // 兜底：浏览器直接打开下载 URL
+    window.open(getReportDownloadUrl(id.value), '_blank')
+  }
 }
 
 function backToResult() {
   router.push('/valuation/result')
 }
 
-// 按类别分组 items（兼容后端 omitempty 可能不返回 items 的情况）
-const itemsByCategory = computed(() => {
-  const items = data.value?.items ?? []
-  const map = new Map<string, { name: string; items: typeof items }>()
-  for (const it of items) {
-    const arr = map.get(it.category_code) ?? { name: it.category_name, items: [] }
-    arr.items.push(it)
-    map.set(it.category_code, arr)
-  }
-  return Array.from(map.entries()).map(([code, v]) => ({ code, ...v }))
+// 维度评分转 Map（兼容 DimensionRadar 旧 props 签名）
+const dimensionScoresMap = computed(() => {
+  const arr = data.value?.dimension_scores ?? []
+  const map: Record<string, number> = {}
+  for (const d of arr) map[d.label] = d.value
+  return map
 })
 
-const totalCount = computed(() => data.value?.items?.length ?? 0)
+// 系数取值（安全访问）
+function coefValue(key: string): number {
+  const v = (data.value as unknown as Record<string, number> | null)?.[key]
+  return typeof v === 'number' ? v : 0
+}
 
-/** 状态对应的颜色（与 ConditionTable 保持一致） */
-const STATUS_COLOR: Record<ItemStatus, string> = {
-  normal: '#16A34A',
-  slight_wear: '#0EA5E9',
-  need_repair: '#F59E0B',
-  need_replace: '#DC2626'
-}
-const STATUS_TEXT: Record<ItemStatus, string> = {
-  normal: '正常',
-  slight_wear: '轻微磨损',
-  need_repair: '需维修',
-  need_replace: '需更换'
-}
+// 使用年限 = 评估年份 - 出厂年份
+const usageYears = computed(() => {
+  const d = data.value
+  if (!d || !d.factory_year || !d.sale_year) return 0
+  return d.sale_year - d.factory_year
+})
 </script>
 
 <template>
@@ -136,7 +131,7 @@ const STATUS_TEXT: Record<ItemStatus, string> = {
         </template>
       </PageHeader>
 
-      <!-- 顶部双列：左侧残值卡片（主，14 列），右侧雷达图（次，10 列） -->
+      <!-- 顶部双列：左侧残值卡片，右侧雷达图 -->
       <el-row :gutter="20" class="top-row">
         <el-col :xs="24" :lg="14">
           <ResultCard
@@ -149,7 +144,7 @@ const STATUS_TEXT: Record<ItemStatus, string> = {
         <el-col :xs="24" :lg="10">
           <section class="card-surface radar-block">
             <h2 class="section-title">维度评分</h2>
-            <DimensionRadar :scores="data.dimension_scores" height="320px" />
+            <DimensionRadar :scores="dimensionScoresMap" height="320px" />
           </section>
         </el-col>
       </el-row>
@@ -158,23 +153,61 @@ const STATUS_TEXT: Record<ItemStatus, string> = {
       <section class="card-surface section-block">
         <h2 class="section-title">基本信息</h2>
         <el-descriptions :column="{ xs: 1, sm: 2, md: 3 }" border size="small">
-          <el-descriptions-item label="叉车类型">
-            {{ data.forklift_type === 'electric' ? '电动叉车' : '内燃叉车' }}
-          </el-descriptions-item>
+          <el-descriptions-item label="品牌类型">{{ data.brand_type }}</el-descriptions-item>
           <el-descriptions-item label="品牌">{{ data.brand }}</el-descriptions-item>
-          <el-descriptions-item label="型号">{{ data.model || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="原始价格">{{ formatWan(data.original_price) }}</el-descriptions-item>
-          <el-descriptions-item label="购置年份">{{ data.purchase_year }}</el-descriptions-item>
-          <el-descriptions-item label="成交年份">{{ data.sale_year }}</el-descriptions-item>
-          <el-descriptions-item label="使用年限">{{ data.sale_year - data.purchase_year }} 年</el-descriptions-item>
-          <el-descriptions-item label="累计使用小时">{{ formatInt(data.usage_hours) }} 小时</el-descriptions-item>
-          <el-descriptions-item label="使用工况">{{ data.work_condition }}</el-descriptions-item>
-          <el-descriptions-item v-if="data.fuel_type" label="燃料类型">
-            {{ data.fuel_type }}
+          <el-descriptions-item label="车辆类型">{{ data.vehicle_type }}</el-descriptions-item>
+          <el-descriptions-item label="系列">{{ data.series }}</el-descriptions-item>
+          <el-descriptions-item label="吨位">{{ formatTonnage(data.tonnage) }}</el-descriptions-item>
+          <el-descriptions-item label="配置类型">{{ data.config_type }}</el-descriptions-item>
+          <el-descriptions-item label="门架类型">{{ data.mast_type }}</el-descriptions-item>
+          <el-descriptions-item label="门架高度">{{ formatMastHeight(data.mast_height_mm) }}</el-descriptions-item>
+          <el-descriptions-item label="出厂年份">{{ data.factory_year }}</el-descriptions-item>
+          <el-descriptions-item label="评估年份">{{ data.sale_year }}</el-descriptions-item>
+          <el-descriptions-item label="使用年限">{{ usageYears }} 年</el-descriptions-item>
+          <el-descriptions-item label="累计工时">{{ formatInt(data.usage_hours) }} 小时</el-descriptions-item>
+          <el-descriptions-item label="是否原厂原漆">{{ formatBoolean(data.original_paint) }}</el-descriptions-item>
+          <el-descriptions-item v-if="data.battery_type" label="电池类型">
+            {{ data.battery_type }}
           </el-descriptions-item>
-          <el-descriptions-item label="能否正常行驶">{{ data.can_drive ? '是' : '否' }}</el-descriptions-item>
-          <el-descriptions-item label="液压功能">{{ data.hydraulic_ok ? '正常' : '异常' }}</el-descriptions-item>
+          <el-descriptions-item label="所在区域">{{ data.province }} / {{ data.city }}</el-descriptions-item>
+          <el-descriptions-item label="有车牌">{{ formatBoolean(data.has_license_plate) }}</el-descriptions-item>
+          <el-descriptions-item label="特种设备登记证">{{ formatBoolean(data.has_registration_certificate) }}</el-descriptions-item>
+          <el-descriptions-item label="有保养记录">{{ formatBoolean(data.has_maintenance_records) }}</el-descriptions-item>
+          <el-descriptions-item label="车况评级">
+            <el-tag
+              effect="plain"
+              :style="{
+                color: CONDITION_RATING_COLOR[data.condition_rating] || '#666',
+                borderColor: CONDITION_RATING_COLOR[data.condition_rating] || '#666'
+              }"
+            >
+              {{ data.condition_rating }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="原始价格">{{ formatWan(data.original_price) }}</el-descriptions-item>
         </el-descriptions>
+      </section>
+
+      <!-- 系数计算过程 -->
+      <section class="card-surface section-block">
+        <h2 class="section-title">系数计算过程</h2>
+        <p class="calc-formula num">
+          残值 = 原价 × Kt × Kh × Kb × Kc × Km
+        </p>
+        <p class="calc-result num">
+          = {{ formatWan(data.original_price) }}
+          <template v-for="def in COEFFICIENT_DEFS" :key="def.key">
+            × {{ formatCoefficient(coefValue(def.key)) }}
+          </template>
+          = <span class="calc-final">{{ formatWan(data.estimated_value) }}</span>
+        </p>
+        <div class="coef-detail-grid">
+          <div v-for="def in COEFFICIENT_DEFS" :key="def.key" class="coef-detail-cell">
+            <div class="coef-detail-label" :style="{ color: def.color }">{{ def.label }}</div>
+            <div class="coef-detail-value num">{{ formatCoefficient(coefValue(def.key)) }}</div>
+            <div class="coef-detail-desc">{{ def.description }}</div>
+          </div>
+        </div>
       </section>
 
       <!-- 评估建议 -->
@@ -186,48 +219,6 @@ const STATUS_TEXT: Record<ItemStatus, string> = {
             <span class="suggestion-text">{{ s }}</span>
           </li>
         </ul>
-      </section>
-
-      <!-- 部件状态明细 -->
-      <section class="card-surface section-block">
-        <h2 class="section-title">部件状态明细（{{ totalCount }} 条）</h2>
-        <el-collapse v-model="reportActiveNames">
-          <el-collapse-item
-            v-for="cat in itemsByCategory"
-            :key="cat.code"
-            :name="cat.code"
-            :title="cat.name"
-          >
-            <el-table :data="cat.items" row-key="id" size="default">
-              <el-table-column prop="item_name" label="条目" />
-              <el-table-column label="类别权重" width="110" align="center">
-                <template #default="{ row }">
-                  <span class="num">{{ (row.category_weight * 100).toFixed(0) }}%</span>
-                </template>
-              </el-table-column>
-              <el-table-column label="条目权重" width="110" align="center">
-                <template #default="{ row }">
-                  <span class="num">{{ (row.item_weight * 100).toFixed(0) }}%</span>
-                </template>
-              </el-table-column>
-              <el-table-column label="状态" width="130">
-                <template #default="{ row }">
-                  <el-tag
-                    effect="plain"
-                    :style="{ color: STATUS_COLOR[row.status as ItemStatus], borderColor: STATUS_COLOR[row.status as ItemStatus] }"
-                  >
-                    {{ STATUS_TEXT[row.status as ItemStatus] }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="评分" width="100" align="center">
-                <template #default="{ row }">
-                  <span class="num">{{ row.score.toFixed(2) }}</span>
-                </template>
-              </el-table-column>
-            </el-table>
-          </el-collapse-item>
-        </el-collapse>
       </section>
 
       <!-- 免责声明 -->
@@ -268,6 +259,50 @@ const STATUS_TEXT: Record<ItemStatus, string> = {
   font-weight: var(--fw-medium);
   margin: 0 0 var(--sp-5);
   color: var(--color-text);
+}
+.calc-formula {
+  font-size: var(--fs-base);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--sp-3);
+}
+.calc-result {
+  font-size: var(--fs-md);
+  color: var(--color-text);
+  margin: 0 0 var(--sp-5);
+  line-height: 1.8;
+  word-break: break-all;
+}
+.calc-final {
+  color: var(--color-primary);
+  font-weight: var(--fw-semibold);
+}
+.coef-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--sp-4);
+}
+.coef-detail-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--sp-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-muted);
+}
+.coef-detail-label {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+.coef-detail-value {
+  font-size: 20px;
+  font-weight: var(--fw-semibold);
+  color: var(--color-text);
+}
+.coef-detail-desc {
+  font-size: var(--fs-xs);
+  color: var(--color-text-tertiary);
+  line-height: 1.5;
 }
 .suggestion-list {
   margin: 0;
@@ -324,6 +359,9 @@ const STATUS_TEXT: Record<ItemStatus, string> = {
 @media (max-width: 768px) {
   .suggestion-list {
     grid-template-columns: 1fr;
+  }
+  .coef-detail-grid {
+    grid-template-columns: 1fr 1fr;
   }
   .radar-block,
   .section-block {

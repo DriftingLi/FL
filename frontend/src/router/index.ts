@@ -101,14 +101,9 @@ const routes = [
         component: () => import('@/pages/student/valuation/ValuationHome.vue')
       },
       {
-        path: 'valuation/input/electric',
-        name: 'ValuationElectricInput',
-        component: () => import('@/pages/student/valuation/ElectricInputView.vue')
-      },
-      {
-        path: 'valuation/input/combustion',
-        name: 'ValuationCombustionInput',
-        component: () => import('@/pages/student/valuation/CombustionInputView.vue')
+        path: 'valuation/input',
+        name: 'ValuationInput',
+        component: () => import('@/pages/student/valuation/ValuationInputView.vue')
       },
       {
         path: 'valuation/result',
@@ -129,6 +124,11 @@ const routes = [
         path: 'valuation/battery/result',
         name: 'ValuationBatteryResult',
         component: () => import('@/pages/student/valuation/BatteryResultView.vue')
+      },
+      {
+        path: 'valuation/history',
+        name: 'ValuationHistory',
+        component: () => import('@/pages/student/valuation/ValuationHistoryView.vue')
       }
     ]
   },
@@ -180,6 +180,11 @@ const routes = [
         path: 'admins',
         name: 'AdminManage',
         component: () => import('@/pages/admin/AdminManage.vue')
+      },
+      {
+        path: 'valuation-config',
+        name: 'ValuationConfigManage',
+        component: () => import('@/pages/admin/ValuationConfigManage.vue')
       }
     ]
   },

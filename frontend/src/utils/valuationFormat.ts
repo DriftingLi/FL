@@ -38,3 +38,28 @@ export function formatBytes(bytes: number | undefined | null): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`
 }
+
+/** 吨位格式化：保留 1 位小数 + 单位 */
+export function formatTonnage(value: number | undefined | null): string {
+  if (value == null || Number.isNaN(value)) return '-'
+  return `${value.toFixed(1)} 吨`
+}
+
+/** 门架高度（mm）格式化：自动换算 m */
+export function formatMastHeight(mm: number | undefined | null): string {
+  if (mm == null || Number.isNaN(mm)) return '-'
+  if (mm >= 1000) return `${(mm / 1000).toFixed(2)} m（${mm} mm）`
+  return `${mm} mm`
+}
+
+/** 布尔值 → 是/否 */
+export function formatBoolean(v: boolean | undefined | null): string {
+  if (v == null) return '-'
+  return v ? '是' : '否'
+}
+
+/** 通用数字格式化：可指定小数位 */
+export function formatNumber(value: number | undefined | null, digits = 2): string {
+  if (value == null || Number.isNaN(value)) return '-'
+  return value.toFixed(digits)
+}

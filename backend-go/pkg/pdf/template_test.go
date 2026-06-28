@@ -64,69 +64,75 @@ func containAny(haystack string, expected ...string) bool {
 	return false
 }
 
+// sampleDetail 构造电动叉车样例 EvaluationDetail(贴近设计稿示例)
+// 各 K 系数与维度评分一一对应,保证测试数据自洽
+func sampleDetail() *model.EvaluationDetail {
+	return &model.EvaluationDetail{
+		ID:                         1,
+		BrandType:                  "国产一线",
+		Brand:                      "合力 (HELI)",
+		VehicleType:                "电动叉车",
+		Series:                     "H2000",
+		Tonnage:                    2.0,
+		ConfigType:                 "标准配置",
+		MastType:                   "标准门架",
+		MastHeightMM:               3000,
+		FactoryYear:                2020,
+		SaleYear:                   2026,
+		UsageHours:                 6800,
+		OriginalPaint:              true,
+		BatteryType:                "铅酸电池",
+		Province:                   "江苏",
+		City:                       "苏州",
+		HasLicensePlate:            true,
+		HasRegistrationCertificate: true,
+		HasMaintenanceRecords:      true,
+		ConditionRating:            "B",
+		OriginalPrice:              28.50,
+		KTime:                       0.74,
+		KHours:                      0.68,
+		KBrand:                      1.05,
+		KCondition:                  0.82,
+		KMarket:                     0.95,
+		EstimatedValue:             12.35,
+		ConfidenceLow:               10.82,
+		ConfidenceHigh:              13.88,
+	}
+}
+
+// sampleDimensionScores 5 维评分(与雷达图顺序一致)
+func sampleDimensionScores() map[string]float64 {
+	return map[string]float64{
+		"时间维度": 0.74,
+		"使用强度": 0.68,
+		"品牌":   1.05,
+		"车况":   0.82,
+		"市场":   0.95,
+	}
+}
+
+// sampleSuggestions 8 类建议中可能命中的若干条
+func sampleSuggestions() []string {
+	return []string{
+		"车况良好,残值稳定,可作为二手设备出售",
+		"原厂漆完整且有维保记录,加成 6%,对保值有利",
+		"品牌力较好,残值具备一定支撑",
+		"残值率较高,建议按当前车况正常出售",
+	}
+}
+
 // TestGenerateReport 验证 PDF 生成器能成功生成文件、首字节为 PDF 魔数,且为 3 页
 func TestGenerateReport(t *testing.T) {
 	// 准备临时输出目录
 	dir := t.TempDir()
 	gen := NewGenerator(dir)
 
-	// 构造样例评估详情(贴近设计稿示例:合力 H2000, 28.5 万, 6 年, 6800 小时, 12.35 万残值, B 级)
-	report := &model.EvaluationDetailResponse{
-		ID:             1,
-		ForkliftType:   model.ForkliftTypeElectric,
-		Brand:          "合力 (HELI)",
-		Model:          "H2000",
-		OriginalPrice:  28.50,
-		PurchaseYear:   2020,
-		SaleYear:       2026,
-		UsageHours:     6800,
-		WorkCondition:  model.WorkConditionStorage,
-		CanDrive:       true,
-		HydraulicOk:    true,
-		KTime:          0.74,
-		KHours:         0.68,
-		KWork:          1.10,
-		KBrand:         1.05,
-		KCondition:     0.82,
-		KMarket:        0.95,
-		EstimatedValue: 12.35,
-		ConfidenceLow:  10.82,
-		ConfidenceHigh: 13.88,
-		DimensionScores: map[string]float64{
-			"时间维度": 0.74, "使用强度": 0.68, "工况": 1.10,
-			"品牌": 1.05, "车况": 0.82, "市场": 0.95,
-		},
-		Suggestions: []string{
-			"该叉车综合状况良好,建议可作为二手设备在二手市场出售,预期可回收约 12.35 万元。",
-			"液压系统和操控部件有轻微磨损,若继续自用,建议安排预防性维护。",
-			"品牌市场认可度高(合力 HELI),有利于二手交易,建议优先考虑品牌官方渠道。",
-			"工况温和,二手市场需求稳定。",
-		},
-	}
-
-	weights := model.CalcWeights{
-		WWorkCondition: 0.20,
-		WBrand:         0.20,
-		WCondition:     0.50,
-		WMarket:        0.10,
-	}
-
-	// 样例部件状态(对应设计稿中 7 个类别)
-	items := []model.EvaluationItemDTO{
-		{CategoryCode: "POWER", CategoryName: "动力系统", ItemCode: "p1", ItemName: "驱动电机", Status: model.ItemStatusNormal, Score: 1.0},
-		{CategoryCode: "POWER", CategoryName: "动力系统", ItemCode: "p2", ItemName: "传动系统", Status: model.ItemStatusNormal, Score: 0.95},
-		{CategoryCode: "HYDR", CategoryName: "液压系统", ItemCode: "h1", ItemName: "液压泵", Status: model.ItemStatusSlightWear, Score: 0.85},
-		{CategoryCode: "HYDR", CategoryName: "液压系统", ItemCode: "h2", ItemName: "液压缸", Status: model.ItemStatusSlightWear, Score: 0.85},
-		{CategoryCode: "ELEC", CategoryName: "电气系统", ItemCode: "e1", ItemName: "主控板", Status: model.ItemStatusNormal, Score: 1.0},
-		{CategoryCode: "ELEC", CategoryName: "电气系统", ItemCode: "e2", ItemName: "仪表盘", Status: model.ItemStatusNormal, Score: 0.95},
-		{CategoryCode: "FRAME", CategoryName: "车架与结构件", ItemCode: "f1", ItemName: "门架", Status: model.ItemStatusNormal, Score: 0.95},
-		{CategoryCode: "TYRE", CategoryName: "轮胎与轮组", ItemCode: "t1", ItemName: "前轮", Status: model.ItemStatusNeedRepair, Score: 0.6},
-		{CategoryCode: "CTRL", CategoryName: "操控与仪表", ItemCode: "c1", ItemName: "方向盘", Status: model.ItemStatusSlightWear, Score: 0.85},
-		{CategoryCode: "SAFE", CategoryName: "安全装置", ItemCode: "s1", ItemName: "警示灯", Status: model.ItemStatusNormal, Score: 1.0},
-	}
+	detail := sampleDetail()
+	dimScores := sampleDimensionScores()
+	suggestions := sampleSuggestions()
 
 	// 调用生成器
-	path, err := gen.GenerateReport(report, items, weights)
+	path, err := gen.GenerateReport(detail, dimScores, suggestions)
 	if err != nil {
 		t.Fatalf("生成 PDF 失败: %v", err)
 	}
@@ -196,57 +202,56 @@ func TestGenerateReport(t *testing.T) {
 	}
 }
 
-// TestGenerateReportCombustion 内燃叉车样例
+// TestGenerateReportCombustion 内燃叉车样例(无电池类型,无原厂漆加成)
 func TestGenerateReportCombustion(t *testing.T) {
 	dir := t.TempDir()
 	gen := NewGenerator(dir)
 
-	report := &model.EvaluationDetailResponse{
-		ID:             2002,
-		ForkliftType:   model.ForkliftTypeCombustion,
-		Brand:          "三菱 MITSUBISHI",
-		Model:          "FD30N",
-		OriginalPrice:  18.00,
-		PurchaseYear:   2019,
-		SaleYear:       2024,
-		UsageHours:     8000,
-		WorkCondition:  model.WorkConditionPort,
-		FuelType:       model.FuelTypeDiesel,
-		CanDrive:       true,
-		HydraulicOk:    false,
-		KTime:          0.6065,
-		KHours:         0.90,
-		KWork:          0.95,
-		KBrand:         1.00,
-		KCondition:     0.75,
-		KMarket:        0.98,
-		EstimatedValue: 4.50,
-		ConfidenceLow:  4.28,
-		ConfidenceHigh: 4.73,
-		DimensionScores: map[string]float64{
-			"时间维度": 0.61, "使用强度": 0.90, "工况": 0.95,
-			"品牌": 1.00, "车况": 0.75, "市场": 0.98,
-		},
-		Suggestions: []string{
-			"车况一般,多个部件需要维修",
-			"液压系统异常,建议维修后再出售",
-		},
+	detail := &model.EvaluationDetail{
+		ID:                         2002,
+		BrandType:                  "进口一线",
+		Brand:                      "三菱 MITSUBISHI",
+		VehicleType:                "内燃叉车",
+		Series:                     "FD30N",
+		Tonnage:                    3.0,
+		ConfigType:                 "高配置",
+		MastType:                   "三级门架",
+		MastHeightMM:               4500,
+		FactoryYear:                2019,
+		SaleYear:                   2024,
+		UsageHours:                 8000,
+		OriginalPaint:              false,
+		BatteryType:                "",
+		Province:                   "上海",
+		City:                       "上海",
+		HasLicensePlate:            true,
+		HasRegistrationCertificate: false,
+		HasMaintenanceRecords:      false,
+		ConditionRating:            "C",
+		OriginalPrice:              18.00,
+		KTime:                       0.61,
+		KHours:                      0.90,
+		KBrand:                      1.00,
+		KCondition:                  0.75,
+		KMarket:                     0.98,
+		EstimatedValue:              4.50,
+		ConfidenceLow:               4.28,
+		ConfidenceHigh:              4.73,
+	}
+	dimScores := map[string]float64{
+		"时间维度": 0.61,
+		"使用强度": 0.90,
+		"品牌":   1.00,
+		"车况":   0.75,
+		"市场":   0.98,
+	}
+	suggestions := []string{
+		"车况一般,多个维度有折损,建议折价处理",
+		"缺少登记证,残值扣减 5%,过户需提供登记证",
+		"品牌力较好,残值具备一定支撑",
 	}
 
-	weights := model.CalcWeights{
-		WWorkCondition: 0.20,
-		WBrand:         0.20,
-		WCondition:     0.50,
-		WMarket:        0.10,
-	}
-
-	items := []model.EvaluationItemDTO{
-		{CategoryCode: "ENGINE", CategoryName: "发动机", ItemCode: "e1", ItemName: "柴油机本体", Status: model.ItemStatusNeedRepair, Score: 0.6},
-		{CategoryCode: "ENGINE", CategoryName: "发动机", ItemCode: "e2", ItemName: "进排气系统", Status: model.ItemStatusSlightWear, Score: 0.85},
-		{CategoryCode: "BODY", CategoryName: "车身结构", ItemCode: "bd1", ItemName: "驾驶舱", Status: model.ItemStatusNormal, Score: 1.0},
-	}
-
-	path, err := gen.GenerateReport(report, items, weights)
+	path, err := gen.GenerateReport(detail, dimScores, suggestions)
 	if err != nil {
 		t.Fatalf("生成 PDF 失败: %v", err)
 	}
@@ -257,36 +262,59 @@ func TestGenerateReportCombustion(t *testing.T) {
 	t.Logf("内燃叉车 PDF 生成成功: %s", path)
 }
 
-// TestGenerateReportEmptyItems 部件列表为空时也应能生成(且仍为 3 页)
-func TestGenerateReportEmptyItems(t *testing.T) {
+// TestGenerateReportEmptySuggestions 建议列表为空时也应能生成(且仍为 3 页)
+func TestGenerateReportEmptySuggestions(t *testing.T) {
 	dir := t.TempDir()
 	gen := NewGenerator(dir)
 
-	report := &model.EvaluationDetailResponse{
-		ID:            3,
-		ForkliftType:  model.ForkliftTypeElectric,
-		Brand:         "永恒力 JUNGHEINRICH",
-		OriginalPrice: 9.00,
-		PurchaseYear:  2022,
-		SaleYear:      2024,
-		UsageHours:    1200,
-		WorkCondition: model.WorkConditionCold,
+	detail := &model.EvaluationDetail{
+		ID:                         3,
+		BrandType:                  "国产一线",
+		Brand:                      "永恒力 JUNGHEINRICH",
+		VehicleType:                "电动叉车",
+		Series:                     "EFG",
+		Tonnage:                    1.5,
+		ConfigType:                 "标准配置",
+		MastType:                   "标准门架",
+		MastHeightMM:               2500,
+		FactoryYear:                2022,
+		SaleYear:                   2024,
+		UsageHours:                 1200,
+		OriginalPaint:              true,
+		BatteryType:                "锂电池",
+		Province:                   "北京",
+		City:                       "北京",
+		HasLicensePlate:            true,
+		HasRegistrationCertificate: true,
+		HasMaintenanceRecords:       true,
+		ConditionRating:            "A",
+		OriginalPrice:              9.00,
+		KTime:                       0.85,
+		KHours:                      1.10,
+		KBrand:                      1.10,
+		KCondition:                  1.10,
+		KMarket:                     1.00,
+		EstimatedValue:              10.36,
+		ConfidenceLow:               9.32,
+		ConfidenceHigh:              11.40,
 	}
-	weights := model.CalcWeights{
-		WWorkCondition: 0.20,
-		WBrand:         0.20,
-		WCondition:     0.50,
-		WMarket:        0.10,
+	dimScores := map[string]float64{
+		"时间维度": 0.85,
+		"使用强度": 1.10,
+		"品牌":   1.10,
+		"车况":   1.10,
+		"市场":   1.00,
 	}
-	path, err := gen.GenerateReport(report, nil, weights)
+
+	path, err := gen.GenerateReport(detail, dimScores, nil)
 	if err != nil {
-		t.Fatalf("空部件列表也必须能生成: %v", err)
+		t.Fatalf("空建议列表也必须能生成: %v", err)
 	}
 	pages, _ := countPDFPages(path)
 	if pages != 3 {
 		t.Errorf("空数据时也应为 3 页,实际 %d 页", pages)
 	}
-	t.Logf("空部件 PDF 生成成功: %s", path)
+	t.Logf("空建议 PDF 生成成功: %s", path)
 }
 
 // TestFindFontFile 验证字体文件查找逻辑

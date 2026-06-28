@@ -1,6 +1,7 @@
 // Package service 实现核心业务逻辑
-// 本文件：主评估公式 V = V₀ × Kt × Kh × (w₁·Kw + w₂·Kb + w₃·Kc + w₄·Km)
-// 集成全部子系数计算与置信区间
+// 本文件：主评估服务 ValuationService
+// 公式：残值 = 基准原价 × Kt × Kh × Kb × Kc × Km
+// 集成基准价查询、各 K 系数计算、置信区间、维度评分与建议生成
 package service
 
 import (
@@ -8,141 +9,203 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"forklift-training/internal/valuation/model"
 	"forklift-training/internal/valuation/repository"
 )
 
-// ValuationService 评估服务（聚合各子系数计算）
+// ValuationService 评估服务
+// 持有 *pgxpool.Pool 与字典仓储，所有系数从 DB 实时查询
 type ValuationService struct {
-	Coefficients *CoefficientLoader
-	Brands       *BrandLoader
-	Parts        *PartConfigLoader
+	pool     *pgxpool.Pool
+	dictRepo *repository.DictionaryRepository
+	evalRepo *repository.EvaluationRepository
+	provider *CoefficientProvider
 }
 
 // NewValuationService 构造评估服务
-func NewValuationService(c *CoefficientLoader, b *BrandLoader, p *PartConfigLoader) *ValuationService {
+// pool: pgx 连接池
+// dictRepo: 字典仓储（brand_types / brands / vehicle_types / condition_ratings / region_coefficients / coefficient_configs / original_prices）
+// evalRepo: 评估记录仓储（持久化评估结果）
+func NewValuationService(
+	pool *pgxpool.Pool,
+	dictRepo *repository.DictionaryRepository,
+	evalRepo *repository.EvaluationRepository,
+) *ValuationService {
 	return &ValuationService{
-		Coefficients: c,
-		Brands:       b,
-		Parts:        p,
+		pool:     pool,
+		dictRepo: dictRepo,
+		evalRepo: evalRepo,
+		provider: NewCoefficientProvider(dictRepo),
 	}
 }
 
 // Evaluate 执行完整残值评估
-// 返回包含全部中间系数、最终结果、置信区间的 EvaluationResult
+// 流程：
+//  1. 业务参数校验
+//  2. 查询 vehicle_type 派生 power_type（电动/内燃）
+//  3. 查询 original_prices 获取基准价（精确匹配 → 模糊匹配 → 错误）
+//  4. 计算 Kt / Kh / Kb / Kc / Km
+//  5. 残值 = 基准价 × Kt × Kh × Kb × Kc × Km
+//  6. 置信区间 = 残值 × (1 ± confidence_range)
+//  7. 生成维度评分与文本建议
+//  8. 持久化到 evaluations 表
 func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRequest) (*model.EvaluationResult, error) {
 	// 1. 业务参数校验
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
 
-	// 2. 计算 Kt
-	ktRes, err := CalcKTime(req.ForkliftType, req.PurchaseYear, req.SaleYear, s.Coefficients)
+	// 2. 查询 vehicle_type 派生 power_type
+	vt, err := s.dictRepo.GetVehicleTypeByName(ctx, req.VehicleType)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s", model.ErrVehicleTypeNotFound, req.VehicleType)
+	}
+	powerType := model.PowerType(vt.PowerType)
+
+	// 3. 查询基准原价：精确匹配 → 模糊匹配
+	originalPrice, err := s.lookupOriginalPrice(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	// 3. 计算 Kh
-	khRes, err := CalcKHours(req.PurchaseYear, req.SaleYear, req.UsageHours)
+	// 4. 计算 Kt（基于 factory_year 与 sale_year）
+	ktRes, err := CalcKTime(ctx, powerType, req.FactoryYear, req.SaleYear, s.provider)
 	if err != nil {
 		return nil, err
 	}
 
-	// 4. 计算 Kw
-	kw, err := CalcKWork(req.WorkCondition)
+	// 5. 计算 Kh（age 复用 Kt 计算结果）
+	khRes, err := CalcKHours(ctx, ktRes.Age, req.UsageHours, s.provider)
 	if err != nil {
 		return nil, err
 	}
 
-	// 5. 计算 Kb
-	kb, err := s.Brands.CalcKBrand(req.Brand)
+	// 6. 计算 Kb（brand_types × brands）
+	kbRes, err := CalcKBrand(ctx, req.BrandType, req.Brand, s.dictRepo)
 	if err != nil {
 		return nil, err
 	}
 
-	// 6. 计算 Kc
-	kcRes, err := CalcKCondition(req.ForkliftType, req.Items, s.Parts, req.CanDrive, req.HydraulicOk)
+	// 7. 计算 Kc（condition_rating + 修正项）
+	kcRes, err := CalcKCondition(ctx, req.ConditionRating,
+		req.OriginalPaint, req.HasMaintenanceRecords, req.HasLicensePlate, req.HasRegistrationCertificate, s.dictRepo)
 	if err != nil {
 		return nil, err
 	}
 
-	// 7. 计算 Km
-	km, err := CalcKMarket(s.Coefficients)
+	// 8. 计算 Km（region_coefficients，未命中默认 1.0）
+	kmRes, err := CalcKMarket(ctx, req.Province, req.City, s.dictRepo)
 	if err != nil {
 		return nil, err
 	}
 
-	// 8. 读取加权权重
-	wWork, err := s.Coefficients.Get(KeyWWorkCondition)
-	if err != nil {
-		return nil, err
-	}
-	wBrand, err := s.Coefficients.Get(KeyWBrand)
-	if err != nil {
-		return nil, err
-	}
-	wCondition, err := s.Coefficients.Get(KeyWCondition)
-	if err != nil {
-		return nil, err
-	}
-	wMarket, err := s.Coefficients.Get(KeyWMarket)
-	if err != nil {
-		return nil, err
-	}
+	// 9. 主公式：残值 = 基准原价 × Kt × Kh × Kb × Kc × Km
+	estimated := originalPrice * ktRes.KTime * khRes.KHours * kbRes.KBrand * kcRes.KCondition * kmRes.KMarket
 
-	// 9. 计算 Σ(wᵢ·Kᵢ)
-	weightedSum := wWork*kw + wBrand*kb + wCondition*kcRes.KCondition + wMarket*km
-
-	// 10. 主公式 V = V₀ × Kt × Kh × Σ(wᵢ·Kᵢ)
-	estimated := req.OriginalPrice * ktRes.KTime * khRes.KHours * weightedSum
-
-	// 11. 置信区间 [V×(1-r), V×(1+r)]
-	confRange, err := s.Coefficients.Get(KeyConfidenceRange)
-	if err != nil {
-		return nil, err
+	// 10. 置信区间
+	confRange, err := s.provider.Get(ctx, KeyConfidenceRange)
+	if err != nil || confRange <= 0 {
+		confRange = 0.10
 	}
 	confLow := estimated * (1 - confRange)
 	confHigh := estimated * (1 + confRange)
 
-	// 12. 装配结果
+	// 11. 装配结果
 	result := &model.EvaluationResult{
-		ForkliftType:   req.ForkliftType,
-		Brand:          req.Brand,
-		Model:          req.Model,
-		OriginalPrice:  req.OriginalPrice,
-		PurchaseYear:   req.PurchaseYear,
-		SaleYear:       req.SaleYear,
-		UsageHours:     req.UsageHours,
-		WorkCondition:  req.WorkCondition,
-		FuelType:       req.FuelType,
-		CanDrive:       req.CanDrive,
-		HydraulicOk:    req.HydraulicOk,
-		Items:          convertToItemResults(req.Items, s.Parts.GetParts(req.ForkliftType)),
-		KTime:          ktRes.KTime,
-		KHours:         khRes.KHours,
-		KWork:          kw,
-		KBrand:         kb,
-		KCondition:     kcRes.KCondition,
-		KMarket:        km,
-		EstimatedValue: roundTo2(estimated),
-		ConfidenceLow:  roundTo2(confLow),
-		ConfidenceHigh: roundTo2(confHigh),
+		EvaluationRequest: *req,
+		OriginalPrice:     originalPrice,
+		PowerType:         powerType,
+		KTime:             roundTo4(ktRes.KTime),
+		KHours:            roundTo4(khRes.KHours),
+		KBrand:            roundTo4(kbRes.KBrand),
+		KCondition:        roundTo4(kcRes.KCondition),
+		KMarket:           roundTo4(kmRes.KMarket),
+		EstimatedValue:    roundTo2(estimated),
+		ConfidenceLow:     roundTo2(confLow),
+		ConfidenceHigh:    roundTo2(confHigh),
 	}
-	// 13. 派生维度评分 + 文本建议
+
+	// 12. 派生维度评分 + 文本建议
 	result.DimensionScores = buildDimensionScores(result)
 	result.Suggestions = buildSuggestions(result)
 	return result, nil
 }
 
-// buildDimensionScores 把 6 个 K 包装成中文标签的 map，方便前端直接展示
+// Persist 持久化评估结果到 evaluations 表，返回新 ID
+// 由 handler 在拿到 EvaluationResult 后调用
+func (s *ValuationService) Persist(ctx context.Context, result *model.EvaluationResult) (int64, error) {
+	if s.evalRepo == nil {
+		return 0, fmt.Errorf("evalRepo 未装配")
+	}
+	params := &repository.CreateEvaluationParams{
+		BrandType:                  result.BrandType,
+		Brand:                      result.Brand,
+		VehicleType:                result.VehicleType,
+		Series:                     result.Series,
+		Tonnage:                    result.Tonnage,
+		ConfigType:                 result.ConfigType,
+		MastType:                   result.MastType,
+		MastHeightMM:               result.MastHeightMM,
+		FactoryYear:                result.FactoryYear,
+		SaleYear:                   result.SaleYear,
+		UsageHours:                 result.UsageHours,
+		OriginalPaint:              result.OriginalPaint,
+		BatteryType:                result.BatteryType,
+		Province:                   result.Province,
+		City:                       result.City,
+		HasLicensePlate:            result.HasLicensePlate,
+		HasRegistrationCertificate: result.HasRegistrationCertificate,
+		HasMaintenanceRecords:      result.HasMaintenanceRecords,
+		ConditionRating:            result.ConditionRating,
+		OriginalPrice:              result.OriginalPrice,
+		KTime:                      result.KTime,
+		KHours:                     result.KHours,
+		KBrand:                     result.KBrand,
+		KCondition:                 result.KCondition,
+		KMarket:                    result.KMarket,
+		EstimatedValue:             result.EstimatedValue,
+		ConfidenceLow:              result.ConfidenceLow,
+		ConfidenceHigh:             result.ConfidenceHigh,
+	}
+	return s.evalRepo.CreateEvaluation(ctx, params)
+}
+
+// lookupOriginalPrice 查询基准原价：先精确匹配，未命中则模糊匹配
+func (s *ValuationService) lookupOriginalPrice(ctx context.Context, req *model.EvaluationRequest) (float64, error) {
+	// 1. 精确匹配
+	op, err := s.dictRepo.FindOriginalPriceMatch(ctx,
+		req.BrandType, req.Brand, req.VehicleType, req.Series,
+		req.Tonnage, req.ConfigType, req.MastType, req.MastHeightMM, req.BatteryType)
+	if err == nil {
+		return op.OriginalPrice, nil
+	}
+	if err != pgx.ErrNoRows {
+		return 0, fmt.Errorf("精确匹配原价失败: %w", err)
+	}
+	// 2. 模糊匹配（按 brand_type + brand + vehicle_type + series + tonnage）
+	op, err = s.dictRepo.FindOriginalPriceFuzzy(ctx,
+		req.BrandType, req.Brand, req.VehicleType, req.Series, req.Tonnage)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return 0, model.ErrOriginalPriceNotFound
+		}
+		return 0, fmt.Errorf("模糊匹配原价失败: %w", err)
+	}
+	return op.OriginalPrice, nil
+}
+
+// buildDimensionScores 把 5 个 K 包装成中文标签的 map
+// 维度顺序与雷达图保持一致：时间维度 / 使用强度 / 品牌 / 车况 / 市场
 func buildDimensionScores(r *model.EvaluationResult) map[string]float64 {
 	return map[string]float64{
-		"时间维度": roundTo2(r.KTime),
-		"使用强度": roundTo2(r.KHours),
-		"工况":   roundTo2(r.KWork),
-		"品牌":   roundTo2(r.KBrand),
-		"车况":   roundTo2(r.KCondition),
-		"市场":   roundTo2(r.KMarket),
+		"时间维度": roundTo4(r.KTime),
+		"使用强度": roundTo4(r.KHours),
+		"品牌":   roundTo4(r.KBrand),
+		"车况":   roundTo4(r.KCondition),
+		"市场":   roundTo4(r.KMarket),
 	}
 }
 
@@ -153,77 +216,74 @@ func buildSuggestions(r *model.EvaluationResult) []string {
 
 	// 1. 车况维度（核心）
 	switch {
-	case r.KCondition >= 0.95:
-		s = append(s, "车况整体保持良好，建议正常保养延续使用")
-	case r.KCondition >= 0.80:
-		s = append(s, "车况尚可，部分部件存在磨损")
-	case r.KCondition >= 0.60:
-		s = append(s, "车况一般，多个部件需要维修")
+	case r.KCondition >= 1.00:
+		s = append(s, "车况优秀，原漆、维保记录、证件齐全，建议正常出售")
+	case r.KCondition >= 0.85:
+		s = append(s, "车况良好，残值稳定，可作为二手设备出售")
+	case r.KCondition >= 0.65:
+		s = append(s, "车况一般，建议整备后出售以提升残值")
+	case r.KCondition >= 0.45:
+		s = append(s, "车况较差，多个维度有折损，建议折价处理")
 	default:
-		s = append(s, "车况较差，建议大修或拆件出售")
+		s = append(s, "车况很差，建议拆件出售或作为配件使用")
 	}
 
-	// 2. 品牌维度
+	// 2. 证件缺失提示
+	if !r.HasLicensePlate {
+		s = append(s, "缺少车牌，残值扣减 5%，建议补办后再出售")
+	}
+	if !r.HasRegistrationCertificate {
+		s = append(s, "缺少登记证，残值扣减 5%，过户需提供登记证")
+	}
+
+	// 3. 原厂漆与维保记录加分项提示
+	if r.OriginalPaint && r.HasMaintenanceRecords {
+		s = append(s, "原厂漆完整且有维保记录，加成 6%，对保值有利")
+	} else if r.OriginalPaint {
+		s = append(s, "原厂漆完整，加成 3%")
+	} else if r.HasMaintenanceRecords {
+		s = append(s, "有维保记录，加成 3%")
+	}
+
+	// 4. 品牌维度
 	switch {
-	case r.KBrand >= 1.0:
-		s = append(s, "国际一线品牌保值能力强，残值稳定")
-	case r.KBrand >= 0.9:
+	case r.KBrand >= 1.10:
+		s = append(s, "品牌力强（进口一线），保值能力优秀")
+	case r.KBrand >= 1.00:
 		s = append(s, "品牌力较好，残值具备一定支撑")
-	case r.KBrand < 0.85:
-		s = append(s, "二线品牌残值相对偏低")
+	case r.KBrand >= 0.85:
+		s = append(s, "品牌力中等，残值持平行业平均")
+	default:
+		s = append(s, "品牌力偏弱，残值相对偏低")
 	}
 
-	// 3. 时间维度
-	if r.KTime < 0.70 {
+	// 5. 时间维度
+	if r.KTime < 0.50 {
 		s = append(s, "使用年限较长，残值随时间明显折减")
 	}
 
-	// 4. 使用强度维度
-	if r.KHours < 0.85 {
+	// 6. 使用强度维度
+	switch {
+	case r.KHours >= 1.10:
+		s = append(s, "累计使用小时远低于行业平均，机械磨损小")
+	case r.KHours <= 0.85:
 		s = append(s, "累计使用小时偏高，机械磨损较大")
 	}
 
-	// 5. 工况维度
-	switch r.WorkCondition {
-	case model.WorkConditionSite:
-		s = append(s, "工地工况强度大，结构件易损")
-	case model.WorkConditionCold:
-		s = append(s, "冷库环境对电池和液压油寿命有影响")
-	case model.WorkConditionPort:
-		s = append(s, "港口高强度连续作业，液压与制动系统需重点关注")
-	}
-
-	// 6. 行驶 / 液压硬性指标
-	if !r.CanDrive {
-		s = append(s, "车辆当前无法正常行驶，需先修复再评估")
-	}
-	if !r.HydraulicOk {
-		s = append(s, "液压系统异常，建议维修后再出售")
-	}
-
-	// 7. 部件状态统计
-	replaceCount, repairCount := 0, 0
-	for _, it := range r.Items {
-		switch it.Status {
-		case model.ItemStatusNeedReplace:
-			replaceCount++
-		case model.ItemStatusNeedRepair:
-			repairCount++
-		}
-	}
-	if replaceCount > 0 {
-		s = append(s, fmt.Sprintf("有 %d 个部件需更换", replaceCount))
-	}
-	if repairCount > 0 {
-		s = append(s, fmt.Sprintf("有 %d 个部件需维修", repairCount))
+	// 7. 市场维度
+	if r.KMarket < 0.99 {
+		s = append(s, "区域市场系数偏低，二手需求较弱")
+	} else if r.KMarket > 1.02 {
+		s = append(s, "区域市场系数偏高，二手需求旺盛")
 	}
 
 	// 8. 残值率
 	if r.OriginalPrice > 0 {
 		rate := r.EstimatedValue / r.OriginalPrice
-		if rate >= 0.7 {
+		switch {
+		case rate >= 0.7:
 			s = append(s, "残值率较高，建议按当前车况正常出售")
-		} else if rate < 0.3 {
+		case rate < 0.3:
 			s = append(s, "残值率较低，建议拆件出售或作为配件使用")
 		}
 	}
@@ -231,56 +291,12 @@ func buildSuggestions(r *model.EvaluationResult) []string {
 	return s
 }
 
-// ReconstructFromRow 从持久化的 Evaluation 行 + 部件状态重建维度评分与建议
-// 供 handler.Get 在不回算完整 K 系数的情况下补全 dimension_scores / suggestions
-func ReconstructFromRow(eval repository.Evaluation, items []model.ItemResult) (map[string]float64, []string) {
-	r := &model.EvaluationResult{
-		OriginalPrice:  eval.OriginalPrice,
-		WorkCondition:  model.WorkCondition(eval.WorkCondition),
-		CanDrive:       eval.CanDrive,
-		HydraulicOk:    eval.HydraulicOk,
-		KTime:          eval.KTime,
-		KHours:         eval.KHours,
-		KWork:          eval.KWork,
-		KBrand:         eval.KBrand,
-		KCondition:     eval.KCondition,
-		KMarket:        eval.KMarket,
-		EstimatedValue: eval.EstimatedValue,
-		Items:          items,
-	}
-	return buildDimensionScores(r), buildSuggestions(r)
-}
-
-// convertToItemResults 将用户提交的 items 与部件配置合并，得到带权重的 ItemResult
-func convertToItemResults(items []model.ItemInput, configs []model.PartConfigInfo) []model.ItemResult {
-	// 配置索引：O(1) 查找，避免双层循环
-	cfgMap := make(map[string]model.PartConfigInfo, len(configs))
-	for _, c := range configs {
-		cfgMap[c.ItemCode] = c
-	}
-
-	out := make([]model.ItemResult, 0, len(items))
-	for _, it := range items {
-		cfg, ok := cfgMap[it.ItemCode]
-		if !ok {
-			// 未知条目：跳过或使用默认值
-			continue
-		}
-		out = append(out, model.ItemResult{
-			CategoryCode:   cfg.CategoryCode,
-			CategoryName:   cfg.CategoryName,
-			ItemCode:       cfg.ItemCode,
-			ItemName:       cfg.ItemName,
-			Status:         it.Status,
-			CategoryWeight: cfg.CategoryWeight,
-			ItemWeight:     cfg.ItemWeight,
-			Score:          it.Status.Score(),
-		})
-	}
-	return out
-}
-
 // roundTo2 四舍五入到 2 位小数（保留金额精度）
 func roundTo2(v float64) float64 {
 	return math.Round(v*100) / 100
+}
+
+// roundTo4 四舍五入到 4 位小数（保留 K 系数精度）
+func roundTo4(v float64) float64 {
+	return math.Round(v*10000) / 10000
 }
