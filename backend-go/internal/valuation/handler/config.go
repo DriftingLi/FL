@@ -209,8 +209,23 @@ func (h *ConfigHandler) ListMastHeights(c *gin.Context) {
 	OK(c, list)
 }
 
-// ListBatteryTypes 处理 GET /api/valuation/dictionaries/battery-types
+// ListBatteryTypes 处理 GET /api/valuation/dictionaries/battery-types?brand=&vehicle_type=&series=&tonnage=
+// 级联参数全传时基于 original_prices 过滤；否则返回全部电池类型
 func (h *ConfigHandler) ListBatteryTypes(c *gin.Context) {
+	brand := c.Query("brand")
+	vehicleType := c.Query("vehicle_type")
+	series := c.Query("series")
+	tonnage := c.Query("tonnage")
+	if brand != "" && vehicleType != "" && series != "" && tonnage != "" {
+		list, err := h.dictRepo.ListBatteryTypesByCascade(c.Request.Context(), brand, vehicleType, series, tonnage)
+		if err != nil {
+			h.logger.Error("级联查询电池类型失败", zap.Error(err))
+			Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询电池类型失败")
+			return
+		}
+		OK(c, list)
+		return
+	}
 	list, err := h.dictRepo.ListBatteryTypes(c.Request.Context())
 	if err != nil {
 		h.logger.Error("查询电池类型失败", zap.Error(err))

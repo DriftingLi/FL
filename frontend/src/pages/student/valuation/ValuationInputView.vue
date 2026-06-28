@@ -76,9 +76,9 @@ const isElectricVehicle = computed(() => {
   return vt?.power_type === 'electric'
 })
 
-// 电池类型字段可见性：仅电动车辆且字典含电池类型时显示
+// 电池类型字段可见性：电动车辆 + 已选吨位 + 级联结果非空时显示
 const showBatteryType = computed(
-  () => batteryTypes.value.length > 0 && isElectricVehicle.value
+  () => isElectricVehicle.value && form.tonnage != null && batteryTypes.value.length > 0
 )
 
 // 当前所选系列的最早出厂年份（未选系列时返回默认下限 1980）
@@ -93,7 +93,7 @@ const currentSeriesEarliestYear = computed(() => {
 const showFactoryYear = computed(() => form.tonnage != null)
 
 // ========== 级联加载 ==========
-// 级联顺序：品牌 → 车辆类型 → 系列 → 吨位 → 出厂年份 → 配置类型 → 门架类型 → 门架高度
+// 级联顺序：品牌 → 车辆类型 → 系列 → 吨位 →（出厂年份 + 电池类型[电动]）→ 配置类型 → 门架类型 → 门架高度
 
 // 品牌 → 车辆类型 + 自动填充 brand_type
 watch(
@@ -107,12 +107,14 @@ watch(
     form.mast_type = undefined
     form.mast_height_mm = undefined
     form.factory_year = undefined
+    form.battery_type = undefined
     vehicleTypes.value = []
     seriesList.value = []
     tonnages.value = []
     configTypes.value = []
     mastTypes.value = []
     mastHeights.value = []
+    batteryTypes.value = []
 
     if (!b) {
       form.brand_type = undefined
@@ -135,22 +137,16 @@ watch(
     form.config_type = undefined
     form.mast_type = undefined
     form.mast_height_mm = undefined
+    form.battery_type = undefined
     seriesList.value = []
     tonnages.value = []
     configTypes.value = []
     mastTypes.value = []
     mastHeights.value = []
+    batteryTypes.value = []
 
     // 车型变更时清空出厂年份（新车型最早年份可能大于当前值）
     form.factory_year = undefined
-
-    // 非电动车辆清空电池类型
-    if (vt) {
-      const matched = vehicleTypes.value.find((v) => v.name === vt)
-      if (matched && matched.power_type !== 'electric') {
-        form.battery_type = undefined
-      }
-    }
 
     if (!form.brand || !vt) return
     seriesList.value = await listSeries(form.brand, vt)
@@ -165,12 +161,14 @@ watch(
     form.config_type = undefined
     form.mast_type = undefined
     form.mast_height_mm = undefined
+    form.battery_type = undefined
     // 系列变更时清空出厂年份（新系列最早年份可能大于当前值）
     form.factory_year = undefined
     tonnages.value = []
     configTypes.value = []
     mastTypes.value = []
     mastHeights.value = []
+    batteryTypes.value = []
 
     if (!form.brand || !form.vehicle_type || !s) return
     // 系列为 "无" 时，吨位查询不传 series 参数（后端返回该品牌+车型的全部吨位）
@@ -179,21 +177,30 @@ watch(
   }
 )
 
-// 吨位 → 配置类型 + 出厂年份解锁
+// 吨位 → 配置类型 + 电池类型级联加载
 watch(
   () => form.tonnage,
   async (t) => {
     form.config_type = undefined
     form.mast_type = undefined
     form.mast_height_mm = undefined
+    form.battery_type = undefined
     configTypes.value = []
     mastTypes.value = []
     mastHeights.value = []
+    batteryTypes.value = []
 
     if (!form.brand || !form.vehicle_type || !form.series || t == null) return
-    configTypes.value = await listConfigTypes(
-      form.brand, form.vehicle_type, form.series, t
-    )
+    // 并行加载配置类型和电池类型（电动车辆才有电池类型数据）
+    const seriesParam = form.series === NONE_VALUE ? undefined : form.series
+    const [configList, batList] = await Promise.all([
+      listConfigTypes(form.brand, form.vehicle_type, form.series, t),
+      isElectricVehicle.value
+        ? listBatteryTypes(form.brand, form.vehicle_type, seriesParam, t)
+        : Promise.resolve([])
+    ])
+    configTypes.value = configList
+    batteryTypes.value = batList
   }
 )
 
@@ -243,14 +250,13 @@ watch(
 onMounted(async () => {
   loadingDict.value = true
   try {
-    const [brandsList, batList, crList, provList] = await Promise.all([
+    // battery_types 不再预加载全量，改为吨位级联加载
+    const [brandsList, crList, provList] = await Promise.all([
       listBrands(),
-      listBatteryTypes(),
       listConditionRatings(),
       listProvinces()
     ])
     brands.value = brandsList
-    batteryTypes.value = batList
     conditionRatings.value = crList
     provinces.value = provList
   } finally {
@@ -344,7 +350,7 @@ function onSubmit() {
           </el-col>
         </el-row>
 
-        <!-- 行2：系列吨位（系列 → 吨位 → 出厂年份） -->
+        <!-- 行2：系列吨位（系列 → 吨位 → 出厂年份 → 电池类型[电动]） -->
         <el-row v-if="showSeries" :gutter="24">
           <el-col :xs="24" :md="12" :lg="6">
             <el-form-item label="系列" required>
@@ -393,6 +399,24 @@ function onSubmit() {
                 style="width: 100%"
                 placeholder="如 2021"
               />
+            </el-form-item>
+          </el-col>
+          <el-col v-if="showBatteryType" :xs="24" :md="12" :lg="6">
+            <el-form-item label="电池类型" required>
+              <el-select
+                v-model="form.battery_type"
+                placeholder="请选择电池类型"
+                filterable
+                clearable
+                :disabled="form.tonnage == null"
+              >
+                <el-option
+                  v-for="b in batteryTypes"
+                  :key="b.id"
+                  :value="b.name"
+                  :label="b.name"
+                />
+              </el-select>
             </el-form-item>
           </el-col>
         </el-row>
@@ -449,27 +473,6 @@ function onSubmit() {
                   :key="mh.id"
                   :value="mh.value_mm"
                   :label="mh.value_mm === NONE_MAST_HEIGHT ? '无' : `${mh.value_mm} mm`"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <!-- 电池类型（仅电动车辆显示） -->
-        <el-row v-if="showBatteryType" :gutter="24">
-          <el-col :xs="24" :md="12" :lg="6">
-            <el-form-item label="电池类型">
-              <el-select
-                v-model="form.battery_type"
-                placeholder="请选择电池类型"
-                filterable
-                clearable
-              >
-                <el-option
-                  v-for="b in batteryTypes"
-                  :key="b.id"
-                  :value="b.name"
-                  :label="b.name"
                 />
               </el-select>
             </el-form-item>

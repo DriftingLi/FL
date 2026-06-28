@@ -95,9 +95,13 @@ export async function listMastHeights(
   return resp.data ?? []
 }
 
-/** 电池类型 */
-export async function listBatteryTypes(): Promise<BatteryTypeOption[]> {
-  const resp = await client.get<unknown, { data: BatteryTypeOption[] }>('/dictionaries/battery-types')
+/** 电池类型（按品牌+车型+系列+吨位级联过滤；不传参数时返回全部） */
+export async function listBatteryTypes(
+  brand?: string, vehicleType?: string, series?: string, tonnage?: number | string
+): Promise<BatteryTypeOption[]> {
+  const resp = await client.get<unknown, { data: BatteryTypeOption[] }>('/dictionaries/battery-types', {
+    params: { brand, vehicle_type: vehicleType, series, tonnage }
+  })
   return resp.data ?? []
 }
 

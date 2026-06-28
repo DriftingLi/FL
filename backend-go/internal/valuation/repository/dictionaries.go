@@ -619,6 +619,31 @@ func (r *DictionaryRepository) ListBatteryTypes(ctx context.Context) ([]BatteryT
 	return out, rows.Err()
 }
 
+// ListBatteryTypesByCascade 级联查询电池类型：基于品牌+车型+系列+吨位过滤
+// 通过 original_prices 表查询该组合下实际可用的电池类型（去重）
+func (r *DictionaryRepository) ListBatteryTypesByCascade(ctx context.Context, brand, vehicleType, series, tonnage string) ([]BatteryTypeDict, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT DISTINCT bt.id, bt.name
+		FROM original_prices op
+		JOIN battery_types bt ON bt.name = op.battery_type
+		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.tonnage::text = $4
+		      AND op.battery_type IS NOT NULL AND op.is_active = TRUE
+		ORDER BY bt.id ASC`, brand, vehicleType, series, tonnage)
+	if err != nil {
+		return nil, fmt.Errorf("级联查询电池类型失败: %w", err)
+	}
+	defer rows.Close()
+	out := make([]BatteryTypeDict, 0, 4)
+	for rows.Next() {
+		var b BatteryTypeDict
+		if err := rows.Scan(&b.ID, &b.Name); err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}
+
 // CreateBatteryType 新增电池类型
 func (r *DictionaryRepository) CreateBatteryType(ctx context.Context, name string) (BatteryTypeDict, error) {
 	var id int
