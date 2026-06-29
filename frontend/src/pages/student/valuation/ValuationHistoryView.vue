@@ -72,7 +72,8 @@ function goBack() {
 }
 
 function formatValue(v: number): string {
-  return v.toFixed(2)
+  // 后端 estimated_value 以元存储，列头为"残值（万元）"，需除以 10000
+  return (v / 10000).toFixed(2)
 }
 
 function formatRate(estimated: number, original: number): string {

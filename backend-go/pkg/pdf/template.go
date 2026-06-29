@@ -585,7 +585,7 @@ func drawValueHero(pdf *gofpdf.Fpdf, x, y, w, h float64, r *model.EvaluationDeta
 	pdf.CellFormat(7, 11, "￥", "", 0, "L", false, 0, "")
 	pdf.SetFont(FontSimHeiBold, "B", heroValuePt)
 	pdf.SetXY(x+12, y+9)
-	pdf.CellFormat(60, 14, fmt.Sprintf("%.2f", r.EstimatedValue), "", 0, "L", false, 0, "")
+	pdf.CellFormat(60, 14, fmt.Sprintf("%.2f", yuanToWan(r.EstimatedValue)), "", 0, "L", false, 0, "")
 	pdf.SetFont(FontSimHei, "", 14)
 	pdf.SetXY(x+72, y+18)
 	pdf.CellFormat(20, 7, "万元", "", 0, "L", false, 0, "")
@@ -599,7 +599,7 @@ func drawValueHero(pdf *gofpdf.Fpdf, x, y, w, h float64, r *model.EvaluationDeta
 	statY := y + 27
 	drawHeroStat(pdf, x+6, statY, 55, "残值率", fmt.Sprintf("%.1f%%", rate))
 	drawHeroStat(pdf, x+62, statY, 70, "置信区间 (95%)",
-		fmt.Sprintf("%.2f ~ %.2f 万元", r.ConfidenceLow, r.ConfidenceHigh))
+		fmt.Sprintf("%.2f ~ %.2f 万元", yuanToWan(r.ConfidenceLow), yuanToWan(r.ConfidenceHigh)))
 	drawHeroStat(pdf, x+133, statY, 45, "综合等级", fmt.Sprintf("%s级(%s)", grade.cn, grade.letter))
 }
 
@@ -646,7 +646,7 @@ func drawConfidenceBar(pdf *gofpdf.Fpdf, x, y, w float64, r *model.EvaluationDet
 	pdf.SetTextColor(textMuted[0], textMuted[1], textMuted[2])
 	pdf.SetXY(x+w-110, y)
 	pdf.CellFormat(110, 4, fmt.Sprintf("%.2f 万元  ←  %.2f 万元  →  %.2f 万元",
-		r.ConfidenceLow, r.EstimatedValue, r.ConfidenceHigh), "", 0, "R", false, 0, "")
+		yuanToWan(r.ConfidenceLow), yuanToWan(r.EstimatedValue), yuanToWan(r.ConfidenceHigh)), "", 0, "R", false, 0, "")
 
 	// 背景条
 	barY := y + 6
@@ -814,10 +814,10 @@ func drawCoefficientsTable(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, x, y, w 
 	colTotal := colLabelW + colValueW // 1/2 列宽
 
 	rows := []basicInfoRow{
-		{label1: "基准原价", value1: fmt.Sprintf("%.2f 万元", r.OriginalPrice), label2: "时间系数 Kt", value2: fmt.Sprintf("%.4f", r.KTime)},
+		{label1: "基准原价", value1: fmt.Sprintf("%.2f 万元", yuanToWan(r.OriginalPrice)), label2: "时间系数 Kt", value2: fmt.Sprintf("%.4f", r.KTime)},
 		{label1: "使用强度 Kh", value1: fmt.Sprintf("%.4f", r.KHours), label2: "品牌系数 Kb", value2: fmt.Sprintf("%.4f", r.KBrand)},
 		{label1: "车况系数 Kc", value1: fmt.Sprintf("%.4f", r.KCondition), label2: "市场系数 Km", value2: fmt.Sprintf("%.4f", r.KMarket)},
-		{label1: "估算残值", value1: fmt.Sprintf("%.2f 万元", r.EstimatedValue), label2: "置信区间", value2: fmt.Sprintf("%.2f ~ %.2f", r.ConfidenceLow, r.ConfidenceHigh)},
+		{label1: "估算残值", value1: fmt.Sprintf("%.2f 万元", yuanToWan(r.EstimatedValue)), label2: "置信区间", value2: fmt.Sprintf("%.2f ~ %.2f", yuanToWan(r.ConfidenceLow), yuanToWan(r.ConfidenceHigh))},
 	}
 
 	for i, row := range rows {
@@ -895,7 +895,7 @@ func drawGradeCards(pdf *gofpdf.Fpdf, x, y, w float64, grade gradeInfo, rate, es
 	pdf.SetFont(FontSimHeiBold, "B", 22)
 	pdf.SetTextColor(errColor[0], errColor[1], errColor[2])
 	pdf.SetXY(ex, y+7)
-	pdf.CellFormat(estW, 10, fmt.Sprintf("%.2f 万元", estValue), "", 0, "C", false, 0, "")
+	pdf.CellFormat(estW, 10, fmt.Sprintf("%.2f 万元", yuanToWan(estValue)), "", 0, "C", false, 0, "")
 	_ = rate
 }
 
@@ -978,4 +978,9 @@ func defaultIfEmpty(s, fallback string) string {
 		return fallback
 	}
 	return s
+}
+
+// yuanToWan 元 → 万元（后端所有金额字段以元存储，展示时需转为万元）
+func yuanToWan(v float64) float64 {
+	return v / 10000
 }

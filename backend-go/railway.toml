@@ -28,6 +28,8 @@ CORS_ORIGINS = "{{CORS_ORIGINS}}"
 # 上传文件存储（Railway 持久卷挂载路径）
 VOLUME_MOUNT_PATH = "/data"
 UPLOAD_FOLDER = "/data/uploads"
+# PDF 报告输出目录（持久卷，避免容器重启后丢失）
+VALUATION_PDF_OUTPUT_DIR = "/data/reports"
 # AI 配置（在 Railway 变量中设置）
 # ZHIPU_API_KEY = ""
 # ZHIPU_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"

@@ -34,9 +34,9 @@ RUN apk add --no-cache ca-certificates tzdata && \
 # 创建非 root 用户
 RUN addgroup -S app && adduser -S app -G app
 
-# 创建上传目录
-RUN mkdir -p /app/bin /app/static/uploads/chapters /app/static/uploads/slides && \
-    chown -R app:app /app
+# 创建上传目录与持久卷挂载点（Railway 将 /data 挂载为持久卷）
+RUN mkdir -p /app/bin /app/static/uploads/chapters /app/static/uploads/slides /data && \
+    chown -R app:app /app /data
 
 WORKDIR /app
 
@@ -45,6 +45,9 @@ COPY --from=builder /bin/server /app/bin/server
 
 # 复制迁移文件（启动时自动迁移需要）
 COPY --from=builder /build/migrations /app/migrations
+
+# 复制字体文件（PDF 报告生成需要 simhei.ttf）
+COPY --from=builder /build/assets /app/assets
 
 # 切换非 root 用户
 USER app
