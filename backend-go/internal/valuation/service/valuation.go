@@ -1,6 +1,9 @@
 // Package service 实现核心业务逻辑
 // 本文件：主评估服务 ValuationService
-// 公式：残值 = 基准原价 × Kt × Kh × Kb × Kc × Km
+// 公式：残值 = 基准原价 × Kt_adj × Kc × Km
+//   Kt_adj = Kt^(Kh/Kb) = exp(-λ × (Kh/Kb) × age)
+//   品牌系数 Kb 与使用强度系数 Kh 不再直接乘到残值，而是修正时间衰减速率 λ
+//   全局兜底：estimated ≤ originalPrice（残值率不超过 100%）
 // 集成基准价查询、各 K 系数计算、置信区间、维度评分与建议生成
 package service
 
@@ -57,10 +60,11 @@ func NewValuationService(
 //  2. 查询 vehicle_type 派生 power_type（电动/内燃）
 //  3. 查询 original_prices 获取基准价（精确匹配 → 模糊匹配 → 错误）
 //  4. 计算 Kt / Kh / Kb / Kc / Km
-//  5. 残值 = 基准价 × Kt × Kh × Kb × Kc × Km
-//  6. 置信区间 = 残值 × (1 ± confidence_range)
-//  7. 生成维度评分与文本建议
-//  8. 持久化到 evaluations 表
+//  5. 用 Kh、Kb 修正时间衰减：Kt_adj = Kt^(Kh/Kb)
+//  6. 残值 = 基准价 × Kt_adj × Kc × Km，并钳制 ≤ 基准价
+//  7. 置信区间 = 残值 × (1 ± confidence_range)
+//  8. 生成维度评分与文本建议
+//  9. 持久化到 evaluations 表
 func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRequest) (*model.EvaluationResult, error) {
 	// 1. 业务参数校验
 	if err := req.Validate(); err != nil {
@@ -111,8 +115,16 @@ func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRe
 		return nil, err
 	}
 
-	// 9. 主公式：残值 = 基准原价 × Kt × Kh × Kb × Kc × Km
-	estimated := originalPrice * ktRes.KTime * khRes.KHours * kbRes.KBrand * kcRes.KCondition * kmRes.KMarket
+	// 9. 主公式：残值 = 基准原价 × Kt_adj × Kc × Km
+	//    Kt_adj = Kt^(Kh/Kb)，品牌系数与使用强度系数修正时间衰减速率
+	ktAdjusted := AdjustKTimeByBrandAndIntensity(ktRes.KTime, khRes.KHours, kbRes.KBrand)
+	estimated := originalPrice * ktAdjusted * kcRes.KCondition * kmRes.KMarket
+
+	// 9.1 全局兜底：残值率不超过 100%
+	//     Kt_adj 在 age=0 时为 1.0，但 Kc 最高 1.15、Km 可能 >1.0 仍可能让残值突破原价
+	if estimated > originalPrice {
+		estimated = originalPrice
+	}
 
 	// 10. 置信区间
 	confRange, err := s.provider.Get(ctx, KeyConfidenceRange)
@@ -132,6 +144,7 @@ func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRe
 		KBrand:            roundTo4(kbRes.KBrand),
 		KCondition:        roundTo4(kcRes.KCondition),
 		KMarket:           roundTo4(kmRes.KMarket),
+		KTimeAdjusted:     roundTo4(ktAdjusted),
 		EstimatedValue:    roundTo2(estimated),
 		ConfidenceLow:     roundTo2(confLow),
 		ConfidenceHigh:    roundTo2(confHigh),
@@ -162,7 +175,6 @@ func (s *ValuationService) Persist(ctx context.Context, result *model.Evaluation
 		SaleYear:                   result.SaleYear,
 		UsageHours:                 result.UsageHours,
 		OriginalPaint:              result.OriginalPaint,
-		BatteryType:                result.BatteryType,
 		Province:                   result.Province,
 		City:                       result.City,
 		HasLicensePlate:            result.HasLicensePlate,
@@ -188,7 +200,7 @@ func (s *ValuationService) lookupOriginalPrice(ctx context.Context, req *model.E
 	// 1. 精确匹配
 	op, err := s.dictRepo.FindOriginalPriceMatch(ctx,
 		req.BrandType, req.Brand, req.VehicleType, req.Series,
-		req.Tonnage, req.ConfigType, req.MastType, req.MastHeightMM, req.BatteryType)
+		req.Tonnage, req.ConfigType, req.MastType, req.MastHeightMM)
 	if err == nil {
 		return op.OriginalPrice, nil
 	}
@@ -212,15 +224,22 @@ func (s *ValuationService) lookupOriginalPrice(ctx context.Context, req *model.E
 	return op.OriginalPrice, nil
 }
 
-// buildDimensionScores 把 5 个 K 包装成中文标签的 map
-// 维度顺序与雷达图保持一致：时间维度 / 使用强度 / 品牌 / 车况 / 市场
+// buildDimensionScores 把结果包装成 4 维中文标签的 map
+// 维度顺序与雷达图保持一致：时间衰减（含品牌/强度修正） / 车况 / 市场 / 残值率
+// 残值率维度 = estimated / originalPrice（已钳制 ≤ 1.0）
 func buildDimensionScores(r *model.EvaluationResult) map[string]float64 {
+	rate := 0.0
+	if r.OriginalPrice > 0 {
+		rate = r.EstimatedValue / r.OriginalPrice
+		if rate > 1.0 {
+			rate = 1.0
+		}
+	}
 	return map[string]float64{
-		"时间维度": roundTo4(r.KTime),
-		"使用强度": roundTo4(r.KHours),
-		"品牌":   roundTo4(r.KBrand),
+		"时间衰减": roundTo4(r.KTimeAdjusted),
 		"车况":   roundTo4(r.KCondition),
 		"市场":   roundTo4(r.KMarket),
+		"残值率":  roundTo4(rate),
 	}
 }
 
@@ -260,42 +279,42 @@ func buildSuggestions(r *model.EvaluationResult) []string {
 		s = append(s, "有维保记录，加成 3%")
 	}
 
-	// 4. 品牌维度
+	// 4. 品牌/强度对时间衰减的修正方向
+	//    Kb 高 → 衰减速率被压低（保值好）；Kh 高 → 衰减速率被抬高（磨损大）
+	//    用 Kh/Kb 比值判断：> 1.05 加速衰减；< 0.95 减缓衰减；中间视为持平
+	ratioHK := 1.0
+	if r.KBrand > 0 {
+		ratioHK = r.KHours / r.KBrand
+	}
 	switch {
-	case r.KBrand >= 1.10:
-		s = append(s, "品牌力强（进口一线），保值能力优秀")
-	case r.KBrand >= 1.00:
-		s = append(s, "品牌力较好，残值具备一定支撑")
-	case r.KBrand >= 0.85:
-		s = append(s, "品牌力中等，残值持平行业平均")
-	default:
-		s = append(s, "品牌力偏弱，残值相对偏低")
+	case ratioHK >= 1.10:
+		s = append(s, "使用强度显著高于品牌保值能力，时间衰减被加速")
+	case ratioHK >= 1.05:
+		s = append(s, "使用强度略高于品牌保值能力，时间衰减略快")
+	case ratioHK <= 0.90:
+		s = append(s, "品牌保值能力强于使用强度折损，时间衰减被明显减缓")
+	case ratioHK <= 0.95:
+		s = append(s, "品牌保值能力略占优，时间衰减略缓")
 	}
 
-	// 5. 时间维度
+	// 5. 原始时间衰减水平（不含品牌/强度修正）
 	if r.KTime < 0.50 {
-		s = append(s, "使用年限较长，残值随时间明显折减")
+		s = append(s, "使用年限较长，原始时间衰减明显")
 	}
 
-	// 6. 使用强度维度
-	switch {
-	case r.KHours >= 1.10:
-		s = append(s, "累计使用小时远低于行业平均，机械磨损小")
-	case r.KHours <= 0.85:
-		s = append(s, "累计使用小时偏高，机械磨损较大")
-	}
-
-	// 7. 市场维度
+	// 6. 市场维度
 	if r.KMarket < 0.99 {
 		s = append(s, "区域市场系数偏低，二手需求较弱")
 	} else if r.KMarket > 1.02 {
 		s = append(s, "区域市场系数偏高，二手需求旺盛")
 	}
 
-	// 8. 残值率
+	// 7. 残值率（已钳制 ≤ 100%）
 	if r.OriginalPrice > 0 {
 		rate := r.EstimatedValue / r.OriginalPrice
 		switch {
+		case rate >= 1.0:
+			s = append(s, "残值率达 100% 上限（综合车况、市场极优），按原价出售")
 		case rate >= 0.7:
 			s = append(s, "残值率较高，建议按当前车况正常出售")
 		case rate < 0.3:

@@ -100,46 +100,6 @@ func (s *AdminService) DeleteTutor(tutorID int) (map[string]interface{}, error) 
 	return map[string]interface{}{"tutor_id": tutorID}, nil
 }
 
-// GetAdmins 管理员列表，对应 Python get_admins。
-func (s *AdminService) GetAdmins(page, pageSize int, keyword string) map[string]interface{} {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-	q := s.db.Model(&model.Admin{})
-	if keyword != "" {
-		like := "%" + keyword + "%"
-		q = q.Where("username LIKE ? OR name LIKE ?", like, like)
-	}
-	var total int64
-	q.Count(&total)
-	var admins []model.Admin
-	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&admins)
-	items := make([]map[string]interface{}, 0, len(admins))
-	for i := range admins {
-		items = append(items, adminToDict(&admins[i]))
-	}
-	return map[string]interface{}{
-		"total":  total,
-		"page":   page,
-		"admins": items,
-	}
-}
-
-// DeleteAdmin 删除管理员，对应 Python delete_admin。
-func (s *AdminService) DeleteAdmin(adminID int) (map[string]interface{}, error) {
-	var admin model.Admin
-	if err := s.db.First(&admin, adminID).Error; err != nil {
-		return nil, errors.New("管理员不存在")
-	}
-	if err := s.db.Delete(&admin).Error; err != nil {
-		return nil, err
-	}
-	return map[string]interface{}{"admin_id": adminID}, nil
-}
-
 // GetStatistics 统计看板，对应 Python get_statistics。
 func (s *AdminService) GetStatistics() map[string]interface{} {
 	var totalStudents, totalCourses, totalStudyDuration int64
@@ -249,14 +209,5 @@ func tutorToDict(t *model.Tutor) map[string]interface{} {
 		"name":       t.Name,
 		"status":     t.Status,
 		"created_at": formatISO(t.CreatedAt),
-	}
-}
-
-func adminToDict(a *model.Admin) map[string]interface{} {
-	return map[string]interface{}{
-		"admin_id":   a.AdminID,
-		"username":   a.Username,
-		"name":       a.Name,
-		"created_at": formatISO(a.CreatedAt),
 	}
 }

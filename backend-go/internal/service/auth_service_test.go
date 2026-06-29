@@ -207,17 +207,6 @@ func TestAdminLogin_NotFound(t *testing.T) {
 	}
 }
 
-func TestAdminRegister_Success(t *testing.T) {
-	svc, _ := newAuthSvc(t)
-	result, err := svc.AdminRegister("newadmin", "pwd", "管理员")
-	if err != nil {
-		t.Fatalf("管理员注册失败: %v", err)
-	}
-	if result["username"] != "newadmin" {
-		t.Fatalf("注册结果不匹配: %+v", result)
-	}
-}
-
 // --- TutorLogin ---
 
 func TestTutorLogin_Success(t *testing.T) {

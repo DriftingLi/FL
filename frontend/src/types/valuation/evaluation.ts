@@ -72,6 +72,25 @@ export interface BatteryTypeOption {
   name: string
 }
 
+/** 传动系统字典项（手波/自波/无级变速/无） */
+export interface TransmissionTypeOption {
+  id: number
+  name: string
+}
+
+/** 发动机类型字典项（国产发动机/进口发动机/混合动力/无） */
+export interface EngineTypeOption {
+  id: number
+  name: string
+}
+
+/** 系列配置选项：某 series 支持的三维度可选项（数组为空表示该 series 不支持此维度） */
+export interface SeriesConfigOptions {
+  transmission: string[]
+  engine: string[]
+  battery: string[]
+}
+
 /** 车况评级字典项 */
 export interface ConditionRatingOption {
   id: number
@@ -103,7 +122,6 @@ export interface CreateEvaluationRequest {
   sale_year: number
   usage_hours: number
   original_paint: boolean
-  battery_type?: string
   province: string
   city: string
   has_license_plate: boolean
@@ -160,7 +178,6 @@ export interface EvaluationDetail extends EvaluationResult {
   sale_year: number
   usage_hours: number
   original_paint: boolean
-  battery_type?: string
   province: string
   city: string
   has_license_plate: boolean

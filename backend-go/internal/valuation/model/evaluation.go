@@ -29,7 +29,6 @@ type EvaluationRequest struct {
 	SaleYear       int     `json:"sale_year"      binding:"required"` // 成交年份
 	UsageHours     int     `json:"usage_hours"`                      // 累计使用小时数，0 表示新车，由 Validate 校验
 	OriginalPaint bool    `json:"original_paint"`                   // 是否原厂漆
-	BatteryType    *string `json:"battery_type,omitempty"`            // 电池类型（电动叉车必填，内燃可为空）
 	// 区域信息
 	Province string `json:"province" binding:"required"` // 省份
 	City     string `json:"city"     binding:"required"` // 城市
@@ -85,11 +84,12 @@ type EvaluationResult struct {
 	PowerType PowerType
 
 	// 各 K 系数
-	KTime      float64
-	KHours     float64
-	KBrand     float64
-	KCondition float64
-	KMarket    float64
+	KTime         float64
+	KHours        float64
+	KBrand        float64
+	KCondition    float64
+	KMarket       float64
+	KTimeAdjusted float64
 
 	// 最终结果
 	EstimatedValue float64
@@ -129,7 +129,6 @@ type EvaluationDetail struct {
 	SaleYear                   int     `json:"sale_year"`
 	UsageHours                 int     `json:"usage_hours"`
 	OriginalPaint              bool    `json:"original_paint"`
-	BatteryType                string  `json:"battery_type,omitempty"`
 	Province                   string  `json:"province"`
 	City                       string  `json:"city"`
 	HasLicensePlate            bool    `json:"has_license_plate"`
@@ -144,6 +143,7 @@ type EvaluationDetail struct {
 	KBrand         float64 `json:"k_brand"`
 	KCondition     float64 `json:"k_condition"`
 	KMarket        float64 `json:"k_market"`
+	KTimeAdjusted  float64 `json:"k_time_adjusted"`
 	EstimatedValue float64 `json:"estimated_value"`
 	ConfidenceLow  float64 `json:"confidence_low"`
 	ConfidenceHigh float64 `json:"confidence_high"`
@@ -160,6 +160,7 @@ type EvaluationResponse struct {
 	KBrand         float64              `json:"k_brand"`
 	KCondition     float64              `json:"k_condition"`
 	KMarket        float64              `json:"k_market"`
+	KTimeAdjusted  float64              `json:"k_time_adjusted"`
 	EstimatedValue float64              `json:"estimated_value"`
 	ConfidenceLow  float64              `json:"confidence_low"`
 	ConfidenceHigh float64              `json:"confidence_high"`

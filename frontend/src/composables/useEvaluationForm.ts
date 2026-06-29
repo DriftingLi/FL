@@ -1,10 +1,8 @@
 // 表单状态与提交 composable（统一表单，供 ValuationInputView 使用）
-// 重构说明：改为三行级联布局
-//   行1 品牌类型：品牌 → 车辆类型（brand_type 由品牌自动派生，不再手选）
-//   行2 系列吨位：系列 → 吨位
-//   行3 配置门架：配置类型 → 门架类型 → 门架高度
-//   "无" 选项：series / config_type / mast_type 可选 "无"；mast_height_mm 用 0 表示 "无"
-import { reactive, ref, computed, type ComputedRef } from 'vue'
+// 配置类型重构：移除 battery_type 独立字段，改为三维度（transmission/engine/battery）
+// config_type 由三维度拼接而成（用 / 分隔，不支持的维度省略）
+// 维度可见性由 ValuationInputView 通过 listSeriesConfigOptions 查询结果决定
+import { reactive, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { createEvaluation } from '@/api/valuation/evaluation'
@@ -20,38 +18,50 @@ export const NONE_VALUE = '无'
 /** mast_height_mm 的 "无" 值 */
 export const NONE_MAST_HEIGHT = 0
 
-/** 基础表单状态：覆盖 CreateEvaluationRequest 全部字段 */
+/** 基础表单状态：覆盖 CreateEvaluationRequest 全部字段 + 三维度配置 */
 export interface BaseFormState {
   brand_type: string | undefined
   brand: string | undefined
   vehicle_type: string | undefined
   series: string | undefined
   tonnage: number | undefined
-  config_type: string | undefined
+  config_type: string | undefined // computed 写入此字段，便于 v-model 绑定
   mast_type: string | undefined
   mast_height_mm: number | undefined
   factory_year: number | undefined
   sale_year: number | undefined
   usage_hours: number | undefined
   original_paint: boolean
-  battery_type: string | undefined
   province: string | undefined
   city: string | undefined
   has_license_plate: boolean
   has_registration_certificate: boolean
   has_maintenance_records: boolean
   condition_rating: ConditionRating | undefined
+  // 三维度配置字段
+  transmission: string | undefined
+  engine: string | undefined
+  battery: string | undefined
 }
 
-export interface UseEvaluationFormOptions {
-  /** 当前所选车辆类型是否电动（用于决定 battery_type 字段可见性/必填性） */
-  hasElectricVehicleType: ComputedRef<boolean>
+/** 维度选项（由 ValuationInputView 通过 listSeriesConfigOptions 加载后注入） */
+export interface DimensionOptions {
+  transmission: string[]
+  engine: string[]
+  battery: string[]
 }
 
-export function useEvaluationForm(options: UseEvaluationFormOptions) {
+export function useEvaluationForm() {
   const router = useRouter()
   const store = useEvaluationStore()
   const submitting = ref(false)
+
+  // 维度选项（响应式，由 ValuationInputView 在 series 切换时更新）
+  const dimensionOptions = reactive<DimensionOptions>({
+    transmission: [],
+    engine: [],
+    battery: []
+  })
 
   // 基础信息（默认值）
   const form = reactive<BaseFormState>({
@@ -67,25 +77,42 @@ export function useEvaluationForm(options: UseEvaluationFormOptions) {
     sale_year: new Date().getFullYear(),
     usage_hours: undefined,
     original_paint: true,
-    battery_type: undefined,
     province: undefined,
     city: undefined,
     has_license_plate: false,
     has_registration_certificate: false,
     has_maintenance_records: false,
-    condition_rating: undefined
+    condition_rating: undefined,
+    transmission: undefined,
+    engine: undefined,
+    battery: undefined
+  })
+
+  // config_type 由三维度拼接：传动/发动机/电池，不支持的维度省略
+  // 维度被启用且用户选了"无" → 保留"无"字样；维度未启用 → 省略
+  const configType = computed(() => {
+    const parts: string[] = []
+    if (dimensionOptions.transmission.length > 0 && form.transmission) {
+      parts.push(form.transmission)
+    }
+    if (dimensionOptions.engine.length > 0 && form.engine) {
+      parts.push(form.engine)
+    }
+    if (dimensionOptions.battery.length > 0 && form.battery) {
+      parts.push(form.battery)
+    }
+    return parts.join('/')
   })
 
   /** 构造提交 payload */
   function buildPayload(): CreateEvaluationRequest | null {
-    // 必填字段守卫：未填则返回 null
+    // 必填字段守卫
     if (
       !form.brand_type ||
       !form.brand ||
       !form.vehicle_type ||
       !form.series ||
       form.tonnage == null ||
-      !form.config_type ||
       !form.mast_type ||
       form.mast_height_mm == null ||
       form.factory_year == null ||
@@ -96,21 +123,21 @@ export function useEvaluationForm(options: UseEvaluationFormOptions) {
     ) {
       return null
     }
+    const ct = configType.value
+    if (!ct) return null
     const payload: CreateEvaluationRequest = {
       brand_type: form.brand_type,
       brand: form.brand,
       vehicle_type: form.vehicle_type,
       series: form.series,
       tonnage: form.tonnage,
-      config_type: form.config_type,
+      config_type: ct,
       mast_type: form.mast_type,
       mast_height_mm: form.mast_height_mm,
       factory_year: form.factory_year,
       sale_year: form.sale_year,
       usage_hours: form.usage_hours,
       original_paint: form.original_paint,
-      // 电池类型仅在字典含电动时下发，避免污染 combustion 请求
-      battery_type: options.hasElectricVehicleType.value ? form.battery_type : undefined,
       province: form.province,
       city: form.city,
       has_license_plate: form.has_license_plate,
@@ -129,7 +156,7 @@ export function useEvaluationForm(options: UseEvaluationFormOptions) {
       vehicle_type: form.vehicle_type,
       series: form.series,
       tonnage: form.tonnage,
-      config_type: form.config_type,
+      config_type: configType.value,
       mast_type: form.mast_type,
       mast_height_mm: form.mast_height_mm,
       factory_year: form.factory_year,
@@ -138,8 +165,12 @@ export function useEvaluationForm(options: UseEvaluationFormOptions) {
       province: form.province,
       city: form.city,
       condition_rating: form.condition_rating,
-      battery_type: form.battery_type,
-      hasElectricVehicleType: options.hasElectricVehicleType.value
+      transmission: form.transmission,
+      engine: form.engine,
+      battery: form.battery,
+      transmissionOptions: dimensionOptions.transmission,
+      engineOptions: dimensionOptions.engine,
+      batteryOptions: dimensionOptions.battery
     }
     return validateForm(ctx)
   }
@@ -161,13 +192,18 @@ export function useEvaluationForm(options: UseEvaluationFormOptions) {
     form.sale_year = new Date().getFullYear()
     form.usage_hours = undefined
     form.original_paint = true
-    form.battery_type = undefined
     form.province = undefined
     form.city = undefined
     form.has_license_plate = false
     form.has_registration_certificate = false
     form.has_maintenance_records = false
     form.condition_rating = undefined
+    form.transmission = undefined
+    form.engine = undefined
+    form.battery = undefined
+    dimensionOptions.transmission = []
+    dimensionOptions.engine = []
+    dimensionOptions.battery = []
   }
 
   /** 提交评估 */
@@ -200,6 +236,8 @@ export function useEvaluationForm(options: UseEvaluationFormOptions) {
 
   return {
     form,
+    dimensionOptions,
+    configType,
     submitting,
     isValid,
     buildPayload,

@@ -126,3 +126,73 @@ func TestCalcKTime_UnknownPowerType(t *testing.T) {
 		t.Error("expected error for unknown power type, got nil")
 	}
 }
+
+// TestAdjustKTimeByBrandAndIntensity 覆盖 Kt 修正函数各典型场景
+// 数学等价：Kt_adj = Kt^(Kh/Kb)
+//   - Kh 越大（使用强度高）→ 衰减更快 → Kt_adj 更小
+//   - Kb 越大（品牌好）→ 衰减更慢 → Kt_adj 更大
+//   - kt=1.0 时（age=0）→ 无论 Kh、Kb 如何，Kt_adj = 1.0
+//   - kb=0 兜底返回 kt 原值；kt=0 兜底返回 0
+func TestAdjustKTimeByBrandAndIntensity(t *testing.T) {
+	type testCase struct {
+		name     string
+		kt       float64
+		kh       float64
+		kb       float64
+		expected float64
+		tol      float64
+	}
+	cases := []testCase{
+		{"baseline_no_adjust", 0.5, 1.0, 1.0, 0.5, 1e-9},
+		{"kt_one_age_zero", 1.0, 1.5, 1.0, 1.0, 1e-9},
+		{"high_intensity_accelerates", 0.5, 1.1, 1.0, math.Pow(0.5, 1.1), 1e-6},
+		{"good_brand_decelerates", 0.5, 1.0, 1.1, math.Pow(0.5, 1.0/1.1), 1e-6},
+		{"kb_zero_fallback", 0.5, 1.0, 0.0, 0.5, 1e-9},
+		{"kt_zero_fallback", 0.0, 1.0, 1.0, 0.0, 1e-9},
+		{"both_high_balance", 0.5, 1.1, 1.1, math.Pow(0.5, 1.0), 1e-9}, // Kh=Kb → 无修正
+		{"realistic_old_forklift", 0.30, 0.85, 1.10, math.Pow(0.30, 0.85/1.10), 1e-6},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := AdjustKTimeByBrandAndIntensity(c.kt, c.kh, c.kb)
+			if math.Abs(got-c.expected) > c.tol {
+				t.Errorf("AdjustKTimeByBrandAndIntensity(%.4f, %.4f, %.4f) = %.6f, want ≈ %.6f",
+					c.kt, c.kh, c.kb, got, c.expected)
+			}
+		})
+	}
+}
+
+// TestAdjustKTimeByBrandAndIntensity_Invariants 验证关键不变式
+//  1. age=0 时 Kt=1.0，Kt_adj 必须恒为 1.0（残值率上限的核心保证）
+//  2. Kh < Kb 时 Kt_adj > Kt（品牌保值强于强度折损，衰减被减缓）
+//  3. Kh > Kb 时 Kt_adj < Kt（强度折损高于品牌保值，衰减被加速）
+//  4. Kh = Kb 时 Kt_adj = Kt（修正因子为 1，无影响）
+func TestAdjustKTimeByBrandAndIntensity_Invariants(t *testing.T) {
+	// 1. age=0 不变式
+	ktNew := 1.0
+	for _, kh := range []float64{0.5, 1.0, 1.5, 2.0} {
+		for _, kb := range []float64{0.5, 1.0, 1.5, 2.0} {
+			got := AdjustKTimeByBrandAndIntensity(ktNew, kh, kb)
+			if math.Abs(got-1.0) > 1e-9 {
+				t.Errorf("age=0 invariant violated: kh=%.2f kb=%.2f got=%.6f, want 1.0", kh, kb, got)
+			}
+		}
+	}
+
+	// 2-4. 旧车场景
+	ktOld := 0.5
+	adjSlow := AdjustKTimeByBrandAndIntensity(ktOld, 0.9, 1.1) // Kh < Kb
+	if !(adjSlow > ktOld) {
+		t.Errorf("Kh<Kb should slow decay: got %.6f, want > %.6f", adjSlow, ktOld)
+	}
+	adjFast := AdjustKTimeByBrandAndIntensity(ktOld, 1.1, 0.9) // Kh > Kb
+	if !(adjFast < ktOld) {
+		t.Errorf("Kh>Kb should accelerate decay: got %.6f, want < %.6f", adjFast, ktOld)
+	}
+	adjEqual := AdjustKTimeByBrandAndIntensity(ktOld, 1.0, 1.0) // Kh = Kb
+	if math.Abs(adjEqual-ktOld) > 1e-9 {
+		t.Errorf("Kh=Kb should be no-op: got %.6f, want %.6f", adjEqual, ktOld)
+	}
+}

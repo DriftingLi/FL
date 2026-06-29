@@ -62,6 +62,9 @@ func RegisterRoutes(
 		dict.GET("/mast-types", configHandler.ListMastTypes)
 		dict.GET("/mast-heights", configHandler.ListMastHeights)
 		dict.GET("/battery-types", configHandler.ListBatteryTypes)
+		dict.GET("/transmission-types", configHandler.ListTransmissionTypes)
+		dict.GET("/engine-types", configHandler.ListEngineTypes)
+		dict.GET("/series-config-options", configHandler.ListSeriesConfigOptions)
 		dict.GET("/condition-ratings", configHandler.ListConditionRatings)
 		dict.GET("/region-coefficients", configHandler.ListRegionCoefficients)
 		dict.GET("/provinces", configHandler.ListProvinces)
@@ -113,6 +116,14 @@ func RegisterRoutes(
 		// battery_types
 		admin.POST("/battery-types", configHandler.CreateBatteryType)
 		admin.DELETE("/battery-types/:id", configHandler.DeleteBatteryType)
+
+		// transmission_types
+		admin.POST("/transmission-types", configHandler.CreateTransmissionType)
+		admin.DELETE("/transmission-types/:id", configHandler.DeleteTransmissionType)
+
+		// engine_types
+		admin.POST("/engine-types", configHandler.CreateEngineType)
+		admin.DELETE("/engine-types/:id", configHandler.DeleteEngineType)
 
 		// condition_ratings
 		admin.POST("/condition-ratings", configHandler.CreateConditionRating)

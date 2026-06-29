@@ -428,9 +428,9 @@ type basicInfoRow struct {
 //   - 门架类型 / 门架高度
 //   - 出厂年份 / 成交年份
 //   - 累计使用小时 / 原厂漆
-//   - 电池类型 / 车况评级
-//   - 区域 / 维保记录
-//   - 车牌 / 登记证
+//   - 车况评级 / 区域
+//   - 维保记录 / 车牌
+//   - 登记证
 func drawBasicInfoTable(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, x, y, w float64) {
 	rowH := 6.5
 	colLabelW := w * 0.18
@@ -444,9 +444,9 @@ func drawBasicInfoTable(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, x, y, w flo
 		{label1: "门架类型", value1: defaultIfEmpty(r.MastType, "-"), label2: "门架高度", value2: fmt.Sprintf("%d mm", r.MastHeightMM)},
 		{label1: "出厂年份", value1: fmt.Sprintf("%d 年", r.FactoryYear), label2: "成交年份", value2: fmt.Sprintf("%d 年", r.SaleYear)},
 		{label1: "累计使用小时", value1: fmt.Sprintf("%d 小时", r.UsageHours), label2: "原厂漆", value2: statusText(r.OriginalPaint), badge2: true},
-		{label1: "电池类型", value1: defaultIfEmpty(r.BatteryType, "-"), label2: "车况评级", value2: defaultIfEmpty(r.ConditionRating, "-")},
-		{label1: "区域", value1: formatRegion(r.Province, r.City), label2: "维保记录", value2: statusText(r.HasMaintenanceRecords), badge2: true},
-		{label1: "车牌", value1: statusText(r.HasLicensePlate), badge1: true, label2: "登记证", value2: statusText(r.HasRegistrationCertificate), badge2: true},
+		{label1: "车况评级", value1: defaultIfEmpty(r.ConditionRating, "-"), label2: "区域", value2: formatRegion(r.Province, r.City)},
+		{label1: "维保记录", value1: statusText(r.HasMaintenanceRecords), badge1: true, label2: "车牌", value2: statusText(r.HasLicensePlate), badge2: true},
+		{label1: "登记证", value1: statusText(r.HasRegistrationCertificate), badge1: true, span1: true},
 	}
 
 	for i, row := range rows {
@@ -805,8 +805,10 @@ func (g *Generator) renderCoefficientsAndConclusion(pdf *gofpdf.Fpdf, r *model.E
 }
 
 // drawCoefficientsTable 计算系数表
-// 展示:基准原价、Kt(时间)、Kh(使用强度)、Kb(品牌)、Kc(车况)、Km(市场)、最终残值
+// 展示:基准原价、Kt(原始)、Kh、Kb、Kt 修正后、Kc、Km、最终残值与置信区间
 // 采用 4 列布局(label-value-label-value),共 4 行
+// 说明：Kh、Kb 不再直接乘到残值，而是修正时间衰减速率 → Kt_adj = Kt^(Kh/Kb)
+// Kt 修正后值取自 r.KTimeAdjusted（由 handler 在调用 PDF 前用 service.AdjustKTimeByBrandAndIntensity 填充）
 func drawCoefficientsTable(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, x, y, w float64) {
 	rowH := 7.0
 	colLabelW := w * 0.18
@@ -816,8 +818,8 @@ func drawCoefficientsTable(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, x, y, w 
 	rows := []basicInfoRow{
 		{label1: "基准原价", value1: fmt.Sprintf("%.2f 万元", yuanToWan(r.OriginalPrice)), label2: "时间系数 Kt", value2: fmt.Sprintf("%.4f", r.KTime)},
 		{label1: "使用强度 Kh", value1: fmt.Sprintf("%.4f", r.KHours), label2: "品牌系数 Kb", value2: fmt.Sprintf("%.4f", r.KBrand)},
-		{label1: "车况系数 Kc", value1: fmt.Sprintf("%.4f", r.KCondition), label2: "市场系数 Km", value2: fmt.Sprintf("%.4f", r.KMarket)},
-		{label1: "估算残值", value1: fmt.Sprintf("%.2f 万元", yuanToWan(r.EstimatedValue)), label2: "置信区间", value2: fmt.Sprintf("%.2f ~ %.2f", yuanToWan(r.ConfidenceLow), yuanToWan(r.ConfidenceHigh))},
+		{label1: "Kt 修正后", value1: fmt.Sprintf("%.4f", r.KTimeAdjusted), label2: "车况系数 Kc", value2: fmt.Sprintf("%.4f", r.KCondition)},
+		{label1: "市场系数 Km", value1: fmt.Sprintf("%.4f", r.KMarket), label2: "估算残值", value2: fmt.Sprintf("%.2f 万元", yuanToWan(r.EstimatedValue))},
 	}
 
 	for i, row := range rows {
@@ -856,6 +858,16 @@ func drawCoefficientsTable(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, x, y, w 
 	for i := 1; i < len(rows); i++ {
 		pdf.Line(x, y+float64(i)*rowH, x+w, y+float64(i)*rowH)
 	}
+
+	// 表下说明：品牌/强度对时间衰减的修正关系 + 残值率 ≤ 100% 兜底
+	pdf.SetFont(FontSimHei, "", 8.5)
+	pdf.SetTextColor(textLite[0], textLite[1], textLite[2])
+	pdf.SetXY(x, y+totalH+1.5)
+	pdf.MultiCell(w, 3.5,
+		"公式：残值 = 原价 × Kt 修正后 × Kc × Km；其中 Kt 修正后 = Kt^(Kh/Kb)，"+
+			"品牌系数 Kb 与使用强度系数 Kh 修正时间衰减速率 λ（不直接作用于残值）。"+
+			"残值率不超过 100%。",
+		"", "L", false)
 }
 
 func drawGradeCards(pdf *gofpdf.Fpdf, x, y, w float64, grade gradeInfo, rate, estValue float64) {

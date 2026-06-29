@@ -39,7 +39,6 @@ type CreateEvaluationParams struct {
 	SaleYear                   int
 	UsageHours                 int
 	OriginalPaint              bool
-	BatteryType                *string
 	Province                   string
 	City                       string
 	HasLicensePlate            bool
@@ -70,7 +69,7 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 		INSERT INTO evaluations (
 			brand_type, brand, vehicle_type, series, tonnage,
 			config_type, mast_type, mast_height_mm,
-			factory_year, sale_year, usage_hours, original_paint, battery_type,
+			factory_year, sale_year, usage_hours, original_paint,
 			province, city,
 			has_license_plate, has_registration_certificate, has_maintenance_records,
 			condition_rating,
@@ -79,17 +78,17 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 		) VALUES (
 			$1, $2, $3, $4, $5,
 			$6, $7, $8,
-			$9, $10, $11, $12, $13,
-			$14, $15,
-			$16, $17, $18,
-			$19,
-			$20, $21, $22, $23, $24, $25,
-			$26, $27, $28, $29
+			$9, $10, $11, $12,
+			$13, $14,
+			$15, $16, $17,
+			$18,
+			$19, $20, $21, $22, $23, $24,
+			$25, $26, $27, $28
 		)
 		RETURNING id, created_at, updated_at`,
 		p.BrandType, p.Brand, p.VehicleType, p.Series, p.Tonnage,
 		p.ConfigType, p.MastType, p.MastHeightMM,
-		p.FactoryYear, p.SaleYear, p.UsageHours, p.OriginalPaint, p.BatteryType,
+		p.FactoryYear, p.SaleYear, p.UsageHours, p.OriginalPaint,
 		p.Province, p.City,
 		p.HasLicensePlate, p.HasRegistrationCertificate, p.HasMaintenanceRecords,
 		p.ConditionRating,
@@ -109,7 +108,7 @@ func (r *EvaluationRepository) GetEvaluation(ctx context.Context, id int64) (*mo
 	row := r.pool.QueryRow(ctx, `
 		SELECT id, brand_type, brand, vehicle_type, series, tonnage,
 		       config_type, mast_type, mast_height_mm,
-		       factory_year, sale_year, usage_hours, original_paint, battery_type,
+		       factory_year, sale_year, usage_hours, original_paint,
 		       province, city,
 		       has_license_plate, has_registration_certificate, has_maintenance_records,
 		       condition_rating,
@@ -118,16 +117,15 @@ func (r *EvaluationRepository) GetEvaluation(ctx context.Context, id int64) (*mo
 		       created_at, updated_at
 		FROM evaluations WHERE id = $1`, id)
 	var (
-		d           model.EvaluationDetail
-		batteryType *string
-		reportPath  *string
-		createdAt   time.Time
-		updatedAt   time.Time
+		d          model.EvaluationDetail
+		reportPath *string
+		createdAt  time.Time
+		updatedAt  time.Time
 	)
 	if err := row.Scan(
 		&d.ID, &d.BrandType, &d.Brand, &d.VehicleType, &d.Series, &d.Tonnage,
 		&d.ConfigType, &d.MastType, &d.MastHeightMM,
-		&d.FactoryYear, &d.SaleYear, &d.UsageHours, &d.OriginalPaint, &batteryType,
+		&d.FactoryYear, &d.SaleYear, &d.UsageHours, &d.OriginalPaint,
 		&d.Province, &d.City,
 		&d.HasLicensePlate, &d.HasRegistrationCertificate, &d.HasMaintenanceRecords,
 		&d.ConditionRating,
@@ -136,9 +134,6 @@ func (r *EvaluationRepository) GetEvaluation(ctx context.Context, id int64) (*mo
 		&createdAt, &updatedAt,
 	); err != nil {
 		return nil, err
-	}
-	if batteryType != nil {
-		d.BatteryType = *batteryType
 	}
 	if reportPath != nil {
 		d.ReportPdfPath = *reportPath
@@ -157,7 +152,7 @@ func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string
 		rows, err = r.pool.Query(ctx, `
 			SELECT id, brand_type, brand, vehicle_type, series, tonnage,
 			       config_type, mast_type, mast_height_mm,
-			       factory_year, sale_year, usage_hours, original_paint, battery_type,
+			       factory_year, sale_year, usage_hours, original_paint,
 			       province, city,
 			       has_license_plate, has_registration_certificate, has_maintenance_records,
 			       condition_rating,
@@ -170,7 +165,7 @@ func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string
 		rows, err = r.pool.Query(ctx, `
 			SELECT id, brand_type, brand, vehicle_type, series, tonnage,
 			       config_type, mast_type, mast_height_mm,
-			       factory_year, sale_year, usage_hours, original_paint, battery_type,
+			       factory_year, sale_year, usage_hours, original_paint,
 			       province, city,
 			       has_license_plate, has_registration_certificate, has_maintenance_records,
 			       condition_rating,
@@ -187,14 +182,13 @@ func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string
 	out := make([]model.EvaluationDetail, 0, limit)
 	for rows.Next() {
 		var d model.EvaluationDetail
-		var batteryType *string
 		var reportPath *string
 		var createdAt time.Time
 		var updatedAt time.Time
 		if err := rows.Scan(
 			&d.ID, &d.BrandType, &d.Brand, &d.VehicleType, &d.Series, &d.Tonnage,
 			&d.ConfigType, &d.MastType, &d.MastHeightMM,
-			&d.FactoryYear, &d.SaleYear, &d.UsageHours, &d.OriginalPaint, &batteryType,
+			&d.FactoryYear, &d.SaleYear, &d.UsageHours, &d.OriginalPaint,
 			&d.Province, &d.City,
 			&d.HasLicensePlate, &d.HasRegistrationCertificate, &d.HasMaintenanceRecords,
 			&d.ConditionRating,
@@ -203,9 +197,6 @@ func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string
 			&createdAt, &updatedAt,
 		); err != nil {
 			return nil, err
-		}
-		if batteryType != nil {
-			d.BatteryType = *batteryType
 		}
 		if reportPath != nil {
 			d.ReportPdfPath = *reportPath

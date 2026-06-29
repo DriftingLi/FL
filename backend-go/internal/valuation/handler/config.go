@@ -235,6 +235,46 @@ func (h *ConfigHandler) ListBatteryTypes(c *gin.Context) {
 	OK(c, list)
 }
 
+// ListTransmissionTypes 处理 GET /api/valuation/dictionaries/transmission-types
+func (h *ConfigHandler) ListTransmissionTypes(c *gin.Context) {
+	list, err := h.dictRepo.ListTransmissionTypes(c.Request.Context())
+	if err != nil {
+		h.logger.Error("查询传动系统失败", zap.Error(err))
+		Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询传动系统失败")
+		return
+	}
+	OK(c, list)
+}
+
+// ListEngineTypes 处理 GET /api/valuation/dictionaries/engine-types
+func (h *ConfigHandler) ListEngineTypes(c *gin.Context) {
+	list, err := h.dictRepo.ListEngineTypes(c.Request.Context())
+	if err != nil {
+		h.logger.Error("查询发动机类型失败", zap.Error(err))
+		Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询发动机类型失败")
+		return
+	}
+	OK(c, list)
+}
+
+// ListSeriesConfigOptions 处理 GET /api/valuation/dictionaries/series-config-options?brand=&series=
+// 返回指定 series 支持的三维度（传动/发动机/电池）可选项
+func (h *ConfigHandler) ListSeriesConfigOptions(c *gin.Context) {
+	brand := c.Query("brand")
+	series := c.Query("series")
+	if brand == "" || series == "" {
+		Error(c, http.StatusBadRequest, CodeBadRequest, "brand 和 series 参数必填")
+		return
+	}
+	opts, err := h.dictRepo.ListSeriesConfigOptions(c.Request.Context(), brand, series)
+	if err != nil {
+		h.logger.Error("查询系列配置选项失败", zap.Error(err))
+		Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询系列配置选项失败")
+		return
+	}
+	OK(c, opts)
+}
+
 // ListConditionRatings 处理 GET /api/valuation/dictionaries/condition-ratings
 func (h *ConfigHandler) ListConditionRatings(c *gin.Context) {
 	list, err := h.dictRepo.ListConditionRatings(c.Request.Context())
@@ -819,6 +859,86 @@ func (h *ConfigHandler) DeleteBatteryType(c *gin.Context) {
 		}
 		h.logger.Error("删除电池类型失败", zap.Error(err))
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除电池类型失败")
+		return
+	}
+	OK(c, gin.H{"id": id})
+}
+
+// --- transmission_types ---
+
+// CreateTransmissionType 处理 POST /api/valuation/admin/transmission-types
+// Body: {"name":"手波"}
+func (h *ConfigHandler) CreateTransmissionType(c *gin.Context) {
+	var body struct {
+		Name string `json:"name" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
+		return
+	}
+	t, err := h.dictRepo.CreateTransmissionType(c.Request.Context(), body.Name)
+	if err != nil {
+		h.logger.Error("新增传动系统类型失败", zap.Error(err))
+		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增传动系统类型失败")
+		return
+	}
+	OK(c, t)
+}
+
+// DeleteTransmissionType 处理 DELETE /api/valuation/admin/transmission-types/:id
+func (h *ConfigHandler) DeleteTransmissionType(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
+		return
+	}
+	if err := h.dictRepo.DeleteTransmissionType(c.Request.Context(), id); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			Error(c, http.StatusNotFound, CodeNotFound, "传动系统类型不存在")
+			return
+		}
+		h.logger.Error("删除传动系统类型失败", zap.Error(err))
+		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除传动系统类型失败")
+		return
+	}
+	OK(c, gin.H{"id": id})
+}
+
+// --- engine_types ---
+
+// CreateEngineType 处理 POST /api/valuation/admin/engine-types
+// Body: {"name":"国产发动机"}
+func (h *ConfigHandler) CreateEngineType(c *gin.Context) {
+	var body struct {
+		Name string `json:"name" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
+		return
+	}
+	e, err := h.dictRepo.CreateEngineType(c.Request.Context(), body.Name)
+	if err != nil {
+		h.logger.Error("新增发动机类型失败", zap.Error(err))
+		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增发动机类型失败")
+		return
+	}
+	OK(c, e)
+}
+
+// DeleteEngineType 处理 DELETE /api/valuation/admin/engine-types/:id
+func (h *ConfigHandler) DeleteEngineType(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
+		return
+	}
+	if err := h.dictRepo.DeleteEngineType(c.Request.Context(), id); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			Error(c, http.StatusNotFound, CodeNotFound, "发动机类型不存在")
+			return
+		}
+		h.logger.Error("删除发动机类型失败", zap.Error(err))
+		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除发动机类型失败")
 		return
 	}
 	OK(c, gin.H{"id": id})

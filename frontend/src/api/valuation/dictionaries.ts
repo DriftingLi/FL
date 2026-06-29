@@ -12,6 +12,9 @@ import type {
   MastTypeOption,
   MastHeightOption,
   BatteryTypeOption,
+  TransmissionTypeOption,
+  EngineTypeOption,
+  SeriesConfigOptions,
   ConditionRatingOption,
   CoefficientConfig
 } from '@/types/valuation/evaluation'
@@ -103,6 +106,26 @@ export async function listBatteryTypes(
     params: { brand, vehicle_type: vehicleType, series, tonnage }
   })
   return resp.data ?? []
+}
+
+/** 传动系统字典（手波/自波/无级变速/无） */
+export async function listTransmissionTypes(): Promise<TransmissionTypeOption[]> {
+  const resp = await client.get<unknown, { data: TransmissionTypeOption[] }>('/dictionaries/transmission-types')
+  return resp.data ?? []
+}
+
+/** 发动机类型字典（国产发动机/进口发动机/混合动力/无） */
+export async function listEngineTypes(): Promise<EngineTypeOption[]> {
+  const resp = await client.get<unknown, { data: EngineTypeOption[] }>('/dictionaries/engine-types')
+  return resp.data ?? []
+}
+
+/** 系列配置选项（按品牌+系列查询三维度可选项；数组为空表示该 series 不支持此维度） */
+export async function listSeriesConfigOptions(brand: string, series: string): Promise<SeriesConfigOptions> {
+  const resp = await client.get<unknown, { data: SeriesConfigOptions }>('/dictionaries/series-config-options', {
+    params: { brand, series }
+  })
+  return resp.data ?? { transmission: [], engine: [], battery: [] }
 }
 
 /** 车况评级 */

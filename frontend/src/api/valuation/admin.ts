@@ -99,6 +99,8 @@ export const adminResources = {
   mastTypes: createCrud('mast-types'),
   mastHeights: createCrud('mast-heights'),
   batteryTypes: createCrud('battery-types'),
+  transmissionTypes: createCrud('transmission-types'),
+  engineTypes: createCrud('engine-types'),
   conditionRatings: createCrud('condition-ratings'),
   regionCoefficients: createCrud('region-coefficients')
 } as const

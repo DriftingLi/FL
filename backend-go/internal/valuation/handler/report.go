@@ -17,6 +17,7 @@ import (
 
 	"forklift-training/internal/valuation/model"
 	"forklift-training/internal/valuation/repository"
+	"forklift-training/internal/valuation/service"
 	"forklift-training/pkg/pdf"
 )
 
@@ -53,6 +54,9 @@ func (h *ReportHandler) Generate(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询评估记录失败")
 		return
 	}
+
+	// 1.1 实时重算 KTimeAdjusted（不入库字段），供 PDF 系数表展示
+	detail.KTimeAdjusted = service.AdjustKTimeByBrandAndIntensity(detail.KTime, detail.KHours, detail.KBrand)
 
 	// 2. 重建派生字段（维度评分 + 建议），不重新跑完整算法
 	dimScores, suggestions := rebuildDerivedFields(detail)
@@ -100,6 +104,9 @@ func (h *ReportHandler) Download(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询评估记录失败")
 		return
 	}
+
+	// 1.1 实时重算 KTimeAdjusted（不入库字段），供 PDF 系数表展示
+	detail.KTimeAdjusted = service.AdjustKTimeByBrandAndIntensity(detail.KTime, detail.KHours, detail.KBrand)
 
 	// 2. 解析已有路径
 	pdfPath := detail.ReportPdfPath
@@ -155,16 +162,25 @@ func fileSize(path string) int64 {
 
 // rebuildDerivedFields 从持久化记录重建维度评分与文本建议
 // 与 service.buildDimensionScores / buildSuggestions 算法一致，避免重新跑完整评估流程
+// 维度评分改为 4 维：时间衰减（含品牌/强度修正） / 车况 / 市场 / 残值率
 func rebuildDerivedFields(d *model.EvaluationDetail) (map[string]float64, []string) {
 	if d == nil {
 		return nil, nil
 	}
+	// 实时重算 Kt_adj（不入库）
+	ktAdjusted := service.AdjustKTimeByBrandAndIntensity(d.KTime, d.KHours, d.KBrand)
+	rate := 0.0
+	if d.OriginalPrice > 0 {
+		rate = d.EstimatedValue / d.OriginalPrice
+		if rate > 1.0 {
+			rate = 1.0
+		}
+	}
 	dimScores := map[string]float64{
-		"时间维度": roundTo4(d.KTime),
-		"使用强度": roundTo4(d.KHours),
-		"品牌":   roundTo4(d.KBrand),
+		"时间衰减": roundTo4(ktAdjusted),
 		"车况":   roundTo4(d.KCondition),
 		"市场":   roundTo4(d.KMarket),
+		"残值率":  roundTo4(rate),
 	}
 	suggestions := buildSuggestionsFromDetail(d)
 	if suggestions == nil {
@@ -217,42 +233,41 @@ func buildSuggestionsFromDetail(d *model.EvaluationDetail) []string {
 		s = append(s, "有维保记录，加成 3%")
 	}
 
-	// 4. 品牌维度
+	// 4. 品牌/强度对时间衰减的修正方向
+	//    Kb 高 → 衰减速率被压低（保值好）；Kh 高 → 衰减速率被抬高（磨损大）
+	ratioHK := 1.0
+	if d.KBrand > 0 {
+		ratioHK = d.KHours / d.KBrand
+	}
 	switch {
-	case d.KBrand >= 1.10:
-		s = append(s, "品牌力强（进口一线），保值能力优秀")
-	case d.KBrand >= 1.00:
-		s = append(s, "品牌力较好，残值具备一定支撑")
-	case d.KBrand >= 0.85:
-		s = append(s, "品牌力中等，残值持平行业平均")
-	default:
-		s = append(s, "品牌力偏弱，残值相对偏低")
+	case ratioHK >= 1.10:
+		s = append(s, "使用强度显著高于品牌保值能力，时间衰减被加速")
+	case ratioHK >= 1.05:
+		s = append(s, "使用强度略高于品牌保值能力，时间衰减略快")
+	case ratioHK <= 0.90:
+		s = append(s, "品牌保值能力强于使用强度折损，时间衰减被明显减缓")
+	case ratioHK <= 0.95:
+		s = append(s, "品牌保值能力略占优，时间衰减略缓")
 	}
 
-	// 5. 时间维度
+	// 5. 原始时间衰减水平（不含品牌/强度修正）
 	if d.KTime < 0.50 {
-		s = append(s, "使用年限较长，残值随时间明显折减")
+		s = append(s, "使用年限较长，原始时间衰减明显")
 	}
 
-	// 6. 使用强度维度
-	switch {
-	case d.KHours >= 1.10:
-		s = append(s, "累计使用小时远低于行业平均，机械磨损小")
-	case d.KHours <= 0.85:
-		s = append(s, "累计使用小时偏高，机械磨损较大")
-	}
-
-	// 7. 市场维度
+	// 6. 市场维度
 	if d.KMarket < 0.99 {
 		s = append(s, "区域市场系数偏低，二手需求较弱")
 	} else if d.KMarket > 1.02 {
 		s = append(s, "区域市场系数偏高，二手需求旺盛")
 	}
 
-	// 8. 残值率
+	// 7. 残值率（已钳制 ≤ 100%）
 	if d.OriginalPrice > 0 {
 		rate := d.EstimatedValue / d.OriginalPrice
 		switch {
+		case rate >= 1.0:
+			s = append(s, "残值率达 100% 上限（综合车况、市场极优），按原价出售")
 		case rate >= 0.7:
 			s = append(s, "残值率较高，建议按当前车况正常出售")
 		case rate < 0.3:

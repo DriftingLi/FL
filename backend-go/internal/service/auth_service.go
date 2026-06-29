@@ -207,33 +207,6 @@ func (s *AuthService) TutorRegister(username, password, name string) (map[string
 	}, nil
 }
 
-// AdminRegister 管理员注册，对应原 Python 版 admin_register()。
-func (s *AuthService) AdminRegister(username, password, name string) (map[string]interface{}, error) {
-	var count int64
-	s.db.Model(&model.Admin{}).Where("username = ?", username).Count(&count)
-	if count > 0 {
-		return nil, errors.New("用户名已被注册")
-	}
-	hashed, err := HashPassword(password)
-	if err != nil {
-		return nil, err
-	}
-	admin := model.Admin{
-		Username:  username,
-		Password:  hashed,
-		Name:      name,
-		CreatedAt: beijingNow(),
-	}
-	if err := s.db.Create(&admin).Error; err != nil {
-		return nil, err
-	}
-	return map[string]interface{}{
-		"admin_id": admin.AdminID,
-		"username": admin.Username,
-		"name":     admin.Name,
-	}, nil
-}
-
 // EnsureDefaultUsers 确保默认账号存在（admin/admin123、tutor/tutor123、student/student123），
 // 对应原 Python 版 seed_railway.py / init_db.py 的默认账号初始化逻辑。
 // 已存在的账号会被跳过（不会重置密码）。

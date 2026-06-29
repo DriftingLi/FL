@@ -267,60 +267,6 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 		response.SuccessWithMsg(c, "导师删除成功", result)
 	})
 
-	// ===== 管理员管理 =====
-
-	// GET /api/admin/admins  管理员列表
-	g.GET("/admins", func(c *gin.Context) {
-		page := atoiDefault(c.Query("page"), 1)
-		pageSize := atoiDefault(c.Query("page_size"), 10)
-		keyword := c.Query("keyword")
-		response.Success(c, adminSvc.GetAdmins(page, pageSize, keyword))
-	})
-
-	// POST /api/admin/admin  添加管理员
-	g.POST("/admin", func(c *gin.Context) {
-		var req struct {
-			Username string `json:"username"`
-			Password string `json:"password"`
-			Name     string `json:"name"`
-		}
-		if err := c.ShouldBindJSON(&req); err != nil {
-			response.BadRequest(c, "请求参数错误")
-			return
-		}
-		if req.Username == "" || req.Password == "" || req.Name == "" {
-			response.BadRequest(c, "用户名、密码和姓名不能为空")
-			return
-		}
-		result, err := authSvc.AdminRegister(req.Username, req.Password, req.Name)
-		if err != nil {
-			response.BadRequest(c, err.Error())
-			return
-		}
-		response.Created(c, "管理员添加成功", result)
-	})
-
-	// DELETE /api/admin/admin/:admin_id  删除管理员
-	g.DELETE("/admin/:admin_id", func(c *gin.Context) {
-		uid, _ := c.Get(string(middleware.CtxUserID))
-		currentAdminID, _ := uid.(int)
-		adminID, err := strconv.Atoi(c.Param("admin_id"))
-		if err != nil {
-			response.BadRequest(c, "管理员ID无效")
-			return
-		}
-		if adminID == currentAdminID {
-			response.BadRequest(c, "不能删除当前登录的管理员账号")
-			return
-		}
-		result, err := adminSvc.DeleteAdmin(adminID)
-		if err != nil {
-			response.NotFound(c, err.Error())
-			return
-		}
-		response.SuccessWithMsg(c, "管理员删除成功", result)
-	})
-
 	// ===== 统计与实操记录 =====
 
 	// GET /api/admin/statistics  统计看板

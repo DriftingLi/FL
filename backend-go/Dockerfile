@@ -46,8 +46,7 @@ COPY --from=builder /bin/server /app/bin/server
 # 复制迁移文件（启动时自动迁移需要）
 COPY --from=builder /build/migrations /app/migrations
 
-# 复制字体文件（PDF 报告生成需要 simhei.ttf）
-COPY --from=builder /build/assets /app/assets
+# 字体文件已通过 //go:embed 编译进二进制，无需单独复制
 
 # 切换非 root 用户
 USER app

@@ -7,7 +7,7 @@
 INSERT INTO evaluations (
     brand_type, brand, vehicle_type, series, tonnage,
     config_type, mast_type, mast_height_mm,
-    factory_year, sale_year, usage_hours, original_paint, battery_type,
+    factory_year, sale_year, usage_hours, original_paint,
     province, city,
     has_license_plate, has_registration_certificate, has_maintenance_records,
     condition_rating,
@@ -16,12 +16,12 @@ INSERT INTO evaluations (
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8,
-    $9, $10, $11, $12, $13,
-    $14, $15,
-    $16, $17, $18,
-    $19,
-    $20, $21, $22, $23, $24, $25,
-    $26, $27, $28, $29
+    $9, $10, $11, $12,
+    $13, $14,
+    $15, $16, $17,
+    $18,
+    $19, $20, $21, $22, $23, $24,
+    $25, $26, $27, $28
 )
 RETURNING id, created_at, updated_at;
 
@@ -29,7 +29,7 @@ RETURNING id, created_at, updated_at;
 -- 根据 ID 查询评估记录主表
 SELECT id, brand_type, brand, vehicle_type, series, tonnage,
        config_type, mast_type, mast_height_mm,
-       factory_year, sale_year, usage_hours, original_paint, battery_type,
+       factory_year, sale_year, usage_hours, original_paint,
        province, city,
        has_license_plate, has_registration_certificate, has_maintenance_records,
        condition_rating,
@@ -43,7 +43,7 @@ WHERE id = $1;
 -- 分页查询评估历史列表（可选按品牌筛选）
 SELECT id, brand_type, brand, vehicle_type, series, tonnage,
        config_type, mast_type, mast_height_mm,
-       factory_year, sale_year, usage_hours, original_paint, battery_type,
+       factory_year, sale_year, usage_hours, original_paint,
        province, city,
        has_license_plate, has_registration_certificate, has_maintenance_records,
        condition_rating,

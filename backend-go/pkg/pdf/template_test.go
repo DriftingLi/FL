@@ -317,11 +317,13 @@ func TestGenerateReportEmptySuggestions(t *testing.T) {
 	t.Logf("空建议 PDF 生成成功: %s", path)
 }
 
-// TestFindFontFile 验证字体文件查找逻辑
-func TestFindFontFile(t *testing.T) {
-	_, err := findFontFile()
-	if err != nil {
-		// 找不到时给出明确提示,但允许跳过(CI 环境下字体可能不存在)
-		t.Skipf("字体文件未找到(CI 环境可接受): %v", err)
+// TestEmbeddedFont 验证内嵌字体字节已通过 //go:embed 编译进二进制
+func TestEmbeddedFont(t *testing.T) {
+	if len(embeddedFont) == 0 {
+		t.Fatal("内嵌字体字节为空，//go:embed 未生效")
 	}
+	if len(embeddedFont) < 1_000_000 {
+		t.Errorf("内嵌字体过小 (%d 字节)，可能不是完整的 TTF 文件", len(embeddedFont))
+	}
+	t.Logf("内嵌字体大小: %d 字节", len(embeddedFont))
 }

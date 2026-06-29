@@ -77,6 +77,26 @@ type BatteryTypeDict struct {
 	Name string `json:"name"`
 }
 
+// TransmissionType 传动系统字典（手波/自波/无级变速/无）
+type TransmissionType struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+// EngineType 发动机类型字典（国产发动机/进口发动机/混合动力/无）
+type EngineType struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+// SeriesConfigOptions 某 series 支持的配置维度及可选项
+// 每个维度为该 series 在该维度上可选的选项列表；列表为空表示该 series 不支持此维度
+type SeriesConfigOptions struct {
+	Transmission []string `json:"transmission"`
+	Engine       []string `json:"engine"`
+	Battery      []string `json:"battery"`
+}
+
 // ConditionRating 车况评级
 type ConditionRating struct {
 	ID             int     `json:"id"`
@@ -104,7 +124,6 @@ type OriginalPrice struct {
 	ConfigType   string   `json:"config_type"`
 	MastType     string   `json:"mast_type"`
 	MastHeightMM int      `json:"mast_height_mm"`
-	BatteryType  *string  `json:"battery_type,omitempty"`
 	OriginalPrice float64 `json:"original_price"`
 	IsActive     bool     `json:"is_active"`
 	UpdatedAt    string   `json:"updated_at"`
@@ -619,16 +638,17 @@ func (r *DictionaryRepository) ListBatteryTypes(ctx context.Context) ([]BatteryT
 	return out, rows.Err()
 }
 
-// ListBatteryTypesByCascade 级联查询电池类型：基于品牌+车型+系列+吨位过滤
-// 通过 original_prices 表查询该组合下实际可用的电池类型（去重）
+// ListBatteryTypesByCascade 级联查询电池类型：基于品牌+系列过滤
+// 通过 series_config_options 表查询该 series 支持的 battery 维度选项（去重）
+// 注：vehicleType 与 tonnage 参数保留以维持接口兼容，但不再用于过滤
+// （series_config_options 按 brand+series 索引，battery 维度与 vehicle_type/tonnage 无关）
 func (r *DictionaryRepository) ListBatteryTypesByCascade(ctx context.Context, brand, vehicleType, series, tonnage string) ([]BatteryTypeDict, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT DISTINCT bt.id, bt.name
-		FROM original_prices op
-		JOIN battery_types bt ON bt.name = op.battery_type
-		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.tonnage = $4::numeric
-		      AND op.battery_type IS NOT NULL AND op.is_active = TRUE
-		ORDER BY bt.id ASC`, brand, vehicleType, series, tonnage)
+		FROM series_config_options sco
+		JOIN battery_types bt ON bt.name = sco.option_name
+		WHERE sco.brand = $1 AND sco.series = $2 AND sco.dimension = 'battery'
+		ORDER BY bt.id ASC`, brand, series)
 	if err != nil {
 		return nil, fmt.Errorf("级联查询电池类型失败: %w", err)
 	}
@@ -660,6 +680,133 @@ func (r *DictionaryRepository) DeleteBatteryType(ctx context.Context, id int) er
 	ct, err := r.pool.Exec(ctx, `DELETE FROM battery_types WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("删除电池类型失败: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+// =====================================================
+// transmission_types（传动系统维度字典：手波/自波/无级变速/无）
+// =====================================================
+
+// ListTransmissionTypes 列出全部传动系统类型
+func (r *DictionaryRepository) ListTransmissionTypes(ctx context.Context) ([]TransmissionType, error) {
+	rows, err := r.pool.Query(ctx, `SELECT id, name FROM transmission_types ORDER BY id ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("查询传动系统类型失败: %w", err)
+	}
+	defer rows.Close()
+	out := make([]TransmissionType, 0, 8)
+	for rows.Next() {
+		var t TransmissionType
+		if err := rows.Scan(&t.ID, &t.Name); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// =====================================================
+// engine_types（发动机类型维度字典：国产/进口/混合动力/无）
+// =====================================================
+
+// ListEngineTypes 列出全部发动机类型
+func (r *DictionaryRepository) ListEngineTypes(ctx context.Context) ([]EngineType, error) {
+	rows, err := r.pool.Query(ctx, `SELECT id, name FROM engine_types ORDER BY id ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("查询发动机类型失败: %w", err)
+	}
+	defer rows.Close()
+	out := make([]EngineType, 0, 8)
+	for rows.Next() {
+		var e EngineType
+		if err := rows.Scan(&e.ID, &e.Name); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// =====================================================
+// series_config_options（系列-配置维度映射）
+// =====================================================
+
+// ListSeriesConfigOptions 查询指定 series 支持的配置维度及可选项
+// 返回三个维度的可选项列表；列表为空表示该 series 不支持此维度
+func (r *DictionaryRepository) ListSeriesConfigOptions(ctx context.Context, brand, series string) (SeriesConfigOptions, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT dimension, option_name FROM series_config_options
+		WHERE brand = $1 AND series = $2
+		ORDER BY dimension ASC, id ASC`, brand, series)
+	if err != nil {
+		return SeriesConfigOptions{}, fmt.Errorf("查询系列配置选项失败: %w", err)
+	}
+	defer rows.Close()
+	out := SeriesConfigOptions{
+		Transmission: make([]string, 0, 4),
+		Engine:       make([]string, 0, 4),
+		Battery:      make([]string, 0, 4),
+	}
+	for rows.Next() {
+		var dimension, optionName string
+		if err := rows.Scan(&dimension, &optionName); err != nil {
+			return SeriesConfigOptions{}, err
+		}
+		switch dimension {
+		case "transmission":
+			out.Transmission = append(out.Transmission, optionName)
+		case "engine":
+			out.Engine = append(out.Engine, optionName)
+		case "battery":
+			out.Battery = append(out.Battery, optionName)
+		}
+	}
+	return out, rows.Err()
+}
+
+// CreateTransmissionType 新增传动系统类型
+func (r *DictionaryRepository) CreateTransmissionType(ctx context.Context, name string) (TransmissionType, error) {
+	var id int
+	err := r.pool.QueryRow(ctx,
+		`INSERT INTO transmission_types (name) VALUES ($1) ON CONFLICT (name) DO NOTHING RETURNING id`, name).Scan(&id)
+	if err != nil {
+		return TransmissionType{}, fmt.Errorf("新增传动系统类型失败: %w", err)
+	}
+	return TransmissionType{ID: id, Name: name}, nil
+}
+
+// DeleteTransmissionType 删除传动系统类型
+func (r *DictionaryRepository) DeleteTransmissionType(ctx context.Context, id int) error {
+	ct, err := r.pool.Exec(ctx, `DELETE FROM transmission_types WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("删除传动系统类型失败: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+// CreateEngineType 新增发动机类型
+func (r *DictionaryRepository) CreateEngineType(ctx context.Context, name string) (EngineType, error) {
+	var id int
+	err := r.pool.QueryRow(ctx,
+		`INSERT INTO engine_types (name) VALUES ($1) ON CONFLICT (name) DO NOTHING RETURNING id`, name).Scan(&id)
+	if err != nil {
+		return EngineType{}, fmt.Errorf("新增发动机类型失败: %w", err)
+	}
+	return EngineType{ID: id, Name: name}, nil
+}
+
+// DeleteEngineType 删除发动机类型
+func (r *DictionaryRepository) DeleteEngineType(ctx context.Context, id int) error {
+	ct, err := r.pool.Exec(ctx, `DELETE FROM engine_types WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("删除发动机类型失败: %w", err)
 	}
 	if ct.RowsAffected() == 0 {
 		return pgx.ErrNoRows
@@ -867,7 +1014,7 @@ func (r *DictionaryRepository) ListOriginalPrices(ctx context.Context, limit, of
 	}
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, brand_type, brand, vehicle_type, series, tonnage,
-		       config_type, mast_type, mast_height_mm, battery_type, original_price, is_active, updated_at
+		       config_type, mast_type, mast_height_mm, original_price, is_active, updated_at
 		FROM original_prices
 		ORDER BY id DESC LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
@@ -879,7 +1026,7 @@ func (r *DictionaryRepository) ListOriginalPrices(ctx context.Context, limit, of
 		var o OriginalPrice
 		var updatedAt time.Time
 		if err := rows.Scan(&o.ID, &o.BrandType, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
-			&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.BatteryType, &o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
+			&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
 			return nil, 0, err
 		}
 		o.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
@@ -892,12 +1039,12 @@ func (r *DictionaryRepository) ListOriginalPrices(ctx context.Context, limit, of
 func (r *DictionaryRepository) GetOriginalPriceByID(ctx context.Context, id int64) (OriginalPrice, error) {
 	row := r.pool.QueryRow(ctx, `
 		SELECT id, brand_type, brand, vehicle_type, series, tonnage,
-		       config_type, mast_type, mast_height_mm, battery_type, original_price, is_active, updated_at
+		       config_type, mast_type, mast_height_mm, original_price, is_active, updated_at
 		FROM original_prices WHERE id = $1`, id)
 	var o OriginalPrice
 	var updatedAt time.Time
 	if err := row.Scan(&o.ID, &o.BrandType, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
-		&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.BatteryType, &o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
+		&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
 		return OriginalPrice{}, err
 	}
 	o.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
@@ -910,14 +1057,14 @@ func (r *DictionaryRepository) CreateOriginalPrice(ctx context.Context, o *Origi
 	err := r.pool.QueryRow(ctx, `
 		INSERT INTO original_prices (
 			brand_type, brand, vehicle_type, series, tonnage,
-			config_type, mast_type, mast_height_mm, battery_type, original_price, is_active
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+			config_type, mast_type, mast_height_mm, original_price, is_active
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
 		ON CONFLICT (brand_type, brand, vehicle_type, series, tonnage,
-		             config_type, mast_type, mast_height_mm, battery_type)
+		             config_type, mast_type, mast_height_mm)
 		DO UPDATE SET original_price = EXCLUDED.original_price, is_active = EXCLUDED.is_active, updated_at = NOW()
 		RETURNING id`,
 		o.BrandType, o.Brand, o.VehicleType, o.Series, o.Tonnage,
-		o.ConfigType, o.MastType, o.MastHeightMM, nullableStrPtr(o.BatteryType), o.OriginalPrice, o.IsActive).Scan(&id)
+		o.ConfigType, o.MastType, o.MastHeightMM, o.OriginalPrice, o.IsActive).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("新增原价记录失败: %w", err)
 	}
@@ -950,25 +1097,24 @@ func (r *DictionaryRepository) DeleteOriginalPrice(ctx context.Context, id int64
 	return nil
 }
 
-// FindOriginalPriceMatch 精确匹配原价：按全部 9 个字段查询
+// FindOriginalPriceMatch 精确匹配原价：按 8 个字段查询
 // 未命中时返回 pgx.ErrNoRows，由调用方决定是否走模糊匹配
 func (r *DictionaryRepository) FindOriginalPriceMatch(
 	ctx context.Context, brandType, brand, vehicleType, series string,
-	tonnage float64, configType, mastType string, mastHeightMM int, batteryType *string,
+	tonnage float64, configType, mastType string, mastHeightMM int,
 ) (OriginalPrice, error) {
 	row := r.pool.QueryRow(ctx, `
 		SELECT id, brand_type, brand, vehicle_type, series, tonnage,
-		       config_type, mast_type, mast_height_mm, battery_type, original_price, is_active, updated_at
+		       config_type, mast_type, mast_height_mm, original_price, is_active, updated_at
 		FROM original_prices
 		WHERE brand_type = $1 AND brand = $2 AND vehicle_type = $3 AND series = $4
 		  AND tonnage = $5 AND config_type = $6 AND mast_type = $7 AND mast_height_mm = $8
-		  AND COALESCE(battery_type, '') = COALESCE($9, '')
 		  AND is_active = TRUE`,
-		brandType, brand, vehicleType, series, tonnage, configType, mastType, mastHeightMM, nullableStrPtr(batteryType))
+		brandType, brand, vehicleType, series, tonnage, configType, mastType, mastHeightMM)
 	var o OriginalPrice
 	var updatedAt time.Time
 	if err := row.Scan(&o.ID, &o.BrandType, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
-		&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.BatteryType, &o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
+		&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
 		return OriginalPrice{}, err
 	}
 	o.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
@@ -976,7 +1122,7 @@ func (r *DictionaryRepository) FindOriginalPriceMatch(
 }
 
 // FindOriginalPriceFuzzy 模糊匹配原价：按 brand_type + brand + vehicle_type + series + tonnage 查询
-// 忽略 config_type / mast_type / mast_height_mm / battery_type
+// 忽略 config_type / mast_type / mast_height_mm
 // 当 series 为空字符串时，忽略 series 条件（用于 series="无" 的降级匹配）
 // 多条命中时取 original_price 最高的（高配置与标准配置中偏高者，对卖家更友好）
 func (r *DictionaryRepository) FindOriginalPriceFuzzy(
@@ -987,7 +1133,7 @@ func (r *DictionaryRepository) FindOriginalPriceFuzzy(
 		// series 为空：忽略 series 条件
 		row = r.pool.QueryRow(ctx, `
 			SELECT id, brand_type, brand, vehicle_type, series, tonnage,
-			       config_type, mast_type, mast_height_mm, battery_type, original_price, is_active, updated_at
+			       config_type, mast_type, mast_height_mm, original_price, is_active, updated_at
 			FROM original_prices
 			WHERE brand_type = $1 AND brand = $2 AND vehicle_type = $3
 			  AND tonnage = $4 AND is_active = TRUE
@@ -996,7 +1142,7 @@ func (r *DictionaryRepository) FindOriginalPriceFuzzy(
 	} else {
 		row = r.pool.QueryRow(ctx, `
 			SELECT id, brand_type, brand, vehicle_type, series, tonnage,
-			       config_type, mast_type, mast_height_mm, battery_type, original_price, is_active, updated_at
+			       config_type, mast_type, mast_height_mm, original_price, is_active, updated_at
 			FROM original_prices
 			WHERE brand_type = $1 AND brand = $2 AND vehicle_type = $3 AND series = $4
 			  AND tonnage = $5 AND is_active = TRUE
@@ -1006,7 +1152,7 @@ func (r *DictionaryRepository) FindOriginalPriceFuzzy(
 	var o OriginalPrice
 	var updatedAt time.Time
 	if err := row.Scan(&o.ID, &o.BrandType, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
-		&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.BatteryType, &o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
+		&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
 		return OriginalPrice{}, err
 	}
 	o.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")

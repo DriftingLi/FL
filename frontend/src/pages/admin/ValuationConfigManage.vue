@@ -30,6 +30,8 @@ const tabStates = reactive<Record<AdminResourceKey, TabState>>({
   configTypes: { loading: false, list: [] },
   mastTypes: { loading: false, list: [] },
   mastHeights: { loading: false, list: [] },
+  transmissionTypes: { loading: false, list: [] },
+  engineTypes: { loading: false, list: [] },
   batteryTypes: { loading: false, list: [] },
   conditionRatings: { loading: false, list: [] },
   regionCoefficients: { loading: false, list: [] }
@@ -97,6 +99,9 @@ const SCHEMAS: Record<AdminResourceKey, ResourceSchema> = {
       { prop: 'vehicle_type', label: '车辆类型', type: 'input', required: true, width: 140 },
       { prop: 'series', label: '系列', type: 'input', width: 140 },
       { prop: 'tonnage', label: '吨位', type: 'number', width: 100 },
+      { prop: 'config_type', label: '配置类型', type: 'input', width: 180 },
+      { prop: 'mast_type', label: '门架类型', type: 'input', width: 120 },
+      { prop: 'mast_height_mm', label: '门架高度(mm)', type: 'number', width: 140 },
       { prop: 'original_price', label: '原价（万元）', type: 'number', required: true, width: 140 }
     ]
   },
@@ -156,6 +161,14 @@ const SCHEMAS: Record<AdminResourceKey, ResourceSchema> = {
   },
   batteryTypes: {
     title: '电池类型',
+    fields: [{ prop: 'name', label: '名称', type: 'input', required: true, width: 240 }]
+  },
+  transmissionTypes: {
+    title: '传动系统',
+    fields: [{ prop: 'name', label: '名称', type: 'input', required: true, width: 240 }]
+  },
+  engineTypes: {
+    title: '发动机类型',
     fields: [{ prop: 'name', label: '名称', type: 'input', required: true, width: 240 }]
   },
   conditionRatings: {
@@ -317,6 +330,8 @@ const tabs: Array<{ name: AdminResourceKey | 'coefficients'; label: string }> = 
   { name: 'configTypes', label: '配置类型' },
   { name: 'mastTypes', label: '门架类型' },
   { name: 'mastHeights', label: '门架高度' },
+  { name: 'transmissionTypes', label: '传动系统' },
+  { name: 'engineTypes', label: '发动机类型' },
   { name: 'batteryTypes', label: '电池类型' },
   { name: 'conditionRatings', label: '车况评级' },
   { name: 'regionCoefficients', label: '区域系数' },

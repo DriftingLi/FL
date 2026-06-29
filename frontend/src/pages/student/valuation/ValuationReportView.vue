@@ -101,8 +101,13 @@ const dimensionScoresMap = computed(() => {
   return map
 })
 
-// 系数取值（安全访问）
+// 系数取值（安全访问；residual_rate 为本地计算的派生值）
 function coefValue(key: string): number {
+  if (key === 'residual_rate') {
+    const d = data.value
+    if (!d || !d.original_price) return 0
+    return Math.min(1.0, d.estimated_value / d.original_price)
+  }
   const v = (data.value as unknown as Record<string, number> | null)?.[key]
   return typeof v === 'number' ? v : 0
 }
@@ -166,9 +171,6 @@ const usageYears = computed(() => {
           <el-descriptions-item label="使用年限">{{ usageYears }} 年</el-descriptions-item>
           <el-descriptions-item label="累计工时">{{ formatInt(data.usage_hours) }} 小时</el-descriptions-item>
           <el-descriptions-item label="是否原厂原漆">{{ formatBoolean(data.original_paint) }}</el-descriptions-item>
-          <el-descriptions-item v-if="data.battery_type" label="电池类型">
-            {{ data.battery_type }}
-          </el-descriptions-item>
           <el-descriptions-item label="所在区域">{{ data.province }} / {{ data.city }}</el-descriptions-item>
           <el-descriptions-item label="有车牌">{{ formatBoolean(data.has_license_plate) }}</el-descriptions-item>
           <el-descriptions-item label="特种设备登记证">{{ formatBoolean(data.has_registration_certificate) }}</el-descriptions-item>
@@ -192,13 +194,16 @@ const usageYears = computed(() => {
       <section class="card-surface section-block">
         <h2 class="section-title">系数计算过程</h2>
         <p class="calc-formula num">
-          残值 = 原价 × Kt × Kh × Kb × Kc × Km
+          残值 = 原价 × Kt_adj × Kc × Km
+        </p>
+        <p class="calc-formula-sub num">
+          Kt_adj = Kt^(Kh / Kb)（品牌系数与使用强度系数修正时间衰减）
         </p>
         <p class="calc-result num">
           = {{ formatWan(data.original_price) }}
-          <template v-for="def in COEFFICIENT_DEFS" :key="def.key">
-            × {{ formatCoefficient(coefValue(def.key)) }}
-          </template>
+          × {{ formatCoefficient(coefValue('k_time_adjusted')) }}
+          × {{ formatCoefficient(coefValue('k_condition')) }}
+          × {{ formatCoefficient(coefValue('k_market')) }}
           = <span class="calc-final">{{ formatWan(data.estimated_value) }}</span>
         </p>
         <div class="coef-detail-grid">
@@ -265,6 +270,11 @@ const usageYears = computed(() => {
   color: var(--color-text-secondary);
   margin: 0 0 var(--sp-3);
 }
+.calc-formula-sub {
+  font-size: var(--fs-sm);
+  color: var(--color-text-tertiary);
+  margin: 0 0 var(--sp-4);
+}
 .calc-result {
   font-size: var(--fs-md);
   color: var(--color-text);
@@ -278,7 +288,7 @@ const usageYears = computed(() => {
 }
 .coef-detail-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: var(--sp-4);
 }
 .coef-detail-cell {

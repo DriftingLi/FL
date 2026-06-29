@@ -25,18 +25,6 @@ export const adminApi = {
     return request.delete(`/admin/tutor/${id}`)
   },
 
-  getAdmins(params) {
-    return request.get('/admin/admins', { params })
-  },
-
-  addAdmin(data) {
-    return request.post('/admin/admin', data)
-  },
-
-  deleteAdmin(id) {
-    return request.delete(`/admin/admin/${id}`)
-  },
-
   getStatistics() {
     return request.get('/admin/statistics')
   },

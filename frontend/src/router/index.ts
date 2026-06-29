@@ -177,11 +177,6 @@ const routes = [
         component: () => import('@/pages/admin/TutorManage.vue')
       },
       {
-        path: 'admins',
-        name: 'AdminManage',
-        component: () => import('@/pages/admin/AdminManage.vue')
-      },
-      {
         path: 'valuation-config',
         name: 'ValuationConfigManage',
         component: () => import('@/pages/admin/ValuationConfigManage.vue')
