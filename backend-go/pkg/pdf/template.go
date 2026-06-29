@@ -9,6 +9,7 @@ package pdf
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/jung-kurt/gofpdf"
@@ -122,6 +123,11 @@ func (g *Generator) GenerateReport(r *model.EvaluationDetail, dimensionScores ma
 	filename := fmt.Sprintf("evaluation_report_%d_%s.pdf",
 		r.ID, time.Now().Format("20060102150405"))
 	outputPath := joinPath(g.outputDir, filename)
+	if g.outputDir != "" {
+		if err := os.MkdirAll(g.outputDir, 0o755); err != nil {
+			return "", fmt.Errorf("创建 PDF 输出目录失败: %w", err)
+		}
+	}
 	if err := pdf.OutputFileAndClose(outputPath); err != nil {
 		return "", fmt.Errorf("保存 PDF 失败: %w", err)
 	}

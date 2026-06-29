@@ -25,8 +25,8 @@ RUN go build -trimpath -ldflags="-s -w" -o /bin/server ./cmd/server
 # ----- Runtime 阶段：最小化运行时镜像 -----
 FROM alpine:3.20
 
-# 安装最小运行时依赖
-RUN apk add --no-cache ca-certificates tzdata && \
+# 安装最小运行时依赖（su-exec 用于入口脚本切换到非 root 用户）
+RUN apk add --no-cache ca-certificates tzdata su-exec && \
     cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     echo "Asia/Shanghai" > /etc/timezone && \
     apk del tzdata
@@ -34,9 +34,9 @@ RUN apk add --no-cache ca-certificates tzdata && \
 # 创建非 root 用户
 RUN addgroup -S app && adduser -S app -G app
 
-# 创建上传目录与持久卷挂载点（Railway 将 /data 挂载为持久卷）
-RUN mkdir -p /app/bin /app/static/uploads/chapters /app/static/uploads/slides /data && \
-    chown -R app:app /app /data
+# 创建应用目录（/data 由 entrypoint.sh 在运行时创建，因 Railway 卷挂载会覆盖镜像层）
+RUN mkdir -p /app/bin /app/static/uploads/chapters /app/static/uploads/slides && \
+    chown -R app:app /app
 
 WORKDIR /app
 
@@ -48,8 +48,9 @@ COPY --from=builder /build/migrations /app/migrations
 
 # 字体文件已通过 //go:embed 编译进二进制，无需单独复制
 
-# 切换非 root 用户
-USER app
+# 入口脚本：以 root 创建 /data 子目录并修正属主，再切换到 app 用户
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 8080
 
@@ -57,5 +58,6 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -qO- http://localhost:8080/api/health || exit 1
 
-# 启动命令
-ENTRYPOINT ["/app/bin/server"]
+# 入口脚本接收 CMD 作为参数，切换到 app 用户后执行
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["/app/bin/server"]

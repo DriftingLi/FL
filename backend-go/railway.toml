@@ -9,8 +9,8 @@ dockerfilePath = "Dockerfile"
 # 健康检查路径
 healthcheckPath = "/api/health"
 healthcheckTimeout = 30
-# 启动命令（nixpacks 构建产物）
-startCommand = "./bin/server"
+# 启动命令（作为 CMD 传给 entrypoint.sh，由其切换到 app 用户后执行）
+startCommand = "/app/bin/server"
 # 重启策略
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
