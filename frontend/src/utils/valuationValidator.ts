@@ -1,7 +1,7 @@
 // 前端参数校验工具
 // 与后端 model/evaluation.go 中的校验逻辑保持一致
 // 重构说明：删除旧 brand/workCondition/items 校验，改用新字典化字段
-// 配置类型重构：battery_type 字段已移除，改为三维度（transmission/engine/battery）
+// config_type 为单一下拉字段（复合字符串如"手波/国产发动机"、"磷酸铁锂(LFP)"）
 import type { ConditionRating } from '@/types/valuation/evaluation'
 
 const CURRENT_YEAR = new Date().getFullYear()
@@ -115,14 +115,14 @@ export function validateConditionRating(rating: string | undefined | null): Vali
   return { valid: true }
 }
 
-/** 整体表单校验上下文：包含三维度配置及各维度可用选项 */
+/** 整体表单校验上下文 */
 export interface FormValidationContext {
   brand_type: string | undefined
   brand: string | undefined
   vehicle_type: string | undefined
   series: string | undefined
   tonnage: number | undefined
-  config_type: string | undefined // 由三维度 computed 而来
+  config_type: string | undefined
   mast_type: string | undefined
   mast_height_mm: number | undefined
   factory_year: number | undefined
@@ -131,14 +131,6 @@ export interface FormValidationContext {
   province: string | undefined
   city: string | undefined
   condition_rating: string | undefined
-  // 三维度配置字段
-  transmission?: string | undefined
-  engine?: string | undefined
-  battery?: string | undefined
-  // 各维度可用选项（数组非空即该维度启用）
-  transmissionOptions?: string[]
-  engineOptions?: string[]
-  batteryOptions?: string[]
 }
 
 /** 整体校验：依次检查关键字段 */
@@ -149,35 +141,14 @@ export function validateForm(ctx: FormValidationContext): ValidationResult {
     () => validateRequiredString(ctx.vehicle_type, '车辆类型'),
     () => validateRequiredString(ctx.series, '系列'),
     () => validateTonnage(ctx.tonnage),
-    // config_type 由三维度拼接，校验放在维度校验之后
+    () => validateRequiredString(ctx.config_type, '配置类型'),
     () => validateRequiredString(ctx.mast_type, '门架类型'),
     () => validateMastHeight(ctx.mast_height_mm),
     () => validateYears(ctx.factory_year),
     () => validateUsageHours(ctx.usage_hours),
     () => validateRequiredString(ctx.province, '所在省份'),
     () => validateRequiredString(ctx.city, '所在城市'),
-    () => validateConditionRating(ctx.condition_rating),
-    // 三维度校验：维度启用（选项数组非空）时要求对应字段必填
-    () => {
-      if (ctx.transmissionOptions && ctx.transmissionOptions.length > 0 && !ctx.transmission) {
-        return { valid: false, message: '请选择传动系统配置' }
-      }
-      return { valid: true }
-    },
-    () => {
-      if (ctx.engineOptions && ctx.engineOptions.length > 0 && !ctx.engine) {
-        return { valid: false, message: '请选择发动机类型配置' }
-      }
-      return { valid: true }
-    },
-    () => {
-      if (ctx.batteryOptions && ctx.batteryOptions.length > 0 && !ctx.battery) {
-        return { valid: false, message: '请选择电池配置' }
-      }
-      return { valid: true }
-    },
-    // 最终校验拼接后的 config_type 非空
-    () => validateRequiredString(ctx.config_type, '配置类型')
+    () => validateConditionRating(ctx.condition_rating)
   ]
   for (const c of checks) {
     const r = c()

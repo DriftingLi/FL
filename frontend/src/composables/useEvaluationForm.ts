@@ -1,7 +1,6 @@
 // 表单状态与提交 composable（统一表单，供 ValuationInputView 使用）
-// 配置类型重构：移除 battery_type 独立字段，改为三维度（transmission/engine/battery）
-// config_type 由三维度拼接而成（用 / 分隔，不支持的维度省略）
-// 维度可见性由 ValuationInputView 通过 listSeriesConfigOptions 查询结果决定
+// config_type 为单一字段，由用户从下拉列表直接选择（选项来自 original_prices 级联查询）
+// 后端存储的 config_type 为复合字符串（如"手波/国产发动机"、"磷酸铁锂(LFP)"）
 import { reactive, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -13,19 +12,21 @@ import type {
 } from '@/types/valuation/evaluation'
 import { validateForm, type FormValidationContext } from '@/utils/valuationValidator'
 
-/** "无" 常量：用于表示字段不适用 */
+/** "其它" 常量：用于表示系列不适用（前端哨兵值，级联查询时传 undefined） */
+export const OTHER_SERIES_VALUE = '其它'
+/** mast_type 的 "无" 值（门架类型不适用时使用） */
 export const NONE_VALUE = '无'
 /** mast_height_mm 的 "无" 值 */
 export const NONE_MAST_HEIGHT = 0
 
-/** 基础表单状态：覆盖 CreateEvaluationRequest 全部字段 + 三维度配置 */
+/** 基础表单状态：覆盖 CreateEvaluationRequest 全部字段 */
 export interface BaseFormState {
   brand_type: string | undefined
   brand: string | undefined
   vehicle_type: string | undefined
   series: string | undefined
   tonnage: number | undefined
-  config_type: string | undefined // computed 写入此字段，便于 v-model 绑定
+  config_type: string | undefined
   mast_type: string | undefined
   mast_height_mm: number | undefined
   factory_year: number | undefined
@@ -38,30 +39,12 @@ export interface BaseFormState {
   has_registration_certificate: boolean
   has_maintenance_records: boolean
   condition_rating: ConditionRating | undefined
-  // 三维度配置字段
-  transmission: string | undefined
-  engine: string | undefined
-  battery: string | undefined
-}
-
-/** 维度选项（由 ValuationInputView 通过 listSeriesConfigOptions 加载后注入） */
-export interface DimensionOptions {
-  transmission: string[]
-  engine: string[]
-  battery: string[]
 }
 
 export function useEvaluationForm() {
   const router = useRouter()
   const store = useEvaluationStore()
   const submitting = ref(false)
-
-  // 维度选项（响应式，由 ValuationInputView 在 series 切换时更新）
-  const dimensionOptions = reactive<DimensionOptions>({
-    transmission: [],
-    engine: [],
-    battery: []
-  })
 
   // 基础信息（默认值）
   const form = reactive<BaseFormState>({
@@ -82,26 +65,7 @@ export function useEvaluationForm() {
     has_license_plate: false,
     has_registration_certificate: false,
     has_maintenance_records: false,
-    condition_rating: undefined,
-    transmission: undefined,
-    engine: undefined,
-    battery: undefined
-  })
-
-  // config_type 由三维度拼接：传动/发动机/电池，不支持的维度省略
-  // 维度被启用且用户选了"无" → 保留"无"字样；维度未启用 → 省略
-  const configType = computed(() => {
-    const parts: string[] = []
-    if (dimensionOptions.transmission.length > 0 && form.transmission) {
-      parts.push(form.transmission)
-    }
-    if (dimensionOptions.engine.length > 0 && form.engine) {
-      parts.push(form.engine)
-    }
-    if (dimensionOptions.battery.length > 0 && form.battery) {
-      parts.push(form.battery)
-    }
-    return parts.join('/')
+    condition_rating: undefined
   })
 
   /** 构造提交 payload */
@@ -113,6 +77,7 @@ export function useEvaluationForm() {
       !form.vehicle_type ||
       !form.series ||
       form.tonnage == null ||
+      !form.config_type ||
       !form.mast_type ||
       form.mast_height_mm == null ||
       form.factory_year == null ||
@@ -123,15 +88,13 @@ export function useEvaluationForm() {
     ) {
       return null
     }
-    const ct = configType.value
-    if (!ct) return null
     const payload: CreateEvaluationRequest = {
       brand_type: form.brand_type,
       brand: form.brand,
       vehicle_type: form.vehicle_type,
       series: form.series,
       tonnage: form.tonnage,
-      config_type: ct,
+      config_type: form.config_type,
       mast_type: form.mast_type,
       mast_height_mm: form.mast_height_mm,
       factory_year: form.factory_year,
@@ -156,7 +119,7 @@ export function useEvaluationForm() {
       vehicle_type: form.vehicle_type,
       series: form.series,
       tonnage: form.tonnage,
-      config_type: configType.value,
+      config_type: form.config_type,
       mast_type: form.mast_type,
       mast_height_mm: form.mast_height_mm,
       factory_year: form.factory_year,
@@ -164,13 +127,7 @@ export function useEvaluationForm() {
       usage_hours: form.usage_hours,
       province: form.province,
       city: form.city,
-      condition_rating: form.condition_rating,
-      transmission: form.transmission,
-      engine: form.engine,
-      battery: form.battery,
-      transmissionOptions: dimensionOptions.transmission,
-      engineOptions: dimensionOptions.engine,
-      batteryOptions: dimensionOptions.battery
+      condition_rating: form.condition_rating
     }
     return validateForm(ctx)
   }
@@ -198,12 +155,6 @@ export function useEvaluationForm() {
     form.has_registration_certificate = false
     form.has_maintenance_records = false
     form.condition_rating = undefined
-    form.transmission = undefined
-    form.engine = undefined
-    form.battery = undefined
-    dimensionOptions.transmission = []
-    dimensionOptions.engine = []
-    dimensionOptions.battery = []
   }
 
   /** 提交评估 */
@@ -236,8 +187,6 @@ export function useEvaluationForm() {
 
   return {
     form,
-    dimensionOptions,
-    configType,
     submitting,
     isValid,
     buildPayload,

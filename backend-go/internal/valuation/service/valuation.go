@@ -208,9 +208,9 @@ func (s *ValuationService) lookupOriginalPrice(ctx context.Context, req *model.E
 		return 0, fmt.Errorf("精确匹配原价失败: %w", err)
 	}
 	// 2. 模糊匹配（按 brand_type + brand + vehicle_type + series + tonnage）
-	//    若 series 为 "无"，降级为仅按 brand_type + brand + vehicle_type + tonnage 匹配
+	//    若 series 为 "其它"，降级为仅按 brand_type + brand + vehicle_type + tonnage 匹配
 	seriesForFuzzy := req.Series
-	if seriesForFuzzy == "无" {
+	if seriesForFuzzy == "其它" {
 		seriesForFuzzy = ""
 	}
 	op, err = s.dictRepo.FindOriginalPriceFuzzy(ctx,

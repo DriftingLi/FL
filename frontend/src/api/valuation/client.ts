@@ -74,7 +74,7 @@ client.interceptors.response.use(
     }
     return response
   },
-  (err: AxiosError) => {
+  async (err: AxiosError) => {
     if (err.response) {
       const status = err.response.status
       // 401：登录过期，清空认证并跳转登录
@@ -83,9 +83,18 @@ client.interceptors.response.use(
         ElMessage.error('登录已过期，请重新登录')
         return Promise.reject(err)
       }
-      // 尝试从错误响应中取 message
-      const data = err.response.data as { message?: string } | undefined
-      const msg = data?.message || `请求失败 (${status})`
+      // blob/arraybuffer 错误响应需先读取为文本再解析 JSON
+      let data: unknown = err.response.data
+      const rt = err.config?.responseType
+      if ((rt === 'blob' || rt === 'arraybuffer') && data instanceof Blob) {
+        try {
+          const text = await data.text()
+          data = JSON.parse(text)
+        } catch {
+          data = undefined
+        }
+      }
+      const msg = (data as { message?: string } | undefined)?.message || `请求失败 (${status})`
       ElMessage.error(msg)
     } else if (err.request) {
       ElMessage.error('网络异常：无法连接服务器')

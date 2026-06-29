@@ -1,24 +1,24 @@
 <script setup lang="ts">
 // 叉车残值评估参数录入（统一表单，Tesla 极简风）
-// 配置类型重构：移除 battery_type 独立字段，改为三维度（传动/发动机/电池）
+// 配置类型为单一下拉，选项来自 original_prices 级联查询（含传动/发动机/电池等复合配置）
 // 三行级联布局：
-//   行1 品牌类型：品牌 → 车辆类型（brand_type 由品牌自动派生）
+//   行1 品牌：品牌 → 车辆类型（brand_type 由品牌自动派生）
 //   行2 系列吨位：系列 → 吨位 → 出厂年份（出厂年份 min 由所选系列 earliest_factory_year 决定）
-//   行3 配置维度：传动系统 / 发动机类型 / 电池配置（按 series 支持的维度显示）
-//   行4 配置门架：配置类型(只读 computed) → 门架类型 → 门架高度
-// "无" 选项：series / mast_type 可选 "无"；mast_height_mm 用 0 表示 "无"
+//   行3 配置门架：配置类型 → 门架类型 → 门架高度
+// "其它" 选项：series 可选 "其它"（级联查询时传 undefined 跳过 series 过滤）
+// "无" 选项：mast_type 可选 "无"；mast_height_mm 用 0 表示 "无"
 import { computed, onMounted, ref, watch } from 'vue'
 import { Refresh, Promotion } from '@element-plus/icons-vue'
 import PageHeader from '@/components/valuation/PageHeader.vue'
-import { useEvaluationForm, NONE_VALUE, NONE_MAST_HEIGHT } from '@/composables/useEvaluationForm'
+import { useEvaluationForm, OTHER_SERIES_VALUE, NONE_VALUE, NONE_MAST_HEIGHT } from '@/composables/useEvaluationForm'
 import {
   listBrands,
   listVehicleTypes,
   listSeries,
   listTonnages,
+  listConfigTypes,
   listMastTypes,
   listMastHeights,
-  listSeriesConfigOptions,
   listConditionRatings,
   listProvinces,
   listCities
@@ -27,6 +27,7 @@ import type {
   VehicleTypeOption,
   SeriesOption,
   TonnageOption,
+  ConfigTypeOption,
   MastTypeOption,
   MastHeightOption,
   ConditionRatingOption
@@ -38,6 +39,7 @@ const brands = ref<Brand[]>([])
 const vehicleTypes = ref<VehicleTypeOption[]>([])
 const seriesList = ref<SeriesOption[]>([])
 const tonnages = ref<TonnageOption[]>([])
+const configTypes = ref<ConfigTypeOption[]>([])
 const mastTypes = ref<MastTypeOption[]>([])
 const mastHeights = ref<MastHeightOption[]>([])
 const conditionRatings = ref<ConditionRatingOption[]>([])
@@ -46,17 +48,23 @@ const cities = ref<string[]>([])
 const loadingDict = ref(false)
 
 // ========== "无" 选项（前端常量，附加到下拉列表末尾） ==========
-const noneSeriesOption: SeriesOption = { id: -1, brand: '', name: NONE_VALUE, earliest_factory_year: 1980 }
+const otherSeriesOption: SeriesOption = { id: -1, brand: '', name: OTHER_SERIES_VALUE, earliest_factory_year: 1980 }
 const noneMastTypeOption: MastTypeOption = { id: -1, name: NONE_VALUE }
 const noneMastHeightOption: MastHeightOption = { id: -1, value_mm: NONE_MAST_HEIGHT }
 
-// 合并 "无" 选项后的可选项列表
-const seriesOptions = computed(() => [...seriesList.value, noneSeriesOption])
+// 合并选项后的可选项列表
+// 若 API 返回的系列列表中已包含 "其它"，不再追加（避免重复）
+const seriesOptions = computed(() => {
+  if (seriesList.value.some((s) => s.name === OTHER_SERIES_VALUE)) {
+    return seriesList.value
+  }
+  return [...seriesList.value, otherSeriesOption]
+})
 const mastTypeOptions = computed(() => [...mastTypes.value, noneMastTypeOption])
 const mastHeightOptions = computed(() => [...mastHeights.value, noneMastHeightOption])
 
 // ========== 表单 ==========
-const { form, dimensionOptions, configType, submitting, isValid, reset, submit } = useEvaluationForm()
+const { form, submitting, isValid, reset, submit } = useEvaluationForm()
 
 // 当前所选系列的最早出厂年份（未选系列时返回默认下限 1980）
 const currentSeriesEarliestYear = computed(() => {
@@ -68,49 +76,33 @@ const currentSeriesEarliestYear = computed(() => {
 // 出厂年份字段可见性：选完吨位后才显示
 const showFactoryYear = computed(() => form.tonnage != null)
 
-// 维度可见性：仅当对应维度选项数组非空时显示
-const showTransmission = computed(() => dimensionOptions.transmission.length > 0)
-const showEngine = computed(() => dimensionOptions.engine.length > 0)
-const showBattery = computed(() => dimensionOptions.battery.length > 0)
-// 任一维度启用 → 显示"配置维度"区域
-const showConfigDimensions = computed(
-  () => showTransmission.value || showEngine.value || showBattery.value
-)
-
 // ========== 级联加载 ==========
-// 级联顺序：品牌 → 车辆类型 → 系列 → 吨位 →（出厂年份 + 配置维度）→ 门架类型 → 门架高度
+// 级联顺序：品牌 → 车辆类型 → 系列 → 吨位 →（出厂年份 + 配置类型）→ 门架类型 → 门架高度
 
 // 品牌 → 车辆类型 + 自动填充 brand_type
 watch(
   () => form.brand,
   async (b) => {
-    // 清空下游全部字段
     form.vehicle_type = undefined
     form.series = undefined
     form.tonnage = undefined
-    form.transmission = undefined
-    form.engine = undefined
-    form.battery = undefined
+    form.config_type = undefined
     form.mast_type = undefined
     form.mast_height_mm = undefined
     form.factory_year = undefined
     vehicleTypes.value = []
     seriesList.value = []
     tonnages.value = []
+    configTypes.value = []
     mastTypes.value = []
     mastHeights.value = []
-    dimensionOptions.transmission = []
-    dimensionOptions.engine = []
-    dimensionOptions.battery = []
 
     if (!b) {
       form.brand_type = undefined
       return
     }
-    // 自动填充 brand_type（从品牌字典派生，无需用户手选）
     const brandData = brands.value.find((br) => br.name === b)
     form.brand_type = brandData?.brand_type
-    // 加载该品牌可选车辆类型
     vehicleTypes.value = await listVehicleTypes(b)
   }
 )
@@ -121,87 +113,72 @@ watch(
   async (vt) => {
     form.series = undefined
     form.tonnage = undefined
-    form.transmission = undefined
-    form.engine = undefined
-    form.battery = undefined
+    form.config_type = undefined
     form.mast_type = undefined
     form.mast_height_mm = undefined
     form.factory_year = undefined
     seriesList.value = []
     tonnages.value = []
+    configTypes.value = []
     mastTypes.value = []
     mastHeights.value = []
-    dimensionOptions.transmission = []
-    dimensionOptions.engine = []
-    dimensionOptions.battery = []
 
     if (!form.brand || !vt) return
     seriesList.value = await listSeries(form.brand, vt)
   }
 )
 
-// 系列 → 吨位 + 加载维度配置选项
+// 系列 → 吨位
 watch(
   () => form.series,
   async (s) => {
     form.tonnage = undefined
-    form.transmission = undefined
-    form.engine = undefined
-    form.battery = undefined
+    form.config_type = undefined
     form.mast_type = undefined
     form.mast_height_mm = undefined
     form.factory_year = undefined
     tonnages.value = []
+    configTypes.value = []
     mastTypes.value = []
     mastHeights.value = []
-    dimensionOptions.transmission = []
-    dimensionOptions.engine = []
-    dimensionOptions.battery = []
 
     if (!form.brand || !form.vehicle_type || !s) return
-
-    // 并行加载：吨位列表 + 维度配置选项
-    // 系列为 "无" 时，吨位查询不传 series 参数；维度配置仅对真实 series 查询
-    const seriesParam = s === NONE_VALUE ? undefined : s
-    const [tonnageList, opts] = await Promise.all([
-      listTonnages(form.brand, form.vehicle_type, seriesParam),
-      s === NONE_VALUE
-        ? Promise.resolve({ transmission: [], engine: [], battery: [] })
-        : listSeriesConfigOptions(form.brand, s)
-    ])
-    tonnages.value = tonnageList
-    dimensionOptions.transmission = opts.transmission ?? []
-    dimensionOptions.engine = opts.engine ?? []
-    dimensionOptions.battery = opts.battery ?? []
+    // 系列为 "其它" 时，吨位查询不传 series 参数
+    const seriesParam = s === OTHER_SERIES_VALUE ? undefined : s
+    tonnages.value = await listTonnages(form.brand, form.vehicle_type, seriesParam)
   }
 )
 
-// 吨位 → 出厂年份字段解锁（出厂年份由 currentSeriesEarliestYear 限制 min）
-// 配置维度选项已在 series watcher 中加载，吨位变化只需清空下游门架相关字段
+// 吨位 → 配置类型
 watch(
   () => form.tonnage,
   async () => {
+    form.config_type = undefined
     form.mast_type = undefined
     form.mast_height_mm = undefined
+    configTypes.value = []
     mastTypes.value = []
     mastHeights.value = []
+
+    if (!form.brand || !form.vehicle_type || !form.series || form.tonnage == null) return
+    const seriesParam = form.series === OTHER_SERIES_VALUE ? undefined : form.series
+    configTypes.value = await listConfigTypes(
+      form.brand, form.vehicle_type, seriesParam ?? form.series, form.tonnage
+    )
   }
 )
 
-// 任一维度变化 → 清空下游门架字段（config_type 由 computed 自动更新）
+// 配置类型 → 门架类型
 watch(
-  [() => form.transmission, () => form.engine, () => form.battery],
-  async () => {
+  () => form.config_type,
+  async (ct) => {
     form.mast_type = undefined
     form.mast_height_mm = undefined
     mastTypes.value = []
     mastHeights.value = []
 
-    // 当三维度都已选（或维度未启用）且 config_type 非空时，加载门架类型
-    const ct = configType.value
-    if (!ct || !form.brand || !form.vehicle_type || !form.series || form.tonnage == null) return
-    const seriesParam = form.series === NONE_VALUE ? undefined : form.series
-    // listMastTypes 需要 series 参数，"无" 时传 undefined
+    if (!form.brand || !form.vehicle_type || !form.series || form.tonnage == null || !ct) return
+    const seriesParam = form.series === OTHER_SERIES_VALUE ? undefined : form.series
     mastTypes.value = await listMastTypes(
       form.brand, form.vehicle_type, seriesParam ?? form.series, form.tonnage, ct
     )
@@ -216,10 +193,10 @@ watch(
     mastHeights.value = []
 
     if (!form.brand || !form.vehicle_type || !form.series || form.tonnage == null ||
-        !configType.value || !mt) return
-    const seriesParam = form.series === NONE_VALUE ? undefined : form.series
+        !form.config_type || !mt) return
+    const seriesParam = form.series === OTHER_SERIES_VALUE ? undefined : form.series
     mastHeights.value = await listMastHeights(
-      form.brand, form.vehicle_type, seriesParam ?? form.series, form.tonnage, configType.value, mt
+      form.brand, form.vehicle_type, seriesParam ?? form.series, form.tonnage, form.config_type, mt
     )
   }
 )
@@ -257,7 +234,8 @@ const showBrand = computed(() => brands.value.length > 0)
 const showVehicleType = computed(() => vehicleTypes.value.length > 0)
 const showSeries = computed(() => form.vehicle_type !== undefined)
 const showTonnage = computed(() => form.series !== undefined)
-const showMastType = computed(() => form.tonnage != null && configType.value !== '')
+const showConfigType = computed(() => form.tonnage != null)
+const showMastType = computed(() => form.config_type !== undefined)
 const showMastHeight = computed(() => form.mast_type !== undefined)
 const showConditionRating = computed(() => conditionRatings.value.length > 0)
 const showProvince = computed(() => provinces.value.length > 0)
@@ -390,80 +368,34 @@ function onSubmit() {
           </el-col>
         </el-row>
 
-        <!-- 行3：配置维度（传动系统 / 发动机类型 / 电池配置） -->
-        <el-row v-if="showConfigDimensions" :gutter="24">
-          <el-col v-if="showTransmission" :xs="24" :md="12" :lg="6">
-            <el-form-item label="传动系统" required>
-              <el-select
-                v-model="form.transmission"
-                placeholder="请选择传动系统"
-                filterable
-                clearable
-              >
-                <el-option
-                  v-for="t in dimensionOptions.transmission"
-                  :key="t"
-                  :value="t"
-                  :label="t"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col v-if="showEngine" :xs="24" :md="12" :lg="6">
-            <el-form-item label="发动机类型" required>
-              <el-select
-                v-model="form.engine"
-                placeholder="请选择发动机类型"
-                filterable
-                clearable
-              >
-                <el-option
-                  v-for="e in dimensionOptions.engine"
-                  :key="e"
-                  :value="e"
-                  :label="e"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col v-if="showBattery" :xs="24" :md="12" :lg="6">
-            <el-form-item label="电池配置" required>
-              <el-select
-                v-model="form.battery"
-                placeholder="请选择电池配置"
-                filterable
-                clearable
-              >
-                <el-option
-                  v-for="b in dimensionOptions.battery"
-                  :key="b"
-                  :value="b"
-                  :label="b"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <!-- 行4：配置门架（配置类型只读 → 门架类型 → 门架高度） -->
-        <el-row v-if="showMastType" :gutter="24">
+        <!-- 行3：配置门架（配置类型 → 门架类型 → 门架高度） -->
+        <el-row v-if="showConfigType" :gutter="24">
           <el-col :xs="24" :md="12" :lg="6">
-            <el-form-item label="配置类型">
-              <el-input
-                :model-value="configType"
-                placeholder="请先完成上方配置维度"
-                readonly
-              />
+            <el-form-item label="配置类型" required>
+              <el-select
+                v-model="form.config_type"
+                placeholder="请选择配置类型"
+                filterable
+                clearable
+                :disabled="form.tonnage == null"
+              >
+                <el-option
+                  v-for="c in configTypes"
+                  :key="c.id"
+                  :value="c.name"
+                  :label="c.name"
+                />
+              </el-select>
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :md="12" :lg="6">
+          <el-col v-if="showMastType" :xs="24" :md="12" :lg="6">
             <el-form-item label="门架类型" required>
               <el-select
                 v-model="form.mast_type"
                 placeholder="请选择门架类型"
                 filterable
                 clearable
-                :disabled="!configType"
+                :disabled="!form.config_type"
               >
                 <el-option
                   v-for="m in mastTypeOptions"

@@ -1123,7 +1123,7 @@ func (r *DictionaryRepository) FindOriginalPriceMatch(
 
 // FindOriginalPriceFuzzy 模糊匹配原价：按 brand_type + brand + vehicle_type + series + tonnage 查询
 // 忽略 config_type / mast_type / mast_height_mm
-// 当 series 为空字符串时，忽略 series 条件（用于 series="无" 的降级匹配）
+// 当 series 为空字符串时，忽略 series 条件（用于 series="其它" 的降级匹配）
 // 多条命中时取 original_price 最高的（高配置与标准配置中偏高者，对卖家更友好）
 func (r *DictionaryRepository) FindOriginalPriceFuzzy(
 	ctx context.Context, brandType, brand, vehicleType, series string, tonnage float64,
@@ -1308,13 +1308,14 @@ func (r *DictionaryRepository) ListTonnagesByCascade(ctx context.Context, brand,
 }
 
 // ListConfigTypesByCascade 按品牌+车辆类型+系列+吨位级联查询配置类型
+// config_type 为复合字符串（如"手波/国产发动机"、"磷酸铁锂(LFP)"），直接从 original_prices 取 DISTINCT
 func (r *DictionaryRepository) ListConfigTypesByCascade(ctx context.Context, brand, vehicleType, series, tonnage string) ([]ConfigType, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT DISTINCT c.id, c.name
+		SELECT DISTINCT MIN(op.id), op.config_type
 		FROM original_prices op
-		JOIN config_types c ON c.name = op.config_type
 		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.tonnage = $4::numeric AND op.is_active = TRUE
-		ORDER BY c.id ASC`, brand, vehicleType, series, tonnage)
+		GROUP BY op.config_type
+		ORDER BY op.config_type`, brand, vehicleType, series, tonnage)
 	if err != nil {
 		return nil, fmt.Errorf("级联查询配置类型失败: %w", err)
 	}
