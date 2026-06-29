@@ -1,0 +1,5 @@
+# 强制 shell 脚本使用 LF 行尾，避免 Linux 容器中 ^M: bad interpreter 错误
+*.sh text eol=lf
+
+# Dockerfile 也强制 LF
+Dockerfile text eol=lf
