@@ -7,6 +7,7 @@ import { Edit, Document, Download } from '@element-plus/icons-vue'
 import PageHeader from '@/components/valuation/PageHeader.vue'
 import ResultCard from '@/components/valuation/ResultCard.vue'
 import DimensionRadar from '@/components/valuation/DimensionRadar.vue'
+import FutureValueChart from '@/components/valuation/FutureValueChart.vue'
 import { downloadEvaluationReportBlob } from '@/api/valuation/evaluation'
 
 const router = useRouter()
@@ -55,6 +56,15 @@ const dimensionScoresMap = computed(() => {
   for (const d of arr) map[d.label] = d.value
   return map
 })
+
+// 使用年限 = 评估年份 - 出厂年份（从草稿表单获取，用于未来估价推算）
+const usageYears = computed(() => {
+  const draft = store.draftForm
+  if (draft?.factory_year && draft?.sale_year) {
+    return draft.sale_year - draft.factory_year
+  }
+  return 0
+})
 </script>
 
 <template>
@@ -87,6 +97,23 @@ const dimensionScoresMap = computed(() => {
         </section>
       </el-col>
     </el-row>
+
+    <!-- 未来估价走势 -->
+    <section class="card-surface section-block">
+      <h2 class="section-title">
+        <span class="title-icon">📊</span>
+        未来估价走势
+      </h2>
+      <FutureValueChart
+        :estimated-value="r.estimated_value"
+        :age="usageYears"
+        :k-time="r.k_time"
+        :k-hours="r.k_hours"
+        :k-brand="r.k_brand"
+        :sale-year="store.draftForm?.sale_year || 0"
+        height="320px"
+      />
+    </section>
 
     <!-- 评估建议 -->
     <section class="card-surface section-block">

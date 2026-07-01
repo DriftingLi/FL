@@ -6,6 +6,7 @@ import { ArrowLeft, Download, CircleCheck } from '@element-plus/icons-vue'
 import PageHeader from '@/components/valuation/PageHeader.vue'
 import ResultCard from '@/components/valuation/ResultCard.vue'
 import DimensionRadar from '@/components/valuation/DimensionRadar.vue'
+import FutureValueChart from '@/components/valuation/FutureValueChart.vue'
 import { getEvaluationDetail } from '@/api/valuation/evaluation'
 import { generateReport, getReportDownloadUrl } from '@/api/valuation/report'
 import { downloadEvaluationReportBlob } from '@/api/valuation/evaluation'
@@ -140,6 +141,20 @@ const usageYears = computed(() => {
           </section>
         </el-col>
       </el-row>
+
+      <!-- 未来估价走势 -->
+      <section class="card-surface section-block">
+        <h2 class="section-title">未来估价走势</h2>
+        <FutureValueChart
+          :estimated-value="data.estimated_value"
+          :age="usageYears"
+          :k-time="data.k_time"
+          :k-hours="data.k_hours"
+          :k-brand="data.k_brand"
+          :sale-year="data.sale_year || 0"
+          height="320px"
+        />
+      </section>
 
       <!-- 基本信息 -->
       <section class="card-surface section-block">

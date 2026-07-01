@@ -357,11 +357,13 @@ func (g *Generator) renderBasicInfoAndSummary(pdf *gofpdf.Fpdf, r *model.Evaluat
 	drawPageHeader(pdf, r)
 
 	// 评估基本信息
-	drawSectionHeader(pdf, "评估基本信息", pageMargin, 35)
-	drawBasicInfoTable(pdf, r, pageMargin, 45, contentWidth)
+	infoHeaderY := 35.0
+	infoTableY := 45.0
+	drawSectionHeader(pdf, "评估基本信息", pageMargin, infoHeaderY)
+	infoTableH := drawBasicInfoTable(pdf, r, pageMargin, infoTableY, contentWidth)
 
-	// 评估结果摘要
-	summaryY := 102.0
+	// 评估结果摘要(与上一段表格保持间距,避免标题触及表格)
+	summaryY := infoTableY + infoTableH + 6.0
 	drawSectionHeader(pdf, "评估结果摘要", pageMargin, summaryY)
 
 	// Hero 卡片
@@ -453,7 +455,7 @@ type basicInfoRow struct {
 //   - 车况评级 / 区域
 //   - 维保记录 / 车牌
 //   - 登记证
-func drawBasicInfoTable(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, x, y, w float64) {
+func drawBasicInfoTable(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, x, y, w float64) float64 {
 	rowH := 6.5
 	colLabelW := w * 0.18
 	colValueW := w * 0.32
@@ -519,6 +521,7 @@ func drawBasicInfoTable(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, x, y, w flo
 	for i := 1; i < len(rows); i++ {
 		pdf.Line(x, y+float64(i)*float64(rowH), x+w, y+float64(i)*float64(rowH))
 	}
+	return totalH
 }
 
 // formatRegion 拼接省份与城市(空值降级为 -)
