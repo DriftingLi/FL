@@ -60,7 +60,7 @@
           <el-form-item prop="username">
             <el-input
               v-model="formData.username"
-              placeholder="请输入用户名"
+              placeholder="请输入手机号或用户名"
               prefix-icon="User"
               size="large"
             />

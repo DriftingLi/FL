@@ -146,15 +146,16 @@ func TestStudentLogin_Disabled(t *testing.T) {
 
 func TestStudentRegister_Success(t *testing.T) {
 	svc, _ := newAuthSvc(t)
-	result, err := svc.StudentRegister("newstudent", "pwd", "新生")
+	// 新签名：username 由手机号自动生成
+	result, err := svc.StudentRegister("13800138000", "pwd", "新生", "", "")
 	if err != nil {
 		t.Fatalf("注册失败: %v", err)
 	}
-	if result["username"] != "newstudent" || result["name"] != "新生" {
+	if result["username"] != "13800138000" || result["name"] != "新生" {
 		t.Fatalf("注册结果不匹配: %+v", result)
 	}
-	// 验证可登录
-	login, err := svc.StudentLogin("newstudent", "pwd")
+	// 验证可用手机号登录
+	login, err := svc.StudentLogin("13800138000", "pwd")
 	if err != nil {
 		t.Fatalf("注册后应可登录: %v", err)
 	}
@@ -165,10 +166,10 @@ func TestStudentRegister_Success(t *testing.T) {
 
 func TestStudentRegister_Duplicate(t *testing.T) {
 	svc, _ := newAuthSvc(t)
-	_, _ = svc.StudentRegister("dup", "pwd", " dup1")
-	_, err := svc.StudentRegister("dup", "pwd", "dup2")
-	if err == nil || err.Error() != "用户名已被注册" {
-		t.Fatalf("应返回用户名已被注册, got %v", err)
+	_, _ = svc.StudentRegister("13800138000", "pwd", "dup1", "", "")
+	_, err := svc.StudentRegister("13800138000", "pwd", "dup2", "", "")
+	if err == nil || err.Error() != "手机号已被注册" {
+		t.Fatalf("应返回手机号已被注册, got %v", err)
 	}
 }
 

@@ -224,23 +224,28 @@ func (s *ValuationService) lookupOriginalPrice(ctx context.Context, req *model.E
 	return op.OriginalPrice, nil
 }
 
-// buildDimensionScores 把结果包装成 4 维中文标签的 map
-// 维度顺序与雷达图保持一致：时间衰减（含品牌/强度修正） / 车况 / 市场 / 残值率
-// 残值率维度 = estimated / originalPrice（已钳制 ≤ 1.0）
+// BuildDimensionScores 由结果字段派生 5 维度评分切片
+// 维度顺序与雷达图保持一致：出厂时间 / 使用强度 / 品牌价值 / 市场需求 / 车辆情况
+// 每个维度值钳制到 [0, 1]，对应前端雷达图 max=1
+// 供 handler.Get 在详情接口实时计算维度评分（dimension_scores 未入库）
+func BuildDimensionScores(kTime, kHours, kBrand, kCondition, kMarket float64) []model.DimensionScore {
+	return []model.DimensionScore{
+		{Label: "出厂时间", Value: roundTo4(clamp01(kTime))},
+		{Label: "使用强度", Value: roundTo4(clamp01(kHours))},
+		{Label: "品牌价值", Value: roundTo4(clamp01(kBrand))},
+		{Label: "市场需求", Value: roundTo4(clamp01(kMarket))},
+		{Label: "车辆情况", Value: roundTo4(clamp01(kCondition))},
+	}
+}
+
+// buildDimensionScores 把结果包装成 5 维中文标签的 map（Evaluate 流程内部使用）
 func buildDimensionScores(r *model.EvaluationResult) map[string]float64 {
-	rate := 0.0
-	if r.OriginalPrice > 0 {
-		rate = r.EstimatedValue / r.OriginalPrice
-		if rate > 1.0 {
-			rate = 1.0
-		}
+	scores := BuildDimensionScores(r.KTime, r.KHours, r.KBrand, r.KCondition, r.KMarket)
+	m := make(map[string]float64, len(scores))
+	for _, s := range scores {
+		m[s.Label] = s.Value
 	}
-	return map[string]float64{
-		"时间衰减": roundTo4(r.KTimeAdjusted),
-		"车况":   roundTo4(r.KCondition),
-		"市场":   roundTo4(r.KMarket),
-		"残值率":  roundTo4(rate),
-	}
+	return m
 }
 
 // buildSuggestions 基于评估结果生成文本建议
@@ -333,4 +338,15 @@ func roundTo2(v float64) float64 {
 // roundTo4 四舍五入到 4 位小数（保留 K 系数精度）
 func roundTo4(v float64) float64 {
 	return math.Round(v*10000) / 10000
+}
+
+// clamp01 将值钳制到 [0, 1] 区间（雷达图维度评分归一化）
+func clamp01(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
 }

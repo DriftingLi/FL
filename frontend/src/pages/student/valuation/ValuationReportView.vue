@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 评估报告页（Tesla 极简：白底 + Electric Blue 残值 + 维度雷达 + 系数计算过程）
+// 评估报告页（Tesla 极简：白底 + Electric Blue 残值 + 维度雷达 + 基本信息 + 建议）
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Download, CircleCheck } from '@element-plus/icons-vue'
@@ -15,11 +15,9 @@ import {
   formatDateTime,
   formatInt,
   formatMastHeight,
-  formatTonnage,
-  formatWan,
-  formatCoefficient
+  formatTonnage
 } from '@/utils/valuationFormat'
-import { COEFFICIENT_DEFS, CONDITION_RATING_COLOR } from '@/utils/valuationConstants'
+import { CONDITION_RATING_COLOR } from '@/utils/valuationConstants'
 import type { EvaluationDetailResponse } from '@/types/valuation/evaluation'
 
 const route = useRoute()
@@ -101,17 +99,6 @@ const dimensionScoresMap = computed(() => {
   return map
 })
 
-// 系数取值（安全访问；residual_rate 为本地计算的派生值）
-function coefValue(key: string): number {
-  if (key === 'residual_rate') {
-    const d = data.value
-    if (!d || !d.original_price) return 0
-    return Math.min(1.0, d.estimated_value / d.original_price)
-  }
-  const v = (data.value as unknown as Record<string, number> | null)?.[key]
-  return typeof v === 'number' ? v : 0
-}
-
 // 使用年限 = 评估年份 - 出厂年份
 const usageYears = computed(() => {
   const d = data.value
@@ -186,33 +173,7 @@ const usageYears = computed(() => {
               {{ data.condition_rating }}
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="原始价格">{{ formatWan(data.original_price) }}</el-descriptions-item>
         </el-descriptions>
-      </section>
-
-      <!-- 系数计算过程 -->
-      <section class="card-surface section-block">
-        <h2 class="section-title">系数计算过程</h2>
-        <p class="calc-formula num">
-          残值 = 原价 × Kt_adj × Kc × Km
-        </p>
-        <p class="calc-formula-sub num">
-          Kt_adj = Kt^(Kh / Kb)（品牌系数与使用强度系数修正时间衰减）
-        </p>
-        <p class="calc-result num">
-          = {{ formatWan(data.original_price) }}
-          × {{ formatCoefficient(coefValue('k_time_adjusted')) }}
-          × {{ formatCoefficient(coefValue('k_condition')) }}
-          × {{ formatCoefficient(coefValue('k_market')) }}
-          = <span class="calc-final">{{ formatWan(data.estimated_value) }}</span>
-        </p>
-        <div class="coef-detail-grid">
-          <div v-for="def in COEFFICIENT_DEFS" :key="def.key" class="coef-detail-cell">
-            <div class="coef-detail-label" :style="{ color: def.color }">{{ def.label }}</div>
-            <div class="coef-detail-value num">{{ formatCoefficient(coefValue(def.key)) }}</div>
-            <div class="coef-detail-desc">{{ def.description }}</div>
-          </div>
-        </div>
       </section>
 
       <!-- 评估建议 -->
@@ -264,55 +225,6 @@ const usageYears = computed(() => {
   font-weight: var(--fw-medium);
   margin: 0 0 var(--sp-5);
   color: var(--color-text);
-}
-.calc-formula {
-  font-size: var(--fs-base);
-  color: var(--color-text-secondary);
-  margin: 0 0 var(--sp-3);
-}
-.calc-formula-sub {
-  font-size: var(--fs-sm);
-  color: var(--color-text-tertiary);
-  margin: 0 0 var(--sp-4);
-}
-.calc-result {
-  font-size: var(--fs-md);
-  color: var(--color-text);
-  margin: 0 0 var(--sp-5);
-  line-height: 1.8;
-  word-break: break-all;
-}
-.calc-final {
-  color: var(--color-primary);
-  font-weight: var(--fw-semibold);
-}
-.coef-detail-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--sp-4);
-}
-.coef-detail-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: var(--sp-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-muted);
-}
-.coef-detail-label {
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-medium);
-}
-.coef-detail-value {
-  font-size: 20px;
-  font-weight: var(--fw-semibold);
-  color: var(--color-text);
-}
-.coef-detail-desc {
-  font-size: var(--fs-xs);
-  color: var(--color-text-tertiary);
-  line-height: 1.5;
 }
 .suggestion-list {
   margin: 0;
@@ -369,9 +281,6 @@ const usageYears = computed(() => {
 @media (max-width: 768px) {
   .suggestion-list {
     grid-template-columns: 1fr;
-  }
-  .coef-detail-grid {
-    grid-template-columns: 1fr 1fr;
   }
   .radar-block,
   .section-block {

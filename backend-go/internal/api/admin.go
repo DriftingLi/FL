@@ -184,19 +184,21 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	// POST /api/admin/student  添加学员
 	g.POST("/student", func(c *gin.Context) {
 		var req struct {
-			Username string `json:"username"`
+			Phone    string `json:"phone"`
 			Password string `json:"password"`
 			Name     string `json:"name"`
+			Email    string `json:"email"`
+			Company  string `json:"company"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			response.BadRequest(c, "请求参数错误")
 			return
 		}
-		if req.Username == "" || req.Password == "" || req.Name == "" {
-			response.BadRequest(c, "用户名、密码和姓名不能为空")
+		if req.Phone == "" || req.Password == "" || req.Name == "" {
+			response.BadRequest(c, "手机号、密码和姓名不能为空")
 			return
 		}
-		result, err := authSvc.StudentRegister(req.Username, req.Password, req.Name)
+		result, err := authSvc.StudentRegister(req.Phone, req.Password, req.Name, req.Email, req.Company)
 		if err != nil {
 			response.BadRequest(c, err.Error())
 			return

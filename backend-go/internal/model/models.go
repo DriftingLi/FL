@@ -71,6 +71,9 @@ type Student struct {
 	Username       string    `gorm:"column:username;uniqueIndex" json:"username"`
 	Password       string    `gorm:"column:password" json:"-"`
 	Name           string    `gorm:"column:name" json:"name"`
+	Phone          string    `gorm:"column:phone;uniqueIndex" json:"phone"`
+	Email          string    `gorm:"column:email" json:"email,omitempty"`
+	Company        string    `gorm:"column:company" json:"company,omitempty"`
 	Status         int16     `gorm:"column:status;default:1" json:"status"`
 	Level          string    `gorm:"column:level;default:beginner" json:"level"`
 	LevelUpdatedAt *time.Time `gorm:"column:level_updated_at" json:"level_updated_at,omitempty"`

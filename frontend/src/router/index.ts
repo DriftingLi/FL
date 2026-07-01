@@ -129,6 +129,11 @@ const routes = [
         path: 'valuation/history',
         name: 'ValuationHistory',
         component: () => import('@/pages/student/valuation/ValuationHistoryView.vue')
+      },
+      {
+        path: 'dispatch',
+        name: 'DispatchComingSoon',
+        component: () => import('@/pages/student/DispatchComingSoon.vue')
       }
     ]
   },

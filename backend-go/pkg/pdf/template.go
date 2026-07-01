@@ -2,13 +2,14 @@
 // 本文件:简洁版叉车残值评估报告,3 页 A4 布局。
 //   - 第 1 页:封面(渐变蓝带 + Logo + 报告元信息卡片)
 //   - 第 2 页:评估基本信息 + 评估结果摘要(Hero 卡片 + 置信区间 + 雷达图/维度进度条)
-//   - 第 3 页:计算系数 + 车况评级 + 处置建议 + 风险提示 + 免责声明
+//   - 第 3 页:评估结论 + 处置建议 + 风险提示 + 免责声明
 //
 // 设计稿: .trae/design-exports/简洁版评估报告.html
 package pdf
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"time"
 
@@ -240,18 +241,33 @@ func coverVehicleLabel(r *model.EvaluationDetail) string {
 }
 
 func drawCoverMetaRow(pdf *gofpdf.Fpdf, x, y, w float64, label, value string, valueBold bool, vc, lc rgb) {
+	gap := 3.0
+	pdf.SetFont(FontSimHei, "", 11.5)
+	labelW := pdf.GetStringWidth(label)
+	if valueBold {
+		pdf.SetFont(FontSimHeiBold, "B", 13)
+	} else {
+		pdf.SetFont(FontSimHei, "", 13)
+	}
+	valueW := pdf.GetStringWidth(value)
+	totalW := labelW + gap + valueW
+	startX := x
+	if totalW < w {
+		startX = x + (w-totalW)/2
+	}
+
 	pdf.SetFont(FontSimHei, "", 11.5)
 	pdf.SetTextColor(lc[0], lc[1], lc[2])
-	pdf.SetXY(x, y)
-	labelW := 45.0
-	pdf.CellFormat(labelW, 6, label, "", 0, "R", false, 0, "")
+	pdf.SetXY(startX, y)
+	pdf.CellFormat(labelW, 6, label, "", 0, "L", false, 0, "")
 	if valueBold {
 		pdf.SetFont(FontSimHeiBold, "B", 13)
 	} else {
 		pdf.SetFont(FontSimHei, "", 13)
 	}
 	pdf.SetTextColor(vc[0], vc[1], vc[2])
-	pdf.CellFormat(w-labelW, 6, value, "", 0, "L", false, 0, "")
+	pdf.SetXY(startX+labelW+gap, y)
+	pdf.CellFormat(valueW, 6, value, "", 0, "L", false, 0, "")
 }
 
 // drawForkliftIcon 在中心 (cx, cy) 处绘制简化的叉车图标
@@ -407,10 +423,10 @@ func drawSectionHeader(pdf *gofpdf.Fpdf, title string, x, y float64) {
 	// 蓝色细竖条
 	pdf.SetFillColor(primary[0], primary[1], primary[2])
 	pdf.RoundedRect(x, y+1.5, 1.4, 6.5, 0.7, "1234", "F")
-	// 标题
+	// 标题(与下方表格内容左对齐)
 	pdf.SetFont(FontSimHeiBold, "B", h1Pt)
 	pdf.SetTextColor(text[0], text[1], text[2])
-	pdf.SetXY(x+5, y)
+	pdf.SetXY(x+3.5, y)
 	pdf.CellFormat(150, 7, title, "", 0, "L", false, 0, "")
 	// 底部分隔线
 	pdf.SetDrawColor(border[0], border[1], border[2])
@@ -694,10 +710,10 @@ func drawRadarAndDimensions(pdf *gofpdf.Fpdf, x, y, w float64, dimensionScores m
 	pdf.SetXY(dimX, y)
 	pdf.CellFormat(dimW, 4, "维度评分明细", "", 0, "L", false, 0, "")
 
-	// 雷达图(尺寸需容纳外圈标签)
+	// 雷达图(整体下移,避免标题与标签重合)
 	if len(dimensionScores) > 0 {
 		rcx := x + radarW/2
-		rcy := y + 32
+		rcy := y + 44
 		drawRadarChart(pdf, rcx, rcy, 18, dimensionScores)
 	} else {
 		pdf.SetFont(FontSimHei, "", 9.5)
@@ -764,20 +780,16 @@ func dimensionBarColor(v float64) rgb {
 }
 
 // =====================================================
-// 第 3 页:计算系数 + 车况评级 + 处置建议 + 风险提示 + 免责声明
+// 第 3 页:评估结论 + 处置建议 + 风险提示 + 免责声明
 // =====================================================
 
 // renderCoefficientsAndConclusion 渲染第 3 页
-// 顺序:计算系数表 → 车况评级卡 → 处置建议 → 风险提示 → 免责声明
+// 顺序:评估结论 → 处置建议 → 风险提示 → 免责声明
 func (g *Generator) renderCoefficientsAndConclusion(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, suggestions []string) {
 	drawPageHeader(pdf, r)
 
-	// 计算系数表
-	drawSectionHeader(pdf, "计算系数", pageMargin, 35)
-	drawCoefficientsTable(pdf, r, pageMargin, 45, contentWidth)
-
-	// 车况评级 + 估算残值双卡
-	conclusionY := 88.0
+	// 评估结论:车况评级 + 估算残值双卡
+	conclusionY := 38.0
 	drawSectionHeader(pdf, "评估结论", pageMargin, conclusionY)
 	rate := 0.0
 	if r.OriginalPrice > 0 {
@@ -795,85 +807,19 @@ func (g *Generator) renderCoefficientsAndConclusion(pdf *gofpdf.Fpdf, r *model.E
 	if len(suggs) > 6 {
 		suggs = suggs[:6]
 	}
-	suggY := cardY + 32
-	drawRecommendations(pdf, pageMargin, suggY, contentWidth, suggs)
+	suggY := cardY + 30
+	suggH := drawRecommendations(pdf, pageMargin, suggY, contentWidth, suggs)
 
 	// 风险提示
-	riskY := suggY + 8 + float64(len(suggs))*6.5
-	drawRiskWarnings(pdf, pageMargin, riskY, contentWidth)
+	riskY := suggY + suggH + 6
+	riskH := drawRiskWarnings(pdf, pageMargin, riskY, contentWidth)
 
 	// 免责声明
-	disY := riskY + 28
+	disY := riskY + riskH + 8
 	drawDisclaimer(pdf, pageMargin, disY, contentWidth)
 
 	// 页脚
 	drawPageFooter(pdf, 3, 3)
-}
-
-// drawCoefficientsTable 计算系数表
-// 展示:基准原价、Kt(原始)、Kh、Kb、Kt 修正后、Kc、Km、最终残值与置信区间
-// 采用 4 列布局(label-value-label-value),共 4 行
-// 说明：Kh、Kb 不再直接乘到残值，而是修正时间衰减速率 → Kt_adj = Kt^(Kh/Kb)
-// Kt 修正后值取自 r.KTimeAdjusted（由 handler 在调用 PDF 前用 service.AdjustKTimeByBrandAndIntensity 填充）
-func drawCoefficientsTable(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, x, y, w float64) {
-	rowH := 7.0
-	colLabelW := w * 0.18
-	colValueW := w * 0.32
-	colTotal := colLabelW + colValueW // 1/2 列宽
-
-	rows := []basicInfoRow{
-		{label1: "基准原价", value1: fmt.Sprintf("%.2f 万元", yuanToWan(r.OriginalPrice)), label2: "时间系数 Kt", value2: fmt.Sprintf("%.4f", r.KTime)},
-		{label1: "使用强度 Kh", value1: fmt.Sprintf("%.4f", r.KHours), label2: "品牌系数 Kb", value2: fmt.Sprintf("%.4f", r.KBrand)},
-		{label1: "Kt 修正后", value1: fmt.Sprintf("%.4f", r.KTimeAdjusted), label2: "车况系数 Kc", value2: fmt.Sprintf("%.4f", r.KCondition)},
-		{label1: "市场系数 Km", value1: fmt.Sprintf("%.4f", r.KMarket), label2: "估算残值", value2: fmt.Sprintf("%.2f 万元", yuanToWan(r.EstimatedValue))},
-	}
-
-	for i, row := range rows {
-		ry := y + float64(i)*rowH
-		// 偶数行浅底
-		if i%2 == 0 {
-			pdf.SetFillColor(bgMuted[0], bgMuted[1], bgMuted[2])
-			pdf.Rect(x, ry, w, rowH, "F")
-		}
-		// 第一组 label
-		pdf.SetFont(FontSimHei, "", 10)
-		pdf.SetTextColor(textMuted[0], textMuted[1], textMuted[2])
-		pdf.SetXY(x+3, ry+1.5)
-		pdf.CellFormat(colLabelW-3, rowH-1.5, row.label1, "", 0, "L", false, 0, "")
-		// 第一组 value
-		pdf.SetFont(FontSimHeiBold, "B", 10)
-		pdf.SetTextColor(text[0], text[1], text[2])
-		pdf.SetXY(x+colLabelW+3, ry+1.5)
-		pdf.CellFormat(colValueW-3, rowH-1.5, row.value1, "", 0, "L", false, 0, "")
-		// 第二组
-		pdf.SetFont(FontSimHei, "", 10)
-		pdf.SetTextColor(textMuted[0], textMuted[1], textMuted[2])
-		pdf.SetXY(x+colTotal+3, ry+1.5)
-		pdf.CellFormat(colLabelW-3, rowH-1.5, row.label2, "", 0, "L", false, 0, "")
-		pdf.SetFont(FontSimHeiBold, "B", 10)
-		pdf.SetTextColor(text[0], text[1], text[2])
-		pdf.SetXY(x+colTotal+colLabelW+3, ry+1.5)
-		pdf.CellFormat(colValueW-3, rowH-1.5, row.value2, "", 0, "L", false, 0, "")
-	}
-	// 表格外框 + 内部网格
-	pdf.SetDrawColor(border[0], border[1], border[2])
-	pdf.SetLineWidth(0.2)
-	totalH := rowH * float64(len(rows))
-	pdf.Rect(x, y, w, totalH, "D")
-	pdf.Line(x+colTotal, y, x+colTotal, y+totalH)
-	for i := 1; i < len(rows); i++ {
-		pdf.Line(x, y+float64(i)*rowH, x+w, y+float64(i)*rowH)
-	}
-
-	// 表下说明：品牌/强度对时间衰减的修正关系 + 残值率 ≤ 100% 兜底
-	pdf.SetFont(FontSimHei, "", 8.5)
-	pdf.SetTextColor(textLite[0], textLite[1], textLite[2])
-	pdf.SetXY(x, y+totalH+1.5)
-	pdf.MultiCell(w, 3.5,
-		"公式：残值 = 原价 × Kt 修正后 × Kc × Km；其中 Kt 修正后 = Kt^(Kh/Kb)，"+
-			"品牌系数 Kb 与使用强度系数 Kh 修正时间衰减速率 λ（不直接作用于残值）。"+
-			"残值率不超过 100%。",
-		"", "L", false)
 }
 
 func drawGradeCards(pdf *gofpdf.Fpdf, x, y, w float64, grade gradeInfo, rate, estValue float64) {
@@ -917,31 +863,40 @@ func drawGradeCards(pdf *gofpdf.Fpdf, x, y, w float64, grade gradeInfo, rate, es
 	_ = rate
 }
 
-func drawRecommendations(pdf *gofpdf.Fpdf, x, y, w float64, suggs []string) {
+func drawRecommendations(pdf *gofpdf.Fpdf, x, y, w float64, suggs []string) float64 {
 	// 标题
 	pdf.SetFont(FontSimHeiBold, "B", 11)
 	pdf.SetTextColor(textSub[0], textSub[1], textSub[2])
 	pdf.SetXY(x, y)
 	pdf.CellFormat(80, 5, "处置建议", "", 0, "L", false, 0, "")
 
-	// 列表
-	rowH := 6.0
+	// 列表(根据文字长度动态计算每行高度,避免换行重叠)
+	rowY := y + 7
+	pdf.SetFont(FontSimHei, "", 10)
+	availW := w - 7
 	for i, s := range suggs {
-		sy := y + 7 + float64(i)*rowH
+		sw := pdf.GetStringWidth(s)
+		lines := math.Ceil(sw / availW)
+		if lines < 1 {
+			lines = 1
+		}
+		itemH := 4*lines + 2
 		// 编号
 		pdf.SetFont(FontSimHeiBold, "B", 10.5)
 		pdf.SetTextColor(primary[0], primary[1], primary[2])
-		pdf.SetXY(x, sy)
-		pdf.CellFormat(6, rowH, fmt.Sprintf("%d.", i+1), "", 0, "L", false, 0, "")
+		pdf.SetXY(x, rowY)
+		pdf.CellFormat(6, itemH, fmt.Sprintf("%d.", i+1), "", 0, "L", false, 0, "")
 		// 文字
 		pdf.SetFont(FontSimHei, "", 10)
 		pdf.SetTextColor(textMuted[0], textMuted[1], textMuted[2])
-		pdf.SetXY(x+7, sy)
-		pdf.MultiCell(w-7, 4, s, "", "L", false)
+		pdf.SetXY(x+7, rowY)
+		pdf.MultiCell(availW, 4, s, "", "L", false)
+		rowY += itemH
 	}
+	return rowY - y
 }
 
-func drawRiskWarnings(pdf *gofpdf.Fpdf, x, y, w float64) {
+func drawRiskWarnings(pdf *gofpdf.Fpdf, x, y, w float64) float64 {
 	// 标题
 	pdf.SetFont(FontSimHeiBold, "B", 11)
 	pdf.SetTextColor(errColor[0], errColor[1], errColor[2])
@@ -953,22 +908,40 @@ func drawRiskWarnings(pdf *gofpdf.Fpdf, x, y, w float64) {
 		"评估结果仅供参考,不构成任何形式的价格承诺或担保,买卖双方应结合实地验车结果进行最终定价。",
 		"本报告有效期为自生成之日起 6 个月,逾期需重新评估。",
 	}
+
+	// 根据文字折行情况动态计算警示卡高度
+	pdf.SetFont(FontSimHei, "", 9.5)
+	availTextW := w - 13
+	itemHs := make([]float64, len(risks))
+	totalTextH := 0.0
+	for i, r := range risks {
+		rw := pdf.GetStringWidth(r)
+		lines := math.Ceil(rw / availTextW)
+		if lines < 1 {
+			lines = 1
+		}
+		itemHs[i] = 4*lines + 1.5
+		totalTextH += itemHs[i]
+	}
+
 	// 黄色警示卡
 	cardY := y + 7
-	cardH := 4 + float64(len(risks))*5
+	cardH := totalTextH + 4
 	pdf.SetFillColor(warningBg[0], warningBg[1], warningBg[2])
 	pdf.SetDrawColor(warningBord[0], warningBord[1], warningBord[2])
 	pdf.SetLineWidth(0.3)
 	pdf.RoundedRect(x, cardY, w, cardH, 1.5, "1234", "FD")
+	rowY := cardY + 2
 	for i, r := range risks {
-		ry := cardY + 2.5 + float64(i)*5
 		pdf.SetFont(FontSimHei, "", 9.5)
 		pdf.SetTextColor(warningText[0], warningText[1], warningText[2])
-		pdf.SetXY(x+4, ry)
+		pdf.SetXY(x+4, rowY)
 		pdf.CellFormat(4, 4, "-", "", 0, "L", false, 0, "")
-		pdf.SetXY(x+9, ry)
-		pdf.MultiCell(w-13, 4, r, "", "L", false)
+		pdf.SetXY(x+9, rowY)
+		pdf.MultiCell(availTextW, 4, r, "", "L", false)
+		rowY += itemHs[i]
 	}
+	return (cardY + cardH) - y
 }
 
 func drawDisclaimer(pdf *gofpdf.Fpdf, x, y, w float64) {

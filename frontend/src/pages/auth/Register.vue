@@ -10,7 +10,7 @@
           </svg>
         </div>
         <h1 class="brand-title">ForkLift<span class="brand-accent">Pro</span></h1>
-        <p class="brand-subtitle">开启您的叉车维修学习之旅</p>
+        <p class="brand-subtitle">叉车维修一站式服务平台</p>
       </div>
       <div class="brand-decor">
         <div class="decor-circle decor-circle-1"></div>
@@ -26,21 +26,22 @@
         </div>
 
         <el-form ref="formRef" :model="formData" :rules="rules" label-width="0" class="register-form">
-          <el-form-item prop="username">
-            <el-input
-              v-model="formData.username"
-              placeholder="用户名（3-20位字母、数字或下划线）"
-              prefix-icon="User"
-              size="large"
-            />
-          </el-form-item>
-
           <el-form-item prop="name">
             <el-input
               v-model="formData.name"
               placeholder="真实姓名"
               prefix-icon="Postcard"
               size="large"
+            />
+          </el-form-item>
+
+          <el-form-item prop="phone">
+            <el-input
+              v-model="formData.phone"
+              placeholder="手机号"
+              prefix-icon="Phone"
+              size="large"
+              maxlength="11"
             />
           </el-form-item>
 
@@ -62,6 +63,24 @@
               placeholder="确认密码"
               prefix-icon="Lock"
               show-password
+              size="large"
+            />
+          </el-form-item>
+
+          <el-form-item prop="company">
+            <el-input
+              v-model="formData.company"
+              placeholder="单位（选填）"
+              prefix-icon="OfficeBuilding"
+              size="large"
+            />
+          </el-form-item>
+
+          <el-form-item prop="email">
+            <el-input
+              v-model="formData.email"
+              placeholder="邮箱（选填）"
+              prefix-icon="Message"
               size="large"
               @keyup.enter="handleRegister"
             />
@@ -94,17 +113,19 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { authApi } from '@/api/auth'
 import { ElMessage } from 'element-plus'
-import { usernameRules, passwordRules, nameRules } from '@/utils/validate'
+import { passwordRules, nameRules, phoneRules, emailRules, companyRules } from '@/utils/validate'
 
 const router = useRouter()
 const formRef = ref(null)
 const loading = ref(false)
 
 const formData = reactive({
-  username: '',
+  name: '',
+  phone: '',
   password: '',
   confirmPassword: '',
-  name: ''
+  company: '',
+  email: ''
 })
 
 const validateConfirmPassword = (rule, value, callback) => {
@@ -118,13 +139,15 @@ const validateConfirmPassword = (rule, value, callback) => {
 }
 
 const rules = {
-  username: usernameRules,
-  password: passwordRules,
   name: nameRules,
+  phone: phoneRules,
+  password: passwordRules,
   confirmPassword: [
     { required: true, message: '请确认密码', trigger: 'blur' },
     { validator: validateConfirmPassword, trigger: 'blur' }
-  ]
+  ],
+  company: companyRules,
+  email: emailRules
 }
 
 async function handleRegister() {
@@ -134,9 +157,11 @@ async function handleRegister() {
   loading.value = true
   try {
     const res = await authApi.register({
-      username: formData.username,
+      name: formData.name,
+      phone: formData.phone,
       password: formData.password,
-      name: formData.name
+      company: formData.company,
+      email: formData.email
     })
 
     if (res.code === 201 || res.code === 200) {

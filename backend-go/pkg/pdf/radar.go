@@ -1,6 +1,6 @@
 // Package pdf 实现 PDF 报告生成
-// 本文件：4 维雷达图渲染，直接使用 gofpdf 矢量原语绘制（Line/Polygon/Circle）
-// 维度顺序：时间衰减（含品牌/强度修正）、车况、市场、残值率（顺时针从顶部开始）
+// 本文件：5 维雷达图渲染，直接使用 gofpdf 矢量原语绘制（Line/Polygon/Circle）
+// 维度顺序：出厂时间、使用强度、品牌价值、市场需求、车辆情况（顺时针从顶部开始）
 package pdf
 
 import (
@@ -10,35 +10,34 @@ import (
 	"github.com/jung-kurt/gofpdf"
 )
 
-// radarDimensionOrder 4 维度的固定展示顺序（顺时针从顶部开始，间隔 90°）
-// 重构说明：从原 5 维（时间/使用强度/品牌/车况/市场）合并为 4 维
-//   - 品牌系数与使用强度系数已并入时间衰减（Kt_adj = Kt^(Kh/Kb)）
-//   - 新增"残值率"维度直觀展示最终保值水平
+// radarDimensionOrder 5 维度的固定展示顺序（顺时针从顶部开始，间隔 72°）
+// 5 维独立展示，各维度值钳制到 [0, 1]，与前端雷达图 max=1 对齐
 var radarDimensionOrder = []string{
-	"时间衰减", // 顶部 -90°
-	"车况",   // 右侧 0°
-	"市场",   // 底部 90°
-	"残值率",  // 左侧 -180° / 180°
+	"出厂时间", // 顶部 -90°
+	"使用强度", // -18°
+	"品牌价值", // 54°
+	"市场需求", // 126°
+	"车辆情况", // 198° / -162°
 }
 
 // radarMaxValue 雷达图最大刻度值
-// 时间衰减与车况、市场范围通常 0.3~1.15；残值率 ≤ 1.0；统一设 1.2 为满刻度
-const radarMaxValue = 1.2
+// 5 维值均钳制到 [0, 1]，满刻度 1.0 对应 100%
+const radarMaxValue = 1.0
 
-// drawRadarChart 在 PDF 上绘制 4 维雷达图
+// drawRadarChart 在 PDF 上绘制 5 维雷达图
 // pdf: gofpdf 实例
 // cx, cy: 雷达图中心坐标（mm）
 // radius: 雷达图半径（mm）
-// dimensionScores: 维度名 → 评分（实际 K 系数值或残值率，如 0.74/1.10/1.05 等）
+// dimensionScores: 维度名 → 评分（K 系数值，已钳制到 [0,1]）
 func drawRadarChart(pdf *gofpdf.Fpdf, cx, cy, radius float64, dimensionScores map[string]float64) {
-	// 1. 计算每个维度的角度（弧度），从顶部 -90° 开始顺时针，每维间隔 90°
+	// 1. 计算每个维度的角度（弧度），从顶部 -90° 开始顺时针，每维间隔 72°
 	angles := make([]float64, len(radarDimensionOrder))
 	for i := range radarDimensionOrder {
-		angles[i] = (-90.0 + float64(i)*90.0) * math.Pi / 180.0
+		angles[i] = (-90.0 + float64(i)*72.0) * math.Pi / 180.0
 	}
 
 	// 2. 绘制同心网格(4 圈:25% / 50% / 75% / 100%)
-	gridLevels := []float64{0.3, 0.6, 0.9, 1.2}
+	gridLevels := []float64{0.25, 0.5, 0.75, 1.0}
 	pdf.SetDrawColor(226, 232, 240) // #E2E8F0 浅灰
 	pdf.SetLineWidth(0.2)
 	for i, level := range gridLevels {
@@ -117,39 +116,38 @@ func drawRadarChart(pdf *gofpdf.Fpdf, cx, cy, radius float64, dimensionScores ma
 	pdf.SetFont(FontSimHei, "", 8.5)
 	pdf.SetTextColor(71, 85, 105) // #475569
 	for i, dimName := range radarDimensionOrder {
-		// 标签位置：外圈外侧 8mm
-		labelR := radius + 8.0
+		// 标签位置：外圈外侧 3mm
+		labelR := radius + 3.0
 		x := cx + labelR*math.Cos(angles[i])
 		y := cy + labelR*math.Sin(angles[i])
 
-		// 评分值
-		value := dimensionScores[dimName]
-		label := fmt.Sprintf("%s %.2f", dimName, value)
+		// 雷达图标签只显示维度名(数值已在右侧进度条展示)
+		label := dimName
 
-		// 根据角度精确调整标签位置和对齐方式
-		angleDeg := -90.0 + float64(i)*90.0
-
-		// 标签宽度估算（每个字符约 3mm，9pt 字体）
-		labelWidth := float64(len([]rune(label))) * 3.0
+		// 标签宽度按实际字体测量
+		labelWidth := pdf.GetStringWidth(label) + 1.0
 		labelHeight := 4.0
 
+		// 根据 cos/sin 分量决定标签对齐方式（通用，适配任意维度数）
+		cosA := math.Cos(angles[i])
+		sinA := math.Sin(angles[i])
 		switch {
-		case angleDeg == -90:
-			// 顶部：标签在上方，水平居中
-			pdf.SetXY(x-labelWidth/2, y-labelHeight-1)
-			pdf.CellFormat(labelWidth, labelHeight, label, "", 0, "C", false, 0, "")
-		case angleDeg == 90:
-			// 底部：标签在下方，水平居中
-			pdf.SetXY(x-labelWidth/2, y+1)
-			pdf.CellFormat(labelWidth, labelHeight, label, "", 0, "C", false, 0, "")
-		case angleDeg == 0:
+		case cosA >= 0.5:
 			// 右侧：标签在右侧，左对齐
 			pdf.SetXY(x+1, y-labelHeight/2)
 			pdf.CellFormat(labelWidth, labelHeight, label, "", 0, "L", false, 0, "")
-		default:
-			// 左侧（angleDeg == 180 或 -180）：标签在左侧，右对齐
+		case cosA <= -0.5:
+			// 左侧：标签在左侧，右对齐
 			pdf.SetXY(x-labelWidth-1, y-labelHeight/2)
 			pdf.CellFormat(labelWidth, labelHeight, label, "", 0, "R", false, 0, "")
+		case sinA < 0:
+			// 顶部：标签在上方，水平居中
+			pdf.SetXY(x-labelWidth/2, y-labelHeight-1)
+			pdf.CellFormat(labelWidth, labelHeight, label, "", 0, "C", false, 0, "")
+		default:
+			// 底部：标签在下方，水平居中
+			pdf.SetXY(x-labelWidth/2, y+1)
+			pdf.CellFormat(labelWidth, labelHeight, label, "", 0, "C", false, 0, "")
 		}
 	}
 

@@ -158,7 +158,7 @@ export interface EvaluationResult {
   k_condition: number
   /** 市场系数 */
   k_market: number
-  /** 6 维度评分列表 */
+  /** 5 维度评分列表 */
   dimension_scores: DimensionScore[]
   /** 文本建议 */
   suggestions: string[]

@@ -69,8 +69,8 @@
       destroy-on-close
     >
       <el-form ref="formRef" :model="formData" :rules="formRules" label-width="100px">
-        <el-form-item label="用户名" prop="username">
-          <el-input v-model="formData.username" placeholder="请输入用户名（3-20字符）" maxlength="20" show-word-limit />
+        <el-form-item label="手机号" prop="phone">
+          <el-input v-model="formData.phone" placeholder="请输入手机号" maxlength="11" />
         </el-form-item>
         <el-form-item label="密码" prop="password">
           <el-input v-model="formData.password" type="password" placeholder="请输入密码（6-20字符）" maxlength="20" show-password />
@@ -92,6 +92,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { adminApi } from '@/api/admin'
+import { phoneRules } from '@/utils/validate'
 
 const loading = ref(false)
 const students = ref([])
@@ -104,16 +105,13 @@ const dialogVisible = ref(false)
 const submitting = ref(false)
 const formRef = ref(null)
 const formData = reactive({
-  username: '',
+  phone: '',
   password: '',
   name: ''
 })
 
 const formRules = {
-  username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 3, max: 20, message: '用户名长度为3-20个字符', trigger: 'blur' }
-  ],
+  phone: phoneRules,
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 6, max: 20, message: '密码长度为6-20个字符', trigger: 'blur' }
@@ -160,7 +158,7 @@ function handleSearch() {
 }
 
 function openAddDialog() {
-  formData.username = ''
+  formData.phone = ''
   formData.password = ''
   formData.name = ''
   dialogVisible.value = true
@@ -173,7 +171,7 @@ async function handleSubmit() {
   submitting.value = true
   try {
     const res = await adminApi.addStudent({
-      username: formData.username,
+      phone: formData.phone,
       password: formData.password,
       name: formData.name
     })

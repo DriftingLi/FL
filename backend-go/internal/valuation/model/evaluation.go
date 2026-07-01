@@ -137,17 +137,18 @@ type EvaluationDetail struct {
 	ConditionRating            string  `json:"condition_rating"`
 
 	// 结果字段
-	OriginalPrice  float64 `json:"original_price"`
-	KTime          float64 `json:"k_time"`
-	KHours         float64 `json:"k_hours"`
-	KBrand         float64 `json:"k_brand"`
-	KCondition     float64 `json:"k_condition"`
-	KMarket        float64 `json:"k_market"`
-	KTimeAdjusted  float64 `json:"k_time_adjusted"`
-	EstimatedValue float64 `json:"estimated_value"`
-	ConfidenceLow  float64 `json:"confidence_low"`
-	ConfidenceHigh float64 `json:"confidence_high"`
-	ReportPdfPath  string  `json:"report_pdf_path,omitempty"`
+	OriginalPrice   float64          `json:"original_price"`
+	KTime           float64          `json:"k_time"`
+	KHours          float64          `json:"k_hours"`
+	KBrand          float64          `json:"k_brand"`
+	KCondition      float64          `json:"k_condition"`
+	KMarket         float64          `json:"k_market"`
+	KTimeAdjusted   float64          `json:"k_time_adjusted"`
+	EstimatedValue  float64          `json:"estimated_value"`
+	ConfidenceLow   float64          `json:"confidence_low"`
+	ConfidenceHigh  float64          `json:"confidence_high"`
+	ReportPdfPath   string           `json:"report_pdf_path,omitempty"`
+	DimensionScores []DimensionScore `json:"dimension_scores"`
 }
 
 // EvaluationResponse 创建评估响应 DTO（HTTP 出参）

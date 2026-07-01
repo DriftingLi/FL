@@ -68,10 +68,11 @@ type LoginResult struct {
 	Level    string `json:"level,omitempty"`
 }
 
-// StudentLogin 学员登录。
-func (s *AuthService) StudentLogin(username, password string) (*LoginResult, error) {
+// StudentLogin 学员登录，支持用户名或手机号。
+func (s *AuthService) StudentLogin(account, password string) (*LoginResult, error) {
 	var student model.Student
-	if err := s.db.Where("username = ?", username).First(&student).Error; err != nil {
+	// 同一输入既可能是用户名也可能是手机号，二者择一命中即可
+	if err := s.db.Where("username = ? OR phone = ?", account, account).First(&student).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("用户名或密码错误")
 		}
@@ -97,21 +98,24 @@ func (s *AuthService) StudentLogin(username, password string) (*LoginResult, err
 	}, nil
 }
 
-// StudentRegister 学员注册。
-func (s *AuthService) StudentRegister(username, password, name string) (map[string]interface{}, error) {
+// StudentRegister 学员注册，username 由手机号自动生成，避免前端再单独填写用户名。
+func (s *AuthService) StudentRegister(phone, password, name, email, company string) (map[string]interface{}, error) {
 	var count int64
-	s.db.Model(&model.Student{}).Where("username = ?", username).Count(&count)
+	s.db.Model(&model.Student{}).Where("phone = ?", phone).Count(&count)
 	if count > 0 {
-		return nil, errors.New("用户名已被注册")
+		return nil, errors.New("手机号已被注册")
 	}
 	hashed, err := HashPassword(password)
 	if err != nil {
 		return nil, err
 	}
 	student := model.Student{
-		Username:  username,
+		Username:  phone,
 		Password:  hashed,
 		Name:      name,
+		Phone:     phone,
+		Email:     email,
+		Company:   company,
 		Status:    1,
 		Level:     "beginner",
 		CreatedAt: beijingNow(),
@@ -123,6 +127,7 @@ func (s *AuthService) StudentRegister(username, password, name string) (map[stri
 		"student_id": student.StudentID,
 		"username":   student.Username,
 		"name":       student.Name,
+		"phone":      student.Phone,
 	}, nil
 }
 

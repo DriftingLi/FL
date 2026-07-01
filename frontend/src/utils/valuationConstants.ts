@@ -3,9 +3,9 @@
 //         字典选项统一从后端动态加载，前端只保留系数定义（用于图表/报告展示）
 
 /** 系数 K 对应的中文名 + 颜色（用于 ECharts / 报告卡片）
- *  重构说明：品牌系数 Kb 与使用强度系数 Kh 不再直接作用于残值，而是修正时间衰减速率
- *  公式：残值 = 原价 × Kt_adj × Kc × Km，其中 Kt_adj = Kt^(Kh/Kb)
- *  COEFFICIENT_DEFS 用于明细网格展示 4 维（与雷达图维度一致）
+ *  COEFFICIENT_DEFS 用于明细网格展示 5 维（与雷达图维度一致）
+ *  残值公式不变：残值 = 原价 × Kt_adj × Kc × Km，其中 Kt_adj = Kt^(Kh/Kb)
+ *  雷达图维度还原为 5 个独立 K 系数展示
  */
 export const COEFFICIENT_DEFS: Array<{
   key: CoefficientKey
@@ -13,28 +13,31 @@ export const COEFFICIENT_DEFS: Array<{
   color: string
   description: string
 }> = [
-  { key: 'k_time_adjusted', label: 'Kt 修正后', color: '#0F4C81', description: '时间衰减，经品牌/强度修正：Kt_adj = Kt^(Kh/Kb)' },
-  { key: 'k_condition', label: 'Kc 车况', color: '#F59E0B', description: '按车况评级（A~E）与原漆/证件/保养等加权' },
-  { key: 'k_market', label: 'Km 市场', color: '#EC4899', description: '按省/市区域系数调节' },
-  { key: 'residual_rate', label: '残值率', color: '#16A34A', description: '残值/原价（已钳制 ≤ 100%）' }
+  { key: 'k_time', label: '出厂时间', color: '#0F4C81', description: '时间衰减系数 Kt = e^(-λ·age)' },
+  { key: 'k_hours', label: '使用强度', color: '#8B5CF6', description: '使用强度系数 Kh，按累计工时与行业标准比值查表' },
+  { key: 'k_brand', label: '品牌价值', color: '#EC4899', description: '品牌系数 Kb = 品牌类型系数 × 品牌系数' },
+  { key: 'k_market', label: '市场需求', color: '#0EA5E9', description: '市场系数 Km，按省/市区域系数调节' },
+  { key: 'k_condition', label: '车辆情况', color: '#F59E0B', description: '车况系数 Kc，按车况评级（A~E）与原漆/证件/保养等加权' }
 ]
 
-/** 4 个系数/维度字段（用于迭代/类型映射） */
-export type CoefficientKey = 'k_time_adjusted' | 'k_condition' | 'k_market' | 'residual_rate'
+/** 5 个系数/维度字段（用于迭代/类型映射） */
+export type CoefficientKey = 'k_time' | 'k_hours' | 'k_brand' | 'k_market' | 'k_condition'
 
 export interface CoefficientMap {
-  k_time_adjusted: number
-  k_condition: number
+  k_time: number
+  k_hours: number
+  k_brand: number
   k_market: number
-  residual_rate: number
+  k_condition: number
 }
 
-/** 默认展示的 4 维度评分标签顺序（与后端 dimension_scores 顺序对齐，仅用于雷达图稳定渲染） */
+/** 默认展示的 5 维度评分标签顺序（与后端 dimension_scores 顺序对齐，仅用于雷达图稳定渲染） */
 export const DIMENSION_LABELS = [
-  '时间衰减',
-  '车况',
-  '市场',
-  '残值率'
+  '出厂时间',
+  '使用强度',
+  '品牌价值',
+  '市场需求',
+  '车辆情况'
 ] as const
 
 /** 车况评级展示色（A 绿 → E 红） */

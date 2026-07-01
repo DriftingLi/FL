@@ -47,21 +47,24 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 // Register 学员注册 POST /api/auth/register
+// 用户名由后端用手机号自动生成，前端无需提交 username。
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req struct {
-		Username string `json:"username"`
+		Phone    string `json:"phone"`
 		Password string `json:"password"`
 		Name     string `json:"name"`
+		Email    string `json:"email"`
+		Company  string `json:"company"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "请求参数错误")
 		return
 	}
-	if req.Username == "" || req.Password == "" || req.Name == "" {
-		response.BadRequest(c, "用户名、密码和姓名不能为空")
+	if req.Phone == "" || req.Password == "" || req.Name == "" {
+		response.BadRequest(c, "手机号、密码和姓名不能为空")
 		return
 	}
-	result, err := h.authSvc.StudentRegister(req.Username, req.Password, req.Name)
+	result, err := h.authSvc.StudentRegister(req.Phone, req.Password, req.Name, req.Email, req.Company)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -143,6 +146,9 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		if err := db.First(&s, uid).Error; err == nil {
 			data["name"] = s.Name
 			data["level"] = s.Level
+			data["phone"] = s.Phone
+			data["email"] = s.Email
+			data["company"] = s.Company
 		}
 	case "tutor":
 		var t model.Tutor

@@ -6,7 +6,6 @@ package handler
 import (
 	"errors"
 	"fmt"
-	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -55,7 +54,7 @@ func (h *ReportHandler) Generate(c *gin.Context) {
 		return
 	}
 
-	// 1.1 实时重算 KTimeAdjusted（不入库字段），供 PDF 系数表展示
+	// 1.1 实时重算 KTimeAdjusted（不入库字段），用于维度评分
 	detail.KTimeAdjusted = service.AdjustKTimeByBrandAndIntensity(detail.KTime, detail.KHours, detail.KBrand)
 
 	// 2. 重建派生字段（维度评分 + 建议），不重新跑完整算法
@@ -105,7 +104,7 @@ func (h *ReportHandler) Download(c *gin.Context) {
 		return
 	}
 
-	// 1.1 实时重算 KTimeAdjusted（不入库字段），供 PDF 系数表展示
+	// 1.1 实时重算 KTimeAdjusted（不入库字段），用于维度评分
 	detail.KTimeAdjusted = service.AdjustKTimeByBrandAndIntensity(detail.KTime, detail.KHours, detail.KBrand)
 
 	// 2. 解析已有路径
@@ -162,36 +161,22 @@ func fileSize(path string) int64 {
 
 // rebuildDerivedFields 从持久化记录重建维度评分与文本建议
 // 与 service.buildDimensionScores / buildSuggestions 算法一致，避免重新跑完整评估流程
-// 维度评分改为 4 维：时间衰减（含品牌/强度修正） / 车况 / 市场 / 残值率
+// 维度评分改为 5 维：出厂时间 / 使用强度 / 品牌价值 / 市场需求 / 车辆情况
 func rebuildDerivedFields(d *model.EvaluationDetail) (map[string]float64, []string) {
 	if d == nil {
 		return nil, nil
 	}
-	// 实时重算 Kt_adj（不入库）
-	ktAdjusted := service.AdjustKTimeByBrandAndIntensity(d.KTime, d.KHours, d.KBrand)
-	rate := 0.0
-	if d.OriginalPrice > 0 {
-		rate = d.EstimatedValue / d.OriginalPrice
-		if rate > 1.0 {
-			rate = 1.0
-		}
-	}
-	dimScores := map[string]float64{
-		"时间衰减": roundTo4(ktAdjusted),
-		"车况":   roundTo4(d.KCondition),
-		"市场":   roundTo4(d.KMarket),
-		"残值率":  roundTo4(rate),
+	// 复用 service.BuildDimensionScores 保证与评估流程维度一致（含 [0,1] 钳制）
+	scoreList := service.BuildDimensionScores(d.KTime, d.KHours, d.KBrand, d.KCondition, d.KMarket)
+	dimScores := make(map[string]float64, len(scoreList))
+	for _, s := range scoreList {
+		dimScores[s.Label] = s.Value
 	}
 	suggestions := buildSuggestionsFromDetail(d)
 	if suggestions == nil {
 		suggestions = []string{}
 	}
 	return dimScores, suggestions
-}
-
-// roundTo4 四舍五入到 4 位小数（与 service.roundTo4 一致）
-func roundTo4(v float64) float64 {
-	return math.Round(v*10000) / 10000
 }
 
 // buildSuggestionsFromDetail 基于持久化记录重建文本建议

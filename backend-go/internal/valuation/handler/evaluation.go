@@ -82,6 +82,10 @@ func (h *EvaluationHandler) Get(c *gin.Context) {
 
 	// 实时重算 KTimeAdjusted（不入库字段）
 	detail.KTimeAdjusted = service.AdjustKTimeByBrandAndIntensity(detail.KTime, detail.KHours, detail.KBrand)
+	// 维度评分未入库，由结果字段实时派生（供前端雷达图展示）
+	detail.DimensionScores = service.BuildDimensionScores(
+		detail.KTime, detail.KHours, detail.KBrand, detail.KCondition, detail.KMarket,
+	)
 
 	// 详情接口直接返回持久化记录（已含全部输入字段 + 计算结果 + 报告路径）
 	OK(c, detail)
@@ -134,11 +138,11 @@ func (h *EvaluationHandler) List(c *gin.Context) {
 }
 
 // buildEvaluationResponse 把 EvaluationResult + 持久化 ID 转换为响应 DTO
-// 维度评分顺序与雷达图保持一致：时间衰减 / 车况 / 市场 / 残值率
+// 维度评分顺序与雷达图保持一致：出厂时间 / 使用强度 / 品牌价值 / 市场需求 / 车辆情况
 func buildEvaluationResponse(id int64, r *model.EvaluationResult) model.EvaluationResponse {
 	// 维度评分 map → 切片（保持固定顺序）
 	dimScores := make([]model.DimensionScore, 0, len(r.DimensionScores))
-	for _, label := range []string{"时间衰减", "车况", "市场", "残值率"} {
+	for _, label := range []string{"出厂时间", "使用强度", "品牌价值", "市场需求", "车辆情况"} {
 		if v, ok := r.DimensionScores[label]; ok {
 			dimScores = append(dimScores, model.DimensionScore{Label: label, Value: v})
 		}
