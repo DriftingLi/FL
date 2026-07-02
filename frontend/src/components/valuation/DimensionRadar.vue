@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// 维度评分雷达图（Tesla 极简配色：Electric Blue 单色 + 极淡灰背景）
+// 维度评分雷达图（设计稿风格：Electric Blue 单色 + 极淡灰背景网格）
 // 改用 echarts.init 直接渲染（维修培训统一用法，不再依赖 vue-echarts）
-// 重构说明：维度顺序由 DIMENSION_LABELS 常量提供，但以 scores 实际数据为准（数据驱动，避免硬编码漏维度）
+// 维度顺序由 DIMENSION_LABELS 常量提供，但以 scores 实际数据为准（数据驱动，避免硬编码漏维度）
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
 import { DIMENSION_LABELS } from '@/utils/valuationConstants'
@@ -17,22 +17,24 @@ const props = withDefaults(defineProps<Props>(), { height: '320px' })
 const chartRef = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
 
-// 唯一主题色：Electric Blue（与 CTA 同一色系）
+// 唯一主题色：Electric Blue（与设计稿 CTA 同一色系）
 const COLOR_PRIMARY = '#3E6AE1'
+const COLOR_TEXT = '#1A1A1A'
+const COLOR_GRID = '#EEEEEE'
+const COLOR_BG = '#FFFFFF'
+const COLOR_BG_ALT = '#FAFAFA'
 
 /** 排序后的维度列表：先按 DIMENSION_LABELS 顺序，再补齐后端新增的维度 */
 const orderedDimensions = computed(() => {
   const scoreMap: Record<string, number> = props.scores ?? {}
   const seen = new Set<string>()
   const result: { name: string; value: number }[] = []
-  // 1) 按 DIMENSION_LABELS 顺序加入存在的维度
   for (const label of DIMENSION_LABELS) {
     if (scoreMap[label] !== undefined) {
       result.push({ name: label, value: Number(scoreMap[label].toFixed(3)) })
       seen.add(label)
     }
   }
-  // 2) 补齐后端可能新增的、不在常量中的维度
   for (const [label, value] of Object.entries(scoreMap)) {
     if (!seen.has(label)) {
       result.push({ name: label, value: Number(value.toFixed(3)) })
@@ -60,17 +62,17 @@ const chartOption = computed(() => {
     },
     radar: {
       indicator: indicators,
-      radius: '68%',
+      radius: '66%',
       center: ['50%', '52%'],
       splitNumber: 4,
       axisName: {
-        color: '#393C41',
+        color: COLOR_TEXT,
         fontSize: 13,
         fontWeight: 500
       },
-      splitLine: { lineStyle: { color: '#EEEEEE' } },
-      splitArea: { areaStyle: { color: ['#FFFFFF', '#FAFAFA'] } },
-      axisLine: { lineStyle: { color: '#EEEEEE' } }
+      splitLine: { lineStyle: { color: COLOR_GRID } },
+      splitArea: { areaStyle: { color: [COLOR_BG, COLOR_BG_ALT] } },
+      axisLine: { lineStyle: { color: COLOR_GRID } }
     },
     series: [
       {

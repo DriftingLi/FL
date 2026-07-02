@@ -140,13 +140,13 @@ export interface ApiResponse<T> {
 /** 评估结果（POST /evaluations 响应） */
 export interface EvaluationResult {
   id: number
-  /** 估算残值（万元） */
+  /** 估算残值（元，前端 formatWan 除以 10000 展示） */
   estimated_value: number
-  /** 置信区间下限 */
+  /** 置信区间下限（元） */
   confidence_low: number
-  /** 置信区间上限 */
+  /** 置信区间上限（元） */
   confidence_high: number
-  /** 原始购买价格（万元） */
+  /** 原始购买价格（元） */
   original_price: number
   /** 时间衰减系数 */
   k_time: number

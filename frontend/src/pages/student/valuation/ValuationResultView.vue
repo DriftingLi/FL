@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 评估结果页（Tesla 极简：白底 + Electric Blue 残值 + 维度雷达 + 建议）
+// 评估结果页（设计稿风格：白底 + Electric Blue 残值 + 维度雷达 + 建议）
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useEvaluationStore } from '@/stores/valuationEvaluation'
@@ -42,7 +42,6 @@ async function downloadPdf() {
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
-    // 延迟释放，确保浏览器已开始下载
     setTimeout(() => URL.revokeObjectURL(url), 1500)
   } catch {
     // 拦截器已 ElMessage.error
@@ -100,10 +99,7 @@ const usageYears = computed(() => {
 
     <!-- 未来估价走势 -->
     <section class="card-surface section-block">
-      <h2 class="section-title">
-        <span class="title-icon">📊</span>
-        未来估价走势
-      </h2>
+      <h2 class="section-title">未来估价走势</h2>
       <FutureValueChart
         :estimated-value="r.estimated_value"
         :age="usageYears"
@@ -117,10 +113,7 @@ const usageYears = computed(() => {
 
     <!-- 评估建议 -->
     <section class="card-surface section-block">
-      <h2 class="section-title">
-        <span class="title-icon">💡</span>
-        评估建议
-      </h2>
+      <h2 class="section-title">评估建议</h2>
       <ul v-if="r.suggestions && r.suggestions.length" class="suggestion-list">
         <li v-for="(s, idx) in r.suggestions" :key="idx">
           <span class="suggestion-num">{{ String(idx + 1).padStart(2, '0') }}</span>
@@ -135,7 +128,9 @@ const usageYears = computed(() => {
 
 <style scoped>
 .result-view {
-  padding: 0;
+  padding: 0 0 var(--sp-16);
+  background: var(--color-surface);
+  min-height: calc(100vh - var(--header-h));
 }
 .top-row {
   margin-top: 0;
@@ -150,13 +145,6 @@ const usageYears = computed(() => {
   font-weight: var(--fw-medium);
   margin: 0 0 var(--sp-5);
   color: var(--color-text);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.title-icon {
-  color: var(--color-primary);
-  font-size: 18px;
 }
 .suggestion-list {
   margin: 0;
@@ -170,15 +158,15 @@ const usageYears = computed(() => {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  font-size: var(--fs-base);
-  line-height: 1.6;
-  color: var(--color-text);
+  font-size: var(--fs-sm);
+  line-height: 1.75;
+  color: var(--color-text-secondary);
 }
 .suggestion-num {
   font-family: var(--font-mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   font-weight: var(--fw-medium);
-  color: var(--color-primary);
+  color: var(--color-accent);
   background: rgba(62, 106, 225, 0.08);
   padding: 2px 8px;
   border-radius: var(--radius-sm);
@@ -189,6 +177,9 @@ const usageYears = computed(() => {
   flex: 1;
 }
 @media (max-width: 768px) {
+  .result-view {
+    padding-bottom: var(--sp-10);
+  }
   .suggestion-list {
     grid-template-columns: 1fr;
   }

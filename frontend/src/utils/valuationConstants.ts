@@ -31,13 +31,14 @@ export interface CoefficientMap {
   k_condition: number
 }
 
-/** 默认展示的 5 维度评分标签顺序（与后端 dimension_scores 顺序对齐，仅用于雷达图稳定渲染） */
+/** 默认展示的 6 维度评分标签顺序（与设计稿《评估结果/报告》雷达图维度对齐） */
 export const DIMENSION_LABELS = [
-  '出厂时间',
-  '使用强度',
-  '品牌价值',
-  '市场需求',
-  '车辆情况'
+  '品牌保值',
+  '使用年限',
+  '累计工时',
+  '车况评级',
+  '市场供需',
+  '区域系数'
 ] as const
 
 /** 车况评级展示色（A 绿 → E 红） */

@@ -1,4 +1,4 @@
-// 统一页头（极简，无下边线）
+// 统一页头（设计稿风格：eyebrow + 主标题 + 右侧操作，底部 1px 分隔线）
 <script setup lang="ts">
 defineProps<{
   title: string
@@ -28,8 +28,9 @@ defineProps<{
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--sp-6);
-  margin-bottom: var(--sp-8);
-  padding-bottom: var(--sp-5);
+  padding: var(--sp-8) 0 var(--sp-5);
+  margin-bottom: var(--sp-6);
+  border-bottom: 1px solid var(--color-border);
 }
 .page-header-left {
   display: flex;
@@ -44,15 +45,15 @@ defineProps<{
 .page-header-eyebrow {
   font-size: var(--fs-sm);
   font-weight: var(--fw-medium);
-  letter-spacing: 0.12em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--color-text-tertiary);
-  margin: 0 0 6px;
+  margin: 0 0 var(--sp-1);
 }
 .page-header-title {
   font-family: var(--font-text);
-  font-size: var(--fs-2xl);    /* 28px */
-  font-weight: var(--fw-medium);
+  font-size: var(--fs-3xl);
+  font-weight: var(--fw-semibold);
   margin: 0;
   color: var(--color-text);
   line-height: 1.2;
@@ -60,6 +61,7 @@ defineProps<{
 .page-header-right {
   display: flex;
   gap: var(--sp-2);
+  flex-shrink: 0;
 }
 
 /* ===== 移动端适配 ===== */
@@ -68,11 +70,11 @@ defineProps<{
     flex-direction: column;
     align-items: flex-start;
     gap: var(--sp-4);
-    margin-bottom: var(--sp-6);
-    padding-bottom: var(--sp-4);
+    padding: var(--sp-5) 0 var(--sp-4);
+    margin-bottom: var(--sp-4);
   }
   .page-header-title {
-    font-size: 22px;
+    font-size: var(--fs-2xl);
   }
   .page-header-right {
     width: 100%;

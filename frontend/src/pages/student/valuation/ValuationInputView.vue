@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 叉车残值评估参数录入（统一表单，Tesla 极简风）
+// 叉车残值评估参数录入（设计稿风格：白底细边框卡片 + 自定义表单控件 + 底部固定操作栏）
 // 配置类型为单一下拉，选项来自 original_prices 级联查询（含传动/发动机/电池等复合配置）
 // 三行级联布局：
 //   行1 品牌：品牌 → 车辆类型（brand_type 由品牌自动派生）
@@ -47,7 +47,7 @@ const provinces = ref<string[]>([])
 const cities = ref<string[]>([])
 const loadingDict = ref(false)
 
-// ========== "无" 选项（前端常量，附加到下拉列表末尾） ==========
+// ========== "其它"/"无" 选项（前端常量，附加到下拉列表末尾） ==========
 const otherSeriesOption: SeriesOption = { id: -1, brand: '', name: OTHER_SERIES_VALUE, earliest_factory_year: 1980 }
 const noneMastTypeOption: MastTypeOption = { id: -1, name: NONE_VALUE }
 const noneMastHeightOption: MastHeightOption = { id: -1, value_mm: NONE_MAST_HEIGHT }
@@ -271,259 +271,244 @@ function onSubmit() {
       </template>
     </PageHeader>
 
-    <div v-loading="loadingDict">
+    <div v-loading="loadingDict" class="input-form-body">
       <!-- 品牌与车型（三行级联） -->
       <section class="input-section card-surface">
         <h2 class="section-title">品牌与车型</h2>
 
         <!-- 行1：品牌类型（品牌 → 车辆类型） -->
-        <el-row :gutter="24">
-          <el-col v-if="showBrand" :xs="24" :md="12" :lg="6">
-            <el-form-item label="品牌" required>
-              <el-select
-                v-model="form.brand"
-                placeholder="请选择品牌"
-                filterable
-                clearable
-              >
-                <el-option
-                  v-for="b in brands"
-                  :key="b.id"
-                  :value="b.name"
-                  :label="b.name"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col v-if="showVehicleType" :xs="24" :md="12" :lg="6">
-            <el-form-item label="车辆类型" required>
-              <el-select
-                v-model="form.vehicle_type"
-                placeholder="请选择车辆类型"
-                filterable
-                clearable
-                :disabled="!form.brand"
-              >
-                <el-option
-                  v-for="vt in vehicleTypes"
-                  :key="vt.id"
-                  :value="vt.name"
-                  :label="vt.name"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <div class="form-row row-3">
+          <el-form-item v-if="showBrand" label="品牌">
+            <el-select
+              v-model="form.brand"
+              placeholder="请选择品牌"
+              filterable
+              clearable
+            >
+              <el-option
+                v-for="b in brands"
+                :key="b.id"
+                :value="b.name"
+                :label="b.name"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="showVehicleType" label="车辆类型">
+            <el-select
+              v-model="form.vehicle_type"
+              placeholder="请选择车辆类型"
+              filterable
+              clearable
+              :disabled="!form.brand"
+            >
+              <el-option
+                v-for="vt in vehicleTypes"
+                :key="vt.id"
+                :value="vt.name"
+                :label="vt.name"
+              />
+            </el-select>
+          </el-form-item>
+        </div>
 
         <!-- 行2：系列吨位（系列 → 吨位 → 出厂年份） -->
-        <el-row v-if="showSeries" :gutter="24">
-          <el-col :xs="24" :md="12" :lg="6">
-            <el-form-item label="系列" required>
-              <el-select
-                v-model="form.series"
-                placeholder="请选择系列"
-                filterable
-                clearable
-                :disabled="!form.vehicle_type"
-              >
-                <el-option
-                  v-for="s in seriesOptions"
-                  :key="s.id"
-                  :value="s.name"
-                  :label="s.name"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col v-if="showTonnage" :xs="24" :md="12" :lg="6">
-            <el-form-item label="吨位" required>
-              <el-select
-                v-model="form.tonnage"
-                placeholder="请选择吨位"
-                filterable
-                clearable
-                :disabled="!form.series"
-              >
-                <el-option
-                  v-for="t in tonnages"
-                  :key="t.id"
-                  :value="t.value"
-                  :label="`${t.value} 吨`"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col v-if="showFactoryYear" :xs="24" :md="12" :lg="6">
-            <el-form-item label="出厂年份" required>
-              <el-input-number
-                v-model="form.factory_year"
-                :min="currentSeriesEarliestYear"
-                :max="new Date().getFullYear()"
-                :step="1"
-                :disabled="form.tonnage == null"
-                style="width: 100%"
-                placeholder="如 2021"
+        <div v-if="showSeries" class="form-row row-3">
+          <el-form-item label="系列">
+            <el-select
+              v-model="form.series"
+              placeholder="请选择系列"
+              filterable
+              clearable
+              :disabled="!form.vehicle_type"
+            >
+              <el-option
+                v-for="s in seriesOptions"
+                :key="s.id"
+                :value="s.name"
+                :label="s.name"
               />
-            </el-form-item>
-          </el-col>
-        </el-row>
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="showTonnage" label="吨位">
+            <el-select
+              v-model="form.tonnage"
+              placeholder="请选择吨位"
+              filterable
+              clearable
+              :disabled="!form.series"
+            >
+              <el-option
+                v-for="t in tonnages"
+                :key="t.id"
+                :value="t.value"
+                :label="`${t.value} 吨`"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="showFactoryYear" label="出厂年份">
+            <el-input-number
+              v-model="form.factory_year"
+              :min="currentSeriesEarliestYear"
+              :max="new Date().getFullYear()"
+              :step="1"
+              :disabled="form.tonnage == null"
+              style="width: 100%"
+              placeholder="如 2021"
+            />
+          </el-form-item>
+        </div>
 
         <!-- 行3：配置门架（配置类型 → 门架类型 → 门架高度） -->
-        <el-row v-if="showConfigType" :gutter="24">
-          <el-col :xs="24" :md="12" :lg="6">
-            <el-form-item label="配置类型" required>
-              <el-select
-                v-model="form.config_type"
-                placeholder="请选择配置类型"
-                filterable
-                clearable
-                :disabled="form.tonnage == null"
-              >
-                <el-option
-                  v-for="c in configTypes"
-                  :key="c.id"
-                  :value="c.name"
-                  :label="c.name"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col v-if="showMastType" :xs="24" :md="12" :lg="6">
-            <el-form-item label="门架类型" required>
-              <el-select
-                v-model="form.mast_type"
-                placeholder="请选择门架类型"
-                filterable
-                clearable
-                :disabled="!form.config_type"
-              >
-                <el-option
-                  v-for="m in mastTypeOptions"
-                  :key="m.id"
-                  :value="m.name"
-                  :label="m.name"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col v-if="showMastHeight" :xs="24" :md="12" :lg="6">
-            <el-form-item label="门架高度" required>
-              <el-select
-                v-model="form.mast_height_mm"
-                placeholder="请选择门架高度"
-                filterable
-                clearable
-                :disabled="!form.mast_type"
-              >
-                <el-option
-                  v-for="mh in mastHeightOptions"
-                  :key="mh.id"
-                  :value="mh.value_mm"
-                  :label="mh.value_mm === NONE_MAST_HEIGHT ? '无' : `${mh.value_mm} mm`"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <div v-if="showConfigType" class="form-row row-3">
+          <el-form-item label="配置类型">
+            <el-select
+              v-model="form.config_type"
+              placeholder="请选择配置类型"
+              filterable
+              clearable
+              :disabled="form.tonnage == null"
+            >
+              <el-option
+                v-for="c in configTypes"
+                :key="c.id"
+                :value="c.name"
+                :label="c.name"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="showMastType" label="门架类型">
+            <el-select
+              v-model="form.mast_type"
+              placeholder="请选择门架类型"
+              filterable
+              clearable
+              :disabled="!form.config_type"
+            >
+              <el-option
+                v-for="m in mastTypeOptions"
+                :key="m.id"
+                :value="m.name"
+                :label="m.name"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="showMastHeight" label="门架高度">
+            <el-select
+              v-model="form.mast_height_mm"
+              placeholder="请选择门架高度"
+              filterable
+              clearable
+              :disabled="!form.mast_type"
+            >
+              <el-option
+                v-for="mh in mastHeightOptions"
+                :key="mh.id"
+                :value="mh.value_mm"
+                :label="mh.value_mm === NONE_MAST_HEIGHT ? '无' : `${mh.value_mm} mm`"
+              />
+            </el-select>
+          </el-form-item>
+        </div>
       </section>
 
       <!-- 使用信息：工时 / 原漆 -->
       <section class="input-section card-surface">
         <h2 class="section-title">使用信息</h2>
-        <el-row :gutter="24">
-          <el-col :xs="24" :md="12" :lg="6">
-            <el-form-item label="累计工时" required>
-              <el-input-number
-                v-model="form.usage_hours"
-                :min="0"
-                :max="100000"
-                :step="100"
-                style="width: 100%"
-                placeholder="如 3500"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :md="12" :lg="6">
-            <el-form-item label="是否原厂原漆" required>
-              <el-switch
-                v-model="form.original_paint"
-                active-text="原厂原漆"
-                inactive-text="非原厂"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <div class="form-row row-2">
+          <el-form-item label="累计工时">
+            <el-input-number
+              v-model="form.usage_hours"
+              :min="0"
+              :max="100000"
+              :step="100"
+              style="width: 100%"
+              placeholder="如 3500"
+            />
+          </el-form-item>
+          <el-form-item label="是否原厂原漆">
+            <div class="custom-toggle">
+              <el-switch v-model="form.original_paint" />
+              <span class="toggle-text" :class="form.original_paint ? 'active' : 'muted'">原厂原漆</span>
+              <span class="toggle-text muted">/ 非原厂</span>
+            </div>
+          </el-form-item>
+        </div>
       </section>
 
       <!-- 区域信息：省 → 市 -->
       <section v-if="showProvince" class="input-section card-surface">
         <h2 class="section-title">所在区域</h2>
-        <el-row :gutter="24">
-          <el-col :xs="24" :md="12" :lg="6">
-            <el-form-item label="省份" required>
-              <el-select
-                v-model="form.province"
-                placeholder="请选择省份"
-                filterable
-                clearable
-              >
-                <el-option
-                  v-for="p in provinces"
-                  :key="p"
-                  :value="p"
-                  :label="p"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col v-if="showCity" :xs="24" :md="12" :lg="6">
-            <el-form-item label="城市" required>
-              <el-select
-                v-model="form.city"
-                placeholder="请选择城市"
-                filterable
-                clearable
-                :disabled="!form.province"
-              >
-                <el-option
-                  v-for="c in cities"
-                  :key="c"
-                  :value="c"
-                  :label="c"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <div class="form-row row-2">
+          <el-form-item label="省份">
+            <el-select
+              v-model="form.province"
+              placeholder="请选择省份"
+              filterable
+              clearable
+            >
+              <el-option
+                v-for="p in provinces"
+                :key="p"
+                :value="p"
+                :label="p"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="showCity" label="城市">
+            <el-select
+              v-model="form.city"
+              placeholder="请选择城市"
+              filterable
+              clearable
+              :disabled="!form.province"
+            >
+              <el-option
+                v-for="c in cities"
+                :key="c"
+                :value="c"
+                :label="c"
+              />
+            </el-select>
+          </el-form-item>
+        </div>
       </section>
 
       <!-- 证件与保养 -->
       <section class="input-section card-surface">
         <h2 class="section-title">证件与保养</h2>
-        <el-row :gutter="24">
-          <el-col :xs="24" :md="8">
-            <el-form-item label="是否有车牌">
+        <div class="form-row row-3">
+          <el-form-item label="是否有车牌">
+            <div class="custom-toggle">
               <el-switch v-model="form.has_license_plate" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :md="8">
-            <el-form-item label="特种设备登记证">
+              <span class="toggle-text" :class="form.has_license_plate ? 'active' : 'muted'">
+                {{ form.has_license_plate ? '有' : '无' }}
+              </span>
+            </div>
+          </el-form-item>
+          <el-form-item label="特种设备登记证">
+            <div class="custom-toggle">
               <el-switch v-model="form.has_registration_certificate" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :md="8">
-            <el-form-item label="是否有保养记录">
+              <span class="toggle-text" :class="form.has_registration_certificate ? 'active' : 'muted'">
+                {{ form.has_registration_certificate ? '有' : '无' }}
+              </span>
+            </div>
+          </el-form-item>
+          <el-form-item label="是否有保养记录">
+            <div class="custom-toggle">
               <el-switch v-model="form.has_maintenance_records" />
-            </el-form-item>
-          </el-col>
-        </el-row>
+              <span class="toggle-text" :class="form.has_maintenance_records ? 'active' : 'muted'">
+                {{ form.has_maintenance_records ? '有' : '无' }}
+              </span>
+            </div>
+          </el-form-item>
+        </div>
       </section>
 
       <!-- 车况评级 -->
       <section v-if="showConditionRating" class="input-section card-surface">
         <h2 class="section-title">车况评级</h2>
-        <el-form-item label="车况评级" required>
-          <el-radio-group v-model="form.condition_rating">
+        <el-form-item label="车况评级">
+          <el-radio-group v-model="form.condition_rating" class="condition-pills">
             <el-radio-button
               v-for="cr in sortedConditionRatings"
               :key="cr.id"
@@ -535,16 +520,42 @@ function onSubmit() {
         </el-form-item>
       </section>
     </div>
+
+    <!-- 底部固定操作栏 -->
+    <div class="bottom-action-bar">
+      <div class="bottom-action-inner">
+        <el-button :icon="Refresh" @click="reset">重置</el-button>
+        <el-button
+          type="primary"
+          :icon="Promotion"
+          :loading="submitting"
+          :disabled="!isValid"
+          @click="onSubmit"
+        >
+          提交评估
+        </el-button>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .input-page {
-  padding: 0;
+  padding: 0 0 var(--sp-20);
+  min-height: calc(100vh - var(--header-h));
 }
+
+.input-form-body {
+  padding-bottom: var(--sp-6);
+}
+
 .input-section {
   margin-bottom: var(--sp-6);
+  border-radius: var(--radius-xl);
+  padding: var(--sp-6);
+  padding-bottom: var(--sp-7);
 }
+
 .section-title {
   font-size: var(--fs-lg);
   font-weight: var(--fw-medium);
@@ -552,14 +563,218 @@ function onSubmit() {
   color: var(--color-text);
 }
 
+/* ===== 表单行布局 ===== */
+.form-row {
+  display: grid;
+  gap: var(--sp-6);
+}
+.form-row.row-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.form-row.row-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+.form-row + .form-row {
+  margin-top: var(--sp-4);
+}
+
+/* ===== el-form-item 自定义 ===== */
+:deep(.el-form-item) {
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+}
+:deep(.el-form-item__label) {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+  padding: 0 0 var(--sp-2);
+  justify-content: flex-start;
+}
+:deep(.el-form-item__content) {
+  line-height: 1;
+}
+
+/* ===== 下拉框 / 数字输入框统一样式 ===== */
+:deep(.el-select),
+:deep(.el-input-number) {
+  width: 100%;
+}
+:deep(.el-select__wrapper),
+:deep(.el-input-number .el-input__wrapper) {
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 1px var(--color-border) inset;
+  padding: 0 var(--sp-4);
+  min-height: 44px;
+  transition: all var(--t-fast) var(--ease);
+}
+:deep(.el-select__wrapper:hover),
+:deep(.el-input-number .el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px var(--color-accent) inset;
+}
+:deep(.el-select__wrapper.is-focused),
+:deep(.el-input-number .el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px var(--color-accent) inset, 0 0 0 3px var(--color-accent-light);
+}
+:deep(.el-select__placeholder) {
+  color: var(--color-text-muted);
+}
+:deep(.el-select__selected-item) {
+  color: var(--color-text);
+  font-size: var(--fs-base);
+}
+:deep(.el-input__inner) {
+  color: var(--color-text);
+  font-size: var(--fs-base);
+  background: transparent;
+  height: 42px;
+}
+:deep(.el-input__inner::placeholder) {
+  color: var(--color-text-muted);
+}
+:deep(.el-input-number__decrease),
+:deep(.el-input-number__increase) {
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
+}
+:deep(.el-input-number__decrease:hover),
+:deep(.el-input-number__increase:hover) {
+  color: var(--color-accent);
+}
+
+/* ===== 自定义开关 + 文本 ===== */
+.custom-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 44px;
+}
+.toggle-text {
+  font-size: var(--fs-base);
+  font-weight: var(--fw-medium);
+  transition: color var(--t-fast) var(--ease);
+}
+.toggle-text.active {
+  color: var(--color-text);
+}
+.toggle-text.muted {
+  color: var(--color-text-muted);
+}
+:deep(.el-switch) {
+  --el-switch-on-color: var(--color-accent);
+  --el-switch-off-color: var(--color-border);
+  height: 24px;
+}
+:deep(.el-switch__core) {
+  width: 44px !important;
+  min-width: 44px;
+  height: 24px;
+  border-radius: var(--radius-full);
+}
+:deep(.el-switch__core .el-switch__action) {
+  width: 20px;
+  height: 20px;
+  left: 2px;
+}
+:deep(.el-switch.is-checked .el-switch__core .el-switch__action) {
+  left: calc(100% - 22px);
+}
+
+/* ===== 车况评级胶囊按钮 ===== */
+.condition-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+:deep(.condition-pills .el-radio-button__inner) {
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-medium);
+  padding: var(--sp-2) var(--sp-5);
+  box-shadow: none;
+  transition: all var(--t-fast) var(--ease);
+}
+:deep(.condition-pills .el-radio-button__inner:hover) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+:deep(.condition-pills .el-radio-button.is-active .el-radio-button__inner) {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-text-inverse);
+  box-shadow: none;
+}
+:deep(.condition-pills .el-radio-button:first-child .el-radio-button__inner) {
+  border-radius: var(--radius-full);
+}
+:deep(.condition-pills .el-radio-button:last-child .el-radio-button__inner) {
+  border-radius: var(--radius-full);
+}
+
+/* ===== 底部固定操作栏 ===== */
+.bottom-action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  padding: var(--sp-4) var(--sp-7);
+}
+.bottom-action-inner {
+  max-width: var(--container-max);
+  margin: 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+}
+
 /* ===== 移动端适配 ===== */
+@media (max-width: 1024px) {
+  .form-row.row-3,
+  .form-row.row-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
+  .input-page {
+    padding: 0 0 var(--sp-16);
+  }
   .input-section {
     margin-bottom: var(--sp-4);
     padding: var(--sp-5) var(--sp-4);
+    border-radius: var(--radius-lg);
   }
   .section-title {
     margin: 0 0 var(--sp-4);
+  }
+  .form-row.row-3,
+  .form-row.row-2 {
+    grid-template-columns: 1fr;
+    gap: var(--sp-4);
+  }
+  .form-row + .form-row {
+    margin-top: var(--sp-4);
+  }
+  .bottom-action-bar {
+    padding: var(--sp-3) var(--sp-4);
+  }
+  .bottom-action-inner {
+    justify-content: stretch;
+  }
+  .bottom-action-inner :deep(.el-button) {
+    flex: 1;
+  }
+  :deep(.condition-pills .el-radio-button__inner) {
+    padding: var(--sp-2) var(--sp-4);
   }
 }
 </style>

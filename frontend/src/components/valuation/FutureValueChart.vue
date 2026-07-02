@@ -35,9 +35,13 @@ const props = withDefaults(defineProps<Props>(), {
 const chartRef = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
 
-// 主题色：Electric Blue（与 ResultCard / DimensionRadar 同一色系）
+// 主题色（与设计稿一致）
 const COLOR_PRIMARY = '#3E6AE1'
-const COLOR_CURRENT = '#A8C0F5' // 当年用浅色，区分"现状"与"预测"
+const COLOR_CURRENT = '#A8C0F5'
+const COLOR_TEXT = '#1A1A1A'
+const COLOR_TEXT_MUTED = '#999999'
+const COLOR_GRID = '#F0F0F0'
+const COLOR_AXIS = '#EEEEEE'
 
 // age=0 时无法反推 λ，用电动 0.12 与内燃 0.10 的均值兜底
 const DEFAULT_LAMBDA = 0.11
@@ -47,14 +51,11 @@ function computeAnnualDecay(): number {
   const { age, kTime, kHours, kBrand } = props
   if (kBrand <= 0 || kTime <= 0) return Math.exp(-DEFAULT_LAMBDA)
 
-  // Kt_adj = Kt^(Kh/Kb)
   const ktAdjusted = Math.pow(kTime, kHours / kBrand)
 
   if (age > 0) {
-    // d = Kt_adj^(1/age) = e^(-λ·(Kh/Kb))
     return Math.pow(ktAdjusted, 1 / age)
   }
-  // age=0 时 Kt_adj 恒为 1.0，无法反推 λ，用默认值兜底
   return Math.exp(-DEFAULT_LAMBDA)
 }
 
@@ -103,27 +104,27 @@ const chartOption = computed(() => {
       }
     },
     grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '3%',
-      top: '15%',
+      left: '2%',
+      right: '3%',
+      bottom: '2%',
+      top: '12%',
       containLabel: true
     },
     xAxis: {
       type: 'category',
       data: data.map((d) => d.label),
-      axisLine: { lineStyle: { color: '#E5E5E5' } },
+      axisLine: { lineStyle: { color: COLOR_AXIS } },
       axisTick: { show: false },
-      axisLabel: { color: '#393C41', fontSize: 12 }
+      axisLabel: { color: COLOR_TEXT_MUTED, fontSize: 12 }
     },
     yAxis: {
       type: 'value',
       axisLabel: {
-        color: '#999',
+        color: COLOR_TEXT_MUTED,
         fontSize: 11,
         formatter: (v: number) => `${(v / 10000).toFixed(1)}万`
       },
-      splitLine: { lineStyle: { color: '#F0F0F0' } },
+      splitLine: { lineStyle: { color: COLOR_GRID } },
       axisLine: { show: false },
       axisTick: { show: false }
     },
@@ -141,7 +142,7 @@ const chartOption = computed(() => {
         label: {
           show: true,
           position: 'top',
-          color: '#393C41',
+          color: COLOR_TEXT,
           fontSize: 11,
           formatter: (p: { value: number }) => `${(p.value / 10000).toFixed(2)}万`
         }
@@ -182,10 +183,10 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="future-value-chart">
-    <div class="chart-subtitle">
-      年衰减率 <span class="decay-rate">{{ (annualDecayRate * 100).toFixed(1) }}%</span>
-    </div>
     <div ref="chartRef" class="chart-canvas" :style="{ height: props.height, width: '100%' }" />
+    <p class="chart-subtitle">
+      年衰减率 <span class="decay-rate">{{ (annualDecayRate * 100).toFixed(1) }}%</span>
+    </p>
   </div>
 </template>
 
@@ -193,19 +194,19 @@ onBeforeUnmount(() => {
 .future-value-chart {
   width: 100%;
 }
+.chart-canvas {
+  width: 100%;
+}
 .chart-subtitle {
   font-size: var(--fs-sm);
   color: var(--color-text-tertiary);
-  margin-bottom: var(--sp-3);
+  margin: var(--sp-4) 0 0;
   letter-spacing: 0.04em;
 }
 .decay-rate {
   font-family: var(--font-mono);
   font-weight: var(--fw-medium);
-  color: var(--color-primary);
+  color: var(--color-accent);
   margin-left: 4px;
-}
-.chart-canvas {
-  width: 100%;
 }
 </style>

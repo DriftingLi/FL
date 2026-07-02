@@ -1,4 +1,4 @@
-// 残值结果大字号卡片（Tesla 极简风：白底 + Electric Blue 主数字）
+// 残值结果大字号卡片（设计稿：白底细边框 + Electric Blue 主数字 + 三段指标）
 <script setup lang="ts">
 import { computed } from 'vue'
 import { formatWan, formatPercent } from '@/utils/valuationFormat'
@@ -20,12 +20,10 @@ const rate = computed(() => {
 
 <template>
   <div class="result-card card-surface">
-    <!-- 极简 label + 微小 tag -->
     <div class="result-card-head">
       <span class="result-card-label">estimated residual value</span>
     </div>
 
-    <!-- 主数字：64px Electric Blue（数字 + 同号大字单位） -->
     <div class="result-card-value num-hero">
       <span>{{ (Number(estimatedValue) / 10000).toFixed(2) }}</span>
       <span class="result-card-unit">万元</span>
@@ -35,7 +33,6 @@ const rate = computed(() => {
 
     <div class="result-card-divider" />
 
-    <!-- 三段指标 -->
     <div class="metric-row">
       <div class="metric">
         <div class="metric-label">置信下限</div>
@@ -55,10 +52,6 @@ const rate = computed(() => {
 
 <style scoped>
 .result-card {
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--sp-8) var(--sp-8);
   min-height: 320px;
   display: flex;
   flex-direction: column;
@@ -75,13 +68,6 @@ const rate = computed(() => {
   color: var(--color-text-tertiary);
 }
 .result-card-value {
-  font-family: var(--font-mono);
-  font-size: 64px;
-  font-weight: var(--fw-semibold);
-  color: var(--color-primary);
-  letter-spacing: -0.02em;
-  line-height: 1.05;
-  font-feature-settings: 'tnum' 1;
   display: flex;
   align-items: baseline;
   gap: 12px;
@@ -98,7 +84,6 @@ const rate = computed(() => {
   font-size: var(--fs-sm);
   color: var(--color-text-tertiary);
   letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 .result-card-divider {
   height: 1px;
