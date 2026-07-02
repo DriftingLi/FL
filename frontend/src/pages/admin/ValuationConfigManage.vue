@@ -2,9 +2,10 @@
 // 残值评估配置管理（管理员）
 // 重构说明：从 15 tab 缩减为 2 tab
 //   Tab 1 原价表：CRUD original-prices（学生端表单依赖该表数据）
-//   Tab 2 算法参数：聚合展示 4 类参数（全局系数 / 品牌系数 / 车况系数 / 区域系数）
+//   Tab 2 算法参数：聚合展示 5 类参数（全局系数 / 品牌系数 / 车况系数 / 车况修正项 / 区域系数）
 //                  每类独立保存，仅提交变更项（dirty 检测），不提供新增/删除
-import { ref, reactive, onMounted } from 'vue'
+// 000015：新增"车况修正项"区，按 key 前缀 kc_ 过滤 coefficient_configs 行单独展示
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Edit, Delete, Refresh, Check, RefreshLeft } from '@element-plus/icons-vue'
 import PageHeader from '@/components/valuation/PageHeader.vue'
@@ -170,6 +171,7 @@ const savingCoefficients = ref(false)
 const savingBrands = ref(false)
 const savingConditionRatings = ref(false)
 const savingRegionCoefficients = ref(false)
+const savingKcModifiers = ref(false)
 
 async function loadAlgorithmParams() {
   algorithmLoading.value = true
@@ -205,6 +207,26 @@ function isCoefficientsDirty(): boolean {
     return !o || o.key !== c.key || o.value !== c.value
   })
 }
+
+// 000015：按 key 前缀 kc_ 拆分全局系数与车况修正项
+// 全局系数区只展示非 kc_ 前缀的行；车况修正项区只展示 kc_ 前缀的行
+// 底层数据共享 coefficientsDraft / originalCoefficients，保存/重置仍走 saveCoefficients/resetCoefficients
+const globalCoefficientsDraft = computed(() =>
+  coefficientsDraft.value.filter((c) => !c.key.startsWith('kc_'))
+)
+const kcModifiersDraft = computed(() =>
+  coefficientsDraft.value.filter((c) => c.key.startsWith('kc_'))
+)
+// 车况修正项 dirty：仅检查 kc_ 前缀的行
+function isKcModifiersDirty(): boolean {
+  const draftKc = coefficientsDraft.value.filter((c) => c.key.startsWith('kc_'))
+  const origKc = originalCoefficients.value.filter((c) => c.key.startsWith('kc_'))
+  if (draftKc.length !== origKc.length) return true
+  return draftKc.some((c) => {
+    const o = origKc.find((x) => x.key === c.key)
+    return !o || o.value !== c.value
+  })
+}
 function isBrandsDirty(): boolean {
   if (brandsDraft.value.length !== originalBrands.value.length) return true
   return brandsDraft.value.some((b, i) => {
@@ -227,9 +249,10 @@ function isRegionCoefficientsDirty(): boolean {
   })
 }
 
-// 保存：仅提交变更项
+// 保存：仅提交变更项（限定到非 kc_ 前缀的全局系数）
 async function saveCoefficients() {
   const dirtyItems = coefficientsDraft.value.filter((c) => {
+    if (c.key.startsWith('kc_')) return false // 跳过车况修正项，由 saveKcModifiers 处理
     const o = originalCoefficients.value.find((x) => x.key === c.key)
     return !o || o.value !== c.value
   })
@@ -246,6 +269,29 @@ async function saveCoefficients() {
     // 拦截器已提示
   } finally {
     savingCoefficients.value = false
+  }
+}
+
+// 000015：保存车况修正项（仅 kc_ 前缀的行）
+async function saveKcModifiers() {
+  const dirtyItems = coefficientsDraft.value.filter((c) => {
+    if (!c.key.startsWith('kc_')) return false
+    const o = originalCoefficients.value.find((x) => x.key === c.key)
+    return !o || o.value !== c.value
+  })
+  if (dirtyItems.length === 0) {
+    ElMessage.info('无变更')
+    return
+  }
+  savingKcModifiers.value = true
+  try {
+    await Promise.all(dirtyItems.map((c) => updateCoefficient(c.key, c.value)))
+    ElMessage.success(`已保存 ${dirtyItems.length} 项车况修正项`)
+    await loadAlgorithmParams()
+  } catch {
+    // 拦截器已提示
+  } finally {
+    savingKcModifiers.value = false
   }
 }
 
@@ -327,9 +373,27 @@ async function saveRegionCoefficients() {
   }
 }
 
-// 重置：恢复 draft 到服务器值
+// 重置：恢复全局系数 draft 到服务器值（仅非 kc_ 前缀的行）
 function resetCoefficients() {
+  // 全量重置即可：kc_ 前缀的行也会被重置，但用户在车况修正项区点重置时
+  // 通常只关心 kc_ 行；为简化实现，此处统一重置全部 coefficients 行
   coefficientsDraft.value = originalCoefficients.value.map((c) => ({ ...c }))
+}
+
+// 000015：重置车况修正项（仅 kc_ 前缀的行恢复服务器值）
+function resetKcModifiers() {
+  // 找出 kc_ 行的原始值，覆盖 draft 中对应行
+  const origKcMap = new Map(
+    originalCoefficients.value
+      .filter((c) => c.key.startsWith('kc_'))
+      .map((c) => [c.key, { ...c }])
+  )
+  coefficientsDraft.value = coefficientsDraft.value.map((c) => {
+    if (c.key.startsWith('kc_')) {
+      return origKcMap.get(c.key) ?? { ...c }
+    }
+    return c
+  })
 }
 function resetBrands() {
   brandsDraft.value = originalBrands.value.map((b) => ({ ...b }))
@@ -396,8 +460,8 @@ function onTabChange(name: string) {
   }
 }
 
-// 算法参数折叠面板默认全部展开
-const activeCollapse = ref<string[]>(['coefficients', 'brands', 'condition', 'region'])
+// 算法参数折叠面板默认全部展开（含 000015 新增的 kcModifiers）
+const activeCollapse = ref<string[]>(['coefficients', 'brands', 'condition', 'kcModifiers', 'region'])
 
 onMounted(() => {
   loadOriginalPrices()
@@ -495,7 +559,7 @@ function onRefresh() {
                   </el-button>
                 </div>
               </div>
-              <el-table :data="coefficientsDraft" stripe border style="width: 100%" empty-text="暂无参数">
+              <el-table :data="globalCoefficientsDraft" stripe border style="width: 100%" empty-text="暂无参数">
                 <el-table-column prop="key" label="参数键" width="200" />
                 <el-table-column prop="description" label="参数说明" min-width="320" />
                 <el-table-column label="参数值" width="180">
@@ -538,7 +602,6 @@ function onRefresh() {
                 </div>
               </div>
               <el-table :data="brandsDraft" stripe border style="width: 100%" empty-text="暂无品牌">
-                <el-table-column prop="id" label="ID" width="70" align="center" />
                 <el-table-column prop="name" label="品牌名称" min-width="180" />
                 <el-table-column label="K_brand 系数" width="180">
                   <template #default="{ row }">
@@ -585,7 +648,6 @@ function onRefresh() {
                 </div>
               </div>
               <el-table :data="conditionRatingsDraft" stripe border style="width: 100%" empty-text="暂无车况评级">
-                <el-table-column prop="id" label="ID" width="70" align="center" />
                 <el-table-column prop="rating" label="评级" width="100" align="center" />
                 <el-table-column label="中文标签" min-width="180">
                   <template #default="{ row }">
@@ -607,7 +669,51 @@ function onRefresh() {
               </el-table>
             </el-collapse-item>
 
-            <!-- 4. 区域系数 -->
+            <!-- 4. 车况修正项（000015 新增：油漆/保养/证件，按 kc_ 前缀过滤） -->
+            <el-collapse-item name="kcModifiers">
+              <template #title>
+                <div class="collapse-title">
+                  <span>车况修正项（油漆/保养/证件）</span>
+                  <span v-if="isKcModifiersDirty()" class="dirty-dot" title="有未保存变更">●</span>
+                </div>
+              </template>
+              <div class="section-toolbar">
+                <span class="section-tip">
+                  Kc 修正项：油漆/保养为加性叠加（base + bonus），证件为乘性扣减（×(1-pct)），缺双证时复合放大
+                </span>
+                <div class="section-actions">
+                  <el-button :icon="RefreshLeft" size="small" @click="resetKcModifiers">重置</el-button>
+                  <el-button
+                    type="primary"
+                    :icon="Check"
+                    size="small"
+                    :loading="savingKcModifiers"
+                    :disabled="!isKcModifiersDirty()"
+                    @click="saveKcModifiers"
+                  >
+                    保存本节
+                  </el-button>
+                </div>
+              </div>
+              <el-table :data="kcModifiersDraft" stripe border style="width: 100%" empty-text="暂无车况修正项">
+                <el-table-column prop="key" label="参数键" width="260" />
+                <el-table-column prop="description" label="参数说明" min-width="380" />
+                <el-table-column label="参数值" width="180">
+                  <template #default="{ row }">
+                    <el-input-number
+                      v-model="row.value"
+                      :step="0.01"
+                      :precision="4"
+                      :min="0"
+                      :max="1"
+                      style="width: 100%"
+                    />
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-collapse-item>
+
+            <!-- 5. 区域系数 -->
             <el-collapse-item name="region">
               <template #title>
                 <div class="collapse-title">
@@ -633,7 +739,6 @@ function onRefresh() {
                 </div>
               </div>
               <el-table :data="regionCoefficientsDraft" stripe border style="width: 100%" empty-text="暂无区域系数">
-                <el-table-column prop="id" label="ID" width="70" align="center" />
                 <el-table-column prop="province" label="省份" width="140" />
                 <el-table-column prop="city" label="城市" width="160" />
                 <el-table-column label="区域系数" width="200">

@@ -1,9 +1,11 @@
 // Package service 实现核心业务逻辑
 // 本文件：主评估服务 ValuationService
 // 公式：残值 = 基准原价 × Kt_adj × Kc × Km
-//   Kt_adj = Kt^(Kh/Kb) = exp(-λ × (Kh/Kb) × age)
-//   品牌系数 Kb 与使用强度系数 Kh 不再直接乘到残值，而是修正时间衰减速率 λ
-//   全局兜底：estimated ≤ originalPrice（残值率不超过 100%）
+//
+//	Kt_adj = Kt^(Kh/Kb) = exp(-λ × (Kh/Kb) × age)
+//	品牌系数 Kb 与使用强度系数 Kh 不再直接乘到残值，而是修正时间衰减速率 λ
+//	全局兜底：estimated ≤ originalPrice（残值率不超过 100%）
+//
 // 集成基准价查询、各 K 系数计算、置信区间、维度评分与建议生成
 package service
 
@@ -102,9 +104,10 @@ func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRe
 		return nil, err
 	}
 
-	// 7. 计算 Kc（condition_rating + 修正项）
+	// 7. 计算 Kc（condition_rating + 修正项，4 个修正项从 coefficient_configs 读取）
 	kcRes, err := CalcKCondition(ctx, req.ConditionRating,
-		req.OriginalPaint, req.HasMaintenanceRecords, req.HasLicensePlate, req.HasRegistrationCertificate, s.dictRepo)
+		req.OriginalPaint, req.HasMaintenanceRecords, req.HasLicensePlate, req.HasRegistrationCertificate,
+		s.dictRepo, s.provider)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +155,7 @@ func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRe
 
 	// 12. 派生维度评分 + 文本建议
 	result.DimensionScores = buildDimensionScores(result)
-	result.Suggestions = buildSuggestions(result)
+	result.Suggestions = buildSuggestions(result, s.provider, ctx)
 	return result, nil
 }
 
@@ -249,8 +252,9 @@ func buildDimensionScores(r *model.EvaluationResult) map[string]float64 {
 
 // buildSuggestions 基于评估结果生成文本建议
 // 每条建议是一个短句，前端直接用 <li> 列表展示
-func buildSuggestions(r *model.EvaluationResult) []string {
-	s := make([]string, 0, 8)
+// 000015：证件扣减/油漆保养加成百分比动态读取，并补充可售性提示
+func buildSuggestions(r *model.EvaluationResult, provider *CoefficientProvider, ctx context.Context) []string {
+	s := make([]string, 0, 10)
 
 	// 1. 车况维度（核心）
 	switch {
@@ -266,21 +270,34 @@ func buildSuggestions(r *model.EvaluationResult) []string {
 		s = append(s, "车况很差，建议拆件出售或作为配件使用")
 	}
 
-	// 2. 证件缺失提示
+	// 2. 证件缺失提示 + 可售性警告
+	//    缺车牌 → 无法上路；缺登记证 → 无法过户；缺双证 → 无法正常出售
+	licensePct := readWithFallback(ctx, provider, KeyKcNoLicensePenaltyPct, defaultKcNoLicensePenaltyPct)
+	regPct := readWithFallback(ctx, provider, KeyKcNoRegistrationPenaltyPct, defaultKcNoRegistrationPenaltyPct)
+	licensePctShown := licensePct * 100
+	regPctShown := regPct * 100
+	missingBoth := !r.HasLicensePlate && !r.HasRegistrationCertificate
+
 	if !r.HasLicensePlate {
-		s = append(s, "缺少车牌，残值扣减 5%，建议补办后再出售")
+		s = append(s, fmt.Sprintf("缺少车牌，残值扣减 %.0f%%，无法正常上路行驶，建议补办后再出售", licensePctShown))
 	}
 	if !r.HasRegistrationCertificate {
-		s = append(s, "缺少登记证，残值扣减 5%，过户需提供登记证")
+		s = append(s, fmt.Sprintf("缺少登记证，残值扣减 %.0f%%，无法正常过户，建议补办后交易", regPctShown))
+	}
+	if missingBoth {
+		s = append(s, "车牌与登记证均缺失，无法正常出售与过户，强烈建议补齐证件后再交易")
 	}
 
-	// 3. 原厂漆与维保记录加分项提示
+	// 3. 原厂漆与维保记录加分项提示（百分比动态读取）
+	paintBonus := readWithFallback(ctx, provider, KeyKcPaintBonus, defaultKcPaintBonus)
+	maintenanceBonus := readWithFallback(ctx, provider, KeyKcMaintenanceBonus, defaultKcMaintenanceBonus)
 	if r.OriginalPaint && r.HasMaintenanceRecords {
-		s = append(s, "原厂漆完整且有维保记录，加成 6%，对保值有利")
+		totalPct := (paintBonus + maintenanceBonus) * 100
+		s = append(s, fmt.Sprintf("原厂漆完整且有维保记录，加成 %.0f%%，对保值有利", totalPct))
 	} else if r.OriginalPaint {
-		s = append(s, "原厂漆完整，加成 3%")
+		s = append(s, fmt.Sprintf("原厂漆完整，加成 %.0f%%", paintBonus*100))
 	} else if r.HasMaintenanceRecords {
-		s = append(s, "有维保记录，加成 3%")
+		s = append(s, fmt.Sprintf("有维保记录，加成 %.0f%%", maintenanceBonus*100))
 	}
 
 	// 4. 品牌/强度对时间衰减的修正方向

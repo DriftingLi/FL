@@ -201,21 +201,25 @@ func buildSuggestionsFromDetail(d *model.EvaluationDetail) []string {
 		s = append(s, "车况很差，建议拆件出售或作为配件使用")
 	}
 
-	// 2. 证件缺失提示
+	// 2. 证件缺失提示 + 可售性警告（百分比取 DB 默认值 10%；若管理员调整过 coefficient_configs，
+	//    新评估会通过 service.buildSuggestions 动态读取，此 fallback 仅用于持久化记录重建）
 	if !d.HasLicensePlate {
-		s = append(s, "缺少车牌，残值扣减 5%，建议补办后再出售")
+		s = append(s, "缺少车牌，残值扣减 10%，无法正常上路行驶，建议补办后再出售")
 	}
 	if !d.HasRegistrationCertificate {
-		s = append(s, "缺少登记证，残值扣减 5%，过户需提供登记证")
+		s = append(s, "缺少登记证，残值扣减 10%，无法正常过户，建议补办后交易")
+	}
+	if !d.HasLicensePlate && !d.HasRegistrationCertificate {
+		s = append(s, "车牌与登记证均缺失，无法正常出售与过户，强烈建议补齐证件后再交易")
 	}
 
-	// 3. 原厂漆与维保记录加分项提示
+	// 3. 原厂漆与维保记录加分项提示（百分比取 DB 默认值 2%）
 	if d.OriginalPaint && d.HasMaintenanceRecords {
-		s = append(s, "原厂漆完整且有维保记录，加成 6%，对保值有利")
+		s = append(s, "原厂漆完整且有维保记录，加成 4%，对保值有利")
 	} else if d.OriginalPaint {
-		s = append(s, "原厂漆完整，加成 3%")
+		s = append(s, "原厂漆完整，加成 2%")
 	} else if d.HasMaintenanceRecords {
-		s = append(s, "有维保记录，加成 3%")
+		s = append(s, "有维保记录，加成 2%")
 	}
 
 	// 4. 品牌/强度对时间衰减的修正方向
