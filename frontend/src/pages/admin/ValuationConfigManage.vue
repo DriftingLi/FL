@@ -52,14 +52,14 @@ interface FieldDef {
 }
 
 const ORIGINAL_PRICE_FIELDS: FieldDef[] = [
-  { prop: 'brand', label: '品牌', type: 'input', required: true, width: 140 },
-  { prop: 'vehicle_type', label: '车辆类型', type: 'input', required: true, width: 140 },
-  { prop: 'series', label: '系列', type: 'input', width: 140 },
-  { prop: 'tonnage', label: '吨位', type: 'number', width: 100 },
-  { prop: 'config_type', label: '配置类型', type: 'input', width: 180 },
-  { prop: 'mast_type', label: '门架类型', type: 'input', width: 120 },
-  { prop: 'mast_height_mm', label: '门架高度(mm)', type: 'number', width: 140 },
-  { prop: 'original_price', label: '原价（万元）', type: 'number', required: true, width: 140 }
+  { prop: 'brand', label: '品牌', type: 'input', required: true, width: 120 },
+  { prop: 'vehicle_type', label: '车辆类型', type: 'input', required: true, width: 120 },
+  { prop: 'series', label: '系列', type: 'input', width: 100 },
+  { prop: 'tonnage', label: '吨位', type: 'number', width: 80 },
+  { prop: 'config_type', label: '配置类型', type: 'input', width: 150 },
+  { prop: 'mast_type', label: '门架类型', type: 'input', width: 100 },
+  { prop: 'mast_height_mm', label: '门架高度(mm)', type: 'number', width: 120 },
+  { prop: 'original_price', label: '原价（万元）', type: 'number', required: true, width: 120 }
 ]
 
 // 通用编辑对话框
@@ -341,6 +341,50 @@ function resetRegionCoefficients() {
   regionCoefficientsDraft.value = originalRegionCoefficients.value.map((r) => ({ ...r }))
 }
 
+// 区域系数新增：调用 POST /admin/region-coefficients
+const regionCreateDialogVisible = ref(false)
+const creatingRegion = ref(false)
+const regionCreateForm = reactive({
+  province: '',
+  city: '',
+  coefficient: 1.0
+})
+
+function openCreateRegion() {
+  regionCreateForm.province = ''
+  regionCreateForm.city = ''
+  regionCreateForm.coefficient = 1.0
+  regionCreateDialogVisible.value = true
+}
+
+async function handleCreateRegion() {
+  const province = regionCreateForm.province.trim()
+  const city = regionCreateForm.city.trim()
+  if (!province) {
+    ElMessage.warning('请填写省份')
+    return
+  }
+  if (!city) {
+    ElMessage.warning('请填写城市')
+    return
+  }
+  creatingRegion.value = true
+  try {
+    await adminResources.regionCoefficients.create({
+      province,
+      city,
+      coefficient: regionCreateForm.coefficient
+    })
+    ElMessage.success('已新增区域系数')
+    regionCreateDialogVisible.value = false
+    await loadAlgorithmParams()
+  } catch {
+    // 拦截器已提示
+  } finally {
+    creatingRegion.value = false
+  }
+}
+
 // ========== Tab 切换 ==========
 const activeTab = ref<string>('originalPrices')
 const algorithmLoaded = ref(false)
@@ -393,7 +437,6 @@ function onRefresh() {
             style="width: 100%"
             empty-text="暂无数据"
           >
-            <el-table-column prop="id" label="ID" width="70" align="center" />
             <el-table-column
               v-for="col in ORIGINAL_PRICE_FIELDS"
               :key="col.prop"
@@ -575,6 +618,7 @@ function onRefresh() {
               <div class="section-toolbar">
                 <span class="section-tip">Km = coefficient，按省市区域调整市场系数</span>
                 <div class="section-actions">
+                  <el-button type="success" :icon="Plus" size="small" @click="openCreateRegion">新增区域</el-button>
                   <el-button :icon="RefreshLeft" size="small" @click="resetRegionCoefficients">重置</el-button>
                   <el-button
                     type="primary"
@@ -648,6 +692,39 @@ function onRefresh() {
           <el-button @click="dialogVisible = false">取消</el-button>
           <el-button type="primary" :loading="submitting" @click="handleSubmit">
             {{ editingRow ? '保存' : '创建' }}
+          </el-button>
+        </template>
+      </el-dialog>
+
+      <!-- 区域系数新增对话框 -->
+      <el-dialog
+        v-model="regionCreateDialogVisible"
+        title="新增区域系数"
+        width="480px"
+        destroy-on-close
+      >
+        <el-form :model="regionCreateForm" label-width="100px">
+          <el-form-item label="省份" required>
+            <el-input v-model="regionCreateForm.province" placeholder="如：江苏" />
+          </el-form-item>
+          <el-form-item label="城市" required>
+            <el-input v-model="regionCreateForm.city" placeholder="如：苏州" />
+          </el-form-item>
+          <el-form-item label="区域系数">
+            <el-input-number
+              v-model="regionCreateForm.coefficient"
+              :step="0.01"
+              :precision="2"
+              :min="0"
+              :max="10"
+              style="width: 100%"
+            />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="regionCreateDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="creatingRegion" @click="handleCreateRegion">
+            创建
           </el-button>
         </template>
       </el-dialog>
