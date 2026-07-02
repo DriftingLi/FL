@@ -16,17 +16,10 @@ import (
 // 字典 DTO 定义
 // =====================================================
 
-// BrandType 品牌类型（进口一线 / 国产一线 等）
-type BrandType struct {
-	Name  string  `json:"name"`
-	KType float64 `json:"k_type"`
-}
-
 // Brand 品牌
 type Brand struct {
 	ID       int64   `json:"id"`
 	Name     string  `json:"name"`
-	BrandType string  `json:"brand_type"`
 	KBrand   float64 `json:"k_brand"`
 	IsActive bool    `json:"is_active"`
 }
@@ -51,12 +44,6 @@ type Series struct {
 type Tonnage struct {
 	ID    int     `json:"id"`
 	Value float64 `json:"value"`
-}
-
-// ConfigType 配置类型（标准配置 / 高配置）
-type ConfigType struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
 }
 
 // MastType 门架类型
@@ -116,7 +103,6 @@ type RegionCoefficient struct {
 // OriginalPrice 车辆原价
 type OriginalPrice struct {
 	ID           int64    `json:"id"`
-	BrandType    string   `json:"brand_type"`
 	Brand        string   `json:"brand"`
 	VehicleType  string   `json:"vehicle_type"`
 	Series       string   `json:"series"`
@@ -127,6 +113,12 @@ type OriginalPrice struct {
 	OriginalPrice float64 `json:"original_price"`
 	IsActive     bool     `json:"is_active"`
 	UpdatedAt    string   `json:"updated_at"`
+}
+
+// ConfigOption 配置类型选项（从 original_prices DISTINCT 派生，非字典表实体）
+type ConfigOption struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
 }
 
 // CoefficientConfig 系数配置（全局可调参数）
@@ -154,76 +146,13 @@ func NewDictionaryRepository(pool *pgxpool.Pool) *DictionaryRepository {
 }
 
 // =====================================================
-// brand_types
-// =====================================================
-
-// ListBrandTypes 列出全部品牌类型
-func (r *DictionaryRepository) ListBrandTypes(ctx context.Context) ([]BrandType, error) {
-	rows, err := r.pool.Query(ctx, `SELECT name, k_type FROM brand_types ORDER BY k_type DESC`)
-	if err != nil {
-		return nil, fmt.Errorf("查询品牌类型失败: %w", err)
-	}
-	defer rows.Close()
-	out := make([]BrandType, 0, 8)
-	for rows.Next() {
-		var bt BrandType
-		if err := rows.Scan(&bt.Name, &bt.KType); err != nil {
-			return nil, err
-		}
-		out = append(out, bt)
-	}
-	return out, rows.Err()
-}
-
-// CreateBrandType 新增品牌类型
-func (r *DictionaryRepository) CreateBrandType(ctx context.Context, name string, kType float64) (BrandType, error) {
-	_, err := r.pool.Exec(ctx,
-		`INSERT INTO brand_types (name, k_type) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING`, name, kType)
-	if err != nil {
-		return BrandType{}, fmt.Errorf("新增品牌类型失败: %w", err)
-	}
-	return BrandType{Name: name, KType: kType}, nil
-}
-
-// UpdateBrandType 更新品牌类型系数
-func (r *DictionaryRepository) UpdateBrandType(ctx context.Context, name string, kType float64) error {
-	ct, err := r.pool.Exec(ctx, `UPDATE brand_types SET k_type = $2 WHERE name = $1`, name, kType)
-	if err != nil {
-		return fmt.Errorf("更新品牌类型失败: %w", err)
-	}
-	if ct.RowsAffected() == 0 {
-		return pgx.ErrNoRows
-	}
-	return nil
-}
-
-// DeleteBrandType 删除品牌类型
-func (r *DictionaryRepository) DeleteBrandType(ctx context.Context, name string) error {
-	ct, err := r.pool.Exec(ctx, `DELETE FROM brand_types WHERE name = $1`, name)
-	if err != nil {
-		return fmt.Errorf("删除品牌类型失败: %w", err)
-	}
-	if ct.RowsAffected() == 0 {
-		return pgx.ErrNoRows
-	}
-	return nil
-}
-
-// =====================================================
 // brands
 // =====================================================
 
-// ListBrands 列出全部品牌（可按 brand_type 筛选）
-func (r *DictionaryRepository) ListBrands(ctx context.Context, brandType string) ([]Brand, error) {
-	var rows pgx.Rows
-	var err error
-	if brandType != "" {
-		rows, err = r.pool.Query(ctx,
-			`SELECT id, name, brand_type, k_brand, is_active FROM brands WHERE brand_type = $1 ORDER BY k_brand DESC, name ASC`, brandType)
-	} else {
-		rows, err = r.pool.Query(ctx,
-			`SELECT id, name, brand_type, k_brand, is_active FROM brands ORDER BY k_brand DESC, name ASC`)
-	}
+// ListBrands 列出全部品牌（按 k_brand 倒序）
+func (r *DictionaryRepository) ListBrands(ctx context.Context) ([]Brand, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, name, k_brand, is_active FROM brands ORDER BY k_brand DESC, name ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("查询品牌失败: %w", err)
 	}
@@ -231,7 +160,7 @@ func (r *DictionaryRepository) ListBrands(ctx context.Context, brandType string)
 	out := make([]Brand, 0, 16)
 	for rows.Next() {
 		var b Brand
-		if err := rows.Scan(&b.ID, &b.Name, &b.BrandType, &b.KBrand, &b.IsActive); err != nil {
+		if err := rows.Scan(&b.ID, &b.Name, &b.KBrand, &b.IsActive); err != nil {
 			return nil, err
 		}
 		out = append(out, b)
@@ -239,31 +168,26 @@ func (r *DictionaryRepository) ListBrands(ctx context.Context, brandType string)
 	return out, rows.Err()
 }
 
-// ListBrandsByType 按品牌类型列出品牌
-func (r *DictionaryRepository) ListBrandsByType(ctx context.Context, brandType string) ([]Brand, error) {
-	return r.ListBrands(ctx, brandType)
-}
-
 // CreateBrand 新增品牌
-func (r *DictionaryRepository) CreateBrand(ctx context.Context, name, brandType string, kBrand float64, isActive bool) (Brand, error) {
+func (r *DictionaryRepository) CreateBrand(ctx context.Context, name string, kBrand float64, isActive bool) (Brand, error) {
 	var id int64
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO brands (name, brand_type, k_brand, is_active)
-		 VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO UPDATE
-		 SET brand_type = EXCLUDED.brand_type, k_brand = EXCLUDED.k_brand, is_active = EXCLUDED.is_active
+		`INSERT INTO brands (name, k_brand, is_active)
+		 VALUES ($1, $2, $3) ON CONFLICT (name) DO UPDATE
+		 SET k_brand = EXCLUDED.k_brand, is_active = EXCLUDED.is_active
 		 RETURNING id`,
-		name, brandType, kBrand, isActive).Scan(&id)
+		name, kBrand, isActive).Scan(&id)
 	if err != nil {
 		return Brand{}, fmt.Errorf("新增品牌失败: %w", err)
 	}
-	return Brand{ID: id, Name: name, BrandType: brandType, KBrand: kBrand, IsActive: isActive}, nil
+	return Brand{ID: id, Name: name, KBrand: kBrand, IsActive: isActive}, nil
 }
 
-// UpdateBrand 更新品牌
-func (r *DictionaryRepository) UpdateBrand(ctx context.Context, id int64, brandType string, kBrand float64, isActive bool) error {
+// UpdateBrand 更新品牌系数与启用状态
+func (r *DictionaryRepository) UpdateBrand(ctx context.Context, id int64, kBrand float64, isActive bool) error {
 	ct, err := r.pool.Exec(ctx,
-		`UPDATE brands SET brand_type = $2, k_brand = $3, is_active = $4 WHERE id = $1`,
-		id, brandType, kBrand, isActive)
+		`UPDATE brands SET k_brand = $2, is_active = $3 WHERE id = $1`,
+		id, kBrand, isActive)
 	if err != nil {
 		return fmt.Errorf("更新品牌失败: %w", err)
 	}
@@ -288,9 +212,9 @@ func (r *DictionaryRepository) DeleteBrand(ctx context.Context, id int64) error 
 // GetBrandByName 按名称查询品牌（供 service 实时计算 Kb 使用）
 func (r *DictionaryRepository) GetBrandByName(ctx context.Context, name string) (Brand, error) {
 	row := r.pool.QueryRow(ctx,
-		`SELECT id, name, brand_type, k_brand, is_active FROM brands WHERE name = $1`, name)
+		`SELECT id, name, k_brand, is_active FROM brands WHERE name = $1`, name)
 	var b Brand
-	if err := row.Scan(&b.ID, &b.Name, &b.BrandType, &b.KBrand, &b.IsActive); err != nil {
+	if err := row.Scan(&b.ID, &b.Name, &b.KBrand, &b.IsActive); err != nil {
 		return Brand{}, err
 	}
 	return b, nil
@@ -474,51 +398,6 @@ func (r *DictionaryRepository) DeleteTonnage(ctx context.Context, id int) error 
 	ct, err := r.pool.Exec(ctx, `DELETE FROM tonnages WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("删除吨位失败: %w", err)
-	}
-	if ct.RowsAffected() == 0 {
-		return pgx.ErrNoRows
-	}
-	return nil
-}
-
-// =====================================================
-// config_types
-// =====================================================
-
-// ListConfigTypes 列出全部配置类型
-func (r *DictionaryRepository) ListConfigTypes(ctx context.Context) ([]ConfigType, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id, name FROM config_types ORDER BY id ASC`)
-	if err != nil {
-		return nil, fmt.Errorf("查询配置类型失败: %w", err)
-	}
-	defer rows.Close()
-	out := make([]ConfigType, 0, 8)
-	for rows.Next() {
-		var c ConfigType
-		if err := rows.Scan(&c.ID, &c.Name); err != nil {
-			return nil, err
-		}
-		out = append(out, c)
-	}
-	return out, rows.Err()
-}
-
-// CreateConfigType 新增配置类型
-func (r *DictionaryRepository) CreateConfigType(ctx context.Context, name string) (ConfigType, error) {
-	var id int
-	err := r.pool.QueryRow(ctx,
-		`INSERT INTO config_types (name) VALUES ($1) ON CONFLICT (name) DO NOTHING RETURNING id`, name).Scan(&id)
-	if err != nil {
-		return ConfigType{}, fmt.Errorf("新增配置类型失败: %w", err)
-	}
-	return ConfigType{ID: id, Name: name}, nil
-}
-
-// DeleteConfigType 删除配置类型
-func (r *DictionaryRepository) DeleteConfigType(ctx context.Context, id int) error {
-	ct, err := r.pool.Exec(ctx, `DELETE FROM config_types WHERE id = $1`, id)
-	if err != nil {
-		return fmt.Errorf("删除配置类型失败: %w", err)
 	}
 	if ct.RowsAffected() == 0 {
 		return pgx.ErrNoRows
@@ -1013,7 +892,7 @@ func (r *DictionaryRepository) ListOriginalPrices(ctx context.Context, limit, of
 		return nil, 0, fmt.Errorf("统计原价记录失败: %w", err)
 	}
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, brand_type, brand, vehicle_type, series, tonnage,
+		SELECT id, brand, vehicle_type, series, tonnage,
 		       config_type, mast_type, mast_height_mm, original_price, is_active, updated_at
 		FROM original_prices
 		ORDER BY id DESC LIMIT $1 OFFSET $2`, limit, offset)
@@ -1025,7 +904,7 @@ func (r *DictionaryRepository) ListOriginalPrices(ctx context.Context, limit, of
 	for rows.Next() {
 		var o OriginalPrice
 		var updatedAt time.Time
-		if err := rows.Scan(&o.ID, &o.BrandType, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
+		if err := rows.Scan(&o.ID, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
 			&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
 			return nil, 0, err
 		}
@@ -1038,12 +917,12 @@ func (r *DictionaryRepository) ListOriginalPrices(ctx context.Context, limit, of
 // GetOriginalPriceByID 按主键查询原价
 func (r *DictionaryRepository) GetOriginalPriceByID(ctx context.Context, id int64) (OriginalPrice, error) {
 	row := r.pool.QueryRow(ctx, `
-		SELECT id, brand_type, brand, vehicle_type, series, tonnage,
+		SELECT id, brand, vehicle_type, series, tonnage,
 		       config_type, mast_type, mast_height_mm, original_price, is_active, updated_at
 		FROM original_prices WHERE id = $1`, id)
 	var o OriginalPrice
 	var updatedAt time.Time
-	if err := row.Scan(&o.ID, &o.BrandType, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
+	if err := row.Scan(&o.ID, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
 		&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
 		return OriginalPrice{}, err
 	}
@@ -1056,14 +935,14 @@ func (r *DictionaryRepository) CreateOriginalPrice(ctx context.Context, o *Origi
 	var id int64
 	err := r.pool.QueryRow(ctx, `
 		INSERT INTO original_prices (
-			brand_type, brand, vehicle_type, series, tonnage,
+			brand, vehicle_type, series, tonnage,
 			config_type, mast_type, mast_height_mm, original_price, is_active
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-		ON CONFLICT (brand_type, brand, vehicle_type, series, tonnage,
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		ON CONFLICT (brand, vehicle_type, series, tonnage,
 		             config_type, mast_type, mast_height_mm)
 		DO UPDATE SET original_price = EXCLUDED.original_price, is_active = EXCLUDED.is_active, updated_at = NOW()
 		RETURNING id`,
-		o.BrandType, o.Brand, o.VehicleType, o.Series, o.Tonnage,
+		o.Brand, o.VehicleType, o.Series, o.Tonnage,
 		o.ConfigType, o.MastType, o.MastHeightMM, o.OriginalPrice, o.IsActive).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("新增原价记录失败: %w", err)
@@ -1097,23 +976,23 @@ func (r *DictionaryRepository) DeleteOriginalPrice(ctx context.Context, id int64
 	return nil
 }
 
-// FindOriginalPriceMatch 精确匹配原价：按 8 个字段查询
+// FindOriginalPriceMatch 精确匹配原价：按 7 个字段查询
 // 未命中时返回 pgx.ErrNoRows，由调用方决定是否走模糊匹配
 func (r *DictionaryRepository) FindOriginalPriceMatch(
-	ctx context.Context, brandType, brand, vehicleType, series string,
+	ctx context.Context, brand, vehicleType, series string,
 	tonnage float64, configType, mastType string, mastHeightMM int,
 ) (OriginalPrice, error) {
 	row := r.pool.QueryRow(ctx, `
-		SELECT id, brand_type, brand, vehicle_type, series, tonnage,
+		SELECT id, brand, vehicle_type, series, tonnage,
 		       config_type, mast_type, mast_height_mm, original_price, is_active, updated_at
 		FROM original_prices
-		WHERE brand_type = $1 AND brand = $2 AND vehicle_type = $3 AND series = $4
-		  AND tonnage = $5 AND config_type = $6 AND mast_type = $7 AND mast_height_mm = $8
+		WHERE brand = $1 AND vehicle_type = $2 AND series = $3
+		  AND tonnage = $4 AND config_type = $5 AND mast_type = $6 AND mast_height_mm = $7
 		  AND is_active = TRUE`,
-		brandType, brand, vehicleType, series, tonnage, configType, mastType, mastHeightMM)
+		brand, vehicleType, series, tonnage, configType, mastType, mastHeightMM)
 	var o OriginalPrice
 	var updatedAt time.Time
-	if err := row.Scan(&o.ID, &o.BrandType, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
+	if err := row.Scan(&o.ID, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
 		&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
 		return OriginalPrice{}, err
 	}
@@ -1121,37 +1000,37 @@ func (r *DictionaryRepository) FindOriginalPriceMatch(
 	return o, nil
 }
 
-// FindOriginalPriceFuzzy 模糊匹配原价：按 brand_type + brand + vehicle_type + series + tonnage 查询
+// FindOriginalPriceFuzzy 模糊匹配原价：按 brand + vehicle_type + series + tonnage 查询
 // 忽略 config_type / mast_type / mast_height_mm
 // 当 series 为空字符串时，忽略 series 条件（用于 series="其它" 的降级匹配）
 // 多条命中时取 original_price 最高的（高配置与标准配置中偏高者，对卖家更友好）
 func (r *DictionaryRepository) FindOriginalPriceFuzzy(
-	ctx context.Context, brandType, brand, vehicleType, series string, tonnage float64,
+	ctx context.Context, brand, vehicleType, series string, tonnage float64,
 ) (OriginalPrice, error) {
 	var row pgx.Row
 	if series == "" {
 		// series 为空：忽略 series 条件
 		row = r.pool.QueryRow(ctx, `
-			SELECT id, brand_type, brand, vehicle_type, series, tonnage,
+			SELECT id, brand, vehicle_type, series, tonnage,
 			       config_type, mast_type, mast_height_mm, original_price, is_active, updated_at
 			FROM original_prices
-			WHERE brand_type = $1 AND brand = $2 AND vehicle_type = $3
-			  AND tonnage = $4 AND is_active = TRUE
+			WHERE brand = $1 AND vehicle_type = $2
+			  AND tonnage = $3 AND is_active = TRUE
 			ORDER BY original_price DESC LIMIT 1`,
-			brandType, brand, vehicleType, tonnage)
+			brand, vehicleType, tonnage)
 	} else {
 		row = r.pool.QueryRow(ctx, `
-			SELECT id, brand_type, brand, vehicle_type, series, tonnage,
+			SELECT id, brand, vehicle_type, series, tonnage,
 			       config_type, mast_type, mast_height_mm, original_price, is_active, updated_at
 			FROM original_prices
-			WHERE brand_type = $1 AND brand = $2 AND vehicle_type = $3 AND series = $4
-			  AND tonnage = $5 AND is_active = TRUE
+			WHERE brand = $1 AND vehicle_type = $2 AND series = $3
+			  AND tonnage = $4 AND is_active = TRUE
 			ORDER BY original_price DESC LIMIT 1`,
-			brandType, brand, vehicleType, series, tonnage)
+			brand, vehicleType, series, tonnage)
 	}
 	var o OriginalPrice
 	var updatedAt time.Time
-	if err := row.Scan(&o.ID, &o.BrandType, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
+	if err := row.Scan(&o.ID, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
 		&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
 		return OriginalPrice{}, err
 	}
@@ -1307,9 +1186,9 @@ func (r *DictionaryRepository) ListTonnagesByCascade(ctx context.Context, brand,
 	return out, rows.Err()
 }
 
-// ListConfigTypesByCascade 按品牌+车辆类型+系列+吨位级联查询配置类型
+// ListConfigOptionsByCascade 按品牌+车辆类型+系列+吨位级联查询配置类型选项
 // config_type 为复合字符串（如"手波/国产发动机"、"磷酸铁锂(LFP)"），直接从 original_prices 取 DISTINCT
-func (r *DictionaryRepository) ListConfigTypesByCascade(ctx context.Context, brand, vehicleType, series, tonnage string) ([]ConfigType, error) {
+func (r *DictionaryRepository) ListConfigOptionsByCascade(ctx context.Context, brand, vehicleType, series, tonnage string) ([]ConfigOption, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT DISTINCT MIN(op.id), op.config_type
 		FROM original_prices op
@@ -1320,9 +1199,9 @@ func (r *DictionaryRepository) ListConfigTypesByCascade(ctx context.Context, bra
 		return nil, fmt.Errorf("级联查询配置类型失败: %w", err)
 	}
 	defer rows.Close()
-	out := make([]ConfigType, 0, 8)
+	out := make([]ConfigOption, 0, 8)
 	for rows.Next() {
-		var c ConfigType
+		var c ConfigOption
 		if err := rows.Scan(&c.ID, &c.Name); err != nil {
 			return nil, err
 		}
@@ -1375,6 +1254,37 @@ func (r *DictionaryRepository) ListMastHeightsByCascade(ctx context.Context, bra
 		out = append(out, m)
 	}
 	return out, rows.Err()
+}
+
+// =====================================================
+// 算法参数聚合查询
+// =====================================================
+
+// AlgorithmParameters 算法参数聚合结果（管理员后台「算法参数」tab 一次加载）
+type AlgorithmParameters struct {
+	Coefficients       []CoefficientConfig  `json:"coefficients"`
+	Brands             []Brand              `json:"brands"`
+	ConditionRatings   []ConditionRating    `json:"condition_ratings"`
+	RegionCoefficients []RegionCoefficient  `json:"region_coefficients"`
+}
+
+// ListAlgorithmParameters 聚合查询全部算法参数（4 类），供管理员后台一次加载
+func (r *DictionaryRepository) ListAlgorithmParameters(ctx context.Context) (AlgorithmParameters, error) {
+	var result AlgorithmParameters
+	var err error
+	if result.Coefficients, err = r.ListCoefficientConfigs(ctx); err != nil {
+		return result, fmt.Errorf("查询算法系数失败: %w", err)
+	}
+	if result.Brands, err = r.ListBrands(ctx); err != nil {
+		return result, fmt.Errorf("查询品牌系数失败: %w", err)
+	}
+	if result.ConditionRatings, err = r.ListConditionRatings(ctx); err != nil {
+		return result, fmt.Errorf("查询车况系数失败: %w", err)
+	}
+	if result.RegionCoefficients, err = r.ListRegionCoefficients(ctx, ""); err != nil {
+		return result, fmt.Errorf("查询区域系数失败: %w", err)
+	}
+	return result, nil
 }
 
 // =====================================================

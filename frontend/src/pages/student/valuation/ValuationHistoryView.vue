@@ -140,11 +140,6 @@ onMounted(load)
         @row-click="(row: EvaluationDetail) => goReport(row.id)"
       >
         <el-table-column prop="id" label="编号" width="80" align="center" />
-        <el-table-column label="品牌类型" width="120">
-          <template #default="{ row }">
-            {{ row.brand_type || '-' }}
-          </template>
-        </el-table-column>
         <el-table-column prop="brand" label="品牌" width="120" />
         <el-table-column label="车辆类型" width="140">
           <template #default="{ row }">

@@ -1,212 +1,79 @@
 <script setup lang="ts">
 // 残值评估配置管理（管理员）
-// 使用 el-tabs 组织 10 个配置板块：原价表 / 品牌类型 / 品牌 / 车辆类型 / 系列·吨位 / 配置·门架 / 电池类型 / 车况评级 / 区域系数 / 算法参数
-import { ref, reactive, onMounted, watch } from 'vue'
+// 重构说明：从 15 tab 缩减为 2 tab
+//   Tab 1 原价表：CRUD original-prices（学生端表单依赖该表数据）
+//   Tab 2 算法参数：聚合展示 4 类参数（全局系数 / 品牌系数 / 车况系数 / 区域系数）
+//                  每类独立保存，仅提交变更项（dirty 检测），不提供新增/删除
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Edit, Delete, Refresh } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, Refresh, Check, RefreshLeft } from '@element-plus/icons-vue'
 import PageHeader from '@/components/valuation/PageHeader.vue'
 import {
   adminResources,
-  listAdminCoefficients,
-  updateAdminCoefficients,
+  listAlgorithmParameters,
+  updateCoefficient,
+  updateBrandCoefficient,
+  updateConditionCoefficient,
+  updateRegionCoefficient,
   type AdminRow,
-  type AdminResourceKey
+  type AlgorithmParameters
 } from '@/api/valuation/admin'
 import type { CoefficientConfig } from '@/types/valuation/evaluation'
 
-// ========== 通用 Tab 状态 ==========
-interface TabState {
+// ========== Tab 1: 原价表 ==========
+interface OriginalPriceTabState {
   loading: boolean
   list: AdminRow[]
 }
 
-const tabStates = reactive<Record<AdminResourceKey, TabState>>({
-  originalPrices: { loading: false, list: [] },
-  brandTypes: { loading: false, list: [] },
-  brands: { loading: false, list: [] },
-  vehicleTypes: { loading: false, list: [] },
-  series: { loading: false, list: [] },
-  tonnages: { loading: false, list: [] },
-  configTypes: { loading: false, list: [] },
-  mastTypes: { loading: false, list: [] },
-  mastHeights: { loading: false, list: [] },
-  transmissionTypes: { loading: false, list: [] },
-  engineTypes: { loading: false, list: [] },
-  batteryTypes: { loading: false, list: [] },
-  conditionRatings: { loading: false, list: [] },
-  regionCoefficients: { loading: false, list: [] }
+const originalPriceState = reactive<OriginalPriceTabState>({
+  loading: false,
+  list: []
 })
 
-// 当前激活的 tab
-const activeTab = ref<string>('originalPrices')
-
-// 加载指定资源的列表
-async function loadList(key: AdminResourceKey) {
-  const state = tabStates[key]
-  state.loading = true
+async function loadOriginalPrices() {
+  originalPriceState.loading = true
   try {
-    state.list = await adminResources[key].list()
+    originalPriceState.list = await adminResources.originalPrices.list()
   } catch {
-    // 拦截器已提示
-    state.list = []
+    originalPriceState.list = []
   } finally {
-    state.loading = false
+    originalPriceState.loading = false
   }
 }
 
-// 切换 tab 时懒加载
-function onTabChange(name: string) {
-  const key = name as AdminResourceKey
-  if (tabStates[key].list.length === 0) {
-    loadList(key)
-  }
+// 原价表字段定义（已移除 brand_type 列）
+interface FieldDef {
+  prop: string
+  label: string
+  type: 'input' | 'number' | 'switch'
+  required?: boolean
+  width?: number
 }
 
-onMounted(() => {
-  loadList('originalPrices')
-})
+const ORIGINAL_PRICE_FIELDS: FieldDef[] = [
+  { prop: 'brand', label: '品牌', type: 'input', required: true, width: 140 },
+  { prop: 'vehicle_type', label: '车辆类型', type: 'input', required: true, width: 140 },
+  { prop: 'series', label: '系列', type: 'input', width: 140 },
+  { prop: 'tonnage', label: '吨位', type: 'number', width: 100 },
+  { prop: 'config_type', label: '配置类型', type: 'input', width: 180 },
+  { prop: 'mast_type', label: '门架类型', type: 'input', width: 120 },
+  { prop: 'mast_height_mm', label: '门架高度(mm)', type: 'number', width: 140 },
+  { prop: 'original_price', label: '原价（万元）', type: 'number', required: true, width: 140 }
+]
 
-// ========== 通用编辑对话框 ==========
+// 通用编辑对话框
 const dialogVisible = ref(false)
 const dialogTitle = ref('')
-const editingKey = ref<AdminResourceKey | null>(null)
 const editingRow = ref<AdminRow | null>(null)
 const formData = reactive<AdminRow>({})
 const submitting = ref(false)
 
-/** 资源的中文名 + 字段配置（用于动态渲染表单与表格列） */
-interface FieldDef {
-  prop: string
-  label: string
-  /** 表单输入类型 */
-  type: 'input' | 'number' | 'switch'
-  required?: boolean
-  /** 表格列宽度 */
-  width?: number
-}
-
-interface ResourceSchema {
-  title: string
-  fields: FieldDef[]
-}
-
-const SCHEMAS: Record<AdminResourceKey, ResourceSchema> = {
-  originalPrices: {
-    title: '原价表',
-    fields: [
-      { prop: 'brand_type', label: '品牌类型', type: 'input', required: true, width: 140 },
-      { prop: 'brand', label: '品牌', type: 'input', required: true, width: 140 },
-      { prop: 'vehicle_type', label: '车辆类型', type: 'input', required: true, width: 140 },
-      { prop: 'series', label: '系列', type: 'input', width: 140 },
-      { prop: 'tonnage', label: '吨位', type: 'number', width: 100 },
-      { prop: 'config_type', label: '配置类型', type: 'input', width: 180 },
-      { prop: 'mast_type', label: '门架类型', type: 'input', width: 120 },
-      { prop: 'mast_height_mm', label: '门架高度(mm)', type: 'number', width: 140 },
-      { prop: 'original_price', label: '原价（万元）', type: 'number', required: true, width: 140 }
-    ]
-  },
-  brandTypes: {
-    title: '品牌类型',
-    fields: [
-      { prop: 'name', label: '名称', type: 'input', required: true, width: 200 },
-      { prop: 'k_type', label: 'K_type 系数', type: 'number', required: true, width: 140 }
-    ]
-  },
-  brands: {
-    title: '品牌',
-    fields: [
-      { prop: 'name', label: '名称', type: 'input', required: true, width: 160 },
-      { prop: 'brand_type', label: '品牌类型', type: 'input', required: true, width: 140 },
-      { prop: 'k_brand', label: 'K_brand 系数', type: 'number', required: true, width: 140 },
-      { prop: 'is_active', label: '启用', type: 'switch', width: 100 }
-    ]
-  },
-  vehicleTypes: {
-    title: '车辆类型',
-    fields: [
-      { prop: 'name', label: '名称', type: 'input', required: true, width: 200 },
-      {
-        prop: 'power_type',
-        label: '动力类型',
-        type: 'input',
-        required: true,
-        width: 140
-      },
-      { prop: 'earliest_factory_year', label: '最早出厂年份', type: 'number', width: 160 }
-    ]
-  },
-  series: {
-    title: '系列',
-    fields: [
-      { prop: 'brand', label: '品牌', type: 'input', required: true, width: 160 },
-      { prop: 'name', label: '系列名称', type: 'input', required: true, width: 200 },
-      { prop: 'earliest_factory_year', label: '最早出厂年份', type: 'number', width: 160 }
-    ]
-  },
-  tonnages: {
-    title: '吨位',
-    fields: [{ prop: 'value', label: '吨位值', type: 'number', required: true, width: 200 }]
-  },
-  configTypes: {
-    title: '配置类型',
-    fields: [{ prop: 'name', label: '名称', type: 'input', required: true, width: 240 }]
-  },
-  mastTypes: {
-    title: '门架类型',
-    fields: [{ prop: 'name', label: '名称', type: 'input', required: true, width: 240 }]
-  },
-  mastHeights: {
-    title: '门架高度',
-    fields: [{ prop: 'value_mm', label: '高度（mm）', type: 'number', required: true, width: 240 }]
-  },
-  batteryTypes: {
-    title: '电池类型',
-    fields: [{ prop: 'name', label: '名称', type: 'input', required: true, width: 240 }]
-  },
-  transmissionTypes: {
-    title: '传动系统',
-    fields: [{ prop: 'name', label: '名称', type: 'input', required: true, width: 240 }]
-  },
-  engineTypes: {
-    title: '发动机类型',
-    fields: [{ prop: 'name', label: '名称', type: 'input', required: true, width: 240 }]
-  },
-  conditionRatings: {
-    title: '车况评级',
-    fields: [
-      { prop: 'rating', label: '评级', type: 'input', required: true, width: 120 },
-      { prop: 'label', label: '中文标签', type: 'input', required: true, width: 160 },
-      { prop: 'base_coefficient', label: '基础系数', type: 'number', required: true, width: 140 }
-    ]
-  },
-  regionCoefficients: {
-    title: '区域系数',
-    fields: [
-      { prop: 'province', label: '省份', type: 'input', required: true, width: 140 },
-      { prop: 'city', label: '城市', type: 'input', required: true, width: 140 },
-      { prop: 'coefficient', label: '系数', type: 'number', required: true, width: 140 }
-    ]
-  }
-}
-
-/** 表格列：含 id 列 + 各字段 + 操作列；brand-types 后端无 id 字段，跳过 id 列 */
-function tableColumns(key: AdminResourceKey): FieldDef[] {
-  const idCol =
-    key === 'brandTypes'
-      ? []
-      : [{ prop: 'id', label: 'ID', type: 'number' as const, width: 70 }]
-  return [...idCol, ...SCHEMAS[key].fields]
-}
-
-/** 打开新增对话框 */
-function openCreate(key: AdminResourceKey) {
-  editingKey.value = key
+function openCreate() {
   editingRow.value = null
-  dialogTitle.value = `新增${SCHEMAS[key].title}`
-  // 重置表单数据
+  dialogTitle.value = '新增原价记录'
   Object.keys(formData).forEach((k) => delete formData[k])
-  // 设置默认值
-  for (const f of SCHEMAS[key].fields) {
+  for (const f of ORIGINAL_PRICE_FIELDS) {
     if (f.type === 'switch') formData[f.prop] = true
     else if (f.type === 'number') formData[f.prop] = 0
     else formData[f.prop] = ''
@@ -214,23 +81,16 @@ function openCreate(key: AdminResourceKey) {
   dialogVisible.value = true
 }
 
-/** 打开编辑对话框 */
-function openEdit(key: AdminResourceKey, row: AdminRow) {
-  editingKey.value = key
+function openEdit(row: AdminRow) {
   editingRow.value = row
-  dialogTitle.value = `编辑${SCHEMAS[key].title}`
-  // 重置并复制行数据
+  dialogTitle.value = '编辑原价记录'
   Object.keys(formData).forEach((k) => delete formData[k])
   Object.assign(formData, row)
   dialogVisible.value = true
 }
 
-/** 提交新增/编辑 */
 async function handleSubmit() {
-  if (!editingKey.value) return
-  const key = editingKey.value
-  // 必填校验
-  for (const f of SCHEMAS[key].fields) {
+  for (const f of ORIGINAL_PRICE_FIELDS) {
     if (f.required) {
       const v = formData[f.prop]
       if (v == null || v === '') {
@@ -242,17 +102,16 @@ async function handleSubmit() {
   submitting.value = true
   try {
     const payload: Record<string, unknown> = { ...formData }
-    // 通过资源 idField 提取标识符：通常用 id，brand-types 用 name
-    const id = adminResources[key].getIdOf(editingRow.value)
+    const id = adminResources.originalPrices.getIdOf(editingRow.value)
     if (id != null) {
-      await adminResources[key].update(id, payload)
+      await adminResources.originalPrices.update(id, payload)
       ElMessage.success('更新成功')
     } else {
-      await adminResources[key].create(payload)
+      await adminResources.originalPrices.create(payload)
       ElMessage.success('创建成功')
     }
     dialogVisible.value = false
-    await loadList(key)
+    await loadOriginalPrices()
   } catch {
     // 拦截器已提示
   } finally {
@@ -260,83 +119,254 @@ async function handleSubmit() {
   }
 }
 
-/** 删除 */
-async function handleDelete(key: AdminResourceKey, row: AdminRow) {
-  // 通过资源 idField 提取标识符（brand-types 用 name）
-  const id = adminResources[key].getIdOf(row)
+async function handleDelete(row: AdminRow) {
+  const id = adminResources.originalPrices.getIdOf(row)
   if (id == null) return
   try {
-    await ElMessageBox.confirm(`确定删除该${SCHEMAS[key].title}记录？`, '删除确认', {
-      type: 'warning'
-    })
-    await adminResources[key].remove(id)
+    await ElMessageBox.confirm('确定删除该原价记录？', '删除确认', { type: 'warning' })
+    await adminResources.originalPrices.remove(id)
     ElMessage.success('已删除')
-    await loadList(key)
+    await loadOriginalPrices()
   } catch {
     // 用户取消或拦截器已提示
   }
 }
 
-// ========== 算法参数（Tab 10）：独立表单 ==========
-const coefficients = ref<CoefficientConfig[]>([])
-const coefficientsLoading = ref(false)
-const coefficientsSaving = ref(false)
-// 本地编辑副本（避免直接修改原数据）
-const coefficientsDraft = ref<CoefficientConfig[]>([])
+// ========== Tab 2: 算法参数 ==========
+type CoeffRow = CoefficientConfig
+interface BrandRow {
+  id: number
+  name: string
+  k_brand: number
+  is_active: boolean
+}
+interface ConditionRatingRow {
+  id: number
+  rating: string
+  label: string
+  base_coefficient: number
+}
+interface RegionCoefficientRow {
+  id: number
+  province: string
+  city: string
+  coefficient: number
+}
 
-async function loadCoefficients() {
-  coefficientsLoading.value = true
+// 服务器原始数据（用于 dirty 比较 & 重置）
+const originalCoefficients = ref<CoeffRow[]>([])
+const originalBrands = ref<BrandRow[]>([])
+const originalConditionRatings = ref<ConditionRatingRow[]>([])
+const originalRegionCoefficients = ref<RegionCoefficientRow[]>([])
+
+// 本地编辑副本
+const coefficientsDraft = ref<CoeffRow[]>([])
+const brandsDraft = ref<BrandRow[]>([])
+const conditionRatingsDraft = ref<ConditionRatingRow[]>([])
+const regionCoefficientsDraft = ref<RegionCoefficientRow[]>([])
+
+const algorithmLoading = ref(false)
+const savingCoefficients = ref(false)
+const savingBrands = ref(false)
+const savingConditionRatings = ref(false)
+const savingRegionCoefficients = ref(false)
+
+async function loadAlgorithmParams() {
+  algorithmLoading.value = true
   try {
-    coefficients.value = await listAdminCoefficients()
-    // 深拷贝作为编辑副本
-    coefficientsDraft.value = coefficients.value.map((c) => ({ ...c }))
+    const data: AlgorithmParameters = await listAlgorithmParameters()
+    originalCoefficients.value = data.coefficients.map((c) => ({ ...c }))
+    originalBrands.value = data.brands.map((b) => ({ ...b }))
+    originalConditionRatings.value = data.condition_ratings.map((c) => ({ ...c }))
+    originalRegionCoefficients.value = data.region_coefficients.map((r) => ({ ...r }))
+    coefficientsDraft.value = data.coefficients.map((c) => ({ ...c }))
+    brandsDraft.value = data.brands.map((b) => ({ ...b }))
+    conditionRatingsDraft.value = data.condition_ratings.map((c) => ({ ...c }))
+    regionCoefficientsDraft.value = data.region_coefficients.map((r) => ({ ...r }))
   } catch {
-    coefficients.value = []
+    originalCoefficients.value = []
+    originalBrands.value = []
+    originalConditionRatings.value = []
+    originalRegionCoefficients.value = []
     coefficientsDraft.value = []
+    brandsDraft.value = []
+    conditionRatingsDraft.value = []
+    regionCoefficientsDraft.value = []
   } finally {
-    coefficientsLoading.value = false
+    algorithmLoading.value = false
   }
 }
 
+// dirty 检测：比较 draft 与 original
+function isCoefficientsDirty(): boolean {
+  if (coefficientsDraft.value.length !== originalCoefficients.value.length) return true
+  return coefficientsDraft.value.some((c, i) => {
+    const o = originalCoefficients.value[i]
+    return !o || o.key !== c.key || o.value !== c.value
+  })
+}
+function isBrandsDirty(): boolean {
+  if (brandsDraft.value.length !== originalBrands.value.length) return true
+  return brandsDraft.value.some((b, i) => {
+    const o = originalBrands.value[i]
+    return !o || o.id !== b.id || o.k_brand !== b.k_brand || o.is_active !== b.is_active
+  })
+}
+function isConditionRatingsDirty(): boolean {
+  if (conditionRatingsDraft.value.length !== originalConditionRatings.value.length) return true
+  return conditionRatingsDraft.value.some((c, i) => {
+    const o = originalConditionRatings.value[i]
+    return !o || o.id !== c.id || o.label !== c.label || o.base_coefficient !== c.base_coefficient
+  })
+}
+function isRegionCoefficientsDirty(): boolean {
+  if (regionCoefficientsDraft.value.length !== originalRegionCoefficients.value.length) return true
+  return regionCoefficientsDraft.value.some((r, i) => {
+    const o = originalRegionCoefficients.value[i]
+    return !o || o.id !== r.id || o.coefficient !== r.coefficient
+  })
+}
+
+// 保存：仅提交变更项
 async function saveCoefficients() {
-  coefficientsSaving.value = true
+  const dirtyItems = coefficientsDraft.value.filter((c) => {
+    const o = originalCoefficients.value.find((x) => x.key === c.key)
+    return !o || o.value !== c.value
+  })
+  if (dirtyItems.length === 0) {
+    ElMessage.info('无变更')
+    return
+  }
+  savingCoefficients.value = true
   try {
-    const updated = await updateAdminCoefficients(coefficientsDraft.value)
-    coefficients.value = updated
-    coefficientsDraft.value = updated.map((c) => ({ ...c }))
-    ElMessage.success('算法参数已保存')
+    await Promise.all(dirtyItems.map((c) => updateCoefficient(c.key, c.value)))
+    ElMessage.success(`已保存 ${dirtyItems.length} 项全局系数`)
+    await loadAlgorithmParams()
   } catch {
     // 拦截器已提示
   } finally {
-    coefficientsSaving.value = false
+    savingCoefficients.value = false
   }
 }
 
-/** Tab 切换到算法参数时加载 */
-watch(activeTab, (name) => {
-  if (name === 'coefficients' && coefficients.value.length === 0) {
-    loadCoefficients()
+async function saveBrands() {
+  const dirtyItems = brandsDraft.value.filter((b) => {
+    const o = originalBrands.value.find((x) => x.id === b.id)
+    return !o || o.k_brand !== b.k_brand || o.is_active !== b.is_active
+  })
+  if (dirtyItems.length === 0) {
+    ElMessage.info('无变更')
+    return
   }
+  savingBrands.value = true
+  try {
+    await Promise.all(
+      dirtyItems.map((b) => updateBrandCoefficient(b.id, b.k_brand, b.is_active))
+    )
+    ElMessage.success(`已保存 ${dirtyItems.length} 项品牌系数`)
+    await loadAlgorithmParams()
+  } catch {
+    // 拦截器已提示
+  } finally {
+    savingBrands.value = false
+  }
+}
+
+async function saveConditionRatings() {
+  const dirtyItems = conditionRatingsDraft.value.filter((c) => {
+    const o = originalConditionRatings.value.find((x) => x.id === c.id)
+    return !o || o.label !== c.label || o.base_coefficient !== c.base_coefficient
+  })
+  if (dirtyItems.length === 0) {
+    ElMessage.info('无变更')
+    return
+  }
+  // 必填校验
+  for (const c of dirtyItems) {
+    if (!c.label || !c.label.trim()) {
+      ElMessage.warning(`评级 ${c.rating} 的中文标签不能为空`)
+      return
+    }
+  }
+  savingConditionRatings.value = true
+  try {
+    await Promise.all(
+      dirtyItems.map((c) =>
+        updateConditionCoefficient(c.id, c.label, c.base_coefficient)
+      )
+    )
+    ElMessage.success(`已保存 ${dirtyItems.length} 项车况系数`)
+    await loadAlgorithmParams()
+  } catch {
+    // 拦截器已提示
+  } finally {
+    savingConditionRatings.value = false
+  }
+}
+
+async function saveRegionCoefficients() {
+  const dirtyItems = regionCoefficientsDraft.value.filter((r) => {
+    const o = originalRegionCoefficients.value.find((x) => x.id === r.id)
+    return !o || o.coefficient !== r.coefficient
+  })
+  if (dirtyItems.length === 0) {
+    ElMessage.info('无变更')
+    return
+  }
+  savingRegionCoefficients.value = true
+  try {
+    await Promise.all(
+      dirtyItems.map((r) => updateRegionCoefficient(r.id, r.coefficient))
+    )
+    ElMessage.success(`已保存 ${dirtyItems.length} 项区域系数`)
+    await loadAlgorithmParams()
+  } catch {
+    // 拦截器已提示
+  } finally {
+    savingRegionCoefficients.value = false
+  }
+}
+
+// 重置：恢复 draft 到服务器值
+function resetCoefficients() {
+  coefficientsDraft.value = originalCoefficients.value.map((c) => ({ ...c }))
+}
+function resetBrands() {
+  brandsDraft.value = originalBrands.value.map((b) => ({ ...b }))
+}
+function resetConditionRatings() {
+  conditionRatingsDraft.value = originalConditionRatings.value.map((c) => ({ ...c }))
+}
+function resetRegionCoefficients() {
+  regionCoefficientsDraft.value = originalRegionCoefficients.value.map((r) => ({ ...r }))
+}
+
+// ========== Tab 切换 ==========
+const activeTab = ref<string>('originalPrices')
+const algorithmLoaded = ref(false)
+
+function onTabChange(name: string) {
+  if (name === 'algorithm' && !algorithmLoaded.value) {
+    algorithmLoaded.value = true
+    loadAlgorithmParams()
+  }
+}
+
+// 算法参数折叠面板默认全部展开
+const activeCollapse = ref<string[]>(['coefficients', 'brands', 'condition', 'region'])
+
+onMounted(() => {
+  loadOriginalPrices()
 })
 
-// ========== Tab 配置 ==========
-const tabs: Array<{ name: AdminResourceKey | 'coefficients'; label: string }> = [
-  { name: 'originalPrices', label: '原价表' },
-  { name: 'brandTypes', label: '品牌类型' },
-  { name: 'brands', label: '品牌' },
-  { name: 'vehicleTypes', label: '车辆类型' },
-  { name: 'series', label: '系列' },
-  { name: 'tonnages', label: '吨位' },
-  { name: 'configTypes', label: '配置类型' },
-  { name: 'mastTypes', label: '门架类型' },
-  { name: 'mastHeights', label: '门架高度' },
-  { name: 'transmissionTypes', label: '传动系统' },
-  { name: 'engineTypes', label: '发动机类型' },
-  { name: 'batteryTypes', label: '电池类型' },
-  { name: 'conditionRatings', label: '车况评级' },
-  { name: 'regionCoefficients', label: '区域系数' },
-  { name: 'coefficients', label: '算法参数' }
-]
+// 顶部刷新按钮：根据当前 tab 刷新
+function onRefresh() {
+  if (activeTab.value === 'originalPrices') {
+    loadOriginalPrices()
+  } else if (activeTab.value === 'algorithm') {
+    loadAlgorithmParams()
+  }
+}
 </script>
 
 <template>
@@ -344,38 +374,28 @@ const tabs: Array<{ name: AdminResourceKey | 'coefficients'; label: string }> = 
     <div class="app-container">
       <PageHeader title="残值评估配置" subtitle="valuation config">
         <template #actions>
-          <el-button
-            :icon="Refresh"
-            @click="activeTab === 'coefficients' ? loadCoefficients() : loadList(activeTab as AdminResourceKey)"
-          >
-            刷新当前
-          </el-button>
+          <el-button :icon="Refresh" @click="onRefresh">刷新当前</el-button>
         </template>
       </PageHeader>
 
       <el-tabs v-model="activeTab" type="border-card" @tab-change="onTabChange">
-        <!-- 通用资源 Tab（原价表 / 品牌类型 / ... / 区域系数） -->
-        <el-tab-pane
-          v-for="tab in tabs.filter((t) => t.name !== 'coefficients')"
-          :key="tab.name"
-          :label="tab.label"
-          :name="tab.name"
-        >
+        <!-- Tab 1: 原价表 -->
+        <el-tab-pane label="原价表" name="originalPrices">
           <div class="tab-toolbar">
-            <el-button type="primary" :icon="Plus" @click="openCreate(tab.name as AdminResourceKey)">
-              新增
-            </el-button>
+            <span class="tab-tip">维护叉车基准原价记录（学生端表单级联查询依赖此表）</span>
+            <el-button type="primary" :icon="Plus" @click="openCreate">新增</el-button>
           </div>
           <el-table
-            v-loading="tabStates[tab.name as AdminResourceKey].loading"
-            :data="tabStates[tab.name as AdminResourceKey].list"
+            v-loading="originalPriceState.loading"
+            :data="originalPriceState.list"
             stripe
             border
             style="width: 100%"
             empty-text="暂无数据"
           >
+            <el-table-column prop="id" label="ID" width="70" align="center" />
             <el-table-column
-              v-for="col in tableColumns(tab.name as AdminResourceKey)"
+              v-for="col in ORIGINAL_PRICE_FIELDS"
               :key="col.prop"
               :prop="col.prop"
               :label="col.label"
@@ -383,18 +403,15 @@ const tabs: Array<{ name: AdminResourceKey | 'coefficients'; label: string }> = 
               align="center"
             >
               <template #default="{ row }">
-                <el-tag v-if="col.type === 'switch'" :type="row[col.prop] ? 'success' : 'info'">
-                  {{ row[col.prop] ? '启用' : '禁用' }}
-                </el-tag>
-                <span v-else>{{ row[col.prop] ?? '-' }}</span>
+                <span>{{ row[col.prop] ?? '-' }}</span>
               </template>
             </el-table-column>
             <el-table-column label="操作" width="160" fixed="right" align="center">
               <template #default="{ row }">
-                <el-button type="primary" link size="small" :icon="Edit" @click="openEdit(tab.name as AdminResourceKey, row)">
+                <el-button type="primary" link size="small" :icon="Edit" @click="openEdit(row)">
                   编辑
                 </el-button>
-                <el-button type="danger" link size="small" :icon="Delete" @click="handleDelete(tab.name as AdminResourceKey, row)">
+                <el-button type="danger" link size="small" :icon="Delete" @click="handleDelete(row)">
                   删除
                 </el-button>
               </template>
@@ -402,41 +419,198 @@ const tabs: Array<{ name: AdminResourceKey | 'coefficients'; label: string }> = 
           </el-table>
         </el-tab-pane>
 
-        <!-- 算法参数 Tab（GET + PUT，无 CRUD） -->
-        <el-tab-pane label="算法参数" name="coefficients">
+        <!-- Tab 2: 算法参数 -->
+        <el-tab-pane label="算法参数" name="algorithm">
           <div class="tab-toolbar">
-            <span class="coef-tip">编辑后点击「保存」整体提交（PUT 全量替换）</span>
-            <el-button type="primary" :loading="coefficientsSaving" @click="saveCoefficients">
-              保存
-            </el-button>
+            <span class="tab-tip">
+              调整核心公式参数（残值 = 基准原价 × Kt_adj × Kc × Km，其中 Kt_adj = Kt^(Kh/Kb)）
+            </span>
           </div>
-          <el-table
-            v-loading="coefficientsLoading"
-            :data="coefficientsDraft"
-            stripe
-            border
-            style="width: 100%"
-            empty-text="暂无参数"
-          >
-            <el-table-column prop="key" label="参数键" width="200" />
-            <el-table-column label="参数值" width="200">
-              <template #default="{ row }">
-                <el-input-number
-                  v-model="row.value"
-                  :step="0.01"
-                  :precision="4"
-                  :min="0"
-                  :max="10"
-                  style="width: 100%"
-                />
+
+          <el-collapse v-model="activeCollapse" v-loading="algorithmLoading">
+            <!-- 1. 全局系数 -->
+            <el-collapse-item name="coefficients">
+              <template #title>
+                <div class="collapse-title">
+                  <span>全局系数</span>
+                  <span v-if="isCoefficientsDirty()" class="dirty-dot" title="有未保存变更">●</span>
+                </div>
               </template>
-            </el-table-column>
-            <el-table-column prop="description" label="描述" min-width="240" />
-          </el-table>
+              <div class="section-toolbar">
+                <span class="section-tip">影响时间衰减、使用强度、置信区间等核心计算</span>
+                <div class="section-actions">
+                  <el-button :icon="RefreshLeft" size="small" @click="resetCoefficients">重置</el-button>
+                  <el-button
+                    type="primary"
+                    :icon="Check"
+                    size="small"
+                    :loading="savingCoefficients"
+                    :disabled="!isCoefficientsDirty()"
+                    @click="saveCoefficients"
+                  >
+                    保存本节
+                  </el-button>
+                </div>
+              </div>
+              <el-table :data="coefficientsDraft" stripe border style="width: 100%" empty-text="暂无参数">
+                <el-table-column prop="key" label="参数键" width="200" />
+                <el-table-column prop="description" label="参数说明" min-width="320" />
+                <el-table-column label="参数值" width="180">
+                  <template #default="{ row }">
+                    <el-input-number
+                      v-model="row.value"
+                      :step="0.001"
+                      :precision="4"
+                      :min="0"
+                      :max="100000"
+                      style="width: 100%"
+                    />
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-collapse-item>
+
+            <!-- 2. 品牌系数 -->
+            <el-collapse-item name="brands">
+              <template #title>
+                <div class="collapse-title">
+                  <span>品牌系数（Kb）</span>
+                  <span v-if="isBrandsDirty()" class="dirty-dot" title="有未保存变更">●</span>
+                </div>
+              </template>
+              <div class="section-toolbar">
+                <span class="section-tip">Kb = k_brand，直接作为品牌系数参与 Kt_adj 计算</span>
+                <div class="section-actions">
+                  <el-button :icon="RefreshLeft" size="small" @click="resetBrands">重置</el-button>
+                  <el-button
+                    type="primary"
+                    :icon="Check"
+                    size="small"
+                    :loading="savingBrands"
+                    :disabled="!isBrandsDirty()"
+                    @click="saveBrands"
+                  >
+                    保存本节
+                  </el-button>
+                </div>
+              </div>
+              <el-table :data="brandsDraft" stripe border style="width: 100%" empty-text="暂无品牌">
+                <el-table-column prop="id" label="ID" width="70" align="center" />
+                <el-table-column prop="name" label="品牌名称" min-width="180" />
+                <el-table-column label="K_brand 系数" width="180">
+                  <template #default="{ row }">
+                    <el-input-number
+                      v-model="row.k_brand"
+                      :step="0.01"
+                      :precision="2"
+                      :min="0"
+                      :max="10"
+                      style="width: 100%"
+                    />
+                  </template>
+                </el-table-column>
+                <el-table-column label="启用" width="120" align="center">
+                  <template #default="{ row }">
+                    <el-switch v-model="row.is_active" />
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-collapse-item>
+
+            <!-- 3. 车况系数 -->
+            <el-collapse-item name="condition">
+              <template #title>
+                <div class="collapse-title">
+                  <span>车况系数（Kc）</span>
+                  <span v-if="isConditionRatingsDirty()" class="dirty-dot" title="有未保存变更">●</span>
+                </div>
+              </template>
+              <div class="section-toolbar">
+                <span class="section-tip">Kc = base_coefficient，按车况评级 A~E 给出基础调整系数</span>
+                <div class="section-actions">
+                  <el-button :icon="RefreshLeft" size="small" @click="resetConditionRatings">重置</el-button>
+                  <el-button
+                    type="primary"
+                    :icon="Check"
+                    size="small"
+                    :loading="savingConditionRatings"
+                    :disabled="!isConditionRatingsDirty()"
+                    @click="saveConditionRatings"
+                  >
+                    保存本节
+                  </el-button>
+                </div>
+              </div>
+              <el-table :data="conditionRatingsDraft" stripe border style="width: 100%" empty-text="暂无车况评级">
+                <el-table-column prop="id" label="ID" width="70" align="center" />
+                <el-table-column prop="rating" label="评级" width="100" align="center" />
+                <el-table-column label="中文标签" min-width="180">
+                  <template #default="{ row }">
+                    <el-input v-model="row.label" placeholder="如 优秀" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="基础系数" width="180">
+                  <template #default="{ row }">
+                    <el-input-number
+                      v-model="row.base_coefficient"
+                      :step="0.01"
+                      :precision="2"
+                      :min="0"
+                      :max="10"
+                      style="width: 100%"
+                    />
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-collapse-item>
+
+            <!-- 4. 区域系数 -->
+            <el-collapse-item name="region">
+              <template #title>
+                <div class="collapse-title">
+                  <span>区域系数（Km）</span>
+                  <span v-if="isRegionCoefficientsDirty()" class="dirty-dot" title="有未保存变更">●</span>
+                </div>
+              </template>
+              <div class="section-toolbar">
+                <span class="section-tip">Km = coefficient，按省市区域调整市场系数</span>
+                <div class="section-actions">
+                  <el-button :icon="RefreshLeft" size="small" @click="resetRegionCoefficients">重置</el-button>
+                  <el-button
+                    type="primary"
+                    :icon="Check"
+                    size="small"
+                    :loading="savingRegionCoefficients"
+                    :disabled="!isRegionCoefficientsDirty()"
+                    @click="saveRegionCoefficients"
+                  >
+                    保存本节
+                  </el-button>
+                </div>
+              </div>
+              <el-table :data="regionCoefficientsDraft" stripe border style="width: 100%" empty-text="暂无区域系数">
+                <el-table-column prop="id" label="ID" width="70" align="center" />
+                <el-table-column prop="province" label="省份" width="140" />
+                <el-table-column prop="city" label="城市" width="160" />
+                <el-table-column label="区域系数" width="200">
+                  <template #default="{ row }">
+                    <el-input-number
+                      v-model="row.coefficient"
+                      :step="0.01"
+                      :precision="2"
+                      :min="0"
+                      :max="10"
+                      style="width: 100%"
+                    />
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-collapse-item>
+          </el-collapse>
         </el-tab-pane>
       </el-tabs>
 
-      <!-- 通用编辑对话框 -->
+      <!-- 原价表编辑对话框 -->
       <el-dialog
         v-model="dialogVisible"
         :title="dialogTitle"
@@ -445,7 +619,7 @@ const tabs: Array<{ name: AdminResourceKey | 'coefficients'; label: string }> = 
       >
         <el-form :model="formData" label-width="120px">
           <el-form-item
-            v-for="f in (editingKey ? SCHEMAS[editingKey].fields : [])"
+            v-for="f in ORIGINAL_PRICE_FIELDS"
             :key="f.prop"
             :label="f.label"
             :required="f.required"
@@ -458,8 +632,8 @@ const tabs: Array<{ name: AdminResourceKey | 'coefficients'; label: string }> = 
             <el-input-number
               v-else-if="f.type === 'number'"
               v-model="formData[f.prop]"
-              :step="f.prop === 'value' || f.prop === 'tonnage' || f.prop === 'original_price' ? 0.1 : 0.01"
-              :precision="f.prop === 'k_type' || f.prop === 'k_brand' || f.prop === 'base_coefficient' || f.prop === 'coefficient' ? 4 : 2"
+              :step="f.prop === 'tonnage' || f.prop === 'original_price' ? 0.1 : 1"
+              :precision="f.prop === 'tonnage' || f.prop === 'original_price' ? 2 : 0"
               style="width: 100%"
             />
             <el-switch
@@ -497,15 +671,55 @@ const tabs: Array<{ name: AdminResourceKey | 'coefficients'; label: string }> = 
   margin-bottom: var(--sp-4);
   gap: var(--sp-3);
 }
-.coef-tip {
+.tab-tip {
   font-size: var(--fs-sm);
   color: var(--color-text-tertiary);
 }
+
+/* ===== 算法参数折叠面板 ===== */
+.collapse-title {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-medium);
+}
+.dirty-dot {
+  color: var(--color-accent, #3e6ae1);
+  font-size: 10px;
+  line-height: 1;
+}
+.section-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-3);
+  gap: var(--sp-3);
+}
+.section-tip {
+  font-size: var(--fs-sm);
+  color: var(--color-text-tertiary);
+}
+.section-actions {
+  display: flex;
+  gap: var(--sp-2);
+}
+
 :deep(.el-tabs__content) {
   padding: var(--sp-4) var(--sp-5);
 }
+:deep(.el-collapse-item__header) {
+  font-size: var(--fs-base);
+  font-weight: var(--fw-medium);
+  padding: 0 var(--sp-2);
+}
+:deep(.el-collapse-item__content) {
+  padding: var(--sp-3) var(--sp-2) var(--sp-5);
+}
+
 @media (max-width: 768px) {
-  .tab-toolbar {
+  .tab-toolbar,
+  .section-toolbar {
     flex-direction: column;
     align-items: flex-start;
     gap: var(--sp-2);

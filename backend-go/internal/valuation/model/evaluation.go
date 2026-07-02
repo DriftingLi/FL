@@ -16,7 +16,6 @@ const (
 // 与 evaluations 表字段一一对应，覆盖重构后的全部输入字段
 type EvaluationRequest struct {
 	// 字典字段
-	BrandType    string  `json:"brand_type"     binding:"required"` // 品牌类型
 	Brand        string  `json:"brand"          binding:"required"` // 品牌
 	VehicleType  string  `json:"vehicle_type"   binding:"required"` // 车型
 	Series       string  `json:"series"         binding:"required"` // 系列
@@ -43,7 +42,7 @@ type EvaluationRequest struct {
 // Validate 业务级参数校验（在 binding 之后补充校验）
 // 支持字段值为 "无"（字符串）或 0（mast_height_mm）表示该属性不适用
 func (r *EvaluationRequest) Validate() error {
-	if r.BrandType == "" || r.Brand == "" || r.VehicleType == "" || r.Series == "" {
+	if r.Brand == "" || r.VehicleType == "" || r.Series == "" {
 		return ErrInvalidDictField
 	}
 	if r.ConfigType == "" || r.MastType == "" {
@@ -117,7 +116,6 @@ type EvaluationDetail struct {
 	UpdatedAt string `json:"updated_at"`
 
 	// 输入字段（与 EvaluationRequest 一致）
-	BrandType                  string  `json:"brand_type"`
 	Brand                      string  `json:"brand"`
 	VehicleType                string  `json:"vehicle_type"`
 	Series                     string  `json:"series"`

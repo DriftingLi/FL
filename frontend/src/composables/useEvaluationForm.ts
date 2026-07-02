@@ -21,7 +21,6 @@ export const NONE_MAST_HEIGHT = 0
 
 /** 基础表单状态：覆盖 CreateEvaluationRequest 全部字段 */
 export interface BaseFormState {
-  brand_type: string | undefined
   brand: string | undefined
   vehicle_type: string | undefined
   series: string | undefined
@@ -48,7 +47,6 @@ export function useEvaluationForm() {
 
   // 基础信息（默认值）
   const form = reactive<BaseFormState>({
-    brand_type: undefined,
     brand: undefined,
     vehicle_type: undefined,
     series: undefined,
@@ -72,7 +70,6 @@ export function useEvaluationForm() {
   function buildPayload(): CreateEvaluationRequest | null {
     // 必填字段守卫
     if (
-      !form.brand_type ||
       !form.brand ||
       !form.vehicle_type ||
       !form.series ||
@@ -89,7 +86,6 @@ export function useEvaluationForm() {
       return null
     }
     const payload: CreateEvaluationRequest = {
-      brand_type: form.brand_type,
       brand: form.brand,
       vehicle_type: form.vehicle_type,
       series: form.series,
@@ -114,7 +110,6 @@ export function useEvaluationForm() {
   /** 整体表单校验（返回第一个失败的 message） */
   function validate(): { valid: boolean; message?: string } {
     const ctx: FormValidationContext = {
-      brand_type: form.brand_type,
       brand: form.brand,
       vehicle_type: form.vehicle_type,
       series: form.series,
@@ -137,7 +132,6 @@ export function useEvaluationForm() {
 
   /** 重置全部 */
   function reset() {
-    form.brand_type = undefined
     form.brand = undefined
     form.vehicle_type = undefined
     form.series = undefined

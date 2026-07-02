@@ -444,17 +444,16 @@ type basicInfoRow struct {
 	span1          bool // value1 是否跨 3 列(独占该行)
 }
 
-// drawBasicInfoTable 评估基本信息表(2 列布局,共 7 行)
-// 展示重构后的全部输入字段:
-//   - 品牌类型 / 品牌
-//   - 车型 / 系列
-//   - 吨位 / 配置类型
-//   - 门架类型 / 门架高度
-//   - 出厂年份 / 成交年份
-//   - 累计使用小时 / 原厂漆
-//   - 车况评级 / 区域
-//   - 维保记录 / 车牌
-//   - 登记证
+// drawBasicInfoTable 评估基本信息表(2 列布局,共 8 行)
+// 展示重构后的全部输入字段（已移除 brand_type）:
+//   - 品牌 / 车型
+//   - 系列 / 吨位
+//   - 配置类型 / 门架类型
+//   - 门架高度 / 出厂年份
+//   - 成交年份 / 累计使用小时
+//   - 原厂漆 / 车况评级
+//   - 区域 / 维保记录
+//   - 车牌 / 登记证
 func drawBasicInfoTable(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, x, y, w float64) float64 {
 	rowH := 6.5
 	colLabelW := w * 0.18
@@ -462,15 +461,14 @@ func drawBasicInfoTable(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, x, y, w flo
 	colTotal := colLabelW + colValueW // 1/2 列宽
 
 	rows := []basicInfoRow{
-		{label1: "品牌类型", value1: defaultIfEmpty(r.BrandType, "-"), label2: "品牌", value2: defaultIfEmpty(r.Brand, "-")},
-		{label1: "车型", value1: defaultIfEmpty(r.VehicleType, "-"), label2: "系列", value2: defaultIfEmpty(r.Series, "-")},
-		{label1: "吨位", value1: fmt.Sprintf("%.1f 吨", r.Tonnage), label2: "配置类型", value2: defaultIfEmpty(r.ConfigType, "-")},
-		{label1: "门架类型", value1: defaultIfEmpty(r.MastType, "-"), label2: "门架高度", value2: fmt.Sprintf("%d mm", r.MastHeightMM)},
-		{label1: "出厂年份", value1: fmt.Sprintf("%d 年", r.FactoryYear), label2: "成交年份", value2: fmt.Sprintf("%d 年", r.SaleYear)},
-		{label1: "累计使用小时", value1: fmt.Sprintf("%d 小时", r.UsageHours), label2: "原厂漆", value2: statusText(r.OriginalPaint), badge2: true},
-		{label1: "车况评级", value1: defaultIfEmpty(r.ConditionRating, "-"), label2: "区域", value2: formatRegion(r.Province, r.City)},
-		{label1: "维保记录", value1: statusText(r.HasMaintenanceRecords), badge1: true, label2: "车牌", value2: statusText(r.HasLicensePlate), badge2: true},
-		{label1: "登记证", value1: statusText(r.HasRegistrationCertificate), badge1: true, span1: true},
+		{label1: "品牌", value1: defaultIfEmpty(r.Brand, "-"), label2: "车型", value2: defaultIfEmpty(r.VehicleType, "-")},
+		{label1: "系列", value1: defaultIfEmpty(r.Series, "-"), label2: "吨位", value2: fmt.Sprintf("%.1f 吨", r.Tonnage)},
+		{label1: "配置类型", value1: defaultIfEmpty(r.ConfigType, "-"), label2: "门架类型", value2: defaultIfEmpty(r.MastType, "-")},
+		{label1: "门架高度", value1: fmt.Sprintf("%d mm", r.MastHeightMM), label2: "出厂年份", value2: fmt.Sprintf("%d 年", r.FactoryYear)},
+		{label1: "成交年份", value1: fmt.Sprintf("%d 年", r.SaleYear), label2: "累计使用小时", value2: fmt.Sprintf("%d 小时", r.UsageHours)},
+		{label1: "原厂漆", value1: statusText(r.OriginalPaint), badge1: true, label2: "车况评级", value2: defaultIfEmpty(r.ConditionRating, "-")},
+		{label1: "区域", value1: formatRegion(r.Province, r.City), label2: "维保记录", value2: statusText(r.HasMaintenanceRecords), badge2: true},
+		{label1: "车牌", value1: statusText(r.HasLicensePlate), badge1: true, label2: "登记证", value2: statusText(r.HasRegistrationCertificate), badge2: true},
 	}
 
 	for i, row := range rows {

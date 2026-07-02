@@ -69,7 +69,6 @@ func containAny(haystack string, expected ...string) bool {
 func sampleDetail() *model.EvaluationDetail {
 	return &model.EvaluationDetail{
 		ID:                         1,
-		BrandType:                  "国产一线",
 		Brand:                      "合力 (HELI)",
 		VehicleType:                "电动叉车",
 		Series:                     "H2000",
@@ -208,7 +207,6 @@ func TestGenerateReportCombustion(t *testing.T) {
 
 	detail := &model.EvaluationDetail{
 		ID:                         2002,
-		BrandType:                  "进口一线",
 		Brand:                      "三菱 MITSUBISHI",
 		VehicleType:                "内燃叉车",
 		Series:                     "FD30N",
@@ -267,7 +265,6 @@ func TestGenerateReportEmptySuggestions(t *testing.T) {
 
 	detail := &model.EvaluationDetail{
 		ID:                         3,
-		BrandType:                  "国产一线",
 		Brand:                      "永恒力 JUNGHEINRICH",
 		VehicleType:                "电动叉车",
 		Series:                     "EFG",

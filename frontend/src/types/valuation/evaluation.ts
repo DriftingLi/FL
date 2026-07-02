@@ -1,7 +1,7 @@
 // 与后端新 DTO 一一对应的 TypeScript 类型
 // 后端路径：backend/internal/model/evaluation.go
 // 重构说明：删除旧的 ForkliftType / WorkCondition / FuelType / ItemStatus / BrandTier
-//         改用统一的字典化字段：brand_type / brand / vehicle_type / series / tonnage 等
+//         改用统一的字典化字段：brand / vehicle_type / series / tonnage 等
 
 /** 动力类型（车辆类型字典中的 power_type） */
 export type PowerType = 'electric' | 'combustion'
@@ -17,12 +17,6 @@ export interface DimensionScore {
 
 // ========== 字典条目类型 ==========
 // 仅用于内部类型推导，实际数据全部从后端字典接口加载
-
-/** 品牌类型字典项 */
-export interface BrandTypeOption {
-  name: string
-  k_type: number
-}
 
 /** 车辆类型字典项 */
 export interface VehicleTypeOption {
@@ -110,7 +104,6 @@ export interface CoefficientConfig {
 
 /** 提交评估请求体（与后端 CreateEvaluationRequest 一致） */
 export interface CreateEvaluationRequest {
-  brand_type: string
   brand: string
   vehicle_type: string
   series: string
@@ -166,7 +159,6 @@ export interface EvaluationResult {
 
 /** 评估详情（GET /evaluations/:id 响应，继承结果字段并补全输入参数） */
 export interface EvaluationDetail extends EvaluationResult {
-  brand_type: string
   brand: string
   vehicle_type: string
   series: string
@@ -207,4 +199,10 @@ export interface PageResult<T> {
   total: number
   page: number
   page_size: number
+}
+
+/** 评估统计（GET /evaluations/stats 响应） */
+export interface EvaluationStats {
+  /** 累计评估次数 */
+  total: number
 }

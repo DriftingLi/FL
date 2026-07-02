@@ -4,7 +4,6 @@
 //           均支持按前序已选层级过滤，参数全传时走 original_prices DISTINCT 查询
 import client from './client'
 import type {
-  BrandTypeOption,
   VehicleTypeOption,
   SeriesOption,
   TonnageOption,
@@ -18,28 +17,11 @@ import type {
   ConditionRatingOption,
   CoefficientConfig
 } from '@/types/valuation/evaluation'
+import type { Brand } from '@/types/valuation/brand'
 
-/** 品牌类型 */
-export async function listBrandTypes(): Promise<BrandTypeOption[]> {
-  const resp = await client.get<unknown, { data: BrandTypeOption[] }>('/dictionaries/brand-types')
-  return resp.data ?? []
-}
-
-/** 品牌（按品牌类型过滤） */
-export async function listBrandsByType(brand_type: string): Promise<
-  Array<{ id: number; name: string; brand_type: string; k_brand: number; is_active: boolean }>
-> {
-  const resp = await client.get<unknown, { data: Array<{ id: number; name: string; brand_type: string; k_brand: number; is_active: boolean }> }>('/dictionaries/brands', {
-    params: { brand_type }
-  })
-  return resp.data ?? []
-}
-
-/** 全部品牌（不过滤） */
-export async function listBrands(): Promise<
-  Array<{ id: number; name: string; brand_type: string; k_brand: number; is_active: boolean }>
-> {
-  const resp = await client.get<unknown, { data: Array<{ id: number; name: string; brand_type: string; k_brand: number; is_active: boolean }> }>('/dictionaries/brands')
+/** 全部品牌（按 k_brand 倒序） */
+export async function listBrands(): Promise<Brand[]> {
+  const resp = await client.get<unknown, { data: Brand[] }>('/dictionaries/brands')
   return resp.data ?? []
 }
 

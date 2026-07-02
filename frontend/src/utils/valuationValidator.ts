@@ -117,7 +117,6 @@ export function validateConditionRating(rating: string | undefined | null): Vali
 
 /** 整体表单校验上下文 */
 export interface FormValidationContext {
-  brand_type: string | undefined
   brand: string | undefined
   vehicle_type: string | undefined
   series: string | undefined
@@ -136,7 +135,6 @@ export interface FormValidationContext {
 /** 整体校验：依次检查关键字段 */
 export function validateForm(ctx: FormValidationContext): ValidationResult {
   const checks: Array<() => ValidationResult> = [
-    () => validateRequiredString(ctx.brand_type, '品牌类型'),
     () => validateRequiredString(ctx.brand, '品牌'),
     () => validateRequiredString(ctx.vehicle_type, '车辆类型'),
     () => validateRequiredString(ctx.series, '系列'),

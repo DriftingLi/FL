@@ -27,7 +27,6 @@ func NewEvaluationRepository(pool *pgxpool.Pool) *EvaluationRepository {
 // 输入字段从 EvaluationRequest 派生，结果字段由 service 计算填入
 type CreateEvaluationParams struct {
 	// 输入字段
-	BrandType                  string
 	Brand                      string
 	VehicleType                string
 	Series                     string
@@ -67,7 +66,7 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 	)
 	err := r.pool.QueryRow(ctx, `
 		INSERT INTO evaluations (
-			brand_type, brand, vehicle_type, series, tonnage,
+			brand, vehicle_type, series, tonnage,
 			config_type, mast_type, mast_height_mm,
 			factory_year, sale_year, usage_hours, original_paint,
 			province, city,
@@ -76,17 +75,17 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 			original_price, k_time, k_hours, k_brand, k_condition, k_market,
 			estimated_value, confidence_low, confidence_high, report_pdf_path
 		) VALUES (
-			$1, $2, $3, $4, $5,
-			$6, $7, $8,
-			$9, $10, $11, $12,
-			$13, $14,
-			$15, $16, $17,
-			$18,
-			$19, $20, $21, $22, $23, $24,
-			$25, $26, $27, $28
+			$1, $2, $3, $4,
+			$5, $6, $7,
+			$8, $9, $10, $11,
+			$12, $13,
+			$14, $15, $16,
+			$17,
+			$18, $19, $20, $21, $22, $23,
+			$24, $25, $26, $27
 		)
 		RETURNING id, created_at, updated_at`,
-		p.BrandType, p.Brand, p.VehicleType, p.Series, p.Tonnage,
+		p.Brand, p.VehicleType, p.Series, p.Tonnage,
 		p.ConfigType, p.MastType, p.MastHeightMM,
 		p.FactoryYear, p.SaleYear, p.UsageHours, p.OriginalPaint,
 		p.Province, p.City,
@@ -106,7 +105,7 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 // GetEvaluation 按 ID 查询评估详情
 func (r *EvaluationRepository) GetEvaluation(ctx context.Context, id int64) (*model.EvaluationDetail, error) {
 	row := r.pool.QueryRow(ctx, `
-		SELECT id, brand_type, brand, vehicle_type, series, tonnage,
+		SELECT id, brand, vehicle_type, series, tonnage,
 		       config_type, mast_type, mast_height_mm,
 		       factory_year, sale_year, usage_hours, original_paint,
 		       province, city,
@@ -123,7 +122,7 @@ func (r *EvaluationRepository) GetEvaluation(ctx context.Context, id int64) (*mo
 		updatedAt  time.Time
 	)
 	if err := row.Scan(
-		&d.ID, &d.BrandType, &d.Brand, &d.VehicleType, &d.Series, &d.Tonnage,
+		&d.ID, &d.Brand, &d.VehicleType, &d.Series, &d.Tonnage,
 		&d.ConfigType, &d.MastType, &d.MastHeightMM,
 		&d.FactoryYear, &d.SaleYear, &d.UsageHours, &d.OriginalPaint,
 		&d.Province, &d.City,
@@ -150,7 +149,7 @@ func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string
 	var err error
 	if brand != "" {
 		rows, err = r.pool.Query(ctx, `
-			SELECT id, brand_type, brand, vehicle_type, series, tonnage,
+			SELECT id, brand, vehicle_type, series, tonnage,
 			       config_type, mast_type, mast_height_mm,
 			       factory_year, sale_year, usage_hours, original_paint,
 			       province, city,
@@ -163,7 +162,7 @@ func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string
 			ORDER BY created_at DESC LIMIT $2 OFFSET $3`, brand, limit, offset)
 	} else {
 		rows, err = r.pool.Query(ctx, `
-			SELECT id, brand_type, brand, vehicle_type, series, tonnage,
+			SELECT id, brand, vehicle_type, series, tonnage,
 			       config_type, mast_type, mast_height_mm,
 			       factory_year, sale_year, usage_hours, original_paint,
 			       province, city,
@@ -186,7 +185,7 @@ func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string
 		var createdAt time.Time
 		var updatedAt time.Time
 		if err := rows.Scan(
-			&d.ID, &d.BrandType, &d.Brand, &d.VehicleType, &d.Series, &d.Tonnage,
+			&d.ID, &d.Brand, &d.VehicleType, &d.Series, &d.Tonnage,
 			&d.ConfigType, &d.MastType, &d.MastHeightMM,
 			&d.FactoryYear, &d.SaleYear, &d.UsageHours, &d.OriginalPaint,
 			&d.Province, &d.City,

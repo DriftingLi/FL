@@ -109,7 +109,6 @@ const basicInfoItems = computed(() => {
   const d = data.value
   if (!d) return []
   return [
-    { label: '品牌类型', value: d.brand_type },
     { label: '品牌', value: d.brand },
     { label: '车辆类型', value: d.vehicle_type },
     { label: '系列', value: d.series },

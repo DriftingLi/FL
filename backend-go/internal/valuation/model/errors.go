@@ -21,8 +21,6 @@ var (
 	ErrInvalidRegion = errors.New("省份与城市不能为空")
 	// ErrBrandNotFound 品牌未找到
 	ErrBrandNotFound = errors.New("品牌未找到")
-	// ErrBrandTypeNotFound 品牌类型未找到
-	ErrBrandTypeNotFound = errors.New("品牌类型未找到")
 	// ErrVehicleTypeNotFound 车型未找到
 	ErrVehicleTypeNotFound = errors.New("车型未找到")
 	// ErrConditionRatingNotFound 车况评级未找到

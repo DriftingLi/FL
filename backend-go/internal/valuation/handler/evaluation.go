@@ -137,6 +137,18 @@ func (h *EvaluationHandler) List(c *gin.Context) {
 	})
 }
 
+// Stats 处理 GET /api/valuation/evaluations/stats
+// 返回累计评估次数（复用 CountEvaluations，brand 为空统计全部）
+func (h *EvaluationHandler) Stats(c *gin.Context) {
+	total, err := h.evalRepo.CountEvaluations(c.Request.Context(), "")
+	if err != nil {
+		h.logger.Error("统计评估次数失败", zap.Error(err))
+		Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询统计数据失败")
+		return
+	}
+	OK(c, gin.H{"total": total})
+}
+
 // buildEvaluationResponse 把 EvaluationResult + 持久化 ID 转换为响应 DTO
 // 维度评分顺序与雷达图保持一致：出厂时间 / 使用强度 / 品牌价值 / 市场需求 / 车辆情况
 func buildEvaluationResponse(id int64, r *model.EvaluationResult) model.EvaluationResponse {

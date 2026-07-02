@@ -6,6 +6,7 @@ import type {
   EvaluationDetail,
   EvaluationDetailResponse,
   EvaluationResult,
+  EvaluationStats,
   PageQuery,
   PageResult
 } from '@/types/valuation/evaluation'
@@ -40,5 +41,11 @@ export async function downloadEvaluationReportBlob(id: number): Promise<Blob> {
   const resp = await client.get<Blob>(`/evaluations/${id}/report`, {
     responseType: 'blob'
   })
+  return resp.data
+}
+
+/** 查询累计评估次数 */
+export async function getEvaluationStats(): Promise<EvaluationStats> {
+  const resp = await client.get<unknown, { data: EvaluationStats }>('/evaluations/stats')
   return resp.data
 }

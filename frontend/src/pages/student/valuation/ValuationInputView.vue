@@ -2,7 +2,7 @@
 // 叉车残值评估参数录入（设计稿风格：白底细边框卡片 + 自定义表单控件 + 底部固定操作栏）
 // 配置类型为单一下拉，选项来自 original_prices 级联查询（含传动/发动机/电池等复合配置）
 // 三行级联布局：
-//   行1 品牌：品牌 → 车辆类型（brand_type 由品牌自动派生）
+//   行1 品牌：品牌 → 车辆类型
 //   行2 系列吨位：系列 → 吨位 → 出厂年份（出厂年份 min 由所选系列 earliest_factory_year 决定）
 //   行3 配置门架：配置类型 → 门架类型 → 门架高度
 // "其它" 选项：series 可选 "其它"（级联查询时传 undefined 跳过 series 过滤）
@@ -23,6 +23,7 @@ import {
   listProvinces,
   listCities
 } from '@/api/valuation/dictionaries'
+import { getEvaluationStats } from '@/api/valuation/evaluation'
 import type {
   VehicleTypeOption,
   SeriesOption,
@@ -46,6 +47,10 @@ const conditionRatings = ref<ConditionRatingOption[]>([])
 const provinces = ref<string[]>([])
 const cities = ref<string[]>([])
 const loadingDict = ref(false)
+
+// ========== 累计评估次数统计 ==========
+const statsTotal = ref(0)
+const loadingStats = ref(false)
 
 // ========== "其它"/"无" 选项（前端常量，附加到下拉列表末尾） ==========
 const otherSeriesOption: SeriesOption = { id: -1, brand: '', name: OTHER_SERIES_VALUE, earliest_factory_year: 1980 }
@@ -79,7 +84,7 @@ const showFactoryYear = computed(() => form.tonnage != null)
 // ========== 级联加载 ==========
 // 级联顺序：品牌 → 车辆类型 → 系列 → 吨位 →（出厂年份 + 配置类型）→ 门架类型 → 门架高度
 
-// 品牌 → 车辆类型 + 自动填充 brand_type
+// 品牌 → 车辆类型
 watch(
   () => form.brand,
   async (b) => {
@@ -97,12 +102,7 @@ watch(
     mastTypes.value = []
     mastHeights.value = []
 
-    if (!b) {
-      form.brand_type = undefined
-      return
-    }
-    const brandData = brands.value.find((br) => br.name === b)
-    form.brand_type = brandData?.brand_type
+    if (!b) return
     vehicleTypes.value = await listVehicleTypes(b)
   }
 )
@@ -215,6 +215,7 @@ watch(
 // ========== 初始化：并行加载静态字典 ==========
 onMounted(async () => {
   loadingDict.value = true
+  loadingStats.value = true
   try {
     const [brandsList, crList, provList] = await Promise.all([
       listBrands(),
@@ -226,6 +227,15 @@ onMounted(async () => {
     provinces.value = provList
   } finally {
     loadingDict.value = false
+  }
+  // 统计数据独立加载，失败不影响表单
+  try {
+    const s = await getEvaluationStats()
+    statsTotal.value = s.total
+  } catch {
+    statsTotal.value = 0
+  } finally {
+    loadingStats.value = false
   }
 })
 
@@ -270,6 +280,18 @@ function onSubmit() {
         </el-button>
       </template>
     </PageHeader>
+
+    <!-- 累计评估次数概览卡 -->
+    <section class="stats-card card-surface" v-loading="loadingStats">
+      <div class="stats-card-body">
+        <span class="stats-card-label">累计评估次数</span>
+        <div class="stats-card-value">
+          <span class="num">{{ statsTotal }}</span>
+          <span class="unit">次</span>
+        </div>
+        <p class="stats-card-suffix">已有用户提交的残值评估总数</p>
+      </div>
+    </section>
 
     <div v-loading="loadingDict" class="input-form-body">
       <!-- 品牌与车型（三行级联） -->
@@ -549,6 +571,51 @@ function onSubmit() {
   padding-bottom: var(--sp-6);
 }
 
+/* ===== 累计评估次数概览卡 ===== */
+.stats-card {
+  margin-bottom: var(--sp-6);
+  border-radius: var(--radius-xl);
+  padding: var(--sp-6) var(--sp-7);
+}
+.stats-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.stats-card-label {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+.stats-card-value {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum' 1;
+}
+.stats-card-value .num {
+  font-size: 40px;
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.stats-card-value .unit {
+  font-family: var(--font-text);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-medium);
+  color: var(--color-text);
+}
+.stats-card-suffix {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--color-text-tertiary);
+  letter-spacing: 0.04em;
+}
+
 .input-section {
   margin-bottom: var(--sp-6);
   border-radius: var(--radius-xl);
@@ -755,6 +822,14 @@ function onSubmit() {
   }
   .section-title {
     margin: 0 0 var(--sp-4);
+  }
+  .stats-card {
+    margin-bottom: var(--sp-4);
+    padding: var(--sp-5) var(--sp-4);
+    border-radius: var(--radius-lg);
+  }
+  .stats-card-value .num {
+    font-size: 32px;
   }
   .form-row.row-3,
   .form-row.row-2 {

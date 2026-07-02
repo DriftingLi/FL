@@ -42,6 +42,7 @@ func RegisterRoutes(
 	evalHandler := NewEvaluationHandler(valuationSvc, evalRepo, logger)
 	g.POST("/evaluations", evalHandler.Create)
 	g.GET("/evaluations", evalHandler.List)
+	g.GET("/evaluations/stats", evalHandler.Stats)
 	g.GET("/evaluations/:id", evalHandler.Get)
 
 	// === PDF 报告接口（学生端可访问） ===
@@ -53,7 +54,6 @@ func RegisterRoutes(
 	configHandler := NewConfigHandler(dictRepo, logger)
 	dict := g.Group("/dictionaries")
 	{
-		dict.GET("/brand-types", configHandler.ListBrandTypes)
 		dict.GET("/brands", configHandler.ListBrands)
 		dict.GET("/vehicle-types", configHandler.ListVehicleTypes)
 		dict.GET("/series", configHandler.ListSeries)
@@ -71,17 +71,13 @@ func RegisterRoutes(
 		dict.GET("/cities", configHandler.ListCities)
 		dict.GET("/coefficient-configs", configHandler.ListCoefficientConfigs)
 		dict.GET("/original-prices", configHandler.ListOriginalPrices)
+		dict.GET("/algorithm-parameters", configHandler.ListAlgorithmParameters)
 	}
 
 	// === 管理员 CRUD 接口（要求 JWT role=admin） ===
 	admin := g.Group("/admin")
 	admin.Use(middleware.RoleRequired("admin"))
 	{
-		// brand_types
-		admin.POST("/brand-types", configHandler.CreateBrandType)
-		admin.PUT("/brand-types/:name", configHandler.UpdateBrandType)
-		admin.DELETE("/brand-types/:name", configHandler.DeleteBrandType)
-
 		// brands
 		admin.POST("/brands", configHandler.CreateBrand)
 		admin.PUT("/brands/:id", configHandler.UpdateBrand)
@@ -100,10 +96,6 @@ func RegisterRoutes(
 		// tonnages
 		admin.POST("/tonnages", configHandler.CreateTonnage)
 		admin.DELETE("/tonnages/:id", configHandler.DeleteTonnage)
-
-		// config_types
-		admin.POST("/config-types", configHandler.CreateConfigType)
-		admin.DELETE("/config-types/:id", configHandler.DeleteConfigType)
 
 		// mast_types
 		admin.POST("/mast-types", configHandler.CreateMastType)

@@ -32,22 +32,10 @@ func NewConfigHandler(dictRepo *repository.DictionaryRepository, l *zap.Logger) 
 // 学生端字典查询接口（GET，无需 admin 权限）
 // =====================================================
 
-// ListBrandTypes 处理 GET /api/valuation/dictionaries/brand-types
-func (h *ConfigHandler) ListBrandTypes(c *gin.Context) {
-	list, err := h.dictRepo.ListBrandTypes(c.Request.Context())
-	if err != nil {
-		h.logger.Error("查询品牌类型失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询品牌类型失败")
-		return
-	}
-	OK(c, list)
-}
-
-// ListBrands 处理 GET /api/valuation/dictionaries/brands?brand_type=进口一线
-// brand_type 可选，为空时返回全部品牌
+// ListBrands 处理 GET /api/valuation/dictionaries/brands
+// 返回全部启用品牌（按 k_brand 倒序）
 func (h *ConfigHandler) ListBrands(c *gin.Context) {
-	brandType := c.Query("brand_type")
-	list, err := h.dictRepo.ListBrands(c.Request.Context(), brandType)
+	list, err := h.dictRepo.ListBrands(c.Request.Context())
 	if err != nil {
 		h.logger.Error("查询品牌失败", zap.Error(err))
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询品牌失败")
@@ -129,25 +117,19 @@ func (h *ConfigHandler) ListTonnages(c *gin.Context) {
 }
 
 // ListConfigTypes 处理 GET /api/valuation/dictionaries/config-types?brand=&vehicle_type=&series=&tonnage=
-// 级联参数全传时基于 original_prices 过滤；否则返回全部配置类型
+// 级联参数全传时基于 original_prices 过滤；否则返回空数组
 func (h *ConfigHandler) ListConfigTypes(c *gin.Context) {
 	brand := c.Query("brand")
 	vehicleType := c.Query("vehicle_type")
 	series := c.Query("series")
 	tonnage := c.Query("tonnage")
-	if brand != "" && vehicleType != "" && series != "" && tonnage != "" {
-		list, err := h.dictRepo.ListConfigTypesByCascade(c.Request.Context(), brand, vehicleType, series, tonnage)
-		if err != nil {
-			h.logger.Error("级联查询配置类型失败", zap.Error(err))
-			Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询配置类型失败")
-			return
-		}
-		OK(c, list)
+	if brand == "" || vehicleType == "" || series == "" || tonnage == "" {
+		OK(c, []repository.ConfigOption{})
 		return
 	}
-	list, err := h.dictRepo.ListConfigTypes(c.Request.Context())
+	list, err := h.dictRepo.ListConfigOptionsByCascade(c.Request.Context(), brand, vehicleType, series, tonnage)
 	if err != nil {
-		h.logger.Error("查询配置类型失败", zap.Error(err))
+		h.logger.Error("级联查询配置类型失败", zap.Error(err))
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询配置类型失败")
 		return
 	}
@@ -370,89 +352,21 @@ func (h *ConfigHandler) ListOriginalPrices(c *gin.Context) {
 // 管理员 CRUD 接口（/api/valuation/admin/*，要求 JWT role=admin）
 // =====================================================
 
-// --- brand_types ---
-
-// CreateBrandType 处理 POST /api/valuation/admin/brand-types
-// Body: {"name":"进口一线","k_type":1.10}
-func (h *ConfigHandler) CreateBrandType(c *gin.Context) {
-	var body struct {
-		Name  string  `json:"name" binding:"required"`
-		KType float64 `json:"k_type" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
-		return
-	}
-	bt, err := h.dictRepo.CreateBrandType(c.Request.Context(), body.Name, body.KType)
-	if err != nil {
-		h.logger.Error("新增品牌类型失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增品牌类型失败")
-		return
-	}
-	OK(c, bt)
-}
-
-// UpdateBrandType 处理 PUT /api/valuation/admin/brand-types/:name
-// Body: {"k_type":1.12}
-func (h *ConfigHandler) UpdateBrandType(c *gin.Context) {
-	name := c.Param("name")
-	if name == "" {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "品牌类型 name 不能为空")
-		return
-	}
-	var body struct {
-		KType float64 `json:"k_type" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
-		return
-	}
-	if err := h.dictRepo.UpdateBrandType(c.Request.Context(), name, body.KType); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			Error(c, http.StatusNotFound, CodeNotFound, "品牌类型不存在: "+name)
-			return
-		}
-		h.logger.Error("更新品牌类型失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "更新品牌类型失败")
-		return
-	}
-	OK(c, gin.H{"name": name, "k_type": body.KType})
-}
-
-// DeleteBrandType 处理 DELETE /api/valuation/admin/brand-types/:name
-func (h *ConfigHandler) DeleteBrandType(c *gin.Context) {
-	name := c.Param("name")
-	if name == "" {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "品牌类型 name 不能为空")
-		return
-	}
-	if err := h.dictRepo.DeleteBrandType(c.Request.Context(), name); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			Error(c, http.StatusNotFound, CodeNotFound, "品牌类型不存在: "+name)
-			return
-		}
-		h.logger.Error("删除品牌类型失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除品牌类型失败")
-		return
-	}
-	OK(c, gin.H{"name": name})
-}
-
 // --- brands ---
 
 // CreateBrand 处理 POST /api/valuation/admin/brands
-// Body: {"name":"林德","brand_type":"进口一线","k_brand":1.10,"is_active":true}
+// Body: {"name":"林德","k_brand":1.10,"is_active":true}
 func (h *ConfigHandler) CreateBrand(c *gin.Context) {
 	var body repository.Brand
 	if err := c.ShouldBindJSON(&body); err != nil {
 		Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
 		return
 	}
-	if body.Name == "" || body.BrandType == "" {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "name 与 brand_type 必填")
+	if body.Name == "" {
+		Error(c, http.StatusBadRequest, CodeBadRequest, "name 必填")
 		return
 	}
-	b, err := h.dictRepo.CreateBrand(c.Request.Context(), body.Name, body.BrandType, body.KBrand, body.IsActive)
+	b, err := h.dictRepo.CreateBrand(c.Request.Context(), body.Name, body.KBrand, body.IsActive)
 	if err != nil {
 		h.logger.Error("新增品牌失败", zap.Error(err))
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增品牌失败")
@@ -462,7 +376,7 @@ func (h *ConfigHandler) CreateBrand(c *gin.Context) {
 }
 
 // UpdateBrand 处理 PUT /api/valuation/admin/brands/:id
-// Body: {"brand_type":"进口一线","k_brand":1.12,"is_active":true}
+// Body: {"k_brand":1.12,"is_active":true}
 func (h *ConfigHandler) UpdateBrand(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -470,15 +384,14 @@ func (h *ConfigHandler) UpdateBrand(c *gin.Context) {
 		return
 	}
 	var body struct {
-		BrandType string  `json:"brand_type" binding:"required"`
-		KBrand    float64 `json:"k_brand" binding:"required"`
-		IsActive  bool    `json:"is_active"`
+		KBrand   float64 `json:"k_brand" binding:"required"`
+		IsActive bool    `json:"is_active"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
 		return
 	}
-	if err := h.dictRepo.UpdateBrand(c.Request.Context(), id, body.BrandType, body.KBrand, body.IsActive); err != nil {
+	if err := h.dictRepo.UpdateBrand(c.Request.Context(), id, body.KBrand, body.IsActive); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			Error(c, http.StatusNotFound, CodeNotFound, "品牌不存在")
 			return
@@ -487,7 +400,7 @@ func (h *ConfigHandler) UpdateBrand(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "更新品牌失败")
 		return
 	}
-	OK(c, gin.H{"id": id, "brand_type": body.BrandType, "k_brand": body.KBrand, "is_active": body.IsActive})
+	OK(c, gin.H{"id": id, "k_brand": body.KBrand, "is_active": body.IsActive})
 }
 
 // DeleteBrand 处理 DELETE /api/valuation/admin/brands/:id
@@ -699,46 +612,6 @@ func (h *ConfigHandler) DeleteTonnage(c *gin.Context) {
 		}
 		h.logger.Error("删除吨位失败", zap.Error(err))
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除吨位失败")
-		return
-	}
-	OK(c, gin.H{"id": id})
-}
-
-// --- config_types ---
-
-// CreateConfigType 处理 POST /api/valuation/admin/config-types
-// Body: {"name":"标准配置"}
-func (h *ConfigHandler) CreateConfigType(c *gin.Context) {
-	var body struct {
-		Name string `json:"name" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
-		return
-	}
-	ct, err := h.dictRepo.CreateConfigType(c.Request.Context(), body.Name)
-	if err != nil {
-		h.logger.Error("新增配置类型失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增配置类型失败")
-		return
-	}
-	OK(c, ct)
-}
-
-// DeleteConfigType 处理 DELETE /api/valuation/admin/config-types/:id
-func (h *ConfigHandler) DeleteConfigType(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
-		return
-	}
-	if err := h.dictRepo.DeleteConfigType(c.Request.Context(), id); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			Error(c, http.StatusNotFound, CodeNotFound, "配置类型不存在")
-			return
-		}
-		h.logger.Error("删除配置类型失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除配置类型失败")
 		return
 	}
 	OK(c, gin.H{"id": id})
@@ -1093,8 +966,8 @@ func (h *ConfigHandler) CreateOriginalPrice(c *gin.Context) {
 		Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
 		return
 	}
-	if body.BrandType == "" || body.Brand == "" || body.VehicleType == "" || body.Series == "" {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "brand_type/brand/vehicle_type/series 必填")
+	if body.Brand == "" || body.VehicleType == "" || body.Series == "" {
+		Error(c, http.StatusBadRequest, CodeBadRequest, "brand/vehicle_type/series 必填")
 		return
 	}
 	if body.OriginalPrice <= 0 {
@@ -1186,4 +1059,18 @@ func (h *ConfigHandler) UpdateCoefficient(c *gin.Context) {
 		return
 	}
 	OK(c, cc)
+}
+
+// --- algorithm_parameters ---
+
+// ListAlgorithmParameters 处理 GET /api/valuation/dictionaries/algorithm-parameters
+// 聚合返回 4 类算法参数（全局系数 + 品牌系数 + 车况系数 + 区域系数），供管理员后台一次加载
+func (h *ConfigHandler) ListAlgorithmParameters(c *gin.Context) {
+	result, err := h.dictRepo.ListAlgorithmParameters(c.Request.Context())
+	if err != nil {
+		h.logger.Error("查询算法参数失败", zap.Error(err))
+		Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询算法参数失败")
+		return
+	}
+	OK(c, result)
 }

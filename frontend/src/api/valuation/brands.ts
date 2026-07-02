@@ -1,35 +1,31 @@
-// 品牌 API（按 brand_type 过滤；模块级内存缓存，避免每次进 InputView 都请求）
-// 重构说明：从无参 listBrands 改为按品牌类型过滤
+// 品牌 API（全量加载，模块级内存缓存，避免每次进 InputView 都请求）
 import client from './client'
 import type { Brand } from '@/types/valuation/brand'
 
-const cache = new Map<string, Brand[]>()
-const inflightMap = new Map<string, Promise<Brand[]>>()
+let cache: Brand[] | null = null
+let inflight: Promise<Brand[]> | null = null
 
-/** 拉取指定品牌类型下的所有品牌 */
-export async function listBrands(brandType: string, force = false): Promise<Brand[]> {
-  if (!force && cache.has(brandType)) return cache.get(brandType)!
-  if (inflightMap.has(brandType)) return inflightMap.get(brandType)!
+/** 拉取全部品牌（按 k_brand 倒序） */
+export async function listBrands(force = false): Promise<Brand[]> {
+  if (!force && cache) return cache
+  if (inflight) return inflight
 
-  const inflight = client
-    .get<unknown, { data: Brand[] }>('/brands', {
-      params: { brand_type: brandType }
-    })
+  inflight = client
+    .get<unknown, { data: Brand[] }>('/dictionaries/brands')
     .then((r) => {
       const list = r.data ?? []
-      cache.set(brandType, list)
+      cache = list
       return list
     })
     .finally(() => {
-      inflightMap.delete(brandType)
+      inflight = null
     })
 
-  inflightMap.set(brandType, inflight)
   return inflight
 }
 
-/** 调试用：清空全部缓存 */
+/** 调试用：清空缓存 */
 export function clearBrandsCache(): void {
-  cache.clear()
-  inflightMap.clear()
+  cache = null
+  inflight = null
 }

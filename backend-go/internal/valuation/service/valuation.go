@@ -96,8 +96,8 @@ func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRe
 		return nil, err
 	}
 
-	// 6. 计算 Kb（brand_types × brands）
-	kbRes, err := CalcKBrand(ctx, req.BrandType, req.Brand, s.dictRepo)
+	// 6. 计算 Kb（直接使用 brands.k_brand）
+	kbRes, err := CalcKBrand(ctx, req.Brand, s.dictRepo)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,6 @@ func (s *ValuationService) Persist(ctx context.Context, result *model.Evaluation
 		return 0, fmt.Errorf("evalRepo 未装配")
 	}
 	params := &repository.CreateEvaluationParams{
-		BrandType:                  result.BrandType,
 		Brand:                      result.Brand,
 		VehicleType:                result.VehicleType,
 		Series:                     result.Series,
@@ -199,7 +198,7 @@ func (s *ValuationService) Persist(ctx context.Context, result *model.Evaluation
 func (s *ValuationService) lookupOriginalPrice(ctx context.Context, req *model.EvaluationRequest) (float64, error) {
 	// 1. 精确匹配
 	op, err := s.dictRepo.FindOriginalPriceMatch(ctx,
-		req.BrandType, req.Brand, req.VehicleType, req.Series,
+		req.Brand, req.VehicleType, req.Series,
 		req.Tonnage, req.ConfigType, req.MastType, req.MastHeightMM)
 	if err == nil {
 		return op.OriginalPrice, nil
@@ -207,14 +206,14 @@ func (s *ValuationService) lookupOriginalPrice(ctx context.Context, req *model.E
 	if err != pgx.ErrNoRows {
 		return 0, fmt.Errorf("精确匹配原价失败: %w", err)
 	}
-	// 2. 模糊匹配（按 brand_type + brand + vehicle_type + series + tonnage）
-	//    若 series 为 "其它"，降级为仅按 brand_type + brand + vehicle_type + tonnage 匹配
+	// 2. 模糊匹配（按 brand + vehicle_type + series + tonnage）
+	//    若 series 为 "其它"，降级为仅按 brand + vehicle_type + tonnage 匹配
 	seriesForFuzzy := req.Series
 	if seriesForFuzzy == "其它" {
 		seriesForFuzzy = ""
 	}
 	op, err = s.dictRepo.FindOriginalPriceFuzzy(ctx,
-		req.BrandType, req.Brand, req.VehicleType, seriesForFuzzy, req.Tonnage)
+		req.Brand, req.VehicleType, seriesForFuzzy, req.Tonnage)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return 0, model.ErrOriginalPriceNotFound
