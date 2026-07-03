@@ -950,11 +950,18 @@ func (r *DictionaryRepository) CreateOriginalPrice(ctx context.Context, o *Origi
 	return id, nil
 }
 
-// UpdateOriginalPrice 更新原价记录
-func (r *DictionaryRepository) UpdateOriginalPrice(ctx context.Context, id int64, price float64, isActive bool) error {
-	ct, err := r.pool.Exec(ctx,
-		`UPDATE original_prices SET original_price = $2, is_active = $3, updated_at = NOW() WHERE id = $1`,
-		id, price, isActive)
+// UpdateOriginalPrice 更新原价记录的全部可编辑字段
+// 包含 7 个唯一约束字段（brand/vehicle_type/series/tonnage/config_type/mast_type/mast_height_mm）
+// 以及 original_price 与 is_active；若新值触发 7 字段唯一约束冲突，返回原始 pgx 错误
+func (r *DictionaryRepository) UpdateOriginalPrice(ctx context.Context, o *OriginalPrice) error {
+	ct, err := r.pool.Exec(ctx, `
+		UPDATE original_prices SET
+			brand = $2, vehicle_type = $3, series = $4, tonnage = $5,
+			config_type = $6, mast_type = $7, mast_height_mm = $8,
+			original_price = $9, is_active = $10, updated_at = NOW()
+		WHERE id = $1`,
+		o.ID, o.Brand, o.VehicleType, o.Series, o.Tonnage,
+		o.ConfigType, o.MastType, o.MastHeightMM, o.OriginalPrice, o.IsActive)
 	if err != nil {
 		return fmt.Errorf("更新原价记录失败: %w", err)
 	}

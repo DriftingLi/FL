@@ -985,22 +985,29 @@ func (h *ConfigHandler) CreateOriginalPrice(c *gin.Context) {
 }
 
 // UpdateOriginalPrice 处理 PUT /api/valuation/admin/original-prices/:id
-// Body: {"original_price":28.50,"is_active":true}
+// Body: 完整 original_prices 行（不含 id 与 updated_at，由后端忽略/覆盖）
+// 支持修改全部 7 个唯一约束字段 + original_price + is_active
 func (h *ConfigHandler) UpdateOriginalPrice(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
 		return
 	}
-	var body struct {
-		OriginalPrice float64 `json:"original_price" binding:"required"`
-		IsActive      bool    `json:"is_active"`
-	}
+	var body repository.OriginalPrice
 	if err := c.ShouldBindJSON(&body); err != nil {
 		Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
 		return
 	}
-	if err := h.dictRepo.UpdateOriginalPrice(c.Request.Context(), id, body.OriginalPrice, body.IsActive); err != nil {
+	if body.Brand == "" || body.VehicleType == "" || body.Series == "" {
+		Error(c, http.StatusBadRequest, CodeBadRequest, "brand/vehicle_type/series 必填")
+		return
+	}
+	if body.OriginalPrice <= 0 {
+		Error(c, http.StatusBadRequest, CodeBadRequest, "original_price 必须大于 0")
+		return
+	}
+	body.ID = id
+	if err := h.dictRepo.UpdateOriginalPrice(c.Request.Context(), &body); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			Error(c, http.StatusNotFound, CodeNotFound, "原价记录不存在")
 			return
@@ -1009,7 +1016,7 @@ func (h *ConfigHandler) UpdateOriginalPrice(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "更新原价记录失败")
 		return
 	}
-	OK(c, gin.H{"id": id, "original_price": body.OriginalPrice, "is_active": body.IsActive})
+	OK(c, body)
 }
 
 // DeleteOriginalPrice 处理 DELETE /api/valuation/admin/original-prices/:id
