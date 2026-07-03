@@ -56,8 +56,9 @@ func main() {
 	}
 	slog.Info("数据库迁移完成")
 
-	// 4. 确保默认账号（admin/admin123、tutor/tutor123）
-	authSvc := service.NewAuthService(gormDB, cfg.JWTSecretKey, cfg.JWTExpiry())
+	// 4. 确保默认账号（密码由环境变量配置）
+	authSvc := service.NewAuthService(gormDB, cfg.JWTSecretKey, cfg.JWTExpiry(),
+		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student)
 	if err := authSvc.EnsureDefaultUsers(); err != nil {
 		slog.Error("默认用户创建失败", "error", err)
 		os.Exit(1)

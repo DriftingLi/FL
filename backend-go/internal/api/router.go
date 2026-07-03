@@ -41,7 +41,8 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	registerStaticRoutes(r, cfg)
 
 	// 初始化服务
-	authSvc := service.NewAuthService(db, cfg.JWTSecretKey, cfg.JWTExpiry())
+	authSvc := service.NewAuthService(db, cfg.JWTSecretKey, cfg.JWTExpiry(),
+		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student)
 	authH := NewAuthHandler(authSvc)
 
 	// ===== API 路由组 =====

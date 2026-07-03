@@ -24,8 +24,15 @@ yarn-error.log*
 .env
 .env.local
 .env.*.local
+# 实际环境配置文件（仅保留 .example 模板入库）
+.env.production
+.env.development
+.env.staging
+.env.test
 **/private_key.pem
 *.pem
+*.key
+*.secret
 
 # ===== 数据库文件 =====
 *.db

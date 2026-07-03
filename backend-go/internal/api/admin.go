@@ -18,7 +18,8 @@ import (
 func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	adminSvc := service.NewAdminService(db)
 	courseSvc := service.NewAdminCourseService(db)
-	authSvc := service.NewAuthService(db, cfg.JWTSecretKey, cfg.JWTExpiry())
+	authSvc := service.NewAuthService(db, cfg.JWTSecretKey, cfg.JWTExpiry(),
+		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student)
 
 	g := rg.Group("/admin", middleware.JWTAuth(cfg), middleware.RoleRequired("admin"))
 

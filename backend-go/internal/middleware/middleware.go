@@ -2,6 +2,7 @@
 package middleware
 
 import (
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -167,6 +168,10 @@ func extractToken(c *gin.Context) string {
 func parseToken(secret, tokenStr string) (*Claims, error) {
 	claims := &Claims{}
 	_, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
+		// 显式校验签名算法，拒绝非 HMAC 算法（防止 alg=none 攻击）
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
 		return []byte(secret), nil
 	})
 	if err != nil {

@@ -7,13 +7,34 @@ bin/
 *.dylib
 *.test
 *.out
+
+# 环境变量与密钥（避免泄露进镜像）
 .env
 .env.local
 .env.*.local
+.env.production
+.env.development
+.env.staging
+.env.test
+**/private_key.pem
+*.pem
+*.key
+*.secret
+
+# 运行期存储（含登录态、报告 PDF 等）
+storage/
+
+# 日志
+*.log
+logs/
+
+# Git 与 IDE
 .git
 .gitignore
 .vscode
 .idea
+
+# 文档与测试
 *.md
 docs/
 testdata/

@@ -30,6 +30,14 @@ type Config struct {
 	ZhipuModel        string
 	Coze              CozeConfig
 	Valuation         ValuationConfig
+	DefaultPasswords  DefaultPasswordsConfig
+}
+
+// DefaultPasswordsConfig 默认账号密码配置，生产环境必须覆盖开发默认值。
+type DefaultPasswordsConfig struct {
+	Admin   string
+	Tutor   string
+	Student string
 }
 
 // CozeConfig 扣子智能体 OAuth 配置。
@@ -95,6 +103,11 @@ func Load() (*Config, error) {
 			DBMaxOpenConns:    valuationDBMaxOpen,
 			DBMaxIdleConns:    valuationDBMaxIdle,
 			DBConnMaxLifetime: valuationDBLifetime,
+		},
+		DefaultPasswords: DefaultPasswordsConfig{
+			Admin:   getenv("ADMIN_DEFAULT_PASSWORD", "admin123"),
+			Tutor:   getenv("TUTOR_DEFAULT_PASSWORD", "tutor123"),
+			Student: getenv("STUDENT_DEFAULT_PASSWORD", "student123"),
 		},
 	}
 

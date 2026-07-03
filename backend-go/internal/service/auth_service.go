@@ -15,14 +15,24 @@ import (
 
 // AuthService 认证服务，处理学员/管理员/导师的登录、注册与令牌签发。
 type AuthService struct {
-	db        *gorm.DB
-	jwtSecret string
-	jwtExpiry time.Duration
+	db              *gorm.DB
+	jwtSecret       string
+	jwtExpiry       time.Duration
+	defaultAdminPwd string
+	defaultTutorPwd string
+	defaultStudentPwd string
 }
 
 // NewAuthService 创建认证服务。
-func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpiry time.Duration) *AuthService {
-	return &AuthService{db: db, jwtSecret: jwtSecret, jwtExpiry: jwtExpiry}
+func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpiry time.Duration, adminPwd, tutorPwd, studentPwd string) *AuthService {
+	return &AuthService{
+		db:               db,
+		jwtSecret:        jwtSecret,
+		jwtExpiry:        jwtExpiry,
+		defaultAdminPwd:  adminPwd,
+		defaultTutorPwd:  tutorPwd,
+		defaultStudentPwd: studentPwd,
+	}
 }
 
 // DB 返回底层 *gorm.DB，供 handler 复用查询。
@@ -212,17 +222,17 @@ func (s *AuthService) TutorRegister(username, password, name string) (map[string
 	}, nil
 }
 
-// EnsureDefaultUsers 确保默认账号存在（admin/admin123、tutor/tutor123、student/student123），
+// EnsureDefaultUsers 确保默认账号存在（admin/tutor/student），密码由环境变量配置。
 // 对应原 Python 版 seed_railway.py / init_db.py 的默认账号初始化逻辑。
 // 已存在的账号会被跳过（不会重置密码）。
 func (s *AuthService) EnsureDefaultUsers() error {
-	// 1. 默认管理员 admin / admin123
+	// 1. 默认管理员 admin
 	var adminCount int64
 	if err := s.db.Model(&model.Admin{}).Where("username = ?", "admin").Count(&adminCount).Error; err != nil {
 		return err
 	}
 	if adminCount == 0 {
-		hashed, err := HashPassword("admin123")
+		hashed, err := HashPassword(s.defaultAdminPwd)
 		if err != nil {
 			return err
 		}
@@ -237,13 +247,13 @@ func (s *AuthService) EnsureDefaultUsers() error {
 		}
 	}
 
-	// 2. 默认导师 tutor / tutor123
+	// 2. 默认导师 tutor
 	var tutorCount int64
 	if err := s.db.Model(&model.Tutor{}).Where("username = ?", "tutor").Count(&tutorCount).Error; err != nil {
 		return err
 	}
 	if tutorCount == 0 {
-		hashed, err := HashPassword("tutor123")
+		hashed, err := HashPassword(s.defaultTutorPwd)
 		if err != nil {
 			return err
 		}
@@ -259,13 +269,13 @@ func (s *AuthService) EnsureDefaultUsers() error {
 		}
 	}
 
-	// 3. 默认学员 student / student123
+	// 3. 默认学员 student
 	var studentCount int64
 	if err := s.db.Model(&model.Student{}).Where("username = ?", "student").Count(&studentCount).Error; err != nil {
 		return err
 	}
 	if studentCount == 0 {
-		hashed, err := HashPassword("student123")
+		hashed, err := HashPassword(s.defaultStudentPwd)
 		if err != nil {
 			return err
 		}

@@ -108,9 +108,13 @@ make migrate-data SOURCE="postgres://user:pass@host:5432/forklift_training?sslmo
 
 ## 默认账号
 
-- 管理员：`admin` / `admin123`
-- 导师：`tutor` / `tutor123`（启动时自动创建）
-- 学员：`student` / `student123`（需通过 init 或注册创建）
+系统启动时自动创建默认账号，密码通过环境变量配置：
+
+- 管理员：`admin`，密码由 `ADMIN_DEFAULT_PASSWORD` 配置
+- 导师：`tutor`，密码由 `TUTOR_DEFAULT_PASSWORD` 配置
+- 学员：`student`，密码由 `STUDENT_DEFAULT_PASSWORD` 配置
+
+> 开发环境默认值见 `.env.example`；生产环境必须设置强密码。
 
 ## 部署
 
