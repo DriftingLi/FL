@@ -19,6 +19,7 @@ import {
   listConfigTypes,
   listMastTypes,
   listMastHeights,
+  getEarliestFactoryYear,
   listConditionRatings,
   listProvinces,
   listCities
@@ -71,12 +72,9 @@ const mastHeightOptions = computed(() => [...mastHeights.value, noneMastHeightOp
 // ========== 表单 ==========
 const { form, submitting, isValid, reset, submit } = useEvaluationForm()
 
-// 当前所选系列的最早出厂年份（未选系列时返回默认下限 1980）
-const currentSeriesEarliestYear = computed(() => {
-  if (!form.series) return 1980
-  const s = seriesList.value.find((it) => it.name === form.series)
-  return s?.earliest_factory_year ?? 1980
-})
+// 当前品牌+车型+系列+吨位组合下的最早出厂年份下限
+// 选完吨位后从 original_prices 级联查询 MIN(earliest_factory_year)；查询前默认 1980
+const earliestFactoryYear = ref(1980)
 
 // 出厂年份字段可见性：选完吨位后才显示
 const showFactoryYear = computed(() => form.tonnage != null)
@@ -149,22 +147,27 @@ watch(
   }
 )
 
-// 吨位 → 配置类型
+// 吨位 → 配置类型 + 最早出厂年份下限
 watch(
   () => form.tonnage,
   async () => {
     form.config_type = undefined
     form.mast_type = undefined
     form.mast_height_mm = undefined
+    form.factory_year = undefined
     configTypes.value = []
     mastTypes.value = []
     mastHeights.value = []
+    earliestFactoryYear.value = 1980
 
     if (!form.brand || !form.vehicle_type || !form.series || form.tonnage == null) return
     const seriesParam = form.series === OTHER_SERIES_VALUE ? undefined : form.series
-    configTypes.value = await listConfigTypes(
-      form.brand, form.vehicle_type, seriesParam ?? form.series, form.tonnage
-    )
+    const [configs, year] = await Promise.all([
+      listConfigTypes(form.brand, form.vehicle_type, seriesParam ?? form.series, form.tonnage),
+      getEarliestFactoryYear(form.brand, form.vehicle_type, seriesParam, form.tonnage)
+    ])
+    configTypes.value = configs
+    earliestFactoryYear.value = year
   }
 )
 
@@ -370,7 +373,7 @@ function onSubmit() {
           <el-form-item v-if="showFactoryYear" label="出厂年份">
             <el-input-number
               v-model="form.factory_year"
-              :min="currentSeriesEarliestYear"
+              :min="earliestFactoryYear"
               :max="new Date().getFullYear()"
               :step="1"
               :disabled="form.tonnage == null"

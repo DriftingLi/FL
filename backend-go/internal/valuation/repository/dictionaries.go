@@ -102,17 +102,18 @@ type RegionCoefficient struct {
 
 // OriginalPrice 车辆原价
 type OriginalPrice struct {
-	ID           int64    `json:"id"`
-	Brand        string   `json:"brand"`
-	VehicleType  string   `json:"vehicle_type"`
-	Series       string   `json:"series"`
-	Tonnage      float64  `json:"tonnage"`
-	ConfigType   string   `json:"config_type"`
-	MastType     string   `json:"mast_type"`
-	MastHeightMM int      `json:"mast_height_mm"`
-	OriginalPrice float64 `json:"original_price"`
-	IsActive     bool     `json:"is_active"`
-	UpdatedAt    string   `json:"updated_at"`
+	ID                  int64   `json:"id"`
+	Brand               string  `json:"brand"`
+	VehicleType         string  `json:"vehicle_type"`
+	Series              string  `json:"series"`
+	Tonnage             float64 `json:"tonnage"`
+	ConfigType          string  `json:"config_type"`
+	MastType            string  `json:"mast_type"`
+	MastHeightMM        int     `json:"mast_height_mm"`
+	EarliestFactoryYear int     `json:"earliest_factory_year"`
+	OriginalPrice       float64 `json:"original_price"`
+	IsActive            bool    `json:"is_active"`
+	UpdatedAt           string  `json:"updated_at"`
 }
 
 // ConfigOption 配置类型选项（从 original_prices DISTINCT 派生，非字典表实体）
@@ -893,7 +894,8 @@ func (r *DictionaryRepository) ListOriginalPrices(ctx context.Context, limit, of
 	}
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, brand, vehicle_type, series, tonnage,
-		       config_type, mast_type, mast_height_mm, original_price, is_active, updated_at
+		       config_type, mast_type, mast_height_mm, earliest_factory_year,
+		       original_price, is_active, updated_at
 		FROM original_prices
 		ORDER BY id DESC LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
@@ -905,7 +907,8 @@ func (r *DictionaryRepository) ListOriginalPrices(ctx context.Context, limit, of
 		var o OriginalPrice
 		var updatedAt time.Time
 		if err := rows.Scan(&o.ID, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
-			&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
+			&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.EarliestFactoryYear,
+			&o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
 			return nil, 0, err
 		}
 		o.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
@@ -918,12 +921,14 @@ func (r *DictionaryRepository) ListOriginalPrices(ctx context.Context, limit, of
 func (r *DictionaryRepository) GetOriginalPriceByID(ctx context.Context, id int64) (OriginalPrice, error) {
 	row := r.pool.QueryRow(ctx, `
 		SELECT id, brand, vehicle_type, series, tonnage,
-		       config_type, mast_type, mast_height_mm, original_price, is_active, updated_at
+		       config_type, mast_type, mast_height_mm, earliest_factory_year,
+		       original_price, is_active, updated_at
 		FROM original_prices WHERE id = $1`, id)
 	var o OriginalPrice
 	var updatedAt time.Time
 	if err := row.Scan(&o.ID, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
-		&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
+		&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.EarliestFactoryYear,
+		&o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
 		return OriginalPrice{}, err
 	}
 	o.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
@@ -936,14 +941,18 @@ func (r *DictionaryRepository) CreateOriginalPrice(ctx context.Context, o *Origi
 	err := r.pool.QueryRow(ctx, `
 		INSERT INTO original_prices (
 			brand, vehicle_type, series, tonnage,
-			config_type, mast_type, mast_height_mm, original_price, is_active
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+			config_type, mast_type, mast_height_mm, earliest_factory_year,
+			original_price, is_active
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
 		ON CONFLICT (brand, vehicle_type, series, tonnage,
 		             config_type, mast_type, mast_height_mm)
-		DO UPDATE SET original_price = EXCLUDED.original_price, is_active = EXCLUDED.is_active, updated_at = NOW()
+		DO UPDATE SET earliest_factory_year = EXCLUDED.earliest_factory_year,
+		              original_price = EXCLUDED.original_price,
+		              is_active = EXCLUDED.is_active, updated_at = NOW()
 		RETURNING id`,
 		o.Brand, o.VehicleType, o.Series, o.Tonnage,
-		o.ConfigType, o.MastType, o.MastHeightMM, o.OriginalPrice, o.IsActive).Scan(&id)
+		o.ConfigType, o.MastType, o.MastHeightMM, o.EarliestFactoryYear,
+		o.OriginalPrice, o.IsActive).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("新增原价记录失败: %w", err)
 	}
@@ -952,16 +961,18 @@ func (r *DictionaryRepository) CreateOriginalPrice(ctx context.Context, o *Origi
 
 // UpdateOriginalPrice 更新原价记录的全部可编辑字段
 // 包含 7 个唯一约束字段（brand/vehicle_type/series/tonnage/config_type/mast_type/mast_height_mm）
-// 以及 original_price 与 is_active；若新值触发 7 字段唯一约束冲突，返回原始 pgx 错误
+// 以及 earliest_factory_year、original_price、is_active；若新值触发 7 字段唯一约束冲突，返回原始 pgx 错误
 func (r *DictionaryRepository) UpdateOriginalPrice(ctx context.Context, o *OriginalPrice) error {
 	ct, err := r.pool.Exec(ctx, `
 		UPDATE original_prices SET
 			brand = $2, vehicle_type = $3, series = $4, tonnage = $5,
 			config_type = $6, mast_type = $7, mast_height_mm = $8,
-			original_price = $9, is_active = $10, updated_at = NOW()
+			earliest_factory_year = $9, original_price = $10, is_active = $11,
+			updated_at = NOW()
 		WHERE id = $1`,
 		o.ID, o.Brand, o.VehicleType, o.Series, o.Tonnage,
-		o.ConfigType, o.MastType, o.MastHeightMM, o.OriginalPrice, o.IsActive)
+		o.ConfigType, o.MastType, o.MastHeightMM, o.EarliestFactoryYear,
+		o.OriginalPrice, o.IsActive)
 	if err != nil {
 		return fmt.Errorf("更新原价记录失败: %w", err)
 	}
@@ -983,6 +994,36 @@ func (r *DictionaryRepository) DeleteOriginalPrice(ctx context.Context, id int64
 	return nil
 }
 
+// GetEarliestFactoryYearByCascade 按品牌+车型+系列+吨位级联查询最早出厂年份
+// 取该组合下所有 active 原价记录 earliest_factory_year 的最小值，作为学生端出厂年份输入下限
+// series 为空字符串时忽略 series 条件（用于 series="其它" 的降级场景）
+// 无匹配记录时返回 1980（与学生端默认下限一致）
+func (r *DictionaryRepository) GetEarliestFactoryYearByCascade(
+	ctx context.Context, brand, vehicleType, series string, tonnage float64,
+) (int, error) {
+	var year int
+	if series == "" {
+		err := r.pool.QueryRow(ctx, `
+			SELECT COALESCE(MIN(earliest_factory_year), 1980)
+			FROM original_prices
+			WHERE brand = $1 AND vehicle_type = $2 AND tonnage = $3 AND is_active = TRUE`,
+			brand, vehicleType, tonnage).Scan(&year)
+		if err != nil {
+			return 1980, fmt.Errorf("查询最早出厂年份失败: %w", err)
+		}
+		return year, nil
+	}
+	err := r.pool.QueryRow(ctx, `
+		SELECT COALESCE(MIN(earliest_factory_year), 1980)
+		FROM original_prices
+		WHERE brand = $1 AND vehicle_type = $2 AND series = $3 AND tonnage = $4 AND is_active = TRUE`,
+		brand, vehicleType, series, tonnage).Scan(&year)
+	if err != nil {
+		return 1980, fmt.Errorf("查询最早出厂年份失败: %w", err)
+	}
+	return year, nil
+}
+
 // FindOriginalPriceMatch 精确匹配原价：按 7 个字段查询
 // 未命中时返回 pgx.ErrNoRows，由调用方决定是否走模糊匹配
 func (r *DictionaryRepository) FindOriginalPriceMatch(
@@ -991,7 +1032,7 @@ func (r *DictionaryRepository) FindOriginalPriceMatch(
 ) (OriginalPrice, error) {
 	row := r.pool.QueryRow(ctx, `
 		SELECT id, brand, vehicle_type, series, tonnage,
-		       config_type, mast_type, mast_height_mm, original_price, is_active, updated_at
+		       config_type, mast_type, mast_height_mm, earliest_factory_year, original_price, is_active, updated_at
 		FROM original_prices
 		WHERE brand = $1 AND vehicle_type = $2 AND series = $3
 		  AND tonnage = $4 AND config_type = $5 AND mast_type = $6 AND mast_height_mm = $7
@@ -1000,7 +1041,7 @@ func (r *DictionaryRepository) FindOriginalPriceMatch(
 	var o OriginalPrice
 	var updatedAt time.Time
 	if err := row.Scan(&o.ID, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
-		&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
+		&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.EarliestFactoryYear, &o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
 		return OriginalPrice{}, err
 	}
 	o.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
@@ -1019,7 +1060,7 @@ func (r *DictionaryRepository) FindOriginalPriceFuzzy(
 		// series 为空：忽略 series 条件
 		row = r.pool.QueryRow(ctx, `
 			SELECT id, brand, vehicle_type, series, tonnage,
-			       config_type, mast_type, mast_height_mm, original_price, is_active, updated_at
+			       config_type, mast_type, mast_height_mm, earliest_factory_year, original_price, is_active, updated_at
 			FROM original_prices
 			WHERE brand = $1 AND vehicle_type = $2
 			  AND tonnage = $3 AND is_active = TRUE
@@ -1028,7 +1069,7 @@ func (r *DictionaryRepository) FindOriginalPriceFuzzy(
 	} else {
 		row = r.pool.QueryRow(ctx, `
 			SELECT id, brand, vehicle_type, series, tonnage,
-			       config_type, mast_type, mast_height_mm, original_price, is_active, updated_at
+			       config_type, mast_type, mast_height_mm, earliest_factory_year, original_price, is_active, updated_at
 			FROM original_prices
 			WHERE brand = $1 AND vehicle_type = $2 AND series = $3
 			  AND tonnage = $4 AND is_active = TRUE
@@ -1038,7 +1079,7 @@ func (r *DictionaryRepository) FindOriginalPriceFuzzy(
 	var o OriginalPrice
 	var updatedAt time.Time
 	if err := row.Scan(&o.ID, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
-		&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
+		&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.EarliestFactoryYear, &o.OriginalPrice, &o.IsActive, &updatedAt); err != nil {
 		return OriginalPrice{}, err
 	}
 	o.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")

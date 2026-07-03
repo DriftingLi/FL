@@ -71,6 +71,7 @@ func RegisterRoutes(
 		dict.GET("/cities", configHandler.ListCities)
 		dict.GET("/coefficient-configs", configHandler.ListCoefficientConfigs)
 		dict.GET("/original-prices", configHandler.ListOriginalPrices)
+		dict.GET("/earliest-factory-year", configHandler.GetEarliestFactoryYear)
 		dict.GET("/algorithm-parameters", configHandler.ListAlgorithmParameters)
 	}
 

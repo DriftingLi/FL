@@ -83,6 +83,7 @@ interface FieldDef {
   type: 'input' | 'number' | 'switch'
   required?: boolean
   width?: number
+  defaultValue?: string | number | boolean
 }
 
 const ORIGINAL_PRICE_FIELDS: FieldDef[] = [
@@ -90,9 +91,10 @@ const ORIGINAL_PRICE_FIELDS: FieldDef[] = [
   { prop: 'vehicle_type', label: '车辆类型', type: 'input', required: true, width: 120 },
   { prop: 'series', label: '系列', type: 'input', width: 100 },
   { prop: 'tonnage', label: '吨位', type: 'number', width: 80 },
-  { prop: 'config_type', label: '配置类型', type: 'input', width: 150 },
-  { prop: 'mast_type', label: '门架类型', type: 'input', width: 100 },
+  { prop: 'config_type', label: '配置类型', type: 'input', width: 150, defaultValue: '无' },
+  { prop: 'mast_type', label: '门架类型', type: 'input', width: 100, defaultValue: '无' },
   { prop: 'mast_height_mm', label: '门架高度(mm)', type: 'number', width: 120 },
+  { prop: 'earliest_factory_year', label: '最早出厂年份', type: 'number', required: true, width: 120, defaultValue: 2000 },
   { prop: 'original_price', label: '原价（万元）', type: 'number', required: true, width: 120 }
 ]
 
@@ -108,9 +110,15 @@ function openCreate() {
   dialogTitle.value = '新增原价记录'
   Object.keys(formData).forEach((k) => delete formData[k])
   for (const f of ORIGINAL_PRICE_FIELDS) {
-    if (f.type === 'switch') formData[f.prop] = true
-    else if (f.type === 'number') formData[f.prop] = 0
-    else formData[f.prop] = ''
+    if (f.defaultValue !== undefined) {
+      formData[f.prop] = f.defaultValue
+    } else if (f.type === 'switch') {
+      formData[f.prop] = true
+    } else if (f.type === 'number') {
+      formData[f.prop] = 0
+    } else {
+      formData[f.prop] = ''
+    }
   }
   dialogVisible.value = true
 }

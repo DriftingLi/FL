@@ -974,6 +974,9 @@ func (h *ConfigHandler) CreateOriginalPrice(c *gin.Context) {
 		Error(c, http.StatusBadRequest, CodeBadRequest, "original_price 必须大于 0")
 		return
 	}
+	if body.EarliestFactoryYear == 0 {
+		body.EarliestFactoryYear = 2000
+	}
 	id, err := h.dictRepo.CreateOriginalPrice(c.Request.Context(), &body)
 	if err != nil {
 		h.logger.Error("新增原价记录失败", zap.Error(err))
@@ -1006,6 +1009,9 @@ func (h *ConfigHandler) UpdateOriginalPrice(c *gin.Context) {
 		Error(c, http.StatusBadRequest, CodeBadRequest, "original_price 必须大于 0")
 		return
 	}
+	if body.EarliestFactoryYear == 0 {
+		body.EarliestFactoryYear = 2000
+	}
 	body.ID = id
 	if err := h.dictRepo.UpdateOriginalPrice(c.Request.Context(), &body); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -1036,6 +1042,33 @@ func (h *ConfigHandler) DeleteOriginalPrice(c *gin.Context) {
 		return
 	}
 	OK(c, gin.H{"id": id})
+}
+
+// GetEarliestFactoryYear 处理 GET /api/valuation/dictionaries/earliest-factory-year
+// Query: brand, vehicle_type, series(可选), tonnage
+// 返回该组合下 active 原价记录 earliest_factory_year 的最小值，作为学生端出厂年份输入下限
+// series 为空或"其它"时忽略 series 条件做降级查询
+func (h *ConfigHandler) GetEarliestFactoryYear(c *gin.Context) {
+	brand := c.Query("brand")
+	vehicleType := c.Query("vehicle_type")
+	series := c.Query("series")
+	tonnageStr := c.Query("tonnage")
+	if brand == "" || vehicleType == "" || tonnageStr == "" {
+		Error(c, http.StatusBadRequest, CodeBadRequest, "brand/vehicle_type/tonnage 必填")
+		return
+	}
+	tonnage, err := strconv.ParseFloat(tonnageStr, 64)
+	if err != nil {
+		Error(c, http.StatusBadRequest, CodeBadRequest, "tonnage 必须为数字")
+		return
+	}
+	year, err := h.dictRepo.GetEarliestFactoryYearByCascade(c.Request.Context(), brand, vehicleType, series, tonnage)
+	if err != nil {
+		h.logger.Error("查询最早出厂年份失败", zap.Error(err))
+		Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询最早出厂年份失败")
+		return
+	}
+	OK(c, gin.H{"earliest_factory_year": year})
 }
 
 // --- coefficient_configs ---

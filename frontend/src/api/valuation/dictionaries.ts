@@ -80,6 +80,18 @@ export async function listMastHeights(
   return resp.data ?? []
 }
 
+/** 最早出厂年份下限（按品牌+车型+系列+吨位级联查询 active 原价记录 earliest_factory_year 最小值）
+ *  series 传 undefined 或 "其它" 时后端忽略 series 条件做降级查询；无匹配记录返回 1980 */
+export async function getEarliestFactoryYear(
+  brand: string, vehicleType: string, series: string | undefined, tonnage: number | string
+): Promise<number> {
+  const resp = await client.get<unknown, { data: { earliest_factory_year: number } }>(
+    '/dictionaries/earliest-factory-year',
+    { params: { brand, vehicle_type: vehicleType, series: series || undefined, tonnage } }
+  )
+  return resp.data?.earliest_factory_year ?? 1980
+}
+
 /** 电池类型（按品牌+车型+系列+吨位级联过滤；不传参数时返回全部） */
 export async function listBatteryTypes(
   brand?: string, vehicleType?: string, series?: string, tonnage?: number | string
