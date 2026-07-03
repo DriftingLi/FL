@@ -1165,14 +1165,19 @@ type CascadeFilter struct {
 	MastType    string // 门架类型
 }
 
-// ListVehicleTypesByBrand 按品牌列出可选车辆类型（从 original_prices DISTINCT 查询）
+// ListVehicleTypesByBrand 按品牌列出可选车辆类型（数据源为 original_prices 表）
+// LEFT JOIN vehicle_types 字典表仅用于补充 power_type / earliest_factory_year
+// 管理员在原价表里填新 vehicle_type 后学生端立即可见，无需先在 vehicle_types 字典表建记录
 func (r *DictionaryRepository) ListVehicleTypesByBrand(ctx context.Context, brand string) ([]VehicleType, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT DISTINCT vt.id, vt.name, vt.power_type, vt.earliest_factory_year
+		SELECT MIN(op.id), op.vehicle_type,
+		       COALESCE(MIN(vt.power_type), ''),
+		       COALESCE(MIN(vt.earliest_factory_year), 1980)
 		FROM original_prices op
-		JOIN vehicle_types vt ON vt.name = op.vehicle_type
+		LEFT JOIN vehicle_types vt ON vt.name = op.vehicle_type
 		WHERE op.brand = $1 AND op.is_active = TRUE
-		ORDER BY vt.id ASC`, brand)
+		GROUP BY op.vehicle_type
+		ORDER BY op.vehicle_type`, brand)
 	if err != nil {
 		return nil, fmt.Errorf("级联查询车型失败: %w", err)
 	}
@@ -1189,13 +1194,16 @@ func (r *DictionaryRepository) ListVehicleTypesByBrand(ctx context.Context, bran
 }
 
 // ListSeriesByCascade 按品牌+车辆类型级联查询系列
+// 数据源为 original_prices 表，LEFT JOIN series 字典表仅用于补充 earliest_factory_year
+// 这样管理员在原价表里新增 series 名字后，学生端立即可见，无需先在 series 字典表建记录
 func (r *DictionaryRepository) ListSeriesByCascade(ctx context.Context, brand, vehicleType string) ([]Series, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT DISTINCT s.id, s.brand, s.name, s.earliest_factory_year
+		SELECT MIN(op.id), op.brand, op.series, COALESCE(MIN(s.earliest_factory_year), 1980)
 		FROM original_prices op
-		JOIN series s ON s.brand = op.brand AND s.name = op.series
+		LEFT JOIN series s ON s.brand = op.brand AND s.name = op.series
 		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.is_active = TRUE
-		ORDER BY s.id ASC`, brand, vehicleType)
+		GROUP BY op.brand, op.series
+		ORDER BY op.series`, brand, vehicleType)
 	if err != nil {
 		return nil, fmt.Errorf("级联查询系列失败: %w", err)
 	}
@@ -1211,14 +1219,15 @@ func (r *DictionaryRepository) ListSeriesByCascade(ctx context.Context, brand, v
 	return out, rows.Err()
 }
 
-// ListTonnagesByCascade 按品牌+车辆类型+系列级联查询吨位
+// ListTonnagesByCascade 按品牌+车辆类型+系列级联查询吨位（数据源为 original_prices 表）
+// 管理员在原价表里填新 tonnage 后学生端立即可见，无需先在 tonnages 字典表建记录
 func (r *DictionaryRepository) ListTonnagesByCascade(ctx context.Context, brand, vehicleType, series string) ([]Tonnage, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT DISTINCT t.id, t.value
+		SELECT MIN(op.id), op.tonnage
 		FROM original_prices op
-		JOIN tonnages t ON t.value = op.tonnage
 		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.is_active = TRUE
-		ORDER BY t.value ASC`, brand, vehicleType, series)
+		GROUP BY op.tonnage
+		ORDER BY op.tonnage`, brand, vehicleType, series)
 	if err != nil {
 		return nil, fmt.Errorf("级联查询吨位失败: %w", err)
 	}
@@ -1258,14 +1267,15 @@ func (r *DictionaryRepository) ListConfigOptionsByCascade(ctx context.Context, b
 	return out, rows.Err()
 }
 
-// ListMastTypesByCascade 按前序层级+配置类型级联查询门架类型
+// ListMastTypesByCascade 按前序层级+配置类型级联查询门架类型（数据源为 original_prices 表）
+// 管理员在原价表里填新 mast_type 后学生端立即可见，无需先在 mast_types 字典表建记录
 func (r *DictionaryRepository) ListMastTypesByCascade(ctx context.Context, brand, vehicleType, series, tonnage, configType string) ([]MastType, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT DISTINCT m.id, m.name
+		SELECT MIN(op.id), op.mast_type
 		FROM original_prices op
-		JOIN mast_types m ON m.name = op.mast_type
 		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.tonnage = $4::numeric AND op.config_type = $5 AND op.is_active = TRUE
-		ORDER BY m.id ASC`, brand, vehicleType, series, tonnage, configType)
+		GROUP BY op.mast_type
+		ORDER BY op.mast_type`, brand, vehicleType, series, tonnage, configType)
 	if err != nil {
 		return nil, fmt.Errorf("级联查询门架类型失败: %w", err)
 	}
@@ -1281,14 +1291,15 @@ func (r *DictionaryRepository) ListMastTypesByCascade(ctx context.Context, brand
 	return out, rows.Err()
 }
 
-// ListMastHeightsByCascade 按前序层级+门架类型级联查询门架高度
+// ListMastHeightsByCascade 按前序层级+门架类型级联查询门架高度（数据源为 original_prices 表）
+// 管理员在原价表里填新 mast_height_mm 后学生端立即可见，无需先在 mast_heights 字典表建记录
 func (r *DictionaryRepository) ListMastHeightsByCascade(ctx context.Context, brand, vehicleType, series, tonnage, configType, mastType string) ([]MastHeight, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT DISTINCT mh.id, mh.value_mm
+		SELECT MIN(op.id), op.mast_height_mm
 		FROM original_prices op
-		JOIN mast_heights mh ON mh.value_mm = op.mast_height_mm
 		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.tonnage = $4::numeric AND op.config_type = $5 AND op.mast_type = $6 AND op.is_active = TRUE
-		ORDER BY mh.value_mm ASC`, brand, vehicleType, series, tonnage, configType, mastType)
+		GROUP BY op.mast_height_mm
+		ORDER BY op.mast_height_mm`, brand, vehicleType, series, tonnage, configType, mastType)
 	if err != nil {
 		return nil, fmt.Errorf("级联查询门架高度失败: %w", err)
 	}
