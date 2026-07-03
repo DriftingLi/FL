@@ -6,9 +6,7 @@ package service
 
 import (
 	"context"
-	"fmt"
 
-	"forklift-training/internal/valuation/model"
 	"forklift-training/internal/valuation/repository"
 )
 
@@ -22,10 +20,15 @@ type KbResult struct {
 // CalcKBrand 计算品牌系数 Kb
 // brandName: 品牌名（如"林德"）
 // dictRepo: 字典仓储
+// 字典表未命中时用 1.0 兜底（中性系数，不放大也不缩小残值），不阻断评估流程
 func CalcKBrand(ctx context.Context, brandName string, dictRepo *repository.DictionaryRepository) (KbResult, error) {
 	b, err := dictRepo.GetBrandByName(ctx, brandName)
 	if err != nil {
-		return KbResult{}, fmt.Errorf("%w: %s", model.ErrBrandNotFound, brandName)
+		return KbResult{
+			KBrand:  1.0,
+			BrandKB: 1.0,
+			Brand:   brandName,
+		}, nil
 	}
 	return KbResult{
 		KBrand:  b.KBrand,

@@ -18,9 +18,7 @@ package service
 
 import (
 	"context"
-	"fmt"
 
-	"forklift-training/internal/valuation/model"
 	"forklift-training/internal/valuation/repository"
 )
 
@@ -70,9 +68,14 @@ func CalcKCondition(
 	provider *CoefficientProvider,
 ) (KcResult, error) {
 	// 1. 查询车况评级基准系数
+	//    字典表未命中时用 1.0 兜底（中性车况，不阻断评估流程）
 	cr, err := dictRepo.GetConditionRating(ctx, rating)
 	if err != nil {
-		return KcResult{}, fmt.Errorf("%w: %s", model.ErrConditionRatingNotFound, rating)
+		cr = repository.ConditionRating{
+			Rating:          rating,
+			Label:           rating,
+			BaseCoefficient: 1.0,
+		}
 	}
 
 	// 2. 从 provider 读取 4 个修正项（失败时回退默认值）

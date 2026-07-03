@@ -13,6 +13,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -73,12 +74,13 @@ func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRe
 		return nil, err
 	}
 
-	// 2. 查询 vehicle_type 派生 power_type
-	vt, err := s.dictRepo.GetVehicleTypeByName(ctx, req.VehicleType)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %s", model.ErrVehicleTypeNotFound, req.VehicleType)
+	// 2. 派生 power_type（电动/内燃），决定 Kt 用哪个衰减系数 λ
+	//    优先从 vehicle_types 字典表读取；字典表未命中时从车型名推断
+	//    （含"内燃"→combustion，其他→electric），原价表车型名不再受字典表约束
+	powerType := inferPowerType(req.VehicleType)
+	if vt, err := s.dictRepo.GetVehicleTypeByName(ctx, req.VehicleType); err == nil {
+		powerType = model.PowerType(vt.PowerType)
 	}
-	powerType := model.PowerType(vt.PowerType)
 
 	// 3. 查询基准原价：精确匹配 → 模糊匹配
 	originalPrice, err := s.lookupOriginalPrice(ctx, req)
@@ -157,6 +159,16 @@ func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRe
 	result.DimensionScores = buildDimensionScores(result)
 	result.Suggestions = buildSuggestions(result, s.provider, ctx)
 	return result, nil
+}
+
+// inferPowerType 从车型名推断动力类型
+// 含"内燃"→combustion，其他→electric（电动为仓储车主流派系）
+// 仅在 vehicle_types 字典表未命中时作为兜底，避免原价表自由输入的车型名导致评估失败
+func inferPowerType(vehicleType string) model.PowerType {
+	if strings.Contains(vehicleType, "内燃") {
+		return model.PowerTypeCombustion
+	}
+	return model.PowerTypeElectric
 }
 
 // Persist 持久化评估结果到 evaluations 表，返回新 ID
