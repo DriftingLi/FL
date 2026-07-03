@@ -32,6 +32,39 @@ const originalPriceState = reactive<OriginalPriceTabState>({
   list: []
 })
 
+// 原价表筛选
+const originalPriceFilter = reactive({
+  brand: '',
+  vehicle_type: '',
+  series: '',
+  config_type: ''
+})
+
+const filteredOriginalPrices = computed(() => {
+  const rows = originalPriceState.list
+  const brand = originalPriceFilter.brand.trim()
+  const vehicleType = originalPriceFilter.vehicle_type.trim()
+  const series = originalPriceFilter.series.trim()
+  const configType = originalPriceFilter.config_type.trim()
+  if (!brand && !vehicleType && !series && !configType) return rows
+  return rows.filter((row) => {
+    const matchBrand = !brand || String(row.brand ?? '').toLowerCase().includes(brand.toLowerCase())
+    const matchVehicleType =
+      !vehicleType || String(row.vehicle_type ?? '').toLowerCase().includes(vehicleType.toLowerCase())
+    const matchSeries = !series || String(row.series ?? '').toLowerCase().includes(series.toLowerCase())
+    const matchConfigType =
+      !configType || String(row.config_type ?? '').toLowerCase().includes(configType.toLowerCase())
+    return matchBrand && matchVehicleType && matchSeries && matchConfigType
+  })
+})
+
+function resetOriginalPriceFilter() {
+  originalPriceFilter.brand = ''
+  originalPriceFilter.vehicle_type = ''
+  originalPriceFilter.series = ''
+  originalPriceFilter.config_type = ''
+}
+
 async function loadOriginalPrices() {
   originalPriceState.loading = true
   try {
@@ -493,9 +526,40 @@ function onRefresh() {
             <span class="tab-tip">维护叉车基准原价记录（学生端表单级联查询依赖此表）</span>
             <el-button type="primary" :icon="Plus" @click="openCreate">新增</el-button>
           </div>
+          <div class="filter-bar">
+            <el-input
+              v-model="originalPriceFilter.brand"
+              placeholder="筛选品牌"
+              clearable
+              size="small"
+              style="width: 140px"
+            />
+            <el-input
+              v-model="originalPriceFilter.vehicle_type"
+              placeholder="筛选车辆类型"
+              clearable
+              size="small"
+              style="width: 140px"
+            />
+            <el-input
+              v-model="originalPriceFilter.series"
+              placeholder="筛选系列"
+              clearable
+              size="small"
+              style="width: 120px"
+            />
+            <el-input
+              v-model="originalPriceFilter.config_type"
+              placeholder="筛选配置类型"
+              clearable
+              size="small"
+              style="width: 160px"
+            />
+            <el-button :icon="RefreshLeft" size="small" @click="resetOriginalPriceFilter">重置筛选</el-button>
+          </div>
           <el-table
             v-loading="originalPriceState.loading"
-            :data="originalPriceState.list"
+            :data="filteredOriginalPrices"
             stripe
             border
             style="width: 100%"
@@ -856,6 +920,13 @@ function onRefresh() {
 .tab-tip {
   font-size: var(--fs-sm);
   color: var(--color-text-tertiary);
+}
+.filter-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
 }
 
 /* ===== 算法参数折叠面板 ===== */
