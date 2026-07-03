@@ -59,15 +59,25 @@ const noneMastTypeOption: MastTypeOption = { id: -1, name: NONE_VALUE }
 const noneMastHeightOption: MastHeightOption = { id: -1, value_mm: NONE_MAST_HEIGHT }
 
 // 合并选项后的可选项列表
-// 若 API 返回的系列列表中已包含 "其它"，不再追加（避免重复）
+// 若 API 返回的列表中已包含对应"其它"/"无"项，不再追加（避免重复）
 const seriesOptions = computed(() => {
   if (seriesList.value.some((s) => s.name === OTHER_SERIES_VALUE)) {
     return seriesList.value
   }
   return [...seriesList.value, otherSeriesOption]
 })
-const mastTypeOptions = computed(() => [...mastTypes.value, noneMastTypeOption])
-const mastHeightOptions = computed(() => [...mastHeights.value, noneMastHeightOption])
+const mastTypeOptions = computed(() => {
+  if (mastTypes.value.some((m) => m.name === NONE_VALUE)) {
+    return mastTypes.value
+  }
+  return [...mastTypes.value, noneMastTypeOption]
+})
+const mastHeightOptions = computed(() => {
+  if (mastHeights.value.some((mh) => mh.value_mm === NONE_MAST_HEIGHT)) {
+    return mastHeights.value
+  }
+  return [...mastHeights.value, noneMastHeightOption]
+})
 
 // ========== 表单 ==========
 const { form, submitting, isValid, reset, submit } = useEvaluationForm()
