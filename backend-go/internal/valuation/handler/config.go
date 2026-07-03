@@ -989,7 +989,7 @@ func (h *ConfigHandler) CreateOriginalPrice(c *gin.Context) {
 
 // UpdateOriginalPrice 处理 PUT /api/valuation/admin/original-prices/:id
 // Body: 完整 original_prices 行（不含 id 与 updated_at，由后端忽略/覆盖）
-// 支持修改全部 7 个唯一约束字段 + original_price + is_active
+// 支持修改全部 7 个唯一约束字段 + original_price
 func (h *ConfigHandler) UpdateOriginalPrice(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
