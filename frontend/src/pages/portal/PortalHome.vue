@@ -2,7 +2,7 @@
   <div class="portal-home">
     <!-- ===== Hero ===== -->
     <section id="hero" class="hero">
-      <img src="/images/hero-bg.jpg" alt="" class="hero-bg" />
+      <img src="/images/hero-bg.png" alt="" class="hero-bg" />
       <div class="hero-overlay"></div>
       <div class="hero-content">
         <p class="hero-tagline">AI赋能叉车行业</p>
@@ -25,7 +25,7 @@
         </div>
         <div class="about-grid">
           <div class="about-image">
-            <img src="/images/about.jpg" alt="和润天下公司办公环境" />
+            <img src="/images/about.png" alt="和润天下公司办公环境" />
           </div>
           <div class="about-content">
             <p class="about-paragraph">
