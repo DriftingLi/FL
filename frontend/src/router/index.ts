@@ -4,6 +4,18 @@ import { useAuthStore } from '@/stores/auth'
 
 const routes = [
   {
+    path: '/',
+    component: () => import('@/layouts/PortalHomeLayout.vue'),
+    meta: { requiresAuth: false },
+    children: [
+      {
+        path: '',
+        name: 'PortalHome',
+        component: () => import('@/pages/portal/PortalHome.vue')
+      }
+    ]
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('@/pages/auth/Login.vue'),
@@ -16,7 +28,7 @@ const routes = [
     meta: { requiresAuth: false }
   },
   {
-    path: '/',
+    path: '/dashboard',
     component: () => import('@/layouts/DefaultLayout.vue'),
     meta: { requiresAuth: true, role: 'student' },
     children: [
@@ -269,7 +281,6 @@ const router = createRouter({
 
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
-  const whiteList = ['/login', '/register']
 
   if (authStore.isInitializing) {
     await new Promise(resolve => {
@@ -282,19 +293,23 @@ router.beforeEach(async (to, from, next) => {
     })
   }
 
-  if (whiteList.includes(to.path)) {
-    if (authStore.isLoggedIn && authStore.userInfo.role) {
+  // 基于 meta.requiresAuth 判断是否为公开路由（官网 / 登录 / 注册）
+  const isPublic = to.meta?.requiresAuth === false
+
+  if (isPublic) {
+    // 已登录用户访问 /login 或 /register 时跳转到对应角色首页
+    if (authStore.isLoggedIn && authStore.userInfo.role &&
+        (to.path === '/login' || to.path === '/register')) {
       const role = authStore.userInfo.role
-      if (role === 'admin' && to.path === '/login') {
+      if (role === 'admin') {
         next('/admin/dashboard')
-      } else if (role === 'student' && to.path === '/login') {
-        next('/')
-      } else if (role === 'tutor' && to.path === '/login') {
+      } else if (role === 'tutor') {
         next('/tutor/courses')
       } else {
-        next()
+        next('/dashboard')
       }
     } else {
+      // 访问官网 `/` 或其他公开页：放行（包括已登录用户）
       next()
     }
   } else {
@@ -313,7 +328,7 @@ router.beforeEach(async (to, from, next) => {
         } else if (userRole === 'tutor') {
           next('/tutor/courses')
         } else {
-          next('/')
+          next('/dashboard')
         }
       } else {
         next()

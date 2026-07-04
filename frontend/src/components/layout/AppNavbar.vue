@@ -2,7 +2,7 @@
   <header class="app-navbar">
     <div class="navbar-container">
       <div class="navbar-left">
-        <router-link to="/" class="logo-link">
+        <router-link to="/dashboard" class="logo-link">
           <div class="logo-icon">
             <svg width="32" height="32" viewBox="0 0 28 28" fill="none">
               <rect width="28" height="28" rx="8" fill="url(#logo-gradient)"/>
@@ -10,8 +10,8 @@
               <circle cx="14" cy="15" r="2" fill="white"/>
               <defs>
                 <linearGradient id="logo-gradient" x1="0" y1="0" x2="28" y2="28">
-                  <stop stop-color="#1E40AF"/>
-                  <stop offset="1" stop-color="#2563EB"/>
+                  <stop stop-color="#0EA5E9"/>
+                  <stop offset="1" stop-color="#14B8A6"/>
                 </linearGradient>
               </defs>
             </svg>

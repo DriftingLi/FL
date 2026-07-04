@@ -1,10 +1,10 @@
 :root {
-  --el-color-primary: #2563EB;
-  --el-color-primary-light-3: #60A5FA;
-  --el-color-primary-light-5: #93C5FD;
-  --el-color-primary-light-7: #BFDBFE;
-  --el-color-primary-light-9: #EFF6FF;
-  --el-color-primary-dark-2: #1D4ED8;
+  --el-color-primary: #0EA5E9;
+  --el-color-primary-light-3: #38BDF8;
+  --el-color-primary-light-5: #7DD3FC;
+  --el-color-primary-light-7: #BAE6FD;
+  --el-color-primary-light-9: #F0F9FF;
+  --el-color-primary-dark-2: #0284C7;
 
   --el-color-success: #10B981;
   --el-color-success-light-3: #6EE7B7;

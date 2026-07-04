@@ -1,23 +1,25 @@
 :root {
-  --color-primary-50: #EFF6FF;
-  --color-primary-100: #DBEAFE;
-  --color-primary-200: #BFDBFE;
-  --color-primary-300: #93C5FD;
-  --color-primary-400: #60A5FA;
-  --color-primary-500: #2563EB;
-  --color-primary-600: #1D4ED8;
-  --color-primary-700: #1E40AF;
-  --color-primary-800: #1E3A8A;
-  --color-primary-900: #172554;
+  /* 主色 - Sky 蓝绿 */
+  --color-primary-50: #F0F9FF;
+  --color-primary-100: #E0F2FE;
+  --color-primary-200: #BAE6FD;
+  --color-primary-300: #7DD3FC;
+  --color-primary-400: #38BDF8;
+  --color-primary-500: #0EA5E9;
+  --color-primary-600: #0284C7;
+  --color-primary-700: #0369A1;
+  --color-primary-800: #075985;
+  --color-primary-900: #0C4A6E;
 
-  --color-accent-50: #FFF7ED;
-  --color-accent-100: #FFEDD5;
-  --color-accent-200: #FED7AA;
-  --color-accent-300: #FDBA74;
-  --color-accent-400: #FB923C;
-  --color-accent-500: #F97316;
-  --color-accent-600: #EA580C;
-  --color-accent-700: #C2410C;
+  /* 强调色 - Teal 青 */
+  --color-accent-50: #F0FDFA;
+  --color-accent-100: #CCFBF1;
+  --color-accent-200: #99F6E4;
+  --color-accent-300: #5EEAD4;
+  --color-accent-400: #2DD4BF;
+  --color-accent-500: #14B8A6;
+  --color-accent-600: #0D9488;
+  --color-accent-700: #0F766E;
 
   --color-success: #10B981;
   --color-success-light: #D1FAE5;
@@ -28,28 +30,42 @@
   --color-info: #6B7280;
   --color-info-light: #F3F4F6;
 
-  --color-text-primary: #111827;
-  --color-text-secondary: #4B5563;
-  --color-text-tertiary: #9CA3AF;
-  --color-text-disabled: #D1D5DB;
+  --color-text-primary: #0F172A;
+  --color-text-secondary: #475569;
+  --color-text-tertiary: #64748B;
+  --color-text-muted: #94A3B8;
+  --color-text-disabled: #CBD5E1;
   --color-text-inverse: #FFFFFF;
+  --color-text-on-dark: #F1F5F9;
 
   --color-bg-page: #F8FAFC;
   --color-bg-card: #FFFFFF;
   --color-bg-elevated: #FFFFFF;
   --color-bg-sidebar: #0F172A;
   --color-bg-sidebar-hover: #1E293B;
-  --color-bg-sidebar-active: rgba(37, 99, 235, 0.15);
+  --color-bg-sidebar-active: rgba(14, 165, 233, 0.15);
 
   --color-border: #E2E8F0;
   --color-border-light: #F1F5F9;
   --color-border-dark: #CBD5E1;
+  --color-border-darker: #334155;
 
-  --gradient-brand: linear-gradient(135deg, #1E40AF 0%, #2563EB 50%, #3B82F6 100%);
-  --gradient-hero: linear-gradient(135deg, #0F172A 0%, #1E3A8A 50%, #1D4ED8 100%);
-  --gradient-accent: linear-gradient(135deg, #EA580C 0%, #F97316 100%);
-  --gradient-card: linear-gradient(180deg, rgba(37, 99, 235, 0.04) 0%, rgba(255, 255, 255, 0) 100%);
+  /* 官网专用表面 */
+  --surface-dark: #0F172A;
+  --surface-dark-alt: #1E293B;
+  --surface-card-alt: #F8FAFC;
+
+  /* 渐变 */
+  --gradient-brand: linear-gradient(135deg, #0EA5E9 0%, #14B8A6 100%);
+  --gradient-hero: linear-gradient(135deg, #0F172A 0%, #075985 50%, #0284C7 100%);
+  --gradient-accent: linear-gradient(135deg, #0D9488 0%, #14B8A6 100%);
+  --gradient-card: linear-gradient(180deg, rgba(14, 165, 233, 0.04) 0%, rgba(255, 255, 255, 0) 100%);
   --gradient-sidebar: linear-gradient(180deg, #0F172A 0%, #1E293B 100%);
+
+  /* 官网专用渐变 */
+  --gradient-hero-overlay: linear-gradient(135deg, rgba(14, 165, 233, 0.85) 0%, rgba(20, 184, 166, 0.75) 100%);
+  --gradient-dark-section: linear-gradient(180deg, #0F172A 0%, #1E293B 100%);
+  --gradient-cta-banner: linear-gradient(135deg, #0EA5E9 0%, #14B8A6 60%, #0D9488 100%);
 
   --font-display: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-body: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
@@ -71,6 +87,7 @@
   --font-bold: 700;
 
   --leading-tight: 1.25;
+  --leading-snug: 1.375;
   --leading-normal: 1.5;
   --leading-relaxed: 1.75;
 
@@ -85,6 +102,8 @@
   --space-12: 48px;
   --space-16: 64px;
   --space-20: 80px;
+  --space-24: 96px;
+  --space-32: 128px;
 
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -127,9 +146,14 @@
   --container-xl: 1280px;
   --container-2xl: 1400px;
   --container-page: 1280px;
+  --container-narrow: 960px;
 
   --navbar-bg: rgba(255, 255, 255, 0.92);
   --navbar-border: rgba(226, 232, 240, 0.8);
   --footer-bg: #F1F5F9;
   --ticker-border: #E2E8F0;
+
+  /* 官网 section 间距 */
+  --section-padding: 6rem;
+  --section-padding-mobile: 3rem;
 }

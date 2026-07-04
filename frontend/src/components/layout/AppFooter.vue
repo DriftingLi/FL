@@ -10,8 +10,8 @@
               <circle cx="14" cy="15" r="2" fill="white"/>
               <defs>
                 <linearGradient id="footer-logo-gradient" x1="0" y1="0" x2="28" y2="28">
-                  <stop stop-color="#1E40AF"/>
-                  <stop offset="1" stop-color="#2563EB"/>
+                  <stop stop-color="#0EA5E9"/>
+                  <stop offset="1" stop-color="#14B8A6"/>
                 </linearGradient>
               </defs>
             </svg>

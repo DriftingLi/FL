@@ -26,7 +26,7 @@ export interface NavItem {
 }
 
 const studentNav: NavItem[] = [
-  { key: 'home', label: '首页', path: '/', icon: HomeFilled },
+  { key: 'home', label: '首页', path: '/dashboard', icon: HomeFilled },
   {
     key: 'training',
     label: '培训',
@@ -90,8 +90,18 @@ const tutorNav: NavItem[] = [
   { key: 'grading', label: '人工阅卷', path: '/tutor/grading', icon: Finished }
 ]
 
+const portalNav: NavItem[] = [
+  { key: 'home', label: '首页', path: '/' },
+  { key: 'about', label: '关于我们', path: '/#about' },
+  { key: 'products', label: '核心服务', path: '/#products' },
+  { key: 'cooperation', label: '合作模式', path: '/#cooperation' },
+  { key: 'service', label: '服务保障', path: '/#service' },
+  { key: 'contact', label: '加入我们', path: '/#footer' }
+]
+
 export const roleNavigation: Record<string, NavItem[]> = {
   student: studentNav,
   admin: adminNav,
-  tutor: tutorNav
+  tutor: tutorNav,
+  portal: portalNav
 }

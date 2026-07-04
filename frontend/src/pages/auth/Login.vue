@@ -167,7 +167,7 @@ async function handleLogin() {
       } else if (formData.role === 'tutor') {
         router.push('/tutor/courses')
       } else {
-        router.push('/')
+        router.push('/dashboard')
       }
     }
   } catch (e) {
