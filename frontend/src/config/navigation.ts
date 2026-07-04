@@ -53,7 +53,8 @@ const studentNav: NavItem[] = [
     path: '/valuation',
     icon: DataAnalysis,
     children: [
-      { key: 'valuation', label: '残值评估', path: '/valuation', icon: DataAnalysis }
+      { key: 'valuation', label: '残值评估', path: '/valuation', icon: DataAnalysis },
+      { key: 'ai-assistant', label: 'AI 助手', path: '/ai-assistant', icon: MagicStick }
     ]
   },
   { key: 'profile', label: '个人中心', path: '/profile', icon: User }

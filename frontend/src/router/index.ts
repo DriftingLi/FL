@@ -201,7 +201,7 @@ const routes = [
         path: 'history',
         name: 'ValuationHistory',
         component: () => import('@/pages/student/valuation/ValuationHistoryView.vue'),
-        meta: { requiresAuth: true, role: 'student', navKey: 'valuation-history', navLabel: '评估历史', navGroup: 'tools' }
+        meta: { requiresAuth: true, roles: ['student', 'tutor', 'admin'], navKey: 'valuation-history', navLabel: '评估历史', navGroup: 'tools' }
       }
     ]
   },

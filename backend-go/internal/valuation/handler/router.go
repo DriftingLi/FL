@@ -22,7 +22,9 @@ import (
 )
 
 // RegisterRoutes 注册残值评估模块路由。
-// 路由组 /api/valuation 启用 JWTAuth 中间件；admin 子组额外要求 RoleRequired("admin")。
+// 路由分两组：
+//   - 公开组 /api/valuation：字典查询、评估提交、统计、健康检查（匿名可访问，用于未登录用户的评估计数）
+//   - 鉴权组 /api/valuation：评估历史/详情、PDF 报告、电池 RUL、admin CRUD（需 JWTAuth）
 func RegisterRoutes(
 	r *gin.Engine,
 	cfg *config.Config,
@@ -35,44 +37,54 @@ func RegisterRoutes(
 	pdfGen *pdf.Generator,
 	pdfOutputDir string,
 ) {
+	evalHandler := NewEvaluationHandler(valuationSvc, evalRepo, logger)
+	configHandler := NewConfigHandler(dictRepo, logger)
+	reportHandler := NewReportHandler(evalRepo, pdfGen, logger)
+	batteryRepo := vrepo.NewBatteryRepository(pool)
+	batteryHandler := NewBatteryHandler(batteryRepo, batterySvc, logger, pdfOutputDir)
+	healthHandler := NewHealthHandler()
+
+	// === 公开组（无需登录）：字典查询 + 评估提交 + 统计 + 健康检查 ===
+	// 未登录用户可提交评估并被计数（evaluations 表无 user_id，记录匿名存储）
+	public := r.Group("/api/valuation")
+	{
+		public.POST("/evaluations", evalHandler.Create)
+		public.GET("/evaluations/stats", evalHandler.Stats)
+		public.GET("/health", healthHandler.Check)
+
+		dict := public.Group("/dictionaries")
+		{
+			dict.GET("/brands", configHandler.ListBrands)
+			dict.GET("/vehicle-types", configHandler.ListVehicleTypes)
+			dict.GET("/series", configHandler.ListSeries)
+			dict.GET("/tonnages", configHandler.ListTonnages)
+			dict.GET("/config-types", configHandler.ListConfigTypes)
+			dict.GET("/mast-types", configHandler.ListMastTypes)
+			dict.GET("/mast-heights", configHandler.ListMastHeights)
+			dict.GET("/battery-types", configHandler.ListBatteryTypes)
+			dict.GET("/transmission-types", configHandler.ListTransmissionTypes)
+			dict.GET("/engine-types", configHandler.ListEngineTypes)
+			dict.GET("/series-config-options", configHandler.ListSeriesConfigOptions)
+			dict.GET("/condition-ratings", configHandler.ListConditionRatings)
+			dict.GET("/region-coefficients", configHandler.ListRegionCoefficients)
+			dict.GET("/provinces", configHandler.ListProvinces)
+			dict.GET("/cities", configHandler.ListCities)
+			dict.GET("/coefficient-configs", configHandler.ListCoefficientConfigs)
+			dict.GET("/original-prices", configHandler.ListOriginalPrices)
+			dict.GET("/earliest-factory-year", configHandler.GetEarliestFactoryYear)
+			dict.GET("/algorithm-parameters", configHandler.ListAlgorithmParameters)
+		}
+	}
+
+	// === 鉴权组（需登录）：评估历史/详情 + PDF 报告 + 电池 RUL + admin CRUD ===
 	g := r.Group("/api/valuation")
 	g.Use(middleware.JWTAuth(cfg))
-
-	// === 评估接口（学生端可访问） ===
-	evalHandler := NewEvaluationHandler(valuationSvc, evalRepo, logger)
-	g.POST("/evaluations", evalHandler.Create)
-	g.GET("/evaluations", evalHandler.List)
-	g.GET("/evaluations/stats", evalHandler.Stats)
-	g.GET("/evaluations/:id", evalHandler.Get)
-
-	// === PDF 报告接口（学生端可访问） ===
-	reportHandler := NewReportHandler(evalRepo, pdfGen, logger)
-	g.POST("/evaluations/:id/report", reportHandler.Generate)
-	g.GET("/evaluations/:id/report", reportHandler.Download)
-
-	// === 字典查询接口（学生端只读 GET，无需 admin 权限） ===
-	configHandler := NewConfigHandler(dictRepo, logger)
-	dict := g.Group("/dictionaries")
 	{
-		dict.GET("/brands", configHandler.ListBrands)
-		dict.GET("/vehicle-types", configHandler.ListVehicleTypes)
-		dict.GET("/series", configHandler.ListSeries)
-		dict.GET("/tonnages", configHandler.ListTonnages)
-		dict.GET("/config-types", configHandler.ListConfigTypes)
-		dict.GET("/mast-types", configHandler.ListMastTypes)
-		dict.GET("/mast-heights", configHandler.ListMastHeights)
-		dict.GET("/battery-types", configHandler.ListBatteryTypes)
-		dict.GET("/transmission-types", configHandler.ListTransmissionTypes)
-		dict.GET("/engine-types", configHandler.ListEngineTypes)
-		dict.GET("/series-config-options", configHandler.ListSeriesConfigOptions)
-		dict.GET("/condition-ratings", configHandler.ListConditionRatings)
-		dict.GET("/region-coefficients", configHandler.ListRegionCoefficients)
-		dict.GET("/provinces", configHandler.ListProvinces)
-		dict.GET("/cities", configHandler.ListCities)
-		dict.GET("/coefficient-configs", configHandler.ListCoefficientConfigs)
-		dict.GET("/original-prices", configHandler.ListOriginalPrices)
-		dict.GET("/earliest-factory-year", configHandler.GetEarliestFactoryYear)
-		dict.GET("/algorithm-parameters", configHandler.ListAlgorithmParameters)
+		g.GET("/evaluations", evalHandler.List)
+		g.GET("/evaluations/:id", evalHandler.Get)
+
+		g.POST("/evaluations/:id/report", reportHandler.Generate)
+		g.GET("/evaluations/:id/report", reportHandler.Download)
 	}
 
 	// === 管理员 CRUD 接口（要求 JWT role=admin） ===
@@ -137,16 +149,10 @@ func RegisterRoutes(
 		admin.PUT("/coefficient-configs/:key", configHandler.UpdateCoefficient)
 	}
 
-	// === 电池 RUL 评估（保留不变） ===
-	batteryRepo := vrepo.NewBatteryRepository(pool)
-	batteryHandler := NewBatteryHandler(batteryRepo, batterySvc, logger, pdfOutputDir)
+	// === 电池 RUL 评估（需登录） ===
 	g.POST("/battery/evaluations", batteryHandler.Create)
 	g.GET("/battery/evaluations", batteryHandler.List)
 	g.GET("/battery/evaluations/:id", batteryHandler.Get)
 	g.POST("/battery/evaluations/:id/report", batteryHandler.GenerateReport)
 	g.GET("/battery/evaluations/:id/report", batteryHandler.DownloadReport)
-
-	// === 健康检查（valuation 子模块独立健康端点） ===
-	healthHandler := NewHealthHandler()
-	g.GET("/health", healthHandler.Check)
 }
