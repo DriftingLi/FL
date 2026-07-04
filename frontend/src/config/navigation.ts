@@ -50,10 +50,9 @@ const studentNav: NavItem[] = [
   {
     key: 'tools',
     label: '工具',
-    path: '/ai-assistant',
-    icon: MagicStick,
+    path: '/valuation',
+    icon: DataAnalysis,
     children: [
-      { key: 'ai-assistant', label: 'AI 助手', path: '/ai-assistant', icon: MagicStick },
       { key: 'valuation', label: '残值评估', path: '/valuation', icon: DataAnalysis }
     ]
   },

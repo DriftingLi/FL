@@ -102,9 +102,8 @@ onUnmounted(() => {
 
 <style scoped>
 .ai-assistant-page {
-  margin: -20px;
-  width: calc(100% + 40px);
-  height: calc(100vh - 60px);
+  width: 100%;
+  height: 100%;
   position: relative;
   overflow: hidden;
   background: #f0f2f5;
@@ -197,9 +196,8 @@ onUnmounted(() => {
 
 @media screen and (max-width: 768px) {
   .ai-assistant-page {
-    margin: -12px;
-    width: calc(100% + 24px);
-    height: calc(100vh - 60px);
+    width: 100%;
+    height: 100%;
   }
 }
 </style>

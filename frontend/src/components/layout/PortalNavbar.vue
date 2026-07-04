@@ -3,17 +3,7 @@
     <div class="navbar-container">
       <!-- Logo -->
       <a href="/" class="logo-link" @click.prevent="goHome">
-        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-          <rect width="36" height="36" rx="8" fill="url(#portal-logo-grad)"/>
-          <path d="M10 26V18L18 10L26 18V26" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          <path d="M15 26V21H21V26" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <defs>
-            <linearGradient id="portal-logo-grad" x1="0" y1="0" x2="36" y2="36">
-              <stop stop-color="#0EA5E9"/>
-              <stop offset="1" stop-color="#14B8A6"/>
-            </linearGradient>
-          </defs>
-        </svg>
+        <img src="/images/HRWAIlogo.jpg" alt="和润天下" class="logo-img" />
         <div class="logo-text-wrap">
           <span class="logo-text">和润天下</span>
           <span class="logo-sub">HRWAI</span>
@@ -185,6 +175,13 @@ onUnmounted(() => {
   gap: var(--space-3);
   text-decoration: none;
   cursor: pointer;
+}
+
+.logo-img {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
 }
 .logo-text-wrap {
   display: flex;

@@ -1,5 +1,5 @@
 <template>
-  <PortalLayout :menu-items="studentNav" />
+  <PortalLayout :menu-items="studentNav" hide-footer />
 </template>
 
 <script setup lang="ts">

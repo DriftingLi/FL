@@ -3,13 +3,9 @@
     <div class="register-brand">
       <div class="brand-content">
         <div class="brand-logo">
-          <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
-            <rect width="56" height="56" rx="16" fill="rgba(255,255,255,0.1)"/>
-            <path d="M16 36L28 16L40 36H16Z" stroke="white" stroke-width="2" stroke-linejoin="round" fill="none"/>
-            <circle cx="28" cy="30" r="3" fill="white"/>
-          </svg>
+          <img src="/images/HRWAIlogo.jpg" alt="和润天下" class="logo-img" />
         </div>
-        <h1 class="brand-title">ForkLift<span class="brand-accent">Pro</span></h1>
+        <h1 class="brand-title">和润天下</h1>
         <p class="brand-subtitle">叉车维修一站式服务平台</p>
       </div>
       <div class="brand-decor">
@@ -205,6 +201,14 @@ async function handleRegister() {
   margin-bottom: var(--space-6);
 }
 
+.logo-img {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-xl);
+  object-fit: cover;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
 .brand-title {
   font-family: var(--font-display);
   font-size: var(--text-4xl);
@@ -212,10 +216,6 @@ async function handleRegister() {
   color: white;
   margin-bottom: var(--space-3);
   letter-spacing: -0.03em;
-}
-
-.brand-accent {
-  color: var(--color-primary-300);
 }
 
 .brand-subtitle {

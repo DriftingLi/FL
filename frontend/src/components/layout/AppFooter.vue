@@ -4,18 +4,8 @@
       <div class="footer-grid">
         <div class="footer-brand">
           <div class="footer-logo">
-            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-              <rect width="28" height="28" rx="8" fill="url(#footer-logo-gradient)"/>
-              <path d="M8 18L14 8L20 18H8Z" stroke="white" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
-              <circle cx="14" cy="15" r="2" fill="white"/>
-              <defs>
-                <linearGradient id="footer-logo-gradient" x1="0" y1="0" x2="28" y2="28">
-                  <stop stop-color="#0EA5E9"/>
-                  <stop offset="1" stop-color="#14B8A6"/>
-                </linearGradient>
-              </defs>
-            </svg>
-            <span class="footer-logo-text">ForkLift<span class="footer-logo-accent">Pro</span></span>
+            <img src="/images/HRWAIlogo.jpg" alt="和润天下" class="footer-logo-img" />
+            <span class="footer-logo-text">和润天下</span>
           </div>
           <p class="footer-desc">一站式叉车维修培训、考核与残值评估服务平台。</p>
         </div>
@@ -52,7 +42,7 @@
       </div>
 
       <div class="footer-bottom">
-        <p>© {{ currentYear }} ForkLift Pro. 保留所有权利。</p>
+        <p>© {{ currentYear }} 和润天下. 保留所有权利。</p>
       </div>
     </div>
   </footer>
@@ -102,8 +92,11 @@ const currentYear = new Date().getFullYear()
   color: var(--color-text-primary);
 }
 
-.footer-logo-accent {
-  color: var(--color-primary-500);
+.footer-logo-img {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
 }
 
 .footer-desc {

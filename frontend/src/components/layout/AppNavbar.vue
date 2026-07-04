@@ -4,19 +4,9 @@
       <div class="navbar-left">
         <router-link :to="homePath" class="logo-link">
           <div class="logo-icon">
-            <svg width="32" height="32" viewBox="0 0 28 28" fill="none">
-              <rect width="28" height="28" rx="8" fill="url(#logo-gradient)"/>
-              <path d="M8 18L14 8L20 18H8Z" stroke="white" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
-              <circle cx="14" cy="15" r="2" fill="white"/>
-              <defs>
-                <linearGradient id="logo-gradient" x1="0" y1="0" x2="28" y2="28">
-                  <stop stop-color="#0EA5E9"/>
-                  <stop offset="1" stop-color="#14B8A6"/>
-                </linearGradient>
-              </defs>
-            </svg>
+            <img src="/images/HRWAIlogo.jpg" alt="和润天下" class="logo-img" />
           </div>
-          <span class="logo-text">ForkLift<span class="logo-accent">Pro</span></span>
+          <span class="logo-text">和润天下</span>
         </router-link>
 
         <nav class="desktop-nav">
@@ -253,16 +243,19 @@ async function handleCommand(command: string) {
   align-items: center;
 }
 
+.logo-img {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+}
+
 .logo-text {
   font-family: var(--font-display);
   font-size: var(--text-xl);
   font-weight: var(--font-bold);
   color: var(--color-text-primary);
   letter-spacing: -0.02em;
-}
-
-.logo-accent {
-  color: var(--color-primary-500);
 }
 
 .desktop-nav {
