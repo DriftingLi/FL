@@ -119,11 +119,17 @@
 
   --sidebar-width: 240px;
   --sidebar-collapsed-width: 64px;
-  --header-height: 64px;
+  --header-height: 72px;
 
   --container-sm: 640px;
   --container-md: 768px;
   --container-lg: 1024px;
   --container-xl: 1280px;
   --container-2xl: 1400px;
+  --container-page: 1280px;
+
+  --navbar-bg: rgba(255, 255, 255, 0.92);
+  --navbar-border: rgba(226, 232, 240, 0.8);
+  --footer-bg: #F1F5F9;
+  --ticker-border: #E2E8F0;
 }

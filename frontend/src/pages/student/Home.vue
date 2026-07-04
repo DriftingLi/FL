@@ -2,12 +2,30 @@
   <div class="home-page">
     <section class="hero-section">
       <div class="hero-content">
-        <p class="hero-greeting">{{ greeting }}，</p>
-        <h1 class="hero-name">{{ authStore.userInfo.name || authStore.userInfo.username }}</h1>
-        <p class="hero-desc">欢迎使用叉车维修一站式服务平台</p>
+        <div class="hero-text">
+          <p class="hero-greeting">{{ greeting }}，</p>
+          <h1 class="hero-name">{{ authStore.userInfo?.name || authStore.userInfo?.username }}</h1>
+          <p class="hero-desc">欢迎使用叉车维修一站式服务平台</p>
+          <div class="hero-actions">
+            <el-button type="primary" size="large" @click="$router.push('/courses')">
+              开始学习
+            </el-button>
+            <el-button size="large" @click="$router.push('/valuation')">
+              残值评估
+            </el-button>
+          </div>
+        </div>
+        <div class="hero-stats">
+          <div v-for="stat in heroStats" :key="stat.label" class="hero-stat-card">
+            <span class="hero-stat-value">{{ stat.value }}</span>
+            <span class="hero-stat-label">{{ stat.label }}</span>
+          </div>
+        </div>
       </div>
       <div class="hero-decor"></div>
     </section>
+
+    <StatsTicker />
 
     <section class="modules-section">
       <div
@@ -17,15 +35,38 @@
         :class="{ 'module-disabled': item.disabled }"
         @click="onModuleClick(item)"
       >
-        <div class="module-header">
+        <div class="module-main">
           <div class="module-icon-wrap" :style="{ background: item.gradient }">
             <el-icon :size="28" color="white"><component :is="item.icon" /></el-icon>
           </div>
+          <div class="module-text">
+            <h3 class="module-title">{{ item.label }}</h3>
+            <p class="module-desc">{{ item.desc }}</p>
+          </div>
+        </div>
+        <div class="module-side">
           <span v-if="item.disabled" class="module-badge">敬请期待</span>
           <el-icon v-else class="module-arrow"><ArrowRight /></el-icon>
         </div>
-        <h3 class="module-title">{{ item.label }}</h3>
-        <p class="module-desc">{{ item.desc }}</p>
+      </div>
+    </section>
+
+    <section class="quick-section">
+      <div class="quick-card quick-recent">
+        <h3 class="quick-title">最近动态</h3>
+        <div class="quick-placeholder">
+          <el-icon><Timer /></el-icon>
+          <span>暂无最近学习记录</span>
+        </div>
+      </div>
+      <div class="quick-card quick-links">
+        <h3 class="quick-title">快捷入口</h3>
+        <div class="quick-link-grid">
+          <router-link v-for="link in quickLinks" :key="link.path" :to="link.path" class="quick-link">
+            <el-icon><component :is="link.icon" /></el-icon>
+            <span>{{ link.label }}</span>
+          </router-link>
+        </div>
       </div>
     </section>
   </div>
@@ -36,7 +77,11 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
-import { Notebook, DataAnalysis, SetUp, MagicStick, ArrowRight } from '@element-plus/icons-vue'
+import {
+  Notebook, DataAnalysis, SetUp, MagicStick, ArrowRight, Timer,
+  EditPen, Document, User
+} from '@element-plus/icons-vue'
+import StatsTicker from '@/components/layout/StatsTicker.vue'
 
 interface ModuleItem {
   label: string
@@ -49,7 +94,6 @@ interface ModuleItem {
 
 const router = useRouter()
 const authStore = useAuthStore()
-
 const currentHour = ref(new Date().getHours())
 
 const greeting = computed(() => {
@@ -61,6 +105,13 @@ const greeting = computed(() => {
 })
 
 let greetingTimer: ReturnType<typeof setInterval> | null = null
+
+const heroStats = [
+  { value: '12', label: '在学课程' },
+  { value: '86%', label: '平均进度' },
+  { value: '128', label: '练习题目' },
+  { value: '5', label: '评估记录' }
+]
 
 const modules: ModuleItem[] = [
   {
@@ -92,6 +143,13 @@ const modules: ModuleItem[] = [
     path: '/ai-generate',
     gradient: 'linear-gradient(135deg, #8B5CF6, #A78BFA)'
   }
+]
+
+const quickLinks = [
+  { path: '/question-bank', label: '题库练习', icon: EditPen },
+  { path: '/level-exam', label: '考试中心', icon: Document },
+  { path: '/practice', label: '虚拟实操', icon: SetUp },
+  { path: '/profile', label: '个人中心', icon: User }
 ]
 
 function onModuleClick(item: ModuleItem) {
@@ -135,6 +193,15 @@ onUnmounted(() => {
 .hero-content {
   position: relative;
   z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.hero-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .hero-greeting {
@@ -148,22 +215,60 @@ onUnmounted(() => {
   font-size: var(--text-4xl);
   font-weight: var(--font-bold);
   color: white;
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 
 .hero-desc {
   font-size: var(--text-base);
   color: rgba(255, 255, 255, 0.7);
+  margin-bottom: var(--space-6);
+}
+
+.hero-actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+  flex-shrink: 0;
+}
+
+.hero-stat-card {
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+  min-width: 140px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.hero-stat-value {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: white;
+}
+
+.hero-stat-label {
+  font-size: var(--text-sm);
+  color: rgba(255, 255, 255, 0.75);
 }
 
 .hero-decor {
   position: absolute;
-  width: 300px;
-  height: 300px;
+  width: 360px;
+  height: 360px;
   border-radius: var(--radius-full);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  right: -60px;
-  top: -60px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  right: -80px;
+  top: -80px;
   pointer-events: none;
 }
 
@@ -176,16 +281,21 @@ onUnmounted(() => {
 .module-card {
   background: var(--color-bg-card);
   border-radius: var(--radius-2xl);
-  padding: var(--space-8);
+  padding: var(--space-6);
   cursor: pointer;
   box-shadow: var(--shadow-xs);
   border: 1px solid var(--color-border-light);
   transition: all var(--duration-normal) var(--ease-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
 }
 
 .module-card:hover {
   box-shadow: var(--shadow-lg);
   transform: translateY(-4px);
+  border-color: var(--color-primary-200);
 }
 
 .module-disabled {
@@ -196,11 +306,11 @@ onUnmounted(() => {
   transform: translateY(-2px);
 }
 
-.module-header {
+.module-main {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--space-5);
+  gap: var(--space-4);
+  min-width: 0;
 }
 
 .module-icon-wrap {
@@ -210,6 +320,29 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+}
+
+.module-text {
+  min-width: 0;
+}
+
+.module-title {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-1);
+}
+
+.module-desc {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+  line-height: var(--leading-relaxed);
+}
+
+.module-side {
+  flex-shrink: 0;
 }
 
 .module-badge {
@@ -231,46 +364,114 @@ onUnmounted(() => {
   transform: translateX(4px);
 }
 
-.module-title {
-  font-family: var(--font-display);
-  font-size: var(--text-xl);
-  font-weight: var(--font-bold);
-  color: var(--color-text-primary);
-  margin-bottom: var(--space-2);
+.quick-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5);
 }
 
-.module-desc {
-  font-size: var(--text-sm);
+.quick-card {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-2xl);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-xs);
+  border: 1px solid var(--color-border-light);
+}
+
+.quick-title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-4);
+}
+
+.quick-placeholder {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  background: var(--color-bg-page);
+  border-radius: var(--radius-xl);
   color: var(--color-text-tertiary);
-  line-height: var(--leading-relaxed);
+  font-size: var(--text-sm);
+}
+
+.quick-link-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+}
+
+.quick-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-page);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  transition: all var(--duration-fast);
+}
+
+.quick-link:hover {
+  background: var(--color-primary-50);
+  color: var(--color-primary-600);
+}
+
+@media screen and (max-width: 1024px) {
+  .hero-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .hero-stats {
+    width: 100%;
+  }
 }
 
 @media screen and (max-width: 768px) {
   .hero-section {
-    padding: var(--space-6) var(--space-5);
+    padding: var(--space-8) var(--space-5);
   }
 
   .hero-name {
-    font-size: var(--text-2xl);
+    font-size: var(--text-3xl);
   }
 
-  .modules-section {
+  .hero-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .modules-section,
+  .quick-section {
     grid-template-columns: 1fr;
   }
 }
 
 @media screen and (max-width: 480px) {
   .hero-section {
-    padding: var(--space-5) var(--space-4);
+    padding: var(--space-6) var(--space-4);
     border-radius: var(--radius-xl);
   }
 
   .hero-name {
-    font-size: var(--text-xl);
+    font-size: var(--text-2xl);
+  }
+
+  .hero-actions {
+    flex-direction: column;
   }
 
   .module-card {
-    padding: var(--space-6);
+    padding: var(--space-5);
+  }
+
+  .module-title {
+    font-size: var(--text-lg);
   }
 }
 </style>

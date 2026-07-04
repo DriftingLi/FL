@@ -193,3 +193,32 @@
   background: var(--color-bg-card) !important;
   border-color: var(--color-border-light) !important;
 }
+
+.el-button {
+  --el-button-border-radius: var(--radius-lg);
+  font-weight: var(--font-semibold);
+}
+
+.el-button--primary {
+  background: var(--gradient-brand);
+  border: none;
+}
+
+.el-button--primary:hover,
+.el-button--primary:focus {
+  opacity: 0.92;
+}
+
+.el-button--large {
+  --el-button-size: 48px;
+  padding: 0 var(--space-6);
+}
+
+.el-dropdown-menu {
+  --el-dropdown-menuItem-hover-fill: var(--color-primary-50);
+  --el-dropdown-menuItem-hover-color: var(--color-primary-700);
+}
+
+.el-dropdown-menu__item {
+  border-radius: var(--radius-md) !important;
+}
