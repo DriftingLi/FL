@@ -1,6 +1,5 @@
 import type { Component } from 'vue'
 import {
-  HomeFilled,
   Notebook,
   EditPen,
   SetUp,
@@ -26,33 +25,35 @@ export interface NavItem {
 }
 
 const studentNav: NavItem[] = [
-  { key: 'home', label: '首页', path: '/dashboard', icon: HomeFilled },
   {
     key: 'training',
     label: '培训',
+    path: '/training',
     icon: Notebook,
     children: [
-      { key: 'courses', label: '课程中心', path: '/courses', icon: Notebook },
-      { key: 'question-bank', label: '题库练习', path: '/question-bank', icon: EditPen },
-      { key: 'practice', label: '虚拟实操', path: '/practice', icon: SetUp }
+      { key: 'courses', label: '课程中心', path: '/training', icon: Notebook },
+      { key: 'question-bank', label: '题库练习', path: '/training/question-bank', icon: EditPen },
+      { key: 'practice', label: '虚拟实操', path: '/training/practice', icon: SetUp }
     ]
   },
   {
     key: 'exam',
     label: '考试',
+    path: '/training/level-exam',
     icon: Document,
     children: [
-      { key: 'level-exam', label: '考试中心', path: '/level-exam', icon: Document },
-      { key: 'mock-exam', label: '模拟考试', path: '/mock-exam', icon: DocumentCopy },
-      { key: 'wrong-questions', label: '错题本', path: '/wrong-questions', icon: CircleCloseFilled }
+      { key: 'level-exam', label: '考试中心', path: '/training/level-exam', icon: Document },
+      { key: 'mock-exam', label: '模拟考试', path: '/training/mock-exam', icon: DocumentCopy },
+      { key: 'wrong-questions', label: '错题本', path: '/training/wrong-questions', icon: CircleCloseFilled }
     ]
   },
   {
     key: 'tools',
     label: '工具',
+    path: '/ai-assistant',
     icon: MagicStick,
     children: [
-      { key: 'ai-generate', label: 'AI 助手', path: '/ai-generate', icon: MagicStick },
+      { key: 'ai-assistant', label: 'AI 助手', path: '/ai-assistant', icon: MagicStick },
       { key: 'valuation', label: '残值评估', path: '/valuation', icon: DataAnalysis }
     ]
   },
@@ -85,9 +86,9 @@ const adminNav: NavItem[] = [
 ]
 
 const tutorNav: NavItem[] = [
-  { key: 'courses', label: '我的课程', path: '/tutor/courses', icon: Notebook },
-  { key: 'question-manage', label: '题库管理', path: '/tutor/question-manage', icon: EditPen },
-  { key: 'grading', label: '人工阅卷', path: '/tutor/grading', icon: Finished }
+  { key: 'courses', label: '我的课程', path: '/training/tutor/courses', icon: Notebook },
+  { key: 'question-manage', label: '题库管理', path: '/training/tutor/question-manage', icon: EditPen },
+  { key: 'grading', label: '人工阅卷', path: '/training/tutor/grading', icon: Finished }
 ]
 
 const portalNav: NavItem[] = [

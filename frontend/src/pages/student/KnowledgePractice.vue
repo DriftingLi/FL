@@ -2,7 +2,7 @@
   <div class="knowledge-practice">
     <div class="kp-sidebar">
       <div class="sidebar-header">
-        <el-button @click="$router.push('/question-bank')" :icon="ArrowLeft" size="small">返回题库</el-button>
+        <el-button @click="$router.push('/training/question-bank')" :icon="ArrowLeft" size="small">返回题库</el-button>
         <h4>知识点分类</h4>
       </div>
 

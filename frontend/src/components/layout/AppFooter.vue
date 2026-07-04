@@ -23,9 +23,9 @@
         <div class="footer-column">
           <h4 class="footer-title">产品</h4>
           <ul class="footer-links">
-            <li><router-link to="/courses">课程中心</router-link></li>
-            <li><router-link to="/question-bank">题库练习</router-link></li>
-            <li><router-link to="/practice">虚拟实操</router-link></li>
+            <li><router-link to="/training">课程中心</router-link></li>
+            <li><router-link to="/training/question-bank">题库练习</router-link></li>
+            <li><router-link to="/training/practice">虚拟实操</router-link></li>
             <li><router-link to="/valuation">残值评估</router-link></li>
           </ul>
         </div>
@@ -33,7 +33,7 @@
         <div class="footer-column">
           <h4 class="footer-title">支持</h4>
           <ul class="footer-links">
-            <li><router-link to="/ai-generate">AI 助手</router-link></li>
+            <li><router-link to="/ai-assistant">AI 助手</router-link></li>
             <li><router-link to="/profile">个人中心</router-link></li>
             <li><a href="#">帮助文档</a></li>
             <li><a href="#">意见反馈</a></li>

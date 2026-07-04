@@ -178,7 +178,7 @@ function startLearning() {
 }
 
 function goBack() {
-  router.push('/courses')
+  router.push('/training')
 }
 
 function checkViewport() {

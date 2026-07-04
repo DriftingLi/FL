@@ -8,7 +8,7 @@
         <p class="hero-tagline">AI赋能叉车行业</p>
         <h1 class="hero-title">和润天下 HRWAI</h1>
         <p class="hero-subtitle">
-          和润天下人工智能科技有限公司 — 专注叉车残值评估与智能运维，用AI让每一台叉车的价值透明可见。
+          和润天下人工智能科技有限公司 — 深耕工程车辆垂直领域，专注于人工智能研发及场景落地。
         </p>
         <div class="hero-cta">
           <a href="#about" class="btn-primary" @click.prevent="scrollTo('about')">了解我们</a>
@@ -82,12 +82,20 @@
             v-for="item in products"
             :key="item.title"
             class="service-card"
+            @click="handleCardClick(item)"
           >
             <div class="service-icon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" v-html="item.icon"></svg>
             </div>
             <h3 class="service-title">{{ item.title }}</h3>
             <p class="service-desc">{{ item.desc }}</p>
+            <div class="service-cta">
+              <span class="service-cta-text">进入板块</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+                <polyline points="12 5 19 12 12 19"/>
+              </svg>
+            </div>
           </div>
         </div>
       </div>
@@ -149,28 +157,92 @@
 </template>
 
 <script setup lang="ts">
-const products = [
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { ElMessage } from 'element-plus'
+
+type ModuleKey = 'training' | 'valuation' | 'ai-assistant' | 'trade'
+
+interface ProductCard {
+  title: string
+  desc: string
+  icon: string
+  module: ModuleKey
+}
+
+const router = useRouter()
+const authStore = useAuthStore()
+
+const products: ProductCard[] = [
   {
     title: '叉车维修培训',
     desc: '专业叉车维修技能培训与认证服务，涵盖电动叉车、内燃叉车全系列机型，理论+实操一体化教学，帮助学员快速掌握核心技术，提升职业竞争力。',
-    icon: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>'
+    icon: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
+    module: 'training'
   },
   {
     title: '叉车残值评估',
     desc: '基于AI多维度加权模型的智能残值评估系统，精准量化二手叉车价值，输出专业评估报告与置信区间，为交易定价提供科学依据。',
-    icon: '<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'
+    icon: '<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+    module: 'valuation'
   },
   {
     title: '二手叉车交易',
     desc: '一站式二手叉车信息撮合平台，整合车源信息与AI评估报告，消除信息不对称，让买卖双方高效对接、透明交易。',
-    icon: '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>'
+    icon: '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>',
+    module: 'trade'
   },
   {
     title: 'AI叉车助手',
     desc: '基于大语言模型的智能问答助手，随时解答叉车选购、维保、故障诊断等专业问题，降低行业知识门槛，提升决策效率。',
-    icon: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'
+    icon: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    module: 'ai-assistant'
   }
 ]
+
+function isLoggedIn(): boolean {
+  return !!(authStore.token && authStore.isLoggedIn && authStore.userInfo?.role)
+}
+
+function goToLogin(redirect: string) {
+  router.push({ path: '/login', query: { redirect } })
+}
+
+function handleCardClick(item: ProductCard) {
+  const role = authStore.userInfo?.role
+
+  switch (item.module) {
+    case 'training':
+      if (!isLoggedIn()) {
+        goToLogin('/training')
+        return
+      }
+      if (role === 'admin') {
+        router.push('/admin/courses')
+      } else if (role === 'tutor') {
+        router.push('/training/tutor')
+      } else {
+        router.push('/training')
+      }
+      break
+
+    case 'valuation':
+      router.push('/valuation')
+      break
+
+    case 'ai-assistant':
+      if (!isLoggedIn()) {
+        goToLogin('/ai-assistant')
+        return
+      }
+      router.push('/ai-assistant')
+      break
+
+    case 'trade':
+      ElMessage.info('二手叉车交易板块敬请期待')
+      break
+  }
+}
 
 const cooperations = [
   {
@@ -487,11 +559,13 @@ function scrollTo(id: string) {
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-sm);
   padding: var(--space-8);
-  transition: box-shadow var(--duration-normal), transform var(--duration-normal);
+  cursor: pointer;
+  transition: box-shadow var(--duration-normal), transform var(--duration-normal), border-color var(--duration-fast);
 }
 .service-card:hover {
   box-shadow: var(--shadow-lg);
   transform: translateY(-2px);
+  border-color: var(--color-primary-300);
 }
 .service-icon {
   width: 48px;
@@ -516,7 +590,23 @@ function scrollTo(id: string) {
   font-size: var(--text-base);
   line-height: var(--leading-relaxed);
   color: var(--color-text-secondary);
-  margin: 0;
+  margin: 0 0 var(--space-6);
+}
+.service-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-primary-600);
+  transition: gap var(--duration-fast), color var(--duration-fast);
+}
+.service-card:hover .service-cta {
+  gap: var(--space-3);
+  color: var(--color-primary-700);
+}
+.service-cta-text {
+  letter-spacing: 0.05em;
 }
 
 /* ============ Cooperation ============ */

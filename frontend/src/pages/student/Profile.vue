@@ -102,7 +102,7 @@
 
           <el-card v-else class="empty-progress-card">
             <el-empty description="暂无学习记录，快去课程中心开始学习吧！">
-              <el-button type="primary" @click="$router.push('/courses')">前往课程中心</el-button>
+              <el-button type="primary" @click="$router.push('/training')">前往课程中心</el-button>
             </el-empty>
           </el-card>
         </div>
@@ -248,7 +248,7 @@
             </div>
 
             <el-empty v-if="practiceRecords.length === 0 && !practiceLoading" description="暂无实操记录，快去虚拟实操模块练习吧！">
-              <el-button type="primary" @click="$router.push('/practice')">前往实操</el-button>
+              <el-button type="primary" @click="$router.push('/training/practice')">前往实操</el-button>
             </el-empty>
           </el-card>
         </div>

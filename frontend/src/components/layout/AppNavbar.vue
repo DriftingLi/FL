@@ -2,7 +2,7 @@
   <header class="app-navbar">
     <div class="navbar-container">
       <div class="navbar-left">
-        <router-link to="/dashboard" class="logo-link">
+        <router-link :to="homePath" class="logo-link">
           <div class="logo-icon">
             <svg width="32" height="32" viewBox="0 0 28 28" fill="none">
               <rect width="28" height="28" rx="8" fill="url(#logo-gradient)"/>
@@ -151,6 +151,14 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const mobileOpen = ref(false)
+
+const homePath = computed(() => {
+  const role = authStore.userInfo?.role
+  if (role === 'admin') return '/admin/dashboard'
+  if (role === 'tutor') return '/training/tutor'
+  if (role === 'student') return '/training'
+  return '/'
+})
 
 function isRouteActive(path?: string): boolean {
   if (!path) return false

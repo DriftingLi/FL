@@ -208,7 +208,7 @@ async function submitForm() {
       await questionBankApi.createQuestion(data)
       ElMessage.success('创建成功')
     }
-    router.push('/tutor/question-manage')
+    router.push('/training/tutor/question-manage')
   } catch (e) {
     ElMessage.error(e.message || '操作失败')
   } finally {

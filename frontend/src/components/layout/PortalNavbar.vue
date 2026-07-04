@@ -35,7 +35,7 @@
       <!-- Desktop CTA -->
       <div class="desktop-cta">
         <router-link v-if="!isLoggedIn" to="/login" class="btn-login">登录</router-link>
-        <router-link v-else to="/dashboard" class="btn-dashboard">进入工作台</router-link>
+        <router-link v-else :to="dashboardPath" class="btn-dashboard">进入工作台</router-link>
       </div>
 
       <!-- Mobile Hamburger -->
@@ -63,7 +63,7 @@
         >{{ item.label }}</a>
         <div class="mobile-cta">
           <router-link v-if="!isLoggedIn" to="/login" class="btn-login" @click="mobileOpen = false">登录</router-link>
-          <router-link v-else to="/dashboard" class="btn-dashboard" @click="mobileOpen = false">进入工作台</router-link>
+          <router-link v-else :to="dashboardPath" class="btn-dashboard" @click="mobileOpen = false">进入工作台</router-link>
         </div>
       </div>
     </transition>
@@ -85,6 +85,14 @@ const mobileOpen = ref(false)
 const activeAnchor = ref('home')
 
 const isLoggedIn = computed(() => !!(authStore.token && authStore.isLoggedIn && authStore.userInfo?.role))
+
+const dashboardPath = computed(() => {
+  const role = authStore.userInfo?.role
+  if (role === 'admin') return '/admin/dashboard'
+  if (role === 'tutor') return '/training/tutor'
+  if (role === 'student') return '/training'
+  return '/'
+})
 
 function onScroll() {
   scrolled.value = window.scrollY > 80

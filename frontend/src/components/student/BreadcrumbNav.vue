@@ -1,7 +1,7 @@
 <template>
   <div class="breadcrumb-nav">
     <el-breadcrumb separator="/">
-      <el-breadcrumb-item :to="{ path: '/courses' }">课程中心</el-breadcrumb-item>
+      <el-breadcrumb-item :to="{ path: '/training' }">课程中心</el-breadcrumb-item>
       <el-breadcrumb-item :to="{ path: `/course/${courseId}` }">{{ courseName }}</el-breadcrumb-item>
       <el-breadcrumb-item v-if="chapterName">{{ chapterName }}</el-breadcrumb-item>
     </el-breadcrumb>

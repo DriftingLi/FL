@@ -7,7 +7,7 @@
       <h1 class="title">叉车派单系统</h1>
       <p class="subtitle">敬请期待</p>
       <p class="desc">该模块正在紧锣密鼓地开发中，上线后将提供维修工单派发与管理功能。</p>
-      <el-button type="primary" size="large" class="back-btn" @click="router.push('/dashboard')">返回首页</el-button>
+      <el-button type="primary" size="large" class="back-btn" @click="router.push('/')">返回首页</el-button>
     </div>
   </div>
 </template>

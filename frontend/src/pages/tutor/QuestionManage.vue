@@ -2,7 +2,7 @@
   <div class="question-manage">
     <div class="page-header">
       <h2>题库管理</h2>
-      <el-button type="primary" @click="$router.push('/tutor/question-create')">新增题目</el-button>
+      <el-button type="primary" @click="$router.push('/training/tutor/question-create')">新增题目</el-button>
     </div>
 
     <div class="filter-bar">
@@ -119,7 +119,7 @@ function viewDetail(row) {
 }
 
 function editQuestion(row) {
-  router.push({ path: '/tutor/question-create', query: { id: row.id } })
+  router.push({ path: '/training/tutor/question-create', query: { id: row.id } })
 }
 
 async function handleDelete(row) {

@@ -228,7 +228,7 @@ async function loadChapters() {
 }
 
 function goBack() {
-  router.push('/tutor/courses')
+  router.push('/training/tutor/courses')
 }
 
 function handleFilterChange() {

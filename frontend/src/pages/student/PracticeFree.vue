@@ -212,7 +212,7 @@ function nextQuestion() {
     lastResult.value = null
   } else {
     ElMessage.success('练习完成！')
-    router.push('/question-bank')
+    router.push('/training/question-bank')
   }
 }
 </script>

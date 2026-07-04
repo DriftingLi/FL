@@ -102,7 +102,7 @@
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import { ElMessage } from 'element-plus'
@@ -110,6 +110,7 @@ import { usernameRules, passwordRules } from '@/utils/validate'
 import { User, UserFilled, Setting } from '@element-plus/icons-vue'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const formRef = ref(null)
 const loading = ref(false)
@@ -162,12 +163,16 @@ async function handleLogin() {
       authStore.setAuthData(res.data)
       ElMessage.success('登录成功')
 
+      const redirect = route.query.redirect as string | undefined
       if (formData.role === 'admin') {
+        // 管理员始终跳转仪表盘，忽略 redirect 防止钓鱼
         router.push('/admin/dashboard')
-      } else if (formData.role === 'tutor') {
-        router.push('/tutor/courses')
+      } else if (redirect && !redirect.startsWith('/admin')) {
+        // 学员/导师支持 redirect 回跳（排除 admin 路径防止钓鱼）
+        router.push(redirect)
       } else {
-        router.push('/dashboard')
+        // 默认留在官网首页
+        router.push('/')
       }
     }
   } catch (e) {
