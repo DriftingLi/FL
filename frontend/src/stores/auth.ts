@@ -38,7 +38,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     try {
-      const res = await authApi.getUserInfo()
+      // 静默校验：token 过期时由拦截器直接 reject，不弹错误提示、不跳转登录页
+      const res = await authApi.getUserInfo({ headers: { 'X-Silent': '1' } })
       if (res.code === 200 && res.data) {
         const updates = {
           user_id: res.data.user_id,

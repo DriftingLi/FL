@@ -65,7 +65,10 @@ request.interceptors.response.use(
       switch (status) {
         case 401:
           useAuthStore().clearAuthData()
-          router.push('/login')
+          // 仅在需要登录的页面跳转登录页；公开页面（如残值评估首页）保留当前视图
+          if (router.currentRoute.value.matched.some(r => r.meta?.requiresAuth === true)) {
+            router.push('/login')
+          }
           ElMessage.error('登录已过期，请重新登录')
           break
         case 403:
@@ -122,7 +125,10 @@ aiRequest.interceptors.response.use(
       switch (status) {
         case 401:
           useAuthStore().clearAuthData()
-          router.push('/login')
+          // 仅在需要登录的页面跳转登录页；公开页面保留当前视图
+          if (router.currentRoute.value.matched.some(r => r.meta?.requiresAuth === true)) {
+            router.push('/login')
+          }
           ElMessage.error('登录已过期，请重新登录')
           break
         case 403:

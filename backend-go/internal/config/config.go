@@ -68,7 +68,7 @@ func Load() (*Config, error) {
 	}
 
 	maxMB, _ := strconv.Atoi(getenv("MAX_CONTENT_LENGTH_MB", "250"))
-	jwtHours, _ := strconv.Atoi(getenv("JWT_EXPIRES_HOURS", "1"))
+	jwtHours, _ := strconv.Atoi(getenv("JWT_EXPIRES_HOURS", "24"))
 	valuationDBMaxOpen, _ := strconv.Atoi(getenv("VALUATION_DB_MAX_OPEN_CONNS", "20"))
 	valuationDBMaxIdle, _ := strconv.Atoi(getenv("VALUATION_DB_MAX_IDLE_CONNS", "5"))
 	valuationDBLifetime, _ := strconv.Atoi(getenv("VALUATION_DB_CONN_MAX_LIFETIME", "3600"))

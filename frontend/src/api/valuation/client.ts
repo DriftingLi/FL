@@ -45,12 +45,15 @@ function handleUnauthorized() {
       localStorage.removeItem(TOKEN_STORAGE_KEY)
       localStorage.removeItem('userInfo')
     })
+  // 仅在需要登录的页面跳转登录页；公开页面（如残值评估首页）保留当前视图
   import('@/router')
     .then(({ default: router }) => {
-      router.push('/login')
+      if (router.currentRoute.value.matched.some(r => r.meta?.requiresAuth === true)) {
+        router.push('/login')
+      }
     })
     .catch(() => {
-      window.location.href = '/login'
+      // router 加载失败时不强制跳转，避免在公开页面误跳登录页
     })
 }
 

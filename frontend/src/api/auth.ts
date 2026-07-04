@@ -21,7 +21,7 @@ export const authApi = {
     return request.post('/auth/logout')
   },
 
-  getUserInfo() {
-    return request.get('/auth/me')
+  getUserInfo(config?) {
+    return request.get('/auth/me', config)
   }
 }

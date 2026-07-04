@@ -52,7 +52,7 @@ func VerifyPassword(password, hashed string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password)) == nil
 }
 
-// GenerateToken 签发 JWT，claims 结构与原 Python 版一致：user_id/username/role，1 小时过期。
+// GenerateToken 签发 JWT，claims 结构与原 Python 版一致：user_id/username/role，过期时长由 JWT_EXPIRES_HOURS 配置（默认 24 小时）。
 func (s *AuthService) GenerateToken(userID int, username, role string) (string, error) {
 	claims := &middleware.Claims{
 		UserID:   userID,
