@@ -49,7 +49,7 @@ func main() {
 	}
 	slog.Info("数据库连接成功")
 
-	// 3. 执行数据库迁移（含维修培训 000001 + 残值评估 000002~000004）
+	// 3. 执行数据库迁移（000001~000017，覆盖维修培训初始化与残值评估全量表结构/种子/系数调整）
 	if err := migratedb.RunMigrations(cfg.DatabaseURL, "up"); err != nil {
 		slog.Error("数据库迁移失败", "error", err)
 		os.Exit(1)
@@ -102,6 +102,8 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Error("服务关闭异常", "error", err)
 	}
+	// 释放 GORM 连接池（此前仅关闭了 valuation 的 pgx 池，GORM 池会被泄漏）
+	db.Close(gormDB)
 	slog.Info("服务已退出")
 }
 
@@ -135,7 +137,11 @@ func setupValuation(r *gin.Engine, cfg *config.Config) func() {
 	evalRepo := vrepo.NewEvaluationRepository(pool)
 
 	// 4. 装配业务服务（系数从 DB 实时查询，不再使用内存加载器）
-	valuationSvc := vservice.NewValuationService(pool, dictRepo, evalRepo)
+	valuationSvc, err := vservice.NewValuationService(pool, dictRepo, evalRepo)
+	if err != nil {
+		slog.Error("valuation 服务初始化失败", "error", err)
+		os.Exit(1)
+	}
 	batterySvc := vservice.NewBatteryRULService()
 
 	// 5. 装配 PDF 生成器

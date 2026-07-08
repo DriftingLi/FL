@@ -102,12 +102,6 @@ const routes = [
         name: 'WrongQuestions',
         component: () => import('@/pages/student/WrongQuestions.vue'),
         meta: { navKey: 'wrong-questions', navLabel: '错题本', navGroup: 'exam' }
-      },
-      {
-        path: 'practice',
-        name: 'Practice',
-        component: () => import('@/pages/student/Practice.vue'),
-        meta: { navKey: 'practice', navLabel: '虚拟实操', navGroup: 'training' }
       }
     ]
   },
@@ -168,10 +162,9 @@ const routes = [
         meta: { requiresAuth: false, navKey: 'valuation', navLabel: '残值评估', navGroup: 'tools' }
       },
       {
+        // 设计稿将表单提升为首页：访问 /valuation/input 等同于 /valuation
         path: 'input',
-        name: 'ValuationInput',
-        component: () => import('@/pages/student/valuation/ValuationInputView.vue'),
-        meta: { requiresAuth: false, navKey: 'valuation-input', navLabel: '整车评估', navGroup: 'tools' }
+        redirect: { name: 'ValuationHome' }
       },
       {
         path: 'result',

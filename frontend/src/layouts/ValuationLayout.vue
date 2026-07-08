@@ -1,55 +1,17 @@
 <template>
   <div class="valuation-layout">
-    <header class="valuation-navbar">
-      <div class="navbar-container">
+    <!-- 简洁顶部栏：仅 logo + 返回官网（无导航） -->
+    <header class="topbar">
+      <div class="topbar-container">
         <router-link to="/" class="logo-link">
           <img src="/images/HRWAIlogo.jpg" alt="和润天下" class="logo-img" />
           <div class="logo-text-wrap">
             <span class="logo-text">和润天下</span>
-            <span class="logo-sub">残值评估</span>
+            <span class="logo-sub">残值评估 · HRWAI</span>
           </div>
         </router-link>
-
-        <nav class="nav-links">
-          <router-link to="/valuation" class="nav-link" :class="{ active: isActive('/valuation') }">评估首页</router-link>
-          <router-link to="/valuation/input" class="nav-link" :class="{ active: isActive('/valuation/input') }">整车评估</router-link>
-          <router-link to="/valuation/battery" class="nav-link" :class="{ active: isActive('/valuation/battery') }">电池评估</router-link>
-          <router-link v-if="isLoggedIn" to="/valuation/history" class="nav-link" :class="{ active: isActive('/valuation/history') }">评估历史</router-link>
-        </nav>
-
-        <div class="nav-cta">
-          <template v-if="!isLoggedIn">
-            <router-link :to="{ path: '/login', query: { redirect: '/valuation/history' } }" class="btn-login">登录</router-link>
-          </template>
-          <template v-else>
-            <router-link to="/" class="btn-back">返回官网</router-link>
-          </template>
-        </div>
-
-        <button
-          class="hamburger"
-          :class="{ open: mobileOpen }"
-          @click="mobileOpen = !mobileOpen"
-          aria-label="菜单"
-        >
-          <span></span>
-          <span></span>
-          <span></span>
-        </button>
+        <router-link to="/" class="btn-back">返回官网</router-link>
       </div>
-
-      <transition name="mobile-slide">
-        <div v-if="mobileOpen" class="mobile-menu">
-          <router-link to="/valuation" class="mobile-link" @click="mobileOpen = false">评估首页</router-link>
-          <router-link to="/valuation/input" class="mobile-link" @click="mobileOpen = false">整车评估</router-link>
-          <router-link to="/valuation/battery" class="mobile-link" @click="mobileOpen = false">电池评估</router-link>
-          <router-link v-if="isLoggedIn" to="/valuation/history" class="mobile-link" @click="mobileOpen = false">评估历史</router-link>
-          <div class="mobile-cta">
-            <router-link v-if="!isLoggedIn" :to="{ path: '/login', query: { redirect: '/valuation/history' } }" class="btn-login" @click="mobileOpen = false">登录</router-link>
-            <router-link v-else to="/" class="btn-back" @click="mobileOpen = false">返回官网</router-link>
-          </div>
-        </div>
-      </transition>
     </header>
 
     <main class="valuation-main">
@@ -58,29 +20,13 @@
       </div>
     </main>
 
-    <footer class="valuation-footer">
-      <div class="footer-container">
-        <p class="footer-text">© {{ year }} 和润天下人工智能科技有限公司</p>
-      </div>
-    </footer>
+    <!-- 深色页脚：吸收原导航功能 + 累计评估 + 公众号 + 版权 -->
+    <ValuationFooter />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRoute } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-
-const route = useRoute()
-const authStore = useAuthStore()
-const mobileOpen = ref(false)
-
-const isLoggedIn = computed(() => !!(authStore.token && authStore.isLoggedIn && authStore.userInfo?.role))
-const year = new Date().getFullYear()
-
-function isActive(path: string): boolean {
-  return route.path === path
-}
+import ValuationFooter from '@/components/valuation/ValuationFooter.vue'
 </script>
 
 <style scoped>
@@ -88,129 +34,61 @@ function isActive(path: string): boolean {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-page);
+  background: var(--color-bg-page, #F8FAFC);
 }
 
-.valuation-navbar {
-  position: sticky;
-  top: 0;
-  z-index: var(--z-sticky);
-  background: var(--color-bg-card);
-  border-bottom: 1px solid var(--color-border);
-  box-shadow: var(--shadow-xs);
+/* ===== 简洁顶部栏 ===== */
+.topbar {
+  background: var(--color-surface, #FFFFFF);
+  border-bottom: 1px solid var(--color-border, #E2E8F0);
 }
 
-.navbar-container {
-  max-width: var(--container-page);
+.topbar-container {
+  max-width: var(--container-max, 1280px);
   margin: 0 auto;
-  padding: 0 var(--space-6);
+  padding: 0 var(--space-6, 24px);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 64px;
-  gap: var(--space-6);
+  height: var(--header-h, 72px);
+  gap: var(--space-6, 24px);
 }
 
 .logo-link {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-3, 12px);
   text-decoration: none;
   flex-shrink: 0;
 }
 
 .logo-img {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-md);
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md, 8px);
   object-fit: cover;
 }
 
 .logo-text-wrap {
   display: flex;
   flex-direction: column;
-  line-height: 1;
+  line-height: 1.1;
 }
 
 .logo-text {
-  font-family: var(--font-display);
-  font-size: var(--text-lg);
-  font-weight: var(--font-bold);
-  color: var(--color-text-primary);
+  font-family: var(--font-display, 'DM Sans', sans-serif);
+  font-size: var(--text-lg, 18px);
+  font-weight: var(--fw-bold, 700);
+  color: var(--color-text-primary, #0F172A);
   letter-spacing: -0.025em;
 }
 
 .logo-sub {
-  font-size: 10px;
-  color: var(--color-text-tertiary);
+  font-size: 11px;
+  color: var(--color-text-tertiary, #64748B);
   letter-spacing: 0.15em;
   text-transform: uppercase;
   margin-top: 2px;
-}
-
-.nav-links {
-  display: none;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  gap: var(--space-6);
-  align-items: center;
-  flex: 1;
-  justify-content: center;
-}
-
-.nav-link {
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  color: var(--color-text-secondary);
-  text-decoration: none;
-  transition: color var(--duration-fast);
-  cursor: pointer;
-  position: relative;
-  padding: var(--space-2) 0;
-}
-
-.nav-link:hover,
-.nav-link.active {
-  color: var(--color-primary-600);
-}
-
-.nav-link.active::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -4px;
-  height: 2px;
-  background: var(--gradient-brand);
-  border-radius: 2px;
-}
-
-.nav-cta {
-  display: none;
-  gap: var(--space-3);
-  flex-shrink: 0;
-}
-
-.btn-login {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  padding: 8px 20px;
-  background: var(--gradient-brand);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  text-decoration: none;
-  transition: opacity var(--duration-fast);
-}
-
-.btn-login:hover {
-  opacity: 0.92;
 }
 
 .btn-back {
@@ -220,157 +98,43 @@ function isActive(path: string): boolean {
   min-height: 40px;
   padding: 8px 20px;
   background: transparent;
-  color: var(--color-text-secondary);
-  border: 1px solid var(--color-border-dark);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
+  color: var(--color-text-secondary, #475569);
+  border: 1px solid var(--color-border-dark, #CBD5E1);
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--text-sm, 14px);
+  font-weight: var(--fw-medium, 500);
   text-decoration: none;
-  transition: all var(--duration-fast);
+  transition: all var(--t-fast, 150ms) var(--ease, ease);
 }
 
 .btn-back:hover {
-  border-color: var(--color-primary-500);
-  color: var(--color-primary-600);
+  border-color: var(--color-brand-500, #0EA5E9);
+  color: var(--color-brand-600, #0284C7);
+  background: var(--color-brand-50, #F0F9FF);
 }
 
-.hamburger {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
-  width: 36px;
-  height: 36px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-}
-
-.hamburger span {
-  display: block;
-  width: 22px;
-  height: 2px;
-  background: var(--color-text-primary);
-  border-radius: 1px;
-  transition: all var(--duration-normal);
-}
-
-.hamburger.open span:nth-child(1) {
-  transform: rotate(45deg) translate(5px, 5px);
-}
-
-.hamburger.open span:nth-child(2) {
-  opacity: 0;
-}
-
-.hamburger.open span:nth-child(3) {
-  transform: rotate(-45deg) translate(5px, -5px);
-}
-
-.mobile-menu {
-  display: flex;
-  flex-direction: column;
-  background: var(--color-bg-card);
-  padding: var(--space-4) var(--space-6);
-  border-top: 1px solid var(--color-border);
-}
-
-.mobile-link {
-  display: block;
-  font-size: var(--text-base);
-  font-weight: var(--font-medium);
-  color: var(--color-text-primary);
-  text-decoration: none;
-  padding: var(--space-4) 0;
-  border-bottom: 1px solid var(--color-border-light);
-}
-
-.mobile-link:last-of-type {
-  border-bottom: none;
-}
-
-.mobile-cta {
-  display: flex;
-  gap: var(--space-3);
-  margin-top: var(--space-5);
-}
-
-.mobile-cta .btn-login,
-.mobile-cta .btn-back {
-  flex: 1;
-  min-height: 44px;
-  text-align: center;
-}
-
-.mobile-slide-enter-active,
-.mobile-slide-leave-active {
-  transition: opacity var(--duration-normal), transform var(--duration-normal);
-}
-
-.mobile-slide-enter-from,
-.mobile-slide-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
-}
-
+/* ===== 主内容区 ===== */
 .valuation-main {
   flex: 1;
-  padding: var(--space-6) var(--space-4);
+  padding: 0 var(--space-4, 16px);
 }
 
 .valuation-content {
-  max-width: var(--container-page);
+  max-width: var(--container-max, 1280px);
   margin: 0 auto;
   width: 100%;
 }
 
-.valuation-footer {
-  background: var(--surface-dark);
-  padding: var(--space-6) var(--space-4);
-  border-top: 1px solid var(--color-border-darker);
-}
-
-.footer-container {
-  max-width: var(--container-page);
-  margin: 0 auto;
-  text-align: center;
-}
-
-.footer-text {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  margin: 0;
-}
-
-@media (min-width: 768px) {
-  .nav-links {
-    display: flex;
-  }
-  .nav-cta {
-    display: flex;
-  }
-  .hamburger {
-    display: none;
-  }
-  .mobile-menu {
-    display: none !important;
-  }
-}
-
 @media (max-width: 767px) {
-  .hamburger {
-    display: flex;
-  }
-  .navbar-container {
-    padding: 0 var(--space-4);
-    height: 56px;
+  .topbar-container {
+    padding: 0 var(--space-4, 16px);
+    height: 60px;
   }
   .logo-text {
-    font-size: var(--text-base);
+    font-size: var(--text-base, 16px);
   }
   .valuation-main {
-    padding: var(--space-4) var(--space-3);
+    padding: 0 var(--space-3, 12px);
   }
 }
 </style>

@@ -556,19 +556,26 @@ function onSubmit() {
       </section>
     </div>
 
-    <!-- 底部固定操作栏 -->
-    <div class="bottom-action-bar">
-      <div class="bottom-action-inner">
-        <el-button :icon="Refresh" @click="reset">重置</el-button>
-        <el-button
-          type="primary"
-          :icon="Promotion"
-          :loading="submitting"
-          :disabled="!isValid"
-          @click="onSubmit"
-        >
-          提交评估
-        </el-button>
+    <!-- 页面底部内联操作区（替代原 fixed 底部栏） -->
+    <div class="bottom-action-inline">
+      <div class="bottom-action-card">
+        <div class="bottom-action-text">
+          <p class="bottom-action-hint">完成所有必填项后即可提交评估</p>
+          <p class="bottom-action-sub">评估结果将保留在「评估历史」中，支持下载 PDF 报告</p>
+        </div>
+        <div class="bottom-action-buttons">
+          <el-button :icon="Refresh" size="large" @click="reset">重置</el-button>
+          <el-button
+            type="primary"
+            size="large"
+            :icon="Promotion"
+            :loading="submitting"
+            :disabled="!isValid"
+            @click="onSubmit"
+          >
+            提交评估
+          </el-button>
+        </div>
       </div>
     </div>
   </div>
@@ -797,23 +804,41 @@ function onSubmit() {
   border-radius: var(--radius-full);
 }
 
-/* ===== 底部固定操作栏 ===== */
-.bottom-action-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 50;
-  background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
-  padding: var(--sp-4) var(--sp-7);
+/* ===== 页面底部内联操作区（替代 fixed 栏） ===== */
+.bottom-action-inline {
+  margin-top: var(--sp-8, 32px);
+  margin-bottom: var(--sp-12, 48px);
 }
-.bottom-action-inner {
-  max-width: var(--container-max);
-  margin: 0 auto;
+.bottom-action-card {
   display: flex;
-  justify-content: flex-end;
-  gap: var(--sp-3);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-6, 24px);
+  padding: var(--sp-6, 24px) var(--sp-7, 28px);
+  background: linear-gradient(135deg, #F0F9FF 0%, #FFFFFF 50%, #F0FDFA 100%);
+  border: 1px solid var(--color-brand-200, #BAE6FD);
+  border-radius: var(--radius-xl, 16px);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+}
+.bottom-action-text {
+  flex: 1;
+  min-width: 0;
+}
+.bottom-action-hint {
+  font-size: var(--text-base, 16px);
+  font-weight: var(--fw-semibold, 600);
+  color: var(--color-text, #0F172A);
+  margin: 0 0 4px;
+}
+.bottom-action-sub {
+  font-size: var(--text-sm, 14px);
+  color: var(--color-text-secondary, #475569);
+  margin: 0;
+}
+.bottom-action-buttons {
+  display: flex;
+  gap: var(--sp-3, 12px);
+  flex-shrink: 0;
 }
 
 /* ===== 移动端适配 ===== */
@@ -852,13 +877,21 @@ function onSubmit() {
   .form-row + .form-row {
     margin-top: var(--sp-4);
   }
-  .bottom-action-bar {
-    padding: var(--sp-3) var(--sp-4);
+  .bottom-action-inline {
+    margin-top: var(--sp-6, 24px);
+    margin-bottom: var(--sp-8, 32px);
   }
-  .bottom-action-inner {
-    justify-content: stretch;
+  .bottom-action-card {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+    padding: var(--sp-5, 20px) var(--sp-4, 16px);
+    gap: var(--sp-4, 16px);
   }
-  .bottom-action-inner :deep(.el-button) {
+  .bottom-action-buttons {
+    width: 100%;
+  }
+  .bottom-action-buttons :deep(.el-button) {
     flex: 1;
   }
   :deep(.condition-pills .el-radio-button__inner) {

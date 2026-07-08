@@ -35,26 +35,29 @@ type ValuationService struct {
 // pool: pgx 连接池
 // dictRepo: 字典仓储（brand_types / brands / vehicle_types / condition_ratings / region_coefficients / coefficient_configs / original_prices）
 // evalRepo: 评估记录仓储（持久化评估结果）
+//
+// 原实现使用 panic 做空值断言，会绕过 error 返回链导致启动流程难以优雅处理。
+// 改为返回 error，由调用方在装配阶段决定 fail-fast 策略（main.go 启动时 os.Exit）。
 func NewValuationService(
 	pool *pgxpool.Pool,
 	dictRepo *repository.DictionaryRepository,
 	evalRepo *repository.EvaluationRepository,
-) *ValuationService {
+) (*ValuationService, error) {
 	if pool == nil {
-		panic("NewValuationService: pool 不能为 nil")
+		return nil, fmt.Errorf("NewValuationService: pool 不能为 nil")
 	}
 	if dictRepo == nil {
-		panic("NewValuationService: dictRepo 不能为 nil")
+		return nil, fmt.Errorf("NewValuationService: dictRepo 不能为 nil")
 	}
 	if evalRepo == nil {
-		panic("NewValuationService: evalRepo 不能为 nil")
+		return nil, fmt.Errorf("NewValuationService: evalRepo 不能为 nil")
 	}
 	return &ValuationService{
 		pool:     pool,
 		dictRepo: dictRepo,
 		evalRepo: evalRepo,
 		provider: NewCoefficientProvider(dictRepo),
-	}
+	}, nil
 }
 
 // Evaluate 执行完整残值评估
@@ -369,8 +372,9 @@ func roundTo4(v float64) float64 {
 }
 
 // clamp01 将值钳制到 [0, 1] 区间（雷达图维度评分归一化）
+// NaN 兜底为 0，避免异常系数经雷达图渲染传播为非法值
 func clamp01(v float64) float64 {
-	if v < 0 {
+	if math.IsNaN(v) || v < 0 {
 		return 0
 	}
 	if v > 1 {

@@ -42,3 +42,22 @@ func InitDB(dsn string) (*gorm.DB, error) {
 	slog.Info("数据库连接成功")
 	return db, nil
 }
+
+// Close 释放 GORM 底层 *sql.DB 连接池。
+// 在服务优雅退出阶段调用，避免连接池资源泄漏。
+// 传入 nil 时为空操作；关闭失败仅记录日志，不阻断退出流程。
+func Close(db *gorm.DB) {
+	if db == nil {
+		return
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		slog.Warn("获取底层 sql.DB 失败，跳过连接池关闭", "error", err)
+		return
+	}
+	if err := sqlDB.Close(); err != nil {
+		slog.Warn("关闭数据库连接池异常", "error", err)
+		return
+	}
+	slog.Info("数据库连接池已关闭")
+}

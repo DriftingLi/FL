@@ -69,3 +69,9 @@ node_modules_old/
 
 # ===== Trae 相关文件 =====
 .trae/
+
+# ===== WorkBuddy 相关文件 =====
+.workbuddy/
+
+# ===== 上传临时目录 =====
+.uploads/

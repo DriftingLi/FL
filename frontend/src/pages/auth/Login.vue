@@ -159,16 +159,28 @@ async function handleLogin() {
       authStore.setAuthData(res.data)
       ElMessage.success('登录成功')
 
+      // 工作台：按登录身份跳转到对应工作台
+      const dashboardByRole: Record<string, string> = {
+        admin: '/admin/dashboard',
+        tutor: '/training/tutor',
+        student: '/training'
+      }
+      const role = authStore.userInfo?.role
+      const dashboard = (role && dashboardByRole[role]) || '/'
+
+      // redirect 回跳：仅允许在同身份工作台内回跳，防止越权/钓鱼
       const redirect = route.query.redirect as string | undefined
-      if (formData.role === 'admin') {
-        // 管理员始终跳转仪表盘，忽略 redirect 防止钓鱼
-        router.push('/admin/dashboard')
-      } else if (redirect && !redirect.startsWith('/admin')) {
-        // 学员/导师支持 redirect 回跳（排除 admin 路径防止钓鱼）
+      const isSafeRedirect = (target: string): boolean => {
+        if (role === 'admin') return target.startsWith('/admin')
+        if (role === 'tutor') return target.startsWith('/training/tutor')
+        if (role === 'student') return target.startsWith('/training')
+        return false
+      }
+
+      if (redirect && isSafeRedirect(redirect)) {
         router.push(redirect)
       } else {
-        // 默认留在官网首页
-        router.push('/')
+        router.push(dashboard)
       }
     }
   } catch (e) {

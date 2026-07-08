@@ -1,5 +1,5 @@
-// 统一页头（设计稿风格：eyebrow + 主标题 + 右侧操作，底部 1px 分隔线）
 <script setup lang="ts">
+// 统一页头：eyebrow + 主标题 + 右侧操作 + 底部渐变下划线（与官网风格一致）
 defineProps<{
   title: string
   subtitle?: string
@@ -27,40 +27,56 @@ defineProps<{
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: var(--sp-6);
-  padding: var(--sp-8) 0 var(--sp-5);
-  margin-bottom: var(--sp-6);
-  border-bottom: 1px solid var(--color-border);
+  gap: var(--sp-6, 24px);
+  padding: var(--sp-10, 40px) 0 var(--sp-5, 20px);
+  margin-bottom: var(--sp-6, 24px);
+  position: relative;
+}
+.page-header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    var(--color-brand-200, #BAE6FD) 0%,
+    var(--color-border, #E2E8F0) 30%,
+    var(--color-border, #E2E8F0) 100%
+  );
 }
 .page-header-left {
   display: flex;
-  gap: var(--sp-3);
+  gap: var(--sp-3, 12px);
   align-items: center;
 }
 .page-header-icon {
   font-size: 24px;
-  color: var(--color-text);
+  color: var(--color-text, #0F172A);
   line-height: 1;
 }
 .page-header-eyebrow {
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-medium);
+  font-family: var(--font-display, 'DM Sans', sans-serif);
+  font-size: var(--text-sm, 14px);
+  font-weight: var(--fw-medium, 500);
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--color-text-tertiary);
-  margin: 0 0 var(--sp-1);
+  color: var(--color-text-tertiary, #64748B);
+  margin: 0 0 var(--sp-1, 4px);
 }
 .page-header-title {
-  font-family: var(--font-text);
-  font-size: var(--fs-3xl);
-  font-weight: var(--fw-semibold);
+  font-family: var(--font-text, 'Noto Sans SC', sans-serif);
+  font-size: var(--fs-3xl, 30px);
+  font-weight: var(--fw-bold, 700);
   margin: 0;
-  color: var(--color-text);
+  color: var(--color-text, #0F172A);
   line-height: 1.2;
+  letter-spacing: -0.025em;
 }
 .page-header-right {
   display: flex;
-  gap: var(--sp-2);
+  gap: var(--sp-2, 8px);
   flex-shrink: 0;
 }
 
@@ -69,12 +85,12 @@ defineProps<{
   .page-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--sp-4);
-    padding: var(--sp-5) 0 var(--sp-4);
-    margin-bottom: var(--sp-4);
+    gap: var(--sp-4, 16px);
+    padding: var(--sp-6, 24px) 0 var(--sp-4, 16px);
+    margin-bottom: var(--sp-4, 16px);
   }
   .page-header-title {
-    font-size: var(--fs-2xl);
+    font-size: var(--fs-2xl, 24px);
   }
   .page-header-right {
     width: 100%;

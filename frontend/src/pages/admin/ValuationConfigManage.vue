@@ -5,8 +5,13 @@
 //   Tab 2 算法参数：聚合展示 5 类参数（全局系数 / 品牌系数 / 车况系数 / 车况修正项 / 区域系数）
 //                  每类独立保存，仅提交变更项（dirty 检测），不提供新增/删除
 // 000015：新增"车况修正项"区，按 key 前缀 kc_ 过滤 coefficient_configs 行单独展示
+//
+// 重构（2026-07）：抽出通用组合式函数消除重复
+//   - useCrudTable：Tab 1 原价表 CRUD（列表/弹窗/必填校验/删除确认/loading 态）
+//   - useDirtyDraft：Tab 2 各分区 dirty 检测 + 仅保存变更项 + 重置
+//     coefficients 分区共享一条 draft，global / kcModifiers 通过 filter 派生两个视图
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Plus, Edit, Delete, Refresh, Check, RefreshLeft } from '@element-plus/icons-vue'
 import PageHeader from '@/components/valuation/PageHeader.vue'
 import {
@@ -17,22 +22,52 @@ import {
   updateConditionCoefficient,
   updateRegionCoefficient,
   type AdminRow,
+  type AdminResourceId,
   type AlgorithmParameters
 } from '@/api/valuation/admin'
 import type { CoefficientConfig } from '@/types/valuation/evaluation'
+import { useCrudTable, type FieldDef } from '@/composables/useCrudTable'
+import { useDirtyDraft } from '@/composables/useDirtyDraft'
 
 // ========== Tab 1: 原价表 ==========
-interface OriginalPriceTabState {
-  loading: boolean
-  list: AdminRow[]
-}
+const ORIGINAL_PRICE_FIELDS: FieldDef[] = [
+  { prop: 'brand', label: '品牌', type: 'input', required: true, width: 120 },
+  { prop: 'vehicle_type', label: '车辆类型', type: 'input', required: true, width: 120 },
+  { prop: 'series', label: '系列', type: 'input', width: 100 },
+  { prop: 'tonnage', label: '吨位', type: 'number', width: 80 },
+  { prop: 'config_type', label: '配置类型', type: 'input', width: 150, defaultValue: '无' },
+  { prop: 'mast_type', label: '门架类型', type: 'input', width: 100, defaultValue: '无' },
+  { prop: 'mast_height_mm', label: '门架高度(mm)', type: 'number', width: 120 },
+  { prop: 'earliest_factory_year', label: '最早出厂年份', type: 'number', required: true, width: 120, defaultValue: 2000 },
+  { prop: 'original_price', label: '原价（万元）', type: 'number', required: true, width: 120 }
+]
 
-const originalPriceState = reactive<OriginalPriceTabState>({
-  loading: false,
-  list: []
-})
+const {
+  loading: originalPriceLoading,
+  list: originalPriceList,
+  dialogVisible,
+  dialogTitle,
+  editingRow,
+  formData,
+  submitting,
+  load: loadOriginalPrices,
+  openCreate,
+  openEdit,
+  submit: handleSubmit,
+  remove: handleDelete
+} = useCrudTable<AdminRow, AdminResourceId>(
+  {
+    fetch: () => adminResources.originalPrices.list(),
+    create: (p) => adminResources.originalPrices.create(p),
+    update: (id, p) => adminResources.originalPrices.update(id, p),
+    remove: (id) => adminResources.originalPrices.remove(id),
+    getId: (row) => adminResources.originalPrices.getIdOf(row)
+  },
+  ORIGINAL_PRICE_FIELDS,
+  '原价记录'
+)
 
-// 原价表筛选
+// 原价表筛选（本地过滤）
 const originalPriceFilter = reactive({
   brand: '',
   vehicle_type: '',
@@ -41,7 +76,7 @@ const originalPriceFilter = reactive({
 })
 
 const filteredOriginalPrices = computed(() => {
-  const rows = originalPriceState.list
+  const rows = originalPriceList.value
   const brand = originalPriceFilter.brand.trim()
   const vehicleType = originalPriceFilter.vehicle_type.trim()
   const series = originalPriceFilter.series.trim()
@@ -65,115 +100,6 @@ function resetOriginalPriceFilter() {
   originalPriceFilter.config_type = ''
 }
 
-async function loadOriginalPrices() {
-  originalPriceState.loading = true
-  try {
-    originalPriceState.list = await adminResources.originalPrices.list()
-  } catch {
-    originalPriceState.list = []
-  } finally {
-    originalPriceState.loading = false
-  }
-}
-
-// 原价表字段定义（已移除 brand_type 列）
-interface FieldDef {
-  prop: string
-  label: string
-  type: 'input' | 'number' | 'switch'
-  required?: boolean
-  width?: number
-  defaultValue?: string | number | boolean
-}
-
-const ORIGINAL_PRICE_FIELDS: FieldDef[] = [
-  { prop: 'brand', label: '品牌', type: 'input', required: true, width: 120 },
-  { prop: 'vehicle_type', label: '车辆类型', type: 'input', required: true, width: 120 },
-  { prop: 'series', label: '系列', type: 'input', width: 100 },
-  { prop: 'tonnage', label: '吨位', type: 'number', width: 80 },
-  { prop: 'config_type', label: '配置类型', type: 'input', width: 150, defaultValue: '无' },
-  { prop: 'mast_type', label: '门架类型', type: 'input', width: 100, defaultValue: '无' },
-  { prop: 'mast_height_mm', label: '门架高度(mm)', type: 'number', width: 120 },
-  { prop: 'earliest_factory_year', label: '最早出厂年份', type: 'number', required: true, width: 120, defaultValue: 2000 },
-  { prop: 'original_price', label: '原价（万元）', type: 'number', required: true, width: 120 }
-]
-
-// 通用编辑对话框
-const dialogVisible = ref(false)
-const dialogTitle = ref('')
-const editingRow = ref<AdminRow | null>(null)
-const formData = reactive<AdminRow>({})
-const submitting = ref(false)
-
-function openCreate() {
-  editingRow.value = null
-  dialogTitle.value = '新增原价记录'
-  Object.keys(formData).forEach((k) => delete formData[k])
-  for (const f of ORIGINAL_PRICE_FIELDS) {
-    if (f.defaultValue !== undefined) {
-      formData[f.prop] = f.defaultValue
-    } else if (f.type === 'switch') {
-      formData[f.prop] = true
-    } else if (f.type === 'number') {
-      formData[f.prop] = 0
-    } else {
-      formData[f.prop] = ''
-    }
-  }
-  dialogVisible.value = true
-}
-
-function openEdit(row: AdminRow) {
-  editingRow.value = row
-  dialogTitle.value = '编辑原价记录'
-  Object.keys(formData).forEach((k) => delete formData[k])
-  Object.assign(formData, row)
-  dialogVisible.value = true
-}
-
-async function handleSubmit() {
-  for (const f of ORIGINAL_PRICE_FIELDS) {
-    if (f.required) {
-      const v = formData[f.prop]
-      if (v == null || v === '') {
-        ElMessage.warning(`请填写${f.label}`)
-        return
-      }
-    }
-  }
-  submitting.value = true
-  try {
-    const payload: Record<string, unknown> = { ...formData }
-    const id = adminResources.originalPrices.getIdOf(editingRow.value)
-    if (id != null) {
-      await adminResources.originalPrices.update(id, payload)
-      ElMessage.success('更新成功')
-    } else {
-      await adminResources.originalPrices.create(payload)
-      ElMessage.success('创建成功')
-    }
-    dialogVisible.value = false
-    await loadOriginalPrices()
-  } catch {
-    // 拦截器已提示
-  } finally {
-    submitting.value = false
-  }
-}
-
-async function handleDelete(row: AdminRow) {
-  const id = adminResources.originalPrices.getIdOf(row)
-  if (id == null) return
-  try {
-    await ElMessageBox.confirm('确定删除该原价记录？', '删除确认', { type: 'warning' })
-    await adminResources.originalPrices.remove(id)
-    ElMessage.success('已删除')
-    await loadOriginalPrices()
-  } catch {
-    // 用户取消或拦截器已提示
-  }
-}
-
 // ========== Tab 2: 算法参数 ==========
 type CoeffRow = CoefficientConfig
 interface BrandRow {
@@ -195,256 +121,159 @@ interface RegionCoefficientRow {
   coefficient: number
 }
 
-// 服务器原始数据（用于 dirty 比较 & 重置）
-const originalCoefficients = ref<CoeffRow[]>([])
-const originalBrands = ref<BrandRow[]>([])
-const originalConditionRatings = ref<ConditionRatingRow[]>([])
-const originalRegionCoefficients = ref<RegionCoefficientRow[]>([])
+// coefficients 共享一条 draft：global 与 kcModifiers 按 key 前缀 kc_ 派生
+const isKc = (c: CoeffRow) => c.key.startsWith('kc_')
+const isGlobal = (c: CoeffRow) => !c.key.startsWith('kc_')
 
-// 本地编辑副本
-const coefficientsDraft = ref<CoeffRow[]>([])
-const brandsDraft = ref<BrandRow[]>([])
-const conditionRatingsDraft = ref<ConditionRatingRow[]>([])
-const regionCoefficientsDraft = ref<RegionCoefficientRow[]>([])
+const coefficients = useDirtyDraft<CoeffRow>({
+  identity: (c) => c.key,
+  equals: (a, b) => a.key === b.key && a.value === b.value
+})
+const brands = useDirtyDraft<BrandRow>({
+  identity: (b) => b.id,
+  equals: (a, b) => a.id === b.id && a.k_brand === b.k_brand && a.is_active === b.is_active
+})
+const conditionRatings = useDirtyDraft<ConditionRatingRow>({
+  identity: (c) => c.id,
+  equals: (a, b) => a.id === b.id && a.label === b.label && a.base_coefficient === b.base_coefficient
+})
+const regionCoefficients = useDirtyDraft<RegionCoefficientRow>({
+  identity: (r) => r.id,
+  equals: (a, b) => a.id === b.id && a.coefficient === b.coefficient
+})
+
+// 模板用的 draft 视图（coefficients 派生 global / kc 两个视图）
+const globalCoefficientsDraft = computed(() => coefficients.draft.value.filter(isGlobal))
+const kcModifiersDraft = computed(() => coefficients.draft.value.filter(isKc))
+const brandsDraft = brands.draft
+const conditionRatingsDraft = conditionRatings.draft
+const regionCoefficientsDraft = regionCoefficients.draft
 
 const algorithmLoading = ref(false)
+// 各分区独立 saving 态，保留各按钮独立 loading 的精确行为
 const savingCoefficients = ref(false)
+const savingKcModifiers = ref(false)
 const savingBrands = ref(false)
 const savingConditionRatings = ref(false)
 const savingRegionCoefficients = ref(false)
-const savingKcModifiers = ref(false)
 
 async function loadAlgorithmParams() {
   algorithmLoading.value = true
   try {
     const data: AlgorithmParameters = await listAlgorithmParameters()
-    originalCoefficients.value = data.coefficients.map((c) => ({ ...c }))
-    originalBrands.value = data.brands.map((b) => ({ ...b }))
-    originalConditionRatings.value = data.condition_ratings.map((c) => ({ ...c }))
-    originalRegionCoefficients.value = data.region_coefficients.map((r) => ({ ...r }))
-    coefficientsDraft.value = data.coefficients.map((c) => ({ ...c }))
-    brandsDraft.value = data.brands.map((b) => ({ ...b }))
-    conditionRatingsDraft.value = data.condition_ratings.map((c) => ({ ...c }))
-    regionCoefficientsDraft.value = data.region_coefficients.map((r) => ({ ...r }))
+    coefficients.setAll(data.coefficients)
+    brands.setAll(data.brands)
+    conditionRatings.setAll(data.condition_ratings)
+    regionCoefficients.setAll(data.region_coefficients)
   } catch {
-    originalCoefficients.value = []
-    originalBrands.value = []
-    originalConditionRatings.value = []
-    originalRegionCoefficients.value = []
-    coefficientsDraft.value = []
-    brandsDraft.value = []
-    conditionRatingsDraft.value = []
-    regionCoefficientsDraft.value = []
+    coefficients.clear()
+    brands.clear()
+    conditionRatings.clear()
+    regionCoefficients.clear()
   } finally {
     algorithmLoading.value = false
   }
 }
 
-// dirty 检测：比较 draft 与 original
-function isCoefficientsDirty(): boolean {
-  if (coefficientsDraft.value.length !== originalCoefficients.value.length) return true
-  return coefficientsDraft.value.some((c, i) => {
-    const o = originalCoefficients.value[i]
-    return !o || o.key !== c.key || o.value !== c.value
-  })
-}
+// ----- dirty 检测 -----
+// 注意：isCoefficientsDirty 沿用原实现的「全量比较」语义（整条 coefficients 数组任一项变更都点亮全局系数区），
+// 而非仅检查 isGlobal 子集，以保持与重构前完全一致的行为。
+const isCoefficientsDirty = () => coefficients.isDirty()
+const isKcModifiersDirty = () => coefficients.isDirty(isKc)
+const isBrandsDirty = () => brands.isDirty()
+const isConditionRatingsDirty = () => conditionRatings.isDirty()
+const isRegionCoefficientsDirty = () => regionCoefficients.isDirty()
 
-// 000015：按 key 前缀 kc_ 拆分全局系数与车况修正项
-// 全局系数区只展示非 kc_ 前缀的行；车况修正项区只展示 kc_ 前缀的行
-// 底层数据共享 coefficientsDraft / originalCoefficients，保存/重置仍走 saveCoefficients/resetCoefficients
-const globalCoefficientsDraft = computed(() =>
-  coefficientsDraft.value.filter((c) => !c.key.startsWith('kc_'))
-)
-const kcModifiersDraft = computed(() =>
-  coefficientsDraft.value.filter((c) => c.key.startsWith('kc_'))
-)
-// 车况修正项 dirty：仅检查 kc_ 前缀的行
-function isKcModifiersDirty(): boolean {
-  const draftKc = coefficientsDraft.value.filter((c) => c.key.startsWith('kc_'))
-  const origKc = originalCoefficients.value.filter((c) => c.key.startsWith('kc_'))
-  if (draftKc.length !== origKc.length) return true
-  return draftKc.some((c) => {
-    const o = origKc.find((x) => x.key === c.key)
-    return !o || o.value !== c.value
-  })
-}
-function isBrandsDirty(): boolean {
-  if (brandsDraft.value.length !== originalBrands.value.length) return true
-  return brandsDraft.value.some((b, i) => {
-    const o = originalBrands.value[i]
-    return !o || o.id !== b.id || o.k_brand !== b.k_brand || o.is_active !== b.is_active
-  })
-}
-function isConditionRatingsDirty(): boolean {
-  if (conditionRatingsDraft.value.length !== originalConditionRatings.value.length) return true
-  return conditionRatingsDraft.value.some((c, i) => {
-    const o = originalConditionRatings.value[i]
-    return !o || o.id !== c.id || o.label !== c.label || o.base_coefficient !== c.base_coefficient
-  })
-}
-function isRegionCoefficientsDirty(): boolean {
-  if (regionCoefficientsDraft.value.length !== originalRegionCoefficients.value.length) return true
-  return regionCoefficientsDraft.value.some((r, i) => {
-    const o = originalRegionCoefficients.value[i]
-    return !o || o.id !== r.id || o.coefficient !== r.coefficient
-  })
-}
-
-// 保存：仅提交变更项（限定到非 kc_ 前缀的全局系数）
+// ----- 保存（仅提交变更项；成功后统一 reload）-----
 async function saveCoefficients() {
-  const dirtyItems = coefficientsDraft.value.filter((c) => {
-    if (c.key.startsWith('kc_')) return false // 跳过车况修正项，由 saveKcModifiers 处理
-    const o = originalCoefficients.value.find((x) => x.key === c.key)
-    return !o || o.value !== c.value
-  })
-  if (dirtyItems.length === 0) {
-    ElMessage.info('无变更')
-    return
-  }
   savingCoefficients.value = true
   try {
-    await Promise.all(dirtyItems.map((c) => updateCoefficient(c.key, c.value)))
-    ElMessage.success(`已保存 ${dirtyItems.length} 项全局系数`)
-    await loadAlgorithmParams()
-  } catch {
-    // 拦截器已提示
+    if (
+      await coefficients.save({
+        filter: isGlobal,
+        persist: (c) => updateCoefficient(c.key, c.value),
+        successLabel: (n) => `已保存 ${n} 项全局系数`
+      })
+    ) {
+      await loadAlgorithmParams()
+    }
   } finally {
     savingCoefficients.value = false
   }
 }
 
-// 000015：保存车况修正项（仅 kc_ 前缀的行）
 async function saveKcModifiers() {
-  const dirtyItems = coefficientsDraft.value.filter((c) => {
-    if (!c.key.startsWith('kc_')) return false
-    const o = originalCoefficients.value.find((x) => x.key === c.key)
-    return !o || o.value !== c.value
-  })
-  if (dirtyItems.length === 0) {
-    ElMessage.info('无变更')
-    return
-  }
   savingKcModifiers.value = true
   try {
-    await Promise.all(dirtyItems.map((c) => updateCoefficient(c.key, c.value)))
-    ElMessage.success(`已保存 ${dirtyItems.length} 项车况修正项`)
-    await loadAlgorithmParams()
-  } catch {
-    // 拦截器已提示
+    if (
+      await coefficients.save({
+        filter: isKc,
+        persist: (c) => updateCoefficient(c.key, c.value),
+        successLabel: (n) => `已保存 ${n} 项车况修正项`
+      })
+    ) {
+      await loadAlgorithmParams()
+    }
   } finally {
     savingKcModifiers.value = false
   }
 }
 
 async function saveBrands() {
-  const dirtyItems = brandsDraft.value.filter((b) => {
-    const o = originalBrands.value.find((x) => x.id === b.id)
-    return !o || o.k_brand !== b.k_brand || o.is_active !== b.is_active
-  })
-  if (dirtyItems.length === 0) {
-    ElMessage.info('无变更')
-    return
-  }
   savingBrands.value = true
   try {
-    await Promise.all(
-      dirtyItems.map((b) => updateBrandCoefficient(b.id, b.k_brand, b.is_active))
-    )
-    ElMessage.success(`已保存 ${dirtyItems.length} 项品牌系数`)
-    await loadAlgorithmParams()
-  } catch {
-    // 拦截器已提示
+    if (
+      await brands.save({
+        persist: (b) => updateBrandCoefficient(b.id, b.k_brand, b.is_active),
+        successLabel: (n) => `已保存 ${n} 项品牌系数`
+      })
+    ) {
+      await loadAlgorithmParams()
+    }
   } finally {
     savingBrands.value = false
   }
 }
 
 async function saveConditionRatings() {
-  const dirtyItems = conditionRatingsDraft.value.filter((c) => {
-    const o = originalConditionRatings.value.find((x) => x.id === c.id)
-    return !o || o.label !== c.label || o.base_coefficient !== c.base_coefficient
-  })
-  if (dirtyItems.length === 0) {
-    ElMessage.info('无变更')
-    return
-  }
-  // 必填校验
-  for (const c of dirtyItems) {
-    if (!c.label || !c.label.trim()) {
-      ElMessage.warning(`评级 ${c.rating} 的中文标签不能为空`)
-      return
-    }
-  }
   savingConditionRatings.value = true
   try {
-    await Promise.all(
-      dirtyItems.map((c) =>
-        updateConditionCoefficient(c.id, c.label, c.base_coefficient)
-      )
-    )
-    ElMessage.success(`已保存 ${dirtyItems.length} 项车况系数`)
-    await loadAlgorithmParams()
-  } catch {
-    // 拦截器已提示
+    if (
+      await conditionRatings.save({
+        persist: (c) => updateConditionCoefficient(c.id, c.label, c.base_coefficient),
+        successLabel: (n) => `已保存 ${n} 项车况系数`,
+        validate: (c) => (!c.label || !c.label.trim() ? `评级 ${c.rating} 的中文标签不能为空` : undefined)
+      })
+    ) {
+      await loadAlgorithmParams()
+    }
   } finally {
     savingConditionRatings.value = false
   }
 }
 
 async function saveRegionCoefficients() {
-  const dirtyItems = regionCoefficientsDraft.value.filter((r) => {
-    const o = originalRegionCoefficients.value.find((x) => x.id === r.id)
-    return !o || o.coefficient !== r.coefficient
-  })
-  if (dirtyItems.length === 0) {
-    ElMessage.info('无变更')
-    return
-  }
   savingRegionCoefficients.value = true
   try {
-    await Promise.all(
-      dirtyItems.map((r) => updateRegionCoefficient(r.id, r.coefficient))
-    )
-    ElMessage.success(`已保存 ${dirtyItems.length} 项区域系数`)
-    await loadAlgorithmParams()
-  } catch {
-    // 拦截器已提示
+    if (
+      await regionCoefficients.save({
+        persist: (r) => updateRegionCoefficient(r.id, r.coefficient),
+        successLabel: (n) => `已保存 ${n} 项区域系数`
+      })
+    ) {
+      await loadAlgorithmParams()
+    }
   } finally {
     savingRegionCoefficients.value = false
   }
 }
 
-// 重置：恢复全局系数 draft 到服务器值（仅非 kc_ 前缀的行）
-function resetCoefficients() {
-  // 全量重置即可：kc_ 前缀的行也会被重置，但用户在车况修正项区点重置时
-  // 通常只关心 kc_ 行；为简化实现，此处统一重置全部 coefficients 行
-  coefficientsDraft.value = originalCoefficients.value.map((c) => ({ ...c }))
-}
-
-// 000015：重置车况修正项（仅 kc_ 前缀的行恢复服务器值）
-function resetKcModifiers() {
-  // 找出 kc_ 行的原始值，覆盖 draft 中对应行
-  const origKcMap = new Map(
-    originalCoefficients.value
-      .filter((c) => c.key.startsWith('kc_'))
-      .map((c) => [c.key, { ...c }])
-  )
-  coefficientsDraft.value = coefficientsDraft.value.map((c) => {
-    if (c.key.startsWith('kc_')) {
-      return origKcMap.get(c.key) ?? { ...c }
-    }
-    return c
-  })
-}
-function resetBrands() {
-  brandsDraft.value = originalBrands.value.map((b) => ({ ...b }))
-}
-function resetConditionRatings() {
-  conditionRatingsDraft.value = originalConditionRatings.value.map((c) => ({ ...c }))
-}
-function resetRegionCoefficients() {
-  regionCoefficientsDraft.value = originalRegionCoefficients.value.map((r) => ({ ...r }))
-}
+// ----- 重置 -----
+const resetCoefficients = () => coefficients.reset() // 全量重置（含 kc_，与原实现一致）
+const resetKcModifiers = () => coefficients.reset(isKc) // 仅重置 kc_ 行
+const resetBrands = () => brands.reset()
+const resetConditionRatings = () => conditionRatings.reset()
+const resetRegionCoefficients = () => regionCoefficients.reset()
 
 // 区域系数新增：调用 POST /admin/region-coefficients
 const regionCreateDialogVisible = ref(false)
@@ -566,7 +395,7 @@ function onRefresh() {
             <el-button :icon="RefreshLeft" size="small" @click="resetOriginalPriceFilter">重置筛选</el-button>
           </div>
           <el-table
-            v-loading="originalPriceState.loading"
+            v-loading="originalPriceLoading"
             :data="filteredOriginalPrices"
             stripe
             border
