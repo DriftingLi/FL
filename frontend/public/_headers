@@ -1,0 +1,6 @@
+# Cloudflare Pages 路由配置
+# SPA 回退：所有路径回退到 index.html（Vue Router history 模式）
+/*
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

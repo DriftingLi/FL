@@ -1,0 +1,397 @@
+name: CD - 持续部署（Tailscale SSH + Cloudflare Pages）
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 部署目标环境
+        type: choice
+        default: staging
+        options:
+          - staging
+          - production
+      skip_backend:
+        description: 跳过后端部署
+        type: boolean
+        default: false
+      skip_frontend:
+        description: 跳过前端部署
+        type: boolean
+        default: false
+      skip_migration:
+        description: 跳过数据库迁移
+        type: boolean
+        default: false
+
+concurrency:
+  group: cd-${{ github.ref }}-${{ inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: "1.26"
+  NODE_VERSION: "22"
+  REGISTRY: ghcr.io
+  IMAGE_BACKEND: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-backend
+  DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/forklift-training' }}
+  COMPOSE_FILE: ${{ vars.COMPOSE_FILE || 'docker-compose.prod.yml' }}
+  # Tailscale 配置
+  TAILSCALE_VERSION: "v2"
+  TAILSCALE_TAG: "tag:ci"
+
+jobs:
+  # ============================================================
+  # Stage 1: 构建后端 Docker 镜像并推送 ghcr.io
+  # ============================================================
+  build-backend:
+    if: ${{ !inputs.skip_backend }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 登录 GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 提取镜像标签
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_BACKEND }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,prefix=,format=short
+            type=ref,event=branch
+
+      - name: 构建并推送后端镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: backend-go
+          push: true
+          tags: ${{ env.IMAGE_BACKEND }}:latest,${{ env.IMAGE_BACKEND }}:${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+  # ============================================================
+  # Stage 2: 通过 Tailscale SSH 部署后端到自托管服务器
+  # ============================================================
+  deploy-backend:
+    needs: build-backend
+    if: |
+      always() &&
+      !inputs.skip_backend &&
+      (needs.build-backend.result == 'success' || needs.build-backend.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # --------------------------------------------------------
+      # Step 2.1: 加入 Tailscale 网络（无公网 IP 也能 SSH）
+      # --------------------------------------------------------
+      - name: 连接 Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: ${{ env.TAILSCALE_TAG }}
+
+      - name: 验证 Tailscale 连通性
+        run: |
+          echo "Tailscale 状态："
+          tailscale status || true
+          echo ""
+          echo "测试与部署服务器的连通性..."
+          if tailscale ping --c 3 ${{ secrets.TAILSCALE_HOST }}; then
+            echo "✅ Tailscale 连接正常"
+          else
+            echo "❌ 无法通过 Tailscale 连接服务器"
+            echo "请检查："
+            echo "  1. 服务器是否已安装 Tailscale 并加入同一 tailnet"
+            echo "  2. TAILSCALE_HOST Secret 是否为服务器的 Tailscale IP (100.x.x.x)"
+            echo "  3. 服务器是否在线"
+            exit 1
+          fi
+
+      # --------------------------------------------------------
+      # Step 2.2: 配置 SSH（通过 Tailscale 网络）
+      # --------------------------------------------------------
+      - name: 配置 SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # 通过 Tailscale IP 加入 known_hosts（不再用公网 IP）
+          ssh-keyscan -p ${{ secrets.SSH_PORT || '22' }} \
+            -H ${{ secrets.TAILSCALE_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          # 关闭 IPv6，避免 Tailscale MagicDNS 偶发问题
+          echo "AddressFamily inet" >> ~/.ssh/config
+
+      # --------------------------------------------------------
+      # Step 2.3: 上传部署脚本和配置
+      # --------------------------------------------------------
+      - name: 上传部署脚本和配置
+        run: |
+          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15"
+
+          scp $SSH_OPTS \
+            -P ${{ secrets.SSH_PORT || '22' }} \
+            scripts/deploy-remote.sh docker-compose.prod.yml \
+            ${{ secrets.SSH_USER }}@${{ secrets.TAILSCALE_HOST }}:${{ env.DEPLOY_PATH }}/
+
+          ssh $SSH_OPTS \
+            -p ${{ secrets.SSH_PORT || '22' }} \
+            ${{ secrets.SSH_USER }}@${{ secrets.TAILSCALE_HOST }} \
+            "chmod +x ${{ env.DEPLOY_PATH }}/deploy-remote.sh"
+
+      # --------------------------------------------------------
+      # Step 2.4: 执行远程部署
+      # --------------------------------------------------------
+      - name: 执行远程部署
+        run: |
+          # 将敏感环境变量写入临时文件
+          cat > /tmp/deploy-env.sh << 'ENVEOF'
+          export IMAGE_TAG="${IMAGE_TAG}"
+          export IMAGE_BACKEND="${IMAGE_BACKEND}"
+          export GITHUB_TOKEN="${GITHUB_TOKEN}"
+          export REGISTRY="${REGISTRY}"
+          export DATABASE_URL="${DATABASE_URL}"
+          export DB_USER="${DB_USER}"
+          export DB_PASSWORD="${DB_PASSWORD}"
+          export SECRET_KEY="${SECRET_KEY}"
+          export JWT_SECRET_KEY="${JWT_SECRET_KEY}"
+          export JWT_EXPIRES_HOURS="${JWT_EXPIRES_HOURS}"
+          export ADMIN_DEFAULT_PASSWORD="${ADMIN_DEFAULT_PASSWORD}"
+          export TUTOR_DEFAULT_PASSWORD="${TUTOR_DEFAULT_PASSWORD}"
+          export STUDENT_DEFAULT_PASSWORD="${STUDENT_DEFAULT_PASSWORD}"
+          export CORS_ORIGINS="${CORS_ORIGINS}"
+          export ZHIPU_API_KEY="${ZHIPU_API_KEY}"
+          export ZHIPU_BASE_URL="${ZHIPU_BASE_URL}"
+          export ZHIPU_MODEL="${ZHIPU_MODEL}"
+          export OPENAI_API_KEY="${OPENAI_API_KEY}"
+          export COZE_PROJECT_ID="${COZE_PROJECT_ID}"
+          export COZE_OAUTH_APP_ID="${COZE_OAUTH_APP_ID}"
+          export COZE_OAUTH_KID="${COZE_OAUTH_KID}"
+          export COMPOSE_FILE="${COMPOSE_FILE}"
+          export SKIP_MIGRATION="${SKIP_MIGRATION}"
+          export BACKEND_PORT="${BACKEND_PORT}"
+          ENVEOF
+
+          # 替换占位符
+          for var in IMAGE_TAG IMAGE_BACKEND GITHUB_TOKEN REGISTRY DATABASE_URL DB_USER DB_PASSWORD \
+            SECRET_KEY JWT_SECRET_KEY JWT_EXPIRES_HOURS ADMIN_DEFAULT_PASSWORD TUTOR_DEFAULT_PASSWORD \
+            STUDENT_DEFAULT_PASSWORD CORS_ORIGINS ZHIPU_API_KEY ZHIPU_BASE_URL ZHIPU_MODEL OPENAI_API_KEY \
+            COZE_PROJECT_ID COZE_OAUTH_APP_ID COZE_OAUTH_KID COMPOSE_FILE SKIP_MIGRATION BACKEND_PORT; do
+            sed -i "s|\${${var}}|${!var}|g" /tmp/deploy-env.sh
+          done
+
+          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15"
+
+          scp $SSH_OPTS \
+            -P ${{ secrets.SSH_PORT || '22' }} \
+            /tmp/deploy-env.sh \
+            ${{ secrets.SSH_USER }}@${{ secrets.TAILSCALE_HOST }}:/tmp/deploy-env.sh
+
+          ssh $SSH_OPTS \
+            -p ${{ secrets.SSH_PORT || '22' }} \
+            ${{ secrets.SSH_USER }}@${{ secrets.TAILSCALE_HOST }} << 'REMOTE_EXEC'
+          set -e
+          source /tmp/deploy-env.sh
+          shred -u /tmp/deploy-env.sh 2>/dev/null || rm -f /tmp/deploy-env.sh
+          cd ${DEPLOY_PATH:-/opt/forklift-training}
+          bash deploy-remote.sh
+          REMOTE_EXEC
+
+      # --------------------------------------------------------
+      # Step 2.5: 清理（SSH 密钥 + Tailscale 自动登出）
+      # --------------------------------------------------------
+      - name: 清理 SSH 密钥
+        if: always()
+        run: |
+          rm -f ~/.ssh/deploy_key /tmp/deploy-env.sh
+      - name: 登出 Tailscale
+        if: always()
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: ${{ env.TAILSCALE_TAG }}
+          args: logout
+
+  # ============================================================
+  # Stage 3: 构建前端并部署到 Cloudflare Pages
+  # ============================================================
+  deploy-frontend:
+    if: ${{ !inputs.skip_frontend }}
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment || 'staging' }}
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 安装依赖
+        working-directory: frontend
+        run: npm ci
+
+      - name: TypeScript 类型检查
+        working-directory: frontend
+        run: npm run type-check
+
+      - name: 构建前端（注入 API 地址）
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || secrets.VITE_API_BASE_URL || 'https://api.your-domain.com' }}
+        run: npm run build
+
+      - name: 部署到 Cloudflare Pages
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: ${{ vars.CLOUDFLARE_PROJECT_NAME || 'forklift-training' }}
+          directory: frontend/dist
+          branch: main
+          wranglerVersion: '3'
+
+      - name: 前端部署摘要
+        run: |
+          echo "### 前端部署完成" >> $GITHUB_STEP_SUMMARY
+          echo "- Cloudflare Pages: \`${{ vars.CLOUDFLARE_PROJECT_NAME || 'forklift-training' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- API 地址: \`${{ vars.VITE_API_BASE_URL || 'https://api.your-domain.com' }}\`" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================
+  # Stage 4: 后端健康检查（通过公网 Cloudflare Tunnel）
+  # ============================================================
+  health-check:
+    needs: deploy-backend
+    if: |
+      always() &&
+      !inputs.skip_backend &&
+      needs.deploy-backend.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 等待服务就绪
+        run: sleep 15
+
+      - name: API 健康检查
+        env:
+          API_URL: ${{ vars.API_URL || secrets.API_URL }}
+        run: |
+          if [ -z "$API_URL" ]; then
+            echo "::warning::未配置 API_URL，跳过健康检查"
+            exit 0
+          fi
+          for i in $(seq 1 15); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              --connect-timeout 5 --max-time 10 \
+              "$API_URL/api/health" 2>/dev/null || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ 后端健康 ($STATUS)"
+              exit 0
+            fi
+            echo "⏳ 等待... ($STATUS) [$i/15]"
+            sleep 6
+          done
+          echo "❌ 后端健康检查失败!"
+          exit 1
+
+  # ============================================================
+  # Stage 5: 后端自动回滚（通过 Tailscale SSH）
+  # ============================================================
+  rollback:
+    needs: [deploy-backend, health-check]
+    if: |
+      always() &&
+      !inputs.skip_backend &&
+      needs.deploy-backend.result == 'success' &&
+      needs.health-check.result == 'failure'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 连接 Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: ${{ env.TAILSCALE_TAG }}
+
+      - name: 配置 SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p ${{ secrets.SSH_PORT || '22' }} \
+            -H ${{ secrets.TAILSCALE_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: 执行远程回滚
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+            -p ${{ secrets.SSH_PORT || '22' }} \
+            ${{ secrets.SSH_USER }}@${{ secrets.TAILSCALE_HOST }} \
+            "cd ${DEPLOY_PATH:-/opt/forklift-training} && bash deploy-remote.sh --rollback"
+          echo "::warning::后端自动回滚已执行!"
+
+      - name: 清理
+        if: always()
+        run: |
+          rm -f ~/.ssh/deploy_key
+
+      - name: 登出 Tailscale
+        if: always()
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: ${{ env.TAILSCALE_TAG }}
+          args: logout
+
+  # ============================================================
+  # Stage 6: 部署汇总
+  # ============================================================
+  notify:
+    needs: [deploy-backend, deploy-frontend, health-check]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: 汇总部署状态
+        run: |
+          BACKEND_STATUS="${{ needs.deploy-backend.result }}"
+          FRONTEND_STATUS="${{ needs.deploy-frontend.result }}"
+          HEALTH_STATUS="${{ needs.health-check.result }}"
+
+          echo "# 部署报告" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 项目 | 状态 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 后端 (Tailscale SSH) | $([ "$BACKEND_STATUS" = 'success' ] && echo '✅' || ([ "$BACKEND_STATUS" = 'skipped' ] && echo '⏭️') || echo '❌') |" >> $GITHUB_STEP_SUMMARY
+          echo "| 前端 (Cloudflare Pages) | $([ "$FRONTEND_STATUS" = 'success' ] && echo '✅' || ([ "$FRONTEND_STATUS" = 'skipped' ] && echo '⏭️') || echo '❌') |" >> $GITHUB_STEP_SUMMARY
+          echo "| 健康检查 | $([ "$HEALTH_STATUS" = 'success' ] && echo '✅' || ([ "$HEALTH_STATUS" = 'skipped' ] && echo '⏭️') || echo '⚠️ 已回滚') |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- 后端 API: ${{ vars.API_URL || '未配置' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 前端: https://${{ vars.CLOUDFLARE_PROJECT_NAME || 'forklift-training' }}.pages.dev" >> $GITHUB_STEP_SUMMARY
+        shell: bash

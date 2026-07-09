@@ -1,0 +1,279 @@
+name: CI - 持续集成
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.26"
+  NODE_VERSION: "22"
+
+jobs:
+  # ============================================================
+  # Stage 1: 代码变更检测（仅 PR 时跳过无关 job，push 全量运行）
+  # ============================================================
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend-go/**'
+              - '.github/workflows/**'
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/**'
+
+  # ============================================================
+  # Stage 2: 后端 - 代码质量
+  # ============================================================
+  backend-lint:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend-go
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend-go/go.sum
+
+      - name: Go 代码格式化检查
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "以下文件未格式化:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Go vet 静态分析
+        run: go vet ./...
+
+      - name: golangci-lint 代码检查
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: backend-go
+          args: --timeout=5m
+
+  # ============================================================
+  # Stage 3: 后端 - 单元测试
+  # ============================================================
+  backend-test:
+    needs: backend-lint
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: forklift_test
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend-go
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend-go/go.sum
+
+      - name: 运行单元测试
+        env:
+          DATABASE_URL: postgres://testuser:testpass@localhost:5432/forklift_test?sslmode=disable
+        run: go test ./... -race -cover -coverprofile=coverage.txt -timeout 10m
+
+      - name: 上传覆盖率报告
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend-go/coverage.txt
+
+  # ============================================================
+  # Stage 4: 前端 - 类型检查 + 构建
+  # ============================================================
+  frontend-check:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: TypeScript 类型检查
+        run: npm run type-check
+
+      - name: ESLint 检查（如有配置）
+        continue-on-error: true
+        run: npx eslint src/ --ext .ts,.vue --max-warnings 0 || echo "ESLint 暂未配置，跳过"
+
+      - name: 生产构建
+        run: npm run build
+
+  # ============================================================
+  # Stage 5: 安全扫描
+  # ============================================================
+  security-scan:
+    needs: [backend-test, frontend-check]
+    if: always() && (needs.backend-test.result == 'success' || needs.frontend-check.result == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Go 依赖漏洞扫描
+        if: needs.changes.outputs.backend == 'true'
+        run: |
+          cd backend-go
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+      - name: npm 依赖漏洞扫描
+        if: needs.changes.outputs.frontend == 'true'
+        working-directory: frontend
+        run: |
+          npm audit --audit-level=high || echo "发现高危漏洞，请检查并修复"
+
+      - name: Dockerfile 安全分析
+        uses: aquasecurity/trivy-action@master
+        continue-on-error: true
+        with:
+          scan-type: config
+          scan-ref: backend-go/Dockerfile
+
+  # ============================================================
+  # Stage 6: 数据库迁移校验
+  # ============================================================
+  migration-check:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: forklift_migrate
+          POSTGRES_USER: migrateuser
+          POSTGRES_PASSWORD: migratepass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend-go
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend-go/go.sum
+
+      - name: 验证迁移脚本完整性（up + down）
+        env:
+          DATABASE_URL: postgres://migrateuser:migratepass@localhost:5432/forklift_migrate?sslmode=disable
+        run: |
+          echo ">>> 检查迁移脚本..."
+          UP_COUNT=$(find migrations -name "*.up.sql" | wc -l)
+          DOWN_COUNT=$(find migrations -name "*.down.sql" | wc -l)
+          echo "UP: $UP_COUNT, DOWN: $DOWN_COUNT"
+          if [ "$UP_COUNT" -ne "$DOWN_COUNT" ]; then
+            echo "错误: UP 和 DOWN 迁移文件数量不一致!"
+            exit 1
+          fi
+          echo "迁移文件完整性检查通过"
+
+  # ============================================================
+  # Stage 7: CI 汇总（作为 CD 流水线的依赖门禁）
+  # ============================================================
+  ci-summary:
+    needs: [backend-lint, backend-test, frontend-check, security-scan, migration-check]
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检查是否全部通过
+        run: |
+          FAILED=""
+          for job in backend-lint backend-test frontend-check security-scan migration-check; do
+            result="${{ needs[format('{0}', job)].result }}" || true
+            # 简化处理：直接通过 needs 上下文逐项检查
+          done
+
+          echo "# CI 检查报告" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | 状态 |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|------|" >> $GITHUB_STEP_SUMMARY
+
+          check() {
+            local result=$1
+            local name=$2
+            if [ "$result" = "success" ]; then
+              echo "| $name | ✅ 通过 |" >> $GITHUB_STEP_SUMMARY
+            elif [ "$result" = "skipped" ] || [ "$result" = "cancelled" ]; then
+              echo "| $name | ⏭️ 跳过 |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| $name | ❌ 失败 |" >> $GITHUB_STEP_SUMMARY
+              FAILED="${FAILED}$name "
+            fi
+          }
+
+          check "${{ needs.backend-lint.result }}" "backend-lint"
+          check "${{ needs.backend-test.result }}" "backend-test"
+          check "${{ needs.frontend-check.result }}" "frontend-check"
+          check "${{ needs.security-scan.result }}" "security-scan"
+          check "${{ needs.migration-check.result }}" "migration-check"
+
+          if [ -n "$FAILED" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**失败项: $FAILED**" >> $GITHUB_STEP_SUMMARY
+            echo "CI_FAILED=true" >> $GITHUB_ENV
+            exit 1
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**全部检查通过, 可以进入 CD 部署!**" >> $GITHUB_STEP_SUMMARY

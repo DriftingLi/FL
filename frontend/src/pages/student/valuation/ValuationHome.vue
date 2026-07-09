@@ -1,7 +1,10 @@
 <script setup lang="ts">
 // 残值评估首页（设计稿风格：白底居中表单 + 自定义控件 + 底部固定操作栏）
-// 设计将表单提升为首页：访问 /valuation 即可直接填写并提交评估，无需再跳到 /valuation/input
-// 保留 ValuationInputView 的级联加载、校验、提交等全部表单逻辑
+// 改动：
+// 1) 出厂年份改为下拉框（按 earliest_factory_year → 当前年 动态生成）
+// 2) 所有字段一开始就出现，按级联逻辑 :disabled 锁定，而非 v-if
+// 3) 操作栏文字允许换行 + 768px 以下提前变竖排
+// 保留 useEvaluationForm composable 的级联加载、校验、提交等全部逻辑
 import { computed, onMounted, ref, watch } from 'vue'
 import {
   useEvaluationForm,
@@ -22,12 +25,8 @@ import {
   listProvinces,
   listCities
 } from '@/api/valuation/dictionaries'
-import { getEvaluationStats } from '@/api/valuation/evaluation'
 import type {
-  VehicleTypeOption,
   SeriesOption,
-  TonnageOption,
-  ConfigTypeOption,
   MastTypeOption,
   MastHeightOption,
   ConditionRatingOption,
@@ -37,15 +36,15 @@ import type { Brand } from '@/types/valuation/brand'
 
 // ========== 字典数据 ==========
 const brands = ref<Brand[]>([])
-const vehicleTypes = ref<VehicleTypeOption[]>([])
 const seriesList = ref<SeriesOption[]>([])
-const tonnages = ref<TonnageOption[]>([])
-const configTypes = ref<ConfigTypeOption[]>([])
+const tonnages = ref<number[]>([])
+const configTypes = ref<{ id: number; name: string }[]>([])
 const mastTypes = ref<MastTypeOption[]>([])
 const mastHeights = ref<MastHeightOption[]>([])
 const conditionRatings = ref<ConditionRatingOption[]>([])
 const provinces = ref<string[]>([])
 const cities = ref<string[]>([])
+const vehicleTypes = ref<string[]>([])
 const loadingDict = ref(false)
 
 // ========== "其它"/"无" 选项（前端常量，附加到下拉列表末尾） ==========
@@ -76,7 +75,16 @@ const { form, submitting, isValid, reset, submit } = useEvaluationForm()
 
 // 选完吨位后从 original_prices 级联查询 MIN(earliest_factory_year)
 const earliestFactoryYear = ref(1980)
-const showFactoryYear = computed(() => form.tonnage != null)
+const currentYear = new Date().getFullYear()
+
+// 出厂年份下拉框选项：最新年份排在前
+const factoryYearOptions = computed(() => {
+  const years: number[] = []
+  for (let y = earliestFactoryYear.value; y <= currentYear; y++) {
+    years.push(y)
+  }
+  return years.reverse()
+})
 
 // ========== 级联加载 ==========
 // 品牌 → 车辆类型
@@ -98,7 +106,8 @@ watch(
     mastHeights.value = []
 
     if (!b) return
-    vehicleTypes.value = await listVehicleTypes(b)
+    const list = await listVehicleTypes(b)
+    vehicleTypes.value = list.map((v) => v.name)
   }
 )
 
@@ -139,7 +148,8 @@ watch(
 
     if (!form.brand || !form.vehicle_type || !s) return
     const seriesParam = s === OTHER_SERIES_VALUE ? undefined : s
-    tonnages.value = await listTonnages(form.brand, form.vehicle_type, seriesParam)
+    const list = await listTonnages(form.brand, form.vehicle_type, seriesParam)
+    tonnages.value = list.map((t) => t.value)
   }
 )
 
@@ -244,16 +254,6 @@ onMounted(async () => {
   }
 })
 
-// ========== 字段可见性 ==========
-const showVehicleType = computed(() => vehicleTypes.value.length > 0)
-const showSeries = computed(() => form.vehicle_type !== undefined)
-const showTonnage = computed(() => form.series !== undefined)
-const showConfigType = computed(() => form.tonnage != null)
-const showMastType = computed(() => form.config_type !== undefined)
-const showMastHeight = computed(() => form.mast_type !== undefined)
-const showProvince = computed(() => provinces.value.length > 0)
-const showCity = computed(() => cities.value.length > 0)
-
 // 车况评级按 rating 排序展示
 const sortedConditionRatings = computed(() =>
   [...conditionRatings.value].sort((a, b) => a.rating.localeCompare(b.rating))
@@ -275,6 +275,21 @@ function onSubmit() {
 function onConditionSelect(rating: ConditionRating) {
   // 再次点击同一项则取消选择
   form.condition_rating = form.condition_rating === rating ? undefined : rating
+}
+
+// ========== 字符串字段代理（空字符串 ↔ undefined 互转） ==========
+// 原生 select 配 :value=undefined 占位时，DOM value 会回退为 textContent，
+// 污染 form 状态。这里用计算属性包裹 v-model，在 set 时把空串归一为 undefined。
+function useStringField(getter: () => string | undefined) {
+  return computed<string>({
+    get: () => getter() ?? '',
+    set: (v) => {
+      // 通过闭包反射回 form：调用方传入 () => form.xxx
+      // 用 Function 保持 setter 简洁（避免在模板里写箭头函数）
+      const setter = getter as unknown as { __setVal?: (v: string) => void }
+      setter.__setVal?.(v)
+    }
+  })
 }
 </script>
 
@@ -331,19 +346,17 @@ function onConditionSelect(rating: ConditionRating) {
                 </span>
               </div>
             </div>
-            <div v-if="showVehicleType" class="field">
+            <div class="field">
               <label class="field-label" for="vh-vehicle-type">车辆类型</label>
               <div class="select-wrap">
                 <select
                   id="vh-vehicle-type"
                   v-model="form.vehicle_type"
                   class="form-control"
-                  :disabled="!form.brand"
+                  :disabled="!form.brand || vehicleTypes.length === 0"
                 >
                   <option :value="undefined" disabled>请选择车辆类型</option>
-                  <option v-for="vt in vehicleTypes" :key="vt.id" :value="vt.name">
-                    {{ vt.name }}
-                  </option>
+                  <option v-for="vt in vehicleTypes" :key="vt" :value="vt">{{ vt }}</option>
                 </select>
                 <span class="select-icon" aria-hidden="true">
                   <svg
@@ -364,7 +377,7 @@ function onConditionSelect(rating: ConditionRating) {
           </div>
 
           <!-- Row 2: 系列 + 吨位 + 出厂年份 -->
-          <div v-if="showSeries" class="form-row form-row-3">
+          <div class="form-row form-row-3">
             <div class="field">
               <label class="field-label" for="vh-series">系列</label>
               <div class="select-wrap">
@@ -393,7 +406,7 @@ function onConditionSelect(rating: ConditionRating) {
                 </span>
               </div>
             </div>
-            <div v-if="showTonnage" class="field">
+            <div class="field">
               <label class="field-label" for="vh-tonnage">吨位</label>
               <div class="select-wrap">
                 <select
@@ -403,9 +416,7 @@ function onConditionSelect(rating: ConditionRating) {
                   :disabled="!form.series"
                 >
                   <option :value="undefined" disabled>请选择吨位</option>
-                  <option v-for="t in tonnages" :key="t.id" :value="t.value">
-                    {{ t.value }} 吨
-                  </option>
+                  <option v-for="t in tonnages" :key="t" :value="t">{{ t }} 吨</option>
                 </select>
                 <span class="select-icon" aria-hidden="true">
                   <svg
@@ -423,22 +434,38 @@ function onConditionSelect(rating: ConditionRating) {
                 </span>
               </div>
             </div>
-            <div v-if="showFactoryYear" class="field">
+            <div class="field">
               <label class="field-label" for="vh-factory-year">出厂年份</label>
-              <input
-                id="vh-factory-year"
-                v-model.number="form.factory_year"
-                type="number"
-                class="form-control"
-                :min="earliestFactoryYear"
-                :max="new Date().getFullYear()"
-                placeholder="如 2021"
-              />
+              <div class="select-wrap">
+                <select
+                  id="vh-factory-year"
+                  v-model="form.factory_year"
+                  class="form-control"
+                  :disabled="form.tonnage == null"
+                >
+                  <option :value="undefined" disabled>请选择出厂年份</option>
+                  <option v-for="y in factoryYearOptions" :key="y" :value="y">{{ y }} 年</option>
+                </select>
+                <span class="select-icon" aria-hidden="true">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </span>
+              </div>
             </div>
           </div>
 
           <!-- Row 3: 配置类型 + 门架类型 + 门架高度 -->
-          <div v-if="showConfigType" class="form-row form-row-3">
+          <div class="form-row form-row-3">
             <div class="field">
               <label class="field-label" for="vh-config-type">配置类型</label>
               <div class="select-wrap">
@@ -469,7 +496,7 @@ function onConditionSelect(rating: ConditionRating) {
                 </span>
               </div>
             </div>
-            <div v-if="showMastType" class="field">
+            <div class="field">
               <label class="field-label" for="vh-mast-type">门架类型</label>
               <div class="select-wrap">
                 <select
@@ -499,7 +526,7 @@ function onConditionSelect(rating: ConditionRating) {
                 </span>
               </div>
             </div>
-            <div v-if="showMastHeight" class="field">
+            <div class="field">
               <label class="field-label" for="vh-mast-height">门架高度</label>
               <div class="select-wrap">
                 <select
@@ -567,7 +594,7 @@ function onConditionSelect(rating: ConditionRating) {
           </div>
 
           <!-- Row 5: 省份 + 城市 -->
-          <div v-if="showProvince" class="form-row form-row-2">
+          <div class="form-row form-row-2">
             <div class="field">
               <label class="field-label" for="vh-province">省份</label>
               <div class="select-wrap">
@@ -595,7 +622,7 @@ function onConditionSelect(rating: ConditionRating) {
                 </span>
               </div>
             </div>
-            <div v-if="showCity" class="field">
+            <div class="field">
               <label class="field-label" for="vh-city">城市</label>
               <div class="select-wrap">
                 <select
@@ -739,7 +766,7 @@ function onConditionSelect(rating: ConditionRating) {
                   >
                     <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                   </svg>
-                  提交中…
+                  <span>提交中…</span>
                 </template>
                 <template v-else>提交评估</template>
               </button>
@@ -867,6 +894,11 @@ function onConditionSelect(rating: ConditionRating) {
   margin-bottom: 6px;
   color: var(--color-text-secondary, #475569);
   font-family: var(--font-text, 'Noto Sans SC', sans-serif);
+  transition: color 200ms ease;
+}
+/* 锁定态：label 同步变灰 */
+.field:has(.form-control:disabled) .field-label {
+  color: var(--color-text-muted, #94A3B8);
 }
 
 /* ===== Form control (input + select shared) ===== */
@@ -881,7 +913,7 @@ function onConditionSelect(rating: ConditionRating) {
   color: var(--color-text-primary, #0F172A);
   background: var(--color-bg-card, #FFFFFF);
   outline: none;
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
   -webkit-appearance: none;
   appearance: none;
 }
@@ -899,7 +931,8 @@ function onConditionSelect(rating: ConditionRating) {
   background: #F8FAFC;
   color: var(--color-text-muted, #94A3B8);
   cursor: not-allowed;
-  opacity: 0.7;
+  border-style: dashed;
+  border-color: #E2E8F0;
 }
 
 /* ===== Select wrapper with chevron icon ===== */
@@ -923,10 +956,15 @@ function onConditionSelect(rating: ConditionRating) {
   justify-content: center;
   color: var(--color-text-muted, #94A3B8);
   pointer-events: none;
-  transition: color 150ms ease, transform 200ms ease;
+  transition: color 150ms ease, opacity 150ms ease;
 }
 .select-wrap:hover:not(.is-disabled) .select-icon {
   color: var(--color-brand-500, #0EA5E9);
+}
+/* 锁定态：chevron 变灰且半透明 */
+.select-wrap:has(.form-control:disabled) .select-icon {
+  color: var(--color-text-muted, #94A3B8);
+  opacity: 0.45;
 }
 
 /* ===== Toggle switch (custom CSS, matches design) ===== */
@@ -1058,9 +1096,10 @@ function onConditionSelect(rating: ConditionRating) {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  flex-wrap: wrap;
 }
 .action-bar-text {
-  flex: 1;
+  flex: 1 1 200px;
   min-width: 0;
 }
 .action-bar-hint {
@@ -1069,18 +1108,14 @@ function onConditionSelect(rating: ConditionRating) {
   color: var(--color-text-secondary, #475569);
   margin: 0 0 2px;
   font-family: var(--font-text, 'Noto Sans SC', sans-serif);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.5;
 }
 .action-bar-sub {
   font-size: 12px;
   color: var(--color-text-muted, #94A3B8);
   margin: 0;
   font-family: var(--font-text, 'Noto Sans SC', sans-serif);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.5;
 }
 .action-bar-buttons {
   display: flex;
@@ -1160,8 +1195,8 @@ function onConditionSelect(rating: ConditionRating) {
   }
 }
 
-/* ===== Mobile (< 640px) ===== */
-@media (max-width: 639px) {
+/* ===== Mobile (< 768px) ===== */
+@media (max-width: 767px) {
   .form-section {
     padding: 32px 0 56px;
   }
@@ -1193,6 +1228,7 @@ function onConditionSelect(rating: ConditionRating) {
     gap: 16px;
   }
   .action-bar-text {
+    flex: 1 1 auto;
     text-align: center;
   }
   .action-bar-buttons {

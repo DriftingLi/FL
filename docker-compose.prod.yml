@@ -1,0 +1,123 @@
+# ===== 生产环境 Docker Compose 编排 =====
+# 架构：PostgreSQL + Go 后端（仅后端，前端由 Cloudflare Pages 托管）
+# 使用：docker compose -f docker-compose.prod.yml up -d
+# 前置：确保 .env 已正确配置
+
+services:
+  # ==========================================
+  # PostgreSQL 数据库
+  # ==========================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: forklift-pg-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: forklift_training
+      POSTGRES_USER: ${DB_USER:-forklift}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: Asia/Shanghai
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata-prod:/var/lib/postgresql/data
+      - ./backend-go/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-forklift} -d forklift_training"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - forklift-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+          cpus: "0.5"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ==========================================
+  # Go 后端服务（直连，无 Nginx 反代）
+  # 前端通过 Cloudflare Pages 直接调用 API
+  # ==========================================
+  backend:
+    build:
+      context: ./backend-go
+      dockerfile: Dockerfile
+    image: ${BACKEND_IMAGE:-forklift-backend:latest}
+    container_name: forklift-backend-prod
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_ENV: production
+      PORT: "8080"
+      DATABASE_URL: postgres://${DB_USER:-forklift}:${DB_PASSWORD}@postgres:5432/forklift_training?sslmode=disable
+      SECRET_KEY: ${SECRET_KEY}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_EXPIRES_HOURS: "${JWT_EXPIRES_HOURS:-24}"
+      # CORS：必须包含 Cloudflare Pages 域名
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      UPLOAD_FOLDER: /data/uploads
+      VOLUME_MOUNT_PATH: /data
+      MAX_CONTENT_LENGTH_MB: "250"
+      ZHIPU_API_KEY: ${ZHIPU_API_KEY}
+      ZHIPU_BASE_URL: ${ZHIPU_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
+      ZHIPU_MODEL: ${ZHIPU_MODEL:-glm-4.7-flash}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      COZE_PROJECT_ID: ${COZE_PROJECT_ID:-}
+      COZE_OAUTH_APP_ID: ${COZE_OAUTH_APP_ID:-}
+      COZE_OAUTH_KID: ${COZE_OAUTH_KID:-}
+      COZE_OAUTH_PRIVATE_KEY: ${COZE_OAUTH_PRIVATE_KEY:-}
+      COZE_OAUTH_PRIVATE_KEY_PATH: ${COZE_OAUTH_PRIVATE_KEY_PATH:-}
+      ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD}
+      TUTOR_DEFAULT_PASSWORD: ${TUTOR_DEFAULT_PASSWORD}
+      STUDENT_DEFAULT_PASSWORD: ${STUDENT_DEFAULT_PASSWORD}
+      VALUATION_PDF_OUTPUT_DIR: /data/reports
+      TZ: Asia/Shanghai
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    volumes:
+      - uploads-data:/data/uploads
+      - reports-data:/data/reports
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - forklift-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+networks:
+  forklift-net:
+    driver: bridge
+
+volumes:
+  pgdata-prod:
+    driver: local
+  uploads-data:
+    driver: local
+  reports-data:
+    driver: local
