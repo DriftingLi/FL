@@ -179,27 +179,26 @@ jobs:
           echo ""
           # Tailnet 信息
           echo "--- Tailnet ---"
-          tailscale whois "$TAILSCALE_HOST" 2>&1 || echo "whois 失败（对端不可见或无权限）"
+          tailscale dns resolve "$TAILSCALE_HOST" 2>&1 || echo "DNS 解析失败"
           echo ""
           # 本机节点信息
           echo "--- 本机节点 ---"
-          tailscale status --json 2>/dev/null | python3 <<'PYEOF'
-import json,sys
-d=json.load(sys.stdin)
-self=d.get('Self',{})
-print(f"  本机: {self.get('HostName','?')} ({self.get('TailscaleIPs',['?'])[0] if self.get('TailscaleIPs') else '?'})")
-print(f"  Tailnet: {d.get('CurrentTailnet',{}).get('Name','?')}")
-print(f"  Online: {self.get('Online',False)}")
-peers=d.get('Peer',{})
-if peers:
-    print(f'  可见节点数: {len(peers)}')
-    for k,v in peers.items():
-        name=v.get('HostName','?')
-        ips=v.get('TailscaleIPs',['?'])
-        print(f'    {name}: {ips[0] if ips else "?"} (online={v.get("Online",False)})')
-else:
-    print('  可见节点: 0（ACL 或 tailnet 问题，看不到其他设备）')
-PYEOF
+          tailscale status --json 2>/dev/null > /tmp/ts.json
+          if [ -s /tmp/ts.json ]; then
+            echo "  本机: $(jq -r '.Self.HostName // "?"' /tmp/ts.json)"
+            echo "  IP:   $(jq -r '.Self.TailscaleIPs[0] // "?"' /tmp/ts.json)"
+            echo "  Tailnet: $(jq -r '.CurrentTailnet.Name // "?"' /tmp/ts.json)"
+            echo "  Online: $(jq -r '.Self.Online' /tmp/ts.json)"
+            PEERS=$(jq -r '.Peer | length' /tmp/ts.json)
+            echo "  可见节点数: $PEERS"
+            if [ "$PEERS" -gt 0 ]; then
+              jq -r '.Peer | to_entries[] | "    \(.value.HostName // "?"): \(.value.TailscaleIPs[0] // "?") (online=\(.value.Online))"' /tmp/ts.json
+            else
+              echo "    （看不到其他设备——ACL 或 tailnet 不匹配）"
+            fi
+          else
+            echo "  （无法获取 Tailscale 状态 JSON）"
+          fi
           echo ""
           # DNS 解析测试
           echo "--- DNS 解析 ---"
