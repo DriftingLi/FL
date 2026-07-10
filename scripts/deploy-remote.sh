@@ -90,6 +90,13 @@ write_env_file() {
         fi
     }
 
+    # PEM 私钥写入独立文件（必须在 {} > .env 块之外，防止 log_ok ANSI 码污染 .env）
+    if [ -n "${COZE_OAUTH_PRIVATE_KEY:-}" ]; then
+        printf '%s' "${COZE_OAUTH_PRIVATE_KEY}" > "${DEPLOY_PATH}/coze_private_key.pem"
+        chmod 600 "${DEPLOY_PATH}/coze_private_key.pem"
+        log_ok "Coze 私钥已写入文件"
+    fi
+
     {
         echo "# 由 deploy-remote.sh 自动生成 — $(date '+%Y-%m-%d %H:%M:%S')"
         echo "APP_ENV=production"
@@ -133,14 +140,8 @@ write_env_file() {
         env_val "${COZE_OAUTH_APP_ID:-}"; echo
         printf 'COZE_OAUTH_KID='
         env_val "${COZE_OAUTH_KID:-}"; echo
-        # PEM 私钥写入独立文件（避免 .env 中特殊字符导致 Docker Compose 解析失败）
-        if [ -n "${COZE_OAUTH_PRIVATE_KEY:-}" ]; then
-            printf '%s' "${COZE_OAUTH_PRIVATE_KEY}" > "${DEPLOY_PATH}/coze_private_key.pem"
-            chmod 600 "${DEPLOY_PATH}/coze_private_key.pem"
-            log_ok "Coze 私钥已写入文件"
-        fi
         echo "COZE_OAUTH_PRIVATE_KEY_PATH=/etc/secrets/coze_private_key.pem"
-        # COZE_OAUTH_PRIVATE_KEY 不再写入 .env，避免 Docker Compose 解析报错
+        # COZE_OAUTH_PRIVATE_KEY 不写入 .env（已写入独立文件，见上方）
 
         echo "BACKEND_IMAGE=${IMAGE_BACKEND}:${IMAGE_TAG}"
 
