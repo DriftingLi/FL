@@ -327,10 +327,11 @@ run_migration() {
     done
 
     # 通过临时容器运行迁移（使用镜像中独立的 migrate 二进制）
+    log_info "运行迁移: ${IMAGE_BACKEND}:${IMAGE_TAG} /app/bin/migrate up"
     if docker run --rm --network container:"$(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps -q "$POSTGRES_SERVICE")" \
         -e "DATABASE_URL=${DATABASE_URL}" \
         "${IMAGE_BACKEND}:${IMAGE_TAG}" \
-        /app/bin/migrate up 2>/dev/null; then
+        /app/bin/migrate up 2>&1; then
         log_ok "数据库迁移完成"
     else
         log_warn "自动迁移失败，请手动执行: cd backend-go && go run ./cmd/migrate up"
@@ -386,6 +387,12 @@ health_check() {
     done
 
     log_error "健康检查超时!"
+    echo ""
+    echo "=== 后端容器日志（最后 30 行）==="
+    docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" logs --tail 30 "$BACKEND_SERVICE" 2>&1 || echo "无法获取日志"
+    echo ""
+    echo "=== 容器状态 ==="
+    docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps 2>&1
     return 1
 }
 
