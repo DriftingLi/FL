@@ -174,9 +174,8 @@ func (s *BatteryRULService) extractCCCVFeatures(
 		fv[7] = skew(cvCurr)
 		fv[8] = kurt(cvCurr)
 		fv[9] = slope(cvCurr)
-		//lint:ignore SA9003 empty else branch intentional, fields are zeroed
-	} else {
 	}
+	// 无 CV 段时字段已默认零值，无需额外处理
 
 	// 4) 阶段时间占比（2 维）
 	total := len(voltage)

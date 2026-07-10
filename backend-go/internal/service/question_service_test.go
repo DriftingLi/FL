@@ -1,8 +1,9 @@
 package service
 
 import (
-	"forklift-training/internal/model"
 	"testing"
+
+	"forklift-training/internal/model"
 )
 
 func TestCheckAnswer_SingleChoice(t *testing.T) {
