@@ -11,22 +11,22 @@ import (
 // 业务状态码定义
 // 0 表示成功，其他值表示业务失败（非 HTTP 状态码）
 const (
-	CodeOK                 = 0     // 成功
-	CodeBadRequest         = 40000 // 请求参数错误
-	CodeInvalidParam       = 40001 // 业务参数校验失败
-	CodeNotFound           = 40400 // 资源未找到
-	CodeMethodNotAllowed   = 40500 // 方法不允许
-	CodeInternalError      = 50000 // 服务器内部错误
-	CodeDatabaseError      = 50001 // 数据库错误
-	CodeUpstreamError      = 50002 // 上游服务错误
+	CodeOK               = 0     // 成功
+	CodeBadRequest       = 40000 // 请求参数错误
+	CodeInvalidParam     = 40001 // 业务参数校验失败
+	CodeNotFound         = 40400 // 资源未找到
+	CodeMethodNotAllowed = 40500 // 方法不允许
+	CodeInternalError    = 50000 // 服务器内部错误
+	CodeDatabaseError    = 50001 // 数据库错误
+	CodeUpstreamError    = 50002 // 上游服务错误
 )
 
 // Response 统一响应结构
 // 与 API 设计文档保持一致：{code, message, data}
 type Response struct {
-	Code    int         `json:"code"`              // 业务状态码
-	Message string      `json:"message"`           // 提示信息
-	Data    interface{} `json:"data,omitempty"`    // 业务数据（成功时返回）
+	Code    int         `json:"code"`           // 业务状态码
+	Message string      `json:"message"`        // 提示信息
+	Data    interface{} `json:"data,omitempty"` // 业务数据（成功时返回）
 }
 
 // OK 返回成功响应

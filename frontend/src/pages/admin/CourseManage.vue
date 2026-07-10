@@ -254,7 +254,7 @@ const dialogVisible = ref(false)
 const isEdit = ref(false)
 const submitting = ref(false)
 const formRef = ref(null)
-const formData = reactive({
+const formData: Record<string, any> = reactive({
   name: '',
   category: '',
   description: '',
@@ -314,7 +314,7 @@ function formatDate(dateStr) {
 async function loadCourses() {
   loading.value = true
   try {
-    const params = {
+    const params: Record<string, any> = {
       page: currentPage.value,
       page_size: pageSize.value
     }

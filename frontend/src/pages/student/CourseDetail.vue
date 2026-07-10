@@ -117,7 +117,7 @@ const drawerVisible = ref(false)
 const isTablet = ref(false)
 const isMobile = ref(false)
 
-const courseId = computed(() => route.params.id)
+const courseId = computed(() => route.params.id as string)
 
 const categoryMap = {
   'CATEGORY_01': '基础理论',

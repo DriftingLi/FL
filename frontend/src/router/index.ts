@@ -1,8 +1,8 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 
-const routes = [
+const routes: RouteRecordRaw[] = [
   // ========== 官网 ==========
   {
     path: '/',
@@ -359,7 +359,7 @@ router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
 
   if (authStore.isInitializing) {
-    await new Promise(resolve => {
+    await new Promise<void>(resolve => {
       const unwatch = watch(() => authStore.isInitializing, (val) => {
         if (!val) {
           unwatch()

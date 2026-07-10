@@ -7,7 +7,7 @@ export const practiceModeApi = {
   getKnowledgePointPractice(params) {
     return request.get('/practice-mode/knowledge-point', { params })
   },
-  getKnowledgePointProgress(params) {
+  getKnowledgePointProgress(params?) {
     return request.get('/practice-mode/knowledge-point-progress', { params })
   },
   submitAnswer(data) {

@@ -46,12 +46,23 @@
 import { ref, watch, nextTick } from 'vue'
 import { CircleCheck } from '@element-plus/icons-vue'
 
-const props = defineProps({
-  chapters: { type: Array, default: () => [] },
-  courseId: { type: [Number, String], required: true },
-  activeChapterId: { type: [Number, String], default: null },
-  compact: { type: Boolean, default: false }
-})
+interface ChapterInfo {
+  chapter_id: number
+  title: string
+  content_type: string
+  sort_order?: number
+  progress?: number
+  status?: string
+  children?: ChapterInfo[]
+  [key: string]: any
+}
+
+const props = defineProps<{
+  chapters: ChapterInfo[]
+  courseId: number | string
+  activeChapterId?: number | string | null
+  compact?: boolean
+}>()
 
 defineEmits(['select'])
 

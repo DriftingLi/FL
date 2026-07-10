@@ -115,8 +115,8 @@ async function loadSlides() {
     let rawSlides = []
     if (res && res.data && Array.isArray(res.data.slides)) {
       rawSlides = res.data.slides
-    } else if (res && Array.isArray(res.slides)) {
-      rawSlides = res.slides
+    } else if (res && Array.isArray((res as any).slides)) {
+      rawSlides = (res as any).slides
     } else if (res && Array.isArray(res)) {
       rawSlides = res
     }

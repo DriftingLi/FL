@@ -9,10 +9,10 @@ function getObserver(rootMargin = '200px') {
     (entries) => {
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
-          const el = entry.target
+          const el = entry.target as HTMLElement
           const src = el.dataset.lazySrc
           if (src) {
-            el.src = resolveFileUrl(src)
+            (el as HTMLImageElement).src = resolveFileUrl(src)
             delete el.dataset.lazySrc
           }
           const observer = observerMap.get(el)
@@ -57,7 +57,7 @@ export function useLazyLoad(rootMargin = '200px') {
 }
 
 export const vLazy = {
-  mounted(el, binding) {
+  mounted(el: HTMLElement, binding) {
     const src = binding.value
     if (!src) return
     el.dataset.lazySrc = src
@@ -67,15 +67,15 @@ export const vLazy = {
       observer.observe(el)
       observerMap.set(el, observer)
     } else {
-      el.src = resolveFileUrl(src)
+      (el as HTMLImageElement).src = resolveFileUrl(src)
     }
   },
-  updated(el, binding) {
+  updated(el: HTMLElement, binding) {
     const src = binding.value
     if (!src) return
-    if (el.src === resolveFileUrl(src)) return
+    if ((el as HTMLImageElement).src === resolveFileUrl(src)) return
     el.dataset.lazySrc = src
-    el.src = ''
+    (el as HTMLImageElement).src = ''
     const rootMargin = binding.arg || '200px'
     const observer = getObserver(rootMargin)
     if (observer) {
@@ -86,10 +86,10 @@ export const vLazy = {
       observer.observe(el)
       observerMap.set(el, observer)
     } else {
-      el.src = resolveFileUrl(src)
+      (el as HTMLImageElement).src = resolveFileUrl(src)
     }
   },
-  unmounted(el) {
+  unmounted(el: HTMLElement) {
     const observer = observerMap.get(el)
     if (observer) {
       observer.unobserve(el)

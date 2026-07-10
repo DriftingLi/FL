@@ -67,17 +67,17 @@ func beijingNow() time.Time {
 // ===== 1. 学员 =====
 
 type Student struct {
-	StudentID      int       `gorm:"column:student_id;primaryKey" json:"student_id"`
-	Username       string    `gorm:"column:username;uniqueIndex" json:"username"`
-	Password       string    `gorm:"column:password" json:"-"`
-	Name           string    `gorm:"column:name" json:"name"`
-	Phone          string    `gorm:"column:phone;uniqueIndex" json:"phone"`
-	Email          string    `gorm:"column:email" json:"email,omitempty"`
-	Company        string    `gorm:"column:company" json:"company,omitempty"`
-	Status         int16     `gorm:"column:status;default:1" json:"status"`
-	Level          string    `gorm:"column:level;default:beginner" json:"level"`
+	StudentID      int        `gorm:"column:student_id;primaryKey" json:"student_id"`
+	Username       string     `gorm:"column:username;uniqueIndex" json:"username"`
+	Password       string     `gorm:"column:password" json:"-"`
+	Name           string     `gorm:"column:name" json:"name"`
+	Phone          string     `gorm:"column:phone;uniqueIndex" json:"phone"`
+	Email          string     `gorm:"column:email" json:"email,omitempty"`
+	Company        string     `gorm:"column:company" json:"company,omitempty"`
+	Status         int16      `gorm:"column:status;default:1" json:"status"`
+	Level          string     `gorm:"column:level;default:beginner" json:"level"`
 	LevelUpdatedAt *time.Time `gorm:"column:level_updated_at" json:"level_updated_at,omitempty"`
-	CreatedAt      time.Time `gorm:"column:created_at" json:"created_at"`
+	CreatedAt      time.Time  `gorm:"column:created_at" json:"created_at"`
 }
 
 func (Student) TableName() string { return "student" }
@@ -110,14 +110,14 @@ func (Tutor) TableName() string { return "tutor" }
 // ===== 4. 课程 =====
 
 type Course struct {
-	CourseID   int       `gorm:"column:course_id;primaryKey" json:"course_id"`
-	Name       string    `gorm:"column:name" json:"name"`
-	Category   string    `gorm:"column:category" json:"category"`
-	Description string   `gorm:"column:description" json:"description"`
-	CoverImage string    `gorm:"column:cover_image" json:"cover_image"`
-	Duration   int       `gorm:"column:duration;default:0" json:"duration"`
-	Status     int16     `gorm:"column:status;default:1" json:"status"`
-	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
+	CourseID    int       `gorm:"column:course_id;primaryKey" json:"course_id"`
+	Name        string    `gorm:"column:name" json:"name"`
+	Category    string    `gorm:"column:category" json:"category"`
+	Description string    `gorm:"column:description" json:"description"`
+	CoverImage  string    `gorm:"column:cover_image" json:"cover_image"`
+	Duration    int       `gorm:"column:duration;default:0" json:"duration"`
+	Status      int16     `gorm:"column:status;default:1" json:"status"`
+	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (Course) TableName() string { return "course" }
@@ -171,11 +171,11 @@ func (StudyRecord) TableName() string { return "study_record" }
 // ===== 8. 考核记录 =====
 
 type ExamRecord struct {
-	ExamID   int       `gorm:"column:exam_id;primaryKey" json:"exam_id"`
-	StudentID int      `gorm:"column:student_id" json:"student_id"`
-	CourseID  int      `gorm:"column:course_id" json:"course_id"`
-	Score     *float64 `gorm:"column:score;type:numeric(5,2)" json:"score,omitempty"`
-	Answers   JSONB    `gorm:"column:answers;type:jsonb" json:"answers,omitempty"`
+	ExamID    int       `gorm:"column:exam_id;primaryKey" json:"exam_id"`
+	StudentID int       `gorm:"column:student_id" json:"student_id"`
+	CourseID  int       `gorm:"column:course_id" json:"course_id"`
+	Score     *float64  `gorm:"column:score;type:numeric(5,2)" json:"score,omitempty"`
+	Answers   JSONB     `gorm:"column:answers;type:jsonb" json:"answers,omitempty"`
 	ExamDate  time.Time `gorm:"column:exam_date" json:"exam_date"`
 }
 
@@ -212,23 +212,23 @@ func (KnowledgePoint) TableName() string { return "knowledge_point" }
 // ===== 11. 题目 =====
 
 type Question struct {
-	ID                int       `gorm:"column:id;primaryKey" json:"id"`
-	Type              string    `gorm:"column:type" json:"type"`
-	Level             string    `gorm:"column:level" json:"level"`
-	Content           string    `gorm:"column:content" json:"content"`
-	Options           JSONB     `gorm:"column:options;type:jsonb" json:"options,omitempty"`
-	Answer            string    `gorm:"column:answer" json:"answer"`
-	Explanation       string    `gorm:"column:explanation" json:"explanation"`
-	ImageURL          string    `gorm:"column:image_url" json:"image_url"`
-	ReferenceAnswer   string    `gorm:"column:reference_answer" json:"reference_answer"`
-	ScoringCriteria   string    `gorm:"column:scoring_criteria" json:"scoring_criteria"`
-	Score             int       `gorm:"column:score;default:0" json:"score"`
-	KnowledgePointID  *int      `gorm:"column:knowledge_point_id" json:"knowledge_point_id,omitempty"`
-	Status            string    `gorm:"column:status;default:draft" json:"status"`
-	CreatedBy         *int      `gorm:"column:created_by" json:"created_by,omitempty"`
-	CreatedByType     string    `gorm:"column:created_by_type;default:tutor" json:"created_by_type"`
-	CreatedAt         time.Time `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt         time.Time `gorm:"column:updated_at" json:"updated_at"`
+	ID               int       `gorm:"column:id;primaryKey" json:"id"`
+	Type             string    `gorm:"column:type" json:"type"`
+	Level            string    `gorm:"column:level" json:"level"`
+	Content          string    `gorm:"column:content" json:"content"`
+	Options          JSONB     `gorm:"column:options;type:jsonb" json:"options,omitempty"`
+	Answer           string    `gorm:"column:answer" json:"answer"`
+	Explanation      string    `gorm:"column:explanation" json:"explanation"`
+	ImageURL         string    `gorm:"column:image_url" json:"image_url"`
+	ReferenceAnswer  string    `gorm:"column:reference_answer" json:"reference_answer"`
+	ScoringCriteria  string    `gorm:"column:scoring_criteria" json:"scoring_criteria"`
+	Score            int       `gorm:"column:score;default:0" json:"score"`
+	KnowledgePointID *int      `gorm:"column:knowledge_point_id" json:"knowledge_point_id,omitempty"`
+	Status           string    `gorm:"column:status;default:draft" json:"status"`
+	CreatedBy        *int      `gorm:"column:created_by" json:"created_by,omitempty"`
+	CreatedByType    string    `gorm:"column:created_by_type;default:tutor" json:"created_by_type"`
+	CreatedAt        time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt        time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (Question) TableName() string { return "question" }
@@ -331,13 +331,13 @@ func (PracticeRecord) TableName() string { return "practice_record" }
 // ===== 17. 错题记录 =====
 
 type WrongQuestion struct {
-	ID           int       `gorm:"column:id;primaryKey" json:"id"`
-	StudentID    int       `gorm:"column:student_id" json:"student_id"`
-	QuestionID   int       `gorm:"column:question_id" json:"question_id"`
-	WrongCount   int       `gorm:"column:wrong_count;default:1" json:"wrong_count"`
-	LastWrongAt  time.Time `gorm:"column:last_wrong_at" json:"last_wrong_at"`
-	IsRemoved    bool      `gorm:"column:is_removed;default:false" json:"is_removed"`
-	CreatedAt    time.Time `gorm:"column:created_at" json:"created_at"`
+	ID          int       `gorm:"column:id;primaryKey" json:"id"`
+	StudentID   int       `gorm:"column:student_id" json:"student_id"`
+	QuestionID  int       `gorm:"column:question_id" json:"question_id"`
+	WrongCount  int       `gorm:"column:wrong_count;default:1" json:"wrong_count"`
+	LastWrongAt time.Time `gorm:"column:last_wrong_at" json:"last_wrong_at"`
+	IsRemoved   bool      `gorm:"column:is_removed;default:false" json:"is_removed"`
+	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (WrongQuestion) TableName() string { return "wrong_question" }

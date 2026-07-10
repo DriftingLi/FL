@@ -165,7 +165,7 @@ const studySeconds = ref(0)
 let studyTimer = null
 let studyStartTime = null
 
-const courseId = computed(() => route.params.courseId)
+const courseId = computed(() => route.params.courseId as string)
 const chapterId = computed(() => route.params.chapterId)
 
 const chapterFiles = computed(() => {

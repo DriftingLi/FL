@@ -42,8 +42,9 @@ func newTestProvider(t *testing.T) (*CoefficientProvider, *pgxpool.Pool) {
 
 // TestCalcKTime_BoundaryCases 覆盖 Kt 各典型年限与两种动力类型
 // 期望值与开发方案表一致：
-//   电动 λ=0.12：t=1→0.887 / t=3→0.698 / t=5→0.549 / t=8→0.382 / t=10→0.301
-//   内燃 λ=0.10：t=1→0.905 / t=3→0.741 / t=5→0.607 / t=8→0.449 / t=10→0.368
+//
+//	电动 λ=0.12：t=1→0.887 / t=3→0.698 / t=5→0.549 / t=8→0.382 / t=10→0.301
+//	内燃 λ=0.10：t=1→0.905 / t=3→0.741 / t=5→0.607 / t=8→0.449 / t=10→0.368
 func TestCalcKTime_BoundaryCases(t *testing.T) {
 	provider, pool := newTestProvider(t)
 	defer pool.Close()

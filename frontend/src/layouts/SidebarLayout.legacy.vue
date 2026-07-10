@@ -101,10 +101,18 @@ import { useAuthStore } from '@/stores/auth'
 import { ElMessageBox } from 'element-plus'
 import { Operation, ArrowDown, SwitchButton, Expand, Fold } from '@element-plus/icons-vue'
 
-const props = defineProps({
-  title: { type: String, default: '管理后台' },
-  menuItems: { type: Array, required: true }
-})
+interface MenuItem {
+  path: string
+  label: string
+  icon?: object
+  roles?: string[]
+  [key: string]: any
+}
+
+const props = defineProps<{
+  title?: string
+  menuItems: MenuItem[]
+}>()
 
 const route = useRoute()
 const router = useRouter()

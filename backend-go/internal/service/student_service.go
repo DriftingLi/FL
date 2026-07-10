@@ -59,10 +59,10 @@ func (s *StudentService) GetProfile(studentID int) (map[string]interface{}, erro
 
 	// 各课程进度
 	type courseProgressRow struct {
-		CourseID       int
-		MaxProgress    float64
-		TotalDuration  int64
-		LatestDate     time.Time
+		CourseID      int
+		MaxProgress   float64
+		TotalDuration int64
+		LatestDate    time.Time
 	}
 	var rows []courseProgressRow
 	s.db.Model(&model.StudyRecord{}).

@@ -19,9 +19,9 @@ func NewHealthHandler() *HealthHandler {
 
 // Response 健康检查统一响应
 type HealthResponse struct {
-	Status    string `json:"status"`     // 服务状态：ok
-	Service   string `json:"service"`    // 服务名称
-	Timestamp string `json:"timestamp"`  // 响应时间戳
+	Status    string `json:"status"`    // 服务状态：ok
+	Service   string `json:"service"`   // 服务名称
+	Timestamp string `json:"timestamp"` // 响应时间戳
 }
 
 // Check 处理 GET /api/v1/health 请求

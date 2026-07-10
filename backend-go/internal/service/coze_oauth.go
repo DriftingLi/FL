@@ -54,7 +54,7 @@ func (s *CozeOAuthService) GetAccessToken() (map[string]interface{}, error) {
 	}
 
 	body := map[string]interface{}{
-		"grant_type":      "urn:ietf:params:oauth:grant-type:jwt-bearer",
+		"grant_type":       "urn:ietf:params:oauth:grant-type:jwt-bearer",
 		"duration_seconds": 86399,
 	}
 	bodyJSON, _ := json.Marshal(body)

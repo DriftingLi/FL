@@ -103,7 +103,7 @@ func TestSplitOrigins(t *testing.T) {
 	}{
 		{"http://localhost:5173", 1},
 		{"http://a.com,http://b.com", 2},
-		{"", 1},      // 空字符串 Split 返回 [""], TrimSpace 后为 ""，但仍计入
+		{"", 1}, // 空字符串 Split 返回 [""], TrimSpace 后为 ""，但仍计入
 		{"  ,  ,  ", 0},
 	}
 	for _, tt := range tests {

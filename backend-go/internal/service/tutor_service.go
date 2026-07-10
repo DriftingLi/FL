@@ -221,5 +221,3 @@ func (s *TutorService) BatchDeleteChapterFiles(fileIDs []int) map[string]interfa
 		"failed_ids":    failedIDs,
 	}
 }
-
-

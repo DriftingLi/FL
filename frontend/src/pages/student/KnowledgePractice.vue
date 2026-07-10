@@ -288,7 +288,7 @@ const typeTagMap = {
   fault_image: 'danger', short_answer: 'success'
 }
 
-const selectedLevel = ref(route.query.level || 'beginner')
+const selectedLevel = ref<string | undefined>(route.query.level as string || 'beginner')
 const levelLabel = computed(() => levelLabelMap[selectedLevel.value] || '初级')
 const levelTagType = computed(() => {
   const map = { beginner: 'success', intermediate: 'warning', advanced: 'danger' }
@@ -314,8 +314,8 @@ const showResult = ref(false)
 const lastResult = ref(null)
 const submitting = ref(false)
 
-const answeredMap = reactive({})
-const answerStatusMap = reactive({})
+const answeredMap = reactive<any>({})
+const answerStatusMap = reactive<any>({})
 
 const currentQuestion = computed(() => questions.value[currentIndex.value] || {})
 
@@ -348,7 +348,7 @@ async function loadProgress() {
   }
 }
 
-function selectKnowledgePoint(kp, parent) {
+function selectKnowledgePoint(kp, parent?) {
   if (parent) {
     selectedKpId.value = kp.id
     selectedKpName.value = kp.name

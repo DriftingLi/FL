@@ -14,23 +14,23 @@ import (
 
 // Config 持有应用运行所需的全部配置。
 type Config struct {
-	AppEnv            string
-	Port              string
-	SecretKey         string
-	JWTSecretKey      string
-	JWTExpiresHours   int
-	DatabaseURL       string
-	CORSOrigins       []string
-	UploadFolder      string
-	VolumeMountPath   string
-	MaxContentLength  int64
-	OpenAIAPIKey      string
-	ZhipuAPIKey       string
-	ZhipuBaseURL      string
-	ZhipuModel        string
-	Coze              CozeConfig
-	Valuation         ValuationConfig
-	DefaultPasswords  DefaultPasswordsConfig
+	AppEnv           string
+	Port             string
+	SecretKey        string
+	JWTSecretKey     string
+	JWTExpiresHours  int
+	DatabaseURL      string
+	CORSOrigins      []string
+	UploadFolder     string
+	VolumeMountPath  string
+	MaxContentLength int64
+	OpenAIAPIKey     string
+	ZhipuAPIKey      string
+	ZhipuBaseURL     string
+	ZhipuModel       string
+	Coze             CozeConfig
+	Valuation        ValuationConfig
+	DefaultPasswords DefaultPasswordsConfig
 }
 
 // DefaultPasswordsConfig 默认账号密码配置，生产环境必须覆盖开发默认值。

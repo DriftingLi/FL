@@ -171,7 +171,7 @@ const typeMap = { single_choice: '单选题', multi_choice: '多选题', true_fa
 const loading = ref(false)
 const participants = ref([])
 const selectedParticipant = ref(null)
-const detail = ref({})
+const detail = ref<any>({})
 const confirmingObj = ref(false)
 
 const pendingCount = computed(() => participants.value.filter(p => p.grading_status === 'pending').length)

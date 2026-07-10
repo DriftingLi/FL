@@ -28,7 +28,7 @@ export const questionBankApi = {
   getStats() {
     return request.get('/question-bank/stats')
   },
-  getKnowledgePoints(params) {
+  getKnowledgePoints(params?) {
     return request.get('/question-bank/knowledge-points', { params })
   },
   createKnowledgePoint(data) {

@@ -83,42 +83,42 @@ func (f FeatureVector) AsSlice() []float64 {
 
 // CycleFeature 周期特征记录（落库与 API 共用）
 type CycleFeature struct {
-	ID            int64        `json:"id,omitempty"`
-	EvaluationID  int64        `json:"evaluation_id"`
-	CycleIndex    int          `json:"cycle_index"`
+	ID            int64         `json:"id,omitempty"`
+	EvaluationID  int64         `json:"evaluation_id"`
+	CycleIndex    int           `json:"cycle_index"`
 	FeatureVector FeatureVector `json:"feature_vector"`
-	RawStats      RawStats     `json:"raw_stats"`
-	SohAtCycle    float64      `json:"soh_at_cycle"`
+	RawStats      RawStats      `json:"raw_stats"`
+	SohAtCycle    float64       `json:"soh_at_cycle"`
 }
 
 // RawStats 原始统计摘要
 type RawStats struct {
-	VoltageMean  float64 `json:"voltage_mean"`
-	VoltageStd   float64 `json:"voltage_std"`
-	CurrentMean  float64 `json:"current_mean"`
-	CurrentStd   float64 `json:"current_std"`
-	Capacity     float64 `json:"capacity"`
-	CCDuration   int     `json:"cc_duration"`    // 恒流段采样点数
-	CVDuration   int     `json:"cv_duration"`    // 恒压段采样点数
-	ICPeak       float64 `json:"ic_peak"`        // 增量容量峰值
-	ICPeakVolt   float64 `json:"ic_peak_voltage"` // 峰值对应电压
+	VoltageMean float64 `json:"voltage_mean"`
+	VoltageStd  float64 `json:"voltage_std"`
+	CurrentMean float64 `json:"current_mean"`
+	CurrentStd  float64 `json:"current_std"`
+	Capacity    float64 `json:"capacity"`
+	CCDuration  int     `json:"cc_duration"`     // 恒流段采样点数
+	CVDuration  int     `json:"cv_duration"`     // 恒压段采样点数
+	ICPeak      float64 `json:"ic_peak"`         // 增量容量峰值
+	ICPeakVolt  float64 `json:"ic_peak_voltage"` // 峰值对应电压
 }
 
 // BatteryEvaluation 电池评估主记录
 type BatteryEvaluation struct {
-	ID                 int64           `json:"id"`
-	BatteryType        BatteryType     `json:"battery_type"`
-	BatteryModel       string          `json:"battery_model"`
-	CycleCount         int             `json:"cycle_count"`
-	RulCycles          int             `json:"rul_cycles"`
-	SohPercent         float64         `json:"soh_percent"`
-	Confidence         float64         `json:"confidence"`
-	ConfidenceLow      int             `json:"confidence_low"`
-	ConfidenceHigh     int             `json:"confidence_high"`
-	FeatureImportance  []FeatureImportance `json:"feature_importance,omitempty"`
-	ReportPdfPath      string          `json:"report_pdf_path"`
-	CreatedAt          string          `json:"created_at"`
-	UpdatedAt          string          `json:"updated_at"`
+	ID                int64               `json:"id"`
+	BatteryType       BatteryType         `json:"battery_type"`
+	BatteryModel      string              `json:"battery_model"`
+	CycleCount        int                 `json:"cycle_count"`
+	RulCycles         int                 `json:"rul_cycles"`
+	SohPercent        float64             `json:"soh_percent"`
+	Confidence        float64             `json:"confidence"`
+	ConfidenceLow     int                 `json:"confidence_low"`
+	ConfidenceHigh    int                 `json:"confidence_high"`
+	FeatureImportance []FeatureImportance `json:"feature_importance,omitempty"`
+	ReportPdfPath     string              `json:"report_pdf_path"`
+	CreatedAt         string              `json:"created_at"`
+	UpdatedAt         string              `json:"updated_at"`
 	// 详情时填充
 	CycleFeatures []CycleFeature `json:"cycle_features,omitempty"`
 	// 评估建议（基于 SOH/RUL/电池类型生成）
@@ -136,14 +136,14 @@ type FeatureImportance struct {
 
 // BatteryEvaluationSummary 列表查询的摘要项
 type BatteryEvaluationSummary struct {
-	ID            int64       `json:"id"`
-	BatteryType   BatteryType `json:"battery_type"`
-	BatteryModel  string      `json:"battery_model"`
-	CycleCount    int         `json:"cycle_count"`
-	RulCycles     int         `json:"rul_cycles"`
-	SohPercent    float64     `json:"soh_percent"`
-	Confidence    float64     `json:"confidence"`
-	CreatedAt     string      `json:"created_at"`
+	ID           int64       `json:"id"`
+	BatteryType  BatteryType `json:"battery_type"`
+	BatteryModel string      `json:"battery_model"`
+	CycleCount   int         `json:"cycle_count"`
+	RulCycles    int         `json:"rul_cycles"`
+	SohPercent   float64     `json:"soh_percent"`
+	Confidence   float64     `json:"confidence"`
+	CreatedAt    string      `json:"created_at"`
 }
 
 // CreateBatteryResponse 创建评估响应
@@ -162,8 +162,8 @@ type CreateBatteryResponse struct {
 
 // ListBatteryResponse 列表查询响应
 type ListBatteryResponse struct {
-	Total    int                        `json:"total"`
-	Items    []BatteryEvaluationSummary `json:"items"`
+	Total int                        `json:"total"`
+	Items []BatteryEvaluationSummary `json:"items"`
 }
 
 // BatteryReportResponse 报告生成响应

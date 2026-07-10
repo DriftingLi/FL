@@ -62,7 +62,7 @@ import { practiceModeApi } from '@/api/practiceMode'
 
 const typeMap = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
 
-const stats = ref({ total: 0, correct: 0, wrong: 0, accuracy: 0, by_type: {}, by_level: {}, weak_knowledge_points: [] })
+const stats = ref({ total: 0, correct: 0, wrong: 0, accuracy: 0, by_type: {} as Record<string, any>, by_level: {} as Record<string, any>, weak_knowledge_points: [] })
 
 onMounted(async () => {
   try {

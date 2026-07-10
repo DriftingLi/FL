@@ -1,7 +1,7 @@
 import request from './request'
 
 export const gradingApi = {
-  getSubmittedParticipants(params) {
+  getSubmittedParticipants(params?) {
     return request.get('/grading/participants', { params })
   },
   getParticipantDetail(participantId) {

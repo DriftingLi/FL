@@ -210,7 +210,7 @@ const resultData = ref(null)
 const showResult = ref(false)
 
 const currentIndex = ref(0)
-const answers = ref({})
+const answers = ref<any>({})
 const markedQuestions = ref(new Set())
 
 const currentQuestion = computed(() => {

@@ -15,22 +15,22 @@ import (
 
 // AuthService 认证服务，处理学员/管理员/导师的登录、注册与令牌签发。
 type AuthService struct {
-	db              *gorm.DB
-	jwtSecret       string
-	jwtExpiry       time.Duration
-	defaultAdminPwd string
-	defaultTutorPwd string
+	db                *gorm.DB
+	jwtSecret         string
+	jwtExpiry         time.Duration
+	defaultAdminPwd   string
+	defaultTutorPwd   string
 	defaultStudentPwd string
 }
 
 // NewAuthService 创建认证服务。
 func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpiry time.Duration, adminPwd, tutorPwd, studentPwd string) *AuthService {
 	return &AuthService{
-		db:               db,
-		jwtSecret:        jwtSecret,
-		jwtExpiry:        jwtExpiry,
-		defaultAdminPwd:  adminPwd,
-		defaultTutorPwd:  tutorPwd,
+		db:                db,
+		jwtSecret:         jwtSecret,
+		jwtExpiry:         jwtExpiry,
+		defaultAdminPwd:   adminPwd,
+		defaultTutorPwd:   tutorPwd,
 		defaultStudentPwd: studentPwd,
 	}
 }

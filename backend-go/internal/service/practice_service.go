@@ -243,7 +243,7 @@ func calculateSkillScores(records []model.PracticeRecord) map[string]interface{}
 			sk["score_sum"] = toInt(sk["score_sum"]) + r.Score
 		}
 		if r.Duration > 0 && r.TimeLimit != nil && *r.TimeLimit > 0 {
-			speedScore := 100 - int(float64(r.Duration)/float64(*r.TimeLimit)*100)+50
+			speedScore := 100 - int(float64(r.Duration)/float64(*r.TimeLimit)*100) + 50
 			if speedScore > 100 {
 				speedScore = 100
 			}
@@ -280,8 +280,8 @@ func (s *PracticeService) GetAdminStats() map[string]interface{} {
 	s.db.Model(&model.PracticeRecord{}).Count(&totalRecords)
 
 	type aggRow struct {
-		Key     string
-		Count   int64
+		Key      string
+		Count    int64
 		AvgScore float64
 	}
 
@@ -316,12 +316,12 @@ func (s *PracticeService) GetAdminStats() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"total_records":          totalRecords,
-		"total_duration":         totalDuration,
-		"avg_score":              roundFloat1(avgScore),
-		"today_count":            todayCount,
-		"recent_count":           recentCount,
-		"type_distribution":      typeDist,
+		"total_records":           totalRecords,
+		"total_duration":          totalDuration,
+		"avg_score":               roundFloat1(avgScore),
+		"today_count":             todayCount,
+		"recent_count":            recentCount,
+		"type_distribution":       typeDist,
 		"difficulty_distribution": diffDist,
 	}
 }

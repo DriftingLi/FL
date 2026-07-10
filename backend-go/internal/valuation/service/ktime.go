@@ -4,8 +4,10 @@
 // λ 区分电动（默认 0.12）与内燃（默认 0.10），可通过 coefficient_configs 调整
 //
 // 品牌系数 Kb 与使用强度系数 Kh 不再直接作用于残值，而是对衰减速率 λ 进行修正：
-//   λ_adj = λ × (Kh / Kb)
-//   Kt_adj = e^(-λ_adj · age) = Kt^(Kh / Kb)
+//
+//	λ_adj = λ × (Kh / Kb)
+//	Kt_adj = e^(-λ_adj · age) = Kt^(Kh / Kb)
+//
 // 这样 age=0 时 Kt_adj 恒等于 1.0，从根本上避免残值率超过 100%
 package service
 

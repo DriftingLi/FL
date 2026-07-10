@@ -1,7 +1,27 @@
 import axios from 'axios'
+import type { AxiosRequestConfig, AxiosInstance } from 'axios'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import router from '@/router'
+
+/** 后端通用 JSON 响应格式 */
+export interface ApiResponse<T = any> {
+  code: number
+  message: string
+  data: T
+}
+
+/** 请求实例的类型：拦截器已将 AxiosResponse 解包为 ApiResponse */
+type TypedRequest = {
+  get<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>>
+  post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>>
+  put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>>
+  delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>>
+  patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>>
+  request<T = any>(config: AxiosRequestConfig): Promise<ApiResponse<T>>
+  defaults: typeof axios.defaults
+  interceptors: AxiosInstance['interceptors']
+}
 
 const request = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -154,4 +174,4 @@ aiRequest.interceptors.response.use(
 )
 
 export { aiRequest }
-export default request
+export default request as unknown as TypedRequest

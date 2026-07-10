@@ -3,11 +3,11 @@ import { ref } from 'vue'
 import { studentApi } from '@/api/student'
 
 export const useUserStore = defineStore('user', () => {
-  const profile = ref({})
-  const studyStats = ref({})
+  const profile = ref<any>({})
+  const studyStats = ref<any>({})
   const courseProgress = ref([])
   const studyRecords = ref([])
-  const recordsPagination = ref({})
+  const recordsPagination = ref<any>({})
 
   async function fetchProfile() {
     try {

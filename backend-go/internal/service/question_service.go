@@ -14,14 +14,14 @@ import (
 
 // 题型与等级常量，与 Python VALID_TYPES/VALID_LEVELS 一致。
 var (
-	validQuestionTypes   = []string{"single_choice", "multi_choice", "true_false", "fault_image", "short_answer"}
-	validQuestionLevels  = []string{"beginner", "intermediate", "advanced"}
-	validQuestionStatus  = []string{"draft", "pending", "published"}
-	examScoreMap         = map[string]float64{"single_choice": 3, "multi_choice": 4, "true_false": 2, "fault_image": 6, "short_answer": 5}
-	mockExamScoreMap     = map[string]float64{"single_choice": 3, "multi_choice": 4, "true_false": 2, "fault_image": 4, "short_answer": 10}
-	levelOrder           = map[string]int{"beginner": 1, "intermediate": 2, "advanced": 3, "expert": 4}
-	levelPromotion       = map[string]string{"beginner": "intermediate", "intermediate": "advanced", "advanced": "expert"}
-	examAllowedLevels    = map[string][]string{
+	validQuestionTypes  = []string{"single_choice", "multi_choice", "true_false", "fault_image", "short_answer"}
+	validQuestionLevels = []string{"beginner", "intermediate", "advanced"}
+	validQuestionStatus = []string{"draft", "pending", "published"}
+	examScoreMap        = map[string]float64{"single_choice": 3, "multi_choice": 4, "true_false": 2, "fault_image": 6, "short_answer": 5}
+	mockExamScoreMap    = map[string]float64{"single_choice": 3, "multi_choice": 4, "true_false": 2, "fault_image": 4, "short_answer": 10}
+	levelOrder          = map[string]int{"beginner": 1, "intermediate": 2, "advanced": 3, "expert": 4}
+	levelPromotion      = map[string]string{"beginner": "intermediate", "intermediate": "advanced", "advanced": "expert"}
+	examAllowedLevels   = map[string][]string{
 		"beginner":     {"beginner"},
 		"intermediate": {"beginner", "intermediate"},
 		"advanced":     {"beginner", "intermediate", "advanced"},
@@ -489,11 +489,11 @@ func (s *QuestionBankService) GetStats() map[string]interface{} {
 		byKP = append(byKP, map[string]interface{}{"id": kp.ID, "name": kp.Name, "count": c})
 	}
 	return map[string]interface{}{
-		"total":                total,
-		"by_level":             byLevel,
-		"by_type":              byType,
-		"by_status":            byStatus,
-		"by_knowledge_point":   byKP,
+		"total":              total,
+		"by_level":           byLevel,
+		"by_type":            byType,
+		"by_status":          byStatus,
+		"by_knowledge_point": byKP,
 	}
 }
 
@@ -680,7 +680,7 @@ func getString(m map[string]interface{}, key string) string {
 	return v
 }
 
-func intToString(i int) string { return toStringHelper(i) }
+func intToString(i int) string       { return toStringHelper(i) }
 func floatToString(f float64) string { return toStringHelper(f) }
 
 func toStringHelper(v interface{}) string {

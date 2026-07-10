@@ -1,12 +1,24 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import type { Ref } from 'vue'
 import { authApi } from '@/api/auth'
 
+export interface UserInfo {
+  token?: string
+  user_id?: number
+  username?: string
+  name?: string
+  role?: string
+  avatar?: string
+  level?: string
+  [key: string]: any
+}
+
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref('')
-  const userInfo = ref({})
-  const isLoggedIn = ref(false)
-  const isInitializing = ref(true)
+  const token: Ref<string> = ref('')
+  const userInfo: Ref<UserInfo> = ref({})
+  const isLoggedIn: Ref<boolean> = ref(false)
+  const isInitializing: Ref<boolean> = ref(true)
 
   function initFromStorage() {
     const savedToken = localStorage.getItem('token')
@@ -41,7 +53,7 @@ export const useAuthStore = defineStore('auth', () => {
       // 静默校验：token 过期时由拦截器直接 reject，不弹错误提示、不跳转登录页
       const res = await authApi.getUserInfo({ headers: { 'X-Silent': '1' } })
       if (res.code === 200 && res.data) {
-        const updates = {
+        const updates: Record<string, any> = {
           user_id: res.data.user_id,
           username: res.data.username,
           role: res.data.role

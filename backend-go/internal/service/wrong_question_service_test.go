@@ -145,11 +145,11 @@ func TestFormatWrongQuestionsText_Empty(t *testing.T) {
 func TestFormatWrongQuestionsText_WithData(t *testing.T) {
 	data := []map[string]interface{}{
 		{
-			"question_id":  1,
-			"content":      "叉车检查要点",
-			"type":         "single_choice",
-			"level":        "beginner",
-			"wrong_count":  3,
+			"question_id":   1,
+			"content":       "叉车检查要点",
+			"type":          "single_choice",
+			"level":         "beginner",
+			"wrong_count":   3,
 			"last_wrong_at": "2026-06-01T10:00:00",
 		},
 	}

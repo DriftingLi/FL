@@ -192,12 +192,12 @@ func (s *PracticeModeService) GetKnowledgePointProgress(studentID int, kpID *int
 				childAcc = roundFloat1(float64(childCorrect) / float64(childAnsCount) * 100)
 			}
 			childrenProg = append(childrenProg, map[string]interface{}{
-				"id":             child.ID,
-				"name":           child.Name,
+				"id":              child.ID,
+				"name":            child.Name,
 				"total_questions": childTotal,
-				"answered":       childAnsCount,
-				"correct":        childCorrect,
-				"accuracy":       childAcc,
+				"answered":        childAnsCount,
+				"correct":         childCorrect,
+				"accuracy":        childAcc,
 			})
 		}
 		result = append(result, map[string]interface{}{
@@ -389,14 +389,14 @@ func (s *PracticeModeService) GetHistory(studentID, page, pageSize int, qType, s
 	items := make([]map[string]interface{}, 0, len(records))
 	for _, r := range records {
 		item := map[string]interface{}{
-			"id":             r.ID,
-			"student_id":     r.StudentID,
-			"question_id":    r.QuestionID,
-			"level":          r.Level,
-			"is_correct":     r.IsCorrect,
-			"practice_type":  r.PracticeType,
-			"user_answer":    r.UserAnswer,
-			"created_at":     formatISO(r.CreatedAt),
+			"id":            r.ID,
+			"student_id":    r.StudentID,
+			"question_id":   r.QuestionID,
+			"level":         r.Level,
+			"is_correct":    r.IsCorrect,
+			"practice_type": r.PracticeType,
+			"user_answer":   r.UserAnswer,
+			"created_at":    formatISO(r.CreatedAt),
 		}
 		var qq model.Question
 		if err := s.db.First(&qq, r.QuestionID).Error; err == nil {

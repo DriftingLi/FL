@@ -111,14 +111,14 @@ func SeedTutor(t *testing.T, db *gorm.DB, username, hashedPassword string) *mode
 func SeedQuestion(t *testing.T, db *gorm.DB, qType, level, content, answer string) *model.Question {
 	t.Helper()
 	q := &model.Question{
-		Type:         qType,
-		Level:        level,
-		Content:      content,
-		Answer:       answer,
-		Status:       "published",
+		Type:          qType,
+		Level:         level,
+		Content:       content,
+		Answer:        answer,
+		Status:        "published",
 		CreatedByType: "tutor",
-		CreatedAt:    Now(),
-		UpdatedAt:    Now(),
+		CreatedAt:     Now(),
+		UpdatedAt:     Now(),
 	}
 	if err := db.Create(q).Error; err != nil {
 		t.Fatalf("插入测试题目失败: %v", err)

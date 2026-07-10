@@ -329,12 +329,12 @@ func (s *LevelExamService) getExamData(session *model.ExamSession, p *model.Exam
 		startISO = formatISO(*p.StartTime)
 	}
 	return map[string]interface{}{
-		"participant_id":  p.ID,
-		"session":         sessionToDict(session),
-		"questions":       ordered,
-		"answers":         answers,
-		"remaining_time":  p.RemainingTime,
-		"start_time":      startISO,
+		"participant_id": p.ID,
+		"session":        sessionToDict(session),
+		"questions":      ordered,
+		"answers":        answers,
+		"remaining_time": p.RemainingTime,
+		"start_time":     startISO,
 	}, nil
 }
 
@@ -690,13 +690,13 @@ func participantToDict(p *model.ExamParticipant) map[string]interface{} {
 
 func examAnswerToDict(a *model.ExamAnswer) map[string]interface{} {
 	d := map[string]interface{}{
-		"id":                 a.ID,
+		"id":                  a.ID,
 		"exam_participant_id": a.ExamParticipantID,
-		"question_id":        a.QuestionID,
-		"user_answer":        a.UserAnswer,
-		"score":              a.Score,
-		"grading_comment":    a.GradingComment,
-		"ai_comment":         a.AIComment,
+		"question_id":         a.QuestionID,
+		"user_answer":         a.UserAnswer,
+		"score":               a.Score,
+		"grading_comment":     a.GradingComment,
+		"ai_comment":          a.AIComment,
 	}
 	if a.IsCorrect != nil {
 		d["is_correct"] = *a.IsCorrect

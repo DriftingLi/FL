@@ -149,10 +149,10 @@ const examFinished = ref(false)
 const examForm = ref({ level: 'beginner', duration: 90 })
 const mockExamId = ref(null)
 const questions = ref([])
-const answers = ref({})
+const answers = ref<any>({})
 const currentIdx = ref(0)
 const remainingTime = ref(0)
-const examResult = ref({})
+const examResult = ref<any>({})
 const history = ref([])
 let timer = null
 

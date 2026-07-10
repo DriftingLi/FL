@@ -153,7 +153,7 @@ const editTitle = ref('')
 const descEditingId = ref(null)
 const editDescription = ref('')
 const filterType = ref('')
-const checkState = reactive({})
+const checkState = reactive<any>({})
 const selectedFileIds = ref([])
 
 const uploadDialogVisible = ref(false)

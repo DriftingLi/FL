@@ -2,9 +2,9 @@ name: CI - 持续集成
 
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [master, develop]
   push:
-    branches: [main, develop]
+    branches: [master, develop]
   workflow_dispatch:
 
 concurrency:
@@ -26,6 +26,8 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -241,7 +243,7 @@ jobs:
   # ============================================================
   ci-summary:
     needs: [backend-lint, backend-test, frontend-check, security-scan, migration-check]
-    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
       - name: 检查是否全部通过

@@ -164,9 +164,9 @@ import * as echarts from 'echarts'
 import { adminApi } from '@/api/admin'
 import { practiceApi } from '@/api/practice'
 
-const overview = ref({})
+const overview = ref<any>({})
 const courseStats = ref([])
-const practiceStats = ref({})
+const practiceStats = ref<any>({})
 const barChartRef = ref(null)
 const progressChartRef = ref(null)
 const typePieRef = ref(null)

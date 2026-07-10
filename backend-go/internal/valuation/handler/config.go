@@ -849,7 +849,7 @@ func (h *ConfigHandler) UpdateConditionRating(c *gin.Context) {
 		return
 	}
 	var body struct {
-		Label          string  `json:"label" binding:"required"`
+		Label           string  `json:"label" binding:"required"`
 		BaseCoefficient float64 `json:"base_coefficient" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {

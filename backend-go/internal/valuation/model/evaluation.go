@@ -22,18 +22,18 @@ type EvaluationRequest struct {
 	Tonnage      float64 `json:"tonnage"        binding:"required"` // 吨位
 	ConfigType   string  `json:"config_type"    binding:"required"` // 配置类型
 	MastType     string  `json:"mast_type"      binding:"required"` // 门架类型
-	MastHeightMM int     `json:"mast_height_mm"`                   // 门架高度(mm)，0 表示"无"，由 Validate 校验
+	MastHeightMM int     `json:"mast_height_mm"`                    // 门架高度(mm)，0 表示"无"，由 Validate 校验
 	// 使用信息
-	FactoryYear   int     `json:"factory_year"   binding:"required"` // 出厂年份
-	SaleYear       int     `json:"sale_year"      binding:"required"` // 成交年份
-	UsageHours     int     `json:"usage_hours"`                      // 累计使用小时数，0 表示新车，由 Validate 校验
-	OriginalPaint bool    `json:"original_paint"`                   // 是否原厂漆
+	FactoryYear   int  `json:"factory_year"   binding:"required"` // 出厂年份
+	SaleYear      int  `json:"sale_year"      binding:"required"` // 成交年份
+	UsageHours    int  `json:"usage_hours"`                       // 累计使用小时数，0 表示新车，由 Validate 校验
+	OriginalPaint bool `json:"original_paint"`                    // 是否原厂漆
 	// 区域信息
 	Province string `json:"province" binding:"required"` // 省份
 	City     string `json:"city"     binding:"required"` // 城市
 	// 证件状态
-	HasLicensePlate           bool `json:"has_license_plate"`            // 是否有车牌
-	HasRegistrationCertificate bool `json:"has_registration_certificate"`  // 是否有登记证
+	HasLicensePlate            bool `json:"has_license_plate"`            // 是否有车牌
+	HasRegistrationCertificate bool `json:"has_registration_certificate"` // 是否有登记证
 	HasMaintenanceRecords      bool `json:"has_maintenance_records"`      // 是否有维保记录
 	// 车况
 	ConditionRating string `json:"condition_rating" binding:"required"` // 车况评级 A/B/C/D/E
@@ -152,19 +152,19 @@ type EvaluationDetail struct {
 // EvaluationResponse 创建评估响应 DTO（HTTP 出参）
 // 返回 ID + 全部 K 系数 + 残值 + 置信区间 + 维度评分 + 建议
 type EvaluationResponse struct {
-	ID             int64                `json:"id"`
-	OriginalPrice  float64              `json:"original_price"`
-	KTime          float64              `json:"k_time"`
-	KHours         float64              `json:"k_hours"`
-	KBrand         float64              `json:"k_brand"`
-	KCondition     float64              `json:"k_condition"`
-	KMarket        float64              `json:"k_market"`
-	KTimeAdjusted  float64              `json:"k_time_adjusted"`
-	EstimatedValue float64              `json:"estimated_value"`
-	ConfidenceLow  float64              `json:"confidence_low"`
-	ConfidenceHigh float64              `json:"confidence_high"`
-	DimensionScores []DimensionScore    `json:"dimension_scores"`
-	Suggestions     []string            `json:"suggestions"`
+	ID              int64            `json:"id"`
+	OriginalPrice   float64          `json:"original_price"`
+	KTime           float64          `json:"k_time"`
+	KHours          float64          `json:"k_hours"`
+	KBrand          float64          `json:"k_brand"`
+	KCondition      float64          `json:"k_condition"`
+	KMarket         float64          `json:"k_market"`
+	KTimeAdjusted   float64          `json:"k_time_adjusted"`
+	EstimatedValue  float64          `json:"estimated_value"`
+	ConfidenceLow   float64          `json:"confidence_low"`
+	ConfidenceHigh  float64          `json:"confidence_high"`
+	DimensionScores []DimensionScore `json:"dimension_scores"`
+	Suggestions     []string         `json:"suggestions"`
 }
 
 // CalcWeights 加权权重（用于 PDF 计算过程展示）
@@ -178,11 +178,11 @@ type CalcWeights struct {
 
 // EvaluationItemDTO 部件状态 DTO（保留兼容 PDF 旧签名，重构后不再使用）
 type EvaluationItemDTO struct {
-	CategoryCode   string `json:"category_code"`
-	CategoryName   string `json:"category_name"`
-	ItemCode       string `json:"item_code"`
-	ItemName       string `json:"item_name"`
-	Status         string `json:"status"`
+	CategoryCode   string  `json:"category_code"`
+	CategoryName   string  `json:"category_name"`
+	ItemCode       string  `json:"item_code"`
+	ItemName       string  `json:"item_name"`
+	Status         string  `json:"status"`
 	CategoryWeight float64 `json:"category_weight"`
 	ItemWeight     float64 `json:"item_weight"`
 	Score          float64 `json:"score"`

@@ -133,7 +133,7 @@ function formatDate(dateStr) {
 async function loadTutors() {
   loading.value = true
   try {
-    const params = {
+    const params: Record<string, any> = {
       page: currentPage.value,
       page_size: pageSize.value
     }

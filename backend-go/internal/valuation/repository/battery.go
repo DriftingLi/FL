@@ -97,19 +97,19 @@ func (r *BatteryRepository) GetEvaluation(ctx context.Context, id int64) (*model
 		FROM battery_evaluations WHERE id = $1
 	`, id)
 	var (
-		bid          int64
-		batteryType  string
-		batteryModel *string
-		cycleCount   int32
-		rulCycles    int32
-		soh          float64
-		conf         float64
-		confLow      int32
-		confHigh     int32
+		bid           int64
+		batteryType   string
+		batteryModel  *string
+		cycleCount    int32
+		rulCycles     int32
+		soh           float64
+		conf          float64
+		confLow       int32
+		confHigh      int32
 		importanceRaw []byte
-		reportPath   *string
-		createdAt    time.Time
-		updatedAt    time.Time
+		reportPath    *string
+		createdAt     time.Time
+		updatedAt     time.Time
 	)
 	if err := row.Scan(&bid, &batteryType, &batteryModel, &cycleCount, &rulCycles, &soh,
 		&conf, &confLow, &confHigh, &importanceRaw, &reportPath, &createdAt, &updatedAt); err != nil {

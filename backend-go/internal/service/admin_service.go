@@ -120,10 +120,10 @@ func (s *AdminService) GetStatistics() map[string]interface{} {
 
 	// 课程统计
 	type courseStatRow struct {
-		CourseID     int
-		Name         string
-		StudyCount   int64
-		AvgProgress  float64
+		CourseID      int
+		Name          string
+		StudyCount    int64
+		AvgProgress   float64
 		TotalDuration int64
 	}
 	var rows []courseStatRow

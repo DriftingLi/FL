@@ -74,9 +74,9 @@ func TestCreateQuestion_InvalidLevel(t *testing.T) {
 func TestCreateQuestion_EmptyContent(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
 	data := map[string]interface{}{
-		"type":   "single_choice",
-		"level":  "beginner",
-		"answer": "A",
+		"type":    "single_choice",
+		"level":   "beginner",
+		"answer":  "A",
 		"options": []string{"A", "B"},
 	}
 	_, err := svc.CreateQuestion(data, nil, "tutor")
@@ -362,8 +362,8 @@ func TestBatchImport_WithErrors(t *testing.T) {
 			"answer":  "A",
 		},
 		map[string]interface{}{
-			"type":  "invalid_type",
-			"level": "beginner",
+			"type":    "invalid_type",
+			"level":   "beginner",
 			"content": "无效题",
 		},
 		"not-a-map", // 无效数据

@@ -416,7 +416,7 @@ async function loadProfile() {
 
 async function loadRecords() {
   recordsLoading.value = true
-  const params = {
+  const params: Record<string, any> = {
     page: currentPage.value,
     page_size: pageSize.value
   }
@@ -434,7 +434,7 @@ async function loadRecords() {
 async function loadPracticeRecords() {
   practiceLoading.value = true
   try {
-    const params = {
+    const params: Record<string, any> = {
       page: practicePage.value,
       page_size: practicePageSize.value
     }

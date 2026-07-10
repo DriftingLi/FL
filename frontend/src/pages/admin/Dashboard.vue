@@ -57,7 +57,7 @@ import { User, UserFilled, Notebook, Timer, TrendCharts, MagicStick, Calendar, S
 import * as echarts from 'echarts'
 import { adminApi } from '@/api/admin'
 
-const overview = ref({})
+const overview = ref<any>({})
 const courseStats = ref([])
 const barChartRef = ref(null)
 const pieChartRef = ref(null)

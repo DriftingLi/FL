@@ -1,12 +1,13 @@
 // Package handler 提供残值评估子模块的路由注册入口。
 // 路由结构：
-//   /api/valuation                      启用 JWTAuth 中间件
-//     ├── /evaluations                  评估 CRUD（学生端可访问）
-//     ├── /evaluations/:id/report       PDF 报告生成与下载
-//     ├── /battery/evaluations          电池 RUL 评估（保留不变）
-//     ├── /dictionaries/*               字典查询（学生端只读 GET）
-//     ├── /admin/*                      管理员 CRUD（要求 JWT role=admin）
-//     └── /health                       健康检查
+//
+//	/api/valuation                      启用 JWTAuth 中间件
+//	  ├── /evaluations                  评估 CRUD（学生端可访问）
+//	  ├── /evaluations/:id/report       PDF 报告生成与下载
+//	  ├── /battery/evaluations          电池 RUL 评估（保留不变）
+//	  ├── /dictionaries/*               字典查询（学生端只读 GET）
+//	  ├── /admin/*                      管理员 CRUD（要求 JWT role=admin）
+//	  └── /health                       健康检查
 package handler
 
 import (

@@ -14,12 +14,13 @@ import (
 
 // TestCalcKHours_RangeMapping 覆盖 5 段强度区间的查表结果
 // 默认 1750 小时/年基准
-//   5 年标准 = 8750 小时
-//     ratio < 0.7   → 1.10（远低于平均）
-//     0.7 ≤ r < 1.0 → 1.00（正常）
-//     1.0 ≤ r < 1.3 → 0.95（高于平均）
-//     1.3 ≤ r < 1.6 → 0.90（接近重型）
-//     r ≥ 1.6       → 0.85（超高强度）
+//
+//	5 年标准 = 8750 小时
+//	  ratio < 0.7   → 1.10（远低于平均）
+//	  0.7 ≤ r < 1.0 → 1.00（正常）
+//	  1.0 ≤ r < 1.3 → 0.95（高于平均）
+//	  1.3 ≤ r < 1.6 → 0.90（接近重型）
+//	  r ≥ 1.6       → 0.85（超高强度）
 func TestCalcKHours_RangeMapping(t *testing.T) {
 	provider, pool := newTestProvider(t)
 	defer pool.Close()

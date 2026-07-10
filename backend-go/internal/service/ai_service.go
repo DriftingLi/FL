@@ -87,10 +87,10 @@ type AIGradeResult struct {
 func (s *AIService) TestConnection() map[string]interface{} {
 	if s.apiKey == "" {
 		return map[string]interface{}{
-			"status":           "error",
-			"message":          "ZHIPU_API_KEY未配置，请在环境变量或.env文件中设置",
-			"api_key_exists":   false,
-			"api_key_length":   0,
+			"status":         "error",
+			"message":        "ZHIPU_API_KEY未配置，请在环境变量或.env文件中设置",
+			"api_key_exists": false,
+			"api_key_length": 0,
 		}
 	}
 	keyPrefix := s.apiKey
@@ -102,12 +102,12 @@ func (s *AIService) TestConnection() map[string]interface{} {
 	}, 50, 0.1)
 	if err != nil {
 		return map[string]interface{}{
-			"status":           "error",
-			"message":          fmt.Sprintf("AI连接失败: %s", err.Error()),
-			"api_key_exists":   true,
-			"api_key_prefix":   keyPrefix,
-			"error_type":       "RuntimeError",
-			"model":            s.model,
+			"status":         "error",
+			"message":        fmt.Sprintf("AI连接失败: %s", err.Error()),
+			"api_key_exists": true,
+			"api_key_prefix": keyPrefix,
+			"error_type":     "RuntimeError",
+			"model":          s.model,
 		}
 	}
 	if content == "" {
@@ -124,12 +124,12 @@ func (s *AIService) TestConnection() map[string]interface{} {
 		preview = preview[:100]
 	}
 	return map[string]interface{}{
-		"status":            "success",
-		"message":           "AI连接正常",
-		"api_key_exists":    true,
-		"api_key_prefix":    keyPrefix,
-		"response_preview":  preview,
-		"model":             s.model,
+		"status":           "success",
+		"message":          "AI连接正常",
+		"api_key_exists":   true,
+		"api_key_prefix":   keyPrefix,
+		"response_preview": preview,
+		"model":            s.model,
 	}
 }
 
@@ -234,11 +234,11 @@ func (s *AIService) GetGenerationHistory(userID int, generationType string, limi
 			params = map[string]interface{}{}
 		}
 		out = append(out, map[string]interface{}{
-			"log_id":           log.LogID,
-			"generation_type":  log.GenerationType,
-			"input_params":     params,
-			"output_result":    log.OutputResult,
-			"created_at":       formatISO(log.CreatedAt),
+			"log_id":          log.LogID,
+			"generation_type": log.GenerationType,
+			"input_params":    params,
+			"output_result":   log.OutputResult,
+			"created_at":      formatISO(log.CreatedAt),
 		})
 	}
 	return out
