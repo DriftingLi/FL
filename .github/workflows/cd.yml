@@ -1,4 +1,4 @@
-name: CD - 持续部署（Tailscale SSH + Cloudflare Pages）
+name: CD - 持续部署（Tailscale SSH）
 
 on:
   # CI 通过后自动触发部署（确保部署的是已测试的代码）
@@ -18,10 +18,6 @@ on:
           - production
       skip_backend:
         description: 跳过后端部署
-        type: boolean
-        default: false
-      skip_frontend:
-        description: 跳过前端部署
         type: boolean
         default: false
       skip_migration:
@@ -299,64 +295,7 @@ jobs:
           args: logout
 
   # ============================================================
-  # Stage 3: 构建前端并部署到 Cloudflare Pages
-  # ============================================================
-  deploy-frontend:
-    needs: ci-gate
-    if: |
-      always() &&
-      (github.event_name == 'workflow_dispatch' || needs.ci-gate.result == 'success') &&
-      !(github.event_name == 'workflow_dispatch' && inputs.skip_frontend)
-    runs-on: ubuntu-latest
-    environment:
-      name: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
-    permissions:
-      contents: read
-      deployments: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: 安装依赖
-        working-directory: frontend
-        run: npm install
-
-      - name: TypeScript 类型检查
-        working-directory: frontend
-        run: npm run type-check
-
-      - name: 构建前端（注入 API 地址）
-        working-directory: frontend
-        env:
-          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || secrets.VITE_API_BASE_URL || 'https://api.your-domain.com' }}
-        run: npm run build
-
-      - name: 部署到 Cloudflare Pages
-        uses: cloudflare/pages-action@v1
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: ${{ vars.CLOUDFLARE_PROJECT_NAME || 'forklift-training' }}
-          directory: frontend/dist
-          branch: main
-          wranglerVersion: '3'
-
-      - name: 前端部署摘要
-        run: |
-          echo "### 前端部署完成" >> $GITHUB_STEP_SUMMARY
-          echo "- Cloudflare Pages: \`${{ vars.CLOUDFLARE_PROJECT_NAME || 'forklift-training' }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- API 地址: \`${{ vars.VITE_API_BASE_URL || 'https://api.your-domain.com' }}\`" >> $GITHUB_STEP_SUMMARY
-
-  # ============================================================
-  # Stage 4: 后端健康检查（通过公网 API 地址）
+  # 注：前端由 Cloudflare Pages 自动部署（GitHub 集成，监听仓库 push 事件）
   # ============================================================
   health-check:
     needs: deploy-backend
@@ -453,14 +392,13 @@ jobs:
   # Stage 6: 部署汇总
   # ============================================================
   notify:
-    needs: [deploy-backend, deploy-frontend, health-check]
+    needs: [deploy-backend, health-check]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: 汇总部署状态
         run: |
           BACKEND_STATUS="${{ needs.deploy-backend.result }}"
-          FRONTEND_STATUS="${{ needs.deploy-frontend.result }}"
           HEALTH_STATUS="${{ needs.health-check.result }}"
 
           echo "# 部署报告" >> $GITHUB_STEP_SUMMARY
@@ -468,7 +406,7 @@ jobs:
           echo "| 项目 | 状态 |" >> $GITHUB_STEP_SUMMARY
           echo "|------|------|" >> $GITHUB_STEP_SUMMARY
           echo "| 后端 (Tailscale SSH) | $([ "$BACKEND_STATUS" = 'success' ] && echo '✅' || ([ "$BACKEND_STATUS" = 'skipped' ] && echo '⏭️') || echo '❌') |" >> $GITHUB_STEP_SUMMARY
-          echo "| 前端 (Cloudflare Pages) | $([ "$FRONTEND_STATUS" = 'success' ] && echo '✅' || ([ "$FRONTEND_STATUS" = 'skipped' ] && echo '⏭️') || echo '❌') |" >> $GITHUB_STEP_SUMMARY
+          echo "| 前端 | Cloudflare Pages 自动部署 |" >> $GITHUB_STEP_SUMMARY
           echo "| 健康检查 | $([ "$HEALTH_STATUS" = 'success' ] && echo '✅' || ([ "$HEALTH_STATUS" = 'skipped' ] && echo '⏭️') || echo '⚠️ 已回滚') |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- 后端 API: ${{ vars.API_URL || '未配置' }}" >> $GITHUB_STEP_SUMMARY
