@@ -327,9 +327,11 @@ run_migration() {
     done
 
     # 通过临时容器运行迁移（使用镜像中独立的 migrate 二进制）
+    # 用 DB_USER/DB_PASSWORD 拼接连接串（和 docker-compose 一致），不依赖 GitHub Secret 的 DATABASE_URL
+    MIGRATE_DB_URL="postgres://${DB_USER:-forklift}:${DB_PASSWORD}@localhost:5432/forklift_training?sslmode=disable"
     log_info "运行迁移: ${IMAGE_BACKEND}:${IMAGE_TAG} /app/bin/migrate up"
     if docker run --rm --network container:"$(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps -q "$POSTGRES_SERVICE")" \
-        -e "DATABASE_URL=${DATABASE_URL}" \
+        -e "DATABASE_URL=${MIGRATE_DB_URL}" \
         "${IMAGE_BACKEND}:${IMAGE_TAG}" \
         /app/bin/migrate up 2>&1; then
         log_ok "数据库迁移完成"
