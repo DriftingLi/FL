@@ -306,12 +306,13 @@ func buildSuggestions(r *model.EvaluationResult, provider *CoefficientProvider, 
 	// 3. 原厂漆与维保记录加分项提示（百分比动态读取）
 	paintBonus := readWithFallback(ctx, provider, KeyKcPaintBonus, defaultKcPaintBonus)
 	maintenanceBonus := readWithFallback(ctx, provider, KeyKcMaintenanceBonus, defaultKcMaintenanceBonus)
-	if r.OriginalPaint && r.HasMaintenanceRecords {
+	switch {
+	case r.OriginalPaint && r.HasMaintenanceRecords:
 		totalPct := (paintBonus + maintenanceBonus) * 100
 		s = append(s, fmt.Sprintf("原厂漆完整且有维保记录，加成 %.0f%%，对保值有利", totalPct))
-	} else if r.OriginalPaint {
+	case r.OriginalPaint:
 		s = append(s, fmt.Sprintf("原厂漆完整，加成 %.0f%%", paintBonus*100))
-	} else if r.HasMaintenanceRecords {
+	case r.HasMaintenanceRecords:
 		s = append(s, fmt.Sprintf("有维保记录，加成 %.0f%%", maintenanceBonus*100))
 	}
 

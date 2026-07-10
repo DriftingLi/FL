@@ -214,11 +214,12 @@ func buildSuggestionsFromDetail(d *model.EvaluationDetail) []string {
 	}
 
 	// 3. 原厂漆与维保记录加分项提示（百分比取 DB 默认值 2%）
-	if d.OriginalPaint && d.HasMaintenanceRecords {
+	switch {
+	case d.OriginalPaint && d.HasMaintenanceRecords:
 		s = append(s, "原厂漆完整且有维保记录，加成 4%，对保值有利")
-	} else if d.OriginalPaint {
+	case d.OriginalPaint:
 		s = append(s, "原厂漆完整，加成 2%")
-	} else if d.HasMaintenanceRecords {
+	case d.HasMaintenanceRecords:
 		s = append(s, "有维保记录，加成 2%")
 	}
 

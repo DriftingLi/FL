@@ -808,7 +808,7 @@ func (g *Generator) renderCoefficientsAndConclusion(pdf *gofpdf.Fpdf, r *model.E
 	drawPageFooter(pdf, 3, 3)
 }
 
-func drawGradeCards(pdf *gofpdf.Fpdf, x, y, w float64, grade gradeInfo, rate, estValue float64) {
+func drawGradeCards(pdf *gofpdf.Fpdf, x, y, w float64, grade gradeInfo, _, estValue float64) {
 	cardH := 24.0
 	gap := 4.0
 	cardW := (w - gap) * 0.30
@@ -846,7 +846,6 @@ func drawGradeCards(pdf *gofpdf.Fpdf, x, y, w float64, grade gradeInfo, rate, es
 	pdf.SetTextColor(errColor[0], errColor[1], errColor[2])
 	pdf.SetXY(ex, y+7)
 	pdf.CellFormat(estW, 10, fmt.Sprintf("%.2f 万元", yuanToWan(estValue)), "", 0, "C", false, 0, "")
-	_ = rate
 }
 
 func drawRecommendations(pdf *gofpdf.Fpdf, x, y, w float64, suggs []string) float64 {

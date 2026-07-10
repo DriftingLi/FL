@@ -235,12 +235,11 @@ func batteryTypeName(t model.BatteryType) string {
 }
 
 // GenerateBatteryReportToPath 静态函数：直接生成 PDF 到指定路径（handler 调用入口）
-func GenerateBatteryReportToPath(outputDir, fullPath string, eval *model.BatteryEvaluation) error {
+func GenerateBatteryReportToPath(_, fullPath string, eval *model.BatteryEvaluation) error {
 	// 把 outputDir 临时改成 fullPath 的目录
 	g := &Generator{outputDir: fullPath}
 	// 重用 Generator.GenerateBatteryReport 但跳过其内部拼路径
 	// 这里直接调内部实现
-	_ = outputDir
 	return g.generateBatteryReportInternal(fullPath, eval)
 }
 

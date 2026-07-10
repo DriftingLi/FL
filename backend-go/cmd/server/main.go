@@ -4,7 +4,7 @@
 //   - 残值评估子模块路由 /api/valuation/*
 package main
 
-//nolint:gocritic  // exitAfterDefer: os.Exit 在 defer cancel 之前，是预期的启动失败流程
+//nolint:gocritic // exitAfterDefer: os.Exit 在 defer cancel 之前，是预期的启动失败流程
 
 import (
 	"context"
@@ -31,7 +31,8 @@ import (
 	"forklift-training/pkg/pdf"
 )
 
-func main() { //nolint:gocritic
+//nolint:gocritic
+func main() {
 	// 开发环境自动加载 .env
 	_ = godotenv.Load()
 
@@ -111,7 +112,9 @@ func main() { //nolint:gocritic
 
 // setupValuation 装配残值评估子模块，注册 /api/valuation/* 路由。
 // 返回 cleanup 函数用于释放 pgx 连接池和 zap 日志缓冲。
-func setupValuation(r *gin.Engine, cfg *config.Config) func() { //nolint:gocritic
+//
+//nolint:gocritic
+func setupValuation(r *gin.Engine, cfg *config.Config) func() {
 	// 1. 初始化 zap 日志器
 	vLogger, err := vconfig.NewLogger(vconfig.LogConfig{
 		Level:  cfg.Valuation.LogLevel,

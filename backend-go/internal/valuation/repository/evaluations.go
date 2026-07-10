@@ -59,11 +59,7 @@ type CreateEvaluationParams struct {
 
 // CreateEvaluation 插入评估主记录，返回新 ID
 func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEvaluationParams) (int64, error) {
-	var (
-		id        int64
-		createdAt time.Time
-		updatedAt time.Time
-	)
+	var id int64
 	err := r.pool.QueryRow(ctx, `
 		INSERT INTO evaluations (
 			brand, vehicle_type, series, tonnage,
@@ -93,12 +89,10 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 		p.ConditionRating,
 		p.OriginalPrice, p.KTime, p.KHours, p.KBrand, p.KCondition, p.KMarket,
 		p.EstimatedValue, p.ConfidenceLow, p.ConfidenceHigh, nullableString(p.ReportPdfPath),
-	).Scan(&id, &createdAt, &updatedAt)
+	).Scan(&id, new(time.Time), new(time.Time))
 	if err != nil {
 		return 0, fmt.Errorf("插入评估记录失败: %w", err)
 	}
-	_ = createdAt
-	_ = updatedAt
 	return id, nil
 }
 
