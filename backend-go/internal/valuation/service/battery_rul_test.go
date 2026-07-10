@@ -2,6 +2,7 @@
 package service
 
 import (
+	"context"
 	"math"
 	"testing"
 
@@ -103,7 +104,8 @@ func TestPredict_LFP_FullLifecycle(t *testing.T) {
 		BatteryModel: "Test-LFP-1.1Ah",
 		Cycles:       cycles,
 	}
-	res, err := svc.Predict(nil, req)
+	ctx := context.TODO()
+	res, err := svc.Predict(ctx, req)
 	if err != nil {
 		t.Fatalf("Predict error: %v", err)
 	}
@@ -145,7 +147,8 @@ func TestPredict_NCM_ShortLifecycle(t *testing.T) {
 		BatteryModel: "Test-NCM-2.0Ah",
 		Cycles:       cycles,
 	}
-	res, err := svc.Predict(nil, req)
+	ctx := context.TODO()
+	res, err := svc.Predict(ctx, req)
 	if err != nil {
 		t.Fatalf("Predict error: %v", err)
 	}
@@ -170,7 +173,8 @@ func TestPredict_BelowEOL(t *testing.T) {
 		BatteryType: model.BatteryTypeLFP,
 		Cycles:      cycles,
 	}
-	res, err := svc.Predict(nil, req)
+	ctx := context.TODO()
+	res, err := svc.Predict(ctx, req)
 	if err != nil {
 		t.Fatalf("Predict error: %v", err)
 	}

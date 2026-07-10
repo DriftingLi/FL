@@ -186,7 +186,8 @@ func (s *ExamService) SubmitExam(studentID, courseID int, answers map[string]int
 	detailsJSON, _ := json.Marshal(details)
 	var rec model.ExamRecord
 	err = s.db.Where("student_id = ? AND course_id = ?", studentID, courseID).First(&rec).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
+	switch {
+	case errors.Is(err, gorm.ErrRecordNotFound):
 		rec = model.ExamRecord{
 			StudentID: studentID,
 			CourseID:  courseID,
@@ -197,14 +198,14 @@ func (s *ExamService) SubmitExam(studentID, courseID int, answers map[string]int
 		if err := s.db.Create(&rec).Error; err != nil {
 			return nil, err
 		}
-	} else if err == nil {
+	case err == nil:
 		rec.Score = floatPtr(float64(finalScore))
 		rec.Answers = model.JSONB(detailsJSON)
 		rec.ExamDate = beijingNow()
 		if err := s.db.Save(&rec).Error; err != nil {
 			return nil, err
 		}
-	} else {
+	default:
 		return nil, err
 	}
 

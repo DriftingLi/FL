@@ -16,7 +16,7 @@ import (
 // output: stdout | 文件路径
 func NewLogger(cfg LogConfig) (*zap.Logger, error) {
 	// 解析日志级别
-	level := zapcore.InfoLevel
+	var level zapcore.Level
 	switch strings.ToLower(cfg.Level) {
 	case "debug":
 		level = zapcore.DebugLevel

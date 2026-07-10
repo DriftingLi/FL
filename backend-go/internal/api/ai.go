@@ -68,7 +68,7 @@ func RegisterAIRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 			return
 		}
 		accessToken, _ := token["access_token"].(string)
-		expiresIn, _ := token["expires_in"]
+		expiresIn := token["expires_in"]
 		response.Success(c, gin.H{
 			"token":      accessToken,
 			"project_id": cfg.Coze.ProjectID,

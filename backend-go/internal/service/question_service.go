@@ -80,7 +80,8 @@ func checkAnswer(q *model.Question, userAnswer interface{}) *bool {
 	}
 	// 单选/判断/故障识图：字符串大写比较
 	ua := stringifyAnswer(userAnswer)
-	res := strings.ToUpper(strings.TrimSpace(ua)) == strings.ToUpper(strings.TrimSpace(q.Answer))
+	//nolint:staticcheck
+	res := strings.EqualFold(strings.TrimSpace(ua), strings.TrimSpace(q.Answer))
 	return &res
 }
 
@@ -96,7 +97,8 @@ func gradeQuestion(q *model.Question, userAnswer interface{}, maxScore float64) 
 	switch q.Type {
 	case "single_choice", "true_false", "fault_image":
 		ua := stringifyAnswer(userAnswer)
-		correct := strings.ToUpper(strings.TrimSpace(ua)) == strings.ToUpper(strings.TrimSpace(q.Answer))
+		//nolint:staticcheck
+		correct := strings.EqualFold(strings.TrimSpace(ua), strings.TrimSpace(q.Answer))
 		if correct {
 			return &correct, maxScore
 		}
