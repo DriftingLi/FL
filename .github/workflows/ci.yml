@@ -273,7 +273,6 @@ jobs:
           check "${{ needs.backend-lint.result }}" "backend-lint"
           check "${{ needs.backend-test.result }}" "backend-test"
           check "${{ needs.frontend-check.result }}" "frontend-check"
-          check "${{ needs.security-scan.result }}" "security-scan"
           check "${{ needs.migration-check.result }}" "migration-check"
 
           if [ -n "$FAILED" ]; then

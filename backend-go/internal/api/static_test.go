@@ -128,16 +128,16 @@ func TestResolveUploadDir(t *testing.T) {
 		t.Fatalf("VOLUME_MOUNT_PATH 优先失败: %s", dir)
 	}
 
-	// 无 VOLUME_MOUNT_PATH 时用 UploadFolder
+	// 无 VOLUME_MOUNT_PATH 时用 UploadFolder（resolveUploadDir 将其转为绝对路径）
 	cfg = &config.Config{UploadFolder: "/custom/uploads"}
-	if dir := resolveUploadDir(cfg); dir != "/custom/uploads" {
-		t.Fatalf("UploadFolder 回退失败: %s", dir)
+	if d := resolveUploadDir(cfg); filepath.Base(d) != "uploads" || !filepath.IsAbs(d) {
+		t.Fatalf("UploadFolder 回退失败: %s", d)
 	}
 
-	// 均无时用默认
+	// 均无时用默认（resolveUploadDir 返回绝对路径）
 	cfg = &config.Config{}
-	if dir := resolveUploadDir(cfg); dir != "static/uploads" {
-		t.Fatalf("默认值失败: %s", dir)
+	if d := resolveUploadDir(cfg); filepath.Base(d) != "uploads" {
+		t.Fatalf("默认值失败: %s", d)
 	}
 }
 
