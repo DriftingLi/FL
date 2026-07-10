@@ -53,17 +53,6 @@ func (j *JSONB) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// ===== 时间戳钩子（北京时间） =====
-
-// beijingNow 返回当前北京时间（UTC+8）。
-func beijingNow() time.Time {
-	loc, _ := time.LoadLocation("Asia/Shanghai")
-	if loc == nil {
-		loc = time.FixedZone("CST", 8*3600)
-	}
-	return time.Now().In(loc)
-}
-
 // ===== 1. 学员 =====
 
 type Student struct {

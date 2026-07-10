@@ -55,6 +55,8 @@ func extractPDFText(path string) (string, error) {
 }
 
 // containAny 报告中至少出现 expected 中的一项(用于容忍字体编码差异)
+//
+//nolint:unused
 func containAny(haystack string, expected ...string) bool {
 	for _, s := range expected {
 		if strings.Contains(haystack, s) {

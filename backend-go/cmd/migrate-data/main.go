@@ -216,7 +216,7 @@ func migrateTable(srcDB, tgtDB *sql.DB, t tableSpec) (int64, error) {
 	}
 	stmt, err := txn.Prepare(insertSQL)
 	if err != nil {
-		txn.Rollback()
+		_ = txn.Rollback()
 		return 0, fmt.Errorf("预编译插入语句失败: %w", err)
 	}
 	defer stmt.Close()
@@ -229,7 +229,7 @@ func migrateTable(srcDB, tgtDB *sql.DB, t tableSpec) (int64, error) {
 			valuePtrs[i] = &values[i]
 		}
 		if err := rows.Scan(valuePtrs...); err != nil {
-			txn.Rollback()
+			_ = txn.Rollback()
 			return total, fmt.Errorf("扫描源行失败: %w", err)
 		}
 
@@ -239,7 +239,7 @@ func migrateTable(srcDB, tgtDB *sql.DB, t tableSpec) (int64, error) {
 		}
 
 		if _, err := stmt.Exec(values...); err != nil {
-			txn.Rollback()
+			_ = txn.Rollback()
 			return total, fmt.Errorf("插入目标行失败（表 %s）: %w", t.Name, err)
 		}
 		total++
@@ -255,14 +255,14 @@ func migrateTable(srcDB, tgtDB *sql.DB, t tableSpec) (int64, error) {
 			}
 			stmt, err = txn.Prepare(insertSQL)
 			if err != nil {
-				txn.Rollback()
+				_ = txn.Rollback()
 				return total, fmt.Errorf("重新预编译失败: %w", err)
 			}
 			batchCount = 0
 		}
 	}
 	if err := rows.Err(); err != nil {
-		txn.Rollback()
+		_ = txn.Rollback()
 		return total, fmt.Errorf("遍历源行失败: %w", err)
 	}
 

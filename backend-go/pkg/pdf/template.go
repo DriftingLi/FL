@@ -60,12 +60,11 @@ var (
 	textPale  = rgb{203, 213, 225} // #CBD5E1
 
 	// 背景与边框
-	bgMuted     = rgb{248, 250, 252} // #F8FAFC
-	bgSecondary = rgb{241, 245, 249} // #F1F5F9
-	bgPrimary   = rgb{239, 246, 255} // #EFF6FF
-	bgPrimary2  = rgb{219, 234, 254} // #DBEAFE
-	border      = rgb{226, 232, 240} // #E2E8F0
-	borderLite  = rgb{241, 245, 249} // #F1F5F9
+	bgMuted    = rgb{248, 250, 252} // #F8FAFC
+	bgPrimary  = rgb{239, 246, 255} // #EFF6FF
+	bgPrimary2 = rgb{219, 234, 254} // #DBEAFE
+	border     = rgb{226, 232, 240} // #E2E8F0
+	borderLite = rgb{241, 245, 249} // #F1F5F9
 
 	// 语义色
 	success     = rgb{22, 163, 74}   // #16A34A
@@ -315,20 +314,6 @@ func drawCenterFadeBar(pdf *gofpdf.Fpdf, cx, y, w, h float64, c rgb) {
 		bb := lerp(255, c[2], alpha)
 		pdf.SetFillColor(rr, gg, bb)
 		pdf.Rect(cx-w/2+float64(i)*stripW, y, stripW+0.1, h, "F")
-	}
-}
-
-func blendRgb(a, b rgb, t float64) rgb {
-	if t < 0 {
-		t = 0
-	}
-	if t > 1 {
-		t = 1
-	}
-	return rgb{
-		lerp(a[0], b[0], t),
-		lerp(a[1], b[1], t),
-		lerp(a[2], b[2], t),
 	}
 }
 

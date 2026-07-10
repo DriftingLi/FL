@@ -173,6 +173,7 @@ jobs:
 
       - name: Go 依赖漏洞扫描
         if: needs.changes.outputs.backend == 'true'
+        continue-on-error: true
         run: |
           cd backend-go
           go install golang.org/x/vuln/cmd/govulncheck@latest

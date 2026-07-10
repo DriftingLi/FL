@@ -2,8 +2,6 @@
 package api
 
 import (
-	"log/slog"
-
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
@@ -162,11 +160,6 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		}
 	}
 	response.Success(c, data)
-}
-
-// logErr 记录错误日志。
-func logErr(msg string, err error) {
-	slog.Error(msg, "error", err)
 }
 
 // 占位：避免未使用导入警告

@@ -49,6 +49,8 @@ func ensureFontLoaded(pdf *gofpdf.Fpdf) error {
 }
 
 // fontFileName 返回内嵌字体的建议文件名（供调试/日志使用）
+//
+//nolint:unused
 func fontFileName() string {
 	return filepath.Base("fonts/simhei.ttf")
 }

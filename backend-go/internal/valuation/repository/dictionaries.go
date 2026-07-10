@@ -139,12 +139,3 @@ type DictionaryRepository struct {
 func NewDictionaryRepository(pool *pgxpool.Pool) *DictionaryRepository {
 	return &DictionaryRepository{pool: pool}
 }
-
-// nullableStrPtr 把 *string 转为 SQL 占位符（nil → NULL）
-// 与 battery.go 的 nullableString 不同，此处用于 *string 类型字段
-func nullableStrPtr(s *string) any {
-	if s == nil {
-		return nil
-	}
-	return *s
-}
