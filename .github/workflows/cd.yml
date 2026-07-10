@@ -202,8 +202,10 @@ jobs:
           echo "=== 连通性测试 ==="
           # tailscale ping 直连成功 exit 0；走 DERP 中继时仍能通但可能 exit 非零
           # 只要收到 pong（直接或 DERP 中继都算通），SSH 就能用
+          set +e  # tailscale ping 走 DERP 时 exit 非零，不要因此中断
           TS_PING_OUT=$(tailscale ping --c 3 "$TAILSCALE_HOST" 2>&1)
           TS_PING_RC=$?
+          set -e
           echo "$TS_PING_OUT"
           if echo "$TS_PING_OUT" | grep -q "pong"; then
             echo "✅ Tailscale 连接正常（$([ $TS_PING_RC -eq 0 ] && echo '直连' || echo 'DERP 中继')）"
