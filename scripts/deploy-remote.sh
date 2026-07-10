@@ -74,9 +74,14 @@ write_env_file() {
         if [ -z "$val" ]; then
             printf '""'
         elif printf '%s' "$val" | grep -q "[[:space:]\$+#{}()&|!<>'\";=]" 2>/dev/null; then
-            # 含特殊字符，双引号包裹，换行转 \n
+            # 含特殊字符：双引号包裹，换行转 \n（Docker Compose .env 不支持裸换行）
             printf '"'
-            printf '%s' "$val" | sed ':a;N;$!ba;s/\n/\\n/g'
+            if command -v python3 >/dev/null 2>&1; then
+                printf '%s' "$val" | python3 -c "import sys; sys.stdout.write(sys.stdin.read().rstrip('\n').replace('\n', r'\n'))"
+            else
+                # fallback: 用 perl（更常见于最小化安装）
+                printf '%s' "$val" | perl -pe 's/\n/\\n/g' | head -c -2
+            fi
             printf '"'
         else
             printf '%s' "$val"
