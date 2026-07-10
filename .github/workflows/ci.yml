@@ -71,11 +71,11 @@ jobs:
         run: go vet ./...
 
       - name: golangci-lint 代码检查
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          working-directory: backend-go
-          args: --timeout=5m
+        run: |
+          # 安装与系统 Go 版本匹配的 golangci-lint（避免预编译二进制版本不兼容）
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          golangci-lint run --timeout=5m
+        working-directory: backend-go
 
   # ============================================================
   # Stage 3: 后端 - 单元测试
