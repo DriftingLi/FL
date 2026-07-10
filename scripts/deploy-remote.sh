@@ -67,55 +67,77 @@ check_dependency() {
 
 write_env_file() {
     # 生成 .env 文件（供 docker compose 使用）
-    cat > "${DEPLOY_PATH}/.env" << ENVEOF
-# 由 deploy-remote.sh 自动生成 — $(date '+%Y-%m-%d %H:%M:%S')
-# 请勿手动编辑此文件
+    # Docker Compose .env 语法：简单值直接写，含特殊字符的值用双引号包裹
+    # 多行值（如 PEM 密钥）将换行替换为 \n
+    env_val() {
+        local val="$1"
+        if [ -z "$val" ]; then
+            printf '""'
+        elif printf '%s' "$val" | grep -q "[[:space:]\$+#{}()&|!<>'\";=]" 2>/dev/null; then
+            # 含特殊字符，双引号包裹，换行转 \n
+            printf '"'
+            printf '%s' "$val" | sed ':a;N;$!ba;s/\n/\\n/g'
+            printf '"'
+        else
+            printf '%s' "$val"
+        fi
+    }
 
-APP_ENV=production
-PORT=${BACKEND_PORT}
+    {
+        echo "# 由 deploy-remote.sh 自动生成 — $(date '+%Y-%m-%d %H:%M:%S')"
+        echo "APP_ENV=production"
+        echo "PORT=${BACKEND_PORT}"
 
-# 数据库
-DATABASE_URL=${DATABASE_URL:-}
-DB_USER=${DB_USER:-forklift}
-DB_PASSWORD=${DB_PASSWORD:-}
+        printf 'DATABASE_URL='
+        env_val "${DATABASE_URL:-}"; echo
+        printf 'DB_USER='
+        env_val "${DB_USER:-forklift}"; echo
+        printf 'DB_PASSWORD='
+        env_val "${DB_PASSWORD:-}"; echo
 
-# 密钥
-SECRET_KEY=${SECRET_KEY:-}
-JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
-JWT_EXPIRES_HOURS=${JWT_EXPIRES_HOURS:-24}
+        printf 'SECRET_KEY='
+        env_val "${SECRET_KEY:-}"; echo
+        printf 'JWT_SECRET_KEY='
+        env_val "${JWT_SECRET_KEY:-}"; echo
+        echo "JWT_EXPIRES_HOURS=${JWT_EXPIRES_HOURS:-24}"
 
-# 默认账号
-ADMIN_DEFAULT_PASSWORD=${ADMIN_DEFAULT_PASSWORD:-}
-TUTOR_DEFAULT_PASSWORD=${TUTOR_DEFAULT_PASSWORD:-}
-STUDENT_DEFAULT_PASSWORD=${STUDENT_DEFAULT_PASSWORD:-}
+        printf 'ADMIN_DEFAULT_PASSWORD='
+        env_val "${ADMIN_DEFAULT_PASSWORD:-}"; echo
+        printf 'TUTOR_DEFAULT_PASSWORD='
+        env_val "${TUTOR_DEFAULT_PASSWORD:-}"; echo
+        printf 'STUDENT_DEFAULT_PASSWORD='
+        env_val "${STUDENT_DEFAULT_PASSWORD:-}"; echo
 
-# CORS
-CORS_ORIGINS=${CORS_ORIGINS:-}
+        printf 'CORS_ORIGINS='
+        env_val "${CORS_ORIGINS:-}"; echo
 
-# AI
-ZHIPU_API_KEY=${ZHIPU_API_KEY:-}
-ZHIPU_BASE_URL=${ZHIPU_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
-ZHIPU_MODEL=${ZHIPU_MODEL:-glm-4.7-flash}
-OPENAI_API_KEY=${OPENAI_API_KEY:-}
+        printf 'ZHIPU_API_KEY='
+        env_val "${ZHIPU_API_KEY:-}"; echo
+        printf 'ZHIPU_BASE_URL='
+        env_val "${ZHIPU_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}"; echo
+        printf 'ZHIPU_MODEL='
+        env_val "${ZHIPU_MODEL:-glm-4.7-flash}"; echo
+        printf 'OPENAI_API_KEY='
+        env_val "${OPENAI_API_KEY:-}"; echo
 
-# Coze
-COZE_PROJECT_ID=${COZE_PROJECT_ID:-}
-COZE_OAUTH_APP_ID=${COZE_OAUTH_APP_ID:-}
-COZE_OAUTH_KID=${COZE_OAUTH_KID:-}
-COZE_OAUTH_PRIVATE_KEY=${COZE_OAUTH_PRIVATE_KEY:-}
-COZE_OAUTH_PRIVATE_KEY_PATH=${COZE_OAUTH_PRIVATE_KEY_PATH:-}
+        printf 'COZE_PROJECT_ID='
+        env_val "${COZE_PROJECT_ID:-}"; echo
+        printf 'COZE_OAUTH_APP_ID='
+        env_val "${COZE_OAUTH_APP_ID:-}"; echo
+        printf 'COZE_OAUTH_KID='
+        env_val "${COZE_OAUTH_KID:-}"; echo
+        printf 'COZE_OAUTH_PRIVATE_KEY='
+        env_val "${COZE_OAUTH_PRIVATE_KEY:-}"; echo
+        printf 'COZE_OAUTH_PRIVATE_KEY_PATH='
+        env_val "${COZE_OAUTH_PRIVATE_KEY_PATH:-}"; echo
 
-# 后端镜像
-BACKEND_IMAGE=${IMAGE_BACKEND}:${IMAGE_TAG}
+        echo "BACKEND_IMAGE=${IMAGE_BACKEND}:${IMAGE_TAG}"
 
-# 上传
-UPLOAD_FOLDER=/data/uploads
-VOLUME_MOUNT_PATH=/data
-MAX_CONTENT_LENGTH_MB=250
-
-# 评估报告
-VALUATION_PDF_OUTPUT_DIR=/data/reports
-ENVEOF
+        echo "UPLOAD_FOLDER=/data/uploads"
+        echo "VOLUME_MOUNT_PATH=/data"
+        echo "MAX_CONTENT_LENGTH_MB=250"
+        echo "VALUATION_PDF_OUTPUT_DIR=/data/reports"
+    } > "${DEPLOY_PATH}/.env"
     chmod 600 "${DEPLOY_PATH}/.env"
     log_ok ".env 文件已生成"
 }
