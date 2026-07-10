@@ -148,9 +148,11 @@ write_env_file() {
         echo "VOLUME_MOUNT_PATH=/data"
         echo "MAX_CONTENT_LENGTH_MB=250"
         echo "VALUATION_PDF_OUTPUT_DIR=/data/reports"
-    } > "${DEPLOY_PATH}/.env"
+    } > "${DEPLOY_PATH}/.env.tmp"
+    rm -f "${DEPLOY_PATH}/.env"
+    mv "${DEPLOY_PATH}/.env.tmp" "${DEPLOY_PATH}/.env"
     chmod 600 "${DEPLOY_PATH}/.env"
-    log_ok ".env 文件已生成"
+    log_ok ".env 文件已生成（$(wc -l < "${DEPLOY_PATH}/.env") 行）"
 }
 
 # ======================================================================
