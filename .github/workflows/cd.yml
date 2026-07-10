@@ -312,6 +312,7 @@ jobs:
 
       - name: 登出 Tailscale
         if: always()
+        continue-on-error: true
         uses: tailscale/github-action@v2
         with:
           oauth-client-id: ${{ env.TS_OAUTH_CLIENT_ID }}
@@ -406,6 +407,7 @@ jobs:
 
       - name: 登出 Tailscale
         if: always()
+        continue-on-error: true
         uses: tailscale/github-action@v2
         with:
           oauth-client-id: ${{ env.TS_OAUTH_CLIENT_ID }}
