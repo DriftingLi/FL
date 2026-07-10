@@ -179,10 +179,9 @@ jobs:
           echo ""
           # Tailnet 信息
           echo "--- Tailnet ---"
-          tailscale dns resolve "$TAILSCALE_HOST" 2>&1 || echo "DNS 解析失败"
+          echo "  TAILSCALE_HOST 值长度: ${#TAILSCALE_HOST}"
           echo ""
-          # 本机节点信息
-          echo "--- 本机节点 ---"
+          echo "--- Tailscale 本机节点 ---"
           tailscale status --json 2>/dev/null > /tmp/ts.json
           if [ -s /tmp/ts.json ]; then
             echo "  本机: $(jq -r '.Self.HostName // "?"' /tmp/ts.json)"
