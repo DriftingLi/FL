@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # ======================================================================
-# deploy-remote.sh — 远程服务器端后端部署脚本
+# deploy-remote.sh v2 — 远程服务器端后端部署脚本
+# [env_val 版本] — 使用 env_val() 安全转义 .env 值
 # ======================================================================
 # 仅部署后端服务（PostgreSQL + Go API）。
+echo "[deploy-remote.sh] 版本: env_val v2"
 # 前端由 Cloudflare Pages 单独托管，不在此脚本管理范围内。
 # 也可以手动执行：
 #   bash deploy-remote.sh            # 正常部署
@@ -131,10 +133,14 @@ write_env_file() {
         env_val "${COZE_OAUTH_APP_ID:-}"; echo
         printf 'COZE_OAUTH_KID='
         env_val "${COZE_OAUTH_KID:-}"; echo
-        printf 'COZE_OAUTH_PRIVATE_KEY='
-        env_val "${COZE_OAUTH_PRIVATE_KEY:-}"; echo
-        printf 'COZE_OAUTH_PRIVATE_KEY_PATH='
-        env_val "${COZE_OAUTH_PRIVATE_KEY_PATH:-}"; echo
+        # PEM 私钥写入独立文件（避免 .env 中特殊字符导致 Docker Compose 解析失败）
+        if [ -n "${COZE_OAUTH_PRIVATE_KEY:-}" ]; then
+            printf '%s' "${COZE_OAUTH_PRIVATE_KEY}" > "${DEPLOY_PATH}/coze_private_key.pem"
+            chmod 600 "${DEPLOY_PATH}/coze_private_key.pem"
+            log_ok "Coze 私钥已写入文件"
+        fi
+        echo "COZE_OAUTH_PRIVATE_KEY_PATH=/etc/secrets/coze_private_key.pem"
+        # COZE_OAUTH_PRIVATE_KEY 不再写入 .env，避免 Docker Compose 解析报错
 
         echo "BACKEND_IMAGE=${IMAGE_BACKEND}:${IMAGE_TAG}"
 

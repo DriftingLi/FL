@@ -88,6 +88,8 @@ services:
     volumes:
       - uploads-data:/data/uploads
       - reports-data:/data/reports
+      # Coze 私钥文件（避免 .env 转义问题）
+      - ./coze_private_key.pem:/etc/secrets/coze_private_key.pem:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"]
       interval: 30s
