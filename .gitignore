@@ -45,6 +45,16 @@ backend-go/static/uploads/slides/*
 !backend-go/static/uploads/chapters/.gitkeep
 !backend-go/static/uploads/slides/.gitkeep
 
+# 用户上传的视频和图片（运行时生成，不应入库）
+backend-go/static/videos/*
+!backend-go/static/videos/.gitkeep
+backend-go/static/images/*
+!backend-go/static/images/.gitkeep
+
+# Docker Compose 本地覆盖文件（仅保留 .example 模板入库）
+docker-compose.override.yml
+backend-go/docker-compose.override.yml
+
 # ===== 日志 =====
 *.log
 logs/
@@ -75,3 +85,8 @@ node_modules_old/
 
 # ===== 上传临时目录 =====
 .uploads/
+
+# ===== docker镜像 =====
+*.tar.gz
+*.tar
+*.zip

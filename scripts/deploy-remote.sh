@@ -126,7 +126,7 @@ pre_deploy_check() {
     log_info ">>> 预部署检查..."
 
     check_dependency docker
-    check_dependency docker
+    check_dependency curl
 
     # 检查 docker compose 可用性
     if ! docker compose version &> /dev/null; then
@@ -165,10 +165,26 @@ create_backup() {
 
     TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
     BACKUP_FILE="${BACKUP_DIR}/backup_${TIMESTAMP}.txt"
+    DB_BACKUP_FILE="${BACKUP_DIR}/db_backup_${TIMESTAMP}.sql.gz"
 
     mkdir -p "$BACKUP_DIR"
 
-    # 记录当前运行的容器和镜像
+    # ---- 数据库备份（关键！迁移失败时可恢复） ----
+    if docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps -q "$POSTGRES_SERVICE" &>/dev/null; then
+        log_info "备份数据库 (pg_dump + gzip)..."
+        if docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" exec -T "$POSTGRES_SERVICE" \
+            pg_dump -U "${DB_USER:-forklift}" -d forklift_training 2>/dev/null | gzip > "$DB_BACKUP_FILE"; then
+            DB_SIZE=$(du -h "$DB_BACKUP_FILE" | cut -f1)
+            log_ok "数据库备份完成: $DB_BACKUP_FILE ($DB_SIZE)"
+        else
+            log_warn "数据库备份失败，继续部署（迁移失败将无法回滚数据）"
+            rm -f "$DB_BACKUP_FILE"
+        fi
+    else
+        log_warn "数据库未运行，跳过数据库备份"
+    fi
+
+    # ---- 记录当前运行的容器和镜像 ----
     {
         echo "=== 备份时间: $(date) ==="
         echo "=== Git 提交: ${IMAGE_TAG:-unknown} ==="
@@ -184,6 +200,12 @@ create_backup() {
             # 仅保存非敏感信息
             grep -v -E '(SECRET_KEY|JWT_SECRET_KEY|PASSWORD|API_KEY)' "$DEPLOY_PATH/.env" 2>/dev/null || true
         fi
+        echo ""
+        if [ -f "$DB_BACKUP_FILE" ]; then
+            echo "--- 数据库备份 ---"
+            echo "文件: $DB_BACKUP_FILE ($(du -h "$DB_BACKUP_FILE" | cut -f1))"
+            echo "恢复命令: gunzip -c $DB_BACKUP_FILE | docker compose -f $DEPLOY_PATH/$COMPOSE_FILE exec -T $POSTGRES_SERVICE psql -U ${DB_USER:-forklift} -d forklift_training"
+        fi
     } > "$BACKUP_FILE"
 
     # 标记当前版本（用于回滚）
@@ -193,6 +215,9 @@ create_backup() {
             "$(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps -q "$BACKEND_SERVICE")" 2>/dev/null || echo "unknown")
         echo "PREVIOUS_IMAGE=${CURRENT_IMAGE}" > "${BACKUP_DIR}/last-version.txt"
     fi
+
+    # 清理旧数据库备份（保留最近 10 份，每份约几 MB）
+    ls -t "$BACKUP_DIR"/db_backup_*.sql.gz 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null || true
 
     log_ok "备份完成: $BACKUP_FILE"
 }
@@ -264,15 +289,14 @@ run_migration() {
         sleep 2
     done
 
-    # 通过临时容器运行迁移（使用后端镜像中的 migrate 命令）
-    # 注意：如果后端二进制不支持 migrate 子命令，则跳过
+    # 通过临时容器运行迁移（使用镜像中独立的 migrate 二进制）
     if docker run --rm --network container:"$(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps -q "$POSTGRES_SERVICE")" \
         -e "DATABASE_URL=${DATABASE_URL}" \
         "${IMAGE_BACKEND}:${IMAGE_TAG}" \
-        /app/bin/server migrate up 2>/dev/null; then
+        /app/bin/migrate up 2>/dev/null; then
         log_ok "数据库迁移完成"
     else
-        log_warn "自动迁移失败或未支持，请手动执行: cd backend-go && go run ./cmd/migrate up"
+        log_warn "自动迁移失败，请手动执行: cd backend-go && go run ./cmd/migrate up"
     fi
 }
 
@@ -376,8 +400,12 @@ do_rollback() {
 
             if health_check; then
                 log_ok "回滚成功"
+                log_info "如需恢复数据库，可执行："
+                log_info "  gunzip -c ${BACKUP_DIR}/db_backup_*.sql.gz | docker compose -f \$DEPLOY_PATH/\$COMPOSE_FILE exec -T \$POSTGRES_SERVICE psql -U ${DB_USER:-forklift} -d forklift_training"
             else
                 log_error "回滚后健康检查也失败了! 需要人工介入!"
+                log_info "可尝试恢复最近的数据库备份："
+                log_info "  ls -t ${BACKUP_DIR}/db_backup_*.sql.gz | head -1"
                 exit 1
             fi
         else

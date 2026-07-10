@@ -156,11 +156,18 @@ jobs:
   # Stage 5: 安全扫描
   # ============================================================
   security-scan:
-    needs: [backend-test, frontend-check]
+    needs: [changes, backend-test, frontend-check]
     if: always() && (needs.backend-test.result == 'success' || needs.frontend-check.result == 'success')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Go
+        if: needs.changes.outputs.backend == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend-go/go.sum
 
       - name: Go 依赖漏洞扫描
         if: needs.changes.outputs.backend == 'true'
@@ -240,10 +247,6 @@ jobs:
       - name: 检查是否全部通过
         run: |
           FAILED=""
-          for job in backend-lint backend-test frontend-check security-scan migration-check; do
-            result="${{ needs[format('{0}', job)].result }}" || true
-            # 简化处理：直接通过 needs 上下文逐项检查
-          done
 
           echo "# CI 检查报告" >> $GITHUB_STEP_SUMMARY
           echo "| Job | 状态 |" >> $GITHUB_STEP_SUMMARY

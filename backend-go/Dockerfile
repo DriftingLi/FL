@@ -21,6 +21,7 @@ COPY . .
 # -trimpath 移除本地路径信息
 ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
 RUN go build -trimpath -ldflags="-s -w" -o /bin/server ./cmd/server
+RUN go build -trimpath -ldflags="-s -w" -o /bin/migrate ./cmd/migrate
 
 # ----- Runtime 阶段：最小化运行时镜像 -----
 FROM alpine:3.20
@@ -42,6 +43,7 @@ WORKDIR /app
 
 # 从 builder 复制编译产物
 COPY --from=builder /bin/server /app/bin/server
+COPY --from=builder /bin/migrate /app/bin/migrate
 
 # 复制迁移文件（启动时自动迁移需要）
 COPY --from=builder /build/migrations /app/migrations
