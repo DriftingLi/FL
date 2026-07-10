@@ -172,18 +172,51 @@ jobs:
 
       - name: 验证 Tailscale 连通性
         run: |
-          echo "Tailscale 状态："
-          tailscale status || true
+          set -x
+          echo "=== Tailscale 自诊断 ==="
           echo ""
-          echo "测试与部署服务器的连通性..."
+          echo "TAILSCALE_HOST = ******** (长度: ${#TAILSCALE_HOST})"
+          echo ""
+          # Tailnet 信息
+          echo "--- Tailnet ---"
+          tailscale whois "$TAILSCALE_HOST" 2>&1 || echo "whois 失败（对端不可见或无权限）"
+          echo ""
+          # 本机节点信息
+          echo "--- 本机节点 ---"
+          tailscale status --json 2>/dev/null | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+self=d.get('Self',{})
+print(f\"  本机: {self.get('HostName','?')} ({self.get('TailscaleIPs',['?'])[0] if self.get('TailscaleIPs') else '?'})\")
+print(f\"  Tailnet: {d.get('CurrentTailnet',{}).get('Name','?')}\")
+print(f\"  Online: {self.get('Online',False)}\")
+# 列出所有对等节点
+peers=d.get('Peer',{})
+if peers:
+    print(f'  可见节点数: {len(peers)}')
+    for k,v in peers.items():
+        name=v.get('HostName','?')
+        ips=v.get('TailscaleIPs',['?'])
+        print(f'    {name}: {ips[0] if ips else \"?\"} (online={v.get(\"Online\",False)})')
+else:
+    print('  可见节点: 0（ACL 或 tailnet 问题，看不到其他设备）')
+" 2>/dev/null || echo "JSON 解析失败"
+          echo ""
+          # DNS 解析测试
+          echo "--- DNS 解析 ---"
+          tailscale dns resolve "$TAILSCALE_HOST" 2>&1 || echo "DNS 解析失败"
+          echo ""
+          echo "=== 连通性测试 ==="
           if tailscale ping --c 3 "$TAILSCALE_HOST"; then
             echo "✅ Tailscale 连接正常"
           else
             echo "❌ 无法通过 Tailscale 连接服务器"
-            echo "请检查："
-            echo "  1. 服务器是否已安装 Tailscale 并加入同一 tailnet"
-            echo "  2. TAILSCALE_HOST Secret 是否为服务器的 Tailscale IP (100.x.x.x)"
-            echo "  3. 服务器是否在线"
+            echo ""
+            echo "可能原因："
+            echo "  - TAILSCALE_HOST 填的不是 Tailscale 100.x IP"
+            echo "  - 服务器使用 'tailscale up' 加入的是另一个 tailnet（域名不同）"
+            echo "  - OAuth key 创建时选的 organisation 不对"
+            echo "  - ACL 仍然拦截 tag:ci → 服务器"
             exit 1
           fi
 
