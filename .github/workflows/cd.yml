@@ -183,24 +183,23 @@ jobs:
           echo ""
           # 本机节点信息
           echo "--- 本机节点 ---"
-          tailscale status --json 2>/dev/null | python3 -c "
+          tailscale status --json 2>/dev/null | python3 <<'PYEOF'
 import json,sys
 d=json.load(sys.stdin)
 self=d.get('Self',{})
-print(f\"  本机: {self.get('HostName','?')} ({self.get('TailscaleIPs',['?'])[0] if self.get('TailscaleIPs') else '?'})\")
-print(f\"  Tailnet: {d.get('CurrentTailnet',{}).get('Name','?')}\")
-print(f\"  Online: {self.get('Online',False)}\")
-# 列出所有对等节点
+print(f"  本机: {self.get('HostName','?')} ({self.get('TailscaleIPs',['?'])[0] if self.get('TailscaleIPs') else '?'})")
+print(f"  Tailnet: {d.get('CurrentTailnet',{}).get('Name','?')}")
+print(f"  Online: {self.get('Online',False)}")
 peers=d.get('Peer',{})
 if peers:
     print(f'  可见节点数: {len(peers)}')
     for k,v in peers.items():
         name=v.get('HostName','?')
         ips=v.get('TailscaleIPs',['?'])
-        print(f'    {name}: {ips[0] if ips else \"?\"} (online={v.get(\"Online\",False)})')
+        print(f'    {name}: {ips[0] if ips else "?"} (online={v.get("Online",False)})')
 else:
     print('  可见节点: 0（ACL 或 tailnet 问题，看不到其他设备）')
-" 2>/dev/null || echo "JSON 解析失败"
+PYEOF
           echo ""
           # DNS 解析测试
           echo "--- DNS 解析 ---"
