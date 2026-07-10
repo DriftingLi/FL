@@ -5,8 +5,9 @@ package repository
 import (
 	"context"
 	"fmt"
-	"github.com/jackc/pgx/v5"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // ListOriginalPrices 列出全部原价记录（分页）

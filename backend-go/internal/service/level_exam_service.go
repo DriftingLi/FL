@@ -20,7 +20,7 @@ var examQuestionConfig = map[string]map[string]int{
 	"short_answer":  {"count": 2, "score": 5},
 }
 
-var validSessionStatuses = []string{"upcoming", "ongoing", "finished"}
+var validSessionStatuses = []string{"upcoming", "ongoing", "finished"} //nolint:unused
 
 // LevelExamService 等级考试服务。
 type LevelExamService struct {

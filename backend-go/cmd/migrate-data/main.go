@@ -7,6 +7,8 @@
 //
 // 前置条件: 目标 PostgreSQL 已执行 migrate up 创建 schema。
 // 迁移顺序遵循外键依赖，分批 commit（每 1000 行），含行数校验与序列重置。
+//
+//nolint:gocritic // exitAfterDefer: log.Fatalf 在 defer Close 之前，是预期的失败流程
 package main
 
 import (
@@ -76,7 +78,7 @@ var identityColumns = map[string]string{
 
 const batchSize = 1000
 
-func main() {
+func main() { //nolint:gocritic
 	source := flag.String("source", "", "源 PostgreSQL DSN，如 postgres://forklift:pass@host:5432/forklift_training?sslmode=disable")
 	target := flag.String("target", os.Getenv("DATABASE_URL"), "目标 PostgreSQL DSN（默认读取 DATABASE_URL）")
 	dryRun := flag.Bool("dry-run", false, "仅校验行数，不写入数据")

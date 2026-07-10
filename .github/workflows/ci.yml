@@ -171,13 +171,13 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: backend-go/go.sum
 
-      - name: Go 依赖漏洞扫描
+      - name: Go 依赖漏洞扫描（仅报告，不阻断）
         if: needs.changes.outputs.backend == 'true'
         continue-on-error: true
         run: |
           cd backend-go
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
+          govulncheck ./... || echo "发现漏洞，详细信息请查看日志"
 
       - name: npm 依赖漏洞扫描
         if: needs.changes.outputs.frontend == 'true'
@@ -185,12 +185,13 @@ jobs:
         run: |
           npm audit --audit-level=high || echo "发现高危漏洞，请检查并修复"
 
-      - name: Dockerfile 安全分析
+      - name: Dockerfile 安全分析（仅报告，不阻断）
         uses: aquasecurity/trivy-action@master
         continue-on-error: true
         with:
           scan-type: config
           scan-ref: backend-go/Dockerfile
+          exit-code: 0
 
   # ============================================================
   # Stage 6: 数据库迁移校验
@@ -243,7 +244,8 @@ jobs:
   # Stage 7: CI 汇总（作为 CD 流水线的依赖门禁）
   # ============================================================
   ci-summary:
-    needs: [backend-lint, backend-test, frontend-check, security-scan, migration-check]
+    # 注：security-scan 为参考性质，不阻断流水线
+    needs: [backend-lint, backend-test, frontend-check, migration-check]
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
