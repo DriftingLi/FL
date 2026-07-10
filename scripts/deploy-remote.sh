@@ -475,6 +475,7 @@ main() {
             ;;
         deploy|*)
             pre_deploy_check
+            write_env_file
             create_backup
             login_registry
             pull_images
