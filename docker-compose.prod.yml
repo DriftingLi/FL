@@ -20,7 +20,6 @@ services:
       - "5432:5432"
     volumes:
       - pgdata-prod:/var/lib/postgresql/data
-      - ./backend-go/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-forklift} -d forklift_training"]
       interval: 10s
