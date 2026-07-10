@@ -327,7 +327,7 @@ jobs:
 
       - name: 安装依赖
         working-directory: frontend
-        run: npm ci
+        run: npm install
 
       - name: TypeScript 类型检查
         working-directory: frontend
