@@ -34,9 +34,11 @@ export function isMainSubdomain(): boolean {
   return getSubdomain() === 'main'
 }
 
-// 推导当前 hostname 的根域名（去掉第一个子域段）。
+// 推导当前 hostname 的根域名（用于跨子域名 URL 构建）。
 // 例：mentor.example.com → example.com
-//     admin.www.example.com → www.example.com
+//     mentor.example.top → example.top
+//     example.top → example.top（2 段已是根域名，保持不变）
+//     mentor.localhost → localhost（开发环境特殊处理）
 //     localhost → localhost（无子域段可去，回退原值）
 //     127.0.0.1 → 127.0.0.1
 function getRootDomain(): string {
@@ -46,6 +48,17 @@ function getRootDomain(): string {
     return host
   }
   const parts = host.split('.')
+  // 开发环境 *.localhost：mentor.localhost → localhost
+  if (parts.length === 2 && parts[1] === 'localhost') {
+    return 'localhost'
+  }
+  // 2 段生产域名（如 example.top、example.com）已是根域名，保持不变
+  if (parts.length <= 2) {
+    return host
+  }
+  // 3 段以上：去掉第一个子域段
+  // mentor.example.top → example.top
+  // www.example.com → example.com
   const root = parts.slice(1).join('.')
   return root || host
 }
