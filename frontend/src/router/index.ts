@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { getSubdomain, buildSubdomainUrl } from '@/utils/subdomain'
+import { getSubdomain, buildSubdomainUrl, getTargetSubdomainForPath, getDefaultWorkspaceBySubdomain } from '@/utils/subdomain'
 
 const routes: RouteRecordRaw[] = [
   // ========== 官网 ==========
@@ -371,47 +371,31 @@ router.beforeEach(async (to, from, next) => {
   }
 
   // ===== 子域名边界检查 =====
-  // 主域名仅承载学员入口与公共页面；导师工作区在 mentor.主域名；管理员后台在 admin.主域名
+  // 五类子域名：main（公共）、training（学员培训+AI助手）、valuation（残值评估）、
+  // tutor（导师工作区）、admin（管理员后台）
   // 跨子域名访问会触发整页跳转（不同 origin，token 不共享）
-  const subdomain = getSubdomain()
+  const currentSubdomain = getSubdomain()
   const isLoginPath = to.path === '/login' || to.path === '/register'
 
-  if (subdomain === 'student') {
-    // 主域名访问导师/管理员工作区 → 跳对应子域名
-    if (to.path.startsWith('/training/tutor')) {
-      window.location.href = buildSubdomainUrl('mentor', to.fullPath)
+  if (isLoginPath) {
+    // /login 和 /register 在主域名上跳到 training 子域名（主域名不再承载登录）
+    // 其它子域名保留各自的 /login（training=学员、valuation=学员、tutor=导师、admin=管理员）
+    if (currentSubdomain === 'main') {
+      window.location.href = buildSubdomainUrl('training', to.fullPath)
       return
     }
-    if (to.path.startsWith('/admin')) {
-      window.location.href = buildSubdomainUrl('admin', to.fullPath)
-      return
-    }
-  } else if (subdomain === 'tutor') {
-    // mentor 子域名仅允许 /login、/register 和 /training/tutor/*
-    if (!isLoginPath && !to.path.startsWith('/training/tutor')) {
-      next('/training/tutor')
-      return
-    }
-  } else if (subdomain === 'admin') {
-    // admin 子域名仅允许 /login、/register 和 /admin/*
-    if (!isLoginPath && !to.path.startsWith('/admin')) {
-      next('/admin/dashboard')
+  } else {
+    // 非登录路径：按路径前缀映射到对应子域名，不一致则跳转
+    const targetSubdomain = getTargetSubdomainForPath(to.path)
+    if (currentSubdomain !== targetSubdomain) {
+      window.location.href = buildSubdomainUrl(targetSubdomain, to.fullPath)
       return
     }
   }
 
-  // 已登录用户访问 /login 或 /register：按角色处理
-  const isPublicLogin = isLoginPath
-  if (isPublicLogin && authStore.isLoggedIn && authStore.userInfo.role) {
-    const role = authStore.userInfo.role
-    if (role === 'admin') {
-      next('/admin/dashboard')
-    } else if (role === 'tutor') {
-      next('/training/tutor')
-    } else {
-      // 学员登录后进入培训首页
-      next('/training')
-    }
+  // 已登录用户访问 /login 或 /register：按当前子域名跳转到对应工作区
+  if (isLoginPath && authStore.isLoggedIn && authStore.userInfo.role) {
+    next(getDefaultWorkspaceBySubdomain())
     return
   }
 

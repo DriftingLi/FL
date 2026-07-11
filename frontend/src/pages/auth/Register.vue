@@ -1,24 +1,21 @@
 <template>
   <div class="register-page">
-    <div class="register-brand">
-      <div class="brand-content">
-        <div class="brand-logo">
-          <img src="/images/HRWAIlogo.jpg" alt="和润天下" class="logo-img" />
-        </div>
-        <h1 class="brand-title">和润天下</h1>
-        <p class="brand-subtitle">叉车维修一站式服务平台</p>
-      </div>
-      <div class="brand-decor">
-        <div class="decor-circle decor-circle-1"></div>
-        <div class="decor-circle decor-circle-2"></div>
-      </div>
+    <div class="register-bg">
+      <div class="bg-blob bg-blob-1"></div>
+      <div class="bg-blob bg-blob-2"></div>
+      <div class="bg-blob bg-blob-3"></div>
     </div>
 
-    <div class="register-form-side">
-      <div class="form-container">
-        <div class="form-header">
-          <h2 class="form-title">创建账户</h2>
-          <p class="form-subtitle">填写以下信息完成注册</p>
+    <div class="register-card-wrap">
+      <div class="register-card">
+        <div class="card-header">
+          <div class="card-icon">
+            <el-icon :size="24">
+              <EditPen />
+            </el-icon>
+          </div>
+          <h1 class="card-title">创建账户</h1>
+          <p class="card-subtitle">填写以下信息完成注册</p>
         </div>
 
         <el-form ref="formRef" :model="formData" :rules="rules" label-width="0" class="register-form">
@@ -28,6 +25,7 @@
               placeholder="真实姓名"
               prefix-icon="Postcard"
               size="large"
+              class="form-input"
             />
           </el-form-item>
 
@@ -37,6 +35,7 @@
               placeholder="手机号"
               prefix-icon="Phone"
               size="large"
+              class="form-input"
               maxlength="11"
             />
           </el-form-item>
@@ -49,6 +48,7 @@
               prefix-icon="Lock"
               show-password
               size="large"
+              class="form-input"
             />
           </el-form-item>
 
@@ -60,6 +60,7 @@
               prefix-icon="Lock"
               show-password
               size="large"
+              class="form-input"
             />
           </el-form-item>
 
@@ -69,6 +70,7 @@
               placeholder="单位（选填）"
               prefix-icon="OfficeBuilding"
               size="large"
+              class="form-input"
             />
           </el-form-item>
 
@@ -78,6 +80,7 @@
               placeholder="邮箱（选填）"
               prefix-icon="Message"
               size="large"
+              class="form-input"
               @keyup.enter="handleRegister"
             />
           </el-form-item>
@@ -109,6 +112,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { authApi } from '@/api/auth'
 import { ElMessage } from 'element-plus'
+import { EditPen } from '@element-plus/icons-vue'
 import { passwordRules, nameRules, phoneRules, emailRules, companyRules } from '@/utils/validate'
 
 const router = useRouter()
@@ -178,187 +182,198 @@ async function handleRegister() {
 .register-page {
   min-height: 100vh;
   display: flex;
-}
-
-.register-brand {
-  flex: 0 0 45%;
-  background: var(--gradient-hero);
-  display: flex;
   align-items: center;
   justify-content: center;
+  background: #F1F5F9;
   position: relative;
   overflow: hidden;
-  padding: var(--space-10);
+  padding: 40px 24px;
 }
 
-.brand-content {
-  position: relative;
-  z-index: 2;
-  max-width: 400px;
-}
-
-.brand-logo {
-  margin-bottom: var(--space-6);
-}
-
-.logo-img {
-  width: 72px;
-  height: 72px;
-  border-radius: var(--radius-xl);
-  object-fit: cover;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-}
-
-.brand-title {
-  font-family: var(--font-display);
-  font-size: var(--text-4xl);
-  font-weight: var(--font-bold);
-  color: white;
-  margin-bottom: var(--space-3);
-  letter-spacing: -0.03em;
-}
-
-.brand-subtitle {
-  font-size: var(--text-lg);
-  color: rgba(255, 255, 255, 0.7);
-  line-height: var(--leading-relaxed);
-}
-
-.brand-decor {
+.register-bg {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  z-index: 0;
 }
 
-.decor-circle {
+.bg-blob {
   position: absolute;
-  border-radius: var(--radius-full);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.3;
 }
 
-.decor-circle-1 {
-  width: 300px;
-  height: 300px;
-  right: -80px;
-  bottom: -60px;
-  animation: float 8s ease-in-out infinite;
+.bg-blob-1 {
+  width: 460px;
+  height: 460px;
+  background: #A7F3D0;
+  top: -120px;
+  left: -80px;
+  animation: blob-float 12s ease-in-out infinite;
 }
 
-.decor-circle-2 {
-  width: 180px;
-  height: 180px;
-  left: -40px;
-  top: -30px;
-  animation: float 10s ease-in-out infinite 2s;
+.bg-blob-2 {
+  width: 360px;
+  height: 360px;
+  background: #BAE6FD;
+  bottom: -100px;
+  right: -60px;
+  animation: blob-float 14s ease-in-out infinite 3s;
 }
 
-.register-form-side {
-  flex: 1;
-  display: flex;
+.bg-blob-3 {
+  width: 240px;
+  height: 240px;
+  background: #C4B5FD;
+  top: 45%;
+  right: 25%;
+  opacity: 0.15;
+  animation: blob-float 10s ease-in-out infinite 1.5s;
+}
+
+@keyframes blob-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(20px, -20px) scale(1.05); }
+  66% { transform: translate(-15px, 15px) scale(0.95); }
+}
+
+.register-card-wrap {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 440px;
+}
+
+.register-card {
+  background: #FFFFFF;
+  border-radius: 20px;
+  padding: 44px 40px 36px;
+  box-shadow:
+    0 4px 6px -1px rgba(15, 23, 42, 0.05),
+    0 20px 50px -12px rgba(15, 23, 42, 0.1);
+  border: 1px solid rgba(226, 232, 240, 0.6);
+}
+
+.card-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.card-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-10);
-  background: var(--color-bg-card);
+  margin-bottom: 20px;
+  color: white;
+  background: linear-gradient(135deg, #0EA5E9 0%, #14B8A6 100%);
+  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.25);
 }
 
-.form-container {
-  width: 100%;
-  max-width: 420px;
+.card-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: #0F172A;
+  margin: 0 0 8px;
+  letter-spacing: -0.02em;
 }
 
-.form-header {
-  margin-bottom: var(--space-8);
+.card-subtitle {
+  font-size: 14px;
+  color: #64748B;
+  margin: 0;
+  line-height: 1.5;
 }
 
-.form-title {
-  font-family: var(--font-display);
-  font-size: var(--text-3xl);
-  font-weight: var(--font-bold);
-  color: var(--color-text-primary);
-  margin-bottom: var(--space-2);
+.register-form {
+  margin-top: 4px;
 }
 
-.form-subtitle {
-  font-size: var(--text-base);
-  color: var(--color-text-tertiary);
+.form-input :deep(.el-input__wrapper) {
+  border-radius: 12px;
+  padding: 4px 14px;
+  box-shadow: 0 0 0 1px #E2E8F0 inset;
+  transition: all 0.2s ease;
+  background: #F8FAFC;
 }
 
-.register-form :deep(.el-input__wrapper) {
-  padding: 4px 12px;
-  border-radius: var(--radius-lg);
+.form-input :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px #CBD5E1 inset;
+  background: #FFFFFF;
+}
+
+.form-input :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.25) inset;
+  background: #FFFFFF;
+}
+
+.form-input :deep(.el-input__prefix-inner) {
+  color: #94A3B8;
 }
 
 .register-btn {
   width: 100%;
   height: 48px;
-  font-size: var(--text-base);
-  font-weight: var(--font-semibold);
-  border-radius: var(--radius-lg);
-  background: var(--gradient-brand);
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #0EA5E9 0%, #14B8A6 100%);
   border: none;
-  letter-spacing: 0.05em;
-  transition: all var(--duration-fast) var(--ease-default);
+  letter-spacing: 0.08em;
+  margin-top: 8px;
+  transition: all 0.2s ease;
 }
 
 .register-btn:hover {
-  box-shadow: var(--shadow-glow);
   transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.3);
+  opacity: 0.95;
 }
 
 .form-footer {
   text-align: center;
-  margin-top: var(--space-5);
+  margin-top: 24px;
 }
 
 .footer-text {
-  font-size: var(--text-sm);
-  color: var(--color-text-tertiary);
+  font-size: 14px;
+  color: #94A3B8;
 }
 
 .footer-link {
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-  color: var(--color-primary-500);
+  font-size: 14px;
+  font-weight: 600;
+  color: #0EA5E9;
   text-decoration: none;
-  transition: color var(--duration-fast);
+  margin-left: 4px;
+  transition: color 0.15s ease;
 }
 
 .footer-link:hover {
-  color: var(--color-primary-600);
-}
-
-@media screen and (max-width: 768px) {
-  .register-page {
-    flex-direction: column;
-  }
-
-  .register-brand {
-    flex: none;
-    padding: var(--space-8) var(--space-6);
-    min-height: 180px;
-  }
-
-  .brand-title {
-    font-size: var(--text-2xl);
-  }
-
-  .register-form-side {
-    padding: var(--space-6);
-  }
-
-  .form-title {
-    font-size: var(--text-2xl);
-  }
+  color: #0284C7;
 }
 
 @media screen and (max-width: 480px) {
-  .register-brand {
-    padding: var(--space-6) var(--space-4);
-    min-height: 150px;
+  .register-page {
+    padding: 24px 16px;
   }
 
-  .register-form-side {
-    padding: var(--space-5) var(--space-4);
+  .register-card {
+    padding: 36px 24px 28px;
+    border-radius: 16px;
+  }
+
+  .card-title {
+    font-size: 22px;
+  }
+
+  .card-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
   }
 }
 </style>

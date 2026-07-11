@@ -1,41 +1,24 @@
 <template>
   <div class="login-page">
-    <div class="login-brand">
-      <div class="brand-content">
-        <div class="brand-logo">
-          <img src="/images/HRWAIlogo.jpg" alt="和润天下" class="logo-img" />
-        </div>
-        <h1 class="brand-title">和润天下</h1>
-        <p class="brand-subtitle">专业叉车维修培训系统</p>
-        <div class="brand-features">
-          <div class="feature-item">
-            <div class="feature-dot"></div>
-            <span>3D 虚拟实操训练</span>
-          </div>
-          <div class="feature-item">
-            <div class="feature-dot"></div>
-            <span>AI 智能辅助教学</span>
-          </div>
-          <div class="feature-item">
-            <div class="feature-dot"></div>
-            <span>全流程考核认证</span>
-          </div>
-        </div>
-      </div>
-      <div class="brand-decor">
-        <div class="decor-circle decor-circle-1"></div>
-        <div class="decor-circle decor-circle-2"></div>
-        <div class="decor-circle decor-circle-3"></div>
-        <div class="decor-shape decor-shape-1"></div>
-        <div class="decor-shape decor-shape-2"></div>
-      </div>
+    <div class="login-bg">
+      <div class="bg-blob bg-blob-1"></div>
+      <div class="bg-blob bg-blob-2"></div>
+      <div class="bg-blob bg-blob-3"></div>
     </div>
 
-    <div class="login-form-side">
-      <div class="form-container">
-        <div class="form-header">
-          <h2 class="form-title">欢迎回来</h2>
-          <p class="form-subtitle">{{ subtitleByRole }}</p>
+    <div class="login-card-wrap">
+      <div class="login-card" :class="`card-${currentRole}`">
+        <div class="card-header">
+          <div class="card-icon" :class="`icon-${currentRole}`">
+            <el-icon :size="24">
+              <component :is="roleIcon" />
+            </el-icon>
+          </div>
+          <h1 class="card-title">欢迎登录</h1>
+          <p class="card-subtitle">{{ subtitleByRole }}</p>
+          <div class="role-badge" :class="`badge-${currentRole}`">
+            {{ roleLabel }}
+          </div>
         </div>
 
         <el-form ref="formRef" :model="formData" :rules="rules" label-width="0" class="login-form">
@@ -45,6 +28,7 @@
               placeholder="请输入手机号或用户名"
               prefix-icon="User"
               size="large"
+              class="form-input"
             />
           </el-form-item>
 
@@ -56,6 +40,7 @@
               prefix-icon="Lock"
               show-password
               size="large"
+              class="form-input"
               @keyup.enter="handleLogin"
             />
           </el-form-item>
@@ -76,17 +61,6 @@
             <span class="footer-text">还没有账号？</span>
             <router-link to="/register" class="footer-link">立即注册</router-link>
           </div>
-
-          <div class="subdomain-guide" v-if="isStudentSubdomain">
-            <div class="guide-item">
-              <span class="guide-label">导师入口：</span>
-              <a :href="mentorLoginUrl" class="guide-link">{{ mentorLoginUrl }}</a>
-            </div>
-            <div class="guide-item">
-              <span class="guide-label">管理员入口：</span>
-              <a :href="adminLoginUrl" class="guide-link">{{ adminLoginUrl }}</a>
-            </div>
-          </div>
         </el-form>
       </div>
     </div>
@@ -99,10 +73,12 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import { ElMessage } from 'element-plus'
+import { UserFilled, Avatar, Setting } from '@element-plus/icons-vue'
 import { usernameRules, passwordRules } from '@/utils/validate'
 import {
   getSubdomain,
-  isMainSubdomain,
+  getRoleForSubdomain,
+  getDefaultWorkspaceBySubdomain,
   buildSubdomainUrl,
   type SubdomainType
 } from '@/utils/subdomain'
@@ -113,20 +89,36 @@ const authStore = useAuthStore()
 const formRef = ref(null)
 const loading = ref(false)
 
-// 当前子域名决定的角色（学员/导师/管理员），不再支持手动切换
+// 当前子域名决定角色（不再支持手动切换）
 const subdomain: SubdomainType = getSubdomain()
-const isStudentSubdomain = isMainSubdomain()
-const currentRole = subdomain === 'tutor' ? 'tutor' : subdomain === 'admin' ? 'admin' : 'student'
+const currentRole = getRoleForSubdomain()
+// 学员登录入口：training 和 valuation 子域名都显示注册链接
+const isStudentSubdomain = subdomain === 'training' || subdomain === 'valuation'
 
 const subtitleMap: Record<SubdomainType, string> = {
-  student: '登录您的账户继续学习',
-  tutor: '登录导师工作区',
+  main: '登录您的账户',
+  training: '登录您的账户继续学习',
+  valuation: '登录查看残值评估历史',
+  tutor: '登录导师工作台',
   admin: '登录管理后台'
 }
 const subtitleByRole = computed(() => subtitleMap[subdomain])
 
-// 跨子域名入口（仅主域名登录页显示引导）
-const mentorLoginUrl = computed(() => buildSubdomainUrl('mentor', '/login'))
+const roleLabelMap: Record<string, string> = {
+  student: '学员端',
+  tutor: '导师端',
+  admin: '管理端'
+}
+const roleIconMap: Record<string, any> = {
+  student: UserFilled,
+  tutor: Avatar,
+  admin: Setting
+}
+const roleLabel = computed(() => roleLabelMap[currentRole])
+const roleIcon = computed(() => roleIconMap[currentRole])
+
+// 跨子域名入口引导（仅学员登录页显示）
+const mentorLoginUrl = computed(() => buildSubdomainUrl('tutor', '/login'))
 const adminLoginUrl = computed(() => buildSubdomainUrl('admin', '/login'))
 
 const formData = reactive({
@@ -163,21 +155,19 @@ async function handleLogin() {
       authStore.setAuthData(res.data)
       ElMessage.success('登录成功')
 
-      // 子域名已与角色绑定，不再需要按角色跨域名跳转
-      const dashboardByRole: Record<string, string> = {
-        admin: '/admin/dashboard',
-        tutor: '/training/tutor',
-        student: '/training'
-      }
-      const role = authStore.userInfo?.role
-      const dashboard = (role && dashboardByRole[role]) || '/'
+      // 默认跳转到当前子域名对应的工作区
+      const dashboard = getDefaultWorkspaceBySubdomain()
 
       // redirect 回跳：仅允许在同身份工作台内回跳，防止越权/钓鱼
+      const role = authStore.userInfo?.role
       const redirect = route.query.redirect as string | undefined
       const isSafeRedirect = (target: string): boolean => {
         if (role === 'admin') return target.startsWith('/admin')
         if (role === 'tutor') return target.startsWith('/training/tutor')
-        if (role === 'student') return target.startsWith('/training')
+        if (role === 'student') {
+          // 学员可回跳到培训或残值评估路径
+          return target.startsWith('/training') || target.startsWith('/valuation')
+        }
         return false
       }
 
@@ -206,291 +196,258 @@ async function handleLogin() {
 .login-page {
   min-height: 100vh;
   display: flex;
-}
-
-.login-brand {
-  flex: 0 0 55%;
-  background: var(--gradient-hero);
-  display: flex;
   align-items: center;
   justify-content: center;
+  background: #F1F5F9;
   position: relative;
   overflow: hidden;
-  padding: var(--space-10);
+  padding: 24px;
 }
 
-.brand-content {
-  position: relative;
-  z-index: 2;
-  max-width: 480px;
-}
-
-.brand-logo {
-  margin-bottom: var(--space-6);
-}
-
-.logo-img {
-  width: 72px;
-  height: 72px;
-  border-radius: var(--radius-xl);
-  object-fit: cover;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-}
-
-.brand-title {
-  font-family: var(--font-display);
-  font-size: var(--text-5xl);
-  font-weight: var(--font-bold);
-  color: white;
-  margin-bottom: var(--space-3);
-  letter-spacing: -0.03em;
-  line-height: 1.1;
-}
-
-.brand-subtitle {
-  font-size: var(--text-xl);
-  color: rgba(255, 255, 255, 0.7);
-  margin-bottom: var(--space-10);
-  line-height: var(--leading-relaxed);
-}
-
-.brand-features {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.feature-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  color: rgba(255, 255, 255, 0.8);
-  font-size: var(--text-base);
-}
-
-.feature-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--radius-full);
-  background: var(--color-accent-400);
-  flex-shrink: 0;
-}
-
-.brand-decor {
+.login-bg {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  z-index: 0;
 }
 
-.decor-circle {
+.bg-blob {
   position: absolute;
-  border-radius: var(--radius-full);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.35;
 }
 
-.decor-circle-1 {
-  width: 400px;
-  height: 400px;
-  right: -100px;
-  top: -80px;
-  animation: float 8s ease-in-out infinite;
+.bg-blob-1 {
+  width: 480px;
+  height: 480px;
+  background: #BAE6FD;
+  top: -120px;
+  right: -80px;
+  animation: blob-float 12s ease-in-out infinite;
 }
 
-.decor-circle-2 {
-  width: 250px;
-  height: 250px;
+.bg-blob-2 {
+  width: 380px;
+  height: 380px;
+  background: #99F6E4;
+  bottom: -100px;
   left: -60px;
-  bottom: -40px;
-  animation: float 10s ease-in-out infinite 2s;
+  animation: blob-float 14s ease-in-out infinite 3s;
 }
 
-.decor-circle-3 {
-  width: 150px;
-  height: 150px;
-  right: 20%;
-  bottom: 15%;
-  background: rgba(255, 255, 255, 0.03);
-  animation: float 6s ease-in-out infinite 1s;
+.bg-blob-3 {
+  width: 280px;
+  height: 280px;
+  background: #7DD3FC;
+  top: 40%;
+  left: 35%;
+  opacity: 0.15;
+  animation: blob-float 10s ease-in-out infinite 1.5s;
 }
 
-.decor-shape {
-  position: absolute;
-  background: rgba(255, 255, 255, 0.05);
+@keyframes blob-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(20px, -20px) scale(1.05); }
+  66% { transform: translate(-15px, 15px) scale(0.95); }
 }
 
-.decor-shape-1 {
-  width: 60px;
-  height: 60px;
-  right: 15%;
-  top: 20%;
-  border-radius: var(--radius-lg);
-  transform: rotate(45deg);
-  animation: float 7s ease-in-out infinite 3s;
+.login-card-wrap {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 420px;
 }
 
-.decor-shape-2 {
-  width: 40px;
-  height: 40px;
-  left: 20%;
-  top: 30%;
-  border-radius: var(--radius-md);
-  transform: rotate(30deg);
-  animation: float 9s ease-in-out infinite 1.5s;
+.login-card {
+  background: #FFFFFF;
+  border-radius: 20px;
+  padding: 48px 40px 40px;
+  box-shadow:
+    0 4px 6px -1px rgba(15, 23, 42, 0.05),
+    0 20px 50px -12px rgba(15, 23, 42, 0.1);
+  border: 1px solid rgba(226, 232, 240, 0.6);
 }
 
-.login-form-side {
-  flex: 1;
-  display: flex;
+.card-header {
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.card-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-10);
-  background: var(--color-bg-card);
+  margin-bottom: 20px;
+  color: white;
 }
 
-.form-container {
-  width: 100%;
-  max-width: 400px;
+.icon-student {
+  background: linear-gradient(135deg, #0EA5E9 0%, #38BDF8 100%);
+  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.3);
 }
 
-.form-header {
-  margin-bottom: var(--space-8);
+.icon-tutor {
+  background: linear-gradient(135deg, #14B8A6 0%, #2DD4BF 100%);
+  box-shadow: 0 8px 20px rgba(20, 184, 166, 0.3);
 }
 
-.form-title {
-  font-family: var(--font-display);
-  font-size: var(--text-3xl);
-  font-weight: var(--font-bold);
-  color: var(--color-text-primary);
-  margin-bottom: var(--space-2);
+.icon-admin {
+  background: linear-gradient(135deg, #6366F1 0%, #818CF8 100%);
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
 }
 
-.form-subtitle {
-  font-size: var(--text-base);
-  color: var(--color-text-tertiary);
+.card-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: #0F172A;
+  margin: 0 0 8px;
+  letter-spacing: -0.02em;
 }
 
-.subdomain-guide {
-  margin-top: var(--space-5);
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-bg-secondary, #f7f8fa);
-  border-radius: var(--radius-md);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+.card-subtitle {
+  font-size: 14px;
+  color: #64748B;
+  margin: 0 0 14px;
+  line-height: 1.5;
 }
 
-.guide-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-size: var(--text-xs);
-  color: var(--color-text-tertiary);
+.role-badge {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
-.guide-label {
-  flex-shrink: 0;
+.badge-student {
+  background: rgba(14, 165, 233, 0.08);
+  color: #0284C7;
 }
 
-.guide-link {
-  color: var(--color-primary-500);
-  text-decoration: none;
-  word-break: break-all;
-  transition: color var(--duration-fast);
+.badge-tutor {
+  background: rgba(20, 184, 166, 0.08);
+  color: #0D9488;
 }
 
-.guide-link:hover {
-  color: var(--color-primary-600);
+.badge-admin {
+  background: rgba(99, 102, 241, 0.08);
+  color: #4F46E5;
 }
 
-.login-form :deep(.el-input__wrapper) {
-  padding: 4px 12px;
-  border-radius: var(--radius-lg);
+.login-form {
+  margin-top: 8px;
+}
+
+.form-input :deep(.el-input__wrapper) {
+  border-radius: 12px;
+  padding: 6px 14px;
+  box-shadow: 0 0 0 1px #E2E8F0 inset;
+  transition: all 0.2s ease;
+  background: #F8FAFC;
+}
+
+.form-input :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px #CBD5E1 inset;
+  background: #FFFFFF;
+}
+
+.form-input :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.25) inset;
+  background: #FFFFFF;
+}
+
+.form-input :deep(.el-input__prefix-inner) {
+  color: #94A3B8;
 }
 
 .login-btn {
   width: 100%;
   height: 48px;
-  font-size: var(--text-base);
-  font-weight: var(--font-semibold);
-  border-radius: var(--radius-lg);
-  background: var(--gradient-brand);
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 12px;
   border: none;
-  letter-spacing: 0.05em;
-  transition: all var(--duration-fast) var(--ease-default);
+  letter-spacing: 0.08em;
+  margin-top: 8px;
+  transition: all 0.2s ease;
 }
 
-.login-btn:hover {
-  box-shadow: var(--shadow-glow);
+.card-student .login-btn {
+  background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%);
+}
+
+.card-tutor .login-btn {
+  background: linear-gradient(135deg, #14B8A6 0%, #0D9488 100%);
+}
+
+.card-admin .login-btn {
+  background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+}
+
+.card-student .login-btn:hover {
   transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.3);
+  opacity: 0.95;
+}
+
+.card-tutor .login-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(20, 184, 166, 0.3);
+  opacity: 0.95;
+}
+
+.card-admin .login-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+  opacity: 0.95;
 }
 
 .form-footer {
   text-align: center;
-  margin-top: var(--space-5);
+  margin-top: 24px;
 }
 
 .footer-text {
-  font-size: var(--text-sm);
-  color: var(--color-text-tertiary);
+  font-size: 14px;
+  color: #94A3B8;
 }
 
 .footer-link {
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-  color: var(--color-primary-500);
+  font-size: 14px;
+  font-weight: 600;
+  color: #0EA5E9;
   text-decoration: none;
-  transition: color var(--duration-fast);
+  margin-left: 4px;
+  transition: color 0.15s ease;
 }
 
 .footer-link:hover {
-  color: var(--color-primary-600);
-}
-
-@media screen and (max-width: 768px) {
-  .login-page {
-    flex-direction: column;
-  }
-
-  .login-brand {
-    flex: none;
-    padding: var(--space-10) var(--space-6);
-    min-height: 240px;
-  }
-
-  .brand-title {
-    font-size: var(--text-3xl);
-  }
-
-  .brand-subtitle {
-    font-size: var(--text-base);
-    margin-bottom: var(--space-6);
-  }
-
-  .brand-features {
-    display: none;
-  }
-
-  .login-form-side {
-    padding: var(--space-6);
-  }
-
-  .form-title {
-    font-size: var(--text-2xl);
-  }
+  color: #0284C7;
 }
 
 @media screen and (max-width: 480px) {
-  .login-brand {
-    padding: var(--space-8) var(--space-4);
-    min-height: 200px;
+  .login-page {
+    padding: 16px;
   }
 
-  .brand-title {
-    font-size: var(--text-2xl);
+  .login-card {
+    padding: 36px 24px 28px;
+    border-radius: 16px;
   }
 
-  .login-form-side {
-    padding: var(--space-5) var(--space-4);
+  .card-title {
+    font-size: 22px;
+  }
+
+  .card-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
   }
 }
 </style>
