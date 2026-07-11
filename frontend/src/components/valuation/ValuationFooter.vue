@@ -14,7 +14,7 @@
             用AI让每一台叉车的价值透明可见。
           </p>
           <div class="brand-meta">
-            <a href="/" class="brand-link">访问官网 →</a>
+            <a :href="mainSiteUrl" class="brand-link">访问官网 →</a>
           </div>
         </div>
 
@@ -81,12 +81,15 @@
 import { onMounted, ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { getEvaluationStats } from '@/api/valuation/evaluation'
+import { buildSubdomainUrl } from '@/utils/subdomain'
 
 const authStore = useAuthStore()
 const isLoggedIn = computed(() => {
   const u = authStore.userInfo as { role?: string } | null
   return !!(authStore.token && authStore.isLoggedIn && u?.role)
 })
+// 跨子域名跳转：访问官网需切回主域名（避免停在当前 valuation 子域名的根路径）
+const mainSiteUrl = buildSubdomainUrl('main', '/')
 const year = new Date().getFullYear()
 
 // 累计评估次数（与 ValuationInputView 同一接口，失败回退 0）

@@ -92,6 +92,9 @@ const tutorNav: NavItem[] = [
 ]
 
 const portalNav: NavItem[] = [
+  // portalNav 用于主域名官网导航：path 已经是相对于主域名的绝对路径，
+  // 跨子域名调用方需自行拼接主域名 URL（如 buildSubdomainUrl('main', item.path)）。
+  // 注意：子域名下不要直接渲染 portalNav，否则会跳到当前子域名的根路径。
   { key: 'home', label: '首页', path: '/' },
   { key: 'about', label: '关于我们', path: '/#about' },
   { key: 'products', label: '核心服务', path: '/#products' },

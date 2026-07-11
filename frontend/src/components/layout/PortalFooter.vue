@@ -60,12 +60,12 @@
         <div class="footer-col">
           <h4 class="footer-title">快速链接</h4>
           <div class="quick-links">
-            <a href="/" class="quick-link">首页</a>
-            <a href="/#about" class="quick-link">公司介绍</a>
-            <a href="/#products" class="quick-link">核心服务</a>
-            <a href="/#cooperation" class="quick-link">合作模式</a>
-            <a href="/#service" class="quick-link">服务保障</a>
-            <a href="/#footer" class="quick-link">加入我们</a>
+            <a :href="homeUrl" class="quick-link">首页</a>
+            <a :href="aboutUrl" class="quick-link">公司介绍</a>
+            <a :href="productsUrl" class="quick-link">核心服务</a>
+            <a :href="cooperationUrl" class="quick-link">合作模式</a>
+            <a :href="serviceUrl" class="quick-link">服务保障</a>
+            <a :href="joinUrl" class="quick-link">加入我们</a>
           </div>
         </div>
       </div>
@@ -78,6 +78,15 @@
 </template>
 
 <script setup lang="ts">
+import { buildSubdomainUrl } from '@/utils/subdomain'
+
+// 主域名为锚点首页（hash 链接）
+const homeUrl = buildSubdomainUrl('main', '/')
+const aboutUrl = buildSubdomainUrl('main', '/#about')
+const productsUrl = buildSubdomainUrl('main', '/#products')
+const cooperationUrl = buildSubdomainUrl('main', '/#cooperation')
+const serviceUrl = buildSubdomainUrl('main', '/#service')
+const joinUrl = buildSubdomainUrl('main', '/#footer')
 </script>
 
 <style scoped>

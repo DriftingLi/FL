@@ -2,7 +2,7 @@
   <nav class="portal-navbar" :class="{ scrolled }">
     <div class="navbar-container">
       <!-- Logo -->
-      <a href="/" class="logo-link" @click.prevent="goHome">
+      <a :href="homeUrl" class="logo-link" @click.prevent="goHome">
         <img src="/images/HRWAIlogo.jpg" alt="和润天下" class="logo-img" />
         <div class="logo-text-wrap">
           <span class="logo-text">和润天下</span>
@@ -54,6 +54,7 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import type { NavItem } from '@/config/navigation'
+import { buildSubdomainUrl } from '@/utils/subdomain'
 
 defineProps<{ menuItems: NavItem[] }>()
 
@@ -61,6 +62,8 @@ const router = useRouter()
 const scrolled = ref(false)
 const mobileOpen = ref(false)
 const activeAnchor = ref('home')
+// 主域名为锚点首页（hash 链接），主域名访问时链接为 example.top/#
+const homeUrl = buildSubdomainUrl('main', '/')
 
 function onScroll() {
   scrolled.value = window.scrollY > 80
