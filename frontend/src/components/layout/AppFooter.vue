@@ -8,6 +8,17 @@
             <span class="footer-logo-text">和润天下</span>
           </div>
           <p class="footer-desc">一站式叉车维修培训、考核与残值评估服务平台。</p>
+          <div class="footer-contact">
+            <p class="contact-line">
+              <span class="contact-label">服务热线（9:00-18:00）</span>
+              <a href="tel:18024010891" class="contact-phone">18024010891</a>
+              <span class="contact-sep">/</span>
+              <a href="tel:13352891859" class="contact-phone">13352891859</a>
+            </p>
+            <p class="contact-line">
+              <a href="mailto:HRWAI001@aidataexp.com" class="contact-phone">HRWAI001@aidataexp.com</a>
+            </p>
+          </div>
         </div>
 
         <div class="footer-column">
@@ -17,6 +28,7 @@
             <li><router-link to="/training/question-bank">题库练习</router-link></li>
             <li><router-link to="/training/practice">虚拟实操</router-link></li>
             <li><router-link to="/valuation">残值评估</router-link></li>
+            <li><a href="https://mall.gccsmile.com/" target="_blank" rel="noopener noreferrer">二手叉车交易 ↗</a></li>
           </ul>
         </div>
 
@@ -36,13 +48,13 @@
             <li><a href="#">关于我们</a></li>
             <li><a href="#">服务条款</a></li>
             <li><a href="#">隐私政策</a></li>
-            <li><a href="#">联系我们</a></li>
+            <li><a href="tel:18024010891">联系我们</a></li>
           </ul>
         </div>
       </div>
 
       <div class="footer-bottom">
-        <p>© {{ currentYear }} 和润天下. 保留所有权利。</p>
+        <p>© {{ currentYear }} 和润天下人工智能科技有限公司 版权所有 | 粤ICP备2026005936号</p>
       </div>
     </div>
   </footer>
@@ -104,6 +116,35 @@ const currentYear = new Date().getFullYear()
   color: var(--color-text-secondary);
   line-height: var(--leading-relaxed);
   max-width: 280px;
+}
+
+.footer-contact {
+  margin-top: var(--space-2);
+}
+.contact-line {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  line-height: var(--leading-relaxed);
+}
+.contact-label {
+  display: block;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
+  margin-bottom: 2px;
+}
+.contact-phone {
+  color: var(--color-text-primary);
+  text-decoration: none;
+  font-weight: var(--font-medium);
+  transition: color var(--duration-fast);
+}
+.contact-phone:hover {
+  color: var(--color-primary-600);
+}
+.contact-sep {
+  color: var(--color-text-tertiary);
+  margin: 0 2px;
 }
 
 .footer-title {

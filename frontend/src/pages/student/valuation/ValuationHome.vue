@@ -1042,7 +1042,7 @@ function useStringField(getter: () => string | undefined) {
   gap: 4px;
   padding: 12px 8px;
   border: 1.5px solid var(--color-border, #E2E8F0);
-  border-radius: 9999px;
+  border-radius: 12px;
   background: var(--color-bg-card, #FFFFFF);
   cursor: pointer;
   text-align: center;
@@ -1064,7 +1064,7 @@ function useStringField(getter: () => string | undefined) {
   box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
 }
 .rating-pill-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--color-text-primary, #0F172A);
   white-space: nowrap;
@@ -1073,10 +1073,11 @@ function useStringField(getter: () => string | undefined) {
   color: #FFFFFF;
 }
 .rating-pill-desc {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--color-text-muted, #94A3B8);
   font-weight: 400;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: keep-all;
   line-height: 1.4;
 }
 .rating-pill.is-active .rating-pill-desc {

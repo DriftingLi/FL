@@ -25,7 +25,7 @@
         </div>
         <div class="about-grid">
           <div class="about-image">
-            <img src="/images/about.png" alt="和润天下公司办公环境" />
+            <img src="/images/about.jpg" alt="和润天下公司办公环境" />
           </div>
           <div class="about-content">
             <p class="about-paragraph">
@@ -42,6 +42,10 @@
               <div class="stat-card">
                 <span class="stat-number">20+</span>
                 <p class="stat-label">覆盖品牌</p>
+              </div>
+              <div class="stat-card">
+                <span class="stat-number">20+</span>
+                <p class="stat-label">专利</p>
               </div>
             </div>
           </div>
@@ -158,7 +162,6 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { ElMessage } from 'element-plus'
 
 type ModuleKey = 'training' | 'valuation' | 'ai-assistant' | 'trade'
 
@@ -238,7 +241,7 @@ function handleCardClick(item: ProductCard) {
       break
 
     case 'trade':
-      ElMessage.info('二手叉车交易板块敬请期待')
+      window.open('https://mall.gccsmile.com/', '_blank', 'noopener,noreferrer')
       break
   }
 }
@@ -461,7 +464,7 @@ function scrollTo(id: string) {
   height: auto;
   display: block;
   object-fit: cover;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 3 / 2;
 }
 .about-paragraph {
   font-size: var(--text-base);
@@ -474,7 +477,7 @@ function scrollTo(id: string) {
 }
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--space-6);
 }
 .stat-card {
@@ -808,7 +811,7 @@ function scrollTo(id: string) {
     grid-template-columns: 1fr;
   }
   .stat-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
   .hero-content {
     padding: var(--space-32) var(--space-4) var(--space-12);

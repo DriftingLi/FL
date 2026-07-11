@@ -87,12 +87,19 @@ export function buildSubdomainUrl(target: SubdomainType, path: string): string {
   const protocol = window.location.protocol
   const port = window.location.port ? `:${window.location.port}` : ''
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
-  const rootDomain = getRootDomain()
+  const host = window.location.hostname.toLowerCase()
 
+  // 主域名链接：若当前在 www 子域名，保留 www 前缀，
+  // 避免 www.example.com → example.com 的多余跳转（www 与根域名渲染同一前端）
   if (target === 'main') {
+    if (host.startsWith('www.')) {
+      return `${protocol}//${host}${port}${normalizedPath}`
+    }
+    const rootDomain = getRootDomain()
     return `${protocol}//${rootDomain}${port}${normalizedPath}`
   }
 
+  const rootDomain = getRootDomain()
   const prefix = SUBDOMAIN_PREFIX_MAP[target]
   return `${protocol}//${prefix}.${rootDomain}${port}${normalizedPath}`
 }

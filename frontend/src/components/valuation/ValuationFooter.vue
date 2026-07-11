@@ -15,6 +15,7 @@
           </p>
           <div class="brand-meta">
             <a :href="mainSiteUrl" class="brand-link">访问官网 →</a>
+            <a href="https://mall.gccsmile.com/" target="_blank" rel="noopener noreferrer" class="brand-link">二手交易 →</a>
           </div>
         </div>
 
@@ -49,28 +50,33 @@
 
         <!-- Column 4: 关注公众号 -->
         <div class="footer-col">
-          <h4 class="footer-title">关注公众号</h4>
-          <div class="qr-box" aria-label="公众号二维码占位">
-            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="7" height="7"/>
-              <rect x="14" y="3" width="7" height="7"/>
-              <rect x="3" y="14" width="7" height="7"/>
-              <rect x="14" y="14" width="3" height="3"/>
-              <rect x="18" y="14" width="3" height="3"/>
-              <rect x="14" y="18" width="3" height="3"/>
-              <rect x="18" y="18" width="3" height="3"/>
-            </svg>
+          <h4 class="footer-title">扫码关注</h4>
+          <div class="qr-group">
+            <div class="qr-item">
+              <div class="qr-box">
+                <img src="/images/公众号.png" alt="公众号二维码" class="qr-img" />
+              </div>
+              <p class="qr-label">公众号</p>
+            </div>
+            <div class="qr-item">
+              <div class="qr-box">
+                <img src="/images/小程序.png" alt="小程序二维码" class="qr-img" />
+              </div>
+              <p class="qr-label">小程序</p>
+            </div>
           </div>
           <p class="qr-hint">扫码关注获取最新功能与行业资讯</p>
           <p class="footer-hint">
-            客服电话：400-XXX-XXXX<br />
-            邮箱：contact@heruntianxia.com
+            服务热线（9:00-18:00）<br />
+            <a href="tel:18024010891" class="contact-phone">18024010891</a> /
+            <a href="tel:13352891859" class="contact-phone">13352891859</a><br />
+            邮箱：<a href="mailto:HRWAI001@aidataexp.com" class="contact-phone">HRWAI001@aidataexp.com</a>
           </p>
         </div>
       </div>
 
       <div class="footer-bottom">
-        <p>© {{ year }} 和润天下人工智能科技有限公司 版权所有 | 粤ICP备XXXXXXXX号 </p>
+        <p>© {{ year }} 和润天下人工智能科技有限公司 版权所有 | 粤ICP备2026005936号 </p>
       </div>
     </div>
   </footer>
@@ -161,6 +167,9 @@ onMounted(async () => {
 }
 .brand-meta {
   margin-top: var(--space-2, 8px);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3, 12px);
 }
 .brand-link {
   display: inline-flex;
@@ -273,18 +282,45 @@ onMounted(async () => {
 }
 
 /* ===== 二维码列 ===== */
+.qr-group {
+  display: flex;
+  gap: var(--space-4, 16px);
+  margin-bottom: var(--space-3, 12px);
+}
+.qr-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2, 8px);
+}
 .qr-box {
-  width: 120px;
-  height: 120px;
+  width: 110px;
+  height: 110px;
   border-radius: var(--radius-lg, 12px);
-  background: var(--color-bg-dark-alt, #1E293B);
+  background: #fff;
   border: 1px solid var(--color-border-darker, #334155);
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+}
+.qr-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.qr-label {
+  font-size: var(--text-xs, 12px);
   color: var(--color-text-muted, #94A3B8);
-  opacity: 0.85;
-  margin-bottom: var(--space-3, 12px);
+  margin: 0;
+}
+.contact-phone {
+  color: var(--color-text-muted, #94A3B8);
+  text-decoration: none;
+  transition: color var(--t-fast, 150ms) var(--ease, ease);
+}
+.contact-phone:hover {
+  color: var(--color-text-on-dark, #F1F5F9);
 }
 .qr-hint {
   font-size: var(--text-xs, 12px);
