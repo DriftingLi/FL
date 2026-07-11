@@ -385,10 +385,17 @@ router.beforeEach(async (to, from, next) => {
       return
     }
   } else {
-    // 非登录路径：按路径前缀映射到对应子域名，不一致则跳转
+    // 非登录路径：按路径前缀映射到对应子域名
     const targetSubdomain = getTargetSubdomainForPath(to.path)
     if (currentSubdomain !== targetSubdomain) {
-      window.location.href = buildSubdomainUrl(targetSubdomain, to.fullPath)
+      if (targetSubdomain === 'main') {
+        // 路径是公共的（/、/dispatch 等），但当前在功能子域名
+        // 跳到当前子域名的默认工作区（而非根域名），避免功能子域名用户被踢到主域名
+        next(getDefaultWorkspaceBySubdomain())
+      } else {
+        // 路径属于另一个功能子域名 → 跨子域名跳转
+        window.location.href = buildSubdomainUrl(targetSubdomain, to.fullPath)
+      }
       return
     }
   }
