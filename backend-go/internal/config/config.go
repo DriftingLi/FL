@@ -4,6 +4,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -123,6 +124,20 @@ func Load() (*Config, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+
+	// 生产环境 CORS 配置自检：若仍使用本地开发默认值或为空，
+	// 前端跨域请求会被浏览器拦截。提前在日志告警，便于定位。
+	if cfg.IsProd() {
+		if len(cfg.CORSOrigins) == 0 {
+			slog.Warn("CORS_ORIGINS 为空，生产环境前端跨域请求将被浏览器拦截；请在部署环境变量中设置前端页面源")
+		}
+		for _, o := range cfg.CORSOrigins {
+			if strings.Contains(o, "localhost") {
+				slog.Warn("CORS_ORIGINS 仍包含本地开发地址，生产环境前端跨域可能被拦截", "origins", cfg.CORSOrigins)
+			}
+		}
+	}
+
 	return cfg, nil
 }
 

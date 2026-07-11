@@ -66,15 +66,17 @@ func Logger() gin.HandlerFunc {
 }
 
 // CORS 跨域中间件。
+// 在闭包外构造一次 cors.Handler，避免每个请求重复创建（行为保持一致）。
 func CORS(origins []string) gin.HandlerFunc {
+	handler := cors.New(cors.Config{
+		AllowOrigins:     origins,
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Content-Type", "Authorization", "X-Silent"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	})
 	return func(c *gin.Context) {
-		cors.New(cors.Config{
-			AllowOrigins:     origins,
-			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowHeaders:     []string{"Content-Type", "Authorization", "X-Silent"},
-			AllowCredentials: true,
-			MaxAge:           12 * time.Hour,
-		})(c)
+		handler(c)
 	}
 }
 
