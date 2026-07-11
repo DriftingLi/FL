@@ -360,7 +360,8 @@ restart_services() {
 # 健康检查
 # ======================================================================
 health_check() {
-    log_info ">>> 健康检查..."
+    log_info ">>> 健康检查 (localhost:${BACKEND_PORT}/api/health)..."
+    log_info "容器端口映射: $(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" port "$BACKEND_SERVICE" 8080 2>/dev/null || echo 'N/A')"
 
     RETRY=0
     while [ $RETRY -lt $HEALTH_CHECK_RETRIES ]; do
