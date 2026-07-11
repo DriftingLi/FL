@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { getSubdomain, buildSubdomainUrl } from '@/utils/subdomain'
 
 const routes: RouteRecordRaw[] = [
   // ========== 官网 ==========
@@ -369,15 +370,47 @@ router.beforeEach(async (to, from, next) => {
     })
   }
 
+  // ===== 子域名边界检查 =====
+  // 主域名仅承载学员入口与公共页面；导师工作区在 mentor.主域名；管理员后台在 admin.主域名
+  // 跨子域名访问会触发整页跳转（不同 origin，token 不共享）
+  const subdomain = getSubdomain()
+  const isLoginPath = to.path === '/login' || to.path === '/register'
+
+  if (subdomain === 'student') {
+    // 主域名访问导师/管理员工作区 → 跳对应子域名
+    if (to.path.startsWith('/training/tutor')) {
+      window.location.href = buildSubdomainUrl('mentor', to.fullPath)
+      return
+    }
+    if (to.path.startsWith('/admin')) {
+      window.location.href = buildSubdomainUrl('admin', to.fullPath)
+      return
+    }
+  } else if (subdomain === 'tutor') {
+    // mentor 子域名仅允许 /login、/register 和 /training/tutor/*
+    if (!isLoginPath && !to.path.startsWith('/training/tutor')) {
+      next('/training/tutor')
+      return
+    }
+  } else if (subdomain === 'admin') {
+    // admin 子域名仅允许 /login、/register 和 /admin/*
+    if (!isLoginPath && !to.path.startsWith('/admin')) {
+      next('/admin/dashboard')
+      return
+    }
+  }
+
   // 已登录用户访问 /login 或 /register：按角色处理
-  const isPublicLogin = to.path === '/login' || to.path === '/register'
+  const isPublicLogin = isLoginPath
   if (isPublicLogin && authStore.isLoggedIn && authStore.userInfo.role) {
     const role = authStore.userInfo.role
     if (role === 'admin') {
       next('/admin/dashboard')
+    } else if (role === 'tutor') {
+      next('/training/tutor')
     } else {
-      // 学员/导师留在官网首页
-      next('/')
+      // 学员登录后进入培训首页
+      next('/training')
     }
     return
   }

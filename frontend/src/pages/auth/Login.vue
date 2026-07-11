@@ -35,24 +35,10 @@
       <div class="form-container">
         <div class="form-header">
           <h2 class="form-title">欢迎回来</h2>
-          <p class="form-subtitle">登录您的账户继续学习</p>
+          <p class="form-subtitle">{{ subtitleByRole }}</p>
         </div>
 
         <el-form ref="formRef" :model="formData" :rules="rules" label-width="0" class="login-form">
-          <div class="role-selector">
-            <button
-              v-for="role in roles"
-              :key="role.value"
-              type="button"
-              class="role-btn"
-              :class="{ active: formData.role === role.value }"
-              @click="formData.role = role.value"
-            >
-              <el-icon><component :is="role.icon" /></el-icon>
-              <span>{{ role.label }}</span>
-            </button>
-          </div>
-
           <el-form-item prop="username">
             <el-input
               v-model="formData.username"
@@ -86,9 +72,20 @@
             </el-button>
           </el-form-item>
 
-          <div class="form-footer" v-if="formData.role === 'student'">
+          <div class="form-footer" v-if="isStudentSubdomain">
             <span class="footer-text">还没有账号？</span>
             <router-link to="/register" class="footer-link">立即注册</router-link>
+          </div>
+
+          <div class="subdomain-guide" v-if="isStudentSubdomain">
+            <div class="guide-item">
+              <span class="guide-label">导师入口：</span>
+              <a :href="mentorLoginUrl" class="guide-link">{{ mentorLoginUrl }}</a>
+            </div>
+            <div class="guide-item">
+              <span class="guide-label">管理员入口：</span>
+              <a :href="adminLoginUrl" class="guide-link">{{ adminLoginUrl }}</a>
+            </div>
           </div>
         </el-form>
       </div>
@@ -97,13 +94,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import { ElMessage } from 'element-plus'
 import { usernameRules, passwordRules } from '@/utils/validate'
-import { User, UserFilled, Setting } from '@element-plus/icons-vue'
+import {
+  getSubdomain,
+  isMainSubdomain,
+  buildSubdomainUrl,
+  type SubdomainType
+} from '@/utils/subdomain'
 
 const router = useRouter()
 const route = useRoute()
@@ -111,16 +113,25 @@ const authStore = useAuthStore()
 const formRef = ref(null)
 const loading = ref(false)
 
-const roles = [
-  { value: 'student', label: '学员', icon: User },
-  { value: 'tutor', label: '导师', icon: UserFilled },
-  { value: 'admin', label: '管理员', icon: Setting }
-]
+// 当前子域名决定的角色（学员/导师/管理员），不再支持手动切换
+const subdomain: SubdomainType = getSubdomain()
+const isStudentSubdomain = isMainSubdomain()
+const currentRole = subdomain === 'tutor' ? 'tutor' : subdomain === 'admin' ? 'admin' : 'student'
+
+const subtitleMap: Record<SubdomainType, string> = {
+  student: '登录您的账户继续学习',
+  tutor: '登录导师工作区',
+  admin: '登录管理后台'
+}
+const subtitleByRole = computed(() => subtitleMap[subdomain])
+
+// 跨子域名入口（仅主域名登录页显示引导）
+const mentorLoginUrl = computed(() => buildSubdomainUrl('mentor', '/login'))
+const adminLoginUrl = computed(() => buildSubdomainUrl('admin', '/login'))
 
 const formData = reactive({
   username: '',
-  password: '',
-  role: 'student'
+  password: ''
 })
 
 const rules = {
@@ -134,32 +145,25 @@ async function handleLogin() {
 
   loading.value = true
   try {
+    const payload = {
+      username: formData.username,
+      password: formData.password,
+      role: currentRole
+    }
     let res
-    if (formData.role === 'student') {
-      res = await authApi.login({
-        username: formData.username,
-        password: formData.password,
-        role: 'student'
-      })
-    } else if (formData.role === 'tutor') {
-      res = await authApi.tutorLogin({
-        username: formData.username,
-        password: formData.password,
-        role: 'tutor'
-      })
+    if (currentRole === 'student') {
+      res = await authApi.login(payload)
+    } else if (currentRole === 'tutor') {
+      res = await authApi.tutorLogin(payload)
     } else {
-      res = await authApi.adminLogin({
-        username: formData.username,
-        password: formData.password,
-        role: 'admin'
-      })
+      res = await authApi.adminLogin(payload)
     }
 
     if (res.code === 200 || res.code === 201) {
       authStore.setAuthData(res.data)
       ElMessage.success('登录成功')
 
-      // 工作台：按登录身份跳转到对应工作台
+      // 子域名已与角色绑定，不再需要按角色跨域名跳转
       const dashboardByRole: Record<string, string> = {
         admin: '/admin/dashboard',
         tutor: '/training/tutor',
@@ -365,44 +369,37 @@ async function handleLogin() {
   color: var(--color-text-tertiary);
 }
 
-.role-selector {
+.subdomain-guide {
+  margin-top: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-secondary, #f7f8fa);
+  border-radius: var(--radius-md);
   display: flex;
+  flex-direction: column;
   gap: var(--space-2);
-  width: 100%;
-  margin-bottom: 18px;
 }
 
-.role-btn {
-  flex: 1;
+.guide-item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-2);
-  border: 1.5px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-card);
-  color: var(--color-text-secondary);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-default);
-  font-family: var(--font-body);
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
 }
 
-.role-btn:hover {
-  border-color: var(--color-primary-300);
+.guide-label {
+  flex-shrink: 0;
+}
+
+.guide-link {
   color: var(--color-primary-500);
+  text-decoration: none;
+  word-break: break-all;
+  transition: color var(--duration-fast);
 }
 
-.role-btn.active {
-  border-color: var(--color-primary-500);
-  background: var(--color-primary-50);
+.guide-link:hover {
   color: var(--color-primary-600);
-}
-
-.role-btn .el-icon {
-  font-size: 16px;
 }
 
 .login-form :deep(.el-input__wrapper) {
@@ -494,15 +491,6 @@ async function handleLogin() {
 
   .login-form-side {
     padding: var(--space-5) var(--space-4);
-  }
-
-  .role-btn {
-    padding: var(--space-2);
-    font-size: var(--text-xs);
-  }
-
-  .role-btn span {
-    display: none;
   }
 }
 </style>

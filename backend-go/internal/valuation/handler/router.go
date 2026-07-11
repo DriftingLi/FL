@@ -1,13 +1,21 @@
 // Package handler 提供残值评估子模块的路由注册入口。
 // 路由结构：
 //
-//	/api/valuation                      启用 JWTAuth 中间件
-//	  ├── /evaluations                  评估 CRUD（学生端可访问）
-//	  ├── /evaluations/:id/report       PDF 报告生成与下载
-//	  ├── /battery/evaluations          电池 RUL 评估（保留不变）
-//	  ├── /dictionaries/*               字典查询（学生端只读 GET）
-//	  ├── /admin/*                      管理员 CRUD（要求 JWT role=admin）
+//	/api/valuation                      公开组（无需登录）
+//	  ├── POST /evaluations             评估提交（匿名存储）
+//	  ├── GET  /evaluations/stats       评估统计
+//	  ├── POST /evaluations/:id/report  生成 PDF 报告
+//	  ├── GET  /evaluations/:id/report  下载 PDF 报告
+//	  ├── POST /battery/evaluations/:id/report   生成电池报告
+//	  ├── GET  /battery/evaluations/:id/report   下载电池报告
+//	  ├── /dictionaries/*               字典查询（只读 GET）
 //	  └── /health                       健康检查
+//
+//	/api/valuation                      鉴权组（JWTAuth）
+//	  ├── GET  /evaluations             评估历史/详情（需登录）
+//	  ├── GET  /evaluations/:id
+//	  ├── /battery/evaluations          电池 RUL 评估 CRUD（需登录）
+//	  └── /admin/*                      管理员 CRUD（要求 JWT role=admin）
 package handler
 
 import (
@@ -24,8 +32,8 @@ import (
 
 // RegisterRoutes 注册残值评估模块路由。
 // 路由分两组：
-//   - 公开组 /api/valuation：字典查询、评估提交、统计、健康检查（匿名可访问，用于未登录用户的评估计数）
-//   - 鉴权组 /api/valuation：评估历史/详情、PDF 报告、电池 RUL、admin CRUD（需 JWTAuth）
+//   - 公开组 /api/valuation：字典查询、评估提交、统计、健康检查、报告生成/下载（匿名可访问）
+//   - 鉴权组 /api/valuation：评估历史/详情、电池 RUL CRUD、admin CRUD（需 JWTAuth）
 func RegisterRoutes(
 	r *gin.Engine,
 	cfg *config.Config,
@@ -45,13 +53,20 @@ func RegisterRoutes(
 	batteryHandler := NewBatteryHandler(batteryRepo, batterySvc, logger, pdfOutputDir)
 	healthHandler := NewHealthHandler()
 
-	// === 公开组（无需登录）：字典查询 + 评估提交 + 统计 + 健康检查 ===
+	// === 公开组（无需登录）：字典查询 + 评估提交 + 统计 + 健康检查 + 报告生成/下载 ===
 	// 未登录用户可提交评估并被计数（evaluations 表无 user_id，记录匿名存储）
+	// 报告生成/下载也改为公开：未登录用户可下载已生成的评估报告
 	public := r.Group("/api/valuation")
 	{
 		public.POST("/evaluations", evalHandler.Create)
 		public.GET("/evaluations/stats", evalHandler.Stats)
 		public.GET("/health", healthHandler.Check)
+
+		// 报告生成与下载（无需登录）
+		public.POST("/evaluations/:id/report", reportHandler.Generate)
+		public.GET("/evaluations/:id/report", reportHandler.Download)
+		public.POST("/battery/evaluations/:id/report", batteryHandler.GenerateReport)
+		public.GET("/battery/evaluations/:id/report", batteryHandler.DownloadReport)
 
 		dict := public.Group("/dictionaries")
 		{
@@ -77,15 +92,13 @@ func RegisterRoutes(
 		}
 	}
 
-	// === 鉴权组（需登录）：评估历史/详情 + PDF 报告 + 电池 RUL + admin CRUD ===
+	// === 鉴权组（需登录）：评估历史/详情 + 电池 RUL CRUD + admin CRUD ===
+	// 报告生成/下载已挪到公开组，未登录用户可下载报告
 	g := r.Group("/api/valuation")
 	g.Use(middleware.JWTAuth(cfg))
 	{
 		g.GET("/evaluations", evalHandler.List)
 		g.GET("/evaluations/:id", evalHandler.Get)
-
-		g.POST("/evaluations/:id/report", reportHandler.Generate)
-		g.GET("/evaluations/:id/report", reportHandler.Download)
 	}
 
 	// === 管理员 CRUD 接口（要求 JWT role=admin） ===
@@ -150,10 +163,8 @@ func RegisterRoutes(
 		admin.PUT("/coefficient-configs/:key", configHandler.UpdateCoefficient)
 	}
 
-	// === 电池 RUL 评估（需登录） ===
+	// === 电池 RUL 评估 CRUD（需登录，报告生成/下载已挪到公开组） ===
 	g.POST("/battery/evaluations", batteryHandler.Create)
 	g.GET("/battery/evaluations", batteryHandler.List)
 	g.GET("/battery/evaluations/:id", batteryHandler.Get)
-	g.POST("/battery/evaluations/:id/report", batteryHandler.GenerateReport)
-	g.GET("/battery/evaluations/:id/report", batteryHandler.DownloadReport)
 }

@@ -775,8 +775,21 @@ function onSubmit() {
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-3);
+  max-width: 100%;
+}
+:deep(.condition-pills .el-radio-button) {
+  min-width: 0;
+  max-width: 100%;
 }
 :deep(.condition-pills .el-radio-button__inner) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: auto;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
   border-radius: var(--radius-full);
   border: 1px solid var(--color-border);
   background: transparent;
