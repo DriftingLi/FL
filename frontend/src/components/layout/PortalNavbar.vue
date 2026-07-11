@@ -22,12 +22,6 @@
         </li>
       </ul>
 
-      <!-- Desktop CTA -->
-      <div class="desktop-cta">
-        <router-link v-if="!isLoggedIn" to="/login" class="btn-login">登录</router-link>
-        <router-link v-else :to="dashboardPath" class="btn-dashboard">进入工作台</router-link>
-      </div>
-
       <!-- Mobile Hamburger -->
       <button
         class="hamburger"
@@ -51,38 +45,22 @@
           class="mobile-link"
           @click.prevent="handleNavClick(item, true)"
         >{{ item.label }}</a>
-        <div class="mobile-cta">
-          <router-link v-if="!isLoggedIn" to="/login" class="btn-login" @click="mobileOpen = false">登录</router-link>
-          <router-link v-else :to="dashboardPath" class="btn-dashboard" @click="mobileOpen = false">进入工作台</router-link>
-        </div>
       </div>
     </transition>
   </nav>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
 import type { NavItem } from '@/config/navigation'
 
 defineProps<{ menuItems: NavItem[] }>()
 
 const router = useRouter()
-const authStore = useAuthStore()
 const scrolled = ref(false)
 const mobileOpen = ref(false)
 const activeAnchor = ref('home')
-
-const isLoggedIn = computed(() => !!(authStore.token && authStore.isLoggedIn && authStore.userInfo?.role))
-
-const dashboardPath = computed(() => {
-  const role = authStore.userInfo?.role
-  if (role === 'admin') return '/admin/dashboard'
-  if (role === 'tutor') return '/training/tutor'
-  if (role === 'student') return '/training'
-  return '/'
-})
 
 function onScroll() {
   scrolled.value = window.scrollY > 80
@@ -236,48 +214,6 @@ onUnmounted(() => {
   border-radius: 2px;
 }
 
-.desktop-cta {
-  display: none;
-  gap: var(--space-3);
-}
-.btn-login {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  padding: 8px 20px;
-  background: transparent;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  text-decoration: none;
-  transition: all var(--duration-fast);
-}
-.btn-login:hover {
-  border-color: rgba(255, 255, 255, 0.9);
-  background: rgba(255, 255, 255, 0.1);
-}
-.btn-dashboard {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  padding: 8px 20px;
-  background: var(--gradient-brand);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  text-decoration: none;
-  transition: opacity var(--duration-fast);
-}
-.btn-dashboard:hover {
-  opacity: 0.92;
-}
-
 .hamburger {
   display: flex;
   flex-direction: column;
@@ -327,16 +263,6 @@ onUnmounted(() => {
 .mobile-link:last-of-type {
   border-bottom: none;
 }
-.mobile-cta {
-  display: flex;
-  gap: var(--space-3);
-  margin-top: var(--space-5);
-}
-.mobile-cta .btn-login,
-.mobile-cta .btn-dashboard {
-  flex: 1;
-  min-height: 44px;
-}
 
 .mobile-slide-enter-active,
 .mobile-slide-leave-active {
@@ -350,9 +276,6 @@ onUnmounted(() => {
 
 @media (min-width: 768px) {
   .desktop-nav {
-    display: flex;
-  }
-  .desktop-cta {
     display: flex;
   }
   .hamburger {

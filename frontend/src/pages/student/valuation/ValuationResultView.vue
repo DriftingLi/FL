@@ -3,7 +3,7 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useEvaluationStore } from '@/stores/valuationEvaluation'
-import { Edit, Document, Download } from '@element-plus/icons-vue'
+import { Edit, Download } from '@element-plus/icons-vue'
 import PageHeader from '@/components/valuation/PageHeader.vue'
 import ResultCard from '@/components/valuation/ResultCard.vue'
 import DimensionRadar from '@/components/valuation/DimensionRadar.vue'
@@ -23,10 +23,6 @@ const id = computed(() => store.currentId)
 
 function goEdit() {
   router.push('/valuation/input')
-}
-
-function goReport() {
-  if (id.value) router.push(`/valuation/report/${id.value}`)
 }
 
 async function downloadPdf() {
@@ -74,7 +70,6 @@ const usageYears = computed(() => {
     >
       <template #actions>
         <el-button :icon="Edit" @click="goEdit">返回修改</el-button>
-        <el-button :icon="Document" @click="goReport">查看报告</el-button>
         <el-button type="primary" :icon="Download" @click="downloadPdf">下载 PDF</el-button>
       </template>
     </PageHeader>

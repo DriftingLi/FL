@@ -150,7 +150,6 @@
       <div class="container narrow cta-content">
         <h2 class="cta-title">准备好开启AI驱动的叉车之旅了吗？</h2>
         <p class="cta-subtitle">加入和润天下，获取一整套成熟的叉车行业AI解决方案。</p>
-        <a href="#footer" class="btn-cta" @click.prevent="scrollTo('footer')">立即合作</a>
       </div>
     </section>
   </div>

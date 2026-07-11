@@ -22,8 +22,6 @@
         <div class="footer-col">
           <h4 class="footer-title">快速入口</h4>
           <ul class="footer-list">
-            <li><router-link to="/valuation">评估首页</router-link></li>
-            <li><router-link to="/valuation/input">整车残值评估</router-link></li>
             <li><router-link to="/valuation/battery">电池健康度评估</router-link></li>
             <li v-if="isLoggedIn"><router-link to="/valuation/history">评估历史记录</router-link></li>
             <li v-else>
@@ -72,14 +70,13 @@
       </div>
 
       <div class="footer-bottom">
-        <p>© {{ year }} 和润天下人工智能科技有限公司 版权所有 | 粤ICP备XXXXXXXX号 | ForkLift Pro 残值评估子系统</p>
+        <p>© {{ year }} 和润天下人工智能科技有限公司 版权所有 | 粤ICP备XXXXXXXX号 </p>
       </div>
     </div>
   </footer>
 </template>
 
 <script setup lang="ts">
-// 残值评估模块页脚：吸收原顶部导航功能 + 累计评估次数 + 公众号 + 版权
 // 与 PortalFooter 视觉风格保持一致（深色多列 + 渐变点缀）
 import { onMounted, ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
