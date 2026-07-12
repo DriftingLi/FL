@@ -148,6 +148,11 @@ jobs:
       # 部署选项
       SKIP_MIGRATION: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_migration || 'false' }}
       BACKEND_PORT: ${{ secrets.BACKEND_PORT || '8080' }}
+      # Redis 缓存
+      REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD || '' }}
+      REDIS_DB: ${{ secrets.REDIS_DB || '0' }}
+      REDIS_POOL_SIZE: ${{ secrets.REDIS_POOL_SIZE || '10' }}
+      REDIS_KEY_PREFIX: ${{ secrets.REDIS_KEY_PREFIX || 'fl:' }}
       # Tailscale
       TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
       TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
@@ -283,6 +288,10 @@ jobs:
             printf 'export DEPLOY_PATH=%q\n' "${DEPLOY_PATH:-/opt/forklift-training}"
             printf 'export SKIP_MIGRATION=%q\n' "${SKIP_MIGRATION:-false}"
             printf 'export BACKEND_PORT=%q\n' "${BACKEND_PORT:-8080}"
+            printf 'export REDIS_PASSWORD=%q\n' "${REDIS_PASSWORD:-}"
+            printf 'export REDIS_DB=%q\n' "${REDIS_DB:-0}"
+            printf 'export REDIS_POOL_SIZE=%q\n' "${REDIS_POOL_SIZE:-10}"
+            printf 'export REDIS_KEY_PREFIX=%q\n' "${REDIS_KEY_PREFIX:-fl:}"
           } > /tmp/deploy-env.sh
 
           echo "环境变量文件已生成（$(wc -l < /tmp/deploy-env.sh) 行）"

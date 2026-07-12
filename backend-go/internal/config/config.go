@@ -31,6 +31,7 @@ type Config struct {
 	ZhipuModel       string
 	Coze             CozeConfig
 	Valuation        ValuationConfig
+	Redis            RedisConfig
 	DefaultPasswords DefaultPasswordsConfig
 }
 
@@ -61,6 +62,15 @@ type ValuationConfig struct {
 	DBConnMaxLifetime int
 }
 
+// RedisConfig Redis 缓存配置。
+type RedisConfig struct {
+	Addr     string // REDIS_ADDR，默认 "localhost:6379"
+	Password string // REDIS_PASSWORD，生产环境从环境变量注入
+	DB       int    // REDIS_DB，默认 0
+	PoolSize int    // REDIS_POOL_SIZE，默认 10
+	Prefix   string // REDIS_KEY_PREFIX，统一 key 前缀，默认 "fl:"
+}
+
 // Load 从环境变量加载配置。非 production 环境会自动加载 .env 文件。
 func Load() (*Config, error) {
 	appEnv := getenv("APP_ENV", "development")
@@ -73,6 +83,8 @@ func Load() (*Config, error) {
 	valuationDBMaxOpen, _ := strconv.Atoi(getenv("VALUATION_DB_MAX_OPEN_CONNS", "20"))
 	valuationDBMaxIdle, _ := strconv.Atoi(getenv("VALUATION_DB_MAX_IDLE_CONNS", "5"))
 	valuationDBLifetime, _ := strconv.Atoi(getenv("VALUATION_DB_CONN_MAX_LIFETIME", "3600"))
+	redisPoolSize, _ := strconv.Atoi(getenv("REDIS_POOL_SIZE", "10"))
+	redisDB, _ := strconv.Atoi(getenv("REDIS_DB", "0"))
 
 	cfg := &Config{
 		AppEnv:           appEnv,
@@ -104,6 +116,13 @@ func Load() (*Config, error) {
 			DBMaxOpenConns:    valuationDBMaxOpen,
 			DBMaxIdleConns:    valuationDBMaxIdle,
 			DBConnMaxLifetime: valuationDBLifetime,
+		},
+		Redis: RedisConfig{
+			Addr:     getenv("REDIS_ADDR", "localhost:6379"),
+			Password: getenv("REDIS_PASSWORD", ""),
+			DB:       redisDB,
+			PoolSize: redisPoolSize,
+			Prefix:   getenv("REDIS_KEY_PREFIX", "fl:"),
 		},
 		DefaultPasswords: DefaultPasswordsConfig{
 			Admin:   getenv("ADMIN_DEFAULT_PASSWORD", "admin123"),

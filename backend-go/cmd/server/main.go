@@ -20,6 +20,7 @@ import (
 	"go.uber.org/zap"
 
 	"forklift-training/internal/api"
+	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
 	"forklift-training/internal/db"
 	migratedb "forklift-training/internal/migrate"
@@ -51,6 +52,13 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("数据库连接成功")
+
+	// 2.5. 连接 Redis 缓存
+	redisClient, err := cache.InitRedis(cfg.Redis)
+	if err != nil {
+		slog.Error("Redis 连接失败", "error", err)
+		os.Exit(1)
+	}
 
 	// 3. 执行数据库迁移（000001~000017，覆盖维修培训初始化与残值评估全量表结构/种子/系数调整）
 	if err := migratedb.RunMigrations(cfg.DatabaseURL, "up"); err != nil {
@@ -107,6 +115,8 @@ func main() {
 	}
 	// 释放 GORM 连接池（此前仅关闭了 valuation 的 pgx 池，GORM 池会被泄漏）
 	db.Close(gormDB)
+	// 释放 Redis 连接池
+	cache.CloseRedis(redisClient)
 	slog.Info("服务已退出")
 }
 

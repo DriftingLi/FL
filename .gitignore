@@ -52,8 +52,7 @@ backend-go/static/images/*
 !backend-go/static/images/.gitkeep
 
 # Docker Compose 本地覆盖文件（仅保留 .example 模板入库）
-docker-compose.override.yml
-backend-go/docker-compose.override.yml
+backend-go/docker-compose.yml
 
 # ===== 日志 =====
 *.log

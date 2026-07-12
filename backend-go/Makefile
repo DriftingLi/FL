@@ -32,7 +32,7 @@ fmt:
 
 ## 启动本地 PG 容器
 dev-up:
-	docker compose up -d postgres
+	docker compose up -d postgres redis
 	@echo "等待 PostgreSQL 就绪..."
 	@for /l %%i in (1,1,30) do (pg_isready -h localhost -p 5432 -U forklift >nul 2>&1 && echo PostgreSQL ready && exit /b 0) & timeout /t 1 >nul
 
