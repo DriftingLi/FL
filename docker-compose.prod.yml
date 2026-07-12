@@ -49,8 +49,9 @@ services:
     image: redis:7-alpine
     container_name: forklift-redis-prod
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    # 不暴露到宿主机，仅 Docker 内部网络访问
+    expose:
+      - "6379"
     volumes:
       - redisdata-prod:/data
     healthcheck:
