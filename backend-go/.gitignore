@@ -44,3 +44,6 @@ static/uploads/slides/*
 # Logs
 *.log
 logs/
+
+# Local dev infrastructure (each developer manages their own containers)
+docker-compose.yml
