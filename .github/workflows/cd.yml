@@ -147,7 +147,7 @@ jobs:
       COZE_OAUTH_PRIVATE_KEY_PATH: ${{ secrets.COZE_OAUTH_PRIVATE_KEY_PATH }}
       # 部署选项
       SKIP_MIGRATION: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_migration || 'false' }}
-      BACKEND_PORT: ${{ secrets.BACKEND_PORT || '8080' }}
+      BACKEND_PORT: ${{ secrets.BACKEND_PORT || '8081' }}
       # Redis 缓存
       REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD || '' }}
       REDIS_DB: ${{ secrets.REDIS_DB || '0' }}
@@ -287,7 +287,7 @@ jobs:
             printf 'export COMPOSE_FILE=%q\n' "${COMPOSE_FILE:-docker-compose.prod.yml}"
             printf 'export DEPLOY_PATH=%q\n' "${DEPLOY_PATH:-/opt/forklift-training}"
             printf 'export SKIP_MIGRATION=%q\n' "${SKIP_MIGRATION:-false}"
-            printf 'export BACKEND_PORT=%q\n' "${BACKEND_PORT:-8080}"
+            printf 'export BACKEND_PORT=%q\n' "${BACKEND_PORT:-8081}"
             printf 'export REDIS_PASSWORD=%q\n' "${REDIS_PASSWORD:-}"
             printf 'export REDIS_DB=%q\n' "${REDIS_DB:-0}"
             printf 'export REDIS_POOL_SIZE=%q\n' "${REDIS_POOL_SIZE:-10}"

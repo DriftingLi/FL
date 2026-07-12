@@ -121,7 +121,7 @@ services:
       REDIS_KEY_PREFIX: "${REDIS_KEY_PREFIX:-fl:}"
       TZ: Asia/Shanghai
     ports:
-      - "${BACKEND_PORT:-8080}:8080"
+      - "${BACKEND_PORT:-8081}:8080"
     volumes:
       - uploads-data:/data/uploads
       - reports-data:/data/reports

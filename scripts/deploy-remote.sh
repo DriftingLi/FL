@@ -47,7 +47,7 @@ IMAGE_TAG="${IMAGE_TAG:-latest}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 
 # 健康检查
-BACKEND_PORT="${BACKEND_PORT:-8080}"
+BACKEND_PORT="${BACKEND_PORT:-8081}"
 HEALTH_CHECK_RETRIES="${HEALTH_CHECK_RETRIES:-20}"
 HEALTH_CHECK_INTERVAL="${HEALTH_CHECK_INTERVAL:-6}"
 
@@ -355,12 +355,13 @@ restart_services() {
     # 写入 .env 文件
     write_env_file
 
-    # 重启后端服务（不重启数据库）
-    # 先 down 旧容器（释放端口 + 清理网络），up 时 --force-recreate 确保全新启动
-    docker compose -f "$COMPOSE_FILE" down "$BACKEND_SERVICE" 2>/dev/null || true
-    sleep 5
-    docker compose -f "$COMPOSE_FILE" up -d --force-recreate --remove-orphans "$BACKEND_SERVICE" 2>&1 | tail -5
-    log_ok "后端服务已重启"
+    # 全栈 down + up：compose 配置变更时仅 down 单个服务无法彻底清理共享网络的端口映射残留
+    log_info "停止全部服务..."
+    docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>&1 || true
+    sleep 3
+    log_info "启动全部服务..."
+    docker compose -f "$COMPOSE_FILE" up -d 2>&1
+    log_ok "服务已重启"
 }
 
 # ======================================================================
@@ -449,10 +450,10 @@ do_rollback() {
             export BACKEND_IMAGE="$PREVIOUS_IMAGE"
             write_env_file
 
-            # 先 down 旧容器释放端口，再 force-recreate
-            docker compose -f "$COMPOSE_FILE" down "$BACKEND_SERVICE" 2>/dev/null || true
-            sleep 5
-            docker compose -f "$COMPOSE_FILE" up -d --force-recreate --remove-orphans "$BACKEND_SERVICE"
+            # 全栈 down + up：回滚前彻底重置网络
+            docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>&1 || true
+            sleep 3
+            docker compose -f "$COMPOSE_FILE" up -d 2>&1
             sleep 10
 
             if health_check; then
