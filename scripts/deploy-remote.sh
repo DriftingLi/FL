@@ -101,6 +101,7 @@ write_env_file() {
         echo "# 由 deploy-remote.sh 自动生成 — $(date '+%Y-%m-%d %H:%M:%S')"
         echo "APP_ENV=production"
         echo "PORT=${BACKEND_PORT}"
+        echo "BACKEND_PORT=${BACKEND_PORT}"
 
         printf 'DATABASE_URL='
         env_val "${DATABASE_URL:-}"; echo
@@ -501,8 +502,9 @@ main() {
             create_backup
             login_registry
             pull_images
-            run_migration
+            # 先重启（启动 postgres + redis + backend，创建网络），再迁移
             restart_services
+            run_migration
 
             if ! health_check; then
                 log_error "健康检查失败!"
