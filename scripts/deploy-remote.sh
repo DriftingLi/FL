@@ -356,10 +356,10 @@ restart_services() {
     write_env_file
 
     # 重启后端服务（不重启数据库）
-    # 先停止并移除旧容器，避免端口冲突（如 8080 仍被旧容器占用）
-    docker compose -f "$COMPOSE_FILE" stop "$BACKEND_SERVICE" 2>/dev/null || true
-    docker compose -f "$COMPOSE_FILE" rm -f "$BACKEND_SERVICE" 2>/dev/null || true
-    docker compose -f "$COMPOSE_FILE" up -d --remove-orphans "$BACKEND_SERVICE" 2>&1 | tail -5
+    # 先 down 旧容器（释放端口 + 清理网络），up 时 --force-recreate 确保全新启动
+    docker compose -f "$COMPOSE_FILE" down "$BACKEND_SERVICE" 2>/dev/null || true
+    sleep 2
+    docker compose -f "$COMPOSE_FILE" up -d --force-recreate --remove-orphans "$BACKEND_SERVICE" 2>&1 | tail -5
     log_ok "后端服务已重启"
 }
 
@@ -449,10 +449,10 @@ do_rollback() {
             export BACKEND_IMAGE="$PREVIOUS_IMAGE"
             write_env_file
 
-            # 先停止并移除旧容器，避免端口冲突
-            docker compose -f "$COMPOSE_FILE" stop "$BACKEND_SERVICE" 2>/dev/null || true
-            docker compose -f "$COMPOSE_FILE" rm -f "$BACKEND_SERVICE" 2>/dev/null || true
-            docker compose -f "$COMPOSE_FILE" up -d --remove-orphans "$BACKEND_SERVICE"
+            # 先 down 旧容器释放端口，再 force-recreate
+            docker compose -f "$COMPOSE_FILE" down "$BACKEND_SERVICE" 2>/dev/null || true
+            sleep 2
+            docker compose -f "$COMPOSE_FILE" up -d --force-recreate --remove-orphans "$BACKEND_SERVICE"
             sleep 10
 
             if health_check; then
