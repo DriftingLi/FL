@@ -195,17 +195,17 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
-  max-width: 1200px;
 }
 
 .welcome-banner {
-  background: linear-gradient(135deg, #059669 0%, #14B8A6 100%);
+  background: #ECFDF5;
+  border: 1px solid #A7F3D0;
   border-radius: var(--radius-xl);
   padding: var(--space-6) var(--space-8);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: white;
+  color: var(--color-text-primary);
 }
 
 .banner-title {
@@ -213,11 +213,12 @@ onMounted(async () => {
   font-size: var(--text-2xl);
   font-weight: var(--font-bold);
   margin-bottom: var(--space-1);
+  color: var(--color-text-primary);
 }
 
 .banner-subtitle {
   font-size: var(--text-base);
-  opacity: 0.85;
+  color: var(--color-text-secondary);
 }
 
 .banner-action {
@@ -225,9 +226,8 @@ onMounted(async () => {
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-5);
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: #059669;
+  border: 1px solid #047857;
   border-radius: var(--radius-lg);
   color: white;
   font-size: var(--text-sm);
@@ -238,7 +238,7 @@ onMounted(async () => {
 }
 
 .banner-action:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: #047857;
 }
 
 .quick-cards {

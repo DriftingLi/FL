@@ -261,15 +261,15 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
-  max-width: 1200px;
 }
 
 /* Welcome Banner */
 .welcome-banner {
-  background: linear-gradient(135deg, #7C3AED 0%, #2563EB 100%);
+  background: #F5F3FF;
+  border: 1px solid #DDD6FE;
   border-radius: var(--radius-xl);
   padding: var(--space-6) var(--space-8);
-  color: white;
+  color: var(--color-text-primary);
 }
 
 .banner-title {
@@ -277,11 +277,12 @@ onUnmounted(() => {
   font-size: var(--text-2xl);
   font-weight: var(--font-bold);
   margin-bottom: var(--space-1);
+  color: var(--color-text-primary);
 }
 
 .banner-subtitle {
   font-size: var(--text-base);
-  opacity: 0.85;
+  color: var(--color-text-secondary);
 }
 
 .stat-cards {

@@ -42,7 +42,7 @@ const routes: RouteRecordRaw[] = [
         path: '',
         name: 'StudentDashboard',
         component: () => import('@/pages/student/Dashboard.vue'),
-        meta: { navKey: 'dashboard', navLabel: '工作台' }
+        meta: { navKey: 'dashboard', navLabel: '仪表盘' }
       },
       {
         path: 'courses',
@@ -105,7 +105,7 @@ const routes: RouteRecordRaw[] = [
         path: '',
         name: 'TutorDashboard',
         component: () => import('@/pages/tutor/Dashboard.vue'),
-        meta: { navKey: 'dashboard', navLabel: '工作台' }
+        meta: { navKey: 'dashboard', navLabel: '仪表盘' }
       },
       {
         path: 'courses',

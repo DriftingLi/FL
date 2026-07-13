@@ -334,7 +334,7 @@ const guarantees = [
 const carouselIndex = ref(0)
 const currentGuarantee = computed(() => guarantees[carouselIndex.value])
 let autoplayTimer: ReturnType<typeof setInterval> | null = null
-const AUTOPLAY_INTERVAL = 4000
+const AUTOPLAY_INTERVAL = 1000
 let isPaused = false
 
 function carouselNext() {

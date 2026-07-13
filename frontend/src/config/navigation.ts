@@ -56,7 +56,6 @@ const studentNav: NavItem[] = [
       { key: 'ai-assistant', label: 'AI 助手', path: '/ai-assistant', icon: MagicStick }
     ]
   },
-  { key: 'profile', label: '个人中心', path: '/profile', icon: User }
 ]
 
 const adminNav: NavItem[] = [
@@ -85,7 +84,7 @@ const adminNav: NavItem[] = [
 ]
 
 const tutorNav: NavItem[] = [
-  { key: 'dashboard', label: '工作台', path: '/training/tutor', icon: HomeFilled },
+  { key: 'dashboard', label: '仪表盘', path: '/training/tutor', icon: HomeFilled },
   { key: 'courses', label: '我的课程', path: '/training/tutor/courses', icon: Notebook },
   { key: 'question-manage', label: '题库管理', path: '/training/tutor/question-manage', icon: EditPen },
   { key: 'grading', label: '人工阅卷', path: '/training/tutor/grading', icon: Finished }

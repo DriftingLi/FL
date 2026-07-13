@@ -19,7 +19,10 @@
       <template v-for="item in menuItems" :key="item.key">
         <!-- 有子项的分组 -->
         <template v-if="item.children && item.children.length">
-          <div v-if="!collapsed" class="nav-group-label">{{ item.label }}</div>
+          <div v-if="!collapsed" class="nav-group-label">
+            <el-icon v-if="item.icon" class="nav-group-icon"><component :is="item.icon" /></el-icon>
+            <span>{{ item.label }}</span>
+          </div>
           <el-tooltip v-else :content="item.label" placement="right" :show-after="300">
             <div class="nav-group-icon-only">
               <el-icon><component :is="item.icon" /></el-icon>
@@ -220,6 +223,15 @@ function isRouteActive(path?: string): boolean {
   padding: var(--space-3) var(--space-3) var(--space-1);
   letter-spacing: 0.03em;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-group-icon {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
 }
 
 .nav-group-icon-only {

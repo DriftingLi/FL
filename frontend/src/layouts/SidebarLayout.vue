@@ -18,7 +18,7 @@
             <el-icon :size="20"><Operation /></el-icon>
           </button>
           <el-breadcrumb separator="/">
-            <el-breadcrumb-item :to="homePath">工作台</el-breadcrumb-item>
+            <el-breadcrumb-item :to="homePath">仪表盘</el-breadcrumb-item>
             <el-breadcrumb-item v-if="currentLabel">{{ currentLabel }}</el-breadcrumb-item>
           </el-breadcrumb>
         </div>
@@ -33,10 +33,7 @@
             </div>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="profile">
-                  <el-icon><User /></el-icon>个人中心
-                </el-dropdown-item>
-                <el-dropdown-item command="logout" divided>
+                <el-dropdown-item command="logout">
                   <el-icon><SwitchButton /></el-icon>退出登录
                 </el-dropdown-item>
               </el-dropdown-menu>
@@ -57,7 +54,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessageBox } from 'element-plus'
-import { Operation, ArrowDown, User, SwitchButton } from '@element-plus/icons-vue'
+import { Operation, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import type { NavItem } from '@/config/navigation'
 
@@ -114,8 +111,6 @@ async function handleCommand(command: string) {
     } catch (e) {
       // cancelled
     }
-  } else if (command === 'profile') {
-    router.push('/profile')
   }
 }
 </script>
