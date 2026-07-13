@@ -109,8 +109,8 @@ func (s *AdminCourseService) CreateCourse(data map[string]interface{}) (map[stri
 	if err := s.db.Create(&course).Error; err != nil {
 		return nil, err
 	}
-	cache.InvalidatePattern(context.Background(), "course:list:*")
-	cache.InvalidatePattern(context.Background(), "course:detail:*")
+	_ = cache.InvalidatePattern(context.Background(), "course:list:*")
+	_ = cache.InvalidatePattern(context.Background(), "course:detail:*")
 	return courseToDict(&course), nil
 }
 
@@ -141,7 +141,7 @@ func (s *AdminCourseService) UpdateCourse(courseID int, data map[string]interfac
 	if err := s.db.Save(&course).Error; err != nil {
 		return nil, err
 	}
-	cache.InvalidatePattern(context.Background(), "course:list:*")
+	_ = cache.InvalidatePattern(context.Background(), "course:list:*")
 	cache.InvalidatePattern(context.Background(), cache.SafeKey("course", "detail", fmt.Sprintf("%d", courseID)))
 	return courseToDict(&course), nil
 }
@@ -155,7 +155,7 @@ func (s *AdminCourseService) DeleteCourse(courseID int) (map[string]interface{},
 	if err := s.db.Delete(&course).Error; err != nil {
 		return nil, err
 	}
-	cache.InvalidatePattern(context.Background(), "course:list:*")
+	_ = cache.InvalidatePattern(context.Background(), "course:list:*")
 	cache.InvalidatePattern(context.Background(), cache.SafeKey("course", "detail", fmt.Sprintf("%d", courseID)))
 	return map[string]interface{}{"course_id": courseID}, nil
 }
