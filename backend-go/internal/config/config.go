@@ -64,11 +64,18 @@ type ValuationConfig struct {
 
 // RedisConfig Redis 缓存配置。
 type RedisConfig struct {
-	Addr     string // REDIS_ADDR，默认 "localhost:6379"
-	Password string // REDIS_PASSWORD，生产环境从环境变量注入
-	DB       int    // REDIS_DB，默认 0
-	PoolSize int    // REDIS_POOL_SIZE，默认 10
-	Prefix   string // REDIS_KEY_PREFIX，统一 key 前缀，默认 "fl:"
+	Addr         string        // REDIS_ADDR，默认 "localhost:6379"
+	Password     string        // REDIS_PASSWORD，生产环境从环境变量注入
+	DB           int           // REDIS_DB，默认 0
+	PoolSize     int           // REDIS_POOL_SIZE，默认 10
+	MinIdleConns int           // REDIS_MIN_IDLE_CONNS，默认 3
+	MaxRetries   int           // REDIS_MAX_RETRIES，默认 3
+	Prefix       string        // REDIS_KEY_PREFIX，统一 key 前缀，默认 "fl:"
+	DialTimeout  time.Duration // REDIS_DIAL_TIMEOUT，默认 5s
+	ReadTimeout  time.Duration // REDIS_READ_TIMEOUT，默认 3s
+	WriteTimeout time.Duration // REDIS_WRITE_TIMEOUT，默认 3s
+	PoolTimeout  time.Duration // REDIS_POOL_TIMEOUT，默认 4s
+	IdleTimeout  time.Duration // REDIS_IDLE_TIMEOUT，默认 5m
 }
 
 // Load 从环境变量加载配置。非 production 环境会自动加载 .env 文件。
@@ -85,6 +92,13 @@ func Load() (*Config, error) {
 	valuationDBLifetime, _ := strconv.Atoi(getenv("VALUATION_DB_CONN_MAX_LIFETIME", "3600"))
 	redisPoolSize, _ := strconv.Atoi(getenv("REDIS_POOL_SIZE", "10"))
 	redisDB, _ := strconv.Atoi(getenv("REDIS_DB", "0"))
+	redisMinIdle, _ := strconv.Atoi(getenv("REDIS_MIN_IDLE_CONNS", "3"))
+	redisMaxRetries, _ := strconv.Atoi(getenv("REDIS_MAX_RETRIES", "3"))
+	redisDialTimeout := getDuration("REDIS_DIAL_TIMEOUT", 5*time.Second)
+	redisReadTimeout := getDuration("REDIS_READ_TIMEOUT", 3*time.Second)
+	redisWriteTimeout := getDuration("REDIS_WRITE_TIMEOUT", 3*time.Second)
+	redisPoolTimeout := getDuration("REDIS_POOL_TIMEOUT", 4*time.Second)
+	redisIdleTimeout := getDuration("REDIS_IDLE_TIMEOUT", 5*time.Minute)
 
 	cfg := &Config{
 		AppEnv:           appEnv,
@@ -118,11 +132,18 @@ func Load() (*Config, error) {
 			DBConnMaxLifetime: valuationDBLifetime,
 		},
 		Redis: RedisConfig{
-			Addr:     getenv("REDIS_ADDR", "localhost:6379"),
-			Password: getenv("REDIS_PASSWORD", ""),
-			DB:       redisDB,
-			PoolSize: redisPoolSize,
-			Prefix:   getenv("REDIS_KEY_PREFIX", "fl:"),
+			Addr:         getenv("REDIS_ADDR", "localhost:6379"),
+			Password:     getenv("REDIS_PASSWORD", ""),
+			DB:           redisDB,
+			PoolSize:     redisPoolSize,
+			MinIdleConns: redisMinIdle,
+			MaxRetries:   redisMaxRetries,
+			Prefix:       getenv("REDIS_KEY_PREFIX", "fl:"),
+			DialTimeout:  redisDialTimeout,
+			ReadTimeout:  redisReadTimeout,
+			WriteTimeout: redisWriteTimeout,
+			PoolTimeout:  redisPoolTimeout,
+			IdleTimeout:  redisIdleTimeout,
 		},
 		DefaultPasswords: DefaultPasswordsConfig{
 			Admin:   getenv("ADMIN_DEFAULT_PASSWORD", "admin123"),
@@ -175,6 +196,12 @@ func (c *Config) Validate() error {
 	if c.DatabaseURL == "" {
 		missing = append(missing, "DATABASE_URL")
 	}
+	if c.Redis.Addr == "" {
+		missing = append(missing, "REDIS_ADDR")
+	}
+	if c.Redis.Password == "" {
+		missing = append(missing, "REDIS_PASSWORD")
+	}
 	if len(missing) > 0 {
 		return fmt.Errorf("生产环境缺少必填配置: %s", strings.Join(missing, ", "))
 	}
@@ -192,6 +219,19 @@ func (c *Config) IsProd() bool { return c.AppEnv == "production" }
 func getenv(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return def
+}
+
+// getDuration 从环境变量读取 time.Duration，支持 "5s"/"5000ms"/"5m" 等格式。
+// 解析失败或未设置时返回 def。
+func getDuration(key string, def time.Duration) time.Duration {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	if d, err := time.ParseDuration(v); err == nil {
+		return d
 	}
 	return def
 }

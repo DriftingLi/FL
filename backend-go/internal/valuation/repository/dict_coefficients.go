@@ -6,47 +6,59 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"forklift-training/internal/cache"
 )
 
 // ListCoefficientConfigs 列出全部系数配置
 func (r *DictionaryRepository) ListCoefficientConfigs(ctx context.Context) ([]CoefficientConfig, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id, key, value, description, updated_at FROM coefficient_configs ORDER BY key ASC`)
-	if err != nil {
-		return nil, fmt.Errorf("查询系数配置失败: %w", err)
-	}
-	defer rows.Close()
-	out := make([]CoefficientConfig, 0, 16)
-	for rows.Next() {
+	const cacheKey = "dict:coef:list"
+	var result []CoefficientConfig
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+		rows, err := r.pool.Query(ctx, `SELECT id, key, value, description, updated_at FROM coefficient_configs ORDER BY key ASC`)
+		if err != nil {
+			return nil, fmt.Errorf("查询系数配置失败: %w", err)
+		}
+		defer rows.Close()
+		out := make([]CoefficientConfig, 0, 16)
+		for rows.Next() {
+			var c CoefficientConfig
+			var desc *string
+			var updatedAt time.Time
+			if err := rows.Scan(&c.ID, &c.Key, &c.Value, &desc, &updatedAt); err != nil {
+				return nil, err
+			}
+			if desc != nil {
+				c.Description = *desc
+			}
+			c.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
+			out = append(out, c)
+		}
+		return out, rows.Err()
+	})
+	return result, err
+}
+
+// GetCoefficientByKey 按 key 查询系数
+func (r *DictionaryRepository) GetCoefficientByKey(ctx context.Context, key string) (CoefficientConfig, error) {
+	cacheKey := cache.SafeKey("dict", "coef", "get", key)
+	var result CoefficientConfig
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+		row := r.pool.QueryRow(ctx,
+			`SELECT id, key, value, description, updated_at FROM coefficient_configs WHERE key = $1`, key)
 		var c CoefficientConfig
 		var desc *string
 		var updatedAt time.Time
-		if err := rows.Scan(&c.ID, &c.Key, &c.Value, &desc, &updatedAt); err != nil {
+		if err := row.Scan(&c.ID, &c.Key, &c.Value, &desc, &updatedAt); err != nil {
 			return nil, err
 		}
 		if desc != nil {
 			c.Description = *desc
 		}
 		c.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
-		out = append(out, c)
-	}
-	return out, rows.Err()
-}
-
-// GetCoefficientByKey 按 key 查询系数
-func (r *DictionaryRepository) GetCoefficientByKey(ctx context.Context, key string) (CoefficientConfig, error) {
-	row := r.pool.QueryRow(ctx,
-		`SELECT id, key, value, description, updated_at FROM coefficient_configs WHERE key = $1`, key)
-	var c CoefficientConfig
-	var desc *string
-	var updatedAt time.Time
-	if err := row.Scan(&c.ID, &c.Key, &c.Value, &desc, &updatedAt); err != nil {
-		return CoefficientConfig{}, err
-	}
-	if desc != nil {
-		c.Description = *desc
-	}
-	c.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
-	return c, nil
+		return c, nil
+	})
+	return result, err
 }
 
 // UpdateCoefficientByKey 按 key 更新系数值
@@ -77,19 +89,24 @@ type AlgorithmParameters struct {
 
 // ListAlgorithmParameters 聚合查询全部算法参数（4 类），供管理员后台一次加载
 func (r *DictionaryRepository) ListAlgorithmParameters(ctx context.Context) (AlgorithmParameters, error) {
+	const cacheKey = "dict:algo_params"
 	var result AlgorithmParameters
-	var err error
-	if result.Coefficients, err = r.ListCoefficientConfigs(ctx); err != nil {
-		return result, fmt.Errorf("查询算法系数失败: %w", err)
-	}
-	if result.Brands, err = r.ListBrands(ctx); err != nil {
-		return result, fmt.Errorf("查询品牌系数失败: %w", err)
-	}
-	if result.ConditionRatings, err = r.ListConditionRatings(ctx); err != nil {
-		return result, fmt.Errorf("查询车况系数失败: %w", err)
-	}
-	if result.RegionCoefficients, err = r.ListRegionCoefficients(ctx, ""); err != nil {
-		return result, fmt.Errorf("查询区域系数失败: %w", err)
-	}
-	return result, nil
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+		var ap AlgorithmParameters
+		var e error
+		if ap.Coefficients, e = r.ListCoefficientConfigs(ctx); e != nil {
+			return nil, fmt.Errorf("查询算法系数失败: %w", e)
+		}
+		if ap.Brands, e = r.ListBrands(ctx); e != nil {
+			return nil, fmt.Errorf("查询品牌系数失败: %w", e)
+		}
+		if ap.ConditionRatings, e = r.ListConditionRatings(ctx); e != nil {
+			return nil, fmt.Errorf("查询车况系数失败: %w", e)
+		}
+		if ap.RegionCoefficients, e = r.ListRegionCoefficients(ctx, ""); e != nil {
+			return nil, fmt.Errorf("查询区域系数失败: %w", e)
+		}
+		return ap, nil
+	})
+	return result, err
 }

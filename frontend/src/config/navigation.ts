@@ -22,10 +22,13 @@ export interface NavItem {
   path?: string
   icon?: Component
   children?: NavItem[]
+  // exact=true 时仅精确匹配 route.path 才高亮，
+  // 用于路径恰好是其他菜单父级的情况（如学员/导师仪表盘）。
+  exact?: boolean
 }
 
 const studentNav: NavItem[] = [
-  { key: 'dashboard', label: '仪表盘', path: '/training', icon: HomeFilled },
+  { key: 'dashboard', label: '仪表盘', path: '/training', icon: HomeFilled, exact: true },
   {
     key: 'training',
     label: '培训',
@@ -84,7 +87,7 @@ const adminNav: NavItem[] = [
 ]
 
 const tutorNav: NavItem[] = [
-  { key: 'dashboard', label: '仪表盘', path: '/training/tutor', icon: HomeFilled },
+  { key: 'dashboard', label: '仪表盘', path: '/training/tutor', icon: HomeFilled, exact: true },
   { key: 'courses', label: '我的课程', path: '/training/tutor/courses', icon: Notebook },
   { key: 'question-manage', label: '题库管理', path: '/training/tutor/question-manage', icon: EditPen },
   { key: 'grading', label: '人工阅卷', path: '/training/tutor/grading', icon: Finished }

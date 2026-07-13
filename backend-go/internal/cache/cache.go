@@ -6,10 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/sync/singleflight"
 )
+
+// sfGroup 合并相同 key 的并发 loader 调用，防止缓存击穿。
+var sfGroup singleflight.Group
 
 // fullKey 拼接带前缀的完整缓存 key。
 func fullKey(key string) string {
@@ -17,6 +23,16 @@ func fullKey(key string) string {
 		prefix = DefaultKeyPrefix
 	}
 	return prefix + key
+}
+
+// SafeKey 用 ":" 拼接多段 key，并对每段做 URL 编码以避免特殊字符（空格、冒号等）导致 key 解析歧义。
+// 示例：SafeKey("dict", "brand", "get", "林德(E16)") → "dict:brand:get:%E6%9E%97%E5%BE%B7%28E16%29"
+func SafeKey(parts ...string) string {
+	encoded := make([]string, len(parts))
+	for i, p := range parts {
+		encoded[i] = url.QueryEscape(p)
+	}
+	return strings.Join(encoded, ":")
 }
 
 // Get 从缓存读取字符串值。key 不存在时返回 ("", redis.Nil)。
@@ -122,6 +138,7 @@ func GetJSON(ctx context.Context, key string, dest interface{}) error {
 //  1. 先查缓存，命中则反序列化到 dest 并返回 nil
 //  2. 缓存 miss 则调用 loader() 查 DB/执行计算
 //  3. loader 成功时写回缓存（TTL），失败时只返回 error 不回写
+//  4. 使用 singleflight 合并相同 key 的并发 loader 调用，防止缓存击穿
 //
 // dest 必须为指针类型，用于接收反序列化结果。
 func GetOrSetJSON(ctx context.Context, key string, ttl time.Duration, dest interface{}, loader func() (interface{}, error)) error {
@@ -135,28 +152,39 @@ func GetOrSetJSON(ctx context.Context, key string, ttl time.Duration, dest inter
 		slog.Warn("Redis GetJSON 异常，降级查 DB", "key", key, "error", err)
 	}
 
-	// 2. 缓存 miss → 调用 loader
-	result, loaderErr := loader()
-	if loaderErr != nil {
-		return loaderErr
+	// 2. 缓存 miss → singleflight 合并并发 loader
+	val, sfErr, _ := sfGroup.Do(key, func() (interface{}, error) {
+		// 双重检查：可能在等待期间已被其他请求填充
+		if e := GetJSON(ctx, key, dest); e == nil {
+			return nil, nil
+		}
+		data, e := loader()
+		if e != nil {
+			return nil, e
+		}
+		// 回写缓存（忽略回写失败，不影响返回业务数据）
+		if setErr := SetJSON(ctx, key, data, ttl); setErr != nil {
+			slog.Warn("回写缓存失败", "key", key, "error", setErr)
+		}
+		return data, nil
+	})
+	if sfErr != nil {
+		return sfErr
 	}
-
-	// 3. 回写缓存（忽略回写失败，不影响返回业务数据）
-	if setErr := SetJSON(ctx, key, result, ttl); setErr != nil {
-		slog.Warn("回写缓存失败", "key", key, "error", setErr)
+	// singleflight 返回 nil 表示 dest 已由双重检查填充
+	if val == nil {
+		return nil
 	}
-
-	// 4. 将 loader 结果写入 dest
-	data, _ := json.Marshal(result)
+	// 将 loader 结果写入 dest
+	data, _ := json.Marshal(val)
 	if err := json.Unmarshal(data, dest); err != nil {
 		return fmt.Errorf("loader 结果序列化异常: %w", err)
 	}
 	return nil
 }
 
-// InvalidatePattern 使用 SCAN 遍历匹配 pattern 的 key 并批量 DEL。
-// pattern 格式与 Redis KEYS 命令一致（如 "fl:course:*"），
-// 内部已经拼接前缀，调用方只需传业务 pattern 即可。
+// InvalidatePattern 使用 SCAN 遍历匹配 pattern 的 key 并用 Pipeline 批量 DEL。
+// pattern 格式与 Redis KEYS 命令一致（如 "course:*"），内部自动拼接前缀，调用方只需传业务 pattern。
 func InvalidatePattern(ctx context.Context, pattern string) error {
 	if client == nil {
 		return fmt.Errorf("redis client 未初始化")
@@ -172,8 +200,11 @@ func InvalidatePattern(ctx context.Context, pattern string) error {
 			return err
 		}
 		if len(keys) > 0 {
-			if dErr := client.Del(ctx, keys...).Err(); dErr != nil {
-				slog.Warn("InvalidatePattern DEL 失败", "keys_count", len(keys), "error", dErr)
+			// 用 Pipeline 批量 DEL，减少网络往返
+			pipe := client.Pipeline()
+			pipe.Del(ctx, keys...)
+			if _, dErr := pipe.Exec(ctx); dErr != nil {
+				slog.Warn("InvalidatePattern 批量 DEL 失败", "keys_count", len(keys), "error", dErr)
 				// 继续处理下一批，不中断
 			} else {
 				deleted += len(keys)

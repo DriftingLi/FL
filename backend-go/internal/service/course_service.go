@@ -2,6 +2,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -13,6 +14,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"forklift-training/internal/cache"
 	"forklift-training/internal/model"
 )
 
@@ -30,31 +32,40 @@ func NewCourseService(db *gorm.DB, uploadFolder string, fileService *FileService
 
 // GetCourses 课程列表，对应 Python get_courses。
 func (s *CourseService) GetCourses(page, pageSize int, category string) map[string]interface{} {
-	if page <= 0 {
-		page = 1
+	cacheKey := cache.SafeKey("course", "list", category, fmt.Sprintf("%d", page), fmt.Sprintf("%d", pageSize))
+	var result map[string]interface{}
+	err := cache.GetOrSetJSON(context.Background(), cacheKey, cache.TTLStats, &result, func() (interface{}, error) {
+		if page <= 0 {
+			page = 1
+		}
+		if pageSize <= 0 {
+			pageSize = 12
+		}
+		q := s.db.Model(&model.Course{}).Where("status = ?", 1)
+		if category != "" {
+			q = q.Where("category = ?", category)
+		}
+		var total int64
+		q.Count(&total)
+		var courses []model.Course
+		q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&courses)
+		items := make([]map[string]interface{}, 0, len(courses))
+		for i := range courses {
+			items = append(items, courseToDict(&courses[i]))
+		}
+		pages := int((total + int64(pageSize) - 1) / int64(pageSize))
+		return map[string]interface{}{
+			"total":   total,
+			"page":    page,
+			"pages":   pages,
+			"courses": items,
+		}, nil
+	})
+	if err != nil {
+		// 降级：缓存失败时返回空结果
+		return map[string]interface{}{"courses": []interface{}{}, "total": 0}
 	}
-	if pageSize <= 0 {
-		pageSize = 12
-	}
-	q := s.db.Model(&model.Course{}).Where("status = ?", 1)
-	if category != "" {
-		q = q.Where("category = ?", category)
-	}
-	var total int64
-	q.Count(&total)
-	var courses []model.Course
-	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&courses)
-	items := make([]map[string]interface{}, 0, len(courses))
-	for i := range courses {
-		items = append(items, courseToDict(&courses[i]))
-	}
-	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	return map[string]interface{}{
-		"total":   total,
-		"page":    page,
-		"pages":   pages,
-		"courses": items,
-	}
+	return result
 }
 
 // GetCourseDetail 课程详情，对应 Python get_course_detail。
@@ -256,6 +267,9 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, dura
 		}
 		record.Progress = roundFloat2(float64(completedChapters) / float64(totalChapters) * 100)
 		s.db.Save(&record)
+		cache.InvalidatePattern(context.Background(), cache.SafeKey("student", "profile", fmt.Sprintf("%d", studentID)))
+		cache.InvalidatePattern(context.Background(), "student:stats:"+fmt.Sprintf("%d", studentID)+":*")
+		cache.InvalidatePattern(context.Background(), "admin:stats")
 		return map[string]interface{}{
 			"record_id":      record.RecordID,
 			"progress":       record.Progress,
@@ -278,6 +292,9 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, dura
 	if err := s.db.Create(&newRecord).Error; err != nil {
 		return nil, err
 	}
+	cache.InvalidatePattern(context.Background(), cache.SafeKey("student", "profile", fmt.Sprintf("%d", studentID)))
+	cache.InvalidatePattern(context.Background(), "student:stats:"+fmt.Sprintf("%d", studentID)+":*")
+	cache.InvalidatePattern(context.Background(), "admin:stats")
 	return map[string]interface{}{
 		"record_id":      newRecord.RecordID,
 		"progress":       newRecord.Progress,

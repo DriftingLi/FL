@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -21,13 +22,17 @@ var prefix string
 // 失败返回 error，调用方应在启动流程中以 os.Exit(1) 处理。
 func InitRedis(cfg config.RedisConfig) (*redis.Client, error) {
 	c := redis.NewClient(&redis.Options{
-		Addr:         cfg.Addr,
-		Password:     cfg.Password,
-		DB:           cfg.DB,
-		PoolSize:     cfg.PoolSize,
-		DialTimeout:  5 * time.Second,
-		ReadTimeout:  3 * time.Second,
-		WriteTimeout: 3 * time.Second,
+		Addr:            cfg.Addr,
+		Password:        cfg.Password,
+		DB:              cfg.DB,
+		PoolSize:        cfg.PoolSize,
+		MinIdleConns:    cfg.MinIdleConns,
+		MaxRetries:      cfg.MaxRetries,
+		DialTimeout:     cfg.DialTimeout,
+		ReadTimeout:     cfg.ReadTimeout,
+		WriteTimeout:    cfg.WriteTimeout,
+		PoolTimeout:     cfg.PoolTimeout,
+		ConnMaxIdleTime: cfg.IdleTimeout,
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -46,13 +51,23 @@ func InitRedis(cfg config.RedisConfig) (*redis.Client, error) {
 		prefix = DefaultKeyPrefix
 	}
 
-	slog.Info("Redis 连接成功", "addr", cfg.Addr, "db", cfg.DB, "prefix", prefix)
+	slog.Info("Redis 连接成功", "addr", cfg.Addr, "db", cfg.DB, "prefix", prefix,
+		"poolSize", cfg.PoolSize, "minIdle", cfg.MinIdleConns)
 	return c, nil
 }
 
 // GetClient 返回全局 Redis 客户端，未初始化时返回 nil。
 // 提供给需要直接使用 go-redis 高级特性（Pipeline、Pub/Sub 等）的调用方。
+// 注意：使用此函数时需自行拼接 fullKey 前缀。
 func GetClient() *redis.Client { return client }
+
+// Ping 探测 Redis 连通性，用于健康检查。
+func Ping(ctx context.Context) error {
+	if client == nil {
+		return errors.New("redis client 未初始化")
+	}
+	return client.Ping(ctx).Err()
+}
 
 // CloseRedis 优雅关闭 Redis 连接池。
 // 传入 nil 时空操作；关闭失败仅记录日志，不阻断退出流程。

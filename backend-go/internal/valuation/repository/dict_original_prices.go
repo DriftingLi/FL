@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"forklift-training/internal/cache"
 )
 
 // ListOriginalPrices 列出全部原价记录（分页）
@@ -123,21 +125,27 @@ func (r *DictionaryRepository) FindOriginalPriceMatch(
 	ctx context.Context, brand, vehicleType, series string,
 	tonnage float64, configType, mastType string, mastHeightMM int,
 ) (OriginalPrice, error) {
-	row := r.pool.QueryRow(ctx, `
-		SELECT id, brand, vehicle_type, series, tonnage,
-		       config_type, mast_type, mast_height_mm, earliest_factory_year, original_price, updated_at
-		FROM original_prices
-		WHERE brand = $1 AND vehicle_type = $2 AND series = $3
-		  AND tonnage = $4 AND config_type = $5 AND mast_type = $6 AND mast_height_mm = $7`,
-		brand, vehicleType, series, tonnage, configType, mastType, mastHeightMM)
-	var o OriginalPrice
-	var updatedAt time.Time
-	if err := row.Scan(&o.ID, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
-		&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.EarliestFactoryYear, &o.OriginalPrice, &updatedAt); err != nil {
-		return OriginalPrice{}, err
-	}
-	o.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
-	return o, nil
+	cacheKey := cache.SafeKey("dict", "op", "match", brand, vehicleType, series,
+		fmt.Sprintf("%v", tonnage), configType, mastType, fmt.Sprintf("%d", mastHeightMM))
+	var result OriginalPrice
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+		row := r.pool.QueryRow(ctx, `
+			SELECT id, brand, vehicle_type, series, tonnage,
+			       config_type, mast_type, mast_height_mm, earliest_factory_year, original_price, updated_at
+			FROM original_prices
+			WHERE brand = $1 AND vehicle_type = $2 AND series = $3
+			  AND tonnage = $4 AND config_type = $5 AND mast_type = $6 AND mast_height_mm = $7`,
+			brand, vehicleType, series, tonnage, configType, mastType, mastHeightMM)
+		var o OriginalPrice
+		var updatedAt time.Time
+		if err := row.Scan(&o.ID, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
+			&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.EarliestFactoryYear, &o.OriginalPrice, &updatedAt); err != nil {
+			return nil, err
+		}
+		o.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
+		return o, nil
+	})
+	return result, err
 }
 
 // FindOriginalPriceFuzzy 模糊匹配原价：按 brand + vehicle_type + series + tonnage 查询
@@ -147,33 +155,38 @@ func (r *DictionaryRepository) FindOriginalPriceMatch(
 func (r *DictionaryRepository) FindOriginalPriceFuzzy(
 	ctx context.Context, brand, vehicleType, series string, tonnage float64,
 ) (OriginalPrice, error) {
-	var row pgx.Row
-	if series == "" {
-		// series 为空：忽略 series 条件
-		row = r.pool.QueryRow(ctx, `
-			SELECT id, brand, vehicle_type, series, tonnage,
+	cacheKey := cache.SafeKey("dict", "op", "fuzzy", brand, vehicleType, series, fmt.Sprintf("%v", tonnage))
+	var result OriginalPrice
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+		var row pgx.Row
+		if series == "" {
+			// series 为空：忽略 series 条件
+			row = r.pool.QueryRow(ctx, `
+				SELECT id, brand, vehicle_type, series, tonnage,
 			       config_type, mast_type, mast_height_mm, earliest_factory_year, original_price, updated_at
-			FROM original_prices
-			WHERE brand = $1 AND vehicle_type = $2
-			  AND tonnage = $3
-			ORDER BY original_price DESC LIMIT 1`,
-			brand, vehicleType, tonnage)
-	} else {
-		row = r.pool.QueryRow(ctx, `
-			SELECT id, brand, vehicle_type, series, tonnage,
+				FROM original_prices
+				WHERE brand = $1 AND vehicle_type = $2
+				  AND tonnage = $3
+				ORDER BY original_price DESC LIMIT 1`,
+				brand, vehicleType, tonnage)
+		} else {
+			row = r.pool.QueryRow(ctx, `
+				SELECT id, brand, vehicle_type, series, tonnage,
 			       config_type, mast_type, mast_height_mm, earliest_factory_year, original_price, updated_at
-			FROM original_prices
-			WHERE brand = $1 AND vehicle_type = $2 AND series = $3
-			  AND tonnage = $4
-			ORDER BY original_price DESC LIMIT 1`,
-			brand, vehicleType, series, tonnage)
-	}
-	var o OriginalPrice
-	var updatedAt time.Time
-	if err := row.Scan(&o.ID, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
-		&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.EarliestFactoryYear, &o.OriginalPrice, &updatedAt); err != nil {
-		return OriginalPrice{}, err
-	}
-	o.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
-	return o, nil
+				FROM original_prices
+				WHERE brand = $1 AND vehicle_type = $2 AND series = $3
+				  AND tonnage = $4
+				ORDER BY original_price DESC LIMIT 1`,
+				brand, vehicleType, series, tonnage)
+		}
+		var o OriginalPrice
+		var updatedAt time.Time
+		if err := row.Scan(&o.ID, &o.Brand, &o.VehicleType, &o.Series, &o.Tonnage,
+			&o.ConfigType, &o.MastType, &o.MastHeightMM, &o.EarliestFactoryYear, &o.OriginalPrice, &updatedAt); err != nil {
+			return nil, err
+		}
+		o.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
+		return o, nil
+	})
+	return result, err
 }

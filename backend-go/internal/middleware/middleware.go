@@ -2,6 +2,8 @@
 package middleware
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"time"
@@ -11,6 +13,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
+	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
 	"forklift-training/pkg/response"
 )
@@ -108,6 +111,18 @@ func JWTAuth(cfg *config.Config) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+
+		// 检查 token 黑名单（已登出 token 会被加入黑名单直到自然过期）
+		tokenHash := sha256.Sum256([]byte(tokenStr))
+		blacklistKey := "jwt:blacklist:" + hex.EncodeToString(tokenHash[:])
+		if _, err := cache.Get(c.Request.Context(), blacklistKey); err == nil {
+			// 命中黑名单 → token 已登出
+			response.Unauthorized(c, "Token无效或已过期，请重新登录")
+			c.Abort()
+			return
+		}
+		// err != nil 时放行：redis.Nil 表示 key 不存在（正常情况）；
+		// 其他 Redis 异常也放行，避免 Redis 宕机导致全员无法登录
 
 		c.Set(string(CtxUserID), claims.UserID)
 		c.Set(string(CtxUsername), claims.Username)

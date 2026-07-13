@@ -7,25 +7,32 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+
+	"forklift-training/internal/cache"
 )
 
 // ListConditionRatings 列出全部车况评级
 func (r *DictionaryRepository) ListConditionRatings(ctx context.Context) ([]ConditionRating, error) {
-	rows, err := r.pool.Query(ctx,
-		`SELECT id, rating, label, base_coefficient FROM condition_ratings ORDER BY base_coefficient DESC`)
-	if err != nil {
-		return nil, fmt.Errorf("查询车况评级失败: %w", err)
-	}
-	defer rows.Close()
-	out := make([]ConditionRating, 0, 8)
-	for rows.Next() {
-		var c ConditionRating
-		if err := rows.Scan(&c.ID, &c.Rating, &c.Label, &c.BaseCoefficient); err != nil {
-			return nil, err
+	const cacheKey = "dict:condition:list"
+	var result []ConditionRating
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+		rows, err := r.pool.Query(ctx,
+			`SELECT id, rating, label, base_coefficient FROM condition_ratings ORDER BY base_coefficient DESC`)
+		if err != nil {
+			return nil, fmt.Errorf("查询车况评级失败: %w", err)
 		}
-		out = append(out, c)
-	}
-	return out, rows.Err()
+		defer rows.Close()
+		out := make([]ConditionRating, 0, 8)
+		for rows.Next() {
+			var c ConditionRating
+			if err := rows.Scan(&c.ID, &c.Rating, &c.Label, &c.BaseCoefficient); err != nil {
+				return nil, err
+			}
+			out = append(out, c)
+		}
+		return out, rows.Err()
+	})
+	return result, err
 }
 
 // CreateConditionRating 新增车况评级
@@ -68,11 +75,16 @@ func (r *DictionaryRepository) DeleteConditionRating(ctx context.Context, id int
 
 // GetConditionRating 按 rating 查询（供 service 计算 Kc 使用）
 func (r *DictionaryRepository) GetConditionRating(ctx context.Context, rating string) (ConditionRating, error) {
-	row := r.pool.QueryRow(ctx,
-		`SELECT id, rating, label, base_coefficient FROM condition_ratings WHERE rating = $1`, rating)
-	var c ConditionRating
-	if err := row.Scan(&c.ID, &c.Rating, &c.Label, &c.BaseCoefficient); err != nil {
-		return ConditionRating{}, err
-	}
-	return c, nil
+	cacheKey := cache.SafeKey("dict", "condition", "get", rating)
+	var result ConditionRating
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+		row := r.pool.QueryRow(ctx,
+			`SELECT id, rating, label, base_coefficient FROM condition_ratings WHERE rating = $1`, rating)
+		var c ConditionRating
+		if err := row.Scan(&c.ID, &c.Rating, &c.Label, &c.BaseCoefficient); err != nil {
+			return nil, err
+		}
+		return c, nil
+	})
+	return result, err
 }

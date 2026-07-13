@@ -10,5 +10,13 @@ import "time"
 // DefaultKeyPrefix 默认 key 前缀，可通过配置覆盖。
 const DefaultKeyPrefix = "fl:"
 
-// DefaultTTL 写缓存默认过期时间（10 分钟）。
-const DefaultTTL = 10 * time.Minute
+// 默认过期时间
+const (
+	DefaultTTL = 10 * time.Minute // 写缓存默认过期时间
+
+	TTLDictionary   = 60 * time.Minute // 字典/配置数据
+	TTLStats        = 5 * time.Minute  // 聚合统计
+	TTLUserProfile  = 5 * time.Minute  // 个人档案
+	TTLValuation    = 3 * time.Minute  // 估价结果
+	TTLJWTBlacklist = 24 * time.Hour   // JWT 黑名单（覆盖 token 最大有效期）
+)

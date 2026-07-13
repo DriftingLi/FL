@@ -7,24 +7,31 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+
+	"forklift-training/internal/cache"
 )
 
 // ListTonnages 列出全部吨位
 func (r *DictionaryRepository) ListTonnages(ctx context.Context) ([]Tonnage, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id, value FROM tonnages ORDER BY value ASC`)
-	if err != nil {
-		return nil, fmt.Errorf("查询吨位失败: %w", err)
-	}
-	defer rows.Close()
-	out := make([]Tonnage, 0, 16)
-	for rows.Next() {
-		var t Tonnage
-		if err := rows.Scan(&t.ID, &t.Value); err != nil {
-			return nil, err
+	const cacheKey = "dict:specs:tonnages:list"
+	var result []Tonnage
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+		rows, err := r.pool.Query(ctx, `SELECT id, value FROM tonnages ORDER BY value ASC`)
+		if err != nil {
+			return nil, fmt.Errorf("查询吨位失败: %w", err)
 		}
-		out = append(out, t)
-	}
-	return out, rows.Err()
+		defer rows.Close()
+		out := make([]Tonnage, 0, 16)
+		for rows.Next() {
+			var t Tonnage
+			if err := rows.Scan(&t.ID, &t.Value); err != nil {
+				return nil, err
+			}
+			out = append(out, t)
+		}
+		return out, rows.Err()
+	})
+	return result, err
 }
 
 // CreateTonnage 新增吨位
@@ -52,20 +59,25 @@ func (r *DictionaryRepository) DeleteTonnage(ctx context.Context, id int) error 
 
 // ListMastTypes 列出全部门架类型
 func (r *DictionaryRepository) ListMastTypes(ctx context.Context) ([]MastType, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id, name FROM mast_types ORDER BY id ASC`)
-	if err != nil {
-		return nil, fmt.Errorf("查询门架类型失败: %w", err)
-	}
-	defer rows.Close()
-	out := make([]MastType, 0, 8)
-	for rows.Next() {
-		var m MastType
-		if err := rows.Scan(&m.ID, &m.Name); err != nil {
-			return nil, err
+	const cacheKey = "dict:specs:mast_types:list"
+	var result []MastType
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+		rows, err := r.pool.Query(ctx, `SELECT id, name FROM mast_types ORDER BY id ASC`)
+		if err != nil {
+			return nil, fmt.Errorf("查询门架类型失败: %w", err)
 		}
-		out = append(out, m)
-	}
-	return out, rows.Err()
+		defer rows.Close()
+		out := make([]MastType, 0, 8)
+		for rows.Next() {
+			var m MastType
+			if err := rows.Scan(&m.ID, &m.Name); err != nil {
+				return nil, err
+			}
+			out = append(out, m)
+		}
+		return out, rows.Err()
+	})
+	return result, err
 }
 
 // CreateMastType 新增门架类型
@@ -93,20 +105,25 @@ func (r *DictionaryRepository) DeleteMastType(ctx context.Context, id int) error
 
 // ListMastHeights 列出全部门架高度
 func (r *DictionaryRepository) ListMastHeights(ctx context.Context) ([]MastHeight, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id, value_mm FROM mast_heights ORDER BY value_mm ASC`)
-	if err != nil {
-		return nil, fmt.Errorf("查询门架高度失败: %w", err)
-	}
-	defer rows.Close()
-	out := make([]MastHeight, 0, 8)
-	for rows.Next() {
-		var m MastHeight
-		if err := rows.Scan(&m.ID, &m.ValueMM); err != nil {
-			return nil, err
+	const cacheKey = "dict:specs:mast_heights:list"
+	var result []MastHeight
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+		rows, err := r.pool.Query(ctx, `SELECT id, value_mm FROM mast_heights ORDER BY value_mm ASC`)
+		if err != nil {
+			return nil, fmt.Errorf("查询门架高度失败: %w", err)
 		}
-		out = append(out, m)
-	}
-	return out, rows.Err()
+		defer rows.Close()
+		out := make([]MastHeight, 0, 8)
+		for rows.Next() {
+			var m MastHeight
+			if err := rows.Scan(&m.ID, &m.ValueMM); err != nil {
+				return nil, err
+			}
+			out = append(out, m)
+		}
+		return out, rows.Err()
+	})
+	return result, err
 }
 
 // CreateMastHeight 新增门架高度
@@ -134,20 +151,25 @@ func (r *DictionaryRepository) DeleteMastHeight(ctx context.Context, id int) err
 
 // ListBatteryTypes 列出全部电池类型
 func (r *DictionaryRepository) ListBatteryTypes(ctx context.Context) ([]BatteryTypeDict, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id, name FROM battery_types ORDER BY id ASC`)
-	if err != nil {
-		return nil, fmt.Errorf("查询电池类型失败: %w", err)
-	}
-	defer rows.Close()
-	out := make([]BatteryTypeDict, 0, 8)
-	for rows.Next() {
-		var b BatteryTypeDict
-		if err := rows.Scan(&b.ID, &b.Name); err != nil {
-			return nil, err
+	const cacheKey = "dict:specs:battery_types:list"
+	var result []BatteryTypeDict
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+		rows, err := r.pool.Query(ctx, `SELECT id, name FROM battery_types ORDER BY id ASC`)
+		if err != nil {
+			return nil, fmt.Errorf("查询电池类型失败: %w", err)
 		}
-		out = append(out, b)
-	}
-	return out, rows.Err()
+		defer rows.Close()
+		out := make([]BatteryTypeDict, 0, 8)
+		for rows.Next() {
+			var b BatteryTypeDict
+			if err := rows.Scan(&b.ID, &b.Name); err != nil {
+				return nil, err
+			}
+			out = append(out, b)
+		}
+		return out, rows.Err()
+	})
+	return result, err
 }
 
 // CreateBatteryType 新增电池类型
@@ -175,38 +197,48 @@ func (r *DictionaryRepository) DeleteBatteryType(ctx context.Context, id int) er
 
 // ListTransmissionTypes 列出全部传动系统类型
 func (r *DictionaryRepository) ListTransmissionTypes(ctx context.Context) ([]TransmissionType, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id, name FROM transmission_types ORDER BY id ASC`)
-	if err != nil {
-		return nil, fmt.Errorf("查询传动系统类型失败: %w", err)
-	}
-	defer rows.Close()
-	out := make([]TransmissionType, 0, 8)
-	for rows.Next() {
-		var t TransmissionType
-		if err := rows.Scan(&t.ID, &t.Name); err != nil {
-			return nil, err
+	const cacheKey = "dict:specs:transmission_types:list"
+	var result []TransmissionType
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+		rows, err := r.pool.Query(ctx, `SELECT id, name FROM transmission_types ORDER BY id ASC`)
+		if err != nil {
+			return nil, fmt.Errorf("查询传动系统类型失败: %w", err)
 		}
-		out = append(out, t)
-	}
-	return out, rows.Err()
+		defer rows.Close()
+		out := make([]TransmissionType, 0, 8)
+		for rows.Next() {
+			var t TransmissionType
+			if err := rows.Scan(&t.ID, &t.Name); err != nil {
+				return nil, err
+			}
+			out = append(out, t)
+		}
+		return out, rows.Err()
+	})
+	return result, err
 }
 
 // ListEngineTypes 列出全部发动机类型
 func (r *DictionaryRepository) ListEngineTypes(ctx context.Context) ([]EngineType, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id, name FROM engine_types ORDER BY id ASC`)
-	if err != nil {
-		return nil, fmt.Errorf("查询发动机类型失败: %w", err)
-	}
-	defer rows.Close()
-	out := make([]EngineType, 0, 8)
-	for rows.Next() {
-		var e EngineType
-		if err := rows.Scan(&e.ID, &e.Name); err != nil {
-			return nil, err
+	const cacheKey = "dict:specs:engine_types:list"
+	var result []EngineType
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+		rows, err := r.pool.Query(ctx, `SELECT id, name FROM engine_types ORDER BY id ASC`)
+		if err != nil {
+			return nil, fmt.Errorf("查询发动机类型失败: %w", err)
 		}
-		out = append(out, e)
-	}
-	return out, rows.Err()
+		defer rows.Close()
+		out := make([]EngineType, 0, 8)
+		for rows.Next() {
+			var e EngineType
+			if err := rows.Scan(&e.ID, &e.Name); err != nil {
+				return nil, err
+			}
+			out = append(out, e)
+		}
+		return out, rows.Err()
+	})
+	return result, err
 }
 
 // CreateTransmissionType 新增传动系统类型

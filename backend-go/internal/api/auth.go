@@ -2,9 +2,15 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"time"
+
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/cache"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
 	"forklift-training/internal/service"
@@ -115,8 +121,26 @@ func (h *AuthHandler) TutorLogin(c *gin.Context) {
 }
 
 // Logout 登出 POST /api/auth/logout
+// 将当前 token 写入 Redis 黑名单，TTL = token 剩余有效期，使其在后续请求中被 JWTAuth 中间件拒绝。
 func (h *AuthHandler) Logout(c *gin.Context) {
-	response.SuccessWithMsg(c, "退出成功", nil)
+	// 从 Authorization header 提取 Bearer token（与 JWTAuth 中间件提取逻辑一致）
+	tokenStr := ""
+	if auth := c.GetHeader("Authorization"); len(auth) > 7 && auth[:7] == "Bearer " {
+		tokenStr = auth[7:]
+	}
+	if tokenStr != "" {
+		// 已通过 JWTAuth 中间件校验，这里仅解析 claims 获取过期时间，不重复校验签名
+		claims := &middleware.Claims{}
+		if _, _, err := jwt.NewParser().ParseUnverified(tokenStr, claims); err == nil && claims.ExpiresAt != nil {
+			tokenHash := sha256.Sum256([]byte(tokenStr))
+			blacklistKey := "jwt:blacklist:" + hex.EncodeToString(tokenHash[:])
+			ttl := time.Until(claims.ExpiresAt.Time)
+			if ttl > 0 {
+				_ = cache.Set(c.Request.Context(), blacklistKey, "1", ttl)
+			}
+		}
+	}
+	response.SuccessWithMsg(c, "已登出", nil)
 }
 
 // Me 获取当前用户 GET /api/auth/me

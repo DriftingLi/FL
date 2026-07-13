@@ -17,6 +17,7 @@ require (
 	github.com/sashabaranov/go-openai v1.32.5
 	go.uber.org/zap v1.28.0
 	golang.org/x/crypto v0.27.0
+	golang.org/x/sync v0.17.0
 	gorm.io/driver/postgres v1.5.9
 	gorm.io/gorm v1.25.12
 )
@@ -58,7 +59,6 @@ require (
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/arch v0.8.0 // indirect
 	golang.org/x/net v0.29.0 // indirect
-	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect

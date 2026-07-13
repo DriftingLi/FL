@@ -7,24 +7,31 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+
+	"forklift-training/internal/cache"
 )
 
 // ListVehicleTypes 列出全部车型
 func (r *DictionaryRepository) ListVehicleTypes(ctx context.Context) ([]VehicleType, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id, name, power_type, earliest_factory_year FROM vehicle_types ORDER BY id ASC`)
-	if err != nil {
-		return nil, fmt.Errorf("查询车型失败: %w", err)
-	}
-	defer rows.Close()
-	out := make([]VehicleType, 0, 8)
-	for rows.Next() {
-		var v VehicleType
-		if err := rows.Scan(&v.ID, &v.Name, &v.PowerType, &v.EarliestFactoryYear); err != nil {
-			return nil, err
+	const cacheKey = "dict:vt:list"
+	var result []VehicleType
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+		rows, err := r.pool.Query(ctx, `SELECT id, name, power_type, earliest_factory_year FROM vehicle_types ORDER BY id ASC`)
+		if err != nil {
+			return nil, fmt.Errorf("查询车型失败: %w", err)
 		}
-		out = append(out, v)
-	}
-	return out, rows.Err()
+		defer rows.Close()
+		out := make([]VehicleType, 0, 8)
+		for rows.Next() {
+			var v VehicleType
+			if err := rows.Scan(&v.ID, &v.Name, &v.PowerType, &v.EarliestFactoryYear); err != nil {
+				return nil, err
+			}
+			out = append(out, v)
+		}
+		return out, rows.Err()
+	})
+	return result, err
 }
 
 // CreateVehicleType 新增车型
@@ -68,10 +75,15 @@ func (r *DictionaryRepository) DeleteVehicleType(ctx context.Context, id int) er
 
 // GetVehicleTypeByName 按名称查询车型（供 service 判断电动/内燃使用）
 func (r *DictionaryRepository) GetVehicleTypeByName(ctx context.Context, name string) (VehicleType, error) {
-	row := r.pool.QueryRow(ctx, `SELECT id, name, power_type, earliest_factory_year FROM vehicle_types WHERE name = $1`, name)
-	var v VehicleType
-	if err := row.Scan(&v.ID, &v.Name, &v.PowerType, &v.EarliestFactoryYear); err != nil {
-		return VehicleType{}, err
-	}
-	return v, nil
+	cacheKey := cache.SafeKey("dict", "vt", "get", name)
+	var result VehicleType
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+		row := r.pool.QueryRow(ctx, `SELECT id, name, power_type, earliest_factory_year FROM vehicle_types WHERE name = $1`, name)
+		var v VehicleType
+		if err := row.Scan(&v.ID, &v.Name, &v.PowerType, &v.EarliestFactoryYear); err != nil {
+			return nil, err
+		}
+		return v, nil
+	})
+	return result, err
 }

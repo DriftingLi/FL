@@ -2,13 +2,17 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
+	"forklift-training/internal/cache"
 	"forklift-training/internal/model"
 )
 
@@ -326,6 +330,7 @@ func (s *QuestionBankService) CreateQuestion(data map[string]interface{}, create
 	if err := s.db.Create(&q).Error; err != nil {
 		return nil, err
 	}
+	cache.InvalidatePattern(context.Background(), "question:*")
 	return questionToDict(&q, true), nil
 }
 
@@ -358,6 +363,7 @@ func (s *QuestionBankService) UpdateQuestion(id int, data map[string]interface{}
 	if err := s.db.Save(&q).Error; err != nil {
 		return nil, err
 	}
+	cache.InvalidatePattern(context.Background(), "question:*")
 	return questionToDict(&q, true), nil
 }
 
@@ -370,6 +376,7 @@ func (s *QuestionBankService) DeleteQuestion(id int) error {
 	if result.RowsAffected == 0 {
 		return errors.New("题目不存在")
 	}
+	cache.InvalidatePattern(context.Background(), "question:*")
 	return nil
 }
 
@@ -424,6 +431,7 @@ func (s *QuestionBankService) PublishQuestion(id int) (map[string]interface{}, e
 	if err := s.db.Save(&q).Error; err != nil {
 		return nil, err
 	}
+	cache.InvalidatePattern(context.Background(), "question:*")
 	return questionToDict(&q, true), nil
 }
 
@@ -434,6 +442,7 @@ func (s *QuestionBankService) BatchPublish(ids []int) map[string]interface{} {
 		count64 := s.db.Model(&model.Question{}).Where("id IN ?", ids).Update("status", "published").RowsAffected
 		count = int(count64)
 	}
+	cache.InvalidatePattern(context.Background(), "question:*")
 	return map[string]interface{}{"published_count": count}
 }
 
@@ -453,6 +462,7 @@ func (s *QuestionBankService) BatchImport(items []interface{}, createdBy *int) m
 		}
 		success++
 	}
+	cache.InvalidatePattern(context.Background(), "question:*")
 	return map[string]interface{}{
 		"success_count": success,
 		"error_count":   len(errs),
@@ -462,41 +472,49 @@ func (s *QuestionBankService) BatchImport(items []interface{}, createdBy *int) m
 
 // GetStats 题库统计。
 func (s *QuestionBankService) GetStats() map[string]interface{} {
-	var total int64
-	s.db.Model(&model.Question{}).Count(&total)
-	byLevel := map[string]int64{}
-	for _, l := range validQuestionLevels {
-		var c int64
-		s.db.Model(&model.Question{}).Where("level = ?", l).Count(&c)
-		byLevel[l] = c
+	var result map[string]interface{}
+	err := cache.GetOrSetJSON(context.Background(), "question:stats", 10*time.Minute, &result, func() (interface{}, error) {
+		var total int64
+		s.db.Model(&model.Question{}).Count(&total)
+		byLevel := map[string]int64{}
+		for _, l := range validQuestionLevels {
+			var c int64
+			s.db.Model(&model.Question{}).Where("level = ?", l).Count(&c)
+			byLevel[l] = c
+		}
+		byType := map[string]int64{}
+		for _, t := range validQuestionTypes {
+			var c int64
+			s.db.Model(&model.Question{}).Where("type = ?", t).Count(&c)
+			byType[t] = c
+		}
+		byStatus := map[string]int64{}
+		for _, st := range validQuestionStatus {
+			var c int64
+			s.db.Model(&model.Question{}).Where("status = ?", st).Count(&c)
+			byStatus[st] = c
+		}
+		var kps []model.KnowledgePoint
+		s.db.Find(&kps)
+		byKP := make([]map[string]interface{}, 0, len(kps))
+		for _, kp := range kps {
+			var c int64
+			s.db.Model(&model.Question{}).Where("knowledge_point_id = ?", kp.ID).Count(&c)
+			byKP = append(byKP, map[string]interface{}{"id": kp.ID, "name": kp.Name, "count": c})
+		}
+		return map[string]interface{}{
+			"total":              total,
+			"by_level":           byLevel,
+			"by_type":            byType,
+			"by_status":          byStatus,
+			"by_knowledge_point": byKP,
+		}, nil
+	})
+	if err != nil {
+		// 降级：缓存失败时返回空结果
+		return map[string]interface{}{}
 	}
-	byType := map[string]int64{}
-	for _, t := range validQuestionTypes {
-		var c int64
-		s.db.Model(&model.Question{}).Where("type = ?", t).Count(&c)
-		byType[t] = c
-	}
-	byStatus := map[string]int64{}
-	for _, st := range validQuestionStatus {
-		var c int64
-		s.db.Model(&model.Question{}).Where("status = ?", st).Count(&c)
-		byStatus[st] = c
-	}
-	var kps []model.KnowledgePoint
-	s.db.Find(&kps)
-	byKP := make([]map[string]interface{}, 0, len(kps))
-	for _, kp := range kps {
-		var c int64
-		s.db.Model(&model.Question{}).Where("knowledge_point_id = ?", kp.ID).Count(&c)
-		byKP = append(byKP, map[string]interface{}{"id": kp.ID, "name": kp.Name, "count": c})
-	}
-	return map[string]interface{}{
-		"total":              total,
-		"by_level":           byLevel,
-		"by_type":            byType,
-		"by_status":          byStatus,
-		"by_knowledge_point": byKP,
-	}
+	return result
 }
 
 // CreateKnowledgePoint 创建知识点。
@@ -528,25 +546,36 @@ func (s *QuestionBankService) CreateKnowledgePoint(data map[string]interface{}) 
 	if err := s.db.Create(&kp).Error; err != nil {
 		return nil, err
 	}
+	cache.InvalidatePattern(context.Background(), "kp:*")
+	cache.InvalidatePattern(context.Background(), "question:stats")
 	return kpToDict(&kp), nil
 }
 
 // GetKnowledgePoints 查询知识点列表。
 func (s *QuestionBankService) GetKnowledgePoints(level string, parentID *int) []map[string]interface{} {
-	q := s.db.Model(&model.KnowledgePoint{})
-	if level != "" {
-		q = q.Where("level = ?", level)
+	cacheKey := cache.SafeKey("kp", "list", fmt.Sprintf("%v", level), fmt.Sprintf("%v", parentID))
+	var result []map[string]interface{}
+	err := cache.GetOrSetJSON(context.Background(), cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+		q := s.db.Model(&model.KnowledgePoint{})
+		if level != "" {
+			q = q.Where("level = ?", level)
+		}
+		if parentID != nil {
+			q = q.Where("parent_id = ?", *parentID)
+		}
+		var kps []model.KnowledgePoint
+		q.Order("created_at ASC").Find(&kps)
+		out := make([]map[string]interface{}, 0, len(kps))
+		for i := range kps {
+			out = append(out, kpToDict(&kps[i]))
+		}
+		return out, nil
+	})
+	if err != nil {
+		// 降级：缓存失败时返回空切片
+		return []map[string]interface{}{}
 	}
-	if parentID != nil {
-		q = q.Where("parent_id = ?", *parentID)
-	}
-	var kps []model.KnowledgePoint
-	q.Order("created_at ASC").Find(&kps)
-	out := make([]map[string]interface{}, 0, len(kps))
-	for i := range kps {
-		out = append(out, kpToDict(&kps[i]))
-	}
-	return out
+	return result
 }
 
 // UpdateKnowledgePoint 更新知识点。
@@ -578,6 +607,7 @@ func (s *QuestionBankService) UpdateKnowledgePoint(id int, data map[string]inter
 	if err := s.db.Save(&kp).Error; err != nil {
 		return nil, err
 	}
+	cache.InvalidatePattern(context.Background(), "kp:*")
 	return kpToDict(&kp), nil
 }
 
@@ -591,6 +621,8 @@ func (s *QuestionBankService) DeleteKnowledgePoint(id int) error {
 	if err := s.db.Delete(&model.KnowledgePoint{}, id).Error; err != nil {
 		return errors.New("知识点不存在")
 	}
+	cache.InvalidatePattern(context.Background(), "kp:*")
+	cache.InvalidatePattern(context.Background(), "question:stats")
 	return nil
 }
 

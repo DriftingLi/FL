@@ -11,6 +11,9 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
@@ -18,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"forklift-training/internal/cache"
 	"forklift-training/internal/valuation/model"
 	"forklift-training/internal/valuation/repository"
 )
@@ -71,7 +75,28 @@ func NewValuationService(
 //  7. 置信区间 = 残值 × (1 ± confidence_range)
 //  8. 生成维度评分与文本建议
 //  9. 持久化到 evaluations 表
+//
+// 缓存：Evaluate 是纯计算函数（Persist 与计算解耦），相同输入产生相同输出，
+// 按 req JSON 的 SHA256 缓存 3 分钟（cache.TTLValuation）。
+// 所有字典/系数写操作已在 config handler 中统一失效 valuation:result:*。
 func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRequest) (*model.EvaluationResult, error) {
+	// 构造缓存 key：对规范化后的 req JSON 做 SHA256
+	reqBytes, _ := json.Marshal(req)
+	hash := sha256.Sum256(reqBytes)
+	cacheKey := cache.SafeKey("valuation", "result", hex.EncodeToString(hash[:]))
+
+	var result model.EvaluationResult
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLValuation, &result, func() (interface{}, error) {
+		return s.evaluateInternal(ctx, req)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// evaluateInternal 包含原 Evaluate 的全部计算逻辑（纯函数，无副作用）
+func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.EvaluationRequest) (*model.EvaluationResult, error) {
 	// 1. 业务参数校验
 	if err := req.Validate(); err != nil {
 		return nil, err

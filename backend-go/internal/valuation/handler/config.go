@@ -5,6 +5,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 
+	"forklift-training/internal/cache"
 	"forklift-training/internal/valuation/repository"
 )
 
@@ -21,6 +23,15 @@ import (
 type ConfigHandler struct {
 	dictRepo *repository.DictionaryRepository
 	logger   *zap.Logger
+}
+
+// invalidateCache 失效指定 pattern 的缓存，失败仅记录日志不影响业务返回。
+func (h *ConfigHandler) invalidateCache(ctx context.Context, patterns ...string) {
+	for _, p := range patterns {
+		if err := cache.InvalidatePattern(ctx, p); err != nil {
+			h.logger.Warn("缓存失效失败", zap.String("pattern", p), zap.Error(err))
+		}
+	}
 }
 
 // NewConfigHandler 构造配置处理器
@@ -372,6 +383,7 @@ func (h *ConfigHandler) CreateBrand(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增品牌失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:brands:*", "dict:brand:get:*", "valuation:result:*")
 	OK(c, b)
 }
 
@@ -400,6 +412,7 @@ func (h *ConfigHandler) UpdateBrand(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "更新品牌失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:brands:*", "dict:brand:get:*", "valuation:result:*")
 	OK(c, gin.H{"id": id, "k_brand": body.KBrand, "is_active": body.IsActive})
 }
 
@@ -419,6 +432,7 @@ func (h *ConfigHandler) DeleteBrand(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除品牌失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:brands:*", "dict:brand:get:*", "valuation:result:*")
 	OK(c, gin.H{"id": id})
 }
 
@@ -445,6 +459,7 @@ func (h *ConfigHandler) CreateVehicleType(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增车型失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:vt:*", "valuation:result:*")
 	OK(c, v)
 }
 
@@ -477,6 +492,7 @@ func (h *ConfigHandler) UpdateVehicleType(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "更新车型失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:vt:*", "valuation:result:*")
 	OK(c, gin.H{"id": id, "name": body.Name, "power_type": body.PowerType, "earliest_factory_year": body.EarliestFactoryYear})
 }
 
@@ -496,6 +512,7 @@ func (h *ConfigHandler) DeleteVehicleType(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除车型失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:vt:*", "valuation:result:*")
 	OK(c, gin.H{"id": id})
 }
 
@@ -523,6 +540,7 @@ func (h *ConfigHandler) CreateSeries(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增系列失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:series:*", "dict:sco:*", "dict:battery:cascade:*")
 	OK(c, s)
 }
 
@@ -555,6 +573,7 @@ func (h *ConfigHandler) UpdateSeries(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "更新系列失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:series:*", "dict:sco:*", "dict:battery:cascade:*")
 	OK(c, gin.H{"id": id, "brand": body.Brand, "name": body.Name, "earliest_factory_year": body.EarliestFactoryYear})
 }
 
@@ -574,6 +593,7 @@ func (h *ConfigHandler) DeleteSeries(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除系列失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:series:*", "dict:sco:*", "dict:battery:cascade:*")
 	OK(c, gin.H{"id": id})
 }
 
@@ -595,6 +615,7 @@ func (h *ConfigHandler) CreateTonnage(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增吨位失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:specs:tonnages:*")
 	OK(c, t)
 }
 
@@ -614,6 +635,7 @@ func (h *ConfigHandler) DeleteTonnage(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除吨位失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:specs:tonnages:*")
 	OK(c, gin.H{"id": id})
 }
 
@@ -635,6 +657,7 @@ func (h *ConfigHandler) CreateMastType(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增门架类型失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:specs:mast_types:*")
 	OK(c, m)
 }
 
@@ -654,6 +677,7 @@ func (h *ConfigHandler) DeleteMastType(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除门架类型失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:specs:mast_types:*")
 	OK(c, gin.H{"id": id})
 }
 
@@ -675,6 +699,7 @@ func (h *ConfigHandler) CreateMastHeight(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增门架高度失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:specs:mast_heights:*")
 	OK(c, m)
 }
 
@@ -694,6 +719,7 @@ func (h *ConfigHandler) DeleteMastHeight(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除门架高度失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:specs:mast_heights:*")
 	OK(c, gin.H{"id": id})
 }
 
@@ -715,6 +741,7 @@ func (h *ConfigHandler) CreateBatteryType(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增电池类型失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:specs:battery_types:*")
 	OK(c, b)
 }
 
@@ -734,6 +761,7 @@ func (h *ConfigHandler) DeleteBatteryType(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除电池类型失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:specs:battery_types:*")
 	OK(c, gin.H{"id": id})
 }
 
@@ -755,6 +783,7 @@ func (h *ConfigHandler) CreateTransmissionType(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增传动系统类型失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:specs:transmission_types:*")
 	OK(c, t)
 }
 
@@ -774,6 +803,7 @@ func (h *ConfigHandler) DeleteTransmissionType(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除传动系统类型失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:specs:transmission_types:*")
 	OK(c, gin.H{"id": id})
 }
 
@@ -795,6 +825,7 @@ func (h *ConfigHandler) CreateEngineType(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增发动机类型失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:specs:engine_types:*")
 	OK(c, e)
 }
 
@@ -814,6 +845,7 @@ func (h *ConfigHandler) DeleteEngineType(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除发动机类型失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:specs:engine_types:*")
 	OK(c, gin.H{"id": id})
 }
 
@@ -837,6 +869,7 @@ func (h *ConfigHandler) CreateConditionRating(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增车况评级失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:condition:*", "valuation:result:*")
 	OK(c, cr)
 }
 
@@ -865,6 +898,7 @@ func (h *ConfigHandler) UpdateConditionRating(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "更新车况评级失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:condition:*", "valuation:result:*")
 	OK(c, gin.H{"id": id, "label": body.Label, "base_coefficient": body.BaseCoefficient})
 }
 
@@ -884,6 +918,7 @@ func (h *ConfigHandler) DeleteConditionRating(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除车况评级失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:condition:*", "valuation:result:*")
 	OK(c, gin.H{"id": id})
 }
 
@@ -907,6 +942,7 @@ func (h *ConfigHandler) CreateRegionCoefficient(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增区域系数失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:region:*", "valuation:result:*")
 	OK(c, rc)
 }
 
@@ -934,6 +970,7 @@ func (h *ConfigHandler) UpdateRegionCoefficient(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "更新区域系数失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:region:*", "valuation:result:*")
 	OK(c, gin.H{"id": id, "coefficient": body.Coefficient})
 }
 
@@ -953,6 +990,7 @@ func (h *ConfigHandler) DeleteRegionCoefficient(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除区域系数失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:region:*", "valuation:result:*")
 	OK(c, gin.H{"id": id})
 }
 
@@ -984,6 +1022,7 @@ func (h *ConfigHandler) CreateOriginalPrice(c *gin.Context) {
 		return
 	}
 	body.ID = id
+	h.invalidateCache(c.Request.Context(), "dict:*", "valuation:result:*")
 	OK(c, body)
 }
 
@@ -1022,6 +1061,7 @@ func (h *ConfigHandler) UpdateOriginalPrice(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "更新原价记录失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:*", "valuation:result:*")
 	OK(c, body)
 }
 
@@ -1041,6 +1081,7 @@ func (h *ConfigHandler) DeleteOriginalPrice(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除原价记录失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:*", "valuation:result:*")
 	OK(c, gin.H{"id": id})
 }
 
@@ -1098,6 +1139,7 @@ func (h *ConfigHandler) UpdateCoefficient(c *gin.Context) {
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "更新系数失败")
 		return
 	}
+	h.invalidateCache(c.Request.Context(), "dict:coef:*", "dict:algo_params", "valuation:result:*")
 	OK(c, cc)
 }
 

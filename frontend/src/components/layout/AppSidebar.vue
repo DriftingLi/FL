@@ -33,7 +33,7 @@
             :key="child.key"
             :to="child.path || ''"
             class="nav-item"
-            :class="{ active: isRouteActive(child.path) }"
+            :class="{ active: isRouteActive(child) }"
           >
             <div class="nav-item-icon">
               <el-icon><component :is="child.icon" /></el-icon>
@@ -47,7 +47,7 @@
           v-else-if="item.path"
           :to="item.path"
           class="nav-item"
-          :class="{ active: isRouteActive(item.path) }"
+          :class="{ active: isRouteActive(item) }"
         >
           <div class="nav-item-icon">
             <el-icon><component :is="item.icon" /></el-icon>
@@ -100,9 +100,12 @@ const roleClass = computed(() => {
   return role || 'student'
 })
 
-function isRouteActive(path?: string): boolean {
+function isRouteActive(item: NavItem): boolean {
+  const path = item.path
   if (!path) return false
-  if (path === '/') return route.path === '/'
+  // exact=true 或根路径仅精确匹配：仪表盘路径恰好是其他菜单的父级
+  // （如 /training、/training/tutor），不能走前缀匹配，否则访问任何子路由时仪表盘都会高亮。
+  if (path === '/' || item.exact) return route.path === path
   return route.path === path || route.path.startsWith(path + '/')
 }
 </script>
