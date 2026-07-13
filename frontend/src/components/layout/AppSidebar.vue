@@ -61,9 +61,7 @@
     <div class="sidebar-divider"></div>
     <div class="sidebar-footer">
       <button class="footer-btn collapse-btn" @click="$emit('toggle-collapse')">
-        <el-icon :size="18">
-          <component :is="collapsed ? 'Expand' : 'Fold'" />
-        </el-icon>
+        <component :is="collapsed ? Expand : Fold" class="collapse-icon" />
         <span v-if="!collapsed" class="footer-btn-label">收起侧栏</span>
       </button>
     </div>
@@ -73,6 +71,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { Expand, Fold } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import type { NavItem } from '@/config/navigation'
 
@@ -341,6 +340,12 @@ function isRouteActive(path?: string): boolean {
 .app-sidebar.collapsed .footer-btn {
   justify-content: center;
   padding: 0;
+}
+
+.collapse-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
 .footer-btn-label {

@@ -41,4 +41,14 @@ func RegisterStudentRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB)
 		result := svc.GetRecords(studentID, page, pageSize, startDate, endDate)
 		response.Success(c, result)
 	})
+
+	// GET /api/student/study-stats  学员仪表盘学习统计（按天分组）
+	//   query: days=7|30（其他值回退为 7）
+	g.GET("/study-stats", func(c *gin.Context) {
+		uid, _ := c.Get(string(middleware.CtxUserID))
+		studentID, _ := uid.(int)
+		days := atoiDefault(c.Query("days"), 7)
+		result := svc.GetStudyStats(studentID, days)
+		response.Success(c, result)
+	})
 }

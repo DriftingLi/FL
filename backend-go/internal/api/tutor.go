@@ -28,6 +28,15 @@ func RegisterTutorRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 		response.Success(c, svc.GetCourses(nil, page, pageSize))
 	})
 
+	// GET /api/tutor/grading-stats  导师仪表盘阅卷统计（按天分组）
+	//   query: days=7|30（其他值回退为 7）
+	g.GET("/grading-stats", func(c *gin.Context) {
+		uid, _ := c.Get(string(middleware.CtxUserID))
+		tutorID, _ := uid.(int)
+		days := atoiDefault(c.Query("days"), 7)
+		response.Success(c, svc.GetGradingStats(tutorID, days))
+	})
+
 	// GET /api/tutor/course/:course_id/chapters  课程章节列表（含文件）
 	g.GET("/course/:course_id/chapters", func(c *gin.Context) {
 		courseID, err := strconv.Atoi(c.Param("course_id"))

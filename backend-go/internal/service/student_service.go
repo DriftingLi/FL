@@ -108,6 +108,67 @@ func (s *StudentService) GetProfile(studentID int) (map[string]interface{}, erro
 	}, nil
 }
 
+// GetStudyStats 学习统计（按天分组），用于学员仪表盘图表。
+// days 仅允许 7 或 30，其他值统一回退为 7。
+func (s *StudentService) GetStudyStats(studentID, days int) map[string]interface{} {
+	if days != 7 && days != 30 {
+		days = 7
+	}
+
+	// 计算最近 days 天的起止时间（北京时间）
+	end := beijingNow()
+	startOfDay := end.Add(-time.Duration(end.Hour()) * time.Hour).
+		Add(-time.Duration(end.Minute()) * time.Minute).
+		Add(-time.Duration(end.Second()) * time.Second).
+		Add(-time.Duration(end.Nanosecond()) * time.Nanosecond)
+	start := startOfDay.AddDate(0, 0, -(days - 1))
+
+	// 按天聚合学习时长（study_date 为 timestamp without time zone，按存储值即北京时间分组）
+	type dailyRow struct {
+		Day     string
+		Minutes int64
+	}
+	var rows []dailyRow
+	s.db.Model(&model.StudyRecord{}).
+		Select("TO_CHAR(study_date, 'YYYY-MM-DD') as day, COALESCE(SUM(study_duration), 0) as minutes").
+		Where("student_id = ? AND study_date >= ?", studentID, start).
+		Group("day").
+		Order("day ASC").
+		Scan(&rows)
+
+	// 构建日期 -> 分钟映射
+	minutesByDay := make(map[string]int64, len(rows))
+	var totalMinutes int64
+	for _, r := range rows {
+		minutesByDay[r.Day] = r.Minutes
+		totalMinutes += r.Minutes
+	}
+
+	// 生成最近 days 天的完整序列（含无学习记录的天，补 0）
+	// start 由 beijingNow() 派生，携带 Asia/Shanghai 时区，AddDate 保留时区
+	labels := make([]string, 0, days)
+	data := make([]int64, 0, days)
+	activeDays := 0
+	for i := 0; i < days; i++ {
+		d := start.AddDate(0, 0, i)
+		key := d.Format("2006-01-02")
+		mins := minutesByDay[key]
+		if mins > 0 {
+			activeDays++
+		}
+		labels = append(labels, d.Format("1/2"))
+		data = append(data, mins)
+	}
+
+	return map[string]interface{}{
+		"days":          days,
+		"labels":        labels,
+		"data":          data,
+		"total_minutes": totalMinutes,
+		"active_days":   activeDays,
+	}
+}
+
 // GetRecords 学习记录列表，对应 Python get_student_records。
 func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, endDate string) map[string]interface{} {
 	if page <= 0 {

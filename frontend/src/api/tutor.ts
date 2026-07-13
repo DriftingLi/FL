@@ -5,6 +5,11 @@ export const tutorApi = {
     return request.get('/tutor/courses', { params })
   },
 
+  // 阅卷统计（按天分组），days=7|30
+  getGradingStats(params?: { days?: number }) {
+    return request.get('/tutor/grading-stats', { params })
+  },
+
   getCourseChapters(courseId) {
     return request.get(`/tutor/course/${courseId}/chapters`)
   },

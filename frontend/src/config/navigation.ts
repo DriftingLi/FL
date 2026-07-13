@@ -25,7 +25,7 @@ export interface NavItem {
 }
 
 const studentNav: NavItem[] = [
-  { key: 'dashboard', label: '工作台', path: '/training', icon: HomeFilled },
+  { key: 'dashboard', label: '仪表盘', path: '/training', icon: HomeFilled },
   {
     key: 'training',
     label: '培训',

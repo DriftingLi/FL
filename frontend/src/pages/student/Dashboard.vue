@@ -52,7 +52,12 @@
     <!-- 学习统计 -->
     <div class="stats-section">
       <div class="stats-header">
-        <h2 class="stats-title">学习统计</h2>
+        <div class="stats-title-group">
+          <h2 class="stats-title">学习统计</h2>
+          <span v-if="studyStats" class="stats-summary">
+            共 {{ studyStats.total_minutes }} 分钟 · 活跃 {{ studyStats.active_days }} 天
+          </span>
+        </div>
         <div class="time-range-tabs">
           <button
             v-for="tab in timeTabs"
@@ -66,20 +71,23 @@
         </div>
       </div>
       <div class="chart-container">
-        <div ref="chartRef" class="chart-area"></div>
+        <div v-if="statsLoading" class="chart-empty">加载中…</div>
+        <div v-else-if="statsEmpty" class="chart-empty">暂无学习记录</div>
+        <div v-show="!statsLoading && !statsEmpty" ref="chartRef" class="chart-area"></div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { ArrowRight } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import QuickCard from '@/components/dashboard/QuickCard.vue'
 import type { QuickCardItem } from '@/components/dashboard/QuickCard.vue'
 import { useECharts } from '@/composables/useECharts'
 import { courseApi } from '@/api/course'
+import { studentApi } from '@/api/student'
 
 const authStore = useAuthStore()
 
@@ -106,6 +114,21 @@ const timeTabs = [
 ]
 const currentTab = ref('7d')
 
+// 学习统计数据
+interface StudyStats {
+  days: number
+  labels: string[]
+  data: number[]
+  total_minutes: number
+  active_days: number
+}
+const studyStats = ref<StudyStats | null>(null)
+const statsLoading = ref(false)
+const statsEmpty = computed(() => {
+  if (!studyStats.value) return true
+  return studyStats.value.data.every((v) => v === 0)
+})
+
 async function loadCourses() {
   try {
     const res = await courseApi.getCourses({ page: 1, page_size: 5 })
@@ -120,19 +143,27 @@ async function loadCourses() {
   }
 }
 
-function initStudyChart() {
-  if (!chartRef.value) return
-
-  const days = currentTab.value === '7d' ? 7 : 30
-  const labels: string[] = []
-  const data: number[] = []
-
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date()
-    d.setDate(d.getDate() - i)
-    labels.push(`${d.getMonth() + 1}/${d.getDate()}`)
-    data.push(Math.floor(Math.random() * 120 + 20))
+async function loadStudyStats() {
+  statsLoading.value = true
+  try {
+    const days = currentTab.value === '30d' ? 30 : 7
+    const res = await studentApi.getStudyStats({ days })
+    if (res.code === 200 && res.data) {
+      studyStats.value = res.data as StudyStats
+    }
+  } catch (error) {
+    console.error('加载学习统计失败:', error)
+    studyStats.value = null
+  } finally {
+    statsLoading.value = false
   }
+}
+
+function renderStudyChart() {
+  if (!chartRef.value || !studyStats.value) return
+
+  const labels = studyStats.value.labels
+  const data = studyStats.value.data
 
   initChart({
     tooltip: {
@@ -141,7 +172,8 @@ function initStudyChart() {
       borderColor: '#E2E8F0',
       borderWidth: 1,
       textStyle: { color: '#0F172A' },
-      extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 8px;'
+      extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 8px;',
+      valueFormatter: (val: any) => `${val} 分钟`
     },
     grid: {
       left: '3%',
@@ -189,10 +221,18 @@ function initStudyChart() {
   })
 }
 
+// tab 切换时重新加载
+watch(currentTab, async () => {
+  await loadStudyStats()
+  await nextTick()
+  renderStudyChart()
+})
+
 onMounted(async () => {
   await loadCourses()
+  await loadStudyStats()
   await nextTick()
-  initStudyChart()
+  renderStudyChart()
 })
 </script>
 
@@ -323,6 +363,29 @@ onMounted(async () => {
   justify-content: space-between;
   padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--color-border-light);
+}
+
+.stats-title-group {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.stats-summary {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-regular);
+}
+
+.chart-empty {
+  width: 100%;
+  height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
 }
 
 .stats-title {

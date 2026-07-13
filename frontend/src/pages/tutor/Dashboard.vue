@@ -41,7 +41,12 @@
     <!-- 阅卷统计 -->
     <div class="stats-section">
       <div class="stats-header">
-        <h2 class="stats-title">阅卷统计</h2>
+        <div class="stats-title-group">
+          <h2 class="stats-title">阅卷统计</h2>
+          <span v-if="gradingStats" class="stats-summary">
+            共批阅 {{ gradingStats.total_count }} 题 · 活跃 {{ gradingStats.active_days }} 天
+          </span>
+        </div>
         <div class="time-range-tabs">
           <button
             v-for="tab in timeTabs"
@@ -55,14 +60,16 @@
         </div>
       </div>
       <div class="chart-container">
-        <div ref="chartRef" class="chart-area"></div>
+        <div v-if="statsLoading" class="chart-empty">加载中…</div>
+        <div v-else-if="statsEmpty" class="chart-empty">暂无阅卷记录</div>
+        <div v-show="!statsLoading && !statsEmpty" ref="chartRef" class="chart-area"></div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { ArrowRight } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import QuickCard from '@/components/dashboard/QuickCard.vue'
@@ -90,6 +97,21 @@ const timeTabs = [
   { label: '本月', value: 'month' }
 ]
 const currentTab = ref('week')
+
+// 阅卷统计数据
+interface GradingStats {
+  days: number
+  labels: string[]
+  data: number[]
+  total_count: number
+  active_days: number
+}
+const gradingStats = ref<GradingStats | null>(null)
+const statsLoading = ref(false)
+const statsEmpty = computed(() => {
+  if (!gradingStats.value) return true
+  return gradingStats.value.data.every((v) => v === 0)
+})
 
 async function loadData() {
   try {
@@ -124,19 +146,27 @@ async function loadData() {
   }
 }
 
-function initGradingChart() {
-  if (!chartRef.value) return
-
-  const days = currentTab.value === 'week' ? 7 : 30
-  const labels: string[] = []
-  const data: number[] = []
-
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date()
-    d.setDate(d.getDate() - i)
-    labels.push(`${d.getMonth() + 1}/${d.getDate()}`)
-    data.push(Math.floor(Math.random() * 15 + 2))
+async function loadGradingStats() {
+  statsLoading.value = true
+  try {
+    const days = currentTab.value === 'month' ? 30 : 7
+    const res = await tutorApi.getGradingStats({ days })
+    if (res.code === 200 && res.data) {
+      gradingStats.value = res.data as GradingStats
+    }
+  } catch (error) {
+    console.error('加载阅卷统计失败:', error)
+    gradingStats.value = null
+  } finally {
+    statsLoading.value = false
   }
+}
+
+function renderGradingChart() {
+  if (!chartRef.value || !gradingStats.value) return
+
+  const labels = gradingStats.value.labels
+  const data = gradingStats.value.data
 
   initChart({
     tooltip: {
@@ -145,7 +175,8 @@ function initGradingChart() {
       borderColor: '#E2E8F0',
       borderWidth: 1,
       textStyle: { color: '#0F172A' },
-      extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 8px;'
+      extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 8px;',
+      valueFormatter: (val: any) => `${val} 题`
     },
     grid: {
       left: '3%',
@@ -163,11 +194,12 @@ function initGradingChart() {
     },
     yAxis: {
       type: 'value',
-      name: '份',
+      name: '题数',
       nameTextStyle: { color: '#94A3B8', fontSize: 11 },
       axisLine: { show: false },
       axisTick: { show: false },
-      splitLine: { lineStyle: { color: '#F1F5F9' } }
+      splitLine: { lineStyle: { color: '#F1F5F9' } },
+      minInterval: 1
     },
     series: [
       {
@@ -183,10 +215,18 @@ function initGradingChart() {
   })
 }
 
+// tab 切换时重新加载
+watch(currentTab, async () => {
+  await loadGradingStats()
+  await nextTick()
+  renderGradingChart()
+})
+
 onMounted(async () => {
   await loadData()
+  await loadGradingStats()
   await nextTick()
-  initGradingChart()
+  renderGradingChart()
 })
 </script>
 
@@ -261,6 +301,29 @@ onMounted(async () => {
   justify-content: space-between;
   padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--color-border-light);
+}
+
+.stats-title-group {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.stats-summary {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-regular);
+}
+
+.chart-empty {
+  width: 100%;
+  height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
 }
 
 .stats-title {
