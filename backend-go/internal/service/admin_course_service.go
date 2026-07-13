@@ -142,7 +142,7 @@ func (s *AdminCourseService) UpdateCourse(courseID int, data map[string]interfac
 		return nil, err
 	}
 	_ = cache.InvalidatePattern(context.Background(), "course:list:*")
-	cache.InvalidatePattern(context.Background(), cache.SafeKey("course", "detail", fmt.Sprintf("%d", courseID)))
+	_ = cache.InvalidatePattern(context.Background(), cache.SafeKey("course", "detail", fmt.Sprintf("%d", courseID)))
 	return courseToDict(&course), nil
 }
 
@@ -156,7 +156,7 @@ func (s *AdminCourseService) DeleteCourse(courseID int) (map[string]interface{},
 		return nil, err
 	}
 	_ = cache.InvalidatePattern(context.Background(), "course:list:*")
-	cache.InvalidatePattern(context.Background(), cache.SafeKey("course", "detail", fmt.Sprintf("%d", courseID)))
+	_ = cache.InvalidatePattern(context.Background(), cache.SafeKey("course", "detail", fmt.Sprintf("%d", courseID)))
 	return map[string]interface{}{"course_id": courseID}, nil
 }
 
@@ -190,7 +190,7 @@ func (s *AdminCourseService) CreateChapter(courseID int, data map[string]interfa
 	if err := s.db.Create(&chapter).Error; err != nil {
 		return nil, err
 	}
-	cache.InvalidatePattern(context.Background(), "course:detail:*")
+	_ = cache.InvalidatePattern(context.Background(), "course:detail:*")
 	return chapterToDict(&chapter), nil
 }
 
@@ -218,7 +218,7 @@ func (s *AdminCourseService) UpdateChapter(chapterID int, data map[string]interf
 	if err := s.db.Save(&chapter).Error; err != nil {
 		return nil, err
 	}
-	cache.InvalidatePattern(context.Background(), "course:detail:*")
+	_ = cache.InvalidatePattern(context.Background(), "course:detail:*")
 	return chapterToDict(&chapter), nil
 }
 
@@ -231,6 +231,6 @@ func (s *AdminCourseService) DeleteChapter(chapterID int) (map[string]interface{
 	if err := s.db.Delete(&chapter).Error; err != nil {
 		return nil, err
 	}
-	cache.InvalidatePattern(context.Background(), "course:detail:*")
+	_ = cache.InvalidatePattern(context.Background(), "course:detail:*")
 	return map[string]interface{}{"chapter_id": chapterID}, nil
 }
