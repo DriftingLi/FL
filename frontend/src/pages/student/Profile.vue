@@ -174,128 +174,14 @@
           </el-card>
         </div>
       </el-tab-pane>
-
-      <el-tab-pane label="实操记录" name="practice">
-        <div v-loading="practiceLoading" class="practice-container">
-          <el-card class="filter-card">
-            <el-row :gutter="16" align="middle">
-              <el-col :span="6">
-                <el-select v-model="practiceTypeFilter" placeholder="实操类型" clearable style="width: 100%;" @change="loadPracticeRecords">
-                  <el-option label="日常检查" value="inspection" />
-                  <el-option label="故障诊断" value="diagnosis" />
-                  <el-option label="部件拆装" value="assembly" />
-                </el-select>
-              </el-col>
-              <el-col :span="4">
-                <el-button @click="loadPracticeRecords">刷新</el-button>
-              </el-col>
-            </el-row>
-          </el-card>
-
-          <el-card class="table-card">
-            <el-table :data="practiceRecords" stripe style="width: 100%">
-              <el-table-column prop="created_at" label="时间" width="170">
-                <template #default="{ row }">
-                  {{ formatDate(row.created_at) }}
-                </template>
-              </el-table-column>
-              <el-table-column prop="practice_type" label="类型" width="120">
-                <template #default="{ row }">
-                  <el-tag :type="getTypeTagType(row.practice_type)" size="small">
-                    {{ getTypeLabel(row.practice_type) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="difficulty" label="难度" width="80">
-                <template #default="{ row }">
-                  {{ getDifficultyLabel(row.difficulty) }}
-                </template>
-              </el-table-column>
-              <el-table-column prop="score" label="得分" width="80" align="center">
-                <template #default="{ row }">
-                  <span :style="{ color: row.score >= 80 ? '#67c23a' : row.score >= 60 ? '#e6a23c' : '#f56c6c', fontWeight: 'bold' }">
-                    {{ row.score }}
-                  </span>
-                </template>
-              </el-table-column>
-              <el-table-column prop="duration" label="用时" width="100" align="center">
-                <template #default="{ row }">
-                  {{ row.duration }}秒
-                </template>
-              </el-table-column>
-              <el-table-column prop="status" label="状态" width="80" align="center">
-                <template #default="{ row }">
-                  <el-tag :type="row.status === 'completed' ? 'success' : 'warning'" size="small">
-                    {{ row.status === 'completed' ? '完成' : '未完成' }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="操作" width="120" align="center">
-                <template #default="{ row }">
-                  <el-button size="small" text type="primary" @click="viewPracticeDetail(row)">详情</el-button>
-                </template>
-              </el-table-column>
-            </el-table>
-
-            <div class="pagination-wrapper" v-if="practicePagination.total > 0">
-              <el-pagination
-                v-model:current-page="practicePage"
-                :page-size="practicePageSize"
-                :total="practicePagination.total"
-                layout="total, prev, pager, next"
-                @current-change="handlePracticePageChange"
-              />
-            </div>
-
-            <el-empty v-if="practiceRecords.length === 0 && !practiceLoading" description="暂无实操记录，快去虚拟实操模块练习吧！">
-              <el-button type="primary" @click="$router.push('/training/practice')">前往实操</el-button>
-            </el-empty>
-          </el-card>
-        </div>
-
-        <el-dialog v-model="detailDialogVisible" title="实操记录详情" width="600px">
-          <div v-if="practiceDetail" class="detail-content">
-            <el-descriptions :column="2" border>
-              <el-descriptions-item label="实操类型">{{ getTypeLabel(practiceDetail.practice_type) }}</el-descriptions-item>
-              <el-descriptions-item label="难度">{{ getDifficultyLabel(practiceDetail.difficulty) }}</el-descriptions-item>
-              <el-descriptions-item label="得分">
-                <span :style="{ color: practiceDetail.score >= 80 ? '#67c23a' : practiceDetail.score >= 60 ? '#e6a23c' : '#f56c6c', fontWeight: 'bold' }">
-                  {{ practiceDetail.score }}分
-                </span>
-              </el-descriptions-item>
-              <el-descriptions-item label="用时">{{ practiceDetail.duration }}秒</el-descriptions-item>
-              <el-descriptions-item label="时间">{{ formatDate(practiceDetail.created_at) }}</el-descriptions-item>
-              <el-descriptions-item label="状态">
-                <el-tag :type="practiceDetail.status === 'completed' ? 'success' : 'warning'" size="small">
-                  {{ practiceDetail.status === 'completed' ? '完成' : '未完成' }}
-                </el-tag>
-              </el-descriptions-item>
-            </el-descriptions>
-
-            <div v-if="practiceDetail.operations && practiceDetail.operations.length > 0" class="operations-section">
-              <h4>操作记录 ({{ practiceDetail.operations.length }}步)</h4>
-              <div class="operations-list">
-                <div v-for="(op, index) in practiceDetail.operations" :key="index" class="op-item">
-                  <span class="op-index">{{ index + 1 }}</span>
-                  <span class="op-part">{{ op.partName || op.partId }}</span>
-                  <el-tag size="small" :type="getActionTagType(op.action)">{{ getActionLabel(op.action) }}</el-tag>
-                </div>
-              </div>
-            </div>
-          </div>
-        </el-dialog>
-      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { practiceApi } from '@/api/practice'
 
-const router = useRouter()
 const userStore = useUserStore()
 
 const activeTab = ref('info')
@@ -304,15 +190,6 @@ const recordsLoading = ref(false)
 const dateRange = ref(null)
 const currentPage = ref(1)
 const pageSize = ref(10)
-
-const practiceLoading = ref(false)
-const practiceRecords = ref([])
-const practicePagination = ref({ total: 0 })
-const practicePage = ref(1)
-const practicePageSize = ref(10)
-const practiceTypeFilter = ref('')
-const detailDialogVisible = ref(false)
-const practiceDetail = ref(null)
 
 const profile = computed(() => userStore.profile)
 const studyStats = computed(() => userStore.studyStats)
@@ -380,31 +257,6 @@ function getProgressColor(progress) {
   return '#f56c6c'
 }
 
-function getTypeLabel(type) {
-  const map = { inspection: '日常检查', diagnosis: '故障诊断', assembly: '部件拆装' }
-  return map[type] || type
-}
-
-function getTypeTagType(type) {
-  const map = { inspection: 'success', diagnosis: 'warning', assembly: '' }
-  return map[type] || 'info'
-}
-
-function getDifficultyLabel(diff) {
-  const map = { beginner: '初级', normal: '中级', expert: '高级' }
-  return map[diff] || diff
-}
-
-function getActionLabel(action) {
-  const map = { click: '点击', detach: '拆卸', attach: '装回', undo: '撤销' }
-  return map[action] || action
-}
-
-function getActionTagType(action) {
-  const map = { click: 'info', detach: 'warning', attach: 'success', undo: '' }
-  return map[action] || 'info'
-}
-
 async function loadProfile() {
   profileLoading.value = true
   try {
@@ -431,49 +283,12 @@ async function loadRecords() {
   }
 }
 
-async function loadPracticeRecords() {
-  practiceLoading.value = true
-  try {
-    const params: Record<string, any> = {
-      page: practicePage.value,
-      page_size: practicePageSize.value
-    }
-    if (practiceTypeFilter.value) {
-      params.practice_type = practiceTypeFilter.value
-    }
-    const res = await practiceApi.getRecords(params)
-    if (res.data) {
-      practiceRecords.value = res.data.records || []
-      practicePagination.value = { total: res.data.total || 0 }
-    }
-  } catch (e) {
-    console.error('加载实操记录失败:', e)
-  } finally {
-    practiceLoading.value = false
-  }
-}
-
-async function viewPracticeDetail(row) {
-  try {
-    const res = await practiceApi.getRecordDetail(row.record_id)
-    if (res.data) {
-      practiceDetail.value = res.data
-      detailDialogVisible.value = true
-    }
-  } catch (e) {
-    console.error('加载实操详情失败:', e)
-  }
-}
-
 function handleTabChange(tab) {
   if (tab === 'info') {
     loadProfile()
   } else if (tab === 'records') {
     currentPage.value = 1
     loadRecords()
-  } else if (tab === 'practice') {
-    practicePage.value = 1
-    loadPracticeRecords()
   }
 }
 
@@ -491,11 +306,6 @@ function resetDateFilter() {
 function handlePageChange(page) {
   currentPage.value = page
   loadRecords()
-}
-
-function handlePracticePageChange(page) {
-  practicePage.value = page
-  loadPracticeRecords()
 }
 
 onMounted(() => {
@@ -636,57 +446,6 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   margin-top: 20px;
-}
-
-.detail-content {
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.operations-section {
-  margin-top: 20px;
-}
-
-.operations-section h4 {
-  font-size: 15px;
-  color: #303133;
-  margin-bottom: 12px;
-}
-
-.operations-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.op-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  background: #f5f7fa;
-  border-radius: 4px;
-  font-size: 13px;
-}
-
-.op-index {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: #409eff;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  flex-shrink: 0;
-}
-
-.op-part {
-  flex: 1;
-  color: #303133;
 }
 
 @media screen and (max-width: 768px) {

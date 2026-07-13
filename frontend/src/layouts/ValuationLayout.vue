@@ -10,7 +10,7 @@
             <span class="logo-sub">残值评估 · HRWAI</span>
           </div>
         </router-link>
-        <router-link to="/" class="btn-back">返回官网</router-link>
+        <a :href="mainSiteUrl" class="btn-back">返回官网</a>
       </div>
     </header>
 
@@ -26,7 +26,12 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import ValuationFooter from '@/components/valuation/ValuationFooter.vue'
+import { buildSubdomainUrl } from '@/utils/subdomain'
+
+// 跨子域名跳回主域名（router-link to="/" 在当前子域名下会被路由守卫重定向）
+const mainSiteUrl = computed(() => buildSubdomainUrl('main', '/'))
 </script>
 
 <style scoped>

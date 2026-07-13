@@ -3,7 +3,6 @@
 DROP TABLE IF EXISTS async_task;
 DROP TABLE IF EXISTS mock_exam;
 DROP TABLE IF EXISTS wrong_question;
-DROP TABLE IF EXISTS practice_record;
 DROP TABLE IF EXISTS question_practice_record;
 DROP TABLE IF EXISTS exam_answer;
 DROP TABLE IF EXISTS exam_participant;

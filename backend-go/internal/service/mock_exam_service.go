@@ -391,5 +391,3 @@ func mockExamToDict(m *model.MockExam) map[string]interface{} {
 	}
 	return d
 }
-
-// roundFloat1 定义在 practice_service.go，此处复用。

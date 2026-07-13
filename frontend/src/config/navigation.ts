@@ -1,8 +1,8 @@
 import type { Component } from 'vue'
 import {
+  HomeFilled,
   Notebook,
   EditPen,
-  SetUp,
   Document,
   DocumentCopy,
   CircleCloseFilled,
@@ -25,15 +25,14 @@ export interface NavItem {
 }
 
 const studentNav: NavItem[] = [
+  { key: 'dashboard', label: '工作台', path: '/training', icon: HomeFilled },
   {
     key: 'training',
     label: '培训',
-    path: '/training',
     icon: Notebook,
     children: [
-      { key: 'courses', label: '课程中心', path: '/training', icon: Notebook },
-      { key: 'question-bank', label: '题库练习', path: '/training/question-bank', icon: EditPen },
-      { key: 'practice', label: '虚拟实操', path: '/training/practice', icon: SetUp }
+      { key: 'courses', label: '课程中心', path: '/training/courses', icon: Notebook },
+      { key: 'question-bank', label: '题库练习', path: '/training/question-bank', icon: EditPen }
     ]
   },
   {
@@ -86,6 +85,7 @@ const adminNav: NavItem[] = [
 ]
 
 const tutorNav: NavItem[] = [
+  { key: 'dashboard', label: '工作台', path: '/training/tutor', icon: HomeFilled },
   { key: 'courses', label: '我的课程', path: '/training/tutor/courses', icon: Notebook },
   { key: 'question-manage', label: '题库管理', path: '/training/tutor/question-manage', icon: EditPen },
   { key: 'grading', label: '人工阅卷', path: '/training/tutor/grading', icon: Finished }

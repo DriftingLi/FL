@@ -49,10 +49,10 @@
 
       <transition name="mobile-slide">
         <div v-if="mobileOpen" class="mobile-menu">
-          <router-link to="/" class="mobile-link" @click="mobileOpen = false">
+          <a :href="mainSiteUrl" class="mobile-link" @click="mobileOpen = false">
             <el-icon><ArrowLeft /></el-icon>
             <span>返回官网</span>
-          </router-link>
+          </a>
           <router-link to="/profile" class="mobile-link" @click="mobileOpen = false">
             <el-icon><User /></el-icon>
             <span>个人中心</span>
@@ -77,10 +77,13 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessageBox } from 'element-plus'
 import { ArrowLeft, ArrowDown, User, SwitchButton } from '@element-plus/icons-vue'
+import { buildSubdomainUrl } from '@/utils/subdomain'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const mobileOpen = ref(false)
+// 跨子域名跳回主域名（router-link to="/" 在当前子域名下会被路由守卫重定向）
+const mainSiteUrl = computed(() => buildSubdomainUrl('main', '/'))
 
 const userName = computed(() => authStore.userInfo?.name || authStore.userInfo?.username || '用户')
 const avatarLetter = computed(() => userName.value.charAt(0).toUpperCase())

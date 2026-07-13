@@ -40,7 +40,13 @@ const routes: RouteRecordRaw[] = [
     children: [
       {
         path: '',
-        name: 'TrainingHome',
+        name: 'StudentDashboard',
+        component: () => import('@/pages/student/Dashboard.vue'),
+        meta: { navKey: 'dashboard', navLabel: '工作台' }
+      },
+      {
+        path: 'courses',
+        name: 'CourseList',
         component: () => import('@/pages/student/CourseList.vue'),
         meta: { navKey: 'courses', navLabel: '课程中心', navGroup: 'training' }
       },
@@ -67,24 +73,6 @@ const routes: RouteRecordRaw[] = [
         name: 'QuestionBank',
         component: () => import('@/pages/student/QuestionBank.vue'),
         meta: { navKey: 'question-bank', navLabel: '题库练习', navGroup: 'training' }
-      },
-      {
-        path: 'practice-free',
-        name: 'PracticeFree',
-        component: () => import('@/pages/student/PracticeFree.vue'),
-        meta: { navKey: 'practice-free', navLabel: '自由练习', navGroup: 'training' }
-      },
-      {
-        path: 'knowledge-practice',
-        name: 'KnowledgePractice',
-        component: () => import('@/pages/student/KnowledgePractice.vue'),
-        meta: { navKey: 'knowledge-practice', navLabel: '知识点练习', navGroup: 'training' }
-      },
-      {
-        path: 'practice-stats',
-        name: 'PracticeStats',
-        component: () => import('@/pages/student/PracticeStats.vue'),
-        meta: { navKey: 'practice-stats', navLabel: '练习统计', navGroup: 'training' }
       },
       {
         path: 'mock-exam',
@@ -115,7 +103,9 @@ const routes: RouteRecordRaw[] = [
     children: [
       {
         path: '',
-        redirect: '/training/tutor/courses'
+        name: 'TutorDashboard',
+        component: () => import('@/pages/tutor/Dashboard.vue'),
+        meta: { navKey: 'dashboard', navLabel: '工作台' }
       },
       {
         path: 'courses',

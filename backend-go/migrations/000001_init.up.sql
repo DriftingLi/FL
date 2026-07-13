@@ -251,32 +251,6 @@ CREATE INDEX idx_qpr_question ON question_practice_record (question_id);
 CREATE INDEX idx_qpr_created  ON question_practice_record (created_at);
 COMMENT ON TABLE question_practice_record IS '题库练习记录表';
 
--- 16. 实操练习记录表（叉车实操模拟，对应 Python PracticeRecord）
-CREATE TABLE practice_record (
-    record_id      INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    student_id     INT          NOT NULL REFERENCES student(student_id) ON DELETE CASCADE,
-    practice_type  VARCHAR(50)  NOT NULL,
-    duration       INT          NOT NULL DEFAULT 0,
-    score          INT          NOT NULL DEFAULT 0,
-    operations     JSONB,
-    status         VARCHAR(20)  NOT NULL DEFAULT 'completed',
-    difficulty     VARCHAR(20)  NOT NULL DEFAULT 'normal',
-    scenario_id    INT,
-    time_limit     INT,
-    correct_parts  JSONB,
-    wrong_attempts INT          NOT NULL DEFAULT 0,
-    created_at     TIMESTAMPTZ  NOT NULL DEFAULT now()
-);
-CREATE INDEX idx_practice_record_student ON practice_record (student_id);
-CREATE INDEX idx_practice_record_type    ON practice_record (practice_type);
-CREATE INDEX idx_practice_record_created ON practice_record (created_at);
-COMMENT ON TABLE  practice_record IS '实操练习记录表';
-COMMENT ON COLUMN practice_record.practice_type IS '实操类型：inspection/diagnosis/assembly 等';
-COMMENT ON COLUMN practice_record.duration IS '用时（秒）';
-COMMENT ON COLUMN practice_record.operations IS '操作步骤（JSON）';
-COMMENT ON COLUMN practice_record.difficulty IS '难度：normal/hard';
-COMMENT ON COLUMN practice_record.correct_parts IS '正确部件（JSON）';
-
 -- 17. 错题记录表
 CREATE TABLE wrong_question (
     id             INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

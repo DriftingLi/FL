@@ -26,7 +26,6 @@
           <ul class="footer-links">
             <li><router-link to="/training">课程中心</router-link></li>
             <li><router-link to="/training/question-bank">题库练习</router-link></li>
-            <li><router-link to="/training/practice">虚拟实操</router-link></li>
             <li><router-link to="/valuation">残值评估</router-link></li>
             <li><a href="https://mall.gccsmile.com/" target="_blank" rel="noopener noreferrer">二手叉车交易 ↗</a></li>
           </ul>

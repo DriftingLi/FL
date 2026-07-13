@@ -87,6 +87,64 @@ h1, h2, h3, h4, h5, h6 {
   animation: fadeIn var(--duration-normal) var(--ease-default) both;
 }
 
+/* ============ Scroll Reveal 入场动画 ============ */
+/* 配合 v-reveal 指令使用（directives/reveal.ts）。
+   使用 animation（非 transition），避免与组件 scoped 的 hover transition 特异性冲突。
+   动画结束后由指令通过 animationend 清理 reveal 类，恢复 hover 交互。 */
+.reveal {
+  opacity: 0;
+}
+.reveal.is-visible {
+  animation: fadeInUp var(--duration-slow) var(--ease-out) both;
+}
+.reveal--fade.is-visible {
+  animation-name: fadeIn;
+}
+.reveal--slide-left.is-visible {
+  animation-name: slideInLeft;
+}
+.reveal--slide-right.is-visible {
+  animation-name: slideInRight;
+}
+.reveal--zoom.is-visible {
+  animation-name: zoomIn;
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes zoomIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* 无障碍：尊重 prefers-reduced-motion，禁用所有入场动画 */
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal.is-visible {
+    opacity: 1 !important;
+    animation: none !important;
+  }
+  .animate-fade-in-up,
+  .animate-fade-in {
+    animation: none !important;
+  }
+  .hero-tagline,
+  .hero-title,
+  .hero-subtitle,
+  .hero-cta {
+    opacity: 1 !important;
+    animation: none !important;
+  }
+}
+
 @media screen and (max-width: 768px) {
   html {
     font-size: 14px;

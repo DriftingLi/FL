@@ -297,26 +297,6 @@ type QuestionPracticeRecord struct {
 
 func (QuestionPracticeRecord) TableName() string { return "question_practice_record" }
 
-// ===== 16. 实操练习记录（叉车实操模拟，对应 Python PracticeRecord） =====
-
-type PracticeRecord struct {
-	RecordID      int       `gorm:"column:record_id;primaryKey" json:"record_id"`
-	StudentID     int       `gorm:"column:student_id" json:"student_id"`
-	PracticeType  string    `gorm:"column:practice_type" json:"practice_type"`
-	Duration      int       `gorm:"column:duration;default:0" json:"duration"`
-	Score         int       `gorm:"column:score;default:0" json:"score"`
-	Operations    JSONB     `gorm:"column:operations;type:jsonb" json:"operations,omitempty"`
-	Status        string    `gorm:"column:status;default:completed" json:"status"`
-	Difficulty    string    `gorm:"column:difficulty;default:normal" json:"difficulty"`
-	ScenarioID    *int      `gorm:"column:scenario_id" json:"scenario_id,omitempty"`
-	TimeLimit     *int      `gorm:"column:time_limit" json:"time_limit,omitempty"`
-	CorrectParts  JSONB     `gorm:"column:correct_parts;type:jsonb" json:"correct_parts,omitempty"`
-	WrongAttempts int       `gorm:"column:wrong_attempts;default:0" json:"wrong_attempts"`
-	CreatedAt     time.Time `gorm:"column:created_at" json:"created_at"`
-}
-
-func (PracticeRecord) TableName() string { return "practice_record" }
-
 // ===== 17. 错题记录 =====
 
 type WrongQuestion struct {

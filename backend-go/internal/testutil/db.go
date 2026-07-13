@@ -51,7 +51,6 @@ func allModels() []interface{} {
 		&model.ExamAnswer{},
 		&model.ExamRecord{},
 		&model.QuestionPracticeRecord{},
-		&model.PracticeRecord{},
 		&model.WrongQuestion{},
 		&model.MockExam{},
 		&model.AIGenerationLog{},

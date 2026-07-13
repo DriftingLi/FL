@@ -34,32 +34,10 @@
       </el-col>
     </el-row>
 
-    <el-row :gutter="20" class="mode-section" v-if="userLevel !== 'expert'">
-      <el-col :xs="24" :sm="12" :md="12">
-        <el-card shadow="hover" class="mode-card" @click="goPractice">
-          <el-icon :size="40"><EditPen /></el-icon>
-          <h4>自由刷题</h4>
-          <p>根据等级自动匹配题目（{{ questionCount }}道）</p>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :sm="12" :md="12">
-        <el-card shadow="hover" class="mode-card" @click="goKnowledgePractice">
-          <el-icon :size="40"><Collection /></el-icon>
-          <h4>知识点专项</h4>
-          <p>针对薄弱知识点强化练习</p>
-        </el-card>
-      </el-col>
-    </el-row>
-
     <el-row :gutter="20" class="quick-links" v-if="userLevel !== 'expert'">
-      <el-col :xs="12" :sm="12">
-        <el-button type="warning" size="large" @click="$router.push('/wrong-questions')" style="width:100%">
+      <el-col :span="24">
+        <el-button type="warning" size="large" @click="$router.push('/training/wrong-questions')" style="width:100%">
           错题本
-        </el-button>
-      </el-col>
-      <el-col :xs="12" :sm="12">
-        <el-button type="success" size="large" @click="$router.push('/practice-stats')" style="width:100%">
-          练习统计
         </el-button>
       </el-col>
     </el-row>
@@ -68,13 +46,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { EditPen, Collection, Lock } from '@element-plus/icons-vue'
+import { Lock } from '@element-plus/icons-vue'
 import { questionBankApi } from '@/api/questionBank'
 import { useAuthStore } from '@/stores/auth'
 import { useUserStore } from '@/stores/user'
-
-const router = useRouter()
 const authStore = useAuthStore()
 const userStore = useUserStore()
 
@@ -146,14 +121,6 @@ onMounted(async () => {
 
 function selectLevel(level) {
   selectedLevel.value = level
-}
-
-function goPractice() {
-  router.push({ path: '/practice-free' })
-}
-
-function goKnowledgePractice() {
-  router.push({ path: '/knowledge-practice' })
 }
 </script>
 

@@ -158,48 +158,6 @@ func (s *AdminService) GetStatistics() map[string]interface{} {
 	}
 }
 
-// GetAdminPracticeRecords 管理端实操记录，对应 Python get_admin_practice_records。
-func (s *AdminService) GetAdminPracticeRecords(page, pageSize int, practiceType string, studentID *int) map[string]interface{} {
-	if studentID != nil && *studentID > 0 {
-		// 复用学员侧查询
-		ps := NewPracticeService(s.db)
-		return ps.GetRecords(*studentID, page, pageSize, practiceType)
-	}
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-	q := s.db.Model(&model.PracticeRecord{})
-	if practiceType != "" {
-		q = q.Where("practice_type = ?", practiceType)
-	}
-	var total int64
-	q.Count(&total)
-	var records []model.PracticeRecord
-	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&records)
-
-	items := make([]map[string]interface{}, 0, len(records))
-	for i := range records {
-		r := &records[i]
-		d := practiceRecordToDict(r, false)
-		var student model.Student
-		if err := s.db.First(&student, r.StudentID).Error; err == nil {
-			d["student_name"] = student.Name
-		} else {
-			d["student_name"] = "未知"
-		}
-		items = append(items, d)
-	}
-	return map[string]interface{}{
-		"total":     total,
-		"page":      page,
-		"page_size": pageSize,
-		"records":   items,
-	}
-}
-
 // ===== dict 辅助 =====
 
 func tutorToDict(t *model.Tutor) map[string]interface{} {

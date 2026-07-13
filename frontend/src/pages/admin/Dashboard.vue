@@ -1,8 +1,11 @@
 <template>
   <div class="dashboard-page">
-    <div class="page-header">
-      <h1 class="page-title">数据概览</h1>
-      <p class="page-subtitle">系统运营数据一览</p>
+    <!-- Welcome Banner -->
+    <div class="welcome-banner">
+      <div class="banner-content">
+        <h1 class="banner-title">欢迎回来，{{ userName }}！</h1>
+        <p class="banner-subtitle">系统运行正常，{{ overview.active_today || 0 }} 名学员今日活跃</p>
+      </div>
     </div>
 
     <div class="stat-cards">
@@ -23,13 +26,17 @@
     <div class="chart-row">
       <el-card class="chart-card">
         <template #header>
-          <span class="card-title">课程学习热度排行</span>
+          <div class="chart-card-header">
+            <span class="card-title">课程学习热度排行</span>
+          </div>
         </template>
         <div ref="barChartRef" class="chart-container"></div>
       </el-card>
       <el-card class="chart-card">
         <template #header>
-          <span class="card-title">课程平均进度</span>
+          <div class="chart-card-header">
+            <span class="card-title">课程平均进度</span>
+          </div>
         </template>
         <div ref="pieChartRef" class="chart-container"></div>
       </el-card>
@@ -52,10 +59,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { User, UserFilled, Notebook, Timer, TrendCharts, MagicStick, Calendar, Setting } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import { adminApi } from '@/api/admin'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
+const userName = computed(() =>
+  authStore.userInfo?.name || authStore.userInfo?.username || '管理员'
+)
 
 const overview = ref<any>({})
 const courseStats = ref([])
@@ -248,23 +261,27 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
+  max-width: 1200px;
 }
 
-.page-header {
-  margin-bottom: 0;
+/* Welcome Banner */
+.welcome-banner {
+  background: linear-gradient(135deg, #7C3AED 0%, #2563EB 100%);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6) var(--space-8);
+  color: white;
 }
 
-.page-title {
+.banner-title {
   font-family: var(--font-display);
   font-size: var(--text-2xl);
   font-weight: var(--font-bold);
-  color: var(--color-text-primary);
   margin-bottom: var(--space-1);
 }
 
-.page-subtitle {
-  font-size: var(--text-sm);
-  color: var(--color-text-tertiary);
+.banner-subtitle {
+  font-size: var(--text-base);
+  opacity: 0.85;
 }
 
 .stat-cards {
@@ -279,6 +296,7 @@ onUnmounted(() => {
   box-shadow: var(--shadow-xs);
   border: 1px solid var(--color-border-light);
   overflow: hidden;
+  position: relative;
   transition: all var(--duration-normal) var(--ease-default);
 }
 
@@ -346,6 +364,12 @@ onUnmounted(() => {
 .chart-card :deep(.el-card__body) {
   padding: var(--space-3) var(--space-5);
   height: 320px;
+}
+
+.chart-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .card-title {
@@ -416,11 +440,7 @@ onUnmounted(() => {
   color: var(--color-text-secondary);
 }
 
-@media screen and (max-width: 768px) {
-  .stat-cards {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
+@media screen and (max-width: 1024px) {
   .chart-row {
     grid-template-columns: 1fr;
   }
@@ -428,9 +448,23 @@ onUnmounted(() => {
   .chart-card :deep(.el-card__body) {
     height: 280px;
   }
+}
+
+@media screen and (max-width: 768px) {
+  .stat-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
 
   .quick-actions {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .welcome-banner {
+    padding: var(--space-5) var(--space-6);
+  }
+
+  .banner-title {
+    font-size: var(--text-xl);
   }
 }
 

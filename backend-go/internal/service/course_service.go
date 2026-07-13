@@ -331,6 +331,11 @@ func roundFloat2(f float64) float64 {
 	return float64(int(f*100+0.5)) / 100
 }
 
+// roundFloat1 保留 1 位小数。
+func roundFloat1(f float64) float64 {
+	return float64(int(f*10+0.5)) / 10
+}
+
 // ===== dict 辅助 =====
 
 func courseToDict(c *model.Course) map[string]interface{} {

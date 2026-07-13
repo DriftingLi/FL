@@ -20,14 +20,15 @@
     <!-- ===== About ===== -->
     <section id="about" class="section about">
       <div class="container">
-        <div class="section-title-wrap">
+        <div class="section-title-wrap" v-reveal>
           <h2 class="section-title">公司介绍<span class="title-underline"></span></h2>
+          <p class="section-subtitle">深耕叉车行业，以AI技术驱动产业智能化升级</p>
         </div>
         <div class="about-grid">
-          <div class="about-image">
+          <div class="about-image" v-reveal.slide-left>
             <img src="/images/about.jpg" alt="和润天下公司办公环境" />
           </div>
-          <div class="about-content">
+          <div class="about-content" v-reveal.slide-right>
             <p class="about-paragraph">
               和润天下人工智能科技有限公司是一家专注于叉车行业人工智能应用的高新技术企业。公司秉承"科技赋能、精准服务"的理念，致力于为叉车产业链上下游企业提供智能化、数字化的一站式解决方案。
             </p>
@@ -56,15 +57,15 @@
     <!-- ===== Founder ===== -->
     <section class="section founder">
       <div class="container narrow">
-        <div class="founder-avatar">
+        <div class="founder-avatar" v-reveal.zoom>
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
             <circle cx="12" cy="7" r="4"/>
           </svg>
         </div>
-        <h3 class="founder-title">创始人介绍</h3>
-        <p class="founder-name">刘永桂 · 和润天下创始人 &amp; 董事长</p>
-        <div class="founder-quote-wrap">
+        <h3 class="founder-title" v-reveal="100">创始人介绍</h3>
+        <p class="founder-name" v-reveal="200">刘永桂 · 和润天下创始人 &amp; 董事长</p>
+        <div class="founder-quote-wrap" v-reveal="300">
           <svg class="quote-mark" width="60" height="48" viewBox="0 0 60 48" fill="none">
             <path d="M2 36C2 26 8 20 18 18L16 2L2 36ZM34 36C34 26 40 20 50 18L48 2L34 36Z" fill="#fff" opacity="0.15"/>
           </svg>
@@ -78,17 +79,20 @@
     <!-- ===== Products ===== -->
     <section id="products" class="section products">
       <div class="container">
-        <div class="section-title-wrap">
+        <div class="section-title-wrap" v-reveal>
           <h2 class="section-title">核心服务<span class="title-underline"></span></h2>
+          <p class="section-subtitle">四大业务板块，覆盖叉车全生命周期服务</p>
         </div>
         <div class="products-grid">
           <div
-            v-for="item in products"
+            v-for="(item, index) in products"
             :key="item.title"
             class="service-card"
+            v-reveal="index * 100"
             @click="handleCardClick(item)"
           >
-            <div class="service-icon">
+            <span class="service-no">0{{ index + 1 }}</span>
+            <div class="service-icon" :style="{ background: productColors[index].bg, color: productColors[index].fg }">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" v-html="item.icon"></svg>
             </div>
             <h3 class="service-title">{{ item.title }}</h3>
@@ -108,12 +112,13 @@
     <!-- ===== Cooperation ===== -->
     <section id="cooperation" class="section cooperation">
       <div class="container">
-        <div class="section-title-wrap">
+        <div class="section-title-wrap" v-reveal>
           <h2 class="section-title">合作模式<span class="title-underline"></span></h2>
+          <p class="section-subtitle">携手多方伙伴，共建叉车产业智能生态</p>
         </div>
         <div class="cooperation-grid">
-          <div v-for="item in cooperations" :key="item.title" class="coop-card">
-            <div class="coop-icon">
+          <div v-for="(item, index) in cooperations" :key="item.title" v-reveal="index * 120" class="coop-card">
+            <div class="coop-icon" :style="{ background: coopColors[index].bg, color: coopColors[index].fg }">
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" v-html="item.icon"></svg>
             </div>
             <h3 class="coop-title">{{ item.title }}</h3>
@@ -132,19 +137,42 @@
     </section>
 
     <!-- ===== Service Guarantee ===== -->
-    <section id="service" class="section service-guarantee">
-      <div class="container">
-        <div class="section-title-wrap">
-          <h2 class="section-title">服务保障<span class="title-underline"></span></h2>
-        </div>
-        <div class="guarantee-grid">
-          <div v-for="item in guarantees" :key="item.no" class="guarantee-item">
-            <div class="guarantee-no">
-              <span>{{ item.no }}</span>
-            </div>
-            <h3 class="guarantee-title">{{ item.title }}</h3>
-            <p class="guarantee-desc">{{ item.desc }}</p>
+    <section id="service" class="section service-guarantee" v-reveal>
+      <div class="container guarantee-carousel">
+        <!-- 左侧面板 -->
+        <div class="gc-left">
+          <div class="gc-badge">服务保障</div>
+          <h2 class="gc-heading">八大核心保障</h2>
+          <p class="gc-sub">全方位护航，让合作无忧</p>
+          <div class="gc-controls">
+            <button class="gc-arrow" @click="manualPrev" aria-label="上一项">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <button class="gc-arrow" @click="manualNext" aria-label="下一项">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
           </div>
+          <div class="gc-pagination">{{ String(carouselIndex + 1).padStart(2, '0') }} / {{ String(guarantees.length).padStart(2, '0') }}</div>
+        </div>
+        <!-- 右侧卡片 -->
+        <div
+          class="gc-right"
+          @mouseenter="pauseAutoplay"
+          @mouseleave="resumeAutoplay"
+        >
+          <Transition name="gc-card" mode="out-in">
+            <div :key="carouselIndex" class="gc-card">
+              <div class="gc-card-step">
+                <span class="gc-card-step-num">{{ currentGuarantee.no }}</span>
+                <span class="gc-card-step-label">保障项</span>
+              </div>
+              <h3 class="gc-card-title">{{ currentGuarantee.title }}</h3>
+              <p class="gc-card-desc">{{ currentGuarantee.desc }}</p>
+            </div>
+          </Transition>
+          <!-- 装饰叠层卡片 -->
+          <div class="gc-card-deco gc-card-deco--1"></div>
+          <div class="gc-card-deco gc-card-deco--2"></div>
         </div>
       </div>
     </section>
@@ -152,8 +180,8 @@
     <!-- ===== CTA Banner ===== -->
     <section class="cta-banner">
       <div class="container narrow cta-content">
-        <h2 class="cta-title">准备好开启AI驱动的叉车之旅了吗？</h2>
-        <p class="cta-subtitle">加入和润天下，获取一整套成熟的叉车行业AI解决方案。</p>
+        <h2 class="cta-title" v-reveal>准备好开启AI驱动的叉车之旅了吗？</h2>
+        <p class="cta-subtitle" v-reveal="100">加入和润天下，获取一整套成熟的叉车行业AI解决方案。</p>
       </div>
     </section>
   </div>
@@ -161,7 +189,9 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { vReveal } from '@/directives/reveal'
 
 type ModuleKey = 'training' | 'valuation' | 'ai-assistant' | 'trade'
 
@@ -276,16 +306,80 @@ const cooperations = [
   }
 ]
 
-const guarantees = [
-  { no: '01', title: '数据安全保障', desc: '企业级加密存储，严格的数据访问权限控制' },
-  { no: '02', title: '模型精度保障', desc: '持续训练优化，评估准确率行业领先' },
-  { no: '03', title: '7x24技术支持', desc: '全天候专业团队在线，快速响应技术需求' },
-  { no: '04', title: '评估报告可追溯', desc: '完整评估链路记录，支持全流程审计追踪' },
-  { no: '05', title: '定制化服务', desc: '根据业务场景灵活定制评估模型与报告模板' },
-  { no: '06', title: '数据洞察分析', desc: '深度挖掘评估数据价值，提供行业趋势洞察' },
-  { no: '07', title: '合规审计支持', desc: '符合行业监管标准，协助完成合规审计流程' },
-  { no: '08', title: '持续迭代升级', desc: '定期更新算法模型，确保技术始终领先' }
+/* 卡片图标多色配色（前景色 / 浅底色） */
+const productColors = [
+  { fg: '#0EA5E9', bg: '#F0F9FF' }, // 蓝
+  { fg: '#14B8A6', bg: '#F0FDFA' }, // 青
+  { fg: '#8B5CF6', bg: '#F5F3FF' }, // 紫
+  { fg: '#F59E0B', bg: '#FFFBEB' }  // 橙
 ]
+const coopColors = [
+  { fg: '#6366F1', bg: '#EEF2FF' }, // 靛蓝
+  { fg: '#F43F5E', bg: '#FFF1F2' }, // 玫红
+  { fg: '#10B981', bg: '#ECFDF5' }  // 绿
+]
+
+const guarantees = [
+  { no: '01', title: '数据安全保障', desc: '企业级加密存储，严格的数据访问权限控制，确保客户数据资产万无一失。' },
+  { no: '02', title: '模型精度保障', desc: '持续训练优化，评估准确率行业领先，为业务决策提供可靠数据支撑。' },
+  { no: '03', title: '7x24技术支持', desc: '全天候专业团队在线，快速响应技术需求，保障系统稳定运行。' },
+  { no: '04', title: '评估报告可追溯', desc: '完整评估链路记录，支持全流程审计追踪，合规透明可信赖。' },
+  { no: '05', title: '定制化服务', desc: '根据业务场景灵活定制评估模型与报告模板，精准匹配实际需求。' },
+  { no: '06', title: '数据洞察分析', desc: '深度挖掘评估数据价值，提供行业趋势洞察，辅助战略决策。' },
+  { no: '07', title: '合规审计支持', desc: '符合行业监管标准，协助完成合规审计流程，降低合规风险。' },
+  { no: '08', title: '持续迭代升级', desc: '定期更新算法模型，确保技术始终领先，持续为客户创造价值。' }
+]
+
+/* ---------- 服务保障轮播 ---------- */
+const carouselIndex = ref(0)
+const currentGuarantee = computed(() => guarantees[carouselIndex.value])
+let autoplayTimer: ReturnType<typeof setInterval> | null = null
+const AUTOPLAY_INTERVAL = 4000
+let isPaused = false
+
+function carouselNext() {
+  carouselIndex.value = (carouselIndex.value + 1) % guarantees.length
+}
+function carouselPrev() {
+  carouselIndex.value = (carouselIndex.value - 1 + guarantees.length) % guarantees.length
+}
+
+function startAutoplay() {
+  stopAutoplay()
+  if (isPaused) return
+  autoplayTimer = setInterval(carouselNext, AUTOPLAY_INTERVAL)
+}
+function stopAutoplay() {
+  if (autoplayTimer) {
+    clearInterval(autoplayTimer)
+    autoplayTimer = null
+  }
+}
+/* 手动切换：重置计时，避免刚手动切完又立刻自动切 */
+function manualNext() {
+  carouselNext()
+  startAutoplay()
+}
+function manualPrev() {
+  carouselPrev()
+  startAutoplay()
+}
+/* 悬停暂停 / 离开恢复 */
+function pauseAutoplay() {
+  isPaused = true
+  stopAutoplay()
+}
+function resumeAutoplay() {
+  isPaused = false
+  startAutoplay()
+}
+
+onMounted(() => {
+  startAutoplay()
+})
+onBeforeUnmount(() => {
+  stopAutoplay()
+})
 
 function scrollTo(id: string) {
   const el = document.getElementById(id)
@@ -375,6 +469,26 @@ function scrollTo(id: string) {
   justify-content: center;
   flex-wrap: wrap;
 }
+/* Hero 首屏加载动画：tagline → title → subtitle → CTA 依次淡入上移 */
+.hero-tagline,
+.hero-title,
+.hero-subtitle,
+.hero-cta {
+  opacity: 0;
+  animation: fadeInUp var(--duration-slow) var(--ease-out) both;
+}
+.hero-tagline {
+  animation-delay: 0ms;
+}
+.hero-title {
+  animation-delay: 120ms;
+}
+.hero-subtitle {
+  animation-delay: 240ms;
+}
+.hero-cta {
+  animation-delay: 360ms;
+}
 .btn-primary {
   display: inline-flex;
   align-items: center;
@@ -437,11 +551,18 @@ function scrollTo(id: string) {
 .title-underline {
   position: absolute;
   bottom: -8px;
-  left: 0;
-  right: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 56px;
   height: 3px;
-  background: var(--gradient-brand);
+  background: linear-gradient(to right, #0EA5E9, #14B8A6);
   border-radius: 2px;
+}
+.section-subtitle {
+  margin: var(--space-5) 0 0;
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-tertiary);
 }
 
 /* ============ About ============ */
@@ -548,7 +669,7 @@ function scrollTo(id: string) {
 
 /* ============ Products ============ */
 .products {
-  background: var(--surface-card-alt);
+  background: var(--color-primary-50);
 }
 .products-grid {
   display: grid;
@@ -556,6 +677,8 @@ function scrollTo(id: string) {
   gap: var(--space-8);
 }
 .service-card {
+  position: relative;
+  overflow: hidden;
   background: var(--color-bg-card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
@@ -568,6 +691,20 @@ function scrollTo(id: string) {
   box-shadow: var(--shadow-lg);
   transform: translateY(-2px);
   border-color: var(--color-primary-300);
+}
+/* 右上角灰色半透明编号 */
+.service-no {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-5);
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  color: var(--color-text-primary);
+  opacity: 0.08;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
 }
 .service-icon {
   width: 48px;
@@ -613,7 +750,7 @@ function scrollTo(id: string) {
 
 /* ============ Cooperation ============ */
 .cooperation {
-  background: var(--surface-card-alt);
+  background: var(--color-accent-50);
 }
 .cooperation-grid {
   display: grid;
@@ -696,48 +833,155 @@ function scrollTo(id: string) {
   color: #fff;
 }
 
-/* ============ Service Guarantee ============ */
+/* ============ Service Guarantee (轮切卡片) ============ */
 .service-guarantee {
-  background: var(--color-bg-card);
+  background: var(--surface-dark);
+  overflow: hidden;
 }
-.guarantee-grid {
+.guarantee-carousel {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-6);
+  grid-template-columns: 1fr;
+  gap: var(--space-10);
+  align-items: center;
 }
-.guarantee-item {
-  text-align: center;
-  padding: var(--space-6);
+.gc-left {
+  color: var(--color-text-on-dark);
 }
-.guarantee-no {
-  width: 48px;
-  height: 48px;
+.gc-badge {
+  display: inline-block;
+  padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-full);
-  background: var(--color-primary-50);
+  background: rgba(14, 165, 233, 0.15);
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-primary-300);
+  margin-bottom: var(--space-6);
+}
+.gc-heading {
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 3.5vw, var(--text-3xl));
+  font-weight: var(--font-bold);
+  line-height: var(--leading-tight);
+  color: #fff;
+  margin: 0 0 var(--space-3);
+}
+.gc-sub {
+  font-size: var(--text-base);
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-8);
+  line-height: var(--leading-relaxed);
+}
+.gc-controls {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.gc-arrow {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border-darker);
+  background: transparent;
+  color: var(--color-text-on-dark);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto var(--space-5);
+  cursor: pointer;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
 }
-.guarantee-no span {
+.gc-arrow:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--color-primary-400);
+}
+.gc-pagination {
   font-family: var(--font-display);
-  font-size: var(--text-lg);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  letter-spacing: 0.1em;
+}
+.gc-right {
+  position: relative;
+  min-height: 320px;
+}
+.gc-card {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  padding: var(--space-10);
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+}
+.gc-card-step {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+.gc-card-step-num {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
   font-weight: var(--font-bold);
   color: var(--color-primary-500);
 }
-.guarantee-title {
+.gc-card-step-label {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.gc-card-title {
   font-family: var(--font-display);
-  font-size: var(--text-base);
-  font-weight: var(--font-semibold);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
   line-height: var(--leading-snug);
   color: var(--color-text-primary);
-  margin: 0 0 var(--space-3);
+  margin: 0 0 var(--space-4);
 }
-.guarantee-desc {
-  font-size: var(--text-sm);
+.gc-card-desc {
+  font-size: var(--text-base);
   line-height: var(--leading-relaxed);
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
   margin: 0;
+  flex: 1;
+}
+/* 装饰叠层卡片 */
+.gc-card-deco {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--color-bg-card);
+  border-radius: var(--radius-xl);
+}
+.gc-card-deco--1 {
+  z-index: 1;
+  transform: translate(8px, 8px);
+  opacity: 0.5;
+}
+.gc-card-deco--2 {
+  z-index: 0;
+  transform: translate(16px, 16px);
+  opacity: 0.25;
+}
+/* 卡片切换过渡（单卡片 out-in 模式，避免叠加闪烁） */
+.gc-card-enter-active,
+.gc-card-leave-active {
+  transition: opacity 0.3s var(--ease-default), transform 0.3s var(--ease-default);
+}
+.gc-card-enter-from {
+  opacity: 0;
+  transform: translateX(24px);
+}
+.gc-card-leave-to {
+  opacity: 0;
+  transform: translateX(-24px);
 }
 
 /* ============ CTA Banner ============ */
@@ -794,11 +1038,9 @@ function scrollTo(id: string) {
   .cooperation-grid {
     grid-template-columns: repeat(3, 1fr);
   }
-}
-
-@media (max-width: 1023px) {
-  .guarantee-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .guarantee-carousel {
+    grid-template-columns: 2fr 3fr;
+    gap: var(--space-12);
   }
 }
 
@@ -826,6 +1068,22 @@ function scrollTo(id: string) {
   }
   .section-title-wrap {
     margin-bottom: var(--space-10);
+  }
+  .gc-right {
+    min-height: 280px;
+  }
+  .gc-card {
+    padding: var(--space-6);
+    min-height: 280px;
+  }
+  .gc-card-title {
+    font-size: var(--text-xl);
+  }
+  .gc-card-deco--1 {
+    transform: translate(4px, 4px);
+  }
+  .gc-card-deco--2 {
+    transform: translate(8px, 8px);
   }
 }
 </style>

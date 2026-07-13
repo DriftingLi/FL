@@ -60,14 +60,14 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	}
 
 	// 注册全部 14 个业务蓝图：
-	//   auth/courses/exam/student/practice/practice-mode/question-bank/
+	//   auth/courses/exam/student/question-bank/
 	//   level-exam/grading/ai/tutor/wrong-questions/mock-exam/admin
+	//   practice-mode（题库练习模式：自由刷题/知识点专项，对应 question_practice_record）
 	RegisterCoursesRoutes(api, cfg, db)
 	RegisterExamRoutes(api, cfg, db)
 	RegisterStudentRoutes(api, cfg, db)
-	RegisterPracticeRoutes(api, cfg, db)
-	RegisterPracticeModeRoutes(api, cfg, db)
 	RegisterQuestionBankRoutes(api, cfg, db)
+	RegisterPracticeModeRoutes(api, cfg, db)
 	RegisterLevelExamRoutes(api, cfg, db)
 	RegisterGradingRoutes(api, cfg, db)
 	RegisterAIRoutes(api, cfg, db)

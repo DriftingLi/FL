@@ -1,9 +1,9 @@
 <template>
-  <PortalLayout :menu-items="tutorNav" hide-footer />
+  <SidebarLayout :menu-items="tutorNav" />
 </template>
 
 <script setup lang="ts">
-import PortalLayout from './PortalLayout.vue'
+import SidebarLayout from './SidebarLayout.vue'
 import { roleNavigation } from '@/config/navigation'
 
 const tutorNav = roleNavigation.tutor

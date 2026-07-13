@@ -78,83 +78,6 @@
         </el-table-column>
       </el-table>
     </el-card>
-
-    <div class="section-divider">
-      <h3>实操培训统计</h3>
-    </div>
-
-    <el-row :gutter="20" class="stat-cards">
-      <el-col :xs="12" :sm="6">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-value blue">{{ practiceStats.total_records || 0 }}</div>
-          <div class="stat-label">实操总次数</div>
-        </el-card>
-      </el-col>
-      <el-col :xs="12" :sm="6">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-value green">{{ practiceStats.avg_score || 0 }}</div>
-          <div class="stat-label">平均得分</div>
-        </el-card>
-      </el-col>
-      <el-col :xs="12" :sm="6">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-value orange">{{ practiceStats.today_count || 0 }}</div>
-          <div class="stat-label">今日实操</div>
-        </el-card>
-      </el-col>
-      <el-col :xs="12" :sm="6">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-value gray">{{ practiceStats.recent_count || 0 }}</div>
-          <div class="stat-label">近7天实操</div>
-        </el-card>
-      </el-col>
-    </el-row>
-
-    <el-row :gutter="20" class="chart-row">
-      <el-col :xs="24" :sm="12">
-        <el-card class="chart-card">
-          <template #header>
-            <span class="card-title">实操类型分布</span>
-          </template>
-          <div ref="typePieRef" class="chart-container"></div>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :sm="12">
-        <el-card class="chart-card">
-          <template #header>
-            <span class="card-title">近30天实操趋势</span>
-          </template>
-          <div ref="trendLineRef" class="chart-container"></div>
-        </el-card>
-      </el-col>
-    </el-row>
-
-    <el-card class="table-card">
-      <template #header>
-        <span class="card-title">学员实操排行</span>
-      </template>
-      <el-table :data="practiceStats.top_students || []" stripe border style="width: 100%">
-        <el-table-column type="index" label="排名" width="60" align="center" />
-        <el-table-column prop="student_name" label="学员" min-width="120" />
-        <el-table-column label="练习次数" width="100" align="center">
-          <template #default="{ row }">
-            {{ row.practice_count || 0 }}
-          </template>
-        </el-table-column>
-        <el-table-column label="平均分" width="100" align="center">
-          <template #default="{ row }">
-            <span :style="{ color: row.avg_score >= 80 ? '#67c23a' : row.avg_score >= 60 ? '#e6a23c' : '#f56c6c', fontWeight: 'bold' }">
-              {{ row.avg_score }}
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column label="总用时" width="120" align="center">
-          <template #default="{ row }">
-            {{ formatDuration(row.total_duration || 0) }}
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
   </div>
 </template>
 
@@ -162,19 +85,13 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { adminApi } from '@/api/admin'
-import { practiceApi } from '@/api/practice'
 
 const overview = ref<any>({})
 const courseStats = ref([])
-const practiceStats = ref<any>({})
 const barChartRef = ref(null)
 const progressChartRef = ref(null)
-const typePieRef = ref(null)
-const trendLineRef = ref(null)
 let barChart = null
 let progressChart = null
-let typePieChart = null
-let trendLineChart = null
 
 function formatDuration(minutes) {
   if (!minutes || minutes <= 0) return '0分钟'
@@ -309,112 +226,9 @@ function initProgressChart() {
   })
 }
 
-function initTypePieChart() {
-  if (!typePieRef.value) return
-
-  if (typePieChart) typePieChart.dispose()
-  typePieChart = echarts.init(typePieRef.value)
-
-  const typeDist = practiceStats.value.type_distribution || []
-  const typeLabels = { inspection: '日常检查', diagnosis: '故障诊断', assembly: '部件拆装' }
-  const typeColors = { inspection: '#67c23a', diagnosis: '#e6a23c', assembly: '#409eff' }
-
-  const data = typeDist.map(item => ({
-    name: typeLabels[item.type] || item.type,
-    value: item.count,
-    itemStyle: { color: typeColors[item.type] || '#909399' }
-  }))
-
-  typePieChart.setOption({
-    tooltip: {
-      trigger: 'item',
-      formatter: '{b}: {c}次 ({d}%)'
-    },
-    legend: {
-      orient: 'vertical',
-      right: 10,
-      top: 'center'
-    },
-    series: [{
-      type: 'pie',
-      radius: ['40%', '70%'],
-      center: ['35%', '50%'],
-      avoidLabelOverlap: false,
-      label: {
-        show: false
-      },
-      emphasis: {
-        label: {
-          show: true,
-          fontSize: 14,
-          fontWeight: 'bold'
-        }
-      },
-      data: data
-    }]
-  })
-}
-
-function initTrendLineChart() {
-  if (!trendLineRef.value) return
-
-  if (trendLineChart) trendLineChart.dispose()
-  trendLineChart = echarts.init(trendLineRef.value)
-
-  const dailyStats = practiceStats.value.daily_stats || []
-  const dates = dailyStats.map(d => d.date)
-  const counts = dailyStats.map(d => d.count)
-  const scores = dailyStats.map(d => d.avg_score)
-
-  trendLineChart.setOption({
-    tooltip: {
-      trigger: 'axis'
-    },
-    legend: {
-      data: ['实操次数', '平均分'],
-      top: 0
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '3%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      data: dates,
-      axisLabel: { fontSize: 10, rotate: 30 }
-    },
-    yAxis: [
-      { type: 'value', name: '次数' },
-      { type: 'value', name: '分数', max: 100 }
-    ],
-    series: [
-      {
-        name: '实操次数',
-        type: 'bar',
-        data: counts,
-        itemStyle: { color: '#409eff' },
-        barWidth: '40%'
-      },
-      {
-        name: '平均分',
-        type: 'line',
-        yAxisIndex: 1,
-        data: scores,
-        smooth: true,
-        lineStyle: { color: '#67c23a', width: 2 },
-        itemStyle: { color: '#67c23a' }
-      }
-    ]
-  })
-}
-
 function handleResize() {
   barChart && barChart.resize()
   progressChart && progressChart.resize()
-  typePieChart && typePieChart.resize()
-  trendLineChart && trendLineChart.resize()
 }
 
 async function loadStatistics() {
@@ -433,23 +247,8 @@ async function loadStatistics() {
   }
 }
 
-async function loadPracticeStats() {
-  try {
-    const res = await practiceApi.getAdminStats()
-    if (res.data) {
-      practiceStats.value = res.data
-      await nextTick()
-      initTypePieChart()
-      initTrendLineChart()
-    }
-  } catch (error) {
-    console.error('加载实操统计失败:', error)
-  }
-}
-
 onMounted(() => {
   loadStatistics()
-  loadPracticeStats()
   window.addEventListener('resize', handleResize)
 })
 
@@ -457,8 +256,6 @@ onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   if (barChart) { barChart.dispose(); barChart = null }
   if (progressChart) { progressChart.dispose(); progressChart = null }
-  if (typePieChart) { typePieChart.dispose(); typePieChart = null }
-  if (trendLineChart) { trendLineChart.dispose(); trendLineChart = null }
 })
 </script>
 
@@ -533,18 +330,6 @@ onUnmounted(() => {
 
 .table-card {
   margin-bottom: 20px;
-}
-
-.section-divider {
-  margin: 30px 0 20px;
-  padding-bottom: 10px;
-  border-bottom: 2px solid #409eff;
-}
-
-.section-divider h3 {
-  font-size: 18px;
-  color: #303133;
-  margin: 0;
 }
 
 @media screen and (max-width: 768px) {

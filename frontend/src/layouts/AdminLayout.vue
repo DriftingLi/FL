@@ -1,9 +1,9 @@
 <template>
-  <PortalLayout :menu-items="adminNav" hide-footer />
+  <SidebarLayout :menu-items="adminNav" />
 </template>
 
 <script setup lang="ts">
-import PortalLayout from './PortalLayout.vue'
+import SidebarLayout from './SidebarLayout.vue'
 import { roleNavigation } from '@/config/navigation'
 
 const adminNav = roleNavigation.admin

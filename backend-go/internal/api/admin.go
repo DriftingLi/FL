@@ -270,24 +270,10 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 		response.SuccessWithMsg(c, "导师删除成功", result)
 	})
 
-	// ===== 统计与实操记录 =====
+	// ===== 统计看板 =====
 
 	// GET /api/admin/statistics  统计看板
 	g.GET("/statistics", func(c *gin.Context) {
 		response.Success(c, adminSvc.GetStatistics())
-	})
-
-	// GET /api/admin/practice-records  实操记录列表
-	g.GET("/practice-records", func(c *gin.Context) {
-		page := atoiDefault(c.Query("page"), 1)
-		pageSize := atoiDefault(c.Query("page_size"), 10)
-		practiceType := c.Query("practice_type")
-		var studentID *int
-		if s := c.Query("student_id"); s != "" {
-			if id, err := strconv.Atoi(s); err == nil {
-				studentID = &id
-			}
-		}
-		response.Success(c, adminSvc.GetAdminPracticeRecords(page, pageSize, practiceType, studentID))
 	})
 }
