@@ -211,9 +211,9 @@ func (s *ExamService) SubmitExam(studentID, courseID int, answers map[string]int
 		return nil, err
 	}
 
-	cache.InvalidatePattern(context.Background(), cache.SafeKey("exam", "result", fmt.Sprintf("%d", studentID), fmt.Sprintf("%d", courseID)))
-	cache.InvalidatePattern(context.Background(), cache.SafeKey("student", "profile", fmt.Sprintf("%d", studentID)))
-	cache.InvalidatePattern(context.Background(), "admin:stats")
+	_ = cache.InvalidatePattern(context.Background(), cache.SafeKey("exam", "result", fmt.Sprintf("%d", studentID), fmt.Sprintf("%d", courseID)))
+	_ = cache.InvalidatePattern(context.Background(), cache.SafeKey("student", "profile", fmt.Sprintf("%d", studentID)))
+	_ = cache.InvalidatePattern(context.Background(), "admin:stats")
 	return map[string]interface{}{
 		"exam_id":         rec.ExamID,
 		"score":           finalScore,

@@ -267,9 +267,9 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, dura
 		}
 		record.Progress = roundFloat2(float64(completedChapters) / float64(totalChapters) * 100)
 		s.db.Save(&record)
-		cache.InvalidatePattern(context.Background(), cache.SafeKey("student", "profile", fmt.Sprintf("%d", studentID)))
-		cache.InvalidatePattern(context.Background(), "student:stats:"+fmt.Sprintf("%d", studentID)+":*")
-		cache.InvalidatePattern(context.Background(), "admin:stats")
+		_ = cache.InvalidatePattern(context.Background(), cache.SafeKey("student", "profile", fmt.Sprintf("%d", studentID)))
+		_ = cache.InvalidatePattern(context.Background(), "student:stats:"+fmt.Sprintf("%d", studentID)+":*")
+		_ = cache.InvalidatePattern(context.Background(), "admin:stats")
 		return map[string]interface{}{
 			"record_id":      record.RecordID,
 			"progress":       record.Progress,
@@ -292,9 +292,9 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, dura
 	if err := s.db.Create(&newRecord).Error; err != nil {
 		return nil, err
 	}
-	cache.InvalidatePattern(context.Background(), cache.SafeKey("student", "profile", fmt.Sprintf("%d", studentID)))
-	cache.InvalidatePattern(context.Background(), "student:stats:"+fmt.Sprintf("%d", studentID)+":*")
-	cache.InvalidatePattern(context.Background(), "admin:stats")
+	_ = cache.InvalidatePattern(context.Background(), cache.SafeKey("student", "profile", fmt.Sprintf("%d", studentID)))
+	_ = cache.InvalidatePattern(context.Background(), "student:stats:"+fmt.Sprintf("%d", studentID)+":*")
+	_ = cache.InvalidatePattern(context.Background(), "admin:stats")
 	return map[string]interface{}{
 		"record_id":      newRecord.RecordID,
 		"progress":       newRecord.Progress,

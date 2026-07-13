@@ -330,7 +330,7 @@ func (s *QuestionBankService) CreateQuestion(data map[string]interface{}, create
 	if err := s.db.Create(&q).Error; err != nil {
 		return nil, err
 	}
-	cache.InvalidatePattern(context.Background(), "question:*")
+	_ = cache.InvalidatePattern(context.Background(), "question:*")
 	return questionToDict(&q, true), nil
 }
 
@@ -363,7 +363,7 @@ func (s *QuestionBankService) UpdateQuestion(id int, data map[string]interface{}
 	if err := s.db.Save(&q).Error; err != nil {
 		return nil, err
 	}
-	cache.InvalidatePattern(context.Background(), "question:*")
+	_ = cache.InvalidatePattern(context.Background(), "question:*")
 	return questionToDict(&q, true), nil
 }
 
@@ -376,7 +376,7 @@ func (s *QuestionBankService) DeleteQuestion(id int) error {
 	if result.RowsAffected == 0 {
 		return errors.New("题目不存在")
 	}
-	cache.InvalidatePattern(context.Background(), "question:*")
+	_ = cache.InvalidatePattern(context.Background(), "question:*")
 	return nil
 }
 
@@ -431,7 +431,7 @@ func (s *QuestionBankService) PublishQuestion(id int) (map[string]interface{}, e
 	if err := s.db.Save(&q).Error; err != nil {
 		return nil, err
 	}
-	cache.InvalidatePattern(context.Background(), "question:*")
+	_ = cache.InvalidatePattern(context.Background(), "question:*")
 	return questionToDict(&q, true), nil
 }
 
@@ -442,7 +442,7 @@ func (s *QuestionBankService) BatchPublish(ids []int) map[string]interface{} {
 		count64 := s.db.Model(&model.Question{}).Where("id IN ?", ids).Update("status", "published").RowsAffected
 		count = int(count64)
 	}
-	cache.InvalidatePattern(context.Background(), "question:*")
+	_ = cache.InvalidatePattern(context.Background(), "question:*")
 	return map[string]interface{}{"published_count": count}
 }
 
@@ -462,7 +462,7 @@ func (s *QuestionBankService) BatchImport(items []interface{}, createdBy *int) m
 		}
 		success++
 	}
-	cache.InvalidatePattern(context.Background(), "question:*")
+	_ = cache.InvalidatePattern(context.Background(), "question:*")
 	return map[string]interface{}{
 		"success_count": success,
 		"error_count":   len(errs),
@@ -546,8 +546,8 @@ func (s *QuestionBankService) CreateKnowledgePoint(data map[string]interface{}) 
 	if err := s.db.Create(&kp).Error; err != nil {
 		return nil, err
 	}
-	cache.InvalidatePattern(context.Background(), "kp:*")
-	cache.InvalidatePattern(context.Background(), "question:stats")
+	_ = cache.InvalidatePattern(context.Background(), "kp:*")
+	_ = cache.InvalidatePattern(context.Background(), "question:stats")
 	return kpToDict(&kp), nil
 }
 
@@ -607,7 +607,7 @@ func (s *QuestionBankService) UpdateKnowledgePoint(id int, data map[string]inter
 	if err := s.db.Save(&kp).Error; err != nil {
 		return nil, err
 	}
-	cache.InvalidatePattern(context.Background(), "kp:*")
+	_ = cache.InvalidatePattern(context.Background(), "kp:*")
 	return kpToDict(&kp), nil
 }
 
@@ -621,8 +621,8 @@ func (s *QuestionBankService) DeleteKnowledgePoint(id int) error {
 	if err := s.db.Delete(&model.KnowledgePoint{}, id).Error; err != nil {
 		return errors.New("知识点不存在")
 	}
-	cache.InvalidatePattern(context.Background(), "kp:*")
-	cache.InvalidatePattern(context.Background(), "question:stats")
+	_ = cache.InvalidatePattern(context.Background(), "kp:*")
+	_ = cache.InvalidatePattern(context.Background(), "question:stats")
 	return nil
 }
 
