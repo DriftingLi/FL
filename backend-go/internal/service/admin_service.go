@@ -2,13 +2,11 @@
 package service
 
 import (
-	"context"
 	"errors"
 	"time"
 
 	"gorm.io/gorm"
 
-	"forklift-training/internal/cache"
 	"forklift-training/internal/model"
 )
 
@@ -59,8 +57,6 @@ func (s *AdminService) DeleteStudent(studentID int) (map[string]interface{}, err
 	if err := s.db.Delete(&student).Error; err != nil {
 		return nil, err
 	}
-	// 失效统计看板缓存
-	_ = cache.Del(context.Background(), "admin:stats")
 	return map[string]interface{}{"student_id": studentID}, nil
 }
 
@@ -101,26 +97,15 @@ func (s *AdminService) DeleteTutor(tutorID int) (map[string]interface{}, error) 
 	if err := s.db.Delete(&tutor).Error; err != nil {
 		return nil, err
 	}
-	// 失效统计看板缓存
-	_ = cache.Del(context.Background(), "admin:stats")
 	return map[string]interface{}{"tutor_id": tutorID}, nil
 }
 
 // GetStatistics 统计看板，对应 Python get_statistics。
-// 结果缓存 5 分钟（cache.TTLStats），DeleteStudent/DeleteTutor 会主动失效。
 func (s *AdminService) GetStatistics() map[string]interface{} {
-	const cacheKey = "admin:stats"
-	var result map[string]interface{}
-	if err := cache.GetOrSetJSON(context.Background(), cacheKey, cache.TTLStats, &result, func() (interface{}, error) {
-		return s.queryStatistics(), nil
-	}); err != nil || result == nil {
-		// 缓存异常时降级直查（GetOrSetJSON 内部已处理 Redis 故障，此处为防御性回退）
-		return s.queryStatistics()
-	}
-	return result
+	return s.queryStatistics()
 }
 
-// queryStatistics 执行实际的统计查询（无缓存），供 GetStatistics 的 loader 与降级路径复用。
+// queryStatistics 执行实际的统计查询。
 func (s *AdminService) queryStatistics() map[string]interface{} {
 	var totalStudents, totalCourses, totalStudyDuration int64
 	s.db.Model(&model.Student{}).Count(&totalStudents)

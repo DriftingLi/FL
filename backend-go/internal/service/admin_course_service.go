@@ -2,14 +2,10 @@
 package service
 
 import (
-	"context"
 	"errors"
-	"fmt"
-	"time"
 
 	"gorm.io/gorm"
 
-	"forklift-training/internal/cache"
 	"forklift-training/internal/model"
 )
 
@@ -57,27 +53,19 @@ func (s *AdminCourseService) GetCourses(page, pageSize int, keyword, category st
 
 // GetCourseDetail 管理端课程详情，对应 Python get_admin_course_detail。
 func (s *AdminCourseService) GetCourseDetail(courseID int) (map[string]interface{}, error) {
-	cacheKey := cache.SafeKey("course", "detail", fmt.Sprintf("%d", courseID))
-	var result map[string]interface{}
-	err := cache.GetOrSetJSON(context.Background(), cacheKey, 10*time.Minute, &result, func() (interface{}, error) {
-		var course model.Course
-		if err := s.db.First(&course, courseID).Error; err != nil {
-			return nil, errors.New("课程不存在")
-		}
-		var chapters []model.Chapter
-		s.db.Where("course_id = ?", courseID).Order("order_num").Find(&chapters)
-		chapterList := make([]map[string]interface{}, 0, len(chapters))
-		for i := range chapters {
-			chapterList = append(chapterList, chapterToDict(&chapters[i]))
-		}
-		detail := courseToDict(&course)
-		detail["chapters"] = chapterList
-		return detail, nil
-	})
-	if err != nil {
-		return nil, err
+	var course model.Course
+	if err := s.db.First(&course, courseID).Error; err != nil {
+		return nil, errors.New("课程不存在")
 	}
-	return result, nil
+	var chapters []model.Chapter
+	s.db.Where("course_id = ?", courseID).Order("order_num").Find(&chapters)
+	chapterList := make([]map[string]interface{}, 0, len(chapters))
+	for i := range chapters {
+		chapterList = append(chapterList, chapterToDict(&chapters[i]))
+	}
+	detail := courseToDict(&course)
+	detail["chapters"] = chapterList
+	return detail, nil
 }
 
 // CreateCourse 创建课程，对应 Python create_course。
@@ -109,8 +97,6 @@ func (s *AdminCourseService) CreateCourse(data map[string]interface{}) (map[stri
 	if err := s.db.Create(&course).Error; err != nil {
 		return nil, err
 	}
-	_ = cache.InvalidatePattern(context.Background(), "course:list:*")
-	_ = cache.InvalidatePattern(context.Background(), "course:detail:*")
 	return courseToDict(&course), nil
 }
 
@@ -141,8 +127,6 @@ func (s *AdminCourseService) UpdateCourse(courseID int, data map[string]interfac
 	if err := s.db.Save(&course).Error; err != nil {
 		return nil, err
 	}
-	_ = cache.InvalidatePattern(context.Background(), "course:list:*")
-	_ = cache.InvalidatePattern(context.Background(), cache.SafeKey("course", "detail", fmt.Sprintf("%d", courseID)))
 	return courseToDict(&course), nil
 }
 
@@ -155,8 +139,6 @@ func (s *AdminCourseService) DeleteCourse(courseID int) (map[string]interface{},
 	if err := s.db.Delete(&course).Error; err != nil {
 		return nil, err
 	}
-	_ = cache.InvalidatePattern(context.Background(), "course:list:*")
-	_ = cache.InvalidatePattern(context.Background(), cache.SafeKey("course", "detail", fmt.Sprintf("%d", courseID)))
 	return map[string]interface{}{"course_id": courseID}, nil
 }
 
@@ -190,7 +172,6 @@ func (s *AdminCourseService) CreateChapter(courseID int, data map[string]interfa
 	if err := s.db.Create(&chapter).Error; err != nil {
 		return nil, err
 	}
-	_ = cache.InvalidatePattern(context.Background(), "course:detail:*")
 	return chapterToDict(&chapter), nil
 }
 
@@ -218,7 +199,6 @@ func (s *AdminCourseService) UpdateChapter(chapterID int, data map[string]interf
 	if err := s.db.Save(&chapter).Error; err != nil {
 		return nil, err
 	}
-	_ = cache.InvalidatePattern(context.Background(), "course:detail:*")
 	return chapterToDict(&chapter), nil
 }
 
@@ -231,6 +211,5 @@ func (s *AdminCourseService) DeleteChapter(chapterID int) (map[string]interface{
 	if err := s.db.Delete(&chapter).Error; err != nil {
 		return nil, err
 	}
-	_ = cache.InvalidatePattern(context.Background(), "course:detail:*")
 	return map[string]interface{}{"chapter_id": chapterID}, nil
 }

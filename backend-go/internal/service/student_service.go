@@ -2,14 +2,11 @@
 package service
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"gorm.io/gorm"
 
-	"forklift-training/internal/cache"
 	"forklift-training/internal/model"
 )
 
@@ -24,21 +21,11 @@ func NewStudentService(db *gorm.DB) *StudentService {
 }
 
 // GetProfile 学员档案，对应 Python get_student_profile。
-// 结果缓存 5 分钟（cache.TTLUserProfile）。
 func (s *StudentService) GetProfile(studentID int) (map[string]interface{}, error) {
-	cacheKey := cache.SafeKey("student", "profile", fmt.Sprintf("%d", studentID))
-	var result map[string]interface{}
-	err := cache.GetOrSetJSON(context.Background(), cacheKey, cache.TTLUserProfile, &result, func() (interface{}, error) {
-		return s.queryProfile(studentID)
-	})
-	if err != nil {
-		// 缓存异常或 loader 业务错误（如学员不存在）→ 降级直查获取准确结果与错误信息
-		return s.queryProfile(studentID)
-	}
-	return result, nil
+	return s.queryProfile(studentID)
 }
 
-// queryProfile 执行实际的学员档案查询（无缓存），供 GetProfile 的 loader 与降级路径复用。
+// queryProfile 执行实际的学员档案查询。
 func (s *StudentService) queryProfile(studentID int) (map[string]interface{}, error) {
 	var student model.Student
 	if err := s.db.First(&student, studentID).Error; err != nil {
@@ -128,20 +115,11 @@ func (s *StudentService) queryProfile(studentID int) (map[string]interface{}, er
 
 // GetStudyStats 学习统计（按天分组），用于学员仪表盘图表。
 // days 仅允许 7 或 30，其他值统一回退为 7。
-// 结果缓存 5 分钟（cache.TTLUserProfile）。
 func (s *StudentService) GetStudyStats(studentID, days int) map[string]interface{} {
-	cacheKey := cache.SafeKey("student", "stats", fmt.Sprintf("%d", studentID), fmt.Sprintf("%d", days))
-	var result map[string]interface{}
-	if err := cache.GetOrSetJSON(context.Background(), cacheKey, cache.TTLUserProfile, &result, func() (interface{}, error) {
-		return s.queryStudyStats(studentID, days), nil
-	}); err != nil || result == nil {
-		// 缓存异常时降级直查
-		return s.queryStudyStats(studentID, days)
-	}
-	return result
+	return s.queryStudyStats(studentID, days)
 }
 
-// queryStudyStats 执行实际的学习统计查询（无缓存），供 GetStudyStats 的 loader 与降级路径复用。
+// queryStudyStats 执行实际的学习统计查询。
 func (s *StudentService) queryStudyStats(studentID, days int) map[string]interface{} {
 	if days != 7 && days != 30 {
 		days = 7

@@ -2,7 +2,6 @@
 package service
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,7 +13,6 @@ import (
 
 	"gorm.io/gorm"
 
-	"forklift-training/internal/cache"
 	"forklift-training/internal/model"
 )
 
@@ -211,9 +209,6 @@ func (s *ExamService) SubmitExam(studentID, courseID int, answers map[string]int
 		return nil, err
 	}
 
-	_ = cache.InvalidatePattern(context.Background(), cache.SafeKey("exam", "result", fmt.Sprintf("%d", studentID), fmt.Sprintf("%d", courseID)))
-	_ = cache.InvalidatePattern(context.Background(), cache.SafeKey("student", "profile", fmt.Sprintf("%d", studentID)))
-	_ = cache.InvalidatePattern(context.Background(), "admin:stats")
 	return map[string]interface{}{
 		"exam_id":         rec.ExamID,
 		"score":           finalScore,
@@ -226,61 +221,53 @@ func (s *ExamService) SubmitExam(studentID, courseID int, answers map[string]int
 
 // GetExamResult 查询考核结果，对应 Python get_exam_result。
 func (s *ExamService) GetExamResult(studentID, courseID int) (map[string]interface{}, error) {
-	cacheKey := cache.SafeKey("exam", "result", fmt.Sprintf("%d", studentID), fmt.Sprintf("%d", courseID))
-	var result map[string]interface{}
-	err := cache.GetOrSetJSON(context.Background(), cacheKey, cache.TTLStats, &result, func() (interface{}, error) {
-		var rec model.ExamRecord
-		err := s.db.Where("student_id = ? AND course_id = ?", studentID, courseID).First(&rec).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		if err != nil {
-			return nil, err
-		}
-		all, _ := loadQuestions()
-		courseKey := fmt.Sprintf("%d", courseID)
-		totalScore := 0
-		if courseData, ok := all[courseKey].(map[string]interface{}); ok {
-			if raws, _ := courseData["questions"].([]interface{}); ok {
-				for _, rq := range raws {
-					if q, _ := rq.(map[string]interface{}); q != nil {
-						if t, _ := q["type"].(string); t == "multi_choice" {
-							totalScore += examMultiScore
-						} else {
-							totalScore += examSingleScore
-						}
+	var rec model.ExamRecord
+	err := s.db.Where("student_id = ? AND course_id = ?", studentID, courseID).First(&rec).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	all, _ := loadQuestions()
+	courseKey := fmt.Sprintf("%d", courseID)
+	totalScore := 0
+	if courseData, ok := all[courseKey].(map[string]interface{}); ok {
+		if raws, _ := courseData["questions"].([]interface{}); ok {
+			for _, rq := range raws {
+				if q, _ := rq.(map[string]interface{}); q != nil {
+					if t, _ := q["type"].(string); t == "multi_choice" {
+						totalScore += examMultiScore
+					} else {
+						totalScore += examSingleScore
 					}
 				}
 			}
 		}
-		var details []interface{}
-		if len(rec.Answers) > 0 {
-			_ = json.Unmarshal(rec.Answers, &details)
-		}
-		correctCount := 0
-		for _, d := range details {
-			if m, ok := d.(map[string]interface{}); ok && m["is_correct"] == true {
-				correctCount++
-			}
-		}
-		score := 0.0
-		if rec.Score != nil {
-			score = *rec.Score
-		}
-		return map[string]interface{}{
-			"exam_id":         rec.ExamID,
-			"score":           score,
-			"total_score":     totalScore,
-			"correct_count":   correctCount,
-			"total_questions": len(details),
-			"details":         details,
-			"exam_date":       formatISO(rec.ExamDate),
-		}, nil
-	})
-	if err != nil {
-		return nil, err
 	}
-	return result, nil
+	var details []interface{}
+	if len(rec.Answers) > 0 {
+		_ = json.Unmarshal(rec.Answers, &details)
+	}
+	correctCount := 0
+	for _, d := range details {
+		if m, ok := d.(map[string]interface{}); ok && m["is_correct"] == true {
+			correctCount++
+		}
+	}
+	score := 0.0
+	if rec.Score != nil {
+		score = *rec.Score
+	}
+	return map[string]interface{}{
+		"exam_id":         rec.ExamID,
+		"score":           score,
+		"total_score":     totalScore,
+		"correct_count":   correctCount,
+		"total_questions": len(details),
+		"details":         details,
+		"exam_date":       formatISO(rec.ExamDate),
+	}, nil
 }
 
 // GetExamHistory 学员考核历史，对应 Python get_exam_history。

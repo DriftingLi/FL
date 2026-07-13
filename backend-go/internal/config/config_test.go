@@ -71,6 +71,10 @@ func TestValidate_Production_AllPresent(t *testing.T) {
 		SecretKey:    "real-secret",
 		JWTSecretKey: "real-jwt-secret",
 		DatabaseURL:  "postgres://localhost/db",
+		Redis: RedisConfig{
+			Addr:     "localhost:6379",
+			Password: "real-redis-password",
+		},
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Errorf("全部必填项存在时不应报错: %v", err)
