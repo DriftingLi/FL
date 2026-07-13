@@ -199,9 +199,6 @@ func (c *Config) Validate() error {
 	if c.Redis.Addr == "" {
 		missing = append(missing, "REDIS_ADDR")
 	}
-	if c.Redis.Password == "" {
-		missing = append(missing, "REDIS_PASSWORD")
-	}
 	if len(missing) > 0 {
 		return fmt.Errorf("生产环境缺少必填配置: %s", strings.Join(missing, ", "))
 	}
