@@ -105,11 +105,11 @@ func (s *TutorService) GetGradingStats(tutorID, days int) map[string]interface{}
 	}
 
 	return map[string]interface{}{
-		"days":         days,
-		"labels":       labels,
-		"data":         data,
-		"total_count":  totalCount,
-		"active_days":  activeDays,
+		"days":        days,
+		"labels":      labels,
+		"data":        data,
+		"total_count": totalCount,
+		"active_days": activeDays,
 	}
 }
 
