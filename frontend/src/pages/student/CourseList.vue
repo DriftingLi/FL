@@ -177,7 +177,7 @@ function handleSizeChange() {
 }
 
 function goToDetail(courseId) {
-  router.push(`/course/${courseId}`)
+  router.push({ name: 'CourseDetail', params: { id: courseId } })
 }
 
 onMounted(() => {

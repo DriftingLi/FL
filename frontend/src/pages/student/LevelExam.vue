@@ -14,30 +14,17 @@
         </span>
       </div>
 
-      <el-row :gutter="20" class="exam-cards">
-        <el-col :xs="24" :sm="12">
-          <el-card shadow="hover" class="exam-type-card level-exam-card">
-            <div class="exam-type-icon">📋</div>
+      <el-card class="intro-card" shadow="never">
+        <div class="intro-content">
+          <div class="intro-icon">📋</div>
+          <div class="intro-text">
             <h3>等级考试</h3>
-            <p>通过等级考试晋升学徒等级</p>
-            <el-button type="primary" @click="showLevelExams = true; showMockExam = false" style="margin-top:10px">
-              查看考试
-            </el-button>
-          </el-card>
-        </el-col>
-        <el-col :xs="24" :sm="12">
-          <el-card shadow="hover" class="exam-type-card mock-exam-card">
-            <div class="exam-type-icon">📝</div>
-            <h3>模拟考试</h3>
-            <p>全真模拟考试环境练习</p>
-            <el-button type="warning" @click="showMockExam = true; showLevelExams = false" style="margin-top:10px">
-              开始模拟
-            </el-button>
-          </el-card>
-        </el-col>
-      </el-row>
+            <p>通过等级考试晋升学徒等级，考试由导师安排，完成后需等待导师批改</p>
+          </div>
+        </div>
+      </el-card>
 
-      <div v-if="showLevelExams" class="level-exam-section">
+      <div class="level-exam-section">
         <h3>等级考试列表</h3>
         <el-table :data="exams" stripe v-loading="loading">
           <el-table-column prop="name" label="考试名称" />
@@ -62,24 +49,8 @@
             </template>
           </el-table-column>
         </el-table>
-      </div>
 
-      <div v-if="showMockExam" class="mock-exam-section">
-        <el-card>
-          <h3>模拟考试</h3>
-          <el-form :model="mockForm" label-width="100px" style="max-width:400px;margin-top:15px">
-            <el-form-item label="考试等级">
-              <el-select v-model="mockForm.level">
-                <el-option label="初级" value="beginner" />
-                <el-option label="中级" value="intermediate" />
-                <el-option label="高级" value="advanced" />
-              </el-select>
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" size="large" @click="startMockExam" :loading="mockLoading">开始模拟考试</el-button>
-            </el-form-item>
-          </el-form>
-        </el-card>
+        <el-empty v-if="!loading && exams.length === 0" description="暂无可参加的等级考试" />
       </div>
     </div>
 
@@ -147,7 +118,6 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Timer } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { levelExamApi } from '@/api/levelExam'
-import { mockExamApi } from '@/api/mockExam'
 import { useAuthStore } from '@/stores/auth'
 import { useUserStore } from '@/stores/user'
 
@@ -169,24 +139,17 @@ const levelTagType = computed(() => {
   return map[userLevel.value] || 'success'
 })
 
-const showLevelExams = ref(false)
-const showMockExam = ref(false)
 const loading = ref(false)
 const exams = ref([])
 
 const inExam = ref(false)
-const examMode = ref('')
 const examTitle = ref('')
 const participantId = ref(null)
-const mockExamId = ref(null)
 const examQuestions = ref([])
 const examAnswers = ref<any>({})
 const qIdx = ref(0)
 const remainingTime = ref(0)
 let timer = null
-
-const mockForm = ref({ level: 'beginner', duration: 90 })
-const mockLoading = ref(false)
 let refreshTimer = null
 
 const currentQ = computed(() => examQuestions.value[qIdx.value] || {})
@@ -223,7 +186,6 @@ onMounted(async () => {
       userLevel.value = userStore.profile?.level || 'beginner'
     } catch (e) {}
   }
-  mockForm.value.level = userLevel.value
   await loadExams()
   startRefreshTimer()
 })
@@ -252,37 +214,15 @@ async function enterExam(sessionId) {
   try {
     const res = await levelExamApi.enterExam(sessionId)
     participantId.value = res.data.participant_id
-    mockExamId.value = null
     examQuestions.value = res.data.questions
     examAnswers.value = res.data.answers || {}
     remainingTime.value = res.data.remaining_time
-    examMode.value = 'level'
     examTitle.value = '等级考试'
     inExam.value = true
     qIdx.value = findResumeIndex(res.data.questions, res.data.answers || {})
     startTimer()
   } catch (e) {
     ElMessage.error(e.message || '进入考试失败')
-  }
-}
-
-async function startMockExam() {
-  mockLoading.value = true
-  try {
-    const res = await mockExamApi.startMockExam(mockForm.value)
-    mockExamId.value = res.data.mock_exam_id
-    participantId.value = null
-    examQuestions.value = res.data.questions
-    examAnswers.value = {}
-    remainingTime.value = res.data.remaining_time
-    examMode.value = 'mock'
-    examTitle.value = '模拟考试'
-    inExam.value = true
-    startTimer()
-  } catch (e) {
-    ElMessage.error(e.message || '开始考试失败')
-  } finally {
-    mockLoading.value = false
   }
 }
 
@@ -320,10 +260,8 @@ function toggleOpt(key) {
 
 async function saveProgress() {
   try {
-    if (examMode.value === 'level' && participantId.value) {
+    if (participantId.value) {
       await levelExamApi.saveAnswer(participantId.value, { answers: examAnswers.value, remaining_time: remainingTime.value })
-    } else if (examMode.value === 'mock' && mockExamId.value) {
-      await mockExamApi.saveProgress(mockExamId.value, { answers: examAnswers.value, remaining_time: remainingTime.value })
     }
   } catch (e) {}
 }
@@ -344,22 +282,13 @@ async function doSubmit() {
   if (timer) clearInterval(timer)
   try { await saveProgress() } catch (e) {}
   try {
-    if (examMode.value === 'level' && participantId.value) {
+    if (participantId.value) {
       await levelExamApi.submitExam(participantId.value, {
         is_timeout: remainingTime.value <= 0,
         answers: examAnswers.value,
         remaining_time: remainingTime.value
       })
       ElMessage.success('交卷成功，请等待导师批改')
-    } else if (examMode.value === 'mock' && mockExamId.value) {
-      const res = await mockExamApi.submitMockExam(mockExamId.value)
-      const result = res.data || {}
-      const status = result.accuracy >= 60 ? '通过' : '未通过'
-      ElMessageBox.alert(
-        `得分：${result.total_score}/${result.max_score}\n正确率：${result.accuracy}%\n结果：${status}`,
-        '模拟考试结果',
-        { confirmButtonText: '确定' }
-      )
     }
     resetExamState()
     await loadExams()
@@ -370,10 +299,8 @@ async function doSubmit() {
 
 function resetExamState() {
   inExam.value = false
-  examMode.value = ''
   examTitle.value = ''
   participantId.value = null
-  mockExamId.value = null
   examQuestions.value = []
   examAnswers.value = {}
   qIdx.value = 0
@@ -408,14 +335,13 @@ async function viewResult(row) {
 .level-exam h2 { margin-bottom: 10px; }
 .level-info { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
 .level-tip { color: #909399; font-size: 14px; }
-.exam-cards { margin-bottom: 25px; }
-.exam-type-card { text-align: center; padding: 20px; cursor: default; }
-.exam-type-icon { font-size: 48px; margin-bottom: 10px; }
-.exam-type-card h3 { margin: 10px 0 5px; }
-.exam-type-card p { color: #909399; font-size: 14px; }
-.level-exam-card { border-top: 3px solid #409eff; }
-.mock-exam-card { border-top: 3px solid #e6a23c; }
-.level-exam-section, .mock-exam-section { margin-top: 20px; }
+.intro-card { margin-bottom: 25px; background: #f8fafc; }
+.intro-content { display: flex; align-items: center; gap: 16px; }
+.intro-icon { font-size: 40px; }
+.intro-text h3 { margin: 0 0 4px; color: #303133; }
+.intro-text p { margin: 0; color: #909399; font-size: 14px; }
+.level-exam-section { margin-top: 20px; }
+.level-exam-section h3 { margin-bottom: 12px; }
 .exam-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px 15px; background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 .exam-title { font-size: 16px; font-weight: bold; }
 .timer { font-size: 20px; font-weight: bold; display: flex; align-items: center; gap: 8px; }
