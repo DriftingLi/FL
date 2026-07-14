@@ -72,21 +72,17 @@
         <el-empty v-if="!chapterDetail.content && chapterFiles.length === 0" description="该章节暂无内容" />
       </div>
 
-      <div class="study-actions">
-        <template v-if="!isStudying">
-          <el-button type="primary" @click="beginStudy" size="large">
-            开始学习本章
-          </el-button>
-        </template>
-        <template v-else>
-          <div class="study-timer">
-            <el-icon><Timer /></el-icon>
-            已学习: {{ formatStudyTime(studySeconds) }}
+      <div class="study-floating-panel">
+        <div class="study-timer">
+          <el-icon class="timer-icon"><Timer /></el-icon>
+          <div class="timer-info">
+            <span class="timer-label">已学习</span>
+            <span class="timer-value">{{ formatStudyTime(studySeconds) }}</span>
           </div>
-          <el-button type="success" @click="completeStudy" size="large">
-            完成本章学习
-          </el-button>
-        </template>
+        </div>
+        <el-button type="success" @click="completeStudy" size="large" class="complete-btn">
+          完成本章学习
+        </el-button>
       </div>
 
       <div class="chapter-navigation">
@@ -124,7 +120,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Timer, ArrowLeft, ArrowRight, VideoCamera, Document, Picture } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -132,6 +128,7 @@ import { marked } from 'marked'
 import { markedHighlight } from 'marked-highlight'
 import hljs from 'highlight.js'
 import { courseApi } from '@/api/course'
+import { useAuthStore } from '@/stores/auth'
 import '@/assets/styles/markdown.css'
 import VideoPlayer from '@/components/student/VideoPlayer.vue'
 import DocumentViewer from '@/components/student/DocumentViewer.vue'
@@ -154,6 +151,7 @@ marked.use(
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const loading = ref(false)
 const chapterNotFound = ref(false)
@@ -164,6 +162,12 @@ const isStudying = ref(false)
 const studySeconds = ref(0)
 let studyTimer = null
 let studyStartTime = null
+// 已上报到后端的秒数，用于计算增量上报
+let reportedSeconds = 0
+// 自动上报定时器
+let autoReportTimer = null
+// 自动上报间隔（秒）
+const AUTO_REPORT_INTERVAL = 60
 
 const courseId = computed(() => route.params.courseId as string)
 const chapterId = computed(() => route.params.chapterId)
@@ -226,12 +230,15 @@ function formatStudyTime(seconds) {
 async function loadChapterDetail() {
   loading.value = true
   chapterNotFound.value = false
+  // 切换章节前先上报当前章节的增量时长
+  await reportIncremental(false)
   stopStudy()
 
   try {
     const res = await courseApi.getChapterDetail(courseId.value, chapterId.value)
     if (res.code === 200) {
       chapterDetail.value = res.data
+      beginStudy()
     } else {
       chapterNotFound.value = true
     }
@@ -263,9 +270,14 @@ function beginStudy() {
   isStudying.value = true
   studyStartTime = Date.now()
   studySeconds.value = 0
+  reportedSeconds = 0
   studyTimer = setInterval(() => {
     studySeconds.value = Math.floor((Date.now() - studyStartTime) / 1000)
   }, 1000)
+  // 启动自动上报：每隔 AUTO_REPORT_INTERVAL 秒上报一次增量时长
+  autoReportTimer = setInterval(() => {
+    reportIncremental(false)
+  }, AUTO_REPORT_INTERVAL * 1000)
 }
 
 function stopStudy() {
@@ -273,19 +285,77 @@ function stopStudy() {
     clearInterval(studyTimer)
     studyTimer = null
   }
+  if (autoReportTimer) {
+    clearInterval(autoReportTimer)
+    autoReportTimer = null
+  }
   isStudying.value = false
 }
 
+// 上报自上次上报以来的增量学习时长。后端 study_duration 为累加字段。
+// isFinal=true 表示页面即将卸载，使用 fetch keepalive 保证请求能发出。
+async function reportIncremental(isFinal) {
+  if (!chapterDetail.value || !isStudying.value) return
+  const currentSecs = studySeconds.value
+  const delta = currentSecs - reportedSeconds
+  if (delta <= 0) return
+  // 后端 duration 单位为分钟，向上取整，至少 1 分钟
+  const duration = Math.max(Math.ceil(delta / 60), 1)
+  const payload = {
+    chapter_id: chapterDetail.value.chapter_id,
+    duration: duration
+  }
+
+  if (isFinal) {
+    // 离开页面场景：使用 fetch keepalive 确保请求在页面卸载后仍能发出
+    const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+    const url = `${baseURL}/course/${courseId.value}/progress`
+    try {
+      fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: authStore.token ? `Bearer ${authStore.token}` : ''
+        },
+        body: JSON.stringify(payload),
+        keepalive: true
+      })
+    } catch (e) {
+      // 忽略离场上报错误
+    }
+    reportedSeconds = currentSecs
+    return
+  }
+
+  try {
+    const res = await courseApi.updateProgress(courseId.value, payload)
+    if (res.code === 200) {
+      reportedSeconds = currentSecs
+    }
+  } catch (error) {
+    // 静默失败，下次自动上报会补上
+    console.error('自动上报学习时长失败:', error)
+  }
+}
+
 async function completeStudy() {
+  // 先停止计时，再上报最终增量
+  const wasStudying = isStudying.value
   stopStudy()
+  if (!wasStudying || !chapterDetail.value) return
+
+  const delta = studySeconds.value - reportedSeconds
   const duration = Math.max(Math.ceil(studySeconds.value / 60), 1)
+  // 完成学习时上报总时长（取较大值确保不丢时长）
+  const reportDuration = Math.max(duration, Math.max(Math.ceil(delta / 60), 1))
 
   try {
     const res = await courseApi.updateProgress(courseId.value, {
       chapter_id: chapterDetail.value.chapter_id,
-      duration: duration
+      duration: reportDuration
     })
     if (res.code === 200) {
+      reportedSeconds = studySeconds.value
       ElMessage.success('学习进度已保存')
       await loadChapterDetail()
     }
@@ -313,13 +383,57 @@ watch(() => route.params.chapterId, (newVal) => {
   }
 })
 
+// 页面可见性变化：切到后台时暂停计时并上报，回到前台时恢复
+function handleVisibilityChange() {
+  if (document.hidden) {
+    if (isStudying.value) {
+      // 暂停计时器，上报已学习时长
+      if (studyTimer) {
+        clearInterval(studyTimer)
+        studyTimer = null
+      }
+      if (autoReportTimer) {
+        clearInterval(autoReportTimer)
+        autoReportTimer = null
+      }
+      reportIncremental(false)
+    }
+  } else {
+    // 回到前台：若仍在学习状态则恢复计时
+    if (isStudying.value && !studyTimer && chapterDetail.value) {
+      studyStartTime = Date.now() - studySeconds.value * 1000
+      studyTimer = setInterval(() => {
+        studySeconds.value = Math.floor((Date.now() - studyStartTime) / 1000)
+      }, 1000)
+      autoReportTimer = setInterval(() => {
+        reportIncremental(false)
+      }, AUTO_REPORT_INTERVAL * 1000)
+    }
+  }
+}
+
+// 页面关闭/刷新时上报
+function handleBeforeUnload() {
+  if (isStudying.value) {
+    reportIncremental(true)
+  }
+}
+
 onMounted(() => {
   loadChapterDetail()
   loadCourseInfo()
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  window.addEventListener('beforeunload', handleBeforeUnload)
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
+  // 离开组件时使用 fetch keepalive 上报未提交时长
+  if (isStudying.value) {
+    reportIncremental(true)
+  }
   stopStudy()
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
 
@@ -417,26 +531,63 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-.study-actions {
+.study-floating-panel {
+  position: fixed;
+  right: 24px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
-  gap: 20px;
-  padding: 20px;
+  gap: 16px;
+  padding: 20px 18px;
   background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  margin-bottom: 20px;
-  flex-wrap: wrap;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+  min-width: 140px;
 }
 
 .study-timer {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  font-size: 18px;
+  gap: 8px;
+}
+
+.timer-icon {
+  font-size: 28px;
   color: #409eff;
-  font-weight: 600;
+  animation: timer-pulse 2s ease-in-out infinite;
+}
+
+@keyframes timer-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.timer-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.timer-label {
+  font-size: 12px;
+  color: #909399;
+}
+
+.timer-value {
+  font-size: 24px;
+  color: #409eff;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 1px;
+}
+
+.complete-btn {
+  width: 100%;
 }
 
 .chapter-navigation {
@@ -508,13 +659,23 @@ onUnmounted(() => {
     grid-template-columns: 1fr;
   }
 
-  .study-actions {
-    padding: 16px;
-    gap: 12px;
+  .study-floating-panel {
+    right: 12px;
+    padding: 14px 12px;
+    min-width: 110px;
+    gap: 10px;
   }
 
-  .study-timer {
-    font-size: 16px;
+  .timer-icon {
+    font-size: 22px;
+  }
+
+  .timer-value {
+    font-size: 18px;
+  }
+
+  .complete-btn {
+    font-size: 13px;
   }
 
   .nav-title {
