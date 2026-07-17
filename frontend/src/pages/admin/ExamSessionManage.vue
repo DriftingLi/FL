@@ -8,9 +8,6 @@
     <el-table :data="sessions" stripe v-loading="loading">
       <el-table-column prop="id" label="ID" width="60" />
       <el-table-column prop="name" label="考试名称" />
-      <el-table-column prop="level" label="等级" width="80">
-        <template #default="{ row }">{{ levelMap[row.level] }}</template>
-      </el-table-column>
       <el-table-column prop="start_time" label="开始时间" width="180">
         <template #default="{ row }">{{ formatDateTime(row.start_time) }}</template>
       </el-table-column>
@@ -35,14 +32,6 @@
       <el-form :model="sessionForm" label-width="100px">
         <el-form-item label="考试名称" required>
           <el-input v-model="sessionForm.name" placeholder="请输入考试名称" />
-        </el-form-item>
-        <el-form-item label="考试等级" required>
-          <el-select v-model="sessionForm.level" :disabled="!!editingId">
-            <el-option label="初级" value="beginner" />
-            <el-option label="中级" value="intermediate" />
-            <el-option label="高级" value="advanced" />
-          </el-select>
-          <div class="form-tip">初级学徒考初级考试晋升中级，以此类推</div>
         </el-form-item>
         <el-form-item label="开始时间" required>
           <el-date-picker v-model="sessionForm.start_time" type="datetime" placeholder="选择开始时间" />
@@ -72,7 +61,6 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { levelExamApi } from '@/api/levelExam'
 
-const levelMap = { beginner: '初级', intermediate: '中级', advanced: '高级' }
 const statusMap = { upcoming: '未开始', ongoing: '进行中', finished: '已结束' }
 const statusType = { upcoming: 'info', ongoing: 'success', finished: '' }
 
@@ -82,7 +70,7 @@ const dialogVisible = ref(false)
 const editingId = ref(null)
 const submitting = ref(false)
 const sessionForm = ref({
-  name: '', level: 'beginner', start_time: '', end_time: ''
+  name: '', start_time: '', end_time: ''
 })
 
 onMounted(() => loadData())
@@ -97,13 +85,13 @@ async function loadData() {
 
 function showCreateDialog() {
   editingId.value = null
-  sessionForm.value = { name: '', level: 'beginner', start_time: '', end_time: '' }
+  sessionForm.value = { name: '', start_time: '', end_time: '' }
   dialogVisible.value = true
 }
 
 function editSession(row) {
   editingId.value = row.id
-  sessionForm.value = { name: row.name, level: row.level, start_time: row.start_time, end_time: row.end_time }
+  sessionForm.value = { name: row.name, start_time: row.start_time, end_time: row.end_time }
   dialogVisible.value = true
 }
 
@@ -126,7 +114,6 @@ async function submitSession() {
   try {
     const data = {
       name: sessionForm.value.name,
-      level: sessionForm.value.level,
       start_time: sessionForm.value.start_time ? toLocalISOString(sessionForm.value.start_time) : '',
       end_time: sessionForm.value.end_time ? toLocalISOString(sessionForm.value.end_time) : ''
     }

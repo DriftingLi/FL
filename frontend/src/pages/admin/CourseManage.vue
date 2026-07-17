@@ -63,13 +63,10 @@
           {{ formatDate(row.created_at) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="280" fixed="right" align="center">
+      <el-table-column label="操作" width="220" fixed="right" align="center">
         <template #default="{ row }">
           <el-button type="primary" link size="small" @click="openChapterDrawer(row)">
             章节
-          </el-button>
-          <el-button type="primary" link size="small" @click="openEditDialog(row)">
-            编辑
           </el-button>
           <el-button
             :type="row.status === 1 ? 'warning' : 'success'"
@@ -102,7 +99,7 @@
 
     <el-dialog
       v-model="dialogVisible"
-      :title="isEdit ? '编辑课程' : '新增课程'"
+      title="新增课程"
       width="560px"
       destroy-on-close
     >
@@ -134,17 +131,11 @@
         <el-form-item label="预计时长(分钟)" prop="duration">
           <el-input-number v-model="formData.duration" :min="0" :max="9999" />
         </el-form-item>
-        <el-form-item label="状态" prop="status" v-if="isEdit">
-          <el-radio-group v-model="formData.status">
-            <el-radio :value="1">上架</el-radio>
-            <el-radio :value="0">下架</el-radio>
-          </el-radio-group>
-        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="handleSubmit">
-          {{ isEdit ? '保存' : '创建' }}
+          创建
         </el-button>
       </template>
     </el-dialog>
@@ -183,7 +174,6 @@
                 </div>
               </div>
               <div class="chapter-actions">
-                <el-button type="primary" link size="small" @click="openChapterForm(element)">编辑</el-button>
                 <el-popconfirm title="确定删除该章节？" @confirm="handleDeleteChapter(element.chapter_id)">
                   <template #reference>
                     <el-button type="danger" link size="small">删除</el-button>
@@ -200,23 +190,13 @@
 
     <el-dialog
       v-model="chapterDialogVisible"
-      :title="isChapterEdit ? '编辑章节' : '新增章节'"
+      title="新增章节"
       width="520px"
       destroy-on-close
     >
       <el-form ref="chapterFormRef" :model="chapterFormData" :rules="chapterFormRules" label-width="100px">
         <el-form-item label="章节标题" prop="title">
           <el-input v-model="chapterFormData.title" placeholder="请输入章节标题" maxlength="100" show-word-limit />
-        </el-form-item>
-        <el-form-item label="章节内容" prop="content">
-          <el-input
-            v-model="chapterFormData.content"
-            type="textarea"
-            placeholder="请输入章节内容（支持换行）"
-            :rows="8"
-            maxlength="10000"
-            show-word-limit
-          />
         </el-form-item>
         <el-form-item label="内容链接" prop="content_url">
           <el-input v-model="chapterFormData.content_url" placeholder="外部内容链接（可选）" />
@@ -228,7 +208,7 @@
       <template #footer>
         <el-button @click="chapterDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="chapterSubmitting" @click="handleChapterSubmit">
-          {{ isChapterEdit ? '保存' : '创建' }}
+          创建
         </el-button>
       </template>
     </el-dialog>
@@ -251,7 +231,6 @@ const pageSize = ref(10)
 const total = ref(0)
 
 const dialogVisible = ref(false)
-const isEdit = ref(false)
 const submitting = ref(false)
 const formRef = ref(null)
 const formData: Record<string, any> = reactive({
@@ -259,8 +238,7 @@ const formData: Record<string, any> = reactive({
   category: '',
   description: '',
   cover_image: '',
-  duration: 0,
-  status: 1
+  duration: 0
 })
 
 const formRules = {
@@ -274,13 +252,10 @@ const chaptersLoading = ref(false)
 const chapters = ref([])
 
 const chapterDialogVisible = ref(false)
-const isChapterEdit = ref(false)
 const chapterSubmitting = ref(false)
 const chapterFormRef = ref(null)
 const chapterFormData = reactive({
-  chapter_id: null,
   title: '',
-  content: '',
   content_url: '',
   duration: 0
 })
@@ -345,26 +320,10 @@ function resetForm() {
   formData.description = ''
   formData.cover_image = ''
   formData.duration = 0
-  formData.status = 1
 }
 
 function openCreateDialog() {
   resetForm()
-  isEdit.value = false
-  dialogVisible.value = true
-}
-
-function openEditDialog(row) {
-  isEdit.value = true
-  Object.assign(formData, {
-    course_id: row.course_id,
-    name: row.name,
-    category: row.category,
-    description: row.description || '',
-    cover_image: row.cover_image || '',
-    duration: row.duration || 0,
-    status: row.status
-  })
   dialogVisible.value = true
 }
 
@@ -374,24 +333,15 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    if (isEdit.value) {
-      const res = await adminApi.updateCourse(formData.course_id, formData)
-      if (res.code === 200) {
-        ElMessage.success('课程更新成功')
-        dialogVisible.value = false
-        loadCourses()
-      }
-    } else {
-      const res = await adminApi.createCourse(formData)
-      if (res.code === 201) {
-        ElMessage.success('课程创建成功')
-        dialogVisible.value = false
-        loadCourses()
-      }
+    const res = await adminApi.createCourse(formData)
+    if (res.code === 201) {
+      ElMessage.success('课程创建成功')
+      dialogVisible.value = false
+      loadCourses()
     }
   } catch (error) {
     console.error('操作失败:', error)
-    ElMessage.error(isEdit.value ? '更新失败' : '创建失败')
+    ElMessage.error('创建失败')
   } finally {
     submitting.value = false
   }
@@ -443,27 +393,13 @@ async function openChapterDrawer(course) {
 }
 
 function resetChapterForm() {
-  chapterFormData.chapter_id = null
   chapterFormData.title = ''
-  chapterFormData.content = ''
   chapterFormData.content_url = ''
   chapterFormData.duration = 0
 }
 
-function openChapterForm(chapter = null) {
+function openChapterForm() {
   resetChapterForm()
-  if (chapter) {
-    isChapterEdit.value = true
-    Object.assign(chapterFormData, {
-      chapter_id: chapter.chapter_id,
-      title: chapter.title,
-      content: chapter.content || '',
-      content_url: chapter.content_url || '',
-      duration: chapter.duration || 0
-    })
-  } else {
-    isChapterEdit.value = false
-  }
   chapterDialogVisible.value = true
 }
 
@@ -473,24 +409,15 @@ async function handleChapterSubmit() {
 
   chapterSubmitting.value = true
   try {
-    if (isChapterEdit.value && chapterFormData.chapter_id) {
-      const res = await adminApi.updateChapter(chapterFormData.chapter_id, chapterFormData)
-      if (res.code === 200) {
-        ElMessage.success('章节更新成功')
-        chapterDialogVisible.value = false
-        openChapterDrawer(currentCourse.value)
-      }
-    } else {
-      const res = await adminApi.createChapter(currentCourse.value.course_id, chapterFormData)
-      if (res.code === 201) {
-        ElMessage.success('章节创建成功')
-        chapterDialogVisible.value = false
-        openChapterDrawer(currentCourse.value)
-      }
+    const res = await adminApi.createChapter(currentCourse.value.course_id, chapterFormData)
+    if (res.code === 201) {
+      ElMessage.success('章节创建成功')
+      chapterDialogVisible.value = false
+      openChapterDrawer(currentCourse.value)
     }
   } catch (error) {
-    console.error('操作失败:', error)
-    ElMessage.error(isChapterEdit.value ? '更新失败' : '创建失败')
+    console.error('创建失败:', error)
+    ElMessage.error('创建失败')
   } finally {
     chapterSubmitting.value = false
   }

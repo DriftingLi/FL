@@ -102,9 +102,6 @@ func TestStudentLogin_Success(t *testing.T) {
 	if result.Username != "student1" || result.Role != "student" {
 		t.Fatalf("登录结果不匹配: %+v", result)
 	}
-	if result.Level != "beginner" {
-		t.Fatalf("等级应为 beginner, got %s", result.Level)
-	}
 	if result.Token == "" {
 		t.Fatal("token 不应为空")
 	}

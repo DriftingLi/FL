@@ -216,6 +216,54 @@ DAEMON
 }
 
 # ======================================================================
+# 7. SSL 证书说明（通过 GitHub Secrets 自动分发）
+# ======================================================================
+setup_ssl() {
+    log_info ">>> SSL 证书目录准备..."
+
+    SSL_DIR="$DEPLOY_PATH/nginx/ssl"
+    mkdir -p "$SSL_DIR"
+    log_ok "SSL 证书目录: $SSL_DIR"
+
+    echo ""
+    echo "=================================================="
+    echo "  SSL 证书配置说明"
+    echo "=================================================="
+    echo ""
+    echo "  本方案通过 GitHub Secrets 自动分发 SSL 证书，无需手动上传。"
+    echo ""
+    echo "  证书要求："
+    echo "  - 必须是通配符证书 *.your-domain.com（覆盖 www/training/valuation/mentor/manage 五个子域名）"
+    echo "  - 同时需包含根域名 your-domain.com（用于根域名 301 重定向到 www）"
+    echo "  - 建议申请多域名证书（SAN）：包含 *.your-domain.com 和 your-domain.com"
+    echo ""
+    echo "  在 GitHub 仓库 Settings → Secrets and variables →"
+    echo "  Actions 中添加以下两个 Secrets："
+    echo ""
+    echo "  1. SSL_FULLCHAIN"
+    echo "     证书文件全文（含 BEGIN/END CERTIFICATE 行）"
+    echo "     - 若注册商分开提供站点证书和中间证书，需合并："
+    echo "       cat your-domain.crt intermediate.crt > fullchain.pem"
+    echo "     - 将文件完整内容粘贴到 Secret 中"
+    echo ""
+    echo "  2. SSL_PRIVKEY"
+    echo "     私钥文件全文（含 BEGIN/END PRIVATE KEY 行）"
+    echo "     - 将 .key 文件完整内容粘贴到 Secret 中"
+    echo ""
+    echo "  部署时 CD 流水线会自动将证书内容写入："
+    echo "    $SSL_DIR/fullchain.pem"
+    echo "    $SSL_DIR/privkey.pem"
+    echo ""
+    echo "  注意："
+    echo "  - 通配符证书 *.your-domain.com 不包含根域名 your-domain.com 本身"
+    echo "  - 若仅申请通配符证书，根域名 HTTPS 访问会报证书错误（但 301 重定向仍可生效）"
+    echo "  - 注册商证书通常 1 年有效期，到期前重新申请并更新 Secret 内容"
+    echo "  - 证书更新后，下次部署会自动覆盖旧证书"
+    echo "=================================================="
+    echo ""
+}
+
+# ======================================================================
 # 7. 创建初始 .env 模板
 # ======================================================================
 create_env_template() {
@@ -245,8 +293,9 @@ ADMIN_DEFAULT_PASSWORD=请替换为强密码
 TUTOR_DEFAULT_PASSWORD=请替换为强密码
 STUDENT_DEFAULT_PASSWORD=请替换为强密码
 
-# CORS（多个域名用逗号分隔）
-CORS_ORIGINS=https://your-domain.com
+# CORS（必须包含主域名 + 四个子域名，逗号分隔）
+# 主域名为 www，管理员后台用 manage 替代 admin
+CORS_ORIGINS=https://www.your-domain.com,https://training.your-domain.com,https://valuation.your-domain.com,https://mentor.your-domain.com,https://manage.your-domain.com
 
 # AI 配置
 ZHIPU_API_KEY=your-zhipu-api-key
@@ -261,6 +310,13 @@ COZE_OAUTH_KID=
 
 # 后端镜像（CD 流水线自动填充）
 BACKEND_IMAGE=ghcr.io/YOUR_ORG/forklift-training-backend
+
+# 前端镜像（CD 流水线自动填充）
+FRONTEND_IMAGE=ghcr.io/YOUR_ORG/forklift-training-frontend
+
+# 根域名（由 CD 流水线从 GitHub Secrets 注入，用于 nginx ${DOMAIN} 和 *.${DOMAIN} 通配符展开）
+# 主站使用 www.根域名，根域名本身由 nginx 301 重定向到 www
+DOMAIN=your-domain.com
 ENVEOF
         chown "$DEPLOY_USER":"$DEPLOY_USER" "$DEPLOY_PATH/.env.template"
         log_ok ".env.template 已创建"
@@ -347,6 +403,7 @@ main() {
     configure_firewall
     configure_system
     configure_logrotate
+    setup_ssl
     create_env_template
     setup_cron
     verify
@@ -356,23 +413,26 @@ main() {
     echo "  服务器初始化完成!"
     echo ""
     echo "  后续步骤:"
-    echo "  1. 将 GitHub Actions SSH 公钥添加到服务器:"
+    echo "  1. 在 GitHub Secrets 中配置 SSL 证书（参考上方说明）"
+    echo ""
+    echo "  2. 将 GitHub Actions SSH 公钥添加到服务器:"
     echo "     ssh-copy-id -i <公钥路径> $DEPLOY_USER@<服务器IP>"
     echo ""
-    echo "  2. 在 GitHub 仓库 Settings → Secrets and variables →"
+    echo "  3. 在 GitHub 仓库 Settings → Secrets and variables →"
     echo "     Actions 中添加以下 Secrets:"
-    echo "       SSH_HOST       服务器 IP/域名"
-    echo "       SSH_USER       $DEPLOY_USER"
-    echo "       SSH_PORT       22"
-    echo "       SSH_PRIVATE_KEY  SSH 私钥（完整内容，含 BEGIN/END）"
-    echo "       DATABASE_URL   PostgreSQL 连接串"
-    echo "       SECRET_KEY     应用密钥"
-    echo "       JWT_SECRET_KEY JWT 密钥"
+    echo "       SSH_HOST          服务器 IP/域名"
+    echo "       SSH_USER          $DEPLOY_USER"
+    echo "       SSH_PORT          22"
+    echo "       SSH_PRIVATE_KEY   SSH 私钥（完整内容，含 BEGIN/END）"
+    echo "       DATABASE_URL      PostgreSQL 连接串"
+    echo "       SECRET_KEY        应用密钥"
+    echo "       JWT_SECRET_KEY    JWT 密钥"
+    echo "       FRONTEND_URL      https://www.your-domain.com"
+    echo "       API_URL           https://www.your-domain.com"
+    echo "       DOMAIN            your-domain.com"
+    echo "       SSL_FULLCHAIN     证书文件全文（含 BEGIN/END CERTIFICATE）"
+    echo "       SSL_PRIVKEY       私钥文件全文（含 BEGIN/END PRIVATE KEY）"
     echo "       ... 及其他环境变量"
-    echo ""
-    echo "  3. 复制配置文件到服务器:"
-    echo "     scp docker-compose.prod.yml nginx/nginx.conf \\"
-    echo "       nginx/default.conf $DEPLOY_USER@<服务器>:$DEPLOY_PATH/"
     echo ""
     echo "  4. 推送代码到 main 分支自动触发部署!"
     echo "=================================================="

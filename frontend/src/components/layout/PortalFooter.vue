@@ -86,7 +86,7 @@
       </div>
 
       <div class="footer-bottom">
-        <p>© 2026 和润天下人工智能科技有限公司 版权所有 | 粤ICP备2026005936号</p>
+        <p>© 2026 和润天下人工智能科技有限公司 版权所有 | <a href="https://beian.miit.gov.cn/#/Integrated/index" target="_blank" rel="noopener noreferrer" class="beian-link">粤ICP备2026005936号-1</a></p>
       </div>
     </div>
   </footer>
@@ -248,6 +248,16 @@ const joinUrl = buildSubdomainUrl('main', '/#footer')
   font-size: var(--text-xs);
   color: var(--color-text-muted);
   margin: 0;
+}
+
+.beian-link {
+  color: inherit;
+  text-decoration: none;
+  transition: color var(--duration-fast);
+}
+
+.beian-link:hover {
+  color: var(--color-primary-400);
 }
 
 @media (max-width: 768px) {

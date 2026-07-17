@@ -4,7 +4,6 @@ import {
   Notebook,
   EditPen,
   Document,
-  DocumentCopy,
   CircleCloseFilled,
   MagicStick,
   DataAnalysis,
@@ -45,7 +44,6 @@ const studentNav: NavItem[] = [
     icon: Document,
     children: [
       { key: 'level-exam', label: '考试中心', path: '/training/level-exam', icon: Document },
-      { key: 'mock-exam', label: '模拟考试', path: '/training/mock-exam', icon: DocumentCopy },
       { key: 'wrong-questions', label: '错题本', path: '/training/wrong-questions', icon: CircleCloseFilled }
     ]
   },
@@ -71,6 +69,7 @@ const adminNav: NavItem[] = [
       { key: 'students', label: '学员管理', path: '/admin/students', icon: User },
       { key: 'tutors', label: '导师管理', path: '/admin/tutors', icon: UserFilled },
       { key: 'courses', label: '课程管理', path: '/admin/courses', icon: Notebook },
+      { key: 'question-review', label: '题库审核', path: '/admin/question-review', icon: EditPen },
       { key: 'exam-sessions', label: '考试场次', path: '/admin/exam-sessions', icon: Calendar }
     ]
   },

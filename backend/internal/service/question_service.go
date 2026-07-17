@@ -4,6 +4,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"math/rand"
 	"sort"
 	"strings"
 
@@ -12,38 +13,52 @@ import (
 	"forklift-training/internal/model"
 )
 
-// 题型与等级常量，与 Python VALID_TYPES/VALID_LEVELS 一致。
+// 题型与课程分类常量（已取消等级制度）。
 var (
 	validQuestionTypes  = []string{"single_choice", "multi_choice", "true_false", "fault_image", "short_answer"}
-	validQuestionLevels = []string{"beginner", "intermediate", "advanced"}
 	validQuestionStatus = []string{"draft", "pending", "published"}
+	validCategories     = []string{"CATEGORY_01", "CATEGORY_02", "CATEGORY_03", "CATEGORY_04"}
 	examScoreMap        = map[string]float64{"single_choice": 3, "multi_choice": 4, "true_false": 2, "fault_image": 6, "short_answer": 5}
 	mockExamScoreMap    = map[string]float64{"single_choice": 3, "multi_choice": 4, "true_false": 2, "fault_image": 4, "short_answer": 10}
-	levelOrder          = map[string]int{"beginner": 1, "intermediate": 2, "advanced": 3, "expert": 4}
-	levelPromotion      = map[string]string{"beginner": "intermediate", "intermediate": "advanced", "advanced": "expert"}
-	examAllowedLevels   = map[string][]string{
-		"beginner":     {"beginner"},
-		"intermediate": {"beginner", "intermediate"},
-		"advanced":     {"beginner", "intermediate", "advanced"},
-	}
 )
 
-// questionToDict 将 Question 转为 dict，对应 Python Question.to_dict。
+// sampleQuestions 统一抽题函数：从 published 题库按条件随机抽取 count 题。
+// qType 为空表示不限题型；kpIDs 为空表示不限知识点。
+func sampleQuestions(db *gorm.DB, qType string, kpIDs []int, count int) ([]model.Question, error) {
+	q := db.Model(&model.Question{}).Where("status = ?", "published")
+	if qType != "" {
+		q = q.Where("type = ?", qType)
+	}
+	if len(kpIDs) > 0 {
+		q = q.Where("knowledge_point_id IN ?", kpIDs)
+	}
+	var all []model.Question
+	if err := q.Find(&all).Error; err != nil {
+		return nil, err
+	}
+	if count > 0 && len(all) > count {
+		rand.Shuffle(len(all), func(i, j int) { all[i], all[j] = all[j], all[i] })
+		all = all[:count]
+	}
+	return all, nil
+}
+
+// questionToDict 将 Question 转为 dict。
 // includeAnswer=false 时剔除答案、解析、参考答案、评分标准（学员侧）。
-func questionToDict(q *model.Question, includeAnswer bool) map[string]interface{} {
-	var options interface{}
+func questionToDict(q *model.Question, includeAnswer bool) map[string]any {
+	var options any
 	if len(q.Options) > 0 {
 		_ = json.Unmarshal(q.Options, &options)
 	}
-	d := map[string]interface{}{
+	d := map[string]any{
 		"id":                 q.ID,
 		"type":               q.Type,
-		"level":              q.Level,
 		"content":            q.Content,
 		"options":            options,
 		"image_url":          q.ImageURL,
 		"knowledge_point_id": q.KnowledgePointID,
 		"status":             q.Status,
+		"reject_reason":      q.RejectReason,
 		"score":              q.Score,
 		"created_by":         q.CreatedBy,
 		"created_by_type":    q.CreatedByType,
@@ -59,7 +74,7 @@ func questionToDict(q *model.Question, includeAnswer bool) map[string]interface{
 	return d
 }
 
-// checkAnswer 判定答案对错，对应 Python _check_answer。
+// checkAnswer 判定答案对错。
 // 返回 *bool：nil 表示无法判定（简答题/未作答），true/false 表示对/错。
 func checkAnswer(q *model.Question, userAnswer interface{}) *bool {
 	if userAnswer == nil {
@@ -85,7 +100,7 @@ func checkAnswer(q *model.Question, userAnswer interface{}) *bool {
 	return &res
 }
 
-// gradeQuestion 评分，对应 Python _grade_question。
+// gradeQuestion 评分。
 // 返回 (isCorrect, earned)：isCorrect 为 nil 表示无法判定；earned 为得分。
 func gradeQuestion(q *model.Question, userAnswer interface{}, maxScore float64) (*bool, float64) {
 	if userAnswer == nil {
@@ -129,7 +144,7 @@ func gradeQuestion(q *model.Question, userAnswer interface{}, maxScore float64) 
 	return &b, 0
 }
 
-// addToWrongQuestions 错题入库（去重、计数），对应 Python _add_to_wrong_question。
+// addToWrongQuestions 错题入库（去重、计数）。
 func addToWrongQuestions(db *gorm.DB, studentID, questionID int) error {
 	var wq model.WrongQuestion
 	err := db.Where("student_id = ? AND question_id = ?", studentID, questionID).First(&wq).Error
@@ -152,7 +167,7 @@ func addToWrongQuestions(db *gorm.DB, studentID, questionID int) error {
 	return db.Create(&wq).Error
 }
 
-// stringifyAnswer 将用户答案（字符串/列表）转为字符串，对应 Python 中 ','.join(list) 或 str。
+// stringifyAnswer 将用户答案（字符串/列表）转为字符串。
 func stringifyAnswer(a interface{}) string {
 	if a == nil {
 		return ""
@@ -172,7 +187,7 @@ func stringifyAnswer(a interface{}) string {
 	return ""
 }
 
-// normalizeAnswerList 将 "A,B,C" 拆分并排序，对应 Python sorted([x.strip() for x in answer.split(',')])。
+// normalizeAnswerList 将 "A,B,C" 拆分并排序。
 func normalizeAnswerList(s string) []string {
 	parts := strings.Split(s, ",")
 	out := make([]string, 0, len(parts))
@@ -262,15 +277,11 @@ func NewQuestionBankService(db *gorm.DB) *QuestionBankService {
 	return &QuestionBankService{db: db}
 }
 
-// CreateQuestion 创建题目，对应 Python create_question。
-func (s *QuestionBankService) CreateQuestion(data map[string]interface{}, createdBy *int, createdByType string) (map[string]interface{}, error) {
+// CreateQuestion 创建题目。
+func (s *QuestionBankService) CreateQuestion(data map[string]any, createdBy *int, createdByType string) (map[string]any, error) {
 	qType, _ := data["type"].(string)
 	if !containsString(validQuestionTypes, qType) {
 		return nil, errors.New("无效的题型，支持的题型：" + strings.Join(validQuestionTypes, ", "))
-	}
-	qLevel, _ := data["level"].(string)
-	if !containsString(validQuestionLevels, qLevel) {
-		return nil, errors.New("无效的等级，支持的等级：" + strings.Join(validQuestionLevels, ", "))
 	}
 	content, _ := data["content"].(string)
 	if content == "" {
@@ -307,7 +318,6 @@ func (s *QuestionBankService) CreateQuestion(data map[string]interface{}, create
 	}
 	q := model.Question{
 		Type:             qType,
-		Level:            qLevel,
 		Content:          content,
 		Options:          optionsBytes,
 		Answer:           answer,
@@ -330,7 +340,7 @@ func (s *QuestionBankService) CreateQuestion(data map[string]interface{}, create
 }
 
 // GetQuestion 查询题目详情。
-func (s *QuestionBankService) GetQuestion(id int) (map[string]interface{}, error) {
+func (s *QuestionBankService) GetQuestion(id int) (map[string]any, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
 		return nil, errors.New("题目不存在")
@@ -339,7 +349,8 @@ func (s *QuestionBankService) GetQuestion(id int) (map[string]interface{}, error
 }
 
 // UpdateQuestion 更新题目。
-func (s *QuestionBankService) UpdateQuestion(id int, data map[string]interface{}) (map[string]interface{}, error) {
+// 特殊处理：当 status 由 draft 改为 pending（导师重新提交审核）时，清空驳回理由。
+func (s *QuestionBankService) UpdateQuestion(id int, data map[string]any) (map[string]any, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
 		return nil, errors.New("题目不存在")
@@ -347,13 +358,15 @@ func (s *QuestionBankService) UpdateQuestion(id int, data map[string]interface{}
 	if t, ok := data["type"].(string); ok && !containsString(validQuestionTypes, t) {
 		return nil, errors.New("无效的题型")
 	}
-	if l, ok := data["level"].(string); ok && !containsString(validQuestionLevels, l) {
-		return nil, errors.New("无效的等级")
-	}
 	if st, ok := data["status"].(string); ok && !containsString(validQuestionStatus, st) {
 		return nil, errors.New("无效的状态")
 	}
+	// 检测重新提交：原本 draft 状态，新状态为 pending → 视为导师修改后重新提交，清空驳回理由
+	resubmitting := q.Status == "draft" && data["status"] == "pending"
 	applyQuestionFields(&q, data)
+	if resubmitting {
+		q.RejectReason = ""
+	}
 	q.UpdatedAt = beijingNow()
 	if err := s.db.Save(&q).Error; err != nil {
 		return nil, err
@@ -374,7 +387,7 @@ func (s *QuestionBankService) DeleteQuestion(id int) error {
 }
 
 // ListQuestions 题目列表分页查询。
-func (s *QuestionBankService) ListQuestions(page, pageSize int, level, qType string, kpID *int, status, keyword string) map[string]interface{} {
+func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, kpID *int, status, keyword string) map[string]any {
 	if page <= 0 {
 		page = 1
 	}
@@ -382,9 +395,6 @@ func (s *QuestionBankService) ListQuestions(page, pageSize int, level, qType str
 		pageSize = 20
 	}
 	q := s.db.Model(&model.Question{})
-	if level != "" {
-		q = q.Where("level = ?", level)
-	}
 	if qType != "" {
 		q = q.Where("type = ?", qType)
 	}
@@ -400,12 +410,12 @@ func (s *QuestionBankService) ListQuestions(page, pageSize int, level, qType str
 	var total int64
 	q.Count(&total)
 	var list []model.Question
-	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list)
-	out := make([]map[string]interface{}, 0, len(list))
+	q.Order("created_at DESC, id ASC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list)
+	out := make([]map[string]any, 0, len(list))
 	for i := range list {
 		out = append(out, questionToDict(&list[i], true))
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"total":     total,
 		"page":      page,
 		"page_size": pageSize,
@@ -413,13 +423,14 @@ func (s *QuestionBankService) ListQuestions(page, pageSize int, level, qType str
 	}
 }
 
-// PublishQuestion 发布题目。
-func (s *QuestionBankService) PublishQuestion(id int) (map[string]interface{}, error) {
+// PublishQuestion 发布题目（管理员审核通过）。同时清空驳回理由。
+func (s *QuestionBankService) PublishQuestion(id int) (map[string]any, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
 		return nil, errors.New("题目不存在")
 	}
 	q.Status = "published"
+	q.RejectReason = ""
 	q.UpdatedAt = beijingNow()
 	if err := s.db.Save(&q).Error; err != nil {
 		return nil, err
@@ -427,33 +438,69 @@ func (s *QuestionBankService) PublishQuestion(id int) (map[string]interface{}, e
 	return questionToDict(&q, true), nil
 }
 
-// BatchPublish 批量发布。
-func (s *QuestionBankService) BatchPublish(ids []int) map[string]interface{} {
+// BatchPublish 批量发布（管理员审核通过）。同时清空驳回理由。
+func (s *QuestionBankService) BatchPublish(ids []int) map[string]any {
 	count := 0
 	if len(ids) > 0 {
-		count64 := s.db.Model(&model.Question{}).Where("id IN ?", ids).Update("status", "published").RowsAffected
+		count64 := s.db.Model(&model.Question{}).
+			Where("id IN ?", ids).
+			Updates(map[string]any{"status": "published", "reject_reason": ""}).
+			RowsAffected
 		count = int(count64)
 	}
-	return map[string]interface{}{"published_count": count}
+	return map[string]any{"published_count": count}
+}
+
+// RejectQuestion 驳回题目（管理员审核）。状态回退为 draft，记录驳回理由供导师查看修改。
+func (s *QuestionBankService) RejectQuestion(id int, reason string) (map[string]any, error) {
+	if reason == "" {
+		return nil, errors.New("请填写驳回理由")
+	}
+	var q model.Question
+	if err := s.db.First(&q, id).Error; err != nil {
+		return nil, errors.New("题目不存在")
+	}
+	q.Status = "draft"
+	q.RejectReason = reason
+	q.UpdatedAt = beijingNow()
+	if err := s.db.Save(&q).Error; err != nil {
+		return nil, err
+	}
+	return questionToDict(&q, true), nil
+}
+
+// BatchReject 批量驳回（管理员审核）。状态回退为 draft，统一记录同一驳回理由。
+func (s *QuestionBankService) BatchReject(ids []int, reason string) (map[string]any, error) {
+	if reason == "" {
+		return nil, errors.New("请填写驳回理由")
+	}
+	if len(ids) == 0 {
+		return map[string]any{"rejected_count": 0}, nil
+	}
+	count64 := s.db.Model(&model.Question{}).
+		Where("id IN ?", ids).
+		Updates(map[string]any{"status": "draft", "reject_reason": reason}).
+		RowsAffected
+	return map[string]any{"rejected_count": int(count64)}, nil
 }
 
 // BatchImport 批量导入题目。
-func (s *QuestionBankService) BatchImport(items []interface{}, createdBy *int) map[string]interface{} {
-	success, errs := 0, []map[string]interface{}{}
+func (s *QuestionBankService) BatchImport(items []any, createdBy *int) map[string]any {
+	success, errs := 0, []map[string]any{}
 	for i, item := range items {
-		data, ok := item.(map[string]interface{})
+		data, ok := item.(map[string]any)
 		if !ok {
-			errs = append(errs, map[string]interface{}{"index": i, "error": "无效数据"})
+			errs = append(errs, map[string]any{"index": i, "error": "无效数据"})
 			continue
 		}
 		data["status"] = "pending"
 		if _, err := s.CreateQuestion(data, createdBy, "tutor"); err != nil {
-			errs = append(errs, map[string]interface{}{"index": i, "error": err.Error()})
+			errs = append(errs, map[string]any{"index": i, "error": err.Error()})
 			continue
 		}
 		success++
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"success_count": success,
 		"error_count":   len(errs),
 		"errors":        errs,
@@ -461,15 +508,9 @@ func (s *QuestionBankService) BatchImport(items []interface{}, createdBy *int) m
 }
 
 // GetStats 题库统计。
-func (s *QuestionBankService) GetStats() map[string]interface{} {
+func (s *QuestionBankService) GetStats() map[string]any {
 	var total int64
 	s.db.Model(&model.Question{}).Count(&total)
-	byLevel := map[string]int64{}
-	for _, l := range validQuestionLevels {
-		var c int64
-		s.db.Model(&model.Question{}).Where("level = ?", l).Count(&c)
-		byLevel[l] = c
-	}
 	byType := map[string]int64{}
 	for _, t := range validQuestionTypes {
 		var c int64
@@ -482,32 +523,56 @@ func (s *QuestionBankService) GetStats() map[string]interface{} {
 		s.db.Model(&model.Question{}).Where("status = ?", st).Count(&c)
 		byStatus[st] = c
 	}
+	// 按课程分类统计（经 knowledge_point.category 关联）
+	byCategory := map[string]int64{}
+	for _, cat := range validCategories {
+		var c int64
+		s.db.Model(&model.Question{}).
+			Joins("LEFT JOIN knowledge_point ON knowledge_point.id = question.knowledge_point_id").
+			Where("knowledge_point.category = ? AND question.status = ?", cat, "published").
+			Count(&c)
+		byCategory[cat] = c
+	}
 	var kps []model.KnowledgePoint
 	s.db.Find(&kps)
-	byKP := make([]map[string]interface{}, 0, len(kps))
+	byKP := make([]map[string]any, 0, len(kps))
 	for _, kp := range kps {
 		var c int64
 		s.db.Model(&model.Question{}).Where("knowledge_point_id = ?", kp.ID).Count(&c)
-		byKP = append(byKP, map[string]interface{}{"id": kp.ID, "name": kp.Name, "count": c})
+		byKP = append(byKP, map[string]any{"id": kp.ID, "name": kp.Name, "category": kp.Category, "count": c})
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"total":              total,
-		"by_level":           byLevel,
 		"by_type":            byType,
 		"by_status":          byStatus,
+		"by_category":        byCategory,
 		"by_knowledge_point": byKP,
 	}
 }
 
+// GetCategories 返回课程四分类及其题目数。
+func (s *QuestionBankService) GetCategories() []map[string]any {
+	out := make([]map[string]any, 0, len(validCategories))
+	for _, cat := range validCategories {
+		var c int64
+		s.db.Model(&model.Question{}).
+			Joins("LEFT JOIN knowledge_point ON knowledge_point.id = question.knowledge_point_id").
+			Where("knowledge_point.category = ? AND question.status = ?", cat, "published").
+			Count(&c)
+		out = append(out, map[string]any{"category": cat, "count": c})
+	}
+	return out
+}
+
 // CreateKnowledgePoint 创建知识点。
-func (s *QuestionBankService) CreateKnowledgePoint(data map[string]interface{}) (map[string]interface{}, error) {
+func (s *QuestionBankService) CreateKnowledgePoint(data map[string]any) (map[string]any, error) {
 	name, _ := data["name"].(string)
 	if name == "" {
 		return nil, errors.New("知识点名称不能为空")
 	}
-	level, _ := data["level"].(string)
-	if !containsString(validQuestionLevels, level) {
-		return nil, errors.New("无效的等级")
+	category, _ := data["category"].(string)
+	if category != "" && !containsString(validCategories, category) {
+		return nil, errors.New("无效的课程分类")
 	}
 	var parentID *int
 	if v, ok := data["parent_id"]; ok && v != nil {
@@ -520,7 +585,7 @@ func (s *QuestionBankService) CreateKnowledgePoint(data map[string]interface{}) 
 	}
 	kp := model.KnowledgePoint{
 		Name:        name,
-		Level:       level,
+		Category:    category,
 		ParentID:    parentID,
 		Description: getString(data, "description"),
 		CreatedAt:   beijingNow(),
@@ -532,17 +597,17 @@ func (s *QuestionBankService) CreateKnowledgePoint(data map[string]interface{}) 
 }
 
 // GetKnowledgePoints 查询知识点列表。
-func (s *QuestionBankService) GetKnowledgePoints(level string, parentID *int) []map[string]interface{} {
+func (s *QuestionBankService) GetKnowledgePoints(category string, parentID *int) []map[string]any {
 	q := s.db.Model(&model.KnowledgePoint{})
-	if level != "" {
-		q = q.Where("level = ?", level)
+	if category != "" {
+		q = q.Where("category = ?", category)
 	}
 	if parentID != nil {
 		q = q.Where("parent_id = ?", *parentID)
 	}
 	var kps []model.KnowledgePoint
 	q.Order("created_at ASC").Find(&kps)
-	out := make([]map[string]interface{}, 0, len(kps))
+	out := make([]map[string]any, 0, len(kps))
 	for i := range kps {
 		out = append(out, kpToDict(&kps[i]))
 	}
@@ -550,7 +615,7 @@ func (s *QuestionBankService) GetKnowledgePoints(level string, parentID *int) []
 }
 
 // UpdateKnowledgePoint 更新知识点。
-func (s *QuestionBankService) UpdateKnowledgePoint(id int, data map[string]interface{}) (map[string]interface{}, error) {
+func (s *QuestionBankService) UpdateKnowledgePoint(id int, data map[string]any) (map[string]any, error) {
 	var kp model.KnowledgePoint
 	if err := s.db.First(&kp, id).Error; err != nil {
 		return nil, errors.New("知识点不存在")
@@ -558,11 +623,11 @@ func (s *QuestionBankService) UpdateKnowledgePoint(id int, data map[string]inter
 	if v, ok := data["name"]; ok {
 		kp.Name, _ = v.(string)
 	}
-	if v, ok := data["level"]; ok {
-		if l, _ := v.(string); !containsString(validQuestionLevels, l) {
-			return nil, errors.New("无效的等级")
+	if v, ok := data["category"]; ok {
+		if c, _ := v.(string); c != "" && !containsString(validCategories, c) {
+			return nil, errors.New("无效的课程分类")
 		}
-		kp.Level, _ = v.(string)
+		kp.Category, _ = v.(string)
 	}
 	if v, ok := data["parent_id"]; ok {
 		if v == nil {
@@ -594,23 +659,20 @@ func (s *QuestionBankService) DeleteKnowledgePoint(id int) error {
 	return nil
 }
 
-func kpToDict(kp *model.KnowledgePoint) map[string]interface{} {
-	return map[string]interface{}{
+func kpToDict(kp *model.KnowledgePoint) map[string]any {
+	return map[string]any{
 		"id":          kp.ID,
 		"name":        kp.Name,
-		"level":       kp.Level,
+		"category":    kp.Category,
 		"parent_id":   kp.ParentID,
 		"description": kp.Description,
 		"created_at":  formatISO(kp.CreatedAt),
 	}
 }
 
-func applyQuestionFields(q *model.Question, data map[string]interface{}) {
+func applyQuestionFields(q *model.Question, data map[string]any) {
 	if v, ok := data["type"]; ok {
 		q.Type, _ = v.(string)
-	}
-	if v, ok := data["level"]; ok {
-		q.Level, _ = v.(string)
 	}
 	if v, ok := data["content"]; ok {
 		q.Content, _ = v.(string)
@@ -677,7 +739,7 @@ func toIntDefault(v interface{}, def int) int {
 }
 
 // getString 从 map 取字符串。
-func getString(m map[string]interface{}, key string) string {
+func getString(m map[string]any, key string) string {
 	v, _ := m[key].(string)
 	return v
 }

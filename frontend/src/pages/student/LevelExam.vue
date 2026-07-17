@@ -2,35 +2,12 @@
   <div class="level-exam">
     <div v-if="!inExam" class="exam-list">
       <h2>考试中心</h2>
-      <div class="level-info">
-        <el-tag :type="levelTagType" size="large" effect="dark">
-          当前等级：{{ levelMap[userLevel] }}学徒
-        </el-tag>
-        <span class="level-tip" v-if="nextLevel">
-          通过{{ levelMap[userLevel] }}等级考试可晋级为{{ levelMap[nextLevel] }}学徒
-        </span>
-        <span class="level-tip" v-else>
-          您已达到最高等级
-        </span>
-      </div>
-
-      <el-card class="intro-card" shadow="never">
-        <div class="intro-content">
-          <div class="intro-icon">📋</div>
-          <div class="intro-text">
-            <h3>等级考试</h3>
-            <p>通过等级考试晋升学徒等级，考试由导师安排，完成后需等待导师批改</p>
-          </div>
-        </div>
-      </el-card>
+      <p class="section-desc">下方为当前可参加的考试场次，进入后请在规定时间内完成作答</p>
 
       <div class="level-exam-section">
-        <h3>等级考试列表</h3>
+        <h3>考试场次</h3>
         <el-table :data="exams" stripe v-loading="loading">
           <el-table-column prop="name" label="考试名称" />
-          <el-table-column prop="level" label="等级" width="100">
-            <template #default="{ row }">{{ levelMap[row.level] }}</template>
-          </el-table-column>
           <el-table-column prop="start_time" label="开始时间" width="180">
             <template #default="{ row }">{{ formatDateTime(row.start_time) }}</template>
           </el-table-column>
@@ -43,14 +20,13 @@
           <el-table-column label="操作" width="160">
             <template #default="{ row }">
               <el-button v-if="row.status === 'ongoing' && !row.has_participated && row.can_enter" type="primary" size="small" @click="enterExam(row.id)">进入考试</el-button>
-              <el-tag v-if="row.status === 'ongoing' && !row.has_participated && !row.can_enter" type="info" size="small">等级不符</el-tag>
               <el-button v-if="row.status === 'ongoing' && row.has_participated && row.participant_status === 'in_progress'" type="warning" size="small" @click="enterExam(row.id)">继续考试</el-button>
               <el-button v-if="row.has_participated && (row.participant_status === 'submitted' || row.participant_status === 'timeout')" type="success" size="small" @click="viewResult(row)">查看结果</el-button>
             </template>
           </el-table-column>
         </el-table>
 
-        <el-empty v-if="!loading && exams.length === 0" description="暂无可参加的等级考试" />
+        <el-empty v-if="!loading && exams.length === 0" description="暂无可参加的考试场次" />
       </div>
     </div>
 
@@ -118,26 +94,9 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Timer } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { levelExamApi } from '@/api/levelExam'
-import { useAuthStore } from '@/stores/auth'
-import { useUserStore } from '@/stores/user'
+import { typeMap, sessionStatusMap as statusMap } from '@/constants/question'
 
-const authStore = useAuthStore()
-const userStore = useUserStore()
-
-const levelMap = { beginner: '初级', intermediate: '中级', advanced: '高级', expert: '顶级' }
-const statusMap = { upcoming: '未开始', ongoing: '进行中', finished: '已结束' }
 const statusType = { upcoming: 'info', ongoing: 'success', finished: '' }
-const typeMap = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
-
-const userLevel = ref(authStore.userInfo?.level || 'beginner')
-const nextLevel = computed(() => {
-  const order = { beginner: 'intermediate', intermediate: 'advanced', advanced: 'expert' }
-  return order[userLevel.value]
-})
-const levelTagType = computed(() => {
-  const map = { beginner: 'success', intermediate: 'warning', advanced: 'danger', expert: '' }
-  return map[userLevel.value] || 'success'
-})
 
 const loading = ref(false)
 const exams = ref([])
@@ -180,12 +139,6 @@ function findResumeIndex(questions, answers) {
 }
 
 onMounted(async () => {
-  if (!authStore.userInfo?.level) {
-    try {
-      await userStore.fetchProfile()
-      userLevel.value = userStore.profile?.level || 'beginner'
-    } catch (e) {}
-  }
   await loadExams()
   startRefreshTimer()
 })
@@ -217,7 +170,7 @@ async function enterExam(sessionId) {
     examQuestions.value = res.data.questions
     examAnswers.value = res.data.answers || {}
     remainingTime.value = res.data.remaining_time
-    examTitle.value = '等级考试'
+    examTitle.value = '考试进行中'
     inExam.value = true
     qIdx.value = findResumeIndex(res.data.questions, res.data.answers || {})
     startTimer()
@@ -333,13 +286,7 @@ async function viewResult(row) {
 <style scoped>
 .level-exam { max-width: 1200px; margin: 0 auto; }
 .level-exam h2 { margin-bottom: 10px; }
-.level-info { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-.level-tip { color: #909399; font-size: 14px; }
-.intro-card { margin-bottom: 25px; background: #f8fafc; }
-.intro-content { display: flex; align-items: center; gap: 16px; }
-.intro-icon { font-size: 40px; }
-.intro-text h3 { margin: 0 0 4px; color: #303133; }
-.intro-text p { margin: 0; color: #909399; font-size: 14px; }
+.section-desc { color: #909399; font-size: 14px; margin-bottom: 20px; }
 .level-exam-section { margin-top: 20px; }
 .level-exam-section h3 { margin-bottom: 12px; }
 .exam-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px 15px; background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }

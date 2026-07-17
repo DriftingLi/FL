@@ -25,7 +25,7 @@
       <QuickCard
         title="我的课程"
         :items="myCourses"
-        :max-items="5"
+        :max-items="100"
         more-link="/training/tutor/courses"
         empty-text="暂无课程"
       />
@@ -115,11 +115,11 @@ const statsEmpty = computed(() => {
 
 async function loadData() {
   try {
-    // 加载导师课程
-    const courseRes = await tutorApi.getCourses({})
+    // 加载导师课程（page_size=100 拉取所有课程，仪表盘需展示全部）
+    const courseRes = await tutorApi.getCourses({ page: 1, page_size: 100 })
     if (courseRes.code === 200 && courseRes.data) {
       const courses = Array.isArray(courseRes.data) ? courseRes.data : (courseRes.data.courses || [])
-      myCourses.value = courses.slice(0, 5).map((c: any) => ({
+      myCourses.value = courses.map((c: any) => ({
         title: c.name || c.course_name,
         subtitle: `${c.student_count || 0} 名学员`,
         path: c.course_id ? `/training/tutor/course/${c.course_id}/chapters` : ''
@@ -130,14 +130,16 @@ async function loadData() {
   }
 
   try {
-    // 加载待批阅
-    const gradingRes = await gradingApi.getSubmittedParticipants({ status: 'pending', page: 1, page_size: 5 })
+    // 加载待批阅（后端不支持 status 过滤，前端按 grading_status 过滤）
+    const gradingRes = await gradingApi.getSubmittedParticipants({ page: 1, page_size: 100 })
     if (gradingRes.code === 200 && gradingRes.data) {
-      const items = Array.isArray(gradingRes.data) ? gradingRes.data : (gradingRes.data.participants || gradingRes.data.items || [])
-      pendingCount.value = gradingRes.data.total || items.length
-      pendingGrading.value = items.slice(0, 5).map((p: any) => ({
+      const allItems = Array.isArray(gradingRes.data) ? gradingRes.data : (gradingRes.data.participants || gradingRes.data.items || [])
+      // 仅保留未批改完成的试卷
+      const pendingItems = allItems.filter((p: any) => p.grading_status !== 'completed')
+      pendingCount.value = pendingItems.length
+      pendingGrading.value = pendingItems.slice(0, 5).map((p: any) => ({
         title: `${p.student_name || '学员'} - ${p.exam_name || p.session_name || '考试'}`,
-        badge: `${p.pending_count || p.question_count || '?'}题待批`,
+        badge: `${p.ungraded_count ?? 0}题待批`,
         path: p.participant_id ? `/training/tutor/grading?participant=${p.participant_id}` : '/training/tutor/grading'
       }))
     }

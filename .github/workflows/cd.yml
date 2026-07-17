@@ -20,6 +20,10 @@ on:
         description: 跳过后端部署
         type: boolean
         default: false
+      skip_frontend:
+        description: 跳过前端部署
+        type: boolean
+        default: false
       skip_migration:
         description: 跳过数据库迁移
         type: boolean
@@ -34,6 +38,7 @@ env:
   NODE_VERSION: "22"
   REGISTRY: ghcr.io
   IMAGE_BACKEND: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-backend
+  IMAGE_FRONTEND: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-frontend
   DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/forklift-training' }}
   COMPOSE_FILE: ${{ vars.COMPOSE_FILE || 'docker-compose.prod.yml' }}
   TAILSCALE_VERSION: "v2"
@@ -99,26 +104,81 @@ jobs:
       - name: 构建并推送后端镜像
         uses: docker/build-push-action@v6
         with:
-          context: backend-go
+          context: backend
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
 
   # ============================================================
-  # Stage 2: 通过 Tailscale SSH 部署后端到自托管服务器
+  # Stage 1.5: 构建前端 Docker 镜像并推送 ghcr.io（与后端并行）
   # ============================================================
-  deploy-backend:
-    needs: build-backend
+  build-frontend:
+    needs: ci-gate
     if: |
       always() &&
-      needs.build-backend.result == 'success'
+      (github.event_name == 'workflow_dispatch' || needs.ci-gate.result == 'success') &&
+      !(github.event_name == 'workflow_dispatch' && inputs.skip_frontend)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # workflow_run 模式下检出触发 CI 的那个 commit
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: 登录 GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 提取镜像标签
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_FRONTEND }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
+            type=sha,prefix=,format=short
+            type=raw,value=${{ github.event.workflow_run.head_sha || github.sha }}
+            type=ref,event=branch
+
+      - name: 构建并推送前端镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+
+  # ============================================================
+  # Stage 2: 通过 Tailscale SSH 部署全栈到自托管服务器
+  # ============================================================
+  deploy:
+    needs: [build-backend, build-frontend]
+    if: |
+      always() &&
+      needs.build-backend.result == 'success' &&
+      needs.build-frontend.result == 'success'
     runs-on: ubuntu-latest
     environment:
       name: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
     env:
-      # 镜像信息（来自 build-backend outputs）
+      # 镜像信息（来自 build-backend/build-frontend outputs）
       IMAGE_TAG: ${{ needs.build-backend.outputs.image_tag || github.sha }}
+      IMAGE_FRONTEND: ${{ env.IMAGE_FRONTEND }}
+      # SSL 证书内容（从 GitHub Secrets 注入，部署时写入服务器固定路径）
+      SSL_FULLCHAIN: ${{ secrets.SSL_FULLCHAIN }}
+      SSL_PRIVKEY: ${{ secrets.SSL_PRIVKEY }}
+      # 域名（启动时 envsubst 替换 nginx 配置中的 ${DOMAIN}）
+      DOMAIN: ${{ secrets.DOMAIN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # 数据库
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -147,7 +207,6 @@ jobs:
       COZE_OAUTH_PRIVATE_KEY_PATH: ${{ secrets.COZE_OAUTH_PRIVATE_KEY_PATH }}
       # 部署选项
       SKIP_MIGRATION: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_migration || 'false' }}
-      BACKEND_PORT: ${{ secrets.BACKEND_PORT || '8081' }}
       # Redis 缓存
       REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD || '' }}
       REDIS_DB: ${{ secrets.REDIS_DB || '0' }}
@@ -263,6 +322,10 @@ jobs:
             echo ''
             printf 'export IMAGE_TAG=%q\n' "${IMAGE_TAG:-latest}"
             printf 'export IMAGE_BACKEND=%q\n' "${IMAGE_BACKEND:-}"
+            printf 'export IMAGE_FRONTEND=%q\n' "${IMAGE_FRONTEND:-}"
+            printf 'export SSL_FULLCHAIN=%q\n' "${SSL_FULLCHAIN:-}"
+            printf 'export SSL_PRIVKEY=%q\n' "${SSL_PRIVKEY:-}"
+            printf 'export DOMAIN=%q\n' "${DOMAIN:-}"
             printf 'export GITHUB_TOKEN=%q\n' "${GITHUB_TOKEN:-}"
             printf 'export REGISTRY=%q\n' "${REGISTRY:-ghcr.io}"
             printf 'export DATABASE_URL=%q\n' "${DATABASE_URL:-}"
@@ -287,7 +350,6 @@ jobs:
             printf 'export COMPOSE_FILE=%q\n' "${COMPOSE_FILE:-docker-compose.prod.yml}"
             printf 'export DEPLOY_PATH=%q\n' "${DEPLOY_PATH:-/opt/forklift-training}"
             printf 'export SKIP_MIGRATION=%q\n' "${SKIP_MIGRATION:-false}"
-            printf 'export BACKEND_PORT=%q\n' "${BACKEND_PORT:-8081}"
             printf 'export REDIS_PASSWORD=%q\n' "${REDIS_PASSWORD:-}"
             printf 'export REDIS_DB=%q\n' "${REDIS_DB:-0}"
             printf 'export REDIS_POOL_SIZE=%q\n' "${REDIS_POOL_SIZE:-10}"
@@ -330,13 +392,13 @@ jobs:
           args: logout
 
   # ============================================================
-  # 注：前端由 Cloudflare Pages 自动部署（GitHub 集成，监听仓库 push 事件）
+  # Stage 3: 健康检查（后端 + 前端）
   # ============================================================
   health-check:
-    needs: deploy-backend
+    needs: deploy
     if: |
       always() &&
-      needs.deploy-backend.result == 'success'
+      needs.deploy.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: 等待服务就绪
@@ -364,14 +426,36 @@ jobs:
           echo "❌ 后端健康检查失败!"
           exit 1
 
+      - name: 前端健康检查
+        env:
+          FRONTEND_URL: ${{ vars.FRONTEND_URL || secrets.FRONTEND_URL }}
+        run: |
+          if [ -z "$FRONTEND_URL" ]; then
+            echo "::warning::未配置 FRONTEND_URL，跳过前端健康检查"
+            exit 0
+          fi
+          for i in $(seq 1 15); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              --connect-timeout 5 --max-time 10 \
+              "$FRONTEND_URL/health" 2>/dev/null || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ 前端健康 ($STATUS)"
+              exit 0
+            fi
+            echo "⏳ 等待前端... ($STATUS) [$i/15]"
+            sleep 6
+          done
+          echo "❌ 前端健康检查失败!"
+          exit 1
+
   # ============================================================
-  # Stage 5: 后端自动回滚（通过 Tailscale SSH）
+  # Stage 4: 全栈自动回滚（通过 Tailscale SSH）
   # ============================================================
   rollback:
-    needs: [deploy-backend, health-check]
+    needs: [deploy, health-check]
     if: |
       always() &&
-      needs.deploy-backend.result == 'success' &&
+      needs.deploy.result == 'success' &&
       needs.health-check.result == 'failure'
     runs-on: ubuntu-latest
     environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
@@ -428,23 +512,23 @@ jobs:
   # Stage 6: 部署汇总
   # ============================================================
   notify:
-    needs: [deploy-backend, health-check]
+    needs: [deploy, health-check]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: 汇总部署状态
         run: |
-          BACKEND_STATUS="${{ needs.deploy-backend.result }}"
+          DEPLOY_STATUS="${{ needs.deploy.result }}"
           HEALTH_STATUS="${{ needs.health-check.result }}"
 
           echo "# 部署报告" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| 项目 | 状态 |" >> $GITHUB_STEP_SUMMARY
           echo "|------|------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 后端 (Tailscale SSH) | $([ "$BACKEND_STATUS" = 'success' ] && echo '✅' || ([ "$BACKEND_STATUS" = 'skipped' ] && echo '⏭️') || echo '❌') |" >> $GITHUB_STEP_SUMMARY
-          echo "| 前端 | Cloudflare Pages 自动部署 |" >> $GITHUB_STEP_SUMMARY
+          echo "| 全栈部署 (Tailscale SSH) | $([ "$DEPLOY_STATUS" = 'success' ] && echo '✅' || ([ "$DEPLOY_STATUS" = 'skipped' ] && echo '⏭️') || echo '❌') |" >> $GITHUB_STEP_SUMMARY
+          echo "| 前端 | $([ "$DEPLOY_STATUS" = 'success' ] && echo '✅ 已部署' || echo '⚠️') |" >> $GITHUB_STEP_SUMMARY
           echo "| 健康检查 | $([ "$HEALTH_STATUS" = 'success' ] && echo '✅' || ([ "$HEALTH_STATUS" = 'skipped' ] && echo '⏭️') || echo '⚠️ 已回滚') |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- 后端 API: ${{ vars.API_URL || '未配置' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- 前端: https://${{ vars.CLOUDFLARE_PROJECT_NAME || 'forklift-training' }}.pages.dev" >> $GITHUB_STEP_SUMMARY
+          echo "- 前端: ${{ vars.FRONTEND_URL || '未配置' }}" >> $GITHUB_STEP_SUMMARY
         shell: bash

@@ -4,11 +4,11 @@
       <el-card>
         <h2>模拟考试</h2>
         <el-form :model="examForm" label-width="100px">
-          <el-form-item label="考试等级">
-            <el-select v-model="examForm.level">
-              <el-option label="初级学徒" value="beginner" />
-              <el-option label="中级学徒" value="intermediate" />
-              <el-option label="高级学徒" value="advanced" />
+          <el-form-item label="题目数量">
+            <el-select v-model="examForm.count">
+              <el-option label="20 题" :value="20" />
+              <el-option label="40 题（默认）" :value="40" />
+              <el-option label="60 题" :value="60" />
             </el-select>
           </el-form-item>
           <el-form-item label="考试时长">
@@ -27,9 +27,6 @@
       <el-card class="history-card" v-if="history.length > 0">
         <h3>历史记录</h3>
         <el-table :data="history" stripe>
-          <el-table-column prop="level" label="等级" width="80">
-            <template #default="{ row }">{{ levelMap[row.level] }}</template>
-          </el-table-column>
           <el-table-column prop="score" label="得分" width="80" />
           <el-table-column prop="status" label="状态" width="100">
             <template #default="{ row }">
@@ -139,14 +136,12 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Timer } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { mockExamApi } from '@/api/mockExam'
-
-const levelMap = { beginner: '初级', intermediate: '中级', advanced: '高级', expert: '顶级' }
-const typeMap = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
+import { typeMap } from '@/constants/question'
 
 const loading = ref(false)
 const examStarted = ref(false)
 const examFinished = ref(false)
-const examForm = ref({ level: 'beginner', duration: 90 })
+const examForm = ref({ count: 40, duration: 90 })
 const mockExamId = ref(null)
 const questions = ref([])
 const answers = ref<any>({})

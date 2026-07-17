@@ -1,5 +1,5 @@
 // Package config 负责加载与校验应用配置。
-// 所有配置通过环境变量注入，与原 Python 版环境变量命名保持一致。
+// 所有配置通过环境变量注入。
 package config
 
 import (

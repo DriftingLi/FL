@@ -1,4 +1,4 @@
-// Package response 提供与原 Python 版一致的统一响应结构 {code, message, data}。
+// Package response 提供统一响应结构 {code, message, data}。
 package response
 
 import "github.com/gin-gonic/gin"
@@ -7,21 +7,21 @@ import "github.com/gin-gonic/gin"
 type R struct {
 	Code    int         `json:"code"`
 	Message string      `json:"message"`
-	Data    interface{} `json:"data"`
+	Data    any `json:"data"`
 }
 
 // Success 输出 200 成功响应。
-func Success(c *gin.Context, data interface{}) {
+func Success(c *gin.Context, data any) {
 	c.JSON(200, R{Code: 200, Message: "success", Data: data})
 }
 
 // SuccessWithMsg 输出 200 成功响应，自定义 message。
-func SuccessWithMsg(c *gin.Context, msg string, data interface{}) {
+func SuccessWithMsg(c *gin.Context, msg string, data any) {
 	c.JSON(200, R{Code: 200, Message: msg, Data: data})
 }
 
 // Created 输出 201 创建成功响应。
-func Created(c *gin.Context, msg string, data interface{}) {
+func Created(c *gin.Context, msg string, data any) {
 	c.JSON(201, R{Code: 201, Message: msg, Data: data})
 }
 

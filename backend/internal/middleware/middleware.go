@@ -32,7 +32,7 @@ const (
 	CtxRequestID ContextKey = "request_id"
 )
 
-// Claims JWT 声明，与原 Python 版 additional_claims 结构一致。
+// Claims JWT 声明。
 type Claims struct {
 	UserID   int    `json:"user_id"`
 	Username string `json:"username"`
@@ -95,7 +95,7 @@ func Recovery() gin.HandlerFunc {
 	})
 }
 
-// JWTAuth 强制 JWT 认证中间件，对应原 Python 版 jwt_required_custom()。
+// JWTAuth 强制 JWT 认证中间件。
 func JWTAuth(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenStr := extractToken(c)
@@ -148,7 +148,7 @@ func OptionalAuth(cfg *config.Config) gin.HandlerFunc {
 	}
 }
 
-// RoleRequired 角色校验中间件，对应原 Python 版 role_required()。
+// RoleRequired 角色校验中间件。
 // 必须在 JWTAuth 之后使用。
 func RoleRequired(roles ...string) gin.HandlerFunc {
 	allowed := make(map[string]struct{}, len(roles))

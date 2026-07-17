@@ -20,9 +20,8 @@ func newQuestionBankSvc(t *testing.T) (*QuestionBankService, *gorm.DB) {
 func TestCreateQuestion_SingleChoice_Success(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
 	createdBy := 1
-	data := map[string]interface{}{
+	data := map[string]any{
 		"type":    "single_choice",
-		"level":   "beginner",
 		"content": "叉车作业前应检查什么？",
 		"options": []string{"轮胎气压", "油位", "制动系统", "以上全部"},
 		"answer":  "D",
@@ -44,9 +43,8 @@ func TestCreateQuestion_SingleChoice_Success(t *testing.T) {
 
 func TestCreateQuestion_InvalidType(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	data := map[string]interface{}{
+	data := map[string]any{
 		"type":    "invalid_type",
-		"level":   "beginner",
 		"content": "test",
 		"answer":  "A",
 	}
@@ -56,26 +54,10 @@ func TestCreateQuestion_InvalidType(t *testing.T) {
 	}
 }
 
-func TestCreateQuestion_InvalidLevel(t *testing.T) {
-	svc, _ := newQuestionBankSvc(t)
-	data := map[string]interface{}{
-		"type":    "single_choice",
-		"level":   "expert",
-		"content": "test",
-		"answer":  "A",
-		"options": []string{"A", "B"},
-	}
-	_, err := svc.CreateQuestion(data, nil, "tutor")
-	if err == nil {
-		t.Fatal("应拒绝无效等级 expert")
-	}
-}
-
 func TestCreateQuestion_EmptyContent(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	data := map[string]interface{}{
+	data := map[string]any{
 		"type":    "single_choice",
-		"level":   "beginner",
 		"answer":  "A",
 		"options": []string{"A", "B"},
 	}
@@ -87,9 +69,8 @@ func TestCreateQuestion_EmptyContent(t *testing.T) {
 
 func TestCreateQuestion_MissingOptions(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	data := map[string]interface{}{
+	data := map[string]any{
 		"type":    "single_choice",
-		"level":   "beginner",
 		"content": "test",
 		"answer":  "A",
 	}
@@ -101,9 +82,8 @@ func TestCreateQuestion_MissingOptions(t *testing.T) {
 
 func TestCreateQuestion_ShortAnswer_NoAnswer(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	data := map[string]interface{}{
+	data := map[string]any{
 		"type":    "short_answer",
-		"level":   "advanced",
 		"content": "请描述液压系统工作原理",
 	}
 	result, err := svc.CreateQuestion(data, nil, "tutor")
@@ -117,11 +97,9 @@ func TestCreateQuestion_ShortAnswer_NoAnswer(t *testing.T) {
 
 func TestCreateQuestion_WithKnowledgePoint(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
-	// 先创建知识点
-	kp := testutil.SeedKnowledgePoint(t, db, "液压系统", "beginner")
-	data := map[string]interface{}{
+	kp := testutil.SeedKnowledgePoint(t, db, "液压系统", "CATEGORY_01")
+	data := map[string]any{
 		"type":               "single_choice",
-		"level":              "beginner",
 		"content":            "test",
 		"options":            []string{"A", "B"},
 		"answer":             "A",
@@ -141,7 +119,7 @@ func TestCreateQuestion_WithKnowledgePoint(t *testing.T) {
 
 func TestGetQuestion_Success(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
-	q := testutil.SeedQuestion(t, db, "true_false", "beginner", "叉车可以超载运行", "false")
+	q := testutil.SeedQuestion(t, db, "true_false", "叉车可以超载运行", "false")
 	result, err := svc.GetQuestion(q.ID)
 	if err != nil {
 		t.Fatalf("查询题目失败: %v", err)
@@ -163,10 +141,9 @@ func TestGetQuestion_NotFound(t *testing.T) {
 
 func TestUpdateQuestion_Success(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
-	q := testutil.SeedQuestion(t, db, "single_choice", "beginner", "旧题干", "A")
-	data := map[string]interface{}{
+	q := testutil.SeedQuestion(t, db, "single_choice", "旧题干", "A")
+	data := map[string]any{
 		"content": "新题干",
-		"level":   "intermediate",
 	}
 	result, err := svc.UpdateQuestion(q.ID, data)
 	if err != nil {
@@ -175,15 +152,12 @@ func TestUpdateQuestion_Success(t *testing.T) {
 	if result["content"] != "新题干" {
 		t.Fatalf("内容未更新: %v", result["content"])
 	}
-	if result["level"] != "intermediate" {
-		t.Fatalf("等级未更新: %v", result["level"])
-	}
 }
 
 func TestUpdateQuestion_InvalidStatus(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
-	q := testutil.SeedQuestion(t, db, "single_choice", "beginner", "test", "A")
-	data := map[string]interface{}{"status": "invalid_status"}
+	q := testutil.SeedQuestion(t, db, "single_choice", "test", "A")
+	data := map[string]any{"status": "invalid_status"}
 	_, err := svc.UpdateQuestion(q.ID, data)
 	if err == nil {
 		t.Fatal("应拒绝无效状态")
@@ -192,7 +166,7 @@ func TestUpdateQuestion_InvalidStatus(t *testing.T) {
 
 func TestUpdateQuestion_NotFound(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	_, err := svc.UpdateQuestion(9999, map[string]interface{}{"content": "x"})
+	_, err := svc.UpdateQuestion(9999, map[string]any{"content": "x"})
 	if err == nil {
 		t.Fatal("应返回题目不存在")
 	}
@@ -202,7 +176,7 @@ func TestUpdateQuestion_NotFound(t *testing.T) {
 
 func TestDeleteQuestion_Success(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
-	q := testutil.SeedQuestion(t, db, "single_choice", "beginner", "test", "A")
+	q := testutil.SeedQuestion(t, db, "single_choice", "test", "A")
 	if err := svc.DeleteQuestion(q.ID); err != nil {
 		t.Fatalf("删除失败: %v", err)
 	}
@@ -225,13 +199,13 @@ func TestDeleteQuestion_NotFound(t *testing.T) {
 func TestListQuestions_Pagination(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
 	for i := 0; i < 5; i++ {
-		testutil.SeedQuestion(t, db, "single_choice", "beginner", "题目前5", "A")
+		testutil.SeedQuestion(t, db, "single_choice", "题目前5", "A")
 	}
-	result := svc.ListQuestions(1, 2, "", "", nil, "", "")
+	result := svc.ListQuestions(1, 2, "", nil, "", "")
 	if result["total"].(int64) != 5 {
 		t.Fatalf("总数应为 5, got %v", result["total"])
 	}
-	questions := result["questions"].([]map[string]interface{})
+	questions := result["questions"].([]map[string]any)
 	if len(questions) != 2 {
 		t.Fatalf("本页应 2 条, got %d", len(questions))
 	}
@@ -240,21 +214,11 @@ func TestListQuestions_Pagination(t *testing.T) {
 	}
 }
 
-func TestListQuestions_FilterByLevel(t *testing.T) {
-	svc, db := newQuestionBankSvc(t)
-	testutil.SeedQuestion(t, db, "single_choice", "beginner", "初级题", "A")
-	testutil.SeedQuestion(t, db, "single_choice", "advanced", "高级题", "A")
-	result := svc.ListQuestions(1, 20, "advanced", "", nil, "", "")
-	if result["total"].(int64) != 1 {
-		t.Fatalf("高级题应 1 条, got %v", result["total"])
-	}
-}
-
 func TestListQuestions_FilterByType(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
-	testutil.SeedQuestion(t, db, "single_choice", "beginner", "单选题", "A")
-	testutil.SeedQuestion(t, db, "true_false", "beginner", "判断题", "true")
-	result := svc.ListQuestions(1, 20, "", "true_false", nil, "", "")
+	testutil.SeedQuestion(t, db, "single_choice", "单选题", "A")
+	testutil.SeedQuestion(t, db, "true_false", "判断题", "true")
+	result := svc.ListQuestions(1, 20, "true_false", nil, "", "")
 	if result["total"].(int64) != 1 {
 		t.Fatalf("判断题应 1 条, got %v", result["total"])
 	}
@@ -262,7 +226,7 @@ func TestListQuestions_FilterByType(t *testing.T) {
 
 func TestListQuestions_DefaultPage(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	result := svc.ListQuestions(0, 0, "", "", nil, "", "")
+	result := svc.ListQuestions(0, 0, "", nil, "", "")
 	if result["page"].(int) != 1 {
 		t.Fatalf("默认页码应为 1, got %v", result["page"])
 	}
@@ -275,7 +239,7 @@ func TestListQuestions_DefaultPage(t *testing.T) {
 
 func TestPublishQuestion_Success(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
-	q := testutil.SeedQuestion(t, db, "single_choice", "beginner", "test", "A")
+	q := testutil.SeedQuestion(t, db, "single_choice", "test", "A")
 	result, err := svc.PublishQuestion(q.ID)
 	if err != nil {
 		t.Fatalf("发布失败: %v", err)
@@ -297,8 +261,8 @@ func TestPublishQuestion_NotFound(t *testing.T) {
 
 func TestBatchPublish_Success(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
-	q1 := testutil.SeedQuestion(t, db, "single_choice", "beginner", "q1", "A")
-	q2 := testutil.SeedQuestion(t, db, "single_choice", "beginner", "q2", "A")
+	q1 := testutil.SeedQuestion(t, db, "single_choice", "q1", "A")
+	q2 := testutil.SeedQuestion(t, db, "single_choice", "q2", "A")
 	result := svc.BatchPublish([]int{q1.ID, q2.ID})
 	if result["published_count"].(int) != 2 {
 		t.Fatalf("应发布 2 条, got %v", result["published_count"])
@@ -307,7 +271,7 @@ func TestBatchPublish_Success(t *testing.T) {
 
 func TestBatchPublish_PartialNotFound(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
-	q1 := testutil.SeedQuestion(t, db, "single_choice", "beginner", "q1", "A")
+	q1 := testutil.SeedQuestion(t, db, "single_choice", "q1", "A")
 	result := svc.BatchPublish([]int{q1.ID, 9999})
 	if result["published_count"].(int) != 1 {
 		t.Fatalf("应发布 1 条, got %v", result["published_count"])
@@ -326,17 +290,15 @@ func TestBatchPublish_Empty(t *testing.T) {
 
 func TestBatchImport_Success(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	items := []interface{}{
-		map[string]interface{}{
+	items := []any{
+		map[string]any{
 			"type":    "single_choice",
-			"level":   "beginner",
 			"content": "导入题1",
 			"options": []string{"A", "B"},
 			"answer":  "A",
 		},
-		map[string]interface{}{
+		map[string]any{
 			"type":    "true_false",
-			"level":   "intermediate",
 			"content": "导入题2",
 			"answer":  "true",
 		},
@@ -353,17 +315,15 @@ func TestBatchImport_Success(t *testing.T) {
 
 func TestBatchImport_WithErrors(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	items := []interface{}{
-		map[string]interface{}{
+	items := []any{
+		map[string]any{
 			"type":    "single_choice",
-			"level":   "beginner",
 			"content": "有效题",
 			"options": []string{"A", "B"},
 			"answer":  "A",
 		},
-		map[string]interface{}{
+		map[string]any{
 			"type":    "invalid_type",
-			"level":   "beginner",
 			"content": "无效题",
 		},
 		"not-a-map", // 无效数据
@@ -389,9 +349,9 @@ func TestGetStats_Empty(t *testing.T) {
 
 func TestGetStats_WithData(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
-	testutil.SeedQuestion(t, db, "single_choice", "beginner", "q1", "A")
-	testutil.SeedQuestion(t, db, "single_choice", "intermediate", "q2", "A")
-	testutil.SeedQuestion(t, db, "true_false", "advanced", "q3", "true")
+	testutil.SeedQuestion(t, db, "single_choice", "q1", "A")
+	testutil.SeedQuestion(t, db, "single_choice", "q2", "A")
+	testutil.SeedQuestion(t, db, "true_false", "q3", "true")
 	result := svc.GetStats()
 	if result["total"].(int64) != 3 {
 		t.Fatalf("总数应为 3, got %v", result["total"])

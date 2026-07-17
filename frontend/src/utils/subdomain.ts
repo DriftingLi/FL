@@ -1,10 +1,13 @@
 // 子域名解析工具：通过 window.location.hostname 判断当前访问的子域名类型。
 // 五类子域名约定：
-//   - 主域名（www.example.com / example.com / localhost）：官网、派单等公共页面（无登录）
+//   - 主域名（www.example.com / localhost）：官网、派单等公共页面（无登录）
 //   - training.主域名：学员培训 + AI 助手 + 学员登录
 //   - valuation.主域名：残值评估（含历史）+ 学员登录（与 training 共享用户体系）
 //   - mentor.主域名：导师登录与工作区
-//   - admin.主域名：管理员登录与后台
+//   - manage.主域名：管理员登录与后台（hostname 前缀为 manage，内部类型仍为 admin）
+//
+// 注意：不使用根域名（example.com），主站统一走 www 子域名。
+// 根域名的请求由 nginx 301 重定向到 www.根域名。
 //
 // 跨子域名视为不同站点，localStorage 中存储的 token 不共享，
 // 用户在不同子域名间切换时需要重新登录。
@@ -16,7 +19,7 @@ const SUBDOMAIN_PREFIX_MAP: Record<Exclude<SubdomainType, 'main'>, string> = {
   training: 'training',
   valuation: 'valuation',
   tutor: 'mentor', // 导师子域名前缀为 mentor
-  admin: 'admin'
+  admin: 'manage' // 管理员子域名前缀为 manage（内部类型 admin 保持不变）
 }
 
 // 解析当前 hostname 对应的子域名类型
@@ -24,7 +27,7 @@ export function getSubdomain(): SubdomainType {
   if (typeof window === 'undefined') return 'main'
   const host = window.location.hostname.toLowerCase()
   if (host.startsWith('mentor.')) return 'tutor'
-  if (host.startsWith('admin.')) return 'admin'
+  if (host.startsWith('manage.')) return 'admin'
   if (host.startsWith('training.')) return 'training'
   if (host.startsWith('valuation.')) return 'valuation'
   return 'main'
@@ -63,6 +66,11 @@ function getRootDomain(): string {
   return root || host
 }
 
+// 判断是否为开发环境主机（localhost 或 IP），开发环境不加 www 前缀
+function isDevHost(host: string): boolean {
+  return host === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(host)
+}
+
 // 根据路径推导应该所在的子域名类型。
 // 用于路由守卫：当前子域名与目标子域名不一致时触发跨子域名跳转。
 // 注意：/login 和 /register 不在此处理，由路由守卫特殊处理（每个子域名都可有自己的登录页）。
@@ -82,21 +90,24 @@ export function getTargetSubdomainForPath(path: string): SubdomainType {
 }
 
 // 构建跨子域名的绝对 URL。
-// target 为 'main' 时构建主域名 URL（去掉子域名前缀），否则构建对应子域名 URL。
+// target 为 'main' 时构建主域名 URL（www.根域名），否则构建对应子域名 URL。
+// 注意：不使用根域名本身，主站统一走 www 子域名。
 export function buildSubdomainUrl(target: SubdomainType, path: string): string {
   const protocol = window.location.protocol
   const port = window.location.port ? `:${window.location.port}` : ''
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   const host = window.location.hostname.toLowerCase()
 
-  // 主域名链接：若当前在 www 子域名，保留 www 前缀，
-  // 避免 www.example.com → example.com 的多余跳转（www 与根域名渲染同一前端）
+  // 主域名链接：始终使用 www.根域名（不使用根域名本身）
   if (target === 'main') {
+    // 若当前已在 www 子域名，直接复用当前 host
     if (host.startsWith('www.')) {
       return `${protocol}//${host}${port}${normalizedPath}`
     }
     const rootDomain = getRootDomain()
-    return `${protocol}//${rootDomain}${port}${normalizedPath}`
+    // 开发环境（localhost/IP）不加 www 前缀
+    const mainHost = isDevHost(rootDomain) ? rootDomain : `www.${rootDomain}`
+    return `${protocol}//${mainHost}${port}${normalizedPath}`
   }
 
   const rootDomain = getRootDomain()

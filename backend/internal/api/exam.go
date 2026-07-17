@@ -14,7 +14,6 @@ import (
 )
 
 // RegisterExamRoutes 注册 /api/exam 蓝图（课程考核，数据源为 JSON 题库）。
-// 对应 Python app/api/exam.py。
 func RegisterExamRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	svc := service.NewExamService(db)
 

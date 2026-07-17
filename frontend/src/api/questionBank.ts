@@ -19,14 +19,24 @@ export const questionBankApi = {
   publishQuestion(id) {
     return request.post(`/question-bank/questions/${id}/publish`)
   },
+  rejectQuestion(id, reason) {
+    return request.post(`/question-bank/questions/${id}/reject`, { reason })
+  },
   batchPublish(questionIds) {
     return request.post('/question-bank/questions/batch-publish', { question_ids: questionIds })
+  },
+  batchReject(questionIds, reason) {
+    return request.post('/question-bank/questions/batch-reject', { question_ids: questionIds, reason })
   },
   batchImport(questions) {
     return request.post('/question-bank/questions/batch-import', { questions })
   },
   getStats() {
     return request.get('/question-bank/stats')
+  },
+  // 课程四分类及其题目数（章节练习用）
+  getCategories() {
+    return request.get('/question-bank/categories')
   },
   getKnowledgePoints(params?) {
     return request.get('/question-bank/knowledge-points', { params })

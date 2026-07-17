@@ -38,7 +38,7 @@ func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpiry time.Duration, admi
 // DB 返回底层 *gorm.DB，供 handler 复用查询。
 func (s *AuthService) DB() *gorm.DB { return s.db }
 
-// HashPassword 使用 bcrypt 加密密码，与原 Python 版 bcrypt.hashpw 兼容。
+// HashPassword 使用 bcrypt 加密密码。
 func HashPassword(password string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -47,12 +47,12 @@ func HashPassword(password string) (string, error) {
 	return string(hash), nil
 }
 
-// VerifyPassword 校验密码，兼容原 Python 版生成的 bcrypt 哈希。
+// VerifyPassword 校验密码。
 func VerifyPassword(password, hashed string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password)) == nil
 }
 
-// GenerateToken 签发 JWT，claims 结构与原 Python 版一致：user_id/username/role，过期时长由 JWT_EXPIRES_HOURS 配置（默认 24 小时）。
+// GenerateToken 签发 JWT，claims 结构：user_id/username/role，过期时长由 JWT_EXPIRES_HOURS 配置（默认 24 小时）。
 func (s *AuthService) GenerateToken(userID int, username, role string) (string, error) {
 	claims := &middleware.Claims{
 		UserID:   userID,
@@ -75,7 +75,6 @@ type LoginResult struct {
 	Username string `json:"username"`
 	Name     string `json:"name"`
 	Role     string `json:"role"`
-	Level    string `json:"level,omitempty"`
 }
 
 // StudentLogin 学员登录，支持用户名或手机号。
@@ -104,12 +103,11 @@ func (s *AuthService) StudentLogin(account, password string) (*LoginResult, erro
 		Username: student.Username,
 		Name:     student.Name,
 		Role:     "student",
-		Level:    student.Level,
 	}, nil
 }
 
 // StudentRegister 学员注册，username 由手机号自动生成，避免前端再单独填写用户名。
-func (s *AuthService) StudentRegister(phone, password, name, email, company string) (map[string]interface{}, error) {
+func (s *AuthService) StudentRegister(phone, password, name, email, company string) (map[string]any, error) {
 	var count int64
 	s.db.Model(&model.Student{}).Where("phone = ?", phone).Count(&count)
 	if count > 0 {
@@ -127,13 +125,12 @@ func (s *AuthService) StudentRegister(phone, password, name, email, company stri
 		Email:     email,
 		Company:   company,
 		Status:    1,
-		Level:     "beginner",
 		CreatedAt: beijingNow(),
 	}
 	if err := s.db.Create(&student).Error; err != nil {
 		return nil, err
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"student_id": student.StudentID,
 		"username":   student.Username,
 		"name":       student.Name,
@@ -194,8 +191,8 @@ func (s *AuthService) TutorLogin(username, password string) (*LoginResult, error
 	}, nil
 }
 
-// TutorRegister 导师注册，对应原 Python 版 tutor_register()。
-func (s *AuthService) TutorRegister(username, password, name string) (map[string]interface{}, error) {
+// TutorRegister 导师注册。
+func (s *AuthService) TutorRegister(username, password, name string) (map[string]any, error) {
 	var count int64
 	s.db.Model(&model.Tutor{}).Where("username = ?", username).Count(&count)
 	if count > 0 {
@@ -215,7 +212,7 @@ func (s *AuthService) TutorRegister(username, password, name string) (map[string
 	if err := s.db.Create(&tutor).Error; err != nil {
 		return nil, err
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"tutor_id": tutor.TutorID,
 		"username": tutor.Username,
 		"name":     tutor.Name,
@@ -223,7 +220,6 @@ func (s *AuthService) TutorRegister(username, password, name string) (map[string
 }
 
 // EnsureDefaultUsers 确保默认账号存在（admin/tutor/student），密码由环境变量配置。
-// 对应原 Python 版 seed_railway.py / init_db.py 的默认账号初始化逻辑。
 // 已存在的账号会被跳过（不会重置密码）。
 func (s *AuthService) EnsureDefaultUsers() error {
 	// 1. 默认管理员 admin
@@ -284,7 +280,6 @@ func (s *AuthService) EnsureDefaultUsers() error {
 			Password:  hashed,
 			Name:      "测试学员",
 			Status:    1,
-			Level:     "beginner",
 			CreatedAt: beijingNow(),
 		}
 		if err := s.db.Create(&student).Error; err != nil {

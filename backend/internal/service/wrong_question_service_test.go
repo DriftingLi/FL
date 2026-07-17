@@ -42,7 +42,7 @@ func TestGetWrongQuestions_Empty(t *testing.T) {
 
 func TestGetWrongQuestions_WithData(t *testing.T) {
 	svc, db := newWrongQuestionSvc(t)
-	testutil.SeedQuestion(t, db, "single_choice", "beginner", "错题1", "A")
+	testutil.SeedQuestion(t, db, "single_choice", "错题1", "A")
 	seedWrongQuestion(t, db, 1, 1, 3)
 	seedWrongQuestion(t, db, 1, 2, 1)
 
@@ -67,7 +67,7 @@ func TestGetWrongQuestions_DefaultPaging(t *testing.T) {
 
 func TestRemoveWrongQuestion_Success(t *testing.T) {
 	svc, db := newWrongQuestionSvc(t)
-	testutil.SeedQuestion(t, db, "single_choice", "beginner", "test", "A")
+	testutil.SeedQuestion(t, db, "single_choice", "test", "A")
 	seedWrongQuestion(t, db, 1, 1, 2)
 
 	result, err := svc.RemoveWrongQuestion(1, 1)
@@ -99,7 +99,7 @@ func TestGetStats_WrongQuestion_Empty(t *testing.T) {
 
 func TestGetStats_WrongQuestion_WithData(t *testing.T) {
 	svc, db := newWrongQuestionSvc(t)
-	testutil.SeedQuestion(t, db, "single_choice", "beginner", "q1", "A")
+	testutil.SeedQuestion(t, db, "single_choice", "q1", "A")
 	seedWrongQuestion(t, db, 1, 1, 3)
 	seedWrongQuestion(t, db, 1, 2, 1)
 
@@ -124,7 +124,7 @@ func TestExportWrongQuestions_Empty(t *testing.T) {
 
 func TestExportWrongQuestions_WithData(t *testing.T) {
 	svc, db := newWrongQuestionSvc(t)
-	testutil.SeedQuestion(t, db, "single_choice", "beginner", "导出错题", "A")
+	testutil.SeedQuestion(t, db, "single_choice", "导出错题", "A")
 	seedWrongQuestion(t, db, 1, 1, 2)
 
 	result := svc.ExportWrongQuestions(1)
@@ -136,19 +136,18 @@ func TestExportWrongQuestions_WithData(t *testing.T) {
 // --- FormatWrongQuestionsText (纯函数) ---
 
 func TestFormatWrongQuestionsText_Empty(t *testing.T) {
-	text := FormatWrongQuestionsText([]map[string]interface{}{})
+	text := FormatWrongQuestionsText([]map[string]any{})
 	if text == "" {
 		t.Fatal("空列表应返回非空文本（标题）")
 	}
 }
 
 func TestFormatWrongQuestionsText_WithData(t *testing.T) {
-	data := []map[string]interface{}{
+	data := []map[string]any{
 		{
 			"question_id":   1,
 			"content":       "叉车检查要点",
 			"type":          "single_choice",
-			"level":         "beginner",
 			"wrong_count":   3,
 			"last_wrong_at": "2026-06-01T10:00:00",
 		},
@@ -180,7 +179,7 @@ func indexOf(s, sub string) int {
 
 func TestRedoWrongQuestion_Correct(t *testing.T) {
 	svc, db := newWrongQuestionSvc(t)
-	q := testutil.SeedQuestion(t, db, "single_choice", "beginner", "重做题", "A")
+	q := testutil.SeedQuestion(t, db, "single_choice", "重做题", "A")
 	seedWrongQuestion(t, db, 1, q.ID, 2)
 
 	result, err := svc.RedoWrongQuestion(1, q.ID, "A")
@@ -194,7 +193,7 @@ func TestRedoWrongQuestion_Correct(t *testing.T) {
 
 func TestRedoWrongQuestion_Wrong(t *testing.T) {
 	svc, db := newWrongQuestionSvc(t)
-	q := testutil.SeedQuestion(t, db, "single_choice", "beginner", "重做题", "A")
+	q := testutil.SeedQuestion(t, db, "single_choice", "重做题", "A")
 	seedWrongQuestion(t, db, 1, q.ID, 2)
 
 	result, err := svc.RedoWrongQuestion(1, q.ID, "B")
@@ -208,7 +207,7 @@ func TestRedoWrongQuestion_Wrong(t *testing.T) {
 
 func TestRedoWrongQuestion_NotInWrongList(t *testing.T) {
 	svc, db := newWrongQuestionSvc(t)
-	q := testutil.SeedQuestion(t, db, "single_choice", "beginner", "test", "A")
+	q := testutil.SeedQuestion(t, db, "single_choice", "test", "A")
 	// 不在错题本中
 	_, err := svc.RedoWrongQuestion(1, q.ID, "A")
 	if err == nil {

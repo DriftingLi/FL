@@ -21,7 +21,7 @@
 
 ## 技术栈
 
-### 后端（backend-go）
+### 后端（backend）
 
 - 语言：Go 1.26
 - Web 框架：Gin v1.10 + gin-contrib/cors
@@ -49,8 +49,8 @@
 
 ```
 叉车维修项目/
-├── backend-go/                  # Go 后端
-│   ├── cmd/                     # 入口：server（服务）、migrate（迁移）、migrate-data（数据搬迁）、visual_check（辅助检查）
+├── backend/                  # Go 后端
+│   ├── cmd/                     # 入口：server（服务）、migrate（迁移）、visual_check（辅助检查）
 │   ├── internal/                # 业务分层
 │   │   ├── api/ config/ db/ middleware/ model/ repository/ service/ testutil/
 │   │   └── valuation/           # 残值评估子模块（独立 handler/repository/service）
@@ -95,7 +95,7 @@
 ### 1. 启动数据库
 
 ```bash
-cd backend-go
+cd backend
 docker compose up -d postgres
 ```
 
@@ -150,7 +150,7 @@ npm run dev       # 默认 :5173
 
 ## 配置说明
 
-后端配置通过 `backend-go/.env` 注入，关键项：
+后端配置通过 `backend/.env` 注入，关键项：
 
 | 变量                         | 说明                     | 默认值                                    |
 | -------------------------- | ---------------------- | -------------------------------------- |
@@ -175,7 +175,7 @@ npm run dev       # 默认 :5173
 
 ## 常用命令
 
-### 后端（在 `backend-go/` 下）
+### 后端（在 `backend/` 下）
 
 ```bash
 make build           # 编译二进制到 bin/server
@@ -189,7 +189,6 @@ make migrate-down    # 回滚最近一次迁移
 make dev-up          # 启动 PostgreSQL 容器
 make dev-down        # 停止容器
 make dev-reset       # 清除数据卷并重建（数据丢失）
-make migrate-data SOURCE="postgres://..."  # 从旧库搬迁数据
 ```
 
 ### 前端（在 `frontend/` 下）
@@ -203,7 +202,7 @@ npm run type-check   # TypeScript 类型检查
 
 ## 数据库迁移
 
-迁移脚本位于 `backend-go/migrations/`，采用 `序号_名称.up.sql` / `.down.sql` 成对组织，共 17 组（000001 \~ 000017），覆盖初始化、残值评估表结构、级联过滤、种子数据、系数调整等。
+迁移脚本位于 `backend/migrations/`，采用 `序号_名称.up.sql` / `.down.sql` 成对组织，共 17 组（000001 \~ 000017），覆盖初始化、残值评估表结构、级联过滤、种子数据、系数调整等。
 
 ## 许可证
 

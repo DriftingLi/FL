@@ -1,7 +1,8 @@
-// Package service 题库练习模式，对应 Python practice_mode_service。
+// Package service 题库练习模式。
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"math/rand"
 
@@ -21,50 +22,189 @@ func NewPracticeModeService(db *gorm.DB, ai *AIService) *PracticeModeService {
 	return &PracticeModeService{db: db, ai: ai}
 }
 
-var practiceLevelQuestionCount = map[string]int{"beginner": 10, "intermediate": 20, "advanced": 30}
-
-// GetFreeQuestions 自由练习抽题，对应 Python get_free_practice_questions。
-func (s *PracticeModeService) GetFreeQuestions(studentID int, qType string, kpID *int) ([]map[string]interface{}, error) {
-	var student model.Student
-	if err := s.db.First(&student, studentID).Error; err != nil {
-		return nil, errors.New("学员不存在")
-	}
-	studentLevel := student.Level
-	allowed, ok := examAllowedLevels[studentLevel]
-	if !ok {
-		studentLevel = "beginner"
-		allowed = examAllowedLevels["beginner"]
-	}
-	count := practiceLevelQuestionCount[studentLevel]
-
-	q := s.db.Model(&model.Question{}).Where("status = ? AND level IN ?", "published", allowed)
-	if qType != "" {
-		q = q.Where("type = ?", qType)
-	}
+// GetFreeQuestions 随机练习抽题：从 published 题库按条件随机抽取 count 题。
+// count <= 0 时返回全部符合条件的题目（按 id 升序，不打乱）。
+func (s *PracticeModeService) GetFreeQuestions(qType string, kpID *int, count int) ([]map[string]any, error) {
+	var kpIDs []int
 	if kpID != nil {
-		q = q.Where("knowledge_point_id = ?", *kpID)
+		kpIDs = []int{*kpID}
 	}
-	var questions []model.Question
-	if err := q.Find(&questions).Error; err != nil {
+	selected, err := sampleQuestions(s.db, qType, kpIDs, count)
+	if err != nil {
 		return nil, errors.New("查询题目失败")
 	}
-	if len(questions) == 0 {
+	if len(selected) == 0 {
 		return nil, errors.New("没有符合条件的题目")
 	}
-	if count > len(questions) {
-		count = len(questions)
-	}
-	rand.Shuffle(len(questions), func(i, j int) { questions[i], questions[j] = questions[j], questions[i] })
-	selected := questions[:count]
-	out := make([]map[string]interface{}, 0, len(selected))
+	out := make([]map[string]any, 0, len(selected))
 	for i := range selected {
 		out = append(out, questionToDict(&selected[i], false))
 	}
 	return out, nil
 }
 
-// GetKnowledgePointPractice 知识点练习，对应 Python get_knowledge_point_practice。
-func (s *PracticeModeService) GetKnowledgePointPractice(studentID, kpID int, count int, randomOrder bool) (map[string]interface{}, error) {
+// StartSequential 顺序练习：加载全部 published 题目（按 id 升序），
+// 复用已有 practice_progress 游标续练；一次性返回全部题目，前端从游标处开始作答。
+func (s *PracticeModeService) StartSequential(studentID int) (map[string]any, error) {
+	var questions []model.Question
+	if err := s.db.Where("status = ?", "published").Order("id ASC").Find(&questions).Error; err != nil {
+		return nil, errors.New("查询题目失败")
+	}
+	if len(questions) == 0 {
+		return nil, errors.New("题库暂无题目")
+	}
+	ids := make([]int, len(questions))
+	for i, q := range questions {
+		ids[i] = q.ID
+	}
+	idsJSON, _ := json.Marshal(ids)
+
+	// upsert 进度
+	var prog model.PracticeProgress
+	err := s.db.Where("student_id = ? AND practice_mode = ?", studentID, "sequential").First(&prog).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		prog = model.PracticeProgress{
+			StudentID:    studentID,
+			PracticeMode: "sequential",
+			QuestionIDs:  model.JSONB(idsJSON),
+			CurrentIndex: 0,
+			Total:        len(ids),
+			UpdatedAt:    beijingNow(),
+		}
+		if err := s.db.Create(&prog).Error; err != nil {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, err
+	} else {
+		// 题库变化时刷新列表，但保留游标（不超过新总数）
+		prog.QuestionIDs = model.JSONB(idsJSON)
+		prog.Total = len(ids)
+		if prog.CurrentIndex >= prog.Total {
+			prog.CurrentIndex = 0
+		}
+		prog.UpdatedAt = beijingNow()
+		s.db.Save(&prog)
+	}
+
+	// 一次性返回全部题目，前端从游标处开始作答
+	all := make([]map[string]any, 0, len(questions))
+	for i := range questions {
+		all = append(all, questionToDict(&questions[i], false))
+	}
+	return map[string]any{
+		"questions":     all,
+		"current_index": prog.CurrentIndex,
+		"total":         prog.Total,
+		"completed":     prog.CurrentIndex,
+	}, nil
+}
+
+// SaveProgress 保存练习游标和答题状态。upsert 语义：记录不存在则创建。
+// practiceMode 为空时默认 "sequential"；total > 0 时同步更新 total；
+// answersState 非空时更新答题状态 JSONB。
+func (s *PracticeModeService) SaveProgress(studentID, index int, practiceMode string, total int, answersState json.RawMessage) error {
+	if practiceMode == "" {
+		practiceMode = "sequential"
+	}
+	// 默认空对象
+	if len(answersState) == 0 {
+		answersState = json.RawMessage("{}")
+	}
+	var prog model.PracticeProgress
+	err := s.db.Where("student_id = ? AND practice_mode = ?", studentID, practiceMode).First(&prog).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		prog = model.PracticeProgress{
+			StudentID:    studentID,
+			PracticeMode: practiceMode,
+			QuestionIDs:  model.JSONB([]byte("[]")),
+			CurrentIndex: index,
+			Total:        total,
+			AnswersState: model.JSONB(answersState),
+			UpdatedAt:    beijingNow(),
+		}
+		if err := s.db.Create(&prog).Error; err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	} else {
+		updates := map[string]any{
+			"current_index": index,
+			"answers_state": model.JSONB(answersState),
+			"updated_at":    beijingNow(),
+		}
+		if total > 0 {
+			updates["total"] = total
+		}
+		if err := s.db.Model(&prog).Updates(updates).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetProgress 查询任意模式的练习进度（卡片展示/断点续练用）。
+func (s *PracticeModeService) GetProgress(studentID int, practiceMode string) map[string]any {
+	if practiceMode == "" {
+		practiceMode = "sequential"
+	}
+	var prog model.PracticeProgress
+	if err := s.db.Where("student_id = ? AND practice_mode = ?", studentID, practiceMode).First(&prog).Error; err != nil {
+		return map[string]any{"completed": 0, "total": 0, "current_index": 0, "answers_state": map[string]any{}}
+	}
+	// 解析 answers_state JSONB 为 map
+	var stateMap map[string]any
+	if len(prog.AnswersState) > 0 {
+		_ = json.Unmarshal(prog.AnswersState, &stateMap)
+	}
+	if stateMap == nil {
+		stateMap = map[string]any{}
+	}
+	return map[string]any{
+		"completed":     prog.CurrentIndex,
+		"total":         prog.Total,
+		"current_index": prog.CurrentIndex,
+		"answers_state": stateMap,
+	}
+}
+
+// GetSequentialProgress 查询顺序练习进度（卡片展示用，向后兼容）。
+func (s *PracticeModeService) GetSequentialProgress(studentID int) map[string]any {
+	return s.GetProgress(studentID, "sequential")
+}
+
+// GetCategoryQuestions 章节练习：按课程分类（经 knowledge_point.category）抽题。
+func (s *PracticeModeService) GetCategoryQuestions(category string, count int) ([]map[string]any, error) {
+	if !containsString(validCategories, category) {
+		return nil, errors.New("无效的课程分类")
+	}
+	// 查该分类下所有知识点 ID
+	var kps []model.KnowledgePoint
+	s.db.Where("category = ?", category).Find(&kps)
+	if len(kps) == 0 {
+		return nil, errors.New("该分类下暂无知识点")
+	}
+	kpIDs := make([]int, len(kps))
+	for i, kp := range kps {
+		kpIDs[i] = kp.ID
+	}
+	selected, err := sampleQuestions(s.db, "", kpIDs, count)
+	if err != nil {
+		return nil, errors.New("查询题目失败")
+	}
+	if len(selected) == 0 {
+		return nil, errors.New("该分类下没有题目")
+	}
+	out := make([]map[string]any, 0, len(selected))
+	for i := range selected {
+		out = append(out, questionToDict(&selected[i], false))
+	}
+	return out, nil
+}
+
+// GetKnowledgePointPractice 知识点练习。
+func (s *PracticeModeService) GetKnowledgePointPractice(studentID, kpID int, count int, randomOrder bool) (map[string]any, error) {
 	var kp model.KnowledgePoint
 	if err := s.db.First(&kp, kpID).Error; err != nil {
 		return nil, errors.New("知识点不存在")
@@ -107,7 +247,7 @@ func (s *PracticeModeService) GetKnowledgePointPractice(studentID, kpID int, cou
 	}
 	// 子知识点名缓存
 	kpCache := map[int]string{}
-	list := make([]map[string]interface{}, 0, len(selected))
+	list := make([]map[string]any, 0, len(selected))
 	for i := range selected {
 		q := &selected[i]
 		d := questionToDict(q, false)
@@ -123,15 +263,15 @@ func (s *PracticeModeService) GetKnowledgePointPractice(studentID, kpID int, cou
 		}
 		list = append(list, d)
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"knowledge_point": kpToDict(&kp),
 		"questions":       list,
 		"total":           len(questions),
 	}, nil
 }
 
-// GetKnowledgePointProgress 知识点进度，对应 Python get_knowledge_point_progress。
-func (s *PracticeModeService) GetKnowledgePointProgress(studentID int, kpID *int) ([]map[string]interface{}, error) {
+// GetKnowledgePointProgress 知识点进度。
+func (s *PracticeModeService) GetKnowledgePointProgress(studentID int, kpID *int) ([]map[string]any, error) {
 	var kps []model.KnowledgePoint
 	if kpID != nil {
 		var kp model.KnowledgePoint
@@ -142,7 +282,7 @@ func (s *PracticeModeService) GetKnowledgePointProgress(studentID int, kpID *int
 	} else {
 		s.db.Where("parent_id IS NULL").Order("created_at ASC").Find(&kps)
 	}
-	result := make([]map[string]interface{}, 0, len(kps))
+	result := make([]map[string]any, 0, len(kps))
 	for _, kp := range kps {
 		var children []model.KnowledgePoint
 		s.db.Where("parent_id = ?", kp.ID).Order("created_at ASC").Find(&children)
@@ -170,7 +310,7 @@ func (s *PracticeModeService) GetKnowledgePointProgress(studentID int, kpID *int
 		if answeredCount > 0 {
 			accuracy = roundFloat1(float64(correctCount) / float64(answeredCount) * 100)
 		}
-		childrenProg := make([]map[string]interface{}, 0, len(children))
+		childrenProg := make([]map[string]any, 0, len(children))
 		for _, child := range children {
 			var childTotal int64
 			s.db.Model(&model.Question{}).Where("knowledge_point_id = ? AND status = ?", child.ID, "published").Count(&childTotal)
@@ -191,7 +331,7 @@ func (s *PracticeModeService) GetKnowledgePointProgress(studentID int, kpID *int
 			if childAnsCount > 0 {
 				childAcc = roundFloat1(float64(childCorrect) / float64(childAnsCount) * 100)
 			}
-			childrenProg = append(childrenProg, map[string]interface{}{
+			childrenProg = append(childrenProg, map[string]any{
 				"id":              child.ID,
 				"name":            child.Name,
 				"total_questions": childTotal,
@@ -200,10 +340,10 @@ func (s *PracticeModeService) GetKnowledgePointProgress(studentID int, kpID *int
 				"accuracy":        childAcc,
 			})
 		}
-		result = append(result, map[string]interface{}{
+		result = append(result, map[string]any{
 			"id":              kp.ID,
 			"name":            kp.Name,
-			"level":           kp.Level,
+			"category":        kp.Category,
 			"description":     kp.Description,
 			"total_questions": totalQ,
 			"answered":        answeredCount,
@@ -215,8 +355,8 @@ func (s *PracticeModeService) GetKnowledgePointProgress(studentID int, kpID *int
 	return result, nil
 }
 
-// SubmitAnswer 提交答案并判定，对应 Python submit_practice_answer。
-func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer interface{}, practiceType string) (map[string]interface{}, error) {
+// SubmitAnswer 提交答案并判定。
+func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer any, practiceType string) (map[string]any, error) {
 	var q model.Question
 	if err := s.db.First(&q, questionID).Error; err != nil {
 		return nil, errors.New("题目不存在")
@@ -226,7 +366,6 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 	rec := model.QuestionPracticeRecord{
 		StudentID:    studentID,
 		QuestionID:   questionID,
-		Level:        q.Level,
 		IsCorrect:    isCorrect != nil && *isCorrect,
 		PracticeType: orDefault(practiceType, "free"),
 		UserAnswer:   userAnswerStr,
@@ -240,7 +379,7 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 		_ = addToWrongQuestions(s.db, studentID, questionID)
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"is_correct":     isCorrect,
 		"correct_answer": q.Answer,
 		"explanation":    q.Explanation,
@@ -274,8 +413,8 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 	return result, nil
 }
 
-// GetStats 学员练习统计，对应 Python get_practice_stats（practice_mode）。
-func (s *PracticeModeService) GetStats(studentID int) map[string]interface{} {
+// GetStats 学员练习统计。
+func (s *PracticeModeService) GetStats(studentID int) map[string]any {
 	var total, correct int64
 	s.db.Model(&model.QuestionPracticeRecord{}).Where("student_id = ?", studentID).Count(&total)
 	s.db.Model(&model.QuestionPracticeRecord{}).Where("student_id = ? AND is_correct = ?", studentID, true).Count(&correct)
@@ -300,25 +439,17 @@ func (s *PracticeModeService) GetStats(studentID int) map[string]interface{} {
 		byType[t] = map[string]int64{"total": tt, "correct": tc}
 		_ = acc
 	}
-	byLevel := map[string]map[string]int64{}
-	for _, l := range validQuestionLevels {
-		var lt, lc int64
-		s.db.Model(&model.QuestionPracticeRecord{}).Where("student_id = ? AND level = ?", studentID, l).Count(&lt)
-		s.db.Model(&model.QuestionPracticeRecord{}).Where("student_id = ? AND level = ? AND is_correct = ?", studentID, l, true).Count(&lc)
-		byLevel[l] = map[string]int64{"total": lt, "correct": lc}
-	}
-	return map[string]interface{}{
+	return map[string]any{
 		"total":                 total,
 		"correct":               correct,
 		"wrong":                 wrong,
 		"accuracy":              accuracy,
 		"by_type":               byType,
-		"by_level":              byLevel,
 		"weak_knowledge_points": s.getWeakKnowledgePoints(studentID),
 	}
 }
 
-func (s *PracticeModeService) getWeakKnowledgePoints(studentID int) []map[string]interface{} {
+func (s *PracticeModeService) getWeakKnowledgePoints(studentID int) []map[string]any {
 	type row struct {
 		ID      int
 		Name    string
@@ -332,14 +463,14 @@ func (s *PracticeModeService) getWeakKnowledgePoints(studentID int) []map[string
 		Joins("JOIN question_practice_record ON question_practice_record.question_id = question.id").
 		Where("question_practice_record.student_id = ?", studentID).
 		Group("knowledge_point.id").Scan(&rows)
-	weak := []map[string]interface{}{}
+	weak := []map[string]any{}
 	for _, r := range rows {
 		acc := 0.0
 		if r.Total > 0 {
 			acc = roundFloat1(float64(r.Correct) / float64(r.Total) * 100)
 		}
 		if acc < 70 {
-			weak = append(weak, map[string]interface{}{
+			weak = append(weak, map[string]any{
 				"id":       r.ID,
 				"name":     r.Name,
 				"total":    r.Total,
@@ -364,8 +495,8 @@ func (s *PracticeModeService) getWeakKnowledgePoints(studentID int) []map[string
 	return weak
 }
 
-// GetHistory 练习历史分页，对应 Python get_practice_history。
-func (s *PracticeModeService) GetHistory(studentID, page, pageSize int, qType, startDate, endDate string) map[string]interface{} {
+// GetHistory 练习历史分页。
+func (s *PracticeModeService) GetHistory(studentID, page, pageSize int, qType, startDate, endDate string) map[string]any {
 	if page <= 0 {
 		page = 1
 	}
@@ -386,13 +517,12 @@ func (s *PracticeModeService) GetHistory(studentID, page, pageSize int, qType, s
 	q.Count(&total)
 	var records []model.QuestionPracticeRecord
 	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&records)
-	items := make([]map[string]interface{}, 0, len(records))
+	items := make([]map[string]any, 0, len(records))
 	for _, r := range records {
-		item := map[string]interface{}{
+		item := map[string]any{
 			"id":            r.ID,
 			"student_id":    r.StudentID,
 			"question_id":   r.QuestionID,
-			"level":         r.Level,
 			"is_correct":    r.IsCorrect,
 			"practice_type": r.PracticeType,
 			"user_answer":   r.UserAnswer,
@@ -404,7 +534,7 @@ func (s *PracticeModeService) GetHistory(studentID, page, pageSize int, qType, s
 		}
 		items = append(items, item)
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"total":     total,
 		"page":      page,
 		"page_size": pageSize,

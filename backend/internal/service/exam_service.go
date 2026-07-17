@@ -1,4 +1,4 @@
-// Package service 课程考核（基于 JSON 题库），对应 Python exam_service。
+// Package service 课程考核（基于 JSON 题库）。
 package service
 
 import (
@@ -16,7 +16,7 @@ import (
 	"forklift-training/internal/model"
 )
 
-// 单选/多选分值，与 Python 一致。
+// 单选/多选分值。
 const (
 	examSingleScore = 3
 	examMultiScore  = 4
@@ -26,7 +26,7 @@ const (
 var examQuestionsFile = filepath.Join("data", "exam_questions.json")
 
 var (
-	examQuestionsCache     map[string]interface{}
+	examQuestionsCache     map[string]any
 	examQuestionsCacheOnce sync.Once
 	examQuestionsCacheErr  error
 )
@@ -48,15 +48,15 @@ func SetExamQuestionsFile(path string) {
 	examQuestionsCacheOnce = sync.Once{}
 }
 
-// loadQuestions 加载并缓存 JSON 题库，对应 Python _load_questions。
-func loadQuestions() (map[string]interface{}, error) {
+// loadQuestions 加载并缓存 JSON 题库。
+func loadQuestions() (map[string]any, error) {
 	examQuestionsCacheOnce.Do(func() {
 		b, err := os.ReadFile(examQuestionsFile)
 		if err != nil {
 			examQuestionsCacheErr = fmt.Errorf("题库文件读取失败: %w", err)
 			return
 		}
-		var data map[string]interface{}
+		var data map[string]any
 		if err := json.Unmarshal(b, &data); err != nil {
 			examQuestionsCacheErr = fmt.Errorf("题库文件解析失败: %w", err)
 			return
@@ -66,8 +66,8 @@ func loadQuestions() (map[string]interface{}, error) {
 	return examQuestionsCache, examQuestionsCacheErr
 }
 
-// GetExamQuestions 获取课程考核题目（乱序、选项乱序），对应 Python get_exam_questions。
-func (s *ExamService) GetExamQuestions(courseID int) (map[string]interface{}, error) {
+// GetExamQuestions 获取课程考核题目（乱序、选项乱序）。
+func (s *ExamService) GetExamQuestions(courseID int) (map[string]any, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		return nil, errors.New("课程不存在")
@@ -77,14 +77,17 @@ func (s *ExamService) GetExamQuestions(courseID int) (map[string]interface{}, er
 		return nil, err
 	}
 	courseKey := fmt.Sprintf("%d", courseID)
-	courseData, ok := all[courseKey].(map[string]interface{})
+	courseData, ok := all[courseKey].(map[string]any)
 	if !ok {
 		return nil, errors.New("该课程暂无考核题目")
 	}
-	rawQuestions, _ := courseData["questions"].([]interface{})
-	questions := make([]map[string]interface{}, 0, len(rawQuestions))
+	rawQuestions, ok := courseData["questions"].([]any)
+	if !ok {
+		return nil, errors.New("该课程暂无考核题目")
+	}
+	questions := make([]map[string]any, 0, len(rawQuestions))
 	for _, rq := range rawQuestions {
-		q, ok := rq.(map[string]interface{})
+		q, ok := rq.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -96,13 +99,13 @@ func (s *ExamService) GetExamQuestions(courseID int) (map[string]interface{}, er
 
 	totalScore := 0
 	for _, q := range rawQuestions {
-		if t, _ := q.(map[string]interface{})["type"].(string); t == "multi_choice" {
+		if t, _ := q.(map[string]any)["type"].(string); t == "multi_choice" {
 			totalScore += examMultiScore
 		} else {
 			totalScore += examSingleScore
 		}
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"course_id":       courseID,
 		"course_name":     courseData["course_name"],
 		"total_score":     totalScore,
@@ -113,8 +116,8 @@ func (s *ExamService) GetExamQuestions(courseID int) (map[string]interface{}, er
 	}, nil
 }
 
-// SubmitExam 提交考核，评分并保存 ExamRecord，对应 Python submit_exam。
-func (s *ExamService) SubmitExam(studentID, courseID int, answers map[string]interface{}) (map[string]interface{}, error) {
+// SubmitExam 提交考核，评分并保存 ExamRecord。
+func (s *ExamService) SubmitExam(studentID, courseID int, answers map[string]any) (map[string]any, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		return nil, errors.New("课程不存在")
@@ -124,18 +127,18 @@ func (s *ExamService) SubmitExam(studentID, courseID int, answers map[string]int
 		return nil, err
 	}
 	courseKey := fmt.Sprintf("%d", courseID)
-	courseData, ok := all[courseKey].(map[string]interface{})
+	courseData, ok := all[courseKey].(map[string]any)
 	if !ok {
 		return nil, errors.New("该课程暂无考核题目")
 	}
-	rawQuestions, _ := courseData["questions"].([]interface{})
+	rawQuestions, _ := courseData["questions"].([]any)
 
 	totalScore := 0
 	correctCount := 0
-	details := make([]map[string]interface{}, 0, len(rawQuestions))
+	details := make([]map[string]any, 0, len(rawQuestions))
 
 	for _, rq := range rawQuestions {
-		q, _ := rq.(map[string]interface{})
+		q, _ := rq.(map[string]any)
 		qID := fmt.Sprintf("%v", q["question_id"])
 		qType, _ := q["type"].(string)
 		userAnswer := answers[qID]
@@ -164,7 +167,7 @@ func (s *ExamService) SubmitExam(studentID, courseID int, answers map[string]int
 		if isCorrect {
 			earned = questionScore
 		}
-		details = append(details, map[string]interface{}{
+		details = append(details, map[string]any{
 			"question_id":    q["question_id"],
 			"type":           qType,
 			"question_text":  q["question_text"],
@@ -209,7 +212,7 @@ func (s *ExamService) SubmitExam(studentID, courseID int, answers map[string]int
 		return nil, err
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"exam_id":         rec.ExamID,
 		"score":           finalScore,
 		"total_score":     totalScore,
@@ -219,8 +222,8 @@ func (s *ExamService) SubmitExam(studentID, courseID int, answers map[string]int
 	}, nil
 }
 
-// GetExamResult 查询考核结果，对应 Python get_exam_result。
-func (s *ExamService) GetExamResult(studentID, courseID int) (map[string]interface{}, error) {
+// GetExamResult 查询考核结果。
+func (s *ExamService) GetExamResult(studentID, courseID int) (map[string]any, error) {
 	var rec model.ExamRecord
 	err := s.db.Where("student_id = ? AND course_id = ?", studentID, courseID).First(&rec).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -232,10 +235,10 @@ func (s *ExamService) GetExamResult(studentID, courseID int) (map[string]interfa
 	all, _ := loadQuestions()
 	courseKey := fmt.Sprintf("%d", courseID)
 	totalScore := 0
-	if courseData, ok := all[courseKey].(map[string]interface{}); ok {
-		if raws, _ := courseData["questions"].([]interface{}); ok {
+	if courseData, ok := all[courseKey].(map[string]any); ok {
+		if raws, _ := courseData["questions"].([]any); ok {
 			for _, rq := range raws {
-				if q, _ := rq.(map[string]interface{}); q != nil {
+				if q, _ := rq.(map[string]any); q != nil {
 					if t, _ := q["type"].(string); t == "multi_choice" {
 						totalScore += examMultiScore
 					} else {
@@ -245,13 +248,13 @@ func (s *ExamService) GetExamResult(studentID, courseID int) (map[string]interfa
 			}
 		}
 	}
-	var details []interface{}
+	var details []map[string]any
 	if len(rec.Answers) > 0 {
 		_ = json.Unmarshal(rec.Answers, &details)
 	}
 	correctCount := 0
 	for _, d := range details {
-		if m, ok := d.(map[string]interface{}); ok && m["is_correct"] == true {
+		if d["is_correct"] == true {
 			correctCount++
 		}
 	}
@@ -259,7 +262,7 @@ func (s *ExamService) GetExamResult(studentID, courseID int) (map[string]interfa
 	if rec.Score != nil {
 		score = *rec.Score
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"exam_id":         rec.ExamID,
 		"score":           score,
 		"total_score":     totalScore,
@@ -270,11 +273,11 @@ func (s *ExamService) GetExamResult(studentID, courseID int) (map[string]interfa
 	}, nil
 }
 
-// GetExamHistory 学员考核历史，对应 Python get_exam_history。
-func (s *ExamService) GetExamHistory(studentID int) []map[string]interface{} {
+// GetExamHistory 学员考核历史。
+func (s *ExamService) GetExamHistory(studentID int) []map[string]any {
 	var records []model.ExamRecord
 	s.db.Where("student_id = ?", studentID).Order("exam_date DESC").Find(&records)
-	out := make([]map[string]interface{}, 0, len(records))
+	out := make([]map[string]any, 0, len(records))
 	for _, r := range records {
 		var course model.Course
 		courseName := "未知课程"
@@ -285,7 +288,7 @@ func (s *ExamService) GetExamHistory(studentID int) []map[string]interface{} {
 		if r.Score != nil {
 			score = *r.Score
 		}
-		out = append(out, map[string]interface{}{
+		out = append(out, map[string]any{
 			"exam_id":     r.ExamID,
 			"course_id":   r.CourseID,
 			"course_name": courseName,
@@ -297,12 +300,12 @@ func (s *ExamService) GetExamHistory(studentID int) []map[string]interface{} {
 }
 
 // copyQuestion 深拷贝题目 map（含 options）。
-func copyQuestion(q map[string]interface{}) map[string]interface{} {
-	cp := make(map[string]interface{}, len(q))
+func copyQuestion(q map[string]any) map[string]any {
+	cp := make(map[string]any, len(q))
 	for k, v := range q {
 		if k == "options" {
-			if opts, ok := v.(map[string]interface{}); ok {
-				optCopy := make(map[string]interface{}, len(opts))
+			if opts, ok := v.(map[string]any); ok {
+				optCopy := make(map[string]any, len(opts))
 				for k2, v2 := range opts {
 					optCopy[k2] = v2
 				}
@@ -317,13 +320,13 @@ func copyQuestion(q map[string]interface{}) map[string]interface{} {
 	return cp
 }
 
-// shuffleOptions 单选题选项乱序，对应 Python _shuffle_options。
-func shuffleOptions(q map[string]interface{}) {
+// shuffleOptions 单选题选项乱序。
+func shuffleOptions(q map[string]any) {
 	qType, _ := q["type"].(string)
 	if qType != "single_choice" {
 		return
 	}
-	opts, ok := q["options"].(map[string]interface{})
+	opts, ok := q["options"].(map[string]any)
 	if !ok {
 		return
 	}
@@ -332,7 +335,7 @@ func shuffleOptions(q map[string]interface{}) {
 		keys = append(keys, k)
 	}
 	rand.Shuffle(len(keys), func(i, j int) { keys[i], keys[j] = keys[j], keys[i] })
-	shuffled := make(map[string]interface{}, len(opts))
+	shuffled := make(map[string]any, len(opts))
 	for _, k := range keys {
 		shuffled[k] = opts[k]
 	}

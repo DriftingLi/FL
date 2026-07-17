@@ -14,7 +14,6 @@ import (
 )
 
 // RegisterAdminRoutes 注册 /api/admin 蓝图（管理员后台）。
-// 对应 Python app/api/admin.py。
 func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	adminSvc := service.NewAdminService(db)
 	courseSvc := service.NewAdminCourseService(db)
@@ -36,7 +35,7 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 
 	// POST /api/admin/course  创建课程
 	g.POST("/course", func(c *gin.Context) {
-		var data map[string]interface{}
+		var data map[string]any
 		if err := c.ShouldBindJSON(&data); err != nil {
 			response.BadRequest(c, "请求数据无效")
 			return

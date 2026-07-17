@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # ======================================================================
-# deploy-remote.sh v2 — 远程服务器端后端部署脚本
+# deploy-remote.sh v3 — 远程服务器端全栈部署脚本
 # [env_val 版本] — 使用 env_val() 安全转义 .env 值
 # ======================================================================
-# 仅部署后端服务（PostgreSQL + Go API）。
-echo "[deploy-remote.sh] 版本: env_val v2"
-# 前端由 Cloudflare Pages 单独托管，不在此脚本管理范围内。
+# 部署前端（Nginx）+ 后端（Go API）。
+echo "[deploy-remote.sh] 版本: env_val v3 (全栈)"
 # 也可以手动执行：
 #   bash deploy-remote.sh            # 正常部署
 #   bash deploy-remote.sh --rollback # 回滚到上一个版本
@@ -36,6 +35,7 @@ BACKUP_DIR="${DEPLOY_PATH}/backups"
 # Docker
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 BACKEND_SERVICE="${BACKEND_SERVICE:-backend}"
+FRONTEND_SERVICE="${FRONTEND_SERVICE:-frontend}"
 POSTGRES_SERVICE="${POSTGRES_SERVICE:-postgres}"
 
 # 注册表认证
@@ -47,9 +47,11 @@ IMAGE_TAG="${IMAGE_TAG:-latest}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 
 # 健康检查
-BACKEND_PORT="${BACKEND_PORT:-8081}"
 HEALTH_CHECK_RETRIES="${HEALTH_CHECK_RETRIES:-20}"
 HEALTH_CHECK_INTERVAL="${HEALTH_CHECK_INTERVAL:-6}"
+
+# SSL 证书目录（固定路径，由 write_ssl_certs() 写入，frontend 容器挂载）
+SSL_CERT_DIR="${DEPLOY_PATH}/nginx/ssl"
 
 # 迁移
 SKIP_MIGRATION="${SKIP_MIGRATION:-false}"
@@ -100,8 +102,7 @@ write_env_file() {
     {
         echo "# 由 deploy-remote.sh 自动生成 — $(date '+%Y-%m-%d %H:%M:%S')"
         echo "APP_ENV=production"
-        echo "PORT=${BACKEND_PORT}"
-        echo "BACKEND_PORT=${BACKEND_PORT}"
+        echo "PORT=8080"
 
         printf 'DATABASE_URL='
         env_val "${DATABASE_URL:-}"; echo
@@ -145,6 +146,8 @@ write_env_file() {
         # COZE_OAUTH_PRIVATE_KEY 不写入 .env（已写入独立文件，见上方）
 
         echo "BACKEND_IMAGE=${IMAGE_BACKEND}:${IMAGE_TAG}"
+        echo "FRONTEND_IMAGE=${IMAGE_FRONTEND}:${IMAGE_TAG}"
+        echo "DOMAIN=${DOMAIN:-localhost}"
 
         echo "UPLOAD_FOLDER=/data/uploads"
         echo "VOLUME_MOUNT_PATH=/data"
@@ -159,6 +162,47 @@ write_env_file() {
     mv "${DEPLOY_PATH}/.env.tmp" "${DEPLOY_PATH}/.env"
     chmod 600 "${DEPLOY_PATH}/.env"
     log_ok ".env 文件已生成（$(wc -l < "${DEPLOY_PATH}/.env") 行）"
+}
+
+# ======================================================================
+# 写入 SSL 证书文件（从 GitHub Secrets 注入的内容）
+# ======================================================================
+write_ssl_certs() {
+    log_info ">>> 检查 SSL 证书..."
+
+    mkdir -p "$SSL_CERT_DIR"
+
+    # 检查证书内容是否已通过环境变量注入
+    if [ -z "${SSL_FULLCHAIN:-}" ] || [ -z "${SSL_PRIVKEY:-}" ]; then
+        log_warn "未通过环境变量提供 SSL 证书内容（SSL_FULLCHAIN/SSL_PRIVKEY）"
+        # 检查证书文件是否已存在（可能是手动上传的）
+        if [ -f "${SSL_CERT_DIR}/fullchain.pem" ] && [ -f "${SSL_CERT_DIR}/privkey.pem" ]; then
+            log_ok "检测到已有证书文件，将复用: $SSL_CERT_DIR"
+        else
+            log_error "SSL 证书文件不存在且未通过 Secrets 注入: $SSL_CERT_DIR"
+            log_info "请在 GitHub Secrets 中配置 SSL_FULLCHAIN 和 SSL_PRIVKEY，或手动上传证书文件"
+            exit 1
+        fi
+        return
+    fi
+
+    # 写入证书文件（环境变量中的换行符已通过 printf %q 还原）
+    printf '%s\n' "${SSL_FULLCHAIN}" > "${SSL_CERT_DIR}/fullchain.pem"
+    printf '%s\n' "${SSL_PRIVKEY}" > "${SSL_CERT_DIR}/privkey.pem"
+
+    # 设置权限（证书文件可读，私钥仅 owner 可读）
+    chmod 644 "${SSL_CERT_DIR}/fullchain.pem"
+    chmod 600 "${SSL_CERT_DIR}/privkey.pem"
+
+    # 验证证书内容有效
+    if ! openssl x509 -in "${SSL_CERT_DIR}/fullchain.pem" -noout 2>/dev/null; then
+        log_error "证书文件无效（非合法的 X.509 格式）: ${SSL_CERT_DIR}/fullchain.pem"
+        log_info "请检查 GitHub Secret SSL_FULLCHAIN 的内容是否完整（含 BEGIN/END CERTIFICATE 行）"
+        exit 1
+    fi
+
+    log_ok "SSL 证书已从 GitHub Secrets 写入: $SSL_CERT_DIR"
+    log_info "证书有效期至: $(openssl x509 -in "${SSL_CERT_DIR}/fullchain.pem" -noout -enddate 2>/dev/null | cut -d= -f2)"
 }
 
 # ======================================================================
@@ -251,12 +295,26 @@ create_backup() {
     } > "$BACKUP_FILE"
 
     # 标记当前版本（用于回滚）
-    if docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps -q "$BACKEND_SERVICE" &>/dev/null; then
-        CURRENT_IMAGE=$(docker inspect \
+    BACKEND_RUNNING=$(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps -q "$BACKEND_SERVICE" 2>/dev/null)
+    FRONTEND_RUNNING=$(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps -q "$FRONTEND_SERVICE" 2>/dev/null)
+
+    PREVIOUS_BACKEND="unknown"
+    PREVIOUS_FRONTEND="unknown"
+    if [ -n "$BACKEND_RUNNING" ]; then
+        PREVIOUS_BACKEND=$(docker inspect \
             --format='{{.Config.Image}}' \
-            "$(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps -q "$BACKEND_SERVICE")" 2>/dev/null || echo "unknown")
-        echo "PREVIOUS_IMAGE=${CURRENT_IMAGE}" > "${BACKUP_DIR}/last-version.txt"
+            "$BACKEND_RUNNING" 2>/dev/null || echo "unknown")
     fi
+    if [ -n "$FRONTEND_RUNNING" ]; then
+        PREVIOUS_FRONTEND=$(docker inspect \
+            --format='{{.Config.Image}}' \
+            "$FRONTEND_RUNNING" 2>/dev/null || echo "unknown")
+    fi
+
+    {
+        echo "PREVIOUS_BACKEND_IMAGE=${PREVIOUS_BACKEND}"
+        echo "PREVIOUS_FRONTEND_IMAGE=${PREVIOUS_FRONTEND}"
+    } > "${BACKUP_DIR}/last-version.txt"
 
     # 清理旧数据库备份（保留最近 10 份，每份约几 MB）
     ls -t "$BACKUP_DIR"/db_backup_*.sql.gz 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null || true
@@ -297,7 +355,8 @@ pull_images() {
 
     if [ -n "$IMAGE_FRONTEND" ]; then
         docker pull "${IMAGE_FRONTEND}:${IMAGE_TAG}" || {
-            log_warn "前端镜像拉取失败，将跳过: ${IMAGE_FRONTEND}:${IMAGE_TAG}"
+            log_error "前端镜像拉取失败: ${IMAGE_FRONTEND}:${IMAGE_TAG}"
+            exit 1
         }
         log_ok "前端镜像: ${IMAGE_FRONTEND}:${IMAGE_TAG}"
     fi
@@ -341,7 +400,7 @@ run_migration() {
         /app/bin/migrate up 2>&1; then
         log_ok "数据库迁移完成"
     else
-        log_warn "自动迁移失败，请手动执行: cd backend-go && go run ./cmd/migrate up"
+        log_warn "自动迁移失败，请手动执行: cd backend && go run ./cmd/migrate up"
     fi
 }
 
@@ -356,21 +415,28 @@ restart_services() {
     # 写入 .env 文件
     write_env_file
 
-    # 只重启 backend（不动 postgres/redis/云隧道等外部容器）
+    # 先启动 backend（依赖 postgres + redis）
     log_info "停止后端容器..."
     docker compose -f "$COMPOSE_FILE" down "$BACKEND_SERVICE" 2>&1 || true
     sleep 3
     log_info "启动后端容器..."
     docker compose -f "$COMPOSE_FILE" up -d "$BACKEND_SERVICE" 2>&1 | tail -5
     log_ok "后端服务已重启"
+
+    # 再启动 frontend（依赖 backend healthy）
+    log_info "停止前端容器..."
+    docker compose -f "$COMPOSE_FILE" down "$FRONTEND_SERVICE" 2>&1 || true
+    sleep 2
+    log_info "启动前端容器..."
+    docker compose -f "$COMPOSE_FILE" up -d "$FRONTEND_SERVICE" 2>&1 | tail -5
+    log_ok "前端服务已重启"
 }
 
 # ======================================================================
 # 健康检查
 # ======================================================================
 health_check() {
-    log_info ">>> 健康检查 (localhost:${BACKEND_PORT}/api/health)..."
-    log_info "容器端口映射: $(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" port "$BACKEND_SERVICE" 8080 2>/dev/null || echo 'N/A')"
+    log_info ">>> 后端健康检查（通过前端容器反代 localhost/api/health）..."
 
     RETRY=0
     while [ $RETRY -lt $HEALTH_CHECK_RETRIES ]; do
@@ -381,14 +447,14 @@ health_check() {
             return 1
         fi
 
-        # HTTP 健康检查
+        # HTTP 健康检查（backend 不再对外暴露端口，通过前端 80 端口反代检查）
         HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
             --connect-timeout 3 --max-time 5 \
-            "http://localhost:${BACKEND_PORT}/api/health" 2>/dev/null || echo "000")
+            "http://localhost/api/health" 2>/dev/null || echo "000")
 
         if [ "$HTTP_CODE" = "200" ]; then
             log_ok "后端健康检查通过 ($HTTP_CODE)"
-            return 0
+            break
         fi
 
         RETRY=$((RETRY + 1))
@@ -398,10 +464,50 @@ health_check() {
         sleep "$HEALTH_CHECK_INTERVAL"
     done
 
-    log_error "健康检查超时!"
+    # 后端检查未通过
+    if [ "$HTTP_CODE" != "200" ]; then
+        log_error "后端健康检查超时!"
+        echo ""
+        echo "=== 后端容器日志（最后 30 行）==="
+        docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" logs --tail 30 "$BACKEND_SERVICE" 2>&1 || echo "无法获取日志"
+        echo ""
+        echo "=== 容器状态 ==="
+        docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps 2>&1
+        return 1
+    fi
+
+    # ===== 前端健康检查 =====
+    log_info ">>> 前端健康检查 (localhost:80/health)..."
+
+    FRONTEND_RETRY=0
+    FRONTEND_MAX_RETRIES=10
+    while [ $FRONTEND_RETRY -lt $FRONTEND_MAX_RETRIES ]; do
+        FRONTEND_STATUS=$(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps -q "$FRONTEND_SERVICE" 2>/dev/null)
+        if [ -z "$FRONTEND_STATUS" ]; then
+            log_error "前端容器未运行!"
+            echo ""
+            echo "=== 前端容器日志（最后 30 行）==="
+            docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" logs --tail 30 "$FRONTEND_SERVICE" 2>&1 || echo "无法获取日志"
+            return 1
+        fi
+
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            --connect-timeout 3 --max-time 5 \
+            "http://localhost:80/health" 2>/dev/null || echo "000")
+
+        if [ "$HTTP_CODE" = "200" ]; then
+            log_ok "前端健康检查通过 ($HTTP_CODE)"
+            return 0
+        fi
+
+        FRONTEND_RETRY=$((FRONTEND_RETRY + 1))
+        sleep 3
+    done
+
+    log_error "前端健康检查超时!"
     echo ""
-    echo "=== 后端容器日志（最后 30 行）==="
-    docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" logs --tail 30 "$BACKEND_SERVICE" 2>&1 || echo "无法获取日志"
+    echo "=== 前端容器日志（最后 30 行）==="
+    docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" logs --tail 30 "$FRONTEND_SERVICE" 2>&1 || echo "无法获取日志"
     echo ""
     echo "=== 容器状态 ==="
     docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps 2>&1
@@ -444,31 +550,42 @@ do_rollback() {
     if [ -f "${BACKUP_DIR}/last-version.txt" ]; then
         # shellcheck disable=SC1090
         source "${BACKUP_DIR}/last-version.txt"
-        if [ -n "${PREVIOUS_IMAGE:-}" ] && [ "$PREVIOUS_IMAGE" != "unknown" ]; then
-            log_info "回滚到: $PREVIOUS_IMAGE"
 
-            # 设置环境变量使 compose 使用旧镜像
-            export BACKEND_IMAGE="$PREVIOUS_IMAGE"
-            write_env_file
+        # 设置环境变量使 compose 使用旧镜像
+        export BACKEND_IMAGE="${PREVIOUS_BACKEND_IMAGE:-unknown}"
+        export FRONTEND_IMAGE="${PREVIOUS_FRONTEND_IMAGE:-unknown}"
+        write_env_file
 
-            # 只回滚 backend 容器
+        # 回滚 backend
+        if [ "${PREVIOUS_BACKEND_IMAGE:-unknown}" != "unknown" ]; then
+            log_info "回滚后端到: $PREVIOUS_BACKEND_IMAGE"
             docker compose -f "$COMPOSE_FILE" down "$BACKEND_SERVICE" 2>&1 || true
             sleep 3
             docker compose -f "$COMPOSE_FILE" up -d "$BACKEND_SERVICE" 2>&1
-            sleep 10
-
-            if health_check; then
-                log_ok "回滚成功"
-                log_info "如需恢复数据库，可执行："
-                log_info "  gunzip -c ${BACKUP_DIR}/db_backup_*.sql.gz | docker compose -f \$DEPLOY_PATH/\$COMPOSE_FILE exec -T \$POSTGRES_SERVICE psql -U ${DB_USER:-forklift} -d forklift_training"
-            else
-                log_error "回滚后健康检查也失败了! 需要人工介入!"
-                log_info "可尝试恢复最近的数据库备份："
-                log_info "  ls -t ${BACKUP_DIR}/db_backup_*.sql.gz | head -1"
-                exit 1
-            fi
         else
-            log_error "无法获取上一个版本信息，回滚失败"
+            log_warn "无后端历史版本，跳过后端回滚"
+        fi
+
+        # 回滚 frontend
+        if [ "${PREVIOUS_FRONTEND_IMAGE:-unknown}" != "unknown" ]; then
+            log_info "回滚前端到: $PREVIOUS_FRONTEND_IMAGE"
+            docker compose -f "$COMPOSE_FILE" down "$FRONTEND_SERVICE" 2>&1 || true
+            sleep 2
+            docker compose -f "$COMPOSE_FILE" up -d "$FRONTEND_SERVICE" 2>&1
+        else
+            log_warn "无前端历史版本，跳过前端回滚"
+        fi
+
+        sleep 10
+
+        if health_check; then
+            log_ok "回滚成功"
+            log_info "如需恢复数据库，可执行："
+            log_info "  gunzip -c ${BACKUP_DIR}/db_backup_*.sql.gz | docker compose -f \$DEPLOY_PATH/\$COMPOSE_FILE exec -T \$POSTGRES_SERVICE psql -U ${DB_USER:-forklift} -d forklift_training"
+        else
+            log_error "回滚后健康检查也失败了! 需要人工介入!"
+            log_info "可尝试恢复最近的数据库备份："
+            log_info "  ls -t ${BACKUP_DIR}/db_backup_*.sql.gz | head -1"
             exit 1
         fi
     else
@@ -499,6 +616,7 @@ main() {
         deploy|*)
             pre_deploy_check
             write_env_file
+            write_ssl_certs
             create_backup
             login_registry
             pull_images

@@ -66,7 +66,6 @@ func SeedStudent(t *testing.T, db *gorm.DB, username, hashedPassword string) *mo
 		Password:  hashedPassword,
 		Name:      username,
 		Status:    1,
-		Level:     "beginner",
 		CreatedAt: Now(),
 	}
 	if err := db.Create(s).Error; err != nil {
@@ -107,11 +106,10 @@ func SeedTutor(t *testing.T, db *gorm.DB, username, hashedPassword string) *mode
 }
 
 // SeedQuestion 插入一道测试题目。
-func SeedQuestion(t *testing.T, db *gorm.DB, qType, level, content, answer string) *model.Question {
+func SeedQuestion(t *testing.T, db *gorm.DB, qType, content, answer string) *model.Question {
 	t.Helper()
 	q := &model.Question{
 		Type:          qType,
-		Level:         level,
 		Content:       content,
 		Answer:        answer,
 		Status:        "published",
@@ -141,11 +139,11 @@ func SeedCourse(t *testing.T, db *gorm.DB, name string) *model.Course {
 }
 
 // SeedKnowledgePoint 插入一个测试知识点。
-func SeedKnowledgePoint(t *testing.T, db *gorm.DB, name, level string) *model.KnowledgePoint {
+func SeedKnowledgePoint(t *testing.T, db *gorm.DB, name, category string) *model.KnowledgePoint {
 	t.Helper()
 	kp := &model.KnowledgePoint{
 		Name:      name,
-		Level:     level,
+		Category:  category,
 		CreatedAt: Now(),
 	}
 	if err := db.Create(kp).Error; err != nil {

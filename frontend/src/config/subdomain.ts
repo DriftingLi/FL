@@ -2,8 +2,9 @@
 // 生产环境通过 Vite 环境变量注入（VITE_MAIN_DOMAIN / VITE_*_SUBDOMAIN），
 // 开发环境默认使用 *.localhost 模式。
 //
-// 部署时需要在 Cloudflare Pages 或 DNS 中为这五个域名配置 CNAME 指向同一前端站点。
+// 部署时需要在 DNS 中为这五个域名配置 A 记录指向同一服务器 IP。
 // 后端 CORS_ORIGINS 也必须同时包含这五个域名。
+// 注意：管理员后台 hostname 前缀为 manage（内部类型仍为 admin）。
 
 // 主域名（用于跨子域名跳转时的根域名推导参考）
 export const MAIN_DOMAIN = import.meta.env.VITE_MAIN_DOMAIN || 'localhost'
@@ -12,4 +13,4 @@ export const MAIN_DOMAIN = import.meta.env.VITE_MAIN_DOMAIN || 'localhost'
 export const TRAINING_SUBDOMAIN = import.meta.env.VITE_TRAINING_SUBDOMAIN || 'training.localhost'
 export const VALUATION_SUBDOMAIN = import.meta.env.VITE_VALUATION_SUBDOMAIN || 'valuation.localhost'
 export const MENTOR_SUBDOMAIN = import.meta.env.VITE_MENTOR_SUBDOMAIN || 'mentor.localhost'
-export const ADMIN_SUBDOMAIN = import.meta.env.VITE_ADMIN_SUBDOMAIN || 'admin.localhost'
+export const ADMIN_SUBDOMAIN = import.meta.env.VITE_ADMIN_SUBDOMAIN || 'manage.localhost'

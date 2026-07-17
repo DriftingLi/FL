@@ -21,6 +21,7 @@
     "marked-highlight": "^2.2.4",
     "pdfjs-dist": "^4.4.168",
     "pinia": "^2.1.7",
+    "vditor": "^3.11.2",
     "vue": "^3.4.15",
     "vue-router": "^4.2.5",
     "vuedraggable": "^4.1.0"

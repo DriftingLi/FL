@@ -1,4 +1,4 @@
-// Package service 错题本，对应 Python wrong_question_service。
+// Package service 错题本。
 package service
 
 import (
@@ -21,8 +21,8 @@ func NewWrongQuestionService(db *gorm.DB) *WrongQuestionService {
 	return &WrongQuestionService{db: db}
 }
 
-// GetWrongQuestions 错题列表，对应 Python get_wrong_questions。
-func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, qType string, knowledgePointID *int, minWrongCount *int) map[string]interface{} {
+// GetWrongQuestions 错题列表。
+func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, qType string, knowledgePointID *int, minWrongCount *int) map[string]any {
 	if page <= 0 {
 		page = 1
 	}
@@ -47,7 +47,7 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 	var items []model.WrongQuestion
 	q.Order("wrong_question.last_wrong_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&items)
 
-	result := make([]map[string]interface{}, 0, len(items))
+	result := make([]map[string]any, 0, len(items))
 	for i := range items {
 		wq := &items[i]
 		item := wrongQuestionToDict(wq)
@@ -57,7 +57,7 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 		}
 		result = append(result, item)
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"total":     total,
 		"page":      page,
 		"page_size": pageSize,
@@ -65,8 +65,8 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 	}
 }
 
-// RedoWrongQuestion 重做错题，对应 Python redo_wrong_question。
-func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, userAnswer interface{}) (map[string]interface{}, error) {
+// RedoWrongQuestion 重做错题。
+func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, userAnswer interface{}) (map[string]any, error) {
 	var wq model.WrongQuestion
 	if err := s.db.Where("student_id = ? AND question_id = ? AND is_removed = ?", studentID, questionID, false).First(&wq).Error; err != nil {
 		return nil, errors.New("错题记录不存在")
@@ -85,7 +85,7 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 	}
 	s.db.Save(&wq)
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"correct_answer": question.Answer,
 		"explanation":    question.Explanation,
 		"is_removed":     wq.IsRemoved,
@@ -98,19 +98,19 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 	return result, nil
 }
 
-// RemoveWrongQuestion 移除错题，对应 Python remove_wrong_question。
-func (s *WrongQuestionService) RemoveWrongQuestion(studentID, questionID int) (map[string]interface{}, error) {
+// RemoveWrongQuestion 移除错题。
+func (s *WrongQuestionService) RemoveWrongQuestion(studentID, questionID int) (map[string]any, error) {
 	var wq model.WrongQuestion
 	if err := s.db.Where("student_id = ? AND question_id = ? AND is_removed = ?", studentID, questionID, false).First(&wq).Error; err != nil {
 		return nil, errors.New("错题记录不存在")
 	}
 	wq.IsRemoved = true
 	s.db.Save(&wq)
-	return map[string]interface{}{"removed": true}, nil
+	return map[string]any{"removed": true}, nil
 }
 
-// GetStats 错题统计，对应 Python get_wrong_question_stats。
-func (s *WrongQuestionService) GetStats(studentID int) map[string]interface{} {
+// GetStats 错题统计。
+func (s *WrongQuestionService) GetStats(studentID int) map[string]any {
 	var items []model.WrongQuestion
 	s.db.Where("student_id = ? AND is_removed = ?", studentID, false).Find(&items)
 
@@ -133,19 +133,19 @@ func (s *WrongQuestionService) GetStats(studentID int) map[string]interface{} {
 			byKnowledgePoint[kpName]++
 		}
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"total":              total,
 		"by_type":            byType,
 		"by_knowledge_point": byKnowledgePoint,
 	}
 }
 
-// ExportWrongQuestions 导出错题，对应 Python export_wrong_questions。
-func (s *WrongQuestionService) ExportWrongQuestions(studentID int) []map[string]interface{} {
+// ExportWrongQuestions 导出错题。
+func (s *WrongQuestionService) ExportWrongQuestions(studentID int) []map[string]any {
 	var items []model.WrongQuestion
 	s.db.Where("student_id = ? AND is_removed = ?", studentID, false).Find(&items)
 
-	exportData := make([]map[string]interface{}, 0, len(items))
+	exportData := make([]map[string]any, 0, len(items))
 	for i := range items {
 		wq := &items[i]
 		var question model.Question
@@ -156,7 +156,7 @@ func (s *WrongQuestionService) ExportWrongQuestions(studentID int) []map[string]
 		if len(question.Options) > 0 {
 			_ = jsonUnmarshal(question.Options, &options)
 		}
-		item := map[string]interface{}{
+		item := map[string]any{
 			"question_id":        question.ID,
 			"type":               question.Type,
 			"content":            question.Content,
@@ -166,7 +166,6 @@ func (s *WrongQuestionService) ExportWrongQuestions(studentID int) []map[string]
 			"wrong_count":        wq.WrongCount,
 			"image_url":          question.ImageURL,
 			"knowledge_point_id": question.KnowledgePointID,
-			"level":              question.Level,
 			"last_wrong_at":      formatISO(wq.LastWrongAt),
 		}
 		exportData = append(exportData, item)
@@ -174,41 +173,34 @@ func (s *WrongQuestionService) ExportWrongQuestions(studentID int) []map[string]
 	return exportData
 }
 
-// FormatWrongQuestionsText 格式化错题文本，对应 Python format_wrong_questions_text。
-func FormatWrongQuestionsText(exportData []map[string]interface{}) string {
-	typeMap := map[string]string{
+// FormatWrongQuestionsText 格式化错题文本。
+func FormatWrongQuestionsText(exportData []map[string]any) string {
+	typeMap := map[string]any{
 		"single_choice": "单选题",
 		"multi_choice":  "多选题",
 		"true_false":    "判断题",
 		"fault_image":   "故障识图",
 		"short_answer":  "简答题",
 	}
-	levelMap := map[string]string{
-		"beginner":     "初级",
-		"intermediate": "中级",
-		"advanced":     "高级",
-	}
 	now := beijingNow().Format("2006-01-02 15:04:05")
 	var sb strings.Builder
 	sb.WriteString(strings.Repeat("=", 50))
 	sb.WriteString("\n错题本导出\n")
-	sb.WriteString(fmt.Sprintf("导出时间: %s\n", now))
-	sb.WriteString(fmt.Sprintf("错题总数: %d\n", len(exportData)))
+	fmt.Fprintf(&sb, "导出时间: %s\n", now)
+	fmt.Fprintf(&sb, "错题总数: %d\n", len(exportData))
 	sb.WriteString(strings.Repeat("=", 50))
 
 	for idx, item := range exportData {
 		sb.WriteString("\n")
-		sb.WriteString(fmt.Sprintf("【第%d题】\n", idx+1))
+		fmt.Fprintf(&sb, "【第%d题】\n", idx+1)
 		sb.WriteString(strings.Repeat("-", 40))
 		sb.WriteString("\n")
 		qType, _ := item["type"].(string)
-		sb.WriteString(fmt.Sprintf("题型: %s\n", mapOr(qType, typeMap, qType)))
-		level, _ := item["level"].(string)
-		sb.WriteString(fmt.Sprintf("难度: %s\n", mapOr(level, levelMap, level)))
+		fmt.Fprintf(&sb, "题型: %s\n", mapOr(qType, typeMap, qType))
 		content, _ := item["content"].(string)
-		sb.WriteString(fmt.Sprintf("题目: %s\n", content))
+		fmt.Fprintf(&sb, "题目: %s\n", content)
 
-		if options, ok := item["options"].(map[string]interface{}); ok && len(options) > 0 {
+		if options, ok := item["options"].(map[string]any); ok && len(options) > 0 {
 			sb.WriteString("选项:\n")
 			keys := make([]string, 0, len(options))
 			for k := range options {
@@ -216,37 +208,36 @@ func FormatWrongQuestionsText(exportData []map[string]interface{}) string {
 			}
 			sortStrings(keys)
 			for _, k := range keys {
-				sb.WriteString(fmt.Sprintf("  %s. %v\n", k, options[k]))
+				fmt.Fprintf(&sb, "  %s. %v\n", k, options[k])
 			}
 		}
 
 		correctAnswer, _ := item["correct_answer"].(string)
-		sb.WriteString(fmt.Sprintf("正确答案: %s\n", correctAnswer))
+		fmt.Fprintf(&sb, "正确答案: %s\n", correctAnswer)
 		if explanation, ok := item["explanation"].(string); ok && explanation != "" {
-			sb.WriteString(fmt.Sprintf("解析: %s\n", explanation))
+			fmt.Fprintf(&sb, "解析: %s\n", explanation)
 		}
 		wrongCount := toInt(item["wrong_count"])
-		sb.WriteString(fmt.Sprintf("错误次数: %d\n", wrongCount))
+		fmt.Fprintf(&sb, "错误次数: %d\n", wrongCount)
 		if lastWrong, ok := item["last_wrong_at"].(string); ok && lastWrong != "" {
-			sb.WriteString(fmt.Sprintf("最近错误时间: %s\n", lastWrong))
+			fmt.Fprintf(&sb, "最近错误时间: %s\n", lastWrong)
 		}
 		if imgURL, ok := item["image_url"].(string); ok && imgURL != "" {
-			sb.WriteString(fmt.Sprintf("图片: %s\n", imgURL))
+			fmt.Fprintf(&sb, "图片: %s\n", imgURL)
 		}
 		sb.WriteString(strings.Repeat("-", 40))
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(strings.Repeat("=", 50))
-	sb.WriteString(fmt.Sprintf("\n共 %d 道错题\n", len(exportData)))
-	sb.WriteString(strings.Repeat("=", 50))
+	fmt.Fprintf(&sb, "\n共 %d 道错题\n", len(exportData))
+	fmt.Fprintf(&sb, "%s\n", strings.Repeat("=", 50))
 	return sb.String()
 }
 
 // ===== dict 辅助 =====
 
-func wrongQuestionToDict(wq *model.WrongQuestion) map[string]interface{} {
-	return map[string]interface{}{
+func wrongQuestionToDict(wq *model.WrongQuestion) map[string]any {
+	return map[string]any{
 		"id":            wq.ID,
 		"student_id":    wq.StudentID,
 		"question_id":   wq.QuestionID,
@@ -257,7 +248,7 @@ func wrongQuestionToDict(wq *model.WrongQuestion) map[string]interface{} {
 	}
 }
 
-func mapOr(key string, m map[string]string, def string) string {
+func mapOr(key string, m map[string]any, def any) any {
 	if v, ok := m[key]; ok {
 		return v
 	}

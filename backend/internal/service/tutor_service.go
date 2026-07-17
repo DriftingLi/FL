@@ -1,4 +1,4 @@
-// Package service 导师端课程与文件管理，对应 Python tutor_service。
+// Package service 导师端课程与文件管理。
 package service
 
 import (
@@ -25,8 +25,8 @@ func NewTutorService(db *gorm.DB, uploadFolder string, fileService *FileService)
 	return &TutorService{db: db, uploadFolder: uploadFolder, fileService: fileService}
 }
 
-// GetCourses 导师课程列表，对应 Python get_tutor_courses。
-func (s *TutorService) GetCourses(tutorID *int, page, pageSize int) map[string]interface{} {
+// GetCourses 导师课程列表。
+func (s *TutorService) GetCourses(tutorID *int, page, pageSize int) map[string]any {
 	if page <= 0 {
 		page = 1
 	}
@@ -38,12 +38,23 @@ func (s *TutorService) GetCourses(tutorID *int, page, pageSize int) map[string]i
 	q.Count(&total)
 	var courses []model.Course
 	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&courses)
-	items := make([]map[string]interface{}, 0, len(courses))
+	items := make([]map[string]any, 0, len(courses))
 	for i := range courses {
-		items = append(items, courseToDict(&courses[i]))
+		item := courseToDict(&courses[i])
+		var chapterCount int64
+		s.db.Model(&model.Chapter{}).Where("course_id = ?", courses[i].CourseID).Count(&chapterCount)
+		item["chapter_count"] = chapterCount
+		// 统计该课程的学习学员数（study_record 表中去重的 student_id 数量）
+		var studentCount int64
+		s.db.Table("study_record").
+			Where("course_id = ?", courses[i].CourseID).
+			Distinct("student_id").
+			Count(&studentCount)
+		item["student_count"] = studentCount
+		items = append(items, item)
 	}
 	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	return map[string]interface{}{
+	return map[string]any{
 		"total":   total,
 		"page":    page,
 		"pages":   pages,
@@ -54,7 +65,7 @@ func (s *TutorService) GetCourses(tutorID *int, page, pageSize int) map[string]i
 // GetGradingStats 阅卷统计（按天分组），用于导师仪表盘图表。
 // 统计当前导师 grader_id 命中的 exam_answer 行数（即导师本人批阅题数）。
 // days 仅允许 7 或 30，其他值统一回退为 7。
-func (s *TutorService) GetGradingStats(tutorID, days int) map[string]interface{} {
+func (s *TutorService) GetGradingStats(tutorID, days int) map[string]any {
 	if days != 7 && days != 30 {
 		days = 7
 	}
@@ -104,7 +115,7 @@ func (s *TutorService) GetGradingStats(tutorID, days int) map[string]interface{}
 		data = append(data, cnt)
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"days":        days,
 		"labels":      labels,
 		"data":        data,
@@ -113,21 +124,21 @@ func (s *TutorService) GetGradingStats(tutorID, days int) map[string]interface{}
 	}
 }
 
-// GetCourseChapters 导师章节列表（含文件），对应 Python get_tutor_course_chapters。
-func (s *TutorService) GetCourseChapters(courseID int) (map[string]interface{}, error) {
+// GetCourseChapters 导师章节列表（含文件）。
+func (s *TutorService) GetCourseChapters(courseID int) (map[string]any, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		return nil, errors.New("课程不存在")
 	}
 	var chapters []model.Chapter
 	s.db.Where("course_id = ?", courseID).Order("order_num").Find(&chapters)
-	resultChapters := make([]map[string]interface{}, 0, len(chapters))
+	resultChapters := make([]map[string]any, 0, len(chapters))
 	for i := range chapters {
 		ch := &chapters[i]
 		chDict := chapterToDict(ch)
 		var files []model.ChapterFile
 		s.db.Where("chapter_id = ?", ch.ChapterID).Order("created_at").Find(&files)
-		fileList := make([]map[string]interface{}, 0, len(files))
+		fileList := make([]map[string]any, 0, len(files))
 		if len(files) == 0 && ch.FileURL != "" {
 			fileList = append(fileList, legacyFileEntry(ch))
 		} else {
@@ -138,14 +149,61 @@ func (s *TutorService) GetCourseChapters(courseID int) (map[string]interface{}, 
 		chDict["files"] = fileList
 		resultChapters = append(resultChapters, chDict)
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"course":   courseToDict(&course),
 		"chapters": resultChapters,
 	}, nil
 }
 
-// UploadChapterFile 上传章节文件，对应 Python upload_chapter_file。
-func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileContent []byte) (map[string]interface{}, error) {
+// GetChapterDetail 章节详情（含上下章ID + 文件列表，供导师端编辑页使用）。
+func (s *TutorService) GetChapterDetail(chapterID int) (map[string]any, error) {
+	var chapter model.Chapter
+	if err := s.db.First(&chapter, chapterID).Error; err != nil {
+		return nil, errors.New("章节不存在")
+	}
+	// 同课程章节按 order_num 排序，计算上下章ID
+	var chapters []model.Chapter
+	s.db.Where("course_id = ?", chapter.CourseID).Order("order_num").Find(&chapters)
+	prevID, nextID := 0, 0
+	for i, ch := range chapters {
+		if ch.ChapterID == chapterID {
+			if i > 0 {
+				prevID = chapters[i-1].ChapterID
+			}
+			if i < len(chapters)-1 {
+				nextID = chapters[i+1].ChapterID
+			}
+			break
+		}
+	}
+	// 文件列表
+	var files []model.ChapterFile
+	s.db.Where("chapter_id = ?", chapterID).Order("created_at").Find(&files)
+	fileList := make([]map[string]any, 0, len(files))
+	if len(files) == 0 && chapter.FileURL != "" {
+		fileList = append(fileList, legacyFileEntry(&chapter))
+	} else {
+		for j := range files {
+			fileList = append(fileList, chapterFileToDict(&files[j]))
+		}
+	}
+	result := chapterToDict(&chapter)
+	if prevID != 0 {
+		result["previous_chapter_id"] = prevID
+	} else {
+		result["previous_chapter_id"] = nil
+	}
+	if nextID != 0 {
+		result["next_chapter_id"] = nextID
+	} else {
+		result["next_chapter_id"] = nil
+	}
+	result["files"] = fileList
+	return result, nil
+}
+
+// UploadChapterFile 上传章节文件。
+func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileContent []byte) (map[string]any, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
@@ -194,8 +252,8 @@ func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileCon
 	return chapterFileToDict(&chapterFile), nil
 }
 
-// UpdateChapterInfo 更新章节信息，对应 Python update_chapter_info。
-func (s *TutorService) UpdateChapterInfo(chapterID int, data map[string]interface{}) (map[string]interface{}, error) {
+// UpdateChapterInfo 更新章节信息。
+func (s *TutorService) UpdateChapterInfo(chapterID int, data map[string]any) (map[string]any, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
@@ -221,8 +279,8 @@ func (s *TutorService) UpdateChapterInfo(chapterID int, data map[string]interfac
 	return chapterToDict(&chapter), nil
 }
 
-// DeleteChapterFileByID 删除章节文件，对应 Python delete_chapter_file_by_id。
-func (s *TutorService) DeleteChapterFileByID(fileID int) (map[string]interface{}, error) {
+// DeleteChapterFileByID 删除章节文件。
+func (s *TutorService) DeleteChapterFileByID(fileID int) (map[string]any, error) {
 	var chapterFile model.ChapterFile
 	if err := s.db.First(&chapterFile, fileID).Error; err != nil {
 		return nil, errors.New("文件不存在")
@@ -248,11 +306,11 @@ func (s *TutorService) DeleteChapterFileByID(fileID int) (map[string]interface{}
 			s.db.Save(&chapter)
 		}
 	}
-	return map[string]interface{}{"file_id": fileID, "deleted": true}, nil
+	return map[string]any{"file_id": fileID, "deleted": true}, nil
 }
 
-// BatchDeleteChapterFiles 批量删除文件，对应 Python batch_delete_chapter_files。
-func (s *TutorService) BatchDeleteChapterFiles(fileIDs []int) map[string]interface{} {
+// BatchDeleteChapterFiles 批量删除文件。
+func (s *TutorService) BatchDeleteChapterFiles(fileIDs []int) map[string]any {
 	successCount := 0
 	failedIDs := make([]int, 0)
 	for _, fid := range fileIDs {
@@ -278,7 +336,7 @@ func (s *TutorService) BatchDeleteChapterFiles(fileIDs []int) map[string]interfa
 		}
 		successCount++
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"success_count": successCount,
 		"failed_count":  len(failedIDs),
 		"failed_ids":    failedIDs,

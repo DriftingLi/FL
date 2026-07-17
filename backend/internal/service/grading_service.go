@@ -1,4 +1,4 @@
-// Package service 阅卷与复核，对应 Python grading_service。
+// Package service 阅卷与复核。
 package service
 
 import (
@@ -21,8 +21,8 @@ func NewGradingService(db *gorm.DB, ai *AIService) *GradingService {
 	return &GradingService{db: db, ai: ai}
 }
 
-// GetSubmittedParticipants 获取已提交的考试参与列表，对应 Python get_submitted_participants。
-func (s *GradingService) GetSubmittedParticipants(sessionID *int) ([]map[string]interface{}, error) {
+// GetSubmittedParticipants 获取已提交的考试参与列表。
+func (s *GradingService) GetSubmittedParticipants(sessionID *int) ([]map[string]any, error) {
 	q := s.db.Model(&model.ExamParticipant{}).Where("status IN ?", []string{"submitted", "timeout"})
 	if sessionID != nil {
 		q = q.Where("exam_session_id = ?", *sessionID)
@@ -31,8 +31,8 @@ func (s *GradingService) GetSubmittedParticipants(sessionID *int) ([]map[string]
 	if err := q.Order("submit_time DESC").Find(&participants).Error; err != nil {
 		return nil, err
 	}
-
-	result := make([]map[string]interface{}, 0, len(participants))
+	//Replace map[string]interface{} with map[string]any
+	result := make([]map[string]any, 0, len(participants))
 	for i := range participants {
 		p := &participants[i]
 		var session model.ExamSession
@@ -72,7 +72,6 @@ func (s *GradingService) GetSubmittedParticipants(sessionID *int) ([]map[string]
 
 		item := participantToDict(p)
 		item["session_name"] = session.Name
-		item["session_level"] = session.Level
 		item["student_name"] = studentName
 		item["pass_score"] = passScore
 		item["ungraded_count"] = ungradedCount
@@ -89,8 +88,8 @@ func (s *GradingService) GetSubmittedParticipants(sessionID *int) ([]map[string]
 	return result, nil
 }
 
-// GetParticipantDetail 获取参与详情，对应 Python get_participant_detail。
-func (s *GradingService) GetParticipantDetail(participantID int) (map[string]interface{}, error) {
+// GetParticipantDetail 获取参与详情。
+func (s *GradingService) GetParticipantDetail(participantID int) (map[string]any, error) {
 	var p model.ExamParticipant
 	if err := s.db.First(&p, participantID).Error; err != nil {
 		return nil, errors.New("考试参与记录不存在")
@@ -103,7 +102,7 @@ func (s *GradingService) GetParticipantDetail(participantID int) (map[string]int
 	var answers []model.ExamAnswer
 	s.db.Where("exam_participant_id = ?", participantID).Find(&answers)
 
-	answerList := make([]map[string]interface{}, 0, len(answers))
+	answerList := make([]map[string]any, 0, len(answers))
 	objectiveUngraded := 0
 	subjectiveUngraded := 0
 	for i := range answers {
@@ -134,7 +133,6 @@ func (s *GradingService) GetParticipantDetail(participantID int) (map[string]int
 
 	result := participantToDict(&p)
 	result["session_name"] = session.Name
-	result["session_level"] = session.Level
 	result["student_name"] = studentName
 	result["pass_score"] = passScore
 	result["answers"] = answerList
@@ -143,8 +141,8 @@ func (s *GradingService) GetParticipantDetail(participantID int) (map[string]int
 	return result, nil
 }
 
-// GradeAnswer 阅卷评分，对应 Python grade_answer。
-func (s *GradingService) GradeAnswer(answerID int, score float64, graderID int, comment string) (map[string]interface{}, error) {
+// GradeAnswer 阅卷评分。
+func (s *GradingService) GradeAnswer(answerID int, score float64, graderID int, comment string) (map[string]any, error) {
 	var answer model.ExamAnswer
 	if err := s.db.First(&answer, answerID).Error; err != nil {
 		return nil, errors.New("答题记录不存在")
@@ -172,8 +170,8 @@ func (s *GradingService) GradeAnswer(answerID int, score float64, graderID int, 
 	return examAnswerToDict(&answer), nil
 }
 
-// RegradeAnswer 复核评分，对应 Python regrade_answer。
-func (s *GradingService) RegradeAnswer(answerID int, score float64, graderID int, comment string) (map[string]interface{}, error) {
+// RegradeAnswer 复核评分。
+func (s *GradingService) RegradeAnswer(answerID int, score float64, graderID int, comment string) (map[string]any, error) {
 	var answer model.ExamAnswer
 	if err := s.db.First(&answer, answerID).Error; err != nil {
 		return nil, errors.New("答题记录不存在")
@@ -201,8 +199,8 @@ func (s *GradingService) RegradeAnswer(answerID int, score float64, graderID int
 	return examAnswerToDict(&answer), nil
 }
 
-// ConfirmAIGrading 确认 AI 评分，对应 Python confirm_ai_grading。
-func (s *GradingService) ConfirmAIGrading(answerID, graderID int) (map[string]interface{}, error) {
+// ConfirmAIGrading 确认 AI 评分。
+func (s *GradingService) ConfirmAIGrading(answerID, graderID int) (map[string]any, error) {
 	var answer model.ExamAnswer
 	if err := s.db.First(&answer, answerID).Error; err != nil {
 		return nil, errors.New("答题记录不存在")
@@ -229,8 +227,8 @@ func (s *GradingService) ConfirmAIGrading(answerID, graderID int) (map[string]in
 	return examAnswerToDict(&answer), nil
 }
 
-// AIGradeAnswer AI 评分，对应 Python ai_grade_answer。
-func (s *GradingService) AIGradeAnswer(answerID int, userID *int) (map[string]interface{}, error) {
+// AIGradeAnswer AI 评分。
+func (s *GradingService) AIGradeAnswer(answerID int, userID *int) (map[string]any, error) {
 	var answer model.ExamAnswer
 	if err := s.db.First(&answer, answerID).Error; err != nil {
 		return nil, errors.New("答题记录不存在")
@@ -271,8 +269,8 @@ func (s *GradingService) AIGradeAnswer(answerID int, userID *int) (map[string]in
 	return examAnswerToDict(&answer), nil
 }
 
-// BatchConfirmObjective 批量确认客观题，对应 Python batch_confirm_objective。
-func (s *GradingService) BatchConfirmObjective(participantID, graderID int) (map[string]interface{}, error) {
+// BatchConfirmObjective 批量确认客观题。
+func (s *GradingService) BatchConfirmObjective(participantID, graderID int) (map[string]any, error) {
 	var p model.ExamParticipant
 	if err := s.db.First(&p, participantID).Error; err != nil {
 		return nil, errors.New("考试参与记录不存在")
@@ -305,11 +303,11 @@ func (s *GradingService) BatchConfirmObjective(participantID, graderID int) (map
 	if confirmedCount > 0 {
 		s.updateParticipantScore(participantID)
 	}
-	return map[string]interface{}{"confirmed_count": confirmedCount}, nil
+	return map[string]any{"confirmed_count": confirmedCount}, nil
 }
 
-// GetGradingStats 阅卷统计，对应 Python get_grading_stats。
-func (s *GradingService) GetGradingStats(sessionID *int) map[string]interface{} {
+// GetGradingStats 阅卷统计。
+func (s *GradingService) GetGradingStats(sessionID *int) map[string]any {
 	pendingQ := s.db.Model(&model.ExamAnswer{}).Where("is_correct IS NULL")
 	gradedQ := s.db.Model(&model.ExamAnswer{}).Where("grader_id IS NOT NULL")
 	aiPendingQ := s.db.Model(&model.ExamAnswer{}).Where("is_correct IS NULL AND grader_id IS NULL AND ai_score IS NOT NULL")
@@ -322,14 +320,14 @@ func (s *GradingService) GetGradingStats(sessionID *int) map[string]interface{} 
 	pendingQ.Count(&pendingCount)
 	gradedQ.Count(&gradedCount)
 	aiPendingQ.Count(&aiPendingCount)
-	return map[string]interface{}{
+	return map[string]any{
 		"pending_count":    pendingCount,
 		"graded_count":     gradedCount,
 		"ai_pending_count": aiPendingCount,
 	}
 }
 
-// updateParticipantScore 更新参与记录总分，对应 Python _update_participant_score。
+// updateParticipantScore 更新参与记录总分。
 func (s *GradingService) updateParticipantScore(participantID int) {
 	var p model.ExamParticipant
 	if err := s.db.First(&p, participantID).Error; err != nil {
@@ -368,38 +366,11 @@ func (s *GradingService) updateParticipantScore(participantID int) {
 			passScore = float64(session.PassScore)
 		}
 		p.IsPassed = total >= passScore
-		if p.IsPassed {
-			s.updateStudentLevel(p.StudentID, p.ExamSessionID)
-		}
 	} else {
 		p.Score = nil
 		p.IsPassed = false
 	}
 	s.db.Save(&p)
-}
-
-// updateStudentLevel 晋级，对应 Python _update_student_level。
-func (s *GradingService) updateStudentLevel(studentID, sessionID int) {
-	var session model.ExamSession
-	if err := s.db.First(&session, sessionID).Error; err != nil {
-		return
-	}
-	var student model.Student
-	if err := s.db.First(&student, studentID).Error; err != nil {
-		return
-	}
-	nextLevel, ok := levelPromotion[session.Level]
-	if !ok {
-		return
-	}
-	current := levelOrder[student.Level]
-	next := levelOrder[nextLevel]
-	if next > current {
-		student.Level = nextLevel
-		now := beijingNow()
-		student.LevelUpdatedAt = &now
-		s.db.Save(&student)
-	}
 }
 
 // questionMaxScore 获取题目满分（优先 question.score，否则用 examScoreMap）。

@@ -12,7 +12,6 @@ import (
 )
 
 // RegisterStudentRoutes 注册 /api/student 蓝图。
-// 对应 Python app/api/student.py。
 func RegisterStudentRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	svc := service.NewStudentService(db)
 

@@ -23,8 +23,8 @@ RUN npm run build
 # ----- Runtime 阶段 -----
 FROM nginx:1.27-alpine
 
-# 设置时区
-RUN apk add --no-cache tzdata && \
+# 设置时区 + 安装 gettext（提供 envsubst）
+RUN apk add --no-cache tzdata gettext && \
     cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     echo "Asia/Shanghai" > /etc/timezone && \
     apk del tzdata
@@ -32,15 +32,22 @@ RUN apk add --no-cache tzdata && \
 # 复制构建产物
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# 复制 Nginx 配置
-COPY nginx.default.conf /etc/nginx/conf.d/default.conf
+# 复制 Nginx 配置模板（启动时由 envsubst 替换 ${DOMAIN} 占位符）
+COPY nginx.default.conf /etc/nginx/conf.d/default.conf.template
+
+# 复制启动脚本
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 # 健康检查端点
 RUN echo "ok" > /usr/share/nginx/html/health
 
-EXPOSE 80
+EXPOSE 80 443
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD wget -qO- http://localhost/health || exit 1
 
-CMD ["nginx", "-g", "daemon off;"]
+# 默认 DOMAIN（可被 docker-compose environment 覆盖）
+ENV DOMAIN=localhost
+
+ENTRYPOINT ["/docker-entrypoint.sh"]

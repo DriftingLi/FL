@@ -1,4 +1,4 @@
-// Package service 学员信息与学习记录，对应 Python student_service。
+// Package service 学员信息与学习记录。
 package service
 
 import (
@@ -20,13 +20,13 @@ func NewStudentService(db *gorm.DB) *StudentService {
 	return &StudentService{db: db}
 }
 
-// GetProfile 学员档案，对应 Python get_student_profile。
-func (s *StudentService) GetProfile(studentID int) (map[string]interface{}, error) {
+// GetProfile 学员档案。
+func (s *StudentService) GetProfile(studentID int) (map[string]any, error) {
 	return s.queryProfile(studentID)
 }
 
 // queryProfile 执行实际的学员档案查询。
-func (s *StudentService) queryProfile(studentID int) (map[string]interface{}, error) {
+func (s *StudentService) queryProfile(studentID int) (map[string]any, error) {
 	var student model.Student
 	if err := s.db.First(&student, studentID).Error; err != nil {
 		return nil, errors.New("学员不存在")
@@ -76,7 +76,7 @@ func (s *StudentService) queryProfile(studentID int) (map[string]interface{}, er
 		Group("course_id").
 		Scan(&rows)
 
-	courseProgressList := make([]map[string]interface{}, 0, len(rows))
+	courseProgressList := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		var course model.Course
 		if err := s.db.First(&course, r.CourseID).Error; err != nil {
@@ -88,7 +88,7 @@ func (s *StudentService) queryProfile(studentID int) (map[string]interface{}, er
 		if !r.LatestDate.IsZero() {
 			studyDate = formatISO(r.LatestDate)
 		}
-		courseProgressList = append(courseProgressList, map[string]interface{}{
+		courseProgressList = append(courseProgressList, map[string]any{
 			"course_id":      course.CourseID,
 			"course_name":    course.Name,
 			"category":       course.Category,
@@ -99,9 +99,9 @@ func (s *StudentService) queryProfile(studentID int) (map[string]interface{}, er
 		})
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"student_info": studentToDict(&student),
-		"study_stats": map[string]interface{}{
+		"study_stats": map[string]any{
 			"total_study_duration": totalStudyDuration,
 			"completed_courses":    completedCourses,
 			"learning_courses":     learningCourses,
@@ -115,12 +115,12 @@ func (s *StudentService) queryProfile(studentID int) (map[string]interface{}, er
 
 // GetStudyStats 学习统计（按天分组），用于学员仪表盘图表。
 // days 仅允许 7 或 30，其他值统一回退为 7。
-func (s *StudentService) GetStudyStats(studentID, days int) map[string]interface{} {
+func (s *StudentService) GetStudyStats(studentID, days int) map[string]any {
 	return s.queryStudyStats(studentID, days)
 }
 
 // queryStudyStats 执行实际的学习统计查询。
-func (s *StudentService) queryStudyStats(studentID, days int) map[string]interface{} {
+func (s *StudentService) queryStudyStats(studentID, days int) map[string]any {
 	if days != 7 && days != 30 {
 		days = 7
 	}
@@ -170,7 +170,7 @@ func (s *StudentService) queryStudyStats(studentID, days int) map[string]interfa
 		data = append(data, mins)
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"days":          days,
 		"labels":        labels,
 		"data":          data,
@@ -179,8 +179,8 @@ func (s *StudentService) queryStudyStats(studentID, days int) map[string]interfa
 	}
 }
 
-// GetRecords 学习记录列表，对应 Python get_student_records。
-func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, endDate string) map[string]interface{} {
+// GetRecords 学习记录列表。
+func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, endDate string) map[string]any {
 	if page <= 0 {
 		page = 1
 	}
@@ -203,7 +203,7 @@ func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, en
 	var records []model.StudyRecord
 	q.Order("study_date DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&records)
 
-	items := make([]map[string]interface{}, 0, len(records))
+	items := make([]map[string]any, 0, len(records))
 	for i := range records {
 		r := &records[i]
 		item := studyRecordToDict(r)
@@ -226,7 +226,7 @@ func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, en
 		items = append(items, item)
 	}
 	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	return map[string]interface{}{
+	return map[string]any{
 		"total":   total,
 		"page":    page,
 		"pages":   pages,
@@ -236,25 +236,19 @@ func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, en
 
 // ===== dict 辅助 =====
 
-func studentToDict(s *model.Student) map[string]interface{} {
-	d := map[string]interface{}{
+func studentToDict(s *model.Student) map[string]any {
+	d := map[string]any{
 		"student_id": s.StudentID,
 		"username":   s.Username,
 		"name":       s.Name,
 		"status":     s.Status,
-		"level":      s.Level,
 		"created_at": formatISO(s.CreatedAt),
-	}
-	if s.LevelUpdatedAt != nil {
-		d["level_updated_at"] = formatISO(*s.LevelUpdatedAt)
-	} else {
-		d["level_updated_at"] = nil
 	}
 	return d
 }
 
-func studyRecordToDict(r *model.StudyRecord) map[string]interface{} {
-	d := map[string]interface{}{
+func studyRecordToDict(r *model.StudyRecord) map[string]any {
+	d := map[string]any{
 		"record_id":      r.RecordID,
 		"student_id":     r.StudentID,
 		"course_id":      r.CourseID,

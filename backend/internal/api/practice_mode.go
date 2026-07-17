@@ -2,6 +2,7 @@
 package api
 
 import (
+	"encoding/json"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -14,16 +15,13 @@ import (
 )
 
 // RegisterPracticeModeRoutes 注册 /api/practice-mode 蓝图（题库练习）。
-// 对应 Python app/api/practice_mode.py。
 func RegisterPracticeModeRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	svc := service.NewPracticeModeService(db, newAIService(cfg, db))
 
 	g := rg.Group("/practice-mode", middleware.JWTAuth(cfg), middleware.RoleRequired("student"))
 
-	// GET /api/practice-mode/free  自由练习随机抽题
+	// GET /api/practice-mode/free  随机练习抽题（count 控制题量）
 	g.GET("/free", func(c *gin.Context) {
-		uid, _ := c.Get(string(middleware.CtxUserID))
-		studentID, _ := uid.(int)
 		qType := c.Query("type")
 		var kpID *int
 		if s := c.Query("knowledge_point_id"); s != "" {
@@ -31,7 +29,75 @@ func RegisterPracticeModeRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gor
 				kpID = &id
 			}
 		}
-		result, err := svc.GetFreeQuestions(studentID, qType, kpID)
+		count := atoiDefault(c.Query("count"), 20)
+		result, err := svc.GetFreeQuestions(qType, kpID, count)
+		if err != nil {
+			response.NotFound(c, err.Error())
+			return
+		}
+		response.Success(c, result)
+	})
+
+	// GET /api/practice-mode/sequential  顺序练习（开始/续练，返回当前批次+进度）
+	g.GET("/sequential", func(c *gin.Context) {
+		uid, _ := c.Get(string(middleware.CtxUserID))
+		studentID, _ := uid.(int)
+		result, err := svc.StartSequential(studentID)
+		if err != nil {
+			response.NotFound(c, err.Error())
+			return
+		}
+		response.Success(c, result)
+	})
+
+	// GET /api/practice-mode/sequential-progress  顺序练习进度（卡片展示用）
+	g.GET("/sequential-progress", func(c *gin.Context) {
+		uid, _ := c.Get(string(middleware.CtxUserID))
+		studentID, _ := uid.(int)
+		response.Success(c, svc.GetSequentialProgress(studentID))
+	})
+
+	// POST /api/practice-mode/progress  保存练习游标和答题状态（支持顺序/专项/章节练习）
+	g.POST("/progress", func(c *gin.Context) {
+		uid, _ := c.Get(string(middleware.CtxUserID))
+		studentID, _ := uid.(int)
+		var req struct {
+			Index        int              `json:"index"`
+			PracticeMode string           `json:"practice_mode"`
+			Total        int              `json:"total"`
+			AnswersState json.RawMessage  `json:"answers_state"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			response.BadRequest(c, "请求数据无效")
+			return
+		}
+		if err := svc.SaveProgress(studentID, req.Index, req.PracticeMode, req.Total, req.AnswersState); err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.Success(c, map[string]any{"saved": true, "index": req.Index})
+	})
+
+	// GET /api/practice-mode/progress?mode=xxx  查询任意模式的练习进度（断点续练用）
+	g.GET("/progress", func(c *gin.Context) {
+		uid, _ := c.Get(string(middleware.CtxUserID))
+		studentID, _ := uid.(int)
+		mode := c.Query("mode")
+		if mode == "" {
+			mode = "sequential"
+		}
+		response.Success(c, svc.GetProgress(studentID, mode))
+	})
+
+	// GET /api/practice-mode/category  章节练习：按课程分类抽题
+	g.GET("/category", func(c *gin.Context) {
+		category := c.Query("category")
+		if category == "" {
+			response.BadRequest(c, "请指定课程分类")
+			return
+		}
+		count := atoiDefault(c.Query("count"), 0) // 0=全部
+		result, err := svc.GetCategoryQuestions(category, count)
 		if err != nil {
 			response.NotFound(c, err.Error())
 			return

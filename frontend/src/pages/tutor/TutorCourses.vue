@@ -28,7 +28,7 @@
           <p class="card-desc">{{ course.description || '暂无简介' }}</p>
           <div class="card-footer">
             <span>{{ course.chapter_count || 0 }} 个章节</span>
-            <el-button type="primary" size="small" text>
+            <el-button type="primary" size="small">
               管理章节 <el-icon><ArrowRight /></el-icon>
             </el-button>
           </div>
@@ -101,7 +101,7 @@ async function loadCourses() {
 }
 
 function goToChapters(courseId) {
-  router.push(`/tutor/course/${courseId}/chapters`)
+  router.push(`/training/tutor/course/${courseId}/chapters`)
 }
 
 onMounted(() => {

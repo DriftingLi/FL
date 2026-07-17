@@ -10,7 +10,6 @@ export interface UserInfo {
   name?: string
   role?: string
   avatar?: string
-  level?: string
   [key: string]: any
 }
 
@@ -60,9 +59,6 @@ export const useAuthStore = defineStore('auth', () => {
         }
         if (res.data.name) {
           updates.name = res.data.name
-        }
-        if (res.data.level) {
-          updates.level = res.data.level
         }
         userInfo.value = {
           ...userInfo.value,

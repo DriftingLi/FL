@@ -49,7 +49,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		c.JSON(200, gin.H{"message": "Forklift Training System API", "version": "1.0.0"})
 	})
 
-	// 静态资源：等价 Python Flask 的 static_folder + VOLUME_MOUNT_PATH 行为
+	// 静态资源：等价 static_folder + VOLUME_MOUNT_PATH 行为
 	// /static/uploads/* 优先从 VOLUME_MOUNT_PATH/uploads 提供，否则本地 UploadFolder
 	// /static/*         其他静态资源从本地 static/ 目录提供
 	registerStaticRoutes(r, cfg)
@@ -94,7 +94,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	return r
 }
 
-// registerStaticRoutes 注册 /static/* 静态资源路由，等价 Python Flask 行为。
+// registerStaticRoutes 注册 /static/* 静态资源路由。
 //
 // /static/uploads/<path> 优先从 VOLUME_MOUNT_PATH/uploads 提供，否则本地 UploadFolder/static/uploads
 // /static/<path>          其他静态资源从本地 static/ 目录提供
@@ -143,10 +143,10 @@ func resolveStaticDir() string {
 			return abs
 		}
 	}
-	// 2. 可执行文件上级目录下的 static（本地开发 cwd 可能不是 backend-go/）
+	// 2. 可执行文件上级目录下的 static（本地开发 cwd 可能不是 backend/）
 	if exe, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(exe)        // backend-go/bin
-		projectDir := filepath.Dir(exeDir) // backend-go
+		exeDir := filepath.Dir(exe)        // backend/bin
+		projectDir := filepath.Dir(exeDir) // backend
 		candidate := filepath.Join(projectDir, "static")
 		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
 			return candidate

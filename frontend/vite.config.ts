@@ -12,7 +12,7 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
-    allowedHosts: ['.localhost', 'mentor.localhost', 'admin.localhost', 'training.localhost', 'valuation.localhost'],
+    allowedHosts: ['.localhost', 'mentor.localhost', 'manage.localhost', 'training.localhost', 'valuation.localhost'],
     proxy: {
       '/api': {
         target: 'http://localhost:8080',

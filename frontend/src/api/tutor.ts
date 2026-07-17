@@ -14,6 +14,10 @@ export const tutorApi = {
     return request.get(`/tutor/course/${courseId}/chapters`)
   },
 
+  getChapterDetail(chapterId) {
+    return request.get(`/tutor/chapter/${chapterId}`)
+  },
+
   uploadChapterFile(chapterId, formData, onProgress) {
     return request.post(`/tutor/chapter/${chapterId}/upload`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

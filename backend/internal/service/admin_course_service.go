@@ -1,4 +1,4 @@
-// Package service 管理端课程 CRUD，对应 Python admin_course_service。
+// Package service 管理端课程 CRUD。
 package service
 
 import (
@@ -19,8 +19,8 @@ func NewAdminCourseService(db *gorm.DB) *AdminCourseService {
 	return &AdminCourseService{db: db}
 }
 
-// GetCourses 管理端课程列表，对应 Python get_admin_courses。
-func (s *AdminCourseService) GetCourses(page, pageSize int, keyword, category string) map[string]interface{} {
+// GetCourses 管理端课程列表。
+func (s *AdminCourseService) GetCourses(page, pageSize int, keyword, category string) map[string]any {
 	if page <= 0 {
 		page = 1
 	}
@@ -38,12 +38,16 @@ func (s *AdminCourseService) GetCourses(page, pageSize int, keyword, category st
 	q.Count(&total)
 	var courses []model.Course
 	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&courses)
-	items := make([]map[string]interface{}, 0, len(courses))
+	items := make([]map[string]any, 0, len(courses))
 	for i := range courses {
-		items = append(items, courseToDict(&courses[i]))
+		item := courseToDict(&courses[i])
+		var chapterCount int64
+		s.db.Model(&model.Chapter{}).Where("course_id = ?", courses[i].CourseID).Count(&chapterCount)
+		item["chapter_count"] = chapterCount
+		items = append(items, item)
 	}
 	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	return map[string]interface{}{
+	return map[string]any{
 		"total":   total,
 		"page":    page,
 		"pages":   pages,
@@ -51,15 +55,15 @@ func (s *AdminCourseService) GetCourses(page, pageSize int, keyword, category st
 	}
 }
 
-// GetCourseDetail 管理端课程详情，对应 Python get_admin_course_detail。
-func (s *AdminCourseService) GetCourseDetail(courseID int) (map[string]interface{}, error) {
+// GetCourseDetail 管理端课程详情。
+func (s *AdminCourseService) GetCourseDetail(courseID int) (map[string]any, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		return nil, errors.New("课程不存在")
 	}
 	var chapters []model.Chapter
 	s.db.Where("course_id = ?", courseID).Order("order_num").Find(&chapters)
-	chapterList := make([]map[string]interface{}, 0, len(chapters))
+	chapterList := make([]map[string]any, 0, len(chapters))
 	for i := range chapters {
 		chapterList = append(chapterList, chapterToDict(&chapters[i]))
 	}
@@ -68,8 +72,8 @@ func (s *AdminCourseService) GetCourseDetail(courseID int) (map[string]interface
 	return detail, nil
 }
 
-// CreateCourse 创建课程，对应 Python create_course。
-func (s *AdminCourseService) CreateCourse(data map[string]interface{}) (map[string]interface{}, error) {
+// CreateCourse 创建课程。
+func (s *AdminCourseService) CreateCourse(data map[string]any) (map[string]any, error) {
 	name, _ := data["name"].(string)
 	category, _ := data["category"].(string)
 	if name == "" {
@@ -100,8 +104,8 @@ func (s *AdminCourseService) CreateCourse(data map[string]interface{}) (map[stri
 	return courseToDict(&course), nil
 }
 
-// UpdateCourse 更新课程，对应 Python update_course。
-func (s *AdminCourseService) UpdateCourse(courseID int, data map[string]interface{}) (map[string]interface{}, error) {
+// UpdateCourse 更新课程。
+func (s *AdminCourseService) UpdateCourse(courseID int, data map[string]any) (map[string]any, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		return nil, errors.New("课程不存在")
@@ -130,8 +134,8 @@ func (s *AdminCourseService) UpdateCourse(courseID int, data map[string]interfac
 	return courseToDict(&course), nil
 }
 
-// DeleteCourse 删除课程，对应 Python delete_course。
-func (s *AdminCourseService) DeleteCourse(courseID int) (map[string]interface{}, error) {
+// DeleteCourse 删除课程。
+func (s *AdminCourseService) DeleteCourse(courseID int) (map[string]any, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		return nil, errors.New("课程不存在")
@@ -139,11 +143,11 @@ func (s *AdminCourseService) DeleteCourse(courseID int) (map[string]interface{},
 	if err := s.db.Delete(&course).Error; err != nil {
 		return nil, err
 	}
-	return map[string]interface{}{"course_id": courseID}, nil
+	return map[string]any{"course_id": courseID}, nil
 }
 
-// CreateChapter 创建章节，对应 Python create_chapter。
-func (s *AdminCourseService) CreateChapter(courseID int, data map[string]interface{}) (map[string]interface{}, error) {
+// CreateChapter 创建章节。
+func (s *AdminCourseService) CreateChapter(courseID int, data map[string]any) (map[string]any, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		return nil, errors.New("课程不存在")
@@ -175,8 +179,8 @@ func (s *AdminCourseService) CreateChapter(courseID int, data map[string]interfa
 	return chapterToDict(&chapter), nil
 }
 
-// UpdateChapter 更新章节，对应 Python update_chapter。
-func (s *AdminCourseService) UpdateChapter(chapterID int, data map[string]interface{}) (map[string]interface{}, error) {
+// UpdateChapter 更新章节。
+func (s *AdminCourseService) UpdateChapter(chapterID int, data map[string]any) (map[string]any, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
@@ -202,8 +206,8 @@ func (s *AdminCourseService) UpdateChapter(chapterID int, data map[string]interf
 	return chapterToDict(&chapter), nil
 }
 
-// DeleteChapter 删除章节，对应 Python delete_chapter。
-func (s *AdminCourseService) DeleteChapter(chapterID int) (map[string]interface{}, error) {
+// DeleteChapter 删除章节。
+func (s *AdminCourseService) DeleteChapter(chapterID int) (map[string]any, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
@@ -211,5 +215,5 @@ func (s *AdminCourseService) DeleteChapter(chapterID int) (map[string]interface{
 	if err := s.db.Delete(&chapter).Error; err != nil {
 		return nil, err
 	}
-	return map[string]interface{}{"chapter_id": chapterID}, nil
+	return map[string]any{"chapter_id": chapterID}, nil
 }

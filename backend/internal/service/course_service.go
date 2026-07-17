@@ -1,4 +1,4 @@
-// Package service 学员侧课程与章节，对应 Python course_service。
+// Package service 学员侧课程与章节。
 package service
 
 import (
@@ -28,8 +28,8 @@ func NewCourseService(db *gorm.DB, uploadFolder string, fileService *FileService
 	return &CourseService{db: db, uploadFolder: uploadFolder, fileService: fileService}
 }
 
-// GetCourses 课程列表，对应 Python get_courses。
-func (s *CourseService) GetCourses(page, pageSize int, category string) map[string]interface{} {
+// GetCourses 课程列表。
+func (s *CourseService) GetCourses(page, pageSize int, category string) map[string]any {
 	if page <= 0 {
 		page = 1
 	}
@@ -44,12 +44,12 @@ func (s *CourseService) GetCourses(page, pageSize int, category string) map[stri
 	q.Count(&total)
 	var courses []model.Course
 	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&courses)
-	items := make([]map[string]interface{}, 0, len(courses))
+	items := make([]map[string]any, 0, len(courses))
 	for i := range courses {
 		items = append(items, courseToDict(&courses[i]))
 	}
 	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	return map[string]interface{}{
+	return map[string]any{
 		"total":   total,
 		"page":    page,
 		"pages":   pages,
@@ -57,15 +57,15 @@ func (s *CourseService) GetCourses(page, pageSize int, category string) map[stri
 	}
 }
 
-// GetCourseDetail 课程详情，对应 Python get_course_detail。
-func (s *CourseService) GetCourseDetail(courseID, studentID int) (map[string]interface{}, error) {
+// GetCourseDetail 课程详情。
+func (s *CourseService) GetCourseDetail(courseID, studentID int) (map[string]any, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		return nil, errors.New("课程不存在")
 	}
 	var chapters []model.Chapter
 	s.db.Where("course_id = ?", courseID).Order("order_num").Find(&chapters)
-	chapterList := make([]map[string]interface{}, 0, len(chapters))
+	chapterList := make([]map[string]any, 0, len(chapters))
 	for i := range chapters {
 		chapterList = append(chapterList, chapterToDict(&chapters[i]))
 	}
@@ -76,15 +76,15 @@ func (s *CourseService) GetCourseDetail(courseID, studentID int) (map[string]int
 			progress = record.Progress
 		}
 	}
-	return map[string]interface{}{
+		return map[string]any{
 		"course_info": courseToDict(&course),
 		"chapters":    chapterList,
 		"progress":    progress,
 	}, nil
 }
 
-// GetChapterDetail 章节详情，对应 Python get_chapter_detail。
-func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (map[string]interface{}, error) {
+// GetChapterDetail 章节详情。
+func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (map[string]any, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
@@ -135,7 +135,7 @@ func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (ma
 
 	var files []model.ChapterFile
 	s.db.Where("chapter_id = ?", chapterID).Order("created_at").Find(&files)
-	fileList := make([]map[string]interface{}, 0, len(files))
+		fileList := make([]map[string]any, 0, len(files))
 	if len(files) == 0 && chapter.FileURL != "" {
 		fileList = append(fileList, legacyFileEntry(&chapter))
 	} else {
@@ -147,8 +147,8 @@ func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (ma
 	return result, nil
 }
 
-// GetChapterSlides 章节幻灯片，对应 Python get_chapter_slides。
-func (s *CourseService) GetChapterSlides(chapterID int) (map[string]interface{}, error) {
+// GetChapterSlides 章节幻灯片。
+func (s *CourseService) GetChapterSlides(chapterID int) (map[string]any, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
@@ -161,7 +161,7 @@ func (s *CourseService) GetChapterSlides(chapterID int) (map[string]interface{},
 		}
 	}
 	if !hasPPT {
-		return map[string]interface{}{"chapter_id": chapterID, "slides": []string{}}, nil
+		return map[string]any{"chapter_id": chapterID, "slides": []string{}}, nil
 	}
 
 	slidesDir := filepath.Join(s.uploadFolder, "slides", strconv.Itoa(chapterID))
@@ -180,7 +180,7 @@ func (s *CourseService) GetChapterSlides(chapterID int) (map[string]interface{},
 			if _, err := os.Stat(pptPath); err == nil {
 				if s.fileService != nil {
 					slideURLs := s.fileService.ConvertPPTToImages(pptPath, slidesDir)
-					return map[string]interface{}{"chapter_id": chapterID, "slides": slideURLs}, nil
+					return map[string]any{"chapter_id": chapterID, "slides": slideURLs}, nil
 				}
 			}
 		}
@@ -189,11 +189,11 @@ func (s *CourseService) GetChapterSlides(chapterID int) (map[string]interface{},
 	for _, img := range existingImages {
 		urls = append(urls, fmt.Sprintf("/static/uploads/slides/%d/%s", chapterID, img))
 	}
-	return map[string]interface{}{"chapter_id": chapterID, "slides": urls}, nil
+	return map[string]any{"chapter_id": chapterID, "slides": urls}, nil
 }
 
-// RegenerateChapterSlides 重新生成幻灯片，对应 Python regenerate_chapter_slides。
-func (s *CourseService) RegenerateChapterSlides(chapterID int) (map[string]interface{}, error) {
+// RegenerateChapterSlides 重新生成幻灯片。
+func (s *CourseService) RegenerateChapterSlides(chapterID int) (map[string]any, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
@@ -219,11 +219,11 @@ func (s *CourseService) RegenerateChapterSlides(chapterID int) (map[string]inter
 		return nil, errors.New("文件服务不可用")
 	}
 	slideURLs := s.fileService.ConvertPPTToImages(pptPath, slidesDir)
-	return map[string]interface{}{"chapter_id": chapterID, "slides": slideURLs}, nil
+	return map[string]any{"chapter_id": chapterID, "slides": slideURLs}, nil
 }
 
-// UpdateStudyProgress 更新学习进度，对应 Python update_study_progress。
-func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, duration int) (map[string]interface{}, error) {
+// UpdateStudyProgress 更新学习进度。
+func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, duration int) (map[string]any, error) {
 	var record model.StudyRecord
 	err := s.db.Where("student_id = ? AND course_id = ?", studentID, courseID).First(&record).Error
 
@@ -256,7 +256,7 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, dura
 		}
 		record.Progress = roundFloat2(float64(completedChapters) / float64(totalChapters) * 100)
 		s.db.Save(&record)
-		return map[string]interface{}{
+		return map[string]any{
 			"record_id":      record.RecordID,
 			"progress":       record.Progress,
 			"study_duration": record.StudyDuration,
@@ -278,7 +278,7 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, dura
 	if err := s.db.Create(&newRecord).Error; err != nil {
 		return nil, err
 	}
-	return map[string]interface{}{
+		return map[string]any{
 		"record_id":      newRecord.RecordID,
 		"progress":       newRecord.Progress,
 		"study_duration": newRecord.StudyDuration,
@@ -338,8 +338,8 @@ func roundFloat1(f float64) float64 {
 
 // ===== dict 辅助 =====
 
-func courseToDict(c *model.Course) map[string]interface{} {
-	return map[string]interface{}{
+func courseToDict(c *model.Course) map[string]any {
+	return map[string]any{
 		"course_id":   c.CourseID,
 		"name":        c.Name,
 		"category":    c.Category,
@@ -351,8 +351,8 @@ func courseToDict(c *model.Course) map[string]interface{} {
 	}
 }
 
-func chapterToDict(c *model.Chapter) map[string]interface{} {
-	return map[string]interface{}{
+func chapterToDict(c *model.Chapter) map[string]any {
+	return map[string]any{
 		"chapter_id":   c.ChapterID,
 		"course_id":    c.CourseID,
 		"title":        c.Title,
@@ -367,8 +367,8 @@ func chapterToDict(c *model.Chapter) map[string]interface{} {
 	}
 }
 
-func chapterFileToDict(f *model.ChapterFile) map[string]interface{} {
-	d := map[string]interface{}{
+func chapterFileToDict(f *model.ChapterFile) map[string]any {
+	d := map[string]any{
 		"file_id":      f.FileID,
 		"file_url":     f.FileURL,
 		"file_name":    f.FileName,
@@ -384,7 +384,7 @@ func chapterFileToDict(f *model.ChapterFile) map[string]interface{} {
 	return d
 }
 
-func legacyFileEntry(ch *model.Chapter) map[string]interface{} {
+func legacyFileEntry(ch *model.Chapter) map[string]any {
 	fileName := ""
 	if ch.FileURL != "" {
 		parts := strings.Split(ch.FileURL, "/")
@@ -394,7 +394,7 @@ func legacyFileEntry(ch *model.Chapter) map[string]interface{} {
 	if contentType == "" {
 		contentType = "document"
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"file_id":      0,
 		"chapter_id":   ch.ChapterID,
 		"file_url":     ch.FileURL,

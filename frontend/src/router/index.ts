@@ -120,6 +120,12 @@ const routes: RouteRecordRaw[] = [
         meta: { navKey: 'chapters', navLabel: '章节管理', navGroup: 'courses' }
       },
       {
+        path: 'course/:courseId/chapter/:chapterId',
+        name: 'TutorChapterEdit',
+        component: () => import('@/pages/tutor/TutorChapterEdit.vue'),
+        meta: { navKey: 'chapters', navLabel: '章节编辑', navGroup: 'courses' }
+      },
+      {
         path: 'question-manage',
         name: 'TutorQuestionManage',
         component: () => import('@/pages/tutor/QuestionManage.vue'),
@@ -247,6 +253,12 @@ const routes: RouteRecordRaw[] = [
         name: 'CourseManage',
         component: () => import('@/pages/admin/CourseManage.vue'),
         meta: { navKey: 'courses', navLabel: '课程管理', navGroup: 'education' }
+      },
+      {
+        path: 'question-review',
+        name: 'QuestionReview',
+        component: () => import('@/pages/admin/QuestionReview.vue'),
+        meta: { navKey: 'question-review', navLabel: '题库审核', navGroup: 'education' }
       },
       {
         path: 'statistics',

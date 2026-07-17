@@ -1,4 +1,4 @@
-// Package service 文件上传与 PPT 转换，对应 Python file_service。
+// Package service 文件上传与 PPT 转换。
 package service
 
 import (
@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// 文件扩展名白名单，与 Python ALLOWED_EXTENSIONS 一致。
+// 文件扩展名白名单。
 var allowedExtensions = map[string]map[string]bool{
 	"document": {"pdf": true, "doc": true, "docx": true, "xls": true, "xlsx": true, "csv": true},
 	"ppt":      {"ppt": true, "pptx": true},
@@ -20,7 +20,7 @@ var allowedExtensions = map[string]map[string]bool{
 	"image":    {"png": true, "jpg": true, "jpeg": true, "gif": true, "webp": true, "bmp": true, "svg": true},
 }
 
-// 文件大小限制，与 Python MAX_FILE_SIZES 一致。
+// 文件大小限制。
 var maxFileSizes = map[string]int64{
 	"video":   200 * 1024 * 1024,
 	"image":   20 * 1024 * 1024,
@@ -37,7 +37,7 @@ func NewFileService(uploadFolder string) *FileService {
 	return &FileService{uploadFolder: uploadFolder}
 }
 
-// GetContentType 获取文件内容类型，对应 Python get_content_type。
+// GetContentType 获取文件内容类型。
 func (s *FileService) GetContentType(filename string) string {
 	ext := fileExtension(filename)
 	for contentType, exts := range allowedExtensions {
@@ -48,12 +48,12 @@ func (s *FileService) GetContentType(filename string) string {
 	return ""
 }
 
-// AllowedFile 是否允许的文件格式，对应 Python allowed_file。
+// AllowedFile 是否允许的文件格式。
 func (s *FileService) AllowedFile(filename string) bool {
 	return s.GetContentType(filename) != ""
 }
 
-// ValidateFileSize 校验文件大小，对应 Python validate_file_size。
+// ValidateFileSize 校验文件大小。
 func (s *FileService) ValidateFileSize(size int64, filename string) bool {
 	contentType := s.GetContentType(filename)
 	maxSize := maxFileSizes["default"]
@@ -63,7 +63,7 @@ func (s *FileService) ValidateFileSize(size int64, filename string) bool {
 	return size <= maxSize
 }
 
-// ValidateImageFile 校验图片文件，对应 Python validate_image_file。
+// ValidateImageFile 校验图片文件。
 func (s *FileService) ValidateImageFile(filename string, size int64) (bool, string) {
 	ext := fileExtension(filename)
 	if !allowedExtensions["image"][ext] {
@@ -79,7 +79,7 @@ func (s *FileService) ValidateImageFile(filename string, size int64) (bool, stri
 	return true, ""
 }
 
-// SaveFile 保存文件，返回 file_url 与 file_path，对应 Python save_file。
+// SaveFile 保存文件，返回 file_url 与 file_path。
 func (s *FileService) SaveFile(content []byte, filename, subfolder string) (string, string) {
 	saveDir := filepath.Join(s.uploadFolder, subfolder)
 	_ = os.MkdirAll(saveDir, 0755)
@@ -96,7 +96,7 @@ func (s *FileService) SaveFile(content []byte, filename, subfolder string) (stri
 	return fileURL, filePath
 }
 
-// DeleteFile 删除文件，对应 Python delete_file。
+// DeleteFile 删除文件。
 func (s *FileService) DeleteFile(fileURL string) {
 	if fileURL == "" {
 		return
@@ -108,7 +108,7 @@ func (s *FileService) DeleteFile(fileURL string) {
 	}
 }
 
-// ConvertPPTToImages 将 PPT 转为图片，对应 Python convert_ppt_to_images。
+// ConvertPPTToImages 将 PPT 转为图片。
 // 转换流程：PPT → PDF（LibreOffice headless）→ PNG 图片。
 // 失败时返回占位图片 URL 列表。
 func (s *FileService) ConvertPPTToImages(pptPath, outputDir string) []string {

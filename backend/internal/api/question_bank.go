@@ -14,7 +14,6 @@ import (
 )
 
 // RegisterQuestionBankRoutes 注册 /api/question-bank 蓝图。
-// 对应 Python app/api/question_bank.py。
 func RegisterQuestionBankRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	svc := service.NewQuestionBankService(db)
 	fileSvc := service.NewFileService(cfg.UploadFolder)
@@ -27,7 +26,6 @@ func RegisterQuestionBankRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gor
 	g.GET("/questions", func(c *gin.Context) {
 		page := atoiDefault(c.Query("page"), 1)
 		pageSize := atoiDefault(c.Query("page_size"), 20)
-		level := c.Query("level")
 		qType := c.Query("type")
 		status := c.Query("status")
 		keyword := c.Query("keyword")
@@ -37,7 +35,7 @@ func RegisterQuestionBankRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gor
 				kpID = &id
 			}
 		}
-		response.Success(c, svc.ListQuestions(page, pageSize, level, qType, kpID, status, keyword))
+		response.Success(c, svc.ListQuestions(page, pageSize, qType, kpID, status, keyword))
 	})
 
 	// POST /api/question-bank/questions  创建题目
@@ -61,8 +59,8 @@ func RegisterQuestionBankRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gor
 
 	// GET /api/question-bank/questions/batch-publish  与下方 :question_id 路由冲突处理
 	// 注意：Gin 路由树中静态路径优先于参数路径，batch-publish/batch-import 需在 :question_id 之前注册
-	// POST /api/question-bank/questions/batch-publish  批量发布
-	g.POST("/questions/batch-publish", middleware.RoleRequired("tutor", "admin"), func(c *gin.Context) {
+	// POST /api/question-bank/questions/batch-publish  批量发布（仅管理员）
+	g.POST("/questions/batch-publish", middleware.RoleRequired("admin"), func(c *gin.Context) {
 		var req struct {
 			QuestionIDs []int `json:"question_ids"`
 		}
@@ -76,6 +74,28 @@ func RegisterQuestionBankRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gor
 		}
 		result := svc.BatchPublish(req.QuestionIDs)
 		response.SuccessWithMsg(c, "成功发布"+strconv.Itoa(result["published_count"].(int))+"道题目", result)
+	})
+
+	// POST /api/question-bank/questions/batch-reject  批量驳回（仅管理员）
+	g.POST("/questions/batch-reject", middleware.RoleRequired("admin"), func(c *gin.Context) {
+		var req struct {
+			QuestionIDs []int   `json:"question_ids"`
+			Reason      string  `json:"reason"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			response.BadRequest(c, "请求参数错误")
+			return
+		}
+		if len(req.QuestionIDs) == 0 {
+			response.BadRequest(c, "请选择要驳回的题目")
+			return
+		}
+		result, err := svc.BatchReject(req.QuestionIDs, req.Reason)
+		if err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.SuccessWithMsg(c, "成功驳回"+strconv.Itoa(result["rejected_count"].(int))+"道题目", result)
 	})
 
 	// POST /api/question-bank/questions/batch-import  批量导入
@@ -146,8 +166,8 @@ func RegisterQuestionBankRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gor
 		response.SuccessWithMsg(c, "题目删除成功", nil)
 	})
 
-	// POST /api/question-bank/questions/:question_id/publish  发布题目
-	g.POST("/questions/:question_id/publish", middleware.RoleRequired("tutor", "admin"), func(c *gin.Context) {
+	// POST /api/question-bank/questions/:question_id/publish  发布题目（仅管理员）
+	g.POST("/questions/:question_id/publish", middleware.RoleRequired("admin"), func(c *gin.Context) {
 		id, err := strconv.Atoi(c.Param("question_id"))
 		if err != nil {
 			response.BadRequest(c, "题目ID无效")
@@ -161,23 +181,54 @@ func RegisterQuestionBankRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gor
 		response.SuccessWithMsg(c, "题目发布成功", result)
 	})
 
+	// POST /api/question-bank/questions/:question_id/reject  驳回题目（仅管理员）
+	g.POST("/questions/:question_id/reject", middleware.RoleRequired("admin"), func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("question_id"))
+		if err != nil {
+			response.BadRequest(c, "题目ID无效")
+			return
+		}
+		var req struct {
+			Reason string `json:"reason"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			response.BadRequest(c, "请求参数错误")
+			return
+		}
+		result, err := svc.RejectQuestion(id, req.Reason)
+		if err != nil {
+			if err.Error() == "题目不存在" {
+				response.NotFound(c, err.Error())
+			} else {
+				response.BadRequest(c, err.Error())
+			}
+			return
+		}
+		response.SuccessWithMsg(c, "题目已驳回", result)
+	})
+
 	// GET /api/question-bank/stats  题库统计
 	g.GET("/stats", func(c *gin.Context) {
 		response.Success(c, svc.GetStats())
+	})
+
+	// GET /api/question-bank/categories  课程四分类及其题目数（章节练习用）
+	g.GET("/categories", func(c *gin.Context) {
+		response.Success(c, svc.GetCategories())
 	})
 
 	// ===== 知识点 =====
 
 	// GET /api/question-bank/knowledge-points  知识点列表
 	g.GET("/knowledge-points", func(c *gin.Context) {
-		level := c.Query("level")
+		category := c.Query("category")
 		var parentID *int
 		if s := c.Query("parent_id"); s != "" {
 			if id, err := strconv.Atoi(s); err == nil {
 				parentID = &id
 			}
 		}
-		response.Success(c, svc.GetKnowledgePoints(level, parentID))
+		response.Success(c, svc.GetKnowledgePoints(category, parentID))
 	})
 
 	// POST /api/question-bank/knowledge-points  创建知识点

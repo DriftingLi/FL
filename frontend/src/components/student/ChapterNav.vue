@@ -70,6 +70,7 @@ const navListRef = ref(null)
 
 function getContentTypeTagType(contentType) {
   const types = {
+    'text': '',
     'document': '',
     'ppt': 'warning',
     'video': 'danger',
@@ -81,6 +82,7 @@ function getContentTypeTagType(contentType) {
 
 function getContentTypeLabel(contentType) {
   const labels = {
+    'text': '图文',
     'document': '文档',
     'ppt': 'PPT',
     'video': '视频',

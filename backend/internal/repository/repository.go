@@ -1,7 +1,6 @@
-// Package repository 提供数据访问层（Task 10 占位）。
+// Package repository 提供数据访问层。
 //
 // 仓储层封装每个聚合根的 CRUD 与业务查询，供 service 层调用。
-// 完整实现将在 Task 10 中补充，当前为基础骨架。
 package repository
 
 import (

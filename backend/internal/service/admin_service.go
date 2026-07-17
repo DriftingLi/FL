@@ -1,4 +1,4 @@
-// Package service 管理员服务，对应 Python admin_service。
+// Package service 管理员服务。
 package service
 
 import (
@@ -20,8 +20,8 @@ func NewAdminService(db *gorm.DB) *AdminService {
 	return &AdminService{db: db}
 }
 
-// GetStudents 学员列表，对应 Python get_students。
-func (s *AdminService) GetStudents(page, pageSize int, keyword string) map[string]interface{} {
+// GetStudents 学员列表。
+func (s *AdminService) GetStudents(page, pageSize int, keyword string) map[string]any {
 	if page <= 0 {
 		page = 1
 	}
@@ -37,19 +37,19 @@ func (s *AdminService) GetStudents(page, pageSize int, keyword string) map[strin
 	q.Count(&total)
 	var students []model.Student
 	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&students)
-	items := make([]map[string]interface{}, 0, len(students))
+	items := make([]map[string]any, 0, len(students))
 	for i := range students {
 		items = append(items, studentToDict(&students[i]))
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"total":    total,
 		"page":     page,
 		"students": items,
 	}
 }
 
-// DeleteStudent 删除学员，对应 Python delete_student。
-func (s *AdminService) DeleteStudent(studentID int) (map[string]interface{}, error) {
+// DeleteStudent 删除学员。
+func (s *AdminService) DeleteStudent(studentID int) (map[string]any, error) {
 	var student model.Student
 	if err := s.db.First(&student, studentID).Error; err != nil {
 		return nil, errors.New("学员不存在")
@@ -57,11 +57,11 @@ func (s *AdminService) DeleteStudent(studentID int) (map[string]interface{}, err
 	if err := s.db.Delete(&student).Error; err != nil {
 		return nil, err
 	}
-	return map[string]interface{}{"student_id": studentID}, nil
+	return map[string]any{"student_id": studentID}, nil
 }
 
-// GetTutors 导师列表，对应 Python get_tutors。
-func (s *AdminService) GetTutors(page, pageSize int, keyword string) map[string]interface{} {
+// GetTutors 导师列表。
+func (s *AdminService) GetTutors(page, pageSize int, keyword string) map[string]any {
 	if page <= 0 {
 		page = 1
 	}
@@ -77,19 +77,19 @@ func (s *AdminService) GetTutors(page, pageSize int, keyword string) map[string]
 	q.Count(&total)
 	var tutors []model.Tutor
 	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&tutors)
-	items := make([]map[string]interface{}, 0, len(tutors))
+	items := make([]map[string]any, 0, len(tutors))
 	for i := range tutors {
 		items = append(items, tutorToDict(&tutors[i]))
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"total":  total,
 		"page":   page,
 		"tutors": items,
 	}
 }
 
-// DeleteTutor 删除导师，对应 Python delete_tutor。
-func (s *AdminService) DeleteTutor(tutorID int) (map[string]interface{}, error) {
+// DeleteTutor 删除导师。
+func (s *AdminService) DeleteTutor(tutorID int) (map[string]any, error) {
 	var tutor model.Tutor
 	if err := s.db.First(&tutor, tutorID).Error; err != nil {
 		return nil, errors.New("导师不存在")
@@ -97,16 +97,16 @@ func (s *AdminService) DeleteTutor(tutorID int) (map[string]interface{}, error) 
 	if err := s.db.Delete(&tutor).Error; err != nil {
 		return nil, err
 	}
-	return map[string]interface{}{"tutor_id": tutorID}, nil
+	return map[string]any{"tutor_id": tutorID}, nil
 }
 
-// GetStatistics 统计看板，对应 Python get_statistics。
-func (s *AdminService) GetStatistics() map[string]interface{} {
+// GetStatistics 统计看板。
+func (s *AdminService) GetStatistics() map[string]any {
 	return s.queryStatistics()
 }
 
 // queryStatistics 执行实际的统计查询。
-func (s *AdminService) queryStatistics() map[string]interface{} {
+func (s *AdminService) queryStatistics() map[string]any {
 	var totalStudents, totalCourses, totalStudyDuration int64
 	s.db.Model(&model.Student{}).Count(&totalStudents)
 	s.db.Model(&model.Course{}).Count(&totalCourses)
@@ -141,9 +141,9 @@ func (s *AdminService) queryStatistics() map[string]interface{} {
 		Group("course.course_id").
 		Scan(&rows)
 
-	courseStats := make([]map[string]interface{}, 0, len(rows))
+	courseStats := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
-		courseStats = append(courseStats, map[string]interface{}{
+		courseStats = append(courseStats, map[string]any{
 			"course_id":      r.CourseID,
 			"name":           r.Name,
 			"study_count":    r.StudyCount,
@@ -152,8 +152,8 @@ func (s *AdminService) queryStatistics() map[string]interface{} {
 		})
 	}
 
-	return map[string]interface{}{
-		"overview": map[string]interface{}{
+	return map[string]any{
+		"overview": map[string]any{
 			"total_students":       totalStudents,
 			"active_today":         activeToday,
 			"total_courses":        totalCourses,
@@ -165,8 +165,8 @@ func (s *AdminService) queryStatistics() map[string]interface{} {
 
 // ===== dict 辅助 =====
 
-func tutorToDict(t *model.Tutor) map[string]interface{} {
-	return map[string]interface{}{
+func tutorToDict(t *model.Tutor) map[string]any {
+	return map[string]any{
 		"tutor_id":   t.TutorID,
 		"username":   t.Username,
 		"name":       t.Name,

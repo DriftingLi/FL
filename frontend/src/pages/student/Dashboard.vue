@@ -19,19 +19,8 @@
         :items="activeCourses"
         :max-items="5"
         more-link="/training/courses"
-      >
-        <template #default>
-          <div v-for="course in activeCourses" :key="course.course_id" class="course-progress-item">
-            <div class="progress-info">
-              <span class="progress-title">{{ course.name }}</span>
-              <div class="progress-bar-wrap">
-                <div class="progress-bar" :style="{ width: course.progress + '%' }"></div>
-              </div>
-            </div>
-            <span class="progress-percent">{{ course.progress }}%</span>
-          </div>
-        </template>
-      </QuickCard>
+        empty-text="暂无进行中的课程"
+      />
 
       <QuickCard
         title="待完成考试"
@@ -86,7 +75,6 @@ import { useAuthStore } from '@/stores/auth'
 import QuickCard from '@/components/dashboard/QuickCard.vue'
 import type { QuickCardItem } from '@/components/dashboard/QuickCard.vue'
 import { useECharts } from '@/composables/useECharts'
-import { courseApi } from '@/api/course'
 import { studentApi } from '@/api/student'
 
 const authStore = useAuthStore()
@@ -96,7 +84,7 @@ const userName = computed(() =>
 )
 
 // 进行中的课程
-const activeCourses = ref<any[]>([])
+const activeCourses = ref<QuickCardItem[]>([])
 
 // 待完成考试
 const pendingExams = ref<QuickCardItem[]>([])
@@ -131,15 +119,37 @@ const statsEmpty = computed(() => {
 
 async function loadCourses() {
   try {
-    const res = await courseApi.getCourses({ page: 1, page_size: 5 })
-    if (res.code === 200 && res.data?.courses) {
-      activeCourses.value = res.data.courses.map((c: any) => ({
-        ...c,
-        progress: Math.floor(Math.random() * 80 + 10) // mock progress
-      }))
+    const res = await studentApi.getProfile()
+    if (res.code === 200 && res.data?.course_progress) {
+      // 进行中的课程：0 < progress < 100，按最近学习时间降序
+      activeCourses.value = res.data.course_progress
+        .filter((c: any) => c.progress > 0 && c.progress < 100)
+        .sort((a: any, b: any) => (b.study_date || '').localeCompare(a.study_date || ''))
+        .slice(0, 5)
+        .map((c: any) => ({
+          title: c.course_name,
+          badge: `${Math.round(c.progress)}%`,
+          path: `/training/course/${c.course_id}`
+        }))
     }
   } catch (error) {
     console.error('加载课程失败:', error)
+  }
+}
+
+async function loadRecentLearning() {
+  try {
+    const res = await studentApi.getRecords({ page: 1, page_size: 5 })
+    if (res.code === 200 && res.data?.records) {
+      recentLearning.value = res.data.records.map((r: any) => ({
+        title: r.course_name || '未知课程',
+        subtitle: r.chapter_title || `${r.study_duration || 0} 分钟`,
+        badge: r.study_duration ? `${r.study_duration}分钟` : '',
+        path: r.course_id ? `/training/course/${r.course_id}` : ''
+      }))
+    }
+  } catch (error) {
+    console.error('加载最近学习失败:', error)
   }
 }
 
@@ -229,8 +239,7 @@ watch(currentTab, async () => {
 })
 
 onMounted(async () => {
-  await loadCourses()
-  await loadStudyStats()
+  await Promise.all([loadCourses(), loadRecentLearning(), loadStudyStats()])
   await nextTick()
   renderStudyChart()
 })
@@ -293,59 +302,6 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--space-4);
-}
-
-/* 进行中的课程进度列表（替代 QuickCard 默认插槽） */
-.course-progress-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-2);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: background var(--duration-fast);
-}
-
-.course-progress-item:hover {
-  background: var(--color-bg-page);
-}
-
-.progress-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.progress-title {
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  color: var(--color-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.progress-bar-wrap {
-  height: 4px;
-  background: var(--color-border-light);
-  border-radius: var(--radius-full);
-  overflow: hidden;
-}
-
-.progress-bar {
-  height: 100%;
-  background: var(--color-primary-500);
-  border-radius: var(--radius-full);
-  transition: width var(--duration-slow);
-}
-
-.progress-percent {
-  font-size: var(--text-xs);
-  font-weight: var(--font-semibold);
-  color: var(--color-primary-600);
-  flex-shrink: 0;
 }
 
 /* 学习统计 */

@@ -14,28 +14,24 @@ import (
 )
 
 // RegisterMockExamRoutes 注册 /api/mock-exam 蓝图。
-// 对应 Python app/api/mock_exam.py。
 func RegisterMockExamRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	svc := service.NewMockExamService(db, newAIService(cfg, db))
 
 	g := rg.Group("/mock-exam", middleware.JWTAuth(cfg), middleware.RoleRequired("student"))
 
-	// POST /api/mock-exam/start  开始模拟考试
+	// POST /api/mock-exam/start  开始模拟考试（count 题量 + duration 时长）
 	g.POST("/start", func(c *gin.Context) {
 		uid, _ := c.Get(string(middleware.CtxUserID))
 		studentID, _ := uid.(int)
 		var req struct {
-			Level    string `json:"level"`
-			Duration int    `json:"duration"`
+			Count    int `json:"count"`
+			Duration int `json:"duration"`
 		}
 		_ = c.ShouldBindJSON(&req)
-		if req.Level == "" {
-			req.Level = "beginner"
-		}
 		if req.Duration == 0 {
 			req.Duration = 90
 		}
-		result, err := svc.Start(studentID, req.Level, req.Duration)
+		result, err := svc.Start(studentID, req.Count, req.Duration)
 		if err != nil {
 			response.BadRequest(c, err.Error())
 			return

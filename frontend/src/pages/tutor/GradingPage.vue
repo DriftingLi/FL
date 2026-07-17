@@ -19,9 +19,6 @@
     <div v-if="!selectedParticipant" class="participant-list">
       <el-table :data="participants" stripe v-loading="loading" @row-click="openDetail">
         <el-table-column prop="session_name" label="考试名称" min-width="150" />
-        <el-table-column prop="session_level" label="等级" width="80">
-          <template #default="{ row }">{{ levelMap[row.session_level] }}</template>
-        </el-table-column>
         <el-table-column prop="student_name" label="学员" width="100" />
         <el-table-column label="得分" width="100">
           <template #default="{ row }">
@@ -56,7 +53,6 @@
         <el-button @click="closeDetail" :icon="ArrowLeft">返回列表</el-button>
         <div class="detail-info">
           <span><strong>{{ detail.session_name }}</strong></span>
-          <el-tag size="small">{{ levelMap[detail.session_level] }}</el-tag>
           <span>学员：{{ detail.student_name }}</span>
           <span>得分：{{ detail.score !== null ? detail.score + '分' : '待批改' }} / {{ detail.pass_score }}分及格</span>
           <el-tag v-if="detail.is_passed" type="success" size="small">通过</el-tag>
@@ -165,7 +161,6 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Monitor, ArrowLeft } from '@element-plus/icons-vue'
 import { gradingApi } from '@/api/grading'
 
-const levelMap = { beginner: '初级', intermediate: '中级', advanced: '高级', expert: '顶级' }
 const typeMap = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
 
 const loading = ref(false)

@@ -76,7 +76,7 @@
       </div>
 
       <div class="footer-bottom">
-        <p>© {{ year }} 和润天下人工智能科技有限公司 版权所有 | 粤ICP备2026005936号 </p>
+        <p>© {{ year }} 和润天下人工智能科技有限公司 版权所有 | <a href="https://beian.miit.gov.cn/#/Integrated/index" target="_blank" rel="noopener noreferrer" class="beian-link">粤ICP备2026005936号-1</a></p>
       </div>
     </div>
   </footer>
@@ -338,6 +338,16 @@ onMounted(async () => {
   color: var(--color-text-muted, #94A3B8);
   margin: 0;
   letter-spacing: 0.02em;
+}
+
+.beian-link {
+  color: inherit;
+  text-decoration: none;
+  transition: color var(--duration-fast);
+}
+
+.beian-link:hover {
+  color: var(--color-primary-400, #38BDF8);
 }
 
 /* ===== 响应式 ===== */

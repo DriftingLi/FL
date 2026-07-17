@@ -1,4 +1,4 @@
-// Package service Coze OAuth JWT 签发，对应 Python coze_oauth。
+// Package service Coze OAuth JWT 签发。
 package service
 
 import (
@@ -43,8 +43,8 @@ func NewCozeOAuthService(appID, kid, privateKey, privateKeyPath string) *CozeOAu
 	}
 }
 
-// GetAccessToken 获取 Coze 访问令牌，对应 Python get_coze_access_token。
-func (s *CozeOAuthService) GetAccessToken() (map[string]interface{}, error) {
+// GetAccessToken 获取 Coze 访问令牌。
+func (s *CozeOAuthService) GetAccessToken() (map[string]any, error) {
 	if s.appID == "" || s.kid == "" {
 		return nil, errors.New("Coze OAuth 配置不完整")
 	}
@@ -52,8 +52,7 @@ func (s *CozeOAuthService) GetAccessToken() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, fmt.Errorf("生成 JWT 失败: %w", err)
 	}
-
-	body := map[string]interface{}{
+	body := map[string]any{
 		"grant_type":       "urn:ietf:params:oauth:grant-type:jwt-bearer",
 		"duration_seconds": 86399,
 	}
@@ -78,10 +77,10 @@ func (s *CozeOAuthService) GetAccessToken() (map[string]interface{}, error) {
 		return nil, fmt.Errorf("Coze OAuth token 请求失败，状态码 %d", resp.StatusCode)
 	}
 
-	var data map[string]interface{}
-	if err := json.Unmarshal(respBody, &data); err != nil {
-		return nil, fmt.Errorf("解析 Coze OAuth 响应失败: %w", err)
-	}
+		var data map[string]any
+		if err := json.Unmarshal(respBody, &data); err != nil {
+			return nil, fmt.Errorf("解析 Coze OAuth 响应失败: %w", err)
+		}
 
 	accessToken, _ := data["access_token"].(string)
 	if accessToken == "" {
@@ -96,16 +95,16 @@ func (s *CozeOAuthService) GetAccessToken() (map[string]interface{}, error) {
 	}
 
 	expiresIn := int64(0)
-	if v, ok := data["expires_in"].(float64); ok {
-		expiresIn = int64(v)
-	}
-	return map[string]interface{}{
-		"access_token": accessToken,
-		"expires_in":   expiresIn,
-	}, nil
+		if v, ok := data["expires_in"].(float64); ok {
+			expiresIn = int64(v)
+		}
+		return map[string]any{
+			"access_token": accessToken,
+			"expires_in":   expiresIn,
+		}, nil
 }
 
-// generateJWT 生成 RS256 JWT，对应 Python _generate_jwt。
+// generateJWT 生成 RS256 JWT。
 func (s *CozeOAuthService) generateJWT() (string, error) {
 	privateKeyContent, err := s.readPrivateKey()
 	if err != nil {
@@ -131,7 +130,7 @@ func (s *CozeOAuthService) generateJWT() (string, error) {
 	return token.SignedString(key)
 }
 
-// readPrivateKey 读取私钥（带缓存），对应 Python _read_private_key。
+// readPrivateKey 读取私钥（带缓存）。
 func (s *CozeOAuthService) readPrivateKey() (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

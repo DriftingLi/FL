@@ -12,7 +12,6 @@ import (
 )
 
 // RegisterAIRoutes 注册 /api/ai 蓝图（AI 文本生成与 Coze OAuth 令牌）。
-// 对应 Python app/api/ai.py。
 func RegisterAIRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	svc := newAIService(cfg, db)
 

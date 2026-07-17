@@ -14,7 +14,6 @@ import (
 )
 
 // RegisterGradingRoutes 注册 /api/grading 蓝图（导师阅卷）。
-// 对应 Python app/api/grading.py。
 func RegisterGradingRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	svc := service.NewGradingService(db, newAIService(cfg, db))
 

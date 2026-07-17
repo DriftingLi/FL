@@ -53,7 +53,7 @@
       </div>
 
       <div class="footer-bottom">
-        <p>© {{ currentYear }} 和润天下人工智能科技有限公司 版权所有 | 粤ICP备2026005936号</p>
+        <p>© {{ currentYear }} 和润天下人工智能科技有限公司 版权所有 | <a href="https://beian.miit.gov.cn/#/Integrated/index" target="_blank" rel="noopener noreferrer" class="beian-link">粤ICP备2026005936号-1</a></p>
       </div>
     </div>
   </footer>
@@ -178,6 +178,16 @@ const currentYear = new Date().getFullYear()
   text-align: center;
   font-size: var(--text-sm);
   color: var(--color-text-tertiary);
+}
+
+.beian-link {
+  color: inherit;
+  text-decoration: none;
+  transition: color var(--duration-fast);
+}
+
+.beian-link:hover {
+  color: var(--color-primary-500);
 }
 
 @media screen and (max-width: 768px) {

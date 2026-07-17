@@ -1,7 +1,7 @@
 // Package service - 电池 RUL 评估核心算法
 // 复现论文《一种基于特征提取与混合神经网络的锂电池剩余使用寿命预测方法》S2 节
 // 20 维特征提取 + 滑窗聚合 + 轻量 RUL 预测（MVP）
-// 后续可替换 Predict 内部聚合为 ONNX/Python sidecar 推理
+// 后续可替换 Predict 内部聚合为 ONNX sidecar 推理
 package service
 
 import (

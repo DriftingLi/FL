@@ -153,6 +153,10 @@ const props = defineProps({
   chapterId: {
     type: [String, Number],
     required: true
+  },
+  initialFilter: {
+    type: String,
+    default: 'all'
   }
 })
 
@@ -160,7 +164,7 @@ const inputRef = ref(null)
 const isDragover = ref(false)
 const isUploading = ref(false)
 const fileList = ref([])
-const activeFilter = ref('all')
+const activeFilter = ref(props.initialFilter || 'all')
 
 let uidCounter = 0
 

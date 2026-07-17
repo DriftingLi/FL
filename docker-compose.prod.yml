@@ -1,5 +1,6 @@
 # ===== 生产环境 Docker Compose 编排 =====
-# 架构：PostgreSQL + Go 后端（仅后端，前端由 Cloudflare Pages 托管）
+# 架构：PostgreSQL + Go 后端 + Nginx 前端（全栈 Docker 部署）
+# 前端容器兼任 SSL 终止 + API 反代 + 静态文件托管
 # 使用：docker compose -f docker-compose.prod.yml up -d
 # 前置：确保 .env 已正确配置
 
@@ -86,12 +87,11 @@ services:
         max-file: "3"
 
   # ==========================================
-  # Go 后端服务（直连，无 Nginx 反代）
-  # 前端通过 Cloudflare Pages 直接调用 API
+  # Go 后端服务（仅内网可访问，通过前端 Nginx 反代）
   # ==========================================
   backend:
     build:
-      context: ./backend-go
+      context: ./backend
       dockerfile: Dockerfile
     image: ${BACKEND_IMAGE:-forklift-backend:latest}
     container_name: forklift-backend-prod
@@ -108,8 +108,8 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       JWT_EXPIRES_HOURS: "${JWT_EXPIRES_HOURS:-24}"
-      # CORS：必须包含主域名 + 四个子域名（training/valuation/mentor/admin，逗号分隔）
-      # 例：https://www.example.com,https://training.example.com,https://valuation.example.com,https://mentor.example.com,https://admin.example.com
+      # CORS：必须包含主域名 + 四个子域名（training/valuation/mentor/manage，逗号分隔）
+      # 例：https://www.example.com,https://training.example.com,https://valuation.example.com,https://mentor.example.com,https://manage.example.com
       CORS_ORIGINS: ${CORS_ORIGINS}
       UPLOAD_FOLDER: /data/uploads
       VOLUME_MOUNT_PATH: /data
@@ -133,8 +133,9 @@ services:
       REDIS_POOL_SIZE: "${REDIS_POOL_SIZE:-10}"
       REDIS_KEY_PREFIX: "${REDIS_KEY_PREFIX:-fl:}"
       TZ: Asia/Shanghai
-    ports:
-      - "${BACKEND_PORT:-8081}:8080"
+    # 仅内网可访问，不对外暴露端口（通过前端 Nginx 反代 /api/ 路径访问）
+    expose:
+      - "8080"
     volumes:
       - uploads-data:/data/uploads
       - reports-data:/data/reports
@@ -161,6 +162,41 @@ services:
       options:
         max-size: "100m"
         max-file: "5"
+
+  # ==========================================
+  # Nginx 前端服务（SSL 终止 + API 反代 + 静态文件托管）
+  # ==========================================
+  frontend:
+    image: ${FRONTEND_IMAGE:-forklift-frontend:latest}
+    container_name: forklift-frontend-prod
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # 域名（由 GitHub Secrets 注入，启动时 envsubst 替换 nginx 配置中的 ${DOMAIN}）
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      # SSL 证书挂载（只读，路径与 deploy-remote.sh 中 write_ssl_certs() 一致）
+      - ${DEPLOY_PATH:-/opt/forklift-training}/nginx/ssl:/etc/nginx/ssl:ro
+    networks:
+      - forklift-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+        reservations:
+          memory: 128M
+          cpus: "0.25"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
 
 networks:
   forklift-net:

@@ -14,7 +14,6 @@ import (
 )
 
 // RegisterLevelExamRoutes 注册 /api/level-exam 蓝图（等级考试与晋级）。
-// 对应 Python app/api/level_exam.py。
 func RegisterLevelExamRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	svc := service.NewLevelExamService(db, newAIService(cfg, db))
 
@@ -26,12 +25,11 @@ func RegisterLevelExamRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 	g.GET("/sessions", func(c *gin.Context) {
 		page := atoiDefault(c.Query("page"), 1)
 		pageSize := atoiDefault(c.Query("page_size"), 20)
-		level := c.Query("level")
 		status := c.Query("status")
 		role, _ := c.Get(string(middleware.CtxUserRole))
 		roleStr, _ := role.(string)
 		includeParticipants := roleStr == "tutor" || roleStr == "admin"
-		response.Success(c, svc.ListSessions(page, pageSize, level, status, includeParticipants))
+		response.Success(c, svc.ListSessions(page, pageSize, status, includeParticipants))
 	})
 
 	// POST /api/level-exam/sessions  创建场次

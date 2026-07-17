@@ -24,8 +24,8 @@ error() { echo -e "${RED}[ERROR]${NC} $1"; }
 ENV="${1:-}"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="docker-compose.prod.yml"
-ENV_FILE="backend-go/.env"
-BACKEND_DIR="$PROJECT_DIR/backend-go"
+ENV_FILE="backend/.env"
+BACKEND_DIR="$PROJECT_DIR/backend"
 FRONTEND_DIR="$PROJECT_DIR/frontend"
 
 # ---- 帮助 ----

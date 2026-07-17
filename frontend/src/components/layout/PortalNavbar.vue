@@ -62,7 +62,7 @@ const router = useRouter()
 const scrolled = ref(false)
 const mobileOpen = ref(false)
 const activeAnchor = ref('home')
-// 主域名为锚点首页（hash 链接），主域名访问时链接为 example.top/#
+// 主域名为锚点首页（hash 链接），主域名访问时链接为 www.example.top/#
 const homeUrl = buildSubdomainUrl('main', '/')
 
 function onScroll() {

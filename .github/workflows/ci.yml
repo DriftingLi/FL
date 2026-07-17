@@ -33,7 +33,7 @@ jobs:
         with:
           filters: |
             backend:
-              - 'backend-go/**'
+              - 'backend/**'
               - '.github/workflows/**'
             frontend:
               - 'frontend/**'
@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: backend-go
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
 
@@ -56,7 +56,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: backend-go/go.sum
+          cache-dependency-path: backend/go.sum
 
       - name: Go 代码格式化检查
         run: |
@@ -75,7 +75,7 @@ jobs:
           # 安装与系统 Go 版本匹配的 golangci-lint（避免预编译二进制版本不兼容）
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
           golangci-lint run --timeout=5m
-        working-directory: backend-go
+        working-directory: backend
 
   # ============================================================
   # Stage 3: 后端 - 单元测试
@@ -109,7 +109,7 @@ jobs:
           --health-retries 5
     defaults:
       run:
-        working-directory: backend-go
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
 
@@ -117,7 +117,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: backend-go/go.sum
+          cache-dependency-path: backend/go.sum
 
       - name: 运行单元测试
         env:
@@ -131,7 +131,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage
-          path: backend-go/coverage.txt
+          path: backend/coverage.txt
 
   # ============================================================
   # Stage 4: 前端 - 类型检查 + 构建
@@ -181,13 +181,13 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: backend-go/go.sum
+          cache-dependency-path: backend/go.sum
 
       - name: Go 依赖漏洞扫描（仅报告，不阻断）
         if: needs.changes.outputs.backend == 'true'
         continue-on-error: true
         run: |
-          cd backend-go
+          cd backend
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./... || echo "发现漏洞，详细信息请查看日志"
 
@@ -202,7 +202,7 @@ jobs:
         continue-on-error: true
         with:
           scan-type: config
-          scan-ref: backend-go/Dockerfile
+          scan-ref: backend/Dockerfile
           exit-code: 0
 
   # ============================================================
@@ -228,7 +228,7 @@ jobs:
           --health-retries 5
     defaults:
       run:
-        working-directory: backend-go
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
 
@@ -236,7 +236,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: backend-go/go.sum
+          cache-dependency-path: backend/go.sum
 
       - name: 验证迁移脚本完整性（up + down）
         env:

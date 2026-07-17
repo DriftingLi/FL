@@ -27,21 +27,30 @@
       </div>
 
       <div class="chapter-content-area">
-        <div v-if="chapterDetail.content" class="content-text markdown-body" v-html="renderedContent"></div>
+        <el-tabs v-if="chapterDetail.content || chapterFiles.length > 0" v-model="activeTab" class="content-tabs">
+          <el-tab-pane
+            v-if="chapterDetail.content"
+            label="图文"
+            name="content"
+          >
+            <div class="content-text markdown-body" v-html="renderedContent"></div>
+          </el-tab-pane>
 
-        <template v-if="chapterFiles.length > 0">
-          <div
+          <el-tab-pane
             v-for="group in fileGroups"
             :key="group.type"
-            class="file-section"
+            :name="group.type"
           >
-            <div class="section-header">
-              <el-icon :size="20" class="section-icon" :style="{ color: group.color }">
-                <component :is="group.icon" />
-              </el-icon>
-              <h3 class="section-title">{{ group.label }}</h3>
-              <el-tag size="small" type="info">{{ group.files.length }}个文件</el-tag>
-            </div>
+            <template #label>
+              <span class="tab-label">
+                <el-icon :size="16" :style="{ color: group.color }">
+                  <component :is="group.icon" />
+                </el-icon>
+                {{ group.label }}
+                <el-tag size="small" type="info" class="tab-count">{{ group.files.length }}</el-tag>
+              </span>
+            </template>
+
             <div class="section-content">
               <template v-if="group.type === 'video'">
                 <div v-for="file in group.files" :key="file.file_id" class="media-item">
@@ -66,8 +75,8 @@
                 </div>
               </template>
             </div>
-          </div>
-        </template>
+          </el-tab-pane>
+        </el-tabs>
 
         <el-empty v-if="!chapterDetail.content && chapterFiles.length === 0" description="该章节暂无内容" />
       </div>
@@ -160,6 +169,7 @@ const courseName = ref('')
 const chapters = ref([])
 const isStudying = ref(false)
 const studySeconds = ref(0)
+const activeTab = ref('')
 let studyTimer = null
 let studyStartTime = null
 // 已上报到后端的秒数，用于计算增量上报
@@ -209,6 +219,13 @@ const renderedContent = computed(() => {
   return marked.parse(chapterDetail.value.content)
 })
 
+// 计算默认激活的 Tab：优先图文，其次按 TYPE_ORDER 第一个有内容的媒体类型
+const defaultTab = computed(() => {
+  if (chapterDetail.value?.content) return 'content'
+  const firstGroup = fileGroups.value[0]
+  return firstGroup ? firstGroup.type : ''
+})
+
 const getPrevChapterTitle = computed(() => {
   if (!chapterDetail.value?.previous_chapter_id) return ''
   const prev = chapters.value.find(c => c.chapter_id === chapterDetail.value.previous_chapter_id)
@@ -238,6 +255,7 @@ async function loadChapterDetail() {
     const res = await courseApi.getChapterDetail(courseId.value, chapterId.value)
     if (res.code === 200) {
       chapterDetail.value = res.data
+      activeTab.value = defaultTab.value
       beginStudy()
     } else {
       chapterNotFound.value = true
@@ -292,15 +310,17 @@ function stopStudy() {
   isStudying.value = false
 }
 
-// 上报自上次上报以来的增量学习时长。后端 study_duration 为累加字段。
+// 上报自上次上报以来的增量学习时长。后端 study_duration 为累加字段（int 分钟）。
 // isFinal=true 表示页面即将卸载，使用 fetch keepalive 保证请求能发出。
 async function reportIncremental(isFinal) {
   if (!chapterDetail.value || !isStudying.value) return
   const currentSecs = studySeconds.value
   const delta = currentSecs - reportedSeconds
   if (delta <= 0) return
-  // 后端 duration 单位为分钟，向上取整，至少 1 分钟
-  const duration = Math.max(Math.ceil(delta / 60), 1)
+  // 后端 duration 单位为分钟，向下取整，不足 1 分钟不上报（避免虚高）
+  const duration = Math.floor(delta / 60)
+  if (duration <= 0) return
+
   const payload = {
     chapter_id: chapterDetail.value.chapter_id,
     duration: duration
@@ -339,30 +359,32 @@ async function reportIncremental(isFinal) {
 }
 
 async function completeStudy() {
-  // 先停止计时，再上报最终增量
+  // 先停止计时，再上报未上报的增量（与 reportIncremental 逻辑一致）
   const wasStudying = isStudying.value
   stopStudy()
   if (!wasStudying || !chapterDetail.value) return
 
   const delta = studySeconds.value - reportedSeconds
-  const duration = Math.max(Math.ceil(studySeconds.value / 60), 1)
-  // 完成学习时上报总时长（取较大值确保不丢时长）
-  const reportDuration = Math.max(duration, Math.max(Math.ceil(delta / 60), 1))
+  const duration = Math.floor(delta / 60)
 
-  try {
-    const res = await courseApi.updateProgress(courseId.value, {
-      chapter_id: chapterDetail.value.chapter_id,
-      duration: reportDuration
-    })
-    if (res.code === 200) {
-      reportedSeconds = studySeconds.value
-      ElMessage.success('学习进度已保存')
-      await loadChapterDetail()
+  if (duration > 0) {
+    try {
+      const res = await courseApi.updateProgress(courseId.value, {
+        chapter_id: chapterDetail.value.chapter_id,
+        duration: duration
+      })
+      if (res.code === 200) {
+        reportedSeconds = studySeconds.value
+      }
+    } catch (error) {
+      console.error('保存学习进度失败:', error)
+      ElMessage.error('保存学习进度失败，请稍后重试')
+      return
     }
-  } catch (error) {
-    console.error('保存学习进度失败:', error)
-    ElMessage.error('保存学习进度失败，请稍后重试')
   }
+
+  ElMessage.success('学习进度已保存')
+  await loadChapterDetail()
 }
 
 function navigateToChapter(targetChapterId) {
@@ -478,34 +500,32 @@ onBeforeUnmount(() => {
   margin-bottom: 20px;
 }
 
-.file-section {
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid #ebeef5;
+.content-tabs {
+  min-height: 400px;
 }
 
-.file-section:first-child {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: none;
+.content-tabs :deep(.el-tabs__header) {
+  margin-bottom: 20px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #fff;
+  padding-top: 8px;
 }
 
-.section-header {
-  display: flex;
+.content-tabs :deep(.el-tabs__nav-wrap)::after {
+  height: 1px;
+}
+
+.tab-label {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 6px;
 }
 
-.section-icon {
-  flex-shrink: 0;
-}
-
-.section-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #303133;
-  margin: 0;
+.tab-count {
+  margin-left: 2px;
+  transform: scale(0.85);
 }
 
 .section-content {

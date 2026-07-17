@@ -15,7 +15,7 @@ import (
 	"forklift-training/internal/model"
 )
 
-// 智谱 GLM 默认模型与提示词，与 Python ai_service.py 保持一致。
+// 智谱 GLM 默认模型与提示词。
 const (
 	fallbackText = `## 叉车维修知识
 
@@ -84,10 +84,10 @@ type AIGradeResult struct {
 	Fallback bool    `json:"fallback,omitempty"`
 }
 
-// TestConnection 测试 AI 连接，对应 Python test_ai_connection。
-func (s *AIService) TestConnection() map[string]interface{} {
+// TestConnection 测试 AI 连接。
+func (s *AIService) TestConnection() map[string]any {
 	if s.apiKey == "" {
-		return map[string]interface{}{
+		return map[string]any{
 			"status":         "error",
 			"message":        "ZHIPU_API_KEY未配置，请在环境变量或.env文件中设置",
 			"api_key_exists": false,
@@ -102,7 +102,7 @@ func (s *AIService) TestConnection() map[string]interface{} {
 		{Role: openai.ChatMessageRoleUser, Content: `请回复"连接测试成功"四个字`},
 	}, 50, 0.1)
 	if err != nil {
-		return map[string]interface{}{
+		return map[string]any{
 			"status":         "error",
 			"message":        fmt.Sprintf("AI连接失败: %s", err.Error()),
 			"api_key_exists": true,
@@ -112,7 +112,7 @@ func (s *AIService) TestConnection() map[string]interface{} {
 		}
 	}
 	if content == "" {
-		return map[string]interface{}{
+		return map[string]any{
 			"status":         "error",
 			"message":        "AI返回空内容，可能是内容安全过滤或API限流",
 			"api_key_exists": true,
@@ -124,7 +124,7 @@ func (s *AIService) TestConnection() map[string]interface{} {
 	if len(preview) > 100 {
 		preview = preview[:100]
 	}
-	return map[string]interface{}{
+		return map[string]any{
 		"status":           "success",
 		"message":          "AI连接正常",
 		"api_key_exists":   true,
@@ -134,11 +134,11 @@ func (s *AIService) TestConnection() map[string]interface{} {
 	}
 }
 
-// GenerateText 根据关键词生成培训内容，对应 Python generate_text。
-func (s *AIService) GenerateText(keyword string, userID int, userType string) map[string]interface{} {
+// GenerateText 根据关键词生成培训内容。
+func (s *AIService) GenerateText(keyword string, userID int, userType string) map[string]any {
 	if strings.TrimSpace(keyword) == "" {
-		// 与 Python 一致：抛错由调用方处理；这里返回错误标记。
-		return map[string]interface{}{"error": "关键词不能为空"}
+		// 抛错由调用方处理；这里返回错误标记。
+		return map[string]any{"error": "关键词不能为空"}
 	}
 	systemPrompt := `你是一名专业的叉车维修培训讲师，擅长用通俗易懂的语言讲解叉车维修知识。请按照以下结构组织内容：
 1. 概述：简要介绍该知识点
@@ -157,9 +157,9 @@ func (s *AIService) GenerateText(keyword string, userID int, userType string) ma
 	if err != nil {
 		slog.Error("AI generate_text failed", "error", err)
 		if userID != 0 {
-			s.saveLog(userID, userType, "text", map[string]interface{}{"keyword": keyword}, err.Error(), 0)
+			s.saveLog(userID, userType, "text", map[string]any{"keyword": keyword}, err.Error(), 0)
 		}
-		return map[string]interface{}{
+		return map[string]any{
 			"content":      fallbackText,
 			"keywords":     keyword,
 			"generated_at": now,
@@ -168,16 +168,16 @@ func (s *AIService) GenerateText(keyword string, userID int, userType string) ma
 		}
 	}
 	if userID != 0 {
-		s.saveLog(userID, userType, "text", map[string]interface{}{"keyword": keyword}, content, 1)
+		s.saveLog(userID, userType, "text", map[string]any{"keyword": keyword}, content, 1)
 	}
-	return map[string]interface{}{
+		return map[string]any{
 		"content":      content,
 		"keywords":     keyword,
 		"generated_at": now,
 	}
 }
 
-// GradeShortAnswer 简答题 AI 评分，对应 Python grade_short_answer。
+// GradeShortAnswer 简答题 AI 评分。
 func (s *AIService) GradeShortAnswer(questionContent, referenceAnswer, scoringCriteria, studentAnswer string, maxScore float64, userID *int) *AIGradeResult {
 	if strings.TrimSpace(studentAnswer) == "" {
 		return &AIGradeResult{Score: 0, Comment: "未作答，得0分"}
@@ -202,7 +202,7 @@ func (s *AIService) GradeShortAnswer(questionContent, referenceAnswer, scoringCr
 		return &AIGradeResult{Score: 0, Comment: "AI评分结果解析失败，请等待导师人工评分", Fallback: true}
 	}
 	if userID != nil {
-		s.saveLog(*userID, "admin", "content", map[string]interface{}{
+		s.saveLog(*userID, "admin", "content", map[string]any{
 			"question":       truncate(questionContent, 100),
 			"student_answer": truncate(studentAnswer, 100),
 			"max_score":      maxScore,
@@ -211,8 +211,8 @@ func (s *AIService) GradeShortAnswer(questionContent, referenceAnswer, scoringCr
 	return result
 }
 
-// GetGenerationHistory 查询生成历史，对应 Python get_generation_history。
-func (s *AIService) GetGenerationHistory(userID int, generationType string, limit int) []map[string]interface{} {
+// GetGenerationHistory 查询生成历史。
+func (s *AIService) GetGenerationHistory(userID int, generationType string, limit int) []map[string]any {
 	q := s.db.Model(&model.AIGenerationLog{}).Where("user_id = ? AND status = ?", userID, 1)
 	if generationType != "" {
 		q = q.Where("generation_type = ?", generationType)
@@ -223,18 +223,18 @@ func (s *AIService) GetGenerationHistory(userID int, generationType string, limi
 	var logs []model.AIGenerationLog
 	if err := q.Order("created_at DESC").Limit(limit).Find(&logs).Error; err != nil {
 		slog.Error("GetGenerationHistory failed", "error", err)
-		return []map[string]interface{}{}
+		return []map[string]any{}
 	}
-	out := make([]map[string]interface{}, 0, len(logs))
+	out := make([]map[string]any, 0, len(logs))
 	for _, log := range logs {
 		var params interface{}
 		if len(log.InputParams) > 0 {
 			_ = json.Unmarshal(log.InputParams, &params)
 		}
 		if params == nil {
-			params = map[string]interface{}{}
+			params = map[string]any{}
 		}
-		out = append(out, map[string]interface{}{
+		out = append(out, map[string]any{
 			"log_id":          log.LogID,
 			"generation_type": log.GenerationType,
 			"input_params":    params,
@@ -245,7 +245,7 @@ func (s *AIService) GetGenerationHistory(userID int, generationType string, limi
 	return out
 }
 
-// callModel 调用模型，重试 2 次，对应 Python _call_model。
+// callModel 调用模型，重试 2 次。
 func (s *AIService) callModel(messages []openai.ChatCompletionMessage, maxTokens int, temperature float32) (string, error) {
 	if s.client == nil {
 		return "", fmt.Errorf("AI服务未配置，请设置ZHIPU_API_KEY")
@@ -318,7 +318,7 @@ func (s *AIService) saveLog(userID int, userType, generationType string, inputPa
 	}
 }
 
-// parseGradingResponse 解析 AI 评分 JSON 响应，对应 Python _parse_grading_response。
+// parseGradingResponse 解析 AI 评分 JSON 响应。
 func parseGradingResponse(content string, maxScore float64) *AIGradeResult {
 	if content == "" {
 		return nil
@@ -370,7 +370,7 @@ func parseGradingResponse(content string, maxScore float64) *AIGradeResult {
 }
 
 func tryParseScore(s string, maxScore float64) *AIGradeResult {
-	var obj map[string]interface{}
+	var obj map[string]any
 	if err := json.Unmarshal([]byte(s), &obj); err != nil {
 		return nil
 	}

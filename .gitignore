@@ -1,8 +1,7 @@
-# ===== Go (backend-go) =====
-backend-go/bin/
-backend-go/*.exe
-backend-go/migrate-data.exe
-backend-go/server
+# ===== Go (backend) =====
+backend/bin/
+backend/*.exe
+backend/server
 *.test
 *.out
 coverage.txt
@@ -40,26 +39,26 @@ yarn-error.log*
 *.sqlite3
 
 # ===== 上传内容（保留目录，忽略内容）=====
-backend-go/static/uploads/chapters/*
-backend-go/static/uploads/slides/*
-!backend-go/static/uploads/chapters/.gitkeep
-!backend-go/static/uploads/slides/.gitkeep
+backend/static/uploads/chapters/*
+backend/static/uploads/slides/*
+!backend/static/uploads/chapters/.gitkeep
+!backend/static/uploads/slides/.gitkeep
 
 # 用户上传的视频和图片（运行时生成，不应入库）
-backend-go/static/videos/*
-!backend-go/static/videos/.gitkeep
-backend-go/static/images/*
-!backend-go/static/images/.gitkeep
+backend/static/videos/*
+!backend/static/videos/.gitkeep
+backend/static/images/*
+!backend/static/images/.gitkeep
 
 # Docker Compose 本地覆盖文件（仅保留 .example 模板入库）
-backend-go/docker-compose.yml
+backend/docker-compose.yml
 
 # ===== 日志 =====
 *.log
 logs/
 
 # ===== PDF 报告输出 =====
-backend-go/storage/
+backend/storage/
 
 # ===== IDE / 编辑器 =====
 .idea/

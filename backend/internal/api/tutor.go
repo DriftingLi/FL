@@ -15,7 +15,6 @@ import (
 )
 
 // RegisterTutorRoutes 注册 /api/tutor 蓝图（导师管理章节与文件）。
-// 对应 Python app/api/tutor.py。
 func RegisterTutorRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	svc := service.NewTutorService(db, cfg.UploadFolder, service.NewFileService(cfg.UploadFolder))
 
@@ -45,6 +44,21 @@ func RegisterTutorRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 			return
 		}
 		result, err := svc.GetCourseChapters(courseID)
+		if err != nil {
+			response.NotFound(c, err.Error())
+			return
+		}
+		response.Success(c, result)
+	})
+
+	// GET /api/tutor/chapter/:chapter_id  章节详情（含上下章ID + 文件列表）
+	g.GET("/chapter/:chapter_id", func(c *gin.Context) {
+		chapterID, err := strconv.Atoi(c.Param("chapter_id"))
+		if err != nil {
+			response.BadRequest(c, "章节ID无效")
+			return
+		}
+		result, err := svc.GetChapterDetail(chapterID)
 		if err != nil {
 			response.NotFound(c, err.Error())
 			return

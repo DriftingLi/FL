@@ -13,7 +13,7 @@ func withTimeout(d time.Duration) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), d)
 }
 
-// formatISO 将时间格式化为 ISO8601 字符串（与 Python isoformat 对齐）。
+// formatISO 将时间格式化为 ISO8601 字符串。
 func formatISO(t time.Time) string {
 	if t.IsZero() {
 		return ""

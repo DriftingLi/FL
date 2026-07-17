@@ -11,13 +11,6 @@
           <el-option label="简答题" value="short_answer" />
         </el-select>
       </el-form-item>
-      <el-form-item label="等级" required>
-        <el-select v-model="form.level">
-          <el-option label="初级" value="beginner" />
-          <el-option label="中级" value="intermediate" />
-          <el-option label="高级" value="advanced" />
-        </el-select>
-      </el-form-item>
       <el-form-item label="知识点">
         <el-select v-model="form.knowledge_point_id" clearable placeholder="选择知识点">
           <el-option v-for="kp in knowledgePoints" :key="kp.id" :label="kp.name" :value="kp.id" />
@@ -114,7 +107,6 @@ const imageUploading = ref(false)
 
 const form = ref({
   type: 'single_choice',
-  level: 'beginner',
   content: '',
   options: { A: '', B: '', C: '', D: '' },
   answer: '',

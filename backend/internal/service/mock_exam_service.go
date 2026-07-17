@@ -1,85 +1,61 @@
-// Package service 模拟考试，对应 Python mock_exam_service。
+// Package service 模拟考试。
 package service
 
 import (
 	"errors"
-	"math/rand"
-	"time"
 
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
 )
 
-// mockExamDefaultConfig 组卷配置，与 Python DEFAULT_CONFIG 一致。
-var mockExamDefaultConfig = map[string]map[string]int{
-	"beginner":     {"single_choice": 20, "multi_choice": 10, "true_false": 10, "fault_image": 5, "short_answer": 2},
-	"intermediate": {"single_choice": 15, "multi_choice": 15, "true_false": 8, "fault_image": 8, "short_answer": 3},
-	"advanced":     {"single_choice": 10, "multi_choice": 15, "true_false": 5, "fault_image": 10, "short_answer": 5},
-}
+// mockExamDefaultCount 模拟考试默认题量（取消等级后：固定题量随机抽）。
+const mockExamDefaultCount = 40
 
 // MockExamService 模拟考试服务。
 type MockExamService struct {
-	db  *gorm.DB
-	ai  *AIService
-	rng *rand.Rand
+	db *gorm.DB
+	ai *AIService
 }
 
 // NewMockExamService 创建模拟考试服务实例。
 func NewMockExamService(db *gorm.DB, ai *AIService) *MockExamService {
-	return &MockExamService{db: db, ai: ai, rng: rand.New(rand.NewSource(time.Now().UnixNano()))}
+	return &MockExamService{db: db, ai: ai}
 }
 
-// Start 生成模拟考试，对应 Python generate_mock_exam。
-func (s *MockExamService) Start(studentID int, level string, duration int) (map[string]interface{}, error) {
-	if !containsString(validQuestionLevels, level) {
-		return nil, errors.New("无效的等级")
+// Start 生成模拟考试：从 published 题库随机抽 count 题（不分等级、不分题型）。
+func (s *MockExamService) Start(studentID, count, duration int) (map[string]any, error) {
+	if count <= 0 {
+		count = mockExamDefaultCount
 	}
 	if duration <= 0 {
 		duration = 90
 	}
-	config, ok := mockExamDefaultConfig[level]
-	if !ok {
-		config = mockExamDefaultConfig["beginner"]
+
+	selected, err := sampleQuestions(s.db, "", nil, count)
+	if err != nil {
+		return nil, errors.New("查询题目失败")
+	}
+	if len(selected) == 0 {
+		return nil, errors.New("题库暂无可用的题目")
 	}
 
-	questionIDs := make([]int, 0)
+	questionIDs := make([]int, len(selected))
 	totalScore := 0
-	for _, qType := range validQuestionTypes {
-		count := config[qType]
-		if count <= 0 {
-			continue
+	for i, q := range selected {
+		questionIDs[i] = q.ID
+		score := float64(q.Score)
+		if q.Score <= 0 {
+			score = mockExamScoreMap[q.Type]
 		}
-		var questions []model.Question
-		s.db.Where("level = ? AND type = ? AND status = ?", level, qType, "published").Find(&questions)
-		actualCount := count
-		if actualCount > len(questions) {
-			actualCount = len(questions)
-		}
-		if actualCount > 0 {
-			s.rng.Shuffle(len(questions), func(i, j int) { questions[i], questions[j] = questions[j], questions[i] })
-			for i := 0; i < actualCount; i++ {
-				questionIDs = append(questionIDs, questions[i].ID)
-				score := float64(questions[i].Score)
-				if questions[i].Score <= 0 {
-					score = mockExamScoreMap[qType]
-				}
-				totalScore += int(score)
-			}
-		}
+		totalScore += int(score)
 	}
-
-	if len(questionIDs) == 0 {
-		return nil, errors.New("该等级下没有可用的题目")
-	}
-	s.rng.Shuffle(len(questionIDs), func(i, j int) { questionIDs[i], questionIDs[j] = questionIDs[j], questionIDs[i] })
 
 	idsJSON, _ := jsonMarshal(questionIDs)
-	emptyJSON, _ := jsonMarshal(map[string]interface{}{})
+	emptyJSON, _ := jsonMarshal(map[string]any{})
 	startTime := beijingNow()
 	mock := model.MockExam{
 		StudentID:     studentID,
-		Level:         level,
 		QuestionIDs:   model.JSONB(idsJSON),
 		Answers:       model.JSONB(emptyJSON),
 		Duration:      duration,
@@ -91,21 +67,12 @@ func (s *MockExamService) Start(studentID int, level string, duration int) (map[
 		return nil, err
 	}
 
-	var questions []model.Question
-	s.db.Where("id IN ?", questionIDs).Find(&questions)
-	qMap := map[int]*model.Question{}
-	for i := range questions {
-		qMap[questions[i].ID] = &questions[i]
+	ordered := make([]map[string]any, 0, len(selected))
+	for i := range selected {
+		ordered = append(ordered, questionToDict(&selected[i], false))
 	}
-	ordered := make([]map[string]interface{}, 0, len(questionIDs))
-	for _, qid := range questionIDs {
-		if q, ok := qMap[qid]; ok {
-			ordered = append(ordered, questionToDict(q, false))
-		}
-	}
-	return map[string]interface{}{
+	return map[string]any{
 		"mock_exam_id":    mock.ID,
-		"level":           level,
 		"duration":        duration,
 		"total_score":     totalScore,
 		"total_questions": len(questionIDs),
@@ -114,8 +81,8 @@ func (s *MockExamService) Start(studentID int, level string, duration int) (map[
 	}, nil
 }
 
-// SaveProgress 保存进度，对应 Python save_mock_exam_progress。
-func (s *MockExamService) SaveProgress(mockExamID, studentID int, answers map[string]interface{}, remainingTime int) error {
+// SaveProgress 保存进度。
+func (s *MockExamService) SaveProgress(mockExamID, studentID int, answers map[string]any, remainingTime int) error {
 	var mock model.MockExam
 	if err := s.db.First(&mock, mockExamID).Error; err != nil {
 		return errors.New("模拟考试不存在")
@@ -129,8 +96,8 @@ func (s *MockExamService) SaveProgress(mockExamID, studentID int, answers map[st
 	return s.db.Save(&mock).Error
 }
 
-// Resume 恢复考试，对应 Python resume_mock_exam。
-func (s *MockExamService) Resume(mockExamID, studentID int) (map[string]interface{}, error) {
+// Resume 恢复考试。
+func (s *MockExamService) Resume(mockExamID, studentID int) (map[string]any, error) {
 	var mock model.MockExam
 	if err := s.db.First(&mock, mockExamID).Error; err != nil {
 		return nil, errors.New("模拟考试不存在")
@@ -152,7 +119,7 @@ func (s *MockExamService) Resume(mockExamID, studentID int) (map[string]interfac
 	for i := range questions {
 		qMap[questions[i].ID] = &questions[i]
 	}
-	ordered := make([]map[string]interface{}, 0, len(ids))
+	ordered := make([]map[string]any, 0, len(ids))
 	for _, qid := range ids {
 		if q, ok := qMap[qid]; ok {
 			ordered = append(ordered, questionToDict(q, false))
@@ -166,9 +133,8 @@ func (s *MockExamService) Resume(mockExamID, studentID int) (map[string]interfac
 	if mock.StartTime != nil {
 		startISO = formatISO(*mock.StartTime)
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"mock_exam_id":   mock.ID,
-		"level":          mock.Level,
 		"duration":       mock.Duration,
 		"remaining_time": mock.RemainingTime,
 		"questions":      ordered,
@@ -177,8 +143,8 @@ func (s *MockExamService) Resume(mockExamID, studentID int) (map[string]interfac
 	}, nil
 }
 
-// Submit 交卷，对应 Python submit_mock_exam。
-func (s *MockExamService) Submit(mockExamID, studentID int) (map[string]interface{}, error) {
+// Submit 交卷。
+func (s *MockExamService) Submit(mockExamID, studentID int) (map[string]any, error) {
 	var mock model.MockExam
 	if err := s.db.First(&mock, mockExamID).Error; err != nil {
 		return nil, errors.New("模拟考试不存在")
@@ -190,12 +156,12 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (map[string]interfac
 		return nil, errors.New("考试不在进行中")
 	}
 
-	var answersMap map[string]interface{}
+	var answersMap map[string]any
 	if len(mock.Answers) > 0 {
 		_ = jsonUnmarshal(mock.Answers, &answersMap)
 	}
 	if answersMap == nil {
-		answersMap = map[string]interface{}{}
+		answersMap = map[string]any{}
 	}
 	var ids []int
 	if len(mock.QuestionIDs) > 0 {
@@ -211,7 +177,7 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (map[string]interfac
 	totalScore := 0.0
 	maxScore := 0.0
 	correctCount := 0
-	details := make([]map[string]interface{}, 0, len(ids))
+	details := make([]map[string]any, 0, len(ids))
 
 	for _, qid := range ids {
 		question, ok := qMap[qid]
@@ -230,7 +196,7 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (map[string]interfac
 			_ = addToWrongQuestions(s.db, studentID, qid)
 		}
 
-		detail := map[string]interface{}{
+		detail := map[string]any{
 			"question_id":    qid,
 			"type":           question.Type,
 			"content":        question.Content,
@@ -272,7 +238,7 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (map[string]interfac
 	if len(ids) > 0 {
 		accuracy = roundFloat1(float64(correctCount) / float64(len(ids)) * 100)
 	}
-	result := map[string]interface{}{
+	result := map[string]any{
 		"total_score":     totalScore,
 		"max_score":       maxScore,
 		"correct_count":   correctCount,
@@ -288,8 +254,8 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (map[string]interfac
 	return result, nil
 }
 
-// GetResult 获取结果，对应 Python get_mock_exam_result。
-func (s *MockExamService) GetResult(mockExamID, studentID int) (map[string]interface{}, error) {
+// GetResult 获取结果。
+func (s *MockExamService) GetResult(mockExamID, studentID int) (map[string]any, error) {
 	var mock model.MockExam
 	if err := s.db.First(&mock, mockExamID).Error; err != nil {
 		return nil, errors.New("模拟考试不存在")
@@ -301,12 +267,11 @@ func (s *MockExamService) GetResult(mockExamID, studentID int) (map[string]inter
 	if len(mock.Result) > 0 {
 		_ = jsonUnmarshal(mock.Result, &result)
 	}
-	resultMap := map[string]interface{}{}
-	if m, ok := result.(map[string]interface{}); ok {
+	resultMap := map[string]any{}
+	if m, ok := result.(map[string]any); ok {
 		resultMap = m
 	}
 	resultMap["mock_exam_id"] = mock.ID
-	resultMap["level"] = mock.Level
 	submitISO := ""
 	if mock.SubmitTime != nil {
 		submitISO = formatISO(*mock.SubmitTime)
@@ -315,8 +280,8 @@ func (s *MockExamService) GetResult(mockExamID, studentID int) (map[string]inter
 	return resultMap, nil
 }
 
-// GetHistory 历史列表，对应 Python get_mock_exam_history。
-func (s *MockExamService) GetHistory(studentID, page, pageSize int) map[string]interface{} {
+// GetHistory 历史列表。
+func (s *MockExamService) GetHistory(studentID, page, pageSize int) map[string]any {
 	if page <= 0 {
 		page = 1
 	}
@@ -328,11 +293,11 @@ func (s *MockExamService) GetHistory(studentID, page, pageSize int) map[string]i
 	q.Count(&total)
 	var exams []model.MockExam
 	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&exams)
-	items := make([]map[string]interface{}, 0, len(exams))
+	items := make([]map[string]any, 0, len(exams))
 	for i := range exams {
 		items = append(items, mockExamToDict(&exams[i]))
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"total":     total,
 		"page":      page,
 		"page_size": pageSize,
@@ -352,8 +317,8 @@ func mockExamMaxScore(q *model.Question) float64 {
 	return 0
 }
 
-func mockExamToDict(m *model.MockExam) map[string]interface{} {
-	var ids, answers, result interface{}
+func mockExamToDict(m *model.MockExam) map[string]any {
+	var ids, answers, result any
 	if len(m.QuestionIDs) > 0 {
 		_ = jsonUnmarshal(m.QuestionIDs, &ids)
 	}
@@ -370,10 +335,9 @@ func mockExamToDict(m *model.MockExam) map[string]interface{} {
 	if m.SubmitTime != nil {
 		submitISO = formatISO(*m.SubmitTime)
 	}
-	d := map[string]interface{}{
+	d := map[string]any{
 		"id":             m.ID,
 		"student_id":     m.StudentID,
-		"level":          m.Level,
 		"question_ids":   ids,
 		"answers":        answers,
 		"start_time":     startISO,

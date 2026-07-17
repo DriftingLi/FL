@@ -29,7 +29,7 @@ func InitDB(dsn string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("获取底层 sql.DB 失败: %w", err)
 	}
 
-	// 连接池配置（与原 Python 版 SQLAlchemy 池配置等价）
+	// 连接池配置
 	sqlDB.SetMaxOpenConns(20)
 	sqlDB.SetMaxIdleConns(5)
 	sqlDB.SetConnMaxLifetime(time.Hour)

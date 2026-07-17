@@ -158,7 +158,6 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		"username": uname,
 		"role":     roleStr,
 		"name":     "",
-		"level":    "",
 	}
 
 	db := h.authSvc.DB()
@@ -167,7 +166,6 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		var s model.Student
 		if err := db.First(&s, uid).Error; err == nil {
 			data["name"] = s.Name
-			data["level"] = s.Level
 			data["phone"] = s.Phone
 			data["email"] = s.Email
 			data["company"] = s.Company

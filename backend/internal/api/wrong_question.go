@@ -14,7 +14,6 @@ import (
 )
 
 // RegisterWrongQuestionRoutes 注册 /api/wrong-questions 蓝图。
-// 对应 Python app/api/wrong_question.py。
 func RegisterWrongQuestionRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	svc := service.NewWrongQuestionService(db)
 

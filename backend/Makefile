@@ -1,4 +1,4 @@
-.PHONY: build run test lint tidy fmt dev-up dev-down dev-reset dev migrate-up migrate-down migrate-data clean
+.PHONY: build run test lint tidy fmt dev-up dev-down dev-reset dev migrate-up migrate-down clean
 
 APP_BIN := bin/server
 PG_DSN := postgres://forklift:forklift123@localhost:5432/forklift_training?sslmode=disable
@@ -55,12 +55,6 @@ migrate-up:
 ## 回滚数据库迁移（down）
 migrate-down:
 	go run ./cmd/migrate down
-
-## PostgreSQL -> PostgreSQL 数据迁移（从 Python 版生产库迁移至 Go 版 schema）
-## 用法: make migrate-data SOURCE="postgres://user:pass@host:5432/forklift_training?sslmode=disable"
-## 可选: make migrate-data SOURCE="..." DRY_RUN=true  仅校验行数不写入
-migrate-data:
-	go run ./cmd/migrate-data -source "$(SOURCE)" -target "$(PG_DSN)" $(if $(DRY_RUN),-dry-run)
 
 ## 清理构建产物
 clean:

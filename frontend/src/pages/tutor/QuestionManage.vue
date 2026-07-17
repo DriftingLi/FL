@@ -6,11 +6,6 @@
     </div>
 
     <div class="filter-bar">
-      <el-select v-model="filters.level" placeholder="等级" clearable style="width: 120px">
-        <el-option label="初级" value="beginner" />
-        <el-option label="中级" value="intermediate" />
-        <el-option label="高级" value="advanced" />
-      </el-select>
       <el-select v-model="filters.type" placeholder="题型" clearable style="width: 130px">
         <el-option label="单选题" value="single_choice" />
         <el-option label="多选题" value="multi_choice" />
@@ -25,28 +20,38 @@
       </el-select>
       <el-input v-model="filters.keyword" placeholder="搜索题目" clearable style="width: 200px" @keyup.enter="loadData" />
       <el-button type="primary" @click="loadData">查询</el-button>
-      <el-button @click="batchPublishSelected" :disabled="selectedIds.length === 0">批量发布</el-button>
     </div>
 
-    <el-table :data="questions" stripe v-loading="loading" @selection-change="handleSelection">
-      <el-table-column type="selection" width="50" />
+    <el-table :data="questions" stripe v-loading="loading">
       <el-table-column prop="id" label="ID" width="60" />
       <el-table-column prop="type" label="题型" width="100">
         <template #default="{ row }">{{ typeMap[row.type] }}</template>
       </el-table-column>
-      <el-table-column prop="level" label="等级" width="80">
-        <template #default="{ row }">{{ levelMap[row.level] }}</template>
-      </el-table-column>
       <el-table-column prop="content" label="题干" show-overflow-tooltip />
-      <el-table-column prop="status" label="状态" width="90">
+      <el-table-column label="状态" width="120">
         <template #default="{ row }">
-          <el-tag :type="statusType[row.status]" size="small">{{ statusMap[row.status] }}</el-tag>
+          <el-tooltip
+            v-if="row.status === 'draft' && row.reject_reason"
+            :content="`驳回理由：${row.reject_reason}`"
+            placement="top"
+          >
+            <el-tag type="danger" size="small">已驳回</el-tag>
+          </el-tooltip>
+          <el-tag v-else :type="statusType[row.status]" size="small">{{ statusMap[row.status] }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200">
+      <el-table-column label="操作" width="280">
         <template #default="{ row }">
           <el-button size="small" @click="viewDetail(row)">查看</el-button>
           <el-button size="small" type="primary" @click="editQuestion(row)">编辑</el-button>
+          <el-button
+            v-if="row.status === 'draft'"
+            size="small"
+            type="success"
+            @click="submitForReview(row)"
+          >
+            提交审核
+          </el-button>
           <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
@@ -57,7 +62,6 @@
     <el-dialog v-model="detailVisible" title="题目详情" width="600px">
       <div v-if="currentQuestion">
         <p><strong>题型：</strong>{{ typeMap[currentQuestion.type] }}</p>
-        <p><strong>等级：</strong>{{ levelMap[currentQuestion.level] }}</p>
         <p><strong>题干：</strong>{{ currentQuestion.content }}</p>
         <div v-if="currentQuestion.options">
           <p><strong>选项：</strong></p>
@@ -71,6 +75,15 @@
           <p><strong>图片：</strong></p>
           <img :src="currentQuestion.image_url" style="max-width: 100%; max-height: 300px; border-radius: 8px" />
         </div>
+        <el-alert
+          v-if="currentQuestion.status === 'draft' && currentQuestion.reject_reason"
+          title="该题目已被管理员驳回"
+          type="error"
+          :description="currentQuestion.reject_reason"
+          show-icon
+          :closable="false"
+          style="margin-top: 15px"
+        />
       </div>
     </el-dialog>
   </div>
@@ -84,7 +97,6 @@ import { questionBankApi } from '@/api/questionBank'
 
 const router = useRouter()
 const typeMap = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
-const levelMap = { beginner: '初级', intermediate: '中级', advanced: '高级', expert: '顶级' }
 const statusMap = { draft: '草稿', pending: '待审核', published: '已发布' }
 const statusType = { draft: 'info', pending: 'warning', published: 'success' }
 
@@ -93,8 +105,7 @@ const questions = ref([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
-const filters = ref({ level: '', type: '', status: '', keyword: '' })
-const selectedIds = ref([])
+const filters = ref({ type: '', status: '', keyword: '' })
 const detailVisible = ref(false)
 const currentQuestion = ref(null)
 
@@ -109,10 +120,6 @@ async function loadData() {
   } catch (e) {} finally { loading.value = false }
 }
 
-function handleSelection(rows) {
-  selectedIds.value = rows.map(r => r.id)
-}
-
 function viewDetail(row) {
   currentQuestion.value = row
   detailVisible.value = true
@@ -122,6 +129,18 @@ function editQuestion(row) {
   router.push({ path: '/training/tutor/question-create', query: { id: row.id } })
 }
 
+// 提交审核：将 draft 题目状态改为 pending（后端会清空驳回理由）
+async function submitForReview(row) {
+  try {
+    await ElMessageBox.confirm('确定提交该题目给管理员审核？', '提示', { type: 'info' })
+    await questionBankApi.updateQuestion(row.id, { status: 'pending' })
+    ElMessage.success('已提交审核')
+    await loadData()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error('提交失败')
+  }
+}
+
 async function handleDelete(row) {
   try {
     await ElMessageBox.confirm('确定删除此题目？', '提示', { type: 'warning' })
@@ -129,16 +148,6 @@ async function handleDelete(row) {
     ElMessage.success('删除成功')
     await loadData()
   } catch (e) {}
-}
-
-async function batchPublishSelected() {
-  try {
-    await questionBankApi.batchPublish(selectedIds.value)
-    ElMessage.success('发布成功')
-    await loadData()
-  } catch (e) {
-    ElMessage.error('发布失败')
-  }
 }
 </script>
 

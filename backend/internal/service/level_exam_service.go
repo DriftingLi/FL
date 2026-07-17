@@ -1,4 +1,4 @@
-// Package service 等级考试与晋级，对应 Python level_exam_service。
+// Package service 等级考试与晋级。
 package service
 
 import (
@@ -11,7 +11,7 @@ import (
 	"forklift-training/internal/model"
 )
 
-// 等级考试组卷配置，与 Python EXAM_QUESTION_CONFIG 一致。
+// 等级考试组卷配置。
 var examQuestionConfig = map[string]map[string]int{
 	"single_choice": {"count": 12, "score": 3},
 	"true_false":    {"count": 8, "score": 2},
@@ -33,15 +33,11 @@ func NewLevelExamService(db *gorm.DB, ai *AIService) *LevelExamService {
 	return &LevelExamService{db: db, ai: ai}
 }
 
-// CreateSession 创建考试场次，对应 Python create_exam_session。
-func (s *LevelExamService) CreateSession(data map[string]interface{}, createdBy *int) (map[string]interface{}, error) {
+// CreateSession 创建考试场次。
+func (s *LevelExamService) CreateSession(data map[string]any, createdBy *int) (map[string]any, error) {
 	name, _ := data["name"].(string)
 	if name == "" {
 		return nil, errors.New("考试名称不能为空")
-	}
-	level, _ := data["level"].(string)
-	if !containsString(validQuestionLevels, level) {
-		return nil, errors.New("无效的等级，只能创建初级、中级或高级考试")
 	}
 	startStr, _ := data["start_time"].(string)
 	endStr, _ := data["end_time"].(string)
@@ -58,7 +54,6 @@ func (s *LevelExamService) CreateSession(data map[string]interface{}, createdBy 
 	}
 	session := model.ExamSession{
 		Name:       name,
-		Level:      level,
 		StartTime:  startTime,
 		EndTime:    endTime,
 		Duration:   90,
@@ -75,8 +70,8 @@ func (s *LevelExamService) CreateSession(data map[string]interface{}, createdBy 
 	return sessionToDict(&session), nil
 }
 
-// UpdateSession 更新场次，对应 Python update_exam_session。
-func (s *LevelExamService) UpdateSession(id int, data map[string]interface{}) (map[string]interface{}, error) {
+// UpdateSession 更新场次。
+func (s *LevelExamService) UpdateSession(id int, data map[string]any) (map[string]any, error) {
 	var session model.ExamSession
 	if err := s.db.First(&session, id).Error; err != nil {
 		return nil, errors.New("考试场次不存在")
@@ -86,9 +81,6 @@ func (s *LevelExamService) UpdateSession(id int, data map[string]interface{}) (m
 	}
 	if v, ok := data["name"]; ok {
 		session.Name, _ = v.(string)
-	}
-	if v, ok := data["level"]; ok {
-		session.Level, _ = v.(string)
 	}
 	if v, ok := data["start_time"]; ok {
 		if t, err := parseFlexibleTime(toString(v)); err == nil {
@@ -124,8 +116,8 @@ func (s *LevelExamService) DeleteSession(id int) error {
 	return s.db.Delete(&session).Error
 }
 
-// ListSessions 列表（自动推进 upcoming→ongoing），对应 Python get_exam_sessions。
-func (s *LevelExamService) ListSessions(page, pageSize int, level, status string, includeParticipants bool) map[string]interface{} {
+// ListSessions 列表（自动推进 upcoming→ongoing）。
+func (s *LevelExamService) ListSessions(page, pageSize int, status string, includeParticipants bool) map[string]any {
 	if page <= 0 {
 		page = 1
 	}
@@ -133,9 +125,6 @@ func (s *LevelExamService) ListSessions(page, pageSize int, level, status string
 		pageSize = 20
 	}
 	q := s.db.Model(&model.ExamSession{})
-	if level != "" {
-		q = q.Where("level = ?", level)
-	}
 	if status != "" {
 		q = q.Where("status = ?", status)
 	}
@@ -144,7 +133,7 @@ func (s *LevelExamService) ListSessions(page, pageSize int, level, status string
 	var sessions []model.ExamSession
 	q.Order("start_time DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&sessions)
 	now := beijingNow()
-	out := make([]map[string]interface{}, 0, len(sessions))
+	out := make([]map[string]any, 0, len(sessions))
 	for i := range sessions {
 		sess := &sessions[i]
 		if sess.Status == "upcoming" && now.After(sess.StartTime) {
@@ -156,7 +145,7 @@ func (s *LevelExamService) ListSessions(page, pageSize int, level, status string
 		if includeParticipants {
 			var parts []model.ExamParticipant
 			s.db.Where("exam_session_id = ?", sess.ID).Find(&parts)
-			ps := make([]map[string]interface{}, 0, len(parts))
+			ps := make([]map[string]any, 0, len(parts))
 			for j := range parts {
 				pd := participantToDict(&parts[j])
 				var st model.Student
@@ -169,7 +158,7 @@ func (s *LevelExamService) ListSessions(page, pageSize int, level, status string
 		}
 		out = append(out, d)
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"total":     total,
 		"page":      page,
 		"page_size": pageSize,
@@ -178,7 +167,7 @@ func (s *LevelExamService) ListSessions(page, pageSize int, level, status string
 }
 
 // GetSessionDetail 场次详情。
-func (s *LevelExamService) GetSessionDetail(id int) (map[string]interface{}, error) {
+func (s *LevelExamService) GetSessionDetail(id int) (map[string]any, error) {
 	var session model.ExamSession
 	if err := s.db.First(&session, id).Error; err != nil {
 		return nil, errors.New("考试场次不存在")
@@ -187,7 +176,7 @@ func (s *LevelExamService) GetSessionDetail(id int) (map[string]interface{}, err
 }
 
 // UpdateSessionStatus 更新状态（带状态机校验）。
-func (s *LevelExamService) UpdateSessionStatus(id int, status string) (map[string]interface{}, error) {
+func (s *LevelExamService) UpdateSessionStatus(id int, status string) (map[string]any, error) {
 	var session model.ExamSession
 	if err := s.db.First(&session, id).Error; err != nil {
 		return nil, errors.New("考试场次不存在")
@@ -205,8 +194,8 @@ func (s *LevelExamService) UpdateSessionStatus(id int, status string) (map[strin
 	return sessionToDict(&session), nil
 }
 
-// EnterExam 学员进入考试，组卷并创建参与记录，对应 Python enter_exam。
-func (s *LevelExamService) EnterExam(sessionID, studentID int) (map[string]interface{}, error) {
+// EnterExam 学员进入考试，组卷并创建参与记录。
+func (s *LevelExamService) EnterExam(sessionID, studentID int) (map[string]any, error) {
 	var session model.ExamSession
 	if err := s.db.First(&session, sessionID).Error; err != nil {
 		return nil, errors.New("考试场次不存在")
@@ -222,26 +211,6 @@ func (s *LevelExamService) EnterExam(sessionID, studentID int) (map[string]inter
 	}
 	if session.Status == "upcoming" && now.Before(session.StartTime) {
 		return nil, errors.New("考试尚未开始")
-	}
-	var student model.Student
-	if err := s.db.First(&student, studentID).Error; err != nil {
-		return nil, errors.New("学员不存在")
-	}
-	studentLevel := levelOrder[student.Level]
-	if studentLevel == 0 {
-		studentLevel = 1
-	}
-	examLevel := levelOrder[session.Level]
-	if examLevel == 0 {
-		examLevel = 1
-	}
-	if studentLevel != examLevel {
-		levelNames := map[string]string{"beginner": "初级", "intermediate": "中级", "advanced": "高级", "expert": "顶级"}
-		name := levelNames[student.Level]
-		if name == "" {
-			name = "初级"
-		}
-		return nil, errors.New(name + "学徒只能参加" + name + "等级考试")
 	}
 	var participant model.ExamParticipant
 	err := s.db.Where("exam_session_id = ? AND student_id = ?", sessionID, studentID).First(&participant).Error
@@ -274,15 +243,11 @@ func (s *LevelExamService) EnterExam(sessionID, studentID int) (map[string]inter
 }
 
 func (s *LevelExamService) generateQuestionIDs(session *model.ExamSession) ([]int, int) {
-	allowed := examAllowedLevels[session.Level]
-	if allowed == nil {
-		allowed = []string{session.Level}
-	}
 	questionIDs := []int{}
 	total := 0
 	for qType, cfg := range examQuestionConfig {
 		var questions []model.Question
-		s.db.Where("type = ? AND status = ? AND level IN ?", qType, "published", allowed).Find(&questions)
+		s.db.Where("type = ? AND status = ?", qType, "published").Find(&questions)
 		actual := cfg["count"]
 		if actual > len(questions) {
 			actual = len(questions)
@@ -298,7 +263,7 @@ func (s *LevelExamService) generateQuestionIDs(session *model.ExamSession) ([]in
 	return questionIDs, total
 }
 
-func (s *LevelExamService) getExamData(session *model.ExamSession, p *model.ExamParticipant) (map[string]interface{}, error) {
+func (s *LevelExamService) getExamData(session *model.ExamSession, p *model.ExamParticipant) (map[string]any, error) {
 	var ids []int
 	if len(p.QuestionIDs) > 0 {
 		_ = jsonUnmarshal(p.QuestionIDs, &ids)
@@ -311,7 +276,7 @@ func (s *LevelExamService) getExamData(session *model.ExamSession, p *model.Exam
 	for i := range questions {
 		qMap[questions[i].ID] = &questions[i]
 	}
-	ordered := make([]map[string]interface{}, 0, len(ids))
+	ordered := make([]map[string]any, 0, len(ids))
 	for _, qid := range ids {
 		if q, ok := qMap[qid]; ok {
 			ordered = append(ordered, questionToDict(q, false))
@@ -322,13 +287,13 @@ func (s *LevelExamService) getExamData(session *model.ExamSession, p *model.Exam
 		_ = jsonUnmarshal(p.AnswersSnapshot, &answers)
 	}
 	if answers == nil {
-		answers = map[string]interface{}{}
+		answers = map[string]any{}
 	}
 	startISO := ""
 	if p.StartTime != nil {
 		startISO = formatISO(*p.StartTime)
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"participant_id": p.ID,
 		"session":        sessionToDict(session),
 		"questions":      ordered,
@@ -338,8 +303,8 @@ func (s *LevelExamService) getExamData(session *model.ExamSession, p *model.Exam
 	}, nil
 }
 
-// SaveAnswer 保存答案快照，对应 Python save_exam_answer。
-func (s *LevelExamService) SaveAnswer(participantID, studentID int, answers map[string]interface{}, remainingTime int) error {
+// SaveAnswer 保存答案快照。
+func (s *LevelExamService) SaveAnswer(participantID, studentID int, answers map[string]any, remainingTime int) error {
 	var p model.ExamParticipant
 	if err := s.db.First(&p, participantID).Error; err != nil {
 		return errors.New("考试参与记录不存在")
@@ -356,8 +321,8 @@ func (s *LevelExamService) SaveAnswer(participantID, studentID int, answers map[
 	return s.db.Save(&p).Error
 }
 
-// SubmitExam 交卷评分，对应 Python submit_exam。
-func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bool) (map[string]interface{}, error) {
+// SubmitExam 交卷评分。
+func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bool) (map[string]any, error) {
 	var p model.ExamParticipant
 	if err := s.db.First(&p, participantID).Error; err != nil {
 		return nil, errors.New("考试参与记录不存在")
@@ -368,7 +333,7 @@ func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bo
 	if p.Status != "in_progress" {
 		return nil, errors.New("考试不在进行中")
 	}
-	var answers map[string]interface{}
+	var answers map[string]any
 	if len(p.AnswersSnapshot) > 0 {
 		_ = jsonUnmarshal(p.AnswersSnapshot, &answers)
 	}
@@ -467,9 +432,6 @@ func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bo
 		}
 		passed := total >= passScore
 		p.IsPassed = passed
-		if passed {
-			s.updateStudentLevel(p.StudentID, p.ExamSessionID)
-		}
 	} else {
 		p.Score = nil
 		p.IsPassed = false
@@ -480,32 +442,8 @@ func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bo
 	return participantToDict(&p), nil
 }
 
-// updateStudentLevel 晋级，对应 Python _update_student_level。
-func (s *LevelExamService) updateStudentLevel(studentID, sessionID int) {
-	var session model.ExamSession
-	if err := s.db.First(&session, sessionID).Error; err != nil {
-		return
-	}
-	var student model.Student
-	if err := s.db.First(&student, studentID).Error; err != nil {
-		return
-	}
-	nextLevel, ok := levelPromotion[session.Level]
-	if !ok {
-		return
-	}
-	current := levelOrder[student.Level]
-	next := levelOrder[nextLevel]
-	if next > current {
-		student.Level = nextLevel
-		now := beijingNow()
-		student.LevelUpdatedAt = &now
-		s.db.Save(&student)
-	}
-}
-
 // GetResult 考试结果详情。
-func (s *LevelExamService) GetResult(participantID, studentID int) (map[string]interface{}, error) {
+func (s *LevelExamService) GetResult(participantID, studentID int) (map[string]any, error) {
 	var p model.ExamParticipant
 	if err := s.db.First(&p, participantID).Error; err != nil {
 		return nil, errors.New("考试记录不存在")
@@ -515,7 +453,7 @@ func (s *LevelExamService) GetResult(participantID, studentID int) (map[string]i
 	}
 	var answers []model.ExamAnswer
 	s.db.Where("exam_participant_id = ?", p.ID).Find(&answers)
-	details := make([]map[string]interface{}, 0, len(answers))
+	details := make([]map[string]any, 0, len(answers))
 	for _, a := range answers {
 		d := examAnswerToDict(&a)
 		var q model.Question
@@ -524,14 +462,14 @@ func (s *LevelExamService) GetResult(participantID, studentID int) (map[string]i
 		}
 		details = append(details, d)
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"participant": participantToDict(&p),
 		"answers":     details,
 	}, nil
 }
 
 // GetStudentHistory 学员考试历史。
-func (s *LevelExamService) GetStudentHistory(studentID, page, pageSize int) map[string]interface{} {
+func (s *LevelExamService) GetStudentHistory(studentID, page, pageSize int) map[string]any {
 	if page <= 0 {
 		page = 1
 	}
@@ -543,17 +481,16 @@ func (s *LevelExamService) GetStudentHistory(studentID, page, pageSize int) map[
 	q.Count(&total)
 	var parts []model.ExamParticipant
 	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&parts)
-	items := make([]map[string]interface{}, 0, len(parts))
+	items := make([]map[string]any, 0, len(parts))
 	for _, p := range parts {
 		var sess model.ExamSession
 		item := participantToDict(&p)
 		if err := s.db.First(&sess, p.ExamSessionID).Error; err == nil {
 			item["session_name"] = sess.Name
-			item["level"] = sess.Level
 		}
 		items = append(items, item)
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"total":     total,
 		"page":      page,
 		"page_size": pageSize,
@@ -561,20 +498,12 @@ func (s *LevelExamService) GetStudentHistory(studentID, page, pageSize int) map[
 	}
 }
 
-// GetAvailableExams 可用考试列表，对应 Python get_available_exams。
-func (s *LevelExamService) GetAvailableExams(studentID int) ([]map[string]interface{}, error) {
-	var student model.Student
-	if err := s.db.First(&student, studentID).Error; err != nil {
-		return nil, errors.New("学员不存在")
-	}
+// GetAvailableExams 可用考试列表。
+func (s *LevelExamService) GetAvailableExams(studentID int) ([]map[string]any, error) {
 	now := beijingNow()
 	var sessions []model.ExamSession
 	s.db.Order("start_time DESC").Find(&sessions)
-	studentLevel := levelOrder[student.Level]
-	if studentLevel == 0 {
-		studentLevel = 1
-	}
-	available := []map[string]interface{}{}
+	available := []map[string]any{}
 	for i := range sessions {
 		sess := &sessions[i]
 		if sess.StartTime.IsZero() || sess.EndTime.IsZero() {
@@ -597,11 +526,8 @@ func (s *LevelExamService) GetAvailableExams(studentID int) ([]map[string]interf
 		if effStatus == "finished" && !hasPart {
 			continue
 		}
-		examLevel := levelOrder[sess.Level]
-		if examLevel == 0 {
-			examLevel = 1
-		}
-		canEnter := studentLevel == examLevel
+		// 取消等级制度：可进入 = 未结束 且 未提交过
+		canEnter := effStatus != "finished" && !(hasPart && participant.Status == "submitted")
 		item := sessionToDict(sess)
 		item["status"] = effStatus
 		item["has_participated"] = hasPart
@@ -620,15 +546,14 @@ func (s *LevelExamService) GetAvailableExams(studentID int) ([]map[string]interf
 
 // ===== dict 辅助 =====
 
-func sessionToDict(s *model.ExamSession) map[string]interface{} {
-	var qc interface{}
+func sessionToDict(s *model.ExamSession) map[string]any {
+	var qc any
 	if len(s.QuestionConfig) > 0 {
 		_ = jsonUnmarshal(s.QuestionConfig, &qc)
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"id":              s.ID,
 		"name":            s.Name,
-		"level":           s.Level,
 		"start_time":      formatISO(s.StartTime),
 		"end_time":        formatISO(s.EndTime),
 		"duration":        s.Duration,
@@ -642,7 +567,7 @@ func sessionToDict(s *model.ExamSession) map[string]interface{} {
 	}
 }
 
-func participantToDict(p *model.ExamParticipant) map[string]interface{} {
+func participantToDict(p *model.ExamParticipant) map[string]any {
 	var ids, snap interface{}
 	if len(p.QuestionIDs) > 0 {
 		_ = jsonUnmarshal(p.QuestionIDs, &ids)
@@ -657,7 +582,7 @@ func participantToDict(p *model.ExamParticipant) map[string]interface{} {
 	if p.SubmitTime != nil {
 		submitISO = formatISO(*p.SubmitTime)
 	}
-	d := map[string]interface{}{
+	d := map[string]any{
 		"id":               p.ID,
 		"exam_session_id":  p.ExamSessionID,
 		"student_id":       p.StudentID,
@@ -688,8 +613,8 @@ func participantToDict(p *model.ExamParticipant) map[string]interface{} {
 	return d
 }
 
-func examAnswerToDict(a *model.ExamAnswer) map[string]interface{} {
-	d := map[string]interface{}{
+func examAnswerToDict(a *model.ExamAnswer) map[string]any {
+	d := map[string]any{
 		"id":                  a.ID,
 		"exam_participant_id": a.ExamParticipantID,
 		"question_id":         a.QuestionID,
