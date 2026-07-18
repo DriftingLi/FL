@@ -24,7 +24,7 @@ func TestFormatISO(t *testing.T) {
 
 func TestToFloat(t *testing.T) {
 	tests := []struct {
-		input interface{}
+		input any
 		want  float64
 	}{
 		{float64(3.14), 3.14},

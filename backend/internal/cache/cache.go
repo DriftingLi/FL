@@ -112,7 +112,7 @@ func Expire(ctx context.Context, key string, ttl time.Duration) error {
 }
 
 // SetJSON 将 value 序列化为 JSON 后写入缓存，带 TTL。
-func SetJSON(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+func SetJSON(ctx context.Context, key string, value any, ttl time.Duration) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("JSON 序列化失败: %w", err)
@@ -122,7 +122,7 @@ func SetJSON(ctx context.Context, key string, value interface{}, ttl time.Durati
 
 // GetJSON 从缓存读取并反序列化 JSON 到 dest（必须传指针）。
 // key 不存在时返回 redis.Nil。
-func GetJSON(ctx context.Context, key string, dest interface{}) error {
+func GetJSON(ctx context.Context, key string, dest any) error {
 	val, err := Get(ctx, key)
 	if err != nil {
 		return err
@@ -141,7 +141,7 @@ func GetJSON(ctx context.Context, key string, dest interface{}) error {
 //  4. 使用 singleflight 合并相同 key 的并发 loader 调用，防止缓存击穿
 //
 // dest 必须为指针类型，用于接收反序列化结果。
-func GetOrSetJSON(ctx context.Context, key string, ttl time.Duration, dest interface{}, loader func() (interface{}, error)) error {
+func GetOrSetJSON(ctx context.Context, key string, ttl time.Duration, dest any, loader func() (any, error)) error {
 	// 1. 查缓存
 	err := GetJSON(ctx, key, dest)
 	if err == nil {
@@ -153,7 +153,7 @@ func GetOrSetJSON(ctx context.Context, key string, ttl time.Duration, dest inter
 	}
 
 	// 2. 缓存 miss → singleflight 合并并发 loader
-	val, sfErr, _ := sfGroup.Do(key, func() (interface{}, error) {
+	val, sfErr, _ := sfGroup.Do(key, func() (any, error) {
 		// 双重检查：可能在等待期间已被其他请求填充
 		if e := GetJSON(ctx, key, dest); e == nil {
 			return nil, nil

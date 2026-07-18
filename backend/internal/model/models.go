@@ -12,7 +12,7 @@ import (
 type JSONB json.RawMessage
 
 // Scan 实现 sql.Scanner。
-func (j *JSONB) Scan(value interface{}) error {
+func (j *JSONB) Scan(value any) error {
 	if value == nil {
 		*j = nil
 		return nil

@@ -15,7 +15,7 @@ import (
 func (r *DictionaryRepository) ListConditionRatings(ctx context.Context) ([]ConditionRating, error) {
 	const cacheKey = "dict:condition:list"
 	var result []ConditionRating
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		rows, err := r.pool.Query(ctx,
 			`SELECT id, rating, label, base_coefficient FROM condition_ratings ORDER BY base_coefficient DESC`)
 		if err != nil {
@@ -76,8 +76,8 @@ func (r *DictionaryRepository) DeleteConditionRating(ctx context.Context, id int
 // GetConditionRating 按 rating 查询（供 service 计算 Kc 使用）
 func (r *DictionaryRepository) GetConditionRating(ctx context.Context, rating string) (ConditionRating, error) {
 	cacheKey := cache.SafeKey("dict", "condition", "get", rating)
-	var result ConditionRating
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+		var result ConditionRating
+		err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		row := r.pool.QueryRow(ctx,
 			`SELECT id, rating, label, base_coefficient FROM condition_ratings WHERE rating = $1`, rating)
 		var c ConditionRating

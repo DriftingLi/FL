@@ -2,6 +2,7 @@
 package service
 
 import (
+	"slices"
 	"context"
 	"encoding/json"
 	"strconv"
@@ -90,21 +91,16 @@ func floatPtr(v float64) *float64 { return &v }
 
 // containsString 判断切片是否包含字符串。
 func containsString(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(slice, s)
 }
 
 // jsonMarshalImpl 是 jsonMarshal 包装函数的实现，直接调用标准库 json.Marshal。
 // 单独抽出实现层是为了便于在测试中替换（如需 mock JSON 序列化）。
-func jsonMarshalImpl(v interface{}) ([]byte, error) {
+func jsonMarshalImpl(v any) ([]byte, error) {
 	return json.Marshal(v)
 }
 
 // jsonUnmarshalImpl 是 jsonUnmarshal 包装函数的实现，直接调用标准库 json.Unmarshal。
-func jsonUnmarshalImpl(b []byte, v interface{}) error {
+func jsonUnmarshalImpl(b []byte, v any) error {
 	return json.Unmarshal(b, v)
 }

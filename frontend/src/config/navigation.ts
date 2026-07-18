@@ -28,60 +28,23 @@ export interface NavItem {
 
 const studentNav: NavItem[] = [
   { key: 'dashboard', label: '仪表盘', path: '/training', icon: HomeFilled, exact: true },
-  {
-    key: 'training',
-    label: '培训',
-    icon: Notebook,
-    children: [
-      { key: 'courses', label: '课程中心', path: '/training/courses', icon: Notebook },
-      { key: 'question-bank', label: '题库练习', path: '/training/question-bank', icon: EditPen }
-    ]
-  },
-  {
-    key: 'exam',
-    label: '考试',
-    path: '/training/level-exam',
-    icon: Document,
-    children: [
-      { key: 'level-exam', label: '考试中心', path: '/training/level-exam', icon: Document },
-      { key: 'wrong-questions', label: '错题本', path: '/training/wrong-questions', icon: CircleCloseFilled }
-    ]
-  },
-  {
-    key: 'tools',
-    label: '工具',
-    path: '/valuation',
-    icon: DataAnalysis,
-    children: [
-      { key: 'valuation', label: '残值评估', path: '/valuation', icon: DataAnalysis },
-      { key: 'ai-assistant', label: 'AI 助手', path: '/ai-assistant', icon: MagicStick }
-    ]
-  },
+  { key: 'courses', label: '课程中心', path: '/training/courses', icon: Notebook },
+  { key: 'question-bank', label: '题库练习', path: '/training/question-bank', icon: EditPen },
+  { key: 'level-exam', label: '考试中心', path: '/training/level-exam', icon: Document },
+  { key: 'wrong-questions', label: '错题本', path: '/training/wrong-questions', icon: CircleCloseFilled },
+  { key: 'valuation', label: '残值评估', path: '/valuation', icon: DataAnalysis },
+  { key: 'ai-assistant', label: 'AI 助手', path: '/ai-assistant', icon: MagicStick }
 ]
 
 const adminNav: NavItem[] = [
   { key: 'dashboard', label: '仪表盘', path: '/admin/dashboard', icon: DataAnalysis },
-  {
-    key: 'education',
-    label: '教务',
-    icon: Notebook,
-    children: [
-      { key: 'students', label: '学员管理', path: '/admin/students', icon: User },
-      { key: 'tutors', label: '导师管理', path: '/admin/tutors', icon: UserFilled },
-      { key: 'courses', label: '课程管理', path: '/admin/courses', icon: Notebook },
-      { key: 'question-review', label: '题库审核', path: '/admin/question-review', icon: EditPen },
-      { key: 'exam-sessions', label: '考试场次', path: '/admin/exam-sessions', icon: Calendar }
-    ]
-  },
-  {
-    key: 'data',
-    label: '数据',
-    icon: TrendCharts,
-    children: [
-      { key: 'statistics', label: '统计分析', path: '/admin/statistics', icon: TrendCharts },
-      { key: 'valuation-config', label: '残值配置', path: '/admin/valuation-config', icon: PriceTag }
-    ]
-  },
+  { key: 'students', label: '学员管理', path: '/admin/students', icon: User },
+  { key: 'tutors', label: '导师管理', path: '/admin/tutors', icon: UserFilled },
+  { key: 'courses', label: '课程管理', path: '/admin/courses', icon: Notebook },
+  { key: 'question-review', label: '题库审核', path: '/admin/question-review', icon: EditPen },
+  { key: 'exam-sessions', label: '考试场次', path: '/admin/exam-sessions', icon: Calendar },
+  { key: 'statistics', label: '统计分析', path: '/admin/statistics', icon: TrendCharts },
+  { key: 'valuation-config', label: '残值配置', path: '/admin/valuation-config', icon: PriceTag },
   { key: 'content-generate', label: '内容生成', path: '/admin/content-generate', icon: MagicStick }
 ]
 

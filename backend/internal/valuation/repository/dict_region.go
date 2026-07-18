@@ -15,7 +15,7 @@ import (
 func (r *DictionaryRepository) ListRegionCoefficients(ctx context.Context, province string) ([]RegionCoefficient, error) {
 	cacheKey := cache.SafeKey("dict", "region", "list", province)
 	var result []RegionCoefficient
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		var rows pgx.Rows
 		var err error
 		if province != "" {
@@ -45,7 +45,7 @@ func (r *DictionaryRepository) ListRegionCoefficients(ctx context.Context, provi
 func (r *DictionaryRepository) ListProvinces(ctx context.Context) ([]string, error) {
 	const cacheKey = "dict:region:provinces"
 	var result []string
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		rows, err := r.pool.Query(ctx, `SELECT DISTINCT province FROM region_coefficients ORDER BY province ASC`)
 		if err != nil {
 			return nil, fmt.Errorf("查询省份失败: %w", err)
@@ -68,7 +68,7 @@ func (r *DictionaryRepository) ListProvinces(ctx context.Context) ([]string, err
 func (r *DictionaryRepository) ListCities(ctx context.Context, province string) ([]string, error) {
 	cacheKey := cache.SafeKey("dict", "region", "cities", province)
 	var result []string
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		rows, err := r.pool.Query(ctx,
 			`SELECT city FROM region_coefficients WHERE province = $1 ORDER BY city ASC`, province)
 		if err != nil {
@@ -131,7 +131,7 @@ func (r *DictionaryRepository) DeleteRegionCoefficient(ctx context.Context, id i
 func (r *DictionaryRepository) GetRegionCoefficient(ctx context.Context, province, city string) (RegionCoefficient, error) {
 	cacheKey := cache.SafeKey("dict", "region", "get", province, city)
 	var result RegionCoefficient
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		row := r.pool.QueryRow(ctx,
 			`SELECT id, province, city, coefficient FROM region_coefficients WHERE province = $1 AND city = $2`, province, city)
 		var rc RegionCoefficient

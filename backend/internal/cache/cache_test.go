@@ -128,7 +128,7 @@ func TestGetOrSetJSON_CacheMiss(t *testing.T) {
 	}
 
 	var callCount int32
-	loader := func() (interface{}, error) {
+	loader := func() (any, error) {
 		atomic.AddInt32(&callCount, 1)
 		return Data{Count: 42}, nil
 	}
@@ -169,7 +169,7 @@ func TestGetOrSetJSON_Singleflight(t *testing.T) {
 	}
 
 	var callCount int32
-	loader := func() (interface{}, error) {
+	loader := func() (any, error) {	
 		atomic.AddInt32(&callCount, 1)
 		time.Sleep(100 * time.Millisecond) // 模拟慢查询，让并发请求阻塞
 		return Data{Value: 100}, nil
@@ -182,7 +182,7 @@ func TestGetOrSetJSON_Singleflight(t *testing.T) {
 	var wg sync.WaitGroup
 	results := make([]Data, 100)
 	errs := make([]error, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -217,7 +217,7 @@ func TestInvalidatePattern(t *testing.T) {
 	ctx := context.Background()
 
 	// 写入 10 个匹配 pattern 的 key
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		key := "inval:item:" + string(rune('a'+i))
 		if err := Set(ctx, key, "v", time.Minute); err != nil {
 			t.Fatalf("Set 失败: %v", err)
@@ -234,7 +234,7 @@ func TestInvalidatePattern(t *testing.T) {
 	}
 
 	// 验证匹配的 key 已删除
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		key := "inval:item:" + string(rune('a'+i))
 		if _, err := Get(ctx, key); err == nil {
 			t.Errorf("key %s 应已删除但仍存在", key)

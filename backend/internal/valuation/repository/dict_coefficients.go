@@ -14,7 +14,7 @@ import (
 func (r *DictionaryRepository) ListCoefficientConfigs(ctx context.Context) ([]CoefficientConfig, error) {
 	const cacheKey = "dict:coef:list"
 	var result []CoefficientConfig
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		rows, err := r.pool.Query(ctx, `SELECT id, key, value, description, updated_at FROM coefficient_configs ORDER BY key ASC`)
 		if err != nil {
 			return nil, fmt.Errorf("查询系数配置失败: %w", err)
@@ -43,7 +43,7 @@ func (r *DictionaryRepository) ListCoefficientConfigs(ctx context.Context) ([]Co
 func (r *DictionaryRepository) GetCoefficientByKey(ctx context.Context, key string) (CoefficientConfig, error) {
 	cacheKey := cache.SafeKey("dict", "coef", "get", key)
 	var result CoefficientConfig
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		row := r.pool.QueryRow(ctx,
 			`SELECT id, key, value, description, updated_at FROM coefficient_configs WHERE key = $1`, key)
 		var c CoefficientConfig
@@ -91,7 +91,7 @@ type AlgorithmParameters struct {
 func (r *DictionaryRepository) ListAlgorithmParameters(ctx context.Context) (AlgorithmParameters, error) {
 	const cacheKey = "dict:algo_params"
 	var result AlgorithmParameters
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		var ap AlgorithmParameters
 		var e error
 		if ap.Coefficients, e = r.ListCoefficientConfigs(ctx); e != nil {

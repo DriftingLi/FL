@@ -15,7 +15,7 @@ import (
 func (r *DictionaryRepository) ListTonnages(ctx context.Context) ([]Tonnage, error) {
 	const cacheKey = "dict:specs:tonnages:list"
 	var result []Tonnage
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		rows, err := r.pool.Query(ctx, `SELECT id, value FROM tonnages ORDER BY value ASC`)
 		if err != nil {
 			return nil, fmt.Errorf("查询吨位失败: %w", err)
@@ -61,7 +61,7 @@ func (r *DictionaryRepository) DeleteTonnage(ctx context.Context, id int) error 
 func (r *DictionaryRepository) ListMastTypes(ctx context.Context) ([]MastType, error) {
 	const cacheKey = "dict:specs:mast_types:list"
 	var result []MastType
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		rows, err := r.pool.Query(ctx, `SELECT id, name FROM mast_types ORDER BY id ASC`)
 		if err != nil {
 			return nil, fmt.Errorf("查询门架类型失败: %w", err)
@@ -107,7 +107,7 @@ func (r *DictionaryRepository) DeleteMastType(ctx context.Context, id int) error
 func (r *DictionaryRepository) ListMastHeights(ctx context.Context) ([]MastHeight, error) {
 	const cacheKey = "dict:specs:mast_heights:list"
 	var result []MastHeight
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		rows, err := r.pool.Query(ctx, `SELECT id, value_mm FROM mast_heights ORDER BY value_mm ASC`)
 		if err != nil {
 			return nil, fmt.Errorf("查询门架高度失败: %w", err)
@@ -153,7 +153,7 @@ func (r *DictionaryRepository) DeleteMastHeight(ctx context.Context, id int) err
 func (r *DictionaryRepository) ListBatteryTypes(ctx context.Context) ([]BatteryTypeDict, error) {
 	const cacheKey = "dict:specs:battery_types:list"
 	var result []BatteryTypeDict
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		rows, err := r.pool.Query(ctx, `SELECT id, name FROM battery_types ORDER BY id ASC`)
 		if err != nil {
 			return nil, fmt.Errorf("查询电池类型失败: %w", err)
@@ -199,7 +199,7 @@ func (r *DictionaryRepository) DeleteBatteryType(ctx context.Context, id int) er
 func (r *DictionaryRepository) ListTransmissionTypes(ctx context.Context) ([]TransmissionType, error) {
 	const cacheKey = "dict:specs:transmission_types:list"
 	var result []TransmissionType
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		rows, err := r.pool.Query(ctx, `SELECT id, name FROM transmission_types ORDER BY id ASC`)
 		if err != nil {
 			return nil, fmt.Errorf("查询传动系统类型失败: %w", err)
@@ -222,7 +222,7 @@ func (r *DictionaryRepository) ListTransmissionTypes(ctx context.Context) ([]Tra
 func (r *DictionaryRepository) ListEngineTypes(ctx context.Context) ([]EngineType, error) {
 	const cacheKey = "dict:specs:engine_types:list"
 	var result []EngineType
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		rows, err := r.pool.Query(ctx, `SELECT id, name FROM engine_types ORDER BY id ASC`)
 		if err != nil {
 			return nil, fmt.Errorf("查询发动机类型失败: %w", err)
