@@ -255,8 +255,6 @@ async function loadChapterDetail() {
     const res = await courseApi.getChapterDetail(courseId.value, chapterId.value)
     if (res.code === 200) {
       chapterDetail.value = res.data
-      activeTab.value = defaultTab.value
-      beginStudy()
     } else {
       chapterNotFound.value = true
     }
@@ -310,77 +308,22 @@ function stopStudy() {
   isStudying.value = false
 }
 
-// 上报自上次上报以来的增量学习时长。后端 study_duration 为累加字段（int 分钟）。
-// isFinal=true 表示页面即将卸载，使用 fetch keepalive 保证请求能发出。
-async function reportIncremental(isFinal) {
-  if (!chapterDetail.value || !isStudying.value) return
-  const currentSecs = studySeconds.value
-  const delta = currentSecs - reportedSeconds
-  if (delta <= 0) return
-  // 后端 duration 单位为分钟，向下取整，不足 1 分钟不上报（避免虚高）
-  const duration = Math.floor(delta / 60)
-  if (duration <= 0) return
-
-  const payload = {
-    chapter_id: chapterDetail.value.chapter_id,
-    duration: duration
-  }
-
-  if (isFinal) {
-    // 离开页面场景：使用 fetch keepalive 确保请求在页面卸载后仍能发出
-    const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
-    const url = `${baseURL}/course/${courseId.value}/progress`
-    try {
-      fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: authStore.token ? `Bearer ${authStore.token}` : ''
-        },
-        body: JSON.stringify(payload),
-        keepalive: true
-      })
-    } catch (e) {
-      // 忽略离场上报错误
-    }
-    reportedSeconds = currentSecs
-    return
-  }
+async function completeStudy() {
+  stopStudy()
+  const duration = Math.max(Math.ceil(studySeconds.value / 60), 1)
 
   try {
-    const res = await courseApi.updateProgress(courseId.value, payload)
+    const res = await courseApi.updateProgress(courseId.value, {
+      chapter_id: chapterDetail.value.chapter_id,
+      duration: duration
+    })
     if (res.code === 200) {
-      reportedSeconds = currentSecs
+      ElMessage.success('学习进度已保存')
+      await loadChapterDetail()
     }
   } catch (error) {
-    // 静默失败，下次自动上报会补上
-    console.error('自动上报学习时长失败:', error)
-  }
-}
-
-async function completeStudy() {
-  // 先停止计时，再上报未上报的增量（与 reportIncremental 逻辑一致）
-  const wasStudying = isStudying.value
-  stopStudy()
-  if (!wasStudying || !chapterDetail.value) return
-
-  const delta = studySeconds.value - reportedSeconds
-  const duration = Math.floor(delta / 60)
-
-  if (duration > 0) {
-    try {
-      const res = await courseApi.updateProgress(courseId.value, {
-        chapter_id: chapterDetail.value.chapter_id,
-        duration: duration
-      })
-      if (res.code === 200) {
-        reportedSeconds = studySeconds.value
-      }
-    } catch (error) {
-      console.error('保存学习进度失败:', error)
-      ElMessage.error('保存学习进度失败，请稍后重试')
-      return
-    }
+    console.error('保存学习进度失败:', error)
+    ElMessage.error('保存学习进度失败，请稍后重试')
   }
 
   ElMessage.success('学习进度已保存')
