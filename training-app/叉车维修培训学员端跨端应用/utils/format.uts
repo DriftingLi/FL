@@ -1,0 +1,82 @@
+/**
+ * 格式化工具
+ */
+
+/**
+ * 格式化日期
+ * @param ts 毫秒时间戳
+ * @param format 默认 'YYYY-MM-DD HH:mm'
+ */
+export function formatDate(ts : number, format : string = 'YYYY-MM-DD HH:mm') : string {
+	if (ts <= 0) {
+		return ''
+	}
+	const d = new Date(ts)
+	const yyyy = d.getFullYear().toString()
+	const MM = (d.getMonth() + 1).toString().padStart(2, '0')
+	const dd = d.getDate().toString().padStart(2, '0')
+	const HH = d.getHours().toString().padStart(2, '0')
+	const mm = d.getMinutes().toString().padStart(2, '0')
+	const ss = d.getSeconds().toString().padStart(2, '0')
+	return format
+		.replace('YYYY', yyyy)
+		.replace('MM', MM)
+		.replace('DD', dd)
+		.replace('HH', HH)
+		.replace('mm', mm)
+		.replace('ss', ss)
+}
+
+/**
+ * 格式化时长（秒 → 可读字符串）
+ * - < 60s: "Xs"
+ * - < 3600s: "Xm Ys"
+ * - >= 3600s: "Xh Ym"
+ */
+export function formatDuration(seconds : number) : string {
+	if (seconds <= 0) return '0s'
+	const h = Math.floor(seconds / 3600)
+	const m = Math.floor((seconds % 3600) / 60)
+	const s = Math.floor(seconds % 60)
+	if (h > 0) {
+		return `${h}h ${m}m`
+	}
+	if (m > 0) {
+		return `${m}m ${s}s`
+	}
+	return `${s}s`
+}
+
+/**
+ * 分钟数 → 可读字符串
+ * - < 60: "X 分钟"
+ * - >= 60: "X 小时 Y 分钟"
+ */
+export function formatMinutes(minutes : number) : string {
+	if (minutes <= 0) return '0 分钟'
+	const h = Math.floor(minutes / 60)
+	const m = Math.floor(minutes % 60)
+	if (h > 0) {
+		return `${h} 小时 ${m} 分钟`
+	}
+	return `${m} 分钟`
+}
+
+/**
+ * 数字千分位
+ */
+export function formatNumber(n : number) : string {
+	if (n == null || isNaN(n)) return '0'
+	const parts = n.toString().split('.')
+	parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+	return parts.join('.')
+}
+
+/**
+ * 取日期字符串中的 MM-DD（用于柱状图 X 轴标签）
+ * 输入示例: "2026-07-21" → "07-21"
+ */
+export function shortDate(dateStr : string) : string {
+	if (dateStr == null || dateStr.length < 10) return dateStr
+	return dateStr.substring(5, 10)
+}

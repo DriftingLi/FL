@@ -1,0 +1,5 @@
+/**
+ * Pinia store 装配入口
+ * 后续模块扩展时在此追加导出
+ */
+export { useAuthStore } from './auth'

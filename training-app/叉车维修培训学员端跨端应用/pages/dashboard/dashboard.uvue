@@ -1,0 +1,539 @@
+<template>
+	<view class="dashboard">
+		<!-- 顶部欢迎区（自定义导航栏） -->
+		<view class="header" :style="{ paddingTop: statusBarHeight + 'px' }">
+			<view class="header-content">
+				<view class="header-left">
+					<text class="welcome">你好，{{ displayName }}</text>
+					<text class="subtitle">继续学习，提升技能</text>
+				</view>
+				<view class="header-right" @click="onLogoutClick">
+					<view class="avatar">
+						<text class="avatar-text">{{ avatarLetter }}</text>
+					</view>
+				</view>
+			</view>
+		</view>
+
+		<!-- 滚动内容区 -->
+		<scroll-view scroll-y class="content" @refresherrefresh="onRefresh" :refresher-enabled="true"
+			:refresher-triggered="refreshing">
+			<!-- 学习概览卡片 -->
+			<view class="card stats-card">
+				<view class="stats-item">
+					<text class="stats-value">{{ totalStudyText }}</text>
+					<text class="stats-label">累计学习</text>
+				</view>
+				<view class="stats-divider"></view>
+				<view class="stats-item">
+					<text class="stats-value">{{ profile?.total_courses ?? 0 }}</text>
+					<text class="stats-label">课程总数</text>
+				</view>
+				<view class="stats-divider"></view>
+				<view class="stats-item">
+					<text class="stats-value">{{ profile?.completed_courses ?? 0 }}</text>
+					<text class="stats-label">已完成</text>
+				</view>
+			</view>
+
+			<!-- 学习统计图表 -->
+			<view class="card chart-card">
+				<view class="card-header">
+					<text class="card-title">学习统计</text>
+					<text class="card-summary" v-if="studyStats != null">近 {{ studyStats!.days }} 天共 {{ studyStats!.total_minutes }} 分钟</text>
+				</view>
+
+				<view v-if="loadingStats" class="chart-empty">
+					<text class="chart-empty-text">加载中...</text>
+				</view>
+				<view v-else-if="statsEmpty" class="chart-empty">
+					<text class="chart-empty-text">暂无学习记录</text>
+				</view>
+				<view v-else class="chart">
+					<view class="chart-bars">
+						<view v-for="(item, idx) in chartData" :key="idx" class="bar-col">
+							<view class="bar-track">
+								<view class="bar" :style="{ height: item.height + 'rpx', backgroundColor: item.color }"></view>
+							</view>
+							<text class="bar-label">{{ item.label }}</text>
+						</view>
+					</view>
+				</view>
+			</view>
+
+			<!-- 功能入口九宫格 -->
+			<view class="card grid-card-container">
+				<view class="card-header">
+					<text class="card-title">学习功能</text>
+				</view>
+				<view class="grid">
+					<view v-for="(item, idx) in gridItems" :key="idx" class="grid-item" @click="onGridClick(item)">
+						<grid-card :title="item.title" :icon="item.icon" :color="item.color"
+							:available="item.available" />
+					</view>
+				</view>
+			</view>
+
+			<!-- 最近学习记录 -->
+			<view class="card records-card">
+				<view class="card-header">
+					<text class="card-title">最近学习</text>
+					<text class="card-more" @click="onViewAllRecords">查看全部</text>
+				</view>
+				<text v-if="records.length == 0" class="empty-text">暂无学习记录</text>
+				<view v-else class="records">
+					<view v-for="(r, idx) in records" :key="idx" class="record-item">
+						<view class="record-left">
+							<text class="record-title">{{ r.course_name }}</text>
+							<text class="record-subtitle">{{ r.chapter_title }}</text>
+						</view>
+						<view class="record-right">
+							<text class="record-duration">{{ r.study_duration }}分钟</text>
+							<text class="record-date">{{ formatShortDate(r.study_date) }}</text>
+						</view>
+					</view>
+				</view>
+			</view>
+
+			<view class="bottom-space"></view>
+		</scroll-view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { onLoad, onShow, onPullDownRefresh } from '@dcloudio/uni-app'
+	import { computed, ref } from 'vue'
+	import GridCard from '../../components/grid-card/grid-card.uvue'
+	import { useAuthStore } from '../../stores/auth'
+	import { getProfileApi, getStudyStatsApi, getRecordsApi } from '../../api/student'
+	import { GRID_ITEMS, UNAVAILABLE_TOAST } from '../../constants/app'
+	import { shortDate } from '../../utils/format'
+	import type { StudentProfile, StudyStats, StudyRecord, GridItem } from '../../types/index'
+
+	const auth = useAuthStore()
+
+	// 系统信息
+	const statusBarHeight = ref<number>(20)
+
+	// 数据
+	const profile = ref<StudentProfile | null>(null)
+	const studyStats = ref<StudyStats | null>(null)
+	const records = ref<StudyRecord[]>([])
+
+	// 加载状态
+	const loadingStats = ref<boolean>(false)
+	const refreshing = ref<boolean>(false)
+
+	// 模板辅助函数（包装导入的 shortDate，确保 UTS 编译器正确识别）
+	const formatShortDate = (dateStr : string) : string => shortDate(dateStr)
+
+	// 配置
+	const gridItems : GridItem[] = GRID_ITEMS
+
+	// 计算
+	const displayName = computed<string>(() : string => auth.displayName.value)
+
+	const avatarLetter = computed<string>(() : string => {
+		const name : string = auth.displayName.value
+		if (name.length == 0) return 'U'
+		return name.charAt(0).toUpperCase()
+	})
+
+	const totalStudyText = computed<string>(() : string => {
+		if (profile.value == null) return '0 分钟'
+		const minutes = (profile.value as StudentProfile).total_study_duration
+		const h = Math.floor(minutes / 60)
+		const m = minutes % 60
+		if (h > 0) {
+			return `${h}h ${m}m`
+		}
+		return `${m} 分钟`
+	})
+
+	const statsEmpty = computed<boolean>(() : boolean => {
+		if (studyStats.value == null) return true
+		const data = (studyStats.value as StudyStats).data
+		for (let i = 0; i < data.length; i++) {
+			if (data[i] > 0) return false
+		}
+		return true
+	})
+
+	type BarItem = {
+		label : string
+		height : number
+		color : string
+	}
+
+	const chartData = computed<BarItem[]>(() : BarItem[] => {
+		if (studyStats.value == null) return []
+		const s = studyStats.value as StudyStats
+		const labels = s.labels
+		const data = s.data
+		let maxVal = 0
+		for (let i = 0; i < data.length; i++) {
+			if (data[i] > maxVal) maxVal = data[i]
+		}
+		const bars : BarItem[] = []
+		for (let i = 0; i < data.length; i++) {
+			const h = maxVal > 0 ? Math.max(8, Math.round(data[i] * 180 / maxVal)) : 8
+			bars.push({
+				label: labels[i].length >= 5 ? labels[i].substring(5) : labels[i],
+				height: h,
+				color: data[i] > 0 ? '#2979ff' : '#e5e5e5',
+			})
+		}
+		return bars
+	})
+
+	// 数据加载函数（必须在使用前声明，UTS 不支持函数提升）
+	async function loadProfile() : Promise<void> {
+		try {
+			profile.value = await getProfileApi()
+		} catch (e) {
+			console.error('loadProfile failed:', e)
+		}
+	}
+
+	async function loadStudyStats() : Promise<void> {
+		loadingStats.value = true
+		try {
+			studyStats.value = await getStudyStatsApi(7)
+		} catch (e) {
+			console.error('loadStudyStats failed:', e)
+			studyStats.value = null
+		} finally {
+			loadingStats.value = false
+		}
+	}
+
+	async function loadRecords() : Promise<void> {
+		try {
+			const result = await getRecordsApi(1, 5)
+			records.value = result.records
+		} catch (e) {
+			console.error('loadRecords failed:', e)
+			records.value = []
+		}
+	}
+
+	async function loadAll() : Promise<void> {
+		// 并行加载三个接口
+		const task1 : Promise<void> = loadProfile()
+		const task2 : Promise<void> = loadStudyStats()
+		const task3 : Promise<void> = loadRecords()
+		const tasks : Promise<void>[] = [task1, task2, task3]
+		await Promise.all(tasks)
+	}
+
+	// 生命周期
+	onLoad((options : OnLoadOptions) => {
+		const sysInfo = uni.getSystemInfoSync()
+		statusBarHeight.value = sysInfo.statusBarHeight
+
+		// 已登录校验（防止未登录直接进入此页）
+		auth.restoreFromStorage()
+		if (!auth.isLoggedIn.value) {
+			uni.reLaunch({ url: '/pages/login/login' })
+			return
+		}
+
+		loadAll()
+	})
+
+	onShow(() => {
+		if (auth.isLoggedIn.value) {
+			// 静默刷新
+			loadAll()
+		}
+	})
+
+	onPullDownRefresh(() => {
+		loadAll().finally(() : Promise<void> => {
+			uni.stopPullDownRefresh()
+			return Promise.resolve()
+		})
+	})
+
+	function onRefresh() : void {
+		refreshing.value = true
+		loadAll().finally(() : Promise<void> => {
+			refreshing.value = false
+			return Promise.resolve()
+		})
+	}
+
+	// 事件处理
+	function onGridClick(item : GridItem) : void {
+		if (!item.available) {
+			uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
+			return
+		}
+		if (item.path.length == 0) {
+			uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
+			return
+		}
+		// 仪表盘自身不需要跳转
+		if (item.key == 'dashboard') return
+		uni.navigateTo({ url: item.path })
+	}
+
+	function onViewAllRecords() : void {
+		uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
+	}
+
+	function onLogoutClick() : void {
+		uni.showActionSheet({
+			itemList: ['退出登录'],
+			success: (res) => {
+				if (res.tapIndex == 0) {
+					auth.logout()
+				}
+			},
+		})
+	}
+</script>
+
+<style>
+	.dashboard {
+		flex: 1;
+		background-color: #f8f8f8;
+	}
+
+	/* 顶部欢迎区 */
+	.header {
+		background: linear-gradient(135deg, #2979ff, #1c9eff);
+		padding-bottom: 32rpx;
+	}
+
+	.header-content {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding: 24rpx 32rpx;
+	}
+
+	.header-left {
+		flex-direction: column;
+	}
+
+	.welcome {
+		font-size: 36rpx;
+		font-weight: 600;
+		color: #ffffff;
+		margin-bottom: 4rpx;
+	}
+
+	.subtitle {
+		font-size: 24rpx;
+		color: rgba(255, 255, 255, 0.85);
+	}
+
+	.header-right {
+		padding: 8rpx;
+	}
+
+	.avatar {
+		width: 80rpx;
+		height: 80rpx;
+		border-radius: 40rpx;
+		background-color: rgba(255, 255, 255, 0.25);
+		align-items: center;
+		justify-content: center;
+	}
+
+	.avatar-text {
+		font-size: 32rpx;
+		font-weight: 600;
+		color: #ffffff;
+	}
+
+	/* 滚动内容 */
+	.content {
+		flex: 1;
+	}
+
+	/* 卡片通用 */
+	.card {
+		background-color: #ffffff;
+		border-radius: 24rpx;
+		margin: 16rpx 24rpx;
+		padding: 24rpx;
+	}
+
+	.card-header {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 16rpx;
+	}
+
+	.card-title {
+		font-size: 30rpx;
+		font-weight: 600;
+		color: #333333;
+	}
+
+	.card-summary {
+		font-size: 22rpx;
+		color: #999999;
+	}
+
+	.card-more {
+		font-size: 24rpx;
+		color: #2979ff;
+	}
+
+	/* 学习概览三列 */
+	.stats-card {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-around;
+		padding: 32rpx 24rpx;
+	}
+
+	.stats-item {
+		flex: 1;
+		align-items: center;
+	}
+
+	.stats-value {
+		font-size: 36rpx;
+		font-weight: 600;
+		color: #2979ff;
+		margin-bottom: 8rpx;
+	}
+
+	.stats-label {
+		font-size: 22rpx;
+		color: #666666;
+	}
+
+	.stats-divider {
+		width: 1rpx;
+		height: 48rpx;
+		background-color: #f0f0f0;
+	}
+
+	/* 柱状图 */
+	.chart-card {
+		padding-bottom: 16rpx;
+	}
+
+	.chart-empty {
+		height: 240rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.chart-empty-text {
+		color: #999999;
+		font-size: 26rpx;
+	}
+
+	.chart {
+		height: 280rpx;
+	}
+
+	.chart-bars {
+		flex-direction: row;
+		align-items: flex-end;
+		justify-content: space-between;
+		height: 240rpx;
+		padding: 16rpx 0;
+	}
+
+	.bar-col {
+		flex: 1;
+		align-items: center;
+		margin: 0 6rpx;
+	}
+
+	.bar-track {
+		width: 100%;
+		height: 200rpx;
+		justify-content: flex-end;
+		align-items: center;
+	}
+
+	.bar {
+		width: 36rpx;
+		border-radius: 8rpx 8rpx 0 0;
+	}
+
+	.bar-label {
+		font-size: 20rpx;
+		color: #999999;
+		margin-top: 8rpx;
+	}
+
+	/* 九宫格 */
+	.grid {
+		flex-direction: row;
+		flex-wrap: wrap;
+	}
+
+	.grid-item {
+		width: 25%;
+		padding: 8rpx 4rpx;
+	}
+
+	/* 最近学习记录 */
+	.records-card {
+		padding-bottom: 16rpx;
+	}
+
+	.empty-text {
+		padding: 32rpx 0;
+		text-align: center;
+		font-size: 26rpx;
+		color: #999999;
+	}
+
+	.records {
+		flex-direction: column;
+	}
+
+	.record-item {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding: 20rpx 0;
+		border-bottom: 1rpx solid #f0f0f0;
+	}
+
+	.record-left {
+		flex: 1;
+		flex-direction: column;
+	}
+
+	.record-title {
+		font-size: 28rpx;
+		color: #333333;
+		margin-bottom: 4rpx;
+	}
+
+	.record-subtitle {
+		font-size: 22rpx;
+		color: #999999;
+	}
+
+	.record-right {
+		align-items: flex-end;
+	}
+
+	.record-duration {
+		font-size: 24rpx;
+		color: #2979ff;
+		margin-bottom: 4rpx;
+	}
+
+	.record-date {
+		font-size: 20rpx;
+		color: #bbbbbb;
+	}
+
+	.bottom-space {
+		height: 32rpx;
+	}
+</style>

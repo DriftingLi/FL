@@ -1,0 +1,171 @@
+<template>
+	<view class="register-page">
+		<view class="form">
+			<view class="form-item">
+				<text class="label">姓名</text>
+				<input class="input-base" type="text" placeholder="请输入姓名" :maxlength="20" v-model="form.name" />
+			</view>
+			<view class="form-item">
+				<text class="label">手机号</text>
+				<input class="input-base" type="number" placeholder="请输入 11 位手机号" :maxlength="11" v-model="form.phone" />
+			</view>
+			<view class="form-item">
+				<text class="label">密码</text>
+				<input class="input-base" :password="true" placeholder="至少 6 位密码" :maxlength="32" v-model="form.password" />
+			</view>
+			<view class="form-item">
+				<text class="label">确认密码</text>
+				<input class="input-base" :password="true" placeholder="请再次输入密码" :maxlength="32" v-model="form.confirmPassword" />
+			</view>
+
+			<button class="btn-primary submit-btn" :disabled="loading" @click="onSubmit">
+				{{ loading ? '注册中...' : '注 册' }}
+			</button>
+
+			<view class="footer">
+				<text class="footer-text">已有账号？</text>
+				<text class="footer-link" @click="goLogin">返回登录</text>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { onLoad } from '@dcloudio/uni-app'
+	import { reactive, ref } from 'vue'
+	import { useAuthStore } from '../../stores/auth'
+	import { registerApi } from '../../api/auth'
+	import type { RegisterParams } from '../../types/index'
+
+	// 注册表单数据类型（UTS 必须显式声明，否则 reactive 字段会被推断为 Any?）
+	type RegisterForm = {
+		name : string
+		phone : string
+		password : string
+		confirmPassword : string
+	}
+
+	const auth = useAuthStore()
+
+	const form = reactive({
+		name: '',
+		phone: '',
+		password: '',
+		confirmPassword: '',
+	} as RegisterForm)
+
+	const loading = ref<boolean>(false)
+
+	onLoad((options : OnLoadOptions) => {
+		// 已登录则跳转仪表盘
+		auth.restoreFromStorage()
+		if (auth.isLoggedIn.value) {
+			uni.reLaunch({ url: '/pages/dashboard/dashboard' })
+		}
+	})
+
+	function validate() : string {
+		const name : string = form.name
+		const phone : string = form.phone
+		const password : string = form.password
+		const confirmPassword : string = form.confirmPassword
+		if (name.length == 0) return '请输入姓名'
+		if (phone.length != 11) return '请输入 11 位手机号'
+		if (!phone.startsWith('1')) return '手机号格式不正确'
+		if (!/^\d{11}$/.test(phone)) return '手机号必须为数字'
+		if (password.length < 6) return '密码至少 6 位'
+		if (password != confirmPassword) return '两次输入的密码不一致'
+		return ''
+	}
+
+	async function onSubmit() : Promise<void> {
+		const err = validate()
+		if (err.length > 0) {
+			uni.showToast({ title: err, icon: 'none' })
+			return
+		}
+
+		loading.value = true
+		uni.showLoading({ title: '注册中...', mask: true })
+
+		const params : RegisterParams = {
+			phone: form.phone,
+			password: form.password,
+			name: form.name,
+		}
+
+		try {
+			await registerApi(params)
+			uni.hideLoading()
+			uni.showToast({ title: '注册成功，请登录', icon: 'success', duration: 1500 })
+			setTimeout(() => {
+				uni.redirectTo({ url: '/pages/login/login' })
+			}, 1000)
+		} catch (e) {
+			uni.hideLoading()
+			console.error('[register] failed:', e)
+			// UTS 中 catch 的 e 可能是任何 Throwable（含 Java 异常），用 instanceof 判断避免 as 强转失败
+			let msg = '注册失败，请重试'
+			if (e instanceof Error) {
+				const err = e as Error
+				const m = err.message
+				if (m != null && m.length > 0) {
+					msg = m
+				}
+			}
+			uni.showToast({ title: msg, icon: 'none' })
+		} finally {
+			loading.value = false
+		}
+	}
+
+	function goLogin() : void {
+		uni.redirectTo({ url: '/pages/login/login' })
+	}
+</script>
+
+<style>
+	.register-page {
+		flex: 1;
+		background-color: #f8f8f8;
+	}
+
+	.form {
+		background-color: #ffffff;
+		padding: 32rpx 48rpx;
+		margin-top: 16rpx;
+	}
+
+	.form-item {
+		margin-bottom: 32rpx;
+	}
+
+	.label {
+		font-size: 26rpx;
+		color: #666666;
+		margin-bottom: 12rpx;
+	}
+
+	.submit-btn {
+		margin-top: 16rpx;
+		width: 100%;
+	}
+
+	.footer {
+		flex-direction: row;
+		justify-content: center;
+		margin-top: 48rpx;
+		padding-bottom: 24rpx;
+	}
+
+	.footer-text {
+		font-size: 26rpx;
+		color: #666666;
+	}
+
+	.footer-link {
+		font-size: 26rpx;
+		color: #2979ff;
+		margin-left: 8rpx;
+	}
+</style>

@@ -13,10 +13,6 @@ frontend/dist/
 frontend/.vite/
 frontend/build*.log
 
-# ===== 跨端应用 (training-app) =====
-# uni-app x 跨端项目，MVP 阶段暂不入库
-training-app/
-
 # ===== Node (通用) =====
 node_modules/
 npm-debug.log*

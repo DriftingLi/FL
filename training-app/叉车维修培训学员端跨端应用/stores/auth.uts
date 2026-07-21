@@ -1,0 +1,150 @@
+/**
+ * 认证状态管理（基于 Vue 3 响应式单例，无需 pinia）
+ * - token / user 持久化到 uni.setStorageSync
+ * - 启动时调用 validateToken() 校验
+ * - 401 由 request 层自动清空并跳转登录页
+ */
+import { ref, computed } from 'vue'
+import { loginApi, logoutApi, getUserInfoApi } from '../api/auth'
+import { setStorage, setStorageJSON, getStorage, getStorageJSON, removeStorage } from '../utils/storage'
+import { STORAGE_KEY_TOKEN, STORAGE_KEY_USER } from '../constants/app'
+import type { LoginParams, UserInfo, AuthStore } from '../types/index'
+
+// 全局响应式状态（模块级单例，多次调用 useAuthStore 共享同一份状态）
+const token = ref<string>('')
+const user = ref<UserInfo | null>(null)
+const isInitializing = ref<boolean>(true)
+
+const isLoggedIn = computed<boolean>(() : boolean => {
+	return token.value.length > 0 && user.value != null
+})
+
+const displayName = computed<string>(() : string => {
+	if (user.value == null) return '同学'
+	const u = user.value as UserInfo
+	if (u.name != null && u.name.length > 0) return u.name
+	if (u.username != null && u.username.length > 0) return u.username
+	return '同学'
+})
+
+function setAuthData(t : string, u : UserInfo) : void {
+	token.value = t
+	user.value = u
+	setStorage(STORAGE_KEY_TOKEN, t)
+	setStorageJSON(STORAGE_KEY_USER, u)
+}
+
+function clearAuthData() : void {
+	token.value = ''
+	user.value = null
+	removeStorage(STORAGE_KEY_TOKEN)
+	removeStorage(STORAGE_KEY_USER)
+}
+
+function restoreFromStorage() : boolean {
+	const t = getStorage(STORAGE_KEY_TOKEN)
+	if (t.length == 0) {
+		return false
+	}
+	const uObj = getStorageJSON(STORAGE_KEY_USER)
+	if (uObj == null) {
+		return false
+	}
+	// Android 端无法用 as 把 UTSJSONObject 强转为 type 字面量（Kotlin data class），
+	// 必须逐字段手动构造 UserInfo
+	const user_id = uObj['user_id'] as number
+	const username = uObj['username'] as string
+	const name = uObj['name'] as string
+	const role = uObj['role'] as string
+	const u : UserInfo = {
+		user_id: user_id,
+		username: username,
+		name: name,
+		role: role,
+	} as UserInfo
+	const avatar = uObj['avatar']
+	if (avatar != null) {
+		u.avatar = avatar as string
+	}
+	token.value = t
+	user.value = u
+	return true
+}
+
+async function validateToken() : Promise<void> {
+	isInitializing.value = true
+	const restored = restoreFromStorage()
+	if (!restored) {
+		clearAuthData()
+		isInitializing.value = false
+		return
+	}
+
+	try {
+		const u = await getUserInfoApi()
+		if (u != null && u.user_id > 0) {
+			user.value = u
+			setStorageJSON(STORAGE_KEY_USER, u)
+		} else {
+			clearAuthData()
+		}
+	} catch (e) {
+		clearAuthData()
+	} finally {
+		isInitializing.value = false
+	}
+}
+
+async function login(params : LoginParams) : Promise<void> {
+	console.log('[auth] login start, username=', params.username)
+	try {
+		const result = await loginApi(params)
+		console.log('[auth] login result=', result)
+		if (result == null) {
+			throw new Error('登录响应为空')
+		}
+		setAuthData(result.token, result.user)
+	} catch (e) {
+		// 打印完整异常对象，避免 message 为空时丢失诊断信息
+		console.error('[auth] login exception:', e)
+		// UTS 中 catch 的 e 可能是任何 Throwable（含 Java NullPointerException 等），
+		// 不能直接用 as Error 强转（会再抛 ClassCastException），用 instanceof 判断
+		let msg = '登录失败（响应解析错误）'
+		if (e instanceof Error) {
+			const errObj = e as Error
+			const m = errObj.message
+			if (m != null && m.length > 0) {
+				msg = m
+			}
+		}
+		throw new Error(msg)
+	}
+}
+
+async function logout() : Promise<void> {
+	try {
+		await logoutApi()
+	} catch (e) {
+		// 即使后端 logout 失败也要清本地
+	} finally {
+		clearAuthData()
+		uni.reLaunch({ url: '/pages/login/login' })
+	}
+}
+
+/** 认证 store composable（单例模式，所有页面共享同一份状态） */
+export function useAuthStore() : AuthStore {
+	return {
+		token,
+		user,
+		isInitializing,
+		isLoggedIn,
+		displayName,
+		setAuthData: (t : string, u : UserInfo) : void => setAuthData(t, u),
+		clearAuthData: () : void => clearAuthData(),
+		restoreFromStorage: () : boolean => restoreFromStorage(),
+		validateToken: () : Promise<void> => validateToken(),
+		login: (params : LoginParams) : Promise<void> => login(params),
+		logout: () : Promise<void> => logout(),
+	} as AuthStore
+}

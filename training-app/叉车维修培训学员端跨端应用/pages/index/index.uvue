@@ -1,0 +1,66 @@
+<template>
+	<view class="launch">
+		<image class="logo" src="/static/logo.png" mode="aspectFit"></image>
+		<text class="title">叉车维修培训</text>
+		<text class="subtitle">学员端</text>
+	</view>
+</template>
+
+<script>
+	import { useAuthStore } from '../../stores/auth'
+
+	export default {
+		onLoad() {
+			console.log('[launch] index onLoad triggered')
+			const auth = useAuthStore()
+			// 尝试从 storage 恢复（不阻塞跳转，详细校验由 App.uvue onLaunch 异步处理）
+			const restored = auth.restoreFromStorage()
+			console.log('[launch] restored=', restored, 'isLoggedIn=', auth.isLoggedIn.value)
+			if (auth.isLoggedIn.value) {
+				console.log('[launch] redirect to dashboard')
+				uni.reLaunch({
+					url: '/pages/dashboard/dashboard',
+					fail: (err) => {
+						console.error('[launch] reLaunch to dashboard failed:', err)
+					}
+				})
+			} else {
+				console.log('[launch] redirect to login')
+				uni.reLaunch({
+					url: '/pages/login/login',
+					fail: (err) => {
+						console.error('[launch] reLaunch to login failed:', err)
+					}
+				})
+			}
+		}
+	}
+</script>
+
+<style>
+	.launch {
+		flex: 1;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		background-color: #f8f8f8;
+	}
+
+	.logo {
+		width: 160rpx;
+		height: 160rpx;
+		margin-bottom: 32rpx;
+	}
+
+	.title {
+		font-size: 44rpx;
+		font-weight: 600;
+		color: #333333;
+		margin-bottom: 8rpx;
+	}
+
+	.subtitle {
+		font-size: 24rpx;
+		color: #999999;
+	}
+</style>

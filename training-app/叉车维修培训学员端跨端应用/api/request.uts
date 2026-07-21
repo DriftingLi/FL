@@ -1,0 +1,196 @@
+/**
+ * HTTP 请求封装
+ * 基于 uni.request，跨 4 端通用
+ * - 自动注入 Authorization
+ * - 统一解包 ApiResponse<T>
+ * - 401 自动清空登录态并跳转登录页
+ * - X-Silent: 1 头关闭错误 toast
+ */
+import { API_BASE_URL, REQUEST_TIMEOUT } from '../config/env'
+import { STORAGE_KEY_TOKEN } from '../constants/app'
+import { getStorage, removeStorage } from '../utils/storage'
+import type { ApiResponse } from '../types/index'
+
+/** 请求方法 */
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
+
+/** 请求配置 */
+export type RequestOptions = {
+	url : string
+	method ?: HttpMethod
+	data ?: any | null
+	header ?: UTSJSONObject | null
+	/** 请求超时，默认使用 REQUEST_TIMEOUT */
+	timeout ?: number
+	/** 是否静默（不弹错误 toast），默认 false */
+	silent ?: boolean
+}
+
+/** 默认请求头 */
+function buildHeader(custom : UTSJSONObject | null, silent : boolean) : UTSJSONObject {
+	const header : UTSJSONObject = {}
+	header['Content-Type'] = 'application/json'
+
+	const token = getStorage(STORAGE_KEY_TOKEN)
+	if (token.length > 0) {
+		header['Authorization'] = `Bearer ${token}`
+	}
+
+	if (silent) {
+		header['X-Silent'] = '1'
+	}
+
+	if (custom != null) {
+		// 用 for...in 遍历 UTSJSONObject 的字段名（跨端通用，Android 端不支持 Object.keys）
+		for (const k in custom) {
+			header[k] = custom[k]
+		}
+	}
+
+	return header
+}
+
+/** 拼接完整 URL（相对路径不拼接 baseURL） */
+function resolveURL(url : string) : string {
+	if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/')) {
+		// H5 端使用相对路径 /api 走同源 + 后端 CORS
+		if (url.startsWith('/')) {
+			return API_BASE_URL + url
+		}
+		return url
+	}
+	return API_BASE_URL + '/' + url
+}
+
+/** 显示错误 toast（受 silent 控制） */
+function showError(msg : string, silent : boolean) {
+	if (silent) return
+	uni.showToast({
+		title: msg.length > 20 ? msg.substring(0, 20) + '...' : msg,
+		icon: 'none',
+		duration: 2500,
+	})
+}
+
+/** 清空登录态并跳转登录页 */
+function handleUnauthorized() {
+	removeStorage(STORAGE_KEY_TOKEN)
+	removeStorage('auth_user')
+	// 避免在登录页时还跳登录页
+	const pages = getCurrentPages()
+	if (pages.length > 0) {
+		const current = pages[pages.length - 1]
+		const route = current.route
+		if (route != 'pages/login/login') {
+			uni.reLaunch({ url: '/pages/login/login' })
+		}
+	}
+}
+
+/**
+ * 发起请求，返回解包后的 data（UTSJSONObject）
+ * @throws Error 当网络错误、HTTP 错误或业务 code 非 200/201 时 reject
+ * @note Android 端无法用 as 把 UTSJSONObject 强转为 type 字面量（Kotlin data class）
+ *       因此统一返回 UTSJSONObject，由调用方手动构造目标类型
+ */
+export function request<T>(options : RequestOptions) : Promise<UTSJSONObject> {
+	return new Promise<UTSJSONObject>((resolve, reject) => {
+		const method = options.method ?? 'GET'
+		const silent = options.silent ?? false
+		const timeout = options.timeout ?? REQUEST_TIMEOUT
+		const fullURL = resolveURL(options.url)
+		const header = buildHeader(options.header, silent)
+
+		console.log('[request] >>>', method, fullURL)
+		console.log('[request] header:', JSON.stringify(header))
+		console.log('[request] data:', options.data)
+
+		uni.request({
+			url: fullURL,
+			method: method,
+			data: options.data,
+			header: header,
+			timeout: timeout,
+			success: (res) => {
+				console.log('[request] <<< success statusCode=', res.statusCode)
+				console.log('[request] <<< data:', res.data)
+				const statusCode = res.statusCode
+				const body = res.data as UTSJSONObject
+
+				// HTTP 401：未登录/登录过期
+				if (statusCode == 401) {
+					handleUnauthorized()
+					showError('登录已过期，请重新登录', silent)
+					reject(new Error('登录已过期，请重新登录'))
+					return
+				}
+
+				// HTTP 其他错误
+				if (statusCode < 200 || statusCode >= 300) {
+					let msg = `请求失败 (${statusCode})`
+					const bodyMsg = body['message']
+					if (bodyMsg != null) {
+						msg = bodyMsg as string
+					}
+					showError(msg, silent)
+					reject(new Error(msg))
+					return
+				}
+
+				// 业务层错误：code 非 200/201
+				const code = body['code'] as number
+				const message = (body['message'] as string) ?? '请求失败'
+				if (code != 200 && code != 201) {
+					showError(message, silent)
+					reject(new Error(message))
+					return
+				}
+
+				// 成功：返回 data 字段（UTSJSONObject，由调用方手动构造目标类型）
+			const data = body['data']
+			if (data == null) {
+				resolve({})
+			} else {
+				const dataObj = data as UTSJSONObject
+				resolve(dataObj)
+			}
+			},
+			fail: (err) => {
+				console.error('[request] <<< FAIL errMsg=', err.errMsg)
+				console.error('[request] <<< FAIL err=', JSON.stringify(err))
+				const msg = '网络连接失败，请检查后端服务是否启动'
+				showError(msg, silent)
+				reject(new Error(err.errMsg ?? msg))
+			},
+		})
+	})
+}
+
+/** GET 请求快捷方法 */
+export function get(url : string, params : UTSJSONObject | null = null, options : RequestOptions | null = null) : Promise<UTSJSONObject> {
+	let finalURL = url
+	if (params != null) {
+		const pairs : string[] = []
+		// 用 for...in 遍历 UTSJSONObject 的字段名（跨端通用，Android 端不支持 Object.keys）
+		for (const k in params) {
+			const v = params[k]
+			pairs.push(`${encodeURIComponent(k)}=${encodeURIComponent(v as string)}`)
+		}
+		if (pairs.length > 0) {
+			finalURL = url + (url.includes('?') ? '&' : '?') + pairs.join('&')
+		}
+	}
+	const opts : RequestOptions = options != null ? options! : { url: finalURL } as RequestOptions
+	opts.url = finalURL
+	opts.method = 'GET'
+	return request<UTSJSONObject>(opts)
+}
+
+/** POST 请求快捷方法 */
+export function post(url : string, data : any | null = null, options : RequestOptions | null = null) : Promise<UTSJSONObject> {
+	const opts : RequestOptions = options != null ? options! : { url: url } as RequestOptions
+	opts.url = url
+	opts.method = 'POST'
+	opts.data = data
+	return request<UTSJSONObject>(opts)
+}

@@ -1,0 +1,103 @@
+<script>
+	import { useAuthStore } from './stores/auth'
+
+	// #ifdef APP-ANDROID || APP-HARMONY
+	let firstBackTime = 0
+	// #endif
+
+	export default {
+		onLaunch: function() {
+			console.log('App Launch')
+			// 启动时异步校验 token（不阻塞渲染）
+			const auth = useAuthStore()
+			// 使用 async/await + try/catch 避免 UTSPromise.catch 类型推断问题
+			;(async () : Promise<void> => {
+				try {
+					await auth.validateToken()
+					console.log('Token validated, isLoggedIn=', auth.isLoggedIn.value)
+				} catch (e) {
+					console.error('Token validate failed:', e)
+				}
+			})()
+		},
+		onShow: function() {
+			console.log('App Show')
+		},
+		onHide: function() {
+			console.log('App Hide')
+		},
+		// #ifdef APP-ANDROID || APP-HARMONY
+		onLastPageBackPress: function() : void {
+			console.log('App LastPageBackPress')
+			if (firstBackTime == 0) {
+				uni.showToast({
+					title: '再按一次退出应用',
+					position: 'bottom',
+				})
+				firstBackTime = Date.now()
+				setTimeout(() => {
+					firstBackTime = 0
+				}, 2000)
+			} else if (Date.now() - firstBackTime < 2000) {
+				firstBackTime = Date.now()
+				uni.exit()
+			}
+		},
+		onExit: function() {
+			console.log('App Exit')
+		}
+		// #endif
+	}
+</script>
+
+<style>
+	/*每个页面公共css */
+	.uni-row {
+		flex-direction: row;
+	}
+
+	.uni-column {
+		flex-direction: column;
+	}
+
+	/* 全局公共样式 */
+	.page-base {
+		background-color: #f8f8f8;
+		font-size: 28rpx;
+		color: #333333;
+	}
+
+	/* 通用卡片 */
+	.card {
+		background-color: #ffffff;
+		border-radius: 24rpx;
+		padding: 24rpx;
+		margin: 24rpx;
+	}
+
+	/* 通用按钮 */
+	.btn-primary {
+		background-color: #2979ff;
+		color: #ffffff;
+		border-radius: 48rpx;
+		height: 88rpx;
+		line-height: 88rpx;
+		text-align: center;
+		font-size: 32rpx;
+		font-weight: 500;
+	}
+
+	.btn-primary-disabled {
+		opacity: 0.5;
+	}
+
+	/* 通用输入框 */
+	.input-base {
+		height: 88rpx;
+		border: 1rpx solid #e5e5e5;
+		border-radius: 12rpx;
+		padding: 0 24rpx;
+		font-size: 28rpx;
+		background-color: #ffffff;
+	}
+</style>

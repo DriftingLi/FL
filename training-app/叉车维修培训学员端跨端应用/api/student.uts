@@ -1,0 +1,217 @@
+/**
+ * 学员档案/统计 API
+ * @note Android 端无法用 as 把 UTSJSONObject 强转为 type 字面量（Kotlin data class），
+ *       因此所有响应都由 buildXxx 函数手动逐字段构造目标类型
+ * @note 后端 /student/profile 返回嵌套结构：
+ *       { student_info: {...}, study_stats: {...}, course_progress: [...] }
+ */
+import { get } from './request'
+import type { StudentProfile, StudyRecordsResult, StudyStats, CourseProgressItem, StudyRecord } from '../types/index'
+
+/**
+ * 安全转换为 number
+ * @note UTS 中 UTSJSONObject 的 [] 索引返回 Any?（可为 null），
+ *       且 Android 端 JSON 整数解析为 Int，直接 as number（Double）会抛 ClassCastException，
+ *       需先判 null，再用模板字符串 + parseFloat 安全转换
+ */
+function toNumber(v : any | null, defaultVal : number = 0) : number {
+	if (v == null) {
+		return defaultVal
+	}
+	const s = `${v}`
+	const n = parseFloat(s)
+	if (isNaN(n)) {
+		return defaultVal
+	}
+	return n
+}
+
+/** 安全转换为 string */
+function toStr(v : any | null, defaultVal : string = '') : string {
+	if (v == null) {
+		return defaultVal
+	}
+	return `${v}`
+}
+
+/** 从 UTSJSONObject 构造 CourseProgressItem */
+function buildCourseProgressItem(obj : UTSJSONObject) : CourseProgressItem {
+	const item : CourseProgressItem = {
+		course_id: toNumber(obj['course_id']),
+		course_name: toStr(obj['course_name']),
+		progress: toNumber(obj['progress']),
+	} as CourseProgressItem
+	const studyDate = obj['study_date']
+	if (studyDate != null) {
+		item.study_date = studyDate as string
+	}
+	return item
+}
+
+/**
+ * 从 UTSJSONObject 构造 StudentProfile
+ * @note 后端返回嵌套结构：
+ *   {
+ *     student_info: { student_id, username, name, status, created_at },
+ *     study_stats: { total_study_duration, completed_courses, learning_courses, latest_study_time, exam_count, avg_score },
+ *     course_progress: [{ course_id, course_name, category, progress, study_duration, total_chapters, study_date }]
+ *   }
+ *   前端 StudentProfile 是平铺结构，需要从嵌套对象中逐层提取字段。
+ *   后端 study_stats 没有 total_courses 字段，默认 0。
+ *   后端 student_info 没有 phone/email/company 字段，均为可选不设置。
+ */
+function buildStudentProfile(obj : UTSJSONObject) : StudentProfile {
+	// 从 student_info 提取学员基础信息
+	const infoRaw = obj['student_info']
+	let student_id = 0
+	let username = ''
+	let name = ''
+	if (infoRaw != null) {
+		const info = infoRaw as UTSJSONObject
+		student_id = toNumber(info['student_id'])
+		username = toStr(info['username'])
+		name = toStr(info['name'])
+	}
+
+	// 从 study_stats 提取学习统计信息
+	const statsRaw = obj['study_stats']
+	let total_study_duration = 0
+	let total_courses = 0
+	let completed_courses = 0
+	if (statsRaw != null) {
+		const stats = statsRaw as UTSJSONObject
+		total_study_duration = toNumber(stats['total_study_duration'])
+		total_courses = toNumber(stats['total_courses'])
+		completed_courses = toNumber(stats['completed_courses'])
+	}
+
+	const profile : StudentProfile = {
+		student_id: student_id,
+		username: username,
+		name: name,
+		phone: '',
+		total_study_duration: total_study_duration,
+		total_courses: total_courses,
+		completed_courses: completed_courses,
+		course_progress: [],
+	} as StudentProfile
+
+	// 解析 course_progress 数组
+	const cpRaw = obj['course_progress']
+	if (cpRaw != null) {
+		const cpArray = cpRaw as Array<UTSJSONObject>
+		for (let i = 0; i < cpArray.length; i++) {
+			profile.course_progress.push(buildCourseProgressItem(cpArray[i]))
+		}
+	}
+	return profile
+}
+
+/** 从 UTSJSONObject 构造 StudyStats */
+function buildStudyStats(obj : UTSJSONObject) : StudyStats {
+	// labels 和 data 是平行数组，逐个元素取出并类型转换
+	const labels : string[] = []
+	const data : number[] = []
+	const labelsRaw = obj['labels']
+	if (labelsRaw != null) {
+		const labelsArray = labelsRaw as Array<string>
+		for (let i = 0; i < labelsArray.length; i++) {
+			labels.push(labelsArray[i])
+		}
+	}
+	const dataRaw = obj['data']
+	if (dataRaw != null) {
+		const dataArray = dataRaw as Array<number>
+		for (let i = 0; i < dataArray.length; i++) {
+			data.push(dataArray[i])
+		}
+	}
+	const stats : StudyStats = {
+		days: toNumber(obj['days']),
+		labels: labels,
+		data: data,
+		total_minutes: toNumber(obj['total_minutes']),
+		active_days: toNumber(obj['active_days']),
+	}
+	return stats
+}
+
+/**
+ * 从 UTSJSONObject 构造 StudyRecord
+ * @note 后端 chapter_id 和 chapter_title 可能为 null（当 StudyRecord.ChapterID 为 nil 时），
+ *       前端 StudyRecord 类型中这两个字段是必填，null 时给默认值 0 和 ''
+ */
+function buildStudyRecord(obj : UTSJSONObject) : StudyRecord {
+	const record : StudyRecord = {
+		record_id: toNumber(obj['record_id']),
+		course_id: toNumber(obj['course_id']),
+		course_name: toStr(obj['course_name']),
+		chapter_id: toNumber(obj['chapter_id']),
+		chapter_title: toStr(obj['chapter_title']),
+		study_duration: toNumber(obj['study_duration']),
+		study_date: toStr(obj['study_date']),
+	}
+	return record
+}
+
+/**
+ * 从 UTSJSONObject 构造 StudyRecordsResult
+ * @note 后端返回字段是 pages（总页数），不是 page_size（每页条数），
+ *       前端类型 StudyRecordsResult 中 page_size 是必填，后端没返回该字段时默认 0
+ */
+function buildStudyRecordsResult(obj : UTSJSONObject) : StudyRecordsResult {
+	const records : StudyRecord[] = []
+	const recordsRaw = obj['records']
+	if (recordsRaw != null) {
+		const recordsArray = recordsRaw as Array<UTSJSONObject>
+		for (let i = 0; i < recordsArray.length; i++) {
+			records.push(buildStudyRecord(recordsArray[i]))
+		}
+	}
+	const result : StudyRecordsResult = {
+		records: records,
+		total: toNumber(obj['total']),
+		page: toNumber(obj['page']),
+		page_size: toNumber(obj['page_size']),
+	}
+	return result
+}
+
+/** 学员档案（信息 + 学习统计 + 各课程进度） */
+export function getProfileApi() : Promise<StudentProfile> {
+	return get('/student/profile').then((data : UTSJSONObject) : StudentProfile => {
+		return buildStudentProfile(data)
+	})
+}
+
+/** 学习统计（按天分组）
+ * @param days 7 或 30
+ */
+export function getStudyStatsApi(days : number) : Promise<StudyStats> {
+	const params : UTSJSONObject = { days: days.toString() }
+	return get('/student/study-stats', params).then((data : UTSJSONObject) : StudyStats => {
+		return buildStudyStats(data)
+	})
+}
+
+/** 学习记录分页
+ * @param page 页码（从 1 开始）
+ * @param pageSize 每页条数
+ * @param startDate 起始日期 YYYY-MM-DD（可选）
+ * @param endDate 结束日期 YYYY-MM-DD（可选）
+ */
+export function getRecordsApi(page : number, pageSize : number, startDate : string = '', endDate : string = '') : Promise<StudyRecordsResult> {
+	const params : UTSJSONObject = {
+		page: page.toString(),
+		page_size: pageSize.toString(),
+	}
+	if (startDate.length > 0) {
+		params['start_date'] = startDate
+	}
+	if (endDate.length > 0) {
+		params['end_date'] = endDate
+	}
+	return get('/student/records', params).then((data : UTSJSONObject) : StudyRecordsResult => {
+		return buildStudyRecordsResult(data)
+	})
+}

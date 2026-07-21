@@ -1,0 +1,129 @@
+/**
+ * 全局类型定义
+ */
+
+/** 后端通用 JSON 响应格式 */
+export type ApiResponse<T> = {
+	code : number
+	message : string
+	data : T
+}
+
+/**
+ * 用户角色
+ * @note UTS 中联合字面量类型（如 'student' | 'tutor' | 'admin'）编译到 Kotlin 后
+ *       无法用 as 从 string 强转（会抛 ClassCastException），因此 role 统一用 string 类型
+ */
+export type UserRole = string
+
+/** 用户信息 */
+export type UserInfo = {
+	user_id : number
+	username : string
+	name : string
+	role : string
+	avatar ?: string
+}
+
+/** 登录参数 */
+export type LoginParams = {
+	username : string  // 用户名或手机号
+	password : string
+}
+
+/** 登录响应数据 */
+export type LoginResult = {
+	token : string
+	user : UserInfo
+}
+
+/** 注册参数 */
+export type RegisterParams = {
+	phone : string
+	password : string
+	name : string
+}
+
+/** 学习统计单日数据 */
+export type StudyStatsItem = {
+	date : string       // YYYY-MM-DD
+	minutes : number    // 学习分钟数
+}
+
+/** 学习统计响应 */
+export type StudyStats = {
+	days : number
+	labels : string[]
+	data : number[]
+	total_minutes : number
+	active_days : number
+}
+
+/** 课程进度项 */
+export type CourseProgressItem = {
+	course_id : number
+	course_name : string
+	progress : number
+	study_date ?: string
+}
+
+/** 学员档案 */
+export type StudentProfile = {
+	student_id : number
+	username : string
+	name : string
+	phone : string
+	email ?: string
+	company ?: string
+	total_study_duration : number
+	total_courses : number
+	completed_courses : number
+	course_progress : CourseProgressItem[]
+}
+
+/** 学习记录条目 */
+export type StudyRecord = {
+	record_id : number
+	course_id : number
+	course_name : string
+	chapter_id : number
+	chapter_title : string
+	study_duration : number
+	study_date : string
+}
+
+/** 学习记录分页响应 */
+export type StudyRecordsResult = {
+	records : StudyRecord[]
+	total : number
+	page : number
+	page_size : number
+}
+
+/** 九宫格入口配置项 */
+export type GridItem = {
+	key : string
+	title : string
+	icon : string        // emoji 或字符
+	color : string       // 卡片主题色（hex）
+	path : string        // 跳转路径，空字符串表示占位
+	available : boolean  // 是否已开发
+}
+
+import type { Ref } from 'vue'
+import type { ComputedRef } from 'vue'
+
+/** 认证 store 实例类型（useAuthStore 返回值） */
+export type AuthStore = {
+	token : Ref<string>
+	user : Ref<UserInfo | null>
+	isInitializing : Ref<boolean>
+	isLoggedIn : ComputedRef<boolean>
+	displayName : ComputedRef<string>
+	setAuthData : (t : string, u : UserInfo) => void
+	clearAuthData : () => void
+	restoreFromStorage : () => boolean
+	validateToken : () => Promise<void>
+	login : (params : LoginParams) => Promise<void>
+	logout : () => Promise<void>
+}

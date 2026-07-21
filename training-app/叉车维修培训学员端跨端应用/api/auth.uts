@@ -1,0 +1,104 @@
+/**
+ * 认证相关 API
+ */
+import { get, post } from './request'
+import type { LoginParams, LoginResult, RegisterParams, UserInfo } from '../types/index'
+
+/**
+ * 从 UTSJSONObject 构造 UserInfo
+ * @note Android 端无法用 as 把 UTSJSONObject 强转为 type 字面量（Kotlin data class），
+ *       必须逐字段手动取值并转换。UTS 中 as 是强类型转换，类型不匹配会抛 ClassCastException。
+ */
+function buildUserInfo(obj : UTSJSONObject) : UserInfo {
+	// 用 try/catch 包裹，捕获类型转换异常并打印具体字段，避免错误信息丢失
+	try {
+		const user_id = obj['user_id'] as number
+		const username = obj['username'] as string
+		const name = obj['name'] as string
+		const role = obj['role'] as string
+		const user : UserInfo = {
+			user_id: user_id,
+			username: username,
+			name: name,
+			role: role,
+		} as UserInfo
+		const avatar = obj['avatar']
+		if (avatar != null) {
+			user.avatar = avatar as string
+		}
+		return user
+	} catch (e) {
+		// 打印完整异常对象，便于定位是哪个字段转换失败
+		console.error('[buildUserInfo] exception:', e)
+		// UTS 中 catch 的 e 可能是任何 Throwable（含 Java 异常），用 instanceof 判断避免 as 强转失败
+		let msg = '用户信息构造失败'
+		if (e instanceof Error) {
+			const errObj = e as Error
+			const m = errObj.message
+			if (m != null && m.length > 0) {
+				msg = msg + ': ' + m
+			}
+		}
+		throw new Error(msg)
+	}
+}
+
+/** 学员登录（用户名或手机号 + 密码） */
+export function loginApi(params : LoginParams) : Promise<LoginResult> {
+	// Android 端 uni.request 的 data 必须是 UTSJSONObject，不接受 type 字面量（编译为 Kotlin data class）
+	const payload : UTSJSONObject = {
+		username: params.username,
+		password: params.password
+	} as UTSJSONObject
+	return post('/auth/login', payload).then((data : UTSJSONObject) : LoginResult => {
+		console.log('[loginApi] data keys:', JSON.stringify(data))
+		// 后端 /auth/login 返回的 data 是平铺结构：
+		//   { token, user_id, username, name, role }
+		// 没有嵌套的 user 对象，直接用 data 构造 UserInfo
+		try {
+			const token = data['token'] as string
+			const user = buildUserInfo(data)
+			const result : LoginResult = {
+				token: token,
+				user: user,
+			}
+			return result
+		} catch (e) {
+			console.error('[loginApi] parse exception:', e)
+			// UTS 中 catch 的 e 可能是任何 Throwable（含 Java 异常），用 instanceof 判断避免 as 强转失败
+			let msg = '登录响应解析失败'
+			if (e instanceof Error) {
+				const errObj = e as Error
+				const m = errObj.message
+				if (m != null && m.length > 0) {
+					msg = msg + ': ' + m
+				}
+			}
+			throw new Error(msg)
+		}
+	})
+}
+
+/** 学员注册（手机号 + 密码 + 姓名，username 由后端按手机号生成） */
+export function registerApi(params : RegisterParams) : Promise<UTSJSONObject> {
+	// Android 端 uni.request 的 data 不支持 type 字面量对象（Kotlin data class）
+	// 必须显式构造 UTSJSONObject
+	const payload : UTSJSONObject = {
+		phone: params.phone,
+		password: params.password,
+		name: params.name
+	} as UTSJSONObject
+	return post('/auth/register', payload)
+}
+
+/** 登出（token SHA256 写入 Redis 黑名单） */
+export function logoutApi() : Promise<UTSJSONObject> {
+	return post('/auth/logout', null)
+}
+
+/** 获取当前用户信息 */
+export function getUserInfoApi() : Promise<UserInfo> {
+	return get('/auth/me').then((data : UTSJSONObject) : UserInfo => {
+		return buildUserInfo(data)
+	})
+}

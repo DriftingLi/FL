@@ -1,0 +1,76 @@
+<template>
+	<view class="grid-card" :class="{ 'is-disabled': !available }" @click="onClick">
+		<view class="icon" :style="{ backgroundColor: bgColor }">
+			<text class="icon-text">{{ icon }}</text>
+		</view>
+		<text class="title">{{ title }}</text>
+		<text v-if="!available" class="badge">敬请期待</text>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { computed } from 'vue'
+
+	const props = withDefaults(defineProps<{
+		title : string
+		icon : string
+		color : string
+		available ?: boolean
+	}>(), {
+		available: true,
+	})
+
+	const emit = defineEmits<{
+		(e : 'click') : void
+	}>()
+
+	const bgColor = computed<string>(() : string => {
+		return props.color + '20'  // 透明度 12.5%
+	})
+
+	function onClick() : void {
+		emit('click')
+	}
+</script>
+
+<style>
+	.grid-card {
+		align-items: center;
+		padding: 24rpx 8rpx;
+		border-radius: 16rpx;
+		position: relative;
+	}
+
+	.is-disabled {
+		opacity: 0.55;
+	}
+
+	.icon {
+		width: 96rpx;
+		height: 96rpx;
+		border-radius: 24rpx;
+		align-items: center;
+		justify-content: center;
+		margin-bottom: 12rpx;
+	}
+
+	.icon-text {
+		font-size: 44rpx;
+	}
+
+	.title {
+		font-size: 24rpx;
+		color: #333333;
+	}
+
+	.badge {
+		position: absolute;
+		top: 8rpx;
+		right: 8rpx;
+		font-size: 18rpx;
+		color: #999999;
+		background-color: #f0f0f0;
+		padding: 2rpx 8rpx;
+		border-radius: 8rpx;
+	}
+</style>

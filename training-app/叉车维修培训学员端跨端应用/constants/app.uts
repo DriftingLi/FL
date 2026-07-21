@@ -1,0 +1,29 @@
+/**
+ * 全局常量
+ */
+import type { GridItem } from '../types/index'
+
+/** 存储 key: 登录 token */
+export const STORAGE_KEY_TOKEN = 'auth_token'
+
+/** 存储 key: 用户信息（JSON 字符串） */
+export const STORAGE_KEY_USER = 'auth_user'
+
+/** 仪表盘九宫格入口配置
+ * - available=true 表示已开发，点击跳转 path
+ * - available=false 表示占位，点击提示"功能开发中"
+ * - 后续模块上线时将对应项 available 改为 true 并填入实际 path
+ */
+export const GRID_ITEMS : GridItem[] = [
+	{ key: 'dashboard', title: '仪表盘', icon: '📊', color: '#2979ff', path: '/pages/dashboard/dashboard', available: true },
+	{ key: 'courses', title: '课程中心', icon: '📚', color: '#19be6b', path: '', available: false },
+	{ key: 'question-bank', title: '题库练习', icon: '✏️', color: '#ff9900', path: '', available: false },
+	{ key: 'mock-exam', title: '模拟考试', icon: '⏱️', color: '#dd524d', path: '', available: false },
+	{ key: 'level-exam', title: '考试中心', icon: '🎓', color: '#9c27b0', path: '', available: false },
+	{ key: 'wrong-questions', title: '错题本', icon: '❗', color: '#ff5722', path: '', available: false },
+	{ key: 'profile', title: '个人中心', icon: '👤', color: '#00bcd4', path: '', available: false },
+	{ key: 'ai-assistant', title: 'AI 助手', icon: '🤖', color: '#607d8b', path: '', available: false },
+]
+
+/** 占位入口点击提示文案 */
+export const UNAVAILABLE_TOAST = '功能开发中，敬请期待'

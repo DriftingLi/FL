@@ -1,0 +1,187 @@
+<template>
+	<scroll-view scroll-y class="login-page">
+		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+		<view class="header">
+			<image class="logo" src="/static/logo.png" mode="aspectFit"></image>
+			<text class="app-title">叉车维修培训</text>
+			<text class="app-subtitle">学员端</text>
+		</view>
+
+		<view class="form">
+			<view class="form-item">
+				<input class="input-base" type="text" placeholder="用户名或手机号" :maxlength="50"
+					v-model="form.username" @confirm="onConfirm" />
+			</view>
+			<view class="form-item">
+				<input class="input-base" :password="true" placeholder="密码（至少 6 位）" :maxlength="32"
+					v-model="form.password" @confirm="onConfirm" />
+			</view>
+
+			<button class="btn-primary submit-btn" :disabled="loading" @click="onSubmit">
+				{{ loading ? '登录中...' : '登 录' }}
+			</button>
+
+			<view class="footer">
+				<text class="footer-text">还没有账号？</text>
+				<text class="footer-link" @click="goRegister">立即注册</text>
+			</view>
+		</view>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+	import { onLoad, onShow } from '@dcloudio/uni-app'
+	import { reactive, ref } from 'vue'
+	import { useAuthStore } from '../../stores/auth'
+	import type { LoginParams } from '../../types/index'
+
+	const auth = useAuthStore()
+
+	const form = reactive<LoginParams>({
+		username: '',
+		password: '',
+	})
+
+	const loading = ref<boolean>(false)
+	const statusBarHeight = ref<number>(20)
+
+	onLoad((options : OnLoadOptions) => {
+		// 读取状态栏高度
+		const sysInfo = uni.getSystemInfoSync()
+		statusBarHeight.value = sysInfo.statusBarHeight
+
+		// 已登录则跳转仪表盘
+		auth.restoreFromStorage()
+		if (auth.isLoggedIn.value) {
+			uni.reLaunch({ url: '/pages/dashboard/dashboard' })
+		}
+	})
+
+	onShow(() => {
+		// 从注册页返回时清空密码
+		form.password = ''
+	})
+
+	function validate() : string {
+		if (form.username.length == 0) return '请输入用户名或手机号'
+		if (form.password.length == 0) return '请输入密码'
+		if (form.password.length < 6) return '密码至少 6 位'
+		return ''
+	}
+
+	async function onSubmit() : Promise<void> {
+		const err = validate()
+		if (err.length > 0) {
+			uni.showToast({ title: err, icon: 'none' })
+			return
+		}
+
+		loading.value = true
+		uni.showLoading({ title: '登录中...', mask: true })
+
+		// 显式构造 LoginParams，避免传 reactive Proxy 给 uni.request
+		// Android 端 uni.request 的 data 不支持 reactive Proxy 对象
+		const params : LoginParams = {
+			username: form.username,
+			password: form.password,
+		}
+
+		try {
+			await auth.login(params)
+			uni.hideLoading()
+			uni.showToast({ title: '登录成功', icon: 'success', duration: 1000 })
+			setTimeout(() => {
+				uni.reLaunch({ url: '/pages/dashboard/dashboard' })
+			}, 500)
+		} catch (e) {
+			uni.hideLoading()
+			// 打印完整异常对象，便于定位（UTS 中 ClassCastException 的 message 可能为空）
+			console.error('[login] failed:', e)
+			// UTS 中 catch 的 e 可能是任何 Throwable（含 Java 异常），用 instanceof 判断避免 as 强转失败
+			let msg = '登录失败，请重试'
+			if (e instanceof Error) {
+				const errObj = e as Error
+				const m = errObj.message
+				if (m != null && m.length > 0) {
+					msg = m
+				}
+			}
+			uni.showToast({ title: msg, icon: 'none' })
+		} finally {
+			loading.value = false
+		}
+	}
+
+	function onConfirm() : void {
+		onSubmit()
+	}
+
+	function goRegister() : void {
+		uni.navigateTo({ url: '/pages/register/register' })
+	}
+</script>
+
+<style>
+	.login-page {
+		flex: 1;
+		background-color: #ffffff;
+	}
+
+	.status-bar {
+		background-color: #ffffff;
+	}
+
+	.header {
+		align-items: center;
+		padding: 60rpx 0 80rpx 0;
+	}
+
+	.logo {
+		width: 160rpx;
+		height: 160rpx;
+		margin-bottom: 24rpx;
+	}
+
+	.app-title {
+		font-size: 44rpx;
+		font-weight: 600;
+		color: #333333;
+		margin-bottom: 8rpx;
+	}
+
+	.app-subtitle {
+		font-size: 24rpx;
+		color: #999999;
+	}
+
+	.form {
+		padding: 0 48rpx;
+	}
+
+	.form-item {
+		margin-bottom: 32rpx;
+	}
+
+	.submit-btn {
+		margin-top: 16rpx;
+		width: 100%;
+	}
+
+	.footer {
+		flex-direction: row;
+		justify-content: center;
+		margin-top: 48rpx;
+	}
+
+	.footer-text {
+		font-size: 26rpx;
+		color: #666666;
+	}
+
+	.footer-link {
+		font-size: 26rpx;
+		color: #2979ff;
+		margin-left: 8rpx;
+	}
+</style>

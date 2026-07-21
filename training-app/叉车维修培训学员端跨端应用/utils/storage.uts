@@ -1,0 +1,47 @@
+/**
+ * 本地持久化封装
+ * 跨 4 端统一使用 uni.setStorageSync / uni.getStorageSync / uni.removeStorageSync
+ */
+
+/** 存储字符串值 */
+export function setStorage(key : string, value : string) : void {
+	uni.setStorageSync(key, value)
+}
+
+/** 读取字符串值，不存在返回空字符串 */
+export function getStorage(key : string) : string {
+	let v = uni.getStorageSync(key)
+	if (v == null) {
+		return ''
+	}
+	return v as string
+}
+
+/** 移除指定 key */
+export function removeStorage(key : string) : void {
+	uni.removeStorageSync(key)
+}
+
+/** 存储 JSON 对象（自动序列化为字符串） */
+export function setStorageJSON(key : string, value : object) : void {
+	uni.setStorageSync(key, JSON.stringify(value))
+}
+
+/** 读取 JSON 对象，失败返回 null
+ * @note UTS 不支持 object 类型，统一返回 UTSJSONObject（JSON.parse 的实际返回类型）
+ */
+export function getStorageJSON(key : string) : UTSJSONObject | null {
+	let v = uni.getStorageSync(key)
+	if (v == null || v == '') {
+		return null
+	}
+	try {
+		const parsed = JSON.parse(v as string)
+		if (parsed == null) {
+			return null
+		}
+		return parsed as UTSJSONObject
+	} catch (e) {
+		return null
+	}
+}
