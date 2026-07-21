@@ -32,7 +32,6 @@ const studentNav: NavItem[] = [
   { key: 'question-bank', label: '题库练习', path: '/training/question-bank', icon: EditPen },
   { key: 'level-exam', label: '考试中心', path: '/training/level-exam', icon: Document },
   { key: 'wrong-questions', label: '错题本', path: '/training/wrong-questions', icon: CircleCloseFilled },
-  { key: 'valuation', label: '残值评估', path: '/valuation', icon: DataAnalysis },
   { key: 'ai-assistant', label: 'AI 助手', path: '/ai-assistant', icon: MagicStick }
 ]
 
@@ -45,7 +44,8 @@ const adminNav: NavItem[] = [
   { key: 'exam-sessions', label: '考试场次', path: '/admin/exam-sessions', icon: Calendar },
   { key: 'statistics', label: '统计分析', path: '/admin/statistics', icon: TrendCharts },
   { key: 'valuation-config', label: '残值配置', path: '/admin/valuation-config', icon: PriceTag },
-  { key: 'content-generate', label: '内容生成', path: '/admin/content-generate', icon: MagicStick }
+  { key: 'content-generate', label: '内容生成', path: '/admin/content-generate', icon: MagicStick },
+  { key: 'featured-content', label: '内容精选', path: '/admin/featured-content', icon: Document }
 ]
 
 const tutorNav: NavItem[] = [
@@ -64,6 +64,7 @@ const portalNav: NavItem[] = [
   { key: 'products', label: '核心服务', path: '/#products' },
   { key: 'cooperation', label: '合作模式', path: '/#cooperation' },
   { key: 'service', label: '服务保障', path: '/#service' },
+  { key: 'featured', label: '内容精选', path: '/#featured' },
   { key: 'contact', label: '加入我们', path: '/#footer' }
 ]
 

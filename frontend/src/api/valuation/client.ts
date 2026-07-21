@@ -9,7 +9,8 @@ import type { ApiResponse } from '@/types/valuation/evaluation'
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/api$/, '') + '/api/valuation'
 const REQUEST_TIMEOUT_MS = 30_000
 
-const TOKEN_STORAGE_KEY = 'token'
+const TOKEN_STORAGE_KEY = 'valuation_token'
+const USER_INFO_KEY = 'valuation_userInfo'
 
 const client = axios.create({
   baseURL: API_BASE_URL,
@@ -29,27 +30,27 @@ client.interceptors.request.use(
   (err) => Promise.reject(err)
 )
 
-// 延迟引入 auth store 与 router，避免循环依赖
+// 延迟引入 valuation auth store 与 router，避免循环依赖
 function handleUnauthorized() {
   // 动态加载，防止模块初始化顺序问题
-  import('@/stores/auth')
-    .then(({ useAuthStore }) => {
+  import('@/stores/valuationAuth')
+    .then(({ useValuationAuthStore }) => {
       try {
-        useAuthStore().clearAuthData()
+        useValuationAuthStore().clearAuthData()
       } catch (e) {
         localStorage.removeItem(TOKEN_STORAGE_KEY)
-        localStorage.removeItem('userInfo')
+        localStorage.removeItem(USER_INFO_KEY)
       }
     })
     .catch(() => {
       localStorage.removeItem(TOKEN_STORAGE_KEY)
-      localStorage.removeItem('userInfo')
+      localStorage.removeItem(USER_INFO_KEY)
     })
-  // 仅在需要登录的页面跳转登录页；公开页面（如残值评估首页）保留当前视图
+  // 仅在需要登录的页面跳转估值专属登录页；公开页面（如残值评估首页）保留当前视图
   import('@/router')
     .then(({ default: router }) => {
       if (router.currentRoute.value.matched.some(r => r.meta?.requiresAuth === true)) {
-        router.push('/login')
+        router.push('/valuation/login')
       }
     })
     .catch(() => {

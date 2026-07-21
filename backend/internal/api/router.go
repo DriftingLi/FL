@@ -89,6 +89,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	RegisterTutorRoutes(api, cfg, db)
 	RegisterWrongQuestionRoutes(api, cfg, db)
 	RegisterMockExamRoutes(api, cfg, db)
+	RegisterFeaturedRoutes(api, cfg, db)
 
 	_ = response.Success // 确保包引用
 	return r

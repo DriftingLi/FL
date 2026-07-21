@@ -29,11 +29,15 @@ import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 // vditor 是浏览器 DOM 库，动态导入避免 SSR/构建期问题
 import Vditor from 'vditor'
 import 'vditor/dist/index.css'
+import { useAuthStore } from '@/stores/auth'
 
 const props = withDefaults(defineProps<{
   modelValue: string
   placeholder?: string
   height?: number
+  /** 图片上传地址（绝对或相对路径，如 /api/admin/featured-content/upload-image）。
+   *  传入后即可在编辑器内直接上传图片到后端，否则图片以 base64 嵌入。 */
+  uploadUrl?: string
 }>(), {
   placeholder: '请输入 Markdown 内容...',
   height: 500
@@ -48,6 +52,25 @@ let vditor: Vditor | null = null
 let internalUpdate = false
 
 const bodyHeight = ref(`${props.height}px`)
+
+// 构造 Vditor upload 配置（仅当传入 uploadUrl 时启用）
+function buildUploadConfig() {
+  if (!props.uploadUrl) return undefined
+  const authStore = useAuthStore()
+  const headers: Record<string, string> = {}
+  if (authStore.token) {
+    headers.Authorization = `Bearer ${authStore.token}`
+  }
+  return {
+    url: props.uploadUrl,
+    fieldName: 'file',
+    headers,
+    // 后端返回 { msg, code, data: { errFiles, succMap: { name: url } } }
+    // Vditor 默认按此结构解析，无需额外处理
+    accept: 'image/*',
+    multiple: false
+  }
+}
 
 // 创建 vditor 实例（切换模式时复用）
 function createVditor(targetMode: 'ir' | 'sv') {
@@ -71,6 +94,7 @@ function createVditor(targetMode: 'ir' | 'sv') {
       pin: true
     },
     cache: { enable: false },
+    upload: buildUploadConfig(),
     preview: {
       hljs: {
         lineNumber: false,
@@ -123,6 +147,19 @@ watch(() => props.height, (h) => {
 onBeforeUnmount(() => {
   vditor?.destroy()
   vditor = null
+})
+
+// 暴露给父组件：主动获取 Vditor 内部最新值
+// 用于保存前兜底（避免 v-model 在某些输入场景下未及时同步）
+defineExpose({
+  getValue: (): string => {
+    if (!vditor) return props.modelValue || ''
+    try {
+      return vditor.getValue() || ''
+    } catch {
+      return props.modelValue || ''
+    }
+  }
 })
 </script>
 

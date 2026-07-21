@@ -35,11 +35,8 @@ Thumbs.db
 *.db
 *.sqlite
 
-# Uploads (keep directories, ignore content)
-static/uploads/chapters/*
-static/uploads/slides/*
-!static/uploads/chapters/.gitkeep
-!static/uploads/slides/.gitkeep
+# Static files
+\backend\static
 
 # Logs
 *.log

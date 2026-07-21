@@ -126,11 +126,11 @@ export function getDefaultWorkspaceBySubdomain(): string {
 }
 
 // 获取当前子域名对应的登录角色
-// training 和 valuation 子域名都是学员登录
-export function getRoleForSubdomain(): 'student' | 'tutor' | 'admin' {
+// training 子域名走学员登录；valuation 子域名走独立的 valuation_user 登录体系
+export function getRoleForSubdomain(): 'student' | 'tutor' | 'admin' | 'valuation_user' {
   const sub = getSubdomain()
   if (sub === 'tutor') return 'tutor'
   if (sub === 'admin') return 'admin'
-  // training、valuation 都是学员登录
+  if (sub === 'valuation') return 'valuation_user'
   return 'student'
 }

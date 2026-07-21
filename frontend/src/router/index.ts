@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useValuationAuthStore } from '@/stores/valuationAuth'
 import { getSubdomain, buildSubdomainUrl, getTargetSubdomainForPath, getDefaultWorkspaceBySubdomain } from '@/utils/subdomain'
 
 const routes: RouteRecordRaw[] = [
@@ -14,6 +15,12 @@ const routes: RouteRecordRaw[] = [
         path: '',
         name: 'PortalHome',
         component: () => import('@/pages/portal/PortalHome.vue')
+      },
+      {
+        path: 'content/:id',
+        name: 'PortalContentDetail',
+        component: () => import('@/pages/portal/ContentDetail.vue'),
+        meta: { requiresAuth: false }
       }
     ]
   },
@@ -191,9 +198,23 @@ const routes: RouteRecordRaw[] = [
         path: 'history',
         name: 'ValuationHistory',
         component: () => import('@/pages/student/valuation/ValuationHistoryView.vue'),
-        meta: { requiresAuth: true, roles: ['student', 'tutor', 'admin'], navKey: 'valuation-history', navLabel: '评估历史', navGroup: 'tools' }
+        meta: { requiresAuth: true, roles: ['valuation_user'], navKey: 'valuation-history', navLabel: '评估历史', navGroup: 'tools' }
       }
     ]
+  },
+
+  // ========== 残值评估独立登录 / 注册（独立全屏页，不挂 ValuationLayout）==========
+  {
+    path: '/valuation/login',
+    name: 'ValuationLogin',
+    component: () => import('@/pages/valuation/auth/ValuationLogin.vue'),
+    meta: { requiresAuth: false, isValuationAuthPage: true }
+  },
+  {
+    path: '/valuation/register',
+    name: 'ValuationRegister',
+    component: () => import('@/pages/valuation/auth/ValuationRegister.vue'),
+    meta: { requiresAuth: false, isValuationAuthPage: true }
   },
 
   // ========== AI 助手模块（学员/导师/管理员均可）==========
@@ -271,6 +292,18 @@ const routes: RouteRecordRaw[] = [
         name: 'ContentGenerate',
         component: () => import('@/pages/admin/ContentGenerate.vue'),
         meta: { navKey: 'content-generate', navLabel: '内容生成', navGroup: 'content' }
+      },
+      {
+        path: 'featured-content',
+        name: 'AdminFeaturedContentList',
+        component: () => import('@/pages/admin/FeaturedContentList.vue'),
+        meta: { navKey: 'featured-content', navLabel: '内容精选', navGroup: 'content' }
+      },
+      {
+        path: 'featured-content/edit/:id?',
+        name: 'AdminFeaturedContentEdit',
+        component: () => import('@/pages/admin/FeaturedContentEdit.vue'),
+        meta: { navKey: 'featured-content', navLabel: '内容精选编辑', navGroup: 'content' }
       },
       {
         path: 'exam-sessions',
@@ -360,7 +393,76 @@ const router = createRouter({
 
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
+  const valuationAuth = useValuationAuthStore()
 
+  // ===== 估值模块独立鉴权分支 =====
+  // 所有 /valuation/* 路径都由估值独立 auth store 校验，不走主体系
+  const isValuationPath = to.path === '/valuation' || to.path.startsWith('/valuation/')
+
+  if (isValuationPath) {
+    // 等待估值 auth 初始化完成
+    if (valuationAuth.isInitializing) {
+      await new Promise<void>(resolve => {
+        const unwatch = watch(() => valuationAuth.isInitializing, (val) => {
+          if (!val) {
+            unwatch()
+            resolve()
+          }
+        })
+      })
+    }
+
+    // 子域名边界检查：估值路径必须在 valuation 子域名下访问
+    const currentSubdomain = getSubdomain()
+    if (currentSubdomain !== 'valuation') {
+      window.location.href = buildSubdomainUrl('valuation', to.fullPath)
+      return
+    }
+
+    // 已登录估值用户访问 /valuation/login 或 /valuation/register → 跳回评估历史
+    if (valuationAuth.isLoggedIn && (to.name === 'ValuationLogin' || to.name === 'ValuationRegister')) {
+      next('/valuation/history')
+      return
+    }
+
+    // 通过 to.matched 检查是否需要鉴权（支持子路由覆盖父路由 meta）
+    const requiresValuationAuth = to.matched.some(record => record.meta?.requiresAuth === true)
+    if (!requiresValuationAuth) {
+      next()
+      return
+    }
+
+    // 检查估值 token
+    const hasValuationToken = valuationAuth.token &&
+                               valuationAuth.isLoggedIn &&
+                               valuationAuth.userInfo &&
+                               valuationAuth.userInfo.role
+
+    if (!hasValuationToken) {
+      valuationAuth.clearAuthData()
+      next({ path: '/valuation/login', query: { redirect: to.fullPath } })
+      return
+    }
+
+    // 角色校验：估值路由仅接受 valuation_user
+    const valuationRole = valuationAuth.userInfo.role
+    const requiredRole = to.meta?.role as string | undefined
+    const requiredRoles = to.meta?.roles as string[] | undefined
+
+    const roleMatched = requiredRoles
+      ? requiredRoles.includes(valuationRole)
+      : (requiredRole ? requiredRole === valuationRole : true)
+
+    if (!roleMatched) {
+      next('/valuation')
+      return
+    }
+
+    next()
+    return
+  }
+
+  // ===== 主体系鉴权分支（培训/管理/导师等） =====
   if (authStore.isInitializing) {
     await new Promise<void>(resolve => {
       const unwatch = watch(() => authStore.isInitializing, (val) => {
@@ -381,9 +483,13 @@ router.beforeEach(async (to, from, next) => {
 
   if (isLoginPath) {
     // /login 和 /register 在主域名上跳到 training 子域名（主域名不再承载登录）
-    // 其它子域名保留各自的 /login（training=学员、valuation=学员、tutor=导师、admin=管理员）
+    // valuation 子域名有独立的 /valuation/login 与 /valuation/register，主体系 /login 重定向过去
     if (currentSubdomain === 'main') {
       window.location.href = buildSubdomainUrl('training', to.fullPath)
+      return
+    }
+    if (currentSubdomain === 'valuation') {
+      next(to.path === '/register' ? '/valuation/register' : '/valuation/login')
       return
     }
   } else {

@@ -94,6 +94,23 @@ type Tutor struct {
 
 func (Tutor) TableName() string { return "tutor" }
 
+// ===== 3.5 残值评估模块独立用户 =====
+
+// ValuationUser 残值评估模块独立用户（与培训 Student 表完全独立，账号互不复用）。
+type ValuationUser struct {
+	ID        int       `gorm:"column:id;primaryKey" json:"id"`
+	Username  string    `gorm:"column:username;uniqueIndex" json:"username"`
+	Password  string    `gorm:"column:password" json:"-"`
+	Name      string    `gorm:"column:name" json:"name"`
+	Phone     string    `gorm:"column:phone;uniqueIndex" json:"phone"`
+	Email     string    `gorm:"column:email" json:"email,omitempty"`
+	Company   string    `gorm:"column:company" json:"company,omitempty"`
+	Status    int16     `gorm:"column:status;default:1" json:"status"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (ValuationUser) TableName() string { return "valuation_users" }
+
 // ===== 4. 课程 =====
 
 type Course struct {
@@ -355,3 +372,23 @@ type AsyncTask struct {
 }
 
 func (AsyncTask) TableName() string { return "async_task" }
+
+// ===== 20. 内容精选（公司动态 / 行业新闻 等） =====
+
+type FeaturedContent struct {
+	ContentID   int        `gorm:"column:content_id;primaryKey" json:"content_id"`
+	Title       string     `gorm:"column:title" json:"title"`
+	Summary     string     `gorm:"column:summary" json:"summary"`
+	CoverImage  string     `gorm:"column:cover_image" json:"cover_image"`
+	Content     string     `gorm:"column:content" json:"content"`
+	Category    string     `gorm:"column:category;default:industry" json:"category"`
+	Source      string     `gorm:"column:source" json:"source"`
+	Status      int16      `gorm:"column:status;default:0" json:"status"`
+	ViewCount   int        `gorm:"column:view_count;default:0" json:"view_count"`
+	SortOrder   int        `gorm:"column:sort_order;default:0" json:"sort_order"`
+	PublishedAt *time.Time `gorm:"column:published_at" json:"published_at,omitempty"`
+	CreatedAt   time.Time  `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt   time.Time  `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (FeaturedContent) TableName() string { return "featured_content" }

@@ -13,6 +13,10 @@ frontend/dist/
 frontend/.vite/
 frontend/build*.log
 
+# ===== 跨端应用 (training-app) =====
+# uni-app x 跨端项目，MVP 阶段暂不入库
+training-app/
+
 # ===== Node (通用) =====
 node_modules/
 npm-debug.log*
@@ -38,16 +42,14 @@ yarn-error.log*
 *.sqlite
 *.sqlite3
 
-# ===== 上传内容（保留目录，忽略内容）=====
-backend/static/uploads/chapters/*
-backend/static/uploads/slides/*
+# ===== 上传内容（运行时生成，不应入库）=====
+backend/static/
+!backend/static/.gitkeep
+
+# 兼容旧规则（保留目录占位文件）
 !backend/static/uploads/chapters/.gitkeep
 !backend/static/uploads/slides/.gitkeep
-
-# 用户上传的视频和图片（运行时生成，不应入库）
-backend/static/videos/*
 !backend/static/videos/.gitkeep
-backend/static/images/*
 !backend/static/images/.gitkeep
 
 # Docker Compose 本地覆盖文件（仅保留 .example 模板入库）

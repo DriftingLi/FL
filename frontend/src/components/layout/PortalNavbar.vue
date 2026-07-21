@@ -68,7 +68,7 @@ const homeUrl = buildSubdomainUrl('main', '/')
 function onScroll() {
   scrolled.value = window.scrollY > 80
   // 更新当前活动锚点
-  const sections = ['hero', 'about', 'products', 'cooperation', 'service', 'footer']
+  const sections = ['hero', 'about', 'products', 'cooperation', 'service', 'featured', 'footer']
   for (const id of sections) {
     const el = document.getElementById(id)
     if (el) {

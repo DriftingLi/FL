@@ -80,6 +80,7 @@
             <a :href="productsUrl" class="quick-link">核心服务</a>
             <a :href="cooperationUrl" class="quick-link">合作模式</a>
             <a :href="serviceUrl" class="quick-link">服务保障</a>
+            <a :href="featuredUrl" class="quick-link">内容精选</a>
             <a :href="joinUrl" class="quick-link">加入我们</a>
           </div>
         </div>
@@ -101,6 +102,7 @@ const aboutUrl = buildSubdomainUrl('main', '/#about')
 const productsUrl = buildSubdomainUrl('main', '/#products')
 const cooperationUrl = buildSubdomainUrl('main', '/#cooperation')
 const serviceUrl = buildSubdomainUrl('main', '/#service')
+const featuredUrl = buildSubdomainUrl('main', '/#featured')
 const joinUrl = buildSubdomainUrl('main', '/#footer')
 </script>
 

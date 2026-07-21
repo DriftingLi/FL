@@ -37,14 +37,18 @@ func (s *StudentService) queryProfile(studentID int) (map[string]any, error) {
 	s.db.Model(&model.StudyRecord{}).Where("student_id = ?", studentID).
 		Select("COALESCE(SUM(study_duration), 0)").Scan(&totalStudyDuration)
 
+	// 课程总数（系统中所有已发布课程的数量，status=1 表示已发布）
+	var totalCourses int64
+	s.db.Model(&model.Course{}).Where("status = ?", 1).Count(&totalCourses)
+
 	// 已完成课程数
 	var completedCourses int64
-	s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND progress >= 100").
+	s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND progress >= 100", studentID).
 		Distinct("course_id").Count(&completedCourses)
 
 	// 学习中课程数
 	var learningCourses int64
-	s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND progress > 0 AND progress < 100").
+	s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND progress > 0 AND progress < 100", studentID).
 		Distinct("course_id").Count(&learningCourses)
 
 	// 最近学习时间
@@ -102,6 +106,7 @@ func (s *StudentService) queryProfile(studentID int) (map[string]any, error) {
 	return map[string]any{
 		"student_info": studentToDict(&student),
 		"study_stats": map[string]any{
+			"total_courses":        totalCourses,
 			"total_study_duration": totalStudyDuration,
 			"completed_courses":    completedCourses,
 			"learning_courses":     learningCourses,

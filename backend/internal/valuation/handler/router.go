@@ -8,14 +8,20 @@
 //	  ├── GET  /evaluations/:id/report  下载 PDF 报告
 //	  ├── POST /battery/evaluations/:id/report   生成电池报告
 //	  ├── GET  /battery/evaluations/:id/report   下载电池报告
+//	  ├── POST /auth/login              估值模块独立登录
+//	  ├── POST /auth/register           估值模块独立注册
 //	  ├── /dictionaries/*               字典查询（只读 GET）
 //	  └── /health                       健康检查
 //
-//	/api/valuation                      鉴权组（JWTAuth）
+//	/api/valuation                      估值鉴权组（ValuationJWTAuth，独立 JWT secret）
 //	  ├── GET  /evaluations             评估历史/详情（需登录）
 //	  ├── GET  /evaluations/:id
 //	  ├── /battery/evaluations          电池 RUL 评估 CRUD（需登录）
-//	  └── /admin/*                      管理员 CRUD（要求 JWT role=admin）
+//	  ├── GET  /auth/me                 获取当前估值用户
+//	  └── POST /auth/logout             估值用户登出
+//
+//	/api/valuation/admin                管理员组（主体系 JWTAuth + role=admin）
+//	  └── /admin/*                      管理员 CRUD（仍走主体系 admin JWT）
 package handler
 
 import (
@@ -31,9 +37,10 @@ import (
 )
 
 // RegisterRoutes 注册残值评估模块路由。
-// 路由分两组：
-//   - 公开组 /api/valuation：字典查询、评估提交、统计、健康检查、报告生成/下载（匿名可访问）
-//   - 鉴权组 /api/valuation：评估历史/详情、电池 RUL CRUD、admin CRUD（需 JWTAuth）
+// 路由分四组：
+//   - 公开组 /api/valuation：字典查询、评估提交、统计、健康检查、报告生成/下载、登录/注册（匿名可访问）
+//   - 估值鉴权组 /api/valuation：评估历史/详情、电池 RUL CRUD、/auth/me、/auth/logout（需估值专属 ValuationJWTAuth）
+//   - 管理员组 /api/valuation/admin：字典 CRUD（需主体系 admin JWT）
 func RegisterRoutes(
 	r *gin.Engine,
 	cfg *config.Config,
@@ -45,6 +52,7 @@ func RegisterRoutes(
 	batterySvc *vservice.BatteryRULService,
 	pdfGen *pdf.Generator,
 	pdfOutputDir string,
+	valuationAuthSvc *vservice.ValuationAuthService,
 ) {
 	evalHandler := NewEvaluationHandler(valuationSvc, evalRepo, logger)
 	configHandler := NewConfigHandler(dictRepo, logger)
@@ -52,8 +60,9 @@ func RegisterRoutes(
 	batteryRepo := vrepo.NewBatteryRepository(pool)
 	batteryHandler := NewBatteryHandler(batteryRepo, batterySvc, logger, pdfOutputDir)
 	healthHandler := NewHealthHandler()
+	valuationAuthHandler := NewValuationAuthHandler(valuationAuthSvc)
 
-	// === 公开组（无需登录）：字典查询 + 评估提交 + 统计 + 健康检查 + 报告生成/下载 ===
+	// === 公开组（无需登录）：字典查询 + 评估提交 + 统计 + 健康检查 + 报告生成/下载 + 登录/注册 ===
 	// 未登录用户可提交评估并被计数（evaluations 表无 user_id，记录匿名存储）
 	// 报告生成/下载也改为公开：未登录用户可下载已生成的评估报告
 	public := r.Group("/api/valuation")
@@ -61,6 +70,10 @@ func RegisterRoutes(
 		public.POST("/evaluations", evalHandler.Create)
 		public.GET("/evaluations/stats", evalHandler.Stats)
 		public.GET("/health", healthHandler.Check)
+
+		// 估值模块独立登录/注册（公开接口）
+		public.POST("/auth/login", valuationAuthHandler.Login)
+		public.POST("/auth/register", valuationAuthHandler.Register)
 
 		// 报告生成与下载（无需登录）
 		public.POST("/evaluations/:id/report", reportHandler.Generate)
@@ -92,17 +105,27 @@ func RegisterRoutes(
 		}
 	}
 
-	// === 鉴权组（需登录）：评估历史/详情 + 电池 RUL CRUD + admin CRUD ===
-	// 报告生成/下载已挪到公开组，未登录用户可下载报告
-	g := r.Group("/api/valuation")
-	g.Use(middleware.JWTAuth(cfg))
+	// === 估值独立鉴权组（需估值专属 ValuationJWTAuth） ===
+	// 评估历史/详情 + 电池 RUL CRUD + /auth/me + /auth/logout
+	// 使用独立 JWT secret，与主体系 token 互不兼容
+	valAuth := r.Group("/api/valuation")
+	valAuth.Use(ValuationJWTAuth(cfg.Valuation.JWTSecretKey))
 	{
-		g.GET("/evaluations", evalHandler.List)
-		g.GET("/evaluations/:id", evalHandler.Get)
+		valAuth.GET("/evaluations", evalHandler.List)
+		valAuth.GET("/evaluations/:id", evalHandler.Get)
+
+		valAuth.POST("/battery/evaluations", batteryHandler.Create)
+		valAuth.GET("/battery/evaluations", batteryHandler.List)
+		valAuth.GET("/battery/evaluations/:id", batteryHandler.Get)
+
+		valAuth.GET("/auth/me", valuationAuthHandler.Me)
+		valAuth.POST("/auth/logout", valuationAuthHandler.Logout)
 	}
 
-	// === 管理员 CRUD 接口（要求 JWT role=admin） ===
-	admin := g.Group("/admin")
+	// === 管理员 CRUD 接口（要求主体系 JWT role=admin） ===
+	// 残值配置管理仍走主体系 admin JWT，不参与此次独立化
+	admin := r.Group("/api/valuation/admin")
+	admin.Use(middleware.JWTAuth(cfg))
 	admin.Use(middleware.RoleRequired("admin"))
 	{
 		// brands
@@ -162,9 +185,4 @@ func RegisterRoutes(
 		// coefficient_configs（仅支持按 key 更新值，不允许新增/删除）
 		admin.PUT("/coefficient-configs/:key", configHandler.UpdateCoefficient)
 	}
-
-	// === 电池 RUL 评估 CRUD（需登录，报告生成/下载已挪到公开组） ===
-	g.POST("/battery/evaluations", batteryHandler.Create)
-	g.GET("/battery/evaluations", batteryHandler.List)
-	g.GET("/battery/evaluations/:id", batteryHandler.Get)
 }
