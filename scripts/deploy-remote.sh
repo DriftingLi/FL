@@ -486,7 +486,7 @@ health_check() {
     fi
 
     # ===== 前端健康检查 =====
-    log_info ">>> 前端健康检查 (localhost:80/health)..."
+    log_info ">>> 前端健康检查 (localhost:8081/health)..."
 
     FRONTEND_RETRY=0
     FRONTEND_MAX_RETRIES=10
@@ -500,9 +500,8 @@ health_check() {
             return 1
         fi
 
-        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            --connect-timeout 3 --max-time 5 \
-            "http://localhost:80/health" 2>/dev/null || echo "000")
+        docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" exec -T "$FRONTEND_SERVICE" \
+            wget -qO- http://localhost/health 2>/dev/null && HTTP_CODE="200" || HTTP_CODE="000"
 
         if [ "$HTTP_CODE" = "200" ]; then
             log_ok "前端健康检查通过 ($HTTP_CODE)"
