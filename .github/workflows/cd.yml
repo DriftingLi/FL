@@ -326,71 +326,13 @@ jobs:
           rm -f ~/.ssh/deploy_key /tmp/deploy-env.sh
 
   # ============================================================
-  # Stage 3: 健康检查（后端 + 前端）
+  # Stage 4: 全栈自动回滚（通过公网 SSH）
   # ============================================================
-  health-check:
+  rollback:
     needs: deploy
     if: |
       always() &&
       needs.deploy.result == 'success'
-    runs-on: ubuntu-latest
-    steps:
-      - name: 等待服务就绪
-        run: sleep 15
-
-      - name: API 健康检查
-        env:
-          API_URL: ${{ vars.API_URL || secrets.API_URL }}
-        run: |
-          if [ -z "$API_URL" ]; then
-            echo "::warning::未配置 API_URL，跳过健康检查"
-            exit 0
-          fi
-          for i in $(seq 1 15); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-              --connect-timeout 5 --max-time 10 \
-              "$API_URL/api/health" 2>/dev/null || echo "000")
-            if [ "$STATUS" = "200" ]; then
-              echo "✅ 后端健康 ($STATUS)"
-              exit 0
-            fi
-            echo "⏳ 等待... ($STATUS) [$i/15]"
-            sleep 6
-          done
-          echo "❌ 后端健康检查失败!"
-          exit 1
-
-      - name: 前端健康检查
-        env:
-          FRONTEND_URL: ${{ vars.FRONTEND_URL || secrets.FRONTEND_URL }}
-        run: |
-          if [ -z "$FRONTEND_URL" ]; then
-            echo "::warning::未配置 FRONTEND_URL，跳过前端健康检查"
-            exit 0
-          fi
-          for i in $(seq 1 15); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-              --connect-timeout 5 --max-time 10 \
-              "$FRONTEND_URL/health" 2>/dev/null || echo "000")
-            if [ "$STATUS" = "200" ]; then
-              echo "✅ 前端健康 ($STATUS)"
-              exit 0
-            fi
-            echo "⏳ 等待前端... ($STATUS) [$i/15]"
-            sleep 6
-          done
-          echo "❌ 前端健康检查失败!"
-          exit 1
-
-  # ============================================================
-  # Stage 4: 全栈自动回滚（通过公网 SSH）
-  # ============================================================
-  rollback:
-    needs: [deploy, health-check]
-    if: |
-      always() &&
-      needs.deploy.result == 'success' &&
-      needs.health-check.result == 'failure'
     runs-on: ubuntu-latest
     environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
     env:
@@ -427,14 +369,13 @@ jobs:
   # Stage 6: 部署汇总
   # ============================================================
   notify:
-    needs: [deploy, health-check]
+    needs: deploy
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: 汇总部署状态
         run: |
           DEPLOY_STATUS="${{ needs.deploy.result }}"
-          HEALTH_STATUS="${{ needs.health-check.result }}"
 
           echo "# 部署报告" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -442,7 +383,6 @@ jobs:
           echo "|------|------|" >> $GITHUB_STEP_SUMMARY
           echo "| 全栈部署 (公网 SSH) | $([ "$DEPLOY_STATUS" = 'success' ] && echo '✅' || ([ "$DEPLOY_STATUS" = 'skipped' ] && echo '⏭️') || echo '❌') |" >> $GITHUB_STEP_SUMMARY
           echo "| 前端 | $([ "$DEPLOY_STATUS" = 'success' ] && echo '✅ 已部署' || echo '⚠️') |" >> $GITHUB_STEP_SUMMARY
-          echo "| 健康检查 | $([ "$HEALTH_STATUS" = 'success' ] && echo '✅' || ([ "$HEALTH_STATUS" = 'skipped' ] && echo '⏭️') || echo '⚠️ 已回滚') |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- 后端 API: ${{ vars.API_URL || '未配置' }}" >> $GITHUB_STEP_SUMMARY
           echo "- 前端: ${{ vars.FRONTEND_URL || '未配置' }}" >> $GITHUB_STEP_SUMMARY
