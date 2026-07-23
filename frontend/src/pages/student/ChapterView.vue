@@ -308,6 +308,22 @@ function stopStudy() {
   isStudying.value = false
 }
 
+// 增量上报学习时长（不停止学习）
+async function reportIncremental(final: boolean) {
+  const now = Date.now()
+  const elapsed = Math.floor((now - studyStartTime) / 1000)
+  if (elapsed < 5 && !final) return  // 少于 5 秒不报
+  try {
+    await courseApi.updateProgress(courseId.value, {
+      chapter_id: chapterDetail.value.chapter_id,
+      duration: Math.max(Math.ceil(elapsed / 60), 1),
+    })
+  } catch {
+    // 增量上报失败不影响学习
+  }
+  studyStartTime = now  // 重置计时起点
+}
+
 async function completeStudy() {
   stopStudy()
   const duration = Math.max(Math.ceil(studySeconds.value / 60), 1)

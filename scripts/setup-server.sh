@@ -24,7 +24,7 @@ log_error() { echo -e "${RED}[SETUP]${NC} ❌ $1"; }
 # ---- 配置（按需修改）----
 DEPLOY_USER="${DEPLOY_USER:-deploy}"
 DEPLOY_PATH="${DEPLOY_PATH:-/opt/forklift-training}"
-SSH_PORT="${SSH_PORT:-22}"
+SSH_PORT="${SSH_PORT:-2222}"
 
 # ---- 检查是否以 root 运行 ----
 if [ "$(id -u)" -ne 0 ]; then
@@ -420,9 +420,9 @@ main() {
     echo ""
     echo "  3. 在 GitHub 仓库 Settings → Secrets and variables →"
     echo "     Actions 中添加以下 Secrets:"
-    echo "       SSH_HOST          服务器 IP/域名"
+    echo "       SSH_HOST          服务器公网 IP（如 183.36.195.104）"
     echo "       SSH_USER          $DEPLOY_USER"
-    echo "       SSH_PORT          22"
+    echo "       SSH_PORT          2222"
     echo "       SSH_PRIVATE_KEY   SSH 私钥（完整内容，含 BEGIN/END）"
     echo "       DATABASE_URL      PostgreSQL 连接串"
     echo "       SECRET_KEY        应用密钥"

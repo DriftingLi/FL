@@ -1,4 +1,4 @@
-name: CD - 持续部署（Tailscale SSH）
+name: CD - 持续部署（公网 SSH）
 
 on:
   # CI 通过后自动触发部署（确保部署的是已测试的代码）
@@ -41,8 +41,6 @@ env:
   IMAGE_FRONTEND: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-frontend
   DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/forklift-training' }}
   COMPOSE_FILE: ${{ vars.COMPOSE_FILE || 'docker-compose.prod.yml' }}
-  TAILSCALE_VERSION: "v2"
-  TAILSCALE_TAG: "tag:ci"
 
 jobs:
   # ============================================================
@@ -159,7 +157,7 @@ jobs:
           provenance: false
 
   # ============================================================
-  # Stage 2: 通过 Tailscale SSH 部署全栈到自托管服务器
+  # Stage 2: 通过公网 SSH 部署全栈到自托管服务器
   # ============================================================
   deploy:
     needs: [build-backend, build-frontend]
@@ -214,12 +212,10 @@ jobs:
       REDIS_DB: ${{ secrets.REDIS_DB || '0' }}
       REDIS_POOL_SIZE: ${{ secrets.REDIS_POOL_SIZE || '10' }}
       REDIS_KEY_PREFIX: ${{ secrets.REDIS_KEY_PREFIX || 'fl:' }}
-      # Tailscale
-      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-      TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
-      TAILSCALE_HOST: ${{ secrets.TAILSCALE_HOST }}
+      # SSH 连接（公网 IP）
+      SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
-      SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+      SSH_PORT: ${{ secrets.SSH_PORT || '2222' }}
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v4
@@ -227,61 +223,7 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       # --------------------------------------------------------
-      # Step 2.1: 加入 Tailscale 网络
-      # --------------------------------------------------------
-      - name: 连接 Tailscale
-        uses: tailscale/github-action@v2
-        with:
-          oauth-client-id: ${{ env.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ env.TS_OAUTH_SECRET }}
-          tags: ${{ env.TAILSCALE_TAG }}
-
-      - name: 验证 Tailscale 连通性
-        run: |
-          set -x
-          echo "=== Tailscale 自诊断 ==="
-          echo ""
-          echo "TAILSCALE_HOST = ******** (长度: ${#TAILSCALE_HOST})"
-          echo ""
-          # Tailnet 信息
-          echo "--- Tailnet ---"
-          echo "  TAILSCALE_HOST 值长度: ${#TAILSCALE_HOST}"
-          echo ""
-          echo "--- Tailscale 本机节点 ---"
-          tailscale status --json 2>/dev/null > /tmp/ts.json
-          if [ -s /tmp/ts.json ]; then
-            echo "  本机: $(jq -r '.Self.HostName // "?"' /tmp/ts.json)"
-            echo "  IP:   $(jq -r '.Self.TailscaleIPs[0] // "?"' /tmp/ts.json)"
-            echo "  Tailnet: $(jq -r '.CurrentTailnet.Name // "?"' /tmp/ts.json)"
-            echo "  Online: $(jq -r '.Self.Online' /tmp/ts.json)"
-            PEERS=$(jq -r '.Peer | length' /tmp/ts.json)
-            echo "  可见节点数: $PEERS"
-            if [ "$PEERS" -gt 0 ]; then
-              jq -r '.Peer | to_entries[] | "    \(.value.HostName // "?"): \(.value.TailscaleIPs[0] // "?") (online=\(.value.Online))"' /tmp/ts.json
-            else
-              echo "    （看不到其他设备——ACL 或 tailnet 不匹配）"
-            fi
-          else
-            echo "  （无法获取 Tailscale 状态 JSON）"
-          fi
-          echo ""
-          echo "=== 连通性测试 ==="
-          # tailscale ping 直连成功 exit 0；走 DERP 中继时仍能通但可能 exit 非零
-          # 只要收到 pong（直接或 DERP 中继都算通），SSH 就能用
-          set +e  # tailscale ping 走 DERP 时 exit 非零，不要因此中断
-          TS_PING_OUT=$(tailscale ping --c 3 "$TAILSCALE_HOST" 2>&1)
-          TS_PING_RC=$?
-          set -e
-          echo "$TS_PING_OUT"
-          if echo "$TS_PING_OUT" | grep -q "pong"; then
-            echo "✅ Tailscale 连接正常（$([ $TS_PING_RC -eq 0 ] && echo '直连' || echo 'DERP 中继')）"
-          else
-            echo "❌ 无法通过 Tailscale 连接服务器"
-            exit 1
-          fi
-
-      # --------------------------------------------------------
-      # Step 2.2: 配置 SSH
+      # Step 2.1: 配置 SSH
       # --------------------------------------------------------
       - name: 配置 SSH
         run: |
@@ -289,11 +231,11 @@ jobs:
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p "$SSH_PORT" \
-            -H "$TAILSCALE_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+            -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
           echo "AddressFamily inet" >> ~/.ssh/config
 
       # --------------------------------------------------------
-      # Step 2.3: 上传部署脚本和配置
+      # Step 2.2: 上传部署脚本和配置
       # --------------------------------------------------------
       - name: 上传部署脚本和配置
         run: |
@@ -302,15 +244,15 @@ jobs:
           scp $SSH_OPTS \
             -P "$SSH_PORT" \
             scripts/deploy-remote.sh docker-compose.prod.yml \
-            "$SSH_USER@$TAILSCALE_HOST:$DEPLOY_PATH/"
+            "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"
 
           ssh $SSH_OPTS \
             -p "$SSH_PORT" \
-            "$SSH_USER@$TAILSCALE_HOST" \
+            "$SSH_USER@$SSH_HOST" \
             "chmod +x $DEPLOY_PATH/deploy-remote.sh"
 
       # --------------------------------------------------------
-      # Step 2.4: 生成环境变量文件并执行远程部署
+      # Step 2.3: 生成环境变量文件并执行远程部署
       #           用 printf %q 安全转义所有特殊字符
       # --------------------------------------------------------
       - name: 生成环境变量文件并执行远程部署
@@ -368,31 +310,21 @@ jobs:
           scp $SSH_OPTS \
             -P "$SSH_PORT" \
             /tmp/deploy-env.sh \
-            "$SSH_USER@$TAILSCALE_HOST:/tmp/deploy-env.sh"
+            "$SSH_USER@$SSH_HOST:/tmp/deploy-env.sh"
 
           # 执行远程部署
           ssh $SSH_OPTS \
             -p "$SSH_PORT" \
-            "$SSH_USER@$TAILSCALE_HOST" \
+            "$SSH_USER@$SSH_HOST" \
             "set -e; source /tmp/deploy-env.sh; shred -u /tmp/deploy-env.sh 2>/dev/null || rm -f /tmp/deploy-env.sh; cd \"\$DEPLOY_PATH\" && bash deploy-remote.sh"
 
       # --------------------------------------------------------
-      # Step 2.5: 清理
+      # Step 2.4: 清理
       # --------------------------------------------------------
       - name: 清理 SSH 密钥
         if: always()
         run: |
           rm -f ~/.ssh/deploy_key /tmp/deploy-env.sh
-
-      - name: 登出 Tailscale
-        if: always()
-        continue-on-error: true
-        uses: tailscale/github-action@v2
-        with:
-          oauth-client-id: ${{ env.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ env.TS_OAUTH_SECRET }}
-          tags: ${{ env.TAILSCALE_TAG }}
-          args: logout
 
   # ============================================================
   # Stage 3: 健康检查（后端 + 前端）
@@ -452,7 +384,7 @@ jobs:
           exit 1
 
   # ============================================================
-  # Stage 4: 全栈自动回滚（通过 Tailscale SSH）
+  # Stage 4: 全栈自动回滚（通过公网 SSH）
   # ============================================================
   rollback:
     needs: [deploy, health-check]
@@ -463,21 +395,12 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
     env:
-      TAILSCALE_HOST: ${{ secrets.TAILSCALE_HOST }}
+      SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
-      SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+      SSH_PORT: ${{ secrets.SSH_PORT || '2222' }}
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-      TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: 连接 Tailscale
-        uses: tailscale/github-action@v2
-        with:
-          oauth-client-id: ${{ env.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ env.TS_OAUTH_SECRET }}
-          tags: ${{ env.TAILSCALE_TAG }}
 
       - name: 配置 SSH
         run: |
@@ -485,31 +408,21 @@ jobs:
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p "$SSH_PORT" \
-            -H "$TAILSCALE_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+            -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: 执行远程回滚
         run: |
           ssh -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
             -p "$SSH_PORT" \
-            "$SSH_USER@$TAILSCALE_HOST" \
+            "$SSH_USER@$SSH_HOST" \
             "cd \"$DEPLOY_PATH\" && bash deploy-remote.sh --rollback"
-          echo "::warning::后端自动回滚已执行!"
+          echo "::warning::全栈自动回滚已执行!"
 
       - name: 清理
         if: always()
         run: |
           rm -f ~/.ssh/deploy_key
-
-      - name: 登出 Tailscale
-        if: always()
-        continue-on-error: true
-        uses: tailscale/github-action@v2
-        with:
-          oauth-client-id: ${{ env.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ env.TS_OAUTH_SECRET }}
-          tags: ${{ env.TAILSCALE_TAG }}
-          args: logout
 
   # ============================================================
   # Stage 6: 部署汇总
@@ -528,7 +441,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| 项目 | 状态 |" >> $GITHUB_STEP_SUMMARY
           echo "|------|------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 全栈部署 (Tailscale SSH) | $([ "$DEPLOY_STATUS" = 'success' ] && echo '✅' || ([ "$DEPLOY_STATUS" = 'skipped' ] && echo '⏭️') || echo '❌') |" >> $GITHUB_STEP_SUMMARY
+          echo "| 全栈部署 (公网 SSH) | $([ "$DEPLOY_STATUS" = 'success' ] && echo '✅' || ([ "$DEPLOY_STATUS" = 'skipped' ] && echo '⏭️') || echo '❌') |" >> $GITHUB_STEP_SUMMARY
           echo "| 前端 | $([ "$DEPLOY_STATUS" = 'success' ] && echo '✅ 已部署' || echo '⚠️') |" >> $GITHUB_STEP_SUMMARY
           echo "| 健康检查 | $([ "$HEALTH_STATUS" = 'success' ] && echo '✅' || ([ "$HEALTH_STATUS" = 'skipped' ] && echo '⏭️') || echo '⚠️ 已回滚') |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

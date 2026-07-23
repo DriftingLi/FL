@@ -91,7 +91,7 @@
 - 缓存：Redis 7（生产环境必需，用于 JWT 黑名单与缓存）
 - 编排：Docker Compose
 - 反向代理 / 静态托管：Nginx（前端容器兼任 SSL 终止 + API 反代）
-- CI/CD：GitHub Actions（ci.yml / cd.yml），通过 Tailscale SSH 部署到自托管服务器
+- CI/CD：GitHub Actions（ci.yml / cd.yml），通过公网 SSH（端口 2222）部署到自托管服务器
 - 备选：Cloudflare Pages（wrangler.jsonc）
 
 ## 项目结构
@@ -313,12 +313,12 @@ docker compose -f docker-compose.prod.yml up -d
 
 ### 远程部署（自托管服务器）
 
-`scripts/deploy-remote.sh` 通过 Tailscale SSH 将构建产物部署到服务器 `/opt/forklift-training`，支持 `--rollback`。`scripts/setup-server.sh` 负责服务器初始化。
+`scripts/deploy-remote.sh` 通过公网 SSH（端口 2222）将构建产物部署到服务器 `/opt/forklift-training`，支持 `--rollback`。`scripts/setup-server.sh` 负责服务器初始化。
 
 ### CI/CD（GitHub Actions）
 
 - `ci.yml`：gofmt / go vet / golangci-lint → 测试（race + cover）→ 前端 type-check + build → 安全扫描 → 迁移校验
-- `cd.yml`：构建并推送镜像（ghcr.io）→ Tailscale SSH 部署 → 健康检查 → 失败自动回滚
+- `cd.yml`：构建并推送镜像（ghcr.io）→ 公网 SSH 部署 → 健康检查 → 失败自动回滚
 
 ## 许可证
 
