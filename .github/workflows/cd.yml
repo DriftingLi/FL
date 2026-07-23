@@ -238,7 +238,7 @@ jobs:
       # --------------------------------------------------------
       - name: 上传部署脚本和配置
         run: |
-          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15"
+          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=3"
 
           scp $SSH_OPTS \
             -P "$SSH_PORT" \
@@ -303,7 +303,7 @@ jobs:
           echo "环境变量文件已生成（$(wc -l < /tmp/deploy-env.sh) 行）"
           echo "注意：密钥值已被 GitHub Actions 自动 mask，不会出现在日志中"
 
-          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15"
+          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=3"
 
           # 上传环境变量文件
           scp $SSH_OPTS \
