@@ -433,8 +433,6 @@ restart_services() {
         docker compose -f "$COMPOSE_FILE" logs --tail 30 "$BACKEND_SERVICE" 2>&1 || echo "  无法��取日志"
         echo ""
     fi
-        echo ""
-    fi
 
     log_ok "全栈服务已重启"
 }
