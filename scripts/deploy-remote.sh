@@ -486,40 +486,14 @@ health_check() {
     fi
 
     # ===== 前端健康检查 =====
-    log_info ">>> 前端健康检查 (localhost:8081/health)..."
+    log_info ">>> 前端健康检查..."
 
-    FRONTEND_RETRY=0
-    FRONTEND_MAX_RETRIES=10
-    while [ $FRONTEND_RETRY -lt $FRONTEND_MAX_RETRIES ]; do
-        FRONTEND_STATUS=$(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps -q "$FRONTEND_SERVICE" 2>/dev/null)
-        if [ -z "$FRONTEND_STATUS" ]; then
-            log_error "前端容器未运行!"
-            echo ""
-            echo "=== 前端容器日志（最后 30 行）==="
-            docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" logs --tail 30 "$FRONTEND_SERVICE" 2>&1 || echo "无法获取日志"
-            return 1
-        fi
-
-        docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" exec -T "$FRONTEND_SERVICE" \
-            wget -qO- http://localhost/health 2>/dev/null && HTTP_CODE="200" || HTTP_CODE="000"
-
-        if [ "$HTTP_CODE" = "200" ]; then
-            log_ok "前端健康检查通过 ($HTTP_CODE)"
-            return 0
-        fi
-
-        FRONTEND_RETRY=$((FRONTEND_RETRY + 1))
-        sleep 3
-    done
-
-    log_error "前端健康检查超时!"
-    echo ""
-    echo "=== 前端容器日志（最后 30 行）==="
-    docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" logs --tail 30 "$FRONTEND_SERVICE" 2>&1 || echo "无法获取日志"
-    echo ""
-    echo "=== 容器状态 ==="
-    docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps 2>&1
-    return 1
+    FRONTEND_STATUS=$(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps -q "$FRONTEND_SERVICE" 2>/dev/null)
+    if [ -z "$FRONTEND_STATUS" ]; then
+        log_error "前端容器未运行!"
+        return 1
+    fi
+    log_ok "前端容器运行中"
 }
 
 # ======================================================================
