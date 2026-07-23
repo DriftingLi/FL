@@ -15,7 +15,7 @@ import (
 func (r *DictionaryRepository) ListSeries(ctx context.Context, brand string) ([]Series, error) {
 	cacheKey := cache.SafeKey("dict", "series", "bybrand", brand)
 	var result []Series
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {	
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		var rows pgx.Rows
 		var err error
 		if brand != "" {
@@ -81,7 +81,7 @@ func (r *DictionaryRepository) DeleteSeries(ctx context.Context, id int) error {
 func (r *DictionaryRepository) ListSeriesConfigOptions(ctx context.Context, brand, series string) (SeriesConfigOptions, error) {
 	cacheKey := cache.SafeKey("dict", "sco", brand, series)
 	var result SeriesConfigOptions
-		err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		rows, err := r.pool.Query(ctx, `
 			SELECT dimension, option_name FROM series_config_options
 			WHERE brand = $1 AND series = $2

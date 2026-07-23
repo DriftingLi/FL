@@ -5,9 +5,9 @@ import "github.com/gin-gonic/gin"
 
 // R 统一响应体。
 type R struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    any `json:"data"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    any    `json:"data"`
 }
 
 // Success 输出 200 成功响应。
