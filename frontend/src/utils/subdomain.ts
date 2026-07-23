@@ -71,6 +71,14 @@ function isDevHost(host: string): boolean {
   return host === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(host)
 }
 
+// 判断是否为 IP 直连模式（无 DNS 子域名环境，如局域网 IP 访问）
+// 在 IP 模式下，不进行跨子域名强制跳转，所有工作区通过路径在同一 origin 下访问
+export function isIpDirectMode(): boolean {
+  if (typeof window === 'undefined') return false
+  const host = window.location.hostname.toLowerCase()
+  return /^\d+\.\d+\.\d+\.\d+$/.test(host)
+}
+
 // 根据路径推导应该所在的子域名类型。
 // 用于路由守卫：当前子域名与目标子域名不一致时触发跨子域名跳转。
 // 注意：/login 和 /register 不在此处理，由路由守卫特殊处理（每个子域名都可有自己的登录页）。

@@ -11,16 +11,21 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    host: true,
-    allowedHosts: ['.localhost', 'mentor.localhost', 'manage.localhost', 'training.localhost', 'valuation.localhost'],
+    host: '0.0.0.0',
+    allowedHosts: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
-        changeOrigin: true
+        target: 'http://127.0.0.1:8080',
+        changeOrigin: true,
+        timeout: 60000,
+        proxyTimeout: 60000,
+        ws: false
       },
       '/static': {
-        target: 'http://localhost:8080',
-        changeOrigin: true
+        target: 'http://127.0.0.1:8080',
+        changeOrigin: true,
+        timeout: 60000,
+        proxyTimeout: 60000
       }
     }
   }
