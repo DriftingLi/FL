@@ -75,6 +75,9 @@ func TestValidate_Production_AllPresent(t *testing.T) {
 			Addr:     "localhost:6379",
 			Password: "real-redis-password",
 		},
+		Valuation: ValuationConfig{
+			JWTSecretKey: "real-valuation-jwt-secret",
+		},
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Errorf("全部必填项存在时不应报错: %v", err)

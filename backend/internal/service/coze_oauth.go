@@ -77,10 +77,10 @@ func (s *CozeOAuthService) GetAccessToken() (map[string]any, error) {
 		return nil, fmt.Errorf("Coze OAuth token 请求失败，状态码 %d", resp.StatusCode)
 	}
 
-		var data map[string]any
-		if err := json.Unmarshal(respBody, &data); err != nil {
-			return nil, fmt.Errorf("解析 Coze OAuth 响应失败: %w", err)
-		}
+	var data map[string]any
+	if err := json.Unmarshal(respBody, &data); err != nil {
+		return nil, fmt.Errorf("解析 Coze OAuth 响应失败: %w", err)
+	}
 
 	accessToken, _ := data["access_token"].(string)
 	if accessToken == "" {
@@ -95,13 +95,13 @@ func (s *CozeOAuthService) GetAccessToken() (map[string]any, error) {
 	}
 
 	expiresIn := int64(0)
-		if v, ok := data["expires_in"].(float64); ok {
-			expiresIn = int64(v)
-		}
-		return map[string]any{
-			"access_token": accessToken,
-			"expires_in":   expiresIn,
-		}, nil
+	if v, ok := data["expires_in"].(float64); ok {
+		expiresIn = int64(v)
+	}
+	return map[string]any{
+		"access_token": accessToken,
+		"expires_in":   expiresIn,
+	}, nil
 }
 
 // generateJWT 生成 RS256 JWT。

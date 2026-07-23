@@ -169,7 +169,7 @@ func TestGetOrSetJSON_Singleflight(t *testing.T) {
 	}
 
 	var callCount int32
-	loader := func() (any, error) {	
+	loader := func() (any, error) {
 		atomic.AddInt32(&callCount, 1)
 		time.Sleep(100 * time.Millisecond) // 模拟慢查询，让并发请求阻塞
 		return Data{Value: 100}, nil

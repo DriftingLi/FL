@@ -102,10 +102,10 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 
 // GetEvaluation 按 ID 查询评估详情
 func (r *EvaluationRepository) GetEvaluation(ctx context.Context, id int64) (*model.EvaluationDetail, error) {
-		cacheKey := cache.SafeKey("eval", "get", fmt.Sprintf("%d", id))
-		var result model.EvaluationDetail
-		err := cache.GetOrSetJSON(ctx, cacheKey, 10*time.Minute, &result, func() (any, error) {
-			row := r.pool.QueryRow(ctx, `
+	cacheKey := cache.SafeKey("eval", "get", fmt.Sprintf("%d", id))
+	var result model.EvaluationDetail
+	err := cache.GetOrSetJSON(ctx, cacheKey, 10*time.Minute, &result, func() (any, error) {
+		row := r.pool.QueryRow(ctx, `
 			SELECT id, brand, vehicle_type, series, tonnage,
 			       config_type, mast_type, mast_height_mm,
 			       factory_year, sale_year, usage_hours, original_paint,
@@ -152,11 +152,11 @@ func (r *EvaluationRepository) GetEvaluation(ctx context.Context, id int64) (*mo
 // brand 为空时不过滤
 func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string, limit, offset int) ([]model.EvaluationDetail, error) {
 	cacheKey := cache.SafeKey("eval", "list", brand, fmt.Sprintf("%d", limit), fmt.Sprintf("%d", offset))
-		var result []model.EvaluationDetail
-		err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLStats, &result, func() (any, error) {
-			var rows pgx.Rows
-			var err error
-			if brand != "" {
+	var result []model.EvaluationDetail
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLStats, &result, func() (any, error) {
+		var rows pgx.Rows
+		var err error
+		if brand != "" {
 			rows, err = r.pool.Query(ctx, `
 				SELECT id, brand, vehicle_type, series, tonnage,
 				       config_type, mast_type, mast_height_mm,
@@ -222,11 +222,11 @@ func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string
 // brand 为空时统计全部
 func (r *EvaluationRepository) CountEvaluations(ctx context.Context, brand string) (int, error) {
 	cacheKey := cache.SafeKey("eval", "count", brand)
-		var result int
-		err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLStats, &result, func() (any, error) {
-			var total int
-			if brand != "" {
-				if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM evaluations WHERE brand = $1`, brand).Scan(&total); err != nil {
+	var result int
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLStats, &result, func() (any, error) {
+		var total int
+		if brand != "" {
+			if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM evaluations WHERE brand = $1`, brand).Scan(&total); err != nil {
 				return nil, err
 			}
 		} else {

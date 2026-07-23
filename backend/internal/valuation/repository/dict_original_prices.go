@@ -128,7 +128,7 @@ func (r *DictionaryRepository) FindOriginalPriceMatch(
 	cacheKey := cache.SafeKey("dict", "op", "match", brand, vehicleType, series,
 		fmt.Sprintf("%v", tonnage), configType, mastType, fmt.Sprintf("%d", mastHeightMM))
 	var result OriginalPrice
-		err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		row := r.pool.QueryRow(ctx, `
 			SELECT id, brand, vehicle_type, series, tonnage,
 			       config_type, mast_type, mast_height_mm, earliest_factory_year, original_price, updated_at

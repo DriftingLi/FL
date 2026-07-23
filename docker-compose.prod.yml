@@ -17,8 +17,9 @@ services:
       POSTGRES_USER: ${DB_USER:-forklift}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       TZ: Asia/Shanghai
-    ports:
-      - "5432:5432"
+    # 仅内网可访问，不对外暴露端口（仅 backend 容器通过 Docker 网络访问）
+    expose:
+      - "5432"
     volumes:
       - pgdata-prod:/var/lib/postgresql/data
     healthcheck:
@@ -127,6 +128,7 @@ services:
       TUTOR_DEFAULT_PASSWORD: ${TUTOR_DEFAULT_PASSWORD}
       STUDENT_DEFAULT_PASSWORD: ${STUDENT_DEFAULT_PASSWORD}
       VALUATION_PDF_OUTPUT_DIR: /data/reports
+      VALUATION_JWT_SECRET_KEY: ${VALUATION_JWT_SECRET_KEY:-}
       REDIS_ADDR: redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       REDIS_DB: "${REDIS_DB:-0}"

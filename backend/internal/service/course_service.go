@@ -76,7 +76,7 @@ func (s *CourseService) GetCourseDetail(courseID, studentID int) (map[string]any
 			progress = record.Progress
 		}
 	}
-		return map[string]any{
+	return map[string]any{
 		"course_info": courseToDict(&course),
 		"chapters":    chapterList,
 		"progress":    progress,
@@ -135,7 +135,7 @@ func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (ma
 
 	var files []model.ChapterFile
 	s.db.Where("chapter_id = ?", chapterID).Order("created_at").Find(&files)
-		fileList := make([]map[string]any, 0, len(files))
+	fileList := make([]map[string]any, 0, len(files))
 	if len(files) == 0 && chapter.FileURL != "" {
 		fileList = append(fileList, legacyFileEntry(&chapter))
 	} else {
@@ -278,7 +278,7 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, dura
 	if err := s.db.Create(&newRecord).Error; err != nil {
 		return nil, err
 	}
-		return map[string]any{
+	return map[string]any{
 		"record_id":      newRecord.RecordID,
 		"progress":       newRecord.Progress,
 		"study_duration": newRecord.StudyDuration,

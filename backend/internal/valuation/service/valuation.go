@@ -85,14 +85,14 @@ func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRe
 	hash := sha256.Sum256(reqBytes)
 	cacheKey := cache.SafeKey("valuation", "result", hex.EncodeToString(hash[:]))
 
-		var result model.EvaluationResult
-		err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLValuation, &result, func() (any, error) {
-			return s.evaluateInternal(ctx, req)
-		})
-		if err != nil {
-			return nil, err
-		}
-		return &result, nil
+	var result model.EvaluationResult
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLValuation, &result, func() (any, error) {
+		return s.evaluateInternal(ctx, req)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // evaluateInternal 包含原 Evaluate 的全部计算逻辑（纯函数，无副作用）
