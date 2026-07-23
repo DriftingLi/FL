@@ -79,6 +79,9 @@ node_modules_old/
 # ===== WorkBuddy 相关文件 =====
 .workbuddy/
 
+# ===== SpecStory 相关文件 =====
+.specstory/
+
 # ===== 上传临时目录 =====
 .uploads/
 
@@ -86,3 +89,31 @@ node_modules_old/
 *.tar.gz
 *.tar
 *.zip
+
+# ===== 本地开发配置 =====
+# 本地 Docker Compose 配置文件（仅保留 .example 和生产配置入库）
+docker-compose.local.yml
+
+# ===== Go 本地开发 =====
+backend/tmp/
+debug
+
+# ===== 前端本地开发 =====
+frontend/.cache/
+frontend/.output/
+frontend/.nuxt/
+
+# ===== 测试覆盖率报告 =====
+coverage/
+*.coverprofile
+
+# ===== Air 热重载工具 =====
+.air.toml
+backend/.air.toml
+
+# ===== 调试和性能分析 =====
+debug
+*.prof
+*.test
+cpu.prof
+mem.prof

@@ -2,7 +2,7 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useValuationAuthStore } from '@/stores/valuationAuth'
-import { getSubdomain, buildSubdomainUrl, getTargetSubdomainForPath, getDefaultWorkspaceBySubdomain } from '@/utils/subdomain'
+import { getSubdomain, buildSubdomainUrl, getTargetSubdomainForPath, getDefaultWorkspaceBySubdomain, isIpDirectMode } from '@/utils/subdomain'
 
 const routes: RouteRecordRaw[] = [
   // ========== 官网 ==========
@@ -413,8 +413,9 @@ router.beforeEach(async (to, from, next) => {
     }
 
     // 子域名边界检查：估值路径必须在 valuation 子域名下访问
+    // IP 直连模式下跳过此检查（无 DNS 子域名环境）
     const currentSubdomain = getSubdomain()
-    if (currentSubdomain !== 'valuation') {
+    if (!isIpDirectMode() && currentSubdomain !== 'valuation') {
       window.location.href = buildSubdomainUrl('valuation', to.fullPath)
       return
     }
@@ -478,33 +479,37 @@ router.beforeEach(async (to, from, next) => {
   // 五类子域名：main（公共）、training（学员培训+AI助手）、valuation（残值评估）、
   // tutor（导师工作区）、admin（管理员后台）
   // 跨子域名访问会触发整页跳转（不同 origin，token 不共享）
+  // IP 直连模式下跳过子域名边界检查（无 DNS 子域名环境，通过路径直接访问所有工作区）
   const currentSubdomain = getSubdomain()
   const isLoginPath = to.path === '/login' || to.path === '/register'
+  const skipSubdomainCheck = isIpDirectMode()
 
-  if (isLoginPath) {
-    // /login 和 /register 在主域名上跳到 training 子域名（主域名不再承载登录）
-    // valuation 子域名有独立的 /valuation/login 与 /valuation/register，主体系 /login 重定向过去
-    if (currentSubdomain === 'main') {
-      window.location.href = buildSubdomainUrl('training', to.fullPath)
-      return
-    }
-    if (currentSubdomain === 'valuation') {
-      next(to.path === '/register' ? '/valuation/register' : '/valuation/login')
-      return
-    }
-  } else {
-    // 非登录路径：按路径前缀映射到对应子域名
-    const targetSubdomain = getTargetSubdomainForPath(to.path)
-    if (currentSubdomain !== targetSubdomain) {
-      if (targetSubdomain === 'main') {
-        // 路径是公共的（/、/dispatch 等），但当前在功能子域名
-        // 跳到当前子域名的默认工作区（而非根域名），避免功能子域名用户被踢到主域名
-        next(getDefaultWorkspaceBySubdomain())
-      } else {
-        // 路径属于另一个功能子域名 → 跨子域名跳转
-        window.location.href = buildSubdomainUrl(targetSubdomain, to.fullPath)
+  if (!skipSubdomainCheck) {
+    if (isLoginPath) {
+      // /login 和 /register 在主域名上跳到 training 子域名（主域名不再承载登录）
+      // valuation 子域名有独立的 /valuation/login 与 /valuation/register，主体系 /login 重定向过去
+      if (currentSubdomain === 'main') {
+        window.location.href = buildSubdomainUrl('training', to.fullPath)
+        return
       }
-      return
+      if (currentSubdomain === 'valuation') {
+        next(to.path === '/register' ? '/valuation/register' : '/valuation/login')
+        return
+      }
+    } else {
+      // 非登录路径：按路径前缀映射到对应子域名
+      const targetSubdomain = getTargetSubdomainForPath(to.path)
+      if (currentSubdomain !== targetSubdomain) {
+        if (targetSubdomain === 'main') {
+          // 路径是公共的（/、/dispatch 等），但当前在功能子域名
+          // 跳到当前子域名的默认工作区（而非根域名），避免功能子域名用户被踢到主域名
+          next(getDefaultWorkspaceBySubdomain())
+        } else {
+          // 路径属于另一个功能子域名 → 跨子域名跳转
+          window.location.href = buildSubdomainUrl(targetSubdomain, to.fullPath)
+        }
+        return
+      }
     }
   }
 

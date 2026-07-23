@@ -25,7 +25,7 @@ type TypedRequest = {
 
 const request = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
-  timeout: 10000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -103,6 +103,10 @@ request.interceptors.response.use(
         default:
           const msg = data?.message || error.message || '请求失败'
           ElMessage.error(msg)
+      }
+    } else if (error.code === 'ECONNABORTED' || /timeout\s+of\s+\d+\s+ms\s+exceeded/i.test(error.message || '')) {
+      if (!isSilent(error.config)) {
+        ElMessage.error('请求超时，请检查网络或稍后重试')
       }
     } else {
       if (!isSilent(error.config)) {

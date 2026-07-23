@@ -226,6 +226,14 @@ const defaultTab = computed(() => {
   return firstGroup ? firstGroup.type : ''
 })
 
+watch(
+  defaultTab,
+  (newTab) => {
+    if (newTab && newTab !== activeTab.value) activeTab.value = newTab
+  },
+  { immediate: true }
+)
+
 const getPrevChapterTitle = computed(() => {
   if (!chapterDetail.value?.previous_chapter_id) return ''
   const prev = chapters.value.find(c => c.chapter_id === chapterDetail.value.previous_chapter_id)
@@ -242,6 +250,24 @@ function formatStudyTime(seconds) {
   const mins = Math.floor(seconds / 60)
   const secs = seconds % 60
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+}
+
+async function reportIncremental(isFinal = false) {
+  if (!chapterDetail.value?.chapter_id || !courseId.value) return
+  const incrementalSeconds = studySeconds.value - reportedSeconds
+  if (incrementalSeconds <= 0) return
+
+  if (!isFinal && incrementalSeconds < 60) return
+
+  const durationMinutes = Math.max(Math.ceil(incrementalSeconds / 60), 1)
+  const chapter_id = chapterDetail.value.chapter_id
+
+  try {
+    const res = await courseApi.updateProgress(courseId.value, { chapter_id, duration: durationMinutes })
+    if (res.code === 200) reportedSeconds += incrementalSeconds
+  } catch (error) {
+    if (!isFinal) console.warn('上报学习时长增量失败:', error)
+  }
 }
 
 async function loadChapterDetail() {
@@ -309,25 +335,29 @@ function stopStudy() {
 }
 
 async function completeStudy() {
+  const chapterId = chapterDetail.value?.chapter_id
+  if (!chapterId) return
+
+  const finalIncremental = studySeconds.value - reportedSeconds
+  const totalDuration = Math.max(Math.ceil((reportedSeconds + finalIncremental) / 60), 1)
   stopStudy()
-  const duration = Math.max(Math.ceil(studySeconds.value / 60), 1)
 
   try {
     const res = await courseApi.updateProgress(courseId.value, {
-      chapter_id: chapterDetail.value.chapter_id,
-      duration: duration
+      chapter_id: chapterId,
+      duration: totalDuration
     })
     if (res.code === 200) {
+      reportedSeconds += finalIncremental
       ElMessage.success('学习进度已保存')
       await loadChapterDetail()
+    } else {
+      ElMessage.error(res.message || '保存学习进度失败')
     }
   } catch (error) {
     console.error('保存学习进度失败:', error)
     ElMessage.error('保存学习进度失败，请稍后重试')
   }
-
-  ElMessage.success('学习进度已保存')
-  await loadChapterDetail()
 }
 
 function navigateToChapter(targetChapterId) {
