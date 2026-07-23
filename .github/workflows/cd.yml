@@ -1,4 +1,4 @@
-name: CD - 持续部署（公网 SSH）
+name: CD - 持续部署
 
 on:
   # CI 通过后自动触发部署（确保部署的是已测试的代码）
@@ -171,7 +171,6 @@ jobs:
     env:
       # 镜像信息（来自 build-backend/build-frontend outputs）
       IMAGE_TAG: ${{ needs.build-backend.outputs.image_tag || github.sha }}
-      IMAGE_FRONTEND: ${{ env.IMAGE_FRONTEND }}
       # SSL 证书内容（从 GitHub Secrets 注入，部署时写入服务器固定路径）
       SSL_FULLCHAIN: ${{ secrets.SSL_FULLCHAIN }}
       SSL_PRIVKEY: ${{ secrets.SSL_PRIVKEY }}
