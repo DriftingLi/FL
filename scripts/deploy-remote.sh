@@ -420,21 +420,9 @@ restart_services() {
     # 写入 .env 文件
     write_env_file
 
-    # 先启动 backend（依赖 postgres + redis）
-    log_info "停止后端容器..."
-    docker compose -f "$COMPOSE_FILE" down "$BACKEND_SERVICE" 2>&1 || true
-    sleep 3
-    log_info "启动后端容器..."
-    docker compose -f "$COMPOSE_FILE" up -d "$BACKEND_SERVICE" 2>&1 | tail -5
-    log_ok "后端服务已重启"
-
-    # 再启动 frontend（依赖 backend healthy）
-    log_info "停止前端容器..."
-    docker compose -f "$COMPOSE_FILE" down "$FRONTEND_SERVICE" 2>&1 || true
-    sleep 2
-    log_info "启动前端容器..."
-    docker compose -f "$COMPOSE_FILE" up -d "$FRONTEND_SERVICE" 2>&1 | tail -5
-    log_ok "前端服务已重启"
+    # docker compose up -d 自动处理变更检测和依赖顺序
+    docker compose -f "$COMPOSE_FILE" up -d --remove-orphans 2>&1 | tail -10
+    log_ok "全栈服务已重启"
 }
 
 # ======================================================================
