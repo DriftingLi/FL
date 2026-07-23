@@ -326,46 +326,6 @@ jobs:
           rm -f ~/.ssh/deploy_key /tmp/deploy-env.sh
 
   # ============================================================
-  # Stage 4: 全栈自动回滚（通过公网 SSH）
-  # ============================================================
-  rollback:
-    needs: deploy
-    if: |
-      always() &&
-      needs.deploy.result == 'success'
-    runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
-    env:
-      SSH_HOST: ${{ secrets.SSH_HOST }}
-      SSH_USER: ${{ secrets.SSH_USER }}
-      SSH_PORT: ${{ secrets.SSH_PORT || '2222' }}
-      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: 配置 SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -p "$SSH_PORT" \
-            -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
-
-      - name: 执行远程回滚
-        run: |
-          ssh -i ~/.ssh/deploy_key \
-            -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
-            -p "$SSH_PORT" \
-            "$SSH_USER@$SSH_HOST" \
-            "cd \"$DEPLOY_PATH\" && bash deploy-remote.sh --rollback"
-          echo "::warning::全栈自动回滚已执行!"
-
-      - name: 清理
-        if: always()
-        run: |
-          rm -f ~/.ssh/deploy_key
-
-  # ============================================================
   # Stage 6: 部署汇总
   # ============================================================
   notify:

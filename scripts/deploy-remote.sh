@@ -453,9 +453,8 @@ health_check() {
         fi
 
         # HTTP 健康检查（通过容器内部 wget，避免宿主机端口冲突）
-        HTTP_CODE=$(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" exec -T "$BACKEND_SERVICE" \
-            wget -qO- http://localhost:8080/api/health 2>/dev/null | grep -c '"status":"ok"' || echo "0")
-        if [ "$HTTP_CODE" -ge 1 ]; then
+        if docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" exec -T "$BACKEND_SERVICE" \
+            wget -qO- http://localhost:8080/api/health 2>/dev/null | grep -q '"status":"ok"'; then
             HTTP_CODE="200"
         else
             HTTP_CODE="000"
