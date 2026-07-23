@@ -124,7 +124,7 @@ func (s *AIService) TestConnection() map[string]any {
 	if len(preview) > 100 {
 		preview = preview[:100]
 	}
-		return map[string]any{
+	return map[string]any{
 		"status":           "success",
 		"message":          "AI连接正常",
 		"api_key_exists":   true,
@@ -170,7 +170,7 @@ func (s *AIService) GenerateText(keyword string, userID int, userType string) ma
 	if userID != 0 {
 		s.saveLog(userID, userType, "text", map[string]any{"keyword": keyword}, content, 1)
 	}
-		return map[string]any{
+	return map[string]any{
 		"content":      content,
 		"keywords":     keyword,
 		"generated_at": now,

@@ -17,8 +17,9 @@ services:
       POSTGRES_USER: ${DB_USER:-forklift}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       TZ: Asia/Shanghai
-    ports:
-      - "5432:5432"
+    # 仅内网可访问，不对外暴露端口（仅 backend 容器通过 Docker 网络访问）
+    expose:
+      - "5432"
     volumes:
       - pgdata-prod:/var/lib/postgresql/data
     healthcheck:

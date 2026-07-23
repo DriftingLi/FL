@@ -62,10 +62,10 @@ func RegisterPracticeModeRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gor
 		uid, _ := c.Get(string(middleware.CtxUserID))
 		studentID, _ := uid.(int)
 		var req struct {
-			Index        int              `json:"index"`
-			PracticeMode string           `json:"practice_mode"`
-			Total        int              `json:"total"`
-			AnswersState json.RawMessage  `json:"answers_state"`
+			Index        int             `json:"index"`
+			PracticeMode string          `json:"practice_mode"`
+			Total        int             `json:"total"`
+			AnswersState json.RawMessage `json:"answers_state"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			response.BadRequest(c, "请求数据无效")

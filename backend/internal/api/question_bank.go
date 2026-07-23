@@ -79,8 +79,8 @@ func RegisterQuestionBankRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gor
 	// POST /api/question-bank/questions/batch-reject  批量驳回（仅管理员）
 	g.POST("/questions/batch-reject", middleware.RoleRequired("admin"), func(c *gin.Context) {
 		var req struct {
-			QuestionIDs []int   `json:"question_ids"`
-			Reason      string  `json:"reason"`
+			QuestionIDs []int  `json:"question_ids"`
+			Reason      string `json:"reason"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			response.BadRequest(c, "请求参数错误")

@@ -79,8 +79,8 @@ func (r *DictionaryRepository) DeleteBrand(ctx context.Context, id int64) error 
 // GetBrandByName 按名称查询品牌（供 service 实时计算 Kb 使用）
 func (r *DictionaryRepository) GetBrandByName(ctx context.Context, name string) (Brand, error) {
 	cacheKey := cache.SafeKey("dict", "brand", "get", name)
-		var result Brand
-		err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
+	var result Brand
+	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		row := r.pool.QueryRow(ctx,
 			`SELECT id, name, k_brand, is_active FROM brands WHERE name = $1`, name)
 		var b Brand

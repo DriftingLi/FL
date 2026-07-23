@@ -65,10 +65,10 @@ func (s *FeaturedService) GetPublicList(page, pageSize int, category string) map
 	}
 	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
 	return map[string]any{
-		"total":  total,
-		"page":   page,
-		"pages":  pages,
-		"items":  list,
+		"total": total,
+		"page":  page,
+		"pages": pages,
+		"items": list,
 	}
 }
 
@@ -325,18 +325,18 @@ func (s *FeaturedService) SaveImage(content []byte, filename string) (string, er
 // featuredToListDict 列表项 dict（不含 content 正文）。
 func featuredToListDict(c *model.FeaturedContent) map[string]any {
 	d := map[string]any{
-		"content_id":  c.ContentID,
-		"title":       c.Title,
-		"summary":     c.Summary,
-		"cover_image": c.CoverImage,
-		"category":    c.Category,
+		"content_id":     c.ContentID,
+		"title":          c.Title,
+		"summary":        c.Summary,
+		"cover_image":    c.CoverImage,
+		"category":       c.Category,
 		"category_label": featuredCategoryLabel(c.Category),
-		"source":      c.Source,
-		"status":      c.Status,
-		"view_count":  c.ViewCount,
-		"sort_order":  c.SortOrder,
-		"created_at":  formatISO(c.CreatedAt),
-		"updated_at":  formatISO(c.UpdatedAt),
+		"source":         c.Source,
+		"status":         c.Status,
+		"view_count":     c.ViewCount,
+		"sort_order":     c.SortOrder,
+		"created_at":     formatISO(c.CreatedAt),
+		"updated_at":     formatISO(c.UpdatedAt),
 	}
 	if c.PublishedAt != nil {
 		d["published_at"] = formatISO(*c.PublishedAt)

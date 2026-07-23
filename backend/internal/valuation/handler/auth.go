@@ -27,7 +27,7 @@ func NewValuationAuthHandler(authSvc *vservice.ValuationAuthService) *ValuationA
 
 // loginRequest 登录请求体。
 type loginRequest struct {
-	Account  string `json:"account"`  // 用户名或手机号
+	Account  string `json:"account"` // 用户名或手机号
 	Password string `json:"password"`
 }
 
