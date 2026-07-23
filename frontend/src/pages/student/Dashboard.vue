@@ -71,6 +71,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { ArrowRight } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import QuickCard from '@/components/dashboard/QuickCard.vue'
 import type { QuickCardItem } from '@/components/dashboard/QuickCard.vue'
@@ -121,7 +122,6 @@ async function loadCourses() {
   try {
     const res = await studentApi.getProfile()
     if (res.code === 200 && res.data?.course_progress) {
-      // 进行中的课程：0 < progress < 100，按最近学习时间降序
       activeCourses.value = res.data.course_progress
         .filter((c: any) => c.progress > 0 && c.progress < 100)
         .sort((a: any, b: any) => (b.study_date || '').localeCompare(a.study_date || ''))
@@ -132,8 +132,10 @@ async function loadCourses() {
           path: `/training/course/${c.course_id}`
         }))
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('加载课程失败:', error)
+    const isTimeout = error?.code === 'ECONNABORTED' || /timeout/i.test(error?.message || '')
+    ElMessage.warning(isTimeout ? '课程信息加载超时，可稍后刷新重试' : '课程信息加载失败，请稍后重试')
   }
 }
 
@@ -148,8 +150,10 @@ async function loadRecentLearning() {
         path: r.course_id ? `/training/course/${r.course_id}` : ''
       }))
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('加载最近学习失败:', error)
+    const isTimeout = error?.code === 'ECONNABORTED' || /timeout/i.test(error?.message || '')
+    ElMessage.warning(isTimeout ? '最近学习记录加载超时，可稍后刷新重试' : '最近学习记录加载失败，请稍后重试')
   }
 }
 
@@ -161,9 +165,11 @@ async function loadStudyStats() {
     if (res.code === 200 && res.data) {
       studyStats.value = res.data as StudyStats
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('加载学习统计失败:', error)
     studyStats.value = null
+    const isTimeout = error?.code === 'ECONNABORTED' || /timeout/i.test(error?.message || '')
+    ElMessage.warning(isTimeout ? '学习统计加载超时，可点击切换时间范围重试' : '学习统计加载失败，请稍后重试')
   } finally {
     statsLoading.value = false
   }
