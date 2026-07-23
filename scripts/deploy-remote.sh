@@ -420,18 +420,19 @@ restart_services() {
     # 写入 .env 文件
     write_env_file
 
-    # docker compose up -d 自动处理变更检测和依赖顺序
-    docker compose -f "$COMPOSE_FILE" up -d --remove-orphans 2>&1 | tail -10
-
-    # 等后端稳定（避免立刻检查时容器还在启动）
-    sleep 5
+    # 启动服务（不做健康等待，由后续 health_check() 统一处理）
+    docker compose -f "$COMPOSE_FILE" up -d --wait-timeout 1 --remove-orphans 2>&1 | tail -10 || true
+    log_info "等待容器稳定 (10s)..."
+    sleep 10
 
     # 快速诊断：如果 backend 不在 running 状态，打日志
     local be_stat
     be_stat=$(docker compose -f "$COMPOSE_FILE" ps -q "$BACKEND_SERVICE" 2>/dev/null)
-    if [ -z "$be_stat" ] || ! docker compose -f "$COMPOSE_FILE" ps "$BACKEND_SERVICE" 2>/dev/null | grep -q "Up"; then
-        log_warn "后端容器异常，最后 30 行日志："
-        docker compose -f "$COMPOSE_FILE" logs --tail 30 "$BACKEND_SERVICE" 2>&1 || echo "  无法获取日志"
+    if [ -z "$be_stat" ]; then
+        log_warn "后端容器未创建，最后 30 行日志："
+        docker compose -f "$COMPOSE_FILE" logs --tail 30 "$BACKEND_SERVICE" 2>&1 || echo "  无法��取日志"
+        echo ""
+    fi
         echo ""
     fi
 
