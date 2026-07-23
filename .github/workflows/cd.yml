@@ -177,6 +177,8 @@ jobs:
       # SSL 证书内容（从 GitHub Secrets 注入，部署时写入服务器固定路径）
       SSL_FULLCHAIN: ${{ secrets.SSL_FULLCHAIN }}
       SSL_PRIVKEY: ${{ secrets.SSL_PRIVKEY }}
+      # 残值评估
+      VALUATION_JWT_SECRET_KEY: ${{ secrets.VALUATION_JWT_SECRET_KEY }}
       # 域名（启动时 envsubst 替换 nginx 配置中的 ${DOMAIN}）
       DOMAIN: ${{ secrets.DOMAIN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -347,6 +349,7 @@ jobs:
             printf 'export COZE_OAUTH_KID=%q\n' "${COZE_OAUTH_KID:-}"
             printf 'export COZE_OAUTH_PRIVATE_KEY=%q\n' "${COZE_OAUTH_PRIVATE_KEY:-}"
             printf 'export COZE_OAUTH_PRIVATE_KEY_PATH=%q\n' "${COZE_OAUTH_PRIVATE_KEY_PATH:-}"
+            printf 'export VALUATION_JWT_SECRET_KEY=%q\n' "${VALUATION_JWT_SECRET_KEY:-}"
             printf 'export COMPOSE_FILE=%q\n' "${COMPOSE_FILE:-docker-compose.prod.yml}"
             printf 'export DEPLOY_PATH=%q\n' "${DEPLOY_PATH:-/opt/forklift-training}"
             printf 'export SKIP_MIGRATION=%q\n' "${SKIP_MIGRATION:-false}"

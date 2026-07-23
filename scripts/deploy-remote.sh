@@ -145,6 +145,10 @@ write_env_file() {
         echo "COZE_OAUTH_PRIVATE_KEY_PATH=/etc/secrets/coze_private_key.pem"
         # COZE_OAUTH_PRIVATE_KEY 不写入 .env（已写入独立文件，见上方）
 
+        echo "# 残值评估 JWT 密钥（生产环境必需）"
+        printf 'VALUATION_JWT_SECRET_KEY='
+        env_val "${VALUATION_JWT_SECRET_KEY:-}"; echo
+
         echo "BACKEND_IMAGE=${IMAGE_BACKEND}:${IMAGE_TAG}"
         echo "FRONTEND_IMAGE=${IMAGE_FRONTEND}:${IMAGE_TAG}"
         echo "DOMAIN=${DOMAIN:-localhost}"
