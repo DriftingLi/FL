@@ -176,8 +176,7 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "80:80"
-      - "443:443"
+      - "8081:80"
     environment:
       # 域名（由 GitHub Secrets 注入，启动时 envsubst 替换 nginx 配置中的 ${DOMAIN}）
       DOMAIN: ${DOMAIN:-localhost}

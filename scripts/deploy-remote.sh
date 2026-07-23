@@ -441,7 +441,7 @@ restart_services() {
 # 健康检查
 # ======================================================================
 health_check() {
-    log_info ">>> 后端健康检查（通过前端容器反代 localhost/api/health）..."
+    log_info ">>> 后端健康检查 (localhost:8080/api/health)..."
 
     RETRY=0
     while [ $RETRY -lt $HEALTH_CHECK_RETRIES ]; do
@@ -452,10 +452,14 @@ health_check() {
             return 1
         fi
 
-        # HTTP 健康检查（backend 不再对外暴露端口，通过前端 80 端口反代检查）
-        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            --connect-timeout 3 --max-time 5 \
-            "http://localhost/api/health" 2>/dev/null || echo "000")
+        # HTTP 健康检查（通过容器内部 wget，避免宿主机端口冲突）
+        HTTP_CODE=$(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" exec -T "$BACKEND_SERVICE" \
+            wget -qO- http://localhost:8080/api/health 2>/dev/null | grep -c '"status":"ok"' || echo "0")
+        if [ "$HTTP_CODE" -ge 1 ]; then
+            HTTP_CODE="200"
+        else
+            HTTP_CODE="000"
+        fi
 
         if [ "$HTTP_CODE" = "200" ]; then
             log_ok "后端健康检查通过 ($HTTP_CODE)"
