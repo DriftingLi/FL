@@ -422,6 +422,19 @@ restart_services() {
 
     # docker compose up -d 自动处理变更检测和依赖顺序
     docker compose -f "$COMPOSE_FILE" up -d --remove-orphans 2>&1 | tail -10
+
+    # 等后端稳定（避免立刻检查时容器还在启动）
+    sleep 5
+
+    # 快速诊断：如果 backend 不在 running 状态，打日志
+    local be_stat
+    be_stat=$(docker compose -f "$COMPOSE_FILE" ps -q "$BACKEND_SERVICE" 2>/dev/null)
+    if [ -z "$be_stat" ] || ! docker compose -f "$COMPOSE_FILE" ps "$BACKEND_SERVICE" 2>/dev/null | grep -q "Up"; then
+        log_warn "后端容器异常，最后 30 行日志："
+        docker compose -f "$COMPOSE_FILE" logs --tail 30 "$BACKEND_SERVICE" 2>&1 || echo "  无法获取日志"
+        echo ""
+    fi
+
     log_ok "全栈服务已重启"
 }
 
