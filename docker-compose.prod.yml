@@ -175,14 +175,19 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    # ISP 封锁常用端口（80/443/8080），使用高端口 51820 绕过
+    # 使用 nginx-http.conf（HTTP-only，无 HTTPS 跳转）
+    # 如需恢复 HTTPS，改回 nginx.default.conf 并映射 443
     ports:
-      - "8081:80"
+      - "51820:80"
     environment:
       # 域名（由 GitHub Secrets 注入，启动时 envsubst 替换 nginx 配置中的 ${DOMAIN}）
       DOMAIN: ${DOMAIN:-localhost}
     volumes:
       # SSL 证书挂载（只读，路径与 deploy-remote.sh 中 write_ssl_certs() 一致）
       - ${DEPLOY_PATH:-/opt/forklift-training}/nginx/ssl:/etc/nginx/ssl:ro
+      # HTTP-only 配置（不跳转 HTTPS，适合高端口部署）
+      - ./frontend/nginx-http.conf:/etc/nginx/conf.d/default.conf.template:ro
     networks:
       - forklift-net
     deploy:
