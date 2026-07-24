@@ -1,6 +1,7 @@
 /**
  * 全局类型定义
  */
+import { Ref } from 'vue'
 
 /** 后端通用 JSON 响应格式 */
 export type ApiResponse<T> = {
@@ -110,16 +111,13 @@ export type GridItem = {
 	available : boolean  // 是否已开发
 }
 
-import type { Ref } from 'vue'
-import type { ComputedRef } from 'vue'
-
 /** 认证 store 实例类型（useAuthStore 返回值） */
 export type AuthStore = {
 	token : Ref<string>
 	user : Ref<UserInfo | null>
 	isInitializing : Ref<boolean>
-	isLoggedIn : ComputedRef<boolean>
-	displayName : ComputedRef<string>
+	isLoggedIn : Ref<boolean>
+	displayName : Ref<string>
 	setAuthData : (t : string, u : UserInfo) => void
 	clearAuthData : () => void
 	restoreFromStorage : () => boolean

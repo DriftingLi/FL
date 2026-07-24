@@ -24,8 +24,29 @@
 			"path": "pages/dashboard/dashboard",
 			"style": {
 				"navigationStyle": "custom",
-				"navigationBarTitleText": "仪表盘",
+				"navigationBarTitleText": "首页",
 				"enablePullDownRefresh": true
+			}
+		},
+		{
+			"path": "pages/courses/courses",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "课程"
+			}
+		},
+		{
+			"path": "pages/exam/exam",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "考试"
+			}
+		},
+		{
+			"path": "pages/profile/profile",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "我的"
 			}
 		}
 	],

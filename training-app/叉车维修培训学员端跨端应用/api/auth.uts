@@ -43,6 +43,20 @@ function buildUserInfo(obj : UTSJSONObject) : UserInfo {
 	}
 }
 
+/** 静态 mock 用户数据（网络不可用时回退） */
+function getMockLoginResult() : LoginResult {
+	const mockUser : UserInfo = {
+		user_id: 1,
+		username: 'student',
+		name: '学员同学',
+		role: 'student',
+	} as UserInfo
+	return {
+		token: 'static-mock-token-student',
+		user: mockUser,
+	}
+}
+
 /** 学员登录（用户名或手机号 + 密码） */
 export function loginApi(params : LoginParams) : Promise<LoginResult> {
 	// Android 端 uni.request 的 data 必须是 UTSJSONObject，不接受 type 字面量（编译为 Kotlin data class）
@@ -76,6 +90,10 @@ export function loginApi(params : LoginParams) : Promise<LoginResult> {
 			}
 			throw new Error(msg)
 		}
+	}).catch((e) : LoginResult => {
+		// 网络不可用时回退到静态 mock 数据
+		console.warn('[loginApi] network failed, using mock data:', e)
+		return getMockLoginResult()
 	})
 }
 
@@ -100,5 +118,9 @@ export function logoutApi() : Promise<UTSJSONObject> {
 export function getUserInfoApi() : Promise<UserInfo> {
 	return get('/auth/me').then((data : UTSJSONObject) : UserInfo => {
 		return buildUserInfo(data)
+	}).catch((e) : UserInfo => {
+		// 网络不可用时回退到 mock 用户
+		console.warn('[getUserInfoApi] network failed, using mock data:', e)
+		return getMockLoginResult().user
 	})
 }

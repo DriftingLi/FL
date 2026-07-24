@@ -1,0 +1,210 @@
+<template>
+	<view class="container">
+		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+		<view class="header">
+			<text class="header-title">课程中心</text>
+		</view>
+		<scroll-view class="category-scroll" scroll-x>
+			<view class="category-list">
+				<view v-for="(cat, idx) in categories" :key="idx" :class="['category-item', { active: currentCategory == idx }]" @click="onCategoryClick(idx)">
+					<text class="category-text">{{ cat.name }}</text>
+				</view>
+			</view>
+		</scroll-view>
+		<scroll-view class="course-scroll" scroll-y>
+			<view class="course-grid">
+				<view v-for="(course, idx) in courses" :key="idx" class="course-card" @click="onCourseClick(course.id)">
+					<view class="course-card-cover">
+						<text class="course-card-icon">{{ course.icon }}</text>
+					</view>
+					<view class="course-card-info">
+						<text class="course-card-title">{{ course.title }}</text>
+						<text class="course-card-desc">{{ course.desc }}</text>
+						<view class="course-card-footer">
+							<text class="course-card-chapters">{{ course.chapters }}节</text>
+							<text class="course-card-progress">{{ course.progress }}%</text>
+						</view>
+					</view>
+				</view>
+			</view>
+		</scroll-view>
+		<tab-bar :active-index="1"></tab-bar>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { ref } from 'vue'
+
+	type CourseItem = {
+		id : number
+		icon : string
+		title : string
+		desc : string
+		chapters : number
+		progress : number
+	}
+
+	const statusBarHeight = ref<number>(44)
+	const currentCategory = ref<number>(0)
+
+	const categories = [
+		{ name: '全部' },
+		{ name: '基础操作' },
+		{ name: '维护保养' },
+		{ name: '安全规范' },
+		{ name: '故障排除' },
+	]
+
+	const courses : CourseItem[] = [
+		{ id: 1, icon: '🚗', title: '叉车基础操作', desc: '学习叉车基本操作技能', chapters: 12, progress: 60 },
+		{ id: 2, icon: '🔧', title: '日常维护保养', desc: '掌握叉车日常保养知识', chapters: 8, progress: 30 },
+		{ id: 3, icon: '⚠️', title: '安全操作规程', desc: '了解叉车安全操作规范', chapters: 10, progress: 100 },
+		{ id: 4, icon: '🔩', title: '故障诊断与排除', desc: '学习常见故障处理方法', chapters: 15, progress: 20 },
+		{ id: 5, icon: '📐', title: '货物搬运技巧', desc: '掌握高效安全搬运技能', chapters: 6, progress: 0 },
+		{ id: 6, icon: '⚡', title: '电动叉车培训', desc: '电动叉车专项操作培训', chapters: 10, progress: 45 },
+	]
+
+	uni.getSystemInfo({
+		success: (res) => {
+			const sbh = res.statusBarHeight
+			if (sbh != null) {
+				statusBarHeight.value = sbh as number
+			} else {
+				statusBarHeight.value = 44
+			}
+		}
+	})
+
+	function onCategoryClick(idx: number): void {
+		currentCategory.value = idx
+	}
+
+	function onCourseClick(id: number): void {
+		console.log('click course:', id)
+	}
+</script>
+
+<style>
+	.container {
+		flex: 1;
+		background-color: #f5f5f5;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.status-bar {
+		background-color: #2979ff;
+		width: 100%;
+	}
+
+	.header {
+		background-color: #2979ff;
+		padding: 16rpx 32rpx;
+		align-items: center;
+	}
+
+	.header-title {
+		font-size: 36rpx;
+		font-weight: bold;
+		color: #ffffff;
+	}
+
+	.category-scroll {
+		background-color: #ffffff;
+		white-space: nowrap;
+		border-bottom: 1rpx solid #f0f0f0;
+	}
+
+	.category-list {
+		padding: 20rpx 0;
+		flex-direction: row;
+	}
+
+	.category-item {
+		padding: 16rpx 32rpx;
+		border-radius: 32rpx;
+		background-color: #f5f5f5;
+		margin-left: 20rpx;
+	}
+
+	.category-item.active {
+		background-color: #2979ff;
+	}
+
+	.category-text {
+		font-size: 28rpx;
+		color: #666666;
+	}
+
+	.category-item.active .category-text {
+		color: #ffffff;
+	}
+
+	.course-scroll {
+		flex: 1;
+		padding: 24rpx;
+		padding-bottom: 120rpx;
+	}
+
+	.course-grid {
+		flex-direction: row;
+		flex-wrap: wrap;
+		justify-content: space-between;
+	}
+
+	.course-card {
+		width: 48%;
+		background-color: #ffffff;
+		border-radius: 16rpx;
+		overflow: hidden;
+		margin-bottom: 20rpx;
+		box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04);
+	}
+
+	.course-card-cover {
+		width: 100%;
+		height: 180rpx;
+		background-color: #e3f2fd;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.course-card-icon {
+		font-size: 64rpx;
+	}
+
+	.course-card-info {
+		padding: 20rpx;
+		flex-direction: column;
+	}
+
+	.course-card-title {
+		font-size: 30rpx;
+		font-weight: bold;
+		color: #333333;
+		margin-bottom: 8rpx;
+	}
+
+	.course-card-desc {
+		font-size: 24rpx;
+		color: #999999;
+		margin-bottom: 16rpx;
+	}
+
+	.course-card-footer {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.course-card-chapters {
+		font-size: 22rpx;
+		color: #999999;
+	}
+
+	.course-card-progress {
+		font-size: 22rpx;
+		color: #2979ff;
+		font-weight: bold;
+	}
+</style>

@@ -1,0 +1,86 @@
+<template>
+	<view class="tab-bar" :style="{ paddingBottom: safeAreaBottom + 'px' }">
+		<view v-for="(item, idx) in tabs" :key="idx" class="tab-item" @click="onTabClick(item.path)">
+			<text :class="['tab-icon', { active: activeIndex == idx }]">{{ item.icon }}</text>
+			<text :class="['tab-text', { active: activeIndex == idx }]">{{ item.text }}</text>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { ref } from 'vue'
+
+	const props = withDefaults(defineProps<{
+		activeIndex?: number
+	}>(), {
+		activeIndex: 0
+	})
+
+	const activeIndex = ref<number>(props.activeIndex)
+	const safeAreaBottom = ref<number>(0)
+
+	const sysInfo = uni.getSystemInfoSync()
+	const insets = sysInfo.safeAreaInsets
+	if (insets != null) {
+		const bottom = insets.bottom
+		if (bottom != null && bottom > 0) {
+			safeAreaBottom.value = bottom
+		}
+	}
+
+	type TabItem = {
+		key: string
+		path: string
+		icon: string
+		text: string
+	}
+	const tabs: TabItem[] = [
+		{ key: 'dashboard', path: '/pages/dashboard/dashboard', icon: '🏠', text: '首页' },
+		{ key: 'courses', path: '/pages/courses/courses', icon: '📚', text: '课程' },
+		{ key: 'exam', path: '/pages/exam/exam', icon: '📝', text: '考试' },
+		{ key: 'profile', path: '/pages/profile/profile', icon: '👤', text: '我的' },
+	]
+
+	function onTabClick(path: string): void {
+		uni.redirectTo({ url: path })
+	}
+</script>
+
+<style>
+	.tab-bar {
+		flex-direction: row;
+		background-color: #ffffff;
+		border-top: 1rpx solid #f0f0f0;
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 999;
+	}
+
+	.tab-item {
+		flex: 1;
+		flex-direction: column;
+		align-items: center;
+		padding: 16rpx 0;
+	}
+
+	.tab-icon {
+		font-size: 44rpx;
+		margin-bottom: 8rpx;
+		opacity: 0.5;
+	}
+
+	.tab-icon.active {
+		opacity: 1;
+	}
+
+	.tab-text {
+		font-size: 22rpx;
+		color: #999999;
+	}
+
+	.tab-text.active {
+		color: #2979ff;
+	}
+</style>

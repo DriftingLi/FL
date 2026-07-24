@@ -1,0 +1,256 @@
+<template>
+	<view class="container">
+		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+		<view class="header">
+			<view class="user-card">
+				<view class="user-avatar">
+					<text class="avatar-icon">👤</text>
+				</view>
+				<view class="user-info">
+					<text class="user-name">{{ userName }}</text>
+					<text class="user-role">叉车学员</text>
+				</view>
+			</view>
+		</view>
+		<view class="stats-row">
+			<view class="stats-item">
+				<text class="stats-num">{{ stats.totalHours }}</text>
+				<text class="stats-label">累计学时</text>
+			</view>
+			<view class="stats-divider"></view>
+			<view class="stats-item">
+				<text class="stats-num">{{ stats.completedCourses }}</text>
+				<text class="stats-label">已完成课程</text>
+			</view>
+			<view class="stats-divider"></view>
+			<view class="stats-item">
+				<text class="stats-num">{{ stats.examPassed }}</text>
+				<text class="stats-label">通过考试</text>
+			</view>
+		</view>
+		<view class="menu-section">
+			<view class="menu-item" @click="onMenuClick('study')">
+				<text class="menu-icon">📚</text>
+				<text class="menu-text">学习记录</text>
+				<text class="menu-arrow">›</text>
+			</view>
+			<view class="menu-item" @click="onMenuClick('cert')">
+				<text class="menu-icon">🏆</text>
+				<text class="menu-text">证书管理</text>
+				<text class="menu-arrow">›</text>
+			</view>
+			<view class="menu-item" @click="onMenuClick('message')">
+				<text class="menu-icon">💬</text>
+				<text class="menu-text">消息通知</text>
+				<view class="menu-badge-wrap">
+					<text class="menu-badge">3</text>
+				</view>
+				<text class="menu-arrow">›</text>
+			</view>
+			<view class="menu-item" @click="onMenuClick('settings')">
+				<text class="menu-icon">⚙️</text>
+				<text class="menu-text">设置</text>
+				<text class="menu-arrow">›</text>
+			</view>
+			<view class="menu-item" @click="onMenuClick('about')">
+				<text class="menu-icon">ℹ️</text>
+				<text class="menu-text">关于我们</text>
+				<text class="menu-arrow">›</text>
+			</view>
+		</view>
+		<view class="logout-btn-wrap">
+			<text class="logout-btn" @click="onLogout">退出登录</text>
+		</view>
+		<tab-bar :active-index="3"></tab-bar>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { ref, computed } from 'vue'
+	import { useAuthStore } from '../../stores/auth'
+
+	const authStore = useAuthStore()
+	const statusBarHeight = ref<number>(44)
+
+	const userName = computed<string>(() => {
+		const u = authStore.user.value
+		if (u != null) {
+			if (u.name.length > 0) return u.name
+			if (u.username.length > 0) return u.username
+		}
+		return '同学'
+	})
+
+	const stats = {
+		totalHours: '28h',
+		completedCourses: 5,
+		examPassed: 3
+	}
+
+	uni.getSystemInfo({
+		success: (res) => {
+			const sbh = res.statusBarHeight
+			if (sbh != null) {
+				statusBarHeight.value = sbh as number
+			} else {
+				statusBarHeight.value = 44
+			}
+		}
+	})
+
+	function onMenuClick(type: string): void {
+		console.log('click menu:', type)
+	}
+
+	function onLogout(): void {
+		authStore.logout()
+	}
+</script>
+
+<style>
+	.container {
+		flex: 1;
+		background-color: #f5f5f5;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.status-bar {
+		background-color: #2979ff;
+		width: 100%;
+	}
+
+	.header {
+		background: linear-gradient(135deg, #2979ff 0%, #1976d2 100%);
+		padding: 32rpx;
+	}
+
+	.user-card {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.user-avatar {
+		width: 120rpx;
+		height: 120rpx;
+		border-radius: 60rpx;
+		background-color: rgba(255, 255, 255, 0.2);
+		align-items: center;
+		justify-content: center;
+		margin-right: 24rpx;
+	}
+
+	.avatar-icon {
+		font-size: 64rpx;
+	}
+
+	.user-info {
+		flex-direction: column;
+	}
+
+	.user-name {
+		font-size: 40rpx;
+		font-weight: bold;
+		color: #ffffff;
+		margin-bottom: 8rpx;
+	}
+
+	.user-role {
+		font-size: 26rpx;
+		color: rgba(255, 255, 255, 0.8);
+	}
+
+	.stats-row {
+		background-color: #ffffff;
+		margin: -32rpx 24rpx 24rpx;
+		border-radius: 16rpx;
+		padding: 32rpx;
+		flex-direction: row;
+		justify-content: space-around;
+		box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
+	}
+
+	.stats-item {
+		flex: 1;
+		flex-direction: column;
+		align-items: center;
+	}
+
+	.stats-num {
+		font-size: 40rpx;
+		font-weight: bold;
+		color: #333333;
+		margin-bottom: 8rpx;
+	}
+
+	.stats-label {
+		font-size: 24rpx;
+		color: #999999;
+	}
+
+	.stats-divider {
+		width: 1rpx;
+		background-color: #f0f0f0;
+	}
+
+	.menu-section {
+		background-color: #ffffff;
+		margin-bottom: 24rpx;
+	}
+
+	.menu-item {
+		flex-direction: row;
+		align-items: center;
+		padding: 32rpx;
+		border-bottom: 1rpx solid #f5f5f5;
+	}
+
+	.menu-item:last-child {
+		border-bottom: none;
+	}
+
+	.menu-icon {
+		font-size: 44rpx;
+		margin-right: 20rpx;
+	}
+
+	.menu-text {
+		flex: 1;
+		font-size: 32rpx;
+		color: #333333;
+	}
+
+	.menu-badge-wrap {
+		width: 36rpx;
+		height: 36rpx;
+		background-color: #ff5252;
+		border-radius: 18rpx;
+		align-items: center;
+		justify-content: center;
+		margin-right: 12rpx;
+	}
+
+	.menu-badge {
+		font-size: 20rpx;
+		color: #ffffff;
+	}
+
+	.menu-arrow {
+		font-size: 40rpx;
+		color: #cccccc;
+	}
+
+	.logout-btn-wrap {
+		padding: 32rpx;
+	}
+
+	.logout-btn {
+		display: flex;
+		justify-content: center;
+		font-size: 32rpx;
+		color: #ff5252;
+		border: 1rpx solid #ff5252;
+		border-radius: 48rpx;
+		padding: 24rpx;
+	}
+</style>

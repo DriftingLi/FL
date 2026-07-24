@@ -16,12 +16,12 @@ export const STORAGE_KEY_USER = 'auth_user'
  */
 export const GRID_ITEMS : GridItem[] = [
     { key: 'dashboard', title: '仪表盘', icon: '📊', color: '#2979ff', path: '/pages/dashboard/dashboard', available: true },
-    { key: 'courses', title: '课程中心', icon: '📚', color: '#19be6b', path: '', available: false },
+    { key: 'courses', title: '课程中心', icon: '📚', color: '#19be6b', path: '/pages/courses/courses', available: true },
     { key: 'question-bank', title: '题库练习', icon: '✏️', color: '#ff9900', path: '', available: false },
     { key: 'mock-exam', title: '模拟考试', icon: '⏱️', color: '#dd524d', path: '', available: false },
-    { key: 'level-exam', title: '考试中心', icon: '🎓', color: '#9c27b0', path: '', available: false },
+    { key: 'level-exam', title: '考试中心', icon: '🎓', color: '#9c27b0', path: '/pages/exam/exam', available: true },
     { key: 'wrong-questions', title: '错题本', icon: '❗', color: '#ff5722', path: '', available: false },
-    { key: 'profile', title: '个人中心', icon: '👤', color: '#00bcd4', path: '', available: false },
+    { key: 'profile', title: '个人中心', icon: '👤', color: '#00bcd4', path: '/pages/profile/profile', available: true },
     // { key: 'ai-assistant', title: 'AI 助手', icon: '🤖', color: '#607d8b', path: '', available: false },
 ]
 

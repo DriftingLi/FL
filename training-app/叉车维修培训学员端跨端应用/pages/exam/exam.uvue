@@ -1,0 +1,256 @@
+<template>
+	<view class="container">
+		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+		<view class="header">
+			<text class="header-title">考试中心</text>
+		</view>
+		<view class="stats-section">
+			<view class="stats-row">
+				<view class="stat-box">
+					<text class="stat-num">{{ stats.total }}</text>
+					<text class="stat-label">考试总数</text>
+				</view>
+				<view class="stat-box">
+					<text class="stat-num">{{ stats.completed }}</text>
+					<text class="stat-label">已完成</text>
+				</view>
+				<view class="stat-box">
+					<text class="stat-num">{{ stats.passed }}</text>
+					<text class="stat-label">通过</text>
+				</view>
+				<view class="stat-box">
+					<text class="stat-num">{{ stats.avg }}</text>
+					<text class="stat-label">平均分</text>
+				</view>
+			</view>
+		</view>
+		<view class="section">
+			<view class="section-header">
+				<text class="section-title">待参加考试</text>
+			</view>
+			<view class="exam-list">
+				<view class="exam-item" @click="onExamClick(1)">
+					<view class="exam-info">
+						<text class="exam-title">叉车基础操作考核</text>
+						<text class="exam-desc">满分100分，60分及格</text>
+						<view class="exam-meta">
+							<text class="exam-tag">必修</text>
+							<text class="exam-time">限时30分钟</text>
+						</view>
+					</view>
+					<view class="exam-action">
+						<text class="action-btn">开始考试</text>
+					</view>
+				</view>
+				<view class="exam-item" @click="onExamClick(2)">
+					<view class="exam-info">
+						<text class="exam-title">安全规范知识测试</text>
+						<text class="exam-desc">满分100分，80分及格</text>
+						<view class="exam-meta">
+							<text class="exam-tag">必修</text>
+							<text class="exam-time">限时20分钟</text>
+						</view>
+					</view>
+					<view class="exam-action">
+						<text class="action-btn">开始考试</text>
+					</view>
+				</view>
+			</view>
+		</view>
+		<view class="section">
+			<view class="section-header">
+				<text class="section-title">已完成考试</text>
+			</view>
+			<view class="exam-list">
+				<view class="exam-item completed" @click="onExamClick(3)">
+					<view class="exam-info">
+						<text class="exam-title">日常维护保养考核</text>
+						<text class="exam-desc">已通过，得分92分</text>
+						<view class="exam-meta">
+							<text class="exam-tag passed">通过</text>
+							<text class="exam-time">2024-01-15</text>
+						</view>
+					</view>
+					<view class="exam-action">
+						<text class="action-btn-secondary">查看详情</text>
+					</view>
+				</view>
+			</view>
+		</view>
+		<tab-bar :active-index="2"></tab-bar>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { ref } from 'vue'
+
+	const statusBarHeight = ref<number>(44)
+
+	const stats = {
+		total: 5,
+		completed: 3,
+		passed: 2,
+		avg: 85
+	}
+
+	uni.getSystemInfo({
+		success: (res) => {
+			const sbh = res.statusBarHeight
+			if (sbh != null) {
+				statusBarHeight.value = sbh as number
+			} else {
+				statusBarHeight.value = 44
+			}
+		}
+	})
+
+	function onExamClick(id: number): void {
+		console.log('click exam:', id)
+	}
+</script>
+
+<style>
+	.container {
+		flex: 1;
+		background-color: #f5f5f5;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.status-bar {
+		background-color: #2979ff;
+		width: 100%;
+	}
+
+	.header {
+		background-color: #2979ff;
+		padding: 16rpx 32rpx;
+		align-items: center;
+	}
+
+	.header-title {
+		font-size: 36rpx;
+		font-weight: bold;
+		color: #ffffff;
+	}
+
+	.stats-section {
+		background-color: #ffffff;
+		padding: 24rpx;
+	}
+
+	.stats-row {
+		flex-direction: row;
+		justify-content: space-around;
+	}
+
+	.stat-box {
+		flex-direction: column;
+		align-items: center;
+		flex: 1;
+	}
+
+	.stat-num {
+		font-size: 44rpx;
+		font-weight: bold;
+		color: #2979ff;
+		margin-bottom: 8rpx;
+	}
+
+	.stat-label {
+		font-size: 24rpx;
+		color: #999999;
+	}
+
+	.section {
+		background-color: #ffffff;
+		margin-top: 16rpx;
+		padding: 24rpx;
+	}
+
+	.section-header {
+		margin-bottom: 20rpx;
+	}
+
+	.section-title {
+		font-size: 32rpx;
+		font-weight: bold;
+		color: #333333;
+	}
+
+	.exam-list {
+		flex-direction: column;
+	}
+
+	.exam-item {
+		flex-direction: row;
+		align-items: center;
+		padding: 24rpx 0;
+		border-bottom: 1rpx solid #f5f5f5;
+	}
+
+	.exam-item:last-child {
+		border-bottom: none;
+	}
+
+	.exam-info {
+		flex: 1;
+		flex-direction: column;
+	}
+
+	.exam-title {
+		font-size: 30rpx;
+		font-weight: bold;
+		color: #333333;
+		margin-bottom: 8rpx;
+	}
+
+	.exam-desc {
+		font-size: 24rpx;
+		color: #999999;
+		margin-bottom: 12rpx;
+	}
+
+	.exam-meta {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.exam-tag {
+		font-size: 20rpx;
+		color: #ffffff;
+		background-color: #ff9800;
+		padding: 4rpx 16rpx;
+		border-radius: 8rpx;
+		margin-right: 16rpx;
+	}
+
+	.exam-tag.passed {
+		background-color: #4caf50;
+	}
+
+	.exam-time {
+		font-size: 22rpx;
+		color: #999999;
+	}
+
+	.exam-action {
+		margin-left: 20rpx;
+	}
+
+	.action-btn {
+		font-size: 26rpx;
+		color: #ffffff;
+		background-color: #2979ff;
+		padding: 12rpx 32rpx;
+		border-radius: 24rpx;
+	}
+
+	.action-btn-secondary {
+		font-size: 26rpx;
+		color: #666666;
+		background-color: #f5f5f5;
+		padding: 12rpx 32rpx;
+		border-radius: 24rpx;
+	}
+</style>
