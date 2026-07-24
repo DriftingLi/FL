@@ -322,6 +322,12 @@ const routes: RouteRecordRaw[] = [
         name: 'ValuationConfigManage',
         component: () => import('@/pages/admin/ValuationConfigManage.vue'),
         meta: { navKey: 'valuation-config', navLabel: '残值配置', navGroup: 'data' }
+      },
+      {
+        path: 'valuation-users',
+        name: 'ValuationUserManage',
+        component: () => import('@/pages/admin/ValuationUserManage.vue'),
+        meta: { navKey: 'valuation-users', navLabel: '评估用户', navGroup: 'data' }
       }
     ]
   },

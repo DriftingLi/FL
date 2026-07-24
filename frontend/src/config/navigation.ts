@@ -44,6 +44,7 @@ const adminNav: NavItem[] = [
   { key: 'exam-sessions', label: '考试场次', path: '/admin/exam-sessions', icon: Calendar },
   { key: 'statistics', label: '统计分析', path: '/admin/statistics', icon: TrendCharts },
   { key: 'valuation-config', label: '残值配置', path: '/admin/valuation-config', icon: PriceTag },
+  { key: 'valuation-users', label: '评估用户', path: '/admin/valuation-users', icon: User },
   { key: 'content-generate', label: '内容生成', path: '/admin/content-generate', icon: MagicStick },
   { key: 'featured-content', label: '内容精选', path: '/admin/featured-content', icon: Document }
 ]

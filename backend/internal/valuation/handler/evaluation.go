@@ -32,6 +32,7 @@ func NewEvaluationHandler(v *service.ValuationService, evalRepo *repository.Eval
 
 // Create 处理 POST /api/valuation/evaluations
 // 提交评估请求：调用 service.Evaluate → service.Persist 持久化 → 返回计算结果
+// 走可选认证：登录用户提交时记录 user_id，匿名提交 user_id 为 NULL
 func (h *EvaluationHandler) Create(c *gin.Context) {
 	var req model.EvaluationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -47,8 +48,9 @@ func (h *EvaluationHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// 2. 持久化评估结果到 evaluations 表
-	id, err := h.valuation.Persist(c.Request.Context(), result)
+	// 2. 持久化评估结果到 evaluations 表（带上当前登录用户 ID，未登录为 0→NULL）
+	userID := currentValuationUserID(c)
+	id, err := h.valuation.Persist(c.Request.Context(), result, userID)
 	if err != nil {
 		h.logger.Error("保存评估记录失败", zap.Error(err))
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "保存评估记录失败")
@@ -61,6 +63,7 @@ func (h *EvaluationHandler) Create(c *gin.Context) {
 
 // Get 处理 GET /api/valuation/evaluations/:id
 // 查询评估详情：输入参数 + 计算结果 + 时间戳
+// 仅返回属于当前登录用户的记录（不属于自己 → 404）
 // KTimeAdjusted 不入库，读取时实时由 KTime/KHours/KBrand 重算
 func (h *EvaluationHandler) Get(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -69,7 +72,8 @@ func (h *EvaluationHandler) Get(c *gin.Context) {
 		return
 	}
 
-	detail, err := h.evalRepo.GetEvaluation(c.Request.Context(), id)
+	userID := currentValuationUserID(c)
+	detail, err := h.evalRepo.GetEvaluationByUser(c.Request.Context(), id, userID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			Error(c, http.StatusNotFound, CodeNotFound, "评估记录不存在")
@@ -92,7 +96,7 @@ func (h *EvaluationHandler) Get(c *gin.Context) {
 }
 
 // List 处理 GET /api/valuation/evaluations?page=1&page_size=20&brand=合力
-// 分页查询评估历史（可按品牌筛选）
+// 分页查询评估历史（可按品牌筛选），仅返回当前登录用户的记录
 func (h *EvaluationHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -106,9 +110,11 @@ func (h *EvaluationHandler) List(c *gin.Context) {
 
 	// 品牌筛选参数（为空时不过滤）
 	brand := c.Query("brand")
+	// 仅查询当前登录用户的记录（List 在鉴权组，userID 必然 >0）
+	userID := currentValuationUserID(c)
 
 	// 1. 查询总数
-	total, err := h.evalRepo.CountEvaluations(c.Request.Context(), brand)
+	total, err := h.evalRepo.CountEvaluations(c.Request.Context(), brand, userID)
 	if err != nil {
 		h.logger.Error("统计评估记录失败", zap.Error(err))
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询评估列表失败")
@@ -116,7 +122,7 @@ func (h *EvaluationHandler) List(c *gin.Context) {
 	}
 
 	// 2. 查询当前页列表
-	list, err := h.evalRepo.ListEvaluations(c.Request.Context(), brand, pageSize, offset)
+	list, err := h.evalRepo.ListEvaluations(c.Request.Context(), brand, userID, pageSize, offset)
 	if err != nil {
 		h.logger.Error("查询评估列表失败", zap.Error(err))
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询评估列表失败")
@@ -138,9 +144,9 @@ func (h *EvaluationHandler) List(c *gin.Context) {
 }
 
 // Stats 处理 GET /api/valuation/evaluations/stats
-// 返回累计评估次数（复用 CountEvaluations，brand 为空统计全部）
+// 返回累计评估次数（公开统计全部记录，userID=0 不过滤）
 func (h *EvaluationHandler) Stats(c *gin.Context) {
-	total, err := h.evalRepo.CountEvaluations(c.Request.Context(), "")
+	total, err := h.evalRepo.CountEvaluations(c.Request.Context(), "", 0)
 	if err != nil {
 		h.logger.Error("统计评估次数失败", zap.Error(err))
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询统计数据失败")

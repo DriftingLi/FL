@@ -149,3 +149,80 @@ export async function updateConditionCoefficient(id: number, label: string, base
 export async function updateRegionCoefficient(id: number, coefficient: number): Promise<void> {
   await client.put(`/admin/region-coefficients/${encodeURIComponent(id)}`, { coefficient })
 }
+
+// ========== 评估模块独立用户管理（/admin/users） ==========
+// 鉴权走主体系 admin JWT；列表为分页响应 { total, page, page_size, list }
+
+/** 评估用户摘要（列表项，不含密码） */
+export interface ValuationUser {
+  id: number
+  username: string
+  name: string
+  phone: string
+  email: string
+  company: string
+  status: number // 1 启用 / 0 禁用
+  created_at: string
+}
+
+/** 评估用户列表分页响应 */
+interface ValuationUsersPage {
+  total: number
+  page: number
+  page_size: number
+  list: ValuationUser[]
+}
+
+/** 新增评估用户请求体 */
+export interface CreateValuationUserPayload {
+  phone: string
+  password: string
+  name: string
+  email?: string
+  company?: string
+}
+
+/** 更新评估用户请求体（不含密码） */
+export interface UpdateValuationUserPayload {
+  name: string
+  email?: string
+  company?: string
+  status: number // 1 启用 / 0 禁用
+}
+
+/** 分页查询评估用户（GET /admin/users） */
+export async function listValuationUsers(
+  params: { page?: number; page_size?: number; keyword?: string } = {}
+): Promise<ValuationUsersPage> {
+  const resp = await client.get<unknown, { data: ValuationUsersPage }>('/admin/users', { params })
+  return resp.data ?? { total: 0, page: 1, page_size: 20, list: [] }
+}
+
+/** 新增评估用户（POST /admin/users） */
+export async function createValuationUser(payload: CreateValuationUserPayload): Promise<{
+  id: number
+  username: string
+  name: string
+  phone: string
+}> {
+  const resp = await client.post<unknown, { data: { id: number; username: string; name: string; phone: string } }>(
+    '/admin/users',
+    payload
+  )
+  return resp.data
+}
+
+/** 更新评估用户资料（PUT /admin/users/:id） */
+export async function updateValuationUser(id: number, payload: UpdateValuationUserPayload): Promise<void> {
+  await client.put(`/admin/users/${encodeURIComponent(id)}`, payload)
+}
+
+/** 重置评估用户密码（PUT /admin/users/:id/password） */
+export async function resetValuationUserPassword(id: number, password: string): Promise<void> {
+  await client.put(`/admin/users/${encodeURIComponent(id)}/password`, { password })
+}
+
+/** 删除评估用户（DELETE /admin/users/:id） */
+export async function deleteValuationUser(id: number): Promise<void> {
+  await client.delete(`/admin/users/${encodeURIComponent(id)}`)
+}

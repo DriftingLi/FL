@@ -56,6 +56,9 @@ type CreateEvaluationParams struct {
 	ConfidenceLow  float64
 	ConfidenceHigh float64
 	ReportPdfPath  string
+	// 归属字段
+	// UserID 为 0 表示匿名提交（user_id 落 NULL）；>0 表示登录用户提交
+	UserID int
 }
 
 // CreateEvaluation 插入评估主记录，返回新 ID
@@ -70,7 +73,8 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 			has_license_plate, has_registration_certificate, has_maintenance_records,
 			condition_rating,
 			original_price, k_time, k_hours, k_brand, k_condition, k_market,
-			estimated_value, confidence_low, confidence_high, report_pdf_path
+			estimated_value, confidence_low, confidence_high, report_pdf_path,
+			user_id
 		) VALUES (
 			$1, $2, $3, $4,
 			$5, $6, $7,
@@ -79,7 +83,8 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 			$14, $15, $16,
 			$17,
 			$18, $19, $20, $21, $22, $23,
-			$24, $25, $26, $27
+			$24, $25, $26, $27,
+			$28
 		)
 		RETURNING id, created_at, updated_at`,
 		p.Brand, p.VehicleType, p.Series, p.Tonnage,
@@ -90,6 +95,7 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 		p.ConditionRating,
 		p.OriginalPrice, p.KTime, p.KHours, p.KBrand, p.KCondition, p.KMarket,
 		p.EstimatedValue, p.ConfidenceLow, p.ConfidenceHigh, nullableString(p.ReportPdfPath),
+		nullableUserID(p.UserID),
 	).Scan(&id, new(time.Time), new(time.Time))
 	if err != nil {
 		return 0, fmt.Errorf("插入评估记录失败: %w", err)
@@ -100,12 +106,59 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 	return id, nil
 }
 
-// GetEvaluation 按 ID 查询评估详情
+// GetEvaluation 按 ID 查询评估详情（不按用户过滤）
+// 用于公开的报告生成/下载场景（report.go），鉴权详情请用 GetEvaluationByUser
 func (r *EvaluationRepository) GetEvaluation(ctx context.Context, id int64) (*model.EvaluationDetail, error) {
 	cacheKey := cache.SafeKey("eval", "get", fmt.Sprintf("%d", id))
 	var result model.EvaluationDetail
 	err := cache.GetOrSetJSON(ctx, cacheKey, 10*time.Minute, &result, func() (any, error) {
-		row := r.pool.QueryRow(ctx, `
+		return r.scanEvaluationByID(ctx, id, 0, false)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetEvaluationByUser 按 ID 查询评估详情，并校验归属（user_id 必须等于 userID）
+// 用于登录用户查看自己的历史详情；不属于该用户的记录返回 pgx.ErrNoRows
+func (r *EvaluationRepository) GetEvaluationByUser(ctx context.Context, id int64, userID int) (*model.EvaluationDetail, error) {
+	// 详情缓存 key 带上 userID，避免跨用户串缓存
+	cacheKey := cache.SafeKey("eval", "get", "user", fmt.Sprintf("%d", userID), fmt.Sprintf("%d", id))
+	var result model.EvaluationDetail
+	err := cache.GetOrSetJSON(ctx, cacheKey, 10*time.Minute, &result, func() (any, error) {
+		return r.scanEvaluationByID(ctx, id, userID, true)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// scanEvaluationByID 执行单行查询并扫描为 EvaluationDetail。
+// enforceOwner=true 时追加 user_id = $userID 过滤；=false 时仅按 id 查询（公开场景）
+func (r *EvaluationRepository) scanEvaluationByID(ctx context.Context, id int64, userID int, enforceOwner bool) (model.EvaluationDetail, error) {
+	var (
+		d          model.EvaluationDetail
+		reportPath *string
+		createdAt  time.Time
+		updatedAt  time.Time
+	)
+	var row pgx.Row
+	if enforceOwner {
+		row = r.pool.QueryRow(ctx, `
+			SELECT id, brand, vehicle_type, series, tonnage,
+			       config_type, mast_type, mast_height_mm,
+			       factory_year, sale_year, usage_hours, original_paint,
+			       province, city,
+			       has_license_plate, has_registration_certificate, has_maintenance_records,
+			       condition_rating,
+			       original_price, k_time, k_hours, k_brand, k_condition, k_market,
+			       estimated_value, confidence_low, confidence_high, report_pdf_path,
+			       created_at, updated_at
+			FROM evaluations WHERE id = $1 AND user_id = $2`, id, userID)
+	} else {
+		row = r.pool.QueryRow(ctx, `
 			SELECT id, brand, vehicle_type, series, tonnage,
 			       config_type, mast_type, mast_height_mm,
 			       factory_year, sale_year, usage_hours, original_paint,
@@ -116,73 +169,66 @@ func (r *EvaluationRepository) GetEvaluation(ctx context.Context, id int64) (*mo
 			       estimated_value, confidence_low, confidence_high, report_pdf_path,
 			       created_at, updated_at
 			FROM evaluations WHERE id = $1`, id)
-		var (
-			d          model.EvaluationDetail
-			reportPath *string
-			createdAt  time.Time
-			updatedAt  time.Time
-		)
-		if err := row.Scan(
-			&d.ID, &d.Brand, &d.VehicleType, &d.Series, &d.Tonnage,
-			&d.ConfigType, &d.MastType, &d.MastHeightMM,
-			&d.FactoryYear, &d.SaleYear, &d.UsageHours, &d.OriginalPaint,
-			&d.Province, &d.City,
-			&d.HasLicensePlate, &d.HasRegistrationCertificate, &d.HasMaintenanceRecords,
-			&d.ConditionRating,
-			&d.OriginalPrice, &d.KTime, &d.KHours, &d.KBrand, &d.KCondition, &d.KMarket,
-			&d.EstimatedValue, &d.ConfidenceLow, &d.ConfidenceHigh, &reportPath,
-			&createdAt, &updatedAt,
-		); err != nil {
-			return nil, err
-		}
-		if reportPath != nil {
-			d.ReportPdfPath = *reportPath
-		}
-		d.CreatedAt = createdAt.Format("2006-01-02T15:04:05Z07:00")
-		d.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
-		return d, nil
-	})
-	if err != nil {
-		return nil, err
 	}
-	return &result, nil
+	if err := row.Scan(
+		&d.ID, &d.Brand, &d.VehicleType, &d.Series, &d.Tonnage,
+		&d.ConfigType, &d.MastType, &d.MastHeightMM,
+		&d.FactoryYear, &d.SaleYear, &d.UsageHours, &d.OriginalPaint,
+		&d.Province, &d.City,
+		&d.HasLicensePlate, &d.HasRegistrationCertificate, &d.HasMaintenanceRecords,
+		&d.ConditionRating,
+		&d.OriginalPrice, &d.KTime, &d.KHours, &d.KBrand, &d.KCondition, &d.KMarket,
+		&d.EstimatedValue, &d.ConfidenceLow, &d.ConfidenceHigh, &reportPath,
+		&createdAt, &updatedAt,
+	); err != nil {
+		return d, err
+	}
+	if reportPath != nil {
+		d.ReportPdfPath = *reportPath
+	}
+	d.CreatedAt = createdAt.Format("2006-01-02T15:04:05Z07:00")
+	d.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
+	return d, nil
 }
 
 // ListEvaluations 分页查询评估列表
-// brand 为空时不过滤
-func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string, limit, offset int) ([]model.EvaluationDetail, error) {
-	cacheKey := cache.SafeKey("eval", "list", brand, fmt.Sprintf("%d", limit), fmt.Sprintf("%d", offset))
+// brand 为空时不过滤；userID>0 时仅返回该用户的记录，userID=0 时返回全部（公开统计场景）
+func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string, userID int, limit, offset int) ([]model.EvaluationDetail, error) {
+	cacheKey := cache.SafeKey("eval", "list", brand, fmt.Sprintf("u%d", userID), fmt.Sprintf("%d", limit), fmt.Sprintf("%d", offset))
 	var result []model.EvaluationDetail
 	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLStats, &result, func() (any, error) {
-		var rows pgx.Rows
-		var err error
+		// 动态拼装 WHERE：brand / user_id 均为可选过滤
+		where := make([]string, 0, 2)
+		args := make([]any, 0, 3)
+		argIdx := 1
 		if brand != "" {
-			rows, err = r.pool.Query(ctx, `
-				SELECT id, brand, vehicle_type, series, tonnage,
-				       config_type, mast_type, mast_height_mm,
-				       factory_year, sale_year, usage_hours, original_paint,
-				       province, city,
-				       has_license_plate, has_registration_certificate, has_maintenance_records,
-				       condition_rating,
-				       original_price, k_time, k_hours, k_brand, k_condition, k_market,
-				       estimated_value, confidence_low, confidence_high, report_pdf_path,
-				       created_at, updated_at
-				FROM evaluations WHERE brand = $1
-				ORDER BY created_at DESC LIMIT $2 OFFSET $3`, brand, limit, offset)
-		} else {
-			rows, err = r.pool.Query(ctx, `
-				SELECT id, brand, vehicle_type, series, tonnage,
-				       config_type, mast_type, mast_height_mm,
-				       factory_year, sale_year, usage_hours, original_paint,
-				       province, city,
-				       has_license_plate, has_registration_certificate, has_maintenance_records,
-				       condition_rating,
-				       original_price, k_time, k_hours, k_brand, k_condition, k_market,
-				       estimated_value, confidence_low, confidence_high, report_pdf_path,
-				       created_at, updated_at
-				FROM evaluations
-				ORDER BY created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
+			where = append(where, fmt.Sprintf("brand = $%d", argIdx))
+			args = append(args, brand)
+			argIdx++
 		}
+		if userID > 0 {
+			where = append(where, fmt.Sprintf("user_id = $%d", argIdx))
+			args = append(args, userID)
+			argIdx++
+		}
+		whereClause := ""
+		if len(where) > 0 {
+			whereClause = "WHERE " + joinStrings(where, " AND ")
+		}
+		args = append(args, limit, offset)
+		query := fmt.Sprintf(`
+			SELECT id, brand, vehicle_type, series, tonnage,
+			       config_type, mast_type, mast_height_mm,
+			       factory_year, sale_year, usage_hours, original_paint,
+			       province, city,
+			       has_license_plate, has_registration_certificate, has_maintenance_records,
+			       condition_rating,
+			       original_price, k_time, k_hours, k_brand, k_condition, k_market,
+			       estimated_value, confidence_low, confidence_high, report_pdf_path,
+			       created_at, updated_at
+			FROM evaluations %s
+			ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, whereClause, argIdx, argIdx+1)
+		rows, err := r.pool.Query(ctx, query, args...)
 		if err != nil {
 			return nil, fmt.Errorf("查询评估列表失败: %w", err)
 		}
@@ -219,24 +265,56 @@ func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string
 }
 
 // CountEvaluations 统计评估记录总数
-// brand 为空时统计全部
-func (r *EvaluationRepository) CountEvaluations(ctx context.Context, brand string) (int, error) {
-	cacheKey := cache.SafeKey("eval", "count", brand)
+// brand 为空时不过滤；userID>0 时仅统计该用户的记录，userID=0 时统计全部（公开统计场景）
+func (r *EvaluationRepository) CountEvaluations(ctx context.Context, brand string, userID int) (int, error) {
+	cacheKey := cache.SafeKey("eval", "count", brand, fmt.Sprintf("u%d", userID))
 	var result int
 	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLStats, &result, func() (any, error) {
-		var total int
+		where := make([]string, 0, 2)
+		args := make([]any, 0, 2)
+		argIdx := 1
 		if brand != "" {
-			if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM evaluations WHERE brand = $1`, brand).Scan(&total); err != nil {
-				return nil, err
-			}
-		} else {
-			if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM evaluations`).Scan(&total); err != nil {
-				return nil, err
-			}
+			where = append(where, fmt.Sprintf("brand = $%d", argIdx))
+			args = append(args, brand)
+			argIdx++
+		}
+		if userID > 0 {
+			where = append(where, fmt.Sprintf("user_id = $%d", argIdx))
+			args = append(args, userID)
+			argIdx++
+		}
+		whereClause := ""
+		if len(where) > 0 {
+			whereClause = "WHERE " + joinStrings(where, " AND ")
+		}
+		var total int
+		query := fmt.Sprintf(`SELECT COUNT(*) FROM evaluations %s`, whereClause)
+		if err := r.pool.QueryRow(ctx, query, args...).Scan(&total); err != nil {
+			return nil, err
 		}
 		return total, nil
 	})
 	return result, err
+}
+
+// nullableUserID 把 0 转为 nil 便于 user_id 落 NULL（匿名提交）
+func nullableUserID(uid int) any {
+	if uid <= 0 {
+		return nil
+	}
+	return uid
+}
+
+// joinStrings 用 sep 连接字符串切片（避免引入 strings 包的小工具）
+func joinStrings(parts []string, sep string) string {
+	out := ""
+	for i, p := range parts {
+		if i > 0 {
+			out += sep
+		}
+		out += p
+	}
+	return out
 }
 
 // UpdateEvaluationReportPath 更新 PDF 报告路径

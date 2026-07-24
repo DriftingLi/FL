@@ -70,8 +70,9 @@ func (h *BatteryHandler) Create(c *gin.Context) {
 		Suggestions:       result.Suggestions,
 	}
 
-	// 持久化
-	saved, err := h.repo.CreateEvaluation(c.Request.Context(), eval, result.CycleFeatures)
+	// 持久化（带上当前登录用户 ID）
+	userID := currentValuationUserID(c)
+	saved, err := h.repo.CreateEvaluation(c.Request.Context(), eval, result.CycleFeatures, userID)
 	if err != nil {
 		h.logger.Error("保存电池评估记录失败", zap.Error(err))
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "保存评估记录失败")
@@ -115,7 +116,9 @@ func (h *BatteryHandler) List(c *gin.Context) {
 		}
 	}
 
-	items, total, err := h.repo.ListEvaluations(c.Request.Context(), batteryType, pageSize, offset)
+	// 仅查询当前登录用户的记录（List 在鉴权组，userID 必然 >0）
+	userID := currentValuationUserID(c)
+	items, total, err := h.repo.ListEvaluations(c.Request.Context(), batteryType, userID, pageSize, offset)
 	if err != nil {
 		h.logger.Error("查询电池评估列表失败", zap.Error(err))
 		Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询评估列表失败")
@@ -129,7 +132,7 @@ func (h *BatteryHandler) List(c *gin.Context) {
 }
 
 // Get 处理 GET /api/v1/battery/evaluations/:id
-// 查询评估详情（含周期特征）
+// 查询评估详情（含周期特征），仅返回属于当前登录用户的记录
 func (h *BatteryHandler) Get(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -137,7 +140,8 @@ func (h *BatteryHandler) Get(c *gin.Context) {
 		return
 	}
 
-	eval, err := h.repo.GetEvaluation(c.Request.Context(), id)
+	userID := currentValuationUserID(c)
+	eval, err := h.repo.GetEvaluationByUser(c.Request.Context(), id, userID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			Error(c, http.StatusNotFound, CodeNotFound, "电池评估记录不存在")
