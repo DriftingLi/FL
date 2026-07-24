@@ -25,7 +25,7 @@
           v-for="course in courses"
           :key="course.course_id"
           class="course-card"
-          @click="goToDetail(course.course_id)"
+          @click="goToCourse(course.course_id)"
         >
           <div class="card-cover" :class="getCategoryClass(course.category)">
             <img
@@ -176,8 +176,23 @@ function handleSizeChange() {
   loadCourses()
 }
 
-function goToDetail(courseId) {
-  router.push({ name: 'CourseDetail', params: { id: courseId } })
+async function goToCourse(courseId) {
+  // 课程详情页已移除：点击课程直接跳转第一章，无章节时给出提示
+  try {
+    const res = await courseApi.getCourseDetail(courseId)
+    if (res.code === 200 && res.data.chapters && res.data.chapters.length > 0) {
+      const firstChapter = res.data.chapters[0]
+      router.push({
+        name: 'ChapterView',
+        params: { courseId, chapterId: firstChapter.chapter_id }
+      })
+    } else {
+      ElMessage.warning('该课程暂无章节内容')
+    }
+  } catch (error) {
+    console.error('加载课程失败:', error)
+    ElMessage.error('加载课程失败，请稍后重试')
+  }
 }
 
 onMounted(() => {

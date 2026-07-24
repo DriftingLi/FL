@@ -17,35 +17,6 @@ import (
 
 // 智谱 GLM 默认模型与提示词。
 const (
-	fallbackText = `## 叉车维修知识
-
-抱歉，AI服务暂时不可用，以下是预设参考内容：
-
-### 常见故障检查要点
-
-1. **液压系统**：检查油位、管路密封、泵的工作压力
-2. **电气系统**：检查蓄电池电压、线路连接、保险丝状态
-3. **制动系统**：检查制动液液位、蹄片磨损、管路泄漏
-4. **转向系统**：检查液压油位、转向器间隙、轮胎气压
-
-### 维修安全注意事项
-
-- 维修前必须关闭发动机并断开电源
-- 液压系统维修前必须释放系统压力
-- 使用合格的工具和配件
-- 维修后必须进行功能测试
-
-> 如需更详细的内容，请稍后重试或联系管理员。`
-
-	//nolint:unused
-	contentSystemPrompt = `你是一名叉车维修培训内容编写专家。请为以下章节编写详细的培训内容。
-要求：
-1. 使用Markdown格式
-2. 内容专业准确，适合培训教学
-3. 包含理论讲解和实操要点
-4. 标注安全注意事项
-5. 字数800-1500字`
-
 	gradingSystemPrompt = `你是一名专业的叉车维修培训考试阅卷专家。请根据参考答案和评分标准，对学员的简答题答案进行评分。
 要求：
 1. 严格按照评分标准逐项评分，意思正确但表述不同也应给分
@@ -84,99 +55,6 @@ type AIGradeResult struct {
 	Fallback bool    `json:"fallback,omitempty"`
 }
 
-// TestConnection 测试 AI 连接。
-func (s *AIService) TestConnection() map[string]any {
-	if s.apiKey == "" {
-		return map[string]any{
-			"status":         "error",
-			"message":        "ZHIPU_API_KEY未配置，请在环境变量或.env文件中设置",
-			"api_key_exists": false,
-			"api_key_length": 0,
-		}
-	}
-	keyPrefix := s.apiKey
-	if len(keyPrefix) > 10 {
-		keyPrefix = keyPrefix[:6] + "..."
-	}
-	content, err := s.callModel([]openai.ChatCompletionMessage{
-		{Role: openai.ChatMessageRoleUser, Content: `请回复"连接测试成功"四个字`},
-	}, 50, 0.1)
-	if err != nil {
-		return map[string]any{
-			"status":         "error",
-			"message":        fmt.Sprintf("AI连接失败: %s", err.Error()),
-			"api_key_exists": true,
-			"api_key_prefix": keyPrefix,
-			"error_type":     "RuntimeError",
-			"model":          s.model,
-		}
-	}
-	if content == "" {
-		return map[string]any{
-			"status":         "error",
-			"message":        "AI返回空内容，可能是内容安全过滤或API限流",
-			"api_key_exists": true,
-			"api_key_prefix": keyPrefix,
-			"model":          s.model,
-		}
-	}
-	preview := content
-	if len(preview) > 100 {
-		preview = preview[:100]
-	}
-	return map[string]any{
-		"status":           "success",
-		"message":          "AI连接正常",
-		"api_key_exists":   true,
-		"api_key_prefix":   keyPrefix,
-		"response_preview": preview,
-		"model":            s.model,
-	}
-}
-
-// GenerateText 根据关键词生成培训内容。
-func (s *AIService) GenerateText(keyword string, userID int, userType string) map[string]any {
-	if strings.TrimSpace(keyword) == "" {
-		// 抛错由调用方处理；这里返回错误标记。
-		return map[string]any{"error": "关键词不能为空"}
-	}
-	systemPrompt := `你是一名专业的叉车维修培训讲师，擅长用通俗易懂的语言讲解叉车维修知识。请按照以下结构组织内容：
-1. 概述：简要介绍该知识点
-2. 详细讲解：分点说明关键内容
-3. 实操要点：给出实际操作建议
-4. 安全提示：标注重要安全注意事项
-请使用Markdown格式输出，内容专业、准确、实用。`
-	userPrompt := fmt.Sprintf("请详细讲解以下叉车维修知识点：%s", keyword)
-	now := time.Now().Format("2006-01-02 15:04:05")
-
-	content, err := s.callModel([]openai.ChatCompletionMessage{
-		{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
-		{Role: openai.ChatMessageRoleUser, Content: userPrompt},
-	}, 3000, 0.7)
-
-	if err != nil {
-		slog.Error("AI generate_text failed", "error", err)
-		if userID != 0 {
-			s.saveLog(userID, userType, "text", map[string]any{"keyword": keyword}, err.Error(), 0)
-		}
-		return map[string]any{
-			"content":      fallbackText,
-			"keywords":     keyword,
-			"generated_at": now,
-			"fallback":     true,
-			"error":        err.Error(),
-		}
-	}
-	if userID != 0 {
-		s.saveLog(userID, userType, "text", map[string]any{"keyword": keyword}, content, 1)
-	}
-	return map[string]any{
-		"content":      content,
-		"keywords":     keyword,
-		"generated_at": now,
-	}
-}
-
 // GradeShortAnswer 简答题 AI 评分。
 func (s *AIService) GradeShortAnswer(questionContent, referenceAnswer, scoringCriteria, studentAnswer string, maxScore float64, userID *int) *AIGradeResult {
 	if strings.TrimSpace(studentAnswer) == "" {
@@ -209,40 +87,6 @@ func (s *AIService) GradeShortAnswer(questionContent, referenceAnswer, scoringCr
 		}, fmt.Sprintf("{\"score\":%g,\"comment\":%q}", result.Score, result.Comment), 1)
 	}
 	return result
-}
-
-// GetGenerationHistory 查询生成历史。
-func (s *AIService) GetGenerationHistory(userID int, generationType string, limit int) []map[string]any {
-	q := s.db.Model(&model.AIGenerationLog{}).Where("user_id = ? AND status = ?", userID, 1)
-	if generationType != "" {
-		q = q.Where("generation_type = ?", generationType)
-	}
-	if limit <= 0 {
-		limit = 10
-	}
-	var logs []model.AIGenerationLog
-	if err := q.Order("created_at DESC").Limit(limit).Find(&logs).Error; err != nil {
-		slog.Error("GetGenerationHistory failed", "error", err)
-		return []map[string]any{}
-	}
-	out := make([]map[string]any, 0, len(logs))
-	for _, log := range logs {
-		var params interface{}
-		if len(log.InputParams) > 0 {
-			_ = json.Unmarshal(log.InputParams, &params)
-		}
-		if params == nil {
-			params = map[string]any{}
-		}
-		out = append(out, map[string]any{
-			"log_id":          log.LogID,
-			"generation_type": log.GenerationType,
-			"input_params":    params,
-			"output_result":   log.OutputResult,
-			"created_at":      formatISO(log.CreatedAt),
-		})
-	}
-	return out
 }
 
 // callModel 调用模型，重试 2 次。

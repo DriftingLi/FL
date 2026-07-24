@@ -7,12 +7,6 @@
     </template>
 
     <template v-else-if="chapterDetail">
-      <BreadcrumbNav
-        :courseName="courseName"
-        :courseId="courseId"
-        :chapterName="chapterDetail.title"
-      />
-
       <div class="chapter-header">
         <div class="header-left">
           <h1 class="chapter-title">{{ chapterDetail.title }}</h1>
@@ -138,12 +132,12 @@ import { markedHighlight } from 'marked-highlight'
 import hljs from 'highlight.js'
 import { courseApi } from '@/api/course'
 import { useAuthStore } from '@/stores/auth'
+import { useCourseStore } from '@/stores/course'
 import '@/assets/styles/markdown.css'
 import VideoPlayer from '@/components/student/VideoPlayer.vue'
 import DocumentViewer from '@/components/student/DocumentViewer.vue'
 import PptViewer from '@/components/student/PptViewer.vue'
 import ImageViewer from '@/components/student/ImageViewer.vue'
-import BreadcrumbNav from '@/components/student/BreadcrumbNav.vue'
 
 marked.use(
   markedHighlight({
@@ -161,6 +155,7 @@ marked.use(
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const courseStore = useCourseStore()
 
 const loading = ref(false)
 const chapterNotFound = ref(false)
@@ -281,6 +276,8 @@ async function loadChapterDetail() {
     const res = await courseApi.getChapterDetail(courseId.value, chapterId.value)
     if (res.code === 200) {
       chapterDetail.value = res.data
+      // 章节加载成功后启动学习计时
+      beginStudy()
     } else {
       chapterNotFound.value = true
     }
@@ -297,12 +294,11 @@ async function loadChapterDetail() {
 }
 
 async function loadCourseInfo() {
+  // 复用侧栏章节模式已加载的课程数据，避免重复请求；未命中时由 store 发起请求
   try {
-    const res = await courseApi.getCourseDetail(courseId.value)
-    if (res.code === 200) {
-      courseName.value = res.data.course_info?.name || ''
-      chapters.value = res.data.chapters || []
-    }
+    await courseStore.loadCourse(courseId.value)
+    courseName.value = courseStore.courseInfo?.name || ''
+    chapters.value = courseStore.chapters || []
   } catch (error) {
     console.error('加载课程信息失败:', error)
   }
@@ -339,7 +335,8 @@ async function completeStudy() {
   if (!chapterId) return
 
   const finalIncremental = studySeconds.value - reportedSeconds
-  const totalDuration = Math.max(Math.ceil((reportedSeconds + finalIncremental) / 60), 1)
+  // 仅上报未上报过的增量时长，避免与已上报部分重复累加
+  const totalDuration = finalIncremental > 0 ? Math.max(Math.ceil(finalIncremental / 60), 1) : 0
   stopStudy()
 
   try {
@@ -349,8 +346,11 @@ async function completeStudy() {
     })
     if (res.code === 200) {
       reportedSeconds += finalIncremental
+      // 手动更新章节状态，避免重新加载章节时重置计时器
+      if (chapterDetail.value) {
+        chapterDetail.value.study_status = 'completed'
+      }
       ElMessage.success('学习进度已保存')
-      await loadChapterDetail()
     } else {
       ElMessage.error(res.message || '保存学习进度失败')
     }
@@ -369,7 +369,7 @@ function navigateToChapter(targetChapterId) {
 }
 
 function goBackToCourse() {
-  router.push({ name: 'CourseDetail', params: { id: courseId.value } })
+  router.push({ name: 'CourseList' })
 }
 
 watch(() => route.params.chapterId, (newVal) => {

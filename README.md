@@ -226,7 +226,6 @@ npm run dev                   # 默认 :5173
 | `ADMIN_DEFAULT_PASSWORD` / `TUTOR_DEFAULT_PASSWORD` / `STUDENT_DEFAULT_PASSWORD` | 默认账号密码（生产必改） | 空 |
 | `ZHIPU_API_KEY` / `ZHIPU_BASE_URL` / `ZHIPU_MODEL` | 智谱 GLM 配置 | glm-4.7-flash |
 | `OPENAI_API_KEY` | OpenAI 密钥（ZHIPU 为空时备用） | 空 |
-| `COZE_*` | Coze OAuth / Web SDK 配置 | 空 |
 | `VALUATION_PDF_OUTPUT_DIR` | 评估报告 PDF 输出目录 | storage/reports |
 
 前端环境变量（`.env.example`）：

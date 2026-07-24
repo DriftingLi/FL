@@ -93,13 +93,6 @@ write_env_file() {
         fi
     }
 
-    # PEM 私钥写入独立文件（必须在 {} > .env 块之外，防止 log_ok ANSI 码污染 .env）
-    if [ -n "${COZE_OAUTH_PRIVATE_KEY:-}" ]; then
-        printf '%s' "${COZE_OAUTH_PRIVATE_KEY}" > "${DEPLOY_PATH}/coze_private_key.pem"
-        chmod 600 "${DEPLOY_PATH}/coze_private_key.pem"
-        log_ok "Coze 私钥已写入文件"
-    fi
-
     {
         echo "# 由 deploy-remote.sh 自动生成 — $(date '+%Y-%m-%d %H:%M:%S')"
         echo "APP_ENV=production"
@@ -136,15 +129,6 @@ write_env_file() {
         env_val "${ZHIPU_MODEL:-glm-4.7-flash}"; echo
         printf 'OPENAI_API_KEY='
         env_val "${OPENAI_API_KEY:-}"; echo
-
-        printf 'COZE_PROJECT_ID='
-        env_val "${COZE_PROJECT_ID:-}"; echo
-        printf 'COZE_OAUTH_APP_ID='
-        env_val "${COZE_OAUTH_APP_ID:-}"; echo
-        printf 'COZE_OAUTH_KID='
-        env_val "${COZE_OAUTH_KID:-}"; echo
-        echo "COZE_OAUTH_PRIVATE_KEY_PATH=/etc/secrets/coze_private_key.pem"
-        # COZE_OAUTH_PRIVATE_KEY 不写入 .env（已写入独立文件，见上方）
 
         echo "# 残值评估 JWT 密钥（生产环境必需）"
         printf 'VALUATION_JWT_SECRET_KEY='

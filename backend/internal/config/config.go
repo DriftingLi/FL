@@ -29,7 +29,6 @@ type Config struct {
 	ZhipuAPIKey      string
 	ZhipuBaseURL     string
 	ZhipuModel       string
-	Coze             CozeConfig
 	Valuation        ValuationConfig
 	Redis            RedisConfig
 	DefaultPasswords DefaultPasswordsConfig
@@ -40,15 +39,6 @@ type DefaultPasswordsConfig struct {
 	Admin   string
 	Tutor   string
 	Student string
-}
-
-// CozeConfig 扣子智能体 OAuth 配置。
-type CozeConfig struct {
-	ProjectID       string
-	OAuthAppID      string
-	OAuthKID        string
-	OAuthPrivateKey string
-	OAuthKeyPath    string
 }
 
 // ValuationConfig 残值评估模块配置。
@@ -118,13 +108,6 @@ func Load() (*Config, error) {
 		ZhipuAPIKey:      getenv("ZHIPU_API_KEY", ""),
 		ZhipuBaseURL:     getenv("ZHIPU_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"),
 		ZhipuModel:       getenv("ZHIPU_MODEL", "glm-4.7-flash"),
-		Coze: CozeConfig{
-			ProjectID:       getenv("COZE_PROJECT_ID", ""),
-			OAuthAppID:      getenv("COZE_OAUTH_APP_ID", ""),
-			OAuthKID:        getenv("COZE_OAUTH_KID", ""),
-			OAuthPrivateKey: getenv("COZE_OAUTH_PRIVATE_KEY", ""),
-			OAuthKeyPath:    getenv("COZE_OAUTH_PRIVATE_KEY_PATH", ""),
-		},
 		Valuation: ValuationConfig{
 			PDFOutputDir:      getenv("VALUATION_PDF_OUTPUT_DIR", "storage/reports"),
 			LogLevel:          getenv("VALUATION_LOG_LEVEL", "info"),

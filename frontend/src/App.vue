@@ -1,7 +1,10 @@
 <template>
   <router-view v-slot="{ Component, route }">
     <transition name="fade-slide" mode="out-in">
-      <component :is="Component" :key="route.path" />
+      <!-- key 用最顶层匹配路由的路径，而非完整 route.path：
+           同一 Layout 下切换子页面不会重新挂载整个 Layout，
+           避免侧栏/顶栏等框架元素被反复销毁重建带来的闪烁与状态丢失 -->
+      <component :is="Component" :key="route.matched[0]?.path || route.path" />
     </transition>
   </router-view>
 </template>

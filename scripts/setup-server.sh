@@ -303,11 +303,6 @@ ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas/v4
 ZHIPU_MODEL=glm-4.7-flash
 OPENAI_API_KEY=
 
-# Coze（可选）
-COZE_PROJECT_ID=
-COZE_OAUTH_APP_ID=
-COZE_OAUTH_KID=
-
 # 后端镜像（CD 流水线自动填充）
 BACKEND_IMAGE=ghcr.io/YOUR_ORG/forklift-training-backend
 

@@ -12,6 +12,8 @@ frontend/node_modules_old/
 frontend/dist/
 frontend/.vite/
 frontend/build*.log
+# vditor 本地 CDN 资源（由 vite.config.ts 中 vditor-static-copy 插件从 node_modules/vditor/dist 复制生成）
+frontend/public/vditor/dist/
 
 # ===== Node (通用) =====
 node_modules/

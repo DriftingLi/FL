@@ -3,45 +3,26 @@
     <AppSidebar
       :menu-items="menuItems"
       :collapsed="collapsed"
+      :mobile-open="mobileOpen"
       :class="{ 'sidebar-mobile-open': mobileOpen }"
-      @toggle-collapse="collapsed = !collapsed"
+      @toggle-collapse="handleToggleCollapse"
     />
 
     <transition name="fade">
       <div v-if="mobileOpen" class="sidebar-overlay" @click="mobileOpen = false"></div>
     </transition>
 
-    <div class="main-container" :class="{ 'main-collapsed': collapsed }">
-      <header class="topbar">
-        <div class="topbar-left">
-          <button class="mobile-toggle" @click="mobileOpen = !mobileOpen">
-            <el-icon :size="20"><Operation /></el-icon>
-          </button>
-          <el-breadcrumb separator="/">
-            <el-breadcrumb-item :to="homePath">仪表盘</el-breadcrumb-item>
-            <el-breadcrumb-item v-if="currentLabel">{{ currentLabel }}</el-breadcrumb-item>
-          </el-breadcrumb>
-        </div>
-        <div class="topbar-right">
-          <el-dropdown @command="handleCommand" trigger="click">
-            <div class="user-avatar">
-              <div class="avatar-circle">
-                {{ (authStore.userInfo?.name || authStore.userInfo?.username || '?').charAt(0) }}
-              </div>
-              <span class="user-name">{{ authStore.userInfo?.name || authStore.userInfo?.username }}</span>
-              <el-icon class="dropdown-arrow"><ArrowDown /></el-icon>
-            </div>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="logout">
-                  <el-icon><SwitchButton /></el-icon>退出登录
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
-      </header>
+    <!-- 移动端浮动菜单按钮（替代原顶栏的 mobile-toggle） -->
+    <button
+      v-if="!mobileOpen"
+      class="mobile-fab"
+      aria-label="打开菜单"
+      @click="mobileOpen = true"
+    >
+      <el-icon :size="20"><Operation /></el-icon>
+    </button>
 
+    <div class="main-container" :class="{ 'main-collapsed': collapsed }">
       <main class="main-content">
         <router-view />
       </main>
@@ -50,15 +31,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import { ElMessageBox } from 'element-plus'
-import { Operation, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
+import { ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { Operation } from '@element-plus/icons-vue'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import type { NavItem } from '@/config/navigation'
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   menuItems: NavItem[]
   showFooter?: boolean
 }>(), {
@@ -66,53 +45,30 @@ const props = withDefaults(defineProps<{
 })
 
 const route = useRoute()
-const router = useRouter()
-const authStore = useAuthStore()
 
-// 折叠状态持久化
-const collapsed = ref(false)
-onMounted(() => {
-  const saved = localStorage.getItem('sidebar-collapsed')
-  if (saved === 'true') {
-    collapsed.value = true
-  }
-})
+// 折叠状态持久化：同步读取初始值，避免组件重新挂载时 false→true 跳变引发拉伸动画
+const collapsed = ref(localStorage.getItem('sidebar-collapsed') === 'true')
 
 // 监听折叠变化持久化
-import { watch } from 'vue'
 watch(collapsed, (val) => {
   localStorage.setItem('sidebar-collapsed', String(val))
 })
 
 const mobileOpen = ref(false)
 
-const homePath = computed(() => {
-  const role = authStore.userInfo?.role
-  if (role === 'admin') return '/admin/dashboard'
-  if (role === 'tutor') return '/training/tutor'
-  if (role === 'student') return '/training'
-  return '/'
-})
-
-const currentLabel = computed(() => {
-  return (route.meta?.navLabel as string) || ''
-})
-
-async function handleCommand(command: string) {
-  if (command === 'logout') {
-    try {
-      await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning'
-      })
-      authStore.clearAuthData()
-      router.push('/login')
-    } catch (e) {
-      // cancelled
-    }
+// 移动端侧边栏打开时，底部按钮关闭侧边栏；桌面端则切换折叠状态
+function handleToggleCollapse() {
+  if (mobileOpen.value) {
+    mobileOpen.value = false
+  } else {
+    collapsed.value = !collapsed.value
   }
 }
+
+// 路由切换时自动关闭移动端侧边栏，避免导航后菜单仍遮挡内容
+watch(() => route.path, () => {
+  mobileOpen.value = false
+})
 </script>
 
 <style scoped>
@@ -132,89 +88,6 @@ async function handleCommand(command: string) {
   margin-left: var(--sidebar-collapsed-width);
 }
 
-.topbar {
-  height: var(--header-height);
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--color-border-light);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 var(--space-6);
-  position: sticky;
-  top: 0;
-  z-index: var(--z-sticky);
-}
-
-.topbar-left {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.mobile-toggle {
-  display: none;
-  width: 40px;
-  height: 40px;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--color-text-secondary);
-  border-radius: var(--radius-md);
-  transition: background var(--duration-fast);
-}
-
-.mobile-toggle:hover {
-  background: var(--color-bg-page);
-}
-
-.topbar-right {
-  display: flex;
-  align-items: center;
-}
-
-.user-avatar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  cursor: pointer;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-full);
-  transition: background var(--duration-fast) var(--ease-default);
-}
-
-.user-avatar:hover {
-  background: var(--color-bg-page);
-}
-
-.avatar-circle {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-full);
-  background: var(--gradient-brand);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-  font-family: var(--font-display);
-}
-
-.user-name {
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  color: var(--color-text-primary);
-}
-
-.dropdown-arrow {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-}
-
 .main-content {
   background: var(--color-bg-page);
   padding: var(--space-6);
@@ -229,6 +102,34 @@ async function handleCommand(command: string) {
   bottom: 0;
   background: rgba(15, 23, 42, 0.5);
   z-index: calc(var(--z-fixed) - 1);
+}
+
+/* 移动端浮动菜单按钮 */
+.mobile-fab {
+  display: none;
+  position: fixed;
+  top: var(--space-4);
+  left: var(--space-4);
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(15, 23, 42, 0.12));
+  cursor: pointer;
+  color: var(--color-text-primary);
+  z-index: var(--z-sticky);
+  transition: background var(--duration-fast), box-shadow var(--duration-fast);
+}
+
+.mobile-fab:hover {
+  background: var(--color-bg-page);
+}
+
+.mobile-fab:active {
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.16);
 }
 
 .fade-enter-active,
@@ -258,21 +159,14 @@ async function handleCommand(command: string) {
     transform: translateX(0) !important;
   }
 
-  .mobile-toggle {
+  .mobile-fab {
     display: flex;
-  }
-
-  .user-name,
-  .dropdown-arrow {
-    display: none;
-  }
-
-  .topbar {
-    padding: 0 var(--space-4);
   }
 
   .main-content {
     padding: var(--space-4);
+    /* 顶部留出浮动按钮的空间，避免内容被遮挡 */
+    padding-top: calc(var(--space-4) + 44px);
   }
 }
 </style>

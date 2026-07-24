@@ -129,7 +129,7 @@ async function loadCourses() {
         .map((c: any) => ({
           title: c.course_name,
           badge: `${Math.round(c.progress)}%`,
-          path: `/training/course/${c.course_id}`
+          path: `/training/courses`
         }))
     }
   } catch (error: any) {
@@ -147,7 +147,7 @@ async function loadRecentLearning() {
         title: r.course_name || '未知课程',
         subtitle: r.chapter_title || `${r.study_duration || 0} 分钟`,
         badge: r.study_duration ? `${r.study_duration}分钟` : '',
-        path: r.course_id ? `/training/course/${r.course_id}` : ''
+        path: r.course_id ? `/training/courses` : ''
       }))
     }
   } catch (error: any) {
@@ -177,6 +177,9 @@ async function loadStudyStats() {
 
 function renderStudyChart() {
   if (!chartRef.value || !studyStats.value) return
+  // 数据全为 0 时 chartRef 被 v-show 隐藏（display:none），此时初始化会触发
+  // ECharts "Can't get DOM width or height" 警告，直接跳过
+  if (statsEmpty.value) return
 
   const labels = studyStats.value.labels
   const data = studyStats.value.data
