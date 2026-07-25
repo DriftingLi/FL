@@ -37,6 +37,10 @@ COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 BACKEND_SERVICE="${BACKEND_SERVICE:-backend}"
 FRONTEND_SERVICE="${FRONTEND_SERVICE:-frontend}"
 POSTGRES_SERVICE="${POSTGRES_SERVICE:-postgres}"
+REDIS_SERVICE="${REDIS_SERVICE:-redis}"
+
+# 已知容器名（compose 中显式指定），用于部署前清理可能残留的冲突容器
+KNOWN_CONTAINERS="forklift-backend-prod forklift-frontend-prod forklift-pg-prod forklift-redis-prod"
 
 # 注册表认证
 REGISTRY="${REGISTRY:-ghcr.io}"
@@ -370,14 +374,7 @@ run_migration() {
     fi
 
     # 等待数据库就绪
-    for i in $(seq 1 15); do
-        if docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" exec -T "$POSTGRES_SERVICE" \
-            pg_isready -U "${DB_USER:-forklift}" -d forklift_training &>/dev/null; then
-            log_ok "数据库就绪"
-            break
-        fi
-        sleep 2
-    done
+    wait_postgres
 
     # 通过临时容器运行迁移（使用镜像中独立的 migrate 二进制）
     # 用 DB_USER/DB_PASSWORD 拼接连接串（和 docker-compose 一致），不依赖 GitHub Secret 的 DATABASE_URL
@@ -394,12 +391,83 @@ run_migration() {
 }
 
 # ======================================================================
+# 等待数据库就绪
+# ======================================================================
+wait_postgres() {
+    log_info ">>> 等待数据库就绪..."
+    for i in $(seq 1 15); do
+        if docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" exec -T "$POSTGRES_SERVICE" \
+            pg_isready -U "${DB_USER:-forklift}" -d forklift_training &>/dev/null; then
+            log_ok "数据库就绪"
+            return 0
+        fi
+        sleep 2
+    done
+    log_warn "数据库在超时时间内未就绪，部分依赖数据库的步骤可能失败"
+    return 1
+}
+
+# ======================================================================
+# 迁移兼容性预检（防止旧镜像启动后因缺少迁移文件崩溃循环）
+#   后端 cmd/server 启动时会自动执行 migrate up；若镜像内迁移文件版本
+#   落后于数据库当前版本，会报 "no migration found for version N" 并退出。
+#   预检在启动后端容器前拦截这种情况。
+# 返回: 0=通过/可跳过, 1=镜像迁移版本落后，应终止部署
+# ======================================================================
+preflight_migration_check() {
+    local image="${1:-}"
+    [ -z "$image" ] && { log_warn "未指定镜像，跳过迁移预检"; return 0; }
+
+    log_info ">>> 迁移兼容性预检: $image"
+
+    # 1. 镜像内最大迁移版本（统计 /app/migrations/*.up.sql 的 6 位序号）
+    local img_max="0"
+    if docker image inspect "$image" &>/dev/null; then
+        img_max=$(docker run --rm --entrypoint sh "$image" -c \
+            'ls /app/migrations/*.up.sql 2>/dev/null | grep -oE "[0-9]{6}" | sort -n | tail -1' 2>/dev/null | tr -d ' \n')
+        img_max=${img_max:-0}
+    else
+        log_warn "本地无镜像 $image，无法读取其迁移版本，跳过预检（请确认镜像已拉取）"
+        return 0
+    fi
+
+    # 2. 数据库当前版本（schema_migrations.version）
+    local db_ver="0"
+    local pg_id
+    pg_id=$(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps -q "$POSTGRES_SERVICE" 2>/dev/null)
+    if [ -n "$pg_id" ]; then
+        db_ver=$(docker exec "$pg_id" psql -U "${DB_USER:-forklift}" -d forklift_training \
+            -tAc "SELECT COALESCE(version,0) FROM schema_migrations LIMIT 1;" 2>/dev/null | tr -d ' \n')
+        db_ver=${db_ver:-0}
+    fi
+
+    log_info "镜像最大迁移版本=$img_max, 数据库当前版本=$db_ver"
+
+    if [ "${db_ver:-0}" -gt "${img_max:-0}" ]; then
+        log_error "❌ 镜像迁移版本($img_max)落后于数据库($db_ver)!"
+        log_error "   该镜像启动后会因缺少迁移文件而崩溃循环 (no migration found for version ...)。"
+        log_error "   请重新构建并推送包含最新迁移文件(直至 v${db_ver})的后端镜像，再部署/回滚。"
+        return 1
+    fi
+    log_ok "迁移兼容性预检通过"
+    return 0
+}
+
+# ======================================================================
 # 重启服务
 # ======================================================================
 restart_services() {
     log_info ">>> 重启服务..."
 
     cd "$DEPLOY_PATH"
+
+    # 移除可能残留的冲突容器（同名但非本 compose 项目管理的容器会导致 up 失败）
+    for c in $KNOWN_CONTAINERS; do
+        if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$c"; then
+            log_warn "移除残留容器: $c"
+            docker rm -f "$c" 2>/dev/null || true
+        fi
+    done
 
     # 写入 .env 文件
     write_env_file
@@ -512,49 +580,66 @@ do_rollback() {
     cd "$DEPLOY_PATH"
 
     # 读取上一个版本
-    if [ -f "${BACKUP_DIR}/last-version.txt" ]; then
-        # shellcheck disable=SC1090
-        source "${BACKUP_DIR}/last-version.txt"
+    if [ ! -f "${BACKUP_DIR}/last-version.txt" ]; then
+        log_error "未找到备份文件，无法回滚"
+        exit 1
+    fi
 
-        # 设置环境变量使 compose 使用旧镜像
-        export BACKEND_IMAGE="${PREVIOUS_BACKEND_IMAGE:-unknown}"
-        export FRONTEND_IMAGE="${PREVIOUS_FRONTEND_IMAGE:-unknown}"
-        write_env_file
+    # shellcheck disable=SC1090
+    source "${BACKUP_DIR}/last-version.txt"
 
-        # 回滚 backend
-        if [ "${PREVIOUS_BACKEND_IMAGE:-unknown}" != "unknown" ]; then
+    # 记录当前实际运行的镜像（回滚失败时保持，避免 .env 被污染为不兼容镜像）
+    local cur_be cur_fe
+    cur_be=$(docker compose -f "$COMPOSE_FILE" ps -q "$BACKEND_SERVICE" 2>/dev/null | head -1)
+    cur_be=$([ -n "$cur_be" ] && docker inspect --format='{{.Config.Image}}' "$cur_be" 2>/dev/null || echo "unknown")
+    cur_fe=$(docker compose -f "$COMPOSE_FILE" ps -q "$FRONTEND_SERVICE" 2>/dev/null | head -1)
+    cur_fe=$([ -n "$cur_fe" ] && docker inspect --format='{{.Config.Image}}' "$cur_fe" 2>/dev/null || echo "unknown")
+
+    # 启动数据库以便迁移预检读取当前版本
+    docker compose -f "$COMPOSE_FILE" up -d "$POSTGRES_SERVICE" 2>&1 | tail -3 || true
+    wait_postgres
+
+    # 回滚 backend（先做迁移兼容性预检，避免回滚到旧镜像后崩溃循环）
+    if [ "${PREVIOUS_BACKEND_IMAGE:-unknown}" != "unknown" ]; then
+        if preflight_migration_check "${PREVIOUS_BACKEND_IMAGE}"; then
             log_info "回滚后端到: $PREVIOUS_BACKEND_IMAGE"
+            export BACKEND_IMAGE="${PREVIOUS_BACKEND_IMAGE}"
+            write_env_file
             docker compose -f "$COMPOSE_FILE" down "$BACKEND_SERVICE" 2>&1 || true
             sleep 3
             docker compose -f "$COMPOSE_FILE" up -d "$BACKEND_SERVICE" 2>&1
         else
-            log_warn "无后端历史版本，跳过后端回滚"
-        fi
-
-        # 回滚 frontend
-        if [ "${PREVIOUS_FRONTEND_IMAGE:-unknown}" != "unknown" ]; then
-            log_info "回滚前端到: $PREVIOUS_FRONTEND_IMAGE"
-            docker compose -f "$COMPOSE_FILE" down "$FRONTEND_SERVICE" 2>&1 || true
-            sleep 2
-            docker compose -f "$COMPOSE_FILE" up -d "$FRONTEND_SERVICE" 2>&1
-        else
-            log_warn "无前端历史版本，跳过前端回滚"
-        fi
-
-        sleep 10
-
-        if health_check; then
-            log_ok "回滚成功"
-            log_info "如需恢复数据库，可执行："
-            log_info "  gunzip -c ${BACKUP_DIR}/db_backup_*.sql.gz | docker compose -f \$DEPLOY_PATH/\$COMPOSE_FILE exec -T \$POSTGRES_SERVICE psql -U ${DB_USER:-forklift} -d forklift_training"
-        else
-            log_error "回滚后健康检查也失败了! 需要人工介入!"
-            log_info "可尝试恢复最近的数据库备份："
-            log_info "  ls -t ${BACKUP_DIR}/db_backup_*.sql.gz | head -1"
-            exit 1
+            log_error "❌ 拒绝回滚后端到 ${PREVIOUS_BACKEND_IMAGE}（迁移版本落后数据库，会崩溃循环）"
+            log_error "   保持当前后端镜像: ${cur_be}"
+            export BACKEND_IMAGE="${cur_be}"
+            write_env_file
         fi
     else
-        log_error "未找到备份文件，无法回滚"
+        log_warn "无后端历史版本，跳过后端回滚"
+    fi
+
+    # 回滚 frontend
+    if [ "${PREVIOUS_FRONTEND_IMAGE:-unknown}" != "unknown" ]; then
+        log_info "回滚前端到: $PREVIOUS_FRONTEND_IMAGE"
+        export FRONTEND_IMAGE="${PREVIOUS_FRONTEND_IMAGE}"
+        write_env_file
+        docker compose -f "$COMPOSE_FILE" down "$FRONTEND_SERVICE" 2>&1 || true
+        sleep 2
+        docker compose -f "$COMPOSE_FILE" up -d "$FRONTEND_SERVICE" 2>&1
+    else
+        log_warn "无前端历史版本，跳过前端回滚"
+    fi
+
+    sleep 10
+
+    if health_check; then
+        log_ok "回滚成功"
+        log_info "如需恢复数据库，可执行："
+        log_info "  gunzip -c ${BACKUP_DIR}/db_backup_*.sql.gz | docker compose -f \$DEPLOY_PATH/\$COMPOSE_FILE exec -T \$POSTGRES_SERVICE psql -U ${DB_USER:-forklift} -d forklift_training"
+    else
+        log_error "回滚后健康检查也失败了! 需要人工介入!"
+        log_info "可尝试恢复最近的数据库备份："
+        log_info "  ls -t ${BACKUP_DIR}/db_backup_*.sql.gz | head -1"
         exit 1
     fi
 }
@@ -585,7 +670,18 @@ main() {
             create_backup
             login_registry
             pull_images
-            # 先重启（启动 postgres + redis + backend，创建网络），再迁移
+
+            # 先拉起数据库与 Redis，供迁移预检读取当前版本
+            docker compose -f "$COMPOSE_FILE" up -d "$POSTGRES_SERVICE" "$REDIS_SERVICE" 2>&1 | tail -5 || true
+            wait_postgres
+
+            # 迁移兼容性预检：若镜像迁移版本落后数据库，启动后会崩溃循环
+            if ! preflight_migration_check "${IMAGE_BACKEND}:${IMAGE_TAG}"; then
+                log_error "迁移预检失败，终止部署（避免后端因缺少迁移文件崩溃循环）"
+                exit 1
+            fi
+
+            # 重启全栈（postgres/redis 已运行，此处拉起 backend + frontend）
             restart_services
             run_migration
 

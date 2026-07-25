@@ -61,7 +61,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 3. 执行数据库迁移（000001~000017，覆盖维修培训初始化与残值评估全量表结构/种子/系数调整）
+	// 3. 执行数据库迁移
 	if err := migratedb.RunMigrations(cfg.DatabaseURL, "up"); err != nil {
 		slog.Error("数据库迁移失败", "error", err)
 		os.Exit(1)
