@@ -22,7 +22,7 @@
     >
       <el-icon class="upload-icon" :size="40"><UploadFilled /></el-icon>
       <p class="upload-text">将文件拖到此处，或<em>点击上传</em></p>
-      <p class="upload-tip">支持格式：PDF、Word、PPT、MP4、WebM、Excel、CSV、图片</p>
+      <p class="upload-tip">支持格式：PDF 文档、PPT、MP4、WebM、图片</p>
       <p class="upload-tip">视频文件最大200MB，图片最大20MB，其他文件最大50MB</p>
     </div>
 
@@ -169,8 +169,8 @@ const activeFilter = ref(props.initialFilter || 'all')
 let uidCounter = 0
 
 const filterOptions = [
-  { label: '全部', value: 'all', accept: '.pdf,.doc,.docx,.ppt,.pptx,.mp4,.webm,.jpg,.jpeg,.png,.gif,.webp,.svg,.xls,.xlsx,.csv' },
-  { label: '文档', value: 'document', accept: '.pdf,.doc,.docx,.xls,.xlsx,.csv' },
+  { label: '全部', value: 'all', accept: '.pdf,.ppt,.pptx,.mp4,.webm,.jpg,.jpeg,.png,.gif,.webp,.svg' },
+  { label: '文档', value: 'document', accept: '.pdf' },
   { label: 'PPT', value: 'ppt', accept: '.ppt,.pptx' },
   { label: '视频', value: 'video', accept: '.mp4,.webm' },
   { label: '图片', value: 'image', accept: '.jpg,.jpeg,.png,.gif,.webp,.svg' }
@@ -186,8 +186,7 @@ const successCount = computed(() => {
 })
 
 const typeCategoryMap = {
-  pdf: 'document', doc: 'document', docx: 'document',
-  xls: 'document', xlsx: 'document', csv: 'document',
+  pdf: 'document',
   ppt: 'ppt', pptx: 'ppt',
   mp4: 'video', webm: 'video',
   jpg: 'image', jpeg: 'image', png: 'image', gif: 'image', webp: 'image', svg: 'image'

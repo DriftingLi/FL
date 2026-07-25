@@ -12,9 +12,9 @@ import (
 	"time"
 )
 
-// 文件扩展名白名单。
+// 文件扩展名白名单（文档仅允许 PDF，浏览器原生预览；其他 Office 格式无法内嵌渲染故移除）。
 var allowedExtensions = map[string]map[string]bool{
-	"document": {"pdf": true, "doc": true, "docx": true, "xls": true, "xlsx": true, "csv": true},
+	"document": {"pdf": true},
 	"ppt":      {"ppt": true, "pptx": true},
 	"video":    {"mp4": true, "webm": true},
 	"image":    {"png": true, "jpg": true, "jpeg": true, "gif": true, "webp": true, "bmp": true, "svg": true},

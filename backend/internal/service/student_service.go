@@ -51,9 +51,9 @@ func (s *StudentService) queryProfile(studentID int) (map[string]any, error) {
 	s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND progress > 0 AND progress < 100", studentID).
 		Distinct("course_id").Count(&learningCourses)
 
-	// 最近学习时间
+	// 最近学习时间（学员可能无任何学习记录，使用 Limit(1).Find() 避免 First() 在空结果时打印 record not found 日志）
 	var latestRecord model.StudyRecord
-	s.db.Where("student_id = ?", studentID).Order("study_date DESC").First(&latestRecord)
+	s.db.Where("student_id = ?", studentID).Order("study_date DESC").Limit(1).Find(&latestRecord)
 	latestStudyTime := ""
 	if !latestRecord.StudyDate.IsZero() {
 		latestStudyTime = formatISO(latestRecord.StudyDate)

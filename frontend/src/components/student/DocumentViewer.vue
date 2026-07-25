@@ -3,10 +3,10 @@
     <div class="doc-toolbar">
       <div class="toolbar-left">
         <el-icon :size="18" class="toolbar-icon"><Document /></el-icon>
-        <span class="file-name" :title="fileName">{{ fileName || 'PDF文档' }}</span>
+        <span class="file-name" :title="fileName">{{ fileName || '文档' }}</span>
       </div>
       <div class="toolbar-right">
-        <el-tooltip content="在新窗口打开" placement="bottom">
+        <el-tooltip v-if="canPreview" content="在新窗口打开" placement="bottom">
           <el-button :icon="FullScreen" circle size="small" @click="openInNewTab" />
         </el-tooltip>
         <el-tooltip content="下载" placement="bottom">
@@ -16,8 +16,9 @@
     </div>
 
     <div class="doc-body">
+      <!-- PDF 用 iframe 内嵌预览 -->
       <iframe
-        v-if="!loadError && resolvedSrc"
+        v-if="canPreview && !loadError && resolvedSrc"
         :src="resolvedSrc"
         class="pdf-iframe"
         frameborder="0"
@@ -25,9 +26,20 @@
         @error="onIframeError"
       ></iframe>
 
-      <div v-if="loading" class="doc-loading">
+      <div v-if="loading && canPreview" class="doc-loading">
         <el-icon class="loading-icon" :size="32"><Loading /></el-icon>
         <span>文档加载中...</span>
+      </div>
+
+      <!-- 非 PDF 文档：浏览器无法内嵌预览，提供下载/新窗口打开 -->
+      <div v-if="!canPreview" class="doc-unsupported">
+        <el-empty :description="unsupportedMessage">
+          <el-button type="primary" @click="downloadFile">
+            <el-icon><Download /></el-icon> 下载文档
+          </el-button>
+          <el-button @click="openInNewTab">在新窗口打开</el-button>
+        </el-empty>
+        <p class="unsupported-tip" v-if="unsupportedTip">{{ unsupportedTip }}</p>
       </div>
 
       <div v-if="loadError" class="doc-error">
@@ -55,6 +67,37 @@ const resolvedSrc = computed(() => resolveFileUrl(props.src))
 const loading = ref(true)
 const loadError = ref(false)
 const errorMessage = ref('文档加载失败')
+
+// 文件扩展名（小写）
+const fileExt = computed(() => {
+  const name = props.fileName || props.src || ''
+  const idx = name.lastIndexOf('.')
+  if (idx < 0) return ''
+  return name.slice(idx + 1).toLowerCase()
+})
+
+// 是否可在浏览器内嵌预览（PDF 可由浏览器原生渲染）
+const canPreview = computed(() => fileExt.value === 'pdf')
+
+// Office 文档类型描述
+const officeTypeLabel = computed(() => {
+  const ext = fileExt.value
+  if (['doc', 'docx'].includes(ext)) return 'Word 文档'
+  if (['xls', 'xlsx'].includes(ext)) return 'Excel 表格'
+  if (['ppt', 'pptx'].includes(ext)) return 'PPT 演示文稿'
+  if (ext === 'csv') return 'CSV 文件'
+  return '文档'
+})
+
+const unsupportedMessage = computed(() => `${officeTypeLabel.value}无法在浏览器中直接预览，请下载后查看`)
+
+const unsupportedTip = computed(() => {
+  const ext = fileExt.value
+  if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext)) {
+    return '提示：PPT/Word/Excel 文件请下载后使用对应软件打开'
+  }
+  return ''
+})
 
 async function checkFileExists() {
   try {
@@ -92,7 +135,7 @@ function openInNewTab() {
 function downloadFile() {
   const link = document.createElement('a')
   link.href = resolvedSrc.value
-  link.download = props.fileName || 'document.pdf'
+  link.download = props.fileName || 'document'
   link.target = '_blank'
   document.body.appendChild(link)
   link.click()
@@ -100,14 +143,23 @@ function downloadFile() {
 }
 
 onMounted(() => {
-  checkFileExists()
+  // 仅 PDF 需要检查文件存在性并加载 iframe
+  if (canPreview.value) {
+    checkFileExists()
+  } else {
+    loading.value = false
+  }
 })
 
 watch(resolvedSrc, (newVal) => {
   if (newVal) {
     loading.value = true
     loadError.value = false
-    checkFileExists()
+    if (canPreview.value) {
+      checkFileExists()
+    } else {
+      loading.value = false
+    }
   }
 })
 </script>
@@ -201,15 +253,7 @@ watch(resolvedSrc, (newVal) => {
   z-index: 10;
 }
 
-.loading-icon {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
+.doc-unsupported,
 .doc-error {
   position: absolute;
   top: 0;
@@ -217,10 +261,28 @@ watch(resolvedSrc, (newVal) => {
   right: 0;
   bottom: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   background: rgba(82, 86, 89, 0.95);
   z-index: 10;
+}
+
+.unsupported-tip {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #909399;
+  text-align: center;
+  padding: 0 20px;
+}
+
+.loading-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 @media screen and (max-width: 767px) {
