@@ -240,10 +240,23 @@ jobs:
         run: |
           SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=3"
 
+          # 主部署文件：脚本 + compose
           scp $SSH_OPTS \
             -P "$SSH_PORT" \
             scripts/deploy-remote.sh docker-compose.prod.yml \
             "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"
+
+          # nginx-host.conf 必须放在 $DEPLOY_PATH/frontend/ 下（compose volume 挂载路径）
+          # 否则 Docker 会把不存在的路径当目录挂载，导致容器启动失败
+          ssh $SSH_OPTS \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "mkdir -p $DEPLOY_PATH/frontend"
+
+          scp $SSH_OPTS \
+            -P "$SSH_PORT" \
+            frontend/nginx-host.conf \
+            "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/frontend/nginx-host.conf"
 
           ssh $SSH_OPTS \
             -p "$SSH_PORT" \

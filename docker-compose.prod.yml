@@ -131,9 +131,10 @@ services:
       REDIS_POOL_SIZE: "${REDIS_POOL_SIZE:-10}"
       REDIS_KEY_PREFIX: "${REDIS_KEY_PREFIX:-fl:}"
       TZ: Asia/Shanghai
-    # 仅内网可访问，不对外暴露端口（通过前端 Nginx 反代 /api/ 路径访问）
-    expose:
-      - "8080"
+    # 端口映射到宿主机回环，供 host 模式的 frontend nginx 反代访问
+    # PVE 环境：frontend 用 network_mode: host，需通过 127.0.0.1:8080 访问 backend
+    ports:
+      - "127.0.0.1:8080:8080"
     volumes:
       - uploads-data:/data/uploads
       - reports-data:/data/reports
@@ -169,21 +170,14 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    # ISP 封锁常用端口（80/443/8080），使用高端口 51820 绕过
-    # 使用 nginx-http.conf（HTTP-only，无 HTTPS 跳转）
-    # 如需恢复 HTTPS，改回 nginx.default.conf 并映射 443
-    ports:
-      - "51820:80"
+    # PVE 环境用 host 网络模式，绕过 Docker 网桥 iptables FORWARD policy DROP 拦截
+    # nginx 直接监听宿主机 51820 端口，proxy_pass 到 127.0.0.1:8080 访问 backend
+    network_mode: host
     environment:
-      # 域名（由 GitHub Secrets 注入，启动时 envsubst 替换 nginx 配置中的 ${DOMAIN}）
       DOMAIN: ${DOMAIN:-localhost}
     volumes:
-      # SSL 证书挂载（只读，路径与 deploy-remote.sh 中 write_ssl_certs() 一致）
-      - ${DEPLOY_PATH:-/opt/forklift-training}/nginx/ssl:/etc/nginx/ssl:ro
-      # HTTP-only 配置（不跳转 HTTPS，适合高端口部署）
-      - ./frontend/nginx-http.conf:/etc/nginx/conf.d/default.conf.template:ro
-    networks:
-      - forklift-net
+      # host 模式专用 nginx 配置（listen 51820 + proxy_pass 127.0.0.1:8080）
+      - ./frontend/nginx-host.conf:/etc/nginx/conf.d/default.conf.template:ro
     deploy:
       resources:
         limits:

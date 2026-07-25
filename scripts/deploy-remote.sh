@@ -666,7 +666,9 @@ main() {
         deploy|*)
             pre_deploy_check
             write_env_file
-            write_ssl_certs
+            # host 网络模式下 nginx-host.conf 是 HTTP-only，不需要 SSL 证书
+            # 若未来切回 bridge + HTTPS，可重新启用 write_ssl_certs
+            # write_ssl_certs
             create_backup
             login_registry
             pull_images
