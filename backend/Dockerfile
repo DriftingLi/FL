@@ -1,5 +1,5 @@
 # ===== Dockerfile：多阶段构建 Go 后端 =====
-# 目标：产出精简镜像 (< 100MB)，不含 LibreOffice（转换服务通过 sidecar 提供）
+# 目标：产出含 LibreOffice + poppler-utils 的镜像（用于 PPT → PDF → PNG 转换）
 
 # ----- Builder 阶段：编译静态二进制 -----
 FROM golang:1.26-alpine AS builder
@@ -11,6 +11,8 @@ WORKDIR /build
 
 # 先复制依赖文件，利用 Docker 层缓存
 COPY go.mod go.sum ./
+# 国内网络环境设置 GOPROXY 加速依赖下载
+ENV GOPROXY=https://goproxy.cn,direct
 RUN go mod download
 
 # 复制源码
@@ -23,14 +25,23 @@ ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
 RUN go build -trimpath -ldflags="-s -w" -o /bin/server ./cmd/server
 RUN go build -trimpath -ldflags="-s -w" -o /bin/migrate ./cmd/migrate
 
-# ----- Runtime 阶段：最小化运行时镜像 -----
+# ----- Runtime 阶段：含 LibreOffice + poppler-utils 的运行时镜像 -----
 FROM alpine:3.20
 
-# 安装最小运行时依赖（su-exec 用于入口脚本切换到非 root 用户）
-RUN apk add --no-cache ca-certificates tzdata su-exec && \
+# 安装运行时依赖：
+# - ca-certificates tzdata su-exec：基础依赖
+# - libreoffice：PPT/PPTX → PDF 转换（headless 模式）
+# - poppler-utils：PDF → PNG 图片转换（pdftoppm 工具）
+# - font-noto-cjk：中日韩字体，避免中文 PPT 转换后乱码
+# 注：LibreOffice 体积较大（约 400MB），但 PPT 转图片功能必需
+RUN apk add --no-cache \
+        ca-certificates \
+        su-exec \
+        libreoffice \
+        poppler-utils \
+        font-noto-cjk && \
     cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
-    echo "Asia/Shanghai" > /etc/timezone && \
-    apk del tzdata
+    echo "Asia/Shanghai" > /etc/timezone
 
 # 创建非 root 用户
 RUN addgroup -S app && adduser -S app -G app

@@ -105,7 +105,8 @@ func registerStaticRoutes(r *gin.Engine, cfg *config.Config) {
 	// 预计算 static 目录的绝对路径，避免依赖进程工作目录
 	staticDir := resolveStaticDir()
 
-	r.GET("/static/*filepath", func(c *gin.Context) {
+	// 静态文件 handler：同时支持 GET 和 HEAD（前端 DocumentViewer/ImageViewer 用 HEAD 检查文件存在性）
+	staticHandler := func(c *gin.Context) {
 		reqPath := c.Param("filepath") // 含前导 /
 
 		// 防止路径穿越攻击
@@ -131,7 +132,9 @@ func registerStaticRoutes(r *gin.Engine, cfg *config.Config) {
 			return
 		}
 		c.File(fullPath)
-	})
+	}
+	r.GET("/static/*filepath", staticHandler)
+	r.HEAD("/static/*filepath", staticHandler)
 }
 
 // resolveStaticDir 解析静态资源目录（返回绝对路径）。

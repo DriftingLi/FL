@@ -75,17 +75,16 @@
         <el-empty v-if="!chapterDetail.content && chapterFiles.length === 0" description="该章节暂无内容" />
       </div>
 
-      <div class="study-floating-panel">
-        <div class="study-timer">
-          <el-icon class="timer-icon"><Timer /></el-icon>
-          <div class="timer-info">
-            <span class="timer-label">已学习</span>
-            <span class="timer-value">{{ formatStudyTime(studySeconds) }}</span>
-          </div>
-        </div>
-        <el-button type="success" @click="completeStudy" size="large" class="complete-btn">
+      <div class="complete-study-bar">
+        <el-button
+          v-if="chapterDetail.study_status !== 'completed'"
+          type="success"
+          @click="completeStudy"
+          size="large"
+        >
           完成本章学习
         </el-button>
+        <el-tag v-else type="success" size="large">本章已完成</el-tag>
       </div>
 
       <div class="chapter-navigation">
@@ -240,12 +239,6 @@ const getNextChapterTitle = computed(() => {
   const next = chapters.value.find(c => c.chapter_id === chapterDetail.value.next_chapter_id)
   return next ? next.title : ''
 })
-
-function formatStudyTime(seconds) {
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-}
 
 async function reportIncremental(isFinal = false) {
   if (!chapterDetail.value?.chapter_id || !courseId.value) return
@@ -524,63 +517,10 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.study-floating-panel {
-  position: fixed;
-  right: 24px;
-  top: 50%;
-  transform: translateY(-50%);
+.complete-study-bar {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  padding: 20px 18px;
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
-  z-index: 100;
-  min-width: 140px;
-}
-
-.study-timer {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.timer-icon {
-  font-size: 28px;
-  color: #409eff;
-  animation: timer-pulse 2s ease-in-out infinite;
-}
-
-@keyframes timer-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-.timer-info {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-
-.timer-label {
-  font-size: 12px;
-  color: #909399;
-}
-
-.timer-value {
-  font-size: 24px;
-  color: #409eff;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 1px;
-}
-
-.complete-btn {
-  width: 100%;
+  justify-content: center;
+  padding: 8px 0 20px;
 }
 
 .chapter-navigation {
@@ -650,25 +590,6 @@ onBeforeUnmount(() => {
 
   .image-gallery {
     grid-template-columns: 1fr;
-  }
-
-  .study-floating-panel {
-    right: 12px;
-    padding: 14px 12px;
-    min-width: 110px;
-    gap: 10px;
-  }
-
-  .timer-icon {
-    font-size: 22px;
-  }
-
-  .timer-value {
-    font-size: 18px;
-  }
-
-  .complete-btn {
-    font-size: 13px;
   }
 
   .nav-title {

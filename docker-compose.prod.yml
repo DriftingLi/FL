@@ -89,6 +89,7 @@ services:
 
   # ==========================================
   # Go 后端服务（仅内网可访问，通过前端 Nginx 反代）
+  # 镜像内置 LibreOffice + poppler-utils，用于 PPT → PDF → PNG 转换
   # ==========================================
   backend:
     build:
@@ -147,10 +148,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
-          cpus: "1.0"
+          memory: 1G
+          cpus: "1.5"
         reservations:
-          memory: 256M
+          memory: 384M
           cpus: "0.25"
     logging:
       driver: json-file
