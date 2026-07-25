@@ -1,0 +1,221 @@
+/**
+ * 课程模块 API
+ * - 课程列表（公开）
+ * - 课程详情（需要 Token）
+ * - 章节幻灯片（公开）
+ * - 更新学习进度（需要 Token）
+ *
+ * @note 后端实际返回的字段名与前端类型定义不同：
+ *   列表：后端返回 { courses: [...], pages }，前端类型用 { items: [...], page_size }
+ *   课程：后端返回 { name, cover_image }，前端类型用 { title, cover_url }
+ *   详情：后端返回 { course_info: {...}, progress }，前端类型用 { course_id, progress_pct }
+ *   buildXxx 函数负责字段映射转换
+ */
+import { get, post } from './request'
+import type { CourseListResult, CourseDetail, CourseItem, ChapterItem } from '../types/index'
+
+/** 安全转换为 number */
+function toNumber(v : any | null, defaultVal : number = 0) : number {
+	if (v == null) return defaultVal
+	const s = `${v}`
+	const n = parseFloat(s)
+	if (isNaN(n)) return defaultVal
+	return n
+}
+
+/** 安全转换为 string */
+function toStr(v : any | null, defaultVal : string = '') : string {
+	if (v == null) return defaultVal
+	return `${v}`
+}
+
+/**
+ * 从 UTSJSONObject 构造 CourseItem
+ * @note 后端字段 name → 前端 title，cover_image → cover_url
+ *       后端无 chapter_count 字段，默认 0
+ */
+function buildCourseItem(obj : UTSJSONObject) : CourseItem {
+	const item : CourseItem = {
+		course_id: toNumber(obj['course_id']),
+		title: toStr(obj['name']),           // 后端 name → 前端 title
+		category: toStr(obj['category']),
+		description: toStr(obj['description']),
+		cover_url: toStr(obj['cover_image']), // 后端 cover_image → 前端 cover_url
+		duration: toNumber(obj['duration']),
+		chapter_count: toNumber(obj['chapter_count']), // 后端不返回此字段，默认 0
+	} as CourseItem
+	return item
+}
+
+/** 从 UTSJSONObject 构造 ChapterItem */
+function buildChapterItem(obj : UTSJSONObject) : ChapterItem {
+	const item : ChapterItem = {
+		chapter_id: toNumber(obj['chapter_id']),
+		title: toStr(obj['title']),
+		order_num: toNumber(obj['order_num']),
+		duration: toNumber(obj['duration']),
+	} as ChapterItem
+	return item
+}
+
+/**
+ * 从 UTSJSONObject 构造 CourseDetail
+ * @note 后端返回 { course_info: {...}, chapters: [...], progress: 33.0 }
+ *       前端类型用 { course_id, title, chapters, progress_pct }
+ */
+function buildCourseDetail(obj : UTSJSONObject) : CourseDetail {
+	const chapters : ChapterItem[] = []
+	const chaptersRaw = obj['chapters']
+	if (chaptersRaw != null) {
+		const chaptersArray = chaptersRaw as Array<UTSJSONObject>
+		for (let i = 0; i < chaptersArray.length; i++) {
+			chapters.push(buildChapterItem(chaptersArray[i]))
+		}
+	}
+
+	// 后端把课程信息嵌套在 course_info 字段中
+	let courseInfo = obj['course_info']
+	let courseId : number = 0
+	let courseTitle : string = ''
+	if (courseInfo != null) {
+		const infoObj = courseInfo as UTSJSONObject
+		courseId = toNumber(infoObj['course_id'])
+		courseTitle = toStr(infoObj['name']) // 后端 name → 前端 title
+	} else {
+		// 兼容：某些接口可能直接返回顶层字段
+		courseId = toNumber(obj['course_id'])
+		courseTitle = toStr(obj['name'])
+	}
+
+	// 后端 progress → 前端 progress_pct
+	const progressPct = toNumber(obj['progress'])
+
+	const detail : CourseDetail = {
+		course_id: courseId,
+		title: courseTitle,
+		chapters: chapters,
+		progress_pct: progressPct,
+	} as CourseDetail
+	return detail
+}
+
+/**
+ * 从 UTSJSONObject 构造 CourseListResult
+ * @note 后端返回 { courses: [...], total, page, pages }
+ *       前端类型用 { items: [...], total, page, page_size }
+ */
+function buildCourseListResult(obj : UTSJSONObject) : CourseListResult {
+	const items : CourseItem[] = []
+	// 后端用 "courses" 字段，兼容 "items" 字段
+	let listRaw = obj['courses']
+	if (listRaw == null) {
+		listRaw = obj['items']
+	}
+	if (listRaw != null) {
+		const itemsArray = listRaw as Array<UTSJSONObject>
+		for (let i = 0; i < itemsArray.length; i++) {
+			items.push(buildCourseItem(itemsArray[i]))
+		}
+	}
+	const result : CourseListResult = {
+		items: items,
+		total: toNumber(obj['total']),
+		page: toNumber(obj['page']),
+		// 后端返回 "pages"（总页数），前端用 "page_size"（每页条数）
+		// 后端不返回 page_size，用 items 长度推算
+		page_size: toNumber(obj['page_size'], items.length > 0 ? items.length : 12),
+	} as CourseListResult
+	return result
+}
+
+/** mock 课程列表（网络不可用时回退） */
+function getMockCourseList() : CourseListResult {
+	const items : CourseItem[] = [
+		{ course_id: 1, title: '叉车基本构造', category: 'structure', description: '学习叉车基本构造知识', cover_url: '', duration: 120, chapter_count: 3 } as CourseItem,
+		{ course_id: 2, title: '液压传动系统', category: 'hydraulic', description: '掌握液压系统原理', cover_url: '', duration: 90, chapter_count: 4 } as CourseItem,
+		{ course_id: 3, title: '叉车驾驶操作', category: 'driving', description: '叉车驾驶技能培训', cover_url: '', duration: 150, chapter_count: 5 } as CourseItem,
+		{ course_id: 4, title: '日常维护保养', category: 'maintenance', description: '叉车日常保养知识', cover_url: '', duration: 100, chapter_count: 4 } as CourseItem,
+		{ course_id: 5, title: '货物装卸作业', category: 'cargo', description: '安全装卸作业规范', cover_url: '', duration: 80, chapter_count: 3 } as CourseItem,
+		{ course_id: 6, title: '故障排查与应急', category: 'troubleshooting', description: '故障诊断与处理', cover_url: '', duration: 110, chapter_count: 4 } as CourseItem,
+	]
+	return {
+		items: items,
+		total: 6,
+		page: 1,
+		page_size: 12,
+	} as CourseListResult
+}
+
+/** mock 课程详情 */
+function getMockCourseDetail(courseId : number) : CourseDetail {
+	const chapters : ChapterItem[] = [
+		{ chapter_id: 1, title: '第一章 叉车分类与型号', order_num: 1, duration: 40 } as ChapterItem,
+		{ chapter_id: 2, title: '第二章 叉车基本结构组成', order_num: 2, duration: 40 } as ChapterItem,
+		{ chapter_id: 3, title: '第三章 叉车主要技术参数', order_num: 3, duration: 40 } as ChapterItem,
+	]
+	return {
+		course_id: courseId,
+		title: '叉车基本构造',
+		chapters: chapters,
+		progress_pct: 33,
+	} as CourseDetail
+}
+
+/**
+ * 课程列表
+ * @param page 页码，默认 1
+ * @param pageSize 每页条数，默认 12
+ * @param category 分类过滤（可选，如 'safety'）
+ */
+export function getCourseListApi(page : number = 1, pageSize : number = 12, category : string = '') : Promise<CourseListResult> {
+	const params : UTSJSONObject = {
+		page: page.toString(),
+		page_size: pageSize.toString(),
+	}
+	if (category.length > 0) {
+		params['category'] = category
+	}
+	return get('/courses', params).then((data : UTSJSONObject) : CourseListResult => {
+		console.log('[getCourseListApi] raw data:', JSON.stringify(data))
+		return buildCourseListResult(data)
+	}).catch((e) : CourseListResult => {
+		console.warn('[getCourseListApi] network failed, using mock data:', e)
+		return getMockCourseList()
+	})
+}
+
+/**
+ * 课程详情（含章节列表 + 学习进度）
+ * @param courseId 课程 ID
+ */
+export function getCourseDetailApi(courseId : number) : Promise<CourseDetail> {
+	return get('/course/' + courseId).then((data : UTSJSONObject) : CourseDetail => {
+		console.log('[getCourseDetailApi] raw data:', JSON.stringify(data))
+		return buildCourseDetail(data)
+	}).catch((e) : CourseDetail => {
+		console.warn('[getCourseDetailApi] network failed, using mock data:', e)
+		return getMockCourseDetail(courseId)
+	})
+}
+
+/**
+ * 章节幻灯片
+ * @param chapterId 章节 ID（全局唯一）
+ */
+export function getChapterSlidesApi(chapterId : number) : Promise<UTSJSONObject> {
+	return get('/chapter/' + chapterId + '/slides')
+}
+
+/**
+ * 更新学习进度
+ * @param courseId 课程 ID
+ * @param chapterId 当前学习章节 ID
+ * @param duration 本次学习时长（秒）
+ */
+export function updateCourseProgressApi(courseId : number, chapterId : number, duration : number) : Promise<UTSJSONObject> {
+	const payload : UTSJSONObject = {
+		chapter_id: chapterId,
+		duration: duration,
+	} as UTSJSONObject
+	return post('/course/' + courseId + '/progress', payload)
+}

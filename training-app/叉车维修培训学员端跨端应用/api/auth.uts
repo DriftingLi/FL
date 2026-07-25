@@ -91,9 +91,22 @@ export function loginApi(params : LoginParams) : Promise<LoginResult> {
 			throw new Error(msg)
 		}
 	}).catch((e) : LoginResult => {
-		// 网络不可用时回退到静态 mock 数据
-		console.warn('[loginApi] network failed, using mock data:', e)
-		return getMockLoginResult()
+		// 仅当输入为内置测试账号时，网络不可用才回退到 mock 数据
+		if (params.username == 'student' && params.password == 'student123') {
+			console.warn('[loginApi] network failed, using mock data:', e)
+			return getMockLoginResult()
+		}
+		// 其他账号：网络正常时由后端校验；网络失败则直接报错，禁止随意登录
+		console.error('[loginApi] login failed:', e)
+		let msg = '登录失败，请检查网络后重试'
+		if (e instanceof Error) {
+			const errObj = e as Error
+			const m = errObj.message
+			if (m != null && m.length > 0) {
+				msg = msg + ': ' + m
+			}
+		}
+		throw new Error(msg)
 	})
 }
 

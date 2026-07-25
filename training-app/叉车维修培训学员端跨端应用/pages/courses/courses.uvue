@@ -11,21 +11,30 @@
 				</view>
 			</view>
 		</scroll-view>
-		<scroll-view class="course-scroll" scroll-y>
+		<scroll-view class="course-scroll" scroll-y @scrolltolower="onLoadMore">
+			<view v-if="courses.length == 0 && !loading" class="empty-tip">
+				<text class="empty-text">暂无课程数据</text>
+			</view>
 			<view class="course-grid">
-				<view v-for="(course, idx) in courses" :key="idx" class="course-card" @click="onCourseClick(course.id)">
+				<view v-for="(course, idx) in courses" :key="idx" class="course-card" @click="onCourseClick(course.course_id)">
 					<view class="course-card-cover">
-						<text class="course-card-icon">{{ course.icon }}</text>
+						<text class="course-card-icon">{{ getCategoryIcon(course.category) }}</text>
 					</view>
 					<view class="course-card-info">
 						<text class="course-card-title">{{ course.title }}</text>
-						<text class="course-card-desc">{{ course.desc }}</text>
+						<text class="course-card-desc">{{ course.description }}</text>
 						<view class="course-card-footer">
-							<text class="course-card-chapters">{{ course.chapters }}节</text>
-							<text class="course-card-progress">{{ course.progress }}%</text>
+							<text v-if="course.chapter_count > 0" class="course-card-chapters">{{ course.chapter_count }}节</text>
+							<text v-if="course.duration > 0" class="course-card-duration">{{ formatDuration(course.duration) }}</text>
 						</view>
 					</view>
 				</view>
+			</view>
+			<view v-if="loading" class="loading-more">
+				<text class="loading-text">加载中...</text>
+			</view>
+			<view v-if="noMore && courses.length > 0" class="loading-more">
+				<text class="loading-text">没有更多了</text>
 			</view>
 		</scroll-view>
 		<tab-bar :active-index="1"></tab-bar>
@@ -34,67 +43,113 @@
 
 <script setup lang="uts">
 	import { ref } from 'vue'
+	import { onShow } from '@dcloudio/uni-app'
+	import { useStatusBarHeight } from '../../utils/system'
+	import { getCourseListApi } from '../../api/course'
+	import type { CourseItem } from '../../types/index'
 
-	type CourseItem = {
-		id : number
-		icon : string
-		title : string
-		desc : string
-		chapters : number
-		progress : number
+	type CategoryItem = {
+		name : string
+		value : string
 	}
 
-	const statusBarHeight = ref<number>(44)
+	const statusBarHeight = useStatusBarHeight()
 	const currentCategory = ref<number>(0)
+	const courses = ref<CourseItem[]>([])
+	const loading = ref<boolean>(false)
+	const page = ref<number>(1)
+	const pageSize = 12
+	const total = ref<number>(0)
+	const noMore = ref<boolean>(false)
 
-	const categories = [
-		{ name: '全部' },
-		{ name: '基础操作' },
-		{ name: '维护保养' },
-		{ name: '安全规范' },
-		{ name: '故障排除' },
+	const categories : CategoryItem[] = [
+		{ name: '全部', value: '' },
+		{ name: '基础操作', value: 'driving' },
+		{ name: '维护保养', value: 'maintenance' },
+		{ name: '安全规范', value: 'safety' },
+		{ name: '故障排除', value: 'troubleshooting' },
 	]
 
-	const courses : CourseItem[] = [
-		{ id: 1, icon: '🚗', title: '叉车基础操作', desc: '学习叉车基本操作技能', chapters: 12, progress: 60 },
-		{ id: 2, icon: '🔧', title: '日常维护保养', desc: '掌握叉车日常保养知识', chapters: 8, progress: 30 },
-		{ id: 3, icon: '⚠️', title: '安全操作规程', desc: '了解叉车安全操作规范', chapters: 10, progress: 100 },
-		{ id: 4, icon: '🔩', title: '故障诊断与排除', desc: '学习常见故障处理方法', chapters: 15, progress: 20 },
-		{ id: 5, icon: '📐', title: '货物搬运技巧', desc: '掌握高效安全搬运技能', chapters: 6, progress: 0 },
-		{ id: 6, icon: '⚡', title: '电动叉车培训', desc: '电动叉车专项操作培训', chapters: 10, progress: 45 },
-	]
+	function getCategoryIcon(category : string) : string {
+		if (category == 'driving') return '🚗'
+		if (category == 'maintenance') return '🔧'
+		if (category == 'safety') return '⚠️'
+		if (category == 'troubleshooting') return '🔩'
+		if (category == 'cargo') return '📐'
+		if (category == 'electric') return '⚡'
+		return '📚'
+	}
 
-	uni.getSystemInfo({
-		success: (res) => {
-			const sbh = res.statusBarHeight
-			if (sbh != null) {
-				statusBarHeight.value = sbh as number
+	function formatDuration(seconds : number) : string {
+		if (seconds <= 0) return ''
+		const minutes = Math.floor(seconds / 60)
+		if (minutes < 60) return minutes + '分钟'
+		const hours = Math.floor(minutes / 60)
+		const mins = minutes % 60
+		return hours + 'h' + mins + 'm'
+	}
+
+	async function loadCourses(reset : boolean = false) {
+		if (loading.value) return
+		if (reset) {
+			page.value = 1
+			noMore.value = false
+		}
+		if (noMore.value && !reset) return
+
+		loading.value = true
+		const category = categories[currentCategory.value].value
+		try {
+			const result = await getCourseListApi(page.value, pageSize, category)
+			if (reset) {
+				courses.value = result.items
 			} else {
-				statusBarHeight.value = 44
+				courses.value = courses.value.concat(result.items)
 			}
+			total.value = result.total
+			if (courses.value.length >= result.total || result.items.length == 0) {
+				noMore.value = true
+			} else {
+				page.value = page.value + 1
+			}
+		} catch (e) {
+			console.error('[courses] load failed:', e)
+			uni.showToast({ title: '加载课程失败', icon: 'none' })
+		} finally {
+			loading.value = false
+		}
+	}
+
+	function onCategoryClick(idx : number) : void {
+		if (currentCategory.value == idx) return
+		currentCategory.value = idx
+		loadCourses(true)
+	}
+
+	function onLoadMore() : void {
+		loadCourses(false)
+	}
+
+	function onCourseClick(courseId : number) : void {
+		uni.showToast({ title: '课程详情开发中', icon: 'none' })
+	}
+
+	onShow(() => {
+		if (courses.value.length == 0) {
+			loadCourses(true)
 		}
 	})
-
-	function onCategoryClick(idx: number): void {
-		currentCategory.value = idx
-	}
-
-	function onCourseClick(id: number): void {
-		console.log('click course:', id)
-	}
 </script>
 
 <style>
 	.container {
 		flex: 1;
 		background-color: #f5f5f5;
-		display: flex;
 		flex-direction: column;
 	}
 
 	.status-bar {
 		background-color: #2979ff;
-		width: 100%;
 	}
 
 	.header {
@@ -143,7 +198,17 @@
 	.course-scroll {
 		flex: 1;
 		padding: 24rpx;
-		padding-bottom: 120rpx;
+		padding-bottom: 140rpx;
+	}
+
+	.empty-tip {
+		align-items: center;
+		padding: 120rpx 0;
+	}
+
+	.empty-text {
+		font-size: 28rpx;
+		color: #999999;
 	}
 
 	.course-grid {
@@ -153,16 +218,16 @@
 	}
 
 	.course-card {
-		width: 48%;
+		width: 340rpx;
 		background-color: #ffffff;
 		border-radius: 16rpx;
 		overflow: hidden;
 		margin-bottom: 20rpx;
-		box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04);
+		border: 1px solid #eeeeee;
 	}
 
 	.course-card-cover {
-		width: 100%;
+		align-self: stretch;
 		height: 180rpx;
 		background-color: #e3f2fd;
 		align-items: center;
@@ -189,6 +254,8 @@
 		font-size: 24rpx;
 		color: #999999;
 		margin-bottom: 16rpx;
+		lines: 2;
+		text-overflow: ellipsis;
 	}
 
 	.course-card-footer {
@@ -202,9 +269,19 @@
 		color: #999999;
 	}
 
-	.course-card-progress {
+	.course-card-duration {
 		font-size: 22rpx;
 		color: #2979ff;
 		font-weight: bold;
+	}
+
+	.loading-more {
+		align-items: center;
+		padding: 24rpx 0;
+	}
+
+	.loading-text {
+		font-size: 24rpx;
+		color: #999999;
 	}
 </style>

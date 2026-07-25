@@ -115,45 +115,56 @@ export function request<T>(options : RequestOptions) : Promise<UTSJSONObject> {
 				console.log('[request] <<< success statusCode=', res.statusCode)
 				console.log('[request] <<< data:', res.data)
 				const statusCode = res.statusCode
-				const body = res.data as UTSJSONObject
+				// 响应体可能是 HTML（如 nginx 502 错误页），as UTSJSONObject 会抛 ClassCastException
+				// 用 try/catch 包裹，确保异常时 reject 而非让 Promise 悬挂
+				try {
+					const body = res.data as UTSJSONObject
 
-				// HTTP 401：未登录/登录过期
-				if (statusCode == 401) {
-					handleUnauthorized()
-					showError('登录已过期，请重新登录', silent)
-					reject(new Error('登录已过期，请重新登录'))
-					return
-				}
-
-				// HTTP 其他错误
-				if (statusCode < 200 || statusCode >= 300) {
-					let msg = `请求失败 (${statusCode})`
-					const bodyMsg = body['message']
-					if (bodyMsg != null) {
-						msg = bodyMsg as string
+					// HTTP 401：未登录/登录过期
+					if (statusCode == 401) {
+						handleUnauthorized()
+						showError('登录已过期，请重新登录', silent)
+						reject(new Error('登录已过期，请重新登录'))
+						return
 					}
+
+					// HTTP 其他错误
+					if (statusCode < 200 || statusCode >= 300) {
+						let msg = `请求失败 (${statusCode})`
+						const bodyMsg = body['message']
+						if (bodyMsg != null) {
+							msg = bodyMsg as string
+						}
+						showError(msg, silent)
+						reject(new Error(msg))
+						return
+					}
+
+					// 业务层错误：code 非 200/201
+					const code = body['code'] as number
+					const message = (body['message'] as string) ?? '请求失败'
+					if (code != 200 && code != 201) {
+						showError(message, silent)
+						reject(new Error(message))
+						return
+					}
+
+					// 成功：返回 data 字段（UTSJSONObject，由调用方手动构造目标类型）
+				const data = body['data']
+				if (data == null) {
+					resolve({})
+				} else {
+					const dataObj = data as UTSJSONObject
+					resolve(dataObj)
+				}
+				} catch (e) {
+					// 响应非 JSON（如 nginx 返回的 HTML 502 页面），以 HTTP 状态码报错
+					// 此 reject 会被 loginApi 的 .catch() 捕获，触发 mock 数据回退
+					console.error('[request] parse response failed (non-JSON?):', e)
+					const msg = `请求失败 (${statusCode})`
 					showError(msg, silent)
 					reject(new Error(msg))
-					return
 				}
-
-				// 业务层错误：code 非 200/201
-				const code = body['code'] as number
-				const message = (body['message'] as string) ?? '请求失败'
-				if (code != 200 && code != 201) {
-					showError(message, silent)
-					reject(new Error(message))
-					return
-				}
-
-				// 成功：返回 data 字段（UTSJSONObject，由调用方手动构造目标类型）
-			const data = body['data']
-			if (data == null) {
-				resolve({})
-			} else {
-				const dataObj = data as UTSJSONObject
-				resolve(dataObj)
-			}
 			},
 			fail: (err) => {
 				console.error('[request] <<< FAIL errMsg=', err.errMsg)

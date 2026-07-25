@@ -1,7 +1,7 @@
 /**
  * 全局类型定义
  */
-import { Ref } from 'vue'
+import { Ref, ComputedRef } from 'vue'
 
 /** 后端通用 JSON 响应格式 */
 export type ApiResponse<T> = {
@@ -116,8 +116,8 @@ export type AuthStore = {
 	token : Ref<string>
 	user : Ref<UserInfo | null>
 	isInitializing : Ref<boolean>
-	isLoggedIn : Ref<boolean>
-	displayName : Ref<string>
+	isLoggedIn : ComputedRef<boolean>
+	displayName : ComputedRef<string>
 	setAuthData : (t : string, u : UserInfo) => void
 	clearAuthData : () => void
 	restoreFromStorage : () => boolean
@@ -125,3 +125,145 @@ export type AuthStore = {
 	login : (params : LoginParams) => Promise<void>
 	logout : () => Promise<void>
 }
+
+/** 题目选项 */
+export type QuestionOption = {
+	key : string
+	text : string
+}
+
+/** 考核题目 */
+export type ExamQuestion = {
+	question_id : number
+	type : string          // 题型：single_choice / multiple_choice / true_false
+	title : string
+	options : QuestionOption[]
+	score : number
+}
+
+/** 考核提交参数 */
+export type ExamSubmitParams = {
+	course_id : number
+	answers : UTSJSONObject   // { 题号: 答案 }
+}
+
+/** 考核结果 */
+export type ExamResult = {
+	score : number
+	total_score : number
+	passed : boolean
+	details : UTSJSONObject[]
+}
+
+/** 模拟考试开始参数 */
+export type MockExamStartParams = {
+	count : number
+	duration : number
+}
+
+/** 模拟考试信息 */
+export type MockExamInfo = {
+	mock_exam_id : number
+	questions : ExamQuestion[]
+	duration : number          // 考试时长（分钟）
+	remaining_time : number    // 剩余时间（秒）
+}
+
+/** 模拟考试保存参数 */
+export type MockExamSaveParams = {
+	mock_exam_id : number
+	answers : UTSJSONObject
+	remaining_time : number
+}
+
+/** 错题项 */
+export type WrongQuestionItem = {
+	question_id : number
+	type : string
+	title : string
+	options : QuestionOption[]
+	correct_answer : string
+	user_answer : string
+	wrong_count : number
+	created_at : string
+}
+
+/** 错题列表结果 */
+export type WrongQuestionListResult = {
+	items : WrongQuestionItem[]
+	total : number
+	page : number
+	page_size : number
+}
+
+/** 错题统计 */
+export type WrongQuestionStats = {
+	total : number
+	by_type : UTSJSONObject               // { 题型: 数量 }
+	by_knowledge_point : UTSJSONObject    // { 知识点: 数量 }
+}
+
+// ===== 课程模块类型 =====
+
+/** 课程列表项 */
+export type CourseItem = {
+	course_id : number
+	title : string
+	category : string
+	description : string
+	cover_url : string
+	duration : number
+	chapter_count : number
+}
+
+/** 课程列表响应 */
+export type CourseListResult = {
+	items : CourseItem[]
+	total : number
+	page : number
+	page_size : number
+}
+
+/** 章节项 */
+export type ChapterItem = {
+	chapter_id : number
+	title : string
+	order_num : number
+	duration : number
+}
+
+/** 课程详情 */
+export type CourseDetail = {
+	course_id : number
+	title : string
+	chapters : ChapterItem[]
+	progress_pct : number
+}
+
+// ===== 题库练习模块类型 =====
+
+/** 练习题目 */
+export type Question = {
+	question_id : number
+	type : string
+	title : string
+	options : QuestionOption[]
+	correct_answer : string
+	explanation : string
+	knowledge_point ?: string
+}
+
+/** 提交答案参数 */
+export type SubmitAnswerParams = {
+	question_id : number
+	user_answer : string
+	practice_type : string
+}
+
+/** 提交答案响应 */
+export type SubmitAnswerResult = {
+	correct : boolean
+	correct_answer : string
+	explanation : string
+}
+

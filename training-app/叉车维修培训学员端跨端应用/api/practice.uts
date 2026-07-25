@@ -1,0 +1,360 @@
+/**
+ * 题库练习模块 API
+ * - 课程分类 / 知识点
+ * - 随机练习 / 顺序练习 / 章节练习 / 知识点专项练习
+ * - 提交答案 / 保存进度 / 查询进度 / 统计 / 历史
+ * 全部需要 Token + student 角色
+ *
+ * @note 后端 Question 模型字段与前端类型定义不同：
+ *   后端 id → 前端 question_id
+ *   后端 content → 前端 title
+ *   后端 options 是 Map{A:"text"} → 前端是 Array[{key,text}]
+ *   后端 answer → 前端 correct_answer
+ *   后端 is_correct → 前端 correct
+ */
+import { get, post } from './request'
+import type { Question, SubmitAnswerResult, SubmitAnswerParams, QuestionOption } from '../types/index'
+
+/** 安全转换为 number */
+function toNumber(v : any | null, defaultVal : number = 0) : number {
+	if (v == null) return defaultVal
+	const s = `${v}`
+	const n = parseFloat(s)
+	if (isNaN(n)) return defaultVal
+	return n
+}
+
+/** 安全转换为 string */
+function toStr(v : any | null, defaultVal : string = '') : string {
+	if (v == null) return defaultVal
+	return `${v}`
+}
+
+/** 安全转换为 boolean */
+function toBool(v : any | null, defaultVal : boolean = false) : boolean {
+	if (v == null) return defaultVal
+	const s = `${v}`
+	return s == 'true' || s == '1'
+}
+
+/**
+ * 将后端 options Map 转换为前端 Array<{key, text}>
+ * 后端格式：{"A": "选项A", "B": "选项B"}
+ * 前端格式：[{key: "A", text: "选项A"}, {key: "B", text: "选项B"}]
+ */
+function buildOptions(raw : any | null) : QuestionOption[] {
+	const options : QuestionOption[] = []
+	if (raw == null) return options
+	// 尝试作为 UTSJSONObject (Map) 遍历
+	const optsMap = raw as UTSJSONObject
+	for (const k in optsMap) {
+		const opt : QuestionOption = {
+			key: k,
+			text: toStr(optsMap[k]),
+		} as QuestionOption
+		options.push(opt)
+	}
+	return options
+}
+
+
+/** 从 UTSJSONObject 构造 Question */
+function buildQuestion(obj : UTSJSONObject) : Question {
+	const q : Question = {
+		question_id: toNumber(obj['id']),              // 后端 id → 前端 question_id
+		type: toStr(obj['type']),
+		title: toStr(obj['content']),                   // 后端 content → 前端 title
+		options: buildOptions(obj['options']),
+		correct_answer: toStr(obj['answer']),           // 后端 answer → 前端 correct_answer
+		explanation: toStr(obj['explanation']),
+	} as Question
+	const kp = obj['knowledge_point_id']
+	if (kp != null) {
+		q.knowledge_point = toStr(kp)
+	}
+	return q
+}
+
+/**
+ * 从 UTSJSONObject 构造 Question 数组
+ * @note 后端可能返回数组或 { questions: [...] } 对象，两种情况都处理
+ */
+function buildQuestions(data : UTSJSONObject) : Question[] {
+	const questions : Question[] = []
+	const questionsRaw = data['questions']
+	if (questionsRaw != null) {
+		const arr = questionsRaw as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			questions.push(buildQuestion(arr[i]))
+		}
+	} else {
+		// 可能直接是数组
+		const arr = data as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			questions.push(buildQuestion(arr[i]))
+		}
+	}
+	return questions
+}
+
+/** mock 题目数据（网络不可用时回退） */
+function getMockQuestions(count : number) : Question[] {
+	const questions : Question[] = []
+	const mockData : UTSJSONObject[] = [
+		{
+			id: 1,
+			type: 'single_choice',
+			content: '叉车属于哪种类型的特种设备？',
+			options: {
+				A: '起重机械',
+				B: '场（厂）内专用机动车辆',
+				C: '客运索道',
+				D: '大型游乐设施',
+			},
+			answer: 'B',
+			explanation: '叉车属于场（厂）内专用机动车辆，是特种设备的一种。',
+		} as UTSJSONObject,
+		{
+			id: 2,
+			type: 'true_false',
+			content: '叉车作业前必须检查制动系统是否正常。',
+			options: {
+				true: '正确',
+				false: '错误',
+			},
+			answer: 'true',
+			explanation: '作业前检查制动系统是叉车安全操作的基本要求。',
+		} as UTSJSONObject,
+		{
+			id: 3,
+			type: 'multi_choice',
+			content: '叉车液压系统的主要组成部分包括？',
+			options: {
+				A: '液压泵',
+				B: '控制阀',
+				C: '液压缸',
+				D: '油箱',
+			},
+			answer: 'ABCD',
+			explanation: '液压系统由液压泵、控制阀、液压缸、油箱等组成。',
+		} as UTSJSONObject,
+	]
+	for (let i = 0; i < mockData.length && i < count; i++) {
+		questions.push(buildQuestion(mockData[i]))
+	}
+	return questions
+}
+
+/** 课程分类列表 */
+export function getCategoriesApi() : Promise<UTSJSONObject> {
+	return get('/question-bank/categories')
+}
+
+/**
+ * 知识点列表
+ * @param category 课程分类（可选）
+ * @param parentId 父知识点 ID（可选）
+ */
+export function getKnowledgePointsApi(category : string = '', parentId : number = 0) : Promise<UTSJSONObject> {
+	const params : UTSJSONObject = {}
+	if (category.length > 0) {
+		params['category'] = category
+	}
+	if (parentId > 0) {
+		params['parent_id'] = parentId.toString()
+	}
+	return get('/question-bank/knowledge-points', params)
+}
+
+/** 题库统计 */
+export function getQuestionBankStatsApi() : Promise<UTSJSONObject> {
+	return get('/question-bank/stats')
+}
+
+/**
+ * 题目列表（只读）
+ * @param page 页码
+ * @param pageSize 每页条数
+ * @param type 题型过滤（可选）
+ * @param keyword 关键词搜索（可选）
+ */
+export function getQuestionListApi(page : number = 1, pageSize : number = 20, type : string = '', keyword : string = '') : Promise<UTSJSONObject> {
+	const params : UTSJSONObject = {
+		page: page.toString(),
+		page_size: pageSize.toString(),
+	}
+	if (type.length > 0) {
+		params['type'] = type
+	}
+	if (keyword.length > 0) {
+		params['keyword'] = keyword
+	}
+	return get('/question-bank/questions', params)
+}
+
+/**
+ * 随机练习抽题
+ * @param count 抽题数量，默认 20
+ * @param type 题型过滤（可选）
+ * @param knowledgePointId 知识点 ID（可选）
+ */
+export function getFreePracticeApi(count : number = 20, type : string = '', knowledgePointId : number = 0) : Promise<Question[]> {
+	const params : UTSJSONObject = {
+		count: count.toString(),
+	}
+	if (type.length > 0) {
+		params['type'] = type
+	}
+	if (knowledgePointId > 0) {
+		params['knowledge_point_id'] = knowledgePointId.toString()
+	}
+	return get('/practice-mode/free', params).then((data : UTSJSONObject) : Question[] => {
+		return buildQuestions(data)
+	}).catch((e) : Question[] => {
+		console.warn('[getFreePracticeApi] network failed, using mock data:', e)
+		return getMockQuestions(count)
+	})
+}
+
+/** 顺序练习（开始/续练） */
+export function getSequentialPracticeApi() : Promise<Question[]> {
+	return get('/practice-mode/sequential').then((data : UTSJSONObject) : Question[] => {
+		return buildQuestions(data)
+	}).catch((e) : Question[] => {
+		console.warn('[getSequentialPracticeApi] network failed, using mock data:', e)
+		return getMockQuestions(3)
+	})
+}
+
+/** 顺序练习进度 */
+export function getSequentialProgressApi() : Promise<UTSJSONObject> {
+	return get('/practice-mode/sequential-progress')
+}
+
+/**
+ * 章节练习（按课程分类抽题）
+ * @param category 课程分类（必填）
+ * @param count 题量，0=全部
+ */
+export function getCategoryPracticeApi(category : string, count : number = 0) : Promise<Question[]> {
+	const params : UTSJSONObject = {
+		category: category,
+	}
+	if (count > 0) {
+		params['count'] = count.toString()
+	}
+	return get('/practice-mode/category', params).then((data : UTSJSONObject) : Question[] => {
+		return buildQuestions(data)
+	}).catch((e) : Question[] => {
+		console.warn('[getCategoryPracticeApi] network failed, using mock data:', e)
+		return getMockQuestions(3)
+	})
+}
+
+/**
+ * 知识点专项练习
+ * @param knowledgePointId 知识点 ID（必填）
+ * @param count 题量，0=全部
+ * @param random 是否随机排序
+ */
+export function getKnowledgePointPracticeApi(knowledgePointId : number, count : number = 0, random : boolean = false) : Promise<Question[]> {
+	const params : UTSJSONObject = {
+		knowledge_point_id: knowledgePointId.toString(),
+	}
+	if (count > 0) {
+		params['count'] = count.toString()
+	}
+	if (random) {
+		params['random'] = 'true'
+	}
+	return get('/practice-mode/knowledge-point', params).then((data : UTSJSONObject) : Question[] => {
+		return buildQuestions(data)
+	}).catch((e) : Question[] => {
+		console.warn('[getKnowledgePointPracticeApi] network failed, using mock data:', e)
+		return getMockQuestions(3)
+	})
+}
+
+/**
+ * 提交答案
+ * @param params 提交参数（question_id, user_answer, practice_type）
+ * @note 后端返回 { is_correct, correct_answer, explanation }
+ *       前端类型用 { correct, correct_answer, explanation }
+ */
+export function submitAnswerApi(params : SubmitAnswerParams) : Promise<SubmitAnswerResult> {
+	const payload : UTSJSONObject = {
+		question_id: params.question_id,
+		user_answer: params.user_answer,
+		practice_type: params.practice_type,
+	} as UTSJSONObject
+	return post('/practice-mode/submit', payload).then((data : UTSJSONObject) : SubmitAnswerResult => {
+		const result : SubmitAnswerResult = {
+			correct: toBool(data['is_correct']),         // 后端 is_correct → 前端 correct
+			correct_answer: toStr(data['correct_answer']),
+			explanation: toStr(data['explanation']),
+		} as SubmitAnswerResult
+		return result
+	})
+}
+
+/**
+ * 保存练习进度（断点续练）
+ * @param index 当前做题进度序号
+ * @param practiceMode 练习模式（sequential/category/knowledge_point）
+ * @param total 总题量
+ * @param answersState 已答题状态 JSON
+ */
+export function savePracticeProgressApi(index : number, practiceMode : string, total : number, answersState : UTSJSONObject) : Promise<UTSJSONObject> {
+	const payload : UTSJSONObject = {
+		index: index,
+		practice_mode: practiceMode,
+		total: total,
+		answers_state: answersState,
+	} as UTSJSONObject
+	return post('/practice-mode/progress', payload)
+}
+
+/**
+ * 查询练习进度
+ * @param mode 练习模式，默认 sequential
+ */
+export function getPracticeProgressApi(mode : string = 'sequential') : Promise<UTSJSONObject> {
+	const params : UTSJSONObject = {
+		mode: mode,
+	}
+	return get('/practice-mode/progress', params)
+}
+
+/** 练习统计 */
+export function getPracticeStatsApi() : Promise<UTSJSONObject> {
+	return get('/practice-mode/stats')
+}
+
+/**
+ * 练习历史
+ * @param page 页码
+ * @param pageSize 每页条数
+ * @param type 题型过滤（可选）
+ */
+export function getPracticeHistoryApi(page : number = 1, pageSize : number = 20, type : string = '') : Promise<UTSJSONObject> {
+	const params : UTSJSONObject = {
+		page: page.toString(),
+		page_size: pageSize.toString(),
+	}
+	if (type.length > 0) {
+		params['type'] = type
+	}
+	return get('/practice-mode/history', params)
+}
+
+/**
+ * 知识点进度
+ * @param knowledgePointId 指定知识点（可选，不传返回全部）
+ */
+export function getKnowledgePointProgressApi(knowledgePointId : number = 0) : Promise<UTSJSONObject> {
+	const params : UTSJSONObject = {}
+	if (knowledgePointId > 0) {
+		params['knowledge_point_id'] = knowledgePointId.toString()
+	}
+	return get('/practice-mode/knowledge-point-progress', params)
+}

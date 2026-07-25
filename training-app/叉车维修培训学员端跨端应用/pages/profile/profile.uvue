@@ -1,78 +1,82 @@
 <template>
 	<view class="container">
 		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-		<view class="header">
-			<view class="user-card">
-				<view class="user-avatar">
-					<text class="avatar-icon">👤</text>
+		<scroll-view class="content-scroll" scroll-y>
+			<view class="header">
+				<view class="user-card">
+					<view class="user-avatar">
+						<text class="avatar-icon">👤</text>
+					</view>
+					<view class="user-info">
+						<text class="user-name">{{ userName }}</text>
+						<text class="user-role">叉车学员</text>
+					</view>
 				</view>
-				<view class="user-info">
-					<text class="user-name">{{ userName }}</text>
-					<text class="user-role">叉车学员</text>
+			</view>
+			<view class="stats-row">
+				<view class="stats-item">
+					<text class="stats-num">{{ totalHours }}</text>
+					<text class="stats-label">累计学时</text>
+				</view>
+				<view class="stats-divider"></view>
+				<view class="stats-item">
+					<text class="stats-num">{{ completedCourses }}</text>
+					<text class="stats-label">已完成课程</text>
+				</view>
+				<view class="stats-divider"></view>
+				<view class="stats-item">
+					<text class="stats-num">{{ totalCourses }}</text>
+					<text class="stats-label">课程总数</text>
 				</view>
 			</view>
-		</view>
-		<view class="stats-row">
-			<view class="stats-item">
-				<text class="stats-num">{{ stats.totalHours }}</text>
-				<text class="stats-label">累计学时</text>
-			</view>
-			<view class="stats-divider"></view>
-			<view class="stats-item">
-				<text class="stats-num">{{ stats.completedCourses }}</text>
-				<text class="stats-label">已完成课程</text>
-			</view>
-			<view class="stats-divider"></view>
-			<view class="stats-item">
-				<text class="stats-num">{{ stats.examPassed }}</text>
-				<text class="stats-label">通过考试</text>
-			</view>
-		</view>
-		<view class="menu-section">
-			<view class="menu-item" @click="onMenuClick('study')">
-				<text class="menu-icon">📚</text>
-				<text class="menu-text">学习记录</text>
-				<text class="menu-arrow">›</text>
-			</view>
-			<view class="menu-item" @click="onMenuClick('cert')">
-				<text class="menu-icon">🏆</text>
-				<text class="menu-text">证书管理</text>
-				<text class="menu-arrow">›</text>
-			</view>
-			<view class="menu-item" @click="onMenuClick('message')">
-				<text class="menu-icon">💬</text>
-				<text class="menu-text">消息通知</text>
-				<view class="menu-badge-wrap">
-					<text class="menu-badge">3</text>
+			<view class="menu-section">
+				<view class="menu-item" @click="onMenuClick('wrong')">
+					<text class="menu-icon">❌</text>
+					<text class="menu-text">错题本</text>
+					<text class="menu-arrow">›</text>
 				</view>
-				<text class="menu-arrow">›</text>
+				<view class="menu-item" @click="onMenuClick('records')">
+					<text class="menu-icon">📊</text>
+					<text class="menu-text">学习记录</text>
+					<text class="menu-arrow">›</text>
+				</view>
+				<view class="menu-item" @click="onMenuClick('practice')">
+					<text class="menu-icon">✏️</text>
+					<text class="menu-text">练习记录</text>
+					<text class="menu-arrow">›</text>
+				</view>
+				<view class="menu-item" @click="onMenuClick('settings')">
+					<text class="menu-icon">⚙️</text>
+					<text class="menu-text">设置</text>
+					<text class="menu-arrow">›</text>
+				</view>
+				<view class="menu-item" @click="onMenuClick('about')">
+					<text class="menu-icon">ℹ️</text>
+					<text class="menu-text">关于我们</text>
+					<text class="menu-arrow">›</text>
+				</view>
 			</view>
-			<view class="menu-item" @click="onMenuClick('settings')">
-				<text class="menu-icon">⚙️</text>
-				<text class="menu-text">设置</text>
-				<text class="menu-arrow">›</text>
+			<view class="logout-btn-wrap">
+				<text class="logout-btn" @click="onLogout">退出登录</text>
 			</view>
-			<view class="menu-item" @click="onMenuClick('about')">
-				<text class="menu-icon">ℹ️</text>
-				<text class="menu-text">关于我们</text>
-				<text class="menu-arrow">›</text>
-			</view>
-		</view>
-		<view class="logout-btn-wrap">
-			<text class="logout-btn" @click="onLogout">退出登录</text>
-		</view>
+		</scroll-view>
 		<tab-bar :active-index="3"></tab-bar>
 	</view>
 </template>
 
 <script setup lang="uts">
 	import { ref, computed } from 'vue'
+	import { onShow } from '@dcloudio/uni-app'
 	import { useAuthStore } from '../../stores/auth'
+	import { getProfileApi } from '../../api/student'
+	import { useStatusBarHeight } from '../../utils/system'
+	import type { StudentProfile } from '../../types/index'
 
 	const authStore = useAuthStore()
-	const statusBarHeight = ref<number>(44)
+	const statusBarHeight = useStatusBarHeight()
+	const profile = ref<StudentProfile | null>(null)
 
-	const userName = computed<string>(() => {
+	const userName = computed<string>(() : string => {
 		const u = authStore.user.value
 		if (u != null) {
 			if (u.name.length > 0) return u.name
@@ -81,47 +85,90 @@
 		return '同学'
 	})
 
-	const stats = {
-		totalHours: '28h',
-		completedCourses: 5,
-		examPassed: 3
-	}
-
-	uni.getSystemInfo({
-		success: (res) => {
-			const sbh = res.statusBarHeight
-			if (sbh != null) {
-				statusBarHeight.value = sbh as number
-			} else {
-				statusBarHeight.value = 44
+	const totalHours = computed<string>(() : string => {
+		if (profile.value != null) {
+			const minutes = profile.value.total_study_duration
+			const hours = Math.floor(minutes / 60)
+			const mins = minutes % 60
+			if (hours > 0) {
+				return hours + 'h' + mins + 'm'
 			}
+			return mins + 'm'
 		}
+		return '0m'
 	})
 
-	function onMenuClick(type: string): void {
-		console.log('click menu:', type)
+	const completedCourses = computed<number>(() : number => {
+		if (profile.value != null) {
+			return profile.value.completed_courses
+		}
+		return 0
+	})
+
+	const totalCourses = computed<number>(() : number => {
+		if (profile.value != null) {
+			return profile.value.total_courses
+		}
+		return 0
+	})
+
+	async function loadProfile() {
+		try {
+			const data = await getProfileApi()
+			profile.value = data
+		} catch (e) {
+			console.error('[profile] load failed:', e)
+		}
 	}
 
-	function onLogout(): void {
-		authStore.logout()
+	function onMenuClick(type : string) : void {
+		if (type == 'wrong') {
+			uni.showToast({ title: '错题本开发中', icon: 'none' })
+		} else if (type == 'records') {
+			uni.showToast({ title: '学习记录开发中', icon: 'none' })
+		} else if (type == 'practice') {
+			uni.showToast({ title: '练习记录开发中', icon: 'none' })
+		} else if (type == 'settings') {
+			uni.showToast({ title: '设置开发中', icon: 'none' })
+		} else if (type == 'about') {
+			uni.showToast({ title: '叉车维修培训学员端 v1.0', icon: 'none' })
+		}
 	}
+
+	function onLogout() : void {
+		uni.showModal({
+			title: '提示',
+			content: '确认退出登录？',
+			success: (res) => {
+				if (res.confirm) {
+					authStore.logout()
+				}
+			}
+		})
+	}
+
+	onShow(() => {
+		loadProfile()
+	})
 </script>
 
 <style>
 	.container {
 		flex: 1;
 		background-color: #f5f5f5;
-		display: flex;
 		flex-direction: column;
 	}
 
 	.status-bar {
 		background-color: #2979ff;
-		width: 100%;
+	}
+
+	.content-scroll {
+		flex: 1;
 	}
 
 	.header {
-		background: linear-gradient(135deg, #2979ff 0%, #1976d2 100%);
+		background-color: #2979ff;
 		padding: 32rpx;
 	}
 
@@ -134,7 +181,7 @@
 		width: 120rpx;
 		height: 120rpx;
 		border-radius: 60rpx;
-		background-color: rgba(255, 255, 255, 0.2);
+		background-color: #4a9aff;
 		align-items: center;
 		justify-content: center;
 		margin-right: 24rpx;
@@ -157,7 +204,7 @@
 
 	.user-role {
 		font-size: 26rpx;
-		color: rgba(255, 255, 255, 0.8);
+		color: #cfe5ff;
 	}
 
 	.stats-row {
@@ -167,7 +214,7 @@
 		padding: 32rpx;
 		flex-direction: row;
 		justify-content: space-around;
-		box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
+		border: 1px solid #eeeeee;
 	}
 
 	.stats-item {
@@ -218,21 +265,6 @@
 		flex: 1;
 		font-size: 32rpx;
 		color: #333333;
-	}
-
-	.menu-badge-wrap {
-		width: 36rpx;
-		height: 36rpx;
-		background-color: #ff5252;
-		border-radius: 18rpx;
-		align-items: center;
-		justify-content: center;
-		margin-right: 12rpx;
-	}
-
-	.menu-badge {
-		font-size: 20rpx;
-		color: #ffffff;
 	}
 
 	.menu-arrow {

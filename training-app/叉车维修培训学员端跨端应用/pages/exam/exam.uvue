@@ -4,122 +4,203 @@
 		<view class="header">
 			<text class="header-title">考试中心</text>
 		</view>
-		<view class="stats-section">
-			<view class="stats-row">
-				<view class="stat-box">
-					<text class="stat-num">{{ stats.total }}</text>
-					<text class="stat-label">考试总数</text>
-				</view>
-				<view class="stat-box">
-					<text class="stat-num">{{ stats.completed }}</text>
-					<text class="stat-label">已完成</text>
-				</view>
-				<view class="stat-box">
-					<text class="stat-num">{{ stats.passed }}</text>
-					<text class="stat-label">通过</text>
-				</view>
-				<view class="stat-box">
-					<text class="stat-num">{{ stats.avg }}</text>
-					<text class="stat-label">平均分</text>
+		<scroll-view class="content-scroll" scroll-y>
+			<view class="stats-section">
+				<view class="stats-row">
+					<view class="stat-box">
+						<text class="stat-num">{{ stats.total }}</text>
+						<text class="stat-label">考试总数</text>
+					</view>
+					<view class="stat-box">
+						<text class="stat-num">{{ stats.completed }}</text>
+						<text class="stat-label">已完成</text>
+					</view>
+					<view class="stat-box">
+						<text class="stat-num">{{ stats.passed }}</text>
+						<text class="stat-label">通过</text>
+					</view>
+					<view class="stat-box">
+						<text class="stat-num">{{ stats.avg }}</text>
+						<text class="stat-label">平均分</text>
+					</view>
 				</view>
 			</view>
-		</view>
-		<view class="section">
-			<view class="section-header">
-				<text class="section-title">待参加考试</text>
+
+			<!-- 模拟考试入口 -->
+			<view class="section">
+				<view class="section-header">
+					<text class="section-title">模拟考试</text>
+				</view>
+				<view class="mock-exam-card" @click="onStartMockExam">
+					<view class="mock-exam-info">
+						<text class="mock-exam-title">随机模拟考试</text>
+						<text class="mock-exam-desc">从题库随机抽题，模拟真实考试环境</text>
+					</view>
+					<view class="mock-exam-action">
+						<text class="action-btn">开始模考</text>
+					</view>
+				</view>
 			</view>
-			<view class="exam-list">
-				<view class="exam-item" @click="onExamClick(1)">
-					<view class="exam-info">
-						<text class="exam-title">叉车基础操作考核</text>
-						<text class="exam-desc">满分100分，60分及格</text>
-						<view class="exam-meta">
-							<text class="exam-tag">必修</text>
-							<text class="exam-time">限时30分钟</text>
+
+			<!-- 待参加考试 -->
+			<view class="section">
+				<view class="section-header">
+					<text class="section-title">待参加考试</text>
+				</view>
+				<view v-if="pendingExams.length == 0" class="empty-tip">
+					<text class="empty-text">暂无待参加考试</text>
+				</view>
+				<view class="exam-list">
+					<view v-for="(exam, idx) in pendingExams" :key="idx" class="exam-item" @click="onExamClick(exam.course_id)">
+						<view class="exam-info">
+							<text class="exam-title">{{ exam.title }}</text>
+							<text class="exam-desc">{{ exam.description }}</text>
+							<view class="exam-meta">
+								<text class="exam-tag">必修</text>
+								<text class="exam-time">{{ exam.chapter_count }}章</text>
+							</view>
+						</view>
+						<view class="exam-action">
+							<text class="action-btn">开始考试</text>
 						</view>
 					</view>
-					<view class="exam-action">
-						<text class="action-btn">开始考试</text>
-					</view>
 				</view>
-				<view class="exam-item" @click="onExamClick(2)">
-					<view class="exam-info">
-						<text class="exam-title">安全规范知识测试</text>
-						<text class="exam-desc">满分100分，80分及格</text>
-						<view class="exam-meta">
-							<text class="exam-tag">必修</text>
-							<text class="exam-time">限时20分钟</text>
+			</view>
+
+			<!-- 已完成考试 -->
+			<view class="section">
+				<view class="section-header">
+					<text class="section-title">已完成考试</text>
+				</view>
+				<view v-if="completedExams.length == 0 && !loading" class="empty-tip">
+					<text class="empty-text">暂无已完成考试</text>
+				</view>
+				<view class="exam-list">
+					<view v-for="(exam, idx) in completedExams" :key="idx" class="exam-item completed" @click="onViewResult(exam.course_id)">
+						<view class="exam-info">
+							<text class="exam-title">{{ exam.title }}</text>
+							<text class="exam-desc">{{ exam.description }}</text>
+							<view class="exam-meta">
+								<text class="exam-tag passed">已完成</text>
+								<text class="exam-time">{{ exam.chapter_count }}章</text>
+							</view>
+						</view>
+						<view class="exam-action">
+							<text class="action-btn-secondary">查看详情</text>
 						</view>
 					</view>
-					<view class="exam-action">
-						<text class="action-btn">开始考试</text>
-					</view>
 				</view>
 			</view>
-		</view>
-		<view class="section">
-			<view class="section-header">
-				<text class="section-title">已完成考试</text>
-			</view>
-			<view class="exam-list">
-				<view class="exam-item completed" @click="onExamClick(3)">
-					<view class="exam-info">
-						<text class="exam-title">日常维护保养考核</text>
-						<text class="exam-desc">已通过，得分92分</text>
-						<view class="exam-meta">
-							<text class="exam-tag passed">通过</text>
-							<text class="exam-time">2024-01-15</text>
-						</view>
-					</view>
-					<view class="exam-action">
-						<text class="action-btn-secondary">查看详情</text>
-					</view>
-				</view>
-			</view>
-		</view>
+
+			<view style="height: 120rpx;"></view>
+		</scroll-view>
 		<tab-bar :active-index="2"></tab-bar>
 	</view>
 </template>
 
 <script setup lang="uts">
-	import { ref } from 'vue'
+	import { ref, reactive } from 'vue'
+	import { onShow } from '@dcloudio/uni-app'
+	import { useStatusBarHeight } from '../../utils/system'
+	import { getCourseListApi } from '../../api/course'
+	import { startMockExamApi } from '../../api/mockExam'
+	import type { CourseItem } from '../../types/index'
 
-	const statusBarHeight = ref<number>(44)
+	const statusBarHeight = useStatusBarHeight()
+	const loading = ref<boolean>(false)
 
-	const stats = {
-		total: 5,
-		completed: 3,
-		passed: 2,
-		avg: 85
+	type ExamStats = {
+		total : number
+		completed : number
+		passed : number
+		avg : number
 	}
 
-	uni.getSystemInfo({
-		success: (res) => {
-			const sbh = res.statusBarHeight
-			if (sbh != null) {
-				statusBarHeight.value = sbh as number
-			} else {
-				statusBarHeight.value = 44
-			}
-		}
+	const stats = reactive<ExamStats>({
+		total: 0,
+		completed: 0,
+		passed: 0,
+		avg: 0,
 	})
 
-	function onExamClick(id: number): void {
-		console.log('click exam:', id)
+	const pendingExams = ref<CourseItem[]>([])
+	const completedExams = ref<CourseItem[]>([])
+
+	async function loadExams() {
+		if (loading.value) return
+		loading.value = true
+		try {
+			const result = await getCourseListApi(1, 50, '')
+			pendingExams.value = result.items
+			completedExams.value = []
+			stats.total = result.items.length
+		} catch (e) {
+			console.error('[exam] load failed:', e)
+			uni.showToast({ title: '加载考试列表失败', icon: 'none' })
+		} finally {
+			loading.value = false
+		}
 	}
+
+	// doStartMockExam 必须在 onStartMockExam 之前声明（UTS 不支持函数提升）
+	async function doStartMockExam() {
+		uni.showLoading({ title: '正在组卷...', mask: true })
+		try {
+			const info = await startMockExamApi(0, 90)
+			uni.hideLoading()
+			console.log('[mock exam] started:', info.mock_exam_id, 'questions:', info.questions.length)
+			uni.showToast({ title: '模考已开始，答题页面开发中', icon: 'none' })
+		} catch (e) {
+			uni.hideLoading()
+			console.error('[mock exam] start failed:', e)
+			let msg = '开始模拟考试失败'
+			if (e instanceof Error) {
+				const errObj = e as Error
+				const m = errObj.message
+				if (m != null && m.length > 0) {
+					msg = m
+				}
+			}
+			uni.showToast({ title: msg, icon: 'none' })
+		}
+	}
+
+	function onStartMockExam() : void {
+		uni.showModal({
+			title: '模拟考试',
+			content: '即将开始随机模拟考试，确认开始？',
+			success: (res) => {
+				if (res.confirm) {
+					doStartMockExam()
+				}
+			}
+		})
+	}
+
+	function onExamClick(courseId : number) : void {
+		uni.showToast({ title: '考试功能开发中', icon: 'none' })
+	}
+
+	function onViewResult(courseId : number) : void {
+		uni.showToast({ title: '考试结果开发中', icon: 'none' })
+	}
+
+	onShow(() => {
+		if (pendingExams.value.length == 0) {
+			loadExams()
+		}
+	})
 </script>
 
 <style>
 	.container {
 		flex: 1;
 		background-color: #f5f5f5;
-		display: flex;
 		flex-direction: column;
 	}
 
 	.status-bar {
 		background-color: #2979ff;
-		width: 100%;
 	}
 
 	.header {
@@ -132,6 +213,10 @@
 		font-size: 36rpx;
 		font-weight: bold;
 		color: #ffffff;
+	}
+
+	.content-scroll {
+		flex: 1;
 	}
 
 	.stats-section {
@@ -176,6 +261,35 @@
 		font-size: 32rpx;
 		font-weight: bold;
 		color: #333333;
+	}
+
+	.mock-exam-card {
+		flex-direction: row;
+		align-items: center;
+		padding: 24rpx;
+		background-color: #f0f7ff;
+		border-radius: 12rpx;
+	}
+
+	.mock-exam-info {
+		flex: 1;
+		flex-direction: column;
+	}
+
+	.mock-exam-title {
+		font-size: 30rpx;
+		font-weight: bold;
+		color: #333333;
+		margin-bottom: 8rpx;
+	}
+
+	.mock-exam-desc {
+		font-size: 24rpx;
+		color: #666666;
+	}
+
+	.mock-exam-action {
+		margin-left: 20rpx;
 	}
 
 	.exam-list {
@@ -252,5 +366,15 @@
 		background-color: #f5f5f5;
 		padding: 12rpx 32rpx;
 		border-radius: 24rpx;
+	}
+
+	.empty-tip {
+		align-items: center;
+		padding: 60rpx 0;
+	}
+
+	.empty-text {
+		font-size: 28rpx;
+		color: #999999;
 	}
 </style>

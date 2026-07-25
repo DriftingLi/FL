@@ -1,106 +1,87 @@
 <template>
 	<view class="container">
 		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-		<view class="header">
-			<view class="greeting">
-				<text class="greeting-text">你好，{{ userName }}</text>
-				<text class="greeting-sub">今天也要努力学习哦！</text>
-			</view>
-			<view class="avatar">
-				<text class="avatar-icon">👤</text>
-			</view>
-		</view>
-		<view class="stats-card">
-			<view class="stat-item">
-				<text class="stats-label">课程总数</text>
-				<text class="stats-value">{{ totalCourses }}</text>
-			</view>
-			<view class="stat-divider"></view>
-			<view class="stat-item">
-				<text class="stats-label">已完成</text>
-				<text class="stats-value">{{ completedCourses }}</text>
-			</view>
-			<view class="stat-divider"></view>
-			<view class="stat-item">
-				<text class="stats-label">学习时长</text>
-				<text class="stats-value">{{ studyHours }}</text>
-			</view>
-		</view>
-		<view class="section">
-			<view class="section-header">
-				<text class="section-title">快速入口</text>
-			</view>
-			<view class="grid">
-				<view class="grid-item" @click="onGridClick('courses')">
-					<view class="grid-icon-wrap">
-						<text class="grid-icon">📚</text>
-					</view>
-					<text class="grid-text">课程中心</text>
+		<scroll-view class="content-scroll" scroll-y>
+			<view class="header">
+				<view class="greeting">
+					<text class="greeting-text">你好，{{ userName }}</text>
+					<text class="greeting-sub">今天也要努力学习哦！</text>
 				</view>
-				<view class="grid-item" @click="onGridClick('exam')">
-					<view class="grid-icon-wrap">
-						<text class="grid-icon">📝</text>
-					</view>
-					<text class="grid-text">在线考试</text>
-				</view>
-				<view class="grid-item" @click="onGridClick('records')">
-					<view class="grid-icon-wrap">
-						<text class="grid-icon">📊</text>
-					</view>
-					<text class="grid-text">学习记录</text>
-				</view>
-				<view class="grid-item" @click="onGridClick('profile')">
-					<view class="grid-icon-wrap">
-						<text class="grid-icon">👤</text>
-					</view>
-					<text class="grid-text">个人中心</text>
+				<view class="avatar">
+					<text class="avatar-icon">👤</text>
 				</view>
 			</view>
-		</view>
-		<view class="section">
-			<view class="section-header">
-				<text class="section-title">最近学习</text>
-				<text class="section-more" @click="onGridClick('courses')">查看全部 →</text>
+			<view class="stats-card">
+				<view class="stat-item">
+					<text class="stats-label">课程总数</text>
+					<text class="stats-value">{{ totalCourses }}</text>
+				</view>
+				<view class="stat-divider"></view>
+				<view class="stat-item">
+					<text class="stats-label">已完成</text>
+					<text class="stats-value">{{ completedCourses }}</text>
+				</view>
+				<view class="stat-divider"></view>
+				<view class="stat-item">
+					<text class="stats-label">学习时长</text>
+					<text class="stats-value">{{ studyHours }}</text>
+				</view>
 			</view>
-			<view class="course-list">
-				<view class="course-item">
-					<view class="course-cover">
-						<text class="course-icon">🚗</text>
-					</view>
-					<view class="course-info">
-						<text class="course-title">叉车基础操作</text>
-						<text class="course-progress">已完成 60%</text>
-					</view>
-					<view class="course-arrow">
-						<text class="arrow-icon">›</text>
-					</view>
+			<view class="section">
+				<view class="section-header">
+					<text class="section-title">快速入口</text>
 				</view>
-				<view class="course-item">
-					<view class="course-cover">
-						<text class="course-icon">🔧</text>
+				<view class="grid">
+					<view class="grid-item" @click="onGridClick('courses')">
+						<view class="grid-icon-wrap">
+							<text class="grid-icon">📚</text>
+						</view>
+						<text class="grid-text">课程中心</text>
 					</view>
-					<view class="course-info">
-						<text class="course-title">日常维护保养</text>
-						<text class="course-progress">已完成 30%</text>
+					<view class="grid-item" @click="onGridClick('exam')">
+						<view class="grid-icon-wrap">
+							<text class="grid-icon">📝</text>
+						</view>
+						<text class="grid-text">在线考试</text>
 					</view>
-					<view class="course-arrow">
-						<text class="arrow-icon">›</text>
+					<view class="grid-item" @click="onGridClick('practice')">
+						<view class="grid-icon-wrap">
+							<text class="grid-icon">✏️</text>
+						</view>
+						<text class="grid-text">题库练习</text>
 					</view>
-				</view>
-				<view class="course-item">
-					<view class="course-cover">
-						<text class="course-icon">⚠️</text>
-					</view>
-					<view class="course-info">
-						<text class="course-title">安全操作规程</text>
-						<text class="course-progress">已完成 100%</text>
-					</view>
-					<view class="course-arrow">
-						<text class="arrow-icon">›</text>
+					<view class="grid-item" @click="onGridClick('profile')">
+						<view class="grid-icon-wrap">
+							<text class="grid-icon">👤</text>
+						</view>
+						<text class="grid-text">个人中心</text>
 					</view>
 				</view>
 			</view>
-		</view>
+			<view class="section">
+				<view class="section-header">
+					<text class="section-title">最近学习</text>
+					<text class="section-more" @click="onGridClick('courses')">查看全部 →</text>
+				</view>
+				<view v-if="recentCourses.length == 0" class="empty-tip">
+					<text class="empty-text">暂无学习记录</text>
+				</view>
+				<view class="course-list">
+					<view v-for="(course, idx) in recentCourses" :key="idx" class="course-item" @click="onCourseClick(course.course_id)">
+						<view class="course-cover">
+							<text class="course-icon">{{ getCategoryIcon(course.category) }}</text>
+						</view>
+						<view class="course-info">
+							<text class="course-title">{{ course.title }}</text>
+							<text class="course-progress">{{ course.chapter_count }}章 · {{ formatDuration(course.duration) }}</text>
+						</view>
+						<view class="course-arrow">
+							<text class="arrow-icon">›</text>
+						</view>
+					</view>
+				</view>
+			</view>
+		</scroll-view>
 		<tab-bar :active-index="0"></tab-bar>
 	</view>
 </template>
@@ -109,41 +90,41 @@
 	import { ref, computed } from 'vue'
 	import { useAuthStore } from '../../stores/auth'
 	import { getProfileApi } from '../../api/student'
-	import type { StudentProfile } from '../../types/index'
+	import { getCourseListApi } from '../../api/course'
+	import { useStatusBarHeight } from '../../utils/system'
+	import type { StudentProfile, CourseItem } from '../../types/index'
 
 	const authStore = useAuthStore()
-	const statusBarHeight = ref<number>(44)
+	const statusBarHeight = useStatusBarHeight()
 	const profile = ref<StudentProfile | null>(null)
+	const recentCourses = ref<CourseItem[]>([])
 
-	const userName = computed<string>(() => {
-		const u = authStore.user.value
-		if (u != null) {
+	const userName = computed<string>(() : string => {
+		if (authStore.user.value != null) {
+			const u = authStore.user.value
 			if (u.name.length > 0) return u.name
 			if (u.username.length > 0) return u.username
 		}
 		return '同学'
 	})
 
-	const totalCourses = computed<number>(() => {
-		const p = profile.value
-		if (p != null) {
-			return p.total_courses
+	const totalCourses = computed<number>(() : number => {
+		if (profile.value != null) {
+			return profile.value.total_courses
+		}
+		return recentCourses.value.length
+	})
+
+	const completedCourses = computed<number>(() : number => {
+		if (profile.value != null) {
+			return profile.value.completed_courses
 		}
 		return 0
 	})
 
-	const completedCourses = computed<number>(() => {
-		const p = profile.value
-		if (p != null) {
-			return p.completed_courses
-		}
-		return 0
-	})
-
-	const studyHours = computed<string>(() => {
-		const p = profile.value
-		if (p != null) {
-			const minutes = p.total_study_duration
+	const studyHours = computed<string>(() : string => {
+		if (profile.value != null) {
+			const minutes = profile.value.total_study_duration
 			const hours = Math.floor(minutes / 60)
 			const mins = minutes % 60
 			if (hours > 0) {
@@ -154,57 +135,80 @@
 		return '0m'
 	})
 
-	uni.getSystemInfo({
-		success: (res) => {
-			const sbh = res.statusBarHeight
-			if (sbh != null) {
-				statusBarHeight.value = sbh as number
-			} else {
-				statusBarHeight.value = 44
-			}
-		}
-	})
+	function getCategoryIcon(category : string) : string {
+		if (category == 'driving') return '🚗'
+		if (category == 'maintenance') return '🔧'
+		if (category == 'safety') return '⚠️'
+		if (category == 'troubleshooting') return '🔩'
+		if (category == 'cargo') return '📐'
+		if (category == 'electric') return '⚡'
+		return '📚'
+	}
+
+	function formatDuration(seconds : number) : string {
+		if (seconds <= 0) return ''
+		const minutes = Math.floor(seconds / 60)
+		if (minutes < 60) return minutes + '分钟'
+		const hours = Math.floor(minutes / 60)
+		const mins = minutes % 60
+		return hours + 'h' + mins + 'm'
+	}
 
 	async function loadProfile() {
 		try {
 			const data = await getProfileApi()
 			profile.value = data
 		} catch (e) {
-			console.error('load profile failed:', e)
+			console.error('[dashboard] load profile failed:', e)
 		}
 	}
 
-	function onGridClick(type: string): void {
-		let url = '/pages/dashboard/dashboard'
-		if (type == 'courses') {
-			url = '/pages/courses/courses'
-		} else if (type == 'exam') {
-			url = '/pages/exam/exam'
-		} else if (type == 'records' || type == 'profile') {
-			url = '/pages/profile/profile'
+	async function loadRecentCourses() {
+		try {
+			const result = await getCourseListApi(1, 3, '')
+			recentCourses.value = result.items
+		} catch (e) {
+			console.error('[dashboard] load courses failed:', e)
 		}
-		uni.redirectTo({ url: url })
+	}
+
+	function onGridClick(type : string) : void {
+		if (type == 'courses') {
+			uni.reLaunch({ url: '/pages/courses/courses' })
+		} else if (type == 'exam') {
+			uni.reLaunch({ url: '/pages/exam/exam' })
+		} else if (type == 'practice') {
+			uni.showToast({ title: '题库练习开发中', icon: 'none' })
+		} else if (type == 'profile') {
+			uni.reLaunch({ url: '/pages/profile/profile' })
+		}
+	}
+
+	function onCourseClick(courseId : number) : void {
+		uni.showToast({ title: '课程详情开发中', icon: 'none' })
 	}
 
 	loadProfile()
+	loadRecentCourses()
 </script>
 
 <style>
 	.container {
 		flex: 1;
 		background-color: #f5f5f5;
-		display: flex;
 		flex-direction: column;
-		padding-bottom: 100rpx;
 	}
 
 	.status-bar {
 		background-color: #2979ff;
-		width: 100%;
+	}
+
+	.content-scroll {
+		flex: 1;
 	}
 
 	.header {
-		background: linear-gradient(135deg, #2979ff 0%, #1976d2 100%);
+		background-color: #2979ff;
 		padding: 32rpx 32rpx 48rpx;
 		flex-direction: row;
 		justify-content: space-between;
@@ -231,7 +235,7 @@
 		width: 88rpx;
 		height: 88rpx;
 		border-radius: 44rpx;
-		background-color: rgba(255, 255, 255, 0.2);
+		background-color: #4a9aff;
 		align-items: center;
 		justify-content: center;
 	}
@@ -247,7 +251,7 @@
 		padding: 32rpx;
 		flex-direction: row;
 		justify-content: space-around;
-		box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
+		border: 1px solid #eeeeee;
 	}
 
 	.stat-item {
@@ -304,7 +308,7 @@
 	}
 
 	.grid-item {
-		width: 48%;
+		width: 340rpx;
 		background-color: #f8f9fa;
 		border-radius: 12rpx;
 		padding: 32rpx 0;
@@ -387,5 +391,15 @@
 	.arrow-icon {
 		font-size: 40rpx;
 		color: #cccccc;
+	}
+
+	.empty-tip {
+		align-items: center;
+		padding: 60rpx 0;
+	}
+
+	.empty-text {
+		font-size: 28rpx;
+		color: #999999;
 	}
 </style>

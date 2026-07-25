@@ -122,13 +122,26 @@ async function login(params : LoginParams) : Promise<void> {
 }
 
 async function logout() : Promise<void> {
-	try {
-		await logoutApi()
-	} catch (e) {
-		// 即使后端 logout 失败也要清本地
-	} finally {
-		clearAuthData()
-		uni.reLaunch({ url: '/pages/login/login' })
+	// 1. 立即清空本地登录态，让 UI 秒退到登录页
+	// 退出登录是非关键操作：本地 token 清掉就已视为"退出"，
+	// 后端 token 黑名单写入可以异步处理，不应阻塞 UI
+	const savedToken = token.value
+	clearAuthData()
+	uni.reLaunch({ url: '/pages/login/login' })
+
+	// 2. 后台异步通知后端写 token 黑名单（fire-and-forget）
+	// 设 3 秒短超时：后端挂了也不影响用户退出，最多 3 秒后请求被丢弃
+	if (savedToken.length > 0) {
+		// 用 IIFE 异步执行，不 await，不阻塞当前函数
+		;(async () : Promise<void> => {
+			try {
+				await logoutApi()
+				console.log('[auth] logout backend ok')
+			} catch (e) {
+				// 后端不可用/超时都不影响本地退出
+				console.warn('[auth] logout backend failed (ignored):', e)
+			}
+		})()
 	}
 }
 

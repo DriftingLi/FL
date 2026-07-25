@@ -1,0 +1,192 @@
+/**
+ * 错题本 API
+ * @note 后端返回的错题结构：
+ *   items[].question_id = 题目ID
+ *   items[].question = { id, type, content, options:{Map}, answer, explanation }
+ *   需要从嵌套的 question 对象中提取题目信息
+ */
+import { get, post } from './request'
+import type { WrongQuestionItem, WrongQuestionListResult, WrongQuestionStats, QuestionOption } from '../types/index'
+
+/** 安全转换为 number */
+function toNumber(v : any | null, defaultVal : number = 0) : number {
+	if (v == null) return defaultVal
+	const s = `${v}`
+	const n = parseFloat(s)
+	if (isNaN(n)) return defaultVal
+	return n
+}
+
+/** 安全转换为 string */
+function toStr(v : any | null, defaultVal : string = '') : string {
+	if (v == null) return defaultVal
+	return `${v}`
+}
+
+/**
+ * 将后端 options Map 转换为前端 Array<{key, text}>
+ */
+function buildOptions(raw : any | null) : QuestionOption[] {
+	const options : QuestionOption[] = []
+	if (raw == null) return options
+	const optsMap = raw as UTSJSONObject
+	for (const k in optsMap) {
+		const opt : QuestionOption = {
+			key: k,
+			text: toStr(optsMap[k]),
+		} as QuestionOption
+		options.push(opt)
+	}
+	return options
+}
+
+/**
+ * 从 UTSJSONObject 构造 WrongQuestionItem
+ * @note 后端把题目信息嵌套在 question 字段中
+ */
+function buildWrongQuestionItem(obj : UTSJSONObject) : WrongQuestionItem {
+	// 从嵌套的 question 对象中提取题目信息
+	let questionId = toNumber(obj['question_id'])
+	let qType = ''
+	let qTitle = ''
+	let qOptions : QuestionOption[] = []
+	let qCorrectAnswer = ''
+
+	const questionRaw = obj['question']
+	if (questionRaw != null) {
+		const questionObj = questionRaw as UTSJSONObject
+		questionId = toNumber(questionObj['id'])           // 后端 id → question_id
+		qType = toStr(questionObj['type'])
+		qTitle = toStr(questionObj['content'])              // 后端 content → title
+		qOptions = buildOptions(questionObj['options'])
+		qCorrectAnswer = toStr(questionObj['answer'])      // 后端 answer → correct_answer
+	}
+
+	const item : WrongQuestionItem = {
+		question_id: questionId,
+		type: qType,
+		title: qTitle,
+		options: qOptions,
+		correct_answer: qCorrectAnswer,
+		user_answer: toStr(obj['user_answer']),
+		wrong_count: toNumber(obj['wrong_count']),
+		created_at: toStr(obj['created_at']),
+	} as WrongQuestionItem
+	return item
+}
+
+/** 从 UTSJSONObject 构造 WrongQuestionListResult */
+function buildWrongQuestionListResult(obj : UTSJSONObject) : WrongQuestionListResult {
+	const items : WrongQuestionItem[] = []
+	const itemsRaw = obj['items']
+	if (itemsRaw != null) {
+		const itemsArray = itemsRaw as Array<UTSJSONObject>
+		for (let i = 0; i < itemsArray.length; i++) {
+			items.push(buildWrongQuestionItem(itemsArray[i]))
+		}
+	}
+	const result : WrongQuestionListResult = {
+		items: items,
+		total: toNumber(obj['total']),
+		page: toNumber(obj['page']),
+		page_size: toNumber(obj['page_size']),
+	} as WrongQuestionListResult
+	return result
+}
+
+/** 从 UTSJSONObject 构造 WrongQuestionStats */
+function buildWrongQuestionStats(obj : UTSJSONObject) : WrongQuestionStats {
+	const byTypeRaw = obj['by_type']
+	let by_type : UTSJSONObject = {}
+	if (byTypeRaw != null) {
+		by_type = byTypeRaw as UTSJSONObject
+	}
+	const byKpRaw = obj['by_knowledge_point']
+	let by_knowledge_point : UTSJSONObject = {}
+	if (byKpRaw != null) {
+		by_knowledge_point = byKpRaw as UTSJSONObject
+	}
+	const stats : WrongQuestionStats = {
+		total: toNumber(obj['total']),
+		by_type: by_type,
+		by_knowledge_point: by_knowledge_point,
+	} as WrongQuestionStats
+	return stats
+}
+
+/**
+ * 获取错题列表
+ * @param page 页码，默认 1
+ * @param pageSize 每页条数，默认 20
+ * @param type 题型筛选（可选，空字符串表示不筛选）
+ */
+export function getWrongQuestionsApi(page : number = 1, pageSize : number = 20, type : string = '') : Promise<WrongQuestionListResult> {
+	const params : UTSJSONObject = {
+		page: page.toString(),
+		page_size: pageSize.toString(),
+	} as UTSJSONObject
+	if (type.length > 0) {
+		params['type'] = type
+	}
+	return get('/wrong-questions', params).then((data : UTSJSONObject) : WrongQuestionListResult => {
+		console.log('[getWrongQuestionsApi] raw data:', JSON.stringify(data))
+		return buildWrongQuestionListResult(data)
+	}).catch((e) : WrongQuestionListResult => {
+		console.error('[getWrongQuestionsApi] failed:', e)
+		let msg = '获取错题列表失败'
+		if (e instanceof Error) {
+			const errObj = e as Error
+			const m = errObj.message
+			if (m != null && m.length > 0) {
+				msg = msg + ': ' + m
+			}
+		}
+		throw new Error(msg)
+	})
+}
+
+/**
+ * 重做错题
+ * @param questionId 题目 ID
+ * @param userAnswer 用户答案
+ */
+export function redoWrongQuestionApi(questionId : number, userAnswer : string) : Promise<UTSJSONObject> {
+	const url = '/wrong-questions/' + questionId + '/redo'
+	const payload : UTSJSONObject = {
+		user_answer: userAnswer
+	} as UTSJSONObject
+	return post(url, payload)
+}
+
+/**
+ * 移出错题本
+ * @param questionId 题目 ID
+ */
+export function removeWrongQuestionApi(questionId : number) : Promise<UTSJSONObject> {
+	const url = '/wrong-questions/' + questionId + '/remove'
+	return post(url, null)
+}
+
+/** 获取错题统计 */
+export function getWrongQuestionStatsApi() : Promise<WrongQuestionStats> {
+	return get('/wrong-questions/stats').then((data : UTSJSONObject) : WrongQuestionStats => {
+		console.log('[getWrongQuestionStatsApi] raw data:', JSON.stringify(data))
+		return buildWrongQuestionStats(data)
+	}).catch((e) : WrongQuestionStats => {
+		console.error('[getWrongQuestionStatsApi] failed:', e)
+		let msg = '获取错题统计失败'
+		if (e instanceof Error) {
+			const errObj = e as Error
+			const m = errObj.message
+			if (m != null && m.length > 0) {
+				msg = msg + ': ' + m
+			}
+		}
+		throw new Error(msg)
+	})
+}
+
+/** 导出错题本 */
+export function exportWrongQuestionsApi() : Promise<UTSJSONObject> {
+	return get('/wrong-questions/export')
+}
