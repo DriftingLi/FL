@@ -72,7 +72,9 @@ func (s *CourseService) GetCourseDetail(courseID, studentID int) (map[string]any
 	progress := 0.0
 	if studentID > 0 {
 		var record model.StudyRecord
-		if err := s.db.Where("student_id = ? AND course_id = ?", studentID, courseID).First(&record).Error; err == nil {
+		// 使用 Limit(1).Find() 而非 First()：学员首次访问课程时无学习记录是正常情况，
+		// Find() 在无记录时不返回 ErrRecordNotFound，避免 GORM logger 误报 WARN 日志。
+		if err := s.db.Where("student_id = ? AND course_id = ?", studentID, courseID).Limit(1).Find(&record).Error; err == nil && record.RecordID > 0 {
 			progress = record.Progress
 		}
 	}
@@ -111,7 +113,8 @@ func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (ma
 	studyStatus := "not_started"
 	if studentID > 0 {
 		var record model.StudyRecord
-		if err := s.db.Where("student_id = ? AND course_id = ? AND chapter_id = ?", studentID, courseID, chapterID).First(&record).Error; err == nil {
+		// 同上：使用 Limit(1).Find() 避免首次访问章节时 GORM 误报 record not found。
+		if err := s.db.Where("student_id = ? AND course_id = ? AND chapter_id = ?", studentID, courseID, chapterID).Limit(1).Find(&record).Error; err == nil && record.RecordID > 0 {
 			if record.Progress >= 100 {
 				studyStatus = "completed"
 			} else {

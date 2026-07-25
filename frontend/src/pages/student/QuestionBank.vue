@@ -167,7 +167,7 @@
           <el-button v-if="!submitted" type="primary" :disabled="!canSubmit" @click="submitAnswer">
             提交答案
           </el-button>
-          <el-button v-if="currentIdx < questions.length - 1" type="primary" plain @click="nextQuestion">
+          <el-button v-if="currentIdx < questions.length - 1" type="primary" @click="nextQuestion">
             下一题
           </el-button>
           <el-button v-if="currentIdx === questions.length - 1" type="success" @click="nextQuestion">

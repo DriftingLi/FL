@@ -156,3 +156,128 @@ func beijingTimeNow() time.Time {
 	}
 	return time.Now().In(loc)
 }
+
+// =====================================================
+// 管理员用户管理（供后台 /api/valuation/admin/users 调用）
+// =====================================================
+
+// ValuationUserSummary 评估用户摘要（列表项，不含密码）
+type ValuationUserSummary struct {
+	ID        int       `json:"id"`
+	Username  string    `json:"username"`
+	Name      string    `json:"name"`
+	Phone     string    `json:"phone"`
+	Email     string    `json:"email"`
+	Company   string    `json:"company"`
+	Status    int16     `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// ListValuationUsers 分页查询评估用户，支持按用户名/姓名/手机号模糊搜索。
+// 返回摘要列表与总数。
+func (s *ValuationAuthService) ListValuationUsers(page, pageSize int, keyword string) ([]ValuationUserSummary, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+	offset := (page - 1) * pageSize
+
+	query := s.db.Model(&model.ValuationUser{})
+	if keyword != "" {
+		like := "%" + keyword + "%"
+		query = query.Where("username LIKE ? OR name LIKE ? OR phone LIKE ?", like, like, like)
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var users []model.ValuationUser
+	if err := query.Order("created_at DESC, id ASC").Limit(pageSize).Offset(offset).Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+	out := make([]ValuationUserSummary, 0, len(users))
+	for _, u := range users {
+		out = append(out, ValuationUserSummary{
+			ID:        u.ID,
+			Username:  u.Username,
+			Name:      u.Name,
+			Phone:     u.Phone,
+			Email:     u.Email,
+			Company:   u.Company,
+			Status:    u.Status,
+			CreatedAt: u.CreatedAt,
+		})
+	}
+	return out, total, nil
+}
+
+// AdminCreateValuationUser 管理员新增评估用户。
+// username 缺省时用手机号充填，避免唯一约束冲突。
+func (s *ValuationAuthService) AdminCreateValuationUser(phone, password, name, email, company string) (*model.ValuationUser, error) {
+	if phone == "" || password == "" || name == "" {
+		return nil, errors.New("手机号、密码和姓名不能为空")
+	}
+	var count int64
+	s.db.Model(&model.ValuationUser{}).Where("phone = ?", phone).Count(&count)
+	if count > 0 {
+		return nil, errors.New("手机号已被注册")
+	}
+	hashed, err := HashValuationPassword(password)
+	if err != nil {
+		return nil, err
+	}
+	user := model.ValuationUser{
+		Username:  phone,
+		Password:  hashed,
+		Name:      name,
+		Phone:     phone,
+		Email:     email,
+		Company:   company,
+		Status:    1,
+		CreatedAt: beijingTimeNow(),
+	}
+	if err := s.db.Create(&user).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// AdminUpdateValuationUser 管理员更新评估用户资料（不含密码）。
+// status: 1 启用 / 0 禁用。
+func (s *ValuationAuthService) AdminUpdateValuationUser(id int, name, email, company string, status int16) error {
+	if id <= 0 {
+		return errors.New("用户 ID 非法")
+	}
+	updates := map[string]interface{}{
+		"name":    name,
+		"email":   email,
+		"company": company,
+		"status":  status,
+	}
+	return s.db.Model(&model.ValuationUser{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// AdminResetValuationUserPassword 管理员重置用户密码。
+func (s *ValuationAuthService) AdminResetValuationUserPassword(id int, newPassword string) error {
+	if id <= 0 {
+		return errors.New("用户 ID 非法")
+	}
+	if newPassword == "" {
+		return errors.New("新密码不能为空")
+	}
+	hashed, err := HashValuationPassword(newPassword)
+	if err != nil {
+		return err
+	}
+	return s.db.Model(&model.ValuationUser{}).Where("id = ?", id).Update("password", hashed).Error
+}
+
+// AdminDeleteValuationUser 管理员删除评估用户。
+func (s *ValuationAuthService) AdminDeleteValuationUser(id int) error {
+	if id <= 0 {
+		return errors.New("用户 ID 非法")
+	}
+	return s.db.Delete(&model.ValuationUser{}, id).Error
+}

@@ -201,7 +201,8 @@ func inferPowerType(vehicleType string) model.PowerType {
 
 // Persist 持久化评估结果到 evaluations 表，返回新 ID
 // 由 handler 在拿到 EvaluationResult 后调用
-func (s *ValuationService) Persist(ctx context.Context, result *model.EvaluationResult) (int64, error) {
+// userID>0 时写入归属（登录用户提交）；userID=0 时落 NULL（匿名提交）
+func (s *ValuationService) Persist(ctx context.Context, result *model.EvaluationResult, userID int) (int64, error) {
 	if s.evalRepo == nil {
 		return 0, fmt.Errorf("evalRepo 未装配")
 	}
@@ -232,6 +233,7 @@ func (s *ValuationService) Persist(ctx context.Context, result *model.Evaluation
 		EstimatedValue:             result.EstimatedValue,
 		ConfidenceLow:              result.ConfidenceLow,
 		ConfidenceHigh:             result.ConfidenceHigh,
+		UserID:                     userID,
 	}
 	return s.evalRepo.CreateEvaluation(ctx, params)
 }

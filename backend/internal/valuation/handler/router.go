@@ -61,13 +61,13 @@ func RegisterRoutes(
 	batteryHandler := NewBatteryHandler(batteryRepo, batterySvc, logger, pdfOutputDir)
 	healthHandler := NewHealthHandler()
 	valuationAuthHandler := NewValuationAuthHandler(valuationAuthSvc)
+	adminUserHandler := NewValuationAdminUserHandler(valuationAuthSvc)
 
-	// === 公开组（无需登录）：字典查询 + 评估提交 + 统计 + 健康检查 + 报告生成/下载 + 登录/注册 ===
-	// 未登录用户可提交评估并被计数（evaluations 表无 user_id，记录匿名存储）
-	// 报告生成/下载也改为公开：未登录用户可下载已生成的评估报告
+	// === 公开组（无需登录）：字典查询 + 统计 + 健康检查 + 报告生成/下载 + 登录/注册 ===
+	// 评估提交（POST /evaluations）已移至"可选认证组"，登录用户提交时记录 user_id
+	// 报告生成/下载公开：未登录用户可下载已生成的评估报告
 	public := r.Group("/api/valuation")
 	{
-		public.POST("/evaluations", evalHandler.Create)
 		public.GET("/evaluations/stats", evalHandler.Stats)
 		public.GET("/health", healthHandler.Check)
 
@@ -103,6 +103,14 @@ func RegisterRoutes(
 			dict.GET("/earliest-factory-year", configHandler.GetEarliestFactoryYear)
 			dict.GET("/algorithm-parameters", configHandler.ListAlgorithmParameters)
 		}
+	}
+
+	// === 可选认证组（登录与否都能用，登录则记录 user_id） ===
+	// 评估提交：未登录可提交（user_id 落 NULL），登录用户提交则归属到自己
+	optional := r.Group("/api/valuation")
+	optional.Use(ValuationOptionalJWTAuth(cfg.Valuation.JWTSecretKey))
+	{
+		optional.POST("/evaluations", evalHandler.Create)
 	}
 
 	// === 估值独立鉴权组（需估值专属 ValuationJWTAuth） ===
@@ -184,5 +192,12 @@ func RegisterRoutes(
 
 		// coefficient_configs（仅支持按 key 更新值，不允许新增/删除）
 		admin.PUT("/coefficient-configs/:key", configHandler.UpdateCoefficient)
+
+		// valuation users（评估模块独立用户管理）
+		admin.GET("/users", adminUserHandler.List)
+		admin.POST("/users", adminUserHandler.Create)
+		admin.PUT("/users/:id", adminUserHandler.Update)
+		admin.PUT("/users/:id/password", adminUserHandler.ResetPassword)
+		admin.DELETE("/users/:id", adminUserHandler.Delete)
 	}
 }

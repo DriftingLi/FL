@@ -73,9 +73,9 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		auth.GET("/me", middleware.JWTAuth(cfg), authH.Me)
 	}
 
-	// 注册全部 14 个业务蓝图：
+	// 注册全部 13 个业务蓝图：
 	//   auth/courses/exam/student/question-bank/
-	//   level-exam/grading/ai/tutor/wrong-questions/mock-exam/admin
+	//   level-exam/grading/tutor/wrong-questions/mock-exam/admin
 	//   practice-mode（题库练习模式：自由刷题/知识点专项，对应 question_practice_record）
 	RegisterCoursesRoutes(api, cfg, db)
 	RegisterExamRoutes(api, cfg, db)
@@ -84,7 +84,6 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	RegisterPracticeModeRoutes(api, cfg, db)
 	RegisterLevelExamRoutes(api, cfg, db)
 	RegisterGradingRoutes(api, cfg, db)
-	RegisterAIRoutes(api, cfg, db)
 	RegisterAdminRoutes(api, cfg, db)
 	RegisterTutorRoutes(api, cfg, db)
 	RegisterWrongQuestionRoutes(api, cfg, db)

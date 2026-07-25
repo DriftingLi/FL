@@ -7,20 +7,12 @@
     </template>
 
     <template v-else-if="chapterDetail">
-      <!-- 面包屑 -->
-      <div class="breadcrumb">
-        <el-button text @click="goBackToChapters">
-          <el-icon><ArrowLeft /></el-icon> 返回章节列表
-        </el-button>
-        <span class="separator">/</span>
-        <span class="course-name">{{ courseName || '课程' }}</span>
-        <span class="separator">/</span>
-        <span class="chapter-name">{{ chapterDetail.title }}</span>
-      </div>
-
       <!-- 章节标题 + 元信息编辑 -->
       <div class="chapter-header">
         <div class="title-row">
+          <el-button text @click="goBackToChapters">
+            <el-icon><ArrowLeft /></el-icon> 返回章节列表
+          </el-button>
           <h1 class="chapter-title">{{ chapterDetail.title }}</h1>
           <el-button size="small" type="primary" @click="openMetaDialog">
             <el-icon><Edit /></el-icon> 编辑信息
@@ -503,25 +495,6 @@ onMounted(() => {
   max-width: 1200px;
   margin: 0 auto;
   padding-bottom: 60px;
-}
-
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: #606266;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
-.separator {
-  color: #c0c4cc;
-}
-
-.course-name,
-.chapter-name {
-  color: #303133;
 }
 
 .chapter-header {

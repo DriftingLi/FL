@@ -59,10 +59,13 @@ func (s *PracticeModeService) StartSequential(studentID int) (map[string]any, er
 	}
 	idsJSON, _ := json.Marshal(ids)
 
-	// upsert 进度
+	// upsert 进度：使用 Limit(1).Find() 避免首次进入练习时 GORM logger 误报 record not found
 	var prog model.PracticeProgress
-	err := s.db.Where("student_id = ? AND practice_mode = ?", studentID, "sequential").First(&prog).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
+	err := s.db.Where("student_id = ? AND practice_mode = ?", studentID, "sequential").Limit(1).Find(&prog).Error
+	if err != nil {
+		return nil, err
+	}
+	if prog.ID == 0 {
 		prog = model.PracticeProgress{
 			StudentID:    studentID,
 			PracticeMode: "sequential",
@@ -74,8 +77,6 @@ func (s *PracticeModeService) StartSequential(studentID int) (map[string]any, er
 		if err := s.db.Create(&prog).Error; err != nil {
 			return nil, err
 		}
-	} else if err != nil {
-		return nil, err
 	} else {
 		// 题库变化时刷新列表，但保留游标（不超过新总数）
 		prog.QuestionIDs = model.JSONB(idsJSON)
@@ -112,8 +113,11 @@ func (s *PracticeModeService) SaveProgress(studentID, index int, practiceMode st
 		answersState = json.RawMessage("{}")
 	}
 	var prog model.PracticeProgress
-	err := s.db.Where("student_id = ? AND practice_mode = ?", studentID, practiceMode).First(&prog).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
+	err := s.db.Where("student_id = ? AND practice_mode = ?", studentID, practiceMode).Limit(1).Find(&prog).Error
+	if err != nil {
+		return err
+	}
+	if prog.ID == 0 {
 		prog = model.PracticeProgress{
 			StudentID:    studentID,
 			PracticeMode: practiceMode,
@@ -126,8 +130,6 @@ func (s *PracticeModeService) SaveProgress(studentID, index int, practiceMode st
 		if err := s.db.Create(&prog).Error; err != nil {
 			return err
 		}
-	} else if err != nil {
-		return err
 	} else {
 		updates := map[string]any{
 			"current_index": index,

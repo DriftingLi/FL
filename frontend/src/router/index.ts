@@ -58,12 +58,6 @@ const routes: RouteRecordRaw[] = [
         meta: { navKey: 'courses', navLabel: '课程中心', navGroup: 'training' }
       },
       {
-        path: 'course/:id',
-        name: 'CourseDetail',
-        component: () => import('@/pages/student/CourseDetail.vue'),
-        meta: { navKey: 'course-detail', navLabel: '课程详情', navGroup: 'training' }
-      },
-      {
         path: 'course/:courseId/chapter/:chapterId',
         name: 'ChapterView',
         component: () => import('@/pages/student/ChapterView.vue'),
@@ -217,19 +211,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false, isValuationAuthPage: true }
   },
 
-  // ========== AI 助手模块（学员/导师/管理员均可）==========
+  // ========== AI 助手模块（敬请期待占位，无需登录）==========
   {
     path: '/ai-assistant',
-    component: () => import('@/layouts/AIAssistantLayout.vue'),
-    meta: { requiresAuth: true, roles: ['student', 'tutor', 'admin'] },
-    children: [
-      {
-        path: '',
-        name: 'AIAssistant',
-        component: () => import('@/pages/student/AIAssistant.vue'),
-        meta: { navKey: 'ai-assistant', navLabel: 'AI 助手', navGroup: 'tools' }
-      }
-    ]
+    name: 'AIAssistant',
+    component: () => import('@/pages/student/AIAssistant.vue'),
+    meta: { requiresAuth: false }
   },
 
   // ========== 学员个人中心 ==========
@@ -322,6 +309,12 @@ const routes: RouteRecordRaw[] = [
         name: 'ValuationConfigManage',
         component: () => import('@/pages/admin/ValuationConfigManage.vue'),
         meta: { navKey: 'valuation-config', navLabel: '残值配置', navGroup: 'data' }
+      },
+      {
+        path: 'valuation-users',
+        name: 'ValuationUserManage',
+        component: () => import('@/pages/admin/ValuationUserManage.vue'),
+        meta: { navKey: 'valuation-users', navLabel: '评估用户', navGroup: 'data' }
       }
     ]
   },

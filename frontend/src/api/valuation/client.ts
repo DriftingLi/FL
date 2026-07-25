@@ -11,6 +11,8 @@ const REQUEST_TIMEOUT_MS = 30_000
 
 const TOKEN_STORAGE_KEY = 'valuation_token'
 const USER_INFO_KEY = 'valuation_userInfo'
+// 主体系 admin token 存储 key（管理员后台接口 /admin/* 需用主体系 JWT 鉴权）
+const ADMIN_TOKEN_STORAGE_KEY = 'token'
 
 const client = axios.create({
   baseURL: API_BASE_URL,
@@ -19,9 +21,14 @@ const client = axios.create({
 })
 
 // ========== 请求拦截器：附加 JWT ==========
+// /admin/* 路径走主体系 admin JWT（localStorage 'token'），其余路径走估值独立 JWT（localStorage 'valuation_token'）
 client.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    const url = config.url || ''
+    const isAdminPath = url.startsWith('/admin/') || url === '/admin'
+    const token = isAdminPath
+      ? localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY)
+      : localStorage.getItem(TOKEN_STORAGE_KEY)
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -31,7 +38,7 @@ client.interceptors.request.use(
 )
 
 // 延迟引入 valuation auth store 与 router，避免循环依赖
-function handleUnauthorized() {
+function handleValuationUnauthorized() {
   // 动态加载，防止模块初始化顺序问题
   import('@/stores/valuationAuth')
     .then(({ useValuationAuthStore }) => {
@@ -58,6 +65,25 @@ function handleUnauthorized() {
     })
 }
 
+// 管理员路径 401：主体系 admin JWT 过期，清主体系登录态并跳主登录页
+function handleAdminUnauthorized() {
+  localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY)
+  localStorage.removeItem('userInfo')
+  import('@/router')
+    .then(({ default: router }) => {
+      router.push('/login')
+    })
+    .catch(() => {
+      // router 加载失败时仅刷新当前页触发主体系鉴权重定向
+    })
+}
+
+// 判断请求 URL 是否为管理员路径（/admin/* 走主体系 admin JWT）
+function isAdminRequest(config: AxiosError['config']): boolean {
+  const url = config?.url || ''
+  return url.startsWith('/admin/') || url === '/admin'
+}
+
 // ========== 响应拦截器 ==========
 client.interceptors.response.use(
   (response: AxiosResponse<ApiResponse<unknown>>) => {
@@ -81,9 +107,13 @@ client.interceptors.response.use(
   async (err: AxiosError) => {
     if (err.response) {
       const status = err.response.status
-      // 401：登录过期，清空认证并跳转登录
+      // 401：登录过期，按请求来源分流处理（管理员路径走主体系，其余走估值独立）
       if (status === 401) {
-        handleUnauthorized()
+        if (isAdminRequest(err.config)) {
+          handleAdminUnauthorized()
+        } else {
+          handleValuationUnauthorized()
+        }
         ElMessage.error('登录已过期，请重新登录')
         return Promise.reject(err)
       }

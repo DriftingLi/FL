@@ -338,10 +338,6 @@ function handleCardClick(item: ProductCard) {
       break
 
     case 'ai-assistant':
-      if (!isLoggedIn()) {
-        goToLogin('/ai-assistant')
-        return
-      }
       router.push('/ai-assistant')
       break
 

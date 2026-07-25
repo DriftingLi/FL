@@ -66,6 +66,47 @@ func extractValuationBearerToken(c *gin.Context) string {
 	return ""
 }
 
+// ValuationOptionalJWTAuth 估值模块"可选认证"中间件。
+// 与 ValuationJWTAuth 的区别：无 token 或 token 无效时不拒绝请求，仅不设置 user_id；
+// 有合法 token 时设置 CtxValuationUserID 等上下文，便于匿名也可用的接口（如评估提交）
+// 在登录情况下记录归属。
+func ValuationOptionalJWTAuth(secret string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tokenStr := extractValuationBearerToken(c)
+		if tokenStr == "" {
+			c.Next()
+			return
+		}
+		claims, err := parseValuationToken(secret, tokenStr)
+		if err != nil {
+			// 无效 token 视作匿名，不设置上下文
+			c.Next()
+			return
+		}
+		// 检查独立黑名单（已登出的 token 即使签名有效也不认）
+		tokenHash := sha256.Sum256([]byte(tokenStr))
+		blacklistKey := valuationBlacklistPrefix + hex.EncodeToString(tokenHash[:])
+		if _, err := cache.Get(c.Request.Context(), blacklistKey); err == nil {
+			c.Next()
+			return
+		}
+		c.Set(CtxValuationUserID, claims.UserID)
+		c.Set(CtxValuationUsername, claims.Username)
+		c.Set(CtxValuationRole, claims.Role)
+		c.Next()
+	}
+}
+
+// currentValuationUserID 从 gin.Context 读取估值用户 ID（未登录返回 0）
+func currentValuationUserID(c *gin.Context) int {
+	v, ok := c.Get(CtxValuationUserID)
+	if !ok {
+		return 0
+	}
+	uid, _ := v.(int)
+	return uid
+}
+
 // parseValuationToken 解析并校验估值 JWT。
 func parseValuationToken(secret, tokenStr string) (*vservice.ValuationClaims, error) {
 	claims := &vservice.ValuationClaims{}

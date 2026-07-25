@@ -119,11 +119,6 @@ services:
       ZHIPU_BASE_URL: ${ZHIPU_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
       ZHIPU_MODEL: ${ZHIPU_MODEL:-glm-4.7-flash}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      COZE_PROJECT_ID: ${COZE_PROJECT_ID:-}
-      COZE_OAUTH_APP_ID: ${COZE_OAUTH_APP_ID:-}
-      COZE_OAUTH_KID: ${COZE_OAUTH_KID:-}
-      COZE_OAUTH_PRIVATE_KEY: ${COZE_OAUTH_PRIVATE_KEY:-}
-      COZE_OAUTH_PRIVATE_KEY_PATH: ${COZE_OAUTH_PRIVATE_KEY_PATH:-}
       ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD}
       TUTOR_DEFAULT_PASSWORD: ${TUTOR_DEFAULT_PASSWORD}
       STUDENT_DEFAULT_PASSWORD: ${STUDENT_DEFAULT_PASSWORD}
@@ -141,8 +136,6 @@ services:
     volumes:
       - uploads-data:/data/uploads
       - reports-data:/data/reports
-      # Coze 私钥文件（避免 .env 转义问题）
-      - ./coze_private_key.pem:/etc/secrets/coze_private_key.pem:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"]
       interval: 30s
@@ -175,14 +168,19 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    # ISP 封锁常用端口（80/443/8080），使用高端口 51820 绕过
+    # 使用 nginx-http.conf（HTTP-only，无 HTTPS 跳转）
+    # 如需恢复 HTTPS，改回 nginx.default.conf 并映射 443
     ports:
-      - "8081:80"
+      - "51820:80"
     environment:
       # 域名（由 GitHub Secrets 注入，启动时 envsubst 替换 nginx 配置中的 ${DOMAIN}）
       DOMAIN: ${DOMAIN:-localhost}
     volumes:
       # SSL 证书挂载（只读，路径与 deploy-remote.sh 中 write_ssl_certs() 一致）
       - ${DEPLOY_PATH:-/opt/forklift-training}/nginx/ssl:/etc/nginx/ssl:ro
+      # HTTP-only 配置（不跳转 HTTPS，适合高端口部署）
+      - ./frontend/nginx-http.conf:/etc/nginx/conf.d/default.conf.template:ro
     networks:
       - forklift-net
     deploy:

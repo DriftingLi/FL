@@ -166,6 +166,9 @@ async function loadGradingStats() {
 
 function renderGradingChart() {
   if (!chartRef.value || !gradingStats.value) return
+  // 数据全为 0 时 chartRef 被 v-show 隐藏（display:none），此时初始化会触发
+  // ECharts "Can't get DOM width or height" 警告，直接跳过
+  if (statsEmpty.value) return
 
   const labels = gradingStats.value.labels
   const data = gradingStats.value.data
