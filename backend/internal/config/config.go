@@ -94,12 +94,12 @@ func Load() (*Config, error) {
 	redisIdleTimeout := getDuration("REDIS_IDLE_TIMEOUT", 5*time.Minute)
 
 	cfg := &Config{
-		AppEnv:           appEnv,
-		Port:             getenv("PORT", "8080"),
-		SecretKey:        getenv("SECRET_KEY", "dev-secret-key"),
-		JWTSecretKey:     getenv("JWT_SECRET_KEY", "jwt-secret-key"),
-		JWTExpiresHours:  jwtHours,
-		DatabaseURL:      getenv("DATABASE_URL", ""),
+		AppEnv:          appEnv,
+		Port:            getenv("PORT", "8080"),
+		SecretKey:       getenv("SECRET_KEY", "dev-secret-key"),
+		JWTSecretKey:    getenv("JWT_SECRET_KEY", "jwt-secret-key"),
+		JWTExpiresHours: jwtHours,
+		DatabaseURL:     getenv("DATABASE_URL", ""),
 		// 本地开发默认允许所有子域名 origin（生产环境必须通过 CORS_ORIGINS 注入实际域名）
 		CORSOrigins: splitOrigins(getenv("CORS_ORIGINS",
 			"http://localhost:5173,http://localhost:5174,"+
