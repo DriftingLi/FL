@@ -58,26 +58,20 @@
       </el-table-column>
       <el-table-column prop="view_count" label="阅读量" width="100" align="center" />
       <el-table-column prop="sort_order" label="排序" width="80" align="center" />
-      <el-table-column label="操作" width="220" fixed="right" align="center">
+      <el-table-column label="操作" width="90" fixed="right" align="center">
         <template #default="{ row }">
-          <el-button link type="primary" size="small" @click="goEdit(row.content_id)">编辑</el-button>
-          <el-button
-            v-if="row.status === 0"
-            link
-            type="success"
-            size="small"
-            @click="handlePublish(row.content_id)"
-          >
-            发布
-          </el-button>
-          <el-popconfirm
-            title="确定删除该内容？删除后不可恢复"
-            @confirm="handleDelete(row.content_id)"
-          >
-            <template #reference>
-              <el-button link type="danger" size="small">删除</el-button>
+          <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
+            <el-button type="primary" link size="small">
+              操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="edit">编辑</el-dropdown-item>
+                <el-dropdown-item v-if="row.status === 0" command="publish">发布</el-dropdown-item>
+                <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+              </el-dropdown-menu>
             </template>
-          </el-popconfirm>
+          </el-dropdown>
         </template>
       </el-table-column>
     </el-table>
@@ -99,8 +93,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { Plus, ArrowDown } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminFeaturedApi, featuredCategoryOptions, categoryLabel } from '@/api/featured'
 
 const router = useRouter()
@@ -178,6 +172,30 @@ async function handleDelete(id: number) {
     }
   } catch (e: any) {
     // 错误已由全局拦截器提示
+  }
+}
+
+// 操作下拉菜单统一入口
+async function handleAction(cmd: string, row: any) {
+  switch (cmd) {
+    case 'edit':
+      goEdit(row.content_id)
+      break
+    case 'publish':
+      handlePublish(row.content_id)
+      break
+    case 'delete':
+      try {
+        await ElMessageBox.confirm('确定删除该内容？删除后不可恢复', '提示', {
+          type: 'warning',
+          confirmButtonText: '确定',
+          cancelButtonText: '取消'
+        })
+        await handleDelete(row.content_id)
+      } catch {
+        // 用户取消
+      }
+      break
   }
 }
 

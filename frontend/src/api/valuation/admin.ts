@@ -49,32 +49,31 @@ function createCrud(resource: string, options: CreateCrudOptions = {}): CrudEndp
   const dictBase = `/dictionaries/${resource}` // GET 列表（学生端字典端点，admin 与学生共用）
   const adminBase = `/admin/${resource}` // POST/PUT/DELETE 写操作（需 admin）
   return {
-    list<T = AdminRow>(params?: Record<string, unknown>) {
+    async list<T = AdminRow>(params?: Record<string, unknown>) {
       const merged = isPaginated
         ? { page: 1, page_size: 100, ...params }
         : params
-      return client
-        .get<unknown, { data: T[] | OriginalPricesPage }>(dictBase, { params: merged })
-        .then((r) => {
-          const data = r.data
-          if (isPaginated && data && typeof data === 'object' && 'list' in data) {
-            return (data.list as T[]) ?? []
-          }
-          return (data as T[]) ?? []
-        })
+      const r = await client
+        .get<unknown, { data: T[] | OriginalPricesPage} >(dictBase, { params: merged })
+      const data = r.data
+      if (isPaginated && data && typeof data === 'object' && 'list' in data) {
+        return (data.list as T[]) ?? []
+      }
+      return (data as T[]) ?? []
     },
-    create<T = AdminRow>(payload: Record<string, unknown>) {
-      return client
-        .post<unknown, { data: T }>(adminBase, payload)
-        .then((r) => r.data)
+    async create<T = AdminRow>(payload: Record<string, unknown>) {
+      const r = await client
+        .post<unknown, { data: T} >(adminBase, payload)
+      return r.data
     },
-    update<T = AdminRow>(id: AdminResourceId, payload: Record<string, unknown>) {
-      return client
-        .put<unknown, { data: T }>(`${adminBase}/${encodeURIComponent(id)}`, payload)
-        .then((r) => r.data)
+    async update<T = AdminRow>(id: AdminResourceId, payload: Record<string, unknown>) {
+      const r = await client
+        .put<unknown, { data: T} >(`${adminBase}/${encodeURIComponent(id)}`, payload)
+      return r.data
     },
-    remove(id: AdminResourceId) {
-      return client.delete(`${adminBase}/${encodeURIComponent(id)}`).then(() => undefined)
+    async remove(id: AdminResourceId): Promise<void> {
+      await client.delete(`${adminBase}/${encodeURIComponent(id)}`)
+      return undefined
     },
     getIdOf(row: AdminRow | null | undefined): AdminResourceId | undefined {
       if (!row) return undefined

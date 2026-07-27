@@ -114,6 +114,7 @@ import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { valuationAuthApi } from '@/api/valuation/auth'
 import { ElMessage } from 'element-plus'
+import type { FormItemRule } from 'element-plus'
 import { DataAnalysis } from '@element-plus/icons-vue'
 import { passwordRules, nameRules, phoneRules, emailRules, companyRules } from '@/utils/validate'
 import { buildSubdomainUrl } from '@/utils/subdomain'
@@ -133,7 +134,7 @@ const formData = reactive({
   email: ''
 })
 
-const validateConfirmPassword = (rule, value, callback) => {
+const validateConfirmPassword: FormItemRule['validator'] = (_rule, value: string, callback) => {
   if (value === '') {
     callback(new Error('请再次输入密码'))
   } else if (value !== formData.password) {

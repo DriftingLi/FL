@@ -96,9 +96,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
 
 const router = useRouter()
-const typeMap = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
-const statusMap = { draft: '草稿', pending: '待审核', published: '已发布' }
-const statusType = { draft: 'info', pending: 'warning', published: 'success' }
+const typeMap: Record<string, string> = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
+const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
+const statusType: Record<string, string> = { draft: 'info', pending: 'warning', published: 'success' }
 
 const loading = ref(false)
 const questions = ref([])
@@ -120,17 +120,17 @@ async function loadData() {
   } catch (e) {} finally { loading.value = false }
 }
 
-function viewDetail(row) {
+function viewDetail(row: { id: number; type?: string; status?: string; content?: string; [key: string]: unknown }) {
   currentQuestion.value = row
   detailVisible.value = true
 }
 
-function editQuestion(row) {
+function editQuestion(row: { id: number; [key: string]: unknown }) {
   router.push({ path: '/training/tutor/question-create', query: { id: row.id } })
 }
 
 // 提交审核：将 draft 题目状态改为 pending（后端会清空驳回理由）
-async function submitForReview(row) {
+async function submitForReview(row: { id: number; [key: string]: unknown }) {
   try {
     await ElMessageBox.confirm('确定提交该题目给管理员审核？', '提示', { type: 'info' })
     await questionBankApi.updateQuestion(row.id, { status: 'pending' })
@@ -141,7 +141,7 @@ async function submitForReview(row) {
   }
 }
 
-async function handleDelete(row) {
+async function handleDelete(row: { id: number; [key: string]: unknown }) {
   try {
     await ElMessageBox.confirm('确定删除此题目？', '提示', { type: 'warning' })
     await questionBankApi.deleteQuestion(row.id)

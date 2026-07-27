@@ -1,4 +1,4 @@
-export function resolveFileUrl(url) {
+export function resolveFileUrl(url: string | undefined | null): string {
   if (!url) return ''
   if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:')) {
     return url

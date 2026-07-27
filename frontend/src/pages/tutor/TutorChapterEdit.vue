@@ -401,7 +401,7 @@ async function loadChapterDetail() {
   loading.value = true
   chapterNotFound.value = false
   try {
-    const chapterId = route.params.chapterId
+    const chapterId = Number(route.params.chapterId)
     const res = await tutorApi.getChapterDetail(chapterId)
     if (res.code === 200) {
       chapterDetail.value = res.data
@@ -428,7 +428,7 @@ async function loadChapterDetail() {
 
 async function loadCourseInfo() {
   try {
-    const courseId = route.params.courseId
+    const courseId = Number(route.params.courseId)
     const res = await tutorApi.getCourseChapters(courseId)
     if (res.code === 200) {
       courseName.value = res.data.course?.name || ''

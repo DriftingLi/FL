@@ -44,7 +44,7 @@
         <el-col :xs="24" :md="18">
           <el-card class="question-card">
             <div class="question-header">
-              <el-tag>{{ typeMap[currentQ.type] }}</el-tag>
+              <el-tag>{{ (typeMap as Record<string, string>)[currentQ.type] }}</el-tag>
               <span>第 {{ qIdx + 1 }}/{{ examQuestions.length }} 题</span>
             </div>
             <img v-if="currentQ.image_url" :src="currentQ.image_url" class="q-image" />
@@ -96,7 +96,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { levelExamApi } from '@/api/levelExam'
 import { typeMap, sessionStatusMap as statusMap } from '@/constants/question'
 
-const statusType = { upcoming: 'info', ongoing: 'success', finished: '' }
+const statusType: Record<string, string> = { upcoming: 'info', ongoing: 'success', finished: '' }
 
 const loading = ref(false)
 const exams = ref([])
@@ -108,27 +108,27 @@ const examQuestions = ref([])
 const examAnswers = ref<any>({})
 const qIdx = ref(0)
 const remainingTime = ref(0)
-let timer = null
-let refreshTimer = null
+let timer: ReturnType<typeof setInterval> | null = null
+let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 const currentQ = computed(() => examQuestions.value[qIdx.value] || {})
 
-function formatDateTime(dtStr) {
+function formatDateTime(dtStr: string) {
   if (!dtStr) return ''
   const d = new Date(dtStr)
   if (isNaN(d.getTime())) return dtStr
-  const pad = (n) => String(n).padStart(2, '0')
+  const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function isAnswered(qid) {
+function isAnswered(qid: number) {
   const a = examAnswers.value[qid]
   if (a === undefined || a === null || a === '') return false
   if (Array.isArray(a)) return a.length > 0
   return true
 }
 
-function findResumeIndex(questions, answers) {
+function findResumeIndex(questions: { id: number }[], answers: Record<string, unknown>) {
   for (let i = 0; i < questions.length; i++) {
     const qid = questions[i].id
     const a = answers[qid]
@@ -163,7 +163,7 @@ async function loadExams() {
   } catch (e) {} finally { loading.value = false }
 }
 
-async function enterExam(sessionId) {
+async function enterExam(sessionId: number) {
   try {
     const res = await levelExamApi.enterExam(sessionId)
     participantId.value = res.data.participant_id
@@ -188,18 +188,18 @@ function startTimer() {
   }, 1000)
 }
 
-function formatTime(s) {
+function formatTime(s: number) {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 }
 
-function isOptSelected(key) {
+function isOptSelected(key: string | number) {
   const a = examAnswers.value[currentQ.value.id]
   if (!a) return false
   if (currentQ.value.type === 'multi_choice') return Array.isArray(a) && a.includes(key)
   return a === key
 }
 
-function toggleOpt(key) {
+function toggleOpt(key: string | number) {
   const qid = currentQ.value.id
   if (currentQ.value.type === 'multi_choice') {
     if (!examAnswers.value[qid]) examAnswers.value[qid] = []
@@ -260,7 +260,7 @@ function resetExamState() {
   remainingTime.value = 0
 }
 
-async function viewResult(row) {
+async function viewResult(row: { id: number; status?: string; name?: string; participant_id?: number; [key: string]: unknown }) {
   if (row.participant_id) {
     try {
       const res = await levelExamApi.getExamResult(row.participant_id)

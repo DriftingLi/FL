@@ -499,7 +499,7 @@ async function submitAnswer() {
   try {
     const res = await practiceModeApi.submitAnswer({
       question_id: q.id,
-      user_answer: userAnswer,
+      user_answer: userAnswer as string,
       practice_type: mode.value || 'free'
     })
     resultMap.value[q.id] = res.data || {}

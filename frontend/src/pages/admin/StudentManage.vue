@@ -25,8 +25,8 @@
 
     <el-table :data="students" v-loading="loading" stripe border style="width: 100%">
       <el-table-column prop="student_id" label="ID" width="70" align="center" />
-      <el-table-column prop="username" label="用户名" width="160" />
-      <el-table-column prop="name" label="姓名" width="140" />
+      <el-table-column prop="username" label="用户名" min-width="160" />
+      <el-table-column prop="name" label="姓名" min-width="140" />
       <el-table-column label="状态" width="100" align="center">
         <template #default="{ row }">
           <el-tag :type="row.status === 1 ? 'success' : 'danger'" size="small">
@@ -39,13 +39,20 @@
           {{ formatDate(row.created_at) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="160" fixed="right" align="center">
+      <el-table-column label="操作" width="90" fixed="right" align="center">
         <template #default="{ row }">
-          <el-popconfirm title="确定删除该学员？删除后不可恢复" @confirm="handleDelete(row.student_id)">
-            <template #reference>
-              <el-button type="danger" link size="small">删除</el-button>
+          <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
+            <el-button type="primary" link size="small">
+              操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="resetPwd">重置密码</el-dropdown-item>
+                <el-dropdown-item command="toggle">{{ row.status === 1 ? '禁用' : '启用' }}</el-dropdown-item>
+                <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+              </el-dropdown-menu>
             </template>
-          </el-popconfirm>
+          </el-dropdown>
         </template>
       </el-table-column>
     </el-table>
@@ -84,18 +91,48 @@
         <el-button type="primary" :loading="submitting" @click="handleSubmit">确认添加</el-button>
       </template>
     </el-dialog>
+
+    <!-- 重置密码弹窗 -->
+    <el-dialog
+      v-model="pwdDialogVisible"
+      title="重置密码"
+      width="440px"
+      destroy-on-close
+    >
+      <el-form ref="pwdFormRef" :model="pwdFormData" :rules="pwdFormRules" label-width="90px">
+        <el-form-item label="学员">
+          <span>{{ pwdFormData.name }}</span>
+        </el-form-item>
+        <el-form-item label="新密码" prop="password">
+          <el-input v-model="pwdFormData.password" type="password" placeholder="请输入新密码（6-20字符）" maxlength="20" show-password />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="pwdDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="pwdSubmitting" @click="handleResetPwd">确认重置</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { Plus, Search } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { Plus, Search, ArrowDown } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
 import { adminApi } from '@/api/admin'
-import { phoneRules } from '@/utils/validate'
+import { phoneRules, passwordRules, nameRules } from '@/utils/validate'
+
+interface StudentRow {
+  student_id: number
+  username: string
+  name: string
+  status: number
+  created_at: string
+}
 
 const loading = ref(false)
-const students = ref([])
+const students = ref<StudentRow[]>([])
 const searchKeyword = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
@@ -103,26 +140,34 @@ const total = ref(0)
 
 const dialogVisible = ref(false)
 const submitting = ref(false)
-const formRef = ref(null)
+const formRef = ref<FormInstance>()
 const formData = reactive({
   phone: '',
   password: '',
   name: ''
 })
 
-const formRules = {
+const formRules: FormRules = {
   phone: phoneRules,
-  password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, max: 20, message: '密码长度为6-20个字符', trigger: 'blur' }
-  ],
-  name: [
-    { required: true, message: '请输入姓名', trigger: 'blur' },
-    { min: 2, max: 10, message: '姓名长度为2-10个字符', trigger: 'blur' }
-  ]
+  password: passwordRules,
+  name: nameRules
 }
 
-function formatDate(dateStr) {
+// 重置密码弹窗
+const pwdDialogVisible = ref(false)
+const pwdSubmitting = ref(false)
+const pwdFormRef = ref<FormInstance>()
+const pwdFormData = reactive({
+  id: 0,
+  name: '',
+  password: ''
+})
+
+const pwdFormRules: FormRules = {
+  password: passwordRules
+}
+
+function formatDate(dateStr: string): string {
   if (!dateStr) return '-'
   const d = new Date(dateStr)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
@@ -187,7 +232,40 @@ async function handleSubmit() {
   }
 }
 
-async function handleDelete(studentId) {
+function openResetPwdDialog(row: StudentRow) {
+  pwdFormData.id = row.student_id
+  pwdFormData.name = row.name
+  pwdFormData.password = ''
+  pwdDialogVisible.value = true
+}
+
+async function handleResetPwd() {
+  if (!pwdFormRef.value) return
+  await pwdFormRef.value.validate()
+
+  pwdSubmitting.value = true
+  try {
+    await adminApi.resetStudentPassword(pwdFormData.id, pwdFormData.password)
+    ElMessage.success('密码已重置')
+    pwdDialogVisible.value = false
+  } catch (error) {
+    console.error('重置密码失败:', error)
+  } finally {
+    pwdSubmitting.value = false
+  }
+}
+
+async function handleToggleStatus(row: StudentRow) {
+  try {
+    await adminApi.toggleStudentStatus(row.student_id)
+    ElMessage.success(row.status === 1 ? '已禁用' : '已启用')
+    loadStudents()
+  } catch (error) {
+    console.error('切换状态失败:', error)
+  }
+}
+
+async function handleDelete(studentId: number) {
   try {
     const res = await adminApi.deleteStudent(studentId)
     if (res.code === 200) {
@@ -197,6 +275,30 @@ async function handleDelete(studentId) {
   } catch (error) {
     console.error('删除学员失败:', error)
     ElMessage.error('删除学员失败')
+  }
+}
+
+// 操作下拉菜单统一入口
+async function handleAction(cmd: string, row: StudentRow) {
+  switch (cmd) {
+    case 'resetPwd':
+      openResetPwdDialog(row)
+      break
+    case 'toggle':
+      handleToggleStatus(row)
+      break
+    case 'delete':
+      try {
+        await ElMessageBox.confirm('确定删除该学员？删除后不可恢复', '提示', {
+          type: 'warning',
+          confirmButtonText: '确定',
+          cancelButtonText: '取消'
+        })
+        await handleDelete(row.student_id)
+      } catch {
+        // 用户取消
+      }
+      break
   }
 }
 

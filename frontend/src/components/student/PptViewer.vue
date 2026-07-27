@@ -111,7 +111,7 @@ async function loadSlides() {
   loading.value = true
   loadError.value = false
   try {
-    const res = await courseApi.getChapterSlides(props.chapterId)
+    const res = await courseApi.getChapterSlides(Number(props.chapterId))
     let rawSlides = []
     if (res && res.data && Array.isArray(res.data.slides)) {
       rawSlides = res.data.slides
@@ -120,7 +120,7 @@ async function loadSlides() {
     } else if (res && Array.isArray(res)) {
       rawSlides = res
     }
-    slides.value = rawSlides.map(s => resolveFileUrl(s))
+    slides.value = rawSlides.map((s: string) => resolveFileUrl(s))
     currentSlideIndex.value = 0
     if (slides.value.length === 0) {
       loadError.value = true
@@ -147,7 +147,7 @@ function nextSlide() {
   }
 }
 
-function goToSlide(index) {
+function goToSlide(index: number) {
   currentSlideIndex.value = index
   scrollToThumbnail()
 }
@@ -186,7 +186,7 @@ function onSlideImageError() {
 async function regenerateSlides() {
   regenerating.value = true
   try {
-    await courseApi.regenerateSlides(props.chapterId)
+    await courseApi.regenerateSlides(Number(props.chapterId))
     ElMessage.success('幻灯片重新生成成功')
     await loadSlides()
   } catch (e) {
@@ -197,18 +197,18 @@ async function regenerateSlides() {
   }
 }
 
-function onSlideTouchStart(e) {
+function onSlideTouchStart(e: TouchEvent) {
   if (e.touches.length === 1) {
     touchStartX.value = e.touches[0].clientX
     touchStartY.value = e.touches[0].clientY
   }
 }
 
-function onSlideTouchMove(e) {
+function onSlideTouchMove(e: TouchEvent) {
   e.preventDefault()
 }
 
-function onSlideTouchEnd(e) {
+function onSlideTouchEnd(e: TouchEvent) {
   if (e.changedTouches.length !== 1) return
   const dx = e.changedTouches[0].clientX - touchStartX.value
   const dy = e.changedTouches[0].clientY - touchStartY.value
@@ -221,8 +221,9 @@ function onSlideTouchEnd(e) {
   }
 }
 
-function onKeyDown(e) {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+function onKeyDown(e: KeyboardEvent) {
+  const target = e.target as HTMLElement
+  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
   switch (e.key) {
     case 'ArrowLeft':
       e.preventDefault()

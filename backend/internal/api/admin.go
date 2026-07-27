@@ -221,6 +221,50 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 		response.SuccessWithMsg(c, "学员删除成功", result)
 	})
 
+	// PUT /api/admin/student/:student_id/password  重置学员密码
+	g.PUT("/student/:student_id/password", func(c *gin.Context) {
+		studentID, err := strconv.Atoi(c.Param("student_id"))
+		if err != nil {
+			response.BadRequest(c, "学员ID无效")
+			return
+		}
+		var req struct {
+			Password string `json:"password"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			response.BadRequest(c, "请求参数错误")
+			return
+		}
+		if len(req.Password) < 6 || len(req.Password) > 20 {
+			response.BadRequest(c, "密码长度需为 6-20 个字符")
+			return
+		}
+		if err := adminSvc.ResetStudentPassword(studentID, req.Password); err != nil {
+			response.NotFound(c, err.Error())
+			return
+		}
+		response.SuccessWithMsg(c, "密码已重置", nil)
+	})
+
+	// PUT /api/admin/student/:student_id/status  切换学员启用/禁用状态
+	g.PUT("/student/:student_id/status", func(c *gin.Context) {
+		studentID, err := strconv.Atoi(c.Param("student_id"))
+		if err != nil {
+			response.BadRequest(c, "学员ID无效")
+			return
+		}
+		next, err := adminSvc.ToggleStudentStatus(studentID)
+		if err != nil {
+			response.NotFound(c, err.Error())
+			return
+		}
+		msg := "学员已启用"
+		if next == 0 {
+			msg = "学员已禁用"
+		}
+		response.SuccessWithMsg(c, msg, map[string]any{"status": next})
+	})
+
 	// ===== 导师管理 =====
 
 	// GET /api/admin/tutors  导师列表
@@ -267,6 +311,50 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 			return
 		}
 		response.SuccessWithMsg(c, "导师删除成功", result)
+	})
+
+	// PUT /api/admin/tutor/:tutor_id/password  重置导师密码
+	g.PUT("/tutor/:tutor_id/password", func(c *gin.Context) {
+		tutorID, err := strconv.Atoi(c.Param("tutor_id"))
+		if err != nil {
+			response.BadRequest(c, "导师ID无效")
+			return
+		}
+		var req struct {
+			Password string `json:"password"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			response.BadRequest(c, "请求参数错误")
+			return
+		}
+		if len(req.Password) < 6 || len(req.Password) > 20 {
+			response.BadRequest(c, "密码长度需为 6-20 个字符")
+			return
+		}
+		if err := adminSvc.ResetTutorPassword(tutorID, req.Password); err != nil {
+			response.NotFound(c, err.Error())
+			return
+		}
+		response.SuccessWithMsg(c, "密码已重置", nil)
+	})
+
+	// PUT /api/admin/tutor/:tutor_id/status  切换导师启用/禁用状态
+	g.PUT("/tutor/:tutor_id/status", func(c *gin.Context) {
+		tutorID, err := strconv.Atoi(c.Param("tutor_id"))
+		if err != nil {
+			response.BadRequest(c, "导师ID无效")
+			return
+		}
+		next, err := adminSvc.ToggleTutorStatus(tutorID)
+		if err != nil {
+			response.NotFound(c, err.Error())
+			return
+		}
+		msg := "导师已启用"
+		if next == 0 {
+			msg = "导师已禁用"
+		}
+		response.SuccessWithMsg(c, msg, map[string]any{"status": next})
 	})
 
 	// ===== 统计看板 =====

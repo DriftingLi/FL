@@ -74,8 +74,15 @@ const overview = ref<any>({})
 const courseStats = ref([])
 const barChartRef = ref(null)
 const pieChartRef = ref(null)
-let barChart = null
-let pieChart = null
+let barChart: echarts.ECharts | null = null
+let pieChart: echarts.ECharts | null = null
+
+// 移动端断点：≤768px 时切换饼图 legend 布局，避免 legend 与图像重叠
+const MOBILE_BREAKPOINT = 768
+const isMobile = ref(false)
+function checkMobile() {
+  isMobile.value = window.innerWidth <= MOBILE_BREAKPOINT
+}
 
 const statItems = ref([
   { label: '学员总数', value: '0', icon: User, color: '#2563EB', bgColor: '#EFF6FF' },
@@ -91,7 +98,7 @@ const quickActions = [
   { label: '内容生成', path: '/admin/content-generate', icon: MagicStick, color: '#8B5CF6', bgColor: '#F5F3FF' }
 ]
 
-function formatDuration(minutes) {
+function formatDuration(minutes: number) {
   if (!minutes || minutes <= 0) return '0分钟'
   const hours = Math.floor(minutes / 60)
   const mins = minutes % 60
@@ -176,6 +183,26 @@ function initPieChart() {
     value: Math.round(c.avg_progress * 100) / 100
   }))
 
+  // 移动端：legend 水平放底部并启用滚动，避免与饼图重叠；桌面端：legend 垂直放右侧
+  const mobile = isMobile.value
+  const legend = mobile
+    ? {
+        orient: 'horizontal' as const,
+        bottom: 0,
+        left: 'center' as const,
+        type: 'scroll' as const,
+        textStyle: { fontSize: 11, color: '#4B5563' },
+        itemWidth: 10,
+        itemHeight: 10,
+        itemGap: 8
+      }
+    : {
+        orient: 'vertical' as const,
+        right: 10,
+        top: 'center' as const,
+        textStyle: { fontSize: 12, color: '#4B5563' }
+      }
+
   pieChart.setOption({
     tooltip: {
       trigger: 'item',
@@ -186,18 +213,14 @@ function initPieChart() {
       textStyle: { color: '#111827' },
       extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 8px;'
     },
-    legend: {
-      orient: 'vertical',
-      right: 10,
-      top: 'center',
-      textStyle: { fontSize: 12, color: '#4B5563' }
-    },
+    legend,
     color: brandColors,
     series: [
       {
         type: 'pie',
-        radius: ['40%', '70%'],
-        center: ['40%', '50%'],
+        // 移动端缩小半径并下移中心，为底部 legend 留出空间
+        radius: mobile ? ['35%', '58%'] : ['40%', '70%'],
+        center: mobile ? ['50%', '45%'] : ['40%', '50%'],
         avoidLabelOverlap: false,
         itemStyle: {
           borderRadius: 6,
@@ -219,8 +242,14 @@ function initPieChart() {
 }
 
 function handleResize() {
+  // 跨越移动端断点时重新初始化饼图，切换 legend 布局避免重叠
+  const wasMobile = isMobile.value
+  checkMobile()
   barChart && barChart.resize()
   pieChart && pieChart.resize()
+  if (wasMobile !== isMobile.value) {
+    initPieChart()
+  }
 }
 
 async function loadStatistics() {
@@ -245,6 +274,7 @@ async function loadStatistics() {
 }
 
 onMounted(() => {
+  checkMobile()
   loadStatistics()
   window.addEventListener('resize', handleResize)
 })

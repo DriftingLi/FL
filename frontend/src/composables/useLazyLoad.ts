@@ -1,9 +1,10 @@
 import { onMounted, onBeforeUnmount } from 'vue'
+import type { DirectiveBinding } from 'vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
 
-const observerMap = new WeakMap()
+const observerMap = new WeakMap<HTMLElement, IntersectionObserver>()
 
-function getObserver(rootMargin = '200px') {
+function getObserver(rootMargin = '200px'): IntersectionObserver | null {
   if (typeof IntersectionObserver === 'undefined') return null
   return new IntersectionObserver(
     (entries) => {
@@ -28,15 +29,15 @@ function getObserver(rootMargin = '200px') {
 }
 
 export function useLazyLoad(rootMargin = '200px') {
-  let observer = null
+  let observer: IntersectionObserver | null = null
 
-  function observe(el) {
+  function observe(el: HTMLElement): void {
     if (!el || !observer) return
     observer.observe(el)
     observerMap.set(el, observer)
   }
 
-  function unobserve(el) {
+  function unobserve(el: HTMLElement): void {
     if (!el || !observer) return
     observer.unobserve(el)
     observerMap.delete(el)
@@ -57,7 +58,7 @@ export function useLazyLoad(rootMargin = '200px') {
 }
 
 export const vLazy = {
-  mounted(el: HTMLElement, binding) {
+  mounted(el: HTMLElement, binding: DirectiveBinding<string>) {
     const src = binding.value
     if (!src) return
     el.dataset.lazySrc = src
@@ -70,11 +71,11 @@ export const vLazy = {
       (el as HTMLImageElement).src = resolveFileUrl(src)
     }
   },
-  updated(el: HTMLElement, binding) {
+  updated(el: HTMLElement, binding: DirectiveBinding<string>) {
     const src = binding.value
     if (!src) return
     if ((el as HTMLImageElement).src === resolveFileUrl(src)) return
-    el.dataset.lazySrc = src
+    el.dataset.lazySrc = src;
     (el as HTMLImageElement).src = ''
     const rootMargin = binding.arg || '200px'
     const observer = getObserver(rootMargin)

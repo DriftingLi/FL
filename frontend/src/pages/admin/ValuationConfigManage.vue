@@ -12,7 +12,7 @@
 //     coefficients 分区共享一条 draft，global / kcModifiers 通过 filter 派生两个视图
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, Edit, Delete, Refresh, Check, RefreshLeft } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, Refresh, Check, RefreshLeft, ArrowDown } from '@element-plus/icons-vue'
 import PageHeader from '@/components/valuation/PageHeader.vue'
 import {
   adminResources,
@@ -66,6 +66,18 @@ const {
   ORIGINAL_PRICE_FIELDS,
   '原价记录'
 )
+
+// 操作下拉菜单统一入口（原价表）
+function handleAction(cmd: string, row: AdminRow) {
+  switch (cmd) {
+    case 'edit':
+      openEdit(row)
+      break
+    case 'delete':
+      handleDelete(row)
+      break
+  }
+}
 
 // 原价表筛选（本地过滤）
 const originalPriceFilter = reactive({
@@ -414,14 +426,19 @@ function onRefresh() {
                 <span>{{ row[col.prop] ?? '-' }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="160" fixed="right" align="center">
+            <el-table-column label="操作" width="90" fixed="right" align="center">
               <template #default="{ row }">
-                <el-button type="primary" link size="small" :icon="Edit" @click="openEdit(row)">
-                  编辑
-                </el-button>
-                <el-button type="danger" link size="small" :icon="Delete" @click="handleDelete(row)">
-                  删除
-                </el-button>
+                <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
+                  <el-button type="primary" link size="small">
+                    操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="edit">编辑</el-dropdown-item>
+                      <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
               </template>
             </el-table-column>
           </el-table>

@@ -61,19 +61,19 @@ const currentPage = ref(1)
 const pageSize = ref(12)
 const total = ref(0)
 
-const categoryMap = {
+const categoryMap: Record<string, string> = {
   'CATEGORY_01': '基础理论',
   'CATEGORY_02': '安全规范',
   'CATEGORY_03': '实操技能',
   'CATEGORY_04': '进阶提升'
 }
 
-function getCategoryName(category) {
+function getCategoryName(category: string) {
   return categoryMap[category] || '其他'
 }
 
-function getCategoryTagType(category) {
-  const types = {
+function getCategoryTagType(category: string) {
+  const types: Record<string, string> = {
     'CATEGORY_01': '',
     'CATEGORY_02': 'success',
     'CATEGORY_03': 'warning',
@@ -100,7 +100,7 @@ async function loadCourses() {
   }
 }
 
-function goToChapters(courseId) {
+function goToChapters(courseId: number) {
   router.push(`/training/tutor/course/${courseId}/chapters`)
 }
 

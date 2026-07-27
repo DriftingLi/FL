@@ -1,42 +1,69 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import type { Ref } from 'vue'
 import { courseApi } from '@/api/course'
 
+interface CourseSummary {
+  course_id: number
+  name: string
+  category?: string
+  cover_image?: string
+  duration?: number
+  status?: number
+  [key: string]: unknown
+}
+
+interface CourseChapter {
+  chapter_id: number
+  title: string
+  order_num?: number
+  [key: string]: unknown
+}
+
+interface CourseDetail {
+  course_info?: CourseSummary
+  chapters?: CourseChapter[]
+  [key: string]: unknown
+}
+
 export const useCourseStore = defineStore('course', () => {
-  const courses = ref([])
-  const currentCourse = ref(null)
-  const chapters = ref([])
+  const courses: Ref<CourseSummary[]> = ref([])
+  const currentCourse: Ref<CourseSummary | null> = ref(null)
+  const chapters: Ref<CourseChapter[]> = ref([])
 
   // 当前已加载的课程详情缓存（供侧栏章节模式与章节页共享，避免重复请求）
-  const currentCourseId = ref<string | number | null>(null)
-  const courseInfo = ref<any>(null)
+  const currentCourseId: Ref<number | null> = ref(null)
+  const courseInfo: Ref<CourseSummary | null> = ref(null)
   // 进行中的加载请求，用于并发去重
   let loadPromise: Promise<void> | null = null
 
-  function setCourses(data) {
+  function setCourses(data: CourseSummary[]) {
     courses.value = data
   }
 
-  function setCurrentCourse(data) {
+  function setCurrentCourse(data: CourseSummary | null) {
     currentCourse.value = data
   }
 
-  function setChapters(data) {
+  function setChapters(data: CourseChapter[]) {
     chapters.value = data
   }
 
   // 加载课程详情（含章节列表）。同一 courseId 已缓存则直接返回；
   // 切换到不同 courseId 时重新加载；并发调用复用同一 Promise 避免重复请求。
-  async function loadCourse(courseId: string | number) {
-    if (currentCourseId.value === courseId && courseInfo.value) return
+  async function loadCourse(courseId: number | string) {
+    const numericId = Number(courseId)
+    if (!Number.isFinite(numericId)) return
+    if (currentCourseId.value === numericId && courseInfo.value) return
     if (loadPromise) return loadPromise
     loadPromise = (async () => {
       try {
-        const res = await courseApi.getCourseDetail(courseId)
+        const res = await courseApi.getCourseDetail(numericId)
         if (res.code === 200) {
-          currentCourseId.value = courseId
-          courseInfo.value = res.data.course_info || null
-          chapters.value = res.data.chapters || []
+          const data = res.data as CourseDetail
+          currentCourseId.value = numericId
+          courseInfo.value = data.course_info || null
+          chapters.value = data.chapters || []
         }
       } finally {
         loadPromise = null

@@ -145,17 +145,18 @@ func gradeQuestion(q *model.Question, userAnswer interface{}, maxScore float64) 
 }
 
 // addToWrongQuestions 错题入库（去重、计数）。
+// 使用 Limit(1).Find() 替代 First()，避免首次错题入库时 GORM logger 误报 record not found
 func addToWrongQuestions(db *gorm.DB, studentID, questionID int) error {
 	var wq model.WrongQuestion
-	err := db.Where("student_id = ? AND question_id = ?", studentID, questionID).First(&wq).Error
-	if err == nil {
+	err := db.Where("student_id = ? AND question_id = ?", studentID, questionID).Limit(1).Find(&wq).Error
+	if err != nil {
+		return err
+	}
+	if wq.ID != 0 {
 		wq.WrongCount++
 		wq.LastWrongAt = beijingNow()
 		wq.IsRemoved = false
 		return db.Save(&wq).Error
-	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return err
 	}
 	wq = model.WrongQuestion{
 		StudentID:   studentID,

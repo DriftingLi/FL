@@ -88,7 +88,7 @@ function getFileCount(chapter: any): number {
 async function loadChapters() {
   loading.value = true
   try {
-    const courseId = route.params.id
+    const courseId = Number(route.params.id)
     const res = await tutorApi.getCourseChapters(courseId)
     if (res.code === 200) {
       courseInfo.value = res.data.course

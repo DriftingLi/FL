@@ -31,7 +31,7 @@ const request = axios.create({
   }
 })
 
-function isSilent(config) {
+function isSilent(config: AxiosRequestConfig | undefined): unknown {
   return config?.headers?.['X-Silent'] || config?.headers?.['x-silent']
 }
 

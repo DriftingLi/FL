@@ -3,7 +3,7 @@ import request from './request'
 // 题库练习模式接口，对应后端 /api/practice-mode
 export const practiceModeApi = {
   // 随机练习：随机抽 count 题（可按题型/知识点筛选）
-  getFreeQuestions(params?) {
+  getFreeQuestions(params?: { count?: number; type?: string; knowledge_point_id?: number; category?: string }) {
     return request.get('/practice-mode/free', { params })
   },
   // 顺序练习：开始/续练，返回当前批次题目 + 进度
@@ -27,15 +27,15 @@ export const practiceModeApi = {
     return request.get('/practice-mode/category', { params })
   },
   // 按知识点练习
-  getKnowledgePointPractice(params) {
+  getKnowledgePointPractice(params: { knowledge_point_id: number; count?: number }) {
     return request.get('/practice-mode/knowledge-point', { params })
   },
   // 知识点练习进度
-  getKnowledgePointProgress(params?) {
+  getKnowledgePointProgress(params?: { knowledge_point_id?: number }) {
     return request.get('/practice-mode/knowledge-point-progress', { params })
   },
   // 提交单题答案并判定
-  submitAnswer(data) {
+  submitAnswer(data: { question_id: number; user_answer: string; practice_type?: string }) {
     return request.post('/practice-mode/submit', data)
   },
   // 练习统计
@@ -43,7 +43,7 @@ export const practiceModeApi = {
     return request.get('/practice-mode/stats')
   },
   // 练习历史
-  getHistory(params) {
+  getHistory(params: { page?: number; page_size?: number }) {
     return request.get('/practice-mode/history', { params })
   }
 }

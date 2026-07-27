@@ -60,6 +60,36 @@ func (s *AdminService) DeleteStudent(studentID int) (map[string]any, error) {
 	return map[string]any{"student_id": studentID}, nil
 }
 
+// ResetStudentPassword 重置学员密码。
+func (s *AdminService) ResetStudentPassword(studentID int, password string) error {
+	var student model.Student
+	if err := s.db.First(&student, studentID).Error; err != nil {
+		return errors.New("学员不存在")
+	}
+	hashed, err := HashPassword(password)
+	if err != nil {
+		return err
+	}
+	return s.db.Model(&model.Student{}).Where("student_id = ?", studentID).
+		Update("password", hashed).Error
+}
+
+// ToggleStudentStatus 切换学员启用/禁用状态，返回切换后的新状态。
+func (s *AdminService) ToggleStudentStatus(studentID int) (int, error) {
+	var student model.Student
+	if err := s.db.First(&student, studentID).Error; err != nil {
+		return 0, errors.New("学员不存在")
+	}
+	next := 1
+	if student.Status == 1 {
+		next = 0
+	}
+	if err := s.db.Model(&student).Update("status", next).Error; err != nil {
+		return 0, err
+	}
+	return next, nil
+}
+
 // GetTutors 导师列表。
 func (s *AdminService) GetTutors(page, pageSize int, keyword string) map[string]any {
 	if page <= 0 {
@@ -98,6 +128,36 @@ func (s *AdminService) DeleteTutor(tutorID int) (map[string]any, error) {
 		return nil, err
 	}
 	return map[string]any{"tutor_id": tutorID}, nil
+}
+
+// ResetTutorPassword 重置导师密码。
+func (s *AdminService) ResetTutorPassword(tutorID int, password string) error {
+	var tutor model.Tutor
+	if err := s.db.First(&tutor, tutorID).Error; err != nil {
+		return errors.New("导师不存在")
+	}
+	hashed, err := HashPassword(password)
+	if err != nil {
+		return err
+	}
+	return s.db.Model(&model.Tutor{}).Where("tutor_id = ?", tutorID).
+		Update("password", hashed).Error
+}
+
+// ToggleTutorStatus 切换导师启用/禁用状态，返回切换后的新状态。
+func (s *AdminService) ToggleTutorStatus(tutorID int) (int, error) {
+	var tutor model.Tutor
+	if err := s.db.First(&tutor, tutorID).Error; err != nil {
+		return 0, errors.New("导师不存在")
+	}
+	next := 1
+	if tutor.Status == 1 {
+		next = 0
+	}
+	if err := s.db.Model(&tutor).Update("status", next).Error; err != nil {
+		return 0, err
+	}
+	return next, nil
 }
 
 // GetStatistics 统计看板。

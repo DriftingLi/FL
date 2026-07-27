@@ -147,6 +147,18 @@ import {
 import { ElMessage } from 'element-plus'
 import { tutorApi } from '@/api/tutor'
 
+interface FileItem {
+  uid: number
+  raw: File
+  name: string
+  size: number
+  ext: string
+  category: string
+  status: string
+  percentage: number
+  errorMsg: string
+}
+
 const emit = defineEmits(['upload-all', 'file-status'])
 
 const props = defineProps({
@@ -185,28 +197,28 @@ const successCount = computed(() => {
   return fileList.value.filter(f => f.status === 'success').length
 })
 
-const typeCategoryMap = {
+const typeCategoryMap: Record<string, string> = {
   pdf: 'document',
   ppt: 'ppt', pptx: 'ppt',
   mp4: 'video', webm: 'video',
   jpg: 'image', jpeg: 'image', png: 'image', gif: 'image', webp: 'image', svg: 'image'
 }
 
-const maxSizeMap = {
+const maxSizeMap: Record<string, number> = {
   video: 200 * 1024 * 1024,
   image: 20 * 1024 * 1024,
   document: 50 * 1024 * 1024,
   ppt: 50 * 1024 * 1024
 }
 
-const maxSizeMBMap = {
+const maxSizeMBMap: Record<string, number> = {
   video: 200,
   image: 20,
   document: 50,
   ppt: 50
 }
 
-function getFileCategory(ext) {
+function getFileCategory(ext: string) {
   return typeCategoryMap[ext] || 'document'
 }
 
@@ -220,23 +232,24 @@ function triggerSelect() {
   inputRef.value.click()
 }
 
-function handleSelect(event) {
-  const files = Array.from(event.target.files)
+function handleSelect(event: Event) {
+  const target = event.target as HTMLInputElement
+  const files = Array.from(target.files ?? [])
   if (files.length > 0) {
     addFiles(files)
   }
   inputRef.value.value = ''
 }
 
-function handleDrop(event) {
+function handleDrop(event: DragEvent) {
   isDragover.value = false
-  const files = Array.from(event.dataTransfer.files)
+  const files = Array.from(event.dataTransfer?.files ?? [])
   if (files.length > 0) {
     addFiles(files)
   }
 }
 
-function addFiles(files) {
+function addFiles(files: File[]) {
   for (const file of files) {
     const ext = file.name.split('.').pop().toLowerCase()
     const category = getFileCategory(ext)
@@ -270,14 +283,14 @@ function addFiles(files) {
   }
 }
 
-function formatSize(bytes) {
+function formatSize(bytes: number) {
   if (bytes === 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(1024))
   return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i]
 }
 
-function getFileIcon(ext) {
+function getFileIcon(ext: string) {
   const category = getFileCategory(ext)
   switch (category) {
     case 'video': return VideoCamera
@@ -286,8 +299,8 @@ function getFileIcon(ext) {
   }
 }
 
-function getFileTypeTagType(category) {
-  const types = {
+function getFileTypeTagType(category: string) {
+  const types: Record<string, string> = {
     document: '',
     ppt: 'warning',
     video: 'danger',
@@ -296,8 +309,8 @@ function getFileTypeTagType(category) {
   return types[category] || 'info'
 }
 
-function getFileTypeLabel(category) {
-  const labels = {
+function getFileTypeLabel(category: string) {
+  const labels: Record<string, string> = {
     document: '文档',
     ppt: 'PPT',
     video: '视频',
@@ -306,7 +319,7 @@ function getFileTypeLabel(category) {
   return labels[category] || '文件'
 }
 
-function removeFile(file) {
+function removeFile(file: FileItem) {
   const index = fileList.value.findIndex(f => f.uid === file.uid)
   if (index > -1) {
     fileList.value.splice(index, 1)
@@ -317,7 +330,7 @@ function clearAll() {
   fileList.value = []
 }
 
-function emitFileStatus(file) {
+function emitFileStatus(file: FileItem) {
   emit('file-status', {
     uid: file.uid,
     name: file.name,
@@ -327,7 +340,7 @@ function emitFileStatus(file) {
   })
 }
 
-async function uploadSingleFile(file) {
+async function uploadSingleFile(file: FileItem) {
   file.status = 'uploading'
   file.percentage = 0
   emitFileStatus(file)
@@ -337,7 +350,7 @@ async function uploadSingleFile(file) {
 
   try {
     const res = await tutorApi.uploadChapterFile(
-      props.chapterId,
+      Number(props.chapterId),
       formData,
       (progressEvent) => {
         if (progressEvent.total) {
@@ -385,7 +398,7 @@ async function startUploadAll() {
   }
 }
 
-async function retryFile(file) {
+async function retryFile(file: FileItem) {
   await uploadSingleFile(file)
 
   const allDone = fileList.value.every(f => f.status === 'success' || f.status === 'error')

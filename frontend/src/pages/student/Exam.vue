@@ -237,16 +237,16 @@ const progressColor = computed(() => {
   return '#f56c6c'
 })
 
-function isAnswered(questionId) {
+function isAnswered(questionId: number) {
   const val = answers.value[String(questionId)]
   return val !== undefined && val !== null && val !== ''
 }
 
-function isMarked(questionId) {
+function isMarked(questionId: number) {
   return markedQuestions.value.has(questionId)
 }
 
-function isSelected(optionKey) {
+function isSelected(optionKey: string | number) {
   const qId = String(currentQuestion.value?.question_id)
   const answer = answers.value[qId]
 
@@ -260,7 +260,7 @@ function isSelected(optionKey) {
   return answer === optionKey
 }
 
-function selectOption(optionKey) {
+function selectOption(optionKey: string | number) {
   const qId = String(currentQuestion.value.question_id)
 
   if (currentQuestion.value.type === 'multi_choice') {
@@ -278,7 +278,7 @@ function selectOption(optionKey) {
   }
 }
 
-function toggleMark(questionId) {
+function toggleMark(questionId: number) {
   if (markedQuestions.value.has(questionId)) {
     markedQuestions.value.delete(questionId)
   } else {
@@ -286,7 +286,7 @@ function toggleMark(questionId) {
   }
 }
 
-function goToQuestion(index) {
+function goToQuestion(index: number) {
   currentIndex.value = index
 }
 
@@ -323,7 +323,7 @@ async function submitExamAnswers() {
   submitting.value = true
   try {
     const courseId = route.params.courseId
-    const res = await examApi.submitExam(courseId, answers.value)
+    const res = await examApi.submitExam(Number(courseId), answers.value)
 
     if (res.code === 200) {
       resultData.value = res.data
@@ -356,14 +356,14 @@ function retakeExam() {
   currentIndex.value = 0
 }
 
-function getDetailOptions(item) {
+function getDetailOptions(item: { options?: Record<string, string>; [key: string]: unknown }) {
   if (item.options && typeof item.options === 'object') {
     return item.options
   }
   return {}
 }
 
-function isCorrectOption(item, optKey) {
+function isCorrectOption(item: { correct_answer?: string | string[]; [key: string]: unknown }, optKey: string) {
   const correct = item.correct_answer
   if (Array.isArray(correct)) {
     return correct.includes(optKey)
@@ -371,7 +371,7 @@ function isCorrectOption(item, optKey) {
   return correct === optKey
 }
 
-function isUserSelectedOption(item, optKey) {
+function isUserSelectedOption(item: { user_answer?: string | string[]; [key: string]: unknown }, optKey: string) {
   const userAns = item.user_answer
   if (Array.isArray(userAns)) {
     return userAns.includes(optKey)
@@ -379,7 +379,7 @@ function isUserSelectedOption(item, optKey) {
   return userAns === optKey
 }
 
-function isWrongSelectedOption(item, optKey) {
+function isWrongSelectedOption(item: { correct_answer?: string | string[]; user_answer?: string | string[]; [key: string]: unknown }, optKey: string) {
   return isUserSelectedOption(item, optKey) && !isCorrectOption(item, optKey)
 }
 
@@ -387,13 +387,13 @@ async function loadExamQuestions() {
   loading.value = true
   try {
     const courseId = route.params.courseId
-    const res = await examApi.getExamQuestions(courseId)
+    const res = await examApi.getExamQuestions(Number(courseId))
 
     if (res.code === 200) {
       examData.value = res.data
 
       try {
-        const historyRes = await examApi.getExamResult(courseId)
+        const historyRes = await examApi.getExamResult(Number(courseId))
         if (historyRes.code === 200 && historyRes.data) {
           resultData.value = historyRes.data
           showResult.value = true
@@ -410,14 +410,14 @@ async function loadExamQuestions() {
   }
 }
 
-function getScoreClass(score, total) {
+function getScoreClass(score: number, total: number) {
   const percent = (score / total) * 100
   if (percent >= 80) return 'score-excellent'
   if (percent >= 60) return 'score-pass'
   return 'score-fail'
 }
 
-function getScoreTitle(score, total) {
+function getScoreTitle(score: number, total: number) {
   const percent = (score / total) * 100
   if (percent >= 90) return '优秀！'
   if (percent >= 80) return '良好！'
@@ -425,7 +425,7 @@ function getScoreTitle(score, total) {
   return '需要继续努力！'
 }
 
-function formatAnswer(answer) {
+function formatAnswer(answer: string | string[]) {
   if (Array.isArray(answer)) {
     return answer.join(', ')
   }

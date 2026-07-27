@@ -147,12 +147,16 @@ func (s *PracticeModeService) SaveProgress(studentID, index int, practiceMode st
 }
 
 // GetProgress 查询任意模式的练习进度（卡片展示/断点续练用）。
+// 使用 Limit(1).Find() 替代 First()，避免首次进入时 GORM logger 误报 record not found
 func (s *PracticeModeService) GetProgress(studentID int, practiceMode string) map[string]any {
 	if practiceMode == "" {
 		practiceMode = "sequential"
 	}
 	var prog model.PracticeProgress
-	if err := s.db.Where("student_id = ? AND practice_mode = ?", studentID, practiceMode).First(&prog).Error; err != nil {
+	if err := s.db.Where("student_id = ? AND practice_mode = ?", studentID, practiceMode).Limit(1).Find(&prog).Error; err != nil {
+		return map[string]any{"completed": 0, "total": 0, "current_index": 0, "answers_state": map[string]any{}}
+	}
+	if prog.ID == 0 {
 		return map[string]any{"completed": 0, "total": 0, "current_index": 0, "answers_state": map[string]any{}}
 	}
 	// 解析 answers_state JSONB 为 map

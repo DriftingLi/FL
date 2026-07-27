@@ -60,7 +60,7 @@ import { ref, watch, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { wrongQuestionApi } from '@/api/wrongQuestion'
 
-const typeMap = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
+const typeMap: Record<string, string> = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
 
 const wrongList = ref([])
 const total = ref(0)
@@ -82,13 +82,13 @@ async function loadData() {
   } catch (e) {}
 }
 
-function startRedo(item) {
+function startRedo(item: { id: number; question_id: number; question?: { type?: string; options?: Record<string, string>; content?: string }; [key: string]: unknown }) {
   redoingId.value = item.id
   redoAnswer.value = []
   redoTextAnswer.value = ''
 }
 
-function toggleRedoOption(key, type) {
+function toggleRedoOption(key: string | number, type: string) {
   if (type === 'multi_choice') {
     const idx = redoAnswer.value.indexOf(key)
     if (idx > -1) redoAnswer.value.splice(idx, 1)
@@ -98,10 +98,10 @@ function toggleRedoOption(key, type) {
   }
 }
 
-async function submitRedo(item) {
+async function submitRedo(item: { id: number; question_id: number; question?: { type?: string; options?: Record<string, string>; content?: string }; [key: string]: unknown }) {
   try {
     const answer = item.question?.type === 'short_answer' ? redoTextAnswer.value : redoAnswer.value
-    const res = await wrongQuestionApi.redoWrongQuestion(item.question_id, answer)
+    const res = await wrongQuestionApi.redoWrongQuestion(item.question_id, Array.isArray(answer) ? answer.join(', ') : answer)
     if (res.data?.is_correct === true) {
       ElMessage.success('回答正确！已移出错题本')
     } else if (res.data?.is_correct === false) {
@@ -116,7 +116,7 @@ async function submitRedo(item) {
   }
 }
 
-async function removeWrong(questionId) {
+async function removeWrong(questionId: number) {
   try {
     await ElMessageBox.confirm('确定移除此错题？', '提示', { type: 'warning' })
     await wrongQuestionApi.removeWrongQuestion(questionId)

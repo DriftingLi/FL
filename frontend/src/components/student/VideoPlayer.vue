@@ -128,7 +128,7 @@ function onCanPlay() {
   buffering.value = false
 }
 
-function changeSpeed(speed) {
+function changeSpeed(speed: number) {
   currentSpeed.value = speed
   if (videoRef.value) {
     videoRef.value.playbackRate = speed

@@ -77,7 +77,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   validateToken()
 
-  function setAuthData(data) {
+  function setAuthData(data: UserInfo) {
     if (!data || !data.token) {
       console.warn('[Auth] setAuthData called with invalid data')
       return

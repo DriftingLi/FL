@@ -164,12 +164,12 @@ const chapters = ref([])
 const isStudying = ref(false)
 const studySeconds = ref(0)
 const activeTab = ref('')
-let studyTimer = null
-let studyStartTime = null
+let studyTimer: ReturnType<typeof setInterval> | null = null
+let studyStartTime: number | null = null
 // 已上报到后端的秒数，用于计算增量上报
 let reportedSeconds = 0
 // 自动上报定时器
-let autoReportTimer = null
+let autoReportTimer: ReturnType<typeof setInterval> | null = null
 // 自动上报间隔（秒）
 const AUTO_REPORT_INTERVAL = 60
 
@@ -181,7 +181,7 @@ const chapterFiles = computed(() => {
 })
 
 const TYPE_ORDER = ['video', 'document', 'ppt', 'image']
-const TYPE_CONFIG = {
+const TYPE_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
   video: { label: '视频', icon: VideoCamera, color: '#f56c6c' },
   document: { label: '文档', icon: Document, color: '#409eff' },
   ppt: { label: 'PPT', icon: Document, color: '#e6a23c' },
@@ -189,7 +189,7 @@ const TYPE_CONFIG = {
 }
 
 const fileGroups = computed(() => {
-  const groups = {}
+  const groups: Record<string, any[]> = {}
   for (const file of chapterFiles.value) {
     const type = file.content_type || 'document'
     if (!groups[type]) {
@@ -251,7 +251,7 @@ async function reportIncremental(isFinal = false) {
   const chapter_id = chapterDetail.value.chapter_id
 
   try {
-    const res = await courseApi.updateProgress(courseId.value, { chapter_id, duration: durationMinutes })
+    const res = await courseApi.updateProgress(Number(courseId.value), { chapter_id, duration: durationMinutes })
     if (res.code === 200) reportedSeconds += incrementalSeconds
   } catch (error) {
     if (!isFinal) console.warn('上报学习时长增量失败:', error)
@@ -266,7 +266,7 @@ async function loadChapterDetail() {
   stopStudy()
 
   try {
-    const res = await courseApi.getChapterDetail(courseId.value, chapterId.value)
+    const res = await courseApi.getChapterDetail(Number(courseId.value), Number(chapterId.value))
     if (res.code === 200) {
       chapterDetail.value = res.data
       // 章节加载成功后启动学习计时
@@ -333,7 +333,7 @@ async function completeStudy() {
   stopStudy()
 
   try {
-    const res = await courseApi.updateProgress(courseId.value, {
+    const res = await courseApi.updateProgress(Number(courseId.value), {
       chapter_id: chapterId,
       duration: totalDuration
     })
@@ -353,7 +353,7 @@ async function completeStudy() {
   }
 }
 
-function navigateToChapter(targetChapterId) {
+function navigateToChapter(targetChapterId: string | number) {
   if (!targetChapterId) return
   router.push({
     name: 'ChapterView',

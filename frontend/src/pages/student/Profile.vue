@@ -83,7 +83,7 @@
               <div v-for="item in courseProgress" :key="item.course_id" class="progress-item">
                 <div class="progress-header">
                   <span class="course-name">{{ item.course_name }}</span>
-                  <el-tag size="small" type="info">{{ getCategoryLabel(item.category) }}</el-tag>
+                  <el-tag size="small" type="info">{{ getCategoryLabel(item.category as string) }}</el-tag>
                 </div>
                 <el-progress
                   :percentage="item.progress"
@@ -203,27 +203,27 @@ const avatarLetter = computed(() => {
 })
 
 const levelLabel = computed(() => {
-  const map = { beginner: '初级学徒', intermediate: '中级学徒', advanced: '高级学徒', expert: '顶级学徒' }
-  return map[profile.value.level] || ''
+  const map: Record<string, string> = { beginner: '初级学徒', intermediate: '中级学徒', advanced: '高级学徒', expert: '顶级学徒' }
+  return map[profile.value.level as string] || ''
 })
 
 const levelTagType = computed(() => {
-  const map = { beginner: 'success', intermediate: 'warning', advanced: 'danger' }
-  return map[profile.value.level] || 'info'
+  const map: Record<string, string> = { beginner: 'success', intermediate: 'warning', advanced: 'danger' }
+  return map[profile.value.level as string] || 'info'
 })
 
-const categoryMap = {
+const categoryMap: Record<string, string> = {
   'CATEGORY_01': '基础理论',
   'CATEGORY_02': '安全规范',
   'CATEGORY_03': '实操技能',
   'CATEGORY_04': '进阶提升'
 }
 
-function getCategoryLabel(category) {
+function getCategoryLabel(category: string) {
   return categoryMap[category] || category || '未分类'
 }
 
-function formatDuration(minutes) {
+function formatDuration(minutes: number) {
   if (!minutes || minutes <= 0) return '0分钟'
   const hours = Math.floor(minutes / 60)
   const mins = minutes % 60
@@ -233,7 +233,7 @@ function formatDuration(minutes) {
   return `${mins}分钟`
 }
 
-function formatDate(dateStr) {
+function formatDate(dateStr: string) {
   if (!dateStr) return '-'
   try {
     const d = new Date(dateStr)
@@ -250,7 +250,7 @@ function formatDate(dateStr) {
   }
 }
 
-function getProgressColor(progress) {
+function getProgressColor(progress: number) {
   if (progress >= 100) return '#67c23a'
   if (progress >= 60) return '#409eff'
   if (progress >= 30) return '#e6a23c'
@@ -283,7 +283,7 @@ async function loadRecords() {
   }
 }
 
-function handleTabChange(tab) {
+function handleTabChange(tab: string) {
   if (tab === 'info') {
     loadProfile()
   } else if (tab === 'records') {
@@ -303,7 +303,7 @@ function resetDateFilter() {
   loadRecords()
 }
 
-function handlePageChange(page) {
+function handlePageChange(page: number) {
   currentPage.value = page
   loadRecords()
 }

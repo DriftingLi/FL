@@ -112,6 +112,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { authApi } from '@/api/auth'
 import { ElMessage } from 'element-plus'
+import type { FormItemRule } from 'element-plus'
 import { EditPen } from '@element-plus/icons-vue'
 import { passwordRules, nameRules, phoneRules, emailRules, companyRules } from '@/utils/validate'
 
@@ -128,7 +129,7 @@ const formData = reactive({
   email: ''
 })
 
-const validateConfirmPassword = (rule, value, callback) => {
+const validateConfirmPassword: FormItemRule['validator'] = (_rule, value: string, callback) => {
   if (value === '') {
     callback(new Error('请再次输入密码'))
   } else if (value !== formData.password) {

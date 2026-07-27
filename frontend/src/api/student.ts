@@ -7,7 +7,7 @@ export const studentApi = {
     return request.get('/student/profile', { timeout: DASHBOARD_TIMEOUT })
   },
 
-  getRecords(params) {
+  getRecords(params: { page?: number; page_size?: number; start_date?: string; end_date?: string }) {
     return request.get('/student/records', { params, timeout: DASHBOARD_TIMEOUT })
   },
 

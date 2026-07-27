@@ -98,7 +98,7 @@ const router = useRouter()
 
 const isEdit = computed(() => !!route.query.id)
 const hasOptions = computed(() => ['single_choice', 'multi_choice', 'fault_image'].includes(form.value.type))
-const optionKeys = ['A', 'B', 'C', 'D']
+const optionKeys = ['A', 'B', 'C', 'D'] as const
 
 const submitting = ref(false)
 const knowledgePoints = ref([])
@@ -127,7 +127,7 @@ onMounted(async () => {
 
   if (isEdit.value) {
     try {
-      const res = await questionBankApi.getQuestion(route.query.id)
+      const res = await questionBankApi.getQuestion(Number(route.query.id))
       const q = res.data
       form.value = { ...form.value, ...q }
       if (q.type === 'multi_choice' && q.answer) {
@@ -153,7 +153,7 @@ function onTypeChange() {
   multiAnswer.value = []
 }
 
-function beforeImageUpload(file) {
+function beforeImageUpload(file: File) {
   const allowedTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp']
   if (!allowedTypes.includes(file.type)) {
     ElMessage.error('不支持的图片格式，请上传 PNG/JPG/GIF/WebP/BMP 格式')
@@ -167,7 +167,7 @@ function beforeImageUpload(file) {
   return true
 }
 
-async function handleImageUpload(options) {
+async function handleImageUpload(options: { file: File }) {
   imageUploading.value = true
   try {
     const formData = new FormData()
@@ -194,7 +194,7 @@ async function submitForm() {
       data.answer = multiAnswer.value.sort().join(',')
     }
     if (isEdit.value) {
-      await questionBankApi.updateQuestion(route.query.id, data)
+      await questionBankApi.updateQuestion(Number(route.query.id), data)
       ElMessage.success('更新成功')
     } else {
       await questionBankApi.createQuestion(data)

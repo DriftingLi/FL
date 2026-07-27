@@ -50,25 +50,20 @@
           <el-tag :type="statusType[row.status]" size="small">{{ statusMap[row.status] }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="240">
+      <el-table-column label="操作" width="90" fixed="right" align="center">
         <template #default="{ row }">
-          <el-button size="small" @click="viewDetail(row)">查看</el-button>
-          <el-button
-            v-if="row.status === 'pending'"
-            size="small"
-            type="success"
-            @click="publishSingle(row)"
-          >
-            发布
-          </el-button>
-          <el-button
-            v-if="row.status === 'pending'"
-            size="small"
-            type="danger"
-            @click="rejectSingle(row)"
-          >
-            驳回
-          </el-button>
+          <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
+            <el-button type="primary" link size="small">
+              操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="view">查看</el-dropdown-item>
+                <el-dropdown-item v-if="row.status === 'pending'" command="publish">发布</el-dropdown-item>
+                <el-dropdown-item v-if="row.status === 'pending'" command="reject" divided>驳回</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </template>
       </el-table-column>
     </el-table>
@@ -141,11 +136,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { questionBankApi } from '@/api/questionBank'
 
-const typeMap = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
-const statusMap = { draft: '草稿', pending: '待审核', published: '已发布' }
-const statusType = { draft: 'info', pending: 'warning', published: 'success' }
+const typeMap: Record<string, string> = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
+const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
+const statusType: Record<string, string> = { draft: 'info', pending: 'warning', published: 'success' }
 
 const loading = ref(false)
 const questions = ref([])
@@ -169,6 +165,21 @@ let rejectTargetId = 0
 
 onMounted(() => loadData())
 
+// 操作下拉菜单统一入口
+function handleAction(cmd: string, row: any) {
+  switch (cmd) {
+    case 'view':
+      viewDetail(row)
+      break
+    case 'publish':
+      publishSingle(row)
+      break
+    case 'reject':
+      rejectSingle(row)
+      break
+  }
+}
+
 async function loadData() {
   loading.value = true
   try {
@@ -191,17 +202,17 @@ async function loadPendingCount() {
   } catch (e) {}
 }
 
-function handleSelection(rows) {
-  selectedIds.value = rows.map(r => r.id)
+function handleSelection(rows: { id: number }[]) {
+  selectedIds.value = rows.map((r: { id: number }) => r.id)
 }
 
-function viewDetail(row) {
+function viewDetail(row: any) {
   currentQuestion.value = row
   detailVisible.value = true
 }
 
 // 单题发布
-async function publishSingle(row) {
+async function publishSingle(row: { id: number }) {
   try {
     await ElMessageBox.confirm(`确定发布题目 #${row.id}？发布后学员可见。`, '确认发布', { type: 'success' })
     await questionBankApi.publishQuestion(row.id)
@@ -213,7 +224,7 @@ async function publishSingle(row) {
 }
 
 // 单题驳回
-function rejectSingle(row) {
+function rejectSingle(row: { id: number }) {
   rejectMode = 'single'
   rejectTargetId = row.id
   rejectReason.value = ''

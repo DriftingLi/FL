@@ -152,7 +152,7 @@ const selectedCourseId = ref(null)
 const selectedChapterIds = ref([])
 const generating = ref(false)
 const generateTask = ref(null)
-let pollTimer = null
+let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const previewVisible = ref(false)
 const previewTitle = ref('')
@@ -184,7 +184,7 @@ async function loadCourses() {
   }
 }
 
-async function handleCourseChange(courseId) {
+async function handleCourseChange(courseId: number) {
   selectedChapterIds.value = []
   chapters.value = []
 
@@ -235,7 +235,7 @@ async function handleGenerate() {
   }
 }
 
-function startPolling(taskId) {
+function startPolling(taskId: string) {
   if (pollTimer) clearInterval(pollTimer)
 
   pollTimer = setInterval(async () => {
@@ -246,7 +246,7 @@ function startPolling(taskId) {
         if (res.data.status === 'completed' || res.data.status === 'failed') {
           clearInterval(pollTimer)
           pollTimer = null
-          const successCount = (res.data.results || []).filter(r => r.status === 'success').length
+          const successCount = (res.data.results || []).filter((r: { status: string }) => r.status === 'success').length
           const total = res.data.total || res.data.results?.length || 0
           if (res.data.status === 'completed') {
             ElMessage.success(`生成完成：${successCount}/${total} 个章节成功`)
@@ -261,7 +261,7 @@ function startPolling(taskId) {
   }, 3000)
 }
 
-function previewChapter(item) {
+function previewChapter(item: { title: string; content?: string }) {
   previewTitle.value = item.title
   previewContent.value = item.content || ''
   previewVisible.value = true

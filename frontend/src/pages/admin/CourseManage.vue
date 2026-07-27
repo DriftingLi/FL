@@ -63,24 +63,20 @@
           {{ formatDate(row.created_at) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="220" fixed="right" align="center">
+      <el-table-column label="操作" width="90" fixed="right" align="center">
         <template #default="{ row }">
-          <el-button type="primary" link size="small" @click="openChapterDrawer(row)">
-            章节
-          </el-button>
-          <el-button
-            :type="row.status === 1 ? 'warning' : 'success'"
-            link
-            size="small"
-            @click="toggleStatus(row)"
-          >
-            {{ row.status === 1 ? '下架' : '上架' }}
-          </el-button>
-          <el-popconfirm title="确定删除该课程？删除后不可恢复" @confirm="handleDelete(row.course_id)">
-            <template #reference>
-              <el-button type="danger" link size="small">删除</el-button>
+          <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
+            <el-button type="primary" link size="small">
+              操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="chapters">章节管理</el-dropdown-item>
+                <el-dropdown-item command="toggle">{{ row.status === 1 ? '下架' : '上架' }}</el-dropdown-item>
+                <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+              </el-dropdown-menu>
             </template>
-          </el-popconfirm>
+          </el-dropdown>
         </template>
       </el-table-column>
     </el-table>
@@ -217,10 +213,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { Plus, Search, Rank } from '@element-plus/icons-vue'
+import { Plus, Search, Rank, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import draggable from 'vuedraggable'
-import { adminApi } from '@/api/admin'
+import { adminApi, type CoursePayload, type ChapterPayload } from '@/api/admin'
 
 const loading = ref(false)
 const courses = ref([])
@@ -264,23 +260,23 @@ const chapterFormRules = {
   title: [{ required: true, message: '请输入章节标题', trigger: 'blur' }]
 }
 
-const categoryMap = {
+const categoryMap: Record<string, string> = {
   'CATEGORY_01': '基础理论',
   'CATEGORY_02': '安全规范',
   'CATEGORY_03': '实操技能',
   'CATEGORY_04': '进阶提升'
 }
 
-function getCategoryName(category) {
+function getCategoryName(category: string) {
   return categoryMap[category] || '其他'
 }
 
-function getCategoryTagType(category) {
-  const types = { 'CATEGORY_01': '', 'CATEGORY_02': 'success', 'CATEGORY_03': 'warning', 'CATEGORY_04': 'danger' }
+function getCategoryTagType(category: string) {
+  const types: Record<string, string> = { 'CATEGORY_01': '', 'CATEGORY_02': 'success', 'CATEGORY_03': 'warning', 'CATEGORY_04': 'danger' }
   return types[category] || 'info'
 }
 
-function formatDate(dateStr) {
+function formatDate(dateStr: string) {
   if (!dateStr) return '-'
   const d = new Date(dateStr)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
@@ -333,7 +329,7 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    const res = await adminApi.createCourse(formData)
+    const res = await adminApi.createCourse(formData as CoursePayload)
     if (res.code === 201) {
       ElMessage.success('课程创建成功')
       dialogVisible.value = false
@@ -347,7 +343,7 @@ async function handleSubmit() {
   }
 }
 
-async function handleDelete(courseId) {
+async function handleDelete(courseId: number) {
   try {
     const res = await adminApi.deleteCourse(courseId)
     if (res.code === 200) {
@@ -360,10 +356,34 @@ async function handleDelete(courseId) {
   }
 }
 
-async function toggleStatus(row) {
+// 操作下拉菜单统一入口
+async function handleAction(cmd: string, row: any) {
+  switch (cmd) {
+    case 'chapters':
+      openChapterDrawer(row)
+      break
+    case 'toggle':
+      toggleStatus(row)
+      break
+    case 'delete':
+      try {
+        await ElMessageBox.confirm('确定删除该课程？删除后不可恢复', '提示', {
+          type: 'warning',
+          confirmButtonText: '确定',
+          cancelButtonText: '取消'
+        })
+        await handleDelete(row.course_id)
+      } catch {
+        // 用户取消
+      }
+      break
+  }
+}
+
+async function toggleStatus(row: { course_id: number; status: number }) {
   try {
     const newStatus = row.status === 1 ? 0 : 1
-    const res = await adminApi.updateCourse(row.course_id, { status: newStatus })
+    const res = await adminApi.updateCourse(row.course_id, { status: newStatus } as CoursePayload)
     if (res.code === 200) {
       ElMessage.success(newStatus === 1 ? '已上架' : '已下架')
       row.status = newStatus
@@ -374,7 +394,7 @@ async function toggleStatus(row) {
   }
 }
 
-async function openChapterDrawer(course) {
+async function openChapterDrawer(course: { course_id: number; name: string }) {
   currentCourse.value = course
   drawerVisible.value = true
   chaptersLoading.value = true
@@ -423,7 +443,7 @@ async function handleChapterSubmit() {
   }
 }
 
-async function handleDeleteChapter(chapterId) {
+async function handleDeleteChapter(chapterId: number) {
   try {
     const res = await adminApi.deleteChapter(chapterId)
     if (res.code === 200) {
@@ -441,7 +461,7 @@ async function handleChapterReorder() {
     const ch = chapters.value[i]
     if (ch.order_num !== i + 1) {
       try {
-        await adminApi.updateChapter(ch.chapter_id, { order_num: i + 1 })
+        await adminApi.updateChapter(ch.chapter_id, { order_num: i + 1 } as ChapterPayload)
       } catch (e) {
         console.error('排序更新失败:', e)
       }

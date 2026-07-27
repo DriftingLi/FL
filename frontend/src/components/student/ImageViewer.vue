@@ -157,7 +157,7 @@ function resetZoom() {
   panY.value = 0
 }
 
-function onWheel(e) {
+function onWheel(e: WheelEvent) {
   const delta = e.ctrlKey ? 0.02 : 0.1
   if (e.deltaY < 0) {
     scale.value = Math.min(Math.round((scale.value + delta) * 100) / 100, 5)
@@ -166,7 +166,7 @@ function onWheel(e) {
   }
 }
 
-function onMouseDown(e) {
+function onMouseDown(e: MouseEvent) {
   if (e.button !== 0) return
   if (scale.value <= 1) return
   isDragging.value = true
@@ -176,7 +176,7 @@ function onMouseDown(e) {
   panStartY.value = panY.value
 }
 
-function onMouseMove(e) {
+function onMouseMove(e: MouseEvent) {
   if (!isDragging.value) return
   panX.value = panStartX.value + (e.clientX - dragStartX.value)
   panY.value = panStartY.value + (e.clientY - dragStartY.value)
@@ -186,7 +186,7 @@ function onMouseUp() {
   isDragging.value = false
 }
 
-function onTouchStart(e) {
+function onTouchStart(e: TouchEvent) {
   if (e.touches.length === 2) {
     const dx = e.touches[0].clientX - e.touches[1].clientX
     const dy = e.touches[0].clientY - e.touches[1].clientY
@@ -201,7 +201,7 @@ function onTouchStart(e) {
   }
 }
 
-function onTouchMove(e) {
+function onTouchMove(e: TouchEvent) {
   if (e.touches.length === 2) {
     const dx = e.touches[0].clientX - e.touches[1].clientX
     const dy = e.touches[0].clientY - e.touches[1].clientY

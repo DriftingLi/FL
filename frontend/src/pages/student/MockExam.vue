@@ -55,7 +55,7 @@
         <el-col :xs="24" :md="18">
           <el-card class="question-card">
             <div class="question-header">
-              <el-tag>{{ typeMap[currentQuestion.type] }}</el-tag>
+              <el-tag>{{ (typeMap as Record<string, string>)[currentQuestion.type] }}</el-tag>
               <span>第 {{ currentIdx + 1 }}/{{ questions.length }} 题（{{ currentQuestion.score }}分）</span>
             </div>
             <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="q-image" />
@@ -149,7 +149,7 @@ const currentIdx = ref(0)
 const remainingTime = ref(0)
 const examResult = ref<any>({})
 const history = ref([])
-let timer = null
+let timer: ReturnType<typeof setInterval> | null = null
 
 const currentQuestion = computed(() => questions.value[currentIdx.value] || {})
 
@@ -194,21 +194,21 @@ function startTimer() {
   }, 1000)
 }
 
-function formatTime(seconds) {
+function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-function formatDateTime(dtStr) {
+function formatDateTime(dtStr: string) {
   if (!dtStr) return ''
   const d = new Date(dtStr)
   if (isNaN(d.getTime())) return dtStr
-  const pad = (n) => String(n).padStart(2, '0')
+  const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function isOptionSelected(key) {
+function isOptionSelected(key: string | number) {
   const ans = answers.value[currentQuestion.value.id]
   if (!ans) return false
   if (currentQuestion.value.type === 'multi_choice') {
@@ -217,7 +217,7 @@ function isOptionSelected(key) {
   return ans === key
 }
 
-function toggleOption(key) {
+function toggleOption(key: string | number) {
   const qid = currentQuestion.value.id
   if (currentQuestion.value.type === 'multi_choice') {
     if (!answers.value[qid]) answers.value[qid] = []

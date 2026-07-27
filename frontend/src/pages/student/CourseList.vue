@@ -113,29 +113,29 @@ const categories = [
   { value: 'CATEGORY_04', label: '进阶提升' }
 ]
 
-const categoryMap = {
+const categoryMap: Record<string, string> = {
   'CATEGORY_01': '基础理论',
   'CATEGORY_02': '安全规范',
   'CATEGORY_03': '实操技能',
   'CATEGORY_04': '进阶提升'
 }
 
-const categoryClassMap = {
+const categoryClassMap: Record<string, string> = {
   'CATEGORY_01': 'cat-theory',
   'CATEGORY_02': 'cat-safety',
   'CATEGORY_03': 'cat-practice',
   'CATEGORY_04': 'cat-advanced'
 }
 
-function getCategoryName(category) {
+function getCategoryName(category: string) {
   return categoryMap[category] || '其他'
 }
 
-function getCategoryClass(category) {
+function getCategoryClass(category: string) {
   return categoryClassMap[category] || 'cat-default'
 }
 
-function formatDuration(minutes) {
+function formatDuration(minutes: number) {
   if (minutes < 60) {
     return `${minutes}分钟`
   }
@@ -176,7 +176,7 @@ function handleSizeChange() {
   loadCourses()
 }
 
-async function goToCourse(courseId) {
+async function goToCourse(courseId: number) {
   // 课程详情页已移除：点击课程直接跳转第一章，无章节时给出提示
   try {
     const res = await courseApi.getCourseDetail(courseId)

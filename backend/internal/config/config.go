@@ -100,7 +100,11 @@ func Load() (*Config, error) {
 		JWTSecretKey:     getenv("JWT_SECRET_KEY", "jwt-secret-key"),
 		JWTExpiresHours:  jwtHours,
 		DatabaseURL:      getenv("DATABASE_URL", ""),
-		CORSOrigins:      splitOrigins(getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174")),
+		// 本地开发默认允许所有子域名 origin（生产环境必须通过 CORS_ORIGINS 注入实际域名）
+		CORSOrigins: splitOrigins(getenv("CORS_ORIGINS",
+			"http://localhost:5173,http://localhost:5174,"+
+				"http://training.localhost:5173,http://valuation.localhost:5173,"+
+				"http://mentor.localhost:5173,http://manage.localhost:5173")),
 		UploadFolder:     getenv("UPLOAD_FOLDER", ""),
 		VolumeMountPath:  getenv("VOLUME_MOUNT_PATH", ""),
 		MaxContentLength: int64(maxMB) * 1024 * 1024,

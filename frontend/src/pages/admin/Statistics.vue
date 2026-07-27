@@ -90,10 +90,10 @@ const overview = ref<any>({})
 const courseStats = ref([])
 const barChartRef = ref(null)
 const progressChartRef = ref(null)
-let barChart = null
-let progressChart = null
+let barChart: echarts.ECharts | null = null
+let progressChart: echarts.ECharts | null = null
 
-function formatDuration(minutes) {
+function formatDuration(minutes: number) {
   if (!minutes || minutes <= 0) return '0分钟'
   const hours = Math.floor(minutes / 60)
   const mins = minutes % 60
@@ -103,7 +103,7 @@ function formatDuration(minutes) {
   return `${mins}分钟`
 }
 
-function getProgressColor(progress) {
+function getProgressColor(progress: number) {
   if (progress >= 100) return '#67c23a'
   if (progress >= 60) return '#409eff'
   if (progress >= 30) return '#e6a23c'

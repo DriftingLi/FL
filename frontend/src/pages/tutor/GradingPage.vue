@@ -161,7 +161,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Monitor, ArrowLeft } from '@element-plus/icons-vue'
 import { gradingApi } from '@/api/grading'
 
-const typeMap = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
+const typeMap: Record<string, string> = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
 
 const loading = ref(false)
 const participants = ref([])
@@ -182,12 +182,12 @@ async function loadParticipants() {
   } catch (e) {} finally { loading.value = false }
 }
 
-async function openDetail(row) {
+async function openDetail(row: { id: number; [key: string]: unknown }) {
   try {
     const res = await gradingApi.getParticipantDetail(row.id)
     const data = res.data || {}
     if (data.answers) {
-      data.answers.forEach(a => {
+      data.answers.forEach((a: { ai_score?: number | null; score?: number | null; [key: string]: unknown }) => {
         a._score = a.ai_score != null ? a.ai_score : 0
         a._comment = ''
         a._confirming = false
@@ -226,7 +226,7 @@ async function confirmAllObjective() {
   } finally { confirmingObj.value = false }
 }
 
-async function confirmAi(ans) {
+async function confirmAi(ans: { id: number; ai_score?: number | null; _confirming?: boolean; [key: string]: unknown }) {
   try {
     await ElMessageBox.confirm(
       `确认采用AI建议评分 ${ans.ai_score} 分？`,
@@ -242,7 +242,7 @@ async function confirmAi(ans) {
   } finally { ans._confirming = false }
 }
 
-async function triggerAi(ans) {
+async function triggerAi(ans: { id: number; ai_score?: number | null; ai_comment?: string; _aiLoading?: boolean; _score: number; [key: string]: unknown }) {
   try {
     ans._aiLoading = true
     const res = await gradingApi.aiGradeAnswer(ans.id)
@@ -257,7 +257,7 @@ async function triggerAi(ans) {
   } finally { ans._aiLoading = false }
 }
 
-async function gradeAnswer(ans) {
+async function gradeAnswer(ans: { id: number; _score: number; _comment?: string; [key: string]: unknown }) {
   try {
     await gradingApi.gradeAnswer(ans.id, { score: ans._score, comment: ans._comment })
     ElMessage.success('评分成功')
@@ -267,13 +267,13 @@ async function gradeAnswer(ans) {
   }
 }
 
-function startRegrade(ans) {
+function startRegrade(ans: { score?: number | null; _regrading?: boolean; _regradeScore: number; _regradeComment?: string; [key: string]: unknown }) {
   ans._regrading = true
   ans._regradeScore = ans.score || 0
   ans._regradeComment = ''
 }
 
-async function doRegrade(ans) {
+async function doRegrade(ans: { id: number; _regradeScore: number; _regradeComment?: string; [key: string]: unknown }) {
   try {
     await gradingApi.regradeAnswer(ans.id, { score: ans._regradeScore, comment: ans._regradeComment })
     ElMessage.success('复核成功')
