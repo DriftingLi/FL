@@ -245,11 +245,13 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, dura
 		if chapterID > 0 {
 			var existing model.StudyRecord
 			if e := s.db.Where("student_id = ? AND course_id = ? AND chapter_id = ?", studentID, courseID, chapterID).First(&existing).Error; e != nil {
+				// 新章节记录的 study_duration 置 0：duration 已累加到上方 First() 取出的主记录上，
+				// 此处仅为统计 completedChapters 创建占位记录，避免 SUM(study_duration) 重复计算
 				newRecord := model.StudyRecord{
 					StudentID:     studentID,
 					CourseID:      courseID,
 					ChapterID:     &chapterID,
-					StudyDuration: duration,
+					StudyDuration: 0,
 					Progress:      0,
 					StudyDate:     beijingNow(),
 				}
