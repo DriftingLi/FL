@@ -25,10 +25,10 @@ type Config struct {
 	UploadFolder     string
 	VolumeMountPath  string
 	MaxContentLength int64
-	OpenAIAPIKey     string
-	ZhipuAPIKey      string
-	ZhipuBaseURL     string
-	ZhipuModel       string
+	// AI 服务配置（OpenAI 兼容格式）。优先级：AI_* > DEEPSEEK_* > ZHIPU_* > OPENAI_API_KEY。
+	AIAPIKey         string
+	AIBaseURL        string
+	AIModel          string
 	Valuation        ValuationConfig
 	Redis            RedisConfig
 	DefaultPasswords DefaultPasswordsConfig
@@ -108,10 +108,9 @@ func Load() (*Config, error) {
 		UploadFolder:     getenv("UPLOAD_FOLDER", ""),
 		VolumeMountPath:  getenv("VOLUME_MOUNT_PATH", ""),
 		MaxContentLength: int64(maxMB) * 1024 * 1024,
-		OpenAIAPIKey:     getenv("OPENAI_API_KEY", ""),
-		ZhipuAPIKey:      getenv("ZHIPU_API_KEY", ""),
-		ZhipuBaseURL:     getenv("ZHIPU_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"),
-		ZhipuModel:       getenv("ZHIPU_MODEL", "glm-4.7-flash"),
+		AIAPIKey:         getenvChainDef("", "AI_API_KEY", "DEEPSEEK_API_KEY", "ZHIPU_API_KEY", "OPENAI_API_KEY"),
+		AIBaseURL:        getenvChainDef("https://api.deepseek.com", "AI_BASE_URL", "DEEPSEEK_API_URL", "ZHIPU_BASE_URL"),
+		AIModel:          getenvChainDef("deepseek-v4-flash", "AI_MODEL", "MODEL", "ZHIPU_MODEL"),
 		Valuation: ValuationConfig{
 			PDFOutputDir:      getenv("VALUATION_PDF_OUTPUT_DIR", "storage/reports"),
 			LogLevel:          getenv("VALUATION_LOG_LEVEL", "info"),
@@ -216,6 +215,17 @@ func (c *Config) IsProd() bool { return c.AppEnv == "production" }
 func getenv(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return def
+}
+
+// getenvChainDef 按顺序返回第一个非空环境变量，全部为空时返回 def。
+// 用于 AI 配置字段的多名称兼容回退（如 AI_API_KEY > DEEPSEEK_API_KEY > ZHIPU_API_KEY）。
+func getenvChainDef(def string, keys ...string) string {
+	for _, k := range keys {
+		if v := os.Getenv(k); v != "" {
+			return v
+		}
 	}
 	return def
 }

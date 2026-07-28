@@ -12,8 +12,8 @@
           <div class="card-icon">
             <el-icon :size="24"><DataAnalysis /></el-icon>
           </div>
-          <h1 class="card-title">创建评估账户</h1>
-          <p class="card-subtitle">填写以下信息完成残值评估账户注册</p>
+          <h1 class="card-title">创建 HRWAI 账号</h1>
+          <p class="card-subtitle">填写以下信息完成 HRWAI 通用账号注册</p>
         </div>
 
         <el-form ref="formRef" :model="formData" :rules="rules" label-width="0" class="register-form">

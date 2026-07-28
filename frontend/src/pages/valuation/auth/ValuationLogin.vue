@@ -12,9 +12,9 @@
           <div class="card-icon">
             <el-icon :size="24"><DataAnalysis /></el-icon>
           </div>
-          <h1 class="card-title">残值评估登录</h1>
-          <p class="card-subtitle">登录后查看您的评估历史记录</p>
-          <div class="role-badge">评估用户端</div>
+          <h1 class="card-title">HRWAI 账号登录</h1>
+          <p class="card-subtitle">登录后查看您的评估历史记录与 AI 助手会话</p>
+          <div class="role-badge">HRWAI 通用账号</div>
         </div>
 
         <el-form ref="formRef" :model="formData" :rules="rules" label-width="0" class="login-form">

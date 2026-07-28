@@ -97,8 +97,8 @@ func ValuationOptionalJWTAuth(secret string) gin.HandlerFunc {
 	}
 }
 
-// currentValuationUserID 从 gin.Context 读取估值用户 ID（未登录返回 0）
-func currentValuationUserID(c *gin.Context) int {
+// CurrentValuationUserID 从 gin.Context 读取估值用户 ID（未登录返回 0）
+func CurrentValuationUserID(c *gin.Context) int {
 	v, ok := c.Get(CtxValuationUserID)
 	if !ok {
 		return 0

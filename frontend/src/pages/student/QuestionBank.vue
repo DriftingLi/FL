@@ -170,29 +170,6 @@
           <el-button v-if="currentIdx < questions.length - 1" type="primary" @click="nextQuestion">
             下一题
           </el-button>
-          <el-button v-if="currentIdx === questions.length - 1" type="success" @click="nextQuestion">
-            查看结果
-          </el-button>
-        </div>
-      </el-card>
-    </div>
-
-    <!-- ===== 刷题完成 ===== -->
-    <div v-if="showResult" class="practice-result">
-      <el-card>
-        <h2>本次练习结果</h2>
-        <div class="score-display">
-          <div class="score-circle" :class="{ passed: accuracy >= 60 }">
-            <span class="score-num">{{ correctCount }}</span>
-            <span class="score-total">/{{ questions.length }}</span>
-          </div>
-          <p>正确率：{{ accuracy }}%</p>
-          <p>答对 {{ correctCount }} 题 · 答错 {{ wrongCount }} 题</p>
-        </div>
-        <div class="result-actions">
-          <el-button v-if="mode === 'sequential'" type="primary" @click="startSequential">继续顺序练习</el-button>
-          <el-button v-else type="primary" @click="restartPractice">再来一组</el-button>
-          <el-button @click="backToEntry">返回题库</el-button>
         </div>
       </el-card>
     </div>
@@ -211,7 +188,6 @@ import type { CourseCategory, PracticeProgress, Question, QuestionType, SubmitRe
 
 // null = 入口；'sequential' | 'free' | 'category' = 刷题中
 const mode = ref<'sequential' | 'free' | 'category' | null>(null)
-const showResult = ref(false)
 
 // 卡片选择器状态
 const randomCount = ref(20)
@@ -256,10 +232,6 @@ const canSubmit = computed(() => {
   if (Array.isArray(ans)) return ans.length > 0
   return ans !== ''
 })
-const accuracy = computed(() => {
-  if (questions.value.length === 0) return 0
-  return Math.round((correctCount.value / questions.value.length) * 100)
-})
 
 onMounted(() => {
   loadCardData()
@@ -297,7 +269,6 @@ async function startSequential() {
       return
     }
     mode.value = 'sequential'
-    showResult.value = false
     // 获取持久化的答题状态
     const prog = await resolveProgress('sequential', questions.value.length)
     resetSession(prog.startIndex)
@@ -407,7 +378,6 @@ async function startFree(type?: string) {
       return
     }
     mode.value = 'free'
-    showResult.value = false
     const prog = await resolveProgress(modeKey, questions.value.length)
     resetSession(prog.startIndex)
     restoreState(prog.answersState)
@@ -430,7 +400,6 @@ async function startCategory() {
       return
     }
     mode.value = 'category'
-    showResult.value = false
     const prog = await resolveProgress(modeKey, questions.value.length)
     resetSession(prog.startIndex)
     restoreState(prog.answersState)
@@ -517,11 +486,6 @@ async function submitAnswer() {
 }
 
 async function nextQuestion() {
-  // 最后一题：直接查看结果，不再推进游标
-  if (currentIdx.value === questions.value.length - 1) {
-    showResult.value = true
-    return
-  }
   // 所有有断点的模式：推进游标并保存进度+答题状态
   const newIndex = currentIdx.value + 1
   currentIdx.value++
@@ -546,7 +510,6 @@ async function confirmQuit() {
 
 function backToEntry() {
   mode.value = null
-  showResult.value = false
   questions.value = []
   currentIdx.value = 0
   answers.value = {}
@@ -556,16 +519,6 @@ function backToEntry() {
   correctCount.value = 0
   wrongCount.value = 0
   loadCardData()
-}
-
-function restartPractice() {
-  if (mode.value === 'free' && specialType.value) {
-    startFree(specialType.value)
-  } else if (mode.value === 'category') {
-    startCategory()
-  } else {
-    startFree()
-  }
 }
 </script>
 
@@ -609,13 +562,4 @@ function restartPractice() {
 .q-feedback { margin-top: 15px; }
 .feedback-explanation { margin-top: 6px; color: #606266; }
 .q-actions { display: flex; justify-content: center; margin-top: 20px; }
-
-.practice-result { margin-top: 20px; }
-.practice-result h2 { text-align: center; margin-bottom: 20px; }
-.score-display { text-align: center; margin: 20px 0; }
-.score-circle { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; width: 150px; height: 150px; border-radius: 50%; border: 6px solid #f56c6c; margin-bottom: 10px; }
-.score-circle.passed { border-color: #67c23a; }
-.score-num { font-size: 36px; font-weight: bold; }
-.score-total { font-size: 14px; color: #909399; }
-.result-actions { display: flex; justify-content: center; gap: 12px; margin-top: 20px; }
 </style>

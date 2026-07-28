@@ -12,8 +12,10 @@ import {
   UserFilled,
   Calendar,
   PriceTag,
-  Finished
+  Finished,
+  Setting
 } from '@element-plus/icons-vue'
+// 注：MagicStick 仍用于管理员"内容生成"菜单项
 
 export interface NavItem {
   key: string
@@ -31,8 +33,7 @@ const studentNav: NavItem[] = [
   { key: 'courses', label: '课程中心', path: '/training/courses', icon: Notebook },
   { key: 'question-bank', label: '题库练习', path: '/training/question-bank', icon: EditPen },
   { key: 'level-exam', label: '考试中心', path: '/training/level-exam', icon: Document },
-  { key: 'wrong-questions', label: '错题本', path: '/training/wrong-questions', icon: CircleCloseFilled },
-  { key: 'ai-assistant', label: 'AI 助手', path: '/ai-assistant', icon: MagicStick }
+  { key: 'wrong-questions', label: '错题本', path: '/training/wrong-questions', icon: CircleCloseFilled }
 ]
 
 const adminNav: NavItem[] = [
@@ -45,6 +46,7 @@ const adminNav: NavItem[] = [
   { key: 'statistics', label: '统计分析', path: '/admin/statistics', icon: TrendCharts },
   { key: 'valuation-config', label: '残值配置', path: '/admin/valuation-config', icon: PriceTag },
   { key: 'valuation-users', label: '评估用户', path: '/admin/valuation-users', icon: User },
+  { key: 'ai-settings', label: 'AI 配置', path: '/admin/ai-settings', icon: Setting },
   { key: 'content-generate', label: '内容生成', path: '/admin/content-generate', icon: MagicStick },
   { key: 'featured-content', label: '内容精选', path: '/admin/featured-content', icon: Document }
 ]

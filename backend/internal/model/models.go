@@ -392,3 +392,80 @@ type FeaturedContent struct {
 }
 
 func (FeaturedContent) TableName() string { return "featured_content" }
+
+// ===== 21. 系统设置 =====
+
+// SystemSetting 系统设置表（key-value 结构，承载 AI 等模块的动态配置）。
+type SystemSetting struct {
+	Key         string    `gorm:"column:key;primaryKey" json:"key"`
+	Value       string    `gorm:"column:value" json:"value"`
+	Description string    `gorm:"column:description" json:"description"`
+	UpdatedAt   time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (SystemSetting) TableName() string { return "system_settings" }
+
+// ===== 22. AI 多配置 =====
+
+// AIConfig AI 服务配置（多套命名配置，可绑定到不同 AI 功能）。
+type AIConfig struct {
+	ID          int       `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	Name        string    `gorm:"column:name;uniqueIndex" json:"name"`
+	APIKey      string    `gorm:"column:api_key" json:"api_key"`
+	BaseURL     string    `gorm:"column:base_url" json:"base_url"`
+	Model       string    `gorm:"column:model" json:"model"`
+	Description string    `gorm:"column:description" json:"description"`
+	IsActive    bool      `gorm:"column:is_active" json:"is_active"`
+	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (AIConfig) TableName() string { return "ai_configs" }
+
+// AIFeatureBinding AI 功能-配置绑定（每个 feature_key 只能绑定一个 config_id）。
+type AIFeatureBinding struct {
+	FeatureKey string    `gorm:"column:feature_key;primaryKey" json:"feature_key"`
+	ConfigID   int       `gorm:"column:config_id" json:"config_id"`
+	UpdatedAt  time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (AIFeatureBinding) TableName() string { return "ai_feature_bindings" }
+
+// ===== 23. AI 助手模块 =====
+
+// AIChatSession AI 助手会话（归属 valuation_users）。
+type AIChatSession struct {
+	ID        int       `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	UserID    int       `gorm:"column:user_id" json:"user_id"`
+	Title     string    `gorm:"column:title" json:"title"`
+	ModelName string    `gorm:"column:model_name" json:"model_name"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (AIChatSession) TableName() string { return "ai_chat_sessions" }
+
+// AIChatMessage AI 助手会话消息。
+type AIChatMessage struct {
+	ID        int       `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	SessionID int       `gorm:"column:session_id" json:"session_id"`
+	Role      string    `gorm:"column:role" json:"role"` // 'user' | 'assistant' | 'system'
+	Content   string    `gorm:"column:content" json:"content"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (AIChatMessage) TableName() string { return "ai_chat_messages" }
+
+// AIUserModel 用户自定义 AI 模型配置（openai 兼容格式，归属 valuation_users）。
+type AIUserModel struct {
+	ID        int       `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	UserID    int       `gorm:"column:user_id" json:"user_id"`
+	Name      string    `gorm:"column:name" json:"name"`
+	APIKey    string    `gorm:"column:api_key" json:"api_key"`
+	BaseURL   string    `gorm:"column:base_url" json:"base_url"`
+	Model     string    `gorm:"column:model" json:"model"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (AIUserModel) TableName() string { return "ai_user_models" }

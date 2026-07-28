@@ -14,13 +14,21 @@ import (
 )
 
 // RegisterAdminRoutes 注册 /api/admin 蓝图（管理员后台）。
-func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
+// aiConfigSvc 由上层 NewRouter 创建并传入，便于 AI 助手模块复用同一实例。
+func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, aiConfigSvc *service.AIConfigService) {
 	adminSvc := service.NewAdminService(db)
 	courseSvc := service.NewAdminCourseService(db)
 	authSvc := service.NewAuthService(db, cfg.JWTSecretKey, cfg.JWTExpiry(),
 		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student)
 
+	// AI 多配置 service + 课程内容生成 service
+	aiSvc := service.NewAIService(db, aiConfigSvc)
+	contentGenSvc := service.NewContentGenerateService(db, aiSvc)
+
 	g := rg.Group("/admin", middleware.JWTAuth(cfg), middleware.RoleRequired("admin"))
+
+	// ===== AI 配置（多配置管理 + 功能绑定）=====
+	registerSettingsRoutes(g, aiConfigSvc, db)
 
 	// ===== 课程管理 =====
 
@@ -153,7 +161,7 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 		response.SuccessWithMsg(c, "章节删除成功", result)
 	})
 
-	// POST /api/admin/course/generate-content  异步生成课程内容（暂未实现，返回 503）
+	// POST /api/admin/course/generate-content  异步生成课程内容
 	g.POST("/course/generate-content", func(c *gin.Context) {
 		var req struct {
 			CourseID   int   `json:"course_id"`
@@ -163,12 +171,28 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 			response.BadRequest(c, "请选择课程")
 			return
 		}
-		response.ServerError(c, "异步内容生成功能尚未迁移至 Go 版本")
+		if len(req.ChapterIDs) == 0 {
+			response.BadRequest(c, "请选择至少一个章节")
+			return
+		}
+		userID := c.GetInt("user_id")
+		taskID, err := contentGenSvc.StartGeneration(req.CourseID, req.ChapterIDs, userID)
+		if err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.Created(c, "生成任务已启动", map[string]any{"task_id": taskID})
 	})
 
-	// GET /api/admin/course/generate-content/:task_id  异步任务状态
+	// GET /api/admin/course/generate-content/:task_id  查询生成任务状态（前端轮询）
 	g.GET("/course/generate-content/:task_id", func(c *gin.Context) {
-		response.NotFound(c, "异步内容生成功能尚未迁移至 Go 版本")
+		taskID := c.Param("task_id")
+		status, err := contentGenSvc.GetTaskStatus(taskID)
+		if err != nil {
+			response.NotFound(c, err.Error())
+			return
+		}
+		response.Success(c, status)
 	})
 
 	// ===== 学员管理 =====

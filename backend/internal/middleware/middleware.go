@@ -74,7 +74,7 @@ func CORS(origins []string) gin.HandlerFunc {
 	handler := cors.New(cors.Config{
 		AllowOrigins:     origins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Content-Type", "Authorization", "X-Silent"},
+		AllowHeaders:     []string{"Content-Type", "Authorization", "X-Silent", "Accept"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	})

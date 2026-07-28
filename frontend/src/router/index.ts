@@ -211,11 +211,11 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false, isValuationAuthPage: true }
   },
 
-  // ========== AI 助手模块（敬请期待占位，无需登录）==========
+  // ========== AI 助手模块（主域名，可选登录；登录后可保存历史会话）==========
   {
     path: '/ai-assistant',
     name: 'AIAssistant',
-    component: () => import('@/pages/student/AIAssistant.vue'),
+    component: () => import('@/pages/ai-assistant/AIAssistantPage.vue'),
     meta: { requiresAuth: false }
   },
 
@@ -315,6 +315,12 @@ const routes: RouteRecordRaw[] = [
         name: 'ValuationUserManage',
         component: () => import('@/pages/admin/ValuationUserManage.vue'),
         meta: { navKey: 'valuation-users', navLabel: '评估用户', navGroup: 'data' }
+      },
+      {
+        path: 'ai-settings',
+        name: 'AISettings',
+        component: () => import('@/pages/admin/AISettings.vue'),
+        meta: { navKey: 'ai-settings', navLabel: 'AI 配置', navGroup: 'data' }
       }
     ]
   },

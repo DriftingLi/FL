@@ -126,9 +126,7 @@ func RegisterMockExamRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB
 
 // newAIService 在蓝图内构造 AIService，集中配置依赖。
 func newAIService(cfg *config.Config, db *gorm.DB) *service.AIService {
-	apiKey := cfg.ZhipuAPIKey
-	if apiKey == "" {
-		apiKey = cfg.OpenAIAPIKey
-	}
-	return service.NewAIService(db, apiKey, cfg.ZhipuBaseURL, cfg.ZhipuModel)
+	_ = cfg
+	aiConfigSvc := service.NewAIConfigService(db)
+	return service.NewAIService(db, aiConfigSvc)
 }

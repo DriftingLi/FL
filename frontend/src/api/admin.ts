@@ -31,6 +31,44 @@ export interface GenerateContentPayload {
   chapter_ids?: number[]
 }
 
+// ===== AI 多配置 =====
+
+export interface AIConfig {
+  id: number
+  name: string
+  api_key: string // 脱敏后
+  base_url: string
+  model: string
+  description: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateAIConfigPayload {
+  name: string
+  api_key: string
+  base_url: string
+  model: string
+  description?: string
+}
+
+export interface UpdateAIConfigPayload {
+  name: string
+  api_key?: string // 留空表示不修改
+  base_url: string
+  model: string
+  description?: string
+  is_active?: boolean
+}
+
+export interface FeatureBinding {
+  feature_key: string
+  feature_label: string
+  config_id: number | null
+  config_name: string
+}
+
 export interface AdminCoursesQuery {
   page?: number
   page_size?: number
@@ -141,5 +179,37 @@ export const adminApi = {
 
   deleteChapter(chapterId: number) {
     return request.delete(`/admin/chapter/${chapterId}`)
+  },
+
+  // ===== AI 多配置 =====
+
+  listAIConfigs() {
+    return request.get('/admin/ai-configs')
+  },
+
+  createAIConfig(data: CreateAIConfigPayload) {
+    return request.post('/admin/ai-configs', data)
+  },
+
+  updateAIConfig(id: number, data: UpdateAIConfigPayload) {
+    return request.put(`/admin/ai-configs/${id}`, data)
+  },
+
+  deleteAIConfig(id: number) {
+    return request.delete(`/admin/ai-configs/${id}`)
+  },
+
+  testAIConfig(id: number) {
+    return request.post(`/admin/ai-configs/${id}/test`)
+  },
+
+  // ===== 功能绑定 =====
+
+  listFeatureBindings() {
+    return request.get('/admin/ai-feature-bindings')
+  },
+
+  setFeatureBinding(featureKey: string, configId: number) {
+    return request.put(`/admin/ai-feature-bindings/${featureKey}`, { config_id: configId })
   }
 }

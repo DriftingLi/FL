@@ -77,6 +77,8 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	//   auth/courses/exam/student/question-bank/
 	//   level-exam/grading/tutor/wrong-questions/mock-exam/admin
 	//   practice-mode（题库练习模式：自由刷题/知识点专项，对应 question_practice_record）
+	// AI 配置服务在 NewRouter 创建一次，被 admin 和 AI 助手模块复用
+	aiConfigSvc := service.NewAIConfigService(db)
 	RegisterCoursesRoutes(api, cfg, db)
 	RegisterExamRoutes(api, cfg, db)
 	RegisterStudentRoutes(api, cfg, db)
@@ -84,11 +86,12 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	RegisterPracticeModeRoutes(api, cfg, db)
 	RegisterLevelExamRoutes(api, cfg, db)
 	RegisterGradingRoutes(api, cfg, db)
-	RegisterAdminRoutes(api, cfg, db)
+	RegisterAdminRoutes(api, cfg, db, aiConfigSvc)
 	RegisterTutorRoutes(api, cfg, db)
 	RegisterWrongQuestionRoutes(api, cfg, db)
 	RegisterMockExamRoutes(api, cfg, db)
 	RegisterFeaturedRoutes(api, cfg, db)
+	RegisterAIAssistantRoutes(api, cfg, db, aiConfigSvc)
 
 	_ = response.Success // 确保包引用
 	return r

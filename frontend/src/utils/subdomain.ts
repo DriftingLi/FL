@@ -1,8 +1,8 @@
 // 子域名解析工具：通过 window.location.hostname 判断当前访问的子域名类型。
 // 五类子域名约定：
-//   - 主域名（www.example.com / localhost）：官网、派单等公共页面（无登录）
-//   - training.主域名：学员培训 + AI 助手 + 学员登录
-//   - valuation.主域名：残值评估（含历史）+ 学员登录（与 training 共享用户体系）
+//   - 主域名（www.example.com / localhost）：官网、派单、AI 助手等公共页面（AI 助手使用 HRWAI 账号可选登录）
+//   - training.主域名：学员培训 + 学员登录
+//   - valuation.主域名：残值评估（含历史）+ HRWAI 账号登录（与 AI 助手共享 valuation 认证体系）
 //   - mentor.主域名：导师登录与工作区
 //   - manage.主域名：管理员登录与后台（hostname 前缀为 manage，内部类型仍为 admin）
 //
@@ -87,13 +87,12 @@ export function getTargetSubdomainForPath(path: string): SubdomainType {
   if (path.startsWith('/training/tutor')) return 'tutor'
   // 学员培训
   if (path.startsWith('/training')) return 'training'
-  // AI 助手与培训共用 training 子域名
-  if (path.startsWith('/ai-assistant')) return 'training'
   // 管理员后台
   if (path.startsWith('/admin')) return 'admin'
   // 残值评估所有界面（含历史、报告、电池评估）
   if (path.startsWith('/valuation')) return 'valuation'
-  // 其它路径（/、/dispatch、/dashboard 兼容重定向等）在主域名
+  // AI 助手归属主域名（使用 HRWAI 账号体系，与残值评估共享 valuation 认证）
+  // 其它路径（/、/dispatch、/ai-assistant、/dashboard 兼容重定向等）在主域名
   return 'main'
 }
 

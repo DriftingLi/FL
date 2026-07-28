@@ -49,7 +49,7 @@ func (h *EvaluationHandler) Create(c *gin.Context) {
 	}
 
 	// 2. 持久化评估结果到 evaluations 表（带上当前登录用户 ID，未登录为 0→NULL）
-	userID := currentValuationUserID(c)
+	userID := CurrentValuationUserID(c)
 	id, err := h.valuation.Persist(c.Request.Context(), result, userID)
 	if err != nil {
 		h.logger.Error("保存评估记录失败", zap.Error(err))
@@ -72,7 +72,7 @@ func (h *EvaluationHandler) Get(c *gin.Context) {
 		return
 	}
 
-	userID := currentValuationUserID(c)
+	userID := CurrentValuationUserID(c)
 	detail, err := h.evalRepo.GetEvaluationByUser(c.Request.Context(), id, userID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -111,7 +111,7 @@ func (h *EvaluationHandler) List(c *gin.Context) {
 	// 品牌筛选参数（为空时不过滤）
 	brand := c.Query("brand")
 	// 仅查询当前登录用户的记录（List 在鉴权组，userID 必然 >0）
-	userID := currentValuationUserID(c)
+	userID := CurrentValuationUserID(c)
 
 	// 1. 查询总数
 	total, err := h.evalRepo.CountEvaluations(c.Request.Context(), brand, userID)
