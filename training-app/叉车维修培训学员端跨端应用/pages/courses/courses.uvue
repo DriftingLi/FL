@@ -1,287 +1,293 @@
 <template>
-	<view class="container">
-		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-		<view class="header">
-			<text class="header-title">课程中心</text>
-		</view>
-		<scroll-view class="category-scroll" scroll-x>
-			<view class="category-list">
-				<view v-for="(cat, idx) in categories" :key="idx" :class="['category-item', { active: currentCategory == idx }]" @click="onCategoryClick(idx)">
-					<text class="category-text">{{ cat.name }}</text>
-				</view>
-			</view>
-		</scroll-view>
-		<scroll-view class="course-scroll" scroll-y @scrolltolower="onLoadMore">
-			<view v-if="courses.length == 0 && !loading" class="empty-tip">
-				<text class="empty-text">暂无课程数据</text>
-			</view>
-			<view class="course-grid">
-				<view v-for="(course, idx) in courses" :key="idx" class="course-card" @click="onCourseClick(course.course_id)">
-					<view class="course-card-cover">
-						<text class="course-card-icon">{{ getCategoryIcon(course.category) }}</text>
-					</view>
-					<view class="course-card-info">
-						<text class="course-card-title">{{ course.title }}</text>
-						<text class="course-card-desc">{{ course.description }}</text>
-						<view class="course-card-footer">
-							<text v-if="course.chapter_count > 0" class="course-card-chapters">{{ course.chapter_count }}节</text>
-							<text v-if="course.duration > 0" class="course-card-duration">{{ formatDuration(course.duration) }}</text>
-						</view>
-					</view>
-				</view>
-			</view>
-			<view v-if="loading" class="loading-more">
-				<text class="loading-text">加载中...</text>
-			</view>
-			<view v-if="noMore && courses.length > 0" class="loading-more">
-				<text class="loading-text">没有更多了</text>
-			</view>
-		</scroll-view>
-		<tab-bar :active-index="1"></tab-bar>
-	</view>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <text class="header-title">课程中心</text>
+        </view>
+        <scroll-view class="category-scroll" scroll-x="true">
+            <view class="category-list">
+                <view v-for="(cat, idx) in categories" :key="idx"
+                    :class="['category-item', { active: currentCategory == idx }]" @click="onCategoryClick(idx)">
+                    <text class="category-text">{{ cat.name }}</text>
+                </view>
+            </view>
+        </scroll-view>
+        <scroll-view class="course-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+            <view v-if="courses.length == 0 && !loading" class="empty-tip">
+                <text class="empty-text">暂无课程数据</text>
+            </view>
+            <view class="course-grid">
+                <view v-for="(course, idx) in courses" :key="idx" class="course-card"
+                    @click="onCourseClick(course.course_id)">
+                    <view class="course-card-cover">
+                        <text class="course-card-icon">{{ getCategoryIcon(course.category) }}</text>
+                    </view>
+                    <view class="course-card-info">
+                        <text class="course-card-title">{{ course.title }}</text>
+                        <text class="course-card-desc">{{ course.description }}</text>
+                        <view class="course-card-footer">
+                            <text v-if="course.chapter_count > 0"
+                                class="course-card-chapters">{{ course.chapter_count }}节</text>
+                            <text v-if="course.duration > 0"
+                                class="course-card-duration">{{ formatDuration(course.duration) }}</text>
+                        </view>
+                    </view>
+                </view>
+            </view>
+            <view v-if="loading" class="loading-more">
+                <text class="loading-text">加载中...</text>
+            </view>
+            <view v-if="noMore && courses.length > 0" class="loading-more">
+                <text class="loading-text">没有更多了</text>
+            </view>
+        </scroll-view>
+        <tab-bar :active-index="1"></tab-bar>
+    </view>
 </template>
 
 <script setup lang="uts">
-	import { ref } from 'vue'
-	import { onShow } from '@dcloudio/uni-app'
-	import { useStatusBarHeight } from '../../utils/system'
-	import { getCourseListApi } from '../../api/course'
-	import type { CourseItem } from '../../types/index'
+    import { ref } from 'vue'
+    import { onShow } from '@dcloudio/uni-app'
+    import { useStatusBarHeight, useScrollHeight } from '../../utils/system'
+    import { getCourseListApi } from '../../api/course'
+    import type { CourseItem } from '../../types/index'
 
-	type CategoryItem = {
-		name : string
-		value : string
-	}
+    type CategoryItem = {
+        name : string
+        value : string
+    }
 
-	const statusBarHeight = useStatusBarHeight()
-	const currentCategory = ref<number>(0)
-	const courses = ref<CourseItem[]>([])
-	const loading = ref<boolean>(false)
-	const page = ref<number>(1)
-	const pageSize = 12
-	const total = ref<number>(0)
-	const noMore = ref<boolean>(false)
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+    const currentCategory = ref<number>(0)
+    const courses = ref<CourseItem[]>([])
+    const loading = ref<boolean>(false)
+    const page = ref<number>(1)
+    const pageSize = 12
+    const total = ref<number>(0)
+    const noMore = ref<boolean>(false)
 
-	const categories : CategoryItem[] = [
-		{ name: '全部', value: '' },
-		{ name: '基础操作', value: 'driving' },
-		{ name: '维护保养', value: 'maintenance' },
-		{ name: '安全规范', value: 'safety' },
-		{ name: '故障排除', value: 'troubleshooting' },
-	]
+    const categories : CategoryItem[] = [
+        { name: '全部', value: '' },
+        { name: '基础操作', value: 'driving' },
+        { name: '维护保养', value: 'maintenance' },
+        { name: '安全规范', value: 'safety' },
+        { name: '故障排除', value: 'troubleshooting' },
+    ]
 
-	function getCategoryIcon(category : string) : string {
-		if (category == 'driving') return '🚗'
-		if (category == 'maintenance') return '🔧'
-		if (category == 'safety') return '⚠️'
-		if (category == 'troubleshooting') return '🔩'
-		if (category == 'cargo') return '📐'
-		if (category == 'electric') return '⚡'
-		return '📚'
-	}
+    function getCategoryIcon(category : string) : string {
+        if (category == 'driving') return '🚗'
+        if (category == 'maintenance') return '🔧'
+        if (category == 'safety') return '⚠️'
+        if (category == 'troubleshooting') return '🔩'
+        if (category == 'cargo') return '📐'
+        if (category == 'electric') return '⚡'
+        return '📚'
+    }
 
-	function formatDuration(seconds : number) : string {
-		if (seconds <= 0) return ''
-		const minutes = Math.floor(seconds / 60)
-		if (minutes < 60) return minutes + '分钟'
-		const hours = Math.floor(minutes / 60)
-		const mins = minutes % 60
-		return hours + 'h' + mins + 'm'
-	}
+    function formatDuration(seconds : number) : string {
+        if (seconds <= 0) return ''
+        const minutes = Math.floor(seconds / 60)
+        if (minutes < 60) return minutes + '分钟'
+        const hours = Math.floor(minutes / 60)
+        const mins = minutes % 60
+        return hours + 'h' + mins + 'm'
+    }
 
-	async function loadCourses(reset : boolean = false) {
-		if (loading.value) return
-		if (reset) {
-			page.value = 1
-			noMore.value = false
-		}
-		if (noMore.value && !reset) return
+    async function loadCourses(reset : boolean = false) {
+        if (loading.value) return
+        if (reset) {
+            page.value = 1
+            noMore.value = false
+        }
+        if (noMore.value && !reset) return
 
-		loading.value = true
-		const category = categories[currentCategory.value].value
-		try {
-			const result = await getCourseListApi(page.value, pageSize, category)
-			if (reset) {
-				courses.value = result.items
-			} else {
-				courses.value = courses.value.concat(result.items)
-			}
-			total.value = result.total
-			if (courses.value.length >= result.total || result.items.length == 0) {
-				noMore.value = true
-			} else {
-				page.value = page.value + 1
-			}
-		} catch (e) {
-			console.error('[courses] load failed:', e)
-			uni.showToast({ title: '加载课程失败', icon: 'none' })
-		} finally {
-			loading.value = false
-		}
-	}
+        loading.value = true
+        const category = categories[currentCategory.value].value
+        try {
+            const result = await getCourseListApi(page.value, pageSize, category)
+            if (reset) {
+                courses.value = result.items
+            } else {
+                courses.value = courses.value.concat(result.items)
+            }
+            total.value = result.total
+            if (courses.value.length >= result.total || result.items.length == 0) {
+                noMore.value = true
+            } else {
+                page.value = page.value + 1
+            }
+        } catch (e) {
+            console.error('[courses] load failed:', e)
+            uni.showToast({ title: '加载课程失败', icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
 
-	function onCategoryClick(idx : number) : void {
-		if (currentCategory.value == idx) return
-		currentCategory.value = idx
-		loadCourses(true)
-	}
+    function onCategoryClick(idx : number) : void {
+        if (currentCategory.value == idx) return
+        currentCategory.value = idx
+        loadCourses(true)
+    }
 
-	function onLoadMore() : void {
-		loadCourses(false)
-	}
+    function onLoadMore() : void {
+        loadCourses(false)
+    }
 
-	function onCourseClick(courseId : number) : void {
-		uni.showToast({ title: '课程详情开发中', icon: 'none' })
-	}
+    function onCourseClick(courseId : number) : void {
+        uni.showToast({ title: '课程详情开发中', icon: 'none' })
+    }
 
-	onShow(() => {
-		if (courses.value.length == 0) {
-			loadCourses(true)
-		}
-	})
+    onShow(() => {
+        if (courses.value.length == 0) {
+            loadCourses(true)
+        }
+    })
 </script>
 
 <style>
-	.container {
-		flex: 1;
-		background-color: #f5f5f5;
-		flex-direction: column;
-	}
+    .container {
+        display: flex;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
 
-	.status-bar {
-		background-color: #2979ff;
-	}
+    .status-bar {
+        background-color: #2979ff;
+    }
 
-	.header {
-		background-color: #2979ff;
-		padding: 16rpx 32rpx;
-		align-items: center;
-	}
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        align-items: center;
+    }
 
-	.header-title {
-		font-size: 36rpx;
-		font-weight: bold;
-		color: #ffffff;
-	}
+    .header-title {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
 
-	.category-scroll {
-		background-color: #ffffff;
-		white-space: nowrap;
-		border-bottom: 1rpx solid #f0f0f0;
-	}
+    .category-scroll {
+        background-color: #ffffff;
+        white-space: nowrap;
+        border-bottom: 1rpx solid #f0f0f0;
+    }
 
-	.category-list {
-		padding: 20rpx 0;
-		flex-direction: row;
-	}
+    .category-list {
+        padding: 20rpx 0;
+        flex-direction: row;
+    }
 
-	.category-item {
-		padding: 16rpx 32rpx;
-		border-radius: 32rpx;
-		background-color: #f5f5f5;
-		margin-left: 20rpx;
-	}
+    .category-item {
+        padding: 16rpx 32rpx;
+        border-radius: 32rpx;
+        background-color: #f5f5f5;
+        margin-left: 20rpx;
+    }
 
-	.category-item.active {
-		background-color: #2979ff;
-	}
+    .category-item.active {
+        background-color: #2979ff;
+    }
 
-	.category-text {
-		font-size: 28rpx;
-		color: #666666;
-	}
+    .category-text {
+        font-size: 28rpx;
+        color: #666666;
+    }
 
-	.category-item.active .category-text {
-		color: #ffffff;
-	}
+    .category-item.active .category-text {
+        color: #ffffff;
+    }
 
-	.course-scroll {
-		flex: 1;
-		padding: 24rpx;
-		padding-bottom: 140rpx;
-	}
+    .course-scroll {
+        flex: 1;
+        /* display: flex; */
+        padding: 24rpx;
+        height: 0;
+    }
 
-	.empty-tip {
-		align-items: center;
-		padding: 120rpx 0;
-	}
+    .empty-tip {
+        align-items: center;
+        padding: 120rpx 0;
+    }
 
-	.empty-text {
-		font-size: 28rpx;
-		color: #999999;
-	}
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
 
-	.course-grid {
-		flex-direction: row;
-		flex-wrap: wrap;
-		justify-content: space-between;
-	}
+    .course-grid {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: space-between;
+    }
 
-	.course-card {
-		width: 340rpx;
-		background-color: #ffffff;
-		border-radius: 16rpx;
-		overflow: hidden;
-		margin-bottom: 20rpx;
-		border: 1px solid #eeeeee;
-	}
+    .course-card {
+        width: 340rpx;
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        overflow: hidden;
+        margin-bottom: 20rpx;
+        border: 1px solid #eeeeee;
+    }
 
-	.course-card-cover {
-		align-self: stretch;
-		height: 180rpx;
-		background-color: #e3f2fd;
-		align-items: center;
-		justify-content: center;
-	}
+    .course-card-cover {
+        align-self: stretch;
+        height: 180rpx;
+        background-color: #e3f2fd;
+        align-items: center;
+        justify-content: center;
+    }
 
-	.course-card-icon {
-		font-size: 64rpx;
-	}
+    .course-card-icon {
+        font-size: 64rpx;
+    }
 
-	.course-card-info {
-		padding: 20rpx;
-		flex-direction: column;
-	}
+    .course-card-info {
+        padding: 20rpx;
+        flex-direction: column;
+    }
 
-	.course-card-title {
-		font-size: 30rpx;
-		font-weight: bold;
-		color: #333333;
-		margin-bottom: 8rpx;
-	}
+    .course-card-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 8rpx;
+    }
 
-	.course-card-desc {
-		font-size: 24rpx;
-		color: #999999;
-		margin-bottom: 16rpx;
-		lines: 2;
-		text-overflow: ellipsis;
-	}
+    .course-card-desc {
+        font-size: 24rpx;
+        color: #999999;
+        margin-bottom: 16rpx;
+        lines: 2;
+        text-overflow: ellipsis;
+    }
 
-	.course-card-footer {
-		flex-direction: row;
-		justify-content: space-between;
-		align-items: center;
-	}
+    .course-card-footer {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
 
-	.course-card-chapters {
-		font-size: 22rpx;
-		color: #999999;
-	}
+    .course-card-chapters {
+        font-size: 22rpx;
+        color: #999999;
+    }
 
-	.course-card-duration {
-		font-size: 22rpx;
-		color: #2979ff;
-		font-weight: bold;
-	}
+    .course-card-duration {
+        font-size: 22rpx;
+        color: #2979ff;
+        font-weight: bold;
+    }
 
-	.loading-more {
-		align-items: center;
-		padding: 24rpx 0;
-	}
+    .loading-more {
+        align-items: center;
+        padding: 24rpx 0;
+    }
 
-	.loading-text {
-		font-size: 24rpx;
-		color: #999999;
-	}
+    .loading-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
 </style>
