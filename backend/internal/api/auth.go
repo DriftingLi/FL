@@ -42,7 +42,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		response.BadRequest(c, "用户名和密码不能为空")
 		return
 	}
-	result, err := h.authSvc.StudentLogin(req.Username, req.Password)
+	result, err := h.authSvc.HrwaiLogin(req.Username, req.Password)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -68,7 +68,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		response.BadRequest(c, "手机号、密码和姓名不能为空")
 		return
 	}
-	result, err := h.authSvc.StudentRegister(req.Phone, req.Password, req.Name, req.Email, req.Company)
+	result, err := h.authSvc.HrwaiRegister(req.Phone, req.Password, req.Name, req.Email, req.Company)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -162,13 +162,13 @@ func (h *AuthHandler) Me(c *gin.Context) {
 
 	db := h.authSvc.DB()
 	switch roleStr {
-	case "student":
-		var s model.Student
-		if err := db.First(&s, uid).Error; err == nil {
-			data["name"] = s.Name
-			data["phone"] = s.Phone
-			data["email"] = s.Email
-			data["company"] = s.Company
+	case "hrwai_user":
+		var u model.HrwaiUser
+		if err := db.First(&u, uid).Error; err == nil {
+			data["name"] = u.Name
+			data["phone"] = u.Phone
+			data["email"] = u.Email
+			data["company"] = u.Company
 		}
 	case "tutor":
 		var t model.Tutor

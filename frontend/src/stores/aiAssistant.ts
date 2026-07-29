@@ -1,6 +1,6 @@
 // AI 助手模块 Pinia store
 // 管理：当前选中的模型、会话列表、当前会话消息、用户自定义模型
-// 认证：复用 valuation_auth（HRWAI 账号），未登录时仅支持临时对话
+// 认证：复用主体系 useAuthStore（HRWAI 账号），未登录时仅支持临时对话
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Ref } from 'vue'
@@ -13,7 +13,7 @@ import {
   type ModelSource,
   type SaveUserModelReq
 } from '@/api/aiAssistant'
-import { useValuationAuthStore } from '@/stores/valuationAuth'
+import { useAuthStore } from '@/stores/auth'
 
 export interface SelectedModel {
   source: ModelSource
@@ -50,9 +50,9 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
   const streamingContent = ref('') // 正在生成的内容
   let abortController: AbortController | null = null
 
-  // ===== 登录状态（复用 valuation auth）=====
-  const valuationAuth = useValuationAuthStore()
-  const isLoggedIn = computed(() => valuationAuth.isLoggedIn)
+  // ===== 登录状态（复用主体系 auth store）=====
+  const authStore = useAuthStore()
+  const isLoggedIn = computed(() => authStore.isLoggedIn)
 
   // ===== 模型加载 =====
   async function loadAdminModels() {
@@ -65,7 +65,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
         selectedModel.value = {
           source: 'admin',
           configId: first.id,
-          label: `${first.name} · ${first.model}`
+          label: `${first.model}`
         }
       }
     } catch (e) {
@@ -130,6 +130,19 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     if (currentSessionId.value === id) {
       currentSessionId.value = null
       messages.value = []
+    }
+  }
+
+  // 重命名会话：调用 API 后立即更新本地列表
+  async function renameSession(id: number, title: string) {
+    const trimmed = title.trim()
+    if (!trimmed) {
+      throw new Error('标题不能为空')
+    }
+    await aiAssistantApi.renameSession(id, trimmed)
+    const target = sessions.value.find(s => s.id === id)
+    if (target) {
+      target.title = trimmed
     }
   }
 
@@ -201,9 +214,18 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
         streamingContent.value = ''
         streaming.value = false
         abortController = null
-        // 刷新会话列表（updated_at 变化）
+        // 刷新会话列表（updated_at 变化 + 后端异步命名可能已生成）
         if (isLoggedIn.value) {
           loadSessions().catch(() => {})
+          // 后端异步生成标题需要调用模型，延迟 5 秒再刷新一次
+          // 仅当当前会话标题仍是占位符时才执行，避免无谓请求
+          const curSessionId = currentSessionId.value
+          const cur = sessions.value.find(s => s.id === curSessionId)
+          if (cur && (cur.title === '新会话' || cur.title === '')) {
+            setTimeout(() => {
+              loadSessions().catch(() => {})
+            }, 5000)
+          }
         }
       },
       onError: (message) => {
@@ -259,7 +281,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     selectedModel.value = {
       source: 'admin',
       configId: m.id,
-      label: `${m.name} · ${m.model}`
+      label: `${m.model}`
     }
   }
 
@@ -314,6 +336,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     loadSessions,
     createSession,
     deleteSession,
+    renameSession,
     selectSession,
     sendMessage,
     stopStreaming,

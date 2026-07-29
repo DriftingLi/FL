@@ -18,7 +18,7 @@ import (
 func RegisterPracticeModeRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	svc := service.NewPracticeModeService(db, newAIService(cfg, db))
 
-	g := rg.Group("/practice-mode", middleware.JWTAuth(cfg), middleware.RoleRequired("student"))
+	g := rg.Group("/practice-mode", middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
 
 	// GET /api/practice-mode/free  随机练习抽题（count 控制题量）
 	g.GET("/free", func(c *gin.Context) {

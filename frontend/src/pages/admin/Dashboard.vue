@@ -92,7 +92,7 @@ const statItems = ref([
 ])
 
 const quickActions = [
-  { label: '学员管理', path: '/admin/students', icon: User, color: '#2563EB', bgColor: '#EFF6FF' },
+  { label: '用户管理', path: '/admin/hrwai-users', icon: User, color: '#2563EB', bgColor: '#EFF6FF' },
   { label: '课程管理', path: '/admin/courses', icon: Notebook, color: '#10B981', bgColor: '#ECFDF5' },
   { label: '统计分析', path: '/admin/statistics', icon: TrendCharts, color: '#F59E0B', bgColor: '#FFFBEB' },
   { label: '内容生成', path: '/admin/content-generate', icon: MagicStick, color: '#8B5CF6', bgColor: '#F5F3FF' }

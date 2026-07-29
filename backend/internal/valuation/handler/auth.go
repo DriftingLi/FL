@@ -1,5 +1,6 @@
 // Package handler 实现残值评估模块的 HTTP 处理器。
-// 本文件：估值模块独立认证 handler（/api/valuation/auth/*）。
+// 本文件：估值模块认证 handler（/api/valuation/auth/*）。
+// 已统一到主体系 AuthService,本 handler 仅作为前端兼容入口。
 package handler
 
 import (
@@ -12,10 +13,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	"forklift-training/internal/cache"
+	"forklift-training/internal/middleware"
 	vservice "forklift-training/internal/valuation/service"
 )
 
-// ValuationAuthHandler 估值模块独立认证处理器。
+// ValuationAuthHandler 估值模块认证处理器(薄包装,内部代理到主体系 AuthService)。
 type ValuationAuthHandler struct {
 	authSvc *vservice.ValuationAuthService
 }
@@ -79,10 +81,9 @@ func (h *ValuationAuthHandler) Register(c *gin.Context) {
 	OK(c, result)
 }
 
-// Me 处理 GET /api/valuation/auth/me（需 ValuationJWTAuth）
+// Me 处理 GET /api/valuation/auth/me（需 middleware.JWTAuth）
 func (h *ValuationAuthHandler) Me(c *gin.Context) {
-	userID, _ := c.Get(CtxValuationUserID)
-	uid, _ := userID.(int)
+	uid := middleware.CurrentUserID(c)
 	if uid == 0 {
 		Error(c, http.StatusUnauthorized, 40100, "Token无效或已过期，请重新登录")
 		return
@@ -103,16 +104,16 @@ func (h *ValuationAuthHandler) Me(c *gin.Context) {
 	})
 }
 
-// Logout 处理 POST /api/valuation/auth/logout（需 ValuationJWTAuth）
-// 将当前 token 写入 Redis 独立黑名单，TTL = token 剩余有效期。
+// Logout 处理 POST /api/valuation/auth/logout（需 middleware.JWTAuth）
+// 将当前 token 写入 Redis 黑名单(统一前缀 jwt:blacklist:),TTL = token 剩余有效期。
 func (h *ValuationAuthHandler) Logout(c *gin.Context) {
 	tokenStr := extractValuationBearerToken(c)
 	if tokenStr == "" {
 		OK(c, nil)
 		return
 	}
-	// 已通过 ValuationJWTAuth 校验，这里仅解析 claims 获取过期时间，不重复校验签名
-	claims := &vservice.ValuationClaims{}
+	// 已通过 middleware.JWTAuth 校验,这里用主体系 Claims 解析过期时间
+	claims := &middleware.Claims{}
 	if _, _, err := jwt.NewParser().ParseUnverified(tokenStr, claims); err == nil && claims.ExpiresAt != nil {
 		tokenHash := sha256.Sum256([]byte(tokenStr))
 		blacklistKey := valuationBlacklistPrefix + hex.EncodeToString(tokenHash[:])

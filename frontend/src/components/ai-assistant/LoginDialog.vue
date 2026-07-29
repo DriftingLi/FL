@@ -52,8 +52,8 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
 import { ElMessage, type FormInstance } from 'element-plus'
-import { useValuationAuthStore } from '@/stores/valuationAuth'
-import { valuationAuthApi } from '@/api/valuation/auth'
+import { useAuthStore } from '@/stores/auth'
+import { authApi } from '@/api/auth'
 import { buildSubdomainUrl } from '@/utils/subdomain'
 import { passwordRules } from '@/utils/validate'
 
@@ -63,7 +63,7 @@ const emit = defineEmits<{
   (e: 'success'): void
 }>()
 
-const valuationAuth = useValuationAuthStore()
+const authStore = useAuthStore()
 const visible = computed({
   get: () => props.modelValue,
   set: (v) => emit('update:modelValue', v)
@@ -102,12 +102,12 @@ async function handleLogin() {
 
   loading.value = true
   try {
-    const res = await valuationAuthApi.login({
-      account: formData.account,
+    const res = await authApi.login({
+      username: formData.account,
       password: formData.password
     })
-    if (res.data && res.data.token) {
-      valuationAuth.setAuthData(res.data)
+    if (res.code === 200 && res.data && res.data.token) {
+      authStore.setAuthData(res.data)
       ElMessage.success('登录成功')
       emit('success')
       visible.value = false

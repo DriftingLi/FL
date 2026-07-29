@@ -53,10 +53,13 @@ func (j *JSONB) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// ===== 1. 学员 =====
+// ===== 1. HRWAI 账号(统一用户表) =====
 
-type Student struct {
-	StudentID int       `gorm:"column:student_id;primaryKey" json:"student_id"`
+// HrwaiUser 统一用户表,合并原 student 与 valuation_users 两表。
+// 三套登录鉴权(培训学员端 / 残值评估 / AI 助手)共用此表与主体系 JWT。
+// admin / tutor 账号仍保留独立表,不并入此表。
+type HrwaiUser struct {
+	ID        int       `gorm:"column:id;primaryKey" json:"id"`
 	Username  string    `gorm:"column:username;uniqueIndex" json:"username"`
 	Password  string    `gorm:"column:password" json:"-"`
 	Name      string    `gorm:"column:name" json:"name"`
@@ -67,7 +70,24 @@ type Student struct {
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
-func (Student) TableName() string { return "student" }
+func (HrwaiUser) TableName() string { return "hrwai_users" }
+
+// Student 兼容旧代码引用,实际映射同一张 hrwai_users 表。
+// StudentID Go 字段名保留(避免大量改下游代码),但 gorm column 改为 id(对应新表主键)。
+// deprecated: 后续请改用 model.HrwaiUser
+type Student struct {
+	StudentID int       `gorm:"column:id;primaryKey" json:"student_id"`
+	Username  string    `gorm:"column:username;uniqueIndex" json:"username"`
+	Password  string    `gorm:"column:password" json:"-"`
+	Name      string    `gorm:"column:name" json:"name"`
+	Phone     string    `gorm:"column:phone;uniqueIndex" json:"phone"`
+	Email     string    `gorm:"column:email" json:"email,omitempty"`
+	Company   string    `gorm:"column:company" json:"company,omitempty"`
+	Status    int16     `gorm:"column:status;default:1" json:"status"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (Student) TableName() string { return "hrwai_users" }
 
 // ===== 2. 管理员 =====
 
@@ -94,22 +114,11 @@ type Tutor struct {
 
 func (Tutor) TableName() string { return "tutor" }
 
-// ===== 3.5 残值评估模块独立用户 =====
+// ===== 3.5 残值评估模块独立用户(已并入 hrwai_users) =====
 
-// ValuationUser 残值评估模块独立用户（与培训 Student 表完全独立，账号互不复用）。
-type ValuationUser struct {
-	ID        int       `gorm:"column:id;primaryKey" json:"id"`
-	Username  string    `gorm:"column:username;uniqueIndex" json:"username"`
-	Password  string    `gorm:"column:password" json:"-"`
-	Name      string    `gorm:"column:name" json:"name"`
-	Phone     string    `gorm:"column:phone;uniqueIndex" json:"phone"`
-	Email     string    `gorm:"column:email" json:"email,omitempty"`
-	Company   string    `gorm:"column:company" json:"company,omitempty"`
-	Status    int16     `gorm:"column:status;default:1" json:"status"`
-	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
-}
-
-func (ValuationUser) TableName() string { return "valuation_users" }
+// ValuationUser 别名,实际映射同一张 hrwai_users 表。
+// deprecated: 后续请改用 model.HrwaiUser
+type ValuationUser = HrwaiUser
 
 // ===== 4. 课程 =====
 
@@ -422,9 +431,12 @@ type AIConfig struct {
 
 func (AIConfig) TableName() string { return "ai_configs" }
 
-// AIFeatureBinding AI 功能-配置绑定（每个 feature_key 只能绑定一个 config_id）。
+// AIFeatureBinding AI 功能-配置绑定。
+// 单绑定功能（如简答题评分）在应用层限制每个 feature_key 只能有一条记录；
+// 多绑定功能（如 AI 助手）允许一个 feature_key 绑定多个 config_id（DB 通过 (feature_key, config_id) 复合唯一约束保证不重复）。
 type AIFeatureBinding struct {
-	FeatureKey string    `gorm:"column:feature_key;primaryKey" json:"feature_key"`
+	ID         int       `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	FeatureKey string    `gorm:"column:feature_key" json:"feature_key"`
 	ConfigID   int       `gorm:"column:config_id" json:"config_id"`
 	UpdatedAt  time.Time `gorm:"column:updated_at" json:"updated_at"`
 }

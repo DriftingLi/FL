@@ -77,39 +77,43 @@ type LoginResult struct {
 	Role     string `json:"role"`
 }
 
-// StudentLogin 学员登录，支持用户名或手机号。
-func (s *AuthService) StudentLogin(account, password string) (*LoginResult, error) {
-	var student model.Student
+// HrwaiRole 统一 HRWAI 账号角色名(替代原 "student" 和 "valuation_user")。
+const HrwaiRole = "hrwai_user"
+
+// HrwaiLogin 统一 HRWAI 账号登录,支持用户名或手机号。
+// 三套前端(培训学员端 / 残值评估 / AI 助手)共用此登录方法。
+func (s *AuthService) HrwaiLogin(account, password string) (*LoginResult, error) {
+	var user model.HrwaiUser
 	// 同一输入既可能是用户名也可能是手机号，二者择一命中即可
-	if err := s.db.Where("username = ? OR phone = ?", account, account).First(&student).Error; err != nil {
+	if err := s.db.Where("username = ? OR phone = ?", account, account).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("用户名或密码错误")
 		}
 		return nil, err
 	}
-	if !VerifyPassword(password, student.Password) {
+	if !VerifyPassword(password, user.Password) {
 		return nil, errors.New("用户名或密码错误")
 	}
-	if student.Status != 1 {
+	if user.Status != 1 {
 		return nil, errors.New("账号已被禁用，请联系管理员")
 	}
-	token, err := s.GenerateToken(student.StudentID, student.Username, "student")
+	token, err := s.GenerateToken(user.ID, user.Username, HrwaiRole)
 	if err != nil {
 		return nil, err
 	}
 	return &LoginResult{
 		Token:    token,
-		UserID:   student.StudentID,
-		Username: student.Username,
-		Name:     student.Name,
-		Role:     "student",
+		UserID:   user.ID,
+		Username: user.Username,
+		Name:     user.Name,
+		Role:     HrwaiRole,
 	}, nil
 }
 
-// StudentRegister 学员注册，username 由手机号自动生成，避免前端再单独填写用户名。
-func (s *AuthService) StudentRegister(phone, password, name, email, company string) (map[string]any, error) {
+// HrwaiRegister 统一 HRWAI 账号注册,username 由手机号自动生成。
+func (s *AuthService) HrwaiRegister(phone, password, name, email, company string) (map[string]any, error) {
 	var count int64
-	s.db.Model(&model.Student{}).Where("phone = ?", phone).Count(&count)
+	s.db.Model(&model.HrwaiUser{}).Where("phone = ?", phone).Count(&count)
 	if count > 0 {
 		return nil, errors.New("手机号已被注册")
 	}
@@ -117,7 +121,7 @@ func (s *AuthService) StudentRegister(phone, password, name, email, company stri
 	if err != nil {
 		return nil, err
 	}
-	student := model.Student{
+	user := model.HrwaiUser{
 		Username:  phone,
 		Password:  hashed,
 		Name:      name,
@@ -127,15 +131,24 @@ func (s *AuthService) StudentRegister(phone, password, name, email, company stri
 		Status:    1,
 		CreatedAt: beijingNow(),
 	}
-	if err := s.db.Create(&student).Error; err != nil {
+	if err := s.db.Create(&user).Error; err != nil {
 		return nil, err
 	}
 	return map[string]any{
-		"student_id": student.StudentID,
-		"username":   student.Username,
-		"name":       student.Name,
-		"phone":      student.Phone,
+		"id":       user.ID,
+		"username": user.Username,
+		"name":     user.Name,
+		"phone":    user.Phone,
 	}, nil
+}
+
+// GetHrwaiUserByID 用于 /me 接口查询用户信息。
+func (s *AuthService) GetHrwaiUserByID(id int) (*model.HrwaiUser, error) {
+	var user model.HrwaiUser
+	if err := s.db.First(&user, id).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
 
 // AdminLogin 管理员登录。
@@ -279,6 +292,7 @@ func (s *AuthService) EnsureDefaultUsers() error {
 			Username:  "student",
 			Password:  hashed,
 			Name:      "测试学员",
+			Phone:     "13800000000",
 			Status:    1,
 			CreatedAt: beijingNow(),
 		}

@@ -1,283 +1,70 @@
 // Package service 实现残值评估模块的业务服务层。
-// 本文件：估值模块独立认证服务（与培训 AuthService 完全隔离）。
+// 本文件:估值模块认证服务(已并入主体系 AuthService,本文件保留作为薄包装降低下游改动量)。
 package service
 
 import (
-	"errors"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	vmain "forklift-training/internal/service"
 )
 
-// ValuationRole 估值模块固定角色。
-const ValuationRole = "valuation_user"
+// ValuationRole 估值模块角色(已统一为 HrwaiRole)。
+// deprecated: 请改用 service.HrwaiRole
+const ValuationRole = vmain.HrwaiRole
 
-// ValuationClaims 估值模块独立 JWT 声明。
-// 使用独立 secret 签发，与主体系 middleware.Claims 互不兼容。
-type ValuationClaims struct {
-	UserID   int    `json:"user_id"`
-	Username string `json:"username"`
-	Role     string `json:"role"` // 固定 "valuation_user"
-	jwt.RegisteredClaims
-}
+// ValuationLoginResult 估值登录返回结构(与主体系 LoginResult 等价)。
+type ValuationLoginResult = vmain.LoginResult
 
-// ValuationAuthService 估值模块独立认证服务。
-// 与主 AuthService 隔离：独立用户表、独立 JWT secret、独立 claims。
+// ValuationAuthService 估值模块认证服务(薄包装,内部代理到主体系 AuthService)。
+// 保留此类型以减少下游 handler 改动量,后续可逐步删除。
 type ValuationAuthService struct {
-	db        *gorm.DB
-	jwtSecret string
-	jwtExpiry time.Duration
+	main *vmain.AuthService
 }
 
-// NewValuationAuthService 创建估值认证服务。
+// NewValuationAuthService 创建估值认证服务(薄包装)。
+// 参数 db / jwtSecret / jwtExpiry 仅为兼容旧签名,实际使用主体系 AuthService 的配置。
 func NewValuationAuthService(db *gorm.DB, jwtSecret string, jwtExpiry time.Duration) *ValuationAuthService {
-	return &ValuationAuthService{db: db, jwtSecret: jwtSecret, jwtExpiry: jwtExpiry}
-}
-
-// ValuationLoginResult 估值登录返回结构。
-type ValuationLoginResult struct {
-	Token    string `json:"token"`
-	UserID   int    `json:"user_id"`
-	Username string `json:"username"`
-	Name     string `json:"name"`
-	Role     string `json:"role"` // 固定 "valuation_user"
-}
-
-// HashValuationPassword 使用 bcrypt 加密密码。
-// 与主 service.HashPassword 等价，但放在本包内避免跨包依赖。
-func HashValuationPassword(password string) (string, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
+	// 创建一个内部主体系 AuthService(jwtExpiry 仅用于内部 token 签发,与主体系一致)
+	return &ValuationAuthService{
+		main: vmain.NewAuthService(db, jwtSecret, jwtExpiry, "", "", ""),
 	}
-	return string(hash), nil
 }
 
-// VerifyValuationPassword 校验密码。
-func VerifyValuationPassword(password, hashed string) bool {
-	return bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password)) == nil
+// WrapValuationAuthService 用已存在的主体系 AuthService 包装为薄包装。
+func WrapValuationAuthService(main *vmain.AuthService) *ValuationAuthService {
+	return &ValuationAuthService{main: main}
 }
 
-// GenerateToken 签发估值专属 JWT。
-func (s *ValuationAuthService) GenerateToken(userID int, username string) (string, error) {
-	claims := &ValuationClaims{
-		UserID:   userID,
-		Username: username,
-		Role:     ValuationRole,
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   username,
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.jwtExpiry)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(s.jwtSecret))
-}
+// Main 返回底层主体系 AuthService,供需要直接调用主体系的场景使用。
+func (s *ValuationAuthService) Main() *vmain.AuthService { return s.main }
 
-// Login 支持用户名或手机号登录。
+// DB 返回底层 *gorm.DB,供 handler 复用查询。
+func (s *ValuationAuthService) DB() *gorm.DB { return s.main.DB() }
+
+// Login 估值登录(代理到主体系 HrwaiLogin)。
 func (s *ValuationAuthService) Login(account, password string) (*ValuationLoginResult, error) {
-	var user model.ValuationUser
-	// 同一输入既可能是用户名也可能是手机号，二者择一命中即可
-	if err := s.db.Where("username = ? OR phone = ?", account, account).First(&user).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("用户名或密码错误")
-		}
-		return nil, err
-	}
-	if !VerifyValuationPassword(password, user.Password) {
-		return nil, errors.New("用户名或密码错误")
-	}
-	if user.Status != 1 {
-		return nil, errors.New("账号已被禁用，请联系管理员")
-	}
-	token, err := s.GenerateToken(user.ID, user.Username)
-	if err != nil {
-		return nil, err
-	}
-	return &ValuationLoginResult{
-		Token:    token,
-		UserID:   user.ID,
-		Username: user.Username,
-		Name:     user.Name,
-		Role:     ValuationRole,
-	}, nil
+	return s.main.HrwaiLogin(account, password)
 }
 
-// Register username 由手机号自动生成，避免前端再单独填写用户名。
+// Register 估值注册(代理到主体系 HrwaiRegister)。
 func (s *ValuationAuthService) Register(phone, password, name, email, company string) (map[string]any, error) {
-	var count int64
-	s.db.Model(&model.ValuationUser{}).Where("phone = ?", phone).Count(&count)
-	if count > 0 {
-		return nil, errors.New("手机号已被注册")
-	}
-	hashed, err := HashValuationPassword(password)
-	if err != nil {
-		return nil, err
-	}
-	user := model.ValuationUser{
-		Username:  phone,
-		Password:  hashed,
-		Name:      name,
-		Phone:     phone,
-		Email:     email,
-		Company:   company,
-		Status:    1,
-		CreatedAt: beijingTimeNow(),
-	}
-	if err := s.db.Create(&user).Error; err != nil {
-		return nil, err
-	}
-	return map[string]any{
-		"id":       user.ID,
-		"username": user.Username,
-		"name":     user.Name,
-		"phone":    user.Phone,
-	}, nil
+	return s.main.HrwaiRegister(phone, password, name, email, company)
 }
 
 // GetByID 用于 /me 接口查询用户信息。
-func (s *ValuationAuthService) GetByID(id int) (*model.ValuationUser, error) {
-	var user model.ValuationUser
-	if err := s.db.First(&user, id).Error; err != nil {
-		return nil, err
-	}
-	return &user, nil
+func (s *ValuationAuthService) GetByID(id int) (*model.HrwaiUser, error) {
+	return s.main.GetHrwaiUserByID(id)
 }
 
-// beijingTimeNow 返回当前北京时间。
-func beijingTimeNow() time.Time {
-	loc, _ := time.LoadLocation("Asia/Shanghai")
-	if loc == nil {
-		loc = time.FixedZone("CST", 8*3600)
-	}
-	return time.Now().In(loc)
+// GenerateToken 签发 JWT(代理到主体系,role 固定 HrwaiRole)。
+func (s *ValuationAuthService) GenerateToken(userID int, username string) (string, error) {
+	return s.main.GenerateToken(userID, username, vmain.HrwaiRole)
 }
 
 // =====================================================
-// 管理员用户管理（供后台 /api/valuation/admin/users 调用）
+// 管理员用户管理已统一到主体系 /api/admin/hrwai-users/*,
+// 由 AdminService 直接操作 hrwai_users 表,本模块不再维护用户管理方法。
 // =====================================================
-
-// ValuationUserSummary 评估用户摘要（列表项，不含密码）
-type ValuationUserSummary struct {
-	ID        int       `json:"id"`
-	Username  string    `json:"username"`
-	Name      string    `json:"name"`
-	Phone     string    `json:"phone"`
-	Email     string    `json:"email"`
-	Company   string    `json:"company"`
-	Status    int16     `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-// ListValuationUsers 分页查询评估用户，支持按用户名/姓名/手机号模糊搜索。
-// 返回摘要列表与总数。
-func (s *ValuationAuthService) ListValuationUsers(page, pageSize int, keyword string) ([]ValuationUserSummary, int64, error) {
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
-	}
-	offset := (page - 1) * pageSize
-
-	query := s.db.Model(&model.ValuationUser{})
-	if keyword != "" {
-		like := "%" + keyword + "%"
-		query = query.Where("username LIKE ? OR name LIKE ? OR phone LIKE ?", like, like, like)
-	}
-	var total int64
-	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-	var users []model.ValuationUser
-	if err := query.Order("created_at DESC, id ASC").Limit(pageSize).Offset(offset).Find(&users).Error; err != nil {
-		return nil, 0, err
-	}
-	out := make([]ValuationUserSummary, 0, len(users))
-	for _, u := range users {
-		out = append(out, ValuationUserSummary{
-			ID:        u.ID,
-			Username:  u.Username,
-			Name:      u.Name,
-			Phone:     u.Phone,
-			Email:     u.Email,
-			Company:   u.Company,
-			Status:    u.Status,
-			CreatedAt: u.CreatedAt,
-		})
-	}
-	return out, total, nil
-}
-
-// AdminCreateValuationUser 管理员新增评估用户。
-// username 缺省时用手机号充填，避免唯一约束冲突。
-func (s *ValuationAuthService) AdminCreateValuationUser(phone, password, name, email, company string) (*model.ValuationUser, error) {
-	if phone == "" || password == "" || name == "" {
-		return nil, errors.New("手机号、密码和姓名不能为空")
-	}
-	var count int64
-	s.db.Model(&model.ValuationUser{}).Where("phone = ?", phone).Count(&count)
-	if count > 0 {
-		return nil, errors.New("手机号已被注册")
-	}
-	hashed, err := HashValuationPassword(password)
-	if err != nil {
-		return nil, err
-	}
-	user := model.ValuationUser{
-		Username:  phone,
-		Password:  hashed,
-		Name:      name,
-		Phone:     phone,
-		Email:     email,
-		Company:   company,
-		Status:    1,
-		CreatedAt: beijingTimeNow(),
-	}
-	if err := s.db.Create(&user).Error; err != nil {
-		return nil, err
-	}
-	return &user, nil
-}
-
-// AdminUpdateValuationUser 管理员更新评估用户资料（不含密码）。
-// status: 1 启用 / 0 禁用。
-func (s *ValuationAuthService) AdminUpdateValuationUser(id int, name, email, company string, status int16) error {
-	if id <= 0 {
-		return errors.New("用户 ID 非法")
-	}
-	updates := map[string]interface{}{
-		"name":    name,
-		"email":   email,
-		"company": company,
-		"status":  status,
-	}
-	return s.db.Model(&model.ValuationUser{}).Where("id = ?", id).Updates(updates).Error
-}
-
-// AdminResetValuationUserPassword 管理员重置用户密码。
-func (s *ValuationAuthService) AdminResetValuationUserPassword(id int, newPassword string) error {
-	if id <= 0 {
-		return errors.New("用户 ID 非法")
-	}
-	if newPassword == "" {
-		return errors.New("新密码不能为空")
-	}
-	hashed, err := HashValuationPassword(newPassword)
-	if err != nil {
-		return err
-	}
-	return s.db.Model(&model.ValuationUser{}).Where("id = ?", id).Update("password", hashed).Error
-}
-
-// AdminDeleteValuationUser 管理员删除评估用户。
-func (s *ValuationAuthService) AdminDeleteValuationUser(id int) error {
-	if id <= 0 {
-		return errors.New("用户 ID 非法")
-	}
-	return s.db.Delete(&model.ValuationUser{}, id).Error
-}

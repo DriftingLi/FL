@@ -172,6 +172,37 @@ func RoleRequired(roles ...string) gin.HandlerFunc {
 	}
 }
 
+// CurrentUserID 从 gin.Context 读取当前登录用户 ID(未登录返回 0)。
+// 统一供主体系与估值模块使用,替代原 vhandler.CurrentValuationUserID。
+func CurrentUserID(c *gin.Context) int {
+	v, ok := c.Get(string(CtxUserID))
+	if !ok {
+		return 0
+	}
+	uid, _ := v.(int)
+	return uid
+}
+
+// CurrentUsername 从 gin.Context 读取当前登录用户名(未登录返回空串)。
+func CurrentUsername(c *gin.Context) string {
+	v, ok := c.Get(string(CtxUsername))
+	if !ok {
+		return ""
+	}
+	uid, _ := v.(string)
+	return uid
+}
+
+// CurrentRole 从 gin.Context 读取当前登录用户角色(未登录返回空串)。
+func CurrentRole(c *gin.Context) string {
+	v, ok := c.Get(string(CtxUserRole))
+	if !ok {
+		return ""
+	}
+	uid, _ := v.(string)
+	return uid
+}
+
 // extractToken 从 Authorization 头提取 Bearer token。
 func extractToken(c *gin.Context) string {
 	auth := c.GetHeader("Authorization")

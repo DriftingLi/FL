@@ -61,7 +61,6 @@ func RegisterRoutes(
 	batteryHandler := NewBatteryHandler(batteryRepo, batterySvc, logger, pdfOutputDir)
 	healthHandler := NewHealthHandler()
 	valuationAuthHandler := NewValuationAuthHandler(valuationAuthSvc)
-	adminUserHandler := NewValuationAdminUserHandler(valuationAuthSvc)
 
 	// === 公开组（无需登录）：字典查询 + 统计 + 健康检查 + 报告生成/下载 + 登录/注册 ===
 	// 评估提交（POST /evaluations）已移至"可选认证组"，登录用户提交时记录 user_id
@@ -108,16 +107,16 @@ func RegisterRoutes(
 	// === 可选认证组（登录与否都能用，登录则记录 user_id） ===
 	// 评估提交：未登录可提交（user_id 落 NULL），登录用户提交则归属到自己
 	optional := r.Group("/api/valuation")
-	optional.Use(ValuationOptionalJWTAuth(cfg.Valuation.JWTSecretKey))
+	optional.Use(middleware.OptionalAuth(cfg))
 	{
 		optional.POST("/evaluations", evalHandler.Create)
 	}
 
-	// === 估值独立鉴权组（需估值专属 ValuationJWTAuth） ===
+	// === HRWAI 账号鉴权组（需 middleware.JWTAuth + role=hrwai_user） ===
 	// 评估历史/详情 + 电池 RUL CRUD + /auth/me + /auth/logout
-	// 使用独立 JWT secret，与主体系 token 互不兼容
+	// 已统一到主体系 JWT,与培训学员端共用同一 token
 	valAuth := r.Group("/api/valuation")
-	valAuth.Use(ValuationJWTAuth(cfg.Valuation.JWTSecretKey))
+	valAuth.Use(middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
 	{
 		valAuth.GET("/evaluations", evalHandler.List)
 		valAuth.GET("/evaluations/:id", evalHandler.Get)
@@ -192,12 +191,5 @@ func RegisterRoutes(
 
 		// coefficient_configs（仅支持按 key 更新值，不允许新增/删除）
 		admin.PUT("/coefficient-configs/:key", configHandler.UpdateCoefficient)
-
-		// valuation users（评估模块独立用户管理）
-		admin.GET("/users", adminUserHandler.List)
-		admin.POST("/users", adminUserHandler.Create)
-		admin.PUT("/users/:id", adminUserHandler.Update)
-		admin.PUT("/users/:id/password", adminUserHandler.ResetPassword)
-		admin.DELETE("/users/:id", adminUserHandler.Delete)
 	}
 }

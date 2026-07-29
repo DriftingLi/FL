@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -104,9 +105,19 @@ func NewAIAssistantService(db *gorm.DB, aiConfigSvc *AIConfigService) *AIAssista
 	return &AIAssistantService{db: db, aiConfigSvc: aiConfigSvc}
 }
 
-// ListPublicModels 返回管理员配置的 is_active=true 模型列表（不含 api_key）。
+// ListPublicModels 返回管理员绑定到 AI 助手功能的可用配置列表（不含 api_key）。
+// 仅返回 ai_feature_bindings 中 feature_key='ai_assistant' 绑定且 is_active=true 的配置。
+// 若管理员未绑定任何配置，返回空列表（前端将提示用户选择自定义模型）。
 func (s *AIAssistantService) ListPublicModels(ctx context.Context) ([]ModelOption, error) {
-	return s.aiConfigSvc.ListPublicModels(ctx)
+	cfgs, err := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistant)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ModelOption, 0, len(cfgs))
+	for _, c := range cfgs {
+		out = append(out, ModelOption{ID: c.ID, Name: c.Name, Model: c.Model, BaseURL: c.BaseURL})
+	}
+	return out, nil
 }
 
 // ListUserModels 返回登录用户的自定义模型列表（api_key 脱敏）。
@@ -195,6 +206,151 @@ func (s *AIAssistantService) CreateSession(ctx context.Context, userID int, titl
 	}, nil
 }
 
+// RenameSession 修改会话标题（校验归属）。
+// 标题长度限制 100 字符；非空校验。
+func (s *AIAssistantService) RenameSession(ctx context.Context, userID, sessionID int, title string) error {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return errors.New("标题不能为空")
+	}
+	if r := []rune(title); len(r) > 100 {
+		return errors.New("标题不能超过 100 字符")
+	}
+	res := s.db.WithContext(ctx).Model(&model.AIChatSession{}).
+		Where("id = ? AND user_id = ?", sessionID, userID).
+		Update("title", title)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// autoTitleTriggerThreshold 自动命名的标题触发值。
+// 仅当会话标题等于该值时（即从未被 AI 命名或用户重命名过），首次对话后才会自动生成标题。
+const autoTitlePlaceholder = "新会话"
+
+// maybeGenerateSessionTitle 异步生成会话标题。
+// 仅当会话标题为占位符 "新会话" 时才生成；已被 AI 命名或用户手动改名后不再覆盖。
+// 失败仅记录日志，不影响主流程。
+func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, userID, sessionID int, mc *modelConfig) {
+	// 查询会话，校验归属和标题
+	var session model.AIChatSession
+	if err := s.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", sessionID, userID).
+		Limit(1).Find(&session).Error; err != nil {
+		slog.Warn("自动命名：查询会话失败", "session_id", sessionID, "error", err)
+		return
+	}
+	if session.ID == 0 {
+		return
+	}
+	// 仅当标题为占位符时才生成（已被命名或用户手动改名后不再覆盖）
+	if session.Title != autoTitlePlaceholder {
+		return
+	}
+
+	// 拉取首条用户消息作为生成依据
+	var userMsg model.AIChatMessage
+	if err := s.db.WithContext(ctx).
+		Where("session_id = ? AND role = ?", sessionID, "user").
+		Order("created_at ASC").Limit(1).Find(&userMsg).Error; err != nil {
+		slog.Warn("自动命名：查询用户消息失败", "session_id", sessionID, "error", err)
+		return
+	}
+	if userMsg.ID == 0 || strings.TrimSpace(userMsg.Content) == "" {
+		return
+	}
+
+	title, err := s.generateTitleWithModel(ctx, mc, userMsg.Content)
+	if err != nil {
+		slog.Warn("自动命名：调用模型失败", "session_id", sessionID, "error", err)
+		return
+	}
+	title = sanitizeTitle(title)
+	if title == "" || title == autoTitlePlaceholder {
+		return
+	}
+
+	// 双重保险：再次校验标题仍为占位符（防止并发用户已手动改名）
+	res := s.db.WithContext(ctx).Model(&model.AIChatSession{}).
+		Where("id = ? AND user_id = ? AND title = ?", sessionID, userID, autoTitlePlaceholder).
+		Update("title", title)
+	if res.Error != nil {
+		slog.Warn("自动命名：更新失败", "session_id", sessionID, "error", res.Error)
+		return
+	}
+	if res.RowsAffected == 0 {
+		// 会话不存在 / 不属于该用户 / 标题已不再是占位符（用户已手动改名）
+		return
+	}
+	slog.Info("自动命名完成", "session_id", sessionID, "title", title)
+}
+
+// generateTitleWithModel 调用同模型根据用户首条消息生成简短标题。
+func (s *AIAssistantService) generateTitleWithModel(ctx context.Context, mc *modelConfig, userMessage string) (string, error) {
+	chatModel, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
+		APIKey:  mc.APIKey,
+		BaseURL: mc.BaseURL,
+		Model:   mc.Model,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	const titlePrompt = `请根据用户的问题，生成一个简短的中文会话标题。
+要求：
+1. 不超过 20 个字
+2. 直接输出标题文字，不要加任何前缀（如"标题："、"会话："等）
+3. 不要使用引号、书名号、冒号等符号
+4. 不要以句号、问号等标点符号结尾
+5. 概括用户问题的核心主题
+
+用户问题：%s`
+
+	msgs := []*schema.Message{
+		schema.SystemMessage("你是一个会话标题生成助手，根据用户消息生成简短的中文标题。"),
+		schema.UserMessage(fmt.Sprintf(titlePrompt, userMessage)),
+	}
+
+	reader, err := chatModel.Stream(ctx, msgs)
+	if err != nil {
+		return "", err
+	}
+	defer reader.Close()
+
+	var sb strings.Builder
+	for {
+		msg, err := reader.Recv()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return sb.String(), err
+		}
+		if msg.Content != "" {
+			sb.WriteString(msg.Content)
+		}
+	}
+	return sb.String(), nil
+}
+
+// sanitizeTitle 清理模型生成的标题：去除空白、引号、首尾标点；截断到 30 字符。
+func sanitizeTitle(raw string) string {
+	t := strings.TrimSpace(raw)
+	t = strings.Trim(t, `"'""''「」『』【】《》<>:：，。.？?!！;；`)
+	t = strings.TrimSpace(t)
+	if t == "" {
+		return ""
+	}
+	if r := []rune(t); len(r) > 30 {
+		t = string(r[:30])
+	}
+	return t
+}
+
 // DeleteSession 删除会话及其消息（校验归属，ON DELETE CASCADE 自动删消息）。
 func (s *AIAssistantService) DeleteSession(ctx context.Context, userID, sessionID int) error {
 	var session model.AIChatSession
@@ -253,12 +409,20 @@ func (s *AIAssistantService) GetSessionMessages(ctx context.Context, userID, ses
 func (s *AIAssistantService) resolveModelConfig(ctx context.Context, userID int, req StreamChatReq) (*modelConfig, error) {
 	switch req.ModelSource {
 	case "admin":
-		cfg, err := s.aiConfigSvc.GetConfigByID(ctx, req.ConfigID)
+		// 校验该配置是否被管理员绑定到 AI 助手功能（防止用户绕过前端传任意 config_id）
+		boundCfgs, err := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistant)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("校验可用模型失败: %w", err)
 		}
-		if !cfg.IsActive {
-			return nil, errors.New("该模型配置已停用")
+		var cfg *model.AIConfig
+		for i := range boundCfgs {
+			if boundCfgs[i].ID == req.ConfigID {
+				cfg = &boundCfgs[i]
+				break
+			}
+		}
+		if cfg == nil {
+			return nil, errors.New("该模型未绑定到 AI 助手，请联系管理员或选择自定义模型")
 		}
 		return &modelConfig{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model}, nil
 	case "user":
@@ -364,6 +528,21 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 				Updates(map[string]any{"updated_at": now}).Error; err != nil {
 				return fullContent.String(), fmt.Errorf("更新会话时间失败: %w", err)
 			}
+
+			// 异步生成会话标题：仅当标题为占位符"新会话"时（首次对话）
+			// 使用独立 context 避免请求结束后被取消；recover 防止 panic 影响主流程
+			mcCopy := mc
+			sessionID := req.SessionID
+			uid := userID
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						slog.Warn("自动命名 panic", "session_id", sessionID, "panic", r)
+					}
+				}()
+				bgCtx := context.Background()
+				s.maybeGenerateSessionTitle(bgCtx, uid, sessionID, mcCopy)
+			}()
 		}
 	}
 

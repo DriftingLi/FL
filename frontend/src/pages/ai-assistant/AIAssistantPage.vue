@@ -58,16 +58,37 @@
             v-for="s in store.sessions"
             :key="s.id"
             class="session-item"
-            :class="{ active: store.currentSessionId === s.id }"
-            @click="store.selectSession(s.id)"
+            :class="{ active: store.currentSessionId === s.id, editing: editingSessionId === s.id }"
+            @click="handleSelectSession(s.id)"
           >
             <div class="session-info">
-              <span class="session-title">{{ s.title || '新会话' }}</span>
-              <span class="session-time">{{ formatTime(s.updated_at) }}</span>
+              <!-- 编辑模式 -->
+              <el-input
+                v-if="editingSessionId === s.id"
+                v-model="editingTitle"
+                size="small"
+                :ref="(el: any) => { if (el) editInputRef = el }"
+                placeholder="输入新标题"
+                maxlength="100"
+                @click.stop
+                @keydown.enter.prevent="commitRename(s.id)"
+                @keydown.esc.prevent="cancelRename"
+                @blur="commitRename(s.id)"
+              />
+              <!-- 展示模式 -->
+              <template v-else>
+                <span class="session-title" @dblclick.stop="startRename(s)">{{ s.title || '新会话' }}</span>
+                <span class="session-time">{{ formatTime(s.updated_at) }}</span>
+              </template>
             </div>
-            <button class="session-delete" @click.stop="handleDeleteSession(s.id)">
-              <el-icon :size="14"><Delete /></el-icon>
-            </button>
+            <div v-if="editingSessionId !== s.id" class="session-actions">
+              <button class="session-rename" title="重命名" @click.stop="startRename(s)">
+                <el-icon :size="14"><Edit /></el-icon>
+              </button>
+              <button class="session-delete" title="删除" @click.stop="handleDeleteSession(s.id)">
+                <el-icon :size="14"><Delete /></el-icon>
+              </button>
+            </div>
           </div>
         </div>
       </aside>
@@ -185,6 +206,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Plus,
   Delete,
+  Edit,
   ArrowDown,
   User,
   ChatDotRound,
@@ -193,8 +215,8 @@ import {
 } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import { useAIAssistantStore } from '@/stores/aiAssistant'
-import { useValuationAuthStore } from '@/stores/valuationAuth'
-import { valuationAuthApi } from '@/api/valuation/auth'
+import { useAuthStore } from '@/stores/auth'
+import { authApi } from '@/api/auth'
 import { buildSubdomainUrl } from '@/utils/subdomain'
 import ModelSelector from '@/components/ai-assistant/ModelSelector.vue'
 import UserModelDialog from '@/components/ai-assistant/UserModelDialog.vue'
@@ -203,12 +225,12 @@ import LoginDialog from '@/components/ai-assistant/LoginDialog.vue'
 import '@/assets/styles/markdown.css'
 
 const store = useAIAssistantStore()
-const valuationAuth = useValuationAuthStore()
+const authStore = useAuthStore()
 
 const homeUrl = buildSubdomainUrl('main', '/')
 const isLoggedIn = computed(() => store.isLoggedIn)
 const displayName = computed(() => {
-  const info = valuationAuth.userInfo
+  const info = authStore.userInfo
   return info?.name || info?.username || 'HRWAI 用户'
 })
 
@@ -219,6 +241,71 @@ const messageListRef = ref<HTMLElement>()
 const loginDialogVisible = ref(false)
 const userModelDialogVisible = ref(false)
 const customModelDialogVisible = ref(false)
+
+// 会话重命名状态
+const editingSessionId = ref<number | null>(null)
+const editingTitle = ref('')
+const editInputRef = ref<any>(null)
+let renamingLock = false // 防止 blur + enter 重复触发
+
+// 选中会话：若正在编辑当前会话则不切换
+function handleSelectSession(id: number) {
+  if (editingSessionId.value === id) return
+  store.selectSession(id)
+}
+
+// 进入重命名模式
+async function startRename(s: { id: number; title: string }) {
+  editingSessionId.value = s.id
+  editingTitle.value = s.title || ''
+  renamingLock = false
+  await nextTick()
+  // 自动聚焦 + 选中文字
+  const input = editInputRef.value?.input || editInputRef.value?.textarea
+  if (input) {
+    input.focus()
+    setTimeout(() => input.select?.(), 0)
+  }
+}
+
+function cancelRename() {
+  editingSessionId.value = null
+  editingTitle.value = ''
+  renamingLock = false
+}
+
+// 提交重命名
+async function commitRename(sessionId: number) {
+  if (renamingLock) return
+  renamingLock = true
+  try {
+    if (editingSessionId.value !== sessionId) {
+      // 已被取消或切换到其他会话
+      return
+    }
+    const newTitle = editingTitle.value.trim()
+    if (!newTitle) {
+      cancelRename()
+      return
+    }
+    const session = store.sessions.find(s => s.id === sessionId)
+    if (session && session.title === newTitle) {
+      // 未变更，直接退出编辑
+      cancelRename()
+      return
+    }
+    try {
+      await store.renameSession(sessionId, newTitle)
+      ElMessage.success('已更新会话标题')
+    } catch (e: any) {
+      ElMessage.error(e.message || '重命名失败')
+    } finally {
+      cancelRename()
+    }
+  } finally {
+    renamingLock = false
+  }
+}
 
 // 配置 marked
 marked.setOptions({
@@ -293,11 +380,11 @@ async function handleDeleteSession(id: number) {
 async function handleUserCommand(cmd: string) {
   if (cmd === 'logout') {
     try {
-      await valuationAuthApi.logout()
+      await authApi.logout()
     } catch {
       // 忽略后端错误
     }
-    valuationAuth.clearAuthData()
+    authStore.clearAuthData()
     store.messages = []
     store.currentSessionId = null
     store.sessions = []
@@ -516,13 +603,45 @@ onMounted(() => {
   transition: all 0.15s ease;
 }
 
+.session-rename {
+  border: none;
+  background: transparent;
+  color: var(--color-text-tertiary, #94a3b8);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: all 0.15s ease;
+}
+
+.session-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 1;
+}
+
+.session-item:hover .session-rename,
 .session-item:hover .session-delete {
   opacity: 1;
+}
+
+.session-rename:hover {
+  color: var(--color-brand-600, #0284c7);
+  background: var(--color-brand-50, #f0f9ff);
 }
 
 .session-delete:hover {
   color: #ef4444;
   background: #fef2f2;
+}
+
+.session-item.editing {
+  background: var(--color-brand-50, #f0f9ff);
+  cursor: default;
+}
+
+.session-item.editing .session-info {
+  gap: 4px;
 }
 
 /* ===== 对话主区 ===== */
@@ -757,7 +876,7 @@ onMounted(() => {
   padding: 8px 12px;
   display: flex;
   gap: 8px;
-  align-items: flex-end;
+  align-items: center;
   transition: border-color 0.15s ease;
 }
 

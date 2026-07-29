@@ -123,7 +123,7 @@ func RegisterLevelExamRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 	// ===== 学员考试流程 =====
 
 	// GET /api/level-exam/available  可用考试列表
-	g.GET("/available", middleware.RoleRequired("student"), func(c *gin.Context) {
+	g.GET("/available", middleware.RoleRequired("hrwai_user"), func(c *gin.Context) {
 		uid, _ := c.Get(string(middleware.CtxUserID))
 		studentID, _ := uid.(int)
 		result, err := svc.GetAvailableExams(studentID)
@@ -135,7 +135,7 @@ func RegisterLevelExamRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 	})
 
 	// GET /api/level-exam/history  学员考试历史
-	g.GET("/history", middleware.RoleRequired("student"), func(c *gin.Context) {
+	g.GET("/history", middleware.RoleRequired("hrwai_user"), func(c *gin.Context) {
 		uid, _ := c.Get(string(middleware.CtxUserID))
 		studentID, _ := uid.(int)
 		page := atoiDefault(c.Query("page"), 1)
@@ -144,7 +144,7 @@ func RegisterLevelExamRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 	})
 
 	// POST /api/level-exam/sessions/:session_id/enter  进入考试
-	g.POST("/sessions/:session_id/enter", middleware.RoleRequired("student"), func(c *gin.Context) {
+	g.POST("/sessions/:session_id/enter", middleware.RoleRequired("hrwai_user"), func(c *gin.Context) {
 		uid, _ := c.Get(string(middleware.CtxUserID))
 		studentID, _ := uid.(int)
 		sessionID, err := strconv.Atoi(c.Param("session_id"))
@@ -161,7 +161,7 @@ func RegisterLevelExamRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 	})
 
 	// POST /api/level-exam/participants/:participant_id/save  保存答案
-	g.POST("/participants/:participant_id/save", middleware.RoleRequired("student"), func(c *gin.Context) {
+	g.POST("/participants/:participant_id/save", middleware.RoleRequired("hrwai_user"), func(c *gin.Context) {
 		uid, _ := c.Get(string(middleware.CtxUserID))
 		studentID, _ := uid.(int)
 		participantID, err := strconv.Atoi(c.Param("participant_id"))
@@ -185,7 +185,7 @@ func RegisterLevelExamRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 	})
 
 	// POST /api/level-exam/participants/:participant_id/submit  交卷
-	g.POST("/participants/:participant_id/submit", middleware.RoleRequired("student"), func(c *gin.Context) {
+	g.POST("/participants/:participant_id/submit", middleware.RoleRequired("hrwai_user"), func(c *gin.Context) {
 		uid, _ := c.Get(string(middleware.CtxUserID))
 		studentID, _ := uid.(int)
 		participantID, err := strconv.Atoi(c.Param("participant_id"))
@@ -216,7 +216,7 @@ func RegisterLevelExamRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 	})
 
 	// GET /api/level-exam/participants/:participant_id/result  查看结果
-	g.GET("/participants/:participant_id/result", middleware.RoleRequired("student"), func(c *gin.Context) {
+	g.GET("/participants/:participant_id/result", middleware.RoleRequired("hrwai_user"), func(c *gin.Context) {
 		uid, _ := c.Get(string(middleware.CtxUserID))
 		studentID, _ := uid.(int)
 		participantID, err := strconv.Atoi(c.Param("participant_id"))

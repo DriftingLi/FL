@@ -1,4 +1,4 @@
-// Axios 实例与统一拦截器（已适配维修培训认证体系 + Element Plus）
+// Axios 实例与统一拦截器（已适配统一 HRWAI 认证体系 + Element Plus）
 // 后端统一响应：{code, message, data}（valuation 后端 code===0 为成功）
 import axios, { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
@@ -9,10 +9,9 @@ import type { ApiResponse } from '@/types/valuation/evaluation'
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/api$/, '') + '/api/valuation'
 const REQUEST_TIMEOUT_MS = 30_000
 
-const TOKEN_STORAGE_KEY = 'valuation_token'
-const USER_INFO_KEY = 'valuation_userInfo'
-// 主体系 admin token 存储 key（管理员后台接口 /admin/* 需用主体系 JWT 鉴权）
-const ADMIN_TOKEN_STORAGE_KEY = 'token'
+// 统一 HRWAI 账号 token 存储 key（与主体系 useAuthStore 一致）
+const TOKEN_STORAGE_KEY = 'token'
+const USER_INFO_KEY = 'userInfo'
 
 const client = axios.create({
   baseURL: API_BASE_URL,
@@ -20,15 +19,10 @@ const client = axios.create({
   headers: { 'Content-Type': 'application/json; charset=utf-8' }
 })
 
-// ========== 请求拦截器：附加 JWT ==========
-// /admin/* 路径走主体系 admin JWT（localStorage 'token'），其余路径走估值独立 JWT（localStorage 'valuation_token'）
+// ========== 请求拦截器：附加统一 JWT ==========
 client.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const url = config.url || ''
-    const isAdminPath = url.startsWith('/admin/') || url === '/admin'
-    const token = isAdminPath
-      ? localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY)
-      : localStorage.getItem(TOKEN_STORAGE_KEY)
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -37,13 +31,13 @@ client.interceptors.request.use(
   (err) => Promise.reject(err)
 )
 
-// 延迟引入 valuation auth store 与 router，避免循环依赖
-function handleValuationUnauthorized() {
+// 延迟引入 auth store 与 router，避免循环依赖
+function handleUnauthorized() {
   // 动态加载，防止模块初始化顺序问题
-  import('@/stores/valuationAuth')
-    .then(({ useValuationAuthStore }) => {
+  import('@/stores/auth')
+    .then(({ useAuthStore }) => {
       try {
-        useValuationAuthStore().clearAuthData()
+        useAuthStore().clearAuthData()
       } catch (e) {
         localStorage.removeItem(TOKEN_STORAGE_KEY)
         localStorage.removeItem(USER_INFO_KEY)
@@ -53,35 +47,22 @@ function handleValuationUnauthorized() {
       localStorage.removeItem(TOKEN_STORAGE_KEY)
       localStorage.removeItem(USER_INFO_KEY)
     })
-  // 仅在需要登录的页面跳转估值专属登录页；公开页面（如残值评估首页）保留当前视图
+  // 仅在需要登录的页面跳转登录页；公开页面保留当前视图
   import('@/router')
     .then(({ default: router }) => {
       if (router.currentRoute.value.matched.some(r => r.meta?.requiresAuth === true)) {
-        router.push('/valuation/login')
+        const currentPath = router.currentRoute.value.path
+        // 估值路径跳估值登录页，其余跳主登录页
+        if (currentPath.startsWith('/valuation')) {
+          router.push('/valuation/login')
+        } else {
+          router.push('/login')
+        }
       }
     })
     .catch(() => {
       // router 加载失败时不强制跳转，避免在公开页面误跳登录页
     })
-}
-
-// 管理员路径 401：主体系 admin JWT 过期，清主体系登录态并跳主登录页
-function handleAdminUnauthorized() {
-  localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY)
-  localStorage.removeItem('userInfo')
-  import('@/router')
-    .then(({ default: router }) => {
-      router.push('/login')
-    })
-    .catch(() => {
-      // router 加载失败时仅刷新当前页触发主体系鉴权重定向
-    })
-}
-
-// 判断请求 URL 是否为管理员路径（/admin/* 走主体系 admin JWT）
-function isAdminRequest(config: AxiosError['config']): boolean {
-  const url = config?.url || ''
-  return url.startsWith('/admin/') || url === '/admin'
 }
 
 // ========== 响应拦截器 ==========
@@ -107,13 +88,8 @@ client.interceptors.response.use(
   async (err: AxiosError) => {
     if (err.response) {
       const status = err.response.status
-      // 401：登录过期，按请求来源分流处理（管理员路径走主体系，其余走估值独立）
       if (status === 401) {
-        if (isAdminRequest(err.config)) {
-          handleAdminUnauthorized()
-        } else {
-          handleValuationUnauthorized()
-        }
+        handleUnauthorized()
         ElMessage.error('登录已过期，请重新登录')
         return Promise.reject(err)
       }

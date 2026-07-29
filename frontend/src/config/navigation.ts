@@ -38,14 +38,13 @@ const studentNav: NavItem[] = [
 
 const adminNav: NavItem[] = [
   { key: 'dashboard', label: '仪表盘', path: '/admin/dashboard', icon: DataAnalysis },
-  { key: 'students', label: '学员管理', path: '/admin/students', icon: User },
+  { key: 'hrwai-users', label: '用户管理', path: '/admin/hrwai-users', icon: User },
   { key: 'tutors', label: '导师管理', path: '/admin/tutors', icon: UserFilled },
   { key: 'courses', label: '课程管理', path: '/admin/courses', icon: Notebook },
   { key: 'question-review', label: '题库审核', path: '/admin/question-review', icon: EditPen },
   { key: 'exam-sessions', label: '考试场次', path: '/admin/exam-sessions', icon: Calendar },
   { key: 'statistics', label: '统计分析', path: '/admin/statistics', icon: TrendCharts },
   { key: 'valuation-config', label: '残值配置', path: '/admin/valuation-config', icon: PriceTag },
-  { key: 'valuation-users', label: '评估用户', path: '/admin/valuation-users', icon: User },
   { key: 'ai-settings', label: 'AI 配置', path: '/admin/ai-settings', icon: Setting },
   { key: 'content-generate', label: '内容生成', path: '/admin/content-generate', icon: MagicStick },
   { key: 'featured-content', label: '内容精选', path: '/admin/featured-content', icon: Document }

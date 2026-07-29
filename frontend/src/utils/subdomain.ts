@@ -133,11 +133,11 @@ export function getDefaultWorkspaceBySubdomain(): string {
 }
 
 // 获取当前子域名对应的登录角色
-// training 子域名走学员登录；valuation 子域名走独立的 valuation_user 登录体系
-export function getRoleForSubdomain(): 'student' | 'tutor' | 'admin' | 'valuation_user' {
+// training 和 valuation 子域名统一走 HRWAI 账号登录体系
+export function getRoleForSubdomain(): 'hrwai_user' | 'tutor' | 'admin' {
   const sub = getSubdomain()
   if (sub === 'tutor') return 'tutor'
   if (sub === 'admin') return 'admin'
-  if (sub === 'valuation') return 'valuation_user'
-  return 'student'
+  // training / valuation / 其他 → 统一 hrwai_user
+  return 'hrwai_user'
 }

@@ -8,7 +8,7 @@
     <template #dropdown>
       <el-dropdown-menu class="model-dropdown-menu">
         <!-- 管理员配置的模型 -->
-        <el-dropdown-item disabled class="dropdown-header">管理员模型</el-dropdown-item>
+        <el-dropdown-item disabled class="dropdown-header">默认模型</el-dropdown-item>
         <el-dropdown-item
           v-for="m in adminModels"
           :key="'admin-' + m.id"
@@ -16,7 +16,6 @@
           :class="{ 'is-selected': isSelected('admin', m.id) }"
         >
           <div class="model-item">
-            <span class="model-name">{{ m.name }}</span>
             <span class="model-desc">{{ m.model }}</span>
           </div>
         </el-dropdown-item>
@@ -45,8 +44,7 @@
         <el-dropdown-item disabled class="dropdown-header divider">临时输入</el-dropdown-item>
         <el-dropdown-item :command="{ type: 'custom' }" :class="{ 'is-selected': isSelected('custom') }">
           <div class="model-item">
-            <span class="model-name">使用自定义 API Key</span>
-            <span class="model-desc">OpenAI 格式</span>
+            <span class="model-desc">使用自定义 API Key</span>
           </div>
         </el-dropdown-item>
       </el-dropdown-menu>
@@ -105,7 +103,7 @@ function handleCommand(cmd: { type: string; id?: number }) {
   border: 1px solid var(--color-border-light, #e2e8f0);
   border-radius: 8px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--color-text-primary, #0f172a);
   transition: all 0.15s ease;
   max-width: 280px;
@@ -120,6 +118,8 @@ function handleCommand(cmd: { type: string; id?: number }) {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 500;
+  height: 24px;
+  line-height: 24px;
 }
 
 .model-dropdown-menu {
@@ -155,7 +155,7 @@ function handleCommand(cmd: { type: string; id?: number }) {
 }
 
 .model-desc {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--color-text-tertiary, #94a3b8);
 }
 

@@ -1,17 +1,35 @@
 import request from './request'
 
-export interface AdminStudentsQuery {
+export interface AdminHrwaiUsersQuery {
   page?: number
   page_size?: number
   keyword?: string
 }
 
-export interface AddStudentPayload {
+export interface HrwaiUser {
+  id: number
+  username: string
+  name: string
+  phone: string
+  email?: string
+  company?: string
+  status: number
+  created_at: string
+}
+
+export interface CreateHrwaiUserPayload {
   phone: string
   password: string
   name: string
   email?: string
   company?: string
+}
+
+export interface UpdateHrwaiUserPayload {
+  name: string
+  email?: string
+  company?: string
+  status: number
 }
 
 export interface AdminTutorsQuery {
@@ -62,11 +80,23 @@ export interface UpdateAIConfigPayload {
   is_active?: boolean
 }
 
+export interface BoundConfig {
+  config_id: number
+  config_name: string
+  model: string
+}
+
 export interface FeatureBinding {
   feature_key: string
   feature_label: string
-  config_id: number | null
-  config_name: string
+  is_multi: boolean // 是否多绑定功能
+  // 单绑定字段
+  config_id?: number | null
+  config_name?: string
+  // 多绑定字段
+  bound_configs?: BoundConfig[]
+  // 前端临时字段（多绑定功能"待添加"下拉框的选中值）
+  _pending_config_id?: number
 }
 
 export interface AdminCoursesQuery {
@@ -97,26 +127,32 @@ export interface ChapterPayload {
 }
 
 export const adminApi = {
-  getStudents(params: AdminStudentsQuery) {
-    return request.get('/admin/students', { params })
+  // ===== HRWAI 用户管理(统一) =====
+  getHrwaiUsers(params: AdminHrwaiUsersQuery) {
+    return request.get('/admin/hrwai-users', { params })
   },
 
-  addStudent(data: AddStudentPayload) {
-    return request.post('/admin/student', data)
+  createHrwaiUser(data: CreateHrwaiUserPayload) {
+    return request.post('/admin/hrwai-users', data)
   },
 
-  deleteStudent(id: number) {
-    return request.delete(`/admin/student/${id}`)
+  updateHrwaiUser(id: number, data: UpdateHrwaiUserPayload) {
+    return request.put(`/admin/hrwai-users/${id}`, data)
   },
 
-  resetStudentPassword(id: number, password: string) {
-    return request.put(`/admin/student/${id}/password`, { password })
+  resetHrwaiUserPassword(id: number, password: string) {
+    return request.put(`/admin/hrwai-users/${id}/password`, { password })
   },
 
-  toggleStudentStatus(id: number) {
-    return request.put(`/admin/student/${id}/status`)
+  toggleHrwaiUserStatus(id: number) {
+    return request.put(`/admin/hrwai-users/${id}/status`)
   },
 
+  deleteHrwaiUser(id: number) {
+    return request.delete(`/admin/hrwai-users/${id}`)
+  },
+
+  // ===== 导师管理 =====
   getTutors(params: AdminTutorsQuery) {
     return request.get('/admin/tutors', { params })
   },
@@ -211,5 +247,10 @@ export const adminApi = {
 
   setFeatureBinding(featureKey: string, configId: number) {
     return request.put(`/admin/ai-feature-bindings/${featureKey}`, { config_id: configId })
+  },
+
+  // 解除多绑定功能的单个配置绑定
+  unbindFeatureConfig(featureKey: string, configId: number) {
+    return request.delete(`/admin/ai-feature-bindings/${featureKey}/configs/${configId}`)
   }
 }

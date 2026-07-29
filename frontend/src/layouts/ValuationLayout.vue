@@ -13,7 +13,7 @@
 
         <div class="user-zone">
           <!-- 未登录：显示登录/注册入口 -->
-          <template v-if="!valuationAuth.isLoggedIn">
+          <template v-if="!authStore.isLoggedIn">
             <router-link to="/valuation/register" class="btn-entry btn-register">注册</router-link>
             <router-link to="/valuation/login" class="btn-entry btn-login">登录</router-link>
           </template>
@@ -46,29 +46,29 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import ValuationFooter from '@/components/valuation/ValuationFooter.vue'
 import { buildSubdomainUrl } from '@/utils/subdomain'
-import { useValuationAuthStore } from '@/stores/valuationAuth'
-import { valuationAuthApi } from '@/api/valuation/auth'
+import { useAuthStore } from '@/stores/auth'
+import { authApi } from '@/api/auth'
 
 const router = useRouter()
-const valuationAuth = useValuationAuthStore()
+const authStore = useAuthStore()
 
 // 跨子域名跳回主域名（router-link to="/" 在当前子域名下会被路由守卫重定向）
 const mainSiteUrl = computed(() => buildSubdomainUrl('main', '/'))
 
 // 估值用户显示名：优先 name，回退到 username
 const displayName = computed(() => {
-  const info = valuationAuth.userInfo
+  const info = authStore.userInfo
   return info?.name || info?.username || '评估用户'
 })
 
 // 退出登录：调用后端写黑名单 → 清除本地登录态 → 跳回估值首页
 async function handleLogout() {
   try {
-    await valuationAuthApi.logout()
+    await authApi.logout()
   } catch (e) {
     // 即使后端调用失败也清除本地登录态，避免用户卡在已登录状态
   } finally {
-    valuationAuth.clearAuthData()
+    authStore.clearAuthData()
     ElMessage.success('已退出登录')
     router.push('/valuation')
   }

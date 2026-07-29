@@ -15,7 +15,7 @@ import (
 func RegisterStudentRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	svc := service.NewStudentService(db)
 
-	g := rg.Group("/student", middleware.JWTAuth(cfg), middleware.RoleRequired("student"))
+	g := rg.Group("/student", middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
 
 	// GET /api/student/profile  学员信息+学习统计+课程进度
 	g.GET("/profile", func(c *gin.Context) {

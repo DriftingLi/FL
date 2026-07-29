@@ -50,8 +50,11 @@ type ValuationConfig struct {
 	DBMaxOpenConns    int
 	DBMaxIdleConns    int
 	DBConnMaxLifetime int
-	JWTSecretKey      string // 估值模块独立 JWT 签名密钥
-	JWTExpiresHours   int    // 估值模块独立 JWT 过期时长（小时）
+	// Deprecated: 估值模块已并入主体系 JWT 鉴权,统一使用 JWT_SECRET_KEY。
+	// 此字段保留仅为向后兼容,实际不再使用。
+	JWTSecretKey string
+	// Deprecated: 同上,已统一使用主体系 JWTExpiry。
+	JWTExpiresHours int
 }
 
 // RedisConfig Redis 缓存配置。
@@ -119,8 +122,9 @@ func Load() (*Config, error) {
 			DBMaxOpenConns:    valuationDBMaxOpen,
 			DBMaxIdleConns:    valuationDBMaxIdle,
 			DBConnMaxLifetime: valuationDBLifetime,
-			JWTSecretKey:      getenv("VALUATION_JWT_SECRET_KEY", "valuation-jwt-secret-key"),
-			JWTExpiresHours:   valuationJWTHours,
+			// Deprecated: 估值模块已统一使用主体系 JWT_SECRET_KEY,此字段不再使用。
+			JWTSecretKey:    getenv("VALUATION_JWT_SECRET_KEY", "valuation-jwt-secret-key"),
+			JWTExpiresHours: valuationJWTHours,
 		},
 		Redis: RedisConfig{
 			Addr:         getenv("REDIS_ADDR", "localhost:6379"),
@@ -184,9 +188,8 @@ func (c *Config) Validate() error {
 	if c.JWTSecretKey == "" || c.JWTSecretKey == "jwt-secret-key" {
 		missing = append(missing, "JWT_SECRET_KEY")
 	}
-	if c.Valuation.JWTSecretKey == "" || c.Valuation.JWTSecretKey == "valuation-jwt-secret-key" {
-		missing = append(missing, "VALUATION_JWT_SECRET_KEY")
-	}
+	// Deprecated: VALUATION_JWT_SECRET_KEY 已废弃,估值模块统一使用 JWT_SECRET_KEY。
+	// 不再校验此环境变量。
 	if c.DatabaseURL == "" {
 		missing = append(missing, "DATABASE_URL")
 	}

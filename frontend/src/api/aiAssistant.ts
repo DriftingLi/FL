@@ -1,13 +1,13 @@
 // AI 助手模块 API 客户端
 // 路径前缀：/api/ai-assistant/*
-// 认证：复用残值评估（HRWAI）账号体系，token 存储于 localStorage 'valuation_token'
+// 认证：统一 HRWAI 账号体系，token 存储于 localStorage 'token'（与主体系 useAuthStore 一致）
 // SSE 流式对话使用 fetch + ReadableStream 消费，不通过 axios
 import axios, { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/api$/, '') + '/api/ai-assistant'
 const REQUEST_TIMEOUT_MS = 30_000
-const TOKEN_STORAGE_KEY = 'valuation_token'
+const TOKEN_STORAGE_KEY = 'token'
 
 const client = axios.create({
   baseURL: API_BASE_URL,
@@ -50,7 +50,7 @@ client.interceptors.response.use(
       if (status === 401) {
         // 清除本地 HRWAI 登录态，让 UI 显示未登录状态
         localStorage.removeItem(TOKEN_STORAGE_KEY)
-        localStorage.removeItem('valuation_userInfo')
+        localStorage.removeItem('userInfo')
         // 不强制跳转登录页，AI 助手支持未登录临时对话
         ElMessage.error('登录已过期，请重新登录')
         return Promise.reject(err)
@@ -158,6 +158,11 @@ export const aiAssistantApi = {
   /** DELETE /api/ai-assistant/sessions/:id — 需登录，删除会话 */
   deleteSession(id: number) {
     return client.delete(`/sessions/${id}`).then(r => r.data)
+  },
+
+  /** PATCH /api/ai-assistant/sessions/:id/title — 需登录，重命名会话 */
+  renameSession(id: number, title: string) {
+    return client.patch(`/sessions/${id}/title`, { title }).then(r => r.data)
   },
 
   /** GET /api/ai-assistant/sessions/:id/messages — 需登录，获取会话消息 */

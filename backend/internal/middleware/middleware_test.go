@@ -98,7 +98,7 @@ func TestJWTAuth_WrongSecret(t *testing.T) {
 	cfg := &config.Config{JWTSecretKey: "different-secret"}
 	r := newTestRouter(cfg)
 
-	token := generateToken(t, 1, "user", "student")
+	token := generateToken(t, 1, "user", "hrwai_user")
 	req, _ := http.NewRequest("GET", "/protected/endpoint", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
@@ -142,7 +142,7 @@ func TestOptionalAuth_WithToken(t *testing.T) {
 		c.JSON(200, gin.H{"user_id": uid, "exists": exists})
 	})
 
-	token := generateToken(t, 10, "optuser", "student")
+	token := generateToken(t, 10, "optuser", "hrwai_user")
 	req, _ := http.NewRequest("GET", "/optional", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
@@ -188,14 +188,14 @@ func TestRoleRequired_Denied(t *testing.T) {
 	cfg := &config.Config{JWTSecretKey: testSecret}
 	r := newTestRouter(cfg, "admin")
 
-	token := generateToken(t, 1, "student01", "student")
+	token := generateToken(t, 1, "hrwai01", "hrwai_user")
 	req, _ := http.NewRequest("GET", "/protected/endpoint", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
 	if w.Code != 403 {
-		t.Fatalf("student 角色应被拒绝 (403)，得到 %d", w.Code)
+		t.Fatalf("hrwai_user 角色应被拒绝 (403)，得到 %d", w.Code)
 	}
 }
 

@@ -17,7 +17,7 @@ import (
 func RegisterMockExamRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	svc := service.NewMockExamService(db, newAIService(cfg, db))
 
-	g := rg.Group("/mock-exam", middleware.JWTAuth(cfg), middleware.RoleRequired("student"))
+	g := rg.Group("/mock-exam", middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
 
 	// POST /api/mock-exam/start  开始模拟考试（count 题量 + duration 时长）
 	g.POST("/start", func(c *gin.Context) {

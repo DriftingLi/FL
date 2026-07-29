@@ -146,7 +146,7 @@ const homePath = computed(() => {
   const role = authStore.userInfo?.role
   if (role === 'admin') return '/admin/dashboard'
   if (role === 'tutor') return '/training/tutor'
-  if (role === 'student') return '/training'
+  if (role === 'hrwai_user') return '/training'
   return '/'
 })
 

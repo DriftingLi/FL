@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	vhandler "forklift-training/internal/valuation/handler"
 )
@@ -28,7 +29,7 @@ func NewAIAssistantHandler(svc *service.AIAssistantService, cfg *config.Config) 
 
 // RegisterAIAssistantRoutes 注册 /api/ai-assistant 路由。
 // 公开路由：GET /models、POST /chat（可选认证）。
-// 登录路由：sessions CRUD、user-models CRUD（强制 ValuationJWTAuth）。
+// 登录路由：sessions CRUD、user-models CRUD（强制 middleware.JWTAuth + role=hrwai_user）。
 func RegisterAIAssistantRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, aiConfigSvc *service.AIConfigService) {
 	assistantSvc := service.NewAIAssistantService(db, aiConfigSvc)
 	h := NewAIAssistantHandler(assistantSvc, cfg)
@@ -38,14 +39,15 @@ func RegisterAIAssistantRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm
 	// 公开路由：列出管理员配置的可用模型（未登录可访问）
 	g.GET("/models", h.ListPublicModels)
 	// 流式对话：可选认证（未登录可临时对话，登录则可保存会话）
-	g.POST("/chat", vhandler.ValuationOptionalJWTAuth(cfg.Valuation.JWTSecretKey), h.StreamChat)
+	g.POST("/chat", middleware.OptionalAuth(cfg), h.StreamChat)
 
-	// 需登录路由：会话管理 + 用户自定义模型管理
+	// 需登录路由：会话管理 + 用户自定义模型管理（HRWAI 账号鉴权）
 	authed := g.Group("")
-	authed.Use(vhandler.ValuationJWTAuth(cfg.Valuation.JWTSecretKey))
+	authed.Use(middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
 	authed.GET("/sessions", h.ListSessions)
 	authed.POST("/sessions", h.CreateSession)
 	authed.DELETE("/sessions/:id", h.DeleteSession)
+	authed.PATCH("/sessions/:id/title", h.RenameSession)
 	authed.GET("/sessions/:id/messages", h.GetSessionMessages)
 	authed.GET("/user-models", h.ListUserModels)
 	authed.POST("/user-models", h.SaveUserModel)
@@ -181,6 +183,37 @@ func (h *AIAssistantHandler) DeleteSession(c *gin.Context) {
 		return
 	}
 	vhandler.OK(c, nil)
+}
+
+// RenameSession 修改会话标题。
+// Body: {"title": "新标题"}；标题非空，最多 100 字符。
+func (h *AIAssistantHandler) RenameSession(c *gin.Context) {
+	userID := vhandler.CurrentValuationUserID(c)
+	if userID == 0 {
+		vhandler.Error(c, http.StatusUnauthorized, 40100, "请先登录")
+		return
+	}
+	sessionID, _ := strconv.Atoi(c.Param("id"))
+	if sessionID <= 0 {
+		vhandler.Fail(c, vhandler.CodeBadRequest, "无效的会话 ID")
+		return
+	}
+	var req struct {
+		Title string `json:"title"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		vhandler.Fail(c, vhandler.CodeBadRequest, "请求数据无效")
+		return
+	}
+	if err := h.svc.RenameSession(c.Request.Context(), userID, sessionID, req.Title); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			vhandler.Fail(c, vhandler.CodeNotFound, "会话不存在")
+			return
+		}
+		vhandler.Fail(c, vhandler.CodeBadRequest, err.Error())
+		return
+	}
+	vhandler.OK(c, map[string]string{"message": "已更新会话标题"})
 }
 
 // GetSessionMessages 获取指定会话的消息列表。

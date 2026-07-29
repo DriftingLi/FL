@@ -138,7 +138,7 @@ func registerSettingsRoutes(g *gin.RouterGroup, aiConfigSvc *service.AIConfigSer
 	})
 
 	// PUT /api/admin/ai-feature-bindings/:feature_key  绑定功能到指定配置
-	// Body: {"config_id": 1}；config_id=0 表示解除绑定
+	// Body: {"config_id": 1}；config_id=0 表示解除绑定（单绑定清空，多绑定清空所有）
 	bind.PUT("/:feature_key", func(c *gin.Context) {
 		featureKey := c.Param("feature_key")
 		var req struct {
@@ -153,5 +153,20 @@ func registerSettingsRoutes(g *gin.RouterGroup, aiConfigSvc *service.AIConfigSer
 			return
 		}
 		response.SuccessWithMsg(c, "绑定已更新", nil)
+	})
+
+	// DELETE /api/admin/ai-feature-bindings/:feature_key/configs/:config_id  解除多绑定功能的单个配置绑定
+	bind.DELETE("/:feature_key/configs/:config_id", func(c *gin.Context) {
+		featureKey := c.Param("feature_key")
+		cfgID, err := strconv.Atoi(c.Param("config_id"))
+		if err != nil {
+			response.BadRequest(c, "无效的 config_id")
+			return
+		}
+		if err := aiConfigSvc.UnbindConfig(c.Request.Context(), featureKey, cfgID); err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.SuccessWithMsg(c, "已解除绑定", nil)
 	})
 }
