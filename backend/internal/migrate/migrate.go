@@ -6,14 +6,17 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 )
 
-// RunMigrations 执行迁移，direction 为 "up" 或 "down"。
-func RunMigrations(dsn, direction string) error {
+// RunMigrations 执行迁移，direction 为 "up"、"down" 或 "force"。
+// force 用法: force <version>，强制设置数据库迁移版本并清除 dirty 标志。
+// 用于数据库因迁移执行中断进入 dirty 状态后的修复。
+func RunMigrations(dsn, direction string, args ...string) error {
 	migrationsDir, err := resolveMigrationsDir()
 	if err != nil {
 		return err
@@ -42,6 +45,37 @@ func RunMigrations(dsn, direction string) error {
 		if err := m.Down(); err != nil && err != migrate.ErrNoChange {
 			return fmt.Errorf("migrate down 失败: %w", err)
 		}
+	case "force":
+		// force <version>: 强制设置数据库迁移版本,清除 dirty 标志
+		if len(args) == 0 {
+			return fmt.Errorf("force 用法: migrate force <version>,请提供目标版本号")
+		}
+		version, err := strconv.Atoi(args[0])
+		if err != nil || version < 0 {
+			return fmt.Errorf("无效的版本号: %s(必须为非负整数)", args[0])
+		}
+		if err := m.Force(version); err != nil {
+			return fmt.Errorf("migrate force %d 失败: %w", version, err)
+		}
+		slog.Info("迁移版本已强制设置", "version", version)
+	case "status":
+		// 查看当前迁移版本和 dirty 状态
+		version, dirty, err := m.Version()
+		if err != nil {
+			return fmt.Errorf("查询迁移版本失败: %w", err)
+		}
+		fmt.Printf("当前迁移版本: %d\n", version)
+		if dirty {
+			fmt.Println("状态: DIRTY (数据库处于脏状态,迁移被中断,需手动修复)")
+			fmt.Println("修复指南:")
+			fmt.Println("  1. 确认该版本的迁移是否已完整应用(检查相关表/对象是否存在)")
+			fmt.Println("  2. 若已完整应用: migrate force <version>  (标记为已应用且干净)")
+			fmt.Println("  3. 若未完整应用: migrate force <version-1>  (回退到上一干净版本)")
+			fmt.Println("     然后重新执行: migrate up")
+		} else {
+			fmt.Println("状态: CLEAN (干净)")
+		}
+		_ = version
 	default:
 		return fmt.Errorf("未知的迁移方向: %s", direction)
 	}
