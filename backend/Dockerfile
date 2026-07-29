@@ -31,8 +31,10 @@ FROM alpine:3.20
 # 安装运行时依赖（已移除 LibreOffice + poppler-utils + font-noto-cjk,改由 sidecar 容器提供）：
 # - ca-certificates tzdata su-exec：基础依赖
 # - wget：健康检查
+# 注:tzdata 必须保留,cp /usr/share/zoneinfo/Asia/Shanghai 依赖此包
 RUN apk add --no-cache \
         ca-certificates \
+        tzdata \
         su-exec \
         wget && \
     cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
