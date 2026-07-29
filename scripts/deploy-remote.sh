@@ -356,6 +356,59 @@ pull_images() {
 }
 
 # ======================================================================
+# 修复 dirty 数据库状态
+# 当 schema_migrations.dirty=true 时,数据库因迁移中断进入脏状态,
+# 后续 migrate up 会被拒绝。此函数自动检测并 force 到 version-1 清除 dirty。
+# ======================================================================
+fix_dirty_state() {
+    log_info ">>> 检查数据库迁移状态..."
+
+    local pg_id
+    pg_id=$(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps -q "$POSTGRES_SERVICE" 2>/dev/null)
+    if [ -z "$pg_id" ]; then
+        log_warn "PostgreSQL 容器未运行,跳过 dirty 检查"
+        return 0
+    fi
+
+    # 查询当前版本和 dirty 状态
+    local cur_ver dirty
+    cur_ver=$(docker exec "$pg_id" psql -U "${DB_USER:-forklift}" -d forklift_training \
+        -tAc "SELECT COALESCE(version,0) FROM schema_migrations LIMIT 1;" 2>/dev/null | tr -d ' \n')
+    dirty=$(docker exec "$pg_id" psql -U "${DB_USER:-forklift}" -d forklift_training \
+        -tAc "SELECT COALESCE(dirty,false) FROM schema_migrations LIMIT 1;" 2>/dev/null | tr -d ' \n')
+    cur_ver=${cur_ver:-0}
+    dirty=${dirty:-f}
+
+    if [ "$dirty" != "t" ] && [ "$dirty" != "true" ]; then
+        log_ok "数据库迁移状态正常 (version=$cur_ver, dirty=false)"
+        return 0
+    fi
+
+    log_warn "数据库处于 dirty 状态 (version=$cur_ver, dirty=true)"
+    log_info "自动修复:执行 migrate force $((cur_ver - 1)) 清除 dirty 标志"
+
+    local force_ver=$((cur_ver - 1))
+    if [ "$force_ver" -lt 0 ]; then
+        force_ver=0
+    fi
+
+    local migrate_db_url
+    migrate_db_url="postgres://${DB_USER:-forklift}:${DB_PASSWORD}@localhost:5432/forklift_training?sslmode=disable"
+
+    if docker run --rm --network container:"$pg_id" \
+        -e "DATABASE_URL=${migrate_db_url}" \
+        "${IMAGE_BACKEND}:${IMAGE_TAG}" \
+        /app/bin/migrate force "$force_ver" 2>&1; then
+        log_ok "已清除 dirty 标志 (force 到版本 $force_ver)"
+    else
+        log_error "自动 force 失败,需手动修复"
+        log_info "手动修复命令:"
+        log_info "  docker exec $pg_id psql -U ${DB_USER:-forklift} -d forklift_training -c \"UPDATE schema_migrations SET version=$force_ver, dirty=false;\""
+        return 1
+    fi
+}
+
+# ======================================================================
 # 数据库迁移
 # ======================================================================
 run_migration() {
@@ -682,6 +735,10 @@ main() {
                 log_error "迁移预检失败，终止部署（避免后端因缺少迁移文件崩溃循环）"
                 exit 1
             fi
+
+            # 修复 dirty 数据库状态（必须在 restart_services 之前执行）
+            # 否则 backend 启动时看到 dirty=true 会崩溃循环
+            fix_dirty_state
 
             # 重启全栈（postgres/redis 已运行，此处拉起 backend + frontend）
             restart_services
