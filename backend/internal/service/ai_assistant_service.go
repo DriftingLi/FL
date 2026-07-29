@@ -339,23 +339,23 @@ func (s *AIAssistantService) generateTitleWithModel(ctx context.Context, mc *mod
 
 // titleTrimRunes 需要从标题首尾去除的字符集合（使用 map 保证唯一性，避免 SA1024）。
 var titleTrimRunes = map[rune]bool{
-	'"':  true, // ASCII 双引号
-	'\'': true, // ASCII 单引号
-	'“':  true, // 中文左双引号
-	'”':  true, // 中文右双引号
-	'‘':  true, // 中文左单引号
-	'’':  true, // 中文右单引号
+	'"':  true,            // ASCII 双引号
+	'\'': true,            // ASCII 单引号
+	'“':  true,            // 中文左双引号
+	'”':  true,            // 中文右双引号
+	'‘':  true,            // 中文左单引号
+	'’':  true,            // 中文右单引号
 	'「':  true, '」': true, // 日式直角引号
-	'『':  true, '』': true, // 日式双直角引号
-	'【':  true, '】': true, // 中文方头括号
-	'《':  true, '》': true, // 中文书名号
-	'<':  true, '>': true, // ASCII 尖括号
-	':':  true, '：': true, // 冒号（ASCII + 中文）
-	'，':  true, '。': true, // 中文逗号 + 中文句号
-	'.':  true,             // ASCII 句点
-	'？':  true, '?': true, // 问号（中文 + ASCII）
-	'!':  true, '！': true, // 感叹号（ASCII + 中文）
-	';':  true, '；': true, // 分号（ASCII + 中文）
+	'『': true, '』': true, // 日式双直角引号
+	'【': true, '】': true, // 中文方头括号
+	'《': true, '》': true, // 中文书名号
+	'<': true, '>': true, // ASCII 尖括号
+	':': true, '：': true, // 冒号（ASCII + 中文）
+	'，': true, '。': true, // 中文逗号 + 中文句号
+	'.': true,            // ASCII 句点
+	'？': true, '?': true, // 问号（中文 + ASCII）
+	'!': true, '！': true, // 感叹号（ASCII + 中文）
+	';': true, '；': true, // 分号（ASCII + 中文）
 }
 
 // sanitizeTitle 清理模型生成的标题：去除空白、引号、首尾标点；截断到 30 字符。
