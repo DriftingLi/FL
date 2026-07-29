@@ -116,9 +116,9 @@ func Load() (*Config, error) {
 		MaxContentLength: int64(maxMB) * 1024 * 1024,
 		// LibreOffice sidecar HTTP 地址;为空则降级到本地 exec(向后兼容)
 		LibreOfficeSidecarURL: getenv("LIBREOFFICE_SIDECAR_URL", ""),
-		AIAPIKey:         getenvChainDef("", "AI_API_KEY", "DEEPSEEK_API_KEY", "ZHIPU_API_KEY", "OPENAI_API_KEY"),
-		AIBaseURL:        getenvChainDef("https://api.deepseek.com", "AI_BASE_URL", "DEEPSEEK_API_URL", "ZHIPU_BASE_URL"),
-		AIModel:          getenvChainDef("deepseek-v4-flash", "AI_MODEL", "MODEL", "ZHIPU_MODEL"),
+		AIAPIKey:              getenvChainDef("", "AI_API_KEY", "DEEPSEEK_API_KEY", "ZHIPU_API_KEY", "OPENAI_API_KEY"),
+		AIBaseURL:             getenvChainDef("https://api.deepseek.com", "AI_BASE_URL", "DEEPSEEK_API_URL", "ZHIPU_BASE_URL"),
+		AIModel:               getenvChainDef("deepseek-v4-flash", "AI_MODEL", "MODEL", "ZHIPU_MODEL"),
 		Valuation: ValuationConfig{
 			PDFOutputDir:      getenv("VALUATION_PDF_OUTPUT_DIR", "storage/reports"),
 			LogLevel:          getenv("VALUATION_LOG_LEVEL", "info"),
