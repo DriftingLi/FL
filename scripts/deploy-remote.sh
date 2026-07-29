@@ -40,7 +40,7 @@ POSTGRES_SERVICE="${POSTGRES_SERVICE:-postgres}"
 REDIS_SERVICE="${REDIS_SERVICE:-redis}"
 
 # 已知容器名（compose 中显式指定），用于部署前清理可能残留的冲突容器
-KNOWN_CONTAINERS="forklift-backend-prod forklift-frontend-prod forklift-pg-prod forklift-redis-prod"
+KNOWN_CONTAINERS="forklift-backend-prod forklift-frontend-prod forklift-pg-prod forklift-redis-prod forklift-libreoffice-prod"
 
 # 注册表认证
 REGISTRY="${REGISTRY:-ghcr.io}"
@@ -48,6 +48,8 @@ IMAGE_BACKEND="${IMAGE_BACKEND:-}"
 IMAGE_BACKEND="${IMAGE_BACKEND,,}"  # Docker 镜像名必须全小写
 IMAGE_FRONTEND="${IMAGE_FRONTEND:-}"
 IMAGE_FRONTEND="${IMAGE_FRONTEND,,}"  # Docker 镜像名必须全小写
+IMAGE_LIBREOFFICE="${IMAGE_LIBREOFFICE:-}"
+IMAGE_LIBREOFFICE="${IMAGE_LIBREOFFICE,,}"  # Docker 镜像名必须全小写
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 
@@ -140,6 +142,7 @@ write_env_file() {
 
         echo "BACKEND_IMAGE=${IMAGE_BACKEND}:${IMAGE_TAG}"
         echo "FRONTEND_IMAGE=${IMAGE_FRONTEND}:${IMAGE_TAG}"
+        echo "LIBREOFFICE_IMAGE=${IMAGE_LIBREOFFICE:-forklift-libreoffice}:${IMAGE_TAG}"
         echo "DOMAIN=${DOMAIN:-localhost}"
 
         echo "UPLOAD_FOLDER=/data/uploads"
@@ -338,20 +341,90 @@ login_registry() {
 pull_images() {
     log_info ">>> 拉取最新镜像..."
 
-    if [ -n "$IMAGE_BACKEND" ]; then
-        docker pull "${IMAGE_BACKEND}:${IMAGE_TAG}" || {
-            log_error "后端镜像拉取失败: ${IMAGE_BACKEND}:${IMAGE_TAG}"
-            exit 1
-        }
-        log_ok "后端镜像: ${IMAGE_BACKEND}:${IMAGE_TAG}"
+    # 国内服务器拉取 ghcr.io 镜像易超时,配置客户端选项:
+    # - max-concurrent-downloads=5: 并发拉取层数(默认 3,提高可加速)
+    # - 通过环境变量 DOCKER_PULL_TIMEOUT 控制单次拉取超时(默认 600s=10min)
+    local pull_opts=""
+    if [ -n "${DOCKER_PULL_TIMEOUT:-}" ]; then
+        pull_opts="--disable-content-trust=false"
     fi
 
-    if [ -n "$IMAGE_FRONTEND" ]; then
-        docker pull "${IMAGE_FRONTEND}:${IMAGE_TAG}" || {
-            log_error "前端镜像拉取失败: ${IMAGE_FRONTEND}:${IMAGE_TAG}"
+    # 拉取后端镜像(含重试,应对 ghcr.io 国内访问不稳定)
+    if [ -n "$IMAGE_BACKEND" ]; then
+        local backend_image="${IMAGE_BACKEND}:${IMAGE_TAG}"
+        local pull_retries=3
+        local pull_ok=false
+
+        for attempt in $(seq 1 $pull_retries); do
+            log_info "拉取后端镜像 (尝试 $attempt/$pull_retries): $backend_image"
+            if docker pull "$backend_image"; then
+                pull_ok=true
+                break
+            fi
+            if [ $attempt -lt $pull_retries ]; then
+                log_warn "拉取失败,10 秒后重试..."
+                sleep 10
+            fi
+        done
+
+        if [ "$pull_ok" = "true" ]; then
+            log_ok "后端镜像: $backend_image"
+        else
+            log_error "后端镜像拉取失败(已重试 $pull_retries 次): $backend_image"
             exit 1
-        }
-        log_ok "前端镜像: ${IMAGE_FRONTEND}:${IMAGE_TAG}"
+        fi
+    fi
+
+    # 拉取前端镜像(前端镜像小,通常无需重试)
+    if [ -n "$IMAGE_FRONTEND" ]; then
+        local frontend_image="${IMAGE_FRONTEND}:${IMAGE_TAG}"
+        local pull_retries=3
+        local pull_ok=false
+
+        for attempt in $(seq 1 $pull_retries); do
+            log_info "拉取前端镜像 (尝试 $attempt/$pull_retries): $frontend_image"
+            if docker pull "$frontend_image"; then
+                pull_ok=true
+                break
+            fi
+            if [ $attempt -lt $pull_retries ]; then
+                log_warn "拉取失败,10 秒后重试..."
+                sleep 10
+            fi
+        done
+
+        if [ "$pull_ok" = "true" ]; then
+            log_ok "前端镜像: $frontend_image"
+        else
+            log_error "前端镜像拉取失败(已重试 $pull_retries 次): $frontend_image"
+            exit 1
+        fi
+    fi
+
+    # 拉取 LibreOffice sidecar 镜像(含 LibreOffice,体积大,需重试)
+    if [ -n "$IMAGE_LIBREOFFICE" ]; then
+        local lo_image="${IMAGE_LIBREOFFICE}:${IMAGE_TAG}"
+        local pull_retries=3
+        local pull_ok=false
+
+        for attempt in $(seq 1 $pull_retries); do
+            log_info "拉取 LibreOffice sidecar 镜像 (尝试 $attempt/$pull_retries): $lo_image"
+            if docker pull "$lo_image"; then
+                pull_ok=true
+                break
+            fi
+            if [ $attempt -lt $pull_retries ]; then
+                log_warn "拉取失败,10 秒后重试..."
+                sleep 10
+            fi
+        done
+
+        if [ "$pull_ok" = "true" ]; then
+            log_ok "LibreOffice sidecar 镜像: $lo_image"
+        else
+            log_error "LibreOffice sidecar 镜像拉取失败(已重试 $pull_retries 次): $lo_image"
+            exit 1
+        fi
     fi
 }
 

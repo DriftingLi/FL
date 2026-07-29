@@ -16,7 +16,7 @@ import (
 
 // RegisterTutorRoutes 注册 /api/tutor 蓝图（导师管理章节与文件）。
 func RegisterTutorRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
-	svc := service.NewTutorService(db, cfg.UploadFolder, service.NewFileService(cfg.UploadFolder))
+	svc := service.NewTutorService(db, cfg.UploadFolder, service.NewFileService(cfg.UploadFolder, cfg.LibreOfficeSidecarURL))
 
 	g := rg.Group("/tutor", middleware.JWTAuth(cfg), middleware.RoleRequired("tutor"))
 

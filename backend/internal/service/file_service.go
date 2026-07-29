@@ -2,8 +2,12 @@
 package service
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,12 +33,21 @@ var maxFileSizes = map[string]int64{
 
 // FileService 文件服务。
 type FileService struct {
-	uploadFolder string
+	uploadFolder          string
+	libreofficeSidecarURL string // LibreOffice sidecar HTTP 地址(如 http://libreoffice:8000);为空则降级到本地 exec
+	httpClient            *http.Client
 }
 
 // NewFileService 创建文件服务实例。
-func NewFileService(uploadFolder string) *FileService {
-	return &FileService{uploadFolder: uploadFolder}
+// libreofficeSidecarURL 为空时降级到本地 LibreOffice exec 调用(向后兼容)。
+func NewFileService(uploadFolder, libreofficeSidecarURL string) *FileService {
+	return &FileService{
+		uploadFolder:          uploadFolder,
+		libreofficeSidecarURL: libreofficeSidecarURL,
+		httpClient: &http.Client{
+			Timeout: 180 * time.Second, // PPT 转换可能较慢
+		},
+	}
 }
 
 // GetContentType 获取文件内容类型。
@@ -110,6 +123,7 @@ func (s *FileService) DeleteFile(fileURL string) {
 
 // ConvertPPTToImages 将 PPT 转为图片。
 // 转换流程：PPT → PDF（LibreOffice headless）→ PNG 图片。
+// 优先调用 LibreOffice sidecar HTTP 服务；若未配置则降级到本地 exec。
 // 失败时返回占位图片 URL 列表。
 func (s *FileService) ConvertPPTToImages(pptPath, outputDir string) []string {
 	if _, err := os.Stat(pptPath); err != nil {
@@ -128,16 +142,31 @@ func (s *FileService) ConvertPPTToImages(pptPath, outputDir string) []string {
 		return urls
 	}
 
-	// 尝试 LibreOffice 转换
-	if s.convertWithLibreOffice(pptPath, outputDir) {
-		images := listSlideImages(outputDir)
-		if len(images) > 0 {
-			urls := make([]string, 0, len(images))
-			baseName := filepath.Base(outputDir)
-			for _, img := range images {
-				urls = append(urls, fmt.Sprintf("/static/uploads/slides/%s/%s", baseName, img))
+	// 优先:LibreOffice sidecar HTTP 调用
+	if s.libreofficeSidecarURL != "" {
+		if s.convertWithSidecar(pptPath, outputDir) {
+			images := listSlideImages(outputDir)
+			if len(images) > 0 {
+				urls := make([]string, 0, len(images))
+				baseName := filepath.Base(outputDir)
+				for _, img := range images {
+					urls = append(urls, fmt.Sprintf("/static/uploads/slides/%s/%s", baseName, img))
+				}
+				return urls
 			}
-			return urls
+		}
+	} else {
+		// 降级:本地 LibreOffice exec
+		if s.convertWithLibreOffice(pptPath, outputDir) {
+			images := listSlideImages(outputDir)
+			if len(images) > 0 {
+				urls := make([]string, 0, len(images))
+				baseName := filepath.Base(outputDir)
+				for _, img := range images {
+					urls = append(urls, fmt.Sprintf("/static/uploads/slides/%s/%s", baseName, img))
+				}
+				return urls
+			}
 		}
 	}
 
@@ -152,7 +181,65 @@ func (s *FileService) ConvertPPTToImages(pptPath, outputDir string) []string {
 	return urls
 }
 
+// convertWithSidecar 调用 LibreOffice sidecar HTTP 服务进行 PPT → 图片转换。
+// backend 和 sidecar 共享 /data/uploads volume,因此路径必须用 sidecar 容器内路径。
+// sidecarSidecarPathPrefix 为空时使用 uploadFolder 原值。
+func (s *FileService) convertWithSidecar(pptPath, outputDir string) bool {
+	sidecarInputPath := s.toSidecarPath(pptPath)
+	sidecarOutputDir := s.toSidecarPath(outputDir)
+
+	reqBody := struct {
+		InputPath string `json:"input_path"`
+		OutputDir string `json:"output_dir"`
+	}{
+		InputPath: sidecarInputPath,
+		OutputDir: sidecarOutputDir,
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+
+	url := strings.TrimSuffix(s.libreofficeSidecarURL, "/") + "/convert"
+	req, err := http.NewRequestWithContext(context.Background(), "POST", url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		log.Printf("[file_service] 构造 sidecar 请求失败: %v", err)
+		return false
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		log.Printf("[file_service] 调用 LibreOffice sidecar 失败: %v", err)
+		return false
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Success bool     `json:"success"`
+		Error   string   `json:"error"`
+		Images  []string `json:"images"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("[file_service] 解析 sidecar 响应失败: %v", err)
+		return false
+	}
+	if !result.Success {
+		log.Printf("[file_service] sidecar 转换失败: %s", result.Error)
+		return false
+	}
+	return len(result.Images) > 0
+}
+
+// toSidecarPath 把 backend 容器内的路径转换为 sidecar 容器内的路径。
+// backend 容器: UPLOAD_FOLDER=/data/uploads (或本地 static/uploads)
+// sidecar 容器: 挂载相同的 /data/uploads volume
+// 约定:两边 volume 挂载点相同,因此路径直接透传;若不同则需通过环境变量 LIBREOFFICE_SIDECAR_DATA_PREFIX 配置前缀映射。
+func (s *FileService) toSidecarPath(path string) string {
+	// 当前实现:backend 与 sidecar 共享 /data/uploads,路径一致,直接返回。
+	// 若未来挂载点不同,可在此处做前缀替换。
+	return path
+}
+
 // convertWithLibreOffice 调用 LibreOffice headless 将 PPT 转 PDF，再转图片。
+// 降级路径:仅当 libreofficeSidecarURL 为空时使用。
 func (s *FileService) convertWithLibreOffice(pptPath, outputDir string) bool {
 	soffice := findLibreOffice()
 	if soffice == "" {

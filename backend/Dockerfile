@@ -1,5 +1,5 @@
 # ===== Dockerfile：多阶段构建 Go 后端 =====
-# 目标：产出含 LibreOffice + poppler-utils 的镜像（用于 PPT → PDF → PNG 转换）
+# 目标：产出轻量 Go 后端镜像（LibreOffice 已拆分到 sidecar 容器）
 
 # ----- Builder 阶段：编译静态二进制 -----
 FROM golang:1.26-alpine AS builder
@@ -25,21 +25,16 @@ ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
 RUN go build -trimpath -ldflags="-s -w" -o /bin/server ./cmd/server
 RUN go build -trimpath -ldflags="-s -w" -o /bin/migrate ./cmd/migrate
 
-# ----- Runtime 阶段：含 LibreOffice + poppler-utils 的运行时镜像 -----
+# ----- Runtime 阶段：轻量运行时镜像 -----
 FROM alpine:3.20
 
-# 安装运行时依赖：
+# 安装运行时依赖（已移除 LibreOffice + poppler-utils + font-noto-cjk,改由 sidecar 容器提供）：
 # - ca-certificates tzdata su-exec：基础依赖
-# - libreoffice：PPT/PPTX → PDF 转换（headless 模式）
-# - poppler-utils：PDF → PNG 图片转换（pdftoppm 工具）
-# - font-noto-cjk：中日韩字体，避免中文 PPT 转换后乱码
-# 注：LibreOffice 体积较大（约 400MB），但 PPT 转图片功能必需
+# - wget：健康检查
 RUN apk add --no-cache \
         ca-certificates \
         su-exec \
-        libreoffice \
-        poppler-utils \
-        font-noto-cjk && \
+        wget && \
     cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     echo "Asia/Shanghai" > /etc/timezone
 

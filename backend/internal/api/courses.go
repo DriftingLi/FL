@@ -15,7 +15,7 @@ import (
 
 // RegisterCoursesRoutes 注册 /api/courses 蓝图（学员侧课程浏览与学习进度）。
 func RegisterCoursesRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
-	svc := service.NewCourseService(db, cfg.UploadFolder, service.NewFileService(cfg.UploadFolder))
+	svc := service.NewCourseService(db, cfg.UploadFolder, service.NewFileService(cfg.UploadFolder, cfg.LibreOfficeSidecarURL))
 
 	// GET /api/courses  课程列表（公开访问）
 	rg.GET("/courses", func(c *gin.Context) {

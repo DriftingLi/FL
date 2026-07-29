@@ -88,8 +88,41 @@ services:
         max-file: "3"
 
   # ==========================================
+  # LibreOffice Sidecar 服务（PPT → PDF → PNG 转换）
+  # 通过 HTTP API 提供 LibreOffice 转换能力，共享 /data/uploads volume
+  # 拆分自 backend 容器，使 backend 镜像从 ~500MB 减小到 ~50MB
+  # ==========================================
+  libreoffice:
+    build:
+      context: ./libreoffice-sidecar
+      dockerfile: Dockerfile
+    image: ${LIBREOFFICE_IMAGE:-forklift-libreoffice:latest}
+    container_name: forklift-libreoffice-prod
+    restart: unless-stopped
+    expose:
+      - "8000"
+    volumes:
+      # 与 backend 共享 uploads volume，sidecar 通过路径访问 PPT 文件并写入 PNG
+      - uploads-data:/data/uploads
+    networks:
+      - forklift-net
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.5"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ==========================================
   # Go 后端服务（仅内网可访问，通过前端 Nginx 反代）
-  # 镜像内置 LibreOffice + poppler-utils，用于 PPT → PDF → PNG 转换
+  # PPT 转图片功能由 libreoffice sidecar 容器提供
   # ==========================================
   backend:
     build:
@@ -103,6 +136,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      libreoffice:
+        condition: service_started
     environment:
       APP_ENV: production
       PORT: "8080"
@@ -126,6 +161,8 @@ services:
       REDIS_DB: "${REDIS_DB:-0}"
       REDIS_POOL_SIZE: "${REDIS_POOL_SIZE:-10}"
       REDIS_KEY_PREFIX: "${REDIS_KEY_PREFIX:-fl:}"
+      # LibreOffice sidecar HTTP 地址(容器内服务名 + 端口)
+      LIBREOFFICE_SIDECAR_URL: http://libreoffice:8000
       TZ: Asia/Shanghai
     # 端口映射到宿主机回环，供 host 模式的 frontend nginx 反代访问
     # PVE 环境：frontend 用 network_mode: host，需通过 127.0.0.1:8080 访问 backend

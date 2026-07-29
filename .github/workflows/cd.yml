@@ -39,6 +39,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_BACKEND: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-backend
   IMAGE_FRONTEND: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-frontend
+  IMAGE_LIBREOFFICE: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-libreoffice
   DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/forklift-training' }}
   COMPOSE_FILE: ${{ vars.COMPOSE_FILE || 'docker-compose.prod.yml' }}
 
@@ -157,20 +158,69 @@ jobs:
           provenance: false
 
   # ============================================================
+  # Stage 1.6: 构建 LibreOffice sidecar 镜像并推送（与前端并行）
+  # 拆分自 backend，使 backend 镜像从 ~500MB 减小到 ~50MB
+  # ============================================================
+  build-libreoffice:
+    needs: ci-gate
+    if: |
+      always() &&
+      (github.event_name == 'workflow_dispatch' || needs.ci-gate.result == 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: 登录 GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 提取镜像标签
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_LIBREOFFICE }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
+            type=sha,prefix=,format=short
+            type=raw,value=${{ github.event.workflow_run.head_sha || github.sha }}
+            type=ref,event=branch
+
+      - name: 构建并推送 LibreOffice sidecar 镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: libreoffice-sidecar
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+
+  # ============================================================
   # Stage 2: 通过公网 SSH 部署全栈到自托管服务器
   # ============================================================
   deploy:
-    needs: [build-backend, build-frontend]
+    needs: [build-backend, build-frontend, build-libreoffice]
     if: |
       always() &&
       needs.build-backend.result == 'success' &&
-      needs.build-frontend.result == 'success'
+      needs.build-frontend.result == 'success' &&
+      needs.build-libreoffice.result == 'success'
     runs-on: ubuntu-latest
     environment:
       name: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
     env:
-      # 镜像信息（来自 build-backend/build-frontend outputs）
+      # 镜像信息（来自 build-backend/build-frontend/build-libreoffice outputs）
       IMAGE_TAG: ${{ needs.build-backend.outputs.image_tag || github.sha }}
+      IMAGE_LIBREOFFICE: ${{ env.IMAGE_LIBREOFFICE }}
       # SSL 证书内容（从 GitHub Secrets 注入，部署时写入服务器固定路径）
       SSL_FULLCHAIN: ${{ secrets.SSL_FULLCHAIN }}
       SSL_PRIVKEY: ${{ secrets.SSL_PRIVKEY }}
@@ -279,6 +329,7 @@ jobs:
             printf 'export IMAGE_TAG=%q\n' "${IMAGE_TAG:-latest}"
             printf 'export IMAGE_BACKEND=%q\n' "${IMAGE_BACKEND:-}"
             printf 'export IMAGE_FRONTEND=%q\n' "${IMAGE_FRONTEND:-}"
+            printf 'export IMAGE_LIBREOFFICE=%q\n' "${IMAGE_LIBREOFFICE:-}"
             printf 'export SSL_FULLCHAIN=%q\n' "${SSL_FULLCHAIN:-}"
             printf 'export SSL_PRIVKEY=%q\n' "${SSL_PRIVKEY:-}"
             printf 'export DOMAIN=%q\n' "${DOMAIN:-}"

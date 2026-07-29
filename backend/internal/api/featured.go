@@ -16,7 +16,7 @@ import (
 
 // RegisterFeaturedRoutes 注册内容精选路由（公开 + 管理端）。
 func RegisterFeaturedRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
-	fileSvc := service.NewFileService(cfg.UploadFolder)
+	fileSvc := service.NewFileService(cfg.UploadFolder, cfg.LibreOfficeSidecarURL)
 	svc := service.NewFeaturedService(db, fileSvc)
 
 	// ===== 公开接口（无鉴权）=====

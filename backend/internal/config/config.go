@@ -25,6 +25,9 @@ type Config struct {
 	UploadFolder     string
 	VolumeMountPath  string
 	MaxContentLength int64
+	// LibreOfficeSidecarURL LibreOffice sidecar HTTP 地址(如 http://libreoffice:8000)。
+	// 为空时降级到本地 exec 调用(向后兼容)。
+	LibreOfficeSidecarURL string
 	// AI 服务配置（OpenAI 兼容格式）。优先级：AI_* > DEEPSEEK_* > ZHIPU_* > OPENAI_API_KEY。
 	AIAPIKey         string
 	AIBaseURL        string
@@ -111,6 +114,8 @@ func Load() (*Config, error) {
 		UploadFolder:     getenv("UPLOAD_FOLDER", ""),
 		VolumeMountPath:  getenv("VOLUME_MOUNT_PATH", ""),
 		MaxContentLength: int64(maxMB) * 1024 * 1024,
+		// LibreOffice sidecar HTTP 地址;为空则降级到本地 exec(向后兼容)
+		LibreOfficeSidecarURL: getenv("LIBREOFFICE_SIDECAR_URL", ""),
 		AIAPIKey:         getenvChainDef("", "AI_API_KEY", "DEEPSEEK_API_KEY", "ZHIPU_API_KEY", "OPENAI_API_KEY"),
 		AIBaseURL:        getenvChainDef("https://api.deepseek.com", "AI_BASE_URL", "DEEPSEEK_API_URL", "ZHIPU_BASE_URL"),
 		AIModel:          getenvChainDef("deepseek-v4-flash", "AI_MODEL", "MODEL", "ZHIPU_MODEL"),
