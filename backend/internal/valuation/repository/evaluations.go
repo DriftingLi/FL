@@ -281,7 +281,6 @@ func (r *EvaluationRepository) CountEvaluations(ctx context.Context, brand strin
 		if userID > 0 {
 			where = append(where, fmt.Sprintf("user_id = $%d", argIdx))
 			args = append(args, userID)
-			argIdx++
 		}
 		whereClause := ""
 		if len(where) > 0 {
