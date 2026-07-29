@@ -302,7 +302,10 @@ jobs:
           echo "**全部检查通过, 可以进入 CD 部署!**" >> $GITHUB_STEP_SUMMARY
 
       # CI 全部通过后,主动触发 CD workflow
-      # 传入 ref=当前 commit SHA,确保 CD 部署的就是 CI 验证过的代码
+      # gh CLI 需要 git 仓库上下文,必须先 checkout 代码
+      - uses: actions/checkout@v4
+        if: success()
+
       - name: 触发 CD 部署
         if: success()
         env:
