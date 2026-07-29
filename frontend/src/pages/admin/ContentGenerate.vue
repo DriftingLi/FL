@@ -42,7 +42,7 @@
             </el-checkbox>
           </el-checkbox-group>
           <div class="select-actions">
-            <el-button text type="primary" size="small" @click="selectAll">全选</el-button>
+            <el-button type="primary" size="small" class="select-all-btn" @click="selectAll">全选</el-button>
             <el-button text size="small" @click="selectNone">取消全选</el-button>
           </div>
         </el-form-item>
@@ -51,13 +51,17 @@
           <el-button
             type="primary"
             size="large"
-            :loading="generating"
-            :disabled="!selectedCourseId || selectedChapterIds.length === 0"
+            :loading="generating || isTaskRunning"
+            :disabled="!selectedCourseId || selectedChapterIds.length === 0 || isTaskRunning"
             @click="handleGenerate"
           >
             <el-icon><MagicStick /></el-icon>
-            开始生成
+            {{ isTaskRunning ? '生成中...' : '开始生成' }}
           </el-button>
+          <span v-if="isTaskRunning" class="generating-tip">
+            <el-icon class="is-loading"><Loading /></el-icon>
+            正在生成，请勿重复提交
+          </span>
         </el-form-item>
       </el-form>
     </div>
@@ -72,17 +76,20 @@
         style="margin-bottom: 16px"
       />
       <div class="progress-detail">
-        <span v-if="generateTask.total > 0">
-          {{ generateTask.completed || 0 }} / {{ generateTask.total }} 个章节
+        <span v-if="generateTask.total > 0" class="progress-count">
+          已完成 {{ generateTask.completed || 0 }} / {{ generateTask.total }} 个章节
         </span>
         <span v-if="generateTask.status === 'processing'" class="progress-status processing">
-          <el-icon class="is-loading"><Loading /></el-icon> 生成中...
+          <el-icon class="is-loading"><Loading /></el-icon> 正在调用 AI 生成内容，预计每个章节约 20-40 秒...
         </span>
         <span v-else-if="generateTask.status === 'completed'" class="progress-status completed">
           生成完成
         </span>
         <span v-else-if="generateTask.status === 'failed'" class="progress-status failed">
           生成失败
+        </span>
+        <span v-else-if="generateTask.status === 'pending'" class="progress-status pending">
+          <el-icon class="is-loading"><Loading /></el-icon> 任务排队中...
         </span>
       </div>
 
@@ -171,6 +178,13 @@ const progressPercent = computed(() => {
     : 0
   if (!generateTask.value.total || generateTask.value.total === 0) return 0
   return Math.round((generateTask.value.completed / generateTask.value.total) * 100)
+})
+
+// 任务运行中（pending/processing）：用于锁住"开始生成"按钮，防止重复提交
+const isTaskRunning = computed(() => {
+  if (!generateTask.value) return false
+  const s = generateTask.value.status
+  return s === 'pending' || s === 'processing'
 })
 
 async function loadCourses() {
@@ -312,6 +326,29 @@ loadCourses()
 
 .select-actions {
   margin-top: 8px;
+}
+
+/* 全选按钮：白色字体 + primary 背景 */
+.select-all-btn {
+  color: #fff !important;
+}
+
+.generating-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 12px;
+  font-size: 13px;
+  color: #409eff;
+}
+
+.progress-count {
+  font-weight: 500;
+  color: #303133;
+}
+
+.progress-status.pending {
+  color: #909399;
 }
 
 .progress-card h3 {

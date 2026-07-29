@@ -59,12 +59,14 @@ func allModels() []interface{} {
 }
 
 // SeedStudent 插入一个测试学员，返回其 ID。
+// phone 自动从 username 派生以保证唯一性(hrwai_users.phone 为 NOT NULL UNIQUE)。
 func SeedStudent(t *testing.T, db *gorm.DB, username, hashedPassword string) *model.Student {
 	t.Helper()
 	s := &model.Student{
 		Username:  username,
 		Password:  hashedPassword,
 		Name:      username,
+		Phone:     "test_" + username,
 		Status:    1,
 		CreatedAt: Now(),
 	}

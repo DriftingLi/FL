@@ -112,13 +112,13 @@ const roleLabel = computed(() => {
   const role = authStore.userInfo?.role
   if (role === 'admin') return '管理员'
   if (role === 'tutor') return '导师'
-  if (role === 'student') return '学员'
+  if (role === 'hrwai_user') return '学员'
   return '用户'
 })
 
 const roleClass = computed(() => {
   const role = authStore.userInfo?.role
-  return role || 'student'
+  return role || 'hrwai_user'
 })
 
 function isRouteActive(item: NavItem): boolean {

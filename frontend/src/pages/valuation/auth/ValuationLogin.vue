@@ -12,9 +12,9 @@
           <div class="card-icon">
             <el-icon :size="24"><DataAnalysis /></el-icon>
           </div>
-          <h1 class="card-title">残值评估登录</h1>
-          <p class="card-subtitle">登录后查看您的评估历史记录</p>
-          <div class="role-badge">评估用户端</div>
+          <h1 class="card-title">HRWAI 账号登录</h1>
+          <p class="card-subtitle">登录后查看您的评估历史记录与 AI 助手会话</p>
+          <div class="role-badge">HRWAI 通用账号</div>
         </div>
 
         <el-form ref="formRef" :model="formData" :rules="rules" label-width="0" class="login-form">
@@ -70,8 +70,8 @@
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useValuationAuthStore } from '@/stores/valuationAuth'
-import { valuationAuthApi } from '@/api/valuation/auth'
+import { useAuthStore } from '@/stores/auth'
+import { authApi } from '@/api/auth'
 import { ElMessage } from 'element-plus'
 import { DataAnalysis } from '@element-plus/icons-vue'
 import { passwordRules } from '@/utils/validate'
@@ -79,7 +79,7 @@ import { buildSubdomainUrl } from '@/utils/subdomain'
 
 const router = useRouter()
 const route = useRoute()
-const valuationAuth = useValuationAuthStore()
+const authStore = useAuthStore()
 const formRef = ref(null)
 const loading = ref(false)
 
@@ -105,12 +105,13 @@ async function handleLogin() {
 
   loading.value = true
   try {
-    const res = await valuationAuthApi.login({
-      account: formData.account,
+    // 统一 HRWAI 登录：username 字段接受用户名或手机号（后端 HrwaiLogin 兼容两者）
+    const res = await authApi.login({
+      username: formData.account,
       password: formData.password
     })
-    if (res.data && res.data.token) {
-      valuationAuth.setAuthData(res.data)
+    if (res.code === 200 && res.data && res.data.token) {
+      authStore.setAuthData(res.data)
       ElMessage.success('登录成功')
 
       // redirect 回跳：仅允许跳转到 /valuation 路径下，防止越权/钓鱼

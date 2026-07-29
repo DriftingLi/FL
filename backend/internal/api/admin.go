@@ -14,13 +14,21 @@ import (
 )
 
 // RegisterAdminRoutes 注册 /api/admin 蓝图（管理员后台）。
-func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
+// aiConfigSvc 由上层 NewRouter 创建并传入，便于 AI 助手模块复用同一实例。
+func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, aiConfigSvc *service.AIConfigService) {
 	adminSvc := service.NewAdminService(db)
 	courseSvc := service.NewAdminCourseService(db)
 	authSvc := service.NewAuthService(db, cfg.JWTSecretKey, cfg.JWTExpiry(),
 		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student)
 
+	// AI 多配置 service + 课程内容生成 service
+	aiSvc := service.NewAIService(db, aiConfigSvc)
+	contentGenSvc := service.NewContentGenerateService(db, aiSvc)
+
 	g := rg.Group("/admin", middleware.JWTAuth(cfg), middleware.RoleRequired("admin"))
+
+	// ===== AI 配置（多配置管理 + 功能绑定）=====
+	registerSettingsRoutes(g, aiConfigSvc, db)
 
 	// ===== 课程管理 =====
 
@@ -153,7 +161,7 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 		response.SuccessWithMsg(c, "章节删除成功", result)
 	})
 
-	// POST /api/admin/course/generate-content  异步生成课程内容（暂未实现，返回 503）
+	// POST /api/admin/course/generate-content  异步生成课程内容
 	g.POST("/course/generate-content", func(c *gin.Context) {
 		var req struct {
 			CourseID   int   `json:"course_id"`
@@ -163,26 +171,49 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 			response.BadRequest(c, "请选择课程")
 			return
 		}
-		response.ServerError(c, "异步内容生成功能尚未迁移至 Go 版本")
+		if len(req.ChapterIDs) == 0 {
+			response.BadRequest(c, "请选择至少一个章节")
+			return
+		}
+		userID := c.GetInt("user_id")
+		taskID, err := contentGenSvc.StartGeneration(req.CourseID, req.ChapterIDs, userID)
+		if err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.Created(c, "生成任务已启动", map[string]any{"task_id": taskID})
 	})
 
-	// GET /api/admin/course/generate-content/:task_id  异步任务状态
+	// GET /api/admin/course/generate-content/:task_id  查询生成任务状态（前端轮询）
 	g.GET("/course/generate-content/:task_id", func(c *gin.Context) {
-		response.NotFound(c, "异步内容生成功能尚未迁移至 Go 版本")
+		taskID := c.Param("task_id")
+		status, err := contentGenSvc.GetTaskStatus(taskID)
+		if err != nil {
+			response.NotFound(c, err.Error())
+			return
+		}
+		response.Success(c, status)
 	})
 
-	// ===== 学员管理 =====
+	// ===== HRWAI 用户管理(统一) =====
+	// 合并原学员管理与评估用户管理两套接口,操作 hrwai_users 表。
+	// 旧路由 /admin/students、/admin/student/* 保留为兼容别名,前端已切到 /admin/hrwai-users/*。
 
-	// GET /api/admin/students  学员列表
-	g.GET("/students", func(c *gin.Context) {
+	// GET /api/admin/hrwai-users  HRWAI 用户列表
+	g.GET("/hrwai-users", func(c *gin.Context) {
 		page := atoiDefault(c.Query("page"), 1)
-		pageSize := atoiDefault(c.Query("page_size"), 10)
+		pageSize := atoiDefault(c.Query("page_size"), 20)
 		keyword := c.Query("keyword")
-		response.Success(c, adminSvc.GetStudents(page, pageSize, keyword))
+		result, err := adminSvc.ListHrwaiUsers(page, pageSize, keyword)
+		if err != nil {
+			response.BadRequest(c, "查询用户列表失败")
+			return
+		}
+		response.Success(c, result)
 	})
 
-	// POST /api/admin/student  添加学员
-	g.POST("/student", func(c *gin.Context) {
+	// POST /api/admin/hrwai-users  新增 HRWAI 用户
+	g.POST("/hrwai-users", func(c *gin.Context) {
 		var req struct {
 			Phone    string `json:"phone"`
 			Password string `json:"password"`
@@ -194,38 +225,56 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 			response.BadRequest(c, "请求参数错误")
 			return
 		}
-		if req.Phone == "" || req.Password == "" || req.Name == "" {
-			response.BadRequest(c, "手机号、密码和姓名不能为空")
-			return
-		}
-		result, err := authSvc.StudentRegister(req.Phone, req.Password, req.Name, req.Email, req.Company)
+		user, err := adminSvc.CreateHrwaiUser(req.Phone, req.Password, req.Name, req.Email, req.Company)
 		if err != nil {
 			response.BadRequest(c, err.Error())
 			return
 		}
-		response.Created(c, "学员添加成功", result)
+		response.Created(c, "用户添加成功", map[string]any{
+			"id":       user.ID,
+			"username": user.Username,
+			"name":     user.Name,
+			"phone":    user.Phone,
+		})
 	})
 
-	// DELETE /api/admin/student/:student_id  删除学员
-	g.DELETE("/student/:student_id", func(c *gin.Context) {
-		studentID, err := strconv.Atoi(c.Param("student_id"))
+	// PUT /api/admin/hrwai-users/:id  更新 HRWAI 用户资料(不含密码)
+	g.PUT("/hrwai-users/:id", func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("id"))
 		if err != nil {
-			response.BadRequest(c, "学员ID无效")
+			response.BadRequest(c, "用户ID无效")
 			return
 		}
-		result, err := adminSvc.DeleteStudent(studentID)
-		if err != nil {
-			response.NotFound(c, err.Error())
+		var req struct {
+			Name    string `json:"name"`
+			Email   string `json:"email"`
+			Company string `json:"company"`
+			Status  int16  `json:"status"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			response.BadRequest(c, "请求参数错误")
 			return
 		}
-		response.SuccessWithMsg(c, "学员删除成功", result)
+		if req.Name == "" {
+			response.BadRequest(c, "姓名不能为空")
+			return
+		}
+		if req.Status != 0 && req.Status != 1 {
+			response.BadRequest(c, "状态值非法(仅支持 0/1)")
+			return
+		}
+		if err := adminSvc.UpdateHrwaiUser(id, req.Name, req.Email, req.Company, req.Status); err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.SuccessWithMsg(c, "用户资料已更新", nil)
 	})
 
-	// PUT /api/admin/student/:student_id/password  重置学员密码
-	g.PUT("/student/:student_id/password", func(c *gin.Context) {
-		studentID, err := strconv.Atoi(c.Param("student_id"))
+	// PUT /api/admin/hrwai-users/:id/password  重置 HRWAI 用户密码
+	g.PUT("/hrwai-users/:id/password", func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("id"))
 		if err != nil {
-			response.BadRequest(c, "学员ID无效")
+			response.BadRequest(c, "用户ID无效")
 			return
 		}
 		var req struct {
@@ -239,30 +288,44 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 			response.BadRequest(c, "密码长度需为 6-20 个字符")
 			return
 		}
-		if err := adminSvc.ResetStudentPassword(studentID, req.Password); err != nil {
-			response.NotFound(c, err.Error())
+		if err := adminSvc.ResetHrwaiUserPassword(id, req.Password); err != nil {
+			response.BadRequest(c, err.Error())
 			return
 		}
 		response.SuccessWithMsg(c, "密码已重置", nil)
 	})
 
-	// PUT /api/admin/student/:student_id/status  切换学员启用/禁用状态
-	g.PUT("/student/:student_id/status", func(c *gin.Context) {
-		studentID, err := strconv.Atoi(c.Param("student_id"))
+	// PUT /api/admin/hrwai-users/:id/status  切换 HRWAI 用户启用/禁用状态
+	g.PUT("/hrwai-users/:id/status", func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("id"))
 		if err != nil {
-			response.BadRequest(c, "学员ID无效")
+			response.BadRequest(c, "用户ID无效")
 			return
 		}
-		next, err := adminSvc.ToggleStudentStatus(studentID)
+		next, err := adminSvc.ToggleHrwaiUserStatus(id)
 		if err != nil {
 			response.NotFound(c, err.Error())
 			return
 		}
-		msg := "学员已启用"
+		msg := "用户已启用"
 		if next == 0 {
-			msg = "学员已禁用"
+			msg = "用户已禁用"
 		}
 		response.SuccessWithMsg(c, msg, map[string]any{"status": next})
+	})
+
+	// DELETE /api/admin/hrwai-users/:id  删除 HRWAI 用户
+	g.DELETE("/hrwai-users/:id", func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("id"))
+		if err != nil {
+			response.BadRequest(c, "用户ID无效")
+			return
+		}
+		if err := adminSvc.DeleteHrwaiUser(id); err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.SuccessWithMsg(c, "用户删除成功", nil)
 	})
 
 	// ===== 导师管理 =====

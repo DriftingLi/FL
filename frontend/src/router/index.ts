@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { useValuationAuthStore } from '@/stores/valuationAuth'
 import { getSubdomain, buildSubdomainUrl, getTargetSubdomainForPath, getDefaultWorkspaceBySubdomain, isIpDirectMode } from '@/utils/subdomain'
 
 const routes: RouteRecordRaw[] = [
@@ -43,7 +42,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/training',
     component: () => import('@/layouts/TrainingLayout.vue'),
-    meta: { requiresAuth: true, role: 'student' },
+    meta: { requiresAuth: true, role: 'hrwai_user' },
     children: [
       {
         path: '',
@@ -192,7 +191,7 @@ const routes: RouteRecordRaw[] = [
         path: 'history',
         name: 'ValuationHistory',
         component: () => import('@/pages/student/valuation/ValuationHistoryView.vue'),
-        meta: { requiresAuth: true, roles: ['valuation_user'], navKey: 'valuation-history', navLabel: '评估历史', navGroup: 'tools' }
+        meta: { requiresAuth: true, roles: ['hrwai_user'], navKey: 'valuation-history', navLabel: '评估历史', navGroup: 'tools' }
       }
     ]
   },
@@ -211,11 +210,11 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false, isValuationAuthPage: true }
   },
 
-  // ========== AI 助手模块（敬请期待占位，无需登录）==========
+  // ========== AI 助手模块（主域名，可选登录；登录后可保存历史会话）==========
   {
     path: '/ai-assistant',
     name: 'AIAssistant',
-    component: () => import('@/pages/student/AIAssistant.vue'),
+    component: () => import('@/pages/ai-assistant/AIAssistantPage.vue'),
     meta: { requiresAuth: false }
   },
 
@@ -223,7 +222,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/profile',
     component: () => import('@/layouts/ProfileLayout.vue'),
-    meta: { requiresAuth: true, role: 'student' },
+    meta: { requiresAuth: true, role: 'hrwai_user' },
     children: [
       {
         path: '',
@@ -251,10 +250,10 @@ const routes: RouteRecordRaw[] = [
         meta: { navKey: 'dashboard', navLabel: '仪表盘', navGroup: 'dashboard' }
       },
       {
-        path: 'students',
-        name: 'StudentManage',
-        component: () => import('@/pages/admin/StudentManage.vue'),
-        meta: { navKey: 'students', navLabel: '学员管理', navGroup: 'education' }
+        path: 'hrwai-users',
+        name: 'HrwaiUserManage',
+        component: () => import('@/pages/admin/HrwaiUserManage.vue'),
+        meta: { navKey: 'hrwai-users', navLabel: '用户管理', navGroup: 'education' }
       },
       {
         path: 'courses',
@@ -311,10 +310,10 @@ const routes: RouteRecordRaw[] = [
         meta: { navKey: 'valuation-config', navLabel: '残值配置', navGroup: 'data' }
       },
       {
-        path: 'valuation-users',
-        name: 'ValuationUserManage',
-        component: () => import('@/pages/admin/ValuationUserManage.vue'),
-        meta: { navKey: 'valuation-users', navLabel: '评估用户', navGroup: 'data' }
+        path: 'ai-settings',
+        name: 'AISettings',
+        component: () => import('@/pages/admin/AISettings.vue'),
+        meta: { navKey: 'ai-settings', navLabel: 'AI 配置', navGroup: 'data' }
       }
     ]
   },
@@ -335,7 +334,7 @@ const routes: RouteRecordRaw[] = [
       const role = authStore.userInfo?.role
       if (role === 'admin') return '/admin/dashboard'
       if (role === 'tutor') return '/training/tutor'
-      if (role === 'student') return '/training'
+      if (role === 'hrwai_user') return '/training'
       return '/'
     }
   },
@@ -360,7 +359,7 @@ const routes: RouteRecordRaw[] = [
       // 默认按角色跳转
       if (role === 'admin') return '/admin/dashboard'
       if (role === 'tutor') return '/training/tutor'
-      if (role === 'student') return '/training'
+      if (role === 'hrwai_user') return '/training'
       return '/'
     }
   },
@@ -386,77 +385,8 @@ const router = createRouter({
 
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
-  const valuationAuth = useValuationAuthStore()
 
-  // ===== 估值模块独立鉴权分支 =====
-  // 所有 /valuation/* 路径都由估值独立 auth store 校验，不走主体系
-  const isValuationPath = to.path === '/valuation' || to.path.startsWith('/valuation/')
-
-  if (isValuationPath) {
-    // 等待估值 auth 初始化完成
-    if (valuationAuth.isInitializing) {
-      await new Promise<void>(resolve => {
-        const unwatch = watch(() => valuationAuth.isInitializing, (val) => {
-          if (!val) {
-            unwatch()
-            resolve()
-          }
-        })
-      })
-    }
-
-    // 子域名边界检查：估值路径必须在 valuation 子域名下访问
-    // IP 直连模式下跳过此检查（无 DNS 子域名环境）
-    const currentSubdomain = getSubdomain()
-    if (!isIpDirectMode() && currentSubdomain !== 'valuation') {
-      window.location.href = buildSubdomainUrl('valuation', to.fullPath)
-      return
-    }
-
-    // 已登录估值用户访问 /valuation/login 或 /valuation/register → 跳回评估历史
-    if (valuationAuth.isLoggedIn && (to.name === 'ValuationLogin' || to.name === 'ValuationRegister')) {
-      next('/valuation/history')
-      return
-    }
-
-    // 通过 to.matched 检查是否需要鉴权（支持子路由覆盖父路由 meta）
-    const requiresValuationAuth = to.matched.some(record => record.meta?.requiresAuth === true)
-    if (!requiresValuationAuth) {
-      next()
-      return
-    }
-
-    // 检查估值 token
-    const hasValuationToken = valuationAuth.token &&
-                               valuationAuth.isLoggedIn &&
-                               valuationAuth.userInfo &&
-                               valuationAuth.userInfo.role
-
-    if (!hasValuationToken) {
-      valuationAuth.clearAuthData()
-      next({ path: '/valuation/login', query: { redirect: to.fullPath } })
-      return
-    }
-
-    // 角色校验：估值路由仅接受 valuation_user
-    const valuationRole = valuationAuth.userInfo.role
-    const requiredRole = to.meta?.role as string | undefined
-    const requiredRoles = to.meta?.roles as string[] | undefined
-
-    const roleMatched = requiredRoles
-      ? requiredRoles.includes(valuationRole)
-      : (requiredRole ? requiredRole === valuationRole : true)
-
-    if (!roleMatched) {
-      next('/valuation')
-      return
-    }
-
-    next()
-    return
-  }
-
-  // ===== 主体系鉴权分支（培训/管理/导师等） =====
+  // 等待 auth store 初始化完成
   if (authStore.isInitializing) {
     await new Promise<void>(resolve => {
       const unwatch = watch(() => authStore.isInitializing, (val) => {
@@ -468,6 +398,9 @@ router.beforeEach(async (to, from, next) => {
     })
   }
 
+  const isValuationPath = to.path === '/valuation' || to.path.startsWith('/valuation/')
+  const isValuationLoginPage = to.name === 'ValuationLogin' || to.name === 'ValuationRegister'
+
   // ===== 子域名边界检查 =====
   // 五类子域名：main（公共）、training（学员培训+AI助手）、valuation（残值评估）、
   // tutor（导师工作区）、admin（管理员后台）
@@ -478,7 +411,13 @@ router.beforeEach(async (to, from, next) => {
   const skipSubdomainCheck = isIpDirectMode()
 
   if (!skipSubdomainCheck) {
-    if (isLoginPath) {
+    if (isValuationPath) {
+      // 估值路径必须在 valuation 子域名下访问
+      if (currentSubdomain !== 'valuation') {
+        window.location.href = buildSubdomainUrl('valuation', to.fullPath)
+        return
+      }
+    } else if (isLoginPath) {
       // /login 和 /register 在主域名上跳到 training 子域名（主域名不再承载登录）
       // valuation 子域名有独立的 /valuation/login 与 /valuation/register，主体系 /login 重定向过去
       if (currentSubdomain === 'main') {
@@ -506,9 +445,15 @@ router.beforeEach(async (to, from, next) => {
     }
   }
 
-  // 已登录用户访问 /login 或 /register：按当前子域名跳转到对应工作区
+  // 已登录用户访问登录页：按当前子域名跳转到对应工作区
   if (isLoginPath && authStore.isLoggedIn && authStore.userInfo.role) {
     next(getDefaultWorkspaceBySubdomain())
+    return
+  }
+
+  // 已登录用户访问估值登录/注册页 → 跳回评估历史
+  if (isValuationLoginPage && authStore.isLoggedIn && authStore.userInfo.role === 'hrwai_user') {
+    next('/valuation/history')
     return
   }
 
@@ -527,7 +472,12 @@ router.beforeEach(async (to, from, next) => {
 
   if (!hasValidToken) {
     authStore.clearAuthData()
-    next({ path: '/login', query: { redirect: to.fullPath } })
+    // 估值路径跳估值登录页，其余跳主登录页
+    if (isValuationPath) {
+      next({ path: '/valuation/login', query: { redirect: to.fullPath } })
+    } else {
+      next({ path: '/login', query: { redirect: to.fullPath } })
+    }
     return
   }
 
@@ -545,6 +495,8 @@ router.beforeEach(async (to, from, next) => {
       next('/admin/dashboard')
     } else if (userRole === 'tutor') {
       next('/training/tutor')
+    } else if (isValuationPath) {
+      next('/valuation')
     } else {
       next('/training')
     }

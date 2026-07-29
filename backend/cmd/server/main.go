@@ -84,7 +84,7 @@ func main() {
 	router := api.NewRouter(cfg, gormDB)
 
 	// 7. 装配残值评估子模块（注册 /api/valuation/* 路由）
-	cleanup := setupValuation(router, cfg, gormDB)
+	cleanup := setupValuation(router, cfg, gormDB, authSvc)
 	defer cleanup()
 
 	// 8. 启动 HTTP 服务
@@ -125,7 +125,7 @@ func main() {
 // 返回 cleanup 函数用于释放 pgx 连接池和 zap 日志缓冲。
 //
 //nolint:gocritic
-func setupValuation(r *gin.Engine, cfg *config.Config, gormDB *gorm.DB) func() {
+func setupValuation(r *gin.Engine, cfg *config.Config, gormDB *gorm.DB, authSvc *service.AuthService) func() {
 	// 1. 初始化 zap 日志器
 	vLogger, err := vconfig.NewLogger(vconfig.LogConfig{
 		Level:  cfg.Valuation.LogLevel,
@@ -160,8 +160,9 @@ func setupValuation(r *gin.Engine, cfg *config.Config, gormDB *gorm.DB) func() {
 	}
 	batterySvc := vservice.NewBatteryRULService()
 
-	// 5. 装配估值模块独立认证服务（独立 JWT secret + 独立用户表）
-	valuationAuthSvc := vservice.NewValuationAuthService(gormDB, cfg.Valuation.JWTSecretKey, cfg.ValuationJWTExpiry())
+	// 5. 装配估值模块认证服务(已统一到主体系 AuthService,薄包装保留旧签名)
+	// 内部代理到主体系 AuthService,使用统一 JWT_SECRET_KEY 与 hrwai_users 表
+	valuationAuthSvc := vservice.WrapValuationAuthService(authSvc)
 
 	// 6. 装配 PDF 生成器
 	pdfDir := cfg.Valuation.PDFOutputDir

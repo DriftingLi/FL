@@ -20,71 +20,145 @@ func NewAdminService(db *gorm.DB) *AdminService {
 	return &AdminService{db: db}
 }
 
-// GetStudents 学员列表。
-func (s *AdminService) GetStudents(page, pageSize int, keyword string) map[string]any {
-	if page <= 0 {
+// ===== HRWAI 用户管理(统一) =====
+// 操作 hrwai_users 表,合并原学员管理与评估用户管理两套接口。
+
+// HrwaiUserSummary HRWAI 用户摘要(列表项,不含密码)。
+type HrwaiUserSummary struct {
+	ID        int       `json:"id"`
+	Username  string    `json:"username"`
+	Name      string    `json:"name"`
+	Phone     string    `json:"phone"`
+	Email     string    `json:"email"`
+	Company   string    `json:"company"`
+	Status    int16     `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// ListHrwaiUsers 分页查询 HRWAI 用户,支持按用户名/姓名/手机号模糊搜索。
+func (s *AdminService) ListHrwaiUsers(page, pageSize int, keyword string) (map[string]any, error) {
+	if page < 1 {
 		page = 1
 	}
-	if pageSize <= 0 {
-		pageSize = 10
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
 	}
-	q := s.db.Model(&model.Student{})
+	offset := (page - 1) * pageSize
+	q := s.db.Model(&model.HrwaiUser{})
 	if keyword != "" {
 		like := "%" + keyword + "%"
-		q = q.Where("username LIKE ? OR name LIKE ?", like, like)
+		q = q.Where("username LIKE ? OR name LIKE ? OR phone LIKE ?", like, like, like)
 	}
 	var total int64
-	q.Count(&total)
-	var students []model.Student
-	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&students)
-	items := make([]map[string]any, 0, len(students))
-	for i := range students {
-		items = append(items, studentToDict(&students[i]))
-	}
-	return map[string]any{
-		"total":    total,
-		"page":     page,
-		"students": items,
-	}
-}
-
-// DeleteStudent 删除学员。
-func (s *AdminService) DeleteStudent(studentID int) (map[string]any, error) {
-	var student model.Student
-	if err := s.db.First(&student, studentID).Error; err != nil {
-		return nil, errors.New("学员不存在")
-	}
-	if err := s.db.Delete(&student).Error; err != nil {
+	if err := q.Count(&total).Error; err != nil {
 		return nil, err
 	}
-	return map[string]any{"student_id": studentID}, nil
+	var users []model.HrwaiUser
+	if err := q.Order("created_at DESC, id ASC").Limit(pageSize).Offset(offset).Find(&users).Error; err != nil {
+		return nil, err
+	}
+	list := make([]HrwaiUserSummary, 0, len(users))
+	for _, u := range users {
+		list = append(list, HrwaiUserSummary{
+			ID:        u.ID,
+			Username:  u.Username,
+			Name:      u.Name,
+			Phone:     u.Phone,
+			Email:     u.Email,
+			Company:   u.Company,
+			Status:    u.Status,
+			CreatedAt: u.CreatedAt,
+		})
+	}
+	return map[string]any{
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+		"list":      list,
+	}, nil
 }
 
-// ResetStudentPassword 重置学员密码。
-func (s *AdminService) ResetStudentPassword(studentID int, password string) error {
-	var student model.Student
-	if err := s.db.First(&student, studentID).Error; err != nil {
-		return errors.New("学员不存在")
+// CreateHrwaiUser 管理员新增 HRWAI 用户。username 缺省时用手机号充填。
+func (s *AdminService) CreateHrwaiUser(phone, password, name, email, company string) (*model.HrwaiUser, error) {
+	if phone == "" || password == "" || name == "" {
+		return nil, errors.New("手机号、密码和姓名不能为空")
+	}
+	var count int64
+	s.db.Model(&model.HrwaiUser{}).Where("phone = ?", phone).Count(&count)
+	if count > 0 {
+		return nil, errors.New("手机号已被注册")
 	}
 	hashed, err := HashPassword(password)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return s.db.Model(&model.Student{}).Where("student_id = ?", studentID).
-		Update("password", hashed).Error
+	user := model.HrwaiUser{
+		Username:  phone,
+		Password:  hashed,
+		Name:      name,
+		Phone:     phone,
+		Email:     email,
+		Company:   company,
+		Status:    1,
+		CreatedAt: beijingNow(),
+	}
+	if err := s.db.Create(&user).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
 
-// ToggleStudentStatus 切换学员启用/禁用状态，返回切换后的新状态。
-func (s *AdminService) ToggleStudentStatus(studentID int) (int, error) {
-	var student model.Student
-	if err := s.db.First(&student, studentID).Error; err != nil {
-		return 0, errors.New("学员不存在")
+// UpdateHrwaiUser 管理员更新 HRWAI 用户资料(不含密码)。
+func (s *AdminService) UpdateHrwaiUser(id int, name, email, company string, status int16) error {
+	if id <= 0 {
+		return errors.New("用户 ID 非法")
 	}
-	next := 1
-	if student.Status == 1 {
+	updates := map[string]interface{}{
+		"name":    name,
+		"email":   email,
+		"company": company,
+		"status":  status,
+	}
+	return s.db.Model(&model.HrwaiUser{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// ResetHrwaiUserPassword 管理员重置 HRWAI 用户密码。
+func (s *AdminService) ResetHrwaiUserPassword(id int, newPassword string) error {
+	if id <= 0 {
+		return errors.New("用户 ID 非法")
+	}
+	if newPassword == "" {
+		return errors.New("新密码不能为空")
+	}
+	hashed, err := HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+	return s.db.Model(&model.HrwaiUser{}).Where("id = ?", id).Update("password", hashed).Error
+}
+
+// DeleteHrwaiUser 管理员删除 HRWAI 用户。
+func (s *AdminService) DeleteHrwaiUser(id int) error {
+	if id <= 0 {
+		return errors.New("用户 ID 非法")
+	}
+	return s.db.Delete(&model.HrwaiUser{}, id).Error
+}
+
+// ToggleHrwaiUserStatus 切换 HRWAI 用户启用/禁用状态,返回切换后的新状态。
+func (s *AdminService) ToggleHrwaiUserStatus(id int) (int16, error) {
+	if id <= 0 {
+		return 0, errors.New("用户 ID 非法")
+	}
+	var user model.HrwaiUser
+	if err := s.db.First(&user, id).Error; err != nil {
+		return 0, errors.New("用户不存在")
+	}
+	next := int16(1)
+	if user.Status == 1 {
 		next = 0
 	}
-	if err := s.db.Model(&student).Update("status", next).Error; err != nil {
+	if err := s.db.Model(&user).Update("status", next).Error; err != nil {
 		return 0, err
 	}
 	return next, nil

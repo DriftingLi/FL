@@ -2,11 +2,13 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sashabaranov/go-openai"
@@ -15,37 +17,40 @@ import (
 	"forklift-training/internal/model"
 )
 
-// 智谱 GLM 默认模型与提示词。
-const (
-	gradingSystemPrompt = `你是一名专业的叉车维修培训考试阅卷专家。请根据参考答案和评分标准，对学员的简答题答案进行评分。
+// AI 评分系统提示词。
+const gradingSystemPrompt = `你是一名专业的叉车维修培训考试阅卷专家。请根据参考答案和评分标准，对学员的简答题答案进行评分。
 要求：
 1. 严格按照评分标准逐项评分，意思正确但表述不同也应给分
 2. 评分应客观公正，不苛求表述完全一致
 3. 给出具体得分和简要评语，评语需指出得分点和失分点
 4. 只返回JSON格式，不要返回其他内容：{"score": 分数值, "comment": "评语"}
 5. 分数值为数字类型，不要加引号`
-)
 
-// AIService 封装智谱 GLM 调用、文本生成与简答题评分。
+// 章节内容生成系统提示词。
+const chapterContentSystemPrompt = `你是一名叉车维修培训内容编写专家。请根据课程信息和章节标题，生成适合培训学员的章节内容。
+要求：
+1. 内容使用 Markdown 格式
+2. 包含概述、核心知识点、操作要点、安全注意事项、小结等部分
+3. 内容专业、准确、实用，字数 800-1500 字
+4. 不要在内容开头重复章节标题（前端会自动显示）
+5. 可适当使用 Markdown 标题（##、###）、列表、加粗等格式增强可读性`
+
+// AIService 封装 OpenAI 兼容 API 调用、文本生成与简答题评分。
+// 调用时按 feature_key 查找绑定配置（AIConfigService），未绑定时返回错误。
 type AIService struct {
-	db      *gorm.DB
-	client  *openai.Client
-	apiKey  string
-	baseURL string
-	model   string
+	db          *gorm.DB
+	aiConfigSvc *AIConfigService
+	client      *openai.Client
+	clientSig   string // 当前 client 使用的 "key|url|model" 签名，用于检测配置变化
+	apiKey      string
+	baseURL     string
+	model       string
+	mu          sync.Mutex // 保护 client 重建并发安全
 }
 
-// NewAIService 创建 AI 服务。apiKey 为空时 client 为 nil，调用时降级返回 fallback。
-func NewAIService(db *gorm.DB, apiKey, baseURL, modelName string) *AIService {
-	svc := &AIService{db: db, apiKey: apiKey, baseURL: baseURL, model: modelName}
-	if apiKey != "" {
-		cfg := openai.DefaultConfig(apiKey)
-		if baseURL != "" {
-			cfg.BaseURL = baseURL
-		}
-		svc.client = openai.NewClientWithConfig(cfg)
-	}
-	return svc
+// NewAIService 创建 AI 服务。aiConfigSvc 用于按功能查找绑定配置。
+func NewAIService(db *gorm.DB, aiConfigSvc *AIConfigService) *AIService {
+	return &AIService{db: db, aiConfigSvc: aiConfigSvc}
 }
 
 // AIGradeResult 简答题 AI 评分结果。
@@ -69,7 +74,7 @@ func (s *AIService) GradeShortAnswer(questionContent, referenceAnswer, scoringCr
 	content, err := s.callModel([]openai.ChatCompletionMessage{
 		{Role: openai.ChatMessageRoleSystem, Content: gradingSystemPrompt},
 		{Role: openai.ChatMessageRoleUser, Content: userPrompt},
-	}, 1000, 0.3)
+	}, 1000, 0.3, FeatureGradeShortAnswer)
 
 	if err != nil || content == "" {
 		slog.Error("AI grade_short_answer failed", "error", err)
@@ -89,13 +94,66 @@ func (s *AIService) GradeShortAnswer(questionContent, referenceAnswer, scoringCr
 	return result
 }
 
-// callModel 调用模型，重试 2 次。
-func (s *AIService) callModel(messages []openai.ChatCompletionMessage, maxTokens int, temperature float32) (string, error) {
-	if s.client == nil {
-		return "", fmt.Errorf("AI服务未配置，请设置ZHIPU_API_KEY")
+// GenerateChapterContent 为指定章节生成 Markdown 内容。
+// 调用 LLM 根据课程上下文和章节标题生成培训内容，写入 ai_generation_log（generation_type=chapter_content）。
+func (s *AIService) GenerateChapterContent(courseName, courseCategory, courseDescription, chapterTitle string, userID *int) (string, error) {
+	userPrompt := fmt.Sprintf("【课程名称】%s\n【课程分类】%s\n【课程简介】%s\n【章节标题】%s\n\n请根据以上信息生成该章节的培训内容（Markdown 格式）。",
+		courseName, orDefault(courseCategory, "无"), orDefault(courseDescription, "无"), chapterTitle)
+
+	content, err := s.callModel([]openai.ChatCompletionMessage{
+		{Role: openai.ChatMessageRoleSystem, Content: chapterContentSystemPrompt},
+		{Role: openai.ChatMessageRoleUser, Content: userPrompt},
+	}, 2000, 0.5, FeatureGenerateChapterContent)
+	if err != nil {
+		return "", err
 	}
+	if userID != nil {
+		s.saveLog(*userID, "admin", "chapter_content", map[string]any{
+			"course_name":   courseName,
+			"chapter_title": chapterTitle,
+		}, truncate(content, 5000), 1)
+	}
+	return content, nil
+}
+
+// ensureClient 检查 AI 配置是否变化，必要时重建 openai.Client。
+// featureKey 用于查找该功能绑定的配置；未绑定时返回错误（不再降级到环境变量）。
+func (s *AIService) ensureClient(ctx context.Context, featureKey string) error {
+	if featureKey == "" || s.aiConfigSvc == nil {
+		return fmt.Errorf("AI 功能 %q 未绑定配置，请在管理员后台 AI 配置页面绑定", featureKey)
+	}
+	cur := s.aiConfigSvc.ResolveConfig(ctx, featureKey)
+	sig := cur.APIKey + "|" + cur.BaseURL + "|" + cur.Model
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if sig == s.clientSig && s.client != nil {
+		s.model = cur.Model
+		return nil
+	}
+	if cur.APIKey == "" {
+		return fmt.Errorf("AI 功能 %q 未绑定配置，请在管理员后台 AI 配置页面绑定", featureKey)
+	}
+	cfg := openai.DefaultConfig(cur.APIKey)
+	if cur.BaseURL != "" {
+		cfg.BaseURL = cur.BaseURL
+	}
+	s.client = openai.NewClientWithConfig(cfg)
+	s.clientSig = sig
+	s.apiKey, s.baseURL, s.model = cur.APIKey, cur.BaseURL, cur.Model
+	slog.Info("AI client 已重建", "base_url", cur.BaseURL, "model", cur.Model, "source", cur.Source, "feature", featureKey)
+	return nil
+}
+
+// callModel 调用模型，重试 2 次。
+// featureKey 用于按功能解析绑定的 AI 配置。
+func (s *AIService) callModel(messages []openai.ChatCompletionMessage, maxTokens int, temperature float32, featureKey string) (string, error) {
 	ctx, cancel := withTimeout(120 * time.Second)
 	defer cancel()
+
+	if err := s.ensureClient(ctx, featureKey); err != nil {
+		return "", err
+	}
 
 	for attempt := 1; attempt <= 2; attempt++ {
 		req := openai.ChatCompletionRequest{

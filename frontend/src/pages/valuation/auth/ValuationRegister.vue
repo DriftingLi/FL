@@ -12,8 +12,8 @@
           <div class="card-icon">
             <el-icon :size="24"><DataAnalysis /></el-icon>
           </div>
-          <h1 class="card-title">创建评估账户</h1>
-          <p class="card-subtitle">填写以下信息完成残值评估账户注册</p>
+          <h1 class="card-title">创建 HRWAI 账号</h1>
+          <p class="card-subtitle">填写以下信息完成 HRWAI 通用账号注册</p>
         </div>
 
         <el-form ref="formRef" :model="formData" :rules="rules" label-width="0" class="register-form">
@@ -112,7 +112,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { valuationAuthApi } from '@/api/valuation/auth'
+import { authApi } from '@/api/auth'
 import { ElMessage } from 'element-plus'
 import type { FormItemRule } from 'element-plus'
 import { DataAnalysis } from '@element-plus/icons-vue'
@@ -162,14 +162,15 @@ async function handleRegister() {
 
   loading.value = true
   try {
-    const res = await valuationAuthApi.register({
+    // 统一 HRWAI 注册：调用主体系 /api/auth/register
+    const res = await authApi.register({
       name: formData.name,
       phone: formData.phone,
       password: formData.password,
       company: formData.company,
       email: formData.email
     })
-    if (res.data && res.data.id) {
+    if ((res.code === 201 || res.code === 200) && res.data) {
       ElMessage.success('注册成功，即将跳转到登录页...')
       setTimeout(() => {
         router.push('/valuation/login')

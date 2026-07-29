@@ -1,23 +1,16 @@
 <script setup lang="ts">
-// 残值评估模块独立用户管理（管理员后台）
-// 对应后端 /api/valuation/admin/users（主体系 admin JWT 鉴权）
-// 功能：分页列表 + 关键词搜索 + 新增 + 重置密码 + 启用/禁用 + 删除
+// HRWAI 用户管理(管理员后台)
+// 对应后端 /api/admin/hrwai-users/*(统一管理 hrwai_users 表)
+// 合并原学员管理与评估用户管理,支持分页列表 + 关键词搜索 + 新增 + 编辑 + 重置密码 + 启用/禁用 + 删除
 import { ref, reactive, onMounted } from 'vue'
 import { Plus, Search, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import {
-  listValuationUsers,
-  createValuationUser,
-  updateValuationUser,
-  resetValuationUserPassword,
-  deleteValuationUser,
-  type ValuationUser
-} from '@/api/valuation/admin'
+import { adminApi, type HrwaiUser } from '@/api/admin'
 import { phoneRules, passwordRules, nameRules, emailRules, companyRules } from '@/utils/validate'
 
 const loading = ref(false)
-const users = ref<ValuationUser[]>([])
+const users = ref<HrwaiUser[]>([])
 const searchKeyword = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
@@ -66,15 +59,16 @@ function formatDate(dateStr: string): string {
 async function loadUsers() {
   loading.value = true
   try {
-    const data = await listValuationUsers({
+    const res = await adminApi.getHrwaiUsers({
       page: currentPage.value,
       page_size: pageSize.value,
       keyword: searchKeyword.value || undefined
     })
+    const data = res.data ?? {}
     users.value = data.list ?? []
     total.value = data.total ?? 0
   } catch (error) {
-    console.error('加载评估用户列表失败:', error)
+    console.error('加载 HRWAI 用户列表失败:', error)
   } finally {
     loading.value = false
   }
@@ -102,25 +96,25 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    await createValuationUser({
+    await adminApi.createHrwaiUser({
       phone: formData.phone,
       password: formData.password,
       name: formData.name,
       email: formData.email || undefined,
       company: formData.company || undefined
     })
-    ElMessage.success('评估用户添加成功')
+    ElMessage.success('用户添加成功')
     dialogVisible.value = false
     loadUsers()
   } catch (error) {
-    // 错误提示已由 client 拦截器处理
-    console.error('保存评估用户失败:', error)
+    // 错误提示已由 request 拦截器处理
+    console.error('保存 HRWAI 用户失败:', error)
   } finally {
     submitting.value = false
   }
 }
 
-function openResetPwdDialog(row: ValuationUser) {
+function openResetPwdDialog(row: HrwaiUser) {
   pwdFormData.id = row.id
   pwdFormData.name = row.name
   pwdFormData.password = ''
@@ -133,7 +127,7 @@ async function handleResetPwd() {
 
   pwdSubmitting.value = true
   try {
-    await resetValuationUserPassword(pwdFormData.id, pwdFormData.password)
+    await adminApi.resetHrwaiUserPassword(pwdFormData.id, pwdFormData.password)
     ElMessage.success('密码已重置')
     pwdDialogVisible.value = false
   } catch (error) {
@@ -143,15 +137,10 @@ async function handleResetPwd() {
   }
 }
 
-async function handleToggleStatus(row: ValuationUser) {
-  const next = row.status === 1 ? 0 : 1
+async function handleToggleStatus(row: HrwaiUser) {
   try {
-    await updateValuationUser(row.id, {
-      name: row.name,
-      email: row.email || undefined,
-      company: row.company || undefined,
-      status: next
-    })
+    const res = await adminApi.toggleHrwaiUserStatus(row.id)
+    const next = res.data?.status
     ElMessage.success(next === 1 ? '已启用' : '已禁用')
     loadUsers()
   } catch (error) {
@@ -159,18 +148,18 @@ async function handleToggleStatus(row: ValuationUser) {
   }
 }
 
-async function handleDelete(row: ValuationUser) {
+async function handleDelete(row: HrwaiUser) {
   try {
-    await deleteValuationUser(row.id)
-    ElMessage.success('评估用户已删除')
+    await adminApi.deleteHrwaiUser(row.id)
+    ElMessage.success('用户已删除')
     loadUsers()
   } catch (error) {
-    console.error('删除评估用户失败:', error)
+    console.error('删除用户失败:', error)
   }
 }
 
 // 操作下拉菜单统一入口
-async function handleAction(cmd: string, row: ValuationUser) {
+async function handleAction(cmd: string, row: HrwaiUser) {
   switch (cmd) {
     case 'resetPwd':
       openResetPwdDialog(row)
@@ -180,7 +169,7 @@ async function handleAction(cmd: string, row: ValuationUser) {
       break
     case 'delete':
       try {
-        await ElMessageBox.confirm('确定删除该评估用户？删除后不可恢复', '提示', {
+        await ElMessageBox.confirm('确定删除该用户？删除后不可恢复', '提示', {
           type: 'warning',
           confirmButtonText: '确定',
           cancelButtonText: '取消'
@@ -199,9 +188,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="valuation-user-manage-page">
+  <div class="hrwai-user-manage-page">
     <div class="page-header">
-      <h2>评估用户管理</h2>
+      <h2>HRWAI 用户管理</h2>
       <el-button type="primary" @click="openCreateDialog">
         <el-icon><Plus /></el-icon> 新增用户
       </el-button>
@@ -225,8 +214,8 @@ onMounted(() => {
 
     <el-table :data="users" v-loading="loading" stripe border style="width: 100%">
       <el-table-column prop="id" label="ID" width="70" align="center" />
-      <el-table-column prop="username" label="用户名" width="140" />
-      <el-table-column prop="name" label="姓名" width="120" />
+      <el-table-column prop="username" label="用户名" min-width="140" />
+      <el-table-column prop="name" label="姓名" min-width="120" />
       <el-table-column prop="phone" label="手机号" width="130" />
       <el-table-column prop="email" label="邮箱" min-width="160" show-overflow-tooltip>
         <template #default="{ row }">
@@ -283,7 +272,7 @@ onMounted(() => {
     <!-- 新增弹窗 -->
     <el-dialog
       v-model="dialogVisible"
-      title="新增评估用户"
+      title="新增 HRWAI 用户"
       width="520px"
       destroy-on-close
     >
@@ -338,7 +327,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.valuation-user-manage-page {
+.hrwai-user-manage-page {
   padding: 20px;
 }
 
@@ -367,7 +356,7 @@ onMounted(() => {
 }
 
 @media screen and (max-width: 768px) {
-  .valuation-user-manage-page {
+  .hrwai-user-manage-page {
     padding: 12px;
   }
 

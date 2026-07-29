@@ -88,18 +88,18 @@ func TestAuthService_GenerateToken(t *testing.T) {
 	}
 }
 
-// --- StudentLogin ---
+// --- HrwaiLogin ---
 
-func TestStudentLogin_Success(t *testing.T) {
+func TestHrwaiLogin_Success(t *testing.T) {
 	svc, tdb := newAuthSvc(t)
 	hash, _ := HashPassword("pwd123")
 	testutil.SeedStudent(t, tdb, "student1", hash)
 
-	result, err := svc.StudentLogin("student1", "pwd123")
+	result, err := svc.HrwaiLogin("student1", "pwd123")
 	if err != nil {
 		t.Fatalf("登录失败: %v", err)
 	}
-	if result.Username != "student1" || result.Role != "student" {
+	if result.Username != "student1" || result.Role != HrwaiRole {
 		t.Fatalf("登录结果不匹配: %+v", result)
 	}
 	if result.Token == "" {
@@ -107,44 +107,44 @@ func TestStudentLogin_Success(t *testing.T) {
 	}
 }
 
-func TestStudentLogin_WrongPassword(t *testing.T) {
+func TestHrwaiLogin_WrongPassword(t *testing.T) {
 	svc, tdb := newAuthSvc(t)
 	hash, _ := HashPassword("pwd123")
 	testutil.SeedStudent(t, tdb, "student1", hash)
 
-	_, err := svc.StudentLogin("student1", "wrong")
+	_, err := svc.HrwaiLogin("student1", "wrong")
 	if err == nil || err.Error() != "用户名或密码错误" {
 		t.Fatalf("应返回密码错误, got %v", err)
 	}
 }
 
-func TestStudentLogin_NotFound(t *testing.T) {
+func TestHrwaiLogin_NotFound(t *testing.T) {
 	svc, _ := newAuthSvc(t)
-	_, err := svc.StudentLogin("nobody", "pwd")
+	_, err := svc.HrwaiLogin("nobody", "pwd")
 	if err == nil || err.Error() != "用户名或密码错误" {
 		t.Fatalf("应返回用户名或密码错误, got %v", err)
 	}
 }
 
-func TestStudentLogin_Disabled(t *testing.T) {
+func TestHrwaiLogin_Disabled(t *testing.T) {
 	svc, tdb := newAuthSvc(t)
 	hash, _ := HashPassword("pwd123")
 	s := testutil.SeedStudent(t, tdb, "disabled", hash)
 	s.Status = 0 // 禁用
 	tdb.Save(s)
 
-	_, err := svc.StudentLogin("disabled", "pwd123")
+	_, err := svc.HrwaiLogin("disabled", "pwd123")
 	if err == nil || err.Error() != "账号已被禁用，请联系管理员" {
 		t.Fatalf("应返回禁用错误, got %v", err)
 	}
 }
 
-// --- StudentRegister ---
+// --- HrwaiRegister ---
 
-func TestStudentRegister_Success(t *testing.T) {
+func TestHrwaiRegister_Success(t *testing.T) {
 	svc, _ := newAuthSvc(t)
 	// 新签名：username 由手机号自动生成
-	result, err := svc.StudentRegister("13800138000", "pwd", "新生", "", "")
+	result, err := svc.HrwaiRegister("13800138000", "pwd", "新生", "", "")
 	if err != nil {
 		t.Fatalf("注册失败: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestStudentRegister_Success(t *testing.T) {
 		t.Fatalf("注册结果不匹配: %+v", result)
 	}
 	// 验证可用手机号登录
-	login, err := svc.StudentLogin("13800138000", "pwd")
+	login, err := svc.HrwaiLogin("13800138000", "pwd")
 	if err != nil {
 		t.Fatalf("注册后应可登录: %v", err)
 	}
@@ -161,10 +161,10 @@ func TestStudentRegister_Success(t *testing.T) {
 	}
 }
 
-func TestStudentRegister_Duplicate(t *testing.T) {
+func TestHrwaiRegister_Duplicate(t *testing.T) {
 	svc, _ := newAuthSvc(t)
-	_, _ = svc.StudentRegister("13800138000", "pwd", "dup1", "", "")
-	_, err := svc.StudentRegister("13800138000", "pwd", "dup2", "", "")
+	_, _ = svc.HrwaiRegister("13800138000", "pwd", "dup1", "", "")
+	_, err := svc.HrwaiRegister("13800138000", "pwd", "dup2", "", "")
 	if err == nil || err.Error() != "手机号已被注册" {
 		t.Fatalf("应返回手机号已被注册, got %v", err)
 	}

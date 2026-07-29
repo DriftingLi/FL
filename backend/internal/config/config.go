@@ -25,10 +25,10 @@ type Config struct {
 	UploadFolder     string
 	VolumeMountPath  string
 	MaxContentLength int64
-	OpenAIAPIKey     string
-	ZhipuAPIKey      string
-	ZhipuBaseURL     string
-	ZhipuModel       string
+	// AI 服务配置（OpenAI 兼容格式）。优先级：AI_* > DEEPSEEK_* > ZHIPU_* > OPENAI_API_KEY。
+	AIAPIKey         string
+	AIBaseURL        string
+	AIModel          string
 	Valuation        ValuationConfig
 	Redis            RedisConfig
 	DefaultPasswords DefaultPasswordsConfig
@@ -50,8 +50,11 @@ type ValuationConfig struct {
 	DBMaxOpenConns    int
 	DBMaxIdleConns    int
 	DBConnMaxLifetime int
-	JWTSecretKey      string // 估值模块独立 JWT 签名密钥
-	JWTExpiresHours   int    // 估值模块独立 JWT 过期时长（小时）
+	// Deprecated: 估值模块已并入主体系 JWT 鉴权,统一使用 JWT_SECRET_KEY。
+	// 此字段保留仅为向后兼容,实际不再使用。
+	JWTSecretKey string
+	// Deprecated: 同上,已统一使用主体系 JWTExpiry。
+	JWTExpiresHours int
 }
 
 // RedisConfig Redis 缓存配置。
@@ -108,10 +111,9 @@ func Load() (*Config, error) {
 		UploadFolder:     getenv("UPLOAD_FOLDER", ""),
 		VolumeMountPath:  getenv("VOLUME_MOUNT_PATH", ""),
 		MaxContentLength: int64(maxMB) * 1024 * 1024,
-		OpenAIAPIKey:     getenv("OPENAI_API_KEY", ""),
-		ZhipuAPIKey:      getenv("ZHIPU_API_KEY", ""),
-		ZhipuBaseURL:     getenv("ZHIPU_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"),
-		ZhipuModel:       getenv("ZHIPU_MODEL", "glm-4.7-flash"),
+		AIAPIKey:         getenvChainDef("", "AI_API_KEY", "DEEPSEEK_API_KEY", "ZHIPU_API_KEY", "OPENAI_API_KEY"),
+		AIBaseURL:        getenvChainDef("https://api.deepseek.com", "AI_BASE_URL", "DEEPSEEK_API_URL", "ZHIPU_BASE_URL"),
+		AIModel:          getenvChainDef("deepseek-v4-flash", "AI_MODEL", "MODEL", "ZHIPU_MODEL"),
 		Valuation: ValuationConfig{
 			PDFOutputDir:      getenv("VALUATION_PDF_OUTPUT_DIR", "storage/reports"),
 			LogLevel:          getenv("VALUATION_LOG_LEVEL", "info"),
@@ -120,8 +122,9 @@ func Load() (*Config, error) {
 			DBMaxOpenConns:    valuationDBMaxOpen,
 			DBMaxIdleConns:    valuationDBMaxIdle,
 			DBConnMaxLifetime: valuationDBLifetime,
-			JWTSecretKey:      getenv("VALUATION_JWT_SECRET_KEY", "valuation-jwt-secret-key"),
-			JWTExpiresHours:   valuationJWTHours,
+			// Deprecated: 估值模块已统一使用主体系 JWT_SECRET_KEY,此字段不再使用。
+			JWTSecretKey:    getenv("VALUATION_JWT_SECRET_KEY", "valuation-jwt-secret-key"),
+			JWTExpiresHours: valuationJWTHours,
 		},
 		Redis: RedisConfig{
 			Addr:         getenv("REDIS_ADDR", "localhost:6379"),
@@ -185,9 +188,8 @@ func (c *Config) Validate() error {
 	if c.JWTSecretKey == "" || c.JWTSecretKey == "jwt-secret-key" {
 		missing = append(missing, "JWT_SECRET_KEY")
 	}
-	if c.Valuation.JWTSecretKey == "" || c.Valuation.JWTSecretKey == "valuation-jwt-secret-key" {
-		missing = append(missing, "VALUATION_JWT_SECRET_KEY")
-	}
+	// Deprecated: VALUATION_JWT_SECRET_KEY 已废弃,估值模块统一使用 JWT_SECRET_KEY。
+	// 不再校验此环境变量。
 	if c.DatabaseURL == "" {
 		missing = append(missing, "DATABASE_URL")
 	}
@@ -216,6 +218,17 @@ func (c *Config) IsProd() bool { return c.AppEnv == "production" }
 func getenv(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return def
+}
+
+// getenvChainDef 按顺序返回第一个非空环境变量，全部为空时返回 def。
+// 用于 AI 配置字段的多名称兼容回退（如 AI_API_KEY > DEEPSEEK_API_KEY > ZHIPU_API_KEY）。
+func getenvChainDef(def string, keys ...string) string {
+	for _, k := range keys {
+		if v := os.Getenv(k); v != "" {
+			return v
+		}
 	}
 	return def
 }

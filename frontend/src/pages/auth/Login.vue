@@ -143,7 +143,7 @@ async function handleLogin() {
       role: currentRole
     }
     let res
-    if (currentRole === 'student') {
+    if (currentRole === 'hrwai_user') {
       res = await authApi.login(payload)
     } else if (currentRole === 'tutor') {
       res = await authApi.tutorLogin(payload)
@@ -164,7 +164,7 @@ async function handleLogin() {
       const isSafeRedirect = (target: string): boolean => {
         if (role === 'admin') return target.startsWith('/admin')
         if (role === 'tutor') return target.startsWith('/training/tutor')
-        if (role === 'student') {
+        if (role === 'hrwai_user') {
           // 学员可回跳到培训或残值评估路径
           return target.startsWith('/training') || target.startsWith('/valuation')
         }

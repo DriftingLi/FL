@@ -17,7 +17,7 @@ import (
 func RegisterWrongQuestionRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	svc := service.NewWrongQuestionService(db)
 
-	g := rg.Group("/wrong-questions", middleware.JWTAuth(cfg), middleware.RoleRequired("student"))
+	g := rg.Group("/wrong-questions", middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
 
 	// GET /api/wrong-questions  错题列表（分页+过滤）
 	g.GET("", func(c *gin.Context) {
