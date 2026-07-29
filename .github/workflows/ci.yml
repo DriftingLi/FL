@@ -253,12 +253,17 @@ jobs:
 
   # ============================================================
   # Stage 7: CI 汇总（作为 CD 流水线的依赖门禁）
+  # CI 全部通过后,主动调用 CD workflow 的 workflow_dispatch 触发部署
   # ============================================================
   ci-summary:
     # 注：security-scan 为参考性质，不阻断流水线
     needs: [backend-lint, backend-test, frontend-check, migration-check]
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
+    # 触发 CD workflow_dispatch 需要 actions:write 权限
+    permissions:
+      actions: write
+      contents: read
     steps:
       - name: 检查是否全部通过
         run: |
@@ -295,3 +300,19 @@ jobs:
 
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**全部检查通过, 可以进入 CD 部署!**" >> $GITHUB_STEP_SUMMARY
+
+      # CI 全部通过后,主动触发 CD workflow
+      # 传入 ref=当前 commit SHA,确保 CD 部署的就是 CI 验证过的代码
+      - name: 触发 CD 部署
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo ">>> 触发 CD workflow,ref=${{ github.sha }}"
+          gh workflow run cd.yml \
+            --ref "${{ github.ref_name }}" \
+            -f ref="${{ github.sha }}" \
+            -f environment=staging
+          echo "✅ CD workflow 已触发"
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**已触发 CD 部署 (commit: \`${{ github.sha }}\`)**" >> $GITHUB_STEP_SUMMARY

@@ -1,14 +1,17 @@
 name: CD - 持续部署
 
 on:
-  # CI 通过后自动触发部署（确保部署的是已测试的代码）
-  workflow_run:
-    workflows: ["CI - 持续集成"]
-    types: [completed]
-    branches: [master]
-  # 手动触发（可跳过 CI 门禁，用于紧急修复）
+  # CI 通过后由 ci-summary job 主动调用 workflow_dispatch 触发（确保部署的是已测试的代码）
+  # 不再使用 workflow_run 被动触发:被取消的 CI 也会触发 workflow_run(conclusion=cancelled),
+  # 导致 CD 先失败一次;且短时间内多次 CI 完成时 workflow_run 事件可能被 GitHub 去重抑制,
+  # 导致成功的 CI 不再触发 CD。
   workflow_dispatch:
     inputs:
+      # 触发 CD 的 commit SHA(由 ci-summary 传入,确保部署的就是 CI 验证过的代码)
+      ref:
+        description: 部署的 commit SHA(由 CI 自动传入,留空则用默认分支 HEAD)
+        type: string
+        default: ""
       environment:
         description: 部署目标环境
         type: choice
@@ -42,45 +45,28 @@ env:
   IMAGE_LIBREOFFICE: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-libreoffice
   DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/forklift-training' }}
   COMPOSE_FILE: ${{ vars.COMPOSE_FILE || 'docker-compose.prod.yml' }}
+  # 部署的 commit SHA:
+  # - workflow_dispatch 触发时优先用 inputs.ref(CI 传入),否则用当前分支 HEAD
+  # - CI 主动触发 CD 时会显式传入 ref=触发 CI 的 commit,确保部署的就是 CI 验证过的代码
+  DEPLOY_REF: ${{ inputs.ref || github.sha }}
 
 jobs:
-  # ============================================================
-  # Stage 0: CI 门禁（workflow_run 触发时检查 CI 是否成功）
-  # ============================================================
-  ci-gate:
-    if: ${{ github.event_name == 'workflow_run' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: 检查 CI 结论
-        run: |
-          CONCLUSION="${{ github.event.workflow_run.conclusion }}"
-          echo "CI 结论: $CONCLUSION"
-          if [ "$CONCLUSION" != "success" ]; then
-            echo "::error::CI 未通过 ($CONCLUSION)，取消部署"
-            exit 1
-          fi
-          echo "✅ CI 已通过，继续部署"
-
   # ============================================================
   # Stage 1: 构建后端 Docker 镜像并推送 ghcr.io
   # ============================================================
   build-backend:
-    needs: ci-gate
-    if: |
-      always() &&
-      (github.event_name == 'workflow_dispatch' || needs.ci-gate.result == 'success') &&
-      !(github.event_name == 'workflow_dispatch' && inputs.skip_backend)
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_backend) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     outputs:
-      image_tag: ${{ github.event.workflow_run.head_sha || github.sha }}
+      image_tag: ${{ env.DEPLOY_REF }}
     steps:
       - uses: actions/checkout@v4
         with:
-          # workflow_run 模式下检出触发 CI 的那个 commit
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # 检出 CI 验证过的那个 commit(inputs.ref 优先,否则当前 HEAD)
+          ref: ${{ env.DEPLOY_REF }}
 
       - name: 登录 GitHub Container Registry
         uses: docker/login-action@v3
@@ -97,7 +83,7 @@ jobs:
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
             type=sha,prefix=,format=short
-            type=raw,value=${{ github.event.workflow_run.head_sha || github.sha }}
+            type=raw,value=${{ env.DEPLOY_REF }}
             type=ref,event=branch
 
       - name: 构建并推送后端镜像
@@ -113,22 +99,17 @@ jobs:
   # Stage 1.5: 构建前端 Docker 镜像并推送 ghcr.io（与后端并行）
   # ============================================================
   build-frontend:
-    needs: ci-gate
-    if: |
-      always() &&
-      (github.event_name == 'workflow_dispatch' || needs.ci-gate.result == 'success') &&
-      !(github.event_name == 'workflow_dispatch' && inputs.skip_frontend)
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_frontend) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     outputs:
-      image_tag: ${{ github.event.workflow_run.head_sha || github.sha }}
+      image_tag: ${{ env.DEPLOY_REF }}
     steps:
       - uses: actions/checkout@v4
         with:
-          # workflow_run 模式下检出触发 CI 的那个 commit
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ env.DEPLOY_REF }}
 
       - name: 登录 GitHub Container Registry
         uses: docker/login-action@v3
@@ -145,7 +126,7 @@ jobs:
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
             type=sha,prefix=,format=short
-            type=raw,value=${{ github.event.workflow_run.head_sha || github.sha }}
+            type=raw,value=${{ env.DEPLOY_REF }}
             type=ref,event=branch
 
       - name: 构建并推送前端镜像
@@ -162,20 +143,16 @@ jobs:
   # 拆分自 backend，使 backend 镜像从 ~500MB 减小到 ~50MB
   # ============================================================
   build-libreoffice:
-    needs: ci-gate
-    if: |
-      always() &&
-      (github.event_name == 'workflow_dispatch' || needs.ci-gate.result == 'success')
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     outputs:
-      image_tag: ${{ github.event.workflow_run.head_sha || github.sha }}
+      image_tag: ${{ env.DEPLOY_REF }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ env.DEPLOY_REF }}
 
       - name: 登录 GitHub Container Registry
         uses: docker/login-action@v3
@@ -192,7 +169,7 @@ jobs:
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
             type=sha,prefix=,format=short
-            type=raw,value=${{ github.event.workflow_run.head_sha || github.sha }}
+            type=raw,value=${{ env.DEPLOY_REF }}
             type=ref,event=branch
 
       - name: 构建并推送 LibreOffice sidecar 镜像
@@ -216,7 +193,7 @@ jobs:
       needs.build-libreoffice.result == 'success'
     runs-on: ubuntu-latest
     environment:
-      name: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+      name: ${{ inputs.environment || 'staging' }}
     env:
       # 镜像信息（来自 build-backend/build-frontend/build-libreoffice outputs）
       IMAGE_TAG: ${{ needs.build-backend.outputs.image_tag || github.sha }}
@@ -255,7 +232,7 @@ jobs:
       COZE_OAUTH_PRIVATE_KEY: ${{ secrets.COZE_OAUTH_PRIVATE_KEY }}
       COZE_OAUTH_PRIVATE_KEY_PATH: ${{ secrets.COZE_OAUTH_PRIVATE_KEY_PATH }}
       # 部署选项
-      SKIP_MIGRATION: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_migration || 'false' }}
+      SKIP_MIGRATION: ${{ inputs.skip_migration || 'false' }}
       # Redis 缓存
       REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD || '' }}
       REDIS_DB: ${{ secrets.REDIS_DB || '0' }}
@@ -269,7 +246,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ env.DEPLOY_REF }}
 
       # --------------------------------------------------------
       # Step 2.1: 配置 SSH
