@@ -390,7 +390,19 @@ jobs:
             "set -e; source /tmp/deploy-env.sh; shred -u /tmp/deploy-env.sh 2>/dev/null || rm -f /tmp/deploy-env.sh; cd \"\$DEPLOY_PATH\" && bash deploy-remote.sh"
 
       # --------------------------------------------------------
-      # Step 2.4: 清理
+      # Step 2.4: 测试环境部署成功后停止容器（避免空转占用资源）
+      # --------------------------------------------------------
+      - name: 测试环境停止容器
+        if: success() && inputs.environment == 'testing'
+        run: |
+          echo "测试环境部署成功，停止容器以释放资源..."
+          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+            "target" \
+            "cd $DEPLOY_PATH && docker compose -f docker-compose.prod.yml down 2>&1 || true"
+          echo "✅ 测试环境容器已停止"
+
+      # --------------------------------------------------------
+      # Step 2.5: 清理
       # --------------------------------------------------------
       - name: 清理 SSH 密钥
         if: always()
