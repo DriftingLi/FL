@@ -127,15 +127,6 @@ write_env_file() {
         printf 'CORS_ORIGINS='
         env_val "${CORS_ORIGINS:-}"; echo
 
-        printf 'ZHIPU_API_KEY='
-        env_val "${ZHIPU_API_KEY:-}"; echo
-        printf 'ZHIPU_BASE_URL='
-        env_val "${ZHIPU_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}"; echo
-        printf 'ZHIPU_MODEL='
-        env_val "${ZHIPU_MODEL:-glm-4.7-flash}"; echo
-        printf 'OPENAI_API_KEY='
-        env_val "${OPENAI_API_KEY:-}"; echo
-
         echo "# 残值评估 JWT 密钥（生产环境必需）"
         printf 'VALUATION_JWT_SECRET_KEY='
         env_val "${VALUATION_JWT_SECRET_KEY:-}"; echo
@@ -154,7 +145,7 @@ write_env_file() {
         echo "REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-10}"
         echo "REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-fl:}"
         echo "BACKEND_HOST_PORT=${BACKEND_HOST_PORT:-8080}"
-    } > "${DEPLOY_PATH}/env.tmp"
+    } > "${DEPLOY_PATH}/.env.tmp"
     rm -f "${DEPLOY_PATH}/.env"
     mv "${DEPLOY_PATH}/.env.tmp" "${DEPLOY_PATH}/.env"
     chmod 600 "${DEPLOY_PATH}/.env"

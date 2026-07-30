@@ -222,17 +222,6 @@ jobs:
       STUDENT_DEFAULT_PASSWORD: ${{ secrets.STUDENT_DEFAULT_PASSWORD }}
       # CORS
       CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
-      # AI 配置
-      ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
-      ZHIPU_BASE_URL: ${{ secrets.ZHIPU_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4' }}
-      ZHIPU_MODEL: ${{ secrets.ZHIPU_MODEL || 'glm-4.7-flash' }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      # Coze 配置
-      COZE_PROJECT_ID: ${{ secrets.COZE_PROJECT_ID }}
-      COZE_OAUTH_APP_ID: ${{ secrets.COZE_OAUTH_APP_ID }}
-      COZE_OAUTH_KID: ${{ secrets.COZE_OAUTH_KID }}
-      COZE_OAUTH_PRIVATE_KEY: ${{ secrets.COZE_OAUTH_PRIVATE_KEY }}
-      COZE_OAUTH_PRIVATE_KEY_PATH: ${{ secrets.COZE_OAUTH_PRIVATE_KEY_PATH }}
       # 部署选项
       SKIP_MIGRATION: ${{ inputs.skip_migration || 'false' }}
       # Redis 缓存
