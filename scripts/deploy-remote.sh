@@ -478,11 +478,13 @@ fix_dirty_state() {
     fi
 
     # 查询当前版本和 dirty 状态
+    # 注意：全新数据库 schema_migrations 表尚未创建，psql 会报错返回非零；
+    # 在 set -euo pipefail 下需用 || true 防止脚本退出
     local cur_ver dirty
     cur_ver=$(docker exec "$pg_id" psql -U "${DB_USER:-forklift}" -d forklift_training \
-        -tAc "SELECT COALESCE(version,0) FROM schema_migrations LIMIT 1;" 2>/dev/null | tr -d ' \n')
+        -tAc "SELECT COALESCE(version,0) FROM schema_migrations LIMIT 1;" 2>/dev/null | tr -d ' \n' || true)
     dirty=$(docker exec "$pg_id" psql -U "${DB_USER:-forklift}" -d forklift_training \
-        -tAc "SELECT COALESCE(dirty,false) FROM schema_migrations LIMIT 1;" 2>/dev/null | tr -d ' \n')
+        -tAc "SELECT COALESCE(dirty,false) FROM schema_migrations LIMIT 1;" 2>/dev/null | tr -d ' \n' || true)
     cur_ver=${cur_ver:-0}
     dirty=${dirty:-f}
 
