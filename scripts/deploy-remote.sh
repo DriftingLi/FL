@@ -315,6 +315,22 @@ create_backup() {
     # 清理旧数据库备份（保留最近 10 份，每份约几 MB）
     ls -t "$BACKUP_DIR"/db_backup_*.sql.gz 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null || true
 
+    # ---- 异地备份:同步到 pve-01（仅 staging 环境配置了 BACKUP_REMOTE_HOST 时执行） ----
+    if [ -n "${BACKUP_REMOTE_HOST:-}" ] && [ -f "$DB_BACKUP_FILE" ]; then
+        log_info "同步数据库备份到 ${BACKUP_REMOTE_HOST}..."
+        local remote_dir="${BACKUP_REMOTE_DIR:-/opt/forklift-backups}"
+        local ssh_key="${BACKUP_REMOTE_KEY:-/root/.ssh/pve01-sync}"
+        if scp -i "$ssh_key" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            "$DB_BACKUP_FILE" "${BACKUP_REMOTE_HOST}:${remote_dir}/" 2>/dev/null; then
+            log_ok "异地备份完成: ${BACKUP_REMOTE_HOST}:${remote_dir}/$(basename "$DB_BACKUP_FILE")"
+            # 清理远程旧备份（保留最近 10 份）
+            ssh -i "$ssh_key" -o StrictHostKeyChecking=no "$BACKUP_REMOTE_HOST" \
+                "ls -t ${remote_dir}/db_backup_*.sql.gz 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null" 2>/dev/null || true
+        else
+            log_warn "异地备份失败（远端不可达或 SSH key 未配置），继续部署"
+        fi
+    fi
+
     log_ok "备份完成: $BACKUP_FILE"
 }
 
