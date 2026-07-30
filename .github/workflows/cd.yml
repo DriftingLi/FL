@@ -244,6 +244,12 @@ jobs:
       # staging: SSH_HOST=pve-02公网, 直连
       # testing: SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=pve-01内网
       SSH_JUMP_HOST: ${{ secrets.SSH_JUMP_HOST || '' }}
+      # Volume 路径（testing 用 bind mount 绕过 Docker 19.03 named volume 权限 bug）
+      # staging/production 留空 → deploy 脚本默认使用 named volume
+      PG_VOLUME: ${{ inputs.environment == 'testing' && './data/pgdata' || '' }}
+      REDIS_VOLUME: ${{ inputs.environment == 'testing' && './data/redis' || '' }}
+      UPLOADS_VOLUME: ${{ inputs.environment == 'testing' && './data/uploads' || '' }}
+      REPORTS_VOLUME: ${{ inputs.environment == 'testing' && './data/reports' || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -364,6 +370,10 @@ jobs:
             printf 'export BACKUP_REMOTE_DIR=%q\n' "${BACKUP_REMOTE_DIR:-}"
             printf 'export BACKUP_REMOTE_KEY=%q\n' "${BACKUP_REMOTE_KEY:-}"
             printf 'export BACKEND_HOST_PORT=%q\n' "${BACKEND_HOST_PORT:-8080}"
+            printf 'export PG_VOLUME=%q\n' "${PG_VOLUME:-}"
+            printf 'export REDIS_VOLUME=%q\n' "${REDIS_VOLUME:-}"
+            printf 'export UPLOADS_VOLUME=%q\n' "${UPLOADS_VOLUME:-}"
+            printf 'export REPORTS_VOLUME=%q\n' "${REPORTS_VOLUME:-}"
           } > /tmp/deploy-env.sh
 
           echo "环境变量文件已生成（$(wc -l < /tmp/deploy-env.sh) 行）"

@@ -21,7 +21,9 @@ services:
     expose:
       - "5432"
     volumes:
-      - pgdata-prod:/var/lib/postgresql/data
+      # 支持 bind mount 覆盖：测试环境(Docker 19.03)用 bind mount 绕过 named volume 权限 bug
+      # 默认 named volume（staging），测试环境设置 PG_VOLUME=./data/pgdata
+      - ${PG_VOLUME:-pgdata-prod}:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-forklift} -d forklift_training"]
       interval: 10s
@@ -67,7 +69,8 @@ services:
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     volumes:
-      - redisdata-prod:/data
+      # 测试环境用 bind mount: REDIS_VOLUME=./data/redis
+      - ${REDIS_VOLUME:-redisdata-prod}:/data
     healthcheck:
       # 密码为空时 redis-cli ping；非空时 redis-cli -a <password> ping
       test: ["CMD-SHELL", "redis-cli $${REDIS_PASSWORD:+-a $${REDIS_PASSWORD}} ping | grep -q PONG"]
@@ -103,7 +106,8 @@ services:
       - "8000"
     volumes:
       # 与 backend 共享 uploads volume，sidecar 通过路径访问 PPT 文件并写入 PNG
-      - uploads-data:/data/uploads
+      # 测试环境用 bind mount: UPLOADS_VOLUME=./data/uploads
+      - ${UPLOADS_VOLUME:-uploads-data}:/data/uploads
     networks:
       - forklift-net
     deploy:
@@ -170,8 +174,9 @@ services:
     ports:
       - "127.0.0.1:${BACKEND_HOST_PORT:-8080}:8080"
     volumes:
-      - uploads-data:/data/uploads
-      - reports-data:/data/reports
+      # 测试环境用 bind mount: UPLOADS_VOLUME=./data/uploads, REPORTS_VOLUME=./data/reports
+      - ${UPLOADS_VOLUME:-uploads-data}:/data/uploads
+      - ${REPORTS_VOLUME:-reports-data}:/data/reports
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"]
       interval: 30s

@@ -145,6 +145,14 @@ write_env_file() {
         echo "REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-10}"
         echo "REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-fl:}"
         echo "BACKEND_HOST_PORT=${BACKEND_HOST_PORT:-8080}"
+
+        # Volume 路径配置
+        # 默认 named volume（staging）；测试环境(Docker 19.03)用 bind mount 绕过 volume 权限 bug
+        # 测试环境设置: PG_VOLUME=./data/pgdata, REDIS_VOLUME=./data/redis 等
+        echo "PG_VOLUME=${PG_VOLUME:-pgdata-prod}"
+        echo "REDIS_VOLUME=${REDIS_VOLUME:-redisdata-prod}"
+        echo "UPLOADS_VOLUME=${UPLOADS_VOLUME:-uploads-data}"
+        echo "REPORTS_VOLUME=${REPORTS_VOLUME:-reports-data}"
     } > "${DEPLOY_PATH}/.env.tmp"
     rm -f "${DEPLOY_PATH}/.env"
     mv "${DEPLOY_PATH}/.env.tmp" "${DEPLOY_PATH}/.env"
