@@ -434,6 +434,24 @@ pull_images() {
             exit 1
         fi
     fi
+
+    # ---- 拉取基础镜像（postgres + redis）----
+    # compose up 时若缺少基础镜像会自动拉取，但国内访问 Docker Hub 易超时
+    # 显式拉取可走 daemon.json 配置的国内镜像源，且能利用重试逻辑
+    local base_images="postgres:15-alpine redis:7-alpine"
+    for img in $base_images; do
+        if docker image inspect "$img" &>/dev/null; then
+            log_ok "基础镜像已缓存: $img"
+            continue
+        fi
+        log_info "拉取基础镜像: $img"
+        if docker pull "$img"; then
+            log_ok "基础镜像: $img"
+        else
+            log_error "基础镜像拉取失败: $img"
+            exit 1
+        fi
+    done
 }
 
 # ======================================================================
