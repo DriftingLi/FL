@@ -127,15 +127,6 @@ write_env_file() {
         printf 'CORS_ORIGINS='
         env_val "${CORS_ORIGINS:-}"; echo
 
-        printf 'ZHIPU_API_KEY='
-        env_val "${ZHIPU_API_KEY:-}"; echo
-        printf 'ZHIPU_BASE_URL='
-        env_val "${ZHIPU_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}"; echo
-        printf 'ZHIPU_MODEL='
-        env_val "${ZHIPU_MODEL:-glm-4.7-flash}"; echo
-        printf 'OPENAI_API_KEY='
-        env_val "${OPENAI_API_KEY:-}"; echo
-
         echo "# 残值评估 JWT 密钥（生产环境必需）"
         printf 'VALUATION_JWT_SECRET_KEY='
         env_val "${VALUATION_JWT_SECRET_KEY:-}"; echo
@@ -153,6 +144,15 @@ write_env_file() {
         echo "REDIS_DB=${REDIS_DB:-0}"
         echo "REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-10}"
         echo "REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-fl:}"
+        echo "BACKEND_HOST_PORT=${BACKEND_HOST_PORT:-8080}"
+
+        # Volume 路径配置
+        # 默认 named volume（staging）；测试环境(Docker 19.03)用 bind mount 绕过 volume 权限 bug
+        # 测试环境设置: PG_VOLUME=./data/pgdata, REDIS_VOLUME=./data/redis 等
+        echo "PG_VOLUME=${PG_VOLUME:-pgdata-prod}"
+        echo "REDIS_VOLUME=${REDIS_VOLUME:-redisdata-prod}"
+        echo "UPLOADS_VOLUME=${UPLOADS_VOLUME:-uploads-data}"
+        echo "REPORTS_VOLUME=${REPORTS_VOLUME:-reports-data}"
     } > "${DEPLOY_PATH}/.env.tmp"
     rm -f "${DEPLOY_PATH}/.env"
     mv "${DEPLOY_PATH}/.env.tmp" "${DEPLOY_PATH}/.env"
@@ -315,6 +315,22 @@ create_backup() {
     # 清理旧数据库备份（保留最近 10 份，每份约几 MB）
     ls -t "$BACKUP_DIR"/db_backup_*.sql.gz 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null || true
 
+    # ---- 异地备份:同步到 pve-01（仅 staging 环境配置了 BACKUP_REMOTE_HOST 时执行） ----
+    if [ -n "${BACKUP_REMOTE_HOST:-}" ] && [ -f "$DB_BACKUP_FILE" ]; then
+        log_info "同步数据库备份到 ${BACKUP_REMOTE_HOST}..."
+        local remote_dir="${BACKUP_REMOTE_DIR:-/opt/forklift-backups}"
+        local ssh_key="${BACKUP_REMOTE_KEY:-/root/.ssh/pve01-sync}"
+        if scp -i "$ssh_key" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            "$DB_BACKUP_FILE" "${BACKUP_REMOTE_HOST}:${remote_dir}/" 2>/dev/null; then
+            log_ok "异地备份完成: ${BACKUP_REMOTE_HOST}:${remote_dir}/$(basename "$DB_BACKUP_FILE")"
+            # 清理远程旧备份（保留最近 10 份）
+            ssh -i "$ssh_key" -o StrictHostKeyChecking=no "$BACKUP_REMOTE_HOST" \
+                "ls -t ${remote_dir}/db_backup_*.sql.gz 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null" 2>/dev/null || true
+        else
+            log_warn "异地备份失败（远端不可达或 SSH key 未配置），继续部署"
+        fi
+    fi
+
     log_ok "备份完成: $BACKUP_FILE"
 }
 
@@ -426,6 +442,24 @@ pull_images() {
             exit 1
         fi
     fi
+
+    # ---- 拉取基础镜像（postgres + redis）----
+    # compose up 时若缺少基础镜像会自动拉取，但国内访问 Docker Hub 易超时
+    # 显式拉取可走 daemon.json 配置的国内镜像源，且能利用重试逻辑
+    local base_images="postgres:15-alpine redis:7-alpine"
+    for img in $base_images; do
+        if docker image inspect "$img" &>/dev/null; then
+            log_ok "基础镜像已缓存: $img"
+            continue
+        fi
+        log_info "拉取基础镜像: $img"
+        if docker pull "$img"; then
+            log_ok "基础镜像: $img"
+        else
+            log_error "基础镜像拉取失败: $img"
+            exit 1
+        fi
+    done
 }
 
 # ======================================================================
@@ -444,11 +478,13 @@ fix_dirty_state() {
     fi
 
     # 查询当前版本和 dirty 状态
+    # 注意：全新数据库 schema_migrations 表尚未创建，psql 会报错返回非零；
+    # 在 set -euo pipefail 下需用 || true 防止脚本退出
     local cur_ver dirty
     cur_ver=$(docker exec "$pg_id" psql -U "${DB_USER:-forklift}" -d forklift_training \
-        -tAc "SELECT COALESCE(version,0) FROM schema_migrations LIMIT 1;" 2>/dev/null | tr -d ' \n')
+        -tAc "SELECT COALESCE(version,0) FROM schema_migrations LIMIT 1;" 2>/dev/null | tr -d ' \n' || true)
     dirty=$(docker exec "$pg_id" psql -U "${DB_USER:-forklift}" -d forklift_training \
-        -tAc "SELECT COALESCE(dirty,false) FROM schema_migrations LIMIT 1;" 2>/dev/null | tr -d ' \n')
+        -tAc "SELECT COALESCE(dirty,false) FROM schema_migrations LIMIT 1;" 2>/dev/null | tr -d ' \n' || true)
     cur_ver=${cur_ver:-0}
     dirty=${dirty:-f}
 

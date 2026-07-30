@@ -18,6 +18,7 @@ on:
         default: staging
         options:
           - staging
+          - testing
           - production
       skip_backend:
         description: 跳过后端部署
@@ -221,17 +222,6 @@ jobs:
       STUDENT_DEFAULT_PASSWORD: ${{ secrets.STUDENT_DEFAULT_PASSWORD }}
       # CORS
       CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
-      # AI 配置
-      ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
-      ZHIPU_BASE_URL: ${{ secrets.ZHIPU_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4' }}
-      ZHIPU_MODEL: ${{ secrets.ZHIPU_MODEL || 'glm-4.7-flash' }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      # Coze 配置
-      COZE_PROJECT_ID: ${{ secrets.COZE_PROJECT_ID }}
-      COZE_OAUTH_APP_ID: ${{ secrets.COZE_OAUTH_APP_ID }}
-      COZE_OAUTH_KID: ${{ secrets.COZE_OAUTH_KID }}
-      COZE_OAUTH_PRIVATE_KEY: ${{ secrets.COZE_OAUTH_PRIVATE_KEY }}
-      COZE_OAUTH_PRIVATE_KEY_PATH: ${{ secrets.COZE_OAUTH_PRIVATE_KEY_PATH }}
       # 部署选项
       SKIP_MIGRATION: ${{ inputs.skip_migration || 'false' }}
       # Redis 缓存
@@ -239,11 +229,27 @@ jobs:
       REDIS_DB: ${{ secrets.REDIS_DB || '0' }}
       REDIS_POOL_SIZE: ${{ secrets.REDIS_POOL_SIZE || '10' }}
       REDIS_KEY_PREFIX: ${{ secrets.REDIS_KEY_PREFIX || 'fl:' }}
+      # backend 宿主机映射端口（staging 默认 8080；testing 用 18080 避免与 cadvisor 冲突）
+      BACKEND_HOST_PORT: ${{ secrets.BACKEND_HOST_PORT || '8080' }}
+      # 异地备份（staging: pve-02 → pve-01；testing: 留空跳过）
+      BACKUP_REMOTE_HOST: ${{ secrets.BACKUP_REMOTE_HOST }}
+      BACKUP_REMOTE_DIR: ${{ secrets.BACKUP_REMOTE_DIR || '/opt/forklift-backups' }}
+      BACKUP_REMOTE_KEY: ${{ secrets.BACKUP_REMOTE_KEY || '/root/.ssh/pve01-sync' }}
       # SSH 连接（公网 IP）
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT || '2222' }}
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      # SSH 跳板配置（仅 testing 环境使用）
+      # staging: SSH_HOST=pve-02公网, 直连
+      # testing: SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=pve-01内网
+      SSH_JUMP_HOST: ${{ secrets.SSH_JUMP_HOST || '' }}
+      # Volume 路径（testing 用 bind mount 绕过 Docker 19.03 named volume 权限 bug）
+      # staging/production 留空 → deploy 脚本默认使用 named volume
+      PG_VOLUME: ${{ inputs.environment == 'testing' && './data/pgdata' || '' }}
+      REDIS_VOLUME: ${{ inputs.environment == 'testing' && './data/redis' || '' }}
+      UPLOADS_VOLUME: ${{ inputs.environment == 'testing' && './data/uploads' || '' }}
+      REPORTS_VOLUME: ${{ inputs.environment == 'testing' && './data/reports' || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -251,6 +257,8 @@ jobs:
 
       # --------------------------------------------------------
       # Step 2.1: 配置 SSH
+      #   staging: 直连 pve-02 (SSH_HOST:SSH_PORT)
+      #   testing: 通过 pve-02 跳板到 pve-01 (SSH_HOST=跳板, SSH_JUMP_HOST=目标)
       # --------------------------------------------------------
       - name: 配置 SSH
         run: |
@@ -259,36 +267,63 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p "$SSH_PORT" \
             -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
-          echo "AddressFamily inet" >> ~/.ssh/config
+
+          if [ -n "$SSH_JUMP_HOST" ]; then
+            # testing 环境: 通过跳板访问 pve-01
+            cat > ~/.ssh/config << EOF
+          Host jump
+              HostName $SSH_HOST
+              Port $SSH_PORT
+              User $SSH_USER
+              IdentityFile ~/.ssh/deploy_key
+              StrictHostKeyChecking no
+
+          Host target
+              HostName $SSH_JUMP_HOST
+              User $SSH_USER
+              IdentityFile ~/.ssh/deploy_key
+              ProxyJump jump
+              StrictHostKeyChecking no
+          EOF
+            echo "SSH_TARGET=target" >> $GITHUB_ENV
+            echo "SSH_PORT_OPT=" >> $GITHUB_ENV
+            echo "SSH 配置: 跳板模式 (jump=$SSH_HOST:$SSH_PORT → target=$SSH_JUMP_HOST)"
+          else
+            # staging 环境: 直连 pve-02
+            cat > ~/.ssh/config << EOF
+          Host target
+              HostName $SSH_HOST
+              Port $SSH_PORT
+              User $SSH_USER
+              IdentityFile ~/.ssh/deploy_key
+              StrictHostKeyChecking no
+          EOF
+            echo "SSH_TARGET=target" >> $GITHUB_ENV
+            echo "SSH_PORT_OPT=" >> $GITHUB_ENV
+            echo "SSH 配置: 直连模式 ($SSH_HOST:$SSH_PORT)"
+          fi
 
       # --------------------------------------------------------
       # Step 2.2: 上传部署脚本和配置
       # --------------------------------------------------------
       - name: 上传部署脚本和配置
         run: |
-          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=3"
-
           # 主部署文件：脚本 + compose
-          scp $SSH_OPTS \
-            -P "$SSH_PORT" \
+          scp -o ConnectTimeout=15 -o ServerAliveInterval=30 \
             scripts/deploy-remote.sh docker-compose.prod.yml \
-            "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"
+            "target:$DEPLOY_PATH/"
 
           # nginx-host.conf 必须放在 $DEPLOY_PATH/frontend/ 下（compose volume 挂载路径）
-          # 否则 Docker 会把不存在的路径当目录挂载，导致容器启动失败
-          ssh $SSH_OPTS \
-            -p "$SSH_PORT" \
-            "$SSH_USER@$SSH_HOST" \
+          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+            "target" \
             "mkdir -p $DEPLOY_PATH/frontend"
 
-          scp $SSH_OPTS \
-            -P "$SSH_PORT" \
+          scp -o ConnectTimeout=15 -o ServerAliveInterval=30 \
             frontend/nginx-host.conf \
-            "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/frontend/nginx-host.conf"
+            "target:$DEPLOY_PATH/frontend/nginx-host.conf"
 
-          ssh $SSH_OPTS \
-            -p "$SSH_PORT" \
-            "$SSH_USER@$SSH_HOST" \
+          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+            "target" \
             "chmod +x $DEPLOY_PATH/deploy-remote.sh"
 
       # --------------------------------------------------------
@@ -331,27 +366,43 @@ jobs:
             printf 'export REDIS_DB=%q\n' "${REDIS_DB:-0}"
             printf 'export REDIS_POOL_SIZE=%q\n' "${REDIS_POOL_SIZE:-10}"
             printf 'export REDIS_KEY_PREFIX=%q\n' "${REDIS_KEY_PREFIX:-fl:}"
+            printf 'export BACKUP_REMOTE_HOST=%q\n' "${BACKUP_REMOTE_HOST:-}"
+            printf 'export BACKUP_REMOTE_DIR=%q\n' "${BACKUP_REMOTE_DIR:-}"
+            printf 'export BACKUP_REMOTE_KEY=%q\n' "${BACKUP_REMOTE_KEY:-}"
+            printf 'export BACKEND_HOST_PORT=%q\n' "${BACKEND_HOST_PORT:-8080}"
+            printf 'export PG_VOLUME=%q\n' "${PG_VOLUME:-}"
+            printf 'export REDIS_VOLUME=%q\n' "${REDIS_VOLUME:-}"
+            printf 'export UPLOADS_VOLUME=%q\n' "${UPLOADS_VOLUME:-}"
+            printf 'export REPORTS_VOLUME=%q\n' "${REPORTS_VOLUME:-}"
           } > /tmp/deploy-env.sh
 
           echo "环境变量文件已生成（$(wc -l < /tmp/deploy-env.sh) 行）"
           echo "注意：密钥值已被 GitHub Actions 自动 mask，不会出现在日志中"
 
-          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=3"
-
           # 上传环境变量文件
-          scp $SSH_OPTS \
-            -P "$SSH_PORT" \
+          scp -o ConnectTimeout=15 -o ServerAliveInterval=30 \
             /tmp/deploy-env.sh \
-            "$SSH_USER@$SSH_HOST:/tmp/deploy-env.sh"
+            "target:/tmp/deploy-env.sh"
 
           # 执行远程部署
-          ssh $SSH_OPTS \
-            -p "$SSH_PORT" \
-            "$SSH_USER@$SSH_HOST" \
+          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+            "target" \
             "set -e; source /tmp/deploy-env.sh; shred -u /tmp/deploy-env.sh 2>/dev/null || rm -f /tmp/deploy-env.sh; cd \"\$DEPLOY_PATH\" && bash deploy-remote.sh"
 
       # --------------------------------------------------------
-      # Step 2.4: 清理
+      # Step 2.4: 测试环境部署成功后停止容器（避免空转占用资源）
+      # --------------------------------------------------------
+      - name: 测试环境停止容器
+        if: success() && inputs.environment == 'testing'
+        run: |
+          echo "测试环境部署成功，停止容器以释放资源..."
+          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+            "target" \
+            "cd $DEPLOY_PATH && docker compose -f docker-compose.prod.yml down 2>&1 || true"
+          echo "✅ 测试环境容器已停止"
+
+      # --------------------------------------------------------
+      # Step 2.5: 清理
       # --------------------------------------------------------
       - name: 清理 SSH 密钥
         if: always()

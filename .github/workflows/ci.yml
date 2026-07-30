@@ -258,7 +258,7 @@ jobs:
   ci-summary:
     # 注：security-scan 为参考性质，不阻断流水线
     needs: [backend-lint, backend-test, frontend-check, migration-check]
-    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: always() && github.event_name == 'push'
     runs-on: ubuntu-latest
     # 触发 CD workflow_dispatch 需要 actions:write 权限
     permissions:
@@ -311,11 +311,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo ">>> 触发 CD workflow,ref=${{ github.sha }}"
+          # master → staging(pve-02 生产), 其他分支 → testing(pve-01 测试)
+          if [ "${{ github.ref }}" = "refs/heads/master" ]; then
+            ENV="staging"
+          else
+            ENV="testing"
+          fi
+          echo ">>> 触发 CD workflow,ref=${{ github.sha }},environment=${ENV}"
           gh workflow run cd.yml \
             --ref "${{ github.ref_name }}" \
             -f ref="${{ github.sha }}" \
-            -f environment=staging
-          echo "✅ CD workflow 已触发"
+            -f environment="${ENV}"
+          echo "✅ CD workflow 已触发 (env: ${ENV})"
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**已触发 CD 部署 (commit: \`${{ github.sha }}\`)**" >> $GITHUB_STEP_SUMMARY
+          echo "**已触发 CD 部署 (commit: \`${{ github.sha }}\`, env: ${ENV})**" >> $GITHUB_STEP_SUMMARY
