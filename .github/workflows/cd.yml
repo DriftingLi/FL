@@ -240,6 +240,8 @@ jobs:
       REDIS_DB: ${{ secrets.REDIS_DB || '0' }}
       REDIS_POOL_SIZE: ${{ secrets.REDIS_POOL_SIZE || '10' }}
       REDIS_KEY_PREFIX: ${{ secrets.REDIS_KEY_PREFIX || 'fl:' }}
+      # backend 宿主机映射端口（staging 默认 8080；testing 用 18080 避免与 cadvisor 冲突）
+      BACKEND_HOST_PORT: ${{ secrets.BACKEND_HOST_PORT || '8080' }}
       # 异地备份（staging: pve-02 → pve-01；testing: 留空跳过）
       BACKUP_REMOTE_HOST: ${{ secrets.BACKUP_REMOTE_HOST }}
       BACKUP_REMOTE_DIR: ${{ secrets.BACKUP_REMOTE_DIR || '/opt/forklift-backups' }}
@@ -372,6 +374,7 @@ jobs:
             printf 'export BACKUP_REMOTE_HOST=%q\n' "${BACKUP_REMOTE_HOST:-}"
             printf 'export BACKUP_REMOTE_DIR=%q\n' "${BACKUP_REMOTE_DIR:-}"
             printf 'export BACKUP_REMOTE_KEY=%q\n' "${BACKUP_REMOTE_KEY:-}"
+            printf 'export BACKEND_HOST_PORT=%q\n' "${BACKEND_HOST_PORT:-8080}"
           } > /tmp/deploy-env.sh
 
           echo "环境变量文件已生成（$(wc -l < /tmp/deploy-env.sh) 行）"
