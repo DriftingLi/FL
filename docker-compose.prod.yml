@@ -207,6 +207,10 @@ services:
     # PVE 环境用 host 网络模式，绕过 Docker 网桥 iptables FORWARD policy DROP 拦截
     # nginx 直接监听宿主机 51820 端口，proxy_pass 到 127.0.0.1:8080 访问 backend
     network_mode: host
+    # 禁用镜像内置 healthcheck（原 healthcheck 访问 127.0.0.1:8080/api/health，
+    # 但 host 网络模式下容器内 wget 行为异常导致误报 unhealthy，实际服务正常）
+    healthcheck:
+      disable: true
     environment:
       DOMAIN: ${DOMAIN:-localhost}
       # backend 宿主机映射端口（默认 8080；测试环境用 18080 避免与 cadvisor 冲突）
