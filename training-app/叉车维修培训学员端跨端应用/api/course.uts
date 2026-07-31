@@ -23,7 +23,7 @@ function toNumber(v : any | null, defaultVal : number = 0) : number {
 	return n
 }
 
-/** 安全转换为 string字符 */
+/** 安全转换为 string */
 function toStr(v : any | null, defaultVal : string = '') : string {
 	if (v == null) return defaultVal
 	return `${v}`
