@@ -4,16 +4,18 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 
+	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation/model"
 	"forklift-training/internal/valuation/repository"
 	"forklift-training/internal/valuation/service"
@@ -21,20 +23,21 @@ import (
 )
 
 // ReportHandler 报告 HTTP 处理器
-// 持有评估仓储（查询评估详情）与 PDF 生成器
+// 持有评估仓储（查询评估详情）、PDF 生成器与文件存储（上传/检查 PDF）
 type ReportHandler struct {
 	evalRepo  *repository.EvaluationRepository
 	generator *pdf.Generator
+	storage   storage.Storage
 	logger    *zap.Logger
 }
 
 // NewReportHandler 构造报告处理器
-func NewReportHandler(evalRepo *repository.EvaluationRepository, gen *pdf.Generator, l *zap.Logger) *ReportHandler {
-	return &ReportHandler{evalRepo: evalRepo, generator: gen, logger: l}
+func NewReportHandler(evalRepo *repository.EvaluationRepository, gen *pdf.Generator, l *zap.Logger, st storage.Storage) *ReportHandler {
+	return &ReportHandler{evalRepo: evalRepo, generator: gen, storage: st, logger: l}
 }
 
 // Generate 处理 POST /api/valuation/evaluations/:id/report
-// 重新加载评估详情 → 调用 PDF 生成器 → 落盘 → 回写 report_pdf_path
+// 重新加载评估详情 → 生成 PDF bytes → 上传到存储后端 → 回写 report_pdf_path（R2 URL）
 func (h *ReportHandler) Generate(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -60,31 +63,42 @@ func (h *ReportHandler) Generate(c *gin.Context) {
 	// 2. 重建派生字段（维度评分 + 建议），不重新跑完整算法
 	dimScores, suggestions := rebuildDerivedFields(detail)
 
-	// 3. 调用 PDF 生成器
-	pdfPath, err := h.generator.GenerateReport(detail, dimScores, suggestions)
+	// 3. 调用 PDF 生成器（返回 bytes）
+	pdfBytes, err := h.generator.GenerateReport(detail, dimScores, suggestions)
 	if err != nil {
 		h.logger.Error("生成 PDF 失败", zap.Error(err), zap.Int64("id", id))
 		Error(c, http.StatusInternalServerError, CodeInternalError, "生成 PDF 失败: "+err.Error())
 		return
 	}
 
-	// 4. 回写报告路径到 evaluations.report_pdf_path
-	if err := h.evalRepo.UpdateEvaluationReportPath(c.Request.Context(), id, pdfPath); err != nil {
-		h.logger.Error("回写报告路径失败", zap.Error(err), zap.Int64("id", id))
-		// 不中断流程：文件已生成，告知用户报告路径即可
+	// 4. 上传到存储后端，获取可访问 URL
+	key := fmt.Sprintf("reports/evaluation_report_%d_%s.pdf", id, time.Now().Format("20060102150405"))
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
+	defer cancel()
+	pdfURL, err := h.storage.Save(ctx, key, pdfBytes, "application/pdf")
+	if err != nil {
+		h.logger.Error("上传 PDF 失败", zap.Error(err), zap.Int64("id", id))
+		Error(c, http.StatusInternalServerError, CodeInternalError, "上传 PDF 失败: "+err.Error())
+		return
 	}
 
-	// 5. 返回响应
+	// 5. 回写报告 URL 到 evaluations.report_pdf_path（字段名不变，存 R2 URL）
+	if err := h.evalRepo.UpdateEvaluationReportPath(c.Request.Context(), id, pdfURL); err != nil {
+		h.logger.Error("回写报告路径失败", zap.Error(err), zap.Int64("id", id))
+		// 不中断流程：文件已上传，告知用户报告 URL 即可
+	}
+
+	// 6. 返回响应
 	OK(c, gin.H{
 		"evaluation_id": id,
-		"pdf_path":      pdfPath,
-		"file_name":     filenameFromPath(pdfPath),
-		"file_size":     fileSize(pdfPath),
+		"pdf_url":       pdfURL,
+		"file_size":     len(pdfBytes),
 	})
 }
 
 // Download 处理 GET /api/valuation/evaluations/:id/report
-// 优先从数据库读取 report_pdf_path；若不存在则即时生成；最终以 attachment 返回文件
+// 优先从数据库读取 report_pdf_path（R2 URL）；若不存在或存储中无此文件则即时生成；
+// 最终 302 重定向到 R2 公开访问 URL（浏览器直连下载）
 func (h *ReportHandler) Download(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -107,57 +121,52 @@ func (h *ReportHandler) Download(c *gin.Context) {
 	// 1.1 实时重算 KTimeAdjusted（不入库字段），用于维度评分
 	detail.KTimeAdjusted = service.AdjustKTimeByBrandAndIntensity(detail.KTime, detail.KHours, detail.KBrand)
 
-	// 2. 解析已有路径
-	pdfPath := detail.ReportPdfPath
-
-	// 3. 路径无效或文件不存在 → 重新生成
-	if pdfPath == "" || !fileExists(pdfPath) {
-		dimScores, suggestions := rebuildDerivedFields(detail)
-		newPath, genErr := h.generator.GenerateReport(detail, dimScores, suggestions)
-		if genErr != nil {
-			h.logger.Error("生成 PDF 失败", zap.Error(genErr), zap.Int64("id", id))
-			Error(c, http.StatusInternalServerError, CodeInternalError, "生成 PDF 失败: "+genErr.Error())
+	// 2. 校验已有 URL 是否有效（为空或存储中不存在则重新生成）
+	pdfURL := detail.ReportPdfPath
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
+	defer cancel()
+	if pdfURL == "" {
+		pdfURL = h.regenerateAndUpload(ctx, detail, id)
+		if pdfURL == "" {
+			Error(c, http.StatusInternalServerError, CodeInternalError, "生成 PDF 失败")
 			return
 		}
-		pdfPath = newPath
-		// 异步写回数据库（不阻塞下载）
-		if dbErr := h.evalRepo.UpdateEvaluationReportPath(c.Request.Context(), id, pdfPath); dbErr != nil {
-			h.logger.Warn("回写报告路径失败", zap.Error(dbErr), zap.Int64("id", id))
+	} else if exists, _ := h.storage.Exists(ctx, pdfURL); !exists {
+		pdfURL = h.regenerateAndUpload(ctx, detail, id)
+		if pdfURL == "" {
+			Error(c, http.StatusInternalServerError, CodeInternalError, "生成 PDF 失败")
+			return
 		}
 	}
 
-	// 4. 设置下载响应头
-	fileName := fmt.Sprintf("evaluation_report_%d.pdf", detail.ID)
-	c.Header("Content-Description", "File Transfer")
-	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, fileName))
-	c.Header("Content-Type", "application/pdf")
-	c.File(pdfPath)
+	// 3. 302 重定向到 R2 公开访问 URL
+	c.Redirect(http.StatusFound, pdfURL)
+}
+
+// regenerateAndUpload 重新生成 PDF 并上传到存储后端，返回新的 URL。
+// 失败时返回空字符串（错误已在内部记日志）。
+func (h *ReportHandler) regenerateAndUpload(ctx context.Context, detail *model.EvaluationDetail, id int64) string {
+	dimScores, suggestions := rebuildDerivedFields(detail)
+	pdfBytes, genErr := h.generator.GenerateReport(detail, dimScores, suggestions)
+	if genErr != nil {
+		h.logger.Error("生成 PDF 失败", zap.Error(genErr), zap.Int64("id", id))
+		return ""
+	}
+	key := fmt.Sprintf("reports/evaluation_report_%d_%s.pdf", id, time.Now().Format("20060102150405"))
+	pdfURL, saveErr := h.storage.Save(ctx, key, pdfBytes, "application/pdf")
+	if saveErr != nil {
+		h.logger.Error("上传 PDF 失败", zap.Error(saveErr), zap.Int64("id", id))
+		return ""
+	}
+	if dbErr := h.evalRepo.UpdateEvaluationReportPath(ctx, id, pdfURL); dbErr != nil {
+		h.logger.Warn("回写报告路径失败", zap.Error(dbErr), zap.Int64("id", id))
+	}
+	return pdfURL
 }
 
 // =====================================================
 // 工具函数
 // =====================================================
-
-// fileExists 判断文件是否存在
-func fileExists(path string) bool {
-	if path == "" {
-		return false
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	return !info.IsDir()
-}
-
-// fileSize 获取文件大小（字节），失败返回 0
-func fileSize(path string) int64 {
-	info, err := os.Stat(path)
-	if err != nil {
-		return 0
-	}
-	return info.Size()
-}
 
 // rebuildDerivedFields 从持久化记录重建维度评分与文本建议
 // 与 service.buildDimensionScores / buildSuggestions 算法一致，避免重新跑完整评估流程

@@ -316,8 +316,7 @@ func (s *FeaturedService) SaveImage(content []byte, filename string) (string, er
 	if s.fileSvc == nil {
 		return "", errors.New("文件服务未初始化")
 	}
-	url, _ := s.fileSvc.SaveFile(content, filename, "featured")
-	return url, nil
+	return s.fileSvc.SaveFile(content, filename, "featured")
 }
 
 // ===== dict 辅助 =====

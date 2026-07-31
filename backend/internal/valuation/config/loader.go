@@ -51,13 +51,12 @@ func Load(configPath string) (*Config, error) {
 
 // LoadFromEnv 从环境变量构造残值评估配置。
 // databaseURL 与 corsOrigins 由主程序注入，其余字段从 VALUATION_* 环境变量读取。
+// 注意：corsOrigins 默认为空数组，强制要求显式配置（生产环境由主 config.Validate() 校验非空）。
 func LoadFromEnv(databaseURL string, corsOrigins []string) *Config {
 	if databaseURL == "" {
 		databaseURL = os.Getenv("DATABASE_URL")
 	}
-	if len(corsOrigins) == 0 {
-		corsOrigins = []string{"*"}
-	}
+	// 不再回退到 ["*"]：默认空数组，强制显式配置，避免误开放跨域
 	return &Config{
 		Server: ServerConfig{
 			Port:        getenvInt("VALUATION_SERVER_PORT", 8080),

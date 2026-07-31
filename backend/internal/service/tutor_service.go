@@ -2,10 +2,9 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"gorm.io/gorm"
@@ -222,7 +221,10 @@ func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileCon
 	}
 
 	contentType := s.fileService.GetContentType(filename)
-	fileURL, filePath := s.fileService.SaveFile(fileContent, filename, "chapters")
+	fileURL, err := s.fileService.SaveFile(fileContent, filename, "chapters")
+	if err != nil {
+		return nil, fmt.Errorf("保存文件失败: %w", err)
+	}
 
 	chapterFile := model.ChapterFile{
 		ChapterID:   &chapterID,
@@ -242,11 +244,13 @@ func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileCon
 		s.db.Save(&chapter)
 	}
 
-	// PPT 自动转图片
+	// PPT 自动转图片并持久化 slide URL 列表到 chapter.slide_urls
 	if contentType == "ppt" {
-		slidesDir := filepath.Join(s.uploadFolder, "slides", fmt.Sprintf("%d", chapterID))
-		_ = os.RemoveAll(slidesDir)
-		_ = s.fileService.ConvertPPTToImages(filePath, slidesDir)
+		slideURLs := s.fileService.ConvertPPTToImages(fileContent, chapterID)
+		if len(slideURLs) > 0 {
+			slideURLsJSON, _ := json.Marshal(slideURLs)
+			s.db.Model(&model.Chapter{}).Where("chapter_id = ?", chapterID).Update("slide_urls", string(slideURLsJSON))
+		}
 	}
 
 	return chapterFileToDict(&chapterFile), nil
@@ -286,7 +290,7 @@ func (s *TutorService) DeleteChapterFileByID(fileID int) (map[string]any, error)
 		return nil, errors.New("文件不存在")
 	}
 	if s.fileService != nil {
-		s.fileService.DeleteFile(chapterFile.FileURL)
+		_ = s.fileService.DeleteFile(chapterFile.FileURL)
 	}
 	chapterID := chapterFile.ChapterID
 	s.db.Delete(&chapterFile)
@@ -320,7 +324,7 @@ func (s *TutorService) BatchDeleteChapterFiles(fileIDs []int) map[string]any {
 			continue
 		}
 		if s.fileService != nil {
-			s.fileService.DeleteFile(chapterFile.FileURL)
+			_ = s.fileService.DeleteFile(chapterFile.FileURL)
 		}
 		chapterID := chapterFile.ChapterID
 		s.db.Delete(&chapterFile)

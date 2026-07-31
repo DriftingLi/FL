@@ -10,13 +10,14 @@ import (
 	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/internal/storage"
 	"forklift-training/pkg/response"
 )
 
 // RegisterQuestionBankRoutes 注册 /api/question-bank 蓝图。
-func RegisterQuestionBankRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
+func RegisterQuestionBankRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage) {
 	svc := service.NewQuestionBankService(db)
-	fileSvc := service.NewFileService(cfg.UploadFolder, cfg.LibreOfficeSidecarURL)
+	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st)
 
 	g := rg.Group("/question-bank", middleware.JWTAuth(cfg))
 
@@ -309,7 +310,11 @@ func RegisterQuestionBankRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gor
 			response.BadRequest(c, msg)
 			return
 		}
-		url, _ := fileSvc.SaveFile(buf, file.Filename, "images/questions")
+		url, err := fileSvc.SaveFile(buf, file.Filename, "images/questions")
+		if err != nil {
+			response.ServerError(c, "图片上传失败: "+err.Error())
+			return
+		}
 		response.SuccessWithMsg(c, "图片上传成功", gin.H{"url": url})
 	})
 }

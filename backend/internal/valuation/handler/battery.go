@@ -4,10 +4,10 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 
+	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation/model"
 	"forklift-training/internal/valuation/repository"
 	"forklift-training/internal/valuation/service"
@@ -23,15 +24,15 @@ import (
 
 // BatteryHandler 电池 RUL 评估 HTTP 处理器
 type BatteryHandler struct {
-	repo         *repository.BatteryRepository
-	service      *service.BatteryRULService
-	logger       *zap.Logger
-	pdfOutputDir string
+	repo    *repository.BatteryRepository
+	service *service.BatteryRULService
+	logger  *zap.Logger
+	storage storage.Storage
 }
 
 // NewBatteryHandler 构造电池处理器
-func NewBatteryHandler(repo *repository.BatteryRepository, svc *service.BatteryRULService, l *zap.Logger, pdfOutputDir string) *BatteryHandler {
-	return &BatteryHandler{repo: repo, service: svc, logger: l, pdfOutputDir: pdfOutputDir}
+func NewBatteryHandler(repo *repository.BatteryRepository, svc *service.BatteryRULService, l *zap.Logger, st storage.Storage) *BatteryHandler {
+	return &BatteryHandler{repo: repo, service: svc, logger: l, storage: st}
 }
 
 // Create 处理 POST /api/v1/battery/evaluations
@@ -161,7 +162,7 @@ func (h *BatteryHandler) Get(c *gin.Context) {
 }
 
 // GenerateReport 处理 POST /api/v1/battery/evaluations/:id/report
-// 生成 PDF 报告并落盘
+// 重新加载电池评估 → 生成 PDF bytes → 上传到存储后端 → 回写 report_pdf_path（R2 URL）
 func (h *BatteryHandler) GenerateReport(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -180,53 +181,42 @@ func (h *BatteryHandler) GenerateReport(c *gin.Context) {
 		return
 	}
 
-	// 如果已有 PDF 路径且文件存在，直接返回（避免重复生成）
-	if eval.ReportPdfPath != "" {
-		if _, err := os.Stat(eval.ReportPdfPath); err == nil {
-			OK(c, model.BatteryReportResponse{
-				EvaluationID: eval.ID,
-				ReportPath:   eval.ReportPdfPath,
-				GeneratedAt:  eval.UpdatedAt,
-			})
-			return
-		}
-	}
-
-	// 生成 PDF
-	// 使用注入的 PDF 输出目录
-	pdfDir := h.pdfOutputDir
-	if pdfDir == "" {
-		pdfDir = "./storage/reports"
-	}
-	filename := fmt.Sprintf("battery_report_%d_%s.pdf", eval.ID, time.Now().Format("20060102150405"))
-	fullPath := pdfDir + "/" + filename
-
-	if err := os.MkdirAll(pdfDir, 0o755); err != nil {
-		h.logger.Error("创建 PDF 目录失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeInternalError, "创建 PDF 目录失败")
-		return
-	}
-
-	if err := h.generateBatteryPDF(fullPath, eval); err != nil {
-		h.logger.Error("生成电池 PDF 失败", zap.Error(err))
+	// 1. 生成 PDF bytes
+	pdfBytes, err := pdf.GenerateBatteryReportBytes(eval)
+	if err != nil {
+		h.logger.Error("生成电池 PDF 失败", zap.Error(err), zap.Int64("id", id))
 		Error(c, http.StatusInternalServerError, CodeInternalError, "生成 PDF 失败: "+err.Error())
 		return
 	}
 
-	// 更新报告路径
-	if err := h.repo.UpdateReportPath(c.Request.Context(), eval.ID, fullPath); err != nil {
-		h.logger.Warn("更新 PDF 路径失败", zap.Error(err))
+	// 2. 上传到存储后端，获取可访问 URL
+	key := fmt.Sprintf("reports/battery_report_%d_%s.pdf", id, time.Now().Format("20060102150405"))
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
+	defer cancel()
+	pdfURL, err := h.storage.Save(ctx, key, pdfBytes, "application/pdf")
+	if err != nil {
+		h.logger.Error("上传电池 PDF 失败", zap.Error(err), zap.Int64("id", id))
+		Error(c, http.StatusInternalServerError, CodeInternalError, "上传 PDF 失败: "+err.Error())
+		return
 	}
 
-	OK(c, model.BatteryReportResponse{
-		EvaluationID: eval.ID,
-		ReportPath:   fullPath,
-		GeneratedAt:  time.Now().Format("2006-01-02T15:04:05Z07:00"),
+	// 3. 回写报告 URL 到 battery_evaluations.report_pdf_path（字段名不变，存 R2 URL）
+	if err := h.repo.UpdateReportPath(c.Request.Context(), eval.ID, pdfURL); err != nil {
+		h.logger.Warn("回写电池 PDF 路径失败", zap.Error(err), zap.Int64("id", id))
+		// 不中断流程：文件已上传，告知用户报告 URL 即可
+	}
+
+	// 4. 返回响应
+	OK(c, gin.H{
+		"evaluation_id": id,
+		"pdf_url":       pdfURL,
+		"file_size":     len(pdfBytes),
 	})
 }
 
 // DownloadReport 处理 GET /api/v1/battery/evaluations/:id/report
-// 下载 PDF 报告
+// 优先从数据库读取 report_pdf_path（R2 URL）；若不存在或存储中无此文件则即时生成；
+// 最终 302 重定向到 R2 公开访问 URL（浏览器直连下载）
 func (h *BatteryHandler) DownloadReport(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -245,22 +235,46 @@ func (h *BatteryHandler) DownloadReport(c *gin.Context) {
 		return
 	}
 
-	if eval.ReportPdfPath == "" {
-		Error(c, http.StatusNotFound, CodeNotFound, "报告尚未生成，请先调用 POST /:id/report")
-		return
-	}
-
-	// 文件不存在则重新生成
-	if _, err := os.Stat(eval.ReportPdfPath); err != nil {
-		h.logger.Warn("PDF 文件不存在，重新生成", zap.String("path", eval.ReportPdfPath))
-		if err := h.generateBatteryPDF(eval.ReportPdfPath, eval); err != nil {
-			h.logger.Error("重新生成 PDF 失败", zap.Error(err))
-			Error(c, http.StatusInternalServerError, CodeInternalError, "重新生成 PDF 失败")
+	// 1. 校验已有 URL 是否有效（为空或存储中不存在则重新生成）
+	pdfURL := eval.ReportPdfPath
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
+	defer cancel()
+	if pdfURL == "" {
+		pdfURL = h.regenerateAndUpload(ctx, eval, id)
+		if pdfURL == "" {
+			Error(c, http.StatusInternalServerError, CodeInternalError, "生成 PDF 失败")
+			return
+		}
+	} else if exists, _ := h.storage.Exists(ctx, pdfURL); !exists {
+		pdfURL = h.regenerateAndUpload(ctx, eval, id)
+		if pdfURL == "" {
+			Error(c, http.StatusInternalServerError, CodeInternalError, "生成 PDF 失败")
 			return
 		}
 	}
 
-	c.FileAttachment(eval.ReportPdfPath, filenameFromPath(eval.ReportPdfPath))
+	// 2. 302 重定向到 R2 公开访问 URL
+	c.Redirect(http.StatusFound, pdfURL)
+}
+
+// regenerateAndUpload 重新生成电池 PDF 并上传到存储后端，返回新的 URL。
+// 失败时返回空字符串（错误已在内部记日志）。
+func (h *BatteryHandler) regenerateAndUpload(ctx context.Context, eval *model.BatteryEvaluation, id int64) string {
+	pdfBytes, genErr := pdf.GenerateBatteryReportBytes(eval)
+	if genErr != nil {
+		h.logger.Error("生成电池 PDF 失败", zap.Error(genErr), zap.Int64("id", id))
+		return ""
+	}
+	key := fmt.Sprintf("reports/battery_report_%d_%s.pdf", id, time.Now().Format("20060102150405"))
+	pdfURL, saveErr := h.storage.Save(ctx, key, pdfBytes, "application/pdf")
+	if saveErr != nil {
+		h.logger.Error("上传电池 PDF 失败", zap.Error(saveErr), zap.Int64("id", id))
+		return ""
+	}
+	if dbErr := h.repo.UpdateReportPath(ctx, id, pdfURL); dbErr != nil {
+		h.logger.Warn("回写电池 PDF 路径失败", zap.Error(dbErr), zap.Int64("id", id))
+	}
+	return pdfURL
 }
 
 // buildSuggestionsFromRecord 基于评估字段生成简单建议（详情接口 fallback）
@@ -285,19 +299,4 @@ func (h *BatteryHandler) buildSuggestionsFromRecord(eval *model.BatteryEvaluatio
 		out = append(out, "NCM 电池能量密度高但循环寿命较短，注意高温环境与过充风险。")
 	}
 	return out
-}
-
-// generateBatteryPDF 调用 pdf 包生成电池报告
-func (h *BatteryHandler) generateBatteryPDF(path string, eval *model.BatteryEvaluation) error {
-	return pdf.GenerateBatteryReportToPath("", path, eval)
-}
-
-// filenameFromPath 从完整路径中提取文件名
-func filenameFromPath(path string) string {
-	for i := len(path) - 1; i >= 0; i-- {
-		if path[i] == '/' || path[i] == '\\' {
-			return path[i+1:]
-		}
-	}
-	return path
 }

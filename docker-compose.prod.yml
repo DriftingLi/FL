@@ -19,7 +19,8 @@ services:
       TZ: Asia/Shanghai
     # Docker 19.03 的默认 seccomp 配置不包含 clone3() 等系统调用，
     # 导致 PostgreSQL 15 报 "could not write to file postmaster.pid: Operation not permitted"
-    # 测试环境(pve-01)需禁用 seccomp；生产环境可移除此配置
+    # pve-02(staging)仍为 Docker 19.03，需保留此项；Docker 24+ 可移除
+    # pve-01(testing)通过 LXC 运行 Docker 24+，此项无害但非必需
     security_opt:
       - seccomp:unconfined
     # 仅内网可访问，不对外暴露端口（仅 backend 容器通过 Docker 网络访问）
@@ -97,7 +98,7 @@ services:
 
   # ==========================================
   # LibreOffice Sidecar 服务（PPT → PDF → PNG 转换）
-  # 通过 HTTP API 提供 LibreOffice 转换能力，共享 /data/uploads volume
+  # 通过 HTTP multipart API 提供转换能力，无需共享 volume
   # 拆分自 backend 容器，使 backend 镜像从 ~500MB 减小到 ~50MB
   # ==========================================
   libreoffice:
@@ -109,10 +110,6 @@ services:
     restart: unless-stopped
     expose:
       - "8000"
-    volumes:
-      # 与 backend 共享 uploads volume，sidecar 通过路径访问 PPT 文件并写入 PNG
-      # 测试环境用 bind mount: UPLOADS_VOLUME=./data/uploads
-      - ${UPLOADS_VOLUME:-uploads-data}:/data/uploads
     networks:
       - forklift-net
     deploy:
@@ -172,6 +169,15 @@ services:
       REDIS_KEY_PREFIX: "${REDIS_KEY_PREFIX:-fl:}"
       # LibreOffice sidecar HTTP 地址(容器内服务名 + 端口)
       LIBREOFFICE_SIDECAR_URL: http://libreoffice:8000
+      # 文件存储：local=本地磁盘 / r2=Cloudflare R2 对象存储
+      # r2 模式下上传文件、PDF 报告、PPT 转图片均存到 R2，本地 /data/uploads 与 /data/reports 仅用于 fallback
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-}
+      # 绑定到 R2 bucket 的自定义域名（如 https://cdn.example.com），尾部斜杠会被去除
+      R2_PUBLIC_DOMAIN: ${R2_PUBLIC_DOMAIN:-}
       TZ: Asia/Shanghai
     # 端口映射到宿主机回环，供 host 模式的 frontend nginx 反代访问
     # PVE 环境：frontend 用 network_mode: host，需通过 127.0.0.1:${BACKEND_HOST_PORT} 访问 backend

@@ -229,6 +229,13 @@ jobs:
       REDIS_DB: ${{ secrets.REDIS_DB || '0' }}
       REDIS_POOL_SIZE: ${{ secrets.REDIS_POOL_SIZE || '10' }}
       REDIS_KEY_PREFIX: ${{ secrets.REDIS_KEY_PREFIX || 'fl:' }}
+      # Cloudflare R2 对象存储（留空则回退到本地磁盘 STORAGE_DRIVER=local）
+      STORAGE_DRIVER: ${{ secrets.STORAGE_DRIVER || 'local' }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_PUBLIC_DOMAIN: ${{ secrets.R2_PUBLIC_DOMAIN }}
       # backend 宿主机映射端口（staging 默认 8080；testing 用 18080 避免与 cadvisor 冲突）
       BACKEND_HOST_PORT: ${{ secrets.BACKEND_HOST_PORT || '8080' }}
       # 异地备份（staging: pve-02 → pve-01；testing: 留空跳过）
@@ -240,16 +247,18 @@ jobs:
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT || '2222' }}
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-      # SSH 跳板配置（仅 testing 环境使用）
-      # staging: SSH_HOST=pve-02公网, 直连
-      # testing: SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=pve-01内网
+      # SSH 跳板配置（staging 和 testing 均已迁移到 LXC,使用 ProxyJump）
+      # staging: SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(172.17.1.201)
+      # testing: SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(172.17.1.200)
+      #         pve-02 与 LXC 同网段路由可达,无需 pve-01 中转
       SSH_JUMP_HOST: ${{ secrets.SSH_JUMP_HOST || '' }}
-      # Volume 路径（testing 用 bind mount 绕过 Docker 19.03 named volume 权限 bug）
-      # staging/production 留空 → deploy 脚本默认使用 named volume
-      PG_VOLUME: ${{ inputs.environment == 'testing' && './data/pgdata' || '' }}
-      REDIS_VOLUME: ${{ inputs.environment == 'testing' && './data/redis' || '' }}
-      UPLOADS_VOLUME: ${{ inputs.environment == 'testing' && './data/uploads' || '' }}
-      REPORTS_VOLUME: ${{ inputs.environment == 'testing' && './data/reports' || '' }}
+      # Volume 路径：testing 已迁移到 LXC + Docker 24+,named volume 正常工作
+      # 旧 Docker 19.03 的 named volume 权限 bug 已通过 Docker 升级解决,无需 bind mount
+      # 留空 → deploy-remote.sh 默认使用 named volume（pgdata-prod / redisdata-prod 等）
+      PG_VOLUME: ''
+      REDIS_VOLUME: ''
+      UPLOADS_VOLUME: ''
+      REPORTS_VOLUME: ''
     steps:
       - uses: actions/checkout@v4
         with:
@@ -257,8 +266,10 @@ jobs:
 
       # --------------------------------------------------------
       # Step 2.1: 配置 SSH
-      #   staging: 直连 pve-02 (SSH_HOST:SSH_PORT)
-      #   testing: 通过 pve-02 跳板到 pve-01 (SSH_HOST=跳板, SSH_JUMP_HOST=目标)
+      #   staging/testing: 两层 ProxyJump (pve-02 → LXC)
+      #           SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(目标)
+      #           pve-02 与 LXC 同网段(172.17.1.0/24)路由可达
+      #   production: 直连 (SSH_HOST:SSH_PORT, SSH_JUMP_HOST 为空)
       # --------------------------------------------------------
       - name: 配置 SSH
         run: |
@@ -269,7 +280,7 @@ jobs:
             -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
           if [ -n "$SSH_JUMP_HOST" ]; then
-            # testing 环境: 通过跳板访问 pve-01
+            # testing 环境: 两层 ProxyJump (pve-02 → LXC)
             cat > ~/.ssh/config << EOF
           Host jump
               HostName $SSH_HOST
@@ -366,6 +377,12 @@ jobs:
             printf 'export REDIS_DB=%q\n' "${REDIS_DB:-0}"
             printf 'export REDIS_POOL_SIZE=%q\n' "${REDIS_POOL_SIZE:-10}"
             printf 'export REDIS_KEY_PREFIX=%q\n' "${REDIS_KEY_PREFIX:-fl:}"
+            printf 'export STORAGE_DRIVER=%q\n' "${STORAGE_DRIVER:-local}"
+            printf 'export R2_ACCOUNT_ID=%q\n' "${R2_ACCOUNT_ID:-}"
+            printf 'export R2_ACCESS_KEY_ID=%q\n' "${R2_ACCESS_KEY_ID:-}"
+            printf 'export R2_SECRET_ACCESS_KEY=%q\n' "${R2_SECRET_ACCESS_KEY:-}"
+            printf 'export R2_BUCKET=%q\n' "${R2_BUCKET:-}"
+            printf 'export R2_PUBLIC_DOMAIN=%q\n' "${R2_PUBLIC_DOMAIN:-}"
             printf 'export BACKUP_REMOTE_HOST=%q\n' "${BACKUP_REMOTE_HOST:-}"
             printf 'export BACKUP_REMOTE_DIR=%q\n' "${BACKUP_REMOTE_DIR:-}"
             printf 'export BACKUP_REMOTE_KEY=%q\n' "${BACKUP_REMOTE_KEY:-}"
