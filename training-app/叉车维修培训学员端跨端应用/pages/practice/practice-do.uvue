@@ -1,0 +1,761 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">{{ modeTitle }}</text>
+            <view class="header-right"></view>
+        </view>
+
+        <!-- 加载中 -->
+        <view v-if="loading && questions.length == 0" class="loading-wrap">
+            <text class="loading-text">正在加载题目...</text>
+        </view>
+
+        <!-- 空数据 -->
+        <view v-else-if="questions.length == 0" class="empty-wrap">
+            <text class="empty-text">暂无题目</text>
+        </view>
+
+        <!-- 答题区域 -->
+        <scroll-view v-else class="content-scroll" scroll-y="true">
+            <!-- 进度条 -->
+            <view class="progress-section">
+                <view class="progress-bar-wrap">
+                    <view class="progress-bar" :style="{ width: progressPercent + '%' }"></view>
+                </view>
+                <text class="progress-text">{{ currentIndex + 1 }} / {{ questions.length }}</text>
+            </view>
+
+            <!-- 题目卡片 -->
+            <view class="question-card">
+                <view class="question-header">
+                    <text class="question-type-tag">{{ getTypeName(currentQuestion.type) }}</text>
+                    <text class="question-index">第 {{ currentIndex + 1 }} 题</text>
+                </view>
+                <text class="question-title">{{ currentQuestion.title }}</text>
+
+                <!-- 选项列表 -->
+                <view class="option-list">
+                    <view v-for="(opt, idx) in currentQuestion.options" :key="idx"
+                        class="option-item"
+                        :class="getOptionClass(opt.key)"
+                        @click="onOptionClick(opt.key)">
+                        <view class="option-key" :class="getOptionKeyClass(opt.key)">
+                            <text class="option-key-text">{{ opt.key }}</text>
+                        </view>
+                        <text class="option-text">{{ opt.text }}</text>
+                        <text v-if="showResult && isSelected(opt.key)" class="option-mark">
+                            {{ isSelected(opt.key) ? (isCorrectAnswer(opt.key) ? '✓' : '✗') : '' }}
+                        </text>
+                    </view>
+                </view>
+
+                <!-- 答案解析 -->
+                <view v-if="showResult" class="result-section">
+                    <view class="result-header" :class="{ correct: lastResult.correct, wrong: !lastResult.correct }">
+                        <text class="result-label">{{ lastResult.correct ? '回答正确' : '回答错误' }}</text>
+                    </view>
+                    <view class="result-answer">
+                        <text class="result-answer-label">正确答案：</text>
+                        <text class="result-answer-value">{{ lastResult.correct_answer }}</text>
+                    </view>
+                    <view v-if="lastResult.explanation.length > 0" class="result-explanation">
+                        <text class="explanation-label">解析：</text>
+                        <text class="explanation-text">{{ lastResult.explanation }}</text>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 操作按钮 -->
+            <view class="action-bar">
+                <view v-if="!showResult" class="action-btn submit-btn" @click="onSubmit">
+                    <text class="action-btn-text">提交答案</text>
+                </view>
+                <view v-else class="action-btn next-btn" @click="onNext">
+                    <text class="action-btn-text">{{ currentIndex >= questions.length - 1 ? '查看结果' : '下一题' }}</text>
+                </view>
+            </view>
+        </scroll-view>
+
+        <!-- 结果汇总 -->
+        <view v-if="showSummary" class="summary-mask">
+            <view class="summary-box">
+                <text class="summary-title">练习完成</text>
+                <view class="summary-stats">
+                    <view class="summary-stat">
+                        <text class="summary-stat-num">{{ questions.length }}</text>
+                        <text class="summary-stat-label">总题数</text>
+                    </view>
+                    <view class="summary-stat">
+                        <text class="summary-stat-num correct-color">{{ correctCount }}</text>
+                        <text class="summary-stat-label">答对</text>
+                    </view>
+                    <view class="summary-stat">
+                        <text class="summary-stat-num wrong-color">{{ questions.length - correctCount }}</text>
+                        <text class="summary-stat-label">答错</text>
+                    </view>
+                    <view class="summary-stat">
+                        <text class="summary-stat-num">{{ summaryAccuracy }}%</text>
+                        <text class="summary-stat-label">正确率</text>
+                    </view>
+                </view>
+                <view class="summary-actions">
+                    <view class="summary-btn summary-btn-secondary" @click="onExit">
+                        <text class="summary-btn-text">返回</text>
+                    </view>
+                    <view class="summary-btn summary-btn-primary" @click="onRestart">
+                        <text class="summary-btn-text">再练一次</text>
+                    </view>
+                </view>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import {
+        getFreePracticeApi,
+        getSequentialPracticeApi,
+        getCategoryPracticeApi,
+        getKnowledgePointPracticeApi,
+        submitAnswerApi,
+        savePracticeProgressApi,
+    } from '../../api/practice'
+    import type { Question, SubmitAnswerResult, AnswerState, QuestionOption, SubmitAnswerParams } from '../../types/index'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    // 页面参数
+    const mode = ref<string>('free')          // free / sequential / category / knowledge_point
+    const practiceCount = ref<number>(20)      // 随机练习题量
+    const categoryCode = ref<string>('')       // 章节练习分类
+    const knowledgePointId = ref<number>(0)    // 知识点练习 ID
+    const knowledgePointName = ref<string>('') // 知识点名称
+    const isContinue = ref<boolean>(false)     // 顺序练习续练
+
+    // 题目与状态
+    const questions = ref<Question[]>([])
+    const currentIndex = ref<number>(0)
+    const loading = ref<boolean>(false)
+    const showResult = ref<boolean>(false)
+    const showSummary = ref<boolean>(false)
+
+    // 当前选中的答案（单选为字符串，多选为字母拼接）
+    const selectedKeys = ref<string[]>([])
+    const answerStates = ref<AnswerState[]>([])
+    const lastResult = ref<SubmitAnswerResult>({
+        correct: false,
+        correct_answer: '',
+        explanation: '',
+    } as SubmitAnswerResult)
+
+    const currentQuestion = computed<Question>(() : Question => {
+        if (questions.value.length == 0) {
+            return { question_id: 0, type: '', title: '', options: [] as QuestionOption[], correct_answer: '', explanation: '' } as Question
+        }
+        return questions.value[currentIndex.value]
+    })
+
+    const progressPercent = computed<number>(() : number => {
+        if (questions.value.length == 0) return 0
+        return Math.floor((currentIndex.value + 1) * 100 / questions.value.length)
+    })
+
+    const modeTitle = computed<string>(() : string => {
+        if (mode.value == 'free') return '随机练习'
+        if (mode.value == 'sequential') return '顺序练习'
+        if (mode.value == 'category') return '章节练习'
+        if (mode.value == 'knowledge_point') return '专项练习'
+        return '题库练习'
+    })
+
+    const correctCount = computed<number>(() : number => {
+        let count = 0
+        for (let i = 0; i < answerStates.value.length; i++) {
+            if (answerStates.value[i].is_correct) count++
+        }
+        return count
+    })
+
+    const summaryAccuracy = computed<number>(() : number => {
+        if (questions.value.length == 0) return 0
+        return Math.floor(correctCount.value * 100 / questions.value.length)
+    })
+
+    function getTypeName(type : string) : string {
+        if (type == 'single' || type == 'single_choice') return '单选题'
+        if (type == 'multi' || type == 'multiple_choice' || type == 'multi_choice') return '多选题'
+        if (type == 'judge' || type == 'true_false') return '判断题'
+        return '其他'
+    }
+
+    function isMultiChoice() : boolean {
+        const t = currentQuestion.value.type
+        return t == 'multi' || t == 'multiple_choice' || t == 'multi_choice'
+    }
+
+    function isSelected(key : string) : boolean {
+        return selectedKeys.value.indexOf(key) >= 0
+    }
+
+    function isCorrectAnswer(key : string) : boolean {
+        // 判断题选项为 true/false，正确答案也用 true/false
+        const answer = lastResult.value.correct_answer
+        if (answer.length == 0) return false
+        return answer.indexOf(key) >= 0
+    }
+
+    function getOptionClass(key : string) : string {
+        if (!showResult.value) {
+            return isSelected(key) ? 'option-selected' : ''
+        }
+        // 已提交，标记对错
+        if (isCorrectAnswer(key)) return 'option-correct'
+        if (isSelected(key) && !isCorrectAnswer(key)) return 'option-wrong'
+        return ''
+    }
+
+    function getOptionKeyClass(key : string) : string {
+        if (!showResult.value) {
+            return isSelected(key) ? 'option-key-selected' : ''
+        }
+        if (isCorrectAnswer(key)) return 'option-key-correct'
+        if (isSelected(key) && !isCorrectAnswer(key)) return 'option-key-wrong'
+        return ''
+    }
+
+    function onOptionClick(key : string) : void {
+        if (showResult.value) return
+        if (isMultiChoice()) {
+            // 多选：切换选中状态
+            const idx = selectedKeys.value.indexOf(key)
+            if (idx >= 0) {
+                selectedKeys.value.splice(idx, 1)
+            } else {
+                selectedKeys.value.push(key)
+            }
+        } else {
+            // 单选/判断：直接选中
+            selectedKeys.value = [key]
+        }
+    }
+
+    async function loadQuestions() {
+        loading.value = true
+        try {
+            if (mode.value == 'free') {
+                questions.value = await getFreePracticeApi(practiceCount.value, '', 0)
+            } else if (mode.value == 'sequential') {
+                questions.value = await getSequentialPracticeApi()
+            } else if (mode.value == 'category') {
+                questions.value = await getCategoryPracticeApi(categoryCode.value, 0)
+            } else if (mode.value == 'knowledge_point') {
+                questions.value = await getKnowledgePointPracticeApi(knowledgePointId.value, 0, true)
+            }
+            if (questions.value.length == 0) {
+                uni.showToast({ title: '暂无题目', icon: 'none' })
+            }
+        } catch (e) {
+            console.error('[practice-do] load questions failed:', e)
+            uni.showToast({ title: '加载题目失败', icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function saveProgress() {
+        const answersState : UTSJSONObject = {} as UTSJSONObject
+        for (let i = 0; i < answerStates.value.length; i++) {
+            const s = answerStates.value[i]
+            answersState[s.question_id.toString()] = s.user_answer
+        }
+        savePracticeProgressApi(currentIndex.value + 1, mode.value, questions.value.length, answersState).catch((e) => {
+            console.warn('[practice-do] save progress failed:', e)
+        })
+    }
+
+    async function onSubmit() : Promise<void> {
+        if (selectedKeys.value.length == 0) {
+            uni.showToast({ title: '请选择答案', icon: 'none' })
+            return
+        }
+        // 拼接答案：多选按字母排序拼接，单选/判断直接取
+        let userAnswer = ''
+        if (isMultiChoice()) {
+            const sorted = selectedKeys.value.slice().sort()
+            userAnswer = sorted.join('')
+        } else {
+            userAnswer = selectedKeys.value[0]
+        }
+
+        const qid = currentQuestion.value.question_id
+        try {
+            const params : SubmitAnswerParams = {
+                question_id: qid,
+                user_answer: userAnswer,
+                practice_type: mode.value,
+            } as SubmitAnswerParams
+            const result = await submitAnswerApi(params)
+            lastResult.value = result
+            showResult.value = true
+
+            // 记录答题状态
+            const state : AnswerState = {
+                question_id: qid,
+                user_answer: userAnswer,
+                is_correct: result.correct,
+                correct_answer: result.correct_answer,
+                submitted: true,
+            } as AnswerState
+            answerStates.value.push(state)
+
+            // 顺序/章节/知识点练习保存进度
+            if (mode.value != 'free') {
+                saveProgress()
+            }
+        } catch (e) {
+            console.error('[practice-do] submit failed:', e)
+            uni.showToast({ title: '提交失败', icon: 'none' })
+        }
+    }
+
+    function onNext() : void {
+        if (currentIndex.value >= questions.value.length - 1) {
+            // 全部完成，显示汇总
+            showSummary.value = true
+            return
+        }
+        currentIndex.value = currentIndex.value + 1
+        selectedKeys.value = []
+        showResult.value = false
+        lastResult.value = { correct: false, correct_answer: '', explanation: '' } as SubmitAnswerResult
+    }
+
+    function onBack() : void {
+        uni.showModal({
+            title: '提示',
+            content: '确定要退出练习吗？',
+            success: (res) => {
+                if (res.confirm) {
+                    uni.navigateBack()
+                }
+            }
+        })
+    }
+
+    function onExit() : void {
+        uni.navigateBack()
+    }
+
+    function onRestart() : void {
+        currentIndex.value = 0
+        selectedKeys.value = []
+        showResult.value = false
+        showSummary.value = false
+        answerStates.value = []
+        lastResult.value = { correct: false, correct_answer: '', explanation: '' } as SubmitAnswerResult
+        loadQuestions()
+    }
+
+    onLoad((options : UTSJSONObject) => {
+        const m = options['mode']
+        if (m != null) mode.value = m as string
+        const cnt = options['count']
+        if (cnt != null) practiceCount.value = parseInt(cnt as string)
+        const cat = options['category']
+        if (cat != null) categoryCode.value = cat as string
+        const kpId = options['kp_id']
+        if (kpId != null) knowledgePointId.value = parseInt(kpId as string)
+        const kpName = options['kp_name']
+        if (kpName != null) {
+            const decoded = decodeURIComponent(kpName as string)
+            knowledgePointName.value = decoded ?? ''
+        }
+        const cont = options['continue']
+        if (cont != null) isContinue.value = (cont as string) == '1'
+        loadQuestions()
+    })
+</script>
+
+<style>
+    .container {
+        display: flex;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        width: 60rpx;
+        align-items: center;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #ffffff;
+    }
+
+    .header-title {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .header-right {
+        width: 60rpx;
+    }
+
+    .content-scroll {
+        flex: 1;
+        height: 0;
+    }
+
+    /* 进度条 */
+    .progress-section {
+        flex-direction: row;
+        align-items: center;
+        padding: 24rpx 24rpx 0;
+    }
+
+    .progress-bar-wrap {
+        flex: 1;
+        height: 12rpx;
+        background-color: #e0e0e0;
+        border-radius: 6rpx;
+        overflow: hidden;
+        margin-right: 20rpx;
+    }
+
+    .progress-bar {
+        height: 12rpx;
+        background-color: #2979ff;
+        border-radius: 6rpx;
+    }
+
+    .progress-text {
+        font-size: 24rpx;
+        color: #666666;
+        min-width: 80rpx;
+        text-align: right;
+    }
+
+    /* 题目卡片 */
+    .question-card {
+        background-color: #ffffff;
+        margin: 24rpx;
+        border-radius: 16rpx;
+        padding: 32rpx;
+        border: 1px solid #eeeeee;
+    }
+
+    .question-header {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 24rpx;
+    }
+
+    .question-type-tag {
+        font-size: 22rpx;
+        color: #ffffff;
+        background-color: #2979ff;
+        padding: 6rpx 16rpx;
+        border-radius: 8rpx;
+        margin-right: 16rpx;
+    }
+
+    .question-index {
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    .question-title {
+        font-size: 32rpx;
+        color: #333333;
+        line-height: 48rpx;
+        margin-bottom: 32rpx;
+    }
+
+    /* 选项列表 */
+    .option-list {
+        flex-direction: column;
+    }
+
+    .option-item {
+        flex-direction: row;
+        align-items: center;
+        padding: 24rpx;
+        background-color: #f8f9fa;
+        border-radius: 12rpx;
+        margin-bottom: 16rpx;
+        border: 2rpx solid transparent;
+    }
+
+    .option-selected {
+        background-color: #e3f2fd;
+        border-color: #2979ff;
+    }
+
+    .option-correct {
+        background-color: #e8f5e9;
+        border-color: #4caf50;
+    }
+
+    .option-wrong {
+        background-color: #ffebee;
+        border-color: #f44336;
+    }
+
+    .option-key {
+        width: 56rpx;
+        height: 56rpx;
+        border-radius: 28rpx;
+        background-color: #e0e0e0;
+        align-items: center;
+        justify-content: center;
+        margin-right: 20rpx;
+    }
+
+    .option-key-selected {
+        background-color: #2979ff;
+    }
+
+    .option-key-correct {
+        background-color: #4caf50;
+    }
+
+    .option-key-wrong {
+        background-color: #f44336;
+    }
+
+    .option-key-text {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .option-text {
+        flex: 1;
+        font-size: 28rpx;
+        color: #333333;
+    }
+
+    .option-mark {
+        font-size: 32rpx;
+        font-weight: bold;
+        margin-left: 12rpx;
+    }
+
+    /* 答案解析 */
+    .result-section {
+        margin-top: 24rpx;
+        padding: 24rpx;
+        background-color: #f5f5f5;
+        border-radius: 12rpx;
+        flex-direction: column;
+    }
+
+    .result-header {
+        margin-bottom: 16rpx;
+    }
+
+    .result-header.correct .result-label {
+        color: #4caf50;
+    }
+
+    .result-header.wrong .result-label {
+        color: #f44336;
+    }
+
+    .result-label {
+        font-size: 28rpx;
+        font-weight: bold;
+    }
+
+    .result-answer {
+        flex-direction: row;
+        margin-bottom: 16rpx;
+    }
+
+    .result-answer-label {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    .result-answer-value {
+        font-size: 26rpx;
+        font-weight: bold;
+        color: #4caf50;
+    }
+
+    .result-explanation {
+        flex-direction: column;
+    }
+
+    .explanation-label {
+        font-size: 26rpx;
+        color: #666666;
+        margin-bottom: 8rpx;
+    }
+
+    .explanation-text {
+        font-size: 26rpx;
+        color: #333333;
+        line-height: 40rpx;
+    }
+
+    /* 操作按钮 */
+    .action-bar {
+        padding: 24rpx;
+    }
+
+    .action-btn {
+        align-items: center;
+        padding: 24rpx 0;
+        border-radius: 48rpx;
+    }
+
+    .submit-btn {
+        background-color: #2979ff;
+    }
+
+    .next-btn {
+        background-color: #4caf50;
+    }
+
+    .action-btn-text {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    /* 加载/空状态 */
+    .loading-wrap {
+        flex: 1;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .empty-wrap {
+        flex: 1;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .loading-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    /* 结果汇总弹窗 */
+    .summary-mask {
+        position: fixed;
+        left: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0,0,0,0.6);
+        justify-content: center;
+        align-items: center;
+    }
+
+    .summary-box {
+        width: 600rpx;
+        background-color: #ffffff;
+        border-radius: 24rpx;
+        padding: 48rpx 32rpx;
+        align-items: center;
+    }
+
+    .summary-title {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 40rpx;
+    }
+
+    .summary-stats {
+        flex-direction: row;
+        justify-content: space-around;
+        margin-bottom: 40rpx;
+        align-self: stretch;
+    }
+
+    .summary-stat {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .summary-stat-num {
+        font-size: 44rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 8rpx;
+    }
+
+    .correct-color {
+        color: #4caf50;
+    }
+
+    .wrong-color {
+        color: #f44336;
+    }
+
+    .summary-stat-label {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .summary-actions {
+        flex-direction: row;
+        align-self: stretch;
+    }
+
+    .summary-btn {
+        flex: 1;
+        align-items: center;
+        padding: 24rpx 0;
+        border-radius: 48rpx;
+        margin: 0 12rpx;
+    }
+
+    .summary-btn-secondary {
+        background-color: #f5f5f5;
+    }
+
+    .summary-btn-primary {
+        background-color: #2979ff;
+    }
+
+    .summary-btn-text {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .summary-btn-secondary .summary-btn-text {
+        color: #666666;
+    }
+</style>

@@ -139,12 +139,10 @@
     })
 
     function getCategoryIcon(category : string) : string {
-        if (category == 'driving') return '🚗'
-        if (category == 'maintenance') return '🔧'
-        if (category == 'safety') return '⚠️'
-        if (category == 'troubleshooting') return '🔩'
-        if (category == 'cargo') return '📐'
-        if (category == 'electric') return '⚡'
+        if (category == 'CATEGORY_01') return '📖'
+        if (category == 'CATEGORY_02') return '⚠️'
+        if (category == 'CATEGORY_03') return '🔧'
+        if (category == 'CATEGORY_04') return '🚀'
         return '📚'
     }
 
@@ -181,14 +179,16 @@
         } else if (type == 'exam') {
             uni.reLaunch({ url: '/pages/exam/exam' })
         } else if (type == 'practice') {
-            uni.showToast({ title: '题库练习开发中', icon: 'none' })
+            uni.navigateTo({ url: '/pages/practice/practice' })
         } else if (type == 'profile') {
             uni.reLaunch({ url: '/pages/profile/profile' })
         }
     }
 
     function onCourseClick(courseId : number) : void {
-        uni.showToast({ title: '课程详情开发中', icon: 'none' })
+        uni.navigateTo({
+            url: '/pages/courses/course-detail?id=' + courseId
+        })
     }
 
     loadProfile()

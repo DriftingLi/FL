@@ -1,0 +1,197 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">设置</text>
+            <view class="header-right"></view>
+        </view>
+        <scroll-view class="content-scroll" scroll-y="true">
+            <!-- 账号信息 -->
+            <view class="section">
+                <text class="section-title">账号</text>
+                <view class="card">
+                    <view class="cell">
+                        <text class="cell-label">用户名</text>
+                        <text class="cell-value">{{ userName }}</text>
+                    </view>
+                    <view class="cell">
+                        <text class="cell-label">角色</text>
+                        <text class="cell-value">叉车学员</text>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 关于 -->
+            <view class="section">
+                <text class="section-title">关于</text>
+                <view class="card">
+                    <view class="cell" @click="onAbout">
+                        <text class="cell-label">关于我们</text>
+                        <text class="cell-arrow">›</text>
+                    </view>
+                    <view class="cell">
+                        <text class="cell-label">当前版本</text>
+                        <text class="cell-value">v1.0.0</text>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 退出登录 -->
+            <view class="logout-wrap">
+                <view class="logout-btn" @click="onLogout">
+                    <text class="logout-text">退出登录</text>
+                </view>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { computed } from 'vue'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { useAuthStore } from '../../stores/auth'
+
+    const authStore = useAuthStore()
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const userName = computed<string>(() : string => {
+        const u = authStore.user.value
+        if (u != null) {
+            if (u.name.length > 0) return u.name
+            if (u.username.length > 0) return u.username
+        }
+        return '同学'
+    })
+
+    function onBack() : void {
+        uni.navigateBack()
+    }
+
+    function onAbout() : void {
+        uni.showToast({ title: '叉车维修培训学员端 v1.0.0', icon: 'none' })
+    }
+
+    function onLogout() : void {
+        uni.showModal({
+            title: '提示',
+            content: '确认退出登录？',
+            success: (res) => {
+                if (res.confirm) {
+                    authStore.logout()
+                }
+            }
+        })
+    }
+</script>
+
+<style>
+    .container {
+        display: flex;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        width: 60rpx;
+        align-items: center;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #ffffff;
+    }
+
+    .header-title {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .header-right {
+        width: 60rpx;
+    }
+
+    .content-scroll {
+        flex: 1;
+        height: 0;
+    }
+
+    .section {
+        margin-top: 24rpx;
+        padding: 0 32rpx;
+    }
+
+    .section-title {
+        font-size: 26rpx;
+        color: #999999;
+        margin-bottom: 16rpx;
+        padding-left: 8rpx;
+    }
+
+    .card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        border: 1px solid #eeeeee;
+        flex-direction: column;
+    }
+
+    .cell {
+        flex-direction: row;
+        align-items: center;
+        padding: 28rpx 24rpx;
+        border-bottom: 1rpx solid #f5f5f5;
+    }
+
+    .cell:last-child {
+        border-bottom: none;
+    }
+
+    .cell-label {
+        flex: 1;
+        font-size: 30rpx;
+        color: #333333;
+    }
+
+    .cell-value {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .cell-arrow {
+        font-size: 40rpx;
+        color: #cccccc;
+    }
+
+    .logout-wrap {
+        padding: 48rpx 32rpx;
+    }
+
+    .logout-btn {
+        background-color: #ffffff;
+        border: 1rpx solid #ff5252;
+        border-radius: 48rpx;
+        padding: 24rpx 0;
+        align-items: center;
+    }
+
+    .logout-text {
+        font-size: 32rpx;
+        color: #ff5252;
+    }
+</style>

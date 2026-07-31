@@ -232,10 +232,42 @@ export type ChapterItem = {
 	duration : number
 }
 
+/** 章节附件文件 */
+export type ChapterFile = {
+	file_id : number
+	file_name : string
+	file_url : string
+	content_type : string  // video / document / ppt / image
+}
+
+/** 章节详情 */
+export type ChapterDetail = {
+	chapter_id : number
+	title : string
+	content : string               // 图文内容（markdown/html）
+	files : ChapterFile[]          // 附件列表
+	previous_chapter_id : number   // 上一章节 ID（0 表示无）
+	next_chapter_id : number       // 下一章节 ID（0 表示无）
+	study_status : string          // 学习状态：completed / studying / ''
+	duration : number              // 章节时长（秒）
+}
+
+/** Markdown 解析后的块类型 */
+export type MarkdownBlock = {
+	type : string      // heading / paragraph / code / list / quote / divider / image
+	level : number     // 标题层级 1-6（非标题为 0）
+	text : string      // 文本内容
+	items : string[]   // 列表项（仅 list 类型）
+}
+
 /** 课程详情 */
 export type CourseDetail = {
 	course_id : number
 	title : string
+	description : string
+	category : string
+	cover_url : string
+	duration : number
 	chapters : ChapterItem[]
 	progress_pct : number
 }
@@ -265,5 +297,68 @@ export type SubmitAnswerResult = {
 	correct : boolean
 	correct_answer : string
 	explanation : string
+}
+
+/** 题库课程分类 */
+export type QuestionCategory = {
+	code : string          // 分类编码，如 CATEGORY_01
+	name : string          // 分类名称
+	question_count : number // 题目数量
+}
+
+/** 知识点 */
+export type KnowledgePoint = {
+	id : number
+	name : string
+	parent_id : number
+	category : string
+	question_count : number
+}
+
+/** 练习统计 */
+export type PracticeStats = {
+	total_practiced : number   // 总练习题数
+	correct_count : number     // 答对题数
+	accuracy : number          // 正确率（0-100）
+	today_count : number       // 今日练习数
+	streak_days : number       // 连续练习天数
+}
+
+/** 练习历史记录项 */
+export type PracticeHistoryItem = {
+	record_id : number
+	question_id : number
+	question_title : string
+	type : string
+	user_answer : string
+	correct_answer : string
+	is_correct : boolean
+	practice_type : string
+	created_at : string
+}
+
+/** 练习历史结果 */
+export type PracticeHistoryResult = {
+	items : PracticeHistoryItem[]
+	total : number
+	page : number
+	page_size : number
+}
+
+/** 练习进度 */
+export type PracticeProgress = {
+	index : number             // 当前题序号
+	practice_mode : string     // 练习模式
+	total : number             // 总题量
+	answers_state : UTSJSONObject // 已答题状态
+}
+
+/** 答题状态（用于做题页面跟踪每题作答情况） */
+export type AnswerState = {
+	question_id : number
+	user_answer : string
+	is_correct : boolean
+	correct_answer : string
+	submitted : boolean
 }
 

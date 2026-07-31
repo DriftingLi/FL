@@ -1,0 +1,227 @@
+/**
+ * 轻量级 Markdown 解析器
+ * 将 markdown 文本解析为 MarkdownBlock[]，由原生组件渲染
+ * 支持：标题(1-6)、段落、代码块、无序/有序列表、引用、分隔线、图片、行内样式(粗体/斜体/代码)
+ *
+ * @note 不依赖 DOM API，跨端通用（App/小程序/H5）
+ */
+import type { MarkdownBlock } from '../types/index'
+
+/** 去除行首尾空白 */
+function trim(line : string) : string {
+	return line.replace(/^\s+|\s+$/g, '')
+}
+
+/**
+ * 去除行内 markdown 标记符号，保留纯文本
+ * 支持 **粗体** *斜体* `代码` [链接](url) ![图片](url)
+ */
+function stripInline(text : string) : string {
+	let s = text
+	// 图片 ![alt](url) → alt
+	s = s.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+	// 链接 [text](url) → text
+	s = s.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+	// 粗体 **text** 或 __text__ → text
+	s = s.replace(/\*\*([^\*]+)\*\*/g, '$1')
+	s = s.replace(/__([^_]+)__/g, '$1')
+	// 斜体 *text* 或 _text_ → text
+	s = s.replace(/\*([^\*]+)\*/g, '$1')
+	s = s.replace(/_([^_]+)_/g, '$1')
+	// 行内代码 `code` → code
+	s = s.replace(/`([^`]+)`/g, '$1')
+	return s
+}
+
+/**
+ * 解析 markdown 文本为块数组
+ * @param markdown 原始 markdown 文本
+ * @returns MarkdownBlock[] 渲染块列表
+ */
+export function parseMarkdown(markdown : string) : MarkdownBlock[] {
+	const blocks : MarkdownBlock[] = []
+	if (markdown.length == 0) return blocks
+
+	const lines = markdown.split('\n')
+	let i = 0
+	let inCodeBlock = false
+	let codeLines : string[] = []
+	let listItems : string[] = []
+	let listType = ''   // 'ul' 或 'ol'
+	let quoteLines : string[] = []
+
+	function flushList() {
+		if (listItems.length > 0) {
+			blocks.push({
+				type: 'list',
+				level: 0,
+				text: '',
+				items: listItems,
+			} as MarkdownBlock)
+			listItems = []
+			listType = ''
+		}
+	}
+
+	function flushQuote() {
+		if (quoteLines.length > 0) {
+			blocks.push({
+				type: 'quote',
+				level: 0,
+				text: quoteLines.join('\n'),
+				items: [] as string[],
+			} as MarkdownBlock)
+			quoteLines = []
+		}
+	}
+
+	while (i < lines.length) {
+		const rawLine = lines[i]
+		const line = trim(rawLine)
+
+		// 代码块开关
+		if (line.startsWith('```')) {
+			if (inCodeBlock) {
+				// 结束代码块
+				blocks.push({
+					type: 'code',
+					level: 0,
+					text: codeLines.join('\n'),
+					items: [] as string[],
+				} as MarkdownBlock)
+				codeLines = []
+				inCodeBlock = false
+			} else {
+				// 开始代码块
+				flushList()
+				flushQuote()
+				inCodeBlock = true
+			}
+			i++
+			continue
+		}
+
+		// 代码块内容
+		if (inCodeBlock) {
+			codeLines.push(rawLine)
+			i++
+			continue
+		}
+
+		// 空行：结束当前列表/引用
+		if (line.length == 0) {
+			flushList()
+			flushQuote()
+			i++
+			continue
+		}
+
+		// 分隔线
+		if (line == '---' || line == '***' || line == '___') {
+			flushList()
+			flushQuote()
+			blocks.push({
+				type: 'divider',
+				level: 0,
+				text: '',
+				items: [] as string[],
+			} as MarkdownBlock)
+			i++
+			continue
+		}
+
+		// 标题 # ~ ######
+		const headingMatch = line.match(/^(#{1,6})\s+(.*)$/)
+		if (headingMatch != null && headingMatch!.length >= 3) {
+			flushList()
+			flushQuote()
+			const levelStr = headingMatch![1] ?? ''
+			const textStr = headingMatch![2] ?? ''
+			const level = levelStr.length
+			const text = stripInline(textStr)
+			blocks.push({
+				type: 'heading',
+				level: level,
+				text: text,
+				items: [] as string[],
+			} as MarkdownBlock)
+			i++
+			continue
+		}
+
+		// 引用 >
+		if (line.startsWith('>')) {
+			flushList()
+			const content = trim(line.substring(1))
+			quoteLines.push(stripInline(content))
+			i++
+			continue
+		}
+
+		// 无序列表 - / * / +
+		const ulMatch = line.match(/^[-*+]\s+(.*)$/)
+		if (ulMatch != null && ulMatch!.length >= 2) {
+			flushQuote()
+			if (listType != 'ul') {
+				flushList()
+				listType = 'ul'
+			}
+			listItems.push(stripInline(ulMatch![1] ?? ''))
+			i++
+			continue
+		}
+
+		// 有序列表 1. 2.
+		const olMatch = line.match(/^\d+\.\s+(.*)$/)
+		if (olMatch != null && olMatch!.length >= 2) {
+			flushQuote()
+			if (listType != 'ol') {
+				flushList()
+				listType = 'ol'
+			}
+			listItems.push(stripInline(olMatch![1] ?? ''))
+			i++
+			continue
+		}
+
+		// 图片 ![alt](url)
+		const imgMatch = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
+		if (imgMatch != null && imgMatch!.length >= 3) {
+			flushList()
+			flushQuote()
+			blocks.push({
+				type: 'image',
+				level: 0,
+				text: imgMatch![2] ?? '',   // url
+				items: [imgMatch![1] ?? ''], // alt
+			} as MarkdownBlock)
+			i++
+			continue
+		}
+
+		// 普通段落
+		flushList()
+		flushQuote()
+		blocks.push({
+			type: 'paragraph',
+			level: 0,
+			text: stripInline(line),
+			items: [] as string[],
+		} as MarkdownBlock)
+		i++
+	}
+
+	// 收尾
+	if (inCodeBlock && codeLines.length > 0) {
+		blocks.push({
+			type: 'code',
+			level: 0,
+			text: codeLines.join('\n'),
+			items: [] as string[],
+		} as MarkdownBlock)
+	}
+	flushList()
+	flushQuote()
+
+	return blocks
+}

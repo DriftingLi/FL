@@ -67,21 +67,20 @@
     const total = ref<number>(0)
     const noMore = ref<boolean>(false)
 
+    // 分类与后端接口对齐：http://training.gccsmile.com:51820/api/courses?category=CATEGORY_01
     const categories : CategoryItem[] = [
         { name: '全部', value: '' },
-        { name: '基础操作', value: 'driving' },
-        { name: '维护保养', value: 'maintenance' },
-        { name: '安全规范', value: 'safety' },
-        { name: '故障排除', value: 'troubleshooting' },
+        { name: '基础理论', value: 'CATEGORY_01' },
+        { name: '安全规范', value: 'CATEGORY_02' },
+        { name: '实操技能', value: 'CATEGORY_03' },
+        { name: '进阶提升', value: 'CATEGORY_04' },
     ]
 
     function getCategoryIcon(category : string) : string {
-        if (category == 'driving') return '🚗'
-        if (category == 'maintenance') return '🔧'
-        if (category == 'safety') return '⚠️'
-        if (category == 'troubleshooting') return '🔩'
-        if (category == 'cargo') return '📐'
-        if (category == 'electric') return '⚡'
+        if (category == 'CATEGORY_01') return '📖'
+        if (category == 'CATEGORY_02') return '⚠️'
+        if (category == 'CATEGORY_03') return '🔧'
+        if (category == 'CATEGORY_04') return '🚀'
         return '📚'
     }
 
@@ -136,7 +135,9 @@
     }
 
     function onCourseClick(courseId : number) : void {
-        uni.showToast({ title: '课程详情开发中', icon: 'none' })
+        uni.navigateTo({
+            url: '/pages/courses/course-detail?id=' + courseId
+        })
     }
 
     onShow(() => {

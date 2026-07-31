@@ -32,7 +32,21 @@
 			"path": "pages/courses/courses",
 			"style": {
 				"navigationStyle": "custom",
-				"navigationBarTitleText": "课程"
+				"navigationBarTitleText": "课程中心"
+			}
+		},
+		{
+			"path": "pages/courses/course-detail",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "课程详情"
+			}
+		},
+		{
+			"path": "pages/courses/chapter-view",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "章节学习"
 			}
 		},
 		{
@@ -47,6 +61,27 @@
 			"style": {
 				"navigationStyle": "custom",
 				"navigationBarTitleText": "我的"
+			}
+		},
+		{
+			"path": "pages/profile/settings",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "设置"
+			}
+		},
+		{
+			"path": "pages/practice/practice",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "题库练习"
+			}
+		},
+		{
+			"path": "pages/practice/practice-do",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "答题"
 			}
 		}
 	],

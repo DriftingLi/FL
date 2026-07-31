@@ -13,7 +13,7 @@
  *   后端 is_correct → 前端 correct
  */
 import { get, post } from './request'
-import type { Question, SubmitAnswerResult, SubmitAnswerParams, QuestionOption } from '../types/index'
+import type { Question, SubmitAnswerResult, SubmitAnswerParams, QuestionOption, QuestionCategory, KnowledgePoint, PracticeStats, PracticeHistoryItem, PracticeHistoryResult, PracticeProgress } from '../types/index'
 
 /** 安全转换为 number */
 function toNumber(v : any | null, defaultVal : number = 0) : number {
@@ -145,9 +145,119 @@ function getMockQuestions(count : number) : Question[] {
 	return questions
 }
 
+/** 从 UTSJSONObject 构造 QuestionCategory */
+function buildCategory(obj : UTSJSONObject) : QuestionCategory {
+	const code = toStr(obj['code'], toStr(obj['value'], toStr(obj['category'])))
+	const cat : QuestionCategory = {
+		code: code,
+		name: toStr(obj['name'], toStr(obj['label'], code)),
+		question_count: toNumber(obj['question_count'], toNumber(obj['count'])),
+	} as QuestionCategory
+	return cat
+}
+
+/** 从 UTSJSONObject 构造 KnowledgePoint */
+function buildKnowledgePoint(obj : UTSJSONObject) : KnowledgePoint {
+	const kp : KnowledgePoint = {
+		id: toNumber(obj['id']),
+		name: toStr(obj['name'], toStr(obj['title'])),
+		parent_id: toNumber(obj['parent_id']),
+		category: toStr(obj['category']),
+		question_count: toNumber(obj['question_count'], toNumber(obj['count'])),
+	} as KnowledgePoint
+	return kp
+}
+
+/** 从 UTSJSONObject 构造 PracticeStats */
+function buildPracticeStats(obj : UTSJSONObject) : PracticeStats {
+	const stats : PracticeStats = {
+		total_practiced: toNumber(obj['total_practiced'], toNumber(obj['total'], toNumber(obj['total_count']))),
+		correct_count: toNumber(obj['correct_count'], toNumber(obj['correct'])),
+		accuracy: toNumber(obj['accuracy'], toNumber(obj['correct_rate'], toNumber(obj['accuracy_rate']))),
+		today_count: toNumber(obj['today_count'], toNumber(obj['today'])),
+		streak_days: toNumber(obj['streak_days'], toNumber(obj['streak'], toNumber(obj['consecutive_days']))),
+	} as PracticeStats
+	return stats
+}
+
+/** 从 UTSJSONObject 构造 PracticeHistoryItem */
+function buildHistoryItem(obj : UTSJSONObject) : PracticeHistoryItem {
+	const item : PracticeHistoryItem = {
+		record_id: toNumber(obj['record_id'], toNumber(obj['id'])),
+		question_id: toNumber(obj['question_id']),
+		question_title: toStr(obj['question_title'], toStr(obj['content'], toStr(obj['title']))),
+		type: toStr(obj['type']),
+		user_answer: toStr(obj['user_answer'], toStr(obj['answer'])),
+		correct_answer: toStr(obj['correct_answer'], toStr(obj['correct'])),
+		is_correct: toBool(obj['is_correct'], toBool(obj['correct'])),
+		practice_type: toStr(obj['practice_type'], toStr(obj['mode'])),
+		created_at: toStr(obj['created_at'], toStr(obj['practice_date'], toStr(obj['created_time']))),
+	} as PracticeHistoryItem
+	return item
+}
+
+/** 从 UTSJSONObject 构造 PracticeHistoryResult */
+function buildHistoryResult(data : UTSJSONObject) : PracticeHistoryResult {
+	const items : PracticeHistoryItem[] = []
+	const listRaw = data['items']
+	if (listRaw == null) {
+		// 后端可能用 records 或 history 字段
+		const alt = data['records']
+		if (alt != null) {
+			const arr = alt as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				items.push(buildHistoryItem(arr[i]))
+			}
+		}
+	} else {
+		const arr = listRaw as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			items.push(buildHistoryItem(arr[i]))
+		}
+	}
+	const result : PracticeHistoryResult = {
+		items: items,
+		total: toNumber(data['total']),
+		page: toNumber(data['page'], 1),
+		page_size: toNumber(data['page_size'], 20),
+	} as PracticeHistoryResult
+	return result
+}
+
+/** 从 UTSJSONObject 构造 PracticeProgress */
+function buildPracticeProgress(data : UTSJSONObject) : PracticeProgress {
+	const answersState = data['answers_state']
+	const progress : PracticeProgress = {
+		index: toNumber(data['index']),
+		practice_mode: toStr(data['practice_mode'], toStr(data['mode'], 'sequential')),
+		total: toNumber(data['total']),
+		answers_state: answersState != null ? (answersState as UTSJSONObject) : {} as UTSJSONObject,
+	} as PracticeProgress
+	return progress
+}
+
 /** 课程分类列表 */
-export function getCategoriesApi() : Promise<UTSJSONObject> {
-	return get('/question-bank/categories')
+export function getCategoriesApi() : Promise<QuestionCategory[]> {
+	return get('/question-bank/categories').then((data : UTSJSONObject) : QuestionCategory[] => {
+		const list : QuestionCategory[] = []
+		// 后端可能返回数组或 { categories: [...] } 对象
+		const catsRaw = data['categories']
+		if (catsRaw != null) {
+			const arr = catsRaw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				list.push(buildCategory(arr[i]))
+			}
+		} else {
+			const arr = data as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				list.push(buildCategory(arr[i]))
+			}
+		}
+		return list
+	}).catch((e) : QuestionCategory[] => {
+		console.warn('[getCategoriesApi] network failed:', e)
+		return [] as QuestionCategory[]
+	})
 }
 
 /**
@@ -155,7 +265,7 @@ export function getCategoriesApi() : Promise<UTSJSONObject> {
  * @param category 课程分类（可选）
  * @param parentId 父知识点 ID（可选）
  */
-export function getKnowledgePointsApi(category : string = '', parentId : number = 0) : Promise<UTSJSONObject> {
+export function getKnowledgePointsApi(category : string = '', parentId : number = 0) : Promise<KnowledgePoint[]> {
 	const params : UTSJSONObject = {}
 	if (category.length > 0) {
 		params['category'] = category
@@ -163,7 +273,25 @@ export function getKnowledgePointsApi(category : string = '', parentId : number 
 	if (parentId > 0) {
 		params['parent_id'] = parentId.toString()
 	}
-	return get('/question-bank/knowledge-points', params)
+	return get('/question-bank/knowledge-points', params).then((data : UTSJSONObject) : KnowledgePoint[] => {
+		const list : KnowledgePoint[] = []
+		const kpsRaw = data['knowledge_points']
+		if (kpsRaw != null) {
+			const arr = kpsRaw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				list.push(buildKnowledgePoint(arr[i]))
+			}
+		} else {
+			const arr = data as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				list.push(buildKnowledgePoint(arr[i]))
+			}
+		}
+		return list
+	}).catch((e) : KnowledgePoint[] => {
+		console.warn('[getKnowledgePointsApi] network failed:', e)
+		return [] as KnowledgePoint[]
+	})
 }
 
 /** 题库统计 */
@@ -227,8 +355,13 @@ export function getSequentialPracticeApi() : Promise<Question[]> {
 }
 
 /** 顺序练习进度 */
-export function getSequentialProgressApi() : Promise<UTSJSONObject> {
-	return get('/practice-mode/sequential-progress')
+export function getSequentialProgressApi() : Promise<PracticeProgress> {
+	return get('/practice-mode/sequential-progress').then((data : UTSJSONObject) : PracticeProgress => {
+		return buildPracticeProgress(data)
+	}).catch((e) : PracticeProgress => {
+		console.warn('[getSequentialProgressApi] network failed:', e)
+		return { index: 0, practice_mode: 'sequential', total: 0, answers_state: {} as UTSJSONObject } as PracticeProgress
+	})
 }
 
 /**
@@ -318,16 +451,26 @@ export function savePracticeProgressApi(index : number, practiceMode : string, t
  * 查询练习进度
  * @param mode 练习模式，默认 sequential
  */
-export function getPracticeProgressApi(mode : string = 'sequential') : Promise<UTSJSONObject> {
+export function getPracticeProgressApi(mode : string = 'sequential') : Promise<PracticeProgress> {
 	const params : UTSJSONObject = {
 		mode: mode,
 	}
-	return get('/practice-mode/progress', params)
+	return get('/practice-mode/progress', params).then((data : UTSJSONObject) : PracticeProgress => {
+		return buildPracticeProgress(data)
+	}).catch((e) : PracticeProgress => {
+		console.warn('[getPracticeProgressApi] network failed:', e)
+		return { index: 0, practice_mode: mode, total: 0, answers_state: {} as UTSJSONObject } as PracticeProgress
+	})
 }
 
 /** 练习统计 */
-export function getPracticeStatsApi() : Promise<UTSJSONObject> {
-	return get('/practice-mode/stats')
+export function getPracticeStatsApi() : Promise<PracticeStats> {
+	return get('/practice-mode/stats').then((data : UTSJSONObject) : PracticeStats => {
+		return buildPracticeStats(data)
+	}).catch((e) : PracticeStats => {
+		console.warn('[getPracticeStatsApi] network failed:', e)
+		return { total_practiced: 0, correct_count: 0, accuracy: 0, today_count: 0, streak_days: 0 } as PracticeStats
+	})
 }
 
 /**
@@ -335,8 +478,10 @@ export function getPracticeStatsApi() : Promise<UTSJSONObject> {
  * @param page 页码
  * @param pageSize 每页条数
  * @param type 题型过滤（可选）
+ * @param startDate 起始日期（可选，YYYY-MM-DD）
+ * @param endDate 截止日期（可选，YYYY-MM-DD）
  */
-export function getPracticeHistoryApi(page : number = 1, pageSize : number = 20, type : string = '') : Promise<UTSJSONObject> {
+export function getPracticeHistoryApi(page : number = 1, pageSize : number = 20, type : string = '', startDate : string = '', endDate : string = '') : Promise<PracticeHistoryResult> {
 	const params : UTSJSONObject = {
 		page: page.toString(),
 		page_size: pageSize.toString(),
@@ -344,7 +489,18 @@ export function getPracticeHistoryApi(page : number = 1, pageSize : number = 20,
 	if (type.length > 0) {
 		params['type'] = type
 	}
-	return get('/practice-mode/history', params)
+	if (startDate.length > 0) {
+		params['start_date'] = startDate
+	}
+	if (endDate.length > 0) {
+		params['end_date'] = endDate
+	}
+	return get('/practice-mode/history', params).then((data : UTSJSONObject) : PracticeHistoryResult => {
+		return buildHistoryResult(data)
+	}).catch((e) : PracticeHistoryResult => {
+		console.warn('[getPracticeHistoryApi] network failed:', e)
+		return { items: [] as PracticeHistoryItem[], total: 0, page: page, page_size: pageSize } as PracticeHistoryResult
+	})
 }
 
 /**

@@ -2,6 +2,7 @@
  * 认证相关 API
  */
 import { get, post } from './request'
+import type { RequestOptions } from './request'
 import type { LoginParams, LoginResult, RegisterParams, UserInfo } from '../types/index'
 
 /**
@@ -124,7 +125,8 @@ export function registerApi(params : RegisterParams) : Promise<UTSJSONObject> {
 
 /** 登出（token SHA256 写入 Redis 黑名单） */
 export function logoutApi() : Promise<UTSJSONObject> {
-	return post('/auth/logout', null)
+	// 静默请求：退出登录是用户主动行为，后端失败不应弹错误 toast 干扰
+	return post('/auth/logout', null, { url: '/auth/logout', silent: true } as RequestOptions)
 }
 
 /** 获取当前用户信息 */
