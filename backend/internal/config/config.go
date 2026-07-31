@@ -137,9 +137,9 @@ func Load() (*Config, error) {
 			R2Bucket:          getenv("R2_BUCKET", ""),
 			R2PublicDomain:    getenv("R2_PUBLIC_DOMAIN", ""),
 		},
-		AIAPIKey:              getenvChainDef("", "AI_API_KEY", "DEEPSEEK_API_KEY", "ZHIPU_API_KEY", "OPENAI_API_KEY"),
-		AIBaseURL:             getenvChainDef("https://api.deepseek.com", "AI_BASE_URL", "DEEPSEEK_API_URL", "ZHIPU_BASE_URL"),
-		AIModel:               getenvChainDef("deepseek-v4-flash", "AI_MODEL", "MODEL", "ZHIPU_MODEL"),
+		AIAPIKey:  getenvChainDef("", "AI_API_KEY", "DEEPSEEK_API_KEY", "ZHIPU_API_KEY", "OPENAI_API_KEY"),
+		AIBaseURL: getenvChainDef("https://api.deepseek.com", "AI_BASE_URL", "DEEPSEEK_API_URL", "ZHIPU_BASE_URL"),
+		AIModel:   getenvChainDef("deepseek-v4-flash", "AI_MODEL", "MODEL", "ZHIPU_MODEL"),
 		Valuation: ValuationConfig{
 			PDFOutputDir:      getenv("VALUATION_PDF_OUTPUT_DIR", "storage/reports"),
 			LogLevel:          getenv("VALUATION_LOG_LEVEL", "info"),

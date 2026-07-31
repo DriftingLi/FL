@@ -228,7 +228,7 @@ func (s *FileService) convertWithSidecar(pptContent []byte, chapterID int) ([]st
 	defer resp.Body.Close()
 
 	var result struct {
-		Success bool `json:"success"`
+		Success bool   `json:"success"`
 		Error   string `json:"error"`
 		Images  []struct {
 			Name string `json:"name"`

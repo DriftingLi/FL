@@ -300,5 +300,3 @@ func (h *BatteryHandler) buildSuggestionsFromRecord(eval *model.BatteryEvaluatio
 	}
 	return out
 }
-
-
