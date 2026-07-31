@@ -11,12 +11,13 @@ import (
 	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/internal/storage"
 	"forklift-training/pkg/response"
 )
 
 // RegisterFeaturedRoutes 注册内容精选路由（公开 + 管理端）。
-func RegisterFeaturedRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
-	fileSvc := service.NewFileService(cfg.UploadFolder, cfg.LibreOfficeSidecarURL)
+func RegisterFeaturedRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage) {
+	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st)
 	svc := service.NewFeaturedService(db, fileSvc)
 
 	// ===== 公开接口（无鉴权）=====

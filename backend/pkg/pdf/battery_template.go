@@ -4,6 +4,7 @@
 package pdf
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"time"
@@ -263,4 +264,32 @@ func (g *Generator) generateBatteryReportInternal(fullPath string, eval *model.B
 	g.renderBatteryConfidence(pdf, eval)
 	g.renderBatteryDisclaimer(pdf)
 	return pdf.OutputFileAndClose(fullPath)
+}
+
+// GenerateBatteryReportBytes 生成电池 RUL 评估报告 PDF，返回二进制内容。
+// 供 R2 存储模式使用：handler 拿到 bytes 后上传到对象存储。
+func GenerateBatteryReportBytes(eval *model.BatteryEvaluation) ([]byte, error) {
+	if eval == nil {
+		return nil, fmt.Errorf("评估记录不能为空")
+	}
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.SetMargins(pageMargin, pageMargin, pageMargin)
+	pdf.SetAutoPageBreak(true, pageMargin)
+	if err := ensureFontLoaded(pdf); err != nil {
+		return nil, err
+	}
+	g := &Generator{}
+	pdf.AddPage()
+	g.renderBatteryCover(pdf, eval)
+	pdf.AddPage()
+	g.renderBatteryInfo(pdf, eval)
+	g.renderBatteryConclusion(pdf, eval)
+	g.renderBatteryTopFeatures(pdf, eval)
+	g.renderBatteryConfidence(pdf, eval)
+	g.renderBatteryDisclaimer(pdf)
+	buf := &bytes.Buffer{}
+	if err := pdf.Output(buf); err != nil {
+		return nil, fmt.Errorf("生成 PDF 失败: %w", err)
+	}
+	return buf.Bytes(), nil
 }

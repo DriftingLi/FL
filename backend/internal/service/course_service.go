@@ -2,13 +2,11 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"regexp"
-	"sort"
-	"strconv"
+	"io"
+	"net/http"
 	"strings"
 
 	"gorm.io/gorm"
@@ -18,14 +16,13 @@ import (
 
 // CourseService 学员课程服务。
 type CourseService struct {
-	db           *gorm.DB
-	uploadFolder string
-	fileService  *FileService
+	db          *gorm.DB
+	fileService *FileService
 }
 
 // NewCourseService 创建课程服务实例。
-func NewCourseService(db *gorm.DB, uploadFolder string, fileService *FileService) *CourseService {
-	return &CourseService{db: db, uploadFolder: uploadFolder, fileService: fileService}
+func NewCourseService(db *gorm.DB, fileService *FileService) *CourseService {
+	return &CourseService{db: db, fileService: fileService}
 }
 
 // GetCourses 课程列表。
@@ -151,78 +148,92 @@ func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (ma
 }
 
 // GetChapterSlides 章节幻灯片。
+// 优先读取 DB 中持久化的 slide_urls；为空则从 PPT 文件下载并触发转图，
+// 转图成功后把 URL 列表回写 chapter.slide_urls。
 func (s *CourseService) GetChapterSlides(chapterID int) (map[string]any, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
 	}
-	hasPPT := chapter.ContentType == "ppt"
-	if !hasPPT {
-		var f model.ChapterFile
-		if err := s.db.Where("chapter_id = ? AND content_type = ?", chapterID, "ppt").First(&f).Error; err == nil {
-			hasPPT = true
+
+	// 1. 优先读 DB 持久化的 slide_urls
+	if chapter.SlideUrls != "" {
+		var urls []string
+		if err := json.Unmarshal([]byte(chapter.SlideUrls), &urls); err == nil && len(urls) > 0 {
+			return map[string]any{"chapter_id": chapterID, "slides": urls}, nil
 		}
 	}
-	if !hasPPT {
+
+	// 2. 查找 PPT 文件 URL
+	pptURL := resolveChapterPPTURL(s.db, &chapter, chapterID)
+	if pptURL == "" {
 		return map[string]any{"chapter_id": chapterID, "slides": []string{}}, nil
 	}
 
-	slidesDir := filepath.Join(s.uploadFolder, "slides", strconv.Itoa(chapterID))
-	existingImages := listSlideImages(slidesDir)
-	if len(existingImages) == 0 {
-		var pptFile model.ChapterFile
-		pptURL := ""
-		if err := s.db.Where("chapter_id = ? AND content_type = ?", chapterID, "ppt").First(&pptFile).Error; err == nil {
-			pptURL = pptFile.FileURL
-		}
-		if pptURL == "" {
-			pptURL = chapter.FileURL
-		}
-		if pptURL != "" {
-			pptPath := s.resolvePPTPath(pptURL)
-			if _, err := os.Stat(pptPath); err == nil {
-				if s.fileService != nil {
-					slideURLs := s.fileService.ConvertPPTToImages(pptPath, slidesDir)
-					return map[string]any{"chapter_id": chapterID, "slides": slideURLs}, nil
-				}
-			}
-		}
-	}
-	urls := make([]string, 0, len(existingImages))
-	for _, img := range existingImages {
-		urls = append(urls, fmt.Sprintf("/static/uploads/slides/%d/%s", chapterID, img))
-	}
-	return map[string]any{"chapter_id": chapterID, "slides": urls}, nil
+	// 3. 下载 PPT 并转图
+	slideURLs := s.generateSlides(chapterID, pptURL)
+	return map[string]any{"chapter_id": chapterID, "slides": slideURLs}, nil
 }
 
 // RegenerateChapterSlides 重新生成幻灯片。
+// 总是重新下载 PPT 并转图，覆盖 chapter.slide_urls。
 func (s *CourseService) RegenerateChapterSlides(chapterID int) (map[string]any, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
 	}
-	var pptFile model.ChapterFile
-	pptURL := ""
-	if err := s.db.Where("chapter_id = ? AND content_type = ?", chapterID, "ppt").First(&pptFile).Error; err == nil {
-		pptURL = pptFile.FileURL
-	}
-	if pptURL == "" {
-		pptURL = chapter.FileURL
-	}
+	pptURL := resolveChapterPPTURL(s.db, &chapter, chapterID)
 	if pptURL == "" {
 		return nil, errors.New("该章节没有PPT文件")
 	}
-	pptPath := s.resolvePPTPath(pptURL)
-	if _, err := os.Stat(pptPath); err != nil {
-		return nil, errors.New("PPT文件不存在，请重新上传")
+	slideURLs := s.generateSlides(chapterID, pptURL)
+	if len(slideURLs) == 0 {
+		return nil, errors.New("PPT转图失败，请检查文件是否损坏")
 	}
-	slidesDir := filepath.Join(s.uploadFolder, "slides", strconv.Itoa(chapterID))
-	_ = os.RemoveAll(slidesDir)
-	if s.fileService == nil {
-		return nil, errors.New("文件服务不可用")
-	}
-	slideURLs := s.fileService.ConvertPPTToImages(pptPath, slidesDir)
 	return map[string]any{"chapter_id": chapterID, "slides": slideURLs}, nil
+}
+
+// generateSlides 下载 PPT bytes 并调 FileService 转图，把 URL 列表持久化到 chapter.slide_urls。
+func (s *CourseService) generateSlides(chapterID int, pptURL string) []string {
+	if s.fileService == nil {
+		return nil
+	}
+	pptBytes, err := downloadFile(pptURL)
+	if err != nil {
+		fmt.Printf("[course_service] 下载 PPT 失败 url=%s: %v\n", pptURL, err)
+		return nil
+	}
+	slideURLs := s.fileService.ConvertPPTToImages(pptBytes, chapterID)
+	if len(slideURLs) > 0 {
+		slideURLsJSON, _ := json.Marshal(slideURLs)
+		s.db.Model(&model.Chapter{}).Where("chapter_id = ?", chapterID).Update("slide_urls", string(slideURLsJSON))
+	}
+	return slideURLs
+}
+
+// resolveChapterPPTURL 查找章节的 PPT 文件 URL（优先 chapter_file 表，其次 chapter.file_url）。
+func resolveChapterPPTURL(db *gorm.DB, chapter *model.Chapter, chapterID int) string {
+	var pptFile model.ChapterFile
+	if err := db.Where("chapter_id = ? AND content_type = ?", chapterID, "ppt").First(&pptFile).Error; err == nil {
+		return pptFile.FileURL
+	}
+	if chapter.ContentType == "ppt" && chapter.FileURL != "" {
+		return chapter.FileURL
+	}
+	return ""
+}
+
+// downloadFile 通过 HTTP GET 下载文件内容（R2 公开访问 URL 可直接下载）。
+func downloadFile(url string) ([]byte, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("HTTP GET 失败: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("下载失败,状态码: %d", resp.StatusCode)
+	}
+	return io.ReadAll(resp.Body)
 }
 
 // UpdateStudyProgress 更新学习进度。
@@ -291,45 +302,6 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, dura
 }
 
 // ===== 辅助 =====
-
-func (s *CourseService) resolvePPTPath(pptURL string) string {
-	relative := strings.TrimPrefix(pptURL, "/static/uploads/")
-	return filepath.Join(s.uploadFolder, relative)
-}
-
-func listSlideImages(dir string) []string {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil
-	}
-	var images []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".png") {
-			images = append(images, e.Name())
-		}
-	}
-	sort.Slice(images, func(i, j int) bool {
-		return naturalSortKey(images[i]) < naturalSortKey(images[j])
-	})
-	return images
-}
-
-var numberRe = regexp.MustCompile(`(\d+)`)
-
-func naturalSortKey(s string) string {
-	parts := numberRe.FindAllString(s, -1)
-	for i := range parts {
-		if _, err := strconv.Atoi(parts[i]); err == nil {
-			parts[i] = fmt.Sprintf("%08d", atoiSafe(parts[i]))
-		}
-	}
-	return strings.Join(parts, "")
-}
-
-func atoiSafe(s string) int {
-	n, _ := strconv.Atoi(s)
-	return n
-}
 
 // roundFloat2 保留 2 位小数。
 func roundFloat2(f float64) float64 {

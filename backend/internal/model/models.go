@@ -145,6 +145,9 @@ type Chapter struct {
 	ContentURL  string    `gorm:"column:content_url" json:"content_url"`
 	ContentType string    `gorm:"column:content_type;default:text" json:"content_type"`
 	FileURL     string    `gorm:"column:file_url" json:"file_url"`
+	// SlideUrls PPT 转图后的幻灯片 URL 列表（JSON 数组字符串）。
+	// 为空表示未生成；由 FileService.ConvertPPTToImages 生成后写入。
+	SlideUrls   string    `gorm:"column:slide_urls" json:"slide_urls"`
 	Description string    `gorm:"column:description" json:"description"`
 	Duration    int       `gorm:"column:duration;default:0" json:"duration"`
 	OrderNum    int       `gorm:"column:order_num;default:0" json:"order_num"`

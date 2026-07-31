@@ -8,9 +8,9 @@
 package pdf
 
 import (
+	"bytes"
 	"fmt"
 	"math"
-	"os"
 	"time"
 
 	"github.com/jung-kurt/gofpdf"
@@ -97,15 +97,15 @@ func NewGenerator(outputDir string) *Generator {
 	return &Generator{outputDir: outputDir}
 }
 
-// GenerateReport 生成 3 页简洁版评估报告 PDF。
+// GenerateReport 生成 3 页简洁版评估报告 PDF，返回 PDF 二进制内容。
 // 入参 r 含评估详情(含输入字段与计算结果);dimensionScores 为 5 维评分;suggestions 为处置建议文本列表。
-func (g *Generator) GenerateReport(r *model.EvaluationDetail, dimensionScores map[string]float64, suggestions []string) (string, error) {
+func (g *Generator) GenerateReport(r *model.EvaluationDetail, dimensionScores map[string]float64, suggestions []string) ([]byte, error) {
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(pageMargin, pageMargin, pageMargin)
 	// 关闭自动分页,由 3 个 render 方法自行控制 AddPage
 	pdf.SetAutoPageBreak(false, pageMargin)
 	if err := ensureFontLoaded(pdf); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// 第 1 页:封面
@@ -120,18 +120,11 @@ func (g *Generator) GenerateReport(r *model.EvaluationDetail, dimensionScores ma
 	pdf.AddPage()
 	g.renderCoefficientsAndConclusion(pdf, r, suggestions)
 
-	filename := fmt.Sprintf("evaluation_report_%d_%s.pdf",
-		r.ID, time.Now().Format("20060102150405"))
-	outputPath := joinPath(g.outputDir, filename)
-	if g.outputDir != "" {
-		if err := os.MkdirAll(g.outputDir, 0o755); err != nil {
-			return "", fmt.Errorf("创建 PDF 输出目录失败: %w", err)
-		}
+	buf := &bytes.Buffer{}
+	if err := pdf.Output(buf); err != nil {
+		return nil, fmt.Errorf("生成 PDF 失败: %w", err)
 	}
-	if err := pdf.OutputFileAndClose(outputPath); err != nil {
-		return "", fmt.Errorf("保存 PDF 失败: %w", err)
-	}
-	return outputPath, nil
+	return buf.Bytes(), nil
 }
 
 // joinPath 拼接输出路径

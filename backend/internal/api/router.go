@@ -15,11 +15,12 @@ import (
 	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/internal/storage"
 	"forklift-training/pkg/response"
 )
 
 // NewRouter 创建并配置 Gin 引擎，注册全部路由与中间件。
-func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
+func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine {
 	if cfg.IsProd() {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -79,18 +80,18 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	//   practice-mode（题库练习模式：自由刷题/知识点专项，对应 question_practice_record）
 	// AI 配置服务在 NewRouter 创建一次，被 admin 和 AI 助手模块复用
 	aiConfigSvc := service.NewAIConfigService(db)
-	RegisterCoursesRoutes(api, cfg, db)
+	RegisterCoursesRoutes(api, cfg, db, st)
 	RegisterExamRoutes(api, cfg, db)
 	RegisterStudentRoutes(api, cfg, db)
-	RegisterQuestionBankRoutes(api, cfg, db)
+	RegisterQuestionBankRoutes(api, cfg, db, st)
 	RegisterPracticeModeRoutes(api, cfg, db)
 	RegisterLevelExamRoutes(api, cfg, db)
 	RegisterGradingRoutes(api, cfg, db)
 	RegisterAdminRoutes(api, cfg, db, aiConfigSvc)
-	RegisterTutorRoutes(api, cfg, db)
+	RegisterTutorRoutes(api, cfg, db, st)
 	RegisterWrongQuestionRoutes(api, cfg, db)
 	RegisterMockExamRoutes(api, cfg, db)
-	RegisterFeaturedRoutes(api, cfg, db)
+	RegisterFeaturedRoutes(api, cfg, db, st)
 	RegisterAIAssistantRoutes(api, cfg, db, aiConfigSvc)
 
 	_ = response.Success // 确保包引用

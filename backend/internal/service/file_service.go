@@ -1,12 +1,20 @@
 // Package service 文件上传与 PPT 转换。
+//
+// 重构说明：存储行为抽象为 storage.Storage 接口，FileService 持有该接口，
+// 实际存储后端由配置决定（local 本地磁盘 / r2 Cloudflare R2 对象存储）。
+// SaveFile 返回完整可访问 URL（local 模式 /static/uploads/...，r2 模式 https://...）。
+// ConvertPPTToImages 改为接收 PPT 二进制内容，通过 sidecar multipart 接口完成转换后，
+// 将 PNG 上传到存储后端并返回 URL 列表。
 package service
 
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"os/exec"
@@ -14,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"forklift-training/internal/storage"
 )
 
 // 文件扩展名白名单（文档仅允许 PDF，浏览器原生预览；其他 Office 格式无法内嵌渲染故移除）。
@@ -33,16 +43,16 @@ var maxFileSizes = map[string]int64{
 
 // FileService 文件服务。
 type FileService struct {
-	uploadFolder          string
+	storage               storage.Storage
 	libreofficeSidecarURL string // LibreOffice sidecar HTTP 地址(如 http://libreoffice:8000);为空则降级到本地 exec
 	httpClient            *http.Client
 }
 
 // NewFileService 创建文件服务实例。
 // libreofficeSidecarURL 为空时降级到本地 LibreOffice exec 调用(向后兼容)。
-func NewFileService(uploadFolder, libreofficeSidecarURL string) *FileService {
+func NewFileService(libreofficeSidecarURL string, st storage.Storage) *FileService {
 	return &FileService{
-		uploadFolder:          uploadFolder,
+		storage:               st,
 		libreofficeSidecarURL: libreofficeSidecarURL,
 		httpClient: &http.Client{
 			Timeout: 180 * time.Second, // PPT 转换可能较慢
@@ -92,231 +102,254 @@ func (s *FileService) ValidateImageFile(filename string, size int64) (bool, stri
 	return true, ""
 }
 
-// SaveFile 保存文件，返回 file_url 与 file_path。
-func (s *FileService) SaveFile(content []byte, filename, subfolder string) (string, string) {
-	saveDir := filepath.Join(s.uploadFolder, subfolder)
-	_ = os.MkdirAll(saveDir, 0755)
-
+// SaveFile 保存文件到存储后端，返回可访问 URL。
+// key 设计为 <subfolder>/<name>_<毫秒时间戳>.<ext>，保证唯一性。
+func (s *FileService) SaveFile(content []byte, filename, subfolder string) (string, error) {
 	ext := filepath.Ext(filename)
 	name := strings.TrimSuffix(filename, ext)
 	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	uniqueFilename := fmt.Sprintf("%s_%s%s", name, timestamp, ext)
+	key := fmt.Sprintf("%s/%s", subfolder, uniqueFilename)
 
-	filePath := filepath.Join(saveDir, uniqueFilename)
-	_ = os.WriteFile(filePath, content, 0644)
-
-	fileURL := fmt.Sprintf("/static/uploads/%s/%s", subfolder, uniqueFilename)
-	return fileURL, filePath
+	contentType := mimeTypeFromExt(fileExtension(filename))
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	return s.storage.Save(ctx, key, content, contentType)
 }
 
-// DeleteFile 删除文件。
-func (s *FileService) DeleteFile(fileURL string) {
+// DeleteFile 删除文件。URL 为空时直接返回。
+func (s *FileService) DeleteFile(fileURL string) error {
 	if fileURL == "" {
-		return
-	}
-	relative := strings.TrimPrefix(fileURL, "/static/uploads/")
-	filePath := filepath.Join(s.uploadFolder, relative)
-	if _, err := os.Stat(filePath); err == nil {
-		_ = os.Remove(filePath)
-	}
-}
-
-// ConvertPPTToImages 将 PPT 转为图片。
-// 转换流程：PPT → PDF（LibreOffice headless）→ PNG 图片。
-// 优先调用 LibreOffice sidecar HTTP 服务；若未配置则降级到本地 exec。
-// 失败时返回占位图片 URL 列表。
-func (s *FileService) ConvertPPTToImages(pptPath, outputDir string) []string {
-	if _, err := os.Stat(pptPath); err != nil {
 		return nil
 	}
-	_ = os.MkdirAll(outputDir, 0755)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return s.storage.Delete(ctx, fileURL)
+}
 
-	// 已有图片直接返回
-	existing := listSlideImages(outputDir)
-	if len(existing) > 0 {
-		urls := make([]string, 0, len(existing))
-		baseName := filepath.Base(outputDir)
-		for _, img := range existing {
-			urls = append(urls, fmt.Sprintf("/static/uploads/slides/%s/%s", baseName, img))
-		}
-		return urls
+// ConvertPPTToImages 将 PPT 二进制内容转为图片并上传到存储后端。
+// 返回幻灯片图片 URL 列表（按 slide_001.png、slide_002.png... 顺序）。
+//
+// 转换流程：PPT bytes → sidecar(multipart) → PNG bytes(base64) → storage.Save。
+// 若 sidecar 未配置则降级到本地 LibreOffice exec（写临时文件转换后上传）。
+// 失败时返回占位图片 URL 列表（单张 1x1 像素 PNG）以避免阻塞业务流程。
+func (s *FileService) ConvertPPTToImages(pptContent []byte, chapterID int) []string {
+	if len(pptContent) == 0 {
+		return nil
 	}
 
-	// 优先:LibreOffice sidecar HTTP 调用
-	if s.libreofficeSidecarURL != "" {
-		if s.convertWithSidecar(pptPath, outputDir) {
-			images := listSlideImages(outputDir)
-			if len(images) > 0 {
-				urls := make([]string, 0, len(images))
-				baseName := filepath.Base(outputDir)
-				for _, img := range images {
-					urls = append(urls, fmt.Sprintf("/static/uploads/slides/%s/%s", baseName, img))
-				}
-				return urls
-			}
+	var (
+		images []struct {
+			Name string `json:"name"`
+			Data string `json:"data"` // base64 编码
 		}
+		success bool
+	)
+
+	// 优先:LibreOffice sidecar HTTP 调用(multipart 上传 PPT bytes)
+	if s.libreofficeSidecarURL != "" {
+		images, success = s.convertWithSidecar(pptContent, chapterID)
 	} else {
 		// 降级:本地 LibreOffice exec
-		if s.convertWithLibreOffice(pptPath, outputDir) {
-			images := listSlideImages(outputDir)
-			if len(images) > 0 {
-				urls := make([]string, 0, len(images))
-				baseName := filepath.Base(outputDir)
-				for _, img := range images {
-					urls = append(urls, fmt.Sprintf("/static/uploads/slides/%s/%s", baseName, img))
-				}
-				return urls
-			}
-		}
+		images, success = s.convertWithLibreOffice(pptContent, chapterID)
 	}
 
-	// 占位图片
-	s.createPlaceholderImages(outputDir)
-	images := listSlideImages(outputDir)
+	if !success || len(images) == 0 {
+		// 占位图片:生成单张 1x1 像素 PNG 上传到存储后端
+		placeholderURL := s.uploadPlaceholder(chapterID)
+		if placeholderURL != "" {
+			return []string{placeholderURL}
+		}
+		return nil
+	}
+
+	// 逐张上传 PNG 到存储后端
 	urls := make([]string, 0, len(images))
-	baseName := filepath.Base(outputDir)
 	for _, img := range images {
-		urls = append(urls, fmt.Sprintf("/static/uploads/slides/%s/%s", baseName, img))
+		pngData, err := base64Decode(img.Data)
+		if err != nil {
+			log.Printf("[file_service] base64 解码失败 name=%s: %v", img.Name, err)
+			continue
+		}
+		key := fmt.Sprintf("slides/%d/%s", chapterID, img.Name)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		url, err := s.storage.Save(ctx, key, pngData, "image/png")
+		cancel()
+		if err != nil {
+			log.Printf("[file_service] 上传 slide 失败 key=%s: %v", key, err)
+			continue
+		}
+		urls = append(urls, url)
+	}
+
+	if len(urls) == 0 {
+		placeholderURL := s.uploadPlaceholder(chapterID)
+		if placeholderURL != "" {
+			return []string{placeholderURL}
+		}
 	}
 	return urls
 }
 
 // convertWithSidecar 调用 LibreOffice sidecar HTTP 服务进行 PPT → 图片转换。
-// backend 和 sidecar 共享 /data/uploads volume,因此路径必须用 sidecar 容器内路径。
-// sidecarSidecarPathPrefix 为空时使用 uploadFolder 原值。
-func (s *FileService) convertWithSidecar(pptPath, outputDir string) bool {
-	sidecarInputPath := s.toSidecarPath(pptPath)
-	sidecarOutputDir := s.toSidecarPath(outputDir)
-
-	reqBody := struct {
-		InputPath string `json:"input_path"`
-		OutputDir string `json:"output_dir"`
-	}{
-		InputPath: sidecarInputPath,
-		OutputDir: sidecarOutputDir,
+// 通过 multipart 上传 PPT bytes，接收 JSON+base64 响应。
+func (s *FileService) convertWithSidecar(pptContent []byte, chapterID int) ([]struct {
+	Name string `json:"name"`
+	Data string `json:"data"`
+}, bool) {
+	// 构造 multipart body
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	_ = writer.WriteField("chapter_id", strconv.Itoa(chapterID))
+	part, err := writer.CreateFormFile("file", fmt.Sprintf("chapter_%d.pptx", chapterID))
+	if err != nil {
+		log.Printf("[file_service] 构造 multipart 失败: %v", err)
+		return nil, false
 	}
-	bodyBytes, _ := json.Marshal(reqBody)
+	if _, err := part.Write(pptContent); err != nil {
+		log.Printf("[file_service] 写入 multipart 失败: %v", err)
+		return nil, false
+	}
+	_ = writer.Close()
 
 	url := strings.TrimSuffix(s.libreofficeSidecarURL, "/") + "/convert"
-	req, err := http.NewRequestWithContext(context.Background(), "POST", url, bytes.NewReader(bodyBytes))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", url, body)
 	if err != nil {
 		log.Printf("[file_service] 构造 sidecar 请求失败: %v", err)
-		return false
+		return nil, false
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		log.Printf("[file_service] 调用 LibreOffice sidecar 失败: %v", err)
-		return false
+		return nil, false
 	}
 	defer resp.Body.Close()
 
 	var result struct {
-		Success bool     `json:"success"`
-		Error   string   `json:"error"`
-		Images  []string `json:"images"`
+		Success bool `json:"success"`
+		Error   string `json:"error"`
+		Images  []struct {
+			Name string `json:"name"`
+			Data string `json:"data"`
+		} `json:"images"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		log.Printf("[file_service] 解析 sidecar 响应失败: %v", err)
-		return false
+		return nil, false
 	}
 	if !result.Success {
 		log.Printf("[file_service] sidecar 转换失败: %s", result.Error)
-		return false
+		return nil, false
 	}
-	return len(result.Images) > 0
+	return result.Images, true
 }
 
-// toSidecarPath 把 backend 容器内的路径转换为 sidecar 容器内的路径。
-// backend 容器: UPLOAD_FOLDER=/data/uploads (或本地 static/uploads)
-// sidecar 容器: 挂载相同的 /data/uploads volume
-// 约定:两边 volume 挂载点相同,因此路径直接透传;若不同则需通过环境变量 LIBREOFFICE_SIDECAR_DATA_PREFIX 配置前缀映射。
-func (s *FileService) toSidecarPath(path string) string {
-	// 当前实现:backend 与 sidecar 共享 /data/uploads,路径一致,直接返回。
-	// 若未来挂载点不同,可在此处做前缀替换。
-	return path
-}
-
-// convertWithLibreOffice 调用 LibreOffice headless 将 PPT 转 PDF，再转图片。
+// convertWithLibreOffice 调用本地 LibreOffice headless 将 PPT 转 PDF，再转图片。
 // 降级路径:仅当 libreofficeSidecarURL 为空时使用。
-func (s *FileService) convertWithLibreOffice(pptPath, outputDir string) bool {
+// 接收 PPT bytes，写临时文件转换后读取 PNG bytes 返回。
+func (s *FileService) convertWithLibreOffice(pptContent []byte, chapterID int) ([]struct {
+	Name string `json:"name"`
+	Data string `json:"data"`
+}, bool) {
 	soffice := findLibreOffice()
 	if soffice == "" {
 		log.Printf("[file_service] LibreOffice 未安装，跳过 PPT 转换")
-		return false
+		return nil, false
 	}
 
-	cmd := exec.Command(soffice, "--headless", "--convert-to", "pdf", "--outdir", outputDir, pptPath)
+	tmpDir, err := os.MkdirTemp("", fmt.Sprintf("ppt_%d_*", chapterID))
+	if err != nil {
+		log.Printf("[file_service] 创建临时目录失败: %v", err)
+		return nil, false
+	}
+	defer os.RemoveAll(tmpDir)
+
+	pptPath := filepath.Join(tmpDir, "input.pptx")
+	if err := os.WriteFile(pptPath, pptContent, 0o644); err != nil {
+		log.Printf("[file_service] 写入临时 PPT 失败: %v", err)
+		return nil, false
+	}
+
+	// PPT → PDF
+	cmd := exec.Command(soffice, "--headless", "--convert-to", "pdf", "--outdir", tmpDir, pptPath)
 	if err := cmd.Run(); err != nil {
 		log.Printf("[file_service] LibreOffice 转换失败: %v", err)
-		return false
+		return nil, false
 	}
 
-	baseName := strings.TrimSuffix(filepath.Base(pptPath), filepath.Ext(pptPath))
-	pdfPath := filepath.Join(outputDir, baseName+".pdf")
+	// 查找生成的 PDF
+	pdfPath := filepath.Join(tmpDir, "input.pdf")
 	if _, err := os.Stat(pdfPath); err != nil {
-		// 查找任何 PDF 文件
-		entries, _ := os.ReadDir(outputDir)
+		entries, _ := os.ReadDir(tmpDir)
 		for _, e := range entries {
 			if strings.HasSuffix(strings.ToLower(e.Name()), ".pdf") {
-				pdfPath = filepath.Join(outputDir, e.Name())
+				pdfPath = filepath.Join(tmpDir, e.Name())
 				break
 			}
 		}
 	}
-
-	success := s.convertPDFToImages(pdfPath, outputDir)
-	if success {
-		_ = os.Remove(pdfPath)
-	}
-	return success
-}
-
-// convertPDFToImages 将 PDF 转为 PNG 图片。
-// 使用 pdfcpu 或 pdftoppm（poppler-utils），若无则返回 false。
-func (s *FileService) convertPDFToImages(pdfPath, outputDir string) bool {
-	// 尝试 pdftoppm（poppler-utils）
-	if pdftoppm := findExecutable("pdftoppm"); pdftoppm != "" {
-		// pdftoppm -png -r 150 input.pdf slide
-		prefix := filepath.Join(outputDir, "slide")
-		cmd := exec.Command(pdftoppm, "-png", "-r", "150", pdfPath, prefix)
-		if err := cmd.Run(); err != nil {
-			log.Printf("[file_service] pdftoppm 转换失败: %v", err)
-		} else {
-			s.renamePDFImages(outputDir)
-			return true
-		}
+	if _, err := os.Stat(pdfPath); err != nil {
+		log.Printf("[file_service] 未找到转换后的 PDF")
+		return nil, false
 	}
 
-	log.Printf("[file_service] 无可用的 PDF 转图片工具（pdftoppm）")
-	return false
-}
+	// PDF → PNG (pdftoppm)
+	pdftoppm := findExecutable("pdftoppm")
+	if pdftoppm == "" {
+		log.Printf("[file_service] 无 pdftoppm 工具")
+		return nil, false
+	}
+	prefix := filepath.Join(tmpDir, "slide")
+	cmd2 := exec.Command(pdftoppm, "-png", "-r", "150", pdfPath, prefix)
+	if err := cmd2.Run(); err != nil {
+		log.Printf("[file_service] pdftoppm 转换失败: %v", err)
+		return nil, false
+	}
 
-// renamePDFImages 将 pdftoppm 输出（slide-1.png）重命名为 slide_001.png。
-func (s *FileService) renamePDFImages(outputDir string) {
-	entries, _ := os.ReadDir(outputDir)
+	// 读取 PNG 文件，重命名为 slide_001.png 并 base64 编码
+	entries, _ := os.ReadDir(tmpDir)
+	var images []struct {
+		Name string `json:"name"`
+		Data string `json:"data"`
+	}
 	for _, e := range entries {
 		name := e.Name()
 		if !strings.HasSuffix(strings.ToLower(name), ".png") {
 			continue
 		}
 		// slide-1.png → slide_001.png
+		finalName := name
 		parts := strings.Split(name, "-")
 		if len(parts) == 2 {
 			num := strings.TrimSuffix(parts[1], ".png")
-			n, err := strconv.Atoi(num)
-			if err == nil {
-				newName := fmt.Sprintf("slide_%03d.png", n)
-				_ = os.Rename(filepath.Join(outputDir, name), filepath.Join(outputDir, newName))
+			if n, err := strconv.Atoi(num); err == nil {
+				finalName = fmt.Sprintf("slide_%03d.png", n)
 			}
 		}
+		imgPath := filepath.Join(tmpDir, name)
+		data, err := os.ReadFile(imgPath)
+		if err != nil {
+			continue
+		}
+		images = append(images, struct {
+			Name string `json:"name"`
+			Data string `json:"data"`
+		}{
+			Name: finalName,
+			Data: base64Encode(data),
+		})
 	}
+
+	if len(images) == 0 {
+		return nil, false
+	}
+	return images, true
 }
 
-// createPlaceholderImages 创建占位图片。
-func (s *FileService) createPlaceholderImages(outputDir string) {
-	// 简单占位：创建一个 1x1 像素 PNG
+// uploadPlaceholder 上传一张 1x1 像素 PNG 占位图到存储后端，返回其 URL。
+func (s *FileService) uploadPlaceholder(chapterID int) string {
 	placeholderPNG := []byte{
 		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
 		0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
@@ -328,11 +361,48 @@ func (s *FileService) createPlaceholderImages(outputDir string) {
 		0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
 		0x42, 0x60, 0x82,
 	}
-	slidePath := filepath.Join(outputDir, "slide_001.png")
-	_ = os.WriteFile(slidePath, placeholderPNG, 0644)
+	key := fmt.Sprintf("slides/%d/slide_001.png", chapterID)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	url, err := s.storage.Save(ctx, key, placeholderPNG, "image/png")
+	if err != nil {
+		log.Printf("[file_service] 上传占位图失败: %v", err)
+		return ""
+	}
+	return url
 }
 
 // ===== 辅助函数 =====
+
+// mimeTypeFromExt 根据文件扩展名返回 MIME 类型。
+func mimeTypeFromExt(ext string) string {
+	switch ext {
+	case "pdf":
+		return "application/pdf"
+	case "ppt":
+		return "application/vnd.ms-powerpoint"
+	case "pptx":
+		return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+	case "mp4":
+		return "video/mp4"
+	case "webm":
+		return "video/webm"
+	case "png":
+		return "image/png"
+	case "jpg", "jpeg":
+		return "image/jpeg"
+	case "gif":
+		return "image/gif"
+	case "webp":
+		return "image/webp"
+	case "bmp":
+		return "image/bmp"
+	case "svg":
+		return "image/svg+xml"
+	default:
+		return "application/octet-stream"
+	}
+}
 
 func fileExtension(filename string) string {
 	idx := strings.LastIndex(filename, ".")
@@ -372,4 +442,13 @@ func findExecutable(name string) string {
 		return ""
 	}
 	return path
+}
+
+// base64Encode / base64Decode 包装 encoding/base64，集中管理编解码逻辑。
+func base64Encode(data []byte) string {
+	return base64.StdEncoding.EncodeToString(data)
+}
+
+func base64Decode(s string) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(s)
 }

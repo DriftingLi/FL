@@ -26,6 +26,7 @@ import (
 	"forklift-training/internal/db"
 	migratedb "forklift-training/internal/migrate"
 	"forklift-training/internal/service"
+	"forklift-training/internal/storage"
 	vconfig "forklift-training/internal/valuation/config"
 	vhandler "forklift-training/internal/valuation/handler"
 	vrepo "forklift-training/internal/valuation/repository"
@@ -80,11 +81,19 @@ func main() {
 	// 5. 确保上传/PDF 目录存在
 	ensureUploadDirs(cfg)
 
+	// 5.5 创建文件存储实例（local 本地磁盘 / r2 Cloudflare R2 对象存储）
+	st, err := createStorage(cfg)
+	if err != nil {
+		slog.Error("创建文件存储实例失败", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("文件存储就绪", "driver", cfg.Storage.Driver)
+
 	// 6. 创建路由（维修培训业务 + 静态资源 + 健康检查）
-	router := api.NewRouter(cfg, gormDB)
+	router := api.NewRouter(cfg, gormDB, st)
 
 	// 7. 装配残值评估子模块（注册 /api/valuation/* 路由）
-	cleanup := setupValuation(router, cfg, gormDB, authSvc)
+	cleanup := setupValuation(router, cfg, gormDB, authSvc, st)
 	defer cleanup()
 
 	// 8. 启动 HTTP 服务
@@ -125,7 +134,7 @@ func main() {
 // 返回 cleanup 函数用于释放 pgx 连接池和 zap 日志缓冲。
 //
 //nolint:gocritic
-func setupValuation(r *gin.Engine, cfg *config.Config, gormDB *gorm.DB, authSvc *service.AuthService) func() {
+func setupValuation(r *gin.Engine, cfg *config.Config, gormDB *gorm.DB, authSvc *service.AuthService, st storage.Storage) func() {
 	// 1. 初始化 zap 日志器
 	vLogger, err := vconfig.NewLogger(vconfig.LogConfig{
 		Level:  cfg.Valuation.LogLevel,
@@ -164,7 +173,7 @@ func setupValuation(r *gin.Engine, cfg *config.Config, gormDB *gorm.DB, authSvc 
 	// 内部代理到主体系 AuthService,使用统一 JWT_SECRET_KEY 与 hrwai_users 表
 	valuationAuthSvc := vservice.WrapValuationAuthService(authSvc)
 
-	// 6. 装配 PDF 生成器
+	// 6. 装配 PDF 生成器（outputDir 仅用于本地缓存/兼容旧路径，R2 模式下不写入）
 	pdfDir := cfg.Valuation.PDFOutputDir
 	if pdfDir == "" {
 		pdfDir = "storage/reports"
@@ -175,7 +184,8 @@ func setupValuation(r *gin.Engine, cfg *config.Config, gormDB *gorm.DB, authSvc 
 	pdfGen := pdf.NewGenerator(pdfDir)
 
 	// 7. 注册路由（/api/valuation/*，公开组 + 估值独立鉴权组 + admin 组）
-	vhandler.RegisterRoutes(r, cfg, vLogger, pool, dictRepo, evalRepo, valuationSvc, batterySvc, pdfGen, pdfDir, valuationAuthSvc)
+	// PDF 报告通过 storage 抽象层上传（local=本地磁盘 / r2=Cloudflare R2 对象存储）
+	vhandler.RegisterRoutes(r, cfg, vLogger, pool, dictRepo, evalRepo, valuationSvc, batterySvc, pdfGen, st, valuationAuthSvc)
 	slog.Info("valuation 路由注册完成", "prefix", "/api/valuation")
 
 	return func() {
@@ -200,4 +210,22 @@ func ensureUploadDirs(cfg *config.Config) {
 			slog.Warn("创建目录失败", "dir", d, "error", err)
 		}
 	}
+}
+
+// createStorage 根据配置创建文件存储实例。
+// driver=local 时使用本地磁盘，driver=r2 时使用 Cloudflare R2 对象存储。
+func createStorage(cfg *config.Config) (storage.Storage, error) {
+	if cfg.Storage.Driver == "r2" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return storage.NewR2Storage(ctx,
+			cfg.Storage.R2AccountID,
+			cfg.Storage.R2AccessKeyID,
+			cfg.Storage.R2SecretAccessKey,
+			cfg.Storage.R2Bucket,
+			cfg.Storage.R2PublicDomain,
+		)
+	}
+	// 默认本地磁盘
+	return storage.NewLocalStorage(cfg.UploadFolder), nil
 }

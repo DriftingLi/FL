@@ -229,6 +229,13 @@ jobs:
       REDIS_DB: ${{ secrets.REDIS_DB || '0' }}
       REDIS_POOL_SIZE: ${{ secrets.REDIS_POOL_SIZE || '10' }}
       REDIS_KEY_PREFIX: ${{ secrets.REDIS_KEY_PREFIX || 'fl:' }}
+      # Cloudflare R2 对象存储（留空则回退到本地磁盘 STORAGE_DRIVER=local）
+      STORAGE_DRIVER: ${{ secrets.STORAGE_DRIVER || 'local' }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_PUBLIC_DOMAIN: ${{ secrets.R2_PUBLIC_DOMAIN }}
       # backend 宿主机映射端口（staging 默认 8080；testing 用 18080 避免与 cadvisor 冲突）
       BACKEND_HOST_PORT: ${{ secrets.BACKEND_HOST_PORT || '8080' }}
       # 异地备份（staging: pve-02 → pve-01；testing: 留空跳过）
@@ -366,6 +373,12 @@ jobs:
             printf 'export REDIS_DB=%q\n' "${REDIS_DB:-0}"
             printf 'export REDIS_POOL_SIZE=%q\n' "${REDIS_POOL_SIZE:-10}"
             printf 'export REDIS_KEY_PREFIX=%q\n' "${REDIS_KEY_PREFIX:-fl:}"
+            printf 'export STORAGE_DRIVER=%q\n' "${STORAGE_DRIVER:-local}"
+            printf 'export R2_ACCOUNT_ID=%q\n' "${R2_ACCOUNT_ID:-}"
+            printf 'export R2_ACCESS_KEY_ID=%q\n' "${R2_ACCESS_KEY_ID:-}"
+            printf 'export R2_SECRET_ACCESS_KEY=%q\n' "${R2_SECRET_ACCESS_KEY:-}"
+            printf 'export R2_BUCKET=%q\n' "${R2_BUCKET:-}"
+            printf 'export R2_PUBLIC_DOMAIN=%q\n' "${R2_PUBLIC_DOMAIN:-}"
             printf 'export BACKUP_REMOTE_HOST=%q\n' "${BACKUP_REMOTE_HOST:-}"
             printf 'export BACKUP_REMOTE_DIR=%q\n' "${BACKUP_REMOTE_DIR:-}"
             printf 'export BACKUP_REMOTE_KEY=%q\n' "${BACKUP_REMOTE_KEY:-}"

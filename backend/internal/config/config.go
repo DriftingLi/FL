@@ -28,6 +28,8 @@ type Config struct {
 	// LibreOfficeSidecarURL LibreOffice sidecar HTTP 地址(如 http://libreoffice:8000)。
 	// 为空时降级到本地 exec 调用(向后兼容)。
 	LibreOfficeSidecarURL string
+	// Storage 文件存储配置（local 本地磁盘 / r2 Cloudflare R2 对象存储）。
+	Storage StorageConfig
 	// AI 服务配置（OpenAI 兼容格式）。优先级：AI_* > DEEPSEEK_* > ZHIPU_* > OPENAI_API_KEY。
 	AIAPIKey         string
 	AIBaseURL        string
@@ -35,6 +37,17 @@ type Config struct {
 	Valuation        ValuationConfig
 	Redis            RedisConfig
 	DefaultPasswords DefaultPasswordsConfig
+}
+
+// StorageConfig 文件存储配置。
+// Driver 为 "local" 时使用本地磁盘（UploadFolder），为 "r2" 时使用 Cloudflare R2。
+type StorageConfig struct {
+	Driver            string // STORAGE_DRIVER，默认 "local"
+	R2AccountID       string // R2_ACCOUNT_ID
+	R2AccessKeyID     string // R2_ACCESS_KEY_ID
+	R2SecretAccessKey string // R2_SECRET_ACCESS_KEY
+	R2Bucket          string // R2_BUCKET
+	R2PublicDomain    string // R2_PUBLIC_DOMAIN，如 https://cdn.example.com
 }
 
 // DefaultPasswordsConfig 默认账号密码配置，生产环境必须覆盖开发默认值。
@@ -116,6 +129,14 @@ func Load() (*Config, error) {
 		MaxContentLength: int64(maxMB) * 1024 * 1024,
 		// LibreOffice sidecar HTTP 地址;为空则降级到本地 exec(向后兼容)
 		LibreOfficeSidecarURL: getenv("LIBREOFFICE_SIDECAR_URL", ""),
+		Storage: StorageConfig{
+			Driver:            getenv("STORAGE_DRIVER", "local"),
+			R2AccountID:       getenv("R2_ACCOUNT_ID", ""),
+			R2AccessKeyID:     getenv("R2_ACCESS_KEY_ID", ""),
+			R2SecretAccessKey: getenv("R2_SECRET_ACCESS_KEY", ""),
+			R2Bucket:          getenv("R2_BUCKET", ""),
+			R2PublicDomain:    getenv("R2_PUBLIC_DOMAIN", ""),
+		},
 		AIAPIKey:              getenvChainDef("", "AI_API_KEY", "DEEPSEEK_API_KEY", "ZHIPU_API_KEY", "OPENAI_API_KEY"),
 		AIBaseURL:             getenvChainDef("https://api.deepseek.com", "AI_BASE_URL", "DEEPSEEK_API_URL", "ZHIPU_BASE_URL"),
 		AIModel:               getenvChainDef("deepseek-v4-flash", "AI_MODEL", "MODEL", "ZHIPU_MODEL"),
@@ -200,6 +221,24 @@ func (c *Config) Validate() error {
 	}
 	if c.Redis.Addr == "" {
 		missing = append(missing, "REDIS_ADDR")
+	}
+	// R2 对象存储校验：driver=r2 时必填 R2 凭证
+	if c.Storage.Driver == "r2" {
+		if c.Storage.R2AccountID == "" {
+			missing = append(missing, "R2_ACCOUNT_ID")
+		}
+		if c.Storage.R2AccessKeyID == "" {
+			missing = append(missing, "R2_ACCESS_KEY_ID")
+		}
+		if c.Storage.R2SecretAccessKey == "" {
+			missing = append(missing, "R2_SECRET_ACCESS_KEY")
+		}
+		if c.Storage.R2Bucket == "" {
+			missing = append(missing, "R2_BUCKET")
+		}
+		if c.Storage.R2PublicDomain == "" {
+			missing = append(missing, "R2_PUBLIC_DOMAIN")
+		}
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("生产环境缺少必填配置: %s", strings.Join(missing, ", "))

@@ -6,8 +6,6 @@ import (
 	"bytes"
 	"compress/zlib"
 	"io"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -16,21 +14,13 @@ import (
 )
 
 // 计数 PDF 中的页面对象 /Type /Page (排除 /Type /Pages 父节点)
-func countPDFPages(path string) (int, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return 0, err
-	}
+func countPDFPages(data []byte) (int, error) {
 	re := regexp.MustCompile(`/Type /Page(?:[^s]|$)`)
 	return len(re.FindAll(data, -1)), nil
 }
 
 // extractPDFText 解压 PDF 内 FlateDecode 后的文本流拼接
-func extractPDFText(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
+func extractPDFText(data []byte) (string, error) {
 	// 寻找 "stream\r?\n ... \r?\nendstream"
 	streamRe := regexp.MustCompile(`(?s)stream\r?\n(.+?)\r?\nendstream`)
 	matches := streamRe.FindAllSubmatch(data, -1)
@@ -121,63 +111,40 @@ func sampleSuggestions() []string {
 	}
 }
 
-// TestGenerateReport 验证 PDF 生成器能成功生成文件、首字节为 PDF 魔数,且为 3 页
+// TestGenerateReport 验证 PDF 生成器能成功生成内容、首字节为 PDF 魔数,且为 3 页
 func TestGenerateReport(t *testing.T) {
-	// 准备临时输出目录
-	dir := t.TempDir()
-	gen := NewGenerator(dir)
+	gen := NewGenerator("")
 
 	detail := sampleDetail()
 	dimScores := sampleDimensionScores()
 	suggestions := sampleSuggestions()
 
-	// 调用生成器
-	path, err := gen.GenerateReport(detail, dimScores, suggestions)
+	// 调用生成器（返回 PDF 二进制内容）
+	data, err := gen.GenerateReport(detail, dimScores, suggestions)
 	if err != nil {
 		t.Fatalf("生成 PDF 失败: %v", err)
 	}
-
-	// 校验文件存在
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("PDF 文件不存在: %v", err)
+	if len(data) < 1024 {
+		t.Errorf("PDF 内容过小 (%d 字节),可能未正确生成", len(data))
 	}
-	if info.Size() < 1024 {
-		t.Errorf("PDF 文件过小 (%d 字节),可能未正确生成", info.Size())
-	}
-	t.Logf("PDF 生成成功: %s, 大小 %d 字节", path, info.Size())
+	t.Logf("PDF 生成成功: %d 字节", len(data))
 
 	// 校验 PDF 魔数
-	head := make([]byte, 4)
-	f, err := os.Open(path)
-	if err != nil {
-		t.Fatalf("打开 PDF 失败: %v", err)
-	}
-	defer f.Close()
-	if _, err := f.Read(head); err != nil {
-		t.Fatalf("读取 PDF 首部失败: %v", err)
-	}
-	if string(head) != "%PDF" {
-		t.Errorf("PDF 首部不是 %%PDF,实际为 %q", head)
-	}
-
-	// 校验输出目录确实在临时目录下
-	abs, _ := filepath.Abs(path)
-	if !strings.HasPrefix(abs, filepath.Clean(dir)) {
-		t.Errorf("PDF 路径 %s 未落在输出目录 %s 下", abs, dir)
+	if string(data[:4]) != "%PDF" {
+		t.Errorf("PDF 首部不是 %%PDF,实际为 %q", data[:4])
 	}
 
 	// 校验页数(简洁版应为 3 页)
-	pages, err := countPDFPages(path)
+	pages, err := countPDFPages(data)
 	if err != nil {
-		t.Fatalf("读取 PDF 失败: %v", err)
+		t.Fatalf("解析 PDF 失败: %v", err)
 	}
 	if pages != 3 {
 		t.Errorf("简洁版报告应为 3 页,实际 %d 页", pages)
 	}
 
 	// 校验内容(解压后应至少包含基本 PDF 操作符,表明内容已被写入)
-	stream, err := extractPDFText(path)
+	stream, err := extractPDFText(data)
 	if err != nil {
 		t.Fatalf("解压 PDF 失败: %v", err)
 	}
@@ -204,8 +171,7 @@ func TestGenerateReport(t *testing.T) {
 
 // TestGenerateReportCombustion 内燃叉车样例(无电池类型,无原厂漆加成)
 func TestGenerateReportCombustion(t *testing.T) {
-	dir := t.TempDir()
-	gen := NewGenerator(dir)
+	gen := NewGenerator("")
 
 	detail := &model.EvaluationDetail{
 		ID:                         2002,
@@ -249,21 +215,20 @@ func TestGenerateReportCombustion(t *testing.T) {
 		"品牌力较好,残值具备一定支撑",
 	}
 
-	path, err := gen.GenerateReport(detail, dimScores, suggestions)
+	data, err := gen.GenerateReport(detail, dimScores, suggestions)
 	if err != nil {
 		t.Fatalf("生成 PDF 失败: %v", err)
 	}
-	pages, _ := countPDFPages(path)
+	pages, _ := countPDFPages(data)
 	if pages != 3 {
 		t.Errorf("简洁版报告应为 3 页,实际 %d 页", pages)
 	}
-	t.Logf("内燃叉车 PDF 生成成功: %s", path)
+	t.Logf("内燃叉车 PDF 生成成功: %d 字节", len(data))
 }
 
 // TestGenerateReportEmptySuggestions 建议列表为空时也应能生成(且仍为 3 页)
 func TestGenerateReportEmptySuggestions(t *testing.T) {
-	dir := t.TempDir()
-	gen := NewGenerator(dir)
+	gen := NewGenerator("")
 
 	detail := &model.EvaluationDetail{
 		ID:                         3,
@@ -302,15 +267,15 @@ func TestGenerateReportEmptySuggestions(t *testing.T) {
 		"市场":   1.00,
 	}
 
-	path, err := gen.GenerateReport(detail, dimScores, nil)
+	data, err := gen.GenerateReport(detail, dimScores, nil)
 	if err != nil {
 		t.Fatalf("空建议列表也必须能生成: %v", err)
 	}
-	pages, _ := countPDFPages(path)
+	pages, _ := countPDFPages(data)
 	if pages != 3 {
 		t.Errorf("空数据时也应为 3 页,实际 %d 页", pages)
 	}
-	t.Logf("空建议 PDF 生成成功: %s", path)
+	t.Logf("空建议 PDF 生成成功: %d 字节", len(data))
 }
 
 // TestEmbeddedFont 验证内嵌字体字节已通过 //go:embed 编译进二进制

@@ -31,6 +31,7 @@ import (
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/storage"
 	vrepo "forklift-training/internal/valuation/repository"
 	vservice "forklift-training/internal/valuation/service"
 	"forklift-training/pkg/pdf"
@@ -51,14 +52,14 @@ func RegisterRoutes(
 	valuationSvc *vservice.ValuationService,
 	batterySvc *vservice.BatteryRULService,
 	pdfGen *pdf.Generator,
-	pdfOutputDir string,
+	st storage.Storage,
 	valuationAuthSvc *vservice.ValuationAuthService,
 ) {
 	evalHandler := NewEvaluationHandler(valuationSvc, evalRepo, logger)
 	configHandler := NewConfigHandler(dictRepo, logger)
-	reportHandler := NewReportHandler(evalRepo, pdfGen, logger)
+	reportHandler := NewReportHandler(evalRepo, pdfGen, logger, st)
 	batteryRepo := vrepo.NewBatteryRepository(pool)
-	batteryHandler := NewBatteryHandler(batteryRepo, batterySvc, logger, pdfOutputDir)
+	batteryHandler := NewBatteryHandler(batteryRepo, batterySvc, logger, st)
 	healthHandler := NewHealthHandler()
 	valuationAuthHandler := NewValuationAuthHandler(valuationAuthSvc)
 

@@ -1,22 +1,27 @@
 """
 LibreOffice Sidecar HTTP 服务
 提供 PPT → PDF → PNG 图片转换的 HTTP API
-共享 /data/uploads volume 与 backend 容器
+通过 HTTP multipart 收发文件内容,不再依赖共享 volume
 
 API:
   POST /convert
-    body: {"input_path": "/data/uploads/chapters/xxx.pptx", "output_dir": "/data/uploads/slides/123"}
-    response: {"success": true, "images": ["slide_001.png", "slide_002.png"]}
+    multipart/form-data:
+      file: PPT 文件二进制内容 (.ppt/.pptx)
+      chapter_id: 字符串,用于临时文件命名
+    response: {"success": true, "images": [{"name": "slide_001.png", "data": "<base64>"}, ...]}
     或    {"success": false, "error": "错误信息"}
 
   GET /health
     response: {"status": "ok"}
 """
 
+import base64
 import os
 import re
+import shutil
 import subprocess
 import threading
+import time
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
@@ -99,28 +104,40 @@ def health():
 
 @app.route("/convert", methods=["POST"])
 def convert():
-    data = request.get_json(silent=True) or {}
-    input_path = data.get("input_path", "")
-    output_dir = data.get("output_dir", "")
+    # 接收 multipart/form-data
+    if "file" not in request.files:
+        return jsonify({"success": False, "error": "缺少 file 字段"}), 400
+    file = request.files["file"]
+    chapter_id = (request.form.get("chapter_id") or "").strip()
 
-    if not input_path or not output_dir:
-        return jsonify({"success": False, "error": "input_path 和 output_dir 必填"}), 400
+    if not file or not file.filename:
+        return jsonify({"success": False, "error": "file 不能为空"}), 400
+    if not chapter_id:
+        return jsonify({"success": False, "error": "chapter_id 必填"}), 400
 
-    if not os.path.exists(input_path):
-        return jsonify({"success": False, "error": f"输入文件不存在: {input_path}"}), 404
+    timestamp = int(time.time())
+    # 临时 PPT 文件路径
+    ppt_path = f"/tmp/ppt_{chapter_id}_{timestamp}.pptx"
+    # 临时输出目录
+    output_dir = f"/tmp/slides_{chapter_id}_{timestamp}"
 
     try:
+        # 1. 把上传的 PPT 写到临时文件
+        file.save(ppt_path)
+        if not os.path.exists(ppt_path):
+            return jsonify({"success": False, "error": "保存上传文件失败"}), 500
+
         os.makedirs(output_dir, exist_ok=True)
 
-        # 1. PPT → PDF
-        pdf_path = convert_ppt_to_pdf(input_path, output_dir)
+        # 2. PPT → PDF(LibreOffice headless)
+        pdf_path = convert_ppt_to_pdf(ppt_path, output_dir)
         if not pdf_path:
             return jsonify({"success": False, "error": "LibreOffice 转换 PDF 失败"}), 500
 
-        # 2. PDF → PNG
+        # 3. PDF → PNG(pdftoppm)
         images = convert_pdf_to_images(pdf_path, output_dir)
 
-        # 3. 删除中间 PDF
+        # 删除中间 PDF
         try:
             os.remove(pdf_path)
         except Exception:
@@ -129,10 +146,31 @@ def convert():
         if not images:
             return jsonify({"success": False, "error": "PDF 转图片失败"}), 500
 
-        return jsonify({"success": True, "images": images})
+        # 4. 读取所有 PNG 文件内容,base64 编码
+        result_images = []
+        for name in images:
+            img_path = os.path.join(output_dir, name)
+            with open(img_path, "rb") as f:
+                data = base64.b64encode(f.read()).decode("ascii")
+            result_images.append({"name": name, "data": data})
+
+        return jsonify({"success": True, "images": result_images})
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+    finally:
+        # 5. 清理所有临时文件(PPT、PDF、PNG)
+        try:
+            if os.path.exists(ppt_path):
+                os.remove(ppt_path)
+        except Exception:
+            pass
+        try:
+            if os.path.exists(output_dir):
+                shutil.rmtree(output_dir, ignore_errors=True)
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

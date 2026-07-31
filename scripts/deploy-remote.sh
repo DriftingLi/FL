@@ -144,6 +144,19 @@ write_env_file() {
         echo "REDIS_DB=${REDIS_DB:-0}"
         echo "REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-10}"
         echo "REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-fl:}"
+
+        echo "# Cloudflare R2 对象存储（留空 STORAGE_DRIVER 或设为 local 则回退到本地磁盘）"
+        echo "STORAGE_DRIVER=${STORAGE_DRIVER:-local}"
+        printf 'R2_ACCOUNT_ID='
+        env_val "${R2_ACCOUNT_ID:-}"; echo
+        printf 'R2_ACCESS_KEY_ID='
+        env_val "${R2_ACCESS_KEY_ID:-}"; echo
+        printf 'R2_SECRET_ACCESS_KEY='
+        env_val "${R2_SECRET_ACCESS_KEY:-}"; echo
+        echo "R2_BUCKET=${R2_BUCKET:-}"
+        printf 'R2_PUBLIC_DOMAIN='
+        env_val "${R2_PUBLIC_DOMAIN:-}"; echo
+
         echo "BACKEND_HOST_PORT=${BACKEND_HOST_PORT:-8080}"
 
         # Volume 路径配置
@@ -280,7 +293,7 @@ create_backup() {
         echo "--- 备份 .env ---"
         if [ -f "$DEPLOY_PATH/.env" ]; then
             # 仅保存非敏感信息
-            grep -v -E '(SECRET_KEY|JWT_SECRET_KEY|PASSWORD|API_KEY)' "$DEPLOY_PATH/.env" 2>/dev/null || true
+            grep -v -E '(SECRET_KEY|JWT_SECRET_KEY|PASSWORD|API_KEY|R2_SECRET|R2_ACCESS_KEY)' "$DEPLOY_PATH/.env" 2>/dev/null || true
         fi
         echo ""
         if [ -f "$DB_BACKUP_FILE" ]; then
