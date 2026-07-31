@@ -71,6 +71,7 @@ func TestValidate_Production_AllPresent(t *testing.T) {
 		SecretKey:    "real-secret",
 		JWTSecretKey: "real-jwt-secret",
 		DatabaseURL:  "postgres://localhost/db",
+		CORSOrigins:  []string{"https://example.com"},
 		Redis: RedisConfig{
 			Addr:     "localhost:6379",
 			Password: "real-redis-password",

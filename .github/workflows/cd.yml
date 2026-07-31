@@ -247,9 +247,9 @@ jobs:
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT || '2222' }}
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-      # SSH 跳板配置（仅 testing 环境使用）
-      # staging: SSH_HOST=pve-02公网, 直连
-      # testing: SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(目标)
+      # SSH 跳板配置（staging 和 testing 均已迁移到 LXC,使用 ProxyJump）
+      # staging: SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(172.17.1.201)
+      # testing: SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(172.17.1.200)
       #         pve-02 与 LXC 同网段路由可达,无需 pve-01 中转
       SSH_JUMP_HOST: ${{ secrets.SSH_JUMP_HOST || '' }}
       # Volume 路径：testing 已迁移到 LXC + Docker 24+,named volume 正常工作
@@ -266,10 +266,10 @@ jobs:
 
       # --------------------------------------------------------
       # Step 2.1: 配置 SSH
-      #   staging: 直连 pve-02 (SSH_HOST:SSH_PORT)
-      #   testing: 两层 ProxyJump (pve-02 → LXC)
+      #   staging/testing: 两层 ProxyJump (pve-02 → LXC)
       #           SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(目标)
-      #           pve-02 与 LXC 同网段(172.17.1.0/24)路由可达,无需 pve-01 中转
+      #           pve-02 与 LXC 同网段(172.17.1.0/24)路由可达
+      #   production: 直连 (SSH_HOST:SSH_PORT, SSH_JUMP_HOST 为空)
       # --------------------------------------------------------
       - name: 配置 SSH
         run: |
