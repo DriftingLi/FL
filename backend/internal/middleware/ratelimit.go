@@ -21,21 +21,20 @@ type ipLimiterEntry struct {
 
 // ipLimiterPool 维护 IP → 限流器映射，定期清理过期条目避免内存泄漏。
 type ipLimiterPool struct {
-	mu       sync.RWMutex
-	entries  map[string]*ipLimiterEntry
-	rps      rate.Limit
-	burst    int
-	stopChan chan struct{}
+	mu      sync.RWMutex
+	entries map[string]*ipLimiterEntry
+	rps     rate.Limit
+	burst   int
 }
 
 // newIPLimiterPool 创建 IP 限流池，rps 为每秒令牌数，burst 为突发上限。
 // 启动后台 goroutine 每 cleanupInterval 清理超过 maxIdle 未访问的条目。
+// 限流池生命周期等于进程，进程退出时 goroutine 自然终止，无需显式停止。
 func newIPLimiterPool(rps float64, burst int) *ipLimiterPool {
 	p := &ipLimiterPool{
-		entries:  make(map[string]*ipLimiterEntry),
-		rps:      rate.Limit(rps),
-		burst:    burst,
-		stopChan: make(chan struct{}),
+		entries: make(map[string]*ipLimiterEntry),
+		rps:     rate.Limit(rps),
+		burst:   burst,
 	}
 	go p.cleanupLoop()
 	return p
@@ -67,30 +66,15 @@ func (p *ipLimiterPool) cleanupLoop() {
 	const maxIdle = 10 * time.Minute
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			p.mu.Lock()
-			now := time.Now()
-			for ip, entry := range p.entries {
-				if now.Sub(entry.lastSeen) > maxIdle {
-					delete(p.entries, ip)
-				}
+	for range ticker.C {
+		p.mu.Lock()
+		now := time.Now()
+		for ip, entry := range p.entries {
+			if now.Sub(entry.lastSeen) > maxIdle {
+				delete(p.entries, ip)
 			}
-			p.mu.Unlock()
-		case <-p.stopChan:
-			return
 		}
-	}
-}
-
-// stop 终止后台清理 goroutine（进程退出时调用，避免 goroutine 泄漏）。
-func (p *ipLimiterPool) stop() {
-	select {
-	case <-p.stopChan:
-		// 已关闭
-	default:
-		close(p.stopChan)
+		p.mu.Unlock()
 	}
 }
 

@@ -249,8 +249,8 @@ jobs:
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
       # SSH 跳板配置（仅 testing 环境使用）
       # staging: SSH_HOST=pve-02公网, 直连
-      # testing: SSH_HOST=pve-02公网(第一跳), SSH_JUMP_HOST=LXC内网IP(目标)
-      #         中间跳板 pve-01 (172.17.1.41) 在下方 SSH config 中硬编码
+      # testing: SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(目标)
+      #         pve-02 与 LXC 同网段路由可达,无需 pve-01 中转
       SSH_JUMP_HOST: ${{ secrets.SSH_JUMP_HOST || '' }}
       # Volume 路径：testing 已迁移到 LXC + Docker 24+,named volume 正常工作
       # 旧 Docker 19.03 的 named volume 权限 bug 已通过 Docker 升级解决,无需 bind mount
@@ -267,9 +267,9 @@ jobs:
       # --------------------------------------------------------
       # Step 2.1: 配置 SSH
       #   staging: 直连 pve-02 (SSH_HOST:SSH_PORT)
-      #   testing: 三层 ProxyJump (pve-02 → pve-01 → LXC)
-      #           SSH_HOST=pve-02公网(第一跳), SSH_JUMP_HOST=LXC内网IP(目标)
-      #           pve-01 内网 IP 固定为 172.17.1.41,硬编码作为第二跳
+      #   testing: 两层 ProxyJump (pve-02 → LXC)
+      #           SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(目标)
+      #           pve-02 与 LXC 同网段(172.17.1.0/24)路由可达,无需 pve-01 中转
       # --------------------------------------------------------
       - name: 配置 SSH
         run: |
@@ -280,10 +280,9 @@ jobs:
             -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
           if [ -n "$SSH_JUMP_HOST" ]; then
-            # testing 环境: 三层 ProxyJump (pve-02 → pve-01 → LXC)
-            # pve-01 (172.17.1.41) 作为中间跳板,LXC IP 由 SSH_JUMP_HOST 指定
+            # testing 环境: 两层 ProxyJump (pve-02 → LXC)
             cat > ~/.ssh/config << EOF
-          Host jump1
+          Host jump
               HostName $SSH_HOST
               Port $SSH_PORT
               User $SSH_USER
@@ -294,12 +293,12 @@ jobs:
               HostName $SSH_JUMP_HOST
               User $SSH_USER
               IdentityFile ~/.ssh/deploy_key
-              ProxyJump jump1,$SSH_USER@172.17.1.41
+              ProxyJump jump
               StrictHostKeyChecking no
           EOF
             echo "SSH_TARGET=target" >> $GITHUB_ENV
             echo "SSH_PORT_OPT=" >> $GITHUB_ENV
-            echo "SSH 配置: 三层跳板模式 (jump1=$SSH_HOST:$SSH_PORT → jump2=172.17.1.41 → target=$SSH_JUMP_HOST)"
+            echo "SSH 配置: 跳板模式 (jump=$SSH_HOST:$SSH_PORT → target=$SSH_JUMP_HOST)"
           else
             # staging 环境: 直连 pve-02
             cat > ~/.ssh/config << EOF
