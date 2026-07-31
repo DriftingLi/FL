@@ -43,9 +43,12 @@ RUN apk add --no-cache \
 # 创建非 root 用户
 RUN addgroup -S app && adduser -S app -G app
 
-# 创建应用目录（/data 由 entrypoint.sh 在运行时创建，因 Railway 卷挂载会覆盖镜像层）
-RUN mkdir -p /app/bin /app/static/uploads/chapters /app/static/uploads/slides && \
-    chown -R app:app /app
+# 创建应用目录 + 运行时数据目录
+# /data 在镜像层预设属主，named volume 首次挂载会继承此权限（app 可写）
+# bind mount 场景需在宿主机设置目录权限，或通过 compose user: root override 由 entrypoint 修正
+RUN mkdir -p /app/bin /app/static/uploads/chapters /app/static/uploads/slides \
+        /data/uploads /data/reports /data/backups && \
+    chown -R app:app /app /data
 
 WORKDIR /app
 
@@ -67,6 +70,9 @@ EXPOSE 8080
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -qO- http://localhost:8080/api/health || exit 1
+
+# 以非 root 用户运行（entrypoint.sh 兼容 root override 场景）
+USER app
 
 # 入口脚本接收 CMD 作为参数，切换到 app 用户后执行
 ENTRYPOINT ["/entrypoint.sh"]

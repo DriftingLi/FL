@@ -23,7 +23,15 @@ RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua
 
 COPY app.py .
 
+# 创建非 root 用户 + LibreOffice 所需的家目录（~/.config 用于 LibreOffice 配置缓存）
+# gunicorn 监听 8000(>1024)，非 root 可绑定
+RUN adduser -D -s /bin/sh -h /home/app app && \
+    mkdir -p /home/app/.config && \
+    chown -R app:app /app /home/app
+
 EXPOSE 8000
+
+USER app
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

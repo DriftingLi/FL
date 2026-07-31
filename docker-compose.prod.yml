@@ -19,7 +19,8 @@ services:
       TZ: Asia/Shanghai
     # Docker 19.03 的默认 seccomp 配置不包含 clone3() 等系统调用，
     # 导致 PostgreSQL 15 报 "could not write to file postmaster.pid: Operation not permitted"
-    # 测试环境(pve-01)需禁用 seccomp；生产环境可移除此配置
+    # pve-02(staging)仍为 Docker 19.03，需保留此项；Docker 24+ 可移除
+    # pve-01(testing)通过 LXC 运行 Docker 24+，此项无害但非必需
     security_opt:
       - seccomp:unconfined
     # 仅内网可访问，不对外暴露端口（仅 backend 容器通过 Docker 网络访问）

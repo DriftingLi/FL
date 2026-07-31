@@ -36,6 +36,7 @@ type Config struct {
 	AIModel          string
 	Valuation        ValuationConfig
 	Redis            RedisConfig
+	RateLimit        RateLimitConfig
 	DefaultPasswords DefaultPasswordsConfig
 }
 
@@ -89,6 +90,14 @@ type RedisConfig struct {
 	IdleTimeout  time.Duration // REDIS_IDLE_TIMEOUT，默认 5m
 }
 
+// RateLimitConfig 限流配置（基于客户端 IP 的 token bucket）。
+// 生产环境建议开启，防止暴力枚举/撞库/爬虫。
+type RateLimitConfig struct {
+	Enabled bool    // RATE_LIMIT_ENABLED，默认 production 开启、其他关闭
+	RPS     float64 // RATE_LIMIT_RPS，每 IP 每秒请求数，默认 20
+	Burst   int     // RATE_LIMIT_BURST，突发上限，默认 40
+}
+
 // Load 从环境变量加载配置。非 production 环境会自动加载 .env 文件。
 func Load() (*Config, error) {
 	appEnv := getenv("APP_ENV", "development")
@@ -111,6 +120,18 @@ func Load() (*Config, error) {
 	redisWriteTimeout := getDuration("REDIS_WRITE_TIMEOUT", 3*time.Second)
 	redisPoolTimeout := getDuration("REDIS_POOL_TIMEOUT", 4*time.Second)
 	redisIdleTimeout := getDuration("REDIS_IDLE_TIMEOUT", 5*time.Minute)
+
+	// 限流配置：production 默认开启，其他环境默认关闭
+	rateLimitEnabled := getenv("RATE_LIMIT_ENABLED", "") == "true" ||
+		(appEnv == "production" && getenv("RATE_LIMIT_ENABLED", "true") != "false")
+	rateLimitRPS, _ := strconv.ParseFloat(getenv("RATE_LIMIT_RPS", "20"), 64)
+	if rateLimitRPS <= 0 {
+		rateLimitRPS = 20
+	}
+	rateLimitBurst, _ := strconv.Atoi(getenv("RATE_LIMIT_BURST", "40"))
+	if rateLimitBurst <= 0 {
+		rateLimitBurst = 40
+	}
 
 	cfg := &Config{
 		AppEnv:          appEnv,
@@ -165,6 +186,11 @@ func Load() (*Config, error) {
 			WriteTimeout: redisWriteTimeout,
 			PoolTimeout:  redisPoolTimeout,
 			IdleTimeout:  redisIdleTimeout,
+		},
+		RateLimit: RateLimitConfig{
+			Enabled: rateLimitEnabled,
+			RPS:     rateLimitRPS,
+			Burst:   rateLimitBurst,
 		},
 		DefaultPasswords: DefaultPasswordsConfig{
 			Admin:   getenv("ADMIN_DEFAULT_PASSWORD", "admin123"),
@@ -239,6 +265,27 @@ func (c *Config) Validate() error {
 		if c.Storage.R2PublicDomain == "" {
 			missing = append(missing, "R2_PUBLIC_DOMAIN")
 		}
+	}
+	// CORS_ORIGINS 强制校验：必须显式配置，且不得包含 localhost（否则浏览器跨域会被拦截）
+	if len(c.CORSOrigins) == 0 {
+		missing = append(missing, "CORS_ORIGINS")
+	} else {
+		for _, o := range c.CORSOrigins {
+			if strings.Contains(o, "localhost") {
+				missing = append(missing, "CORS_ORIGINS(含localhost)")
+				break
+			}
+		}
+	}
+	// 默认密码强制校验：生产环境不得使用开发默认值，防止弱口令被利用
+	if c.DefaultPasswords.Admin == "admin123" {
+		missing = append(missing, "ADMIN_DEFAULT_PASSWORD(仍为默认弱口令)")
+	}
+	if c.DefaultPasswords.Tutor == "tutor123" {
+		missing = append(missing, "TUTOR_DEFAULT_PASSWORD(仍为默认弱口令)")
+	}
+	if c.DefaultPasswords.Student == "student123" {
+		missing = append(missing, "STUDENT_DEFAULT_PASSWORD(仍为默认弱口令)")
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("生产环境缺少必填配置: %s", strings.Join(missing, ", "))

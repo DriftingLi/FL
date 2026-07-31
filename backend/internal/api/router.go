@@ -30,6 +30,9 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
 	r.Use(middleware.CORS(cfg.CORSOrigins))
+	// 限流：基于客户端 IP 的 token bucket，防暴力枚举/撞库/爬虫
+	// 健康检查 /api/health 在中间件内放行，不受限流影响
+	r.Use(middleware.RateLimit(cfg))
 
 	// 健康检查与根路由（无需鉴权）
 	// 探测 Redis 连通性，异常时返回 503 便于容器编排重启
