@@ -1,11 +1,14 @@
 # ===== LibreOffice Sidecar 服务 =====
-# 提供 PPT → PDF → PNG 转换的 HTTP API
-# 与 backend 共享 /data/uploads volume
-# 镜像大小约 500MB(LibreOffice + poppler-utils + fonts + python)
+# 提供两类 HTTP API：
+#   1. PPT → PDF → WebP 转换（/convert）
+#   2. 任意图片 → WebP 压缩（/convert-image）
+# 与 backend 不再共享 volume，全部通过 HTTP multipart 收发
+# 镜像大小约 500MB(LibreOffice + poppler-utils + fonts + python + Pillow)
 
 FROM python:3.12-alpine
 
 # 安装 LibreOffice + poppler-utils + 中日韩字体
+# Pillow 10.4.0 在 alpine 上提供 musllinux wheel，无需额外编译依赖
 RUN apk add --no-cache \
         libreoffice \
         poppler-utils \

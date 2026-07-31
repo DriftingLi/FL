@@ -4,7 +4,11 @@
 // 实际存储后端由配置决定（local 本地磁盘 / r2 Cloudflare R2 对象存储）。
 // SaveFile 返回完整可访问 URL（local 模式 /static/uploads/...，r2 模式 https://...）。
 // ConvertPPTToImages 改为接收 PPT 二进制内容，通过 sidecar multipart 接口完成转换后，
-// 将 PNG 上传到存储后端并返回 URL 列表。
+// sidecar 直接返回 WebP 字节，由 FileService 上传到存储后端并返回 URL 列表。
+//
+// 图片压缩：所有可压缩图片（jpg/png/bmp/webp/tiff）统一通过 sidecar 的
+// /convert-image 接口转为 WebP（质量 85）。sidecar 未配置或转换失败时保留原格式。
+// svg/gif 不压缩（svg 矢量图 gzip 更优，gif 转换会丢动图帧）。
 package service
 
 import (
@@ -104,14 +108,28 @@ func (s *FileService) ValidateImageFile(filename string, size int64) (bool, stri
 
 // SaveFile 保存文件到存储后端，返回可访问 URL。
 // key 设计为 <subfolder>/<name>_<毫秒时间戳>.<ext>，保证唯一性。
+// 可压缩图片（jpg/png/bmp 等，不含 svg/gif）会自动转 WebP 后再上传：
+//   - sidecar 已配置：调用 /convert-image 转换
+//   - sidecar 未配置或转换失败：保留原格式上传
 func (s *FileService) SaveFile(content []byte, filename, subfolder string) (string, error) {
 	ext := filepath.Ext(filename)
 	name := strings.TrimSuffix(filename, ext)
 	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	uniqueFilename := fmt.Sprintf("%s_%s%s", name, timestamp, ext)
+
+	// 图片转 WebP 压缩
+	contentType := mimeTypeFromExt(fileExtension(filename))
+	finalExt := ext
+	if shouldCompressImage(contentType) {
+		if webpData, ok := s.compressImageViaSidecar(content); ok {
+			content = webpData
+			contentType = "image/webp"
+			finalExt = ".webp"
+		}
+	}
+
+	uniqueFilename := fmt.Sprintf("%s_%s%s", name, timestamp, finalExt)
 	key := fmt.Sprintf("%s/%s", subfolder, uniqueFilename)
 
-	contentType := mimeTypeFromExt(fileExtension(filename))
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	return s.storage.Save(ctx, key, content, contentType)
@@ -128,10 +146,11 @@ func (s *FileService) DeleteFile(fileURL string) error {
 }
 
 // ConvertPPTToImages 将 PPT 二进制内容转为图片并上传到存储后端。
-// 返回幻灯片图片 URL 列表（按 slide_001.png、slide_002.png... 顺序）。
+// 返回幻灯片图片 URL 列表（按 slide_001.webp、slide_002.webp... 顺序）。
 //
-// 转换流程：PPT bytes → sidecar(multipart) → PNG bytes(base64) → storage.Save。
-// 若 sidecar 未配置则降级到本地 LibreOffice exec（写临时文件转换后上传）。
+// 转换流程：PPT bytes → sidecar(multipart) → WebP bytes(base64) → storage.Save。
+// sidecar 在 PPT → PDF → PNG 后直接转 WebP 返回，后端无需再压缩。
+// 若 sidecar 未配置则降级到本地 LibreOffice exec（写临时文件转换后上传 PNG，不转 WebP）。
 // 失败时返回占位图片 URL 列表（单张 1x1 像素 PNG）以避免阻塞业务流程。
 func (s *FileService) ConvertPPTToImages(pptContent []byte, chapterID int) []string {
 	if len(pptContent) == 0 {
@@ -150,7 +169,7 @@ func (s *FileService) ConvertPPTToImages(pptContent []byte, chapterID int) []str
 	if s.libreofficeSidecarURL != "" {
 		images, success = s.convertWithSidecar(pptContent, chapterID)
 	} else {
-		// 降级:本地 LibreOffice exec
+		// 降级:本地 LibreOffice exec(返回 PNG,不转 WebP)
 		images, success = s.convertWithLibreOffice(pptContent, chapterID)
 	}
 
@@ -163,17 +182,22 @@ func (s *FileService) ConvertPPTToImages(pptContent []byte, chapterID int) []str
 		return nil
 	}
 
-	// 逐张上传 PNG 到存储后端
+	// 逐张上传 slide 到存储后端
+	// sidecar 路径下 name 已是 .webp，CT 为 image/webp；本地降级路径下 name 为 .png，CT 为 image/png
 	urls := make([]string, 0, len(images))
 	for _, img := range images {
-		pngData, err := base64Decode(img.Data)
+		imgData, err := base64Decode(img.Data)
 		if err != nil {
 			log.Printf("[file_service] base64 解码失败 name=%s: %v", img.Name, err)
 			continue
 		}
+		imgCT := "image/png"
+		if strings.HasSuffix(strings.ToLower(img.Name), ".webp") {
+			imgCT = "image/webp"
+		}
 		key := fmt.Sprintf("slides/%d/%s", chapterID, img.Name)
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		url, err := s.storage.Save(ctx, key, pngData, "image/png")
+		url, err := s.storage.Save(ctx, key, imgData, imgCT)
 		cancel()
 		if err != nil {
 			log.Printf("[file_service] 上传 slide 失败 key=%s: %v", key, err)
@@ -191,8 +215,8 @@ func (s *FileService) ConvertPPTToImages(pptContent []byte, chapterID int) []str
 	return urls
 }
 
-// convertWithSidecar 调用 LibreOffice sidecar HTTP 服务进行 PPT → 图片转换。
-// 通过 multipart 上传 PPT bytes，接收 JSON+base64 响应。
+// convertWithSidecar 调用 LibreOffice sidecar HTTP 服务进行 PPT → WebP 转换。
+// 通过 multipart 上传 PPT bytes，接收 JSON+base64 响应（图片已是 WebP）。
 func (s *FileService) convertWithSidecar(pptContent []byte, chapterID int) ([]struct {
 	Name string `json:"name"`
 	Data string `json:"data"`
@@ -248,7 +272,7 @@ func (s *FileService) convertWithSidecar(pptContent []byte, chapterID int) ([]st
 
 // convertWithLibreOffice 调用本地 LibreOffice headless 将 PPT 转 PDF，再转图片。
 // 降级路径:仅当 libreofficeSidecarURL 为空时使用。
-// 接收 PPT bytes，写临时文件转换后读取 PNG bytes 返回。
+// 接收 PPT bytes，写临时文件转换后读取 PNG bytes 返回（不转 WebP）。
 func (s *FileService) convertWithLibreOffice(pptContent []byte, chapterID int) ([]struct {
 	Name string `json:"name"`
 	Data string `json:"data"`
@@ -348,7 +372,8 @@ func (s *FileService) convertWithLibreOffice(pptContent []byte, chapterID int) (
 	return images, true
 }
 
-// uploadPlaceholder 上传一张 1x1 像素 PNG 占位图到存储后端，返回其 URL。
+// uploadPlaceholder 上传一张 1x1 像素占位图到存储后端，返回其 URL。
+// 占位图为 PNG（体积已极小，无需转 WebP）。
 func (s *FileService) uploadPlaceholder(chapterID int) string {
 	placeholderPNG := []byte{
 		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
@@ -361,6 +386,7 @@ func (s *FileService) uploadPlaceholder(chapterID int) string {
 		0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
 		0x42, 0x60, 0x82,
 	}
+
 	key := fmt.Sprintf("slides/%d/slide_001.png", chapterID)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -372,7 +398,88 @@ func (s *FileService) uploadPlaceholder(chapterID int) string {
 	return url
 }
 
+// compressImageViaSidecar 调用 sidecar 的 /convert-image 接口将图片转为 WebP。
+// 返回 (webpBytes, ok)；sidecar 未配置、转换失败或返回原始数据时 ok=false。
+// 调用方应在 ok=false 时保留原始字节上传。
+func (s *FileService) compressImageViaSidecar(content []byte) ([]byte, bool) {
+	if s.libreofficeSidecarURL == "" {
+		// 本地降级模式：无 sidecar，跳过压缩
+		return nil, false
+	}
+	if len(content) == 0 {
+		return nil, false
+	}
+
+	// 构造 multipart body
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", "image.bin")
+	if err != nil {
+		log.Printf("[file_service] 构造图片压缩 multipart 失败: %v", err)
+		return nil, false
+	}
+	if _, err := part.Write(content); err != nil {
+		log.Printf("[file_service] 写入图片压缩 multipart 失败: %v", err)
+		return nil, false
+	}
+	_ = writer.Close()
+
+	url := strings.TrimSuffix(s.libreofficeSidecarURL, "/") + "/convert-image"
+	req, err := http.NewRequestWithContext(context.Background(), "POST", url, body)
+	if err != nil {
+		log.Printf("[file_service] 构造图片压缩请求失败: %v", err)
+		return nil, false
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		log.Printf("[file_service] 调用 sidecar 图片压缩失败: %v", err)
+		return nil, false
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Success bool   `json:"success"`
+		Status  string `json:"status"` // WEBP / ORIGINAL / SKIP
+		Data    string `json:"data"`   // base64 编码
+		Error   string `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("[file_service] 解析 sidecar 图片压缩响应失败: %v", err)
+		return nil, false
+	}
+	if !result.Success {
+		log.Printf("[file_service] sidecar 图片压缩失败: %s", result.Error)
+		return nil, false
+	}
+
+	imgData, err := base64Decode(result.Data)
+	if err != nil {
+		log.Printf("[file_service] sidecar 图片压缩响应 base64 解码失败: %v", err)
+		return nil, false
+	}
+
+	// status=WEBP 时才用转换后的数据；ORIGINAL/SKIP 时保留原始字节
+	if result.Status == "WEBP" {
+		return imgData, true
+	}
+	return nil, false
+}
+
 // ===== 辅助函数 =====
+
+// shouldCompressImage 判断该 MIME 类型是否需要转 WebP 压缩。
+// 排除：svg（矢量图，gzip 更优）、gif（动图会丢帧）、已经是 webp。
+func shouldCompressImage(contentType string) bool {
+	switch contentType {
+	case "image/jpeg", "image/jpg", "image/png", "image/bmp":
+		return true
+	case "image/webp", "image/gif", "image/svg+xml":
+		return false
+	}
+	return false
+}
 
 // mimeTypeFromExt 根据文件扩展名返回 MIME 类型。
 func mimeTypeFromExt(ext string) string {
