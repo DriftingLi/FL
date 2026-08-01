@@ -4,6 +4,7 @@ package api
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -14,17 +15,21 @@ import (
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
 	"forklift-training/internal/service"
+	"forklift-training/internal/storage"
 	"forklift-training/pkg/response"
 )
 
 // AuthHandler 认证相关 handler。
 type AuthHandler struct {
-	authSvc *service.AuthService
+	authSvc   *service.AuthService
+	fileSvc   *service.FileService
+	storage   storage.Storage
+	reviewSvc *service.ProfileReviewService
 }
 
 // NewAuthHandler 创建认证 handler。
-func NewAuthHandler(authSvc *service.AuthService) *AuthHandler {
-	return &AuthHandler{authSvc: authSvc}
+func NewAuthHandler(authSvc *service.AuthService, fileSvc *service.FileService, st storage.Storage, reviewSvc *service.ProfileReviewService) *AuthHandler {
+	return &AuthHandler{authSvc: authSvc, fileSvc: fileSvc, storage: st, reviewSvc: reviewSvc}
 }
 
 // Login 学员登录 POST /api/auth/login
@@ -166,9 +171,15 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		var u model.HrwaiUser
 		if err := db.First(&u, uid).Error; err == nil {
 			data["name"] = u.Name
+			data["nickname"] = u.Nickname
+			data["avatar_url"] = u.AvatarURL
 			data["phone"] = u.Phone
 			data["email"] = u.Email
 			data["company"] = u.Company
+		}
+		// 待审核的资料修改（昵称/头像），供前端展示"审核中"状态
+		if pending, err := h.reviewSvc.GetPendingForUser(uid); err == nil {
+			data["pending_profile_change"] = pending
 		}
 	case "tutor":
 		var t model.Tutor
@@ -182,6 +193,73 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		}
 	}
 	response.Success(c, data)
+}
+
+// UpdateProfile 提交个人资料（昵称）修改审核 POST /api/auth/profile
+func (h *AuthHandler) UpdateProfile(c *gin.Context) {
+	userID, _ := c.Get(string(middleware.CtxUserID))
+	uid, _ := userID.(int)
+	if uid <= 0 {
+		response.Unauthorized(c, "请先登录")
+		return
+	}
+	var req struct {
+		Nickname string `json:"nickname"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "请求参数错误")
+		return
+	}
+	reqDTO, err := h.reviewSvc.CreateRequest(uid, service.ProfileFieldNickname, req.Nickname)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "昵称修改已提交，审核通过后生效", reqDTO)
+}
+
+// UploadAvatar 上传头像并提交审核 POST /api/auth/avatar（multipart，图片自动压缩为 WebP 后存入 local/R2）
+func (h *AuthHandler) UploadAvatar(c *gin.Context) {
+	userID, _ := c.Get(string(middleware.CtxUserID))
+	uid, _ := userID.(int)
+	if uid <= 0 {
+		response.Unauthorized(c, "请先登录")
+		return
+	}
+	file, err := c.FormFile("file")
+	if err != nil {
+		response.BadRequest(c, "未找到上传文件")
+		return
+	}
+	if ok, msg := h.fileSvc.ValidateImageFile(file.Filename, file.Size); !ok {
+		response.BadRequest(c, msg)
+		return
+	}
+	src, err := file.Open()
+	if err != nil {
+		response.ServerError(c, "文件上传失败")
+		return
+	}
+	defer src.Close()
+	content, err := io.ReadAll(src)
+	if err != nil {
+		response.ServerError(c, "文件上传失败")
+		return
+	}
+
+	url, err := h.fileSvc.SaveFile(content, file.Filename, "avatars")
+	if err != nil {
+		response.ServerError(c, "头像保存失败: "+err.Error())
+		return
+	}
+	reqDTO, err := h.reviewSvc.CreateRequest(uid, service.ProfileFieldAvatar, url)
+	if err != nil {
+		// 提交审核失败时清理已上传的文件（尽力而为）
+		_ = h.storage.Delete(c.Request.Context(), url)
+		response.BadRequest(c, "头像提交失败: "+err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "头像修改已提交，审核通过后生效", reqDTO)
 }
 
 // 占位：避免未使用导入警告

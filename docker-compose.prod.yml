@@ -161,7 +161,6 @@ services:
       TUTOR_DEFAULT_PASSWORD: ${TUTOR_DEFAULT_PASSWORD}
       STUDENT_DEFAULT_PASSWORD: ${STUDENT_DEFAULT_PASSWORD}
       VALUATION_PDF_OUTPUT_DIR: /data/reports
-      VALUATION_JWT_SECRET_KEY: ${VALUATION_JWT_SECRET_KEY:-}
       REDIS_ADDR: redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       REDIS_DB: "${REDIS_DB:-0}"
@@ -189,7 +188,7 @@ services:
       - ${UPLOADS_VOLUME:-uploads-data}:/data/uploads
       - ${REPORTS_VOLUME:-reports-data}:/data/reports
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health/live"]
       interval: 30s
       timeout: 5s
       retries: 3

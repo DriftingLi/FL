@@ -8,6 +8,8 @@ export interface UserInfo {
   user_id?: number
   username?: string
   name?: string
+  nickname?: string
+  avatar_url?: string
   role?: string
   avatar?: string
   [key: string]: any
@@ -100,12 +102,29 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('userInfo')
   }
 
+  // 重新拉取 /auth/me 并合并到 userInfo（昵称/头像等资料更新后调用）
+  async function refreshUserInfo() {
+    try {
+      const res = await authApi.getUserInfo({ headers: { 'X-Silent': '1' } })
+      if (res.code === 200 && res.data) {
+        userInfo.value = {
+          ...userInfo.value,
+          ...res.data
+        }
+        localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
+      }
+    } catch (e) {
+      console.warn('[Auth] refreshUserInfo failed:', e)
+    }
+  }
+
   return {
     token,
     userInfo,
     isLoggedIn,
     isInitializing,
     setAuthData,
-    clearAuthData
+    clearAuthData,
+    refreshUserInfo
   }
 })

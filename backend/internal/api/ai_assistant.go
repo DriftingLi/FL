@@ -31,7 +31,7 @@ func NewAIAssistantHandler(svc *service.AIAssistantService, cfg *config.Config) 
 // 公开路由：GET /models、POST /chat（可选认证）。
 // 登录路由：sessions CRUD、user-models CRUD（强制 middleware.JWTAuth + role=hrwai_user）。
 func RegisterAIAssistantRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, aiConfigSvc *service.AIConfigService) {
-	assistantSvc := service.NewAIAssistantService(db, aiConfigSvc)
+	assistantSvc := service.NewAIAssistantService(db, aiConfigSvc, cfg.SecretKey)
 	h := NewAIAssistantHandler(assistantSvc, cfg)
 
 	g := rg.Group("/ai-assistant")

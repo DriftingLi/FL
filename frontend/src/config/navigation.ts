@@ -11,9 +11,11 @@ import {
   TrendCharts,
   UserFilled,
   Calendar,
+  ChatDotRound,
   PriceTag,
   Finished,
-  Setting
+  Setting,
+  CircleCheck
 } from '@element-plus/icons-vue'
 // 注：MagicStick 仍用于管理员"内容生成"菜单项
 
@@ -31,6 +33,7 @@ export interface NavItem {
 const studentNav: NavItem[] = [
   { key: 'dashboard', label: '仪表盘', path: '/training', icon: HomeFilled, exact: true },
   { key: 'courses', label: '课程中心', path: '/training/courses', icon: Notebook },
+  { key: 'forum', label: '学员论坛', path: '/training/forum', icon: ChatDotRound },
   { key: 'question-bank', label: '题库练习', path: '/training/question-bank', icon: EditPen },
   { key: 'level-exam', label: '考试中心', path: '/training/level-exam', icon: Document },
   { key: 'wrong-questions', label: '错题本', path: '/training/wrong-questions', icon: CircleCloseFilled }
@@ -39,6 +42,7 @@ const studentNav: NavItem[] = [
 const adminNav: NavItem[] = [
   { key: 'dashboard', label: '仪表盘', path: '/admin/dashboard', icon: DataAnalysis },
   { key: 'hrwai-users', label: '用户管理', path: '/admin/hrwai-users', icon: User },
+  { key: 'profile-review', label: '资料审核', path: '/admin/profile-review', icon: CircleCheck },
   { key: 'tutors', label: '导师管理', path: '/admin/tutors', icon: UserFilled },
   { key: 'courses', label: '课程管理', path: '/admin/courses', icon: Notebook },
   { key: 'question-review', label: '题库审核', path: '/admin/question-review', icon: EditPen },

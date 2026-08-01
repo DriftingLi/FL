@@ -7,10 +7,28 @@
             <el-col :xs="24" :sm="8">
               <el-card class="avatar-card">
                 <div class="avatar-section">
-                  <div class="avatar-circle">
+                  <img
+                    v-if="profile.avatar_url"
+                    :src="String(profile.avatar_url)"
+                    class="avatar-circle avatar-img"
+                    alt="头像"
+                  />
+                  <div v-else class="avatar-circle">
                     {{ avatarLetter }}
                   </div>
-                  <h3 class="username">{{ profile.username || '-' }}</h3>
+                  <el-upload
+                    accept="image/*"
+                    :show-file-list="false"
+                    :http-request="handleAvatarUpload"
+                    :disabled="avatarPending"
+                    class="avatar-upload"
+                  >
+                    <el-button size="small" :loading="avatarUploading" :disabled="avatarPending">更换头像</el-button>
+                  </el-upload>
+                  <el-tag v-if="avatarPending" type="warning" size="small" class="pending-tag">
+                    头像审核中
+                  </el-tag>
+                  <h3 class="username">{{ displayName }}</h3>
                   <p class="name">{{ profile.name || '-' }}</p>
                   <el-tag v-if="profile.level" :type="levelTagType" class="level-tag">
                     {{ levelLabel }}
@@ -58,6 +76,27 @@
                 <el-descriptions :column="2" border>
                   <el-descriptions-item label="用户名">{{ profile.username || '-' }}</el-descriptions-item>
                   <el-descriptions-item label="姓名">{{ profile.name || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="昵称">
+                    <template v-if="nicknamePending">
+                      <el-tag type="warning" size="small">昵称审核中</el-tag>
+                    </template>
+                    <template v-else-if="editingNickname">
+                      <el-input
+                        v-model="nicknameDraft"
+                        maxlength="30"
+                        size="small"
+                        style="width: 150px"
+                        placeholder="请输入昵称"
+                        @keyup.enter="saveNickname"
+                      />
+                      <el-button size="small" type="primary" @click="saveNickname">保存</el-button>
+                      <el-button size="small" @click="cancelNickname">取消</el-button>
+                    </template>
+                    <template v-else>
+                      {{ profile.nickname || '未设置' }}
+                      <el-button link type="primary" @click="startEditNickname">修改</el-button>
+                    </template>
+                  </el-descriptions-item>
                   <el-descriptions-item label="当前等级">
                     <el-tag v-if="profile.level" :type="levelTagType" size="small">{{ levelLabel }}</el-tag>
                     <span v-else>初级学徒</span>
@@ -180,9 +219,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { useAuthStore } from '@/stores/auth'
+import { authApi } from '@/api/auth'
 
 const userStore = useUserStore()
+const authStore = useAuthStore()
 
 const activeTab = ref('info')
 const profileLoading = ref(false)
@@ -201,6 +244,83 @@ const avatarLetter = computed(() => {
   const name = profile.value.name || profile.value.username || ''
   return name.charAt(0).toUpperCase()
 })
+
+const displayName = computed(() => {
+  return profile.value.nickname || profile.value.name || profile.value.username || '-'
+})
+
+const avatarUploading = ref(false)
+const editingNickname = ref(false)
+const nicknameDraft = ref('')
+const pendingChange = ref<any>(null)
+
+const avatarPending = computed(() => pendingChange.value?.field_type === 'avatar')
+const nicknamePending = computed(() => pendingChange.value?.field_type === 'nickname')
+
+async function refreshPendingChange() {
+  await authStore.refreshUserInfo()
+  pendingChange.value = (authStore.userInfo as any)?.pending_profile_change || null
+}
+
+async function handleAvatarUpload(options: any) {
+  const file = options?.file
+  if (!file) return
+  if (!file.type?.startsWith('image/')) {
+    ElMessage.warning('请上传图片文件')
+    return
+  }
+  if (file.size > 20 * 1024 * 1024) {
+    ElMessage.warning('图片大小不能超过 20MB')
+    return
+  }
+  avatarUploading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await authApi.uploadAvatar(formData)
+    if (res.code === 200) {
+      ElMessage.success('头像修改已提交，审核通过后生效')
+      await refreshPendingChange()
+      options.onSuccess?.(res)
+    } else {
+      options.onError?.(new Error(res.message || '上传失败'))
+    }
+  } catch (e) {
+    console.error('头像上传失败:', e)
+    ElMessage.error('头像上传失败，请稍后重试')
+    options.onError?.(e as Error)
+  } finally {
+    avatarUploading.value = false
+  }
+}
+
+function startEditNickname() {
+  nicknameDraft.value = String(profile.value.nickname || '')
+  editingNickname.value = true
+}
+
+function cancelNickname() {
+  editingNickname.value = false
+}
+
+async function saveNickname() {
+  const nickname = nicknameDraft.value.trim()
+  if (nickname.length > 30) {
+    ElMessage.warning('昵称不能超过 30 个字符')
+    return
+  }
+  try {
+    const res = await authApi.updateProfile({ nickname })
+    if (res.code === 200) {
+      ElMessage.success('昵称修改已提交，审核通过后生效')
+      editingNickname.value = false
+      await refreshPendingChange()
+    }
+  } catch (e) {
+    console.error('昵称更新失败:', e)
+    ElMessage.error('昵称更新失败，请稍后重试')
+  }
+}
 
 const levelLabel = computed(() => {
   const map: Record<string, string> = { beginner: '初级学徒', intermediate: '中级学徒', advanced: '高级学徒', expert: '顶级学徒' }
@@ -310,6 +430,7 @@ function handlePageChange(page: number) {
 
 onMounted(() => {
   loadProfile()
+  refreshPendingChange()
 })
 </script>
 
@@ -346,6 +467,18 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   margin: 0 auto 16px;
+}
+
+.avatar-img {
+  object-fit: cover;
+}
+
+.avatar-upload {
+  margin-bottom: 12px;
+}
+
+.pending-tag {
+  margin-bottom: 10px;
 }
 
 .username {

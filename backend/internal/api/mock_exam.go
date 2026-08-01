@@ -126,7 +126,6 @@ func RegisterMockExamRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB
 
 // newAIService 在蓝图内构造 AIService，集中配置依赖。
 func newAIService(cfg *config.Config, db *gorm.DB) *service.AIService {
-	_ = cfg
-	aiConfigSvc := service.NewAIConfigService(db)
+	aiConfigSvc := service.NewAIConfigService(db, cfg.SecretKey)
 	return service.NewAIService(db, aiConfigSvc)
 }

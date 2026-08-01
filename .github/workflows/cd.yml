@@ -200,11 +200,15 @@ jobs:
       IMAGE_TAG: ${{ needs.build-backend.outputs.image_tag || github.sha }}
       # 注:job 级 env 块不能引用 workflow 级 env,必须内联 vars 表达式
       IMAGE_LIBREOFFICE: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-libreoffice
+      # 镜像加速代理（ghcr pull-through 缓存，如 127.0.0.1:5000；留空则直连 ghcr.io）
+      # 在仓库级 Variables 设置 REGISTRY_PROXY=127.0.0.1:5000，所有环境统一生效
+      # （当前生产也部署在 lxc201，代理同样可用；若未来生产迁到独立服务器，请改用环境级变量单独配置）
+      REGISTRY_PROXY: ${{ vars.REGISTRY_PROXY || '' }}
+      # 旧版本镜像保留数量（部署后清理更早版本；可在仓库级 Variables 中覆盖）
+      KEEP_IMAGES: ${{ vars.KEEP_IMAGES || '3' }}
       # SSL 证书内容（从 GitHub Secrets 注入，部署时写入服务器固定路径）
       SSL_FULLCHAIN: ${{ secrets.SSL_FULLCHAIN }}
       SSL_PRIVKEY: ${{ secrets.SSL_PRIVKEY }}
-      # 残值评估
-      VALUATION_JWT_SECRET_KEY: ${{ secrets.VALUATION_JWT_SECRET_KEY }}
       # 域名（启动时 envsubst 替换 nginx 配置中的 ${DOMAIN}）
       DOMAIN: ${{ secrets.DOMAIN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -359,6 +363,8 @@ jobs:
             printf 'export DOMAIN=%q\n' "${DOMAIN:-}"
             printf 'export GITHUB_TOKEN=%q\n' "${GITHUB_TOKEN:-}"
             printf 'export REGISTRY=%q\n' "${REGISTRY:-ghcr.io}"
+            printf 'export REGISTRY_PROXY=%q\n' "${REGISTRY_PROXY:-}"
+            printf 'export KEEP_IMAGES=%q\n' "${KEEP_IMAGES:-3}"
             printf 'export DATABASE_URL=%q\n' "${DATABASE_URL:-}"
             printf 'export DB_USER=%q\n' "${DB_USER:-forklift}"
             printf 'export DB_PASSWORD=%q\n' "${DB_PASSWORD:-}"
@@ -369,7 +375,6 @@ jobs:
             printf 'export TUTOR_DEFAULT_PASSWORD=%q\n' "${TUTOR_DEFAULT_PASSWORD:-}"
             printf 'export STUDENT_DEFAULT_PASSWORD=%q\n' "${STUDENT_DEFAULT_PASSWORD:-}"
             printf 'export CORS_ORIGINS=%q\n' "${CORS_ORIGINS:-}"
-            printf 'export VALUATION_JWT_SECRET_KEY=%q\n' "${VALUATION_JWT_SECRET_KEY:-}"
             printf 'export COMPOSE_FILE=%q\n' "${COMPOSE_FILE:-docker-compose.prod.yml}"
             printf 'export DEPLOY_PATH=%q\n' "${DEPLOY_PATH:-/opt/forklift-training}"
             printf 'export SKIP_MIGRATION=%q\n' "${SKIP_MIGRATION:-false}"

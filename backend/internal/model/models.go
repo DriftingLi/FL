@@ -63,6 +63,8 @@ type HrwaiUser struct {
 	Username  string    `gorm:"column:username;uniqueIndex" json:"username"`
 	Password  string    `gorm:"column:password" json:"-"`
 	Name      string    `gorm:"column:name" json:"name"`
+	Nickname  string    `gorm:"column:nickname" json:"nickname"`
+	AvatarURL string    `gorm:"column:avatar_url" json:"avatar_url"`
 	Phone     string    `gorm:"column:phone;uniqueIndex" json:"phone"`
 	Email     string    `gorm:"column:email" json:"email,omitempty"`
 	Company   string    `gorm:"column:company" json:"company,omitempty"`
@@ -80,6 +82,8 @@ type Student struct {
 	Username  string    `gorm:"column:username;uniqueIndex" json:"username"`
 	Password  string    `gorm:"column:password" json:"-"`
 	Name      string    `gorm:"column:name" json:"name"`
+	Nickname  string    `gorm:"column:nickname" json:"nickname"`
+	AvatarURL string    `gorm:"column:avatar_url" json:"avatar_url"`
 	Phone     string    `gorm:"column:phone;uniqueIndex" json:"phone"`
 	Email     string    `gorm:"column:email" json:"email,omitempty"`
 	Company   string    `gorm:"column:company" json:"company,omitempty"`
@@ -484,3 +488,51 @@ type AIUserModel struct {
 }
 
 func (AIUserModel) TableName() string { return "ai_user_models" }
+
+// ===== 24. 论坛模块 =====
+
+// ForumTopic 论坛主题（course_id 为 NULL 表示大论坛/综合讨论，非 NULL 表示课程讨论区）。
+type ForumTopic struct {
+	ID          int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	CourseID    *int       `gorm:"column:course_id" json:"course_id,omitempty"`
+	UserID      int        `gorm:"column:user_id" json:"user_id"`
+	Title       string     `gorm:"column:title" json:"title"`
+	Content     string     `gorm:"column:content" json:"content"`
+	ViewCount   int        `gorm:"column:view_count;default:0" json:"view_count"`
+	ReplyCount  int        `gorm:"column:reply_count;default:0" json:"reply_count"`
+	LastReplyAt *time.Time `gorm:"column:last_reply_at" json:"last_reply_at"`
+	CreatedAt   time.Time  `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt   time.Time  `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (ForumTopic) TableName() string { return "forum_topics" }
+
+// ForumReply 论坛回复。
+type ForumReply struct {
+	ID        int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	TopicID   int64     `gorm:"column:topic_id" json:"topic_id"`
+	UserID    int       `gorm:"column:user_id" json:"user_id"`
+	Content   string    `gorm:"column:content" json:"content"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (ForumReply) TableName() string { return "forum_replies" }
+
+// ===== 25. 资料修改审核 =====
+
+// ProfileChangeRequest 用户资料（昵称/头像）修改审核请求。
+type ProfileChangeRequest struct {
+	ID           int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	UserID       int        `gorm:"column:user_id" json:"user_id"`
+	FieldType    string     `gorm:"column:field_type" json:"field_type"` // nickname / avatar
+	OldValue     string     `gorm:"column:old_value" json:"old_value"`
+	NewValue     string     `gorm:"column:new_value" json:"new_value"`
+	Status       string     `gorm:"column:status;default:pending" json:"status"`
+	RejectReason string     `gorm:"column:reject_reason" json:"reject_reason"`
+	ReviewedBy   *int       `gorm:"column:reviewed_by" json:"reviewed_by,omitempty"`
+	ReviewedAt   *time.Time `gorm:"column:reviewed_at" json:"reviewed_at,omitempty"`
+	CreatedAt    time.Time  `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt    time.Time  `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (ProfileChangeRequest) TableName() string { return "profile_change_requests" }

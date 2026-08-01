@@ -43,12 +43,12 @@ func (s *StudentService) queryProfile(studentID int) (map[string]any, error) {
 
 	// 已完成课程数
 	var completedCourses int64
-	s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND progress >= 100", studentID).
+	s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND chapter_id IS NULL AND progress >= 100", studentID).
 		Distinct("course_id").Count(&completedCourses)
 
 	// 学习中课程数
 	var learningCourses int64
-	s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND progress > 0 AND progress < 100", studentID).
+	s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND chapter_id IS NULL AND progress > 0 AND progress < 100", studentID).
 		Distinct("course_id").Count(&learningCourses)
 
 	// 最近学习时间（学员可能无任何学习记录，使用 Limit(1).Find() 避免 First() 在空结果时打印 record not found 日志）
@@ -75,7 +75,9 @@ func (s *StudentService) queryProfile(studentID int) (map[string]any, error) {
 	}
 	var rows []courseProgressRow
 	s.db.Model(&model.StudyRecord{}).
-		Select("course_id, MAX(progress) as max_progress, SUM(study_duration) as total_duration, MAX(study_date) as latest_date").
+		// 进度只看课程级记录（chapter_id IS NULL）；学习时长汇总该课程全部记录
+		Select("course_id, MAX(progress) FILTER (WHERE chapter_id IS NULL) AS max_progress, "+
+			"SUM(study_duration) AS total_duration, MAX(study_date) AS latest_date").
 		Where("student_id = ?", studentID).
 		Group("course_id").
 		Scan(&rows)
@@ -246,6 +248,8 @@ func studentToDict(s *model.Student) map[string]any {
 		"student_id": s.StudentID,
 		"username":   s.Username,
 		"name":       s.Name,
+		"nickname":   s.Nickname,
+		"avatar_url": s.AvatarURL,
 		"status":     s.Status,
 		"created_at": formatISO(s.CreatedAt),
 	}

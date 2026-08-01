@@ -57,6 +57,24 @@ const routes: RouteRecordRaw[] = [
         meta: { navKey: 'courses', navLabel: '课程中心', navGroup: 'training' }
       },
       {
+        path: 'forum',
+        name: 'ForumPage',
+        component: () => import('@/pages/student/ForumPage.vue'),
+        meta: { navKey: 'forum', navLabel: '学员论坛', navGroup: 'training' }
+      },
+      {
+        path: 'forum/:topicId',
+        name: 'ForumDetail',
+        component: () => import('@/pages/student/ForumDetail.vue'),
+        meta: { navKey: 'forum', navLabel: '帖子详情', navGroup: 'training' }
+      },
+      {
+        path: 'course/:courseId/discussion',
+        name: 'CourseDiscussion',
+        component: () => import('@/pages/student/CourseDiscussion.vue'),
+        meta: { navKey: 'courses', navLabel: '课程讨论', navGroup: 'training' }
+      },
+      {
         path: 'course/:courseId/chapter/:chapterId',
         name: 'ChapterView',
         component: () => import('@/pages/student/ChapterView.vue'),
@@ -249,12 +267,18 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/admin/Dashboard.vue'),
         meta: { navKey: 'dashboard', navLabel: '仪表盘', navGroup: 'dashboard' }
       },
-      {
-        path: 'hrwai-users',
-        name: 'HrwaiUserManage',
-        component: () => import('@/pages/admin/HrwaiUserManage.vue'),
-        meta: { navKey: 'hrwai-users', navLabel: '用户管理', navGroup: 'education' }
-      },
+        {
+          path: 'hrwai-users',
+          name: 'HrwaiUserManage',
+          component: () => import('@/pages/admin/HrwaiUserManage.vue'),
+          meta: { navKey: 'hrwai-users', navLabel: '用户管理', navGroup: 'education' }
+        },
+        {
+          path: 'profile-review',
+          name: 'ProfileReview',
+          component: () => import('@/pages/admin/ProfileReview.vue'),
+          meta: { navKey: 'profile-review', navLabel: '资料审核', navGroup: 'education' }
+        },
       {
         path: 'courses',
         name: 'CourseManage',
