@@ -10,7 +10,6 @@ import (
 	"github.com/sashabaranov/go-openai"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/model"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -98,8 +97,8 @@ func registerSettingsRoutes(g *gin.RouterGroup, aiConfigSvc *service.AIConfigSer
 			response.BadRequest(c, "无效的 id")
 			return
 		}
-		var row model.AIConfig
-		if err := db.First(&row, cfgID).Error; err != nil {
+		row, err := aiConfigSvc.GetConfigByID(c.Request.Context(), cfgID)
+		if err != nil {
 			response.BadRequest(c, "配置不存在")
 			return
 		}

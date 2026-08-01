@@ -53,6 +53,27 @@ IMAGE_LIBREOFFICE="${IMAGE_LIBREOFFICE,,}"  # Docker 镜像名必须全小写
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 
+# 镜像加速代理（ghcr.io pull-through 缓存，如 127.0.0.1:5000）
+# 设置后镜像地址自动改写为 ${REGISTRY_PROXY}/<org>/<image>，由本地代理缓存加速拉取
+REGISTRY_PROXY="${REGISTRY_PROXY:-}"
+if [ -n "$REGISTRY_PROXY" ]; then
+    REGISTRY_PROXY="${REGISTRY_PROXY%/}"
+    # 保存原始镜像名（代理不可用时回退直连 / 清理镜像时覆盖新旧两种路径）
+    IMAGE_BACKEND_ORIG="${IMAGE_BACKEND}"
+    IMAGE_FRONTEND_ORIG="${IMAGE_FRONTEND}"
+    IMAGE_LIBREOFFICE_ORIG="${IMAGE_LIBREOFFICE}"
+    case "$IMAGE_BACKEND" in
+        ghcr.io/*) IMAGE_BACKEND="${REGISTRY_PROXY}/${IMAGE_BACKEND#ghcr.io/}" ;;
+    esac
+    case "$IMAGE_FRONTEND" in
+        ghcr.io/*) IMAGE_FRONTEND="${REGISTRY_PROXY}/${IMAGE_FRONTEND#ghcr.io/}" ;;
+    esac
+    case "$IMAGE_LIBREOFFICE" in
+        ghcr.io/*) IMAGE_LIBREOFFICE="${REGISTRY_PROXY}/${IMAGE_LIBREOFFICE#ghcr.io/}" ;;
+    esac
+    log_info "已启用镜像加速代理: ${REGISTRY_PROXY}"
+fi
+
 # 健康检查
 HEALTH_CHECK_RETRIES="${HEALTH_CHECK_RETRIES:-20}"
 HEALTH_CHECK_INTERVAL="${HEALTH_CHECK_INTERVAL:-6}"
@@ -127,10 +148,6 @@ write_env_file() {
         printf 'CORS_ORIGINS='
         env_val "${CORS_ORIGINS:-}"; echo
 
-        echo "# 残值评估 JWT 密钥（生产环境必需）"
-        printf 'VALUATION_JWT_SECRET_KEY='
-        env_val "${VALUATION_JWT_SECRET_KEY:-}"; echo
-
         echo "BACKEND_IMAGE=${IMAGE_BACKEND}:${IMAGE_TAG}"
         echo "FRONTEND_IMAGE=${IMAGE_FRONTEND}:${IMAGE_TAG}"
         echo "LIBREOFFICE_IMAGE=${IMAGE_LIBREOFFICE:-forklift-libreoffice}:${IMAGE_TAG}"
@@ -160,7 +177,7 @@ write_env_file() {
         echo "BACKEND_HOST_PORT=${BACKEND_HOST_PORT:-8080}"
 
         # Volume 路径配置
-        # 默认 named volume（staging）；测试环境(Docker 19.03)用 bind mount 绕过 volume 权限 bug
+        # 默认 named volume（production）；测试环境(Docker 19.03)用 bind mount 绕过 volume 权限 bug
         # 测试环境设置: PG_VOLUME=./data/pgdata, REDIS_VOLUME=./data/redis 等
         echo "PG_VOLUME=${PG_VOLUME:-pgdata-prod}"
         echo "REDIS_VOLUME=${REDIS_VOLUME:-redisdata-prod}"
@@ -328,7 +345,7 @@ create_backup() {
     # 清理旧数据库备份（保留最近 10 份，每份约几 MB）
     ls -t "$BACKUP_DIR"/db_backup_*.sql.gz 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null || true
 
-    # ---- 异地备份:同步到 pve-01（仅 staging 环境配置了 BACKUP_REMOTE_HOST 时执行） ----
+    # ---- 异地备份:同步到 pve-01（仅 production 环境配置了 BACKUP_REMOTE_HOST 时执行） ----
     if [ -n "${BACKUP_REMOTE_HOST:-}" ] && [ -f "$DB_BACKUP_FILE" ]; then
         log_info "同步数据库备份到 ${BACKUP_REMOTE_HOST}..."
         local remote_dir="${BACKUP_REMOTE_DIR:-/opt/forklift-backups}"
@@ -365,6 +382,45 @@ login_registry() {
 }
 
 # ======================================================================
+# 确保镜像加速代理可用（本地 pull-through 缓存）
+# ======================================================================
+ensure_registry_proxy() {
+    [ -z "$REGISTRY_PROXY" ] && return 0
+
+    log_info ">>> 检查镜像加速代理: ${REGISTRY_PROXY} ..."
+
+    # 仅当代理是本机回环地址时，自动创建/启动 registry:2 缓存容器
+    if [ "$REGISTRY_PROXY" = "127.0.0.1:5000" ]; then
+        if ! docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'ghcr-proxy'; then
+            log_info "启动 ghcr pull-through 缓存容器 (registry:2)..."
+            docker pull registry:2 >/dev/null 2>&1 || true
+            docker run -d --name ghcr-proxy --restart unless-stopped \
+                -p 127.0.0.1:5000:5000 \
+                -e REGISTRY_PROXY_REMOTEURL=https://ghcr.io \
+                -v ghcr-cache:/var/lib/registry \
+                registry:2 >/dev/null 2>&1 || true
+        fi
+        if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ghcr-proxy'; then
+            docker start ghcr-proxy >/dev/null 2>&1 || true
+        fi
+    fi
+
+    # 等待代理就绪（最多 10 秒），失败则回退直连 ghcr.io
+    for i in $(seq 1 10); do
+        if curl -s -o /dev/null "http://${REGISTRY_PROXY}/v2/"; then
+            log_ok "镜像加速代理就绪: ${REGISTRY_PROXY}"
+            return 0
+        fi
+        sleep 1
+    done
+    log_warn "镜像加速代理未就绪 (${REGISTRY_PROXY})，本次部署回退直连 ghcr.io"
+    IMAGE_BACKEND="${IMAGE_BACKEND_ORIG:-$IMAGE_BACKEND}"
+    IMAGE_FRONTEND="${IMAGE_FRONTEND_ORIG:-$IMAGE_FRONTEND}"
+    IMAGE_LIBREOFFICE="${IMAGE_LIBREOFFICE_ORIG:-$IMAGE_LIBREOFFICE}"
+    return 0
+}
+
+# ======================================================================
 # 拉取 Docker 镜像
 # ======================================================================
 pull_images() {
@@ -381,78 +437,93 @@ pull_images() {
     # 拉取后端镜像(含重试,应对 ghcr.io 国内访问不稳定)
     if [ -n "$IMAGE_BACKEND" ]; then
         local backend_image="${IMAGE_BACKEND}:${IMAGE_TAG}"
-        local pull_retries=3
-        local pull_ok=false
-
-        for attempt in $(seq 1 $pull_retries); do
-            log_info "拉取后端镜像 (尝试 $attempt/$pull_retries): $backend_image"
-            if docker pull "$backend_image"; then
-                pull_ok=true
-                break
-            fi
-            if [ $attempt -lt $pull_retries ]; then
-                log_warn "拉取失败,10 秒后重试..."
-                sleep 10
-            fi
-        done
-
-        if [ "$pull_ok" = "true" ]; then
-            log_ok "后端镜像: $backend_image"
+        # 本地已有该 tag 则跳过拉取（重复部署/代理缓存命中时显著提速）
+        if docker image inspect "$backend_image" &>/dev/null; then
+            log_ok "后端镜像已缓存，跳过拉取: $backend_image"
         else
-            log_error "后端镜像拉取失败(已重试 $pull_retries 次): $backend_image"
-            exit 1
+            local pull_retries=3
+            local pull_ok=false
+
+            for attempt in $(seq 1 $pull_retries); do
+                log_info "拉取后端镜像 (尝试 $attempt/$pull_retries): $backend_image"
+                if docker pull "$backend_image"; then
+                    pull_ok=true
+                    break
+                fi
+                if [ $attempt -lt $pull_retries ]; then
+                    log_warn "拉取失败,10 秒后重试..."
+                    sleep 10
+                fi
+            done
+
+            if [ "$pull_ok" = "true" ]; then
+                log_ok "后端镜像: $backend_image"
+            else
+                log_error "后端镜像拉取失败(已重试 $pull_retries 次): $backend_image"
+                exit 1
+            fi
         fi
     fi
 
     # 拉取前端镜像(前端镜像小,通常无需重试)
     if [ -n "$IMAGE_FRONTEND" ]; then
         local frontend_image="${IMAGE_FRONTEND}:${IMAGE_TAG}"
-        local pull_retries=3
-        local pull_ok=false
-
-        for attempt in $(seq 1 $pull_retries); do
-            log_info "拉取前端镜像 (尝试 $attempt/$pull_retries): $frontend_image"
-            if docker pull "$frontend_image"; then
-                pull_ok=true
-                break
-            fi
-            if [ $attempt -lt $pull_retries ]; then
-                log_warn "拉取失败,10 秒后重试..."
-                sleep 10
-            fi
-        done
-
-        if [ "$pull_ok" = "true" ]; then
-            log_ok "前端镜像: $frontend_image"
+        # 本地已有该 tag 则跳过拉取
+        if docker image inspect "$frontend_image" &>/dev/null; then
+            log_ok "前端镜像已缓存，跳过拉取: $frontend_image"
         else
-            log_error "前端镜像拉取失败(已重试 $pull_retries 次): $frontend_image"
-            exit 1
+            local pull_retries=3
+            local pull_ok=false
+
+            for attempt in $(seq 1 $pull_retries); do
+                log_info "拉取前端镜像 (尝试 $attempt/$pull_retries): $frontend_image"
+                if docker pull "$frontend_image"; then
+                    pull_ok=true
+                    break
+                fi
+                if [ $attempt -lt $pull_retries ]; then
+                    log_warn "拉取失败,10 秒后重试..."
+                    sleep 10
+                fi
+            done
+
+            if [ "$pull_ok" = "true" ]; then
+                log_ok "前端镜像: $frontend_image"
+            else
+                log_error "前端镜像拉取失败(已重试 $pull_retries 次): $frontend_image"
+                exit 1
+            fi
         fi
     fi
 
     # 拉取 LibreOffice sidecar 镜像(含 LibreOffice,体积大,需重试)
     if [ -n "$IMAGE_LIBREOFFICE" ]; then
         local lo_image="${IMAGE_LIBREOFFICE}:${IMAGE_TAG}"
-        local pull_retries=3
-        local pull_ok=false
-
-        for attempt in $(seq 1 $pull_retries); do
-            log_info "拉取 LibreOffice sidecar 镜像 (尝试 $attempt/$pull_retries): $lo_image"
-            if docker pull "$lo_image"; then
-                pull_ok=true
-                break
-            fi
-            if [ $attempt -lt $pull_retries ]; then
-                log_warn "拉取失败,10 秒后重试..."
-                sleep 10
-            fi
-        done
-
-        if [ "$pull_ok" = "true" ]; then
-            log_ok "LibreOffice sidecar 镜像: $lo_image"
+        # 本地已有该 tag 则跳过拉取
+        if docker image inspect "$lo_image" &>/dev/null; then
+            log_ok "LibreOffice sidecar 镜像已缓存，跳过拉取: $lo_image"
         else
-            log_error "LibreOffice sidecar 镜像拉取失败(已重试 $pull_retries 次): $lo_image"
-            exit 1
+            local pull_retries=3
+            local pull_ok=false
+
+            for attempt in $(seq 1 $pull_retries); do
+                log_info "拉取 LibreOffice sidecar 镜像 (尝试 $attempt/$pull_retries): $lo_image"
+                if docker pull "$lo_image"; then
+                    pull_ok=true
+                    break
+                fi
+                if [ $attempt -lt $pull_retries ]; then
+                    log_warn "拉取失败,10 秒后重试..."
+                    sleep 10
+                fi
+            done
+
+            if [ "$pull_ok" = "true" ]; then
+                log_ok "LibreOffice sidecar 镜像: $lo_image"
+            else
+                log_error "LibreOffice sidecar 镜像拉取失败(已重试 $pull_retries 次): $lo_image"
+                exit 1
+            fi
         fi
     fi
 
@@ -735,6 +806,9 @@ cleanup() {
         log_ok "已清理 $DANGLING 个悬空镜像"
     fi
 
+    # 清理旧版本镜像（保留最近 KEEP_IMAGES 个）
+    prune_old_images
+
     # 清理旧备份（保留最近 10 个）
     if [ -d "$BACKUP_DIR" ]; then
         ls -t "$BACKUP_DIR"/backup_*.txt 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null || true
@@ -744,6 +818,37 @@ cleanup() {
     docker builder prune -f --filter "until=72h" 2>/dev/null || true
 
     log_ok "清理完成"
+}
+
+# ======================================================================
+# 清理旧版本镜像（按仓库保留最近 KEEP_IMAGES 个）
+# ======================================================================
+prune_old_images() {
+    if [ "${KEEP_IMAGES:-3}" -le 0 ]; then
+        log_info ">>> KEEP_IMAGES<=0，跳过旧镜像清理"
+        return 0
+    fi
+    log_info ">>> 清理旧版本镜像 (每个仓库保留最近 ${KEEP_IMAGES} 个)..."
+
+    local repo
+    for repo in "${IMAGE_BACKEND}" "${IMAGE_FRONTEND}" "${IMAGE_LIBREOFFICE}" \
+                "${IMAGE_BACKEND_ORIG:-}" "${IMAGE_FRONTEND_ORIG:-}" "${IMAGE_LIBREOFFICE_ORIG:-}"; do
+        [ -z "$repo" ] && continue
+        # 按创建时间倒序列出该仓库的镜像，保留前 KEEP_IMAGES 个，其余删除
+        local kept=0
+        local created id ref
+        while IFS='|' read -r created id ref; do
+            [ -z "$ref" ] && continue
+            kept=$((kept + 1))
+            if [ "$kept" -le "$KEEP_IMAGES" ]; then
+                continue
+            fi
+            log_info "删除旧镜像: ${ref} (${id})"
+            docker image rm "${id}" >/dev/null 2>&1 || true
+        done < <(docker images --format '{{.CreatedAt}}|{{.ID}}|{{.Repository}}:{{.Tag}}' "$repo" 2>/dev/null | grep -v '|<none>' | sort -r)
+    done
+
+    log_ok "旧镜像清理完成"
 }
 
 # ======================================================================
@@ -846,6 +951,7 @@ main() {
             # write_ssl_certs
             create_backup
             login_registry
+            ensure_registry_proxy
             pull_images
 
             # 先拉起数据库与 Redis，供迁移预检读取当前版本

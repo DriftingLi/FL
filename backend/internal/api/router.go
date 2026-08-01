@@ -49,6 +49,11 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "backend is running"})
 	})
+	// 存活探针（liveness）：仅表示进程存活，不依赖外部组件。
+	// 容器编排探活应使用本端点，避免 Redis 抖动导致容器被重启。
+	r.GET("/api/health/live", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
 	r.GET("/api", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "Forklift Training System API", "version": "1.0.0"})
 	})
@@ -61,7 +66,9 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 	// 初始化服务
 	authSvc := service.NewAuthService(db, cfg.JWTSecretKey, cfg.JWTExpiry(),
 		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student)
-	authH := NewAuthHandler(authSvc)
+	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st)
+	reviewSvc := service.NewProfileReviewService(db)
+	authH := NewAuthHandler(authSvc, fileSvc, st, reviewSvc)
 
 	// ===== API 路由组 =====
 	api := r.Group("/api")
@@ -75,6 +82,9 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 		auth.POST("/tutor-login", authH.TutorLogin)
 		auth.POST("/logout", middleware.JWTAuth(cfg), authH.Logout)
 		auth.GET("/me", middleware.JWTAuth(cfg), authH.Me)
+		// 个人资料：昵称 / 头像
+		auth.PUT("/profile", middleware.JWTAuth(cfg), authH.UpdateProfile)
+		auth.POST("/avatar", middleware.JWTAuth(cfg), authH.UploadAvatar)
 	}
 
 	// 注册全部 13 个业务蓝图：
@@ -82,7 +92,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 	//   level-exam/grading/tutor/wrong-questions/mock-exam/admin
 	//   practice-mode（题库练习模式：自由刷题/知识点专项，对应 question_practice_record）
 	// AI 配置服务在 NewRouter 创建一次，被 admin 和 AI 助手模块复用
-	aiConfigSvc := service.NewAIConfigService(db)
+	aiConfigSvc := service.NewAIConfigService(db, cfg.SecretKey)
 	RegisterCoursesRoutes(api, cfg, db, st)
 	RegisterExamRoutes(api, cfg, db)
 	RegisterStudentRoutes(api, cfg, db)
@@ -96,6 +106,8 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 	RegisterMockExamRoutes(api, cfg, db)
 	RegisterFeaturedRoutes(api, cfg, db, st)
 	RegisterAIAssistantRoutes(api, cfg, db, aiConfigSvc)
+	RegisterForumRoutes(api, cfg, db)
+	RegisterProfileReviewRoutes(api, cfg, db, st)
 
 	_ = response.Success // 确保包引用
 	return r

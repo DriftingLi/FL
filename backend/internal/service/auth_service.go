@@ -125,6 +125,7 @@ func (s *AuthService) HrwaiRegister(phone, password, name, email, company string
 		Username:  phone,
 		Password:  hashed,
 		Name:      name,
+		Nickname:  generateDefaultNickname(s.db),
 		Phone:     phone,
 		Email:     email,
 		Company:   company,

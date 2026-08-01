@@ -55,16 +55,22 @@
 
         <el-dropdown @command="handleCommand" trigger="click">
           <div class="user-avatar">
-            <div class="avatar-circle">
-              {{ (authStore.userInfo?.name || authStore.userInfo?.username || '?').charAt(0) }}
+            <img
+              v-if="authStore.userInfo?.avatar_url"
+              :src="String(authStore.userInfo.avatar_url)"
+              class="avatar-circle avatar-img"
+              alt="头像"
+            />
+            <div v-else class="avatar-circle">
+              {{ (authStore.userInfo?.nickname || authStore.userInfo?.name || authStore.userInfo?.username || '?').charAt(0) }}
             </div>
-            <span class="user-name">{{ authStore.userInfo?.name || authStore.userInfo?.username }}</span>
+            <span class="user-name">{{ authStore.userInfo?.nickname || authStore.userInfo?.name || authStore.userInfo?.username }}</span>
             <el-icon class="dropdown-arrow"><ArrowDown /></el-icon>
           </div>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="profile">
-                <el-icon><User /></el-icon>个人中心
+                <el-icon><User /></el-icon>修改头像/昵称
               </el-dropdown-item>
               <el-dropdown-item command="logout" divided>
                 <el-icon><SwitchButton /></el-icon>退出登录
@@ -116,6 +122,9 @@
         </nav>
       </div>
     </transition>
+
+    <!-- 修改头像/昵称弹窗（官网顶栏入口） -->
+    <ProfileEditDialog ref="profileDialogRef" />
   </header>
 </template>
 
@@ -132,6 +141,7 @@ import {
   Close
 } from '@element-plus/icons-vue'
 import type { NavItem } from '@/config/navigation'
+import ProfileEditDialog from '@/components/layout/ProfileEditDialog.vue'
 
 const props = defineProps<{
   menuItems: NavItem[]
@@ -141,6 +151,7 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const mobileOpen = ref(false)
+const profileDialogRef = ref<InstanceType<typeof ProfileEditDialog> | null>(null)
 
 const homePath = computed(() => {
   const role = authStore.userInfo?.role
@@ -195,7 +206,7 @@ async function handleCommand(command: string) {
       // cancelled
     }
   } else if (command === 'profile') {
-    router.push('/profile')
+    profileDialogRef.value?.open()
   }
 }
 </script>
@@ -412,6 +423,10 @@ async function handleCommand(command: string) {
   font-size: var(--text-sm);
   font-weight: var(--font-semibold);
   font-family: var(--font-display);
+}
+
+.avatar-img {
+  object-fit: cover;
 }
 
 .user-name {

@@ -245,11 +245,19 @@ func (h *BatteryHandler) DownloadReport(c *gin.Context) {
 			Error(c, http.StatusInternalServerError, CodeInternalError, "生成 PDF 失败")
 			return
 		}
-	} else if exists, _ := h.storage.Exists(ctx, pdfURL); !exists {
-		pdfURL = h.regenerateAndUpload(ctx, eval, id)
-		if pdfURL == "" {
-			Error(c, http.StatusInternalServerError, CodeInternalError, "生成 PDF 失败")
-			return
+	} else {
+		exists, err := h.storage.Exists(ctx, pdfURL)
+		if err != nil {
+			h.logger.Warn("检查存储中 PDF 是否存在失败，按不存在处理并重新生成",
+				zap.String("url", pdfURL), zap.Error(err))
+			exists = false
+		}
+		if !exists {
+			pdfURL = h.regenerateAndUpload(ctx, eval, id)
+			if pdfURL == "" {
+				Error(c, http.StatusInternalServerError, CodeInternalError, "生成 PDF 失败")
+				return
+			}
 		}
 	}
 

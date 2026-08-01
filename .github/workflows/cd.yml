@@ -15,11 +15,10 @@ on:
       environment:
         description: 部署目标环境
         type: choice
-        default: staging
+        default: production
         options:
-          - staging
-          - testing
           - production
+          - testing
       skip_backend:
         description: 跳过后端部署
         type: boolean
@@ -194,17 +193,21 @@ jobs:
       needs.build-libreoffice.result == 'success'
     runs-on: ubuntu-latest
     environment:
-      name: ${{ inputs.environment || 'staging' }}
+      name: ${{ inputs.environment || 'production' }}
     env:
       # 镜像信息（来自 build-backend/build-frontend/build-libreoffice outputs）
       IMAGE_TAG: ${{ needs.build-backend.outputs.image_tag || github.sha }}
       # 注:job 级 env 块不能引用 workflow 级 env,必须内联 vars 表达式
       IMAGE_LIBREOFFICE: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-libreoffice
+      # 镜像加速代理（ghcr pull-through 缓存，如 127.0.0.1:5000；留空则直连 ghcr.io）
+      # 在仓库级 Variables 设置 REGISTRY_PROXY=127.0.0.1:5000，所有环境统一生效
+      # （当前生产也部署在 lxc201，代理同样可用；若未来生产迁到独立服务器，请改用环境级变量单独配置）
+      REGISTRY_PROXY: ${{ vars.REGISTRY_PROXY || '' }}
+      # 旧版本镜像保留数量（部署后清理更早版本；可在仓库级 Variables 中覆盖）
+      KEEP_IMAGES: ${{ vars.KEEP_IMAGES || '3' }}
       # SSL 证书内容（从 GitHub Secrets 注入，部署时写入服务器固定路径）
       SSL_FULLCHAIN: ${{ secrets.SSL_FULLCHAIN }}
       SSL_PRIVKEY: ${{ secrets.SSL_PRIVKEY }}
-      # 残值评估
-      VALUATION_JWT_SECRET_KEY: ${{ secrets.VALUATION_JWT_SECRET_KEY }}
       # 域名（启动时 envsubst 替换 nginx 配置中的 ${DOMAIN}）
       DOMAIN: ${{ secrets.DOMAIN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -236,9 +239,9 @@ jobs:
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_BUCKET: ${{ secrets.R2_BUCKET }}
       R2_PUBLIC_DOMAIN: ${{ secrets.R2_PUBLIC_DOMAIN }}
-      # backend 宿主机映射端口（staging 默认 8080；testing 用 18080 避免与 cadvisor 冲突）
+      # backend 宿主机映射端口（production 默认 8080；testing 用 18080 避免与 cadvisor 冲突）
       BACKEND_HOST_PORT: ${{ secrets.BACKEND_HOST_PORT || '8080' }}
-      # 异地备份（staging: pve-02 → pve-01；testing: 留空跳过）
+      # 异地备份（production: pve-02 → pve-01；testing: 留空跳过）
       BACKUP_REMOTE_HOST: ${{ secrets.BACKUP_REMOTE_HOST }}
       BACKUP_REMOTE_DIR: ${{ secrets.BACKUP_REMOTE_DIR || '/opt/forklift-backups' }}
       BACKUP_REMOTE_KEY: ${{ secrets.BACKUP_REMOTE_KEY || '/root/.ssh/pve01-sync' }}
@@ -247,8 +250,8 @@ jobs:
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT || '2222' }}
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-      # SSH 跳板配置（staging 和 testing 均已迁移到 LXC,使用 ProxyJump）
-      # staging: SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(172.17.1.201)
+      # SSH 跳板配置（production 和 testing 均已迁移到 LXC,使用 ProxyJump）
+      # production: SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(172.17.1.201)
       # testing: SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(172.17.1.200)
       #         pve-02 与 LXC 同网段路由可达,无需 pve-01 中转
       SSH_JUMP_HOST: ${{ secrets.SSH_JUMP_HOST || '' }}
@@ -266,10 +269,10 @@ jobs:
 
       # --------------------------------------------------------
       # Step 2.1: 配置 SSH
-      #   staging/testing: 两层 ProxyJump (pve-02 → LXC)
+      #   production/testing: 两层 ProxyJump (pve-02 → LXC)
       #           SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(目标)
       #           pve-02 与 LXC 同网段(172.17.1.0/24)路由可达
-      #   production: 直连 (SSH_HOST:SSH_PORT, SSH_JUMP_HOST 为空)
+      #   若某环境未配置 SSH_JUMP_HOST，则直连 (SSH_HOST:SSH_PORT)
       # --------------------------------------------------------
       - name: 配置 SSH
         run: |
@@ -280,7 +283,7 @@ jobs:
             -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
           if [ -n "$SSH_JUMP_HOST" ]; then
-            # testing 环境: 两层 ProxyJump (pve-02 → LXC)
+            # 有跳板环境（production/testing）: 两层 ProxyJump (pve-02 → LXC)
             cat > ~/.ssh/config << EOF
           Host jump
               HostName $SSH_HOST
@@ -300,7 +303,7 @@ jobs:
             echo "SSH_PORT_OPT=" >> $GITHUB_ENV
             echo "SSH 配置: 跳板模式 (jump=$SSH_HOST:$SSH_PORT → target=$SSH_JUMP_HOST)"
           else
-            # staging 环境: 直连 pve-02
+            # 无跳板环境: 直连
             cat > ~/.ssh/config << EOF
           Host target
               HostName $SSH_HOST
@@ -359,6 +362,8 @@ jobs:
             printf 'export DOMAIN=%q\n' "${DOMAIN:-}"
             printf 'export GITHUB_TOKEN=%q\n' "${GITHUB_TOKEN:-}"
             printf 'export REGISTRY=%q\n' "${REGISTRY:-ghcr.io}"
+            printf 'export REGISTRY_PROXY=%q\n' "${REGISTRY_PROXY:-}"
+            printf 'export KEEP_IMAGES=%q\n' "${KEEP_IMAGES:-3}"
             printf 'export DATABASE_URL=%q\n' "${DATABASE_URL:-}"
             printf 'export DB_USER=%q\n' "${DB_USER:-forklift}"
             printf 'export DB_PASSWORD=%q\n' "${DB_PASSWORD:-}"
@@ -369,7 +374,6 @@ jobs:
             printf 'export TUTOR_DEFAULT_PASSWORD=%q\n' "${TUTOR_DEFAULT_PASSWORD:-}"
             printf 'export STUDENT_DEFAULT_PASSWORD=%q\n' "${STUDENT_DEFAULT_PASSWORD:-}"
             printf 'export CORS_ORIGINS=%q\n' "${CORS_ORIGINS:-}"
-            printf 'export VALUATION_JWT_SECRET_KEY=%q\n' "${VALUATION_JWT_SECRET_KEY:-}"
             printf 'export COMPOSE_FILE=%q\n' "${COMPOSE_FILE:-docker-compose.prod.yml}"
             printf 'export DEPLOY_PATH=%q\n' "${DEPLOY_PATH:-/opt/forklift-training}"
             printf 'export SKIP_MIGRATION=%q\n' "${SKIP_MIGRATION:-false}"

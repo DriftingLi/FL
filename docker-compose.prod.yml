@@ -19,7 +19,7 @@ services:
       TZ: Asia/Shanghai
     # Docker 19.03 的默认 seccomp 配置不包含 clone3() 等系统调用，
     # 导致 PostgreSQL 15 报 "could not write to file postmaster.pid: Operation not permitted"
-    # pve-02(staging)仍为 Docker 19.03，需保留此项；Docker 24+ 可移除
+    # pve-02(production)仍为 Docker 19.03，需保留此项；Docker 24+ 可移除
     # pve-01(testing)通过 LXC 运行 Docker 24+，此项无害但非必需
     security_opt:
       - seccomp:unconfined
@@ -28,7 +28,7 @@ services:
       - "5432"
     volumes:
       # 支持 bind mount 覆盖：测试环境(Docker 19.03)用 bind mount 绕过 named volume 权限 bug
-      # 默认 named volume（staging），测试环境设置 PG_VOLUME=./data/pgdata
+      # 默认 named volume（production），测试环境设置 PG_VOLUME=./data/pgdata
       - ${PG_VOLUME:-pgdata-prod}:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-forklift} -d forklift_training"]
@@ -161,7 +161,6 @@ services:
       TUTOR_DEFAULT_PASSWORD: ${TUTOR_DEFAULT_PASSWORD}
       STUDENT_DEFAULT_PASSWORD: ${STUDENT_DEFAULT_PASSWORD}
       VALUATION_PDF_OUTPUT_DIR: /data/reports
-      VALUATION_JWT_SECRET_KEY: ${VALUATION_JWT_SECRET_KEY:-}
       REDIS_ADDR: redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       REDIS_DB: "${REDIS_DB:-0}"
@@ -189,7 +188,7 @@ services:
       - ${UPLOADS_VOLUME:-uploads-data}:/data/uploads
       - ${REPORTS_VOLUME:-reports-data}:/data/reports
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health/live"]
       interval: 30s
       timeout: 5s
       retries: 3

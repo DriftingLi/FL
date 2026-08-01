@@ -96,14 +96,15 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    await adminApi.createHrwaiUser({
+    const res = await adminApi.createHrwaiUser({
       phone: formData.phone,
       password: formData.password,
       name: formData.name,
       email: formData.email || undefined,
       company: formData.company || undefined
     })
-    ElMessage.success('用户添加成功')
+    const nickname = res.data?.nickname
+    ElMessage.success(nickname ? `用户添加成功，默认昵称：${nickname}` : '用户添加成功')
     dialogVisible.value = false
     loadUsers()
   } catch (error) {
@@ -199,7 +200,7 @@ onMounted(() => {
     <div class="filter-bar">
       <el-input
         v-model="searchKeyword"
-        placeholder="搜索用户名 / 姓名 / 手机号"
+        placeholder="搜索用户名 / 姓名 / 昵称 / 手机号"
         clearable
         style="width: 280px"
         @clear="handleSearch"
@@ -216,6 +217,11 @@ onMounted(() => {
       <el-table-column prop="id" label="ID" width="70" align="center" />
       <el-table-column prop="username" label="用户名" min-width="140" />
       <el-table-column prop="name" label="姓名" min-width="120" />
+      <el-table-column prop="nickname" label="昵称" min-width="120">
+        <template #default="{ row }">
+          {{ row.nickname || '-' }}
+        </template>
+      </el-table-column>
       <el-table-column prop="phone" label="手机号" width="130" />
       <el-table-column prop="email" label="邮箱" min-width="160" show-overflow-tooltip>
         <template #default="{ row }">

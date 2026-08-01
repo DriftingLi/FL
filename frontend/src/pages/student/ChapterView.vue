@@ -75,17 +75,7 @@
         <el-empty v-if="!chapterDetail.content && chapterFiles.length === 0" description="该章节暂无内容" />
       </div>
 
-      <div class="complete-study-bar">
-        <el-button
-          v-if="chapterDetail.study_status !== 'completed'"
-          type="success"
-          @click="completeStudy"
-          size="large"
-        >
-          完成本章学习
-        </el-button>
-        <el-tag v-else type="success" size="large">本章已完成</el-tag>
-      </div>
+      <ChapterDiscussion v-if="chapterDetail.chapter_id" :chapter-id="chapterDetail.chapter_id" />
 
       <div class="chapter-navigation">
         <div class="nav-prev">
@@ -137,6 +127,7 @@ import VideoPlayer from '@/components/student/VideoPlayer.vue'
 import DocumentViewer from '@/components/student/DocumentViewer.vue'
 import PptViewer from '@/components/student/PptViewer.vue'
 import ImageViewer from '@/components/student/ImageViewer.vue'
+import ChapterDiscussion from '@/components/student/ChapterDiscussion.vue'
 
 marked.use(
   markedHighlight({
@@ -323,36 +314,6 @@ function stopStudy() {
   isStudying.value = false
 }
 
-async function completeStudy() {
-  const chapterId = chapterDetail.value?.chapter_id
-  if (!chapterId) return
-
-  const finalIncremental = studySeconds.value - reportedSeconds
-  // 仅上报未上报过的增量时长，避免与已上报部分重复累加
-  const totalDuration = finalIncremental > 0 ? Math.max(Math.ceil(finalIncremental / 60), 1) : 0
-  stopStudy()
-
-  try {
-    const res = await courseApi.updateProgress(Number(courseId.value), {
-      chapter_id: chapterId,
-      duration: totalDuration
-    })
-    if (res.code === 200) {
-      reportedSeconds += finalIncremental
-      // 手动更新章节状态，避免重新加载章节时重置计时器
-      if (chapterDetail.value) {
-        chapterDetail.value.study_status = 'completed'
-      }
-      ElMessage.success('学习进度已保存')
-    } else {
-      ElMessage.error(res.message || '保存学习进度失败')
-    }
-  } catch (error) {
-    console.error('保存学习进度失败:', error)
-    ElMessage.error('保存学习进度失败，请稍后重试')
-  }
-}
-
 function navigateToChapter(targetChapterId: string | number) {
   if (!targetChapterId) return
   router.push({
@@ -515,12 +476,6 @@ onBeforeUnmount(() => {
 .gallery-item {
   border-radius: 8px;
   overflow: hidden;
-}
-
-.complete-study-bar {
-  display: flex;
-  justify-content: center;
-  padding: 8px 0 20px;
 }
 
 .chapter-navigation {

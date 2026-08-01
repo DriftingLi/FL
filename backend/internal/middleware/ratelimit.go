@@ -92,7 +92,7 @@ func RateLimit(cfg *config.Config) gin.HandlerFunc {
 	)
 	return func(c *gin.Context) {
 		// 健康检查端点放行（容器编排探活不应被限流拦截）
-		if c.Request.URL.Path == "/api/health" {
+		if c.Request.URL.Path == "/api/health" || c.Request.URL.Path == "/api/health/live" {
 			c.Next()
 			return
 		}

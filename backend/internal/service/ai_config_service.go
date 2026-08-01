@@ -13,6 +13,7 @@ import (
 
 	"forklift-training/internal/cache"
 	"forklift-training/internal/model"
+	"forklift-training/internal/security"
 )
 
 // AI 功能键（与前端展示一致）。新增功能时在此追加并同步前端。
@@ -94,12 +95,13 @@ const (
 
 // AIConfigService 多 AI 配置管理 + 功能绑定。
 type AIConfigService struct {
-	db *gorm.DB
+	db        *gorm.DB
+	secretKey string // 用于加密 API Key 的主密钥（SECRET_KEY）
 }
 
 // NewAIConfigService 构造 AIConfigService。
-func NewAIConfigService(db *gorm.DB) *AIConfigService {
-	return &AIConfigService{db: db}
+func NewAIConfigService(db *gorm.DB, secretKey string) *AIConfigService {
+	return &AIConfigService{db: db, secretKey: secretKey}
 }
 
 // ListConfigs 返回所有 AI 配置（API Key 脱敏）。
@@ -110,8 +112,13 @@ func (s *AIConfigService) ListConfigs(ctx context.Context) ([]AIConfigDTO, error
 	}
 	out := make([]AIConfigDTO, len(rows))
 	for i, r := range rows {
+		key, err := security.DecryptSecret(r.APIKey, s.secretKey)
+		if err != nil {
+			slog.Warn("ListConfigs 解密 API Key 失败，按原样脱敏展示", "id", r.ID, "error", err)
+			key = r.APIKey
+		}
 		out[i] = AIConfigDTO{
-			ID: r.ID, Name: r.Name, APIKey: MaskKey(r.APIKey),
+			ID: r.ID, Name: r.Name, APIKey: MaskKey(key),
 			BaseURL: r.BaseURL, Model: r.Model,
 			Description: r.Description, IsActive: r.IsActive,
 			CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
@@ -141,6 +148,11 @@ func (s *AIConfigService) GetConfigByID(ctx context.Context, id int) (*model.AIC
 	if err := s.db.WithContext(ctx).First(&cfg, id).Error; err != nil {
 		return nil, err
 	}
+	key, err := security.DecryptSecret(cfg.APIKey, s.secretKey)
+	if err != nil {
+		return nil, fmt.Errorf("解密配置 %d 的 API Key 失败: %w", id, err)
+	}
+	cfg.APIKey = key
 	return &cfg, nil
 }
 
@@ -148,8 +160,12 @@ func (s *AIConfigService) GetConfigByID(ctx context.Context, id int) (*model.AIC
 // 允许创建同 model 的多个配置（用户可能用不同 api_key/base_url 重复配置同款模型）。
 // 绑定到 AI 助手功能时才校验同 model 唯一性（见 checkModelUniqueForFeature）。
 func (s *AIConfigService) CreateConfig(ctx context.Context, name, apiKey, baseURL, modelName, description string) error {
+	encKey, err := security.EncryptSecret(apiKey, s.secretKey)
+	if err != nil {
+		return fmt.Errorf("加密 API Key 失败: %w", err)
+	}
 	row := model.AIConfig{
-		Name: name, APIKey: apiKey, BaseURL: baseURL, Model: modelName,
+		Name: name, APIKey: encKey, BaseURL: baseURL, Model: modelName,
 		Description: description, IsActive: true,
 	}
 	return s.db.WithContext(ctx).Create(&row).Error
@@ -166,7 +182,11 @@ func (s *AIConfigService) UpdateConfig(ctx context.Context, id int, name, apiKey
 		"updated_at":  time.Now(),
 	}
 	if apiKey != "" {
-		updates["api_key"] = apiKey
+		encKey, err := security.EncryptSecret(apiKey, s.secretKey)
+		if err != nil {
+			return fmt.Errorf("加密 API Key 失败: %w", err)
+		}
+		updates["api_key"] = encKey
 	}
 	if isActive != nil {
 		updates["is_active"] = *isActive
@@ -319,6 +339,13 @@ func (s *AIConfigService) ListConfigsForFeature(ctx context.Context, featureKey 
 	if err != nil {
 		return nil, err
 	}
+	for i := range cfgs {
+		key, err := security.DecryptSecret(cfgs[i].APIKey, s.secretKey)
+		if err != nil {
+			return nil, fmt.Errorf("解密配置 %d 的 API Key 失败: %w", cfgs[i].ID, err)
+		}
+		cfgs[i].APIKey = key
+	}
 	return cfgs, nil
 }
 
@@ -439,8 +466,13 @@ func (s *AIConfigService) ResolveConfig(ctx context.Context, featureKey string) 
 	if err == nil && b.ConfigID > 0 {
 		var cfg model.AIConfig
 		if err := s.db.WithContext(ctx).First(&cfg, b.ConfigID).Error; err == nil && cfg.IsActive {
+			key, err := security.DecryptSecret(cfg.APIKey, s.secretKey)
+			if err != nil {
+				slog.Warn("ResolveConfig 解密 API Key 失败，配置不可用", "config_id", b.ConfigID, "error", err)
+				return AISettings{Source: "decrypt-failed"}
+			}
 			return AISettings{
-				APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model,
+				APIKey: key, BaseURL: cfg.BaseURL, Model: cfg.Model,
 				Source: "binding:" + cfg.Name,
 			}
 		}

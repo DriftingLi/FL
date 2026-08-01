@@ -57,6 +57,18 @@ const routes: RouteRecordRaw[] = [
         meta: { navKey: 'courses', navLabel: '课程中心', navGroup: 'training' }
       },
       {
+        path: 'forum',
+        name: 'ForumPage',
+        component: () => import('@/pages/student/ForumPage.vue'),
+        meta: { navKey: 'forum', navLabel: '学员论坛', navGroup: 'training' }
+      },
+      {
+        path: 'forum/:topicId',
+        name: 'ForumDetail',
+        component: () => import('@/pages/student/ForumDetail.vue'),
+        meta: { navKey: 'forum', navLabel: '帖子详情', navGroup: 'training' }
+      },
+      {
         path: 'course/:courseId/chapter/:chapterId',
         name: 'ChapterView',
         component: () => import('@/pages/student/ChapterView.vue'),
@@ -218,21 +230,6 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false }
   },
 
-  // ========== 学员个人中心 ==========
-  {
-    path: '/profile',
-    component: () => import('@/layouts/ProfileLayout.vue'),
-    meta: { requiresAuth: true, role: 'hrwai_user' },
-    children: [
-      {
-        path: '',
-        name: 'Profile',
-        component: () => import('@/pages/student/Profile.vue'),
-        meta: { navKey: 'profile', navLabel: '个人中心', navGroup: 'profile' }
-      }
-    ]
-  },
-
   // ========== 管理员后台 ==========
   {
     path: '/admin',
@@ -249,12 +246,18 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/admin/Dashboard.vue'),
         meta: { navKey: 'dashboard', navLabel: '仪表盘', navGroup: 'dashboard' }
       },
-      {
-        path: 'hrwai-users',
-        name: 'HrwaiUserManage',
-        component: () => import('@/pages/admin/HrwaiUserManage.vue'),
-        meta: { navKey: 'hrwai-users', navLabel: '用户管理', navGroup: 'education' }
-      },
+        {
+          path: 'hrwai-users',
+          name: 'HrwaiUserManage',
+          component: () => import('@/pages/admin/HrwaiUserManage.vue'),
+          meta: { navKey: 'hrwai-users', navLabel: '用户管理', navGroup: 'education' }
+        },
+        {
+          path: 'profile-review',
+          name: 'ProfileReview',
+          component: () => import('@/pages/admin/ProfileReview.vue'),
+          meta: { navKey: 'profile-review', navLabel: '资料审核', navGroup: 'education' }
+        },
       {
         path: 'courses',
         name: 'CourseManage',
@@ -352,10 +355,6 @@ const routes: RouteRecordRaw[] = [
       if (subPath === 'ai-generate') {
         return '/ai-assistant'
       }
-      if (subPath === 'profile') {
-        return '/profile'
-      }
-
       // 默认按角色跳转
       if (role === 'admin') return '/admin/dashboard'
       if (role === 'tutor') return '/training/tutor'

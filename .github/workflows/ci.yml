@@ -311,9 +311,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # master → staging(pve-02 生产), 其他分支 → testing(pve-01 测试)
+          # master → production(pve-02 生产), 其他分支 → testing(pve-01 测试)
           if [ "${{ github.ref }}" = "refs/heads/master" ]; then
-            ENV="staging"
+            ENV="production"
           else
             ENV="testing"
           fi

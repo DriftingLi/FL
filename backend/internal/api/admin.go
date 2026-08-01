@@ -234,6 +234,7 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, a
 			"id":       user.ID,
 			"username": user.Username,
 			"name":     user.Name,
+			"nickname": user.Nickname,
 			"phone":    user.Phone,
 		})
 	})

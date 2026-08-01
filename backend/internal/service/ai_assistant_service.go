@@ -16,6 +16,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/security"
 )
 
 // forkliftExpertSystemPrompt 叉车维修专家系统提示词。
@@ -98,11 +99,12 @@ type modelConfig struct {
 type AIAssistantService struct {
 	db          *gorm.DB
 	aiConfigSvc *AIConfigService
+	secretKey   string // 用于加密用户自定义 API Key 的主密钥（SECRET_KEY）
 }
 
 // NewAIAssistantService 构造 AIAssistantService。
-func NewAIAssistantService(db *gorm.DB, aiConfigSvc *AIConfigService) *AIAssistantService {
-	return &AIAssistantService{db: db, aiConfigSvc: aiConfigSvc}
+func NewAIAssistantService(db *gorm.DB, aiConfigSvc *AIConfigService, secretKey string) *AIAssistantService {
+	return &AIAssistantService{db: db, aiConfigSvc: aiConfigSvc, secretKey: secretKey}
 }
 
 // ListPublicModels 返回管理员绑定到 AI 助手功能的可用配置列表（不含 api_key）。
@@ -128,8 +130,13 @@ func (s *AIAssistantService) ListUserModels(ctx context.Context, userID int) ([]
 	}
 	out := make([]UserModelDTO, len(rows))
 	for i, r := range rows {
+		key, err := security.DecryptSecret(r.APIKey, s.secretKey)
+		if err != nil {
+			slog.Warn("ListUserModels 解密 API Key 失败，按原样脱敏展示", "id", r.ID, "error", err)
+			key = r.APIKey
+		}
 		out[i] = UserModelDTO{
-			ID: r.ID, Name: r.Name, APIKey: MaskKey(r.APIKey),
+			ID: r.ID, Name: r.Name, APIKey: MaskKey(key),
 			BaseURL: r.BaseURL, Model: r.Model,
 			CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 		}
@@ -153,10 +160,15 @@ func (s *AIAssistantService) SaveUserModel(ctx context.Context, userID int, req 
 		return fmt.Errorf("已存在使用模型 %q 的自定义配置", req.Model)
 	}
 
+	encKey, err := security.EncryptSecret(req.APIKey, s.secretKey)
+	if err != nil {
+		return fmt.Errorf("加密 API Key 失败: %w", err)
+	}
+
 	if req.ID > 0 {
 		// 更新
 		updates := map[string]any{
-			"name": req.Name, "api_key": req.APIKey,
+			"name": req.Name, "api_key": encKey,
 			"base_url": req.BaseURL, "model": req.Model,
 			"updated_at": time.Now(),
 		}
@@ -172,7 +184,7 @@ func (s *AIAssistantService) SaveUserModel(ctx context.Context, userID int, req 
 	}
 	// 新建
 	row := model.AIUserModel{
-		UserID: userID, Name: req.Name, APIKey: req.APIKey,
+		UserID: userID, Name: req.Name, APIKey: encKey,
 		BaseURL: req.BaseURL, Model: req.Model,
 	}
 	return s.db.WithContext(ctx).Create(&row).Error
@@ -460,7 +472,11 @@ func (s *AIAssistantService) resolveModelConfig(ctx context.Context, userID int,
 		if m.ID == 0 {
 			return nil, gorm.ErrRecordNotFound
 		}
-		return &modelConfig{APIKey: m.APIKey, BaseURL: m.BaseURL, Model: m.Model}, nil
+		key, err := security.DecryptSecret(m.APIKey, s.secretKey)
+		if err != nil {
+			return nil, fmt.Errorf("解密用户自定义模型 API Key 失败: %w", err)
+		}
+		return &modelConfig{APIKey: key, BaseURL: m.BaseURL, Model: m.Model}, nil
 	case "custom":
 		if req.CustomAPIKey == "" || req.CustomBaseURL == "" || req.CustomModel == "" {
 			return nil, errors.New("自定义模型配置不完整")

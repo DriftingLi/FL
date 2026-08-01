@@ -35,7 +35,6 @@
           <h4 class="footer-title">支持</h4>
           <ul class="footer-links">
             <li><router-link to="/ai-assistant">AI 助手</router-link></li>
-            <li><router-link to="/profile">个人中心</router-link></li>
             <li><a href="#">帮助文档</a></li>
             <li><a href="#">意见反馈</a></li>
           </ul>

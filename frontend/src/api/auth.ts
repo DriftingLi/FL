@@ -37,5 +37,16 @@ export const authApi = {
 
   getUserInfo(config?: AxiosRequestConfig) {
     return request.get('/auth/me', config)
+  },
+
+  updateProfile(data: { nickname: string }) {
+    return request.put('/auth/profile', data)
+  },
+
+  uploadAvatar(formData: FormData) {
+    return request.post('/auth/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000
+    })
   }
 }

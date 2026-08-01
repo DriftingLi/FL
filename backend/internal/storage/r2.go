@@ -3,13 +3,16 @@ package storage
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awscfg "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // R2Storage Cloudflare R2 对象存储（S3 兼容 API）。
@@ -87,7 +90,7 @@ func (s *R2Storage) Delete(ctx context.Context, url string) error {
 }
 
 // Exists 通过 HeadObject 检查 R2 中是否存在该文件。
-// 任何错误（含 404 NotFound）都视为不存在，不向上抛错。
+// 仅 404 NotFound 视为文件不存在；其余错误（网络/权限等）原样返回，避免掩盖真实故障。
 func (s *R2Storage) Exists(ctx context.Context, url string) (bool, error) {
 	if url == "" {
 		return false, nil
@@ -101,7 +104,11 @@ func (s *R2Storage) Exists(ctx context.Context, url string) (bool, error) {
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		return false, nil
+		var respErr *smithyhttp.ResponseError
+		if errors.As(err, &respErr) && respErr.HTTPStatusCode() == http.StatusNotFound {
+			return false, nil
+		}
+		return false, err
 	}
 	return true, nil
 }

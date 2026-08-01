@@ -10,6 +10,7 @@ export interface HrwaiUser {
   id: number
   username: string
   name: string
+  nickname?: string
   phone: string
   email?: string
   company?: string
@@ -47,6 +48,31 @@ export interface AddTutorPayload {
 export interface GenerateContentPayload {
   course_id?: number
   chapter_ids?: number[]
+}
+
+// ===== 资料审核（昵称/头像） =====
+
+export interface ProfileChangeRequest {
+  id: number
+  user_id: number
+  username: string
+  name: string
+  nickname: string
+  avatar_url: string
+  field_type: 'nickname' | 'avatar'
+  old_value: string
+  new_value: string
+  status: 'pending' | 'approved' | 'rejected'
+  reject_reason?: string
+  reviewed_by?: number
+  reviewed_at?: string | null
+  created_at: string
+}
+
+export interface ProfileReviewsQuery {
+  status?: string
+  page?: number
+  page_size?: number
 }
 
 // ===== AI 多配置 =====
@@ -252,5 +278,19 @@ export const adminApi = {
   // 解除多绑定功能的单个配置绑定
   unbindFeatureConfig(featureKey: string, configId: number) {
     return request.delete(`/admin/ai-feature-bindings/${featureKey}/configs/${configId}`)
+  },
+
+  // ===== 资料审核 =====
+
+  listProfileReviews(params: ProfileReviewsQuery) {
+    return request.get('/admin/profile-reviews', { params })
+  },
+
+  approveProfileReview(id: number) {
+    return request.post(`/admin/profile-reviews/${id}/approve`)
+  },
+
+  rejectProfileReview(id: number, reason: string) {
+    return request.post(`/admin/profile-reviews/${id}/reject`, { reason })
   }
 }

@@ -28,6 +28,7 @@ type HrwaiUserSummary struct {
 	ID        int       `json:"id"`
 	Username  string    `json:"username"`
 	Name      string    `json:"name"`
+	Nickname  string    `json:"nickname"`
 	Phone     string    `json:"phone"`
 	Email     string    `json:"email"`
 	Company   string    `json:"company"`
@@ -47,7 +48,7 @@ func (s *AdminService) ListHrwaiUsers(page, pageSize int, keyword string) (map[s
 	q := s.db.Model(&model.HrwaiUser{})
 	if keyword != "" {
 		like := "%" + keyword + "%"
-		q = q.Where("username LIKE ? OR name LIKE ? OR phone LIKE ?", like, like, like)
+		q = q.Where("username LIKE ? OR name LIKE ? OR nickname LIKE ? OR phone LIKE ?", like, like, like, like)
 	}
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
@@ -63,6 +64,7 @@ func (s *AdminService) ListHrwaiUsers(page, pageSize int, keyword string) (map[s
 			ID:        u.ID,
 			Username:  u.Username,
 			Name:      u.Name,
+			Nickname:  u.Nickname,
 			Phone:     u.Phone,
 			Email:     u.Email,
 			Company:   u.Company,
@@ -96,6 +98,7 @@ func (s *AdminService) CreateHrwaiUser(phone, password, name, email, company str
 		Username:  phone,
 		Password:  hashed,
 		Name:      name,
+		Nickname:  generateDefaultNickname(s.db),
 		Phone:     phone,
 		Email:     email,
 		Company:   company,

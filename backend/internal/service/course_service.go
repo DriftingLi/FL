@@ -69,9 +69,13 @@ func (s *CourseService) GetCourseDetail(courseID, studentID int) (map[string]any
 	progress := 0.0
 	if studentID > 0 {
 		var record model.StudyRecord
-		// 使用 Limit(1).Find() 而非 First()：学员首次访问课程时无学习记录是正常情况，
-		// Find() 在无记录时不返回 ErrRecordNotFound，避免 GORM logger 误报 WARN 日志。
-		if err := s.db.Where("student_id = ? AND course_id = ?", studentID, courseID).Limit(1).Find(&record).Error; err == nil && record.RecordID > 0 {
+		// 优先取课程级记录（chapter_id IS NULL）；历史数据没有 NULL 记录时回退到任意一条记录。
+		if err := s.db.Where("student_id = ? AND course_id = ? AND chapter_id IS NULL", studentID, courseID).
+			Order("record_id ASC").Limit(1).Find(&record).Error; err == nil && record.RecordID == 0 {
+			s.db.Where("student_id = ? AND course_id = ?", studentID, courseID).
+				Order("record_id ASC").Limit(1).Find(&record)
+		}
+		if record.RecordID > 0 {
 			progress = record.Progress
 		}
 	}
@@ -236,68 +240,100 @@ func downloadFile(url string) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
-// UpdateStudyProgress 更新学习进度。
+// UpdateStudyProgress 更新学习进度（按学习时长自动完成章节，无需手动点击"完成"）。
+// 每次上报把 duration（分钟）累加到对应章节记录；当章节累计学习时长达到章节时长
+// （chapter.duration 分钟；未设置时按 1 分钟）自动标记完成（progress=100）。
+// 课程级进度 = 已完成章节数 / 总章节数。
 func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, duration int) (map[string]any, error) {
-	var record model.StudyRecord
-	err := s.db.Where("student_id = ? AND course_id = ?", studentID, courseID).First(&record).Error
-
 	var totalChapters int64
 	s.db.Model(&model.Chapter{}).Where("course_id = ?", courseID).Count(&totalChapters)
 	if totalChapters == 0 {
 		totalChapters = 1
 	}
 
-	if err == nil {
-		record.StudyDuration += duration
-		var completedChapters int64
-		s.db.Model(&model.StudyRecord{}).
-			Where("student_id = ? AND course_id = ? AND chapter_id IS NOT NULL", studentID, courseID).
-			Distinct("chapter_id").Count(&completedChapters)
-		if chapterID > 0 {
-			var existing model.StudyRecord
-			if e := s.db.Where("student_id = ? AND course_id = ? AND chapter_id = ?", studentID, courseID, chapterID).First(&existing).Error; e != nil {
-				// 新章节记录的 study_duration 置 0：duration 已累加到上方 First() 取出的主记录上，
-				// 此处仅为统计 completedChapters 创建占位记录，避免 SUM(study_duration) 重复计算
-				newRecord := model.StudyRecord{
-					StudentID:     studentID,
-					CourseID:      courseID,
-					ChapterID:     &chapterID,
-					StudyDuration: 0,
-					Progress:      0,
-					StudyDate:     beijingNow(),
-				}
-				s.db.Create(&newRecord)
-				completedChapters++
-			}
+	// 1. 课程级记录（chapter_id IS NULL）：承载课程学习时长与课程进度。
+	// 历史数据中不存在 NULL 记录时，从旧主记录（首条任意章节记录）继承时长，避免学习时长丢失。
+	var record model.StudyRecord
+	if err := s.db.Where("student_id = ? AND course_id = ? AND chapter_id IS NULL", studentID, courseID).
+		Order("record_id ASC").Limit(1).Find(&record).Error; err == nil && record.RecordID == 0 {
+		var legacy model.StudyRecord
+		if e := s.db.Where("student_id = ? AND course_id = ?", studentID, courseID).
+			Order("record_id ASC").Limit(1).Find(&legacy).Error; e == nil && legacy.RecordID > 0 {
+			record.StudyDuration = legacy.StudyDuration
 		}
-		record.Progress = roundFloat2(float64(completedChapters) / float64(totalChapters) * 100)
-		s.db.Save(&record)
-		return map[string]any{
-			"record_id":      record.RecordID,
-			"progress":       record.Progress,
-			"study_duration": record.StudyDuration,
-		}, nil
+		record = model.StudyRecord{
+			StudentID:     studentID,
+			CourseID:      courseID,
+			StudyDuration: record.StudyDuration,
+			Progress:      0,
+			StudyDate:     beijingNow(),
+		}
+		if err := s.db.Create(&record).Error; err != nil {
+			return nil, err
+		}
 	}
 
-	progress := 0.0
+	// 2. 章节级记录：累加学习时长，达到阈值自动标记完成。
 	if chapterID > 0 {
-		progress = roundFloat2(1.0 / float64(totalChapters) * 100)
+		threshold := 1
+		var chapter model.Chapter
+		if err := s.db.Select("duration").First(&chapter, chapterID).Error; err == nil && chapter.Duration > 0 {
+			threshold = chapter.Duration
+		}
+		var ch model.StudyRecord
+		if e := s.db.Where("student_id = ? AND course_id = ? AND chapter_id = ?", studentID, courseID, chapterID).
+			Order("record_id ASC").Limit(1).Find(&ch).Error; e == nil && ch.RecordID > 0 {
+			ch.StudyDuration += duration
+			ch.StudyDate = beijingNow()
+			updates := map[string]any{
+				"study_duration": ch.StudyDuration,
+				"study_date":     ch.StudyDate,
+			}
+			if ch.StudyDuration >= threshold {
+				updates["progress"] = 100
+			}
+			if err := s.db.Model(&model.StudyRecord{}).Where("record_id = ?", ch.RecordID).
+				Updates(updates).Error; err != nil {
+				return nil, err
+			}
+		} else {
+			chProgress := 0.0
+			if duration >= threshold {
+				chProgress = 100
+			}
+			newChapter := model.StudyRecord{
+				StudentID:     studentID,
+				CourseID:      courseID,
+				ChapterID:     &chapterID,
+				StudyDuration: duration,
+				Progress:      chProgress,
+				StudyDate:     beijingNow(),
+			}
+			if err := s.db.Create(&newChapter).Error; err != nil {
+				return nil, err
+			}
+		}
 	}
-	newRecord := model.StudyRecord{
-		StudentID:     studentID,
-		CourseID:      courseID,
-		ChapterID:     &chapterID,
-		StudyDuration: duration,
-		Progress:      progress,
-		StudyDate:     beijingNow(),
-	}
-	if err := s.db.Create(&newRecord).Error; err != nil {
+
+	// 3. 重算课程进度：统计 progress >= 100 的不同章节数。
+	var completedChapters int64
+	s.db.Model(&model.StudyRecord{}).
+		Where("student_id = ? AND course_id = ? AND chapter_id IS NOT NULL AND progress >= 100", studentID, courseID).
+		Distinct("chapter_id").Count(&completedChapters)
+
+	record.Progress = roundFloat2(float64(completedChapters) / float64(totalChapters) * 100)
+	if err := s.db.Save(&record).Error; err != nil {
 		return nil, err
 	}
+	// 总学习时长 = 课程级历史时长 + 各章节累计时长（避免重复统计）
+	var totalDuration int64
+	s.db.Model(&model.StudyRecord{}).
+		Where("student_id = ? AND course_id = ?", studentID, courseID).
+		Select("COALESCE(SUM(study_duration), 0)").Scan(&totalDuration)
 	return map[string]any{
-		"record_id":      newRecord.RecordID,
-		"progress":       newRecord.Progress,
-		"study_duration": newRecord.StudyDuration,
+		"record_id":      record.RecordID,
+		"progress":       record.Progress,
+		"study_duration": totalDuration,
 	}, nil
 }
 
