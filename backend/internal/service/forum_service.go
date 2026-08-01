@@ -391,6 +391,18 @@ func (s *ForumService) DeleteTopic(userID int, topicID int64) error {
 	return s.db.Delete(&model.ForumTopic{}, topicID).Error
 }
 
+// AdminDeleteTopic 管理员删除任意主题（不校验作者）。
+func (s *ForumService) AdminDeleteTopic(topicID int64) error {
+	var topic model.ForumTopic
+	if err := s.db.First(&topic, topicID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("主题不存在")
+		}
+		return err
+	}
+	return s.db.Delete(&model.ForumTopic{}, topicID).Error
+}
+
 // DeleteReply 删除回复（仅作者本人；其下级回复随外键级联删除）。
 func (s *ForumService) DeleteReply(userID int, replyID int64) error {
 	var reply model.ForumReply
@@ -403,18 +415,34 @@ func (s *ForumService) DeleteReply(userID int, replyID int64) error {
 	if reply.UserID != userID {
 		return errors.New("只能删除自己发布的回复")
 	}
+	return s.deleteReplyByID(replyID, reply.TopicID)
+}
 
+// AdminDeleteReply 管理员删除任意回复（不校验作者；其下级回复随外键级联删除）。
+func (s *ForumService) AdminDeleteReply(replyID int64) error {
+	var reply model.ForumReply
+	if err := s.db.First(&reply, replyID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("回复不存在")
+		}
+		return err
+	}
+	return s.deleteReplyByID(replyID, reply.TopicID)
+}
+
+// deleteReplyByID 删除回复并回扣主题回复数、刷新最后回复时间。
+func (s *ForumService) deleteReplyByID(replyID, topicID int64) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Delete(&model.ForumReply{}, replyID).Error; err != nil {
 			return err
 		}
 		// 回扣回复数并刷新最后回复时间
-		if err := tx.Model(&model.ForumTopic{}).Where("id = ?", reply.TopicID).
+		if err := tx.Model(&model.ForumTopic{}).Where("id = ?", topicID).
 			UpdateColumn("reply_count", gorm.Expr("GREATEST(reply_count - 1, 0)")).Error; err != nil {
 			return err
 		}
 		var last model.ForumReply
-		if err := tx.Where("topic_id = ?", reply.TopicID).Order("created_at DESC, id DESC").
+		if err := tx.Where("topic_id = ?", topicID).Order("created_at DESC, id DESC").
 			Limit(1).Find(&last).Error; err != nil {
 			return err
 		}
@@ -422,7 +450,7 @@ func (s *ForumService) DeleteReply(userID int, replyID int64) error {
 		if last.ID > 0 {
 			lastAt = &last.CreatedAt
 		}
-		return tx.Model(&model.ForumTopic{}).Where("id = ?", reply.TopicID).
+		return tx.Model(&model.ForumTopic{}).Where("id = ?", topicID).
 			Update("last_reply_at", lastAt).Error
 	})
 }

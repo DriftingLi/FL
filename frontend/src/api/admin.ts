@@ -75,6 +75,51 @@ export interface ProfileReviewsQuery {
   page_size?: number
 }
 
+// ===== 论坛管理 =====
+
+export interface AdminForumTopic {
+  id: number
+  chapter_id?: number | null
+  chapter_title?: string
+  title: string
+  content: string
+  view_count: number
+  reply_count: number
+  last_reply_at?: string | null
+  created_at: string
+  author: {
+    user_id: number
+    username: string
+    name: string
+    nickname: string
+    avatar_url: string
+  }
+}
+
+export interface AdminForumReply {
+  id: number
+  topic_id: number
+  parent_id?: number | null
+  parent_name?: string
+  content: string
+  created_at: string
+  author: {
+    user_id: number
+    username: string
+    name: string
+    nickname: string
+    avatar_url: string
+  }
+}
+
+export interface AdminForumListParams {
+  scope?: 'all' | 'general' | 'chapter'
+  chapter_id?: number
+  page?: number
+  page_size?: number
+  keyword?: string
+}
+
 // ===== AI 多配置 =====
 
 export interface AIConfig {
@@ -292,5 +337,23 @@ export const adminApi = {
 
   rejectProfileReview(id: number, reason: string) {
     return request.post(`/admin/profile-reviews/${id}/reject`, { reason })
+  },
+
+  // ===== 论坛管理 =====
+
+  listAdminForumTopics(params: AdminForumListParams) {
+    return request.get('/admin/forum/topics', { params })
+  },
+
+  getAdminForumTopic(id: number) {
+    return request.get(`/admin/forum/topics/${id}`)
+  },
+
+  deleteAdminForumTopic(id: number) {
+    return request.delete(`/admin/forum/topics/${id}`)
+  },
+
+  deleteAdminForumReply(id: number) {
+    return request.delete(`/admin/forum/replies/${id}`)
   }
 }

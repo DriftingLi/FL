@@ -258,6 +258,12 @@ const routes: RouteRecordRaw[] = [
           component: () => import('@/pages/admin/ProfileReview.vue'),
           meta: { navKey: 'profile-review', navLabel: '资料审核', navGroup: 'education' }
         },
+        {
+          path: 'forum-manage',
+          name: 'ForumManage',
+          component: () => import('@/pages/admin/ForumManage.vue'),
+          meta: { navKey: 'forum-manage', navLabel: '论坛管理', navGroup: 'education' }
+        },
       {
         path: 'courses',
         name: 'CourseManage',

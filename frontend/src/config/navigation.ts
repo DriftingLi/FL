@@ -43,6 +43,7 @@ const adminNav: NavItem[] = [
   { key: 'dashboard', label: '仪表盘', path: '/admin/dashboard', icon: DataAnalysis },
   { key: 'hrwai-users', label: '用户管理', path: '/admin/hrwai-users', icon: User },
   { key: 'profile-review', label: '资料审核', path: '/admin/profile-review', icon: CircleCheck },
+  { key: 'forum-manage', label: '论坛管理', path: '/admin/forum-manage', icon: ChatDotRound },
   { key: 'tutors', label: '导师管理', path: '/admin/tutors', icon: UserFilled },
   { key: 'courses', label: '课程管理', path: '/admin/courses', icon: Notebook },
   { key: 'question-review', label: '题库审核', path: '/admin/question-review', icon: EditPen },

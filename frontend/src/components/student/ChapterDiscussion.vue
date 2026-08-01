@@ -74,7 +74,7 @@
             </div>
 
             <div class="detail-actions">
-              <el-button v-if="topic.can_delete" text type="danger" size="small" @click="removeTopic(topic.id)">
+              <el-button v-if="expandedTopic?.can_delete" text type="danger" size="small" @click="removeTopic(topic.id)">
                 删除本帖
               </el-button>
             </div>
@@ -124,6 +124,7 @@ const replying = ref(false)
 const creating = ref(false)
 const topics = ref<ForumTopicItem[]>([])
 const expandedTopicId = ref<number | null>(null)
+const expandedTopic = ref<ForumTopicItem | null>(null)
 const detailContent = ref('')
 const replies = ref<ForumReplyItem[]>([])
 const replyContent = ref('')
@@ -174,10 +175,12 @@ async function loadTopics() {
 async function toggleTopic(topicId: number) {
   if (expandedTopicId.value === topicId) {
     expandedTopicId.value = null
+    expandedTopic.value = null
     replies.value = []
     return
   }
   expandedTopicId.value = topicId
+  expandedTopic.value = null
   await loadDetail(topicId)
 }
 
@@ -188,6 +191,7 @@ async function loadDetail(topicId: number) {
   try {
     const res = await forumApi.getTopic(topicId)
     if (res.code === 200 && res.data) {
+      expandedTopic.value = res.data.topic || null
       detailContent.value = res.data.topic?.content || ''
       replies.value = res.data.replies || []
     }
@@ -263,9 +267,10 @@ async function removeTopic(topicId: number) {
   try {
     await forumApi.deleteTopic(topicId)
     ElMessage.success('已删除')
-    if (expandedTopicId.value === topicId) {
-      expandedTopicId.value = null
-      replies.value = []
+  if (expandedTopicId.value === topicId) {
+    expandedTopicId.value = null
+    expandedTopic.value = null
+    replies.value = []
     }
     await loadTopics()
   } catch (e) {
@@ -294,6 +299,7 @@ async function removeReply(replyId: number) {
 
 watch(() => props.chapterId, () => {
   expandedTopicId.value = null
+  expandedTopic.value = null
   replies.value = []
   loadTopics()
 }, { immediate: true })

@@ -350,15 +350,21 @@ create_backup() {
         log_info "同步数据库备份到 ${BACKUP_REMOTE_HOST}..."
         local remote_dir="${BACKUP_REMOTE_DIR:-/opt/forklift-backups}"
         local ssh_key="${BACKUP_REMOTE_KEY:-/root/.ssh/pve01-sync}"
+        # 先确保远端备份目录存在（目录缺失会导致 scp 静默失败）
+        ssh -i "$ssh_key" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            "$BACKUP_REMOTE_HOST" "mkdir -p ${remote_dir}" >/dev/null 2>&1 || true
         if scp -i "$ssh_key" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-            "$DB_BACKUP_FILE" "${BACKUP_REMOTE_HOST}:${remote_dir}/" 2>/dev/null; then
+            "$DB_BACKUP_FILE" "${BACKUP_REMOTE_HOST}:${remote_dir}/" 2>/tmp/backup_scp.err; then
             log_ok "异地备份完成: ${BACKUP_REMOTE_HOST}:${remote_dir}/$(basename "$DB_BACKUP_FILE")"
             # 清理远程旧备份（保留最近 10 份）
             ssh -i "$ssh_key" -o StrictHostKeyChecking=no "$BACKUP_REMOTE_HOST" \
                 "ls -t ${remote_dir}/db_backup_*.sql.gz 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null" 2>/dev/null || true
         else
-            log_warn "异地备份失败（远端不可达或 SSH key 未配置），继续部署"
+            local scp_err
+            scp_err=$(tail -1 /tmp/backup_scp.err 2>/dev/null || echo "未知错误")
+            log_warn "异地备份失败: ${scp_err}，继续部署"
         fi
+        rm -f /tmp/backup_scp.err
     fi
 
     log_ok "备份完成: $BACKUP_FILE"

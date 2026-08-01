@@ -133,4 +133,70 @@ func RegisterForumRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 		}
 		response.SuccessWithMsg(c, "已删除", nil)
 	})
+
+	// ===== 管理员论坛管理 =====
+	adminG := rg.Group("/admin/forum", middleware.JWTAuth(cfg), middleware.RoleRequired("admin"))
+
+	// GET /api/admin/forum/topics?scope=all|general|chapter&chapter_id=&page=&page_size=&keyword=
+	adminG.GET("/topics", func(c *gin.Context) {
+		scope := c.Query("scope")
+		chapterID := atoiDefault(c.Query("chapter_id"), 0)
+		page := atoiDefault(c.Query("page"), 1)
+		pageSize := atoiDefault(c.Query("page_size"), 10)
+		result, err := svc.ListTopics(scope, chapterID, page, pageSize, c.Query("keyword"))
+		if err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.Success(c, result)
+	})
+
+	// GET /api/admin/forum/topics/:id 管理员查看帖子详情（含回复）
+	adminG.GET("/topics/:id", func(c *gin.Context) {
+		uid, _ := c.Get(string(middleware.CtxUserID))
+		userID, _ := uid.(int)
+		topicID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil || topicID <= 0 {
+			response.BadRequest(c, "主题ID无效")
+			return
+		}
+		result, err := svc.GetTopic(topicID, userID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				response.NotFound(c, "主题不存在")
+				return
+			}
+			response.ServerError(c, "查询失败: "+err.Error())
+			return
+		}
+		response.Success(c, result)
+	})
+
+	// DELETE /api/admin/forum/topics/:id 管理员删除任意主题
+	adminG.DELETE("/topics/:id", func(c *gin.Context) {
+		topicID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil || topicID <= 0 {
+			response.BadRequest(c, "主题ID无效")
+			return
+		}
+		if err := svc.AdminDeleteTopic(topicID); err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.SuccessWithMsg(c, "已删除", nil)
+	})
+
+	// DELETE /api/admin/forum/replies/:id 管理员删除任意回复
+	adminG.DELETE("/replies/:id", func(c *gin.Context) {
+		replyID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil || replyID <= 0 {
+			response.BadRequest(c, "回复ID无效")
+			return
+		}
+		if err := svc.AdminDeleteReply(replyID); err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.SuccessWithMsg(c, "已删除", nil)
+	})
 }
