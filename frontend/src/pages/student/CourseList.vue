@@ -53,9 +53,6 @@
               </span>
             </div>
             <div class="card-action">
-              <el-button size="small" type="primary" plain @click.stop="goDiscussion(course.course_id)">
-                讨论区
-              </el-button>
               <span class="action-text">开始学习</span>
               <el-icon><ArrowRight /></el-icon>
             </div>
@@ -196,10 +193,6 @@ async function goToCourse(courseId: number) {
     console.error('加载课程失败:', error)
     ElMessage.error('加载课程失败，请稍后重试')
   }
-}
-
-function goDiscussion(courseId: number) {
-  router.push({ name: 'CourseDiscussion', params: { courseId } })
 }
 
 onMounted(() => {

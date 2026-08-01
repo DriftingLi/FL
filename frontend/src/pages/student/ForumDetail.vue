@@ -26,8 +26,8 @@
         </div>
         <div class="topic-body">
           <div class="topic-title-row">
-            <el-tag v-if="topic.course_id" size="small" type="warning">
-              {{ topic.course_name || '课程讨论' }}
+            <el-tag v-if="topic.chapter_id" size="small" type="warning">
+              {{ topic.chapter_title || '章节讨论' }}
             </el-tag>
             <el-tag v-else size="small" type="info">综合</el-tag>
             <h1 class="topic-title">{{ topic.title }}</h1>
@@ -54,6 +54,14 @@
                 <span class="author-name">{{ displayName(reply.author) }}</span>
                 <span class="reply-time">{{ formatTime(reply.created_at) }}</span>
                 <el-button
+                  class="reply-btn"
+                  type="primary"
+                  size="small"
+                  @click="startReplyTo(reply)"
+                >
+                  回复
+                </el-button>
+                <el-button
                   v-if="reply.can_delete"
                   class="delete-btn"
                   type="danger"
@@ -64,6 +72,9 @@
                   删除
                 </el-button>
               </div>
+              <div v-if="reply.parent_id && reply.parent_name" class="reply-quote">
+                回复 @{{ reply.parent_name }}
+              </div>
               <div class="reply-content">{{ reply.content }}</div>
             </div>
           </div>
@@ -72,6 +83,11 @@
       </div>
 
       <div class="reply-editor">
+        <div v-if="replyingTo" class="replying-bar">
+          <el-tag closable type="info" size="small" @close="replyingTo = null">
+            回复 @{{ replyingTo.name }}
+          </el-tag>
+        </div>
         <el-input
           v-model="replyContent"
           type="textarea"
@@ -103,6 +119,7 @@ const submitting = ref(false)
 const topic = ref<ForumTopicItem | null>(null)
 const replies = ref<ForumReplyItem[]>([])
 const replyContent = ref('')
+const replyingTo = ref<{ id: number; name: string } | null>(null)
 
 function displayName(author: ForumTopicItem['author']) {
   return author.nickname || author.name || author.username
@@ -151,10 +168,11 @@ async function submitReply() {
   submitting.value = true
   try {
     const topicId = Number(route.params.topicId)
-    const res = await forumApi.replyTopic(topicId, content)
+    const res = await forumApi.replyTopic(topicId, content, replyingTo.value?.id)
     if (res.code === 200 || res.code === 201) {
       ElMessage.success('回复成功')
       replyContent.value = ''
+      replyingTo.value = null
       loadDetail()
     }
   } catch (e) {
@@ -163,6 +181,10 @@ async function submitReply() {
   } finally {
     submitting.value = false
   }
+}
+
+function startReplyTo(reply: ForumReplyItem) {
+  replyingTo.value = { id: reply.id, name: displayName(reply.author) }
 }
 
 async function removeTopic() {
@@ -333,6 +355,20 @@ onMounted(loadDetail)
   line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.reply-quote {
+  font-size: 12px;
+  color: #909399;
+  background: #f5f7fa;
+  border-radius: 6px;
+  padding: 2px 8px;
+  margin-bottom: 4px;
+  display: inline-block;
+}
+
+.replying-bar {
+  margin-bottom: 10px;
 }
 
 .editor-actions {

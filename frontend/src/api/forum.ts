@@ -2,8 +2,8 @@ import request from './request'
 
 export interface ForumTopicItem {
   id: number
-  course_id?: number | null
-  course_name?: string
+  chapter_id?: number | null
+  chapter_title?: string
   title: string
   content: string
   view_count: number
@@ -23,6 +23,8 @@ export interface ForumTopicItem {
 export interface ForumReplyItem {
   id: number
   topic_id: number
+  parent_id?: number | null
+  parent_name?: string
   content: string
   created_at: string
   author: {
@@ -36,8 +38,8 @@ export interface ForumReplyItem {
 }
 
 export interface ForumListParams {
-  scope?: 'all' | 'general' | 'course'
-  course_id?: number
+  scope?: 'all' | 'general' | 'chapter'
+  chapter_id?: number
   page?: number
   page_size?: number
   keyword?: string
@@ -48,7 +50,7 @@ export const forumApi = {
     return request.get('/forum/topics', { params })
   },
 
-  createTopic(data: { course_id?: number | null; title: string; content: string }) {
+  createTopic(data: { chapter_id?: number | null; title: string; content: string }) {
     return request.post('/forum/topics', data)
   },
 
@@ -56,8 +58,8 @@ export const forumApi = {
     return request.get(`/forum/topics/${id}`)
   },
 
-  replyTopic(id: number, content: string) {
-    return request.post(`/forum/topics/${id}/replies`, { content })
+  replyTopic(id: number, content: string, parentReplyId?: number | null) {
+    return request.post(`/forum/topics/${id}/replies`, { content, parent_reply_id: parentReplyId || null })
   },
 
   deleteTopic(id: number) {

@@ -1,5 +1,5 @@
 // Package api 实现 HTTP handlers。
-// 本文件：学员端论坛（大论坛 + 课程讨论区）。
+// 本文件：学员端论坛（综合讨论区 + 章节讨论区，支持回复别人的回复）。
 package api
 
 import (
@@ -21,13 +21,13 @@ func RegisterForumRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 
 	g := rg.Group("/forum", middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
 
-	// GET /api/forum/topics?scope=all|general|course&course_id=&page=&page_size=&keyword=
+	// GET /api/forum/topics?scope=all|general|chapter&chapter_id=&page=&page_size=&keyword=
 	g.GET("/topics", func(c *gin.Context) {
 		scope := c.Query("scope")
-		courseID := atoiDefault(c.Query("course_id"), 0)
+		chapterID := atoiDefault(c.Query("chapter_id"), 0)
 		page := atoiDefault(c.Query("page"), 1)
 		pageSize := atoiDefault(c.Query("page_size"), 10)
-		result, err := svc.ListTopics(scope, courseID, page, pageSize, c.Query("keyword"))
+		result, err := svc.ListTopics(scope, chapterID, page, pageSize, c.Query("keyword"))
 		if err != nil {
 			response.BadRequest(c, err.Error())
 			return
@@ -35,20 +35,20 @@ func RegisterForumRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 		response.Success(c, result)
 	})
 
-	// POST /api/forum/topics 发帖（course_id 为空/0 表示发到大论坛）
+	// POST /api/forum/topics 发帖（chapter_id 为空/0 表示发到综合讨论区）
 	g.POST("/topics", func(c *gin.Context) {
 		uid, _ := c.Get(string(middleware.CtxUserID))
 		userID, _ := uid.(int)
 		var req struct {
-			CourseID *int   `json:"course_id"`
-			Title    string `json:"title"`
-			Content  string `json:"content"`
+			ChapterID *int   `json:"chapter_id"`
+			Title     string `json:"title"`
+			Content   string `json:"content"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			response.BadRequest(c, "请求参数错误")
 			return
 		}
-		topic, err := svc.CreateTopic(userID, req.CourseID, req.Title, req.Content)
+		topic, err := svc.CreateTopic(userID, req.ChapterID, req.Title, req.Content)
 		if err != nil {
 			response.BadRequest(c, err.Error())
 			return
@@ -87,13 +87,14 @@ func RegisterForumRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 			return
 		}
 		var req struct {
-			Content string `json:"content"`
+			Content       string `json:"content"`
+			ParentReplyID *int64 `json:"parent_reply_id"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			response.BadRequest(c, "请求参数错误")
 			return
 		}
-		reply, err := svc.ReplyTopic(userID, topicID, req.Content)
+		reply, err := svc.ReplyTopic(userID, topicID, req.Content, req.ParentReplyID)
 		if err != nil {
 			response.BadRequest(c, err.Error())
 			return

@@ -491,10 +491,10 @@ func (AIUserModel) TableName() string { return "ai_user_models" }
 
 // ===== 24. 论坛模块 =====
 
-// ForumTopic 论坛主题（course_id 为 NULL 表示大论坛/综合讨论，非 NULL 表示课程讨论区）。
+// ForumTopic 论坛主题（chapter_id 为 NULL 表示综合讨论区，非 NULL 表示章节讨论区）。
 type ForumTopic struct {
 	ID          int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	CourseID    *int       `gorm:"column:course_id" json:"course_id,omitempty"`
+	ChapterID   *int       `gorm:"column:chapter_id" json:"chapter_id,omitempty"`
 	UserID      int        `gorm:"column:user_id" json:"user_id"`
 	Title       string     `gorm:"column:title" json:"title"`
 	Content     string     `gorm:"column:content" json:"content"`
@@ -512,6 +512,7 @@ type ForumReply struct {
 	ID        int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	TopicID   int64     `gorm:"column:topic_id" json:"topic_id"`
 	UserID    int       `gorm:"column:user_id" json:"user_id"`
+	ParentID  *int64    `gorm:"column:parent_id" json:"parent_id,omitempty"`
 	Content   string    `gorm:"column:content" json:"content"`
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }

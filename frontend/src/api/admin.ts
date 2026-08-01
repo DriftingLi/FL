@@ -10,6 +10,7 @@ export interface HrwaiUser {
   id: number
   username: string
   name: string
+  nickname?: string
   phone: string
   email?: string
   company?: string

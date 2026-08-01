@@ -2,20 +2,13 @@
   <div class="forum-page">
     <div class="forum-header">
       <div>
-        <h1 class="forum-title">{{ courseId ? courseName || '课程讨论区' : '学员论坛' }}</h1>
-        <p class="forum-subtitle">
-          {{ courseId ? '与同学一起讨论本课程的学习心得与疑问' : '自由发言，交流叉车维修知识与学习心得' }}
-        </p>
+        <h1 class="forum-title">学员论坛</h1>
+        <p class="forum-subtitle">综合讨论区：自由发言，交流叉车维修知识与学习心得</p>
       </div>
       <el-button type="primary" size="large" :icon="EditPen" @click="openCreateDialog">
         发布新帖
       </el-button>
     </div>
-
-    <el-tabs v-if="!courseId" v-model="activeScope" class="forum-tabs" @tab-change="handleScopeChange">
-      <el-tab-pane label="全部讨论" name="all" />
-      <el-tab-pane label="综合论坛" name="general" />
-    </el-tabs>
 
     <div v-loading="loading" class="topic-list">
       <template v-if="topics.length > 0">
@@ -32,10 +25,9 @@
           </div>
           <div class="topic-main">
             <div class="topic-title-row">
-              <el-tag v-if="topic.course_id && !courseId" size="small" type="warning" class="course-tag">
-                {{ topic.course_name || '课程讨论' }}
+              <el-tag v-if="topic.chapter_id" size="small" type="warning" class="chapter-tag">
+                {{ topic.chapter_title || '章节讨论' }}
               </el-tag>
-              <el-tag v-else-if="!topic.course_id" size="small" type="info" class="course-tag">综合</el-tag>
               <h3 class="topic-title">{{ topic.title }}</h3>
             </div>
             <p class="topic-excerpt">{{ topic.content }}</p>
@@ -66,19 +58,8 @@
       />
     </div>
 
-    <el-dialog v-model="createDialogVisible" :title="courseId ? '发布课程讨论' : '发布新帖'" width="640px">
+    <el-dialog v-model="createDialogVisible" title="发布新帖" width="640px">
       <el-form label-width="70px">
-        <el-form-item v-if="!courseId" label="讨论区">
-          <el-select v-model="createForm.course_id" placeholder="选择讨论区（默认综合论坛）" style="width: 100%">
-            <el-option label="综合论坛（大论坛）" :value="null" />
-            <el-option
-              v-for="course in courseOptions"
-              :key="course.course_id"
-              :label="course.name"
-              :value="course.course_id"
-            />
-          </el-select>
-        </el-form-item>
         <el-form-item label="标题" required>
           <el-input
             v-model="createForm.title"
@@ -112,7 +93,6 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { EditPen, View, ChatDotRound } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem } from '@/api/forum'
-import { courseApi } from '@/api/course'
 
 const router = useRouter()
 
@@ -122,19 +102,8 @@ const topics = ref<ForumTopicItem[]>([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
-const activeScope = ref<'all' | 'general'>('all')
-const courseOptions = ref<any[]>([])
 const createDialogVisible = ref(false)
-const createForm = ref<{ course_id: number | null; title: string; content: string }>({
-  course_id: null,
-  title: '',
-  content: ''
-})
-
-const props = defineProps<{
-  courseId?: number | null
-  courseName?: string
-}>()
+const createForm = ref<{ title: string; content: string }>({ title: '', content: '' })
 
 function displayName(author: ForumTopicItem['author']) {
   return author.nickname || author.name || author.username
@@ -159,17 +128,11 @@ function formatTime(iso: string) {
 async function loadTopics() {
   loading.value = true
   try {
-    const params: Record<string, any> = {
+    const res = await forumApi.listTopics({
+      scope: 'general',
       page: currentPage.value,
       page_size: pageSize.value
-    }
-    if (props.courseId) {
-      params.scope = 'course'
-      params.course_id = props.courseId
-    } else {
-      params.scope = activeScope.value
-    }
-    const res = await forumApi.listTopics(params)
+    })
     if (res.code === 200 && res.data) {
       topics.value = res.data.topics || []
       total.value = res.data.total || 0
@@ -182,24 +145,8 @@ async function loadTopics() {
   }
 }
 
-function handleScopeChange() {
-  currentPage.value = 1
-  loadTopics()
-}
-
-async function loadCourseOptions() {
-  try {
-    const res = await courseApi.getCourses({ page: 1, page_size: 100 })
-    if (res.code === 200 && res.data) {
-      courseOptions.value = res.data.courses || []
-    }
-  } catch (e) {
-    console.error('加载课程列表失败:', e)
-  }
-}
-
 function openCreateDialog() {
-  createForm.value = { course_id: props.courseId ?? null, title: '', content: '' }
+  createForm.value = { title: '', content: '' }
   createDialogVisible.value = true
 }
 
@@ -212,12 +159,7 @@ async function submitTopic() {
   }
   submitting.value = true
   try {
-    const courseId = props.courseId ?? createForm.value.course_id
-    const res = await forumApi.createTopic({
-      course_id: courseId,
-      title,
-      content
-    })
+    const res = await forumApi.createTopic({ chapter_id: null, title, content })
     if (res.code === 200 || res.code === 201) {
       ElMessage.success('发布成功')
       createDialogVisible.value = false
@@ -236,12 +178,7 @@ function goDetail(id: number) {
   router.push({ name: 'ForumDetail', params: { topicId: String(id) } })
 }
 
-onMounted(() => {
-  loadTopics()
-  if (!props.courseId) {
-    loadCourseOptions()
-  }
-})
+onMounted(loadTopics)
 </script>
 
 <style scoped>
@@ -270,10 +207,6 @@ onMounted(() => {
   color: #909399;
   font-size: 14px;
   margin: 0;
-}
-
-.forum-tabs {
-  margin-bottom: 8px;
 }
 
 .topic-list {

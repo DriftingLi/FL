@@ -11,7 +11,7 @@
 - **考试系统**：课程考试、模拟考试、等级考试，自动判分、AI 评分与成绩统计
 - **练习中心**：自由练习、知识点练习、错题本、练习统计
 - **AI 助手**：基于大模型的流式对话（默认 DeepSeek，可切换管理员配置或用户自定义 OpenAI 兼容模型）
-- **学员论坛**：综合大论坛 + 每门课程的独立讨论区，发帖 / 回复 / 删除自己的内容，展示昵称与头像
+- **学员论坛**：独立的综合讨论区 + 每个章节内容下方的章节讨论区，发帖 / 回复（可回复别人的回复）/ 删除自己的内容，展示昵称与头像
 
 ### 门户与内容
 
@@ -340,6 +340,7 @@ npm run type-check   # vue-tsc 类型检查
 | `000016_chapter_slide_urls` | 章节幻灯片 URL 持久化 |
 | `000017_forum_and_profile` | 学员论坛（forum_topics / forum_replies）+ 用户昵称 / 头像字段 |
 | `000018_profile_change_review` | 资料修改审核表（昵称/头像修改先进入待审队列） |
+| `000019_forum_chapter_and_nested_replies` | 论坛改为章节维度（course_id → chapter_id）+ 回复支持 parent_id（回复别人的回复） |
 
 执行 / 回滚：`make migrate-up` / `make migrate-down`。
 
@@ -377,7 +378,7 @@ docker compose -f docker-compose.prod.yml up -d
 ### CI/CD（GitHub Actions）
 
 - `ci.yml`：路径过滤 → gofmt / go vet / golangci-lint → 测试（race + cover，真实 PG + Redis）→ 前端 type-check + build → 安全扫描
-- `cd.yml`：由 CI 主动 `workflow_dispatch` 触发（携带已验证 commit SHA），可选 `staging` / `testing` / `production` 环境与跳过开关；构建并推送 backend / frontend / libreoffice 三个镜像到 ghcr.io → SSH 部署 → 健康检查 → 失败自动回滚；支持 Tailscale/ProxyJump 与异地备份
+- `cd.yml`：由 CI 主动 `workflow_dispatch` 触发（携带已验证 commit SHA），可选 `production` / `testing` 环境与跳过开关；构建并推送 backend / frontend / libreoffice 三个镜像到 ghcr.io → SSH 部署 → 健康检查 → 失败自动回滚；支持 Tailscale/ProxyJump 与异地备份
 
 ## 许可证
 

@@ -75,6 +75,8 @@
         <el-empty v-if="!chapterDetail.content && chapterFiles.length === 0" description="该章节暂无内容" />
       </div>
 
+      <ChapterDiscussion v-if="chapterDetail.chapter_id" :chapter-id="chapterDetail.chapter_id" />
+
       <div class="chapter-navigation">
         <div class="nav-prev">
           <el-button
@@ -125,6 +127,7 @@ import VideoPlayer from '@/components/student/VideoPlayer.vue'
 import DocumentViewer from '@/components/student/DocumentViewer.vue'
 import PptViewer from '@/components/student/PptViewer.vue'
 import ImageViewer from '@/components/student/ImageViewer.vue'
+import ChapterDiscussion from '@/components/student/ChapterDiscussion.vue'
 
 marked.use(
   markedHighlight({

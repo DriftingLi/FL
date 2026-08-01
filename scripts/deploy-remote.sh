@@ -177,7 +177,7 @@ write_env_file() {
         echo "BACKEND_HOST_PORT=${BACKEND_HOST_PORT:-8080}"
 
         # Volume 路径配置
-        # 默认 named volume（staging）；测试环境(Docker 19.03)用 bind mount 绕过 volume 权限 bug
+        # 默认 named volume（production）；测试环境(Docker 19.03)用 bind mount 绕过 volume 权限 bug
         # 测试环境设置: PG_VOLUME=./data/pgdata, REDIS_VOLUME=./data/redis 等
         echo "PG_VOLUME=${PG_VOLUME:-pgdata-prod}"
         echo "REDIS_VOLUME=${REDIS_VOLUME:-redisdata-prod}"
@@ -345,7 +345,7 @@ create_backup() {
     # 清理旧数据库备份（保留最近 10 份，每份约几 MB）
     ls -t "$BACKUP_DIR"/db_backup_*.sql.gz 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null || true
 
-    # ---- 异地备份:同步到 pve-01（仅 staging 环境配置了 BACKUP_REMOTE_HOST 时执行） ----
+    # ---- 异地备份:同步到 pve-01（仅 production 环境配置了 BACKUP_REMOTE_HOST 时执行） ----
     if [ -n "${BACKUP_REMOTE_HOST:-}" ] && [ -f "$DB_BACKUP_FILE" ]; then
         log_info "同步数据库备份到 ${BACKUP_REMOTE_HOST}..."
         local remote_dir="${BACKUP_REMOTE_DIR:-/opt/forklift-backups}"

@@ -1,5 +1,5 @@
 // Package service 实现业务服务层。
-// 本文件：学员端论坛（大论坛 + 课程讨论区）。
+// 本文件：学员端论坛（综合讨论区 + 章节讨论区，支持回复别人的回复）。
 package service
 
 import (
@@ -15,9 +15,9 @@ import (
 
 // 论坛范围常量。
 const (
-	ForumScopeAll     = "all"     // 全部（大论坛 + 课程讨论区）
-	ForumScopeGeneral = "general" // 大论坛（course_id IS NULL）
-	ForumScopeCourse  = "course"  // 指定课程讨论区
+	ForumScopeAll     = "all"     // 全部（综合讨论区 + 章节讨论区）
+	ForumScopeGeneral = "general" // 综合讨论区（chapter_id IS NULL）
+	ForumScopeChapter = "chapter" // 指定章节讨论区
 )
 
 // ForumAuthor 论坛作者信息（昵称优先，其次姓名/用户名）。
@@ -42,27 +42,29 @@ func (a ForumAuthor) DisplayName() string {
 
 // ForumTopicDTO 论坛主题列表/详情对象。
 type ForumTopicDTO struct {
-	ID          int64       `json:"id"`
-	CourseID    *int        `json:"course_id"`
-	CourseName  string      `json:"course_name"`
-	Title       string      `json:"title"`
-	Content     string      `json:"content"`
-	ViewCount   int         `json:"view_count"`
-	ReplyCount  int         `json:"reply_count"`
-	LastReplyAt *string     `json:"last_reply_at"`
-	CreatedAt   string      `json:"created_at"`
-	Author      ForumAuthor `json:"author"`
-	CanDelete   bool        `json:"can_delete"`
+	ID           int64       `json:"id"`
+	ChapterID    *int        `json:"chapter_id"`
+	ChapterTitle string      `json:"chapter_title"`
+	Title        string      `json:"title"`
+	Content      string      `json:"content"`
+	ViewCount    int         `json:"view_count"`
+	ReplyCount   int         `json:"reply_count"`
+	LastReplyAt  *string     `json:"last_reply_at"`
+	CreatedAt    string      `json:"created_at"`
+	Author       ForumAuthor `json:"author"`
+	CanDelete    bool        `json:"can_delete"`
 }
 
 // ForumReplyDTO 论坛回复对象。
 type ForumReplyDTO struct {
-	ID        int64       `json:"id"`
-	TopicID   int64       `json:"topic_id"`
-	Content   string      `json:"content"`
-	CreatedAt string      `json:"created_at"`
-	Author    ForumAuthor `json:"author"`
-	CanDelete bool        `json:"can_delete"`
+	ID         int64       `json:"id"`
+	TopicID    int64       `json:"topic_id"`
+	ParentID   *int64      `json:"parent_id,omitempty"`
+	ParentName string      `json:"parent_name,omitempty"` // 被回复人的展示名
+	Content    string      `json:"content"`
+	CreatedAt  string      `json:"created_at"`
+	Author     ForumAuthor `json:"author"`
+	CanDelete  bool        `json:"can_delete"`
 }
 
 // ForumService 论坛服务。
@@ -77,20 +79,20 @@ func NewForumService(db *gorm.DB) *ForumService {
 
 // topicRow 列表查询的扫描结构。
 type topicRow struct {
-	ID          int64
-	CourseID    *int
-	CourseName  string
-	Title       string
-	Content     string
-	ViewCount   int
-	ReplyCount  int
-	LastReplyAt *time.Time
-	CreatedAt   time.Time
-	UserID      int
-	Username    string
-	Name        string
-	Nickname    string
-	AvatarURL   string
+	ID           int64
+	ChapterID    *int
+	ChapterTitle string
+	Title        string
+	Content      string
+	ViewCount    int
+	ReplyCount   int
+	LastReplyAt  *time.Time
+	CreatedAt    time.Time
+	UserID       int
+	Username     string
+	Name         string
+	Nickname     string
+	AvatarURL    string
 }
 
 func (r topicRow) toDTO(viewerID int) ForumTopicDTO {
@@ -100,15 +102,15 @@ func (r topicRow) toDTO(viewerID int) ForumTopicDTO {
 		lastReplyAt = &s
 	}
 	return ForumTopicDTO{
-		ID:          r.ID,
-		CourseID:    r.CourseID,
-		CourseName:  r.CourseName,
-		Title:       r.Title,
-		Content:     r.Content,
-		ViewCount:   r.ViewCount,
-		ReplyCount:  r.ReplyCount,
-		LastReplyAt: lastReplyAt,
-		CreatedAt:   formatISO(r.CreatedAt),
+		ID:           r.ID,
+		ChapterID:    r.ChapterID,
+		ChapterTitle: r.ChapterTitle,
+		Title:        r.Title,
+		Content:      r.Content,
+		ViewCount:    r.ViewCount,
+		ReplyCount:   r.ReplyCount,
+		LastReplyAt:  lastReplyAt,
+		CreatedAt:    formatISO(r.CreatedAt),
 		Author: ForumAuthor{
 			UserID: r.UserID, Username: r.Username,
 			Name: r.Name, Nickname: r.Nickname, AvatarURL: r.AvatarURL,
@@ -118,8 +120,8 @@ func (r topicRow) toDTO(viewerID int) ForumTopicDTO {
 }
 
 // ListTopics 分页查询主题。
-// scope: all（默认）/ general（大论坛）/ course（需配合 courseID）。
-func (s *ForumService) ListTopics(scope string, courseID, page, pageSize int, keyword string) (map[string]any, error) {
+// scope: all（默认）/ general（综合讨论区）/ chapter（需配合 chapterID）。
+func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, keyword string) (map[string]any, error) {
 	if scope == "" {
 		scope = ForumScopeAll
 	}
@@ -131,20 +133,20 @@ func (s *ForumService) ListTopics(scope string, courseID, page, pageSize int, ke
 	}
 
 	q := s.db.Table("forum_topics AS t").
-		Select("t.id, t.course_id, t.title, t.content, t.view_count, t.reply_count, t.last_reply_at, t.created_at, " +
+		Select("t.id, t.chapter_id, t.title, t.content, t.view_count, t.reply_count, t.last_reply_at, t.created_at, " +
 			"u.id AS user_id, u.username, u.name, u.nickname, u.avatar_url, " +
-			"COALESCE(c.name, '') AS course_name").
+			"COALESCE(ch.title, '') AS chapter_title").
 		Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
-		Joins("LEFT JOIN course AS c ON c.course_id = t.course_id")
+		Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id")
 
 	switch scope {
 	case ForumScopeGeneral:
-		q = q.Where("t.course_id IS NULL")
-	case ForumScopeCourse:
-		if courseID <= 0 {
-			return nil, errors.New("查询课程讨论区需要有效的 course_id")
+		q = q.Where("t.chapter_id IS NULL")
+	case ForumScopeChapter:
+		if chapterID <= 0 {
+			return nil, errors.New("查询章节讨论区需要有效的 chapter_id")
 		}
-		q = q.Where("t.course_id = ?", courseID)
+		q = q.Where("t.chapter_id = ?", chapterID)
 	}
 	if keyword = strings.TrimSpace(keyword); keyword != "" {
 		like := "%" + keyword + "%"
@@ -176,15 +178,15 @@ func (s *ForumService) ListTopics(scope string, courseID, page, pageSize int, ke
 	}, nil
 }
 
-// GetTopic 主题详情（含回复），并累加浏览量。
+// GetTopic 主题详情（含回复，回复带被回复人信息），并累加浏览量。
 func (s *ForumService) GetTopic(topicID int64, viewerID int) (map[string]any, error) {
 	var row topicRow
 	err := s.db.Table("forum_topics AS t").
-		Select("t.id, t.course_id, t.title, t.content, t.view_count, t.reply_count, t.last_reply_at, t.created_at, "+
+		Select("t.id, t.chapter_id, t.title, t.content, t.view_count, t.reply_count, t.last_reply_at, t.created_at, "+
 			"u.id AS user_id, u.username, u.name, u.nickname, u.avatar_url, "+
-			"COALESCE(c.name, '') AS course_name").
+			"COALESCE(ch.title, '') AS chapter_title").
 		Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
-		Joins("LEFT JOIN course AS c ON c.course_id = t.course_id").
+		Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").
 		Where("t.id = ?", topicID).
 		Scan(&row).Error
 	if err != nil {
@@ -199,22 +201,27 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int) (map[string]any, er
 		UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error
 	row.ViewCount++
 
-	// 回复列表
+	// 回复列表（含被回复人展示名）
 	var replies []struct {
-		ID        int64
-		TopicID   int64
-		Content   string
-		CreatedAt time.Time
-		UserID    int
-		Username  string
-		Name      string
-		Nickname  string
-		AvatarURL string
+		ID         int64
+		TopicID    int64
+		ParentID   *int64
+		Content    string
+		CreatedAt  time.Time
+		UserID     int
+		Username   string
+		Name       string
+		Nickname   string
+		AvatarURL  string
+		ParentName string
 	}
 	if err := s.db.Table("forum_replies AS r").
-		Select("r.id, r.topic_id, r.content, r.created_at, "+
-			"u.id AS user_id, u.username, u.name, u.nickname, u.avatar_url").
+		Select("r.id, r.topic_id, r.parent_id, r.content, r.created_at, "+
+			"u.id AS user_id, u.username, u.name, u.nickname, u.avatar_url, "+
+			"COALESCE(NULLIF(pu.nickname, ''), NULLIF(pu.name, ''), pu.username, '') AS parent_name").
 		Joins("JOIN hrwai_users AS u ON u.id = r.user_id").
+		Joins("LEFT JOIN forum_replies AS pr ON pr.id = r.parent_id").
+		Joins("LEFT JOIN hrwai_users AS pu ON pu.id = pr.user_id").
 		Where("r.topic_id = ?", topicID).
 		Order("r.created_at ASC, r.id ASC").
 		Scan(&replies).Error; err != nil {
@@ -224,7 +231,8 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int) (map[string]any, er
 	replyDTOs := make([]ForumReplyDTO, 0, len(replies))
 	for _, r := range replies {
 		replyDTOs = append(replyDTOs, ForumReplyDTO{
-			ID: r.ID, TopicID: r.TopicID, Content: r.Content, CreatedAt: formatISO(r.CreatedAt),
+			ID: r.ID, TopicID: r.TopicID, ParentID: r.ParentID, ParentName: r.ParentName,
+			Content: r.Content, CreatedAt: formatISO(r.CreatedAt),
 			Author: ForumAuthor{
 				UserID: r.UserID, Username: r.Username,
 				Name: r.Name, Nickname: r.Nickname, AvatarURL: r.AvatarURL,
@@ -239,8 +247,8 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int) (map[string]any, er
 	}, nil
 }
 
-// CreateTopic 发帖。courseID 为 nil/0 表示发到大论坛。
-func (s *ForumService) CreateTopic(userID int, courseID *int, title, content string) (*ForumTopicDTO, error) {
+// CreateTopic 发帖。chapterID 为 nil/0 表示发到综合讨论区。
+func (s *ForumService) CreateTopic(userID int, chapterID *int, title, content string) (*ForumTopicDTO, error) {
 	title = strings.TrimSpace(title)
 	content = strings.TrimSpace(content)
 	if utf8.RuneCountInString(title) < 1 || utf8.RuneCountInString(title) > 100 {
@@ -251,20 +259,20 @@ func (s *ForumService) CreateTopic(userID int, courseID *int, title, content str
 	}
 
 	var cid *int
-	if courseID != nil && *courseID > 0 {
+	if chapterID != nil && *chapterID > 0 {
 		var cnt int64
-		if err := s.db.Model(&model.Course{}).Where("course_id = ?", *courseID).Count(&cnt).Error; err != nil {
+		if err := s.db.Model(&model.Chapter{}).Where("chapter_id = ?", *chapterID).Count(&cnt).Error; err != nil {
 			return nil, err
 		}
 		if cnt == 0 {
-			return nil, errors.New("课程不存在")
+			return nil, errors.New("章节不存在")
 		}
-		cid = courseID
+		cid = chapterID
 	}
 
 	now := beijingNow()
 	topic := model.ForumTopic{
-		CourseID:  cid,
+		ChapterID: cid,
 		UserID:    userID,
 		Title:     title,
 		Content:   content,
@@ -281,7 +289,7 @@ func (s *ForumService) CreateTopic(userID int, courseID *int, title, content str
 	}
 	return &ForumTopicDTO{
 		ID:        topic.ID,
-		CourseID:  topic.CourseID,
+		ChapterID: topic.ChapterID,
 		Title:     topic.Title,
 		Content:   topic.Content,
 		CreatedAt: formatISO(topic.CreatedAt),
@@ -293,8 +301,8 @@ func (s *ForumService) CreateTopic(userID int, courseID *int, title, content str
 	}, nil
 }
 
-// ReplyTopic 回复主题。
-func (s *ForumService) ReplyTopic(userID int, topicID int64, content string) (*ForumReplyDTO, error) {
+// ReplyTopic 回复主题或回复某条回复（parentReplyID 非空时）。
+func (s *ForumService) ReplyTopic(userID int, topicID int64, content string, parentReplyID *int64) (*ForumReplyDTO, error) {
 	content = strings.TrimSpace(content)
 	if utf8.RuneCountInString(content) < 1 || utf8.RuneCountInString(content) > 5000 {
 		return nil, errors.New("回复内容长度需在 1-5000 个字符之间")
@@ -308,9 +316,35 @@ func (s *ForumService) ReplyTopic(userID int, topicID int64, content string) (*F
 		return nil, err
 	}
 
+	// 校验被回复的回复存在且属于同一主题
+	var parentName string
+	if parentReplyID != nil && *parentReplyID > 0 {
+		var parent model.ForumReply
+		if err := s.db.First(&parent, *parentReplyID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, errors.New("被回复的回复不存在")
+			}
+			return nil, err
+		}
+		if parent.TopicID != topicID {
+			return nil, errors.New("被回复的回复不属于该主题")
+		}
+		var pu model.HrwaiUser
+		if err := s.db.First(&pu, parent.UserID).Error; err == nil {
+			parentName = ForumAuthor{
+				UserID: pu.ID, Username: pu.Username,
+				Name: pu.Name, Nickname: pu.Nickname, AvatarURL: pu.AvatarURL,
+			}.DisplayName()
+		}
+	}
+
 	now := beijingNow()
 	reply := model.ForumReply{
-		TopicID: topicID, UserID: userID, Content: content, CreatedAt: now,
+		TopicID:   topicID,
+		UserID:    userID,
+		ParentID:  parentReplyID,
+		Content:   content,
+		CreatedAt: now,
 	}
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&reply).Error; err != nil {
@@ -332,7 +366,8 @@ func (s *ForumService) ReplyTopic(userID int, topicID int64, content string) (*F
 		return nil, err
 	}
 	return &ForumReplyDTO{
-		ID: reply.ID, TopicID: reply.TopicID, Content: reply.Content, CreatedAt: formatISO(reply.CreatedAt),
+		ID: reply.ID, TopicID: reply.TopicID, ParentID: reply.ParentID,
+		ParentName: parentName, Content: reply.Content, CreatedAt: formatISO(reply.CreatedAt),
 		Author: ForumAuthor{
 			UserID: u.ID, Username: u.Username,
 			Name: u.Name, Nickname: u.Nickname, AvatarURL: u.AvatarURL,
@@ -356,7 +391,7 @@ func (s *ForumService) DeleteTopic(userID int, topicID int64) error {
 	return s.db.Delete(&model.ForumTopic{}, topicID).Error
 }
 
-// DeleteReply 删除回复（仅作者本人）。
+// DeleteReply 删除回复（仅作者本人；其下级回复随外键级联删除）。
 func (s *ForumService) DeleteReply(userID int, replyID int64) error {
 	var reply model.ForumReply
 	if err := s.db.First(&reply, replyID).Error; err != nil {

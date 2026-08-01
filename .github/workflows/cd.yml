@@ -15,11 +15,10 @@ on:
       environment:
         description: 部署目标环境
         type: choice
-        default: staging
+        default: production
         options:
-          - staging
-          - testing
           - production
+          - testing
       skip_backend:
         description: 跳过后端部署
         type: boolean
@@ -194,7 +193,7 @@ jobs:
       needs.build-libreoffice.result == 'success'
     runs-on: ubuntu-latest
     environment:
-      name: ${{ inputs.environment || 'staging' }}
+      name: ${{ inputs.environment || 'production' }}
     env:
       # 镜像信息（来自 build-backend/build-frontend/build-libreoffice outputs）
       IMAGE_TAG: ${{ needs.build-backend.outputs.image_tag || github.sha }}
@@ -240,9 +239,9 @@ jobs:
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_BUCKET: ${{ secrets.R2_BUCKET }}
       R2_PUBLIC_DOMAIN: ${{ secrets.R2_PUBLIC_DOMAIN }}
-      # backend 宿主机映射端口（staging 默认 8080；testing 用 18080 避免与 cadvisor 冲突）
+      # backend 宿主机映射端口（production 默认 8080；testing 用 18080 避免与 cadvisor 冲突）
       BACKEND_HOST_PORT: ${{ secrets.BACKEND_HOST_PORT || '8080' }}
-      # 异地备份（staging: pve-02 → pve-01；testing: 留空跳过）
+      # 异地备份（production: pve-02 → pve-01；testing: 留空跳过）
       BACKUP_REMOTE_HOST: ${{ secrets.BACKUP_REMOTE_HOST }}
       BACKUP_REMOTE_DIR: ${{ secrets.BACKUP_REMOTE_DIR || '/opt/forklift-backups' }}
       BACKUP_REMOTE_KEY: ${{ secrets.BACKUP_REMOTE_KEY || '/root/.ssh/pve01-sync' }}
@@ -251,8 +250,8 @@ jobs:
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT || '2222' }}
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-      # SSH 跳板配置（staging 和 testing 均已迁移到 LXC,使用 ProxyJump）
-      # staging: SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(172.17.1.201)
+      # SSH 跳板配置（production 和 testing 均已迁移到 LXC,使用 ProxyJump）
+      # production: SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(172.17.1.201)
       # testing: SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(172.17.1.200)
       #         pve-02 与 LXC 同网段路由可达,无需 pve-01 中转
       SSH_JUMP_HOST: ${{ secrets.SSH_JUMP_HOST || '' }}
@@ -270,10 +269,10 @@ jobs:
 
       # --------------------------------------------------------
       # Step 2.1: 配置 SSH
-      #   staging/testing: 两层 ProxyJump (pve-02 → LXC)
+      #   production/testing: 两层 ProxyJump (pve-02 → LXC)
       #           SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(目标)
       #           pve-02 与 LXC 同网段(172.17.1.0/24)路由可达
-      #   production: 直连 (SSH_HOST:SSH_PORT, SSH_JUMP_HOST 为空)
+      #   若某环境未配置 SSH_JUMP_HOST，则直连 (SSH_HOST:SSH_PORT)
       # --------------------------------------------------------
       - name: 配置 SSH
         run: |
@@ -284,7 +283,7 @@ jobs:
             -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
           if [ -n "$SSH_JUMP_HOST" ]; then
-            # testing 环境: 两层 ProxyJump (pve-02 → LXC)
+            # 有跳板环境（production/testing）: 两层 ProxyJump (pve-02 → LXC)
             cat > ~/.ssh/config << EOF
           Host jump
               HostName $SSH_HOST
@@ -304,7 +303,7 @@ jobs:
             echo "SSH_PORT_OPT=" >> $GITHUB_ENV
             echo "SSH 配置: 跳板模式 (jump=$SSH_HOST:$SSH_PORT → target=$SSH_JUMP_HOST)"
           else
-            # staging 环境: 直连 pve-02
+            # 无跳板环境: 直连
             cat > ~/.ssh/config << EOF
           Host target
               HostName $SSH_HOST
