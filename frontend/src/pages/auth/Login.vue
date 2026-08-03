@@ -509,12 +509,9 @@ onUnmounted(() => {
 
 .mode-switch {
   display: flex;
+  gap: 8px;
   width: 100%;
-  padding: 4px;
   margin-bottom: 16px;
-  background: #F1F5F9;
-  border: 1px solid #E2E8F0;
-  border-radius: 12px;
 }
 
 .mode-switch :deep(.el-radio-button) {
@@ -528,11 +525,11 @@ onUnmounted(() => {
   justify-content: center;
   height: 40px;
   width: 100%;
-  border: none;
-  border-radius: 9px;
-  background: transparent;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  background: #FFFFFF;
   color: #64748B;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   padding: 0;
   box-shadow: none;
@@ -540,14 +537,16 @@ onUnmounted(() => {
 }
 
 .mode-switch :deep(.el-radio-button:not(.is-active):hover .el-radio-button__inner) {
+  border-color: #93C5FD;
   color: #0284C7;
-  background: rgba(14, 165, 233, 0.08);
+  background: #F0F9FF;
 }
 
 .mode-switch :deep(.el-radio-button.is-active .el-radio-button__inner) {
   background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%);
+  border-color: transparent;
   color: #FFFFFF;
-  box-shadow: 0 6px 16px rgba(14, 165, 233, 0.3);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
 }
 
 .code-row {
