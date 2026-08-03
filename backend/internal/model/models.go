@@ -59,17 +59,21 @@ func (j *JSONB) UnmarshalJSON(data []byte) error {
 // 三套登录鉴权(培训学员端 / 残值评估 / AI 助手)共用此表与主体系 JWT。
 // admin / tutor 账号仍保留独立表,不并入此表。
 type HrwaiUser struct {
-	ID        int       `gorm:"column:id;primaryKey" json:"id"`
-	Username  string    `gorm:"column:username;uniqueIndex" json:"username"`
-	Password  string    `gorm:"column:password" json:"-"`
-	Name      string    `gorm:"column:name" json:"name"`
-	Nickname  string    `gorm:"column:nickname" json:"nickname"`
-	AvatarURL string    `gorm:"column:avatar_url" json:"avatar_url"`
-	Phone     string    `gorm:"column:phone;uniqueIndex" json:"phone"`
-	Email     string    `gorm:"column:email" json:"email,omitempty"`
-	Company   string    `gorm:"column:company" json:"company,omitempty"`
-	Status    int16     `gorm:"column:status;default:1" json:"status"`
-	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+	ID        int    `gorm:"column:id;primaryKey" json:"id"`
+	Username  string `gorm:"column:username;uniqueIndex" json:"username"`
+	Password  string `gorm:"column:password" json:"-"`
+	Name      string `gorm:"column:name" json:"name"`
+	Nickname  string `gorm:"column:nickname" json:"nickname"`
+	AvatarURL string `gorm:"column:avatar_url" json:"avatar_url"`
+	Phone     string `gorm:"column:phone;uniqueIndex" json:"phone"`
+	Email     string `gorm:"column:email" json:"email,omitempty"`
+	Company   string `gorm:"column:company" json:"company,omitempty"`
+	// WechatOpenID 微信开放平台 openid（微信扫码登录绑定用，框架字段）。
+	WechatOpenID string `gorm:"column:wechat_openid" json:"wechat_openid,omitempty"`
+	// WechatUnionID 微信开放平台 unionid（多应用互通，框架字段）。
+	WechatUnionID string    `gorm:"column:wechat_unionid" json:"wechat_unionid,omitempty"`
+	Status        int16     `gorm:"column:status;default:1" json:"status"`
+	CreatedAt     time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (HrwaiUser) TableName() string { return "hrwai_users" }

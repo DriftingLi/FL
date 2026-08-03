@@ -87,7 +87,7 @@ func extractCode(t *testing.T, store *memCodeStore, purpose EmailCodePurpose, em
 	if err != nil {
 		t.Fatalf("读取验证码失败: %v", err)
 	}
-	var v emailCodeValue
+	var v authCodeValue
 	if err := json.Unmarshal([]byte(raw), &v); err != nil {
 		t.Fatalf("解析验证码失败: %v", err)
 	}
@@ -208,7 +208,7 @@ func TestRegisterAndLoginWithCode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("注册失败: %v", err)
 	}
-	if regRes.Token == "" || regRes.Role != HrwaiRole || regRes.Username != email {
+	if regRes.Token == "" || regRes.Role != HrwaiRole || regRes.Username == "" || regRes.Username == email {
 		t.Errorf("注册结果异常: %+v", regRes)
 	}
 	if len(mailer.sent) != 1 {
@@ -216,7 +216,7 @@ func TestRegisterAndLoginWithCode(t *testing.T) {
 	}
 
 	// 同一邮箱不能重复注册（手动写入验证码绕过发送，验证注册接口的唯一性兜底）
-	dupCodeVal, _ := json.Marshal(emailCodeValue{Code: "123456"})
+	dupCodeVal, _ := json.Marshal(authCodeValue{Code: "123456"})
 	_ = store.Set(ctx, emailCodeKey(EmailCodeRegister, email), string(dupCodeVal), time.Minute)
 	if _, err := svc.RegisterWithCode(ctx, email, "123456", "李四", ""); err == nil || !strings.Contains(err.Error(), "已注册") {
 		t.Errorf("重复注册应失败: %v", err)
@@ -275,6 +275,38 @@ func TestRegisterWithCode_BadEmail(t *testing.T) {
 	svc, _, _ := newEmailTestSvc(t)
 	if _, err := svc.RegisterWithCode(context.Background(), "not-an-email", "123456", "张三", ""); err == nil || !strings.Contains(err.Error(), "格式") {
 		t.Errorf("非法邮箱应报格式错误: %v", err)
+	}
+}
+
+func TestBindEmail(t *testing.T) {
+	svc, store, _ := newEmailTestSvc(t)
+	db := svc.db
+	ctx := context.Background()
+	u1 := &model.HrwaiUser{Username: "ebind1", Password: "x", Name: "用户一", Phone: "test_ebind_1", Email: "old1@example.com", Status: 1, CreatedAt: time.Now()}
+	u2 := &model.HrwaiUser{Username: "ebind2", Password: "x", Name: "用户二", Phone: "test_ebind_2", Email: "taken2@example.com", Status: 1, CreatedAt: time.Now()}
+	_ = db.Create(u1)
+	_ = db.Create(u2)
+
+	// 目标邮箱已被他人使用
+	if err := svc.SendBindCode(ctx, u1.ID, "taken2@example.com"); err == nil || !strings.Contains(err.Error(), "已被其他账号") {
+		t.Errorf("占用邮箱应报错: %v", err)
+	}
+	// 非法格式
+	if err := svc.SendBindCode(ctx, u1.ID, "bad-email"); err == nil || !strings.Contains(err.Error(), "格式") {
+		t.Errorf("非法邮箱应报格式错误: %v", err)
+	}
+	// 正常绑定
+	if err := svc.SendBindCode(ctx, u1.ID, "new@example.com"); err != nil {
+		t.Fatalf("发送绑定验证码失败: %v", err)
+	}
+	code := extractCode(t, store, EmailCodeBind, "new@example.com")
+	if err := svc.BindEmail(ctx, u1.ID, "new@example.com", code); err != nil {
+		t.Fatalf("绑定邮箱失败: %v", err)
+	}
+	var after model.HrwaiUser
+	_ = db.First(&after, u1.ID).Error
+	if after.Email != "new@example.com" {
+		t.Errorf("绑定后邮箱 = %q", after.Email)
 	}
 }
 

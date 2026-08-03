@@ -42,6 +42,8 @@ type Config struct {
 	SMTP SMTPConfig
 	// EmailCodeTTL 邮箱验证码有效期（EMAIL_CODE_TTL_MINUTES，默认 5 分钟）。
 	EmailCodeTTL time.Duration
+	// Wechat 微信开放平台配置（扫码登录，授权信息待接入）。
+	Wechat WechatConfig
 }
 
 // SMTPConfig SMTP 邮件发送配置。
@@ -52,6 +54,12 @@ type SMTPConfig struct {
 	Password string // SMTP_PASSWORD
 	From     string // SMTP_FROM 发件人邮箱
 	FromName string // SMTP_FROM_NAME，默认 和润天下
+}
+
+// WechatConfig 微信开放平台配置（扫码登录框架占位，授权信息待接入）。
+type WechatConfig struct {
+	AppID     string // WECHAT_APP_ID
+	AppSecret string // WECHAT_APP_SECRET
 }
 
 // StorageConfig 文件存储配置。
@@ -219,6 +227,10 @@ func Load() (*Config, error) {
 			FromName: getenv("SMTP_FROM_NAME", "和润天下"),
 		},
 		EmailCodeTTL: time.Duration(emailCodeTTLMinutes) * time.Minute,
+		Wechat: WechatConfig{
+			AppID:     getenv("WECHAT_APP_ID", ""),
+			AppSecret: getenv("WECHAT_APP_SECRET", ""),
+		},
 	}
 
 	// 默认上传目录

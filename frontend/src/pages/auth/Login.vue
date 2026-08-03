@@ -28,6 +28,8 @@
         >
           <el-radio-button label="password">账号密码登录</el-radio-button>
           <el-radio-button label="email">邮箱登录</el-radio-button>
+          <el-radio-button label="phone">手机号登录</el-radio-button>
+          <el-radio-button label="wechat">微信扫码</el-radio-button>
         </el-radio-group>
 
         <el-form ref="formRef" :model="formData" :rules="rules" label-width="0" class="login-form">
@@ -56,7 +58,7 @@
             </el-form-item>
           </template>
 
-          <template v-else>
+          <template v-else-if="loginMode === 'email'">
             <el-form-item prop="email">
               <el-input
                 v-model="formData.email"
@@ -91,6 +93,54 @@
             </el-form-item>
           </template>
 
+          <template v-else-if="loginMode === 'phone'">
+            <el-form-item prop="phone">
+              <el-input
+                v-model="formData.phone"
+                placeholder="请输入手机号"
+                prefix-icon="Phone"
+                size="large"
+                class="form-input"
+                maxlength="11"
+                @keyup.enter="handleLogin"
+              />
+            </el-form-item>
+
+            <el-form-item prop="code">
+              <div class="code-row">
+                <el-input
+                  v-model="formData.code"
+                  placeholder="6位手机验证码"
+                  prefix-icon="Message"
+                  size="large"
+                  class="form-input code-input"
+                  maxlength="6"
+                  @keyup.enter="handleLogin"
+                />
+                <el-button
+                  :disabled="countdown > 0 || codeSending"
+                  size="large"
+                  class="code-btn"
+                  @click="handleSendCode"
+                >
+                  {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
+                </el-button>
+              </div>
+            </el-form-item>
+          </template>
+
+          <template v-else>
+            <el-form-item>
+              <div class="wechat-box">
+                <div class="wechat-qr-placeholder">
+                  <el-icon :size="42"><ChatDotRound /></el-icon>
+                  <p class="wechat-title">微信扫码登录</p>
+                  <span class="wechat-tip">微信授权暂未配置，待开放平台配置完成后开放</span>
+                </div>
+              </div>
+            </el-form-item>
+          </template>
+
           <el-form-item>
             <el-button
               type="primary"
@@ -119,8 +169,8 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import { ElMessage } from 'element-plus'
-import { UserFilled, Avatar, Setting } from '@element-plus/icons-vue'
-import { usernameRules, passwordRules, requiredEmailRules, emailCodeRules } from '@/utils/validate'
+import { UserFilled, Avatar, Setting, ChatDotRound } from '@element-plus/icons-vue'
+import { usernameRules, passwordRules, requiredEmailRules, emailCodeRules, phoneRules } from '@/utils/validate'
 import {
   getSubdomain,
   getRoleForSubdomain,
@@ -134,7 +184,7 @@ const route = useRoute()
 const authStore = useAuthStore()
 const formRef = ref(null)
 const loading = ref(false)
-const loginMode = ref<'password' | 'email'>('password')
+const loginMode = ref<'password' | 'email' | 'phone' | 'wechat'>('password')
 const countdown = ref(0)
 const codeSending = ref(false)
 let countdownTimer: number | undefined
@@ -175,26 +225,38 @@ const formData = reactive({
   username: '',
   password: '',
   email: '',
+  phone: '',
   code: ''
 })
 
-const rules = computed(() =>
-  loginMode.value === 'email'
-    ? { email: requiredEmailRules, code: emailCodeRules }
-    : { username: usernameRules, password: passwordRules }
-)
+const rules = computed(() => {
+  if (loginMode.value === 'email') return { email: requiredEmailRules, code: emailCodeRules }
+  if (loginMode.value === 'phone') return { phone: phoneRules, code: emailCodeRules }
+  if (loginMode.value === 'wechat') return {}
+  return { username: usernameRules, password: passwordRules }
+})
 
 async function handleSendCode() {
-  const email = formData.email.trim()
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    ElMessage.warning('请输入正确的邮箱地址')
-    return
-  }
   codeSending.value = true
   try {
-    const res = await authApi.sendEmailCode({ email, purpose: 'login' })
+    let res
+    if (loginMode.value === 'phone') {
+      const phone = formData.phone.trim()
+      if (!/^1[3-9]\d{9}$/.test(phone)) {
+        ElMessage.warning('请输入正确的手机号')
+        return
+      }
+      res = await authApi.sendPhoneCode({ phone, purpose: 'login' })
+    } else {
+      const email = formData.email.trim()
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        ElMessage.warning('请输入正确的邮箱地址')
+        return
+      }
+      res = await authApi.sendEmailCode({ email, purpose: 'login' })
+    }
     if (res.code === 200) {
-      ElMessage.success('验证码已发送，请查收邮箱')
+      ElMessage.success('验证码已发送，请查收')
       countdown.value = 60
       if (countdownTimer) window.clearInterval(countdownTimer)
       countdownTimer = window.setInterval(() => {
@@ -213,6 +275,10 @@ async function handleSendCode() {
 }
 
 async function handleLogin() {
+  if (loginMode.value === 'wechat') {
+    ElMessage.info('微信扫码登录暂未开放，请等待开放平台配置')
+    return
+  }
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
 
@@ -227,6 +293,11 @@ async function handleLogin() {
     if (loginMode.value === 'email') {
       res = await authApi.emailLogin({
         email: formData.email.trim(),
+        code: formData.code.trim()
+      })
+    } else if (loginMode.value === 'phone') {
+      res = await authApi.phoneLogin({
+        phone: formData.phone.trim(),
         code: formData.code.trim()
       })
     } else if (currentRole === 'hrwai_user') {
@@ -491,6 +562,36 @@ onUnmounted(() => {
 
 .code-btn {
   min-width: 124px;
+}
+
+.wechat-box {
+  width: 100%;
+}
+
+.wechat-qr-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 16px;
+  border: 2px dashed #CBD5E1;
+  border-radius: 12px;
+  color: #94A3B8;
+  background: #F8FAFC;
+}
+
+.wechat-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #64748B;
+}
+
+.wechat-tip {
+  font-size: 12px;
+  color: #94A3B8;
+  text-align: center;
+  line-height: 1.5;
 }
 
 .form-input :deep(.el-input__wrapper) {

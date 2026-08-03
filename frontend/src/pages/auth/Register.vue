@@ -21,6 +21,7 @@
         <el-radio-group v-model="registerMode" class="mode-switch">
           <el-radio-button label="phone">手机号注册</el-radio-button>
           <el-radio-button label="email">邮箱注册</el-radio-button>
+          <el-radio-button label="wechat">微信注册</el-radio-button>
         </el-radio-group>
 
         <el-form ref="formRef" :model="formData" :rules="rules" label-width="0" class="register-form">
@@ -38,36 +39,35 @@
             <el-form-item prop="phone">
               <el-input
                 v-model="formData.phone"
-                placeholder="手机号"
+                placeholder="请输入手机号"
                 prefix-icon="Phone"
                 size="large"
                 class="form-input"
                 maxlength="11"
+                @keyup.enter="handleRegister"
               />
             </el-form-item>
 
-            <el-form-item prop="password">
-              <el-input
-                v-model="formData.password"
-                type="password"
-                placeholder="密码（6-20位字符）"
-                prefix-icon="Lock"
-                show-password
-                size="large"
-                class="form-input"
-              />
-            </el-form-item>
-
-            <el-form-item prop="confirmPassword">
-              <el-input
-                v-model="formData.confirmPassword"
-                type="password"
-                placeholder="确认密码"
-                prefix-icon="Lock"
-                show-password
-                size="large"
-                class="form-input"
-              />
+            <el-form-item prop="code">
+              <div class="code-row">
+                <el-input
+                  v-model="formData.code"
+                  placeholder="6位手机验证码"
+                  prefix-icon="Message"
+                  size="large"
+                  class="form-input code-input"
+                  maxlength="6"
+                  @keyup.enter="handleRegister"
+                />
+                <el-button
+                  :disabled="countdown > 0 || codeSending"
+                  size="large"
+                  class="code-btn"
+                  @click="handleSendCode"
+                >
+                  {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
+                </el-button>
+              </div>
             </el-form-item>
 
             <el-form-item prop="company">
@@ -77,22 +77,12 @@
                 prefix-icon="OfficeBuilding"
                 size="large"
                 class="form-input"
-              />
-            </el-form-item>
-
-            <el-form-item prop="email">
-              <el-input
-                v-model="formData.email"
-                placeholder="邮箱（选填）"
-                prefix-icon="Message"
-                size="large"
-                class="form-input"
                 @keyup.enter="handleRegister"
               />
             </el-form-item>
           </template>
 
-          <template v-else>
+          <template v-else-if="registerMode === 'email'">
             <el-form-item prop="email">
               <el-input
                 v-model="formData.email"
@@ -137,6 +127,18 @@
             </el-form-item>
           </template>
 
+          <template v-else>
+            <el-form-item>
+              <div class="wechat-box">
+                <div class="wechat-qr-placeholder">
+                  <el-icon :size="42"><ChatDotRound /></el-icon>
+                  <p class="wechat-title">微信扫码注册</p>
+                  <span class="wechat-tip">微信授权暂未配置，待开放平台配置完成后开放</span>
+                </div>
+              </div>
+            </el-form-item>
+          </template>
+
           <el-form-item>
             <el-button
               type="primary"
@@ -165,13 +167,10 @@ import { useRouter } from 'vue-router'
 import { authApi } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
-import type { FormItemRule } from 'element-plus'
-import { EditPen } from '@element-plus/icons-vue'
+import { EditPen, ChatDotRound } from '@element-plus/icons-vue'
 import {
-  passwordRules,
   nameRules,
   phoneRules,
-  emailRules,
   companyRules,
   requiredEmailRules,
   emailCodeRules
@@ -181,7 +180,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 const formRef = ref(null)
 const loading = ref(false)
-const registerMode = ref<'phone' | 'email'>('phone')
+const registerMode = ref<'phone' | 'email' | 'wechat'>('phone')
 const countdown = ref(0)
 const codeSending = ref(false)
 let countdownTimer: number | undefined
@@ -196,48 +195,37 @@ const formData = reactive({
   code: ''
 })
 
-const validateConfirmPassword: FormItemRule['validator'] = (_rule, value: string, callback) => {
-  if (value === '') {
-    callback(new Error('请再次输入密码'))
-  } else if (value !== formData.password) {
-    callback(new Error('两次输入密码不一致'))
-  } else {
-    callback()
+const rules = computed(() => {
+  if (registerMode.value === 'email') {
+    return { name: nameRules, email: requiredEmailRules, code: emailCodeRules, company: companyRules }
   }
-}
-
-const rules = computed(() =>
-  registerMode.value === 'email'
-    ? {
-        name: nameRules,
-        email: requiredEmailRules,
-        code: emailCodeRules,
-        company: companyRules
-      }
-    : {
-        name: nameRules,
-        phone: phoneRules,
-        password: passwordRules,
-        confirmPassword: [
-          { required: true, message: '请确认密码', trigger: 'blur' },
-          { validator: validateConfirmPassword, trigger: 'blur' }
-        ],
-        company: companyRules,
-        email: emailRules
-      }
-)
+  if (registerMode.value === 'phone') {
+    return { name: nameRules, phone: phoneRules, code: emailCodeRules, company: companyRules }
+  }
+  return { name: nameRules }
+})
 
 async function handleSendCode() {
-  const email = formData.email.trim()
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    ElMessage.warning('请输入正确的邮箱地址')
-    return
-  }
   codeSending.value = true
   try {
-    const res = await authApi.sendEmailCode({ email, purpose: 'register' })
+    let res
+    if (registerMode.value === 'phone') {
+      const phone = formData.phone.trim()
+      if (!/^1[3-9]\d{9}$/.test(phone)) {
+        ElMessage.warning('请输入正确的手机号')
+        return
+      }
+      res = await authApi.sendPhoneCode({ phone, purpose: 'register' })
+    } else {
+      const email = formData.email.trim()
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        ElMessage.warning('请输入正确的邮箱地址')
+        return
+      }
+      res = await authApi.sendEmailCode({ email, purpose: 'register' })
+    }
     if (res.code === 200) {
-      ElMessage.success('验证码已发送，请查收邮箱')
+      ElMessage.success('验证码已发送，请查收')
       countdown.value = 60
       if (countdownTimer) window.clearInterval(countdownTimer)
       countdownTimer = window.setInterval(() => {
@@ -256,6 +244,10 @@ async function handleSendCode() {
 }
 
 async function handleRegister() {
+  if (registerMode.value === 'wechat') {
+    ElMessage.info('微信扫码注册暂未开放，请等待开放平台配置')
+    return
+  }
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
 
@@ -269,27 +261,21 @@ async function handleRegister() {
         code: formData.code.trim(),
         company: formData.company
       })
-    } else {
-      res = await authApi.register({
+    } else if (registerMode.value === 'phone') {
+      res = await authApi.phoneRegister({
         name: formData.name,
-        phone: formData.phone,
-        password: formData.password,
-        company: formData.company,
-        email: formData.email
+        phone: formData.phone.trim(),
+        code: formData.code.trim(),
+        company: formData.company
       })
+    } else {
+      return
     }
 
     if (res.code === 201 || res.code === 200) {
-      if (registerMode.value === 'email') {
-        authStore.setAuthData(res.data)
-        ElMessage.success('注册成功')
-        router.push('/training')
-      } else {
-        ElMessage.success('注册成功，即将跳转到登录页...')
-        setTimeout(() => {
-          router.push('/login')
-        }, 1500)
-      }
+      authStore.setAuthData(res.data)
+      ElMessage.success('注册成功')
+      router.push('/training')
     }
   } catch (e) {
     console.error('Register error:', e)
@@ -475,6 +461,36 @@ onUnmounted(() => {
 
 .code-btn {
   min-width: 124px;
+}
+
+.wechat-box {
+  width: 100%;
+}
+
+.wechat-qr-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 16px;
+  border: 2px dashed #CBD5E1;
+  border-radius: 12px;
+  color: #94A3B8;
+  background: #F8FAFC;
+}
+
+.wechat-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #64748B;
+}
+
+.wechat-tip {
+  font-size: 12px;
+  color: #94A3B8;
+  text-align: center;
+  line-height: 1.5;
 }
 
 .form-input :deep(.el-input__wrapper) {

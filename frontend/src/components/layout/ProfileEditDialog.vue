@@ -16,7 +16,7 @@
               {{ avatarPending ? '头像审核中' : '上传新头像' }}
             </el-button>
           </el-upload>
-          <p class="hint">支持 jpg/png/webp，自动压缩，管理员审核通过后生效</p>
+          <p class="hint">管理员审核通过后生效</p>
         </div>
       </div>
 

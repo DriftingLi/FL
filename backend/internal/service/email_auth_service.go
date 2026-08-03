@@ -32,30 +32,32 @@ const (
 	EmailCodeRegister EmailCodePurpose = "register"
 	// EmailCodeLogin 登录验证码。
 	EmailCodeLogin EmailCodePurpose = "login"
+	// EmailCodeBind 绑定/修改邮箱验证码。
+	EmailCodeBind EmailCodePurpose = "bind"
 )
 
-// EmailCodeStore 验证码存储接口（生产用 Redis，测试用内存实现）。
-type EmailCodeStore interface {
+// AuthCodeStore 验证码存储接口（生产用 Redis，测试用内存实现）。
+type AuthCodeStore interface {
 	Get(ctx context.Context, key string) (string, error)
 	Set(ctx context.Context, key, value string, ttl time.Duration) error
 	Del(ctx context.Context, keys ...string) error
 }
 
-// RedisEmailCodeStore 基于全局 Redis 缓存的验证码存储。
-type RedisEmailCodeStore struct{}
+// RedisAuthCodeStore 基于全局 Redis 缓存的验证码存储。
+type RedisAuthCodeStore struct{}
 
 // Get 读取验证码。
-func (RedisEmailCodeStore) Get(ctx context.Context, key string) (string, error) {
+func (RedisAuthCodeStore) Get(ctx context.Context, key string) (string, error) {
 	return cache.Get(ctx, key)
 }
 
 // Set 写入验证码。
-func (RedisEmailCodeStore) Set(ctx context.Context, key, value string, ttl time.Duration) error {
+func (RedisAuthCodeStore) Set(ctx context.Context, key, value string, ttl time.Duration) error {
 	return cache.Set(ctx, key, value, ttl)
 }
 
 // Del 删除验证码。
-func (RedisEmailCodeStore) Del(ctx context.Context, keys ...string) error {
+func (RedisAuthCodeStore) Del(ctx context.Context, keys ...string) error {
 	return cache.Del(ctx, keys...)
 }
 
@@ -90,8 +92,8 @@ func (LogMailSender) Send(to, subject, body string) error {
 	return nil
 }
 
-// emailCodeValue 验证码存储值（含错误次数限制，最多 5 次）。
-type emailCodeValue struct {
+// authCodeValue 验证码存储值（含错误次数限制，最多 5 次）。
+type authCodeValue struct {
 	Code     string `json:"code"`
 	Attempts int    `json:"attempts"`
 }
@@ -100,7 +102,7 @@ type emailCodeValue struct {
 type EmailAuthService struct {
 	db      *gorm.DB
 	authSvc *AuthService
-	store   EmailCodeStore
+	store   AuthCodeStore
 	sender  MailSender
 	codeTTL time.Duration
 }
@@ -120,7 +122,7 @@ func NewEmailAuthService(db *gorm.DB, authSvc *AuthService, smtpCfg config.SMTPC
 	return &EmailAuthService{
 		db:      db,
 		authSvc: authSvc,
-		store:   RedisEmailCodeStore{},
+		store:   RedisAuthCodeStore{},
 		sender:  sender,
 		codeTTL: codeTTL,
 	}
@@ -195,7 +197,7 @@ func (s *EmailAuthService) sendCode(ctx context.Context, purpose EmailCodePurpos
 	if err != nil {
 		return errors.New("验证码生成失败，请稍后再试")
 	}
-	val, _ := json.Marshal(emailCodeValue{Code: code})
+	val, _ := json.Marshal(authCodeValue{Code: code})
 	if err := s.store.Set(ctx, emailCodeKey(purpose, email), string(val), s.codeTTL); err != nil {
 		return errors.New("验证码生成失败，请稍后再试")
 	}
@@ -251,8 +253,12 @@ func (s *EmailAuthService) RegisterWithCode(ctx context.Context, email, code, na
 	if err != nil {
 		return nil, errors.New("注册失败，请稍后再试")
 	}
+	username, err := generateRandomUsername()
+	if err != nil {
+		return nil, errors.New("注册失败，请稍后再试")
+	}
 	user := model.HrwaiUser{
-		Username:  email,
+		Username:  username,
 		Password:  hashed,
 		Name:      strings.TrimSpace(name),
 		Nickname:  generateDefaultNickname(s.db),
@@ -309,6 +315,69 @@ func (s *EmailAuthService) LoginWithCode(ctx context.Context, email, code string
 	}, nil
 }
 
+// SendBindCode 发送绑定/修改邮箱验证码：校验格式与唯一性（排除当前用户）后发送。
+func (s *EmailAuthService) SendBindCode(ctx context.Context, userID int, email string) error {
+	if s.sender == nil {
+		return errors.New("邮件服务未配置，请联系管理员")
+	}
+	email = NormalizeEmail(email)
+	if !IsValidEmail(email) {
+		return errors.New("邮箱格式不正确")
+	}
+	var count int64
+	if err := s.db.Model(&model.HrwaiUser{}).
+		Where("LOWER(email) = ? AND email <> '' AND id <> ?", email, userID).Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return errors.New("该邮箱已被其他账号使用")
+	}
+	if _, err := s.store.Get(ctx, emailSendThrottleKey(EmailCodeBind, email)); err == nil {
+		return errors.New("验证码发送过于频繁，请稍后再试")
+	}
+	code, err := generateEmailCode()
+	if err != nil {
+		return errors.New("验证码生成失败，请稍后再试")
+	}
+	val, _ := json.Marshal(authCodeValue{Code: code})
+	if err := s.store.Set(ctx, emailCodeKey(EmailCodeBind, email), string(val), s.codeTTL); err != nil {
+		return errors.New("验证码生成失败，请稍后再试")
+	}
+	if err := s.store.Set(ctx, emailSendThrottleKey(EmailCodeBind, email), "1", time.Minute); err != nil {
+		return errors.New("验证码生成失败，请稍后再试")
+	}
+	subject := "【和润天下】邮箱绑定验证码"
+	body := fmt.Sprintf(
+		"您好！\n\n您正在绑定/修改邮箱，本次验证码为：%s\n验证码 %d 分钟内有效，请勿泄露给他人。\n\n如非本人操作，请忽略本邮件。",
+		code, int(s.codeTTL.Minutes()),
+	)
+	if err := s.sender.Send(email, subject, body); err != nil {
+		slog.Error("验证码邮件发送失败", "email", email, "error", err)
+		return errors.New("验证码发送失败，请稍后再试")
+	}
+	return nil
+}
+
+// BindEmail 校验验证码后绑定/修改当前用户邮箱（格式与唯一性双重校验）。
+func (s *EmailAuthService) BindEmail(ctx context.Context, userID int, email, code string) error {
+	email = NormalizeEmail(email)
+	if !IsValidEmail(email) {
+		return errors.New("邮箱格式不正确")
+	}
+	if err := s.verifyCode(ctx, EmailCodeBind, email, code); err != nil {
+		return err
+	}
+	var count int64
+	if err := s.db.Model(&model.HrwaiUser{}).
+		Where("LOWER(email) = ? AND email <> '' AND id <> ?", email, userID).Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return errors.New("该邮箱已被其他账号使用")
+	}
+	return s.db.Model(&model.HrwaiUser{}).Where("id = ?", userID).Update("email", email).Error
+}
+
 // verifyCode 校验验证码并限制错误次数（最多 5 次），成功后删除验证码。
 func (s *EmailAuthService) verifyCode(ctx context.Context, purpose EmailCodePurpose, email, code string) error {
 	email = NormalizeEmail(email)
@@ -317,7 +386,7 @@ func (s *EmailAuthService) verifyCode(ctx context.Context, purpose EmailCodePurp
 	if err != nil {
 		return errors.New("验证码错误或已过期")
 	}
-	var v emailCodeValue
+	var v authCodeValue
 	if err := json.Unmarshal([]byte(raw), &v); err != nil {
 		return errors.New("验证码错误或已过期")
 	}

@@ -103,6 +103,12 @@ const routes: RouteRecordRaw[] = [
         name: 'WrongQuestions',
         component: () => import('@/pages/student/WrongQuestions.vue'),
         meta: { navKey: 'wrong-questions', navLabel: '错题本', navGroup: 'exam' }
+      },
+      {
+        path: 'profile',
+        name: 'StudentProfile',
+        component: () => import('@/pages/student/Profile.vue'),
+        meta: { navKey: 'profile', navLabel: '个人资料', navGroup: 'account' }
       }
     ]
   },

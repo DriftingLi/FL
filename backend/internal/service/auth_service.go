@@ -2,6 +2,8 @@
 package service
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"time"
 
@@ -110,7 +112,8 @@ func (s *AuthService) HrwaiLogin(account, password string) (*LoginResult, error)
 	}, nil
 }
 
-// HrwaiRegister 统一 HRWAI 账号注册,username 由手机号自动生成。
+// HrwaiRegister 统一 HRWAI 账号注册（手机号+密码，兼容旧流程）。
+// 账号（username）注册时随机生成，与手机号/邮箱概念解耦。
 func (s *AuthService) HrwaiRegister(phone, password, name, email, company string) (map[string]any, error) {
 	var count int64
 	s.db.Model(&model.HrwaiUser{}).Where("phone = ?", phone).Count(&count)
@@ -132,12 +135,16 @@ func (s *AuthService) HrwaiRegister(phone, password, name, email, company string
 			return nil, errors.New("该邮箱已被注册")
 		}
 	}
+	username, err := generateRandomUsername()
+	if err != nil {
+		return nil, errors.New("注册失败，请稍后再试")
+	}
 	hashed, err := HashPassword(password)
 	if err != nil {
 		return nil, err
 	}
 	user := model.HrwaiUser{
-		Username:  phone,
+		Username:  username,
 		Password:  hashed,
 		Name:      name,
 		Nickname:  generateDefaultNickname(s.db),
@@ -153,9 +160,18 @@ func (s *AuthService) HrwaiRegister(phone, password, name, email, company string
 	return map[string]any{
 		"id":       user.ID,
 		"username": user.Username,
-		"name":     user.Name,
 		"phone":    user.Phone,
+		"name":     user.Name,
 	}, nil
+}
+
+// generateRandomUsername 生成随机账号（如 hr1a2b3c4d5e6f78）。
+func generateRandomUsername() (string, error) {
+	b := make([]byte, 9)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return "hr" + hex.EncodeToString(b), nil
 }
 
 // GetHrwaiUserByID 用于 /me 接口查询用户信息。
@@ -165,6 +181,18 @@ func (s *AuthService) GetHrwaiUserByID(id int) (*model.HrwaiUser, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+// UpdatePassword 设置/修改当前用户密码（账号密码登录用）。
+func (s *AuthService) UpdatePassword(userID int, password string) error {
+	if len(password) < 6 || len(password) > 20 {
+		return errors.New("密码长度需为 6-20 位")
+	}
+	hashed, err := HashPassword(password)
+	if err != nil {
+		return err
+	}
+	return s.db.Model(&model.HrwaiUser{}).Where("id = ?", userID).Update("password", hashed).Error
 }
 
 // AdminLogin 管理员登录。

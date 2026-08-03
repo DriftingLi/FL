@@ -143,12 +143,13 @@ func TestHrwaiLogin_Disabled(t *testing.T) {
 
 func TestHrwaiRegister_Success(t *testing.T) {
 	svc, _ := newAuthSvc(t)
-	// 新签名：username 由手机号自动生成
 	result, err := svc.HrwaiRegister("13800138000", "pwd", "新生", "", "")
 	if err != nil {
 		t.Fatalf("注册失败: %v", err)
 	}
-	if result["username"] != "13800138000" || result["name"] != "新生" {
+	// 账号注册时随机生成，与手机号解耦
+	username, _ := result["username"].(string)
+	if username == "" || username == "13800138000" || result["name"] != "新生" {
 		t.Fatalf("注册结果不匹配: %+v", result)
 	}
 	// 验证可用手机号登录
@@ -167,6 +168,21 @@ func TestHrwaiRegister_Duplicate(t *testing.T) {
 	_, err := svc.HrwaiRegister("13800138000", "pwd", "dup2", "", "")
 	if err == nil || err.Error() != "手机号已被注册" {
 		t.Fatalf("应返回手机号已被注册, got %v", err)
+	}
+}
+
+func TestUpdatePassword(t *testing.T) {
+	svc, tdb := newAuthSvc(t)
+	hash, _ := HashPassword("old123")
+	s := testutil.SeedStudent(t, tdb, "pwduser", hash)
+	if err := svc.UpdatePassword(s.StudentID, "new123"); err != nil {
+		t.Fatalf("修改密码失败: %v", err)
+	}
+	if _, err := svc.HrwaiLogin("pwduser", "new123"); err != nil {
+		t.Fatalf("新密码应可登录: %v", err)
+	}
+	if err := svc.UpdatePassword(s.StudentID, "123"); err == nil {
+		t.Error("过短密码应报错")
 	}
 }
 

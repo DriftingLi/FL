@@ -37,7 +37,8 @@ const studentNav: NavItem[] = [
   { key: 'forum', label: '学员论坛', path: '/training/forum', icon: ChatDotRound },
   { key: 'question-bank', label: '题库练习', path: '/training/question-bank', icon: EditPen },
   { key: 'level-exam', label: '考试中心', path: '/training/level-exam', icon: Document },
-  { key: 'wrong-questions', label: '错题本', path: '/training/wrong-questions', icon: CircleCloseFilled }
+  { key: 'wrong-questions', label: '错题本', path: '/training/wrong-questions', icon: CircleCloseFilled },
+  { key: 'profile', label: '个人资料', path: '/training/profile', icon: User }
 ]
 
 const adminNav: NavItem[] = [

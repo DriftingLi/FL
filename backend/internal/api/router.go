@@ -66,6 +66,8 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 	authSvc := service.NewAuthService(db, cfg.JWTSecretKey, cfg.JWTExpiry(),
 		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student)
 	emailAuthSvc := service.NewEmailAuthService(db, authSvc, cfg.SMTP, cfg.EmailCodeTTL, cfg.IsProd())
+	phoneAuthSvc := service.NewPhoneAuthService(db, authSvc, cfg.EmailCodeTTL, cfg.IsProd())
+	wechatAuthSvc := service.NewWechatAuthService(cfg.Wechat)
 	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st)
 	reviewSvc := service.NewProfileReviewService(db)
 	authH := NewAuthHandler(authSvc, fileSvc, st, reviewSvc)
@@ -91,6 +93,12 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 
 	// 邮箱验证码注册/登录
 	RegisterEmailAuthRoutes(api, cfg, db, emailAuthSvc)
+	// 手机号验证码注册/登录
+	RegisterPhoneAuthRoutes(api, cfg, db, phoneAuthSvc)
+	// 微信扫码登录（框架占位）
+	RegisterWechatAuthRoutes(api, cfg, db, wechatAuthSvc)
+	// 个人信息页：手机号/邮箱绑定修改
+	RegisterProfileBindRoutes(api, cfg, db, authSvc, emailAuthSvc, phoneAuthSvc)
 
 	// 注册全部 13 个业务蓝图：
 	//   auth/courses/exam/student/question-bank/

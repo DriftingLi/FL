@@ -38,6 +38,7 @@ func NewMemoryDB(t *testing.T) *gorm.DB {
 func allModels() []interface{} {
 	return []interface{}{
 		&model.Student{},
+		&model.HrwaiUser{},
 		&model.Notification{},
 		&model.AuditLog{},
 		&model.Admin{},
