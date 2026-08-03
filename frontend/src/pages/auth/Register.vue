@@ -18,7 +18,7 @@
           <p class="card-subtitle">填写以下信息完成注册</p>
         </div>
 
-        <el-radio-group v-model="registerMode" class="mode-switch" size="small">
+        <el-radio-group v-model="registerMode" class="mode-switch">
           <el-radio-button label="phone">手机号注册</el-radio-button>
           <el-radio-button label="email">邮箱注册</el-radio-button>
         </el-radio-group>
@@ -422,8 +422,40 @@ onUnmounted(() => {
 
 .mode-switch {
   display: flex;
-  justify-content: center;
-  margin-bottom: 20px;
+  width: 100%;
+  padding: 4px;
+  margin-bottom: 24px;
+  background: #F1F5F9;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+}
+
+.mode-switch :deep(.el-radio-button) {
+  flex: 1;
+}
+
+.mode-switch :deep(.el-radio-button__inner) {
+  width: 100%;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: #64748B;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 0;
+  box-shadow: none;
+  transition: all 0.25s ease;
+}
+
+.mode-switch :deep(.el-radio-button:not(.is-active):hover .el-radio-button__inner) {
+  color: #0D9488;
+  background: rgba(20, 184, 166, 0.08);
+}
+
+.mode-switch :deep(.el-radio-button.is-active .el-radio-button__inner) {
+  background: linear-gradient(135deg, #0EA5E9 0%, #14B8A6 100%);
+  color: #FFFFFF;
+  box-shadow: 0 6px 16px rgba(14, 165, 233, 0.3);
 }
 
 .code-row {

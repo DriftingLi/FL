@@ -14,7 +14,7 @@
               <component :is="roleIcon" />
             </el-icon>
           </div>
-          <h1 class="card-title">欢迎登录</h1>
+          <h1 class="card-title">欢迎回来</h1>
           <p class="card-subtitle">{{ subtitleByRole }}</p>
           <div class="role-badge" :class="`badge-${currentRole}`">
             {{ roleLabel }}
@@ -25,10 +25,9 @@
           v-if="currentRole === 'hrwai_user'"
           v-model="loginMode"
           class="mode-switch"
-          size="small"
         >
-          <el-radio-button label="password">密码登录</el-radio-button>
-          <el-radio-button label="email">邮箱验证码</el-radio-button>
+          <el-radio-button label="password">账号密码登录</el-radio-button>
+          <el-radio-button label="email">邮箱登录</el-radio-button>
         </el-radio-group>
 
         <el-form ref="formRef" :model="formData" :rules="rules" label-width="0" class="login-form">
@@ -36,7 +35,7 @@
             <el-form-item prop="username">
               <el-input
                 v-model="formData.username"
-                placeholder="请输入手机号或用户名"
+                placeholder="请输入您的账号"
                 prefix-icon="User"
                 size="large"
                 class="form-input"
@@ -147,9 +146,9 @@ const currentRole = getRoleForSubdomain()
 const isStudentSubdomain = subdomain === 'training' || subdomain === 'valuation'
 
 const subtitleMap: Record<SubdomainType, string> = {
-  main: '登录您的账户',
-  training: '登录您的账户继续学习',
-  valuation: '登录查看残值评估历史',
+  main: '登录您的HRWAI账户',
+  training: '登录您的HRWAI账户',
+  valuation: '登录您的HRWAI账户',
   tutor: '登录导师工作台',
   admin: '登录管理后台'
 }
@@ -439,8 +438,40 @@ onUnmounted(() => {
 
 .mode-switch {
   display: flex;
-  justify-content: center;
-  margin-bottom: 20px;
+  width: 100%;
+  padding: 4px;
+  margin-bottom: 24px;
+  background: #F1F5F9;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+}
+
+.mode-switch :deep(.el-radio-button) {
+  flex: 1;
+}
+
+.mode-switch :deep(.el-radio-button__inner) {
+  width: 100%;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: #64748B;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 0;
+  box-shadow: none;
+  transition: all 0.25s ease;
+}
+
+.mode-switch :deep(.el-radio-button:not(.is-active):hover .el-radio-button__inner) {
+  color: #0284C7;
+  background: rgba(14, 165, 233, 0.08);
+}
+
+.mode-switch :deep(.el-radio-button.is-active .el-radio-button__inner) {
+  background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%);
+  color: #FFFFFF;
+  box-shadow: 0 6px 16px rgba(14, 165, 233, 0.3);
 }
 
 .code-row {
