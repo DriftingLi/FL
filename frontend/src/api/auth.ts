@@ -56,7 +56,7 @@ export const authApi = {
     return request.post('/auth/email/send-code', data)
   },
 
-  emailRegister(data: { email: string; code: string; name: string; company?: string }) {
+  emailRegister(data: { email: string; code: string; name: string; company?: string; password: string }) {
     return request.post('/auth/email/register', data)
   },
 
@@ -70,7 +70,7 @@ export const authApi = {
     return request.post('/auth/phone/send-code', data)
   },
 
-  phoneRegister(data: { phone: string; code: string; name: string; company?: string }) {
+  phoneRegister(data: { phone: string; code: string; name: string; company?: string; password: string }) {
     return request.post('/auth/phone/register', data)
   },
 

@@ -74,7 +74,7 @@ func TestPhoneRegisterAndLogin(t *testing.T) {
 		t.Errorf("非法手机号应报格式错误: %v", err)
 	}
 	// 未获取验证码直接注册
-	if _, err := svc.RegisterWithCode(ctx, phone, "123456", "张三", ""); err == nil {
+	if _, err := svc.RegisterWithCode(ctx, phone, "123456", "张三", "", "pass123"); err == nil {
 		t.Error("未获取验证码直接注册应失败")
 	}
 	// 发送注册验证码
@@ -86,11 +86,11 @@ func TestPhoneRegisterAndLogin(t *testing.T) {
 	}
 	code := extractPhoneCode(t, store, PhoneCodeRegister, phone)
 	// 错误验证码
-	if _, err := svc.RegisterWithCode(ctx, phone, "000000", "张三", ""); err == nil || !strings.Contains(err.Error(), "验证码") {
+	if _, err := svc.RegisterWithCode(ctx, phone, "000000", "张三", "", "pass123"); err == nil || !strings.Contains(err.Error(), "验证码") {
 		t.Errorf("错误验证码应失败: %v", err)
 	}
 	// 正确验证码注册（账号随机生成）
-	regRes, err := svc.RegisterWithCode(ctx, phone, code, "张三", "测试公司")
+	regRes, err := svc.RegisterWithCode(ctx, phone, code, "张三", "测试公司", "pass123")
 	if err != nil {
 		t.Fatalf("手机号注册失败: %v", err)
 	}

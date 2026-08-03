@@ -69,10 +69,35 @@
               </div>
             </el-form-item>
 
+            <el-form-item prop="password">
+              <el-input
+                v-model="formData.password"
+                type="password"
+                placeholder="设置密码（6-20位，用于账号密码登录）"
+                prefix-icon="Lock"
+                show-password
+                size="large"
+                class="form-input"
+              />
+            </el-form-item>
+
+            <el-form-item prop="confirmPassword">
+              <el-input
+                v-model="formData.confirmPassword"
+                type="password"
+                placeholder="确认密码"
+                prefix-icon="Lock"
+                show-password
+                size="large"
+                class="form-input"
+                @keyup.enter="handleRegister"
+              />
+            </el-form-item>
+
             <el-form-item prop="company">
               <el-input
                 v-model="formData.company"
-                placeholder="单位（选填）"
+                placeholder="您的公司（选填）"
                 prefix-icon="OfficeBuilding"
                 size="large"
                 class="form-input"
@@ -115,10 +140,35 @@
               </div>
             </el-form-item>
 
+            <el-form-item prop="password">
+              <el-input
+                v-model="formData.password"
+                type="password"
+                placeholder="设置密码（6-20位，用于账号密码登录）"
+                prefix-icon="Lock"
+                show-password
+                size="large"
+                class="form-input"
+              />
+            </el-form-item>
+
+            <el-form-item prop="confirmPassword">
+              <el-input
+                v-model="formData.confirmPassword"
+                type="password"
+                placeholder="确认密码"
+                prefix-icon="Lock"
+                show-password
+                size="large"
+                class="form-input"
+                @keyup.enter="handleRegister"
+              />
+            </el-form-item>
+
             <el-form-item prop="company">
               <el-input
                 v-model="formData.company"
-                placeholder="单位（选填）"
+                placeholder="您的公司（选填）"
                 prefix-icon="OfficeBuilding"
                 size="large"
                 class="form-input"
@@ -155,8 +205,10 @@ import { useRouter } from 'vue-router'
 import { authApi } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
+import type { FormItemRule } from 'element-plus'
 import { EditPen } from '@element-plus/icons-vue'
 import {
+  passwordRules,
   nameRules,
   phoneRules,
   companyRules,
@@ -183,10 +235,40 @@ const formData = reactive({
   code: ''
 })
 
+const validateConfirmPassword: FormItemRule['validator'] = (_rule, value: string, callback) => {
+  if (value === '') {
+    callback(new Error('请再次输入密码'))
+  } else if (value !== formData.password) {
+    callback(new Error('两次输入密码不一致'))
+  } else {
+    callback()
+  }
+}
+
 const rules = computed(() =>
   registerMode.value === 'email'
-    ? { name: nameRules, email: requiredEmailRules, code: emailCodeRules, company: companyRules }
-    : { name: nameRules, phone: phoneRules, code: emailCodeRules, company: companyRules }
+    ? {
+        name: nameRules,
+        email: requiredEmailRules,
+        code: emailCodeRules,
+        password: passwordRules,
+        confirmPassword: [
+          { required: true, message: '请确认密码', trigger: 'blur' },
+          { validator: validateConfirmPassword, trigger: 'blur' }
+        ],
+        company: companyRules
+      }
+    : {
+        name: nameRules,
+        phone: phoneRules,
+        code: emailCodeRules,
+        password: passwordRules,
+        confirmPassword: [
+          { required: true, message: '请确认密码', trigger: 'blur' },
+          { validator: validateConfirmPassword, trigger: 'blur' }
+        ],
+        company: companyRules
+      }
 )
 
 async function handleSendCode() {
@@ -239,14 +321,16 @@ async function handleRegister() {
         name: formData.name,
         email: formData.email.trim(),
         code: formData.code.trim(),
-        company: formData.company
+        company: formData.company,
+        password: formData.password
       })
     } else if (registerMode.value === 'phone') {
       res = await authApi.phoneRegister({
         name: formData.name,
         phone: formData.phone.trim(),
         code: formData.code.trim(),
-        company: formData.company
+        company: formData.company,
+        password: formData.password
       })
     }
 

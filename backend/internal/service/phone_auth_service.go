@@ -145,14 +145,17 @@ func (s *PhoneAuthService) sendCode(ctx context.Context, purpose PhoneCodePurpos
 	return nil
 }
 
-// RegisterWithCode 手机号注册：验证码通过后创建账号（账号随机生成）并自动登录。
-func (s *PhoneAuthService) RegisterWithCode(ctx context.Context, phone, code, name, company string) (*LoginResult, error) {
+// RegisterWithCode 手机号注册：验证码通过后创建账号（账号随机生成，可设置密码）并自动登录。
+func (s *PhoneAuthService) RegisterWithCode(ctx context.Context, phone, code, name, company, password string) (*LoginResult, error) {
 	phone = NormalizePhone(phone)
 	if !IsValidPhone(phone) {
 		return nil, errors.New("手机号格式不正确")
 	}
 	if strings.TrimSpace(name) == "" {
 		return nil, errors.New("姓名不能为空")
+	}
+	if len(password) < 6 || len(password) > 20 {
+		return nil, errors.New("密码长度需为 6-20 位")
 	}
 	if err := s.verifyCode(ctx, PhoneCodeRegister, phone, code); err != nil {
 		return nil, err
@@ -168,11 +171,7 @@ func (s *PhoneAuthService) RegisterWithCode(ctx context.Context, phone, code, na
 	if err != nil {
 		return nil, errors.New("注册失败，请稍后再试")
 	}
-	randomPwd, err := randomPassword()
-	if err != nil {
-		return nil, errors.New("注册失败，请稍后再试")
-	}
-	hashed, err := HashPassword(randomPwd)
+	hashed, err := HashPassword(password)
 	if err != nil {
 		return nil, errors.New("注册失败，请稍后再试")
 	}

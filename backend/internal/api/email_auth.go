@@ -51,10 +51,11 @@ func RegisterEmailAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 	// POST /api/auth/email/register {email, code, name, company?} 验证码通过后注册并自动登录
 	g.POST("/register", func(c *gin.Context) {
 		var req struct {
-			Email   string `json:"email"`
-			Code    string `json:"code"`
-			Name    string `json:"name"`
-			Company string `json:"company"`
+			Email    string `json:"email"`
+			Code     string `json:"code"`
+			Name     string `json:"name"`
+			Company  string `json:"company"`
+			Password string `json:"password"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			response.BadRequest(c, "请求参数错误")
@@ -63,7 +64,7 @@ func RegisterEmailAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
-		result, err := emailSvc.RegisterWithCode(ctx, req.Email, req.Code, req.Name, req.Company)
+		result, err := emailSvc.RegisterWithCode(ctx, req.Email, req.Code, req.Name, req.Company, req.Password)
 		if err != nil {
 			response.BadRequest(c, err.Error())
 			return

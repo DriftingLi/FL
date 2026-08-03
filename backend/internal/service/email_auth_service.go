@@ -221,14 +221,17 @@ func (s *EmailAuthService) sendCode(ctx context.Context, purpose EmailCodePurpos
 	return nil
 }
 
-// RegisterWithCode 邮箱注册：验证码校验通过后才创建账号，并直接签发登录令牌。
-func (s *EmailAuthService) RegisterWithCode(ctx context.Context, email, code, name, company string) (*LoginResult, error) {
+// RegisterWithCode 邮箱注册：验证码校验通过后创建账号（可设置密码，用于账号密码登录），并直接签发登录令牌。
+func (s *EmailAuthService) RegisterWithCode(ctx context.Context, email, code, name, company, password string) (*LoginResult, error) {
 	email = NormalizeEmail(email)
 	if !IsValidEmail(email) {
 		return nil, errors.New("邮箱格式不正确")
 	}
 	if strings.TrimSpace(name) == "" {
 		return nil, errors.New("姓名不能为空")
+	}
+	if len(password) < 6 || len(password) > 20 {
+		return nil, errors.New("密码长度需为 6-20 位")
 	}
 	if err := s.verifyCode(ctx, EmailCodeRegister, email, code); err != nil {
 		return nil, err
@@ -245,11 +248,7 @@ func (s *EmailAuthService) RegisterWithCode(ctx context.Context, email, code, na
 	}
 
 	// 邮箱注册用户通过验证码登录，密码随机生成（用户不可知，也无需记忆）
-	randomPwd, err := randomPassword()
-	if err != nil {
-		return nil, errors.New("注册失败，请稍后再试")
-	}
-	hashed, err := HashPassword(randomPwd)
+	hashed, err := HashPassword(password)
 	if err != nil {
 		return nil, errors.New("注册失败，请稍后再试")
 	}
@@ -426,15 +425,6 @@ func generateEmailCode() (string, error) {
 		b[i] = digits[n.Int64()]
 	}
 	return string(b), nil
-}
-
-// randomPassword 生成随机密码（邮箱注册用户不可知，仅占位使用）。
-func randomPassword() (string, error) {
-	b := make([]byte, 12)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
 }
 
 // emailPlaceholderPhone 为邮箱注册账号生成唯一的 phone 占位值（phone 列 NOT NULL）。

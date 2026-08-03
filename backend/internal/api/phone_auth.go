@@ -51,10 +51,11 @@ func RegisterPhoneAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 	// POST /api/auth/phone/register {phone, code, name, company?}
 	g.POST("/register", func(c *gin.Context) {
 		var req struct {
-			Phone   string `json:"phone"`
-			Code    string `json:"code"`
-			Name    string `json:"name"`
-			Company string `json:"company"`
+			Phone    string `json:"phone"`
+			Code     string `json:"code"`
+			Name     string `json:"name"`
+			Company  string `json:"company"`
+			Password string `json:"password"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			response.BadRequest(c, "请求参数错误")
@@ -62,7 +63,7 @@ func RegisterPhoneAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 		}
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
-		result, err := phoneSvc.RegisterWithCode(ctx, req.Phone, req.Code, req.Name, req.Company)
+		result, err := phoneSvc.RegisterWithCode(ctx, req.Phone, req.Code, req.Name, req.Company, req.Password)
 		if err != nil {
 			response.BadRequest(c, err.Error())
 			return

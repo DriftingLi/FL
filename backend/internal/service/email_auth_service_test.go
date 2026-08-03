@@ -189,7 +189,7 @@ func TestRegisterAndLoginWithCode(t *testing.T) {
 	email := "newuser@example.com"
 
 	// 未获取验证码直接注册
-	if _, err := svc.RegisterWithCode(ctx, email, "123456", "张三", ""); err == nil {
+	if _, err := svc.RegisterWithCode(ctx, email, "123456", "张三", "", "pass123"); err == nil {
 		t.Error("未获取验证码直接注册应失败")
 	}
 
@@ -200,11 +200,11 @@ func TestRegisterAndLoginWithCode(t *testing.T) {
 	code := extractCode(t, store, EmailCodeRegister, email)
 
 	// 错误验证码
-	if _, err := svc.RegisterWithCode(ctx, email, "000000", "张三", ""); err == nil || !strings.Contains(err.Error(), "验证码") {
+	if _, err := svc.RegisterWithCode(ctx, email, "000000", "张三", "", "pass123"); err == nil || !strings.Contains(err.Error(), "验证码") {
 		t.Errorf("错误验证码应失败: %v", err)
 	}
 	// 正确验证码注册（自动登录）
-	regRes, err := svc.RegisterWithCode(ctx, email, code, "张三", "测试公司")
+	regRes, err := svc.RegisterWithCode(ctx, email, code, "张三", "测试公司", "pass123")
 	if err != nil {
 		t.Fatalf("注册失败: %v", err)
 	}
@@ -218,7 +218,7 @@ func TestRegisterAndLoginWithCode(t *testing.T) {
 	// 同一邮箱不能重复注册（手动写入验证码绕过发送，验证注册接口的唯一性兜底）
 	dupCodeVal, _ := json.Marshal(authCodeValue{Code: "123456"})
 	_ = store.Set(ctx, emailCodeKey(EmailCodeRegister, email), string(dupCodeVal), time.Minute)
-	if _, err := svc.RegisterWithCode(ctx, email, "123456", "李四", ""); err == nil || !strings.Contains(err.Error(), "已注册") {
+	if _, err := svc.RegisterWithCode(ctx, email, "123456", "李四", "", "pass123"); err == nil || !strings.Contains(err.Error(), "已注册") {
 		t.Errorf("重复注册应失败: %v", err)
 	}
 	// 已注册邮箱发送注册验证码被拒绝
@@ -261,20 +261,33 @@ func TestVerifyCodeAttemptLimit(t *testing.T) {
 	code := extractCode(t, store, EmailCodeRegister, email)
 
 	for i := 0; i < 5; i++ {
-		if _, err := svc.RegisterWithCode(ctx, email, "000000", "张三", ""); err == nil || !strings.Contains(err.Error(), "验证码") {
+		if _, err := svc.RegisterWithCode(ctx, email, "000000", "张三", "", "pass123"); err == nil || !strings.Contains(err.Error(), "验证码") {
 			t.Fatalf("第 %d 次错误验证码应失败: %v", i+1, err)
 		}
 	}
 	// 错误 5 次后，即使输入正确验证码也要求重新获取
-	if _, err := svc.RegisterWithCode(ctx, email, code, "张三", ""); err == nil || !strings.Contains(err.Error(), "次数过多") {
+	if _, err := svc.RegisterWithCode(ctx, email, code, "张三", "", "pass123"); err == nil || !strings.Contains(err.Error(), "次数过多") {
 		t.Errorf("超过错误次数应要求重新获取: %v", err)
 	}
 }
 
 func TestRegisterWithCode_BadEmail(t *testing.T) {
 	svc, _, _ := newEmailTestSvc(t)
-	if _, err := svc.RegisterWithCode(context.Background(), "not-an-email", "123456", "张三", ""); err == nil || !strings.Contains(err.Error(), "格式") {
+	if _, err := svc.RegisterWithCode(context.Background(), "not-an-email", "123456", "张三", "", "pass123"); err == nil || !strings.Contains(err.Error(), "格式") {
 		t.Errorf("非法邮箱应报格式错误: %v", err)
+	}
+}
+
+func TestRegisterWithCode_BadPassword(t *testing.T) {
+	svc, store, _ := newEmailTestSvc(t)
+	ctx := context.Background()
+	email := "pwd@example.com"
+	if err := svc.SendRegisterCode(ctx, email); err != nil {
+		t.Fatalf("发送验证码失败: %v", err)
+	}
+	code := extractCode(t, store, EmailCodeRegister, email)
+	if _, err := svc.RegisterWithCode(ctx, email, code, "张三", "", "123"); err == nil || !strings.Contains(err.Error(), "密码长度") {
+		t.Errorf("过短密码应报错: %v", err)
 	}
 }
 
