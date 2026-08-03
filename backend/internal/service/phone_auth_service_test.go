@@ -150,3 +150,16 @@ func TestPhoneBind(t *testing.T) {
 		t.Errorf("绑定后手机号 = %q", after.Phone)
 	}
 }
+
+func TestPhoneRegister_EmptyNickname(t *testing.T) {
+	svc, store, _ := newPhoneTestSvc(t)
+	ctx := context.Background()
+	phone := "13700009998"
+	if err := svc.SendRegisterCode(ctx, phone); err != nil {
+		t.Fatalf("发送验证码失败: %v", err)
+	}
+	code := extractPhoneCode(t, store, PhoneCodeRegister, phone)
+	if _, err := svc.RegisterWithCode(ctx, phone, code, "  ", "", "pass123"); err == nil || !strings.Contains(err.Error(), "昵称") {
+		t.Errorf("空昵称应报错: %v", err)
+	}
+}

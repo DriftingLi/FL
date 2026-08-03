@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"gorm.io/gorm"
 
@@ -145,14 +146,18 @@ func (s *PhoneAuthService) sendCode(ctx context.Context, purpose PhoneCodePurpos
 	return nil
 }
 
-// RegisterWithCode 手机号注册：验证码通过后创建账号（账号随机生成，可设置密码）并自动登录。
-func (s *PhoneAuthService) RegisterWithCode(ctx context.Context, phone, code, name, company, password string) (*LoginResult, error) {
+// RegisterWithCode 手机号注册：验证码通过后创建账号（昵称 + 账号随机生成 + 可设置密码）并自动登录。
+func (s *PhoneAuthService) RegisterWithCode(ctx context.Context, phone, code, nickname, company, password string) (*LoginResult, error) {
 	phone = NormalizePhone(phone)
 	if !IsValidPhone(phone) {
 		return nil, errors.New("手机号格式不正确")
 	}
-	if strings.TrimSpace(name) == "" {
-		return nil, errors.New("姓名不能为空")
+	nickname = strings.TrimSpace(nickname)
+	if nickname == "" {
+		return nil, errors.New("昵称不能为空")
+	}
+	if utf8.RuneCountInString(nickname) > 30 {
+		return nil, errors.New("昵称不能超过 30 个字符")
 	}
 	if len(password) < 6 || len(password) > 20 {
 		return nil, errors.New("密码长度需为 6-20 位")
@@ -178,8 +183,8 @@ func (s *PhoneAuthService) RegisterWithCode(ctx context.Context, phone, code, na
 	user := model.HrwaiUser{
 		Username:  username,
 		Password:  hashed,
-		Name:      strings.TrimSpace(name),
-		Nickname:  generateDefaultNickname(s.db),
+		Name:      "",
+		Nickname:  nickname,
 		Phone:     phone,
 		Company:   strings.TrimSpace(company),
 		Status:    1,

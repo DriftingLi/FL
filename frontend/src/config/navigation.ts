@@ -38,6 +38,8 @@ const studentNav: NavItem[] = [
   { key: 'question-bank', label: '题库练习', path: '/training/question-bank', icon: EditPen },
   { key: 'level-exam', label: '考试中心', path: '/training/level-exam', icon: Document },
   { key: 'wrong-questions', label: '错题本', path: '/training/wrong-questions', icon: CircleCloseFilled },
+  { key: 'ai-assistant', label: 'AI助手', path: '/ai-assistant', icon: MagicStick },
+  { key: 'valuation', label: '残值评估', path: '/valuation', icon: PriceTag },
   { key: 'profile', label: '个人资料', path: '/training/profile', icon: User }
 ]
 

@@ -291,6 +291,19 @@ func TestRegisterWithCode_BadPassword(t *testing.T) {
 	}
 }
 
+func TestRegisterWithCode_EmptyNickname(t *testing.T) {
+	svc, store, _ := newEmailTestSvc(t)
+	ctx := context.Background()
+	email := "nn@example.com"
+	if err := svc.SendRegisterCode(ctx, email); err != nil {
+		t.Fatalf("发送验证码失败: %v", err)
+	}
+	code := extractCode(t, store, EmailCodeRegister, email)
+	if _, err := svc.RegisterWithCode(ctx, email, code, "  ", "", "pass123"); err == nil || !strings.Contains(err.Error(), "昵称") {
+		t.Errorf("空昵称应报错: %v", err)
+	}
+}
+
 func TestBindEmail(t *testing.T) {
 	svc, store, _ := newEmailTestSvc(t)
 	db := svc.db

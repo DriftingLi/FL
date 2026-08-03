@@ -21,6 +21,7 @@
           <!-- 已登录：显示用户名 + 退出 -->
           <template v-else>
             <span class="user-name" :title="displayName">{{ displayName }}</span>
+            <router-link to="/training/profile" class="btn-entry btn-profile">个人资料</router-link>
             <button type="button" class="btn-entry btn-logout" @click="handleLogout">退出</button>
           </template>
 
@@ -171,6 +172,11 @@ async function handleLogout() {
   border-color: var(--color-brand-500, #0EA5E9);
   color: var(--color-brand-600, #0284C7);
   background: var(--color-brand-50, #F0F9FF);
+}
+
+.btn-profile {
+  border-color: #BFDBFE;
+  color: #0284C7;
 }
 
 /* 登录按钮：主按钮样式（品牌色渐变） */

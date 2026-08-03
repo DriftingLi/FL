@@ -69,9 +69,6 @@
           </div>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="profile">
-                <el-icon><User /></el-icon>修改头像/昵称
-              </el-dropdown-item>
               <el-dropdown-item command="logout" divided>
                 <el-icon><SwitchButton /></el-icon>退出登录
               </el-dropdown-item>
@@ -122,9 +119,6 @@
         </nav>
       </div>
     </transition>
-
-    <!-- 修改头像/昵称弹窗（官网顶栏入口） -->
-    <ProfileEditDialog ref="profileDialogRef" />
   </header>
 </template>
 
@@ -135,12 +129,10 @@ import { useAuthStore } from '@/stores/auth'
 import { ElMessageBox } from 'element-plus'
 import {
   ArrowDown,
-  User,
   SwitchButton,
   Close
 } from '@element-plus/icons-vue'
 import type { NavItem } from '@/config/navigation'
-import ProfileEditDialog from '@/components/layout/ProfileEditDialog.vue'
 import NotificationPanel from '@/components/layout/NotificationPanel.vue'
 
 const props = defineProps<{
@@ -151,7 +143,6 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const mobileOpen = ref(false)
-const profileDialogRef = ref<InstanceType<typeof ProfileEditDialog> | null>(null)
 
 const homePath = computed(() => {
   const role = authStore.userInfo?.role
@@ -205,8 +196,6 @@ async function handleCommand(command: string) {
     } catch (e) {
       // cancelled
     }
-  } else if (command === 'profile') {
-    profileDialogRef.value?.open()
   }
 }
 </script>

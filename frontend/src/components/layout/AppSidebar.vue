@@ -25,9 +25,6 @@
       </div>
       <template #dropdown>
         <el-dropdown-menu>
-          <el-dropdown-item v-if="authStore.userInfo?.role === 'hrwai_user'" command="profile">
-            <el-icon><User /></el-icon>修改头像/昵称
-          </el-dropdown-item>
           <el-dropdown-item command="logout">
             <el-icon><SwitchButton /></el-icon>退出登录
           </el-dropdown-item>
@@ -96,19 +93,16 @@
       </div>
     </div>
 
-    <!-- 修改头像/昵称弹窗（el-dialog 会 teleport 到 body） -->
-    <ProfileEditDialog ref="profileDialogRef" />
   </aside>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
-import { Expand, Fold, ArrowDown, SwitchButton, User } from '@element-plus/icons-vue'
+import { Expand, Fold, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import type { NavItem } from '@/config/navigation'
-import ProfileEditDialog from '@/components/layout/ProfileEditDialog.vue'
 import NotificationPanel from '@/components/layout/NotificationPanel.vue'
 
 const props = defineProps<{
@@ -127,7 +121,6 @@ const effectiveCollapsed = computed(() => props.collapsed && !props.mobileOpen)
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-const profileDialogRef = ref<InstanceType<typeof ProfileEditDialog> | null>(null)
 
 const roleLabel = computed(() => {
   const role = authStore.userInfo?.role
@@ -152,9 +145,7 @@ function isRouteActive(item: NavItem): boolean {
 }
 
 async function handleUserCommand(command: string) {
-  if (command === 'profile') {
-    profileDialogRef.value?.open()
-  } else if (command === 'logout') {
+  if (command === 'logout') {
     try {
       await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
         confirmButtonText: '确定',

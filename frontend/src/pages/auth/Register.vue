@@ -24,10 +24,10 @@
         </el-radio-group>
 
         <el-form ref="formRef" :model="formData" :rules="rules" label-width="0" class="register-form">
-          <el-form-item prop="name">
+          <el-form-item prop="nickname">
             <el-input
-              v-model="formData.name"
-              placeholder="真实姓名"
+              v-model="formData.nickname"
+              placeholder="昵称（1-30字，展示用）"
               prefix-icon="Postcard"
               size="large"
               class="form-input"
@@ -204,12 +204,13 @@ import { ref, reactive, computed, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { authApi } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
+import { getDefaultWorkspaceBySubdomain } from '@/utils/subdomain'
 import { ElMessage } from 'element-plus'
 import type { FormItemRule } from 'element-plus'
 import { EditPen } from '@element-plus/icons-vue'
 import {
   passwordRules,
-  nameRules,
+  nicknameRules,
   phoneRules,
   companyRules,
   requiredEmailRules,
@@ -226,7 +227,7 @@ const codeSending = ref(false)
 let countdownTimer: number | undefined
 
 const formData = reactive({
-  name: '',
+  nickname: '',
   phone: '',
   password: '',
   confirmPassword: '',
@@ -248,7 +249,7 @@ const validateConfirmPassword: FormItemRule['validator'] = (_rule, value: string
 const rules = computed(() =>
   registerMode.value === 'email'
     ? {
-        name: nameRules,
+        nickname: nicknameRules,
         email: requiredEmailRules,
         code: emailCodeRules,
         password: passwordRules,
@@ -259,7 +260,7 @@ const rules = computed(() =>
         company: companyRules
       }
     : {
-        name: nameRules,
+        nickname: nicknameRules,
         phone: phoneRules,
         code: emailCodeRules,
         password: passwordRules,
@@ -318,7 +319,7 @@ async function handleRegister() {
     let res
     if (registerMode.value === 'email') {
       res = await authApi.emailRegister({
-        name: formData.name,
+        nickname: formData.nickname,
         email: formData.email.trim(),
         code: formData.code.trim(),
         company: formData.company,
@@ -326,7 +327,7 @@ async function handleRegister() {
       })
     } else if (registerMode.value === 'phone') {
       res = await authApi.phoneRegister({
-        name: formData.name,
+        nickname: formData.nickname,
         phone: formData.phone.trim(),
         code: formData.code.trim(),
         company: formData.company,
@@ -337,7 +338,7 @@ async function handleRegister() {
     if (res.code === 201 || res.code === 200) {
       authStore.setAuthData(res.data)
       ElMessage.success('注册成功')
-      router.push('/training')
+      router.push(getDefaultWorkspaceBySubdomain())
     }
   } catch (e) {
     console.error('Register error:', e)

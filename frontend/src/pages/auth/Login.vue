@@ -322,8 +322,8 @@ async function handleLogin() {
         if (role === 'admin') return target.startsWith('/admin')
         if (role === 'tutor') return target.startsWith('/training/tutor')
         if (role === 'hrwai_user') {
-          // 学员可回跳到培训或残值评估路径
-          return target.startsWith('/training') || target.startsWith('/valuation')
+          // 学员可回跳到培训、残值评估或 AI 助手路径
+          return target.startsWith('/training') || target.startsWith('/valuation') || target.startsWith('/ai-assistant')
         }
         return false
       }

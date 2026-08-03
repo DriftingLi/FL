@@ -16,6 +16,7 @@ import (
 	"net/smtp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"gorm.io/gorm"
 
@@ -221,14 +222,18 @@ func (s *EmailAuthService) sendCode(ctx context.Context, purpose EmailCodePurpos
 	return nil
 }
 
-// RegisterWithCode 邮箱注册：验证码校验通过后创建账号（可设置密码，用于账号密码登录），并直接签发登录令牌。
-func (s *EmailAuthService) RegisterWithCode(ctx context.Context, email, code, name, company, password string) (*LoginResult, error) {
+// RegisterWithCode 邮箱注册：验证码校验通过后创建账号（昵称 + 可设置密码），并直接签发登录令牌。
+func (s *EmailAuthService) RegisterWithCode(ctx context.Context, email, code, nickname, company, password string) (*LoginResult, error) {
 	email = NormalizeEmail(email)
 	if !IsValidEmail(email) {
 		return nil, errors.New("邮箱格式不正确")
 	}
-	if strings.TrimSpace(name) == "" {
-		return nil, errors.New("姓名不能为空")
+	nickname = strings.TrimSpace(nickname)
+	if nickname == "" {
+		return nil, errors.New("昵称不能为空")
+	}
+	if utf8.RuneCountInString(nickname) > 30 {
+		return nil, errors.New("昵称不能超过 30 个字符")
 	}
 	if len(password) < 6 || len(password) > 20 {
 		return nil, errors.New("密码长度需为 6-20 位")
@@ -259,8 +264,8 @@ func (s *EmailAuthService) RegisterWithCode(ctx context.Context, email, code, na
 	user := model.HrwaiUser{
 		Username:  username,
 		Password:  hashed,
-		Name:      strings.TrimSpace(name),
-		Nickname:  generateDefaultNickname(s.db),
+		Name:      "",
+		Nickname:  nickname,
 		Phone:     emailPlaceholderPhone(email),
 		Email:     email,
 		Company:   strings.TrimSpace(company),

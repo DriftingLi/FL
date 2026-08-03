@@ -18,12 +18,13 @@
           />
 
           <!-- 未登录：显示登录按钮 -->
-          <el-button v-if="!isLoggedIn" type="primary" size="default" @click="loginDialogVisible = true">
+          <el-button v-if="!isLoggedIn" type="primary" size="default" @click="goLogin">
             登录 HRWAI 账号
           </el-button>
 
           <!-- 已登录：显示用户名 + 退出 -->
           <template v-else>
+            <router-link to="/training/profile" class="profile-link">个人资料</router-link>
             <el-dropdown trigger="click" @command="handleUserCommand">
               <span class="user-trigger">
                 {{ displayName }}
@@ -121,7 +122,7 @@
               </div>
             </div>
             <div v-if="!isLoggedIn" class="guest-hint">
-              您当前以游客身份使用，<a href="javascript:void(0)" @click="loginDialogVisible = true">登录</a> 后可保存对话历史
+              您当前以游客身份使用，<a href="javascript:void(0)" @click="goLogin">登录</a> 后可保存对话历史
             </div>
           </div>
 
@@ -193,8 +194,6 @@
       </main>
     </div>
 
-    <!-- 对话框 -->
-    <LoginDialog v-model="loginDialogVisible" @success="handleLoginSuccess" />
     <UserModelDialog v-model="userModelDialogVisible" />
     <CustomModelDialog v-model="customModelDialogVisible" />
   </div>
@@ -202,6 +201,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Plus,
@@ -221,11 +221,11 @@ import { buildSubdomainUrl } from '@/utils/subdomain'
 import ModelSelector from '@/components/ai-assistant/ModelSelector.vue'
 import UserModelDialog from '@/components/ai-assistant/UserModelDialog.vue'
 import CustomModelDialog from '@/components/ai-assistant/CustomModelDialog.vue'
-import LoginDialog from '@/components/ai-assistant/LoginDialog.vue'
 import '@/assets/styles/markdown.css'
 
 const store = useAIAssistantStore()
 const authStore = useAuthStore()
+const router = useRouter()
 
 const homeUrl = buildSubdomainUrl('main', '/')
 const isLoggedIn = computed(() => store.isLoggedIn)
@@ -237,10 +237,13 @@ const displayName = computed(() => {
 const inputText = ref('')
 const messageListRef = ref<HTMLElement>()
 
-// 对话框状态
-const loginDialogVisible = ref(false)
 const userModelDialogVisible = ref(false)
 const customModelDialogVisible = ref(false)
+
+// 使用学员端登录页登录，登录成功后回到 AI 助手
+function goLogin() {
+  router.push({ path: '/login', query: { redirect: '/ai-assistant' } })
+}
 
 // 会话重命名状态
 const editingSessionId = ref<number | null>(null)
@@ -393,12 +396,6 @@ async function handleUserCommand(cmd: string) {
   }
 }
 
-function handleLoginSuccess() {
-  // 登录成功后加载会话和用户模型
-  store.loadSessions()
-  store.loadUserModels()
-}
-
 // 监听消息变化自动滚动
 watch(() => store.messages.length, () => scrollToBottom())
 watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
@@ -490,6 +487,19 @@ onMounted(() => {
 
 .user-trigger:hover {
   background: var(--color-bg-page, #f8fafc);
+}
+
+.profile-link {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-primary-600, #2563eb);
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+.profile-link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
 }
 
 .back-link {

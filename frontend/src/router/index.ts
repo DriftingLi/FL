@@ -218,13 +218,13 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/valuation/login',
     name: 'ValuationLogin',
-    component: () => import('@/pages/valuation/auth/ValuationLogin.vue'),
+    component: () => import('@/pages/auth/Login.vue'),
     meta: { requiresAuth: false, isValuationAuthPage: true }
   },
   {
     path: '/valuation/register',
     name: 'ValuationRegister',
-    component: () => import('@/pages/valuation/auth/ValuationRegister.vue'),
+    component: () => import('@/pages/auth/Register.vue'),
     meta: { requiresAuth: false, isValuationAuthPage: true }
   },
 

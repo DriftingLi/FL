@@ -48,12 +48,12 @@ func RegisterEmailAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 		response.SuccessWithMsg(c, "验证码已发送，请查收邮箱", nil)
 	})
 
-	// POST /api/auth/email/register {email, code, name, company?} 验证码通过后注册并自动登录
+	// POST /api/auth/email/register {email, code, nickname, company?, password} 验证码通过后注册并自动登录
 	g.POST("/register", func(c *gin.Context) {
 		var req struct {
 			Email    string `json:"email"`
 			Code     string `json:"code"`
-			Name     string `json:"name"`
+			Nickname string `json:"nickname"`
 			Company  string `json:"company"`
 			Password string `json:"password"`
 		}
@@ -64,7 +64,7 @@ func RegisterEmailAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
-		result, err := emailSvc.RegisterWithCode(ctx, req.Email, req.Code, req.Name, req.Company, req.Password)
+		result, err := emailSvc.RegisterWithCode(ctx, req.Email, req.Code, req.Nickname, req.Company, req.Password)
 		if err != nil {
 			response.BadRequest(c, err.Error())
 			return

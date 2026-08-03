@@ -15,7 +15,6 @@
             <el-tag size="small" type="info">注册时随机生成，用于账号密码登录</el-tag>
           </div>
         </el-descriptions-item>
-        <el-descriptions-item label="姓名">{{ userInfo.name || '未填写' }}</el-descriptions-item>
         <el-descriptions-item label="昵称">
           <div class="cell-row">
             <span>{{ userInfo.nickname || userInfo.name || '未设置' }}</span>
