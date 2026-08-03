@@ -33,7 +33,8 @@ on:
         default: false
 
 concurrency:
-  group: cd-${{ github.ref }}-${{ github.event_name }}
+  # 同一环境同时只允许一条部署：不同分支并发部署到 testing/production 会互相抢占 Docker 资源
+  group: cd-${{ inputs.environment }}
   cancel-in-progress: false
 
 env:
