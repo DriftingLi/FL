@@ -30,6 +30,7 @@
             <view class="section">
                 <view class="section-header">
                     <text class="section-title">模拟考试</text>
+                    <text class="section-link" @click="onViewHistory">模考历史 ›</text>
                 </view>
                 <view class="mock-exam-card" @click="onStartMockExam">
                     <view class="mock-exam-info">
@@ -103,7 +104,6 @@
     import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { getCourseListApi } from '../../api/course'
-    import { startMockExamApi } from '../../api/mockExam'
     import type { CourseItem } from '../../types/index'
 
     const statusBarHeight = useStatusBarHeight()
@@ -144,26 +144,10 @@
     }
 
     // doStartMockExam 必须在 onStartMockExam 之前声明（UTS 不支持函数提升）
-    async function doStartMockExam() {
-        uni.showLoading({ title: '正在组卷...', mask: true })
-        try {
-            const info = await startMockExamApi(0, 90)
-            uni.hideLoading()
-            console.log('[mock exam] started:', info.mock_exam_id, 'questions:', info.questions.length)
-            uni.showToast({ title: '模考已开始，答题页面开发中', icon: 'none' })
-        } catch (e) {
-            uni.hideLoading()
-            console.error('[mock exam] start failed:', e)
-            let msg = '开始模拟考试失败'
-            if (e instanceof Error) {
-                const errObj = e as Error
-                const m = errObj.message
-                if (m != null && m.length > 0) {
-                    msg = m
-                }
-            }
-            uni.showToast({ title: msg, icon: 'none' })
-        }
+    function doStartMockExam() {
+        uni.navigateTo({
+            url: '/pages/exam/mock-exam?mode=new&duration=90'
+        })
     }
 
     function onStartMockExam() : void {
@@ -176,6 +160,10 @@
                 }
             }
         })
+    }
+
+    function onViewHistory() : void {
+        uni.navigateTo({ url: '/pages/profile/mock-exam-records' })
     }
 
     function onExamClick(courseId : number) : void {
@@ -257,6 +245,9 @@
     }
 
     .section-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
         margin-bottom: 20rpx;
     }
 
@@ -264,6 +255,11 @@
         font-size: 32rpx;
         font-weight: bold;
         color: #333333;
+    }
+
+    .section-link {
+        font-size: 24rpx;
+        color: #2979ff;
     }
 
     .mock-exam-card {

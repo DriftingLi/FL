@@ -57,6 +57,20 @@
 			}
 		},
 		{
+			"path": "pages/exam/mock-exam",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "模拟考试"
+			}
+		},
+		{
+			"path": "pages/exam/mock-exam-result",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "考试成绩"
+			}
+		},
+		{
 			"path": "pages/profile/profile",
 			"style": {
 				"navigationStyle": "custom",
@@ -82,6 +96,13 @@
 			"style": {
 				"navigationStyle": "custom",
 				"navigationBarTitleText": "练习记录"
+			}
+		},
+		{
+			"path": "pages/profile/mock-exam-records",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "模考历史"
 			}
 		},
 		{

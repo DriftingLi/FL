@@ -183,7 +183,7 @@
     onLoad((options : UTSJSONObject) => {
         const id = options['id']
         if (id != null) {
-            courseId.value = parseInt(id as string)
+            courseId.value = parseInt(`${id}`)
             loadDetail()
         } else {
             loading.value = false

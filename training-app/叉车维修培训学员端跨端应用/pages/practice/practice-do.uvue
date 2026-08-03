@@ -366,20 +366,20 @@
 
     onLoad((options : UTSJSONObject) => {
         const m = options['mode']
-        if (m != null) mode.value = m as string
+        if (m != null) mode.value = `${m}`
         const cnt = options['count']
-        if (cnt != null) practiceCount.value = parseInt(cnt as string)
+        if (cnt != null) practiceCount.value = parseInt(`${cnt}`)
         const cat = options['category']
-        if (cat != null) categoryCode.value = cat as string
+        if (cat != null) categoryCode.value = `${cat}`
         const kpId = options['kp_id']
-        if (kpId != null) knowledgePointId.value = parseInt(kpId as string)
+        if (kpId != null) knowledgePointId.value = parseInt(`${kpId}`)
         const kpName = options['kp_name']
         if (kpName != null) {
-            const decoded = decodeURIComponent(kpName as string)
+            const decoded = decodeURIComponent(`${kpName}`)
             knowledgePointName.value = decoded ?? ''
         }
         const cont = options['continue']
-        if (cont != null) isContinue.value = (cont as string) == '1'
+        if (cont != null) isContinue.value = (`${cont}`) == '1'
         loadQuestions()
     })
 </script>

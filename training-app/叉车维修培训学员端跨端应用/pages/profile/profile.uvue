@@ -45,6 +45,11 @@
                     <text class="menu-text">练习记录</text>
                     <text class="menu-arrow">›</text>
                 </view>
+                <view class="menu-item" @click="onMenuClick('mock-exam')">
+                    <text class="menu-icon">📝</text>
+                    <text class="menu-text">模考历史</text>
+                    <text class="menu-arrow">›</text>
+                </view>
                 <view class="menu-item" @click="onMenuClick('settings')">
                     <text class="menu-icon">⚙️</text>
                     <text class="menu-text">设置</text>
@@ -126,6 +131,8 @@
             uni.navigateTo({ url: '/pages/profile/records' })
         } else if (type == 'practice') {
             uni.navigateTo({ url: '/pages/profile/practice-records' })
+        } else if (type == 'mock-exam') {
+            uni.navigateTo({ url: '/pages/profile/mock-exam-records' })
         } else if (type == 'settings') {
             uni.navigateTo({ url: '/pages/profile/settings' })
         }

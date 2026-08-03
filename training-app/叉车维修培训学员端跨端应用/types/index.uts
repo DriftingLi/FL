@@ -176,6 +176,51 @@ export type MockExamSaveParams = {
 	remaining_time : number
 }
 
+/** 模拟考试结果详情（单题） */
+export type MockExamResultDetail = {
+	question_id : number
+	title : string
+	type : string
+	user_answer : string
+	correct_answer : string
+	is_correct : boolean
+}
+
+/** 模拟考试结果 */
+export type MockExamResult = {
+	mock_exam_id : number
+	score : number
+	total_score : number
+	passed : boolean
+	correct_count : number
+	total_questions : number
+	used_time : number          // 用时（秒）
+	details : MockExamResultDetail[]
+}
+
+/** 模拟考试历史项 */
+export type MockExamHistoryItem = {
+	mock_exam_id : number
+	score : number
+	total_score : number
+	passed : boolean
+	correct_count : number
+	total_questions : number
+	duration : number            // 考试时长（分钟）
+	used_time : number           // 用时（秒）
+	status : string             // completed / in_progress
+	created_at : string
+	completed_at : string
+}
+
+/** 模拟考试历史结果 */
+export type MockExamHistoryResult = {
+	items : MockExamHistoryItem[]
+	total : number
+	page : number
+	page_size : number
+}
+
 /** 错题项 */
 export type WrongQuestionItem = {
 	question_id : number

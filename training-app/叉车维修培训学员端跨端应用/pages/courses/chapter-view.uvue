@@ -295,8 +295,8 @@
     onLoad((options : UTSJSONObject) => {
         const cid = options['course_id']
         const chid = options['chapter_id']
-        if (cid != null) courseId.value = parseInt(cid as string)
-        if (chid != null) chapterId.value = parseInt(chid as string)
+        if (cid != null) courseId.value = parseInt(`${cid}`)
+        if (chid != null) chapterId.value = parseInt(`${chid}`)
         loadDetail()
     })
 </script>

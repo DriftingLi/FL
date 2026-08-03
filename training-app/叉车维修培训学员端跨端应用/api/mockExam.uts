@@ -4,7 +4,7 @@
  *   id → question_id, content → title, options 是 Map → Array
  */
 import { get, post } from './request'
-import type { MockExamStartParams, MockExamInfo, MockExamSaveParams, ExamQuestion, QuestionOption } from '../types/index'
+import type { MockExamStartParams, MockExamInfo, MockExamSaveParams, MockExamResult, MockExamResultDetail, MockExamHistoryItem, MockExamHistoryResult, ExamQuestion, QuestionOption } from '../types/index'
 
 /** 安全转换为 number */
 function toNumber(v : any | null, defaultVal : number = 0) : number {
@@ -19,6 +19,13 @@ function toNumber(v : any | null, defaultVal : number = 0) : number {
 function toStr(v : any | null, defaultVal : string = '') : string {
 	if (v == null) return defaultVal
 	return `${v}`
+}
+
+/** 安全转换为 boolean */
+function toBool(v : any | null, defaultVal : boolean = false) : boolean {
+	if (v == null) return defaultVal
+	const s = `${v}`
+	return s == 'true' || s == '1'
 }
 
 /**
@@ -67,6 +74,88 @@ function buildMockExamInfo(obj : UTSJSONObject) : MockExamInfo {
 		remaining_time: toNumber(obj['remaining_time']),
 	} as MockExamInfo
 	return info
+}
+
+/** 从 UTSJSONObject 构造 MockExamResultDetail（单题） */
+function buildMockExamResultDetail(obj : UTSJSONObject) : MockExamResultDetail {
+	const detail : MockExamResultDetail = {
+		question_id: toNumber(obj['question_id'], toNumber(obj['id'])),
+		title: toStr(obj['title'], toStr(obj['content'], toStr(obj['question_text']))),
+		type: toStr(obj['type']),
+		user_answer: toStr(obj['user_answer'], toStr(obj['answer'])),
+		correct_answer: toStr(obj['correct_answer'], toStr(obj['correct'])),
+		is_correct: toBool(obj['is_correct'], toBool(obj['correct'])),
+	} as MockExamResultDetail
+	return detail
+}
+
+/** 从 UTSJSONObject 构造 MockExamResult */
+function buildMockExamResult(obj : UTSJSONObject) : MockExamResult {
+	const details : MockExamResultDetail[] = []
+	const detailsRaw = obj['details']
+	if (detailsRaw != null) {
+		const detailsArray = detailsRaw as Array<UTSJSONObject>
+		for (let i = 0; i < detailsArray.length; i++) {
+			details.push(buildMockExamResultDetail(detailsArray[i]))
+		}
+	}
+	const result : MockExamResult = {
+		mock_exam_id: toNumber(obj['mock_exam_id'], toNumber(obj['exam_id'])),
+		score: toNumber(obj['score']),
+		total_score: toNumber(obj['total_score'], toNumber(obj['full_score'])),
+		passed: toBool(obj['passed'], toBool(obj['is_passed'])),
+		correct_count: toNumber(obj['correct_count'], toNumber(obj['correct'])),
+		total_questions: toNumber(obj['total_questions'], toNumber(obj['question_count'])),
+		used_time: toNumber(obj['used_time'], toNumber(obj['duration'])),
+		details: details,
+	} as MockExamResult
+	return result
+}
+
+/** 从 UTSJSONObject 构造 MockExamHistoryItem */
+function buildMockExamHistoryItem(obj : UTSJSONObject) : MockExamHistoryItem {
+	const item : MockExamHistoryItem = {
+		mock_exam_id: toNumber(obj['mock_exam_id'], toNumber(obj['exam_id'], toNumber(obj['id']))),
+		score: toNumber(obj['score']),
+		total_score: toNumber(obj['total_score'], toNumber(obj['full_score'])),
+		passed: toBool(obj['passed'], toBool(obj['is_passed'])),
+		correct_count: toNumber(obj['correct_count'], toNumber(obj['correct'])),
+		total_questions: toNumber(obj['total_questions'], toNumber(obj['question_count'])),
+		duration: toNumber(obj['duration']),
+		used_time: toNumber(obj['used_time'], toNumber(obj['time_used'])),
+		status: toStr(obj['status'], 'completed'),
+		created_at: toStr(obj['created_at'], toStr(obj['start_time'])),
+		completed_at: toStr(obj['completed_at'], toStr(obj['end_time'], toStr(obj['submit_time']))),
+	} as MockExamHistoryItem
+	return item
+}
+
+/** 从 UTSJSONObject 构造 MockExamHistoryResult */
+function buildMockExamHistoryResult(data : UTSJSONObject) : MockExamHistoryResult {
+	const items : MockExamHistoryItem[] = []
+	const listRaw = data['items']
+	if (listRaw != null) {
+		const arr = listRaw as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			items.push(buildMockExamHistoryItem(arr[i]))
+		}
+	} else {
+		// 后端可能用 records / history 字段
+		const alt = data['records']
+		if (alt != null) {
+			const arr = alt as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				items.push(buildMockExamHistoryItem(arr[i]))
+			}
+		}
+	}
+	const result : MockExamHistoryResult = {
+		items: items,
+		total: toNumber(data['total']),
+		page: toNumber(data['page'], 1),
+		page_size: toNumber(data['page_size'], 10),
+	} as MockExamHistoryResult
+	return result
 }
 
 /** mock 模拟考试题目（网络不可用时回退） */
@@ -162,9 +251,12 @@ export function submitMockExamApi(mockExamId : number) : Promise<UTSJSONObject> 
  * 获取模拟考试成绩
  * @param mockExamId 模拟考试 ID
  */
-export function getMockExamResultApi(mockExamId : number) : Promise<UTSJSONObject> {
+export function getMockExamResultApi(mockExamId : number) : Promise<MockExamResult> {
 	const url = '/mock-exam/' + mockExamId + '/result'
-	return get(url)
+	return get(url).then((data : UTSJSONObject) : MockExamResult => {
+		console.log('[getMockExamResultApi] raw data:', JSON.stringify(data))
+		return buildMockExamResult(data)
+	})
 }
 
 /**
@@ -172,10 +264,16 @@ export function getMockExamResultApi(mockExamId : number) : Promise<UTSJSONObjec
  * @param page 页码，默认 1
  * @param pageSize 每页条数，默认 10
  */
-export function getMockExamHistoryApi(page : number = 1, pageSize : number = 10) : Promise<UTSJSONObject> {
+export function getMockExamHistoryApi(page : number = 1, pageSize : number = 10) : Promise<MockExamHistoryResult> {
 	const params : UTSJSONObject = {
 		page: page.toString(),
 		page_size: pageSize.toString(),
 	} as UTSJSONObject
-	return get('/mock-exam/history', params)
+	return get('/mock-exam/history', params).then((data : UTSJSONObject) : MockExamHistoryResult => {
+		console.log('[getMockExamHistoryApi] raw data:', JSON.stringify(data))
+		return buildMockExamHistoryResult(data)
+	}).catch((e) : MockExamHistoryResult => {
+		console.warn('[getMockExamHistoryApi] network failed:', e)
+		return { items: [] as MockExamHistoryItem[], total: 0, page: page, page_size: pageSize } as MockExamHistoryResult
+	})
 }
