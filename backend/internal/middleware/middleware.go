@@ -69,15 +69,22 @@ func Logger() gin.HandlerFunc {
 }
 
 // CORS 跨域中间件。
+// 开发环境放开全部来源（本地前端可能运行在任意端口/子域名，避免改端口后被拦截）；
+// 生产环境仍按配置白名单校验。
 // 在闭包外构造一次 cors.Handler，避免每个请求重复创建（行为保持一致）。
-func CORS(origins []string) gin.HandlerFunc {
-	handler := cors.New(cors.Config{
-		AllowOrigins:     origins,
+func CORS(origins []string, isProd bool) gin.HandlerFunc {
+	config := cors.Config{
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Content-Type", "Authorization", "X-Silent", "Accept"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
-	})
+	}
+	if isProd {
+		config.AllowOrigins = origins
+	} else {
+		config.AllowAllOrigins = true
+	}
+	handler := cors.New(config)
 	return func(c *gin.Context) {
 		handler(c)
 	}

@@ -28,7 +28,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 	r.Use(middleware.RequestID())
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
-	r.Use(middleware.CORS(cfg.CORSOrigins))
+	r.Use(middleware.CORS(cfg.CORSOrigins, cfg.IsProd()))
 	// 限流：基于客户端 IP 的 token bucket，防暴力枚举/撞库/爬虫
 	// 健康检查 /api/health 在中间件内放行，不受限流影响
 	r.Use(middleware.RateLimit(cfg))
