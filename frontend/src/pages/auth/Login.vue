@@ -508,14 +508,14 @@ onUnmounted(() => {
 }
 
 .mode-switch {
-  display: flex;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
   width: 100%;
   margin-bottom: 16px;
 }
 
 .mode-switch :deep(.el-radio-button) {
-  flex: 1;
   display: flex;
 }
 
@@ -523,13 +523,13 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 40px;
+  height: 44px;
   width: 100%;
   border: 1px solid #E2E8F0;
   border-radius: 10px;
   background: #FFFFFF;
   color: #64748B;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   padding: 0;
   box-shadow: none;
