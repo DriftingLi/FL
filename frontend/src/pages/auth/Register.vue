@@ -385,7 +385,7 @@ onUnmounted(() => {
 
 .card-header {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 20px;
 }
 
 .card-icon {
@@ -424,7 +424,7 @@ onUnmounted(() => {
   display: flex;
   width: 100%;
   padding: 4px;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   background: #F1F5F9;
   border: 1px solid #E2E8F0;
   border-radius: 12px;
