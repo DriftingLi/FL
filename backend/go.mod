@@ -21,7 +21,6 @@ require (
 	github.com/jung-kurt/gofpdf v1.16.2
 	github.com/redis/go-redis/v9 v9.21.0
 	github.com/sashabaranov/go-openai v1.32.5
-	github.com/xuri/excelize/v2 v2.11.0
 	go.uber.org/zap v1.28.0
 	golang.org/x/crypto v0.53.0
 	golang.org/x/sync v0.22.0
@@ -85,16 +84,11 @@ require (
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/richardlehane/mscfb v1.0.7 // indirect
-	github.com/richardlehane/msoleps v1.0.6 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/slongfield/pyfmt v0.0.0-20220222012616-ea85ff4c361f // indirect
-	github.com/tiendc/go-deepcopy v1.7.2 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
-	github.com/xuri/efp v0.0.1 // indirect
-	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect

@@ -3,11 +3,14 @@
 package api
 
 import (
+	"bytes"
+	"encoding/csv"
+	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -16,48 +19,63 @@ import (
 	"forklift-training/pkg/response"
 )
 
-// RegisterExportRoutes 注册 /api/admin/export 蓝图（仅管理员，返回 xlsx 附件）。
+// RegisterExportRoutes 注册 /api/admin/export 蓝图（仅管理员，返回 CSV 附件）。
 func RegisterExportRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	svc := service.NewExportService(db)
 	g := rg.Group("/admin/export", middleware.JWTAuth(cfg), middleware.RoleRequired("admin"))
 
-	g.GET("/students", exportXLSXHandler(func() ([][]any, error) { return svc.Students() }, "学员名单.xlsx"))
-	g.GET("/exam-records", exportXLSXHandler(func() ([][]any, error) { return svc.ExamRecords() }, "成绩单.xlsx"))
-	g.GET("/questions", exportXLSXHandler(func() ([][]any, error) { return svc.Questions() }, "题库.xlsx"))
-	g.GET("/evaluations", exportXLSXHandler(func() ([][]any, error) { return svc.Evaluations() }, "评估记录.xlsx"))
+	g.GET("/students", exportCSVHandler(func() ([][]any, error) { return svc.Students() }, "学员名单.csv"))
+	g.GET("/exam-records", exportCSVHandler(func() ([][]any, error) { return svc.ExamRecords() }, "成绩单.csv"))
+	g.GET("/questions", exportCSVHandler(func() ([][]any, error) { return svc.Questions() }, "题库.csv"))
+	g.GET("/evaluations", exportCSVHandler(func() ([][]any, error) { return svc.Evaluations() }, "评估记录.csv"))
 }
 
-// exportXLSXHandler 将取数结果生成为 xlsx 附件响应。
-func exportXLSXHandler(fetch func() ([][]any, error), filename string) gin.HandlerFunc {
+// exportCSVHandler 将取数结果生成为 CSV 附件响应（带 UTF-8 BOM，Excel 可直接打开不乱码）。
+func exportCSVHandler(fetch func() ([][]any, error), filename string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rows, err := fetch()
 		if err != nil {
 			response.ServerError(c, "导出失败: "+err.Error())
 			return
 		}
-		f := excelize.NewFile()
-		defer f.Close()
-		sheet := f.GetSheetName(0)
-		for i, row := range rows {
-			cell, err := excelize.CoordinatesToCellName(1, i+1)
-			if err != nil {
-				response.ServerError(c, "导出失败: "+err.Error())
-				return
+
+		var buf bytes.Buffer
+		buf.WriteString("\xEF\xBB\xBF") // UTF-8 BOM
+		w := csv.NewWriter(&buf)
+		for _, row := range rows {
+			rec := make([]string, len(row))
+			for i, v := range row {
+				rec[i] = cellString(v)
 			}
-			rowCopy := append([]any(nil), row...)
-			if err := f.SetSheetRow(sheet, cell, &rowCopy); err != nil {
+			if err := w.Write(rec); err != nil {
 				response.ServerError(c, "导出失败: "+err.Error())
 				return
 			}
 		}
-		buf, err := f.WriteToBuffer()
-		if err != nil {
+		w.Flush()
+		if err := w.Error(); err != nil {
 			response.ServerError(c, "导出失败: "+err.Error())
 			return
 		}
+
 		encoded := url.PathEscape(filename)
-		c.Header("Content-Disposition", `attachment; filename="export.xlsx"; filename*=UTF-8''`+encoded)
-		c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-		c.Data(http.StatusOK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buf.Bytes())
+		c.Header("Content-Disposition", `attachment; filename="export.csv"; filename*=UTF-8''`+encoded)
+		c.Header("Content-Type", "text/csv; charset=utf-8")
+		c.Data(http.StatusOK, "text/csv; charset=utf-8", buf.Bytes())
+	}
+}
+
+// cellString 将单元格值转为 CSV 字符串。
+func cellString(v any) string {
+	if v == nil {
+		return ""
+	}
+	switch t := v.(type) {
+	case float64:
+		return strconv.FormatFloat(t, 'f', -1, 64)
+	case float32:
+		return strconv.FormatFloat(float64(t), 'f', -1, 32)
+	default:
+		return fmt.Sprint(v)
 	}
 }

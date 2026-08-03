@@ -3,10 +3,10 @@ import request from './request'
 export type ExportKind = 'students' | 'exam-records' | 'questions' | 'evaluations'
 
 const exportLabels: Record<ExportKind, string> = {
-  students: '学员名单.xlsx',
-  'exam-records': '成绩单.xlsx',
-  questions: '题库.xlsx',
-  evaluations: '评估记录.xlsx'
+  students: '学员名单.csv',
+  'exam-records': '成绩单.csv',
+  questions: '题库.csv',
+  evaluations: '评估记录.csv'
 }
 
 export async function downloadExport(kind: ExportKind) {

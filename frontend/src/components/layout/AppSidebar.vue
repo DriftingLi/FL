@@ -84,10 +84,16 @@
     <!-- 底部功能区 -->
     <div class="sidebar-divider"></div>
     <div class="sidebar-footer">
-      <button class="footer-btn collapse-btn" @click="$emit('toggle-collapse')">
-        <component :is="effectiveCollapsed ? Expand : Fold" class="collapse-icon" />
-        <span v-if="!effectiveCollapsed" class="footer-btn-label">收起侧栏</span>
-      </button>
+      <div class="footer-row">
+        <button class="footer-btn collapse-btn" @click="$emit('toggle-collapse')">
+          <component :is="effectiveCollapsed ? Expand : Fold" class="collapse-icon" />
+          <span v-if="!effectiveCollapsed" class="footer-btn-label">收起侧栏</span>
+        </button>
+        <NotificationPanel
+          v-if="authStore.isLoggedIn && authStore.userInfo?.role === 'hrwai_user'"
+          class="sidebar-notification"
+        />
+      </div>
     </div>
 
     <!-- 修改头像/昵称弹窗（el-dialog 会 teleport 到 body） -->
@@ -103,6 +109,7 @@ import { Expand, Fold, ArrowDown, SwitchButton, User } from '@element-plus/icons
 import { useAuthStore } from '@/stores/auth'
 import type { NavItem } from '@/config/navigation'
 import ProfileEditDialog from '@/components/layout/ProfileEditDialog.vue'
+import NotificationPanel from '@/components/layout/NotificationPanel.vue'
 
 const props = defineProps<{
   menuItems: NavItem[]
@@ -413,6 +420,20 @@ async function handleUserCommand(command: string) {
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-default);
   font-family: var(--font-body);
+}
+
+.footer-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.footer-row .footer-btn {
+  flex: 1;
+}
+
+.app-sidebar.collapsed .sidebar-notification {
+  display: none;
 }
 
 .footer-btn:hover {

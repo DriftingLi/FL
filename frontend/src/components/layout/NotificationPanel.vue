@@ -134,6 +134,26 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-md, 8px);
+  background: transparent;
+  color: var(--color-text-secondary, #475569);
+  cursor: pointer;
+  transition: background var(--duration-fast, 0.2s);
+  flex-shrink: 0;
+}
+
+.icon-btn:hover {
+  background: var(--color-bg-page, #f8fafc);
+  color: var(--color-primary-600, #1d4ed8);
+}
+
 .notification-btn {
   position: relative;
 }

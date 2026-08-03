@@ -6,20 +6,13 @@
 
     <el-card>
       <div class="filter-bar">
-        <el-input
-          v-model="query.actor_id"
-          placeholder="操作人ID"
-          clearable
-          style="width: 140px"
-          @keyup.enter="load(1)"
-        />
         <el-select v-model="query.role" placeholder="角色" clearable style="width: 130px" @change="load(1)">
           <el-option label="管理员" value="admin" />
           <el-option label="讲师" value="tutor" />
         </el-select>
         <el-input
           v-model="query.keyword"
-          placeholder="路径 / 动作 / 操作人"
+          placeholder="搜索操作内容或操作人"
           clearable
           style="width: 220px"
           @keyup.enter="load(1)"
@@ -33,24 +26,23 @@
             <pre class="audit-detail">{{ JSON.stringify(row.detail || {}, null, 2) }}</pre>
           </template>
         </el-table-column>
-        <el-table-column prop="created_at" label="时间" width="170" />
+        <el-table-column label="时间" width="140">
+          <template #default="{ row }">
+            {{ formatTime(row.created_at) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="actor_name" label="操作人" width="110" />
         <el-table-column label="角色" width="80" align="center">
           <template #default="{ row }">
             {{ row.actor_role === 'admin' ? '管理员' : '讲师' }}
           </template>
         </el-table-column>
-        <el-table-column prop="action" label="动作" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="method" label="方法" width="80" align="center" />
-        <el-table-column prop="path" label="路径" min-width="220" show-overflow-tooltip />
-        <el-table-column label="状态" width="80" align="center">
+        <el-table-column prop="action" label="操作内容" min-width="200" show-overflow-tooltip />
+        <el-table-column label="结果" width="80" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.status < 400 ? 'success' : 'danger'" size="small">
-              {{ row.status }}
-            </el-tag>
+            {{ row.status < 400 ? '成功' : '失败' }}
           </template>
         </el-table-column>
-        <el-table-column prop="ip" label="IP" width="130" />
       </el-table>
 
       <div class="pagination">
@@ -69,17 +61,21 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import dayjs from 'dayjs'
 import { adminApi, type AuditLogItem } from '@/api/admin'
 
 const items = ref<AuditLogItem[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = 20
-const query = reactive<{ actor_id: string; role: string; keyword: string }>({
-  actor_id: '',
+const query = reactive<{ role: string; keyword: string }>({
   role: '',
   keyword: ''
 })
+
+function formatTime(value: string) {
+  return dayjs(value).format('YYYY-MM-DD HH:mm')
+}
 
 async function load(p: number) {
   page.value = p
@@ -87,7 +83,6 @@ async function load(p: number) {
     const res = await adminApi.listAuditLogs({
       page: p,
       page_size: pageSize,
-      actor_id: query.actor_id ? Number(query.actor_id) : undefined,
       role: query.role || undefined,
       keyword: query.keyword || undefined
     })
