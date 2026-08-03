@@ -122,6 +122,19 @@ export function buildSubdomainUrl(target: SubdomainType, path: string): string {
   return `${protocol}//${prefix}.${rootDomain}${port}${normalizedPath}`
 }
 
+// 构建跨子域名跳转 URL：已登录时附带一次性 auth_token 参数，
+// 目标子域名读取后写入本地并立即从地址栏清除，用于 Cookie 不可用环境下的登录态交接。
+export function buildCrossDomainAuthUrl(target: SubdomainType, path: string): string {
+  const base = buildSubdomainUrl(target, path)
+  let token = ''
+  if (typeof localStorage !== 'undefined') {
+    token = localStorage.getItem('token') || ''
+  }
+  if (!token) return base
+  const sep = base.includes('?') ? '&' : '?'
+  return `${base}${sep}auth_token=${encodeURIComponent(token)}`
+}
+
 // 获取当前子域名对应的默认工作区路径（同子域名内的相对路径）
 export function getDefaultWorkspaceBySubdomain(): string {
   const sub = getSubdomain()

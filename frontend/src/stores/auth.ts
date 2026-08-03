@@ -21,6 +21,19 @@ export const useAuthStore = defineStore('auth', () => {
   const isLoggedIn: Ref<boolean> = ref(false)
   const isInitializing: Ref<boolean> = ref(true)
 
+  // 读取跨子域名跳转附带的一次性 token，并立即从地址栏移除
+  function consumeAuthTokenFromUrl(): string {
+    if (typeof window === 'undefined') return ''
+    const params = new URLSearchParams(window.location.search)
+    const token = params.get('auth_token')
+    if (!token) return ''
+    params.delete('auth_token')
+    const query = params.toString()
+    const newUrl = window.location.pathname + (query ? `?${query}` : '') + window.location.hash
+    window.history.replaceState(null, '', newUrl)
+    return token
+  }
+
   function initFromStorage() {
     const savedToken = localStorage.getItem('token')
     const savedInfo = localStorage.getItem('userInfo')
@@ -46,6 +59,13 @@ export const useAuthStore = defineStore('auth', () => {
     initFromStorage()
 
     try {
+      // 跨子域名跳转携带的 token：优先于本地缓存，供 Cookie 不可用环境恢复登录态
+      const carriedToken = consumeAuthTokenFromUrl()
+      if (carriedToken) {
+        token.value = carriedToken
+        isLoggedIn.value = true
+        localStorage.setItem('token', carriedToken)
+      }
       // 登录态以 /auth/me 为准：父域名 Cookie 共享后，
       // 即使本地无 token（跨子域名首次访问），也能恢复登录；
       // token 过期时由拦截器直接 reject，不弹错误提示、不跳转登录页

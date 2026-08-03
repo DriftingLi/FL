@@ -1,7 +1,14 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { getSubdomain, buildSubdomainUrl, getTargetSubdomainForPath, getDefaultWorkspaceBySubdomain, isIpDirectMode } from '@/utils/subdomain'
+import {
+  getSubdomain,
+  buildSubdomainUrl,
+  buildCrossDomainAuthUrl,
+  getTargetSubdomainForPath,
+  getDefaultWorkspaceBySubdomain,
+  isIpDirectMode
+} from '@/utils/subdomain'
 
 const routes: RouteRecordRaw[] = [
   // ========== 官网 ==========
@@ -431,14 +438,14 @@ router.beforeEach(async (to, from, next) => {
     if (isValuationPath) {
       // 估值路径必须在 valuation 子域名下访问
       if (currentSubdomain !== 'valuation') {
-        window.location.href = buildSubdomainUrl('valuation', to.fullPath)
+        window.location.href = buildCrossDomainAuthUrl('valuation', to.fullPath)
         return
       }
     } else if (isLoginPath) {
       // /login 和 /register 在主域名上跳到 training 子域名（主域名不再承载登录）
       // valuation 子域名有独立的 /valuation/login 与 /valuation/register，主体系 /login 重定向过去
       if (currentSubdomain === 'main') {
-        window.location.href = buildSubdomainUrl('training', to.fullPath)
+        window.location.href = buildCrossDomainAuthUrl('training', to.fullPath)
         return
       }
       if (currentSubdomain === 'valuation') {
@@ -450,12 +457,16 @@ router.beforeEach(async (to, from, next) => {
       const targetSubdomain = getTargetSubdomainForPath(to.path)
       if (currentSubdomain !== targetSubdomain) {
         if (targetSubdomain === 'main') {
-          // 路径是公共的（/、/dispatch 等），但当前在功能子域名
-          // 跳到当前子域名的默认工作区（而非根域名），避免功能子域名用户被踢到主域名
-          next(getDefaultWorkspaceBySubdomain())
+          // AI 助手部署在主域名，允许从功能子域名跳转过去；
+          // 其余公共路径（/、/dispatch 等）留在当前子域名默认工作区
+          if (to.path.startsWith('/ai-assistant')) {
+            window.location.href = buildCrossDomainAuthUrl('main', to.fullPath)
+          } else {
+            next(getDefaultWorkspaceBySubdomain())
+          }
         } else {
           // 路径属于另一个功能子域名 → 跨子域名跳转
-          window.location.href = buildSubdomainUrl(targetSubdomain, to.fullPath)
+          window.location.href = buildCrossDomainAuthUrl(targetSubdomain, to.fullPath)
         }
         return
       }
