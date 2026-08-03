@@ -76,9 +76,33 @@ func TestValidate_Production_AllPresent(t *testing.T) {
 			Addr:     "localhost:6379",
 			Password: "real-redis-password",
 		},
+		AuthCookie: AuthCookieConfig{
+			Name:   "hrwai_token",
+			Domain: "example.com",
+		},
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Errorf("全部必填项存在时不应报错: %v", err)
+	}
+}
+
+func TestValidate_Production_MissingAuthCookieDomain(t *testing.T) {
+	cfg := &Config{
+		AppEnv:       "production",
+		SecretKey:    "real-secret",
+		JWTSecretKey: "real-jwt-secret",
+		DatabaseURL:  "postgres://localhost/db",
+		CORSOrigins:  []string{"https://example.com"},
+		Redis: RedisConfig{
+			Addr:     "localhost:6379",
+			Password: "real-redis-password",
+		},
+		DefaultPasswords: DefaultPasswordsConfig{
+			Admin: "admin123", Tutor: "tutor123", Student: "student123",
+		},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Error("生产环境缺少 AUTH_COOKIE_DOMAIN 应报错")
 	}
 }
 

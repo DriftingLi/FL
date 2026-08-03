@@ -205,20 +205,26 @@ func TestExtractToken(t *testing.T) {
 
 	// 无 Authorization 头
 	c.Request.Header.Del("Authorization")
-	if got := extractToken(c); got != "" {
+	if got := extractToken(c, ""); got != "" {
 		t.Errorf("无 Authorization 头应返回 ''，得到 %q", got)
 	}
 
 	// 有 Bearer token
 	c.Request.Header.Set("Authorization", "Bearer abc123")
-	if got := extractToken(c); got != "abc123" {
+	if got := extractToken(c, ""); got != "abc123" {
 		t.Errorf("应返回 'abc123'，得到 %q", got)
 	}
 
 	// 非 Bearer 前缀
 	c.Request.Header.Set("Authorization", "Basic abc123")
-	if got := extractToken(c); got != "" {
+	if got := extractToken(c, ""); got != "" {
 		t.Errorf("非 Bearer 应返回 ''，得到 %q", got)
+	}
+
+	// Cookie 兜底：无 Authorization 时从父域名 Cookie 读取
+	c.Request.AddCookie(&http.Cookie{Name: "hrwai_token", Value: "cookie-token"})
+	if got := extractToken(c, "hrwai_token"); got != "cookie-token" {
+		t.Errorf("应从 Cookie 返回 'cookie-token'，得到 %q", got)
 	}
 }
 

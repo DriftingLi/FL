@@ -70,7 +70,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 	wechatAuthSvc := service.NewWechatAuthService(cfg.Wechat)
 	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st)
 	reviewSvc := service.NewProfileReviewService(db)
-	authH := NewAuthHandler(authSvc, fileSvc, st, reviewSvc)
+	authH := NewAuthHandler(cfg, authSvc, fileSvc, st, reviewSvc)
 
 	// ===== API 路由组 =====
 	api := r.Group("/api")

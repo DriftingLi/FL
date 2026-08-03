@@ -44,6 +44,8 @@ type Config struct {
 	EmailCodeTTL time.Duration
 	// Wechat 微信开放平台配置（扫码登录，授权信息待接入）。
 	Wechat WechatConfig
+	// AuthCookie 登录态 Cookie 配置（父域名共享登录）。
+	AuthCookie AuthCookieConfig
 }
 
 // SMTPConfig SMTP 邮件发送配置。
@@ -60,6 +62,14 @@ type SMTPConfig struct {
 type WechatConfig struct {
 	AppID     string // WECHAT_APP_ID
 	AppSecret string // WECHAT_APP_SECRET
+}
+
+// AuthCookieConfig 登录态 Cookie 配置。
+// Domain 需配置为父域名（如 localhost / example.com），各子域名才能共享登录态。
+type AuthCookieConfig struct {
+	Name   string // AUTH_COOKIE_NAME，默认 hrwai_token
+	Domain string // AUTH_COOKIE_DOMAIN，默认 localhost
+	Secure bool   // AUTH_COOKIE_SECURE，生产默认 true（HTTPS 才发送）
 }
 
 // StorageConfig 文件存储配置。
@@ -156,6 +166,8 @@ func Load() (*Config, error) {
 	if emailCodeTTLMinutes <= 0 {
 		emailCodeTTLMinutes = 5
 	}
+	authCookieSecure := getenv("AUTH_COOKIE_SECURE", "") == "true" ||
+		(appEnv == "production" && getenv("AUTH_COOKIE_SECURE", "true") != "false")
 
 	cfg := &Config{
 		AppEnv:          appEnv,
@@ -230,6 +242,11 @@ func Load() (*Config, error) {
 		Wechat: WechatConfig{
 			AppID:     getenv("WECHAT_APP_ID", ""),
 			AppSecret: getenv("WECHAT_APP_SECRET", ""),
+		},
+		AuthCookie: AuthCookieConfig{
+			Name:   getenv("AUTH_COOKIE_NAME", "hrwai_token"),
+			Domain: getenv("AUTH_COOKIE_DOMAIN", "localhost"),
+			Secure: authCookieSecure,
 		},
 	}
 
@@ -318,6 +335,10 @@ func (c *Config) Validate() error {
 	}
 	if c.DefaultPasswords.Student == "student123" {
 		missing = append(missing, "STUDENT_DEFAULT_PASSWORD(仍为默认弱口令)")
+	}
+	// 子域名共享登录 Cookie 必须配置父域名（localhost 仅限开发环境）
+	if c.AuthCookie.Domain == "" || c.AuthCookie.Domain == "localhost" {
+		missing = append(missing, "AUTH_COOKIE_DOMAIN(必须为父域名，如 example.com)")
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("生产环境缺少必填配置: %s", strings.Join(missing, ", "))

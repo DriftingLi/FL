@@ -105,7 +105,7 @@ func Recovery() gin.HandlerFunc {
 // JWTAuth 强制 JWT 认证中间件。
 func JWTAuth(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tokenStr := extractToken(c)
+		tokenStr := extractToken(c, cfg.AuthCookie.Name)
 		if tokenStr == "" {
 			response.Unauthorized(c, "Token无效或已过期，请重新登录")
 			c.Abort()
@@ -141,7 +141,7 @@ func JWTAuth(cfg *config.Config) gin.HandlerFunc {
 // OptionalAuth 可选 JWT 认证：有 token 则解析填充，无则放行。
 func OptionalAuth(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tokenStr := extractToken(c)
+		tokenStr := extractToken(c, cfg.AuthCookie.Name)
 		if tokenStr == "" {
 			c.Next()
 			return
@@ -210,11 +210,15 @@ func CurrentRole(c *gin.Context) string {
 	return uid
 }
 
-// extractToken 从 Authorization 头提取 Bearer token。
-func extractToken(c *gin.Context) string {
-	auth := c.GetHeader("Authorization")
-	if len(auth) > 7 && auth[:7] == "Bearer " {
+// extractToken 提取登录令牌：优先 Authorization Bearer 头，其次父域名 Cookie（子域名共享登录）。
+func extractToken(c *gin.Context, cookieName string) string {
+	if auth := c.GetHeader("Authorization"); len(auth) > 7 && auth[:7] == "Bearer " {
 		return auth[7:]
+	}
+	if cookieName != "" {
+		if tk, err := c.Cookie(cookieName); err == nil && tk != "" {
+			return tk
+		}
 	}
 	return ""
 }

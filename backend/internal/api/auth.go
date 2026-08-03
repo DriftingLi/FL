@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/cache"
+	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
 	"forklift-training/internal/service"
@@ -21,6 +22,7 @@ import (
 
 // AuthHandler 认证相关 handler。
 type AuthHandler struct {
+	cfg       *config.Config
 	authSvc   *service.AuthService
 	fileSvc   *service.FileService
 	storage   storage.Storage
@@ -28,8 +30,8 @@ type AuthHandler struct {
 }
 
 // NewAuthHandler 创建认证 handler。
-func NewAuthHandler(authSvc *service.AuthService, fileSvc *service.FileService, st storage.Storage, reviewSvc *service.ProfileReviewService) *AuthHandler {
-	return &AuthHandler{authSvc: authSvc, fileSvc: fileSvc, storage: st, reviewSvc: reviewSvc}
+func NewAuthHandler(cfg *config.Config, authSvc *service.AuthService, fileSvc *service.FileService, st storage.Storage, reviewSvc *service.ProfileReviewService) *AuthHandler {
+	return &AuthHandler{cfg: cfg, authSvc: authSvc, fileSvc: fileSvc, storage: st, reviewSvc: reviewSvc}
 }
 
 // Login 学员登录 POST /api/auth/login
@@ -52,6 +54,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
+	setAuthCookie(c, h.cfg, result.Token)
 	response.SuccessWithMsg(c, "登录成功", result)
 }
 
@@ -100,6 +103,7 @@ func (h *AuthHandler) AdminLogin(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
+	setAuthCookie(c, h.cfg, result.Token)
 	response.SuccessWithMsg(c, "管理员登录成功", result)
 }
 
@@ -122,6 +126,7 @@ func (h *AuthHandler) TutorLogin(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
+	setAuthCookie(c, h.cfg, result.Token)
 	response.SuccessWithMsg(c, "导师登录成功", result)
 }
 
@@ -132,6 +137,9 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	tokenStr := ""
 	if auth := c.GetHeader("Authorization"); len(auth) > 7 && auth[:7] == "Bearer " {
 		tokenStr = auth[7:]
+	}
+	if tokenStr == "" {
+		tokenStr, _ = c.Cookie(h.cfg.AuthCookie.Name)
 	}
 	if tokenStr != "" {
 		// 已通过 JWTAuth 中间件校验，这里仅解析 claims 获取过期时间，不重复校验签名
@@ -145,6 +153,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 			}
 		}
 	}
+	clearAuthCookie(c, h.cfg)
 	response.SuccessWithMsg(c, "已登出", nil)
 }
 

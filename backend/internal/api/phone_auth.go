@@ -68,6 +68,7 @@ func RegisterPhoneAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 			response.BadRequest(c, err.Error())
 			return
 		}
+		setAuthCookie(c, cfg, result.Token)
 		response.Created(c, "注册成功", result)
 	})
 
@@ -88,6 +89,7 @@ func RegisterPhoneAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 			response.BadRequest(c, err.Error())
 			return
 		}
+		setAuthCookie(c, cfg, result.Token)
 		response.SuccessWithMsg(c, "登录成功", result)
 	})
 }

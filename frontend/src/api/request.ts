@@ -26,6 +26,8 @@ type TypedRequest = {
 const request = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   timeout: 30000,
+  // 携带父域名 Cookie，子域名间共享登录态
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
   }

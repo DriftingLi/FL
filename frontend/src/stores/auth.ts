@@ -45,13 +45,10 @@ export const useAuthStore = defineStore('auth', () => {
   async function validateToken() {
     initFromStorage()
 
-    if (!isLoggedIn.value) {
-      isInitializing.value = false
-      return
-    }
-
     try {
-      // 静默校验：token 过期时由拦截器直接 reject，不弹错误提示、不跳转登录页
+      // 登录态以 /auth/me 为准：父域名 Cookie 共享后，
+      // 即使本地无 token（跨子域名首次访问），也能恢复登录；
+      // token 过期时由拦截器直接 reject，不弹错误提示、不跳转登录页
       const res = await authApi.getUserInfo({ headers: { 'X-Silent': '1' } })
       if (res.code === 200 && res.data) {
         // 全量合并 /auth/me 返回的资料（昵称/头像/邮箱等），
@@ -60,6 +57,7 @@ export const useAuthStore = defineStore('auth', () => {
           ...userInfo.value,
           ...res.data
         }
+        isLoggedIn.value = true
         localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
       } else {
         clearAuthData()

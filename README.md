@@ -55,7 +55,7 @@
 | `valuation.` | 残值评估 | 访客 / hrwai_user | 整机残值、电池 RUL、报告、估值登录注册 |
 | `manage.` | 管理后台 | 管理员 | 学员 / 讲师 / 课程 / 题库 / 残值配置 / AI 配置 |
 
-不同子域名的 `localStorage` token **不共享**，切换需重新登录。
+登录态通过**父域名 httpOnly Cookie**（`hrwai_token`）共享，任意子域名登录一次后，其他子域名自动保持登录；`localStorage` 中的 token 仅作兼容保留。
 
 ### 统一鉴权体系（后端）
 
@@ -256,6 +256,7 @@ npm run dev                   # 默认 :5173
 | `SECRET_KEY` | 应用密钥（生产必改） | dev-secret-key |
 | `JWT_SECRET_KEY` | JWT 签名密钥，全系统统一（生产必改） | jwt-secret-key |
 | `JWT_EXPIRES_HOURS` | JWT 有效期（小时） | 24 |
+| `AUTH_COOKIE_NAME` / `AUTH_COOKIE_DOMAIN` / `AUTH_COOKIE_SECURE` | 登录态 Cookie 名称 / 父域名（子域名共享必需，生产如 example.com）/ 仅 HTTPS 发送（生产默认 true） | hrwai_token / localhost / false |
 | `REDIS_ADDR` / `REDIS_PASSWORD` / `REDIS_DB` / `REDIS_POOL_SIZE` / `REDIS_KEY_PREFIX` | Redis 地址 / 密码 / 库 / 连接池 / 键前缀 | localhost:6379 / 空 / 0 / 10 / fl: |
 | `CORS_ORIGINS` | 允许的前端来源（含五个子域名，逗号分隔） | 本地 localhost 系列 |
 | `UPLOAD_FOLDER` / `VOLUME_MOUNT_PATH` | 上传目录 / 数据卷挂载路径 | static/uploads / 空 |
