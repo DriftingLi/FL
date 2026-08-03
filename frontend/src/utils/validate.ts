@@ -44,6 +44,17 @@ export const companyRules: FormItemRule[] = [
   { max: 50, message: '长度不能超过50个字符', trigger: 'blur' }
 ]
 
+// 邮箱注册/登录必填校验
+export const requiredEmailRules: FormItemRule[] = [
+  { required: true, message: '请输入邮箱', trigger: 'blur' },
+  { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: '请输入正确的邮箱地址', trigger: 'blur' }
+]
+
+export const emailCodeRules: FormItemRule[] = [
+  { required: true, message: '请输入验证码', trigger: 'blur' },
+  { pattern: /^\d{6}$/, message: '验证码为6位数字', trigger: 'blur' }
+]
+
 type FormModel = Record<string, unknown>
 
 export const confirmPasswordRule = (formRef: FormModel, fieldName = 'password'): FormItemRule => ({

@@ -38,6 +38,20 @@ type Config struct {
 	Redis            RedisConfig
 	RateLimit        RateLimitConfig
 	DefaultPasswords DefaultPasswordsConfig
+	// SMTP 邮件发送配置（邮箱验证码注册/登录）。
+	SMTP SMTPConfig
+	// EmailCodeTTL 邮箱验证码有效期（EMAIL_CODE_TTL_MINUTES，默认 5 分钟）。
+	EmailCodeTTL time.Duration
+}
+
+// SMTPConfig SMTP 邮件发送配置。
+type SMTPConfig struct {
+	Host     string // SMTP_HOST
+	Port     int    // SMTP_PORT，默认 587
+	Username string // SMTP_USERNAME
+	Password string // SMTP_PASSWORD
+	From     string // SMTP_FROM 发件人邮箱
+	FromName string // SMTP_FROM_NAME，默认 和润天下
 }
 
 // StorageConfig 文件存储配置。
@@ -126,6 +140,14 @@ func Load() (*Config, error) {
 	if rateLimitBurst <= 0 {
 		rateLimitBurst = 40
 	}
+	smtpPort, _ := strconv.Atoi(getenv("SMTP_PORT", "587"))
+	if smtpPort <= 0 {
+		smtpPort = 587
+	}
+	emailCodeTTLMinutes, _ := strconv.Atoi(getenv("EMAIL_CODE_TTL_MINUTES", "5"))
+	if emailCodeTTLMinutes <= 0 {
+		emailCodeTTLMinutes = 5
+	}
 
 	cfg := &Config{
 		AppEnv:          appEnv,
@@ -188,6 +210,15 @@ func Load() (*Config, error) {
 			Tutor:   getenv("TUTOR_DEFAULT_PASSWORD", "tutor123"),
 			Student: getenv("STUDENT_DEFAULT_PASSWORD", "student123"),
 		},
+		SMTP: SMTPConfig{
+			Host:     getenv("SMTP_HOST", ""),
+			Port:     smtpPort,
+			Username: getenv("SMTP_USERNAME", ""),
+			Password: getenv("SMTP_PASSWORD", ""),
+			From:     getenv("SMTP_FROM", ""),
+			FromName: getenv("SMTP_FROM_NAME", "和润天下"),
+		},
+		EmailCodeTTL: time.Duration(emailCodeTTLMinutes) * time.Minute,
 	}
 
 	// 默认上传目录

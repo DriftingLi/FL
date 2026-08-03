@@ -117,6 +117,21 @@ func (s *AuthService) HrwaiRegister(phone, password, name, email, company string
 	if count > 0 {
 		return nil, errors.New("手机号已被注册")
 	}
+	// 手机号注册时若填写邮箱：校验格式与唯一性（同一邮箱不能注册多个账户）
+	email = NormalizeEmail(email)
+	if email != "" {
+		if !IsValidEmail(email) {
+			return nil, errors.New("邮箱格式不正确")
+		}
+		var emailCount int64
+		if err := s.db.Model(&model.HrwaiUser{}).
+			Where("LOWER(email) = ?", email).Count(&emailCount).Error; err != nil {
+			return nil, err
+		}
+		if emailCount > 0 {
+			return nil, errors.New("该邮箱已被注册")
+		}
+	}
 	hashed, err := HashPassword(password)
 	if err != nil {
 		return nil, err

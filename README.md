@@ -30,6 +30,7 @@
 ### 账号体系
 
 - **统一账号（hrwai_users）**：学员端 / 残值评估 / AI 助手共用一张用户表、一套 JWT（角色 `hrwai_user`），支持用户名或手机号登录
+- **邮箱注册 / 登录**：支持邮箱注册与验证码登录，校验邮箱格式与唯一性（同一邮箱只能注册一个账户），验证码通过 SMTP 发送（开发环境未配置 SMTP 时降级为日志打印）
 - **自定义资料（审核制）**：用户可提交昵称与头像修改（图片自动转 WebP，存储走 local/R2 统一抽象），由管理员在后台「资料审核」通过后生效；驳回可填写原因
 - **讲师 / 管理员**：独立账号表（`tutor` / `admin`），管理员后台可统一管理 hrwai 用户
 
@@ -263,6 +264,8 @@ npm run dev                   # 默认 :5173
 | `RATE_LIMIT_ENABLED` / `RATE_LIMIT_RPS` / `RATE_LIMIT_BURST` | 按 IP 限流开关 / 每秒请求 / 突发上限（生产默认开启） | true(prod) / 20 / 40 |
 | `AI_API_KEY` / `AI_BASE_URL` / `AI_MODEL` | AI 供应商配置（OpenAI 兼容格式） | deepseek-v4-flash / https://api.deepseek.com |
 | `LIBREOFFICE_SIDECAR_URL` | sidecar HTTP 地址；为空时降级为本地 exec 调用 | 空 |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM` / `SMTP_FROM_NAME` | 邮箱验证码邮件 SMTP 配置（主机/端口/账号/密码/发件人/发件人名称） | 空 / 587 / 空 / 空 / 空 / 和润天下 |
+| `EMAIL_CODE_TTL_MINUTES` | 邮箱验证码有效期（分钟） | 5 |
 | `STORAGE_DRIVER` | 文件存储：`local` 本地磁盘 / `r2` Cloudflare R2 | local |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_DOMAIN` | R2 凭证与公开域名（driver=r2 时必填） | 空 |
 | `VALUATION_PDF_OUTPUT_DIR` | 评估报告 PDF 输出目录 | storage/reports |
@@ -341,6 +344,7 @@ npm run type-check   # vue-tsc 类型检查
 | `000019_forum_chapter_and_nested_replies` | 论坛改为章节维度（course_id → chapter_id）+ 回复支持 parent_id（回复别人的回复） |
 | `000020_notifications` | 站内信通知表（P0 通知基础设施，当前仅站内信） |
 | `000021_audit_logs` | 管理员/讲师操作审计日志表（P0 合规） |
+| `000022_email_auth` | 邮箱注册/登录：hrwai_users.email 非空唯一索引 |
 
 执行 / 回滚：`make migrate-up` / `make migrate-down`。
 

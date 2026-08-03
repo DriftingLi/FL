@@ -65,6 +65,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 	// 初始化服务
 	authSvc := service.NewAuthService(db, cfg.JWTSecretKey, cfg.JWTExpiry(),
 		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student)
+	emailAuthSvc := service.NewEmailAuthService(db, authSvc, cfg.SMTP, cfg.EmailCodeTTL, cfg.IsProd())
 	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st)
 	reviewSvc := service.NewProfileReviewService(db)
 	authH := NewAuthHandler(authSvc, fileSvc, st, reviewSvc)
@@ -87,6 +88,9 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 		auth.PUT("/profile", middleware.JWTAuth(cfg), authH.UpdateProfile)
 		auth.POST("/avatar", middleware.JWTAuth(cfg), authH.UploadAvatar)
 	}
+
+	// 邮箱验证码注册/登录
+	RegisterEmailAuthRoutes(api, cfg, db, emailAuthSvc)
 
 	// 注册全部 13 个业务蓝图：
 	//   auth/courses/exam/student/question-bank/

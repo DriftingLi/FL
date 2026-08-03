@@ -21,29 +21,76 @@
           </div>
         </div>
 
-        <el-form ref="formRef" :model="formData" :rules="rules" label-width="0" class="login-form">
-          <el-form-item prop="username">
-            <el-input
-              v-model="formData.username"
-              placeholder="请输入手机号或用户名"
-              prefix-icon="User"
-              size="large"
-              class="form-input"
-            />
-          </el-form-item>
+        <el-radio-group
+          v-if="currentRole === 'hrwai_user'"
+          v-model="loginMode"
+          class="mode-switch"
+          size="small"
+        >
+          <el-radio-button label="password">密码登录</el-radio-button>
+          <el-radio-button label="email">邮箱验证码</el-radio-button>
+        </el-radio-group>
 
-          <el-form-item prop="password">
-            <el-input
-              v-model="formData.password"
-              type="password"
-              placeholder="请输入密码"
-              prefix-icon="Lock"
-              show-password
-              size="large"
-              class="form-input"
-              @keyup.enter="handleLogin"
-            />
-          </el-form-item>
+        <el-form ref="formRef" :model="formData" :rules="rules" label-width="0" class="login-form">
+          <template v-if="loginMode === 'password'">
+            <el-form-item prop="username">
+              <el-input
+                v-model="formData.username"
+                placeholder="请输入手机号或用户名"
+                prefix-icon="User"
+                size="large"
+                class="form-input"
+              />
+            </el-form-item>
+
+            <el-form-item prop="password">
+              <el-input
+                v-model="formData.password"
+                type="password"
+                placeholder="请输入密码"
+                prefix-icon="Lock"
+                show-password
+                size="large"
+                class="form-input"
+                @keyup.enter="handleLogin"
+              />
+            </el-form-item>
+          </template>
+
+          <template v-else>
+            <el-form-item prop="email">
+              <el-input
+                v-model="formData.email"
+                placeholder="请输入邮箱"
+                prefix-icon="Message"
+                size="large"
+                class="form-input"
+                @keyup.enter="handleLogin"
+              />
+            </el-form-item>
+
+            <el-form-item prop="code">
+              <div class="code-row">
+                <el-input
+                  v-model="formData.code"
+                  placeholder="6位邮箱验证码"
+                  prefix-icon="Message"
+                  size="large"
+                  class="form-input code-input"
+                  maxlength="6"
+                  @keyup.enter="handleLogin"
+                />
+                <el-button
+                  :disabled="countdown > 0 || codeSending"
+                  size="large"
+                  class="code-btn"
+                  @click="handleSendCode"
+                >
+                  {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
+                </el-button>
+              </div>
+            </el-form-item>
+          </template>
 
           <el-form-item>
             <el-button
@@ -68,13 +115,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import { ElMessage } from 'element-plus'
 import { UserFilled, Avatar, Setting } from '@element-plus/icons-vue'
-import { usernameRules, passwordRules } from '@/utils/validate'
+import { usernameRules, passwordRules, requiredEmailRules, emailCodeRules } from '@/utils/validate'
 import {
   getSubdomain,
   getRoleForSubdomain,
@@ -88,6 +135,10 @@ const route = useRoute()
 const authStore = useAuthStore()
 const formRef = ref(null)
 const loading = ref(false)
+const loginMode = ref<'password' | 'email'>('password')
+const countdown = ref(0)
+const codeSending = ref(false)
+let countdownTimer: number | undefined
 
 // 当前子域名决定角色（不再支持手动切换）
 const subdomain: SubdomainType = getSubdomain()
@@ -123,12 +174,43 @@ const adminLoginUrl = computed(() => buildSubdomainUrl('admin', '/login'))
 
 const formData = reactive({
   username: '',
-  password: ''
+  password: '',
+  email: '',
+  code: ''
 })
 
-const rules = {
-  username: usernameRules,
-  password: passwordRules
+const rules = computed(() =>
+  loginMode.value === 'email'
+    ? { email: requiredEmailRules, code: emailCodeRules }
+    : { username: usernameRules, password: passwordRules }
+)
+
+async function handleSendCode() {
+  const email = formData.email.trim()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    ElMessage.warning('请输入正确的邮箱地址')
+    return
+  }
+  codeSending.value = true
+  try {
+    const res = await authApi.sendEmailCode({ email, purpose: 'login' })
+    if (res.code === 200) {
+      ElMessage.success('验证码已发送，请查收邮箱')
+      countdown.value = 60
+      if (countdownTimer) window.clearInterval(countdownTimer)
+      countdownTimer = window.setInterval(() => {
+        countdown.value--
+        if (countdown.value <= 0 && countdownTimer) {
+          window.clearInterval(countdownTimer)
+          countdownTimer = undefined
+        }
+      }, 1000)
+    }
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    codeSending.value = false
+  }
 }
 
 async function handleLogin() {
@@ -143,7 +225,12 @@ async function handleLogin() {
       role: currentRole
     }
     let res
-    if (currentRole === 'hrwai_user') {
+    if (loginMode.value === 'email') {
+      res = await authApi.emailLogin({
+        email: formData.email.trim(),
+        code: formData.code.trim()
+      })
+    } else if (currentRole === 'hrwai_user') {
       res = await authApi.login(payload)
     } else if (currentRole === 'tutor') {
       res = await authApi.tutorLogin(payload)
@@ -190,6 +277,13 @@ async function handleLogin() {
     loading.value = false
   }
 }
+
+onUnmounted(() => {
+  if (countdownTimer) {
+    window.clearInterval(countdownTimer)
+    countdownTimer = undefined
+  }
+})
 </script>
 
 <style scoped>
@@ -341,6 +435,26 @@ async function handleLogin() {
 
 .login-form {
   margin-top: 8px;
+}
+
+.mode-switch {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.code-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.code-input {
+  flex: 1;
+}
+
+.code-btn {
+  min-width: 124px;
 }
 
 .form-input :deep(.el-input__wrapper) {
