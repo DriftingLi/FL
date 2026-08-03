@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -204,7 +205,7 @@ func (s *CourseService) generateSlides(chapterID int, pptURL string) []string {
 	}
 	pptBytes, err := downloadFile(pptURL)
 	if err != nil {
-		fmt.Printf("[course_service] 下载 PPT 失败 url=%s: %v\n", pptURL, err)
+		slog.Error("下载 PPT 失败", "url", pptURL, "error", err)
 		return nil
 	}
 	slideURLs := s.fileService.ConvertPPTToImages(pptBytes, chapterID)

@@ -2,7 +2,6 @@
 # ===== 叉车维修培训系统 - 一键部署脚本 =====
 # 用法：
 #   ./deploy.sh              # 交互式部署
-#   ./deploy.sh staging      # 部署到 staging
 #   ./deploy.sh production   # 部署到 production
 #   ./deploy.sh --help       # 帮助
 
@@ -37,7 +36,6 @@ show_help() {
   ./deploy.sh [环境]
 
 环境:
-  staging      部署到预发布环境
   production   部署到生产环境
   (留空)       交互式选择
 
@@ -75,7 +73,7 @@ while [[ $# -gt 0 ]]; do
             SKIP_MIGRATE=true
             shift
             ;;
-        staging|production)
+        production)
             ENV="$1"
             shift
             ;;
@@ -89,12 +87,10 @@ done
 # ---- 交互式选择环境 ----
 if [ -z "$ENV" ]; then
     echo "请选择部署环境:"
-    echo "  1) staging (预发布)"
-    echo "  2) production (生产)"
-    read -rp "输入选项 [1-2]: " choice
+    echo "  1) production (生产)"
+    read -rp "输入选项 [1/回车]: " choice
     case "$choice" in
-        1) ENV="staging" ;;
-        2) ENV="production" ;;
+        1|"") ENV="production" ;;
         *) error "无效选项"; exit 1 ;;
     esac
 fi

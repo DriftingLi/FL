@@ -158,10 +158,6 @@ jobs:
       - name: TypeScript 类型检查
         run: npm run type-check
 
-      - name: ESLint 检查（如有配置）
-        continue-on-error: true
-        run: npx eslint src/ --ext .ts,.vue --max-warnings 0 || echo "ESLint 暂未配置，跳过"
-
       - name: 生产构建
         run: npm run build
 

@@ -3,3 +3,6 @@
 
 # Dockerfile 也强制 LF
 Dockerfile text eol=lf
+
+# Go 源码统一 LF，保证 Windows 检出后 gofmt -l 依然干净
+*.go text eol=lf

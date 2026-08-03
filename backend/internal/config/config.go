@@ -67,11 +67,6 @@ type ValuationConfig struct {
 	DBMaxOpenConns    int
 	DBMaxIdleConns    int
 	DBConnMaxLifetime int
-	// Deprecated: 估值模块已并入主体系 JWT 鉴权,统一使用 JWT_SECRET_KEY。
-	// 此字段保留仅为向后兼容,实际不再使用。
-	JWTSecretKey string
-	// Deprecated: 同上,已统一使用主体系 JWTExpiry。
-	JWTExpiresHours int
 }
 
 // RedisConfig Redis 缓存配置。
@@ -110,7 +105,6 @@ func Load() (*Config, error) {
 	valuationDBMaxOpen, _ := strconv.Atoi(getenv("VALUATION_DB_MAX_OPEN_CONNS", "20"))
 	valuationDBMaxIdle, _ := strconv.Atoi(getenv("VALUATION_DB_MAX_IDLE_CONNS", "5"))
 	valuationDBLifetime, _ := strconv.Atoi(getenv("VALUATION_DB_CONN_MAX_LIFETIME", "3600"))
-	valuationJWTHours, _ := strconv.Atoi(getenv("VALUATION_JWT_EXPIRES_HOURS", "168")) // 默认 7 天
 	redisPoolSize, _ := strconv.Atoi(getenv("REDIS_POOL_SIZE", "10"))
 	redisDB, _ := strconv.Atoi(getenv("REDIS_DB", "0"))
 	redisMinIdle, _ := strconv.Atoi(getenv("REDIS_MIN_IDLE_CONNS", "3"))
@@ -169,9 +163,6 @@ func Load() (*Config, error) {
 			DBMaxOpenConns:    valuationDBMaxOpen,
 			DBMaxIdleConns:    valuationDBMaxIdle,
 			DBConnMaxLifetime: valuationDBLifetime,
-			// Deprecated: 估值模块已统一使用主体系 JWT_SECRET_KEY,此字段不再使用。
-			JWTSecretKey:    getenv("VALUATION_JWT_SECRET_KEY", "valuation-jwt-secret-key"),
-			JWTExpiresHours: valuationJWTHours,
 		},
 		Redis: RedisConfig{
 			Addr:         getenv("REDIS_ADDR", "localhost:6379"),
@@ -240,8 +231,6 @@ func (c *Config) Validate() error {
 	if c.JWTSecretKey == "" || c.JWTSecretKey == "jwt-secret-key" {
 		missing = append(missing, "JWT_SECRET_KEY")
 	}
-	// Deprecated: VALUATION_JWT_SECRET_KEY 已废弃,估值模块统一使用 JWT_SECRET_KEY。
-	// 不再校验此环境变量。
 	if c.DatabaseURL == "" {
 		missing = append(missing, "DATABASE_URL")
 	}
@@ -296,11 +285,6 @@ func (c *Config) Validate() error {
 // JWTExpiry 返回 JWT 过期时长。
 func (c *Config) JWTExpiry() time.Duration {
 	return time.Duration(c.JWTExpiresHours) * time.Hour
-}
-
-// ValuationJWTExpiry 返回估值模块独立 JWT 过期时长。
-func (c *Config) ValuationJWTExpiry() time.Duration {
-	return time.Duration(c.Valuation.JWTExpiresHours) * time.Hour
 }
 
 // IsProd 是否为生产环境。

@@ -63,7 +63,7 @@
 - 统一用户表 `hrwai_users`（由原 `student` 与 `valuation_users` 合并而来，见迁移 `000014`），角色为 `hrwai_user`，覆盖培训学员端、残值评估与 AI 助手三个前端
 - 讲师（`tutor`）与管理员（`admin`）保持独立表，登录接口分别为 `/api/auth/tutor-login`、`/api/auth/admin-login`
 - 统一签发密钥 `JWT_SECRET_KEY`，登出令牌写入 Redis 黑名单
-- `VALUATION_JWT_SECRET_KEY` **已废弃**：不再参与鉴权，且已从生产编排与部署脚本中移除
+- `VALUATION_JWT_SECRET_KEY` **已移除**：不再参与鉴权，统一使用 `JWT_SECRET_KEY`，代码与部署配置均已清理
 
 统一响应结构：`{ "code": 0, "message": "...", "data": ... }`（code=0 表示成功）。健康检查 `/api/health` 除外（返回 `{"status":"ok",...}`，Redis 不可达时返回 503）。
 
@@ -143,7 +143,6 @@
 │   │   ├── response/             # 统一响应结构
 │   │   └── pdf/                  # 中文 PDF 报告（gofpdf + SimHei）
 │   ├── migrations/               # 迁移脚本（000001 ~ 000016）
-│   ├── queries/ sqlc.yaml        # 残值子模块 SQL 与代码生成配置
 │   ├── Dockerfile / entrypoint.sh / Makefile
 │   ├── docker-compose.yml        # 本地 postgres + redis + libreoffice
 │   ├── .env                      # 本地开发环境变量（gitignore，不入库）
@@ -267,7 +266,6 @@ npm run dev                   # 默认 :5173
 | `STORAGE_DRIVER` | 文件存储：`local` 本地磁盘 / `r2` Cloudflare R2 | local |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_DOMAIN` | R2 凭证与公开域名（driver=r2 时必填） | 空 |
 | `VALUATION_PDF_OUTPUT_DIR` | 评估报告 PDF 输出目录 | storage/reports |
-| `VALUATION_JWT_SECRET_KEY` | **已废弃**，仅向后兼容，不再参与鉴权，已从部署配置移除 | 空 |
 
 AI 配置支持链式回退：`AI_API_KEY` > `DEEPSEEK_API_KEY` > `ZHIPU_API_KEY` > `OPENAI_API_KEY`；`AI_BASE_URL` 可回退 `DEEPSEEK_API_URL` / `ZHIPU_BASE_URL`；`AI_MODEL` 可回退 `MODEL` / `ZHIPU_MODEL`。此外管理员可在后台维护多套模型配置（`ai_configs` 表），按功能（AI 评分 / 内容生成 / AI 助手）绑定；用户可在 AI 助手内添加自己的 OpenAI 兼容模型（`ai_user_models` 表）。**存储安全**：所有 API Key 均使用 `SECRET_KEY` 派生的 AES-256-GCM 密钥加密后入库（`enc:v1:` 前缀），读取时自动解密，历史明文数据无缝兼容。
 

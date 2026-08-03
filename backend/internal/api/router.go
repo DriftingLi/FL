@@ -16,7 +16,6 @@ import (
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
-	"forklift-training/pkg/response"
 )
 
 // NewRouter 创建并配置 Gin 引擎，注册全部路由与中间件。
@@ -109,7 +108,6 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 	RegisterForumRoutes(api, cfg, db)
 	RegisterProfileReviewRoutes(api, cfg, db, st)
 
-	_ = response.Success // 确保包引用
 	return r
 }
 
