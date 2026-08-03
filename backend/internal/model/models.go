@@ -537,3 +537,20 @@ type ProfileChangeRequest struct {
 }
 
 func (ProfileChangeRequest) TableName() string { return "profile_change_requests" }
+
+// ===== 26. 站内信通知 =====
+
+// Notification 站内信通知（P0 通知基础设施，当前仅站内信渠道）。
+type Notification struct {
+	ID        int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	UserID    int        `gorm:"column:user_id" json:"user_id"`
+	Type      string     `gorm:"column:type;default:system" json:"type"`
+	Title     string     `gorm:"column:title" json:"title"`
+	Content   string     `gorm:"column:content" json:"content"`
+	Link      string     `gorm:"column:link" json:"link"`
+	IsRead    bool       `gorm:"column:is_read;default:false" json:"is_read"`
+	CreatedAt time.Time  `gorm:"column:created_at" json:"created_at"`
+	ReadAt    *time.Time `gorm:"column:read_at" json:"read_at,omitempty"`
+}
+
+func (Notification) TableName() string { return "notifications" }

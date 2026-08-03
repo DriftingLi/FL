@@ -49,9 +49,9 @@
       </div>
 
       <div class="navbar-right">
-        <button class="icon-btn notification-btn" title="通知">
-          <el-icon><Bell /></el-icon>
-        </button>
+        <NotificationPanel
+          v-if="authStore.isLoggedIn && authStore.userInfo?.role === 'hrwai_user'"
+        />
 
         <el-dropdown @command="handleCommand" trigger="click">
           <div class="user-avatar">
@@ -135,13 +135,13 @@ import { useAuthStore } from '@/stores/auth'
 import { ElMessageBox } from 'element-plus'
 import {
   ArrowDown,
-  Bell,
   User,
   SwitchButton,
   Close
 } from '@element-plus/icons-vue'
 import type { NavItem } from '@/config/navigation'
 import ProfileEditDialog from '@/components/layout/ProfileEditDialog.vue'
+import NotificationPanel from '@/components/layout/NotificationPanel.vue'
 
 const props = defineProps<{
   menuItems: NavItem[]

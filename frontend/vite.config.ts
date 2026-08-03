@@ -62,5 +62,28 @@ export default defineConfig({
         proxyTimeout: 60000
       }
     }
+  },
+  build: {
+    chunkSizeWarningLimit: 700,
+    rollupOptions: {
+      output: {
+        // 按第三方库拆分 vendor chunk，避免 Element Plus / ECharts / PDF 等
+        // 大依赖打进入口 chunk（此前两个入口 chunk 均超 1.1MB）
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('/element-plus/') || id.includes('@element-plus/')) return 'element-plus'
+          if (id.includes('/echarts/') || id.includes('/zrender/')) return 'echarts'
+          if (id.includes('/pdfjs-dist/')) return 'pdfjs'
+          if (id.includes('/vditor/')) return 'vditor'
+          if (id.includes('/marked') || id.includes('highlight.js')) return 'markdown'
+          if (id.includes('/dayjs/')) return 'dayjs'
+          if (id.includes('/vuedraggable/') || id.includes('/sortablejs/')) return 'draggable'
+          if (id.includes('/vue') || id.includes('/pinia') || id.includes('/axios') || id.includes('/@vue/')) {
+            return 'vue-vendor'
+          }
+          return 'vendor'
+        }
+      }
+    }
   }
 })

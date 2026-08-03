@@ -107,6 +107,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 	RegisterAIAssistantRoutes(api, cfg, db, aiConfigSvc)
 	RegisterForumRoutes(api, cfg, db)
 	RegisterProfileReviewRoutes(api, cfg, db, st)
+	RegisterNotificationRoutes(api, cfg, db)
 
 	return r
 }

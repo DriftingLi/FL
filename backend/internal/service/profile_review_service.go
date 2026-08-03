@@ -230,14 +230,18 @@ func (s *ProfileReviewService) review(requestID int64, reviewerID int, status, r
 				return err
 			}
 		}
-		return tx.Model(&model.ProfileChangeRequest{}).Where("id = ?", requestID).
+		if err := tx.Model(&model.ProfileChangeRequest{}).Where("id = ?", requestID).
 			Updates(map[string]any{
 				"status":        status,
 				"reject_reason": reason,
 				"reviewed_by":   reviewerID,
 				"reviewed_at":   now,
 				"updated_at":    now,
-			}).Error
+			}).Error; err != nil {
+			return err
+		}
+		// 审核结果以站内信通知学员（与审核状态流转同事务，避免通知丢失）
+		return tx.Create(buildProfileReviewNotification(&req, status, reason, now)).Error
 	})
 	if err != nil {
 		return nil, err
@@ -251,6 +255,31 @@ func (s *ProfileReviewService) review(requestID int64, reviewerID int, status, r
 		return nil, err
 	}
 	return s.toDTO(&req, &user), nil
+}
+
+// buildProfileReviewNotification 构造资料审核结果站内信。
+func buildProfileReviewNotification(req *model.ProfileChangeRequest, status, reason string, now time.Time) *model.Notification {
+	fieldLabel := "昵称"
+	if req.FieldType == ProfileFieldAvatar {
+		fieldLabel = "头像"
+	}
+	title := "资料审核通过"
+	content := "您的" + fieldLabel + "修改已通过审核，修改已生效。"
+	if status == ProfileStatusRejected {
+		title = "资料审核被驳回"
+		content = "您的" + fieldLabel + "修改申请未通过审核"
+		if reason != "" {
+			content += "，原因：" + reason
+		}
+		content += "。"
+	}
+	return &model.Notification{
+		UserID:    req.UserID,
+		Type:      "profile_review",
+		Title:     title,
+		Content:   content,
+		CreatedAt: now,
+	}
 }
 
 // toDTO 组装展示对象。
