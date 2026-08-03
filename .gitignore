@@ -80,6 +80,9 @@ node_modules_old/
 # ===== Codex 相关文件 =====
 .codex/
 
+# ===== 本地文档（不入库）=====
+docs/
+
 # ===== WorkBuddy 相关文件 =====
 .workbuddy/
 
