@@ -120,6 +120,31 @@ export interface AdminForumListParams {
   keyword?: string
 }
 
+// ===== 审计日志 =====
+
+export interface AuditLogItem {
+  id: number
+  actor_id: number
+  actor_role: string
+  actor_name: string
+  action: string
+  path: string
+  method: string
+  request_id: string
+  ip: string
+  status: number
+  detail?: any
+  created_at: string
+}
+
+export interface AuditLogsQuery {
+  page?: number
+  page_size?: number
+  actor_id?: number
+  role?: string
+  keyword?: string
+}
+
 // ===== AI 多配置 =====
 
 export interface AIConfig {
@@ -355,5 +380,11 @@ export const adminApi = {
 
   deleteAdminForumReply(id: number) {
     return request.delete(`/admin/forum/replies/${id}`)
+  },
+
+  // ===== 审计日志 =====
+
+  listAuditLogs(params: AuditLogsQuery) {
+    return request.get('/admin/audit-logs', { params })
   }
 }

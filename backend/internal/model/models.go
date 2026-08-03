@@ -554,3 +554,23 @@ type Notification struct {
 }
 
 func (Notification) TableName() string { return "notifications" }
+
+// ===== 27. 审计日志 =====
+
+// AuditLog 管理员/讲师关键操作审计日志。
+type AuditLog struct {
+	ID        int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	ActorID   int       `gorm:"column:actor_id" json:"actor_id"`
+	ActorRole string    `gorm:"column:actor_role" json:"actor_role"`
+	ActorName string    `gorm:"column:actor_name" json:"actor_name"`
+	Action    string    `gorm:"column:action" json:"action"`
+	Path      string    `gorm:"column:path" json:"path"`
+	Method    string    `gorm:"column:method" json:"method"`
+	RequestID string    `gorm:"column:request_id" json:"request_id"`
+	IP        string    `gorm:"column:ip" json:"ip"`
+	Status    int       `gorm:"column:status" json:"status"`
+	Detail    JSONB     `gorm:"column:detail;type:jsonb" json:"detail,omitempty"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (AuditLog) TableName() string { return "audit_logs" }

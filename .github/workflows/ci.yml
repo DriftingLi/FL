@@ -71,8 +71,8 @@ jobs:
 
       - name: golangci-lint 代码检查
         run: |
-          # 安装与系统 Go 版本匹配的 golangci-lint（避免预编译二进制版本不兼容）
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          # 固定版本安装，避免 @latest 随上游变动导致 CI 结果漂移
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
           golangci-lint run --timeout=5m
         working-directory: backend
 

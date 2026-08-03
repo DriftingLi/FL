@@ -71,6 +71,8 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 
 	// ===== API 路由组 =====
 	api := r.Group("/api")
+	// 审计日志：记录管理员/讲师写操作（不依赖中间件顺序，见 middleware.AuditLog）
+	api.Use(middleware.AuditLog(cfg, db))
 
 	// 认证蓝图 /api/auth/*
 	auth := api.Group("/auth")
@@ -108,6 +110,8 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 	RegisterForumRoutes(api, cfg, db)
 	RegisterProfileReviewRoutes(api, cfg, db, st)
 	RegisterNotificationRoutes(api, cfg, db)
+	RegisterAuditRoutes(api, cfg, db)
+	RegisterExportRoutes(api, cfg, db)
 
 	return r
 }

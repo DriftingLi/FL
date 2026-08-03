@@ -52,6 +52,42 @@
 
     <el-card class="table-card">
       <template #header>
+        <span class="card-title">数据导出</span>
+      </template>
+      <div class="export-actions">
+        <el-button
+          type="primary"
+          :loading="exporting === 'students'"
+          @click="handleExport('students')"
+        >
+          学员名单
+        </el-button>
+        <el-button
+          type="success"
+          :loading="exporting === 'exam-records'"
+          @click="handleExport('exam-records')"
+        >
+          考试成绩
+        </el-button>
+        <el-button
+          type="warning"
+          :loading="exporting === 'questions'"
+          @click="handleExport('questions')"
+        >
+          题库
+        </el-button>
+        <el-button
+          type="info"
+          :loading="exporting === 'evaluations'"
+          @click="handleExport('evaluations')"
+        >
+          评估记录
+        </el-button>
+      </div>
+    </el-card>
+
+    <el-card class="table-card">
+      <template #header>
         <span class="card-title">课程学习详细数据</span>
       </template>
       <el-table :data="courseStats" stripe border style="width: 100%">
@@ -84,14 +120,29 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
+import { ElMessage } from 'element-plus'
 import { adminApi } from '@/api/admin'
+import { downloadExport, type ExportKind } from '@/api/export'
 
 const overview = ref<any>({})
 const courseStats = ref([])
+const exporting = ref<ExportKind | ''>('')
 const barChartRef = ref(null)
 const progressChartRef = ref(null)
 let barChart: echarts.ECharts | null = null
 let progressChart: echarts.ECharts | null = null
+
+async function handleExport(kind: ExportKind) {
+  exporting.value = kind
+  try {
+    await downloadExport(kind)
+    ElMessage.success('导出成功')
+  } catch (e) {
+    ElMessage.error('导出失败，请稍后重试')
+  } finally {
+    exporting.value = ''
+  }
+}
 
 function formatDuration(minutes: number) {
   if (!minutes || minutes <= 0) return '0分钟'
@@ -326,6 +377,12 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   min-height: 260px;
+}
+
+.export-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .table-card {

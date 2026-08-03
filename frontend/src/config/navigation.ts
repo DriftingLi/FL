@@ -15,6 +15,7 @@ import {
   PriceTag,
   Finished,
   Setting,
+  Memo,
   CircleCheck
 } from '@element-plus/icons-vue'
 // 注：MagicStick 仍用于管理员"内容生成"菜单项
@@ -49,6 +50,7 @@ const adminNav: NavItem[] = [
   { key: 'question-review', label: '题库审核', path: '/admin/question-review', icon: EditPen },
   { key: 'exam-sessions', label: '考试场次', path: '/admin/exam-sessions', icon: Calendar },
   { key: 'statistics', label: '统计分析', path: '/admin/statistics', icon: TrendCharts },
+  { key: 'audit-logs', label: '审计日志', path: '/admin/audit-logs', icon: Memo },
   { key: 'valuation-config', label: '残值配置', path: '/admin/valuation-config', icon: PriceTag },
   { key: 'ai-settings', label: 'AI 配置', path: '/admin/ai-settings', icon: Setting },
   { key: 'content-generate', label: '内容生成', path: '/admin/content-generate', icon: MagicStick },

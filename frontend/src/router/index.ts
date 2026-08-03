@@ -283,6 +283,12 @@ const routes: RouteRecordRaw[] = [
         meta: { navKey: 'statistics', navLabel: '统计分析', navGroup: 'data' }
       },
       {
+        path: 'audit-logs',
+        name: 'AuditLogs',
+        component: () => import('@/pages/admin/AuditLogs.vue'),
+        meta: { navKey: 'audit-logs', navLabel: '审计日志', navGroup: 'data' }
+      },
+      {
         path: 'content-generate',
         name: 'ContentGenerate',
         component: () => import('@/pages/admin/ContentGenerate.vue'),

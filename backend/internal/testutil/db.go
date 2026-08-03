@@ -39,6 +39,7 @@ func allModels() []interface{} {
 	return []interface{}{
 		&model.Student{},
 		&model.Notification{},
+		&model.AuditLog{},
 		&model.Admin{},
 		&model.Tutor{},
 		&model.Course{},

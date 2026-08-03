@@ -340,6 +340,7 @@ npm run type-check   # vue-tsc 类型检查
 | `000018_profile_change_review` | 资料修改审核表（昵称/头像修改先进入待审队列） |
 | `000019_forum_chapter_and_nested_replies` | 论坛改为章节维度（course_id → chapter_id）+ 回复支持 parent_id（回复别人的回复） |
 | `000020_notifications` | 站内信通知表（P0 通知基础设施，当前仅站内信） |
+| `000021_audit_logs` | 管理员/讲师操作审计日志表（P0 合规） |
 
 执行 / 回滚：`make migrate-up` / `make migrate-down`。
 
