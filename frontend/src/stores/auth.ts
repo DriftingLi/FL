@@ -54,17 +54,11 @@ export const useAuthStore = defineStore('auth', () => {
       // 静默校验：token 过期时由拦截器直接 reject，不弹错误提示、不跳转登录页
       const res = await authApi.getUserInfo({ headers: { 'X-Silent': '1' } })
       if (res.code === 200 && res.data) {
-        const updates: Record<string, any> = {
-          user_id: res.data.user_id,
-          username: res.data.username,
-          role: res.data.role
-        }
-        if (res.data.name) {
-          updates.name = res.data.name
-        }
+        // 全量合并 /auth/me 返回的资料（昵称/头像/邮箱等），
+        // 避免登录响应只有基础字段导致重新登录后昵称头像回退
         userInfo.value = {
           ...userInfo.value,
-          ...updates
+          ...res.data
         }
         localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
       } else {
@@ -91,6 +85,9 @@ export const useAuthStore = defineStore('auth', () => {
 
     localStorage.setItem('token', data.token)
     localStorage.setItem('userInfo', JSON.stringify(data))
+
+    // 登录响应只含基础字段（无昵称/头像等），异步拉取 /auth/me 补齐完整资料
+    refreshUserInfo()
   }
 
   function clearAuthData() {
