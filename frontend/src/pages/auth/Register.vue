@@ -21,7 +21,6 @@
         <el-radio-group v-model="registerMode" class="mode-switch">
           <el-radio-button label="phone">手机号注册</el-radio-button>
           <el-radio-button label="email">邮箱注册</el-radio-button>
-          <el-radio-button label="wechat">微信注册</el-radio-button>
         </el-radio-group>
 
         <el-form ref="formRef" :model="formData" :rules="rules" label-width="0" class="register-form">
@@ -82,7 +81,7 @@
             </el-form-item>
           </template>
 
-          <template v-else-if="registerMode === 'email'">
+          <template v-else>
             <el-form-item prop="email">
               <el-input
                 v-model="formData.email"
@@ -127,17 +126,6 @@
             </el-form-item>
           </template>
 
-          <template v-else>
-            <el-form-item>
-              <div class="wechat-box">
-                <div class="wechat-qr-placeholder">
-                  <el-icon :size="42"><ChatDotRound /></el-icon>
-                  <p class="wechat-title">微信扫码注册</p>
-                  <span class="wechat-tip">微信授权暂未配置，待开放平台配置完成后开放</span>
-                </div>
-              </div>
-            </el-form-item>
-          </template>
 
           <el-form-item>
             <el-button
@@ -167,7 +155,7 @@ import { useRouter } from 'vue-router'
 import { authApi } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
-import { EditPen, ChatDotRound } from '@element-plus/icons-vue'
+import { EditPen } from '@element-plus/icons-vue'
 import {
   nameRules,
   phoneRules,
@@ -180,7 +168,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 const formRef = ref(null)
 const loading = ref(false)
-const registerMode = ref<'phone' | 'email' | 'wechat'>('phone')
+const registerMode = ref<'phone' | 'email'>('phone')
 const countdown = ref(0)
 const codeSending = ref(false)
 let countdownTimer: number | undefined
@@ -195,15 +183,11 @@ const formData = reactive({
   code: ''
 })
 
-const rules = computed(() => {
-  if (registerMode.value === 'email') {
-    return { name: nameRules, email: requiredEmailRules, code: emailCodeRules, company: companyRules }
-  }
-  if (registerMode.value === 'phone') {
-    return { name: nameRules, phone: phoneRules, code: emailCodeRules, company: companyRules }
-  }
-  return { name: nameRules }
-})
+const rules = computed(() =>
+  registerMode.value === 'email'
+    ? { name: nameRules, email: requiredEmailRules, code: emailCodeRules, company: companyRules }
+    : { name: nameRules, phone: phoneRules, code: emailCodeRules, company: companyRules }
+)
 
 async function handleSendCode() {
   codeSending.value = true
@@ -244,10 +228,6 @@ async function handleSendCode() {
 }
 
 async function handleRegister() {
-  if (registerMode.value === 'wechat') {
-    ElMessage.info('微信扫码注册暂未开放，请等待开放平台配置')
-    return
-  }
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
 
@@ -268,8 +248,6 @@ async function handleRegister() {
         code: formData.code.trim(),
         company: formData.company
       })
-    } else {
-      return
     }
 
     if (res.code === 201 || res.code === 200) {
@@ -462,35 +440,6 @@ onUnmounted(() => {
   min-width: 124px;
 }
 
-.wechat-box {
-  width: 100%;
-}
-
-.wechat-qr-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 28px 16px;
-  border: 2px dashed #CBD5E1;
-  border-radius: 12px;
-  color: #94A3B8;
-  background: #F8FAFC;
-}
-
-.wechat-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: #64748B;
-}
-
-.wechat-tip {
-  font-size: 12px;
-  color: #94A3B8;
-  text-align: center;
-  line-height: 1.5;
-}
 
 .form-input :deep(.el-input__wrapper) {
   border-radius: 12px;
