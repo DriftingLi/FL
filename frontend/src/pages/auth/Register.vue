@@ -432,9 +432,14 @@ onUnmounted(() => {
 
 .mode-switch :deep(.el-radio-button) {
   flex: 1;
+  display: flex;
 }
 
 .mode-switch :deep(.el-radio-button__inner) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
   width: 100%;
   border: none;
   border-radius: 9px;
@@ -442,7 +447,7 @@ onUnmounted(() => {
   color: #64748B;
   font-size: 14px;
   font-weight: 600;
-  padding: 11px 0;
+  padding: 0;
   box-shadow: none;
   transition: all 0.25s ease;
 }
