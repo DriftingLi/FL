@@ -138,6 +138,13 @@ write_env_file() {
         env_val "${JWT_SECRET_KEY:-}"; echo
         echo "JWT_EXPIRES_HOURS=${JWT_EXPIRES_HOURS:-24}"
 
+        # 登录态 Cookie（父域名共享登录）
+        printf 'AUTH_COOKIE_NAME='
+        env_val "${AUTH_COOKIE_NAME:-hrwai_token}"; echo
+        printf 'AUTH_COOKIE_DOMAIN='
+        env_val "${AUTH_COOKIE_DOMAIN:-}"; echo
+        echo "AUTH_COOKIE_SECURE=${AUTH_COOKIE_SECURE:-true}"
+
         printf 'ADMIN_DEFAULT_PASSWORD='
         env_val "${ADMIN_DEFAULT_PASSWORD:-}"; echo
         printf 'TUTOR_DEFAULT_PASSWORD='
