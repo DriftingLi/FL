@@ -59,13 +59,37 @@ import { useRouter } from 'vue-router'
 import dayjs from 'dayjs'
 import { Bell } from '@element-plus/icons-vue'
 import { notificationApi, type NotificationItem } from '@/api/notification'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const items = ref<NotificationItem[]>([])
 const unreadCount = ref(0)
 const total = ref(0)
 const loading = ref(false)
 let timer: number | undefined
+let lastUserSync = 0
+
+// 资料审核通过后，同步最新昵称/头像到本地缓存（昵称/头像修改需管理员审核后才生效）
+function isProfileApproved(item: NotificationItem) {
+  return item.type === 'profile_review' && item.title.includes('通过')
+}
+
+async function syncUserInfoAfterApproval() {
+  try {
+    await authStore.refreshUserInfo()
+  } catch (e) {
+    // 静默失败，下次轮询再同步
+  }
+}
+
+// 节流：未读通知存在时最多每 60 秒同步一次用户资料
+async function maybeSyncUserInfo() {
+  const now = Date.now()
+  if (now - lastUserSync < 60000) return
+  lastUserSync = now
+  await syncUserInfoAfterApproval()
+}
 
 async function refresh() {
   loading.value = true
@@ -75,6 +99,9 @@ async function refresh() {
       items.value = res.data.items || []
       total.value = res.data.total || 0
       unreadCount.value = res.data.unread_count || 0
+      if (items.value.some(item => !item.is_read && isProfileApproved(item))) {
+        await syncUserInfoAfterApproval()
+      }
     }
   } catch (e) {
     // 静默失败，保留旧数据
@@ -88,6 +115,9 @@ async function refreshUnread() {
     const res = await notificationApi.unreadCount()
     if (res.code === 200 && res.data) {
       unreadCount.value = res.data.count || 0
+      if (unreadCount.value > 0) {
+        await maybeSyncUserInfo()
+      }
     }
   } catch (e) {
     // 静默失败
@@ -99,6 +129,9 @@ async function handleClick(item: NotificationItem) {
     item.is_read = true
     unreadCount.value = Math.max(0, unreadCount.value - 1)
     notificationApi.markRead(item.id).catch(() => {})
+  }
+  if (isProfileApproved(item)) {
+    await syncUserInfoAfterApproval()
   }
   if (item.link) {
     router.push(item.link)
