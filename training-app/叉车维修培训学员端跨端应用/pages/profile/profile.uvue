@@ -121,11 +121,11 @@
 
     function onMenuClick(type : string) : void {
         if (type == 'wrong') {
-            uni.showToast({ title: '错题本开发中', icon: 'none' })
+            uni.navigateTo({ url: '/pages/profile/wrong-questions' })
         } else if (type == 'records') {
-            uni.showToast({ title: '学习记录开发中', icon: 'none' })
+            uni.navigateTo({ url: '/pages/profile/records' })
         } else if (type == 'practice') {
-            uni.showToast({ title: '练习记录开发中', icon: 'none' })
+            uni.navigateTo({ url: '/pages/profile/practice-records' })
         } else if (type == 'settings') {
             uni.navigateTo({ url: '/pages/profile/settings' })
         }

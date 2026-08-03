@@ -1,0 +1,926 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">错题本</text>
+            <view class="header-right" @click="onExport">
+                <text class="header-action">导出</text>
+            </view>
+        </view>
+        <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+            <!-- 统计卡片 -->
+            <view class="stats-card">
+                <view class="stat-item">
+                    <text class="stat-num">{{ stats.total }}</text>
+                    <text class="stat-label">错题总数</text>
+                </view>
+                <view class="stat-divider"></view>
+                <view class="stat-item">
+                    <text class="stat-num">{{ singleCount }}</text>
+                    <text class="stat-label">单选题</text>
+                </view>
+                <view class="stat-divider"></view>
+                <view class="stat-item">
+                    <text class="stat-num">{{ multiCount }}</text>
+                    <text class="stat-label">多选题</text>
+                </view>
+                <view class="stat-divider"></view>
+                <view class="stat-item">
+                    <text class="stat-num">{{ judgeCount }}</text>
+                    <text class="stat-label">判断题</text>
+                </view>
+            </view>
+
+            <!-- 题型筛选 -->
+            <view class="filter-bar">
+                <scroll-view class="filter-scroll" scroll-x="true">
+                    <view class="filter-list">
+                        <view v-for="(opt, idx) in typeOptions" :key="idx"
+                            :class="['filter-chip', { active: currentType == opt.value }]"
+                            @click="onTypeClick(opt.value)">
+                            <text class="filter-chip-text">{{ opt.label }}</text>
+                        </view>
+                    </view>
+                </scroll-view>
+            </view>
+
+            <!-- 错题列表 -->
+            <view v-if="records.length == 0 && !loading" class="empty-tip">
+                <text class="empty-text">暂无错题</text>
+            </view>
+            <view class="record-list">
+                <view v-for="(item, idx) in records" :key="idx" class="record-card">
+                    <view class="record-header">
+                        <text class="record-type-tag">{{ getTypeName(item.type) }}</text>
+                        <text class="record-wrong-count">错 {{ item.wrong_count }} 次</text>
+                        <text class="record-date">{{ formatDate(item.created_at) }}</text>
+                    </view>
+                    <text class="record-title">{{ item.title }}</text>
+
+                    <!-- 折叠态：显示用户答案与正确答案 -->
+                    <view v-if="!isExpanded(item.question_id)" class="record-answers">
+                        <view class="answer-row wrong">
+                            <text class="answer-label">我的答案：</text>
+                            <text class="answer-value">{{ item.user_answer.length > 0 ? item.user_answer : '未作答' }}</text>
+                        </view>
+                        <view class="answer-row correct">
+                            <text class="answer-label">正确答案：</text>
+                            <text class="answer-value">{{ item.correct_answer }}</text>
+                        </view>
+                    </view>
+
+                    <!-- 展开态：重做交互 -->
+                    <view v-if="isExpanded(item.question_id)" class="redo-section">
+                        <view class="option-list">
+                            <view v-for="(opt, oidx) in item.options" :key="oidx"
+                                class="option-item" :class="getOptionClass(item, opt.key)"
+                                @click="onOptionClick(item, opt.key)">
+                                <view class="option-key" :class="getOptionKeyClass(item, opt.key)">
+                                    <text class="option-key-text">{{ opt.key }}</text>
+                                </view>
+                                <text class="option-text">{{ opt.text }}</text>
+                            </view>
+                        </view>
+
+                        <!-- 重做结果 -->
+                        <view v-if="hasRedoResult()" class="redo-result"
+                            :class="redoResultClass()">
+                            <text class="redo-result-text">{{ redoResultLabel() }}</text>
+                            <text class="redo-result-answer">正确答案：{{ redoResultAnswer() }}</text>
+                        </view>
+
+                        <!-- 操作按钮 -->
+                        <view class="redo-actions">
+                            <view v-if="!hasRedoResult()" class="redo-btn redo-btn-primary"
+                                @click="onSubmitRedo(item)">
+                                <text class="redo-btn-text">提交答案</text>
+                            </view>
+                            <view v-if="hasRedoResult() && redoResultCorrect()" class="redo-btn redo-btn-success"
+                                @click="onRemove(item)">
+                                <text class="redo-btn-text">移出错题本</text>
+                            </view>
+                            <view v-else class="redo-btn redo-btn-danger" @click="onRemove(item)">
+                                <text class="redo-btn-text">移出错题本</text>
+                            </view>
+                        </view>
+                    </view>
+
+                    <!-- 折叠态操作按钮 -->
+                    <view v-if="!isExpanded(item.question_id)" class="card-actions">
+                        <view class="card-action-btn" @click="onToggleExpand(item.question_id)">
+                            <text class="card-action-text">重做</text>
+                        </view>
+                        <view class="card-action-btn card-action-danger" @click="onRemove(item)">
+                            <text class="card-action-text card-action-danger-text">移出</text>
+                        </view>
+                    </view>
+                </view>
+            </view>
+            <view v-if="loading" class="loading-more">
+                <text class="loading-text">加载中...</text>
+            </view>
+            <view v-if="noMore && records.length > 0" class="loading-more">
+                <text class="loading-text">没有更多了</text>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onShow } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { useAuthStore } from '../../stores/auth'
+    import {
+        getWrongQuestionsApi,
+        getWrongQuestionStatsApi,
+        redoWrongQuestionApi,
+        removeWrongQuestionApi,
+    } from '../../api/wrongQuestion'
+    import { API_BASE_URL } from '../../config/env'
+    import type { WrongQuestionItem, WrongQuestionStats, QuestionOption } from '../../types/index'
+
+    type TypeOption = {
+        label : string
+        value : string
+    }
+
+    /** 重做结果 */
+    type RedoResult = {
+        correct : boolean
+        correct_answer : string
+        explanation : string
+    }
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+    const authStore = useAuthStore()
+
+    const typeOptions : TypeOption[] = [
+        { label: '全部', value: '' },
+        { label: '单选题', value: 'single_choice' },
+        { label: '多选题', value: 'multiple_choice' },
+        { label: '判断题', value: 'true_false' },
+    ]
+
+    const currentType = ref<string>('')
+    const records = ref<WrongQuestionItem[]>([])
+    const page = ref<number>(1)
+    const pageSize = 20
+    const total = ref<number>(0)
+    const loading = ref<boolean>(false)
+    const noMore = ref<boolean>(false)
+
+    // 统计
+    const stats = ref<WrongQuestionStats>({
+        total: 0,
+        by_type: {} as UTSJSONObject,
+        by_knowledge_point: {} as UTSJSONObject,
+    } as WrongQuestionStats)
+
+    // 当前展开的题目 ID（0 表示都折叠）。同一时间只展开一道题，
+    // 因此选中答案与重做结果用单值 ref，避免 UTSJSONObject 索引/null 赋值在 uvue 模板中的兼容性问题。
+    const expandedId = ref<number>(0)
+    const selectedKeys = ref<string[]>([])
+    const redoResult = ref<RedoResult | null>(null)
+
+    /** 从 by_type 统计中取某题型数量 */
+    function countByType(type : string) : number {
+        const byType = stats.value.by_type
+        const v = byType[type]
+        if (v == null) return 0
+        const s = `${v}`
+        const n = parseFloat(s)
+        if (isNaN(n)) return 0
+        return n
+    }
+
+    const singleCount = computed<number>(() : number => {
+        return countByType('single_choice') + countByType('single')
+    })
+    const multiCount = computed<number>(() : number => {
+        return countByType('multiple_choice') + countByType('multi_choice') + countByType('multi')
+    })
+    const judgeCount = computed<number>(() : number => {
+        return countByType('true_false') + countByType('judge')
+    })
+
+    /** 题型名称 */
+    function getTypeName(type : string) : string {
+        if (type == 'single' || type == 'single_choice') return '单选题'
+        if (type == 'multi' || type == 'multiple_choice' || type == 'multi_choice') return '多选题'
+        if (type == 'judge' || type == 'true_false') return '判断题'
+        return '其他'
+    }
+
+    /** 是否多选题 */
+    function isMultiChoice(type : string) : boolean {
+        return type == 'multi' || type == 'multiple_choice' || type == 'multi_choice'
+    }
+
+    /** 时间字符串截取 YYYY-MM-DD */
+    function formatDate(dateStr : string) : string {
+        if (dateStr.length < 10) return dateStr
+        return dateStr.substring(0, 10)
+    }
+
+    /** 当前展开判断（模板调用） */
+    function isExpanded(qid : number) : boolean {
+        return expandedId.value == qid
+    }
+
+    /** 是否已提交重做（模板调用） */
+    function hasRedoResult() : boolean {
+        return redoResult.value != null
+    }
+
+    /** 重做结果是否正确（模板调用） */
+    function redoResultCorrect() : boolean {
+        const r = redoResult.value
+        if (r == null) return false
+        return r.correct
+    }
+
+    /** 重做结果样式类（模板调用） */
+    function redoResultClass() : string {
+        const r = redoResult.value
+        if (r == null) return ''
+        return r.correct ? 'correct' : 'wrong'
+    }
+
+    /** 重做结果文案（模板调用） */
+    function redoResultLabel() : string {
+        const r = redoResult.value
+        if (r == null) return ''
+        return r.correct ? '回答正确' : '回答错误'
+    }
+
+    /** 重做结果正确答案（模板调用） */
+    function redoResultAnswer() : string {
+        const r = redoResult.value
+        if (r == null) return ''
+        return r.correct_answer
+    }
+
+    /** 选项是否已选中 */
+    function isSelected(key : string) : boolean {
+        return selectedKeys.value.indexOf(key) >= 0
+    }
+
+    /** 答案是否包含某 key */
+    function isAnswerContains(answer : string, key : string) : boolean {
+        return answer.indexOf(key) >= 0
+    }
+
+    /** 选项样式类（模板调用） */
+    function getOptionClass(item : WrongQuestionItem, key : string) : string {
+        const r = redoResult.value
+        if (r != null) {
+            if (isAnswerContains(r.correct_answer, key)) return 'option-correct'
+            if (isSelected(key) && !isAnswerContains(r.correct_answer, key)) return 'option-wrong'
+            return ''
+        }
+        return isSelected(key) ? 'option-selected' : ''
+    }
+
+    /** 选项 key 样式类（模板调用） */
+    function getOptionKeyClass(item : WrongQuestionItem, key : string) : string {
+        const r = redoResult.value
+        if (r != null) {
+            if (isAnswerContains(r.correct_answer, key)) return 'option-key-correct'
+            if (isSelected(key) && !isAnswerContains(r.correct_answer, key)) return 'option-key-wrong'
+            return ''
+        }
+        return isSelected(key) ? 'option-key-selected' : ''
+    }
+
+    /** 点击选项 */
+    function onOptionClick(item : WrongQuestionItem, key : string) : void {
+        if (redoResult.value != null) return
+        if (isMultiChoice(item.type)) {
+            const idx = selectedKeys.value.indexOf(key)
+            if (idx >= 0) {
+                selectedKeys.value.splice(idx, 1)
+            } else {
+                selectedKeys.value.push(key)
+            }
+        } else {
+            // 单选/判断：替换为单元素数组
+            const arr : string[] = [key]
+            selectedKeys.value = arr
+        }
+    }
+
+    async function loadStats() {
+        try {
+            const data = await getWrongQuestionStatsApi()
+            stats.value = data
+        } catch (e) {
+            console.error('[wrong-questions] load stats failed:', e)
+        }
+    }
+
+    async function loadRecords(reset : boolean = false) {
+        if (loading.value) return
+        if (reset) {
+            page.value = 1
+            noMore.value = false
+        }
+        if (noMore.value && !reset) return
+
+        loading.value = true
+        try {
+            const result = await getWrongQuestionsApi(page.value, pageSize, currentType.value)
+            if (reset) {
+                records.value = result.items
+            } else {
+                records.value = records.value.concat(result.items)
+            }
+            total.value = result.total
+            if (records.value.length >= result.total || result.items.length == 0) {
+                noMore.value = true
+            } else {
+                page.value = page.value + 1
+            }
+        } catch (e) {
+            console.error('[wrong-questions] load failed:', e)
+            uni.showToast({ title: '加载错题失败', icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function onTypeClick(val : string) : void {
+        if (currentType.value == val) return
+        currentType.value = val
+        expandedId.value = 0
+        selectedKeys.value = [] as string[]
+        redoResult.value = null
+        loadRecords(true)
+    }
+
+    function onLoadMore() : void {
+        loadRecords(false)
+    }
+
+    function onToggleExpand(qid : number) : void {
+        if (expandedId.value == qid) {
+            // 收起当前题
+            expandedId.value = 0
+        } else {
+            // 展开新题，重置该题的选中与结果
+            expandedId.value = qid
+            selectedKeys.value = [] as string[]
+            redoResult.value = null
+        }
+    }
+
+    /** 提交重做 */
+    async function onSubmitRedo(item : WrongQuestionItem) : Promise<void> {
+        if (selectedKeys.value.length == 0) {
+            uni.showToast({ title: '请选择答案', icon: 'none' })
+            return
+        }
+        // 拼接答案：多选按字母排序拼接，单选/判断直接取
+        let userAnswer = ''
+        if (isMultiChoice(item.type)) {
+            // 拷贝后排序，避免修改原数组
+            const sorted : string[] = []
+            for (let i = 0; i < selectedKeys.value.length; i++) {
+                sorted.push(selectedKeys.value[i])
+            }
+            sorted.sort()
+            userAnswer = sorted.join('')
+        } else {
+            userAnswer = selectedKeys.value[0]
+        }
+
+        uni.showLoading({ title: '提交中...' })
+        try {
+            const data = await redoWrongQuestionApi(item.question_id, userAnswer)
+            // 后端返回 { is_correct, correct_answer, explanation }
+            const isCorrect = `${data['is_correct']}` == 'true' || `${data['is_correct']}` == '1'
+            const correctAnswer = data['correct_answer'] != null ? `${data['correct_answer']}` : item.correct_answer
+            const explanation = data['explanation'] != null ? `${data['explanation']}` : ''
+            const result : RedoResult = {
+                correct: isCorrect,
+                correct_answer: correctAnswer,
+                explanation: explanation,
+            } as RedoResult
+            redoResult.value = result
+
+            // 重做正确后刷新统计
+            if (isCorrect) {
+                loadStats()
+            }
+        } catch (e) {
+            console.error('[wrong-questions] redo failed:', e)
+            uni.showToast({ title: '提交失败', icon: 'none' })
+        } finally {
+            uni.hideLoading()
+        }
+    }
+
+    /** 移出错题本 */
+    function onRemove(item : WrongQuestionItem) : void {
+        uni.showModal({
+            title: '提示',
+            content: '确定将此题移出错题本？',
+            success: (res) => {
+                if (res.confirm) {
+                    doRemove(item)
+                }
+            }
+        })
+    }
+
+    async function doRemove(item : WrongQuestionItem) : Promise<void> {
+        uni.showLoading({ title: '处理中...' })
+        try {
+            await removeWrongQuestionApi(item.question_id)
+            uni.showToast({ title: '已移出错题本', icon: 'success' })
+            // 从列表中移除
+            const newRecords : WrongQuestionItem[] = []
+            for (let i = 0; i < records.value.length; i++) {
+                if (records.value[i].question_id != item.question_id) {
+                    newRecords.push(records.value[i])
+                }
+            }
+            records.value = newRecords
+            total.value = Math.max(0, total.value - 1)
+            if (expandedId.value == item.question_id) {
+                expandedId.value = 0
+                selectedKeys.value = [] as string[]
+                redoResult.value = null
+            }
+            // 刷新统计
+            loadStats()
+        } catch (e) {
+            console.error('[wrong-questions] remove failed:', e)
+            uni.showToast({ title: '移出失败', icon: 'none' })
+        } finally {
+            uni.hideLoading()
+        }
+    }
+
+    /** 导出错题本（使用 downloadFile 处理 .txt 附件） */
+    function onExport() : void {
+        const token = authStore.token.value
+        if (token.length == 0) {
+            uni.showToast({ title: '请先登录', icon: 'none' })
+            return
+        }
+        uni.showLoading({ title: '导出中...' })
+        uni.downloadFile({
+            url: API_BASE_URL + '/wrong-questions/export',
+            header: {
+                'Authorization': 'Bearer ' + token,
+            },
+            success: (res) => {
+                if (res.statusCode == 200) {
+                    uni.openDocument({
+                        filePath: res.tempFilePath,
+                        showMenu: true,
+                        success: () => {
+                            uni.showToast({ title: '导出成功', icon: 'success' })
+                        },
+                        fail: () => {
+                            uni.showToast({ title: '已下载，打开文件失败', icon: 'none' })
+                        }
+                    })
+                } else {
+                    uni.showToast({ title: '导出失败 (' + res.statusCode + ')', icon: 'none' })
+                }
+            },
+            fail: () => {
+                uni.showToast({ title: '导出失败，请检查网络', icon: 'none' })
+            },
+            complete: () => {
+                uni.hideLoading()
+            }
+        })
+    }
+
+    function onBack() : void {
+        uni.navigateBack()
+    }
+
+    onShow(() => {
+        if (records.value.length == 0) {
+            loadRecords(true)
+        }
+        loadStats()
+    })
+</script>
+
+<style>
+    .container {
+        display: flex;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        width: 80rpx;
+        align-items: center;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #ffffff;
+    }
+
+    .header-title {
+        flex: 1;
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+        text-align: center;
+    }
+
+    .header-right {
+        width: 80rpx;
+        align-items: center;
+    }
+
+    .header-action {
+        font-size: 28rpx;
+        color: #ffffff;
+    }
+
+    .content-scroll {
+        flex: 1;
+        height: 0;
+    }
+
+    /* 统计卡片 */
+    .stats-card {
+        margin: 24rpx;
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 32rpx;
+        flex-direction: row;
+        justify-content: space-around;
+        border: 1px solid #eeeeee;
+    }
+
+    .stat-item {
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .stat-num {
+        font-size: 40rpx;
+        font-weight: bold;
+        color: #ff5722;
+        margin-bottom: 8rpx;
+    }
+
+    .stat-label {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .stat-divider {
+        width: 1rpx;
+        background-color: #f0f0f0;
+    }
+
+    /* 筛选条 */
+    .filter-bar {
+        background-color: #ffffff;
+        margin: 0 24rpx 16rpx;
+        border-radius: 12rpx;
+        border: 1px solid #eeeeee;
+    }
+
+    .filter-scroll {
+        white-space: nowrap;
+        border-radius: 12rpx;
+    }
+
+    .filter-list {
+        padding: 16rpx 16rpx;
+        flex-direction: row;
+    }
+
+    .filter-chip {
+        padding: 10rpx 24rpx;
+        border-radius: 32rpx;
+        background-color: #f5f5f5;
+        margin-right: 12rpx;
+    }
+
+    .filter-chip.active {
+        background-color: #ff5722;
+    }
+
+    .filter-chip-text {
+        font-size: 24rpx;
+        color: #666666;
+    }
+
+    .filter-chip.active .filter-chip-text {
+        color: #ffffff;
+    }
+
+    /* 错题列表 */
+    .record-list {
+        flex-direction: column;
+        padding: 0 24rpx;
+    }
+
+    .record-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        margin-bottom: 16rpx;
+        border: 1px solid #eeeeee;
+        flex-direction: column;
+    }
+
+    .record-header {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 16rpx;
+    }
+
+    .record-type-tag {
+        font-size: 20rpx;
+        color: #ffffff;
+        background-color: #ff5722;
+        padding: 4rpx 12rpx;
+        border-radius: 6rpx;
+        margin-right: 12rpx;
+    }
+
+    .record-wrong-count {
+        font-size: 22rpx;
+        color: #f44336;
+        background-color: #ffebee;
+        padding: 4rpx 12rpx;
+        border-radius: 6rpx;
+        margin-right: 12rpx;
+    }
+
+    .record-date {
+        font-size: 22rpx;
+        color: #cccccc;
+    }
+
+    .record-title {
+        font-size: 30rpx;
+        color: #333333;
+        line-height: 1.5;
+        margin-bottom: 16rpx;
+    }
+
+    .record-answers {
+        flex-direction: column;
+        background-color: #fafafa;
+        padding: 16rpx;
+        border-radius: 8rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .answer-row {
+        flex-direction: row;
+        align-items: center;
+        padding: 4rpx 0;
+    }
+
+    .answer-label {
+        font-size: 24rpx;
+        color: #999999;
+        margin-right: 8rpx;
+    }
+
+    .answer-value {
+        font-size: 24rpx;
+        font-weight: bold;
+    }
+
+    .answer-row.wrong .answer-value {
+        color: #f44336;
+    }
+
+    .answer-row.correct .answer-value {
+        color: #4caf50;
+    }
+
+    /* 重做区域 */
+    .redo-section {
+        flex-direction: column;
+        margin-bottom: 16rpx;
+    }
+
+    .option-list {
+        flex-direction: column;
+        margin-bottom: 16rpx;
+    }
+
+    .option-item {
+        flex-direction: row;
+        align-items: center;
+        padding: 20rpx 16rpx;
+        background-color: #f8f9fa;
+        border-radius: 8rpx;
+        margin-bottom: 12rpx;
+        border: 2rpx solid transparent;
+    }
+
+    .option-selected {
+        background-color: #e3f2fd;
+        border-color: #2979ff;
+    }
+
+    .option-correct {
+        background-color: #e8f5e9;
+        border-color: #4caf50;
+    }
+
+    .option-wrong {
+        background-color: #ffebee;
+        border-color: #f44336;
+    }
+
+    .option-key {
+        width: 48rpx;
+        height: 48rpx;
+        border-radius: 24rpx;
+        background-color: #e0e0e0;
+        align-items: center;
+        justify-content: center;
+        margin-right: 16rpx;
+    }
+
+    .option-key-selected {
+        background-color: #2979ff;
+    }
+
+    .option-key-correct {
+        background-color: #4caf50;
+    }
+
+    .option-key-wrong {
+        background-color: #f44336;
+    }
+
+    .option-key-text {
+        font-size: 24rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .option-key-selected .option-key-text {
+        color: #ffffff;
+    }
+
+    .option-key-correct .option-key-text {
+        color: #ffffff;
+    }
+
+    .option-key-wrong .option-key-text {
+        color: #ffffff;
+    }
+
+    .option-text {
+        flex: 1;
+        font-size: 26rpx;
+        color: #333333;
+    }
+
+    .redo-result {
+        flex-direction: column;
+        padding: 16rpx;
+        border-radius: 8rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .redo-result.correct {
+        background-color: #e8f5e9;
+    }
+
+    .redo-result.wrong {
+        background-color: #ffebee;
+    }
+
+    .redo-result-text {
+        font-size: 26rpx;
+        font-weight: bold;
+        margin-bottom: 8rpx;
+    }
+
+    .redo-result.correct .redo-result-text {
+        color: #4caf50;
+    }
+
+    .redo-result.wrong .redo-result-text {
+        color: #f44336;
+    }
+
+    .redo-result-answer {
+        font-size: 24rpx;
+        color: #666666;
+    }
+
+    .redo-actions {
+        flex-direction: row;
+        justify-content: flex-end;
+    }
+
+    .redo-btn {
+        padding: 12rpx 32rpx;
+        border-radius: 32rpx;
+        margin-left: 16rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .redo-btn-primary {
+        background-color: #2979ff;
+    }
+
+    .redo-btn-success {
+        background-color: #4caf50;
+    }
+
+    .redo-btn-danger {
+        background-color: #ffffff;
+        border: 1rpx solid #f44336;
+    }
+
+    .redo-btn-text {
+        font-size: 24rpx;
+        color: #ffffff;
+    }
+
+    .redo-btn-danger .redo-btn-text {
+        color: #f44336;
+    }
+
+    /* 折叠态操作 */
+    .card-actions {
+        flex-direction: row;
+        justify-content: flex-end;
+        padding-top: 8rpx;
+        border-top: 1rpx solid #f5f5f5;
+    }
+
+    .card-action-btn {
+        padding: 8rpx 24rpx;
+        border-radius: 24rpx;
+        background-color: #2979ff;
+        margin-left: 16rpx;
+    }
+
+    .card-action-danger {
+        background-color: #ffffff;
+        border: 1rpx solid #f44336;
+    }
+
+    .card-action-text {
+        font-size: 24rpx;
+        color: #ffffff;
+    }
+
+    .card-action-danger-text {
+        color: #f44336;
+    }
+
+    .empty-tip {
+        align-items: center;
+        padding: 120rpx 0;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .loading-more {
+        align-items: center;
+        padding: 24rpx 0;
+    }
+
+    .loading-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
+</style>

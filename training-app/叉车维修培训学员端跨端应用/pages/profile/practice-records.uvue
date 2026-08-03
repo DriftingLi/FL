@@ -1,0 +1,378 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">练习记录</text>
+            <view class="header-right"></view>
+        </view>
+        <!-- 题型筛选 -->
+        <view class="filter-bar">
+            <scroll-view class="filter-scroll" scroll-x="true">
+                <view class="filter-list">
+                    <view v-for="(opt, idx) in typeOptions" :key="idx"
+                        :class="['filter-chip', { active: currentType == opt.value }]"
+                        @click="onTypeClick(opt.value)">
+                        <text class="filter-chip-text">{{ opt.label }}</text>
+                    </view>
+                </view>
+            </scroll-view>
+        </view>
+        <!-- 汇总 -->
+        <view class="summary">
+            <text class="summary-text">共 {{ total }} 条记录</text>
+            <text v-if="correctCount > 0 || wrongCount > 0" class="summary-correct">对 {{ correctCount }} · 错 {{ wrongCount }}</text>
+        </view>
+        <!-- 记录列表 -->
+        <scroll-view class="record-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+            <view v-if="records.length == 0 && !loading" class="empty-tip">
+                <text class="empty-text">暂无练习记录</text>
+            </view>
+            <view class="record-list">
+                <view v-for="(item, idx) in records" :key="idx" class="record-card">
+                    <view class="record-status" :class="{ correct: item.is_correct, wrong: !item.is_correct }">
+                        <text class="record-status-text">{{ item.is_correct ? '✓' : '✗' }}</text>
+                    </view>
+                    <view class="record-info">
+                        <text class="record-title">{{ item.question_title }}</text>
+                        <view class="record-meta">
+                            <text class="record-tag record-tag-type">{{ getTypeName(item.type) }}</text>
+                            <text class="record-tag record-tag-mode">{{ getModeName(item.practice_type) }}</text>
+                            <text class="record-time">{{ formatDate(item.created_at) }}</text>
+                        </view>
+                    </view>
+                </view>
+            </view>
+            <view v-if="loading" class="loading-more">
+                <text class="loading-text">加载中...</text>
+            </view>
+            <view v-if="noMore && records.length > 0" class="loading-more">
+                <text class="loading-text">没有更多了</text>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onShow } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { getPracticeHistoryApi } from '../../api/practice'
+    import type { PracticeHistoryItem } from '../../types/index'
+
+    type TypeOption = {
+        label : string
+        value : string
+    }
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    // 题型筛选：与后端 type 字段对齐
+    const typeOptions : TypeOption[] = [
+        { label: '全部', value: '' },
+        { label: '单选题', value: 'single_choice' },
+        { label: '多选题', value: 'multiple_choice' },
+        { label: '判断题', value: 'true_false' },
+    ]
+
+    const currentType = ref<string>('')
+    const records = ref<PracticeHistoryItem[]>([])
+    const page = ref<number>(1)
+    const pageSize = 20
+    const total = ref<number>(0)
+    const loading = ref<boolean>(false)
+    const noMore = ref<boolean>(false)
+
+    /** 当前已加载记录中的对/错数（仅当前已加载部分） */
+    const correctCount = computed<number>(() : number => {
+        let cnt = 0
+        for (let i = 0; i < records.value.length; i++) {
+            if (records.value[i].is_correct) cnt++
+        }
+        return cnt
+    })
+
+    const wrongCount = computed<number>(() : number => {
+        return records.value.length - correctCount.value
+    })
+
+    /** 题型名称 */
+    function getTypeName(type : string) : string {
+        if (type == 'single' || type == 'single_choice') return '单选题'
+        if (type == 'multi' || type == 'multiple_choice' || type == 'multi_choice') return '多选题'
+        if (type == 'judge' || type == 'true_false') return '判断题'
+        return '其他'
+    }
+
+    /** 练习模式名称 */
+    function getModeName(mode : string) : string {
+        if (mode == 'free') return '随机练习'
+        if (mode == 'sequential') return '顺序练习'
+        if (mode == 'category') return '章节练习'
+        if (mode == 'knowledge_point') return '专项练习'
+        return '练习'
+    }
+
+    /** 时间字符串截取 YYYY-MM-DD */
+    function formatDate(dateStr : string) : string {
+        if (dateStr.length < 10) return dateStr
+        return dateStr.substring(0, 10)
+    }
+
+    async function loadRecords(reset : boolean = false) {
+        if (loading.value) return
+        if (reset) {
+            page.value = 1
+            noMore.value = false
+        }
+        if (noMore.value && !reset) return
+
+        loading.value = true
+        try {
+            const result = await getPracticeHistoryApi(page.value, pageSize, currentType.value)
+            if (reset) {
+                records.value = result.items
+            } else {
+                records.value = records.value.concat(result.items)
+            }
+            total.value = result.total
+            if (records.value.length >= result.total || result.items.length == 0) {
+                noMore.value = true
+            } else {
+                page.value = page.value + 1
+            }
+        } catch (e) {
+            console.error('[practice-records] load failed:', e)
+            uni.showToast({ title: '加载练习记录失败', icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function onTypeClick(val : string) : void {
+        if (currentType.value == val) return
+        currentType.value = val
+        loadRecords(true)
+    }
+
+    function onLoadMore() : void {
+        loadRecords(false)
+    }
+
+    function onBack() : void {
+        uni.navigateBack()
+    }
+
+    onShow(() => {
+        if (records.value.length == 0) {
+            loadRecords(true)
+        }
+    })
+</script>
+
+<style>
+    .container {
+        display: flex;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        width: 60rpx;
+        align-items: center;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #ffffff;
+    }
+
+    .header-title {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .header-right {
+        width: 60rpx;
+    }
+
+    .filter-bar {
+        background-color: #ffffff;
+        border-bottom: 1rpx solid #f0f0f0;
+    }
+
+    .filter-scroll {
+        white-space: nowrap;
+    }
+
+    .filter-list {
+        padding: 20rpx 24rpx;
+        flex-direction: row;
+    }
+
+    .filter-chip {
+        padding: 12rpx 28rpx;
+        border-radius: 32rpx;
+        background-color: #f5f5f5;
+        margin-right: 16rpx;
+    }
+
+    .filter-chip.active {
+        background-color: #2979ff;
+    }
+
+    .filter-chip-text {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    .filter-chip.active .filter-chip-text {
+        color: #ffffff;
+    }
+
+    .summary {
+        padding: 20rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .summary-text {
+        font-size: 26rpx;
+        color: #999999;
+    }
+
+    .summary-correct {
+        font-size: 24rpx;
+        color: #2979ff;
+        margin-left: 16rpx;
+    }
+
+    .record-scroll {
+        flex: 1;
+        height: 0;
+        padding: 0 24rpx;
+    }
+
+    .record-list {
+        flex-direction: column;
+    }
+
+    .record-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        margin-bottom: 16rpx;
+        border: 1px solid #eeeeee;
+        flex-direction: row;
+        align-items: flex-start;
+    }
+
+    .record-status {
+        width: 56rpx;
+        height: 56rpx;
+        border-radius: 28rpx;
+        align-items: center;
+        justify-content: center;
+        margin-right: 20rpx;
+    }
+
+    .record-status.correct {
+        background-color: #e8f5e9;
+    }
+
+    .record-status.wrong {
+        background-color: #ffebee;
+    }
+
+    .record-status-text {
+        font-size: 32rpx;
+        font-weight: bold;
+    }
+
+    .record-status.correct .record-status-text {
+        color: #4caf50;
+    }
+
+    .record-status.wrong .record-status-text {
+        color: #f44336;
+    }
+
+    .record-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .record-title {
+        font-size: 28rpx;
+        color: #333333;
+        margin-bottom: 12rpx;
+        lines: 2;
+        text-overflow: ellipsis;
+    }
+
+    .record-meta {
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .record-tag {
+        font-size: 20rpx;
+        padding: 4rpx 12rpx;
+        border-radius: 6rpx;
+        margin-right: 12rpx;
+        margin-bottom: 4rpx;
+    }
+
+    .record-tag-type {
+        color: #ffffff;
+        background-color: #2979ff;
+    }
+
+    .record-tag-mode {
+        color: #666666;
+        background-color: #f0f0f0;
+    }
+
+    .record-time {
+        font-size: 20rpx;
+        color: #cccccc;
+        margin-bottom: 4rpx;
+    }
+
+    .empty-tip {
+        align-items: center;
+        padding: 120rpx 0;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .loading-more {
+        align-items: center;
+        padding: 24rpx 0;
+    }
+
+    .loading-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
+</style>

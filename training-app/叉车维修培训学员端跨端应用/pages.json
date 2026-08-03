@@ -71,6 +71,27 @@
 			}
 		},
 		{
+			"path": "pages/profile/records",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "学习记录"
+			}
+		},
+		{
+			"path": "pages/profile/practice-records",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "练习记录"
+			}
+		},
+		{
+			"path": "pages/profile/wrong-questions",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "错题本"
+			}
+		},
+		{
 			"path": "pages/practice/practice",
 			"style": {
 				"navigationStyle": "custom",

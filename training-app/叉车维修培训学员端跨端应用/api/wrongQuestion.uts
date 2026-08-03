@@ -119,14 +119,22 @@ function buildWrongQuestionStats(obj : UTSJSONObject) : WrongQuestionStats {
  * @param page 页码，默认 1
  * @param pageSize 每页条数，默认 20
  * @param type 题型筛选（可选，空字符串表示不筛选）
+ * @param knowledgePointId 知识点筛选（可选，0 表示不筛选）
+ * @param minWrongCount 最少错误次数筛选（可选，0 表示不筛选）
  */
-export function getWrongQuestionsApi(page : number = 1, pageSize : number = 20, type : string = '') : Promise<WrongQuestionListResult> {
+export function getWrongQuestionsApi(page : number = 1, pageSize : number = 20, type : string = '', knowledgePointId : number = 0, minWrongCount : number = 0) : Promise<WrongQuestionListResult> {
 	const params : UTSJSONObject = {
 		page: page.toString(),
 		page_size: pageSize.toString(),
 	} as UTSJSONObject
 	if (type.length > 0) {
 		params['type'] = type
+	}
+	if (knowledgePointId > 0) {
+		params['knowledge_point_id'] = knowledgePointId.toString()
+	}
+	if (minWrongCount > 0) {
+		params['min_wrong_count'] = minWrongCount.toString()
 	}
 	return get('/wrong-questions', params).then((data : UTSJSONObject) : WrongQuestionListResult => {
 		console.log('[getWrongQuestionsApi] raw data:', JSON.stringify(data))

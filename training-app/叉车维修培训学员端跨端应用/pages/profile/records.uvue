@@ -1,0 +1,357 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">学习记录</text>
+            <view class="header-right"></view>
+        </view>
+        <!-- 日期快捷筛选 -->
+        <view class="filter-bar">
+            <scroll-view class="filter-scroll" scroll-x="true">
+                <view class="filter-list">
+                    <view v-for="(opt, idx) in rangeOptions" :key="idx"
+                        :class="['filter-chip', { active: currentRange == opt.value }]"
+                        @click="onRangeClick(opt.value)">
+                        <text class="filter-chip-text">{{ opt.label }}</text>
+                    </view>
+                </view>
+            </scroll-view>
+        </view>
+        <!-- 汇总 -->
+        <view class="summary">
+            <text class="summary-text">共 {{ total }} 条记录</text>
+            <text v-if="rangeLabel.length > 0" class="summary-range">{{ rangeLabel }}</text>
+        </view>
+        <!-- 记录列表 -->
+        <scroll-view class="record-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+            <view v-if="records.length == 0 && !loading" class="empty-tip">
+                <text class="empty-text">暂无学习记录</text>
+            </view>
+            <view class="record-list">
+                <view v-for="(item, idx) in records" :key="idx" class="record-card">
+                    <view class="record-top">
+                        <text class="record-course">{{ item.course_name }}</text>
+                        <text class="record-date">{{ item.study_date }}</text>
+                    </view>
+                    <view class="record-bottom">
+                        <text class="record-chapter">{{ item.chapter_title }}</text>
+                        <text class="record-duration">{{ formatMinutes(item.study_duration) }}</text>
+                    </view>
+                </view>
+            </view>
+            <view v-if="loading" class="loading-more">
+                <text class="loading-text">加载中...</text>
+            </view>
+            <view v-if="noMore && records.length > 0" class="loading-more">
+                <text class="loading-text">没有更多了</text>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onShow } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { getRecordsApi } from '../../api/student'
+    import type { StudyRecord } from '../../types/index'
+
+    type RangeOption = {
+        label : string
+        value : string
+    }
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const rangeOptions : RangeOption[] = [
+        { label: '全部', value: 'all' },
+        { label: '近7天', value: '7' },
+        { label: '近30天', value: '30' },
+        { label: '近90天', value: '90' },
+    ]
+
+    const currentRange = ref<string>('all')
+    const records = ref<StudyRecord[]>([])
+    const page = ref<number>(1)
+    const pageSize = 20
+    const total = ref<number>(0)
+    const loading = ref<boolean>(false)
+    const noMore = ref<boolean>(false)
+
+    /** 计算 YYYY-MM-DD 的日期字符串 */
+    function dateToYMD(d : Date) : string {
+        const yyyy = d.getFullYear().toString()
+        const MM = (d.getMonth() + 1).toString().padStart(2, '0')
+        const dd = d.getDate().toString().padStart(2, '0')
+        return yyyy + '-' + MM + '-' + dd
+    }
+
+    /** 分钟数 → 可读字符串 */
+    function formatMinutes(minutes : number) : string {
+        if (minutes <= 0) return '0 分钟'
+        const h = Math.floor(minutes / 60)
+        const m = Math.floor(minutes % 60)
+        if (h > 0) {
+            return h + ' 小时 ' + m + ' 分钟'
+        }
+        return m + ' 分钟'
+    }
+
+    /** N 天前的日期字符串 */
+    function daysAgoStr(days : number) : string {
+        const DAY_MS = 24 * 60 * 60 * 1000
+        const d = new Date(Date.now() - days * DAY_MS)
+        return dateToYMD(d)
+    }
+
+    /** 当前筛选区间的可读描述 */
+    const rangeLabel = computed<string>(() : string => {
+        if (currentRange.value == 'all') return ''
+        if (currentRange.value == '7') return '近7天'
+        if (currentRange.value == '30') return '近30天'
+        if (currentRange.value == '90') return '近90天'
+        return ''
+    })
+
+    /** 根据当前筛选区间生成 start_date / end_date */
+    function buildDateRange() : string[] {
+        const result : string[] = []
+        if (currentRange.value == 'all') {
+            result.push('')
+            result.push('')
+            return result
+        }
+        const days = parseInt(currentRange.value)
+        result.push(daysAgoStr(days - 1))
+        result.push(dateToYMD(new Date()))
+        return result
+    }
+
+    async function loadRecords(reset : boolean = false) {
+        if (loading.value) return
+        if (reset) {
+            page.value = 1
+            noMore.value = false
+        }
+        if (noMore.value && !reset) return
+
+        loading.value = true
+        const range = buildDateRange()
+        try {
+            const result = await getRecordsApi(page.value, pageSize, range[0], range[1])
+            if (reset) {
+                records.value = result.records
+            } else {
+                records.value = records.value.concat(result.records)
+            }
+            total.value = result.total
+            if (records.value.length >= result.total || result.records.length == 0) {
+                noMore.value = true
+            } else {
+                page.value = page.value + 1
+            }
+        } catch (e) {
+            console.error('[records] load failed:', e)
+            uni.showToast({ title: '加载学习记录失败', icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function onRangeClick(val : string) : void {
+        if (currentRange.value == val) return
+        currentRange.value = val
+        loadRecords(true)
+    }
+
+    function onLoadMore() : void {
+        loadRecords(false)
+    }
+
+    function onBack() : void {
+        uni.navigateBack()
+    }
+
+    onShow(() => {
+        if (records.value.length == 0) {
+            loadRecords(true)
+        }
+    })
+</script>
+
+<style>
+    .container {
+        display: flex;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        width: 60rpx;
+        align-items: center;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #ffffff;
+    }
+
+    .header-title {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .header-right {
+        width: 60rpx;
+    }
+
+    .filter-bar {
+        background-color: #ffffff;
+        border-bottom: 1rpx solid #f0f0f0;
+    }
+
+    .filter-scroll {
+        white-space: nowrap;
+    }
+
+    .filter-list {
+        padding: 20rpx 24rpx;
+        flex-direction: row;
+    }
+
+    .filter-chip {
+        padding: 12rpx 28rpx;
+        border-radius: 32rpx;
+        background-color: #f5f5f5;
+        margin-right: 16rpx;
+    }
+
+    .filter-chip.active {
+        background-color: #2979ff;
+    }
+
+    .filter-chip-text {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    .filter-chip.active .filter-chip-text {
+        color: #ffffff;
+    }
+
+    .summary {
+        padding: 20rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .summary-text {
+        font-size: 26rpx;
+        color: #999999;
+    }
+
+    .summary-range {
+        font-size: 24rpx;
+        color: #2979ff;
+        margin-left: 16rpx;
+    }
+
+    .record-scroll {
+        flex: 1;
+        height: 0;
+        padding: 0 24rpx;
+    }
+
+    .record-list {
+        flex-direction: column;
+    }
+
+    .record-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 28rpx 24rpx;
+        margin-bottom: 16rpx;
+        border: 1px solid #eeeeee;
+        flex-direction: column;
+    }
+
+    .record-top {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16rpx;
+    }
+
+    .record-course {
+        flex: 1;
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        lines: 1;
+        text-overflow: ellipsis;
+        margin-right: 16rpx;
+    }
+
+    .record-date {
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    .record-bottom {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .record-chapter {
+        flex: 1;
+        font-size: 26rpx;
+        color: #666666;
+        lines: 1;
+        text-overflow: ellipsis;
+        margin-right: 16rpx;
+    }
+
+    .record-duration {
+        font-size: 24rpx;
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    .empty-tip {
+        align-items: center;
+        padding: 120rpx 0;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .loading-more {
+        align-items: center;
+        padding: 24rpx 0;
+    }
+
+    .loading-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
+</style>

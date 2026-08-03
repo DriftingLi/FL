@@ -89,14 +89,14 @@
             </view>
 
             <!-- 完成学习按钮 -->
-            <view class="complete-bar">
+            <!-- <view class="complete-bar">
                 <view v-if="detail!.study_status != 'completed'" class="complete-btn" @click="onComplete">
                     <text class="complete-btn-text">完成本章学习</text>
                 </view>
                 <view v-else class="completed-tag">
                     <text class="completed-tag-text">✓ 本章已完成</text>
                 </view>
-            </view>
+            </view> -->
 
             <!-- 上/下章导航 -->
             <view class="chapter-nav">
