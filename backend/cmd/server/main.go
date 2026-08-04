@@ -78,6 +78,16 @@ func main() {
 	}
 	slog.Info("默认用户就绪")
 
+	// 4.5 清理上次进程遗留的异步生成任务（避免重启后前端一直显示「生成中」）
+	genSvc := service.NewContentGenerateService(gormDB, nil)
+	genSvc.CleanupInterruptedTasks()
+
+	// 4.6 检查 AI 配置：未配置任何启用模型时告警（简答题评分等 AI 功能将走导师人工评分）
+	aiConfigSvc := service.NewAIConfigService(gormDB, cfg.SecretKey)
+	if !aiConfigSvc.HasActiveConfigs(context.Background()) {
+		slog.Warn("未检测到已启用的 AI 模型配置：简答题评分将走导师人工评分，AI 助手/课程内容生成不可用；请在管理端「AI 设置」中配置模型")
+	}
+
 	// 5. 确保上传/PDF 目录存在
 	ensureUploadDirs(cfg)
 

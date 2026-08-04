@@ -209,6 +209,26 @@ func (s *ContentGenerateService) failTask(taskID int, errMsg string) {
 	}
 }
 
+// CleanupInterruptedTasks 服务启动时把上次进程遗留的 pending/processing 任务标记为 failed。
+// 进程重启时运行中的 goroutine 直接丢失，DB 里的任务若不清理会永远停在「生成中」，
+// 前端轮询会一直显示生成中。此函数在服务启动阶段调用一次。
+func (s *ContentGenerateService) CleanupInterruptedTasks() {
+	res := s.db.Model(&model.AsyncTask{}).
+		Where("status IN ?", []string{"pending", "processing"}).
+		Updates(map[string]any{
+			"status":     "failed",
+			"error":      "服务重启，任务中断",
+			"updated_at": time.Now(),
+		})
+	if res.Error != nil {
+		slog.Error("清理遗留异步任务失败", "error", res.Error)
+		return
+	}
+	if res.RowsAffected > 0 {
+		slog.Warn("已清理服务重启遗留的异步任务", "count", res.RowsAffected)
+	}
+}
+
 // GetTaskStatus 查询任务状态。返回前端轮询所需的 GenTaskStatus 结构。
 func (s *ContentGenerateService) GetTaskStatus(taskID string) (*GenTaskStatus, error) {
 	var task model.AsyncTask

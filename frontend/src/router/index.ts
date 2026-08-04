@@ -82,12 +82,6 @@ const routes: RouteRecordRaw[] = [
         meta: { navKey: 'chapter', navLabel: '章节学习', navGroup: 'training' }
       },
       {
-        path: 'exam/:courseId',
-        name: 'Exam',
-        component: () => import('@/pages/student/Exam.vue'),
-        meta: { navKey: 'exam', navLabel: '课程考试', navGroup: 'training' }
-      },
-      {
         path: 'question-bank',
         name: 'QuestionBank',
         component: () => import('@/pages/student/QuestionBank.vue'),
