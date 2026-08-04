@@ -47,26 +47,26 @@ export interface ForumListParams {
 
 export const forumApi = {
   listTopics(params: ForumListParams) {
-    return request.get('/forum/topics', { params })
+    return request.get<{ topics: ForumTopicItem[]; total: number }>('/forum/topics', { params })
   },
 
   createTopic(data: { chapter_id?: number | null; title: string; content: string }) {
-    return request.post('/forum/topics', data)
+    return request.post<ForumTopicItem>('/forum/topics', data)
   },
 
   getTopic(id: number) {
-    return request.get(`/forum/topics/${id}`)
+    return request.get<{ topic: ForumTopicItem; replies: ForumReplyItem[] }>(`/forum/topics/${id}`)
   },
 
   replyTopic(id: number, content: string, parentReplyId?: number | null) {
-    return request.post(`/forum/topics/${id}/replies`, { content, parent_reply_id: parentReplyId || null })
+    return request.post<ForumReplyItem>(`/forum/topics/${id}/replies`, { content, parent_reply_id: parentReplyId || null })
   },
 
   deleteTopic(id: number) {
-    return request.delete(`/forum/topics/${id}`)
+    return request.delete<null>(`/forum/topics/${id}`)
   },
 
   deleteReply(id: number) {
-    return request.delete(`/forum/replies/${id}`)
+    return request.delete<null>(`/forum/replies/${id}`)
   }
 }

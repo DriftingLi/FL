@@ -141,7 +141,12 @@ onMounted(async () => {
     try {
       const res = await questionBankApi.getQuestion(Number(route.query.id))
       const q = res.data
-      form.value = { ...form.value, ...q }
+      form.value = {
+        ...form.value,
+        ...q,
+        options: (q.options as { A: string; B: string; C: string; D: string } | undefined) ?? form.value.options,
+        knowledge_point_id: q.knowledge_point_id ?? form.value.knowledge_point_id
+      }
       if (q.type === 'multi_choice' && q.answer) {
         multiAnswer.value = q.answer.split(',')
       }

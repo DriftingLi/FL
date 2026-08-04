@@ -178,7 +178,8 @@ async function loadParticipants() {
   loading.value = true
   try {
     const res = await gradingApi.getSubmittedParticipants()
-    participants.value = res.data || []
+    const data = res.data || []
+    participants.value = Array.isArray(data) ? data : (data.participants || data.items || [])
   } catch (e) {} finally { loading.value = false }
 }
 

@@ -11,11 +11,16 @@ export interface ApiResponse<T = any> {
   data: T
 }
 
-/** 请求实例的类型：拦截器已将 AxiosResponse 解包为 ApiResponse */
+/** 请求实例的类型：拦截器已将 AxiosResponse 解包为 ApiResponse；
+ *  responseType 为 blob/arraybuffer 时拦截器直接放行原始响应数据（Blob/ArrayBuffer） */
 type TypedRequest = {
+  get<T = any>(url: string, config: AxiosRequestConfig & { responseType: 'blob' }): Promise<Blob>
+  get<T = any>(url: string, config: AxiosRequestConfig & { responseType: 'arraybuffer' }): Promise<ArrayBuffer>
   get<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>>
+  post<T = any>(url: string, data: any, config: AxiosRequestConfig & { responseType: 'blob' }): Promise<Blob>
   post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>>
   put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>>
+  delete<T = any>(url: string, config: AxiosRequestConfig & { responseType: 'blob' }): Promise<Blob>
   delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>>
   patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>>
   request<T = any>(config: AxiosRequestConfig): Promise<ApiResponse<T>>

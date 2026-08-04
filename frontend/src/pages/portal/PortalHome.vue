@@ -496,7 +496,7 @@ const displayList = computed<FeaturedListItem[]>(() => {
 async function loadFeaturedList() {
   try {
     const res = await featuredApi.getPublicList({ page: 1, page_size: 6 })
-    featuredList.value = (res?.data?.items as FeaturedListItem[]) || []
+    featuredList.value = ((res?.data?.items as unknown as FeaturedListItem[]) || [])
     activeFeaturedIndex.value = 0
     // 复位滚动位置到第一张（避免上次留下偏移）
     const track = featuredTrackRef.value

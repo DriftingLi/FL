@@ -69,13 +69,13 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
-import { levelExamApi } from '@/api/levelExam'
+import { levelExamApi, type LevelExamSession } from '@/api/levelExam'
 
 const statusMap: Record<string, string> = { upcoming: '未开始', ongoing: '进行中', finished: '已结束' }
 const statusType: Record<string, string> = { upcoming: 'info', ongoing: 'success', finished: '' }
 
 const loading = ref(false)
-const sessions = ref<{ id: number; name: string; start_time: string; end_time: string }[]>([])
+const sessions = ref<LevelExamSession[]>([])
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const submitting = ref(false)

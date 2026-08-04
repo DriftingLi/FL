@@ -29,10 +29,10 @@ export const notificationApi = {
   },
 
   markRead(id: number) {
-    return request.post(`/notifications/${id}/read`)
+    return request.post<null>(`/notifications/${id}/read`)
   },
 
   markAllRead() {
-    return request.post('/notifications/read-all')
+    return request.post<null>('/notifications/read-all')
   }
 }

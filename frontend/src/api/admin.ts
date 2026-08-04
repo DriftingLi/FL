@@ -222,169 +222,239 @@ export interface ChapterPayload {
   order_num?: number
 }
 
+// ===== 响应类型 =====
+
+/** 管理员课程列表项 */
+export interface AdminCourseItem {
+  course_id: number
+  name: string
+  category?: string
+  cover_image?: string
+  description?: string
+  duration?: number
+  status?: number
+  chapter_count?: number
+  created_at?: string
+  [key: string]: unknown
+}
+
+/** 管理员课程详情（含章节） */
+export interface AdminChapter {
+  chapter_id: number
+  title: string
+  content?: string
+  content_type?: string
+  content_url?: string
+  file_url?: string
+  description?: string
+  duration?: number
+  order_num?: number
+  [key: string]: unknown
+}
+
+/** 管理员课程详情（含章节） */
+export interface AdminCourseDetail {
+  course_info?: AdminCourseItem
+  chapters?: AdminChapter[]
+  [key: string]: unknown
+}
+
+/** 内容生成任务（轮询状态用） */
+export interface GenerateTask {
+  task_id: string
+  status: string
+  total?: number
+  completed?: number
+  results?: {
+    chapter_id: number
+    title: string
+    status: string
+    content?: string
+    error?: string
+  }[]
+  [key: string]: unknown
+}
+
+/** 管理员统计 */
+export interface AdminStatistics {
+  overview?: Record<string, unknown>
+  course_stats?: { name: string; study_count: number; total_duration: number; avg_progress: number }[]
+  [key: string]: unknown
+}
+
+/** 导师管理列表项 */
+export interface AdminTutor {
+  tutor_id: number
+  username: string
+  name: string
+  status: number
+  created_at?: string
+  [key: string]: unknown
+}
+
 export const adminApi = {
   // ===== HRWAI 用户管理(统一) =====
   getHrwaiUsers(params: AdminHrwaiUsersQuery) {
-    return request.get('/admin/hrwai-users', { params })
+    return request.get<{ list: HrwaiUser[]; total: number }>('/admin/hrwai-users', { params })
   },
 
   createHrwaiUser(data: CreateHrwaiUserPayload) {
-    return request.post('/admin/hrwai-users', data)
+    return request.post<HrwaiUser>('/admin/hrwai-users', data)
   },
 
   updateHrwaiUser(id: number, data: UpdateHrwaiUserPayload) {
-    return request.put(`/admin/hrwai-users/${id}`, data)
+    return request.put<HrwaiUser>(`/admin/hrwai-users/${id}`, data)
   },
 
   resetHrwaiUserPassword(id: number, password: string) {
-    return request.put(`/admin/hrwai-users/${id}/password`, { password })
+    return request.put<null>(`/admin/hrwai-users/${id}/password`, { password })
   },
 
   toggleHrwaiUserStatus(id: number) {
-    return request.put(`/admin/hrwai-users/${id}/status`)
+    return request.put<HrwaiUser>(`/admin/hrwai-users/${id}/status`)
   },
 
   deleteHrwaiUser(id: number) {
-    return request.delete(`/admin/hrwai-users/${id}`)
+    return request.delete<null>(`/admin/hrwai-users/${id}`)
   },
 
   // ===== 导师管理 =====
   getTutors(params: AdminTutorsQuery) {
-    return request.get('/admin/tutors', { params })
+    return request.get<{ tutors: AdminTutor[]; total: number }>('/admin/tutors', { params })
   },
 
   addTutor(data: AddTutorPayload) {
-    return request.post('/admin/tutor', data)
+    return request.post<AdminTutor>('/admin/tutor', data)
   },
 
   deleteTutor(id: number) {
-    return request.delete(`/admin/tutor/${id}`)
+    return request.delete<null>(`/admin/tutor/${id}`)
   },
 
   resetTutorPassword(id: number, password: string) {
-    return request.put(`/admin/tutor/${id}/password`, { password })
+    return request.put<null>(`/admin/tutor/${id}/password`, { password })
   },
 
   toggleTutorStatus(id: number) {
-    return request.put(`/admin/tutor/${id}/status`)
+    return request.put<AdminTutor>(`/admin/tutor/${id}/status`)
   },
 
   getStatistics() {
-    return request.get('/admin/statistics')
+    return request.get<AdminStatistics>('/admin/statistics')
   },
 
   generateContent(data: GenerateContentPayload) {
-    return request.post('/admin/course/generate-content', data)
+    return request.post<GenerateTask>('/admin/course/generate-content', data)
   },
 
   getGenerateStatus(taskId: string) {
-    return request.get(`/admin/course/generate-content/${taskId}`)
+    return request.get<GenerateTask>(`/admin/course/generate-content/${taskId}`)
   },
 
   getCourses(params: AdminCoursesQuery) {
-    return request.get('/admin/courses', { params })
+    return request.get<{ courses: AdminCourseItem[]; total: number }>('/admin/courses', { params })
   },
 
   getCourseDetail(id: number) {
-    return request.get(`/admin/course/${id}`)
+    return request.get<AdminCourseDetail>(`/admin/course/${id}`)
   },
 
   createCourse(data: CoursePayload) {
-    return request.post('/admin/course', data)
+    return request.post<AdminCourseItem>('/admin/course', data)
   },
 
   updateCourse(id: number, data: CoursePayload) {
-    return request.put(`/admin/course/${id}`, data)
+    return request.put<AdminCourseItem>(`/admin/course/${id}`, data)
   },
 
   deleteCourse(id: number) {
-    return request.delete(`/admin/course/${id}`)
+    return request.delete<null>(`/admin/course/${id}`)
   },
 
   createChapter(courseId: number, data: ChapterPayload) {
-    return request.post(`/admin/course/${courseId}/chapter`, data)
+    return request.post<{ chapter_id: number }>(`/admin/course/${courseId}/chapter`, data)
   },
 
   updateChapter(chapterId: number, data: ChapterPayload) {
-    return request.put(`/admin/chapter/${chapterId}`, data)
+    return request.put<{ chapter_id: number }>(`/admin/chapter/${chapterId}`, data)
   },
 
   deleteChapter(chapterId: number) {
-    return request.delete(`/admin/chapter/${chapterId}`)
+    return request.delete<null>(`/admin/chapter/${chapterId}`)
   },
 
   // ===== AI 多配置 =====
 
   listAIConfigs() {
-    return request.get('/admin/ai-configs')
+    return request.get<AIConfig[]>('/admin/ai-configs')
   },
 
   createAIConfig(data: CreateAIConfigPayload) {
-    return request.post('/admin/ai-configs', data)
+    return request.post<AIConfig>('/admin/ai-configs', data)
   },
 
   updateAIConfig(id: number, data: UpdateAIConfigPayload) {
-    return request.put(`/admin/ai-configs/${id}`, data)
+    return request.put<AIConfig>(`/admin/ai-configs/${id}`, data)
   },
 
   deleteAIConfig(id: number) {
-    return request.delete(`/admin/ai-configs/${id}`)
+    return request.delete<null>(`/admin/ai-configs/${id}`)
   },
 
   testAIConfig(id: number) {
-    return request.post(`/admin/ai-configs/${id}/test`)
+    return request.post<{ ok?: boolean; message?: string }>(`/admin/ai-configs/${id}/test`)
   },
 
   // ===== 功能绑定 =====
 
   listFeatureBindings() {
-    return request.get('/admin/ai-feature-bindings')
+    return request.get<FeatureBinding[]>('/admin/ai-feature-bindings')
   },
 
   setFeatureBinding(featureKey: string, configId: number) {
-    return request.put(`/admin/ai-feature-bindings/${featureKey}`, { config_id: configId })
+    return request.put<null>(`/admin/ai-feature-bindings/${featureKey}`, { config_id: configId })
   },
 
   // 解除多绑定功能的单个配置绑定
   unbindFeatureConfig(featureKey: string, configId: number) {
-    return request.delete(`/admin/ai-feature-bindings/${featureKey}/configs/${configId}`)
+    return request.delete<null>(`/admin/ai-feature-bindings/${featureKey}/configs/${configId}`)
   },
 
   // ===== 资料审核 =====
 
   listProfileReviews(params: ProfileReviewsQuery) {
-    return request.get('/admin/profile-reviews', { params })
+    return request.get<{ requests: ProfileChangeRequest[]; total: number }>('/admin/profile-reviews', { params })
   },
 
   approveProfileReview(id: number) {
-    return request.post(`/admin/profile-reviews/${id}/approve`)
+    return request.post<null>(`/admin/profile-reviews/${id}/approve`)
   },
 
   rejectProfileReview(id: number, reason: string) {
-    return request.post(`/admin/profile-reviews/${id}/reject`, { reason })
+    return request.post<null>(`/admin/profile-reviews/${id}/reject`, { reason })
   },
 
   // ===== 论坛管理 =====
 
   listAdminForumTopics(params: AdminForumListParams) {
-    return request.get('/admin/forum/topics', { params })
+    return request.get<{ topics: AdminForumTopic[]; total: number }>('/admin/forum/topics', { params })
   },
 
   getAdminForumTopic(id: number) {
-    return request.get(`/admin/forum/topics/${id}`)
+    return request.get<{ topic?: AdminForumTopic; replies?: AdminForumReply[] }>(`/admin/forum/topics/${id}`)
   },
 
   deleteAdminForumTopic(id: number) {
-    return request.delete(`/admin/forum/topics/${id}`)
+    return request.delete<null>(`/admin/forum/topics/${id}`)
   },
 
   deleteAdminForumReply(id: number) {
-    return request.delete(`/admin/forum/replies/${id}`)
+    return request.delete<null>(`/admin/forum/replies/${id}`)
   },
 
   // ===== 审计日志 =====
 
   listAuditLogs(params: AuditLogsQuery) {
-    return request.get('/admin/audit-logs', { params })
+    return request.get<{ items: AuditLogItem[]; total: number }>('/admin/audit-logs', { params })
   }
 }

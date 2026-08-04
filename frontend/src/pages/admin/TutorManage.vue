@@ -120,7 +120,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { Plus, Search, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { adminApi } from '@/api/admin'
+import { adminApi, type AdminTutor } from '@/api/admin'
 import { usernameRules, passwordRules, nameRules } from '@/utils/validate'
 
 interface TutorRow {
@@ -132,7 +132,7 @@ interface TutorRow {
 }
 
 const loading = ref(false)
-const tutors = ref<TutorRow[]>([])
+const tutors = ref<AdminTutor[]>([])
 const searchKeyword = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)

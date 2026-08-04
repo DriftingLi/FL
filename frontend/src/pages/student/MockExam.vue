@@ -135,7 +135,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Timer } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { mockExamApi } from '@/api/mockExam'
+import { mockExamApi, type MockExamHistoryItem } from '@/api/mockExam'
 import { typeMap } from '@/constants/question'
 import type { Question } from '@/types/question'
 
@@ -149,7 +149,7 @@ const answers = ref<any>({})
 const currentIdx = ref(0)
 const remainingTime = ref(0)
 const examResult = ref<any>({})
-const history = ref<{ id: number; score?: number }[]>([])
+const history = ref<MockExamHistoryItem[]>([])
 let timer: ReturnType<typeof setInterval> | null = null
 
 const currentQuestion = computed(() => questions.value[currentIdx.value] || {})
