@@ -95,6 +95,7 @@ import { Timer } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { levelExamApi } from '@/api/levelExam'
 import { typeMap, sessionStatusMap as statusMap } from '@/constants/question'
+import type { Question } from '@/types/question'
 
 const statusType: Record<string, string> = { upcoming: 'info', ongoing: 'success', finished: '' }
 
@@ -103,8 +104,8 @@ const exams = ref([])
 
 const inExam = ref(false)
 const examTitle = ref('')
-const participantId = ref(null)
-const examQuestions = ref([])
+const participantId = ref<number | null>(null)
+const examQuestions = ref<Question[]>([])
 const examAnswers = ref<any>({})
 const qIdx = ref(0)
 const remainingTime = ref(0)
@@ -182,7 +183,7 @@ async function enterExam(sessionId: number) {
 function startTimer() {
   if (timer) clearInterval(timer)
   timer = setInterval(() => {
-    if (remainingTime.value <= 0) { clearInterval(timer); autoSubmit(); return }
+    if (remainingTime.value <= 0) { if (timer) clearInterval(timer); autoSubmit(); return }
     remainingTime.value--
     if (remainingTime.value % 30 === 0) saveProgress()
   }, 1000)

@@ -78,8 +78,8 @@ const props = defineProps({
 
 const resolvedSrc = computed(() => resolveFileUrl(props.src))
 
-const videoRef = ref(null)
-const wrapperRef = ref(null)
+const videoRef = ref<HTMLVideoElement | null>(null)
+const wrapperRef = ref<HTMLDivElement | null>(null)
 const error = ref(false)
 const errorMessage = ref('视频加载失败，请稍后重试')
 const buffering = ref(false)

@@ -138,22 +138,23 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { questionBankApi } from '@/api/questionBank'
+import type { Question } from '@/types/question'
 
 const typeMap: Record<string, string> = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
 const statusType: Record<string, string> = { draft: 'info', pending: 'warning', published: 'success' }
 
 const loading = ref(false)
-const questions = ref([])
+const questions = ref<Question[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const filters = ref({ type: '', status: 'pending', keyword: '' })
-const selectedIds = ref([])
+const selectedIds = ref<number[]>([])
 const pendingCount = ref(0)
 
 const detailVisible = ref(false)
-const currentQuestion = ref(null)
+const currentQuestion = ref<(Question & { reject_reason?: string }) | null>(null)
 
 // 驳回相关
 const rejectDialogVisible = ref(false)

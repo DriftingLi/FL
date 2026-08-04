@@ -129,7 +129,7 @@ const breadcrumbs = computed(() => {
   return crumbs
 })
 
-async function handleCommand(command) {
+async function handleCommand(command: string) {
   if (command === 'logout') {
     try {
       await ElMessageBox.confirm('确定要退出登录吗？', '提示', {

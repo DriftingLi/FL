@@ -15,7 +15,7 @@
     <div v-if="wrongList.length > 0">
       <el-card v-for="item in wrongList" :key="item.id" class="wrong-item">
         <div class="wrong-header">
-          <el-tag size="small">{{ typeMap[item.question?.type] }}</el-tag>
+          <el-tag size="small">{{ item.question?.type ? typeMap[item.question.type] : '' }}</el-tag>
           <span class="wrong-count">错误 {{ item.wrong_count }} 次</span>
         </div>
         <p class="wrong-content">{{ item.question?.content }}</p>
@@ -30,9 +30,9 @@
               </div>
             </template>
             <template v-else>
-              <div v-for="(label, key) in item.question?.options" :key="key"
+              <div v-for="(label, key) in item.question?.options ?? {}" :key="key"
                    class="redo-option" :class="{ selected: redoAnswer.includes(key) }"
-                   @click="toggleRedoOption(key, item.question.type)">
+                   @click="toggleRedoOption(key, item.question?.type ?? 'single_choice')">
                 <span class="opt-label">{{ key }}</span>
                 <span>{{ label }}</span>
               </div>
@@ -62,13 +62,25 @@ import { wrongQuestionApi } from '@/api/wrongQuestion'
 
 const typeMap: Record<string, string> = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
 
-const wrongList = ref([])
+interface WrongItem {
+  id: number
+  question_id: number
+  wrong_count?: number
+  question?: {
+    type?: string
+    options?: Record<string, string>
+    content?: string
+  }
+  [key: string]: unknown
+}
+
+const wrongList = ref<WrongItem[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const filterType = ref('')
-const redoingId = ref(null)
-const redoAnswer = ref([])
+const redoingId = ref<number | null>(null)
+const redoAnswer = ref<(string | number)[]>([])
 const redoTextAnswer = ref('')
 
 onMounted(() => loadData())
@@ -82,7 +94,7 @@ async function loadData() {
   } catch (e) {}
 }
 
-function startRedo(item: { id: number; question_id: number; question?: { type?: string; options?: Record<string, string>; content?: string }; [key: string]: unknown }) {
+function startRedo(item: WrongItem) {
   redoingId.value = item.id
   redoAnswer.value = []
   redoTextAnswer.value = ''
@@ -98,7 +110,7 @@ function toggleRedoOption(key: string | number, type: string) {
   }
 }
 
-async function submitRedo(item: { id: number; question_id: number; question?: { type?: string; options?: Record<string, string>; content?: string }; [key: string]: unknown }) {
+async function submitRedo(item: WrongItem) {
   try {
     const answer = item.question?.type === 'short_answer' ? redoTextAnswer.value : redoAnswer.value
     const res = await wrongQuestionApi.redoWrongQuestion(item.question_id, Array.isArray(answer) ? answer.join(', ') : answer)

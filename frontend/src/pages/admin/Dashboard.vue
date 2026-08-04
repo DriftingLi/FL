@@ -71,9 +71,9 @@ const userName = computed(() =>
 )
 
 const overview = ref<any>({})
-const courseStats = ref([])
-const barChartRef = ref(null)
-const pieChartRef = ref(null)
+const courseStats = ref<{ name: string; study_count: number; total_duration: number; avg_progress: number }[]>([])
+const barChartRef = ref<HTMLDivElement | null>(null)
+const pieChartRef = ref<HTMLDivElement | null>(null)
 let barChart: echarts.ECharts | null = null
 let pieChart: echarts.ECharts | null = null
 

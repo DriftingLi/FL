@@ -168,7 +168,7 @@ import { ref, reactive, computed, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
-import { ElMessage } from 'element-plus'
+import { ElMessage, type FormInstance } from 'element-plus'
 import { UserFilled, Avatar, Setting, ChatDotRound } from '@element-plus/icons-vue'
 import { usernameRules, passwordRules, requiredEmailRules, emailCodeRules, phoneRules } from '@/utils/validate'
 import {
@@ -182,7 +182,7 @@ import {
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
-const formRef = ref(null)
+const formRef = ref<FormInstance | null>(null)
 const loading = ref(false)
 const loginMode = ref<'password' | 'email' | 'phone' | 'wechat'>('password')
 const countdown = ref(0)
@@ -279,6 +279,7 @@ async function handleLogin() {
     ElMessage.info('微信扫码登录暂未开放，请等待开放平台配置')
     return
   }
+  if (!formRef.value) return
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
 

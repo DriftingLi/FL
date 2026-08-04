@@ -125,10 +125,10 @@ import { adminApi } from '@/api/admin'
 import { downloadExport, type ExportKind } from '@/api/export'
 
 const overview = ref<any>({})
-const courseStats = ref([])
+const courseStats = ref<{ name: string; study_count: number; total_duration: number; avg_progress: number }[]>([])
 const exporting = ref<ExportKind | ''>('')
-const barChartRef = ref(null)
-const progressChartRef = ref(null)
+const barChartRef = ref<HTMLDivElement | null>(null)
+const progressChartRef = ref<HTMLDivElement | null>(null)
 let barChart: echarts.ECharts | null = null
 let progressChart: echarts.ECharts | null = null
 

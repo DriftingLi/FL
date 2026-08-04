@@ -99,7 +99,15 @@ import { vLazy } from '@/composables/useLazyLoad'
 const router = useRouter()
 
 const loading = ref(false)
-const courses = ref([])
+const courses = ref<{
+  course_id: number
+  name: string
+  category?: string
+  cover_image?: string
+  description?: string
+  chapter_count?: number
+  duration?: number
+}[]>([])
 const currentCategory = ref('')
 const currentPage = ref(1)
 const pageSize = ref(12)
@@ -127,12 +135,12 @@ const categoryClassMap: Record<string, string> = {
   'CATEGORY_04': 'cat-advanced'
 }
 
-function getCategoryName(category: string) {
-  return categoryMap[category] || '其他'
+function getCategoryName(category?: string) {
+  return category ? categoryMap[category] || '其他' : '其他'
 }
 
-function getCategoryClass(category: string) {
-  return categoryClassMap[category] || 'cat-default'
+function getCategoryClass(category?: string) {
+  return category ? categoryClassMap[category] || 'cat-default' : 'cat-default'
 }
 
 function formatDuration(minutes: number) {

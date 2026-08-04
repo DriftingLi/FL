@@ -172,10 +172,10 @@ const props = defineProps({
   }
 })
 
-const inputRef = ref(null)
+const inputRef = ref<HTMLInputElement | null>(null)
 const isDragover = ref(false)
 const isUploading = ref(false)
-const fileList = ref([])
+const fileList = ref<FileItem[]>([])
 const activeFilter = ref(props.initialFilter || 'all')
 
 let uidCounter = 0
@@ -229,7 +229,7 @@ function handleFilterChange() {
 }
 
 function triggerSelect() {
-  inputRef.value.click()
+  inputRef.value?.click()
 }
 
 function handleSelect(event: Event) {
@@ -238,7 +238,7 @@ function handleSelect(event: Event) {
   if (files.length > 0) {
     addFiles(files)
   }
-  inputRef.value.value = ''
+  if (inputRef.value) inputRef.value.value = ''
 }
 
 function handleDrop(event: DragEvent) {
@@ -251,7 +251,7 @@ function handleDrop(event: DragEvent) {
 
 function addFiles(files: File[]) {
   for (const file of files) {
-    const ext = file.name.split('.').pop().toLowerCase()
+    const ext = (file.name.split('.').pop() ?? '').toLowerCase()
     const category = getFileCategory(ext)
 
     if (!Object.keys(typeCategoryMap).includes(ext)) {

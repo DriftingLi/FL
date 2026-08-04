@@ -30,8 +30,8 @@ const props = defineProps({
 
 const resolvedSrc = computed(() => resolveFileUrl(props.src))
 
-const tableData = ref([])
-const columns = ref([])
+const tableData = ref<Record<string, string>[]>([])
+const columns = ref<string[]>([])
 
 const isCsv = computed(() => {
   const name = props.fileName || props.src

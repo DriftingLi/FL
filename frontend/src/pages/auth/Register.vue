@@ -203,9 +203,10 @@
 import { ref, reactive, computed, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { authApi } from '@/api/auth'
+import type { ApiResponse } from '@/api/request'
 import { useAuthStore } from '@/stores/auth'
 import { getDefaultWorkspaceBySubdomain } from '@/utils/subdomain'
-import { ElMessage } from 'element-plus'
+import { ElMessage, type FormInstance } from 'element-plus'
 import type { FormItemRule } from 'element-plus'
 import { EditPen } from '@element-plus/icons-vue'
 import {
@@ -219,7 +220,7 @@ import {
 
 const router = useRouter()
 const authStore = useAuthStore()
-const formRef = ref(null)
+const formRef = ref<FormInstance | null>(null)
 const loading = ref(false)
 const registerMode = ref<'phone' | 'email'>('phone')
 const countdown = ref(0)
@@ -311,12 +312,13 @@ async function handleSendCode() {
 }
 
 async function handleRegister() {
+  if (!formRef.value) return
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
 
   loading.value = true
   try {
-    let res
+    let res: ApiResponse | undefined
     if (registerMode.value === 'email') {
       res = await authApi.emailRegister({
         nickname: formData.nickname,
@@ -335,7 +337,7 @@ async function handleRegister() {
       })
     }
 
-    if (res.code === 201 || res.code === 200) {
+    if (res && (res.code === 201 || res.code === 200)) {
       authStore.setAuthData(res.data)
       ElMessage.success('注册成功')
       router.push(getDefaultWorkspaceBySubdomain())

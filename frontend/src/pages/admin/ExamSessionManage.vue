@@ -75,9 +75,9 @@ const statusMap: Record<string, string> = { upcoming: '未开始', ongoing: '进
 const statusType: Record<string, string> = { upcoming: 'info', ongoing: 'success', finished: '' }
 
 const loading = ref(false)
-const sessions = ref([])
+const sessions = ref<{ id: number; name: string; start_time: string; end_time: string }[]>([])
 const dialogVisible = ref(false)
-const editingId = ref(null)
+const editingId = ref<number | null>(null)
 const submitting = ref(false)
 const sessionForm = ref({
   name: '', start_time: '', end_time: ''

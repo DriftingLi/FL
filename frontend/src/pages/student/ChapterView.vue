@@ -81,7 +81,7 @@
         <div class="nav-prev">
           <el-button
             :disabled="!chapterDetail.previous_chapter_id"
-            @click="navigateToChapter(chapterDetail.previous_chapter_id)"
+            @click="navigateToChapter(chapterDetail.previous_chapter_id ?? 0)"
             text
           >
             <el-icon><ArrowLeft /></el-icon>
@@ -95,7 +95,7 @@
         <div class="nav-next">
           <el-button
             :disabled="!chapterDetail.next_chapter_id"
-            @click="navigateToChapter(chapterDetail.next_chapter_id)"
+            @click="navigateToChapter(chapterDetail.next_chapter_id ?? 0)"
             text
           >
             <div class="nav-btn-content" v-if="chapterDetail.next_chapter_id">
@@ -147,11 +147,30 @@ const router = useRouter()
 const authStore = useAuthStore()
 const courseStore = useCourseStore()
 
+interface ChapterDetail {
+  chapter_id: number
+  title: string
+  content?: string
+  study_status?: string
+  previous_chapter_id?: number | null
+  next_chapter_id?: number | null
+  files?: {
+    content_type?: string
+    file_url?: string
+    [key: string]: unknown
+  }[]
+}
+
+interface ChapterItem {
+  chapter_id: number
+  title: string
+}
+
 const loading = ref(false)
 const chapterNotFound = ref(false)
-const chapterDetail = ref(null)
+const chapterDetail = ref<ChapterDetail | null>(null)
 const courseName = ref('')
-const chapters = ref([])
+const chapters = ref<ChapterItem[]>([])
 const isStudying = ref(false)
 const studySeconds = ref(0)
 const activeTab = ref('')
@@ -220,14 +239,16 @@ watch(
 )
 
 const getPrevChapterTitle = computed(() => {
-  if (!chapterDetail.value?.previous_chapter_id) return ''
-  const prev = chapters.value.find(c => c.chapter_id === chapterDetail.value.previous_chapter_id)
+  const detail = chapterDetail.value
+  if (!detail?.previous_chapter_id) return ''
+  const prev = chapters.value.find(c => c.chapter_id === detail.previous_chapter_id)
   return prev ? prev.title : ''
 })
 
 const getNextChapterTitle = computed(() => {
-  if (!chapterDetail.value?.next_chapter_id) return ''
-  const next = chapters.value.find(c => c.chapter_id === chapterDetail.value.next_chapter_id)
+  const detail = chapterDetail.value
+  if (!detail?.next_chapter_id) return ''
+  const next = chapters.value.find(c => c.chapter_id === detail.next_chapter_id)
   return next ? next.title : ''
 })
 
@@ -294,7 +315,9 @@ function beginStudy() {
   studySeconds.value = 0
   reportedSeconds = 0
   studyTimer = setInterval(() => {
-    studySeconds.value = Math.floor((Date.now() - studyStartTime) / 1000)
+    if (studyStartTime) {
+      studySeconds.value = Math.floor((Date.now() - studyStartTime) / 1000)
+    }
   }, 1000)
   // 启动自动上报：每隔 AUTO_REPORT_INTERVAL 秒上报一次增量时长
   autoReportTimer = setInterval(() => {
@@ -350,9 +373,12 @@ function handleVisibilityChange() {
   } else {
     // 回到前台：若仍在学习状态则恢复计时
     if (isStudying.value && !studyTimer && chapterDetail.value) {
-      studyStartTime = Date.now() - studySeconds.value * 1000
+      const newStart = Date.now() - studySeconds.value * 1000
+      studyStartTime = newStart
       studyTimer = setInterval(() => {
-        studySeconds.value = Math.floor((Date.now() - studyStartTime) / 1000)
+        if (studyStartTime) {
+          studySeconds.value = Math.floor((Date.now() - studyStartTime) / 1000)
+        }
       }, 1000)
       autoReportTimer = setInterval(() => {
         reportIncremental(false)

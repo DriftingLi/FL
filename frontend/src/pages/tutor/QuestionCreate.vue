@@ -47,7 +47,7 @@
       <el-form-item v-if="hasOptions" label="选项" required>
         <div v-for="key in optionKeys" :key="key" class="option-row">
           <span class="opt-key">{{ key }}</span>
-          <el-input v-model="form.options[key]" :placeholder="`选项${key}内容`" />
+          <el-input v-model="form.options![key]" :placeholder="`选项${key}内容`" />
         </div>
       </el-form-item>
       <el-form-item v-if="form.type === 'true_false'" label="正确答案" required>
@@ -91,7 +91,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { questionBankApi } from '@/api/questionBank'
+import { questionBankApi, type QuestionPayload } from '@/api/questionBank'
 
 const route = useRoute()
 const router = useRouter()
@@ -101,11 +101,23 @@ const hasOptions = computed(() => ['single_choice', 'multi_choice', 'fault_image
 const optionKeys = ['A', 'B', 'C', 'D'] as const
 
 const submitting = ref(false)
-const knowledgePoints = ref([])
-const multiAnswer = ref([])
+const knowledgePoints = ref<{ id: number; name: string }[]>([])
+const multiAnswer = ref<string[]>([])
 const imageUploading = ref(false)
 
-const form = ref({
+const form = ref<{
+  type: string
+  content: string
+  options: { A: string; B: string; C: string; D: string } | null
+  answer: string
+  explanation: string
+  image_url: string
+  reference_answer: string
+  scoring_criteria: string
+  score: number
+  knowledge_point_id: number | null
+  status: string
+}>({
   type: 'single_choice',
   content: '',
   options: { A: '', B: '', C: '', D: '' },
@@ -189,7 +201,11 @@ function removeImage() {
 async function submitForm() {
   submitting.value = true
   try {
-    const data = { ...form.value }
+    const data: QuestionPayload = {
+      ...form.value,
+      options: form.value.options ?? undefined,
+      knowledge_point_id: form.value.knowledge_point_id ?? undefined
+    }
     if (data.type === 'multi_choice') {
       data.answer = multiAnswer.value.sort().join(',')
     }
