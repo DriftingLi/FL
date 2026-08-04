@@ -100,14 +100,13 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 	// 个人信息页：手机号/邮箱绑定修改
 	RegisterProfileBindRoutes(api, cfg, db, authSvc, emailAuthSvc, phoneAuthSvc)
 
-	// 注册全部 13 个业务蓝图：
-	//   auth/courses/exam/student/question-bank/
+	// 注册全部 12 个业务蓝图：
+	//   auth/courses/student/question-bank/
 	//   level-exam/grading/tutor/wrong-questions/mock-exam/admin
 	//   practice-mode（题库练习模式：自由刷题/知识点专项，对应 question_practice_record）
 	// AI 配置服务在 NewRouter 创建一次，被 admin 和 AI 助手模块复用
 	aiConfigSvc := service.NewAIConfigService(db, cfg.SecretKey)
 	RegisterCoursesRoutes(api, cfg, db, st)
-	RegisterExamRoutes(api, cfg, db)
 	RegisterStudentRoutes(api, cfg, db)
 	RegisterQuestionBankRoutes(api, cfg, db, st)
 	RegisterPracticeModeRoutes(api, cfg, db)
