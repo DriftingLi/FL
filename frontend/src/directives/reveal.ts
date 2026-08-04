@@ -27,7 +27,7 @@ interface RevealOptions {
 
 interface RevealMeta {
   observer: IntersectionObserver | null
-  onAnimEnd: (() => void) | null
+  onAnimEnd: ((e: AnimationEvent) => void) | null
 }
 
 // 动画名 → 变体类名（默认 fade-up 无需变体类，使用 .reveal.is-visible 的默认动画名）
@@ -117,7 +117,10 @@ export const vReveal: Directive<HTMLElement> = {
     if (delay > 0) el.style.animationDelay = `${delay}ms`
 
     // 动画播放完毕后清理 reveal 类，使元素回归原生 CSS，恢复 hover transition
-    const onAnimEnd = () => {
+    // 注意：animationend 事件会从子元素冒泡上来；子元素自身的 CSS 动画结束时会
+    // 误触发父级的 onAnimEnd，导致 reveal 动画未播完就被清理。校验事件源为当前元素。
+    const onAnimEnd = (e: AnimationEvent) => {
+      if (e.target !== el) return
       removeRevealClasses(el)
     }
 
