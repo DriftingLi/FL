@@ -277,20 +277,6 @@ function onConditionSelect(rating: ConditionRating) {
   form.condition_rating = form.condition_rating === rating ? undefined : rating
 }
 
-// ========== 字符串字段代理（空字符串 ↔ undefined 互转） ==========
-// 原生 select 配 :value=undefined 占位时，DOM value 会回退为 textContent，
-// 污染 form 状态。这里用计算属性包裹 v-model，在 set 时把空串归一为 undefined。
-function useStringField(getter: () => string | undefined) {
-  return computed<string>({
-    get: () => getter() ?? '',
-    set: (v) => {
-      // 通过闭包反射回 form：调用方传入 () => form.xxx
-      // 用 Function 保持 setter 简洁（避免在模板里写箭头函数）
-      const setter = getter as unknown as { __setVal?: (v: string) => void }
-      setter.__setVal?.(v)
-    }
-  })
-}
 </script>
 
 <template>

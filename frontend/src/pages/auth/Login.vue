@@ -175,7 +175,6 @@ import {
   getSubdomain,
   getRoleForSubdomain,
   getDefaultWorkspaceBySubdomain,
-  buildSubdomainUrl,
   type SubdomainType
 } from '@/utils/subdomain'
 
@@ -216,10 +215,6 @@ const roleIconMap: Record<string, any> = {
 }
 const roleLabel = computed(() => roleLabelMap[currentRole])
 const roleIcon = computed(() => roleIconMap[currentRole])
-
-// 跨子域名入口引导（仅学员登录页显示）
-const mentorLoginUrl = computed(() => buildSubdomainUrl('tutor', '/login'))
-const adminLoginUrl = computed(() => buildSubdomainUrl('admin', '/login'))
 
 const formData = reactive({
   username: '',
@@ -336,13 +331,14 @@ async function handleLogin() {
       }
     }
   } catch (e) {
-    console.error('Login error:', e)
-    if (e.response) {
-      console.error('Response data:', e.response.data)
-      console.error('Status:', e.response.status)
+    const err = e as { response?: { data?: unknown; status?: number }; message?: string }
+    console.error('Login error:', err)
+    if (err.response) {
+      console.error('Response data:', err.response.data)
+      console.error('Status:', err.response.status)
     }
-    if (e.message && !e.message.includes('Network')) {
-      ElMessage.error(e.message || '登录失败，请检查用户名和密码')
+    if (err.message && !err.message.includes('Network')) {
+      ElMessage.error(err.message || '登录失败，请检查用户名和密码')
     }
   } finally {
     loading.value = false

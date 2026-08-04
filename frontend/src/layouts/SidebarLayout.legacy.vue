@@ -99,7 +99,7 @@ import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessageBox } from 'element-plus'
-import { Operation, ArrowDown, SwitchButton, Expand, Fold } from '@element-plus/icons-vue'
+import { Operation, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
 
 interface MenuItem {
   path: string

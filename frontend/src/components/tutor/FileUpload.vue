@@ -369,7 +369,7 @@ async function uploadSingleFile(file: FileItem) {
     }
   } catch (e) {
     file.status = 'error'
-    file.errorMsg = e.message || '上传失败'
+    file.errorMsg = (e instanceof Error ? e.message : '上传失败') || '上传失败'
   }
 
   emitFileStatus(file)

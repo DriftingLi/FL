@@ -226,7 +226,7 @@ async function confirmAllObjective() {
       await openDetail({ id: selectedParticipant.value })
     }
   } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e.message || '确认失败')
+    if (e !== 'cancel') ElMessage.error(e instanceof Error ? e.message : '确认失败')
   } finally { confirmingObj.value = false }
 }
 
@@ -244,7 +244,7 @@ async function confirmAi(ans: { id: number; ai_score?: number | null; _confirmin
       await openDetail({ id: selectedParticipant.value })
     }
   } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e.message || '确认失败')
+    if (e !== 'cancel') ElMessage.error(e instanceof Error ? e.message : '确认失败')
   } finally { ans._confirming = false }
 }
 
@@ -259,7 +259,7 @@ async function triggerAi(ans: { id: number; ai_score?: number | null; ai_comment
       ElMessage.success('AI评分完成')
     }
   } catch (e) {
-    ElMessage.error(e.message || 'AI评分失败')
+    ElMessage.error(e instanceof Error ? e.message : 'AI评分失败')
   } finally { ans._aiLoading = false }
 }
 
@@ -271,7 +271,7 @@ async function gradeAnswer(ans: { id: number; _score: number; _comment?: string;
       await openDetail({ id: selectedParticipant.value })
     }
   } catch (e) {
-    ElMessage.error(e.message || '评分失败')
+    ElMessage.error(e instanceof Error ? e.message : '评分失败')
   }
 }
 
@@ -289,7 +289,7 @@ async function doRegrade(ans: { id: number; _regradeScore: number; _regradeComme
       await openDetail({ id: selectedParticipant.value })
     }
   } catch (e) {
-    ElMessage.error(e.message || '复核失败')
+    ElMessage.error(e instanceof Error ? e.message : '复核失败')
   }
 }
 </script>

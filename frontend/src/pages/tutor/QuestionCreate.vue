@@ -193,7 +193,7 @@ async function handleImageUpload(options: { file: File }) {
     form.value.image_url = res.data.url
     ElMessage.success('图片上传成功')
   } catch (e) {
-    ElMessage.error(e.response?.data?.message || '图片上传失败')
+    ElMessage.error(((e as { response?: { data?: { message?: string } } }).response?.data?.message) || '图片上传失败')
   } finally {
     imageUploading.value = false
   }
@@ -223,7 +223,7 @@ async function submitForm() {
     }
     router.push('/training/tutor/question-manage')
   } catch (e) {
-    ElMessage.error(e.message || '操作失败')
+    ElMessage.error(e instanceof Error ? e.message : '操作失败')
   } finally {
     submitting.value = false
   }

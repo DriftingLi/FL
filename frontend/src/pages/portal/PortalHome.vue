@@ -548,7 +548,7 @@ function waitForScrollEnd(callback: () => void) {
     track.removeEventListener('scrollend', onScrollEnd as EventListener)
     callback()
   }
-  const onScrollEnd = (e: Event) => execute()
+  const onScrollEnd = () => execute()
   // 优先用 scrollend 事件（现代浏览器）
   track.addEventListener('scrollend', onScrollEnd as EventListener, { once: true })
   // 降级：超时后强制执行（防止 scrollend 不触发）

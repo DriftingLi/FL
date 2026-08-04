@@ -114,13 +114,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Timer, ArrowLeft, ArrowRight, VideoCamera, Document, Picture } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, VideoCamera, Document, Picture } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { marked } from 'marked'
 import { markedHighlight } from 'marked-highlight'
 import hljs from 'highlight.js'
 import { courseApi } from '@/api/course'
-import { useAuthStore } from '@/stores/auth'
 import { useCourseStore } from '@/stores/course'
 import '@/assets/styles/markdown.css'
 import VideoPlayer from '@/components/student/VideoPlayer.vue'
@@ -144,7 +143,6 @@ marked.use(
 
 const route = useRoute()
 const router = useRouter()
-const authStore = useAuthStore()
 const courseStore = useCourseStore()
 
 interface ChapterDetail {
@@ -287,7 +285,8 @@ async function loadChapterDetail() {
       chapterNotFound.value = true
     }
   } catch (error) {
-    if (error?.response?.status === 404) {
+    const err = error as { response?: { status?: number } }
+    if (err?.response?.status === 404) {
       chapterNotFound.value = true
     } else {
       console.error('加载章节详情失败:', error)

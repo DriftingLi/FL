@@ -176,7 +176,7 @@ async function enterExam(sessionId: number) {
     qIdx.value = findResumeIndex(res.data.questions, res.data.answers || {})
     startTimer()
   } catch (e) {
-    ElMessage.error(e.message || '进入考试失败')
+    ElMessage.error(e instanceof Error ? e.message : '进入考试失败')
   }
 }
 
@@ -247,7 +247,7 @@ async function doSubmit() {
     resetExamState()
     await loadExams()
   } catch (e) {
-    ElMessage.error(e.message || '交卷失败')
+    ElMessage.error(e instanceof Error ? e.message : '交卷失败')
   }
 }
 

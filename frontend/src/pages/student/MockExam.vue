@@ -175,7 +175,7 @@ async function startExam() {
     examStarted.value = true
     startTimer()
   } catch (e) {
-    ElMessage.error(e.message || '开始考试失败')
+    ElMessage.error(e instanceof Error ? e.message : '开始考试失败')
   } finally {
     loading.value = false
   }

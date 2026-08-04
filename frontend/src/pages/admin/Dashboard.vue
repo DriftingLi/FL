@@ -60,7 +60,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { User, UserFilled, Notebook, Timer, TrendCharts, MagicStick, Calendar, Setting } from '@element-plus/icons-vue'
+import { User, UserFilled, Notebook, Timer, TrendCharts, MagicStick } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import { adminApi } from '@/api/admin'
 import { useAuthStore } from '@/stores/auth'

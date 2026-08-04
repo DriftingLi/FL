@@ -3,7 +3,6 @@ import { watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   getSubdomain,
-  buildSubdomainUrl,
   buildCrossDomainAuthUrl,
   getTargetSubdomainForPath,
   getDefaultWorkspaceBySubdomain,
@@ -401,7 +400,7 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
   // 等待 auth store 初始化完成
