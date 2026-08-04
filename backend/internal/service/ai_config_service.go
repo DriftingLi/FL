@@ -481,6 +481,18 @@ func (s *AIConfigService) ResolveConfig(ctx context.Context, featureKey string) 
 	return AISettings{Source: "unbound"}
 }
 
+// HasActiveConfigs 是否存在已启用的 AI 配置。
+// 服务启动时用于告警：若未配置任何模型，简答题评分等 AI 功能将走导师人工评分。
+func (s *AIConfigService) HasActiveConfigs(ctx context.Context) bool {
+	var count int64
+	if err := s.db.WithContext(ctx).Model(&model.AIConfig{}).
+		Where("is_active = ?", true).Count(&count).Error; err != nil {
+		slog.Warn("查询 AI 配置失败", "error", err)
+		return false
+	}
+	return count > 0
+}
+
 // MaskKey 脱敏 API Key，保留前 6 位与后 4 位。
 func MaskKey(k string) string {
 	if k == "" {

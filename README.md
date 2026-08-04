@@ -2,6 +2,8 @@
 
 一套面向叉车维修培训与叉车残值评估的全栈系统，包含在线培训、考试练习、AI 助手，以及叉车残值评估与电池剩余寿命（RUL）评估等业务模块。系统按角色（学员 / 讲师 / 管理员）划分权限，并提供独立的残值评估工作区与 AI 助手工作区。
 
+> 接口文档：完整的 HTTP 接口清单见 [API.md](API.md)（路径 / 方法 / 鉴权 / 说明）。
+
 ## 功能特性
 
 ### 培训学习模块
@@ -82,7 +84,7 @@
 
 - 语言：Go 1.26
 - Web 框架：Gin v1.10 + gin-contrib/cors
-- 数据库：PostgreSQL 15 + GORM（主业务）+ pgx/v5（残值子模块手写 SQL）
+- 数据库：PostgreSQL 15 + GORM（主业务）+ pgx/v5（残值子模块手写 SQL）。注：残值评估子模块独立使用 pgx 直连池（`internal/valuation`），与主业务 GORM 双栈并存，互不依赖，保持现状不合并
 - 缓存：Redis 7（go-redis/v9）
 - 数据库迁移：golang-migrate/v4（up / down / force / status）
 - 认证：golang-jwt/v5 + bcrypt（统一 JWT + Redis 黑名单）
@@ -138,7 +140,7 @@
 │   │   ├── api/                  # 培训业务 Gin 路由与 handler
 │   │   ├── service/              # 培训业务服务层（含 AI 助手 / AI 配置 / 文件服务）
 │   │   ├── storage/              # 文件存储抽象（local / Cloudflare R2）
-│   │   ├── model/ repository/ db/ config/ middleware/ cache/ migrate/ testutil/
+│   │   ├── model/ db/ config/ middleware/ cache/ migrate/ testutil/
 │   │   └── valuation/            # 残值评估 + 电池 RUL 子模块（独立 handler/repository/service/config）
 │   ├── pkg/
 │   │   ├── response/             # 统一响应结构
@@ -166,6 +168,7 @@
 ├── nginx/                        # 宿主机 Nginx 参考配置
 ├── .github/workflows/            # CI/CD（ci.yml / cd.yml）
 ├── .trae/                        # 代码文档与方案（CODE_WIKI.md，gitignore）
+├── API.md                        # HTTP 接口清单（路径 / 方法 / 鉴权 / 说明）
 ├── deploy.sh                     # 本地 / 手动一键部署
 └── docker-compose.prod.yml       # 生产编排（PostgreSQL + Redis + LibreOffice + 后端 + Nginx 前端）
 ```
