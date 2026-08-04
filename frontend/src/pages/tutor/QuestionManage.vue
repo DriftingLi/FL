@@ -94,6 +94,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
+import type { Question } from '@/types/question'
 
 const router = useRouter()
 const typeMap: Record<string, string> = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
@@ -101,13 +102,13 @@ const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核
 const statusType: Record<string, string> = { draft: 'info', pending: 'warning', published: 'success' }
 
 const loading = ref(false)
-const questions = ref([])
+const questions = ref<Question[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const filters = ref({ type: '', status: '', keyword: '' })
 const detailVisible = ref(false)
-const currentQuestion = ref(null)
+const currentQuestion = ref<(Question & { reject_reason?: string }) | null>(null)
 
 onMounted(() => loadData())
 
@@ -120,17 +121,17 @@ async function loadData() {
   } catch (e) {} finally { loading.value = false }
 }
 
-function viewDetail(row: { id: number; type?: string; status?: string; content?: string; [key: string]: unknown }) {
+function viewDetail(row: Question) {
   currentQuestion.value = row
   detailVisible.value = true
 }
 
-function editQuestion(row: { id: number; [key: string]: unknown }) {
+function editQuestion(row: Question) {
   router.push({ path: '/training/tutor/question-create', query: { id: row.id } })
 }
 
 // 提交审核：将 draft 题目状态改为 pending（后端会清空驳回理由）
-async function submitForReview(row: { id: number; [key: string]: unknown }) {
+async function submitForReview(row: Question) {
   try {
     await ElMessageBox.confirm('确定提交该题目给管理员审核？', '提示', { type: 'info' })
     await questionBankApi.updateQuestion(row.id, { status: 'pending' })

@@ -168,21 +168,20 @@ import { ref, reactive, computed, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
-import { ElMessage } from 'element-plus'
+import { ElMessage, type FormInstance } from 'element-plus'
 import { UserFilled, Avatar, Setting, ChatDotRound } from '@element-plus/icons-vue'
 import { usernameRules, passwordRules, requiredEmailRules, emailCodeRules, phoneRules } from '@/utils/validate'
 import {
   getSubdomain,
   getRoleForSubdomain,
   getDefaultWorkspaceBySubdomain,
-  buildSubdomainUrl,
   type SubdomainType
 } from '@/utils/subdomain'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
-const formRef = ref(null)
+const formRef = ref<FormInstance | null>(null)
 const loading = ref(false)
 const loginMode = ref<'password' | 'email' | 'phone' | 'wechat'>('password')
 const countdown = ref(0)
@@ -216,10 +215,6 @@ const roleIconMap: Record<string, any> = {
 }
 const roleLabel = computed(() => roleLabelMap[currentRole])
 const roleIcon = computed(() => roleIconMap[currentRole])
-
-// 跨子域名入口引导（仅学员登录页显示）
-const mentorLoginUrl = computed(() => buildSubdomainUrl('tutor', '/login'))
-const adminLoginUrl = computed(() => buildSubdomainUrl('admin', '/login'))
 
 const formData = reactive({
   username: '',
@@ -279,6 +274,7 @@ async function handleLogin() {
     ElMessage.info('微信扫码登录暂未开放，请等待开放平台配置')
     return
   }
+  if (!formRef.value) return
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
 
@@ -335,13 +331,14 @@ async function handleLogin() {
       }
     }
   } catch (e) {
-    console.error('Login error:', e)
-    if (e.response) {
-      console.error('Response data:', e.response.data)
-      console.error('Status:', e.response.status)
+    const err = e as { response?: { data?: unknown; status?: number }; message?: string }
+    console.error('Login error:', err)
+    if (err.response) {
+      console.error('Response data:', err.response.data)
+      console.error('Status:', err.response.status)
     }
-    if (e.message && !e.message.includes('Network')) {
-      ElMessage.error(e.message || '登录失败，请检查用户名和密码')
+    if (err.message && !err.message.includes('Network')) {
+      ElMessage.error(err.message || '登录失败，请检查用户名和密码')
     }
   } finally {
     loading.value = false

@@ -99,7 +99,7 @@ import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessageBox } from 'element-plus'
-import { Operation, ArrowDown, SwitchButton, Expand, Fold } from '@element-plus/icons-vue'
+import { Operation, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
 
 interface MenuItem {
   path: string
@@ -129,7 +129,7 @@ const breadcrumbs = computed(() => {
   return crumbs
 })
 
-async function handleCommand(command) {
+async function handleCommand(command: string) {
   if (command === 'logout') {
     try {
       await ElMessageBox.confirm('确定要退出登录吗？', '提示', {

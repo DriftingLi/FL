@@ -94,8 +94,8 @@ const props = defineProps({
 
 const resolvedSrc = computed(() => resolveFileUrl(props.src))
 
-const containerRef = ref(null)
-const stripRef = ref(null)
+const containerRef = ref<HTMLDivElement | null>(null)
+const stripRef = ref<HTMLDivElement | null>(null)
 
 const slides = ref([])
 const currentSlideIndex = ref(0)

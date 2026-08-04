@@ -24,7 +24,15 @@
 
     <div class="main-container" :class="{ 'main-collapsed': collapsed }">
       <main class="main-content">
-        <router-view />
+        <!-- 内层 router-view + transition：
+             App.vue 已用 matched[0]?.path 做 key 锁住外层布局不重挂，
+             这里用 fullPath 做 key 让同布局下的子页面也能走 200ms 淡入淡出。
+             不用 keep-alive，避免课程章节页/考试页等带副作用的状态被缓存。 -->
+        <router-view v-slot="{ Component: Inner, route: r }">
+          <transition name="inner-fade" mode="out-in">
+            <component :is="Inner" :key="r.fullPath" />
+          </transition>
+        </router-view>
       </main>
     </div>
   </div>
@@ -139,6 +147,17 @@ watch(() => route.path, () => {
 
 .fade-enter-from,
 .fade-leave-to {
+  opacity: 0;
+}
+
+/* 内层子页面过渡：同布局内切换路由时给中间区域一个 200ms 淡入淡出，避免闪一下 */
+.inner-fade-enter-active,
+.inner-fade-leave-active {
+  transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.inner-fade-enter-from,
+.inner-fade-leave-to {
   opacity: 0;
 }
 

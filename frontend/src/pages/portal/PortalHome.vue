@@ -496,7 +496,7 @@ const displayList = computed<FeaturedListItem[]>(() => {
 async function loadFeaturedList() {
   try {
     const res = await featuredApi.getPublicList({ page: 1, page_size: 6 })
-    featuredList.value = (res?.data?.items as FeaturedListItem[]) || []
+    featuredList.value = ((res?.data?.items as unknown as FeaturedListItem[]) || [])
     activeFeaturedIndex.value = 0
     // 复位滚动位置到第一张（避免上次留下偏移）
     const track = featuredTrackRef.value
@@ -548,7 +548,7 @@ function waitForScrollEnd(callback: () => void) {
     track.removeEventListener('scrollend', onScrollEnd as EventListener)
     callback()
   }
-  const onScrollEnd = (e: Event) => execute()
+  const onScrollEnd = () => execute()
   // 优先用 scrollend 事件（现代浏览器）
   track.addEventListener('scrollend', onScrollEnd as EventListener, { once: true })
   // 降级：超时后强制执行（防止 scrollend 不触发）

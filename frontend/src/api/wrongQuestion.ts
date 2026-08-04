@@ -8,24 +8,44 @@ export interface WrongQuestionsQuery {
   type?: string
 }
 
+/** 错题项 */
+export interface WrongQuestionItem {
+  id: number
+  question_id: number
+  wrong_count?: number
+  question?: {
+    type?: string
+    content?: string
+    options?: Record<string, string>
+    [key: string]: unknown
+  }
+  [key: string]: unknown
+}
+
+/** 重做判定结果 */
+export interface RedoResult {
+  is_correct?: boolean
+  [key: string]: unknown
+}
+
 export const wrongQuestionApi = {
   getWrongQuestions(params: WrongQuestionsQuery) {
-    return request.get('/wrong-questions', { params })
+    return request.get<{ items: WrongQuestionItem[]; total: number }>('/wrong-questions', { params })
   },
 
   redoWrongQuestion(questionId: number, userAnswer: string) {
-    return request.post(`/wrong-questions/${questionId}/redo`, { user_answer: userAnswer })
+    return request.post<RedoResult>(`/wrong-questions/${questionId}/redo`, { user_answer: userAnswer })
   },
 
   removeWrongQuestion(questionId: number) {
-    return request.post(`/wrong-questions/${questionId}/remove`)
+    return request.post<null>(`/wrong-questions/${questionId}/remove`)
   },
 
   getWrongQuestionStats() {
-    return request.get('/wrong-questions/stats')
+    return request.get<Record<string, unknown>>('/wrong-questions/stats')
   },
 
   exportWrongQuestions() {
-    return request.get('/wrong-questions/export', { responseType: 'blob' })
+    return request.get<Blob>('/wrong-questions/export', { responseType: 'blob' })
   }
 }

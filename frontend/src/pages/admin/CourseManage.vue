@@ -214,12 +214,12 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { Plus, Search, Rank, ArrowDown } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import draggable from 'vuedraggable'
 import { adminApi, type CoursePayload, type ChapterPayload } from '@/api/admin'
 
 const loading = ref(false)
-const courses = ref([])
+const courses = ref<{ course_id: number; name: string; category?: string; cover_image?: string }[]>([])
 const searchKeyword = ref('')
 const filterCategory = ref('')
 const currentPage = ref(1)
@@ -228,7 +228,7 @@ const total = ref(0)
 
 const dialogVisible = ref(false)
 const submitting = ref(false)
-const formRef = ref(null)
+const formRef = ref<FormInstance | null>(null)
 const formData: Record<string, any> = reactive({
   name: '',
   category: '',
@@ -243,13 +243,13 @@ const formRules = {
 }
 
 const drawerVisible = ref(false)
-const currentCourse = ref(null)
+const currentCourse = ref<{ course_id: number; name: string } | null>(null)
 const chaptersLoading = ref(false)
-const chapters = ref([])
+const chapters = ref<{ chapter_id: number; title: string; duration?: number; order_num?: number }[]>([])
 
 const chapterDialogVisible = ref(false)
 const chapterSubmitting = ref(false)
-const chapterFormRef = ref(null)
+const chapterFormRef = ref<FormInstance | null>(null)
 const chapterFormData = reactive({
   title: '',
   content_url: '',
@@ -429,6 +429,7 @@ async function handleChapterSubmit() {
 
   chapterSubmitting.value = true
   try {
+    if (!currentCourse.value) return
     const res = await adminApi.createChapter(currentCourse.value.course_id, chapterFormData)
     if (res.code === 201) {
       ElMessage.success('章节创建成功')
@@ -448,7 +449,9 @@ async function handleDeleteChapter(chapterId: number) {
     const res = await adminApi.deleteChapter(chapterId)
     if (res.code === 200) {
       ElMessage.success('章节已删除')
-      openChapterDrawer(currentCourse.value)
+      if (currentCourse.value) {
+        openChapterDrawer(currentCourse.value)
+      }
     }
   } catch (error) {
     console.error('删除章节失败:', error)

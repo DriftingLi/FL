@@ -3,7 +3,6 @@ import { watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   getSubdomain,
-  buildSubdomainUrl,
   buildCrossDomainAuthUrl,
   getTargetSubdomainForPath,
   getDefaultWorkspaceBySubdomain,
@@ -401,7 +400,7 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
   // 等待 auth store 初始化完成
@@ -504,7 +503,7 @@ router.beforeEach(async (to, from, next) => {
   }
 
   // 角色校验：优先使用最内层匹配的 meta（to.meta 已是最终合并的 meta）
-  const userRole = authStore.userInfo.role
+  const userRole = authStore.userInfo?.role ?? ''
   const requiredRole = to.meta?.role as string | undefined
   const requiredRoles = to.meta?.roles as string[] | undefined
 

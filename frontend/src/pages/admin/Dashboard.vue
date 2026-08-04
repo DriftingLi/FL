@@ -60,7 +60,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { User, UserFilled, Notebook, Timer, TrendCharts, MagicStick, Calendar, Setting } from '@element-plus/icons-vue'
+import { User, UserFilled, Notebook, Timer, TrendCharts, MagicStick } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import { adminApi } from '@/api/admin'
 import { useAuthStore } from '@/stores/auth'
@@ -71,9 +71,9 @@ const userName = computed(() =>
 )
 
 const overview = ref<any>({})
-const courseStats = ref([])
-const barChartRef = ref(null)
-const pieChartRef = ref(null)
+const courseStats = ref<{ name: string; study_count: number; total_duration: number; avg_progress: number }[]>([])
+const barChartRef = ref<HTMLDivElement | null>(null)
+const pieChartRef = ref<HTMLDivElement | null>(null)
 let barChart: echarts.ECharts | null = null
 let pieChart: echarts.ECharts | null = null
 

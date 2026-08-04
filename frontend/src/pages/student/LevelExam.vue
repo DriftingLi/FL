@@ -93,18 +93,19 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Timer } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { levelExamApi } from '@/api/levelExam'
+import { levelExamApi, type LevelExamSession } from '@/api/levelExam'
 import { typeMap, sessionStatusMap as statusMap } from '@/constants/question'
+import type { Question } from '@/types/question'
 
 const statusType: Record<string, string> = { upcoming: 'info', ongoing: 'success', finished: '' }
 
 const loading = ref(false)
-const exams = ref([])
+const exams = ref<LevelExamSession[]>([])
 
 const inExam = ref(false)
 const examTitle = ref('')
-const participantId = ref(null)
-const examQuestions = ref([])
+const participantId = ref<number | null>(null)
+const examQuestions = ref<Question[]>([])
 const examAnswers = ref<any>({})
 const qIdx = ref(0)
 const remainingTime = ref(0)
@@ -175,14 +176,14 @@ async function enterExam(sessionId: number) {
     qIdx.value = findResumeIndex(res.data.questions, res.data.answers || {})
     startTimer()
   } catch (e) {
-    ElMessage.error(e.message || '进入考试失败')
+    ElMessage.error(e instanceof Error ? e.message : '进入考试失败')
   }
 }
 
 function startTimer() {
   if (timer) clearInterval(timer)
   timer = setInterval(() => {
-    if (remainingTime.value <= 0) { clearInterval(timer); autoSubmit(); return }
+    if (remainingTime.value <= 0) { if (timer) clearInterval(timer); autoSubmit(); return }
     remainingTime.value--
     if (remainingTime.value % 30 === 0) saveProgress()
   }, 1000)
@@ -246,7 +247,7 @@ async function doSubmit() {
     resetExamState()
     await loadExams()
   } catch (e) {
-    ElMessage.error(e.message || '交卷失败')
+    ElMessage.error(e instanceof Error ? e.message : '交卷失败')
   }
 }
 

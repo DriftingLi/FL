@@ -66,9 +66,9 @@ const props = defineProps({
 
 const resolvedSrc = computed(() => resolveFileUrl(props.src))
 
-const containerRef = ref(null)
-const canvasRef = ref(null)
-const imgRef = ref(null)
+const containerRef = ref<HTMLDivElement | null>(null)
+const canvasRef = ref<HTMLDivElement | null>(null)
+const imgRef = ref<HTMLImageElement | null>(null)
 
 const scale = ref(1)
 const panX = ref(0)
@@ -97,8 +97,10 @@ const imageStyle = computed(() => ({
 function onImageLoad() {
   imgLoaded.value = true
   imgError.value = false
-  naturalWidth.value = imgRef.value.naturalWidth
-  naturalHeight.value = imgRef.value.naturalHeight
+  if (imgRef.value) {
+    naturalWidth.value = imgRef.value.naturalWidth
+    naturalHeight.value = imgRef.value.naturalHeight
+  }
   fitToWindow()
 }
 
@@ -125,7 +127,7 @@ function retryLoad() {
   imgError.value = false
   if (imgRef.value) {
     imgRef.value.src = ''
-    setTimeout(() => { imgRef.value.src = props.src }, 100)
+    setTimeout(() => { if (imgRef.value) imgRef.value.src = props.src }, 100)
   }
 }
 

@@ -10,9 +10,10 @@ const exportLabels: Record<ExportKind, string> = {
 }
 
 export async function downloadExport(kind: ExportKind) {
-  const blob = (await request.get(`/admin/export/${kind}`, {
+  // responseType: 'blob' 时拦截器直接返回 response.data（Blob），不走 ApiResponse 解包
+  const blob = await request.get<Blob>(`/admin/export/${kind}`, {
     responseType: 'blob'
-  })) as unknown as Blob
+  })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url

@@ -135,20 +135,21 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Timer } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { mockExamApi } from '@/api/mockExam'
+import { mockExamApi, type MockExamHistoryItem } from '@/api/mockExam'
 import { typeMap } from '@/constants/question'
+import type { Question } from '@/types/question'
 
 const loading = ref(false)
 const examStarted = ref(false)
 const examFinished = ref(false)
 const examForm = ref({ count: 40, duration: 90 })
-const mockExamId = ref(null)
-const questions = ref([])
+const mockExamId = ref<number | null>(null)
+const questions = ref<Question[]>([])
 const answers = ref<any>({})
 const currentIdx = ref(0)
 const remainingTime = ref(0)
 const examResult = ref<any>({})
-const history = ref([])
+const history = ref<MockExamHistoryItem[]>([])
 let timer: ReturnType<typeof setInterval> | null = null
 
 const currentQuestion = computed(() => questions.value[currentIdx.value] || {})
@@ -174,7 +175,7 @@ async function startExam() {
     examStarted.value = true
     startTimer()
   } catch (e) {
-    ElMessage.error(e.message || '开始考试失败')
+    ElMessage.error(e instanceof Error ? e.message : '开始考试失败')
   } finally {
     loading.value = false
   }
@@ -183,7 +184,7 @@ async function startExam() {
 function startTimer() {
   timer = setInterval(() => {
     if (remainingTime.value <= 0) {
-      clearInterval(timer)
+      if (timer) clearInterval(timer)
       autoSubmit()
       return
     }
@@ -258,6 +259,7 @@ async function doSubmit() {
   if (timer) clearInterval(timer)
   await saveProgress()
   try {
+    if (!mockExamId.value) return
     const res = await mockExamApi.submitMockExam(mockExamId.value)
     examResult.value = res.data || {}
     examFinished.value = true

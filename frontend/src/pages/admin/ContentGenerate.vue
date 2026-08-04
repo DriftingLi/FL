@@ -76,7 +76,7 @@
         style="margin-bottom: 16px"
       />
       <div class="progress-detail">
-        <span v-if="generateTask.total > 0" class="progress-count">
+        <span v-if="(generateTask.total ?? 0) > 0" class="progress-count">
           已完成 {{ generateTask.completed || 0 }} / {{ generateTask.total }} 个章节
         </span>
         <span v-if="generateTask.status === 'processing'" class="progress-status processing">
@@ -153,12 +153,37 @@ import { marked } from 'marked'
 import { adminApi } from '@/api/admin'
 import '@/assets/styles/markdown.css'
 
-const courses = ref([])
-const chapters = ref([])
-const selectedCourseId = ref(null)
-const selectedChapterIds = ref([])
+interface GenerateCourse {
+  course_id: number
+  name: string
+}
+
+interface GenerateChapter {
+  chapter_id: number
+  title: string
+  content?: string
+}
+
+interface GenerateTask {
+  task_id: string
+  status: string
+  total?: number
+  completed?: number
+  results?: {
+    chapter_id: number
+    title: string
+    status: string
+    content?: string
+    error?: string
+  }[]
+}
+
+const courses = ref<GenerateCourse[]>([])
+const chapters = ref<GenerateChapter[]>([])
+const selectedCourseId = ref<number | null>(null)
+const selectedChapterIds = ref<number[]>([])
 const generating = ref(false)
-const generateTask = ref(null)
+const generateTask = ref<GenerateTask | null>(null)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const previewVisible = ref(false)
@@ -172,12 +197,10 @@ const renderedPreview = computed(() => {
 
 const progressPercent = computed(() => {
   if (!generateTask.value) return 0
+  const { total = 0, completed = 0 } = generateTask.value
   if (generateTask.value.status === 'completed') return 100
-  if (generateTask.value.status === 'failed') return generateTask.value.total > 0
-    ? Math.round((generateTask.value.completed / generateTask.value.total) * 100)
-    : 0
-  if (!generateTask.value.total || generateTask.value.total === 0) return 0
-  return Math.round((generateTask.value.completed / generateTask.value.total) * 100)
+  if (total === 0) return 0
+  return Math.round((completed / total) * 100)
 })
 
 // 任务运行中（pending/processing）：用于锁住"开始生成"按钮，防止重复提交
@@ -258,19 +281,25 @@ function startPolling(taskId: string) {
       if (res.code === 200) {
         generateTask.value = res.data
         if (res.data.status === 'completed' || res.data.status === 'failed') {
-          clearInterval(pollTimer)
-          pollTimer = null
+          if (pollTimer) {
+            clearInterval(pollTimer)
+            pollTimer = null
+          }
           const successCount = (res.data.results || []).filter((r: { status: string }) => r.status === 'success').length
           const total = res.data.total || res.data.results?.length || 0
           if (res.data.status === 'completed') {
             ElMessage.success(`生成完成：${successCount}/${total} 个章节成功`)
           }
-          handleCourseChange(selectedCourseId.value)
+          if (selectedCourseId.value) {
+            handleCourseChange(selectedCourseId.value)
+          }
         }
       }
     } catch (error) {
-      clearInterval(pollTimer)
-      pollTimer = null
+      if (pollTimer) {
+        clearInterval(pollTimer)
+        pollTimer = null
+      }
     }
   }, 3000)
 }

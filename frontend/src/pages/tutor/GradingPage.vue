@@ -164,8 +164,8 @@ import { gradingApi } from '@/api/grading'
 const typeMap: Record<string, string> = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
 
 const loading = ref(false)
-const participants = ref([])
-const selectedParticipant = ref(null)
+const participants = ref<{ id: number; grading_status?: string; [key: string]: unknown }[]>([])
+const selectedParticipant = ref<number | null>(null)
 const detail = ref<any>({})
 const confirmingObj = ref(false)
 
@@ -178,7 +178,8 @@ async function loadParticipants() {
   loading.value = true
   try {
     const res = await gradingApi.getSubmittedParticipants()
-    participants.value = res.data || []
+    const data = res.data || []
+    participants.value = Array.isArray(data) ? data : (data.participants || data.items || [])
   } catch (e) {} finally { loading.value = false }
 }
 
@@ -218,11 +219,14 @@ async function confirmAllObjective() {
       { confirmButtonText: '确认', cancelButtonText: '取消', type: 'info' }
     )
     confirmingObj.value = true
+    if (selectedParticipant.value == null) return
     await gradingApi.confirmObjectiveAnswers(selectedParticipant.value)
     ElMessage.success('客观题批改确认成功')
-    await openDetail({ id: selectedParticipant.value })
+    if (selectedParticipant.value != null) {
+      await openDetail({ id: selectedParticipant.value })
+    }
   } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e.message || '确认失败')
+    if (e !== 'cancel') ElMessage.error(e instanceof Error ? e.message : '确认失败')
   } finally { confirmingObj.value = false }
 }
 
@@ -236,9 +240,11 @@ async function confirmAi(ans: { id: number; ai_score?: number | null; _confirmin
     ans._confirming = true
     await gradingApi.confirmAiGrading(ans.id)
     ElMessage.success('AI评分确认成功')
-    await openDetail({ id: selectedParticipant.value })
+    if (selectedParticipant.value != null) {
+      await openDetail({ id: selectedParticipant.value })
+    }
   } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e.message || '确认失败')
+    if (e !== 'cancel') ElMessage.error(e instanceof Error ? e.message : '确认失败')
   } finally { ans._confirming = false }
 }
 
@@ -253,7 +259,7 @@ async function triggerAi(ans: { id: number; ai_score?: number | null; ai_comment
       ElMessage.success('AI评分完成')
     }
   } catch (e) {
-    ElMessage.error(e.message || 'AI评分失败')
+    ElMessage.error(e instanceof Error ? e.message : 'AI评分失败')
   } finally { ans._aiLoading = false }
 }
 
@@ -261,9 +267,11 @@ async function gradeAnswer(ans: { id: number; _score: number; _comment?: string;
   try {
     await gradingApi.gradeAnswer(ans.id, { score: ans._score, comment: ans._comment })
     ElMessage.success('评分成功')
-    await openDetail({ id: selectedParticipant.value })
+    if (selectedParticipant.value != null) {
+      await openDetail({ id: selectedParticipant.value })
+    }
   } catch (e) {
-    ElMessage.error(e.message || '评分失败')
+    ElMessage.error(e instanceof Error ? e.message : '评分失败')
   }
 }
 
@@ -277,9 +285,11 @@ async function doRegrade(ans: { id: number; _regradeScore: number; _regradeComme
   try {
     await gradingApi.regradeAnswer(ans.id, { score: ans._regradeScore, comment: ans._regradeComment })
     ElMessage.success('复核成功')
-    await openDetail({ id: selectedParticipant.value })
+    if (selectedParticipant.value != null) {
+      await openDetail({ id: selectedParticipant.value })
+    }
   } catch (e) {
-    ElMessage.error(e.message || '复核失败')
+    ElMessage.error(e instanceof Error ? e.message : '复核失败')
   }
 }
 </script>

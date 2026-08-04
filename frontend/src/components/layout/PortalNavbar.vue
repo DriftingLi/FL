@@ -43,7 +43,7 @@
           :key="item.key"
           :href="item.path"
           class="mobile-link"
-          @click.prevent="handleNavClick(item, true)"
+          @click.prevent="handleNavClick(item)"
         >{{ item.label }}</a>
       </div>
     </transition>
@@ -90,7 +90,7 @@ function goHome() {
   activeAnchor.value = 'home'
 }
 
-async function handleNavClick(item: NavItem, fromMobile = false) {
+async function handleNavClick(item: NavItem) {
   mobileOpen.value = false
   if (!item.path) return
 

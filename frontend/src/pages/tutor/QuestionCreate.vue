@@ -47,7 +47,7 @@
       <el-form-item v-if="hasOptions" label="选项" required>
         <div v-for="key in optionKeys" :key="key" class="option-row">
           <span class="opt-key">{{ key }}</span>
-          <el-input v-model="form.options[key]" :placeholder="`选项${key}内容`" />
+          <el-input v-model="form.options![key]" :placeholder="`选项${key}内容`" />
         </div>
       </el-form-item>
       <el-form-item v-if="form.type === 'true_false'" label="正确答案" required>
@@ -91,7 +91,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { questionBankApi } from '@/api/questionBank'
+import { questionBankApi, type QuestionPayload } from '@/api/questionBank'
 
 const route = useRoute()
 const router = useRouter()
@@ -101,11 +101,23 @@ const hasOptions = computed(() => ['single_choice', 'multi_choice', 'fault_image
 const optionKeys = ['A', 'B', 'C', 'D'] as const
 
 const submitting = ref(false)
-const knowledgePoints = ref([])
-const multiAnswer = ref([])
+const knowledgePoints = ref<{ id: number; name: string }[]>([])
+const multiAnswer = ref<string[]>([])
 const imageUploading = ref(false)
 
-const form = ref({
+const form = ref<{
+  type: string
+  content: string
+  options: { A: string; B: string; C: string; D: string } | null
+  answer: string
+  explanation: string
+  image_url: string
+  reference_answer: string
+  scoring_criteria: string
+  score: number
+  knowledge_point_id: number | null
+  status: string
+}>({
   type: 'single_choice',
   content: '',
   options: { A: '', B: '', C: '', D: '' },
@@ -129,7 +141,12 @@ onMounted(async () => {
     try {
       const res = await questionBankApi.getQuestion(Number(route.query.id))
       const q = res.data
-      form.value = { ...form.value, ...q }
+      form.value = {
+        ...form.value,
+        ...q,
+        options: (q.options as { A: string; B: string; C: string; D: string } | undefined) ?? form.value.options,
+        knowledge_point_id: q.knowledge_point_id ?? form.value.knowledge_point_id
+      }
       if (q.type === 'multi_choice' && q.answer) {
         multiAnswer.value = q.answer.split(',')
       }
@@ -176,7 +193,7 @@ async function handleImageUpload(options: { file: File }) {
     form.value.image_url = res.data.url
     ElMessage.success('图片上传成功')
   } catch (e) {
-    ElMessage.error(e.response?.data?.message || '图片上传失败')
+    ElMessage.error(((e as { response?: { data?: { message?: string } } }).response?.data?.message) || '图片上传失败')
   } finally {
     imageUploading.value = false
   }
@@ -189,7 +206,11 @@ function removeImage() {
 async function submitForm() {
   submitting.value = true
   try {
-    const data = { ...form.value }
+    const data: QuestionPayload = {
+      ...form.value,
+      options: form.value.options ?? undefined,
+      knowledge_point_id: form.value.knowledge_point_id ?? undefined
+    }
     if (data.type === 'multi_choice') {
       data.answer = multiAnswer.value.sort().join(',')
     }
@@ -202,7 +223,7 @@ async function submitForm() {
     }
     router.push('/training/tutor/question-manage')
   } catch (e) {
-    ElMessage.error(e.message || '操作失败')
+    ElMessage.error(e instanceof Error ? e.message : '操作失败')
   } finally {
     submitting.value = false
   }

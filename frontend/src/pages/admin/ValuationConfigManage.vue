@@ -12,7 +12,7 @@
 //     coefficients 分区共享一条 draft，global / kcModifiers 通过 filter 派生两个视图
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, Edit, Delete, Refresh, Check, RefreshLeft, ArrowDown } from '@element-plus/icons-vue'
+import { Plus, Refresh, Check, RefreshLeft, ArrowDown } from '@element-plus/icons-vue'
 import PageHeader from '@/components/valuation/PageHeader.vue'
 import {
   adminResources,

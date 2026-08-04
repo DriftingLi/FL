@@ -78,6 +78,7 @@ export function useEvaluationForm() {
       !form.mast_type ||
       form.mast_height_mm == null ||
       form.factory_year == null ||
+      form.sale_year == null ||
       form.usage_hours == null ||
       !form.province ||
       !form.city ||
