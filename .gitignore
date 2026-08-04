@@ -89,6 +89,17 @@ docs/
 # ===== SpecStory 相关文件 =====
 .specstory/
 
+# ===== Multica 运行时文件（自动生成，不入库）=====
+.agent_context/
+.multica/
+AGENTS.md
+
+# ===== 文档清理暂存区（复查后手动删除）=====
+.trash/
+
+# ===== 敏感文件隔离区（密钥/证书，严禁入库）=====
+.secrets-quarantine/
+
 # ===== 上传临时目录 =====
 .uploads/
 
