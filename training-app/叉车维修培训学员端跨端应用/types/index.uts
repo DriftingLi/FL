@@ -248,6 +248,51 @@ export type WrongQuestionStats = {
 	by_knowledge_point : UTSJSONObject    // { 知识点: 数量 }
 }
 
+// ===== 论坛模块类型 =====
+
+/** 论坛帖子 */
+export type ForumTopic = {
+	id : number
+	title : string
+	content : string
+	author_id : number
+	author_name : string
+	replies_count : number
+	views_count : number
+	created_at : string
+}
+
+/** 帖子列表响应 */
+export type ForumTopicListResult = {
+	items : ForumTopic[]
+	total : number
+	page : number
+	page_size : number
+}
+
+/** 帖子回复 */
+export type ForumReply = {
+	id : number
+	topic_id : number
+	content : string
+	author_id : number
+	author_name : string
+	created_at : string
+}
+
+/** 帖子详情（含回复列表） */
+export type ForumTopicDetail = {
+	id : number
+	title : string
+	content : string
+	author_id : number
+	author_name : string
+	replies_count : number
+	views_count : number
+	created_at : string
+	replies : ForumReply[]
+}
+
 // ===== 课程模块类型 =====
 
 /** 课程列表项 */

@@ -61,7 +61,7 @@
                     <text class="record-title">{{ item.title }}</text>
 
                     <!-- 折叠态：显示用户答案与正确答案 -->
-                    <view v-if="!isExpanded(item.question_id)" class="record-answers">
+                    <!-- <view v-if="!isExpanded(item.question_id)" class="record-answers">
                         <view class="answer-row wrong">
                             <text class="answer-label">我的答案：</text>
                             <text class="answer-value">{{ item.user_answer.length > 0 ? item.user_answer : '未作答' }}</text>
@@ -70,7 +70,7 @@
                             <text class="answer-label">正确答案：</text>
                             <text class="answer-value">{{ item.correct_answer }}</text>
                         </view>
-                    </view>
+                    </view> -->
 
                     <!-- 展开态：重做交互 -->
                     <view v-if="isExpanded(item.question_id)" class="redo-section">
@@ -162,7 +162,7 @@
     const typeOptions : TypeOption[] = [
         { label: '全部', value: '' },
         { label: '单选题', value: 'single_choice' },
-        { label: '多选题', value: 'multiple_choice' },
+        { label: '多选题', value: 'multi_choice' },
         { label: '判断题', value: 'true_false' },
     ]
 
@@ -405,16 +405,37 @@
             const isCorrect = `${data['is_correct']}` == 'true' || `${data['is_correct']}` == '1'
             const correctAnswer = data['correct_answer'] != null ? `${data['correct_answer']}` : item.correct_answer
             const explanation = data['explanation'] != null ? `${data['explanation']}` : ''
-            const result : RedoResult = {
-                correct: isCorrect,
-                correct_answer: correctAnswer,
-                explanation: explanation,
-            } as RedoResult
-            redoResult.value = result
 
-            // 重做正确后刷新统计
             if (isCorrect) {
+                // 重做正确：自动移出错题本，不保留该数据
+                try {
+                    await removeWrongQuestionApi(item.question_id)
+                } catch (e) {
+                    console.error('[wrong-questions] auto remove failed:', e)
+                }
+                // 从列表中移除
+                const newRecords : WrongQuestionItem[] = []
+                for (let i = 0; i < records.value.length; i++) {
+                    if (records.value[i].question_id != item.question_id) {
+                        newRecords.push(records.value[i])
+                    }
+                }
+                records.value = newRecords
+                total.value = Math.max(0, total.value - 1)
+                expandedId.value = 0
+                selectedKeys.value = [] as string[]
+                redoResult.value = null
+                uni.showToast({ title: '回答正确，已移出错题本', icon: 'success' })
+                // 刷新统计
                 loadStats()
+            } else {
+                // 重做错误：显示结果，保留在错题本中
+                const result : RedoResult = {
+                    correct: false,
+                    correct_answer: correctAnswer,
+                    explanation: explanation,
+                } as RedoResult
+                redoResult.value = result
             }
         } catch (e) {
             console.error('[wrong-questions] redo failed:', e)

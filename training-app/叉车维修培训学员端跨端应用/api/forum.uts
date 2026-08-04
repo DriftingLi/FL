@@ -1,0 +1,247 @@
+/**
+ * 论坛 API
+ * @note 后端响应已由 request 层自动解包 data 字段
+ *
+ * 帖子列表实际响应：
+ *   { page, pages, topics: [{ id, chapter_id, chapter_title, title, content,
+ *     view_count, reply_count, last_reply_at, created_at,
+ *     author: { user_id, username, name, nickname, avatar_url }, can_delete }], total }
+ *
+ * 帖子详情实际响应（推断，含 replies 数组）：
+ *   { id, title, content, view_count, reply_count, created_at,
+ *     author: {...}, replies: [{ id, content, created_at, author: {...} }] }
+ *
+ * 回复对象：{ id, content, created_at, author: { user_id, username, name, nickname, avatar_url } }
+ */
+import { get, post, del } from './request'
+import type { ForumTopic, ForumTopicListResult, ForumTopicDetail, ForumReply } from '../types/index'
+
+/** 安全转换为 number */
+function toNumber(v : any | null, defaultVal : number = 0) : number {
+	if (v == null) return defaultVal
+	const s = `${v}`
+	const n = parseFloat(s)
+	if (isNaN(n)) return defaultVal
+	return n
+}
+
+/** 安全转换为 string */
+function toStr(v : any | null, defaultVal : string = '') : string {
+	if (v == null) return defaultVal
+	return `${v}`
+}
+
+/** 从 author 嵌套对象提取作者名（优先 name，其次 nickname，最后 username） */
+function extractAuthorName(obj : UTSJSONObject) : string {
+	const authorRaw = obj['author']
+	if (authorRaw != null) {
+		const authorObj = authorRaw as UTSJSONObject
+		// 优先 name（非空）
+		const name = authorObj['name']
+		if (name != null) {
+			const s = toStr(name)
+			if (s.length > 0) return s
+		}
+		// 其次 nickname（非空）
+		const nickname = authorObj['nickname']
+		if (nickname != null) {
+			const s = toStr(nickname)
+			if (s.length > 0) return s
+		}
+		// 最后 username
+		const username = authorObj['username']
+		if (username != null) return toStr(username)
+	}
+	// 兼容旧格式 author_name 顶层字段
+	const direct = obj['author_name']
+	if (direct != null) return toStr(direct)
+	return ''
+}
+
+/** 从 author 嵌套对象提取作者 ID */
+function extractAuthorId(obj : UTSJSONObject) : number {
+	const authorRaw = obj['author']
+	if (authorRaw != null) {
+		const authorObj = authorRaw as UTSJSONObject
+		const uid = authorObj['user_id']
+		if (uid != null) return toNumber(uid)
+		const id = authorObj['id']
+		if (id != null) return toNumber(id)
+	}
+	// 兼容旧格式 author_id 顶层字段
+	const direct = obj['author_id']
+	if (direct != null) return toNumber(direct)
+	return 0
+}
+
+/** 构造 ForumReply
+ *  后端回复对象字段：{ id, content, created_at, author: {...} }
+ *  topic_id 后端未必返回，由调用方传入
+ */
+function buildReply(obj : UTSJSONObject, fallbackTopicId : number = 0) : ForumReply {
+	const reply : ForumReply = {
+		id: toNumber(obj['id']),
+		topic_id: toNumber(obj['topic_id'], fallbackTopicId),
+		content: toStr(obj['content']),
+		author_id: extractAuthorId(obj),
+		author_name: extractAuthorName(obj),
+		created_at: toStr(obj['created_at']),
+	} as ForumReply
+	return reply
+}
+
+/** 构造 ForumTopic（列表项）
+ *  后端字段：view_count / reply_count（非 views_count / replies_count）
+ */
+function buildTopic(obj : UTSJSONObject) : ForumTopic {
+	const topic : ForumTopic = {
+		id: toNumber(obj['id']),
+		title: toStr(obj['title']),
+		content: toStr(obj['content']),
+		author_id: extractAuthorId(obj),
+		author_name: extractAuthorName(obj),
+		replies_count: toNumber(obj['reply_count']),
+		views_count: toNumber(obj['view_count']),
+		created_at: toStr(obj['created_at']),
+	} as ForumTopic
+	return topic
+}
+
+/** 构造 ForumTopicListResult
+ *  后端字段：topics（非 items）、pages（非 page_size）、page、total
+ */
+function buildTopicListResult(obj : UTSJSONObject) : ForumTopicListResult {
+	const items : ForumTopic[] = []
+	// 后端用 topics 字段返回帖子数组
+	const topicsRaw = obj['topics']
+	if (topicsRaw != null) {
+		const topicsArray = topicsRaw as Array<UTSJSONObject>
+		for (let i = 0; i < topicsArray.length; i++) {
+			items.push(buildTopic(topicsArray[i]))
+		}
+	}
+	const result : ForumTopicListResult = {
+		items: items,
+		total: toNumber(obj['total']),
+		page: toNumber(obj['page']),
+		page_size: toNumber(obj['pages']),
+	} as ForumTopicListResult
+	return result
+}
+
+/** 构造 ForumTopicDetail（含回复列表） */
+function buildTopicDetail(obj : UTSJSONObject) : ForumTopicDetail {
+	const replies : ForumReply[] = []
+	const repliesRaw = obj['replies']
+	if (repliesRaw != null) {
+		const repliesArray = repliesRaw as Array<UTSJSONObject>
+		const topicId = toNumber(obj['id'])
+		for (let i = 0; i < repliesArray.length; i++) {
+			replies.push(buildReply(repliesArray[i], topicId))
+		}
+	}
+	const detail : ForumTopicDetail = {
+		id: toNumber(obj['id']),
+		title: toStr(obj['title']),
+		content: toStr(obj['content']),
+		author_id: extractAuthorId(obj),
+		author_name: extractAuthorName(obj),
+		replies_count: toNumber(obj['reply_count']),
+		views_count: toNumber(obj['view_count']),
+		created_at: toStr(obj['created_at']),
+		replies: replies,
+	} as ForumTopicDetail
+	return detail
+}
+
+/**
+ * 获取帖子列表
+ * @param page 页码，默认 1
+ * @param pageSize 每页条数，默认 10
+ * @param scope 范围，默认 general
+ */
+export function getForumTopicsApi(page : number = 1, pageSize : number = 10, scope : string = 'general') : Promise<ForumTopicListResult> {
+	const params : UTSJSONObject = {
+		scope: scope,
+		page: page.toString(),
+		page_size: pageSize.toString(),
+	} as UTSJSONObject
+	return get('/forum/topics', params).then((data : UTSJSONObject) : ForumTopicListResult => {
+		console.log('[getForumTopicsApi] raw data:', JSON.stringify(data))
+		return buildTopicListResult(data)
+	}).catch((e) : ForumTopicListResult => {
+		console.error('[getForumTopicsApi] failed:', e)
+		throw e
+	})
+}
+
+/**
+ * 获取帖子详情
+ * @param topicId 帖子 ID
+ */
+export function getForumTopicDetailApi(topicId : number) : Promise<ForumTopicDetail> {
+	const url = '/forum/topics/' + topicId
+	return get(url).then((data : UTSJSONObject) : ForumTopicDetail => {
+		console.log('[getForumTopicDetailApi] raw data:', JSON.stringify(data))
+		return buildTopicDetail(data)
+	}).catch((e) : ForumTopicDetail => {
+		console.error('[getForumTopicDetailApi] failed:', e)
+		throw e
+	})
+}
+
+/**
+ * 发布新帖
+ * @param title 标题（1-100 字）
+ * @param content 内容（1-10000 字）
+ */
+export function createForumTopicApi(title : string, content : string) : Promise<ForumTopic> {
+	const payload : UTSJSONObject = {
+		title: title,
+		content: content,
+	} as UTSJSONObject
+	return post('/forum/topics', payload).then((data : UTSJSONObject) : ForumTopic => {
+		console.log('[createForumTopicApi] raw data:', JSON.stringify(data))
+		return buildTopic(data)
+	}).catch((e) : ForumTopic => {
+		console.error('[createForumTopicApi] failed:', e)
+		throw e
+	})
+}
+
+/**
+ * 回复帖子
+ * @param topicId 帖子 ID
+ * @param content 回复内容
+ */
+export function replyForumTopicApi(topicId : number, content : string) : Promise<ForumReply> {
+	const url = '/forum/topics/' + topicId + '/replies'
+	const payload : UTSJSONObject = {
+		content: content,
+	} as UTSJSONObject
+	return post(url, payload).then((data : UTSJSONObject) : ForumReply => {
+		console.log('[replyForumTopicApi] raw data:', JSON.stringify(data))
+		return buildReply(data, topicId)
+	}).catch((e) : ForumReply => {
+		console.error('[replyForumTopicApi] failed:', e)
+		throw e
+	})
+}
+
+/**
+ * 删除帖子
+ * @param topicId 帖子 ID
+ */
+export function deleteForumTopicApi(topicId : number) : Promise<UTSJSONObject> {
+	const url = '/forum/topics/' + topicId
+	return del(url)
+}
+
+/**
+ * 删除回复
+ * @param replyId 回复 ID
+ */
+export function deleteForumReplyApi(replyId : number) : Promise<UTSJSONObject> {
+	const url = '/forum/replies/' + replyId
+	return del(url)
+}

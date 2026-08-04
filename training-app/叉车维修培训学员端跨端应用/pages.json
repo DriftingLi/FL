@@ -125,6 +125,27 @@
 				"navigationStyle": "custom",
 				"navigationBarTitleText": "答题"
 			}
+		},
+		{
+			"path": "pages/forum/forum",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "学员论坛"
+			}
+		},
+		{
+			"path": "pages/forum/forum-detail",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "帖子详情"
+			}
+		},
+		{
+			"path": "pages/forum/forum-create",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "发布新帖"
+			}
 		}
 	],
 	"globalStyle": {

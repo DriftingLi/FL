@@ -210,3 +210,11 @@ export function post(url : string, data : any | null = null, options : RequestOp
 	opts.data = data
 	return request<UTSJSONObject>(opts)
 }
+
+/** DELETE 请求快捷方法 */
+export function del(url : string, options : RequestOptions | null = null) : Promise<UTSJSONObject> {
+	const opts : RequestOptions = options != null ? options! : { url: url } as RequestOptions
+	opts.url = url
+	opts.method = 'DELETE'
+	return request<UTSJSONObject>(opts)
+}

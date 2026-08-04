@@ -30,6 +30,11 @@
                 </view>
             </view>
             <view class="menu-section">
+                <view class="menu-item" @click="onMenuClick('forum')">
+                    <text class="menu-icon">💬</text>
+                    <text class="menu-text">学员论坛</text>
+                    <text class="menu-arrow">›</text>
+                </view>
                 <view class="menu-item" @click="onMenuClick('wrong')">
                     <text class="menu-icon">❌</text>
                     <text class="menu-text">错题本</text>
@@ -125,7 +130,9 @@
     }
 
     function onMenuClick(type : string) : void {
-        if (type == 'wrong') {
+        if (type == 'forum') {
+            uni.navigateTo({ url: '/pages/forum/forum' })
+        } else if (type == 'wrong') {
             uni.navigateTo({ url: '/pages/profile/wrong-questions' })
         } else if (type == 'records') {
             uni.navigateTo({ url: '/pages/profile/records' })

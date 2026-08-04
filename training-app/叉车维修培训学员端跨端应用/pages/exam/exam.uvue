@@ -46,12 +46,14 @@
             <!-- 待参加考试 -->
             <view class="section">
                 <view class="section-header">
-                    <text class="section-title">待参加考试</text>
+                    <text class="section-title">考试中心</text>
                 </view>
-                <view v-if="pendingExams.length == 0" class="empty-tip">
+                <!-- <view v-if="pendingExams.length == 0" class="empty-tip"> -->
+                <view class="empty-tip">
+
                     <text class="empty-text">暂无待参加考试</text>
                 </view>
-                <view class="exam-list">
+                <!-- <view class="exam-list">
                     <view v-for="(exam, idx) in pendingExams" :key="idx" class="exam-item"
                         @click="onExamClick(exam.course_id)">
                         <view class="exam-info">
@@ -66,7 +68,7 @@
                             <text class="action-btn">开始考试</text>
                         </view>
                     </view>
-                </view>
+                </view> -->
             </view>
 
             <!-- 已完成考试 -->

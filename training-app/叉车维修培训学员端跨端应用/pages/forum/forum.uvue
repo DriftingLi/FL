@@ -1,0 +1,363 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">学员论坛</text>
+            <view class="header-right" @click="onCreate">
+                <text class="header-action">发帖</text>
+            </view>
+        </view>
+        <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+            <view class="forum-banner">
+                <text class="banner-title">综合讨论区</text>
+                <text class="banner-sub">自由发言，交流叉车维修知识与学习心得</text>
+            </view>
+
+            <view v-if="topics.length == 0 && !loading" class="empty-tip">
+                <text class="empty-icon">💬</text>
+                <text class="empty-text">还没有帖子，来发第一帖吧</text>
+                <view class="empty-btn" @click="onCreate">
+                    <text class="empty-btn-text">发布新帖</text>
+                </view>
+            </view>
+
+            <view class="topic-list">
+                <view v-for="(item, idx) in topics" :key="idx" class="topic-card" @click="onTopicClick(item.id)">
+                    <text class="topic-title">{{ item.title }}</text>
+                    <text class="topic-content-preview">{{ getContentPreview(item.content) }}</text>
+                    <view class="topic-footer">
+                        <view class="topic-author">
+                            <view class="author-avatar">
+                                <text class="author-avatar-text">{{ getAuthorInitial(item.author_name) }}</text>
+                            </view>
+                            <text class="author-name">{{ item.author_name.length > 0 ? item.author_name : '匿名学员' }}</text>
+                        </view>
+                        <view class="topic-meta">
+                            <text class="meta-item">💬 {{ item.replies_count }}</text>
+                            <text class="meta-item">👁 {{ item.views_count }}</text>
+                            <text class="meta-time">{{ formatDate(item.created_at) }}</text>
+                        </view>
+                    </view>
+                </view>
+            </view>
+
+            <view v-if="loading" class="loading-more">
+                <text class="loading-text">加载中...</text>
+            </view>
+            <view v-if="noMore && topics.length > 0" class="loading-more">
+                <text class="loading-text">没有更多了</text>
+            </view>
+        </scroll-view>
+
+        <!-- 悬浮发帖按钮 -->
+        <view class="fab-btn" @click="onCreate">
+            <text class="fab-icon">+</text>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref } from 'vue'
+    import { onShow } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { getForumTopicsApi } from '../../api/forum'
+    import type { ForumTopic } from '../../types/index'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const topics = ref<ForumTopic[]>([])
+    const page = ref<number>(1)
+    const pageSize = 10
+    const total = ref<number>(0)
+    const loading = ref<boolean>(false)
+    const noMore = ref<boolean>(false)
+
+    /** 获取内容预览（截取前 80 字，去掉换行） */
+    function getContentPreview(content : string) : string {
+        const single = content.replace('\n', ' ')
+        if (single.length <= 80) return single
+        return single.substring(0, 80) + '...'
+    }
+
+    /** 获取作者名首字 */
+    function getAuthorInitial(name : string) : string {
+        if (name.length == 0) return '学'
+        return name.substring(0, 1)
+    }
+
+    /** 时间字符串截取 YYYY-MM-DD */
+    function formatDate(dateStr : string) : string {
+        if (dateStr.length < 10) return dateStr
+        return dateStr.substring(0, 10)
+    }
+
+    async function loadTopics(reset : boolean = false) : Promise<void> {
+        if (loading.value) return
+        if (reset) {
+            page.value = 1
+            noMore.value = false
+        }
+        if (noMore.value && !reset) return
+
+        loading.value = true
+        try {
+            const result = await getForumTopicsApi(page.value, pageSize)
+            if (reset) {
+                topics.value = result.items
+            } else {
+                topics.value = topics.value.concat(result.items)
+            }
+            total.value = result.total
+            if (topics.value.length >= result.total || result.items.length == 0) {
+                noMore.value = true
+            } else {
+                page.value = page.value + 1
+            }
+        } catch (e) {
+            console.error('[forum] load failed:', e)
+            uni.showToast({ title: '加载帖子失败', icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function onLoadMore() : void {
+        loadTopics(false)
+    }
+
+    function onTopicClick(topicId : number) : void {
+        uni.navigateTo({ url: '/pages/forum/forum-detail?id=' + topicId })
+    }
+
+    function onCreate() : void {
+        uni.navigateTo({ url: '/pages/forum/forum-create' })
+    }
+
+    function onBack() : void {
+        uni.navigateBack()
+    }
+
+    onShow(() => {
+        // 每次进入页面刷新列表（发帖/删帖后能及时同步）
+        loadTopics(true)
+    })
+</script>
+
+<style>
+    .container {
+        display: flex;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        width: 80rpx;
+        align-items: center;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #ffffff;
+    }
+
+    .header-title {
+        flex: 1;
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+        text-align: center;
+    }
+
+    .header-right {
+        width: 80rpx;
+        align-items: center;
+    }
+
+    .header-action {
+        font-size: 28rpx;
+        color: #ffffff;
+    }
+
+    .content-scroll {
+        flex: 1;
+        height: 0;
+    }
+
+    /* 顶部 banner */
+    .forum-banner {
+        background-color: #2979ff;
+        padding: 0 32rpx 32rpx;
+        flex-direction: column;
+    }
+
+    .banner-title {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+        margin-bottom: 8rpx;
+    }
+
+    .banner-sub {
+        font-size: 24rpx;
+        color: #cfe5ff;
+    }
+
+    /* 帖子列表 */
+    .topic-list {
+        flex-direction: column;
+        padding: 16rpx 24rpx;
+    }
+
+    .topic-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        margin-bottom: 16rpx;
+        border: 1px solid #eeeeee;
+        flex-direction: column;
+    }
+
+    .topic-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+        line-height: 1.4;
+        margin-bottom: 12rpx;
+    }
+
+    .topic-content-preview {
+        font-size: 26rpx;
+        color: #666666;
+        line-height: 1.5;
+        margin-bottom: 16rpx;
+    }
+
+    .topic-footer {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: 12rpx;
+        border-top: 1rpx solid #f5f5f5;
+    }
+
+    .topic-author {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .author-avatar {
+        width: 44rpx;
+        height: 44rpx;
+        border-radius: 22rpx;
+        background-color: #2979ff;
+        align-items: center;
+        justify-content: center;
+        margin-right: 12rpx;
+    }
+
+    .author-avatar-text {
+        font-size: 22rpx;
+        color: #ffffff;
+        font-weight: bold;
+    }
+
+    .author-name {
+        font-size: 24rpx;
+        color: #666666;
+    }
+
+    .topic-meta {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .meta-item {
+        font-size: 22rpx;
+        color: #999999;
+        margin-right: 16rpx;
+    }
+
+    .meta-time {
+        font-size: 22rpx;
+        color: #cccccc;
+    }
+
+    /* 空状态 */
+    .empty-tip {
+        align-items: center;
+        padding: 120rpx 0 80rpx;
+        flex-direction: column;
+    }
+
+    .empty-icon {
+        font-size: 96rpx;
+        margin-bottom: 24rpx;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+        margin-bottom: 32rpx;
+    }
+
+    .empty-btn {
+        background-color: #2979ff;
+        padding: 16rpx 48rpx;
+        border-radius: 32rpx;
+    }
+
+    .empty-btn-text {
+        font-size: 28rpx;
+        color: #ffffff;
+    }
+
+    /* 加载更多 */
+    .loading-more {
+        align-items: center;
+        padding: 24rpx 0;
+    }
+
+    .loading-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    /* 悬浮发帖按钮 */
+    .fab-btn {
+        position: fixed;
+        right: 32rpx;
+        bottom: 80rpx;
+        width: 96rpx;
+        height: 96rpx;
+        border-radius: 48rpx;
+        background-color: #2979ff;
+        align-items: center;
+        justify-content: center;
+        shadow-color: rgba(0, 0, 0, 0.3);
+        shadow-offset: 0rpx 4rpx;
+        shadow-opacity: 0.3;
+        shadow-radius: 8rpx;
+    }
+
+    .fab-icon {
+        font-size: 56rpx;
+        color: #ffffff;
+        font-weight: bold;
+    }
+</style>
