@@ -2,19 +2,15 @@
 package middleware
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
-	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/response"
 )
 
@@ -32,13 +28,8 @@ const (
 	CtxRequestID ContextKey = "request_id"
 )
 
-// Claims JWT 声明。
-type Claims struct {
-	UserID   int    `json:"user_id"`
-	Username string `json:"username"`
-	Role     string `json:"role"`
-	jwt.RegisteredClaims
-}
+// Claims JWT 声明（统一由 security 会话模块持有）。
+type Claims = security.Claims
 
 // RequestID 为每个请求注入唯一 ID。
 func RequestID() gin.HandlerFunc {
@@ -104,15 +95,16 @@ func Recovery() gin.HandlerFunc {
 
 // JWTAuth 强制 JWT 认证中间件。
 func JWTAuth(cfg *config.Config) gin.HandlerFunc {
+	sess := security.SessionFromConfig(cfg)
 	return func(c *gin.Context) {
-		tokenStr := extractToken(c, cfg.AuthCookie.Name)
+		tokenStr := sess.ExtractToken(c.GetHeader("Authorization"), authCookieValue(c, cfg.AuthCookie.Name))
 		if tokenStr == "" {
 			response.Unauthorized(c, "Token无效或已过期，请重新登录")
 			c.Abort()
 			return
 		}
 
-		claims, err := parseToken(cfg.JWTSecretKey, tokenStr)
+		claims, err := sess.Verify(tokenStr)
 		if err != nil {
 			response.Unauthorized(c, "Token无效或已过期，请重新登录")
 			c.Abort()
@@ -120,16 +112,11 @@ func JWTAuth(cfg *config.Config) gin.HandlerFunc {
 		}
 
 		// 检查 token 黑名单（已登出 token 会被加入黑名单直到自然过期）
-		tokenHash := sha256.Sum256([]byte(tokenStr))
-		blacklistKey := "jwt:blacklist:" + hex.EncodeToString(tokenHash[:])
-		if _, err := cache.Get(c.Request.Context(), blacklistKey); err == nil {
-			// 命中黑名单 → token 已登出
+		if revoked, _ := sess.IsRevoked(c.Request.Context(), tokenStr); revoked {
 			response.Unauthorized(c, "Token无效或已过期，请重新登录")
 			c.Abort()
 			return
 		}
-		// err != nil 时放行：redis.Nil 表示 key 不存在（正常情况）；
-		// 其他 Redis 异常也放行，避免 Redis 宕机导致全员无法登录
 
 		c.Set(string(CtxUserID), claims.UserID)
 		c.Set(string(CtxUsername), claims.Username)
@@ -140,19 +127,31 @@ func JWTAuth(cfg *config.Config) gin.HandlerFunc {
 
 // OptionalAuth 可选 JWT 认证：有 token 则解析填充，无则放行。
 func OptionalAuth(cfg *config.Config) gin.HandlerFunc {
+	sess := security.SessionFromConfig(cfg)
 	return func(c *gin.Context) {
-		tokenStr := extractToken(c, cfg.AuthCookie.Name)
+		tokenStr := sess.ExtractToken(c.GetHeader("Authorization"), authCookieValue(c, cfg.AuthCookie.Name))
 		if tokenStr == "" {
 			c.Next()
 			return
 		}
-		if claims, err := parseToken(cfg.JWTSecretKey, tokenStr); err == nil {
-			c.Set(string(CtxUserID), claims.UserID)
-			c.Set(string(CtxUsername), claims.Username)
-			c.Set(string(CtxUserRole), claims.Role)
+		if claims, err := sess.Verify(tokenStr); err == nil {
+			if revoked, _ := sess.IsRevoked(c.Request.Context(), tokenStr); !revoked {
+				c.Set(string(CtxUserID), claims.UserID)
+				c.Set(string(CtxUsername), claims.Username)
+				c.Set(string(CtxUserRole), claims.Role)
+			}
 		}
 		c.Next()
 	}
+}
+
+// authCookieValue 读取父域名登录 Cookie（不存在时返回空串）。
+func authCookieValue(c *gin.Context, cookieName string) string {
+	tk, err := c.Cookie(cookieName)
+	if err != nil {
+		return ""
+	}
+	return tk
 }
 
 // RoleRequired 角色校验中间件。
@@ -208,33 +207,4 @@ func CurrentRole(c *gin.Context) string {
 	}
 	uid, _ := v.(string)
 	return uid
-}
-
-// extractToken 提取登录令牌：优先 Authorization Bearer 头，其次父域名 Cookie（子域名共享登录）。
-func extractToken(c *gin.Context, cookieName string) string {
-	if auth := c.GetHeader("Authorization"); len(auth) > 7 && auth[:7] == "Bearer " {
-		return auth[7:]
-	}
-	if cookieName != "" {
-		if tk, err := c.Cookie(cookieName); err == nil && tk != "" {
-			return tk
-		}
-	}
-	return ""
-}
-
-// parseToken 解析并校验 JWT。
-func parseToken(secret, tokenStr string) (*Claims, error) {
-	claims := &Claims{}
-	_, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
-		// 显式校验签名算法，拒绝非 HMAC 算法（防止 alg=none 攻击）
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
-		return []byte(secret), nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return claims, nil
 }

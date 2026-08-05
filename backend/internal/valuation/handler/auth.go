@@ -1,18 +1,13 @@
 // Package handler 实现残值评估模块的 HTTP 处理器。
 // 本文件：估值模块认证 handler（/api/valuation/auth/*）。
-// 已统一到主体系 AuthService,本 handler 仅作为前端兼容入口。
+// 已统一到主体系 AuthService 与 security 会话模块,本 handler 仅作为前端兼容入口。
 package handler
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 
-	"forklift-training/internal/cache"
 	"forklift-training/internal/middleware"
 	vservice "forklift-training/internal/valuation/service"
 )
@@ -105,22 +100,15 @@ func (h *ValuationAuthHandler) Me(c *gin.Context) {
 }
 
 // Logout 处理 POST /api/valuation/auth/logout（需 middleware.JWTAuth）
-// 将当前 token 写入 Redis 黑名单(统一前缀 jwt:blacklist:),TTL = token 剩余有效期。
+// 将当前 token 写入黑名单（统一前缀 jwt:blacklist:，由会话模块实现），TTL = token 剩余有效期。
 func (h *ValuationAuthHandler) Logout(c *gin.Context) {
-	tokenStr := extractValuationBearerToken(c)
+	// 与旧行为一致：仅从 Authorization 头提取 Bearer token
+	tokenStr := h.authSvc.Main().Session().ExtractToken(c.GetHeader("Authorization"), "")
 	if tokenStr == "" {
 		OK(c, nil)
 		return
 	}
-	// 已通过 middleware.JWTAuth 校验,这里用主体系 Claims 解析过期时间
-	claims := &middleware.Claims{}
-	if _, _, err := jwt.NewParser().ParseUnverified(tokenStr, claims); err == nil && claims.ExpiresAt != nil {
-		tokenHash := sha256.Sum256([]byte(tokenStr))
-		blacklistKey := valuationBlacklistPrefix + hex.EncodeToString(tokenHash[:])
-		ttl := time.Until(claims.ExpiresAt.Time)
-		if ttl > 0 {
-			_ = cache.Set(c.Request.Context(), blacklistKey, "1", ttl)
-		}
-	}
+	// 已通过 middleware.JWTAuth 校验，直接吊销（无效 token 静默忽略）
+	_ = h.authSvc.Main().RevokeToken(c.Request.Context(), tokenStr)
 	OK(c, nil)
 }

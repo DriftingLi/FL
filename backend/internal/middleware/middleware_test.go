@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/security"
 )
 
 func init() {
@@ -199,55 +201,30 @@ func TestRoleRequired_Denied(t *testing.T) {
 	}
 }
 
-func TestExtractToken(t *testing.T) {
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c.Request, _ = http.NewRequest("GET", "/", nil)
+func TestJWTAuth_RevokedToken(t *testing.T) {
+	cfg := &config.Config{JWTSecretKey: testSecret}
+	r := newTestRouter(cfg)
 
-	// 无 Authorization 头
-	c.Request.Header.Del("Authorization")
-	if got := extractToken(c, ""); got != "" {
-		t.Errorf("无 Authorization 头应返回 ''，得到 %q", got)
+	token := generateToken(t, 42, "hrwai01", "hrwai_user")
+
+	// 依赖真实 Redis 黑名单（全局缓存）；无 Redis 时跳过
+	sess := security.SessionFromConfig(cfg)
+	ctx := context.Background()
+	if err := sess.Revoke(ctx, token); err != nil {
+		t.Skipf("Redis 不可用，跳过黑名单分支测试: %v", err)
 	}
-
-	// 有 Bearer token
-	c.Request.Header.Set("Authorization", "Bearer abc123")
-	if got := extractToken(c, ""); got != "abc123" {
-		t.Errorf("应返回 'abc123'，得到 %q", got)
-	}
-
-	// 非 Bearer 前缀
-	c.Request.Header.Set("Authorization", "Basic abc123")
-	if got := extractToken(c, ""); got != "" {
-		t.Errorf("非 Bearer 应返回 ''，得到 %q", got)
+	revoked, _ := sess.IsRevoked(ctx, token)
+	if !revoked {
+		t.Skip("Redis 黑名单写入失败，跳过")
 	}
 
-	// Cookie 兜底：无 Authorization 时从父域名 Cookie 读取
-	c.Request.AddCookie(&http.Cookie{Name: "hrwai_token", Value: "cookie-token"})
-	if got := extractToken(c, "hrwai_token"); got != "cookie-token" {
-		t.Errorf("应从 Cookie 返回 'cookie-token'，得到 %q", got)
-	}
-}
+	req, _ := http.NewRequest("GET", "/protected/endpoint", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
 
-func TestParseToken_Valid(t *testing.T) {
-	token := generateToken(t, 5, "parser", "tutor")
-	claims, err := parseToken(testSecret, token)
-	if err != nil {
-		t.Fatalf("有效 token 不应报错: %v", err)
-	}
-	if claims.UserID != 5 {
-		t.Errorf("UserID = %d，期望 5", claims.UserID)
-	}
-	if claims.Username != "parser" {
-		t.Errorf("Username = %q", claims.Username)
-	}
-	if claims.Role != "tutor" {
-		t.Errorf("Role = %q", claims.Role)
-	}
-}
-
-func TestParseToken_Invalid(t *testing.T) {
-	if _, err := parseToken(testSecret, "invalid"); err == nil {
-		t.Error("无效 token 应报错")
+	if w.Code != 401 {
+		t.Fatalf("已吊销 token 应返回 401，得到 %d", w.Code)
 	}
 }
 

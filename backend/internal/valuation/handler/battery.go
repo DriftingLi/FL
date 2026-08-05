@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 
+	"forklift-training/internal/middleware"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation/model"
 	"forklift-training/internal/valuation/repository"
@@ -72,7 +73,7 @@ func (h *BatteryHandler) Create(c *gin.Context) {
 	}
 
 	// 持久化（带上当前登录用户 ID）
-	userID := CurrentValuationUserID(c)
+	userID := middleware.CurrentUserID(c)
 	saved, err := h.repo.CreateEvaluation(c.Request.Context(), eval, result.CycleFeatures, userID)
 	if err != nil {
 		h.logger.Error("保存电池评估记录失败", zap.Error(err))
@@ -118,7 +119,7 @@ func (h *BatteryHandler) List(c *gin.Context) {
 	}
 
 	// 仅查询当前登录用户的记录（List 在鉴权组，userID 必然 >0）
-	userID := CurrentValuationUserID(c)
+	userID := middleware.CurrentUserID(c)
 	items, total, err := h.repo.ListEvaluations(c.Request.Context(), batteryType, userID, pageSize, offset)
 	if err != nil {
 		h.logger.Error("查询电池评估列表失败", zap.Error(err))
@@ -141,7 +142,7 @@ func (h *BatteryHandler) Get(c *gin.Context) {
 		return
 	}
 
-	userID := CurrentValuationUserID(c)
+	userID := middleware.CurrentUserID(c)
 	eval, err := h.repo.GetEvaluationByUser(c.Request.Context(), id, userID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

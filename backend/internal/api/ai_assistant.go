@@ -68,7 +68,7 @@ func (h *AIAssistantHandler) ListPublicModels(c *gin.Context) {
 
 // ListUserModels 列出登录用户的自定义模型（api_key 脱敏）。
 func (h *AIAssistantHandler) ListUserModels(c *gin.Context) {
-	userID := vhandler.CurrentValuationUserID(c)
+	userID := middleware.CurrentUserID(c)
 	if userID == 0 {
 		vhandler.Error(c, http.StatusUnauthorized, 40100, "请先登录")
 		return
@@ -83,7 +83,7 @@ func (h *AIAssistantHandler) ListUserModels(c *gin.Context) {
 
 // SaveUserModel 创建/更新用户自定义模型。
 func (h *AIAssistantHandler) SaveUserModel(c *gin.Context) {
-	userID := vhandler.CurrentValuationUserID(c)
+	userID := middleware.CurrentUserID(c)
 	if userID == 0 {
 		vhandler.Error(c, http.StatusUnauthorized, 40100, "请先登录")
 		return
@@ -106,7 +106,7 @@ func (h *AIAssistantHandler) SaveUserModel(c *gin.Context) {
 
 // DeleteUserModel 删除用户自定义模型。
 func (h *AIAssistantHandler) DeleteUserModel(c *gin.Context) {
-	userID := vhandler.CurrentValuationUserID(c)
+	userID := middleware.CurrentUserID(c)
 	if userID == 0 {
 		vhandler.Error(c, http.StatusUnauthorized, 40100, "请先登录")
 		return
@@ -129,7 +129,7 @@ func (h *AIAssistantHandler) DeleteUserModel(c *gin.Context) {
 
 // ListSessions 列出登录用户的会话。
 func (h *AIAssistantHandler) ListSessions(c *gin.Context) {
-	userID := vhandler.CurrentValuationUserID(c)
+	userID := middleware.CurrentUserID(c)
 	if userID == 0 {
 		vhandler.Error(c, http.StatusUnauthorized, 40100, "请先登录")
 		return
@@ -144,7 +144,7 @@ func (h *AIAssistantHandler) ListSessions(c *gin.Context) {
 
 // CreateSession 创建会话。
 func (h *AIAssistantHandler) CreateSession(c *gin.Context) {
-	userID := vhandler.CurrentValuationUserID(c)
+	userID := middleware.CurrentUserID(c)
 	if userID == 0 {
 		vhandler.Error(c, http.StatusUnauthorized, 40100, "请先登录")
 		return
@@ -164,7 +164,7 @@ func (h *AIAssistantHandler) CreateSession(c *gin.Context) {
 
 // DeleteSession 删除会话及其消息。
 func (h *AIAssistantHandler) DeleteSession(c *gin.Context) {
-	userID := vhandler.CurrentValuationUserID(c)
+	userID := middleware.CurrentUserID(c)
 	if userID == 0 {
 		vhandler.Error(c, http.StatusUnauthorized, 40100, "请先登录")
 		return
@@ -188,7 +188,7 @@ func (h *AIAssistantHandler) DeleteSession(c *gin.Context) {
 // RenameSession 修改会话标题。
 // Body: {"title": "新标题"}；标题非空，最多 100 字符。
 func (h *AIAssistantHandler) RenameSession(c *gin.Context) {
-	userID := vhandler.CurrentValuationUserID(c)
+	userID := middleware.CurrentUserID(c)
 	if userID == 0 {
 		vhandler.Error(c, http.StatusUnauthorized, 40100, "请先登录")
 		return
@@ -218,7 +218,7 @@ func (h *AIAssistantHandler) RenameSession(c *gin.Context) {
 
 // GetSessionMessages 获取指定会话的消息列表。
 func (h *AIAssistantHandler) GetSessionMessages(c *gin.Context) {
-	userID := vhandler.CurrentValuationUserID(c)
+	userID := middleware.CurrentUserID(c)
 	if userID == 0 {
 		vhandler.Error(c, http.StatusUnauthorized, 40100, "请先登录")
 		return
@@ -246,7 +246,7 @@ func (h *AIAssistantHandler) GetSessionMessages(c *gin.Context) {
 //   - error:   错误信息 {"message": "..."}
 //   - done:    正常结束（无 data）
 func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
-	userID := vhandler.CurrentValuationUserID(c) // 可选认证，未登录为 0
+	userID := middleware.CurrentUserID(c) // 可选认证，未登录为 0
 
 	var req service.StreamChatReq
 	if err := c.ShouldBindJSON(&req); err != nil {

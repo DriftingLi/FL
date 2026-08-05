@@ -3,8 +3,6 @@
 package service
 
 import (
-	"time"
-
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -22,15 +20,6 @@ type ValuationLoginResult = vmain.LoginResult
 // 保留此类型以减少下游 handler 改动量,后续可逐步删除。
 type ValuationAuthService struct {
 	main *vmain.AuthService
-}
-
-// NewValuationAuthService 创建估值认证服务(薄包装)。
-// 参数 db / jwtSecret / jwtExpiry 仅为兼容旧签名,实际使用主体系 AuthService 的配置。
-func NewValuationAuthService(db *gorm.DB, jwtSecret string, jwtExpiry time.Duration) *ValuationAuthService {
-	// 创建一个内部主体系 AuthService(jwtExpiry 仅用于内部 token 签发,与主体系一致)
-	return &ValuationAuthService{
-		main: vmain.NewAuthService(db, jwtSecret, jwtExpiry, "", "", ""),
-	}
 }
 
 // WrapValuationAuthService 用已存在的主体系 AuthService 包装为薄包装。

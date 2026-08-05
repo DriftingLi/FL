@@ -13,7 +13,7 @@
 //	  ├── /dictionaries/*               字典查询（只读 GET）
 //	  └── /health                       健康检查
 //
-//	/api/valuation                      估值鉴权组（ValuationJWTAuth，独立 JWT secret）
+//	/api/valuation                      估值鉴权组（统一主体系 JWT）
 //	  ├── GET  /evaluations             评估历史/详情（需登录）
 //	  ├── GET  /evaluations/:id
 //	  ├── /battery/evaluations          电池 RUL 评估 CRUD（需登录）
