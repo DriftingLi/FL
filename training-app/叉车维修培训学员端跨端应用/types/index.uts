@@ -45,6 +45,17 @@ export type RegisterParams = {
 	name : string
 }
 
+/** 更新个人资料参数（昵称/头像） */
+export type UpdateProfileParams = {
+	name ?: string       // 昵称
+	avatar ?: string     // 头像 URL
+}
+
+/** 上传头像响应 */
+export type UploadAvatarResult = {
+	avatar : string      // 头像访问 URL
+}
+
 /** 学习统计单日数据 */
 export type StudyStatsItem = {
 	date : string       // YYYY-MM-DD
@@ -124,6 +135,8 @@ export type AuthStore = {
 	validateToken : () => Promise<void>
 	login : (params : LoginParams) => Promise<void>
 	logout : () => Promise<void>
+	/** 更新本地用户信息（昵称/头像），并持久化到 storage */
+	updateUser : (patch : UpdateProfileParams) => void
 }
 
 /** 题目选项 */

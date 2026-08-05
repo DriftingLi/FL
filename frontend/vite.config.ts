@@ -15,17 +15,12 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8080',
-        changeOrigin: true,
-        timeout: 60000,
-        proxyTimeout: 60000,
-        ws: false
+        target: 'http://localhost:8080',
+        changeOrigin: true
       },
       '/static': {
-        target: 'http://127.0.0.1:8080',
-        changeOrigin: true,
-        timeout: 60000,
-        proxyTimeout: 60000
+        target: 'http://localhost:8080',
+        changeOrigin: true
       }
     }
   }

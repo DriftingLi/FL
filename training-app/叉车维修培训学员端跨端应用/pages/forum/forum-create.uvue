@@ -3,12 +3,10 @@
         <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
         <view class="header">
             <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
+                <text class="back-icon" @click="onBack">‹</text>
             </view>
             <text class="header-title">发布新帖</text>
-            <view class="header-right" :class="{ disabled: !canSubmit }" @click="onSubmit">
-                <text class="header-action">发布</text>
-            </view>
+            <view class="header-right"></view>
         </view>
 
         <scroll-view class="content-scroll" scroll-y="true">
@@ -31,6 +29,12 @@
                 <text class="tips-text">• 请遵守社区规范，文明发言</text>
                 <text class="tips-text">• 禁止发布与叉车维修培训无关的内容</text>
                 <text class="tips-text">• 禁止发布广告、灌水等不良信息</text>
+            </view>
+
+            <view class="submit-section">
+                <view class="submit-btn" @click="onSubmit">
+                    <text class="submit-btn-text" @click="onSubmit">发布</text>
+                </view>
             </view>
         </scroll-view>
     </view>
@@ -58,8 +62,17 @@
 
     /** 提交发帖 */
     async function onSubmit() : Promise<void> {
-        if (!canSubmit.value) return
+        // 提交中防抖
         if (submitting.value) return
+        // 校验未通过时给出明确提示，避免用户以为按钮"点不到"
+        if (title.value.trim().length == 0) {
+            uni.showToast({ title: '请输入标题', icon: 'none' })
+            return
+        }
+        if (content.value.trim().length == 0) {
+            uni.showToast({ title: '请输入内容', icon: 'none' })
+            return
+        }
 
         submitting.value = true
         uni.showLoading({ title: '发布中...' })
@@ -71,7 +84,15 @@
             }, 1000)
         } catch (e) {
             console.error('[forum-create] submit failed:', e)
-            uni.showToast({ title: '发布失败', icon: 'none' })
+            let msg = '发布失败'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) {
+                    msg = m
+                }
+            }
+            uni.showToast({ title: msg, icon: 'none' })
         } finally {
             submitting.value = false
             uni.hideLoading()
@@ -136,10 +157,6 @@
     .header-right {
         width: 80rpx;
         align-items: center;
-    }
-
-    .header-right.disabled {
-        opacity: 0.5;
     }
 
     .header-action {
@@ -222,5 +239,26 @@
         font-size: 24rpx;
         color: #999999;
         line-height: 1.8;
+    }
+
+    /* 发布按钮区 */
+    .submit-section {
+        padding: 24rpx 24rpx 64rpx;
+        align-items: center;
+    }
+
+    .submit-btn {
+        width: 100%;
+        height: 88rpx;
+        border-radius: 44rpx;
+        background-color: #2979ff;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .submit-btn-text {
+        font-size: 32rpx;
+        color: #ffffff;
+        font-weight: bold;
     }
 </style>

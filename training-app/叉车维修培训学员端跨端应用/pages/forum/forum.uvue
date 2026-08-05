@@ -2,12 +2,10 @@
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
         <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
+            <view class="header-left"></view>
             <text class="header-title">学员论坛</text>
             <view class="header-right" @click="onCreate">
-                <text class="header-action">发帖</text>
+                <text class="header-action" @click="onCreate">发帖</text>
             </view>
         </view>
         <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
@@ -56,6 +54,7 @@
         <view class="fab-btn" @click="onCreate">
             <text class="fab-icon">+</text>
         </view>
+        <tab-bar :active-index="3"></tab-bar>
     </view>
 </template>
 
@@ -137,10 +136,6 @@
         uni.navigateTo({ url: '/pages/forum/forum-create' })
     }
 
-    function onBack() : void {
-        uni.navigateBack()
-    }
-
     onShow(() => {
         // 每次进入页面刷新列表（发帖/删帖后能及时同步）
         loadTopics(true)
@@ -185,13 +180,19 @@
     }
 
     .header-right {
-        width: 80rpx;
+        /* 固定宽度避免被 flex:1 的标题挤压消失 */
+        width: 120rpx;
+        height: 56rpx;
+        border-radius: 28rpx;
+        background-color: rgba(255, 255, 255, 0.25);
         align-items: center;
+        justify-content: center;
     }
 
     .header-action {
         font-size: 28rpx;
         color: #ffffff;
+        font-weight: bold;
     }
 
     .content-scroll {
@@ -338,11 +339,11 @@
         color: #999999;
     }
 
-    /* 悬浮发帖按钮 */
+    /* 悬浮发帖按钮（避开底部 tab-bar） */
     .fab-btn {
         position: fixed;
         right: 32rpx;
-        bottom: 80rpx;
+        bottom: 180rpx;
         width: 96rpx;
         height: 96rpx;
         border-radius: 48rpx;

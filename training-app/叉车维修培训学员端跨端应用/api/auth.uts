@@ -1,9 +1,9 @@
 /**
  * 认证相关 API
  */
-import { get, post } from './request'
+import { get, post, put, uploadFile } from './request'
 import type { RequestOptions } from './request'
-import type { LoginParams, LoginResult, RegisterParams, UserInfo } from '../types/index'
+import type { LoginParams, LoginResult, RegisterParams, UserInfo, UpdateProfileParams, UploadAvatarResult } from '../types/index'
 
 /**
  * 从 UTSJSONObject 构造 UserInfo
@@ -137,5 +137,48 @@ export function getUserInfoApi() : Promise<UserInfo> {
 		// 网络不可用时回退到 mock 用户
 		console.warn('[getUserInfoApi] network failed, using mock data:', e)
 		return getMockLoginResult().user
+	})
+}
+
+/**
+ * 更新个人资料（昵称/头像）
+ * @note 只传需要更新的字段；后端返回更新后的完整用户信息
+ *       后端字段映射：前端 name -> 后端 nickname（"内容未发生变化" 通常是字段名不匹配导致）
+ */
+export function updateProfileApi(params : UpdateProfileParams) : Promise<UserInfo> {
+	const payload : UTSJSONObject = {} as UTSJSONObject
+	const name = params.name
+	if (name != null && name.length > 0) {
+		// 后端期望字段名为 nickname（昵称）
+		payload['nickname'] = name
+	}
+	const avatar = params.avatar
+	if (avatar != null && avatar.length > 0) {
+		payload['avatar'] = avatar
+	}
+	return put('/auth/profile', payload).then((data : UTSJSONObject) : UserInfo => {
+		return buildUserInfo(data)
+	})
+}
+
+/**
+ * 上传头像（multipart/form-data）
+ * @param filePath 本地临时文件路径（由 uni.chooseImage 返回）
+ * @returns 上传头像响应，含 avatar URL
+ */
+export function uploadAvatarApi(filePath : string) : Promise<UploadAvatarResult> {
+	return uploadFile('/auth/avatar', filePath, 'avatar').then((data : UTSJSONObject) : UploadAvatarResult => {
+		// 兼容后端两种返回：直接返回 { avatar } 或 data 字段含 url
+		let avatarUrl = ''
+		const avatar = data['avatar']
+		if (avatar != null) {
+			avatarUrl = avatar as string
+		} else {
+			const url = data['url']
+			if (url != null) {
+				avatarUrl = url as string
+			}
+		}
+		return { avatar: avatarUrl } as UploadAvatarResult
 	})
 }

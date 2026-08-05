@@ -47,6 +47,7 @@
 		{ key: 'dashboard', path: '/pages/dashboard/dashboard', icon: '🏠', text: '首页' },
 		{ key: 'courses', path: '/pages/courses/courses', icon: '📚', text: '课程' },
 		{ key: 'exam', path: '/pages/exam/exam', icon: '📝', text: '考试' },
+		{ key: 'forum', path: '/pages/forum/forum', icon: '💬', text: '论坛' },
 		{ key: 'profile', path: '/pages/profile/profile', icon: '👤', text: '我的' },
 	]
 
