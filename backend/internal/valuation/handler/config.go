@@ -40,6 +40,68 @@ func NewConfigHandler(dictRepo *repository.DictionaryRepository, l *zap.Logger) 
 }
 
 // =====================================================
+// 字典 CRUD 共享骨架（bind/validate/Error/invalidateCache 三联收敛于此）
+// =====================================================
+
+// createNamed 单一 name 字段实体的创建骨架（门架类型/电池类型/传动/发动机）。
+func (h *ConfigHandler) createNamed(c *gin.Context, entity string, patterns []string,
+	create func(ctx context.Context, name string) (any, error)) {
+	var body struct {
+		Name string `json:"name" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
+		return
+	}
+	v, err := create(c.Request.Context(), body.Name)
+	if err != nil {
+		h.logger.Error("新增"+entity+"失败", zap.Error(err))
+		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增"+entity+"失败")
+		return
+	}
+	h.invalidateCache(c.Request.Context(), patterns...)
+	OK(c, v)
+}
+
+// createValue 单值实体的创建骨架（吨位/门架高度，bind 闭包负责字段解析与校验）。
+func (h *ConfigHandler) createValue(c *gin.Context, entity string, patterns []string,
+	bind func(c *gin.Context) (any, bool), create func(ctx context.Context, v any) (any, error)) {
+	body, ok := bind(c)
+	if !ok {
+		return
+	}
+	v, err := create(c.Request.Context(), body)
+	if err != nil {
+		h.logger.Error("新增"+entity+"失败", zap.Error(err))
+		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增"+entity+"失败")
+		return
+	}
+	h.invalidateCache(c.Request.Context(), patterns...)
+	OK(c, v)
+}
+
+// deleteOne 删除类接口通用骨架：id 解析 → 删除 → ErrNoRows→404 → 缓存失效 → 返回。
+func (h *ConfigHandler) deleteOne(c *gin.Context, entity, notFound string, patterns []string,
+	del func(ctx context.Context, id int64) error) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
+		return
+	}
+	if err := del(c.Request.Context(), id); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			Error(c, http.StatusNotFound, CodeNotFound, notFound)
+			return
+		}
+		h.logger.Error("删除"+entity+"失败", zap.Error(err))
+		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除"+entity+"失败")
+		return
+	}
+	h.invalidateCache(c.Request.Context(), patterns...)
+	OK(c, gin.H{"id": id})
+}
+
+// =====================================================
 // 学生端字典查询接口（GET，无需 admin 权限）
 // =====================================================
 
@@ -418,22 +480,8 @@ func (h *ConfigHandler) UpdateBrand(c *gin.Context) {
 
 // DeleteBrand 处理 DELETE /api/valuation/admin/brands/:id
 func (h *ConfigHandler) DeleteBrand(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
-		return
-	}
-	if err := h.dictRepo.DeleteBrand(c.Request.Context(), id); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			Error(c, http.StatusNotFound, CodeNotFound, "品牌不存在")
-			return
-		}
-		h.logger.Error("删除品牌失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除品牌失败")
-		return
-	}
-	h.invalidateCache(c.Request.Context(), "dict:brands:*", "dict:brand:get:*", "valuation:result:*")
-	OK(c, gin.H{"id": id})
+	h.deleteOne(c, "品牌", "品牌不存在", []string{"dict:brands:*", "dict:brand:get:*", "valuation:result:*"},
+		func(ctx context.Context, id int64) error { return h.dictRepo.DeleteBrand(ctx, id) })
 }
 
 // --- vehicle_types ---
@@ -498,22 +546,8 @@ func (h *ConfigHandler) UpdateVehicleType(c *gin.Context) {
 
 // DeleteVehicleType 处理 DELETE /api/valuation/admin/vehicle-types/:id
 func (h *ConfigHandler) DeleteVehicleType(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
-		return
-	}
-	if err := h.dictRepo.DeleteVehicleType(c.Request.Context(), id); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			Error(c, http.StatusNotFound, CodeNotFound, "车型不存在")
-			return
-		}
-		h.logger.Error("删除车型失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除车型失败")
-		return
-	}
-	h.invalidateCache(c.Request.Context(), "dict:vt:*", "valuation:result:*")
-	OK(c, gin.H{"id": id})
+	h.deleteOne(c, "车型", "车型不存在", []string{"dict:vt:*", "valuation:result:*"},
+		func(ctx context.Context, id int64) error { return h.dictRepo.DeleteVehicleType(ctx, int(id)) })
 }
 
 // --- series ---
@@ -579,22 +613,8 @@ func (h *ConfigHandler) UpdateSeries(c *gin.Context) {
 
 // DeleteSeries 处理 DELETE /api/valuation/admin/series/:id
 func (h *ConfigHandler) DeleteSeries(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
-		return
-	}
-	if err := h.dictRepo.DeleteSeries(c.Request.Context(), id); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			Error(c, http.StatusNotFound, CodeNotFound, "系列不存在")
-			return
-		}
-		h.logger.Error("删除系列失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除系列失败")
-		return
-	}
-	h.invalidateCache(c.Request.Context(), "dict:series:*", "dict:sco:*", "dict:battery:cascade:*")
-	OK(c, gin.H{"id": id})
+	h.deleteOne(c, "系列", "系列不存在", []string{"dict:series:*", "dict:sco:*", "dict:battery:cascade:*"},
+		func(ctx context.Context, id int64) error { return h.dictRepo.DeleteSeries(ctx, int(id)) })
 }
 
 // --- tonnages ---
@@ -602,83 +622,43 @@ func (h *ConfigHandler) DeleteSeries(c *gin.Context) {
 // CreateTonnage 处理 POST /api/valuation/admin/tonnages
 // Body: {"value":3.0}
 func (h *ConfigHandler) CreateTonnage(c *gin.Context) {
-	var body struct {
-		Value float64 `json:"value" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
-		return
-	}
-	t, err := h.dictRepo.CreateTonnage(c.Request.Context(), body.Value)
-	if err != nil {
-		h.logger.Error("新增吨位失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增吨位失败")
-		return
-	}
-	h.invalidateCache(c.Request.Context(), "dict:specs:tonnages:*")
-	OK(c, t)
+	h.createValue(c, "吨位", []string{"dict:specs:tonnages:*"},
+		func(c *gin.Context) (any, bool) {
+			var body struct {
+				Value float64 `json:"value" binding:"required"`
+			}
+			if err := c.ShouldBindJSON(&body); err != nil {
+				Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
+				return nil, false
+			}
+			return body.Value, true
+		},
+		func(ctx context.Context, v any) (any, error) {
+			return h.dictRepo.CreateTonnage(ctx, v.(float64))
+		})
 }
 
 // DeleteTonnage 处理 DELETE /api/valuation/admin/tonnages/:id
 func (h *ConfigHandler) DeleteTonnage(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
-		return
-	}
-	if err := h.dictRepo.DeleteTonnage(c.Request.Context(), id); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			Error(c, http.StatusNotFound, CodeNotFound, "吨位不存在")
-			return
-		}
-		h.logger.Error("删除吨位失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除吨位失败")
-		return
-	}
-	h.invalidateCache(c.Request.Context(), "dict:specs:tonnages:*")
-	OK(c, gin.H{"id": id})
+	h.deleteOne(c, "吨位", "吨位不存在", []string{"dict:specs:tonnages:*"},
+		func(ctx context.Context, id int64) error { return h.dictRepo.DeleteTonnage(ctx, int(id)) })
 }
 
 // --- mast_types ---
 
 // CreateMastType 处理 POST /api/valuation/admin/mast-types
 // Body: {"name":"三级门架"}
+// CreateMastType 处理 POST /api/valuation/admin/mast-type-types
+// Body: {"name":"xxx"}
 func (h *ConfigHandler) CreateMastType(c *gin.Context) {
-	var body struct {
-		Name string `json:"name" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
-		return
-	}
-	m, err := h.dictRepo.CreateMastType(c.Request.Context(), body.Name)
-	if err != nil {
-		h.logger.Error("新增门架类型失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增门架类型失败")
-		return
-	}
-	h.invalidateCache(c.Request.Context(), "dict:specs:mast_types:*")
-	OK(c, m)
+	h.createNamed(c, "门架类型", []string{"dict:specs:mast_types:*"},
+		func(ctx context.Context, name string) (any, error) { return h.dictRepo.CreateMastType(ctx, name) })
 }
 
 // DeleteMastType 处理 DELETE /api/valuation/admin/mast-types/:id
 func (h *ConfigHandler) DeleteMastType(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
-		return
-	}
-	if err := h.dictRepo.DeleteMastType(c.Request.Context(), id); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			Error(c, http.StatusNotFound, CodeNotFound, "门架类型不存在")
-			return
-		}
-		h.logger.Error("删除门架类型失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除门架类型失败")
-		return
-	}
-	h.invalidateCache(c.Request.Context(), "dict:specs:mast_types:*")
-	OK(c, gin.H{"id": id})
+	h.deleteOne(c, "门架类型", "门架类型不存在", []string{"dict:specs:mast_types:*"},
+		func(ctx context.Context, id int64) error { return h.dictRepo.DeleteMastType(ctx, int(id)) })
 }
 
 // --- mast_heights ---
@@ -686,167 +666,79 @@ func (h *ConfigHandler) DeleteMastType(c *gin.Context) {
 // CreateMastHeight 处理 POST /api/valuation/admin/mast-heights
 // Body: {"value_mm":3000}
 func (h *ConfigHandler) CreateMastHeight(c *gin.Context) {
-	var body struct {
-		ValueMM int `json:"value_mm" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
-		return
-	}
-	m, err := h.dictRepo.CreateMastHeight(c.Request.Context(), body.ValueMM)
-	if err != nil {
-		h.logger.Error("新增门架高度失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增门架高度失败")
-		return
-	}
-	h.invalidateCache(c.Request.Context(), "dict:specs:mast_heights:*")
-	OK(c, m)
+	h.createValue(c, "门架高度", []string{"dict:specs:mast_heights:*"},
+		func(c *gin.Context) (any, bool) {
+			var body struct {
+				ValueMM int `json:"value_mm" binding:"required"`
+			}
+			if err := c.ShouldBindJSON(&body); err != nil {
+				Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
+				return nil, false
+			}
+			return body.ValueMM, true
+		},
+		func(ctx context.Context, v any) (any, error) {
+			return h.dictRepo.CreateMastHeight(ctx, v.(int))
+		})
 }
 
 // DeleteMastHeight 处理 DELETE /api/valuation/admin/mast-heights/:id
 func (h *ConfigHandler) DeleteMastHeight(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
-		return
-	}
-	if err := h.dictRepo.DeleteMastHeight(c.Request.Context(), id); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			Error(c, http.StatusNotFound, CodeNotFound, "门架高度不存在")
-			return
-		}
-		h.logger.Error("删除门架高度失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除门架高度失败")
-		return
-	}
-	h.invalidateCache(c.Request.Context(), "dict:specs:mast_heights:*")
-	OK(c, gin.H{"id": id})
+	h.deleteOne(c, "门架高度", "门架高度不存在", []string{"dict:specs:mast_heights:*"},
+		func(ctx context.Context, id int64) error { return h.dictRepo.DeleteMastHeight(ctx, int(id)) })
 }
 
 // --- battery_types ---
 
 // CreateBatteryType 处理 POST /api/valuation/admin/battery-types
 // Body: {"name":"磷酸铁锂"}
+// CreateBatteryType 处理 POST /api/valuation/admin/battery-type-types
+// Body: {"name":"xxx"}
 func (h *ConfigHandler) CreateBatteryType(c *gin.Context) {
-	var body struct {
-		Name string `json:"name" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
-		return
-	}
-	b, err := h.dictRepo.CreateBatteryType(c.Request.Context(), body.Name)
-	if err != nil {
-		h.logger.Error("新增电池类型失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增电池类型失败")
-		return
-	}
-	h.invalidateCache(c.Request.Context(), "dict:specs:battery_types:*")
-	OK(c, b)
+	h.createNamed(c, "电池类型", []string{"dict:specs:battery_types:*"},
+		func(ctx context.Context, name string) (any, error) { return h.dictRepo.CreateBatteryType(ctx, name) })
 }
 
 // DeleteBatteryType 处理 DELETE /api/valuation/admin/battery-types/:id
 func (h *ConfigHandler) DeleteBatteryType(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
-		return
-	}
-	if err := h.dictRepo.DeleteBatteryType(c.Request.Context(), id); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			Error(c, http.StatusNotFound, CodeNotFound, "电池类型不存在")
-			return
-		}
-		h.logger.Error("删除电池类型失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除电池类型失败")
-		return
-	}
-	h.invalidateCache(c.Request.Context(), "dict:specs:battery_types:*")
-	OK(c, gin.H{"id": id})
+	h.deleteOne(c, "电池类型", "电池类型不存在", []string{"dict:specs:battery_types:*"},
+		func(ctx context.Context, id int64) error { return h.dictRepo.DeleteBatteryType(ctx, int(id)) })
 }
 
 // --- transmission_types ---
 
 // CreateTransmissionType 处理 POST /api/valuation/admin/transmission-types
 // Body: {"name":"手波"}
+// CreateTransmissionType 处理 POST /api/valuation/admin/transmission-type-types
+// Body: {"name":"xxx"}
 func (h *ConfigHandler) CreateTransmissionType(c *gin.Context) {
-	var body struct {
-		Name string `json:"name" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
-		return
-	}
-	t, err := h.dictRepo.CreateTransmissionType(c.Request.Context(), body.Name)
-	if err != nil {
-		h.logger.Error("新增传动系统类型失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增传动系统类型失败")
-		return
-	}
-	h.invalidateCache(c.Request.Context(), "dict:specs:transmission_types:*")
-	OK(c, t)
+	h.createNamed(c, "传动系统类型", []string{"dict:specs:transmission_types:*"},
+		func(ctx context.Context, name string) (any, error) {
+			return h.dictRepo.CreateTransmissionType(ctx, name)
+		})
 }
 
 // DeleteTransmissionType 处理 DELETE /api/valuation/admin/transmission-types/:id
 func (h *ConfigHandler) DeleteTransmissionType(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
-		return
-	}
-	if err := h.dictRepo.DeleteTransmissionType(c.Request.Context(), id); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			Error(c, http.StatusNotFound, CodeNotFound, "传动系统类型不存在")
-			return
-		}
-		h.logger.Error("删除传动系统类型失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除传动系统类型失败")
-		return
-	}
-	h.invalidateCache(c.Request.Context(), "dict:specs:transmission_types:*")
-	OK(c, gin.H{"id": id})
+	h.deleteOne(c, "传动系统类型", "传动系统类型不存在", []string{"dict:specs:transmission_types:*"},
+		func(ctx context.Context, id int64) error { return h.dictRepo.DeleteTransmissionType(ctx, int(id)) })
 }
 
 // --- engine_types ---
 
 // CreateEngineType 处理 POST /api/valuation/admin/engine-types
 // Body: {"name":"国产发动机"}
+// CreateEngineType 处理 POST /api/valuation/admin/engine-type-types
+// Body: {"name":"xxx"}
 func (h *ConfigHandler) CreateEngineType(c *gin.Context) {
-	var body struct {
-		Name string `json:"name" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "请求体格式错误: "+err.Error())
-		return
-	}
-	e, err := h.dictRepo.CreateEngineType(c.Request.Context(), body.Name)
-	if err != nil {
-		h.logger.Error("新增发动机类型失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "新增发动机类型失败")
-		return
-	}
-	h.invalidateCache(c.Request.Context(), "dict:specs:engine_types:*")
-	OK(c, e)
+	h.createNamed(c, "发动机类型", []string{"dict:specs:engine_types:*"},
+		func(ctx context.Context, name string) (any, error) { return h.dictRepo.CreateEngineType(ctx, name) })
 }
 
 // DeleteEngineType 处理 DELETE /api/valuation/admin/engine-types/:id
 func (h *ConfigHandler) DeleteEngineType(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
-		return
-	}
-	if err := h.dictRepo.DeleteEngineType(c.Request.Context(), id); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			Error(c, http.StatusNotFound, CodeNotFound, "发动机类型不存在")
-			return
-		}
-		h.logger.Error("删除发动机类型失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除发动机类型失败")
-		return
-	}
-	h.invalidateCache(c.Request.Context(), "dict:specs:engine_types:*")
-	OK(c, gin.H{"id": id})
+	h.deleteOne(c, "发动机类型", "发动机类型不存在", []string{"dict:specs:engine_types:*"},
+		func(ctx context.Context, id int64) error { return h.dictRepo.DeleteEngineType(ctx, int(id)) })
 }
 
 // --- condition_ratings ---
@@ -904,22 +796,8 @@ func (h *ConfigHandler) UpdateConditionRating(c *gin.Context) {
 
 // DeleteConditionRating 处理 DELETE /api/valuation/admin/condition-ratings/:id
 func (h *ConfigHandler) DeleteConditionRating(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
-		return
-	}
-	if err := h.dictRepo.DeleteConditionRating(c.Request.Context(), id); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			Error(c, http.StatusNotFound, CodeNotFound, "车况评级不存在")
-			return
-		}
-		h.logger.Error("删除车况评级失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除车况评级失败")
-		return
-	}
-	h.invalidateCache(c.Request.Context(), "dict:condition:*", "valuation:result:*")
-	OK(c, gin.H{"id": id})
+	h.deleteOne(c, "车况评级", "车况评级不存在", []string{"dict:condition:*", "valuation:result:*"},
+		func(ctx context.Context, id int64) error { return h.dictRepo.DeleteConditionRating(ctx, int(id)) })
 }
 
 // --- region_coefficients ---
@@ -976,22 +854,8 @@ func (h *ConfigHandler) UpdateRegionCoefficient(c *gin.Context) {
 
 // DeleteRegionCoefficient 处理 DELETE /api/valuation/admin/region-coefficients/:id
 func (h *ConfigHandler) DeleteRegionCoefficient(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
-		return
-	}
-	if err := h.dictRepo.DeleteRegionCoefficient(c.Request.Context(), id); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			Error(c, http.StatusNotFound, CodeNotFound, "区域系数不存在")
-			return
-		}
-		h.logger.Error("删除区域系数失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除区域系数失败")
-		return
-	}
-	h.invalidateCache(c.Request.Context(), "dict:region:*", "valuation:result:*")
-	OK(c, gin.H{"id": id})
+	h.deleteOne(c, "区域系数", "区域系数不存在", []string{"dict:region:*", "valuation:result:*"},
+		func(ctx context.Context, id int64) error { return h.dictRepo.DeleteRegionCoefficient(ctx, int(id)) })
 }
 
 // --- original_prices ---
@@ -1067,22 +931,8 @@ func (h *ConfigHandler) UpdateOriginalPrice(c *gin.Context) {
 
 // DeleteOriginalPrice 处理 DELETE /api/valuation/admin/original-prices/:id
 func (h *ConfigHandler) DeleteOriginalPrice(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
-		return
-	}
-	if err := h.dictRepo.DeleteOriginalPrice(c.Request.Context(), id); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			Error(c, http.StatusNotFound, CodeNotFound, "原价记录不存在")
-			return
-		}
-		h.logger.Error("删除原价记录失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "删除原价记录失败")
-		return
-	}
-	h.invalidateCache(c.Request.Context(), "dict:*", "valuation:result:*")
-	OK(c, gin.H{"id": id})
+	h.deleteOne(c, "原价记录", "原价记录不存在", []string{"dict:*", "valuation:result:*"},
+		func(ctx context.Context, id int64) error { return h.dictRepo.DeleteOriginalPrice(ctx, id) })
 }
 
 // GetEarliestFactoryYear 处理 GET /api/valuation/dictionaries/earliest-factory-year
