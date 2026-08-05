@@ -8,17 +8,16 @@ import (
 	"fmt"
 
 	"forklift-training/internal/valuation/model"
-	"forklift-training/internal/valuation/repository"
 )
 
 // CoefficientProvider 系数配置提供者（实时查 DB）
-// 提供按 key 查询的能力，供各 K 系数计算使用
+// 提供按 key 查询的能力，供各 K 系数计算使用；消费窄接口 DictionaryReader。
 type CoefficientProvider struct {
-	dictRepo *repository.DictionaryRepository
+	dictRepo DictionaryReader
 }
 
 // NewCoefficientProvider 构造系数提供者
-func NewCoefficientProvider(dictRepo *repository.DictionaryRepository) *CoefficientProvider {
+func NewCoefficientProvider(dictRepo DictionaryReader) *CoefficientProvider {
 	return &CoefficientProvider{dictRepo: dictRepo}
 }
 

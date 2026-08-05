@@ -27,10 +27,10 @@ import (
 )
 
 // ValuationService 评估服务
-// 持有 *pgxpool.Pool 与字典仓储，所有系数从 DB 实时查询
+// 持有 *pgxpool.Pool 与字典读取窄接口，所有系数从 DB 实时查询
 type ValuationService struct {
 	pool     *pgxpool.Pool
-	dictRepo *repository.DictionaryRepository
+	dictRepo DictionaryReader
 	evalRepo *repository.EvaluationRepository
 	provider *CoefficientProvider
 }

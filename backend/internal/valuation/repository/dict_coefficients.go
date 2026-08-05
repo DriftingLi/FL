@@ -1,5 +1,4 @@
-// coefficient_configs 系数配置 CRUD 与算法参数聚合（从 dictionaries.go 拆分）
-// 手写 pgx 仓储，统一使用 *pgxpool.Pool 直接操作
+// coefficient_configs 系数配置 CRUD 与算法参数聚合（骨架走 dict_helpers 共享实现）
 package repository
 
 import (
@@ -7,65 +6,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"forklift-training/internal/cache"
 )
 
-// ListCoefficientConfigs 列出全部系数配置
-func (r *DictionaryRepository) ListCoefficientConfigs(ctx context.Context) ([]CoefficientConfig, error) {
-	const cacheKey = "dict:coef:list"
-	var result []CoefficientConfig
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
-		rows, err := r.pool.Query(ctx, `SELECT id, key, value, description, updated_at FROM coefficient_configs ORDER BY key ASC`)
-		if err != nil {
-			return nil, fmt.Errorf("查询系数配置失败: %w", err)
-		}
-		defer rows.Close()
-		out := make([]CoefficientConfig, 0, 16)
-		for rows.Next() {
-			var c CoefficientConfig
-			var desc *string
-			var updatedAt time.Time
-			if err := rows.Scan(&c.ID, &c.Key, &c.Value, &desc, &updatedAt); err != nil {
-				return nil, err
-			}
-			if desc != nil {
-				c.Description = *desc
-			}
-			c.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
-			out = append(out, c)
-		}
-		return out, rows.Err()
-	})
-	return result, err
-}
-
-// GetCoefficientByKey 按 key 查询系数
-func (r *DictionaryRepository) GetCoefficientByKey(ctx context.Context, key string) (CoefficientConfig, error) {
-	cacheKey := cache.SafeKey("dict", "coef", "get", key)
-	var result CoefficientConfig
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
-		row := r.pool.QueryRow(ctx,
-			`SELECT id, key, value, description, updated_at FROM coefficient_configs WHERE key = $1`, key)
-		var c CoefficientConfig
-		var desc *string
-		var updatedAt time.Time
-		if err := row.Scan(&c.ID, &c.Key, &c.Value, &desc, &updatedAt); err != nil {
-			return nil, err
-		}
-		if desc != nil {
-			c.Description = *desc
-		}
-		c.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
-		return c, nil
-	})
-	return result, err
-}
-
-// UpdateCoefficientByKey 按 key 更新系数值
-func (r *DictionaryRepository) UpdateCoefficientByKey(ctx context.Context, key string, value float64) (CoefficientConfig, error) {
-	row := r.pool.QueryRow(ctx,
-		`UPDATE coefficient_configs SET value = $2, updated_at = NOW() WHERE key = $1
-		 RETURNING id, key, value, description, updated_at`, key, value)
+// scanCoefficient 扫描一行系数配置（description 可空 + updated_at 格式化）。
+func scanCoefficient(row interface{ Scan(dest ...any) error }) (CoefficientConfig, error) {
 	var c CoefficientConfig
 	var desc *string
 	var updatedAt time.Time
@@ -77,6 +24,34 @@ func (r *DictionaryRepository) UpdateCoefficientByKey(ctx context.Context, key s
 	}
 	c.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
 	return c, nil
+}
+
+// ListCoefficientConfigs 列出全部系数配置
+func (r *DictionaryRepository) ListCoefficientConfigs(ctx context.Context) ([]CoefficientConfig, error) {
+	return listCached(r, ctx, "dict:coef:list", "查询系数配置",
+		`SELECT id, key, value, description, updated_at FROM coefficient_configs ORDER BY key ASC`,
+		func(rows pgx.Rows) (CoefficientConfig, error) {
+			return scanCoefficient(rows)
+		})
+}
+
+// GetCoefficientByKey 按 key 查询系数
+func (r *DictionaryRepository) GetCoefficientByKey(ctx context.Context, key string) (CoefficientConfig, error) {
+	return getCached(r, ctx, cache.SafeKey("dict", "coef", "get", key), "查询系数配置",
+		`SELECT id, key, value, description, updated_at FROM coefficient_configs WHERE key = $1`,
+		func(row pgx.Row) (CoefficientConfig, error) {
+			return scanCoefficient(row)
+		}, key)
+}
+
+// UpdateCoefficientByKey 按 key 更新系数值
+func (r *DictionaryRepository) UpdateCoefficientByKey(ctx context.Context, key string, value float64) (CoefficientConfig, error) {
+	return queryOne(r, ctx, "更新系数配置",
+		`UPDATE coefficient_configs SET value = $2, updated_at = NOW() WHERE key = $1
+		 RETURNING id, key, value, description, updated_at`,
+		func(row pgx.Row) (CoefficientConfig, error) {
+			return scanCoefficient(row)
+		}, key, value)
 }
 
 // AlgorithmParameters 算法参数聚合结果（管理员后台「算法参数」tab 一次加载）

@@ -32,7 +32,7 @@ type KhResult struct {
 // CalcKHours 计算使用强度系数 Kh
 // age 必须来自 Kt 计算（factory_year 与 sale_year 之差），保证一致性
 // 区间阈值通过 provider 从 coefficient_configs 读取（key: k_hours_ratio_low/mid/high/max）
-func CalcKHours(ctx context.Context, age, usageHours int, provider *CoefficientProvider) (KhResult, error) {
+func CalcKHours(ctx context.Context, age, usageHours int, provider ConfigReader) (KhResult, error) {
 	if usageHours < 0 {
 		return KhResult{}, model.ErrInvalidUsageHours
 	}
