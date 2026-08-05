@@ -41,6 +41,7 @@ func allModels() []interface{} {
 		&model.HrwaiUser{},
 		&model.Notification{},
 		&model.AuditLog{},
+		&model.ProfileChangeRequest{},
 		&model.Admin{},
 		&model.Tutor{},
 		&model.Course{},

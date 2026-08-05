@@ -17,7 +17,7 @@ import (
 
 // RegisterProfileReviewRoutes 注册 /api/admin/profile-reviews 蓝图（仅管理员）。
 func RegisterProfileReviewRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage) {
-	svc := service.NewProfileReviewService(db)
+	svc := service.NewProfileReviewService(db, service.NewNotificationService(db))
 
 	g := rg.Group("/admin/profile-reviews", middleware.JWTAuth(cfg), middleware.RoleRequired("admin"))
 

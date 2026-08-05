@@ -1,7 +1,11 @@
 package service
 
 import (
+	"errors"
 	"testing"
+	"time"
+
+	"gorm.io/gorm"
 
 	"forklift-training/internal/testutil"
 )
@@ -94,5 +98,39 @@ func TestNotificationService_MarkRead(t *testing.T) {
 	count, _ = svc.UnreadCount(uid)
 	if count != 0 {
 		t.Fatalf("全部已读后未读数应为 0，得到 %d", count)
+	}
+}
+
+func TestNotificationService_CreateWithTx_CommitAndRollback(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	svc := NewNotificationService(db)
+	student := testutil.SeedStudent(t, db, "notify_tx", "x")
+	uid := student.StudentID
+
+	// 事务内写入并提交 → 通知落库
+	err := db.Transaction(func(tx *gorm.DB) error {
+		return svc.CreateWithTx(tx, uid, "profile_review", "资料审核通过", "您的昵称修改已生效", "", time.Now())
+	})
+	if err != nil {
+		t.Fatalf("事务内创建通知失败: %v", err)
+	}
+	count, _ := svc.UnreadCount(uid)
+	if count != 1 {
+		t.Fatalf("提交后应落库 1 条，得到 %d", count)
+	}
+
+	// 事务内写入后回滚 → 通知不落库（与业务写同事务的原子性）
+	err = db.Transaction(func(tx *gorm.DB) error {
+		if err := svc.CreateWithTx(tx, uid, "profile_review", "资料审核被驳回", "原因：不符合要求", "", time.Now()); err != nil {
+			return err
+		}
+		return errors.New("模拟业务失败回滚")
+	})
+	if err == nil {
+		t.Fatal("模拟失败应返回错误")
+	}
+	count, _ = svc.UnreadCount(uid)
+	if count != 1 {
+		t.Fatalf("回滚后不应新增通知，得到 %d", count)
 	}
 }
