@@ -57,7 +57,7 @@ func RegisterRoutes(
 ) {
 	evalHandler := NewEvaluationHandler(valuationSvc, evalRepo, logger)
 	configHandler := NewConfigHandler(dictRepo, logger)
-	reportHandler := NewReportHandler(evalRepo, pdfGen, logger, st)
+	reportHandler := NewReportHandler(evalRepo, pdfGen, logger, st, vservice.NewCoefficientProvider(dictRepo))
 	batteryRepo := vrepo.NewBatteryRepository(pool)
 	batteryHandler := NewBatteryHandler(batteryRepo, batterySvc, logger, st)
 	healthHandler := NewHealthHandler()

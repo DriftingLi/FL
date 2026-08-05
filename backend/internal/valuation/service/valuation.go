@@ -185,7 +185,7 @@ func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.Eval
 
 	// 12. 派生维度评分 + 文本建议
 	result.DimensionScores = buildDimensionScores(result)
-	result.Suggestions = buildSuggestions(result, s.provider, ctx)
+	result.Suggestions = BuildSuggestions(ctx, FromResult(result), s.provider)
 	return result, nil
 }
 
@@ -290,103 +290,6 @@ func buildDimensionScores(r *model.EvaluationResult) map[string]float64 {
 		m[s.Label] = s.Value
 	}
 	return m
-}
-
-// buildSuggestions 基于评估结果生成文本建议
-// 每条建议是一个短句，前端直接用 <li> 列表展示
-// 000015：证件扣减/油漆保养加成百分比动态读取，并补充可售性提示
-func buildSuggestions(r *model.EvaluationResult, provider *CoefficientProvider, ctx context.Context) []string {
-	s := make([]string, 0, 10)
-
-	// 1. 车况维度（核心）
-	switch {
-	case r.KCondition >= 1.00:
-		s = append(s, "车况优秀，原漆、维保记录、证件齐全，建议正常出售")
-	case r.KCondition >= 0.85:
-		s = append(s, "车况良好，残值稳定，可作为二手设备出售")
-	case r.KCondition >= 0.65:
-		s = append(s, "车况一般，建议整备后出售以提升残值")
-	case r.KCondition >= 0.45:
-		s = append(s, "车况较差，多个维度有折损，建议折价处理")
-	default:
-		s = append(s, "车况很差，建议拆件出售或作为配件使用")
-	}
-
-	// 2. 证件缺失提示 + 可售性警告
-	//    缺车牌 → 无法上路；缺登记证 → 无法过户；缺双证 → 无法正常出售
-	licensePct := readWithFallback(ctx, provider, KeyKcNoLicensePenaltyPct, defaultKcNoLicensePenaltyPct)
-	regPct := readWithFallback(ctx, provider, KeyKcNoRegistrationPenaltyPct, defaultKcNoRegistrationPenaltyPct)
-	licensePctShown := licensePct * 100
-	regPctShown := regPct * 100
-	missingBoth := !r.HasLicensePlate && !r.HasRegistrationCertificate
-
-	if !r.HasLicensePlate {
-		s = append(s, fmt.Sprintf("缺少车牌，残值扣减 %.0f%%，无法正常上路行驶，建议补办后再出售", licensePctShown))
-	}
-	if !r.HasRegistrationCertificate {
-		s = append(s, fmt.Sprintf("缺少登记证，残值扣减 %.0f%%，无法正常过户，建议补办后交易", regPctShown))
-	}
-	if missingBoth {
-		s = append(s, "车牌与登记证均缺失，无法正常出售与过户，强烈建议补齐证件后再交易")
-	}
-
-	// 3. 原厂漆与维保记录加分项提示（百分比动态读取）
-	paintBonus := readWithFallback(ctx, provider, KeyKcPaintBonus, defaultKcPaintBonus)
-	maintenanceBonus := readWithFallback(ctx, provider, KeyKcMaintenanceBonus, defaultKcMaintenanceBonus)
-	switch {
-	case r.OriginalPaint && r.HasMaintenanceRecords:
-		totalPct := (paintBonus + maintenanceBonus) * 100
-		s = append(s, fmt.Sprintf("原厂漆完整且有维保记录，加成 %.0f%%，对保值有利", totalPct))
-	case r.OriginalPaint:
-		s = append(s, fmt.Sprintf("原厂漆完整，加成 %.0f%%", paintBonus*100))
-	case r.HasMaintenanceRecords:
-		s = append(s, fmt.Sprintf("有维保记录，加成 %.0f%%", maintenanceBonus*100))
-	}
-
-	// 4. 品牌/强度对时间衰减的修正方向
-	//    Kb 高 → 衰减速率被压低（保值好）；Kh 高 → 衰减速率被抬高（磨损大）
-	//    用 Kh/Kb 比值判断：> 1.05 加速衰减；< 0.95 减缓衰减；中间视为持平
-	ratioHK := 1.0
-	if r.KBrand > 0 {
-		ratioHK = r.KHours / r.KBrand
-	}
-	switch {
-	case ratioHK >= 1.10:
-		s = append(s, "使用强度显著高于品牌保值能力，时间衰减被加速")
-	case ratioHK >= 1.05:
-		s = append(s, "使用强度略高于品牌保值能力，时间衰减略快")
-	case ratioHK <= 0.90:
-		s = append(s, "品牌保值能力强于使用强度折损，时间衰减被明显减缓")
-	case ratioHK <= 0.95:
-		s = append(s, "品牌保值能力略占优，时间衰减略缓")
-	}
-
-	// 5. 原始时间衰减水平（不含品牌/强度修正）
-	if r.KTime < 0.50 {
-		s = append(s, "使用年限较长，原始时间衰减明显")
-	}
-
-	// 6. 市场维度
-	if r.KMarket < 0.99 {
-		s = append(s, "区域市场系数偏低，二手需求较弱")
-	} else if r.KMarket > 1.02 {
-		s = append(s, "区域市场系数偏高，二手需求旺盛")
-	}
-
-	// 7. 残值率（已钳制 ≤ 100%）
-	if r.OriginalPrice > 0 {
-		rate := r.EstimatedValue / r.OriginalPrice
-		switch {
-		case rate >= 1.0:
-			s = append(s, "残值率达 100% 上限（综合车况、市场极优），按原价出售")
-		case rate >= 0.7:
-			s = append(s, "残值率较高，建议按当前车况正常出售")
-		case rate < 0.3:
-			s = append(s, "残值率较低，建议拆件出售或作为配件使用")
-		}
-	}
-
-	return s
 }
 
 // roundTo2 四舍五入到 2 位小数（保留金额精度）

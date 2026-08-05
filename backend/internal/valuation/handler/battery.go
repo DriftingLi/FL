@@ -286,26 +286,9 @@ func (h *BatteryHandler) regenerateAndUpload(ctx context.Context, eval *model.Ba
 	return pdfURL
 }
 
-// buildSuggestionsFromRecord 基于评估字段生成简单建议（详情接口 fallback）
+// buildSuggestionsFromRecord 基于评估字段生成建议（详情接口 fallback）
+// 与预测流程共用 service.BuildBatterySuggestions；记录不含特征稳定性分数，health 传 1.0（不触发稳定性提示）。
 func (h *BatteryHandler) buildSuggestionsFromRecord(eval *model.BatteryEvaluation) []string {
-	out := []string{}
-	// EOL 阈值 60%（与 service 端 estimateRUL 保持一致）
-	switch {
-	case eval.SohPercent >= 95:
-		out = append(out, "电池健康度优秀（SOH≥95%），处于生命初期，建议常规巡检。")
-	case eval.SohPercent >= 80:
-		out = append(out, "电池健康度良好（80%≤SOH<95%），状态稳定，可继续投入使用。")
-	case eval.SohPercent >= 60:
-		out = append(out, "电池健康度临近梯次利用边界（60%≤SOH<80%），建议评估应用场景与监测频率。")
-	default:
-		out = append(out, fmt.Sprintf("电池健康度偏低（SOH=%.1f%%<60%%），已低于 EOL 标准，建议尽快更换。", eval.SohPercent))
-	}
-	out = append(out, fmt.Sprintf("预测剩余循环数约 %d 次（置信区间 %d~%d）。", eval.RulCycles, eval.ConfidenceLow, eval.ConfidenceHigh))
-	switch eval.BatteryType {
-	case model.BatteryTypeLFP:
-		out = append(out, "LFP 电池循环寿命长，安全性好；如 SOH 仍高，可考虑梯次利用。")
-	case model.BatteryTypeNCM:
-		out = append(out, "NCM 电池能量密度高但循环寿命较短，注意高温环境与过充风险。")
-	}
-	return out
+	return service.BuildBatterySuggestions(eval.BatteryType, eval.SohPercent,
+		eval.RulCycles, eval.ConfidenceLow, eval.ConfidenceHigh, 1.0)
 }
