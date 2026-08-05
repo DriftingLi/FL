@@ -6,3 +6,12 @@ Dockerfile text eol=lf
 
 # Go 源码统一 LF，保证 Windows 检出后 gofmt -l 依然干净
 *.go text eol=lf
+
+# 前端源码与文档统一 LF，避免编辑器 CRLF/LF 混用产生噪声 diff
+*.ts text eol=lf
+*.tsx text eol=lf
+*.vue text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.md text eol=lf
+*.json text eol=lf
