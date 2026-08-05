@@ -1,5 +1,5 @@
 // Package api 实现 HTTP handlers。
-// 本文件：邮箱注册/登录（验证码）。
+// 本文件：邮箱注册/登录（验证码，走统一验证码 engine）。
 package api
 
 import (
@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/service"
@@ -15,7 +14,7 @@ import (
 )
 
 // RegisterEmailAuthRoutes 注册 /api/auth/email 蓝图（邮箱验证码注册/登录）。
-func RegisterEmailAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, emailSvc *service.EmailAuthService) {
+func RegisterEmailAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, codeSvc *service.VerifyCodeService, emailCh *service.EmailChannel) {
 	g := rg.Group("/auth/email")
 
 	// POST /api/auth/email/send-code {email, purpose: register|login}
@@ -32,11 +31,11 @@ func RegisterEmailAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 		defer cancel()
 
 		var err error
-		switch service.EmailCodePurpose(req.Purpose) {
-		case service.EmailCodeRegister:
-			err = emailSvc.SendRegisterCode(ctx, req.Email)
-		case service.EmailCodeLogin:
-			err = emailSvc.SendLoginCode(ctx, req.Email)
+		switch service.CodePurpose(req.Purpose) {
+		case service.CodePurposeRegister:
+			err = codeSvc.Send(ctx, emailCh, service.CodePurposeRegister, req.Email)
+		case service.CodePurposeLogin:
+			err = codeSvc.Send(ctx, emailCh, service.CodePurposeLogin, req.Email)
 		default:
 			response.BadRequest(c, "purpose 必须为 register 或 login")
 			return
@@ -64,7 +63,7 @@ func RegisterEmailAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
-		result, err := emailSvc.RegisterWithCode(ctx, req.Email, req.Code, req.Nickname, req.Company, req.Password)
+		result, err := codeSvc.RegisterWithCode(ctx, emailCh, req.Email, req.Code, req.Nickname, req.Company, req.Password)
 		if err != nil {
 			response.BadRequest(c, err.Error())
 			return
@@ -86,7 +85,7 @@ func RegisterEmailAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
-		result, err := emailSvc.LoginWithCode(ctx, req.Email, req.Code)
+		result, err := codeSvc.LoginWithCode(ctx, emailCh, req.Email, req.Code)
 		if err != nil {
 			response.BadRequest(c, err.Error())
 			return

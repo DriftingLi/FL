@@ -1,5 +1,5 @@
 // Package api 实现 HTTP handlers。
-// 本文件：手机号注册/登录（验证码，表单与邮箱流程对齐）。
+// 本文件：手机号注册/登录（验证码，走统一验证码 engine）。
 package api
 
 import (
@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/service"
@@ -15,7 +14,7 @@ import (
 )
 
 // RegisterPhoneAuthRoutes 注册 /api/auth/phone 蓝图（手机号验证码注册/登录）。
-func RegisterPhoneAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, phoneSvc *service.PhoneAuthService) {
+func RegisterPhoneAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, codeSvc *service.VerifyCodeService, phoneCh *service.SmsChannel) {
 	g := rg.Group("/auth/phone")
 
 	// POST /api/auth/phone/send-code {phone, purpose: register|login}
@@ -32,11 +31,11 @@ func RegisterPhoneAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 		defer cancel()
 
 		var err error
-		switch service.PhoneCodePurpose(req.Purpose) {
-		case service.PhoneCodeRegister:
-			err = phoneSvc.SendRegisterCode(ctx, req.Phone)
-		case service.PhoneCodeLogin:
-			err = phoneSvc.SendLoginCode(ctx, req.Phone)
+		switch service.CodePurpose(req.Purpose) {
+		case service.CodePurposeRegister:
+			err = codeSvc.Send(ctx, phoneCh, service.CodePurposeRegister, req.Phone)
+		case service.CodePurposeLogin:
+			err = codeSvc.Send(ctx, phoneCh, service.CodePurposeLogin, req.Phone)
 		default:
 			response.BadRequest(c, "purpose 必须为 register 或 login")
 			return
@@ -63,7 +62,7 @@ func RegisterPhoneAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 		}
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
-		result, err := phoneSvc.RegisterWithCode(ctx, req.Phone, req.Code, req.Nickname, req.Company, req.Password)
+		result, err := codeSvc.RegisterWithCode(ctx, phoneCh, req.Phone, req.Code, req.Nickname, req.Company, req.Password)
 		if err != nil {
 			response.BadRequest(c, err.Error())
 			return
@@ -84,7 +83,7 @@ func RegisterPhoneAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.D
 		}
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
-		result, err := phoneSvc.LoginWithCode(ctx, req.Phone, req.Code)
+		result, err := codeSvc.LoginWithCode(ctx, phoneCh, req.Phone, req.Code)
 		if err != nil {
 			response.BadRequest(c, err.Error())
 			return

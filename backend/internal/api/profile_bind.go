@@ -1,5 +1,5 @@
 // Package api 实现 HTTP handlers。
-// 本文件：个人信息页手机号/邮箱绑定修改（验证码校验 + 格式/唯一性校验）。
+// 本文件：个人信息页手机号/邮箱绑定修改（验证码校验 + 格式/唯一性校验，走统一验证码 engine）。
 package api
 
 import (
@@ -17,7 +17,7 @@ import (
 
 // RegisterProfileBindRoutes 注册 /api/auth/profile 蓝图（登录后绑定/修改手机号、邮箱）。
 func RegisterProfileBindRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, authSvc *service.AuthService,
-	emailSvc *service.EmailAuthService, phoneSvc *service.PhoneAuthService) {
+	codeSvc *service.VerifyCodeService, emailCh *service.EmailChannel, phoneCh *service.SmsChannel) {
 	g := rg.Group("/auth/profile", middleware.JWTAuth(cfg))
 
 	// POST /api/auth/profile/send-code {channel: email|phone, target}
@@ -36,9 +36,9 @@ func RegisterProfileBindRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm
 		var err error
 		switch req.Channel {
 		case "email":
-			err = emailSvc.SendBindCode(ctx, userID, req.Target)
+			err = codeSvc.SendBind(ctx, emailCh, userID, req.Target)
 		case "phone":
-			err = phoneSvc.SendBindCode(ctx, userID, req.Target)
+			err = codeSvc.SendBind(ctx, phoneCh, userID, req.Target)
 		default:
 			response.BadRequest(c, "channel 必须为 email 或 phone")
 			return
@@ -63,7 +63,7 @@ func RegisterProfileBindRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 		userID := middleware.CurrentUserID(c)
-		if err := emailSvc.BindEmail(ctx, userID, req.Email, req.Code); err != nil {
+		if err := codeSvc.Bind(ctx, emailCh, userID, req.Email, req.Code); err != nil {
 			response.BadRequest(c, err.Error())
 			return
 		}
@@ -83,7 +83,7 @@ func RegisterProfileBindRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 		userID := middleware.CurrentUserID(c)
-		if err := phoneSvc.BindPhone(ctx, userID, req.Phone, req.Code); err != nil {
+		if err := codeSvc.Bind(ctx, phoneCh, userID, req.Phone, req.Code); err != nil {
 			response.BadRequest(c, err.Error())
 			return
 		}
