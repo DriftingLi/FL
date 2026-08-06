@@ -18,12 +18,14 @@ import (
 func RegisterCoursesRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage) {
 	svc := service.NewCourseService(db, service.NewFileService(cfg.LibreOfficeSidecarURL, st))
 
-	// GET /api/courses  课程列表（公开访问）
+	// GET /api/courses  课程列表（公开访问，可按专业方向/等级过滤）
 	rg.GET("/courses", func(c *gin.Context) {
 		page := atoiDefault(c.Query("page"), 1)
 		pageSize := atoiDefault(c.Query("page_size"), 12)
 		category := c.Query("category")
-		response.Success(c, svc.GetCourses(page, pageSize, category))
+		specialtyID := queryIntPtr(c, "specialty_id")
+		levelID := queryIntPtr(c, "level_id")
+		response.Success(c, svc.GetCourses(page, pageSize, category, specialtyID, levelID))
 	})
 
 	// GET /api/chapter/:chapter_id/slides  章节幻灯片（公开访问）

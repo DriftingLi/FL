@@ -43,6 +43,41 @@ func (s *PracticeModeService) GetFreeQuestions(qType string, kpID *int, count in
 	return out, nil
 }
 
+// GetTagQuestions 标签练习抽题：从 published 题库中按题库标签随机抽取 count 题。
+// count <= 0 时返回该标签下全部已发布题目（按 id 升序，不打乱）。
+func (s *PracticeModeService) GetTagQuestions(tagID, count int) ([]map[string]any, error) {
+	if tagID <= 0 {
+		return nil, errors.New("请指定题库标签")
+	}
+	var tagCount int64
+	if err := s.db.Model(&model.QuestionTag{}).Where("id = ? AND status = ?", tagID, 1).Count(&tagCount).Error; err != nil {
+		return nil, errors.New("查询标签失败")
+	}
+	if tagCount == 0 {
+		return nil, errors.New("题库标签不存在或已停用")
+	}
+	var all []model.Question
+	if err := s.db.Model(&model.Question{}).
+		Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?) AND status = ?", tagID, "published").
+		Order("id ASC").
+		Find(&all).Error; err != nil {
+		return nil, errors.New("查询题目失败")
+	}
+	if len(all) == 0 {
+		return nil, errors.New("该标签下暂无已发布题目")
+	}
+	selected := all
+	if count > 0 && len(all) > count {
+		rand.Shuffle(len(all), func(i, j int) { all[i], all[j] = all[j], all[i] })
+		selected = all[:count]
+	}
+	out := make([]map[string]any, 0, len(selected))
+	for i := range selected {
+		out = append(out, questionToDict(&selected[i], false))
+	}
+	return out, nil
+}
+
 // StartSequential 顺序练习：加载全部 published 题目（按 id 升序），
 // 复用已有 practice_progress 游标续练；一次性返回全部题目，前端从游标处开始作答。
 func (s *PracticeModeService) StartSequential(studentID int) (map[string]any, error) {

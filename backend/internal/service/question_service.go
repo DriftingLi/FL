@@ -337,7 +337,14 @@ func (s *QuestionBankService) CreateQuestion(data map[string]any, createdBy *int
 	if err := s.db.Create(&q).Error; err != nil {
 		return nil, err
 	}
-	return questionToDict(&q, true), nil
+	if v, ok := data["tag_ids"]; ok {
+		if err := replaceQuestionTags(s.db, q.ID, toIntSlice(v)); err != nil {
+			return nil, err
+		}
+	}
+	d := questionToDict(&q, true)
+	d["tags"] = s.loadTagsByQuestion(q.ID)
+	return d, nil
 }
 
 // GetQuestion 查询题目详情。
@@ -346,7 +353,9 @@ func (s *QuestionBankService) GetQuestion(id int) (map[string]any, error) {
 	if err := s.db.First(&q, id).Error; err != nil {
 		return nil, errors.New("题目不存在")
 	}
-	return questionToDict(&q, true), nil
+	d := questionToDict(&q, true)
+	d["tags"] = s.loadTagsByQuestion(q.ID)
+	return d, nil
 }
 
 // UpdateQuestion 更新题目。
@@ -372,7 +381,14 @@ func (s *QuestionBankService) UpdateQuestion(id int, data map[string]any) (map[s
 	if err := s.db.Save(&q).Error; err != nil {
 		return nil, err
 	}
-	return questionToDict(&q, true), nil
+	if v, ok := data["tag_ids"]; ok {
+		if err := replaceQuestionTags(s.db, id, toIntSlice(v)); err != nil {
+			return nil, err
+		}
+	}
+	d := questionToDict(&q, true)
+	d["tags"] = s.loadTagsByQuestion(id)
+	return d, nil
 }
 
 // DeleteQuestion 删除题目。
@@ -387,8 +403,8 @@ func (s *QuestionBankService) DeleteQuestion(id int) error {
 	return nil
 }
 
-// ListQuestions 题目列表分页查询。
-func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, kpID *int, status, keyword string) map[string]any {
+// ListQuestions 题目列表分页查询（可按标签 tagID 过滤，结果附带标签列表）。
+func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, kpID *int, status, keyword string, tagID *int) map[string]any {
 	if page <= 0 {
 		page = 1
 	}
@@ -408,20 +424,83 @@ func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, kp
 	if keyword != "" {
 		q = q.Where("content LIKE ?", "%"+keyword+"%")
 	}
+	if tagID != nil {
+		q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", *tagID)
+	}
 	var total int64
 	q.Count(&total)
 	var list []model.Question
 	q.Order("created_at DESC, id ASC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list)
 	out := make([]map[string]any, 0, len(list))
+	ids := make([]int, 0, len(list))
 	for i := range list {
 		out = append(out, questionToDict(&list[i], true))
+		ids = append(ids, list[i].ID)
 	}
+	s.attachTagsBatch(ids, out)
 	return map[string]any{
 		"total":     total,
 		"page":      page,
 		"page_size": pageSize,
 		"questions": out,
 	}
+}
+
+// loadTagsByQuestion 加载单题标签列表。
+func (s *QuestionBankService) loadTagsByQuestion(questionID int) []map[string]any {
+	return s.loadTagsBatch([]int{questionID})[questionID]
+}
+
+// attachTagsBatch 批量附加标签到题目 dict（避免逐题查询 N+1）。
+func (s *QuestionBankService) attachTagsBatch(questionIDs []int, dicts []map[string]any) {
+	if len(questionIDs) == 0 {
+		return
+	}
+	byID := s.loadTagsBatch(questionIDs)
+	for i, id := range questionIDs {
+		if tags, ok := byID[id]; ok {
+			dicts[i]["tags"] = tags
+		} else {
+			dicts[i]["tags"] = []map[string]any{}
+		}
+	}
+}
+
+// loadTagsBatch 批量加载题目标签，key 为题目 ID。
+func (s *QuestionBankService) loadTagsBatch(questionIDs []int) map[int][]map[string]any {
+	result := make(map[int][]map[string]any, len(questionIDs))
+	if len(questionIDs) == 0 {
+		return result
+	}
+	type tagRow struct {
+		QuestionID int    `gorm:"column:question_id"`
+		TagID      int    `gorm:"column:tag_id"`
+		TagCode    string `gorm:"column:tag_code"`
+		TagName    string `gorm:"column:tag_name"`
+		Category   string `gorm:"column:tag_category"`
+		SortOrder  int    `gorm:"column:tag_sort"`
+		Status     int16  `gorm:"column:tag_status"`
+	}
+	var rows []tagRow
+	if err := s.db.Table("question_tag_relation AS qtr").
+		Select("qtr.question_id, qtr.tag_id, t.code AS tag_code, t.name AS tag_name, t.category AS tag_category, t.sort_order AS tag_sort, t.status AS tag_status").
+		Joins("JOIN question_tag AS t ON t.id = qtr.tag_id").
+		Where("qtr.question_id IN ?", questionIDs).
+		Order("t.sort_order ASC, t.id ASC").
+		Scan(&rows).Error; err != nil {
+		return result
+	}
+	for i := range rows {
+		result[rows[i].QuestionID] = append(result[rows[i].QuestionID], map[string]any{
+			"id":         rows[i].TagID,
+			"code":       rows[i].TagCode,
+			"name":       rows[i].TagName,
+			"category":   rows[i].Category,
+			"sort_order": rows[i].SortOrder,
+			"status":     rows[i].Status,
+		})
+	}
+	return result
 }
 
 // PublishQuestion 发布题目（管理员审核通过）。同时清空驳回理由。
