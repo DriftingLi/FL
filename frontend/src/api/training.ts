@@ -161,6 +161,10 @@ export const trainingApi = {
   },
 
   // ===== 题库标签（后端管理端路由 /admin/question-tag*） =====
+  /** 学员端标签列表（公开，仅启用项，question_count=已发布题数）：GET /api/tags */
+  getTags() {
+    return request.get<{ tags: QuestionTag[] }>('/tags')
+  },
   getQuestionTags() {
     return request.get<{ tags: QuestionTag[] }>('/admin/question-tags')
   },
