@@ -378,6 +378,75 @@ export type CourseDetail = {
 	progress_pct : number
 }
 
+// ===== 等级考试模块类型 =====
+
+/** 等级考试场次（可参加考试列表项） */
+export type LevelExamSession = {
+	id : number
+	name : string
+	start_time : string      // ISO 时间
+	end_time : string
+	duration : number        // 考试时长（分钟）
+	status : string          // upcoming / ongoing / finished
+	total_score : number
+	pass_score : number
+	has_participated : boolean
+	participant_status : string   // '' 表示未参加，否则 in_progress / submitted
+	participant_id : number       // 0 表示未参加
+	can_enter : boolean
+}
+
+/** 等级考试历史项 */
+export type LevelExamHistoryItem = {
+	id : number              // participant_id
+	exam_session_id : number
+	session_name : string
+	status : string          // in_progress / submitted / timeout
+	start_time : string
+	submit_time : string
+	score : number           // 未出分时为 0
+	objective_score : number
+	subjective_score : number
+	is_passed : boolean
+}
+
+/** 等级考试历史分页响应 */
+export type LevelExamHistoryResult = {
+	records : LevelExamHistoryItem[]
+	total : number
+	page : number
+	page_size : number
+}
+
+/** 进入等级考试返回的信息 */
+export type LevelExamInfo = {
+	participant_id : number
+	session : LevelExamSession
+	questions : ExamQuestion[]
+	answers : UTSJSONObject   // 已保存的答案快照 { 题目ID: 答案 }
+	remaining_time : number   // 剩余时间（秒）
+	start_time : string
+}
+
+/** 等级考试结果明细（单题） */
+export type LevelExamResultDetail = {
+	id : number
+	question_id : number
+	title : string
+	type : string
+	user_answer : string
+	is_correct : boolean      // null 表示未判定（简答题/未阅卷）
+	score : number
+	correct_answer : string
+	explanation : string
+}
+
+/** 等级考试结果 */
+export type LevelExamResult = {
+	participant : UTSJSONObject   // participantToDict（含 score/is_passed 等）
+	answers : LevelExamResultDetail[]
+}
+
 // ===== 题库练习模块类型 =====
 
 /** 练习题目 */

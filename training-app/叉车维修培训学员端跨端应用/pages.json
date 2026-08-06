@@ -71,6 +71,20 @@
 			}
 		},
 		{
+			"path": "pages/exam/level-exam-do",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "等级考试"
+			}
+		},
+		{
+			"path": "pages/exam/level-exam-result",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "等级考试成绩"
+			}
+		},
+		{
 			"path": "pages/profile/profile",
 			"style": {
 				"navigationStyle": "custom",

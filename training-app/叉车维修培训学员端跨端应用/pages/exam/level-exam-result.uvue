@@ -1,0 +1,532 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">考试成绩</text>
+            <view class="header-right"></view>
+        </view>
+
+        <!-- 加载中 -->
+        <view v-if="loading" class="loading-wrap">
+            <text class="loading-text">正在加载成绩...</text>
+        </view>
+
+        <scroll-view v-else-if="!hasError" class="content-scroll" scroll-y="true">
+            <!-- 成绩汇总卡片 -->
+            <view class="summary-card" :class="isPassed ? 'summary-passed' : 'summary-failed'">
+                <view class="summary-status">
+                    <text class="summary-status-text">{{ getSummaryStatusText() }}</text>
+                </view>
+                <view class="summary-score">
+                    <text class="summary-score-num">{{ formatScore(totalScore) }}</text>
+                    <text class="summary-score-total">/ {{ formatScore(objectiveScore) }} 分</text>
+                </view>
+                <view class="summary-meta">
+                    <view class="summary-meta-item">
+                        <text class="summary-meta-num">{{ formatScore(objectiveScore) }}</text>
+                        <text class="summary-meta-label">客观分</text>
+                    </view>
+                    <view class="summary-meta-divider"></view>
+                    <view class="summary-meta-item">
+                        <text class="summary-meta-num">{{ formatScore(subjectiveScore) }}</text>
+                        <text class="summary-meta-label">主观分</text>
+                    </view>
+                    <view class="summary-meta-divider"></view>
+                    <view class="summary-meta-item">
+                        <text class="summary-meta-num">{{ answeredCount }}</text>
+                        <text class="summary-meta-label">已评题数</text>
+                    </view>
+                    <view class="summary-meta-divider"></view>
+                    <view class="summary-meta-item">
+                        <text class="summary-meta-num">{{ gradedCount }}</text>
+                        <text class="summary-meta-label">待阅卷</text>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 题目详情列表 -->
+            <view class="section-header">
+                <text class="section-title">题目详情</text>
+            </view>
+            <view class="detail-list">
+                <view v-for="(detail, idx) in details" :key="idx" class="detail-card">
+                    <view class="detail-header">
+                        <text class="detail-type-tag">{{ getTypeName(detail.type) }}</text>
+                        <text class="detail-status" :class="getDetailStatusClass(detail)">
+                            {{ getDetailStatusText(detail) }}</text>
+                    </view>
+                    <text class="detail-title">{{ idx + 1 }}. {{ detail.title }}</text>
+                    <view class="detail-answers">
+                        <view class="detail-answer-row">
+                            <text class="detail-answer-label">你的答案：</text>
+                            <text class="detail-answer-value">{{ detail.user_answer.length > 0 ? detail.user_answer : '未作答' }}</text>
+                        </view>
+                        <view v-if="showCorrectAnswer(detail)" class="detail-answer-row">
+                            <text class="detail-answer-label">正确答案：</text>
+                            <text class="detail-answer-value answer-correct">{{ detail.correct_answer }}</text>
+                        </view>
+                        <view v-if="detail.score > 0" class="detail-answer-row">
+                            <text class="detail-answer-label">得分：</text>
+                            <text class="detail-answer-value answer-correct">{{ formatScore(detail.score) }} 分</text>
+                        </view>
+                        <view v-if="detail.explanation.length > 0" class="detail-answer-row">
+                            <text class="detail-answer-label">解析：</text>
+                            <text class="detail-answer-value">{{ detail.explanation }}</text>
+                        </view>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 底部操作 -->
+            <view class="bottom-actions">
+                <view class="bottom-btn bottom-btn-secondary" @click="onBack">
+                    <text class="bottom-btn-text bottom-btn-text-secondary">返回</text>
+                </view>
+            </view>
+        </scroll-view>
+
+        <!-- 错误态 -->
+        <view v-else class="error-wrap">
+            <text class="error-text">{{ errorMsg }}</text>
+            <view class="retry-btn" @click="loadResult">
+                <text class="retry-btn-text">重试</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { getLevelExamResultApi } from '../../api/levelExam'
+    import type { LevelExamResultDetail } from '../../types/index'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const participantId = ref<number>(0)
+    const loading = ref<boolean>(false)
+    const hasError = ref<boolean>(false)
+    const errorMsg = ref<string>('加载成绩失败')
+
+    const details = ref<LevelExamResultDetail[]>([])
+    const participant = ref<UTSJSONObject>({} as UTSJSONObject)
+
+    /** 总分（未出分时用客观分兜底） */
+    const totalScore = computed<number>(() : number => {
+        const raw = participant.value['score']
+        if (raw != null) return parseFloat(`${raw}`)
+        return objectiveScore.value
+    })
+
+    /** 客观分 */
+    const objectiveScore = computed<number>(() : number => {
+        const raw = participant.value['objective_score']
+        if (raw != null) return parseFloat(`${raw}`)
+        return 0
+    })
+
+    /** 主观分 */
+    const subjectiveScore = computed<number>(() : number => {
+        const raw = participant.value['subjective_score']
+        if (raw != null) return parseFloat(`${raw}`)
+        return 0
+    })
+
+    /** 是否通过 */
+    const isPassed = computed<boolean>(() : boolean => {
+        const raw = participant.value['is_passed']
+        if (raw != null) {
+            const s = `${raw}`
+            return s == 'true' || s == '1'
+        }
+        return false
+    })
+
+    /** 是否待阅卷（存在未评分的主观题） */
+    const hasPendingGrading = computed<boolean>(() : boolean => {
+        const status = participant.value['status']
+        if (status != null) {
+            const s = `${status}`
+            if (s == 'submitted' || s == 'timeout') {
+                // submitted 但未全部阅卷时 score 为 null
+                const scoreRaw = participant.value['score']
+                if (scoreRaw == null) return true
+            }
+        }
+        return false
+    })
+
+    /** 答对题数 */
+    const answeredCount = computed<number>(() : number => {
+        let cnt = 0
+        for (let i = 0; i < details.value.length; i++) {
+            const d = details.value[i]
+            if (d.type == 'short_answer') continue
+            if (d.is_correct) cnt++
+        }
+        return cnt
+    })
+
+    /** 待阅卷题数 */
+    const gradedCount = computed<number>(() : number => {
+        let cnt = 0
+        for (let i = 0; i < details.value.length; i++) {
+            const d = details.value[i]
+            if (d.type == 'short_answer') cnt++
+        }
+        return cnt
+    })
+
+    /** 成绩汇总文案 */
+    function getSummaryStatusText() : string {
+        if (hasPendingGrading.value) return '部分题目待阅卷'
+        return isPassed.value ? '恭喜通过' : '未通过'
+    }
+
+    /** 格式化分数（整数显示整数，小数显示 1 位） */
+    function formatScore(score : number) : string {
+        if (score == Math.floor(score)) {
+            return '' + Math.floor(score)
+        }
+        return score.toFixed(1)
+    }
+
+    /** 题型名称 */
+    function getTypeName(type : string) : string {
+        if (type == 'single' || type == 'single_choice') return '单选题'
+        if (type == 'multi' || type == 'multiple_choice' || type == 'multi_choice') return '多选题'
+        if (type == 'judge' || type == 'true_false') return '判断题'
+        if (type == 'short_answer') return '简答题'
+        if (type == 'fault_image') return '识图题'
+        return '其他'
+    }
+
+    /** 单题状态文案 */
+    function getDetailStatusText(detail : LevelExamResultDetail) : string {
+        if (detail.type == 'short_answer') {
+            return detail.score > 0 ? '已评分 ' + formatScore(detail.score) + '分' : '待阅卷'
+        }
+        return detail.is_correct ? '✓ 正确' : '✗ 错误'
+    }
+
+    function getDetailStatusClass(detail : LevelExamResultDetail) : string {
+        if (detail.type == 'short_answer') {
+            return detail.score > 0 ? 'status-correct' : 'status-pending'
+        }
+        return detail.is_correct ? 'status-correct' : 'status-wrong'
+    }
+
+    /** 是否展示正确答案 */
+    function showCorrectAnswer(detail : LevelExamResultDetail) : boolean {
+        if (detail.type == 'short_answer') return false
+        return detail.correct_answer.length > 0
+    }
+
+    async function loadResult() : Promise<void> {
+        if (participantId.value == 0) {
+            hasError.value = true
+            errorMsg.value = '考试记录 ID 无效'
+            return
+        }
+        loading.value = true
+        hasError.value = false
+        try {
+            const data = await getLevelExamResultApi(participantId.value)
+            participant.value = data.participant
+            details.value = data.answers
+            console.log('[level-exam-result] loaded, answers:', data.answers.length)
+        } catch (e) {
+            console.error('[level-exam-result] load failed:', e)
+            hasError.value = true
+            errorMsg.value = '加载成绩失败'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) {
+                    errorMsg.value = errorMsg.value + ': ' + m
+                }
+            }
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function onBack() : void {
+        uni.navigateBack()
+    }
+
+    onLoad((options : UTSJSONObject) => {
+        const id = options['participant_id']
+        if (id != null) {
+            participantId.value = parseInt(`${id}`)
+        }
+        loadResult()
+    })
+</script>
+
+<style>
+    .container {
+        display: flex;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        width: 60rpx;
+        align-items: center;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #ffffff;
+    }
+
+    .header-title {
+        flex: 1;
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+        text-align: center;
+    }
+
+    .header-right {
+        width: 60rpx;
+    }
+
+    .content-scroll {
+        flex: 1;
+        height: 0;
+        padding: 24rpx;
+    }
+
+    /* 成绩汇总卡片 */
+    .summary-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 40rpx 32rpx;
+        align-items: center;
+        border: 1px solid #eeeeee;
+    }
+
+    .summary-status {
+        margin-bottom: 16rpx;
+    }
+
+    .summary-status-text {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #4caf50;
+    }
+
+    .summary-score {
+        flex-direction: row;
+        align-items: baseline;
+        margin-bottom: 32rpx;
+    }
+
+    .summary-score-num {
+        font-size: 72rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .summary-score-total {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .summary-meta {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .summary-meta-item {
+        flex-direction: column;
+        align-items: center;
+        flex: 1;
+    }
+
+    .summary-meta-num {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 8rpx;
+    }
+
+    .summary-meta-label {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .summary-meta-divider {
+        width: 1rpx;
+        height: 48rpx;
+        background-color: #f0f0f0;
+    }
+
+    .section-header {
+        margin-top: 24rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .section-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    /* 题目详情 */
+    .detail-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        margin-bottom: 16rpx;
+        border: 1px solid #eeeeee;
+    }
+
+    .detail-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16rpx;
+    }
+
+    .detail-type-tag {
+        font-size: 20rpx;
+        color: #ffffff;
+        background-color: #2979ff;
+        padding: 4rpx 16rpx;
+        border-radius: 8rpx;
+    }
+
+    .detail-status {
+        font-size: 24rpx;
+        font-weight: bold;
+    }
+
+    .status-correct {
+        color: #4caf50;
+    }
+
+    .status-wrong {
+        color: #f44336;
+    }
+
+    .status-pending {
+        color: #ff9800;
+    }
+
+    .detail-title {
+        font-size: 28rpx;
+        color: #333333;
+        line-height: 42rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .detail-answers {
+        flex-direction: column;
+    }
+
+    .detail-answer-row {
+        flex-direction: row;
+        align-items: flex-start;
+        margin-bottom: 8rpx;
+    }
+
+    .detail-answer-label {
+        font-size: 24rpx;
+        color: #999999;
+        margin-right: 12rpx;
+        flex-shrink: 0;
+    }
+
+    .detail-answer-value {
+        flex: 1;
+        font-size: 24rpx;
+        color: #333333;
+    }
+
+    .answer-correct {
+        color: #4caf50;
+    }
+
+    /* 底部操作 */
+    .bottom-actions {
+        flex-direction: row;
+        padding: 16rpx 0 48rpx;
+    }
+
+    .bottom-btn {
+        flex: 1;
+        align-items: center;
+        padding: 24rpx 0;
+        border-radius: 48rpx;
+    }
+
+    .bottom-btn-secondary {
+        background-color: #f5f5f5;
+        border: 1px solid #e0e0e0;
+    }
+
+    .bottom-btn-text {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .bottom-btn-text-secondary {
+        color: #666666;
+    }
+
+    /* 加载/错误态 */
+    .loading-wrap {
+        flex: 1;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .error-wrap {
+        flex: 1;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .loading-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .error-text {
+        font-size: 28rpx;
+        color: #999999;
+        margin-bottom: 24rpx;
+    }
+
+    .retry-btn {
+        background-color: #2979ff;
+        padding: 16rpx 48rpx;
+        border-radius: 40rpx;
+    }
+
+    .retry-btn-text {
+        font-size: 28rpx;
+        color: #ffffff;
+    }
+</style>
