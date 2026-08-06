@@ -38,6 +38,27 @@ func RegisterPracticeModeRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gor
 		response.Success(c, result)
 	})
 
+	// GET /api/practice-mode/tag  标签练习抽题（按题库标签，count 控制题量）
+	g.GET("/tag", func(c *gin.Context) {
+		tagIDStr := c.Query("tag_id")
+		if tagIDStr == "" {
+			response.BadRequest(c, "请指定题库标签")
+			return
+		}
+		tagID, err := strconv.Atoi(tagIDStr)
+		if err != nil || tagID <= 0 {
+			response.BadRequest(c, "题库标签ID无效")
+			return
+		}
+		count := atoiDefault(c.Query("count"), 0) // 0=全部
+		result, err := svc.GetTagQuestions(tagID, count)
+		if err != nil {
+			response.NotFound(c, err.Error())
+			return
+		}
+		response.Success(c, result)
+	})
+
 	// GET /api/practice-mode/sequential  顺序练习（开始/续练，返回当前批次+进度）
 	g.GET("/sequential", func(c *gin.Context) {
 		uid, _ := c.Get(string(middleware.CtxUserID))

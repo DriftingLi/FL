@@ -69,9 +69,13 @@
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
-| GET | `/api/courses` | 无 | 课程列表（公开） |
+| GET | `/api/courses` | 无 | 课程列表（公开，支持 `category` / `specialty_id` / `level_id` 过滤） |
+| GET | `/api/catalog/tree` | 无 | 课程目录树：专业方向 → 课程等级 → 课程（含章节数） |
+| GET | `/api/specialties` | 无 | 专业方向列表（仅启用项） |
+| GET | `/api/levels` | 无 | 课程等级列表（仅启用项） |
+| GET | `/api/tags` | 无 | 题库标签列表（仅启用项） |
 | GET | `/api/chapter/:chapter_id/slides` | 无 | 章节课件列表（公开） |
-| GET | `/api/course/:course_id` | JWT | 课程详情 |
+| GET | `/api/course/:course_id` | JWT | 课程详情（含等级/学时/前置课程/证书模板） |
 | GET | `/api/course/:course_id/chapter/:chapter_id` | JWT | 章节详情 |
 | POST | `/api/chapter/:chapter_id/slides/regenerate` | JWT | 重新生成章节课件 |
 | POST | `/api/course/:course_id/progress` | JWT | 记录学习进度 |
@@ -88,7 +92,7 @@
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
-| GET | `/api/question-bank/questions` | JWT | 题库列表 |
+| GET | `/api/question-bank/questions` | JWT | 题库列表（支持 `tag_id` 标签过滤，题目附 `tags`） |
 | POST | `/api/question-bank/questions` | JWT+tutor/admin | 新增题目 |
 | POST | `/api/question-bank/questions/batch-publish` | JWT+admin | 批量发布 |
 | POST | `/api/question-bank/questions/batch-reject` | JWT+admin | 批量驳回 |
@@ -111,6 +115,7 @@
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/practice-mode/free` | 自由刷题 |
+| GET | `/api/practice-mode/tag` | 标签练习抽题（`tag_id` 必填，`count` 控制题量，0=全部） |
 | GET | `/api/practice-mode/sequential` | 顺序练习 |
 | GET | `/api/practice-mode/sequential-progress` | 顺序练习进度 |
 | POST | `/api/practice-mode/progress` | 保存练习进度 |
@@ -202,6 +207,33 @@
 | DELETE | `/api/admin/chapter/:chapter_id` | 删除章节 |
 | POST | `/api/admin/course/generate-content` | 异步生成章节内容（async_task） |
 | GET | `/api/admin/course/generate-content/:task_id` | 查询生成任务状态 |
+
+### 培训目录管理（专业方向 / 等级 / 证书模板 / 题库标签）
+
+课程表单新增字段：`specialty_id`、`level_id`、`theory_hours`（理论学时）、`practice_hours`（实操学时）、`certificate_template_id`、`prerequisite_course_ids`（前置课程 ID 数组）、`sort_order`（课程排序，所属方向+等级层级内生效）。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/admin/catalog/tree` | 管理端目录树：专业方向 → 等级 → 课程 → 章节（含停用项） |
+| GET | `/api/admin/courses` | 课程列表（支持 `specialty_id` / `level_id` 过滤，按 `sort_order` 排序） |
+| GET | `/api/admin/specialties` | 专业方向列表 |
+| POST | `/api/admin/specialty` | 创建专业方向 |
+| PUT | `/api/admin/specialty/:specialty_id` | 更新专业方向 |
+| DELETE | `/api/admin/specialty/:specialty_id` | 删除专业方向 |
+| GET | `/api/admin/levels` | 课程等级列表 |
+| POST | `/api/admin/level` | 创建课程等级 |
+| PUT | `/api/admin/level/:level_id` | 更新课程等级 |
+| DELETE | `/api/admin/level/:level_id` | 删除课程等级 |
+| GET | `/api/admin/certificate-templates` | 证书模板列表 |
+| POST | `/api/admin/certificate-template` | 创建证书模板（`validity_days` 有效期，天） |
+| PUT | `/api/admin/certificate-template/:id` | 更新证书模板 |
+| DELETE | `/api/admin/certificate-template/:id` | 删除证书模板 |
+| GET | `/api/admin/question-tags` | 题库标签列表（含 `question_count` 题目数；学员端 `/api/tags` 统计已发布题目数） |
+| POST | `/api/admin/question-tag` | 创建题库标签 |
+| PUT | `/api/admin/question-tag/:id` | 更新题库标签 |
+| DELETE | `/api/admin/question-tag/:id` | 删除题库标签 |
+| GET | `/api/admin/question/:question_id/tags` | 查询题目标签 |
+| PUT | `/api/admin/question/:question_id/tags` | 全量替换题目标签（`tag_ids`） |
 
 ### 用户管理
 
