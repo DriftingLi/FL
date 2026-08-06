@@ -17,8 +17,11 @@ import (
 
 // RegisterProfileBindRoutes 注册 /api/auth/profile 蓝图（登录后绑定/修改手机号、邮箱）。
 func RegisterProfileBindRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, authSvc *service.AuthService,
-	codeSvc *service.VerifyCodeService, emailCh *service.EmailChannel, phoneCh *service.SmsChannel) {
+	codeSvc *service.VerifyCodeService, emailCh, phoneCh service.CodeChannel) {
 	g := rg.Group("/auth/profile", middleware.JWTAuth(cfg))
+
+	// 通道映射表：send-code 的 channel 字段在此解析为 CodeChannel adapter（不再按通道写 switch）
+	channels := map[string]service.CodeChannel{"email": emailCh, "phone": phoneCh}
 
 	// POST /api/auth/profile/send-code {channel: email|phone, target}
 	g.POST("/send-code", func(c *gin.Context) {
@@ -32,63 +35,21 @@ func RegisterProfileBindRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm
 		}
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
-		userID := middleware.CurrentUserID(c)
-		var err error
-		switch req.Channel {
-		case "email":
-			err = codeSvc.SendBind(ctx, emailCh, userID, req.Target)
-		case "phone":
-			err = codeSvc.SendBind(ctx, phoneCh, userID, req.Target)
-		default:
+		ch, ok := channels[req.Channel]
+		if !ok {
 			response.BadRequest(c, "channel 必须为 email 或 phone")
 			return
 		}
-		if err != nil {
+		if err := codeSvc.SendBind(ctx, ch, middleware.CurrentUserID(c), req.Target); err != nil {
 			response.BadRequest(c, err.Error())
 			return
 		}
 		response.SuccessWithMsg(c, "验证码已发送，请查收", nil)
 	})
 
-	// POST /api/auth/profile/email {email, code}
-	g.POST("/email", func(c *gin.Context) {
-		var req struct {
-			Email string `json:"email"`
-			Code  string `json:"code"`
-		}
-		if err := c.ShouldBindJSON(&req); err != nil {
-			response.BadRequest(c, "请求参数错误")
-			return
-		}
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-		defer cancel()
-		userID := middleware.CurrentUserID(c)
-		if err := codeSvc.Bind(ctx, emailCh, userID, req.Email, req.Code); err != nil {
-			response.BadRequest(c, err.Error())
-			return
-		}
-		response.SuccessWithMsg(c, "邮箱修改成功", nil)
-	})
-
-	// POST /api/auth/profile/phone {phone, code}
-	g.POST("/phone", func(c *gin.Context) {
-		var req struct {
-			Phone string `json:"phone"`
-			Code  string `json:"code"`
-		}
-		if err := c.ShouldBindJSON(&req); err != nil {
-			response.BadRequest(c, "请求参数错误")
-			return
-		}
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-		defer cancel()
-		userID := middleware.CurrentUserID(c)
-		if err := codeSvc.Bind(ctx, phoneCh, userID, req.Phone, req.Code); err != nil {
-			response.BadRequest(c, err.Error())
-			return
-		}
-		response.SuccessWithMsg(c, "手机号修改成功", nil)
-	})
+	// 绑定/修改端点按通道生成（一份骨架，通道作为 adapter 注入）
+	registerCodeChannelBindRoutes(g, codeSvc, emailCh, "email", "邮箱修改成功")
+	registerCodeChannelBindRoutes(g, codeSvc, phoneCh, "phone", "手机号修改成功")
 
 	// POST /api/auth/profile/password {password} 设置/修改密码（账号密码登录用）
 	g.POST("/password", func(c *gin.Context) {

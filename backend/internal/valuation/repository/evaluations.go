@@ -4,6 +4,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -59,6 +60,11 @@ type CreateEvaluationParams struct {
 	// 归属字段
 	// UserID 为 0 表示匿名提交（user_id 落 NULL）；>0 表示登录用户提交
 	UserID int
+
+	// 评估时点锁定的建议与 λ 值（ADR-0004 评估事实性）
+	Suggestions      []string
+	LambdaElectric   float64
+	LambdaCombustion float64
 }
 
 // CreateEvaluation 插入评估主记录，返回新 ID
@@ -74,7 +80,8 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 			condition_rating,
 			original_price, k_time, k_hours, k_brand, k_condition, k_market,
 			estimated_value, confidence_low, confidence_high, report_pdf_path,
-			user_id
+			user_id,
+			suggestions, lambda_electric, lambda_combustion
 		) VALUES (
 			$1, $2, $3, $4,
 			$5, $6, $7,
@@ -84,7 +91,8 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 			$17,
 			$18, $19, $20, $21, $22, $23,
 			$24, $25, $26, $27,
-			$28
+			$28,
+			$29, $30, $31
 		)
 		RETURNING id, created_at, updated_at`,
 		p.Brand, p.VehicleType, p.Series, p.Tonnage,
@@ -96,6 +104,7 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 		p.OriginalPrice, p.KTime, p.KHours, p.KBrand, p.KCondition, p.KMarket,
 		p.EstimatedValue, p.ConfidenceLow, p.ConfidenceHigh, nullableString(p.ReportPdfPath),
 		nullableUserID(p.UserID),
+		nullableJSON(p.Suggestions), p.LambdaElectric, p.LambdaCombustion,
 	).Scan(&id, new(time.Time), new(time.Time))
 	if err != nil {
 		return 0, fmt.Errorf("插入评估记录失败: %w", err)
@@ -139,10 +148,11 @@ func (r *EvaluationRepository) GetEvaluationByUser(ctx context.Context, id int64
 // enforceOwner=true 时追加 user_id = $userID 过滤；=false 时仅按 id 查询（公开场景）
 func (r *EvaluationRepository) scanEvaluationByID(ctx context.Context, id int64, userID int, enforceOwner bool) (model.EvaluationDetail, error) {
 	var (
-		d          model.EvaluationDetail
-		reportPath *string
-		createdAt  time.Time
-		updatedAt  time.Time
+		d               model.EvaluationDetail
+		reportPath      *string
+		suggestionsJSON *[]string
+		createdAt       time.Time
+		updatedAt       time.Time
 	)
 	var row pgx.Row
 	if enforceOwner {
@@ -155,6 +165,7 @@ func (r *EvaluationRepository) scanEvaluationByID(ctx context.Context, id int64,
 			       condition_rating,
 			       original_price, k_time, k_hours, k_brand, k_condition, k_market,
 			       estimated_value, confidence_low, confidence_high, report_pdf_path,
+			       suggestions, lambda_electric, lambda_combustion,
 			       created_at, updated_at
 			FROM evaluations WHERE id = $1 AND user_id = $2`, id, userID)
 	} else {
@@ -167,6 +178,7 @@ func (r *EvaluationRepository) scanEvaluationByID(ctx context.Context, id int64,
 			       condition_rating,
 			       original_price, k_time, k_hours, k_brand, k_condition, k_market,
 			       estimated_value, confidence_low, confidence_high, report_pdf_path,
+			       suggestions, lambda_electric, lambda_combustion,
 			       created_at, updated_at
 			FROM evaluations WHERE id = $1`, id)
 	}
@@ -179,12 +191,16 @@ func (r *EvaluationRepository) scanEvaluationByID(ctx context.Context, id int64,
 		&d.ConditionRating,
 		&d.OriginalPrice, &d.KTime, &d.KHours, &d.KBrand, &d.KCondition, &d.KMarket,
 		&d.EstimatedValue, &d.ConfidenceLow, &d.ConfidenceHigh, &reportPath,
+		&suggestionsJSON, &d.LambdaElectric, &d.LambdaCombustion,
 		&createdAt, &updatedAt,
 	); err != nil {
 		return d, err
 	}
 	if reportPath != nil {
 		d.ReportPdfPath = *reportPath
+	}
+	if suggestionsJSON != nil {
+		d.Suggestions = *suggestionsJSON
 	}
 	d.CreatedAt = createdAt.Format("2006-01-02T15:04:05Z07:00")
 	d.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
@@ -225,6 +241,7 @@ func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string
 			       condition_rating,
 			       original_price, k_time, k_hours, k_brand, k_condition, k_market,
 			       estimated_value, confidence_low, confidence_high, report_pdf_path,
+			       suggestions, lambda_electric, lambda_combustion,
 			       created_at, updated_at
 			FROM evaluations %s
 			ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, whereClause, argIdx, argIdx+1)
@@ -237,6 +254,7 @@ func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string
 		for rows.Next() {
 			var d model.EvaluationDetail
 			var reportPath *string
+			var suggestionsJSON *[]string
 			var createdAt time.Time
 			var updatedAt time.Time
 			if err := rows.Scan(
@@ -248,12 +266,16 @@ func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string
 				&d.ConditionRating,
 				&d.OriginalPrice, &d.KTime, &d.KHours, &d.KBrand, &d.KCondition, &d.KMarket,
 				&d.EstimatedValue, &d.ConfidenceLow, &d.ConfidenceHigh, &reportPath,
+				&suggestionsJSON, &d.LambdaElectric, &d.LambdaCombustion,
 				&createdAt, &updatedAt,
 			); err != nil {
 				return nil, err
 			}
 			if reportPath != nil {
 				d.ReportPdfPath = *reportPath
+			}
+			if suggestionsJSON != nil {
+				d.Suggestions = *suggestionsJSON
 			}
 			d.CreatedAt = createdAt.Format("2006-01-02T15:04:05Z07:00")
 			d.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
@@ -304,6 +326,18 @@ func nullableUserID(uid int) any {
 	return uid
 }
 
+// nullableJSON 把建议切片序列化为 jsonb 值；空切片返回 nil（落 NULL，历史记录未回填态）。
+func nullableJSON(s []string) any {
+	if len(s) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(s)
+	if err != nil {
+		return nil
+	}
+	return b
+}
+
 // joinStrings 用 sep 连接字符串切片（避免引入 strings 包的小工具）
 func joinStrings(parts []string, sep string) string {
 	out := ""
@@ -335,4 +369,68 @@ func (r *EvaluationRepository) EvaluationExists(ctx context.Context, id int64) (
 	err := r.pool.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM evaluations WHERE id = $1)`, id).Scan(&exists)
 	return exists, err
+}
+
+// EvaluationBackfillRow 历史评估回填所需的字段（建议输入 + 当前建议态）。
+type EvaluationBackfillRow struct {
+	ID                         int64
+	KCondition                 float64
+	HasLicensePlate            bool
+	HasRegistrationCertificate bool
+	OriginalPaint              bool
+	HasMaintenanceRecords      bool
+	KHours                     float64
+	KBrand                     float64
+	KTime                      float64
+	KMarket                    float64
+	OriginalPrice              float64
+	EstimatedValue             float64
+	// Suggestions 当前已锁定的建议（nil 表示未回填，回填跳过已有建议保证幂等）
+	Suggestions []string
+}
+
+// ListEvaluationsForBackfill 列出全部评估记录的建议回填输入（幂等回填使用）。
+func (r *EvaluationRepository) ListEvaluationsForBackfill(ctx context.Context) ([]EvaluationBackfillRow, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, k_condition, has_license_plate, has_registration_certificate,
+		       original_paint, has_maintenance_records,
+		       k_hours, k_brand, k_time, k_market,
+		       original_price, estimated_value, suggestions
+		FROM evaluations ORDER BY id ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("查询回填记录失败: %w", err)
+	}
+	defer rows.Close()
+	out := make([]EvaluationBackfillRow, 0, 16)
+	for rows.Next() {
+		var row EvaluationBackfillRow
+		var suggestionsJSON []byte
+		if err := rows.Scan(
+			&row.ID, &row.KCondition, &row.HasLicensePlate, &row.HasRegistrationCertificate,
+			&row.OriginalPaint, &row.HasMaintenanceRecords,
+			&row.KHours, &row.KBrand, &row.KTime, &row.KMarket,
+			&row.OriginalPrice, &row.EstimatedValue, &suggestionsJSON,
+		); err != nil {
+			return nil, err
+		}
+		if len(suggestionsJSON) > 0 {
+			if err := json.Unmarshal(suggestionsJSON, &row.Suggestions); err != nil {
+				return nil, fmt.Errorf("解析建议 JSON 失败 (id=%d): %w", row.ID, err)
+			}
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
+// UpdateEvaluationSuggestions 回填建议（幂等写入，覆盖为 NULL 的存量记录）。
+func (r *EvaluationRepository) UpdateEvaluationSuggestions(ctx context.Context, id int64, suggestions []string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE evaluations SET suggestions = $2, updated_at = NOW() WHERE id = $1`,
+		id, nullableJSON(suggestions))
+	if err != nil {
+		return fmt.Errorf("回填建议失败 (id=%d): %w", id, err)
+	}
+	_ = cache.Del(ctx, cache.SafeKey("eval", "get", fmt.Sprintf("%d", id)))
+	return nil
 }

@@ -5,8 +5,6 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5"
-
-	"forklift-training/internal/cache"
 )
 
 // ListVehicleTypes 列出全部车型
@@ -46,7 +44,7 @@ func (r *DictionaryRepository) DeleteVehicleType(ctx context.Context, id int) er
 
 // GetVehicleTypeByName 按名称查询车型（供 service 判断电动/内燃使用）
 func (r *DictionaryRepository) GetVehicleTypeByName(ctx context.Context, name string) (VehicleType, error) {
-	return getCached(r, ctx, cache.SafeKey("dict", "vt", "get", name), "查询车型",
+	return getCached(r, ctx, cacheKey(CachePrefixVtGet, name), "查询车型",
 		`SELECT id, name, power_type, earliest_factory_year FROM vehicle_types WHERE name = $1`,
 		func(row pgx.Row) (VehicleType, error) {
 			var v VehicleType

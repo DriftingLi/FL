@@ -5,8 +5,6 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5"
-
-	"forklift-training/internal/cache"
 )
 
 // ListSeries 列出全部系列（可按 brand 筛选）
@@ -17,7 +15,7 @@ func (r *DictionaryRepository) ListSeries(ctx context.Context, brand string) ([]
 		query = `SELECT id, brand, name, earliest_factory_year FROM series WHERE brand = $1 ORDER BY id ASC`
 		args = append(args, brand)
 	}
-	return listCached(r, ctx, cache.SafeKey("dict", "series", "bybrand", brand), "查询系列", query,
+	return listCached(r, ctx, cacheKey(CachePrefixSeriesByBrand, brand), "查询系列", query,
 		func(rows pgx.Rows) (Series, error) {
 			var s Series
 			err := rows.Scan(&s.ID, &s.Brand, &s.Name, &s.EarliestFactoryYear)
@@ -55,7 +53,7 @@ func (r *DictionaryRepository) ListSeriesConfigOptions(ctx context.Context, bran
 		dimension  string
 		optionName string
 	}
-	rows, err := listCached(r, ctx, cache.SafeKey("dict", "sco", brand, series), "查询系列配置选项",
+	rows, err := listCached(r, ctx, cacheKey(CachePrefixSco, brand, series), "查询系列配置选项",
 		`SELECT dimension, option_name FROM series_config_options
 		 WHERE brand = $1 AND series = $2
 		 ORDER BY dimension ASC, id ASC`,

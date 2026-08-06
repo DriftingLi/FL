@@ -14,7 +14,7 @@ import (
 
 // ListTonnages 列出全部吨位
 func (r *DictionaryRepository) ListTonnages(ctx context.Context) ([]Tonnage, error) {
-	return listCached(r, ctx, "dict:specs:tonnages:list", "查询吨位",
+	return listCached(r, ctx, CacheKeyTonnagesList, "查询吨位",
 		`SELECT id, value FROM tonnages ORDER BY value ASC`,
 		func(rows pgx.Rows) (Tonnage, error) {
 			var t Tonnage
@@ -44,7 +44,7 @@ func (r *DictionaryRepository) DeleteTonnage(ctx context.Context, id int) error 
 
 // ListMastTypes 列出全部门架类型
 func (r *DictionaryRepository) ListMastTypes(ctx context.Context) ([]MastType, error) {
-	return listCached(r, ctx, "dict:specs:mast_types:list", "查询门架类型",
+	return listCached(r, ctx, CacheKeyMastTypesList, "查询门架类型",
 		`SELECT id, name FROM mast_types ORDER BY id ASC`,
 		func(rows pgx.Rows) (MastType, error) {
 			var m MastType
@@ -74,7 +74,7 @@ func (r *DictionaryRepository) DeleteMastType(ctx context.Context, id int) error
 
 // ListMastHeights 列出全部门架高度
 func (r *DictionaryRepository) ListMastHeights(ctx context.Context) ([]MastHeight, error) {
-	return listCached(r, ctx, "dict:specs:mast_heights:list", "查询门架高度",
+	return listCached(r, ctx, CacheKeyMastHeightsList, "查询门架高度",
 		`SELECT id, value_mm FROM mast_heights ORDER BY value_mm ASC`,
 		func(rows pgx.Rows) (MastHeight, error) {
 			var m MastHeight
@@ -104,7 +104,7 @@ func (r *DictionaryRepository) DeleteMastHeight(ctx context.Context, id int) err
 
 // ListBatteryTypes 列出全部电池类型
 func (r *DictionaryRepository) ListBatteryTypes(ctx context.Context) ([]BatteryTypeDict, error) {
-	return listCached(r, ctx, "dict:specs:battery_types:list", "查询电池类型",
+	return listCached(r, ctx, CacheKeyBatteryTypesList, "查询电池类型",
 		`SELECT id, name FROM battery_types ORDER BY id ASC`,
 		func(rows pgx.Rows) (BatteryTypeDict, error) {
 			var b BatteryTypeDict
@@ -134,7 +134,7 @@ func (r *DictionaryRepository) DeleteBatteryType(ctx context.Context, id int) er
 
 // ListTransmissionTypes 列出全部传动系统类型
 func (r *DictionaryRepository) ListTransmissionTypes(ctx context.Context) ([]TransmissionType, error) {
-	return listCached(r, ctx, "dict:specs:transmission_types:list", "查询传动系统",
+	return listCached(r, ctx, CacheKeyTransmissionTypesList, "查询传动系统",
 		`SELECT id, name FROM transmission_types ORDER BY id ASC`,
 		func(rows pgx.Rows) (TransmissionType, error) {
 			var t TransmissionType
@@ -164,7 +164,7 @@ func (r *DictionaryRepository) DeleteTransmissionType(ctx context.Context, id in
 
 // ListEngineTypes 列出全部发动机类型
 func (r *DictionaryRepository) ListEngineTypes(ctx context.Context) ([]EngineType, error) {
-	return listCached(r, ctx, "dict:specs:engine_types:list", "查询发动机类型",
+	return listCached(r, ctx, CacheKeyEngineTypesList, "查询发动机类型",
 		`SELECT id, name FROM engine_types ORDER BY id ASC`,
 		func(rows pgx.Rows) (EngineType, error) {
 			var e EngineType

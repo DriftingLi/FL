@@ -5,8 +5,6 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5"
-
-	"forklift-training/internal/cache"
 )
 
 // ListRegionCoefficients 列出全部区域系数（可按 province 筛选）
@@ -17,7 +15,7 @@ func (r *DictionaryRepository) ListRegionCoefficients(ctx context.Context, provi
 		query = `SELECT id, province, city, coefficient FROM region_coefficients WHERE province = $1 ORDER BY id ASC`
 		args = append(args, province)
 	}
-	return listCached(r, ctx, cache.SafeKey("dict", "region", "list", province), "查询区域系数", query,
+	return listCached(r, ctx, cacheKey(CachePrefixRegionList, province), "查询区域系数", query,
 		func(rows pgx.Rows) (RegionCoefficient, error) {
 			var rc RegionCoefficient
 			err := rows.Scan(&rc.ID, &rc.Province, &rc.City, &rc.Coefficient)
@@ -38,7 +36,7 @@ func (r *DictionaryRepository) ListProvinces(ctx context.Context) ([]string, err
 
 // ListCities 按省份列出城市
 func (r *DictionaryRepository) ListCities(ctx context.Context, province string) ([]string, error) {
-	return listCached(r, ctx, cache.SafeKey("dict", "region", "cities", province), "查询城市",
+	return listCached(r, ctx, cacheKey(CachePrefixRegionCities, province), "查询城市",
 		`SELECT city FROM region_coefficients WHERE province = $1 ORDER BY city ASC`,
 		func(rows pgx.Rows) (string, error) {
 			var c string
@@ -73,7 +71,7 @@ func (r *DictionaryRepository) DeleteRegionCoefficient(ctx context.Context, id i
 // GetRegionCoefficient 按 province + city 查询区域系数（供 service 计算 Km 使用）
 // 未命中时返回 pgx.ErrNoRows，由调用方决定是否使用默认值 1.0
 func (r *DictionaryRepository) GetRegionCoefficient(ctx context.Context, province, city string) (RegionCoefficient, error) {
-	return getCached(r, ctx, cache.SafeKey("dict", "region", "get", province, city), "查询区域系数",
+	return getCached(r, ctx, cacheKey(CachePrefixRegionGet, province, city), "查询区域系数",
 		`SELECT id, province, city, coefficient FROM region_coefficients WHERE province = $1 AND city = $2`,
 		func(row pgx.Row) (RegionCoefficient, error) {
 			var rc RegionCoefficient

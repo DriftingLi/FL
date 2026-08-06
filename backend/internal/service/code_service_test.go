@@ -87,8 +87,7 @@ func newCodeTestSvc(t *testing.T) (*VerifyCodeService, *memCodeStore) {
 	db := testutil.NewMemoryDB(t)
 	authSvc := NewAuthService(db, "test-secret", time.Hour, "a", "t", "s")
 	store := newMemCodeStore()
-	svc := NewVerifyCodeService(db, authSvc, 5*time.Minute)
-	svc.store = store
+	svc := NewVerifyCodeService(db, authSvc, 5*time.Minute, store)
 	return svc, store
 }
 

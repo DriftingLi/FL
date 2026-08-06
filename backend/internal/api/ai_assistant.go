@@ -13,7 +13,7 @@ import (
 	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
-	vhandler "forklift-training/internal/valuation/handler"
+	"forklift-training/pkg/response"
 )
 
 // AIAssistantHandler AI 助手模块 Handler。
@@ -60,93 +60,93 @@ func RegisterAIAssistantRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm
 func (h *AIAssistantHandler) ListPublicModels(c *gin.Context) {
 	models, err := h.svc.ListPublicModels(c.Request.Context())
 	if err != nil {
-		vhandler.Fail(c, vhandler.CodeInternalError, err.Error())
+		response.ServerError(c, err.Error())
 		return
 	}
-	vhandler.OK(c, models)
+	response.Success(c, models)
 }
 
 // ListUserModels 列出登录用户的自定义模型（api_key 脱敏）。
 func (h *AIAssistantHandler) ListUserModels(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	if userID == 0 {
-		vhandler.Error(c, http.StatusUnauthorized, 40100, "请先登录")
+		response.Unauthorized(c, "请先登录")
 		return
 	}
 	models, err := h.svc.ListUserModels(c.Request.Context(), userID)
 	if err != nil {
-		vhandler.Fail(c, vhandler.CodeInternalError, err.Error())
+		response.ServerError(c, err.Error())
 		return
 	}
-	vhandler.OK(c, models)
+	response.Success(c, models)
 }
 
 // SaveUserModel 创建/更新用户自定义模型。
 func (h *AIAssistantHandler) SaveUserModel(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	if userID == 0 {
-		vhandler.Error(c, http.StatusUnauthorized, 40100, "请先登录")
+		response.Unauthorized(c, "请先登录")
 		return
 	}
 	var req service.SaveUserModelReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		vhandler.Fail(c, vhandler.CodeBadRequest, "请求数据无效")
+		response.BadRequest(c, "请求数据无效")
 		return
 	}
 	if req.Name == "" || req.APIKey == "" || req.BaseURL == "" || req.Model == "" {
-		vhandler.Fail(c, vhandler.CodeBadRequest, "name/api_key/base_url/model 均为必填")
+		response.BadRequest(c, "name/api_key/base_url/model 均为必填")
 		return
 	}
 	if err := h.svc.SaveUserModel(c.Request.Context(), userID, req); err != nil {
-		vhandler.Fail(c, vhandler.CodeBadRequest, err.Error())
+		response.BadRequest(c, err.Error())
 		return
 	}
-	vhandler.OK(c, nil)
+	response.Success(c, nil)
 }
 
 // DeleteUserModel 删除用户自定义模型。
 func (h *AIAssistantHandler) DeleteUserModel(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	if userID == 0 {
-		vhandler.Error(c, http.StatusUnauthorized, 40100, "请先登录")
+		response.Unauthorized(c, "请先登录")
 		return
 	}
 	modelID, _ := strconv.Atoi(c.Param("id"))
 	if modelID <= 0 {
-		vhandler.Fail(c, vhandler.CodeBadRequest, "无效的模型 ID")
+		response.BadRequest(c, "无效的模型 ID")
 		return
 	}
 	if err := h.svc.DeleteUserModel(c.Request.Context(), userID, modelID); err != nil {
 		if err == gorm.ErrRecordNotFound {
-			vhandler.Fail(c, vhandler.CodeNotFound, "模型不存在")
+			response.NotFound(c, "模型不存在")
 			return
 		}
-		vhandler.Fail(c, vhandler.CodeInternalError, err.Error())
+		response.ServerError(c, err.Error())
 		return
 	}
-	vhandler.OK(c, nil)
+	response.Success(c, nil)
 }
 
 // ListSessions 列出登录用户的会话。
 func (h *AIAssistantHandler) ListSessions(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	if userID == 0 {
-		vhandler.Error(c, http.StatusUnauthorized, 40100, "请先登录")
+		response.Unauthorized(c, "请先登录")
 		return
 	}
 	sessions, err := h.svc.ListSessions(c.Request.Context(), userID)
 	if err != nil {
-		vhandler.Fail(c, vhandler.CodeInternalError, err.Error())
+		response.ServerError(c, err.Error())
 		return
 	}
-	vhandler.OK(c, sessions)
+	response.Success(c, sessions)
 }
 
 // CreateSession 创建会话。
 func (h *AIAssistantHandler) CreateSession(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	if userID == 0 {
-		vhandler.Error(c, http.StatusUnauthorized, 40100, "请先登录")
+		response.Unauthorized(c, "请先登录")
 		return
 	}
 	var req struct {
@@ -156,33 +156,33 @@ func (h *AIAssistantHandler) CreateSession(c *gin.Context) {
 	_ = c.ShouldBindJSON(&req)
 	session, err := h.svc.CreateSession(c.Request.Context(), userID, req.Title, req.ModelName)
 	if err != nil {
-		vhandler.Fail(c, vhandler.CodeInternalError, err.Error())
+		response.ServerError(c, err.Error())
 		return
 	}
-	vhandler.OK(c, session)
+	response.Success(c, session)
 }
 
 // DeleteSession 删除会话及其消息。
 func (h *AIAssistantHandler) DeleteSession(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	if userID == 0 {
-		vhandler.Error(c, http.StatusUnauthorized, 40100, "请先登录")
+		response.Unauthorized(c, "请先登录")
 		return
 	}
 	sessionID, _ := strconv.Atoi(c.Param("id"))
 	if sessionID <= 0 {
-		vhandler.Fail(c, vhandler.CodeBadRequest, "无效的会话 ID")
+		response.BadRequest(c, "无效的会话 ID")
 		return
 	}
 	if err := h.svc.DeleteSession(c.Request.Context(), userID, sessionID); err != nil {
 		if err == gorm.ErrRecordNotFound {
-			vhandler.Fail(c, vhandler.CodeNotFound, "会话不存在")
+			response.NotFound(c, "会话不存在")
 			return
 		}
-		vhandler.Fail(c, vhandler.CodeInternalError, err.Error())
+		response.ServerError(c, err.Error())
 		return
 	}
-	vhandler.OK(c, nil)
+	response.Success(c, nil)
 }
 
 // RenameSession 修改会话标题。
@@ -190,54 +190,54 @@ func (h *AIAssistantHandler) DeleteSession(c *gin.Context) {
 func (h *AIAssistantHandler) RenameSession(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	if userID == 0 {
-		vhandler.Error(c, http.StatusUnauthorized, 40100, "请先登录")
+		response.Unauthorized(c, "请先登录")
 		return
 	}
 	sessionID, _ := strconv.Atoi(c.Param("id"))
 	if sessionID <= 0 {
-		vhandler.Fail(c, vhandler.CodeBadRequest, "无效的会话 ID")
+		response.BadRequest(c, "无效的会话 ID")
 		return
 	}
 	var req struct {
 		Title string `json:"title"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		vhandler.Fail(c, vhandler.CodeBadRequest, "请求数据无效")
+		response.BadRequest(c, "请求数据无效")
 		return
 	}
 	if err := h.svc.RenameSession(c.Request.Context(), userID, sessionID, req.Title); err != nil {
 		if err == gorm.ErrRecordNotFound {
-			vhandler.Fail(c, vhandler.CodeNotFound, "会话不存在")
+			response.NotFound(c, "会话不存在")
 			return
 		}
-		vhandler.Fail(c, vhandler.CodeBadRequest, err.Error())
+		response.BadRequest(c, err.Error())
 		return
 	}
-	vhandler.OK(c, map[string]string{"message": "已更新会话标题"})
+	response.Success(c, map[string]string{"message": "已更新会话标题"})
 }
 
 // GetSessionMessages 获取指定会话的消息列表。
 func (h *AIAssistantHandler) GetSessionMessages(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	if userID == 0 {
-		vhandler.Error(c, http.StatusUnauthorized, 40100, "请先登录")
+		response.Unauthorized(c, "请先登录")
 		return
 	}
 	sessionID, _ := strconv.Atoi(c.Param("id"))
 	if sessionID <= 0 {
-		vhandler.Fail(c, vhandler.CodeBadRequest, "无效的会话 ID")
+		response.BadRequest(c, "无效的会话 ID")
 		return
 	}
 	messages, err := h.svc.GetSessionMessages(c.Request.Context(), userID, sessionID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			vhandler.Fail(c, vhandler.CodeNotFound, "会话不存在")
+			response.NotFound(c, "会话不存在")
 			return
 		}
-		vhandler.Fail(c, vhandler.CodeInternalError, err.Error())
+		response.ServerError(c, err.Error())
 		return
 	}
-	vhandler.OK(c, messages)
+	response.Success(c, messages)
 }
 
 // StreamChat 流式对话（SSE 推送）。
@@ -250,11 +250,11 @@ func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 
 	var req service.StreamChatReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		vhandler.Fail(c, vhandler.CodeBadRequest, "请求数据无效")
+		response.BadRequest(c, "请求数据无效")
 		return
 	}
 	if len(req.Messages) == 0 {
-		vhandler.Fail(c, vhandler.CodeBadRequest, "消息不能为空")
+		response.BadRequest(c, "消息不能为空")
 		return
 	}
 

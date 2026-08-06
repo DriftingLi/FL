@@ -410,14 +410,16 @@ type VerifyCodeService struct {
 }
 
 // NewVerifyCodeService 构造验证码服务。
-func NewVerifyCodeService(db *gorm.DB, authSvc *AuthService, codeTTL time.Duration) *VerifyCodeService {
+// NewVerifyCodeService 构造验证码 engine。
+// store 为验证码存储 adapter（生产 Redis，测试内存），接口存在即接线。
+func NewVerifyCodeService(db *gorm.DB, authSvc *AuthService, codeTTL time.Duration, store AuthCodeStore) *VerifyCodeService {
 	if codeTTL <= 0 {
 		codeTTL = 5 * time.Minute
 	}
 	return &VerifyCodeService{
 		db:      db,
 		authSvc: authSvc,
-		store:   RedisAuthCodeStore{},
+		store:   store,
 		codeTTL: codeTTL,
 	}
 }

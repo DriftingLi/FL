@@ -64,6 +64,10 @@ function parseJson() {
         jsonError.value = `第 ${i + 1} 条 voltage_series/current_series 必须是数组`
         return
       }
+      if (voltage_series.length === 0 || current_series.length === 0) {
+        jsonError.value = `第 ${i + 1} 条电压/电流数组不能为空`
+        return
+      }
       if (voltage_series.length !== current_series.length) {
         jsonError.value = `第 ${i + 1} 条电压/电流数组长度不一致`
         return
@@ -78,6 +82,10 @@ function parseJson() {
         current_series: current_series as number[],
         capacity
       })
+    }
+    if (validated.length < 10) {
+      jsonError.value = `循环数据至少需要 10 条，当前 ${validated.length} 条`
+      return
     }
     parsedCycles.value = validated
   } catch (e) {

@@ -26,15 +26,12 @@ package handler
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/storage"
-	vrepo "forklift-training/internal/valuation/repository"
 	vservice "forklift-training/internal/valuation/service"
-	"forklift-training/pkg/pdf"
 )
 
 // RegisterRoutes 注册残值评估模块路由。
@@ -46,19 +43,18 @@ func RegisterRoutes(
 	r *gin.Engine,
 	cfg *config.Config,
 	logger *zap.Logger,
-	pool *pgxpool.Pool,
-	dictRepo *vrepo.DictionaryRepository,
-	evalRepo *vrepo.EvaluationRepository,
+	dictRepo DictionaryConfigStore,
+	evalRepo EvaluationStore,
+	batteryRepo BatteryStore,
 	valuationSvc *vservice.ValuationService,
 	batterySvc *vservice.BatteryRULService,
-	pdfGen *pdf.Generator,
+	pdfGen ReportGenerator,
 	st storage.Storage,
 	valuationAuthSvc *vservice.ValuationAuthService,
 ) {
 	evalHandler := NewEvaluationHandler(valuationSvc, evalRepo, logger)
 	configHandler := NewConfigHandler(dictRepo, logger)
 	reportHandler := NewReportHandler(evalRepo, pdfGen, logger, st, vservice.NewCoefficientProvider(dictRepo))
-	batteryRepo := vrepo.NewBatteryRepository(pool)
 	batteryHandler := NewBatteryHandler(batteryRepo, batterySvc, logger, st)
 	healthHandler := NewHealthHandler()
 	valuationAuthHandler := NewValuationAuthHandler(valuationAuthSvc)

@@ -28,7 +28,7 @@ func scanCoefficient(row interface{ Scan(dest ...any) error }) (CoefficientConfi
 
 // ListCoefficientConfigs 列出全部系数配置
 func (r *DictionaryRepository) ListCoefficientConfigs(ctx context.Context) ([]CoefficientConfig, error) {
-	return listCached(r, ctx, "dict:coef:list", "查询系数配置",
+	return listCached(r, ctx, CacheKeyCoefList, "查询系数配置",
 		`SELECT id, key, value, description, updated_at FROM coefficient_configs ORDER BY key ASC`,
 		func(rows pgx.Rows) (CoefficientConfig, error) {
 			return scanCoefficient(rows)
@@ -37,7 +37,7 @@ func (r *DictionaryRepository) ListCoefficientConfigs(ctx context.Context) ([]Co
 
 // GetCoefficientByKey 按 key 查询系数
 func (r *DictionaryRepository) GetCoefficientByKey(ctx context.Context, key string) (CoefficientConfig, error) {
-	return getCached(r, ctx, cache.SafeKey("dict", "coef", "get", key), "查询系数配置",
+	return getCached(r, ctx, cacheKey(CachePrefixCoefGet, key), "查询系数配置",
 		`SELECT id, key, value, description, updated_at FROM coefficient_configs WHERE key = $1`,
 		func(row pgx.Row) (CoefficientConfig, error) {
 			return scanCoefficient(row)
@@ -64,7 +64,7 @@ type AlgorithmParameters struct {
 
 // ListAlgorithmParameters 聚合查询全部算法参数（4 类），供管理员后台一次加载
 func (r *DictionaryRepository) ListAlgorithmParameters(ctx context.Context) (AlgorithmParameters, error) {
-	const cacheKey = "dict:algo_params"
+	const cacheKey = CacheKeyAlgoParams
 	var result AlgorithmParameters
 	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
 		var ap AlgorithmParameters

@@ -21,13 +21,13 @@ import type { Brand } from '@/types/valuation/brand'
 
 /** 全部品牌（按 k_brand 倒序） */
 export async function listBrands(): Promise<Brand[]> {
-  const resp = await client.get<unknown, { data: Brand[] }>('/dictionaries/brands')
+  const resp = await client.get<Brand[]>('/dictionaries/brands')
   return resp.data ?? []
 }
 
 /** 车辆类型（按品牌级联过滤） */
 export async function listVehicleTypes(brand?: string): Promise<VehicleTypeOption[]> {
-  const resp = await client.get<unknown, { data: VehicleTypeOption[] }>('/dictionaries/vehicle-types', {
+  const resp = await client.get<VehicleTypeOption[]>('/dictionaries/vehicle-types', {
     params: brand ? { brand } : undefined
   })
   return resp.data ?? []
@@ -35,7 +35,7 @@ export async function listVehicleTypes(brand?: string): Promise<VehicleTypeOptio
 
 /** 系列（按品牌+车辆类型级联过滤） */
 export async function listSeries(brand?: string, vehicleType?: string): Promise<SeriesOption[]> {
-  const resp = await client.get<unknown, { data: SeriesOption[] }>('/dictionaries/series', {
+  const resp = await client.get<SeriesOption[]>('/dictionaries/series', {
     params: { brand, vehicle_type: vehicleType }
   })
   return resp.data ?? []
@@ -43,7 +43,7 @@ export async function listSeries(brand?: string, vehicleType?: string): Promise<
 
 /** 吨位（按品牌+车辆类型+系列级联过滤） */
 export async function listTonnages(brand?: string, vehicleType?: string, series?: string): Promise<TonnageOption[]> {
-  const resp = await client.get<unknown, { data: TonnageOption[] }>('/dictionaries/tonnages', {
+  const resp = await client.get<TonnageOption[]>('/dictionaries/tonnages', {
     params: { brand, vehicle_type: vehicleType, series }
   })
   return resp.data ?? []
@@ -53,7 +53,7 @@ export async function listTonnages(brand?: string, vehicleType?: string, series?
 export async function listConfigTypes(
   brand?: string, vehicleType?: string, series?: string, tonnage?: number | string
 ): Promise<ConfigTypeOption[]> {
-  const resp = await client.get<unknown, { data: ConfigTypeOption[] }>('/dictionaries/config-types', {
+  const resp = await client.get<ConfigTypeOption[]>('/dictionaries/config-types', {
     params: { brand, vehicle_type: vehicleType, series, tonnage }
   })
   return resp.data ?? []
@@ -63,7 +63,7 @@ export async function listConfigTypes(
 export async function listMastTypes(
   brand?: string, vehicleType?: string, series?: string, tonnage?: number | string, configType?: string
 ): Promise<MastTypeOption[]> {
-  const resp = await client.get<unknown, { data: MastTypeOption[] }>('/dictionaries/mast-types', {
+  const resp = await client.get<MastTypeOption[]>('/dictionaries/mast-types', {
     params: { brand, vehicle_type: vehicleType, series, tonnage, config_type: configType }
   })
   return resp.data ?? []
@@ -74,7 +74,7 @@ export async function listMastHeights(
   brand?: string, vehicleType?: string, series?: string, tonnage?: number | string,
   configType?: string, mastType?: string
 ): Promise<MastHeightOption[]> {
-  const resp = await client.get<unknown, { data: MastHeightOption[] }>('/dictionaries/mast-heights', {
+  const resp = await client.get<MastHeightOption[]>('/dictionaries/mast-heights', {
     params: { brand, vehicle_type: vehicleType, series, tonnage, config_type: configType, mast_type: mastType }
   })
   return resp.data ?? []
@@ -85,7 +85,7 @@ export async function listMastHeights(
 export async function getEarliestFactoryYear(
   brand: string, vehicleType: string, series: string | undefined, tonnage: number | string
 ): Promise<number> {
-  const resp = await client.get<unknown, { data: { earliest_factory_year: number } }>(
+  const resp = await client.get<{ earliest_factory_year: number }>(
     '/dictionaries/earliest-factory-year',
     { params: { brand, vehicle_type: vehicleType, series: series || undefined, tonnage } }
   )
@@ -96,7 +96,7 @@ export async function getEarliestFactoryYear(
 export async function listBatteryTypes(
   brand?: string, vehicleType?: string, series?: string, tonnage?: number | string
 ): Promise<BatteryTypeOption[]> {
-  const resp = await client.get<unknown, { data: BatteryTypeOption[] }>('/dictionaries/battery-types', {
+  const resp = await client.get<BatteryTypeOption[]>('/dictionaries/battery-types', {
     params: { brand, vehicle_type: vehicleType, series, tonnage }
   })
   return resp.data ?? []
@@ -104,19 +104,19 @@ export async function listBatteryTypes(
 
 /** 传动系统字典（手波/自波/无级变速/无） */
 export async function listTransmissionTypes(): Promise<TransmissionTypeOption[]> {
-  const resp = await client.get<unknown, { data: TransmissionTypeOption[] }>('/dictionaries/transmission-types')
+  const resp = await client.get<TransmissionTypeOption[]>('/dictionaries/transmission-types')
   return resp.data ?? []
 }
 
 /** 发动机类型字典（国产发动机/进口发动机/混合动力/无） */
 export async function listEngineTypes(): Promise<EngineTypeOption[]> {
-  const resp = await client.get<unknown, { data: EngineTypeOption[] }>('/dictionaries/engine-types')
+  const resp = await client.get<EngineTypeOption[]>('/dictionaries/engine-types')
   return resp.data ?? []
 }
 
 /** 系列配置选项（按品牌+系列查询三维度可选项；数组为空表示该 series 不支持此维度） */
 export async function listSeriesConfigOptions(brand: string, series: string): Promise<SeriesConfigOptions> {
-  const resp = await client.get<unknown, { data: SeriesConfigOptions }>('/dictionaries/series-config-options', {
+  const resp = await client.get<SeriesConfigOptions>('/dictionaries/series-config-options', {
     params: { brand, series }
   })
   return resp.data ?? { transmission: [], engine: [], battery: [] }
@@ -124,19 +124,19 @@ export async function listSeriesConfigOptions(brand: string, series: string): Pr
 
 /** 车况评级 */
 export async function listConditionRatings(): Promise<ConditionRatingOption[]> {
-  const resp = await client.get<unknown, { data: ConditionRatingOption[] }>('/dictionaries/condition-ratings')
+  const resp = await client.get<ConditionRatingOption[]>('/dictionaries/condition-ratings')
   return resp.data ?? []
 }
 
 /** 省份列表 */
 export async function listProvinces(): Promise<string[]> {
-  const resp = await client.get<unknown, { data: string[] }>('/dictionaries/provinces')
+  const resp = await client.get<string[]>('/dictionaries/provinces')
   return resp.data ?? []
 }
 
 /** 城市列表（按省份过滤） */
 export async function listCities(province: string): Promise<string[]> {
-  const resp = await client.get<unknown, { data: string[] }>('/dictionaries/cities', {
+  const resp = await client.get<string[]>('/dictionaries/cities', {
     params: { province }
   })
   return resp.data ?? []
@@ -144,6 +144,6 @@ export async function listCities(province: string): Promise<string[]> {
 
 /** 算法参数（系数表） */
 export async function listCoefficients(): Promise<CoefficientConfig[]> {
-  const resp = await client.get<unknown, { data: CoefficientConfig[] }>('/dictionaries/coefficient-configs')
+  const resp = await client.get<CoefficientConfig[]>('/dictionaries/coefficient-configs')
   return resp.data ?? []
 }

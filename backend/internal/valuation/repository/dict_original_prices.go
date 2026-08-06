@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-
-	"forklift-training/internal/cache"
 )
 
 const originalPriceCols = `id, brand, vehicle_type, series, tonnage,
@@ -105,7 +103,7 @@ func (r *DictionaryRepository) FindOriginalPriceMatch(
 	ctx context.Context, brand, vehicleType, series string,
 	tonnage float64, configType, mastType string, mastHeightMM int,
 ) (OriginalPrice, error) {
-	return getCached(r, ctx, cache.SafeKey("dict", "op", "match", brand, vehicleType, series,
+	return getCached(r, ctx, cacheKey(CachePrefixOpMatch, brand, vehicleType, series,
 		fmt.Sprintf("%v", tonnage), configType, mastType, fmt.Sprintf("%d", mastHeightMM)), "查询原价记录",
 		`SELECT `+originalPriceCols+`
 		FROM original_prices
@@ -136,6 +134,6 @@ func (r *DictionaryRepository) FindOriginalPriceFuzzy(
 		ORDER BY original_price DESC LIMIT 1`
 		args = []any{brand, vehicleType, series, tonnage}
 	}
-	return getCached(r, ctx, cache.SafeKey("dict", "op", "fuzzy", brand, vehicleType, series, fmt.Sprintf("%v", tonnage)),
+	return getCached(r, ctx, cacheKey(CachePrefixOpFuzzy, brand, vehicleType, series, fmt.Sprintf("%v", tonnage)),
 		"查询原价记录", query, scanOriginalPrice, args...)
 }

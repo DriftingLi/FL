@@ -5,8 +5,6 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5"
-
-	"forklift-training/internal/cache"
 )
 
 // ListConditionRatings 列出全部车况评级
@@ -45,7 +43,7 @@ func (r *DictionaryRepository) DeleteConditionRating(ctx context.Context, id int
 
 // GetConditionRating 按 rating 查询（供 service 计算 Kc 使用）
 func (r *DictionaryRepository) GetConditionRating(ctx context.Context, rating string) (ConditionRating, error) {
-	return getCached(r, ctx, cache.SafeKey("dict", "condition", "get", rating), "查询车况评级",
+	return getCached(r, ctx, cacheKey(CachePrefixConditionGet, rating), "查询车况评级",
 		`SELECT id, rating, label, base_coefficient FROM condition_ratings WHERE rating = $1`,
 		func(row pgx.Row) (ConditionRating, error) {
 			var c ConditionRating

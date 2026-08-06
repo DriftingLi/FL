@@ -172,12 +172,13 @@ func setupValuation(r *gin.Engine, cfg *config.Config, gormDB *gorm.DB, authSvc 
 	evalRepo := vrepo.NewEvaluationRepository(pool)
 
 	// 4. 装配业务服务（系数从 DB 实时查询，不再使用内存加载器）
-	valuationSvc, err := vservice.NewValuationService(pool, dictRepo, evalRepo)
+	valuationSvc, err := vservice.NewValuationService(dictRepo, evalRepo)
 	if err != nil {
 		slog.Error("valuation 服务初始化失败", "error", err)
 		os.Exit(1)
 	}
 	batterySvc := vservice.NewBatteryRULService()
+	batteryRepo := vrepo.NewBatteryRepository(pool)
 
 	// 5. 装配估值模块认证服务(已统一到主体系 AuthService,薄包装保留旧签名)
 	// 内部代理到主体系 AuthService,使用统一 JWT_SECRET_KEY 与 hrwai_users 表
@@ -195,7 +196,7 @@ func setupValuation(r *gin.Engine, cfg *config.Config, gormDB *gorm.DB, authSvc 
 
 	// 7. 注册路由（/api/valuation/*，公开组 + 估值独立鉴权组 + admin 组）
 	// PDF 报告通过 storage 抽象层上传（local=本地磁盘 / r2=Cloudflare R2 对象存储）
-	vhandler.RegisterRoutes(r, cfg, vLogger, pool, dictRepo, evalRepo, valuationSvc, batterySvc, pdfGen, st, valuationAuthSvc)
+	vhandler.RegisterRoutes(r, cfg, vLogger, dictRepo, evalRepo, batteryRepo, valuationSvc, batterySvc, pdfGen, st, valuationAuthSvc)
 	slog.Info("valuation 路由注册完成", "prefix", "/api/valuation")
 
 	return func() {

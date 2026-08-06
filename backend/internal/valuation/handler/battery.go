@@ -6,10 +6,7 @@ package handler
 import (
 	"context"
 	"errors"
-	"fmt"
-	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -18,22 +15,46 @@ import (
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation/model"
-	"forklift-training/internal/valuation/repository"
 	"forklift-training/internal/valuation/service"
 	"forklift-training/pkg/pdf"
+	"forklift-training/pkg/response"
 )
 
 // BatteryHandler 电池 RUL 评估 HTTP 处理器
 type BatteryHandler struct {
-	repo    *repository.BatteryRepository
+	repo    BatteryStore
 	service *service.BatteryRULService
 	logger  *zap.Logger
 	storage storage.Storage
+	// reportCoord 电池报告流程协调器（生成/下载/再生成单点实现）
+	reportCoord *ReportCoordinator[model.BatteryEvaluation]
 }
 
 // NewBatteryHandler 构造电池处理器
-func NewBatteryHandler(repo *repository.BatteryRepository, svc *service.BatteryRULService, l *zap.Logger, st storage.Storage) *BatteryHandler {
-	return &BatteryHandler{repo: repo, service: svc, logger: l, storage: st}
+func NewBatteryHandler(repo BatteryStore, svc *service.BatteryRULService, l *zap.Logger, st storage.Storage) *BatteryHandler {
+	return &BatteryHandler{
+		repo:    repo,
+		service: svc,
+		logger:  l,
+		storage: st,
+		reportCoord: &ReportCoordinator[model.BatteryEvaluation]{
+			logger:      l,
+			storage:     st,
+			keyPrefix:   "reports/battery_report_",
+			notFoundMsg: "电池评估记录不存在",
+			loader:      repo.GetEvaluation,
+			pathOf:      func(e *model.BatteryEvaluation) string { return e.ReportPdfPath },
+			writer:      repo.UpdateReportPath,
+			generator: func(ctx context.Context, e *model.BatteryEvaluation) ([]byte, error) {
+				// 记录不含特征稳定性分数，health 传 1.0（不触发稳定性提示），与预测流程共用 builder
+				if len(e.Suggestions) == 0 {
+					e.Suggestions = service.BuildBatterySuggestions(e.BatteryType, e.SohPercent,
+						e.RulCycles, e.ConfidenceLow, e.ConfidenceHigh, 1.0)
+				}
+				return pdf.GenerateBatteryReportBytes(e)
+			},
+		},
+	}
 }
 
 // Create 处理 POST /api/v1/battery/evaluations
@@ -41,12 +62,12 @@ func NewBatteryHandler(repo *repository.BatteryRepository, svc *service.BatteryR
 func (h *BatteryHandler) Create(c *gin.Context) {
 	var req model.CreateBatteryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "请求参数格式错误: "+err.Error())
+		response.BadRequest(c, "请求参数格式错误: "+err.Error())
 		return
 	}
 	// 业务校验
 	if err := req.Validate(); err != nil {
-		Error(c, http.StatusBadRequest, CodeInvalidParam, err.Error())
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -54,7 +75,7 @@ func (h *BatteryHandler) Create(c *gin.Context) {
 	result, err := h.service.Predict(c.Request.Context(), &req)
 	if err != nil {
 		h.logger.Error("电池 RUL 预测失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeInternalError, "预测失败: "+err.Error())
+		response.ServerError(c, "预测失败: "+err.Error())
 		return
 	}
 
@@ -77,12 +98,12 @@ func (h *BatteryHandler) Create(c *gin.Context) {
 	saved, err := h.repo.CreateEvaluation(c.Request.Context(), eval, result.CycleFeatures, userID)
 	if err != nil {
 		h.logger.Error("保存电池评估记录失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "保存评估记录失败")
+		response.ServerError(c, "保存评估记录失败")
 		return
 	}
 
 	// 返回响应
-	OK(c, model.CreateBatteryResponse{
+	response.Success(c, model.CreateBatteryResponse{
 		EvaluationID:   saved.ID,
 		BatteryType:    saved.BatteryType,
 		CycleCount:     saved.CycleCount,
@@ -113,7 +134,7 @@ func (h *BatteryHandler) List(c *gin.Context) {
 	// 简单校验：必须是合法值
 	if batteryType != "" {
 		if !model.BatteryType(batteryType).IsValid() {
-			Error(c, http.StatusBadRequest, CodeInvalidParam, "电池类型非法：仅支持 lfp / ncm / other")
+			response.BadRequest(c, "电池类型非法：仅支持 lfp / ncm / other")
 			return
 		}
 	}
@@ -123,11 +144,11 @@ func (h *BatteryHandler) List(c *gin.Context) {
 	items, total, err := h.repo.ListEvaluations(c.Request.Context(), batteryType, userID, pageSize, offset)
 	if err != nil {
 		h.logger.Error("查询电池评估列表失败", zap.Error(err))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询评估列表失败")
+		response.ServerError(c, "查询评估列表失败")
 		return
 	}
 
-	OK(c, model.ListBatteryResponse{
+	response.Success(c, model.ListBatteryResponse{
 		Total: total,
 		Items: items,
 	})
@@ -138,7 +159,7 @@ func (h *BatteryHandler) List(c *gin.Context) {
 func (h *BatteryHandler) Get(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
+		response.BadRequest(c, "id 必须为整数")
 		return
 	}
 
@@ -146,11 +167,11 @@ func (h *BatteryHandler) Get(c *gin.Context) {
 	eval, err := h.repo.GetEvaluationByUser(c.Request.Context(), id, userID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			Error(c, http.StatusNotFound, CodeNotFound, "电池评估记录不存在")
+			response.NotFound(c, "电池评估记录不存在")
 			return
 		}
 		h.logger.Error("查询电池评估详情失败", zap.Error(err), zap.Int64("id", id))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询评估详情失败")
+		response.ServerError(c, "查询评估详情失败")
 		return
 	}
 
@@ -159,131 +180,17 @@ func (h *BatteryHandler) Get(c *gin.Context) {
 		eval.Suggestions = h.buildSuggestionsFromRecord(eval)
 	}
 
-	OK(c, eval)
+	response.Success(c, eval)
 }
 
 // GenerateReport 处理 POST /api/v1/battery/evaluations/:id/report
-// 重新加载电池评估 → 生成 PDF bytes → 上传到存储后端 → 回写 report_pdf_path（R2 URL）
 func (h *BatteryHandler) GenerateReport(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
-		return
-	}
-
-	eval, err := h.repo.GetEvaluation(c.Request.Context(), id)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			Error(c, http.StatusNotFound, CodeNotFound, "电池评估记录不存在")
-			return
-		}
-		h.logger.Error("查询电池评估失败", zap.Error(err), zap.Int64("id", id))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询评估记录失败")
-		return
-	}
-
-	// 1. 生成 PDF bytes
-	pdfBytes, err := pdf.GenerateBatteryReportBytes(eval)
-	if err != nil {
-		h.logger.Error("生成电池 PDF 失败", zap.Error(err), zap.Int64("id", id))
-		Error(c, http.StatusInternalServerError, CodeInternalError, "生成 PDF 失败: "+err.Error())
-		return
-	}
-
-	// 2. 上传到存储后端，获取可访问 URL
-	key := fmt.Sprintf("reports/battery_report_%d_%s.pdf", id, time.Now().Format("20060102150405"))
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
-	defer cancel()
-	pdfURL, err := h.storage.Save(ctx, key, pdfBytes, "application/pdf")
-	if err != nil {
-		h.logger.Error("上传电池 PDF 失败", zap.Error(err), zap.Int64("id", id))
-		Error(c, http.StatusInternalServerError, CodeInternalError, "上传 PDF 失败: "+err.Error())
-		return
-	}
-
-	// 3. 回写报告 URL 到 battery_evaluations.report_pdf_path（字段名不变，存 R2 URL）
-	if err := h.repo.UpdateReportPath(c.Request.Context(), eval.ID, pdfURL); err != nil {
-		h.logger.Warn("回写电池 PDF 路径失败", zap.Error(err), zap.Int64("id", id))
-		// 不中断流程：文件已上传，告知用户报告 URL 即可
-	}
-
-	// 4. 返回响应
-	OK(c, gin.H{
-		"evaluation_id": id,
-		"pdf_url":       pdfURL,
-		"file_size":     len(pdfBytes),
-	})
+	h.reportCoord.Generate(c)
 }
 
 // DownloadReport 处理 GET /api/v1/battery/evaluations/:id/report
-// 优先从数据库读取 report_pdf_path（R2 URL）；若不存在或存储中无此文件则即时生成；
-// 最终 302 重定向到 R2 公开访问 URL（浏览器直连下载）
 func (h *BatteryHandler) DownloadReport(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "id 必须为整数")
-		return
-	}
-
-	eval, err := h.repo.GetEvaluation(c.Request.Context(), id)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			Error(c, http.StatusNotFound, CodeNotFound, "电池评估记录不存在")
-			return
-		}
-		h.logger.Error("查询电池评估失败", zap.Error(err), zap.Int64("id", id))
-		Error(c, http.StatusInternalServerError, CodeDatabaseError, "查询评估记录失败")
-		return
-	}
-
-	// 1. 校验已有 URL 是否有效（为空或存储中不存在则重新生成）
-	pdfURL := eval.ReportPdfPath
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
-	defer cancel()
-	if pdfURL == "" {
-		pdfURL = h.regenerateAndUpload(ctx, eval, id)
-		if pdfURL == "" {
-			Error(c, http.StatusInternalServerError, CodeInternalError, "生成 PDF 失败")
-			return
-		}
-	} else {
-		exists, err := h.storage.Exists(ctx, pdfURL)
-		if err != nil {
-			h.logger.Warn("检查存储中 PDF 是否存在失败，按不存在处理并重新生成",
-				zap.String("url", pdfURL), zap.Error(err))
-			exists = false
-		}
-		if !exists {
-			pdfURL = h.regenerateAndUpload(ctx, eval, id)
-			if pdfURL == "" {
-				Error(c, http.StatusInternalServerError, CodeInternalError, "生成 PDF 失败")
-				return
-			}
-		}
-	}
-
-	// 2. 302 重定向到 R2 公开访问 URL
-	c.Redirect(http.StatusFound, pdfURL)
-}
-
-// regenerateAndUpload 重新生成电池 PDF 并上传到存储后端，返回新的 URL。
-// 失败时返回空字符串（错误已在内部记日志）。
-func (h *BatteryHandler) regenerateAndUpload(ctx context.Context, eval *model.BatteryEvaluation, id int64) string {
-	pdfBytes, genErr := pdf.GenerateBatteryReportBytes(eval)
-	if genErr != nil {
-		h.logger.Error("生成电池 PDF 失败", zap.Error(genErr), zap.Int64("id", id))
-		return ""
-	}
-	key := fmt.Sprintf("reports/battery_report_%d_%s.pdf", id, time.Now().Format("20060102150405"))
-	pdfURL, saveErr := h.storage.Save(ctx, key, pdfBytes, "application/pdf")
-	if saveErr != nil {
-		h.logger.Error("上传电池 PDF 失败", zap.Error(saveErr), zap.Int64("id", id))
-		return ""
-	}
-	if dbErr := h.repo.UpdateReportPath(ctx, id, pdfURL); dbErr != nil {
-		h.logger.Warn("回写电池 PDF 路径失败", zap.Error(dbErr), zap.Int64("id", id))
-	}
-	return pdfURL
+	h.reportCoord.Download(c)
 }
 
 // buildSuggestionsFromRecord 基于评估字段生成建议（详情接口 fallback）

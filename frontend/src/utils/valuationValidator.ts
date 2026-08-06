@@ -46,7 +46,7 @@ export function validateNonNegativeNumber(value: number | undefined | null, labe
   return { valid: true }
 }
 
-/** 校验年份：出厂年份合法性（评估年份默认今年，无需校验） */
+/** 校验年份：出厂年份合法性（后端规则：>= 1900；前端额外限制不晚于当前年） */
 export function validateYears(factory: number | undefined): ValidationResult {
   if (factory == null) {
     return { valid: false, message: '请填写出厂年份' }
@@ -54,8 +54,25 @@ export function validateYears(factory: number | undefined): ValidationResult {
   if (!Number.isInteger(factory)) {
     return { valid: false, message: '年份必须为整数' }
   }
-  if (factory < 1980 || factory > CURRENT_YEAR) {
-    return { valid: false, message: `出厂年份应在 1980~${CURRENT_YEAR} 之间` }
+  if (factory < 1900 || factory > CURRENT_YEAR) {
+    return { valid: false, message: `出厂年份应在 1900~${CURRENT_YEAR} 之间` }
+  }
+  return { valid: true }
+}
+
+/** 校验成交年份：必须 >= 出厂年份（后端规则），且不晚于当前年 */
+export function validateSaleYear(sale: number | undefined, factory: number | undefined): ValidationResult {
+  if (sale == null) {
+    return { valid: false, message: '请填写成交年份' }
+  }
+  if (!Number.isInteger(sale)) {
+    return { valid: false, message: '年份必须为整数' }
+  }
+  if (factory != null && sale < factory) {
+    return { valid: false, message: '成交年份不能早于出厂年份' }
+  }
+  if (sale > CURRENT_YEAR) {
+    return { valid: false, message: `成交年份不能晚于 ${CURRENT_YEAR}` }
   }
   return { valid: true }
 }
@@ -132,7 +149,7 @@ export interface FormValidationContext {
   condition_rating: string | undefined
 }
 
-/** 整体校验：依次检查关键字段 */
+/** 整体校验：依次检查关键字段（与后端 model/evaluation.go Validate() 逐条对齐） */
 export function validateForm(ctx: FormValidationContext): ValidationResult {
   const checks: Array<() => ValidationResult> = [
     () => validateRequiredString(ctx.brand, '品牌'),
@@ -143,6 +160,7 @@ export function validateForm(ctx: FormValidationContext): ValidationResult {
     () => validateRequiredString(ctx.mast_type, '门架类型'),
     () => validateMastHeight(ctx.mast_height_mm),
     () => validateYears(ctx.factory_year),
+    () => validateSaleYear(ctx.sale_year, ctx.factory_year),
     () => validateUsageHours(ctx.usage_hours),
     () => validateRequiredString(ctx.province, '所在省份'),
     () => validateRequiredString(ctx.city, '所在城市'),

@@ -161,8 +161,8 @@ func TestBuildDimensionScores_Order(t *testing.T) {
 // TestNewValuationService_NilGuards 验证构造函数的空值校验返回 error（替代旧 panic）
 // 这是 #5 错误处理修复的回归测试：确保 nil 依赖不会 panic，而是返回可处理的 error
 func TestNewValuationService_NilGuards(t *testing.T) {
-	// 三个依赖任一为 nil 都应返回 error，且不 panic
-	if _, err := NewValuationService(nil, nil, nil); err == nil {
-		t.Error("expected error when pool is nil")
+	// 两个依赖任一为 nil 都应返回 error，且不 panic
+	if _, err := NewValuationService(nil, nil); err == nil {
+		t.Error("expected error when dictRepo is nil")
 	}
 }

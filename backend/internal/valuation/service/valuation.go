@@ -19,7 +19,6 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"forklift-training/internal/cache"
 	"forklift-training/internal/valuation/model"
@@ -27,29 +26,28 @@ import (
 )
 
 // ValuationService 评估服务
-// 持有 *pgxpool.Pool 与字典读取窄接口，所有系数从 DB 实时查询
+// 持有字典读取窄接口与评估存储窄接口，所有系数从 DB 实时查询
 type ValuationService struct {
-	pool     *pgxpool.Pool
 	dictRepo DictionaryReader
-	evalRepo *repository.EvaluationRepository
+	evalRepo EvaluationStore
 	provider *CoefficientProvider
 }
 
+// EvaluationStore 评估记录持久化接口（Persist 消费窄接口，生产为 pgx 仓储，测试为内存替身）。
+type EvaluationStore interface {
+	CreateEvaluation(ctx context.Context, p *repository.CreateEvaluationParams) (int64, error)
+}
+
 // NewValuationService 构造评估服务
-// pool: pgx 连接池
 // dictRepo: 字典仓储（brand_types / brands / vehicle_types / condition_ratings / region_coefficients / coefficient_configs / original_prices）
 // evalRepo: 评估记录仓储（持久化评估结果）
 //
 // 原实现使用 panic 做空值断言，会绕过 error 返回链导致启动流程难以优雅处理。
 // 改为返回 error，由调用方在装配阶段决定 fail-fast 策略（main.go 启动时 os.Exit）。
 func NewValuationService(
-	pool *pgxpool.Pool,
-	dictRepo *repository.DictionaryRepository,
-	evalRepo *repository.EvaluationRepository,
+	dictRepo DictionaryReader,
+	evalRepo EvaluationStore,
 ) (*ValuationService, error) {
-	if pool == nil {
-		return nil, fmt.Errorf("NewValuationService: pool 不能为 nil")
-	}
 	if dictRepo == nil {
 		return nil, fmt.Errorf("NewValuationService: dictRepo 不能为 nil")
 	}
@@ -57,7 +55,6 @@ func NewValuationService(
 		return nil, fmt.Errorf("NewValuationService: evalRepo 不能为 nil")
 	}
 	return &ValuationService{
-		pool:     pool,
 		dictRepo: dictRepo,
 		evalRepo: evalRepo,
 		provider: NewCoefficientProvider(dictRepo),
@@ -97,6 +94,12 @@ func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRe
 
 // evaluateInternal 包含原 Evaluate 的全部计算逻辑（纯函数，无副作用）
 func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.EvaluationRequest) (*model.EvaluationResult, error) {
+	// 0. 系数快照：一次全表读取替代逐 key 串行缓存往返（失败时回退逐 key provider，保持既有容错）
+	coeff := coefficientReader(s.provider)
+	if snap, err := LoadCoefficientSnapshot(ctx, s.dictRepo); err == nil {
+		coeff = snap
+	}
+
 	// 1. 业务参数校验
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -117,13 +120,13 @@ func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.Eval
 	}
 
 	// 4. 计算 Kt（基于 factory_year 与 sale_year）
-	ktRes, err := CalcKTime(ctx, powerType, req.FactoryYear, req.SaleYear, s.provider)
+	ktRes, err := CalcKTime(ctx, powerType, req.FactoryYear, req.SaleYear, coeff)
 	if err != nil {
 		return nil, err
 	}
 
 	// 5. 计算 Kh（age 复用 Kt 计算结果）
-	khRes, err := CalcKHours(ctx, ktRes.Age, req.UsageHours, s.provider)
+	khRes, err := CalcKHours(ctx, ktRes.Age, req.UsageHours, coeff)
 	if err != nil {
 		return nil, err
 	}
@@ -134,10 +137,10 @@ func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.Eval
 		return nil, err
 	}
 
-	// 7. 计算 Kc（condition_rating + 修正项，4 个修正项从 coefficient_configs 读取）
+	// 7. 计算 Kc（condition_rating + 修正项，4 个修正项从系数快照读取）
 	kcRes, err := CalcKCondition(ctx, req.ConditionRating,
 		req.OriginalPaint, req.HasMaintenanceRecords, req.HasLicensePlate, req.HasRegistrationCertificate,
-		s.dictRepo, s.provider)
+		s.dictRepo, coeff)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +163,7 @@ func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.Eval
 	}
 
 	// 10. 置信区间
-	confRange, err := s.provider.Get(ctx, KeyConfidenceRange)
+	confRange, err := coeff.Get(ctx, KeyConfidenceRange)
 	if err != nil || confRange <= 0 {
 		confRange = 0.10
 	}
@@ -181,11 +184,14 @@ func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.Eval
 		EstimatedValue:    roundTo2(estimated),
 		ConfidenceLow:     roundTo2(confLow),
 		ConfidenceHigh:    roundTo2(confHigh),
+		// 评估时点锁定的 λ 值（ADR-0004：评估事实性，随建议一起持久化）
+		LambdaElectric:   coeff.ReadFloat(ctx, KeyLambdaElectric, defaultLambdaElectric),
+		LambdaCombustion: coeff.ReadFloat(ctx, KeyLambdaCombustion, defaultLambdaCombustion),
 	}
 
 	// 12. 派生维度评分 + 文本建议
-	result.DimensionScores = buildDimensionScores(result)
-	result.Suggestions = BuildSuggestions(ctx, FromResult(result), s.provider)
+	result.DimensionScores = BuildDimensionScores(result.KTime, result.KHours, result.KBrand, result.KCondition, result.KMarket)
+	result.Suggestions = BuildSuggestions(ctx, FromResult(result), coeff)
 	return result, nil
 }
 
@@ -234,6 +240,10 @@ func (s *ValuationService) Persist(ctx context.Context, result *model.Evaluation
 		ConfidenceLow:              result.ConfidenceLow,
 		ConfidenceHigh:             result.ConfidenceHigh,
 		UserID:                     userID,
+		// 评估事实性（ADR-0004）：建议与 λ 值在评估时点锁定持久化
+		Suggestions:      result.Suggestions,
+		LambdaElectric:   result.LambdaElectric,
+		LambdaCombustion: result.LambdaCombustion,
 	}
 	return s.evalRepo.CreateEvaluation(ctx, params)
 }
@@ -282,14 +292,12 @@ func BuildDimensionScores(kTime, kHours, kBrand, kCondition, kMarket float64) []
 	}
 }
 
-// buildDimensionScores 把结果包装成 5 维中文标签的 map（Evaluate 流程内部使用）
-func buildDimensionScores(r *model.EvaluationResult) map[string]float64 {
-	scores := BuildDimensionScores(r.KTime, r.KHours, r.KBrand, r.KCondition, r.KMarket)
-	m := make(map[string]float64, len(scores))
-	for _, s := range scores {
-		m[s.Label] = s.Value
-	}
-	return m
+// RebuildDerivedFromDetail 从持久化记录重建派生字段（单一装配点）：
+// KTimeAdjusted 与维度评分是入库 K 系数的纯函数（不漂移，ADR-0004），
+// 建议直接读持久化值。详情/列表/报告/创建响应全部经过这里，装配只实现一次。
+func RebuildDerivedFromDetail(d *model.EvaluationDetail) {
+	d.KTimeAdjusted = AdjustKTimeByBrandAndIntensity(d.KTime, d.KHours, d.KBrand)
+	d.DimensionScores = BuildDimensionScores(d.KTime, d.KHours, d.KBrand, d.KCondition, d.KMarket)
 }
 
 // roundTo2 四舍五入到 2 位小数（保留金额精度）

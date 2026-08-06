@@ -4,12 +4,11 @@
 package handler
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
 	vservice "forklift-training/internal/valuation/service"
+	"forklift-training/pkg/response"
 )
 
 // ValuationAuthHandler 估值模块认证处理器(薄包装,内部代理到主体系 AuthService)。
@@ -32,19 +31,19 @@ type loginRequest struct {
 func (h *ValuationAuthHandler) Login(c *gin.Context) {
 	var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "请求参数错误")
+		response.BadRequest(c, "请求参数错误")
 		return
 	}
 	if req.Account == "" || req.Password == "" {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "用户名和密码不能为空")
+		response.BadRequest(c, "用户名和密码不能为空")
 		return
 	}
 	result, err := h.authSvc.Login(req.Account, req.Password)
 	if err != nil {
-		Fail(c, CodeBadRequest, err.Error())
+		response.BadRequest(c, err.Error())
 		return
 	}
-	OK(c, result)
+	response.Success(c, result)
 }
 
 // registerRequest 注册请求体。
@@ -61,34 +60,34 @@ type registerRequest struct {
 func (h *ValuationAuthHandler) Register(c *gin.Context) {
 	var req registerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "请求参数错误")
+		response.BadRequest(c, "请求参数错误")
 		return
 	}
 	if req.Phone == "" || req.Password == "" || req.Name == "" {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "手机号、密码和姓名不能为空")
+		response.BadRequest(c, "手机号、密码和姓名不能为空")
 		return
 	}
 	result, err := h.authSvc.Register(req.Phone, req.Password, req.Name, req.Email, req.Company)
 	if err != nil {
-		Fail(c, CodeBadRequest, err.Error())
+		response.BadRequest(c, err.Error())
 		return
 	}
-	OK(c, result)
+	response.Success(c, result)
 }
 
 // Me 处理 GET /api/valuation/auth/me（需 middleware.JWTAuth）
 func (h *ValuationAuthHandler) Me(c *gin.Context) {
 	uid := middleware.CurrentUserID(c)
 	if uid == 0 {
-		Error(c, http.StatusUnauthorized, 40100, "Token无效或已过期，请重新登录")
+		response.Unauthorized(c, "Token无效或已过期，请重新登录")
 		return
 	}
 	user, err := h.authSvc.GetByID(uid)
 	if err != nil {
-		Error(c, http.StatusNotFound, CodeNotFound, "用户不存在")
+		response.NotFound(c, "用户不存在")
 		return
 	}
-	OK(c, map[string]interface{}{
+	response.Success(c, map[string]interface{}{
 		"user_id":  user.ID,
 		"username": user.Username,
 		"name":     user.Name,
@@ -105,10 +104,10 @@ func (h *ValuationAuthHandler) Logout(c *gin.Context) {
 	// 与旧行为一致：仅从 Authorization 头提取 Bearer token
 	tokenStr := h.authSvc.Main().Session().ExtractToken(c.GetHeader("Authorization"), "")
 	if tokenStr == "" {
-		OK(c, nil)
+		response.Success(c, nil)
 		return
 	}
 	// 已通过 middleware.JWTAuth 校验，直接吊销（无效 token 静默忽略）
 	_ = h.authSvc.Main().RevokeToken(c.Request.Context(), tokenStr)
-	OK(c, nil)
+	response.Success(c, nil)
 }

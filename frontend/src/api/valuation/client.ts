@@ -1,119 +1,51 @@
-// Axios 实例与统一拦截器（已适配统一 HRWAI 认证体系 + Element Plus）
-// 后端统一响应：{code, message, data}（valuation 后端 code===0 为成功）
-import axios, { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
-import { ElMessage } from 'element-plus'
-import type { ApiResponse } from '@/types/valuation/evaluation'
+// 估值模块 HTTP 客户端（共享 client 工厂实例化：成功码 200——统一信封 ADR-0005）
+// 后端统一响应：{code, message, data}（code = HTTP 状态码，成功即 200）
+import { createHttpClient } from '@/api/client'
 
 // 维修培训 VITE_API_BASE_URL 默认为 /api（vite proxy 代理到 8080）；
 // valuation 路由统一挂在 /api/valuation/* 下，故 baseURL 解析为 <base>/api/valuation
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/api$/, '') + '/api/valuation'
-const REQUEST_TIMEOUT_MS = 30_000
 
-// 统一 HRWAI 账号 token 存储 key（与主体系 useAuthStore 一致）
-const TOKEN_STORAGE_KEY = 'token'
-const USER_INFO_KEY = 'userInfo'
-
-const client = axios.create({
+const client = createHttpClient({
   baseURL: API_BASE_URL,
-  timeout: REQUEST_TIMEOUT_MS,
-  headers: { 'Content-Type': 'application/json; charset=utf-8' }
+  successCodes: [200],
+  onUnauthorized: () => {
+    // 延迟引入 auth store 与 router，避免循环依赖
+    import('@/stores/auth')
+      .then(({ useAuthStore }) => {
+        try {
+          useAuthStore().clearAuthData()
+        } catch {
+          removeLocalAuth()
+        }
+      })
+      .catch(() => {
+        removeLocalAuth()
+      })
+    // 仅在需要登录的页面跳转登录页；公开页面保留当前视图
+    import('@/router')
+      .then(({ default: router }) => {
+        if (router.currentRoute.value.matched.some(r => r.meta?.requiresAuth === true)) {
+          const currentPath = router.currentRoute.value.path
+          // 估值路径跳估值登录页，其余跳主登录页
+          if (currentPath.startsWith('/valuation')) {
+            router.push('/valuation/login')
+          } else {
+            router.push('/login')
+          }
+        }
+      })
+      .catch(() => {
+        // router 加载失败时不强制跳转，避免在公开页面误跳登录页
+      })
+  }
 })
 
-// ========== 请求拦截器：附加统一 JWT ==========
-client.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  },
-  (err) => Promise.reject(err)
-)
-
-// 延迟引入 auth store 与 router，避免循环依赖
-function handleUnauthorized() {
-  // 动态加载，防止模块初始化顺序问题
-  import('@/stores/auth')
-    .then(({ useAuthStore }) => {
-      try {
-        useAuthStore().clearAuthData()
-      } catch (e) {
-        localStorage.removeItem(TOKEN_STORAGE_KEY)
-        localStorage.removeItem(USER_INFO_KEY)
-      }
-    })
-    .catch(() => {
-      localStorage.removeItem(TOKEN_STORAGE_KEY)
-      localStorage.removeItem(USER_INFO_KEY)
-    })
-  // 仅在需要登录的页面跳转登录页；公开页面保留当前视图
-  import('@/router')
-    .then(({ default: router }) => {
-      if (router.currentRoute.value.matched.some(r => r.meta?.requiresAuth === true)) {
-        const currentPath = router.currentRoute.value.path
-        // 估值路径跳估值登录页，其余跳主登录页
-        if (currentPath.startsWith('/valuation')) {
-          router.push('/valuation/login')
-        } else {
-          router.push('/login')
-        }
-      }
-    })
-    .catch(() => {
-      // router 加载失败时不强制跳转，避免在公开页面误跳登录页
-    })
+// 尽力清除本地登录态（auth store 不可用时的兜底）
+function removeLocalAuth(): void {
+  localStorage.removeItem('token')
+  localStorage.removeItem('userInfo')
 }
-
-// ========== 响应拦截器 ==========
-client.interceptors.response.use(
-  (response: AxiosResponse<ApiResponse<unknown>>) => {
-    // 二进制响应（如 PDF）直接放行
-    if (response.config.responseType === 'blob' || response.config.responseType === 'arraybuffer') {
-      return response
-    }
-    const body = response.data
-    if (body && typeof body === 'object' && 'code' in body) {
-      if (body.code === 0) {
-        // 解包 data 字段，返回 AxiosResponse 形态方便上层 .data 取用
-        return { ...response, data: body.data as unknown }
-      }
-      // 业务错误：弹出提示并 reject
-      const errMsg = body.message || `业务错误（code=${body.code}）`
-      ElMessage.error(errMsg)
-      return Promise.reject(new Error(errMsg))
-    }
-    return response
-  },
-  async (err: AxiosError) => {
-    if (err.response) {
-      const status = err.response.status
-      if (status === 401) {
-        handleUnauthorized()
-        ElMessage.error('登录已过期，请重新登录')
-        return Promise.reject(err)
-      }
-      // blob/arraybuffer 错误响应需先读取为文本再解析 JSON
-      let data: unknown = err.response.data
-      const rt = err.config?.responseType
-      if ((rt === 'blob' || rt === 'arraybuffer') && data instanceof Blob) {
-        try {
-          const text = await data.text()
-          data = JSON.parse(text)
-        } catch {
-          data = undefined
-        }
-      }
-      const msg = (data as { message?: string } | undefined)?.message || `请求失败 (${status})`
-      ElMessage.error(msg)
-    } else if (err.request) {
-      ElMessage.error('网络异常：无法连接服务器')
-    } else {
-      ElMessage.error(`请求错误：${err.message}`)
-    }
-    return Promise.reject(err)
-  }
-)
 
 export default client
 export { API_BASE_URL }

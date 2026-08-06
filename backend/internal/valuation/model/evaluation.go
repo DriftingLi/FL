@@ -95,8 +95,12 @@ type EvaluationResult struct {
 	ConfidenceLow  float64
 	ConfidenceHigh float64
 
-	// 6 维度评分（label → value，便于前端展示）
-	DimensionScores map[string]float64
+	// 本次评估使用的 λ 值（评估时点锁定，供前端走势图数据驱动）
+	LambdaElectric   float64
+	LambdaCombustion float64
+
+	// 6 维度评分（固定顺序：出厂时间/使用强度/品牌价值/市场需求/车辆情况，便于前端展示）
+	DimensionScores []DimensionScore
 	// 文本建议
 	Suggestions []string
 }
@@ -147,6 +151,10 @@ type EvaluationDetail struct {
 	ConfidenceHigh  float64          `json:"confidence_high"`
 	ReportPdfPath   string           `json:"report_pdf_path,omitempty"`
 	DimensionScores []DimensionScore `json:"dimension_scores"`
+	// 评估时点锁定的建议与 λ 值（ADR-0004 评估事实性）
+	Suggestions      []string `json:"suggestions"`
+	LambdaElectric   float64  `json:"lambda_electric"`
+	LambdaCombustion float64  `json:"lambda_combustion"`
 }
 
 // EvaluationResponse 创建评估响应 DTO（HTTP 出参）
@@ -165,6 +173,9 @@ type EvaluationResponse struct {
 	ConfidenceHigh  float64          `json:"confidence_high"`
 	DimensionScores []DimensionScore `json:"dimension_scores"`
 	Suggestions     []string         `json:"suggestions"`
+	// 本次评估使用的 λ 值（评估时点锁定，供前端走势图数据驱动）
+	LambdaElectric   float64 `json:"lambda_electric"`
+	LambdaCombustion float64 `json:"lambda_combustion"`
 }
 
 // CalcWeights 加权权重（用于 PDF 计算过程展示）

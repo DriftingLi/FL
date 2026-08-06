@@ -98,3 +98,7 @@ func (m *memDictReader) FindOriginalPriceFuzzy(context.Context, string, string, 
 func (m *memDictReader) GetCoefficientByKey(context.Context, string) (repository.CoefficientConfig, error) {
 	return repository.CoefficientConfig{}, pgx.ErrNoRows
 }
+
+func (m *memDictReader) ListCoefficientConfigs(context.Context) ([]repository.CoefficientConfig, error) {
+	return []repository.CoefficientConfig{}, nil
+}

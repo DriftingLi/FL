@@ -66,13 +66,13 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 	authSvc := service.NewAuthService(db, cfg.JWTSecretKey, cfg.JWTExpiry(),
 		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student)
 	// 验证码 engine：邮箱/短信是同一状态机两侧的 channel adapter
-	codeSvc := service.NewVerifyCodeService(db, authSvc, cfg.EmailCodeTTL)
+	codeSvc := service.NewVerifyCodeService(db, authSvc, cfg.EmailCodeTTL, &service.RedisAuthCodeStore{})
 	emailCh := service.NewEmailChannel(cfg.SMTP, cfg.IsProd())
 	phoneCh := service.NewSmsChannel(cfg.IsProd())
 	wechatAuthSvc := service.NewWechatAuthService(cfg.Wechat)
 	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st)
 	notificationSvc := service.NewNotificationService(db)
-	reviewSvc := service.NewProfileReviewService(db, notificationSvc)
+	reviewSvc := service.NewProfileReviewService(db, notificationSvc, st)
 	authH := NewAuthHandler(cfg, authSvc, fileSvc, st, reviewSvc)
 
 	// ===== API 路由组 =====
