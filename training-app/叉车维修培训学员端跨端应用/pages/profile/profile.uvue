@@ -4,8 +4,10 @@
         <scroll-view class="content-scroll" scroll-y>
             <view class="header">
                 <view class="user-card">
-                    <view class="user-avatar" @click="onChangeAvatar">
-                        <image v-if="avatarUrl.length > 0" class="avatar-img" :src="avatarUrl" mode="aspectFill"></image>
+                    <!-- <view class="user-avatar" @click="onChangeAvatar"> -->
+                    <view class="user-avatar">
+                        <image v-if="avatarUrl.length > 0" class="avatar-img" :src="avatarUrl" mode="aspectFill">
+                        </image>
                         <text v-else class="avatar-icon">👤</text>
                         <view class="avatar-edit-badge">
                             <text class="avatar-edit-icon">✎</text>
@@ -34,11 +36,11 @@
                 </view>
             </view>
             <view class="menu-section">
-                <view class="menu-item" @click="onMenuClick('edit-profile')">
+                <!-- <view class="menu-item" @click="onMenuClick('edit-profile')">
                     <text class="menu-icon">✎</text>
                     <text class="menu-text">编辑资料</text>
                     <text class="menu-arrow">›</text>
-                </view>
+                </view> -->
                 <view class="menu-item" @click="onMenuClick('wrong')">
                     <text class="menu-icon">❌</text>
                     <text class="menu-text">错题本</text>

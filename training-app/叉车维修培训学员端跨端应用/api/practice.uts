@@ -135,8 +135,8 @@ function getMockQuestions(count : number) : Question[] {
 				C: '液压缸',
 				D: '油箱',
 			},
-			answer: 'ABCD',
-			explanation: '液压系统由液压泵、控制阀、液压缸、油箱等组成。',
+			answer: 'A,B,C,D',
+		explanation: '液压系统由液压泵、控制阀、液压缸、油箱等组成。',
 		} as UTSJSONObject,
 	]
 	for (let i = 0; i < mockData.length && i < count; i++) {

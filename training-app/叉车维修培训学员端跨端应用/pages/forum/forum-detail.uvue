@@ -22,8 +22,9 @@
             <view v-if="topic != null" class="topic-section">
                 <text class="topic-title">{{ topic.title }}</text>
                 <view class="topic-info">
-                    <view class="author-avatar">
-                        <text class="author-avatar-text">{{ getAuthorInitial(topic.author_name) }}</text>
+                    <view class="author-avatar" :style="{ backgroundColor: getAvatarColor(topic.author_id) }">
+                        <image v-if="topic.author_avatar.length > 0" class="author-avatar-img" :src="topic.author_avatar" mode="aspectFill" />
+                        <text v-else class="author-avatar-text">{{ getAuthorInitial(topic.author_name) }}</text>
                     </view>
                     <view class="author-info">
                         <text class="author-name">{{ topic.author_name.length > 0 ? topic.author_name : '匿名学员' }}</text>
@@ -50,8 +51,9 @@
 
                 <view v-for="(reply, idx) in replies" :key="idx" class="reply-card">
                     <view class="reply-header">
-                        <view class="reply-avatar">
-                            <text class="reply-avatar-text">{{ getAuthorInitial(reply.author_name) }}</text>
+                        <view class="reply-avatar" :style="{ backgroundColor: getAvatarColor(reply.author_id) }">
+                            <image v-if="reply.author_avatar.length > 0" class="reply-avatar-img" :src="reply.author_avatar" mode="aspectFill" />
+                            <text v-else class="reply-avatar-text">{{ getAuthorInitial(reply.author_name) }}</text>
                         </view>
                         <view class="reply-info">
                             <text class="reply-author">{{ reply.author_name.length > 0 ? reply.author_name : '匿名学员' }}</text>
@@ -123,6 +125,13 @@
     function getAuthorInitial(name : string) : string {
         if (name.length == 0) return '学'
         return name.substring(0, 1)
+    }
+
+    /** 基于 author_id 稳定生成头像背景色，保证同一人在主帖和回复中颜色一致 */
+    function getAvatarColor(authorId : number) : string {
+        const colors : string[] = ['#2979ff', '#4caf50', '#ff9800', '#9c27b0', '#e91e63', '#009688', '#795548', '#607d8b']
+        if (authorId <= 0) return colors[0]
+        return colors[authorId % colors.length]
     }
 
     /** 格式化时间 YYYY-MM-DD HH:mm */
@@ -356,6 +365,12 @@
         font-weight: bold;
     }
 
+    .author-avatar-img {
+        width: 64rpx;
+        height: 64rpx;
+        border-radius: 32rpx;
+    }
+
     .author-info {
         flex: 1;
         flex-direction: column;
@@ -448,6 +463,12 @@
         font-size: 24rpx;
         color: #ffffff;
         font-weight: bold;
+    }
+
+    .reply-avatar-img {
+        width: 56rpx;
+        height: 56rpx;
+        border-radius: 28rpx;
     }
 
     .reply-info {

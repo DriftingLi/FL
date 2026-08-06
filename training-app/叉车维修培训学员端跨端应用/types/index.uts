@@ -270,6 +270,7 @@ export type ForumTopic = {
 	content : string
 	author_id : number
 	author_name : string
+	author_avatar : string
 	replies_count : number
 	views_count : number
 	created_at : string
@@ -290,6 +291,7 @@ export type ForumReply = {
 	content : string
 	author_id : number
 	author_name : string
+	author_avatar : string
 	created_at : string
 }
 
@@ -300,6 +302,7 @@ export type ForumTopicDetail = {
 	content : string
 	author_id : number
 	author_name : string
+	author_avatar : string
 	replies_count : number
 	views_count : number
 	created_at : string

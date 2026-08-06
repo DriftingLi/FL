@@ -59,8 +59,15 @@
                         <text class="result-label">{{ lastResult.correct ? '回答正确' : '回答错误' }}</text>
                     </view>
                     <view class="result-answer">
+                        <text class="result-answer-label">我的答案：</text>
+                        <text class="result-answer-value" :class="{ 'answer-wrong-text': !lastResult.correct }">{{ lastUserAnswer.length > 0 ? lastUserAnswer : '未作答' }}</text>
+                    </view>
+                    <view class="result-answer">
                         <text class="result-answer-label">正确答案：</text>
                         <text class="result-answer-value">{{ lastResult.correct_answer }}</text>
+                    </view>
+                    <view v-if="isLocalMatch && !lastResult.correct" class="result-hint">
+                        <text class="result-hint-text">提示：选项内容一致，可能因答案格式差异被判错</text>
                     </view>
                     <view v-if="lastResult.explanation.length > 0" class="result-explanation">
                         <text class="explanation-label">解析：</text>
@@ -150,6 +157,7 @@
     // 当前选中的答案（单选为字符串，多选为字母拼接）
     const selectedKeys = ref<string[]>([])
     const answerStates = ref<AnswerState[]>([])
+    const lastUserAnswer = ref<string>('')
     const lastResult = ref<SubmitAnswerResult>({
         correct: false,
         correct_answer: '',
@@ -205,12 +213,52 @@
         return selectedKeys.value.indexOf(key) >= 0
     }
 
-    function isCorrectAnswer(key : string) : boolean {
-        // 判断题选项为 true/false，正确答案也用 true/false
-        const answer = lastResult.value.correct_answer
-        if (answer.length == 0) return false
-        return answer.indexOf(key) >= 0
+    /** 将正确答案字符串解析为 key 数组，兼容多种分隔符 */
+    function parseAnswerKeys(answer : string) : string[] {
+        if (answer.length == 0) return [] as string[]
+        // 判断题答案不拆分
+        if (answer == 'true' || answer == 'false') return [answer] as string[]
+        // 尝试按常见分隔符拆分
+        let separator = ''
+        if (answer.indexOf(',') >= 0) separator = ','
+        else if (answer.indexOf('，') >= 0) separator = '，'
+        else if (answer.indexOf(' ') >= 0) separator = ' '
+        else if (answer.indexOf(';') >= 0) separator = ';'
+        else if (answer.indexOf('|') >= 0) separator = '|'
+        if (separator.length > 0) {
+            const parts = answer.split(separator)
+            const keys : string[] = []
+            for (let i = 0; i < parts.length; i++) {
+                const k = parts[i].trim()
+                if (k.length > 0) keys.push(k)
+            }
+            return keys
+        }
+        // 无分隔符，按字符拆分（多选题如 "ABC" → ["A","B","C"]）
+        const keys : string[] = []
+        for (let i = 0; i < answer.length; i++) {
+            keys.push(answer.charAt(i))
+        }
+        return keys
     }
+
+    function isCorrectAnswer(key : string) : boolean {
+        const keys = parseAnswerKeys(lastResult.value.correct_answer)
+        return keys.indexOf(key) >= 0
+    }
+
+    /** 本地比对：用户答案与正确答案的 key 集合是否一致（排序后比较） */
+    const isLocalMatch = computed<boolean>(() : boolean => {
+        if (!showResult.value) return false
+        if (lastResult.value.correct) return false
+        const correctKeys = parseAnswerKeys(lastResult.value.correct_answer)
+        const userKeys = parseAnswerKeys(lastUserAnswer.value)
+        if (correctKeys.length != userKeys.length) return false
+        if (correctKeys.length == 0) return false
+        const sortedCorrect = correctKeys.slice().sort().join('')
+        const sortedUser = userKeys.slice().sort().join('')
+        return sortedCorrect == sortedUser
+    })
 
     function getOptionClass(key : string) : string {
         if (!showResult.value) {
@@ -290,10 +338,11 @@
         let userAnswer = ''
         if (isMultiChoice()) {
             const sorted = selectedKeys.value.slice().sort()
-            userAnswer = sorted.join('')
+            userAnswer = sorted.join(',')
         } else {
             userAnswer = selectedKeys.value[0]
         }
+        lastUserAnswer.value = userAnswer
 
         const qid = currentQuestion.value.question_id
         try {
@@ -335,6 +384,7 @@
         currentIndex.value = currentIndex.value + 1
         selectedKeys.value = []
         showResult.value = false
+        lastUserAnswer.value = ''
         lastResult.value = { correct: false, correct_answer: '', explanation: '' } as SubmitAnswerResult
     }
 
@@ -603,6 +653,23 @@
         font-size: 26rpx;
         font-weight: bold;
         color: #4caf50;
+    }
+
+    .result-answer-value.answer-wrong-text {
+        color: #f44336;
+    }
+
+    .result-hint {
+        margin-top: 8rpx;
+        margin-bottom: 16rpx;
+        padding: 12rpx 16rpx;
+        background-color: #fff3e0;
+        border-radius: 8rpx;
+    }
+
+    .result-hint-text {
+        font-size: 24rpx;
+        color: #ff9800;
     }
 
     .result-explanation {

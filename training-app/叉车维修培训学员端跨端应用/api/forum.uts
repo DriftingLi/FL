@@ -74,6 +74,20 @@ function extractAuthorId(obj : UTSJSONObject) : number {
 	return 0
 }
 
+/** 从 author 嵌套对象提取作者头像 URL */
+function extractAuthorAvatar(obj : UTSJSONObject) : string {
+	const authorRaw = obj['author']
+	if (authorRaw != null) {
+		const authorObj = authorRaw as UTSJSONObject
+		const avatar = authorObj['avatar_url']
+		if (avatar != null) return toStr(avatar)
+	}
+	// 兼容旧格式 author_avatar 顶层字段
+	const direct = obj['author_avatar']
+	if (direct != null) return toStr(direct)
+	return ''
+}
+
 /** 构造 ForumReply
  *  后端回复对象字段：{ id, content, created_at, author: {...} }
  *  topic_id 后端未必返回，由调用方传入
@@ -85,6 +99,7 @@ function buildReply(obj : UTSJSONObject, fallbackTopicId : number = 0) : ForumRe
 		content: toStr(obj['content']),
 		author_id: extractAuthorId(obj),
 		author_name: extractAuthorName(obj),
+		author_avatar: extractAuthorAvatar(obj),
 		created_at: toStr(obj['created_at']),
 	} as ForumReply
 	return reply
@@ -100,6 +115,7 @@ function buildTopic(obj : UTSJSONObject) : ForumTopic {
 		content: toStr(obj['content']),
 		author_id: extractAuthorId(obj),
 		author_name: extractAuthorName(obj),
+		author_avatar: extractAuthorAvatar(obj),
 		replies_count: toNumber(obj['reply_count']),
 		views_count: toNumber(obj['view_count']),
 		created_at: toStr(obj['created_at']),
@@ -129,26 +145,40 @@ function buildTopicListResult(obj : UTSJSONObject) : ForumTopicListResult {
 	return result
 }
 
-/** 构造 ForumTopicDetail（含回复列表） */
+/** 构造 ForumTopicDetail（含回复列表）
+ *  后端实际响应：{ topic: { id, title, content, view_count, reply_count, ...,
+ *    author: {...}, can_delete }, replies: [{ id, content, created_at, author: {...} }] }
+ *  注意：帖子信息在 topic 子对象里，replies 在顶层
+ */
 function buildTopicDetail(obj : UTSJSONObject) : ForumTopicDetail {
+	// 帖子主体在 topic 子对象里
+	const topicRaw = obj['topic']
+	let topicObj : UTSJSONObject = obj
+	if (topicRaw != null) {
+		topicObj = topicRaw as UTSJSONObject
+	}
+	const topicId = toNumber(topicObj['id'])
+
+	// 回复列表在顶层 replies
 	const replies : ForumReply[] = []
 	const repliesRaw = obj['replies']
 	if (repliesRaw != null) {
 		const repliesArray = repliesRaw as Array<UTSJSONObject>
-		const topicId = toNumber(obj['id'])
 		for (let i = 0; i < repliesArray.length; i++) {
 			replies.push(buildReply(repliesArray[i], topicId))
 		}
 	}
+
 	const detail : ForumTopicDetail = {
-		id: toNumber(obj['id']),
-		title: toStr(obj['title']),
-		content: toStr(obj['content']),
-		author_id: extractAuthorId(obj),
-		author_name: extractAuthorName(obj),
-		replies_count: toNumber(obj['reply_count']),
-		views_count: toNumber(obj['view_count']),
-		created_at: toStr(obj['created_at']),
+		id: topicId,
+		title: toStr(topicObj['title']),
+		content: toStr(topicObj['content']),
+		author_id: extractAuthorId(topicObj),
+		author_name: extractAuthorName(topicObj),
+		author_avatar: extractAuthorAvatar(topicObj),
+		replies_count: toNumber(topicObj['reply_count']),
+		views_count: toNumber(topicObj['view_count']),
+		created_at: toStr(topicObj['created_at']),
 		replies: replies,
 	} as ForumTopicDetail
 	return detail

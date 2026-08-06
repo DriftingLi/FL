@@ -89,7 +89,9 @@
                         <view v-if="hasRedoResult()" class="redo-result"
                             :class="redoResultClass()">
                             <text class="redo-result-text">{{ redoResultLabel() }}</text>
+                            <text class="redo-result-answer">我的答案：{{ redoResultUserAnswer() }}</text>
                             <text class="redo-result-answer">正确答案：{{ redoResultAnswer() }}</text>
+                            <text v-if="redoResultLocalMatch()" class="redo-result-hint">提示：选项内容一致，可能因答案格式差异被判错</text>
                         </view>
 
                         <!-- 操作按钮 -->
@@ -185,6 +187,7 @@
     // 因此选中答案与重做结果用单值 ref，避免 UTSJSONObject 索引/null 赋值在 uvue 模板中的兼容性问题。
     const expandedId = ref<number>(0)
     const selectedKeys = ref<string[]>([])
+    const lastRedoAnswer = ref<string>('')
     const redoResult = ref<RedoResult | null>(null)
 
     /** 从 by_type 统计中取某题型数量 */
@@ -265,14 +268,60 @@
         return r.correct_answer
     }
 
+    /** 重做结果用户答案（模板调用） */
+    function redoResultUserAnswer() : string {
+        return lastRedoAnswer.value.length > 0 ? lastRedoAnswer.value : '未作答'
+    }
+
+    /** 本地比对：用户答案与正确答案 key 集合是否一致（模板调用） */
+    function redoResultLocalMatch() : boolean {
+        const r = redoResult.value
+        if (r == null) return false
+        if (r.correct) return false
+        const correctKeys = parseAnswerKeys(r.correct_answer)
+        const userKeys = parseAnswerKeys(lastRedoAnswer.value)
+        if (correctKeys.length != userKeys.length) return false
+        if (correctKeys.length == 0) return false
+        const sortedCorrect = correctKeys.slice().sort().join('')
+        const sortedUser = userKeys.slice().sort().join('')
+        return sortedCorrect == sortedUser
+    }
+
     /** 选项是否已选中 */
     function isSelected(key : string) : boolean {
         return selectedKeys.value.indexOf(key) >= 0
     }
 
+    /** 将答案字符串解析为 key 数组，兼容多种分隔符 */
+    function parseAnswerKeys(answer : string) : string[] {
+        if (answer.length == 0) return [] as string[]
+        if (answer == 'true' || answer == 'false') return [answer] as string[]
+        let separator = ''
+        if (answer.indexOf(',') >= 0) separator = ','
+        else if (answer.indexOf('，') >= 0) separator = '，'
+        else if (answer.indexOf(' ') >= 0) separator = ' '
+        else if (answer.indexOf(';') >= 0) separator = ';'
+        else if (answer.indexOf('|') >= 0) separator = '|'
+        if (separator.length > 0) {
+            const parts = answer.split(separator)
+            const keys : string[] = []
+            for (let i = 0; i < parts.length; i++) {
+                const k = parts[i].trim()
+                if (k.length > 0) keys.push(k)
+            }
+            return keys
+        }
+        const keys : string[] = []
+        for (let i = 0; i < answer.length; i++) {
+            keys.push(answer.charAt(i))
+        }
+        return keys
+    }
+
     /** 答案是否包含某 key */
     function isAnswerContains(answer : string, key : string) : boolean {
-        return answer.indexOf(key) >= 0
+        const keys = parseAnswerKeys(answer)
+        return keys.indexOf(key) >= 0
     }
 
     /** 选项样式类（模板调用） */
@@ -358,6 +407,7 @@
         currentType.value = val
         expandedId.value = 0
         selectedKeys.value = [] as string[]
+        lastRedoAnswer.value = ''
         redoResult.value = null
         loadRecords(true)
     }
@@ -374,6 +424,7 @@
             // 展开新题，重置该题的选中与结果
             expandedId.value = qid
             selectedKeys.value = [] as string[]
+            lastRedoAnswer.value = ''
             redoResult.value = null
         }
     }
@@ -393,10 +444,11 @@
                 sorted.push(selectedKeys.value[i])
             }
             sorted.sort()
-            userAnswer = sorted.join('')
+            userAnswer = sorted.join(',')
         } else {
             userAnswer = selectedKeys.value[0]
         }
+        lastRedoAnswer.value = userAnswer
 
         uni.showLoading({ title: '提交中...' })
         try {
@@ -859,6 +911,12 @@
     .redo-result-answer {
         font-size: 24rpx;
         color: #666666;
+    }
+
+    .redo-result-hint {
+        font-size: 22rpx;
+        color: #ff9800;
+        margin-top: 8rpx;
     }
 
     .redo-actions {

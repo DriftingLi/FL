@@ -256,7 +256,7 @@
                     sorted.push(selectedKeys.value[i])
                 }
                 sorted.sort()
-                ans = sorted.join('')
+                ans = sorted.join(',')
             } else {
                 ans = selectedKeys.value[0]
             }
