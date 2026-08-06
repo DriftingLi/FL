@@ -102,11 +102,6 @@ export const questionBankApi = {
     return request.post<{ success_count?: number; failed_count?: number }>('/question-bank/questions/batch-import', { questions })
   },
 
-  /** 题目打标（管理端/导师，LH-28） */
-  setQuestionTags(questionId: number, tagIds: number[]) {
-    return request.put<null>(`/question-bank/questions/${questionId}/tags`, { tag_ids: tagIds })
-  },
-
   getStats() {
     return request.get<QuestionBankStats>('/question-bank/stats')
   },

@@ -18,10 +18,10 @@
             <div class="tag-list">
               <div
                 v-for="tag in tags"
-                :key="tag.tag_id"
+                :key="tag.id"
                 class="tag-row"
-                :class="{ active: currentTagId === tag.tag_id }"
-                @click="selectTag(tag.tag_id)"
+                :class="{ active: currentTagId === tag.id }"
+                @click="selectTag(tag.id)"
               >
                 <span class="tag-name">{{ tag.name }}</span>
                 <span class="tag-count">{{ tag.question_count ?? 0 }} 题</span>
@@ -85,7 +85,7 @@
             <el-table-column label="标签" min-width="160">
               <template #default="{ row }">
                 <template v-if="row.tags && row.tags.length > 0">
-                  <el-tag v-for="t in row.tags" :key="t.tag_id" size="small" class="question-tag" type="primary" effect="plain">
+                  <el-tag v-for="t in row.tags" :key="t.id" size="small" class="question-tag" type="primary" effect="plain">
                     {{ t.name }}
                   </el-tag>
                 </template>
@@ -115,7 +115,7 @@
     </el-row>
 
     <!-- 标签新建/编辑 -->
-    <el-dialog v-model="tagDialogVisible" :title="tagForm.tag_id ? '编辑标签' : '新增标签'" width="420px" destroy-on-close>
+    <el-dialog v-model="tagDialogVisible" :title="tagForm.id ? '编辑标签' : '新增标签'" width="420px" destroy-on-close>
       <el-form ref="tagFormRef" :model="tagForm" :rules="tagRules" label-width="80px">
         <el-form-item label="标签名" prop="name">
           <el-input v-model="tagForm.name" placeholder="如：法规、结构、液压、电气、制动、故障诊断、应急" maxlength="30" show-word-limit @keyup.enter="submitTag" />
@@ -139,7 +139,7 @@
             placeholder="选择要关联的标签"
             style="width: 100%"
           >
-            <el-option v-for="t in tags" :key="t.tag_id" :label="t.name" :value="t.tag_id" />
+            <el-option v-for="t in tags" :key="t.id" :label="t.name" :value="t.id" />
           </el-select>
         </el-form-item>
         <el-alert type="info" :closable="false" show-icon title="保存将整体替换这些题目的标签关联（未勾选的标签会被移除）" />
@@ -175,14 +175,14 @@ const total = ref(0)
 const selectedIds = ref<number[]>([])
 
 const currentTagName = computed(() => {
-  const tag = tags.value.find(t => t.tag_id === currentTagId.value)
+  const tag = tags.value.find(t => t.id === currentTagId.value)
   return tag?.name || ''
 })
 
 const tagDialogVisible = ref(false)
 const tagSubmitting = ref(false)
 const tagFormRef = ref<FormInstance | null>(null)
-const tagForm = reactive<{ tag_id: number | null; name: string }>({ tag_id: null, name: '' })
+const tagForm = reactive<{ id: number | null; name: string }>({ id: null, name: '' })
 const tagRules = {
   name: [{ required: true, message: '请输入标签名', trigger: 'blur' }]
 }
@@ -196,7 +196,7 @@ async function loadTags() {
   try {
     const res = await trainingApi.getQuestionTags()
     if (res.code === 200) {
-      tags.value = Array.isArray(res.data) ? res.data : []
+      tags.value = res.data.tags || []
     }
   } catch (error) {
     console.error('加载标签失败:', error)
@@ -241,7 +241,7 @@ function handleSelectionChange(rows: Question[]) {
 }
 
 function openTagDialog(tag?: QuestionTag) {
-  tagForm.tag_id = tag?.tag_id ?? null
+  tagForm.id = tag?.id ?? null
   tagForm.name = tag?.name ?? ''
   tagDialogVisible.value = true
 }
@@ -251,8 +251,8 @@ async function submitTag() {
   await tagFormRef.value.validate()
   tagSubmitting.value = true
   try {
-    if (tagForm.tag_id) {
-      const res = await trainingApi.updateQuestionTag(tagForm.tag_id, { name: tagForm.name })
+    if (tagForm.id) {
+      const res = await trainingApi.updateQuestionTag(tagForm.id, { name: tagForm.name })
       if (res.code === 200) ElMessage.success('标签已更新')
     } else {
       const res = await trainingApi.createQuestionTag({ name: tagForm.name })
@@ -270,10 +270,10 @@ async function submitTag() {
 
 async function handleDeleteTag(tag: QuestionTag) {
   try {
-    const res = await trainingApi.deleteQuestionTag(tag.tag_id)
+    const res = await trainingApi.deleteQuestionTag(tag.id)
     if (res.code === 200) {
       ElMessage.success('标签已删除')
-      if (currentTagId.value === tag.tag_id) currentTagId.value = null
+      if (currentTagId.value === tag.id) currentTagId.value = null
       await loadTags()
       loadQuestions()
     }

@@ -8,7 +8,7 @@ export interface UpdateProgressPayload {
   [key: string]: unknown
 }
 
-/** 课程摘要（列表项） */
+/** 课程摘要（列表项，courseToDict 字段） */
 export interface CourseSummary {
   course_id: number
   name: string
@@ -18,19 +18,13 @@ export interface CourseSummary {
   duration?: number
   chapter_count?: number
   status?: number
-  // ===== 培训目录扩展（LH-28）=====
-  direction_id?: number
-  direction_name?: string
-  level_id?: number
-  level_name?: string
+  // ===== 培训目录扩展（LH-27/28）=====
+  specialty_id?: number | null
+  level_id?: number | null
   theory_hours?: number
   practice_hours?: number
-  prerequisite_course_ids?: number[]
-  prerequisite_courses?: { course_id: number; name: string }[]
-  certificate_template_id?: number
-  certificate_template_name?: string
-  certificate_valid_months?: number
-  sort_order?: number
+  certificate_template_id?: number | null
+  created_at?: string
   [key: string]: unknown
 }
 
@@ -42,6 +36,31 @@ export interface CourseChapter {
   content_type?: string
   order_num?: number
   duration?: number
+  [key: string]: unknown
+}
+
+/** 课程详情主体（课程字段 + 嵌套 specialty/level/certificate_template/prerequisites） */
+export interface CourseDetail extends CourseSummary {
+  specialty?: { specialty_id: number; code?: string; name: string }
+  level?: { level_id: number; code?: string; name: string }
+  certificate_template?: {
+    id: number
+    code?: string
+    name: string
+    description?: string
+    validity_days?: number
+    template_url?: string
+  }
+  prerequisites?: { course_id: number; name: string }[]
+  study_progress?: number
+  [key: string]: unknown
+}
+
+/** 学员端课程详情响应（后端包一层 course_info） */
+export interface CourseDetailResponse {
+  course_info?: CourseDetail
+  chapters?: CourseChapter[]
+  progress?: number
   [key: string]: unknown
 }
 
@@ -63,12 +82,12 @@ export interface ChapterDetail {
 }
 
 export const courseApi = {
-  getCourses(params: { page?: number; page_size?: number; category?: string; keyword?: string; direction_id?: number; level_id?: number }) {
+  getCourses(params: { page?: number; page_size?: number; category?: string; keyword?: string; specialty_id?: number; level_id?: number }) {
     return request.get<{ courses: CourseSummary[]; total: number }>('/courses', { params })
   },
 
   getCourseDetail(id: number) {
-    return request.get<{ course_info?: CourseSummary; chapters?: CourseChapter[] }>(`/course/${id}`)
+    return request.get<CourseDetailResponse>(`/course/${id}`)
   },
 
   updateProgress(courseId: number, data: UpdateProgressPayload) {

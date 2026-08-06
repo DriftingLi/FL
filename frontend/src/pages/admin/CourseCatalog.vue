@@ -46,7 +46,7 @@
             </span>
             <span class="node-actions" @click.stop>
               <template v-if="data.__type === 'direction'">
-                <el-button link size="small" @click="openLevelDialog(data)">新增等级</el-button>
+                <el-button link size="small" @click="openLevelDialog()">新增等级</el-button>
                 <el-button link size="small" @click="moveNode(data, -1)" :disabled="!canMove(data, -1)">
                   <el-icon><Top /></el-icon>
                 </el-button>
@@ -54,7 +54,7 @@
                   <el-icon><Bottom /></el-icon>
                 </el-button>
                 <el-button link size="small" @click="openDirectionDialog(data)">编辑</el-button>
-                <el-popconfirm title="删除该方向会级联删除其下等级与课程，确定？" @confirm="handleDeleteDirection(data)">
+                <el-popconfirm title="删除该方向后，其下课程将变为未关联方向（等级保留），确定？" @confirm="handleDeleteDirection(data)">
                   <template #reference>
                     <el-button link size="small" type="danger">删除</el-button>
                   </template>
@@ -68,8 +68,8 @@
                 <el-button link size="small" @click="moveNode(data, 1)" :disabled="!canMove(data, 1)">
                   <el-icon><Bottom /></el-icon>
                 </el-button>
-                <el-button link size="small" @click="openLevelDialog(null, data)">编辑</el-button>
-                <el-popconfirm title="删除该等级会级联删除其下课程，确定？" @confirm="handleDeleteLevel(data)">
+                <el-button link size="small" @click="openLevelDialog(data)">编辑</el-button>
+                <el-popconfirm title="删除该等级后，其下课程将变为未关联等级，确定？" @confirm="handleDeleteLevel(data)">
                   <template #reference>
                     <el-button link size="small" type="danger">删除</el-button>
                   </template>
@@ -113,7 +113,7 @@
     </div>
 
     <!-- 专业方向对话框 -->
-    <el-dialog v-model="directionDialogVisible" :title="directionForm.direction_id ? '编辑专业方向' : '新增专业方向'" width="460px" destroy-on-close>
+    <el-dialog v-model="directionDialogVisible" :title="directionForm.specialty_id ? '编辑专业方向' : '新增专业方向'" width="460px" destroy-on-close>
       <el-form ref="directionFormRef" :model="directionForm" :rules="nameRules" label-width="90px">
         <el-form-item label="名称" prop="name">
           <el-input v-model="directionForm.name" placeholder="如：叉车操作、叉车维修、安全规范、新能源电池" maxlength="30" show-word-limit />
@@ -128,14 +128,9 @@
       </template>
     </el-dialog>
 
-    <!-- 课程等级对话框 -->
+    <!-- 课程等级对话框（等级全局共享，不归属方向） -->
     <el-dialog v-model="levelDialogVisible" :title="levelForm.level_id ? '编辑课程等级' : '新增课程等级'" width="460px" destroy-on-close>
       <el-form ref="levelFormRef" :model="levelForm" :rules="nameRules" label-width="90px">
-        <el-form-item v-if="!levelForm.level_id" label="所属方向" prop="direction_id">
-          <el-select v-model="levelForm.direction_id" placeholder="请选择专业方向" style="width: 100%">
-            <el-option v-for="d in directions" :key="d.direction_id" :label="d.name" :value="d.direction_id" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="等级名称" prop="name">
           <el-input v-model="levelForm.name" placeholder="如：入门、进阶、专项、认证" maxlength="30" show-word-limit />
         </el-form-item>
@@ -159,9 +154,9 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="所属方向" prop="direction_id">
-              <el-select v-model="courseForm.direction_id" placeholder="请选择方向" style="width: 100%">
-                <el-option v-for="d in directions" :key="d.direction_id" :label="d.name" :value="d.direction_id" />
+            <el-form-item label="所属方向" prop="specialty_id">
+              <el-select v-model="courseForm.specialty_id" placeholder="请选择方向" style="width: 100%">
+                <el-option v-for="d in directions" :key="d.specialty_id" :label="d.name" :value="d.specialty_id" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -213,13 +208,8 @@
           <el-col :span="12">
             <el-form-item label="证书模板" prop="certificate_template_id">
               <el-select v-model="courseForm.certificate_template_id" clearable placeholder="不关联则留空" style="width: 100%">
-                <el-option v-for="t in certificateTemplates" :key="t.template_id" :label="t.name" :value="t.template_id" />
+                <el-option v-for="t in certificateTemplates" :key="t.id" :label="t.name" :value="t.id" />
               </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="证书有效期(月)" prop="certificate_valid_months">
-              <el-input-number v-model="courseForm.certificate_valid_months" :min="0" :max="1200" style="width: 100%" />
             </el-form-item>
           </el-col>
           <el-col :span="24">
@@ -267,12 +257,12 @@
         </el-button>
       </div>
       <el-table :data="certificateTemplates" stripe border size="small" v-loading="certificateLoading">
-        <el-table-column prop="template_id" label="ID" width="60" align="center" />
+        <el-table-column prop="id" label="ID" width="60" align="center" />
         <el-table-column prop="name" label="模板名称" min-width="140" show-overflow-tooltip />
         <el-table-column prop="code" label="编码" width="110" />
-        <el-table-column label="默认有效期(月)" width="120" align="center">
+        <el-table-column label="默认有效期(天)" width="120" align="center">
           <template #default="{ row }">
-            {{ row.valid_months ?? '-' }}
+            {{ row.validity_days ?? '-' }}
           </template>
         </el-table-column>
         <el-table-column prop="description" label="说明" min-width="160" show-overflow-tooltip />
@@ -294,7 +284,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="certificateFormVisible" :title="certificateForm.template_id ? '编辑模板' : '新增模板'" width="480px" destroy-on-close append-to-body>
+    <el-dialog v-model="certificateFormVisible" :title="certificateForm.id ? '编辑模板' : '新增模板'" width="480px" destroy-on-close append-to-body>
       <el-form ref="certificateFormRef" :model="certificateForm" :rules="nameRules" label-width="110px">
         <el-form-item label="模板名称" prop="name">
           <el-input v-model="certificateForm.name" placeholder="如：叉车维修初级工证书" maxlength="50" show-word-limit />
@@ -302,8 +292,8 @@
         <el-form-item label="编码" prop="code">
           <el-input v-model="certificateForm.code" placeholder="可选" maxlength="30" />
         </el-form-item>
-        <el-form-item label="有效期(月)" prop="valid_months">
-          <el-input-number v-model="certificateForm.valid_months" :min="0" :max="1200" style="width: 100%" />
+        <el-form-item label="有效期(天)" prop="validity_days">
+          <el-input-number v-model="certificateForm.validity_days" :min="1" :max="36500" style="width: 100%" />
         </el-form-item>
         <el-form-item label="说明" prop="description">
           <el-input v-model="certificateForm.description" type="textarea" :rows="3" maxlength="300" show-word-limit />
@@ -335,7 +325,7 @@ type TreeNode = {
   level_name?: string
   duration?: number
   content_url?: string
-  direction_id?: number
+  specialty_id?: number
   level_id?: number
   course_id?: number
   chapter_id?: number
@@ -343,7 +333,6 @@ type TreeNode = {
   practice_hours?: number
   prerequisite_course_ids?: number[]
   certificate_template_id?: number | null
-  certificate_valid_months?: number | null
   description?: string
   children?: TreeNode[]
   [key: string]: unknown
@@ -356,21 +345,21 @@ const directions = ref<CatalogDirectionNode[]>([])
 const certificateTemplates = ref<CertificateTemplate[]>([])
 
 // ===== 树构建 =====
-function buildTree(tree: { directions: CatalogDirectionNode[] }) {
-  const nodes: TreeNode[] = (tree.directions || []).map((d, di) => ({
-    __key: `dir-${d.direction_id}`,
+function buildTree(tree: { specialties: CatalogDirectionNode[] }) {
+  const nodes: TreeNode[] = (tree.specialties || []).map((d, di) => ({
+    __key: `dir-${d.specialty_id}`,
     __type: 'direction' as const,
     name: d.name,
     code: d.code,
     sort_order: d.sort_order ?? di,
-    direction_id: d.direction_id,
+    specialty_id: d.specialty_id,
     children: (d.levels || []).map((l, li) => ({
       __key: `lvl-${l.level_id}`,
       __type: 'level' as const,
       name: l.name,
       code: l.code,
       sort_order: l.sort_order ?? li,
-      direction_id: d.direction_id,
+      specialty_id: d.specialty_id,
       level_id: l.level_id,
       children: (l.courses || []).map((c, ci) => ({
         __key: `crs-${c.course_id}`,
@@ -378,7 +367,7 @@ function buildTree(tree: { directions: CatalogDirectionNode[] }) {
         name: c.name,
         status: c.status,
         sort_order: c.sort_order ?? ci,
-        direction_id: d.direction_id,
+        specialty_id: d.specialty_id,
         level_id: l.level_id,
         course_id: c.course_id,
         level_name: l.name,
@@ -386,7 +375,6 @@ function buildTree(tree: { directions: CatalogDirectionNode[] }) {
         practice_hours: c.practice_hours,
         prerequisite_course_ids: c.prerequisite_course_ids,
         certificate_template_id: c.certificate_template_id,
-        certificate_valid_months: c.certificate_valid_months,
         description: c.description,
         children: ((c as Record<string, unknown>).chapters as { chapter_id: number; title: string; order_num?: number; duration?: number }[] | undefined || []).map((ch, chi) => ({
           __key: `chp-${ch.chapter_id}`,
@@ -401,7 +389,7 @@ function buildTree(tree: { directions: CatalogDirectionNode[] }) {
     }))
   }))
   treeData.value = nodes
-  directions.value = tree.directions || []
+  directions.value = tree.specialties || []
 }
 
 // ===== 排序 =====
@@ -409,15 +397,15 @@ function siblingsOf(data: TreeNode): TreeNode[] {
   const type = data.__type
   if (type === 'direction') return treeData.value
   if (type === 'level') {
-    const parent = treeData.value.find(d => d.direction_id === data.direction_id)
+    const parent = treeData.value.find(d => d.specialty_id === data.specialty_id)
     return (parent?.children as TreeNode[] | undefined) || []
   }
   if (type === 'course') {
-    const dir = treeData.value.find(d => d.direction_id === data.direction_id)
+    const dir = treeData.value.find(d => d.specialty_id === data.specialty_id)
     const level = dir?.children?.find((l: TreeNode) => l.level_id === data.level_id)
     return (level?.children as TreeNode[] | undefined) || []
   }
-  const dir = treeData.value.find(d => d.direction_id === (data.direction_id as number | undefined))
+  const dir = treeData.value.find(d => d.specialty_id === (data.specialty_id as number | undefined))
   const level = dir?.children?.find((l: TreeNode) => l.level_id === (data.level_id as number | undefined))
   const course = level?.children?.find((c: TreeNode) => c.course_id === data.course_id)
   return (course?.children as TreeNode[] | undefined) || []
@@ -440,8 +428,8 @@ async function moveNode(data: TreeNode, delta: number) {
     const thisOrder = data.sort_order ?? idx
     const targetOrder = target.sort_order ?? idx + delta
     if (data.__type === 'direction') {
-      await trainingApi.updateDirection(data.direction_id as number, { sort_order: targetOrder })
-      await trainingApi.updateDirection(target.direction_id as number, { sort_order: thisOrder })
+      await trainingApi.updateDirection(data.specialty_id as number, { sort_order: targetOrder })
+      await trainingApi.updateDirection(target.specialty_id as number, { sort_order: thisOrder })
     } else if (data.__type === 'level') {
       await trainingApi.updateLevel(data.level_id as number, { sort_order: targetOrder })
       await trainingApi.updateLevel(target.level_id as number, { sort_order: thisOrder })
@@ -482,7 +470,7 @@ async function loadCertificateTemplates() {
   try {
     const res = await trainingApi.getCertificateTemplates()
     if (res.code === 200) {
-      certificateTemplates.value = res.data.templates || []
+      certificateTemplates.value = res.data.certificate_templates || []
     }
   } catch (error) {
     console.error('加载证书模板失败:', error)
@@ -492,8 +480,8 @@ async function loadCertificateTemplates() {
 // ===== 方向 =====
 const directionDialogVisible = ref(false)
 const directionFormRef = ref<FormInstance | null>(null)
-const directionForm = reactive<{ direction_id: number | null; name: string; code: string }>({
-  direction_id: null,
+const directionForm = reactive<{ specialty_id: number | null; name: string; code: string }>({
+  specialty_id: null,
   name: '',
   code: ''
 })
@@ -503,7 +491,7 @@ const nameRules = {
 }
 
 function resetDirectionForm() {
-  directionForm.direction_id = null
+  directionForm.specialty_id = null
   directionForm.name = ''
   directionForm.code = ''
 }
@@ -511,7 +499,7 @@ function resetDirectionForm() {
 function openDirectionDialog(data?: TreeNode) {
   resetDirectionForm()
   if (data) {
-    directionForm.direction_id = data.direction_id as number
+    directionForm.specialty_id = data.specialty_id as number
     directionForm.name = data.name
     directionForm.code = data.code || ''
   }
@@ -523,8 +511,8 @@ async function submitDirection() {
   await directionFormRef.value.validate()
   submitting.value = true
   try {
-    if (directionForm.direction_id) {
-      const res = await trainingApi.updateDirection(directionForm.direction_id, { name: directionForm.name, code: directionForm.code })
+    if (directionForm.specialty_id) {
+      const res = await trainingApi.updateDirection(directionForm.specialty_id, { name: directionForm.name, code: directionForm.code })
       if (res.code === 200) ElMessage.success('已更新')
     } else {
       const res = await trainingApi.createDirection({ name: directionForm.name, code: directionForm.code })
@@ -542,7 +530,7 @@ async function submitDirection() {
 
 async function handleDeleteDirection(data: TreeNode) {
   try {
-    const res = await trainingApi.deleteDirection(data.direction_id as number)
+    const res = await trainingApi.deleteDirection(data.specialty_id as number)
     if (res.code === 200) {
       ElMessage.success('已删除')
       await loadTree()
@@ -556,29 +544,24 @@ async function handleDeleteDirection(data: TreeNode) {
 // ===== 等级 =====
 const levelDialogVisible = ref(false)
 const levelFormRef = ref<FormInstance | null>(null)
-const levelForm = reactive<{ level_id: number | null; direction_id: number | null; name: string; code: string }>({
+const levelForm = reactive<{ level_id: number | null; name: string; code: string }>({
   level_id: null,
-  direction_id: null,
   name: '',
   code: ''
 })
 
 function resetLevelForm() {
   levelForm.level_id = null
-  levelForm.direction_id = null
   levelForm.name = ''
   levelForm.code = ''
 }
 
-function openLevelDialog(direction?: TreeNode | null, level?: TreeNode | null) {
+function openLevelDialog(level?: TreeNode | null) {
   resetLevelForm()
   if (level) {
     levelForm.level_id = level.level_id as number
-    levelForm.direction_id = level.direction_id as number
     levelForm.name = level.name
     levelForm.code = level.code || ''
-  } else if (direction) {
-    levelForm.direction_id = direction.direction_id as number
   }
   levelDialogVisible.value = true
 }
@@ -594,8 +577,7 @@ async function submitLevel() {
     } else {
       const res = await trainingApi.createLevel({
         name: levelForm.name,
-        code: levelForm.code,
-        direction_id: levelForm.direction_id || undefined
+        code: levelForm.code
       })
       if (res.code === 201) ElMessage.success('已创建')
     }
@@ -628,28 +610,27 @@ const courseFormRef = ref<FormInstance | null>(null)
 const courseForm = reactive<Record<string, any>>({
   course_id: null,
   name: '',
-  direction_id: null,
+  specialty_id: null,
   level_id: null,
   status: 1,
   theory_hours: 0,
   practice_hours: 0,
   prerequisite_course_ids: [],
   certificate_template_id: null,
-  certificate_valid_months: null,
   description: ''
 })
 
 const courseRules = {
   name: [{ required: true, message: '请输入课程名称', trigger: 'blur' }],
-  direction_id: [{ required: true, message: '请选择专业方向', trigger: 'change' }],
+  specialty_id: [{ required: true, message: '请选择专业方向', trigger: 'change' }],
   level_id: [{ required: true, message: '请选择课程等级', trigger: 'change' }]
 }
 
 const levelOptions = computed(() => {
-  const list: { level_id: number; name: string; direction_id: number }[] = []
+  const list: { level_id: number; name: string; specialty_id: number }[] = []
   for (const d of directions.value) {
     for (const l of d.levels || []) {
-      list.push({ level_id: l.level_id, name: `${d.name} · ${l.name}`, direction_id: d.direction_id })
+      list.push({ level_id: l.level_id, name: `${d.name} · ${l.name}`, specialty_id: d.specialty_id })
     }
   }
   return list
@@ -670,14 +651,13 @@ const courseOptions = computed(() => {
 function resetCourseForm() {
   courseForm.course_id = null
   courseForm.name = ''
-  courseForm.direction_id = null
+  courseForm.specialty_id = null
   courseForm.level_id = null
   courseForm.status = 1
   courseForm.theory_hours = 0
   courseForm.practice_hours = 0
   courseForm.prerequisite_course_ids = []
   courseForm.certificate_template_id = null
-  courseForm.certificate_valid_months = null
   courseForm.description = ''
 }
 
@@ -686,17 +666,16 @@ function openCourseDialog(level?: TreeNode | null, course?: TreeNode | null) {
   if (course) {
     courseForm.course_id = course.course_id
     courseForm.name = course.name
-    courseForm.direction_id = course.direction_id
+    courseForm.specialty_id = course.specialty_id
     courseForm.level_id = course.level_id
     courseForm.status = course.status ?? 1
     courseForm.theory_hours = course.theory_hours ?? 0
     courseForm.practice_hours = course.practice_hours ?? 0
     courseForm.prerequisite_course_ids = course.prerequisite_course_ids || []
     courseForm.certificate_template_id = course.certificate_template_id ?? null
-    courseForm.certificate_valid_months = course.certificate_valid_months ?? null
     courseForm.description = course.description || ''
   } else if (level) {
-    courseForm.direction_id = level.direction_id
+    courseForm.specialty_id = level.specialty_id
     courseForm.level_id = level.level_id
   }
   courseDialogVisible.value = true
@@ -709,14 +688,13 @@ async function submitCourse() {
   try {
     const payload: Record<string, unknown> = {
       name: courseForm.name,
-      direction_id: courseForm.direction_id,
+      specialty_id: courseForm.specialty_id,
       level_id: courseForm.level_id,
       status: courseForm.status,
       theory_hours: courseForm.theory_hours,
       practice_hours: courseForm.practice_hours,
       prerequisite_course_ids: courseForm.prerequisite_course_ids,
       certificate_template_id: courseForm.certificate_template_id,
-      certificate_valid_months: courseForm.certificate_valid_months,
       description: courseForm.description
     }
     let ok = false
@@ -836,11 +814,11 @@ const certificateDialogVisible = ref(false)
 const certificateLoading = ref(false)
 const certificateFormVisible = ref(false)
 const certificateFormRef = ref<FormInstance | null>(null)
-const certificateForm = reactive<{ template_id: number | null; name: string; code: string; valid_months: number | null; description: string }>({
-  template_id: null,
+const certificateForm = reactive<{ id: number | null; name: string; code: string; validity_days: number | null; description: string }>({
+  id: null,
   name: '',
   code: '',
-  valid_months: null,
+  validity_days: null,
   description: ''
 })
 
@@ -853,20 +831,20 @@ function openCertificateDialog() {
 }
 
 function resetCertificateForm() {
-  certificateForm.template_id = null
+  certificateForm.id = null
   certificateForm.name = ''
   certificateForm.code = ''
-  certificateForm.valid_months = null
+  certificateForm.validity_days = null
   certificateForm.description = ''
 }
 
 function openCertificateForm(template?: CertificateTemplate) {
   resetCertificateForm()
   if (template) {
-    certificateForm.template_id = template.template_id
+    certificateForm.id = template.id
     certificateForm.name = template.name
     certificateForm.code = template.code || ''
-    certificateForm.valid_months = template.valid_months ?? null
+    certificateForm.validity_days = template.validity_days ?? null
     certificateForm.description = template.description || ''
   }
   certificateFormVisible.value = true
@@ -880,11 +858,11 @@ async function submitCertificate() {
     const payload = {
       name: certificateForm.name,
       code: certificateForm.code,
-      valid_months: certificateForm.valid_months,
+      validity_days: certificateForm.validity_days ?? undefined,
       description: certificateForm.description
     }
-    if (certificateForm.template_id) {
-      const res = await trainingApi.updateCertificateTemplate(certificateForm.template_id, payload)
+    if (certificateForm.id) {
+      const res = await trainingApi.updateCertificateTemplate(certificateForm.id, payload)
       if (res.code === 200) ElMessage.success('模板已更新')
     } else {
       const res = await trainingApi.createCertificateTemplate(payload)
@@ -902,7 +880,7 @@ async function submitCertificate() {
 
 async function handleDeleteCertificate(template: CertificateTemplate) {
   try {
-    const res = await trainingApi.deleteCertificateTemplate(template.template_id)
+    const res = await trainingApi.deleteCertificateTemplate(template.id)
     if (res.code === 200) {
       ElMessage.success('已删除')
       await loadCertificateTemplates()

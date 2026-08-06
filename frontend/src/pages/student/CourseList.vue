@@ -21,10 +21,10 @@
         <span class="filter-label">专业方向</span>
         <button
           v-for="d in directions"
-          :key="d.direction_id"
+          :key="d.specialty_id"
           class="pill"
-          :class="{ active: currentDirectionId === d.direction_id }"
-          @click="selectDirection(d.direction_id)"
+          :class="{ active: currentDirectionId === d.specialty_id }"
+          @click="selectDirection(d.specialty_id)"
         >
           {{ d.name }}
         </button>
@@ -62,7 +62,7 @@
               <span>{{ course.name.charAt(0) }}</span>
             </div>
             <span class="category-tag">{{ getCategoryName(course.category) }}</span>
-            <span v-if="course.level_name" class="level-tag">{{ course.level_name }}</span>
+            <span v-if="levelNameOf(course.level_id)" class="level-tag">{{ levelNameOf(course.level_id) }}</span>
           </div>
           <div class="card-body">
             <h3 class="course-name">{{ course.name }}</h3>
@@ -126,8 +126,8 @@
       <div v-loading="detailLoading">
         <template v-if="detailCourse">
           <div class="detail-brief">
-            <el-tag v-if="detailCourse.level_name" type="warning">{{ detailCourse.level_name }}</el-tag>
-            <el-tag v-if="detailCourse.direction_name" type="primary" effect="plain">{{ detailCourse.direction_name }}</el-tag>
+            <el-tag v-if="detailCourse.level?.name" type="warning">{{ detailCourse.level.name }}</el-tag>
+            <el-tag v-if="detailCourse.specialty?.name" type="primary" effect="plain">{{ detailCourse.specialty.name }}</el-tag>
             <el-tag v-if="detailCourse.category" effect="plain">{{ getCategoryName(detailCourse.category) }}</el-tag>
           </div>
           <p class="detail-desc">{{ detailCourse.description || '暂无简介' }}</p>
@@ -138,18 +138,18 @@
             <el-descriptions-item label="章节数">{{ detailCourse.chapter_count ?? '-' }}</el-descriptions-item>
             <el-descriptions-item label="课程时长">{{ detailCourse.duration ? formatDuration(detailCourse.duration) : '-' }}</el-descriptions-item>
             <el-descriptions-item label="关联证书">
-              <template v-if="detailCourse.certificate_template_name">
-                {{ detailCourse.certificate_template_name }}
-                <span v-if="detailCourse.certificate_valid_months" class="cert-valid">
-                  （有效期 {{ detailCourse.certificate_valid_months }} 个月）
+              <template v-if="detailCourse.certificate_template">
+                {{ detailCourse.certificate_template.name }}
+                <span v-if="detailCourse.certificate_template.validity_days" class="cert-valid">
+                  （有效期 {{ detailCourse.certificate_template.validity_days }} 天）
                 </span>
               </template>
               <span v-else>—</span>
             </el-descriptions-item>
             <el-descriptions-item label="前置课程">
-              <template v-if="detailCourse.prerequisite_courses && detailCourse.prerequisite_courses.length > 0">
+              <template v-if="detailCourse.prerequisites && detailCourse.prerequisites.length > 0">
                 <el-tag
-                  v-for="p in detailCourse.prerequisite_courses"
+                  v-for="p in detailCourse.prerequisites"
                   :key="p.course_id"
                   size="small"
                   type="info"
@@ -196,9 +196,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Document, Timer, Clock, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { courseApi } from '@/api/course'
+import { courseApi, type CourseDetail, type CourseSummary } from '@/api/course'
 import { trainingApi } from '@/api/training'
-import type { CourseSummary } from '@/api/course'
 import { vLazy } from '@/composables/useLazyLoad'
 
 const router = useRouter()
@@ -210,14 +209,23 @@ const currentPage = ref(1)
 const pageSize = ref(12)
 const total = ref(0)
 
-const directions = ref<{ direction_id: number; name: string; levels?: { level_id: number; name: string }[] }[]>([])
+const directions = ref<{ specialty_id: number; name: string; levels?: { level_id: number; name: string }[] }[]>([])
 const currentDirectionId = ref<number | null>(null)
 const currentLevelId = ref<number | null>(null)
 
 const currentLevels = computed(() => {
-  const d = directions.value.find(dir => dir.direction_id === currentDirectionId.value)
+  const d = directions.value.find(dir => dir.specialty_id === currentDirectionId.value)
   return d?.levels || []
 })
+
+function levelNameOf(levelId?: number | null) {
+  if (!levelId) return ''
+  for (const d of directions.value) {
+    const l = (d.levels || []).find(item => item.level_id === levelId)
+    if (l) return l.name
+  }
+  return ''
+}
 
 const categories = [
   { value: '', label: '全部' },
@@ -269,7 +277,7 @@ async function loadCourses() {
       params.category = currentCategory.value
     }
     if (currentDirectionId.value !== null) {
-      params.direction_id = currentDirectionId.value
+      params.specialty_id = currentDirectionId.value
     }
     if (currentLevelId.value !== null) {
       params.level_id = currentLevelId.value
@@ -291,7 +299,7 @@ async function loadDirections() {
   try {
     const res = await trainingApi.getCatalogTree()
     if (res.code === 200) {
-      directions.value = res.data.directions || []
+      directions.value = res.data.specialties || []
     }
   } catch (error) {
     console.error('加载目录失败:', error)
@@ -317,7 +325,7 @@ function handleSizeChange() {
 // ===== 课程详情 =====
 const detailVisible = ref(false)
 const detailLoading = ref(false)
-const detailCourse = ref<CourseSummary | null>(null)
+const detailCourse = ref<CourseDetail | null>(null)
 const detailChapters = ref<{ chapter_id: number; title: string; duration?: number }[]>([])
 
 async function openDetail(course: CourseSummary) {

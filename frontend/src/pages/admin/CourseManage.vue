@@ -111,9 +111,9 @@
             <el-option label="进阶提升 (CATEGORY_04)" value="CATEGORY_04" />
           </el-select>
         </el-form-item>
-        <el-form-item label="专业方向" prop="direction_id">
-          <el-select v-model="formData.direction_id" clearable placeholder="选择专业方向（可选）" style="width: 100%">
-            <el-option v-for="d in directions" :key="d.direction_id" :label="d.name" :value="d.direction_id" />
+        <el-form-item label="专业方向" prop="specialty_id">
+          <el-select v-model="formData.specialty_id" clearable placeholder="选择专业方向（可选）" style="width: 100%">
+            <el-option v-for="d in directions" :key="d.specialty_id" :label="d.name" :value="d.specialty_id" />
           </el-select>
         </el-form-item>
         <el-form-item label="课程等级" prop="level_id">
@@ -149,13 +149,8 @@
           <el-col :span="12">
             <el-form-item label="证书模板" prop="certificate_template_id">
               <el-select v-model="formData.certificate_template_id" clearable placeholder="不关联则留空" style="width: 100%">
-                <el-option v-for="t in certificateTemplates" :key="t.template_id" :label="t.name" :value="t.template_id" />
+                <el-option v-for="t in certificateTemplates" :key="t.id" :label="t.name" :value="t.id" />
               </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="有效期(月)" prop="certificate_valid_months">
-              <el-input-number v-model="formData.certificate_valid_months" :min="0" :max="1200" style="width: 100%" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -275,7 +270,7 @@ const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
 
-const directions = ref<{ direction_id: number; name: string; levels?: { level_id: number; name: string }[] }[]>([])
+const directions = ref<{ specialty_id: number; name: string; levels?: { level_id: number; name: string }[] }[]>([])
 const certificateTemplates = ref<CertificateTemplate[]>([])
 
 const levelOptions = computed(() => {
@@ -307,13 +302,12 @@ const formData: Record<string, any> = reactive({
   course_id: null,
   name: '',
   category: '',
-  direction_id: null,
+  specialty_id: null,
   level_id: null,
   theory_hours: 0,
   practice_hours: 0,
   prerequisite_course_ids: [],
   certificate_template_id: null,
-  certificate_valid_months: null,
   description: '',
   cover_image: '',
   duration: 0
@@ -396,13 +390,12 @@ function resetForm() {
   formData.course_id = null
   formData.name = ''
   formData.category = ''
-  formData.direction_id = null
+  formData.specialty_id = null
   formData.level_id = null
   formData.theory_hours = 0
   formData.practice_hours = 0
   formData.prerequisite_course_ids = []
   formData.certificate_template_id = null
-  formData.certificate_valid_months = null
   formData.description = ''
   formData.cover_image = ''
   formData.duration = 0
@@ -417,7 +410,7 @@ async function loadCatalogMeta() {
   try {
     const res = await trainingApi.getAdminCatalogTree()
     if (res.code === 200) {
-      directions.value = res.data.directions || []
+      directions.value = res.data.specialties || []
     }
   } catch (error) {
     console.error('加载目录信息失败:', error)
@@ -425,7 +418,7 @@ async function loadCatalogMeta() {
   try {
     const res = await trainingApi.getCertificateTemplates()
     if (res.code === 200) {
-      certificateTemplates.value = res.data.templates || []
+      certificateTemplates.value = res.data.certificate_templates || []
     }
   } catch (error) {
     console.error('加载证书模板失败:', error)
