@@ -26,8 +26,8 @@ func NewCourseService(db *gorm.DB, fileService *FileService) *CourseService {
 	return &CourseService{db: db, fileService: fileService}
 }
 
-// GetCourses 课程列表。
-func (s *CourseService) GetCourses(page, pageSize int, category string) map[string]any {
+// GetCourses 课程列表（可额外按专业方向/课程等级过滤）。
+func (s *CourseService) GetCourses(page, pageSize int, category string, specialtyID, levelID *int) map[string]any {
 	if page <= 0 {
 		page = 1
 	}
@@ -38,10 +38,16 @@ func (s *CourseService) GetCourses(page, pageSize int, category string) map[stri
 	if category != "" {
 		q = q.Where("category = ?", category)
 	}
+	if specialtyID != nil {
+		q = q.Where("specialty_id = ?", *specialtyID)
+	}
+	if levelID != nil {
+		q = q.Where("level_id = ?", *levelID)
+	}
 	var total int64
 	q.Count(&total)
 	var courses []model.Course
-	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&courses)
+	q.Order("sort_order ASC, created_at DESC, course_id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&courses)
 	items := make([]map[string]any, 0, len(courses))
 	for i := range courses {
 		items = append(items, courseToDict(&courses[i]))
@@ -80,8 +86,10 @@ func (s *CourseService) GetCourseDetail(courseID, studentID int) (map[string]any
 			progress = record.Progress
 		}
 	}
+	detail := courseToDict(&course)
+	fillCourseMeta(s.db, &course, detail)
 	return map[string]any{
-		"course_info": courseToDict(&course),
+		"course_info": detail,
 		"chapters":    chapterList,
 		"progress":    progress,
 	}, nil
@@ -354,14 +362,20 @@ func roundFloat1(f float64) float64 {
 
 func courseToDict(c *model.Course) map[string]any {
 	return map[string]any{
-		"course_id":   c.CourseID,
-		"name":        c.Name,
-		"category":    c.Category,
-		"description": c.Description,
-		"cover_image": c.CoverImage,
-		"duration":    c.Duration,
-		"status":      c.Status,
-		"created_at":  formatISO(c.CreatedAt),
+		"course_id":               c.CourseID,
+		"name":                    c.Name,
+		"category":                c.Category,
+		"description":             c.Description,
+		"cover_image":             c.CoverImage,
+		"duration":                c.Duration,
+		"specialty_id":            c.SpecialtyID,
+		"level_id":                c.LevelID,
+		"theory_hours":            c.TheoryHours,
+		"practice_hours":          c.PracticeHours,
+		"certificate_template_id": c.CertificateTemplateID,
+		"sort_order":              c.SortOrder,
+		"status":                  c.Status,
+		"created_at":              formatISO(c.CreatedAt),
 	}
 }
 
@@ -417,4 +431,244 @@ func legacyFileEntry(ch *model.Chapter) map[string]any {
 		"file_size":    0,
 		"created_at":   formatISO(ch.CreatedAt),
 	}
+}
+
+// ===== 培训目录扩展辅助（课程等级/学时/前置课程/证书模板） =====
+
+// applyCourseTrainingFields 应用课程培训扩展字段（专业方向/等级/学时/证书模板）。
+// specialty_id / level_id / certificate_template_id 传 0 或空表示清空（置 NULL）。
+func applyCourseTrainingFields(db *gorm.DB, course *model.Course, data map[string]any) error {
+	if v, ok := data["specialty_id"]; ok {
+		id := toInt(v)
+		if id < 0 {
+			return errors.New("专业方向ID无效")
+		}
+		if id == 0 {
+			course.SpecialtyID = nil
+		} else {
+			var count int64
+			if err := db.Model(&model.Specialty{}).Where("specialty_id = ?", id).Count(&count).Error; err != nil {
+				return err
+			}
+			if count == 0 {
+				return errors.New("专业方向不存在")
+			}
+			course.SpecialtyID = ptrInt(id)
+		}
+	}
+	if v, ok := data["level_id"]; ok {
+		id := toInt(v)
+		if id < 0 {
+			return errors.New("课程等级ID无效")
+		}
+		if id == 0 {
+			course.LevelID = nil
+		} else {
+			var count int64
+			if err := db.Model(&model.CourseLevel{}).Where("level_id = ?", id).Count(&count).Error; err != nil {
+				return err
+			}
+			if count == 0 {
+				return errors.New("课程等级不存在")
+			}
+			course.LevelID = ptrInt(id)
+		}
+	}
+	if v, ok := data["certificate_template_id"]; ok {
+		id := toInt(v)
+		if id < 0 {
+			return errors.New("证书模板ID无效")
+		}
+		if id == 0 {
+			course.CertificateTemplateID = nil
+		} else {
+			var count int64
+			if err := db.Model(&model.CertificateTemplate{}).Where("id = ?", id).Count(&count).Error; err != nil {
+				return err
+			}
+			if count == 0 {
+				return errors.New("证书模板不存在")
+			}
+			course.CertificateTemplateID = ptrInt(id)
+		}
+	}
+	if v, ok := data["theory_hours"]; ok {
+		hours := toInt(v)
+		if hours < 0 {
+			return errors.New("理论学时不能为负数")
+		}
+		course.TheoryHours = hours
+	}
+	if v, ok := data["practice_hours"]; ok {
+		hours := toInt(v)
+		if hours < 0 {
+			return errors.New("实操学时不能为负数")
+		}
+		course.PracticeHours = hours
+	}
+	if v, ok := data["sort_order"]; ok {
+		order := toInt(v)
+		if order < 0 {
+			return errors.New("课程排序值不能为负数")
+		}
+		course.SortOrder = order
+	}
+	return nil
+}
+
+// prerequisiteIDsFromData 提取前置课程 ID 列表。
+func prerequisiteIDsFromData(data map[string]any) []int {
+	v, ok := data["prerequisite_course_ids"]
+	if !ok {
+		return nil
+	}
+	return toIntSlice(v)
+}
+
+// toIntSlice 将任意值转为 int 切片（支持 []any / []float64 等 JSON 解码结果）。
+func toIntSlice(v any) []int {
+	switch vals := v.(type) {
+	case []any:
+		out := make([]int, 0, len(vals))
+		for _, item := range vals {
+			out = append(out, toInt(item))
+		}
+		return out
+	case []float64:
+		out := make([]int, 0, len(vals))
+		for _, item := range vals {
+			out = append(out, int(item))
+		}
+		return out
+	case []int:
+		return vals
+	}
+	return nil
+}
+
+// replaceCoursePrerequisites 全量替换课程前置课程关联。
+func replaceCoursePrerequisites(db *gorm.DB, courseID int, prereqIDs []int) error {
+	prereqIDs = dedupeInts(prereqIDs)
+	// 校验前置课程存在且不能指向自己
+	for _, id := range prereqIDs {
+		if id == courseID {
+			return errors.New("课程不能设置为自己的前置课程")
+		}
+		var count int64
+		if err := db.Model(&model.Course{}).Where("course_id = ?", id).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			return errors.New("前置课程不存在")
+		}
+	}
+	if err := checkPrerequisiteCycle(db, courseID, prereqIDs); err != nil {
+		return err
+	}
+	if len(prereqIDs) == 0 {
+		return db.Where("course_id = ?", courseID).Delete(&model.CoursePrerequisite{}).Error
+	}
+	rels := make([]model.CoursePrerequisite, 0, len(prereqIDs))
+	for _, id := range prereqIDs {
+		rels = append(rels, model.CoursePrerequisite{
+			CourseID:             courseID,
+			PrerequisiteCourseID: id,
+			CreatedAt:            beijingNow(),
+		})
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("course_id = ?", courseID).Delete(&model.CoursePrerequisite{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&rels).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+// checkPrerequisiteCycle 检测前置课程依赖是否成环（A→B→A 等）。
+// 从每个新前置课程出发，沿"它的前置课程"向下游遍历，若能回到 courseID 则成环；
+// visited 防止既有数据中已存在的环导致死循环。
+func checkPrerequisiteCycle(db *gorm.DB, courseID int, prereqIDs []int) error {
+	if len(prereqIDs) == 0 {
+		return nil
+	}
+	visited := make(map[int]bool, len(prereqIDs))
+	stack := make([]int, 0, len(prereqIDs))
+	stack = append(stack, prereqIDs...)
+	for len(stack) > 0 {
+		cur := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if cur == courseID {
+			return errors.New("前置课程关系存在循环依赖")
+		}
+		if visited[cur] {
+			continue
+		}
+		visited[cur] = true
+		var next []int
+		if err := db.Model(&model.CoursePrerequisite{}).
+			Where("course_id = ?", cur).
+			Pluck("prerequisite_course_id", &next).Error; err != nil {
+			return err
+		}
+		stack = append(stack, next...)
+	}
+	return nil
+}
+
+// fillCourseMeta 填充课程详情的扩展元数据：
+// specialty / level / certificate_template / prerequisites（前置课程列表）。
+func fillCourseMeta(db *gorm.DB, course *model.Course, detail map[string]any) {
+	if course.SpecialtyID != nil {
+		var spec model.Specialty
+		if err := db.First(&spec, *course.SpecialtyID).Error; err == nil {
+			detail["specialty"] = map[string]any{
+				"specialty_id": spec.SpecialtyID,
+				"code":         spec.Code,
+				"name":         spec.Name,
+			}
+		}
+	}
+	if course.LevelID != nil {
+		var level model.CourseLevel
+		if err := db.First(&level, *course.LevelID).Error; err == nil {
+			detail["level"] = map[string]any{
+				"level_id": level.LevelID,
+				"code":     level.Code,
+				"name":     level.Name,
+			}
+		}
+	}
+	if course.CertificateTemplateID != nil {
+		var tpl model.CertificateTemplate
+		if err := db.First(&tpl, *course.CertificateTemplateID).Error; err == nil {
+			detail["certificate_template"] = map[string]any{
+				"id":            tpl.ID,
+				"code":          tpl.Code,
+				"name":          tpl.Name,
+				"description":   tpl.Description,
+				"validity_days": tpl.ValidityDays,
+				"template_url":  tpl.TemplateURL,
+			}
+		}
+	}
+	// 前置课程（仅返回 id/name，避免嵌套过深）
+	type prereqRow struct {
+		CourseID int
+		Name     string
+	}
+	var prereqs []prereqRow
+	db.Table("course_prerequisite AS cp").
+		Select("cp.prerequisite_course_id AS course_id, c.name").
+		Joins("JOIN course AS c ON c.course_id = cp.prerequisite_course_id").
+		Where("cp.course_id = ?", course.CourseID).
+		Order("c.created_at DESC, c.course_id ASC").
+		Scan(&prereqs)
+	prereqList := make([]map[string]any, 0, len(prereqs))
+	for _, p := range prereqs {
+		prereqList = append(prereqList, map[string]any{"course_id": p.CourseID, "name": p.Name})
+	}
+	detail["prerequisites"] = prereqList
 }

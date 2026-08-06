@@ -36,7 +36,13 @@ func RegisterQuestionBankRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gor
 				kpID = &id
 			}
 		}
-		response.Success(c, svc.ListQuestions(page, pageSize, qType, kpID, status, keyword))
+		var tagID *int
+		if s := c.Query("tag_id"); s != "" {
+			if id, err := strconv.Atoi(s); err == nil {
+				tagID = &id
+			}
+		}
+		response.Success(c, svc.ListQuestions(page, pageSize, qType, kpID, status, keyword, tagID))
 	})
 
 	// POST /api/question-bank/questions  创建题目

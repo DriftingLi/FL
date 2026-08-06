@@ -277,6 +277,18 @@ const routes: RouteRecordRaw[] = [
         meta: { navKey: 'courses', navLabel: '课程管理', navGroup: 'education' }
       },
       {
+        path: 'course-catalog',
+        name: 'CourseCatalog',
+        component: () => import('@/pages/admin/CourseCatalog.vue'),
+        meta: { navKey: 'course-catalog', navLabel: '课程目录', navGroup: 'education' }
+      },
+      {
+        path: 'question-tags',
+        name: 'QuestionTags',
+        component: () => import('@/pages/admin/QuestionTags.vue'),
+        meta: { navKey: 'question-tags', navLabel: '题库标签', navGroup: 'education' }
+      },
+      {
         path: 'question-review',
         name: 'QuestionReview',
         component: () => import('@/pages/admin/QuestionReview.vue'),

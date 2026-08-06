@@ -17,6 +17,30 @@
           {{ cat.label }}
         </button>
       </div>
+      <div v-if="directions.length > 0" class="direction-pills">
+        <span class="filter-label">专业方向</span>
+        <button
+          v-for="d in directions"
+          :key="d.specialty_id"
+          class="pill"
+          :class="{ active: currentDirectionId === d.specialty_id }"
+          @click="selectDirection(d.specialty_id)"
+        >
+          {{ d.name }}
+        </button>
+      </div>
+      <div v-if="currentDirectionId !== null && currentLevels.length > 0" class="direction-pills">
+        <span class="filter-label">课程等级</span>
+        <button
+          v-for="l in currentLevels"
+          :key="l.level_id"
+          class="pill level-pill"
+          :class="{ active: currentLevelId === l.level_id }"
+          @click="currentLevelId = l.level_id; currentPage = 1; loadCourses()"
+        >
+          {{ l.name }}
+        </button>
+      </div>
     </div>
 
     <div class="course-content" v-loading="loading">
@@ -25,7 +49,7 @@
           v-for="course in courses"
           :key="course.course_id"
           class="course-card"
-          @click="goToCourse(course.course_id)"
+          @click="openDetail(course)"
         >
           <div class="card-cover" :class="getCategoryClass(course.category)">
             <img
@@ -38,6 +62,7 @@
               <span>{{ course.name.charAt(0) }}</span>
             </div>
             <span class="category-tag">{{ getCategoryName(course.category) }}</span>
+            <span v-if="levelNameOf(course.level_id)" class="level-tag">{{ levelNameOf(course.level_id) }}</span>
           </div>
           <div class="card-body">
             <h3 class="course-name">{{ course.name }}</h3>
@@ -51,9 +76,13 @@
                 <el-icon><Timer /></el-icon>
                 {{ formatDuration(course.duration) }}
               </span>
+              <span class="meta-item" v-if="course.theory_hours || course.practice_hours">
+                <el-icon><Clock /></el-icon>
+                理论{{ course.theory_hours || 0 }}学时 · 实操{{ course.practice_hours || 0 }}学时
+              </span>
             </div>
             <div class="card-action">
-              <span class="action-text">开始学习</span>
+              <span class="action-text">查看详情</span>
               <el-icon><ArrowRight /></el-icon>
             </div>
           </div>
@@ -85,33 +114,118 @@
         @current-change="handlePageChange"
       />
     </div>
+
+    <!-- 课程详情（学时/前置/证书/章节） -->
+    <el-dialog
+      v-model="detailVisible"
+      :title="detailCourse?.name || '课程详情'"
+      width="680px"
+      class="course-detail-dialog"
+      destroy-on-close
+    >
+      <div v-loading="detailLoading">
+        <template v-if="detailCourse">
+          <div class="detail-brief">
+            <el-tag v-if="detailCourse.level?.name" type="warning">{{ detailCourse.level.name }}</el-tag>
+            <el-tag v-if="detailCourse.specialty?.name" type="primary" effect="plain">{{ detailCourse.specialty.name }}</el-tag>
+            <el-tag v-if="detailCourse.category" effect="plain">{{ getCategoryName(detailCourse.category) }}</el-tag>
+          </div>
+          <p class="detail-desc">{{ detailCourse.description || '暂无简介' }}</p>
+
+          <el-descriptions :column="2" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="理论学时">{{ detailCourse.theory_hours ?? '-' }} 学时</el-descriptions-item>
+            <el-descriptions-item label="实操学时">{{ detailCourse.practice_hours ?? '-' }} 学时</el-descriptions-item>
+            <el-descriptions-item label="章节数">{{ detailCourse.chapter_count ?? '-' }}</el-descriptions-item>
+            <el-descriptions-item label="课程时长">{{ detailCourse.duration ? formatDuration(detailCourse.duration) : '-' }}</el-descriptions-item>
+            <el-descriptions-item label="关联证书">
+              <template v-if="detailCourse.certificate_template">
+                {{ detailCourse.certificate_template.name }}
+                <span v-if="detailCourse.certificate_template.validity_days" class="cert-valid">
+                  （有效期 {{ detailCourse.certificate_template.validity_days }} 天）
+                </span>
+              </template>
+              <span v-else>—</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="前置课程">
+              <template v-if="detailCourse.prerequisites && detailCourse.prerequisites.length > 0">
+                <el-tag
+                  v-for="p in detailCourse.prerequisites"
+                  :key="p.course_id"
+                  size="small"
+                  type="info"
+                  class="prereq-tag"
+                >{{ p.name }}</el-tag>
+              </template>
+              <span v-else>—</span>
+            </el-descriptions-item>
+          </el-descriptions>
+
+          <div class="chapter-section">
+            <h4>章节内容（{{ detailChapters.length }}）</h4>
+            <div v-if="detailChapters.length > 0" class="chapter-list">
+              <div
+                v-for="(ch, i) in detailChapters"
+                :key="ch.chapter_id"
+                class="chapter-row"
+                @click="goToChapter(ch)"
+              >
+                <span class="chapter-index">{{ i + 1 }}</span>
+                <span class="chapter-title">{{ ch.title }}</span>
+                <span v-if="ch.duration" class="chapter-duration">{{ ch.duration }}分钟</span>
+                <el-icon class="chapter-arrow"><ArrowRight /></el-icon>
+              </div>
+            </div>
+            <el-empty v-else description="该课程暂无章节内容" :image-size="60" />
+          </div>
+        </template>
+      </div>
+      <template #footer>
+        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button
+          v-if="detailChapters.length > 0"
+          type="primary"
+          @click="goToChapter(detailChapters[0])"
+        >开始学习</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Document, Timer, ArrowRight } from '@element-plus/icons-vue'
+import { Document, Timer, Clock, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { courseApi } from '@/api/course'
+import { courseApi, type CourseDetail, type CourseSummary } from '@/api/course'
+import { trainingApi } from '@/api/training'
 import { vLazy } from '@/composables/useLazyLoad'
 
 const router = useRouter()
 
 const loading = ref(false)
-const courses = ref<{
-  course_id: number
-  name: string
-  category?: string
-  cover_image?: string
-  description?: string
-  chapter_count?: number
-  duration?: number
-}[]>([])
+const courses = ref<CourseSummary[]>([])
 const currentCategory = ref('')
 const currentPage = ref(1)
 const pageSize = ref(12)
 const total = ref(0)
+
+const directions = ref<{ specialty_id: number; name: string; levels?: { level_id: number; name: string }[] }[]>([])
+const currentDirectionId = ref<number | null>(null)
+const currentLevelId = ref<number | null>(null)
+
+const currentLevels = computed(() => {
+  const d = directions.value.find(dir => dir.specialty_id === currentDirectionId.value)
+  return d?.levels || []
+})
+
+function levelNameOf(levelId?: number | null) {
+  if (!levelId) return ''
+  for (const d of directions.value) {
+    const l = (d.levels || []).find(item => item.level_id === levelId)
+    if (l) return l.name
+  }
+  return ''
+}
 
 const categories = [
   { value: '', label: '全部' },
@@ -162,6 +276,12 @@ async function loadCourses() {
     if (currentCategory.value) {
       params.category = currentCategory.value
     }
+    if (currentDirectionId.value !== null) {
+      params.specialty_id = currentDirectionId.value
+    }
+    if (currentLevelId.value !== null) {
+      params.level_id = currentLevelId.value
+    }
     const res = await courseApi.getCourses(params)
     if (res.code === 200) {
       courses.value = res.data.courses
@@ -175,6 +295,24 @@ async function loadCourses() {
   }
 }
 
+async function loadDirections() {
+  try {
+    const res = await trainingApi.getCatalogTree()
+    if (res.code === 200) {
+      directions.value = res.data.specialties || []
+    }
+  } catch (error) {
+    console.error('加载目录失败:', error)
+  }
+}
+
+function selectDirection(directionId: number) {
+  currentDirectionId.value = currentDirectionId.value === directionId ? null : directionId
+  currentLevelId.value = null
+  currentPage.value = 1
+  loadCourses()
+}
+
 function handlePageChange() {
   loadCourses()
 }
@@ -184,27 +322,43 @@ function handleSizeChange() {
   loadCourses()
 }
 
-async function goToCourse(courseId: number) {
-  // 课程详情页已移除：点击课程直接跳转第一章，无章节时给出提示
+// ===== 课程详情 =====
+const detailVisible = ref(false)
+const detailLoading = ref(false)
+const detailCourse = ref<CourseDetail | null>(null)
+const detailChapters = ref<{ chapter_id: number; title: string; duration?: number }[]>([])
+
+async function openDetail(course: CourseSummary) {
+  detailCourse.value = course
+  detailVisible.value = true
+  detailLoading.value = true
+  detailChapters.value = []
   try {
-    const res = await courseApi.getCourseDetail(courseId)
-    if (res.code === 200 && res.data.chapters && res.data.chapters.length > 0) {
-      const firstChapter = res.data.chapters[0]
-      router.push({
-        name: 'ChapterView',
-        params: { courseId, chapterId: firstChapter.chapter_id }
-      })
-    } else {
-      ElMessage.warning('该课程暂无章节内容')
+    const res = await courseApi.getCourseDetail(course.course_id)
+    if (res.code === 200) {
+      detailCourse.value = { ...course, ...(res.data.course_info || {}) }
+      detailChapters.value = res.data.chapters || []
     }
   } catch (error) {
-    console.error('加载课程失败:', error)
-    ElMessage.error('加载课程失败，请稍后重试')
+    console.error('加载课程详情失败:', error)
+    ElMessage.error('加载课程详情失败，请稍后重试')
+  } finally {
+    detailLoading.value = false
   }
+}
+
+function goToChapter(ch: { chapter_id: number }) {
+  if (!detailCourse.value) return
+  detailVisible.value = false
+  router.push({
+    name: 'ChapterView',
+    params: { courseId: detailCourse.value.course_id, chapterId: ch.chapter_id }
+  })
 }
 
 onMounted(() => {
   loadCourses()
+  loadDirections()
 })
 </script>
 
@@ -234,7 +388,9 @@ onMounted(() => {
 
 .filter-bar {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .category-pills {
@@ -242,6 +398,140 @@ onMounted(() => {
   gap: var(--space-2);
   flex-wrap: wrap;
   justify-content: center;
+}
+
+.direction-pills {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.filter-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  font-weight: var(--font-medium);
+  margin-right: var(--space-1);
+}
+
+.direction-pills .pill {
+  border-color: var(--color-primary-200);
+  background: var(--color-primary-50);
+}
+
+.level-pill {
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+}
+
+.level-tag {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(230, 162, 60, 0.92);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cert-valid {
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+}
+
+.prereq-tag {
+  margin: 2px 4px 2px 0;
+}
+
+.chapter-section {
+  margin-top: var(--space-5);
+}
+
+.chapter-section h4 {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-3);
+}
+
+.chapter-list {
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.chapter-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border-light);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-default);
+}
+
+.chapter-row:last-child {
+  border-bottom: none;
+}
+
+.chapter-row:hover {
+  background: var(--color-bg-muted);
+}
+
+.chapter-index {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary-100);
+  color: var(--color-primary-600);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chapter-title {
+  flex: 1;
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+}
+
+.chapter-duration {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+.chapter-arrow {
+  color: var(--color-text-tertiary);
+}
+
+.detail-brief {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.detail-desc {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-4);
+}
+
+.detail-descriptions {
+  margin-bottom: var(--space-4);
+}
+
+@media (max-width: 768px) {
+  .detail-descriptions :deep(.el-descriptions__body .el-descriptions__table) {
+    display: block;
+  }
 }
 
 .pill {

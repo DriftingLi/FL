@@ -29,6 +29,10 @@ export const practiceModeApi = {
   getFreeQuestions(params?: { count?: number; type?: string; knowledge_point_id?: number; category?: string }) {
     return request.get<Question[]>('/practice-mode/free', { params })
   },
+  // 标签练习：按题库标签抽题（返回结构与 /free 一致、不含答案）
+  getTagQuestions(params: { tag_id: number; count?: number }) {
+    return request.get<Question[]>('/practice-mode/tag', { params })
+  },
   // 顺序练习：开始/续练，返回当前批次题目 + 进度
   startSequential() {
     return request.get<{ questions?: Question[]; progress?: PracticeProgressData }>('/practice-mode/sequential')

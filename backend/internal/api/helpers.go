@@ -1,6 +1,10 @@
 package api
 
-import "strconv"
+import (
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+)
 
 // atoiDefault 字符串转 int，失败或为空时返回默认值。
 func atoiDefault(s string, def int) int {
@@ -12,4 +16,17 @@ func atoiDefault(s string, def int) int {
 		return def
 	}
 	return v
+}
+
+// queryIntPtr 解析整型查询参数，非法或缺失时返回 nil。
+func queryIntPtr(c *gin.Context, key string) *int {
+	s := c.Query(key)
+	if s == "" {
+		return nil
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		return nil
+	}
+	return &v
 }
