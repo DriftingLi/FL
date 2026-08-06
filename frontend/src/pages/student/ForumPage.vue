@@ -36,6 +36,10 @@
               <span class="meta-divider">·</span>
               <span>{{ formatTime(topic.created_at) }}</span>
               <span class="meta-right">
+                <span v-if="topic.images && topic.images.length > 0" class="img-mark">
+                  <el-icon><Picture /></el-icon>
+                  {{ topic.images.length }}
+                </span>
                 <el-icon><View /></el-icon>
                 {{ topic.view_count }}
                 <el-icon class="reply-icon"><ChatDotRound /></el-icon>
@@ -78,6 +82,9 @@
             placeholder="请输入内容（1-10000 字）"
           />
         </el-form-item>
+        <el-form-item label="图片">
+          <ForumImageUploader v-model="createForm.images" :max="9" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="createDialogVisible = false">取消</el-button>
@@ -91,8 +98,9 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { EditPen, View, ChatDotRound } from '@element-plus/icons-vue'
+import { EditPen, View, ChatDotRound, Picture } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem } from '@/api/forum'
+import ForumImageUploader from '@/components/student/ForumImageUploader.vue'
 
 const router = useRouter()
 
@@ -103,7 +111,7 @@ const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
 const createDialogVisible = ref(false)
-const createForm = ref<{ title: string; content: string }>({ title: '', content: '' })
+const createForm = ref<{ title: string; content: string; images: string[] }>({ title: '', content: '', images: [] })
 
 function displayName(author: ForumTopicItem['author']) {
   return author.nickname || author.name || author.username
@@ -146,7 +154,7 @@ async function loadTopics() {
 }
 
 function openCreateDialog() {
-  createForm.value = { title: '', content: '' }
+  createForm.value = { title: '', content: '', images: [] }
   createDialogVisible.value = true
 }
 
@@ -159,7 +167,7 @@ async function submitTopic() {
   }
   submitting.value = true
   try {
-    const res = await forumApi.createTopic({ chapter_id: null, title, content })
+    const res = await forumApi.createTopic({ chapter_id: null, title, content, images: createForm.value.images })
     if (res.code === 200 || res.code === 201) {
       ElMessage.success('发布成功')
       createDialogVisible.value = false
@@ -286,6 +294,14 @@ onMounted(loadTopics)
 
 .reply-icon {
   margin-left: 10px;
+}
+
+.img-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 10px;
+  color: #e6a23c;
 }
 
 .pagination-wrapper {

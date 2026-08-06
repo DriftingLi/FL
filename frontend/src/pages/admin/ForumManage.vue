@@ -40,6 +40,10 @@
           <template #default="{ row }">
             <div v-loading="detailLoadingId === row.id" class="expand-replies">
               <template v-if="replyMap[row.id]">
+                <div class="topic-content">
+                  <div class="topic-content-text">{{ row.content }}</div>
+                  <ForumImageGallery :images="row.images" />
+                </div>
                 <div v-if="replyMap[row.id].length > 0" class="reply-list">
                   <div v-for="reply in replyMap[row.id]" :key="reply.id" class="reply-item">
                     <div class="reply-meta">
@@ -61,6 +65,7 @@
                       </el-button>
                     </div>
                     <div class="reply-content">{{ reply.content }}</div>
+                    <ForumImageGallery :images="reply.images" />
                   </div>
                 </div>
                 <el-empty v-else description="暂无回复" :image-size="60" />
@@ -118,6 +123,7 @@ import {
   type AdminForumTopic,
   type AdminForumReply
 } from '@/api/admin'
+import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 
 const loading = ref(false)
 const topics = ref<AdminForumTopic[]>([])
@@ -278,6 +284,20 @@ onMounted(loadList)
 
 .expand-replies {
   padding: 8px 20px 8px 60px;
+}
+
+.topic-content {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.topic-content-text {
+  font-size: 14px;
+  color: #303133;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .reply-list {

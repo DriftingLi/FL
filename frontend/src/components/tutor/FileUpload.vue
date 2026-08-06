@@ -22,8 +22,8 @@
     >
       <el-icon class="upload-icon" :size="40"><UploadFilled /></el-icon>
       <p class="upload-text">将文件拖到此处，或<em>点击上传</em></p>
-      <p class="upload-tip">支持格式：PDF 文档、PPT、MP4、WebM、图片</p>
-      <p class="upload-tip">视频文件最大200MB，图片最大20MB，其他文件最大50MB</p>
+      <p class="upload-tip">支持格式：PDF 文档、PPT、MP4、WebM（图片请粘贴到图文正文）</p>
+      <p class="upload-tip">视频文件最大200MB，其他文件最大50MB</p>
     </div>
 
     <input
@@ -138,7 +138,6 @@ import {
   UploadFilled,
   Document,
   VideoCamera,
-  Picture,
   RefreshRight,
   CircleCheck,
   CircleClose,
@@ -181,11 +180,10 @@ const activeFilter = ref(props.initialFilter || 'all')
 let uidCounter = 0
 
 const filterOptions = [
-  { label: '全部', value: 'all', accept: '.pdf,.ppt,.pptx,.mp4,.webm,.jpg,.jpeg,.png,.gif,.webp,.svg' },
+  { label: '全部', value: 'all', accept: '.pdf,.ppt,.pptx,.mp4,.webm' },
   { label: '文档', value: 'document', accept: '.pdf' },
   { label: 'PPT', value: 'ppt', accept: '.ppt,.pptx' },
-  { label: '视频', value: 'video', accept: '.mp4,.webm' },
-  { label: '图片', value: 'image', accept: '.jpg,.jpeg,.png,.gif,.webp,.svg' }
+  { label: '视频', value: 'video', accept: '.mp4,.webm' }
 ]
 
 const currentAccept = computed(() => {
@@ -200,20 +198,17 @@ const successCount = computed(() => {
 const typeCategoryMap: Record<string, string> = {
   pdf: 'document',
   ppt: 'ppt', pptx: 'ppt',
-  mp4: 'video', webm: 'video',
-  jpg: 'image', jpeg: 'image', png: 'image', gif: 'image', webp: 'image', svg: 'image'
+  mp4: 'video', webm: 'video'
 }
 
 const maxSizeMap: Record<string, number> = {
   video: 200 * 1024 * 1024,
-  image: 20 * 1024 * 1024,
   document: 50 * 1024 * 1024,
   ppt: 50 * 1024 * 1024
 }
 
 const maxSizeMBMap: Record<string, number> = {
   video: 200,
-  image: 20,
   document: 50,
   ppt: 50
 }
@@ -294,7 +289,6 @@ function getFileIcon(ext: string) {
   const category = getFileCategory(ext)
   switch (category) {
     case 'video': return VideoCamera
-    case 'image': return Picture
     default: return Document
   }
 }
@@ -303,8 +297,7 @@ function getFileTypeTagType(category: string) {
   const types: Record<string, string> = {
     document: '',
     ppt: 'warning',
-    video: 'danger',
-    image: 'success'
+    video: 'danger'
   }
   return types[category] || 'info'
 }
@@ -313,8 +306,7 @@ function getFileTypeLabel(category: string) {
   const labels: Record<string, string> = {
     document: '文档',
     ppt: 'PPT',
-    video: '视频',
-    image: '图片'
+    video: '视频'
   }
   return labels[category] || '文件'
 }

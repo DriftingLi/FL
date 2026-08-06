@@ -10,14 +10,15 @@ import (
 	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/internal/storage"
 	"forklift-training/pkg/response"
 )
 
 // RegisterAdminRoutes 注册 /api/admin 蓝图（管理员后台）。
 // aiConfigSvc 由上层 NewRouter 创建并传入，便于 AI 助手模块复用同一实例。
-func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, aiConfigSvc *service.AIConfigService) {
+func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, aiConfigSvc *service.AIConfigService, st storage.Storage) {
 	adminSvc := service.NewAdminService(db)
-	courseSvc := service.NewAdminCourseService(db)
+	courseSvc := service.NewAdminCourseService(db, service.NewFileService(cfg.LibreOfficeSidecarURL, st))
 	authSvc := service.NewAuthService(db, cfg.JWTSecretKey, cfg.JWTExpiry(),
 		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student)
 

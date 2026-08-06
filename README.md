@@ -145,7 +145,7 @@
 │   ├── pkg/
 │   │   ├── response/             # 统一响应结构
 │   │   └── pdf/                  # 中文 PDF 报告（gofpdf + SimHei）
-│   ├── migrations/               # 迁移脚本（000001 ~ 000024）
+│   ├── migrations/               # 迁移脚本（000001 ~ 000028）
 │   ├── Dockerfile / entrypoint.sh / Makefile
 │   ├── docker-compose.yml        # 本地 postgres + redis + libreoffice
 │   ├── .env                      # 本地开发环境变量（gitignore，不入库）
@@ -324,7 +324,7 @@ npm run type-check   # vue-tsc 类型检查
 
 ## 数据库迁移
 
-迁移脚本位于 `backend/migrations/`，采用 `序号_名称.up.sql` / `.down.sql` 成对组织，当前共 **16 组**（000001 ~ 000016）：
+迁移脚本位于 `backend/migrations/`，采用 `序号_名称.up.sql` / `.down.sql` 成对组织，当前共 **28 组**（000001 ~ 000028）：
 
 | 迁移 | 说明 |
 | --- | --- |
@@ -349,6 +349,12 @@ npm run type-check   # vue-tsc 类型检查
 | `000020_notifications` | 站内信通知表（P0 通知基础设施，当前仅站内信） |
 | `000021_audit_logs` | 管理员/讲师操作审计日志表（P0 合规） |
 | `000022_email_auth` | 邮箱注册/登录：hrwai_users.email 非空唯一索引 |
+| `000023_auth_framework` | 多登录方式框架：微信身份字段（账号/手机号/邮箱独立） |
+| `000024_training_catalog` | 培训目录（等级/学时/证书/题库标签） |
+| `000025_course_sort_order` | 课程排序字段 |
+| `000026_evaluation_factuality` | 评估结果事实性（K 系数/残值/建议时点锁定） |
+| `000027_fix_stale_student_fks` | 修复 7 张表 student_id 外键仍指向 _deprecated_student（统一账号后刷题/进度/错题/学习记录写入失败） |
+| `000028_forum_images` | 论坛发图（图文分离）：forum_topics / forum_replies 增加 images JSONB 列 |
 
 执行 / 回滚：`make migrate-up` / `make migrate-down`。
 

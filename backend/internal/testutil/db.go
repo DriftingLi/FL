@@ -63,6 +63,8 @@ func allModels() []interface{} {
 		&model.QuestionPracticeRecord{},
 		&model.WrongQuestion{},
 		&model.MockExam{},
+		&model.ForumTopic{},
+		&model.ForumReply{},
 		&model.AIGenerationLog{},
 		&model.AsyncTask{},
 	}

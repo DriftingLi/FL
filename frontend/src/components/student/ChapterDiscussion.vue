@@ -31,6 +31,7 @@
 
           <div v-if="expandedTopicId === topic.id" v-loading="detailLoading" class="discussion-detail">
             <div class="detail-content">{{ detailContent }}</div>
+            <ForumImageGallery :images="expandedTopic?.images" />
 
             <div class="detail-replies">
               <template v-if="replies.length > 0">
@@ -52,6 +53,7 @@
                     回复 @{{ reply.parent_name }}
                   </div>
                   <div class="reply-content">{{ reply.content }}</div>
+                  <ForumImageGallery :images="reply.images" />
                 </div>
               </template>
               <el-empty v-else description="还没有回复" :image-size="60" />
@@ -71,6 +73,7 @@
                 />
                 <el-button type="primary" :loading="replying" @click="submitReply(topic.id)">发表</el-button>
               </div>
+              <ForumImageUploader v-model="replyImages" :max="3" />
             </div>
 
             <div class="detail-actions">
@@ -99,6 +102,9 @@
             placeholder="请输入内容（1-10000 字）"
           />
         </el-form-item>
+        <el-form-item label="图片">
+          <ForumImageUploader v-model="createForm.images" :max="9" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="createVisible = false">取消</el-button>
@@ -113,6 +119,8 @@ import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { EditPen, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
+import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
+import ForumImageUploader from '@/components/student/ForumImageUploader.vue'
 
 const props = defineProps<{
   chapterId: number
@@ -128,9 +136,10 @@ const expandedTopic = ref<ForumTopicItem | null>(null)
 const detailContent = ref('')
 const replies = ref<ForumReplyItem[]>([])
 const replyContent = ref('')
+const replyImages = ref<string[]>([])
 const replyingTo = ref<{ id: number; name: string } | null>(null)
 const createVisible = ref(false)
-const createForm = ref({ title: '', content: '' })
+const createForm = ref<{ title: string; content: string; images: string[] }>({ title: '', content: '', images: [] })
 
 function displayName(author: ForumTopicItem['author']) {
   return author.nickname || author.name || author.username
@@ -204,7 +213,7 @@ async function loadDetail(topicId: number) {
 }
 
 function openCreate() {
-  createForm.value = { title: '', content: '' }
+  createForm.value = { title: '', content: '', images: [] }
   createVisible.value = true
 }
 
@@ -217,7 +226,7 @@ async function submitCreate() {
   }
   creating.value = true
   try {
-    const res = await forumApi.createTopic({ chapter_id: props.chapterId, title, content })
+    const res = await forumApi.createTopic({ chapter_id: props.chapterId, title, content, images: createForm.value.images })
     if (res.code === 200 || res.code === 201) {
       ElMessage.success('发布成功')
       createVisible.value = false
@@ -243,10 +252,11 @@ async function submitReply(topicId: number) {
   }
   replying.value = true
   try {
-    const res = await forumApi.replyTopic(topicId, content, replyingTo.value?.id)
+    const res = await forumApi.replyTopic(topicId, content, replyingTo.value?.id, replyImages.value)
     if (res.code === 200 || res.code === 201) {
       ElMessage.success('回复成功')
       replyContent.value = ''
+      replyImages.value = []
       replyingTo.value = null
       await Promise.all([loadDetail(topicId), loadTopics()])
     }

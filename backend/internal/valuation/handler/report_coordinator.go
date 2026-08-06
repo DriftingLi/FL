@@ -121,6 +121,7 @@ func (c *ReportCoordinator[T]) resolveDownloadURL(ctx context.Context, id int64)
 }
 
 // generateAndUpload 生成 PDF 并上传，返回 URL 与文件大小（Generate 响应需要 size）。
+// 新 PDF 上传并回写成功后删除旧 PDF（避免存储累积历史报告文件；删除失败仅告警不影响主流程）。
 func (c *ReportCoordinator[T]) generateAndUpload(ctx context.Context, id int64, rec *T) (string, int, error) {
 	pdfBytes, err := c.generator(ctx, rec)
 	if err != nil {
@@ -133,6 +134,12 @@ func (c *ReportCoordinator[T]) generateAndUpload(ctx context.Context, id int64, 
 	}
 	if err := c.writer(ctx, id, url); err != nil {
 		c.logger.Warn("回写报告路径失败", zap.Error(err), zap.Int64("id", id))
+	}
+	// 清理旧 PDF（新文件已上传成功，删除旧文件失败不影响可用性）
+	if oldURL := c.pathOf(rec); oldURL != "" && oldURL != url {
+		if err := c.storage.Delete(ctx, oldURL); err != nil {
+			c.logger.Warn("删除旧报告失败", zap.Error(err), zap.Int64("id", id), zap.String("old_url", oldURL))
+		}
 	}
 	return url, len(pdfBytes), nil
 }

@@ -33,6 +33,7 @@
             <h1 class="topic-title">{{ topic.title }}</h1>
           </div>
           <div class="topic-content">{{ topic.content }}</div>
+          <ForumImageGallery :images="topic.images" />
           <div class="topic-stats">
             <el-icon><View /></el-icon>
             {{ topic.view_count }} 次浏览
@@ -76,6 +77,7 @@
                 回复 @{{ reply.parent_name }}
               </div>
               <div class="reply-content">{{ reply.content }}</div>
+              <ForumImageGallery :images="reply.images" />
             </div>
           </div>
         </template>
@@ -96,6 +98,7 @@
           show-word-limit
           placeholder="写下你的回复…"
         />
+        <ForumImageUploader v-model="replyImages" :max="3" />
         <div class="editor-actions">
           <el-button type="primary" :loading="submitting" @click="submitReply">发表回复</el-button>
         </div>
@@ -110,6 +113,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, View, ChatDotRound } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
+import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
+import ForumImageUploader from '@/components/student/ForumImageUploader.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -119,6 +124,7 @@ const submitting = ref(false)
 const topic = ref<ForumTopicItem | null>(null)
 const replies = ref<ForumReplyItem[]>([])
 const replyContent = ref('')
+const replyImages = ref<string[]>([])
 const replyingTo = ref<{ id: number; name: string } | null>(null)
 
 function displayName(author: ForumTopicItem['author']) {
@@ -168,10 +174,11 @@ async function submitReply() {
   submitting.value = true
   try {
     const topicId = Number(route.params.topicId)
-    const res = await forumApi.replyTopic(topicId, content, replyingTo.value?.id)
+    const res = await forumApi.replyTopic(topicId, content, replyingTo.value?.id, replyImages.value)
     if (res.code === 200 || res.code === 201) {
       ElMessage.success('回复成功')
       replyContent.value = ''
+      replyImages.value = []
       replyingTo.value = null
       loadDetail()
     }

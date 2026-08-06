@@ -3,6 +3,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 
 	"gorm.io/gorm"
 
@@ -11,12 +12,13 @@ import (
 
 // AdminCourseService 管理端课程服务。
 type AdminCourseService struct {
-	db *gorm.DB
+	db      *gorm.DB
+	fileSvc *FileService
 }
 
-// NewAdminCourseService 创建管理端课程服务实例。
-func NewAdminCourseService(db *gorm.DB) *AdminCourseService {
-	return &AdminCourseService{db: db}
+// NewAdminCourseService 创建管理端课程服务实例。fileSvc 用于删除章节时清理幻灯片/图文图片（可 nil，nil 时跳过）。
+func NewAdminCourseService(db *gorm.DB, fileSvc *FileService) *AdminCourseService {
+	return &AdminCourseService{db: db, fileSvc: fileSvc}
 }
 
 // GetCourses 管理端课程列表。
@@ -227,7 +229,8 @@ func (s *AdminCourseService) UpdateChapter(chapterID int, data map[string]any) (
 	return chapterToDict(&chapter), nil
 }
 
-// DeleteChapter 删除章节。
+// DeleteChapter 删除章节，并清理章节关联的存储文件：
+// PPT 幻灯片（slides/<chapterID>/ 前缀）与图文 Markdown 图片（images/chapters/<chapterID>/ 前缀）。
 func (s *AdminCourseService) DeleteChapter(chapterID int) (map[string]any, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
@@ -235,6 +238,10 @@ func (s *AdminCourseService) DeleteChapter(chapterID int) (map[string]any, error
 	}
 	if err := s.db.Delete(&chapter).Error; err != nil {
 		return nil, err
+	}
+	if s.fileSvc != nil {
+		s.fileSvc.DeleteFiles(s.fileSvc.ListFiles(fmt.Sprintf("slides/%d", chapterID)))
+		s.fileSvc.DeleteFiles(s.fileSvc.ListFiles(fmt.Sprintf("images/chapters/%d", chapterID)))
 	}
 	return map[string]any{"chapter_id": chapterID}, nil
 }

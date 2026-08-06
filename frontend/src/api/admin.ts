@@ -83,6 +83,7 @@ export interface AdminForumTopic {
   chapter_title?: string
   title: string
   content: string
+  images?: string[]
   view_count: number
   reply_count: number
   last_reply_at?: string | null
@@ -102,6 +103,7 @@ export interface AdminForumReply {
   parent_id?: number | null
   parent_name?: string
   content: string
+  images?: string[]
   created_at: string
   author: {
     user_id: number

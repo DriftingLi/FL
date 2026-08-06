@@ -4,6 +4,7 @@ package api
 
 import (
 	"errors"
+	"io"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -12,14 +13,51 @@ import (
 	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/internal/storage"
 	"forklift-training/pkg/response"
 )
 
 // RegisterForumRoutes 注册 /api/forum 蓝图（需登录，hrwai_user）。
-func RegisterForumRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
-	svc := service.NewForumService(db)
+func RegisterForumRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage) {
+	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st)
+	svc := service.NewForumService(db, fileSvc)
 
 	g := rg.Group("/forum", middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
+
+	// POST /api/forum/upload-image  上传论坛图片（图文分离，先传图后随发帖/回复提交 URL）
+	// 返回统一信封：{ code: 0, message: "图片上传成功", data: { url } }
+	g.POST("/upload-image", func(c *gin.Context) {
+		file, err := c.FormFile("file")
+		if err != nil {
+			response.BadRequest(c, "未找到上传文件")
+			return
+		}
+		if file.Filename == "" {
+			response.BadRequest(c, "未选择文件")
+			return
+		}
+		src, err := file.Open()
+		if err != nil {
+			response.ServerError(c, "图片上传失败")
+			return
+		}
+		defer src.Close()
+		content, err := io.ReadAll(src)
+		if err != nil {
+			response.ServerError(c, "图片上传失败")
+			return
+		}
+		if ok, msg := fileSvc.ValidateImageFile(file.Filename, file.Size); !ok {
+			response.BadRequest(c, msg)
+			return
+		}
+		url, err := fileSvc.SaveFile(content, file.Filename, service.ForumImageDirPrefix)
+		if err != nil {
+			response.ServerError(c, "图片上传失败: "+err.Error())
+			return
+		}
+		response.SuccessWithMsg(c, "图片上传成功", gin.H{"url": url})
+	})
 
 	// GET /api/forum/topics?scope=all|general|chapter&chapter_id=&page=&page_size=&keyword=
 	g.GET("/topics", func(c *gin.Context) {
@@ -35,20 +73,21 @@ func RegisterForumRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 		response.Success(c, result)
 	})
 
-	// POST /api/forum/topics 发帖（chapter_id 为空/0 表示发到综合讨论区）
+	// POST /api/forum/topics 发帖（chapter_id 为空/0 表示发到综合讨论区；images 为图片 URL 数组，最多 9 张）
 	g.POST("/topics", func(c *gin.Context) {
 		uid, _ := c.Get(string(middleware.CtxUserID))
 		userID, _ := uid.(int)
 		var req struct {
-			ChapterID *int   `json:"chapter_id"`
-			Title     string `json:"title"`
-			Content   string `json:"content"`
+			ChapterID *int     `json:"chapter_id"`
+			Title     string   `json:"title"`
+			Content   string   `json:"content"`
+			Images    []string `json:"images"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			response.BadRequest(c, "请求参数错误")
 			return
 		}
-		topic, err := svc.CreateTopic(userID, req.ChapterID, req.Title, req.Content)
+		topic, err := svc.CreateTopic(userID, req.ChapterID, req.Title, req.Content, req.Images)
 		if err != nil {
 			response.BadRequest(c, err.Error())
 			return
@@ -77,7 +116,7 @@ func RegisterForumRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 		response.Success(c, result)
 	})
 
-	// POST /api/forum/topics/:id/replies 回复
+	// POST /api/forum/topics/:id/replies 回复（images 为图片 URL 数组，最多 3 张）
 	g.POST("/topics/:id/replies", func(c *gin.Context) {
 		uid, _ := c.Get(string(middleware.CtxUserID))
 		userID, _ := uid.(int)
@@ -87,14 +126,15 @@ func RegisterForumRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 			return
 		}
 		var req struct {
-			Content       string `json:"content"`
-			ParentReplyID *int64 `json:"parent_reply_id"`
+			Content       string   `json:"content"`
+			ParentReplyID *int64   `json:"parent_reply_id"`
+			Images        []string `json:"images"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			response.BadRequest(c, "请求参数错误")
 			return
 		}
-		reply, err := svc.ReplyTopic(userID, topicID, req.Content, req.ParentReplyID)
+		reply, err := svc.ReplyTopic(userID, topicID, req.Content, req.ParentReplyID, req.Images)
 		if err != nil {
 			response.BadRequest(c, err.Error())
 			return

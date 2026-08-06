@@ -12,7 +12,7 @@ import (
 func newQuestionBankSvc(t *testing.T) (*QuestionBankService, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewQuestionBankService(db), db
+	return NewQuestionBankService(db, nil), db
 }
 
 // --- CreateQuestion ---

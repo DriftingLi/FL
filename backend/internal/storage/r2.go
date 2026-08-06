@@ -124,3 +124,31 @@ func (s *R2Storage) urlToKey(url string) string {
 	// 兼容 local 模式 URL
 	return strings.TrimPrefix(url, "/static/uploads/")
 }
+
+// List 按 key 前缀列出 R2 中的文件，返回 https://<publicDomain>/<key> 形式的 URL 列表。
+// 前缀为空时列出 bucket 全部文件；前缀按 key 字符前缀匹配（如 "images/forum" 匹配 "images/forum/xxx.webp"）。
+func (s *R2Storage) List(ctx context.Context, prefix string) ([]string, error) {
+	prefix = strings.Trim(prefix, "/")
+	input := &s3.ListObjectsV2Input{
+		Bucket: aws.String(s.bucket),
+	}
+	if prefix != "" {
+		input.Prefix = aws.String(prefix + "/")
+	}
+	var urls []string
+	paginator := s3.NewListObjectsV2Paginator(s.client, input)
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("R2 ListObjectsV2 失败: %w", err)
+		}
+		for _, obj := range page.Contents {
+			key := aws.ToString(obj.Key)
+			if key == "" {
+				continue
+			}
+			urls = append(urls, s.publicDomain+"/"+key)
+		}
+	}
+	return urls, nil
+}

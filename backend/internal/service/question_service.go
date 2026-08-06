@@ -270,12 +270,13 @@ func round1(f *float64) {
 
 // QuestionBankService 题库 CRUD 与知识点管理。
 type QuestionBankService struct {
-	db *gorm.DB
+	db      *gorm.DB
+	fileSvc *FileService
 }
 
-// NewQuestionBankService 创建题库服务。
-func NewQuestionBankService(db *gorm.DB) *QuestionBankService {
-	return &QuestionBankService{db: db}
+// NewQuestionBankService 创建题库服务。fileSvc 用于删除题目时清理题图（可 nil，nil 时跳过）。
+func NewQuestionBankService(db *gorm.DB, fileSvc *FileService) *QuestionBankService {
+	return &QuestionBankService{db: db, fileSvc: fileSvc}
 }
 
 // CreateQuestion 创建题目。
@@ -391,14 +392,20 @@ func (s *QuestionBankService) UpdateQuestion(id int, data map[string]any) (map[s
 	return d, nil
 }
 
-// DeleteQuestion 删除题目。
+// DeleteQuestion 删除题目，并清理题图存储文件。
 func (s *QuestionBankService) DeleteQuestion(id int) error {
-	result := s.db.Delete(&model.Question{}, id)
-	if result.Error != nil {
-		return result.Error
+	var q model.Question
+	if err := s.db.First(&q, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("题目不存在")
+		}
+		return err
 	}
-	if result.RowsAffected == 0 {
-		return errors.New("题目不存在")
+	if err := s.db.Delete(&q).Error; err != nil {
+		return err
+	}
+	if s.fileSvc != nil && q.ImageURL != "" {
+		_ = s.fileSvc.DeleteFile(q.ImageURL)
 	}
 	return nil
 }

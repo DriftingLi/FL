@@ -275,7 +275,7 @@ func (s *FeaturedService) Update(id int, data map[string]any) (map[string]any, e
 	return featuredToDetailDict(&item), nil
 }
 
-// Delete 删除内容精选。
+// Delete 删除内容精选，并清理封面与正文内本站图片（featured/ 前缀）的存储文件。
 func (s *FeaturedService) Delete(id int) (map[string]any, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
@@ -284,8 +284,28 @@ func (s *FeaturedService) Delete(id int) (map[string]any, error) {
 	if err := s.db.Delete(&item).Error; err != nil {
 		return nil, err
 	}
-	// 删除关联的封面与正文内图片由 fileSvc 处理（可选，此处略）
+	// 清理封面与正文图片（仅清理本站 featured 子目录文件，外部链接不动）
+	s.deleteFeaturedImages(item.CoverImage, item.Content)
 	return map[string]any{"content_id": id}, nil
+}
+
+// deleteFeaturedImages 清理精选内容关联的图片存储文件。
+// cover 为封面 URL；content 正文中 ![...](url) 语法引用的图片 URL 会被提取。
+// 仅删除 featured/ 子目录（local /static/uploads/featured/、R2 <domain>/featured/）下的文件。
+func (s *FeaturedService) deleteFeaturedImages(cover, content string) {
+	if s.fileSvc == nil {
+		return
+	}
+	var urls []string
+	if cover != "" && isFeaturedImageURL(cover) {
+		urls = append(urls, cover)
+	}
+	for _, u := range markdownImageURLs(content) {
+		if isFeaturedImageURL(u) {
+			urls = append(urls, u)
+		}
+	}
+	s.fileSvc.DeleteFiles(urls)
 }
 
 // Publish 发布内容精选（草稿 → 已发布）。
