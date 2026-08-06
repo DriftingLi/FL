@@ -7,7 +7,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"math"
 	"sort"
 
@@ -131,7 +130,7 @@ func (s *BatteryRULService) Predict(_ context.Context, req *model.CreateBatteryR
 	importance := s.computeFeatureImportance(aggregated)
 
 	// 8. 评估建议
-	suggestions := s.buildSuggestions(req.BatteryType, soh, rul, confLow, confHigh, healthScore)
+	suggestions := BuildBatterySuggestions(req.BatteryType, soh, rul, confLow, confHigh, healthScore)
 
 	return &PredictResult{
 		CycleFeatures:     cycleFeatures,
@@ -371,36 +370,6 @@ func (s *BatteryRULService) computeFeatureImportance(agg [20][2]float64) []model
 	sort.SliceStable(out, func(i, j int) bool {
 		return out[i].Normalized > out[j].Normalized
 	})
-	return out
-}
-
-// buildSuggestions 生成文本建议
-func (s *BatteryRULService) buildSuggestions(bt model.BatteryType, soh float64, rul, low, high int, health float64) []string {
-	out := []string{}
-	// 1) 健康度评估（EOL 阈值 60%）
-	switch {
-	case soh >= 95:
-		out = append(out, "电池健康度优秀（SOH≥95%），处于生命初期，建议常规巡检。")
-	case soh >= 80:
-		out = append(out, "电池健康度良好（80%≤SOH<95%），状态稳定，可继续投入使用。")
-	case soh >= 60:
-		out = append(out, "电池健康度临近梯次利用边界（60%≤SOH<80%），建议评估应用场景与监测频率。")
-	default:
-		out = append(out, fmt.Sprintf("电池健康度偏低（SOH=%.1f%%<60%%），已低于 EOL 标准，建议尽快更换。", soh))
-	}
-	// 2) 剩余寿命
-	out = append(out, fmt.Sprintf("预测剩余循环数约 %d 次（置信区间 %d~%d）。", rul, low, high))
-	// 3) 类型相关
-	switch bt {
-	case model.BatteryTypeLFP:
-		out = append(out, "LFP 电池循环寿命长，安全性好；如 SOH 仍高，可考虑梯次利用。")
-	case model.BatteryTypeNCM:
-		out = append(out, "NCM 电池能量密度高但循环寿命较短，注意高温环境与过充风险。")
-	}
-	// 4) 健康度稳定性
-	if health < 0.5 {
-		out = append(out, "特征波动较大，建议结合历史多循环数据复核预测结果。")
-	}
 	return out
 }
 

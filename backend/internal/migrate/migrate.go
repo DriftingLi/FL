@@ -92,13 +92,24 @@ func resolveMigrationsDir() (string, error) {
 		}
 		return abs, nil
 	}
-	// 默认相对项目根目录
-	abs, err := filepath.Abs("migrations")
+	// 从 CWD 向上查找 migrations 目录：
+	// go test ./... 的测试二进制在包目录运行，go run/cmd 在仓库根运行
+	dir, err := filepath.Abs(".")
 	if err != nil {
 		return "", err
 	}
-	if _, err := os.Stat(abs); os.IsNotExist(err) {
-		slog.Warn("migrations 目录不存在", "dir", abs)
+	for {
+		candidate := filepath.Join(dir, "migrations")
+		if st, err := os.Stat(candidate); err == nil && st.IsDir() {
+			return candidate, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
 	}
+	slog.Warn("migrations 目录不存在", "dir", "migrations")
+	abs, _ := filepath.Abs("migrations")
 	return abs, nil
 }

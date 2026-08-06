@@ -17,7 +17,7 @@ import (
 
 // RegisterProfileReviewRoutes 注册 /api/admin/profile-reviews 蓝图（仅管理员）。
 func RegisterProfileReviewRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage) {
-	svc := service.NewProfileReviewService(db)
+	svc := service.NewProfileReviewService(db, service.NewNotificationService(db), st)
 
 	g := rg.Group("/admin/profile-reviews", middleware.JWTAuth(cfg), middleware.RoleRequired("admin"))
 
@@ -75,10 +75,7 @@ func RegisterProfileReviewRoutes(rg *gin.RouterGroup, cfg *config.Config, db *go
 			response.BadRequest(c, err.Error())
 			return
 		}
-		// 驳回头像修改时清理已上传的待审文件（尽力而为）
-		if reqDTO.FieldType == service.ProfileFieldAvatar && reqDTO.NewValue != "" {
-			_ = st.Delete(c.Request.Context(), reqDTO.NewValue)
-		}
+		// 头像文件清理已下沉到审核模块内部（approve 清旧头像 / reject 清待审文件）
 		response.SuccessWithMsg(c, "已驳回", reqDTO)
 	})
 }

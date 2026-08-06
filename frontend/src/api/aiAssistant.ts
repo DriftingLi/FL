@@ -1,71 +1,21 @@
-// AI 助手模块 API 客户端
+// AI 助手模块 API 客户端（共享 client 工厂实例化：成功码 200、401 清登录态不跳转）
 // 路径前缀：/api/ai-assistant/*
-// 认证：统一 HRWAI 账号体系，token 存储于 localStorage 'token'（与主体系 useAuthStore 一致）
+// 认证：统一 HRWAI 账号体系，token 走 utils/storage.ts 单点
 // SSE 流式对话使用 fetch + ReadableStream 消费，不通过 axios
-import axios, { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
-import { ElMessage } from 'element-plus'
+import { createHttpClient } from './client'
+import { getToken, removeToken, removeUserInfo } from '@/utils/storage'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/api$/, '') + '/api/ai-assistant'
-const REQUEST_TIMEOUT_MS = 30_000
-const TOKEN_STORAGE_KEY = 'token'
 
-const client = axios.create({
+const client = createHttpClient({
   baseURL: API_BASE_URL,
-  timeout: REQUEST_TIMEOUT_MS,
-  headers: { 'Content-Type': 'application/json; charset=utf-8' }
-})
-
-// 请求拦截器：附加 HRWAI JWT
-client.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  },
-  (err) => Promise.reject(err)
-)
-
-// 响应拦截器：解包 {code,message,data}，401 清除登录态
-client.interceptors.response.use(
-  (response: AxiosResponse) => {
-    const body = response.data
-    if (body && typeof body === 'object' && 'code' in body) {
-      if (body.code === 0) {
-        return { ...response, data: body.data }
-      }
-      const errMsg = body.message || `业务错误（code=${body.code}）`
-      // 40100 为未登录/Token 失效业务码，不弹 ElMessage（由调用方处理跳转）
-      if (body.code !== 40100) {
-        ElMessage.error(errMsg)
-      }
-      return Promise.reject(new Error(errMsg))
-    }
-    return response
-  },
-  async (err: AxiosError) => {
-    if (err.response) {
-      const status = err.response.status
-      if (status === 401) {
-        // 清除本地 HRWAI 登录态，让 UI 显示未登录状态
-        localStorage.removeItem(TOKEN_STORAGE_KEY)
-        localStorage.removeItem('userInfo')
-        // 不强制跳转登录页，AI 助手支持未登录临时对话
-        ElMessage.error('登录已过期，请重新登录')
-        return Promise.reject(err)
-      }
-      const data = err.response.data as { message?: string } | undefined
-      const msg = data?.message || `请求失败 (${status})`
-      ElMessage.error(msg)
-    } else if (err.request) {
-      ElMessage.error('网络异常：无法连接服务器')
-    } else {
-      ElMessage.error(`请求错误：${err.message}`)
-    }
-    return Promise.reject(err)
+  successCodes: [200],
+  onUnauthorized: () => {
+    // 清除本地 HRWAI 登录态，让 UI 显示未登录状态；不强制跳转（AI 助手支持未登录临时对话）
+    removeToken()
+    removeUserInfo()
   }
-)
+})
 
 // ===== 类型定义 =====
 
@@ -187,7 +137,7 @@ export const aiAssistantApi = {
     }
   ): AbortController {
     const controller = new AbortController()
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    const token = getToken()
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

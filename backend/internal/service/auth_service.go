@@ -2,24 +2,23 @@
 package service
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
+	"forklift-training/internal/security"
 )
 
 // AuthService 认证服务，处理学员/管理员/导师的登录、注册与令牌签发。
 type AuthService struct {
 	db                *gorm.DB
-	jwtSecret         string
-	jwtExpiry         time.Duration
+	session           *security.Session
 	defaultAdminPwd   string
 	defaultTutorPwd   string
 	defaultStudentPwd string
@@ -29,8 +28,7 @@ type AuthService struct {
 func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpiry time.Duration, adminPwd, tutorPwd, studentPwd string) *AuthService {
 	return &AuthService{
 		db:                db,
-		jwtSecret:         jwtSecret,
-		jwtExpiry:         jwtExpiry,
+		session:           security.NewSession(jwtSecret, jwtExpiry, security.CookieConfig{}),
 		defaultAdminPwd:   adminPwd,
 		defaultTutorPwd:   tutorPwd,
 		defaultStudentPwd: studentPwd,
@@ -39,6 +37,14 @@ func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpiry time.Duration, admi
 
 // DB 返回底层 *gorm.DB，供 handler 复用查询。
 func (s *AuthService) DB() *gorm.DB { return s.db }
+
+// Session 返回会话模块（供 handler 消费统一接口）。
+func (s *AuthService) Session() *security.Session { return s.session }
+
+// RevokeToken 吊销会话（登出），委托会话模块写入黑名单。
+func (s *AuthService) RevokeToken(ctx context.Context, tokenStr string) error {
+	return s.session.Revoke(ctx, tokenStr)
+}
 
 // HashPassword 使用 bcrypt 加密密码。
 func HashPassword(password string) (string, error) {
@@ -54,20 +60,9 @@ func VerifyPassword(password, hashed string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password)) == nil
 }
 
-// GenerateToken 签发 JWT，claims 结构：user_id/username/role，过期时长由 JWT_EXPIRES_HOURS 配置（默认 24 小时）。
+// GenerateToken 签发 JWT（委托会话模块，claims 结构：user_id/username/role）。
 func (s *AuthService) GenerateToken(userID int, username, role string) (string, error) {
-	claims := &middleware.Claims{
-		UserID:   userID,
-		Username: username,
-		Role:     role,
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   username,
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.jwtExpiry)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(s.jwtSecret))
+	return s.session.Issue(userID, username, role)
 }
 
 // LoginResult 登录返回结构。

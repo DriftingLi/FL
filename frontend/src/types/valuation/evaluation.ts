@@ -155,6 +155,9 @@ export interface EvaluationResult {
   dimension_scores: DimensionScore[]
   /** 文本建议 */
   suggestions: string[]
+  /** 评估时点锁定的 λ 值（ADR-0004，供走势图数据驱动） */
+  lambda_electric: number
+  lambda_combustion: number
 }
 
 /** 评估详情（GET /evaluations/:id 响应，继承结果字段并补全输入参数） */

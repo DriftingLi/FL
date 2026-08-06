@@ -1,15 +1,13 @@
 // Package service 实现核心业务逻辑
+// Package service 实现核心业务逻辑
 // 本文件：车况系数 Kc 的单元测试
-// 注意：Kc 计算依赖 CoefficientProvider（4 个 kc_* 修正项）+ DictionaryRepository（condition_ratings）
-// 测试用例需连接真实 PostgreSQL；DB 不可用时自动跳过
+// Kc 计算依赖 ConfigReader + DictionaryReader，测试用内存实现，无需真实 Postgres。
 package service
 
 import (
 	"context"
 	"math"
 	"testing"
-
-	"forklift-training/internal/valuation/repository"
 )
 
 // TestCalcKCondition_AllPresent 全证件齐全 + 原漆 + 维保
@@ -17,14 +15,12 @@ import (
 // DB 默认值：paint=0.02, maintenance=0.02；评级 A 的 base=1.00
 // 期望 KcBase = 1.00 + 0.02 + 0.02 = 1.04，Kc = 1.04 × 1.0 = 1.04
 func TestCalcKCondition_AllPresent(t *testing.T) {
-	provider, pool := newTestProvider(t)
-	defer pool.Close()
-	dictRepo := repository.NewDictionaryRepository(pool)
+	provider := newDefaultConfigReader()
 
 	ctx := context.Background()
 	res, err := CalcKCondition(ctx, "A",
 		true, true, true, true, // 原漆 + 维保 + 车牌 + 登记证
-		dictRepo, provider)
+		newDefaultMemDict(), provider)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -44,14 +40,12 @@ func TestCalcKCondition_AllPresent(t *testing.T) {
 // DB 默认值：license_pct=0.10；评级 A 的 base=1.00；无原漆无维保
 // 期望 KcBase = 1.00，Kc = 1.00 × 0.90 = 0.90
 func TestCalcKCondition_MissingLicenseOnly(t *testing.T) {
-	provider, pool := newTestProvider(t)
-	defer pool.Close()
-	dictRepo := repository.NewDictionaryRepository(pool)
+	provider := newDefaultConfigReader()
 
 	ctx := context.Background()
 	res, err := CalcKCondition(ctx, "A",
 		false, false, false, true, // 无原漆 + 无维保 + 无车牌 + 有登记证
-		dictRepo, provider)
+		newDefaultMemDict(), provider)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -69,14 +63,12 @@ func TestCalcKCondition_MissingLicenseOnly(t *testing.T) {
 // DB 默认值：license_pct=0.10, reg_pct=0.10；评级 A 的 base=1.00；无原漆无维保
 // 期望 KcBase = 1.00，Kc = 1.00 × 0.81 = 0.81
 func TestCalcKCondition_MissingBothCerts(t *testing.T) {
-	provider, pool := newTestProvider(t)
-	defer pool.Close()
-	dictRepo := repository.NewDictionaryRepository(pool)
+	provider := newDefaultConfigReader()
 
 	ctx := context.Background()
 	res, err := CalcKCondition(ctx, "A",
 		false, false, false, false, // 全缺
-		dictRepo, provider)
+		newDefaultMemDict(), provider)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -94,14 +86,12 @@ func TestCalcKCondition_MissingBothCerts(t *testing.T) {
 // 未触发下限 0.30，因此 Kc = 0.405
 // 此用例验证乘性扣减不会让 Kc 跌穿 0.30（除非 base 极低）
 func TestCalcKCondition_ClampedToMin(t *testing.T) {
-	provider, pool := newTestProvider(t)
-	defer pool.Close()
-	dictRepo := repository.NewDictionaryRepository(pool)
+	provider := newDefaultConfigReader()
 
 	ctx := context.Background()
 	res, err := CalcKCondition(ctx, "E",
 		false, false, false, false,
-		dictRepo, provider)
+		newDefaultMemDict(), provider)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -123,17 +113,11 @@ func TestCalcKCondition_ClampedToMin(t *testing.T) {
 //	CertFactor = (1-0.05) × (1-0.05) = 0.9025
 //	Kc = 1.00 × 0.9025 = 0.9025
 func TestCalcKCondition_FallbackDefaults(t *testing.T) {
-	// 此用例测试 provider 失败兜底，因此不使用 newTestProvider 返回的 provider，
-	// 只借用其创建的 pool 来构造 dictRepo（评级仍需查 condition_ratings）
-	_, pool := newTestProvider(t)
-	defer pool.Close()
-	dictRepo := repository.NewDictionaryRepository(pool)
-
 	ctx := context.Background()
 	// 传入 nil provider 触发兜底
 	res, err := CalcKCondition(ctx, "A",
 		false, false, false, false,
-		dictRepo, nil)
+		newDefaultMemDict(), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -145,17 +129,18 @@ func TestCalcKCondition_FallbackDefaults(t *testing.T) {
 	}
 }
 
-// TestCalcKCondition_UnknownRating 未知评级应报错
+// TestCalcKCondition_UnknownRating 未知评级应兜底 1.0（中性车况，不阻断评估流程）
 func TestCalcKCondition_UnknownRating(t *testing.T) {
-	provider, pool := newTestProvider(t)
-	defer pool.Close()
-	dictRepo := repository.NewDictionaryRepository(pool)
+	provider := newDefaultConfigReader()
 
 	ctx := context.Background()
-	_, err := CalcKCondition(ctx, "X",
+	res, err := CalcKCondition(ctx, "X",
 		true, true, true, true,
-		dictRepo, provider)
-	if err == nil {
-		t.Errorf("期望未知评级返回错误，得到 nil")
+		newDefaultMemDict(), provider)
+	if err != nil {
+		t.Fatalf("未知评级不应阻断评估流程: %v", err)
+	}
+	if math.Abs(res.Base-1.0) > 1e-9 {
+		t.Errorf("未知评级应兜底 base=1.0，得到 %.4f", res.Base)
 	}
 }

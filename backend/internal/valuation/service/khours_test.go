@@ -1,7 +1,7 @@
 // Package service 实现核心业务逻辑
+// Package service 实现核心业务逻辑
 // 本文件：使用强度系数 Kh 的单元测试
-// 注意：Kh 计算依赖 CoefficientProvider 实时查询 coefficient_configs 表（annual_usage_hours 与 4 个区间阈值）
-// 测试用例需连接真实 PostgreSQL；DB 不可用时自动跳过
+// Kh 计算依赖 ConfigReader（系数键读取），测试用内存实现，无需真实 Postgres。
 package service
 
 import (
@@ -22,8 +22,7 @@ import (
 //	  1.3 ≤ r < 1.6 → 0.90（接近重型）
 //	  r ≥ 1.6       → 0.85（超高强度）
 func TestCalcKHours_RangeMapping(t *testing.T) {
-	provider, pool := newTestProvider(t)
-	defer pool.Close()
+	provider := newDefaultConfigReader()
 
 	type testCase struct {
 		name       string
@@ -57,8 +56,7 @@ func TestCalcKHours_RangeMapping(t *testing.T) {
 // TestCalcKHours_BoundaryValues 测试区间临界点
 // 5 年标准 = 8750；阈值 0.7/1.0/1.3/1.6 对应 6125/8750/11375/14000
 func TestCalcKHours_BoundaryValues(t *testing.T) {
-	provider, pool := newTestProvider(t)
-	defer pool.Close()
+	provider := newDefaultConfigReader()
 
 	ctx := context.Background()
 	checks := []struct {
@@ -89,8 +87,7 @@ func TestCalcKHours_BoundaryValues(t *testing.T) {
 
 // TestCalcKHours_NegativeHours 异常：负数小时
 func TestCalcKHours_NegativeHours(t *testing.T) {
-	provider, pool := newTestProvider(t)
-	defer pool.Close()
+	provider := newDefaultConfigReader()
 
 	ctx := context.Background()
 	_, err := CalcKHours(ctx, 5, -100, provider)
@@ -101,8 +98,7 @@ func TestCalcKHours_NegativeHours(t *testing.T) {
 
 // TestCalcKHours_NegativeAge 异常：age 为负
 func TestCalcKHours_NegativeAge(t *testing.T) {
-	provider, pool := newTestProvider(t)
-	defer pool.Close()
+	provider := newDefaultConfigReader()
 
 	ctx := context.Background()
 	_, err := CalcKHours(ctx, -1, 1000, provider)
@@ -113,8 +109,7 @@ func TestCalcKHours_NegativeAge(t *testing.T) {
 
 // TestCalcKHours_ZeroAge 同年购置与成交，age=0 按 1 年基准
 func TestCalcKHours_ZeroAge(t *testing.T) {
-	provider, pool := newTestProvider(t)
-	defer pool.Close()
+	provider := newDefaultConfigReader()
 
 	ctx := context.Background()
 	res, err := CalcKHours(ctx, 0, 1000, provider)

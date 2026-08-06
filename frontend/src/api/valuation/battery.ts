@@ -11,7 +11,7 @@ import type {
 
 /** 提交电池循环数据并预测 RUL */
 export async function createBatteryEvaluation(req: CreateBatteryRequest): Promise<CreateBatteryResponse> {
-  const resp = await client.post<unknown, { data: CreateBatteryResponse }>('/battery/evaluations', req)
+  const resp = await client.post<CreateBatteryResponse>('/battery/evaluations', req)
   return resp.data
 }
 
@@ -21,19 +21,19 @@ export async function listBatteryEvaluations(params: {
   page?: number
   page_size?: number
 }): Promise<BatteryListResponse> {
-  const resp = await client.get<unknown, { data: BatteryListResponse }>('/battery/evaluations', { params })
+  const resp = await client.get<BatteryListResponse>('/battery/evaluations', { params })
   return resp.data
 }
 
 /** 详情查询（含 cycle_features 数组） */
 export async function getBatteryEvaluation(id: number): Promise<BatteryEvaluationDetail> {
-  const resp = await client.get<unknown, { data: BatteryEvaluationDetail }>(`/battery/evaluations/${id}`)
+  const resp = await client.get<BatteryEvaluationDetail>(`/battery/evaluations/${id}`)
   return resp.data
 }
 
 /** 触发后端生成 PDF 报告 */
 export async function generateBatteryReport(id: number): Promise<BatteryReportResponse> {
-  const resp = await client.post<unknown, { data: BatteryReportResponse }>(
+  const resp = await client.post<BatteryReportResponse>(
     `/battery/evaluations/${id}/report`
   )
   return resp.data
@@ -41,10 +41,10 @@ export async function generateBatteryReport(id: number): Promise<BatteryReportRe
 
 /** 下载 PDF 二进制流（返回 Blob，前端用 a.download 触发下载） */
 export async function downloadBatteryReportBlob(id: number): Promise<Blob> {
-  const resp = await client.get<Blob>(`/battery/evaluations/${id}/report`, {
+  // 二进制响应直接放行（共享 client 返回 Blob 本身）
+  return client.get<Blob>(`/battery/evaluations/${id}/report`, {
     responseType: 'blob'
   })
-  return resp.data
 }
 
 // 静态导出，方便列表类型推导

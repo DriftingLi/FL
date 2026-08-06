@@ -4,7 +4,7 @@ import type { GenerateReportResponse } from '@/types/valuation/report'
 
 /** 触发后端生成 PDF（落盘 + 回写 report_pdf_path） */
 export async function generateReport(id: number): Promise<GenerateReportResponse> {
-  const resp = await client.post<unknown, { data: GenerateReportResponse }>(
+  const resp = await client.post<GenerateReportResponse>(
     `/evaluations/${id}/report`
   )
   return resp.data

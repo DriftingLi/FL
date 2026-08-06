@@ -2,19 +2,15 @@
 package api
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"io"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
+	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
 	"forklift-training/pkg/response"
@@ -27,11 +23,15 @@ type AuthHandler struct {
 	fileSvc   *service.FileService
 	storage   storage.Storage
 	reviewSvc *service.ProfileReviewService
+	session   *security.Session
 }
 
 // NewAuthHandler 创建认证 handler。
 func NewAuthHandler(cfg *config.Config, authSvc *service.AuthService, fileSvc *service.FileService, st storage.Storage, reviewSvc *service.ProfileReviewService) *AuthHandler {
-	return &AuthHandler{cfg: cfg, authSvc: authSvc, fileSvc: fileSvc, storage: st, reviewSvc: reviewSvc}
+	return &AuthHandler{
+		cfg: cfg, authSvc: authSvc, fileSvc: fileSvc, storage: st, reviewSvc: reviewSvc,
+		session: security.SessionFromConfig(cfg),
+	}
 }
 
 // Login 学员登录 POST /api/auth/login
@@ -133,28 +133,23 @@ func (h *AuthHandler) TutorLogin(c *gin.Context) {
 // Logout 登出 POST /api/auth/logout
 // 将当前 token 写入 Redis 黑名单，TTL = token 剩余有效期，使其在后续请求中被 JWTAuth 中间件拒绝。
 func (h *AuthHandler) Logout(c *gin.Context) {
-	// 从 Authorization header 提取 Bearer token（与 JWTAuth 中间件提取逻辑一致）
-	tokenStr := ""
-	if auth := c.GetHeader("Authorization"); len(auth) > 7 && auth[:7] == "Bearer " {
-		tokenStr = auth[7:]
-	}
-	if tokenStr == "" {
-		tokenStr, _ = c.Cookie(h.cfg.AuthCookie.Name)
-	}
+	// 与 JWTAuth 中间件同一套提取逻辑（session 模块统一实现）：Bearer 头优先，其次 Cookie
+	tokenStr := h.session.ExtractToken(c.GetHeader("Authorization"), authCookieFromReq(c, h.cfg))
 	if tokenStr != "" {
-		// 已通过 JWTAuth 中间件校验，这里仅解析 claims 获取过期时间，不重复校验签名
-		claims := &middleware.Claims{}
-		if _, _, err := jwt.NewParser().ParseUnverified(tokenStr, claims); err == nil && claims.ExpiresAt != nil {
-			tokenHash := sha256.Sum256([]byte(tokenStr))
-			blacklistKey := "jwt:blacklist:" + hex.EncodeToString(tokenHash[:])
-			ttl := time.Until(claims.ExpiresAt.Time)
-			if ttl > 0 {
-				_ = cache.Set(c.Request.Context(), blacklistKey, "1", ttl)
-			}
-		}
+		// 已通过 JWTAuth 中间件校验，这里仅吊销（无效 token 静默忽略）
+		_ = h.session.Revoke(c.Request.Context(), tokenStr)
 	}
-	clearAuthCookie(c, h.cfg)
+	h.session.ClearCookie(c.Writer)
 	response.SuccessWithMsg(c, "已登出", nil)
+}
+
+// authCookieFromReq 读取父域名登录 Cookie。
+func authCookieFromReq(c *gin.Context, cfg *config.Config) string {
+	tk, err := c.Cookie(cfg.AuthCookie.Name)
+	if err != nil {
+		return ""
+	}
+	return tk
 }
 
 // Me 获取当前用户 GET /api/auth/me

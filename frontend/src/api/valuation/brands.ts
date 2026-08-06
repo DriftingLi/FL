@@ -10,8 +10,7 @@ export async function listBrands(force = false): Promise<Brand[]> {
   if (!force && cache) return cache
   if (inflight) return inflight
 
-  inflight = client
-    .get<unknown, { data: Brand[] }>('/dictionaries/brands')
+  inflight = client.get<Brand[]>('/dictionaries/brands')
     .then((r) => {
       const list = r.data ?? []
       cache = list

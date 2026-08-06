@@ -6,8 +6,6 @@ package service
 
 import (
 	"context"
-
-	"forklift-training/internal/valuation/repository"
 )
 
 // KbResult 品牌系数计算结果
@@ -21,7 +19,7 @@ type KbResult struct {
 // brandName: 品牌名（如"林德"）
 // dictRepo: 字典仓储
 // 字典表未命中时用 1.0 兜底（中性系数，不放大也不缩小残值），不阻断评估流程
-func CalcKBrand(ctx context.Context, brandName string, dictRepo *repository.DictionaryRepository) (KbResult, error) {
+func CalcKBrand(ctx context.Context, brandName string, dictRepo DictionaryReader) (KbResult, error) {
 	b, err := dictRepo.GetBrandByName(ctx, brandName)
 	if err != nil {
 		return KbResult{

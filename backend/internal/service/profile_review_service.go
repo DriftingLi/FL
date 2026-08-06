@@ -3,6 +3,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/storage"
 )
 
 // 资料修改字段类型与状态。
@@ -43,12 +45,15 @@ type ProfileChangeRequestDTO struct {
 
 // ProfileReviewService 资料修改审核服务。
 type ProfileReviewService struct {
-	db *gorm.DB
+	db              *gorm.DB
+	notificationSvc *NotificationService
+	// storage 文件存储（头像文件生命周期：审核通过清理旧头像、驳回清理待审文件）
+	storage storage.Storage
 }
 
 // NewProfileReviewService 构造审核服务。
-func NewProfileReviewService(db *gorm.DB) *ProfileReviewService {
-	return &ProfileReviewService{db: db}
+func NewProfileReviewService(db *gorm.DB, notificationSvc *NotificationService, st storage.Storage) *ProfileReviewService {
+	return &ProfileReviewService{db: db, notificationSvc: notificationSvc, storage: st}
 }
 
 // CreateRequest 提交资料修改审核请求（不直接生效）。
@@ -194,7 +199,7 @@ func (s *ProfileReviewService) Approve(requestID int64, reviewerID int) (*Profil
 	return s.review(requestID, reviewerID, ProfileStatusApproved, "")
 }
 
-// Reject 驳回审核，返回请求对象（供调用方清理已上传的头像文件）。
+// Reject 驳回审核，返回请求对象（待审头像文件由 service 在 review 内清理）。
 func (s *ProfileReviewService) Reject(requestID int64, reviewerID int, reason string) (*ProfileChangeRequestDTO, error) {
 	reason = strings.TrimSpace(reason)
 	if utf8.RuneCountInString(reason) > 200 {
@@ -241,11 +246,18 @@ func (s *ProfileReviewService) review(requestID int64, reviewerID int, status, r
 			return err
 		}
 		// 审核结果以站内信通知学员（与审核状态流转同事务，避免通知丢失）
-		return tx.Create(buildProfileReviewNotification(&req, status, reason, now)).Error
+		// 通知的构造与写入统一走站内信模块
+		typ, title, content := s.notificationSvc.ProfileReviewNotification(&req, status, reason)
+		return s.notificationSvc.CreateWithTx(tx, req.UserID, typ, title, content, "", now)
 	})
 	if err != nil {
 		return nil, err
 	}
+
+	// 头像文件生命周期（与状态流转同处）：审核通过清理被替换的旧头像，驳回清理待审文件。
+	// 尽力而为：文件删除失败不阻断审核结果返回。
+	s.cleanupAvatarFiles(&req, status)
+
 	req.Status = status
 	req.RejectReason = reason
 	req.ReviewedBy = &reviewerID
@@ -257,29 +269,21 @@ func (s *ProfileReviewService) review(requestID int64, reviewerID int, status, r
 	return s.toDTO(&req, &user), nil
 }
 
-// buildProfileReviewNotification 构造资料审核结果站内信。
-func buildProfileReviewNotification(req *model.ProfileChangeRequest, status, reason string, now time.Time) *model.Notification {
-	fieldLabel := "昵称"
-	if req.FieldType == ProfileFieldAvatar {
-		fieldLabel = "头像"
+// cleanupAvatarFiles 按审核结果清理头像文件（孤儿文件修复：approve 路径清理被替换旧头像）。
+func (s *ProfileReviewService) cleanupAvatarFiles(req *model.ProfileChangeRequest, status string) {
+	if s.storage == nil || req.FieldType != ProfileFieldAvatar {
+		return
 	}
-	title := "资料审核通过"
-	content := "您的" + fieldLabel + "修改已通过审核，修改已生效。"
-	if status == ProfileStatusRejected {
-		title = "资料审核被驳回"
-		content = "您的" + fieldLabel + "修改申请未通过审核"
-		if reason != "" {
-			content += "，原因：" + reason
-		}
-		content += "。"
+	target := req.NewValue
+	if status == ProfileStatusApproved {
+		target = req.OldValue // 被替换的旧头像
 	}
-	return &model.Notification{
-		UserID:    req.UserID,
-		Type:      "profile_review",
-		Title:     title,
-		Content:   content,
-		CreatedAt: now,
+	if target == "" {
+		return
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_ = s.storage.Delete(ctx, target)
 }
 
 // toDTO 组装展示对象。

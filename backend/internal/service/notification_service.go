@@ -23,6 +23,11 @@ type NotificationDTO struct {
 	ReadAt    *string `json:"read_at,omitempty"`
 }
 
+// GormCreator 通知写入执行器（*gorm.DB 与 *gorm.Tx 均满足，事务内写入用）。
+type GormCreator interface {
+	Create(value interface{}) *gorm.DB
+}
+
 // NotificationService 站内信通知服务。
 type NotificationService struct {
 	db *gorm.DB
@@ -35,15 +40,40 @@ func NewNotificationService(db *gorm.DB) *NotificationService {
 
 // Create 创建一条站内信通知。
 func (s *NotificationService) Create(userID int, typ, title, content, link string) error {
+	return s.CreateWithTx(s.db, userID, typ, title, content, link, time.Now())
+}
+
+// CreateWithTx 在指定事务/连接内创建站内信。
+// 业务事件（如资料审核）与业务写同事务提交，避免通知丢失；createdAt 由调用方控制时区语义。
+func (s *NotificationService) CreateWithTx(tx GormCreator, userID int, typ, title, content, link string, createdAt time.Time) error {
 	n := model.Notification{
 		UserID:    userID,
 		Type:      typ,
 		Title:     title,
 		Content:   content,
 		Link:      link,
-		CreatedAt: time.Now(),
+		CreatedAt: createdAt,
 	}
-	return s.db.Create(&n).Error
+	return tx.Create(&n).Error
+}
+
+// ProfileReviewNotification 构造资料审核结果站内信参数（type=profile_review）。
+func (s *NotificationService) ProfileReviewNotification(req *model.ProfileChangeRequest, status, reason string) (typ, title, content string) {
+	fieldLabel := "昵称"
+	if req.FieldType == ProfileFieldAvatar {
+		fieldLabel = "头像"
+	}
+	title = "资料审核通过"
+	content = "您的" + fieldLabel + "修改已通过审核，修改已生效。"
+	if status == ProfileStatusRejected {
+		title = "资料审核被驳回"
+		content = "您的" + fieldLabel + "修改申请未通过审核"
+		if reason != "" {
+			content += "，原因：" + reason
+		}
+		content += "。"
+	}
+	return "profile_review", title, content
 }
 
 // List 分页查询当前用户通知，并附带未读数（一次请求同时支撑列表与角标）。

@@ -86,7 +86,8 @@ async function onDownload() {
 }
 
 function backToResult() {
-  router.push('/valuation/result')
+  // 带 id 返回：结果页可兜底拉详情，刷新/直达路径一致
+  router.push({ path: '/valuation/result', query: { id: String(route.params.id) } })
 }
 
 // 维度评分转 Map
@@ -173,6 +174,7 @@ const basicInfoItems = computed(() => {
           :k-time="data.k_time"
           :k-hours="data.k_hours"
           :k-brand="data.k_brand"
+          :lambda="data.lambda_electric"
           :sale-year="data.sale_year || 0"
           height="320px"
         />

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // 评估结果页（设计稿风格：白底 + Electric Blue 残值 + 维度雷达 + 建议）
+// 数据源：store 详情（提交后由 store.submitEvaluation 写入）；
+// 刷新/直达恢复：路由带 id 时兜底 fetchDetail
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useEvaluationStore } from '@/stores/valuationEvaluation'
 import { Edit, Download } from '@element-plus/icons-vue'
 import PageHeader from '@/components/valuation/PageHeader.vue'
@@ -11,11 +13,19 @@ import FutureValueChart from '@/components/valuation/FutureValueChart.vue'
 import { downloadEvaluationReportBlob } from '@/api/valuation/evaluation'
 
 const router = useRouter()
+const route = useRoute()
 const store = useEvaluationStore()
 
-// 守卫：没有结果时跳回首页
-if (!store.currentResult) {
+// 路由 id：刷新/直达时用于兜底恢复
+const routeId = computed(() => Number(route.query.id) || 0)
+
+// 无结果且无路由 id → 无恢复来源，跳回首页
+if (!store.currentResult && !routeId.value) {
   router.replace('/valuation')
+}
+// 有路由 id 但 store 无结果（刷新/直达）→ 兜底拉详情（模板 v-if 兜底渲染）
+if (!store.currentResult && routeId.value) {
+  void store.fetchDetail(routeId.value)
 }
 
 const r = computed(() => store.currentResult)
@@ -52,11 +62,11 @@ const dimensionScoresMap = computed(() => {
   return map
 })
 
-// 使用年限 = 评估年份 - 出厂年份（从草稿表单获取，用于未来估价推算）
+// 使用年限 = 详情返回的成交年份 - 出厂年份（API 数据驱动，不再依赖内存草稿）
 const usageYears = computed(() => {
-  const draft = store.draftForm
-  if (draft?.factory_year && draft?.sale_year) {
-    return draft.sale_year - draft.factory_year
+  const d = r.value
+  if (d?.sale_year && d?.factory_year) {
+    return d.sale_year - d.factory_year
   }
   return 0
 })
@@ -101,7 +111,8 @@ const usageYears = computed(() => {
         :k-time="r.k_time"
         :k-hours="r.k_hours"
         :k-brand="r.k_brand"
-        :sale-year="store.draftForm?.sale_year || 0"
+        :lambda="r.lambda_electric"
+        :sale-year="r.sale_year || 0"
         height="320px"
       />
     </section>

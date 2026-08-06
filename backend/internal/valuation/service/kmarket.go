@@ -6,8 +6,6 @@ package service
 
 import (
 	"context"
-
-	"forklift-training/internal/valuation/repository"
 )
 
 // 默认市场系数（未匹配到区域时使用）
@@ -25,7 +23,7 @@ type KmResult struct {
 // province, city: 省份与城市
 // dictRepo: 字典仓储
 // 未命中时返回 1.0（不阻断流程）
-func CalcKMarket(ctx context.Context, province, city string, dictRepo *repository.DictionaryRepository) (KmResult, error) {
+func CalcKMarket(ctx context.Context, province, city string, dictRepo DictionaryReader) (KmResult, error) {
 	rc, err := dictRepo.GetRegionCoefficient(ctx, province, city)
 	if err != nil {
 		// 未命中：使用默认值 1.0

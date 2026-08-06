@@ -65,11 +65,14 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 	// 初始化服务
 	authSvc := service.NewAuthService(db, cfg.JWTSecretKey, cfg.JWTExpiry(),
 		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student)
-	emailAuthSvc := service.NewEmailAuthService(db, authSvc, cfg.SMTP, cfg.EmailCodeTTL, cfg.IsProd())
-	phoneAuthSvc := service.NewPhoneAuthService(db, authSvc, cfg.EmailCodeTTL, cfg.IsProd())
+	// 验证码 engine：邮箱/短信是同一状态机两侧的 channel adapter
+	codeSvc := service.NewVerifyCodeService(db, authSvc, cfg.EmailCodeTTL, &service.RedisAuthCodeStore{})
+	emailCh := service.NewEmailChannel(cfg.SMTP, cfg.IsProd())
+	phoneCh := service.NewSmsChannel(cfg.IsProd())
 	wechatAuthSvc := service.NewWechatAuthService(cfg.Wechat)
 	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st)
-	reviewSvc := service.NewProfileReviewService(db)
+	notificationSvc := service.NewNotificationService(db)
+	reviewSvc := service.NewProfileReviewService(db, notificationSvc, st)
 	authH := NewAuthHandler(cfg, authSvc, fileSvc, st, reviewSvc)
 
 	// ===== API 路由组 =====
@@ -92,13 +95,13 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 	}
 
 	// 邮箱验证码注册/登录
-	RegisterEmailAuthRoutes(api, cfg, db, emailAuthSvc)
+	RegisterEmailAuthRoutes(api, cfg, codeSvc, emailCh)
 	// 手机号验证码注册/登录
-	RegisterPhoneAuthRoutes(api, cfg, db, phoneAuthSvc)
+	RegisterPhoneAuthRoutes(api, cfg, codeSvc, phoneCh)
 	// 微信扫码登录（框架占位）
 	RegisterWechatAuthRoutes(api, cfg, db, wechatAuthSvc)
 	// 个人信息页：手机号/邮箱绑定修改
-	RegisterProfileBindRoutes(api, cfg, db, authSvc, emailAuthSvc, phoneAuthSvc)
+	RegisterProfileBindRoutes(api, cfg, db, authSvc, codeSvc, emailCh, phoneCh)
 
 	// 注册全部 12 个业务蓝图：
 	//   auth/courses/student/question-bank/
