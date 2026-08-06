@@ -74,6 +74,8 @@ func (c *ReportCoordinator[T]) Generate(ginCtx *gin.Context) {
 }
 
 // Download 处理 GET <prefix>/:id/report：URL 有效则 302；否则并发安全地再生成并回写后 302。
+// 并发语义：加载→检查→再生成整体放入 singleflight（同 ID 只产生一份 PDF）；
+// 晚到的请求在 fn 重跑时发现路径已回写，短路直接返回既有 URL。
 func (c *ReportCoordinator[T]) Download(ginCtx *gin.Context) {
 	id, err := strconv.ParseInt(ginCtx.Param("id"), 10, 64)
 	if err != nil {
@@ -81,7 +83,9 @@ func (c *ReportCoordinator[T]) Download(ginCtx *gin.Context) {
 		return
 	}
 
-	rec, err := c.loader(ginCtx.Request.Context(), id)
+	ctx, cancel := context.WithTimeout(ginCtx.Request.Context(), 60*time.Second)
+	defer cancel()
+	pdfURL, err := c.resolveDownloadURL(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			response.NotFound(ginCtx, c.notFoundMsg)
@@ -92,20 +96,28 @@ func (c *ReportCoordinator[T]) Download(ginCtx *gin.Context) {
 		return
 	}
 
-	pdfURL := c.pathOf(rec)
-	if pdfURL == "" || !c.storageExists(ginCtx, pdfURL) {
-		ctx, cancel := context.WithTimeout(ginCtx.Request.Context(), 60*time.Second)
-		defer cancel()
-		url, genErr := c.regenerate(ctx, id)
-		if genErr != nil {
-			response.ServerError(ginCtx, "生成报告失败")
-			return
-		}
-		pdfURL = url
-	}
-
 	// 302 重定向到公开访问 URL（浏览器直连下载）
 	ginCtx.Redirect(http.StatusFound, pdfURL)
+}
+
+// resolveDownloadURL 在 singleflight 内完成 加载 → 检查 → 再生成（原子，无孤儿 PDF）。
+func (c *ReportCoordinator[T]) resolveDownloadURL(ctx context.Context, id int64) (string, error) {
+	v, err, _ := c.sf.Do(fmt.Sprintf("dl:%d", id), func() (any, error) {
+		rec, loadErr := c.loader(ctx, id)
+		if loadErr != nil {
+			return "", loadErr
+		}
+		// 已有有效 URL 直接返回（并发/晚到请求的短路路径）
+		if url := c.pathOf(rec); url != "" && c.storageExists(ctx, url) {
+			return url, nil
+		}
+		url, _, genErr := c.generateAndUpload(ctx, id, rec)
+		return url, genErr
+	})
+	if err != nil {
+		return "", err
+	}
+	return v.(string), nil
 }
 
 // generateAndUpload 生成 PDF 并上传，返回 URL 与文件大小（Generate 响应需要 size）。
@@ -125,26 +137,8 @@ func (c *ReportCoordinator[T]) generateAndUpload(ctx context.Context, id int64, 
 	return url, len(pdfBytes), nil
 }
 
-// regenerate 并发安全地再生成并上传（singleflight：同 ID 并发下载只产生一份 PDF）。
-func (c *ReportCoordinator[T]) regenerate(ctx context.Context, id int64) (string, error) {
-	v, err, _ := c.sf.Do(fmt.Sprintf("%d", id), func() (any, error) {
-		rec, loadErr := c.loader(ctx, id)
-		if loadErr != nil {
-			return "", loadErr
-		}
-		url, _, uploadErr := c.generateAndUpload(ctx, id, rec)
-		return url, uploadErr
-	})
-	if err != nil {
-		return "", err
-	}
-	return v.(string), nil
-}
-
 // storageExists 检查存储中文件是否存在；出错按不存在处理（重新生成，保持既有语义）。
-func (c *ReportCoordinator[T]) storageExists(ginCtx *gin.Context, url string) bool {
-	ctx, cancel := context.WithTimeout(ginCtx.Request.Context(), 30*time.Second)
-	defer cancel()
+func (c *ReportCoordinator[T]) storageExists(ctx context.Context, url string) bool {
 	exists, err := c.storage.Exists(ctx, url)
 	if err != nil {
 		c.logger.Warn("检查存储文件失败，按不存在处理", zap.String("url", url), zap.Error(err))
