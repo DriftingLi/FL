@@ -1,1 +1,0 @@
-ALTER TABLE chapter DROP COLUMN IF EXISTS slide_urls;

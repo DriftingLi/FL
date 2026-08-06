@@ -1,47 +1,61 @@
 -- 000001_init_baseline.down.sql
--- 回滚 baseline：按依赖反向顺序 DROP 所有 35 张表
--- 注意：只 DROP 最终态存在的表（已被废弃的 brand_types / config_types 表不在最终态，无需 DROP）
+-- 回滚合并 baseline：按依赖反向顺序 DROP 全部最终态表（被引用多的表后删）。
 
--- =====================================================
--- Part 2 反向：残值评估相关表
--- =====================================================
-DROP TABLE IF EXISTS battery_cycle_features;
-DROP TABLE IF EXISTS battery_evaluations;
-DROP TABLE IF EXISTS evaluations;
-DROP TABLE IF EXISTS original_prices;
-DROP TABLE IF EXISTS series_config_options;
-DROP TABLE IF EXISTS engine_types;
-DROP TABLE IF EXISTS transmission_types;
-DROP TABLE IF EXISTS region_coefficients;
-DROP TABLE IF EXISTS condition_ratings;
-DROP TABLE IF EXISTS battery_types;
-DROP TABLE IF EXISTS mast_heights;
-DROP TABLE IF EXISTS mast_types;
-DROP TABLE IF EXISTS tonnages;
-DROP TABLE IF EXISTS series;
-DROP TABLE IF EXISTS vehicle_types;
-DROP TABLE IF EXISTS brands;
-DROP TABLE IF EXISTS coefficient_configs;
-
--- =====================================================
--- Part 1 反向：学员 / 题库 / 考试相关表
--- =====================================================
-DROP TABLE IF EXISTS practice_progress;
-DROP TABLE IF EXISTS async_task;
-DROP TABLE IF EXISTS mock_exam;
-DROP TABLE IF EXISTS wrong_question;
-DROP TABLE IF EXISTS question_practice_record;
-DROP TABLE IF EXISTS exam_answer;
-DROP TABLE IF EXISTS exam_participant;
-DROP TABLE IF EXISTS exam_session;
-DROP TABLE IF EXISTS question;
-DROP TABLE IF EXISTS knowledge_point;
-DROP TABLE IF EXISTS ai_generation_log;
-DROP TABLE IF EXISTS exam_record;
-DROP TABLE IF EXISTS study_record;
-DROP TABLE IF EXISTS chapter_file;
-DROP TABLE IF EXISTS chapter;
-DROP TABLE IF EXISTS course;
-DROP TABLE IF EXISTS tutor;
-DROP TABLE IF EXISTS admin;
-DROP TABLE IF EXISTS student;
+DROP TABLE IF EXISTS hrwai_users CASCADE;
+DROP TABLE IF EXISTS student CASCADE;
+DROP TABLE IF EXISTS course CASCADE;
+DROP TABLE IF EXISTS question CASCADE;
+DROP TABLE IF EXISTS knowledge_point CASCADE;
+DROP TABLE IF EXISTS chapter CASCADE;
+DROP TABLE IF EXISTS question_tag CASCADE;
+DROP TABLE IF EXISTS certificate_template CASCADE;
+DROP TABLE IF EXISTS course_level CASCADE;
+DROP TABLE IF EXISTS specialty CASCADE;
+DROP TABLE IF EXISTS forum_replies CASCADE;
+DROP TABLE IF EXISTS forum_topics CASCADE;
+DROP TABLE IF EXISTS ai_chat_sessions CASCADE;
+DROP TABLE IF EXISTS ai_configs CASCADE;
+DROP TABLE IF EXISTS battery_evaluations CASCADE;
+DROP TABLE IF EXISTS exam_participant CASCADE;
+DROP TABLE IF EXISTS exam_session CASCADE;
+DROP TABLE IF EXISTS _deprecated_valuation_users CASCADE;
+DROP TABLE IF EXISTS _deprecated_student CASCADE;
+DROP TABLE IF EXISTS question_tag_relation CASCADE;
+DROP TABLE IF EXISTS course_prerequisite CASCADE;
+DROP TABLE IF EXISTS audit_logs CASCADE;
+DROP TABLE IF EXISTS notifications CASCADE;
+DROP TABLE IF EXISTS profile_change_requests CASCADE;
+DROP TABLE IF EXISTS ai_user_models CASCADE;
+DROP TABLE IF EXISTS ai_chat_messages CASCADE;
+DROP TABLE IF EXISTS ai_feature_bindings CASCADE;
+DROP TABLE IF EXISTS system_settings CASCADE;
+DROP TABLE IF EXISTS valuation_users CASCADE;
+DROP TABLE IF EXISTS featured_content CASCADE;
+DROP TABLE IF EXISTS coefficient_configs CASCADE;
+DROP TABLE IF EXISTS battery_cycle_features CASCADE;
+DROP TABLE IF EXISTS evaluations CASCADE;
+DROP TABLE IF EXISTS original_prices CASCADE;
+DROP TABLE IF EXISTS series_config_options CASCADE;
+DROP TABLE IF EXISTS engine_types CASCADE;
+DROP TABLE IF EXISTS transmission_types CASCADE;
+DROP TABLE IF EXISTS region_coefficients CASCADE;
+DROP TABLE IF EXISTS condition_ratings CASCADE;
+DROP TABLE IF EXISTS battery_types CASCADE;
+DROP TABLE IF EXISTS mast_heights CASCADE;
+DROP TABLE IF EXISTS mast_types CASCADE;
+DROP TABLE IF EXISTS tonnages CASCADE;
+DROP TABLE IF EXISTS series CASCADE;
+DROP TABLE IF EXISTS vehicle_types CASCADE;
+DROP TABLE IF EXISTS brands CASCADE;
+DROP TABLE IF EXISTS practice_progress CASCADE;
+DROP TABLE IF EXISTS async_task CASCADE;
+DROP TABLE IF EXISTS mock_exam CASCADE;
+DROP TABLE IF EXISTS wrong_question CASCADE;
+DROP TABLE IF EXISTS question_practice_record CASCADE;
+DROP TABLE IF EXISTS exam_answer CASCADE;
+DROP TABLE IF EXISTS ai_generation_log CASCADE;
+DROP TABLE IF EXISTS exam_record CASCADE;
+DROP TABLE IF EXISTS study_record CASCADE;
+DROP TABLE IF EXISTS chapter_file CASCADE;
+DROP TABLE IF EXISTS tutor CASCADE;
+DROP TABLE IF EXISTS admin CASCADE;
