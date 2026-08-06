@@ -17,7 +17,8 @@
           {{ cat.label }}
         </button>
       </div>
-      <div v-if="directions.length > 0" class="category-pills direction-pills">
+      <div v-if="directions.length > 0" class="direction-pills">
+        <span class="filter-label">专业方向</span>
         <button
           v-for="d in directions"
           :key="d.direction_id"
@@ -28,7 +29,8 @@
           {{ d.name }}
         </button>
       </div>
-      <div v-if="currentDirectionId !== null && currentLevels.length > 0" class="category-pills level-pills">
+      <div v-if="currentDirectionId !== null && currentLevels.length > 0" class="direction-pills">
+        <span class="filter-label">课程等级</span>
         <button
           v-for="l in currentLevels"
           :key="l.level_id"
@@ -378,7 +380,9 @@ onMounted(() => {
 
 .filter-bar {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .category-pills {
@@ -389,16 +393,23 @@ onMounted(() => {
 }
 
 .direction-pills {
-  margin-top: var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.filter-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  font-weight: var(--font-medium);
+  margin-right: var(--space-1);
 }
 
 .direction-pills .pill {
   border-color: var(--color-primary-200);
   background: var(--color-primary-50);
-}
-
-.level-pills {
-  margin-top: var(--space-2);
 }
 
 .level-pill {
