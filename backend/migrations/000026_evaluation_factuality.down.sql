@@ -1,4 +1,4 @@
--- 000024_evaluation_factuality.down.sql
+-- 000026_evaluation_factuality.down.sql
 
 BEGIN;
 
