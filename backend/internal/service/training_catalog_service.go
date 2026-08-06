@@ -391,22 +391,24 @@ func replaceQuestionTags(db *gorm.DB, questionID int, tagIDs []int) error {
 			return errors.New("包含不存在的标签")
 		}
 	}
+	if len(tagIDs) == 0 {
+		return db.Where("question_id = ?", questionID).
+			Delete(&model.QuestionTagRelation{}).Error
+	}
+	rels := make([]model.QuestionTagRelation, 0, len(tagIDs))
+	for _, tagID := range tagIDs {
+		rels = append(rels, model.QuestionTagRelation{
+			QuestionID: questionID,
+			TagID:      tagID,
+			CreatedAt:  beijingNow(),
+		})
+	}
 	return db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("question_id = ?", questionID).
 			Delete(&model.QuestionTagRelation{}).Error; err != nil {
 			return err
 		}
-		for _, tagID := range tagIDs {
-			rel := model.QuestionTagRelation{
-				QuestionID: questionID,
-				TagID:      tagID,
-				CreatedAt:  beijingNow(),
-			}
-			if err := tx.Create(&rel).Error; err != nil {
-				return err
-			}
-		}
-		return nil
+		return tx.Create(&rels).Error
 	})
 }
 

@@ -8,6 +8,7 @@ BEGIN;
 DROP INDEX IF EXISTS idx_course_cert_template;
 DROP INDEX IF EXISTS idx_course_level;
 DROP INDEX IF EXISTS idx_course_specialty;
+DROP INDEX IF EXISTS idx_course_status_specialty_level;
 
 ALTER TABLE course
     DROP COLUMN IF EXISTS certificate_template_id,

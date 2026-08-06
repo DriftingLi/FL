@@ -554,22 +554,60 @@ func replaceCoursePrerequisites(db *gorm.DB, courseID int, prereqIDs []int) erro
 			return errors.New("前置课程不存在")
 		}
 	}
+	if err := checkPrerequisiteCycle(db, courseID, prereqIDs); err != nil {
+		return err
+	}
+	if len(prereqIDs) == 0 {
+		return db.Where("course_id = ?", courseID).Delete(&model.CoursePrerequisite{}).Error
+	}
+	rels := make([]model.CoursePrerequisite, 0, len(prereqIDs))
+	for _, id := range prereqIDs {
+		rels = append(rels, model.CoursePrerequisite{
+			CourseID:             courseID,
+			PrerequisiteCourseID: id,
+			CreatedAt:            beijingNow(),
+		})
+	}
 	return db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("course_id = ?", courseID).Delete(&model.CoursePrerequisite{}).Error; err != nil {
 			return err
 		}
-		for _, id := range prereqIDs {
-			rel := model.CoursePrerequisite{
-				CourseID:             courseID,
-				PrerequisiteCourseID: id,
-				CreatedAt:            beijingNow(),
-			}
-			if err := tx.Create(&rel).Error; err != nil {
-				return err
-			}
+		if err := tx.Create(&rels).Error; err != nil {
+			return err
 		}
 		return nil
 	})
+}
+
+// checkPrerequisiteCycle 检测前置课程依赖是否成环（A→B→A 等）。
+// 从每个新前置课程出发，沿"它的前置课程"向下游遍历，若能回到 courseID 则成环；
+// visited 防止既有数据中已存在的环导致死循环。
+func checkPrerequisiteCycle(db *gorm.DB, courseID int, prereqIDs []int) error {
+	if len(prereqIDs) == 0 {
+		return nil
+	}
+	visited := make(map[int]bool, len(prereqIDs))
+	stack := make([]int, 0, len(prereqIDs))
+	stack = append(stack, prereqIDs...)
+	for len(stack) > 0 {
+		cur := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if cur == courseID {
+			return errors.New("前置课程关系存在循环依赖")
+		}
+		if visited[cur] {
+			continue
+		}
+		visited[cur] = true
+		var next []int
+		if err := db.Model(&model.CoursePrerequisite{}).
+			Where("course_id = ?", cur).
+			Pluck("prerequisite_course_id", &next).Error; err != nil {
+			return err
+		}
+		stack = append(stack, next...)
+	}
+	return nil
 }
 
 // fillCourseMeta 填充课程详情的扩展元数据：

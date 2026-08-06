@@ -366,6 +366,35 @@ func TestAdminCourse_TrainingFields(t *testing.T) {
 	if _, err := svc.UpdateCourse(courseID, map[string]any{"prerequisite_course_ids": []int{courseID}}); err == nil {
 		t.Fatal("自引用前置课程应报错")
 	}
+
+	// 多级依赖成环应报错（C→B→A→C 与 A↔B 两课程环）
+	a := model.Course{Name: "课程A", Category: "CATEGORY_01", Status: 1, CreatedAt: testutil.Now()}
+	b := model.Course{Name: "课程B", Category: "CATEGORY_01", Status: 1, CreatedAt: testutil.Now()}
+	c := model.Course{Name: "课程C", Category: "CATEGORY_01", Status: 1, CreatedAt: testutil.Now()}
+	db.Create(&a)
+	db.Create(&b)
+	db.Create(&c)
+	if _, err := svc.UpdateCourse(a.CourseID, map[string]any{"prerequisite_course_ids": []int{b.CourseID}}); err != nil {
+		t.Fatalf("设置前置课程失败: %v", err)
+	}
+	if _, err := svc.UpdateCourse(b.CourseID, map[string]any{"prerequisite_course_ids": []int{c.CourseID}}); err != nil {
+		t.Fatalf("设置前置课程失败: %v", err)
+	}
+	if _, err := svc.UpdateCourse(c.CourseID, map[string]any{"prerequisite_course_ids": []int{a.CourseID}}); err == nil {
+		t.Fatal("多级依赖成环应报错")
+	}
+	if _, err := svc.UpdateCourse(b.CourseID, map[string]any{"prerequisite_course_ids": []int{a.CourseID}}); err == nil {
+		t.Fatal("两课程互相依赖应报错")
+	}
+	// 成环请求被拒绝后，原有关联应保持不变
+	detail, err = svc.GetCourseDetail(b.CourseID)
+	if err != nil {
+		t.Fatalf("获取详情失败: %v", err)
+	}
+	prereqs = detail["prerequisites"].([]map[string]any)
+	if len(prereqs) != 1 || prereqs[0]["name"] != "课程C" {
+		t.Fatalf("成环拒绝后原关联应保留: %+v", prereqs)
+	}
 }
 
 // --- 学员端课程详情与列表过滤 ---
