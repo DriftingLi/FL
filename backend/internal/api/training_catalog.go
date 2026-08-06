@@ -45,6 +45,11 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, cfg *config.Config, db *
 
 	g := rg.Group("/admin", middleware.JWTAuth(cfg), middleware.RoleRequired("admin"))
 
+	// GET /api/admin/catalog/tree  管理端目录树（含停用项与章节节点）
+	g.GET("/catalog/tree", func(c *gin.Context) {
+		response.Success(c, svc.GetAdminCatalogTree())
+	})
+
 	// ---- 专业方向 ----
 
 	// GET /api/admin/specialties  专业方向列表（含停用项）

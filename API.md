@@ -115,6 +115,7 @@
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/practice-mode/free` | 自由刷题 |
+| GET | `/api/practice-mode/tag` | 标签练习抽题（`tag_id` 必填，`count` 控制题量，0=全部） |
 | GET | `/api/practice-mode/sequential` | 顺序练习 |
 | GET | `/api/practice-mode/sequential-progress` | 顺序练习进度 |
 | POST | `/api/practice-mode/progress` | 保存练习进度 |
@@ -209,11 +210,12 @@
 
 ### 培训目录管理（专业方向 / 等级 / 证书模板 / 题库标签）
 
-课程表单新增字段：`specialty_id`、`level_id`、`theory_hours`（理论学时）、`practice_hours`（实操学时）、`certificate_template_id`、`prerequisite_course_ids`（前置课程 ID 数组）。
+课程表单新增字段：`specialty_id`、`level_id`、`theory_hours`（理论学时）、`practice_hours`（实操学时）、`certificate_template_id`、`prerequisite_course_ids`（前置课程 ID 数组）、`sort_order`（课程排序，所属方向+等级层级内生效）。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/admin/courses` | 课程列表（支持 `specialty_id` / `level_id` 过滤） |
+| GET | `/api/admin/catalog/tree` | 管理端目录树：专业方向 → 等级 → 课程 → 章节（含停用项） |
+| GET | `/api/admin/courses` | 课程列表（支持 `specialty_id` / `level_id` 过滤，按 `sort_order` 排序） |
 | GET | `/api/admin/specialties` | 专业方向列表 |
 | POST | `/api/admin/specialty` | 创建专业方向 |
 | PUT | `/api/admin/specialty/:specialty_id` | 更新专业方向 |
@@ -226,7 +228,7 @@
 | POST | `/api/admin/certificate-template` | 创建证书模板（`validity_days` 有效期，天） |
 | PUT | `/api/admin/certificate-template/:id` | 更新证书模板 |
 | DELETE | `/api/admin/certificate-template/:id` | 删除证书模板 |
-| GET | `/api/admin/question-tags` | 题库标签列表 |
+| GET | `/api/admin/question-tags` | 题库标签列表（含 `question_count` 题目数；学员端 `/api/tags` 统计已发布题目数） |
 | POST | `/api/admin/question-tag` | 创建题库标签 |
 | PUT | `/api/admin/question-tag/:id` | 更新题库标签 |
 | DELETE | `/api/admin/question-tag/:id` | 删除题库标签 |

@@ -43,7 +43,7 @@ func (s *AdminCourseService) GetCourses(page, pageSize int, keyword, category st
 	var total int64
 	q.Count(&total)
 	var courses []model.Course
-	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&courses)
+	q.Order("sort_order ASC, created_at DESC, course_id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&courses)
 	items := make([]map[string]any, 0, len(courses))
 	for i := range courses {
 		item := courseToDict(&courses[i])

@@ -47,7 +47,7 @@ func (s *CourseService) GetCourses(page, pageSize int, category string, specialt
 	var total int64
 	q.Count(&total)
 	var courses []model.Course
-	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&courses)
+	q.Order("sort_order ASC, created_at DESC, course_id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&courses)
 	items := make([]map[string]any, 0, len(courses))
 	for i := range courses {
 		items = append(items, courseToDict(&courses[i]))
@@ -373,6 +373,7 @@ func courseToDict(c *model.Course) map[string]any {
 		"theory_hours":            c.TheoryHours,
 		"practice_hours":          c.PracticeHours,
 		"certificate_template_id": c.CertificateTemplateID,
+		"sort_order":              c.SortOrder,
 		"status":                  c.Status,
 		"created_at":              formatISO(c.CreatedAt),
 	}
@@ -504,6 +505,13 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, data map[strin
 			return errors.New("实操学时不能为负数")
 		}
 		course.PracticeHours = hours
+	}
+	if v, ok := data["sort_order"]; ok {
+		order := toInt(v)
+		if order < 0 {
+			return errors.New("课程排序值不能为负数")
+		}
+		course.SortOrder = order
 	}
 	return nil
 }

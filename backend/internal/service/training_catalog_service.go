@@ -276,6 +276,7 @@ func (s *TrainingCatalogService) DeleteCertificateTemplate(id int) error {
 // ===== 题库标签 =====
 
 // ListQuestionTags 题库标签列表（activeOnly=true 仅启用项）。
+// 附带 question_count：学员端统计已发布题目数，管理端统计全部题目数。
 func (s *TrainingCatalogService) ListQuestionTags(activeOnly bool) map[string]any {
 	q := s.db.Model(&model.QuestionTag{})
 	if activeOnly {
@@ -284,10 +285,51 @@ func (s *TrainingCatalogService) ListQuestionTags(activeOnly bool) map[string]an
 	var list []model.QuestionTag
 	q.Order("sort_order ASC, id ASC").Find(&list)
 	items := make([]map[string]any, 0, len(list))
+	if len(list) == 0 {
+		return map[string]any{"tags": items}
+	}
+	// 一次查询全部标签的题目数（LEFT JOIN 保证无题目标签也返回 0，避免 N+1）
+	type countRow struct {
+		TagID          int
+		TotalCount     int64
+		PublishedCount int64
+	}
+	var rows []countRow
+	s.db.Table("question_tag AS t").
+		Select("t.id AS tag_id, COUNT(qtr.question_id) AS total_count, "+
+			"COUNT(qtr.question_id) FILTER (WHERE q.status = 'published') AS published_count").
+		Joins("LEFT JOIN question_tag_relation AS qtr ON qtr.tag_id = t.id").
+		Joins("LEFT JOIN question AS q ON q.id = qtr.question_id").
+		Where("t.id IN ?", idsOfTags(list)).
+		Group("t.id").
+		Scan(&rows)
+	counts := make(map[int]countRow, len(rows))
+	for i := range rows {
+		counts[rows[i].TagID] = rows[i]
+	}
 	for i := range list {
-		items = append(items, tagToDict(&list[i]))
+		d := tagToDict(&list[i])
+		if c, ok := counts[list[i].ID]; ok {
+			if activeOnly {
+				d["question_count"] = c.PublishedCount
+			} else {
+				d["question_count"] = c.TotalCount
+			}
+		} else {
+			d["question_count"] = int64(0)
+		}
+		items = append(items, d)
 	}
 	return map[string]any{"tags": items}
+}
+
+// idsOfTags 提取标签 ID 列表。
+func idsOfTags(tags []model.QuestionTag) []int {
+	ids := make([]int, len(tags))
+	for i := range tags {
+		ids[i] = tags[i].ID
+	}
+	return ids
 }
 
 // CreateQuestionTag 创建题库标签。
@@ -414,25 +456,63 @@ func replaceQuestionTags(db *gorm.DB, questionID int, tagIDs []int) error {
 
 // ===== 目录树（学员端） =====
 
-// GetCatalogTree 目录树：专业方向 → 等级 → 课程（仅启用项，课程含章节数）。
+// GetCatalogTree 目录树（学员端）：专业方向 → 等级 → 课程（仅启用项，课程含章节数）。
 func (s *TrainingCatalogService) GetCatalogTree() map[string]any {
+	return s.getCatalogTree(true, false)
+}
+
+// GetAdminCatalogTree 目录树（管理端）：专业方向 → 等级 → 课程 → 章节。
+// 含停用项与全部课程，课程节点附带章节列表（章节拖拽排序用 order_num）。
+func (s *TrainingCatalogService) GetAdminCatalogTree() map[string]any {
+	return s.getCatalogTree(false, true)
+}
+
+// getCatalogTree 构建目录树。
+// activeOnly=true 时仅返回启用项（学员端）；withChapters=true 时课程节点附带章节列表（管理端）。
+func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool) map[string]any {
 	var specialties []model.Specialty
-	s.db.Where("status = ?", 1).Order("sort_order ASC, specialty_id ASC").Find(&specialties)
+	{
+		q := s.db.Model(&model.Specialty{})
+		if activeOnly {
+			q = q.Where("status = ?", 1)
+		}
+		q.Order("sort_order ASC, specialty_id ASC").Find(&specialties)
+	}
 
 	var levels []model.CourseLevel
-	s.db.Where("status = ?", 1).Order("sort_order ASC, level_id ASC").Find(&levels)
+	{
+		q := s.db.Model(&model.CourseLevel{})
+		if activeOnly {
+			q = q.Where("status = ?", 1)
+		}
+		q.Order("sort_order ASC, level_id ASC").Find(&levels)
+	}
 
-	// 一次查询全部上架课程及其章节数（避免逐门查询的 N+1）
+	// 一次查询全部课程及其章节数（避免逐门查询的 N+1）
 	type courseRow struct {
 		model.Course
 		ChapterCount int64
 	}
 	var rows []courseRow
-	s.db.Model(&model.Course{}).
-		Select("course.*, (SELECT COUNT(*) FROM chapter WHERE chapter.course_id = course.course_id) AS chapter_count").
-		Where("course.status = ?", 1).
-		Order("course.created_at DESC, course.course_id ASC").
-		Find(&rows)
+	{
+		q := s.db.Model(&model.Course{}).
+			Select("course.*, (SELECT COUNT(*) FROM chapter WHERE chapter.course_id = course.course_id) AS chapter_count")
+		if activeOnly {
+			q = q.Where("course.status = ?", 1)
+		}
+		q.Order("course.sort_order ASC, course.course_id ASC").Find(&rows)
+	}
+
+	// 管理端：一次性加载全部章节，按课程分组（避免逐课程查询的 N+1）
+	var chaptersByCourse map[int][]map[string]any
+	if withChapters {
+		var chapters []model.Chapter
+		s.db.Order("order_num ASC, chapter_id ASC").Find(&chapters)
+		chaptersByCourse = make(map[int][]map[string]any, len(chapters))
+		for i := range chapters {
+			chaptersByCourse[chapters[i].CourseID] = append(chaptersByCourse[chapters[i].CourseID], chapterToDict(&chapters[i]))
+		}
+	}
 
 	tree := make([]map[string]any, 0, len(specialties))
 	for i := range specialties {
@@ -450,6 +530,13 @@ func (s *TrainingCatalogService) GetCatalogTree() map[string]any {
 				}
 				cd := courseToDict(&rows[k].Course)
 				cd["chapter_count"] = rows[k].ChapterCount
+				if withChapters {
+					if chs, ok := chaptersByCourse[rows[k].CourseID]; ok {
+						cd["chapters"] = chs
+					} else {
+						cd["chapters"] = []map[string]any{}
+					}
+				}
 				courses = append(courses, cd)
 			}
 			lv["courses"] = courses

@@ -3,6 +3,7 @@ package service
 
 import (
 	"testing"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -179,6 +180,55 @@ func TestQuestionTagCRUD(t *testing.T) {
 	}
 }
 
+// TestListQuestionTags_QuestionCount 标签列表 question_count：
+// 学员端仅统计已发布题目，管理端统计全部题目。
+func TestListQuestionTags_QuestionCount(t *testing.T) {
+	svc, db := newCatalogSvc(t)
+	tag, _ := svc.CreateQuestionTag(map[string]any{"code": "regulation", "name": "法规"})
+	qsvc := NewQuestionBankService(db)
+
+	// 1 道已发布 + 1 道草稿（未发布）
+	published, err := qsvc.CreateQuestion(map[string]any{
+		"type": "single_choice", "content": "已发布题", "options": []string{"A", "B"}, "answer": "A",
+		"status": "published", "tag_ids": []int{tag["id"].(int)},
+	}, nil, "tutor")
+	if err != nil {
+		t.Fatalf("创建已发布题目失败: %v", err)
+	}
+	_ = published
+	draft, err := qsvc.CreateQuestion(map[string]any{
+		"type": "true_false", "content": "草稿题", "answer": "true",
+		"status": "draft", "tag_ids": []int{tag["id"].(int)},
+	}, nil, "tutor")
+	if err != nil {
+		t.Fatalf("创建草稿题目失败: %v", err)
+	}
+	_ = draft
+	// 另一个无题目标签
+	empty, _ := svc.CreateQuestionTag(map[string]any{"code": "brake", "name": "制动"})
+
+	studentTags := svc.ListQuestionTags(true)["tags"].([]map[string]any)
+	byID := map[int]map[string]any{}
+	for _, d := range studentTags {
+		byID[d["id"].(int)] = d
+	}
+	if byID[tag["id"].(int)]["question_count"] != int64(1) {
+		t.Fatalf("学员端应统计 1 道已发布题, got %v", byID[tag["id"].(int)]["question_count"])
+	}
+	if byID[empty["id"].(int)]["question_count"] != int64(0) {
+		t.Fatalf("无题目标签应为 0, got %v", byID[empty["id"].(int)]["question_count"])
+	}
+
+	adminTags := svc.ListQuestionTags(false)["tags"].([]map[string]any)
+	byID2 := map[int]map[string]any{}
+	for _, d := range adminTags {
+		byID2[d["id"].(int)] = d
+	}
+	if byID2[tag["id"].(int)]["question_count"] != int64(2) {
+		t.Fatalf("管理端应统计全部 2 道题, got %v", byID2[tag["id"].(int)]["question_count"])
+	}
+}
+
 func TestSetQuestionTags(t *testing.T) {
 	svc, db := newCatalogSvc(t)
 	q := testutil.SeedQuestion(t, db, "single_choice", "液压相关题目", "A")
@@ -279,6 +329,119 @@ func TestGetCatalogTree(t *testing.T) {
 	}
 	if courses[0]["name"] != "叉车基础" || courses[0]["chapter_count"] != int64(1) {
 		t.Fatalf("课程数据不匹配: %+v", courses[0])
+	}
+}
+
+// TestGetAdminCatalogTree 管理端目录树：含停用项、课程章节节点，课程按 sort_order 排序。
+func TestGetAdminCatalogTree(t *testing.T) {
+	svc, db := newCatalogSvc(t)
+	spec := model.Specialty{Code: "operation", Name: "操作", Status: 1, SortOrder: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&spec).Error; err != nil {
+		t.Fatalf("创建专业方向失败: %v", err)
+	}
+	disabledSpec := model.Specialty{Code: "off", Name: "停用方向", Status: 0, SortOrder: 2, CreatedAt: testutil.Now()}
+	db.Create(&disabledSpec)
+	db.Model(&disabledSpec).Update("status", 0)
+
+	lv := model.CourseLevel{Code: "beginner", Name: "入门", Status: 1, SortOrder: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&lv).Error; err != nil {
+		t.Fatalf("创建等级失败: %v", err)
+	}
+	// 2 门课程：sort_order 2 在前、1 在后，验证按 sort_order 排序；另 1 门下架课程
+	c1 := model.Course{Name: "晚建但排序靠前", Category: "CATEGORY_01", Status: 1, SortOrder: 1,
+		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
+	if err := db.Create(&c1).Error; err != nil {
+		t.Fatalf("创建课程失败: %v", err)
+	}
+	c2 := model.Course{Name: "早建但排序靠后", Category: "CATEGORY_01", Status: 1, SortOrder: 2,
+		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now().Add(-time.Hour)}
+	if err := db.Create(&c2).Error; err != nil {
+		t.Fatalf("创建课程失败: %v", err)
+	}
+	c3 := model.Course{Name: "下架课程", Category: "CATEGORY_01", Status: 0, SortOrder: 3,
+		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
+	db.Create(&c3)
+	db.Model(&c3).Update("status", 0)
+
+	ch1 := model.Chapter{CourseID: c1.CourseID, Title: "第一章", Duration: 10, OrderNum: 2, CreatedAt: testutil.Now()}
+	db.Create(&ch1)
+	ch2 := model.Chapter{CourseID: c1.CourseID, Title: "第二章", Duration: 20, OrderNum: 1, CreatedAt: testutil.Now()}
+	db.Create(&ch2)
+
+	tree := svc.GetAdminCatalogTree()
+	specialties := tree["specialties"].([]map[string]any)
+	if len(specialties) != 2 {
+		t.Fatalf("管理端应包含停用方向, got %d", len(specialties))
+	}
+	if specialties[0]["name"] != "操作" || specialties[1]["name"] != "停用方向" {
+		t.Fatalf("方向排序不匹配: %+v", specialties)
+	}
+	courses := specialties[0]["levels"].([]map[string]any)[0]["courses"].([]map[string]any)
+	if len(courses) != 3 {
+		t.Fatalf("管理端应包含下架课程, got %d", len(courses))
+	}
+	if courses[0]["name"] != "晚建但排序靠前" || courses[1]["name"] != "早建但排序靠后" {
+		t.Fatalf("课程应按 sort_order 排序: %+v", courses)
+	}
+	chapters := courses[0]["chapters"].([]map[string]any)
+	if len(chapters) != 2 {
+		t.Fatalf("课程应含章节节点, got %d", len(chapters))
+	}
+	if chapters[0]["title"] != "第二章" || chapters[1]["title"] != "第一章" {
+		t.Fatalf("章节应按 order_num 排序: %+v", chapters)
+	}
+	if courses[2]["name"] != "下架课程" {
+		t.Fatalf("下架课程应保留: %+v", courses[2])
+	}
+}
+
+// TestCourseSortOrder 课程 sort_order：创建/更新可设置，列表按 sort_order 升序。
+func TestCourseSortOrder(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	svc := NewAdminCourseService(db)
+
+	spec := model.Specialty{Code: "operation", Name: "操作", Status: 1, CreatedAt: testutil.Now()}
+	db.Create(&spec)
+	lv := model.CourseLevel{Code: "beginner", Name: "入门", Status: 1, CreatedAt: testutil.Now()}
+	db.Create(&lv)
+
+	// 创建时设置 sort_order
+	created, err := svc.CreateCourse(map[string]any{
+		"name": "课程A", "category": "CATEGORY_01",
+		"specialty_id": spec.SpecialtyID, "level_id": lv.LevelID, "sort_order": 5,
+	})
+	if err != nil {
+		t.Fatalf("创建课程失败: %v", err)
+	}
+	if created["sort_order"] != 5 {
+		t.Fatalf("创建返回的 sort_order 不匹配: %+v", created)
+	}
+	courseID := created["course_id"].(int)
+
+	// 更新时修改 sort_order
+	updated, err := svc.UpdateCourse(courseID, map[string]any{"sort_order": 1})
+	if err != nil {
+		t.Fatalf("更新课程失败: %v", err)
+	}
+	if updated["sort_order"] != 1 {
+		t.Fatalf("更新后的 sort_order 不匹配: %+v", updated)
+	}
+
+	// 负值应报错
+	if _, err := svc.CreateCourse(map[string]any{"name": "课程B", "category": "CATEGORY_01", "sort_order": -1}); err == nil {
+		t.Fatal("负排序值应报错")
+	}
+
+	// 列表按 sort_order 升序（0 在 1 前，再按创建时间倒序）
+	c0 := model.Course{Name: "课程C", Category: "CATEGORY_01", Status: 1, SortOrder: 0,
+		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
+	db.Create(&c0)
+	list := svc.GetCourses(1, 10, "", "", nil, nil)["courses"].([]map[string]any)
+	if len(list) != 2 {
+		t.Fatalf("应 2 门课程, got %d", len(list))
+	}
+	if list[0]["name"] != "课程C" || list[1]["name"] != "课程A" {
+		t.Fatalf("课程列表应按 sort_order 升序: %+v", list)
 	}
 }
 
