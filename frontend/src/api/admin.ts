@@ -200,6 +200,8 @@ export interface AdminCoursesQuery {
   page_size?: number
   keyword?: string
   category?: string
+  specialty_id?: number
+  level_id?: number
 }
 
 export interface CoursePayload {
@@ -209,6 +211,14 @@ export interface CoursePayload {
   cover_image?: string
   duration?: number
   status?: number
+  // ===== 培训目录扩展（LH-27/28，字段与后端 applyCourseTrainingFields 对齐）=====
+  specialty_id?: number | null
+  level_id?: number | null
+  theory_hours?: number
+  practice_hours?: number
+  prerequisite_course_ids?: number[]
+  certificate_template_id?: number | null
+  sort_order?: number
 }
 
 export interface ChapterPayload {
@@ -235,6 +245,14 @@ export interface AdminCourseItem {
   status?: number
   chapter_count?: number
   created_at?: string
+  // ===== 培训目录扩展（LH-27/28）=====
+  specialty_id?: number | null
+  level_id?: number | null
+  theory_hours?: number
+  practice_hours?: number
+  prerequisite_course_ids?: number[]
+  certificate_template_id?: number | null
+  sort_order?: number
   [key: string]: unknown
 }
 
@@ -252,10 +270,32 @@ export interface AdminChapter {
   [key: string]: unknown
 }
 
-/** 管理员课程详情（含章节） */
+/** 管理员课程详情（后端扁平 dict：课程字段 + chapters + 嵌套 specialty/level/certificate_template/prerequisites） */
 export interface AdminCourseDetail {
-  course_info?: AdminCourseItem
+  course_id?: number
+  name?: string
+  category?: string
+  description?: string
+  cover_image?: string
+  duration?: number
+  status?: number
+  specialty_id?: number | null
+  level_id?: number | null
+  theory_hours?: number
+  practice_hours?: number
+  certificate_template_id?: number | null
   chapters?: AdminChapter[]
+  specialty?: { specialty_id: number; code?: string; name: string }
+  level?: { level_id: number; code?: string; name: string }
+  certificate_template?: {
+    id: number
+    code?: string
+    name: string
+    description?: string
+    validity_days?: number
+    template_url?: string
+  }
+  prerequisites?: { course_id: number; name: string }[]
   [key: string]: unknown
 }
 

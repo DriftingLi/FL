@@ -111,6 +111,49 @@
             <el-option label="进阶提升 (CATEGORY_04)" value="CATEGORY_04" />
           </el-select>
         </el-form-item>
+        <el-form-item label="专业方向" prop="specialty_id">
+          <el-select v-model="formData.specialty_id" clearable placeholder="选择专业方向（可选）" style="width: 100%">
+            <el-option v-for="d in directions" :key="d.specialty_id" :label="d.name" :value="d.specialty_id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="课程等级" prop="level_id">
+          <el-select v-model="formData.level_id" clearable placeholder="选择等级（可选）" style="width: 100%">
+            <el-option v-for="l in levelOptions" :key="l.level_id" :label="l.label" :value="l.level_id" />
+          </el-select>
+        </el-form-item>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="理论学时" prop="theory_hours">
+              <el-input-number v-model="formData.theory_hours" :min="0" :max="999" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="实操学时" prop="practice_hours">
+              <el-input-number v-model="formData.practice_hours" :min="0" :max="999" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="前置课程" prop="prerequisite_course_ids">
+          <el-select
+            v-model="formData.prerequisite_course_ids"
+            multiple
+            filterable
+            collapse-tags
+            placeholder="选择需要先完成的课程（可选）"
+            style="width: 100%"
+          >
+            <el-option v-for="c in courseOptions" :key="c.course_id" :label="c.name" :value="c.course_id" :disabled="c.course_id === formData.course_id" />
+          </el-select>
+        </el-form-item>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="证书模板" prop="certificate_template_id">
+              <el-select v-model="formData.certificate_template_id" clearable placeholder="不关联则留空" style="width: 100%">
+                <el-option v-for="t in certificateTemplates" :key="t.id" :label="t.name" :value="t.id" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-form-item label="课程简介" prop="description">
           <el-input
             v-model="formData.description"
@@ -212,11 +255,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { Plus, Search, Rank, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import draggable from 'vuedraggable'
 import { adminApi, type CoursePayload, type ChapterPayload } from '@/api/admin'
+import { trainingApi, type CertificateTemplate } from '@/api/training'
 
 const loading = ref(false)
 const courses = ref<{ course_id: number; name: string; category?: string; cover_image?: string }[]>([])
@@ -226,12 +270,44 @@ const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
 
+const directions = ref<{ specialty_id: number; name: string; levels?: { level_id: number; name: string }[] }[]>([])
+const certificateTemplates = ref<CertificateTemplate[]>([])
+
+const levelOptions = computed(() => {
+  const list: { level_id: number; label: string }[] = []
+  for (const d of directions.value) {
+    for (const l of d.levels || []) {
+      list.push({ level_id: l.level_id, label: `${d.name} · ${l.name}` })
+    }
+  }
+  return list
+})
+
+const courseOptions = computed(() => {
+  const list: { course_id: number; name: string }[] = []
+  for (const d of directions.value) {
+    for (const l of d.levels || []) {
+      for (const c of ((l as Record<string, unknown>).courses as { course_id: number; name: string }[] | undefined) || []) {
+        list.push({ course_id: c.course_id, name: `${d.name}/${l.name} · ${c.name}` })
+      }
+    }
+  }
+  return list
+})
+
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const formRef = ref<FormInstance | null>(null)
 const formData: Record<string, any> = reactive({
+  course_id: null,
   name: '',
   category: '',
+  specialty_id: null,
+  level_id: null,
+  theory_hours: 0,
+  practice_hours: 0,
+  prerequisite_course_ids: [],
+  certificate_template_id: null,
   description: '',
   cover_image: '',
   duration: 0
@@ -311,8 +387,15 @@ function handleSearch() {
 }
 
 function resetForm() {
+  formData.course_id = null
   formData.name = ''
   formData.category = ''
+  formData.specialty_id = null
+  formData.level_id = null
+  formData.theory_hours = 0
+  formData.practice_hours = 0
+  formData.prerequisite_course_ids = []
+  formData.certificate_template_id = null
   formData.description = ''
   formData.cover_image = ''
   formData.duration = 0
@@ -321,6 +404,25 @@ function resetForm() {
 function openCreateDialog() {
   resetForm()
   dialogVisible.value = true
+}
+
+async function loadCatalogMeta() {
+  try {
+    const res = await trainingApi.getAdminCatalogTree()
+    if (res.code === 200) {
+      directions.value = res.data.specialties || []
+    }
+  } catch (error) {
+    console.error('加载目录信息失败:', error)
+  }
+  try {
+    const res = await trainingApi.getCertificateTemplates()
+    if (res.code === 200) {
+      certificateTemplates.value = res.data.certificate_templates || []
+    }
+  } catch (error) {
+    console.error('加载证书模板失败:', error)
+  }
 }
 
 async function handleSubmit() {
@@ -474,6 +576,7 @@ async function handleChapterReorder() {
 
 onMounted(() => {
   loadCourses()
+  loadCatalogMeta()
 })
 </script>
 

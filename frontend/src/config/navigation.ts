@@ -16,7 +16,9 @@ import {
   Finished,
   Setting,
   Memo,
-  CircleCheck
+  CircleCheck,
+  FolderOpened,
+  CollectionTag
 } from '@element-plus/icons-vue'
 // 注：MagicStick 仍用于管理员"内容生成"菜单项
 
@@ -50,7 +52,9 @@ const adminNav: NavItem[] = [
   { key: 'forum-manage', label: '论坛管理', path: '/admin/forum-manage', icon: ChatDotRound },
   { key: 'tutors', label: '导师管理', path: '/admin/tutors', icon: UserFilled },
   { key: 'courses', label: '课程管理', path: '/admin/courses', icon: Notebook },
+  { key: 'course-catalog', label: '课程目录', path: '/admin/course-catalog', icon: FolderOpened },
   { key: 'question-review', label: '题库审核', path: '/admin/question-review', icon: EditPen },
+  { key: 'question-tags', label: '题库标签', path: '/admin/question-tags', icon: CollectionTag },
   { key: 'exam-sessions', label: '考试场次', path: '/admin/exam-sessions', icon: Calendar },
   { key: 'statistics', label: '统计分析', path: '/admin/statistics', icon: TrendCharts },
   { key: 'audit-logs', label: '审计日志', path: '/admin/audit-logs', icon: Memo },

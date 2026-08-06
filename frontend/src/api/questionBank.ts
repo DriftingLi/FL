@@ -10,6 +10,8 @@ export interface QuestionsQuery {
   category?: string
   knowledge_point_id?: number
   created_by?: number
+  /** 按题库标签筛选（LH-28） */
+  tag_id?: number
 }
 
 export interface QuestionPayload {
