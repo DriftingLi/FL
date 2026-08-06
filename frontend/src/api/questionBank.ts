@@ -10,6 +10,8 @@ export interface QuestionsQuery {
   category?: string
   knowledge_point_id?: number
   created_by?: number
+  /** 按题库标签筛选（LH-28） */
+  tag_id?: number
 }
 
 export interface QuestionPayload {
@@ -98,6 +100,11 @@ export const questionBankApi = {
 
   batchImport(questions: QuestionPayload[]) {
     return request.post<{ success_count?: number; failed_count?: number }>('/question-bank/questions/batch-import', { questions })
+  },
+
+  /** 题目打标（管理端/导师，LH-28） */
+  setQuestionTags(questionId: number, tagIds: number[]) {
+    return request.put<null>(`/question-bank/questions/${questionId}/tags`, { tag_ids: tagIds })
   },
 
   getStats() {

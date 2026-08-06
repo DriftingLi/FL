@@ -209,6 +209,15 @@ export interface CoursePayload {
   cover_image?: string
   duration?: number
   status?: number
+  // ===== 培训目录扩展（LH-28）=====
+  direction_id?: number
+  level_id?: number
+  theory_hours?: number
+  practice_hours?: number
+  prerequisite_course_ids?: number[]
+  certificate_template_id?: number | null
+  certificate_valid_months?: number | null
+  sort_order?: number
 }
 
 export interface ChapterPayload {
@@ -235,6 +244,19 @@ export interface AdminCourseItem {
   status?: number
   chapter_count?: number
   created_at?: string
+  // ===== 培训目录扩展（LH-28）=====
+  direction_id?: number
+  direction_name?: string
+  level_id?: number
+  level_name?: string
+  theory_hours?: number
+  practice_hours?: number
+  prerequisite_course_ids?: number[]
+  prerequisite_courses?: { course_id: number; name: string }[]
+  certificate_template_id?: number | null
+  certificate_template_name?: string
+  certificate_valid_months?: number | null
+  sort_order?: number
   [key: string]: unknown
 }
 

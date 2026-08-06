@@ -18,6 +18,19 @@ export interface CourseSummary {
   duration?: number
   chapter_count?: number
   status?: number
+  // ===== 培训目录扩展（LH-28）=====
+  direction_id?: number
+  direction_name?: string
+  level_id?: number
+  level_name?: string
+  theory_hours?: number
+  practice_hours?: number
+  prerequisite_course_ids?: number[]
+  prerequisite_courses?: { course_id: number; name: string }[]
+  certificate_template_id?: number
+  certificate_template_name?: string
+  certificate_valid_months?: number
+  sort_order?: number
   [key: string]: unknown
 }
 
@@ -50,7 +63,7 @@ export interface ChapterDetail {
 }
 
 export const courseApi = {
-  getCourses(params: { page?: number; page_size?: number; category?: string; keyword?: string }) {
+  getCourses(params: { page?: number; page_size?: number; category?: string; keyword?: string; direction_id?: number; level_id?: number }) {
     return request.get<{ courses: CourseSummary[]; total: number }>('/courses', { params })
   },
 

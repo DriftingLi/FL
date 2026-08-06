@@ -74,6 +74,23 @@
           </el-card>
         </el-col>
 
+        <!-- 标签练习 -->
+        <el-col :xs="24" :sm="12" :md="8">
+          <el-card shadow="hover" class="practice-card card-tag">
+            <div class="card-head">
+              <el-icon :size="28" color="#7952b3"><CollectionTag /></el-icon>
+              <h3>标签练习</h3>
+            </div>
+            <div class="card-select">
+              <span class="select-label">考点标签</span>
+              <el-select v-model="tagPracticeId" size="small" filterable placeholder="选择标签" style="width: 130px" :loading="tagsLoading">
+                <el-option v-for="t in tags" :key="t.tag_id" :label="t.name" :value="t.tag_id" />
+              </el-select>
+            </div>
+            <el-button type="primary" plain :loading="loading" :disabled="!tagPracticeId" @click="startTagPractice">开始练习</el-button>
+          </el-card>
+        </el-col>
+
         <!-- 模拟考试 -->
         <el-col :xs="24" :sm="12" :md="8">
           <el-card shadow="hover" class="practice-card card-mock">
@@ -106,6 +123,9 @@
           <el-tag v-if="mode === 'sequential'" size="small" type="primary" style="margin-left: 10px">顺序练习</el-tag>
           <el-tag v-else-if="mode === 'category'" size="small" type="danger" style="margin-left: 10px">
             {{ chapterCategory ? categoryMap[chapterCategory] : '章节练习' }}
+          </el-tag>
+          <el-tag v-else-if="mode === 'tag'" size="small" style="margin-left: 10px">
+            标签：{{ currentTagName }}
           </el-tag>
           <el-tag v-else-if="specialType && mode === 'free'" size="small" type="warning" style="margin-left: 10px">
             {{ typeMap[specialType] }}
@@ -178,21 +198,31 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Sort, MagicStick, Filter, Reading, Document } from '@element-plus/icons-vue'
+import { Sort, MagicStick, Filter, Reading, Document, CollectionTag } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
 import { practiceModeApi } from '@/api/practiceMode'
 import { mockExamApi } from '@/api/mockExam'
+import { trainingApi } from '@/api/training'
+import type { QuestionTag } from '@/api/training'
 import { typeMap, questionTypeOptions, categoryMap, categoryOptions, randomCountOptions } from '@/constants/question'
 import type { CourseCategory, PracticeProgress, Question, QuestionType, SubmitResult } from '@/types/question'
 
-// null = 入口；'sequential' | 'free' | 'category' = 刷题中
-const mode = ref<'sequential' | 'free' | 'category' | null>(null)
+// null = 入口；'sequential' | 'free' | 'category' | 'tag' = 刷题中
+const mode = ref<'sequential' | 'free' | 'category' | 'tag' | null>(null)
 
 // 卡片选择器状态
 const randomCount = ref(20)
 const specialType = ref<QuestionType | ''>('')
 const chapterCategory = ref<CourseCategory | ''>('')
+const tagPracticeId = ref<number | null>(null)
+const tags = ref<QuestionTag[]>([])
+const tagsLoading = ref(false)
+
+const currentTagName = computed(() => {
+  const t = tags.value.find(item => item.tag_id === tagPracticeId.value)
+  return t?.name || ''
+})
 
 // 卡片展示数据
 const seqProgress = ref<PracticeProgress>({ completed: 0, total: 0, current_index: 0 })
@@ -235,7 +265,22 @@ const canSubmit = computed(() => {
 
 onMounted(() => {
   loadCardData()
+  loadTags()
 })
+
+async function loadTags() {
+  tagsLoading.value = true
+  try {
+    const res = await trainingApi.getQuestionTags()
+    if (res.code === 200) {
+      tags.value = Array.isArray(res.data) ? res.data : []
+    }
+  } catch (e) {
+    // 静默失败，标签入口降级为不可用
+  } finally {
+    tagsLoading.value = false
+  }
+}
 
 async function loadCardData() {
   try {
@@ -410,6 +455,25 @@ async function startCategory() {
   }
 }
 
+async function startTagPractice() {
+  if (!tagPracticeId.value) return
+  loading.value = true
+  try {
+    const res = await practiceModeApi.getTagQuestions({ tag_id: tagPracticeId.value, count: 0 })
+    questions.value = res.data || []
+    if (questions.value.length === 0) {
+      ElMessage.warning('该标签下暂无题目')
+      return
+    }
+    mode.value = 'tag'
+    resetSession(0)
+  } catch (e: any) {
+    ElMessage.error(e.message || '加载题目失败')
+  } finally {
+    loading.value = false
+  }
+}
+
 function resetSession(startIdx: number) {
   currentIdx.value = startIdx
   answers.value = {}
@@ -542,6 +606,7 @@ function backToEntry() {
 .card-random { border-top: 3px solid #67c23a; }
 .card-special { border-top: 3px solid #e6a23c; }
 .card-chapter { border-top: 3px solid #f56c6c; }
+.card-tag { border-top: 3px solid #7952b3; }
 .card-mock { border-top: 3px solid #909399; }
 
 .practice-area { margin-top: 10px; }

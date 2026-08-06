@@ -25,9 +25,13 @@ export interface PracticeHistoryItem {
 
 // 题库练习模式接口，对应后端 /api/practice-mode
 export const practiceModeApi = {
-  // 随机练习：随机抽 count 题（可按题型/知识点筛选）
-  getFreeQuestions(params?: { count?: number; type?: string; knowledge_point_id?: number; category?: string }) {
+  // 随机练习：随机抽 count 题（可按题型/知识点/标签筛选）
+  getFreeQuestions(params?: { count?: number; type?: string; knowledge_point_id?: number; category?: string; tag_id?: number }) {
     return request.get<Question[]>('/practice-mode/free', { params })
+  },
+  // 标签练习：按题库标签抽题
+  getTagQuestions(params: { tag_id: number; count?: number }) {
+    return request.get<Question[]>('/practice-mode/tag', { params })
   },
   // 顺序练习：开始/续练，返回当前批次题目 + 进度
   startSequential() {
