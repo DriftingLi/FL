@@ -17,7 +17,8 @@ import (
 
 // RegisterTutorRoutes 注册 /api/tutor 蓝图（导师管理章节与文件）。
 func RegisterTutorRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage) {
-	svc := service.NewTutorService(db, cfg.UploadFolder, service.NewFileService(cfg.LibreOfficeSidecarURL, st))
+	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st)
+	svc := service.NewTutorService(db, cfg.UploadFolder, fileSvc)
 
 	g := rg.Group("/tutor", middleware.JWTAuth(cfg), middleware.RoleRequired("tutor"))
 
@@ -100,6 +101,48 @@ func RegisterTutorRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, s
 			return
 		}
 		response.SuccessWithMsg(c, "文件上传成功", result)
+	})
+
+	// POST /api/tutor/upload-image  上传图文 Markdown 中的图片（Vditor 格式）
+	// 返回 Vditor 期望的响应格式：{ msg: "", code: 0, data: { errFiles: [], succMap: { "name": "url" } } }
+	g.POST("/upload-image", func(c *gin.Context) {
+		file, err := c.FormFile("file")
+		if err != nil {
+			c.JSON(200, gin.H{"msg": "未找到上传文件", "code": 1, "data": gin.H{"errFiles": []string{}, "succMap": map[string]string{}}})
+			return
+		}
+		if file.Filename == "" {
+			c.JSON(200, gin.H{"msg": "未选择文件", "code": 1, "data": gin.H{"errFiles": []string{}, "succMap": map[string]string{}}})
+			return
+		}
+		src, err := file.Open()
+		if err != nil {
+			c.JSON(200, gin.H{"msg": "文件打开失败", "code": 1, "data": gin.H{"errFiles": []string{file.Filename}, "succMap": map[string]string{}}})
+			return
+		}
+		defer src.Close()
+		content, err := io.ReadAll(src)
+		if err != nil {
+			c.JSON(200, gin.H{"msg": "文件读取失败", "code": 1, "data": gin.H{"errFiles": []string{file.Filename}, "succMap": map[string]string{}}})
+			return
+		}
+		if ok, msg := fileSvc.ValidateImageFile(file.Filename, file.Size); !ok {
+			c.JSON(200, gin.H{"msg": msg, "code": 1, "data": gin.H{"errFiles": []string{file.Filename}, "succMap": map[string]string{}}})
+			return
+		}
+		url, err := fileSvc.SaveFile(content, file.Filename, "images/chapters")
+		if err != nil {
+			c.JSON(200, gin.H{"msg": "文件保存失败", "code": 1, "data": gin.H{"errFiles": []string{file.Filename}, "succMap": map[string]string{}}})
+			return
+		}
+		c.JSON(200, gin.H{
+			"msg":  "",
+			"code": 0,
+			"data": gin.H{
+				"errFiles": []string{},
+				"succMap":  map[string]string{file.Filename: url},
+			},
+		})
 	})
 
 	// PUT /api/tutor/chapter/:chapter_id  更新章节信息

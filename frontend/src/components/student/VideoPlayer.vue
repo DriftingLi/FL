@@ -13,7 +13,6 @@
         class="video-player"
         controls
         preload="metadata"
-        crossorigin="anonymous"
         :src="resolvedSrc"
         @error="handleError"
         @loadedmetadata="onLoadedMetadata"

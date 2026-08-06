@@ -41,7 +41,8 @@
               <MarkdownEditor
                 v-model="editContent"
                 :height="560"
-                placeholder="请输入章节正文内容（支持 Markdown 语法）..."
+                :upload-url="chapterImageUploadUrl"
+                placeholder="请输入章节正文内容（支持 Markdown 语法，可粘贴或上传图片）..."
               />
             </div>
           </el-tab-pane>
@@ -120,9 +121,6 @@
                       :fileName="selectedFile.file_name"
                       :chapterId="chapterDetail.chapter_id"
                     />
-                  </template>
-                  <template v-else-if="group.type === 'image'">
-                    <ImageViewer :src="selectedFile.file_url" :fileName="selectedFile.file_name" />
                   </template>
                 </div>
               </div>
@@ -213,7 +211,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeft, ArrowRight, Edit, Check, Upload, Delete,
-  VideoCamera, Document, Picture
+  VideoCamera, Document
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { tutorApi } from '@/api/tutor'
@@ -222,7 +220,6 @@ import FileUpload from '@/components/tutor/FileUpload.vue'
 import VideoPlayer from '@/components/student/VideoPlayer.vue'
 import DocumentViewer from '@/components/student/DocumentViewer.vue'
 import PptViewer from '@/components/student/PptViewer.vue'
-import ImageViewer from '@/components/student/ImageViewer.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -240,14 +237,16 @@ const originalContent = ref('')
 const savingContent = ref(false)
 const contentChanged = computed(() => editContent.value !== originalContent.value)
 
-// 文件分组
-const TYPE_ORDER = ['video', 'document', 'ppt', 'image']
+// 文件分组（图片不再作为独立章节文件上传，统一走图文 Markdown 粘贴）
+const TYPE_ORDER = ['video', 'document', 'ppt']
 const TYPE_CONFIG: Record<string, { label: string, icon: any, color: string }> = {
   video: { label: '视频', icon: VideoCamera, color: '#f56c6c' },
   document: { label: '文档', icon: Document, color: '#409eff' },
-  ppt: { label: 'PPT', icon: Document, color: '#e6a23c' },
-  image: { label: '图片', icon: Picture, color: '#67c23a' }
+  ppt: { label: 'PPT', icon: Document, color: '#e6a23c' }
 }
+
+// Vditor 图片上传走 /api/tutor/upload-image（返回 Vditor 期望的 {code,msg,data:{succMap}} 格式）
+const chapterImageUploadUrl = '/api/tutor/upload-image'
 
 const chapterFiles = computed(() => chapterDetail.value?.files || [])
 

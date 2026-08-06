@@ -177,6 +177,7 @@
 | GET | `/api/tutor/course/:course_id/chapters` | 课程章节列表 |
 | GET | `/api/tutor/chapter/:chapter_id` | 章节详情 |
 | POST | `/api/tutor/chapter/:chapter_id/upload` | 上传章节文件（课件/视频等） |
+| POST | `/api/tutor/upload-image` | 上传图文 Markdown 图片（Vditor 格式，返回 succMap） |
 | PUT | `/api/tutor/chapter/:chapter_id` | 更新章节 |
 | DELETE | `/api/tutor/file/:file_id` | 删除文件 |
 | POST | `/api/tutor/files/batch-delete` | 批量删除文件 |
