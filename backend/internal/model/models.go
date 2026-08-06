@@ -131,17 +131,82 @@ type ValuationUser = HrwaiUser
 // ===== 4. 课程 =====
 
 type Course struct {
-	CourseID    int       `gorm:"column:course_id;primaryKey" json:"course_id"`
+	CourseID    int    `gorm:"column:course_id;primaryKey" json:"course_id"`
+	Name        string `gorm:"column:name" json:"name"`
+	Category    string `gorm:"column:category" json:"category"`
+	Description string `gorm:"column:description" json:"description"`
+	CoverImage  string `gorm:"column:cover_image" json:"cover_image"`
+	Duration    int    `gorm:"column:duration;default:0" json:"duration"`
+	// SpecialtyID 专业方向（目录一级节点）。
+	SpecialtyID *int `gorm:"column:specialty_id" json:"specialty_id,omitempty"`
+	// LevelID 课程等级（入门/进阶/专项/认证）。
+	LevelID *int `gorm:"column:level_id" json:"level_id,omitempty"`
+	// TheoryHours 理论学时。
+	TheoryHours int `gorm:"column:theory_hours;default:0" json:"theory_hours"`
+	// PracticeHours 实操学时。
+	PracticeHours int `gorm:"column:practice_hours;default:0" json:"practice_hours"`
+	// CertificateTemplateID 关联证书模板（有效期取模板 validity_days）。
+	CertificateTemplateID *int      `gorm:"column:certificate_template_id" json:"certificate_template_id,omitempty"`
+	Status                int16     `gorm:"column:status;default:1" json:"status"`
+	CreatedAt             time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (Course) TableName() string { return "course" }
+
+// ===== 4.5 专业方向（课程目录一级节点） =====
+
+type Specialty struct {
+	SpecialtyID int       `gorm:"column:specialty_id;primaryKey" json:"specialty_id"`
+	Code        string    `gorm:"column:code;uniqueIndex" json:"code"`
 	Name        string    `gorm:"column:name" json:"name"`
-	Category    string    `gorm:"column:category" json:"category"`
 	Description string    `gorm:"column:description" json:"description"`
-	CoverImage  string    `gorm:"column:cover_image" json:"cover_image"`
-	Duration    int       `gorm:"column:duration;default:0" json:"duration"`
+	SortOrder   int       `gorm:"column:sort_order;default:0" json:"sort_order"`
 	Status      int16     `gorm:"column:status;default:1" json:"status"`
 	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
-func (Course) TableName() string { return "course" }
+func (Specialty) TableName() string { return "specialty" }
+
+// ===== 4.6 课程等级 =====
+
+type CourseLevel struct {
+	LevelID     int       `gorm:"column:level_id;primaryKey" json:"level_id"`
+	Code        string    `gorm:"column:code;uniqueIndex" json:"code"`
+	Name        string    `gorm:"column:name" json:"name"`
+	Description string    `gorm:"column:description" json:"description"`
+	SortOrder   int       `gorm:"column:sort_order;default:0" json:"sort_order"`
+	Status      int16     `gorm:"column:status;default:1" json:"status"`
+	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (CourseLevel) TableName() string { return "course_level" }
+
+// ===== 4.7 证书模板 =====
+
+// CertificateTemplate 证书模板，validity_days 为证书有效期（天）。
+type CertificateTemplate struct {
+	ID           int       `gorm:"column:id;primaryKey" json:"id"`
+	Code         string    `gorm:"column:code;uniqueIndex" json:"code"`
+	Name         string    `gorm:"column:name" json:"name"`
+	Description  string    `gorm:"column:description" json:"description"`
+	ValidityDays int       `gorm:"column:validity_days;default:365" json:"validity_days"`
+	TemplateURL  string    `gorm:"column:template_url" json:"template_url"`
+	Status       int16     `gorm:"column:status;default:1" json:"status"`
+	CreatedAt    time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt    time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (CertificateTemplate) TableName() string { return "certificate_template" }
+
+// ===== 4.8 课程前置课程（多对多） =====
+
+type CoursePrerequisite struct {
+	CourseID             int       `gorm:"column:course_id;primaryKey" json:"course_id"`
+	PrerequisiteCourseID int       `gorm:"column:prerequisite_course_id;primaryKey" json:"prerequisite_course_id"`
+	CreatedAt            time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (CoursePrerequisite) TableName() string { return "course_prerequisite" }
 
 // ===== 5. 章节 =====
 
@@ -256,6 +321,32 @@ type Question struct {
 }
 
 func (Question) TableName() string { return "question" }
+
+// ===== 11.5 题库标签 =====
+
+// QuestionTag 题库标签（法规/结构/液压/电气/制动/故障诊断/应急等考点模块）。
+type QuestionTag struct {
+	ID          int       `gorm:"column:id;primaryKey" json:"id"`
+	Code        string    `gorm:"column:code;uniqueIndex" json:"code"`
+	Name        string    `gorm:"column:name" json:"name"`
+	Category    string    `gorm:"column:category" json:"category"`
+	Description string    `gorm:"column:description" json:"description"`
+	SortOrder   int       `gorm:"column:sort_order;default:0" json:"sort_order"`
+	Status      int16     `gorm:"column:status;default:1" json:"status"`
+	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (QuestionTag) TableName() string { return "question_tag" }
+
+// QuestionTagRelation 题目-标签关联（多对多）。
+type QuestionTagRelation struct {
+	QuestionID int       `gorm:"column:question_id;primaryKey" json:"question_id"`
+	TagID      int       `gorm:"column:tag_id;primaryKey" json:"tag_id"`
+	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (QuestionTagRelation) TableName() string { return "question_tag_relation" }
 
 // ===== 12. 考试场次 =====
 

@@ -38,7 +38,9 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, a
 		pageSize := atoiDefault(c.Query("page_size"), 10)
 		keyword := c.Query("keyword")
 		category := c.Query("category")
-		response.Success(c, courseSvc.GetCourses(page, pageSize, keyword, category))
+		specialtyID := queryIntPtr(c, "specialty_id")
+		levelID := queryIntPtr(c, "level_id")
+		response.Success(c, courseSvc.GetCourses(page, pageSize, keyword, category, specialtyID, levelID))
 	})
 
 	// POST /api/admin/course  创建课程

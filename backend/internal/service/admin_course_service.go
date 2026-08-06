@@ -20,7 +20,7 @@ func NewAdminCourseService(db *gorm.DB) *AdminCourseService {
 }
 
 // GetCourses 管理端课程列表。
-func (s *AdminCourseService) GetCourses(page, pageSize int, keyword, category string) map[string]any {
+func (s *AdminCourseService) GetCourses(page, pageSize int, keyword, category string, specialtyID, levelID *int) map[string]any {
 	if page <= 0 {
 		page = 1
 	}
@@ -33,6 +33,12 @@ func (s *AdminCourseService) GetCourses(page, pageSize int, keyword, category st
 	}
 	if category != "" {
 		q = q.Where("category = ?", category)
+	}
+	if specialtyID != nil {
+		q = q.Where("specialty_id = ?", *specialtyID)
+	}
+	if levelID != nil {
+		q = q.Where("level_id = ?", *levelID)
 	}
 	var total int64
 	q.Count(&total)
@@ -69,6 +75,7 @@ func (s *AdminCourseService) GetCourseDetail(courseID int) (map[string]any, erro
 	}
 	detail := courseToDict(&course)
 	detail["chapters"] = chapterList
+	fillCourseMeta(s.db, &course, detail)
 	return detail, nil
 }
 
@@ -98,7 +105,13 @@ func (s *AdminCourseService) CreateCourse(data map[string]any) (map[string]any, 
 		Status:      status,
 		CreatedAt:   beijingNow(),
 	}
+	if err := applyCourseTrainingFields(s.db, &course, data); err != nil {
+		return nil, err
+	}
 	if err := s.db.Create(&course).Error; err != nil {
+		return nil, err
+	}
+	if err := replaceCoursePrerequisites(s.db, course.CourseID, prerequisiteIDsFromData(data)); err != nil {
 		return nil, err
 	}
 	return courseToDict(&course), nil
@@ -128,8 +141,16 @@ func (s *AdminCourseService) UpdateCourse(courseID int, data map[string]any) (ma
 	if v, ok := data["status"]; ok {
 		course.Status = int16(toIntDefault(v, int(course.Status)))
 	}
+	if err := applyCourseTrainingFields(s.db, &course, data); err != nil {
+		return nil, err
+	}
 	if err := s.db.Save(&course).Error; err != nil {
 		return nil, err
+	}
+	if prereqIDs, ok := data["prerequisite_course_ids"]; ok {
+		if err := replaceCoursePrerequisites(s.db, courseID, toIntSlice(prereqIDs)); err != nil {
+			return nil, err
+		}
 	}
 	return courseToDict(&course), nil
 }

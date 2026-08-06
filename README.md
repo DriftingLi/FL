@@ -145,7 +145,7 @@
 │   ├── pkg/
 │   │   ├── response/             # 统一响应结构
 │   │   └── pdf/                  # 中文 PDF 报告（gofpdf + SimHei）
-│   ├── migrations/               # 迁移脚本（000001 ~ 000016）
+│   ├── migrations/               # 迁移脚本（000001 ~ 000024）
 │   ├── Dockerfile / entrypoint.sh / Makefile
 │   ├── docker-compose.yml        # 本地 postgres + redis + libreoffice
 │   ├── .env                      # 本地开发环境变量（gitignore，不入库）

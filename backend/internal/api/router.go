@@ -123,6 +123,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage) *gin.Engine 
 	RegisterNotificationRoutes(api, cfg, db)
 	RegisterAuditRoutes(api, cfg, db)
 	RegisterExportRoutes(api, cfg, db)
+	RegisterTrainingCatalogRoutes(api, cfg, db)
 
 	return r
 }
