@@ -145,6 +145,28 @@ func (s *FileService) DeleteFile(fileURL string) error {
 	return s.storage.Delete(ctx, fileURL)
 }
 
+// DeleteFiles 批量删除文件（忽略空 URL，单个失败不阻断其余删除）。
+func (s *FileService) DeleteFiles(urls []string) {
+	for _, u := range urls {
+		if u == "" {
+			continue
+		}
+		_ = s.DeleteFile(u)
+	}
+}
+
+// ListFiles 按 key 前缀列出文件 URL（如 "images/forum"、"slides/12"）。
+func (s *FileService) ListFiles(prefix string) []string {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	urls, err := s.storage.List(ctx, prefix)
+	if err != nil {
+		log.Printf("[file_service] List 失败 prefix=%s: %v", prefix, err)
+		return nil
+	}
+	return urls
+}
+
 // ConvertPPTToImages 将 PPT 二进制内容转为图片并上传到存储后端。
 // 返回幻灯片图片 URL 列表（按 slide_001.webp、slide_002.webp... 顺序）。
 //

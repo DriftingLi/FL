@@ -595,6 +595,7 @@ type ForumTopic struct {
 	UserID      int        `gorm:"column:user_id" json:"user_id"`
 	Title       string     `gorm:"column:title" json:"title"`
 	Content     string     `gorm:"column:content" json:"content"`
+	Images      JSONB      `gorm:"column:images;type:jsonb" json:"images"`
 	ViewCount   int        `gorm:"column:view_count;default:0" json:"view_count"`
 	ReplyCount  int        `gorm:"column:reply_count;default:0" json:"reply_count"`
 	LastReplyAt *time.Time `gorm:"column:last_reply_at" json:"last_reply_at"`
@@ -611,6 +612,7 @@ type ForumReply struct {
 	UserID    int       `gorm:"column:user_id" json:"user_id"`
 	ParentID  *int64    `gorm:"column:parent_id" json:"parent_id,omitempty"`
 	Content   string    `gorm:"column:content" json:"content"`
+	Images    JSONB     `gorm:"column:images;type:jsonb" json:"images"`
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 

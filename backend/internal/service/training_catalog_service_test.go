@@ -185,7 +185,7 @@ func TestQuestionTagCRUD(t *testing.T) {
 func TestListQuestionTags_QuestionCount(t *testing.T) {
 	svc, db := newCatalogSvc(t)
 	tag, _ := svc.CreateQuestionTag(map[string]any{"code": "regulation", "name": "法规"})
-	qsvc := NewQuestionBankService(db)
+	qsvc := NewQuestionBankService(db, nil)
 
 	// 1 道已发布 + 1 道草稿（未发布）
 	published, err := qsvc.CreateQuestion(map[string]any{
@@ -398,7 +398,7 @@ func TestGetAdminCatalogTree(t *testing.T) {
 // TestCourseSortOrder 课程 sort_order：创建/更新可设置，列表按 sort_order 升序。
 func TestCourseSortOrder(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewAdminCourseService(db)
+	svc := NewAdminCourseService(db, nil)
 
 	spec := model.Specialty{Code: "operation", Name: "操作", Status: 1, CreatedAt: testutil.Now()}
 	db.Create(&spec)
@@ -449,7 +449,7 @@ func TestCourseSortOrder(t *testing.T) {
 
 func TestAdminCourse_TrainingFields(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewAdminCourseService(db)
+	svc := NewAdminCourseService(db, nil)
 
 	spec := model.Specialty{Code: "maintenance", Name: "维修", Status: 1, CreatedAt: testutil.Now()}
 	db.Create(&spec)
@@ -605,7 +605,7 @@ func TestCourseService_TrainingFields(t *testing.T) {
 
 func TestQuestionBank_Tags(t *testing.T) {
 	svc, db := newCatalogSvc(t)
-	qsvc := NewQuestionBankService(db)
+	qsvc := NewQuestionBankService(db, nil)
 
 	tag1, _ := svc.CreateQuestionTag(map[string]any{"code": "regulation", "name": "法规", "sort_order": 1})
 	tag2, _ := svc.CreateQuestionTag(map[string]any{"code": "hydraulic", "name": "液压", "sort_order": 2})

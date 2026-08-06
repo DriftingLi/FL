@@ -16,8 +16,8 @@ import (
 
 // RegisterQuestionBankRoutes 注册 /api/question-bank 蓝图。
 func RegisterQuestionBankRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage) {
-	svc := service.NewQuestionBankService(db)
 	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st)
+	svc := service.NewQuestionBankService(db, fileSvc)
 
 	g := rg.Group("/question-bank", middleware.JWTAuth(cfg))
 

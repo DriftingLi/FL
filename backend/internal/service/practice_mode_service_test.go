@@ -24,7 +24,7 @@ func TestGetTagQuestions(t *testing.T) {
 	tag1, _ := catalogSvc.CreateQuestionTag(map[string]any{"code": "regulation", "name": "法规", "sort_order": 1})
 	tag2, _ := catalogSvc.CreateQuestionTag(map[string]any{"code": "hydraulic", "name": "液压", "sort_order": 2})
 
-	qsvc := NewQuestionBankService(db)
+	qsvc := NewQuestionBankService(db, nil)
 	q1, err := qsvc.CreateQuestion(map[string]any{
 		"type": "single_choice", "content": "法规已发布题", "options": []string{"A", "B"}, "answer": "A",
 		"status": "published", "tag_ids": []int{tag1["id"].(int)},

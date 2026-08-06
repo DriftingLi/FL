@@ -102,6 +102,9 @@ func main() {
 	// 6. 创建路由（维修培训业务 + 静态资源 + 健康检查）
 	router := api.NewRouter(cfg, gormDB, st)
 
+	// 6.5 论坛悬空图片定期清理（每 6 小时扫描 images/forum/ 前缀，删除超 24h 未引用的图片）
+	startForumImageCleanup(gormDB, cfg, st)
+
 	// 7. 装配残值评估子模块（注册 /api/valuation/* 路由）
 	cleanup := setupValuation(router, cfg, gormDB, authSvc, st)
 	defer cleanup()
@@ -211,6 +214,7 @@ func ensureUploadDirs(cfg *config.Config) {
 		cfg.UploadFolder,
 		"static/uploads/chapters",
 		"static/uploads/slides",
+		"static/uploads/images",
 		cfg.Valuation.PDFOutputDir,
 	}
 	for _, d := range dirs {
@@ -221,6 +225,24 @@ func ensureUploadDirs(cfg *config.Config) {
 			slog.Warn("创建目录失败", "dir", d, "error", err)
 		}
 	}
+}
+
+// startForumImageCleanup 启动论坛悬空图片清理定时任务：
+// 每 6 小时对 images/forum/ 前缀 List，与全量引用集做差集，删除超过 24h 未被引用的图片。
+// 进程内 goroutine（与限流池清理同模式），进程退出自然终止。
+func startForumImageCleanup(gormDB *gorm.DB, cfg *config.Config, st storage.Storage) {
+	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st)
+	forumSvc := service.NewForumService(gormDB, fileSvc)
+	const interval = 6 * time.Hour
+	go func() {
+		for range time.Tick(interval) {
+			cleaned := forumSvc.CleanupOrphanImages()
+			if cleaned > 0 {
+				slog.Info("论坛悬空图片清理完成", "cleaned", cleaned)
+			}
+		}
+	}()
+	slog.Info("论坛悬空图片清理任务已启动", "interval", interval.String())
 }
 
 // createStorage 根据配置创建文件存储实例。

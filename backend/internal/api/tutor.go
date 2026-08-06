@@ -2,6 +2,7 @@
 package api
 
 import (
+	"fmt"
 	"io"
 	"strconv"
 
@@ -104,6 +105,7 @@ func RegisterTutorRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, s
 	})
 
 	// POST /api/tutor/upload-image  上传图文 Markdown 中的图片（Vditor 格式）
+	// form 字段：file（图片）、chapter_id（可选，用于按章节分目录存储 images/chapters/<chapterId>/）
 	// 返回 Vditor 期望的响应格式：{ msg: "", code: 0, data: { errFiles: [], succMap: { "name": "url" } } }
 	g.POST("/upload-image", func(c *gin.Context) {
 		file, err := c.FormFile("file")
@@ -130,7 +132,17 @@ func RegisterTutorRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, s
 			c.JSON(200, gin.H{"msg": msg, "code": 1, "data": gin.H{"errFiles": []string{file.Filename}, "succMap": map[string]string{}}})
 			return
 		}
-		url, err := fileSvc.SaveFile(content, file.Filename, "images/chapters")
+		// 按章节分目录存储，便于删除章节时按前缀清理（历史旧目录孤儿文件不处理）
+		// chapter_id 支持 query（Vditor 走 URL）与 form（直接 multipart）两种传递方式
+		subfolder := "images/chapters"
+		chapterIDStr := c.Query("chapter_id")
+		if chapterIDStr == "" {
+			chapterIDStr = c.PostForm("chapter_id")
+		}
+		if chapterID, err := strconv.Atoi(chapterIDStr); err == nil && chapterID > 0 {
+			subfolder = fmt.Sprintf("images/chapters/%d", chapterID)
+		}
+		url, err := fileSvc.SaveFile(content, file.Filename, subfolder)
 		if err != nil {
 			c.JSON(200, gin.H{"msg": "文件保存失败", "code": 1, "data": gin.H{"errFiles": []string{file.Filename}, "succMap": map[string]string{}}})
 			return

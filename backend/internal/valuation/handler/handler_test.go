@@ -513,6 +513,18 @@ func (m *memStorage) Exists(_ context.Context, url string) (bool, error) {
 	return ok, nil
 }
 
+func (m *memStorage) List(_ context.Context, prefix string) ([]string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var urls []string
+	for key := range m.urls {
+		if strings.HasPrefix(key, prefix) {
+			urls = append(urls, "https://fake-cdn/"+key)
+		}
+	}
+	return urls, nil
+}
+
 func createEvalForReport(t *testing.T, r *gin.Engine) float64 {
 	t.Helper()
 	w := performRequest(r, http.MethodPost, "/api/valuation/evaluations", baseEvalRequest())

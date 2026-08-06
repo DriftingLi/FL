@@ -28,6 +28,8 @@
 - **考试（exam）/ 模拟考试（mock exam）/ 等级考试（level exam）**：自动判分 + AI 评分；题目类型满分规则由判分规则表定义。
 - **练习（practice）/ 错题本（wrong question book）**：自由刷题/知识点专项。
 - **AI 助手**：大模型流式对话（DeepSeek 默认，可配置 OpenAI 兼容模型）。
+- **论坛（forum）**：综合讨论区 + 章节讨论区；发帖/回复（可回复别人的回复）。**图文分离**——主题与回复可携带 `images` 图片 URL 数组（JSONB），正文保持纯文本，不做 markdown 渲染。
+- **论坛图片（forum image）**：先经 `POST /api/forum/upload-image` 上传到 `images/forum/` 子目录拿 URL，随发帖/回复提交；删除主题/回复时图片存储一并清理；上传后未发帖的**悬空图片**由进程内定时任务（每 6 小时）扫描差集、回收超过 24h 未被引用的文件。
 
 ## 残值评估（valuation）
 

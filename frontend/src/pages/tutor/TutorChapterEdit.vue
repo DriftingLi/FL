@@ -39,6 +39,7 @@
                 </el-button>
               </div>
               <MarkdownEditor
+                :key="chapterDetail.chapter_id"
                 v-model="editContent"
                 :height="560"
                 :upload-url="chapterImageUploadUrl"
@@ -245,8 +246,12 @@ const TYPE_CONFIG: Record<string, { label: string, icon: any, color: string }> =
   ppt: { label: 'PPT', icon: Document, color: '#e6a23c' }
 }
 
-// Vditor 图片上传走 /api/tutor/upload-image（返回 Vditor 期望的 {code,msg,data:{succMap}} 格式）
-const chapterImageUploadUrl = '/api/tutor/upload-image'
+// Vditor 图片上传走 /api/tutor/upload-image（返回 Vditor 期望的 {code,msg,data:{succMap}} 格式）。
+// 携带 chapter_id 按章节分目录存储 images/chapters/<chapterId>/，删除章节时可按前缀清理。
+const chapterImageUploadUrl = computed(() => {
+  const chapterId = chapterDetail.value?.chapter_id
+  return chapterId ? `/api/tutor/upload-image?chapter_id=${chapterId}` : '/api/tutor/upload-image'
+})
 
 const chapterFiles = computed(() => chapterDetail.value?.files || [])
 

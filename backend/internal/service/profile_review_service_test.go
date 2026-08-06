@@ -27,6 +27,8 @@ func (m *memReviewStorage) Delete(_ context.Context, url string) error {
 
 func (m *memReviewStorage) Exists(context.Context, string) (bool, error) { return true, nil }
 
+func (m *memReviewStorage) List(context.Context, string) ([]string, error) { return nil, nil }
+
 func newReviewTestSvc(t *testing.T) (*ProfileReviewService, *NotificationService, *gorm.DB, *memReviewStorage) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)

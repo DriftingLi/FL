@@ -177,7 +177,7 @@
 | GET | `/api/tutor/course/:course_id/chapters` | 课程章节列表 |
 | GET | `/api/tutor/chapter/:chapter_id` | 章节详情 |
 | POST | `/api/tutor/chapter/:chapter_id/upload` | 上传章节文件（课件/视频等） |
-| POST | `/api/tutor/upload-image` | 上传图文 Markdown 图片（Vditor 格式，返回 succMap） |
+| POST | `/api/tutor/upload-image` | 上传图文 Markdown 图片（Vditor 格式，返回 succMap；`chapter_id` 可选，按章节分目录存储） |
 | PUT | `/api/tutor/chapter/:chapter_id` | 更新章节 |
 | DELETE | `/api/tutor/file/:file_id` | 删除文件 |
 | POST | `/api/tutor/files/batch-delete` | 批量删除文件 |
@@ -326,12 +326,15 @@
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
+| POST | `/api/forum/upload-image` | 上传论坛图片（multipart `file`，返回 `{url}`；先传图后随发帖/回复提交） |
 | GET | `/api/forum/topics` | 帖子列表 |
-| POST | `/api/forum/topics` | 发帖 |
+| POST | `/api/forum/topics` | 发帖（可选 `images: [url...]`，最多 9 张） |
 | GET | `/api/forum/topics/:id` | 帖子详情 |
-| POST | `/api/forum/topics/:id/replies` | 回复 |
-| DELETE | `/api/forum/topics/:id` | 删帖 |
-| DELETE | `/api/forum/replies/:id` | 删除回复 |
+| POST | `/api/forum/topics/:id/replies` | 回复（可选 `images: [url...]`，最多 3 张） |
+| DELETE | `/api/forum/topics/:id` | 删帖（主题与全部回复图片一并清理） |
+| DELETE | `/api/forum/replies/:id` | 删除回复（含下级回复图片一并清理） |
+
+> 图片说明：图文分离，正文保持纯文本，图片以 `images` 数组独立存储/展示；仅接受本站 `images/forum/` 前缀 URL；上传后未发帖的悬空图片由后端定时任务（每 6 小时）回收超过 24h 未被引用的文件。
 
 ## 15. 通知 `/api/notifications`
 
