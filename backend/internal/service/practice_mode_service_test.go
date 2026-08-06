@@ -25,18 +25,25 @@ func TestGetTagQuestions(t *testing.T) {
 	tag2, _ := catalogSvc.CreateQuestionTag(map[string]any{"code": "hydraulic", "name": "液压", "sort_order": 2})
 
 	qsvc := NewQuestionBankService(db)
-	q1, _ := qsvc.CreateQuestion(map[string]any{
+	q1, err := qsvc.CreateQuestion(map[string]any{
 		"type": "single_choice", "content": "法规已发布题", "options": []string{"A", "B"}, "answer": "A",
 		"status": "published", "tag_ids": []int{tag1["id"].(int)},
 	}, nil, "tutor")
-	qsvc.CreateQuestion(map[string]any{
+	if err != nil {
+		t.Fatalf("创建已发布题目失败: %v", err)
+	}
+	if _, err := qsvc.CreateQuestion(map[string]any{
 		"type": "single_choice", "content": "法规草稿题", "options": []string{"A", "B"}, "answer": "A",
 		"status": "draft", "tag_ids": []int{tag1["id"].(int)},
-	}, nil, "tutor")
-	qsvc.CreateQuestion(map[string]any{
+	}, nil, "tutor"); err != nil {
+		t.Fatalf("创建草稿题目失败: %v", err)
+	}
+	if _, err := qsvc.CreateQuestion(map[string]any{
 		"type": "true_false", "content": "液压已发布题", "answer": "true",
 		"status": "published", "tag_ids": []int{tag2["id"].(int)},
-	}, nil, "tutor")
+	}, nil, "tutor"); err != nil {
+		t.Fatalf("创建已发布题目失败: %v", err)
+	}
 
 	// 按标签抽全部已发布题目（草稿题不出现）
 	got, err := svc.GetTagQuestions(tag1["id"].(int), 0)
