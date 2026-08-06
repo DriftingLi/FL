@@ -130,6 +130,7 @@ func (m *memDictStore) ListCoefficientConfigs(_ context.Context) ([]repository.C
 // =====================================================
 
 type memEvalStore struct {
+	mu      sync.Mutex
 	nextID  int64
 	records map[int64]model.EvaluationDetail
 }
@@ -139,6 +140,8 @@ func newMemEvalStore() *memEvalStore {
 }
 
 func (m *memEvalStore) CreateEvaluation(_ context.Context, p *repository.CreateEvaluationParams) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	id := m.nextID
 	m.nextID++
 	m.records[id] = model.EvaluationDetail{
@@ -157,6 +160,8 @@ func (m *memEvalStore) CreateEvaluation(_ context.Context, p *repository.CreateE
 }
 
 func (m *memEvalStore) GetEvaluation(_ context.Context, id int64) (*model.EvaluationDetail, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	d, ok := m.records[id]
 	if !ok {
 		return nil, pgx.ErrNoRows
@@ -169,10 +174,14 @@ func (m *memEvalStore) GetEvaluationByUser(ctx context.Context, id int64, _ int)
 }
 
 func (m *memEvalStore) CountEvaluations(context.Context, string, int) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return len(m.records), nil
 }
 
 func (m *memEvalStore) ListEvaluations(context.Context, string, int, int, int) ([]model.EvaluationDetail, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	out := make([]model.EvaluationDetail, 0, len(m.records))
 	for _, d := range m.records {
 		out = append(out, d)
@@ -181,6 +190,8 @@ func (m *memEvalStore) ListEvaluations(context.Context, string, int, int, int) (
 }
 
 func (m *memEvalStore) UpdateEvaluationReportPath(_ context.Context, id int64, path string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	d, ok := m.records[id]
 	if !ok {
 		return pgx.ErrNoRows
@@ -475,6 +486,7 @@ func equalStrings(a, b []string) bool {
 
 // memStorage 计数存储 fake：统计 Save 次数（断言并发下载不重复上传）。
 type memStorage struct {
+	mu    sync.Mutex
 	saves int
 	urls  map[string][]byte
 }
@@ -484,6 +496,8 @@ func newMemStorage() *memStorage {
 }
 
 func (m *memStorage) Save(_ context.Context, key string, content []byte, _ string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.saves++
 	m.urls[key] = content
 	return "https://fake-cdn/" + key, nil
@@ -492,6 +506,8 @@ func (m *memStorage) Save(_ context.Context, key string, content []byte, _ strin
 func (m *memStorage) Delete(context.Context, string) error { return nil }
 
 func (m *memStorage) Exists(_ context.Context, url string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	key := strings.TrimPrefix(url, "https://fake-cdn/")
 	_, ok := m.urls[key]
 	return ok, nil
