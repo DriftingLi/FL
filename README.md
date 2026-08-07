@@ -145,7 +145,7 @@
 │   ├── pkg/
 │   │   ├── response/             # 统一响应结构
 │   │   └── pdf/                  # 中文 PDF 报告（gofpdf + SimHei）
-│   ├── migrations/               # 迁移脚本（squash baseline 000001 + 增量 000030+）
+│   ├── migrations/               # 迁移脚本（squash baseline 000001 + 增量 000002+）
 │   ├── Dockerfile / entrypoint.sh / Makefile
 │   ├── docker-compose.yml        # 本地 postgres + redis + libreoffice
 │   ├── .env                      # 本地开发环境变量（gitignore，不入库）
@@ -324,7 +324,7 @@ npm run type-check   # vue-tsc 类型检查
 
 ## 数据库迁移
 
-迁移脚本位于 `backend/migrations/`，采用 `序号_名称.up.sql` / `.down.sql` 成对组织。历史迁移（000001 ~ 000028）已 **squash 合并**为单一 baseline，新增迁移从 **000030** 开始编号：
+迁移脚本位于 `backend/migrations/`，采用 `序号_名称.up.sql` / `.down.sql` 成对组织。历史迁移（000001 ~ 000028）已 **squash 合并**为单一 baseline，新增迁移从 **000002** 开始编号：
 
 | 迁移 | 说明 |
 | --- | --- |
