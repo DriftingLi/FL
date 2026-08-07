@@ -69,7 +69,7 @@
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
-| GET | `/api/courses` | 无 | 课程列表（公开，支持 `category` / `specialty_id` / `level_id` 过滤） |
+| GET | `/api/courses` | 无 | 课程列表（公开，支持 `specialty_id` / `level_id` 过滤；未挂方向/等级的课程不展示） |
 | GET | `/api/catalog/tree` | 无 | 课程目录树：专业方向 → 课程等级 → 课程（含章节数） |
 | GET | `/api/specialties` | 无 | 专业方向列表（仅启用项） |
 | GET | `/api/levels` | 无 | 课程等级列表（仅启用项） |
@@ -103,11 +103,6 @@
 | POST | `/api/question-bank/questions/:question_id/publish` | JWT+admin | 发布题目 |
 | POST | `/api/question-bank/questions/:question_id/reject` | JWT+admin | 驳回题目 |
 | GET | `/api/question-bank/stats` | JWT | 题库统计 |
-| GET | `/api/question-bank/categories` | JWT | 分类列表 |
-| GET | `/api/question-bank/knowledge-points` | JWT | 知识点列表 |
-| POST | `/api/question-bank/knowledge-points` | JWT+tutor/admin | 新增知识点 |
-| PUT | `/api/question-bank/knowledge-points/:kp_id` | JWT+tutor/admin | 更新知识点 |
-| DELETE | `/api/question-bank/knowledge-points/:kp_id` | JWT+tutor/admin | 删除知识点 |
 | POST | `/api/question-bank/upload-image` | JWT+tutor/admin | 上传题图 |
 
 ## 5. 自由刷题模式 `/api/practice-mode`（role=hrwai_user）
@@ -120,14 +115,11 @@
 | GET | `/api/practice-mode/sequential-progress` | 顺序练习进度 |
 | POST | `/api/practice-mode/progress` | 保存练习进度 |
 | GET | `/api/practice-mode/progress` | 查询练习进度 |
-| GET | `/api/practice-mode/category` | 分类练习 |
-| GET | `/api/practice-mode/knowledge-point` | 知识点专项练习 |
-| GET | `/api/practice-mode/knowledge-point-progress` | 知识点专项进度 |
 | POST | `/api/practice-mode/submit` | 提交练习 |
 | GET | `/api/practice-mode/stats` | 练习统计 |
 | GET | `/api/practice-mode/history` | 练习历史 |
 
-## 6. 等级考试 `/api/level-exam`
+## 6. 定级考试 `/api/level-exam`
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
@@ -211,7 +203,7 @@
 
 ### 培训目录管理（专业方向 / 等级 / 证书模板 / 题库标签）
 
-课程表单新增字段：`specialty_id`、`level_id`、`theory_hours`（理论学时）、`practice_hours`（实操学时）、`certificate_template_id`、`prerequisite_course_ids`（前置课程 ID 数组）、`sort_order`（课程排序，所属方向+等级层级内生效）。
+课程表单新增字段：`specialty_id`、`level_id`（创建/编辑必填）、`theory_hours`（理论学时）、`practice_hours`（实操学时）、`certificate_template_id`、`prerequisite_course_ids`（前置课程 ID 数组，编辑回填避免清空）、`sort_order`（课程排序，所属方向+等级层级内生效）。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -235,6 +227,10 @@
 | DELETE | `/api/admin/question-tag/:id` | 删除题库标签 |
 | GET | `/api/admin/question/:question_id/tags` | 查询题目标签 |
 | PUT | `/api/admin/question/:question_id/tags` | 全量替换题目标签（`tag_ids`） |
+| PUT | `/api/admin/specialty/:specialty_id/sort` | 交换专业方向排序（body `swap_with`） |
+| PUT | `/api/admin/level/:level_id/sort` | 交换课程等级排序（body `swap_with`） |
+| PUT | `/api/admin/question-tag/:id/sort` | 交换题库标签排序（body `swap_with`） |
+| PUT | `/api/admin/course/:course_id/sort` | 交换课程排序（同一方向+等级组内，body `swap_with`） |
 
 ### 用户管理
 

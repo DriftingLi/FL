@@ -24,9 +24,16 @@
 
 ## 培训领域
 
-- **课程（course）/ 章节（chapter）**：PPT/视频/图文混排内容；PPT 经 LibreOffice sidecar 转 WebP。
-- **考试（exam）/ 模拟考试（mock exam）/ 等级考试（level exam）**：自动判分 + AI 评分；题目类型满分规则由判分规则表定义。
-- **练习（practice）/ 错题本（wrong question book）**：自由刷题/知识点专项。
+- **课程目录（course catalog）**：专业方向 → 课程等级 → 课程 的三层组织视图（虚拟树，实时由 specialty/course_level/course 计算，无物理 catalog 表）。未挂方向/等级的课程不出现在学员端目录与列表（口径统一）。
+- **专业方向（specialty）**：课程目录一级维度，全局共享（操作/维修/安全/电池等），管理员维护。
+- **课程等级（course level）**：课程目录二级维度，**全局共享**（不归属方向，入门/进阶/专项/认证），任意方向的课程可挂任意等级。
+- **课程（course）/ 章节（chapter）**：PPT/视频/图文混排内容；PPT 经 LibreOffice sidecar 转 WebP。课程挂专业方向 + 课程等级（创建/编辑必填），可关联证书模板与前置课程。
+- **证书模板（certificate template）**：课程可选关联的培训合格证书，含有效期（天）；课程挂靠后学员完成学习可获证。
+- **前置课程（course prerequisite）**：课程间的依赖关系（A 完成才能学 B），防自指防成环；编辑回填 prerequisite_course_ids 避免误清空。
+- **考试（exam）/ 模拟考试（mock exam）/ 定级考试（原等级考试，level exam）**：自动判分 + AI 评分；题目类型满分规则由判分规则表定义。定级考试为考试中心功能名，与目录维度「课程等级」无关。
+- **练习（practice）/ 错题本（wrong question book）**：顺序/随机/专项/标签练习；错题按题收录。
+- **题库标签（question tag）**：题目分类维度（法规/结构/液压/电气/制动/故障诊断/应急等），创建需唯一编码；题目可多标签，标签练习按标签抽题。
+- **标签练习（tag practice）**：按题库标签抽题的练习模式（原「章节练习」已退役并入）。
 - **AI 助手**：大模型流式对话（DeepSeek 默认，可配置 OpenAI 兼容模型）。
 - **论坛（forum）**：综合讨论区 + 章节讨论区；发帖/回复（可回复别人的回复）。**图文分离**——主题与回复可携带 `images` 图片 URL 数组（JSONB），正文保持纯文本，不做 markdown 渲染。
 - **论坛图片（forum image）**：先经 `POST /api/forum/upload-image` 上传到 `images/forum/` 子目录拿 URL，随发帖/回复提交；删除主题/回复时图片存储一并清理；上传后未发帖的**悬空图片**由进程内定时任务（每 6 小时）扫描差集、回收超过 24h 未被引用的文件。
