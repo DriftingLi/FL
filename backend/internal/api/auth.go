@@ -180,6 +180,8 @@ func (h *AuthHandler) Me(c *gin.Context) {
 			data["phone"] = u.Phone
 			data["email"] = u.Email
 			data["company"] = u.Company
+			// 是否已设置密码（决定个人资料页"账号密码"卡片提示文案）
+			data["has_password"] = u.Password != ""
 		}
 		// 待审核的资料修改（昵称/头像），供前端展示"审核中"状态
 		if pending, err := h.reviewSvc.GetPendingForUser(uid); err == nil {
