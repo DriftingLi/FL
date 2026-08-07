@@ -54,8 +54,17 @@
         <span class="card-title">账号密码</span>
       </template>
       <div class="cell-row">
-        <span>设置密码后可使用「账号密码登录」</span>
-        <el-button type="primary" plain @click="passwordDialogVisible = true">设置/修改密码</el-button>
+        <template v-if="userInfo.has_password">
+          <span>已设置密码，可使用「账号密码登录」</span>
+          <el-tag size="small" type="success">已设置</el-tag>
+        </template>
+        <template v-else>
+          <span>尚未设置密码，设置后可使用「账号密码登录」</span>
+          <el-tag size="small" type="warning">未设置</el-tag>
+        </template>
+        <el-button type="primary" plain @click="passwordDialogVisible = true">
+          {{ userInfo.has_password ? '修改密码' : '设置密码' }}
+        </el-button>
       </div>
     </el-card>
 
@@ -87,7 +96,7 @@
     </el-dialog>
 
     <!-- 设置/修改密码 -->
-    <el-dialog v-model="passwordDialogVisible" title="设置/修改密码" width="440px">
+    <el-dialog v-model="passwordDialogVisible" :title="userInfo.has_password ? '修改密码' : '设置密码'" width="440px">
       <el-form label-width="0">
         <el-form-item>
           <el-input
@@ -244,6 +253,8 @@ async function handleSetPassword() {
       passwordDialogVisible.value = false
       password.value = ''
       confirmPassword.value = ''
+      // 刷新用户信息以更新 has_password 状态
+      await authStore.refreshUserInfo()
     }
   } catch (e) {
     // 拦截器已提示
