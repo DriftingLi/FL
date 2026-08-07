@@ -22,7 +22,7 @@ func NewWrongQuestionService(db *gorm.DB) *WrongQuestionService {
 }
 
 // GetWrongQuestions 错题列表。
-func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, qType string, knowledgePointID *int, minWrongCount *int) map[string]any {
+func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, qType string, minWrongCount *int) map[string]any {
 	if page <= 0 {
 		page = 1
 	}
@@ -30,14 +30,9 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 		pageSize = 20
 	}
 	q := s.db.Model(&model.WrongQuestion{}).Where("student_id = ? AND is_removed = ?", studentID, false)
-	if qType != "" || knowledgePointID != nil {
+	if qType != "" {
 		q = q.Joins("JOIN question ON question.id = wrong_question.question_id")
-		if qType != "" {
-			q = q.Where("question.type = ?", qType)
-		}
-		if knowledgePointID != nil {
-			q = q.Where("question.knowledge_point_id = ?", *knowledgePointID)
-		}
+		q = q.Where("question.type = ?", qType)
 	}
 	if minWrongCount != nil {
 		q = q.Where("wrong_question.wrong_count >= ?", *minWrongCount)
@@ -115,7 +110,6 @@ func (s *WrongQuestionService) GetStats(studentID int) map[string]any {
 	s.db.Where("student_id = ? AND is_removed = ?", studentID, false).Find(&items)
 
 	byType := map[string]int{}
-	byKnowledgePoint := map[string]int{}
 	total := len(items)
 	for i := range items {
 		wq := &items[i]
@@ -124,19 +118,10 @@ func (s *WrongQuestionService) GetStats(studentID int) map[string]any {
 			continue
 		}
 		byType[question.Type]++
-		if question.KnowledgePointID != nil {
-			var kp model.KnowledgePoint
-			kpName := "未分类"
-			if err := s.db.First(&kp, *question.KnowledgePointID).Error; err == nil {
-				kpName = kp.Name
-			}
-			byKnowledgePoint[kpName]++
-		}
 	}
 	return map[string]any{
-		"total":              total,
-		"by_type":            byType,
-		"by_knowledge_point": byKnowledgePoint,
+		"total":   total,
+		"by_type": byType,
 	}
 }
 
@@ -157,16 +142,15 @@ func (s *WrongQuestionService) ExportWrongQuestions(studentID int) []map[string]
 			_ = jsonUnmarshal(question.Options, &options)
 		}
 		item := map[string]any{
-			"question_id":        question.ID,
-			"type":               question.Type,
-			"content":            question.Content,
-			"options":            options,
-			"correct_answer":     question.Answer,
-			"explanation":        question.Explanation,
-			"wrong_count":        wq.WrongCount,
-			"image_url":          question.ImageURL,
-			"knowledge_point_id": question.KnowledgePointID,
-			"last_wrong_at":      formatISO(wq.LastWrongAt),
+			"question_id":    question.ID,
+			"type":           question.Type,
+			"content":        question.Content,
+			"options":        options,
+			"correct_answer": question.Answer,
+			"explanation":    question.Explanation,
+			"wrong_count":    wq.WrongCount,
+			"image_url":      question.ImageURL,
+			"last_wrong_at":  formatISO(wq.LastWrongAt),
 		}
 		exportData = append(exportData, item)
 	}

@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, type Plugin } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import path from 'node:path'
 import fs from 'node:fs'
@@ -59,6 +59,10 @@ function vditorStaticPlugin(): Plugin {
 
 export default defineConfig({
   plugins: [vue(), vditorStaticPlugin()],
+  test: {
+    environment: 'happy-dom',
+    globals: true
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src')

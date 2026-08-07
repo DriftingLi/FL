@@ -1,4 +1,4 @@
-import type { QuestionType, CourseCategory } from '@/types/question'
+import type { QuestionType } from '@/types/question'
 
 // 题型中文映射
 export const typeMap: Record<QuestionType, string> = {
@@ -10,16 +10,6 @@ export const typeMap: Record<QuestionType, string> = {
 }
 
 export const questionTypeOptions = Object.entries(typeMap).map(([value, label]) => ({ value, label }))
-
-// 课程四分类
-export const categoryMap: Record<CourseCategory, string> = {
-  CATEGORY_01: '基础理论',
-  CATEGORY_02: '安全规范',
-  CATEGORY_03: '实操技能',
-  CATEGORY_04: '进阶提升'
-}
-
-export const categoryOptions = Object.entries(categoryMap).map(([value, label]) => ({ value, label }))
 
 // 考试场次状态
 export const sessionStatusMap: Record<string, string> = {

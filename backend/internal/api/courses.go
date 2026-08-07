@@ -22,10 +22,9 @@ func RegisterCoursesRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB,
 	rg.GET("/courses", func(c *gin.Context) {
 		page := atoiDefault(c.Query("page"), 1)
 		pageSize := atoiDefault(c.Query("page_size"), 12)
-		category := c.Query("category")
 		specialtyID := queryIntPtr(c, "specialty_id")
 		levelID := queryIntPtr(c, "level_id")
-		response.Success(c, svc.GetCourses(page, pageSize, category, specialtyID, levelID))
+		response.Success(c, svc.GetCourses(page, pageSize, specialtyID, levelID))
 	})
 
 	// GET /api/chapter/:chapter_id/slides  章节幻灯片（公开访问）

@@ -271,16 +271,10 @@ const routes: RouteRecordRaw[] = [
           meta: { navKey: 'forum-manage', navLabel: '论坛管理', navGroup: 'education' }
         },
       {
-        path: 'courses',
-        name: 'CourseManage',
-        component: () => import('@/pages/admin/CourseManage.vue'),
-        meta: { navKey: 'courses', navLabel: '课程管理', navGroup: 'education' }
-      },
-      {
         path: 'course-catalog',
         name: 'CourseCatalog',
         component: () => import('@/pages/admin/CourseCatalog.vue'),
-        meta: { navKey: 'course-catalog', navLabel: '课程目录', navGroup: 'education' }
+        meta: { navKey: 'course-catalog', navLabel: '课程管理', navGroup: 'education' }
       },
       {
         path: 'question-tags',

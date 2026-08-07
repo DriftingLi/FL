@@ -11,9 +11,9 @@
           <el-option label="简答题" value="short_answer" />
         </el-select>
       </el-form-item>
-      <el-form-item label="知识点">
-        <el-select v-model="form.knowledge_point_id" clearable placeholder="选择知识点">
-          <el-option v-for="kp in knowledgePoints" :key="kp.id" :label="kp.name" :value="kp.id" />
+      <el-form-item label="考点标签">
+        <el-select v-model="form.tag_ids" multiple filterable collapse-tags placeholder="选择标签（可多选）">
+          <el-option v-for="t in tags" :key="t.id" :label="t.name" :value="t.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="题干" required>
@@ -92,6 +92,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { questionBankApi, type QuestionPayload } from '@/api/questionBank'
+import { trainingApi } from '@/api/training'
 
 const route = useRoute()
 const router = useRouter()
@@ -101,7 +102,7 @@ const hasOptions = computed(() => ['single_choice', 'multi_choice', 'fault_image
 const optionKeys = ['A', 'B', 'C', 'D'] as const
 
 const submitting = ref(false)
-const knowledgePoints = ref<{ id: number; name: string }[]>([])
+const tags = ref<{ id: number; name: string }[]>([])
 const multiAnswer = ref<string[]>([])
 const imageUploading = ref(false)
 
@@ -115,7 +116,7 @@ const form = ref<{
   reference_answer: string
   scoring_criteria: string
   score: number
-  knowledge_point_id: number | null
+  tag_ids: number[]
   status: string
 }>({
   type: 'single_choice',
@@ -127,14 +128,14 @@ const form = ref<{
   reference_answer: '',
   scoring_criteria: '',
   score: 3,
-  knowledge_point_id: null,
+  tag_ids: [],
   status: 'pending'
 })
 
 onMounted(async () => {
   try {
-    const res = await questionBankApi.getKnowledgePoints()
-    knowledgePoints.value = res.data || []
+    const res = await trainingApi.getTags()
+    tags.value = res.data.tags || []
   } catch (e) {}
 
   if (isEdit.value) {
@@ -145,7 +146,7 @@ onMounted(async () => {
         ...form.value,
         ...q,
         options: (q.options as { A: string; B: string; C: string; D: string } | undefined) ?? form.value.options,
-        knowledge_point_id: q.knowledge_point_id ?? form.value.knowledge_point_id
+        tag_ids: (q as unknown as Record<string, unknown>).tag_ids as number[] | undefined ?? form.value.tag_ids
       }
       if (q.type === 'multi_choice' && q.answer) {
         multiAnswer.value = q.answer.split(',')
@@ -208,8 +209,7 @@ async function submitForm() {
   try {
     const data: QuestionPayload = {
       ...form.value,
-      options: form.value.options ?? undefined,
-      knowledge_point_id: form.value.knowledge_point_id ?? undefined
+      options: form.value.options ?? undefined
     }
     if (data.type === 'multi_choice') {
       data.answer = multiAnswer.value.sort().join(',')

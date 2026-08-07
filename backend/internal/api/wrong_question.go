@@ -26,19 +26,13 @@ func RegisterWrongQuestionRoutes(rg *gin.RouterGroup, cfg *config.Config, db *go
 		page := atoiDefault(c.Query("page"), 1)
 		pageSize := atoiDefault(c.Query("page_size"), 20)
 		qType := c.Query("type")
-		var kpID *int
-		if s := c.Query("knowledge_point_id"); s != "" {
-			if id, err := strconv.Atoi(s); err == nil {
-				kpID = &id
-			}
-		}
 		var minWrongCount *int
 		if s := c.Query("min_wrong_count"); s != "" {
 			if v, err := strconv.Atoi(s); err == nil {
 				minWrongCount = &v
 			}
 		}
-		response.Success(c, svc.GetWrongQuestions(studentID, page, pageSize, qType, kpID, minWrongCount))
+		response.Success(c, svc.GetWrongQuestions(studentID, page, pageSize, qType, minWrongCount))
 	})
 
 	// POST /api/wrong-questions/:question_id/redo  重做错题

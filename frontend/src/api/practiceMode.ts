@@ -25,8 +25,8 @@ export interface PracticeHistoryItem {
 
 // 题库练习模式接口，对应后端 /api/practice-mode
 export const practiceModeApi = {
-  // 随机练习：随机抽 count 题（可按题型/知识点筛选）
-  getFreeQuestions(params?: { count?: number; type?: string; knowledge_point_id?: number; category?: string }) {
+  // 随机练习：随机抽 count 题（可按题型筛选）
+  getFreeQuestions(params?: { count?: number; type?: string }) {
     return request.get<Question[]>('/practice-mode/free', { params })
   },
   // 标签练习：按题库标签抽题（返回结构与 /free 一致、不含答案）
@@ -41,25 +41,13 @@ export const practiceModeApi = {
   getSequentialProgress() {
     return request.get<PracticeProgress>('/practice-mode/sequential-progress')
   },
-  // 保存练习游标和答题状态（支持顺序/专项/章节练习）
+  // 保存练习游标和答题状态（顺序/专项/标签练习）
   saveProgress(index: number, mode: string = 'sequential', total: number = 0, answersState: Record<string, unknown> = {}) {
     return request.post<null>('/practice-mode/progress', { index, practice_mode: mode, total, answers_state: answersState })
   },
   // 查询任意模式的练习进度和答题状态（断点续练用）
   getProgress(mode: string = 'sequential') {
     return request.get<PracticeProgressData>('/practice-mode/progress', { params: { mode } })
-  },
-  // 章节练习：按课程分类抽题
-  getCategoryQuestions(params: { category: string; count?: number }) {
-    return request.get<Question[]>('/practice-mode/category', { params })
-  },
-  // 按知识点练习
-  getKnowledgePointPractice(params: { knowledge_point_id: number; count?: number }) {
-    return request.get<Question[]>('/practice-mode/knowledge-point', { params })
-  },
-  // 知识点练习进度
-  getKnowledgePointProgress(params?: { knowledge_point_id?: number }) {
-    return request.get<PracticeProgressData>('/practice-mode/knowledge-point-progress', { params })
   },
   // 提交单题答案并判定
   submitAnswer(data: { question_id: number; user_answer: string; practice_type?: string }) {

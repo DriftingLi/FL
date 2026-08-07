@@ -3,7 +3,6 @@ import request from './request'
 export interface WrongQuestionsQuery {
   page?: number
   page_size?: number
-  category?: string
   practice_type?: string
   type?: string
 }

@@ -23,14 +23,8 @@ func RegisterPracticeModeRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gor
 	// GET /api/practice-mode/free  随机练习抽题（count 控制题量）
 	g.GET("/free", func(c *gin.Context) {
 		qType := c.Query("type")
-		var kpID *int
-		if s := c.Query("knowledge_point_id"); s != "" {
-			if id, err := strconv.Atoi(s); err == nil {
-				kpID = &id
-			}
-		}
 		count := atoiDefault(c.Query("count"), 20)
-		result, err := svc.GetFreeQuestions(qType, kpID, count)
+		result, err := svc.GetFreeQuestions(qType, count)
 		if err != nil {
 			response.NotFound(c, err.Error())
 			return
@@ -78,7 +72,7 @@ func RegisterPracticeModeRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gor
 		response.Success(c, svc.GetSequentialProgress(studentID))
 	})
 
-	// POST /api/practice-mode/progress  保存练习游标和答题状态（支持顺序/专项/章节练习）
+	// POST /api/practice-mode/progress  保存练习游标和答题状态（支持顺序/专项/标签练习）
 	g.POST("/progress", func(c *gin.Context) {
 		uid, _ := c.Get(string(middleware.CtxUserID))
 		studentID, _ := uid.(int)
@@ -108,64 +102,6 @@ func RegisterPracticeModeRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gor
 			mode = "sequential"
 		}
 		response.Success(c, svc.GetProgress(studentID, mode))
-	})
-
-	// GET /api/practice-mode/category  章节练习：按课程分类抽题
-	g.GET("/category", func(c *gin.Context) {
-		category := c.Query("category")
-		if category == "" {
-			response.BadRequest(c, "请指定课程分类")
-			return
-		}
-		count := atoiDefault(c.Query("count"), 0) // 0=全部
-		result, err := svc.GetCategoryQuestions(category, count)
-		if err != nil {
-			response.NotFound(c, err.Error())
-			return
-		}
-		response.Success(c, result)
-	})
-
-	// GET /api/practice-mode/knowledge-point  按知识点练习
-	g.GET("/knowledge-point", func(c *gin.Context) {
-		uid, _ := c.Get(string(middleware.CtxUserID))
-		studentID, _ := uid.(int)
-		kpIDStr := c.Query("knowledge_point_id")
-		if kpIDStr == "" {
-			response.BadRequest(c, "请指定知识点")
-			return
-		}
-		kpID, err := strconv.Atoi(kpIDStr)
-		if err != nil {
-			response.BadRequest(c, "知识点ID无效")
-			return
-		}
-		count := atoiDefault(c.Query("count"), 0)
-		randomOrder := c.Query("random") == "true" || c.Query("random") == "True"
-		result, err := svc.GetKnowledgePointPractice(studentID, kpID, count, randomOrder)
-		if err != nil {
-			response.NotFound(c, err.Error())
-			return
-		}
-		response.Success(c, result)
-	})
-
-	// GET /api/practice-mode/knowledge-point-progress  知识点进度
-	g.GET("/knowledge-point-progress", func(c *gin.Context) {
-		uid, _ := c.Get(string(middleware.CtxUserID))
-		studentID, _ := uid.(int)
-		var kpID *int
-		if s := c.Query("knowledge_point_id"); s != "" {
-			if id, err := strconv.Atoi(s); err == nil {
-				kpID = &id
-			}
-		}
-		result, err := svc.GetKnowledgePointProgress(studentID, kpID)
-		if err != nil {
-			response.NotFound(c, err.Error())
-			return
-		}
-		response.Success(c, result)
 	})
 
 	// POST /api/practice-mode/submit  提交答案

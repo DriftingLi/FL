@@ -21,6 +21,71 @@ func NewTrainingCatalogService(db *gorm.DB) *TrainingCatalogService {
 
 // ===== 专业方向 =====
 
+// nextSortOrderValue 返回表内（可选按组过滤）当前最大 sort_order + 1，新项排末尾。
+func nextSortOrderValue(db *gorm.DB, table string, where map[string]any) int {
+	q := db.Table(table).Select("COALESCE(MAX(sort_order), 0)")
+	for k, v := range where {
+		q = q.Where(k+" = ?", v)
+	}
+	var max int
+	if err := q.Scan(&max).Error; err != nil {
+		return 1
+	}
+	return max + 1
+}
+
+// renumberSortGroup 按 (sort_order, id) 升序把组内全部项重新顺序编号（1..N），返回新序 ID 列表。
+// 消除同值 sort_order（默认 0）导致的顺序不可控。
+func renumberSortGroup(db *gorm.DB, entity any, idCol string, where map[string]any) ([]int, error) {
+	var rows []map[string]any
+	q := db.Model(entity).Select(idCol + ", sort_order")
+	for k, v := range where {
+		q = q.Where(k+" = ?", v)
+	}
+	q.Order("sort_order ASC, " + idCol + " ASC")
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	ids := make([]int, 0, len(rows))
+	for _, r := range rows {
+		ids = append(ids, toInt(r[idCol]))
+	}
+	return ids, nil
+}
+
+// swapGroupPositions 把组内两项交换位置：重编号后交换 a/b 在新序中的下标，再整体落库。
+// 即使两项 sort_order 相同（默认 0）也真实生效。
+func swapGroupPositions(db *gorm.DB, entity any, idCol string, idA, idB int, where map[string]any) error {
+	ids, err := renumberSortGroup(db, entity, idCol, where)
+	if err != nil {
+		return err
+	}
+	ia, ib := -1, -1
+	for i, id := range ids {
+		if id == idA {
+			ia = i
+		}
+		if id == idB {
+			ib = i
+		}
+	}
+	if ia < 0 || ib < 0 {
+		return errors.New("待交换的项不存在")
+	}
+	if ia == ib {
+		return nil
+	}
+	ids[ia], ids[ib] = ids[ib], ids[ia]
+	return db.Transaction(func(tx *gorm.DB) error {
+		for i, id := range ids {
+			if err := tx.Model(entity).Where(idCol+" = ?", id).Update("sort_order", i+1).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // ListSpecialties 专业方向列表（管理端含停用项，学员端仅启用项）。
 func (s *TrainingCatalogService) ListSpecialties(activeOnly bool) map[string]any {
 	q := s.db.Model(&model.Specialty{})
@@ -50,7 +115,7 @@ func (s *TrainingCatalogService) CreateSpecialty(data map[string]any) (map[strin
 		Code:        code,
 		Name:        name,
 		Description: getString(data, "description"),
-		SortOrder:   toIntDefault(data["sort_order"], 0),
+		SortOrder:   toIntDefault(data["sort_order"], nextSortOrderValue(s.db, "specialty", nil)),
 		Status:      int16(toIntDefault(data["status"], 1)),
 		CreatedAt:   beijingNow(),
 	}
@@ -58,6 +123,11 @@ func (s *TrainingCatalogService) CreateSpecialty(data map[string]any) (map[strin
 		return nil, err
 	}
 	return specialtyToDict(&spec), nil
+}
+
+// SwapSpecialtySort 交换两个专业方向的排序位置（真实生效，含同值默认）。
+func (s *TrainingCatalogService) SwapSpecialtySort(a, b int) error {
+	return swapGroupPositions(s.db, &model.Specialty{}, "specialty_id", a, b, nil)
 }
 
 // UpdateSpecialty 更新专业方向。
@@ -130,7 +200,7 @@ func (s *TrainingCatalogService) CreateLevel(data map[string]any) (map[string]an
 		Code:        code,
 		Name:        name,
 		Description: getString(data, "description"),
-		SortOrder:   toIntDefault(data["sort_order"], 0),
+		SortOrder:   toIntDefault(data["sort_order"], nextSortOrderValue(s.db, "course_level", nil)),
 		Status:      int16(toIntDefault(data["status"], 1)),
 		CreatedAt:   beijingNow(),
 	}
@@ -138,6 +208,11 @@ func (s *TrainingCatalogService) CreateLevel(data map[string]any) (map[string]an
 		return nil, err
 	}
 	return levelToDict(&level), nil
+}
+
+// SwapLevelSort 交换两个课程等级的排序位置（真实生效，含同值默认）。
+func (s *TrainingCatalogService) SwapLevelSort(a, b int) error {
+	return swapGroupPositions(s.db, &model.CourseLevel{}, "level_id", a, b, nil)
 }
 
 // UpdateLevel 更新课程等级。
@@ -347,7 +422,7 @@ func (s *TrainingCatalogService) CreateQuestionTag(data map[string]any) (map[str
 		Name:        name,
 		Category:    getString(data, "category"),
 		Description: getString(data, "description"),
-		SortOrder:   toIntDefault(data["sort_order"], 0),
+		SortOrder:   toIntDefault(data["sort_order"], nextSortOrderValue(s.db, "question_tag", nil)),
 		Status:      int16(toIntDefault(data["status"], 1)),
 		CreatedAt:   beijingNow(),
 		UpdatedAt:   beijingNow(),
@@ -356,6 +431,11 @@ func (s *TrainingCatalogService) CreateQuestionTag(data map[string]any) (map[str
 		return nil, err
 	}
 	return tagToDict(&tag), nil
+}
+
+// SwapQuestionTagSort 交换两个题库标签的排序位置（真实生效，含同值默认）。
+func (s *TrainingCatalogService) SwapQuestionTagSort(a, b int) error {
+	return swapGroupPositions(s.db, &model.QuestionTag{}, "id", a, b, nil)
 }
 
 // UpdateQuestionTag 更新题库标签。
@@ -531,6 +611,7 @@ func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool) m
 				cd := courseToDict(&rows[k].Course)
 				cd["chapter_count"] = rows[k].ChapterCount
 				if withChapters {
+					fillPrereqIDs(s.db, rows[k].CourseID, cd)
 					if chs, ok := chaptersByCourse[rows[k].CourseID]; ok {
 						cd["chapters"] = chs
 					} else {

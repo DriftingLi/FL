@@ -17,20 +17,16 @@ import (
 var (
 	validQuestionTypes  = []string{"single_choice", "multi_choice", "true_false", "fault_image", "short_answer"}
 	validQuestionStatus = []string{"draft", "pending", "published"}
-	validCategories     = []string{"CATEGORY_01", "CATEGORY_02", "CATEGORY_03", "CATEGORY_04"}
 	examScoreMap        = map[string]float64{"single_choice": 3, "multi_choice": 4, "true_false": 2, "fault_image": 6, "short_answer": 5}
 	mockExamScoreMap    = map[string]float64{"single_choice": 3, "multi_choice": 4, "true_false": 2, "fault_image": 4, "short_answer": 10}
 )
 
 // sampleQuestions 统一抽题函数：从 published 题库按条件随机抽取 count 题。
-// qType 为空表示不限题型；kpIDs 为空表示不限知识点。
-func sampleQuestions(db *gorm.DB, qType string, kpIDs []int, count int) ([]model.Question, error) {
+// qType 为空表示不限题型。
+func sampleQuestions(db *gorm.DB, qType string, count int) ([]model.Question, error) {
 	q := db.Model(&model.Question{}).Where("status = ?", "published")
 	if qType != "" {
 		q = q.Where("type = ?", qType)
-	}
-	if len(kpIDs) > 0 {
-		q = q.Where("knowledge_point_id IN ?", kpIDs)
 	}
 	var all []model.Question
 	if err := q.Find(&all).Error; err != nil {
@@ -51,19 +47,18 @@ func questionToDict(q *model.Question, includeAnswer bool) map[string]any {
 		_ = json.Unmarshal(q.Options, &options)
 	}
 	d := map[string]any{
-		"id":                 q.ID,
-		"type":               q.Type,
-		"content":            q.Content,
-		"options":            options,
-		"image_url":          q.ImageURL,
-		"knowledge_point_id": q.KnowledgePointID,
-		"status":             q.Status,
-		"reject_reason":      q.RejectReason,
-		"score":              q.Score,
-		"created_by":         q.CreatedBy,
-		"created_by_type":    q.CreatedByType,
-		"created_at":         formatISO(q.CreatedAt),
-		"updated_at":         formatISO(q.UpdatedAt),
+		"id":              q.ID,
+		"type":            q.Type,
+		"content":         q.Content,
+		"options":         options,
+		"image_url":       q.ImageURL,
+		"status":          q.Status,
+		"reject_reason":   q.RejectReason,
+		"score":           q.Score,
+		"created_by":      q.CreatedBy,
+		"created_by_type": q.CreatedByType,
+		"created_at":      formatISO(q.CreatedAt),
+		"updated_at":      formatISO(q.UpdatedAt),
 	}
 	if includeAnswer {
 		d["answer"] = q.Answer
@@ -299,15 +294,6 @@ func (s *QuestionBankService) CreateQuestion(data map[string]any, createdBy *int
 			return nil, errors.New("选项不能为空")
 		}
 	}
-	var kpID *int
-	if v, ok := data["knowledge_point_id"]; ok && v != nil {
-		id := toInt(v)
-		var kp model.KnowledgePoint
-		if err := s.db.First(&kp, id).Error; err != nil {
-			return nil, errors.New("知识点不存在")
-		}
-		kpID = &id
-	}
 	status, _ := data["status"].(string)
 	if status == "" {
 		status = "pending"
@@ -319,21 +305,20 @@ func (s *QuestionBankService) CreateQuestion(data map[string]any, createdBy *int
 		}
 	}
 	q := model.Question{
-		Type:             qType,
-		Content:          content,
-		Options:          optionsBytes,
-		Answer:           answer,
-		Explanation:      getString(data, "explanation"),
-		ImageURL:         getString(data, "image_url"),
-		ReferenceAnswer:  getString(data, "reference_answer"),
-		ScoringCriteria:  getString(data, "scoring_criteria"),
-		Score:            toIntDefault(data["score"], 0),
-		KnowledgePointID: kpID,
-		Status:           status,
-		CreatedBy:        createdBy,
-		CreatedByType:    orDefault(createdByType, "tutor"),
-		CreatedAt:        beijingNow(),
-		UpdatedAt:        beijingNow(),
+		Type:            qType,
+		Content:         content,
+		Options:         optionsBytes,
+		Answer:          answer,
+		Explanation:     getString(data, "explanation"),
+		ImageURL:        getString(data, "image_url"),
+		ReferenceAnswer: getString(data, "reference_answer"),
+		ScoringCriteria: getString(data, "scoring_criteria"),
+		Score:           toIntDefault(data["score"], 0),
+		Status:          status,
+		CreatedBy:       createdBy,
+		CreatedByType:   orDefault(createdByType, "tutor"),
+		CreatedAt:       beijingNow(),
+		UpdatedAt:       beijingNow(),
 	}
 	if err := s.db.Create(&q).Error; err != nil {
 		return nil, err
@@ -411,7 +396,7 @@ func (s *QuestionBankService) DeleteQuestion(id int) error {
 }
 
 // ListQuestions 题目列表分页查询（可按标签 tagID 过滤，结果附带标签列表）。
-func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, kpID *int, status, keyword string, tagID *int) map[string]any {
+func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int) map[string]any {
 	if page <= 0 {
 		page = 1
 	}
@@ -421,9 +406,6 @@ func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, kp
 	q := s.db.Model(&model.Question{})
 	if qType != "" {
 		q = q.Where("type = ?", qType)
-	}
-	if kpID != nil {
-		q = q.Where("knowledge_point_id = ?", *kpID)
 	}
 	if status != "" {
 		q = q.Where("status = ?", status)
@@ -610,150 +592,10 @@ func (s *QuestionBankService) GetStats() map[string]any {
 		s.db.Model(&model.Question{}).Where("status = ?", st).Count(&c)
 		byStatus[st] = c
 	}
-	// 按课程分类统计（经 knowledge_point.category 关联）
-	byCategory := map[string]int64{}
-	for _, cat := range validCategories {
-		var c int64
-		s.db.Model(&model.Question{}).
-			Joins("LEFT JOIN knowledge_point ON knowledge_point.id = question.knowledge_point_id").
-			Where("knowledge_point.category = ? AND question.status = ?", cat, "published").
-			Count(&c)
-		byCategory[cat] = c
-	}
-	var kps []model.KnowledgePoint
-	s.db.Find(&kps)
-	byKP := make([]map[string]any, 0, len(kps))
-	for _, kp := range kps {
-		var c int64
-		s.db.Model(&model.Question{}).Where("knowledge_point_id = ?", kp.ID).Count(&c)
-		byKP = append(byKP, map[string]any{"id": kp.ID, "name": kp.Name, "category": kp.Category, "count": c})
-	}
 	return map[string]any{
-		"total":              total,
-		"by_type":            byType,
-		"by_status":          byStatus,
-		"by_category":        byCategory,
-		"by_knowledge_point": byKP,
-	}
-}
-
-// GetCategories 返回课程四分类及其题目数。
-func (s *QuestionBankService) GetCategories() []map[string]any {
-	out := make([]map[string]any, 0, len(validCategories))
-	for _, cat := range validCategories {
-		var c int64
-		s.db.Model(&model.Question{}).
-			Joins("LEFT JOIN knowledge_point ON knowledge_point.id = question.knowledge_point_id").
-			Where("knowledge_point.category = ? AND question.status = ?", cat, "published").
-			Count(&c)
-		out = append(out, map[string]any{"category": cat, "count": c})
-	}
-	return out
-}
-
-// CreateKnowledgePoint 创建知识点。
-func (s *QuestionBankService) CreateKnowledgePoint(data map[string]any) (map[string]any, error) {
-	name, _ := data["name"].(string)
-	if name == "" {
-		return nil, errors.New("知识点名称不能为空")
-	}
-	category, _ := data["category"].(string)
-	if category != "" && !containsString(validCategories, category) {
-		return nil, errors.New("无效的课程分类")
-	}
-	var parentID *int
-	if v, ok := data["parent_id"]; ok && v != nil {
-		pid := toInt(v)
-		var p model.KnowledgePoint
-		if err := s.db.First(&p, pid).Error; err != nil {
-			return nil, errors.New("父知识点不存在")
-		}
-		parentID = &pid
-	}
-	kp := model.KnowledgePoint{
-		Name:        name,
-		Category:    category,
-		ParentID:    parentID,
-		Description: getString(data, "description"),
-		CreatedAt:   beijingNow(),
-	}
-	if err := s.db.Create(&kp).Error; err != nil {
-		return nil, err
-	}
-	return kpToDict(&kp), nil
-}
-
-// GetKnowledgePoints 查询知识点列表。
-func (s *QuestionBankService) GetKnowledgePoints(category string, parentID *int) []map[string]any {
-	q := s.db.Model(&model.KnowledgePoint{})
-	if category != "" {
-		q = q.Where("category = ?", category)
-	}
-	if parentID != nil {
-		q = q.Where("parent_id = ?", *parentID)
-	}
-	var kps []model.KnowledgePoint
-	q.Order("created_at ASC").Find(&kps)
-	out := make([]map[string]any, 0, len(kps))
-	for i := range kps {
-		out = append(out, kpToDict(&kps[i]))
-	}
-	return out
-}
-
-// UpdateKnowledgePoint 更新知识点。
-func (s *QuestionBankService) UpdateKnowledgePoint(id int, data map[string]any) (map[string]any, error) {
-	var kp model.KnowledgePoint
-	if err := s.db.First(&kp, id).Error; err != nil {
-		return nil, errors.New("知识点不存在")
-	}
-	if v, ok := data["name"]; ok {
-		kp.Name, _ = v.(string)
-	}
-	if v, ok := data["category"]; ok {
-		if c, _ := v.(string); c != "" && !containsString(validCategories, c) {
-			return nil, errors.New("无效的课程分类")
-		}
-		kp.Category, _ = v.(string)
-	}
-	if v, ok := data["parent_id"]; ok {
-		if v == nil {
-			kp.ParentID = nil
-		} else {
-			pid := toInt(v)
-			kp.ParentID = &pid
-		}
-	}
-	if v, ok := data["description"]; ok {
-		kp.Description, _ = v.(string)
-	}
-	if err := s.db.Save(&kp).Error; err != nil {
-		return nil, err
-	}
-	return kpToDict(&kp), nil
-}
-
-// DeleteKnowledgePoint 删除知识点（有题目时拒绝）。
-func (s *QuestionBankService) DeleteKnowledgePoint(id int) error {
-	var c int64
-	s.db.Model(&model.Question{}).Where("knowledge_point_id = ?", id).Count(&c)
-	if c > 0 {
-		return errors.New("该知识点下还有题目，无法删除")
-	}
-	if err := s.db.Delete(&model.KnowledgePoint{}, id).Error; err != nil {
-		return errors.New("知识点不存在")
-	}
-	return nil
-}
-
-func kpToDict(kp *model.KnowledgePoint) map[string]any {
-	return map[string]any{
-		"id":          kp.ID,
-		"name":        kp.Name,
-		"category":    kp.Category,
-		"parent_id":   kp.ParentID,
-		"description": kp.Description,
-		"created_at":  formatISO(kp.CreatedAt),
+		"total":     total,
+		"by_type":   byType,
+		"by_status": byStatus,
 	}
 }
 
@@ -788,14 +630,6 @@ func applyQuestionFields(q *model.Question, data map[string]any) {
 	}
 	if v, ok := data["score"]; ok {
 		q.Score = toIntDefault(v, q.Score)
-	}
-	if v, ok := data["knowledge_point_id"]; ok {
-		if v == nil {
-			q.KnowledgePointID = nil
-		} else {
-			id := toInt(v)
-			q.KnowledgePointID = &id
-		}
 	}
 	if v, ok := data["status"]; ok {
 		q.Status, _ = v.(string)

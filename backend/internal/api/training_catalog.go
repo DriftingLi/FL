@@ -92,6 +92,27 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, cfg *config.Config, db *
 		response.SuccessWithMsg(c, "专业方向更新成功", result)
 	})
 
+	// PUT /api/admin/specialty/:specialty_id/sort  交换专业方向排序（body: {"swap_with": <id>}）
+	g.PUT("/specialty/:specialty_id/sort", func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("specialty_id"))
+		if err != nil {
+			response.BadRequest(c, "专业方向ID无效")
+			return
+		}
+		var body struct {
+			SwapWith int `json:"swap_with"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil || body.SwapWith <= 0 {
+			response.BadRequest(c, "swap_with 参数无效")
+			return
+		}
+		if err := svc.SwapSpecialtySort(id, body.SwapWith); err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.SuccessWithMsg(c, "排序已交换", nil)
+	})
+
 	// DELETE /api/admin/specialty/:specialty_id  删除专业方向
 	g.DELETE("/specialty/:specialty_id", func(c *gin.Context) {
 		id, err := strconv.Atoi(c.Param("specialty_id"))
@@ -146,6 +167,27 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, cfg *config.Config, db *
 			return
 		}
 		response.SuccessWithMsg(c, "课程等级更新成功", result)
+	})
+
+	// PUT /api/admin/level/:level_id/sort  交换课程等级排序（body: {"swap_with": <id>}）
+	g.PUT("/level/:level_id/sort", func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("level_id"))
+		if err != nil {
+			response.BadRequest(c, "课程等级ID无效")
+			return
+		}
+		var body struct {
+			SwapWith int `json:"swap_with"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil || body.SwapWith <= 0 {
+			response.BadRequest(c, "swap_with 参数无效")
+			return
+		}
+		if err := svc.SwapLevelSort(id, body.SwapWith); err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.SuccessWithMsg(c, "排序已交换", nil)
 	})
 
 	// DELETE /api/admin/level/:level_id  删除课程等级
@@ -258,6 +300,27 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, cfg *config.Config, db *
 			return
 		}
 		response.SuccessWithMsg(c, "题库标签更新成功", result)
+	})
+
+	// PUT /api/admin/question-tag/:id/sort  交换题库标签排序（body: {"swap_with": <id>}）
+	g.PUT("/question-tag/:id/sort", func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("id"))
+		if err != nil {
+			response.BadRequest(c, "标签ID无效")
+			return
+		}
+		var body struct {
+			SwapWith int `json:"swap_with"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil || body.SwapWith <= 0 {
+			response.BadRequest(c, "swap_with 参数无效")
+			return
+		}
+		if err := svc.SwapQuestionTagSort(id, body.SwapWith); err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.SuccessWithMsg(c, "排序已交换", nil)
 	})
 
 	// DELETE /api/admin/question-tag/:id  删除题库标签

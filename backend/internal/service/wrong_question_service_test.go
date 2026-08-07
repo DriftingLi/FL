@@ -34,7 +34,7 @@ func seedWrongQuestion(t *testing.T, db *gorm.DB, studentID, questionID, wrongCo
 
 func TestGetWrongQuestions_Empty(t *testing.T) {
 	svc, _ := newWrongQuestionSvc(t)
-	result := svc.GetWrongQuestions(1, 1, 20, "", nil, nil)
+	result := svc.GetWrongQuestions(1, 1, 20, "", nil)
 	if result["total"].(int64) != 0 {
 		t.Fatalf("空库总数应为 0, got %v", result["total"])
 	}
@@ -46,7 +46,7 @@ func TestGetWrongQuestions_WithData(t *testing.T) {
 	seedWrongQuestion(t, db, 1, 1, 3)
 	seedWrongQuestion(t, db, 1, 2, 1)
 
-	result := svc.GetWrongQuestions(1, 1, 20, "", nil, nil)
+	result := svc.GetWrongQuestions(1, 1, 20, "", nil)
 	if result["total"].(int64) != 2 {
 		t.Fatalf("总数应为 2, got %v", result["total"])
 	}
@@ -54,7 +54,7 @@ func TestGetWrongQuestions_WithData(t *testing.T) {
 
 func TestGetWrongQuestions_DefaultPaging(t *testing.T) {
 	svc, _ := newWrongQuestionSvc(t)
-	result := svc.GetWrongQuestions(1, 0, 0, "", nil, nil)
+	result := svc.GetWrongQuestions(1, 0, 0, "", nil)
 	if result["page"].(int) != 1 {
 		t.Fatalf("默认页码应为 1, got %v", result["page"])
 	}

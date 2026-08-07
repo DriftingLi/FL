@@ -113,6 +113,15 @@ func (s *ContentGenerateService) runGeneration(taskID int, courseID int, chapter
 		return
 	}
 
+	// 旧分类已退役：AI 生成的「课程分类」上下文改用专业方向名称
+	classifyCtx := ""
+	if course.SpecialtyID != nil {
+		var spec model.Specialty
+		if err := s.db.First(&spec, *course.SpecialtyID).Error; err == nil {
+			classifyCtx = spec.Name
+		}
+	}
+
 	// 查询所有章节标题
 	var chapters []model.Chapter
 	if err := s.db.Where("chapter_id IN ?", chapterIDs).Find(&chapters).Error; err != nil {
@@ -139,7 +148,7 @@ func (s *ContentGenerateService) runGeneration(taskID int, courseID int, chapter
 		title := chapterMap[chID]
 		genResult := ChapterGenResult{ChapterID: chID, Title: title}
 
-		content, err := s.ai.GenerateChapterContent(course.Name, course.Category, course.Description, title, userIDPtr)
+		content, err := s.ai.GenerateChapterContent(course.Name, classifyCtx, course.Description, title, userIDPtr)
 		if err != nil {
 			genResult.Status = "failed"
 			genResult.Error = err.Error()

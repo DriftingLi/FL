@@ -95,23 +95,27 @@ func TestCreateQuestion_ShortAnswer_NoAnswer(t *testing.T) {
 	}
 }
 
-func TestCreateQuestion_WithKnowledgePoint(t *testing.T) {
+func TestCreateQuestion_WithTagIDs(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
-	kp := testutil.SeedKnowledgePoint(t, db, "液压系统", "CATEGORY_01")
+	catalogSvc := NewTrainingCatalogService(db)
+	tag, err := catalogSvc.CreateQuestionTag(map[string]any{"code": "hydraulic", "name": "液压", "category": "液压"})
+	if err != nil {
+		t.Fatalf("创建标签失败: %v", err)
+	}
 	data := map[string]any{
-		"type":               "single_choice",
-		"content":            "test",
-		"options":            []string{"A", "B"},
-		"answer":             "A",
-		"knowledge_point_id": kp.ID,
+		"type":    "single_choice",
+		"content": "test",
+		"options": []string{"A", "B"},
+		"answer":  "A",
+		"tag_ids": []int{tag["id"].(int)},
 	}
 	result, err := svc.CreateQuestion(data, nil, "tutor")
 	if err != nil {
-		t.Fatalf("带知识点创建失败: %v", err)
+		t.Fatalf("带标签创建失败: %v", err)
 	}
-	kpID, ok := result["knowledge_point_id"].(*int)
-	if !ok || kpID == nil || *kpID != kp.ID {
-		t.Fatalf("知识点 ID 不匹配: got %v, want %d", result["knowledge_point_id"], kp.ID)
+	tags := result["tags"].([]map[string]any)
+	if len(tags) != 1 || tags[0]["id"] != tag["id"] {
+		t.Fatalf("标签未关联: %+v", result["tags"])
 	}
 }
 
@@ -201,7 +205,7 @@ func TestListQuestions_Pagination(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		testutil.SeedQuestion(t, db, "single_choice", "题目前5", "A")
 	}
-	result := svc.ListQuestions(1, 2, "", nil, "", "", nil)
+	result := svc.ListQuestions(1, 2, "", "", "", nil)
 	if result["total"].(int64) != 5 {
 		t.Fatalf("总数应为 5, got %v", result["total"])
 	}
@@ -218,7 +222,7 @@ func TestListQuestions_FilterByType(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
 	testutil.SeedQuestion(t, db, "single_choice", "单选题", "A")
 	testutil.SeedQuestion(t, db, "true_false", "判断题", "true")
-	result := svc.ListQuestions(1, 20, "true_false", nil, "", "", nil)
+	result := svc.ListQuestions(1, 20, "true_false", "", "", nil)
 	if result["total"].(int64) != 1 {
 		t.Fatalf("判断题应 1 条, got %v", result["total"])
 	}
@@ -226,7 +230,7 @@ func TestListQuestions_FilterByType(t *testing.T) {
 
 func TestListQuestions_DefaultPage(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	result := svc.ListQuestions(0, 0, "", nil, "", "", nil)
+	result := svc.ListQuestions(0, 0, "", "", "", nil)
 	if result["page"].(int) != 1 {
 		t.Fatalf("默认页码应为 1, got %v", result["page"])
 	}

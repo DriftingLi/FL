@@ -26,10 +26,11 @@ export interface BatchDeleteFilesPayload {
 export interface TutorCourse {
   course_id: number
   name: string
-  category?: string
   cover_image?: string
   description?: string
   chapter_count?: number
+  specialty_id?: number | null
+  level_id?: number | null
   [key: string]: unknown
 }
 

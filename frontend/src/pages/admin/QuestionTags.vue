@@ -26,6 +26,8 @@
                 <span class="tag-name">{{ tag.name }}</span>
                 <span class="tag-count">{{ tag.question_count ?? 0 }} 题</span>
                 <span class="tag-actions" @click.stop>
+                  <el-link :underline="false" @click="moveTag(tag, -1)">上移</el-link>
+                  <el-link :underline="false" @click="moveTag(tag, 1)">下移</el-link>
                   <el-button link size="small" @click="openTagDialog(tag)">编辑</el-button>
                   <el-popconfirm title="删除标签不会删除题目，仅解除关联，确定？" @confirm="handleDeleteTag(tag)">
                     <template #reference>
@@ -120,6 +122,12 @@
         <el-form-item label="标签名" prop="name">
           <el-input v-model="tagForm.name" placeholder="如：法规、结构、液压、电气、制动、故障诊断、应急" maxlength="30" show-word-limit @keyup.enter="submitTag" />
         </el-form-item>
+        <el-form-item label="编码" prop="code">
+          <el-input v-model="tagForm.code" placeholder="唯一编码，如 HYDRAULIC" maxlength="30" @keyup.enter="submitTag" />
+        </el-form-item>
+        <el-form-item label="考点模块">
+          <el-input v-model="tagForm.category" placeholder="如：液压、电气、制动（可选）" maxlength="30" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="tagDialogVisible = false">取消</el-button>
@@ -181,9 +189,10 @@ const currentTagName = computed(() => {
 const tagDialogVisible = ref(false)
 const tagSubmitting = ref(false)
 const tagFormRef = ref<FormInstance | null>(null)
-const tagForm = reactive<{ id: number | null; name: string }>({ id: null, name: '' })
+const tagForm = reactive<{ id: number | null; name: string; code: string; category: string }>({ id: null, name: '', code: '', category: '' })
 const tagRules = {
-  name: [{ required: true, message: '请输入标签名', trigger: 'blur' }]
+  name: [{ required: true, message: '请输入标签名', trigger: 'blur' }],
+  code: [{ required: true, message: '请输入唯一编码', trigger: 'blur' }]
 }
 
 const tagAssignVisible = ref(false)
@@ -242,6 +251,8 @@ function handleSelectionChange(rows: Question[]) {
 function openTagDialog(tag?: QuestionTag) {
   tagForm.id = tag?.id ?? null
   tagForm.name = tag?.name ?? ''
+  tagForm.code = tag?.code ?? ''
+  tagForm.category = tag?.category ?? ''
   tagDialogVisible.value = true
 }
 
@@ -250,11 +261,16 @@ async function submitTag() {
   await tagFormRef.value.validate()
   tagSubmitting.value = true
   try {
+    const payload = {
+      name: tagForm.name,
+      code: tagForm.code,
+      category: tagForm.category || undefined
+    }
     if (tagForm.id) {
-      const res = await trainingApi.updateQuestionTag(tagForm.id, { name: tagForm.name })
+      const res = await trainingApi.updateQuestionTag(tagForm.id, payload)
       if (res.code === 200) ElMessage.success('标签已更新')
     } else {
-      const res = await trainingApi.createQuestionTag({ name: tagForm.name })
+      const res = await trainingApi.createQuestionTag(payload)
       if (res.code === 201) ElMessage.success('标签已创建')
     }
     tagDialogVisible.value = false
@@ -279,6 +295,25 @@ async function handleDeleteTag(tag: QuestionTag) {
   } catch (error) {
     console.error('删除标签失败:', error)
     ElMessage.error('删除失败')
+  }
+}
+
+async function moveTag(tag: QuestionTag, delta: -1 | 1) {
+  const idx = tags.value.findIndex(t => t.id === tag.id)
+  const target = tags.value[idx + delta]
+  if (!target) return
+  tagSubmitting.value = true
+  try {
+    const res = await trainingApi.swapQuestionTag(tag.id, target.id)
+    if (res.code === 200) {
+      ElMessage.success('排序已更新')
+      await loadTags()
+    }
+  } catch (error) {
+    console.error('排序失败:', error)
+    ElMessage.error('排序更新失败')
+  } finally {
+    tagSubmitting.value = false
   }
 }
 

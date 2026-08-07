@@ -27,17 +27,16 @@ func NewCourseService(db *gorm.DB, fileService *FileService) *CourseService {
 }
 
 // GetCourses 课程列表（可额外按专业方向/课程等级过滤）。
-func (s *CourseService) GetCourses(page, pageSize int, category string, specialtyID, levelID *int) map[string]any {
+// 未挂专业方向/等级的课程不展示（与目录树口径统一）。
+func (s *CourseService) GetCourses(page, pageSize int, specialtyID, levelID *int) map[string]any {
 	if page <= 0 {
 		page = 1
 	}
 	if pageSize <= 0 {
 		pageSize = 12
 	}
-	q := s.db.Model(&model.Course{}).Where("status = ?", 1)
-	if category != "" {
-		q = q.Where("category = ?", category)
-	}
+	q := s.db.Model(&model.Course{}).
+		Where("status = ? AND specialty_id IS NOT NULL AND level_id IS NOT NULL", 1)
 	if specialtyID != nil {
 		q = q.Where("specialty_id = ?", *specialtyID)
 	}
@@ -48,9 +47,22 @@ func (s *CourseService) GetCourses(page, pageSize int, category string, specialt
 	q.Count(&total)
 	var courses []model.Course
 	q.Order("sort_order ASC, created_at DESC, course_id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&courses)
+	// 证书模板数量少，一次加载映射（避免逐课程 N+1）
+	var certs []model.CertificateTemplate
+	s.db.Find(&certs)
+	certNameByID := make(map[int]string, len(certs))
+	for i := range certs {
+		certNameByID[certs[i].ID] = certs[i].Name
+	}
 	items := make([]map[string]any, 0, len(courses))
 	for i := range courses {
-		items = append(items, courseToDict(&courses[i]))
+		item := courseToDict(&courses[i])
+		fillChapterCount(s.db, courses[i].CourseID, item)
+		fillPrereqIDs(s.db, courses[i].CourseID, item)
+		if id := courses[i].CertificateTemplateID; id != nil {
+			item["certificate_name"] = certNameByID[*id]
+		}
+		items = append(items, item)
 	}
 	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
 	return map[string]any{
@@ -87,6 +99,7 @@ func (s *CourseService) GetCourseDetail(courseID, studentID int) (map[string]any
 		}
 	}
 	detail := courseToDict(&course)
+	fillChapterCount(s.db, course.CourseID, detail)
 	fillCourseMeta(s.db, &course, detail)
 	return map[string]any{
 		"course_info": detail,
@@ -364,7 +377,6 @@ func courseToDict(c *model.Course) map[string]any {
 	return map[string]any{
 		"course_id":               c.CourseID,
 		"name":                    c.Name,
-		"category":                c.Category,
 		"description":             c.Description,
 		"cover_image":             c.CoverImage,
 		"duration":                c.Duration,
@@ -377,6 +389,21 @@ func courseToDict(c *model.Course) map[string]any {
 		"status":                  c.Status,
 		"created_at":              formatISO(c.CreatedAt),
 	}
+}
+
+// fillChapterCount 填充课程章节数。
+func fillChapterCount(db *gorm.DB, courseID int, dict map[string]any) {
+	var count int64
+	db.Model(&model.Chapter{}).Where("course_id = ?", courseID).Count(&count)
+	dict["chapter_count"] = count
+}
+
+// fillPrereqIDs 填充前置课程 ID 列表（供编辑表单回填，避免前端提交空数组清空关联）。
+func fillPrereqIDs(db *gorm.DB, courseID int, dict map[string]any) {
+	var ids []int
+	db.Model(&model.CoursePrerequisite{}).Where("course_id = ?", courseID).
+		Order("prerequisite_course_id ASC").Pluck("prerequisite_course_id", &ids)
+	dict["prerequisite_course_ids"] = ids
 }
 
 func chapterToDict(c *model.Chapter) map[string]any {
@@ -667,8 +694,11 @@ func fillCourseMeta(db *gorm.DB, course *model.Course, detail map[string]any) {
 		Order("c.created_at DESC, c.course_id ASC").
 		Scan(&prereqs)
 	prereqList := make([]map[string]any, 0, len(prereqs))
+	prereqIDList := make([]int, 0, len(prereqs))
 	for _, p := range prereqs {
 		prereqList = append(prereqList, map[string]any{"course_id": p.CourseID, "name": p.Name})
+		prereqIDList = append(prereqIDList, p.CourseID)
 	}
 	detail["prerequisites"] = prereqList
+	detail["prerequisite_course_ids"] = prereqIDList
 }

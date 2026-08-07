@@ -12,7 +12,6 @@ export interface UpdateProgressPayload {
 export interface CourseSummary {
   course_id: number
   name: string
-  category?: string
   cover_image?: string
   description?: string
   duration?: number
@@ -24,6 +23,8 @@ export interface CourseSummary {
   theory_hours?: number
   practice_hours?: number
   certificate_template_id?: number | null
+  certificate_name?: string
+  prerequisite_course_ids?: number[]
   created_at?: string
   [key: string]: unknown
 }
@@ -82,7 +83,7 @@ export interface ChapterDetail {
 }
 
 export const courseApi = {
-  getCourses(params: { page?: number; page_size?: number; category?: string; keyword?: string; specialty_id?: number; level_id?: number }) {
+  getCourses(params: { page?: number; page_size?: number; keyword?: string; specialty_id?: number; level_id?: number }) {
     return request.get<{ courses: CourseSummary[]; total: number }>('/courses', { params })
   },
 

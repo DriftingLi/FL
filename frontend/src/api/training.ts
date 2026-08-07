@@ -119,6 +119,10 @@ export const trainingApi = {
   getCatalogTree() {
     return request.get<CatalogTree>('/catalog/tree')
   },
+  /** 全局课程等级列表（仅启用项）：GET /api/levels */
+  getLevels() {
+    return request.get<{ levels: CatalogLevel[] }>('/levels')
+  },
   /** 管理端目录树（含停用项/章节）：GET /api/admin/catalog/tree → {specialties}（后端补齐） */
   getAdminCatalogTree() {
     return request.get<CatalogTree>('/admin/catalog/tree')
@@ -131,6 +135,10 @@ export const trainingApi = {
   updateDirection(id: number, data: { name?: string; code?: string; description?: string; sort_order?: number; status?: number }) {
     return request.put<null>(`/admin/specialty/${id}`, data)
   },
+  /** 交换专业方向排序：PUT /api/admin/specialty/:id/sort */
+  swapDirection(id: number, swapWith: number) {
+    return request.put<null>(`/admin/specialty/${id}/sort`, { swap_with: swapWith })
+  },
   deleteDirection(id: number) {
     return request.delete<null>(`/admin/specialty/${id}`)
   },
@@ -141,6 +149,10 @@ export const trainingApi = {
   },
   updateLevel(id: number, data: { name?: string; code?: string; description?: string; sort_order?: number; status?: number }) {
     return request.put<null>(`/admin/level/${id}`, data)
+  },
+  /** 交换课程等级排序：PUT /api/admin/level/:id/sort */
+  swapLevel(id: number, swapWith: number) {
+    return request.put<null>(`/admin/level/${id}/sort`, { swap_with: swapWith })
   },
   deleteLevel(id: number) {
     return request.delete<null>(`/admin/level/${id}`)
@@ -173,6 +185,10 @@ export const trainingApi = {
   },
   updateQuestionTag(id: number, data: Partial<TagPayload>) {
     return request.put<null>(`/admin/question-tag/${id}`, data)
+  },
+  /** 交换题库标签排序：PUT /api/admin/question-tag/:id/sort */
+  swapQuestionTag(id: number, swapWith: number) {
+    return request.put<null>(`/admin/question-tag/${id}/sort`, { swap_with: swapWith })
   },
   deleteQuestionTag(id: number) {
     return request.delete<null>(`/admin/question-tag/${id}`)
