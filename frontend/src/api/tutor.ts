@@ -31,27 +31,7 @@ export interface TutorCourse {
   chapter_count?: number
   specialty_id?: number | null
   level_id?: number | null
-  theory_hours?: number
-  practice_hours?: number
-  duration?: number
-  certificate_template_id?: number | null
-  prerequisite_course_ids?: number[]
-  status?: number
   [key: string]: unknown
-}
-
-/** 导师课程表单 payload（专业方向/课程等级必填，与管理端同校验） */
-export interface TutorCoursePayload {
-  name?: string
-  specialty_id?: number | null
-  level_id?: number | null
-  theory_hours?: number
-  practice_hours?: number
-  duration?: number
-  certificate_template_id?: number | null
-  prerequisite_course_ids?: number[]
-  description?: string
-  status?: number
 }
 
 /** 导师章节 */
@@ -87,14 +67,6 @@ export interface GradingStatsData {
 export const tutorApi = {
   getCourses(params: TutorCoursesQuery) {
     return request.get<{ courses: TutorCourse[]; total: number }>('/tutor/courses', { params })
-  },
-
-  createCourse(data: TutorCoursePayload) {
-    return request.post<TutorCourse>('/tutor/course', data)
-  },
-
-  updateCourse(id: number, data: TutorCoursePayload) {
-    return request.put<TutorCourse>(`/tutor/course/${id}`, data)
   },
 
   // 阅卷统计（按天分组），days=7|30

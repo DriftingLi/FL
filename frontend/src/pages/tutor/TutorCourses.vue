@@ -2,7 +2,6 @@
   <div class="tutor-courses-page">
     <div class="page-header">
       <h2>我的课程</h2>
-      <el-button type="primary" @click="openCourseDialog()">新增课程</el-button>
     </div>
 
     <div v-loading="loading" class="course-grid">
@@ -33,7 +32,6 @@
           <p class="card-desc">{{ course.description || '暂无简介' }}</p>
           <div class="card-footer">
             <span>{{ course.chapter_count || 0 }} 个章节</span>
-            <el-button size="small" @click.stop="openCourseDialog(course)">编辑</el-button>
             <el-button type="primary" size="small">
               管理章节 <el-icon><ArrowRight /></el-icon>
             </el-button>
@@ -51,61 +49,15 @@
         @current-change="loadCourses"
       />
     </div>
-
-    <!-- 课程编辑（新建/修改，方向/等级必填） -->
-    <el-dialog v-model="courseDialogVisible" :title="courseForm.course_id ? '编辑课程' : '新增课程'" width="560px" destroy-on-close>
-      <el-form ref="courseFormRef" :model="courseForm" :rules="courseRules" label-width="96px">
-        <el-form-item label="课程名称" prop="name">
-          <el-input v-model="courseForm.name" placeholder="课程名称" maxlength="50" />
-        </el-form-item>
-        <el-form-item label="专业方向" prop="specialty_id">
-          <el-select v-model="courseForm.specialty_id" placeholder="必选" style="width: 100%">
-            <el-option v-for="d in directions" :key="d.specialty_id" :label="d.name" :value="d.specialty_id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="课程等级" prop="level_id">
-          <el-select v-model="courseForm.level_id" placeholder="必选" style="width: 100%">
-            <el-option v-for="l in levels" :key="l.level_id" :label="l.name" :value="l.level_id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="学时">
-          <div class="tc-hours">
-            <el-input-number v-model="courseForm.theory_hours" :min="0" :max="999" controls-position="right" />
-            <span class="tc-hours-unit">理论</span>
-            <el-input-number v-model="courseForm.practice_hours" :min="0" :max="999" controls-position="right" />
-            <span class="tc-hours-unit">实操</span>
-          </div>
-        </el-form-item>
-        <el-form-item label="证书模板">
-          <el-select v-model="courseForm.certificate_template_id" clearable placeholder="不关联" style="width: 100%">
-            <el-option v-for="t in certificateTemplates" :key="t.id" :label="t.name" :value="t.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="课程简介">
-          <el-input v-model="courseForm.description" type="textarea" :rows="2" maxlength="500" />
-        </el-form-item>
-        <el-form-item label="上架状态">
-          <el-radio-group v-model="courseForm.status">
-            <el-radio :value="1">上架</el-radio>
-            <el-radio :value="0">下架</el-radio>
-          </el-radio-group>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="courseDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitCourse">保存</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRight } from '@element-plus/icons-vue'
-import { ElMessage, type FormInstance } from 'element-plus'
 import { tutorApi, type TutorCourse } from '@/api/tutor'
-import { trainingApi, type CatalogDirectionNode, type CatalogLevel, type CertificateTemplate } from '@/api/training'
+import { trainingApi, type CatalogDirectionNode, type CatalogLevel } from '@/api/training'
 import { levelTagType } from '@/constants/level'
 
 const router = useRouter()
@@ -167,105 +119,9 @@ function goToChapters(courseId: number) {
   router.push(`/training/tutor/course/${courseId}/chapters`)
 }
 
-// ===== 课程新建/编辑（方向/等级必填，与管理端同校验） =====
-const courseDialogVisible = ref(false)
-const submitting = ref(false)
-const courseFormRef = ref<FormInstance | null>(null)
-const certificateTemplates = ref<CertificateTemplate[]>([])
-const courseForm = reactive<Record<string, any>>({
-  course_id: null,
-  name: '',
-  specialty_id: null,
-  level_id: null,
-  theory_hours: 0,
-  practice_hours: 0,
-  certificate_template_id: null,
-  description: '',
-  status: 1
-})
-
-const courseRules = {
-  name: [{ required: true, message: '请输入课程名称', trigger: 'blur' }],
-  specialty_id: [{ required: true, message: '请选择专业方向', trigger: 'change' }],
-  level_id: [{ required: true, message: '请选择课程等级', trigger: 'change' }]
-}
-
-async function loadCertificateTemplates() {
-  try {
-    const res = await trainingApi.getCertificateTemplates()
-    if (res.code === 200) {
-      certificateTemplates.value = res.data.certificate_templates || []
-    }
-  } catch (e) {
-    // 静默失败：证书下拉降级为空
-  }
-}
-
-function openCourseDialog(course?: (typeof courses.value)[number] | null) {
-  if (!course) {
-    Object.assign(courseForm, {
-      course_id: null,
-      name: '',
-      specialty_id: null,
-      level_id: null,
-      theory_hours: 0,
-      practice_hours: 0,
-      certificate_template_id: null,
-      description: '',
-      status: 1
-    })
-  } else {
-    Object.assign(courseForm, {
-      course_id: course.course_id,
-      name: course.name,
-      specialty_id: course.specialty_id,
-      level_id: course.level_id,
-      theory_hours: course.theory_hours || 0,
-      practice_hours: course.practice_hours || 0,
-      certificate_template_id: course.certificate_template_id,
-      description: course.description || '',
-      status: course.status ?? 1
-    })
-  }
-  courseDialogVisible.value = true
-}
-
-async function submitCourse() {
-  if (!courseFormRef.value) return
-  await courseFormRef.value.validate()
-  submitting.value = true
-  try {
-    const payload = {
-      name: courseForm.name,
-      specialty_id: courseForm.specialty_id,
-      level_id: courseForm.level_id,
-      theory_hours: courseForm.theory_hours,
-      practice_hours: courseForm.practice_hours,
-      certificate_template_id: courseForm.certificate_template_id ?? 0,
-      description: courseForm.description,
-      status: courseForm.status
-    }
-    if (courseForm.course_id) {
-      const res = await tutorApi.updateCourse(courseForm.course_id, payload)
-      if (res.code === 200) ElMessage.success('已更新')
-    } else {
-      const res = await tutorApi.createCourse(payload)
-      if (res.code === 201) ElMessage.success('已创建')
-    }
-    courseDialogVisible.value = false
-    await loadCourses()
-  } catch (e) {
-    console.error('保存课程失败:', e)
-    ElMessage.error('保存失败')
-  } finally {
-    submitting.value = false
-  }
-}
-
 onMounted(() => {
   loadCatalog()
   loadCourses()
-  loadCertificateTemplates()
 })
 </script>
 
@@ -276,9 +132,6 @@ onMounted(() => {
 }
 
 .page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   margin-bottom: 24px;
 }
 
@@ -342,17 +195,6 @@ onMounted(() => {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-}
-
-.tc-hours {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.tc-hours-unit {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
 }
 
 .card-title {

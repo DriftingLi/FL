@@ -58,8 +58,8 @@ func TestQuestionBankQuestionsIgnoresKpParam(t *testing.T) {
 	}
 }
 
-// TestTutorCourseRoutesRegistered 导师端建课/改课端点已注册（无 token 时 401 而非 404）。
-func TestTutorCourseRoutesRegistered(t *testing.T) {
+// TestTutorCourseRoutesAbsent 导师端不可建课/改课：/api/tutor/course 路由不存在（404）。
+func TestTutorCourseRoutesAbsent(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{}
@@ -76,8 +76,8 @@ func TestTutorCourseRoutesRegistered(t *testing.T) {
 		{"PUT", "/api/tutor/course/1"},
 	} {
 		rec := performRequest(r, tc.method, tc.path)
-		if rec.Code != http.StatusUnauthorized {
-			t.Fatalf("%s %s 应 401（路由已注册）, got %d", tc.method, tc.path, rec.Code)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("%s %s 应 404（导师不可建课）, got %d", tc.method, tc.path, rec.Code)
 		}
 	}
 }

@@ -200,11 +200,11 @@ func TestAdminCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 	}
 }
 
-// TestTutorCourseListHasPrereqIDs 导师端课程列表返回章节数与前置课程ID（编辑表单回填用）。
-func TestTutorCourseListHasPrereqIDs(t *testing.T) {
+// TestTutorCourseListHasChapterCount 导师端课程列表返回章节数。
+func TestTutorCourseListHasChapterCount(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := NewTutorService(db, "", nil)
-	course, prereq := seedCatalogCourse(t, db)
+	course, _ := seedCatalogCourse(t, db)
 
 	list := svc.GetCourses(nil, 1, 10)
 	items := list["courses"].([]map[string]any)
@@ -219,10 +219,6 @@ func TestTutorCourseListHasPrereqIDs(t *testing.T) {
 	}
 	if item["chapter_count"] != int64(2) {
 		t.Fatalf("chapter_count 应为 2, got %v", item["chapter_count"])
-	}
-	ids, ok := item["prerequisite_course_ids"].([]int)
-	if !ok || len(ids) != 1 || ids[0] != prereq.CourseID {
-		t.Fatalf("prerequisite_course_ids 应为 [%d], got %v", prereq.CourseID, item["prerequisite_course_ids"])
 	}
 }
 
