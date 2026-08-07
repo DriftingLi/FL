@@ -107,6 +107,11 @@ func (s *AdminCourseService) CreateCourse(data map[string]any) (map[string]any, 
 	if err := applyCourseTrainingFields(s.db, &course, data); err != nil {
 		return nil, err
 	}
+	// 未显式传 sort_order 时，自动排到所属方向+等级组的末尾（max+1）
+	if _, ok := data["sort_order"]; !ok && course.SpecialtyID != nil && course.LevelID != nil {
+		course.SortOrder = nextSortOrderValue(s.db, "course",
+			map[string]any{"specialty_id": *course.SpecialtyID, "level_id": *course.LevelID})
+	}
 	if err := s.db.Create(&course).Error; err != nil {
 		return nil, err
 	}
@@ -162,6 +167,25 @@ func (s *AdminCourseService) UpdateCourse(courseID int, data map[string]any) (ma
 	fillChapterCount(s.db, courseID, result)
 	fillPrereqIDs(s.db, courseID, result)
 	return result, nil
+}
+
+// SwapCourseSort 交换两门课程的排序位置（限制在同一方向+等级组内，真实生效含同值默认）。
+func (s *AdminCourseService) SwapCourseSort(a, b int) error {
+	var ca, cb model.Course
+	if err := s.db.First(&ca, a).Error; err != nil {
+		return errors.New("课程不存在")
+	}
+	if err := s.db.First(&cb, b).Error; err != nil {
+		return errors.New("课程不存在")
+	}
+	if ca.SpecialtyID == nil || ca.LevelID == nil || cb.SpecialtyID == nil || cb.LevelID == nil {
+		return errors.New("未挂载方向/等级的课程不能参与排序")
+	}
+	if *ca.SpecialtyID != *cb.SpecialtyID || *ca.LevelID != *cb.LevelID {
+		return errors.New("只能交换同一方向+等级组内的课程")
+	}
+	return swapGroupPositions(s.db, &model.Course{}, "course_id", a, b,
+		map[string]any{"specialty_id": *ca.SpecialtyID, "level_id": *ca.LevelID})
 }
 
 // DeleteCourse 删除课程。

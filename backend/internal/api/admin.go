@@ -93,6 +93,27 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, a
 		response.SuccessWithMsg(c, "课程更新成功", result)
 	})
 
+	// PUT /api/admin/course/:course_id/sort  交换课程排序（同一方向+等级组内，body: {"swap_with": <id>}）
+	g.PUT("/course/:course_id/sort", func(c *gin.Context) {
+		courseID, err := strconv.Atoi(c.Param("course_id"))
+		if err != nil {
+			response.BadRequest(c, "课程ID无效")
+			return
+		}
+		var body struct {
+			SwapWith int `json:"swap_with"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil || body.SwapWith <= 0 {
+			response.BadRequest(c, "swap_with 参数无效")
+			return
+		}
+		if err := courseSvc.SwapCourseSort(courseID, body.SwapWith); err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.SuccessWithMsg(c, "排序已交换", nil)
+	})
+
 	// DELETE /api/admin/course/:course_id  删除课程
 	g.DELETE("/course/:course_id", func(c *gin.Context) {
 		courseID, err := strconv.Atoi(c.Param("course_id"))
