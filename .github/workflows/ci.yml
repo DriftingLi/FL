@@ -80,7 +80,7 @@ jobs:
   # Stage 3: 后端 - 单元测试
   # ============================================================
   backend-test:
-    needs: backend-lint
+    needs: [backend-lint, changes]
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     services:

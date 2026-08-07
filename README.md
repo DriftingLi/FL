@@ -13,7 +13,7 @@
 - **考试系统**：课程考试、模拟考试、等级考试，自动判分、AI 评分与成绩统计
 - **练习中心**：自由练习、知识点练习、错题本、练习统计
 - **AI 助手**：基于大模型的流式对话（默认 DeepSeek，可切换管理员配置或用户自定义 OpenAI 兼容模型）
-- **学员论坛**：独立的综合讨论区 + 每个章节内容下方的章节讨论区，发帖 / 回复（可回复别人的回复）/ 删除自己的内容，展示昵称与头像
+- **学员论坛**：独立的综合讨论区 + 每个章节内容下方的章节讨论区，发帖 / 回复（可回复别人的回复）/ 删除自己的内容，展示昵称与头像；**图文分离发图**——发帖/回复可附带图片（主题最多 9 张、回复最多 3 张，先传图后提交，支持粘贴），删除时图片一并清理，未发帖的悬空图片由定时任务回收
 
 ### 门户与内容
 
@@ -63,7 +63,7 @@
 
 后端采用**单一 JWT 体系**：
 
-- 统一用户表 `hrwai_users`（由原 `student` 与 `valuation_users` 合并而来，见迁移 `000014`），角色为 `hrwai_user`，覆盖培训学员端、残值评估与 AI 助手三个前端
+- 统一用户表 `hrwai_users`（由原 `student` 与 `valuation_users` 合并而来，见 baseline 迁移 `000001`），角色为 `hrwai_user`，覆盖培训学员端、残值评估与 AI 助手三个前端
 - 讲师（`tutor`）与管理员（`admin`）保持独立表，登录接口分别为 `/api/auth/tutor-login`、`/api/auth/admin-login`
 - 统一签发密钥 `JWT_SECRET_KEY`，登出令牌写入 Redis 黑名单
 - `VALUATION_JWT_SECRET_KEY` **已移除**：不再参与鉴权，统一使用 `JWT_SECRET_KEY`，代码与部署配置均已清理
@@ -145,7 +145,7 @@
 │   ├── pkg/
 │   │   ├── response/             # 统一响应结构
 │   │   └── pdf/                  # 中文 PDF 报告（gofpdf + SimHei）
-│   ├── migrations/               # 迁移脚本（squash baseline 000001 + 增量 000030+）
+│   ├── migrations/               # 迁移脚本（squash baseline 000001 + 增量 000002+）
 │   ├── Dockerfile / entrypoint.sh / Makefile
 │   ├── docker-compose.yml        # 本地 postgres + redis + libreoffice
 │   ├── .env                      # 本地开发环境变量（gitignore，不入库）
@@ -324,7 +324,7 @@ npm run type-check   # vue-tsc 类型检查
 
 ## 数据库迁移
 
-迁移脚本位于 `backend/migrations/`，采用 `序号_名称.up.sql` / `.down.sql` 成对组织。历史迁移（000001 ~ 000028）已 **squash 合并**为单一 baseline，新增迁移从 **000030** 开始编号：
+迁移脚本位于 `backend/migrations/`，采用 `序号_名称.up.sql` / `.down.sql` 成对组织。历史迁移（000001 ~ 000028）已 **squash 合并**为单一 baseline，新增迁移从 **000002** 开始编号：
 
 | 迁移 | 说明 |
 | --- | --- |
