@@ -201,14 +201,12 @@ export interface AdminCoursesQuery {
   page?: number
   page_size?: number
   keyword?: string
-  category?: string
   specialty_id?: number
   level_id?: number
 }
 
 export interface CoursePayload {
-  name: string
-  category?: string
+  name?: string
   description?: string
   cover_image?: string
   duration?: number
@@ -240,7 +238,6 @@ export interface ChapterPayload {
 export interface AdminCourseItem {
   course_id: number
   name: string
-  category?: string
   cover_image?: string
   description?: string
   duration?: number
@@ -276,7 +273,6 @@ export interface AdminChapter {
 export interface AdminCourseDetail {
   course_id?: number
   name?: string
-  category?: string
   description?: string
   cover_image?: string
   duration?: number
@@ -407,6 +403,10 @@ export const adminApi = {
 
   updateCourse(id: number, data: CoursePayload) {
     return request.put<AdminCourseItem>(`/admin/course/${id}`, data)
+  },
+  /** 交换课程排序（同一方向+等级组内）：PUT /api/admin/course/:id/sort */
+  swapCourse(id: number, swapWith: number) {
+    return request.put<null>(`/admin/course/${id}/sort`, { swap_with: swapWith })
   },
 
   deleteCourse(id: number) {

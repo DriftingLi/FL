@@ -135,6 +135,10 @@ export const trainingApi = {
   updateDirection(id: number, data: { name?: string; code?: string; description?: string; sort_order?: number; status?: number }) {
     return request.put<null>(`/admin/specialty/${id}`, data)
   },
+  /** 交换专业方向排序：PUT /api/admin/specialty/:id/sort */
+  swapDirection(id: number, swapWith: number) {
+    return request.put<null>(`/admin/specialty/${id}/sort`, { swap_with: swapWith })
+  },
   deleteDirection(id: number) {
     return request.delete<null>(`/admin/specialty/${id}`)
   },
@@ -145,6 +149,10 @@ export const trainingApi = {
   },
   updateLevel(id: number, data: { name?: string; code?: string; description?: string; sort_order?: number; status?: number }) {
     return request.put<null>(`/admin/level/${id}`, data)
+  },
+  /** 交换课程等级排序：PUT /api/admin/level/:id/sort */
+  swapLevel(id: number, swapWith: number) {
+    return request.put<null>(`/admin/level/${id}/sort`, { swap_with: swapWith })
   },
   deleteLevel(id: number) {
     return request.delete<null>(`/admin/level/${id}`)

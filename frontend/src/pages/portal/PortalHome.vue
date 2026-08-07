@@ -325,7 +325,7 @@ function handleCardClick(item: ProductCard) {
         return
       }
       if (role === 'admin') {
-        router.push('/admin/courses')
+        router.push('/admin/course-catalog')
       } else if (role === 'tutor') {
         router.push('/training/tutor')
       } else {
