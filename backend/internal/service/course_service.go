@@ -47,11 +47,21 @@ func (s *CourseService) GetCourses(page, pageSize int, specialtyID, levelID *int
 	q.Count(&total)
 	var courses []model.Course
 	q.Order("sort_order ASC, created_at DESC, course_id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&courses)
+	// 证书模板数量少，一次加载映射（避免逐课程 N+1）
+	var certs []model.CertificateTemplate
+	s.db.Find(&certs)
+	certNameByID := make(map[int]string, len(certs))
+	for i := range certs {
+		certNameByID[certs[i].ID] = certs[i].Name
+	}
 	items := make([]map[string]any, 0, len(courses))
 	for i := range courses {
 		item := courseToDict(&courses[i])
 		fillChapterCount(s.db, courses[i].CourseID, item)
 		fillPrereqIDs(s.db, courses[i].CourseID, item)
+		if id := courses[i].CertificateTemplateID; id != nil {
+			item["certificate_name"] = certNameByID[*id]
+		}
 		items = append(items, item)
 	}
 	pages := int((total + int64(pageSize) - 1) / int64(pageSize))

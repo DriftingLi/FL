@@ -119,6 +119,10 @@ export const trainingApi = {
   getCatalogTree() {
     return request.get<CatalogTree>('/catalog/tree')
   },
+  /** 全局课程等级列表（仅启用项）：GET /api/levels */
+  getLevels() {
+    return request.get<{ levels: CatalogLevel[] }>('/levels')
+  },
   /** 管理端目录树（含停用项/章节）：GET /api/admin/catalog/tree → {specialties}（后端补齐） */
   getAdminCatalogTree() {
     return request.get<CatalogTree>('/admin/catalog/tree')

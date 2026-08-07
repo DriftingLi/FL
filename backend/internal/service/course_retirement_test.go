@@ -90,6 +90,16 @@ func TestStudentCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 	svc := NewCourseService(db, nil)
 	course, prereq := seedCatalogCourse(t, db)
 
+	// 关联证书模板后，列表应返回 certificate_name（卡片证书标签用）
+	tpl := model.CertificateTemplate{Code: "CERT_TEST", Name: "测试证书", ValidityDays: 365, Status: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&tpl).Error; err != nil {
+		t.Fatalf("创建证书模板失败: %v", err)
+	}
+	if err := db.Model(&model.Course{}).Where("course_id = ?", course.CourseID).
+		Update("certificate_template_id", tpl.ID).Error; err != nil {
+		t.Fatalf("关联证书失败: %v", err)
+	}
+
 	list := svc.GetCourses(1, 10, nil, nil)
 	items := list["courses"].([]map[string]any)
 	var item map[string]any
@@ -107,6 +117,9 @@ func TestStudentCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 	ids, ok := item["prerequisite_course_ids"].([]int)
 	if !ok || len(ids) != 1 || ids[0] != prereq.CourseID {
 		t.Fatalf("prerequisite_course_ids 应为 [%d], got %v", prereq.CourseID, item["prerequisite_course_ids"])
+	}
+	if item["certificate_name"] != "测试证书" {
+		t.Fatalf("certificate_name 应为 测试证书, got %v", item["certificate_name"])
 	}
 	if _, ok := item["category"]; ok {
 		t.Fatal("学生端列表不应包含 category")
