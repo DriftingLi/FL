@@ -7,8 +7,6 @@ export interface QuestionsQuery {
   keyword?: string
   type?: string
   status?: string
-  category?: string
-  knowledge_point_id?: number
   created_by?: number
   /** 按题库标签筛选（LH-28） */
   tag_id?: number
@@ -24,23 +22,9 @@ export interface QuestionPayload {
   reference_answer?: string
   scoring_criteria?: string
   score?: number
-  knowledge_point_id?: number
-  category?: string
   status?: string
-}
-
-export interface KnowledgePointPayload {
-  name: string
-  category?: string
-  parent_id?: number
-  description?: string
-}
-
-export interface KnowledgePointsQuery {
-  page?: number
-  page_size?: number
-  keyword?: string
-  category?: string
+  /** 题库标签（LH-28，创建/更新时全量替换） */
+  tag_ids?: number[]
 }
 
 export interface BatchRejectPayload {
@@ -51,13 +35,6 @@ export interface BatchRejectPayload {
 /** 题库统计（学员端卡片用） */
 export interface QuestionBankStats {
   total?: number
-  [key: string]: unknown
-}
-
-/** 课程四分类及其题目数 */
-export interface QuestionCategory {
-  category: string
-  count: number
   [key: string]: unknown
 }
 
@@ -104,30 +81,6 @@ export const questionBankApi = {
 
   getStats() {
     return request.get<QuestionBankStats>('/question-bank/stats')
-  },
-
-  // 课程四分类及其题目数（章节练习用）
-  getCategories() {
-    return request.get<QuestionCategory[]>('/question-bank/categories')
-  },
-
-  getKnowledgePoints(params?: KnowledgePointsQuery) {
-    return request.get<{ id: number; name: string; category?: string; parent_id?: number | null; description?: string }[]>(
-      '/question-bank/knowledge-points',
-      { params }
-    )
-  },
-
-  createKnowledgePoint(data: KnowledgePointPayload) {
-    return request.post<{ id: number }>('/question-bank/knowledge-points', data)
-  },
-
-  updateKnowledgePoint(id: number, data: KnowledgePointPayload) {
-    return request.put<null>(`/question-bank/knowledge-points/${id}`, data)
-  },
-
-  deleteKnowledgePoint(id: number) {
-    return request.delete<null>(`/question-bank/knowledge-points/${id}`)
   },
 
   uploadImage(formData: FormData) {

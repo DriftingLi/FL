@@ -1,14 +1,11 @@
-// 题目、练习、考试相关类型定义（已取消等级制度）
+// 题目、练习、考试相关类型定义
 
 export type QuestionType = 'single_choice' | 'multi_choice' | 'true_false' | 'fault_image' | 'short_answer'
 
 export type QuestionStatus = 'draft' | 'pending' | 'published'
 
-// 课程四分类
-export type CourseCategory = 'CATEGORY_01' | 'CATEGORY_02' | 'CATEGORY_03' | 'CATEGORY_04'
-
 // 练习模式
-export type PracticeMode = 'sequential' | 'free' | 'category' | 'knowledge_point'
+export type PracticeMode = 'sequential' | 'free'
 
 export interface Question {
   id: number
@@ -16,7 +13,6 @@ export interface Question {
   content: string
   options?: Record<string, string>
   image_url?: string
-  knowledge_point_id?: number | null
   status?: QuestionStatus
   score?: number
   // 学员侧不返回以下字段
@@ -30,11 +26,6 @@ export interface PracticeProgress {
   completed: number
   total: number
   current_index: number
-}
-
-export interface CategoryStat {
-  category: CourseCategory
-  count: number
 }
 
 export interface SubmitResult {

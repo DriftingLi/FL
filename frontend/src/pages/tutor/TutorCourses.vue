@@ -20,9 +20,14 @@
           </div>
         </div>
         <div class="card-body">
-          <el-tag :type="getCategoryTagType(course.category)" size="small">
-            {{ getCategoryName(course.category) }}
-          </el-tag>
+          <div class="card-tags">
+            <el-tag v-if="levelNameOf(course.level_id)" :type="levelTagType(levelNameOf(course.level_id))" size="small">
+              {{ levelNameOf(course.level_id) }}
+            </el-tag>
+            <el-tag v-if="specialtyNameOf(course.specialty_id)" type="primary" effect="plain" size="small">
+              {{ specialtyNameOf(course.specialty_id) }}
+            </el-tag>
+          </div>
           <h3 class="card-title">{{ course.name }}</h3>
           <p class="card-desc">{{ course.description || '暂无简介' }}</p>
           <div class="card-footer">
@@ -52,40 +57,62 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRight } from '@element-plus/icons-vue'
 import { tutorApi } from '@/api/tutor'
+import { trainingApi, type CatalogDirectionNode, type CatalogLevel } from '@/api/training'
 
 const router = useRouter()
 const loading = ref(false)
 const courses = ref<{
   course_id: number
   name: string
-  category?: string
   cover_image?: string
   description?: string
   chapter_count?: number
+  specialty_id?: number | null
+  level_id?: number | null
 }[]>([])
 const currentPage = ref(1)
 const pageSize = ref(12)
 const total = ref(0)
 
-const categoryMap: Record<string, string> = {
-  'CATEGORY_01': '基础理论',
-  'CATEGORY_02': '安全规范',
-  'CATEGORY_03': '实操技能',
-  'CATEGORY_04': '进阶提升'
+const directions = ref<CatalogDirectionNode[]>([])
+const levels = ref<CatalogLevel[]>([])
+
+function specialtyNameOf(id?: number | null) {
+  if (!id) return ''
+  return directions.value.find(d => d.specialty_id === id)?.name || ''
 }
 
-function getCategoryName(category?: string) {
-  return category ? categoryMap[category] || '其他' : '其他'
+function levelNameOf(id?: number | null) {
+  if (!id) return ''
+  return levels.value.find(l => l.level_id === id)?.name || ''
 }
 
-function getCategoryTagType(category?: string) {
-  const types: Record<string, string> = {
-    'CATEGORY_01': '',
-    'CATEGORY_02': 'success',
-    'CATEGORY_03': 'warning',
-    'CATEGORY_04': 'danger'
+const LEVEL_TAG_TYPES: Record<string, 'success' | 'primary' | 'warning' | 'danger' | 'info'> = {
+  入门: 'success',
+  进阶: 'primary',
+  专项: 'warning',
+  认证: 'danger'
+}
+
+function levelTagType(name: string) {
+  return LEVEL_TAG_TYPES[name] ?? 'info'
+}
+
+async function loadCatalog() {
+  try {
+    const [treeRes, levelsRes] = await Promise.all([
+      trainingApi.getCatalogTree(),
+      trainingApi.getLevels()
+    ])
+    if (treeRes.code === 200) {
+      directions.value = treeRes.data.specialties || []
+    }
+    if (levelsRes.code === 200) {
+      levels.value = levelsRes.data.levels || []
+    }
+  } catch (e) {
+    // 静默失败：方向/等级标签降级为空
   }
-  return category ? types[category] || 'info' : 'info'
 }
 
 async function loadCourses() {
@@ -111,6 +138,7 @@ function goToChapters(courseId: number) {
 }
 
 onMounted(() => {
+  loadCatalog()
   loadCourses()
 })
 </script>
@@ -179,6 +207,12 @@ onMounted(() => {
 
 .card-body {
   padding: 16px;
+}
+
+.card-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .card-title {

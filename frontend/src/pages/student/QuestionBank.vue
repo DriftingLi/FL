@@ -57,23 +57,6 @@
           </el-card>
         </el-col>
 
-        <!-- 章节练习 -->
-        <el-col :xs="24" :sm="12" :md="8">
-          <el-card shadow="hover" class="practice-card card-chapter">
-            <div class="card-head">
-              <el-icon :size="28" color="#f56c6c"><Reading /></el-icon>
-              <h3>章节练习</h3>
-            </div>
-            <div class="card-select">
-              <span class="select-label">分类</span>
-              <el-select v-model="chapterCategory" size="small" placeholder="选择分类" style="width: 130px">
-                <el-option v-for="o in categoryOptions" :key="o.value" :label="o.label" :value="o.value" />
-              </el-select>
-            </div>
-            <el-button type="danger" :loading="loading" :disabled="!chapterCategory" @click="startCategory">开始练习</el-button>
-          </el-card>
-        </el-col>
-
         <!-- 标签练习 -->
         <el-col :xs="24" :sm="12" :md="8">
           <el-card shadow="hover" class="practice-card card-tag">
@@ -121,9 +104,6 @@
           第 {{ currentIdx + 1 }}/{{ questions.length }} 题
           <span class="progress-stats">已答对 {{ correctCount }} · 已答错 {{ wrongCount }}</span>
           <el-tag v-if="mode === 'sequential'" size="small" type="primary" style="margin-left: 10px">顺序练习</el-tag>
-          <el-tag v-else-if="mode === 'category'" size="small" type="danger" style="margin-left: 10px">
-            {{ chapterCategory ? categoryMap[chapterCategory] : '章节练习' }}
-          </el-tag>
           <el-tag v-else-if="mode === 'tag'" size="small" style="margin-left: 10px">
             标签：{{ currentTagName }}
           </el-tag>
@@ -198,23 +178,22 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Sort, MagicStick, Filter, Reading, Document, CollectionTag } from '@element-plus/icons-vue'
+import { Sort, MagicStick, Filter, Document, CollectionTag } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
 import { practiceModeApi } from '@/api/practiceMode'
 import { mockExamApi } from '@/api/mockExam'
 import { trainingApi } from '@/api/training'
 import type { QuestionTag } from '@/api/training'
-import { typeMap, questionTypeOptions, categoryMap, categoryOptions, randomCountOptions } from '@/constants/question'
-import type { CourseCategory, PracticeProgress, Question, QuestionType, SubmitResult } from '@/types/question'
+import { typeMap, questionTypeOptions, randomCountOptions } from '@/constants/question'
+import type { PracticeProgress, Question, QuestionType, SubmitResult } from '@/types/question'
 
-// null = 入口；'sequential' | 'free' | 'category' | 'tag' = 刷题中
-const mode = ref<'sequential' | 'free' | 'category' | 'tag' | null>(null)
+// null = 入口；'sequential' | 'free' | 'tag' = 刷题中
+const mode = ref<'sequential' | 'free' | 'tag' | null>(null)
 
 // 卡片选择器状态
 const randomCount = ref(20)
 const specialType = ref<QuestionType | ''>('')
-const chapterCategory = ref<CourseCategory | ''>('')
 const tagPracticeId = ref<number | null>(null)
 const tags = ref<QuestionTag[]>([])
 const tagsLoading = ref(false)
@@ -326,11 +305,10 @@ async function startSequential() {
 }
 
 // 获取当前练习模式的进度 key（用于断点续练）
-// 顺序练习: 'sequential'；专项练习: 'free:<type>'；章节练习: 'category:<category>'；随机练习: ''（不保存）
+// 顺序练习: 'sequential'；专项练习: 'free:<type>'；随机练习: ''（不保存）
 function getPracticeModeKey(): string {
   if (mode.value === 'sequential') return 'sequential'
   if (mode.value === 'free' && specialType.value) return `free:${specialType.value}`
-  if (mode.value === 'category' && chapterCategory.value) return `category:${chapterCategory.value}`
   return ''
 }
 
@@ -423,28 +401,6 @@ async function startFree(type?: string) {
       return
     }
     mode.value = 'free'
-    const prog = await resolveProgress(modeKey, questions.value.length)
-    resetSession(prog.startIndex)
-    restoreState(prog.answersState)
-  } catch (e: any) {
-    ElMessage.error(e.message || '加载题目失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-async function startCategory() {
-  if (!chapterCategory.value) return
-  loading.value = true
-  try {
-    const modeKey = `category:${chapterCategory.value}`
-    const res = await practiceModeApi.getCategoryQuestions({ category: chapterCategory.value, count: 0 })
-    questions.value = res.data || []
-    if (questions.value.length === 0) {
-      ElMessage.warning('该分类下暂无题目')
-      return
-    }
-    mode.value = 'category'
     const prog = await resolveProgress(modeKey, questions.value.length)
     resetSession(prog.startIndex)
     restoreState(prog.answersState)
@@ -605,7 +561,6 @@ function backToEntry() {
 .card-sequential { border-top: 3px solid #409eff; }
 .card-random { border-top: 3px solid #67c23a; }
 .card-special { border-top: 3px solid #e6a23c; }
-.card-chapter { border-top: 3px solid #f56c6c; }
 .card-tag { border-top: 3px solid #7952b3; }
 .card-mock { border-top: 3px solid #909399; }
 
