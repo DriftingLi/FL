@@ -122,7 +122,7 @@
           <el-descriptions :column="2" border size="small" class="detail-descriptions">
             <el-descriptions-item label="理论学时">{{ detailCourse.theory_hours ?? '-' }} 学时</el-descriptions-item>
             <el-descriptions-item label="实操学时">{{ detailCourse.practice_hours ?? '-' }} 学时</el-descriptions-item>
-            <el-descriptions-item label="章节数">{{ detailCourse.chapter_count ?? detailChapters.length ?? '-' }}</el-descriptions-item>
+            <el-descriptions-item label="章节数">{{ detailCourse.chapter_count ?? detailChapters.length }}</el-descriptions-item>
             <el-descriptions-item label="课程时长">{{ detailCourse.duration ? formatDuration(detailCourse.duration) : '-' }}</el-descriptions-item>
             <el-descriptions-item label="关联证书">
               <template v-if="detailCourse.certificate_template">

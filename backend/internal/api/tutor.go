@@ -20,6 +20,7 @@ import (
 func RegisterTutorRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage) {
 	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st)
 	svc := service.NewTutorService(db, cfg.UploadFolder, fileSvc)
+	courseSvc := service.NewAdminCourseService(db, fileSvc)
 
 	g := rg.Group("/tutor", middleware.JWTAuth(cfg), middleware.RoleRequired("tutor"))
 
@@ -28,6 +29,41 @@ func RegisterTutorRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, s
 		page := atoiDefault(c.Query("page"), 1)
 		pageSize := atoiDefault(c.Query("page_size"), 10)
 		response.Success(c, svc.GetCourses(nil, page, pageSize))
+	})
+
+	// POST /api/tutor/course  创建课程（专业方向/课程等级必填，与管理端同校验）
+	g.POST("/course", func(c *gin.Context) {
+		var data map[string]any
+		if err := c.ShouldBindJSON(&data); err != nil {
+			response.BadRequest(c, "请求数据无效")
+			return
+		}
+		result, err := courseSvc.CreateCourse(data)
+		if err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.Created(c, "课程创建成功", result)
+	})
+
+	// PUT /api/tutor/course/:course_id  更新课程
+	g.PUT("/course/:course_id", func(c *gin.Context) {
+		courseID, err := strconv.Atoi(c.Param("course_id"))
+		if err != nil {
+			response.BadRequest(c, "课程ID无效")
+			return
+		}
+		var data map[string]any
+		if err := c.ShouldBindJSON(&data); err != nil {
+			response.BadRequest(c, "请求数据无效")
+			return
+		}
+		result, err := courseSvc.UpdateCourse(courseID, data)
+		if err != nil {
+			response.NotFound(c, err.Error())
+			return
+		}
+		response.SuccessWithMsg(c, "课程更新成功", result)
 	})
 
 	// GET /api/tutor/grading-stats  导师仪表盘阅卷统计（按天分组）

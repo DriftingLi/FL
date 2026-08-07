@@ -72,7 +72,7 @@ func RegisterPracticeModeRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gor
 		response.Success(c, svc.GetSequentialProgress(studentID))
 	})
 
-	// POST /api/practice-mode/progress  保存练习游标和答题状态（支持顺序/专项/章节练习）
+	// POST /api/practice-mode/progress  保存练习游标和答题状态（支持顺序/专项/标签练习）
 	g.POST("/progress", func(c *gin.Context) {
 		uid, _ := c.Get(string(middleware.CtxUserID))
 		studentID, _ := uid.(int)

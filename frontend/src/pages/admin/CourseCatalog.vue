@@ -41,6 +41,20 @@
         <span class="cc-nav-name">未挂载课程</span>
         <span class="cc-nav-count">{{ unmountedCourses.length }}</span>
       </button>
+
+      <div class="cc-sidebar-levels">
+        <div class="cc-sidebar-levels-head">
+          <span>课程等级</span>
+          <el-link :underline="false" @click="openLevelDialog()">新增</el-link>
+        </div>
+        <div v-for="l in levels" :key="l.level_id" class="cc-level-row">
+          <span class="cc-level-name">{{ l.name }}</span>
+          <span class="cc-nav-move">
+            <el-link :underline="false" @click.stop="moveLevel(l, -1)">上移</el-link>
+            <el-link :underline="false" @click.stop="moveLevel(l, 1)">下移</el-link>
+          </span>
+        </div>
+      </div>
     </aside>
 
     <!-- 右侧课程表格 -->
@@ -331,6 +345,7 @@ import { Plus, Search } from '@element-plus/icons-vue'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { trainingApi, type CatalogDirectionNode, type CatalogLevel, type CertificateTemplate } from '@/api/training'
 import { adminApi, type AdminCourseItem, type ChapterPayload } from '@/api/admin'
+import { levelTagType } from '@/constants/level'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -392,17 +407,6 @@ function certificateNameOf(id?: number | null) {
   return certificateTemplates.value.find(t => t.id === id)?.name || ''
 }
 
-const LEVEL_TAG_TYPES: Record<string, 'success' | 'primary' | 'warning' | 'danger' | 'info'> = {
-  入门: 'success',
-  进阶: 'primary',
-  专项: 'warning',
-  认证: 'danger'
-}
-
-function levelTagType(name: string) {
-  return LEVEL_TAG_TYPES[name] ?? 'info'
-}
-
 function selectSpecialty(id: number | null) {
   filterSpecialty.value = id
   currentPage.value = 1
@@ -417,6 +421,26 @@ async function moveDirection(d: CatalogDirectionNode, delta: -1 | 1) {
   submitting.value = true
   try {
     const res = await trainingApi.swapDirection(d.specialty_id, target.specialty_id)
+    if (res.code === 200) {
+      ElMessage.success('排序已更新')
+      await loadCatalog()
+    }
+  } catch (error) {
+    console.error('排序失败:', error)
+    ElMessage.error('排序更新失败')
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function moveLevel(l: CatalogLevel, delta: -1 | 1) {
+  const sibs = levels.value
+  const idx = sibs.findIndex(s => s.level_id === l.level_id)
+  const target = sibs[idx + delta]
+  if (!target) return
+  submitting.value = true
+  try {
+    const res = await trainingApi.swapLevel(l.level_id, target.level_id)
     if (res.code === 200) {
       ElMessage.success('排序已更新')
       await loadCatalog()
@@ -981,6 +1005,36 @@ onMounted(() => {
 .cc-nav-count {
   font-size: var(--text-xs);
   color: var(--color-text-tertiary);
+}
+
+.cc-sidebar-levels {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px dashed var(--color-border-light);
+}
+
+.cc-sidebar-levels-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  margin-bottom: var(--space-1);
+}
+
+.cc-level-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+}
+
+.cc-level-row .cc-nav-move {
+  flex-direction: row;
+  gap: 8px;
 }
 
 /* ===== 右侧表格 ===== */

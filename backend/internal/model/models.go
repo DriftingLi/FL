@@ -286,19 +286,6 @@ type AIGenerationLog struct {
 
 func (AIGenerationLog) TableName() string { return "ai_generation_log" }
 
-// ===== 10. 知识点 =====
-
-type KnowledgePoint struct {
-	ID          int       `gorm:"column:id;primaryKey" json:"id"`
-	Name        string    `gorm:"column:name" json:"name"`
-	Category    string    `gorm:"column:category" json:"category,omitempty"`
-	ParentID    *int      `gorm:"column:parent_id" json:"parent_id,omitempty"`
-	Description string    `gorm:"column:description" json:"description"`
-	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
-}
-
-func (KnowledgePoint) TableName() string { return "knowledge_point" }
-
 // ===== 11. 题目 =====
 
 type Question struct {

@@ -57,3 +57,27 @@ func TestQuestionBankQuestionsIgnoresKpParam(t *testing.T) {
 		t.Fatalf("knowledge_point_id 参数不应导致 500: %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+// TestTutorCourseRoutesRegistered 导师端建课/改课端点已注册（无 token 时 401 而非 404）。
+func TestTutorCourseRoutesRegistered(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := testutil.NewMemoryDB(t)
+	cfg := &config.Config{}
+
+	r := gin.New()
+	api := r.Group("/api")
+	RegisterTutorRoutes(api, cfg, db, nil)
+
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{"POST", "/api/tutor/course"},
+		{"PUT", "/api/tutor/course/1"},
+	} {
+		rec := performRequest(r, tc.method, tc.path)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("%s %s 应 401（路由已注册）, got %d", tc.method, tc.path, rec.Code)
+		}
+	}
+}

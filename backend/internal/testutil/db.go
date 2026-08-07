@@ -49,7 +49,6 @@ func allModels() []interface{} {
 		&model.CourseLevel{},
 		&model.CertificateTemplate{},
 		&model.CoursePrerequisite{},
-		&model.KnowledgePoint{},
 		&model.Chapter{},
 		&model.ChapterFile{},
 		&model.StudyRecord{},
@@ -149,18 +148,4 @@ func SeedCourse(t *testing.T, db *gorm.DB, name string) *model.Course {
 		t.Fatalf("插入测试课程失败: %v", err)
 	}
 	return c
-}
-
-// SeedKnowledgePoint 插入一个测试知识点。
-func SeedKnowledgePoint(t *testing.T, db *gorm.DB, name, category string) *model.KnowledgePoint {
-	t.Helper()
-	kp := &model.KnowledgePoint{
-		Name:      name,
-		Category:  category,
-		CreatedAt: Now(),
-	}
-	if err := db.Create(kp).Error; err != nil {
-		t.Fatalf("插入测试知识点失败: %v", err)
-	}
-	return kp
 }

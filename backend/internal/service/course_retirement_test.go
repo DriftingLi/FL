@@ -200,6 +200,32 @@ func TestAdminCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 	}
 }
 
+// TestTutorCourseListHasPrereqIDs 导师端课程列表返回章节数与前置课程ID（编辑表单回填用）。
+func TestTutorCourseListHasPrereqIDs(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	svc := NewTutorService(db, "", nil)
+	course, prereq := seedCatalogCourse(t, db)
+
+	list := svc.GetCourses(nil, 1, 10)
+	items := list["courses"].([]map[string]any)
+	var item map[string]any
+	for _, c := range items {
+		if c["course_id"] == course.CourseID {
+			item = c
+		}
+	}
+	if item == nil {
+		t.Fatalf("未找到主课程, items: %+v", items)
+	}
+	if item["chapter_count"] != int64(2) {
+		t.Fatalf("chapter_count 应为 2, got %v", item["chapter_count"])
+	}
+	ids, ok := item["prerequisite_course_ids"].([]int)
+	if !ok || len(ids) != 1 || ids[0] != prereq.CourseID {
+		t.Fatalf("prerequisite_course_ids 应为 [%d], got %v", prereq.CourseID, item["prerequisite_course_ids"])
+	}
+}
+
 // TestUpdateCourseWithoutPrereqKeyKeepsPrereqs 编辑课程不携带前置课程字段时，前置课程保持原样。
 func TestUpdateCourseWithoutPrereqKeyKeepsPrereqs(t *testing.T) {
 	db := testutil.NewMemoryDB(t)

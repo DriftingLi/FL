@@ -41,6 +41,7 @@ func (s *TutorService) GetCourses(tutorID *int, page, pageSize int) map[string]a
 	for i := range courses {
 		item := courseToDict(&courses[i])
 		fillChapterCount(s.db, courses[i].CourseID, item)
+		fillPrereqIDs(s.db, courses[i].CourseID, item)
 		// 统计该课程的学习学员数（study_record 表中去重的 student_id 数量）
 		var studentCount int64
 		s.db.Table("study_record").

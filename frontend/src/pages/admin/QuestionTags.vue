@@ -26,6 +26,8 @@
                 <span class="tag-name">{{ tag.name }}</span>
                 <span class="tag-count">{{ tag.question_count ?? 0 }} 题</span>
                 <span class="tag-actions" @click.stop>
+                  <el-link :underline="false" @click="moveTag(tag, -1)">上移</el-link>
+                  <el-link :underline="false" @click="moveTag(tag, 1)">下移</el-link>
                   <el-button link size="small" @click="openTagDialog(tag)">编辑</el-button>
                   <el-popconfirm title="删除标签不会删除题目，仅解除关联，确定？" @confirm="handleDeleteTag(tag)">
                     <template #reference>
@@ -293,6 +295,25 @@ async function handleDeleteTag(tag: QuestionTag) {
   } catch (error) {
     console.error('删除标签失败:', error)
     ElMessage.error('删除失败')
+  }
+}
+
+async function moveTag(tag: QuestionTag, delta: -1 | 1) {
+  const idx = tags.value.findIndex(t => t.id === tag.id)
+  const target = tags.value[idx + delta]
+  if (!target) return
+  tagSubmitting.value = true
+  try {
+    const res = await trainingApi.swapQuestionTag(tag.id, target.id)
+    if (res.code === 200) {
+      ElMessage.success('排序已更新')
+      await loadTags()
+    }
+  } catch (error) {
+    console.error('排序失败:', error)
+    ElMessage.error('排序更新失败')
+  } finally {
+    tagSubmitting.value = false
   }
 }
 

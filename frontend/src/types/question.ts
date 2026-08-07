@@ -4,9 +4,6 @@ export type QuestionType = 'single_choice' | 'multi_choice' | 'true_false' | 'fa
 
 export type QuestionStatus = 'draft' | 'pending' | 'published'
 
-// 练习模式
-export type PracticeMode = 'sequential' | 'free'
-
 export interface Question {
   id: number
   type: QuestionType
