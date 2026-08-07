@@ -28,7 +28,6 @@
           {{ props.modelValue.length }}/{{ props.max }}
         </span>
       </button>
-      <span class="paste-hint">可粘贴图片</span>
     </div>
 
     <input
@@ -246,10 +245,5 @@ onBeforeUnmount(() => {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
-}
-
-.paste-hint {
-  font-size: 12px;
-  color: #c0c4cc;
 }
 </style>

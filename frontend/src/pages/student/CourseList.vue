@@ -2,7 +2,6 @@
   <div class="course-list-page">
     <div class="page-header">
       <h1 class="page-title">课程中心</h1>
-      <p class="page-subtitle">选择您感兴趣的课程，开始学习叉车维修知识</p>
     </div>
 
     <div class="filter-bar">
@@ -379,11 +378,6 @@ onMounted(() => {
   font-weight: var(--font-bold);
   color: var(--color-text-primary);
   margin-bottom: var(--space-2);
-}
-
-.page-subtitle {
-  font-size: var(--text-base);
-  color: var(--color-text-tertiary);
 }
 
 .filter-bar {

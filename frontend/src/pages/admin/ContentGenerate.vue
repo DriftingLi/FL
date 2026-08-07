@@ -2,7 +2,6 @@
   <div class="content-generate-page">
     <div class="page-header">
       <h2>课程内容预生成</h2>
-      <p class="subtitle">使用AI自动生成课程章节内容</p>
     </div>
 
     <div class="generate-card">
@@ -131,17 +130,6 @@
         <el-button @click="previewVisible = false">关闭</el-button>
       </template>
     </el-dialog>
-
-    <div class="tips-card">
-      <h4>使用说明</h4>
-      <ul>
-        <li>AI将根据课程名称和章节标题自动生成培训内容</li>
-        <li>生成的内容会直接写入对应章节，覆盖原有内容</li>
-        <li>已标记"已有内容"的章节如需更新，请勾选后重新生成</li>
-        <li>生成过程可能需要几分钟，请耐心等待</li>
-        <li>如AI服务未配置，生成将返回错误提示</li>
-      </ul>
-    </div>
   </div>
 </template>
 
@@ -338,14 +326,8 @@ loadCourses()
   margin-bottom: 8px;
 }
 
-.subtitle {
-  color: #909399;
-  font-size: 14px;
-}
-
 .generate-card,
-.progress-card,
-.tips-card {
+.progress-card {
   background: #fff;
   border-radius: 12px;
   padding: 24px;
@@ -470,27 +452,13 @@ loadCourses()
   border-radius: 8px;
 }
 
-.tips-card h4 {
-  font-size: 15px;
-  color: #303133;
-  margin-bottom: 10px;
-}
-
-.tips-card ul {
-  padding-left: 20px;
-  color: #909399;
-  font-size: 13px;
-  line-height: 2;
-}
-
 @media screen and (max-width: 768px) {
   .content-generate-page {
     padding: 12px;
   }
 
   .generate-card,
-  .progress-card,
-  .tips-card {
+  .progress-card {
     padding: 16px;
   }
 

@@ -559,10 +559,6 @@ function onSubmit() {
     <!-- 页面底部内联操作区（替代原 fixed 底部栏） -->
     <div class="bottom-action-inline">
       <div class="bottom-action-card">
-        <div class="bottom-action-text">
-          <p class="bottom-action-hint">完成所有必填项后即可提交评估</p>
-          <p class="bottom-action-sub">评估结果将保留在「评估历史」中，支持下载 PDF 报告</p>
-        </div>
         <div class="bottom-action-buttons">
           <el-button :icon="Refresh" size="large" @click="reset">重置</el-button>
           <el-button
@@ -832,21 +828,6 @@ function onSubmit() {
   border: 1px solid var(--color-brand-200, #BAE6FD);
   border-radius: var(--radius-xl, 16px);
   box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
-}
-.bottom-action-text {
-  flex: 1;
-  min-width: 0;
-}
-.bottom-action-hint {
-  font-size: var(--text-base, 16px);
-  font-weight: var(--fw-semibold, 600);
-  color: var(--color-text, #0F172A);
-  margin: 0 0 4px;
-}
-.bottom-action-sub {
-  font-size: var(--text-sm, 14px);
-  color: var(--color-text-secondary, #475569);
-  margin: 0;
 }
 .bottom-action-buttons {
   display: flex;
