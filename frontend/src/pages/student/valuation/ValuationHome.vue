@@ -725,10 +725,6 @@ function onConditionSelect(rating: ConditionRating) {
 
           <!-- Bottom action area -->
           <div class="action-bar">
-            <div class="action-bar-text">
-              <p class="action-bar-hint">完成必填项后即可提交</p>
-              <p class="action-bar-sub">评估结果将保留在评估历史中</p>
-            </div>
             <div class="action-bar-buttons">
               <button type="button" class="btn btn-outline" @click="reset">重置</button>
               <button
@@ -1085,25 +1081,6 @@ function onConditionSelect(rating: ConditionRating) {
   gap: 16px;
   flex-wrap: wrap;
 }
-.action-bar-text {
-  flex: 1 1 200px;
-  min-width: 0;
-}
-.action-bar-hint {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-text-secondary, #475569);
-  margin: 0 0 2px;
-  font-family: var(--font-text, 'Noto Sans SC', sans-serif);
-  line-height: 1.5;
-}
-.action-bar-sub {
-  font-size: 12px;
-  color: var(--color-text-muted, #94A3B8);
-  margin: 0;
-  font-family: var(--font-text, 'Noto Sans SC', sans-serif);
-  line-height: 1.5;
-}
 .action-bar-buttons {
   display: flex;
   align-items: center;
@@ -1213,10 +1190,6 @@ function onConditionSelect(rating: ConditionRating) {
     flex-direction: column;
     align-items: stretch;
     gap: 16px;
-  }
-  .action-bar-text {
-    flex: 1 1 auto;
-    text-align: center;
   }
   .action-bar-buttons {
     width: 100%;

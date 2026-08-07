@@ -248,18 +248,7 @@ const isValid = computed(
             <span v-else-if="cycleCount > 0" class="form-hint">
               已解析 <strong>{{ cycleCount }}</strong> 个循环
             </span>
-            <span v-else class="form-hint form-hint-muted">等待输入</span>
           </div>
-        </div>
-
-        <!-- 数据格式说明 -->
-        <div class="form-tips">
-          <p class="form-tips-title">数据格式说明</p>
-          <ul>
-            <li>每条循环需包含 <code>cycle_index</code>（整数 ≥ 1）、<code>voltage_series</code>（电压时序数组）、<code>current_series</code>（电流时序数组，长度一致）、<code>capacity</code>（放电容量）</li>
-            <li>至少提交 <strong>10</strong> 个循环，推荐 <strong>20+</strong> 循环以获得更稳定的滑窗预测</li>
-            <li>电压/电流时序建议聚焦充电 CC-CV 段（论文算法核心输入）</li>
-          </ul>
         </div>
       </div>
     </div>
@@ -319,42 +308,12 @@ const isValid = computed(
   font-size: var(--fs-sm);
   color: var(--color-text-secondary);
 }
-.form-hint-muted {
-  color: var(--color-text-muted);
-}
 .form-hint strong {
   color: var(--color-primary);
 }
 .form-error {
   font-size: var(--fs-sm);
   color: #cf1322;
-}
-.form-tips {
-  background: var(--color-bg-muted);
-  border-radius: 4px;
-  padding: var(--sp-4) var(--sp-5);
-  border-left: 3px solid var(--color-primary);
-}
-.form-tips-title {
-  margin: 0 0 var(--sp-2);
-  font-size: var(--fs-base);
-  font-weight: var(--fw-medium);
-  color: var(--color-text);
-}
-.form-tips ul {
-  margin: 0;
-  padding-left: var(--sp-5);
-  font-size: var(--fs-sm);
-  color: var(--color-text-secondary);
-  line-height: 1.8;
-}
-.form-tips code {
-  background: var(--color-bg);
-  padding: 0 4px;
-  border-radius: 2px;
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
-  border: 1px solid var(--color-border);
 }
 .btn-primary {
   background: var(--color-primary);
@@ -388,9 +347,6 @@ const isValid = computed(
   }
   .form-row {
     grid-template-columns: 1fr;
-  }
-  .form-tips {
-    padding: var(--sp-3) var(--sp-4);
   }
 }
 </style>

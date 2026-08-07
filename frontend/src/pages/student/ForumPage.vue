@@ -1,10 +1,7 @@
 <template>
   <div class="forum-page">
     <div class="forum-header">
-      <div>
-        <h1 class="forum-title">学员论坛</h1>
-        <p class="forum-subtitle">综合讨论区：自由发言，交流叉车维修知识与学习心得</p>
-      </div>
+      <h1 class="forum-title">学员论坛</h1>
       <el-button type="primary" size="large" :icon="EditPen" @click="openCreateDialog">
         发布新帖
       </el-button>
@@ -209,12 +206,6 @@ onMounted(loadTopics)
   font-weight: 600;
   color: #303133;
   margin: 0 0 6px;
-}
-
-.forum-subtitle {
-  color: #909399;
-  font-size: 14px;
-  margin: 0;
 }
 
 .topic-list {

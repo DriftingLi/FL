@@ -142,7 +142,6 @@
             <el-option v-for="t in tags" :key="t.id" :label="t.name" :value="t.id" />
           </el-select>
         </el-form-item>
-        <el-alert type="info" :closable="false" show-icon title="保存将整体替换这些题目的标签关联（未勾选的标签会被移除）" />
       </el-form>
       <template #footer>
         <el-button @click="tagAssignVisible = false">取消</el-button>

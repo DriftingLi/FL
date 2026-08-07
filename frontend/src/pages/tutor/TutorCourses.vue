@@ -2,7 +2,6 @@
   <div class="tutor-courses-page">
     <div class="page-header">
       <h2>我的课程</h2>
-      <p class="page-desc">管理您负责的课程章节内容</p>
     </div>
 
     <div v-loading="loading" class="course-grid">
@@ -130,11 +129,6 @@ onMounted(() => {
   font-size: 22px;
   color: #303133;
   margin-bottom: 8px;
-}
-
-.page-desc {
-  color: #909399;
-  font-size: 14px;
 }
 
 .course-grid {

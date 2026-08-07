@@ -62,7 +62,6 @@
           <div class="cover-actions" v-if="form.cover_image">
             <el-button link type="danger" @click="form.cover_image = ''">移除封面</el-button>
           </div>
-          <div class="form-hint">建议尺寸 16:9，JPG/PNG，不超过 5MB</div>
         </el-form-item>
 
         <el-form-item label="正文" prop="content">
@@ -77,7 +76,6 @@
 
         <el-form-item label="排序">
           <el-input-number v-model="form.sort_order" :min="0" :max="9999" />
-          <span class="form-hint">数字越小越靠前（默认 0）</span>
         </el-form-item>
 
         <el-form-item label="状态">
@@ -322,12 +320,6 @@ onMounted(() => {
 
 .cover-actions {
   margin-top: 8px;
-}
-
-.form-hint {
-  margin-left: 12px;
-  color: #94a3b8;
-  font-size: 12px;
 }
 
 @media (max-width: 768px) {

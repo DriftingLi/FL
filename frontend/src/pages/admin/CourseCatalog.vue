@@ -12,14 +12,6 @@
       </div>
     </div>
 
-    <el-alert
-      class="catalog-tip"
-      type="info"
-      :closable="false"
-      show-icon
-      title="目录结构：专业方向 → 课程等级 → 课程 → 章节，支持增删改与排序（方向/等级/课程在所属层级内排序，章节在课程内排序）"
-    />
-
     <div class="catalog-body" v-loading="loading">
       <el-tree
         v-if="treeData.length > 0"
@@ -923,10 +915,6 @@ onMounted(() => {
 .header-actions {
   display: flex;
   gap: 8px;
-}
-
-.catalog-tip {
-  margin-bottom: 16px;
 }
 
 .catalog-body {
