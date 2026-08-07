@@ -1,18 +1,10 @@
 -- ============================================================
--- 叉车维修培训系统 PostgreSQL 初始化 baseline（squash 000001~000017）
--- 由 17 个迁移文件 squash 而成，等价于原 17 个迁移按序执行后的最终态
--- 类型映射: AUTO_INCREMENT -> GENERATED ALWAYS AS IDENTITY
---          DATETIME -> TIMESTAMPTZ
---          JSON -> JSONB
---          TINYINT -> SMALLINT / BOOLEAN
---          DECIMAL -> NUMERIC
+-- 叉车维修培训系统 PostgreSQL 迁移（squash 000001~000029）
+-- 由 29 个迁移文件合并而成，等价于原 29 个迁移按序执行后的最终态。
+-- 覆盖：培训/题库/考试/练习/论坛/通知/审计/认证/精选内容/残值评估
+-- 新增迁移请从 000030 开始编号。
 -- ============================================================
 
--- =====================================================
--- Part 1: 学员/题库/考试相关表（来自 000001 + 000013）
--- =====================================================
-
--- 1. 学员表（含 000013 的 phone/email/company 字段）
 CREATE TABLE student (
     student_id      INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     username        VARCHAR(50)  NOT NULL UNIQUE,
@@ -34,7 +26,6 @@ COMMENT ON COLUMN student.phone   IS '手机号（注册时必填，同时作为
 COMMENT ON COLUMN student.email   IS '邮箱（选填）';
 COMMENT ON COLUMN student.company IS '单位/公司（选填）';
 
--- 2. 管理员表
 CREATE TABLE admin (
     admin_id    INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     username    VARCHAR(50)  NOT NULL UNIQUE,
@@ -44,7 +35,6 @@ CREATE TABLE admin (
 );
 COMMENT ON TABLE admin IS '管理员表';
 
--- 3. 导师表
 CREATE TABLE tutor (
     tutor_id    INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     username    VARCHAR(50)  NOT NULL UNIQUE,
@@ -55,7 +45,6 @@ CREATE TABLE tutor (
 );
 COMMENT ON TABLE tutor IS '导师表';
 
--- 4. 课程表
 CREATE TABLE course (
     course_id   INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name        VARCHAR(100) NOT NULL,
@@ -72,7 +61,6 @@ COMMENT ON TABLE  course IS '课程表';
 COMMENT ON COLUMN course.category IS '分类：CATEGORY_01-基础理论, CATEGORY_02-安全规范, CATEGORY_03-实操技能, CATEGORY_04-进阶提升';
 COMMENT ON COLUMN course.status   IS '状态：1-上架，0-下架';
 
--- 5. 章节表
 CREATE TABLE chapter (
     chapter_id   INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     course_id    INT           NOT NULL REFERENCES course(course_id) ON DELETE CASCADE,
@@ -90,7 +78,6 @@ CREATE INDEX idx_chapter_course_id ON chapter (course_id);
 COMMENT ON TABLE chapter IS '章节表';
 COMMENT ON COLUMN chapter.content_type IS '内容类型：text/document/slide';
 
--- 6. 章节文件表
 CREATE TABLE chapter_file (
     file_id      INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     chapter_id   INT           REFERENCES chapter(chapter_id) ON DELETE SET NULL,
@@ -103,7 +90,6 @@ CREATE TABLE chapter_file (
 CREATE INDEX idx_chapter_file_chapter ON chapter_file (chapter_id);
 COMMENT ON TABLE chapter_file IS '章节文件表';
 
--- 7. 学习记录表
 CREATE TABLE study_record (
     record_id      INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     student_id     INT          NOT NULL REFERENCES student(student_id) ON DELETE CASCADE,
@@ -117,7 +103,6 @@ CREATE INDEX idx_study_record_student_course_chapter ON study_record (student_id
 CREATE INDEX idx_study_record_study_date             ON study_record (study_date);
 COMMENT ON TABLE study_record IS '学习记录表';
 
--- 8. 考核记录表
 CREATE TABLE exam_record (
     exam_id   INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     student_id INT          NOT NULL REFERENCES student(student_id) ON DELETE CASCADE,
@@ -129,7 +114,6 @@ CREATE TABLE exam_record (
 CREATE INDEX idx_exam_record_student_course ON exam_record (student_id, course_id);
 COMMENT ON TABLE exam_record IS '考核记录表';
 
--- 9. AI 生成记录表
 CREATE TABLE ai_generation_log (
     log_id          INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id         INT          NOT NULL,
@@ -144,7 +128,6 @@ CREATE INDEX idx_ai_log_user_id         ON ai_generation_log (user_id);
 CREATE INDEX idx_ai_log_generation_type ON ai_generation_log (generation_type);
 COMMENT ON TABLE ai_generation_log IS 'AI生成记录表';
 
--- 10. 知识点表
 CREATE TABLE knowledge_point (
     id          INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name        VARCHAR(100) NOT NULL,
@@ -158,7 +141,6 @@ CREATE INDEX idx_kp_parent   ON knowledge_point (parent_id);
 COMMENT ON TABLE  knowledge_point IS '知识点表';
 COMMENT ON COLUMN knowledge_point.category IS '课程分类：CATEGORY_01-基础理论, CATEGORY_02-安全规范, CATEGORY_03-实操技能, CATEGORY_04-进阶提升';
 
--- 11. 题目表
 CREATE TABLE question (
     id                  INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     type                VARCHAR(20)  NOT NULL,
@@ -186,7 +168,6 @@ COMMENT ON COLUMN question.type IS '题型：single_choice/multi_choice/true_fal
 COMMENT ON COLUMN question.status IS '状态：draft/pending/published';
 COMMENT ON COLUMN question.reject_reason IS '驳回理由（管理员驳回时填写，导师修改重提后清空）';
 
--- 12. 考试场次表
 CREATE TABLE exam_session (
     id              INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name            VARCHAR(200) NOT NULL,
@@ -204,7 +185,6 @@ CREATE TABLE exam_session (
 CREATE INDEX idx_exam_session_status ON exam_session (status);
 COMMENT ON TABLE exam_session IS '考试场次表';
 
--- 13. 考试参与记录表
 CREATE TABLE exam_participant (
     id               INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     exam_session_id  INT          NOT NULL REFERENCES exam_session(id) ON DELETE CASCADE,
@@ -225,7 +205,6 @@ CREATE UNIQUE INDEX idx_exam_participant_session_student ON exam_participant (ex
 CREATE INDEX idx_exam_participant_student                ON exam_participant (student_id);
 COMMENT ON TABLE exam_participant IS '考试参与记录表';
 
--- 14. 考试答题记录表
 CREATE TABLE exam_answer (
     id                  INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     exam_participant_id INT          NOT NULL REFERENCES exam_participant(id) ON DELETE CASCADE,
@@ -244,7 +223,6 @@ CREATE INDEX idx_exam_answer_participant ON exam_answer (exam_participant_id);
 CREATE INDEX idx_exam_answer_question    ON exam_answer (question_id);
 COMMENT ON TABLE exam_answer IS '考试答题记录表';
 
--- 15. 题库练习记录表
 CREATE TABLE question_practice_record (
     id            INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     student_id    INT          NOT NULL REFERENCES student(student_id) ON DELETE CASCADE,
@@ -259,7 +237,6 @@ CREATE INDEX idx_qpr_question ON question_practice_record (question_id);
 CREATE INDEX idx_qpr_created  ON question_practice_record (created_at);
 COMMENT ON TABLE question_practice_record IS '题库练习记录表';
 
--- 17. 错题记录表
 CREATE TABLE wrong_question (
     id             INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     student_id     INT          NOT NULL REFERENCES student(student_id) ON DELETE CASCADE,
@@ -273,7 +250,6 @@ CREATE UNIQUE INDEX idx_wrong_question_student_question ON wrong_question (stude
 CREATE INDEX        idx_wrong_question_student          ON wrong_question (student_id);
 COMMENT ON TABLE wrong_question IS '错题记录表';
 
--- 18. 模拟考试表
 CREATE TABLE mock_exam (
     id            INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     student_id    INT          NOT NULL REFERENCES student(student_id) ON DELETE CASCADE,
@@ -291,7 +267,6 @@ CREATE TABLE mock_exam (
 CREATE INDEX idx_mock_exam_student ON mock_exam (student_id);
 COMMENT ON TABLE mock_exam IS '模拟考试表';
 
--- 19. 异步任务表
 CREATE TABLE async_task (
     id         INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     task_type  VARCHAR(50)  NOT NULL,
@@ -305,7 +280,6 @@ CREATE TABLE async_task (
 CREATE INDEX idx_async_task_status ON async_task (status);
 COMMENT ON TABLE async_task IS '异步任务表';
 
--- 20. 练习进度表（断点续练游标 + 答题状态持久化，来自 000002）
 CREATE TABLE practice_progress (
     id            INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     student_id    INT          NOT NULL REFERENCES student(student_id) ON DELETE CASCADE,
@@ -321,11 +295,7 @@ CREATE INDEX idx_practice_progress_student ON practice_progress (student_id);
 COMMENT ON TABLE practice_progress IS '练习进度表（断点续练游标 + 答题状态持久化）';
 COMMENT ON COLUMN practice_progress.answers_state IS '每题作答状态 JSONB，key 为 question_id，value 含 user_answer/is_correct/correct_answer/explanation 等';
 
--- =====================================================
--- Part 2: 残值评估相关表（最终态）
--- =====================================================
 
--- 1. 品牌表（最终态：删除了 tier/models/brand_type 列）
 CREATE TABLE brands (
     id          SERIAL PRIMARY KEY,
     name        VARCHAR(50) UNIQUE NOT NULL,
@@ -334,7 +304,6 @@ CREATE TABLE brands (
     created_at  TIMESTAMP DEFAULT NOW()
 );
 
--- 2. 车型表（含 000007 的 earliest_factory_year）
 CREATE TABLE vehicle_types (
     id                      SERIAL PRIMARY KEY,
     name                    VARCHAR(50) UNIQUE NOT NULL,
@@ -342,7 +311,6 @@ CREATE TABLE vehicle_types (
     earliest_factory_year   INTEGER NOT NULL DEFAULT 1980
 );
 
--- 3. 系列表（含 000009 的 earliest_factory_year）
 CREATE TABLE series (
     id                      SERIAL PRIMARY KEY,
     brand                   VARCHAR(50) NOT NULL,
@@ -351,31 +319,26 @@ CREATE TABLE series (
     UNIQUE(brand, name)
 );
 
--- 4. 吨位表
 CREATE TABLE tonnages (
     id      SERIAL PRIMARY KEY,
     value   DECIMAL(5,2) UNIQUE NOT NULL
 );
 
--- 5. 门架类型表
 CREATE TABLE mast_types (
     id      SERIAL PRIMARY KEY,
     name    VARCHAR(50) UNIQUE NOT NULL
 );
 
--- 6. 门架高度表
 CREATE TABLE mast_heights (
     id          SERIAL PRIMARY KEY,
     value_mm    INTEGER UNIQUE NOT NULL
 );
 
--- 7. 电池类型表
 CREATE TABLE battery_types (
     id      SERIAL PRIMARY KEY,
     name    VARCHAR(50) UNIQUE NOT NULL
 );
 
--- 8. 车况评级表
 CREATE TABLE condition_ratings (
     id                  SERIAL PRIMARY KEY,
     rating              VARCHAR(10) UNIQUE NOT NULL,
@@ -383,7 +346,6 @@ CREATE TABLE condition_ratings (
     base_coefficient    DECIMAL(5,4) NOT NULL
 );
 
--- 9. 区域系数表
 CREATE TABLE region_coefficients (
     id              SERIAL PRIMARY KEY,
     province        VARCHAR(50) NOT NULL,
@@ -392,19 +354,16 @@ CREATE TABLE region_coefficients (
     UNIQUE(province, city)
 );
 
--- 10. 传动类型表（来自 000010）
 CREATE TABLE transmission_types (
     id    SERIAL PRIMARY KEY,
     name  VARCHAR(50) UNIQUE NOT NULL
 );
 
--- 11. 发动机类型表（来自 000010）
 CREATE TABLE engine_types (
     id    SERIAL PRIMARY KEY,
     name  VARCHAR(50) UNIQUE NOT NULL
 );
 
--- 12. 系列配置选项表（来自 000010）
 CREATE TABLE series_config_options (
     id           SERIAL PRIMARY KEY,
     brand        VARCHAR(50) NOT NULL,
@@ -415,7 +374,6 @@ CREATE TABLE series_config_options (
 );
 CREATE INDEX idx_sco_lookup ON series_config_options(brand, series);
 
--- 13. 车辆原价表（最终态：7字段唯一约束 + earliest_factory_year，无 battery_type/brand_type/is_active）
 CREATE TABLE original_prices (
     id                      BIGSERIAL PRIMARY KEY,
     brand                   VARCHAR(50) NOT NULL,
@@ -435,7 +393,6 @@ CREATE INDEX idx_original_prices_lookup ON original_prices(
     brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm
 );
 
--- 14. 评估记录表（最终态：无 battery_type/brand_type）
 CREATE TABLE evaluations (
     id                          BIGSERIAL PRIMARY KEY,
     brand                       VARCHAR(50) NOT NULL,
@@ -471,7 +428,6 @@ CREATE TABLE evaluations (
 CREATE INDEX idx_evaluations_created ON evaluations(created_at DESC);
 CREATE INDEX idx_evaluations_brand ON evaluations(brand);
 
--- 15. 电池评估主表（来自 000002）
 CREATE TABLE battery_evaluations (
     id                BIGSERIAL PRIMARY KEY,
     battery_type      VARCHAR(20) NOT NULL,
@@ -490,7 +446,6 @@ CREATE TABLE battery_evaluations (
 CREATE INDEX idx_battery_evals_type    ON battery_evaluations(battery_type);
 CREATE INDEX idx_battery_evals_created ON battery_evaluations(created_at DESC);
 
--- 16. 周期特征表（来自 000002）
 CREATE TABLE battery_cycle_features (
     id              BIGSERIAL PRIMARY KEY,
     evaluation_id   BIGINT NOT NULL REFERENCES battery_evaluations(id) ON DELETE CASCADE,
@@ -502,7 +457,6 @@ CREATE TABLE battery_cycle_features (
 );
 CREATE INDEX idx_battery_features_eval ON battery_cycle_features(evaluation_id);
 
--- 17. 系数配置表（来自 000002）
 CREATE TABLE coefficient_configs (
     id          SERIAL PRIMARY KEY,
     key         VARCHAR(50) UNIQUE NOT NULL,
@@ -511,11 +465,7 @@ CREATE TABLE coefficient_configs (
     updated_at  TIMESTAMP DEFAULT NOW()
 );
 
--- =====================================================
--- Part 3: 种子数据
--- =====================================================
 
--- 3.1 brands（14 个品牌：000005 的 13 个 + 000008 的中力）
 INSERT INTO brands (name, k_brand, is_active) VALUES
   ('林德',     1.10, TRUE),
   ('丰田',     1.08, TRUE),
@@ -533,7 +483,6 @@ INSERT INTO brands (name, k_brand, is_active) VALUES
   ('中力',     0.86, TRUE)
 ON CONFLICT DO NOTHING;
 
--- 3.2 vehicle_types（6 个车型，含 earliest_factory_year）
 INSERT INTO vehicle_types (name, power_type, earliest_factory_year) VALUES
   ('电动平衡重式',   'electric',   1995),
   ('电动前移式',     'electric',   2000),
@@ -543,78 +492,58 @@ INSERT INTO vehicle_types (name, power_type, earliest_factory_year) VALUES
   ('内燃重型叉车',   'combustion', 1990)
 ON CONFLICT (name) DO NOTHING;
 
--- 3.3 series（69 个 series，含 earliest_factory_year，已应用 000012 合并规则与"无"→"其它"）
 INSERT INTO series (brand, name, earliest_factory_year) VALUES
-  -- 林德
   ('林德', 'E系列', 2015), ('林德', 'Xi系列', 2018), ('林德', 'H系列', 2006),
   ('林德', 'T-MATIC', 2010), ('林德', 'L系列', 2015), ('林德', 'R系列', 2010),
   ('林德', '其它', 1980),
-  -- 丰田
   ('丰田', '8FBE系列', 2013), ('丰田', '8FD系列', 2010), ('丰田', 'Traigo系列', 2016),
   ('丰田', '7系列（7FD）', 1999), ('丰田', 'Z系列（本土化）', 2010),
   ('丰田', '8系列（8FBN）', 2011), ('丰田', '8系列（8FBR）', 2015),
   ('丰田', '其它', 1980),
-  -- 永恒力
   ('永恒力', 'EFG系列', 2010), ('永恒力', 'ETV系列', 2012), ('永恒力', 'ERIC系列', 2014),
   ('永恒力', '其它', 1980),
-  -- 合力
   ('合力', 'A系列', 2005), ('合力', 'X系列', 2015), ('合力', 'CPCD系列', 1998),
   ('合力', 'CPD系列', 2005), ('合力', 'K系列（K1）', 2011), ('合力', 'K2系列（大力士）', 2022),
   ('合力', 'G2系列', 2020), ('合力', 'G3系列', 2023), ('合力', 'H3系列', 2020),
   ('合力', 'H4系列', 2023), ('合力', 'K3系列（锂电专用）', 2025), ('合力', '前移式', 2022),
   ('合力', '其它', 1980),
-  -- 杭叉
   ('杭叉', 'A系列', 2008), ('杭叉', 'XH系列', 2018), ('杭叉', 'XC系列', 2016),
   ('杭叉', 'XE系列', 2017), ('杭叉', 'XF系列', 2019), ('杭叉', 'XA系列', 2020),
   ('杭叉', 'J系列（大吨位）', 2020), ('杭叉', 'X系列', 2019), ('杭叉', 'A系列（经济型）', 2018),
   ('杭叉', '其它', 1980),
-  -- 比亚迪
   ('比亚迪', 'CPD系列', 2013), ('比亚迪', 'CPD系列（大吨位）', 2018), ('比亚迪', 'S系列', 2018),
   ('比亚迪', '其它', 1980),
-  -- 斗山
   ('斗山', 'B30S系列', 2008), ('斗山', 'BR系列', 2010), ('斗山', '其它', 1980),
-  -- 海斯特
   ('海斯特', 'H系列', 2006), ('海斯特', 'J系列', 2010), ('海斯特', '其它', 1980),
-  -- 凯斯
   ('凯斯', '其它', 1980),
-  -- 龙工
   ('龙工', 'A系列', 2008), ('龙工', 'LG系列', 2010), ('龙工', 'CPCD系列', 2012),
   ('龙工', 'N系列', 2018), ('龙工', 'CDD系列', 2019), ('龙工', '其它', 1980),
-  -- 柳工
   ('柳工', 'CLG系列', 2012), ('柳工', 'E系列', 2020), ('柳工', '其它', 1980),
-  -- 中联重科
   ('中联重科', 'FD系列', 2010), ('中联重科', '其它', 1980),
-  -- 宝骊
   ('宝骊', 'KBE系列', 2008), ('宝骊', '其它', 1980),
-  -- 中力
   ('中力', 'EPT系列', 2013), ('中力', 'ES系列', 2015), ('中力', '其它', 1980)
 ON CONFLICT (brand, name) DO NOTHING;
 
--- 3.4 tonnages（29 个吨位）
 INSERT INTO tonnages (value) VALUES
   (1.0), (1.4), (1.5), (1.6), (1.8), (2.0), (2.5), (2.8), (3.0), (3.2),
   (3.5), (3.8), (4.0), (4.5), (5.0), (5.5), (6.0), (6.5), (7.0), (7.5),
   (8.0), (8.5), (10.0), (12.0), (14.0), (16.0), (20.0), (25.0), (32.0)
 ON CONFLICT (value) DO NOTHING;
 
--- 3.5 mast_types（8 个）
 INSERT INTO mast_types (name) VALUES
   ('两级门架'), ('三级门架'), ('四级门架'), ('无'),
   ('两级标准门架'), ('两级宽视野门架'), ('三级全自由门架'), ('四级HD门架')
 ON CONFLICT (name) DO NOTHING;
 
--- 3.6 mast_heights（16 个）
 INSERT INTO mast_heights (value_mm) VALUES
   (0), (2500), (2900), (3000), (3250), (3500), (4000), (4500),
   (5000), (6000), (7000), (8000), (9500), (10000), (11300), (12000)
 ON CONFLICT (value_mm) DO NOTHING;
 
--- 3.7 battery_types（4 个）
 INSERT INTO battery_types (name) VALUES
   ('磷酸铁锂(LFP)'), ('三元锂(NCM)'), ('铅酸'), ('无')
 ON CONFLICT (name) DO NOTHING;
 
--- 3.8 condition_ratings（5 个）
 INSERT INTO condition_ratings (rating, label, base_coefficient) VALUES
   ('A', '优秀', 1.00),
   ('B', '良好', 0.90),
@@ -623,7 +552,6 @@ INSERT INTO condition_ratings (rating, label, base_coefficient) VALUES
   ('E', '差',   0.50)
 ON CONFLICT (rating) DO NOTHING;
 
--- 3.9 region_coefficients（12 个）
 INSERT INTO region_coefficients (province, city, coefficient) VALUES
   ('上海', '上海', 0.98),
   ('江苏', '苏州', 0.98),
@@ -639,19 +567,15 @@ INSERT INTO region_coefficients (province, city, coefficient) VALUES
   ('河南', '郑州', 1.05)
 ON CONFLICT (province, city) DO NOTHING;
 
--- 3.10 transmission_types（5 个）
 INSERT INTO transmission_types (name) VALUES
   ('手波'), ('自波'), ('无级变速'), ('无'), ('静压传动')
 ON CONFLICT (name) DO NOTHING;
 
--- 3.11 engine_types（4 个）
 INSERT INTO engine_types (name) VALUES
   ('国产发动机'), ('进口发动机'), ('混合动力'), ('无')
 ON CONFLICT (name) DO NOTHING;
 
--- 3.12 series_config_options（已应用 000012 合并规则与"无"→"其它"）
 
--- 林德
 INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('林德','E系列','battery','磷酸铁锂(LFP)'),
   ('林德','E系列','battery','铅酸'),
@@ -673,7 +597,6 @@ INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('林德','R系列','battery','无')
 ON CONFLICT DO NOTHING;
 
--- 丰田
 INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('丰田','8FBE系列','battery','磷酸铁锂(LFP)'),
   ('丰田','8FBE系列','battery','铅酸'),
@@ -702,7 +625,6 @@ INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('丰田','8系列（8FBR）','battery','无')
 ON CONFLICT DO NOTHING;
 
--- 永恒力
 INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('永恒力','EFG系列','battery','磷酸铁锂(LFP)'),
   ('永恒力','EFG系列','battery','铅酸'),
@@ -715,7 +637,6 @@ INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('永恒力','ERIC系列','battery','无')
 ON CONFLICT DO NOTHING;
 
--- 合力
 INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('合力','A系列','transmission','手波'),
   ('合力','A系列','transmission','自波'),
@@ -765,7 +686,6 @@ INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('合力','前移式','battery','无')
 ON CONFLICT DO NOTHING;
 
--- 杭叉
 INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('杭叉','A系列','transmission','手波'),
   ('杭叉','A系列','transmission','自波'),
@@ -801,7 +721,6 @@ INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('杭叉','A系列（经济型）','battery','无')
 ON CONFLICT DO NOTHING;
 
--- 比亚迪
 INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('比亚迪','CPD系列','battery','磷酸铁锂(LFP)'),
   ('比亚迪','CPD系列','battery','无'),
@@ -811,7 +730,6 @@ INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('比亚迪','S系列','battery','无')
 ON CONFLICT DO NOTHING;
 
--- 斗山
 INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('斗山','B30S系列','transmission','手波'),
   ('斗山','B30S系列','transmission','自波'),
@@ -825,7 +743,6 @@ INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('斗山','BR系列','engine','无')
 ON CONFLICT DO NOTHING;
 
--- 海斯特
 INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('海斯特','H系列','transmission','手波'),
   ('海斯特','H系列','transmission','自波'),
@@ -839,7 +756,6 @@ INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('海斯特','J系列','engine','无')
 ON CONFLICT DO NOTHING;
 
--- 龙工
 INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('龙工','A系列','transmission','手波'),
   ('龙工','A系列','transmission','自波'),
@@ -862,7 +778,6 @@ INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('龙工','CDD系列','battery','无')
 ON CONFLICT DO NOTHING;
 
--- 柳工
 INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('柳工','CLG系列','transmission','手波'),
   ('柳工','CLG系列','transmission','自波'),
@@ -877,7 +792,6 @@ INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('柳工','E系列','engine','无')
 ON CONFLICT DO NOTHING;
 
--- 中联重科
 INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('中联重科','FD系列','transmission','手波'),
   ('中联重科','FD系列','transmission','自波'),
@@ -886,14 +800,12 @@ INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('中联重科','FD系列','engine','无')
 ON CONFLICT DO NOTHING;
 
--- 宝骊
 INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('宝骊','KBE系列','battery','磷酸铁锂(LFP)'),
   ('宝骊','KBE系列','battery','铅酸'),
   ('宝骊','KBE系列','battery','无')
 ON CONFLICT DO NOTHING;
 
--- 中力
 INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('中力','EPT系列','battery','磷酸铁锂(LFP)'),
   ('中力','EPT系列','battery','铅酸'),
@@ -906,7 +818,6 @@ INSERT INTO series_config_options (brand, series, dimension, option_name) VALUES
   ('中力','其它','battery','无')
 ON CONFLICT DO NOTHING;
 
--- 3.13 coefficient_configs（12 个参数：000005 + 000015，description 用 000014 之后的版本）
 INSERT INTO coefficient_configs (key, value, description) VALUES
   ('lambda_electric',     0.120000, '电动叉车时间衰减系数 λ（每年衰减率，值越大残值随年限下降越快，建议 0.10~0.15）'),
   ('lambda_combustion',   0.100000, '内燃叉车时间衰减系数 λ（每年衰减率，值越大残值随年限下降越快，建议 0.08~0.12）'),
@@ -922,13 +833,8 @@ INSERT INTO coefficient_configs (key, value, description) VALUES
   ('kc_no_registration_penalty_pct',  0.100000, '缺登记证 Kc 扣减比例（乘性因子，0.10 表示扣减 10%；证件类影响大，建议 0.08~0.15；缺双证时复合放大）')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, description = EXCLUDED.description, updated_at = NOW();
 
--- =====================================================
--- 3.14 original_prices（取 000011 数据，去掉 brand_type/is_active，应用 000012 系列重命名与"无"→"其它"）
--- =====================================================
 
--- ----- 4.1 电动平衡重式 -----
 
--- 林德 E系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('林德', '电动平衡重式', 'E系列', 1.6, '磷酸铁锂(LFP)', '两级门架', 3000, 266500),
   ('林德', '电动平衡重式', 'E系列', 2.0, '磷酸铁锂(LFP)', '两级门架', 3000, 280000),
@@ -937,13 +843,11 @@ INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, 
   ('林德', '电动平衡重式', 'E系列', 3.0, '磷酸铁锂(LFP)', '三级门架', 4500, 302200)
 ON CONFLICT DO NOTHING;
 
--- 林德 Xi系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('林德', '电动平衡重式', 'Xi系列', 1.5, '磷酸铁锂(LFP)', '两级门架', 3000, 255000),
   ('林德', '电动平衡重式', 'Xi系列', 2.0, '磷酸铁锂(LFP)', '两级门架', 3000, 275000)
 ON CONFLICT DO NOTHING;
 
--- 丰田 8FBE系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('丰田', '电动平衡重式', '8FBE系列', 2.0, '铅酸', '两级门架', 3000, 210000),
   ('丰田', '电动平衡重式', '8FBE系列', 2.0, '磷酸铁锂(LFP)', '两级门架', 3000, 245000),
@@ -951,7 +855,6 @@ INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, 
   ('丰田', '电动平衡重式', '8FBE系列', 3.0, '磷酸铁锂(LFP)', '三级门架', 4500, 300000)
 ON CONFLICT DO NOTHING;
 
--- 永恒力 EFG系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('永恒力', '电动平衡重式', 'EFG系列', 1.5, '铅酸', '两级门架', 3000, 158000),
   ('永恒力', '电动平衡重式', 'EFG系列', 2.5, '铅酸', '两级门架', 3000, 185000),
@@ -959,13 +862,11 @@ INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, 
   ('永恒力', '电动平衡重式', 'EFG系列', 3.0, '磷酸铁锂(LFP)', '三级门架', 4500, 245000)
 ON CONFLICT DO NOTHING;
 
--- 合力 X系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('合力', '电动平衡重式', 'X系列', 1.5, '磷酸铁锂(LFP)', '两级门架', 3000, 88000),
   ('合力', '电动平衡重式', 'X系列', 2.0, '磷酸铁锂(LFP)', '两级门架', 3000, 105000)
 ON CONFLICT DO NOTHING;
 
--- 合力 CPD系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('合力', '电动平衡重式', 'CPD系列', 1.5, '铅酸', '两级门架', 3000, 98000),
   ('合力', '电动平衡重式', 'CPD系列', 2.0, '铅酸', '两级门架', 3000, 115000),
@@ -974,25 +875,21 @@ INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, 
   ('合力', '电动平衡重式', 'CPD系列', 3.5, '磷酸铁锂(LFP)', '三级门架', 4500, 165000)
 ON CONFLICT DO NOTHING;
 
--- 杭叉 XH系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('杭叉', '电动平衡重式', 'XH系列', 2.0, '磷酸铁锂(LFP)', '两级门架', 3000, 92000),
   ('杭叉', '电动平衡重式', 'XH系列', 2.5, '磷酸铁锂(LFP)', '三级门架', 4500, 125000)
 ON CONFLICT DO NOTHING;
 
--- 杭叉 XC系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('杭叉', '电动平衡重式', 'XC系列', 1.5, '磷酸铁锂(LFP)', '两级门架', 3000, 75000),
   ('杭叉', '电动平衡重式', 'XC系列', 2.0, '磷酸铁锂(LFP)', '两级门架', 3000, 88000)
 ON CONFLICT DO NOTHING;
 
--- 杭叉 XE系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('杭叉', '电动平衡重式', 'XE系列', 1.5, '磷酸铁锂(LFP)', '两级门架', 3000, 78000),
   ('杭叉', '电动平衡重式', 'XE系列', 2.5, '磷酸铁锂(LFP)', '两级门架', 3000, 95000)
 ON CONFLICT DO NOTHING;
 
--- 比亚迪 CPD系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('比亚迪', '电动平衡重式', 'CPD系列', 1.6, '磷酸铁锂(LFP)', '两级门架', 3000, 92000),
   ('比亚迪', '电动平衡重式', 'CPD系列', 2.0, '磷酸铁锂(LFP)', '两级门架', 3000, 105000),
@@ -1000,45 +897,36 @@ INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, 
   ('比亚迪', '电动平衡重式', 'CPD系列', 3.0, '磷酸铁锂(LFP)', '三级门架', 4500, 138000)
 ON CONFLICT DO NOTHING;
 
--- 宝骊 KBE系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('宝骊', '电动平衡重式', 'KBE系列', 2.0, '铅酸', '两级门架', 3000, 62000),
   ('宝骊', '电动平衡重式', 'KBE系列', 2.0, '磷酸铁锂(LFP)', '两级门架', 3000, 78000),
   ('宝骊', '电动平衡重式', 'KBE系列', 2.5, '磷酸铁锂(LFP)', '两级门架', 3000, 88000)
 ON CONFLICT DO NOTHING;
 
--- ----- 4.2 电动前移式 -----
 
--- 丰田 Traigo系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('丰田', '电动前移式', 'Traigo系列', 2.0, '磷酸铁锂(LFP)', '三级门架', 6000, 265000),
   ('丰田', '电动前移式', 'Traigo系列', 2.5, '磷酸铁锂(LFP)', '三级门架', 6000, 295000)
 ON CONFLICT DO NOTHING;
 
--- 永恒力 ETV系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('永恒力', '电动前移式', 'ETV系列', 2.0, '铅酸', '三级门架', 5000, 229600),
   ('永恒力', '电动前移式', 'ETV系列', 2.5, '磷酸铁锂(LFP)', '三级门架', 6000, 280000)
 ON CONFLICT DO NOTHING;
 
--- 合力 CPD系列（电动前移式）
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('合力', '电动前移式', 'CPD系列', 2.0, '铅酸', '三级门架', 6000, 135000)
 ON CONFLICT DO NOTHING;
 
--- 杭叉 A系列（电动前移式）
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('杭叉', '电动前移式', 'A系列', 2.0, '铅酸', '三级门架', 6000, 150000)
 ON CONFLICT DO NOTHING;
 
--- 比亚迪 CPD系列（电动前移式）
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('比亚迪', '电动前移式', 'CPD系列', 1.5, '磷酸铁锂(LFP)', '三级门架', 5500, 120000)
 ON CONFLICT DO NOTHING;
 
--- ----- 4.3 电动托盘搬运车 -----
 
--- 中力 EPT系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('中力', '电动托盘搬运车', 'EPT系列', 1.5, '铅酸', '无', 0, 9900),
   ('中力', '电动托盘搬运车', 'EPT系列', 2.0, '铅酸', '无', 0, 15000),
@@ -1046,56 +934,45 @@ INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, 
   ('中力', '电动托盘搬运车', 'EPT系列', 3.0, '磷酸铁锂(LFP)', '无', 0, 22000)
 ON CONFLICT DO NOTHING;
 
--- 中力 其它（原"无"系列，已重命名）
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('中力', '电动托盘搬运车', '其它', 1.5, '铅酸', '无', 0, 9500),
   ('中力', '电动托盘搬运车', '其它', 2.0, '铅酸', '无', 0, 14000)
 ON CONFLICT DO NOTHING;
 
--- 杭叉 A系列（电动托盘搬运车）
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('杭叉', '电动托盘搬运车', 'A系列', 2.0, '磷酸铁锂(LFP)', '无', 0, 28000)
 ON CONFLICT DO NOTHING;
 
--- 合力 CPD系列（电动托盘搬运车）
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('合力', '电动托盘搬运车', 'CPD系列', 2.0, '铅酸', '无', 0, 25000)
 ON CONFLICT DO NOTHING;
 
--- 永恒力 EFG系列（电动托盘搬运车）
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('永恒力', '电动托盘搬运车', 'EFG系列', 1.5, '铅酸', '无', 0, 35000)
 ON CONFLICT DO NOTHING;
 
--- ----- 4.4 电动堆高车 -----
 
--- 中力 ES系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('中力', '电动堆高车', 'ES系列', 1.5, '铅酸', '两级门架', 3000, 21800),
   ('中力', '电动堆高车', 'ES系列', 1.5, '磷酸铁锂(LFP)', '两级门架', 3000, 25000),
   ('中力', '电动堆高车', 'ES系列', 2.0, '铅酸', '两级门架', 3500, 52000)
 ON CONFLICT DO NOTHING;
 
--- 永恒力 ERIC系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('永恒力', '电动堆高车', 'ERIC系列', 1.5, '铅酸', '两级门架', 3000, 45000),
   ('永恒力', '电动堆高车', 'ERIC系列', 1.5, '磷酸铁锂(LFP)', '两级门架', 3000, 55000),
   ('永恒力', '电动堆高车', 'ERIC系列', 2.0, '铅酸', '两级门架', 3500, 62000)
 ON CONFLICT DO NOTHING;
 
--- 杭叉 A系列（电动堆高车）
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('杭叉', '电动堆高车', 'A系列', 2.0, '磷酸铁锂(LFP)', '两级门架', 3300, 55000)
 ON CONFLICT DO NOTHING;
 
--- 合力 CPD系列（电动堆高车）
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('合力', '电动堆高车', 'CPD系列', 1.5, '铅酸', '两级门架', 3000, 32000)
 ON CONFLICT DO NOTHING;
 
--- ----- 4.5 内燃平衡重式 -----
 
--- 林德 H系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('林德', '内燃平衡重式', 'H系列', 2.0, '手波/进口发动机', '两级门架', 3000, 155000),
   ('林德', '内燃平衡重式', 'H系列', 2.5, '手波/进口发动机', '两级门架', 3000, 168000),
@@ -1103,20 +980,17 @@ INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, 
   ('林德', '内燃平衡重式', 'H系列', 3.5, '手波/进口发动机', '三级门架', 4000, 195000)
 ON CONFLICT DO NOTHING;
 
--- 林德 T-MATIC
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('林德', '内燃平衡重式', 'T-MATIC', 2.0, '自波/进口发动机', '两级门架', 3000, 178000),
   ('林德', '内燃平衡重式', 'T-MATIC', 3.0, '自波/进口发动机', '三级门架', 4500, 215000)
 ON CONFLICT DO NOTHING;
 
--- 丰田 8FD系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('丰田', '内燃平衡重式', '8FD系列', 2.5, '手波/进口发动机', '两级门架', 3000, 168000),
   ('丰田', '内燃平衡重式', '8FD系列', 2.5, '自波/进口发动机', '两级门架', 3000, 192000),
   ('丰田', '内燃平衡重式', '8FD系列', 3.5, '手波/进口发动机', '三级门架', 4000, 195000)
 ON CONFLICT DO NOTHING;
 
--- 合力 A系列（内燃平衡重式）
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('合力', '内燃平衡重式', 'A系列', 2.0, '手波/国产发动机', '两级门架', 3000, 72000),
   ('合力', '内燃平衡重式', 'A系列', 2.5, '手波/国产发动机', '两级门架', 3000, 80000),
@@ -1124,7 +998,6 @@ INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, 
   ('合力', '内燃平衡重式', 'A系列', 3.5, '手波/国产发动机', '三级门架', 4000, 102000)
 ON CONFLICT DO NOTHING;
 
--- 合力 CPCD系列（内燃平衡重式）
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('合力', '内燃平衡重式', 'CPCD系列', 2.0, '手波/国产发动机', '两级门架', 3000, 75000),
   ('合力', '内燃平衡重式', 'CPCD系列', 2.5, '手波/国产发动机', '两级门架', 3000, 82000),
@@ -1132,7 +1005,6 @@ INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, 
   ('合力', '内燃平衡重式', 'CPCD系列', 3.5, '手波/国产发动机', '三级门架', 4000, 105000)
 ON CONFLICT DO NOTHING;
 
--- 杭叉 A系列（内燃平衡重式）
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('杭叉', '内燃平衡重式', 'A系列', 2.0, '手波/国产发动机', '两级门架', 3000, 68000),
   ('杭叉', '内燃平衡重式', 'A系列', 2.5, '手波/国产发动机', '两级门架', 3000, 75000),
@@ -1140,85 +1012,69 @@ INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, 
   ('杭叉', '内燃平衡重式', 'A系列', 3.5, '手波/国产发动机', '三级门架', 4000, 95000)
 ON CONFLICT DO NOTHING;
 
--- 杭叉 XF系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('杭叉', '内燃平衡重式', 'XF系列', 2.5, '手波/国产发动机', '两级门架', 3000, 82000),
   ('杭叉', '内燃平衡重式', 'XF系列', 2.5, '手波/进口发动机', '两级门架', 3000, 105000),
   ('杭叉', '内燃平衡重式', 'XF系列', 3.5, '手波/国产发动机', '三级门架', 4000, 102000)
 ON CONFLICT DO NOTHING;
 
--- 斗山 B30S系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('斗山', '内燃平衡重式', 'B30S系列', 2.5, '手波/进口发动机', '两级门架', 3000, 145000),
   ('斗山', '内燃平衡重式', 'B30S系列', 3.0, '手波/进口发动机', '三级门架', 4500, 165000)
 ON CONFLICT DO NOTHING;
 
--- 斗山 BR系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('斗山', '内燃平衡重式', 'BR系列', 2.5, '手波/进口发动机', '两级门架', 3000, 148000),
   ('斗山', '内燃平衡重式', 'BR系列', 3.0, '手波/进口发动机', '三级门架', 4500, 168000)
 ON CONFLICT DO NOTHING;
 
--- 海斯特 H系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('海斯特', '内燃平衡重式', 'H系列', 2.5, '手波/进口发动机', '两级门架', 3000, 142000),
   ('海斯特', '内燃平衡重式', 'H系列', 3.0, '手波/进口发动机', '三级门架', 4500, 162000),
   ('海斯特', '内燃平衡重式', 'H系列', 3.0, '自波/进口发动机', '三级门架', 4500, 185000)
 ON CONFLICT DO NOTHING;
 
--- 海斯特 J系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('海斯特', '内燃平衡重式', 'J系列', 3.0, '手波/进口发动机', '三级门架', 4500, 158000),
   ('海斯特', '内燃平衡重式', 'J系列', 5.0, '手波/进口发动机', '三级门架', 4500, 220000)
 ON CONFLICT DO NOTHING;
 
--- 龙工 A系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('龙工', '内燃平衡重式', 'A系列', 2.0, '手波/国产发动机', '两级门架', 3000, 58000),
   ('龙工', '内燃平衡重式', 'A系列', 3.0, '手波/国产发动机', '两级门架', 3000, 72000)
 ON CONFLICT DO NOTHING;
 
--- 龙工 LG系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('龙工', '内燃平衡重式', 'LG系列', 2.0, '手波/国产发动机', '两级门架', 3000, 62000),
   ('龙工', '内燃平衡重式', 'LG系列', 2.5, '手波/国产发动机', '两级门架', 3000, 68000),
   ('龙工', '内燃平衡重式', 'LG系列', 5.0, '手波/国产发动机', '三级门架', 4500, 128000)
 ON CONFLICT DO NOTHING;
 
--- 柳工 CLG系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('柳工', '内燃平衡重式', 'CLG系列', 2.5, '手波/国产发动机', '两级门架', 3000, 65000),
   ('柳工', '内燃平衡重式', 'CLG系列', 3.0, '手波/国产发动机', '两级门架', 3000, 75000)
 ON CONFLICT DO NOTHING;
 
--- ----- 4.6 内燃重型叉车 -----
 
--- 合力 CPCD系列（大吨位）
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('合力', '内燃重型叉车', 'CPCD系列', 10.0, '手波/国产发动机', '三级门架', 4500, 380000),
   ('合力', '内燃重型叉车', 'CPCD系列', 15.0, '手波/国产发动机', '三级门架', 4500, 450000)
 ON CONFLICT DO NOTHING;
 
--- 龙工 LG系列（大吨位）
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('龙工', '内燃重型叉车', 'LG系列', 12.0, '手波/国产发动机', '三级门架', 4500, 350000)
 ON CONFLICT DO NOTHING;
 
--- 中联重科 FD系列
 INSERT INTO original_prices (brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) VALUES
   ('中联重科', '内燃重型叉车', 'FD系列', 10.0, '手波/国产发动机', '三级门架', 4500, 365000),
   ('中联重科', '内燃重型叉车', 'FD系列', 16.0, '手波/国产发动机', '三级门架', 4500, 520000)
 ON CONFLICT DO NOTHING;
 
--- =====================================================
--- 5. Excel 价格对照表数据（92 行，已应用 000012 系列重命名）
--- =====================================================
 
 INSERT INTO original_prices (
     brand, vehicle_type, series, tonnage,
     config_type, mast_type, mast_height_mm, original_price
 ) VALUES
-  -- ========== 合力 ==========
   ('合力', '内燃平衡重式', 'K系列（K1）', 2.0, '手波/国产发动机', '两级标准门架', 3000, 50000),
   ('合力', '内燃平衡重式', 'K系列（K1）', 3.0, '手波/国产发动机', '两级标准门架', 3000, 57000),
   ('合力', '内燃平衡重式', 'K系列（K1）', 3.0, '自波/国产发动机', '两级标准门架', 3000, 63000),
@@ -1241,7 +1097,6 @@ INSERT INTO original_prices (
   ('合力', '电动前移式', '前移式', 1.5, '铅酸', '三级门架', 6000, 165000),
   ('合力', '电动前移式', '前移式', 2.0, '铅酸', '四级门架', 9500, 240000),
 
-  -- ========== 杭叉 ==========
   ('杭叉', '内燃平衡重式', 'A系列', 2.0, '手波/国产发动机', '两级标准门架', 3000, 46000),
   ('杭叉', '内燃平衡重式', 'A系列', 3.0, '手波/国产发动机', '两级标准门架', 3000, 54000),
   ('杭叉', '内燃平衡重式', 'A系列', 3.0, '自波/国产发动机', '两级标准门架', 3000, 60500),
@@ -1265,7 +1120,6 @@ INSERT INTO original_prices (
   ('杭叉', '电动堆高车', 'A系列（经济型）', 1.5, '铅酸', '两级门架', 3000, 30000),
   ('杭叉', '电动堆高车', 'A系列', 2.0, '铅酸', '三级门架', 4500, 65000),
 
-  -- ========== 丰田 ==========
   ('丰田', '内燃平衡重式', '7系列（7FD）', 3.0, '自波/进口发动机', '两级标准门架', 3000, 200000),
   ('丰田', '内燃平衡重式', '8FD系列', 3.0, '自波/进口发动机', '两级标准门架', 3000, 225000),
   ('丰田', '内燃平衡重式', '8FD系列', 3.0, '自波/进口发动机', '三级全自由门架', 4500, 245000),
@@ -1280,7 +1134,6 @@ INSERT INTO original_prices (
   ('丰田', '电动前移式', '8系列（8FBR）', 1.5, '铅酸', '三级门架', 6000, 305000),
   ('丰田', '电动前移式', '8系列（8FBR）', 2.0, '铅酸', '四级门架', 11300, 385000),
 
-  -- ========== 林德 ==========
   ('林德', '内燃平衡重式', 'H系列', 3.0, '无级变速/进口发动机', '两级宽视野门架', 3000, 275000),
   ('林德', '内燃平衡重式', 'H系列', 3.0, '无级变速/进口发动机', '三级全自由门架', 4500, 305000),
   ('林德', '内燃平衡重式', 'H系列', 5.0, '无级变速/进口发动机', '两级宽视野门架', 3000, 385000),
@@ -1292,7 +1145,6 @@ INSERT INTO original_prices (
   ('林德', '电动前移式', 'R系列', 2.0, '铅酸', '四级HD门架', 12000, 450000),
   ('林德', '电动堆高车', 'L系列', 1.6, '铅酸', '三级门架', 4500, 140000),
 
-  -- ========== 龙工 ==========
   ('龙工', '内燃平衡重式', 'CPCD系列', 3.0, '手波/国产发动机', '两级标准门架', 3000, 48500),
   ('龙工', '内燃平衡重式', 'CPCD系列', 3.0, '自波/国产发动机', '两级标准门架', 3000, 54000),
   ('龙工', '内燃平衡重式', 'CPCD系列', 3.5, '自波/国产发动机', '三级门架', 4500, 63000),
@@ -1304,7 +1156,6 @@ INSERT INTO original_prices (
   ('龙工', '电动堆高车', 'CDD系列', 1.5, '铅酸', '两级门架', 3000, 21500),
   ('龙工', '电动堆高车', 'CDD系列', 2.0, '铅酸', '三级门架', 4500, 47500),
 
-  -- ========== 柳工 ==========
   ('柳工', '内燃平衡重式', 'CLG系列', 3.0, '手波/国产发动机', '两级标准门架', 3000, 51500),
   ('柳工', '内燃平衡重式', 'CLG系列', 3.0, '自波/国产发动机', '三级全自由门架', 4500, 60000),
   ('柳工', '内燃平衡重式', 'CLG系列', 3.5, '自波/国产发动机', '三级门架', 4500, 52500),
@@ -1313,7 +1164,6 @@ INSERT INTO original_prices (
   ('柳工', '电动平衡重式', 'CLG系列', 2.0, '铅酸', '两级标准门架', 3000, 77500),
   ('柳工', '电动平衡重式', 'CLG系列', 3.0, '铅酸', '三级门架', 4500, 100000),
 
-  -- ========== 比亚迪 ==========
   ('比亚迪', '电动平衡重式', 'CPD系列', 1.5, '磷酸铁锂(LFP)', '两级标准门架', 3000, 62500),
   ('比亚迪', '电动平衡重式', 'CPD系列', 2.0, '磷酸铁锂(LFP)', '两级标准门架', 3000, 72500),
   ('比亚迪', '电动平衡重式', 'CPD系列', 3.0, '磷酸铁锂(LFP)', '两级标准门架', 3000, 90000),
@@ -1325,21 +1175,11 @@ INSERT INTO original_prices (
   ('比亚迪', '电动堆高车', 'S系列', 2.0, '铅酸', '三级门架', 4500, 52500)
 ON CONFLICT DO NOTHING;
 
--- =====================================================
--- 5.1 earliest_factory_year 回填（用 series 表数据）
--- =====================================================
 UPDATE original_prices op
 SET earliest_factory_year = s.earliest_factory_year
 FROM series s
 WHERE s.brand = op.brand AND s.name = op.series;
 
--- =====================================================
--- 6. "无" 配置兜底记录
---    对每个 (brand, vehicle_type, series) 组合，若尚无含 "无" 的 config_type 记录，
---    则补一条最低原价的兜底记录，保证级联过滤在 config_type/mast_type/mast_height 步骤不断链。
---    电动 series：config_type = '无'
---    内燃 series：config_type = '无/无'
--- =====================================================
 INSERT INTO original_prices (
     brand, vehicle_type, series, tonnage,
     config_type, mast_type, mast_height_mm, original_price
@@ -1359,47 +1199,15 @@ WHERE NOT EXISTS (
 GROUP BY op.brand, op.vehicle_type, op.series, (CASE WHEN op.config_type LIKE '%/%' THEN '无/无' ELSE '无' END)
 ON CONFLICT DO NOTHING;
 
--- 兜底记录的 earliest_factory_year 回填
 UPDATE original_prices op
 SET earliest_factory_year = s.earliest_factory_year
 FROM series s
 WHERE s.brand = op.brand AND s.name = op.series
   AND op.config_type IN ('无', '无/无');
 
--- =====================================================
--- Part 4: N1 题库种子数据（course/knowledge_point/chapter/question）
--- =====================================================
-
--- ================================================================
--- 叉车N1司机证理论培训 - 数据库种子数据 v2
--- ================================================================
--- 自动生成，请勿手工修改
--- 数据源：.workbuddy/叉车N1司机证理论考试题库.md
--- 生成器：.trae/docs/N1题库导入脚本/gen_n1_seed.py
---
--- 设计要点：
---   1. 沿用现有 JSON 题库已定义的 6 门课程（不新建课程）
---   2. 6 门课程分布在 4 个 category：
---      - CATEGORY_01 基础理论：课程1 叉车基础知识概述、课程2 液压系统原理与维护
---      - CATEGORY_02 安全规范：课程3 叉车安全操作规范
---      - CATEGORY_03 实操技能：课程4 日常检查与保养指南、课程5 货叉操作技能训练
---      - CATEGORY_04 进阶提升：课程6 故障诊断与排除进阶
---   3. 6 门课程 × 3 章节 = 18 章节（含 Markdown 正文）
---   4. 6 个知识点（与课程一一对应）
---   5. 题目筛选：剔除纯法规/证件管理类，保留结构原理/维护/故障/安全操作 4 类
---   6. level 按内容难度判定：记忆→beginner，理解→intermediate，应用→advanced
---   7. 每知识点 3 档 level 全覆盖
---
--- 执行方法：
---   psql "postgres://用户名:密码@主机:5432/数据库名" -f seed_n1.sql
---
--- 幂等：可重复执行
--- ================================================================
 
 
--- ============================================================
--- 1. 课程（沿用现有 JSON 题库 6 门课程，分布在 4 个 category 下）
--- ============================================================
+
 INSERT INTO course (course_id, name, category, description, cover_image, duration, status, created_at) OVERRIDING SYSTEM VALUE VALUES (1, '叉车基础知识概述', 'CATEGORY_01', '叉车分类、基本结构、主要技术参数等入门知识，为后续维修与操作学习奠定基础。', NULL, 120, 1, now()) ON CONFLICT (course_id) DO UPDATE SET name = EXCLUDED.name, category = EXCLUDED.category, description = EXCLUDED.description, duration = EXCLUDED.duration, status = EXCLUDED.status;
 INSERT INTO course (course_id, name, category, description, cover_image, duration, status, created_at) OVERRIDING SYSTEM VALUE VALUES (2, '液压系统原理与维护', 'CATEGORY_04', '液压传动原理、液压元件结构、液压系统维护与故障排除，进阶技术内容。', NULL, 150, 1, now()) ON CONFLICT (course_id) DO UPDATE SET name = EXCLUDED.name, category = EXCLUDED.category, description = EXCLUDED.description, duration = EXCLUDED.duration, status = EXCLUDED.status;
 INSERT INTO course (course_id, name, category, description, cover_image, duration, status, created_at) OVERRIDING SYSTEM VALUE VALUES (3, '叉车安全操作规范', 'CATEGORY_02', '叉车起步、行驶、转弯、坡道、停车、会车等环节的安全操作规程。', NULL, 120, 1, now()) ON CONFLICT (course_id) DO UPDATE SET name = EXCLUDED.name, category = EXCLUDED.category, description = EXCLUDED.description, duration = EXCLUDED.duration, status = EXCLUDED.status;
@@ -1407,9 +1215,6 @@ INSERT INTO course (course_id, name, category, description, cover_image, duratio
 INSERT INTO course (course_id, name, category, description, cover_image, duration, status, created_at) OVERRIDING SYSTEM VALUE VALUES (5, '货叉操作技能训练', 'CATEGORY_03', '货物叉取、起升、堆垛、装卸等作业环节的标准操作与安全要求。', NULL, 120, 1, now()) ON CONFLICT (course_id) DO UPDATE SET name = EXCLUDED.name, category = EXCLUDED.category, description = EXCLUDED.description, duration = EXCLUDED.duration, status = EXCLUDED.status;
 INSERT INTO course (course_id, name, category, description, cover_image, duration, status, created_at) OVERRIDING SYSTEM VALUE VALUES (6, '故障诊断与排除进阶', 'CATEGORY_04', '叉车制动、液压、转向系统故障诊断与排除，应急处置与突发情况应对。', NULL, 150, 1, now()) ON CONFLICT (course_id) DO UPDATE SET name = EXCLUDED.name, category = EXCLUDED.category, description = EXCLUDED.description, duration = EXCLUDED.duration, status = EXCLUDED.status;
 
--- ============================================================
--- 2. 知识点（6 个，与 6 门课程对应，category 与 course.category 保持一致）
--- ============================================================
 INSERT INTO knowledge_point (id, name, category, parent_id, description, created_at) OVERRIDING SYSTEM VALUE VALUES (1, '叉车结构与基础', 'CATEGORY_01', NULL, '对应课程1：叉车分类、基本结构、技术参数等基础知识', now()) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, category = EXCLUDED.category, description = EXCLUDED.description;
 INSERT INTO knowledge_point (id, name, category, parent_id, description, created_at) OVERRIDING SYSTEM VALUE VALUES (2, '液压与动力系统', 'CATEGORY_04', NULL, '对应课程2：液压传动原理、液压元件、动力传递路线', now()) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, category = EXCLUDED.category, description = EXCLUDED.description;
 INSERT INTO knowledge_point (id, name, category, parent_id, description, created_at) OVERRIDING SYSTEM VALUE VALUES (3, '安全操作规程', 'CATEGORY_02', NULL, '对应课程3：起步、行驶、转弯、坡道、停车、会车规程', now()) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, category = EXCLUDED.category, description = EXCLUDED.description;
@@ -1417,9 +1222,6 @@ INSERT INTO knowledge_point (id, name, category, parent_id, description, created
 INSERT INTO knowledge_point (id, name, category, parent_id, description, created_at) OVERRIDING SYSTEM VALUE VALUES (5, '货叉作业技能', 'CATEGORY_03', NULL, '对应课程5：货物叉取、起升、堆垛、装卸、视线盲区', now()) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, category = EXCLUDED.category, description = EXCLUDED.description;
 INSERT INTO knowledge_point (id, name, category, parent_id, description, created_at) OVERRIDING SYSTEM VALUE VALUES (6, '故障诊断与排除', 'CATEGORY_04', NULL, '对应课程6：制动/液压/转向故障诊断、应急处置', now()) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, category = EXCLUDED.category, description = EXCLUDED.description;
 
--- ============================================================
--- 3. 章节（6 门课程 × 3 章节 = 18 章节，含 Markdown 正文 + 扩充内容）
--- ============================================================
 INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content_type, file_url, description, duration, order_num, created_at) OVERRIDING SYSTEM VALUE VALUES (1, 1, '第一章 叉车分类与型号', '## 第一章 叉车分类与型号
 
 叉车（Forklift Truck）是工业搬运车辆，主要用于成件托盘货物的装卸、堆垛和短距离运输。
@@ -1446,7 +1248,6 @@ INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content
 叉车按动力分为内燃/电动/手动；按结构分为平衡重/前移/插腿/侧面；2.0～2.5 吨级是工厂仓库最常见规格。
 
 
----
 
 ### 技术参数速查表
 
@@ -1497,7 +1298,6 @@ INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content
 叉车七大系统；液压系统基于帕斯卡定律；门架后倾角 6°～12°防滑落；护顶架防坠落物。
 
 
----
 
 ### 叉车七大系统对照表
 
@@ -1553,7 +1353,6 @@ INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content
 额定起重量是最重要参数；载荷中心距标准 500mm；转弯半径决定窄通道通过能力；厂内限速 5/10 km/h。
 
 
----
 
 ### 技术参数速查表
 
@@ -1608,7 +1407,6 @@ INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content
 帕斯卡定律；五大组成（动力/控制/执行/辅助/介质）；额定压力 14～17.5 MPa；油温 30～60℃。
 
 
----
 
 ### 液压系统参数速查表
 
@@ -1654,7 +1452,6 @@ INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content
 齿轮泵最常用但脉动大；溢流阀限压保护；液控单向阀（液压锁）防货叉下落；多路阀中位卸荷。
 
 
----
 
 ### 液压泵类型对比表
 
@@ -1708,7 +1505,6 @@ INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content
 液压油变质四判断（黑/浑/泡/味）；货叉不起升五原因；维修前必停机泄压；禁止私调溢流阀。
 
 
----
 
 ### 液压油变质判断表
 
@@ -1767,7 +1563,6 @@ INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content
 厂内限速 5/10 km/h；载货行驶货叉离地 10～20 cm；门架后倾；保持 3 米车距。
 
 
----
 
 ### 厂区行驶速度规定
 
@@ -1823,7 +1618,6 @@ INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content
 上坡正向、下坡倒车；坡道禁止掉头转弯；转弯提前减速鸣笛；视线不良必须有人指挥。
 
 
----
 
 ### 坡道作业操作速查表
 
@@ -1888,7 +1682,6 @@ INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content
 停车五步（落叉/手刹/空挡/熄火/拔钥）；会车靠右减速；空载让重载；下坡让上坡。
 
 
----
 
 ### 停车规范五步法
 
@@ -1970,7 +1763,6 @@ INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content
 十字作业法（清洁/润滑/紧固/调整/防腐）；链条下垂 1～2 cm；制动液位 MIN-MAX；带病作业严禁。
 
 
----
 
 ### 出车前必检项目清单
 
@@ -2046,7 +1838,6 @@ INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content
 液压油变质四判断（黑/浑/泡/味）；刹车油更换后排空气；禁止私调溢流阀；滤芯同步更换。
 
 
----
 
 ### 液压油维护周期表
 
@@ -2129,7 +1920,6 @@ INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content
 电瓶补水加蒸馏水；充电通风远离明火；电池着火禁用水；花纹不足 1.6 mm 更换；水温 80～90 ℃。
 
 
----
 
 ### 蓄电池维护速查表
 
@@ -2208,7 +1998,6 @@ INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content
 货叉插入 2/3 以上；起升后门架后倾；货叉下严禁站人；重心居中、捆绑牢固。
 
 
----
 
 ### 货物叉取操作步骤
 
@@ -2277,7 +2066,6 @@ INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content
 上轻下重居中码放；高位作业禁止急转急落；最大倾斜 10 度；月台靠近减速。
 
 
----
 
 ### 堆垛作业操作步骤
 
@@ -2359,7 +2147,6 @@ INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content
 货物超高倒车行驶；拐角鸣笛低速；雨雪结冰停止作业；作业区设置警示标志。
 
 
----
 
 ### 叉车盲区分布表
 
@@ -2435,7 +2222,6 @@ INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content
 制动失灵松油门低速摩擦减速、禁急打方向；制动发软需排气；偏刹调制动片；异响换片。
 
 
----
 
 ### 制动系统故障诊断表
 
@@ -2521,7 +2307,6 @@ INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content
 货叉不起升五原因排查（油/泵/阀/换向/缸）；油温过高四原因；维修前必停机泄压。
 
 
----
 
 ### 液压系统故障诊断流程
 
@@ -2625,7 +2410,6 @@ INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content
 侧翻紧握方向盘身体向内倾、禁跳车；电瓶着火禁用水；制动失灵松油门低速摩擦、禁急打方向。
 
 
----
 
 ### 叉车侧翻应急处置
 
@@ -2690,24 +2474,8 @@ INSERT INTO chapter (chapter_id, course_id, title, content, content_url, content
 4. **拨打120急救**——如有人员受伤
 ', NULL, 'text', NULL, NULL, 50, 3, now()) ON CONFLICT (chapter_id) DO UPDATE SET title = EXCLUDED.title, content = EXCLUDED.content, duration = EXCLUDED.duration, order_num = EXCLUDED.order_num;
 
--- ============================================================
--- 4. 题目筛选与分类
--- ============================================================
--- 筛选规则：剔除纯法规/证件管理类（与维修技术无关），保留结构原理/维护/故障/安全操作 4 类
--- 知识点分配：按题干关键词匹配到 6 个知识点（对应 6 门课程）
--- 难度判定：记忆→beginner，理解→intermediate，应用→advanced（每知识点 3 档全覆盖）
 
--- 清空已有 N1 题目（避免重复导入）
 
--- 输入题目：503 道；剔除法规类：26 道；保留：477 道
--- level 分布：beginner=381, intermediate=41, advanced=55
--- 知识点 × level 分布：
---   kp1 叉车结构与基础: beg=143, int=25, adv=11
---   kp2 液压与动力系统: beg=11, int=5, adv=9
---   kp3 安全操作规程: beg=124, int=2, adv=10
---   kp4 日常检查与保养: beg=44, int=5, adv=7
---   kp5 货叉作业技能: beg=53, int=3, adv=3
---   kp6 故障诊断与排除: beg=6, int=1, adv=15
 
 INSERT INTO question (id, type, content, options, answer, explanation, image_url, reference_answer, scoring_criteria, score, knowledge_point_id, status, created_by, created_by_type, created_at, updated_at)
 OVERRIDING SYSTEM VALUE VALUES
@@ -3216,20 +2984,663 @@ OVERRIDING SYSTEM VALUE VALUES
 (476, 'multi_choice', '叉车作业中突发故障处理（）。', '{"A":"立即停机","B":"停靠安全区域","C":"禁止带病运行","D":"上报维修"}'::jsonb, 'A,B,C,D', '【答案：A,B,C,D】本题考察叉车安全操作与维修技术相关知识，请结合教材相应章节理解掌握。（题库多选题第102题）', NULL, NULL, NULL, 4, 6, 'published', NULL, 'admin', now(), now()),
 (477, 'multi_choice', '叉车考试合格取证要求（）。', '{"A":"理论70分及格","B":"实操考试合格","C":"体检身体健康","D":"培训学时达标"}'::jsonb, 'A,B,C,D', '【答案：A,B,C,D】本题考察叉车安全操作与维修技术相关知识，请结合教材相应章节理解掌握。（题库多选题第103题）', NULL, NULL, NULL, 4, 1, 'published', NULL, 'admin', now(), now());
 
--- 重置 IDENTITY 序列到 max(id)
 SELECT setval(pg_get_serial_sequence('question', 'id'), COALESCE(MAX(id), 1), true) FROM question;
 SELECT setval(pg_get_serial_sequence('course', 'course_id'), COALESCE(MAX(course_id), 1), true) FROM course;
 SELECT setval(pg_get_serial_sequence('chapter', 'chapter_id'), COALESCE(MAX(chapter_id), 1), true) FROM chapter;
 SELECT setval(pg_get_serial_sequence('knowledge_point', 'id'), COALESCE(MAX(id), 1), true) FROM knowledge_point;
 
 
--- ================================================================
--- 导入完成
--- 验证：
 --   SELECT type, level, count(*) FROM question
---   WHERE knowledge_point_id IN (1,2,3,4,5,6) AND created_by_type='admin'
---   GROUP BY type, level ORDER BY type, level;
 --   SELECT kp.name, q.level, count(*) FROM question q
---   JOIN knowledge_point kp ON q.knowledge_point_id = kp.id
---   WHERE q.created_by_type='admin' GROUP BY kp.name, q.level ORDER BY kp.name, q.level;
--- ================================================================
+
+ALTER TABLE question ADD COLUMN IF NOT EXISTS reject_reason TEXT;
+COMMENT ON COLUMN question.reject_reason IS '驳回理由（管理员驳回时填写，导师修改重提后清空）';
+
+CREATE TABLE featured_content (
+    content_id   INT            GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    title        VARCHAR(200)   NOT NULL,
+    summary      VARCHAR(500),
+    cover_image  VARCHAR(500),
+    content      TEXT,
+    category     VARCHAR(20)    NOT NULL DEFAULT 'industry',
+    source       VARCHAR(100),
+    status       SMALLINT       NOT NULL DEFAULT 0,
+    view_count   INT            NOT NULL DEFAULT 0,
+    sort_order   INT            NOT NULL DEFAULT 0,
+    published_at TIMESTAMPTZ,
+    created_at   TIMESTAMPTZ    NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ    NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_featured_content_status    ON featured_content (status);
+CREATE INDEX idx_featured_content_category  ON featured_content (category);
+CREATE INDEX idx_featured_content_published ON featured_content (published_at DESC);
+COMMENT ON TABLE  featured_content IS '内容精选表（公司动态/行业新闻等）';
+COMMENT ON COLUMN featured_content.content_id   IS '内容ID';
+COMMENT ON COLUMN featured_content.title        IS '标题';
+COMMENT ON COLUMN featured_content.summary      IS '摘要（首页卡片展示）';
+COMMENT ON COLUMN featured_content.cover_image  IS '封面图URL（/static/uploads/featured/xxx.jpg）';
+COMMENT ON COLUMN featured_content.content      IS '正文 Markdown 源码';
+COMMENT ON COLUMN featured_content.category     IS '分类：company-公司动态, industry-行业新闻, product-产品资讯, news-资讯';
+COMMENT ON COLUMN featured_content.source       IS '来源（如：公司官网、新华网）';
+COMMENT ON COLUMN featured_content.status       IS '状态：0-草稿，1-已发布';
+COMMENT ON COLUMN featured_content.view_count   IS '阅读量';
+COMMENT ON COLUMN featured_content.sort_order   IS '排序值（小→大）';
+COMMENT ON COLUMN featured_content.published_at IS '发布时间（发布时写入）';
+COMMENT ON COLUMN featured_content.created_at  IS '创建时间';
+COMMENT ON COLUMN featured_content.updated_at   IS '更新时间';
+
+CREATE TABLE valuation_users (
+    id            SERIAL         PRIMARY KEY,
+    username      VARCHAR(50)    NOT NULL,
+    password      VARCHAR(255)   NOT NULL,
+    name          VARCHAR(100)   NOT NULL,
+    phone         VARCHAR(20)    NOT NULL,
+    email         VARCHAR(100)   DEFAULT '',
+    company       VARCHAR(200)   DEFAULT '',
+    status        SMALLINT       NOT NULL DEFAULT 1,
+    created_at    TIMESTAMPTZ    NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX idx_valuation_users_username ON valuation_users (username);
+CREATE UNIQUE INDEX idx_valuation_users_phone    ON valuation_users (phone);
+COMMENT ON TABLE  valuation_users           IS '残值评估模块独立用户表（与培训 Student 表独立）';
+COMMENT ON COLUMN valuation_users.id        IS '主键';
+COMMENT ON COLUMN valuation_users.username  IS '用户名（注册时由手机号自动生成）';
+COMMENT ON COLUMN valuation_users.password  IS '密码（bcrypt hash）';
+COMMENT ON COLUMN valuation_users.name      IS '姓名';
+COMMENT ON COLUMN valuation_users.phone     IS '手机号（唯一）';
+COMMENT ON COLUMN valuation_users.email     IS '邮箱（可选）';
+COMMENT ON COLUMN valuation_users.company   IS '公司（可选）';
+COMMENT ON COLUMN valuation_users.status    IS '状态：1-启用，0-禁用';
+COMMENT ON COLUMN valuation_users.created_at IS '创建时间';
+
+ALTER TABLE evaluations
+    ADD COLUMN IF NOT EXISTS user_id INTEGER;
+
+ALTER TABLE battery_evaluations
+    ADD COLUMN IF NOT EXISTS user_id INTEGER;
+
+CREATE INDEX IF NOT EXISTS idx_evaluations_user ON evaluations(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_battery_evaluations_user ON battery_evaluations(user_id, created_at DESC);
+
+COMMENT ON COLUMN evaluations.user_id IS '残值评估提交者（valuation_users.id），NULL 表示匿名提交';
+COMMENT ON COLUMN battery_evaluations.user_id IS '电池评估提交者（valuation_users.id），NULL 表示历史匿名数据';
+
+ALTER TABLE knowledge_point
+    ADD COLUMN IF NOT EXISTS category VARCHAR(32);
+
+CREATE INDEX IF NOT EXISTS idx_kp_category ON knowledge_point (category);
+
+COMMENT ON COLUMN knowledge_point.category IS '课程分类：CATEGORY_01-基础理论, CATEGORY_02-安全规范, CATEGORY_03-实操技能, CATEGORY_04-进阶提升';
+
+CREATE TABLE IF NOT EXISTS practice_progress (
+    id            INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    student_id    INT          NOT NULL REFERENCES student(student_id) ON DELETE CASCADE,
+    practice_mode VARCHAR(32)  NOT NULL,
+    question_ids  JSONB        NOT NULL,
+    current_index INT          NOT NULL DEFAULT 0,
+    total         INT          NOT NULL DEFAULT 0,
+    answers_state JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    updated_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    UNIQUE (student_id, practice_mode)
+);
+
+CREATE INDEX IF NOT EXISTS idx_practice_progress_student ON practice_progress (student_id);
+
+COMMENT ON TABLE practice_progress IS '练习进度表（断点续练游标 + 答题状态持久化）';
+COMMENT ON COLUMN practice_progress.answers_state IS '每题作答状态 JSONB，key 为 question_id，value 含 user_answer/is_correct/correct_answer/explanation 等';
+
+UPDATE knowledge_point SET category = 'CATEGORY_01' WHERE id = 1 AND (category IS NULL OR category = '');
+UPDATE knowledge_point SET category = 'CATEGORY_04' WHERE id = 2 AND (category IS NULL OR category = '');
+UPDATE knowledge_point SET category = 'CATEGORY_02' WHERE id = 3 AND (category IS NULL OR category = '');
+UPDATE knowledge_point SET category = 'CATEGORY_03' WHERE id = 4 AND (category IS NULL OR category = '');
+UPDATE knowledge_point SET category = 'CATEGORY_03' WHERE id = 5 AND (category IS NULL OR category = '');
+UPDATE knowledge_point SET category = 'CATEGORY_04' WHERE id = 6 AND (category IS NULL OR category = '');
+
+DROP INDEX IF EXISTS idx_mock_exam_level;
+ALTER TABLE mock_exam        DROP COLUMN IF EXISTS level;
+
+ALTER TABLE exam_session     DROP COLUMN IF EXISTS level;
+
+ALTER TABLE knowledge_point  DROP COLUMN IF EXISTS level;
+
+ALTER TABLE question         DROP COLUMN IF EXISTS level;
+
+ALTER TABLE student          DROP COLUMN IF EXISTS level;
+
+UPDATE study_record
+SET study_duration = 0
+WHERE record_id NOT IN (
+    SELECT min_id FROM (
+        SELECT MIN(record_id) AS min_id
+        FROM study_record
+        GROUP BY student_id, course_id
+    ) AS main_records
+);
+
+CREATE TABLE system_settings (
+    key         VARCHAR(50) PRIMARY KEY,
+    value       TEXT NOT NULL DEFAULT '',
+    description VARCHAR(255),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO system_settings (key, value, description) VALUES
+    ('ai_api_key',  '', 'AI 服务 API Key（OpenAI 兼容格式，生产环境动态配置）'),
+    ('ai_base_url', '', 'AI 服务 Base URL（如 https://api.deepseek.com）'),
+    ('ai_model',    '', 'AI 模型名（如 deepseek-v4-flash）')
+ON CONFLICT (key) DO NOTHING;
+
+COMMENT ON TABLE system_settings IS '系统设置表（key-value 结构）';
+
+CREATE TABLE ai_configs (
+    id          SERIAL PRIMARY KEY,
+    name        VARCHAR(50) NOT NULL UNIQUE,
+    api_key     TEXT NOT NULL,
+    base_url    VARCHAR(255) NOT NULL,
+    model       VARCHAR(100) NOT NULL,
+    description VARCHAR(255),
+    is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_ai_configs_active ON ai_configs (is_active);
+
+CREATE TABLE ai_feature_bindings (
+    feature_key VARCHAR(50) PRIMARY KEY,
+    config_id   INTEGER NOT NULL REFERENCES ai_configs(id) ON DELETE CASCADE,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE ai_configs IS 'AI 服务配置表（多套命名配置）';
+COMMENT ON TABLE ai_feature_bindings IS 'AI 功能-配置绑定表（feature_key → config_id）';
+
+CREATE TABLE ai_chat_sessions (
+    id          SERIAL         PRIMARY KEY,
+    user_id     INTEGER        NOT NULL,  -- 关联 valuation_users.id
+    title       VARCHAR(200)   NOT NULL DEFAULT '新会话',
+    model_name  VARCHAR(100),             -- 本次会话使用的模型名
+    created_at  TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ    NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_ai_chat_sessions_user ON ai_chat_sessions (user_id, created_at DESC);
+
+CREATE TABLE ai_chat_messages (
+    id          SERIAL         PRIMARY KEY,
+    session_id  INTEGER        NOT NULL REFERENCES ai_chat_sessions(id) ON DELETE CASCADE,
+    role        VARCHAR(20)    NOT NULL,  -- 'user' | 'assistant' | 'system'
+    content     TEXT           NOT NULL,
+    created_at  TIMESTAMPTZ    NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_ai_chat_messages_session ON ai_chat_messages (session_id, created_at);
+
+CREATE TABLE ai_user_models (
+    id          SERIAL         PRIMARY KEY,
+    user_id     INTEGER        NOT NULL,  -- 关联 valuation_users.id
+    name        VARCHAR(50)    NOT NULL,  -- 用户自定义名称
+    api_key     TEXT           NOT NULL,
+    base_url    VARCHAR(255)   NOT NULL,
+    model       VARCHAR(100)   NOT NULL,
+    created_at  TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
+    UNIQUE (user_id, model)  -- 同用户同模型名只能有一个
+);
+CREATE INDEX idx_ai_user_models_user ON ai_user_models (user_id);
+
+CREATE TABLE IF NOT EXISTS hrwai_users (
+    id          SERIAL         PRIMARY KEY,
+    username    VARCHAR(255)   UNIQUE NOT NULL,
+    password    VARCHAR(255)   NOT NULL,
+    name         VARCHAR(255)   NOT NULL DEFAULT '',
+    phone       VARCHAR(50)    UNIQUE NOT NULL,
+    email       VARCHAR(255)   NOT NULL DEFAULT '',
+    company     VARCHAR(255)   NOT NULL DEFAULT '',
+    status      SMALLINT       NOT NULL DEFAULT 1,
+    created_at  TIMESTAMPTZ    NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS _migrate_student_map (
+    old_id  INTEGER PRIMARY KEY,
+    new_id  INTEGER NOT NULL,
+    phone   VARCHAR(50) NOT NULL
+);
+
+INSERT INTO _migrate_student_map (old_id, new_id, phone)
+SELECT s.student_id, nextval('hrwai_users_id_seq'), s.phone
+FROM student s
+WHERE NOT EXISTS (SELECT 1 FROM hrwai_users h WHERE h.phone = s.phone);
+
+INSERT INTO hrwai_users (id, username, password, name, phone, email, company, status, created_at)
+SELECT m.new_id, s.username, s.password, s.name, s.phone, s.email, s.company, s.status, s.created_at
+FROM _migrate_student_map m
+JOIN student s ON s.student_id = m.old_id;
+
+CREATE TABLE IF NOT EXISTS _migrate_valuation_map (
+    old_id  INTEGER PRIMARY KEY,
+    new_id  INTEGER NOT NULL,
+    phone   VARCHAR(50) NOT NULL,
+    reused  BOOLEAN NOT NULL
+);
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'valuation_users') THEN
+        INSERT INTO _migrate_valuation_map (old_id, new_id, phone, reused)
+        SELECT v.id,
+               COALESCE(h.id, nextval('hrwai_users_id_seq')),
+               v.phone,
+               (h.id IS NOT NULL)
+        FROM valuation_users v
+        LEFT JOIN hrwai_users h ON h.phone = v.phone;
+
+        INSERT INTO hrwai_users (id, username, password, name, phone, email, company, status, created_at)
+        SELECT m.new_id, v.username, v.password, v.name, v.phone, v.email, v.company, v.status, v.created_at
+        FROM _migrate_valuation_map m
+        JOIN valuation_users v ON v.id = m.old_id
+        WHERE NOT m.reused;
+    END IF;
+END $$;
+
+UPDATE study_record sr SET student_id = m.new_id FROM _migrate_student_map m WHERE sr.student_id = m.old_id;
+UPDATE exam_record er SET student_id = m.new_id FROM _migrate_student_map m WHERE er.student_id = m.old_id;
+UPDATE exam_participant ep SET student_id = m.new_id FROM _migrate_student_map m WHERE ep.student_id = m.old_id;
+UPDATE question_practice_record qpr SET student_id = m.new_id FROM _migrate_student_map m WHERE qpr.student_id = m.old_id;
+UPDATE wrong_question wq SET student_id = m.new_id FROM _migrate_student_map m WHERE wq.student_id = m.old_id;
+UPDATE mock_exam me SET student_id = m.new_id FROM _migrate_student_map m WHERE me.student_id = m.old_id;
+UPDATE practice_progress pp SET student_id = m.new_id FROM _migrate_student_map m WHERE pp.student_id = m.old_id;
+UPDATE ai_generation_log aig SET user_id = m.new_id FROM _migrate_student_map m WHERE aig.user_id = m.old_id AND aig.user_type = 'student';
+
+UPDATE evaluations e SET user_id = m.new_id FROM _migrate_valuation_map m WHERE e.user_id = m.old_id;
+UPDATE battery_evaluations be SET user_id = m.new_id FROM _migrate_valuation_map m WHERE be.user_id = m.old_id;
+UPDATE ai_chat_sessions acs SET user_id = m.new_id FROM _migrate_valuation_map m WHERE acs.user_id = m.old_id;
+UPDATE ai_user_models aum SET user_id = m.new_id FROM _migrate_valuation_map m WHERE aum.user_id = m.old_id;
+
+SELECT setval('hrwai_users_id_seq', GREATEST((SELECT MAX(id) FROM hrwai_users), 1));
+
+UPDATE ai_generation_log SET user_type = 'hrwai_user' WHERE user_type = 'student';
+
+ALTER TABLE student RENAME TO _deprecated_student;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'valuation_users') THEN
+        ALTER TABLE valuation_users RENAME TO _deprecated_valuation_users;
+    END IF;
+END $$;
+
+DROP TABLE _migrate_student_map;
+DROP TABLE _migrate_valuation_map;
+
+COMMENT ON COLUMN evaluations.user_id IS '残值评估提交者(hrwai_users.id),NULL 表示匿名提交';
+COMMENT ON COLUMN battery_evaluations.user_id IS '电池评估提交者(hrwai_users.id),NULL 表示历史匿名数据';
+COMMENT ON COLUMN ai_chat_sessions.user_id IS 'AI 助手会话归属 hrwai_users.id';
+COMMENT ON COLUMN ai_user_models.user_id IS '用户自定义模型归属 hrwai_users.id';
+COMMENT ON COLUMN study_record.student_id IS '学习记录归属 hrwai_users.id';
+COMMENT ON COLUMN exam_record.student_id IS '考试记录归属 hrwai_users.id';
+COMMENT ON COLUMN exam_participant.student_id IS '考试参与记录归属 hrwai_users.id';
+COMMENT ON COLUMN question_practice_record.student_id IS '题库练习归属 hrwai_users.id';
+COMMENT ON COLUMN wrong_question.student_id IS '错题记录归属 hrwai_users.id';
+COMMENT ON COLUMN mock_exam.student_id IS '模拟考试归属 hrwai_users.id';
+COMMENT ON COLUMN practice_progress.student_id IS '练习进度归属 hrwai_users.id';
+
+ALTER TABLE ai_feature_bindings ADD COLUMN IF NOT EXISTS id SERIAL;
+
+ALTER TABLE ai_feature_bindings DROP CONSTRAINT IF EXISTS ai_feature_bindings_pkey;
+
+ALTER TABLE ai_feature_bindings ADD PRIMARY KEY (id);
+
+ALTER TABLE ai_feature_bindings ADD CONSTRAINT uq_ai_feature_config UNIQUE (feature_key, config_id);
+
+CREATE INDEX IF NOT EXISTS idx_ai_feature_bindings_feature_key ON ai_feature_bindings (feature_key);
+
+COMMENT ON TABLE ai_feature_bindings IS 'AI 功能-配置绑定表（支持单绑定和多绑定功能）';
+
+ALTER TABLE chapter ADD COLUMN IF NOT EXISTS slide_urls TEXT;
+
+ALTER TABLE hrwai_users
+    ADD COLUMN IF NOT EXISTS nickname VARCHAR(100) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS avatar_url TEXT NOT NULL DEFAULT '';
+
+CREATE TABLE IF NOT EXISTS forum_topics (
+    id            BIGSERIAL     PRIMARY KEY,
+    course_id     INTEGER       REFERENCES course(course_id) ON DELETE CASCADE,
+    user_id       INTEGER       NOT NULL REFERENCES hrwai_users(id) ON DELETE CASCADE,
+    title         VARCHAR(200)  NOT NULL,
+    content       TEXT          NOT NULL,
+    view_count    INTEGER       NOT NULL DEFAULT 0,
+    reply_count   INTEGER       NOT NULL DEFAULT 0,
+    last_reply_at TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_forum_topics_course
+    ON forum_topics (course_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_forum_topics_created
+    ON forum_topics (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_forum_topics_user
+    ON forum_topics (user_id);
+
+CREATE TABLE IF NOT EXISTS forum_replies (
+    id         BIGSERIAL   PRIMARY KEY,
+    topic_id   BIGINT      NOT NULL REFERENCES forum_topics(id) ON DELETE CASCADE,
+    user_id    INTEGER     NOT NULL REFERENCES hrwai_users(id) ON DELETE CASCADE,
+    content    TEXT        NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_forum_replies_topic
+    ON forum_replies (topic_id, created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_forum_replies_user
+    ON forum_replies (user_id);
+
+CREATE TABLE IF NOT EXISTS profile_change_requests (
+    id            BIGSERIAL     PRIMARY KEY,
+    user_id       INTEGER       NOT NULL REFERENCES hrwai_users(id) ON DELETE CASCADE,
+    field_type    VARCHAR(20)   NOT NULL, -- 'nickname' | 'avatar'
+    old_value     TEXT          NOT NULL DEFAULT '',
+    new_value     TEXT          NOT NULL,
+    status        VARCHAR(20)   NOT NULL DEFAULT 'pending', -- pending / approved / rejected
+    reject_reason TEXT          NOT NULL DEFAULT '',
+    reviewed_by   INTEGER,                                    -- 审核管理员（admin.id），未审核为 NULL
+    reviewed_at   TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_profile_change_user
+    ON profile_change_requests (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_profile_change_status
+    ON profile_change_requests (status, created_at DESC);
+
+ALTER TABLE forum_topics RENAME COLUMN course_id TO chapter_id;
+
+ALTER TABLE forum_topics DROP CONSTRAINT IF EXISTS forum_topics_course_id_fkey;
+ALTER TABLE forum_topics ADD CONSTRAINT forum_topics_chapter_id_fkey
+    FOREIGN KEY (chapter_id) REFERENCES chapter(chapter_id) ON DELETE CASCADE;
+
+DROP INDEX IF EXISTS idx_forum_topics_course;
+CREATE INDEX IF NOT EXISTS idx_forum_topics_chapter
+    ON forum_topics (chapter_id, created_at DESC);
+
+ALTER TABLE forum_replies ADD COLUMN IF NOT EXISTS parent_id BIGINT;
+ALTER TABLE forum_replies ADD CONSTRAINT forum_replies_parent_id_fkey
+    FOREIGN KEY (parent_id) REFERENCES forum_replies(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_forum_replies_parent ON forum_replies (parent_id);
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id         BIGSERIAL   PRIMARY KEY,
+    user_id    INTEGER     NOT NULL REFERENCES hrwai_users(id) ON DELETE CASCADE,
+    type       VARCHAR(50) NOT NULL DEFAULT 'system',
+    title      VARCHAR(255) NOT NULL,
+    content    TEXT        NOT NULL DEFAULT '',
+    link       VARCHAR(500) NOT NULL DEFAULT '',
+    is_read    BOOLEAN     NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    read_at    TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created
+    ON notifications (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+    ON notifications (user_id) WHERE is_read = FALSE;
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id         BIGSERIAL   PRIMARY KEY,
+    actor_id   INTEGER     NOT NULL,
+    actor_role VARCHAR(50) NOT NULL,
+    actor_name VARCHAR(100) NOT NULL DEFAULT '',
+    action     VARCHAR(200) NOT NULL,
+    path       VARCHAR(500) NOT NULL,
+    method     VARCHAR(10)  NOT NULL,
+    request_id VARCHAR(64)  NOT NULL DEFAULT '',
+    ip         VARCHAR(64)  NOT NULL DEFAULT '',
+    status     INTEGER     NOT NULL DEFAULT 0,
+    detail     JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created
+    ON audit_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_actor
+    ON audit_logs (actor_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_role
+    ON audit_logs (actor_role, created_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_hrwai_users_email_unique
+    ON hrwai_users (email)
+    WHERE email <> '';
+
+ALTER TABLE hrwai_users
+    ADD COLUMN IF NOT EXISTS wechat_openid  VARCHAR(128) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS wechat_unionid VARCHAR(128) NOT NULL DEFAULT '';
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_hrwai_users_wechat_openid_unique
+    ON hrwai_users (wechat_openid)
+    WHERE wechat_openid <> '';
+
+CREATE TABLE IF NOT EXISTS specialty (
+    specialty_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    code         VARCHAR(30)  NOT NULL UNIQUE,
+    name         VARCHAR(100) NOT NULL,
+    description  TEXT,
+    sort_order   INT          NOT NULL DEFAULT 0,
+    status       SMALLINT     NOT NULL DEFAULT 1,
+    created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+COMMENT ON TABLE  specialty IS '专业方向表（课程目录一级节点）';
+COMMENT ON COLUMN specialty.status IS '状态：1-启用，0-停用';
+
+
+CREATE TABLE IF NOT EXISTS course_level (
+    level_id    INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    code        VARCHAR(30)  NOT NULL UNIQUE,
+    name        VARCHAR(50)  NOT NULL,
+    description TEXT,
+    sort_order  INT          NOT NULL DEFAULT 0,
+    status      SMALLINT     NOT NULL DEFAULT 1,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+COMMENT ON TABLE  course_level IS '课程等级表（入门/进阶/专项/认证）';
+COMMENT ON COLUMN course_level.status IS '状态：1-启用，0-停用';
+
+
+CREATE TABLE IF NOT EXISTS certificate_template (
+    id            INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    code          VARCHAR(50)  NOT NULL UNIQUE,
+    name          VARCHAR(100) NOT NULL,
+    description   TEXT,
+    validity_days INT          NOT NULL DEFAULT 365,
+    template_url  VARCHAR(500) NOT NULL DEFAULT '',
+    status        SMALLINT     NOT NULL DEFAULT 1,
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+COMMENT ON TABLE  certificate_template IS '证书模板表（有效期单位：天）';
+COMMENT ON COLUMN certificate_template.validity_days IS '证书有效期（天）';
+COMMENT ON COLUMN certificate_template.status IS '状态：1-启用，0-停用';
+
+
+CREATE TABLE IF NOT EXISTS course_prerequisite (
+    course_id              INT NOT NULL REFERENCES course(course_id) ON DELETE CASCADE,
+    prerequisite_course_id INT NOT NULL REFERENCES course(course_id) ON DELETE CASCADE,
+    created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (course_id, prerequisite_course_id),
+    CONSTRAINT chk_course_prerequisite_not_self CHECK (course_id <> prerequisite_course_id)
+);
+COMMENT ON TABLE course_prerequisite IS '课程前置课程关联表（A 的 course_id 行表示 A 的前置课程为 prerequisite_course_id）';
+CREATE INDEX IF NOT EXISTS idx_course_prerequisite_reverse
+    ON course_prerequisite (prerequisite_course_id);
+
+
+CREATE TABLE IF NOT EXISTS question_tag (
+    id          INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    code        VARCHAR(50)  NOT NULL UNIQUE,
+    name        VARCHAR(50)  NOT NULL,
+    category    VARCHAR(50)  NOT NULL DEFAULT '',
+    description TEXT,
+    sort_order  INT          NOT NULL DEFAULT 0,
+    status      SMALLINT     NOT NULL DEFAULT 1,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+COMMENT ON TABLE  question_tag IS '题库标签表（法规/结构/液压/电气/制动/故障诊断/应急等考点模块）';
+COMMENT ON COLUMN question_tag.category IS '考点模块分类';
+COMMENT ON COLUMN question_tag.status IS '状态：1-启用，0-停用';
+
+
+CREATE TABLE IF NOT EXISTS question_tag_relation (
+    question_id INT NOT NULL REFERENCES question(id) ON DELETE CASCADE,
+    tag_id      INT NOT NULL REFERENCES question_tag(id) ON DELETE CASCADE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (question_id, tag_id)
+);
+COMMENT ON TABLE question_tag_relation IS '题目-题库标签关联表';
+CREATE INDEX IF NOT EXISTS idx_question_tag_relation_tag
+    ON question_tag_relation (tag_id);
+
+
+ALTER TABLE course
+    ADD COLUMN IF NOT EXISTS specialty_id           INT REFERENCES specialty(specialty_id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS level_id               INT REFERENCES course_level(level_id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS theory_hours           INT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS practice_hours         INT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS certificate_template_id INT REFERENCES certificate_template(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_course_specialty ON course (specialty_id);
+CREATE INDEX IF NOT EXISTS idx_course_level     ON course (level_id);
+CREATE INDEX IF NOT EXISTS idx_course_cert_template ON course (certificate_template_id);
+CREATE INDEX IF NOT EXISTS idx_course_status_specialty_level ON course (status, specialty_id, level_id);
+
+COMMENT ON COLUMN course.specialty_id IS '专业方向（目录一级节点）';
+COMMENT ON COLUMN course.level_id IS '课程等级（入门/进阶/专项/认证）';
+COMMENT ON COLUMN course.theory_hours IS '理论学时';
+COMMENT ON COLUMN course.practice_hours IS '实操学时';
+COMMENT ON COLUMN course.certificate_template_id IS '关联证书模板（有效期取模板 validity_days）';
+
+
+INSERT INTO specialty (code, name, description, sort_order, status)
+VALUES ('operation', '操作', '叉车驾驶与装卸作业方向', 1, 1)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO specialty (code, name, description, sort_order, status)
+VALUES ('maintenance', '维修', '叉车结构与维修技术方向', 2, 1)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO specialty (code, name, description, sort_order, status)
+VALUES ('safety', '安全', '叉车安全操作与应急方向', 3, 1)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO specialty (code, name, description, sort_order, status)
+VALUES ('battery', '电池', '叉车动力电池方向', 4, 1)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO course_level (code, name, description, sort_order, status)
+VALUES ('beginner', '入门', '基础理论与基础技能，面向零基础学员', 1, 1)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO course_level (code, name, description, sort_order, status)
+VALUES ('intermediate', '进阶', '深入原理与常见维护保养技能', 2, 1)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO course_level (code, name, description, sort_order, status)
+VALUES ('specialized', '专项', '面向特定作业场景的专项技能训练', 3, 1)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO course_level (code, name, description, sort_order, status)
+VALUES ('certification', '认证', '对标职业标准与考核规范的认证课程', 4, 1)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO certificate_template (code, name, description, validity_days, template_url, status)
+VALUES ('FORKLIFT_OPERATION_CERT', '叉车操作培训合格证书', '叉车安全操作培训合格证书模板（对标 TSG 81-2022 培训要求）', 1460, '', 1)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO certificate_template (code, name, description, validity_days, template_url, status)
+VALUES ('FORKLIFT_MAINTENANCE_CERT', '叉车维修技能培训合格证书', '叉车维修技能专项培训合格证书模板', 1460, '', 1)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO question_tag (code, name, category, description, sort_order, status) VALUES
+('regulation', '法规', '法规', '法规、标准与作业规范相关考点（含 TSG 81-2022）', 1, 1),
+('structure', '结构', '结构', '叉车整车与零部件结构相关考点', 2, 1),
+('hydraulic', '液压', '液压', '液压系统原理、元件与维护相关考点', 3, 1),
+('electrical', '电气', '电气', '电气系统与电控相关考点', 4, 1),
+('brake', '制动', '制动', '制动系统结构、原理与维护相关考点', 5, 1),
+('fault_diagnosis', '故障诊断', '故障诊断', '故障现象识别与诊断排除相关考点', 6, 1),
+('emergency', '应急', '应急', '应急处置与突发情况应对相关考点', 7, 1)
+ON CONFLICT (code) DO NOTHING;
+
+
+UPDATE course SET specialty_id = (SELECT specialty_id FROM specialty WHERE code = 'maintenance'),
+                  level_id     = (SELECT level_id FROM course_level WHERE code = 'beginner')
+WHERE category = 'CATEGORY_01' AND specialty_id IS NULL;
+
+UPDATE course SET specialty_id = (SELECT specialty_id FROM specialty WHERE code = 'safety'),
+                  level_id     = (SELECT level_id FROM course_level WHERE code = 'beginner')
+WHERE category = 'CATEGORY_02' AND specialty_id IS NULL;
+
+UPDATE course SET specialty_id = (SELECT specialty_id FROM specialty WHERE code = 'operation'),
+                  level_id     = (SELECT level_id FROM course_level WHERE code = 'intermediate')
+WHERE category = 'CATEGORY_03' AND specialty_id IS NULL;
+
+UPDATE course SET specialty_id = (SELECT specialty_id FROM specialty WHERE code = 'maintenance'),
+                  level_id     = (SELECT level_id FROM course_level WHERE code = 'intermediate')
+WHERE category = 'CATEGORY_04' AND specialty_id IS NULL;
+
+ALTER TABLE course
+    ADD COLUMN IF NOT EXISTS sort_order INT NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS idx_course_specialty_level_sort
+    ON course (specialty_id, level_id, sort_order);
+
+COMMENT ON COLUMN course.sort_order IS '课程排序值（所属专业方向+课程等级层级内生效，越小越靠前）';
+
+ALTER TABLE evaluations
+    ADD COLUMN IF NOT EXISTS suggestions      JSONB,
+    ADD COLUMN IF NOT EXISTS lambda_electric  DOUBLE PRECISION,
+    ADD COLUMN IF NOT EXISTS lambda_combustion DOUBLE PRECISION;
+
+ALTER TABLE study_record
+    DROP CONSTRAINT IF EXISTS study_record_student_id_fkey,
+    ADD CONSTRAINT study_record_student_id_fkey
+        FOREIGN KEY (student_id) REFERENCES hrwai_users(id) ON DELETE CASCADE;
+
+ALTER TABLE exam_record
+    DROP CONSTRAINT IF EXISTS exam_record_student_id_fkey,
+    ADD CONSTRAINT exam_record_student_id_fkey
+        FOREIGN KEY (student_id) REFERENCES hrwai_users(id) ON DELETE CASCADE;
+
+ALTER TABLE exam_participant
+    DROP CONSTRAINT IF EXISTS exam_participant_student_id_fkey,
+    ADD CONSTRAINT exam_participant_student_id_fkey
+        FOREIGN KEY (student_id) REFERENCES hrwai_users(id) ON DELETE CASCADE;
+
+ALTER TABLE question_practice_record
+    DROP CONSTRAINT IF EXISTS question_practice_record_student_id_fkey,
+    ADD CONSTRAINT question_practice_record_student_id_fkey
+        FOREIGN KEY (student_id) REFERENCES hrwai_users(id) ON DELETE CASCADE;
+
+ALTER TABLE wrong_question
+    DROP CONSTRAINT IF EXISTS wrong_question_student_id_fkey,
+    ADD CONSTRAINT wrong_question_student_id_fkey
+        FOREIGN KEY (student_id) REFERENCES hrwai_users(id) ON DELETE CASCADE;
+
+ALTER TABLE mock_exam
+    DROP CONSTRAINT IF EXISTS mock_exam_student_id_fkey,
+    ADD CONSTRAINT mock_exam_student_id_fkey
+        FOREIGN KEY (student_id) REFERENCES hrwai_users(id) ON DELETE CASCADE;
+
+ALTER TABLE practice_progress
+    DROP CONSTRAINT IF EXISTS practice_progress_student_id_fkey,
+    ADD CONSTRAINT practice_progress_student_id_fkey
+        FOREIGN KEY (student_id) REFERENCES hrwai_users(id) ON DELETE CASCADE;
+
+ALTER TABLE forum_topics
+    ADD COLUMN IF NOT EXISTS images JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+ALTER TABLE forum_replies
+    ADD COLUMN IF NOT EXISTS images JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+COMMENT ON COLUMN forum_topics.images IS '主题图片 URL 数组（images/forum/ 子目录，最多 9 张）';
+COMMENT ON COLUMN forum_replies.images IS '回复图片 URL 数组（images/forum/ 子目录，最多 3 张）';
+
+ALTER TABLE question_practice_record DROP COLUMN IF EXISTS level;
