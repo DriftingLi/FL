@@ -102,20 +102,19 @@ func (s *ExportService) Questions() ([][]any, error) {
 		Options            []byte
 		Answer             string
 		Explanation        string
-		KnowledgePointName string
 		Status             string
 		CreatedAt          time.Time
 	}
 	err := s.db.Table("question AS q").
 		Select("q.id, q.type, q.content, q.options, q.answer, q.explanation, " +
-			"COALESCE(kp.name, '') AS knowledge_point_name, q.status, q.created_at").
-		Joins("LEFT JOIN knowledge_point AS kp ON kp.id = q.knowledge_point_id").
+			"q.status, q.created_at").
+
 		Order("q.id ASC").
 		Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
-	out := [][]any{{"ID", "类型", "题干", "选项", "答案", "解析", "知识点", "状态", "创建时间"}}
+	out := [][]any{{"ID", "类型", "题干", "选项", "答案", "解析", "状态", "创建时间"}}
 	for _, r := range rows {
 		options := ""
 		if len(r.Options) > 0 {
@@ -123,7 +122,7 @@ func (s *ExportService) Questions() ([][]any, error) {
 		}
 		out = append(out, []any{
 			r.ID, r.Type, r.Content, options, r.Answer, r.Explanation,
-			r.KnowledgePointName, r.Status, formatISO(r.CreatedAt),
+			r.Status, formatISO(r.CreatedAt),
 		})
 	}
 	return out, nil

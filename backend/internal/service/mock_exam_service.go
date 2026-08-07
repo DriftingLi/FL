@@ -32,7 +32,7 @@ func (s *MockExamService) Start(studentID, count, duration int) (map[string]any,
 		duration = 90
 	}
 
-	selected, err := sampleQuestions(s.db, "", nil, count)
+	selected, err := sampleQuestions(s.db, "", count)
 	if err != nil {
 		return nil, errors.New("查询题目失败")
 	}

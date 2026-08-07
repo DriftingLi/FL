@@ -30,19 +30,13 @@ func RegisterQuestionBankRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gor
 		qType := c.Query("type")
 		status := c.Query("status")
 		keyword := c.Query("keyword")
-		var kpID *int
-		if s := c.Query("knowledge_point_id"); s != "" {
-			if id, err := strconv.Atoi(s); err == nil {
-				kpID = &id
-			}
-		}
 		var tagID *int
 		if s := c.Query("tag_id"); s != "" {
 			if id, err := strconv.Atoi(s); err == nil {
 				tagID = &id
 			}
 		}
-		response.Success(c, svc.ListQuestions(page, pageSize, qType, kpID, status, keyword, tagID))
+		response.Success(c, svc.ListQuestions(page, pageSize, qType, status, keyword, tagID))
 	})
 
 	// POST /api/question-bank/questions  创建题目
@@ -218,76 +212,6 @@ func RegisterQuestionBankRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gor
 	g.GET("/stats", func(c *gin.Context) {
 		response.Success(c, svc.GetStats())
 	})
-
-	// GET /api/question-bank/categories  课程四分类及其题目数（章节练习用）
-	g.GET("/categories", func(c *gin.Context) {
-		response.Success(c, svc.GetCategories())
-	})
-
-	// ===== 知识点 =====
-
-	// GET /api/question-bank/knowledge-points  知识点列表
-	g.GET("/knowledge-points", func(c *gin.Context) {
-		category := c.Query("category")
-		var parentID *int
-		if s := c.Query("parent_id"); s != "" {
-			if id, err := strconv.Atoi(s); err == nil {
-				parentID = &id
-			}
-		}
-		response.Success(c, svc.GetKnowledgePoints(category, parentID))
-	})
-
-	// POST /api/question-bank/knowledge-points  创建知识点
-	g.POST("/knowledge-points", middleware.RoleRequired("tutor", "admin"), func(c *gin.Context) {
-		var data map[string]interface{}
-		if err := c.ShouldBindJSON(&data); err != nil {
-			response.BadRequest(c, "请求数据无效")
-			return
-		}
-		result, err := svc.CreateKnowledgePoint(data)
-		if err != nil {
-			response.BadRequest(c, err.Error())
-			return
-		}
-		response.Created(c, "知识点创建成功", result)
-	})
-
-	// PUT /api/question-bank/knowledge-points/:kp_id  更新知识点
-	g.PUT("/knowledge-points/:kp_id", middleware.RoleRequired("tutor", "admin"), func(c *gin.Context) {
-		id, err := strconv.Atoi(c.Param("kp_id"))
-		if err != nil {
-			response.BadRequest(c, "知识点ID无效")
-			return
-		}
-		var data map[string]interface{}
-		if err := c.ShouldBindJSON(&data); err != nil {
-			response.BadRequest(c, "请求数据无效")
-			return
-		}
-		result, err := svc.UpdateKnowledgePoint(id, data)
-		if err != nil {
-			response.BadRequest(c, err.Error())
-			return
-		}
-		response.SuccessWithMsg(c, "知识点更新成功", result)
-	})
-
-	// DELETE /api/question-bank/knowledge-points/:kp_id  删除知识点
-	g.DELETE("/knowledge-points/:kp_id", middleware.RoleRequired("tutor", "admin"), func(c *gin.Context) {
-		id, err := strconv.Atoi(c.Param("kp_id"))
-		if err != nil {
-			response.BadRequest(c, "知识点ID无效")
-			return
-		}
-		if err := svc.DeleteKnowledgePoint(id); err != nil {
-			response.BadRequest(c, err.Error())
-			return
-		}
-		response.SuccessWithMsg(c, "知识点删除成功", nil)
-	})
-
-	// ===== 图片上传 =====
 
 	// POST /api/question-bank/upload-image  上传题目图片
 	g.POST("/upload-image", middleware.RoleRequired("tutor", "admin"), func(c *gin.Context) {

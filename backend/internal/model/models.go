@@ -312,7 +312,6 @@ type Question struct {
 	ReferenceAnswer  string    `gorm:"column:reference_answer" json:"reference_answer"`
 	ScoringCriteria  string    `gorm:"column:scoring_criteria" json:"scoring_criteria"`
 	Score            int       `gorm:"column:score;default:0" json:"score"`
-	KnowledgePointID *int      `gorm:"column:knowledge_point_id" json:"knowledge_point_id,omitempty"`
 	Status           string    `gorm:"column:status;default:draft" json:"status"`
 	RejectReason     string    `gorm:"column:reject_reason" json:"reject_reason"`
 	CreatedBy        *int      `gorm:"column:created_by" json:"created_by,omitempty"`
