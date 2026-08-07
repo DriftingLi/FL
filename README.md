@@ -145,7 +145,7 @@
 │   ├── pkg/
 │   │   ├── response/             # 统一响应结构
 │   │   └── pdf/                  # 中文 PDF 报告（gofpdf + SimHei）
-│   ├── migrations/               # 迁移脚本（000001 ~ 000028）
+│   ├── migrations/               # 迁移脚本（squash baseline 000001 + 增量 000030+）
 │   ├── Dockerfile / entrypoint.sh / Makefile
 │   ├── docker-compose.yml        # 本地 postgres + redis + libreoffice
 │   ├── .env                      # 本地开发环境变量（gitignore，不入库）
@@ -324,37 +324,13 @@ npm run type-check   # vue-tsc 类型检查
 
 ## 数据库迁移
 
-迁移脚本位于 `backend/migrations/`，采用 `序号_名称.up.sql` / `.down.sql` 成对组织，当前共 **28 组**（000001 ~ 000028）：
+迁移脚本位于 `backend/migrations/`，采用 `序号_名称.up.sql` / `.down.sql` 成对组织。历史迁移（000001 ~ 000028）已 **squash 合并**为单一 baseline，新增迁移从 **000030** 开始编号：
 
 | 迁移 | 说明 |
 | --- | --- |
-| `000001_init_baseline` | 培训库基线（账号、课程、考试、题库等） |
-| `000002_question_reject_reason` | 题库驳回原因 |
-| `000003_featured_content` | 官网精选内容 |
-| `000004_valuation_users` | 残值评估用户表 |
-| `000005_valuation_evaluations_user_id` | 评估记录关联用户 |
-| `000006_knowledge_point_category` / `000008_knowledge_point_category_backfill` | 知识点分类与数据回填 |
-| `000007_practice_progress` | 练习进度表 |
-| `000009_drop_legacy_level_columns` | 删除遗留等级字段 |
-| `000010_fix_study_duration_dup` | 修复学习时长重复统计 |
-| `000011_system_settings` | 系统设置表 |
-| `000012_ai_configs` | AI 供应商配置表 |
-| `000013_ai_assistant` | AI 助手会话 / 消息 / 用户自定义模型 |
-| `000014_unified_hrwai_users` | 统一账号：student 与 valuation_users 合并为 hrwai_users |
-| `000015_ai_assistant_feature_binding` | AI 功能与模型配置绑定 |
-| `000016_chapter_slide_urls` | 章节幻灯片 URL 持久化 |
-| `000017_forum_and_profile` | 学员论坛（forum_topics / forum_replies）+ 用户昵称 / 头像字段 |
-| `000018_profile_change_review` | 资料修改审核表（昵称/头像修改先进入待审队列） |
-| `000019_forum_chapter_and_nested_replies` | 论坛改为章节维度（course_id → chapter_id）+ 回复支持 parent_id（回复别人的回复） |
-| `000020_notifications` | 站内信通知表（P0 通知基础设施，当前仅站内信） |
-| `000021_audit_logs` | 管理员/讲师操作审计日志表（P0 合规） |
-| `000022_email_auth` | 邮箱注册/登录：hrwai_users.email 非空唯一索引 |
-| `000023_auth_framework` | 多登录方式框架：微信身份字段（账号/手机号/邮箱独立） |
-| `000024_training_catalog` | 培训目录（等级/学时/证书/题库标签） |
-| `000025_course_sort_order` | 课程排序字段 |
-| `000026_evaluation_factuality` | 评估结果事实性（K 系数/残值/建议时点锁定） |
-| `000027_fix_stale_student_fks` | 修复 7 张表 student_id 外键仍指向 _deprecated_student（统一账号后刷题/进度/错题/学习记录写入失败） |
-| `000028_forum_images` | 论坛发图（图文分离）：forum_topics / forum_replies 增加 images JSONB 列 |
+| `000001_init_baseline` | 全量 schema baseline（squash 000001~000029）：培训/题库/考试/练习/论坛/通知/审计/认证/精选内容/残值评估全部表 + 遗留 level 列删除 + FK 修复 |
+
+> 说明：squash 合并等价于原 29 个迁移按序执行后的最终态；`question_practice_record` 遗留 `level` 列已随合并删除（修复刷题提交 400）；各业务表 `student_id` 外键已指向 `hrwai_users`。
 
 执行 / 回滚：`make migrate-up` / `make migrate-down`。
 
