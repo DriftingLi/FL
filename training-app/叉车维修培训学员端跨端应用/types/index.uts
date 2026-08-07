@@ -311,6 +311,13 @@ export type ForumTopicDetail = {
 
 // ===== 课程模块类型 =====
 
+/** 课程分类 */
+export type CourseCategory = {
+	id : number
+	name : string
+	value : string   // 分类标识，用于 API 查询参数
+}
+
 /** 课程列表项 */
 export type CourseItem = {
 	course_id : number
@@ -320,6 +327,8 @@ export type CourseItem = {
 	cover_url : string
 	duration : number
 	chapter_count : number
+	price : number
+	buyers : number
 }
 
 /** 课程列表响应 */

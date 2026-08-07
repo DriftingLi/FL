@@ -12,7 +12,7 @@
  *   buildXxx 函数负责字段映射转换
  */
 import { get, post } from './request'
-import type { CourseListResult, CourseDetail, CourseItem, ChapterItem, ChapterDetail, ChapterFile } from '../types/index'
+import type { CourseListResult, CourseDetail, CourseItem, ChapterItem, ChapterDetail, ChapterFile, CourseCategory } from '../types/index'
 
 /** 安全转换为 number */
 function toNumber(v : any | null, defaultVal : number = 0) : number {
@@ -43,6 +43,8 @@ function buildCourseItem(obj : UTSJSONObject) : CourseItem {
 		cover_url: toStr(obj['cover_image']), // 后端 cover_image → 前端 cover_url
 		duration: toNumber(obj['duration']),
 		chapter_count: toNumber(obj['chapter_count']), // 后端不返回此字段，默认 0
+		price: toNumber(obj['price']),
+		buyers: toNumber(obj['buyers']),
 	} as CourseItem
 	return item
 }
@@ -178,15 +180,75 @@ function buildCourseListResult(obj : UTSJSONObject) : CourseListResult {
 	return result
 }
 
+/** mock 课程分类（网络不可用时回退） */
+function getMockCourseCategories() : CourseCategory[] {
+	return [
+		{ id: 0, name: '全部', value: '' } as CourseCategory,
+		{ id: 1, name: '基础理论', value: 'theory' } as CourseCategory,
+		{ id: 2, name: '安全规范', value: 'safety' } as CourseCategory,
+		{ id: 3, name: '实操技能', value: 'practice' } as CourseCategory,
+		{ id: 4, name: '进阶提升', value: 'advanced' } as CourseCategory,
+	]
+}
+
+/** 获取课程分类列表（动态，从后端获取） */
+export function getCourseCategoriesApi() : Promise<CourseCategory[]> {
+	return get('/course/categories').then((data : UTSJSONObject) : CourseCategory[] => {
+		const list : CourseCategory[] = []
+		// 后端可能返回数组或 { categories: [...] } 对象
+		let catsRaw = data['categories']
+		if (catsRaw == null) {
+			// 尝试直接将 data 作为数组处理
+			if (data != null) {
+				// 检查 data 是否为数组
+				const arr = data as Array<UTSJSONObject>
+				if (arr != null && arr.length > 0) {
+					for (let i = 0; i < arr.length; i++) {
+						const obj = arr[i]
+						list.push({
+							id: toNumber(obj['id'], i),
+							name: toStr(obj['name']),
+							value: toStr(obj['value'], toStr(obj['code'], toStr(obj['key']))),
+						} as CourseCategory)
+					}
+				}
+			}
+		} else {
+			const arr = catsRaw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				const obj = arr[i]
+				list.push({
+					id: toNumber(obj['id'], i),
+					name: toStr(obj['name']),
+					value: toStr(obj['value'], toStr(obj['code'], toStr(obj['key']))),
+				} as CourseCategory)
+			}
+		}
+		
+		// 确保"全部"分类始终在首位
+		const allCategory = { id: 0, name: '全部', value: '' } as CourseCategory
+		if (list.length == 0) {
+			list.push(allCategory)
+		} else if (list[0].value != '') {
+			list.splice(0, 0, allCategory)
+		}
+		
+		return list
+	}).catch((e) : CourseCategory[] => {
+		console.warn('[getCourseCategoriesApi] network failed, using mock data:', e)
+		return getMockCourseCategories()
+	})
+}
+
 /** mock 课程列表（网络不可用时回退） */
 function getMockCourseList() : CourseListResult {
 	const items : CourseItem[] = [
-		{ course_id: 1, title: '叉车基本构造', category: 'structure', description: '学习叉车基本构造知识', cover_url: '', duration: 120, chapter_count: 3 } as CourseItem,
-		{ course_id: 2, title: '液压传动系统', category: 'hydraulic', description: '掌握液压系统原理', cover_url: '', duration: 90, chapter_count: 4 } as CourseItem,
-		{ course_id: 3, title: '叉车驾驶操作', category: 'driving', description: '叉车驾驶技能培训', cover_url: '', duration: 150, chapter_count: 5 } as CourseItem,
-		{ course_id: 4, title: '日常维护保养', category: 'maintenance', description: '叉车日常保养知识', cover_url: '', duration: 100, chapter_count: 4 } as CourseItem,
-		{ course_id: 5, title: '货物装卸作业', category: 'cargo', description: '安全装卸作业规范', cover_url: '', duration: 80, chapter_count: 3 } as CourseItem,
-		{ course_id: 6, title: '故障排查与应急', category: 'troubleshooting', description: '故障诊断与处理', cover_url: '', duration: 110, chapter_count: 4 } as CourseItem,
+		{ course_id: 1, title: '2026年叉车基础理论课程', category: 'theory', description: '叉车基础理论合集', cover_url: '', duration: 120, chapter_count: 3, price: 39, buyers: 999 } as CourseItem,
+		{ course_id: 2, title: '叉车安全操作规范', category: 'safety', description: '掌握安全操作流程', cover_url: '', duration: 90, chapter_count: 4, price: 29, buyers: 568 } as CourseItem,
+		{ course_id: 3, title: '叉车驾驶实操技能', category: 'practice', description: '叉车驾驶技能培训', cover_url: '', duration: 150, chapter_count: 5, price: 49, buyers: 1203 } as CourseItem,
+		{ course_id: 4, title: '进阶提升与故障诊断', category: 'advanced', description: '进阶知识与故障排查', cover_url: '', duration: 100, chapter_count: 4, price: 19, buyers: 432 } as CourseItem,
+		{ course_id: 5, title: '货物装卸作业规范', category: 'practice', description: '安全装卸作业规范', cover_url: '', duration: 80, chapter_count: 3, price: 0, buyers: 276 } as CourseItem,
+		{ course_id: 6, title: '日常维护保养', category: 'theory', description: '叉车日常保养知识', cover_url: '', duration: 110, chapter_count: 4, price: 35, buyers: 815 } as CourseItem,
 	]
 	return {
 		items: items,

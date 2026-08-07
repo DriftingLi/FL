@@ -49,13 +49,8 @@
     import { ref } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight, useScrollHeight } from '../../utils/system'
-    import { getCourseListApi } from '../../api/course'
-    import type { CourseItem } from '../../types/index'
-
-    type CategoryItem = {
-        name : string
-        value : string
-    }
+    import { getCourseListApi, getCourseCategoriesApi } from '../../api/course'
+    import type { CourseItem, CourseCategory } from '../../types/index'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -67,20 +62,33 @@
     const total = ref<number>(0)
     const noMore = ref<boolean>(false)
 
-    // 分类与后端接口对齐：http://training.gccsmile.com:51820/api/courses?category=CATEGORY_01
-    const categories : CategoryItem[] = [
-        { name: '全部', value: '' },
-        { name: '基础理论', value: 'CATEGORY_01' },
-        { name: '安全规范', value: 'CATEGORY_02' },
-        { name: '实操技能', value: 'CATEGORY_03' },
-        { name: '进阶提升', value: 'CATEGORY_04' },
-    ]
+    // 动态加载的分类列表
+    const categories = ref<CourseCategory[]>([
+        { id: 0, name: '全部', value: '' },
+    ])
+
+    async function loadCategories() {
+        try {
+            const cats = await getCourseCategoriesApi()
+            if (cats.length > 0) {
+                categories.value = cats
+            }
+        } catch (e) {
+            console.error('[courses] load categories failed:', e)
+        }
+    }
 
     function getCategoryIcon(category : string) : string {
-        if (category == 'CATEGORY_01') return '📖'
-        if (category == 'CATEGORY_02') return '⚠️'
-        if (category == 'CATEGORY_03') return '🔧'
-        if (category == 'CATEGORY_04') return '🚀'
+        if (category == 'theory' || category == 'CATEGORY_01') return '📖'
+        if (category == 'safety' || category == 'CATEGORY_02') return '⚠️'
+        if (category == 'practice' || category == 'CATEGORY_03') return '🔧'
+        if (category == 'advanced' || category == 'CATEGORY_04') return '🚀'
+        if (category == 'structure') return '🏗️'
+        if (category == 'hydraulic') return '⚙️'
+        if (category == 'driving') return '🚜'
+        if (category == 'maintenance') return '🔨'
+        if (category == 'cargo') return '📦'
+        if (category == 'troubleshooting') return '🔍'
         return '📚'
     }
 
@@ -102,7 +110,7 @@
         if (noMore.value && !reset) return
 
         loading.value = true
-        const category = categories[currentCategory.value].value
+        const category = categories.value[currentCategory.value].value
         try {
             const result = await getCourseListApi(page.value, pageSize, category)
             if (reset) {
@@ -140,7 +148,9 @@
         })
     }
 
-    onShow(() => {
+    onShow(async () => {
+        // 先加载分类，再加载课程
+        await loadCategories()
         if (courses.value.length == 0) {
             loadCourses(true)
         }

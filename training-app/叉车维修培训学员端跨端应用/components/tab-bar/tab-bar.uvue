@@ -46,14 +46,19 @@
 	const tabs : TabItem[] = [
 		{ key: 'dashboard', path: '/pages/dashboard/dashboard', icon: '🏠', text: '首页' },
 		{ key: 'courses', path: '/pages/courses/courses', icon: '📚', text: '课程' },
-		{ key: 'exam', path: '/pages/exam/exam', icon: '📝', text: '考试' },
-		{ key: 'forum', path: '/pages/forum/forum', icon: '💬', text: '论坛' },
+		{ key: 'ai', path: '', icon: '', text: 'AI学' },
+		{ key: 'forum', path: '/pages/forum/forum', icon: '💬', text: '交流' },
 		{ key: 'profile', path: '/pages/profile/profile', icon: '👤', text: '我的' },
 	]
 
 	function onTabClick(path : string, idx : number) : void {
 		// 点击当前已激活的 tab 时不重复跳转
 		if (activeIndex.value == idx) return
+		// 未开发页面提示
+		if (path.length == 0) {
+			uni.showToast({ title: '功能开发中，敬请期待', icon: 'none' })
+			return
+		}
 		// 使用 reLaunch 防止页面栈堆积，保持 Tab 切换的单一页面栈
 		uni.reLaunch({ url: path })
 	}
