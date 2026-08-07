@@ -133,7 +133,6 @@ type ValuationUser = HrwaiUser
 type Course struct {
 	CourseID    int    `gorm:"column:course_id;primaryKey" json:"course_id"`
 	Name        string `gorm:"column:name" json:"name"`
-	Category    string `gorm:"column:category" json:"category"`
 	Description string `gorm:"column:description" json:"description"`
 	CoverImage  string `gorm:"column:cover_image" json:"cover_image"`
 	Duration    int    `gorm:"column:duration;default:0" json:"duration"`

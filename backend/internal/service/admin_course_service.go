@@ -22,7 +22,7 @@ func NewAdminCourseService(db *gorm.DB, fileSvc *FileService) *AdminCourseServic
 }
 
 // GetCourses 管理端课程列表。
-func (s *AdminCourseService) GetCourses(page, pageSize int, keyword, category string, specialtyID, levelID *int) map[string]any {
+func (s *AdminCourseService) GetCourses(page, pageSize int, keyword string, specialtyID, levelID *int) map[string]any {
 	if page <= 0 {
 		page = 1
 	}
@@ -32,9 +32,6 @@ func (s *AdminCourseService) GetCourses(page, pageSize int, keyword, category st
 	q := s.db.Model(&model.Course{})
 	if keyword != "" {
 		q = q.Where("name LIKE ?", "%"+keyword+"%")
-	}
-	if category != "" {
-		q = q.Where("category = ?", category)
 	}
 	if specialtyID != nil {
 		q = q.Where("specialty_id = ?", *specialtyID)
@@ -49,9 +46,8 @@ func (s *AdminCourseService) GetCourses(page, pageSize int, keyword, category st
 	items := make([]map[string]any, 0, len(courses))
 	for i := range courses {
 		item := courseToDict(&courses[i])
-		var chapterCount int64
-		s.db.Model(&model.Chapter{}).Where("course_id = ?", courses[i].CourseID).Count(&chapterCount)
-		item["chapter_count"] = chapterCount
+		fillChapterCount(s.db, courses[i].CourseID, item)
+		fillPrereqIDs(s.db, courses[i].CourseID, item)
 		items = append(items, item)
 	}
 	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
@@ -81,15 +77,17 @@ func (s *AdminCourseService) GetCourseDetail(courseID int) (map[string]any, erro
 	return detail, nil
 }
 
-// CreateCourse 创建课程。
+// CreateCourse 创建课程。专业方向与课程等级必填（旧 category 已退役）。
 func (s *AdminCourseService) CreateCourse(data map[string]any) (map[string]any, error) {
 	name, _ := data["name"].(string)
-	category, _ := data["category"].(string)
 	if name == "" {
 		return nil, errors.New("课程名称不能为空")
 	}
-	if category == "" {
-		return nil, errors.New("课程分类不能为空")
+	if toInt(data["specialty_id"]) <= 0 {
+		return nil, errors.New("专业方向不能为空")
+	}
+	if toInt(data["level_id"]) <= 0 {
+		return nil, errors.New("课程等级不能为空")
 	}
 	description, _ := data["description"].(string)
 	coverImage, _ := data["cover_image"].(string)
@@ -100,7 +98,6 @@ func (s *AdminCourseService) CreateCourse(data map[string]any) (map[string]any, 
 	}
 	course := model.Course{
 		Name:        name,
-		Category:    category,
 		Description: description,
 		CoverImage:  coverImage,
 		Duration:    duration,
@@ -116,7 +113,10 @@ func (s *AdminCourseService) CreateCourse(data map[string]any) (map[string]any, 
 	if err := replaceCoursePrerequisites(s.db, course.CourseID, prerequisiteIDsFromData(data)); err != nil {
 		return nil, err
 	}
-	return courseToDict(&course), nil
+	result := courseToDict(&course)
+	fillChapterCount(s.db, course.CourseID, result)
+	fillPrereqIDs(s.db, course.CourseID, result)
+	return result, nil
 }
 
 // UpdateCourse 更新课程。
@@ -127,9 +127,6 @@ func (s *AdminCourseService) UpdateCourse(courseID int, data map[string]any) (ma
 	}
 	if v, ok := data["name"].(string); ok && v != "" {
 		course.Name = v
-	}
-	if v, ok := data["category"].(string); ok && v != "" {
-		course.Category = v
 	}
 	if v, ok := data["description"]; ok {
 		course.Description, _ = v.(string)
@@ -143,6 +140,13 @@ func (s *AdminCourseService) UpdateCourse(courseID int, data map[string]any) (ma
 	if v, ok := data["status"]; ok {
 		course.Status = int16(toIntDefault(v, int(course.Status)))
 	}
+	// 编辑时若携带方向/等级字段则不允许清空（应用层必填，DB 列保持可空以兼容存量）
+	if _, ok := data["specialty_id"]; ok && toInt(data["specialty_id"]) <= 0 {
+		return nil, errors.New("专业方向不能为空")
+	}
+	if _, ok := data["level_id"]; ok && toInt(data["level_id"]) <= 0 {
+		return nil, errors.New("课程等级不能为空")
+	}
 	if err := applyCourseTrainingFields(s.db, &course, data); err != nil {
 		return nil, err
 	}
@@ -154,7 +158,10 @@ func (s *AdminCourseService) UpdateCourse(courseID int, data map[string]any) (ma
 			return nil, err
 		}
 	}
-	return courseToDict(&course), nil
+	result := courseToDict(&course)
+	fillChapterCount(s.db, courseID, result)
+	fillPrereqIDs(s.db, courseID, result)
+	return result, nil
 }
 
 // DeleteCourse 删除课程。

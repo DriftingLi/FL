@@ -97,7 +97,6 @@ func (s *StudentService) queryProfile(studentID int) (map[string]any, error) {
 		courseProgressList = append(courseProgressList, map[string]any{
 			"course_id":      course.CourseID,
 			"course_name":    course.Name,
-			"category":       course.Category,
 			"progress":       r.MaxProgress,
 			"study_duration": r.TotalDuration,
 			"total_chapters": totalChapters,

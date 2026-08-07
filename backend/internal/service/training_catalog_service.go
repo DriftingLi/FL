@@ -531,6 +531,7 @@ func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool) m
 				cd := courseToDict(&rows[k].Course)
 				cd["chapter_count"] = rows[k].ChapterCount
 				if withChapters {
+					fillPrereqIDs(s.db, rows[k].CourseID, cd)
 					if chs, ok := chaptersByCourse[rows[k].CourseID]; ok {
 						cd["chapters"] = chs
 					} else {

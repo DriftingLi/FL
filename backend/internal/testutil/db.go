@@ -142,7 +142,6 @@ func SeedCourse(t *testing.T, db *gorm.DB, name string) *model.Course {
 	t.Helper()
 	c := &model.Course{
 		Name:      name,
-		Category:  "general",
 		Status:    1,
 		CreatedAt: Now(),
 	}

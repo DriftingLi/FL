@@ -297,12 +297,12 @@ func TestGetCatalogTree(t *testing.T) {
 		t.Fatalf("创建等级失败: %v", err)
 	}
 
-	c1 := model.Course{Name: "叉车基础", Category: "CATEGORY_01", Status: 1, TheoryHours: 20,
+	c1 := model.Course{Name: "叉车基础", Status: 1, TheoryHours: 20,
 		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&c1).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
-	c2 := model.Course{Name: "下架课程", Category: "CATEGORY_01", Status: 0,
+	c2 := model.Course{Name: "下架课程", Status: 0,
 		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
 	db.Create(&c2)
 	db.Model(&c2).Update("status", 0)
@@ -348,17 +348,17 @@ func TestGetAdminCatalogTree(t *testing.T) {
 		t.Fatalf("创建等级失败: %v", err)
 	}
 	// 2 门课程：sort_order 2 在前、1 在后，验证按 sort_order 排序；另 1 门下架课程
-	c1 := model.Course{Name: "晚建但排序靠前", Category: "CATEGORY_01", Status: 1, SortOrder: 1,
+	c1 := model.Course{Name: "晚建但排序靠前", Status: 1, SortOrder: 1,
 		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&c1).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
-	c2 := model.Course{Name: "早建但排序靠后", Category: "CATEGORY_01", Status: 1, SortOrder: 2,
+	c2 := model.Course{Name: "早建但排序靠后", Status: 1, SortOrder: 2,
 		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now().Add(-time.Hour)}
 	if err := db.Create(&c2).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
-	c3 := model.Course{Name: "下架课程", Category: "CATEGORY_01", Status: 0, SortOrder: 3,
+	c3 := model.Course{Name: "下架课程", Status: 0, SortOrder: 3,
 		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
 	db.Create(&c3)
 	db.Model(&c3).Update("status", 0)
@@ -433,10 +433,10 @@ func TestCourseSortOrder(t *testing.T) {
 	}
 
 	// 列表按 sort_order 升序（0 在 1 前，再按创建时间倒序）
-	c0 := model.Course{Name: "课程C", Category: "CATEGORY_01", Status: 1, SortOrder: 0,
+	c0 := model.Course{Name: "课程C", Status: 1, SortOrder: 0,
 		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
 	db.Create(&c0)
-	list := svc.GetCourses(1, 10, "", "", nil, nil)["courses"].([]map[string]any)
+	list := svc.GetCourses(1, 10, "", nil, nil)["courses"].([]map[string]any)
 	if len(list) != 2 {
 		t.Fatalf("应 2 门课程, got %d", len(list))
 	}
@@ -459,7 +459,7 @@ func TestAdminCourse_TrainingFields(t *testing.T) {
 	db.Create(&tpl)
 
 	// 前置课程
-	prereq := model.Course{Name: "前置课程", Category: "CATEGORY_01", Status: 1, CreatedAt: testutil.Now()}
+	prereq := model.Course{Name: "前置课程", Status: 1, CreatedAt: testutil.Now()}
 	db.Create(&prereq)
 
 	data := map[string]any{
@@ -511,18 +511,19 @@ func TestAdminCourse_TrainingFields(t *testing.T) {
 		t.Fatal("不存在的前置课程应报错")
 	}
 
-	// 更新：替换前置课程 + 清空等级
+	// 更新：等级不可清空（应用层必填，旧 category 退役后方向/等级为必备维度）
 	if _, err := svc.UpdateCourse(courseID, map[string]any{
 		"level_id": 0, "prerequisite_course_ids": []any{},
-	}); err != nil {
+	}); err == nil {
+		t.Fatal("清空课程等级应报错")
+	}
+	// 只替换前置课程（不含方向/等级字段）应成功，且前置课程被清空
+	if _, err := svc.UpdateCourse(courseID, map[string]any{"prerequisite_course_ids": []any{}}); err != nil {
 		t.Fatalf("更新失败: %v", err)
 	}
 	detail, _ = svc.GetCourseDetail(courseID)
 	if len(detail["prerequisites"].([]map[string]any)) != 0 {
 		t.Fatal("前置课程应被清空")
-	}
-	if _, ok := detail["level"]; ok {
-		t.Fatal("等级应被清空")
 	}
 
 	// 自己作为前置课程应报错
@@ -531,9 +532,9 @@ func TestAdminCourse_TrainingFields(t *testing.T) {
 	}
 
 	// 多级依赖成环应报错（C→B→A→C 与 A↔B 两课程环）
-	a := model.Course{Name: "课程A", Category: "CATEGORY_01", Status: 1, CreatedAt: testutil.Now()}
-	b := model.Course{Name: "课程B", Category: "CATEGORY_01", Status: 1, CreatedAt: testutil.Now()}
-	c := model.Course{Name: "课程C", Category: "CATEGORY_01", Status: 1, CreatedAt: testutil.Now()}
+	a := model.Course{Name: "课程A", Status: 1, CreatedAt: testutil.Now()}
+	b := model.Course{Name: "课程B", Status: 1, CreatedAt: testutil.Now()}
+	c := model.Course{Name: "课程C", Status: 1, CreatedAt: testutil.Now()}
 	db.Create(&a)
 	db.Create(&b)
 	db.Create(&c)
@@ -570,7 +571,7 @@ func TestCourseService_TrainingFields(t *testing.T) {
 	db.Create(&spec)
 	lv := model.CourseLevel{Code: "beginner", Name: "入门", Status: 1, CreatedAt: testutil.Now()}
 	db.Create(&lv)
-	course := model.Course{Name: "安全操作规范", Category: "CATEGORY_02", Status: 1,
+	course := model.Course{Name: "安全操作规范", Status: 1,
 		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID),
 		TheoryHours: 12, PracticeHours: 8, CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {
@@ -578,11 +579,11 @@ func TestCourseService_TrainingFields(t *testing.T) {
 	}
 
 	// 学员端列表按专业方向/等级过滤
-	list := svc.GetCourses(1, 10, "", ptrInt(spec.SpecialtyID), ptrInt(lv.LevelID))
+	list := svc.GetCourses(1, 10, ptrInt(spec.SpecialtyID), ptrInt(lv.LevelID))
 	if list["total"].(int64) != 1 {
 		t.Fatalf("过滤后应 1 条, got %v", list["total"])
 	}
-	empty := svc.GetCourses(1, 10, "", ptrInt(spec.SpecialtyID), ptrInt(9999))
+	empty := svc.GetCourses(1, 10, ptrInt(spec.SpecialtyID), ptrInt(9999))
 	if empty["total"].(int64) != 0 {
 		t.Fatal("不存在的等级应过滤为空")
 	}

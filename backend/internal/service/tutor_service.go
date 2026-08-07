@@ -40,9 +40,7 @@ func (s *TutorService) GetCourses(tutorID *int, page, pageSize int) map[string]a
 	items := make([]map[string]any, 0, len(courses))
 	for i := range courses {
 		item := courseToDict(&courses[i])
-		var chapterCount int64
-		s.db.Model(&model.Chapter{}).Where("course_id = ?", courses[i].CourseID).Count(&chapterCount)
-		item["chapter_count"] = chapterCount
+		fillChapterCount(s.db, courses[i].CourseID, item)
 		// 统计该课程的学习学员数（study_record 表中去重的 student_id 数量）
 		var studentCount int64
 		s.db.Table("study_record").
