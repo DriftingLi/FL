@@ -296,11 +296,11 @@ func (s *PracticeModeService) GetStats(studentID int) map[string]any {
 		_ = acc
 	}
 	return map[string]any{
-		"total":                 total,
-		"correct":               correct,
-		"wrong":                 wrong,
-		"accuracy":              accuracy,
-		"by_type":               byType,
+		"total":    total,
+		"correct":  correct,
+		"wrong":    wrong,
+		"accuracy": accuracy,
+		"by_type":  byType,
 	}
 }
 

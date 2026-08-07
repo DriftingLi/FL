@@ -47,18 +47,18 @@ func questionToDict(q *model.Question, includeAnswer bool) map[string]any {
 		_ = json.Unmarshal(q.Options, &options)
 	}
 	d := map[string]any{
-		"id":                 q.ID,
-		"type":               q.Type,
-		"content":            q.Content,
-		"options":            options,
-		"image_url":          q.ImageURL,
-		"status":             q.Status,
-		"reject_reason":      q.RejectReason,
-		"score":              q.Score,
-		"created_by":         q.CreatedBy,
-		"created_by_type":    q.CreatedByType,
-		"created_at":         formatISO(q.CreatedAt),
-		"updated_at":         formatISO(q.UpdatedAt),
+		"id":              q.ID,
+		"type":            q.Type,
+		"content":         q.Content,
+		"options":         options,
+		"image_url":       q.ImageURL,
+		"status":          q.Status,
+		"reject_reason":   q.RejectReason,
+		"score":           q.Score,
+		"created_by":      q.CreatedBy,
+		"created_by_type": q.CreatedByType,
+		"created_at":      formatISO(q.CreatedAt),
+		"updated_at":      formatISO(q.UpdatedAt),
 	}
 	if includeAnswer {
 		d["answer"] = q.Answer
@@ -305,20 +305,20 @@ func (s *QuestionBankService) CreateQuestion(data map[string]any, createdBy *int
 		}
 	}
 	q := model.Question{
-		Type:             qType,
-		Content:          content,
-		Options:          optionsBytes,
-		Answer:           answer,
-		Explanation:      getString(data, "explanation"),
-		ImageURL:         getString(data, "image_url"),
-		ReferenceAnswer:  getString(data, "reference_answer"),
-		ScoringCriteria:  getString(data, "scoring_criteria"),
-		Score:            toIntDefault(data["score"], 0),
-		Status:           status,
-		CreatedBy:        createdBy,
-		CreatedByType:    orDefault(createdByType, "tutor"),
-		CreatedAt:        beijingNow(),
-		UpdatedAt:        beijingNow(),
+		Type:            qType,
+		Content:         content,
+		Options:         optionsBytes,
+		Answer:          answer,
+		Explanation:     getString(data, "explanation"),
+		ImageURL:        getString(data, "image_url"),
+		ReferenceAnswer: getString(data, "reference_answer"),
+		ScoringCriteria: getString(data, "scoring_criteria"),
+		Score:           toIntDefault(data["score"], 0),
+		Status:          status,
+		CreatedBy:       createdBy,
+		CreatedByType:   orDefault(createdByType, "tutor"),
+		CreatedAt:       beijingNow(),
+		UpdatedAt:       beijingNow(),
 	}
 	if err := s.db.Create(&q).Error; err != nil {
 		return nil, err

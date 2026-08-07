@@ -142,15 +142,15 @@ func (s *WrongQuestionService) ExportWrongQuestions(studentID int) []map[string]
 			_ = jsonUnmarshal(question.Options, &options)
 		}
 		item := map[string]any{
-			"question_id":        question.ID,
-			"type":               question.Type,
-			"content":            question.Content,
-			"options":            options,
-			"correct_answer":     question.Answer,
-			"explanation":        question.Explanation,
-			"wrong_count":        wq.WrongCount,
-			"image_url":          question.ImageURL,
-			"last_wrong_at":      formatISO(wq.LastWrongAt),
+			"question_id":    question.ID,
+			"type":           question.Type,
+			"content":        question.Content,
+			"options":        options,
+			"correct_answer": question.Answer,
+			"explanation":    question.Explanation,
+			"wrong_count":    wq.WrongCount,
+			"image_url":      question.ImageURL,
+			"last_wrong_at":  formatISO(wq.LastWrongAt),
 		}
 		exportData = append(exportData, item)
 	}

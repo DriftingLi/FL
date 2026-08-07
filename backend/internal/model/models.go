@@ -289,22 +289,22 @@ func (AIGenerationLog) TableName() string { return "ai_generation_log" }
 // ===== 11. 题目 =====
 
 type Question struct {
-	ID               int       `gorm:"column:id;primaryKey" json:"id"`
-	Type             string    `gorm:"column:type" json:"type"`
-	Content          string    `gorm:"column:content" json:"content"`
-	Options          JSONB     `gorm:"column:options;type:jsonb" json:"options,omitempty"`
-	Answer           string    `gorm:"column:answer" json:"answer"`
-	Explanation      string    `gorm:"column:explanation" json:"explanation"`
-	ImageURL         string    `gorm:"column:image_url" json:"image_url"`
-	ReferenceAnswer  string    `gorm:"column:reference_answer" json:"reference_answer"`
-	ScoringCriteria  string    `gorm:"column:scoring_criteria" json:"scoring_criteria"`
-	Score            int       `gorm:"column:score;default:0" json:"score"`
-	Status           string    `gorm:"column:status;default:draft" json:"status"`
-	RejectReason     string    `gorm:"column:reject_reason" json:"reject_reason"`
-	CreatedBy        *int      `gorm:"column:created_by" json:"created_by,omitempty"`
-	CreatedByType    string    `gorm:"column:created_by_type;default:tutor" json:"created_by_type"`
-	CreatedAt        time.Time `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt        time.Time `gorm:"column:updated_at" json:"updated_at"`
+	ID              int       `gorm:"column:id;primaryKey" json:"id"`
+	Type            string    `gorm:"column:type" json:"type"`
+	Content         string    `gorm:"column:content" json:"content"`
+	Options         JSONB     `gorm:"column:options;type:jsonb" json:"options,omitempty"`
+	Answer          string    `gorm:"column:answer" json:"answer"`
+	Explanation     string    `gorm:"column:explanation" json:"explanation"`
+	ImageURL        string    `gorm:"column:image_url" json:"image_url"`
+	ReferenceAnswer string    `gorm:"column:reference_answer" json:"reference_answer"`
+	ScoringCriteria string    `gorm:"column:scoring_criteria" json:"scoring_criteria"`
+	Score           int       `gorm:"column:score;default:0" json:"score"`
+	Status          string    `gorm:"column:status;default:draft" json:"status"`
+	RejectReason    string    `gorm:"column:reject_reason" json:"reject_reason"`
+	CreatedBy       *int      `gorm:"column:created_by" json:"created_by,omitempty"`
+	CreatedByType   string    `gorm:"column:created_by_type;default:tutor" json:"created_by_type"`
+	CreatedAt       time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt       time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (Question) TableName() string { return "question" }

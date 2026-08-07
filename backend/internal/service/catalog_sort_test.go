@@ -207,7 +207,10 @@ func TestCatalogCodeRequired(t *testing.T) {
 		{"方向", func() error { _, err := svc.CreateSpecialty(map[string]any{"name": "X"}); return err }, "专业方向编码不能为空"},
 		{"等级", func() error { _, err := svc.CreateLevel(map[string]any{"name": "X"}); return err }, "课程等级编码不能为空"},
 		{"证书", func() error { _, err := svc.CreateCertificateTemplate(map[string]any{"name": "X"}); return err }, "证书模板编码不能为空"},
-		{"标签", func() error { _, err := svc.CreateQuestionTag(map[string]any{"name": "X", "category": "Y"}); return err }, "标签编码不能为空"},
+		{"标签", func() error {
+			_, err := svc.CreateQuestionTag(map[string]any{"name": "X", "category": "Y"})
+			return err
+		}, "标签编码不能为空"},
 	}
 	for _, c := range cases {
 		err := c.fn()

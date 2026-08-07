@@ -96,19 +96,18 @@ func (s *ExportService) ExamRecords() ([][]any, error) {
 // Questions 题库导出行。
 func (s *ExportService) Questions() ([][]any, error) {
 	var rows []struct {
-		ID                 int
-		Type               string
-		Content            string
-		Options            []byte
-		Answer             string
-		Explanation        string
-		Status             string
-		CreatedAt          time.Time
+		ID          int
+		Type        string
+		Content     string
+		Options     []byte
+		Answer      string
+		Explanation string
+		Status      string
+		CreatedAt   time.Time
 	}
 	err := s.db.Table("question AS q").
 		Select("q.id, q.type, q.content, q.options, q.answer, q.explanation, " +
 			"q.status, q.created_at").
-
 		Order("q.id ASC").
 		Scan(&rows).Error
 	if err != nil {
