@@ -311,13 +311,6 @@ export type ForumTopicDetail = {
 
 // ===== 课程模块类型 =====
 
-/** 课程分类 */
-export type CourseCategory = {
-	id : number
-	name : string
-	value : string   // 分类标识，用于 API 查询参数
-}
-
 /** 课程列表项 */
 export type CourseItem = {
 	course_id : number
@@ -327,8 +320,29 @@ export type CourseItem = {
 	cover_url : string
 	duration : number
 	chapter_count : number
-	price : number
-	buyers : number
+	/** 专业方向 ID（0 表示未设置） */
+	specialty_id : number
+	/** 课程等级 ID（0 表示未设置） */
+	level_id : number
+}
+
+/** 专业方向（筛选项） */
+export type SpecialtyItem = {
+	specialty_id : number
+	name : string
+}
+
+/** 课程等级（筛选项） */
+export type LevelItem = {
+	level_id : number
+	name : string
+}
+
+/** 课程分类（兼容旧接口，value 为专业方向 ID 字符串） */
+export type CourseCategory = {
+	id : number
+	name : string
+	value : string
 }
 
 /** 课程列表响应 */
@@ -385,6 +399,10 @@ export type CourseDetail = {
 	duration : number
 	chapters : ChapterItem[]
 	progress_pct : number
+	/** 专业方向 ID（0 表示未设置） */
+	specialty_id : number
+	/** 课程等级 ID（0 表示未设置） */
+	level_id : number
 }
 
 // ===== 等级考试模块类型 =====

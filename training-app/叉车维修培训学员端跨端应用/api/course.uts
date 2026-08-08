@@ -1,6 +1,7 @@
 /**
  * 课程模块 API
- * - 课程列表（公开）
+ * - 课程列表（公开，支持按专业方向/课程等级过滤）
+ * - 专业方向 / 课程等级 筛选选项（公开）
  * - 课程详情（需要 Token）
  * - 章节幻灯片（公开）
  * - 更新学习进度（需要 Token）
@@ -12,7 +13,7 @@
  *   buildXxx 函数负责字段映射转换
  */
 import { get, post } from './request'
-import type { CourseListResult, CourseDetail, CourseItem, ChapterItem, ChapterDetail, ChapterFile, CourseCategory } from '../types/index'
+import type { CourseListResult, CourseDetail, CourseItem, ChapterItem, ChapterDetail, ChapterFile, SpecialtyItem, LevelItem, CourseCategory } from '../types/index'
 
 /** 安全转换为 number */
 function toNumber(v : any | null, defaultVal : number = 0) : number {
@@ -43,8 +44,8 @@ function buildCourseItem(obj : UTSJSONObject) : CourseItem {
 		cover_url: toStr(obj['cover_image']), // 后端 cover_image → 前端 cover_url
 		duration: toNumber(obj['duration']),
 		chapter_count: toNumber(obj['chapter_count']), // 后端不返回此字段，默认 0
-		price: toNumber(obj['price']),
-		buyers: toNumber(obj['buyers']),
+		specialty_id: toNumber(obj['specialty_id']),
+		level_id: toNumber(obj['level_id']),
 	} as CourseItem
 	return item
 }
@@ -117,6 +118,8 @@ function buildCourseDetail(obj : UTSJSONObject) : CourseDetail {
 	let courseCategory : string = ''
 	let courseCover : string = ''
 	let courseDuration : number = 0
+	let courseSpecialtyId : number = 0
+	let courseLevelId : number = 0
 	if (courseInfo != null) {
 		const infoObj = courseInfo as UTSJSONObject
 		courseId = toNumber(infoObj['course_id'])
@@ -125,6 +128,8 @@ function buildCourseDetail(obj : UTSJSONObject) : CourseDetail {
 		courseCategory = toStr(infoObj['category'])
 		courseCover = toStr(infoObj['cover_image'])     // 后端 cover_image → 前端 cover_url
 		courseDuration = toNumber(infoObj['duration'])
+		courseSpecialtyId = toNumber(infoObj['specialty_id'])
+		courseLevelId = toNumber(infoObj['level_id'])
 	} else {
 		// 兼容：某些接口可能直接返回顶层字段
 		courseId = toNumber(obj['course_id'])
@@ -133,6 +138,8 @@ function buildCourseDetail(obj : UTSJSONObject) : CourseDetail {
 		courseCategory = toStr(obj['category'])
 		courseCover = toStr(obj['cover_image'])
 		courseDuration = toNumber(obj['duration'])
+		courseSpecialtyId = toNumber(obj['specialty_id'])
+		courseLevelId = toNumber(obj['level_id'])
 	}
 
 	// 后端 progress → 前端 progress_pct
@@ -147,6 +154,8 @@ function buildCourseDetail(obj : UTSJSONObject) : CourseDetail {
 		duration: courseDuration,
 		chapters: chapters,
 		progress_pct: progressPct,
+		specialty_id: courseSpecialtyId,
+		level_id: courseLevelId,
 	} as CourseDetail
 	return detail
 }
@@ -180,75 +189,33 @@ function buildCourseListResult(obj : UTSJSONObject) : CourseListResult {
 	return result
 }
 
-/** mock 课程分类（网络不可用时回退） */
-function getMockCourseCategories() : CourseCategory[] {
-	return [
-		{ id: 0, name: '全部', value: '' } as CourseCategory,
-		{ id: 1, name: '基础理论', value: 'theory' } as CourseCategory,
-		{ id: 2, name: '安全规范', value: 'safety' } as CourseCategory,
-		{ id: 3, name: '实操技能', value: 'practice' } as CourseCategory,
-		{ id: 4, name: '进阶提升', value: 'advanced' } as CourseCategory,
-	]
+/** 从 UTSJSONObject 构造 SpecialtyItem */
+function buildSpecialtyItem(obj : UTSJSONObject) : SpecialtyItem {
+	const item : SpecialtyItem = {
+		specialty_id: toNumber(obj['specialty_id']),
+		name: toStr(obj['name']),
+	} as SpecialtyItem
+	return item
 }
 
-/** 获取课程分类列表（动态，从后端获取） */
-export function getCourseCategoriesApi() : Promise<CourseCategory[]> {
-	return get('/course/categories').then((data : UTSJSONObject) : CourseCategory[] => {
-		const list : CourseCategory[] = []
-		// 后端可能返回数组或 { categories: [...] } 对象
-		let catsRaw = data['categories']
-		if (catsRaw == null) {
-			// 尝试直接将 data 作为数组处理
-			if (data != null) {
-				// 检查 data 是否为数组
-				const arr = data as Array<UTSJSONObject>
-				if (arr != null && arr.length > 0) {
-					for (let i = 0; i < arr.length; i++) {
-						const obj = arr[i]
-						list.push({
-							id: toNumber(obj['id'], i),
-							name: toStr(obj['name']),
-							value: toStr(obj['value'], toStr(obj['code'], toStr(obj['key']))),
-						} as CourseCategory)
-					}
-				}
-			}
-		} else {
-			const arr = catsRaw as Array<UTSJSONObject>
-			for (let i = 0; i < arr.length; i++) {
-				const obj = arr[i]
-				list.push({
-					id: toNumber(obj['id'], i),
-					name: toStr(obj['name']),
-					value: toStr(obj['value'], toStr(obj['code'], toStr(obj['key']))),
-				} as CourseCategory)
-			}
-		}
-		
-		// 确保"全部"分类始终在首位
-		const allCategory = { id: 0, name: '全部', value: '' } as CourseCategory
-		if (list.length == 0) {
-			list.push(allCategory)
-		} else if (list[0].value != '') {
-			list.splice(0, 0, allCategory)
-		}
-		
-		return list
-	}).catch((e) : CourseCategory[] => {
-		console.warn('[getCourseCategoriesApi] network failed, using mock data:', e)
-		return getMockCourseCategories()
-	})
+/** 从 UTSJSONObject 构造 LevelItem */
+function buildLevelItem(obj : UTSJSONObject) : LevelItem {
+	const item : LevelItem = {
+		level_id: toNumber(obj['level_id']),
+		name: toStr(obj['name']),
+	} as LevelItem
+	return item
 }
 
 /** mock 课程列表（网络不可用时回退） */
 function getMockCourseList() : CourseListResult {
 	const items : CourseItem[] = [
-		{ course_id: 1, title: '2026年叉车基础理论课程', category: 'theory', description: '叉车基础理论合集', cover_url: '', duration: 120, chapter_count: 3, price: 39, buyers: 999 } as CourseItem,
-		{ course_id: 2, title: '叉车安全操作规范', category: 'safety', description: '掌握安全操作流程', cover_url: '', duration: 90, chapter_count: 4, price: 29, buyers: 568 } as CourseItem,
-		{ course_id: 3, title: '叉车驾驶实操技能', category: 'practice', description: '叉车驾驶技能培训', cover_url: '', duration: 150, chapter_count: 5, price: 49, buyers: 1203 } as CourseItem,
-		{ course_id: 4, title: '进阶提升与故障诊断', category: 'advanced', description: '进阶知识与故障排查', cover_url: '', duration: 100, chapter_count: 4, price: 19, buyers: 432 } as CourseItem,
-		{ course_id: 5, title: '货物装卸作业规范', category: 'practice', description: '安全装卸作业规范', cover_url: '', duration: 80, chapter_count: 3, price: 0, buyers: 276 } as CourseItem,
-		{ course_id: 6, title: '日常维护保养', category: 'theory', description: '叉车日常保养知识', cover_url: '', duration: 110, chapter_count: 4, price: 35, buyers: 815 } as CourseItem,
+		{ course_id: 1, title: '叉车基本构造', category: 'structure', description: '学习叉车基本构造知识', cover_url: '', duration: 120, chapter_count: 3, specialty_id: 1, level_id: 1 } as CourseItem,
+		{ course_id: 2, title: '液压传动系统', category: 'hydraulic', description: '掌握液压系统原理', cover_url: '', duration: 90, chapter_count: 4, specialty_id: 1, level_id: 2 } as CourseItem,
+		{ course_id: 3, title: '叉车驾驶操作', category: 'driving', description: '叉车驾驶技能培训', cover_url: '', duration: 150, chapter_count: 5, specialty_id: 1, level_id: 1 } as CourseItem,
+		{ course_id: 4, title: '日常维护保养', category: 'maintenance', description: '叉车日常保养知识', cover_url: '', duration: 100, chapter_count: 4, specialty_id: 2, level_id: 2 } as CourseItem,
+		{ course_id: 5, title: '货物装卸作业', category: 'cargo', description: '安全装卸作业规范', cover_url: '', duration: 80, chapter_count: 3, specialty_id: 2, level_id: 1 } as CourseItem,
+		{ course_id: 6, title: '故障排查与应急', category: 'troubleshooting', description: '故障诊断与处理', cover_url: '', duration: 110, chapter_count: 4, specialty_id: 2, level_id: 3 } as CourseItem,
 	]
 	return {
 		items: items,
@@ -274,22 +241,48 @@ function getMockCourseDetail(courseId : number) : CourseDetail {
 		duration: 120,
 		chapters: chapters,
 		progress_pct: 33,
+		specialty_id: 1,
+		level_id: 1,
 	} as CourseDetail
+}
+
+/** mock 专业方向 */
+function getMockSpecialties() : SpecialtyItem[] {
+	return [
+		{ specialty_id: 1, name: '操作' } as SpecialtyItem,
+		{ specialty_id: 2, name: '维修' } as SpecialtyItem,
+		{ specialty_id: 3, name: '安全' } as SpecialtyItem,
+		{ specialty_id: 4, name: '电池' } as SpecialtyItem,
+	]
+}
+
+/** mock 课程等级 */
+function getMockLevels() : LevelItem[] {
+	return [
+		{ level_id: 1, name: '入门' } as LevelItem,
+		{ level_id: 2, name: '进阶' } as LevelItem,
+		{ level_id: 3, name: '专项' } as LevelItem,
+		{ level_id: 4, name: '认证' } as LevelItem,
+	]
 }
 
 /**
  * 课程列表
  * @param page 页码，默认 1
  * @param pageSize 每页条数，默认 12
- * @param category 分类过滤（可选，如 'CATEGORY_01'）
+ * @param specialtyId 专业方向 ID 过滤（可选，0 表示全部）
+ * @param levelId 课程等级 ID 过滤（可选，0 表示全部）
  */
-export function getCourseListApi(page : number = 1, pageSize : number = 12, category : string = '') : Promise<CourseListResult> {
+export function getCourseListApi(page : number = 1, pageSize : number = 12, specialtyId : number = 0, levelId : number = 0) : Promise<CourseListResult> {
 	const params : UTSJSONObject = {
 		page: page.toString(),
 		page_size: pageSize.toString(),
 	}
-	if (category.length > 0) {
-		params['category'] = category
+	if (specialtyId > 0) {
+		params['specialty_id'] = specialtyId.toString()
+	}
+	if (levelId > 0) {
+		params['level_id'] = levelId.toString()
 	}
 	return get('/courses', params).then((data : UTSJSONObject) : CourseListResult => {
 		console.log('[getCourseListApi] raw data:', JSON.stringify(data))
@@ -297,6 +290,66 @@ export function getCourseListApi(page : number = 1, pageSize : number = 12, cate
 	}).catch((e) : CourseListResult => {
 		console.warn('[getCourseListApi] network failed, using mock data:', e)
 		return getMockCourseList()
+	})
+}
+
+/**
+ * 专业方向列表（公开，仅启用项）
+ */
+export function getSpecialtiesApi() : Promise<SpecialtyItem[]> {
+	return get('/specialties').then((data : UTSJSONObject) : SpecialtyItem[] => {
+		console.log('[getSpecialtiesApi] raw data:', JSON.stringify(data))
+		const items : SpecialtyItem[] = []
+		const raw = data['specialties']
+		if (raw != null) {
+			const arr = raw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				items.push(buildSpecialtyItem(arr[i]))
+			}
+		}
+		return items
+	}).catch((e) : SpecialtyItem[] => {
+		console.warn('[getSpecialtiesApi] network failed, using mock data:', e)
+		return getMockSpecialties()
+	})
+}
+
+/**
+ * 课程分类列表（兼容旧接口，内部复用专业方向）
+ * @deprecated 请使用 getSpecialtiesApi
+ */
+export function getCourseCategoriesApi() : Promise<CourseCategory[]> {
+	return getSpecialtiesApi().then((specs : SpecialtyItem[]) : CourseCategory[] => {
+		const items : CourseCategory[] = []
+		for (let i = 0; i < specs.length; i++) {
+			items.push({
+				id: specs[i].specialty_id,
+				name: specs[i].name,
+				value: specs[i].specialty_id.toString(),
+			} as CourseCategory)
+		}
+		return items
+	})
+}
+
+/**
+ * 课程等级列表（公开，仅启用项）
+ */
+export function getLevelsApi() : Promise<LevelItem[]> {
+	return get('/levels').then((data : UTSJSONObject) : LevelItem[] => {
+		console.log('[getLevelsApi] raw data:', JSON.stringify(data))
+		const items : LevelItem[] = []
+		const raw = data['levels']
+		if (raw != null) {
+			const arr = raw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				items.push(buildLevelItem(arr[i]))
+			}
+		}
+		return items
+	}).catch((e) : LevelItem[] => {
+		console.warn('[getLevelsApi] network failed, using mock data:', e)
+		return getMockLevels()
 	})
 }
 
