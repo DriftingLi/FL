@@ -123,8 +123,8 @@ async function submitRedo(item: WrongItem) {
     }
     redoingId.value = null
     await loadData()
-  } catch (e) {
-    ElMessage.error('提交失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -149,8 +149,8 @@ async function exportWrong() {
     link.click()
     link.remove()
     window.URL.revokeObjectURL(url)
-  } catch (e) {
-    ElMessage.error('导出失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 </script>

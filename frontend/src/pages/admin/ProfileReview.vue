@@ -152,7 +152,7 @@ async function loadList() {
     total.value = data?.total || 0
   } catch (e) {
     console.error('加载资料审核列表失败:', e)
-    ElMessage.error('加载失败')
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -183,7 +183,7 @@ async function approve(row: ProfileChangeRequest) {
     loadList()
   } catch (e) {
     console.error('审核失败:', e)
-    ElMessage.error('操作失败')
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -203,7 +203,7 @@ async function reject() {
     loadList()
   } catch (e) {
     console.error('驳回失败:', e)
-    ElMessage.error('操作失败')
+    /* 错误已由拦截器提示 */
   } finally {
     submitting.value = false
   }

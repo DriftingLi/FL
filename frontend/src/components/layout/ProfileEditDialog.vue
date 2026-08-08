@@ -100,7 +100,7 @@ async function handleAvatarUpload(options: any) {
     options.onSuccess?.(res)
   } catch (e) {
     console.error('头像上传失败:', e)
-    ElMessage.error('头像上传失败，请稍后重试')
+    /* 错误已由拦截器提示 */
     options.onError?.(e as Error)
   } finally {
     avatarUploading.value = false
@@ -120,7 +120,7 @@ async function saveNickname() {
     await refresh()
   } catch (e) {
     console.error('昵称提交失败:', e)
-    ElMessage.error('昵称提交失败，请稍后重试')
+    /* 错误已由拦截器提示 */
   } finally {
     savingNickname.value = false
   }

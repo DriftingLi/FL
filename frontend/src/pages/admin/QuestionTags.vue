@@ -202,7 +202,7 @@ async function loadTags() {
     tags.value = data.tags || []
   } catch (error) {
     console.error('加载标签失败:', error)
-    ElMessage.error('加载标签失败')
+    /* 错误已由拦截器提示 */
   } finally {
     tagsLoading.value = false
   }
@@ -224,7 +224,7 @@ async function loadQuestions() {
     total.value = res.total || 0
   } catch (error) {
     console.error('加载题目失败:', error)
-    ElMessage.error('加载题目失败')
+    /* 错误已由拦截器提示 */
   } finally {
     questionsLoading.value = false
   }
@@ -267,7 +267,7 @@ async function submitTag() {
     await loadTags()
   } catch (error) {
     console.error('保存标签失败:', error)
-    ElMessage.error('保存失败')
+    /* 错误已由拦截器提示 */
   } finally {
     tagSubmitting.value = false
   }
@@ -282,7 +282,7 @@ async function handleDeleteTag(tag: QuestionTag) {
     loadQuestions()
   } catch (error) {
     console.error('删除标签失败:', error)
-    ElMessage.error('删除失败')
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -303,7 +303,7 @@ async function submitTagAssign() {
     loadQuestions()
   } catch (error) {
     console.error('打标失败:', error)
-    ElMessage.error('打标失败')
+    /* 错误已由拦截器提示 */
   } finally {
     tagSubmitting.value = false
   }

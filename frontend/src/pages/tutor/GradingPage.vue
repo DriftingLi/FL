@@ -200,8 +200,8 @@ async function openDetail(row: { id: number; [key: string]: unknown }) {
     }
     detail.value = data
     selectedParticipant.value = row.id
-  } catch (e) {
-    ElMessage.error('加载详情失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -225,8 +225,8 @@ async function confirmAllObjective() {
     if (selectedParticipant.value != null) {
       await openDetail({ id: selectedParticipant.value })
     }
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e instanceof Error ? e.message : '确认失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally { confirmingObj.value = false }
 }
 
@@ -243,8 +243,8 @@ async function confirmAi(ans: { id: number; ai_score?: number | null; _confirmin
     if (selectedParticipant.value != null) {
       await openDetail({ id: selectedParticipant.value })
     }
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e instanceof Error ? e.message : '确认失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally { ans._confirming = false }
 }
 
@@ -258,8 +258,8 @@ async function triggerAi(ans: { id: number; ai_score?: number | null; ai_comment
       ans._score = res.ai_score || 0
       ElMessage.success('AI评分完成')
     }
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : 'AI评分失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally { ans._aiLoading = false }
 }
 
@@ -270,8 +270,8 @@ async function gradeAnswer(ans: { id: number; _score: number; _comment?: string;
     if (selectedParticipant.value != null) {
       await openDetail({ id: selectedParticipant.value })
     }
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '评分失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -288,8 +288,8 @@ async function doRegrade(ans: { id: number; _regradeScore: number; _regradeComme
     if (selectedParticipant.value != null) {
       await openDetail({ id: selectedParticipant.value })
     }
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '复核失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 </script>

@@ -182,7 +182,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRight } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
 import { courseApi, type CourseDetail, type CourseSummary } from '@/api/course'
 import { trainingApi, type CatalogDirectionNode, type CatalogLevel } from '@/api/training'
 import { vLazy } from '@/composables/useLazyLoad'
@@ -251,7 +250,7 @@ async function loadCourses() {
     total.value = data.total
   } catch (error) {
     console.error('加载课程失败:', error)
-    ElMessage.error('加载课程失败，请稍后重试')
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -308,7 +307,7 @@ async function openDetail(course: CourseSummary) {
     detailChapters.value = data.chapters || []
   } catch (error) {
     console.error('加载课程详情失败:', error)
-    ElMessage.error('加载课程详情失败，请稍后重试')
+    /* 错误已由拦截器提示 */
   } finally {
     detailLoading.value = false
   }

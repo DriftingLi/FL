@@ -104,8 +104,8 @@ async function uploadFiles(files: File[]) {
         } else {
           ElMessage.error(`"${file.name}" 上传失败`)
         }
-      } catch (e: any) {
-        ElMessage.error(e.message || `"${file.name}" 上传失败`)
+      } catch {
+        /* 错误已由拦截器提示 */
       }
     }
   } finally {

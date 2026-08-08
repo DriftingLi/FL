@@ -135,20 +135,6 @@ func RegisterRoutes(
 	admin.Use(middleware.JWTAuth(cfg))
 	admin.Use(middleware.RoleRequired("admin"))
 	{
-		configHandler.registerDictCRUDRoutes(admin, dictcrud.NewRegistry(
-			dictcrud.BrandDescriptor,
-			dictcrud.VehicleTypeDescriptor,
-			dictcrud.SeriesDescriptor,
-			dictcrud.TonnageDescriptor,
-			dictcrud.MastTypeDescriptor,
-			dictcrud.MastHeightDescriptor,
-			dictcrud.BatteryTypeDescriptor,
-			dictcrud.TransmissionTypeDescriptor,
-			dictcrud.EngineTypeDescriptor,
-			dictcrud.ConditionRatingDescriptor,
-			dictcrud.RegionCoefficientDescriptor,
-			dictcrud.CoefficientConfigDescriptor,
-			dictcrud.OriginalPriceDescriptor,
-		))
+		configHandler.registerDictCRUDRoutes(admin, dictcrud.NewRegistry(dictcrud.AllDescriptors()...))
 	}
 }

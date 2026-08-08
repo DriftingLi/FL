@@ -142,7 +142,7 @@ async function loadTopics() {
     total.value = res.total || 0
   } catch (e) {
     console.error('加载论坛列表失败:', e)
-    ElMessage.error('加载论坛列表失败')
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -169,7 +169,7 @@ async function submitTopic() {
     loadTopics()
   } catch (e) {
     console.error('发布失败:', e)
-    ElMessage.error('发布失败，请稍后重试')
+    /* 错误已由拦截器提示 */
   } finally {
     submitting.value = false
   }

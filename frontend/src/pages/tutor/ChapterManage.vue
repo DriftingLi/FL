@@ -49,7 +49,6 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, ArrowRight, Timer, Document, EditPen } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
 import { tutorApi } from '@/api/tutor'
 
 const route = useRoute()
@@ -94,7 +93,7 @@ async function loadChapters() {
     chapters.value = res.chapters || []
   } catch (e) {
     console.error('Failed to load chapters:', e)
-    ElMessage.error('加载章节失败')
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }

@@ -189,8 +189,8 @@ async function loadData() {
     total.value = res?.total || 0
     // 加载待审核总数（仅当不是 pending 筛选时单独查询）
     await loadPendingCount()
-  } catch (e) {
-    ElMessage.error('加载题目失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -219,8 +219,8 @@ async function publishSingle(row: { id: number }) {
     await questionBankApi.publishQuestion(row.id)
     ElMessage.success('发布成功')
     await loadData()
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error('发布失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -239,8 +239,8 @@ async function batchPublish() {
     await questionBankApi.batchPublish(selectedIds.value)
     ElMessage.success('批量发布成功')
     await loadData()
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error('批量发布失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -286,8 +286,8 @@ async function confirmReject() {
     }
     rejectDialogVisible.value = false
     await loadData()
-  } catch (e) {
-    ElMessage.error('驳回失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     rejecting.value = false
   }

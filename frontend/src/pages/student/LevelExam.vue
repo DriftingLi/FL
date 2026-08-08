@@ -175,8 +175,8 @@ async function enterExam(sessionId: number) {
     inExam.value = true
     qIdx.value = findResumeIndex(res.questions, res.answers || {})
     startTimer()
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '进入考试失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -246,8 +246,8 @@ async function doSubmit() {
     }
     resetExamState()
     await loadExams()
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '交卷失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -277,8 +277,8 @@ async function viewResult(row: { id: number; status?: string; name?: string; par
           { confirmButtonText: '确定' }
         )
       }
-    } catch (e) {
-      ElMessage.error('获取结果失败')
+    } catch {
+      /* 错误已由拦截器提示 */
     }
   }
 }

@@ -191,7 +191,7 @@ async function loadTutors() {
     }
   } catch (error) {
     console.error('加载导师列表失败:', error)
-    ElMessage.error('加载导师列表失败')
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -270,7 +270,7 @@ async function handleDelete(tutorId: number) {
     loadTutors()
   } catch (error) {
     console.error('删除导师失败:', error)
-    ElMessage.error('删除导师失败')
+    /* 错误已由拦截器提示 */
   }
 }
 

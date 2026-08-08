@@ -174,8 +174,8 @@ async function startExam() {
     remainingTime.value = res.remaining_time
     examStarted.value = true
     startTimer()
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '开始考试失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -263,8 +263,8 @@ async function doSubmit() {
     const res = await mockExamApi.submitMockExam(mockExamId.value)
     examResult.value = res || {}
     examFinished.value = true
-  } catch (e) {
-    ElMessage.error('交卷失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 

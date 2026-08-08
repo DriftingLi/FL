@@ -115,7 +115,6 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, ArrowRight, VideoCamera, Document, Picture } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
 import { marked } from 'marked'
 import { markedHighlight } from 'marked-highlight'
 import hljs from 'highlight.js'
@@ -288,7 +287,7 @@ async function loadChapterDetail() {
       chapterNotFound.value = true
     } else {
       console.error('加载章节详情失败:', error)
-      ElMessage.error('加载章节详情失败')
+      /* 错误已由拦截器提示 */
     }
   } finally {
     loading.value = false

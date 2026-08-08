@@ -471,7 +471,7 @@ async function moveDirection(d: CatalogDirectionNode, delta: -1 | 1) {
     await loadCatalog()
   } catch (error) {
     console.error('排序失败:', error)
-    ElMessage.error('排序更新失败')
+    /* 错误已由拦截器提示 */
   } finally {
     submitting.value = false
   }
@@ -490,7 +490,7 @@ async function moveLevel(l: CatalogLevel, delta: -1 | 1) {
     await loadCatalog()
   } catch (error) {
     console.error('排序失败:', error)
-    ElMessage.error('排序更新失败')
+    /* 错误已由拦截器提示 */
   } finally {
     submitting.value = false
   }
@@ -511,7 +511,7 @@ async function moveCourse(row: AdminCourseItem, delta: -1 | 1) {
     await loadCourses()
   } catch (error) {
     console.error('排序失败:', error)
-    ElMessage.error('排序更新失败')
+    /* 错误已由拦截器提示 */
   } finally {
     submitting.value = false
   }
@@ -529,7 +529,7 @@ async function moveChapter(ch: { chapter_id: number; order_num?: number }, delta
     await loadDrawerDetail()
   } catch (error) {
     console.error('排序失败:', error)
-    ElMessage.error('排序更新失败')
+    /* 错误已由拦截器提示 */
   } finally {
     submitting.value = false
   }
@@ -545,7 +545,7 @@ async function loadCourses() {
     }
   } catch (error) {
     console.error('加载课程失败:', error)
-    ElMessage.error('加载课程失败')
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -623,7 +623,7 @@ async function submitDirection() {
     await loadCatalog()
   } catch (error) {
     console.error('保存方向失败:', error)
-    ElMessage.error('保存失败')
+    /* 错误已由拦截器提示 */
   } finally {
     submitting.value = false
   }
@@ -662,7 +662,7 @@ async function submitLevel() {
     await loadCatalog()
   } catch (error) {
     console.error('保存等级失败:', error)
-    ElMessage.error('保存失败')
+    /* 错误已由拦截器提示 */
   } finally {
     submitting.value = false
   }
@@ -778,7 +778,7 @@ async function submitCourse() {
     await loadCourses()
   } catch (error) {
     console.error('保存课程失败:', error)
-    ElMessage.error('保存失败')
+    /* 错误已由拦截器提示 */
   } finally {
     submitting.value = false
   }
@@ -796,7 +796,7 @@ async function toggleStatus(row: AdminCourseItem) {
     await loadCourses()
   } catch (error) {
     console.error('切换状态失败:', error)
-    ElMessage.error('操作失败')
+    /* 错误已由拦截器提示 */
   } finally {
     submitting.value = false
   }
@@ -833,7 +833,7 @@ async function handleDeleteCourse(row: AdminCourseItem) {
     await loadCourses()
   } catch (error) {
     console.error('删除失败:', error)
-    ElMessage.error('删除失败')
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -880,7 +880,7 @@ async function submitChapter() {
     await loadDrawerDetail()
   } catch (error) {
     console.error('保存章节失败:', error)
-    ElMessage.error('保存失败')
+    /* 错误已由拦截器提示 */
   } finally {
     submitting.value = false
   }
@@ -893,7 +893,7 @@ async function handleDeleteChapter(ch: { chapter_id: number }) {
     await loadDrawerDetail()
   } catch (error) {
     console.error('删除章节失败:', error)
-    ElMessage.error('删除失败')
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -948,7 +948,7 @@ async function submitCertificate() {
     await loadCertificateTemplates()
   } catch (error) {
     console.error('保存模板失败:', error)
-    ElMessage.error('保存失败')
+    /* 错误已由拦截器提示 */
   } finally {
     submitting.value = false
   }
@@ -962,7 +962,7 @@ async function handleDeleteCertificate(tpl: CertificateTemplate) {
     await loadCertificateTemplates()
   } catch (error) {
     console.error('删除模板失败:', error)
-    ElMessage.error('删除失败')
+    /* 错误已由拦截器提示 */
   }
 }
 

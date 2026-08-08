@@ -332,9 +332,6 @@ async function handleLogin() {
       console.error('Response data:', err.response.data)
       console.error('Status:', err.response.status)
     }
-    if (err.message && !err.message.includes('Network')) {
-      ElMessage.error(err.message || '登录失败，请检查用户名和密码')
-    }
   } finally {
     loading.value = false
   }

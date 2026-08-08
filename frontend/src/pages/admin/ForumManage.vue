@@ -166,7 +166,7 @@ async function loadList() {
     total.value = res.total || 0
   } catch (e) {
     console.error('加载论坛列表失败:', e)
-    ElMessage.error('加载失败')
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -197,7 +197,7 @@ async function loadReplies(topicId: number) {
     replyMap.value = { ...replyMap.value, [topicId]: res.replies || [] }
   } catch (e) {
     console.error('加载回复失败:', e)
-    ElMessage.error('加载回复失败')
+    /* 错误已由拦截器提示 */
   } finally {
     detailLoadingId.value = null
   }
@@ -216,7 +216,7 @@ async function deleteTopic(row: AdminForumTopic) {
     loadList()
   } catch (e) {
     console.error('删除失败:', e)
-    ElMessage.error('删除失败')
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -238,7 +238,7 @@ async function deleteReply(reply: AdminForumReply) {
     loadList()
   } catch (e) {
     console.error('删除失败:', e)
-    ElMessage.error('删除失败')
+    /* 错误已由拦截器提示 */
   }
 }
 

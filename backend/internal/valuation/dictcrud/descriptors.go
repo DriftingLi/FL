@@ -364,3 +364,22 @@ var OriginalPriceDescriptor = Descriptor{
 	InvalidateResult: true,
 	RequiredMessage:  "brand/vehicle_type/series 必填",
 }
+
+// AllDescriptors 返回全部字典写面描述符（路由注册与缓存契约交叉校验共用同一列表）。
+func AllDescriptors() []Descriptor {
+	return []Descriptor{
+		BrandDescriptor,
+		VehicleTypeDescriptor,
+		SeriesDescriptor,
+		TonnageDescriptor,
+		MastTypeDescriptor,
+		MastHeightDescriptor,
+		BatteryTypeDescriptor,
+		TransmissionTypeDescriptor,
+		EngineTypeDescriptor,
+		ConditionRatingDescriptor,
+		RegionCoefficientDescriptor,
+		CoefficientConfigDescriptor,
+		OriginalPriceDescriptor,
+	}
+}

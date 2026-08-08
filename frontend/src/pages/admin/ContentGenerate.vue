@@ -254,7 +254,7 @@ async function handleGenerate() {
     }
   } catch (error) {
     console.error('内容生成失败:', error)
-    ElMessage.error('内容生成失败，请检查AI服务配置')
+    /* 错误已由拦截器提示 */
   } finally {
     generating.value = false
   }

@@ -188,7 +188,7 @@ async function regenerateSlides() {
     await loadSlides()
   } catch (e) {
     console.error('Failed to regenerate slides:', e)
-    ElMessage.error('重新生成幻灯片失败')
+    /* 错误已由拦截器提示 */
   } finally {
     regenerating.value = false
   }

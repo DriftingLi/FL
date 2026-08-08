@@ -137,8 +137,8 @@ async function handleExport(kind: ExportKind) {
   try {
     await downloadExport(kind)
     ElMessage.success('导出成功')
-  } catch (e) {
-    ElMessage.error('导出失败，请稍后重试')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     exporting.value = ''
   }

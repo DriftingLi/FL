@@ -71,7 +71,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { ArrowRight } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import QuickCard from '@/components/dashboard/QuickCard.vue'
 import type { QuickCardItem } from '@/components/dashboard/QuickCard.vue'
@@ -134,8 +133,7 @@ async function loadCourses() {
     }
   } catch (error: any) {
     console.error('加载课程失败:', error)
-    const isTimeout = error?.code === 'ECONNABORTED' || /timeout/i.test(error?.message || '')
-    ElMessage.warning(isTimeout ? '课程信息加载超时，可稍后刷新重试' : '课程信息加载失败，请稍后重试')
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -163,8 +161,7 @@ async function loadRecentLearning() {
     }
   } catch (error: any) {
     console.error('加载最近学习失败:', error)
-    const isTimeout = error?.code === 'ECONNABORTED' || /timeout/i.test(error?.message || '')
-    ElMessage.warning(isTimeout ? '最近学习记录加载超时，可稍后刷新重试' : '最近学习记录加载失败，请稍后重试')
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -179,8 +176,7 @@ async function loadStudyStats() {
   } catch (error: any) {
     console.error('加载学习统计失败:', error)
     studyStats.value = null
-    const isTimeout = error?.code === 'ECONNABORTED' || /timeout/i.test(error?.message || '')
-    ElMessage.warning(isTimeout ? '学习统计加载超时，可点击切换时间范围重试' : '学习统计加载失败，请稍后重试')
+    /* 错误已由拦截器提示 */
   } finally {
     statsLoading.value = false
   }

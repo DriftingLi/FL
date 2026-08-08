@@ -202,7 +202,7 @@ async function loadDetail(topicId: number) {
     replies.value = res.replies || []
   } catch (e) {
     console.error('加载帖子详情失败:', e)
-    ElMessage.error('加载帖子详情失败')
+    /* 错误已由拦截器提示 */
   } finally {
     detailLoading.value = false
   }
@@ -228,7 +228,7 @@ async function submitCreate() {
     await loadTopics()
   } catch (e) {
     console.error('发布失败:', e)
-    ElMessage.error('发布失败，请稍后重试')
+    /* 错误已由拦截器提示 */
   } finally {
     creating.value = false
   }
@@ -254,7 +254,7 @@ async function submitReply(topicId: number) {
     await Promise.all([loadDetail(topicId), loadTopics()])
   } catch (e) {
     console.error('回复失败:', e)
-    ElMessage.error('回复失败，请稍后重试')
+    /* 错误已由拦截器提示 */
   } finally {
     replying.value = false
   }
@@ -277,7 +277,7 @@ async function removeTopic(topicId: number) {
     await loadTopics()
   } catch (e) {
     console.error('删除失败:', e)
-    ElMessage.error('删除失败')
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -295,7 +295,7 @@ async function removeReply(replyId: number) {
     }
   } catch (e) {
     console.error('删除失败:', e)
-    ElMessage.error('删除失败')
+    /* 错误已由拦截器提示 */
   }
 }
 

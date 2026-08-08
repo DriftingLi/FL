@@ -316,8 +316,8 @@ async function saveMeta() {
     chapterDetail.value.duration = metaForm.value.duration
     ElMessage.success('章节信息更新成功')
     metaDialogVisible.value = false
-  } catch (e: any) {
-    ElMessage.error(e.message || '更新失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     savingMeta.value = false
   }
@@ -334,8 +334,8 @@ async function saveContent() {
     chapterDetail.value.content = editContent.value
     originalContent.value = editContent.value
     ElMessage.success('正文保存成功')
-  } catch (e: any) {
-    ElMessage.error(e.message || '保存失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     savingContent.value = false
   }
@@ -387,10 +387,8 @@ async function handleDeleteFile(file: any) {
       selectedFileId.value = null
     }
     await loadChapterDetail()
-  } catch (e: any) {
-    if (e !== 'cancel') {
-      ElMessage.error(e.message || '删除失败')
-    }
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -412,8 +410,6 @@ async function loadChapterDetail() {
   } catch (e: any) {
     if (e?.response?.status === 404) {
       chapterNotFound.value = true
-    } else {
-      ElMessage.error('加载章节详情失败')
     }
   } finally {
     loading.value = false

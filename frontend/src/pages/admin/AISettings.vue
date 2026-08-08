@@ -340,7 +340,7 @@ async function handleSave() {
       }
     } catch (e) {
       console.error('保存配置失败:', e)
-      ElMessage.error('保存失败')
+      /* 错误已由拦截器提示 */
     } finally {
       saving.value = false
     }
@@ -354,7 +354,7 @@ async function handleDelete(row: AIConfig) {
     await Promise.all([loadConfigs(), loadBindings()])
   } catch (e) {
     console.error('删除配置失败:', e)
-    ElMessage.error('删除失败')
+    /* 错误已由拦截器提示 */
   }
 }
 

@@ -157,7 +157,7 @@ async function loadDetail() {
     replies.value = res.replies || []
   } catch (e) {
     console.error('加载帖子详情失败:', e)
-    ElMessage.error('加载帖子详情失败')
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -180,7 +180,7 @@ async function submitReply() {
     loadDetail()
   } catch (e) {
     console.error('回复失败:', e)
-    ElMessage.error('回复失败，请稍后重试')
+    /* 错误已由拦截器提示 */
   } finally {
     submitting.value = false
   }
@@ -202,7 +202,7 @@ async function removeTopic() {
     goBack()
   } catch (e) {
     console.error('删除失败:', e)
-    ElMessage.error('删除失败')
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -218,7 +218,7 @@ async function removeReply(replyId: number) {
     loadDetail()
   } catch (e) {
     console.error('删除失败:', e)
-    ElMessage.error('删除失败')
+    /* 错误已由拦截器提示 */
   }
 }
 

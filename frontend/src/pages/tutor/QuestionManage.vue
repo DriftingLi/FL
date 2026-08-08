@@ -140,8 +140,8 @@ async function submitForReview(row: Question) {
     await questionBankApi.updateQuestion(row.id, { status: 'pending' })
     ElMessage.success('已提交审核')
     await loadData()
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error('提交失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 

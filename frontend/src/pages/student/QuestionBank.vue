@@ -296,8 +296,8 @@ async function startSequential() {
     const prog = await resolveProgress('sequential', questions.value.length)
     resetSession(prog.startIndex)
     restoreState(prog.answersState)
-  } catch (e: any) {
-    ElMessage.error(e.message || '加载题目失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -403,8 +403,8 @@ async function startFree(type?: string) {
     const prog = await resolveProgress(modeKey, questions.value.length)
     resetSession(prog.startIndex)
     restoreState(prog.answersState)
-  } catch (e: any) {
-    ElMessage.error(e.message || '加载题目失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -422,8 +422,8 @@ async function startTagPractice() {
     }
     mode.value = 'tag'
     resetSession(0)
-  } catch (e: any) {
-    ElMessage.error(e.message || '加载题目失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -499,8 +499,8 @@ async function submitAnswer() {
     }
     // 提交后持久化答题状态（游标不变，仅更新 answers_state）
     await saveCurrentProgress(currentIdx.value)
-  } catch (e: any) {
-    ElMessage.error(e.message || '提交答案失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 
