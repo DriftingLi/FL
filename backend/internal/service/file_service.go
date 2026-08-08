@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -111,6 +112,7 @@ func (s *FileService) ValidateImageFile(filename string, size int64) (bool, stri
 
 // SaveFile 保存文件到存储后端，返回可访问 URL。
 // key 设计为 <subfolder>/<name>_<毫秒时间戳>.<ext>，保证唯一性。
+// 时间戳命名契约为本文件单一事实源：SaveFile 写入，ExtractTimestamp 提取。
 // 可压缩图片（jpg/png/bmp 等，不含 svg/gif）会自动转 WebP 后再上传：
 //   - sidecar 已配置：调用 /convert-image 转换
 //   - sidecar 未配置或转换失败：保留原格式上传
@@ -136,6 +138,28 @@ func (s *FileService) SaveFile(content []byte, filename, subfolder string) (stri
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	return s.storage.Save(ctx, key, content, contentType)
+}
+
+// fileTimestampRe 匹配 SaveFile 内嵌的毫秒时间戳（<name>_<ms>.<ext>）。
+var fileTimestampRe = regexp.MustCompile(`_(\d{10,})\.`)
+
+// ExtractTimestamp 从文件名/URL 提取 SaveFile 保存时内嵌的毫秒时间戳（<name>_<ms>.<ext>），
+// 供孤儿文件清理等场景按上传时间判断时效；解析失败或时间戳非正数时返回 ok=false。
+func (s *FileService) ExtractTimestamp(filename string) (int64, bool) {
+	idx := strings.LastIndex(filename, "/")
+	name := filename
+	if idx >= 0 {
+		name = filename[idx+1:]
+	}
+	m := fileTimestampRe.FindStringSubmatch(name)
+	if len(m) < 2 {
+		return 0, false
+	}
+	ms, err := strconv.ParseInt(m[1], 10, 64)
+	if err != nil || ms <= 0 {
+		return 0, false
+	}
+	return ms, true
 }
 
 // DeleteFile 删除文件。URL 为空时直接返回。

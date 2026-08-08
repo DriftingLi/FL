@@ -50,7 +50,7 @@ func getCached[T any](r *DictionaryRepository, ctx context.Context, cacheKey, wh
 	return result, err
 }
 
-// queryOne 无缓存单行查询（写操作 RETURNING 等）；未命中返回 pgx.ErrNoRows。
+// queryOne 无缓存单行查询（读操作）；未命中返回 pgx.ErrNoRows。
 func queryOne[T any](r *DictionaryRepository, ctx context.Context, what, query string,
 	scan func(pgx.Row) (T, error), args ...any) (T, error) {
 	row := r.pool.QueryRow(ctx, query, args...)
@@ -59,25 +59,4 @@ func queryOne[T any](r *DictionaryRepository, ctx context.Context, what, query s
 		return v, fmt.Errorf("%s失败: %w", what, err)
 	}
 	return v, nil
-}
-
-// insertReturningID 插入并返回自增 ID 的通用骨架。
-func insertReturningID(r *DictionaryRepository, ctx context.Context, what, query string, args ...any) (int64, error) {
-	var id int64
-	if err := r.pool.QueryRow(ctx, query, args...).Scan(&id); err != nil {
-		return 0, fmt.Errorf("%s失败: %w", what, err)
-	}
-	return id, nil
-}
-
-// execWrite 更新/删除通用骨架：RowsAffected==0 时返回 pgx.ErrNoRows（实体不存在）。
-func execWrite(r *DictionaryRepository, ctx context.Context, what, query string, args ...any) error {
-	ct, err := r.pool.Exec(ctx, query, args...)
-	if err != nil {
-		return fmt.Errorf("%s失败: %w", what, err)
-	}
-	if ct.RowsAffected() == 0 {
-		return pgx.ErrNoRows
-	}
-	return nil
 }

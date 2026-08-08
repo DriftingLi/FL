@@ -7,22 +7,20 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 
-	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
 
 // RegisterProfileBindRoutes 注册 /api/auth/profile 蓝图（登录后绑定/修改手机号、邮箱）。
-func RegisterProfileBindRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, authSvc *service.AuthService,
-	codeSvc *service.VerifyCodeService, emailCh, phoneCh service.CodeChannel, logger *zap.Logger) {
-	g := rg.Group("/auth/profile", middleware.JWTAuth(cfg))
+func RegisterProfileBindRoutes(rg *gin.RouterGroup, deps *Deps) {
+	g := rg.Group("/auth/profile", middleware.JWTAuth(deps.Cfg))
+	authSvc := deps.AuthSvc
+	codeSvc := deps.CodeSvc
 
 	// 通道映射表：send-code 的 channel 字段在此解析为 CodeChannel adapter（不再按通道写 switch）
-	channels := map[string]service.CodeChannel{"email": emailCh, "phone": phoneCh}
+	channels := map[string]service.CodeChannel{"email": deps.EmailCh, "phone": deps.PhoneCh}
 
 	// POST /api/auth/profile/send-code {channel: email|phone, target}
 	g.POST("/send-code", func(c *gin.Context) {
@@ -49,8 +47,8 @@ func RegisterProfileBindRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm
 	})
 
 	// 绑定/修改端点按通道生成（一份骨架，通道作为 adapter 注入）
-	registerCodeChannelBindRoutes(g, codeSvc, emailCh, "email", "邮箱修改成功")
-	registerCodeChannelBindRoutes(g, codeSvc, phoneCh, "phone", "手机号修改成功")
+	registerCodeChannelBindRoutes(g, codeSvc, deps.EmailCh, "email", "邮箱修改成功")
+	registerCodeChannelBindRoutes(g, codeSvc, deps.PhoneCh, "phone", "手机号修改成功")
 
 	// POST /api/auth/profile/password {password} 设置/修改密码（账号密码登录用）
 	g.POST("/password", func(c *gin.Context) {

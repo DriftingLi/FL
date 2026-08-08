@@ -45,28 +45,8 @@ func (r *DictionaryRepository) ListCities(ctx context.Context, province string) 
 		}, province)
 }
 
-// CreateRegionCoefficient 新增区域系数
-func (r *DictionaryRepository) CreateRegionCoefficient(ctx context.Context, province, city string, coefficient float64) (RegionCoefficient, error) {
-	id, err := insertReturningID(r, ctx, "新增区域系数",
-		`INSERT INTO region_coefficients (province, city, coefficient) VALUES ($1, $2, $3)
-		 ON CONFLICT (province, city) DO UPDATE SET coefficient = EXCLUDED.coefficient RETURNING id`,
-		province, city, coefficient)
-	if err != nil {
-		return RegionCoefficient{}, err
-	}
-	return RegionCoefficient{ID: int(id), Province: province, City: city, Coefficient: coefficient}, nil
-}
-
-// UpdateRegionCoefficient 更新区域系数
-func (r *DictionaryRepository) UpdateRegionCoefficient(ctx context.Context, id int, coefficient float64) error {
-	return execWrite(r, ctx, "更新区域系数",
-		`UPDATE region_coefficients SET coefficient = $2 WHERE id = $1`, id, coefficient)
-}
-
-// DeleteRegionCoefficient 删除区域系数
-func (r *DictionaryRepository) DeleteRegionCoefficient(ctx context.Context, id int) error {
-	return execWrite(r, ctx, "删除区域系数", `DELETE FROM region_coefficients WHERE id = $1`, id)
-}
+// 注：region_coefficients 的写操作（Create/Update/Delete）已迁至描述符驱动核心
+// （dictcrud.RegionCoefficientDescriptor + dictcrud.Store，见 ADR-0008）。
 
 // GetRegionCoefficient 按 province + city 查询区域系数（供 service 计算 Km 使用）
 // 未命中时返回 pgx.ErrNoRows，由调用方决定是否使用默认值 1.0

@@ -143,3 +143,36 @@ func TestServerError(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	assertResponse(t, resp, 500, "服务器错误", true)
 }
+
+// --- PageResult 分页信封 ---
+
+// TestPageResult_PagesComputation pages = ceil(total/pageSize) 的唯一实现，
+// 期望值独立手算（不复用公式）。
+func TestPageResult_PagesComputation(t *testing.T) {
+	cases := []struct {
+		name     string
+		total    int64
+		pageSize int
+		want     int
+	}{
+		{"空列表（total=0）", 0, 10, 0},
+		{"精确整除", 20, 10, 2},
+		{"非精确整除-余1", 21, 10, 3},
+		{"非精确整除-余9", 19, 10, 2},
+		{"边界-恰一页", 10, 10, 1},
+		{"边界-多一条", 11, 10, 2},
+		{"total小于pageSize", 3, 10, 1},
+		{"单条单页", 1, 1, 1},
+		{"页大小1", 5, 1, 5},
+		{"pageSize为0", 5, 0, 5},
+		{"pageSize为负", 5, -3, 5},
+		{"空列表且pageSize非法", 0, 0, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := PageCount(tc.total, tc.pageSize); got != tc.want {
+				t.Errorf("PageCount(%d, %d) = %d，期望 %d", tc.total, tc.pageSize, got, tc.want)
+			}
+		})
+	}
+}

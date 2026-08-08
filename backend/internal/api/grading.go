@@ -5,18 +5,15 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 
-	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
 
 // RegisterGradingRoutes 注册 /api/grading 蓝图（导师阅卷）。
-func RegisterGradingRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, logger *zap.Logger) {
-	svc := service.NewGradingService(db, newAIService(cfg, db, logger), logger)
+func RegisterGradingRoutes(rg *gin.RouterGroup, deps *Deps) {
+	svc := deps.GradingSvc
+	cfg := deps.Cfg
 
 	g := rg.Group("/grading", middleware.JWTAuth(cfg), middleware.RoleRequired("tutor", "admin"))
 

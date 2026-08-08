@@ -69,13 +69,13 @@ export const useAuthStore = defineStore('auth', () => {
       // 登录态以 /auth/me 为准：父域名 Cookie 共享后，
       // 即使本地无 token（跨子域名首次访问），也能恢复登录；
       // token 过期时由拦截器直接 reject，不弹错误提示、不跳转登录页
-      const res = await authApi.getUserInfo({ headers: { 'X-Silent': '1' } })
-      if (res.code === 200 && res.data) {
+      const info = await authApi.getUserInfo({ headers: { 'X-Silent': '1' } })
+      if (info) {
         // 全量合并 /auth/me 返回的资料（昵称/头像/邮箱等），
         // 避免登录响应只有基础字段导致重新登录后昵称头像回退
         userInfo.value = {
           ...userInfo.value,
-          ...res.data
+          ...info
         }
         isLoggedIn.value = true
         localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
@@ -120,11 +120,11 @@ export const useAuthStore = defineStore('auth', () => {
   // 重新拉取 /auth/me 并合并到 userInfo（昵称/头像等资料更新后调用）
   async function refreshUserInfo() {
     try {
-      const res = await authApi.getUserInfo({ headers: { 'X-Silent': '1' } })
-      if (res.code === 200 && res.data) {
+      const info = await authApi.getUserInfo({ headers: { 'X-Silent': '1' } })
+      if (info) {
         userInfo.value = {
           ...userInfo.value,
-          ...res.data
+          ...info
         }
         localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
       }

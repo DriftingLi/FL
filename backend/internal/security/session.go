@@ -61,23 +61,29 @@ type Session struct {
 	blacklist BlacklistStore
 }
 
-// NewSession 构造会话模块。
+// NewSession 构造会话模块（默认 Redis 黑名单存储）。
 func NewSession(jwtSecret string, jwtExpiry time.Duration, cookie CookieConfig) *Session {
+	return NewSessionWithBlacklist(jwtSecret, jwtExpiry, cookie, RedisBlacklistStore{})
+}
+
+// NewSessionWithBlacklist 构造会话模块，黑名单存储可注入（ADR-0002：
+// 生产 Redis，测试内存实现；默认存储见 NewSession）。
+func NewSessionWithBlacklist(jwtSecret string, jwtExpiry time.Duration, cookie CookieConfig, blacklist BlacklistStore) *Session {
 	return &Session{
 		jwtSecret: jwtSecret,
 		jwtExpiry: jwtExpiry,
 		cookie:    cookie,
-		blacklist: RedisBlacklistStore{},
+		blacklist: blacklist,
 	}
 }
 
-// SessionFromConfig 从应用配置构造会话模块。
+// SessionFromConfig 从应用配置构造会话模块（黑名单固定为 Redis 存储）。
 func SessionFromConfig(cfg *config.Config) *Session {
-	return NewSession(cfg.JWTSecretKey, cfg.JWTExpiry(), CookieConfig{
+	return NewSessionWithBlacklist(cfg.JWTSecretKey, cfg.JWTExpiry(), CookieConfig{
 		Name:   cfg.AuthCookie.Name,
 		Domain: cfg.AuthCookie.Domain,
 		Secure: cfg.AuthCookie.Secure,
-	})
+	}, RedisBlacklistStore{})
 }
 
 // Issue 签发 JWT，claims 结构：user_id/username/role，过期时长由配置决定（默认 24 小时）。

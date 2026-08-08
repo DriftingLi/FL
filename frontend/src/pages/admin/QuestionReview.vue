@@ -185,8 +185,8 @@ async function loadData() {
   loading.value = true
   try {
     const res = await questionBankApi.getQuestions({ page: page.value, page_size: pageSize.value, ...filters.value })
-    questions.value = res.data?.questions || []
-    total.value = res.data?.total || 0
+    questions.value = res?.questions || []
+    total.value = res?.total || 0
     // 加载待审核总数（仅当不是 pending 筛选时单独查询）
     await loadPendingCount()
   } catch (e) {
@@ -199,7 +199,7 @@ async function loadData() {
 async function loadPendingCount() {
   try {
     const res = await questionBankApi.getQuestions({ page: 1, page_size: 1, status: 'pending' })
-    pendingCount.value = res.data?.total || 0
+    pendingCount.value = res?.total || 0
   } catch (e) {}
 }
 

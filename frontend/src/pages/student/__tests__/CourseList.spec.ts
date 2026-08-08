@@ -38,65 +38,52 @@ function mountPage() {
 
 beforeEach(() => {
   vi.mocked(courseApi.getCourses).mockResolvedValue({
-    code: 200,
-    message: '',
-    data: {
-      total: 2,
-      courses: [
-        {
-          course_id: 1,
-          name: '液压系统原理与维护',
-          description: '液压传动原理',
-          specialty_id: 2,
-          level_id: 2,
-          chapter_count: 7,
-          theory_hours: 24,
-          practice_hours: 16,
-          certificate_name: '叉车维修技能培训合格证书'
-        },
-        {
-          course_id: 2,
-          name: '叉车基础知识概述',
-          description: '入门知识',
-          specialty_id: 2,
-          level_id: 1,
-          chapter_count: 6,
-          theory_hours: 16,
-          practice_hours: 8
-        }
-      ]
-    }
+    total: 2,
+    courses: [
+      {
+        course_id: 1,
+        name: '液压系统原理与维护',
+        description: '液压传动原理',
+        specialty_id: 2,
+        level_id: 2,
+        chapter_count: 7,
+        theory_hours: 24,
+        practice_hours: 16,
+        certificate_name: '叉车维修技能培训合格证书'
+      },
+      {
+        course_id: 2,
+        name: '叉车基础知识概述',
+        description: '入门知识',
+        specialty_id: 2,
+        level_id: 1,
+        chapter_count: 6,
+        theory_hours: 16,
+        practice_hours: 8
+      }
+    ]
   })
   vi.mocked(courseApi.getCourseDetail).mockResolvedValue({
-    code: 200,
-    message: '',
-    data: { course_info: { course_id: 1, name: '液压系统原理与维护' }, chapters: [] }
+    course_info: { course_id: 1, name: '液压系统原理与维护' },
+    chapters: []
   })
   vi.mocked(trainingApi.getCatalogTree).mockResolvedValue({
-    code: 200,
-    message: '',
-    data: {
-      specialties: [
-        {
-          specialty_id: 2,
-          name: '维修',
-          levels: [
-            { level_id: 1, name: '入门', courses: [{ course_id: 2, name: '叉车基础知识概述' }] },
-            { level_id: 2, name: '进阶', courses: [{ course_id: 1, name: '液压系统原理与维护' }] }
-          ]
-        }
-      ]
-    }
+    specialties: [
+      {
+        specialty_id: 2,
+        name: '维修',
+        levels: [
+          { level_id: 1, name: '入门', courses: [{ course_id: 2, name: '叉车基础知识概述' }] },
+          { level_id: 2, name: '进阶', courses: [{ course_id: 1, name: '液压系统原理与维护' }] }
+        ]
+      }
+    ]
   })
   vi.mocked(trainingApi.getLevels).mockResolvedValue({
-    code: 200,
-    message: '',
-    data: {
-      levels: [
-        { level_id: 1, name: '入门' },
-        { level_id: 2, name: '进阶' }
-      ]
-    }
+    levels: [
+      { level_id: 1, name: '入门' },
+      { level_id: 2, name: '进阶' }
+    ]
   })
 })
 

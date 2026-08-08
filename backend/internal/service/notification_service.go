@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/response"
 )
 
 // NotificationDTO 站内信通知展示对象。
@@ -79,8 +80,17 @@ func (s *NotificationService) ProfileReviewNotification(req *model.ProfileChange
 	return "profile_review", title, content
 }
 
+// NotificationListPageResult 站内信分页结果（含未读数）。
+type NotificationListPageResult struct {
+	Items       []NotificationDTO `json:"items"`
+	Page        int               `json:"page"`
+	Pages       int               `json:"pages"`
+	Total       int64             `json:"total"`
+	UnreadCount int64             `json:"unread_count"`
+}
+
 // List 分页查询当前用户通知，并附带未读数（一次请求同时支撑列表与角标）。
-func (s *NotificationService) List(userID int, page, pageSize int) (map[string]any, error) {
+func (s *NotificationService) List(userID int, page, pageSize int) (*NotificationListPageResult, error) {
 	if page <= 0 {
 		page = 1
 	}
@@ -112,13 +122,12 @@ func (s *NotificationService) List(userID int, page, pageSize int) (map[string]a
 	for i := range rows {
 		items = append(items, toNotificationDTO(&rows[i]))
 	}
-	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	return map[string]any{
-		"total":        total,
-		"page":         page,
-		"pages":        pages,
-		"unread_count": unread,
-		"items":        items,
+	return &NotificationListPageResult{
+		Items:       items,
+		Page:        page,
+		Pages:       response.PageCount(total, pageSize),
+		Total:       total,
+		UnreadCount: unread,
 	}, nil
 }
 

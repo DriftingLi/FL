@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/response"
 )
 
 // StudentService 学员服务。
@@ -188,8 +189,16 @@ func (s *StudentService) queryStudyStats(studentID, days int) map[string]any {
 	}
 }
 
+// StudyRecordPageResult 学习记录分页结果。
+type StudyRecordPageResult struct {
+	Page    int              `json:"page"`
+	Pages   int              `json:"pages"`
+	Records []map[string]any `json:"records"`
+	Total   int64            `json:"total"`
+}
+
 // GetRecords 学习记录列表。
-func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, endDate string) map[string]any {
+func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, endDate string) StudyRecordPageResult {
 	if page <= 0 {
 		page = 1
 	}
@@ -234,12 +243,11 @@ func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, en
 		}
 		items = append(items, item)
 	}
-	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	return map[string]any{
-		"total":   total,
-		"page":    page,
-		"pages":   pages,
-		"records": items,
+	return StudyRecordPageResult{
+		Page:    page,
+		Pages:   response.PageCount(total, pageSize),
+		Records: items,
+		Total:   total,
 	}
 }
 

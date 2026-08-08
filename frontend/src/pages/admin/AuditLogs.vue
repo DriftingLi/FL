@@ -80,15 +80,15 @@ function formatTime(value: string) {
 async function load(p: number) {
   page.value = p
   try {
-    const res = await adminApi.listAuditLogs({
+    const data = await adminApi.listAuditLogs({
       page: p,
       page_size: pageSize,
       role: query.role || undefined,
       keyword: query.keyword || undefined
     })
-    if (res.code === 200 && res.data) {
-      items.value = res.data.items || []
-      total.value = res.data.total || 0
+    if (data) {
+      items.value = data.items || []
+      total.value = data.total || 0
     }
   } catch (e) {
     // 拦截器已提示

@@ -18,8 +18,10 @@ import (
 
 // AuthService 认证服务，处理学员/管理员/导师的登录、注册与令牌签发。
 type AuthService struct {
-	db                *gorm.DB
-	session           *security.Session
+	db        *gorm.DB
+	session   *security.Session
+	reviewSvc *ProfileReviewService
+
 	defaultAdminPwd   string
 	defaultTutorPwd   string
 	defaultStudentPwd string
@@ -39,11 +41,57 @@ func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpiry time.Duration, admi
 	}
 }
 
-// DB 返回底层 *gorm.DB，供 handler 复用查询。
-func (s *AuthService) DB() *gorm.DB { return s.db }
+// SetProfileReviewService 注入资料审核服务（GetProfile 组装待审资料状态用）。
+func (s *AuthService) SetProfileReviewService(rs *ProfileReviewService) { s.reviewSvc = rs }
+
+// GetProfile 组装 /auth/me 返回的用户资料（按角色查询对应账号表）。
+// 响应字段为前端约定（auth store 依赖 user_id/username/role/name、
+// 学员资料字段与 has_password / pending_profile_change），保持稳定。
+func (s *AuthService) GetProfile(userID int, role, username string) map[string]any {
+	data := map[string]any{
+		"user_id":  userID,
+		"username": username,
+		"role":     role,
+		"name":     "",
+	}
+	switch role {
+	case HrwaiRole:
+		var u model.HrwaiUser
+		if err := s.db.First(&u, userID).Error; err == nil {
+			data["name"] = u.Name
+			data["nickname"] = u.Nickname
+			data["avatar_url"] = u.AvatarURL
+			data["phone"] = u.Phone
+			data["email"] = u.Email
+			data["company"] = u.Company
+			// 是否已设置密码（决定个人资料页"账号密码"卡片提示文案）
+			data["has_password"] = u.Password != ""
+		}
+		// 待审核的资料修改（昵称/头像），供前端展示"审核中"状态
+		if pending, err := s.reviewSvc.GetPendingForUser(userID); err == nil {
+			data["pending_profile_change"] = pending
+		}
+	case "tutor":
+		var t model.Tutor
+		if err := s.db.First(&t, userID).Error; err == nil {
+			data["name"] = t.Name
+		}
+	case "admin":
+		var a model.Admin
+		if err := s.db.First(&a, userID).Error; err == nil {
+			data["name"] = a.Name
+		}
+	}
+	return data
+}
 
 // Session 返回会话模块（供 handler 消费统一接口）。
 func (s *AuthService) Session() *security.Session { return s.session }
+
+// ExtractToken 从请求头/ Cookie 提取 token（委托会话模块，供外部消费方经窄接口使用）。
+func (s *AuthService) ExtractToken(authorization, cookie string) string {
+	return s.session.ExtractToken(authorization, cookie)
+}
 
 // RevokeToken 吊销会话（登出），委托会话模块写入黑名单。
 func (s *AuthService) RevokeToken(ctx context.Context, tokenStr string) error {

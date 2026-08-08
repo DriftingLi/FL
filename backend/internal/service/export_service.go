@@ -3,6 +3,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -12,14 +13,15 @@ import (
 
 // ExportService 数据导出服务。
 type ExportService struct {
-	db *gorm.DB
+	db      *gorm.DB
+	exports ExportStore
 
 	logger *zap.Logger
 }
 
-// NewExportService 构造导出服务。
-func NewExportService(db *gorm.DB, logger *zap.Logger) *ExportService {
-	return &ExportService{db: db, logger: logger}
+// NewExportService 构造导出服务（exports 经 ExportStore seam 注入，生产为估值模块 adapter）。
+func NewExportService(db *gorm.DB, exports ExportStore, logger *zap.Logger) *ExportService {
+	return &ExportService{db: db, exports: exports, logger: logger}
 }
 
 // Students 学员名单导出行（首行为表头）。
@@ -130,52 +132,9 @@ func (s *ExportService) Questions() ([][]any, error) {
 	return out, nil
 }
 
-// Evaluations 残值评估记录导出行。
+// Evaluations 残值评估记录导出行（数据经 ExportStore seam 取自估值模块，见 spec #75 D4）。
 func (s *ExportService) Evaluations() ([][]any, error) {
-	var rows []struct {
-		ID                    int64
-		Username              string
-		Name                  string
-		Brand                 string
-		VehicleType           string
-		Series                string
-		Tonnage               float64
-		ConfigType            string
-		MastType              string
-		MastHeightMM          int
-		FactoryYear           int
-		SaleYear              int
-		UsageHours            int
-		OriginalPaint         bool
-		Province              string
-		City                  string
-		HasLicensePlate       bool
-		HasRegistrationCert   bool
-		HasMaintenanceRecords bool
-		ConditionRating       string
-		OriginalPrice         float64
-		KTime                 *float64
-		KHours                *float64
-		KBrand                *float64
-		KCondition            *float64
-		KMarket               *float64
-		EstimatedValue        float64
-		ConfidenceLow         *float64
-		ConfidenceHigh        *float64
-		ReportPDFPath         string
-		CreatedAt             time.Time
-	}
-	err := s.db.Table("evaluations AS e").
-		Select("e.id, COALESCE(u.username, '') AS username, COALESCE(u.name, '') AS name, " +
-			"e.brand, e.vehicle_type, e.series, e.tonnage, e.config_type, e.mast_type, " +
-			"e.mast_height_mm, e.factory_year, e.sale_year, e.usage_hours, e.original_paint, " +
-			"e.province, e.city, e.has_license_plate, e.has_registration_certificate AS has_registration_cert, " +
-			"e.has_maintenance_records, e.condition_rating, e.original_price, e.k_time, e.k_hours, " +
-			"e.k_brand, e.k_condition, e.k_market, e.estimated_value, e.confidence_low, e.confidence_high, " +
-			"e.report_pdf_path, e.created_at").
-		Joins("LEFT JOIN hrwai_users AS u ON u.id = e.user_id").
-		Order("e.id DESC").
-		Scan(&rows).Error
+	rows, err := s.exports.ListEvaluationExports(context.Background())
 	if err != nil {
 		return nil, err
 	}

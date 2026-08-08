@@ -39,15 +39,13 @@ function mountPage() {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(trainingApi.getQuestionTags).mockResolvedValue({
-    code: 200,
-    message: '',
-    data: { tags: [{ id: 1, name: '液压', code: 'hydraulic', question_count: 3 }] }
+    tags: [{ id: 1, name: '液压', code: 'hydraulic', question_count: 3 }]
   })
-  vi.mocked(trainingApi.createQuestionTag).mockResolvedValue({ code: 201, message: '', data: { id: 2 } })
-  vi.mocked(trainingApi.getTags).mockResolvedValue({ code: 200, message: '', data: { tags: [] } })
-  vi.mocked(trainingApi.setQuestionTags).mockResolvedValue({ code: 200, message: '', data: null })
-  vi.mocked(questionBankApi.getQuestions).mockResolvedValue({ code: 200, message: '', data: { questions: [], total: 0 } })
-  vi.mocked(questionBankApi.getStats).mockResolvedValue({ code: 200, message: '', data: {} })
+  vi.mocked(trainingApi.createQuestionTag).mockResolvedValue({ id: 2 })
+  vi.mocked(trainingApi.getTags).mockResolvedValue({ tags: [] })
+  vi.mocked(trainingApi.setQuestionTags).mockResolvedValue(null)
+  vi.mocked(questionBankApi.getQuestions).mockResolvedValue({ questions: [], total: 0 })
+  vi.mocked(questionBankApi.getStats).mockResolvedValue({})
 })
 
 describe('QuestionTags 新增标签', () => {

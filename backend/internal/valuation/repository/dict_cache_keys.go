@@ -132,49 +132,15 @@ var dictCacheContracts = []cacheContract{
 	},
 }
 
-// patternsOf 按实体名返回失效 pattern 集（契约同源，handler 不再书写 pattern 字面量）。
-func patternsOf(name string) []string {
+// PatternsOf 按实体名返回失效 pattern 集（契约同源，handler 不再书写 pattern 字面量）。
+// 描述符驱动的写面按 Descriptor.Name 查找同一契约。
+func PatternsOf(name string) []string {
 	for _, c := range dictCacheContracts {
 		if c.Name == name {
 			return c.InvalidatePatterns
 		}
 	}
 	return nil
-}
-
-// 各实体的失效 pattern 访问方法（ConfigHandler 组合调用 + 跨模块 evaluation 结果缓存一起失效）。
-func (r *DictionaryRepository) BrandInvalidationPatterns() []string { return patternsOf("brands") }
-func (r *DictionaryRepository) VehicleTypeInvalidationPatterns() []string {
-	return patternsOf("vehicle_types")
-}
-func (r *DictionaryRepository) SeriesInvalidationPatterns() []string  { return patternsOf("series") }
-func (r *DictionaryRepository) TonnageInvalidationPatterns() []string { return patternsOf("tonnages") }
-func (r *DictionaryRepository) MastTypeInvalidationPatterns() []string {
-	return patternsOf("mast_types")
-}
-func (r *DictionaryRepository) MastHeightInvalidationPatterns() []string {
-	return patternsOf("mast_heights")
-}
-func (r *DictionaryRepository) BatteryTypeInvalidationPatterns() []string {
-	return patternsOf("battery_types")
-}
-func (r *DictionaryRepository) TransmissionTypeInvalidationPatterns() []string {
-	return patternsOf("transmission_types")
-}
-func (r *DictionaryRepository) EngineTypeInvalidationPatterns() []string {
-	return patternsOf("engine_types")
-}
-func (r *DictionaryRepository) ConditionRatingInvalidationPatterns() []string {
-	return patternsOf("condition_ratings")
-}
-func (r *DictionaryRepository) RegionCoefficientInvalidationPatterns() []string {
-	return patternsOf("region_coefficients")
-}
-func (r *DictionaryRepository) CoefficientInvalidationPatterns() []string {
-	return patternsOf("coefficient_configs")
-}
-func (r *DictionaryRepository) OriginalPriceInvalidationPatterns() []string {
-	return patternsOf("original_prices")
 }
 
 // ResultCachePattern 评估结果缓存 pattern（评估结果依赖系数配置，字典写操作需一并失效）。

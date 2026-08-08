@@ -28,15 +28,18 @@ func TestNotificationService_CreateAndList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("查询通知失败: %v", err)
 	}
-	items, ok := result["items"].([]NotificationDTO)
-	if !ok || len(items) != 2 {
+	items := result.Items
+	if len(items) != 2 {
 		t.Fatalf("期望 2 条通知，得到 %v", items)
 	}
 	if items[0].Title != "资料审核被驳回" || items[0].IsRead {
 		t.Errorf("最新通知应为未读的驳回通知: %+v", items[0])
 	}
-	if unread, ok := result["unread_count"].(int64); !ok || unread != 2 {
-		t.Errorf("期望未读数 2，得到 %v", result["unread_count"])
+	if result.UnreadCount != 2 {
+		t.Errorf("期望未读数 2，得到 %v", result.UnreadCount)
+	}
+	if result.Pages != 1 {
+		t.Errorf("2 条通知每页 10 条应 1 页，得到 %d", result.Pages)
 	}
 
 	count, err := svc.UnreadCount(uid)
@@ -69,7 +72,7 @@ func TestNotificationService_MarkRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("查询通知失败: %v", err)
 	}
-	for _, item := range result["items"].([]NotificationDTO) {
+	for _, item := range result.Items {
 		ids = append(ids, item.ID)
 	}
 	if len(ids) != 2 {

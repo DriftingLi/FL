@@ -1,4 +1,4 @@
-import request from './request'
+import { unwrappedRequest } from './request'
 
 const DASHBOARD_TIMEOUT = 45000
 
@@ -42,15 +42,15 @@ export interface StudyStats {
 
 export const studentApi = {
   getProfile() {
-    return request.get<StudentProfile>('/student/profile', { timeout: DASHBOARD_TIMEOUT })
+    return unwrappedRequest.get<StudentProfile>('/student/profile', { timeout: DASHBOARD_TIMEOUT })
   },
 
   getRecords(params: { page?: number; page_size?: number; start_date?: string; end_date?: string }) {
-    return request.get<StudyRecordsData>('/student/records', { params, timeout: DASHBOARD_TIMEOUT })
+    return unwrappedRequest.get<StudyRecordsData>('/student/records', { params, timeout: DASHBOARD_TIMEOUT })
   },
 
   // 学习统计（按天分组），days=7|30
   getStudyStats(params?: { days?: number }) {
-    return request.get<StudyStats>('/student/study-stats', { params, timeout: DASHBOARD_TIMEOUT })
+    return unwrappedRequest.get<StudyStats>('/student/study-stats', { params, timeout: DASHBOARD_TIMEOUT })
   }
 }

@@ -54,42 +54,32 @@ function mountPage() {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(adminApi.getCourses).mockResolvedValue({
-    code: 200,
-    message: '',
-    data: {
-      total: 3,
-      courses: [
-        { course_id: 1, name: '液压系统', specialty_id: 2, level_id: 2, status: 1, chapter_count: 7, theory_hours: 24, practice_hours: 16 },
-        { course_id: 2, name: '未挂载遗留课程', specialty_id: null, level_id: null, status: 0, chapter_count: 2 },
-        { course_id: 3, name: '草稿课程', specialty_id: 2, level_id: 1, status: 0, chapter_count: 0 }
-      ]
-    }
+    total: 3,
+    courses: [
+      { course_id: 1, name: '液压系统', specialty_id: 2, level_id: 2, status: 1, chapter_count: 7, theory_hours: 24, practice_hours: 16 },
+      { course_id: 2, name: '未挂载遗留课程', specialty_id: null, level_id: null, status: 0, chapter_count: 2 },
+      { course_id: 3, name: '草稿课程', specialty_id: 2, level_id: 1, status: 0, chapter_count: 0 }
+    ]
   })
   vi.mocked(adminApi.getCourseDetail).mockResolvedValue({
-    code: 200,
-    message: '',
-    data: { course_id: 1, name: '液压系统', specialty_id: 2, level_id: 2, chapters: [] }
+    course_id: 1,
+    name: '液压系统',
+    specialty_id: 2,
+    level_id: 2,
+    chapters: []
   })
-  vi.mocked(adminApi.updateCourse).mockResolvedValue({ code: 200, message: '', data: null as unknown as AdminCourseItem })
+  vi.mocked(adminApi.updateCourse).mockResolvedValue({} as AdminCourseItem)
   vi.mocked(trainingApi.getAdminCatalogTree).mockResolvedValue({
-    code: 200,
-    message: '',
-    data: { specialties: [{ specialty_id: 2, name: '维修', levels: [] }] }
+    specialties: [{ specialty_id: 2, name: '维修', levels: [] }]
   })
   vi.mocked(trainingApi.getLevels).mockResolvedValue({
-    code: 200,
-    message: '',
-    data: {
-      levels: [
-        { level_id: 1, name: '入门' },
-        { level_id: 2, name: '进阶' }
-      ]
-    }
+    levels: [
+      { level_id: 1, name: '入门' },
+      { level_id: 2, name: '进阶' }
+    ]
   })
   vi.mocked(trainingApi.getCertificateTemplates).mockResolvedValue({
-    code: 200,
-    message: '',
-    data: { certificate_templates: [] }
+    certificate_templates: []
   })
 })
 

@@ -94,11 +94,11 @@ async function maybeSyncUserInfo() {
 async function refresh() {
   loading.value = true
   try {
-    const res = await notificationApi.list({ page: 1, page_size: 10 })
-    if (res.code === 200 && res.data) {
-      items.value = res.data.items || []
-      total.value = res.data.total || 0
-      unreadCount.value = res.data.unread_count || 0
+    const data = await notificationApi.list({ page: 1, page_size: 10 })
+    if (data) {
+      items.value = data.items || []
+      total.value = data.total || 0
+      unreadCount.value = data.unread_count || 0
       if (items.value.some(item => !item.is_read && isProfileApproved(item))) {
         await syncUserInfoAfterApproval()
       }
@@ -112,9 +112,9 @@ async function refresh() {
 
 async function refreshUnread() {
   try {
-    const res = await notificationApi.unreadCount()
-    if (res.code === 200 && res.data) {
-      unreadCount.value = res.data.count || 0
+    const data = await notificationApi.unreadCount()
+    if (data) {
+      unreadCount.value = data.count || 0
       if (unreadCount.value > 0) {
         await maybeSyncUserInfo()
       }

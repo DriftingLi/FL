@@ -1,4 +1,4 @@
-// series 系列 与 series_config_options 维度映射（骨架走 dict_helpers 共享实现）
+// series 系列 与 series_config_options 维度映射：只读方法（写面已迁至 dictcrud，见 ADR-0008）。
 package repository
 
 import (
@@ -21,29 +21,6 @@ func (r *DictionaryRepository) ListSeries(ctx context.Context, brand string) ([]
 			err := rows.Scan(&s.ID, &s.Brand, &s.Name, &s.EarliestFactoryYear)
 			return s, err
 		}, args...)
-}
-
-// CreateSeries 新增系列
-func (r *DictionaryRepository) CreateSeries(ctx context.Context, brand, name string, earliestFactoryYear int) (Series, error) {
-	id, err := insertReturningID(r, ctx, "新增系列",
-		`INSERT INTO series (brand, name, earliest_factory_year) VALUES ($1, $2, $3) ON CONFLICT (brand, name) DO NOTHING RETURNING id`,
-		brand, name, earliestFactoryYear)
-	if err != nil {
-		return Series{}, err
-	}
-	return Series{ID: int(id), Brand: brand, Name: name, EarliestFactoryYear: earliestFactoryYear}, nil
-}
-
-// UpdateSeries 更新系列
-func (r *DictionaryRepository) UpdateSeries(ctx context.Context, id int, brand, name string, earliestFactoryYear int) error {
-	return execWrite(r, ctx, "更新系列",
-		`UPDATE series SET brand = $2, name = $3, earliest_factory_year = $4 WHERE id = $1`,
-		id, brand, name, earliestFactoryYear)
-}
-
-// DeleteSeries 删除系列
-func (r *DictionaryRepository) DeleteSeries(ctx context.Context, id int) error {
-	return execWrite(r, ctx, "删除系列", `DELETE FROM series WHERE id = $1`, id)
 }
 
 // ListSeriesConfigOptions 查询指定 series 支持的配置维度及可选项

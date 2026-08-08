@@ -119,10 +119,10 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import {
-  adminApi,
+  adminForumApi,
   type AdminForumTopic,
   type AdminForumReply
-} from '@/api/admin'
+} from '@/api/forum'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 
 const loading = ref(false)
@@ -156,16 +156,14 @@ function formatTime(iso: string) {
 async function loadList() {
   loading.value = true
   try {
-    const res = await adminApi.listAdminForumTopics({
+    const res = await adminForumApi.listTopics({
       scope: activeScope.value,
       page: currentPage.value,
       page_size: pageSize.value,
       keyword: keyword.value || undefined
     })
-    if (res.code === 200 && res.data) {
-      topics.value = res.data.topics || []
-      total.value = res.data.total || 0
-    }
+    topics.value = res.topics || []
+    total.value = res.total || 0
   } catch (e) {
     console.error('加载论坛列表失败:', e)
     ElMessage.error('加载失败')
@@ -195,10 +193,8 @@ async function handleExpand(row: AdminForumTopic, expandedRowsNow: AdminForumTop
 async function loadReplies(topicId: number) {
   detailLoadingId.value = topicId
   try {
-    const res = await adminApi.getAdminForumTopic(topicId)
-    if (res.code === 200 && res.data) {
-      replyMap.value = { ...replyMap.value, [topicId]: res.data.replies || [] }
-    }
+    const res = await adminForumApi.getTopic(topicId)
+    replyMap.value = { ...replyMap.value, [topicId]: res.replies || [] }
   } catch (e) {
     console.error('加载回复失败:', e)
     ElMessage.error('加载回复失败')
@@ -214,7 +210,7 @@ async function deleteTopic(row: AdminForumTopic) {
     return
   }
   try {
-    await adminApi.deleteAdminForumTopic(row.id)
+    await adminForumApi.deleteTopic(row.id)
     ElMessage.success('已删除')
     delete replyMap.value[row.id]
     loadList()
@@ -231,7 +227,7 @@ async function deleteReply(reply: AdminForumReply) {
     return
   }
   try {
-    await adminApi.deleteAdminForumReply(reply.id)
+    await adminForumApi.deleteReply(reply.id)
     ElMessage.success('已删除')
     if (replyMap.value[reply.topic_id]) {
       replyMap.value = {

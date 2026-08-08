@@ -95,11 +95,11 @@ func TestCacheContracts_CascadePrefixesInvalidated(t *testing.T) {
 	}
 }
 
-// TestPatternsOf_AllEntities 每个契约都能通过 patternsOf 取到失效集（防拼写漂移）。
+// TestPatternsOf_AllEntities 每个契约都能通过 PatternsOf 取到失效集（防拼写漂移）。
 func TestPatternsOf_AllEntities(t *testing.T) {
 	for _, c := range dictCacheContracts {
-		if got := patternsOf(c.Name); got == nil {
-			t.Errorf("patternsOf(%q) 返回 nil", c.Name)
+		if got := PatternsOf(c.Name); got == nil {
+			t.Errorf("PatternsOf(%q) 返回 nil", c.Name)
 		}
 	}
 }

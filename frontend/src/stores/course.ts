@@ -2,29 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Ref } from 'vue'
 import { courseApi } from '@/api/course'
-
-interface CourseSummary {
-  course_id: number
-  name: string
-  category?: string
-  cover_image?: string
-  duration?: number
-  status?: number
-  [key: string]: unknown
-}
-
-interface CourseChapter {
-  chapter_id: number
-  title: string
-  order_num?: number
-  [key: string]: unknown
-}
-
-interface CourseDetail {
-  course_info?: CourseSummary
-  chapters?: CourseChapter[]
-  [key: string]: unknown
-}
+import type { CourseSummary, CourseChapter } from '@/api/course'
 
 export const useCourseStore = defineStore('course', () => {
   const courses: Ref<CourseSummary[]> = ref([])
@@ -58,13 +36,11 @@ export const useCourseStore = defineStore('course', () => {
     if (loadPromise) return loadPromise
     loadPromise = (async () => {
       try {
-        const res = await courseApi.getCourseDetail(numericId)
-        if (res.code === 200) {
-          const data = res.data as CourseDetail
-          currentCourseId.value = numericId
-          courseInfo.value = data.course_info || null
-          chapters.value = data.chapters || []
-        }
+        // 拦截器已解包信封：course_info/chapters 即业务负载
+        const data = await courseApi.getCourseDetail(numericId)
+        currentCourseId.value = numericId
+        courseInfo.value = data.course_info || null
+        chapters.value = data.chapters || []
       } finally {
         loadPromise = null
       }

@@ -2,6 +2,7 @@
 package service
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -18,45 +19,48 @@ func newCatalogSvc(t *testing.T) (*TrainingCatalogService, *gorm.DB) {
 	return NewTrainingCatalogService(db, zap.NewNop()), db
 }
 
+// p16 构造 *int16 指针（测试用）。
+func p16(v int16) *int16 { return &v }
+
 // --- 专业方向 ---
 
 func TestSpecialtyCRUD(t *testing.T) {
 	svc, _ := newCatalogSvc(t)
 
 	// 创建
-	result, err := svc.CreateSpecialty(map[string]any{"code": "operation", "name": "操作", "sort_order": 1})
+	result, err := svc.CreateSpecialty(SpecialtyInput{Code: "operation", Name: "操作", SortOrder: ptrInt(1)})
 	if err != nil {
 		t.Fatalf("创建专业方向失败: %v", err)
 	}
-	specID := result["specialty_id"].(int)
-	if result["name"] != "操作" || result["status"] != int16(1) {
+	specID := result.SpecialtyID
+	if result.Name != "操作" || result.Status != 1 {
 		t.Fatalf("创建结果不匹配: %+v", result)
 	}
 
 	// 编码/名称为空校验
-	if _, err := svc.CreateSpecialty(map[string]any{"code": "", "name": "x"}); err == nil {
+	if _, err := svc.CreateSpecialty(SpecialtyInput{Name: "x"}); err == nil {
 		t.Fatal("编码为空应报错")
 	}
-	if _, err := svc.CreateSpecialty(map[string]any{"code": "x", "name": ""}); err == nil {
+	if _, err := svc.CreateSpecialty(SpecialtyInput{Code: "x"}); err == nil {
 		t.Fatal("名称为空应报错")
 	}
 
 	// 更新
-	updated, err := svc.UpdateSpecialty(specID, map[string]any{"name": "操作方向", "status": 0})
+	updated, err := svc.UpdateSpecialty(specID, SpecialtyInput{Name: "操作方向", Status: p16(0)})
 	if err != nil {
 		t.Fatalf("更新失败: %v", err)
 	}
-	if updated["name"] != "操作方向" || updated["status"] != int16(0) {
+	if updated.Name != "操作方向" || updated.Status != 0 {
 		t.Fatalf("更新结果不匹配: %+v", updated)
 	}
 
 	// 列表：管理端含停用项，学员端仅启用项
 	all := svc.ListSpecialties(false)
-	if len(all["specialties"].([]map[string]any)) != 1 {
+	if len(all) != 1 {
 		t.Fatal("管理端应看到 1 条（含停用）")
 	}
 	active := svc.ListSpecialties(true)
-	if len(active["specialties"].([]map[string]any)) != 0 {
+	if len(active) != 0 {
 		t.Fatal("学员端应看不到停用项")
 	}
 
@@ -67,8 +71,41 @@ func TestSpecialtyCRUD(t *testing.T) {
 	if err := svc.DeleteSpecialty(specID); err == nil {
 		t.Fatal("重复删除应报错")
 	}
-	if _, err := svc.UpdateSpecialty(9999, map[string]any{"name": "x"}); err == nil {
+	if _, err := svc.UpdateSpecialty(9999, SpecialtyInput{Name: "x"}); err == nil {
 		t.Fatal("更新不存在的专业方向应报错")
+	}
+}
+
+// TestSpecialtyValidation 专业方向校验（收口在 service）：编码/名称必填、编码唯一、状态枚举。
+func TestSpecialtyValidation(t *testing.T) {
+	svc, _ := newCatalogSvc(t)
+
+	if _, err := svc.CreateSpecialty(SpecialtyInput{Code: "", Name: "x"}); err == nil || err.Error() != "专业方向编码不能为空" {
+		t.Fatalf("编码为空应报「专业方向编码不能为空」, got %v", err)
+	}
+	if _, err := svc.CreateSpecialty(SpecialtyInput{Code: "x", Name: ""}); err == nil || err.Error() != "专业方向名称不能为空" {
+		t.Fatalf("名称为空应报「专业方向名称不能为空」, got %v", err)
+	}
+
+	if _, err := svc.CreateSpecialty(SpecialtyInput{Code: "op", Name: "操作"}); err != nil {
+		t.Fatalf("创建失败: %v", err)
+	}
+	if _, err := svc.CreateSpecialty(SpecialtyInput{Code: "op", Name: "重复"}); err == nil || err.Error() != "专业方向编码已存在" {
+		t.Fatalf("重复编码应报「专业方向编码已存在」, got %v", err)
+	}
+	if _, err := svc.CreateSpecialty(SpecialtyInput{Code: "x2", Name: "x", Status: p16(5)}); err == nil || err.Error() != "状态值无效" {
+		t.Fatalf("非法状态应报「状态值无效」, got %v", err)
+	}
+
+	created, _ := svc.CreateSpecialty(SpecialtyInput{Code: "x3", Name: "x"})
+	if _, err := svc.UpdateSpecialty(created.SpecialtyID, SpecialtyInput{Status: p16(2)}); err == nil || err.Error() != "状态值无效" {
+		t.Fatalf("更新非法状态应报「状态值无效」, got %v", err)
+	}
+	if _, err := svc.UpdateSpecialty(created.SpecialtyID, SpecialtyInput{Code: "op"}); err == nil || err.Error() != "专业方向编码已存在" {
+		t.Fatalf("更新撞码应报「专业方向编码已存在」, got %v", err)
+	}
+	if _, err := svc.UpdateSpecialty(created.SpecialtyID, SpecialtyInput{Code: "x3"}); err != nil {
+		t.Fatalf("更新为自身编码应成功: %v", err)
 	}
 }
 
@@ -76,24 +113,24 @@ func TestSpecialtyCRUD(t *testing.T) {
 
 func TestLevelCRUD(t *testing.T) {
 	svc, _ := newCatalogSvc(t)
-	result, err := svc.CreateLevel(map[string]any{"code": "beginner", "name": "入门", "sort_order": 1})
+	result, err := svc.CreateLevel(LevelInput{Code: "beginner", Name: "入门", SortOrder: ptrInt(1)})
 	if err != nil {
 		t.Fatalf("创建等级失败: %v", err)
 	}
-	levelID := result["level_id"].(int)
+	levelID := result.LevelID
 
-	if _, err := svc.CreateLevel(map[string]any{"code": "", "name": "x"}); err == nil {
+	if _, err := svc.CreateLevel(LevelInput{Name: "x"}); err == nil {
 		t.Fatal("编码为空应报错")
 	}
-	updated, err := svc.UpdateLevel(levelID, map[string]any{"name": "初级"})
+	updated, err := svc.UpdateLevel(levelID, LevelInput{Name: "初级"})
 	if err != nil {
 		t.Fatalf("更新失败: %v", err)
 	}
-	if updated["name"] != "初级" {
+	if updated.Name != "初级" {
 		t.Fatalf("更新结果不匹配: %+v", updated)
 	}
 	all := svc.ListLevels(false)
-	if len(all["levels"].([]map[string]any)) != 1 {
+	if len(all) != 1 {
 		t.Fatal("应看到 1 条等级")
 	}
 	if err := svc.DeleteLevel(levelID); err != nil {
@@ -104,47 +141,62 @@ func TestLevelCRUD(t *testing.T) {
 	}
 }
 
+// TestLevelValidation 课程等级校验（收口在 service）：编码唯一 + 状态枚举。
+func TestLevelValidation(t *testing.T) {
+	svc, _ := newCatalogSvc(t)
+
+	if _, err := svc.CreateLevel(LevelInput{Code: "bg", Name: "入门"}); err != nil {
+		t.Fatalf("创建失败: %v", err)
+	}
+	if _, err := svc.CreateLevel(LevelInput{Code: "bg", Name: "重复"}); err == nil || err.Error() != "课程等级编码已存在" {
+		t.Fatalf("重复编码应报「课程等级编码已存在」, got %v", err)
+	}
+	if _, err := svc.CreateLevel(LevelInput{Code: "x", Name: "x", Status: p16(9)}); err == nil || err.Error() != "状态值无效" {
+		t.Fatalf("非法状态应报「状态值无效」, got %v", err)
+	}
+}
+
 // --- 证书模板 ---
 
 func TestCertificateTemplateCRUD(t *testing.T) {
 	svc, _ := newCatalogSvc(t)
-	result, err := svc.CreateCertificateTemplate(map[string]any{
-		"code": "CERT_1", "name": "叉车培训证书", "validity_days": 1460,
+	result, err := svc.CreateCertificateTemplate(CertificateTemplateInput{
+		Code: "CERT_1", Name: "叉车培训证书", ValidityDays: ptrInt(1460),
 	})
 	if err != nil {
 		t.Fatalf("创建模板失败: %v", err)
 	}
-	tplID := result["id"].(int)
-	if result["validity_days"] != 1460 {
+	tplID := result.ID
+	if result.ValidityDays != 1460 {
 		t.Fatalf("有效期不匹配: %+v", result)
 	}
 
 	// 无效有效期
-	if _, err := svc.CreateCertificateTemplate(map[string]any{"code": "C", "name": "x", "validity_days": 0}); err == nil {
+	if _, err := svc.CreateCertificateTemplate(CertificateTemplateInput{Code: "C", Name: "x", ValidityDays: ptrInt(0)}); err == nil {
 		t.Fatal("有效期为 0 应报错")
 	}
-	if _, err := svc.UpdateCertificateTemplate(tplID, map[string]any{"validity_days": -5}); err == nil {
+	if _, err := svc.UpdateCertificateTemplate(tplID, CertificateTemplateInput{ValidityDays: ptrInt(-5)}); err == nil {
 		t.Fatal("负有效期应报错")
 	}
 
 	// 默认有效期 365
-	def, err := svc.CreateCertificateTemplate(map[string]any{"code": "CERT_2", "name": "默认模板"})
+	def, err := svc.CreateCertificateTemplate(CertificateTemplateInput{Code: "CERT_2", Name: "默认模板"})
 	if err != nil {
 		t.Fatalf("创建默认模板失败: %v", err)
 	}
-	if def["validity_days"] != 365 {
-		t.Fatalf("默认有效期应为 365, got %v", def["validity_days"])
+	if def.ValidityDays != 365 {
+		t.Fatalf("默认有效期应为 365, got %d", def.ValidityDays)
 	}
 
-	updated, err := svc.UpdateCertificateTemplate(tplID, map[string]any{"validity_days": 730})
+	updated, err := svc.UpdateCertificateTemplate(tplID, CertificateTemplateInput{ValidityDays: ptrInt(730)})
 	if err != nil {
 		t.Fatalf("更新失败: %v", err)
 	}
-	if updated["validity_days"] != 730 {
+	if updated.ValidityDays != 730 {
 		t.Fatalf("更新后有效期不匹配: %+v", updated)
 	}
 	list := svc.ListCertificateTemplates(false)
-	if len(list["certificate_templates"].([]map[string]any)) != 2 {
+	if len(list) != 2 {
 		t.Fatal("应看到 2 条模板")
 	}
 	if err := svc.DeleteCertificateTemplate(tplID); err != nil {
@@ -152,28 +204,43 @@ func TestCertificateTemplateCRUD(t *testing.T) {
 	}
 }
 
+// TestCertificateTemplateValidation 证书模板校验（收口在 service）：编码唯一 + 状态枚举。
+func TestCertificateTemplateValidation(t *testing.T) {
+	svc, _ := newCatalogSvc(t)
+
+	if _, err := svc.CreateCertificateTemplate(CertificateTemplateInput{Code: "C1", Name: "模板"}); err != nil {
+		t.Fatalf("创建失败: %v", err)
+	}
+	if _, err := svc.CreateCertificateTemplate(CertificateTemplateInput{Code: "C1", Name: "重复"}); err == nil || err.Error() != "证书模板编码已存在" {
+		t.Fatalf("重复编码应报「证书模板编码已存在」, got %v", err)
+	}
+	if _, err := svc.CreateCertificateTemplate(CertificateTemplateInput{Code: "C2", Name: "x", Status: p16(2)}); err == nil || err.Error() != "状态值无效" {
+		t.Fatalf("非法状态应报「状态值无效」, got %v", err)
+	}
+}
+
 // --- 题库标签与题目关联 ---
 
 func TestQuestionTagCRUD(t *testing.T) {
 	svc, _ := newCatalogSvc(t)
-	result, err := svc.CreateQuestionTag(map[string]any{"code": "hydraulic", "name": "液压", "category": "液压"})
+	result, err := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压"})
 	if err != nil {
 		t.Fatalf("创建标签失败: %v", err)
 	}
-	tagID := result["id"].(int)
+	tagID := result.ID
 
-	if _, err := svc.CreateQuestionTag(map[string]any{"code": "", "name": "x"}); err == nil {
+	if _, err := svc.CreateQuestionTag(QuestionTagInput{Name: "x"}); err == nil {
 		t.Fatal("编码为空应报错")
 	}
-	updated, err := svc.UpdateQuestionTag(tagID, map[string]any{"name": "液压系统"})
+	updated, err := svc.UpdateQuestionTag(tagID, QuestionTagInput{Name: "液压系统"})
 	if err != nil {
 		t.Fatalf("更新失败: %v", err)
 	}
-	if updated["name"] != "液压系统" {
+	if updated.Name != "液压系统" {
 		t.Fatalf("更新结果不匹配: %+v", updated)
 	}
 	active := svc.ListQuestionTags(true)
-	if len(active["tags"].([]map[string]any)) != 1 {
+	if len(active) != 1 {
 		t.Fatal("应看到 1 条标签")
 	}
 	if err := svc.DeleteQuestionTag(tagID); err != nil {
@@ -181,24 +248,37 @@ func TestQuestionTagCRUD(t *testing.T) {
 	}
 }
 
+// TestQuestionTagValidation 题库标签校验（收口在 service）：状态枚举。
+func TestQuestionTagValidation(t *testing.T) {
+	svc, _ := newCatalogSvc(t)
+
+	if _, err := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压", Status: p16(5)}); err == nil || err.Error() != "状态值无效" {
+		t.Fatalf("非法状态应报「状态值无效」, got %v", err)
+	}
+	tag, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压"})
+	if _, err := svc.UpdateQuestionTag(tag.ID, QuestionTagInput{Status: p16(2)}); err == nil || err.Error() != "状态值无效" {
+		t.Fatalf("更新非法状态应报「状态值无效」, got %v", err)
+	}
+}
+
 // TestQuestionTagCodeUnique 标签编码唯一性：创建/更新重复编码均返回友好错误。
 func TestQuestionTagCodeUnique(t *testing.T) {
 	svc, _ := newCatalogSvc(t)
-	tag1, err := svc.CreateQuestionTag(map[string]any{"code": "hydraulic", "name": "液压"})
+	tag1, err := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压"})
 	if err != nil {
 		t.Fatalf("创建失败: %v", err)
 	}
-	if _, err := svc.CreateQuestionTag(map[string]any{"code": "hydraulic", "name": "重复"}); err == nil || err.Error() != "标签编码已存在" {
+	if _, err := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "重复"}); err == nil || err.Error() != "标签编码已存在" {
 		t.Fatalf("重复编码创建应报「标签编码已存在」, got %v", err)
 	}
-	if _, err := svc.UpdateQuestionTag(tag1["id"].(int), map[string]any{"code": "hydraulic"}); err != nil {
+	if _, err := svc.UpdateQuestionTag(tag1.ID, QuestionTagInput{Code: "hydraulic"}); err != nil {
 		t.Fatalf("更新为自身编码应成功: %v", err)
 	}
-	tag2, err := svc.CreateQuestionTag(map[string]any{"code": "brake", "name": "制动"})
+	tag2, err := svc.CreateQuestionTag(QuestionTagInput{Code: "brake", Name: "制动"})
 	if err != nil {
 		t.Fatalf("创建失败: %v", err)
 	}
-	if _, err := svc.UpdateQuestionTag(tag2["id"].(int), map[string]any{"code": "hydraulic"}); err == nil || err.Error() != "标签编码已存在" {
+	if _, err := svc.UpdateQuestionTag(tag2.ID, QuestionTagInput{Code: "hydraulic"}); err == nil || err.Error() != "标签编码已存在" {
 		t.Fatalf("改编码撞车应报「标签编码已存在」, got %v", err)
 	}
 }
@@ -207,13 +287,13 @@ func TestQuestionTagCodeUnique(t *testing.T) {
 // 学员端仅统计已发布题目，管理端统计全部题目。
 func TestListQuestionTags_QuestionCount(t *testing.T) {
 	svc, db := newCatalogSvc(t)
-	tag, _ := svc.CreateQuestionTag(map[string]any{"code": "regulation", "name": "法规"})
+	tag, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "regulation", Name: "法规"})
 	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
 
 	// 1 道已发布 + 1 道草稿（未发布）
 	published, err := qsvc.CreateQuestion(map[string]any{
 		"type": "single_choice", "content": "已发布题", "options": []string{"A", "B"}, "answer": "A",
-		"status": "published", "tag_ids": []int{tag["id"].(int)},
+		"status": "published", "tag_ids": []int{tag.ID},
 	}, nil, "tutor")
 	if err != nil {
 		t.Fatalf("创建已发布题目失败: %v", err)
@@ -221,65 +301,64 @@ func TestListQuestionTags_QuestionCount(t *testing.T) {
 	_ = published
 	draft, err := qsvc.CreateQuestion(map[string]any{
 		"type": "true_false", "content": "草稿题", "answer": "true",
-		"status": "draft", "tag_ids": []int{tag["id"].(int)},
+		"status": "draft", "tag_ids": []int{tag.ID},
 	}, nil, "tutor")
 	if err != nil {
 		t.Fatalf("创建草稿题目失败: %v", err)
 	}
 	_ = draft
 	// 另一个无题目标签
-	empty, _ := svc.CreateQuestionTag(map[string]any{"code": "brake", "name": "制动"})
+	empty, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "brake", Name: "制动"})
 
-	studentTags := svc.ListQuestionTags(true)["tags"].([]map[string]any)
-	byID := map[int]map[string]any{}
+	studentTags := svc.ListQuestionTags(true)
+	byID := map[int]QuestionTagDict{}
 	for _, d := range studentTags {
-		byID[d["id"].(int)] = d
+		byID[d.ID] = d
 	}
-	if byID[tag["id"].(int)]["question_count"] != int64(1) {
-		t.Fatalf("学员端应统计 1 道已发布题, got %v", byID[tag["id"].(int)]["question_count"])
+	if byID[tag.ID].QuestionCount == nil || *byID[tag.ID].QuestionCount != 1 {
+		t.Fatalf("学员端应统计 1 道已发布题, got %v", byID[tag.ID].QuestionCount)
 	}
-	if byID[empty["id"].(int)]["question_count"] != int64(0) {
-		t.Fatalf("无题目标签应为 0, got %v", byID[empty["id"].(int)]["question_count"])
+	if byID[empty.ID].QuestionCount == nil || *byID[empty.ID].QuestionCount != 0 {
+		t.Fatalf("无题目标签应为 0, got %v", byID[empty.ID].QuestionCount)
 	}
 
-	adminTags := svc.ListQuestionTags(false)["tags"].([]map[string]any)
-	byID2 := map[int]map[string]any{}
+	adminTags := svc.ListQuestionTags(false)
+	byID2 := map[int]QuestionTagDict{}
 	for _, d := range adminTags {
-		byID2[d["id"].(int)] = d
+		byID2[d.ID] = d
 	}
-	if byID2[tag["id"].(int)]["question_count"] != int64(2) {
-		t.Fatalf("管理端应统计全部 2 道题, got %v", byID2[tag["id"].(int)]["question_count"])
+	if byID2[tag.ID].QuestionCount == nil || *byID2[tag.ID].QuestionCount != 2 {
+		t.Fatalf("管理端应统计全部 2 道题, got %v", byID2[tag.ID].QuestionCount)
 	}
 }
 
 func TestSetQuestionTags(t *testing.T) {
 	svc, db := newCatalogSvc(t)
 	q := testutil.SeedQuestion(t, db, "single_choice", "液压相关题目", "A")
-	tag1, _ := svc.CreateQuestionTag(map[string]any{"code": "hydraulic", "name": "液压", "sort_order": 1})
-	tag2, _ := svc.CreateQuestionTag(map[string]any{"code": "brake", "name": "制动", "sort_order": 2})
+	tag1, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: ptrInt(1)})
+	tag2, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "brake", Name: "制动", SortOrder: ptrInt(2)})
 
 	// 设置两个标签
-	if err := svc.SetQuestionTags(q.ID, []int{tag1["id"].(int), tag2["id"].(int)}); err != nil {
+	if err := svc.SetQuestionTags(q.ID, []int{tag1.ID, tag2.ID}); err != nil {
 		t.Fatalf("设置标签失败: %v", err)
 	}
 	tags, err := svc.GetQuestionTags(q.ID)
 	if err != nil {
 		t.Fatalf("查询标签失败: %v", err)
 	}
-	got := tags["tags"].([]map[string]any)
-	if len(got) != 2 {
-		t.Fatalf("应 2 个标签, got %d", len(got))
+	if len(tags) != 2 {
+		t.Fatalf("应 2 个标签, got %d", len(tags))
 	}
-	if got[0]["name"] != "液压" {
-		t.Fatalf("应按 sort_order 排序: %+v", got)
+	if tags[0].Name != "液压" {
+		t.Fatalf("应按 sort_order 排序: %+v", tags)
 	}
 
 	// 全量替换为 1 个
-	if err := svc.SetQuestionTags(q.ID, []int{tag2["id"].(int)}); err != nil {
+	if err := svc.SetQuestionTags(q.ID, []int{tag2.ID}); err != nil {
 		t.Fatalf("替换标签失败: %v", err)
 	}
 	tags, _ = svc.GetQuestionTags(q.ID)
-	if len(tags["tags"].([]map[string]any)) != 1 {
+	if len(tags) != 1 {
 		t.Fatal("替换后应只剩 1 个标签")
 	}
 
@@ -288,7 +367,7 @@ func TestSetQuestionTags(t *testing.T) {
 		t.Fatalf("清空标签失败: %v", err)
 	}
 	tags, _ = svc.GetQuestionTags(q.ID)
-	if len(tags["tags"].([]map[string]any)) != 0 {
+	if len(tags) != 0 {
 		t.Fatal("清空后应为 0 个标签")
 	}
 
@@ -418,6 +497,77 @@ func TestGetAdminCatalogTree(t *testing.T) {
 	}
 }
 
+// --- 字典 JSON 契约（字节级） ---
+// 旧实现以 map[string]any 返回字典，encoding/json 按键排序序列化；
+// typed DTO 的字段声明顺序必须与排序后键序一致，保证响应 JSON 字节级不变。
+
+func TestSpecialtyDictJSON(t *testing.T) {
+	got, _ := json.Marshal(SpecialtyDict{
+		Code: "op", CreatedAt: "2026-08-08T08:00:00.000000", Description: "方向说明",
+		Name: "操作", SortOrder: 1, SpecialtyID: 3, Status: 1,
+	})
+	want := `{"code":"op","created_at":"2026-08-08T08:00:00.000000","description":"方向说明","name":"操作","sort_order":1,"specialty_id":3,"status":1}`
+	if string(got) != want {
+		t.Fatalf("专业方向字典 JSON 与旧 map 契约不符\n got: %s\nwant: %s", got, want)
+	}
+}
+
+func TestLevelDictJSON(t *testing.T) {
+	got, _ := json.Marshal(LevelDict{
+		Code: "bg", CreatedAt: "2026-08-08T08:00:00.000000", Description: "",
+		LevelID: 2, Name: "入门", SortOrder: 1, Status: 1,
+	})
+	want := `{"code":"bg","created_at":"2026-08-08T08:00:00.000000","description":"","level_id":2,"name":"入门","sort_order":1,"status":1}`
+	if string(got) != want {
+		t.Fatalf("课程等级字典 JSON 与旧 map 契约不符\n got: %s\nwant: %s", got, want)
+	}
+}
+
+func TestCertificateTemplateDictJSON(t *testing.T) {
+	got, _ := json.Marshal(CertificateTemplateDict{
+		Code: "C1", CreatedAt: "2026-08-08T08:00:00.000000", Description: "模板",
+		ID: 1, Name: "证书", Status: 1, TemplateURL: "https://x/t.pdf",
+		UpdatedAt: "2026-08-09T08:00:00.000000", ValidityDays: 365,
+	})
+	want := `{"code":"C1","created_at":"2026-08-08T08:00:00.000000","description":"模板","id":1,"name":"证书","status":1,"template_url":"https://x/t.pdf","updated_at":"2026-08-09T08:00:00.000000","validity_days":365}`
+	if string(got) != want {
+		t.Fatalf("证书模板字典 JSON 与旧 map 契约不符\n got: %s\nwant: %s", got, want)
+	}
+}
+
+func TestQuestionTagDictJSON(t *testing.T) {
+	// 创建/更新返回：无 question_count
+	got, _ := json.Marshal(QuestionTagDict{
+		Code: "hydraulic", CreatedAt: "2026-08-08T08:00:00.000000", Description: "",
+		ID: 1, Name: "液压", SortOrder: 1, Status: 1,
+		UpdatedAt: "2026-08-08T08:00:00.000000",
+	})
+	want := `{"code":"hydraulic","created_at":"2026-08-08T08:00:00.000000","description":"","id":1,"name":"液压","sort_order":1,"status":1,"updated_at":"2026-08-08T08:00:00.000000"}`
+	if string(got) != want {
+		t.Fatalf("题库标签字典 JSON 与旧 map 契约不符\n got: %s\nwant: %s", got, want)
+	}
+
+	// 列表返回：question_count 恒存在（含 0）
+	zero := int64(0)
+	withCount, _ := json.Marshal(QuestionTagDict{
+		Code: "hydraulic", CreatedAt: "2026-08-08T08:00:00.000000", Description: "",
+		ID: 1, Name: "液压", QuestionCount: &zero, SortOrder: 1, Status: 1,
+		UpdatedAt: "2026-08-08T08:00:00.000000",
+	})
+	wantCount := `{"code":"hydraulic","created_at":"2026-08-08T08:00:00.000000","description":"","id":1,"name":"液压","question_count":0,"sort_order":1,"status":1,"updated_at":"2026-08-08T08:00:00.000000"}`
+	if string(withCount) != wantCount {
+		t.Fatalf("题库标签列表字典 JSON 与旧 map 契约不符\n got: %s\nwant: %s", withCount, wantCount)
+	}
+}
+
+func TestQuestionTagRefJSON(t *testing.T) {
+	got, _ := json.Marshal(QuestionTagRef{Code: "hydraulic", ID: 1, Name: "液压", SortOrder: 1, Status: 1})
+	want := `{"code":"hydraulic","id":1,"name":"液压","sort_order":1,"status":1}`
+	if string(got) != want {
+		t.Fatalf("题目-标签关联 JSON 与旧 map 契约不符\n got: %s\nwant: %s", got, want)
+	}
+}
+
 // TestCourseSortOrder 课程 sort_order：创建/更新可设置，列表按 sort_order 升序。
 func TestCourseSortOrder(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
@@ -459,7 +609,7 @@ func TestCourseSortOrder(t *testing.T) {
 	c0 := model.Course{Name: "课程C", Status: 1, SortOrder: 0,
 		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
 	db.Create(&c0)
-	list := svc.GetCourses(1, 10, "", nil, nil)["courses"].([]map[string]any)
+	list := svc.GetCourses(1, 10, "", nil, nil).Courses
 	if len(list) != 2 {
 		t.Fatalf("应 2 门课程, got %d", len(list))
 	}
@@ -603,11 +753,11 @@ func TestCourseService_TrainingFields(t *testing.T) {
 
 	// 学员端列表按专业方向/等级过滤
 	list := svc.GetCourses(1, 10, ptrInt(spec.SpecialtyID), ptrInt(lv.LevelID))
-	if list["total"].(int64) != 1 {
-		t.Fatalf("过滤后应 1 条, got %v", list["total"])
+	if list.Total != 1 {
+		t.Fatalf("过滤后应 1 条, got %v", list.Total)
 	}
 	empty := svc.GetCourses(1, 10, ptrInt(spec.SpecialtyID), ptrInt(9999))
-	if empty["total"].(int64) != 0 {
+	if empty.Total != 0 {
 		t.Fatal("不存在的等级应过滤为空")
 	}
 
@@ -631,20 +781,20 @@ func TestQuestionBank_Tags(t *testing.T) {
 	svc, db := newCatalogSvc(t)
 	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
 
-	tag1, _ := svc.CreateQuestionTag(map[string]any{"code": "regulation", "name": "法规", "sort_order": 1})
-	tag2, _ := svc.CreateQuestionTag(map[string]any{"code": "hydraulic", "name": "液压", "sort_order": 2})
+	tag1, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "regulation", Name: "法规", SortOrder: ptrInt(1)})
+	tag2, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: ptrInt(2)})
 
 	// 创建题目时打标
 	q1, err := qsvc.CreateQuestion(map[string]any{
 		"type": "single_choice", "content": "法规题", "options": []string{"A", "B"}, "answer": "A",
-		"tag_ids": []int{tag1["id"].(int)},
+		"tag_ids": []int{tag1.ID},
 	}, nil, "tutor")
 	if err != nil {
 		t.Fatalf("创建题目失败: %v", err)
 	}
 	q2, err := qsvc.CreateQuestion(map[string]any{
 		"type": "true_false", "content": "液压题", "answer": "true",
-		"tag_ids": []int{tag2["id"].(int)},
+		"tag_ids": []int{tag2.ID},
 	}, nil, "tutor")
 	if err != nil {
 		t.Fatalf("创建题目失败: %v", err)
@@ -654,7 +804,7 @@ func TestQuestionBank_Tags(t *testing.T) {
 	}
 
 	// 按标签过滤
-	byTag := qsvc.ListQuestions(1, 20, "", "", "", ptrInt(tag2["id"].(int)))
+	byTag := qsvc.ListQuestions(1, 20, "", "", "", ptrInt(tag2.ID))
 	if byTag["total"].(int64) != 1 {
 		t.Fatalf("按标签过滤应 1 条, got %v", byTag["total"])
 	}
@@ -667,7 +817,7 @@ func TestQuestionBank_Tags(t *testing.T) {
 	}
 
 	// 更新题目时替换标签
-	updated, err := qsvc.UpdateQuestion(q1["id"].(int), map[string]any{"tag_ids": []int{tag2["id"].(int)}})
+	updated, err := qsvc.UpdateQuestion(q1["id"].(int), map[string]any{"tag_ids": []int{tag2.ID}})
 	if err != nil {
 		t.Fatalf("更新题目失败: %v", err)
 	}

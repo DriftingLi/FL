@@ -53,20 +53,18 @@ function createCrud(resource: string, options: CreateCrudOptions = {}): CrudEndp
       const merged = isPaginated
         ? { page: 1, page_size: 100, ...params }
         : params
-      const r = await client.get<T[] | OriginalPricesPage>(dictBase, { params: merged })
-      const data = r.data
+      // 拦截器已解包信封，data 即业务负载
+      const data = await client.get<T[] | OriginalPricesPage>(dictBase, { params: merged })
       if (isPaginated && data && typeof data === 'object' && 'list' in data) {
         return (data.list as T[]) ?? []
       }
       return (data as T[]) ?? []
     },
     async create<T = AdminRow>(payload: Record<string, unknown>) {
-      const r = await client.post<T>(adminBase, payload)
-      return r.data
+      return client.post<T>(adminBase, payload)
     },
     async update<T = AdminRow>(id: AdminResourceId, payload: Record<string, unknown>) {
-      const r = await client.put<T>(`${adminBase}/${encodeURIComponent(id)}`, payload)
-      return r.data
+      return client.put<T>(`${adminBase}/${encodeURIComponent(id)}`, payload)
     },
     async remove(id: AdminResourceId): Promise<void> {
       await client.delete(`${adminBase}/${encodeURIComponent(id)}`)
@@ -123,7 +121,7 @@ export interface AlgorithmParameters {
 /** 拉取算法参数聚合数据（一次返回 4 类参数） */
 export async function listAlgorithmParameters(): Promise<AlgorithmParameters> {
   const resp = await client.get<AlgorithmParameters>('/dictionaries/algorithm-parameters')
-  return resp.data ?? { coefficients: [], brands: [], condition_ratings: [], region_coefficients: [] }
+  return resp ?? { coefficients: [], brands: [], condition_ratings: [], region_coefficients: [] }
 }
 
 /** 更新单个全局系数（PUT /admin/coefficient-configs/:key） */

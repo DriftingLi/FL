@@ -14,6 +14,7 @@ import (
 
 	"forklift-training/internal/model"
 	"forklift-training/internal/storage"
+	"forklift-training/pkg/response"
 )
 
 // 资料修改字段类型与状态。
@@ -131,8 +132,16 @@ func (s *ProfileReviewService) GetPendingForUser(userID int) (*ProfileChangeRequ
 	return s.toDTO(&req, &user), nil
 }
 
+// ProfileChangeRequestPageResult 资料审核请求分页结果。
+type ProfileChangeRequestPageResult struct {
+	Page     int                       `json:"page"`
+	Pages    int                       `json:"pages"`
+	Requests []ProfileChangeRequestDTO `json:"requests"`
+	Total    int64                     `json:"total"`
+}
+
 // ListRequests 分页查询审核请求（可按下单状态过滤）。
-func (s *ProfileReviewService) ListRequests(status string, page, pageSize int) (map[string]any, error) {
+func (s *ProfileReviewService) ListRequests(status string, page, pageSize int) (*ProfileChangeRequestPageResult, error) {
 	if page <= 0 {
 		page = 1
 	}
@@ -188,12 +197,11 @@ func (s *ProfileReviewService) ListRequests(status string, page, pageSize int) (
 			CreatedAt:  formatISO(r.CreatedAt),
 		})
 	}
-	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	return map[string]any{
-		"total":    total,
-		"page":     page,
-		"pages":    pages,
-		"requests": items,
+	return &ProfileChangeRequestPageResult{
+		Page:     page,
+		Pages:    response.PageCount(total, pageSize),
+		Requests: items,
+		Total:    total,
 	}, nil
 }
 

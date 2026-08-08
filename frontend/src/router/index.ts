@@ -53,62 +53,52 @@ const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'StudentDashboard',
-        component: () => import('@/pages/student/Dashboard.vue'),
-        meta: { navKey: 'dashboard', navLabel: '仪表盘' }
+        component: () => import('@/pages/student/Dashboard.vue')
       },
       {
         path: 'courses',
         name: 'CourseList',
-        component: () => import('@/pages/student/CourseList.vue'),
-        meta: { navKey: 'courses', navLabel: '课程中心', navGroup: 'training' }
+        component: () => import('@/pages/student/CourseList.vue')
       },
       {
         path: 'forum',
         name: 'ForumPage',
-        component: () => import('@/pages/student/ForumPage.vue'),
-        meta: { navKey: 'forum', navLabel: '学员论坛', navGroup: 'training' }
+        component: () => import('@/pages/student/ForumPage.vue')
       },
       {
         path: 'forum/:topicId',
         name: 'ForumDetail',
-        component: () => import('@/pages/student/ForumDetail.vue'),
-        meta: { navKey: 'forum', navLabel: '帖子详情', navGroup: 'training' }
+        component: () => import('@/pages/student/ForumDetail.vue')
       },
       {
         path: 'course/:courseId/chapter/:chapterId',
         name: 'ChapterView',
-        component: () => import('@/pages/student/ChapterView.vue'),
-        meta: { navKey: 'chapter', navLabel: '章节学习', navGroup: 'training' }
+        component: () => import('@/pages/student/ChapterView.vue')
       },
       {
         path: 'question-bank',
         name: 'QuestionBank',
-        component: () => import('@/pages/student/QuestionBank.vue'),
-        meta: { navKey: 'question-bank', navLabel: '题库练习', navGroup: 'training' }
+        component: () => import('@/pages/student/QuestionBank.vue')
       },
       {
         path: 'mock-exam',
         name: 'MockExam',
-        component: () => import('@/pages/student/MockExam.vue'),
-        meta: { navKey: 'mock-exam', navLabel: '模拟考试', navGroup: 'exam' }
+        component: () => import('@/pages/student/MockExam.vue')
       },
       {
         path: 'level-exam',
         name: 'LevelExam',
-        component: () => import('@/pages/student/LevelExam.vue'),
-        meta: { navKey: 'level-exam', navLabel: '考试中心', navGroup: 'exam' }
+        component: () => import('@/pages/student/LevelExam.vue')
       },
       {
         path: 'wrong-questions',
         name: 'WrongQuestions',
-        component: () => import('@/pages/student/WrongQuestions.vue'),
-        meta: { navKey: 'wrong-questions', navLabel: '错题本', navGroup: 'exam' }
+        component: () => import('@/pages/student/WrongQuestions.vue')
       },
       {
         path: 'profile',
         name: 'StudentProfile',
-        component: () => import('@/pages/student/Profile.vue'),
-        meta: { navKey: 'profile', navLabel: '个人资料', navGroup: 'account' }
+        component: () => import('@/pages/student/Profile.vue')
       }
     ]
   },
@@ -122,44 +112,37 @@ const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'TutorDashboard',
-        component: () => import('@/pages/tutor/Dashboard.vue'),
-        meta: { navKey: 'dashboard', navLabel: '仪表盘' }
+        component: () => import('@/pages/tutor/Dashboard.vue')
       },
       {
         path: 'courses',
         name: 'TutorCourses',
-        component: () => import('@/pages/tutor/TutorCourses.vue'),
-        meta: { navKey: 'courses', navLabel: '我的课程', navGroup: 'courses' }
+        component: () => import('@/pages/tutor/TutorCourses.vue')
       },
       {
         path: 'course/:id/chapters',
         name: 'TutorChapterManage',
-        component: () => import('@/pages/tutor/ChapterManage.vue'),
-        meta: { navKey: 'chapters', navLabel: '章节管理', navGroup: 'courses' }
+        component: () => import('@/pages/tutor/ChapterManage.vue')
       },
       {
         path: 'course/:courseId/chapter/:chapterId',
         name: 'TutorChapterEdit',
-        component: () => import('@/pages/tutor/TutorChapterEdit.vue'),
-        meta: { navKey: 'chapters', navLabel: '章节编辑', navGroup: 'courses' }
+        component: () => import('@/pages/tutor/TutorChapterEdit.vue')
       },
       {
         path: 'question-manage',
         name: 'TutorQuestionManage',
-        component: () => import('@/pages/tutor/QuestionManage.vue'),
-        meta: { navKey: 'question-manage', navLabel: '题库管理', navGroup: 'question' }
+        component: () => import('@/pages/tutor/QuestionManage.vue')
       },
       {
         path: 'question-create',
         name: 'TutorQuestionCreate',
-        component: () => import('@/pages/tutor/QuestionCreate.vue'),
-        meta: { navKey: 'question-create', navLabel: '创建题目', navGroup: 'question' }
+        component: () => import('@/pages/tutor/QuestionCreate.vue')
       },
       {
         path: 'grading',
         name: 'TutorGrading',
-        component: () => import('@/pages/tutor/GradingPage.vue'),
-        meta: { navKey: 'grading', navLabel: '人工阅卷', navGroup: 'grading' }
+        component: () => import('@/pages/tutor/GradingPage.vue')
       }
     ]
   },
@@ -174,7 +157,7 @@ const routes: RouteRecordRaw[] = [
         path: '',
         name: 'ValuationHome',
         component: () => import('@/pages/student/valuation/ValuationHome.vue'),
-        meta: { requiresAuth: false, navKey: 'valuation', navLabel: '残值评估', navGroup: 'tools' }
+        meta: { requiresAuth: false }
       },
       {
         // 设计稿将表单提升为首页：访问 /valuation/input 等同于 /valuation
@@ -185,31 +168,31 @@ const routes: RouteRecordRaw[] = [
         path: 'result',
         name: 'ValuationResult',
         component: () => import('@/pages/student/valuation/ValuationResultView.vue'),
-        meta: { requiresAuth: false, navKey: 'valuation-result', navLabel: '评估结果', navGroup: 'tools' }
+        meta: { requiresAuth: false }
       },
       {
         path: 'report/:id',
         name: 'ValuationReport',
         component: () => import('@/pages/student/valuation/ValuationReportView.vue'),
-        meta: { requiresAuth: false, navKey: 'valuation-report', navLabel: '评估报告', navGroup: 'tools' }
+        meta: { requiresAuth: false }
       },
       {
         path: 'battery',
         name: 'ValuationBatteryInput',
         component: () => import('@/pages/student/valuation/BatteryInputView.vue'),
-        meta: { requiresAuth: false, navKey: 'valuation-battery', navLabel: '电池评估', navGroup: 'tools' }
+        meta: { requiresAuth: false }
       },
       {
         path: 'battery/result',
         name: 'ValuationBatteryResult',
         component: () => import('@/pages/student/valuation/BatteryResultView.vue'),
-        meta: { requiresAuth: false, navKey: 'valuation-battery-result', navLabel: '电池评估结果', navGroup: 'tools' }
+        meta: { requiresAuth: false }
       },
       {
         path: 'history',
         name: 'ValuationHistory',
         component: () => import('@/pages/student/valuation/ValuationHistoryView.vue'),
-        meta: { requiresAuth: true, roles: ['hrwai_user'], navKey: 'valuation-history', navLabel: '评估历史', navGroup: 'tools' }
+        meta: { requiresAuth: true, roles: ['hrwai_user'] }
       }
     ]
   },
@@ -249,98 +232,82 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'dashboard',
         name: 'AdminDashboard',
-        component: () => import('@/pages/admin/Dashboard.vue'),
-        meta: { navKey: 'dashboard', navLabel: '仪表盘', navGroup: 'dashboard' }
+        component: () => import('@/pages/admin/Dashboard.vue')
       },
         {
           path: 'hrwai-users',
           name: 'HrwaiUserManage',
-          component: () => import('@/pages/admin/HrwaiUserManage.vue'),
-          meta: { navKey: 'hrwai-users', navLabel: '用户管理', navGroup: 'education' }
+          component: () => import('@/pages/admin/HrwaiUserManage.vue')
         },
         {
           path: 'profile-review',
           name: 'ProfileReview',
-          component: () => import('@/pages/admin/ProfileReview.vue'),
-          meta: { navKey: 'profile-review', navLabel: '资料审核', navGroup: 'education' }
+          component: () => import('@/pages/admin/ProfileReview.vue')
         },
         {
           path: 'forum-manage',
           name: 'ForumManage',
-          component: () => import('@/pages/admin/ForumManage.vue'),
-          meta: { navKey: 'forum-manage', navLabel: '论坛管理', navGroup: 'education' }
+          component: () => import('@/pages/admin/ForumManage.vue')
         },
       {
         path: 'course-catalog',
         name: 'CourseCatalog',
-        component: () => import('@/pages/admin/CourseCatalog.vue'),
-        meta: { navKey: 'course-catalog', navLabel: '课程管理', navGroup: 'education' }
+        component: () => import('@/pages/admin/CourseCatalog.vue')
       },
       {
         path: 'question-tags',
         name: 'QuestionTags',
-        component: () => import('@/pages/admin/QuestionTags.vue'),
-        meta: { navKey: 'question-tags', navLabel: '题库标签', navGroup: 'education' }
+        component: () => import('@/pages/admin/QuestionTags.vue')
       },
       {
         path: 'question-review',
         name: 'QuestionReview',
-        component: () => import('@/pages/admin/QuestionReview.vue'),
-        meta: { navKey: 'question-review', navLabel: '题库审核', navGroup: 'education' }
+        component: () => import('@/pages/admin/QuestionReview.vue')
       },
       {
         path: 'statistics',
         name: 'Statistics',
-        component: () => import('@/pages/admin/Statistics.vue'),
-        meta: { navKey: 'statistics', navLabel: '统计分析', navGroup: 'data' }
+        component: () => import('@/pages/admin/Statistics.vue')
       },
       {
         path: 'audit-logs',
         name: 'AuditLogs',
-        component: () => import('@/pages/admin/AuditLogs.vue'),
-        meta: { navKey: 'audit-logs', navLabel: '审计日志', navGroup: 'data' }
+        component: () => import('@/pages/admin/AuditLogs.vue')
       },
       {
         path: 'content-generate',
         name: 'ContentGenerate',
-        component: () => import('@/pages/admin/ContentGenerate.vue'),
-        meta: { navKey: 'content-generate', navLabel: '内容生成', navGroup: 'content' }
+        component: () => import('@/pages/admin/ContentGenerate.vue')
       },
       {
         path: 'featured-content',
         name: 'AdminFeaturedContentList',
-        component: () => import('@/pages/admin/FeaturedContentList.vue'),
-        meta: { navKey: 'featured-content', navLabel: '内容精选', navGroup: 'content' }
+        component: () => import('@/pages/admin/FeaturedContentList.vue')
       },
       {
         path: 'featured-content/edit/:id?',
         name: 'AdminFeaturedContentEdit',
-        component: () => import('@/pages/admin/FeaturedContentEdit.vue'),
-        meta: { navKey: 'featured-content', navLabel: '内容精选编辑', navGroup: 'content' }
+        component: () => import('@/pages/admin/FeaturedContentEdit.vue')
       },
       {
         path: 'exam-sessions',
         name: 'ExamSessionManage',
-        component: () => import('@/pages/admin/ExamSessionManage.vue'),
-        meta: { navKey: 'exam-sessions', navLabel: '考试场次', navGroup: 'education' }
+        component: () => import('@/pages/admin/ExamSessionManage.vue')
       },
       {
         path: 'tutors',
         name: 'TutorManage',
-        component: () => import('@/pages/admin/TutorManage.vue'),
-        meta: { navKey: 'tutors', navLabel: '导师管理', navGroup: 'education' }
+        component: () => import('@/pages/admin/TutorManage.vue')
       },
       {
         path: 'valuation-config',
         name: 'ValuationConfigManage',
-        component: () => import('@/pages/admin/ValuationConfigManage.vue'),
-        meta: { navKey: 'valuation-config', navLabel: '残值配置', navGroup: 'data' }
+        component: () => import('@/pages/admin/ValuationConfigManage.vue')
       },
       {
         path: 'ai-settings',
         name: 'AISettings',
-        component: () => import('@/pages/admin/AISettings.vue'),
-        meta: { navKey: 'ai-settings', navLabel: 'AI 配置', navGroup: 'data' }
+        component: () => import('@/pages/admin/AISettings.vue')
       }
     ]
   },

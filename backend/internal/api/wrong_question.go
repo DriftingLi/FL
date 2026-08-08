@@ -5,18 +5,16 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 
-	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
 
 // RegisterWrongQuestionRoutes 注册 /api/wrong-questions 蓝图。
-func RegisterWrongQuestionRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, logger *zap.Logger) {
-	svc := service.NewWrongQuestionService(db, logger)
+func RegisterWrongQuestionRoutes(rg *gin.RouterGroup, deps *Deps) {
+	svc := deps.WrongQuestionSvc
+	cfg := deps.Cfg
 
 	g := rg.Group("/wrong-questions", middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
 

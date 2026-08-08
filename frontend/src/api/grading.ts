@@ -1,4 +1,4 @@
-import request from './request'
+import { unwrappedRequest } from './request'
 
 export interface GradeAnswerPayload {
   score: number
@@ -56,34 +56,34 @@ export interface AiGradeResult {
 
 export const gradingApi = {
   getSubmittedParticipants(params?: GradingParticipantsQuery) {
-    return request.get<GradingParticipantList>('/grading/participants', { params })
+    return unwrappedRequest.get<GradingParticipantList>('/grading/participants', { params })
   },
 
   getParticipantDetail(participantId: number) {
-    return request.get<GradingParticipantDetail>(`/grading/participants/${participantId}`)
+    return unwrappedRequest.get<GradingParticipantDetail>(`/grading/participants/${participantId}`)
   },
 
   gradeAnswer(answerId: number, data: GradeAnswerPayload) {
-    return request.post<null>(`/grading/${answerId}/grade`, data)
+    return unwrappedRequest.post<null>(`/grading/${answerId}/grade`, data)
   },
 
   regradeAnswer(answerId: number, data: GradeAnswerPayload) {
-    return request.post<null>(`/grading/${answerId}/regrade`, data)
+    return unwrappedRequest.post<null>(`/grading/${answerId}/regrade`, data)
   },
 
   getGradingStats(params: GradingStatsQuery) {
-    return request.get<Record<string, unknown>>('/grading/stats', { params })
+    return unwrappedRequest.get<Record<string, unknown>>('/grading/stats', { params })
   },
 
   confirmAiGrading(answerId: number) {
-    return request.post<null>(`/grading/${answerId}/confirm-ai`)
+    return unwrappedRequest.post<null>(`/grading/${answerId}/confirm-ai`)
   },
 
   aiGradeAnswer(answerId: number) {
-    return request.post<AiGradeResult>(`/grading/${answerId}/ai-grade`)
+    return unwrappedRequest.post<AiGradeResult>(`/grading/${answerId}/ai-grade`)
   },
 
   confirmObjectiveAnswers(participantId: number) {
-    return request.post<null>(`/grading/participants/${participantId}/confirm-objective`)
+    return unwrappedRequest.post<null>(`/grading/participants/${participantId}/confirm-objective`)
   }
 }

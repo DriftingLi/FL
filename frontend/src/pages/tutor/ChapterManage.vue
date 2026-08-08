@@ -90,10 +90,8 @@ async function loadChapters() {
   try {
     const courseId = Number(route.params.id)
     const res = await tutorApi.getCourseChapters(courseId)
-    if (res.code === 200) {
-      courseInfo.value = res.data.course
-      chapters.value = res.data.chapters || []
-    }
+    courseInfo.value = res.course
+    chapters.value = res.chapters || []
   } catch (e) {
     console.error('Failed to load chapters:', e)
     ElMessage.error('加载章节失败')

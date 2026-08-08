@@ -58,45 +58,6 @@ func (r *DictionaryRepository) GetOriginalPriceByID(ctx context.Context, id int6
 		scanOriginalPrice, id)
 }
 
-// CreateOriginalPrice 新增原价记录
-func (r *DictionaryRepository) CreateOriginalPrice(ctx context.Context, o *OriginalPrice) (int64, error) {
-	return insertReturningID(r, ctx, "新增原价记录",
-		`INSERT INTO original_prices (
-			brand, vehicle_type, series, tonnage,
-			config_type, mast_type, mast_height_mm, earliest_factory_year,
-			original_price
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-		ON CONFLICT (brand, vehicle_type, series, tonnage,
-		             config_type, mast_type, mast_height_mm)
-		DO UPDATE SET earliest_factory_year = EXCLUDED.earliest_factory_year,
-		              original_price = EXCLUDED.original_price, updated_at = NOW()
-		RETURNING id`,
-		o.Brand, o.VehicleType, o.Series, o.Tonnage,
-		o.ConfigType, o.MastType, o.MastHeightMM, o.EarliestFactoryYear,
-		o.OriginalPrice)
-}
-
-// UpdateOriginalPrice 更新原价记录的全部可编辑字段
-// 包含 7 个唯一约束字段（brand/vehicle_type/series/tonnage/config_type/mast_type/mast_height_mm）
-// 以及 earliest_factory_year、original_price；若新值触发 7 字段唯一约束冲突，返回原始 pgx 错误
-func (r *DictionaryRepository) UpdateOriginalPrice(ctx context.Context, o *OriginalPrice) error {
-	return execWrite(r, ctx, "更新原价记录",
-		`UPDATE original_prices SET
-			brand = $2, vehicle_type = $3, series = $4, tonnage = $5,
-			config_type = $6, mast_type = $7, mast_height_mm = $8,
-			earliest_factory_year = $9, original_price = $10,
-			updated_at = NOW()
-		WHERE id = $1`,
-		o.ID, o.Brand, o.VehicleType, o.Series, o.Tonnage,
-		o.ConfigType, o.MastType, o.MastHeightMM, o.EarliestFactoryYear,
-		o.OriginalPrice)
-}
-
-// DeleteOriginalPrice 删除原价记录
-func (r *DictionaryRepository) DeleteOriginalPrice(ctx context.Context, id int64) error {
-	return execWrite(r, ctx, "删除原价记录", `DELETE FROM original_prices WHERE id = $1`, id)
-}
-
 // FindOriginalPriceMatch 精确匹配原价：按 7 个字段查询
 // 未命中时返回 pgx.ErrNoRows，由调用方决定是否走模糊匹配
 func (r *DictionaryRepository) FindOriginalPriceMatch(

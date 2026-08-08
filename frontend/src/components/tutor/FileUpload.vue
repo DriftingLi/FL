@@ -341,7 +341,7 @@ async function uploadSingleFile(file: FileItem) {
   formData.append('file', file.raw)
 
   try {
-    const res = await tutorApi.uploadChapterFile(
+    await tutorApi.uploadChapterFile(
       Number(props.chapterId),
       formData,
       (progressEvent) => {
@@ -352,13 +352,8 @@ async function uploadSingleFile(file: FileItem) {
       }
     )
 
-    if (res.code === 200 || res.code === 201) {
-      file.status = 'success'
-      file.percentage = 100
-    } else {
-      file.status = 'error'
-      file.errorMsg = res.message || '上传失败'
-    }
+    file.status = 'success'
+    file.percentage = 100
   } catch (e) {
     file.status = 'error'
     file.errorMsg = (e instanceof Error ? e.message : '上传失败') || '上传失败'

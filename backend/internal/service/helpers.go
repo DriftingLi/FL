@@ -78,14 +78,6 @@ func parseInt(s string) int {
 // ptrInt 返回 int 指针。
 func ptrInt(v int) *int { return &v }
 
-// derefInt 安全解引用 *int，nil 返回 0。
-func derefInt(p *int) int {
-	if p == nil {
-		return 0
-	}
-	return *p
-}
-
 // floatPtr 从 float64 构造指针。
 func floatPtr(v float64) *float64 { return &v }
 

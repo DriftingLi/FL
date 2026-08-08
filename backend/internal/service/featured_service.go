@@ -8,7 +8,16 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/response"
 )
+
+// FeaturedContentPageResult 内容精选分页结果。
+type FeaturedContentPageResult struct {
+	Items []map[string]any `json:"items"`
+	Page  int              `json:"page"`
+	Pages int              `json:"pages"`
+	Total int64            `json:"total"`
+}
 
 // FeaturedService 内容精选服务。
 type FeaturedService struct {
@@ -46,7 +55,7 @@ func (s *FeaturedService) IsValidCategory(category string) bool {
 }
 
 // GetPublicList 公开列表（仅已发布）。
-func (s *FeaturedService) GetPublicList(page, pageSize int, category string) map[string]any {
+func (s *FeaturedService) GetPublicList(page, pageSize int, category string) FeaturedContentPageResult {
 	if page <= 0 {
 		page = 1
 	}
@@ -66,12 +75,11 @@ func (s *FeaturedService) GetPublicList(page, pageSize int, category string) map
 	for i := range items {
 		list = append(list, featuredToListDict(&items[i]))
 	}
-	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	return map[string]any{
-		"total": total,
-		"page":  page,
-		"pages": pages,
-		"items": list,
+	return FeaturedContentPageResult{
+		Items: list,
+		Page:  page,
+		Pages: response.PageCount(total, pageSize),
+		Total: total,
 	}
 }
 
@@ -135,7 +143,7 @@ func (s *FeaturedService) GetPublicDetail(id int) (map[string]any, error) {
 }
 
 // AdminList 管理端列表（含草稿）。
-func (s *FeaturedService) AdminList(page, pageSize int, category, status string) map[string]any {
+func (s *FeaturedService) AdminList(page, pageSize int, category, status string) FeaturedContentPageResult {
 	if page <= 0 {
 		page = 1
 	}
@@ -158,12 +166,11 @@ func (s *FeaturedService) AdminList(page, pageSize int, category, status string)
 	for i := range items {
 		list = append(list, featuredToListDict(&items[i]))
 	}
-	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	return map[string]any{
-		"total": total,
-		"page":  page,
-		"pages": pages,
-		"items": list,
+	return FeaturedContentPageResult{
+		Items: list,
+		Page:  page,
+		Pages: response.PageCount(total, pageSize),
+		Total: total,
 	}
 }
 

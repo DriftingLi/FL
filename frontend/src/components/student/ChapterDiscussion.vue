@@ -171,9 +171,7 @@ async function loadTopics() {
       page: 1,
       page_size: 50
     })
-    if (res.code === 200 && res.data) {
-      topics.value = res.data.topics || []
-    }
+    topics.value = res.topics || []
   } catch (e) {
     console.error('加载章节讨论失败:', e)
   } finally {
@@ -199,11 +197,9 @@ async function loadDetail(topicId: number) {
   replies.value = []
   try {
     const res = await forumApi.getTopic(topicId)
-    if (res.code === 200 && res.data) {
-      expandedTopic.value = res.data.topic || null
-      detailContent.value = res.data.topic?.content || ''
-      replies.value = res.data.replies || []
-    }
+    expandedTopic.value = res.topic || null
+    detailContent.value = res.topic?.content || ''
+    replies.value = res.replies || []
   } catch (e) {
     console.error('加载帖子详情失败:', e)
     ElMessage.error('加载帖子详情失败')
@@ -226,12 +222,10 @@ async function submitCreate() {
   }
   creating.value = true
   try {
-    const res = await forumApi.createTopic({ chapter_id: props.chapterId, title, content, images: createForm.value.images })
-    if (res.code === 200 || res.code === 201) {
-      ElMessage.success('发布成功')
-      createVisible.value = false
-      await loadTopics()
-    }
+    await forumApi.createTopic({ chapter_id: props.chapterId, title, content, images: createForm.value.images })
+    ElMessage.success('发布成功')
+    createVisible.value = false
+    await loadTopics()
   } catch (e) {
     console.error('发布失败:', e)
     ElMessage.error('发布失败，请稍后重试')
@@ -252,14 +246,12 @@ async function submitReply(topicId: number) {
   }
   replying.value = true
   try {
-    const res = await forumApi.replyTopic(topicId, content, replyingTo.value?.id, replyImages.value)
-    if (res.code === 200 || res.code === 201) {
-      ElMessage.success('回复成功')
-      replyContent.value = ''
-      replyImages.value = []
-      replyingTo.value = null
-      await Promise.all([loadDetail(topicId), loadTopics()])
-    }
+    await forumApi.replyTopic(topicId, content, replyingTo.value?.id, replyImages.value)
+    ElMessage.success('回复成功')
+    replyContent.value = ''
+    replyImages.value = []
+    replyingTo.value = null
+    await Promise.all([loadDetail(topicId), loadTopics()])
   } catch (e) {
     console.error('回复失败:', e)
     ElMessage.error('回复失败，请稍后重试')

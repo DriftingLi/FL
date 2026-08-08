@@ -119,8 +119,8 @@ async function loadData() {
   loading.value = true
   try {
     const res = await questionBankApi.getQuestions({ page: page.value, page_size: pageSize.value, ...filters.value })
-    questions.value = res.data?.questions || []
-    total.value = res.data?.total || 0
+    questions.value = res?.questions || []
+    total.value = res?.total || 0
   } catch (e) {} finally { loading.value = false }
 }
 

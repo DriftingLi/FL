@@ -216,9 +216,9 @@ async function loadAll() {
 
 async function loadConfigs() {
   try {
-    const res = await adminApi.listAIConfigs()
-    if (res.code === 200) {
-      configs.value = res.data as AIConfig[]
+    const data = await adminApi.listAIConfigs()
+    if (data) {
+      configs.value = data
     }
   } catch (e) {
     console.error('加载配置列表失败:', e)
@@ -227,14 +227,13 @@ async function loadConfigs() {
 
 async function loadBindings() {
   try {
-    const res = await adminApi.listFeatureBindings()
-    if (res.code === 200) {
+    const data = await adminApi.listFeatureBindings()
+    if (data) {
       // 为多绑定行附加 _pending_config_id 字段（用于"待添加"下拉框）
-      const list = (res.data as FeatureBinding[]).map((b) => ({
+      bindings.value = data.map((b) => ({
         ...b,
         _pending_config_id: 0
       }))
-      bindings.value = list
     }
   } catch (e) {
     console.error('加载功能绑定失败:', e)
@@ -251,17 +250,11 @@ function availableConfigsForFeature(row: FeatureBinding): AIConfig[] {
 async function handleAddBinding(featureKey: string, configId: number) {
   if (!configId) return
   try {
-    const res = await adminApi.setFeatureBinding(featureKey, configId)
-    if (res.code === 200) {
-      ElMessage.success('绑定已添加')
-      await loadBindings()
-    } else {
-      ElMessage.error(res.message || '绑定失败')
-    }
-  } catch (e: unknown) {
-    const err = e as { response?: { data?: { message?: string } } }
-    const msg = err?.response?.data?.message || '绑定失败'
-    ElMessage.error(msg)
+    await adminApi.setFeatureBinding(featureKey, configId)
+    ElMessage.success('绑定已添加')
+    await loadBindings()
+  } catch {
+    // 拦截器已统一 toast 业务失败信息
     await loadBindings()
   }
 }
@@ -278,17 +271,11 @@ async function handleUnbind(featureKey: string, configId: number) {
     return
   }
   try {
-    const res = await adminApi.unbindFeatureConfig(featureKey, configId)
-    if (res.code === 200) {
-      ElMessage.success('已解除绑定')
-      await loadBindings()
-    } else {
-      ElMessage.error(res.message || '解绑失败')
-    }
-  } catch (e: unknown) {
-    const err = e as { response?: { data?: { message?: string } } }
-    const msg = err?.response?.data?.message || '解绑失败'
-    ElMessage.error(msg)
+    await adminApi.unbindFeatureConfig(featureKey, configId)
+    ElMessage.success('已解除绑定')
+    await loadBindings()
+  } catch {
+    // 拦截器已统一 toast 业务失败信息
     await loadBindings()
   }
 }
@@ -328,22 +315,18 @@ async function handleSave() {
     saving.value = true
     try {
       if (dialogMode.value === 'create') {
-        const res = await adminApi.createAIConfig({
+        await adminApi.createAIConfig({
           name: form.value.name,
           api_key: form.value.api_key,
           base_url: form.value.base_url,
           model: form.value.model,
           description: form.value.description
         })
-        if (res.code === 200) {
-          ElMessage.success('配置已创建')
-          dialogVisible.value = false
-          await loadConfigs()
-        } else {
-          ElMessage.error(res.message || '创建失败')
-        }
+        ElMessage.success('配置已创建')
+        dialogVisible.value = false
+        await loadConfigs()
       } else if (editingId.value !== null) {
-        const res = await adminApi.updateAIConfig(editingId.value, {
+        await adminApi.updateAIConfig(editingId.value, {
           name: form.value.name,
           api_key: form.value.api_key || undefined,
           base_url: form.value.base_url,
@@ -351,13 +334,9 @@ async function handleSave() {
           description: form.value.description,
           is_active: form.value.is_active
         })
-        if (res.code === 200) {
-          ElMessage.success('配置已更新')
-          dialogVisible.value = false
-          await Promise.all([loadConfigs(), loadBindings()])
-        } else {
-          ElMessage.error(res.message || '更新失败')
-        }
+        ElMessage.success('配置已更新')
+        dialogVisible.value = false
+        await Promise.all([loadConfigs(), loadBindings()])
       }
     } catch (e) {
       console.error('保存配置失败:', e)
@@ -370,13 +349,9 @@ async function handleSave() {
 
 async function handleDelete(row: AIConfig) {
   try {
-    const res = await adminApi.deleteAIConfig(row.id)
-    if (res.code === 200) {
-      ElMessage.success('配置已删除')
-      await Promise.all([loadConfigs(), loadBindings()])
-    } else {
-      ElMessage.error(res.message || '删除失败')
-    }
+    await adminApi.deleteAIConfig(row.id)
+    ElMessage.success('配置已删除')
+    await Promise.all([loadConfigs(), loadBindings()])
   } catch (e) {
     console.error('删除配置失败:', e)
     ElMessage.error('删除失败')
@@ -386,16 +361,10 @@ async function handleDelete(row: AIConfig) {
 async function handleTest(row: AIConfig) {
   testingId.value = row.id
   try {
-    const res = await adminApi.testAIConfig(row.id)
-    if (res.code === 200) {
-      ElMessage.success(res.message || '连接成功')
-    } else {
-      ElMessage.error(res.message || '连接失败')
-    }
-  } catch (e: unknown) {
-    const err = e as { response?: { data?: { message?: string } } }
-    const msg = err?.response?.data?.message || '连接失败'
-    ElMessage.error(msg)
+    const data = await adminApi.testAIConfig(row.id)
+    ElMessage.success(data?.message || '连接成功')
+  } catch {
+    // 拦截器已统一 toast 业务失败信息
   } finally {
     testingId.value = null
   }
@@ -427,17 +396,11 @@ async function handleAction(cmd: string, row: AIConfig) {
 
 async function handleBind(featureKey: string, configId: number) {
   try {
-    const res = await adminApi.setFeatureBinding(featureKey, configId)
-    if (res.code === 200) {
-      ElMessage.success('绑定已更新')
-      await loadBindings()
-    } else {
-      ElMessage.error(res.message || '绑定失败')
-    }
-  } catch (e: unknown) {
-    const err = e as { response?: { data?: { message?: string } } }
-    const msg = err?.response?.data?.message || '绑定失败'
-    ElMessage.error(msg)
+    await adminApi.setFeatureBinding(featureKey, configId)
+    ElMessage.success('绑定已更新')
+    await loadBindings()
+  } catch {
+    // 拦截器已统一 toast 业务失败信息
     await loadBindings()
   }
 }

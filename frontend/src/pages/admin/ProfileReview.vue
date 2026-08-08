@@ -143,15 +143,13 @@ function formatTime(iso: string) {
 async function loadList() {
   loading.value = true
   try {
-    const res = await adminApi.listProfileReviews({
+    const data = await adminApi.listProfileReviews({
       status: activeStatus.value,
       page: currentPage.value,
       page_size: pageSize.value
     })
-    if (res.code === 200 && res.data) {
-      requests.value = res.data.requests || []
-      total.value = res.data.total || 0
-    }
+    requests.value = data?.requests || []
+    total.value = data?.total || 0
   } catch (e) {
     console.error('加载资料审核列表失败:', e)
     ElMessage.error('加载失败')
@@ -180,11 +178,9 @@ async function approve(row: ProfileChangeRequest) {
     return
   }
   try {
-    const res = await adminApi.approveProfileReview(row.id)
-    if (res.code === 200) {
-      ElMessage.success('已通过审核')
-      loadList()
-    }
+    await adminApi.approveProfileReview(row.id)
+    ElMessage.success('已通过审核')
+    loadList()
   } catch (e) {
     console.error('审核失败:', e)
     ElMessage.error('操作失败')
@@ -201,12 +197,10 @@ async function reject() {
   if (!currentRow.value) return
   submitting.value = true
   try {
-    const res = await adminApi.rejectProfileReview(currentRow.value.id, rejectReason.value.trim())
-    if (res.code === 200) {
-      ElMessage.success('已驳回')
-      rejectDialogVisible.value = false
-      loadList()
-    }
+    await adminApi.rejectProfileReview(currentRow.value.id, rejectReason.value.trim())
+    ElMessage.success('已驳回')
+    rejectDialogVisible.value = false
+    loadList()
   } catch (e) {
     console.error('驳回失败:', e)
     ElMessage.error('操作失败')

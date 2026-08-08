@@ -99,7 +99,7 @@ func TestCreateQuestion_ShortAnswer_NoAnswer(t *testing.T) {
 func TestCreateQuestion_WithTagIDs(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
 	catalogSvc := NewTrainingCatalogService(db, zap.NewNop())
-	tag, err := catalogSvc.CreateQuestionTag(map[string]any{"code": "hydraulic", "name": "液压", "category": "液压"})
+	tag, err := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压"})
 	if err != nil {
 		t.Fatalf("创建标签失败: %v", err)
 	}
@@ -108,14 +108,14 @@ func TestCreateQuestion_WithTagIDs(t *testing.T) {
 		"content": "test",
 		"options": []string{"A", "B"},
 		"answer":  "A",
-		"tag_ids": []int{tag["id"].(int)},
+		"tag_ids": []int{tag.ID},
 	}
 	result, err := svc.CreateQuestion(data, nil, "tutor")
 	if err != nil {
 		t.Fatalf("带标签创建失败: %v", err)
 	}
 	tags := result["tags"].([]map[string]any)
-	if len(tags) != 1 || tags[0]["id"] != tag["id"] {
+	if len(tags) != 1 || tags[0]["id"] != tag.ID {
 		t.Fatalf("标签未关联: %+v", result["tags"])
 	}
 }

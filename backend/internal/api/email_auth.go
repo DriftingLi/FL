@@ -4,13 +4,9 @@ package api
 
 import (
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-
-	"forklift-training/internal/config"
-	"forklift-training/internal/service"
 )
 
 // RegisterEmailAuthRoutes 注册 /api/auth/email 蓝图（邮箱验证码注册/登录）。
-func RegisterEmailAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, codeSvc *service.VerifyCodeService, emailCh service.CodeChannel, logger *zap.Logger) {
-	registerCodeChannelAuthRoutes(rg.Group("/auth/email"), cfg, codeSvc, emailCh, "email", "验证码已发送，请查收邮箱")
+func RegisterEmailAuthRoutes(rg *gin.RouterGroup, deps *Deps) {
+	registerCodeChannelAuthRoutes(rg.Group("/auth/email"), deps.Cfg, deps.CodeSvc, deps.EmailCh, "email", "验证码已发送，请查收邮箱")
 }

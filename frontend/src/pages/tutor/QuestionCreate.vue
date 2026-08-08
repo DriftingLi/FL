@@ -134,14 +134,15 @@ const form = ref<{
 
 onMounted(async () => {
   try {
-    const res = await trainingApi.getTags()
-    tags.value = res.data.tags || []
+    // 拦截器已解包信封
+    const data = await trainingApi.getTags()
+    tags.value = data.tags || []
   } catch (e) {}
 
   if (isEdit.value) {
     try {
       const res = await questionBankApi.getQuestion(Number(route.query.id))
-      const q = res.data
+      const q = res
       form.value = {
         ...form.value,
         ...q,
@@ -191,7 +192,7 @@ async function handleImageUpload(options: { file: File }) {
     const formData = new FormData()
     formData.append('image', options.file)
     const res = await questionBankApi.uploadImage(formData)
-    form.value.image_url = res.data.url
+    form.value.image_url = res.url
     ElMessage.success('图片上传成功')
   } catch (e) {
     ElMessage.error(((e as { response?: { data?: { message?: string } } }).response?.data?.message) || '图片上传失败')

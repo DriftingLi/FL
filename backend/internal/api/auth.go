@@ -6,11 +6,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
@@ -154,6 +152,7 @@ func authCookieFromReq(c *gin.Context, cfg *config.Config) string {
 }
 
 // Me 获取当前用户 GET /api/auth/me
+// 资料组装收编在 AuthService.GetProfile（响应形状由契约测试锁定）。
 func (h *AuthHandler) Me(c *gin.Context) {
 	userID, _ := c.Get(string(middleware.CtxUserID))
 	role, _ := c.Get(string(middleware.CtxUserRole))
@@ -163,43 +162,7 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	roleStr, _ := role.(string)
 	uname, _ := username.(string)
 
-	data := map[string]interface{}{
-		"user_id":  uid,
-		"username": uname,
-		"role":     roleStr,
-		"name":     "",
-	}
-
-	db := h.authSvc.DB()
-	switch roleStr {
-	case "hrwai_user":
-		var u model.HrwaiUser
-		if err := db.First(&u, uid).Error; err == nil {
-			data["name"] = u.Name
-			data["nickname"] = u.Nickname
-			data["avatar_url"] = u.AvatarURL
-			data["phone"] = u.Phone
-			data["email"] = u.Email
-			data["company"] = u.Company
-			// 是否已设置密码（决定个人资料页"账号密码"卡片提示文案）
-			data["has_password"] = u.Password != ""
-		}
-		// 待审核的资料修改（昵称/头像），供前端展示"审核中"状态
-		if pending, err := h.reviewSvc.GetPendingForUser(uid); err == nil {
-			data["pending_profile_change"] = pending
-		}
-	case "tutor":
-		var t model.Tutor
-		if err := db.First(&t, uid).Error; err == nil {
-			data["name"] = t.Name
-		}
-	case "admin":
-		var a model.Admin
-		if err := db.First(&a, uid).Error; err == nil {
-			data["name"] = a.Name
-		}
-	}
-	response.Success(c, data)
+	response.Success(c, h.authSvc.GetProfile(uid, roleStr, uname))
 }
 
 // UpdateProfile 提交个人资料（昵称）修改审核 POST /api/auth/profile
@@ -268,6 +231,3 @@ func (h *AuthHandler) UploadAvatar(c *gin.Context) {
 	}
 	response.SuccessWithMsg(c, "头像修改已提交，审核通过后生效", reqDTO)
 }
-
-// 占位：避免未使用导入警告
-var _ = gorm.ErrRecordNotFound

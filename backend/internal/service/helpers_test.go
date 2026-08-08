@@ -95,16 +95,10 @@ func TestParseInt(t *testing.T) {
 	}
 }
 
-func TestPtrAndDerefInt(t *testing.T) {
+func TestPtrInt(t *testing.T) {
 	p := ptrInt(42)
 	if p == nil || *p != 42 {
 		t.Errorf("ptrInt(42) 失败")
-	}
-	if got := derefInt(p); got != 42 {
-		t.Errorf("derefInt(ptrInt(42)) = %v", got)
-	}
-	if got := derefInt(nil); got != 0 {
-		t.Errorf("derefInt(nil) = %v，期望 0", got)
 	}
 }
 

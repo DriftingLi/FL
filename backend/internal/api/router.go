@@ -9,31 +9,29 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 
 	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
 	applogger "forklift-training/internal/logger"
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/service"
-	"forklift-training/internal/storage"
 )
 
 // NewRouter 创建并配置 Gin 引擎，注册全部路由与中间件。
-func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger) *gin.Engine {
+// service 实例统一由 NewDeps 构建（装配根），本函数只做路由装配。
+func NewRouter(deps *Deps) *gin.Engine {
+	cfg := deps.Cfg
 	if cfg.IsProd() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
 	r := gin.New()
 	r.Use(middleware.RequestID())
-	r.Use(applogger.AccessLog(logger))
-	r.Use(middleware.Recovery(logger))
+	r.Use(applogger.AccessLog(deps.Logger))
+	r.Use(middleware.Recovery(deps.Logger))
 	r.Use(middleware.CORS(cfg.CORSOrigins, cfg.IsProd()))
 	// 限流：基于客户端 IP 的 token bucket，防暴力枚举/撞库/爬虫
 	// 健康检查 /api/health 在中间件内放行，不受限流影响
-	r.Use(middleware.RateLimit(cfg, logger))
+	r.Use(middleware.RateLimit(cfg, deps.Logger))
 
 	// 健康检查与根路由（无需鉴权）
 	// 探测 Redis 连通性，异常时返回 503 便于容器编排重启
@@ -64,23 +62,12 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.
 	// /static/*         其他静态资源从本地 static/ 目录提供
 	registerStaticRoutes(r, cfg)
 
-	// 初始化服务
-	authSvc := service.NewAuthService(db, cfg.JWTSecretKey, cfg.JWTExpiry(),
-		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student, logger)
-	// 验证码 engine：邮箱/短信是同一状态机两侧的 channel adapter
-	codeSvc := service.NewVerifyCodeService(db, authSvc, cfg.EmailCodeTTL, &service.RedisAuthCodeStore{}, logger)
-	emailCh := service.NewEmailChannel(cfg.SMTP, cfg.IsProd(), logger)
-	phoneCh := service.NewSmsChannel(cfg.IsProd(), logger)
-	wechatAuthSvc := service.NewWechatAuthService(cfg.Wechat, logger)
-	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st, logger)
-	notificationSvc := service.NewNotificationService(db, logger)
-	reviewSvc := service.NewProfileReviewService(db, notificationSvc, st, logger)
-	authH := NewAuthHandler(cfg, authSvc, fileSvc, st, reviewSvc, logger)
+	authH := deps.AuthH
 
 	// ===== API 路由组 =====
 	api := r.Group("/api")
 	// 审计日志：记录管理员/讲师写操作（不依赖中间件顺序，见 middleware.AuditLog）
-	api.Use(middleware.AuditLog(cfg, db, logger))
+	api.Use(middleware.AuditLog(cfg, deps.DB, deps.Logger))
 
 	// 认证蓝图 /api/auth/*
 	auth := api.Group("/auth")
@@ -97,38 +84,36 @@ func NewRouter(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.
 	}
 
 	// 邮箱验证码注册/登录
-	RegisterEmailAuthRoutes(api, cfg, codeSvc, emailCh, logger)
+	RegisterEmailAuthRoutes(api, deps)
 	// 手机号验证码注册/登录
-	RegisterPhoneAuthRoutes(api, cfg, codeSvc, phoneCh, logger)
+	RegisterPhoneAuthRoutes(api, deps)
 	// 微信扫码登录（框架占位）
-	RegisterWechatAuthRoutes(api, cfg, db, wechatAuthSvc, logger)
+	RegisterWechatAuthRoutes(api, deps)
 	// 个人信息页：手机号/邮箱绑定修改
-	RegisterProfileBindRoutes(api, cfg, db, authSvc, codeSvc, emailCh, phoneCh, logger)
+	RegisterProfileBindRoutes(api, deps)
 
 	// 注册全部 12 个业务蓝图：
 	//   auth/courses/student/question-bank/
 	//   level-exam/grading/tutor/wrong-questions/mock-exam/admin
 	//   practice-mode（题库练习模式：自由刷题/知识点专项，对应 question_practice_record）
-	// AI 配置服务在 NewRouter 创建一次，被 admin 和 AI 助手模块复用
-	aiConfigSvc := service.NewAIConfigService(db, cfg.SecretKey, logger)
-	RegisterCoursesRoutes(api, cfg, db, st, logger)
-	RegisterStudentRoutes(api, cfg, db, logger)
-	RegisterQuestionBankRoutes(api, cfg, db, st, logger)
-	RegisterPracticeModeRoutes(api, cfg, db, logger)
-	RegisterLevelExamRoutes(api, cfg, db, logger)
-	RegisterGradingRoutes(api, cfg, db, logger)
-	RegisterAdminRoutes(api, cfg, db, aiConfigSvc, st, logger)
-	RegisterTutorRoutes(api, cfg, db, st, logger)
-	RegisterWrongQuestionRoutes(api, cfg, db, logger)
-	RegisterMockExamRoutes(api, cfg, db, logger)
-	RegisterFeaturedRoutes(api, cfg, db, st, logger)
-	RegisterAIAssistantRoutes(api, cfg, db, aiConfigSvc, logger)
-	RegisterForumRoutes(api, cfg, db, st, logger)
-	RegisterProfileReviewRoutes(api, cfg, db, st, logger)
-	RegisterNotificationRoutes(api, cfg, db, logger)
-	RegisterAuditRoutes(api, cfg, db, logger)
-	RegisterExportRoutes(api, cfg, db, logger)
-	RegisterTrainingCatalogRoutes(api, cfg, db, logger)
+	RegisterCoursesRoutes(api, deps)
+	RegisterStudentRoutes(api, deps)
+	RegisterQuestionBankRoutes(api, deps)
+	RegisterPracticeModeRoutes(api, deps)
+	RegisterLevelExamRoutes(api, deps)
+	RegisterGradingRoutes(api, deps)
+	RegisterAdminRoutes(api, deps)
+	RegisterTutorRoutes(api, deps)
+	RegisterWrongQuestionRoutes(api, deps)
+	RegisterMockExamRoutes(api, deps)
+	RegisterFeaturedRoutes(api, deps)
+	RegisterAIAssistantRoutes(api, deps)
+	RegisterForumRoutes(api, deps)
+	RegisterProfileReviewRoutes(api, deps)
+	RegisterNotificationRoutes(api, deps)
+	RegisterAuditRoutes(api, deps)
+	RegisterExportRoutes(api, deps)
+	RegisterTrainingCatalogRoutes(api, deps)
 
 	return r
 }

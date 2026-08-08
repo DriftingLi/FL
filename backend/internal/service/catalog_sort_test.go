@@ -18,42 +18,42 @@ func TestCreateCatalogItemsAppendToEnd(t *testing.T) {
 	svc := NewTrainingCatalogService(db, zap.NewNop())
 
 	// 专业方向
-	s1, err := svc.CreateSpecialty(map[string]any{"code": "op", "name": "操作"})
+	s1, err := svc.CreateSpecialty(SpecialtyInput{Code: "op", Name: "操作"})
 	if err != nil {
 		t.Fatalf("创建方向失败: %v", err)
 	}
-	s2, err := svc.CreateSpecialty(map[string]any{"code": "mt", "name": "维修"})
+	s2, err := svc.CreateSpecialty(SpecialtyInput{Code: "mt", Name: "维修"})
 	if err != nil {
 		t.Fatalf("创建方向失败: %v", err)
 	}
-	if s1["sort_order"] != 1 || s2["sort_order"] != 2 {
-		t.Fatalf("方向 sort_order 应为 1,2, got %v,%v", s1["sort_order"], s2["sort_order"])
+	if s1.SortOrder != 1 || s2.SortOrder != 2 {
+		t.Fatalf("方向 sort_order 应为 1,2, got %v,%v", s1.SortOrder, s2.SortOrder)
 	}
 
 	// 课程等级
-	l1, err := svc.CreateLevel(map[string]any{"code": "bg", "name": "入门"})
+	l1, err := svc.CreateLevel(LevelInput{Code: "bg", Name: "入门"})
 	if err != nil {
 		t.Fatalf("创建等级失败: %v", err)
 	}
-	l2, err := svc.CreateLevel(map[string]any{"code": "in", "name": "进阶"})
+	l2, err := svc.CreateLevel(LevelInput{Code: "in", Name: "进阶"})
 	if err != nil {
 		t.Fatalf("创建等级失败: %v", err)
 	}
-	if l1["sort_order"] != 1 || l2["sort_order"] != 2 {
-		t.Fatalf("等级 sort_order 应为 1,2, got %v,%v", l1["sort_order"], l2["sort_order"])
+	if l1.SortOrder != 1 || l2.SortOrder != 2 {
+		t.Fatalf("等级 sort_order 应为 1,2, got %v,%v", l1.SortOrder, l2.SortOrder)
 	}
 
 	// 题库标签
-	tag1, err := svc.CreateQuestionTag(map[string]any{"code": "hydraulic", "name": "液压", "category": "液压"})
+	tag1, err := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压"})
 	if err != nil {
 		t.Fatalf("创建标签失败: %v", err)
 	}
-	tag2, err := svc.CreateQuestionTag(map[string]any{"code": "brake", "name": "制动", "category": "制动"})
+	tag2, err := svc.CreateQuestionTag(QuestionTagInput{Code: "brake", Name: "制动"})
 	if err != nil {
 		t.Fatalf("创建标签失败: %v", err)
 	}
-	if tag1["sort_order"] != 1 || tag2["sort_order"] != 2 {
-		t.Fatalf("标签 sort_order 应为 1,2, got %v,%v", tag1["sort_order"], tag2["sort_order"])
+	if tag1.SortOrder != 1 || tag2.SortOrder != 2 {
+		t.Fatalf("标签 sort_order 应为 1,2, got %v,%v", tag1.SortOrder, tag2.SortOrder)
 	}
 }
 
@@ -132,8 +132,8 @@ func TestSwapCatalogSortWithEqualValues(t *testing.T) {
 		t.Fatalf("交换后两项 sort_order 必须不同, got %d,%d", a2.SortOrder, b2.SortOrder)
 	}
 	// 交换后 A 应排在 B 后面（B 的 sort_order 更小）
-	list := svc.ListSpecialties(false)["specialties"].([]map[string]any)
-	if list[0]["name"] != "B" || list[1]["name"] != "A" {
+	list := svc.ListSpecialties(false)
+	if list[0].Name != "B" || list[1].Name != "A" {
 		t.Fatalf("交换后顺序应为 B,A, got %+v", list)
 	}
 
@@ -205,11 +205,11 @@ func TestCatalogCodeRequired(t *testing.T) {
 		fn   func() error
 		want string
 	}{
-		{"方向", func() error { _, err := svc.CreateSpecialty(map[string]any{"name": "X"}); return err }, "专业方向编码不能为空"},
-		{"等级", func() error { _, err := svc.CreateLevel(map[string]any{"name": "X"}); return err }, "课程等级编码不能为空"},
-		{"证书", func() error { _, err := svc.CreateCertificateTemplate(map[string]any{"name": "X"}); return err }, "证书模板编码不能为空"},
+		{"方向", func() error { _, err := svc.CreateSpecialty(SpecialtyInput{Name: "X"}); return err }, "专业方向编码不能为空"},
+		{"等级", func() error { _, err := svc.CreateLevel(LevelInput{Name: "X"}); return err }, "课程等级编码不能为空"},
+		{"证书", func() error { _, err := svc.CreateCertificateTemplate(CertificateTemplateInput{Name: "X"}); return err }, "证书模板编码不能为空"},
 		{"标签", func() error {
-			_, err := svc.CreateQuestionTag(map[string]any{"name": "X", "category": "Y"})
+			_, err := svc.CreateQuestionTag(QuestionTagInput{Name: "X"})
 			return err
 		}, "标签编码不能为空"},
 	}

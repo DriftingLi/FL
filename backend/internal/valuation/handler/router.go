@@ -31,6 +31,7 @@ import (
 	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/storage"
+	"forklift-training/internal/valuation/dictcrud"
 	vservice "forklift-training/internal/valuation/service"
 )
 
@@ -50,7 +51,7 @@ func RegisterRoutes(
 	batterySvc *vservice.BatteryRULService,
 	pdfGen ReportGenerator,
 	st storage.Storage,
-	valuationAuthSvc *vservice.ValuationAuthService,
+	valuationAuthSvc ValuationAuth,
 ) {
 	evalHandler := NewEvaluationHandler(valuationSvc, evalRepo, logger)
 	configHandler := NewConfigHandler(dictRepo, logger)
@@ -128,65 +129,26 @@ func RegisterRoutes(
 
 	// === 管理员 CRUD 接口（要求主体系 JWT role=admin） ===
 	// 残值配置管理仍走主体系 admin JWT，不参与此次独立化
+	// 全部字典写面由描述符注册表驱动（ADR-0008）：POST/PUT/DELETE 按描述符声明注册，
+	// 不再逐实体手写路由。失效 pattern 来自 repository 缓存契约单点（PatternsOf）。
 	admin := r.Group("/api/valuation/admin")
 	admin.Use(middleware.JWTAuth(cfg))
 	admin.Use(middleware.RoleRequired("admin"))
 	{
-		// brands
-		admin.POST("/brands", configHandler.CreateBrand)
-		admin.PUT("/brands/:id", configHandler.UpdateBrand)
-		admin.DELETE("/brands/:id", configHandler.DeleteBrand)
-
-		// vehicle_types
-		admin.POST("/vehicle-types", configHandler.CreateVehicleType)
-		admin.PUT("/vehicle-types/:id", configHandler.UpdateVehicleType)
-		admin.DELETE("/vehicle-types/:id", configHandler.DeleteVehicleType)
-
-		// series
-		admin.POST("/series", configHandler.CreateSeries)
-		admin.PUT("/series/:id", configHandler.UpdateSeries)
-		admin.DELETE("/series/:id", configHandler.DeleteSeries)
-
-		// tonnages
-		admin.POST("/tonnages", configHandler.CreateTonnage)
-		admin.DELETE("/tonnages/:id", configHandler.DeleteTonnage)
-
-		// mast_types
-		admin.POST("/mast-types", configHandler.CreateMastType)
-		admin.DELETE("/mast-types/:id", configHandler.DeleteMastType)
-
-		// mast_heights
-		admin.POST("/mast-heights", configHandler.CreateMastHeight)
-		admin.DELETE("/mast-heights/:id", configHandler.DeleteMastHeight)
-
-		// battery_types
-		admin.POST("/battery-types", configHandler.CreateBatteryType)
-		admin.DELETE("/battery-types/:id", configHandler.DeleteBatteryType)
-
-		// transmission_types
-		admin.POST("/transmission-types", configHandler.CreateTransmissionType)
-		admin.DELETE("/transmission-types/:id", configHandler.DeleteTransmissionType)
-
-		// engine_types
-		admin.POST("/engine-types", configHandler.CreateEngineType)
-		admin.DELETE("/engine-types/:id", configHandler.DeleteEngineType)
-
-		// condition_ratings
-		admin.POST("/condition-ratings", configHandler.CreateConditionRating)
-		admin.PUT("/condition-ratings/:id", configHandler.UpdateConditionRating)
-		admin.DELETE("/condition-ratings/:id", configHandler.DeleteConditionRating)
-
-		// region_coefficients
-		admin.POST("/region-coefficients", configHandler.CreateRegionCoefficient)
-		admin.PUT("/region-coefficients/:id", configHandler.UpdateRegionCoefficient)
-		admin.DELETE("/region-coefficients/:id", configHandler.DeleteRegionCoefficient)
-
-		// original_prices
-		admin.POST("/original-prices", configHandler.CreateOriginalPrice)
-		admin.PUT("/original-prices/:id", configHandler.UpdateOriginalPrice)
-		admin.DELETE("/original-prices/:id", configHandler.DeleteOriginalPrice)
-
-		// coefficient_configs（仅支持按 key 更新值，不允许新增/删除）
-		admin.PUT("/coefficient-configs/:key", configHandler.UpdateCoefficient)
+		configHandler.registerDictCRUDRoutes(admin, dictcrud.NewRegistry(
+			dictcrud.BrandDescriptor,
+			dictcrud.VehicleTypeDescriptor,
+			dictcrud.SeriesDescriptor,
+			dictcrud.TonnageDescriptor,
+			dictcrud.MastTypeDescriptor,
+			dictcrud.MastHeightDescriptor,
+			dictcrud.BatteryTypeDescriptor,
+			dictcrud.TransmissionTypeDescriptor,
+			dictcrud.EngineTypeDescriptor,
+			dictcrud.ConditionRatingDescriptor,
+			dictcrud.RegionCoefficientDescriptor,
+			dictcrud.CoefficientConfigDescriptor,
+			dictcrud.OriginalPriceDescriptor,
+		))
 	}
 }

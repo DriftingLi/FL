@@ -89,8 +89,8 @@ watch(filterType, () => { page.value = 1; loadData() })
 async function loadData() {
   try {
     const res = await wrongQuestionApi.getWrongQuestions({ page: page.value, page_size: pageSize.value, type: filterType.value || undefined })
-    wrongList.value = res.data?.items || []
-    total.value = res.data?.total || 0
+    wrongList.value = res?.items || []
+    total.value = res?.total || 0
   } catch (e) {}
 }
 
@@ -114,9 +114,9 @@ async function submitRedo(item: WrongItem) {
   try {
     const answer = item.question?.type === 'short_answer' ? redoTextAnswer.value : redoAnswer.value
     const res = await wrongQuestionApi.redoWrongQuestion(item.question_id, Array.isArray(answer) ? answer.join(', ') : answer)
-    if (res.data?.is_correct === true) {
+    if (res?.is_correct === true) {
       ElMessage.success('回答正确！已移出错题本')
-    } else if (res.data?.is_correct === false) {
+    } else if (res?.is_correct === false) {
       ElMessage.warning('回答错误，继续加油')
     } else {
       ElMessage.info('简答题需要教师批改，已提交')

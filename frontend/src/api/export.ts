@@ -1,4 +1,4 @@
-import request from './request'
+import { unwrappedRequest } from './request'
 
 export type ExportKind = 'students' | 'exam-records' | 'questions' | 'evaluations'
 
@@ -11,7 +11,7 @@ const exportLabels: Record<ExportKind, string> = {
 
 export async function downloadExport(kind: ExportKind) {
   // responseType: 'blob' 时拦截器直接返回 response.data（Blob），不走 ApiResponse 解包
-  const blob = await request.get<Blob>(`/admin/export/${kind}`, {
+  const blob = await unwrappedRequest.get<Blob>(`/admin/export/${kind}`, {
     responseType: 'blob'
   })
   const url = URL.createObjectURL(blob)

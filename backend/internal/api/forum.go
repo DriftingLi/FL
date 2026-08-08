@@ -4,24 +4,21 @@ package api
 
 import (
 	"errors"
-	"io"
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
-	"forklift-training/internal/storage"
 	"forklift-training/pkg/response"
 )
 
 // RegisterForumRoutes 注册 /api/forum 蓝图（需登录，hrwai_user）。
-func RegisterForumRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger) {
-	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st, logger)
-	svc := service.NewForumService(db, fileSvc, logger)
+func RegisterForumRoutes(rg *gin.RouterGroup, deps *Deps) {
+	svc := deps.ForumSvc
+	cfg := deps.Cfg
 
 	g := rg.Group("/forum", middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
 
@@ -33,28 +30,18 @@ func RegisterForumRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, s
 			response.BadRequest(c, "未找到上传文件")
 			return
 		}
-		if file.Filename == "" {
-			response.BadRequest(c, "未选择文件")
-			return
-		}
-		src, err := file.Open()
+		url, err := deps.ForumImageSvc.Upload(c.Request.Context(), file)
 		if err != nil {
+			var fe *service.ForumImageError
+			if errors.As(err, &fe) {
+				if fe.Status == http.StatusBadRequest {
+					response.BadRequest(c, fe.Message)
+					return
+				}
+				response.ServerError(c, fe.Message)
+				return
+			}
 			response.ServerError(c, "图片上传失败")
-			return
-		}
-		defer src.Close()
-		content, err := io.ReadAll(src)
-		if err != nil {
-			response.ServerError(c, "图片上传失败")
-			return
-		}
-		if ok, msg := fileSvc.ValidateImageFile(file.Filename, file.Size); !ok {
-			response.BadRequest(c, msg)
-			return
-		}
-		url, err := fileSvc.SaveFile(content, file.Filename, service.ForumImageDirPrefix)
-		if err != nil {
-			response.ServerError(c, "图片上传失败: "+err.Error())
 			return
 		}
 		response.SuccessWithMsg(c, "图片上传成功", gin.H{"url": url})

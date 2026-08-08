@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/response"
 )
 
 // AdminCourseService 管理端课程服务。
@@ -25,7 +26,7 @@ func NewAdminCourseService(db *gorm.DB, fileSvc *FileService, logger *zap.Logger
 }
 
 // GetCourses 管理端课程列表。
-func (s *AdminCourseService) GetCourses(page, pageSize int, keyword string, specialtyID, levelID *int) map[string]any {
+func (s *AdminCourseService) GetCourses(page, pageSize int, keyword string, specialtyID, levelID *int) CoursePageResult {
 	if page <= 0 {
 		page = 1
 	}
@@ -53,12 +54,11 @@ func (s *AdminCourseService) GetCourses(page, pageSize int, keyword string, spec
 		fillPrereqIDs(s.db, courses[i].CourseID, item)
 		items = append(items, item)
 	}
-	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	return map[string]any{
-		"total":   total,
-		"page":    page,
-		"pages":   pages,
-		"courses": items,
+	return CoursePageResult{
+		Courses: items,
+		Page:    page,
+		Pages:   response.PageCount(total, pageSize),
+		Total:   total,
 	}
 }
 

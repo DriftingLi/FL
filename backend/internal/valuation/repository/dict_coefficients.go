@@ -44,15 +44,8 @@ func (r *DictionaryRepository) GetCoefficientByKey(ctx context.Context, key stri
 		}, key)
 }
 
-// UpdateCoefficientByKey 按 key 更新系数值
-func (r *DictionaryRepository) UpdateCoefficientByKey(ctx context.Context, key string, value float64) (CoefficientConfig, error) {
-	return queryOne(r, ctx, "更新系数配置",
-		`UPDATE coefficient_configs SET value = $2, updated_at = NOW() WHERE key = $1
-		 RETURNING id, key, value, description, updated_at`,
-		func(row pgx.Row) (CoefficientConfig, error) {
-			return scanCoefficient(row)
-		}, key, value)
-}
+// 注：coefficient_configs 的写操作（按 key 更新）已迁至描述符驱动核心
+// （dictcrud.CoefficientConfigDescriptor + dictcrud.Store.UpdateByKey，见 ADR-0008）。
 
 // AlgorithmParameters 算法参数聚合结果（管理员后台「算法参数」tab 一次加载）
 type AlgorithmParameters struct {

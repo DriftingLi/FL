@@ -465,11 +465,10 @@ async function moveDirection(d: CatalogDirectionNode, delta: -1 | 1) {
   if (!target) return
   submitting.value = true
   try {
-    const res = await trainingApi.swapDirection(d.specialty_id, target.specialty_id)
-    if (res.code === 200) {
-      ElMessage.success('排序已更新')
-      await loadCatalog()
-    }
+    // trainingApi 已解包信封：成功即业务成功
+    await trainingApi.swapDirection(d.specialty_id, target.specialty_id)
+    ElMessage.success('排序已更新')
+    await loadCatalog()
   } catch (error) {
     console.error('排序失败:', error)
     ElMessage.error('排序更新失败')
@@ -485,11 +484,10 @@ async function moveLevel(l: CatalogLevel, delta: -1 | 1) {
   if (!target) return
   submitting.value = true
   try {
-    const res = await trainingApi.swapLevel(l.level_id, target.level_id)
-    if (res.code === 200) {
-      ElMessage.success('排序已更新')
-      await loadCatalog()
-    }
+    // trainingApi 已解包信封：成功即业务成功
+    await trainingApi.swapLevel(l.level_id, target.level_id)
+    ElMessage.success('排序已更新')
+    await loadCatalog()
   } catch (error) {
     console.error('排序失败:', error)
     ElMessage.error('排序更新失败')
@@ -508,11 +506,9 @@ async function moveCourse(row: AdminCourseItem, delta: -1 | 1) {
   if (!target) return
   submitting.value = true
   try {
-    const res = await adminApi.swapCourse(row.course_id, target.course_id)
-    if (res.code === 200) {
-      ElMessage.success('排序已更新')
-      await loadCourses()
-    }
+    await adminApi.swapCourse(row.course_id, target.course_id)
+    ElMessage.success('排序已更新')
+    await loadCourses()
   } catch (error) {
     console.error('排序失败:', error)
     ElMessage.error('排序更新失败')
@@ -543,9 +539,9 @@ async function moveChapter(ch: { chapter_id: number; order_num?: number }, delta
 async function loadCourses() {
   loading.value = true
   try {
-    const res = await adminApi.getCourses({ page: 1, page_size: 500 })
-    if (res.code === 200) {
-      allCourses.value = res.data.courses || []
+    const data = await adminApi.getCourses({ page: 1, page_size: 500 })
+    if (data) {
+      allCourses.value = data.courses || []
     }
   } catch (error) {
     console.error('加载课程失败:', error)
@@ -557,16 +553,13 @@ async function loadCourses() {
 
 async function loadCatalog() {
   try {
-    const [treeRes, levelsRes] = await Promise.all([
+    // trainingApi 已解包信封：成功直接返回业务负载
+    const [treeData, levelsData] = await Promise.all([
       trainingApi.getAdminCatalogTree(),
       trainingApi.getLevels()
     ])
-    if (treeRes.code === 200) {
-      directions.value = treeRes.data.specialties || []
-    }
-    if (levelsRes.code === 200) {
-      levels.value = levelsRes.data.levels || []
-    }
+    directions.value = treeData.specialties || []
+    levels.value = levelsData.levels || []
   } catch (error) {
     console.error('加载目录失败:', error)
   }
@@ -574,10 +567,9 @@ async function loadCatalog() {
 
 async function loadCertificateTemplates() {
   try {
-    const res = await trainingApi.getCertificateTemplates()
-    if (res.code === 200) {
-      certificateTemplates.value = res.data.certificate_templates || []
-    }
+    // trainingApi 已解包信封：成功直接返回业务负载
+    const data = await trainingApi.getCertificateTemplates()
+    certificateTemplates.value = data.certificate_templates || []
   } catch (error) {
     console.error('加载证书模板失败:', error)
   }
@@ -616,15 +608,16 @@ async function submitDirection() {
   await directionFormRef.value.validate()
   submitting.value = true
   try {
+    // trainingApi 已解包信封：成功即业务成功（拦截器保证 200/201 才 resolve）
     if (directionForm.specialty_id) {
-      const res = await trainingApi.updateDirection(directionForm.specialty_id, {
+      await trainingApi.updateDirection(directionForm.specialty_id, {
         name: directionForm.name,
         code: directionForm.code
       })
-      if (res.code === 200) ElMessage.success('已更新')
+      ElMessage.success('已更新')
     } else {
-      const res = await trainingApi.createDirection({ name: directionForm.name, code: directionForm.code })
-      if (res.code === 201) ElMessage.success('已创建')
+      await trainingApi.createDirection({ name: directionForm.name, code: directionForm.code })
+      ElMessage.success('已创建')
     }
     directionDialogVisible.value = false
     await loadCatalog()
@@ -657,12 +650,13 @@ async function submitLevel() {
   await levelFormRef.value.validate()
   submitting.value = true
   try {
+    // trainingApi 已解包信封：成功即业务成功（拦截器保证 200/201 才 resolve）
     if (levelForm.level_id) {
-      const res = await trainingApi.updateLevel(levelForm.level_id, { name: levelForm.name, code: levelForm.code })
-      if (res.code === 200) ElMessage.success('已更新')
+      await trainingApi.updateLevel(levelForm.level_id, { name: levelForm.name, code: levelForm.code })
+      ElMessage.success('已更新')
     } else {
-      const res = await trainingApi.createLevel({ name: levelForm.name, code: levelForm.code })
-      if (res.code === 201) ElMessage.success('已创建')
+      await trainingApi.createLevel({ name: levelForm.name, code: levelForm.code })
+      ElMessage.success('已创建')
     }
     levelDialogVisible.value = false
     await loadCatalog()
@@ -735,9 +729,8 @@ async function openDrawer(course?: AdminCourseItem | null) {
 
 async function loadDrawerDetail() {
   try {
-    const res = await adminApi.getCourseDetail(drawerForm.course_id)
-    if (res.code === 200) {
-      const detail = res.data
+    const detail = await adminApi.getCourseDetail(drawerForm.course_id)
+    if (detail) {
       Object.assign(drawerForm, {
         name: detail.name ?? drawerForm.name,
         specialty_id: detail.specialty_id ?? null,
@@ -775,11 +768,11 @@ async function submitCourse() {
       description: drawerForm.description
     }
     if (drawerForm.course_id) {
-      const res = await adminApi.updateCourse(drawerForm.course_id, payload)
-      if (res.code === 200) ElMessage.success('已更新')
+      await adminApi.updateCourse(drawerForm.course_id, payload)
+      ElMessage.success('已更新')
     } else {
-      const res = await adminApi.createCourse(payload)
-      if (res.code === 201) ElMessage.success('已创建')
+      await adminApi.createCourse(payload)
+      ElMessage.success('已创建')
     }
     drawerVisible.value = false
     await loadCourses()
@@ -798,11 +791,9 @@ async function toggleStatus(row: AdminCourseItem) {
   }
   submitting.value = true
   try {
-    const res = await adminApi.updateCourse(row.course_id, { status: row.status === 1 ? 0 : 1 })
-    if (res.code === 200) {
-      ElMessage.success(row.status === 1 ? '已下架' : '已上架')
-      await loadCourses()
-    }
+    await adminApi.updateCourse(row.course_id, { status: row.status === 1 ? 0 : 1 })
+    ElMessage.success(row.status === 1 ? '已下架' : '已上架')
+    await loadCourses()
   } catch (error) {
     console.error('切换状态失败:', error)
     ElMessage.error('操作失败')
@@ -837,11 +828,9 @@ function handleAction(cmd: string, row: AdminCourseItem) {
 
 async function handleDeleteCourse(row: AdminCourseItem) {
   try {
-    const res = await adminApi.deleteCourse(row.course_id)
-    if (res.code === 200) {
-      ElMessage.success('已删除')
-      await loadCourses()
-    }
+    await adminApi.deleteCourse(row.course_id)
+    ElMessage.success('已删除')
+    await loadCourses()
   } catch (error) {
     console.error('删除失败:', error)
     ElMessage.error('删除失败')
@@ -881,11 +870,11 @@ async function submitChapter() {
       content_url: chapterForm.content_url || undefined
     }
     if (chapterForm.chapter_id) {
-      const res = await adminApi.updateChapter(chapterForm.chapter_id, payload)
-      if (res.code === 200) ElMessage.success('已更新')
+      await adminApi.updateChapter(chapterForm.chapter_id, payload)
+      ElMessage.success('已更新')
     } else {
-      const res = await adminApi.createChapter(drawerForm.course_id, payload)
-      if (res.code === 201) ElMessage.success('已创建')
+      await adminApi.createChapter(drawerForm.course_id, payload)
+      ElMessage.success('已创建')
     }
     chapterDialogVisible.value = false
     await loadDrawerDetail()
@@ -899,11 +888,9 @@ async function submitChapter() {
 
 async function handleDeleteChapter(ch: { chapter_id: number }) {
   try {
-    const res = await adminApi.deleteChapter(ch.chapter_id)
-    if (res.code === 200) {
-      ElMessage.success('已删除')
-      await loadDrawerDetail()
-    }
+    await adminApi.deleteChapter(ch.chapter_id)
+    ElMessage.success('已删除')
+    await loadDrawerDetail()
   } catch (error) {
     console.error('删除章节失败:', error)
     ElMessage.error('删除失败')
@@ -943,6 +930,7 @@ async function submitCertificate() {
   await certificateFormRef.value.validate()
   submitting.value = true
   try {
+    // trainingApi 已解包信封：成功即业务成功（拦截器保证 200/201 才 resolve）
     const payload = {
       name: certificateForm.name,
       code: certificateForm.code,
@@ -950,11 +938,11 @@ async function submitCertificate() {
       description: certificateForm.description
     }
     if (certificateForm.id) {
-      const res = await trainingApi.updateCertificateTemplate(certificateForm.id, payload)
-      if (res.code === 200) ElMessage.success('已更新')
+      await trainingApi.updateCertificateTemplate(certificateForm.id, payload)
+      ElMessage.success('已更新')
     } else {
-      const res = await trainingApi.createCertificateTemplate(payload)
-      if (res.code === 201) ElMessage.success('已创建')
+      await trainingApi.createCertificateTemplate(payload)
+      ElMessage.success('已创建')
     }
     certificateFormVisible.value = false
     await loadCertificateTemplates()
@@ -968,11 +956,10 @@ async function submitCertificate() {
 
 async function handleDeleteCertificate(tpl: CertificateTemplate) {
   try {
-    const res = await trainingApi.deleteCertificateTemplate(tpl.id)
-    if (res.code === 200) {
-      ElMessage.success('已删除')
-      await loadCertificateTemplates()
-    }
+    // trainingApi 已解包信封：成功即业务成功
+    await trainingApi.deleteCertificateTemplate(tpl.id)
+    ElMessage.success('已删除')
+    await loadCertificateTemplates()
   } catch (error) {
     console.error('删除模板失败:', error)
     ElMessage.error('删除失败')

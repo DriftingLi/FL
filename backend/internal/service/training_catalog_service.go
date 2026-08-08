@@ -89,43 +89,75 @@ func swapGroupPositions(db *gorm.DB, entity any, idCol string, idA, idB int, whe
 	})
 }
 
+// validateStatus 校验状态枚举（0 停用 / 1 启用），nil 视为未提供。
+func validateStatus(status *int16) error {
+	if status == nil {
+		return nil
+	}
+	if *status != 0 && *status != 1 {
+		return errors.New("状态值无效")
+	}
+	return nil
+}
+
+// countByCode 统计表中同编码记录数（excludeID>0 时排除自身，供更新撞码校验）。
+func countByCode(db *gorm.DB, table, idCol, code string, excludeID int) (int64, error) {
+	q := db.Table(table).Where("code = ?", code)
+	if excludeID > 0 {
+		q = q.Where(idCol+" <> ?", excludeID)
+	}
+	var n int64
+	if err := q.Count(&n).Error; err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
 // ListSpecialties 专业方向列表（管理端含停用项，学员端仅启用项）。
-func (s *TrainingCatalogService) ListSpecialties(activeOnly bool) map[string]any {
+func (s *TrainingCatalogService) ListSpecialties(activeOnly bool) []SpecialtyDict {
 	q := s.db.Model(&model.Specialty{})
 	if activeOnly {
 		q = q.Where("status = ?", 1)
 	}
 	var list []model.Specialty
 	q.Order("sort_order ASC, specialty_id ASC").Find(&list)
-	items := make([]map[string]any, 0, len(list))
+	items := make([]SpecialtyDict, 0, len(list))
 	for i := range list {
-		items = append(items, specialtyToDict(&list[i]))
+		items = append(items, specialtyDict(&list[i]))
 	}
-	return map[string]any{"specialties": items}
+	return items
 }
 
 // CreateSpecialty 创建专业方向。
-func (s *TrainingCatalogService) CreateSpecialty(data map[string]any) (map[string]any, error) {
-	code, _ := data["code"].(string)
-	name, _ := data["name"].(string)
-	if code == "" {
-		return nil, errors.New("专业方向编码不能为空")
+func (s *TrainingCatalogService) CreateSpecialty(in SpecialtyInput) (SpecialtyDict, error) {
+	if in.Code == "" {
+		return SpecialtyDict{}, errors.New("专业方向编码不能为空")
 	}
-	if name == "" {
-		return nil, errors.New("专业方向名称不能为空")
+	if in.Name == "" {
+		return SpecialtyDict{}, errors.New("专业方向名称不能为空")
+	}
+	if err := validateStatus(in.Status); err != nil {
+		return SpecialtyDict{}, err
+	}
+	dup, err := countByCode(s.db, "specialty", "specialty_id", in.Code, 0)
+	if err != nil {
+		return SpecialtyDict{}, err
+	}
+	if dup > 0 {
+		return SpecialtyDict{}, errors.New("专业方向编码已存在")
 	}
 	spec := model.Specialty{
-		Code:        code,
-		Name:        name,
-		Description: getString(data, "description"),
-		SortOrder:   toIntDefault(data["sort_order"], nextSortOrderValue(s.db, "specialty", nil)),
-		Status:      int16(toIntDefault(data["status"], 1)),
+		Code:        in.Code,
+		Name:        in.Name,
+		Description: inputString(in.Description),
+		SortOrder:   inputInt(in.SortOrder, nextSortOrderValue(s.db, "specialty", nil)),
+		Status:      inputInt16(in.Status, 1),
 		CreatedAt:   beijingNow(),
 	}
 	if err := s.db.Create(&spec).Error; err != nil {
-		return nil, err
+		return SpecialtyDict{}, err
 	}
-	return specialtyToDict(&spec), nil
+	return specialtyDict(&spec), nil
 }
 
 // SwapSpecialtySort 交换两个专业方向的排序位置（真实生效，含同值默认）。
@@ -134,30 +166,42 @@ func (s *TrainingCatalogService) SwapSpecialtySort(a, b int) error {
 }
 
 // UpdateSpecialty 更新专业方向。
-func (s *TrainingCatalogService) UpdateSpecialty(id int, data map[string]any) (map[string]any, error) {
+func (s *TrainingCatalogService) UpdateSpecialty(id int, in SpecialtyInput) (SpecialtyDict, error) {
 	var spec model.Specialty
 	if err := s.db.First(&spec, id).Error; err != nil {
-		return nil, errors.New("专业方向不存在")
+		return SpecialtyDict{}, errors.New("专业方向不存在")
 	}
-	if v, ok := data["code"].(string); ok && v != "" {
-		spec.Code = v
+	if err := validateStatus(in.Status); err != nil {
+		return SpecialtyDict{}, err
 	}
-	if v, ok := data["name"].(string); ok && v != "" {
-		spec.Name = v
+	if in.Code != "" {
+		if in.Code != spec.Code {
+			dup, err := countByCode(s.db, "specialty", "specialty_id", in.Code, id)
+			if err != nil {
+				return SpecialtyDict{}, err
+			}
+			if dup > 0 {
+				return SpecialtyDict{}, errors.New("专业方向编码已存在")
+			}
+		}
+		spec.Code = in.Code
 	}
-	if v, ok := data["description"]; ok {
-		spec.Description, _ = v.(string)
+	if in.Name != "" {
+		spec.Name = in.Name
 	}
-	if v, ok := data["sort_order"]; ok {
-		spec.SortOrder = toIntDefault(v, spec.SortOrder)
+	if in.Description != nil {
+		spec.Description = *in.Description
 	}
-	if v, ok := data["status"]; ok {
-		spec.Status = int16(toIntDefault(v, int(spec.Status)))
+	if in.SortOrder != nil {
+		spec.SortOrder = *in.SortOrder
+	}
+	if in.Status != nil {
+		spec.Status = *in.Status
 	}
 	if err := s.db.Save(&spec).Error; err != nil {
-		return nil, err
+		return SpecialtyDict{}, err
 	}
-	return specialtyToDict(&spec), nil
+	return specialtyDict(&spec), nil
 }
 
 // DeleteSpecialty 删除专业方向（已关联课程置空 specialty_id，不级联删除课程）。
@@ -175,42 +219,50 @@ func (s *TrainingCatalogService) DeleteSpecialty(id int) error {
 // ===== 课程等级 =====
 
 // ListLevels 课程等级列表（activeOnly=true 仅启用项）。
-func (s *TrainingCatalogService) ListLevels(activeOnly bool) map[string]any {
+func (s *TrainingCatalogService) ListLevels(activeOnly bool) []LevelDict {
 	q := s.db.Model(&model.CourseLevel{})
 	if activeOnly {
 		q = q.Where("status = ?", 1)
 	}
 	var list []model.CourseLevel
 	q.Order("sort_order ASC, level_id ASC").Find(&list)
-	items := make([]map[string]any, 0, len(list))
+	items := make([]LevelDict, 0, len(list))
 	for i := range list {
-		items = append(items, levelToDict(&list[i]))
+		items = append(items, levelDict(&list[i]))
 	}
-	return map[string]any{"levels": items}
+	return items
 }
 
 // CreateLevel 创建课程等级。
-func (s *TrainingCatalogService) CreateLevel(data map[string]any) (map[string]any, error) {
-	code, _ := data["code"].(string)
-	name, _ := data["name"].(string)
-	if code == "" {
-		return nil, errors.New("课程等级编码不能为空")
+func (s *TrainingCatalogService) CreateLevel(in LevelInput) (LevelDict, error) {
+	if in.Code == "" {
+		return LevelDict{}, errors.New("课程等级编码不能为空")
 	}
-	if name == "" {
-		return nil, errors.New("课程等级名称不能为空")
+	if in.Name == "" {
+		return LevelDict{}, errors.New("课程等级名称不能为空")
+	}
+	if err := validateStatus(in.Status); err != nil {
+		return LevelDict{}, err
+	}
+	dup, err := countByCode(s.db, "course_level", "level_id", in.Code, 0)
+	if err != nil {
+		return LevelDict{}, err
+	}
+	if dup > 0 {
+		return LevelDict{}, errors.New("课程等级编码已存在")
 	}
 	level := model.CourseLevel{
-		Code:        code,
-		Name:        name,
-		Description: getString(data, "description"),
-		SortOrder:   toIntDefault(data["sort_order"], nextSortOrderValue(s.db, "course_level", nil)),
-		Status:      int16(toIntDefault(data["status"], 1)),
+		Code:        in.Code,
+		Name:        in.Name,
+		Description: inputString(in.Description),
+		SortOrder:   inputInt(in.SortOrder, nextSortOrderValue(s.db, "course_level", nil)),
+		Status:      inputInt16(in.Status, 1),
 		CreatedAt:   beijingNow(),
 	}
 	if err := s.db.Create(&level).Error; err != nil {
-		return nil, err
+		return LevelDict{}, err
 	}
-	return levelToDict(&level), nil
+	return levelDict(&level), nil
 }
 
 // SwapLevelSort 交换两个课程等级的排序位置（真实生效，含同值默认）。
@@ -219,30 +271,42 @@ func (s *TrainingCatalogService) SwapLevelSort(a, b int) error {
 }
 
 // UpdateLevel 更新课程等级。
-func (s *TrainingCatalogService) UpdateLevel(id int, data map[string]any) (map[string]any, error) {
+func (s *TrainingCatalogService) UpdateLevel(id int, in LevelInput) (LevelDict, error) {
 	var level model.CourseLevel
 	if err := s.db.First(&level, id).Error; err != nil {
-		return nil, errors.New("课程等级不存在")
+		return LevelDict{}, errors.New("课程等级不存在")
 	}
-	if v, ok := data["code"].(string); ok && v != "" {
-		level.Code = v
+	if err := validateStatus(in.Status); err != nil {
+		return LevelDict{}, err
 	}
-	if v, ok := data["name"].(string); ok && v != "" {
-		level.Name = v
+	if in.Code != "" {
+		if in.Code != level.Code {
+			dup, err := countByCode(s.db, "course_level", "level_id", in.Code, id)
+			if err != nil {
+				return LevelDict{}, err
+			}
+			if dup > 0 {
+				return LevelDict{}, errors.New("课程等级编码已存在")
+			}
+		}
+		level.Code = in.Code
 	}
-	if v, ok := data["description"]; ok {
-		level.Description, _ = v.(string)
+	if in.Name != "" {
+		level.Name = in.Name
 	}
-	if v, ok := data["sort_order"]; ok {
-		level.SortOrder = toIntDefault(v, level.SortOrder)
+	if in.Description != nil {
+		level.Description = *in.Description
 	}
-	if v, ok := data["status"]; ok {
-		level.Status = int16(toIntDefault(v, int(level.Status)))
+	if in.SortOrder != nil {
+		level.SortOrder = *in.SortOrder
+	}
+	if in.Status != nil {
+		level.Status = *in.Status
 	}
 	if err := s.db.Save(&level).Error; err != nil {
-		return nil, err
+		return LevelDict{}, err
 	}
-	return levelToDict(&level), nil
+	return levelDict(&level), nil
 }
 
 // DeleteLevel 删除课程等级（已关联课程置空 level_id，不级联删除课程）。
@@ -260,83 +324,102 @@ func (s *TrainingCatalogService) DeleteLevel(id int) error {
 // ===== 证书模板 =====
 
 // ListCertificateTemplates 证书模板列表（activeOnly=true 仅启用项）。
-func (s *TrainingCatalogService) ListCertificateTemplates(activeOnly bool) map[string]any {
+func (s *TrainingCatalogService) ListCertificateTemplates(activeOnly bool) []CertificateTemplateDict {
 	q := s.db.Model(&model.CertificateTemplate{})
 	if activeOnly {
 		q = q.Where("status = ?", 1)
 	}
 	var list []model.CertificateTemplate
 	q.Order("id ASC").Find(&list)
-	items := make([]map[string]any, 0, len(list))
+	items := make([]CertificateTemplateDict, 0, len(list))
 	for i := range list {
-		items = append(items, certTemplateToDict(&list[i]))
+		items = append(items, certTemplateDict(&list[i]))
 	}
-	return map[string]any{"certificate_templates": items}
+	return items
 }
 
 // CreateCertificateTemplate 创建证书模板。
-func (s *TrainingCatalogService) CreateCertificateTemplate(data map[string]any) (map[string]any, error) {
-	code, _ := data["code"].(string)
-	name, _ := data["name"].(string)
-	if code == "" {
-		return nil, errors.New("证书模板编码不能为空")
+func (s *TrainingCatalogService) CreateCertificateTemplate(in CertificateTemplateInput) (CertificateTemplateDict, error) {
+	if in.Code == "" {
+		return CertificateTemplateDict{}, errors.New("证书模板编码不能为空")
 	}
-	if name == "" {
-		return nil, errors.New("证书模板名称不能为空")
+	if in.Name == "" {
+		return CertificateTemplateDict{}, errors.New("证书模板名称不能为空")
 	}
-	validityDays := toIntDefault(data["validity_days"], 365)
+	if err := validateStatus(in.Status); err != nil {
+		return CertificateTemplateDict{}, err
+	}
+	validityDays := inputInt(in.ValidityDays, 365)
 	if validityDays <= 0 {
-		return nil, errors.New("证书有效期必须为正整数（天）")
+		return CertificateTemplateDict{}, errors.New("证书有效期必须为正整数（天）")
+	}
+	dup, err := countByCode(s.db, "certificate_template", "id", in.Code, 0)
+	if err != nil {
+		return CertificateTemplateDict{}, err
+	}
+	if dup > 0 {
+		return CertificateTemplateDict{}, errors.New("证书模板编码已存在")
 	}
 	tpl := model.CertificateTemplate{
-		Code:         code,
-		Name:         name,
-		Description:  getString(data, "description"),
+		Code:         in.Code,
+		Name:         in.Name,
+		Description:  inputString(in.Description),
 		ValidityDays: validityDays,
-		TemplateURL:  getString(data, "template_url"),
-		Status:       int16(toIntDefault(data["status"], 1)),
+		TemplateURL:  inputString(in.TemplateURL),
+		Status:       inputInt16(in.Status, 1),
 		CreatedAt:    beijingNow(),
 		UpdatedAt:    beijingNow(),
 	}
 	if err := s.db.Create(&tpl).Error; err != nil {
-		return nil, err
+		return CertificateTemplateDict{}, err
 	}
-	return certTemplateToDict(&tpl), nil
+	return certTemplateDict(&tpl), nil
 }
 
 // UpdateCertificateTemplate 更新证书模板。
-func (s *TrainingCatalogService) UpdateCertificateTemplate(id int, data map[string]any) (map[string]any, error) {
+func (s *TrainingCatalogService) UpdateCertificateTemplate(id int, in CertificateTemplateInput) (CertificateTemplateDict, error) {
 	var tpl model.CertificateTemplate
 	if err := s.db.First(&tpl, id).Error; err != nil {
-		return nil, errors.New("证书模板不存在")
+		return CertificateTemplateDict{}, errors.New("证书模板不存在")
 	}
-	if v, ok := data["code"].(string); ok && v != "" {
-		tpl.Code = v
+	if err := validateStatus(in.Status); err != nil {
+		return CertificateTemplateDict{}, err
 	}
-	if v, ok := data["name"].(string); ok && v != "" {
-		tpl.Name = v
-	}
-	if v, ok := data["description"]; ok {
-		tpl.Description, _ = v.(string)
-	}
-	if v, ok := data["validity_days"]; ok {
-		days := toIntDefault(v, tpl.ValidityDays)
-		if days <= 0 {
-			return nil, errors.New("证书有效期必须为正整数（天）")
+	if in.Code != "" {
+		if in.Code != tpl.Code {
+			dup, err := countByCode(s.db, "certificate_template", "id", in.Code, id)
+			if err != nil {
+				return CertificateTemplateDict{}, err
+			}
+			if dup > 0 {
+				return CertificateTemplateDict{}, errors.New("证书模板编码已存在")
+			}
 		}
-		tpl.ValidityDays = days
+		tpl.Code = in.Code
 	}
-	if v, ok := data["template_url"]; ok {
-		tpl.TemplateURL, _ = v.(string)
+	if in.Name != "" {
+		tpl.Name = in.Name
 	}
-	if v, ok := data["status"]; ok {
-		tpl.Status = int16(toIntDefault(v, int(tpl.Status)))
+	if in.Description != nil {
+		tpl.Description = *in.Description
+	}
+	if in.ValidityDays != nil {
+		if *in.ValidityDays <= 0 {
+			return CertificateTemplateDict{}, errors.New("证书有效期必须为正整数（天）")
+		}
+		tpl.ValidityDays = *in.ValidityDays
+	}
+	if in.TemplateURL != nil {
+		tpl.TemplateURL = *in.TemplateURL
+	}
+	if in.Status != nil {
+		tpl.Status = *in.Status
 	}
 	tpl.UpdatedAt = beijingNow()
 	if err := s.db.Save(&tpl).Error; err != nil {
-		return nil, err
+		return CertificateTemplateDict{}, err
 	}
-	return certTemplateToDict(&tpl), nil
+	return certTemplateDict(&tpl), nil
 }
 
 // DeleteCertificateTemplate 删除证书模板（已关联课程置空 certificate_template_id）。
@@ -355,16 +438,16 @@ func (s *TrainingCatalogService) DeleteCertificateTemplate(id int) error {
 
 // ListQuestionTags 题库标签列表（activeOnly=true 仅启用项）。
 // 附带 question_count：学员端统计已发布题目数，管理端统计全部题目数。
-func (s *TrainingCatalogService) ListQuestionTags(activeOnly bool) map[string]any {
+func (s *TrainingCatalogService) ListQuestionTags(activeOnly bool) []QuestionTagDict {
 	q := s.db.Model(&model.QuestionTag{})
 	if activeOnly {
 		q = q.Where("status = ?", 1)
 	}
 	var list []model.QuestionTag
 	q.Order("sort_order ASC, id ASC").Find(&list)
-	items := make([]map[string]any, 0, len(list))
+	items := make([]QuestionTagDict, 0, len(list))
 	if len(list) == 0 {
-		return map[string]any{"tags": items}
+		return items
 	}
 	// 一次查询全部标签的题目数（LEFT JOIN 保证无题目标签也返回 0，避免 N+1）
 	type countRow struct {
@@ -386,19 +469,19 @@ func (s *TrainingCatalogService) ListQuestionTags(activeOnly bool) map[string]an
 		counts[rows[i].TagID] = rows[i]
 	}
 	for i := range list {
-		d := tagToDict(&list[i])
+		d := tagDict(&list[i])
+		var count int64
 		if c, ok := counts[list[i].ID]; ok {
 			if activeOnly {
-				d["question_count"] = c.PublishedCount
+				count = c.PublishedCount
 			} else {
-				d["question_count"] = c.TotalCount
+				count = c.TotalCount
 			}
-		} else {
-			d["question_count"] = int64(0)
 		}
+		d.QuestionCount = &count
 		items = append(items, d)
 	}
-	return map[string]any{"tags": items}
+	return items
 }
 
 // idsOfTags 提取标签 ID 列表。
@@ -411,72 +494,74 @@ func idsOfTags(tags []model.QuestionTag) []int {
 }
 
 // CreateQuestionTag 创建题库标签。
-func (s *TrainingCatalogService) CreateQuestionTag(data map[string]any) (map[string]any, error) {
-	code, _ := data["code"].(string)
-	name, _ := data["name"].(string)
-	if code == "" {
-		return nil, errors.New("标签编码不能为空")
+func (s *TrainingCatalogService) CreateQuestionTag(in QuestionTagInput) (QuestionTagDict, error) {
+	if in.Code == "" {
+		return QuestionTagDict{}, errors.New("标签编码不能为空")
 	}
-	if name == "" {
-		return nil, errors.New("标签名称不能为空")
+	if in.Name == "" {
+		return QuestionTagDict{}, errors.New("标签名称不能为空")
+	}
+	if err := validateStatus(in.Status); err != nil {
+		return QuestionTagDict{}, err
 	}
 	var dup int64
-	if err := s.db.Model(&model.QuestionTag{}).Where("code = ?", code).Count(&dup).Error; err != nil {
-		return nil, err
+	if err := s.db.Model(&model.QuestionTag{}).Where("code = ?", in.Code).Count(&dup).Error; err != nil {
+		return QuestionTagDict{}, err
 	}
 	if dup > 0 {
-		return nil, errors.New("标签编码已存在")
+		return QuestionTagDict{}, errors.New("标签编码已存在")
 	}
 	tag := model.QuestionTag{
-		Code:        code,
-		Name:        name,
-		Description: getString(data, "description"),
-		SortOrder:   toIntDefault(data["sort_order"], nextSortOrderValue(s.db, "question_tag", nil)),
-		Status:      int16(toIntDefault(data["status"], 1)),
+		Code:        in.Code,
+		Name:        in.Name,
+		Description: inputString(in.Description),
+		SortOrder:   inputInt(in.SortOrder, nextSortOrderValue(s.db, "question_tag", nil)),
+		Status:      inputInt16(in.Status, 1),
 		CreatedAt:   beijingNow(),
 		UpdatedAt:   beijingNow(),
 	}
 	if err := s.db.Create(&tag).Error; err != nil {
-		return nil, err
+		return QuestionTagDict{}, err
 	}
-	return tagToDict(&tag), nil
+	return tagDict(&tag), nil
 }
 
 // UpdateQuestionTag 更新题库标签。
-func (s *TrainingCatalogService) UpdateQuestionTag(id int, data map[string]any) (map[string]any, error) {
+func (s *TrainingCatalogService) UpdateQuestionTag(id int, in QuestionTagInput) (QuestionTagDict, error) {
 	var tag model.QuestionTag
 	if err := s.db.First(&tag, id).Error; err != nil {
-		return nil, errors.New("题库标签不存在")
+		return QuestionTagDict{}, errors.New("题库标签不存在")
 	}
-	if v, ok := data["code"].(string); ok && v != "" {
-		if v != tag.Code {
-			var dup int64
-			if err := s.db.Model(&model.QuestionTag{}).Where("code = ? AND id <> ?", v, id).Count(&dup).Error; err != nil {
-				return nil, err
-			}
-			if dup > 0 {
-				return nil, errors.New("标签编码已存在")
-			}
+	if err := validateStatus(in.Status); err != nil {
+		return QuestionTagDict{}, err
+	}
+	if in.Code != "" && in.Code != tag.Code {
+		var dup int64
+		if err := s.db.Model(&model.QuestionTag{}).Where("code = ? AND id <> ?", in.Code, id).Count(&dup).Error; err != nil {
+			return QuestionTagDict{}, err
 		}
-		tag.Code = v
+		if dup > 0 {
+			return QuestionTagDict{}, errors.New("标签编码已存在")
+		}
+		tag.Code = in.Code
 	}
-	if v, ok := data["name"].(string); ok && v != "" {
-		tag.Name = v
+	if in.Name != "" {
+		tag.Name = in.Name
 	}
-	if v, ok := data["description"]; ok {
-		tag.Description, _ = v.(string)
+	if in.Description != nil {
+		tag.Description = *in.Description
 	}
-	if v, ok := data["sort_order"]; ok {
-		tag.SortOrder = toIntDefault(v, tag.SortOrder)
+	if in.SortOrder != nil {
+		tag.SortOrder = *in.SortOrder
 	}
-	if v, ok := data["status"]; ok {
-		tag.Status = int16(toIntDefault(v, int(tag.Status)))
+	if in.Status != nil {
+		tag.Status = *in.Status
 	}
 	tag.UpdatedAt = beijingNow()
 	if err := s.db.Save(&tag).Error; err != nil {
-		return nil, err
+		return QuestionTagDict{}, err
 	}
-	return tagToDict(&tag), nil
+	return tagDict(&tag), nil
 }
 
 // DeleteQuestionTag 删除题库标签（自动清理题目关联）。
@@ -494,12 +579,12 @@ func (s *TrainingCatalogService) DeleteQuestionTag(id int) error {
 // ===== 题目-标签关联 =====
 
 // GetQuestionTags 查询题目已关联的标签列表。
-func (s *TrainingCatalogService) GetQuestionTags(questionID int) (map[string]any, error) {
+func (s *TrainingCatalogService) GetQuestionTags(questionID int) ([]QuestionTagRef, error) {
 	var q model.Question
 	if err := s.db.First(&q, questionID).Error; err != nil {
 		return nil, errors.New("题目不存在")
 	}
-	return map[string]any{"tags": s.loadQuestionTags(questionID)}, nil
+	return s.loadQuestionTags(questionID), nil
 }
 
 // SetQuestionTags 全量替换题目标签关联。
@@ -559,6 +644,7 @@ func (s *TrainingCatalogService) GetAdminCatalogTree() map[string]any {
 
 // getCatalogTree 构建目录树。
 // activeOnly=true 时仅返回启用项（学员端）；withChapters=true 时课程节点附带章节列表（管理端）。
+// 目录树节点 = 列表字典字段 + 嵌套子节点，是独立投影；构建保持内部 map 方式（接口面为 typed DTO）。
 func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool) map[string]any {
 	var specialties []model.Specialty
 	{
@@ -641,8 +727,8 @@ func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool) m
 
 // ===== 辅助 =====
 
-// loadQuestionTags 加载单题标签列表。
-func (s *TrainingCatalogService) loadQuestionTags(questionID int) []map[string]any {
+// loadQuestionTags 加载单题标签列表（题目-标签关联摘要）。
+func (s *TrainingCatalogService) loadQuestionTags(questionID int) []QuestionTagRef {
 	var rows []struct {
 		TagID     int    `gorm:"column:tag_id"`
 		TagCode   string `gorm:"column:tag_code"`
@@ -656,16 +742,16 @@ func (s *TrainingCatalogService) loadQuestionTags(questionID int) []map[string]a
 		Where("qtr.question_id = ?", questionID).
 		Order("t.sort_order ASC, t.id ASC").
 		Scan(&rows).Error; err != nil {
-		return []map[string]any{}
+		return []QuestionTagRef{}
 	}
-	out := make([]map[string]any, 0, len(rows))
+	out := make([]QuestionTagRef, 0, len(rows))
 	for i := range rows {
-		out = append(out, map[string]any{
-			"id":         rows[i].TagID,
-			"code":       rows[i].TagCode,
-			"name":       rows[i].TagName,
-			"sort_order": rows[i].SortOrder,
-			"status":     rows[i].Status,
+		out = append(out, QuestionTagRef{
+			ID:        rows[i].TagID,
+			Code:      rows[i].TagCode,
+			Name:      rows[i].TagName,
+			SortOrder: rows[i].SortOrder,
+			Status:    rows[i].Status,
 		})
 	}
 	return out
@@ -685,7 +771,60 @@ func dedupeInts(vals []int) []int {
 	return out
 }
 
-// ===== dict 辅助 =====
+// ===== typed 字典辅助 =====
+
+func specialtyDict(s *model.Specialty) SpecialtyDict {
+	return SpecialtyDict{
+		Code:        s.Code,
+		CreatedAt:   formatISO(s.CreatedAt),
+		Description: s.Description,
+		Name:        s.Name,
+		SortOrder:   s.SortOrder,
+		SpecialtyID: s.SpecialtyID,
+		Status:      s.Status,
+	}
+}
+
+func levelDict(l *model.CourseLevel) LevelDict {
+	return LevelDict{
+		Code:        l.Code,
+		CreatedAt:   formatISO(l.CreatedAt),
+		Description: l.Description,
+		LevelID:     l.LevelID,
+		Name:        l.Name,
+		SortOrder:   l.SortOrder,
+		Status:      l.Status,
+	}
+}
+
+func certTemplateDict(t *model.CertificateTemplate) CertificateTemplateDict {
+	return CertificateTemplateDict{
+		Code:         t.Code,
+		CreatedAt:    formatISO(t.CreatedAt),
+		Description:  t.Description,
+		ID:           t.ID,
+		Name:         t.Name,
+		Status:       t.Status,
+		TemplateURL:  t.TemplateURL,
+		UpdatedAt:    formatISO(t.UpdatedAt),
+		ValidityDays: t.ValidityDays,
+	}
+}
+
+func tagDict(t *model.QuestionTag) QuestionTagDict {
+	return QuestionTagDict{
+		Code:        t.Code,
+		CreatedAt:   formatISO(t.CreatedAt),
+		Description: t.Description,
+		ID:          t.ID,
+		Name:        t.Name,
+		SortOrder:   t.SortOrder,
+		Status:      t.Status,
+		UpdatedAt:   formatISO(t.UpdatedAt),
+	}
+}
+
+// ===== 目录树投影用 map 字典（节点 = 列表字典字段 + 嵌套子节点） =====
 
 func specialtyToDict(s *model.Specialty) map[string]any {
 	return map[string]any{
@@ -708,32 +847,5 @@ func levelToDict(l *model.CourseLevel) map[string]any {
 		"sort_order":  l.SortOrder,
 		"status":      l.Status,
 		"created_at":  formatISO(l.CreatedAt),
-	}
-}
-
-func certTemplateToDict(t *model.CertificateTemplate) map[string]any {
-	return map[string]any{
-		"id":            t.ID,
-		"code":          t.Code,
-		"name":          t.Name,
-		"description":   t.Description,
-		"validity_days": t.ValidityDays,
-		"template_url":  t.TemplateURL,
-		"status":        t.Status,
-		"created_at":    formatISO(t.CreatedAt),
-		"updated_at":    formatISO(t.UpdatedAt),
-	}
-}
-
-func tagToDict(t *model.QuestionTag) map[string]any {
-	return map[string]any{
-		"id":          t.ID,
-		"code":        t.Code,
-		"name":        t.Name,
-		"description": t.Description,
-		"sort_order":  t.SortOrder,
-		"status":      t.Status,
-		"created_at":  formatISO(t.CreatedAt),
-		"updated_at":  formatISO(t.UpdatedAt),
 	}
 }

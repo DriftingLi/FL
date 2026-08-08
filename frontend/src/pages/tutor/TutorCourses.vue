@@ -82,16 +82,13 @@ function levelNameOf(id?: number | null) {
 
 async function loadCatalog() {
   try {
-    const [treeRes, levelsRes] = await Promise.all([
+    // 拦截器已解包信封
+    const [treeData, levelsData] = await Promise.all([
       trainingApi.getCatalogTree(),
       trainingApi.getLevels()
     ])
-    if (treeRes.code === 200) {
-      directions.value = treeRes.data.specialties || []
-    }
-    if (levelsRes.code === 200) {
-      levels.value = levelsRes.data.levels || []
-    }
+    directions.value = treeData.specialties || []
+    levels.value = levelsData.levels || []
   } catch (e) {
     // 静默失败：方向/等级标签降级为空
   }
@@ -104,10 +101,8 @@ async function loadCourses() {
       page: currentPage.value,
       page_size: pageSize.value
     })
-    if (res.code === 200) {
-      courses.value = res.data.courses
-      total.value = res.data.total
-    }
+    courses.value = res.courses
+    total.value = res.total
   } catch (e) {
     console.error('Failed to load courses:', e)
   } finally {

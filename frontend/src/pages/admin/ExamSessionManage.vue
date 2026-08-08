@@ -89,7 +89,7 @@ async function loadData() {
   loading.value = true
   try {
     const res = await levelExamApi.getSessions({ page: 1, page_size: 50 })
-    sessions.value = res.data?.sessions || []
+    sessions.value = res?.sessions || []
   } catch (e) {} finally { loading.value = false }
 }
 

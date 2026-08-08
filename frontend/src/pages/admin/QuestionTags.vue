@@ -197,10 +197,9 @@ const tagAssignTagIds = ref<number[]>([])
 async function loadTags() {
   tagsLoading.value = true
   try {
-    const res = await trainingApi.getQuestionTags()
-    if (res.code === 200) {
-      tags.value = res.data.tags || []
-    }
+    // 拦截器已解包信封
+    const data = await trainingApi.getQuestionTags()
+    tags.value = data.tags || []
   } catch (error) {
     console.error('加载标签失败:', error)
     ElMessage.error('加载标签失败')
@@ -221,10 +220,8 @@ async function loadQuestions() {
     if (filterType.value) params.type = filterType.value
 
     const res = await questionBankApi.getQuestions(params as never)
-    if (res.code === 200) {
-      questions.value = res.data.questions || []
-      total.value = res.data.total || 0
-    }
+    questions.value = res.questions || []
+    total.value = res.total || 0
   } catch (error) {
     console.error('加载题目失败:', error)
     ElMessage.error('加载题目失败')
@@ -260,11 +257,11 @@ async function submitTag() {
       code: tagForm.code
     }
     if (tagForm.id) {
-      const res = await trainingApi.updateQuestionTag(tagForm.id, payload)
-      if (res.code === 200) ElMessage.success('标签已更新')
+      await trainingApi.updateQuestionTag(tagForm.id, payload)
+      ElMessage.success('标签已更新')
     } else {
-      const res = await trainingApi.createQuestionTag(payload)
-      if (res.code === 201) ElMessage.success('标签已创建')
+      await trainingApi.createQuestionTag(payload)
+      ElMessage.success('标签已创建')
     }
     tagDialogVisible.value = false
     await loadTags()
@@ -278,13 +275,11 @@ async function submitTag() {
 
 async function handleDeleteTag(tag: QuestionTag) {
   try {
-    const res = await trainingApi.deleteQuestionTag(tag.id)
-    if (res.code === 200) {
-      ElMessage.success('标签已删除')
-      if (currentTagId.value === tag.id) currentTagId.value = null
-      await loadTags()
-      loadQuestions()
-    }
+    await trainingApi.deleteQuestionTag(tag.id)
+    ElMessage.success('标签已删除')
+    if (currentTagId.value === tag.id) currentTagId.value = null
+    await loadTags()
+    loadQuestions()
   } catch (error) {
     console.error('删除标签失败:', error)
     ElMessage.error('删除失败')
@@ -300,16 +295,12 @@ function openTagAssign(questionIds: number[]) {
 async function submitTagAssign() {
   tagSubmitting.value = true
   try {
-    let ok = true
     for (const qid of tagAssignQuestionIds.value) {
-      const res = await trainingApi.setQuestionTags(qid, tagAssignTagIds.value)
-      if (res.code !== 200) ok = false
+      await trainingApi.setQuestionTags(qid, tagAssignTagIds.value)
     }
-    if (ok) {
-      ElMessage.success('打标完成')
-      tagAssignVisible.value = false
-      loadQuestions()
-    }
+    ElMessage.success('打标完成')
+    tagAssignVisible.value = false
+    loadQuestions()
   } catch (error) {
     console.error('打标失败:', error)
     ElMessage.error('打标失败')

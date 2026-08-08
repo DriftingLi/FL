@@ -1,4 +1,4 @@
-import request from './request'
+import { unwrappedRequest } from './request'
 import type { Question } from '@/types/question'
 
 export interface LevelExamSessionQuery {
@@ -68,50 +68,50 @@ export interface LevelExamResult {
 
 export const levelExamApi = {
   getSessions(params: LevelExamSessionQuery) {
-    return request.get<{ sessions: LevelExamSession[] }>('/level-exam/sessions', { params })
+    return unwrappedRequest.get<{ sessions: LevelExamSession[] }>('/level-exam/sessions', { params })
   },
 
   createSession(data: LevelExamSessionPayload) {
-    return request.post<{ id: number }>('/level-exam/sessions', data)
+    return unwrappedRequest.post<{ id: number }>('/level-exam/sessions', data)
   },
 
   getSessionDetail(sessionId: number) {
-    return request.get<LevelExamSession>(`/level-exam/sessions/${sessionId}`)
+    return unwrappedRequest.get<LevelExamSession>(`/level-exam/sessions/${sessionId}`)
   },
 
   updateSession(sessionId: number, data: LevelExamSessionPayload) {
-    return request.put<null>(`/level-exam/sessions/${sessionId}`, data)
+    return unwrappedRequest.put<null>(`/level-exam/sessions/${sessionId}`, data)
   },
 
   deleteSession(sessionId: number) {
-    return request.delete<null>(`/level-exam/sessions/${sessionId}`)
+    return unwrappedRequest.delete<null>(`/level-exam/sessions/${sessionId}`)
   },
 
   updateSessionStatus(sessionId: number, status: string) {
-    return request.put<null>(`/level-exam/sessions/${sessionId}/status`, { status })
+    return unwrappedRequest.put<null>(`/level-exam/sessions/${sessionId}/status`, { status })
   },
 
   enterExam(sessionId: number) {
-    return request.post<LevelExamEnterData>(`/level-exam/sessions/${sessionId}/enter`)
+    return unwrappedRequest.post<LevelExamEnterData>(`/level-exam/sessions/${sessionId}/enter`)
   },
 
   saveAnswer(participantId: number, data: SaveAnswerPayload) {
-    return request.post<null>(`/level-exam/participants/${participantId}/save`, data)
+    return unwrappedRequest.post<null>(`/level-exam/participants/${participantId}/save`, data)
   },
 
   submitExam(participantId: number, data: SubmitExamPayload) {
-    return request.post<{ result?: LevelExamResult }>(`/level-exam/participants/${participantId}/submit`, data)
+    return unwrappedRequest.post<{ result?: LevelExamResult }>(`/level-exam/participants/${participantId}/submit`, data)
   },
 
   getExamResult(participantId: number) {
-    return request.get<LevelExamResult>(`/level-exam/participants/${participantId}/result`)
+    return unwrappedRequest.get<LevelExamResult>(`/level-exam/participants/${participantId}/result`)
   },
 
   getAvailableExams() {
-    return request.get<LevelExamSession[]>('/level-exam/available')
+    return unwrappedRequest.get<LevelExamSession[]>('/level-exam/available')
   },
 
   getExamHistory(params: ExamHistoryQuery) {
-    return request.get<{ exams: LevelExamSession[] }>('/level-exam/history', { params })
+    return unwrappedRequest.get<{ exams: LevelExamSession[] }>('/level-exam/history', { params })
   }
 }

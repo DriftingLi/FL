@@ -196,11 +196,9 @@ async function handleSendBindCode() {
   }
   codeSending.value = true
   try {
-    const res = await authApi.sendProfileCode({ channel: bindChannel.value, target })
-    if (res.code === 200) {
-      ElMessage.success('验证码已发送，请查收')
-      startCountdown()
-    }
+    await authApi.sendProfileCode({ channel: bindChannel.value, target })
+    ElMessage.success('验证码已发送，请查收')
+    startCountdown()
   } catch (e) {
     // 拦截器已提示
   } finally {
@@ -221,14 +219,14 @@ async function handleBind() {
   }
   binding.value = true
   try {
-    const res = bindChannel.value === 'email'
-      ? await authApi.updateProfileEmail({ email: target, code })
-      : await authApi.updateProfilePhone({ phone: target, code })
-    if (res.code === 200) {
-      ElMessage.success('修改成功')
-      bindVisible.value = false
-      await authStore.refreshUserInfo()
+    if (bindChannel.value === 'email') {
+      await authApi.updateProfileEmail({ email: target, code })
+    } else {
+      await authApi.updateProfilePhone({ phone: target, code })
     }
+    ElMessage.success('修改成功')
+    bindVisible.value = false
+    await authStore.refreshUserInfo()
   } catch (e) {
     // 拦截器已提示
   } finally {
@@ -247,15 +245,13 @@ async function handleSetPassword() {
   }
   savingPassword.value = true
   try {
-    const res = await authApi.updateProfilePassword(password.value)
-    if (res.code === 200) {
-      ElMessage.success('密码设置成功')
-      passwordDialogVisible.value = false
-      password.value = ''
-      confirmPassword.value = ''
-      // 刷新用户信息以更新 has_password 状态
-      await authStore.refreshUserInfo()
-    }
+    await authApi.updateProfilePassword(password.value)
+    ElMessage.success('密码设置成功')
+    passwordDialogVisible.value = false
+    password.value = ''
+    confirmPassword.value = ''
+    // 刷新用户信息以更新 has_password 状态
+    await authStore.refreshUserInfo()
   } catch (e) {
     // 拦截器已提示
   } finally {

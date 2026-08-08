@@ -11,18 +11,15 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 
-	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
 
 // RegisterExportRoutes 注册 /api/admin/export 蓝图（仅管理员，返回 CSV 附件）。
-func RegisterExportRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, logger *zap.Logger) {
-	svc := service.NewExportService(db, logger)
+func RegisterExportRoutes(rg *gin.RouterGroup, deps *Deps) {
+	svc := deps.ExportSvc
+	cfg := deps.Cfg
 	g := rg.Group("/admin/export", middleware.JWTAuth(cfg), middleware.RoleRequired("admin"))
 
 	g.GET("/students", exportCSVHandler(func() ([][]any, error) { return svc.Students() }, "学员名单.csv"))

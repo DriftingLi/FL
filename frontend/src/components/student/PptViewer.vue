@@ -97,7 +97,7 @@ const resolvedSrc = computed(() => resolveFileUrl(props.src))
 const containerRef = ref<HTMLDivElement | null>(null)
 const stripRef = ref<HTMLDivElement | null>(null)
 
-const slides = ref([])
+const slides = ref<string[]>([])
 const currentSlideIndex = ref(0)
 const loading = ref(true)
 const loadError = ref(false)
@@ -112,13 +112,10 @@ async function loadSlides() {
   loadError.value = false
   try {
     const res = await courseApi.getChapterSlides(Number(props.chapterId))
-    let rawSlides = []
-    if (res && res.data && Array.isArray(res.data.slides)) {
-      rawSlides = res.data.slides
-    } else if (res && Array.isArray((res as any).slides)) {
-      rawSlides = (res as any).slides
-    } else if (res && Array.isArray(res)) {
-      rawSlides = res
+    // 拦截器已解包信封，返回 { slides?: string[] }
+    let rawSlides: string[] = []
+    if (res && Array.isArray(res.slides)) {
+      rawSlides = res.slides
     }
     slides.value = rawSlides.map((s: string) => resolveFileUrl(s))
     currentSlideIndex.value = 0

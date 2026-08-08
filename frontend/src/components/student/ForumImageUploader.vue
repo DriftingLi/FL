@@ -98,11 +98,11 @@ async function uploadFiles(files: File[]) {
       formData.append('file', file)
       try {
         const res = await forumApi.uploadImage(formData)
-        if ((res.code === 200 || res.code === 201) && res.data?.url) {
+        if (res?.url) {
           if (props.modelValue.length >= props.max) break
-          emit('update:modelValue', [...props.modelValue, res.data.url])
+          emit('update:modelValue', [...props.modelValue, res.url])
         } else {
-          ElMessage.error(res.message || `"${file.name}" 上传失败`)
+          ElMessage.error(`"${file.name}" 上传失败`)
         }
       } catch (e: any) {
         ElMessage.error(e.message || `"${file.name}" 上传失败`)
