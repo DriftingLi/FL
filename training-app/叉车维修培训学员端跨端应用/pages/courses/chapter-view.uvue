@@ -1,0 +1,750 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">{{ detail != null ? detail!.title : '章节学习' }}</text>
+            <view class="header-right"></view>
+        </view>
+
+        <!-- 加载中 -->
+        <view v-if="loading" class="loading-wrap">
+            <text class="loading-text">正在加载...</text>
+        </view>
+
+        <!-- 加载失败 -->
+        <view v-else-if="detail == null || detail!.chapter_id == 0" class="empty-wrap">
+            <text class="empty-text">章节内容加载失败</text>
+            <view class="retry-btn" @click="loadDetail">
+                <text class="retry-btn-text">重试</text>
+            </view>
+        </view>
+
+        <!-- 章节内容 -->
+        <scroll-view v-else class="content-scroll" scroll-y="true">
+            <!-- 章节标题区 -->
+            <view class="chapter-header">
+                <text class="chapter-title">{{ detail!.title }}</text>
+                <view class="chapter-meta">
+                    <text v-if="detail!.study_status == 'completed'" class="status-tag completed">已完成</text>
+                    <text v-else class="status-tag studying">学习中</text>
+                    <text class="chapter-duration">预计 {{ formatDuration(detail!.duration) }}</text>
+                </view>
+            </view>
+
+            <!-- 图文内容（Markdown 渲染） -->
+            <view v-if="detail!.content.length > 0" class="section md-section">
+                <view v-for="(block, idx) in contentBlocks" :key="idx" class="md-block">
+                    <!-- 标题 -->
+                    <text v-if="block.type == 'heading'"
+                        :class="['md-heading', 'md-h' + block.level]">{{ block.text }}</text>
+                    <!-- 段落 -->
+                    <text v-else-if="block.type == 'paragraph'" class="md-paragraph">{{ block.text }}</text>
+                    <!-- 代码块 -->
+                    <view v-else-if="block.type == 'code'" class="md-code-wrap">
+                        <text class="md-code">{{ block.text }}</text>
+                    </view>
+                    <!-- 列表 -->
+                    <view v-else-if="block.type == 'list'" class="md-list">
+                        <view v-for="(item, li) in block.items" :key="li" class="md-list-item">
+                            <text class="md-list-bullet">•</text>
+                            <text class="md-list-text">{{ item }}</text>
+                        </view>
+                    </view>
+                    <!-- 引用 -->
+                    <view v-else-if="block.type == 'quote'" class="md-quote">
+                        <text class="md-quote-text">{{ block.text }}</text>
+                    </view>
+                    <!-- 分隔线 -->
+                    <view v-else-if="block.type == 'divider'" class="md-divider"></view>
+                    <!-- 图片 -->
+                    <image v-else-if="block.type == 'image'" class="md-image"
+                        :src="block.text" mode="widthFix" @click="onImageClick(block.text)"></image>
+                </view>
+            </view>
+
+            <!-- 附件列表 -->
+            <view v-if="detail!.files.length > 0" class="section">
+                <text class="section-title">附件资料</text>
+                <view class="file-list">
+                    <view v-for="(file, idx) in detail!.files" :key="idx" class="file-item"
+                        @click="onFileClick(file)">
+                        <view class="file-icon-wrap" :class="getFileIconClass(file.content_type)">
+                            <text class="file-icon">{{ getFileIcon(file.content_type) }}</text>
+                        </view>
+                        <view class="file-info">
+                            <text class="file-name">{{ file.file_name }}</text>
+                            <text class="file-type">{{ getFileTypeName(file.content_type) }}</text>
+                        </view>
+                        <text class="file-arrow">›</text>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 无内容提示 -->
+            <view v-if="detail!.content.length == 0 && detail!.files.length == 0" class="empty-tip">
+                <text class="empty-text">该章节暂无内容</text>
+            </view>
+
+            <!-- 完成学习按钮 -->
+            <!-- <view class="complete-bar">
+                <view v-if="detail!.study_status != 'completed'" class="complete-btn" @click="onComplete">
+                    <text class="complete-btn-text">完成本章学习</text>
+                </view>
+                <view v-else class="completed-tag">
+                    <text class="completed-tag-text">✓ 本章已完成</text>
+                </view>
+            </view> -->
+
+            <!-- 上/下章导航 -->
+            <view class="chapter-nav">
+                <view class="nav-item nav-prev" :class="{ disabled: detail!.previous_chapter_id == 0 }"
+                    @click="onPrevChapter">
+                    <text class="nav-arrow">‹</text>
+                    <view class="nav-content">
+                        <text class="nav-label">上一章节</text>
+                        <text v-if="detail!.previous_chapter_id != 0" class="nav-title">{{ prevTitle }}</text>
+                        <text v-else class="nav-title-muted">没有上一章节</text>
+                    </view>
+                </view>
+                <view class="nav-item nav-next" :class="{ disabled: detail!.next_chapter_id == 0 }"
+                    @click="onNextChapter">
+                    <view class="nav-content nav-content-right">
+                        <text class="nav-label">下一章节</text>
+                        <text v-if="detail!.next_chapter_id != 0" class="nav-title">{{ nextTitle }}</text>
+                        <text v-else class="nav-title-muted">没有下一章节</text>
+                    </view>
+                    <text class="nav-arrow">›</text>
+                </view>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { parseMarkdown } from '../../utils/markdown'
+    import { getCourseDetailApi, getChapterDetailApi, updateCourseProgressApi } from '../../api/course'
+    import type { ChapterDetail, ChapterFile, CourseDetail, MarkdownBlock } from '../../types/index'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const courseId = ref<number>(0)
+    const chapterId = ref<number>(0)
+    const detail = ref<ChapterDetail | null>(null)
+    const loading = ref<boolean>(true)
+
+    // 用于上下章标题显示
+    const courseDetail = ref<CourseDetail | null>(null)
+    const prevTitle = ref<string>('')
+    const nextTitle = ref<string>('')
+
+    // Markdown 解析后的内容块
+    const contentBlocks = computed<MarkdownBlock[]>(() : MarkdownBlock[] => {
+        if (detail.value == null) return [] as MarkdownBlock[]
+        if (detail.value!.content.length == 0) return [] as MarkdownBlock[]
+        return parseMarkdown(detail.value!.content)
+    })
+
+    function formatDuration(seconds : number) : string {
+        if (seconds <= 0) return '未知'
+        const minutes = Math.floor(seconds / 60)
+        if (minutes < 60) return minutes + '分钟'
+        const hours = Math.floor(minutes / 60)
+        const mins = minutes % 60
+        return hours + '小时' + (mins > 0 ? mins + '分' : '')
+    }
+
+    function getFileIcon(contentType : string) : string {
+        if (contentType == 'video') return '🎬'
+        if (contentType == 'document') return '📄'
+        if (contentType == 'ppt') return '📊'
+        if (contentType == 'image') return '🖼️'
+        return '📎'
+    }
+
+    function getFileIconClass(contentType : string) : string {
+        if (contentType == 'video') return 'file-icon-video'
+        if (contentType == 'document') return 'file-icon-doc'
+        if (contentType == 'ppt') return 'file-icon-ppt'
+        if (contentType == 'image') return 'file-icon-image'
+        return 'file-icon-default'
+    }
+
+    function getFileTypeName(contentType : string) : string {
+        if (contentType == 'video') return '视频'
+        if (contentType == 'document') return '文档'
+        if (contentType == 'ppt') return 'PPT'
+        if (contentType == 'image') return '图片'
+        return '附件'
+    }
+
+    function updateNavTitles() {
+        if (detail.value == null || courseDetail.value == null) {
+            prevTitle.value = ''
+            nextTitle.value = ''
+            return
+        }
+        const chapters = courseDetail.value!.chapters
+        const prevId = detail.value!.previous_chapter_id
+        const nextId = detail.value!.next_chapter_id
+        prevTitle.value = ''
+        nextTitle.value = ''
+        for (let i = 0; i < chapters.length; i++) {
+            const ch = chapters[i]
+            if (ch.chapter_id == prevId) prevTitle.value = ch.title
+            if (ch.chapter_id == nextId) nextTitle.value = ch.title
+        }
+    }
+
+    async function loadDetail() {
+        if (courseId.value <= 0 || chapterId.value <= 0) return
+        loading.value = true
+        detail.value = null
+        try {
+            const data = await getChapterDetailApi(courseId.value, chapterId.value)
+            detail.value = data
+            // 加载课程详情以获取上下章标题
+            if (courseDetail.value == null) {
+                const cd = await getCourseDetailApi(courseId.value)
+                courseDetail.value = cd
+            }
+            updateNavTitles()
+        } catch (e) {
+            console.error('[chapter-view] load failed:', e)
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function onBack() : void {
+        uni.navigateBack()
+    }
+
+    function onImageClick(url : string) : void {
+        if (url.length == 0) return
+        uni.previewImage({
+            urls: [url],
+            current: url,
+        })
+    }
+
+    function onFileClick(file : ChapterFile) : void {
+        if (file.file_url.length == 0) {
+            uni.showToast({ title: '文件地址无效', icon: 'none' })
+            return
+        }
+        // 在新窗口/webview 中打开文件
+        uni.showLoading({ title: '加载中...' })
+        uni.downloadFile({
+            url: file.file_url,
+            success: (res) => {
+                uni.hideLoading()
+                if (res.statusCode == 200) {
+                    uni.openDocument({
+                        filePath: res.tempFilePath,
+                        fail: () => {
+                            uni.showToast({ title: '无法打开此文件', icon: 'none' })
+                        }
+                    })
+                } else {
+                    uni.showToast({ title: '文件下载失败', icon: 'none' })
+                }
+            },
+            fail: () => {
+                uni.hideLoading()
+                uni.showToast({ title: '文件下载失败', icon: 'none' })
+            }
+        })
+    }
+
+    async function onComplete() : Promise<void> {
+        if (detail.value == null) return
+        const chapterIdVal = detail.value!.chapter_id
+        try {
+            await updateCourseProgressApi(courseId.value, chapterIdVal, detail.value!.duration)
+            detail.value!.study_status = 'completed'
+            uni.showToast({ title: '学习进度已保存', icon: 'success' })
+        } catch (e) {
+            console.error('[chapter-view] save progress failed:', e)
+            uni.showToast({ title: '保存失败，请稍后重试', icon: 'none' })
+        }
+    }
+
+    function onPrevChapter() : void {
+        if (detail.value == null) return
+        const prevId = detail.value!.previous_chapter_id
+        if (prevId == 0) return
+        chapterId.value = prevId
+        loadDetail()
+    }
+
+    function onNextChapter() : void {
+        if (detail.value == null) return
+        const nextId = detail.value!.next_chapter_id
+        if (nextId == 0) return
+        chapterId.value = nextId
+        loadDetail()
+    }
+
+    onLoad((options : UTSJSONObject) => {
+        const cid = options['course_id']
+        const chid = options['chapter_id']
+        if (cid != null) courseId.value = parseInt(`${cid}`)
+        if (chid != null) chapterId.value = parseInt(`${chid}`)
+        loadDetail()
+    })
+</script>
+
+<style>
+    .container {
+        display: flex;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        width: 60rpx;
+        align-items: center;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #ffffff;
+    }
+
+    .header-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #ffffff;
+        flex: 1;
+        text-align: center;
+        lines: 1;
+        text-overflow: ellipsis;
+    }
+
+    .header-right {
+        width: 60rpx;
+    }
+
+    .content-scroll {
+        flex: 1;
+        height: 0;
+    }
+
+    /* 章节标题区 */
+    .chapter-header {
+        background-color: #ffffff;
+        padding: 32rpx;
+        flex-direction: column;
+    }
+
+    .chapter-title {
+        font-size: 40rpx;
+        font-weight: bold;
+        color: #333333;
+        line-height: 56rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .chapter-meta {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .status-tag {
+        font-size: 22rpx;
+        padding: 6rpx 16rpx;
+        border-radius: 8rpx;
+        margin-right: 16rpx;
+    }
+
+    .status-tag.completed {
+        color: #4caf50;
+        background-color: #e8f5e9;
+    }
+
+    .status-tag.studying {
+        color: #ff9800;
+        background-color: #fff3e0;
+    }
+
+    .chapter-duration {
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    /* 通用 section */
+    .section {
+        background-color: #ffffff;
+        margin-top: 16rpx;
+        padding: 32rpx;
+    }
+
+    .section-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 20rpx;
+    }
+
+    .chapter-content {
+        font-size: 28rpx;
+        color: #666666;
+        line-height: 48rpx;
+    }
+
+    /* ===== Markdown 渲染样式 ===== */
+    .md-section {
+        padding: 32rpx;
+    }
+
+    .md-block {
+        margin-bottom: 24rpx;
+    }
+
+    .md-block:last-child {
+        margin-bottom: 0;
+    }
+
+    /* 标题 */
+    .md-heading {
+        font-weight: bold;
+        color: #1a1a1a;
+        margin-top: 16rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .md-h1 {
+        font-size: 40rpx;
+        padding-bottom: 16rpx;
+        border-bottom: 1rpx solid #eeeeee;
+    }
+
+    .md-h2 {
+        font-size: 36rpx;
+        padding-bottom: 12rpx;
+        border-bottom: 1rpx solid #f0f0f0;
+    }
+
+    .md-h3 {
+        font-size: 32rpx;
+    }
+
+    .md-h4 {
+        font-size: 30rpx;
+        color: #333333;
+    }
+
+    .md-h5 {
+        font-size: 28rpx;
+        color: #333333;
+    }
+
+    .md-h6 {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    /* 段落 */
+    .md-paragraph {
+        font-size: 30rpx;
+        color: #333333;
+        line-height: 52rpx;
+    }
+
+    /* 代码块 */
+    .md-code-wrap {
+        background-color: #f6f8fa;
+        border-left: 6rpx solid #2979ff;
+        border-radius: 8rpx;
+        padding: 24rpx;
+        margin: 16rpx 0;
+    }
+
+    .md-code {
+        font-size: 26rpx;
+        color: #d63384;
+        line-height: 44rpx;
+        font-family: monospace;
+    }
+
+    /* 列表 */
+    .md-list {
+        flex-direction: column;
+        margin: 12rpx 0;
+    }
+
+    .md-list-item {
+        flex-direction: row;
+        align-items: flex-start;
+        margin-bottom: 12rpx;
+    }
+
+    .md-list-bullet {
+        font-size: 30rpx;
+        color: #2979ff;
+        margin-right: 16rpx;
+        line-height: 52rpx;
+    }
+
+    .md-list-text {
+        flex: 1;
+        font-size: 30rpx;
+        color: #333333;
+        line-height: 52rpx;
+    }
+
+    /* 引用 */
+    .md-quote {
+        background-color: #f0f7ff;
+        border-left: 6rpx solid #2979ff;
+        border-radius: 8rpx;
+        padding: 24rpx;
+        margin: 16rpx 0;
+    }
+
+    .md-quote-text {
+        font-size: 28rpx;
+        color: #555555;
+        line-height: 48rpx;
+    }
+
+    /* 分隔线 */
+    .md-divider {
+        height: 1rpx;
+        background-color: #e0e0e0;
+        margin: 24rpx 0;
+    }
+
+    /* 图片 */
+    .md-image {
+        width: 100%;
+        border-radius: 12rpx;
+        margin: 16rpx 0;
+    }
+
+    /* 附件列表 */
+    .file-list {
+        flex-direction: column;
+    }
+
+    .file-item {
+        flex-direction: row;
+        align-items: center;
+        padding: 24rpx 0;
+        border-bottom: 1rpx solid #f5f5f5;
+    }
+
+    .file-item:last-child {
+        border-bottom: none;
+    }
+
+    .file-icon-wrap {
+        width: 72rpx;
+        height: 72rpx;
+        border-radius: 12rpx;
+        align-items: center;
+        justify-content: center;
+        margin-right: 20rpx;
+    }
+
+    .file-icon-video {
+        background-color: #ffebee;
+    }
+
+    .file-icon-doc {
+        background-color: #e3f2fd;
+    }
+
+    .file-icon-ppt {
+        background-color: #fff3e0;
+    }
+
+    .file-icon-image {
+        background-color: #e8f5e9;
+    }
+
+    .file-icon-default {
+        background-color: #f5f5f5;
+    }
+
+    .file-icon {
+        font-size: 36rpx;
+    }
+
+    .file-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .file-name {
+        font-size: 28rpx;
+        color: #333333;
+        margin-bottom: 4rpx;
+    }
+
+    .file-type {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .file-arrow {
+        font-size: 40rpx;
+        color: #cccccc;
+    }
+
+    /* 完成学习按钮 */
+    .complete-bar {
+        padding: 32rpx;
+        align-items: center;
+    }
+
+    .complete-btn {
+        background-color: #4caf50;
+        border-radius: 48rpx;
+        padding: 24rpx 0;
+        align-items: center;
+        align-self: stretch;
+    }
+
+    .complete-btn-text {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .completed-tag {
+        background-color: #e8f5e9;
+        border: 1rpx solid #4caf50;
+        border-radius: 48rpx;
+        padding: 24rpx 0;
+        align-items: center;
+        align-self: stretch;
+    }
+
+    .completed-tag-text {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #4caf50;
+    }
+
+    /* 上/下章导航 */
+    .chapter-nav {
+        flex-direction: row;
+        background-color: #ffffff;
+        margin-top: 16rpx;
+        padding: 24rpx 32rpx;
+    }
+
+    .nav-item {
+        flex: 1;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .nav-item.disabled {
+        opacity: 0.4;
+    }
+
+    .nav-prev {
+        padding-right: 16rpx;
+    }
+
+    .nav-next {
+        padding-left: 16rpx;
+        justify-content: flex-end;
+    }
+
+    .nav-arrow {
+        font-size: 48rpx;
+        color: #2979ff;
+    }
+
+    .nav-content {
+        flex-direction: column;
+        margin-left: 12rpx;
+    }
+
+    .nav-content-right {
+        margin-left: 0;
+        margin-right: 12rpx;
+        align-items: flex-end;
+    }
+
+    .nav-label {
+        font-size: 22rpx;
+        color: #999999;
+        margin-bottom: 4rpx;
+    }
+
+    .nav-title {
+        font-size: 26rpx;
+        color: #333333;
+        lines: 1;
+        text-overflow: ellipsis;
+        max-width: 220rpx;
+    }
+
+    .nav-title-muted {
+        font-size: 26rpx;
+        color: #cccccc;
+    }
+
+    /* 加载/空状态 */
+    .loading-wrap {
+        flex: 1;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .empty-wrap {
+        flex: 1;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .loading-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+        margin-bottom: 24rpx;
+    }
+
+    .empty-tip {
+        align-items: center;
+        padding: 80rpx 0;
+    }
+
+    .retry-btn {
+        background-color: #2979ff;
+        border-radius: 32rpx;
+        padding: 16rpx 48rpx;
+    }
+
+    .retry-btn-text {
+        font-size: 28rpx;
+        color: #ffffff;
+    }
+</style>

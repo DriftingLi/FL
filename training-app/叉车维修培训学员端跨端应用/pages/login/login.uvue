@@ -11,11 +11,11 @@
 		<view class="form">
 			<view class="form-item">
 				<input class="input-base" type="text" placeholder="用户名或手机号" :maxlength="50"
-					v-model="form.username" @confirm="onConfirm" />
+					:value="form.username" @input="onUsernameInput" @confirm="onConfirm" />
 			</view>
 			<view class="form-item">
 				<input class="input-base" :password="true" placeholder="密码（至少 6 位）" :maxlength="32"
-					v-model="form.password" @confirm="onConfirm" />
+					:value="form.password" @input="onPasswordInput" @confirm="onConfirm" />
 			</view>
 
 			<button class="btn-primary submit-btn" :disabled="loading" @click="onSubmit">
@@ -25,6 +25,22 @@
 			<view class="footer">
 				<text class="footer-text">还没有账号？</text>
 				<text class="footer-link" @click="goRegister">立即注册</text>
+			</view>
+
+			<!-- 其他登录方式 -->
+			<view class="other-login">
+				<view class="divider">
+					<view class="divider-line"></view>
+					<text class="divider-text">其他登录方式</text>
+					<view class="divider-line"></view>
+				</view>
+
+				<view class="wx-login-btn" @click="onWxLogin">
+					<view class="wx-icon">
+						<text class="wx-icon-text">微信</text>
+					</view>
+					<text class="wx-login-text">微信登录</text>
+				</view>
 			</view>
 		</view>
 	</scroll-view>
@@ -117,8 +133,20 @@
 		onSubmit()
 	}
 
+	function onUsernameInput(e : InputEvent) : void {
+		form.username = e.detail.value
+	}
+
+	function onPasswordInput(e : InputEvent) : void {
+		form.password = e.detail.value
+	}
+
 	function goRegister() : void {
 		uni.navigateTo({ url: '/pages/register/register' })
+	}
+
+	function onWxLogin() : void {
+		uni.showToast({ title: '微信登录暂未开通', icon: 'none' })
 	}
 </script>
 
@@ -145,7 +173,7 @@
 
 	.app-title {
 		font-size: 44rpx;
-		font-weight: 600;
+		font-weight: bold;
 		color: #333333;
 		margin-bottom: 8rpx;
 	}
@@ -183,5 +211,59 @@
 		font-size: 26rpx;
 		color: #2979ff;
 		margin-left: 8rpx;
+	}
+
+	/* 其他登录方式 */
+	.other-login {
+		margin-top: 80rpx;
+	}
+
+	.divider {
+		flex-direction: row;
+		align-items: center;
+		margin-bottom: 48rpx;
+	}
+
+	.divider-line {
+		flex: 1;
+		height: 1px;
+		background-color: #e5e5e5;
+	}
+
+	.divider-text {
+		font-size: 24rpx;
+		color: #999999;
+		margin: 0 24rpx;
+	}
+
+	.wx-login-btn {
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		height: 96rpx;
+		background-color: #07C160;
+		border-radius: 48rpx;
+	}
+
+	.wx-icon {
+		width: 48rpx;
+		height: 48rpx;
+		border-radius: 24rpx;
+		background-color: #ffffff;
+		align-items: center;
+		justify-content: center;
+		margin-right: 16rpx;
+	}
+
+	.wx-icon-text {
+		font-size: 20rpx;
+		color: #07C160;
+		font-weight: bold;
+	}
+
+	.wx-login-text {
+		font-size: 30rpx;
+		color: #ffffff;
+		font-weight: bold;
 	}
 </style>

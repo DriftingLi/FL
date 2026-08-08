@@ -84,7 +84,7 @@
 		line-height: 88rpx;
 		text-align: center;
 		font-size: 32rpx;
-		font-weight: 500;
+		font-weight: bold;
 	}
 
 	.btn-primary-disabled {

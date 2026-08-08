@@ -1,0 +1,488 @@
+<template>
+	<view class="container" :style="{ height: windowHeight + 'px' }">
+		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+		<view class="header">
+			<view class="header-left" @click="onBack">
+				<text class="back-icon">‹</text>
+			</view>
+			<text class="header-title">对话设置</text>
+			<view class="header-right"></view>
+		</view>
+
+		<scroll-view class="content-scroll" scroll-y="true">
+			<!-- 模型来源 -->
+			<view class="section">
+				<text class="section-title">模型来源</text>
+				<view class="card">
+					<view class="source-row" @click="onSelectSource('admin')">
+						<view class="source-left">
+							<text class="source-name">平台模型</text>
+							<text class="source-desc">使用系统配置的默认模型</text>
+						</view>
+						<view :class="['radio', settings.model_source == 'admin' ? 'radio-on' : '']">
+							<view v-if="settings.model_source == 'admin'" class="radio-dot"></view>
+						</view>
+					</view>
+					<view class="divider"></view>
+					<view class="source-row" @click="onSelectSource('custom')">
+						<view class="source-left">
+							<text class="source-name">自定义模型</text>
+							<text class="source-desc">填写 API 地址与密钥</text>
+						</view>
+						<view :class="['radio', settings.model_source == 'custom' ? 'radio-on' : '']">
+							<view v-if="settings.model_source == 'custom'" class="radio-dot"></view>
+						</view>
+					</view>
+				</view>
+			</view>
+
+			<!-- 平台模型列表 -->
+			<view v-if="settings.model_source == 'admin'" class="section">
+				<text class="section-title">可用模型</text>
+				<view class="card">
+					<view v-if="platformModels.length == 0" class="empty-tip">
+						<text class="empty-text">暂无平台模型，请联系管理员配置</text>
+					</view>
+					<view v-for="(m, idx) in platformModels" :key="idx">
+						<view class="model-row" @click="onSelectPlatformModel(m)">
+							<view class="model-left">
+								<text class="model-name">{{ m.name }}</text>
+								<text class="model-sub">{{ m.model.length > 0 ? m.model : m.source }}</text>
+							</view>
+							<view :class="['radio', settings.model_id == m.id && settings.model_source == 'admin' ? 'radio-on' : '']">
+								<view v-if="settings.model_id == m.id && settings.model_source == 'admin'" class="radio-dot"></view>
+							</view>
+						</view>
+						<view v-if="idx < platformModels.length - 1" class="divider"></view>
+					</view>
+				</view>
+			</view>
+
+			<!-- 自定义模型表单 -->
+			<view v-if="settings.model_source == 'custom'" class="section">
+				<text class="section-title">自定义配置</text>
+				<view class="card form-card">
+					<view class="form-item">
+						<text class="form-label">显示名称</text>
+						<input class="form-input" type="text" :value="formName" placeholder="例如：我的 GPT"
+							@input="onNameInput" />
+					</view>
+					<view class="form-item">
+						<text class="form-label">Base URL</text>
+						<input class="form-input" type="text" :value="formBaseUrl"
+							placeholder="https://api.openai.com/v1" @input="onBaseUrlInput" />
+					</view>
+					<view class="form-item">
+						<text class="form-label">Model</text>
+						<input class="form-input" type="text" :value="formModel" placeholder="gpt-4o-mini"
+							@input="onModelInput" />
+					</view>
+					<view class="form-item">
+						<text class="form-label">API Key</text>
+						<input class="form-input" type="text" :password="true" :value="formApiKey"
+							placeholder="sk-..." @input="onApiKeyInput" />
+					</view>
+				</view>
+
+				<!-- 已保存的自定义模型 -->
+				<view v-if="userModels.length > 0" class="saved-block">
+					<text class="section-title">已保存模型</text>
+					<view class="card">
+						<view v-for="(m, idx) in userModels" :key="idx">
+							<view class="model-row">
+								<view class="model-left" @click="onSelectUserModel(m)">
+									<text class="model-name">{{ m.name }}</text>
+									<text class="model-sub">{{ m.model }}</text>
+								</view>
+								<view class="model-actions">
+									<view :class="['radio', settings.model_id == m.id && settings.model_source == 'custom' ? 'radio-on' : '']"
+										@click="onSelectUserModel(m)">
+										<view v-if="settings.model_id == m.id && settings.model_source == 'custom'" class="radio-dot"></view>
+									</view>
+									<text class="del-text" @click="onDeleteUserModel(m.id)">删除</text>
+								</view>
+							</view>
+							<view v-if="idx < userModels.length - 1" class="divider"></view>
+						</view>
+					</view>
+				</view>
+			</view>
+
+			<!-- 保存按钮 -->
+			<view class="btn-wrap">
+				<view class="save-btn" @click="onSave">
+					<text class="save-btn-text">{{ saving ? '保存中...' : '保存设置' }}</text>
+				</view>
+			</view>
+		</scroll-view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { ref } from 'vue'
+	import { onShow } from '@dcloudio/uni-app'
+	import { useStatusBarHeight } from '../../utils/system'
+	import {
+		getAiModelsApi,
+		getAiUserModelsApi,
+		saveAiUserModelApi,
+		deleteAiUserModelApi,
+		loadAiChatSettings,
+		saveAiChatSettings,
+		defaultAiChatSettings,
+	} from '../../api/aiAssistant'
+	import type { AiModel, AiUserModel, AiChatSettings } from '../../types/index'
+
+	const statusBarHeight = useStatusBarHeight()
+	const windowHeight = uni.getSystemInfoSync().windowHeight
+
+	const settings = ref<AiChatSettings>(defaultAiChatSettings())
+	const platformModels = ref<AiModel[]>([])
+	const userModels = ref<AiUserModel[]>([])
+	const saving = ref<boolean>(false)
+
+	const formName = ref<string>('')
+	const formBaseUrl = ref<string>('')
+	const formModel = ref<string>('')
+	const formApiKey = ref<string>('')
+
+	function onBack() : void {
+		uni.navigateBack({})
+	}
+
+	function onNameInput(e : InputEvent) : void {
+		formName.value = e.detail.value
+	}
+	function onBaseUrlInput(e : InputEvent) : void {
+		formBaseUrl.value = e.detail.value
+	}
+	function onModelInput(e : InputEvent) : void {
+		formModel.value = e.detail.value
+	}
+	function onApiKeyInput(e : InputEvent) : void {
+		formApiKey.value = e.detail.value
+	}
+
+	function onSelectSource(source : string) : void {
+		settings.value.model_source = source
+		if (source == 'admin') {
+			// 默认选第一个平台模型
+			if (platformModels.value.length > 0 && settings.value.model_id == 0) {
+				onSelectPlatformModel(platformModels.value[0])
+			}
+		}
+	}
+
+	function onSelectPlatformModel(m : AiModel) : void {
+		settings.value.model_source = 'admin'
+		settings.value.model_id = m.id
+		settings.value.model_name = m.name
+		settings.value.model = m.model
+		settings.value.base_url = ''
+		settings.value.api_key = ''
+	}
+
+	function onSelectUserModel(m : AiUserModel) : void {
+		settings.value.model_source = 'custom'
+		settings.value.model_id = m.id
+		settings.value.model_name = m.name
+		settings.value.base_url = m.base_url
+		settings.value.model = m.model
+		settings.value.api_key = m.api_key
+		formName.value = m.name
+		formBaseUrl.value = m.base_url
+		formModel.value = m.model
+		formApiKey.value = m.api_key
+	}
+
+	async function onDeleteUserModel(id : number) : Promise<void> {
+		uni.showModal({
+			title: '删除模型',
+			content: '确定删除该自定义模型吗？',
+			success: async (res) => {
+				if (!res.confirm) return
+				try {
+					await deleteAiUserModelApi(id)
+					const next : AiUserModel[] = []
+					for (let i = 0; i < userModels.value.length; i++) {
+						if (userModels.value[i].id != id) next.push(userModels.value[i])
+					}
+					userModels.value = next
+					if (settings.value.model_id == id) {
+						settings.value.model_id = 0
+						settings.value.model_name = '自定义模型'
+					}
+					uni.showToast({ title: '已删除', icon: 'success' })
+				} catch (e) {
+					uni.showToast({ title: '删除失败', icon: 'none' })
+				}
+			}
+		})
+	}
+
+	async function onSave() : Promise<void> {
+		if (saving.value) return
+		saving.value = true
+		try {
+			if (settings.value.model_source == 'custom') {
+				const name = formName.value.trim()
+				const baseUrl = formBaseUrl.value.trim()
+				const model = formModel.value.trim()
+				const apiKey = formApiKey.value.trim()
+				if (baseUrl.length == 0 || model.length == 0 || apiKey.length == 0) {
+					uni.showToast({ title: '请填写完整配置', icon: 'none' })
+					saving.value = false
+					return
+				}
+				const payload : UTSJSONObject = {
+					name: name.length > 0 ? name : model,
+					base_url: baseUrl,
+					model: model,
+					api_key: apiKey,
+				}
+				if (settings.value.model_id > 0) {
+					payload['id'] = settings.value.model_id
+				}
+				try {
+					const saved = await saveAiUserModelApi(payload)
+					settings.value.model_id = saved.id
+					settings.value.model_name = saved.name.length > 0 ? saved.name : (name.length > 0 ? name : model)
+					settings.value.base_url = baseUrl
+					settings.value.model = model
+					settings.value.api_key = apiKey
+					// 刷新列表
+					try {
+						userModels.value = await getAiUserModelsApi()
+					} catch (_e) { }
+				} catch (e) {
+					// 后端保存失败时仍本地保存，保证可对话
+					console.warn('[ai-settings] save user model failed, keep local:', e)
+					settings.value.model_name = name.length > 0 ? name : model
+					settings.value.base_url = baseUrl
+					settings.value.model = model
+					settings.value.api_key = apiKey
+				}
+			} else {
+				// admin：若未选模型也允许保存（后端可能用默认绑定）
+				if (settings.value.model_name.length == 0) {
+					settings.value.model_name = '默认模型'
+				}
+			}
+
+			saveAiChatSettings(settings.value)
+			uni.showToast({ title: '已保存', icon: 'success' })
+			setTimeout(() => {
+				uni.navigateBack({})
+			}, 500)
+		} finally {
+			saving.value = false
+		}
+	}
+
+	async function loadData() : Promise<void> {
+		settings.value = loadAiChatSettings()
+		formName.value = settings.value.model_name
+		formBaseUrl.value = settings.value.base_url
+		formModel.value = settings.value.model
+		formApiKey.value = settings.value.api_key
+
+		try {
+			platformModels.value = await getAiModelsApi()
+		} catch (_e) {
+			platformModels.value = [] as AiModel[]
+		}
+		try {
+			userModels.value = await getAiUserModelsApi()
+		} catch (_e) {
+			userModels.value = [] as AiUserModel[]
+		}
+	}
+
+	onShow(() => {
+		loadData()
+	})
+</script>
+
+<style>
+	.container {
+		display: flex;
+		flex-direction: column;
+		background-color: #f5f6f8;
+	}
+
+	.status-bar {
+		background-color: #ffffff;
+	}
+
+	.header {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding: 16rpx 24rpx;
+		background-color: #ffffff;
+		border-bottom: 1rpx solid #f0f0f0;
+	}
+
+	.header-left,
+	.header-right {
+		width: 72rpx;
+		height: 72rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.back-icon {
+		font-size: 48rpx;
+		color: #333333;
+		font-weight: bold;
+	}
+
+	.header-title {
+		font-size: 34rpx;
+		font-weight: bold;
+		color: #222222;
+	}
+
+	.content-scroll {
+		flex: 1;
+		height: 0;
+		padding: 24rpx;
+	}
+
+	.section {
+		margin-bottom: 32rpx;
+	}
+
+	.section-title {
+		font-size: 26rpx;
+		color: #999999;
+		margin-bottom: 16rpx;
+		margin-left: 8rpx;
+	}
+
+	.card {
+		background-color: #ffffff;
+		border-radius: 16rpx;
+		overflow: hidden;
+	}
+
+	.source-row,
+	.model-row {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding: 28rpx 28rpx;
+	}
+
+	.source-left,
+	.model-left {
+		flex: 1;
+	}
+
+	.source-name,
+	.model-name {
+		font-size: 30rpx;
+		color: #222222;
+		font-weight: bold;
+		margin-bottom: 6rpx;
+	}
+
+	.source-desc,
+	.model-sub {
+		font-size: 24rpx;
+		color: #999999;
+	}
+
+	.divider {
+		height: 1rpx;
+		background-color: #f0f0f0;
+		margin-left: 28rpx;
+	}
+
+	.radio {
+		width: 40rpx;
+		height: 40rpx;
+		border-radius: 20rpx;
+		border: 2rpx solid #cccccc;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.radio-on {
+		border-color: #2979ff;
+	}
+
+	.radio-dot {
+		width: 22rpx;
+		height: 22rpx;
+		border-radius: 11rpx;
+		background-color: #2979ff;
+	}
+
+	.form-card {
+		padding: 8rpx 0;
+	}
+
+	.form-item {
+		padding: 20rpx 28rpx;
+	}
+
+	.form-label {
+		font-size: 26rpx;
+		color: #666666;
+		margin-bottom: 12rpx;
+	}
+
+	.form-input {
+		height: 80rpx;
+		background-color: #f5f6f8;
+		border-radius: 12rpx;
+		padding: 0 24rpx;
+		font-size: 28rpx;
+		color: #333333;
+	}
+
+	.saved-block {
+		margin-top: 32rpx;
+	}
+
+	.model-actions {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.del-text {
+		font-size: 24rpx;
+		color: #dd524d;
+		margin-left: 20rpx;
+		padding: 8rpx;
+	}
+
+	.empty-tip {
+		padding: 40rpx;
+		align-items: center;
+	}
+
+	.empty-text {
+		font-size: 26rpx;
+		color: #999999;
+	}
+
+	.btn-wrap {
+		padding: 16rpx 0 60rpx 0;
+	}
+
+	.save-btn {
+		height: 88rpx;
+		background-color: #2979ff;
+		border-radius: 44rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.save-btn-text {
+		font-size: 32rpx;
+		color: #ffffff;
+		font-weight: bold;
+	}
+</style>

@@ -1,0 +1,488 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">考试成绩</text>
+            <view class="header-right"></view>
+        </view>
+
+        <!-- 加载中 -->
+        <view v-if="loading" class="loading-wrap">
+            <text class="loading-text">正在加载成绩...</text>
+        </view>
+
+        <scroll-view v-else-if="!hasError" class="content-scroll" scroll-y="true">
+            <!-- 成绩汇总卡片 -->
+            <view class="summary-card" :class="result.passed ? 'summary-passed' : 'summary-failed'">
+                <view class="summary-status">
+                    <text class="summary-status-text">{{ result.passed ? '恭喜通过' : '未通过' }}</text>
+                </view>
+                <view class="summary-score">
+                    <text class="summary-score-num">{{ formatScore(result.score) }}</text>
+                    <text class="summary-score-total">/ {{ formatScore(result.total_score) }} 分</text>
+                </view>
+                <view class="summary-meta">
+                    <view class="summary-meta-item">
+                        <text class="summary-meta-num">{{ result.correct_count }}</text>
+                        <text class="summary-meta-label">答对</text>
+                    </view>
+                    <view class="summary-meta-divider"></view>
+                    <view class="summary-meta-item">
+                        <text class="summary-meta-num">{{ result.total_questions - result.correct_count }}</text>
+                        <text class="summary-meta-label">答错</text>
+                    </view>
+                    <view class="summary-meta-divider"></view>
+                    <view class="summary-meta-item">
+                        <text class="summary-meta-num">{{ accuracy }}%</text>
+                        <text class="summary-meta-label">正确率</text>
+                    </view>
+                    <view class="summary-meta-divider"></view>
+                    <view class="summary-meta-item">
+                        <text class="summary-meta-num">{{ usedTimeDisplay }}</text>
+                        <text class="summary-meta-label">用时</text>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 题目详情列表 -->
+            <view class="section-header">
+                <text class="section-title">题目详情</text>
+            </view>
+            <view class="detail-list">
+                <view v-for="(detail, idx) in result.details" :key="idx" class="detail-card">
+                    <view class="detail-header">
+                        <text class="detail-type-tag">{{ getTypeName(detail.type) }}</text>
+                        <text class="detail-status" :class="detail.is_correct ? 'status-correct' : 'status-wrong'">
+                            {{ detail.is_correct ? '✓ 正确' : '✗ 错误' }}
+                        </text>
+                    </view>
+                    <text class="detail-title">{{ idx + 1 }}. {{ detail.title }}</text>
+                    <view class="detail-answers">
+                        <view class="detail-answer-row">
+                            <text class="detail-answer-label">你的答案：</text>
+                            <text class="detail-answer-value" :class="detail.is_correct ? 'answer-correct' : 'answer-wrong'">
+                                {{ detail.user_answer.length > 0 ? detail.user_answer : '未作答' }}
+                            </text>
+                        </view>
+                        <view v-if="!detail.is_correct" class="detail-answer-row">
+                            <text class="detail-answer-label">正确答案：</text>
+                            <text class="detail-answer-value answer-correct">{{ detail.correct_answer }}</text>
+                        </view>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 底部操作 -->
+            <view class="bottom-actions">
+                <view class="bottom-btn bottom-btn-secondary" @click="onBack">
+                    <text class="bottom-btn-text bottom-btn-text-secondary">返回</text>
+                </view>
+                <view class="bottom-btn bottom-btn-primary" @click="onViewHistory">
+                    <text class="bottom-btn-text">查看历史</text>
+                </view>
+            </view>
+        </scroll-view>
+
+        <!-- 错误态 -->
+        <view v-else class="error-wrap">
+            <text class="error-text">{{ errorMsg }}</text>
+            <view class="retry-btn" @click="loadResult">
+                <text class="retry-btn-text">重试</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { getMockExamResultApi } from '../../api/mockExam'
+    import type { MockExamResult, MockExamResultDetail } from '../../types/index'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const mockExamId = ref<number>(0)
+    const loading = ref<boolean>(false)
+    const hasError = ref<boolean>(false)
+    const errorMsg = ref<string>('加载成绩失败')
+
+    const result = ref<MockExamResult>({
+        mock_exam_id: 0,
+        score: 0,
+        total_score: 0,
+        passed: false,
+        correct_count: 0,
+        total_questions: 0,
+        used_time: 0,
+        details: [] as MockExamResultDetail[],
+    } as MockExamResult)
+
+    /** 正确率 */
+    const accuracy = computed<number>(() : number => {
+        if (result.value.total_questions == 0) return 0
+        return Math.floor(result.value.correct_count * 100 / result.value.total_questions)
+    })
+
+    /** 用时显示 */
+    const usedTimeDisplay = computed<string>(() : string => {
+        const sec = result.value.used_time
+        if (sec <= 0) return '--'
+        const m = Math.floor(sec / 60)
+        const s = sec % 60
+        if (m > 0) return m + '分' + s + '秒'
+        return s + '秒'
+    })
+
+    /** 格式化分数（整数显示整数，小数显示 1 位） */
+    function formatScore(score : number) : string {
+        if (score == Math.floor(score)) {
+            return '' + Math.floor(score)
+        }
+        return score.toFixed(1)
+    }
+
+    /** 题型名称 */
+    function getTypeName(type : string) : string {
+        if (type == 'single' || type == 'single_choice') return '单选题'
+        if (type == 'multi' || type == 'multiple_choice' || type == 'multi_choice') return '多选题'
+        if (type == 'judge' || type == 'true_false') return '判断题'
+        return '其他'
+    }
+
+    async function loadResult() : Promise<void> {
+        if (mockExamId.value == 0) {
+            hasError.value = true
+            errorMsg.value = '考试 ID 无效'
+            return
+        }
+        loading.value = true
+        hasError.value = false
+        try {
+            const data = await getMockExamResultApi(mockExamId.value)
+            result.value = data
+            console.log('[mock-exam-result] loaded, score:', data.score, '/', data.total_score)
+        } catch (e) {
+            console.error('[mock-exam-result] load failed:', e)
+            hasError.value = true
+            errorMsg.value = '加载成绩失败'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) {
+                    errorMsg.value = errorMsg.value + ': ' + m
+                }
+            }
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function onBack() : void {
+        uni.navigateBack()
+    }
+
+    function onViewHistory() : void {
+        uni.navigateTo({ url: '/pages/profile/mock-exam-records' })
+    }
+
+    onLoad((options : UTSJSONObject) => {
+        const id = options['mock_exam_id']
+        if (id != null) {
+            mockExamId.value = parseInt(`${id}`)
+        }
+        loadResult()
+    })
+</script>
+
+<style>
+    .container {
+        display: flex;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        width: 80rpx;
+        align-items: center;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #ffffff;
+    }
+
+    .header-title {
+        flex: 1;
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+        text-align: center;
+    }
+
+    .header-right {
+        width: 80rpx;
+    }
+
+    .content-scroll {
+        flex: 1;
+        height: 0;
+    }
+
+    /* 成绩汇总卡片 */
+    .summary-card {
+        margin: 24rpx;
+        border-radius: 24rpx;
+        padding: 48rpx 32rpx;
+        align-items: center;
+        border: 1px solid #eeeeee;
+    }
+
+    .summary-passed {
+        background: linear-gradient(135deg, #4caf50, #66bb6a);
+    }
+
+    .summary-failed {
+        background: linear-gradient(135deg, #f44336, #ef5350);
+    }
+
+    .summary-status {
+        margin-bottom: 24rpx;
+    }
+
+    .summary-status-text {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .summary-score {
+        flex-direction: row;
+        align-items: baseline;
+        margin-bottom: 32rpx;
+    }
+
+    .summary-score-num {
+        font-size: 96rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .summary-score-total {
+        font-size: 28rpx;
+        color: #ffffff;
+        opacity: 0.9;
+        margin-left: 12rpx;
+    }
+
+    .summary-meta {
+        flex-direction: row;
+        justify-content: space-around;
+        align-self: stretch;
+        padding-top: 24rpx;
+        border-top: 1rpx solid rgba(255, 255, 255, 0.3);
+    }
+
+    .summary-meta-item {
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .summary-meta-num {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+        margin-bottom: 4rpx;
+    }
+
+    .summary-meta-label {
+        font-size: 22rpx;
+        color: #ffffff;
+        opacity: 0.9;
+    }
+
+    .summary-meta-divider {
+        width: 1rpx;
+        background-color: rgba(255, 255, 255, 0.3);
+    }
+
+    /* 区块标题 */
+    .section-header {
+        padding: 0 24rpx 16rpx;
+    }
+
+    .section-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    /* 题目详情列表 */
+    .detail-list {
+        padding: 0 24rpx;
+    }
+
+    .detail-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        margin-bottom: 16rpx;
+        border: 1px solid #eeeeee;
+        flex-direction: column;
+    }
+
+    .detail-header {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 16rpx;
+    }
+
+    .detail-type-tag {
+        font-size: 20rpx;
+        color: #ffffff;
+        background-color: #2979ff;
+        padding: 4rpx 12rpx;
+        border-radius: 6rpx;
+        margin-right: 12rpx;
+    }
+
+    .detail-status {
+        font-size: 22rpx;
+        padding: 4rpx 12rpx;
+        border-radius: 6rpx;
+    }
+
+    .status-correct {
+        color: #4caf50;
+        background-color: #e8f5e9;
+    }
+
+    .status-wrong {
+        color: #f44336;
+        background-color: #ffebee;
+    }
+
+    .detail-title {
+        font-size: 28rpx;
+        color: #333333;
+        line-height: 44rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .detail-answers {
+        flex-direction: column;
+        background-color: #fafafa;
+        padding: 16rpx;
+        border-radius: 8rpx;
+    }
+
+    .detail-answer-row {
+        flex-direction: row;
+        align-items: center;
+        padding: 4rpx 0;
+    }
+
+    .detail-answer-label {
+        font-size: 24rpx;
+        color: #999999;
+        margin-right: 8rpx;
+    }
+
+    .detail-answer-value {
+        font-size: 24rpx;
+        font-weight: bold;
+    }
+
+    .answer-correct {
+        color: #4caf50;
+    }
+
+    .answer-wrong {
+        color: #f44336;
+    }
+
+    /* 底部操作 */
+    .bottom-actions {
+        flex-direction: row;
+        padding: 24rpx;
+    }
+
+    .bottom-btn {
+        flex: 1;
+        align-items: center;
+        padding: 24rpx 0;
+        border-radius: 48rpx;
+        margin: 0 12rpx;
+    }
+
+    .bottom-btn-secondary {
+        background-color: #f5f5f5;
+        border: 1px solid #e0e0e0;
+    }
+
+    .bottom-btn-primary {
+        background-color: #2979ff;
+    }
+
+    .bottom-btn-text {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .bottom-btn-text-secondary {
+        color: #666666;
+    }
+
+    /* 加载/错误状态 */
+    .loading-wrap {
+        flex: 1;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .loading-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .error-wrap {
+        flex: 1;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .error-text {
+        font-size: 28rpx;
+        color: #999999;
+        margin-bottom: 24rpx;
+    }
+
+    .retry-btn {
+        padding: 16rpx 48rpx;
+        background-color: #2979ff;
+        border-radius: 32rpx;
+    }
+
+    .retry-btn-text {
+        font-size: 28rpx;
+        color: #ffffff;
+    }
+</style>

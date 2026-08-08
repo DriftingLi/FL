@@ -1,0 +1,109 @@
+<template>
+	<view class="tab-bar" :style="{ paddingBottom: safeAreaBottom + 'px' }">
+		<view v-for="(item, idx) in tabs" :key="idx" class="tab-item" @click="onTabClick(item.path, idx)">
+			<text :class="['tab-icon', { active: activeIndex == idx }]">{{ item.icon }}</text>
+			<text :class="['tab-text', { active: activeIndex == idx }]">{{ item.text }}</text>
+			<view v-if="activeIndex == idx" class="tab-indicator"></view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { ref, watch } from 'vue'
+
+	const props = withDefaults(defineProps<{
+		activeIndex?: number
+	}>(), {
+		activeIndex: 0
+	})
+
+	const activeIndex = ref<number>(props.activeIndex)
+	const safeAreaBottom = ref<number>(0)
+
+	// UTS 中 watch 第一个参数不支持箭头函数返回 number，需用 ref 直接监听
+	// 注意：props.activeIndex 本身不是 ref，需通过 watch 的 source 方式
+	watch(props, () => {
+		if (props.activeIndex != activeIndex.value) {
+			activeIndex.value = props.activeIndex
+		}
+	})
+
+	const sysInfo = uni.getSystemInfoSync()
+	const insets = sysInfo.safeAreaInsets
+	if (insets != null) {
+		const bottom = insets.bottom
+		if (bottom != null && bottom > 0) {
+			safeAreaBottom.value = bottom
+		}
+	}
+
+	type TabItem = {
+		key : string
+		path : string
+		icon : string
+		text : string
+	}
+	const tabs : TabItem[] = [
+		{ key: 'dashboard', path: '/pages/dashboard/dashboard', icon: '🏠', text: '首页' },
+		{ key: 'courses', path: '/pages/courses/courses', icon: '📚', text: '课程' },
+		{ key: 'ai', path: '/pages/ai-assistant/ai-assistant', icon: '🤖', text: 'AI学' },
+		{ key: 'forum', path: '/pages/forum/forum', icon: '💬', text: '交流' },
+		{ key: 'profile', path: '/pages/profile/profile', icon: '👤', text: '我的' },
+	]
+
+	function onTabClick(path : string, idx : number) : void {
+		// 点击当前已激活的 tab 时不重复跳转
+		if (activeIndex.value == idx) return
+		// 未开发页面提示
+		if (path.length == 0) {
+			uni.showToast({ title: '功能开发中，敬请期待', icon: 'none' })
+			return
+		}
+		// 使用 reLaunch 防止页面栈堆积，保持 Tab 切换的单一页面栈
+		uni.reLaunch({ url: path })
+	}
+</script>
+
+<style>
+	.tab-bar {
+		flex-direction: row;
+		background-color: #ffffff;
+		border-top: 1rpx solid #f0f0f0;
+	}
+
+	.tab-item {
+		flex: 1;
+		flex-direction: column;
+		align-items: center;
+		padding: 16rpx 0;
+	}
+
+	.tab-icon {
+		font-size: 44rpx;
+		margin-bottom: 8rpx;
+		opacity: 0.5;
+	}
+
+	.tab-icon.active {
+		opacity: 1;
+	}
+
+	.tab-text {
+		font-size: 22rpx;
+		color: #999999;
+	}
+
+	.tab-text.active {
+		color: #2979ff;
+		font-weight: bold;
+	}
+
+	.tab-indicator {
+		position: absolute;
+		top: 0;
+		width: 48rpx;
+		height: 4rpx;
+		background-color: #2979ff;
+		border-radius: 2rpx;
+	}
+</style>
