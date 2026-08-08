@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -19,7 +19,7 @@ import (
 // AuditLog 管理员/讲师写操作审计中间件。
 // 挂载在 /api 路由组，不依赖中间件顺序：请求处理完成后读取 JWT 上下文，
 // 仅记录 admin / tutor 角色的 POST/PUT/PATCH/DELETE 请求。
-func AuditLog(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
+func AuditLog(cfg *config.Config, db *gorm.DB, logger *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		method := c.Request.Method
 		if method != http.MethodPost && method != http.MethodPut &&
@@ -72,7 +72,7 @@ func AuditLog(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 			CreatedAt: time.Now(),
 		}
 		if err := db.Create(&record).Error; err != nil {
-			slog.Warn("写入审计日志失败", "error", err, "path", c.Request.URL.Path)
+			logger.Warn("写入审计日志失败", zap.Error(err), zap.String("path", c.Request.URL.Path))
 		}
 	}
 }

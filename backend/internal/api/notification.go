@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -15,8 +16,8 @@ import (
 )
 
 // RegisterNotificationRoutes 注册 /api/notifications 蓝图（登录用户站内信）。
-func RegisterNotificationRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
-	svc := service.NewNotificationService(db)
+func RegisterNotificationRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, logger *zap.Logger) {
+	svc := service.NewNotificationService(db, logger)
 	g := rg.Group("/notifications", middleware.JWTAuth(cfg))
 
 	// GET /api/notifications?page=&page_size= 分页查询通知（含未读数）

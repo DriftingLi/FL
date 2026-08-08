@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -45,7 +45,7 @@ func Get(ctx context.Context, key string) (string, error) {
 		if errors.Is(err, redis.Nil) {
 			return "", err
 		}
-		slog.Warn("Redis Get 失败", "key", key, "error", err)
+		pkgLogger.Warn("Redis Get 失败", zap.String("key", key), zap.Error(err))
 		return "", err
 	}
 	return val, nil
@@ -60,7 +60,7 @@ func Set(ctx context.Context, key string, value string, ttl time.Duration) error
 		return fmt.Errorf("redis client 未初始化")
 	}
 	if err := client.Set(ctx, fullKey(key), value, ttl).Err(); err != nil {
-		slog.Warn("Redis Set 失败", "key", key, "error", err)
+		pkgLogger.Warn("Redis Set 失败", zap.String("key", key), zap.Error(err))
 		return err
 	}
 	return nil
@@ -76,7 +76,7 @@ func Del(ctx context.Context, keys ...string) error {
 		fullKeys[i] = fullKey(k)
 	}
 	if err := client.Del(ctx, fullKeys...).Err(); err != nil {
-		slog.Warn("Redis Del 失败", "keys", keys, "error", err)
+		pkgLogger.Warn("Redis Del 失败", zap.Any("keys", keys), zap.Error(err))
 		return err
 	}
 	return nil
@@ -93,7 +93,7 @@ func Exists(ctx context.Context, keys ...string) (int64, error) {
 	}
 	n, err := client.Exists(ctx, fullKeys...).Result()
 	if err != nil {
-		slog.Warn("Redis Exists 失败", "keys", keys, "error", err)
+		pkgLogger.Warn("Redis Exists 失败", zap.Any("keys", keys), zap.Error(err))
 		return 0, err
 	}
 	return n, nil
@@ -105,7 +105,7 @@ func Expire(ctx context.Context, key string, ttl time.Duration) error {
 		return fmt.Errorf("redis client 未初始化")
 	}
 	if err := client.Expire(ctx, fullKey(key), ttl).Err(); err != nil {
-		slog.Warn("Redis Expire 失败", "key", key, "error", err)
+		pkgLogger.Warn("Redis Expire 失败", zap.String("key", key), zap.Error(err))
 		return err
 	}
 	return nil
@@ -128,7 +128,7 @@ func GetJSON(ctx context.Context, key string, dest any) error {
 		return err
 	}
 	if err := json.Unmarshal([]byte(val), dest); err != nil {
-		slog.Warn("Redis 缓存数据 JSON 反序列化失败", "key", key, "error", err)
+		pkgLogger.Warn("Redis 缓存数据 JSON 反序列化失败", zap.String("key", key), zap.Error(err))
 		return fmt.Errorf("JSON 反序列化失败: %w", err)
 	}
 	return nil
@@ -149,7 +149,7 @@ func GetOrSetJSON(ctx context.Context, key string, ttl time.Duration, dest any, 
 	}
 	if !errors.Is(err, redis.Nil) {
 		// Redis 异常（网络/超时等）→ 降级查 DB
-		slog.Warn("Redis GetJSON 异常，降级查 DB", "key", key, "error", err)
+		pkgLogger.Warn("Redis GetJSON 异常，降级查 DB", zap.String("key", key), zap.Error(err))
 	}
 
 	// 2. 缓存 miss → singleflight 合并并发 loader
@@ -164,7 +164,7 @@ func GetOrSetJSON(ctx context.Context, key string, ttl time.Duration, dest any, 
 		}
 		// 回写缓存（忽略回写失败，不影响返回业务数据）
 		if setErr := SetJSON(ctx, key, data, ttl); setErr != nil {
-			slog.Warn("回写缓存失败", "key", key, "error", setErr)
+			pkgLogger.Warn("回写缓存失败", zap.String("key", key), zap.Error(setErr))
 		}
 		return data, nil
 	})
@@ -196,7 +196,7 @@ func InvalidatePattern(ctx context.Context, pattern string) error {
 	for {
 		keys, nextCursor, err := client.Scan(ctx, cursor, fullPattern, 100).Result()
 		if err != nil {
-			slog.Warn("Redis SCAN 失败", "pattern", pattern, "error", err)
+			pkgLogger.Warn("Redis SCAN 失败", zap.String("pattern", pattern), zap.Error(err))
 			return err
 		}
 		if len(keys) > 0 {
@@ -204,7 +204,7 @@ func InvalidatePattern(ctx context.Context, pattern string) error {
 			pipe := client.Pipeline()
 			pipe.Del(ctx, keys...)
 			if _, dErr := pipe.Exec(ctx); dErr != nil {
-				slog.Warn("InvalidatePattern 批量 DEL 失败", "keys_count", len(keys), "error", dErr)
+				pkgLogger.Warn("InvalidatePattern 批量 DEL 失败", zap.Int("keys_count", len(keys)), zap.Error(dErr))
 				// 继续处理下一批，不中断
 			} else {
 				deleted += len(keys)
@@ -216,7 +216,7 @@ func InvalidatePattern(ctx context.Context, pattern string) error {
 		}
 	}
 	if deleted > 0 {
-		slog.Info("InvalidatePattern 完成", "pattern", pattern, "deleted", deleted)
+		pkgLogger.Info("InvalidatePattern 完成", zap.String("pattern", pattern), zap.Int("deleted", deleted))
 	}
 	return nil
 }

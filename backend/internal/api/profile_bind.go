@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -17,7 +18,7 @@ import (
 
 // RegisterProfileBindRoutes 注册 /api/auth/profile 蓝图（登录后绑定/修改手机号、邮箱）。
 func RegisterProfileBindRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, authSvc *service.AuthService,
-	codeSvc *service.VerifyCodeService, emailCh, phoneCh service.CodeChannel) {
+	codeSvc *service.VerifyCodeService, emailCh, phoneCh service.CodeChannel, logger *zap.Logger) {
 	g := rg.Group("/auth/profile", middleware.JWTAuth(cfg))
 
 	// 通道映射表：send-code 的 channel 字段在此解析为 CodeChannel adapter（不再按通道写 switch）

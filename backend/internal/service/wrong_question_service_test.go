@@ -4,6 +4,7 @@ package service
 import (
 	"testing"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -13,7 +14,7 @@ import (
 func newWrongQuestionSvc(t *testing.T) (*WrongQuestionService, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewWrongQuestionService(db), db
+	return NewWrongQuestionService(db, zap.NewNop()), db
 }
 
 func seedWrongQuestion(t *testing.T, db *gorm.DB, studentID, questionID, wrongCount int) {

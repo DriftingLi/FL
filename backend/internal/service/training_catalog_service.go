@@ -4,6 +4,7 @@ package service
 import (
 	"errors"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -12,11 +13,13 @@ import (
 // TrainingCatalogService 培训目录（课程目录树与管理数据）服务。
 type TrainingCatalogService struct {
 	db *gorm.DB
+
+	logger *zap.Logger
 }
 
 // NewTrainingCatalogService 创建培训目录服务实例。
-func NewTrainingCatalogService(db *gorm.DB) *TrainingCatalogService {
-	return &TrainingCatalogService{db: db}
+func NewTrainingCatalogService(db *gorm.DB, logger *zap.Logger) *TrainingCatalogService {
+	return &TrainingCatalogService{db: db, logger: logger}
 }
 
 // ===== 专业方向 =====
@@ -417,10 +420,16 @@ func (s *TrainingCatalogService) CreateQuestionTag(data map[string]any) (map[str
 	if name == "" {
 		return nil, errors.New("标签名称不能为空")
 	}
+	var dup int64
+	if err := s.db.Model(&model.QuestionTag{}).Where("code = ?", code).Count(&dup).Error; err != nil {
+		return nil, err
+	}
+	if dup > 0 {
+		return nil, errors.New("标签编码已存在")
+	}
 	tag := model.QuestionTag{
 		Code:        code,
 		Name:        name,
-		Category:    getString(data, "category"),
 		Description: getString(data, "description"),
 		SortOrder:   toIntDefault(data["sort_order"], nextSortOrderValue(s.db, "question_tag", nil)),
 		Status:      int16(toIntDefault(data["status"], 1)),
@@ -445,13 +454,19 @@ func (s *TrainingCatalogService) UpdateQuestionTag(id int, data map[string]any) 
 		return nil, errors.New("题库标签不存在")
 	}
 	if v, ok := data["code"].(string); ok && v != "" {
+		if v != tag.Code {
+			var dup int64
+			if err := s.db.Model(&model.QuestionTag{}).Where("code = ? AND id <> ?", v, id).Count(&dup).Error; err != nil {
+				return nil, err
+			}
+			if dup > 0 {
+				return nil, errors.New("标签编码已存在")
+			}
+		}
 		tag.Code = v
 	}
 	if v, ok := data["name"].(string); ok && v != "" {
 		tag.Name = v
-	}
-	if v, ok := data["category"]; ok {
-		tag.Category, _ = v.(string)
 	}
 	if v, ok := data["description"]; ok {
 		tag.Description, _ = v.(string)
@@ -637,12 +652,11 @@ func (s *TrainingCatalogService) loadQuestionTags(questionID int) []map[string]a
 		TagID     int    `gorm:"column:tag_id"`
 		TagCode   string `gorm:"column:tag_code"`
 		TagName   string `gorm:"column:tag_name"`
-		Category  string `gorm:"column:tag_category"`
 		SortOrder int    `gorm:"column:tag_sort"`
 		Status    int16  `gorm:"column:tag_status"`
 	}
 	if err := s.db.Table("question_tag_relation AS qtr").
-		Select("qtr.tag_id, t.code AS tag_code, t.name AS tag_name, t.category AS tag_category, t.sort_order AS tag_sort, t.status AS tag_status").
+		Select("qtr.tag_id, t.code AS tag_code, t.name AS tag_name, t.sort_order AS tag_sort, t.status AS tag_status").
 		Joins("JOIN question_tag AS t ON t.id = qtr.tag_id").
 		Where("qtr.question_id = ?", questionID).
 		Order("t.sort_order ASC, t.id ASC").
@@ -655,7 +669,6 @@ func (s *TrainingCatalogService) loadQuestionTags(questionID int) []map[string]a
 			"id":         rows[i].TagID,
 			"code":       rows[i].TagCode,
 			"name":       rows[i].TagName,
-			"category":   rows[i].Category,
 			"sort_order": rows[i].SortOrder,
 			"status":     rows[i].Status,
 		})
@@ -722,7 +735,6 @@ func tagToDict(t *model.QuestionTag) map[string]any {
 		"id":          t.ID,
 		"code":        t.Code,
 		"name":        t.Name,
-		"category":    t.Category,
 		"description": t.Description,
 		"sort_order":  t.SortOrder,
 		"status":      t.Status,

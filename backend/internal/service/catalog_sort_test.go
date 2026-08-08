@@ -9,12 +9,13 @@ import (
 
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
+	"go.uber.org/zap"
 )
 
 // TestCreateCatalogItemsAppendToEnd 新建方向/等级/标签自动排同级末尾（max+1），不再默认 0。
 func TestCreateCatalogItemsAppendToEnd(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewTrainingCatalogService(db)
+	svc := NewTrainingCatalogService(db, zap.NewNop())
 
 	// 专业方向
 	s1, err := svc.CreateSpecialty(map[string]any{"code": "op", "name": "操作"})
@@ -59,7 +60,7 @@ func TestCreateCatalogItemsAppendToEnd(t *testing.T) {
 // TestCreateCourseAppendsToEndOfGroup 新建课程自动排所属方向+等级组的末尾。
 func TestCreateCourseAppendsToEndOfGroup(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewAdminCourseService(db, nil)
+	svc := NewAdminCourseService(db, nil, zap.NewNop())
 
 	spec := model.Specialty{Code: "mt", Name: "维修", Status: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&spec).Error; err != nil {
@@ -106,7 +107,7 @@ func TestCreateCourseAppendsToEndOfGroup(t *testing.T) {
 // TestSwapCatalogSortWithEqualValues 相邻交换在 sort_order 相同（默认 0）时也真实生效。
 func TestSwapCatalogSortWithEqualValues(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewTrainingCatalogService(db)
+	svc := NewTrainingCatalogService(db, zap.NewNop())
 
 	a := model.Specialty{Code: "a", Name: "A", SortOrder: 0, Status: 1, CreatedAt: testutil.Now()}
 	b := model.Specialty{Code: "b", Name: "B", SortOrder: 0, Status: 1, CreatedAt: testutil.Now()}
@@ -158,7 +159,7 @@ func TestSwapCatalogSortWithEqualValues(t *testing.T) {
 // TestSwapCourseSortGroupBoundary 课程交换限制在同一个方向+等级组内。
 func TestSwapCourseSortGroupBoundary(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewAdminCourseService(db, nil)
+	svc := NewAdminCourseService(db, nil, zap.NewNop())
 
 	spec := model.Specialty{Code: "mt", Name: "维修", Status: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&spec).Error; err != nil {
@@ -197,7 +198,7 @@ func TestSwapCourseSortGroupBoundary(t *testing.T) {
 // TestCatalogCodeRequired 方向/等级/证书/标签创建时编码必填（与 UI 提示一致）。
 func TestCatalogCodeRequired(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewTrainingCatalogService(db)
+	svc := NewTrainingCatalogService(db, zap.NewNop())
 
 	cases := []struct {
 		name string

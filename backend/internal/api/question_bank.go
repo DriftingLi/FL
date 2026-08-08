@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -15,9 +16,9 @@ import (
 )
 
 // RegisterQuestionBankRoutes 注册 /api/question-bank 蓝图。
-func RegisterQuestionBankRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage) {
-	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st)
-	svc := service.NewQuestionBankService(db, fileSvc)
+func RegisterQuestionBankRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger) {
+	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st, logger)
+	svc := service.NewQuestionBankService(db, fileSvc, logger)
 
 	g := rg.Group("/question-bank", middleware.JWTAuth(cfg))
 

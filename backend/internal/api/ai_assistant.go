@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -30,8 +31,8 @@ func NewAIAssistantHandler(svc *service.AIAssistantService, cfg *config.Config) 
 // RegisterAIAssistantRoutes 注册 /api/ai-assistant 路由。
 // 公开路由：GET /models、POST /chat（可选认证）。
 // 登录路由：sessions CRUD、user-models CRUD（强制 middleware.JWTAuth + role=hrwai_user）。
-func RegisterAIAssistantRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, aiConfigSvc *service.AIConfigService) {
-	assistantSvc := service.NewAIAssistantService(db, aiConfigSvc, cfg.SecretKey)
+func RegisterAIAssistantRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, aiConfigSvc *service.AIConfigService, logger *zap.Logger) {
+	assistantSvc := service.NewAIAssistantService(db, aiConfigSvc, cfg.SecretKey, logger)
 	h := NewAIAssistantHandler(assistantSvc, cfg)
 
 	g := rg.Group("/ai-assistant")

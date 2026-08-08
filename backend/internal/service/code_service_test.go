@@ -12,6 +12,7 @@ import (
 	"forklift-training/internal/cache"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
+	"go.uber.org/zap"
 )
 
 var errCodeNotFound = errors.New("code not found")
@@ -85,9 +86,9 @@ func (f *fakeSMSProvider) Send(to, content string) error {
 func newCodeTestSvc(t *testing.T) (*VerifyCodeService, *memCodeStore) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	authSvc := NewAuthService(db, "test-secret", time.Hour, "a", "t", "s")
+	authSvc := NewAuthService(db, "test-secret", time.Hour, "a", "t", "s", zap.NewNop())
 	store := newMemCodeStore()
-	svc := NewVerifyCodeService(db, authSvc, 5*time.Minute, store)
+	svc := NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
 	return svc, store
 }
 

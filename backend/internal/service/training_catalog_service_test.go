@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -14,7 +15,7 @@ import (
 func newCatalogSvc(t *testing.T) (*TrainingCatalogService, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewTrainingCatalogService(db), db
+	return NewTrainingCatalogService(db, zap.NewNop()), db
 }
 
 // --- 专业方向 ---
@@ -180,12 +181,34 @@ func TestQuestionTagCRUD(t *testing.T) {
 	}
 }
 
+// TestQuestionTagCodeUnique 标签编码唯一性：创建/更新重复编码均返回友好错误。
+func TestQuestionTagCodeUnique(t *testing.T) {
+	svc, _ := newCatalogSvc(t)
+	tag1, err := svc.CreateQuestionTag(map[string]any{"code": "hydraulic", "name": "液压"})
+	if err != nil {
+		t.Fatalf("创建失败: %v", err)
+	}
+	if _, err := svc.CreateQuestionTag(map[string]any{"code": "hydraulic", "name": "重复"}); err == nil || err.Error() != "标签编码已存在" {
+		t.Fatalf("重复编码创建应报「标签编码已存在」, got %v", err)
+	}
+	if _, err := svc.UpdateQuestionTag(tag1["id"].(int), map[string]any{"code": "hydraulic"}); err != nil {
+		t.Fatalf("更新为自身编码应成功: %v", err)
+	}
+	tag2, err := svc.CreateQuestionTag(map[string]any{"code": "brake", "name": "制动"})
+	if err != nil {
+		t.Fatalf("创建失败: %v", err)
+	}
+	if _, err := svc.UpdateQuestionTag(tag2["id"].(int), map[string]any{"code": "hydraulic"}); err == nil || err.Error() != "标签编码已存在" {
+		t.Fatalf("改编码撞车应报「标签编码已存在」, got %v", err)
+	}
+}
+
 // TestListQuestionTags_QuestionCount 标签列表 question_count：
 // 学员端仅统计已发布题目，管理端统计全部题目。
 func TestListQuestionTags_QuestionCount(t *testing.T) {
 	svc, db := newCatalogSvc(t)
 	tag, _ := svc.CreateQuestionTag(map[string]any{"code": "regulation", "name": "法规"})
-	qsvc := NewQuestionBankService(db, nil)
+	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
 
 	// 1 道已发布 + 1 道草稿（未发布）
 	published, err := qsvc.CreateQuestion(map[string]any{
@@ -398,7 +421,7 @@ func TestGetAdminCatalogTree(t *testing.T) {
 // TestCourseSortOrder 课程 sort_order：创建/更新可设置，列表按 sort_order 升序。
 func TestCourseSortOrder(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewAdminCourseService(db, nil)
+	svc := NewAdminCourseService(db, nil, zap.NewNop())
 
 	spec := model.Specialty{Code: "operation", Name: "操作", Status: 1, CreatedAt: testutil.Now()}
 	db.Create(&spec)
@@ -449,7 +472,7 @@ func TestCourseSortOrder(t *testing.T) {
 
 func TestAdminCourse_TrainingFields(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewAdminCourseService(db, nil)
+	svc := NewAdminCourseService(db, nil, zap.NewNop())
 
 	spec := model.Specialty{Code: "maintenance", Name: "维修", Status: 1, CreatedAt: testutil.Now()}
 	db.Create(&spec)
@@ -565,7 +588,7 @@ func TestAdminCourse_TrainingFields(t *testing.T) {
 
 func TestCourseService_TrainingFields(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewCourseService(db, nil)
+	svc := NewCourseService(db, nil, zap.NewNop())
 
 	spec := model.Specialty{Code: "safety", Name: "安全", Status: 1, CreatedAt: testutil.Now()}
 	db.Create(&spec)
@@ -606,7 +629,7 @@ func TestCourseService_TrainingFields(t *testing.T) {
 
 func TestQuestionBank_Tags(t *testing.T) {
 	svc, db := newCatalogSvc(t)
-	qsvc := NewQuestionBankService(db, nil)
+	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
 
 	tag1, _ := svc.CreateQuestionTag(map[string]any{"code": "regulation", "name": "法规", "sort_order": 1})
 	tag2, _ := svc.CreateQuestionTag(map[string]any{"code": "hydraulic", "name": "液压", "sort_order": 2})

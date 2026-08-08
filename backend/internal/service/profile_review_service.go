@@ -9,6 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -49,11 +50,13 @@ type ProfileReviewService struct {
 	notificationSvc *NotificationService
 	// storage 文件存储（头像文件生命周期：审核通过清理旧头像、驳回清理待审文件）
 	storage storage.Storage
+
+	logger *zap.Logger
 }
 
 // NewProfileReviewService 构造审核服务。
-func NewProfileReviewService(db *gorm.DB, notificationSvc *NotificationService, st storage.Storage) *ProfileReviewService {
-	return &ProfileReviewService{db: db, notificationSvc: notificationSvc, storage: st}
+func NewProfileReviewService(db *gorm.DB, notificationSvc *NotificationService, st storage.Storage, logger *zap.Logger) *ProfileReviewService {
+	return &ProfileReviewService{db: db, notificationSvc: notificationSvc, storage: st, logger: logger}
 }
 
 // CreateRequest 提交资料修改审核请求（不直接生效）。

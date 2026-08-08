@@ -2,12 +2,12 @@
 package middleware
 
 import (
-	"log/slog"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 
 	"forklift-training/internal/config"
@@ -81,14 +81,14 @@ func (p *ipLimiterPool) cleanupLoop() {
 // RateLimit 基于 IP 的全局限流中间件（token bucket 算法）。
 // 生产环境防暴力枚举/撞库/爬虫；通过 RATE_LIMIT_RPS / RATE_LIMIT_BURST 调节。
 // 健康检查端点 /api/health 不受限流影响（探活不应被限流拦截）。
-func RateLimit(cfg *config.Config) gin.HandlerFunc {
+func RateLimit(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 	if !cfg.RateLimit.Enabled {
 		return func(c *gin.Context) { c.Next() }
 	}
 	pool := newIPLimiterPool(cfg.RateLimit.RPS, cfg.RateLimit.Burst)
-	slog.Info("rate limit 已启用",
-		"rps", cfg.RateLimit.RPS,
-		"burst", cfg.RateLimit.Burst,
+	logger.Info("rate limit 已启用",
+		zap.Float64("rps", cfg.RateLimit.RPS),
+		zap.Int("burst", cfg.RateLimit.Burst),
 	)
 	return func(c *gin.Context) {
 		// 健康检查端点放行（容器编排探活不应被限流拦截）

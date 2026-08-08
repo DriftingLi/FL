@@ -3,7 +3,6 @@ package migrate
 
 import (
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -11,13 +10,14 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"go.uber.org/zap"
 )
 
 // RunMigrations 执行迁移，direction 为 "up"、"down" 或 "force"。
 // force 用法: force <version>，强制设置数据库迁移版本并清除 dirty 标志。
 // 用于数据库因迁移执行中断进入 dirty 状态后的修复。
-func RunMigrations(dsn, direction string, args ...string) error {
-	migrationsDir, err := resolveMigrationsDir()
+func RunMigrations(dsn, direction string, logger *zap.Logger, args ...string) error {
+	migrationsDir, err := resolveMigrationsDir(logger)
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func RunMigrations(dsn, direction string, args ...string) error {
 		if err := m.Force(version); err != nil {
 			return fmt.Errorf("migrate force %d 失败: %w", version, err)
 		}
-		slog.Info("迁移版本已强制设置", "version", version)
+		logger.Info("迁移版本已强制设置", zap.Int("version", version))
 	case "status":
 		// 查看当前迁移版本和 dirty 状态
 		version, dirty, err := m.Version()
@@ -83,7 +83,7 @@ func RunMigrations(dsn, direction string, args ...string) error {
 }
 
 // resolveMigrationsDir 解析 migrations 目录的绝对路径。
-func resolveMigrationsDir() (string, error) {
+func resolveMigrationsDir(logger *zap.Logger) (string, error) {
 	// 优先使用环境变量
 	if dir := os.Getenv("MIGRATIONS_DIR"); dir != "" {
 		abs, err := filepath.Abs(dir)
@@ -109,7 +109,7 @@ func resolveMigrationsDir() (string, error) {
 		}
 		dir = parent
 	}
-	slog.Warn("migrations 目录不存在", "dir", "migrations")
+	logger.Warn("migrations 目录不存在", zap.String("dir", "migrations"))
 	abs, _ := filepath.Abs("migrations")
 	return abs, nil
 }

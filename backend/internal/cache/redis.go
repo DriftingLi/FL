@@ -4,13 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 
 	"forklift-training/internal/config"
 )
+
+// pkgLogger 包级日志器，InitRedis 时注入（缓存模块为包级函数形态）。
+// 未初始化时回退 Nop，保证包级函数在测试等场景下可安全调用。
+var pkgLogger = zap.NewNop()
 
 // client 全局 Redis 客户端，InitRedis 后赋值。
 var client *redis.Client
@@ -20,7 +24,7 @@ var prefix string
 
 // InitRedis 连接 Redis 服务器，Ping 验证连通性，并初始化全局 client 与 key 前缀。
 // 失败返回 error，调用方应在启动流程中以 os.Exit(1) 处理。
-func InitRedis(cfg config.RedisConfig) (*redis.Client, error) {
+func InitRedis(cfg config.RedisConfig, logger *zap.Logger) (*redis.Client, error) {
 	c := redis.NewClient(&redis.Options{
 		Addr:            cfg.Addr,
 		Password:        cfg.Password,
@@ -43,6 +47,7 @@ func InitRedis(cfg config.RedisConfig) (*redis.Client, error) {
 	}
 
 	client = c
+	pkgLogger = logger
 
 	// 前缀优先用配置值，回退默认
 	if cfg.Prefix != "" {
@@ -51,8 +56,13 @@ func InitRedis(cfg config.RedisConfig) (*redis.Client, error) {
 		prefix = DefaultKeyPrefix
 	}
 
-	slog.Info("Redis 连接成功", "addr", cfg.Addr, "db", cfg.DB, "prefix", prefix,
-		"poolSize", cfg.PoolSize, "minIdle", cfg.MinIdleConns)
+	logger.Info("Redis 连接成功",
+		zap.String("addr", cfg.Addr),
+		zap.Int("db", cfg.DB),
+		zap.String("prefix", prefix),
+		zap.Int("poolSize", cfg.PoolSize),
+		zap.Int("minIdle", cfg.MinIdleConns),
+	)
 	return c, nil
 }
 
@@ -71,13 +81,13 @@ func Ping(ctx context.Context) error {
 
 // CloseRedis 优雅关闭 Redis 连接池。
 // 传入 nil 时空操作；关闭失败仅记录日志，不阻断退出流程。
-func CloseRedis(c *redis.Client) {
+func CloseRedis(c *redis.Client, logger *zap.Logger) {
 	if c == nil {
 		return
 	}
 	if err := c.Close(); err != nil {
-		slog.Warn("Redis 关闭异常", "error", err)
+		logger.Warn("Redis 关闭异常", zap.Error(err))
 		return
 	}
-	slog.Info("Redis 连接池已关闭")
+	logger.Info("Redis 连接池已关闭")
 }

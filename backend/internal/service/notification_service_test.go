@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/testutil"
@@ -12,7 +13,7 @@ import (
 
 func TestNotificationService_CreateAndList(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewNotificationService(db)
+	svc := NewNotificationService(db, zap.NewNop())
 	student := testutil.SeedStudent(t, db, "notify_user", "x")
 	uid := student.StudentID
 
@@ -53,7 +54,7 @@ func TestNotificationService_CreateAndList(t *testing.T) {
 
 func TestNotificationService_MarkRead(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewNotificationService(db)
+	svc := NewNotificationService(db, zap.NewNop())
 	student := testutil.SeedStudent(t, db, "notify_mark", "x")
 	uid := student.StudentID
 
@@ -103,7 +104,7 @@ func TestNotificationService_MarkRead(t *testing.T) {
 
 func TestNotificationService_CreateWithTx_CommitAndRollback(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewNotificationService(db)
+	svc := NewNotificationService(db, zap.NewNop())
 	student := testutil.SeedStudent(t, db, "notify_tx", "x")
 	uid := student.StudentID
 

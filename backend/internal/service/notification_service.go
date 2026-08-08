@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -31,11 +32,13 @@ type GormCreator interface {
 // NotificationService 站内信通知服务。
 type NotificationService struct {
 	db *gorm.DB
+
+	logger *zap.Logger
 }
 
 // NewNotificationService 构造通知服务。
-func NewNotificationService(db *gorm.DB) *NotificationService {
-	return &NotificationService{db: db}
+func NewNotificationService(db *gorm.DB, logger *zap.Logger) *NotificationService {
+	return &NotificationService{db: db, logger: logger}
 }
 
 // Create 创建一条站内信通知。

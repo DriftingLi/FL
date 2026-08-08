@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -32,9 +33,9 @@ func (m *memReviewStorage) List(context.Context, string) ([]string, error) { ret
 func newReviewTestSvc(t *testing.T) (*ProfileReviewService, *NotificationService, *gorm.DB, *memReviewStorage) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	notifySvc := NewNotificationService(db)
+	notifySvc := NewNotificationService(db, zap.NewNop())
 	st := &memReviewStorage{}
-	return NewProfileReviewService(db, notifySvc, st), notifySvc, db, st
+	return NewProfileReviewService(db, notifySvc, st, zap.NewNop()), notifySvc, db, st
 }
 
 func seedHrwaiUser(t *testing.T, db *gorm.DB, phone, email string) *model.HrwaiUser {

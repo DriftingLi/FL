@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/middleware"
@@ -18,7 +19,7 @@ const testJWTSecret = "test-secret-key-for-unit-test"
 func newAuthSvc(t *testing.T) (*AuthService, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewAuthService(db, testJWTSecret, time.Hour, "admin123", "tutor123", "student123"), db
+	return NewAuthService(db, testJWTSecret, time.Hour, "admin123", "tutor123", "student123", zap.NewNop()), db
 }
 
 // --- HashPassword / VerifyPassword ---

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -14,11 +15,13 @@ import (
 type GradingService struct {
 	db *gorm.DB
 	ai *AIService
+
+	logger *zap.Logger
 }
 
 // NewGradingService 创建阅卷服务实例。
-func NewGradingService(db *gorm.DB, ai *AIService) *GradingService {
-	return &GradingService{db: db, ai: ai}
+func NewGradingService(db *gorm.DB, ai *AIService, logger *zap.Logger) *GradingService {
+	return &GradingService{db: db, ai: ai, logger: logger}
 }
 
 // GetSubmittedParticipants 获取已提交的考试参与列表。

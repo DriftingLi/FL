@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"testing"
 
+	"go.uber.org/zap"
+
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/config"
@@ -21,8 +23,8 @@ func TestRetiredPracticeEndpointsReturn404(t *testing.T) {
 
 	r := gin.New()
 	api := r.Group("/api")
-	RegisterPracticeModeRoutes(api, cfg, db)
-	RegisterQuestionBankRoutes(api, cfg, db, nil)
+	RegisterPracticeModeRoutes(api, cfg, db, zap.NewNop())
+	RegisterQuestionBankRoutes(api, cfg, db, nil, zap.NewNop())
 
 	cases := []struct {
 		method string
@@ -49,7 +51,7 @@ func TestQuestionBankQuestionsIgnoresKpParam(t *testing.T) {
 
 	r := gin.New()
 	api := r.Group("/api")
-	RegisterQuestionBankRoutes(api, cfg, db, nil)
+	RegisterQuestionBankRoutes(api, cfg, db, nil, zap.NewNop())
 
 	// 未登录访问会被 JWT 中间件拦下（401），但绝不应因已删的 knowledge_point_id 参数而 500
 	rec := performRequest(r, "GET", "/api/question-bank/questions?knowledge_point_id=1")
@@ -66,7 +68,7 @@ func TestTutorCourseRoutesAbsent(t *testing.T) {
 
 	r := gin.New()
 	api := r.Group("/api")
-	RegisterTutorRoutes(api, cfg, db, nil)
+	RegisterTutorRoutes(api, cfg, db, nil, zap.NewNop())
 
 	for _, tc := range []struct {
 		method string

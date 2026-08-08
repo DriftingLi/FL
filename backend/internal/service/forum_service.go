@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -85,12 +86,14 @@ type ForumReplyDTO struct {
 type ForumService struct {
 	db      *gorm.DB
 	fileSvc *FileService
+
+	logger *zap.Logger
 }
 
 // NewForumService 构造论坛服务。
 // fileSvc 用于删除帖子/回复时清理图片存储（可 nil，nil 时跳过清理）。
-func NewForumService(db *gorm.DB, fileSvc *FileService) *ForumService {
-	return &ForumService{db: db, fileSvc: fileSvc}
+func NewForumService(db *gorm.DB, fileSvc *FileService, logger *zap.Logger) *ForumService {
+	return &ForumService{db: db, fileSvc: fileSvc, logger: logger}
 }
 
 // topicRow 列表查询的扫描结构。

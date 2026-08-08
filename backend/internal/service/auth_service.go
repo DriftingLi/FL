@@ -8,6 +8,7 @@ import (
 	"errors"
 	"time"
 
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
@@ -22,16 +23,19 @@ type AuthService struct {
 	defaultAdminPwd   string
 	defaultTutorPwd   string
 	defaultStudentPwd string
+
+	logger *zap.Logger
 }
 
 // NewAuthService 创建认证服务。
-func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpiry time.Duration, adminPwd, tutorPwd, studentPwd string) *AuthService {
+func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpiry time.Duration, adminPwd, tutorPwd, studentPwd string, logger *zap.Logger) *AuthService {
 	return &AuthService{
 		db:                db,
 		session:           security.NewSession(jwtSecret, jwtExpiry, security.CookieConfig{}),
 		defaultAdminPwd:   adminPwd,
 		defaultTutorPwd:   tutorPwd,
 		defaultStudentPwd: studentPwd,
+		logger:            logger,
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -18,9 +19,9 @@ import (
 
 // RegisterTutorRoutes 注册 /api/tutor 蓝图（导师管理章节与文件）。
 // 导师不建课：课程创建/编辑由管理员负责（/api/admin/course*），导师仅管理章节。
-func RegisterTutorRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage) {
-	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st)
-	svc := service.NewTutorService(db, cfg.UploadFolder, fileSvc)
+func RegisterTutorRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger) {
+	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st, logger)
+	svc := service.NewTutorService(db, cfg.UploadFolder, fileSvc, logger)
 
 	g := rg.Group("/tutor", middleware.JWTAuth(cfg), middleware.RoleRequired("tutor"))
 

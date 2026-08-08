@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -27,7 +28,7 @@ type AuthHandler struct {
 }
 
 // NewAuthHandler 创建认证 handler。
-func NewAuthHandler(cfg *config.Config, authSvc *service.AuthService, fileSvc *service.FileService, st storage.Storage, reviewSvc *service.ProfileReviewService) *AuthHandler {
+func NewAuthHandler(cfg *config.Config, authSvc *service.AuthService, fileSvc *service.FileService, st storage.Storage, reviewSvc *service.ProfileReviewService, logger *zap.Logger) *AuthHandler {
 	return &AuthHandler{
 		cfg: cfg, authSvc: authSvc, fileSvc: fileSvc, storage: st, reviewSvc: reviewSvc,
 		session: security.SessionFromConfig(cfg),
