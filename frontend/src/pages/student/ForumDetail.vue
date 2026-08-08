@@ -153,13 +153,11 @@ async function loadDetail() {
   try {
     const topicId = Number(route.params.topicId)
     const res = await forumApi.getTopic(topicId)
-    if (res.code === 200 && res.data) {
-      topic.value = res.data.topic
-      replies.value = res.data.replies || []
-    }
+    topic.value = res.topic
+    replies.value = res.replies || []
   } catch (e) {
     console.error('加载帖子详情失败:', e)
-    ElMessage.error('加载帖子详情失败')
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -174,17 +172,15 @@ async function submitReply() {
   submitting.value = true
   try {
     const topicId = Number(route.params.topicId)
-    const res = await forumApi.replyTopic(topicId, content, replyingTo.value?.id, replyImages.value)
-    if (res.code === 200 || res.code === 201) {
-      ElMessage.success('回复成功')
-      replyContent.value = ''
-      replyImages.value = []
-      replyingTo.value = null
-      loadDetail()
-    }
+    await forumApi.replyTopic(topicId, content, replyingTo.value?.id, replyImages.value)
+    ElMessage.success('回复成功')
+    replyContent.value = ''
+    replyImages.value = []
+    replyingTo.value = null
+    loadDetail()
   } catch (e) {
     console.error('回复失败:', e)
-    ElMessage.error('回复失败，请稍后重试')
+    /* 错误已由拦截器提示 */
   } finally {
     submitting.value = false
   }
@@ -206,7 +202,7 @@ async function removeTopic() {
     goBack()
   } catch (e) {
     console.error('删除失败:', e)
-    ElMessage.error('删除失败')
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -222,7 +218,7 @@ async function removeReply(replyId: number) {
     loadDetail()
   } catch (e) {
     console.error('删除失败:', e)
-    ElMessage.error('删除失败')
+    /* 错误已由拦截器提示 */
   }
 }
 

@@ -306,20 +306,18 @@ async function saveMeta() {
   }
   savingMeta.value = true
   try {
-    const res = await tutorApi.updateChapter(chapterDetail.value.chapter_id, {
+    await tutorApi.updateChapter(chapterDetail.value.chapter_id, {
       title: metaForm.value.title.trim(),
       description: metaForm.value.description,
       duration: metaForm.value.duration
     })
-    if (res.code === 200) {
-      chapterDetail.value.title = metaForm.value.title.trim()
-      chapterDetail.value.description = metaForm.value.description
-      chapterDetail.value.duration = metaForm.value.duration
-      ElMessage.success('章节信息更新成功')
-      metaDialogVisible.value = false
-    }
-  } catch (e: any) {
-    ElMessage.error(e.message || '更新失败')
+    chapterDetail.value.title = metaForm.value.title.trim()
+    chapterDetail.value.description = metaForm.value.description
+    chapterDetail.value.duration = metaForm.value.duration
+    ElMessage.success('章节信息更新成功')
+    metaDialogVisible.value = false
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     savingMeta.value = false
   }
@@ -330,16 +328,14 @@ async function saveContent() {
   if (!chapterDetail.value) return
   savingContent.value = true
   try {
-    const res = await tutorApi.updateChapter(chapterDetail.value.chapter_id, {
+    await tutorApi.updateChapter(chapterDetail.value.chapter_id, {
       content: editContent.value
     })
-    if (res.code === 200) {
-      chapterDetail.value.content = editContent.value
-      originalContent.value = editContent.value
-      ElMessage.success('正文保存成功')
-    }
-  } catch (e: any) {
-    ElMessage.error(e.message || '保存失败')
+    chapterDetail.value.content = editContent.value
+    originalContent.value = editContent.value
+    ElMessage.success('正文保存成功')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     savingContent.value = false
   }
@@ -385,18 +381,14 @@ async function handleDeleteFile(file: any) {
       '确认删除',
       { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
     )
-    const res = await tutorApi.deleteFile(file.file_id)
-    if (res.code === 200) {
-      ElMessage.success('文件删除成功')
-      if (selectedFileId.value === file.file_id) {
-        selectedFileId.value = null
-      }
-      await loadChapterDetail()
+    await tutorApi.deleteFile(file.file_id)
+    ElMessage.success('文件删除成功')
+    if (selectedFileId.value === file.file_id) {
+      selectedFileId.value = null
     }
-  } catch (e: any) {
-    if (e !== 'cancel') {
-      ElMessage.error(e.message || '删除失败')
-    }
+    await loadChapterDetail()
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -407,23 +399,17 @@ async function loadChapterDetail() {
   try {
     const chapterId = Number(route.params.chapterId)
     const res = await tutorApi.getChapterDetail(chapterId)
-    if (res.code === 200) {
-      chapterDetail.value = res.data
-      editContent.value = res.data.content || ''
-      originalContent.value = res.data.content || ''
-      // 默认 tab：图文优先，否则第一个媒体 tab
-      activeTab.value = 'content'
-      selectedFileId.value = null
-      // 顺便加载课程信息拿课程名 + 章节列表（用于上下章标题）
-      await loadCourseInfo()
-    } else {
-      chapterNotFound.value = true
-    }
+    chapterDetail.value = res
+    editContent.value = res.content || ''
+    originalContent.value = res.content || ''
+    // 默认 tab：图文优先，否则第一个媒体 tab
+    activeTab.value = 'content'
+    selectedFileId.value = null
+    // 顺便加载课程信息拿课程名 + 章节列表（用于上下章标题）
+    await loadCourseInfo()
   } catch (e: any) {
     if (e?.response?.status === 404) {
       chapterNotFound.value = true
-    } else {
-      ElMessage.error('加载章节详情失败')
     }
   } finally {
     loading.value = false
@@ -434,10 +420,8 @@ async function loadCourseInfo() {
   try {
     const courseId = Number(route.params.courseId)
     const res = await tutorApi.getCourseChapters(courseId)
-    if (res.code === 200) {
-      courseName.value = res.data.course?.name || ''
-      chapters.value = res.data.chapters || []
-    }
+    courseName.value = res.course?.name || ''
+    chapters.value = res.chapters || []
   } catch (e) {
     // 静默失败
   }

@@ -6,19 +6,16 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 
-	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
-	"forklift-training/internal/storage"
 	"forklift-training/pkg/response"
 )
 
 // RegisterProfileReviewRoutes 注册 /api/admin/profile-reviews 蓝图（仅管理员）。
-func RegisterProfileReviewRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger) {
-	svc := service.NewProfileReviewService(db, service.NewNotificationService(db, logger), st, logger)
+func RegisterProfileReviewRoutes(rg *gin.RouterGroup, deps *Deps) {
+	svc := deps.ReviewSvc
+	cfg := deps.Cfg
 
 	g := rg.Group("/admin/profile-reviews", middleware.JWTAuth(cfg), middleware.RoleRequired("admin"))
 

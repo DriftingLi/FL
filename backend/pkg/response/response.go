@@ -49,3 +49,12 @@ func NotFound(c *gin.Context, msg string) {
 func ServerError(c *gin.Context, msg string) {
 	c.JSON(500, R{Code: 500, Message: msg, Data: nil})
 }
+
+// PageCount 计算分页页数：ceil(total/pageSize) 的唯一实现。
+// pageSize<=0 按 1 处理（调用方均已先归一化，防御除零）；total=0 时为 0 页。
+func PageCount(total int64, pageSize int) int {
+	if pageSize <= 0 {
+		pageSize = 1
+	}
+	return int((total + int64(pageSize) - 1) / int64(pageSize))
+}

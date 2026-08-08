@@ -115,7 +115,6 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, ArrowRight, VideoCamera, Document, Picture } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
 import { marked } from 'marked'
 import { markedHighlight } from 'marked-highlight'
 import hljs from 'highlight.js'
@@ -261,8 +260,9 @@ async function reportIncremental(isFinal = false) {
   const chapter_id = chapterDetail.value.chapter_id
 
   try {
-    const res = await courseApi.updateProgress(Number(courseId.value), { chapter_id, duration: durationMinutes })
-    if (res.code === 200) reportedSeconds += incrementalSeconds
+    // 拦截器已解包信封；成功返回即业务负载，失败抛错
+    const detail = await courseApi.updateProgress(Number(courseId.value), { chapter_id, duration: durationMinutes })
+    if (detail === null) reportedSeconds += incrementalSeconds
   } catch (error) {
     if (!isFinal) console.warn('上报学习时长增量失败:', error)
   }
@@ -276,21 +276,18 @@ async function loadChapterDetail() {
   stopStudy()
 
   try {
-    const res = await courseApi.getChapterDetail(Number(courseId.value), Number(chapterId.value))
-    if (res.code === 200) {
-      chapterDetail.value = res.data
-      // 章节加载成功后启动学习计时
-      beginStudy()
-    } else {
-      chapterNotFound.value = true
-    }
+    // 拦截器已解包信封；章节不存在由后端 404 触发 catch 分支
+    const detail = await courseApi.getChapterDetail(Number(courseId.value), Number(chapterId.value))
+    chapterDetail.value = detail
+    // 章节加载成功后启动学习计时
+    beginStudy()
   } catch (error) {
     const err = error as { response?: { status?: number } }
     if (err?.response?.status === 404) {
       chapterNotFound.value = true
     } else {
       console.error('加载章节详情失败:', error)
-      ElMessage.error('加载章节详情失败')
+      /* 错误已由拦截器提示 */
     }
   } finally {
     loading.value = false

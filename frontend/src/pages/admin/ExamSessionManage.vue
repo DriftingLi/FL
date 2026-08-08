@@ -89,7 +89,7 @@ async function loadData() {
   loading.value = true
   try {
     const res = await levelExamApi.getSessions({ page: 1, page_size: 50 })
-    sessions.value = res.data?.sessions || []
+    sessions.value = res?.sessions || []
   } catch (e) {} finally { loading.value = false }
 }
 
@@ -137,8 +137,8 @@ async function submitSession() {
     }
     dialogVisible.value = false
     await loadData()
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '操作失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally { submitting.value = false }
 }
 

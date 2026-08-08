@@ -254,10 +254,10 @@ function handleResize() {
 
 async function loadStatistics() {
   try {
-    const res = await adminApi.getStatistics()
-    if (res.code === 200 && res.data) {
-      overview.value = res.data.overview || {}
-      courseStats.value = res.data.course_stats || []
+    const data = await adminApi.getStatistics()
+    if (data) {
+      overview.value = data.overview || {}
+      courseStats.value = data.course_stats || []
 
       statItems.value[0].value = overview.value.total_students || 0
       statItems.value[1].value = overview.value.active_today || 0

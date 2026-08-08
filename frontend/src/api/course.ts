@@ -1,4 +1,6 @@
-import request from './request'
+// 已迁移模块：走 unwrappedRequest（拦截器解包信封，成功直接返回业务数据 Promise<T>，
+// 业务失败抛错并统一 toast，调用方不再自检 res.code）
+import { unwrappedRequest } from './request'
 
 export interface UpdateProgressPayload {
   progress?: number
@@ -84,26 +86,26 @@ export interface ChapterDetail {
 
 export const courseApi = {
   getCourses(params: { page?: number; page_size?: number; keyword?: string; specialty_id?: number; level_id?: number }) {
-    return request.get<{ courses: CourseSummary[]; total: number }>('/courses', { params })
+    return unwrappedRequest.get<{ courses: CourseSummary[]; total: number }>('/courses', { params })
   },
 
   getCourseDetail(id: number) {
-    return request.get<CourseDetailResponse>(`/course/${id}`)
+    return unwrappedRequest.get<CourseDetailResponse>(`/course/${id}`)
   },
 
   updateProgress(courseId: number, data: UpdateProgressPayload) {
-    return request.post<null>(`/course/${courseId}/progress`, data)
+    return unwrappedRequest.post<null>(`/course/${courseId}/progress`, data)
   },
 
   getChapterDetail(courseId: number, chapterId: number) {
-    return request.get<ChapterDetail>(`/course/${courseId}/chapter/${chapterId}`)
+    return unwrappedRequest.get<ChapterDetail>(`/course/${courseId}/chapter/${chapterId}`)
   },
 
   getChapterSlides(chapterId: number) {
-    return request.get<{ slides?: string[] }>(`/chapter/${chapterId}/slides`)
+    return unwrappedRequest.get<{ slides?: string[] }>(`/chapter/${chapterId}/slides`)
   },
 
   regenerateSlides(chapterId: number) {
-    return request.post<null>(`/chapter/${chapterId}/slides/regenerate`)
+    return unwrappedRequest.post<null>(`/chapter/${chapterId}/slides/regenerate`)
   }
 }

@@ -13,7 +13,16 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/response"
 )
+
+// CoursePageResult 课程分页结果（学员端/管理端/导师端共用）。
+type CoursePageResult struct {
+	Courses []map[string]any `json:"courses"`
+	Page    int              `json:"page"`
+	Pages   int              `json:"pages"`
+	Total   int64            `json:"total"`
+}
 
 // CourseService 学员课程服务。
 type CourseService struct {
@@ -29,7 +38,7 @@ func NewCourseService(db *gorm.DB, fileService *FileService, logger *zap.Logger)
 
 // GetCourses 课程列表（可额外按专业方向/课程等级过滤）。
 // 未挂专业方向/等级的课程不展示（与目录树口径统一）。
-func (s *CourseService) GetCourses(page, pageSize int, specialtyID, levelID *int) map[string]any {
+func (s *CourseService) GetCourses(page, pageSize int, specialtyID, levelID *int) CoursePageResult {
 	if page <= 0 {
 		page = 1
 	}
@@ -65,12 +74,11 @@ func (s *CourseService) GetCourses(page, pageSize int, specialtyID, levelID *int
 		}
 		items = append(items, item)
 	}
-	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	return map[string]any{
-		"total":   total,
-		"page":    page,
-		"pages":   pages,
-		"courses": items,
+	return CoursePageResult{
+		Courses: items,
+		Page:    page,
+		Pages:   response.PageCount(total, pageSize),
+		Total:   total,
 	}
 }
 

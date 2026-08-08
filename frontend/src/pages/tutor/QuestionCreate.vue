@@ -134,14 +134,15 @@ const form = ref<{
 
 onMounted(async () => {
   try {
-    const res = await trainingApi.getTags()
-    tags.value = res.data.tags || []
+    // 拦截器已解包信封
+    const data = await trainingApi.getTags()
+    tags.value = data.tags || []
   } catch (e) {}
 
   if (isEdit.value) {
     try {
       const res = await questionBankApi.getQuestion(Number(route.query.id))
-      const q = res.data
+      const q = res
       form.value = {
         ...form.value,
         ...q,
@@ -151,8 +152,8 @@ onMounted(async () => {
       if (q.type === 'multi_choice' && q.answer) {
         multiAnswer.value = q.answer.split(',')
       }
-    } catch (e) {
-      ElMessage.error('获取题目失败')
+    } catch {
+      /* 错误已由拦截器提示 */
     }
   }
 })
@@ -191,10 +192,10 @@ async function handleImageUpload(options: { file: File }) {
     const formData = new FormData()
     formData.append('image', options.file)
     const res = await questionBankApi.uploadImage(formData)
-    form.value.image_url = res.data.url
+    form.value.image_url = res.url
     ElMessage.success('图片上传成功')
-  } catch (e) {
-    ElMessage.error(((e as { response?: { data?: { message?: string } } }).response?.data?.message) || '图片上传失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     imageUploading.value = false
   }
@@ -222,8 +223,8 @@ async function submitForm() {
       ElMessage.success('创建成功')
     }
     router.push('/training/tutor/question-manage')
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '操作失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     submitting.value = false
   }

@@ -5,32 +5,23 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 
-	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/service"
-	"forklift-training/internal/storage"
 	"forklift-training/pkg/response"
 )
 
 // RegisterAdminRoutes 注册 /api/admin 蓝图（管理员后台）。
-// aiConfigSvc 由上层 NewRouter 创建并传入，便于 AI 助手模块复用同一实例。
-func RegisterAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, aiConfigSvc *service.AIConfigService, st storage.Storage, logger *zap.Logger) {
-	adminSvc := service.NewAdminService(db, logger)
-	courseSvc := service.NewAdminCourseService(db, service.NewFileService(cfg.LibreOfficeSidecarURL, st, logger), logger)
-	authSvc := service.NewAuthService(db, cfg.JWTSecretKey, cfg.JWTExpiry(),
-		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student, logger)
+func RegisterAdminRoutes(rg *gin.RouterGroup, deps *Deps) {
+	adminSvc := deps.AdminSvc
+	courseSvc := deps.AdminCourseSvc
+	authSvc := deps.AuthSvc
+	aiConfigSvc := deps.AIConfigSvc
+	contentGenSvc := deps.ContentGenSvc
 
-	// AI 多配置 service + 课程内容生成 service
-	aiSvc := service.NewAIService(db, aiConfigSvc, logger)
-	contentGenSvc := service.NewContentGenerateService(db, aiSvc, logger)
-
-	g := rg.Group("/admin", middleware.JWTAuth(cfg), middleware.RoleRequired("admin"))
+	g := rg.Group("/admin", middleware.JWTAuth(deps.Cfg), middleware.RoleRequired("admin"))
 
 	// ===== AI 配置（多配置管理 + 功能绑定）=====
-	registerSettingsRoutes(g, aiConfigSvc, db)
+	registerSettingsRoutes(g, aiConfigSvc, deps.DB)
 
 	// ===== 课程管理 =====
 

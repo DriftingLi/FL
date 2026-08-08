@@ -88,13 +88,6 @@ type StreamChatReq struct {
 	} `json:"messages"`
 }
 
-// modelConfig 解析后的模型配置（内部使用）。
-type modelConfig struct {
-	APIKey  string
-	BaseURL string
-	Model   string
-}
-
 // AIAssistantService AI 助手模块服务。
 type AIAssistantService struct {
 	db          *gorm.DB
@@ -248,7 +241,7 @@ const autoTitlePlaceholder = "新会话"
 // maybeGenerateSessionTitle 异步生成会话标题。
 // 仅当会话标题为占位符 "新会话" 时才生成；已被 AI 命名或用户手动改名后不再覆盖。
 // 失败仅记录日志，不影响主流程。
-func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, userID, sessionID int, mc *modelConfig) {
+func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, userID, sessionID int, mc AISettings) {
 	// 查询会话，校验归属和标题
 	var session model.AIChatSession
 	if err := s.db.WithContext(ctx).
@@ -303,7 +296,7 @@ func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, user
 }
 
 // generateTitleWithModel 调用同模型根据用户首条消息生成简短标题。
-func (s *AIAssistantService) generateTitleWithModel(ctx context.Context, mc *modelConfig, userMessage string) (string, error) {
+func (s *AIAssistantService) generateTitleWithModel(ctx context.Context, mc AISettings, userMessage string) (string, error) {
 	chatModel, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
 		APIKey:  mc.APIKey,
 		BaseURL: mc.BaseURL,
@@ -441,14 +434,14 @@ func (s *AIAssistantService) GetSessionMessages(ctx context.Context, userID, ses
 	return out, nil
 }
 
-// resolveModelConfig 根据 ModelSource 解析模型配置。
-func (s *AIAssistantService) resolveModelConfig(ctx context.Context, userID int, req StreamChatReq) (*modelConfig, error) {
+// resolveModelConfig 根据 ModelSource 解析模型配置（与 AIService 消费同一 AISettings 形状）。
+func (s *AIAssistantService) resolveModelConfig(ctx context.Context, userID int, req StreamChatReq) (AISettings, error) {
 	switch req.ModelSource {
 	case "admin":
 		// 校验该配置是否被管理员绑定到 AI 助手功能（防止用户绕过前端传任意 config_id）
 		boundCfgs, err := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistant)
 		if err != nil {
-			return nil, fmt.Errorf("校验可用模型失败: %w", err)
+			return AISettings{}, fmt.Errorf("校验可用模型失败: %w", err)
 		}
 		var cfg *model.AIConfig
 		for i := range boundCfgs {
@@ -458,33 +451,33 @@ func (s *AIAssistantService) resolveModelConfig(ctx context.Context, userID int,
 			}
 		}
 		if cfg == nil {
-			return nil, errors.New("该模型未绑定到 AI 助手，请联系管理员或选择自定义模型")
+			return AISettings{}, errors.New("该模型未绑定到 AI 助手，请联系管理员或选择自定义模型")
 		}
-		return &modelConfig{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model}, nil
+		return AISettings{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Source: "binding:" + cfg.Name}, nil
 	case "user":
 		if userID == 0 {
-			return nil, errors.New("未登录不能使用用户自定义模型")
+			return AISettings{}, errors.New("未登录不能使用用户自定义模型")
 		}
 		var m model.AIUserModel
 		if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", req.UserModelID, userID).
 			Limit(1).Find(&m).Error; err != nil {
-			return nil, err
+			return AISettings{}, err
 		}
 		if m.ID == 0 {
-			return nil, gorm.ErrRecordNotFound
+			return AISettings{}, gorm.ErrRecordNotFound
 		}
 		key, err := security.DecryptSecret(m.APIKey, s.secretKey)
 		if err != nil {
-			return nil, fmt.Errorf("解密用户自定义模型 API Key 失败: %w", err)
+			return AISettings{}, fmt.Errorf("解密用户自定义模型 API Key 失败: %w", err)
 		}
-		return &modelConfig{APIKey: key, BaseURL: m.BaseURL, Model: m.Model}, nil
+		return AISettings{APIKey: key, BaseURL: m.BaseURL, Model: m.Model, Source: "user:" + m.Name}, nil
 	case "custom":
 		if req.CustomAPIKey == "" || req.CustomBaseURL == "" || req.CustomModel == "" {
-			return nil, errors.New("自定义模型配置不完整")
+			return AISettings{}, errors.New("自定义模型配置不完整")
 		}
-		return &modelConfig{APIKey: req.CustomAPIKey, BaseURL: req.CustomBaseURL, Model: req.CustomModel}, nil
+		return AISettings{APIKey: req.CustomAPIKey, BaseURL: req.CustomBaseURL, Model: req.CustomModel, Source: "custom"}, nil
 	}
-	return nil, fmt.Errorf("未知的 model_source: %s", req.ModelSource)
+	return AISettings{}, fmt.Errorf("未知的 model_source: %s", req.ModelSource)
 }
 
 // StreamChat 流式对话。

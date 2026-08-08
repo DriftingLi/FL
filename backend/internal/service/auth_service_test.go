@@ -316,3 +316,102 @@ func TestEnsureDefaultUsers_Idempotent(t *testing.T) {
 		t.Fatalf("幂等调用后应仍只有 1 个 tutor, got %d", tutorCount)
 	}
 }
+
+// --- GetProfile (/auth/me 资料组装) ---
+
+func newGetProfileSvc(t *testing.T) (*AuthService, *gorm.DB) {
+	t.Helper()
+	svc, tdb := newAuthSvc(t)
+	svc.SetProfileReviewService(NewProfileReviewService(tdb, nil, nil, zap.NewNop()))
+	return svc, tdb
+}
+
+func TestGetProfile_HrwaiUser(t *testing.T) {
+	svc, tdb := newGetProfileSvc(t)
+	hash, _ := HashPassword("pwd123")
+	u := testutil.SeedStudent(t, tdb, "alice", hash)
+	u.Nickname = "小爱"
+	u.AvatarURL = "https://example.com/avatar.png"
+	u.Email = "alice@example.com"
+	u.Company = "和润"
+	tdb.Save(u)
+
+	data := svc.GetProfile(u.StudentID, HrwaiRole, u.Username)
+	if data["user_id"] != u.StudentID || data["username"] != "alice" || data["role"] != HrwaiRole {
+		t.Fatalf("基础字段异常: %+v", data)
+	}
+	if data["name"] != "alice" || data["nickname"] != "小爱" || data["avatar_url"] != "https://example.com/avatar.png" {
+		t.Fatalf("资料字段异常: %+v", data)
+	}
+	if data["phone"] != "test_alice" || data["email"] != "alice@example.com" || data["company"] != "和润" {
+		t.Fatalf("联系方式字段异常: %+v", data)
+	}
+	if data["has_password"] != true {
+		t.Fatalf("已设置密码时应 has_password=true: %+v", data)
+	}
+	if pending, _ := data["pending_profile_change"].(*ProfileChangeRequestDTO); pending != nil {
+		t.Fatalf("无待审资料时应为 nil: %+v", data["pending_profile_change"])
+	}
+}
+
+func TestGetProfile_HasPasswordFalse(t *testing.T) {
+	svc, tdb := newGetProfileSvc(t)
+	u := testutil.SeedStudent(t, tdb, "nopwd", "") // 未设置密码
+
+	data := svc.GetProfile(u.StudentID, HrwaiRole, u.Username)
+	if data["has_password"] != false {
+		t.Fatalf("未设置密码时应 has_password=false: %+v", data)
+	}
+}
+
+func TestGetProfile_PendingReview(t *testing.T) {
+	svc, tdb := newGetProfileSvc(t)
+	hash, _ := HashPassword("pwd123")
+	u := testutil.SeedStudent(t, tdb, "pending", hash)
+	req, err := svc.reviewSvc.CreateRequest(u.StudentID, ProfileFieldNickname, "新昵称")
+	if err != nil {
+		t.Fatalf("提交待审请求失败: %v", err)
+	}
+
+	data := svc.GetProfile(u.StudentID, HrwaiRole, u.Username)
+	pending, ok := data["pending_profile_change"].(*ProfileChangeRequestDTO)
+	if !ok || pending == nil {
+		t.Fatalf("应有待审资料对象: %v", data["pending_profile_change"])
+	}
+	if pending.ID != req.ID || pending.Status != ProfileStatusPending {
+		t.Fatalf("待审资料异常: %+v", pending)
+	}
+}
+
+func TestGetProfile_Tutor(t *testing.T) {
+	svc, tdb := newAuthSvc(t)
+	hash, _ := HashPassword("tutorpwd")
+	tu := testutil.SeedTutor(t, tdb, "tutor1", hash)
+
+	data := svc.GetProfile(tu.TutorID, "tutor", tu.Username)
+	if data["name"] != "tutor1" {
+		t.Fatalf("导师姓名异常: %+v", data)
+	}
+}
+
+func TestGetProfile_Admin(t *testing.T) {
+	svc, tdb := newAuthSvc(t)
+	hash, _ := HashPassword("adminpwd")
+	a := testutil.SeedAdmin(t, tdb, "admin1", hash)
+
+	data := svc.GetProfile(a.AdminID, "admin", a.Username)
+	if data["name"] != "admin1" {
+		t.Fatalf("管理员姓名异常: %+v", data)
+	}
+}
+
+func TestGetProfile_UserNotFound(t *testing.T) {
+	svc, _ := newGetProfileSvc(t)
+	data := svc.GetProfile(999, HrwaiRole, "ghost")
+	if data["name"] != "" {
+		t.Fatalf("用户不存在时 name 应为空: %+v", data)
+	}
+	if _, ok := data["has_password"]; ok {
+		t.Fatal("用户不存在时不应有 has_password 字段")
+	}
+}

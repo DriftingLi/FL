@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -22,26 +23,81 @@ import (
 	"forklift-training/internal/config"
 	"forklift-training/internal/security"
 	"forklift-training/internal/storage"
+	"forklift-training/internal/valuation/dictcrud"
 	"forklift-training/internal/valuation/model"
 	"forklift-training/internal/valuation/repository"
 	vservice "forklift-training/internal/valuation/service"
 )
 
 // =====================================================
-// 内存 adapter：字典（评估路径读方法显式实现，配置 CRUD 面未实现——调用即 panic）
+// 内存 adapter：字典（评估路径读方法显式实现，其余读面未实现——调用即 panic）
 // =====================================================
 
+// memTable 描述符驱动写面的通用内存表：id 自增 + 值按 JSON 字段名存放。
+type memTable struct {
+	nextID int64
+	rows   []memRow
+}
+
+type memRow struct {
+	id     int64
+	values map[string]any
+}
+
 type memDictStore struct {
-	DictionaryConfigStore // 嵌入 nil：CRUD 写面与其余只读面未实现（本 seam 覆盖范围内不调用）
+	DictionaryConfigStore // 嵌入 nil：未实现的读面调用即 panic（本 seam 覆盖范围内不调用）
 	vehicleTypes          map[string]repository.VehicleType
 	conditions            map[string]repository.ConditionRating
 	originalPrices        []repository.OriginalPrice
 	coefficients          map[string]float64
+	regions               []repository.RegionCoefficient
+	nextRegionID          int
+	tables                map[string]*memTable
+}
+
+// table 按实体名取通用内存表（惰性初始化）。
+func (m *memDictStore) table(name string) *memTable {
+	if m.tables == nil {
+		m.tables = map[string]*memTable{}
+	}
+	t, ok := m.tables[name]
+	if !ok {
+		t = &memTable{nextID: 1}
+		m.tables[name] = t
+	}
+	return t
+}
+
+// rowsOf 读取通用表全部行（契约测试断言用）。
+func rowsOf(m *memDictStore, name string) []memRow {
+	return m.table(name).rows
+}
+
+// memFieldNameByColumn 列名 → 字段 JSON 名（唯一列冲突匹配用）。
+func memFieldNameByColumn(d dictcrud.Descriptor, column string) string {
+	for _, f := range d.Fields {
+		if f.Column == column {
+			return f.Name
+		}
+	}
+	return ""
+}
+
+// rowMatches 行值是否命中全部唯一列（upsert 冲突判定）。
+func rowMatches(d dictcrud.Descriptor, row, values map[string]any) bool {
+	for _, col := range d.UniqueColumns {
+		name := memFieldNameByColumn(d, col)
+		if row[name] != values[name] {
+			return false
+		}
+	}
+	return true
 }
 
 // newSeedMemDict 与迁移种子对齐的默认字典。
 func newSeedMemDict() *memDictStore {
 	return &memDictStore{
+		nextRegionID: 1,
 		vehicleTypes: map[string]repository.VehicleType{
 			"电动叉车": {ID: 1, Name: "电动叉车", PowerType: "electric", EarliestFactoryYear: 2000},
 		},
@@ -123,6 +179,108 @@ func (m *memDictStore) ListCoefficientConfigs(_ context.Context) ([]repository.C
 		out = append(out, repository.CoefficientConfig{Key: k, Value: v})
 	}
 	return out, nil
+}
+
+// =====================================================
+// 描述符驱动写面内存替身（DictWriter；契约测试走此路径）
+// 区域系数保持 typed 存储（既有契约测试断言 dict.regions）；其余实体走通用内存表。
+// =====================================================
+
+func (m *memDictStore) Create(_ context.Context, d dictcrud.Descriptor, fields map[string]any) (int64, error) {
+	if d.Name == "region_coefficients" {
+		rc := repository.RegionCoefficient{
+			ID:          m.nextRegionID,
+			Province:    fields["province"].(string),
+			City:        fields["city"].(string),
+			Coefficient: fields["coefficient"].(float64),
+		}
+		m.nextRegionID++
+		m.regions = append(m.regions, rc)
+		return int64(rc.ID), nil
+	}
+	t := m.table(d.Name)
+	for _, row := range t.rows {
+		if rowMatches(d, row.values, fields) {
+			switch d.Upsert {
+			case dictcrud.UpsertDoUpdate:
+				for _, name := range d.Create.Fields {
+					row.values[name] = fields[name]
+				}
+				return row.id, nil
+			default:
+				// DO NOTHING 冲突无行返回（与 pgx RETURNING 行为一致 → 500）
+				return 0, pgx.ErrNoRows
+			}
+		}
+	}
+	id := t.nextID
+	t.nextID++
+	values := make(map[string]any, len(d.Create.Fields)+1)
+	for _, name := range d.Create.Fields {
+		values[name] = fields[name]
+	}
+	t.rows = append(t.rows, memRow{id: id, values: values})
+	return id, nil
+}
+
+func (m *memDictStore) Update(_ context.Context, d dictcrud.Descriptor, id int64, fields map[string]any) error {
+	if d.Name == "region_coefficients" {
+		for i := range m.regions {
+			if m.regions[i].ID == int(id) {
+				m.regions[i].Coefficient = fields["coefficient"].(float64)
+				return nil
+			}
+		}
+		return pgx.ErrNoRows
+	}
+	t := m.table(d.Name)
+	for _, row := range t.rows {
+		if row.id == id {
+			for k, v := range fields {
+				row.values[k] = v
+			}
+			return nil
+		}
+	}
+	return pgx.ErrNoRows
+}
+
+// UpdateByKey 按唯一 key 列更新（coefficient_configs）：写回系数表并返回完整行。
+func (m *memDictStore) UpdateByKey(_ context.Context, d dictcrud.Descriptor, key string, fields map[string]any) (map[string]any, error) {
+	if d.Name != "coefficient_configs" {
+		return nil, errors.New("未实现的字典实体: " + d.Name)
+	}
+	if _, ok := m.coefficients[key]; !ok {
+		return nil, pgx.ErrNoRows
+	}
+	m.coefficients[key] = fields["value"].(float64)
+	return map[string]any{
+		"id":          1,
+		"key":         key,
+		"value":       m.coefficients[key],
+		"description": "",
+		"updated_at":  "2026-01-01T00:00:00Z",
+	}, nil
+}
+
+func (m *memDictStore) Delete(_ context.Context, d dictcrud.Descriptor, id int64) error {
+	if d.Name == "region_coefficients" {
+		for i, rc := range m.regions {
+			if rc.ID == int(id) {
+				m.regions = append(m.regions[:i], m.regions[i+1:]...)
+				return nil
+			}
+		}
+		return pgx.ErrNoRows
+	}
+	t := m.table(d.Name)
+	for i, row := range t.rows {
+		if row.id == id {
+			t.rows = append(t.rows[:i], t.rows[i+1:]...)
+			return nil
+		}
+	}
+	return pgx.ErrNoRows
 }
 
 // =====================================================
@@ -312,6 +470,17 @@ func authHeader(t *testing.T, userID int) string {
 	token, err := sess.Issue(userID, "testuser", "hrwai_user")
 	if err != nil {
 		t.Fatalf("签发测试 token 失败: %v", err)
+	}
+	return "Bearer " + token
+}
+
+// adminAuthHeader 签发 role=admin 的 Bearer token（管理员字典 CRUD 路由用）。
+func adminAuthHeader(t *testing.T) string {
+	t.Helper()
+	sess := security.NewSession("test-secret", time.Hour, security.CookieConfig{Name: "hrwai_token"})
+	token, err := sess.Issue(1, "admin", "admin")
+	if err != nil {
+		t.Fatalf("签发管理员测试 token 失败: %v", err)
 	}
 	return "Bearer " + token
 }

@@ -71,7 +71,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { ArrowRight } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import QuickCard from '@/components/dashboard/QuickCard.vue'
 import type { QuickCardItem } from '@/components/dashboard/QuickCard.vue'
@@ -121,8 +120,8 @@ const statsEmpty = computed(() => {
 async function loadCourses() {
   try {
     const res = await studentApi.getProfile()
-    if (res.code === 200 && res.data?.course_progress) {
-      activeCourses.value = res.data.course_progress
+    if (res?.course_progress) {
+      activeCourses.value = res.course_progress
         .filter((c: any) => c.progress > 0 && c.progress < 100)
         .sort((a: any, b: any) => (b.study_date || '').localeCompare(a.study_date || ''))
         .slice(0, 5)
@@ -134,8 +133,7 @@ async function loadCourses() {
     }
   } catch (error: any) {
     console.error('加载课程失败:', error)
-    const isTimeout = error?.code === 'ECONNABORTED' || /timeout/i.test(error?.message || '')
-    ElMessage.warning(isTimeout ? '课程信息加载超时，可稍后刷新重试' : '课程信息加载失败，请稍后重试')
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -144,11 +142,11 @@ async function loadRecentLearning() {
     // 多拉一些记录再按课程去重：study_record 是逐章节/逐次学习的行，
     // 同一门课会占多条记录，直接取前 5 条会导致“最近学习”卡片出现重复课程。
     const res = await studentApi.getRecords({ page: 1, page_size: 50 })
-    if (res.code === 200 && res.data?.records) {
+    if (res?.records) {
       // 记录已按 study_date 倒序，第一次遇到的 course_id 即该课程最新学习记录
       const seenCourses = new Set<number>()
       const recentCourses: any[] = []
-      for (const r of res.data.records) {
+      for (const r of res.records) {
         if (!r.course_id || seenCourses.has(r.course_id)) continue
         seenCourses.add(r.course_id)
         recentCourses.push(r)
@@ -163,8 +161,7 @@ async function loadRecentLearning() {
     }
   } catch (error: any) {
     console.error('加载最近学习失败:', error)
-    const isTimeout = error?.code === 'ECONNABORTED' || /timeout/i.test(error?.message || '')
-    ElMessage.warning(isTimeout ? '最近学习记录加载超时，可稍后刷新重试' : '最近学习记录加载失败，请稍后重试')
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -173,14 +170,13 @@ async function loadStudyStats() {
   try {
     const days = currentTab.value === '30d' ? 30 : 7
     const res = await studentApi.getStudyStats({ days })
-    if (res.code === 200 && res.data) {
-      studyStats.value = res.data as StudyStats
+    if (res) {
+      studyStats.value = res as StudyStats
     }
   } catch (error: any) {
     console.error('加载学习统计失败:', error)
     studyStats.value = null
-    const isTimeout = error?.code === 'ECONNABORTED' || /timeout/i.test(error?.message || '')
-    ElMessage.warning(isTimeout ? '学习统计加载超时，可点击切换时间范围重试' : '学习统计加载失败，请稍后重试')
+    /* 错误已由拦截器提示 */
   } finally {
     statsLoading.value = false
   }

@@ -8,11 +8,8 @@ import (
 	"net/http"
 	"testing"
 
-	"go.uber.org/zap"
-
 	"github.com/gin-gonic/gin"
 
-	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -42,7 +39,7 @@ func TestCoursesListCategoryParamRetired(t *testing.T) {
 
 	r := gin.New()
 	api := r.Group("/api")
-	RegisterCoursesRoutes(api, &config.Config{}, db, nil, zap.NewNop())
+	RegisterCoursesRoutes(api, newContractDeps(t, db, nil))
 
 	// 传入已退役的 category 参数：应被忽略，课程仍返回
 	rec := performRequest(r, "GET", "/api/courses?category=CATEGORY_01")

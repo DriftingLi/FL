@@ -158,13 +158,9 @@ async function loadDetail() {
   detail.value = null
   try {
     const res = await featuredApi.getPublicDetail(id)
-    if (res.code === 200 && res.data) {
-      detail.value = res.data
-      await nextTick()
-      window.scrollTo(0, 0)
-    } else {
-      notFound.value = true
-    }
+    detail.value = res
+    await nextTick()
+    window.scrollTo(0, 0)
   } catch (e: any) {
     notFound.value = true
   } finally {

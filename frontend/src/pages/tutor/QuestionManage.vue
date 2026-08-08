@@ -119,8 +119,8 @@ async function loadData() {
   loading.value = true
   try {
     const res = await questionBankApi.getQuestions({ page: page.value, page_size: pageSize.value, ...filters.value })
-    questions.value = res.data?.questions || []
-    total.value = res.data?.total || 0
+    questions.value = res?.questions || []
+    total.value = res?.total || 0
   } catch (e) {} finally { loading.value = false }
 }
 
@@ -140,8 +140,8 @@ async function submitForReview(row: Question) {
     await questionBankApi.updateQuestion(row.id, { status: 'pending' })
     ElMessage.success('已提交审核')
     await loadData()
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error('提交失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 

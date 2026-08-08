@@ -160,23 +160,23 @@ async function loadExams() {
   loading.value = true
   try {
     const res = await levelExamApi.getAvailableExams()
-    exams.value = res.data || []
+    exams.value = res || []
   } catch (e) {} finally { loading.value = false }
 }
 
 async function enterExam(sessionId: number) {
   try {
     const res = await levelExamApi.enterExam(sessionId)
-    participantId.value = res.data.participant_id
-    examQuestions.value = res.data.questions
-    examAnswers.value = res.data.answers || {}
-    remainingTime.value = res.data.remaining_time
+    participantId.value = res.participant_id
+    examQuestions.value = res.questions
+    examAnswers.value = res.answers || {}
+    remainingTime.value = res.remaining_time
     examTitle.value = '考试进行中'
     inExam.value = true
-    qIdx.value = findResumeIndex(res.data.questions, res.data.answers || {})
+    qIdx.value = findResumeIndex(res.questions, res.answers || {})
     startTimer()
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '进入考试失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -246,8 +246,8 @@ async function doSubmit() {
     }
     resetExamState()
     await loadExams()
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '交卷失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -265,7 +265,7 @@ async function viewResult(row: { id: number; status?: string; name?: string; par
   if (row.participant_id) {
     try {
       const res = await levelExamApi.getExamResult(row.participant_id)
-      const data = res.data
+      const data = res
       const participant = data.participant
       if (participant.score === null || participant.score === undefined) {
         ElMessage.info('考试正在批改中，请耐心等待导师评分')
@@ -277,8 +277,8 @@ async function viewResult(row: { id: number; status?: string; name?: string; par
           { confirmButtonText: '确定' }
         )
       }
-    } catch (e) {
-      ElMessage.error('获取结果失败')
+    } catch {
+      /* 错误已由拦截器提示 */
     }
   }
 }

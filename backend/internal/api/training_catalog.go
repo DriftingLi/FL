@@ -5,10 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 
-	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -17,8 +14,9 @@ import (
 // RegisterTrainingCatalogRoutes 注册培训目录蓝图：
 //   - /api/admin/*：专业方向 / 课程等级 / 证书模板 / 题库标签 CRUD 与题目打标（管理端）
 //   - /api/catalog/*、/api/specialties、/api/levels、/api/tags：学员端查询
-func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, logger *zap.Logger) {
-	svc := service.NewTrainingCatalogService(db, logger)
+func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, deps *Deps) {
+	svc := deps.TrainingCatalogSvc
+	cfg := deps.Cfg
 
 	// ===== 学员端查询（公开） =====
 
@@ -29,17 +27,17 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, cfg *config.Config, db *
 
 	// GET /api/specialties  专业方向列表（仅启用项）
 	rg.GET("/specialties", func(c *gin.Context) {
-		response.Success(c, svc.ListSpecialties(true))
+		response.Success(c, gin.H{"specialties": svc.ListSpecialties(true)})
 	})
 
 	// GET /api/levels  课程等级列表（仅启用项）
 	rg.GET("/levels", func(c *gin.Context) {
-		response.Success(c, svc.ListLevels(true))
+		response.Success(c, gin.H{"levels": svc.ListLevels(true)})
 	})
 
 	// GET /api/tags  题库标签列表（仅启用项）
 	rg.GET("/tags", func(c *gin.Context) {
-		response.Success(c, svc.ListQuestionTags(true))
+		response.Success(c, gin.H{"tags": svc.ListQuestionTags(true)})
 	})
 
 	// ===== 管理端 CRUD =====
@@ -55,17 +53,17 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, cfg *config.Config, db *
 
 	// GET /api/admin/specialties  专业方向列表（含停用项）
 	g.GET("/specialties", func(c *gin.Context) {
-		response.Success(c, svc.ListSpecialties(false))
+		response.Success(c, gin.H{"specialties": svc.ListSpecialties(false)})
 	})
 
 	// POST /api/admin/specialty  创建专业方向
 	g.POST("/specialty", func(c *gin.Context) {
-		var data map[string]any
-		if err := c.ShouldBindJSON(&data); err != nil {
+		var in service.SpecialtyInput
+		if err := c.ShouldBindJSON(&in); err != nil {
 			response.BadRequest(c, "请求数据无效")
 			return
 		}
-		result, err := svc.CreateSpecialty(data)
+		result, err := svc.CreateSpecialty(in)
 		if err != nil {
 			response.BadRequest(c, err.Error())
 			return
@@ -80,12 +78,12 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, cfg *config.Config, db *
 			response.BadRequest(c, "专业方向ID无效")
 			return
 		}
-		var data map[string]any
-		if err := c.ShouldBindJSON(&data); err != nil {
+		var in service.SpecialtyInput
+		if err := c.ShouldBindJSON(&in); err != nil {
 			response.BadRequest(c, "请求数据无效")
 			return
 		}
-		result, err := svc.UpdateSpecialty(id, data)
+		result, err := svc.UpdateSpecialty(id, in)
 		if err != nil {
 			response.NotFound(c, err.Error())
 			return
@@ -132,17 +130,17 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, cfg *config.Config, db *
 
 	// GET /api/admin/levels  课程等级列表（含停用项）
 	g.GET("/levels", func(c *gin.Context) {
-		response.Success(c, svc.ListLevels(false))
+		response.Success(c, gin.H{"levels": svc.ListLevels(false)})
 	})
 
 	// POST /api/admin/level  创建课程等级
 	g.POST("/level", func(c *gin.Context) {
-		var data map[string]any
-		if err := c.ShouldBindJSON(&data); err != nil {
+		var in service.LevelInput
+		if err := c.ShouldBindJSON(&in); err != nil {
 			response.BadRequest(c, "请求数据无效")
 			return
 		}
-		result, err := svc.CreateLevel(data)
+		result, err := svc.CreateLevel(in)
 		if err != nil {
 			response.BadRequest(c, err.Error())
 			return
@@ -157,12 +155,12 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, cfg *config.Config, db *
 			response.BadRequest(c, "课程等级ID无效")
 			return
 		}
-		var data map[string]any
-		if err := c.ShouldBindJSON(&data); err != nil {
+		var in service.LevelInput
+		if err := c.ShouldBindJSON(&in); err != nil {
 			response.BadRequest(c, "请求数据无效")
 			return
 		}
-		result, err := svc.UpdateLevel(id, data)
+		result, err := svc.UpdateLevel(id, in)
 		if err != nil {
 			response.NotFound(c, err.Error())
 			return
@@ -209,17 +207,17 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, cfg *config.Config, db *
 
 	// GET /api/admin/certificate-templates  证书模板列表（含停用项）
 	g.GET("/certificate-templates", func(c *gin.Context) {
-		response.Success(c, svc.ListCertificateTemplates(false))
+		response.Success(c, gin.H{"certificate_templates": svc.ListCertificateTemplates(false)})
 	})
 
 	// POST /api/admin/certificate-template  创建证书模板
 	g.POST("/certificate-template", func(c *gin.Context) {
-		var data map[string]any
-		if err := c.ShouldBindJSON(&data); err != nil {
+		var in service.CertificateTemplateInput
+		if err := c.ShouldBindJSON(&in); err != nil {
 			response.BadRequest(c, "请求数据无效")
 			return
 		}
-		result, err := svc.CreateCertificateTemplate(data)
+		result, err := svc.CreateCertificateTemplate(in)
 		if err != nil {
 			response.BadRequest(c, err.Error())
 			return
@@ -234,12 +232,12 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, cfg *config.Config, db *
 			response.BadRequest(c, "证书模板ID无效")
 			return
 		}
-		var data map[string]any
-		if err := c.ShouldBindJSON(&data); err != nil {
+		var in service.CertificateTemplateInput
+		if err := c.ShouldBindJSON(&in); err != nil {
 			response.BadRequest(c, "请求数据无效")
 			return
 		}
-		result, err := svc.UpdateCertificateTemplate(id, data)
+		result, err := svc.UpdateCertificateTemplate(id, in)
 		if err != nil {
 			response.NotFound(c, err.Error())
 			return
@@ -265,17 +263,17 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, cfg *config.Config, db *
 
 	// GET /api/admin/question-tags  题库标签列表（含停用项）
 	g.GET("/question-tags", func(c *gin.Context) {
-		response.Success(c, svc.ListQuestionTags(false))
+		response.Success(c, gin.H{"tags": svc.ListQuestionTags(false)})
 	})
 
 	// POST /api/admin/question-tag  创建题库标签
 	g.POST("/question-tag", func(c *gin.Context) {
-		var data map[string]any
-		if err := c.ShouldBindJSON(&data); err != nil {
+		var in service.QuestionTagInput
+		if err := c.ShouldBindJSON(&in); err != nil {
 			response.BadRequest(c, "请求数据无效")
 			return
 		}
-		result, err := svc.CreateQuestionTag(data)
+		result, err := svc.CreateQuestionTag(in)
 		if err != nil {
 			response.BadRequest(c, err.Error())
 			return
@@ -290,12 +288,12 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, cfg *config.Config, db *
 			response.BadRequest(c, "题库标签ID无效")
 			return
 		}
-		var data map[string]any
-		if err := c.ShouldBindJSON(&data); err != nil {
+		var in service.QuestionTagInput
+		if err := c.ShouldBindJSON(&in); err != nil {
 			response.BadRequest(c, "请求数据无效")
 			return
 		}
-		result, err := svc.UpdateQuestionTag(id, data)
+		result, err := svc.UpdateQuestionTag(id, in)
 		if err != nil {
 			response.NotFound(c, err.Error())
 			return
@@ -331,7 +329,7 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, cfg *config.Config, db *
 			response.NotFound(c, err.Error())
 			return
 		}
-		response.Success(c, result)
+		response.Success(c, gin.H{"tags": result})
 	})
 
 	// PUT /api/admin/question/:question_id/tags  全量替换题目标签

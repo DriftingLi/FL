@@ -6,20 +6,16 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 
-	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/service"
-	"forklift-training/internal/storage"
 	"forklift-training/pkg/response"
 )
 
 // RegisterFeaturedRoutes 注册内容精选路由（公开 + 管理端）。
-func RegisterFeaturedRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger) {
-	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st, logger)
-	svc := service.NewFeaturedService(db, fileSvc, logger)
+func RegisterFeaturedRoutes(rg *gin.RouterGroup, deps *Deps) {
+	svc := deps.FeaturedSvc
+	fileSvc := deps.FileSvc
+	cfg := deps.Cfg
 
 	// ===== 公开接口（无鉴权）=====
 

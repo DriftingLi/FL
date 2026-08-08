@@ -184,14 +184,14 @@ async function loadTutors() {
       params.keyword = searchKeyword.value
     }
 
-    const res = await adminApi.getTutors(params)
-    if (res.code === 200) {
-      tutors.value = res.data.tutors || []
-      total.value = res.data.total || 0
+    const data = await adminApi.getTutors(params)
+    if (data) {
+      tutors.value = data.tutors || []
+      total.value = data.total || 0
     }
   } catch (error) {
     console.error('加载导师列表失败:', error)
-    ElMessage.error('加载导师列表失败')
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -215,16 +215,14 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    const res = await adminApi.addTutor({
+    await adminApi.addTutor({
       username: formData.username,
       password: formData.password,
       name: formData.name
     })
-    if (res.code === 201) {
-      ElMessage.success('导师添加成功')
-      dialogVisible.value = false
-      loadTutors()
-    }
+    ElMessage.success('导师添加成功')
+    dialogVisible.value = false
+    loadTutors()
   } catch (error) {
     console.error('添加导师失败:', error)
   } finally {
@@ -267,14 +265,12 @@ async function handleToggleStatus(row: TutorRow) {
 
 async function handleDelete(tutorId: number) {
   try {
-    const res = await adminApi.deleteTutor(tutorId)
-    if (res.code === 200) {
-      ElMessage.success('导师已删除')
-      loadTutors()
-    }
+    await adminApi.deleteTutor(tutorId)
+    ElMessage.success('导师已删除')
+    loadTutors()
   } catch (error) {
     console.error('删除导师失败:', error)
-    ElMessage.error('删除导师失败')
+    /* 错误已由拦截器提示 */
   }
 }
 

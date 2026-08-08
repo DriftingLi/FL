@@ -2,7 +2,7 @@
 // 路径前缀：/api/ai-assistant/*
 // 认证：统一 HRWAI 账号体系，token 走 utils/storage.ts 单点
 // SSE 流式对话使用 fetch + ReadableStream 消费，不通过 axios
-import { createHttpClient } from './client'
+import { createHttpClient, createDefaultUnauthorizedPolicy } from './client'
 import { getToken, removeToken, removeUserInfo } from '@/utils/storage'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/api$/, '') + '/api/ai-assistant'
@@ -10,11 +10,14 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/ap
 const client = createHttpClient({
   baseURL: API_BASE_URL,
   successCodes: [200],
-  onUnauthorized: () => {
-    // 清除本地 HRWAI 登录态，让 UI 显示未登录状态；不强制跳转（AI 助手支持未登录临时对话）
-    removeToken()
-    removeUserInfo()
-  }
+  // 统一 401 策略（client.ts 单点）：仅清本地 HRWAI 登录态，不跳转（AI 助手支持未登录临时对话）
+  onUnauthorized: createDefaultUnauthorizedPolicy({
+    clearAuth: () => {
+      removeToken()
+      removeUserInfo()
+    },
+    redirect: false
+  })
 })
 
 // ===== 类型定义 =====
@@ -77,47 +80,47 @@ export interface StreamChatReq {
 export const aiAssistantApi = {
   /** GET /api/ai-assistant/models — 公开，列出管理员配置的可用模型 */
   listAdminModels() {
-    return client.get<AdminModelOption[]>('/models').then(r => r.data)
+    return client.get<AdminModelOption[]>('/models')
   },
 
   /** GET /api/ai-assistant/user-models — 需登录，列出当前用户的自定义模型 */
   listUserModels() {
-    return client.get<UserModelDTO[]>('/user-models').then(r => r.data)
+    return client.get<UserModelDTO[]>('/user-models')
   },
 
   /** POST /api/ai-assistant/user-models — 创建/更新用户自定义模型 */
   saveUserModel(data: SaveUserModelReq) {
-    return client.post('/user-models', data).then(r => r.data)
+    return client.post('/user-models', data)
   },
 
   /** DELETE /api/ai-assistant/user-models/:id — 删除用户自定义模型 */
   deleteUserModel(id: number) {
-    return client.delete(`/user-models/${id}`).then(r => r.data)
+    return client.delete(`/user-models/${id}`)
   },
 
   /** GET /api/ai-assistant/sessions — 需登录，列出当前用户的会话 */
   listSessions() {
-    return client.get<ChatSession[]>('/sessions').then(r => r.data)
+    return client.get<ChatSession[]>('/sessions')
   },
 
   /** POST /api/ai-assistant/sessions — 需登录，创建会话 */
   createSession(data: { title?: string; model_name?: string }) {
-    return client.post<ChatSession>('/sessions', data).then(r => r.data)
+    return client.post<ChatSession>('/sessions', data)
   },
 
   /** DELETE /api/ai-assistant/sessions/:id — 需登录，删除会话 */
   deleteSession(id: number) {
-    return client.delete(`/sessions/${id}`).then(r => r.data)
+    return client.delete(`/sessions/${id}`)
   },
 
   /** PATCH /api/ai-assistant/sessions/:id/title — 需登录，重命名会话 */
   renameSession(id: number, title: string) {
-    return client.patch(`/sessions/${id}/title`, { title }).then(r => r.data)
+    return client.patch(`/sessions/${id}/title`, { title })
   },
 
   /** GET /api/ai-assistant/sessions/:id/messages — 需登录，获取会话消息 */
   getSessionMessages(id: number) {
-    return client.get<ChatMessage[]>(`/sessions/${id}/messages`).then(r => r.data)
+    return client.get<ChatMessage[]>(`/sessions/${id}/messages`)
   },
 
   /**

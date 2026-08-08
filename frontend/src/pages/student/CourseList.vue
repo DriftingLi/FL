@@ -182,7 +182,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRight } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
 import { courseApi, type CourseDetail, type CourseSummary } from '@/api/course'
 import { trainingApi, type CatalogDirectionNode, type CatalogLevel } from '@/api/training'
 import { vLazy } from '@/composables/useLazyLoad'
@@ -246,14 +245,12 @@ async function loadCourses() {
     if (levelId.value !== null) {
       params.level_id = levelId.value
     }
-    const res = await courseApi.getCourses(params)
-    if (res.code === 200) {
-      courses.value = res.data.courses
-      total.value = res.data.total
-    }
+    const data = await courseApi.getCourses(params)
+    courses.value = data.courses
+    total.value = data.total
   } catch (error) {
     console.error('加载课程失败:', error)
-    ElMessage.error('加载课程失败，请稍后重试')
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -261,16 +258,12 @@ async function loadCourses() {
 
 async function loadCatalog() {
   try {
-    const [treeRes, levelsRes] = await Promise.all([
+    const [treeData, levelsData] = await Promise.all([
       trainingApi.getCatalogTree(),
       trainingApi.getLevels()
     ])
-    if (treeRes.code === 200) {
-      directions.value = treeRes.data.specialties || []
-    }
-    if (levelsRes.code === 200) {
-      levels.value = levelsRes.data.levels || []
-    }
+    directions.value = treeData.specialties || []
+    levels.value = levelsData.levels || []
   } catch (error) {
     console.error('加载目录失败:', error)
   }
@@ -309,14 +302,12 @@ async function openDetail(course: CourseSummary) {
   detailLoading.value = true
   detailChapters.value = []
   try {
-    const res = await courseApi.getCourseDetail(course.course_id)
-    if (res.code === 200) {
-      detailCourse.value = { ...course, ...(res.data.course_info || {}) }
-      detailChapters.value = res.data.chapters || []
-    }
+    const data = await courseApi.getCourseDetail(course.course_id)
+    detailCourse.value = { ...course, ...(data.course_info || {}) }
+    detailChapters.value = data.chapters || []
   } catch (error) {
     console.error('加载课程详情失败:', error)
-    ElMessage.error('加载课程详情失败，请稍后重试')
+    /* 错误已由拦截器提示 */
   } finally {
     detailLoading.value = false
   }

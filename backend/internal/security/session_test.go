@@ -2,8 +2,10 @@ package security
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,17 +15,17 @@ import (
 
 var errKeyNotFound = errors.New("key not found")
 
-// memBlacklist 内存版黑名单存储（测试用）。
-type memBlacklist struct {
+// inmemoryBlacklistStore 内存版黑名单存储（测试用注入双）。
+type inmemoryBlacklistStore struct {
 	mu sync.Mutex
 	m  map[string]string
 }
 
-func newMemBlacklist() *memBlacklist {
-	return &memBlacklist{m: make(map[string]string)}
+func newInmemoryBlacklistStore() *inmemoryBlacklistStore {
+	return &inmemoryBlacklistStore{m: make(map[string]string)}
 }
 
-func (s *memBlacklist) Get(_ context.Context, key string) (string, error) {
+func (s *inmemoryBlacklistStore) Get(_ context.Context, key string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	v, ok := s.m[key]
@@ -33,7 +35,7 @@ func (s *memBlacklist) Get(_ context.Context, key string) (string, error) {
 	return v, nil
 }
 
-func (s *memBlacklist) Set(_ context.Context, key, value string, _ time.Duration) error {
+func (s *inmemoryBlacklistStore) Set(_ context.Context, key, value string, _ time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.m[key] = value
@@ -43,11 +45,10 @@ func (s *memBlacklist) Set(_ context.Context, key, value string, _ time.Duration
 const testSecret = "test-jwt-secret"
 
 func newTestSession(blacklist BlacklistStore) *Session {
-	s := NewSession(testSecret, time.Hour, CookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: false})
-	if blacklist != nil {
-		s.blacklist = blacklist
+	if blacklist == nil {
+		blacklist = newInmemoryBlacklistStore()
 	}
-	return s
+	return NewSessionWithBlacklist(testSecret, time.Hour, CookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: false}, blacklist)
 }
 
 func TestIssueVerify_RoundTrip(t *testing.T) {
@@ -100,7 +101,7 @@ func TestVerify_RejectsExpired(t *testing.T) {
 }
 
 func TestRevoke_ThenIsRevoked(t *testing.T) {
-	store := newMemBlacklist()
+	store := newInmemoryBlacklistStore()
 	sess := newTestSession(store)
 	token, _ := sess.Issue(7, "user7", "hrwai_user")
 
@@ -118,7 +119,7 @@ func TestRevoke_ThenIsRevoked(t *testing.T) {
 }
 
 func TestRevoke_InvalidTokenIsNoop(t *testing.T) {
-	store := newMemBlacklist()
+	store := newInmemoryBlacklistStore()
 	sess := newTestSession(store)
 	if err := sess.Revoke(context.Background(), "not-a-token"); err != nil {
 		t.Fatalf("无效 token 吊销应静默成功: %v", err)
@@ -129,7 +130,7 @@ func TestRevoke_InvalidTokenIsNoop(t *testing.T) {
 }
 
 func TestRevoke_TwoTokensIndependent(t *testing.T) {
-	store := newMemBlacklist()
+	store := newInmemoryBlacklistStore()
 	sess := newTestSession(store)
 	tokenA, _ := sess.Issue(1, "a", "hrwai_user")
 	tokenB, _ := sess.Issue(2, "b", "hrwai_user")
@@ -139,6 +140,87 @@ func TestRevoke_TwoTokensIndependent(t *testing.T) {
 	revokedB, _ := sess.IsRevoked(context.Background(), tokenB)
 	if !revokedA || revokedB {
 		t.Errorf("吊销应互不影响: A=%v B=%v", revokedA, revokedB)
+	}
+}
+
+// errBlacklistStore 黑名单存储故障桩（模拟 Redis 不可用）。
+type errBlacklistStore struct{}
+
+func (errBlacklistStore) Get(context.Context, string) (string, error) {
+	return "", errors.New("redis down")
+}
+
+func (errBlacklistStore) Set(context.Context, string, string, time.Duration) error {
+	return errors.New("redis down")
+}
+
+// TestRevoke_StoreErrorPropagatesGracefully 存储故障时行为与既有语义一致：
+// Revoke 返回错误（调用方忽略，登出不阻塞）；IsRevoked 读异常放行（不阻断登录）。
+func TestRevoke_StoreErrorPropagatesGracefully(t *testing.T) {
+	sess := newTestSession(errBlacklistStore{})
+	token, _ := sess.Issue(7, "user7", "hrwai_user")
+
+	if err := sess.Revoke(context.Background(), token); err == nil {
+		t.Error("黑名单写入失败时 Revoke 应返回错误")
+	}
+	revoked, err := sess.IsRevoked(context.Background(), token)
+	if err != nil || revoked {
+		t.Errorf("存储异常时 IsRevoked 应放行: revoked=%v err=%v", revoked, err)
+	}
+}
+
+// recordingBlacklistStore 记录每次写入的 key 与 TTL。
+type recordingBlacklistStore struct {
+	mu    sync.Mutex
+	items map[string]time.Duration
+}
+
+func newRecordingBlacklistStore() *recordingBlacklistStore {
+	return &recordingBlacklistStore{items: make(map[string]time.Duration)}
+}
+
+func (r *recordingBlacklistStore) Get(_ context.Context, key string) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.items[key]; !ok {
+		return "", errKeyNotFound
+	}
+	return "1", nil
+}
+
+func (r *recordingBlacklistStore) Set(_ context.Context, key, _ string, ttl time.Duration) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.items[key] = ttl
+	return nil
+}
+
+// TestRevoke_BlacklistKeyFormatAndTTL 黑名单 key 格式与 TTL 语义保持不变：
+// key = jwt:blacklist:<sha256 hex>，TTL = token 剩余有效期。
+func TestRevoke_BlacklistKeyFormatAndTTL(t *testing.T) {
+	store := newRecordingBlacklistStore()
+	sess := newTestSession(store)
+	token, _ := sess.Issue(7, "user7", "hrwai_user")
+
+	if err := sess.Revoke(context.Background(), token); err != nil {
+		t.Fatalf("吊销失败: %v", err)
+	}
+	if len(store.items) != 1 {
+		t.Fatalf("应写入 1 条黑名单，实际 %d 条", len(store.items))
+	}
+	var key string
+	var ttl time.Duration
+	for k, v := range store.items {
+		key, ttl = k, v
+	}
+	if !strings.HasPrefix(key, "jwt:blacklist:") {
+		t.Errorf("黑名单 key 应以 jwt:blacklist: 开头: %q", key)
+	}
+	if len(key) != len("jwt:blacklist:")+sha256.Size*2 {
+		t.Errorf("黑名单 key 应为 sha256 十六进制: %q", key)
+	}
+	if ttl <= 55*time.Minute || ttl > time.Hour {
+		t.Errorf("TTL 应约等于 token 剩余有效期 1h, got %v", ttl)
 	}
 }
 

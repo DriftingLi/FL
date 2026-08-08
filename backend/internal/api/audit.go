@@ -6,18 +6,24 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 
-	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
 	"forklift-training/pkg/response"
 )
 
+// AuditLogPageResult 审计日志分页结果。
+type AuditLogPageResult struct {
+	Items []model.AuditLog `json:"items"`
+	Page  int              `json:"page"`
+	Pages int              `json:"pages"`
+	Total int64            `json:"total"`
+}
+
 // RegisterAuditRoutes 注册 /api/admin/audit-logs 蓝图（仅管理员）。
-func RegisterAuditRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, logger *zap.Logger) {
-	g := rg.Group("/admin/audit-logs", middleware.JWTAuth(cfg), middleware.RoleRequired("admin"))
+func RegisterAuditRoutes(rg *gin.RouterGroup, deps *Deps) {
+	g := rg.Group("/admin/audit-logs", middleware.JWTAuth(deps.Cfg), middleware.RoleRequired("admin"))
+	db := deps.DB
 
 	// GET /api/admin/audit-logs?page=&page_size=&actor_id=&role=&keyword=
 	g.GET("", func(c *gin.Context) {
@@ -52,12 +58,11 @@ func RegisterAuditRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, l
 			response.ServerError(c, "查询失败: "+err.Error())
 			return
 		}
-		pages := int((total + int64(pageSize) - 1) / int64(pageSize))
-		response.Success(c, gin.H{
-			"total": total,
-			"page":  page,
-			"pages": pages,
-			"items": logs,
+		response.Success(c, AuditLogPageResult{
+			Items: logs,
+			Page:  page,
+			Pages: response.PageCount(total, pageSize),
+			Total: total,
 		})
 	})
 }

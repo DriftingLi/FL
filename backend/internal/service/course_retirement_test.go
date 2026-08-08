@@ -102,7 +102,7 @@ func TestStudentCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 	}
 
 	list := svc.GetCourses(1, 10, nil, nil)
-	items := list["courses"].([]map[string]any)
+	items := list.Courses
 	var item map[string]any
 	for _, c := range items {
 		if c["course_id"] == course.CourseID {
@@ -138,7 +138,7 @@ func TestStudentCourseListOmitsUnmountedCourses(t *testing.T) {
 		t.Fatalf("创建未挂载课程失败: %v", err)
 	}
 
-	items := svc.GetCourses(1, 10, nil, nil)["courses"].([]map[string]any)
+	items := svc.GetCourses(1, 10, nil, nil).Courses
 	for _, c := range items {
 		if c["course_id"] == unmounted.CourseID {
 			t.Fatal("未挂方向/等级的课程不应出现在学生端列表")
@@ -176,7 +176,7 @@ func TestAdminCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 	course, prereq := seedCatalogCourse(t, db)
 
 	list := svc.GetCourses(1, 10, "", nil, nil)
-	items := list["courses"].([]map[string]any)
+	items := list.Courses
 	if len(items) != 2 {
 		t.Fatalf("应返回 2 门课程, got %d", len(items))
 	}
@@ -208,7 +208,7 @@ func TestTutorCourseListHasChapterCount(t *testing.T) {
 	course, _ := seedCatalogCourse(t, db)
 
 	list := svc.GetCourses(nil, 1, 10)
-	items := list["courses"].([]map[string]any)
+	items := list.Courses
 	var item map[string]any
 	for _, c := range items {
 		if c["course_id"] == course.CourseID {

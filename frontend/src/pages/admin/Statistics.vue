@@ -137,8 +137,8 @@ async function handleExport(kind: ExportKind) {
   try {
     await downloadExport(kind)
     ElMessage.success('导出成功')
-  } catch (e) {
-    ElMessage.error('导出失败，请稍后重试')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     exporting.value = ''
   }
@@ -284,10 +284,10 @@ function handleResize() {
 
 async function loadStatistics() {
   try {
-    const res = await adminApi.getStatistics()
-    if (res.code === 200 && res.data) {
-      overview.value = res.data.overview || {}
-      courseStats.value = res.data.course_stats || []
+    const data = await adminApi.getStatistics()
+    if (data) {
+      overview.value = data.overview || {}
+      courseStats.value = data.course_stats || []
 
       await nextTick()
       initBarChart()

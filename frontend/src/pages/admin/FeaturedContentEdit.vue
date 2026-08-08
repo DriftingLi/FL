@@ -145,21 +145,15 @@ async function loadDetail() {
   if (!isEdit.value) return
   loading.value = true
   try {
-    const res = await adminFeaturedApi.getDetail(editId.value)
-    if (res.code === 200 && res.data) {
-      const d = res.data
-      form.title = d.title || ''
-      form.category = d.category || ''
-      form.source = d.source || ''
-      form.summary = d.summary || ''
-      form.cover_image = d.cover_image || ''
-      form.content = d.content || ''
-      form.sort_order = d.sort_order || 0
-      form.status = d.status ?? 0
-    } else {
-      ElMessage.error('内容不存在或加载失败')
-      router.push('/admin/featured-content')
-    }
+    const d = await adminFeaturedApi.getDetail(editId.value)
+    form.title = d.title || ''
+    form.category = d.category || ''
+    form.source = d.source || ''
+    form.summary = d.summary || ''
+    form.cover_image = d.cover_image || ''
+    form.content = d.content || ''
+    form.sort_order = d.sort_order || 0
+    form.status = d.status ?? 0
   } catch (e: any) {
     // 错误已由全局拦截器提示
     router.push('/admin/featured-content')
@@ -223,17 +217,13 @@ async function handleSave() {
   }
   try {
     if (isEdit.value) {
-      const res = await adminFeaturedApi.update(editId.value, payload)
-      if (res.code === 200) {
-        ElMessage.success(form.status === 1 ? '已保存并发布' : '草稿已保存')
-        router.push('/admin/featured-content')
-      }
+      await adminFeaturedApi.update(editId.value, payload)
+      ElMessage.success(form.status === 1 ? '已保存并发布' : '草稿已保存')
+      router.push('/admin/featured-content')
     } else {
-      const res = await adminFeaturedApi.create(payload)
-      if (res.code === 200 || res.code === 201) {
-        ElMessage.success(form.status === 1 ? '已创建并发布' : '草稿已创建')
-        router.push('/admin/featured-content')
-      }
+      await adminFeaturedApi.create(payload)
+      ElMessage.success(form.status === 1 ? '已创建并发布' : '草稿已创建')
+      router.push('/admin/featured-content')
     }
   } catch (e: any) {
     // 错误已由全局拦截器提示

@@ -1,4 +1,6 @@
-import request from './request'
+// 已迁移模块：走 unwrappedRequest（拦截器解包信封，成功直接返回业务数据 Promise<T>，
+// 业务失败抛错并统一 toast，调用方不再自检 res.code）
+import { unwrappedRequest } from './request'
 
 export interface NotificationItem {
   id: number
@@ -21,18 +23,18 @@ export interface NotificationListData {
 
 export const notificationApi = {
   list(params: { page?: number; page_size?: number }) {
-    return request.get<NotificationListData>('/notifications', { params })
+    return unwrappedRequest.get<NotificationListData>('/notifications', { params })
   },
 
   unreadCount() {
-    return request.get<{ count: number }>('/notifications/unread-count')
+    return unwrappedRequest.get<{ count: number }>('/notifications/unread-count')
   },
 
   markRead(id: number) {
-    return request.post<null>(`/notifications/${id}/read`)
+    return unwrappedRequest.post<null>(`/notifications/${id}/read`)
   },
 
   markAllRead() {
-    return request.post<null>('/notifications/read-all')
+    return unwrappedRequest.post<null>('/notifications/read-all')
   }
 }

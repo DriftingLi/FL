@@ -1,4 +1,4 @@
-import request from './request'
+import { unwrappedRequest } from './request'
 
 export interface WrongQuestionsQuery {
   page?: number
@@ -29,22 +29,22 @@ export interface RedoResult {
 
 export const wrongQuestionApi = {
   getWrongQuestions(params: WrongQuestionsQuery) {
-    return request.get<{ items: WrongQuestionItem[]; total: number }>('/wrong-questions', { params })
+    return unwrappedRequest.get<{ items: WrongQuestionItem[]; total: number }>('/wrong-questions', { params })
   },
 
   redoWrongQuestion(questionId: number, userAnswer: string) {
-    return request.post<RedoResult>(`/wrong-questions/${questionId}/redo`, { user_answer: userAnswer })
+    return unwrappedRequest.post<RedoResult>(`/wrong-questions/${questionId}/redo`, { user_answer: userAnswer })
   },
 
   removeWrongQuestion(questionId: number) {
-    return request.post<null>(`/wrong-questions/${questionId}/remove`)
+    return unwrappedRequest.post<null>(`/wrong-questions/${questionId}/remove`)
   },
 
   getWrongQuestionStats() {
-    return request.get<Record<string, unknown>>('/wrong-questions/stats')
+    return unwrappedRequest.get<Record<string, unknown>>('/wrong-questions/stats')
   },
 
   exportWrongQuestions() {
-    return request.get<Blob>('/wrong-questions/export', { responseType: 'blob' })
+    return unwrappedRequest.get<Blob>('/wrong-questions/export', { responseType: 'blob' })
   }
 }

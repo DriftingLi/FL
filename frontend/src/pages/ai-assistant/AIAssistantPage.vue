@@ -300,8 +300,8 @@ async function commitRename(sessionId: number) {
     try {
       await store.renameSession(sessionId, newTitle)
       ElMessage.success('已更新会话标题')
-    } catch (e: any) {
-      ElMessage.error(e.message || '重命名失败')
+    } catch {
+      /* 错误已由拦截器提示 */
     } finally {
       cancelRename()
     }

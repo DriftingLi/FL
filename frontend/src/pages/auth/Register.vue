@@ -203,7 +203,6 @@
 import { ref, reactive, computed, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { authApi } from '@/api/auth'
-import type { ApiResponse } from '@/api/request'
 import { useAuthStore } from '@/stores/auth'
 import { getDefaultWorkspaceBySubdomain } from '@/utils/subdomain'
 import { ElMessage, type FormInstance } from 'element-plus'
@@ -276,34 +275,31 @@ const rules = computed(() =>
 async function handleSendCode() {
   codeSending.value = true
   try {
-    let res
     if (registerMode.value === 'phone') {
       const phone = formData.phone.trim()
       if (!/^1[3-9]\d{9}$/.test(phone)) {
         ElMessage.warning('请输入正确的手机号')
         return
       }
-      res = await authApi.sendPhoneCode({ phone, purpose: 'register' })
+      await authApi.sendPhoneCode({ phone, purpose: 'register' })
     } else {
       const email = formData.email.trim()
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         ElMessage.warning('请输入正确的邮箱地址')
         return
       }
-      res = await authApi.sendEmailCode({ email, purpose: 'register' })
+      await authApi.sendEmailCode({ email, purpose: 'register' })
     }
-    if (res.code === 200) {
-      ElMessage.success('验证码已发送，请查收')
-      countdown.value = 60
-      if (countdownTimer) window.clearInterval(countdownTimer)
-      countdownTimer = window.setInterval(() => {
-        countdown.value--
-        if (countdown.value <= 0 && countdownTimer) {
-          window.clearInterval(countdownTimer)
-          countdownTimer = undefined
-        }
-      }, 1000)
-    }
+    ElMessage.success('验证码已发送，请查收')
+    countdown.value = 60
+    if (countdownTimer) window.clearInterval(countdownTimer)
+    countdownTimer = window.setInterval(() => {
+      countdown.value--
+      if (countdown.value <= 0 && countdownTimer) {
+        window.clearInterval(countdownTimer)
+        countdownTimer = undefined
+      }
+    }, 1000)
   } catch (e) {
     // 拦截器已提示
   } finally {
@@ -318,30 +314,28 @@ async function handleRegister() {
 
   loading.value = true
   try {
-    let res: ApiResponse | undefined
     if (registerMode.value === 'email') {
-      res = await authApi.emailRegister({
+      const info = await authApi.emailRegister({
         nickname: formData.nickname,
         email: formData.email.trim(),
         code: formData.code.trim(),
         company: formData.company,
         password: formData.password
       })
+      authStore.setAuthData(info)
     } else if (registerMode.value === 'phone') {
-      res = await authApi.phoneRegister({
+      const info = await authApi.phoneRegister({
         nickname: formData.nickname,
         phone: formData.phone.trim(),
         code: formData.code.trim(),
         company: formData.company,
         password: formData.password
       })
+      authStore.setAuthData(info)
     }
 
-    if (res && (res.code === 201 || res.code === 200)) {
-      authStore.setAuthData(res.data)
-      ElMessage.success('注册成功')
-      router.push(getDefaultWorkspaceBySubdomain())
-    }
+    ElMessage.success('注册成功')
+    router.push(getDefaultWorkspaceBySubdomain())
   } catch (e) {
     console.error('Register error:', e)
   } finally {

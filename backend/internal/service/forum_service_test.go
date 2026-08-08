@@ -178,31 +178,6 @@ func TestForum_DeleteReply_CleansSubReplyImages(t *testing.T) {
 	}
 }
 
-// TestForum_CleanupOrphanImages 悬空图片清理：未引用且超时文件被删，被引用/未超时文件保留。
-func TestForum_CleanupOrphanImages(t *testing.T) {
-	svc, db, st := newForumTestSvc(t)
-	user := seedForumUser(t, db, "g")
-
-	// 被主题引用的图片（即使超时也应保留）
-	referenced := "/static/uploads/images/forum/keep_1000000000000.webp"
-	if _, err := svc.CreateTopic(user.ID, nil, "标题", "内容", []string{referenced}); err != nil {
-		t.Fatal(err)
-	}
-	// 悬空但未超时（时间戳 < 24h）
-	fresh := "/static/uploads/images/forum/fresh_2000000000000.webp"
-	// 悬空且超时
-	stale := "/static/uploads/images/forum/stale_1000000000000.webp"
-	st.files = []string{referenced, fresh, stale}
-
-	cleaned := svc.CleanupOrphanImages()
-	if cleaned != 1 {
-		t.Fatalf("应清理 1 张悬空超时图片，实际 %d", cleaned)
-	}
-	if len(st.deleted) != 1 || st.deleted[0] != stale {
-		t.Fatalf("应删除 %q，实际删除: %v", stale, st.deleted)
-	}
-}
-
 // containsStr 判断字符串切片是否包含目标。
 func containsForumURL(list []string, target string) bool {
 	for _, s := range list {

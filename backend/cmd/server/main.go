@@ -15,24 +15,22 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
-
 	"forklift-training/internal/api"
 	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
 	"forklift-training/internal/db"
 	applogger "forklift-training/internal/logger"
 	migratedb "forklift-training/internal/migrate"
-	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
 	vconfig "forklift-training/internal/valuation/config"
 	vhandler "forklift-training/internal/valuation/handler"
 	vrepo "forklift-training/internal/valuation/repository"
 	vservice "forklift-training/internal/valuation/service"
 	"forklift-training/pkg/pdf"
+	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joho/godotenv"
+	"go.uber.org/zap"
 )
 
 //nolint:gocritic
@@ -87,29 +85,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 4. 确保默认账号（密码由环境变量配置）
-	authSvc := service.NewAuthService(gormDB, cfg.JWTSecretKey, cfg.JWTExpiry(),
-		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student, logger)
-	if err := authSvc.EnsureDefaultUsers(); err != nil {
-		logger.Error("默认用户创建失败", zap.Error(err))
-		os.Exit(1)
-	}
-	logger.Info("默认用户就绪")
-
-	// 4.5 清理上次进程遗留的异步生成任务（避免重启后前端一直显示「生成中」）
-	genSvc := service.NewContentGenerateService(gormDB, nil, logger)
-	genSvc.CleanupInterruptedTasks()
-
-	// 4.6 检查 AI 配置：未配置任何启用模型时告警（简答题评分等 AI 功能将走导师人工评分）
-	aiConfigSvc := service.NewAIConfigService(gormDB, cfg.SecretKey, logger)
-	if !aiConfigSvc.HasActiveConfigs(context.Background()) {
-		logger.Warn("未检测到已启用的 AI 模型配置：简答题评分将走导师人工评分，AI 助手/课程内容生成不可用；请在管理端「AI 设置」中配置模型")
-	}
-
-	// 5. 确保上传/PDF 目录存在
-	ensureUploadDirs(cfg, logger)
-
-	// 5.5 创建文件存储实例（local 本地磁盘 / r2 Cloudflare R2 对象存储）
+	// 4. 创建文件存储实例（local 本地磁盘 / r2 Cloudflare R2 对象存储，装配根依赖）
 	st, err := createStorage(cfg)
 	if err != nil {
 		logger.Error("创建文件存储实例失败", zap.Error(err))
@@ -117,14 +93,44 @@ func main() {
 	}
 	logger.Info("文件存储就绪", zap.String("driver", cfg.Storage.Driver))
 
-	// 6. 创建路由（维修培训业务 + 静态资源 + 健康检查）
-	router := api.NewRouter(cfg, gormDB, st, logger)
+	// 4.5 估值子模块 pgx 连接池（装配根与 setupValuation 共用同一池）
+	vpool, err := createValuationPool(cfg, logger)
+	if err != nil {
+		logger.Error("valuation pgx 连接池创建失败", zap.Error(err))
+		os.Exit(1)
+	}
+	defer vpool.Close()
 
-	// 6.5 论坛悬空图片定期清理（每 6 小时扫描 images/forum/ 前缀，删除超 24h 未引用的图片）
-	startForumImageCleanup(gormDB, cfg, st, logger)
+	// 5. 装配根：全部 service 在此构建一次（单一装配根，见 spec #75 D9）
+	// 导出数据访问经 ExportStore seam 注入估值模块 adapter（spec #75 D4）
+	deps := api.NewDeps(cfg, gormDB, st, logger, vrepo.NewExportStore(vpool))
 
-	// 7. 装配残值评估子模块（注册 /api/valuation/* 路由）
-	cleanup := setupValuation(router, cfg, gormDB, authSvc, st, logger)
+	// 5.1 确保默认账号（密码由环境变量配置）
+	if err := deps.AuthSvc.EnsureDefaultUsers(); err != nil {
+		logger.Error("默认用户创建失败", zap.Error(err))
+		os.Exit(1)
+	}
+	logger.Info("默认用户就绪")
+
+	// 5.5 清理上次进程遗留的异步生成任务（避免重启后前端一直显示「生成中」）
+	deps.ContentGenSvc.CleanupInterruptedTasks()
+
+	// 5.6 检查 AI 配置：未配置任何启用模型时告警（简答题评分等 AI 功能将走导师人工评分）
+	if !deps.AIConfigSvc.HasActiveConfigs(context.Background()) {
+		logger.Warn("未检测到已启用的 AI 模型配置：简答题评分将走导师人工评分，AI 助手/课程内容生成不可用；请在管理端「AI 设置」中配置模型")
+	}
+
+	// 6. 确保上传/PDF 目录存在
+	ensureUploadDirs(cfg, logger)
+
+	// 6.5 创建路由（维修培训业务 + 静态资源 + 健康检查）
+	router := api.NewRouter(deps)
+
+	// 7. 论坛悬空图片定期清理（每 6 小时扫描 images/forum/ 前缀，删除超 24h 未引用的图片）
+	startForumImageCleanup(deps, logger)
+
+	// 7.5 装配残值评估子模块（注册 /api/valuation/* 路由）
+	cleanup := setupValuation(router, cfg, deps.AuthSvc, vpool, st, logger)
 	defer cleanup()
 
 	// 8. 启动 HTTP 服务
@@ -161,27 +167,29 @@ func main() {
 	logger.Info("服务已退出")
 }
 
-// setupValuation 装配残值评估子模块，注册 /api/valuation/* 路由。
-// 返回 cleanup 函数用于释放 pgx 连接池。
-//
-//nolint:gocritic
-func setupValuation(r *gin.Engine, cfg *config.Config, gormDB *gorm.DB, authSvc *service.AuthService, st storage.Storage, logger *zap.Logger) func() {
-	// 1. 创建 pgx 连接池（与 GORM 共用 DATABASE_URL）
+// createValuationPool 创建估值子模块 pgx 连接池（与 GORM 共用 DATABASE_URL）。
+func createValuationPool(cfg *config.Config, logger *zap.Logger) (*pgxpool.Pool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	pool, err := vconfig.NewPostgresPool(ctx, cfg.DatabaseURL,
 		cfg.Valuation.DBMaxOpenConns, cfg.Valuation.DBMaxIdleConns, cfg.Valuation.DBConnMaxLifetime)
 	if err != nil {
-		logger.Error("valuation pgx 连接池创建失败", zap.Error(err))
-		os.Exit(1)
+		return nil, err
 	}
 	logger.Info("valuation pgx 连接池就绪")
+	return pool, nil
+}
 
-	// 2. 装配数据访问层（手写 pgx 仓储）
+// setupValuation 装配残值评估子模块，注册 /api/valuation/* 路由。
+// 返回 cleanup 函数用于释放 pgx 连接池（pool 由调用方创建并共用）。
+//
+//nolint:gocritic
+func setupValuation(r *gin.Engine, cfg *config.Config, authSvc vhandler.ValuationAuth, pool *pgxpool.Pool, st storage.Storage, logger *zap.Logger) func() {
+	// 1. 装配数据访问层（手写 pgx 仓储）
 	dictRepo := vrepo.NewDictionaryRepository(pool)
 	evalRepo := vrepo.NewEvaluationRepository(pool)
 
-	// 3. 装配业务服务（系数从 DB 实时查询，不再使用内存加载器）
+	// 2. 装配业务服务（系数从 DB 实时查询，不再使用内存加载器）
 	valuationSvc, err := vservice.NewValuationService(dictRepo, evalRepo)
 	if err != nil {
 		logger.Error("valuation 服务初始化失败", zap.Error(err))
@@ -190,11 +198,7 @@ func setupValuation(r *gin.Engine, cfg *config.Config, gormDB *gorm.DB, authSvc 
 	batterySvc := vservice.NewBatteryRULService()
 	batteryRepo := vrepo.NewBatteryRepository(pool)
 
-	// 4. 装配估值模块认证服务(已统一到主体系 AuthService,薄包装保留旧签名)
-	// 内部代理到主体系 AuthService,使用统一 JWT_SECRET_KEY 与 hrwai_users 表
-	valuationAuthSvc := vservice.WrapValuationAuthService(authSvc)
-
-	// 5. 装配 PDF 生成器（outputDir 仅用于本地缓存/兼容旧路径，R2 模式下不写入）
+	// 3. 装配 PDF 生成器（outputDir 仅用于本地缓存/兼容旧路径，R2 模式下不写入）
 	pdfDir := cfg.Valuation.PDFOutputDir
 	if pdfDir == "" {
 		pdfDir = "storage/reports"
@@ -204,9 +208,10 @@ func setupValuation(r *gin.Engine, cfg *config.Config, gormDB *gorm.DB, authSvc 
 	}
 	pdfGen := pdf.NewGenerator(pdfDir)
 
-	// 6. 注册路由（/api/valuation/*，公开组 + 估值独立鉴权组 + admin 组）
+	// 4. 注册路由（/api/valuation/*，公开组 + 估值独立鉴权组 + admin 组）
+	// 认证经 ValuationAuth 窄接口注入主体系 AuthService（spec #75 D4）
 	// PDF 报告通过 storage 抽象层上传（local=本地磁盘 / r2=Cloudflare R2 对象存储）
-	vhandler.RegisterRoutes(r, cfg, logger, dictRepo, evalRepo, batteryRepo, valuationSvc, batterySvc, pdfGen, st, valuationAuthSvc)
+	vhandler.RegisterRoutes(r, cfg, logger, dictRepo, evalRepo, batteryRepo, valuationSvc, batterySvc, pdfGen, st, authSvc)
 	logger.Info("valuation 路由注册完成", zap.String("prefix", "/api/valuation"))
 
 	return func() {
@@ -236,13 +241,11 @@ func ensureUploadDirs(cfg *config.Config, logger *zap.Logger) {
 // startForumImageCleanup 启动论坛悬空图片清理定时任务：
 // 每 6 小时对 images/forum/ 前缀 List，与全量引用集做差集，删除超过 24h 未被引用的图片。
 // 进程内 goroutine（与限流池清理同模式），进程退出自然终止。
-func startForumImageCleanup(gormDB *gorm.DB, cfg *config.Config, st storage.Storage, logger *zap.Logger) {
-	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st, logger)
-	forumSvc := service.NewForumService(gormDB, fileSvc, logger)
+func startForumImageCleanup(deps *api.Deps, logger *zap.Logger) {
 	const interval = 6 * time.Hour
 	go func() {
 		for range time.Tick(interval) {
-			cleaned := forumSvc.CleanupOrphanImages()
+			cleaned := deps.ForumImageSvc.CleanupOrphans(context.Background())
 			if cleaned > 0 {
 				logger.Info("论坛悬空图片清理完成", zap.Int("cleaned", cleaned))
 			}

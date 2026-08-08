@@ -120,10 +120,8 @@ async function loadList() {
       params.status = String(filterStatus.value)
     }
     const res = await adminFeaturedApi.getList(params)
-    if (res.code === 200 && res.data) {
-      list.value = res.data.items || []
-      total.value = res.data.total || 0
-    }
+    list.value = res.items || []
+    total.value = res.total || 0
   } catch (e: any) {
     // 错误已由全局拦截器提示
   } finally {
@@ -153,11 +151,9 @@ function goEdit(id: number) {
 
 async function handlePublish(id: number) {
   try {
-    const res = await adminFeaturedApi.publish(id)
-    if (res.code === 200) {
-      ElMessage.success('发布成功')
-      loadList()
-    }
+    await adminFeaturedApi.publish(id)
+    ElMessage.success('发布成功')
+    loadList()
   } catch (e: any) {
     // 错误已由全局拦截器提示
   }
@@ -165,11 +161,9 @@ async function handlePublish(id: number) {
 
 async function handleDelete(id: number) {
   try {
-    const res = await adminFeaturedApi.remove(id)
-    if (res.code === 200) {
-      ElMessage.success('删除成功')
-      loadList()
-    }
+    await adminFeaturedApi.remove(id)
+    ElMessage.success('删除成功')
+    loadList()
   } catch (e: any) {
     // 错误已由全局拦截器提示
   }

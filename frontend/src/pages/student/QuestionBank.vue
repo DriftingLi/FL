@@ -250,10 +250,9 @@ onMounted(() => {
 async function loadTags() {
   tagsLoading.value = true
   try {
-    const res = await trainingApi.getTags()
-    if (res.code === 200) {
-      tags.value = res.data.tags || []
-    }
+    // 拦截器已解包信封
+    const data = await trainingApi.getTags()
+    tags.value = data.tags || []
   } catch (e) {
     // 静默失败，标签入口降级为不可用
   } finally {
@@ -268,11 +267,11 @@ async function loadCardData() {
       practiceModeApi.getSequentialProgress(),
       mockExamApi.getMockExamHistory({ page: 1, page_size: 1 })
     ])
-    totalQuestions.value = (statsRes.data?.total as number) || 0
-    if (progRes.data) {
-      seqProgress.value = progRes.data
+    totalQuestions.value = (statsRes.total as number) || 0
+    if (progRes) {
+      seqProgress.value = progRes
     }
-    const exams = histRes.data?.exams || []
+    const exams = histRes.exams || []
     if (exams.length > 0 && exams[0].score != null) {
       latestMockScore.value = Number(exams[0].score)
     }
@@ -286,7 +285,7 @@ async function startSequential() {
   loading.value = true
   try {
     const res = await practiceModeApi.startSequential()
-    const data = res.data || {}
+    const data = res || {}
     questions.value = data.questions || []
     if (questions.value.length === 0) {
       ElMessage.warning('题库暂无题目')
@@ -297,8 +296,8 @@ async function startSequential() {
     const prog = await resolveProgress('sequential', questions.value.length)
     resetSession(prog.startIndex)
     restoreState(prog.answersState)
-  } catch (e: any) {
-    ElMessage.error(e.message || '加载题目失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -317,7 +316,7 @@ async function resolveProgress(modeKey: string, total: number): Promise<{ startI
   if (!modeKey) return { startIndex: 0, answersState: {} }
   try {
     const progRes = await practiceModeApi.getProgress(modeKey)
-    const data = progRes.data || {}
+    const data = progRes || {}
     const idx = data.current_index || 0
     const startIndex = idx > 0 && idx < total ? idx : 0
     return { startIndex, answersState: data.answers_state || {} }
@@ -395,7 +394,7 @@ async function startFree(type?: string) {
       params.count = randomCount.value
     }
     const res = await practiceModeApi.getFreeQuestions(params)
-    questions.value = res.data || []
+    questions.value = res || []
     if (questions.value.length === 0) {
       ElMessage.warning('暂无符合条件的题目')
       return
@@ -404,8 +403,8 @@ async function startFree(type?: string) {
     const prog = await resolveProgress(modeKey, questions.value.length)
     resetSession(prog.startIndex)
     restoreState(prog.answersState)
-  } catch (e: any) {
-    ElMessage.error(e.message || '加载题目失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -416,15 +415,15 @@ async function startTagPractice() {
   loading.value = true
   try {
     const res = await practiceModeApi.getTagQuestions({ tag_id: tagPracticeId.value, count: 0 })
-    questions.value = res.data || []
+    questions.value = res || []
     if (questions.value.length === 0) {
       ElMessage.warning('该标签下暂无已发布题目')
       return
     }
     mode.value = 'tag'
     resetSession(0)
-  } catch (e: any) {
-    ElMessage.error(e.message || '加载题目失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -491,7 +490,7 @@ async function submitAnswer() {
       user_answer: userAnswer as string,
       practice_type: mode.value || 'free'
     })
-    resultMap.value[q.id] = res.data || {}
+    resultMap.value[q.id] = res || ({} as SubmitResult)
     submittedMap.value[q.id] = true
     if (resultMap.value[q.id].is_correct) {
       correctCount.value++
@@ -500,8 +499,8 @@ async function submitAnswer() {
     }
     // 提交后持久化答题状态（游标不变，仅更新 answers_state）
     await saveCurrentProgress(currentIdx.value)
-  } catch (e: any) {
-    ElMessage.error(e.message || '提交答案失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 

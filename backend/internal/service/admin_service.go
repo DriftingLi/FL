@@ -39,8 +39,16 @@ type HrwaiUserSummary struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// HrwaiUserPageResult HRWAI 用户分页结果（JSON 与既有契约一致，无 pages 字段）。
+type HrwaiUserPageResult struct {
+	List     []HrwaiUserSummary `json:"list"`
+	Page     int                `json:"page"`
+	PageSize int                `json:"page_size"`
+	Total    int64              `json:"total"`
+}
+
 // ListHrwaiUsers 分页查询 HRWAI 用户,支持按用户名/姓名/手机号模糊搜索。
-func (s *AdminService) ListHrwaiUsers(page, pageSize int, keyword string) (map[string]any, error) {
+func (s *AdminService) ListHrwaiUsers(page, pageSize int, keyword string) (*HrwaiUserPageResult, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -75,11 +83,11 @@ func (s *AdminService) ListHrwaiUsers(page, pageSize int, keyword string) (map[s
 			CreatedAt: u.CreatedAt,
 		})
 	}
-	return map[string]any{
-		"total":     total,
-		"page":      page,
-		"page_size": pageSize,
-		"list":      list,
+	return &HrwaiUserPageResult{
+		List:     list,
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
 	}, nil
 }
 

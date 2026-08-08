@@ -95,16 +95,12 @@ async function handleAvatarUpload(options: any) {
     const formData = new FormData()
     formData.append('file', file)
     const res = await authApi.uploadAvatar(formData)
-    if (res.code === 200) {
-      ElMessage.success('头像修改已提交，审核通过后生效')
-      await refresh()
-      options.onSuccess?.(res)
-    } else {
-      options.onError?.(new Error(res.message || '上传失败'))
-    }
+    ElMessage.success('头像修改已提交，审核通过后生效')
+    await refresh()
+    options.onSuccess?.(res)
   } catch (e) {
     console.error('头像上传失败:', e)
-    ElMessage.error('头像上传失败，请稍后重试')
+    /* 错误已由拦截器提示 */
     options.onError?.(e as Error)
   } finally {
     avatarUploading.value = false
@@ -119,14 +115,12 @@ async function saveNickname() {
   }
   savingNickname.value = true
   try {
-    const res = await authApi.updateProfile({ nickname: value })
-    if (res.code === 200) {
-      ElMessage.success('昵称修改已提交，审核通过后生效')
-      await refresh()
-    }
+    await authApi.updateProfile({ nickname: value })
+    ElMessage.success('昵称修改已提交，审核通过后生效')
+    await refresh()
   } catch (e) {
     console.error('昵称提交失败:', e)
-    ElMessage.error('昵称提交失败，请稍后重试')
+    /* 错误已由拦截器提示 */
   } finally {
     savingNickname.value = false
   }

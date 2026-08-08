@@ -59,14 +59,13 @@ function formatDate(dateStr: string): string {
 async function loadUsers() {
   loading.value = true
   try {
-    const res = await adminApi.getHrwaiUsers({
+    const data = await adminApi.getHrwaiUsers({
       page: currentPage.value,
       page_size: pageSize.value,
       keyword: searchKeyword.value || undefined
     })
-    const data = res.data ?? {}
-    users.value = data.list ?? []
-    total.value = data.total ?? 0
+    users.value = data?.list ?? []
+    total.value = data?.total ?? 0
   } catch (error) {
     console.error('加载 HRWAI 用户列表失败:', error)
   } finally {
@@ -96,14 +95,14 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    const res = await adminApi.createHrwaiUser({
+    const created = await adminApi.createHrwaiUser({
       phone: formData.phone,
       password: formData.password,
       name: formData.name,
       email: formData.email || undefined,
       company: formData.company || undefined
     })
-    const nickname = res.data?.nickname
+    const nickname = created?.nickname
     ElMessage.success(nickname ? `用户添加成功，默认昵称：${nickname}` : '用户添加成功')
     dialogVisible.value = false
     loadUsers()
@@ -140,8 +139,8 @@ async function handleResetPwd() {
 
 async function handleToggleStatus(row: HrwaiUser) {
   try {
-    const res = await adminApi.toggleHrwaiUserStatus(row.id)
-    const next = res.data?.status
+    const toggled = await adminApi.toggleHrwaiUserStatus(row.id)
+    const next = toggled?.status
     ElMessage.success(next === 1 ? '已启用' : '已禁用')
     loadUsers()
   } catch (error) {

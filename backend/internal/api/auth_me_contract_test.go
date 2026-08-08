@@ -1,0 +1,81 @@
+// Ticket #84（issue #84）契约测试：锁定 GET /auth/me 响应 JSON 形状。
+// profile 组装收编进 AuthService.GetProfile 前后，响应体必须字节级一致。
+// data 为 map 序列化（encoding/json 按键排序），比对完整响应字符串。
+package api
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/gin-gonic/gin"
+
+	"forklift-training/internal/config"
+	"forklift-training/internal/security"
+	"forklift-training/internal/testutil"
+)
+
+func TestAuthMeContract_ShapeUnchanged(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const secret = "contract-test-secret"
+
+	cases := []struct {
+		name     string
+		role     string
+		username string
+		want     string
+	}{
+		{
+			name: "hrwai_user", role: "hrwai_user", username: "alice",
+			want: `{"code":200,"message":"success","data":{"avatar_url":"","company":"","email":"","has_password":true,"name":"alice","nickname":"","pending_profile_change":null,"phone":"test_alice","role":"hrwai_user","user_id":1,"username":"alice"}}`,
+		},
+		{
+			name: "tutor", role: "tutor", username: "tutor1",
+			want: `{"code":200,"message":"success","data":{"name":"tutor1","role":"tutor","user_id":1,"username":"tutor1"}}`,
+		},
+		{
+			name: "admin", role: "admin", username: "admin1",
+			want: `{"code":200,"message":"success","data":{"name":"admin1","role":"admin","user_id":1,"username":"admin1"}}`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := testutil.NewMemoryDB(t)
+			var userID int
+			switch tc.role {
+			case "hrwai_user":
+				userID = testutil.SeedStudent(t, db, tc.username, "hash123").StudentID
+			case "tutor":
+				userID = testutil.SeedTutor(t, db, tc.username, "hash123").TutorID
+			case "admin":
+				userID = testutil.SeedAdmin(t, db, tc.username, "hash123").AdminID
+			}
+
+			cfg := &config.Config{
+				JWTSecretKey: secret,
+				AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
+			}
+			r := NewRouter(newContractDeps(t, db, cfg))
+
+			token, err := security.NewSession(secret, time.Hour, security.CookieConfig{}).
+				Issue(userID, tc.username, tc.role)
+			if err != nil {
+				t.Fatalf("签发 token 失败: %v", err)
+			}
+
+			req, _ := http.NewRequest("GET", "/api/auth/me", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("期望 200, got %d: %s", w.Code, w.Body.String())
+			}
+			if got := w.Body.String(); got != tc.want {
+				t.Errorf("响应体与契约不符\n got: %s\nwant: %s", got, tc.want)
+			}
+		})
+	}
+}

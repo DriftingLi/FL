@@ -134,12 +134,22 @@ func newCodeAuthTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fakeChann
 		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: false},
 	}
 
+	deps := &Deps{
+		Cfg:     cfg,
+		DB:      db,
+		Logger:  zap.NewNop(),
+		AuthSvc: authSvc,
+		CodeSvc: codeSvc,
+		EmailCh: emailCh,
+		PhoneCh: phoneCh,
+	}
+
 	r := gin.New()
 	r.Use(gin.Recovery())
 	api := r.Group("/api")
-	RegisterEmailAuthRoutes(api, cfg, codeSvc, emailCh, zap.NewNop())
-	RegisterPhoneAuthRoutes(api, cfg, codeSvc, phoneCh, zap.NewNop())
-	RegisterProfileBindRoutes(api, cfg, db, authSvc, codeSvc, emailCh, phoneCh, zap.NewNop())
+	RegisterEmailAuthRoutes(api, deps)
+	RegisterPhoneAuthRoutes(api, deps)
+	RegisterProfileBindRoutes(api, deps)
 
 	return r, store, emailCh, phoneCh
 }

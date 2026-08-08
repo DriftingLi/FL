@@ -200,9 +200,9 @@ const isTaskRunning = computed(() => {
 
 async function loadCourses() {
   try {
-    const res = await adminApi.getCourses({ page: 1, page_size: 100 })
-    if (res.code === 200) {
-      courses.value = res.data.courses
+    const data = await adminApi.getCourses({ page: 1, page_size: 100 })
+    if (data) {
+      courses.value = data.courses
     }
   } catch (error) {
     console.error('加载课程失败:', error)
@@ -216,9 +216,9 @@ async function handleCourseChange(courseId: number) {
   if (!courseId) return
 
   try {
-    const res = await adminApi.getCourseDetail(courseId)
-    if (res.code === 200) {
-      chapters.value = res.data.chapters || []
+    const detail = await adminApi.getCourseDetail(courseId)
+    if (detail) {
+      chapters.value = detail.chapters || []
     }
   } catch (error) {
     console.error('加载章节失败:', error)
@@ -243,18 +243,18 @@ async function handleGenerate() {
   generateTask.value = null
 
   try {
-    const res = await adminApi.generateContent({
+    const task = await adminApi.generateContent({
       course_id: selectedCourseId.value,
       chapter_ids: selectedChapterIds.value
     })
 
-    if (res.code === 200) {
-      generateTask.value = res.data
-      startPolling(res.data.task_id)
+    if (task) {
+      generateTask.value = task
+      startPolling(task.task_id)
     }
   } catch (error) {
     console.error('内容生成失败:', error)
-    ElMessage.error('内容生成失败，请检查AI服务配置')
+    /* 错误已由拦截器提示 */
   } finally {
     generating.value = false
   }
@@ -265,17 +265,17 @@ function startPolling(taskId: string) {
 
   pollTimer = setInterval(async () => {
     try {
-      const res = await adminApi.getGenerateStatus(taskId)
-      if (res.code === 200) {
-        generateTask.value = res.data
-        if (res.data.status === 'completed' || res.data.status === 'failed') {
+      const task = await adminApi.getGenerateStatus(taskId)
+      if (task) {
+        generateTask.value = task
+        if (task.status === 'completed' || task.status === 'failed') {
           if (pollTimer) {
             clearInterval(pollTimer)
             pollTimer = null
           }
-          const successCount = (res.data.results || []).filter((r: { status: string }) => r.status === 'success').length
-          const total = res.data.total || res.data.results?.length || 0
-          if (res.data.status === 'completed') {
+          const successCount = (task.results || []).filter((r: { status: string }) => r.status === 'success').length
+          const total = task.total || task.results?.length || 0
+          if (task.status === 'completed') {
             ElMessage.success(`生成完成：${successCount}/${total} 个章节成功`)
           }
           if (selectedCourseId.value) {

@@ -1,4 +1,4 @@
-import request from './request'
+import { unwrappedRequest } from './request'
 import type { Question } from '@/types/question'
 
 export interface StartMockExamPayload {
@@ -43,26 +43,26 @@ export interface MockExamResult {
 
 export const mockExamApi = {
   startMockExam(data: StartMockExamPayload) {
-    return request.post<{ mock_exam_id: number; questions: Question[]; remaining_time: number }>('/mock-exam/start', data)
+    return unwrappedRequest.post<{ mock_exam_id: number; questions: Question[]; remaining_time: number }>('/mock-exam/start', data)
   },
 
   saveProgress(mockExamId: number, data: MockExamProgressPayload) {
-    return request.post<null>(`/mock-exam/${mockExamId}/save`, data)
+    return unwrappedRequest.post<null>(`/mock-exam/${mockExamId}/save`, data)
   },
 
   resumeMockExam(mockExamId: number) {
-    return request.get<{ questions: Question[]; remaining_time: number }>(`/mock-exam/${mockExamId}/resume`)
+    return unwrappedRequest.get<{ questions: Question[]; remaining_time: number }>(`/mock-exam/${mockExamId}/resume`)
   },
 
   submitMockExam(mockExamId: number) {
-    return request.post<MockExamResult>(`/mock-exam/${mockExamId}/submit`)
+    return unwrappedRequest.post<MockExamResult>(`/mock-exam/${mockExamId}/submit`)
   },
 
   getMockExamResult(mockExamId: number) {
-    return request.get<MockExamResult>(`/mock-exam/${mockExamId}/result`)
+    return unwrappedRequest.get<MockExamResult>(`/mock-exam/${mockExamId}/result`)
   },
 
   getMockExamHistory(params: MockExamHistoryQuery) {
-    return request.get<{ exams: MockExamHistoryItem[] }>('/mock-exam/history', { params })
+    return unwrappedRequest.get<{ exams: MockExamHistoryItem[] }>('/mock-exam/history', { params })
   }
 }

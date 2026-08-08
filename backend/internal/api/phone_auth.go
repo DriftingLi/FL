@@ -4,13 +4,9 @@ package api
 
 import (
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-
-	"forklift-training/internal/config"
-	"forklift-training/internal/service"
 )
 
 // RegisterPhoneAuthRoutes 注册 /api/auth/phone 蓝图（手机号验证码注册/登录）。
-func RegisterPhoneAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, codeSvc *service.VerifyCodeService, phoneCh service.CodeChannel, logger *zap.Logger) {
-	registerCodeChannelAuthRoutes(rg.Group("/auth/phone"), cfg, codeSvc, phoneCh, "phone", "验证码已发送，请查收手机短信")
+func RegisterPhoneAuthRoutes(rg *gin.RouterGroup, deps *Deps) {
+	registerCodeChannelAuthRoutes(rg.Group("/auth/phone"), deps.Cfg, deps.CodeSvc, deps.PhoneCh, "phone", "验证码已发送，请查收手机短信")
 }

@@ -157,7 +157,7 @@ const currentQuestion = computed(() => questions.value[currentIdx.value] || {})
 onMounted(async () => {
   try {
     const res = await mockExamApi.getMockExamHistory({ page: 1, page_size: 5 })
-    history.value = res.data?.exams || []
+    history.value = res.exams || []
   } catch (e) {}
 })
 
@@ -169,13 +169,13 @@ async function startExam() {
   loading.value = true
   try {
     const res = await mockExamApi.startMockExam(examForm.value)
-    mockExamId.value = res.data.mock_exam_id
-    questions.value = res.data.questions
-    remainingTime.value = res.data.remaining_time
+    mockExamId.value = res.mock_exam_id
+    questions.value = res.questions
+    remainingTime.value = res.remaining_time
     examStarted.value = true
     startTimer()
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '开始考试失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -261,10 +261,10 @@ async function doSubmit() {
   try {
     if (!mockExamId.value) return
     const res = await mockExamApi.submitMockExam(mockExamId.value)
-    examResult.value = res.data || {}
+    examResult.value = res || {}
     examFinished.value = true
-  } catch (e) {
-    ElMessage.error('交卷失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 

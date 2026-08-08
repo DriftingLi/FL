@@ -138,13 +138,11 @@ async function loadTopics() {
       page: currentPage.value,
       page_size: pageSize.value
     })
-    if (res.code === 200 && res.data) {
-      topics.value = res.data.topics || []
-      total.value = res.data.total || 0
-    }
+    topics.value = res.topics || []
+    total.value = res.total || 0
   } catch (e) {
     console.error('加载论坛列表失败:', e)
-    ElMessage.error('加载论坛列表失败')
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -164,16 +162,14 @@ async function submitTopic() {
   }
   submitting.value = true
   try {
-    const res = await forumApi.createTopic({ chapter_id: null, title, content, images: createForm.value.images })
-    if (res.code === 200 || res.code === 201) {
-      ElMessage.success('发布成功')
-      createDialogVisible.value = false
-      currentPage.value = 1
-      loadTopics()
-    }
+    await forumApi.createTopic({ chapter_id: null, title, content, images: createForm.value.images })
+    ElMessage.success('发布成功')
+    createDialogVisible.value = false
+    currentPage.value = 1
+    loadTopics()
   } catch (e) {
     console.error('发布失败:', e)
-    ElMessage.error('发布失败，请稍后重试')
+    /* 错误已由拦截器提示 */
   } finally {
     submitting.value = false
   }

@@ -167,7 +167,7 @@
 import { ref, reactive, computed, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { authApi } from '@/api/auth'
+import { authApi, type AuthUserInfo } from '@/api/auth'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { UserFilled, Avatar, Setting, ChatDotRound } from '@element-plus/icons-vue'
 import { usernameRules, passwordRules, requiredEmailRules, emailCodeRules, phoneRules } from '@/utils/validate'
@@ -234,34 +234,31 @@ const rules = computed(() => {
 async function handleSendCode() {
   codeSending.value = true
   try {
-    let res
     if (loginMode.value === 'phone') {
       const phone = formData.phone.trim()
       if (!/^1[3-9]\d{9}$/.test(phone)) {
         ElMessage.warning('请输入正确的手机号')
         return
       }
-      res = await authApi.sendPhoneCode({ phone, purpose: 'login' })
+      await authApi.sendPhoneCode({ phone, purpose: 'login' })
     } else {
       const email = formData.email.trim()
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         ElMessage.warning('请输入正确的邮箱地址')
         return
       }
-      res = await authApi.sendEmailCode({ email, purpose: 'login' })
+      await authApi.sendEmailCode({ email, purpose: 'login' })
     }
-    if (res.code === 200) {
-      ElMessage.success('验证码已发送，请查收')
-      countdown.value = 60
-      if (countdownTimer) window.clearInterval(countdownTimer)
-      countdownTimer = window.setInterval(() => {
-        countdown.value--
-        if (countdown.value <= 0 && countdownTimer) {
-          window.clearInterval(countdownTimer)
-          countdownTimer = undefined
-        }
-      }, 1000)
-    }
+    ElMessage.success('验证码已发送，请查收')
+    countdown.value = 60
+    if (countdownTimer) window.clearInterval(countdownTimer)
+    countdownTimer = window.setInterval(() => {
+      countdown.value--
+      if (countdown.value <= 0 && countdownTimer) {
+        window.clearInterval(countdownTimer)
+        countdownTimer = undefined
+      }
+    }, 1000)
   } catch (e) {
     // 拦截器已提示
   } finally {
@@ -285,31 +282,30 @@ async function handleLogin() {
       password: formData.password,
       role: currentRole
     }
-    let res
+    let userInfo: AuthUserInfo
     if (loginMode.value === 'email') {
-      res = await authApi.emailLogin({
+      userInfo = await authApi.emailLogin({
         email: formData.email.trim(),
         code: formData.code.trim()
       })
     } else if (loginMode.value === 'phone') {
-      res = await authApi.phoneLogin({
+      userInfo = await authApi.phoneLogin({
         phone: formData.phone.trim(),
         code: formData.code.trim()
       })
     } else if (currentRole === 'hrwai_user') {
-      res = await authApi.login(payload)
+      userInfo = await authApi.login(payload)
     } else if (currentRole === 'tutor') {
-      res = await authApi.tutorLogin(payload)
+      userInfo = await authApi.tutorLogin(payload)
     } else {
-      res = await authApi.adminLogin(payload)
+      userInfo = await authApi.adminLogin(payload)
     }
 
-    if (res.code === 200 || res.code === 201) {
-      authStore.setAuthData(res.data)
-      ElMessage.success('登录成功')
+    authStore.setAuthData(userInfo)
+    ElMessage.success('登录成功')
 
-      // 默认跳转到当前子域名对应的工作区
-      const dashboard = getDefaultWorkspaceBySubdomain()
+    // 默认跳转到当前子域名对应的工作区
+    const dashboard = getDefaultWorkspaceBySubdomain()
 
       // redirect 回跳：仅允许在同身份工作台内回跳，防止越权/钓鱼
       const role = authStore.userInfo?.role
@@ -329,16 +325,12 @@ async function handleLogin() {
       } else {
         router.push(dashboard)
       }
-    }
   } catch (e) {
     const err = e as { response?: { data?: unknown; status?: number }; message?: string }
     console.error('Login error:', err)
     if (err.response) {
       console.error('Response data:', err.response.data)
       console.error('Status:', err.response.status)
-    }
-    if (err.message && !err.message.includes('Network')) {
-      ElMessage.error(err.message || '登录失败，请检查用户名和密码')
     }
   } finally {
     loading.value = false

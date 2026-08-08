@@ -5,7 +5,6 @@ package service
 import (
 	"encoding/json"
 	"errors"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/response"
 )
 
 // 论坛范围常量。
@@ -28,9 +28,6 @@ const (
 const (
 	ForumTopicMaxImages = 9 // 主题最多图片数
 	ForumReplyMaxImages = 3 // 回复最多图片数
-	ForumImageDirPrefix = "images/forum"
-	ForumImageOrphanTTL = 24 * time.Hour // 悬空图片清理门槛（超过该时长未被引用才删）
-	ForumImageKeyTimeRe = `_(\d{10,})\.` // 文件名内嵌毫秒时间戳（<name>_<ms>.<ext>）
 )
 
 // ForumAuthor 论坛作者信息（昵称优先，其次姓名/用户名）。
@@ -140,9 +137,17 @@ func (r topicRow) toDTO(viewerID int) ForumTopicDTO {
 	}
 }
 
+// ForumTopicPageResult 论坛主题分页结果。
+type ForumTopicPageResult struct {
+	Page   int             `json:"page"`
+	Pages  int             `json:"pages"`
+	Topics []ForumTopicDTO `json:"topics"`
+	Total  int64           `json:"total"`
+}
+
 // ListTopics 分页查询主题。
 // scope: all（默认）/ general（综合讨论区）/ chapter（需配合 chapterID）。
-func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, keyword string) (map[string]any, error) {
+func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, keyword string) (*ForumTopicPageResult, error) {
 	if scope == "" {
 		scope = ForumScopeAll
 	}
@@ -190,12 +195,11 @@ func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, k
 	for _, r := range rows {
 		items = append(items, r.toDTO(0))
 	}
-	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	return map[string]any{
-		"total":  total,
-		"page":   page,
-		"pages":  pages,
-		"topics": items,
+	return &ForumTopicPageResult{
+		Page:   page,
+		Pages:  response.PageCount(total, pageSize),
+		Topics: items,
+		Total:  total,
 	}, nil
 }
 
@@ -590,21 +594,6 @@ func validateForumImages(images []string, max int) error {
 	return nil
 }
 
-// isForumImageURL 判断 URL 是否指向本站 images/forum/ 子目录。
-func isForumImageURL(u string) bool {
-	u = strings.TrimSpace(u)
-	if u == "" {
-		return false
-	}
-	// local：/static/uploads/images/forum/xxx
-	if strings.HasPrefix(u, "/static/uploads/images/forum/") {
-		return true
-	}
-	// R2：https://<任意域名>/images/forum/xxx
-	idx := strings.Index(u, "/images/forum/")
-	return idx > 0 && (strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://"))
-}
-
 // parseImageURLs 将 JSONB 图片数组字符串解析为 URL 列表（无效 JSON 返回空列表）。
 func parseImageURLs(raw string) []string {
 	raw = strings.TrimSpace(raw)
@@ -625,77 +614,4 @@ func marshalImageURLs(urls []string) model.JSONB {
 	}
 	b, _ := json.Marshal(urls)
 	return model.JSONB(b)
-}
-
-// CleanupOrphanImages 清理论坛悬空图片：List(images/forum/) 与全量引用集差集，
-// 仅删除文件名时间戳超过 ForumImageOrphanTTL 且未被任何主题/回复引用的文件。
-// 返回清理的文件数（尽力而为，存储错误不中断）。
-func (s *ForumService) CleanupOrphanImages() int {
-	if s.fileSvc == nil {
-		return 0
-	}
-	stored := s.fileSvc.ListFiles(ForumImageDirPrefix)
-	if len(stored) == 0 {
-		return 0
-	}
-
-	referenced := s.collectReferencedImages()
-	cleaned := 0
-	cutoff := time.Now().Add(-ForumImageOrphanTTL)
-	for _, u := range stored {
-		if referenced[u] {
-			continue
-		}
-		if !isForumImageURL(u) {
-			continue
-		}
-		if ms := imageUploadTime(u); ms > 0 && time.UnixMilli(ms).Before(cutoff) {
-			if err := s.fileSvc.DeleteFile(u); err == nil {
-				cleaned++
-			}
-		}
-	}
-	return cleaned
-}
-
-// collectReferencedImages 收集全部主题与回复引用的图片 URL 集合。
-func (s *ForumService) collectReferencedImages() map[string]bool {
-	ref := map[string]bool{}
-	var rawList []string
-	if err := s.db.Model(&model.ForumTopic{}).Pluck("images", &rawList).Error; err == nil {
-		for _, raw := range rawList {
-			for _, u := range parseImageURLs(raw) {
-				ref[u] = true
-			}
-		}
-	}
-	rawList = rawList[:0]
-	if err := s.db.Model(&model.ForumReply{}).Pluck("images", &rawList).Error; err == nil {
-		for _, raw := range rawList {
-			for _, u := range parseImageURLs(raw) {
-				ref[u] = true
-			}
-		}
-	}
-	return ref
-}
-
-var forumImageTimeRe = regexp.MustCompile(ForumImageKeyTimeRe)
-
-// imageUploadTime 从文件名内嵌的毫秒时间戳（<name>_<ms>.<ext>）提取上传时间；解析失败返回 0。
-func imageUploadTime(url string) int64 {
-	idx := strings.LastIndex(url, "/")
-	name := url
-	if idx >= 0 {
-		name = url[idx+1:]
-	}
-	m := forumImageTimeRe.FindStringSubmatch(name)
-	if len(m) < 2 {
-		return 0
-	}
-	ms, err := strconv.ParseInt(m[1], 10, 64)
-	if err != nil {
-		return 0
-	}
-	return ms
 }

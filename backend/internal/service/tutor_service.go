@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/response"
 )
 
 // TutorService 导师服务。
@@ -28,7 +29,7 @@ func NewTutorService(db *gorm.DB, uploadFolder string, fileService *FileService,
 }
 
 // GetCourses 导师课程列表。
-func (s *TutorService) GetCourses(tutorID *int, page, pageSize int) map[string]any {
+func (s *TutorService) GetCourses(tutorID *int, page, pageSize int) CoursePageResult {
 	if page <= 0 {
 		page = 1
 	}
@@ -53,12 +54,11 @@ func (s *TutorService) GetCourses(tutorID *int, page, pageSize int) map[string]a
 		item["student_count"] = studentCount
 		items = append(items, item)
 	}
-	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	return map[string]any{
-		"total":   total,
-		"page":    page,
-		"pages":   pages,
-		"courses": items,
+	return CoursePageResult{
+		Courses: items,
+		Page:    page,
+		Pages:   response.PageCount(total, pageSize),
+		Total:   total,
 	}
 }
 

@@ -1,4 +1,4 @@
-import request from './request'
+import { unwrappedRequest } from './request'
 import type { AxiosProgressEvent } from 'axios'
 
 export interface TutorCoursesQuery {
@@ -66,24 +66,24 @@ export interface GradingStatsData {
 
 export const tutorApi = {
   getCourses(params: TutorCoursesQuery) {
-    return request.get<{ courses: TutorCourse[]; total: number }>('/tutor/courses', { params })
+    return unwrappedRequest.get<{ courses: TutorCourse[]; total: number }>('/tutor/courses', { params })
   },
 
   // 阅卷统计（按天分组），days=7|30
   getGradingStats(params?: { days?: number }) {
-    return request.get<GradingStatsData>('/tutor/grading-stats', { params })
+    return unwrappedRequest.get<GradingStatsData>('/tutor/grading-stats', { params })
   },
 
   getCourseChapters(courseId: number) {
-    return request.get<{ course?: TutorCourse; chapters?: TutorChapter[] }>(`/tutor/course/${courseId}/chapters`)
+    return unwrappedRequest.get<{ course?: TutorCourse; chapters?: TutorChapter[] }>(`/tutor/course/${courseId}/chapters`)
   },
 
   getChapterDetail(chapterId: number) {
-    return request.get<TutorChapterDetail>(`/tutor/chapter/${chapterId}`)
+    return unwrappedRequest.get<TutorChapterDetail>(`/tutor/chapter/${chapterId}`)
   },
 
   uploadChapterFile(chapterId: number, formData: FormData, onProgress: (event: AxiosProgressEvent) => void) {
-    return request.post<{ url?: string; file_id?: number }>(`/tutor/chapter/${chapterId}/upload`, formData, {
+    return unwrappedRequest.post<{ url?: string; file_id?: number }>(`/tutor/chapter/${chapterId}/upload`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 300000,
       onUploadProgress: onProgress
@@ -91,14 +91,14 @@ export const tutorApi = {
   },
 
   updateChapter(chapterId: number, data: UpdateChapterPayload) {
-    return request.put<TutorChapter>(`/tutor/chapter/${chapterId}`, data)
+    return unwrappedRequest.put<TutorChapter>(`/tutor/chapter/${chapterId}`, data)
   },
 
   deleteFile(fileId: number) {
-    return request.delete<null>(`/tutor/file/${fileId}`)
+    return unwrappedRequest.delete<null>(`/tutor/file/${fileId}`)
   },
 
   batchDeleteFiles(data: BatchDeleteFilesPayload) {
-    return request.post<null>('/tutor/files/batch-delete', data)
+    return unwrappedRequest.post<null>('/tutor/files/batch-delete', data)
   }
 }

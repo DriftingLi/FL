@@ -1,4 +1,6 @@
-import request from './request'
+// 已迁移模块：走 unwrappedRequest（拦截器解包信封，成功直接返回业务数据 Promise<T>，
+// 业务失败抛错并统一 toast，调用方不再自检 res.code）
+import { unwrappedRequest } from './request'
 
 // ===== 培训目录体系：专业方向(specialty) → 等级(level) → 课程 → 章节 =====
 // 契约与后端 LH-27 真实路由/字段对齐：
@@ -115,80 +117,80 @@ export const trainingApi = {
   // ===== 目录树 =====
   /** 公开目录树（学员端筛选用）：GET /api/catalog/tree → {specialties} */
   getCatalogTree() {
-    return request.get<CatalogTree>('/catalog/tree')
+    return unwrappedRequest.get<CatalogTree>('/catalog/tree')
   },
   /** 全局课程等级列表（仅启用项）：GET /api/levels */
   getLevels() {
-    return request.get<{ levels: CatalogLevel[] }>('/levels')
+    return unwrappedRequest.get<{ levels: CatalogLevel[] }>('/levels')
   },
   /** 管理端目录树（含停用项/章节）：GET /api/admin/catalog/tree → {specialties}（后端补齐） */
   getAdminCatalogTree() {
-    return request.get<CatalogTree>('/admin/catalog/tree')
+    return unwrappedRequest.get<CatalogTree>('/admin/catalog/tree')
   },
 
   // ===== 专业方向（后端路由 /admin/specialty*） =====
   createDirection(data: { name: string; code?: string; description?: string; sort_order?: number; status?: number }) {
-    return request.post<{ specialty_id: number }>('/admin/specialty', data)
+    return unwrappedRequest.post<{ specialty_id: number }>('/admin/specialty', data)
   },
   updateDirection(id: number, data: { name?: string; code?: string; description?: string; sort_order?: number; status?: number }) {
-    return request.put<null>(`/admin/specialty/${id}`, data)
+    return unwrappedRequest.put<null>(`/admin/specialty/${id}`, data)
   },
   /** 交换专业方向排序：PUT /api/admin/specialty/:id/sort */
   swapDirection(id: number, swapWith: number) {
-    return request.put<null>(`/admin/specialty/${id}/sort`, { swap_with: swapWith })
+    return unwrappedRequest.put<null>(`/admin/specialty/${id}/sort`, { swap_with: swapWith })
   },
   deleteDirection(id: number) {
-    return request.delete<null>(`/admin/specialty/${id}`)
+    return unwrappedRequest.delete<null>(`/admin/specialty/${id}`)
   },
 
   // ===== 课程等级（后端路由 /admin/level*，等级全局共享无方向维度） =====
   createLevel(data: { name: string; code?: string; description?: string; sort_order?: number; status?: number }) {
-    return request.post<{ level_id: number }>('/admin/level', data)
+    return unwrappedRequest.post<{ level_id: number }>('/admin/level', data)
   },
   updateLevel(id: number, data: { name?: string; code?: string; description?: string; sort_order?: number; status?: number }) {
-    return request.put<null>(`/admin/level/${id}`, data)
+    return unwrappedRequest.put<null>(`/admin/level/${id}`, data)
   },
   /** 交换课程等级排序：PUT /api/admin/level/:id/sort */
   swapLevel(id: number, swapWith: number) {
-    return request.put<null>(`/admin/level/${id}/sort`, { swap_with: swapWith })
+    return unwrappedRequest.put<null>(`/admin/level/${id}/sort`, { swap_with: swapWith })
   },
   deleteLevel(id: number) {
-    return request.delete<null>(`/admin/level/${id}`)
+    return unwrappedRequest.delete<null>(`/admin/level/${id}`)
   },
 
   // ===== 证书模板（后端单数路由 certificate-template，有效期单位天） =====
   getCertificateTemplates() {
-    return request.get<{ certificate_templates: CertificateTemplate[] }>('/admin/certificate-templates')
+    return unwrappedRequest.get<{ certificate_templates: CertificateTemplate[] }>('/admin/certificate-templates')
   },
   createCertificateTemplate(data: CertificateTemplatePayload) {
-    return request.post<CertificateTemplate>('/admin/certificate-template', data)
+    return unwrappedRequest.post<CertificateTemplate>('/admin/certificate-template', data)
   },
   updateCertificateTemplate(id: number, data: Partial<CertificateTemplatePayload>) {
-    return request.put<CertificateTemplate>(`/admin/certificate-template/${id}`, data)
+    return unwrappedRequest.put<CertificateTemplate>(`/admin/certificate-template/${id}`, data)
   },
   deleteCertificateTemplate(id: number) {
-    return request.delete<null>(`/admin/certificate-template/${id}`)
+    return unwrappedRequest.delete<null>(`/admin/certificate-template/${id}`)
   },
 
   // ===== 题库标签（后端管理端路由 /admin/question-tag*） =====
   /** 学员端标签列表（公开，仅启用项，question_count=已发布题数）：GET /api/tags */
   getTags() {
-    return request.get<{ tags: QuestionTag[] }>('/tags')
+    return unwrappedRequest.get<{ tags: QuestionTag[] }>('/tags')
   },
   getQuestionTags() {
-    return request.get<{ tags: QuestionTag[] }>('/admin/question-tags')
+    return unwrappedRequest.get<{ tags: QuestionTag[] }>('/admin/question-tags')
   },
   createQuestionTag(data: TagPayload) {
-    return request.post<{ id: number }>('/admin/question-tag', data)
+    return unwrappedRequest.post<{ id: number }>('/admin/question-tag', data)
   },
   updateQuestionTag(id: number, data: Partial<TagPayload>) {
-    return request.put<null>(`/admin/question-tag/${id}`, data)
+    return unwrappedRequest.put<null>(`/admin/question-tag/${id}`, data)
   },
   deleteQuestionTag(id: number) {
-    return request.delete<null>(`/admin/question-tag/${id}`)
+    return unwrappedRequest.delete<null>(`/admin/question-tag/${id}`)
   },
   /** 题目打标（管理端）：PUT /api/admin/question/:question_id/tags 全量替换 */
   setQuestionTags(questionId: number, tagIds: number[]) {
-    return request.put<null>(`/admin/question/${questionId}/tags`, { tag_ids: tagIds })
+    return unwrappedRequest.put<null>(`/admin/question/${questionId}/tags`, { tag_ids: tagIds })
   }
 }

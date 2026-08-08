@@ -5,19 +5,15 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 
-	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/service"
-	"forklift-training/internal/storage"
 	"forklift-training/pkg/response"
 )
 
 // RegisterCoursesRoutes 注册 /api/courses 蓝图（学员侧课程浏览与学习进度）。
-func RegisterCoursesRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger) {
-	svc := service.NewCourseService(db, service.NewFileService(cfg.LibreOfficeSidecarURL, st, logger), logger)
+func RegisterCoursesRoutes(rg *gin.RouterGroup, deps *Deps) {
+	svc := deps.CourseSvc
+	cfg := deps.Cfg
 
 	// GET /api/courses  课程列表（公开访问，可按专业方向/等级过滤）
 	rg.GET("/courses", func(c *gin.Context) {

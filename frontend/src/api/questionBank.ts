@@ -1,4 +1,4 @@
-import request from './request'
+import { unwrappedRequest } from './request'
 import type { Question } from '@/types/question'
 
 export interface QuestionsQuery {
@@ -40,51 +40,51 @@ export interface QuestionBankStats {
 
 export const questionBankApi = {
   getQuestions(params: QuestionsQuery) {
-    return request.get<{ questions: Question[]; total: number }>('/question-bank/questions', { params })
+    return unwrappedRequest.get<{ questions: Question[]; total: number }>('/question-bank/questions', { params })
   },
 
   createQuestion(data: QuestionPayload) {
-    return request.post<Question>('/question-bank/questions', data)
+    return unwrappedRequest.post<Question>('/question-bank/questions', data)
   },
 
   getQuestion(id: number) {
-    return request.get<Question>(`/question-bank/questions/${id}`)
+    return unwrappedRequest.get<Question>(`/question-bank/questions/${id}`)
   },
 
   updateQuestion(id: number, data: Partial<QuestionPayload>) {
-    return request.put<Question>(`/question-bank/questions/${id}`, data)
+    return unwrappedRequest.put<Question>(`/question-bank/questions/${id}`, data)
   },
 
   deleteQuestion(id: number) {
-    return request.delete<null>(`/question-bank/questions/${id}`)
+    return unwrappedRequest.delete<null>(`/question-bank/questions/${id}`)
   },
 
   publishQuestion(id: number) {
-    return request.post<null>(`/question-bank/questions/${id}/publish`)
+    return unwrappedRequest.post<null>(`/question-bank/questions/${id}/publish`)
   },
 
   rejectQuestion(id: number, reason: string) {
-    return request.post<null>(`/question-bank/questions/${id}/reject`, { reason })
+    return unwrappedRequest.post<null>(`/question-bank/questions/${id}/reject`, { reason })
   },
 
   batchPublish(questionIds: number[]) {
-    return request.post<null>('/question-bank/questions/batch-publish', { question_ids: questionIds })
+    return unwrappedRequest.post<null>('/question-bank/questions/batch-publish', { question_ids: questionIds })
   },
 
   batchReject(questionIds: number[], reason: string) {
-    return request.post<null>('/question-bank/questions/batch-reject', { question_ids: questionIds, reason })
+    return unwrappedRequest.post<null>('/question-bank/questions/batch-reject', { question_ids: questionIds, reason })
   },
 
   batchImport(questions: QuestionPayload[]) {
-    return request.post<{ success_count?: number; failed_count?: number }>('/question-bank/questions/batch-import', { questions })
+    return unwrappedRequest.post<{ success_count?: number; failed_count?: number }>('/question-bank/questions/batch-import', { questions })
   },
 
   getStats() {
-    return request.get<QuestionBankStats>('/question-bank/stats')
+    return unwrappedRequest.get<QuestionBankStats>('/question-bank/stats')
   },
 
   uploadImage(formData: FormData) {
-    return request.post<{ url: string }>('/question-bank/upload-image', formData, {
+    return unwrappedRequest.post<{ url: string }>('/question-bank/upload-image', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 30000
     })
