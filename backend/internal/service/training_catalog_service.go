@@ -442,11 +442,6 @@ func (s *TrainingCatalogService) CreateQuestionTag(data map[string]any) (map[str
 	return tagToDict(&tag), nil
 }
 
-// SwapQuestionTagSort 交换两个题库标签的排序位置（真实生效，含同值默认）。
-func (s *TrainingCatalogService) SwapQuestionTagSort(a, b int) error {
-	return swapGroupPositions(s.db, &model.QuestionTag{}, "id", a, b, nil)
-}
-
 // UpdateQuestionTag 更新题库标签。
 func (s *TrainingCatalogService) UpdateQuestionTag(id int, data map[string]any) (map[string]any, error) {
 	var tag model.QuestionTag

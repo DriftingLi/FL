@@ -40,19 +40,21 @@
           <el-tag v-else :type="statusType[row.status]" size="small">{{ statusMap[row.status] }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="280">
+      <el-table-column label="操作" width="90" fixed="right" align="center">
         <template #default="{ row }">
-          <el-button size="small" @click="viewDetail(row)">查看</el-button>
-          <el-button size="small" type="primary" @click="editQuestion(row)">编辑</el-button>
-          <el-button
-            v-if="row.status === 'draft'"
-            size="small"
-            type="success"
-            @click="submitForReview(row)"
-          >
-            提交审核
-          </el-button>
-          <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+          <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
+            <el-button type="primary" link size="small">
+              操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="view">查看</el-dropdown-item>
+                <el-dropdown-item command="edit">编辑</el-dropdown-item>
+                <el-dropdown-item v-if="row.status === 'draft'" command="review">提交审核</el-dropdown-item>
+                <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </template>
       </el-table-column>
     </el-table>
@@ -92,6 +94,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
 import type { Question } from '@/types/question'
@@ -142,7 +145,24 @@ async function submitForReview(row: Question) {
   }
 }
 
-async function handleDelete(row: { id: number; [key: string]: unknown }) {
+function handleAction(cmd: string, row: Question) {
+  switch (cmd) {
+    case 'view':
+      viewDetail(row)
+      break
+    case 'edit':
+      editQuestion(row)
+      break
+    case 'review':
+      submitForReview(row)
+      break
+    case 'delete':
+      handleDelete(row)
+      break
+  }
+}
+
+async function handleDelete(row: Question) {
   try {
     await ElMessageBox.confirm('确定删除此题目？', '提示', { type: 'warning' })
     await questionBankApi.deleteQuestion(row.id)

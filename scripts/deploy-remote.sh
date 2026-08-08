@@ -404,6 +404,17 @@ ensure_registry_proxy() {
 
     # 仅当代理是本机回环地址时，自动创建/启动 registry:2 缓存容器
     if [ "$REGISTRY_PROXY" = "127.0.0.1:5000" ]; then
+        # 缓存卷只增不减（pull-through 无自动回收），超阈值即清空重建，
+        # 否则长时间积累会撑满磁盘（曾导致 testing 部署失败：磁盘 0GB < 2GB）
+        CACHE_DIR="/var/lib/docker/volumes/ghcr-cache/_data"
+        if [ -d "$CACHE_DIR" ]; then
+            CACHE_MB=$(du -sm "$CACHE_DIR" 2>/dev/null | awk '{print $1}')
+            if [ "${CACHE_MB:-0}" -gt 6000 ]; then
+                log_warn "ghcr-cache 缓存 ${CACHE_MB}MB 超过 6GB 阈值，清空缓存卷（拉取按需回源）"
+                docker rm -f ghcr-proxy >/dev/null 2>&1 || true
+                docker volume rm ghcr-cache >/dev/null 2>&1 || true
+            fi
+        fi
         if ! docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'ghcr-proxy'; then
             log_info "启动 ghcr pull-through 缓存容器 (registry:2)..."
             docker pull registry:2 >/dev/null 2>&1 || true

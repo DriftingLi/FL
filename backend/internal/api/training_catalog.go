@@ -303,27 +303,6 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, cfg *config.Config, db *
 		response.SuccessWithMsg(c, "题库标签更新成功", result)
 	})
 
-	// PUT /api/admin/question-tag/:id/sort  交换题库标签排序（body: {"swap_with": <id>}）
-	g.PUT("/question-tag/:id/sort", func(c *gin.Context) {
-		id, err := strconv.Atoi(c.Param("id"))
-		if err != nil {
-			response.BadRequest(c, "标签ID无效")
-			return
-		}
-		var body struct {
-			SwapWith int `json:"swap_with"`
-		}
-		if err := c.ShouldBindJSON(&body); err != nil || body.SwapWith <= 0 {
-			response.BadRequest(c, "swap_with 参数无效")
-			return
-		}
-		if err := svc.SwapQuestionTagSort(id, body.SwapWith); err != nil {
-			response.BadRequest(c, err.Error())
-			return
-		}
-		response.SuccessWithMsg(c, "排序已交换", nil)
-	})
-
 	// DELETE /api/admin/question-tag/:id  删除题库标签
 	g.DELETE("/question-tag/:id", func(c *gin.Context) {
 		id, err := strconv.Atoi(c.Param("id"))

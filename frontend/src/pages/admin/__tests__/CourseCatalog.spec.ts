@@ -110,11 +110,8 @@ describe('CourseCatalog 左树右表', () => {
 
     const unmountedRow = wrapper.findAll('.el-table__row').find(r => r.text().includes('未挂载遗留课程'))
     expect(unmountedRow).toBeTruthy()
-    const links = unmountedRow!.findAll('.el-link')
-    const upLink = links.find(l => l.text() === '上架')
-    expect(upLink).toBeTruthy()
-
-    await upLink!.trigger('click')
+    // 下拉 teleport + happy-dom 交互不稳定，直接对 ElDropdown emit command（测 handleAction → toggleStatus 逻辑）
+    await unmountedRow!.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'toggle')
     await flushPromises()
 
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('未挂载'))
@@ -126,9 +123,7 @@ describe('CourseCatalog 左树右表', () => {
     await flushPromises()
 
     const mountedRow = wrapper.findAll('.el-table__row').find(r => r.text().includes('草稿课程'))
-    const links = mountedRow!.findAll('.el-link')
-    const upLink = links.find(l => l.text() === '上架')
-    await upLink!.trigger('click')
+    await mountedRow!.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'toggle')
     await flushPromises()
 
     expect(adminApi.updateCourse).toHaveBeenCalledWith(3, { status: 1 })
