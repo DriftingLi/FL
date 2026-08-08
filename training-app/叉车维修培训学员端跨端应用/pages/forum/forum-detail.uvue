@@ -82,6 +82,7 @@
     import { ref, computed } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
     import { useAuthStore } from '../../stores/auth'
     import {
         getForumTopicDetailApi,
@@ -200,7 +201,7 @@
             await deleteForumTopicApi(topicId.value)
             uni.showToast({ title: '已删除', icon: 'success' })
             setTimeout(() => {
-                uni.navigateBack()
+                goBack()
             }, 1000)
         } catch (e) {
             console.error('[forum-detail] delete topic failed:', e)
@@ -250,7 +251,7 @@
     }
 
     function onBack() : void {
-        uni.navigateBack()
+        goBack()
     }
 
     onLoad((options : UTSJSONObject) => {

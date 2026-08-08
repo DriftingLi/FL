@@ -1,554 +1,417 @@
 <template>
-	<view class="dashboard">
-		<!-- 顶部欢迎区（自定义导航栏） -->
-		<view class="header" :style="{ paddingTop: statusBarHeight + 'px' }">
-			<view class="header-content">
-				<view class="header-left">
-					<text class="welcome">你好，{{ displayName }}</text>
-					<text class="subtitle">继续学习，提升技能</text>
-				</view>
-				<view class="header-right" @click="onLogoutClick">
-					<view class="avatar">
-						<text class="avatar-text">{{ avatarLetter }}</text>
-					</view>
-				</view>
-			</view>
-		</view>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
 
-		<!-- 滚动内容区 -->
-		<scroll-view scroll-y class="content" @refresherrefresh="onRefresh" :refresher-enabled="true"
-			:refresher-triggered="refreshing">
-			<!-- 学习概览卡片 -->
-			<view class="card stats-card">
-				<view class="stats-item">
-					<text class="stats-value">{{ totalStudyText }}</text>
-					<text class="stats-label">累计学习</text>
-				</view>
-				<view class="stats-divider"></view>
-				<view class="stats-item">
-					<text class="stats-value">{{ profile?.total_courses ?? 0 }}</text>
-					<text class="stats-label">课程总数</text>
-				</view>
-				<view class="stats-divider"></view>
-				<view class="stats-item">
-					<text class="stats-value">{{ profile?.completed_courses ?? 0 }}</text>
-					<text class="stats-label">已完成</text>
-				</view>
-			</view>
+        <!-- 顶部导航栏 -->
+        <view class="nav-bar">
+            <view class="nav-left" @click="onRoleToggle">
+                <text class="nav-title">叉车司机</text>
+                <text class="nav-arrow">▾</text>
+            </view>
+            <view class="nav-right" @click="onCartClick">
+                <text class="nav-cart-icon">🛒</text>
+            </view>
+        </view>
 
-			<!-- 学习统计图表 -->
-			<view class="card chart-card">
-				<view class="card-header">
-					<text class="card-title">学习统计</text>
-					<text class="card-summary" v-if="studyStats != null">近 {{ studyStats!.days }} 天共 {{ studyStats!.total_minutes }} 分钟</text>
-				</view>
+        <scroll-view class="content-scroll" scroll-y="true">
+            <!-- Banner 占位 -->
+            <view class="banner-placeholder"></view>
 
-				<view v-if="loadingStats" class="chart-empty">
-					<text class="chart-empty-text">加载中...</text>
-				</view>
-				<view v-else-if="statsEmpty" class="chart-empty">
-					<text class="chart-empty-text">暂无学习记录</text>
-				</view>
-				<view v-else class="chart">
-					<view class="chart-bars">
-						<view v-for="(item, idx) in chartData" :key="idx" class="bar-col">
-							<view class="bar-track">
-								<view class="bar" :style="{ height: item.height + 'rpx', backgroundColor: item.color }"></view>
-							</view>
-							<text class="bar-label">{{ item.label }}</text>
-						</view>
-					</view>
-				</view>
-			</view>
+            <!-- 功能入口（4+2 布局） -->
+            <view class="menu-grid">
+                <view v-for="(item, idx) in menuItems" :key="idx" class="menu-item" @click="onMenuClick(item)">
+                    <view class="menu-icon-box" :style="{ backgroundColor: item.color }"></view>
+                    <text class="menu-label">{{ item.title }}</text>
+                </view>
+            </view>
 
-			<!-- 功能入口九宫格 -->
-			<view class="card grid-card-container">
-				<view class="card-header">
-					<text class="card-title">学习功能</text>
-				</view>
-				<view class="grid">
-					<view v-for="(item, idx) in gridItems" :key="idx" class="grid-item" @click="onGridClick(item)">
-						<grid-card :title="item.title" :icon="item.icon" :color="item.color"
-							:available="item.available" />
-					</view>
-				</view>
-			</view>
+            <!-- Tab 切换 -->
+            <view class="tab-row">
+                <view v-for="(tab, idx) in contentTabs" :key="idx" class="tab-item"
+                    :class="{ 'tab-active': activeTab == idx }" @click="onTabChange(idx)">
+                    <text class="tab-text" :class="{ 'tab-text-active': activeTab == idx }">{{ tab }}</text>
+                    <view v-if="activeTab == idx" class="tab-underline"></view>
+                </view>
+            </view>
 
-			<!-- 最近学习记录 -->
-			<view class="card records-card">
-				<view class="card-header">
-					<text class="card-title">最近学习</text>
-					<text class="card-more" @click="onViewAllRecords">查看全部</text>
-				</view>
-				<text v-if="records.length == 0" class="empty-text">暂无学习记录</text>
-				<view v-else class="records">
-					<view v-for="(r, idx) in records" :key="idx" class="record-item">
-						<view class="record-left">
-							<text class="record-title">{{ r.course_name }}</text>
-							<text class="record-subtitle">{{ r.chapter_title }}</text>
-						</view>
-						<view class="record-right">
-							<text class="record-duration">{{ r.study_duration }}分钟</text>
-							<text class="record-date">{{ formatShortDate(r.study_date) }}</text>
-						</view>
-					</view>
-				</view>
-			</view>
+            <!-- 筛选标签 -->
+            <view class="filter-row">
+                <view class="filter-tags">
+                    <view v-for="(tag, idx) in filterTags" :key="idx" class="filter-tag"
+                        :class="{ 'filter-tag-active': activeFilter == idx }" @click="onFilterChange(idx)">
+                        <text class="filter-tag-text"
+                            :class="{ 'filter-tag-text-active': activeFilter == idx }">{{ tag }}</text>
+                    </view>
+                </view>
+                <view class="filter-btn" @click="onFilterBtnClick">
+                    <text class="filter-btn-text">筛选</text>
+                </view>
+            </view>
 
-			<view class="bottom-space"></view>
-		</scroll-view>
-	</view>
+            <!-- 课程卡片列表 -->
+            <view class="course-list">
+                <!-- <view v-for="(course, idx) in recentCourses" :key="idx" class="course-card"
+                    @click="onCourseClick(course.course_id)">
+                    <view class="course-card-top">
+                        <view class="course-badge">
+                            <text class="course-badge-text">合集</text>
+                        </view>
+                        <text class="course-card-title">{{ course.title }}</text>
+                    </view>
+                    <view class="course-card-tags">
+                        <view class="course-tag">
+                            <text class="course-tag-text">直播授课</text>
+                        </view>
+                        <view class="course-tag">
+                            <text class="course-tag-text">电子资料</text>
+                        </view>
+                    </view>
+                    <view class="course-card-bottom">
+                        <text class="course-price">¥ {{ course.price > 0 ? course.price : 0 }}</text>
+                        <text class="course-buyers">{{ course.buyers }}+人购买</text>
+                    </view>
+                </view>
+                <view v-if="recentCourses.length == 0" class="empty-tip">
+                    <text class="empty-text">暂无推荐课程</text>
+                </view> -->
+                 <view class="empty-tip">
+                    <text class="empty-text">暂无推荐课程</text>
+                </view> 
+            </view>
+        </scroll-view>
+
+        <!-- <tab-bar :active-index="0"></tab-bar> -->
+    </view>
 </template>
 
 <script setup lang="uts">
-	import { onLoad, onShow, onPullDownRefresh } from '@dcloudio/uni-app'
-	import { computed, ref } from 'vue'
-	import GridCard from '../../components/grid-card/grid-card.uvue'
-	import { useAuthStore } from '../../stores/auth'
-	import { getProfileApi, getStudyStatsApi, getRecordsApi } from '../../api/student'
-	import { GRID_ITEMS, UNAVAILABLE_TOAST } from '../../constants/app'
-	import { shortDate } from '../../utils/format'
-	import type { StudentProfile, StudyStats, StudyRecord, GridItem } from '../../types/index'
+    import { ref, computed } from 'vue'
+    import { getCourseListApi } from '../../api/course'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { UNAVAILABLE_TOAST } from '../../constants/app'
+    import type { CourseItem } from '../../types/index'
 
-	const auth = useAuthStore()
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
 
-	// 系统信息
-	const statusBarHeight = ref<number>(20)
+    // 功能入口菜单（6 项，4+2 布局）
+    type MenuItem = {
+        key : string
+        title : string
+        icon : string
+        color : string
+        path : string
+        available : boolean
+    }
 
-	// 数据
-	const profile = ref<StudentProfile | null>(null)
-	const studyStats = ref<StudyStats | null>(null)
-	const records = ref<StudyRecord[]>([])
+    const menuItems : MenuItem[] = [
+        { key: 'course-mall', title: '课程商城', icon: '', color: '#b0c4de', path: '/pages/courses/courses', available: true },
+        { key: 'question-bank', title: '题库练习', icon: '✏️', color: '#ff9900', path: '/pages/practice/practice', available: true },
+        { key: 'material-course', title: '资料课程', icon: '', color: '#b0c4de', path: '', available: false },
+        { key: 'exam-info', title: '考情资讯', icon: '', color: '#b0c4de', path: '', available: false },
+        { key: 'exam', title: '考试', icon: '', color: '#b0c4de', path: '/pages/exam/exam', available: true },
+        { key: 'certificate', title: '证书', icon: '', color: '#b0c4de', path: '', available: false },
+    ]
 
-	// 加载状态
-	const loadingStats = ref<boolean>(false)
-	const refreshing = ref<boolean>(false)
+    // 内容 Tab
+    const contentTabs : string[] = ['推荐课程', '精品活动', '精品课程']
+    const activeTab = ref<number>(0)
 
-	// 模板辅助函数（包装导入的 shortDate，确保 UTS 编译器正确识别）
-	const formatShortDate = (dateStr : string) : string => shortDate(dateStr)
+    // 筛选标签
+    const filterTags : string[] = ['笔试', '实操技能', '综合评审']
+    const activeFilter = ref<number>(0)
 
-	// 配置
-	const gridItems : GridItem[] = GRID_ITEMS
+    // 课程列表
+    const recentCourses = ref<CourseItem[]>([])
 
-	// 计算
-	const displayName = computed<string>(() : string => auth.displayName.value)
+    function onRoleToggle() : void {
+        uni.showToast({ title: '角色切换开发中', icon: 'none' })
+    }
 
-	const avatarLetter = computed<string>(() : string => {
-		const name : string = auth.displayName.value
-		if (name.length == 0) return 'U'
-		return name.charAt(0).toUpperCase()
-	})
+    function onCartClick() : void {
+        uni.showToast({ title: '购物车开发中', icon: 'none' })
+    }
 
-	const totalStudyText = computed<string>(() : string => {
-		if (profile.value == null) return '0 分钟'
-		const minutes = (profile.value as StudentProfile).total_study_duration
-		const h = Math.floor(minutes / 60)
-		const m = minutes % 60
-		if (h > 0) {
-			return `${h}h ${m}m`
-		}
-		return `${m} 分钟`
-	})
+    function onMenuClick(item : MenuItem) : void {
+        if (!item.available || item.path.length == 0) {
+            uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
+            return
+        }
+        uni.reLaunch({ url: item.path })
+    }
 
-	const statsEmpty = computed<boolean>(() : boolean => {
-		if (studyStats.value == null) return true
-		const data = (studyStats.value as StudyStats).data
-		for (let i = 0; i < data.length; i++) {
-			if (data[i] > 0) return false
-		}
-		return true
-	})
+    function onTabChange(idx : number) : void {
+        activeTab.value = idx
+    }
 
-	type BarItem = {
-		label : string
-		height : number
-		color : string
-	}
+    function onFilterChange(idx : number) : void {
+        activeFilter.value = idx
+    }
 
-	const chartData = computed<BarItem[]>(() : BarItem[] => {
-		if (studyStats.value == null) return []
-		const s = studyStats.value as StudyStats
-		const labels = s.labels
-		const data = s.data
-		let maxVal = 0
-		for (let i = 0; i < data.length; i++) {
-			if (data[i] > maxVal) maxVal = data[i]
-		}
-		const bars : BarItem[] = []
-		for (let i = 0; i < data.length; i++) {
-			const h = maxVal > 0 ? Math.max(8, Math.round(data[i] * 180 / maxVal)) : 8
-			bars.push({
-				label: labels[i].length >= 5 ? labels[i].substring(5) : labels[i],
-				height: h,
-				color: data[i] > 0 ? '#2979ff' : '#e5e5e5',
-			})
-		}
-		return bars
-	})
+    function onFilterBtnClick() : void {
+        uni.showToast({ title: '筛选功能开发中', icon: 'none' })
+    }
 
-	// 数据加载函数（必须在使用前声明，UTS 不支持函数提升）
-	async function loadProfile() : Promise<void> {
-		try {
-			profile.value = await getProfileApi()
-		} catch (e) {
-			console.error('loadProfile failed:', e)
-		}
-	}
+    function onCourseClick(courseId : number) : void {
+        uni.navigateTo({
+            url: '/pages/courses/course-detail?id=' + courseId
+        })
+    }
 
-	async function loadStudyStats() : Promise<void> {
-		loadingStats.value = true
-		try {
-			studyStats.value = await getStudyStatsApi(7)
-		} catch (e) {
-			console.error('loadStudyStats failed:', e)
-			studyStats.value = null
-		} finally {
-			loadingStats.value = false
-		}
-	}
+    async function loadRecentCourses() {
+        try {
+            const result = await getCourseListApi(1, 10, '')
+            recentCourses.value = result.items
+        } catch (e) {
+            console.error('[dashboard] load courses failed:', e)
+        }
+    }
 
-	async function loadRecords() : Promise<void> {
-		try {
-			const result = await getRecordsApi(1, 5)
-			records.value = result.records
-		} catch (e) {
-			console.error('loadRecords failed:', e)
-			records.value = []
-		}
-	}
-
-	async function loadAll() : Promise<void> {
-		// 并行加载三个接口
-		const task1 : Promise<void> = loadProfile()
-		const task2 : Promise<void> = loadStudyStats()
-		const task3 : Promise<void> = loadRecords()
-		const tasks : Promise<void>[] = [task1, task2, task3]
-		await Promise.all(tasks)
-	}
-
-	// 生命周期
-	onLoad((options : OnLoadOptions) => {
-		const sysInfo = uni.getSystemInfoSync()
-		statusBarHeight.value = sysInfo.statusBarHeight
-
-		// 已登录校验（防止未登录直接进入此页）
-		auth.restoreFromStorage()
-		if (!auth.isLoggedIn.value) {
-			uni.reLaunch({ url: '/pages/login/login' })
-			return
-		}
-
-		loadAll()
-	})
-
-	onShow(() => {
-		if (auth.isLoggedIn.value) {
-			// 静默刷新
-			loadAll()
-		}
-	})
-
-	onPullDownRefresh(() => {
-		loadAll().finally(() : Promise<void> => {
-			uni.stopPullDownRefresh()
-			return Promise.resolve()
-		})
-	})
-
-	function onRefresh() : void {
-		refreshing.value = true
-		loadAll().finally(() : Promise<void> => {
-			refreshing.value = false
-			return Promise.resolve()
-		})
-	}
-
-	// 事件处理
-	const TAB_BAR_PATHS = [
-		'/pages/dashboard/dashboard',
-		'/pages/courses/courses',
-		'/pages/ai-assistant/ai-assistant',
-		'/pages/forum/forum',
-		'/pages/profile/profile',
-	]
-
-	function onGridClick(item : GridItem) : void {
-		if (!item.available) {
-			uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
-			return
-		}
-		if (item.path.length == 0) {
-			uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
-			return
-		}
-		// 仪表盘自身不需要跳转
-		if (item.key == 'dashboard') return
-		// tabBar 页面使用 switchTab
-		for (let i = 0; i < TAB_BAR_PATHS.length; i++) {
-			if (item.path == TAB_BAR_PATHS[i]) {
-				uni.switchTab({ url: item.path })
-				return
-			}
-		}
-		uni.navigateTo({ url: item.path })
-	}
-
-	function onViewAllRecords() : void {
-		uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
-	}
-
-	function onLogoutClick() : void {
-		uni.showActionSheet({
-			itemList: ['退出登录'],
-			success: (res) => {
-				if (res.tapIndex == 0) {
-					auth.logout()
-				}
-			},
-		})
-	}
+    loadRecentCourses()
 </script>
 
 <style>
-	.dashboard {
-		flex: 1;
-		background-color: #f8f8f8;
-	}
+    .container {
+        flex: 1;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
 
-	/* 顶部欢迎区 */
-	.header {
-		background: linear-gradient(135deg, #2979ff, #1c9eff);
-		padding-bottom: 32rpx;
-	}
+    .status-bar {
+        background-color: #ffffff;
+    }
 
-	.header-content {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-		padding: 24rpx 32rpx;
-	}
+    .content-scroll {
+        flex: 1;
+    }
 
-	.header-left {
-		flex-direction: column;
-	}
+    /* 顶部导航栏 */
+    .nav-bar {
+        background-color: #ffffff;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20rpx 32rpx;
+    }
 
-	.welcome {
-		font-size: 36rpx;
-		font-weight: 600;
-		color: #ffffff;
-		margin-bottom: 4rpx;
-	}
+    .nav-left {
+        flex-direction: row;
+        align-items: center;
+    }
 
-	.subtitle {
-		font-size: 24rpx;
-		color: rgba(255, 255, 255, 0.85);
-	}
+    .nav-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+    }
 
-	.header-right {
-		padding: 8rpx;
-	}
+    .nav-arrow {
+        font-size: 24rpx;
+        color: #999999;
+        margin-left: 8rpx;
+    }
 
-	.avatar {
-		width: 80rpx;
-		height: 80rpx;
-		border-radius: 40rpx;
-		background-color: rgba(255, 255, 255, 0.25);
-		align-items: center;
-		justify-content: center;
-	}
+    .nav-right {
+        width: 64rpx;
+        height: 64rpx;
+        align-items: center;
+        justify-content: center;
+    }
 
-	.avatar-text {
-		font-size: 32rpx;
-		font-weight: 600;
-		color: #ffffff;
-	}
+    .nav-cart-icon {
+        font-size: 44rpx;
+    }
 
-	/* 滚动内容 */
-	.content {
-		flex: 1;
-	}
+    /* Banner 占位 */
+    .banner-placeholder {
+        height: 240rpx;
+        margin: 24rpx;
+        border-radius: 16rpx;
+        background-color: #e8f4fd;
+    }
 
-	/* 卡片通用 */
-	.card {
-		background-color: #ffffff;
-		border-radius: 24rpx;
-		margin: 16rpx 24rpx;
-		padding: 24rpx;
-	}
+    /* 功能入口网格 */
+    .menu-grid {
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: 0 24rpx;
+    }
 
-	.card-header {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: 16rpx;
-	}
+    .menu-item {
+        width: 25%;
+        padding: 20rpx 0;
+        flex-direction: column;
+        align-items: center;
+    }
 
-	.card-title {
-		font-size: 30rpx;
-		font-weight: 600;
-		color: #333333;
-	}
+    .menu-icon-box {
+        width: 80rpx;
+        height: 80rpx;
+        border-radius: 8rpx;
+        margin-bottom: 12rpx;
+    }
 
-	.card-summary {
-		font-size: 22rpx;
-		color: #999999;
-	}
+    .menu-label {
+        font-size: 24rpx;
+        color: #333333;
+    }
 
-	.card-more {
-		font-size: 24rpx;
-		color: #2979ff;
-	}
+    /* 内容 Tab */
+    .tab-row {
+        flex-direction: row;
+        padding: 24rpx 32rpx 0;
+    }
 
-	/* 学习概览三列 */
-	.stats-card {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-around;
-		padding: 32rpx 24rpx;
-	}
+    .tab-item {
+        margin-right: 40rpx;
+        flex-direction: column;
+        align-items: center;
+    }
 
-	.stats-item {
-		flex: 1;
-		align-items: center;
-	}
+    .tab-text {
+        font-size: 28rpx;
+        color: #999999;
+        padding-bottom: 12rpx;
+    }
 
-	.stats-value {
-		font-size: 36rpx;
-		font-weight: 600;
-		color: #2979ff;
-		margin-bottom: 8rpx;
-	}
+    .tab-text-active {
+        color: #333333;
+        font-weight: bold;
+    }
 
-	.stats-label {
-		font-size: 22rpx;
-		color: #666666;
-	}
+    .tab-underline {
+        width: 40rpx;
+        height: 6rpx;
+        border-radius: 3rpx;
+        background-color: #2979ff;
+    }
 
-	.stats-divider {
-		width: 1rpx;
-		height: 48rpx;
-		background-color: #f0f0f0;
-	}
+    /* 筛选标签 */
+    .filter-row {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20rpx 32rpx;
+    }
 
-	/* 柱状图 */
-	.chart-card {
-		padding-bottom: 16rpx;
-	}
+    .filter-tags {
+        flex: 1;
+        flex-direction: row;
+    }
 
-	.chart-empty {
-		height: 240rpx;
-		align-items: center;
-		justify-content: center;
-	}
+    .filter-tag {
+        padding: 8rpx 24rpx;
+        border-radius: 24rpx;
+        border: 1rpx solid #e0e0e0;
+        margin-right: 16rpx;
+        background-color: #ffffff;
+    }
 
-	.chart-empty-text {
-		color: #999999;
-		font-size: 26rpx;
-	}
+    .filter-tag-active {
+        border-color: #2979ff;
+        background-color: #e8f0fe;
+    }
 
-	.chart {
-		height: 280rpx;
-	}
+    .filter-tag-text {
+        font-size: 24rpx;
+        color: #666666;
+    }
 
-	.chart-bars {
-		flex-direction: row;
-		align-items: flex-end;
-		justify-content: space-between;
-		height: 240rpx;
-		padding: 16rpx 0;
-	}
+    .filter-tag-text-active {
+        color: #2979ff;
+    }
 
-	.bar-col {
-		flex: 1;
-		align-items: center;
-		margin: 0 6rpx;
-	}
+    .filter-btn {
+        padding: 8rpx 24rpx;
+        border-radius: 24rpx;
+        border: 1rpx solid #e0e0e0;
+        background-color: #ffffff;
+    }
 
-	.bar-track {
-		width: 100%;
-		height: 200rpx;
-		justify-content: flex-end;
-		align-items: center;
-	}
+    .filter-btn-text {
+        font-size: 24rpx;
+        color: #666666;
+    }
 
-	.bar {
-		width: 36rpx;
-		border-radius: 8rpx 8rpx 0 0;
-	}
+    /* 课程卡片 */
+    .course-list {
+        padding: 0 24rpx;
+    }
 
-	.bar-label {
-		font-size: 20rpx;
-		color: #999999;
-		margin-top: 8rpx;
-	}
+    .course-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        margin-bottom: 16rpx;
+        flex-direction: column;
+    }
 
-	/* 九宫格 */
-	.grid {
-		flex-direction: row;
-		flex-wrap: wrap;
-	}
+    .course-card-top {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 16rpx;
+    }
 
-	.grid-item {
-		width: 25%;
-		padding: 8rpx 4rpx;
-	}
+    .course-badge {
+        background-color: #19be6b;
+        border-radius: 8rpx;
+        padding: 4rpx 12rpx;
+        margin-right: 16rpx;
+    }
 
-	/* 最近学习记录 */
-	.records-card {
-		padding-bottom: 16rpx;
-	}
+    .course-badge-text {
+        font-size: 20rpx;
+        color: #ffffff;
+    }
 
-	.empty-text {
-		padding: 32rpx 0;
-		text-align: center;
-		font-size: 26rpx;
-		color: #999999;
-	}
+    .course-card-title {
+        flex: 1;
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+    }
 
-	.records {
-		flex-direction: column;
-	}
+    .course-card-tags {
+        flex-direction: row;
+        margin-bottom: 16rpx;
+    }
 
-	.record-item {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-		padding: 20rpx 0;
-		border-bottom: 1rpx solid #f0f0f0;
-	}
+    .course-tag {
+        padding: 4rpx 16rpx;
+        border-radius: 4rpx;
+        background-color: #f5f5f5;
+        margin-right: 12rpx;
+    }
 
-	.record-left {
-		flex: 1;
-		flex-direction: column;
-	}
+    .course-tag-text {
+        font-size: 22rpx;
+        color: #999999;
+    }
 
-	.record-title {
-		font-size: 28rpx;
-		color: #333333;
-		margin-bottom: 4rpx;
-	}
+    .course-card-bottom {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
 
-	.record-subtitle {
-		font-size: 22rpx;
-		color: #999999;
-	}
+    .course-price {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #f44336;
+    }
 
-	.record-right {
-		align-items: flex-end;
-	}
+    .course-buyers {
+        font-size: 24rpx;
+        color: #999999;
+    }
 
-	.record-duration {
-		font-size: 24rpx;
-		color: #2979ff;
-		margin-bottom: 4rpx;
-	}
+    .empty-tip {
+        align-items: center;
+        padding: 60rpx 0;
+    }
 
-	.record-date {
-		font-size: 20rpx;
-		color: #bbbbbb;
-	}
-
-	.bottom-space {
-		height: 32rpx;
-	}
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
 </style>

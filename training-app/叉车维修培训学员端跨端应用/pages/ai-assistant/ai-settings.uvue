@@ -147,7 +147,13 @@
 	const formApiKey = ref<string>('')
 
 	function onBack() : void {
-		uni.navigateBack({})
+		// 页面栈只有一层时 navigateBack 会失败，回退到 AI 助手页
+		const pages = getCurrentPages()
+		if (pages != null && pages.length > 1) {
+			uni.navigateBack({})
+		} else {
+			uni.reLaunch({ url: '/pages/ai-assistant/ai-assistant' })
+		}
 	}
 
 	function onNameInput(e : InputEvent) : void {
@@ -272,7 +278,12 @@
 			saveAiChatSettings(settings.value)
 			uni.showToast({ title: '已保存', icon: 'success' })
 			setTimeout(() => {
-				uni.navigateBack({})
+				const pages = getCurrentPages()
+				if (pages != null && pages.length > 1) {
+					uni.navigateBack({})
+				} else {
+					uni.reLaunch({ url: '/pages/ai-assistant/ai-assistant' })
+				}
 			}, 500)
 		} finally {
 			saving.value = false

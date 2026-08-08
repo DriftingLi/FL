@@ -96,6 +96,7 @@
     import { ref } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
     import { getCourseDetailApi } from '../../api/course'
     import type { CourseDetail, ChapterItem } from '../../types/index'
 
@@ -176,7 +177,7 @@
     }
 
     function onBack() : void {
-        uni.navigateBack()
+        goBack()
     }
 
     function onChapterClick(chapterId : number) : void {

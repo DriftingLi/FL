@@ -127,6 +127,7 @@
     import { ref, computed } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
     import { parseMarkdown } from '../../utils/markdown'
     import { getCourseDetailApi, getChapterDetailApi, updateCourseProgressApi } from '../../api/course'
     import type { ChapterDetail, ChapterFile, CourseDetail, MarkdownBlock } from '../../types/index'
@@ -223,7 +224,7 @@
     }
 
     function onBack() : void {
-        uni.navigateBack()
+        goBack()
     }
 
     function onImageClick(url : string) : void {

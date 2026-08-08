@@ -102,6 +102,7 @@
     import { ref, computed } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
     import { getLevelExamResultApi } from '../../api/levelExam'
     import type { LevelExamResultDetail } from '../../types/index'
 
@@ -257,7 +258,7 @@
     }
 
     function onBack() : void {
-        uni.navigateBack()
+        goBack()
     }
 
     onLoad((options : UTSJSONObject) => {

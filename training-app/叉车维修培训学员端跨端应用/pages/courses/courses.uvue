@@ -58,7 +58,6 @@
                 <text class="loading-text">没有更多了</text>
             </view>
         </scroll-view>
-        <tab-bar :active-index="1"></tab-bar>
     </view>
 </template>
 

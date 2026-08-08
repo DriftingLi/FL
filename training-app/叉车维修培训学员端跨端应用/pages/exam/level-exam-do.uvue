@@ -101,6 +101,7 @@
     import { ref, computed } from 'vue'
     import { onLoad, onUnload } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
     import {
         enterLevelExamApi,
         saveLevelExamApi,
@@ -498,7 +499,7 @@
                 if (res.confirm) {
                     doSaveProgress(false).then(() : void => {
                         stopTimer()
-                        uni.navigateBack()
+                        goBack()
                     })
                 }
             }

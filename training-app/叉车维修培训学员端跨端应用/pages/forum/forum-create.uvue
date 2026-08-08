@@ -43,6 +43,7 @@
 <script setup lang="uts">
     import { ref, computed } from 'vue'
     import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
     import { createForumTopicApi } from '../../api/forum'
 
     const statusBarHeight = useStatusBarHeight()
@@ -80,7 +81,7 @@
             await createForumTopicApi(title.value.trim(), content.value.trim())
             uni.showToast({ title: '发布成功', icon: 'success' })
             setTimeout(() => {
-                uni.navigateBack()
+                goBack()
             }, 1000)
         } catch (e) {
             console.error('[forum-create] submit failed:', e)
@@ -107,12 +108,12 @@
                 content: '确定放弃编辑吗？已输入的内容将丢失。',
                 success: (res) => {
                     if (res.confirm) {
-                        uni.navigateBack()
+                        goBack()
                     }
                 }
             })
         } else {
-            uni.navigateBack()
+            goBack()
         }
     }
 </script>

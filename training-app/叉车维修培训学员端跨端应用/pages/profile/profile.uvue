@@ -73,7 +73,6 @@
 				</view> -->
             </view>
         </scroll-view>
-        <tab-bar :active-index="4"></tab-bar>
     </view>
 </template>
 

@@ -54,7 +54,6 @@
         <view class="fab-btn" @click="onCreate">
             <text class="fab-icon">+</text>
         </view>
-        <tab-bar :active-index="3"></tab-bar>
     </view>
 </template>
 

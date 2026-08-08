@@ -126,6 +126,7 @@
     import { ref, computed } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
     import {
         getFreePracticeApi,
         getSequentialPracticeApi,
@@ -394,14 +395,14 @@
             content: '确定要退出练习吗？',
             success: (res) => {
                 if (res.confirm) {
-                    uni.navigateBack()
+                    goBack()
                 }
             }
         })
     }
 
     function onExit() : void {
-        uni.navigateBack()
+        goBack()
     }
 
     function onRestart() : void {
