@@ -671,6 +671,8 @@ onMounted(() => {
 
   .course-layout {
     flex-direction: column;
+    /* 纵向后子元素需横向拉伸，否则 .cc-main 宽度=内容宽度导致整页横向溢出 */
+    align-items: stretch;
   }
 
   .cc-sidebar {

@@ -27,8 +27,8 @@
           <span class="cc-nav-count">{{ countOfDirection(d.specialty_id) }}</span>
         </button>
         <span class="cc-nav-move">
-          <el-link :underline="false" @click.stop="moveDirection(d, -1)">上移</el-link>
-          <el-link :underline="false" @click.stop="moveDirection(d, 1)">下移</el-link>
+          <el-link :underline="'never'" @click.stop="moveDirection(d, -1)">上移</el-link>
+          <el-link :underline="'never'" @click.stop="moveDirection(d, 1)">下移</el-link>
         </span>
       </div>
 
@@ -45,13 +45,13 @@
       <div class="cc-sidebar-levels">
         <div class="cc-sidebar-levels-head">
           <span>课程等级</span>
-          <el-link :underline="false" @click="openLevelDialog()">新增</el-link>
+          <el-link :underline="'never'" @click="openLevelDialog()">新增</el-link>
         </div>
         <div v-for="l in levels" :key="l.level_id" class="cc-level-row">
           <span class="cc-level-name">{{ l.name }}</span>
           <span class="cc-nav-move">
-            <el-link :underline="false" @click.stop="moveLevel(l, -1)">上移</el-link>
-            <el-link :underline="false" @click.stop="moveLevel(l, 1)">下移</el-link>
+            <el-link :underline="'never'" @click.stop="moveLevel(l, -1)">上移</el-link>
+            <el-link :underline="'never'" @click.stop="moveLevel(l, 1)">下移</el-link>
           </span>
         </div>
       </div>
@@ -109,20 +109,20 @@
         </el-table-column>
         <el-table-column label="操作" width="210" fixed="right">
           <template #default="{ row }">
-            <el-link type="primary" :underline="false" @click="openDrawer(row)">编辑</el-link>
+            <el-link type="primary" :underline="'never'" @click="openDrawer(row)">编辑</el-link>
             <el-link
-              :underline="false"
+              :underline="'never'"
               :class="{ 'cc-link-disabled': isUnmounted(row) }"
               style="margin-left: 10px"
               @click="toggleStatus(row)"
             >
               {{ row.status === 1 ? '下架' : '上架' }}
             </el-link>
-            <el-link :underline="false" style="margin-left: 10px" @click="moveCourse(row, -1)">上移</el-link>
-            <el-link :underline="false" style="margin-left: 10px" @click="moveCourse(row, 1)">下移</el-link>
+            <el-link :underline="'never'" style="margin-left: 10px" @click="moveCourse(row, -1)">上移</el-link>
+            <el-link :underline="'never'" style="margin-left: 10px" @click="moveCourse(row, 1)">下移</el-link>
             <el-popconfirm title="确定删除该课程？" @confirm="handleDeleteCourse(row)">
               <template #reference>
-                <el-link type="danger" :underline="false" style="margin-left: 10px">删除</el-link>
+                <el-link type="danger" :underline="'never'" style="margin-left: 10px">删除</el-link>
               </template>
             </el-popconfirm>
           </template>
@@ -213,12 +213,12 @@
         <div v-for="(ch, i) in drawerChapters" :key="ch.chapter_id" class="cc-chapter-row">
           <span class="cc-chapter-idx">{{ i + 1 }}</span>
           <span class="cc-chapter-title">{{ ch.title }}</span>
-          <el-link :underline="false" @click="openChapterDialog(ch)">编辑</el-link>
-          <el-link :underline="false" @click="moveChapter(ch, -1)">上移</el-link>
-          <el-link :underline="false" @click="moveChapter(ch, 1)">下移</el-link>
+          <el-link :underline="'never'" @click="openChapterDialog(ch)">编辑</el-link>
+          <el-link :underline="'never'" @click="moveChapter(ch, -1)">上移</el-link>
+          <el-link :underline="'never'" @click="moveChapter(ch, 1)">下移</el-link>
           <el-popconfirm title="确定删除该章节？" @confirm="handleDeleteChapter(ch)">
             <template #reference>
-              <el-link type="danger" :underline="false">删除</el-link>
+              <el-link type="danger" :underline="'never'">删除</el-link>
             </template>
           </el-popconfirm>
         </div>
@@ -1141,6 +1141,8 @@ onMounted(() => {
 @media (max-width: 900px) {
   .cc-layout {
     flex-direction: column;
+    /* 纵向后子元素需横向拉伸，否则 .cc-main 宽度=内容宽度（宽表格）导致整页横向溢出 */
+    align-items: stretch;
   }
 
   .cc-sidebar {
