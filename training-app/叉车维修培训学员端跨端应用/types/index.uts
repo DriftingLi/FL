@@ -127,3 +127,36 @@ export type AuthStore = {
 	login : (params : LoginParams) => Promise<void>
 	logout : () => Promise<void>
 }
+
+/** AI 模型选项 */
+export type AIModelOption = {
+	id : number
+	name : string
+	model : string
+	base_url ?: string
+}
+
+/** AI 会话 */
+export type AIChatSession = {
+	id : number
+	title : string
+	model_name : string
+	created_at : string
+	updated_at : string
+}
+
+/** AI 消息 */
+export type AIChatMessage = {
+	id : number
+	role : string
+	content : string
+	created_at : string
+}
+
+/** AI 功能入口 */
+export type AIFunctionItem = {
+	key : string
+	title : string
+	icon : string
+	prompt : string
+}

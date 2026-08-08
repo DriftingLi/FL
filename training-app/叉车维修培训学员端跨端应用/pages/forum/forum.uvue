@@ -1,0 +1,36 @@
+<template>
+	<view class="placeholder-page">
+		<view class="placeholder-icon">&#128172;</view>
+		<text class="placeholder-title">交流</text>
+		<text class="placeholder-subtitle">功能开发中，敬请期待</text>
+	</view>
+</template>
+
+<script setup lang="uts">
+</script>
+
+<style>
+	.placeholder-page {
+		flex: 1;
+		background-color: #f8f8f8;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.placeholder-icon {
+		font-size: 80rpx;
+		margin-bottom: 24rpx;
+	}
+
+	.placeholder-title {
+		font-size: 36rpx;
+		color: #333333;
+		font-weight: 600;
+		margin-bottom: 12rpx;
+	}
+
+	.placeholder-subtitle {
+		font-size: 26rpx;
+		color: #999999;
+	}
+</style>

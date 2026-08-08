@@ -264,6 +264,14 @@
 	}
 
 	// 事件处理
+	const TAB_BAR_PATHS = [
+		'/pages/dashboard/dashboard',
+		'/pages/courses/courses',
+		'/pages/ai-assistant/ai-assistant',
+		'/pages/forum/forum',
+		'/pages/profile/profile',
+	]
+
 	function onGridClick(item : GridItem) : void {
 		if (!item.available) {
 			uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
@@ -275,6 +283,13 @@
 		}
 		// 仪表盘自身不需要跳转
 		if (item.key == 'dashboard') return
+		// tabBar 页面使用 switchTab
+		for (let i = 0; i < TAB_BAR_PATHS.length; i++) {
+			if (item.path == TAB_BAR_PATHS[i]) {
+				uni.switchTab({ url: item.path })
+				return
+			}
+		}
 		uni.navigateTo({ url: item.path })
 	}
 
