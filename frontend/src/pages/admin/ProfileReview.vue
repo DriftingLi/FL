@@ -56,11 +56,20 @@
         <el-table-column v-if="activeStatus === 'rejected'" label="驳回原因" min-width="140">
           <template #default="{ row }">{{ row.reject_reason || '-' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="160" fixed="right">
+        <el-table-column label="操作" width="90" fixed="right" align="center">
           <template #default="{ row }">
             <template v-if="row.status === 'pending'">
-              <el-button size="small" type="success" @click="approve(row)">通过</el-button>
-              <el-button size="small" type="danger" @click="openReject(row)">驳回</el-button>
+              <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
+                <el-button type="primary" link size="small">
+                  操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="approve">通过</el-dropdown-item>
+                    <el-dropdown-item command="reject">驳回</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </template>
             <el-tag v-else :type="row.status === 'approved' ? 'success' : 'danger'" size="small">
               {{ row.status === 'approved' ? '已通过' : '已拒绝' }}
@@ -100,7 +109,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, ArrowRight } from '@element-plus/icons-vue'
+import { Refresh, ArrowRight, ArrowDown } from '@element-plus/icons-vue'
 import { adminApi, type ProfileChangeRequest } from '@/api/admin'
 
 const loading = ref(false)
@@ -154,6 +163,14 @@ async function loadList() {
 function handleTabChange() {
   currentPage.value = 1
   loadList()
+}
+
+function handleAction(cmd: string, row: ProfileChangeRequest) {
+  if (cmd === 'approve') {
+    approve(row)
+  } else if (cmd === 'reject') {
+    openReject(row)
+  }
 }
 
 async function approve(row: ProfileChangeRequest) {

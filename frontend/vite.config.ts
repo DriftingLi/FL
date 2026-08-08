@@ -72,6 +72,11 @@ export default defineConfig({
     port: 5173,
     host: '0.0.0.0',
     allowedHosts: true,
+    // WSL /mnt/d（drvfs）下 inotify 不可靠，轮询监听保证 HMR 生效
+    watch: {
+      usePolling: true,
+      interval: 200
+    },
     proxy: {
       // 后端容器宿主端口 18080（8080 落在 Windows Hyper-V 排除端口段 8025-8124 内，见 backend/docker-compose.yml 注释）
       '/api': {
