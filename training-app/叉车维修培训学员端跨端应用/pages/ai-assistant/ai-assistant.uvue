@@ -2,63 +2,118 @@
 	<view class="container" :style="{ height: windowHeight + 'px' }">
 		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
 
-		<!-- 顶栏 -->
+		<!-- 顶栏：按 Figma 设计稿 76/77 -->
 		<view class="header">
 			<view class="header-left" @click="onOpenHistory">
 				<text class="header-icon">☰</text>
 			</view>
-			<text class="header-title">AI 助手</text>
-			<view class="header-right" @click="onOpenSettings">
-				<text class="header-icon">⚙</text>
+			<view class="header-center">
+				<view class="version-tabs">
+					<text class="version-tab" :class="{ active: version == 'basic' }" @click="switchVersion('basic')">基础版</text>
+					<text class="version-tab" :class="{ active: version == 'pro' }" @click="switchVersion('pro')">专业版</text>
+				</view>
+				<text class="header-title">维修助手</text>
+			</view>
+			<view class="header-right" @click="onOpenMenu">
+				<text class="header-icon">☰</text>
 			</view>
 		</view>
 
-		<!-- 消息区 -->
-		<scroll-view class="chat-scroll" scroll-y="true" :scroll-into-view="scrollIntoView" :scroll-with-animation="true">
-			<!-- 欢迎区 -->
-			<view v-if="messages.length == 0" class="welcome">
-				<view class="welcome-avatar">
-					<text class="welcome-avatar-text">AI</text>
-				</view>
-				<text class="welcome-title">你好，我是你的 AI 学习助手</text>
-				<text class="welcome-sub">可以问我叉车结构、故障诊断、安全操作等问题</text>
-				<view class="suggest-list">
-					<view v-for="(s, idx) in suggestions" :key="idx" class="suggest-item" @click="onSuggest(s)">
-						<text class="suggest-text">{{ s }}</text>
+		<!-- 基础版：新对话 + 最近对话 -->
+		<template v-if="version == 'basic'">
+			<scroll-view class="basic-scroll" scroll-y="true">
+				<view class="basic-panel">
+					<view class="new-chat-card" @click="onNewChatFromBasic">
+						<text class="new-chat-icon">✉</text>
+						<text class="new-chat-text">新对话</text>
 					</view>
-				</view>
-			</view>
 
-			<!-- 消息列表 -->
-			<view class="msg-list">
-				<view v-for="(msg, idx) in messages" :key="idx" :id="'msg-' + idx"
-					:class="['msg-row', msg.role == 'user' ? 'msg-row-user' : 'msg-row-ai']">
-					<view v-if="msg.role != 'user'" class="msg-avatar ai-avatar">
-						<text class="msg-avatar-text">AI</text>
+					<view class="section-card">
+						<view class="section-header" @click="recentExpanded = !recentExpanded">
+							<view class="section-header-left">
+								<text class="section-icon">✉</text>
+								<text class="section-title">最近对话</text>
+							</view>
+							<text class="section-arrow" :class="{ up: recentExpanded }">▼</text>
+						</view>
+						<view v-if="recentExpanded" class="section-body">
+							<view v-if="sessions.length == 0" class="empty-tip">暂无历史对话</view>
+							<view v-for="(s, idx) in sessions" :key="idx" class="session-row" @click="onSelectSession(s.id)">
+								<text class="session-row-title">{{ s.title }}</text>
+								<text class="session-row-del" @click.stop="onDeleteSession(s.id)">×</text>
+							</view>
+						</view>
 					</view>
-					<view :class="['msg-bubble', msg.role == 'user' ? 'bubble-user' : 'bubble-ai']">
-						<text class="msg-content">{{ msg.content.length > 0 ? msg.content : (sending && idx == messages.length - 1 ? '思考中...' : '') }}</text>
+				</view>
+			</scroll-view>
+		</template>
+
+		<!-- 专业版 -->
+		<template v-else>
+			<scroll-view class="chat-scroll" scroll-y="true" :scroll-into-view="scrollIntoView" :scroll-with-animation="true">
+				<!-- 功能快捷入口 -->
+				<view class="function-grid">
+					<view v-for="(item, idx) in functionItems" :key="idx" class="function-item" @click="onFunctionClick(item)">
+						<view class="function-icon-box">
+							<text class="function-icon">{{ item.icon }}</text>
+						</view>
+						<text class="function-title">{{ item.title }}</text>
+					</view>
+				</view>
+
+				<!-- 快捷提示语 -->
+				<view class="prompt-list">
+					<view v-for="(s, idx) in suggestions" :key="idx" class="prompt-card" @click="onSuggest(s)">
+						<text class="prompt-text">{{ s }}</text>
+						<text class="prompt-arrow">›</text>
+					</view>
+				</view>
+
+				<!-- 消息列表 -->
+				<view class="msg-list">
+					<view v-for="(msg, idx) in messages" :key="idx" :id="'msg-' + idx"
+						:class="['msg-row', msg.role == 'user' ? 'msg-row-user' : 'msg-row-ai']">
+						<view v-if="msg.role != 'user'" class="msg-avatar ai-avatar">
+							<text class="msg-avatar-text">AI</text>
+						</view>
+						<view :class="['msg-bubble', msg.role == 'user' ? 'bubble-user' : 'bubble-ai']">
+							<text class="msg-content">{{ msg.content.length > 0 ? msg.content : (sending && idx == messages.length - 1 ? '思考中...' : '') }}</text>
+						</view>
+					</view>
+				</view>
+				<view id="msg-bottom" class="scroll-anchor"></view>
+			</scroll-view>
+
+			<!-- 输入区 -->
+			<view class="input-area">
+				<view class="model-bar">
+					<view class="model-selector" @click="onOpenSettings">
+						<text class="model-icon">★</text>
+						<text class="model-name">{{ currentModelName }}</text>
+						<text class="model-arrow">▼</text>
+					</view>
+					<view class="deep-thinking" :class="{ active: deepThinking }" @click="deepThinking = !deepThinking">
+						<text class="dt-text">深度思考</text>
+					</view>
+				</view>
+				<view class="input-row">
+					<text class="tool-icon" @click="onAttach">📎</text>
+					<input class="chat-input" type="text" :value="inputText" :disabled="sending"
+						placeholder="提出你想要知道的问题" :maxlength="2000" confirm-type="send"
+						@input="onInput" @confirm="onSend" />
+					<text class="tool-icon" @click="onVoice">🎤</text>
+					<view :class="['send-btn', canSend ? 'send-btn-active' : '']" @click="onSend">
+						<text class="send-btn-text">➤</text>
 					</view>
 				</view>
 			</view>
-			<view id="msg-bottom" class="scroll-anchor"></view>
-		</scroll-view>
-
-		<!-- 输入区 -->
-		<view class="input-bar">
-			<input class="chat-input" type="text" :value="inputText" :disabled="sending"
-				placeholder="输入你的问题..." :maxlength="2000" confirm-type="send"
-				@input="onInput" @confirm="onSend" />
-			<view :class="['send-btn', canSend ? 'send-btn-active' : '']" @click="onSend">
-				<text class="send-btn-text">{{ sending ? '...' : '发送' }}</text>
-			</view>
-		</view>
+		</template>
 
 		<tab-bar :active-index="2"></tab-bar>
 
 		<!-- 历史会话抽屉 -->
 		<view v-if="showHistory" class="drawer-mask" @click="onCloseHistory"></view>
-		<view :class="['drawer', showHistory ? 'drawer-open' : '']">
+		<view :class="['drawer', 'drawer-left', showHistory ? 'drawer-open' : '']">
 			<view class="drawer-header">
 				<text class="drawer-title">历史会话</text>
 				<view class="drawer-new" @click="onNewChat">
@@ -79,11 +134,31 @@
 				</view>
 			</scroll-view>
 		</view>
+
+		<!-- 右侧菜单抽屉 -->
+		<view v-if="showMenu" class="drawer-mask" @click="onCloseMenu"></view>
+		<view :class="['drawer', 'drawer-right', showMenu ? 'drawer-open' : '']">
+			<view class="drawer-header">
+				<text class="drawer-title">功能菜单</text>
+				<text class="drawer-close" @click="onCloseMenu">×</text>
+			</view>
+			<scroll-view class="drawer-scroll" scroll-y="true">
+				<view class="menu-item" @click="onMenuNewChat">
+					<text class="menu-item-text">新对话</text>
+				</view>
+				<view class="menu-item" @click="onMenuSwitchVersion">
+					<text class="menu-item-text">{{ version == 'basic' ? '切换到专业版' : '切换到基础版' }}</text>
+				</view>
+				<view class="menu-item" @click="onMenuSettings">
+					<text class="menu-item-text">对话设置</text>
+				</view>
+			</scroll-view>
+		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
-	import { ref } from 'vue'
+	import { ref, computed } from 'vue'
 	import { onShow } from '@dcloudio/uni-app'
 	import { useStatusBarHeight } from '../../utils/system'
 	import {
@@ -93,8 +168,9 @@
 		createAiSessionApi,
 		deleteAiSessionApi,
 		getAiSessionMessagesApi,
+		getAiModelsApi,
 	} from '../../api/aiAssistant'
-	import type { AiChatMessage, AiSession, AiChatSettings } from '../../types/index'
+	import type { AiChatMessage, AiSession, AiChatSettings, AiModel } from '../../types/index'
 
 	const statusBarHeight = useStatusBarHeight()
 	const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -108,13 +184,40 @@
 	const settings = ref<AiChatSettings>(loadAiChatSettings())
 
 	const showHistory = ref<boolean>(false)
+	const showMenu = ref<boolean>(false)
 	const sessions = ref<AiSession[]>([])
 
+	// 按设计稿新增：版本、深度思考、最近对话展开、平台模型
+	const version = ref<'basic' | 'pro'>('pro')
+	const deepThinking = ref<boolean>(false)
+	const recentExpanded = ref<boolean>(true)
+	const platformModels = ref<AiModel[]>([])
+
+	const currentModelName = computed<string>(() : string => {
+		if (settings.value.model_source == 'custom') {
+			return settings.value.model_name.length > 0 ? settings.value.model_name : '自定义模型'
+		}
+		return settings.value.model_name.length > 0 ? settings.value.model_name : '选择模型'
+	})
+
 	const suggestions : string[] = [
-		'叉车液压系统常见故障有哪些？',
-		'如何正确进行出车前安全检查？',
-		'货叉起升时有异响怎么排查？',
-		'解释一下叉车的主要技术参数',
+		'如何高效阅读书籍？',
+		'帮我写近期的学习汇报',
+		'总结这个章节的主要内容',
+	]
+
+	type FunctionItem = {
+		key : string
+		title : string
+		icon : string
+		prompt : string
+	}
+
+	const functionItems : FunctionItem[] = [
+		{ key: 'fault-code', title: '故障代码查询', icon: '🔧', prompt: '帮我查询叉车故障代码含义' },
+		{ key: 'drawing', title: '图纸识别', icon: '📐', prompt: '请识别这张叉车图纸' },
+		{ key: 'exercise', title: '习题解答', icon: '📝', prompt: '请解答这道叉车维修题目' },
+		{ key: 'knowledge', title: '维保知识', icon: '📚', prompt: '请介绍叉车维保相关知识' },
 	]
 
 	function onInput(e : InputEvent) : void {
@@ -135,13 +238,24 @@
 		onSend()
 	}
 
+	function switchVersion(v : 'basic' | 'pro') : void {
+		version.value = v
+	}
+
+	function onFunctionClick(item : FunctionItem) : void {
+		if (item.key == 'drawing') {
+			onAttach(item.prompt)
+			return
+		}
+		onSuggest(item.prompt)
+	}
+
 	async function ensureSession() : Promise<void> {
 		if (sessionId.value > 0) return
 		try {
 			const s = await createAiSessionApi('新对话')
 			sessionId.value = s.id
 		} catch (e) {
-			// 未登录或接口失败时允许无 session 继续对话
 			console.warn('[ai] create session failed:', e)
 		}
 	}
@@ -150,7 +264,6 @@
 		const text = inputText.value.trim()
 		if (text.length == 0 || sending.value) return
 
-		// 追加用户消息
 		const userMsg : AiChatMessage = { role: 'user', content: text }
 		messages.value = messages.value.concat([userMsg])
 		inputText.value = ''
@@ -158,27 +271,23 @@
 		sending.value = true
 		scrollToBottom()
 
-		// 占位助手消息
 		const aiMsg : AiChatMessage = { role: 'assistant', content: '' }
 		messages.value = messages.value.concat([aiMsg])
 		scrollToBottom()
 
 		try {
 			await ensureSession()
-			// 构造发送的历史（不含空 assistant 占位）
 			const history : AiChatMessage[] = []
 			for (let i = 0; i < messages.value.length; i++) {
 				const m = messages.value[i]
 				if (m.role == 'assistant' && m.content.length == 0) continue
 				history.push({ role: m.role, content: m.content })
 			}
-			// 确保最后是当前用户消息
 			if (history.length == 0 || history[history.length - 1].role != 'user') {
 				history.push(userMsg)
 			}
 
 			const reply = await chatAiApi(history, settings.value, sessionId.value)
-			// 更新最后一条 assistant
 			const updated : AiChatMessage[] = []
 			for (let i = 0; i < messages.value.length; i++) {
 				if (i == messages.value.length - 1 && messages.value[i].role == 'assistant') {
@@ -194,7 +303,6 @@
 				const m = (e as Error).message
 				if (m != null && m.length > 0) msg = m
 			}
-			// 把错误写到助手气泡
 			const updated : AiChatMessage[] = []
 			for (let i = 0; i < messages.value.length; i++) {
 				if (i == messages.value.length - 1 && messages.value[i].role == 'assistant') {
@@ -230,10 +338,38 @@
 		}
 	}
 
+	function onOpenMenu() : void {
+		showMenu.value = true
+	}
+
+	function onCloseMenu() : void {
+		showMenu.value = false
+	}
+
 	function onNewChat() : void {
 		sessionId.value = 0
 		messages.value = [] as AiChatMessage[]
 		showHistory.value = false
+	}
+
+	function onNewChatFromBasic() : void {
+		onNewChat()
+		version.value = 'pro'
+	}
+
+	function onMenuNewChat() : void {
+		onNewChat()
+		showMenu.value = false
+	}
+
+	function onMenuSwitchVersion() : void {
+		version.value = version.value == 'basic' ? 'pro' : 'basic'
+		showMenu.value = false
+	}
+
+	function onMenuSettings() : void {
+		showMenu.value = false
+		onOpenSettings()
 	}
 
 	async function onSelectSession(id : number) : Promise<void> {
@@ -248,6 +384,7 @@
 				msgs.push({ role: list[i].role, content: list[i].content })
 			}
 			messages.value = msgs
+			version.value = 'pro'
 			scrollToBottom()
 		} catch (e) {
 			console.error('[ai] load messages failed:', e)
@@ -281,6 +418,32 @@
 		})
 	}
 
+	function onAttach(promptText : string = '') : void {
+		uni.chooseImage({
+			count: 1,
+			sizeType: ['compressed'],
+			sourceType: ['album', 'camera'],
+			success: (res) => {
+				const tempFilePaths = res.tempFilePaths as string[]
+				uni.showToast({ title: '已选择图片', icon: 'none' })
+				if (promptText.length > 0) {
+					onSuggest(promptText + '（已选择图片）')
+				}
+			},
+			fail: () => {
+				uni.showToast({ title: '选择图片失败', icon: 'none' })
+			}
+		})
+	}
+
+	function onVoice() : void {
+		uni.showModal({
+			title: '语音输入',
+			content: '当前环境暂不支持语音输入，请使用文字提问',
+			showCancel: false,
+		})
+	}
+
 	function formatTime(s : string) : string {
 		if (s.length >= 16) return s.substring(0, 16).replace('T', ' ')
 		if (s.length >= 10) return s.substring(0, 10)
@@ -288,8 +451,12 @@
 	}
 
 	onShow(() => {
-		// 从设置页返回时刷新模型配置
 		settings.value = loadAiChatSettings()
+		try {
+			getAiModelsApi().then((list) => {
+				platformModels.value = list
+			})
+		} catch (_e) { }
 	})
 </script>
 
@@ -297,7 +464,7 @@
 	.container {
 		display: flex;
 		flex-direction: column;
-		background-color: #f5f6f8;
+		background-color: #f8f8f8;
 		position: relative;
 	}
 
@@ -305,6 +472,7 @@
 		background-color: #ffffff;
 	}
 
+	/* 顶栏 */
 	.header {
 		flex-direction: row;
 		align-items: center;
@@ -327,71 +495,200 @@
 		color: #333333;
 	}
 
-	.header-title {
-		font-size: 34rpx;
-		font-weight: bold;
-		color: #222222;
+	.header-center {
+		flex: 1;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
 	}
 
+	.version-tabs {
+		flex-direction: row;
+		align-items: center;
+		margin-bottom: 4rpx;
+	}
+
+	.version-tab {
+		font-size: 24rpx;
+		color: #999999;
+		padding: 4rpx 16rpx;
+	}
+
+	.version-tab.active {
+		color: #2979ff;
+		font-weight: 600;
+	}
+
+	.header-title {
+		font-size: 30rpx;
+		font-weight: bold;
+		color: #2979ff;
+	}
+
+	/* 基础版 */
+	.basic-scroll {
+		flex: 1;
+		height: 0;
+		padding: 24rpx;
+	}
+
+	.new-chat-card {
+		background-color: #f5f5f5;
+		border-radius: 16rpx;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		padding: 32rpx;
+		margin-bottom: 24rpx;
+	}
+
+	.new-chat-icon {
+		font-size: 36rpx;
+		margin-right: 12rpx;
+	}
+
+	.new-chat-text {
+		font-size: 30rpx;
+		color: #333333;
+		font-weight: 500;
+	}
+
+	.section-card {
+		background-color: #ffffff;
+		border-radius: 16rpx;
+		padding: 24rpx;
+	}
+
+	.section-header {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.section-header-left {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.section-icon {
+		font-size: 32rpx;
+		margin-right: 12rpx;
+	}
+
+	.section-title {
+		font-size: 30rpx;
+		color: #333333;
+		font-weight: 500;
+	}
+
+	.section-arrow {
+		font-size: 28rpx;
+		color: #999999;
+	}
+
+	.section-arrow.up {
+		transform: rotate(180deg);
+	}
+
+	.section-body {
+		margin-top: 16rpx;
+	}
+
+	.empty-tip {
+		text-align: center;
+		font-size: 26rpx;
+		color: #999999;
+		padding: 32rpx 0;
+	}
+
+	.session-row {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding: 20rpx 0;
+		border-bottom: 1rpx solid #f5f5f5;
+	}
+
+	.session-row-title {
+		flex: 1;
+		font-size: 28rpx;
+		color: #333333;
+	}
+
+	.session-row-del {
+		font-size: 32rpx;
+		color: #999999;
+		padding: 8rpx;
+	}
+
+	/* 专业版滚动区 */
 	.chat-scroll {
 		flex: 1;
 		height: 0;
 		padding: 24rpx;
 	}
 
-	.welcome {
-		align-items: center;
-		padding: 80rpx 32rpx 40rpx 32rpx;
+	/* 功能入口 */
+	.function-grid {
+		flex-direction: row;
+		justify-content: space-between;
+		margin-bottom: 24rpx;
 	}
 
-	.welcome-avatar {
-		width: 120rpx;
-		height: 120rpx;
-		border-radius: 60rpx;
-		background-color: #2979ff;
+	.function-item {
+		align-items: center;
+		width: 22%;
+	}
+
+	.function-icon-box {
+		width: 96rpx;
+		height: 96rpx;
+		background-color: #e5e5e5;
+		border-radius: 16rpx;
 		align-items: center;
 		justify-content: center;
-		margin-bottom: 28rpx;
-	}
-
-	.welcome-avatar-text {
-		font-size: 40rpx;
-		color: #ffffff;
-		font-weight: bold;
-	}
-
-	.welcome-title {
-		font-size: 34rpx;
-		font-weight: bold;
-		color: #222222;
 		margin-bottom: 12rpx;
+	}
+
+	.function-icon {
+		font-size: 44rpx;
+	}
+
+	.function-title {
+		font-size: 24rpx;
+		color: #666666;
 		text-align: center;
 	}
 
-	.welcome-sub {
-		font-size: 26rpx;
-		color: #999999;
-		margin-bottom: 40rpx;
-		text-align: center;
+	/* 快捷提示语 */
+	.prompt-list {
+		flex-direction: column;
+		margin-bottom: 24rpx;
 	}
 
-	.suggest-list {
-		align-self: stretch;
-	}
-
-	.suggest-item {
+	.prompt-card {
 		background-color: #ffffff;
 		border-radius: 16rpx;
-		padding: 24rpx 28rpx;
+		padding: 28rpx 24rpx;
 		margin-bottom: 16rpx;
-		border: 1rpx solid #eeeeee;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
 	}
 
-	.suggest-text {
+	.prompt-text {
+		flex: 1;
 		font-size: 28rpx;
 		color: #333333;
 	}
 
+	.prompt-arrow {
+		font-size: 36rpx;
+		color: #cccccc;
+		margin-left: 16rpx;
+	}
+
+	/* 消息列表 */
 	.msg-list {
 		padding-bottom: 24rpx;
 	}
@@ -464,28 +761,92 @@
 		height: 2rpx;
 	}
 
-	.input-bar {
-		flex-direction: row;
-		align-items: center;
-		padding: 16rpx 20rpx;
+	/* 输入区 */
+	.input-area {
 		background-color: #ffffff;
 		border-top: 1rpx solid #f0f0f0;
+		padding: 16rpx 24rpx;
+	}
+
+	.model-bar {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 16rpx;
+	}
+
+	.model-selector {
+		flex-direction: row;
+		align-items: center;
+		background-color: #f5f5f5;
+		border-radius: 24rpx;
+		padding: 10rpx 20rpx;
+	}
+
+	.model-icon {
+		font-size: 24rpx;
+		color: #2979ff;
+		margin-right: 8rpx;
+	}
+
+	.model-name {
+		font-size: 24rpx;
+		color: #333333;
+		margin-right: 8rpx;
+		max-width: 300rpx;
+	}
+
+	.model-arrow {
+		font-size: 20rpx;
+		color: #999999;
+	}
+
+	.deep-thinking {
+		background-color: #f5f5f5;
+		border-radius: 24rpx;
+		padding: 10rpx 20rpx;
+	}
+
+	.deep-thinking.active {
+		background-color: #e3f2fd;
+	}
+
+	.dt-text {
+		font-size: 24rpx;
+		color: #666666;
+	}
+
+	.deep-thinking.active .dt-text {
+		color: #2979ff;
+		font-weight: 500;
+	}
+
+	.input-row {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.tool-icon {
+		font-size: 40rpx;
+		color: #666666;
+		padding: 12rpx;
 	}
 
 	.chat-input {
 		flex: 1;
 		height: 76rpx;
-		background-color: #f5f6f8;
+		background-color: #f5f5f5;
 		border-radius: 38rpx;
 		padding: 0 28rpx;
 		font-size: 28rpx;
 		color: #333333;
+		margin: 0 12rpx;
 	}
 
 	.send-btn {
 		margin-left: 16rpx;
+		width: 76rpx;
 		height: 76rpx;
-		padding: 0 28rpx;
 		border-radius: 38rpx;
 		background-color: #c5c5c5;
 		align-items: center;
@@ -497,12 +858,12 @@
 	}
 
 	.send-btn-text {
-		font-size: 28rpx;
+		font-size: 32rpx;
 		color: #ffffff;
 		font-weight: bold;
 	}
 
-	/* 历史抽屉 */
+	/* 抽屉 */
 	.drawer-mask {
 		position: absolute;
 		left: 0;
@@ -515,13 +876,22 @@
 
 	.drawer {
 		position: absolute;
-		left: 0;
 		top: 0;
 		bottom: 0;
 		width: 560rpx;
 		background-color: #ffffff;
 		z-index: 30;
+		transition: transform 0.25s ease;
+	}
+
+	.drawer-left {
+		left: 0;
 		transform: translateX(-100%);
+	}
+
+	.drawer-right {
+		right: 0;
+		transform: translateX(100%);
 	}
 
 	.drawer-open {
@@ -552,6 +922,12 @@
 	.drawer-new-text {
 		font-size: 24rpx;
 		color: #2979ff;
+	}
+
+	.drawer-close {
+		font-size: 44rpx;
+		color: #999999;
+		padding: 8rpx;
 	}
 
 	.drawer-scroll {
@@ -602,5 +978,15 @@
 		font-size: 24rpx;
 		color: #dd524d;
 		padding: 8rpx 12rpx;
+	}
+
+	.menu-item {
+		padding: 28rpx;
+		border-bottom: 1rpx solid #f5f5f5;
+	}
+
+	.menu-item-text {
+		font-size: 28rpx;
+		color: #333333;
 	}
 </style>
