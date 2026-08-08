@@ -553,12 +553,12 @@ onMounted(() => {
 
 .cc-meta {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-3);
   font-size: var(--text-xs);
   color: var(--color-text-tertiary);
   margin-bottom: var(--space-2);
 }
-
 .cc-cert {
   display: flex;
 }
@@ -664,7 +664,7 @@ onMounted(() => {
   margin-bottom: var(--space-4);
 }
 
-@media (max-width: 768px) {
+@media screen and (max-width: 768px) {
   .detail-descriptions :deep(.el-descriptions__body .el-descriptions__table) {
     display: block;
   }

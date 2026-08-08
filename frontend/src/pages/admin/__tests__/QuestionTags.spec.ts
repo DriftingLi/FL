@@ -84,8 +84,7 @@ describe('QuestionTags 新增标签', () => {
 
     expect(trainingApi.createQuestionTag).toHaveBeenCalledWith({
       name: '制动',
-      code: 'brake',
-      category: undefined
+      code: 'brake'
     })
     expect(successSpy).toHaveBeenCalled()
   })
@@ -102,5 +101,31 @@ describe('QuestionTags 新增标签', () => {
     const inputs = wrapper.findAll('.el-dialog input')
     const codeInput = inputs.find(i => (i.element as HTMLInputElement).placeholder.includes('编码'))
     expect((codeInput!.element as HTMLInputElement).value).toBe('hydraulic')
+  })
+})
+
+describe('QuestionTags 批量打标计数', () => {
+  it('selection-change 收到 undefined 时不崩溃，批量打标按钮不出现（计数防御回归护栏）', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const table = wrapper.findComponent({ name: 'ElTable' })
+    await table.vm.$emit('selection-change', undefined)
+    await flushPromises()
+
+    const batchBtn = wrapper.findAll('.el-button').find(b => b.text().includes('批量打标'))
+    expect(batchBtn).toBeUndefined()
+  })
+
+  it('勾选行后批量打标按钮显示正确计数', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const table = wrapper.findComponent({ name: 'ElTable' })
+    await table.vm.$emit('selection-change', [{ id: 101 }, { id: 102 }])
+    await flushPromises()
+
+    const batchBtn = wrapper.findAll('.el-button').find(b => b.text().includes('批量打标'))
+    expect(batchBtn?.text()).toContain('(2)')
   })
 })
