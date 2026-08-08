@@ -316,7 +316,6 @@ type QuestionTag struct {
 	ID          int       `gorm:"column:id;primaryKey" json:"id"`
 	Code        string    `gorm:"column:code;uniqueIndex" json:"code"`
 	Name        string    `gorm:"column:name" json:"name"`
-	Category    string    `gorm:"column:category" json:"category"`
 	Description string    `gorm:"column:description" json:"description"`
 	SortOrder   int       `gorm:"column:sort_order;default:0" json:"sort_order"`
 	Status      int16     `gorm:"column:status;default:1" json:"status"`
