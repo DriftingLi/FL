@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
+	"go.uber.org/zap"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -97,11 +97,12 @@ const (
 type AIConfigService struct {
 	db        *gorm.DB
 	secretKey string // 用于加密 API Key 的主密钥（SECRET_KEY）
+	logger    *zap.Logger
 }
 
 // NewAIConfigService 构造 AIConfigService。
-func NewAIConfigService(db *gorm.DB, secretKey string) *AIConfigService {
-	return &AIConfigService{db: db, secretKey: secretKey}
+func NewAIConfigService(db *gorm.DB, secretKey string, logger *zap.Logger) *AIConfigService {
+	return &AIConfigService{db: db, secretKey: secretKey, logger: logger}
 }
 
 // ListConfigs 返回所有 AI 配置（API Key 脱敏）。
@@ -114,7 +115,7 @@ func (s *AIConfigService) ListConfigs(ctx context.Context) ([]AIConfigDTO, error
 	for i, r := range rows {
 		key, err := security.DecryptSecret(r.APIKey, s.secretKey)
 		if err != nil {
-			slog.Warn("ListConfigs 解密 API Key 失败，按原样脱敏展示", "id", r.ID, "error", err)
+			s.logger.Warn("ListConfigs 解密 API Key 失败，按原样脱敏展示", zap.Int("id", r.ID), zap.Error(err))
 			key = r.APIKey
 		}
 		out[i] = AIConfigDTO{
@@ -232,7 +233,7 @@ func (s *AIConfigService) ListBindings(ctx context.Context) ([]FeatureBindingDTO
 		return cached, nil
 	}
 	if !errors.Is(err, redis.Nil) {
-		slog.Warn("ListBindings 缓存读取异常，降级直查 DB", "error", err)
+		s.logger.Warn("ListBindings 缓存读取异常，降级直查 DB", zap.Error(err))
 	}
 	return s.loadBindingsFromDB(ctx)
 }
@@ -369,7 +370,7 @@ func (s *AIConfigService) UnbindConfig(ctx context.Context, featureKey string, c
 	}
 	// 失效绑定缓存
 	if err := cache.Del(ctx, bindingsCacheKey); err != nil {
-		slog.Warn("UnbindConfig 失效缓存失败（不影响 DB 写入结果）", "error", err)
+		s.logger.Warn("UnbindConfig 失效缓存失败（不影响 DB 写入结果）", zap.Error(err))
 	}
 	return nil
 }
@@ -453,7 +454,7 @@ func (s *AIConfigService) SetBinding(ctx context.Context, featureKey string, con
 
 	// 失效绑定缓存
 	if err := cache.Del(ctx, bindingsCacheKey); err != nil {
-		slog.Warn("SetBinding 失效缓存失败（不影响 DB 写入结果）", "error", err)
+		s.logger.Warn("SetBinding 失效缓存失败（不影响 DB 写入结果）", zap.Error(err))
 	}
 	return nil
 }
@@ -468,7 +469,7 @@ func (s *AIConfigService) ResolveConfig(ctx context.Context, featureKey string) 
 		if err := s.db.WithContext(ctx).First(&cfg, b.ConfigID).Error; err == nil && cfg.IsActive {
 			key, err := security.DecryptSecret(cfg.APIKey, s.secretKey)
 			if err != nil {
-				slog.Warn("ResolveConfig 解密 API Key 失败，配置不可用", "config_id", b.ConfigID, "error", err)
+				s.logger.Warn("ResolveConfig 解密 API Key 失败，配置不可用", zap.Int("config_id", b.ConfigID), zap.Error(err))
 				return AISettings{Source: "decrypt-failed"}
 			}
 			return AISettings{
@@ -487,7 +488,7 @@ func (s *AIConfigService) HasActiveConfigs(ctx context.Context) bool {
 	var count int64
 	if err := s.db.WithContext(ctx).Model(&model.AIConfig{}).
 		Where("is_active = ?", true).Count(&count).Error; err != nil {
-		slog.Warn("查询 AI 配置失败", "error", err)
+		s.logger.Warn("查询 AI 配置失败", zap.Error(err))
 		return false
 	}
 	return count > 0

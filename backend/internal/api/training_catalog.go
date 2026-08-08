@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -16,8 +17,8 @@ import (
 // RegisterTrainingCatalogRoutes 注册培训目录蓝图：
 //   - /api/admin/*：专业方向 / 课程等级 / 证书模板 / 题库标签 CRUD 与题目打标（管理端）
 //   - /api/catalog/*、/api/specialties、/api/levels、/api/tags：学员端查询
-func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
-	svc := service.NewTrainingCatalogService(db)
+func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, logger *zap.Logger) {
+	svc := service.NewTrainingCatalogService(db, logger)
 
 	// ===== 学员端查询（公开） =====
 

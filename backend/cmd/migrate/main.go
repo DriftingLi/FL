@@ -10,12 +10,12 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/joho/godotenv"
+	"go.uber.org/zap"
 
-	"forklift-training/internal/config"
+	applogger "forklift-training/internal/logger"
 	migratedb "forklift-training/internal/migrate"
 )
 
@@ -23,8 +23,15 @@ func main() {
 	_ = godotenv.Load()
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		log.Fatal("DATABASE_URL 未配置")
+		fmt.Fprintln(os.Stderr, "DATABASE_URL 未配置")
+		os.Exit(1)
 	}
+	logger, err := applogger.New(applogger.Config{Level: "info", Format: "console"})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "初始化日志失败:", err)
+		os.Exit(1)
+	}
+	defer func() { _ = logger.Sync() }()
 
 	direction := "up"
 	var extraArgs []string
@@ -33,9 +40,9 @@ func main() {
 		extraArgs = os.Args[2:]
 	}
 
-	if err := migratedb.RunMigrations(dsn, direction, extraArgs...); err != nil {
-		log.Fatalf("迁移失败: %v", err)
+	if err := migratedb.RunMigrations(dsn, direction, logger, extraArgs...); err != nil {
+		logger.Error("迁移失败", zap.Error(err))
+		os.Exit(1)
 	}
-	fmt.Printf("迁移 %s 完成\n", direction)
-	_ = config.Load // 占位引用
+	logger.Info("迁移完成", zap.String("direction", direction))
 }

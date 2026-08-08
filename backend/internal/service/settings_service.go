@@ -4,7 +4,7 @@ package service
 import (
 	"context"
 	"errors"
-	"log/slog"
+	"go.uber.org/zap"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -33,12 +33,13 @@ type SettingsService struct {
 	envKey   string // 环境变量读取的 API key（兜底）
 	envURL   string
 	envModel string
+	logger   *zap.Logger
 }
 
 // NewSettingsService 构造 SettingsService。
 // envKey/envURL/envModel 为环境变量读取的兜底配置（来自 cfg.AIAPIKey 等）。
-func NewSettingsService(db *gorm.DB, envKey, envURL, envModel string) *SettingsService {
-	return &SettingsService{db: db, envKey: envKey, envURL: envURL, envModel: envModel}
+func NewSettingsService(db *gorm.DB, envKey, envURL, envModel string, logger *zap.Logger) *SettingsService {
+	return &SettingsService{db: db, envKey: envKey, envURL: envURL, envModel: envModel, logger: logger}
 }
 
 // GetAISettings 获取当前生效的 AI 配置。
@@ -55,7 +56,7 @@ func (s *SettingsService) GetAISettings(ctx context.Context) AISettings {
 	}
 	// Redis 异常或 loader 失败时降级
 	if !errors.Is(err, redis.Nil) {
-		slog.Warn("GetAISettings 缓存读取异常，降级直查 DB", "error", err)
+		s.logger.Warn("GetAISettings 缓存读取异常，降级直查 DB", zap.Error(err))
 	}
 	direct, _ := s.loadAISettingsFromDB(ctx)
 	return direct
@@ -69,7 +70,7 @@ func (s *SettingsService) loadAISettingsFromDB(ctx context.Context) (AISettings,
 		Find(&rows).Error
 	if err != nil {
 		// DB 异常时仍降级返回环境变量，避免完全不可用
-		slog.Warn("loadAISettingsFromDB 查询失败，降级环境变量", "error", err)
+		s.logger.Warn("loadAISettingsFromDB 查询失败，降级环境变量", zap.Error(err))
 		return s.envSettings("env"), err
 	}
 
@@ -133,7 +134,7 @@ func (s *SettingsService) SetAISettings(ctx context.Context, apiKey, baseURL, mo
 	}
 	// 失效缓存，下次读取自动重建
 	if err := cache.Del(ctx, aiSettingsCacheKey); err != nil {
-		slog.Warn("SetAISettings 失效缓存失败（不影响 DB 写入结果）", "error", err)
+		s.logger.Warn("SetAISettings 失效缓存失败（不影响 DB 写入结果）", zap.Error(err))
 	}
 	return nil
 }

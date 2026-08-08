@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -13,11 +14,13 @@ import (
 // AdminService 管理员服务。
 type AdminService struct {
 	db *gorm.DB
+
+	logger *zap.Logger
 }
 
 // NewAdminService 创建管理员服务实例。
-func NewAdminService(db *gorm.DB) *AdminService {
-	return &AdminService{db: db}
+func NewAdminService(db *gorm.DB, logger *zap.Logger) *AdminService {
+	return &AdminService{db: db, logger: logger}
 }
 
 // ===== HRWAI 用户管理(统一) =====

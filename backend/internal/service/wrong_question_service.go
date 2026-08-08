@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -14,11 +15,13 @@ import (
 // WrongQuestionService 错题本服务。
 type WrongQuestionService struct {
 	db *gorm.DB
+
+	logger *zap.Logger
 }
 
 // NewWrongQuestionService 创建错题本服务实例。
-func NewWrongQuestionService(db *gorm.DB) *WrongQuestionService {
-	return &WrongQuestionService{db: db}
+func NewWrongQuestionService(db *gorm.DB, logger *zap.Logger) *WrongQuestionService {
+	return &WrongQuestionService{db: db, logger: logger}
 }
 
 // GetWrongQuestions 错题列表。

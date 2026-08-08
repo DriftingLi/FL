@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -17,11 +18,13 @@ type TutorService struct {
 	db           *gorm.DB
 	uploadFolder string
 	fileService  *FileService
+
+	logger *zap.Logger
 }
 
 // NewTutorService 创建导师服务实例。
-func NewTutorService(db *gorm.DB, uploadFolder string, fileService *FileService) *TutorService {
-	return &TutorService{db: db, uploadFolder: uploadFolder, fileService: fileService}
+func NewTutorService(db *gorm.DB, uploadFolder string, fileService *FileService, logger *zap.Logger) *TutorService {
+	return &TutorService{db: db, uploadFolder: uploadFolder, fileService: fileService, logger: logger}
 }
 
 // GetCourses 导师课程列表。

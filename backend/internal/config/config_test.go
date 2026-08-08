@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"testing"
+
+	"github.com/spf13/viper"
 )
 
 func TestValidate_Development(t *testing.T) {
@@ -153,13 +155,44 @@ func TestSplitOrigins(t *testing.T) {
 }
 
 func TestGetenv(t *testing.T) {
+	// Viper 环境变量语义：非空 env 胜出；空 env / 未设置回退默认值。
+	viper.AutomaticEnv()
+	setDefaults()
+
 	os.Setenv("TEST_GETENV_KEY", "testvalue")
 	defer os.Unsetenv("TEST_GETENV_KEY")
-
-	if got := getenv("TEST_GETENV_KEY", "default"); got != "testvalue" {
-		t.Errorf("getenv 已设置键 = %q，期望 'testvalue'", got)
+	if got := viper.GetString("test_getenv_key"); got != "testvalue" {
+		t.Errorf("已设置键 = %q，期望 'testvalue'", got)
 	}
-	if got := getenv("TEST_GETENV_MISSING", "default"); got != "default" {
-		t.Errorf("getenv 未设置键 = %q，期望 'default'", got)
+
+	os.Setenv("TEST_GETENV_MISSING", "")
+	defer os.Unsetenv("TEST_GETENV_MISSING")
+	if got := viper.GetString("log_level"); got != "info" {
+		t.Errorf("空 env 应回退默认值，got %q", got)
+	}
+}
+
+func TestChainDef(t *testing.T) {
+	viper.AutomaticEnv()
+	setDefaults()
+
+	if got := chainDef("fallback", "test_chain_a", "test_chain_b"); got != "fallback" {
+		t.Errorf("全部缺失应回退 fallback，got %q", got)
+	}
+	os.Setenv("TEST_CHAIN_A", "first")
+	defer os.Unsetenv("TEST_CHAIN_A")
+	if got := chainDef("fallback", "test_chain_a", "test_chain_b"); got != "first" {
+		t.Errorf("链式回退应按序取第一个非空，got %q", got)
+	}
+}
+
+func TestPositiveInt_Fallback(t *testing.T) {
+	viper.AutomaticEnv()
+	setDefaults()
+
+	os.Setenv("TEST_JUNK_INT", "abc")
+	defer os.Unsetenv("TEST_JUNK_INT")
+	if got := positiveInt("test_junk_int", 7); got != 7 {
+		t.Errorf("非法整数应回退默认值，got %d", got)
 	}
 }

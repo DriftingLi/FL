@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -14,8 +15,8 @@ import (
 )
 
 // RegisterLevelExamRoutes 注册 /api/level-exam 蓝图（等级考试与晋级）。
-func RegisterLevelExamRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
-	svc := service.NewLevelExamService(db, newAIService(cfg, db))
+func RegisterLevelExamRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, logger *zap.Logger) {
+	svc := service.NewLevelExamService(db, newAIService(cfg, db, logger), logger)
 
 	g := rg.Group("/level-exam", middleware.JWTAuth(cfg))
 

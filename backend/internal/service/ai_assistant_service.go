@@ -6,8 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -100,11 +100,12 @@ type AIAssistantService struct {
 	db          *gorm.DB
 	aiConfigSvc *AIConfigService
 	secretKey   string // 用于加密用户自定义 API Key 的主密钥（SECRET_KEY）
+	logger      *zap.Logger
 }
 
 // NewAIAssistantService 构造 AIAssistantService。
-func NewAIAssistantService(db *gorm.DB, aiConfigSvc *AIConfigService, secretKey string) *AIAssistantService {
-	return &AIAssistantService{db: db, aiConfigSvc: aiConfigSvc, secretKey: secretKey}
+func NewAIAssistantService(db *gorm.DB, aiConfigSvc *AIConfigService, secretKey string, logger *zap.Logger) *AIAssistantService {
+	return &AIAssistantService{db: db, aiConfigSvc: aiConfigSvc, secretKey: secretKey, logger: logger}
 }
 
 // ListPublicModels 返回管理员绑定到 AI 助手功能的可用配置列表（不含 api_key）。
@@ -132,7 +133,7 @@ func (s *AIAssistantService) ListUserModels(ctx context.Context, userID int) ([]
 	for i, r := range rows {
 		key, err := security.DecryptSecret(r.APIKey, s.secretKey)
 		if err != nil {
-			slog.Warn("ListUserModels 解密 API Key 失败，按原样脱敏展示", "id", r.ID, "error", err)
+			s.logger.Warn("ListUserModels 解密 API Key 失败，按原样脱敏展示", zap.Int("id", r.ID), zap.Error(err))
 			key = r.APIKey
 		}
 		out[i] = UserModelDTO{
@@ -253,7 +254,7 @@ func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, user
 	if err := s.db.WithContext(ctx).
 		Where("id = ? AND user_id = ?", sessionID, userID).
 		Limit(1).Find(&session).Error; err != nil {
-		slog.Warn("自动命名：查询会话失败", "session_id", sessionID, "error", err)
+		s.logger.Warn("自动命名：查询会话失败", zap.Int("session_id", sessionID), zap.Error(err))
 		return
 	}
 	if session.ID == 0 {
@@ -269,7 +270,7 @@ func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, user
 	if err := s.db.WithContext(ctx).
 		Where("session_id = ? AND role = ?", sessionID, "user").
 		Order("created_at ASC").Limit(1).Find(&userMsg).Error; err != nil {
-		slog.Warn("自动命名：查询用户消息失败", "session_id", sessionID, "error", err)
+		s.logger.Warn("自动命名：查询用户消息失败", zap.Int("session_id", sessionID), zap.Error(err))
 		return
 	}
 	if userMsg.ID == 0 || strings.TrimSpace(userMsg.Content) == "" {
@@ -278,7 +279,7 @@ func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, user
 
 	title, err := s.generateTitleWithModel(ctx, mc, userMsg.Content)
 	if err != nil {
-		slog.Warn("自动命名：调用模型失败", "session_id", sessionID, "error", err)
+		s.logger.Warn("自动命名：调用模型失败", zap.Int("session_id", sessionID), zap.Error(err))
 		return
 	}
 	title = sanitizeTitle(title)
@@ -291,14 +292,14 @@ func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, user
 		Where("id = ? AND user_id = ? AND title = ?", sessionID, userID, autoTitlePlaceholder).
 		Update("title", title)
 	if res.Error != nil {
-		slog.Warn("自动命名：更新失败", "session_id", sessionID, "error", res.Error)
+		s.logger.Warn("自动命名：更新失败", zap.Int("session_id", sessionID), zap.Error(res.Error))
 		return
 	}
 	if res.RowsAffected == 0 {
 		// 会话不存在 / 不属于该用户 / 标题已不再是占位符（用户已手动改名）
 		return
 	}
-	slog.Info("自动命名完成", "session_id", sessionID, "title", title)
+	s.logger.Info("自动命名完成", zap.Int("session_id", sessionID), zap.String("title", title))
 }
 
 // generateTitleWithModel 调用同模型根据用户首条消息生成简短标题。
@@ -576,7 +577,7 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 			go func() {
 				defer func() {
 					if r := recover(); r != nil {
-						slog.Warn("自动命名 panic", "session_id", sessionID, "panic", r)
+						s.logger.Warn("自动命名 panic", zap.Int("session_id", sessionID), zap.Any("panic", r))
 					}
 				}()
 				bgCtx := context.Background()

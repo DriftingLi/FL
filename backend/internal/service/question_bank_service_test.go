@@ -4,6 +4,7 @@ package service
 import (
 	"testing"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/testutil"
@@ -12,7 +13,7 @@ import (
 func newQuestionBankSvc(t *testing.T) (*QuestionBankService, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewQuestionBankService(db, nil), db
+	return NewQuestionBankService(db, nil, zap.NewNop()), db
 }
 
 // --- CreateQuestion ---
@@ -97,7 +98,7 @@ func TestCreateQuestion_ShortAnswer_NoAnswer(t *testing.T) {
 
 func TestCreateQuestion_WithTagIDs(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
-	catalogSvc := NewTrainingCatalogService(db)
+	catalogSvc := NewTrainingCatalogService(db, zap.NewNop())
 	tag, err := catalogSvc.CreateQuestionTag(map[string]any{"code": "hydraulic", "name": "液压", "category": "液压"})
 	if err != nil {
 		t.Fatalf("创建标签失败: %v", err)

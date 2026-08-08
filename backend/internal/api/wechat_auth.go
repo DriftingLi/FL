@@ -4,6 +4,7 @@ package api
 
 import (
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -12,7 +13,7 @@ import (
 )
 
 // RegisterWechatAuthRoutes 注册 /api/auth/wechat 蓝图（框架占位）。
-func RegisterWechatAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, wechatSvc *service.WechatAuthService) {
+func RegisterWechatAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, wechatSvc *service.WechatAuthService, logger *zap.Logger) {
 	g := rg.Group("/auth/wechat")
 
 	// POST /api/auth/wechat/qrcode 获取扫码登录占位信息

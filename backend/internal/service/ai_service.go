@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
+	"go.uber.org/zap"
 	"regexp"
 	"strings"
 	"sync"
@@ -46,11 +46,12 @@ type AIService struct {
 	baseURL     string
 	model       string
 	mu          sync.Mutex // 保护 client 重建并发安全
+	logger      *zap.Logger
 }
 
 // NewAIService 创建 AI 服务。aiConfigSvc 用于按功能查找绑定配置。
-func NewAIService(db *gorm.DB, aiConfigSvc *AIConfigService) *AIService {
-	return &AIService{db: db, aiConfigSvc: aiConfigSvc}
+func NewAIService(db *gorm.DB, aiConfigSvc *AIConfigService, logger *zap.Logger) *AIService {
+	return &AIService{db: db, aiConfigSvc: aiConfigSvc, logger: logger}
 }
 
 // AIGradeResult 简答题 AI 评分结果。
@@ -77,7 +78,7 @@ func (s *AIService) GradeShortAnswer(questionContent, referenceAnswer, scoringCr
 	}, 1000, 0.3, FeatureGradeShortAnswer)
 
 	if err != nil || content == "" {
-		slog.Error("AI grade_short_answer failed", "error", err)
+		s.logger.Error("AI grade_short_answer failed", zap.Error(err))
 		return &AIGradeResult{Score: 0, Comment: "AI评分暂不可用，请等待导师人工评分", Fallback: true}
 	}
 	result := parseGradingResponse(content, maxScore)
@@ -141,7 +142,7 @@ func (s *AIService) ensureClient(ctx context.Context, featureKey string) error {
 	s.client = openai.NewClientWithConfig(cfg)
 	s.clientSig = sig
 	s.apiKey, s.baseURL, s.model = cur.APIKey, cur.BaseURL, cur.Model
-	slog.Info("AI client 已重建", "base_url", cur.BaseURL, "model", cur.Model, "source", cur.Source, "feature", featureKey)
+	s.logger.Info("AI client 已重建", zap.String("base_url", cur.BaseURL), zap.String("model", cur.Model), zap.String("source", cur.Source), zap.String("feature", featureKey))
 	return nil
 }
 
@@ -164,7 +165,7 @@ func (s *AIService) callModel(messages []openai.ChatCompletionMessage, maxTokens
 		}
 		resp, err := s.client.CreateChatCompletion(ctx, req)
 		if err != nil {
-			slog.Error("AI call failed", "attempt", attempt, "error", err)
+			s.logger.Error("AI call failed", zap.Int("attempt", attempt), zap.Error(err))
 			if attempt == 2 {
 				return "", err
 			}
@@ -216,7 +217,7 @@ func (s *AIService) saveLog(userID int, userType, generationType string, inputPa
 		CreatedAt:      beijingNow(),
 	}
 	if err := s.db.Create(&log).Error; err != nil {
-		slog.Error("saveLog failed", "error", err)
+		s.logger.Error("saveLog failed", zap.Error(err))
 	}
 }
 

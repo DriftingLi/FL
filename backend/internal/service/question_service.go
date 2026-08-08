@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -267,11 +268,13 @@ func round1(f *float64) {
 type QuestionBankService struct {
 	db      *gorm.DB
 	fileSvc *FileService
+
+	logger *zap.Logger
 }
 
 // NewQuestionBankService 创建题库服务。fileSvc 用于删除题目时清理题图（可 nil，nil 时跳过）。
-func NewQuestionBankService(db *gorm.DB, fileSvc *FileService) *QuestionBankService {
-	return &QuestionBankService{db: db, fileSvc: fileSvc}
+func NewQuestionBankService(db *gorm.DB, fileSvc *FileService, logger *zap.Logger) *QuestionBankService {
+	return &QuestionBankService{db: db, fileSvc: fileSvc, logger: logger}
 }
 
 // CreateQuestion 创建题目。
@@ -466,13 +469,12 @@ func (s *QuestionBankService) loadTagsBatch(questionIDs []int) map[int][]map[str
 		TagID      int    `gorm:"column:tag_id"`
 		TagCode    string `gorm:"column:tag_code"`
 		TagName    string `gorm:"column:tag_name"`
-		Category   string `gorm:"column:tag_category"`
 		SortOrder  int    `gorm:"column:tag_sort"`
 		Status     int16  `gorm:"column:tag_status"`
 	}
 	var rows []tagRow
 	if err := s.db.Table("question_tag_relation AS qtr").
-		Select("qtr.question_id, qtr.tag_id, t.code AS tag_code, t.name AS tag_name, t.category AS tag_category, t.sort_order AS tag_sort, t.status AS tag_status").
+		Select("qtr.question_id, qtr.tag_id, t.code AS tag_code, t.name AS tag_name, t.sort_order AS tag_sort, t.status AS tag_status").
 		Joins("JOIN question_tag AS t ON t.id = qtr.tag_id").
 		Where("qtr.question_id IN ?", questionIDs).
 		Order("t.sort_order ASC, t.id ASC").
@@ -484,7 +486,6 @@ func (s *QuestionBankService) loadTagsBatch(questionIDs []int) map[int][]map[str
 			"id":         rows[i].TagID,
 			"code":       rows[i].TagCode,
 			"name":       rows[i].TagName,
-			"category":   rows[i].Category,
 			"sort_order": rows[i].SortOrder,
 			"status":     rows[i].Status,
 		})

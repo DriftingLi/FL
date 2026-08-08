@@ -4,6 +4,7 @@ package service
 import (
 	"errors"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -13,11 +14,13 @@ import (
 type FeaturedService struct {
 	db      *gorm.DB
 	fileSvc *FileService
+
+	logger *zap.Logger
 }
 
 // NewFeaturedService 创建内容精选服务实例。
-func NewFeaturedService(db *gorm.DB, fileSvc *FileService) *FeaturedService {
-	return &FeaturedService{db: db, fileSvc: fileSvc}
+func NewFeaturedService(db *gorm.DB, fileSvc *FileService, logger *zap.Logger) *FeaturedService {
+	return &FeaturedService{db: db, fileSvc: fileSvc, logger: logger}
 }
 
 // featuredCategoryLabels 分类中文标签映射。

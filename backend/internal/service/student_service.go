@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -13,11 +14,13 @@ import (
 // StudentService 学员服务。
 type StudentService struct {
 	db *gorm.DB
+
+	logger *zap.Logger
 }
 
 // NewStudentService 创建学员服务实例。
-func NewStudentService(db *gorm.DB) *StudentService {
-	return &StudentService{db: db}
+func NewStudentService(db *gorm.DB, logger *zap.Logger) *StudentService {
+	return &StudentService{db: db, logger: logger}
 }
 
 // GetProfile 学员档案。

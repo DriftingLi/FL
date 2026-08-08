@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -36,8 +37,8 @@ func newForumTestSvc(t *testing.T) (*ForumService, *gorm.DB, *memForumStorage) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
 	st := &memForumStorage{}
-	fileSvc := NewFileService("", st)
-	svc := NewForumService(db, fileSvc)
+	fileSvc := NewFileService("", st, zap.NewNop())
+	svc := NewForumService(db, fileSvc, zap.NewNop())
 	return svc, db, st
 }
 

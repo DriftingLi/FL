@@ -6,6 +6,8 @@ import (
 	"context"
 	"os"
 	"testing"
+
+	"go.uber.org/zap"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -21,7 +23,7 @@ func integrationPool(t *testing.T) *pgxpool.Pool {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	if err := migratedb.RunMigrations(dsn, "up"); err != nil {
+	if err := migratedb.RunMigrations(dsn, "up", zap.NewNop()); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
 	pool, err := pgxpool.New(ctx, dsn)

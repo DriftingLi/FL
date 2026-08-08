@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -18,9 +19,9 @@ import (
 )
 
 // RegisterForumRoutes 注册 /api/forum 蓝图（需登录，hrwai_user）。
-func RegisterForumRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage) {
-	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st)
-	svc := service.NewForumService(db, fileSvc)
+func RegisterForumRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger) {
+	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st, logger)
+	svc := service.NewForumService(db, fileSvc, logger)
 
 	g := rg.Group("/forum", middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
 

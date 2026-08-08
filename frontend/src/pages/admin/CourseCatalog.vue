@@ -1147,4 +1147,24 @@ onMounted(() => {
     width: 100%;
   }
 }
+
+@media screen and (max-width: 768px) {
+  .cc-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .cc-search {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  .cc-hours {
+    flex-wrap: wrap;
+  }
+
+  .cc-hours :deep(.el-input-number) {
+    flex: 1;
+    min-width: 90px;
+  }
+}
 </style>

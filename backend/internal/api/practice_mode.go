@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -15,8 +16,8 @@ import (
 )
 
 // RegisterPracticeModeRoutes 注册 /api/practice-mode 蓝图（题库练习）。
-func RegisterPracticeModeRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
-	svc := service.NewPracticeModeService(db, newAIService(cfg, db))
+func RegisterPracticeModeRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, logger *zap.Logger) {
+	svc := service.NewPracticeModeService(db, newAIService(cfg, db, logger), logger)
 
 	g := rg.Group("/practice-mode", middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
 

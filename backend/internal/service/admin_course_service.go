@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -14,11 +15,13 @@ import (
 type AdminCourseService struct {
 	db      *gorm.DB
 	fileSvc *FileService
+
+	logger *zap.Logger
 }
 
 // NewAdminCourseService 创建管理端课程服务实例。fileSvc 用于删除章节时清理幻灯片/图文图片（可 nil，nil 时跳过）。
-func NewAdminCourseService(db *gorm.DB, fileSvc *FileService) *AdminCourseService {
-	return &AdminCourseService{db: db, fileSvc: fileSvc}
+func NewAdminCourseService(db *gorm.DB, fileSvc *FileService, logger *zap.Logger) *AdminCourseService {
+	return &AdminCourseService{db: db, fileSvc: fileSvc, logger: logger}
 }
 
 // GetCourses 管理端课程列表。

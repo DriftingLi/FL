@@ -1,16 +1,15 @@
 // Package config 负责加载与校验应用配置。
-// 所有配置通过环境变量注入。
+// 所有配置通过环境变量注入（Viper AutomaticEnv + 集中 SetDefault 默认值）。
 package config
 
 import (
 	"fmt"
-	"log/slog"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/spf13/viper"
 )
 
 // Config 持有应用运行所需的全部配置。
@@ -46,6 +45,8 @@ type Config struct {
 	Wechat WechatConfig
 	// AuthCookie 登录态 Cookie 配置（父域名共享登录）。
 	AuthCookie AuthCookieConfig
+	// Log 统一系统运行日志配置（zap）。
+	Log LogConfig
 }
 
 // SMTPConfig SMTP 邮件发送配置。
@@ -93,9 +94,6 @@ type DefaultPasswordsConfig struct {
 // ValuationConfig 残值评估模块配置。
 type ValuationConfig struct {
 	PDFOutputDir      string
-	LogLevel          string
-	LogFormat         string
-	LogOutput         string
 	DBMaxOpenConns    int
 	DBMaxIdleConns    int
 	DBConnMaxLifetime int
@@ -125,128 +123,177 @@ type RateLimitConfig struct {
 	Burst   int     // RATE_LIMIT_BURST，突发上限，默认 40
 }
 
+// LogConfig 统一系统运行日志（zap）配置。
+type LogConfig struct {
+	Level      string // LOG_LEVEL，debug|info|warn|error，默认 info
+	Format     string // LOG_FORMAT，console|json，默认 console
+	OutputDir  string // LOG_DIR，日志文件目录；为空仅 stdout，非空双写（生产挂载卷）
+	MaxSizeMB  int    // LOG_MAX_SIZE_MB，单文件轮转上限，默认 100
+	MaxBackups int    // LOG_MAX_BACKUPS，保留旧文件份数，默认 7
+	MaxAgeDays int    // LOG_MAX_AGE_DAYS，旧文件最长保留天数，默认 30
+	Compress   bool   // LOG_COMPRESS，轮转压缩归档，默认 true
+}
+
+// setDefaults 集中定义全部配置默认值。
+func setDefaults() {
+	viper.SetDefault("app_env", "development")
+	viper.SetDefault("port", "8080")
+	viper.SetDefault("secret_key", "dev-secret-key")
+	viper.SetDefault("jwt_secret_key", "jwt-secret-key")
+	viper.SetDefault("jwt_expires_hours", 24)
+	viper.SetDefault("max_content_length_mb", 250)
+	viper.SetDefault("database_url", "")
+	viper.SetDefault("cors_origins", "http://localhost:5173,http://localhost:5174,"+
+		"http://training.localhost:5173,http://valuation.localhost:5173,"+
+		"http://mentor.localhost:5173,http://manage.localhost:5173")
+	viper.SetDefault("upload_folder", "")
+	viper.SetDefault("volume_mount_path", "")
+	viper.SetDefault("libreoffice_sidecar_url", "")
+	viper.SetDefault("storage_driver", "local")
+	viper.SetDefault("r2_account_id", "")
+	viper.SetDefault("r2_access_key_id", "")
+	viper.SetDefault("r2_secret_access_key", "")
+	viper.SetDefault("r2_bucket", "")
+	viper.SetDefault("r2_public_domain", "")
+	viper.SetDefault("ai_base_url", "https://api.deepseek.com")
+	viper.SetDefault("ai_model", "deepseek-v4-flash")
+	viper.SetDefault("valuation_pdf_output_dir", "storage/reports")
+	viper.SetDefault("valuation_db_max_open_conns", 20)
+	viper.SetDefault("valuation_db_max_idle_conns", 5)
+	viper.SetDefault("valuation_db_conn_max_lifetime", 3600)
+	viper.SetDefault("redis_addr", "localhost:6379")
+	viper.SetDefault("redis_password", "")
+	viper.SetDefault("redis_db", 0)
+	viper.SetDefault("redis_pool_size", 10)
+	viper.SetDefault("redis_min_idle_conns", 3)
+	viper.SetDefault("redis_max_retries", 3)
+	viper.SetDefault("redis_key_prefix", "fl:")
+	viper.SetDefault("redis_dial_timeout", "5s")
+	viper.SetDefault("redis_read_timeout", "3s")
+	viper.SetDefault("redis_write_timeout", "3s")
+	viper.SetDefault("redis_pool_timeout", "4s")
+	viper.SetDefault("redis_idle_timeout", "5m")
+	viper.SetDefault("rate_limit_rps", 20.0)
+	viper.SetDefault("rate_limit_burst", 40)
+	viper.SetDefault("admin_default_password", "admin123")
+	viper.SetDefault("tutor_default_password", "tutor123")
+	viper.SetDefault("student_default_password", "student123")
+	viper.SetDefault("smtp_host", "")
+	viper.SetDefault("smtp_port", 587)
+	viper.SetDefault("smtp_username", "")
+	viper.SetDefault("smtp_password", "")
+	viper.SetDefault("smtp_from", "")
+	viper.SetDefault("smtp_from_name", "和润天下")
+	viper.SetDefault("email_code_ttl_minutes", 5)
+	viper.SetDefault("wechat_app_id", "")
+	viper.SetDefault("wechat_app_secret", "")
+	viper.SetDefault("auth_cookie_name", "hrwai_token")
+	viper.SetDefault("auth_cookie_domain", "localhost")
+	viper.SetDefault("log_level", "info")
+	viper.SetDefault("log_format", "console")
+	viper.SetDefault("log_dir", "")
+	viper.SetDefault("log_max_size_mb", 100)
+	viper.SetDefault("log_max_backups", 7)
+	viper.SetDefault("log_max_age_days", 30)
+	viper.SetDefault("log_compress", true)
+}
+
 // Load 从环境变量加载配置。非 production 环境会自动加载 .env 文件。
 func Load() (*Config, error) {
-	appEnv := getenv("APP_ENV", "development")
+	viper.AutomaticEnv()
+	setDefaults()
+
+	appEnv := viper.GetString("app_env")
 	if appEnv != "production" {
 		_ = godotenv.Load()
 	}
 
-	maxMB, _ := strconv.Atoi(getenv("MAX_CONTENT_LENGTH_MB", "250"))
-	jwtHours, _ := strconv.Atoi(getenv("JWT_EXPIRES_HOURS", "24"))
-	valuationDBMaxOpen, _ := strconv.Atoi(getenv("VALUATION_DB_MAX_OPEN_CONNS", "20"))
-	valuationDBMaxIdle, _ := strconv.Atoi(getenv("VALUATION_DB_MAX_IDLE_CONNS", "5"))
-	valuationDBLifetime, _ := strconv.Atoi(getenv("VALUATION_DB_CONN_MAX_LIFETIME", "3600"))
-	redisPoolSize, _ := strconv.Atoi(getenv("REDIS_POOL_SIZE", "10"))
-	redisDB, _ := strconv.Atoi(getenv("REDIS_DB", "0"))
-	redisMinIdle, _ := strconv.Atoi(getenv("REDIS_MIN_IDLE_CONNS", "3"))
-	redisMaxRetries, _ := strconv.Atoi(getenv("REDIS_MAX_RETRIES", "3"))
-	redisDialTimeout := getDuration("REDIS_DIAL_TIMEOUT", 5*time.Second)
-	redisReadTimeout := getDuration("REDIS_READ_TIMEOUT", 3*time.Second)
-	redisWriteTimeout := getDuration("REDIS_WRITE_TIMEOUT", 3*time.Second)
-	redisPoolTimeout := getDuration("REDIS_POOL_TIMEOUT", 4*time.Second)
-	redisIdleTimeout := getDuration("REDIS_IDLE_TIMEOUT", 5*time.Minute)
-
-	// 限流配置：production 默认开启，其他环境默认关闭
-	rateLimitEnabled := getenv("RATE_LIMIT_ENABLED", "") == "true" ||
-		(appEnv == "production" && getenv("RATE_LIMIT_ENABLED", "true") != "false")
-	rateLimitRPS, _ := strconv.ParseFloat(getenv("RATE_LIMIT_RPS", "20"), 64)
-	if rateLimitRPS <= 0 {
-		rateLimitRPS = 20
-	}
-	rateLimitBurst, _ := strconv.Atoi(getenv("RATE_LIMIT_BURST", "40"))
-	if rateLimitBurst <= 0 {
-		rateLimitBurst = 40
-	}
-	smtpPort, _ := strconv.Atoi(getenv("SMTP_PORT", "587"))
-	if smtpPort <= 0 {
-		smtpPort = 587
-	}
-	emailCodeTTLMinutes, _ := strconv.Atoi(getenv("EMAIL_CODE_TTL_MINUTES", "5"))
-	if emailCodeTTLMinutes <= 0 {
-		emailCodeTTLMinutes = 5
-	}
-	authCookieSecure := getenv("AUTH_COOKIE_SECURE", "") == "true" ||
-		(appEnv == "production" && getenv("AUTH_COOKIE_SECURE", "true") != "false")
+	// 限流与 Cookie 安全位特殊：显式 "true" 任意环境开启；
+	// 生产默认开启，且仅显式 "false" 可关闭（需区分"未设置"与"显式空值"）。
+	rateLimitEnabled := envBoolOr("rate_limit_enabled", appEnv == "production")
+	authCookieSecure := envBoolOr("auth_cookie_secure", appEnv == "production")
 
 	cfg := &Config{
 		AppEnv:          appEnv,
-		Port:            getenv("PORT", "8080"),
-		SecretKey:       getenv("SECRET_KEY", "dev-secret-key"),
-		JWTSecretKey:    getenv("JWT_SECRET_KEY", "jwt-secret-key"),
-		JWTExpiresHours: jwtHours,
-		DatabaseURL:     getenv("DATABASE_URL", ""),
+		Port:            viper.GetString("port"),
+		SecretKey:       viper.GetString("secret_key"),
+		JWTSecretKey:    viper.GetString("jwt_secret_key"),
+		JWTExpiresHours: positiveInt("jwt_expires_hours", 24),
+		DatabaseURL:     viper.GetString("database_url"),
 		// 本地开发默认允许所有子域名 origin（生产环境必须通过 CORS_ORIGINS 注入实际域名）
-		CORSOrigins: splitOrigins(getenv("CORS_ORIGINS",
-			"http://localhost:5173,http://localhost:5174,"+
-				"http://training.localhost:5173,http://valuation.localhost:5173,"+
-				"http://mentor.localhost:5173,http://manage.localhost:5173")),
-		UploadFolder:     getenv("UPLOAD_FOLDER", ""),
-		VolumeMountPath:  getenv("VOLUME_MOUNT_PATH", ""),
-		MaxContentLength: int64(maxMB) * 1024 * 1024,
+		CORSOrigins:     splitOrigins(viper.GetString("cors_origins")),
+		UploadFolder:    viper.GetString("upload_folder"),
+		VolumeMountPath: viper.GetString("volume_mount_path"),
 		// LibreOffice sidecar HTTP 地址;为空则降级到本地 exec(向后兼容)
-		LibreOfficeSidecarURL: getenv("LIBREOFFICE_SIDECAR_URL", ""),
+		MaxContentLength:      int64(positiveInt("max_content_length_mb", 250)) * 1024 * 1024,
+		LibreOfficeSidecarURL: viper.GetString("libreoffice_sidecar_url"),
 		Storage: StorageConfig{
-			Driver:            getenv("STORAGE_DRIVER", "local"),
-			R2AccountID:       getenv("R2_ACCOUNT_ID", ""),
-			R2AccessKeyID:     getenv("R2_ACCESS_KEY_ID", ""),
-			R2SecretAccessKey: getenv("R2_SECRET_ACCESS_KEY", ""),
-			R2Bucket:          getenv("R2_BUCKET", ""),
-			R2PublicDomain:    getenv("R2_PUBLIC_DOMAIN", ""),
+			Driver:            viper.GetString("storage_driver"),
+			R2AccountID:       viper.GetString("r2_account_id"),
+			R2AccessKeyID:     viper.GetString("r2_access_key_id"),
+			R2SecretAccessKey: viper.GetString("r2_secret_access_key"),
+			R2Bucket:          viper.GetString("r2_bucket"),
+			R2PublicDomain:    viper.GetString("r2_public_domain"),
 		},
-		AIAPIKey:  getenvChainDef("", "AI_API_KEY", "DEEPSEEK_API_KEY", "ZHIPU_API_KEY", "OPENAI_API_KEY"),
-		AIBaseURL: getenvChainDef("https://api.deepseek.com", "AI_BASE_URL", "DEEPSEEK_API_URL", "ZHIPU_BASE_URL"),
-		AIModel:   getenvChainDef("deepseek-v4-flash", "AI_MODEL", "MODEL", "ZHIPU_MODEL"),
+		AIAPIKey:  chainDef("", "ai_api_key", "deepseek_api_key", "zhipu_api_key", "openai_api_key"),
+		AIBaseURL: chainDef("https://api.deepseek.com", "ai_base_url", "deepseek_api_url", "zhipu_base_url"),
+		AIModel:   chainDef("deepseek-v4-flash", "ai_model", "model", "zhipu_model"),
 		Valuation: ValuationConfig{
-			PDFOutputDir:      getenv("VALUATION_PDF_OUTPUT_DIR", "storage/reports"),
-			LogLevel:          getenv("VALUATION_LOG_LEVEL", "info"),
-			LogFormat:         getenv("VALUATION_LOG_FORMAT", "console"),
-			LogOutput:         getenv("VALUATION_LOG_OUTPUT", "stdout"),
-			DBMaxOpenConns:    valuationDBMaxOpen,
-			DBMaxIdleConns:    valuationDBMaxIdle,
-			DBConnMaxLifetime: valuationDBLifetime,
+			PDFOutputDir:      viper.GetString("valuation_pdf_output_dir"),
+			DBMaxOpenConns:    positiveInt("valuation_db_max_open_conns", 20),
+			DBMaxIdleConns:    positiveInt("valuation_db_max_idle_conns", 5),
+			DBConnMaxLifetime: positiveInt("valuation_db_conn_max_lifetime", 3600),
 		},
 		Redis: RedisConfig{
-			Addr:         getenv("REDIS_ADDR", "localhost:6379"),
-			Password:     getenv("REDIS_PASSWORD", ""),
-			DB:           redisDB,
-			PoolSize:     redisPoolSize,
-			MinIdleConns: redisMinIdle,
-			MaxRetries:   redisMaxRetries,
-			Prefix:       getenv("REDIS_KEY_PREFIX", "fl:"),
-			DialTimeout:  redisDialTimeout,
-			ReadTimeout:  redisReadTimeout,
-			WriteTimeout: redisWriteTimeout,
-			PoolTimeout:  redisPoolTimeout,
-			IdleTimeout:  redisIdleTimeout,
+			Addr:         viper.GetString("redis_addr"),
+			Password:     viper.GetString("redis_password"),
+			DB:           nonNegInt("redis_db", 0),
+			PoolSize:     positiveInt("redis_pool_size", 10),
+			MinIdleConns: positiveInt("redis_min_idle_conns", 3),
+			MaxRetries:   positiveInt("redis_max_retries", 3),
+			Prefix:       viper.GetString("redis_key_prefix"),
+			DialTimeout:  positiveDuration("redis_dial_timeout", 5*time.Second),
+			ReadTimeout:  positiveDuration("redis_read_timeout", 3*time.Second),
+			WriteTimeout: positiveDuration("redis_write_timeout", 3*time.Second),
+			PoolTimeout:  positiveDuration("redis_pool_timeout", 4*time.Second),
+			IdleTimeout:  positiveDuration("redis_idle_timeout", 5*time.Minute),
 		},
 		RateLimit: RateLimitConfig{
 			Enabled: rateLimitEnabled,
-			RPS:     rateLimitRPS,
-			Burst:   rateLimitBurst,
+			RPS:     positiveFloat("rate_limit_rps", 20),
+			Burst:   positiveInt("rate_limit_burst", 40),
 		},
 		DefaultPasswords: DefaultPasswordsConfig{
-			Admin:   getenv("ADMIN_DEFAULT_PASSWORD", "admin123"),
-			Tutor:   getenv("TUTOR_DEFAULT_PASSWORD", "tutor123"),
-			Student: getenv("STUDENT_DEFAULT_PASSWORD", "student123"),
+			Admin:   viper.GetString("admin_default_password"),
+			Tutor:   viper.GetString("tutor_default_password"),
+			Student: viper.GetString("student_default_password"),
 		},
 		SMTP: SMTPConfig{
-			Host:     getenv("SMTP_HOST", ""),
-			Port:     smtpPort,
-			Username: getenv("SMTP_USERNAME", ""),
-			Password: getenv("SMTP_PASSWORD", ""),
-			From:     getenv("SMTP_FROM", ""),
-			FromName: getenv("SMTP_FROM_NAME", "和润天下"),
+			Host:     viper.GetString("smtp_host"),
+			Port:     positiveInt("smtp_port", 587),
+			Username: viper.GetString("smtp_username"),
+			Password: viper.GetString("smtp_password"),
+			From:     viper.GetString("smtp_from"),
+			FromName: viper.GetString("smtp_from_name"),
 		},
-		EmailCodeTTL: time.Duration(emailCodeTTLMinutes) * time.Minute,
+		EmailCodeTTL: time.Duration(positiveInt("email_code_ttl_minutes", 5)) * time.Minute,
 		Wechat: WechatConfig{
-			AppID:     getenv("WECHAT_APP_ID", ""),
-			AppSecret: getenv("WECHAT_APP_SECRET", ""),
+			AppID:     viper.GetString("wechat_app_id"),
+			AppSecret: viper.GetString("wechat_app_secret"),
 		},
 		AuthCookie: AuthCookieConfig{
-			Name:   getenv("AUTH_COOKIE_NAME", "hrwai_token"),
-			Domain: getenv("AUTH_COOKIE_DOMAIN", "localhost"),
+			Name:   viper.GetString("auth_cookie_name"),
+			Domain: viper.GetString("auth_cookie_domain"),
 			Secure: authCookieSecure,
+		},
+		Log: LogConfig{
+			Level:      viper.GetString("log_level"),
+			Format:     viper.GetString("log_format"),
+			OutputDir:  viper.GetString("log_dir"),
+			MaxSizeMB:  positiveInt("log_max_size_mb", 100),
+			MaxBackups: positiveInt("log_max_backups", 7),
+			MaxAgeDays: positiveInt("log_max_age_days", 30),
+			Compress:   viper.GetBool("log_compress"),
 		},
 	}
 
@@ -263,20 +310,26 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	// 生产环境 CORS 配置自检：若仍使用本地开发默认值或为空，
-	// 前端跨域请求会被浏览器拦截。提前在日志告警，便于定位。
-	if cfg.IsProd() {
-		if len(cfg.CORSOrigins) == 0 {
-			slog.Warn("CORS_ORIGINS 为空，生产环境前端跨域请求将被浏览器拦截；请在部署环境变量中设置前端页面源")
-		}
-		for _, o := range cfg.CORSOrigins {
-			if strings.Contains(o, "localhost") {
-				slog.Warn("CORS_ORIGINS 仍包含本地开发地址，生产环境前端跨域可能被拦截", "origins", cfg.CORSOrigins)
-			}
+	return cfg, nil
+}
+
+// CORSConfigWarnings 返回生产环境 CORS 配置自检告警列表（供启动阶段以统一日志输出）。
+// 若仍使用本地开发默认值或为空，前端跨域请求会被浏览器拦截。
+func (c *Config) CORSConfigWarnings() []string {
+	if !c.IsProd() {
+		return nil
+	}
+	var warns []string
+	if len(c.CORSOrigins) == 0 {
+		warns = append(warns, "CORS_ORIGINS 为空，生产环境前端跨域请求将被浏览器拦截；请在部署环境变量中设置前端页面源")
+	}
+	for _, o := range c.CORSOrigins {
+		if strings.Contains(o, "localhost") {
+			warns = append(warns, "CORS_ORIGINS 仍包含本地开发地址，生产环境前端跨域可能被拦截: "+strings.Join(c.CORSOrigins, ","))
+			break
 		}
 	}
-
-	return cfg, nil
+	return warns
 }
 
 // Validate 在 production 环境校验必填项。
@@ -354,33 +407,55 @@ func (c *Config) JWTExpiry() time.Duration {
 // IsProd 是否为生产环境。
 func (c *Config) IsProd() bool { return c.AppEnv == "production" }
 
-func getenv(key, def string) string {
-	if v := os.Getenv(key); v != "" {
+// envBoolOr 读取布尔环境变量；"true"→true、"false"→false、
+// 未设置或空值→def（生产默认开启、开发默认关闭）。
+func envBoolOr(key string, def bool) bool {
+	v, set := os.LookupEnv(strings.ToUpper(key))
+	if !set || v == "" {
+		return def
+	}
+	return strings.EqualFold(v, "true")
+}
+
+// positiveInt 读取整数配置，非法或 <=0 时回退默认值。
+func positiveInt(key string, def int) int {
+	if v := viper.GetInt(key); v > 0 {
 		return v
 	}
 	return def
 }
 
-// getenvChainDef 按顺序返回第一个非空环境变量，全部为空时返回 def。
-// 用于 AI 配置字段的多名称兼容回退（如 AI_API_KEY > DEEPSEEK_API_KEY > ZHIPU_API_KEY）。
-func getenvChainDef(def string, keys ...string) string {
-	for _, k := range keys {
-		if v := os.Getenv(k); v != "" {
-			return v
-		}
+// nonNegInt 读取非负整数配置，非法或 <0 时回退默认值。
+func nonNegInt(key string, def int) int {
+	if v := viper.GetInt(key); v >= 0 {
+		return v
 	}
 	return def
 }
 
-// getDuration 从环境变量读取 time.Duration，支持 "5s"/"5000ms"/"5m" 等格式。
-// 解析失败或未设置时返回 def。
-func getDuration(key string, def time.Duration) time.Duration {
-	v := os.Getenv(key)
-	if v == "" {
-		return def
+// positiveFloat 读取浮点配置，非法或 <=0 时回退默认值。
+func positiveFloat(key string, def float64) float64 {
+	if v := viper.GetFloat64(key); v > 0 {
+		return v
 	}
-	if d, err := time.ParseDuration(v); err == nil {
-		return d
+	return def
+}
+
+// positiveDuration 读取时长配置，非法或 <=0 时回退默认值。
+func positiveDuration(key string, def time.Duration) time.Duration {
+	if v := viper.GetDuration(key); v > 0 {
+		return v
+	}
+	return def
+}
+
+// chainDef 按顺序返回第一个非空值，全部为空时返回 def。
+// 用于 AI 配置字段的多名称兼容回退（如 AI_API_KEY > DEEPSEEK_API_KEY > ZHIPU_API_KEY）。
+func chainDef(def string, keys ...string) string {
+	for _, k := range keys {
+		if v := viper.GetString(k); v != "" {
+			return v
+		}
 	}
 	return def
 }

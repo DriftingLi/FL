@@ -4,6 +4,7 @@ package service
 import (
 	"testing"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -13,18 +14,18 @@ import (
 func newPracticeSvc(t *testing.T) (*PracticeModeService, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewPracticeModeService(db, nil), db
+	return NewPracticeModeService(db, nil, zap.NewNop()), db
 }
 
 // TestGetTagQuestions 标签练习抽题：按标签过滤、count 限制、错误分支。
 func TestGetTagQuestions(t *testing.T) {
 	svc, db := newPracticeSvc(t)
-	catalogSvc := NewTrainingCatalogService(db)
+	catalogSvc := NewTrainingCatalogService(db, zap.NewNop())
 
 	tag1, _ := catalogSvc.CreateQuestionTag(map[string]any{"code": "regulation", "name": "法规", "sort_order": 1})
 	tag2, _ := catalogSvc.CreateQuestionTag(map[string]any{"code": "hydraulic", "name": "液压", "sort_order": 2})
 
-	qsvc := NewQuestionBankService(db, nil)
+	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
 	q1, err := qsvc.CreateQuestion(map[string]any{
 		"type": "single_choice", "content": "法规已发布题", "options": []string{"A", "B"}, "answer": "A",
 		"status": "published", "tag_ids": []int{tag1["id"].(int)},
@@ -92,7 +93,7 @@ func TestGetTagQuestions(t *testing.T) {
 // TestGetTagQuestions_QuestionToDict 校验题目 dict 中带标签字段所需字段完整。
 func TestGetTagQuestions_QuestionToDict(t *testing.T) {
 	svc, db := newPracticeSvc(t)
-	catalogSvc := NewTrainingCatalogService(db)
+	catalogSvc := NewTrainingCatalogService(db, zap.NewNop())
 	tag, _ := catalogSvc.CreateQuestionTag(map[string]any{"code": "brake", "name": "制动"})
 	q := model.Question{Type: "single_choice", Content: "制动题", Answer: "A",
 		Options: model.JSONB([]byte(`["A","B"]`)), Status: "published",

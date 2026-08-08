@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -14,8 +15,8 @@ import (
 )
 
 // RegisterMockExamRoutes 注册 /api/mock-exam 蓝图。
-func RegisterMockExamRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
-	svc := service.NewMockExamService(db, newAIService(cfg, db))
+func RegisterMockExamRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, logger *zap.Logger) {
+	svc := service.NewMockExamService(db, newAIService(cfg, db, logger), logger)
 
 	g := rg.Group("/mock-exam", middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
 
@@ -125,7 +126,7 @@ func RegisterMockExamRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB
 }
 
 // newAIService 在蓝图内构造 AIService，集中配置依赖。
-func newAIService(cfg *config.Config, db *gorm.DB) *service.AIService {
-	aiConfigSvc := service.NewAIConfigService(db, cfg.SecretKey)
-	return service.NewAIService(db, aiConfigSvc)
+func newAIService(cfg *config.Config, db *gorm.DB, logger *zap.Logger) *service.AIService {
+	aiConfigSvc := service.NewAIConfigService(db, cfg.SecretKey, logger)
+	return service.NewAIService(db, aiConfigSvc, logger)
 }

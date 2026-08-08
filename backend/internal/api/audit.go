@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -15,7 +16,7 @@ import (
 )
 
 // RegisterAuditRoutes 注册 /api/admin/audit-logs 蓝图（仅管理员）。
-func RegisterAuditRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
+func RegisterAuditRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, logger *zap.Logger) {
 	g := rg.Group("/admin/audit-logs", middleware.JWTAuth(cfg), middleware.RoleRequired("admin"))
 
 	// GET /api/admin/audit-logs?page=&page_size=&actor_id=&role=&keyword=

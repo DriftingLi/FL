@@ -12,7 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
+	"go.uber.org/zap"
 	"math/big"
 	"net/mail"
 	"net/smtp"
@@ -112,11 +112,13 @@ func (s SMTPMailSender) Send(to, subject, body string) error {
 }
 
 // LogMailSender 开发环境降级实现：验证码写入服务日志（未配置 SMTP 时便于本地验证）。
-type LogMailSender struct{}
+type LogMailSender struct {
+	logger *zap.Logger
+}
 
 // Send 将邮件内容写入日志。
-func (LogMailSender) Send(to, subject, body string) error {
-	slog.Info("邮件发送（开发环境降级为日志）", "to", to, "subject", subject, "body", body)
+func (s LogMailSender) Send(to, subject, body string) error {
+	s.logger.Info("邮件发送（开发环境降级为日志）", zap.String("to", to), zap.String("subject", subject), zap.String("body", body))
 	return nil
 }
 
@@ -126,11 +128,13 @@ type SMSProvider interface {
 }
 
 // LogSMSProvider 开发环境降级实现：验证码写入服务日志。
-type LogSMSProvider struct{}
+type LogSMSProvider struct {
+	logger *zap.Logger
+}
 
 // Send 将短信内容写入日志。
-func (LogSMSProvider) Send(to, content string) error {
-	slog.Info("短信发送（开发环境降级为日志）", "to", to, "content", content)
+func (s LogSMSProvider) Send(to, content string) error {
+	s.logger.Info("短信发送（开发环境降级为日志）", zap.String("to", to), zap.String("content", content))
 	return nil
 }
 
@@ -201,18 +205,19 @@ func emailPlaceholderPhone(email string) string {
 // EmailChannel 邮箱验证码通道。
 type EmailChannel struct {
 	mailer MailSender
+	logger *zap.Logger
 }
 
 // NewEmailChannel 构造邮箱通道。
 // 未配置 SMTP 时：开发环境降级为日志发送验证码，生产环境发送接口返回明确错误。
-func NewEmailChannel(smtpCfg config.SMTPConfig, isProd bool) *EmailChannel {
-	var mailer MailSender = LogMailSender{}
+func NewEmailChannel(smtpCfg config.SMTPConfig, isProd bool, logger *zap.Logger) *EmailChannel {
+	var mailer MailSender = LogMailSender{logger: logger}
 	if smtpCfg.Host != "" && smtpCfg.From != "" {
 		mailer = SMTPMailSender{cfg: smtpCfg}
 	} else if isProd {
 		mailer = nil
 	}
-	return &EmailChannel{mailer: mailer}
+	return &EmailChannel{mailer: mailer, logger: logger}
 }
 
 // SenderReady 邮件服务未配置时报错。
@@ -278,7 +283,7 @@ func (c *EmailChannel) Render(purpose CodePurpose, code string, ttl time.Duratio
 // Send 发送验证码邮件。
 func (c *EmailChannel) Send(target, title, body string) error {
 	if err := c.mailer.Send(target, title, body); err != nil {
-		slog.Error("验证码邮件发送失败", "email", target, "error", err)
+		c.logger.Error("验证码邮件发送失败", zap.String("email", target), zap.Error(err))
 		return errors.New("验证码发送失败，请稍后再试")
 	}
 	return nil
@@ -299,17 +304,18 @@ func (c *EmailChannel) BindColumn() string { return "email" }
 
 // SmsChannel 手机号验证码通道。
 type SmsChannel struct {
-	sms SMSProvider
+	sms    SMSProvider
+	logger *zap.Logger
 }
 
 // NewSmsChannel 构造短信通道。
 // 真实短信通道待接入：开发环境降级为日志打印验证码，生产环境未配置时发送接口报错。
-func NewSmsChannel(isProd bool) *SmsChannel {
-	var sms SMSProvider = LogSMSProvider{}
+func NewSmsChannel(isProd bool, logger *zap.Logger) *SmsChannel {
+	var sms SMSProvider = LogSMSProvider{logger: logger}
 	if isProd {
 		sms = nil
 	}
-	return &SmsChannel{sms: sms}
+	return &SmsChannel{sms: sms, logger: logger}
 }
 
 // SenderReady 短信服务未配置时报错。
@@ -383,7 +389,7 @@ func (c *SmsChannel) Render(purpose CodePurpose, code string, ttl time.Duration)
 // Send 发送验证码短信。
 func (c *SmsChannel) Send(target, title, body string) error {
 	if err := c.sms.Send(target, body); err != nil {
-		slog.Error("验证码短信发送失败", "phone", target, "error", err)
+		c.logger.Error("验证码短信发送失败", zap.String("phone", target), zap.Error(err))
 		return errors.New("验证码发送失败，请稍后再试")
 	}
 	return nil
@@ -407,12 +413,13 @@ type VerifyCodeService struct {
 	authSvc *AuthService
 	store   AuthCodeStore
 	codeTTL time.Duration
+	logger  *zap.Logger
 }
 
 // NewVerifyCodeService 构造验证码服务。
 // NewVerifyCodeService 构造验证码 engine。
 // store 为验证码存储 adapter（生产 Redis，测试内存），接口存在即接线。
-func NewVerifyCodeService(db *gorm.DB, authSvc *AuthService, codeTTL time.Duration, store AuthCodeStore) *VerifyCodeService {
+func NewVerifyCodeService(db *gorm.DB, authSvc *AuthService, codeTTL time.Duration, store AuthCodeStore, logger *zap.Logger) *VerifyCodeService {
 	if codeTTL <= 0 {
 		codeTTL = 5 * time.Minute
 	}
@@ -421,6 +428,7 @@ func NewVerifyCodeService(db *gorm.DB, authSvc *AuthService, codeTTL time.Durati
 		authSvc: authSvc,
 		store:   store,
 		codeTTL: codeTTL,
+		logger:  logger,
 	}
 }
 

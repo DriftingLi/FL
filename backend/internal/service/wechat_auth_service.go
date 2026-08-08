@@ -6,16 +6,19 @@ import (
 	"errors"
 
 	"forklift-training/internal/config"
+	"go.uber.org/zap"
 )
 
 // WechatAuthService 微信扫码登录/注册占位服务。
 type WechatAuthService struct {
 	cfg config.WechatConfig
+
+	logger *zap.Logger
 }
 
 // NewWechatAuthService 构造微信服务（框架占位）。
-func NewWechatAuthService(cfg config.WechatConfig) *WechatAuthService {
-	return &WechatAuthService{cfg: cfg}
+func NewWechatAuthService(cfg config.WechatConfig, logger *zap.Logger) *WechatAuthService {
+	return &WechatAuthService{cfg: cfg, logger: logger}
 }
 
 // QRCodeInfo 返回扫码登录占位信息：未配置授权时 enabled=false，前端展示占位二维码。

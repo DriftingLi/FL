@@ -3,6 +3,7 @@ package api
 
 import (
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -12,8 +13,8 @@ import (
 )
 
 // RegisterStudentRoutes 注册 /api/student 蓝图。
-func RegisterStudentRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
-	svc := service.NewStudentService(db)
+func RegisterStudentRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, logger *zap.Logger) {
+	svc := service.NewStudentService(db, logger)
 
 	g := rg.Group("/student", middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
 

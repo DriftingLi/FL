@@ -4,6 +4,7 @@ package service
 import (
 	"errors"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -16,11 +17,13 @@ const mockExamDefaultCount = 40
 type MockExamService struct {
 	db *gorm.DB
 	ai *AIService
+
+	logger *zap.Logger
 }
 
 // NewMockExamService 创建模拟考试服务实例。
-func NewMockExamService(db *gorm.DB, ai *AIService) *MockExamService {
-	return &MockExamService{db: db, ai: ai}
+func NewMockExamService(db *gorm.DB, ai *AIService, logger *zap.Logger) *MockExamService {
+	return &MockExamService{db: db, ai: ai, logger: logger}
 }
 
 // Start 生成模拟考试：从 published 题库随机抽 count 题（不分等级、不分题型）。

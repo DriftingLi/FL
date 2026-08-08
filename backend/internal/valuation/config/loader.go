@@ -12,7 +12,6 @@ import (
 type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
-	Log      LogConfig
 	Storage  StorageConfig
 }
 
@@ -29,13 +28,6 @@ type DatabaseConfig struct {
 	MaxOpenConns    int
 	MaxIdleConns    int
 	ConnMaxLifetime int
-}
-
-// LogConfig 日志配置
-type LogConfig struct {
-	Level  string
-	Format string
-	Output string
 }
 
 // StorageConfig 文件存储配置
@@ -68,11 +60,6 @@ func LoadFromEnv(databaseURL string, corsOrigins []string) *Config {
 			MaxOpenConns:    getenvInt("VALUATION_DB_MAX_OPEN_CONNS", 20),
 			MaxIdleConns:    getenvInt("VALUATION_DB_MAX_IDLE_CONNS", 5),
 			ConnMaxLifetime: getenvInt("VALUATION_DB_CONN_MAX_LIFETIME", 3600),
-		},
-		Log: LogConfig{
-			Level:  getenvStr("VALUATION_LOG_LEVEL", "info"),
-			Format: getenvStr("VALUATION_LOG_FORMAT", "console"),
-			Output: getenvStr("VALUATION_LOG_OUTPUT", "stdout"),
 		},
 		Storage: StorageConfig{
 			PDFOutputDir: getenvStr("VALUATION_PDF_OUTPUT_DIR", "storage/reports"),

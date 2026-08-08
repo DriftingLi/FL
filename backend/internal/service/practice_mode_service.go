@@ -6,6 +6,7 @@ import (
 	"errors"
 	"math/rand"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -15,11 +16,13 @@ import (
 type PracticeModeService struct {
 	db *gorm.DB
 	ai *AIService
+
+	logger *zap.Logger
 }
 
 // NewPracticeModeService 创建题库练习服务，ai 可为 nil（简答题降级）。
-func NewPracticeModeService(db *gorm.DB, ai *AIService) *PracticeModeService {
-	return &PracticeModeService{db: db, ai: ai}
+func NewPracticeModeService(db *gorm.DB, ai *AIService, logger *zap.Logger) *PracticeModeService {
+	return &PracticeModeService{db: db, ai: ai, logger: logger}
 }
 
 // GetFreeQuestions 随机练习抽题：从 published 题库按条件随机抽取 count 题。

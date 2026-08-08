@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
@@ -120,9 +122,9 @@ func newCodeAuthTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fakeChann
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db := testutil.NewMemoryDB(t)
-	authSvc := service.NewAuthService(db, "test-secret", time.Hour, "admin", "tutor", "student")
+	authSvc := service.NewAuthService(db, "test-secret", time.Hour, "admin", "tutor", "student", zap.NewNop())
 	store := newMemCodeStore()
-	codeSvc := service.NewVerifyCodeService(db, authSvc, 5*time.Minute, store)
+	codeSvc := service.NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
 
 	emailCh := &fakeChannel{column: "email", keyPref: "email_code", noun: "邮箱"}
 	phoneCh := &fakeChannel{column: "phone", keyPref: "phone_code", noun: "手机号"}
@@ -135,9 +137,9 @@ func newCodeAuthTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fakeChann
 	r := gin.New()
 	r.Use(gin.Recovery())
 	api := r.Group("/api")
-	RegisterEmailAuthRoutes(api, cfg, codeSvc, emailCh)
-	RegisterPhoneAuthRoutes(api, cfg, codeSvc, phoneCh)
-	RegisterProfileBindRoutes(api, cfg, db, authSvc, codeSvc, emailCh, phoneCh)
+	RegisterEmailAuthRoutes(api, cfg, codeSvc, emailCh, zap.NewNop())
+	RegisterPhoneAuthRoutes(api, cfg, codeSvc, phoneCh, zap.NewNop())
+	RegisterProfileBindRoutes(api, cfg, db, authSvc, codeSvc, emailCh, phoneCh, zap.NewNop())
 
 	return r, store, emailCh, phoneCh
 }

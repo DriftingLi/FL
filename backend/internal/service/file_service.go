@@ -17,7 +17,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -28,6 +27,7 @@ import (
 	"time"
 
 	"forklift-training/internal/storage"
+	"go.uber.org/zap"
 )
 
 // 文件扩展名白名单（文档仅允许 PDF，浏览器原生预览；其他 Office 格式无法内嵌渲染故移除）。
@@ -50,17 +50,20 @@ type FileService struct {
 	storage               storage.Storage
 	libreofficeSidecarURL string // LibreOffice sidecar HTTP 地址(如 http://libreoffice:8000);为空则降级到本地 exec
 	httpClient            *http.Client
+
+	logger *zap.Logger
 }
 
 // NewFileService 创建文件服务实例。
 // libreofficeSidecarURL 为空时降级到本地 LibreOffice exec 调用(向后兼容)。
-func NewFileService(libreofficeSidecarURL string, st storage.Storage) *FileService {
+func NewFileService(libreofficeSidecarURL string, st storage.Storage, logger *zap.Logger) *FileService {
 	return &FileService{
 		storage:               st,
 		libreofficeSidecarURL: libreofficeSidecarURL,
 		httpClient: &http.Client{
 			Timeout: 180 * time.Second, // PPT 转换可能较慢
 		},
+		logger: logger,
 	}
 }
 
@@ -161,7 +164,7 @@ func (s *FileService) ListFiles(prefix string) []string {
 	defer cancel()
 	urls, err := s.storage.List(ctx, prefix)
 	if err != nil {
-		log.Printf("[file_service] List 失败 prefix=%s: %v", prefix, err)
+		s.logger.Warn("[file_service] List 失败", zap.String("prefix", prefix), zap.Error(err))
 		return nil
 	}
 	return urls
@@ -210,7 +213,7 @@ func (s *FileService) ConvertPPTToImages(pptContent []byte, chapterID int) []str
 	for _, img := range images {
 		imgData, err := base64Decode(img.Data)
 		if err != nil {
-			log.Printf("[file_service] base64 解码失败 name=%s: %v", img.Name, err)
+			s.logger.Warn("[file_service] base64 解码失败", zap.String("name", img.Name), zap.Error(err))
 			continue
 		}
 		imgCT := "image/png"
@@ -222,7 +225,7 @@ func (s *FileService) ConvertPPTToImages(pptContent []byte, chapterID int) []str
 		url, err := s.storage.Save(ctx, key, imgData, imgCT)
 		cancel()
 		if err != nil {
-			log.Printf("[file_service] 上传 slide 失败 key=%s: %v", key, err)
+			s.logger.Warn("[file_service] 上传 slide 失败", zap.String("key", key), zap.Error(err))
 			continue
 		}
 		urls = append(urls, url)
@@ -249,11 +252,11 @@ func (s *FileService) convertWithSidecar(pptContent []byte, chapterID int) ([]st
 	_ = writer.WriteField("chapter_id", strconv.Itoa(chapterID))
 	part, err := writer.CreateFormFile("file", fmt.Sprintf("chapter_%d.pptx", chapterID))
 	if err != nil {
-		log.Printf("[file_service] 构造 multipart 失败: %v", err)
+		s.logger.Warn("[file_service] 构造 multipart 失败", zap.Error(err))
 		return nil, false
 	}
 	if _, err := part.Write(pptContent); err != nil {
-		log.Printf("[file_service] 写入 multipart 失败: %v", err)
+		s.logger.Warn("[file_service] 写入 multipart 失败", zap.Error(err))
 		return nil, false
 	}
 	_ = writer.Close()
@@ -261,14 +264,14 @@ func (s *FileService) convertWithSidecar(pptContent []byte, chapterID int) ([]st
 	url := strings.TrimSuffix(s.libreofficeSidecarURL, "/") + "/convert"
 	req, err := http.NewRequestWithContext(context.Background(), "POST", url, body)
 	if err != nil {
-		log.Printf("[file_service] 构造 sidecar 请求失败: %v", err)
+		s.logger.Warn("[file_service] 构造 sidecar 请求失败", zap.Error(err))
 		return nil, false
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		log.Printf("[file_service] 调用 LibreOffice sidecar 失败: %v", err)
+		s.logger.Warn("[file_service] 调用 LibreOffice sidecar 失败", zap.Error(err))
 		return nil, false
 	}
 	defer resp.Body.Close()
@@ -282,11 +285,11 @@ func (s *FileService) convertWithSidecar(pptContent []byte, chapterID int) ([]st
 		} `json:"images"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Printf("[file_service] 解析 sidecar 响应失败: %v", err)
+		s.logger.Warn("[file_service] 解析 sidecar 响应失败", zap.Error(err))
 		return nil, false
 	}
 	if !result.Success {
-		log.Printf("[file_service] sidecar 转换失败: %s", result.Error)
+		s.logger.Warn("[file_service] sidecar 转换失败", zap.String("detail", result.Error))
 		return nil, false
 	}
 	return result.Images, true
@@ -301,27 +304,27 @@ func (s *FileService) convertWithLibreOffice(pptContent []byte, chapterID int) (
 }, bool) {
 	soffice := findLibreOffice()
 	if soffice == "" {
-		log.Printf("[file_service] LibreOffice 未安装，跳过 PPT 转换")
+		s.logger.Warn("[file_service] LibreOffice 未安装，跳过 PPT 转换")
 		return nil, false
 	}
 
 	tmpDir, err := os.MkdirTemp("", fmt.Sprintf("ppt_%d_*", chapterID))
 	if err != nil {
-		log.Printf("[file_service] 创建临时目录失败: %v", err)
+		s.logger.Warn("[file_service] 创建临时目录失败", zap.Error(err))
 		return nil, false
 	}
 	defer os.RemoveAll(tmpDir)
 
 	pptPath := filepath.Join(tmpDir, "input.pptx")
 	if err := os.WriteFile(pptPath, pptContent, 0o644); err != nil {
-		log.Printf("[file_service] 写入临时 PPT 失败: %v", err)
+		s.logger.Warn("[file_service] 写入临时 PPT 失败", zap.Error(err))
 		return nil, false
 	}
 
 	// PPT → PDF
 	cmd := exec.Command(soffice, "--headless", "--convert-to", "pdf", "--outdir", tmpDir, pptPath)
 	if err := cmd.Run(); err != nil {
-		log.Printf("[file_service] LibreOffice 转换失败: %v", err)
+		s.logger.Warn("[file_service] LibreOffice 转换失败", zap.Error(err))
 		return nil, false
 	}
 
@@ -337,20 +340,20 @@ func (s *FileService) convertWithLibreOffice(pptContent []byte, chapterID int) (
 		}
 	}
 	if _, err := os.Stat(pdfPath); err != nil {
-		log.Printf("[file_service] 未找到转换后的 PDF")
+		s.logger.Warn("[file_service] 未找到转换后的 PDF")
 		return nil, false
 	}
 
 	// PDF → PNG (pdftoppm)
 	pdftoppm := findExecutable("pdftoppm")
 	if pdftoppm == "" {
-		log.Printf("[file_service] 无 pdftoppm 工具")
+		s.logger.Warn("[file_service] 无 pdftoppm 工具")
 		return nil, false
 	}
 	prefix := filepath.Join(tmpDir, "slide")
 	cmd2 := exec.Command(pdftoppm, "-png", "-r", "150", pdfPath, prefix)
 	if err := cmd2.Run(); err != nil {
-		log.Printf("[file_service] pdftoppm 转换失败: %v", err)
+		s.logger.Warn("[file_service] pdftoppm 转换失败", zap.Error(err))
 		return nil, false
 	}
 
@@ -414,7 +417,7 @@ func (s *FileService) uploadPlaceholder(chapterID int) string {
 	defer cancel()
 	url, err := s.storage.Save(ctx, key, placeholderPNG, "image/png")
 	if err != nil {
-		log.Printf("[file_service] 上传占位图失败: %v", err)
+		s.logger.Warn("[file_service] 上传占位图失败", zap.Error(err))
 		return ""
 	}
 	return url
@@ -437,11 +440,11 @@ func (s *FileService) compressImageViaSidecar(content []byte) ([]byte, bool) {
 	writer := multipart.NewWriter(body)
 	part, err := writer.CreateFormFile("file", "image.bin")
 	if err != nil {
-		log.Printf("[file_service] 构造图片压缩 multipart 失败: %v", err)
+		s.logger.Warn("[file_service] 构造图片压缩 multipart 失败", zap.Error(err))
 		return nil, false
 	}
 	if _, err := part.Write(content); err != nil {
-		log.Printf("[file_service] 写入图片压缩 multipart 失败: %v", err)
+		s.logger.Warn("[file_service] 写入图片压缩 multipart 失败", zap.Error(err))
 		return nil, false
 	}
 	_ = writer.Close()
@@ -449,14 +452,14 @@ func (s *FileService) compressImageViaSidecar(content []byte) ([]byte, bool) {
 	url := strings.TrimSuffix(s.libreofficeSidecarURL, "/") + "/convert-image"
 	req, err := http.NewRequestWithContext(context.Background(), "POST", url, body)
 	if err != nil {
-		log.Printf("[file_service] 构造图片压缩请求失败: %v", err)
+		s.logger.Warn("[file_service] 构造图片压缩请求失败", zap.Error(err))
 		return nil, false
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		log.Printf("[file_service] 调用 sidecar 图片压缩失败: %v", err)
+		s.logger.Warn("[file_service] 调用 sidecar 图片压缩失败", zap.Error(err))
 		return nil, false
 	}
 	defer resp.Body.Close()
@@ -468,17 +471,17 @@ func (s *FileService) compressImageViaSidecar(content []byte) ([]byte, bool) {
 		Error   string `json:"error"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Printf("[file_service] 解析 sidecar 图片压缩响应失败: %v", err)
+		s.logger.Warn("[file_service] 解析 sidecar 图片压缩响应失败", zap.Error(err))
 		return nil, false
 	}
 	if !result.Success {
-		log.Printf("[file_service] sidecar 图片压缩失败: %s", result.Error)
+		s.logger.Warn("[file_service] sidecar 图片压缩失败", zap.String("detail", result.Error))
 		return nil, false
 	}
 
 	imgData, err := base64Decode(result.Data)
 	if err != nil {
-		log.Printf("[file_service] sidecar 图片压缩响应 base64 解码失败: %v", err)
+		s.logger.Warn("[file_service] sidecar 图片压缩响应 base64 解码失败", zap.Error(err))
 		return nil, false
 	}
 

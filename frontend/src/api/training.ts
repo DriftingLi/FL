@@ -85,7 +85,6 @@ export interface QuestionTag {
   id: number
   name: string
   code?: string
-  category?: string
   description?: string
   sort_order?: number
   status?: number
@@ -98,7 +97,6 @@ export interface QuestionTag {
 export interface TagPayload {
   name: string
   code?: string
-  category?: string
   description?: string
   sort_order?: number
   status?: number
@@ -185,10 +183,6 @@ export const trainingApi = {
   },
   updateQuestionTag(id: number, data: Partial<TagPayload>) {
     return request.put<null>(`/admin/question-tag/${id}`, data)
-  },
-  /** 交换题库标签排序：PUT /api/admin/question-tag/:id/sort */
-  swapQuestionTag(id: number, swapWith: number) {
-    return request.put<null>(`/admin/question-tag/${id}/sort`, { swap_with: swapWith })
   },
   deleteQuestionTag(id: number) {
     return request.delete<null>(`/admin/question-tag/${id}`)

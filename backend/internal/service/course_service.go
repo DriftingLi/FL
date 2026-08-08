@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
-	"log/slog"
 	"net/http"
 	"strings"
 
@@ -19,11 +19,12 @@ import (
 type CourseService struct {
 	db          *gorm.DB
 	fileService *FileService
+	logger      *zap.Logger
 }
 
 // NewCourseService 创建课程服务实例。
-func NewCourseService(db *gorm.DB, fileService *FileService) *CourseService {
-	return &CourseService{db: db, fileService: fileService}
+func NewCourseService(db *gorm.DB, fileService *FileService, logger *zap.Logger) *CourseService {
+	return &CourseService{db: db, fileService: fileService, logger: logger}
 }
 
 // GetCourses 课程列表（可额外按专业方向/课程等级过滤）。
@@ -226,7 +227,7 @@ func (s *CourseService) generateSlides(chapterID int, pptURL string) []string {
 	}
 	pptBytes, err := downloadFile(pptURL)
 	if err != nil {
-		slog.Error("下载 PPT 失败", "url", pptURL, "error", err)
+		s.logger.Error("下载 PPT 失败", zap.String("url", pptURL), zap.Error(err))
 		return nil
 	}
 	slideURLs := s.fileService.ConvertPPTToImages(pptBytes, chapterID)

@@ -2,12 +2,12 @@
 package middleware
 
 import (
-	"log/slog"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/security"
@@ -44,21 +44,6 @@ func RequestID() gin.HandlerFunc {
 	}
 }
 
-// Logger 请求日志中间件。
-func Logger() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		start := time.Now()
-		c.Next()
-		slog.Info("request",
-			"method", c.Request.Method,
-			"path", c.Request.URL.Path,
-			"status", c.Writer.Status(),
-			"duration_ms", time.Since(start).Milliseconds(),
-			"ip", c.ClientIP(),
-		)
-	}
-}
-
 // CORS 跨域中间件。
 // 开发环境放开全部来源（本地前端可能运行在任意端口/子域名，避免改端口后被拦截）；
 // 生产环境仍按配置白名单校验。
@@ -82,11 +67,11 @@ func CORS(origins []string, isProd bool) gin.HandlerFunc {
 }
 
 // Recovery panic 恢复中间件。
-func Recovery() gin.HandlerFunc {
+func Recovery(logger *zap.Logger) gin.HandlerFunc {
 	return gin.CustomRecovery(func(c *gin.Context, recovered interface{}) {
-		slog.Error("panic recovered",
-			"error", recovered,
-			"path", c.Request.URL.Path,
+		logger.Error("panic recovered",
+			zap.Any("error", recovered),
+			zap.String("path", c.Request.URL.Path),
 		)
 		response.ServerError(c, "服务器内部错误")
 		c.Abort()

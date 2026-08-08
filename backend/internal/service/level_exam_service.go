@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -26,11 +27,13 @@ var validSessionStatuses = []string{"upcoming", "ongoing", "finished"} //nolint:
 type LevelExamService struct {
 	db *gorm.DB
 	ai *AIService
+
+	logger *zap.Logger
 }
 
 // NewLevelExamService 创建等级考试服务。
-func NewLevelExamService(db *gorm.DB, ai *AIService) *LevelExamService {
-	return &LevelExamService{db: db, ai: ai}
+func NewLevelExamService(db *gorm.DB, ai *AIService, logger *zap.Logger) *LevelExamService {
+	return &LevelExamService{db: db, ai: ai, logger: logger}
 }
 
 // CreateSession 创建考试场次。

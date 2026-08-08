@@ -6,17 +6,20 @@ import (
 	"fmt"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 // ExportService 数据导出服务。
 type ExportService struct {
 	db *gorm.DB
+
+	logger *zap.Logger
 }
 
 // NewExportService 构造导出服务。
-func NewExportService(db *gorm.DB) *ExportService {
-	return &ExportService{db: db}
+func NewExportService(db *gorm.DB, logger *zap.Logger) *ExportService {
+	return &ExportService{db: db, logger: logger}
 }
 
 // Students 学员名单导出行（首行为表头）。

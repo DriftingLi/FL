@@ -4,7 +4,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
-	"log/slog"
+	"go.uber.org/zap"
 	"time"
 
 	"gorm.io/gorm"
@@ -46,13 +46,14 @@ type genTaskResult struct {
 
 // ContentGenerateService 课程内容异步生成服务。
 type ContentGenerateService struct {
-	db *gorm.DB
-	ai *AIService
+	db     *gorm.DB
+	ai     *AIService
+	logger *zap.Logger
 }
 
 // NewContentGenerateService 构造 ContentGenerateService。
-func NewContentGenerateService(db *gorm.DB, ai *AIService) *ContentGenerateService {
-	return &ContentGenerateService{db: db, ai: ai}
+func NewContentGenerateService(db *gorm.DB, ai *AIService, logger *zap.Logger) *ContentGenerateService {
+	return &ContentGenerateService{db: db, ai: ai, logger: logger}
 }
 
 // StartGeneration 启动异步生成任务，返回 task_id（字符串形式）。
@@ -102,7 +103,7 @@ func (s *ContentGenerateService) runGeneration(taskID int, courseID int, chapter
 	// 更新状态为 processing
 	if err := s.db.Model(&model.AsyncTask{}).Where("id = ?", taskID).
 		Update("status", "processing").Error; err != nil {
-		slog.Error("runGeneration 更新 processing 状态失败", "task_id", taskID, "error", err)
+		s.logger.Error("runGeneration 更新 processing 状态失败", zap.Int("task_id", taskID), zap.Error(err))
 		return
 	}
 
@@ -152,14 +153,14 @@ func (s *ContentGenerateService) runGeneration(taskID int, courseID int, chapter
 		if err != nil {
 			genResult.Status = "failed"
 			genResult.Error = err.Error()
-			slog.Warn("章节内容生成失败", "task_id", taskID, "chapter_id", chID, "error", err)
+			s.logger.Warn("章节内容生成失败", zap.Int("task_id", taskID), zap.Int("chapter_id", chID), zap.Error(err))
 		} else {
 			// 写入 chapter.content
 			if err := s.db.Model(&model.Chapter{}).Where("chapter_id = ?", chID).
 				Update("content", content).Error; err != nil {
 				genResult.Status = "failed"
 				genResult.Error = fmt.Sprintf("写入数据库失败: %v", err)
-				slog.Error("写入 chapter.content 失败", "chapter_id", chID, "error", err)
+				s.logger.Error("写入 chapter.content 失败", zap.Int("chapter_id", chID), zap.Error(err))
 			} else {
 				genResult.Status = "success"
 				genResult.Content = content
@@ -190,7 +191,7 @@ func (s *ContentGenerateService) runGeneration(taskID int, courseID int, chapter
 			"status":     finalStatus,
 			"updated_at": time.Now(),
 		}).Error; err != nil {
-		slog.Error("更新任务最终状态失败", "task_id", taskID, "error", err)
+		s.logger.Error("更新任务最终状态失败", zap.Int("task_id", taskID), zap.Error(err))
 	}
 }
 
@@ -202,7 +203,7 @@ func (s *ContentGenerateService) updateTaskResult(taskID int, result *genTaskRes
 			"result":     model.JSONB(resultJSON),
 			"updated_at": time.Now(),
 		}).Error; err != nil {
-		slog.Error("更新任务 result 失败", "task_id", taskID, "error", err)
+		s.logger.Error("更新任务 result 失败", zap.Int("task_id", taskID), zap.Error(err))
 	}
 }
 
@@ -214,7 +215,7 @@ func (s *ContentGenerateService) failTask(taskID int, errMsg string) {
 			"error":      errMsg,
 			"updated_at": time.Now(),
 		}).Error; err != nil {
-		slog.Error("failTask 更新失败", "task_id", taskID, "error", err)
+		s.logger.Error("failTask 更新失败", zap.Int("task_id", taskID), zap.Error(err))
 	}
 }
 
@@ -230,11 +231,11 @@ func (s *ContentGenerateService) CleanupInterruptedTasks() {
 			"updated_at": time.Now(),
 		})
 	if res.Error != nil {
-		slog.Error("清理遗留异步任务失败", "error", res.Error)
+		s.logger.Error("清理遗留异步任务失败", zap.Error(res.Error))
 		return
 	}
 	if res.RowsAffected > 0 {
-		slog.Warn("已清理服务重启遗留的异步任务", "count", res.RowsAffected)
+		s.logger.Warn("已清理服务重启遗留的异步任务", zap.Int64("count", res.RowsAffected))
 	}
 }
 

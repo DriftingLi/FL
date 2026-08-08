@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -16,9 +17,9 @@ import (
 )
 
 // RegisterFeaturedRoutes 注册内容精选路由（公开 + 管理端）。
-func RegisterFeaturedRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage) {
-	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st)
-	svc := service.NewFeaturedService(db, fileSvc)
+func RegisterFeaturedRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger) {
+	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st, logger)
+	svc := service.NewFeaturedService(db, fileSvc, logger)
 
 	// ===== 公开接口（无鉴权）=====
 
