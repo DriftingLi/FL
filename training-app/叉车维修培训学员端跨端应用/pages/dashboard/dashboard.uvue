@@ -50,7 +50,7 @@
 
             <!-- 课程卡片列表 -->
             <view class="course-list">
-                <view v-for="(course, idx) in recentCourses" :key="idx" class="course-card"
+                <!-- <view v-for="(course, idx) in recentCourses" :key="idx" class="course-card"
                     @click="onCourseClick(course.course_id)">
                     <view class="course-card-top">
                         <view class="course-badge">
@@ -73,7 +73,10 @@
                 </view>
                 <view v-if="recentCourses.length == 0" class="empty-tip">
                     <text class="empty-text">暂无推荐课程</text>
-                </view>
+                </view> -->
+                 <view class="empty-tip">
+                    <text class="empty-text">暂无推荐课程</text>
+                </view> 
             </view>
         </scroll-view>
 

@@ -564,3 +564,58 @@ export type AnswerState = {
 	submitted : boolean
 }
 
+// ===== AI 助手模块类型 =====
+
+/** AI 对话消息 */
+export type AiChatMessage = {
+	role : string       // user | assistant | system
+	content : string
+}
+
+/** 平台可用模型 */
+export type AiModel = {
+	id : number
+	name : string
+	model : string
+	source : string     // admin / system 等
+	description : string
+}
+
+/** 用户自定义模型 */
+export type AiUserModel = {
+	id : number
+	name : string
+	base_url : string
+	model : string
+	api_key : string
+	created_at : string
+}
+
+/** AI 会话 */
+export type AiSession = {
+	id : number
+	title : string
+	model_source : string
+	model_id : number
+	created_at : string
+	updated_at : string
+}
+
+/** AI 会话消息（含 id） */
+export type AiSessionMessage = {
+	id : number
+	role : string
+	content : string
+	created_at : string
+}
+
+/** 对话设置（本地缓存） */
+export type AiChatSettings = {
+	model_source : string   // admin | custom
+	model_id : number       // 用户模型 id，0 表示未选
+	model_name : string     // 展示名
+	base_url : string
+	model : string
+	api_key : string
+}
+

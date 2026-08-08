@@ -1,0 +1,606 @@
+<template>
+	<view class="container" :style="{ height: windowHeight + 'px' }">
+		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+		<!-- 顶栏 -->
+		<view class="header">
+			<view class="header-left" @click="onOpenHistory">
+				<text class="header-icon">☰</text>
+			</view>
+			<text class="header-title">AI 助手</text>
+			<view class="header-right" @click="onOpenSettings">
+				<text class="header-icon">⚙</text>
+			</view>
+		</view>
+
+		<!-- 消息区 -->
+		<scroll-view class="chat-scroll" scroll-y="true" :scroll-into-view="scrollIntoView" :scroll-with-animation="true">
+			<!-- 欢迎区 -->
+			<view v-if="messages.length == 0" class="welcome">
+				<view class="welcome-avatar">
+					<text class="welcome-avatar-text">AI</text>
+				</view>
+				<text class="welcome-title">你好，我是你的 AI 学习助手</text>
+				<text class="welcome-sub">可以问我叉车结构、故障诊断、安全操作等问题</text>
+				<view class="suggest-list">
+					<view v-for="(s, idx) in suggestions" :key="idx" class="suggest-item" @click="onSuggest(s)">
+						<text class="suggest-text">{{ s }}</text>
+					</view>
+				</view>
+			</view>
+
+			<!-- 消息列表 -->
+			<view class="msg-list">
+				<view v-for="(msg, idx) in messages" :key="idx" :id="'msg-' + idx"
+					:class="['msg-row', msg.role == 'user' ? 'msg-row-user' : 'msg-row-ai']">
+					<view v-if="msg.role != 'user'" class="msg-avatar ai-avatar">
+						<text class="msg-avatar-text">AI</text>
+					</view>
+					<view :class="['msg-bubble', msg.role == 'user' ? 'bubble-user' : 'bubble-ai']">
+						<text class="msg-content">{{ msg.content.length > 0 ? msg.content : (sending && idx == messages.length - 1 ? '思考中...' : '') }}</text>
+					</view>
+				</view>
+			</view>
+			<view id="msg-bottom" class="scroll-anchor"></view>
+		</scroll-view>
+
+		<!-- 输入区 -->
+		<view class="input-bar">
+			<input class="chat-input" type="text" :value="inputText" :disabled="sending"
+				placeholder="输入你的问题..." :maxlength="2000" confirm-type="send"
+				@input="onInput" @confirm="onSend" />
+			<view :class="['send-btn', canSend ? 'send-btn-active' : '']" @click="onSend">
+				<text class="send-btn-text">{{ sending ? '...' : '发送' }}</text>
+			</view>
+		</view>
+
+		<tab-bar :active-index="2"></tab-bar>
+
+		<!-- 历史会话抽屉 -->
+		<view v-if="showHistory" class="drawer-mask" @click="onCloseHistory"></view>
+		<view :class="['drawer', showHistory ? 'drawer-open' : '']">
+			<view class="drawer-header">
+				<text class="drawer-title">历史会话</text>
+				<view class="drawer-new" @click="onNewChat">
+					<text class="drawer-new-text">+ 新对话</text>
+				</view>
+			</view>
+			<scroll-view class="drawer-scroll" scroll-y="true">
+				<view v-if="sessions.length == 0" class="drawer-empty">
+					<text class="drawer-empty-text">暂无历史会话</text>
+				</view>
+				<view v-for="(s, idx) in sessions" :key="idx" class="session-item"
+					:class="{ 'session-active': s.id == sessionId }" @click="onSelectSession(s.id)">
+					<view class="session-main">
+						<text class="session-title">{{ s.title }}</text>
+						<text class="session-time">{{ formatTime(s.updated_at.length > 0 ? s.updated_at : s.created_at) }}</text>
+					</view>
+					<text class="session-del" @click.stop="onDeleteSession(s.id)">删除</text>
+				</view>
+			</scroll-view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { ref } from 'vue'
+	import { onShow } from '@dcloudio/uni-app'
+	import { useStatusBarHeight } from '../../utils/system'
+	import {
+		chatAiApi,
+		loadAiChatSettings,
+		getAiSessionsApi,
+		createAiSessionApi,
+		deleteAiSessionApi,
+		getAiSessionMessagesApi,
+	} from '../../api/aiAssistant'
+	import type { AiChatMessage, AiSession, AiChatSettings } from '../../types/index'
+
+	const statusBarHeight = useStatusBarHeight()
+	const windowHeight = uni.getSystemInfoSync().windowHeight
+
+	const messages = ref<AiChatMessage[]>([])
+	const inputText = ref<string>('')
+	const sending = ref<boolean>(false)
+	const canSend = ref<boolean>(false)
+	const scrollIntoView = ref<string>('')
+	const sessionId = ref<number>(0)
+	const settings = ref<AiChatSettings>(loadAiChatSettings())
+
+	const showHistory = ref<boolean>(false)
+	const sessions = ref<AiSession[]>([])
+
+	const suggestions : string[] = [
+		'叉车液压系统常见故障有哪些？',
+		'如何正确进行出车前安全检查？',
+		'货叉起升时有异响怎么排查？',
+		'解释一下叉车的主要技术参数',
+	]
+
+	function onInput(e : InputEvent) : void {
+		inputText.value = e.detail.value
+		canSend.value = inputText.value.trim().length > 0 && !sending.value
+	}
+
+	function scrollToBottom() : void {
+		scrollIntoView.value = ''
+		setTimeout(() => {
+			scrollIntoView.value = 'msg-bottom'
+		}, 50)
+	}
+
+	function onSuggest(text : string) : void {
+		inputText.value = text
+		canSend.value = true
+		onSend()
+	}
+
+	async function ensureSession() : Promise<void> {
+		if (sessionId.value > 0) return
+		try {
+			const s = await createAiSessionApi('新对话')
+			sessionId.value = s.id
+		} catch (e) {
+			// 未登录或接口失败时允许无 session 继续对话
+			console.warn('[ai] create session failed:', e)
+		}
+	}
+
+	async function onSend() : Promise<void> {
+		const text = inputText.value.trim()
+		if (text.length == 0 || sending.value) return
+
+		// 追加用户消息
+		const userMsg : AiChatMessage = { role: 'user', content: text }
+		messages.value = messages.value.concat([userMsg])
+		inputText.value = ''
+		canSend.value = false
+		sending.value = true
+		scrollToBottom()
+
+		// 占位助手消息
+		const aiMsg : AiChatMessage = { role: 'assistant', content: '' }
+		messages.value = messages.value.concat([aiMsg])
+		scrollToBottom()
+
+		try {
+			await ensureSession()
+			// 构造发送的历史（不含空 assistant 占位）
+			const history : AiChatMessage[] = []
+			for (let i = 0; i < messages.value.length; i++) {
+				const m = messages.value[i]
+				if (m.role == 'assistant' && m.content.length == 0) continue
+				history.push({ role: m.role, content: m.content })
+			}
+			// 确保最后是当前用户消息
+			if (history.length == 0 || history[history.length - 1].role != 'user') {
+				history.push(userMsg)
+			}
+
+			const reply = await chatAiApi(history, settings.value, sessionId.value)
+			// 更新最后一条 assistant
+			const updated : AiChatMessage[] = []
+			for (let i = 0; i < messages.value.length; i++) {
+				if (i == messages.value.length - 1 && messages.value[i].role == 'assistant') {
+					updated.push({ role: 'assistant', content: reply })
+				} else {
+					updated.push(messages.value[i])
+				}
+			}
+			messages.value = updated
+		} catch (e) {
+			let msg = '对话失败，请稍后重试'
+			if (e instanceof Error) {
+				const m = (e as Error).message
+				if (m != null && m.length > 0) msg = m
+			}
+			// 把错误写到助手气泡
+			const updated : AiChatMessage[] = []
+			for (let i = 0; i < messages.value.length; i++) {
+				if (i == messages.value.length - 1 && messages.value[i].role == 'assistant') {
+					updated.push({ role: 'assistant', content: '⚠️ ' + msg })
+				} else {
+					updated.push(messages.value[i])
+				}
+			}
+			messages.value = updated
+			uni.showToast({ title: msg.length > 20 ? msg.substring(0, 20) + '...' : msg, icon: 'none' })
+		} finally {
+			sending.value = false
+			canSend.value = inputText.value.trim().length > 0
+			scrollToBottom()
+		}
+	}
+
+	function onOpenSettings() : void {
+		uni.navigateTo({ url: '/pages/ai-assistant/ai-settings' })
+	}
+
+	function onCloseHistory() : void {
+		showHistory.value = false
+	}
+
+	async function onOpenHistory() : Promise<void> {
+		showHistory.value = true
+		try {
+			sessions.value = await getAiSessionsApi()
+		} catch (e) {
+			console.warn('[ai] load sessions failed:', e)
+			sessions.value = [] as AiSession[]
+		}
+	}
+
+	function onNewChat() : void {
+		sessionId.value = 0
+		messages.value = [] as AiChatMessage[]
+		showHistory.value = false
+	}
+
+	async function onSelectSession(id : number) : Promise<void> {
+		if (id <= 0) return
+		sessionId.value = id
+		showHistory.value = false
+		uni.showLoading({ title: '加载中...', mask: true })
+		try {
+			const list = await getAiSessionMessagesApi(id)
+			const msgs : AiChatMessage[] = []
+			for (let i = 0; i < list.length; i++) {
+				msgs.push({ role: list[i].role, content: list[i].content })
+			}
+			messages.value = msgs
+			scrollToBottom()
+		} catch (e) {
+			console.error('[ai] load messages failed:', e)
+			uni.showToast({ title: '加载会话失败', icon: 'none' })
+		} finally {
+			uni.hideLoading()
+		}
+	}
+
+	async function onDeleteSession(id : number) : Promise<void> {
+		uni.showModal({
+			title: '删除会话',
+			content: '确定删除该会话吗？',
+			success: async (res) => {
+				if (!res.confirm) return
+				try {
+					await deleteAiSessionApi(id)
+					const next : AiSession[] = []
+					for (let i = 0; i < sessions.value.length; i++) {
+						if (sessions.value[i].id != id) next.push(sessions.value[i])
+					}
+					sessions.value = next
+					if (sessionId.value == id) {
+						sessionId.value = 0
+						messages.value = [] as AiChatMessage[]
+					}
+				} catch (e) {
+					uni.showToast({ title: '删除失败', icon: 'none' })
+				}
+			}
+		})
+	}
+
+	function formatTime(s : string) : string {
+		if (s.length >= 16) return s.substring(0, 16).replace('T', ' ')
+		if (s.length >= 10) return s.substring(0, 10)
+		return s
+	}
+
+	onShow(() => {
+		// 从设置页返回时刷新模型配置
+		settings.value = loadAiChatSettings()
+	})
+</script>
+
+<style>
+	.container {
+		display: flex;
+		flex-direction: column;
+		background-color: #f5f6f8;
+		position: relative;
+	}
+
+	.status-bar {
+		background-color: #ffffff;
+	}
+
+	.header {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding: 16rpx 24rpx;
+		background-color: #ffffff;
+		border-bottom: 1rpx solid #f0f0f0;
+	}
+
+	.header-left,
+	.header-right {
+		width: 72rpx;
+		height: 72rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.header-icon {
+		font-size: 40rpx;
+		color: #333333;
+	}
+
+	.header-title {
+		font-size: 34rpx;
+		font-weight: bold;
+		color: #222222;
+	}
+
+	.chat-scroll {
+		flex: 1;
+		height: 0;
+		padding: 24rpx;
+	}
+
+	.welcome {
+		align-items: center;
+		padding: 80rpx 32rpx 40rpx 32rpx;
+	}
+
+	.welcome-avatar {
+		width: 120rpx;
+		height: 120rpx;
+		border-radius: 60rpx;
+		background-color: #2979ff;
+		align-items: center;
+		justify-content: center;
+		margin-bottom: 28rpx;
+	}
+
+	.welcome-avatar-text {
+		font-size: 40rpx;
+		color: #ffffff;
+		font-weight: bold;
+	}
+
+	.welcome-title {
+		font-size: 34rpx;
+		font-weight: bold;
+		color: #222222;
+		margin-bottom: 12rpx;
+		text-align: center;
+	}
+
+	.welcome-sub {
+		font-size: 26rpx;
+		color: #999999;
+		margin-bottom: 40rpx;
+		text-align: center;
+	}
+
+	.suggest-list {
+		align-self: stretch;
+	}
+
+	.suggest-item {
+		background-color: #ffffff;
+		border-radius: 16rpx;
+		padding: 24rpx 28rpx;
+		margin-bottom: 16rpx;
+		border: 1rpx solid #eeeeee;
+	}
+
+	.suggest-text {
+		font-size: 28rpx;
+		color: #333333;
+	}
+
+	.msg-list {
+		padding-bottom: 24rpx;
+	}
+
+	.msg-row {
+		flex-direction: row;
+		margin-bottom: 28rpx;
+		align-items: flex-start;
+	}
+
+	.msg-row-user {
+		justify-content: flex-end;
+	}
+
+	.msg-row-ai {
+		justify-content: flex-start;
+	}
+
+	.msg-avatar {
+		width: 64rpx;
+		height: 64rpx;
+		border-radius: 32rpx;
+		align-items: center;
+		justify-content: center;
+		margin-right: 16rpx;
+		flex-shrink: 0;
+	}
+
+	.ai-avatar {
+		background-color: #2979ff;
+	}
+
+	.msg-avatar-text {
+		font-size: 22rpx;
+		color: #ffffff;
+		font-weight: bold;
+	}
+
+	.msg-bubble {
+		max-width: 520rpx;
+		padding: 20rpx 24rpx;
+		border-radius: 20rpx;
+	}
+
+	.bubble-user {
+		background-color: #2979ff;
+		border-top-right-radius: 6rpx;
+	}
+
+	.bubble-ai {
+		background-color: #ffffff;
+		border-top-left-radius: 6rpx;
+		border: 1rpx solid #eeeeee;
+	}
+
+	.msg-content {
+		font-size: 28rpx;
+		line-height: 42rpx;
+	}
+
+	.bubble-user .msg-content {
+		color: #ffffff;
+	}
+
+	.bubble-ai .msg-content {
+		color: #333333;
+	}
+
+	.scroll-anchor {
+		height: 2rpx;
+	}
+
+	.input-bar {
+		flex-direction: row;
+		align-items: center;
+		padding: 16rpx 20rpx;
+		background-color: #ffffff;
+		border-top: 1rpx solid #f0f0f0;
+	}
+
+	.chat-input {
+		flex: 1;
+		height: 76rpx;
+		background-color: #f5f6f8;
+		border-radius: 38rpx;
+		padding: 0 28rpx;
+		font-size: 28rpx;
+		color: #333333;
+	}
+
+	.send-btn {
+		margin-left: 16rpx;
+		height: 76rpx;
+		padding: 0 28rpx;
+		border-radius: 38rpx;
+		background-color: #c5c5c5;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.send-btn-active {
+		background-color: #2979ff;
+	}
+
+	.send-btn-text {
+		font-size: 28rpx;
+		color: #ffffff;
+		font-weight: bold;
+	}
+
+	/* 历史抽屉 */
+	.drawer-mask {
+		position: absolute;
+		left: 0;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		background-color: rgba(0, 0, 0, 0.4);
+		z-index: 20;
+	}
+
+	.drawer {
+		position: absolute;
+		left: 0;
+		top: 0;
+		bottom: 0;
+		width: 560rpx;
+		background-color: #ffffff;
+		z-index: 30;
+		transform: translateX(-100%);
+	}
+
+	.drawer-open {
+		transform: translateX(0);
+	}
+
+	.drawer-header {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding: 32rpx 28rpx 20rpx 28rpx;
+		margin-top: 60rpx;
+		border-bottom: 1rpx solid #f0f0f0;
+	}
+
+	.drawer-title {
+		font-size: 32rpx;
+		font-weight: bold;
+		color: #222222;
+	}
+
+	.drawer-new {
+		padding: 10rpx 20rpx;
+		background-color: #e8f0ff;
+		border-radius: 24rpx;
+	}
+
+	.drawer-new-text {
+		font-size: 24rpx;
+		color: #2979ff;
+	}
+
+	.drawer-scroll {
+		flex: 1;
+		height: 0;
+		padding: 16rpx 0;
+	}
+
+	.drawer-empty {
+		padding: 80rpx 0;
+		align-items: center;
+	}
+
+	.drawer-empty-text {
+		font-size: 26rpx;
+		color: #999999;
+	}
+
+	.session-item {
+		flex-direction: row;
+		align-items: center;
+		padding: 24rpx 28rpx;
+		border-bottom: 1rpx solid #f5f5f5;
+	}
+
+	.session-active {
+		background-color: #f0f6ff;
+	}
+
+	.session-main {
+		flex: 1;
+	}
+
+	.session-title {
+		font-size: 28rpx;
+		color: #333333;
+		margin-bottom: 8rpx;
+		lines: 1;
+		text-overflow: ellipsis;
+	}
+
+	.session-time {
+		font-size: 22rpx;
+		color: #999999;
+	}
+
+	.session-del {
+		font-size: 24rpx;
+		color: #dd524d;
+		padding: 8rpx 12rpx;
+	}
+</style>

@@ -160,6 +160,20 @@
 				"navigationStyle": "custom",
 				"navigationBarTitleText": "发布新帖"
 			}
+		},
+		{
+			"path": "pages/ai-assistant/ai-assistant",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "AI 助手"
+			}
+		},
+		{
+			"path": "pages/ai-assistant/ai-settings",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "对话设置"
+			}
 		}
 	],
 	"globalStyle": {

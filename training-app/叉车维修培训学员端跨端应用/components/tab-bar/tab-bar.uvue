@@ -46,7 +46,7 @@
 	const tabs : TabItem[] = [
 		{ key: 'dashboard', path: '/pages/dashboard/dashboard', icon: '🏠', text: '首页' },
 		{ key: 'courses', path: '/pages/courses/courses', icon: '📚', text: '课程' },
-		{ key: 'ai', path: '', icon: '', text: 'AI学' },
+		{ key: 'ai', path: '/pages/ai-assistant/ai-assistant', icon: '🤖', text: 'AI学' },
 		{ key: 'forum', path: '/pages/forum/forum', icon: '💬', text: '交流' },
 		{ key: 'profile', path: '/pages/profile/profile', icon: '👤', text: '我的' },
 	]
