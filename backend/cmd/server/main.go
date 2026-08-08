@@ -61,7 +61,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "日志初始化失败:", err)
 		os.Exit(1)
 	}
-	defer logger.Sync()
+	defer func() { _ = logger.Sync() }()
 	logger.Info("配置加载完成", zap.String("env", cfg.AppEnv), zap.String("port", cfg.Port))
 	for _, w := range cfg.CORSConfigWarnings() {
 		logger.Warn(w)

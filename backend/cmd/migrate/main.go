@@ -31,7 +31,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "初始化日志失败:", err)
 		os.Exit(1)
 	}
-	defer logger.Sync()
+	defer func() { _ = logger.Sync() }()
 
 	direction := "up"
 	var extraArgs []string

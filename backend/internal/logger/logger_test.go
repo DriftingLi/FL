@@ -36,7 +36,7 @@ func TestNew_Stdout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New 失败: %v", err)
 	}
-	defer z.Sync()
+	defer func() { _ = z.Sync() }()
 	z.Info("hello")
 }
 
@@ -49,7 +49,7 @@ func TestNew_JSONEncoder(t *testing.T) {
 	core := zapcore.NewCore(enc, zapcore.AddSync(buf), zapcore.InfoLevel)
 	z := zap.New(core)
 	z.Info("structured", zap.String("k", "v"))
-	z.Sync()
+	_ = z.Sync()
 	if len(buf.data) == 0 || buf.data[0][0] != '{' {
 		t.Errorf("json 编码器应输出 JSON, got %q", buf.data)
 	}
@@ -69,7 +69,7 @@ func TestNew_FileOutput(t *testing.T) {
 		t.Fatalf("New 失败: %v", err)
 	}
 	z.Info("file log line")
-	z.Sync()
+	_ = z.Sync()
 
 	data, err := os.ReadFile(path)
 	if err != nil {

@@ -66,7 +66,7 @@ func TestRedactHook_AppliedByFactory(t *testing.T) {
 		zap.String("token", "abc123"),
 		zap.Error(errors.New("连接失败: postgres://user:topsecret@db:5432/x")),
 	)
-	z.Sync()
+	_ = z.Sync()
 
 	data, err := os.ReadFile(dir + "/app.log")
 	if err != nil {
