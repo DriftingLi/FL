@@ -73,6 +73,7 @@ Thumbs.db
 
 # ===== 临时与备份目录 =====
 _ftmp_clean/
+.scratch/
 .empty_tmp/
 node_modules_old/
 
