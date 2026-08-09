@@ -39,20 +39,11 @@ Single-context：root `CONTEXT.md` + `docs/adr/`。See `docs/agents/domain.md`.
   - `npm test`（vitest）
 - **部署配置**：改 `docker-compose*.yml` / `deploy.sh` 后可用 `docker compose -f docker-compose.prod.yml config -q` 做语法校验
 
-## 多 agent 并发约定
-
-其他 agent 可能同时在本工作区干活。遵守以下纪律避免冲突（详见 `docs/agents/work.md` 的区域声明表）：
-
-- **开工前**：读 `docs/agents/work.md` → 查 `git status`（他人未提交改动）→ `ps aux | grep opencode`（在跑的 agent）→ 最新 `docs/session-*.md`。
-- **声明区域**：开工后在 `docs/agents/work.md` 登记自己的区域与涉及文件；每个区域（`backend/`、`frontend/`、`docs/`）同时只允许一个持有者。触碰跨区热点文件（`go.mod`、`go.sum`、`package.json`、`package-lock.json`、`CONTEXT.md`、`AGENTS.md`）前必须先声明。
-- **提交纪律**：只 `git add` 自己涉及的文件，**禁止 `git add -A`**；提交前复查 `git status`，他人未提交的改动不随本次提交带走；动手前先 `git fetch`。
-- **分支纪律**：并发工作各自开 `feat/xxx` 分支，master 只通过 PR squash merge。
-
 ## 发布流程（push / PR / merge）
 
 master 有仓库 ruleset「protect」保护（直接 push 会被拒，`push declined due to repository rule violations`）。发布必须走分支 + PR：
 
-1. **本地提交**（按上方提交纪律，只 add 自己的文件）。
+1. **本地提交**（只 add 本次改动的文件，勿 `git add -A`）。
 2. **建分支推送**：若提交已在本地 master 上，`git branch feat/xxx` 后 `git reset --hard origin/master` 还原本地 master；然后 `git push -u origin feat/xxx`。
 3. **CI 自动跑**：push 事件触发全量 CI；ci-summary 通过后**自动触发 CD 部署 testing**（非 master 分支 → testing 环境）。
 4. **创建 PR**：`gh pr create --base master --head feat/xxx --title "..." --body "..."`。

@@ -229,7 +229,6 @@
 | PUT | `/api/admin/question/:question_id/tags` | 全量替换题目标签（`tag_ids`） |
 | PUT | `/api/admin/specialty/:specialty_id/sort` | 交换专业方向排序（body `swap_with`） |
 | PUT | `/api/admin/level/:level_id/sort` | 交换课程等级排序（body `swap_with`） |
-| PUT | `/api/admin/question-tag/:id/sort` | 交换题库标签排序（body `swap_with`） |
 | PUT | `/api/admin/course/:course_id/sort` | 交换课程排序（同一方向+等级组内，body `swap_with`） |
 
 ### 用户管理
