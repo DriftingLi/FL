@@ -1,0 +1,26 @@
+# 本地开发独立定义：本机 5432/5433 落在 Windows 保留端口段（5358-5457），用 15432 映射 Postgres。
+# 用法：docker compose -f docker-compose.local.yml up -d postgres
+# 启动后端时需设置 DATABASE_URL=postgres://forklift:forklift123@localhost:15432/forklift_training?sslmode=disable
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: forklift-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: forklift_training
+      POSTGRES_USER: forklift
+      POSTGRES_PASSWORD: forklift123
+      TZ: Asia/Shanghai
+    ports:
+      - "15432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U forklift -d forklift_training"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
+    driver: local
