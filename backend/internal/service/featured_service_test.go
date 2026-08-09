@@ -23,17 +23,17 @@ func seedPublishedFeatured(t *testing.T, db *gorm.DB, title string, viewCount in
 	t.Helper()
 	now := testutil.Now()
 	item := model.FeaturedContent{
-		Title:     title,
-		Summary:   "摘要-" + title,
-		Content:   "# " + title + "\n正文",
-		Category:  "industry",
-		Source:    "测试来源",
-		Status:    1,
-		ViewCount: viewCount,
-		SortOrder: 0,
+		Title:       title,
+		Summary:     "摘要-" + title,
+		Content:     "# " + title + "\n正文",
+		Category:    "industry",
+		Source:      "测试来源",
+		Status:      1,
+		ViewCount:   viewCount,
+		SortOrder:   0,
 		PublishedAt: &now,
-		CreatedAt: now,
-		UpdatedAt: now,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 	if err := db.Create(&item).Error; err != nil {
 		t.Fatalf("创建精选内容失败: %v", err)
