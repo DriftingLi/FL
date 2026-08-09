@@ -11,7 +11,7 @@
 - **课程管理**：课程目录（专业方向 × 课程等级）、课程 CRUD、章节内容编排、PPT / 视频 / 图文混排
 - **PPT 自动转图**：PPT 上传后由 LibreOffice sidecar 转换为 WebP 幻灯片并持久化到章节
 - **考试系统**：课程考试、模拟考试、定级考试，自动判分、AI 评分与成绩统计
-- **练习中心**：自由练习、标签练习、错题本、练习统计
+- **练习中心**：顺序练习（断点续练）、标签练习（断点续练）、自由/专项练习、错题本、练习统计
 - **AI 助手**：基于大模型的流式对话（默认 DeepSeek，可切换管理员配置或用户自定义 OpenAI 兼容模型）
 - **学员论坛**：独立的综合讨论区 + 每个章节内容下方的章节讨论区，发帖 / 回复（可回复别人的回复）/ 删除自己的内容，展示昵称与头像；**图文分离发图**——发帖/回复可附带图片（主题最多 9 张、回复最多 3 张，先传图后提交，支持粘贴），删除时图片一并清理，未发帖的悬空图片由定时任务回收
 
@@ -51,8 +51,8 @@
 
 | 子域名 | 工作区 | 主要角色 | 功能 |
 | --- | --- | --- | --- |
-| `www`（根域名 / localhost） | 官网门户 | 访客 | 首页、内容详情、派单（`/dispatch` 占位） |
-| `training.` | 培训学习 | 学员（hrwai_user） | 课程、考试、练习、错题本 |
+| `www`（根域名） | 官网门户（**独立 Nuxt 仓库 hrwai-portal 接管**，不在本仓库 SPA 内） | 访客 | 首页、内容详情 |
+| `training.` | 培训学习 | 学员（hrwai_user） | 课程、考试、练习（含断点续练）、错题本、AI 助手 |
 | `mentor.` | 导师工作区 | 讲师 | 课程管理、题库、阅卷 |
 | `valuation.` | 残值评估 | 访客 / hrwai_user | 整机残值、电池 RUL、报告、估值登录注册 |
 | `manage.` | 管理后台 | 管理员 | 学员 / 讲师 / 课程 / 题库 / 残值配置 / AI 配置 |
@@ -89,7 +89,7 @@
 - 数据库迁移：golang-migrate/v4（up / down / force / status）
 - 认证：golang-jwt/v5 + bcrypt（统一 JWT + Redis 黑名单）
 - 限流：golang.org/x/time/rate（按客户端 IP 的 token bucket）
-- 日志：log/slog（主业务）+ zap（残值模块）
+- 日志：zap（全栈统一，2026-08 #71 起 slog 退役）
 - PDF 生成：gofpdf（中文 SimHei 字体）
 - AI 集成：cloudwego/eino（流式对话）+ OpenAI 兼容客户端（sashabaranov/go-openai，评分/内容生成），默认 DeepSeek
 - 对象存储：aws-sdk-go-v2（Cloudflare R2，S3 兼容 API）
@@ -124,7 +124,7 @@
 - 数据库：PostgreSQL 15
 - 缓存：Redis 7（生产必需，用于 JWT 黑名单与缓存）
 - 编排：Docker Compose（本地与生产）
-- 反向代理 / 静态托管：Nginx（前端容器兼任 SSL 终止 + API 反代，PVE 环境使用 host 网络模式监听 51820）
+- 反向代理 / 静态托管：Nginx（前端容器兼任 SSL 终止 + API 反代，PVE 环境使用 host 网络模式监听 51820）；`www` 主站请求由官网门户（独立 Nuxt 仓库）部署时注入的 `~^www\..+$` 分流块转发到门户容器（:3000），本仓库 SPA 只服务业务子域名
 - CI/CD：GitHub Actions（ci.yml / cd.yml），镜像推送 ghcr.io，SSH（公网跳板 + ProxyJump）部署到自托管服务器
 - 备选：Cloudflare Pages（frontend/wrangler.jsonc）
 
@@ -165,9 +165,9 @@
 │   ├── setup-server.sh           # 服务器初始化
 │   ├── lxc-install-docker.sh     # LXC 容器 Docker 安装（PVE 环境）
 │   └── lxc-setup-ssh.sh          # LXC SSH 配置（PVE 环境）
-├── nginx/                        # 宿主机 Nginx 参考配置
+├── nginx/                        # 宿主机 Nginx 参考配置（www 分流到门户、业务子域名反代）
 ├── .github/workflows/            # CI/CD（ci.yml / cd.yml）
-├── .trae/                        # 代码文档与方案（CODE_WIKI.md，gitignore）
+├── docs/                         # 本地协作文档（不入库；ADR-0001~0008 例外，已版本化）
 ├── API.md                        # HTTP 接口清单（路径 / 方法 / 鉴权 / 说明）
 ├── deploy.sh                     # 本地 / 手动一键部署
 └── docker-compose.prod.yml       # 生产编排（PostgreSQL + Redis + LibreOffice + 后端 + Nginx 前端）
@@ -329,6 +329,8 @@ npm run type-check   # vue-tsc 类型检查
 | 迁移 | 说明 |
 | --- | --- |
 | `000001_init_baseline` | 全量 schema baseline（squash 000001~000029）：培训/题库/考试/练习/论坛/通知/审计/认证/精选内容/残值评估全部表 + 遗留 level 列删除 + FK 修复 |
+| `000002_catalog_retirement` | 课程分类体系收敛：删除 `course.category` 列与 `knowledge_point` 表、`question.knowledge_point_id` 列，存量题目按显式映射回填题库标签（结构/液压/法规/故障诊断） |
+| `000003_drop_question_tag_category` | 题库标签退役死字段 `category`（考点模块，全库无消费方） |
 
 > 说明：squash 合并等价于原 29 个迁移按序执行后的最终态；`question_practice_record` 遗留 `level` 列已随合并删除（修复刷题提交 400）；各业务表 `student_id` 外键已指向 `hrwai_users`。
 
