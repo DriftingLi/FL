@@ -51,6 +51,10 @@ IMAGE_FRONTEND="${IMAGE_FRONTEND,,}"  # Docker 镜像名必须全小写
 IMAGE_LIBREOFFICE="${IMAGE_LIBREOFFICE:-}"
 IMAGE_LIBREOFFICE="${IMAGE_LIBREOFFICE,,}"  # Docker 镜像名必须全小写
 IMAGE_TAG="${IMAGE_TAG:-latest}"
+# 各镜像独立标签（CD 传入内容哈希标签：未变更的镜像跳过构建/拉取）；缺省统一用 IMAGE_TAG
+IMAGE_TAG_BACKEND="${IMAGE_TAG_BACKEND:-$IMAGE_TAG}"
+IMAGE_TAG_FRONTEND="${IMAGE_TAG_FRONTEND:-$IMAGE_TAG}"
+IMAGE_TAG_LIBREOFFICE="${IMAGE_TAG_LIBREOFFICE:-$IMAGE_TAG}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 
 # 镜像加速代理（ghcr.io pull-through 缓存，如 127.0.0.1:5000）
@@ -155,9 +159,9 @@ write_env_file() {
         printf 'CORS_ORIGINS='
         env_val "${CORS_ORIGINS:-}"; echo
 
-        echo "BACKEND_IMAGE=${IMAGE_BACKEND}:${IMAGE_TAG}"
-        echo "FRONTEND_IMAGE=${IMAGE_FRONTEND}:${IMAGE_TAG}"
-        echo "LIBREOFFICE_IMAGE=${IMAGE_LIBREOFFICE:-forklift-libreoffice}:${IMAGE_TAG}"
+        echo "BACKEND_IMAGE=${IMAGE_BACKEND}:${IMAGE_TAG_BACKEND}"
+        echo "FRONTEND_IMAGE=${IMAGE_FRONTEND}:${IMAGE_TAG_FRONTEND}"
+        echo "LIBREOFFICE_IMAGE=${IMAGE_LIBREOFFICE:-forklift-libreoffice}:${IMAGE_TAG_LIBREOFFICE}"
         echo "DOMAIN=${DOMAIN:-localhost}"
 
         echo "UPLOAD_FOLDER=/data/uploads"
@@ -307,6 +311,7 @@ create_backup() {
     {
         echo "=== 备份时间: $(date) ==="
         echo "=== Git 提交: ${IMAGE_TAG:-unknown} ==="
+        echo "=== 镜像标签: backend=${IMAGE_TAG_BACKEND} frontend=${IMAGE_TAG_FRONTEND} libreoffice=${IMAGE_TAG_LIBREOFFICE} ==="
         echo ""
         echo "--- 运行中的容器 ---"
         docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps 2>/dev/null || echo "无法获取容器状态"
@@ -418,10 +423,20 @@ ensure_registry_proxy() {
         if ! docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'ghcr-proxy'; then
             log_info "启动 ghcr pull-through 缓存容器 (registry:2)..."
             docker pull registry:2 >/dev/null 2>&1 || true
+            local proxy_env=(-e REGISTRY_PROXY_REMOTEURL=https://ghcr.io)
+            local proxy_mount=(-v ghcr-cache:/var/lib/registry)
+            # 上游认证（read:packages PAT）：避免 ghcr.io 匿名 IP 限流导致拉取爬行/挂起
+            # 凭据文件：${DEPLOY_PATH}/.ghcr-pull-token（root 600，ops 维护轮换）
+            # 注：registry 2.8.x 不支持 *_FILE 后缀 env，须在容器创建时读文件注入
+            GHCR_PULL_TOKEN_FILE="${GHCR_PULL_TOKEN_FILE:-$DEPLOY_PATH/.ghcr-pull-token}"
+            if [ -f "$GHCR_PULL_TOKEN_FILE" ]; then
+                proxy_env+=(-e REGISTRY_PROXY_USERNAME=oauth2 \
+                    -e "REGISTRY_PROXY_PASSWORD=$(cat "$GHCR_PULL_TOKEN_FILE")")
+            fi
             docker run -d --name ghcr-proxy --restart unless-stopped \
                 -p 127.0.0.1:5000:5000 \
-                -e REGISTRY_PROXY_REMOTEURL=https://ghcr.io \
-                -v ghcr-cache:/var/lib/registry \
+                "${proxy_env[@]}" \
+                "${proxy_mount[@]}" \
                 registry:2 >/dev/null 2>&1 || true
         fi
         if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ghcr-proxy'; then
@@ -447,8 +462,51 @@ ensure_registry_proxy() {
 # ======================================================================
 # 拉取 Docker 镜像
 # ======================================================================
+
+# 代理健康检查：探测超时则重启（registry:2 上游连接可能挂起导致拉取卡死）
+ensure_proxy_healthy() {
+    [ -z "$REGISTRY_PROXY" ] && return 0
+    if ! timeout 5 curl -s -o /dev/null "http://${REGISTRY_PROXY}/v2/"; then
+        log_warn "镜像加速代理探测超时，重启 ghcr-proxy ..."
+        docker restart ghcr-proxy >/dev/null 2>&1 || true
+        sleep 3
+    fi
+}
+
+# 拉取单个镜像：3 次重试；代理路径失败时回退直连 ghcr.io 认证拉取
+pull_one() {
+    local name="$1"
+    local image="$2"
+    local retries=3
+    for attempt in $(seq 1 $retries); do
+        log_info "拉取${name}镜像 (尝试 $attempt/$retries): $image"
+        if docker pull "$image"; then
+            log_ok "${name}镜像: $image"
+            return 0
+        fi
+        if [ $attempt -lt $retries ]; then
+            log_warn "拉取失败,10 秒后重试..."
+            sleep 10
+        fi
+    done
+    # 回退直连（仅代理改写过的地址）：认证拉取绕过代理挂起/缓存损坏
+    local direct="${image#${REGISTRY_PROXY}/}"
+    if [ "$direct" != "$image" ] && [ -n "$GITHUB_TOKEN" ]; then
+        log_warn "代理拉取失败，回退直连 ghcr.io 认证拉取: $direct"
+        echo "$GITHUB_TOKEN" | docker login ghcr.io -u oauth2 --password-stdin >/dev/null 2>&1 || true
+        if docker pull "$direct"; then
+            docker tag "$direct" "$image"
+            log_ok "直连拉取成功并补 tag: $image"
+            return 0
+        fi
+    fi
+    log_error "${name}镜像拉取失败(已重试 $retries 次): $image"
+    return 1
+}
+
 pull_images() {
     log_info ">>> 拉取最新镜像..."
+    ensure_proxy_healthy
 
     # 国内服务器拉取 ghcr.io 镜像易超时,配置客户端选项:
     # - max-concurrent-downloads=5: 并发拉取层数(默认 3,提高可加速)
@@ -458,96 +516,33 @@ pull_images() {
         pull_opts="--disable-content-trust=false"
     fi
 
-    # 拉取后端镜像(含重试,应对 ghcr.io 国内访问不稳定)
+    # 拉取后端镜像（本地已有该 tag 则跳过：内容标签命中即零传输）
     if [ -n "$IMAGE_BACKEND" ]; then
-        local backend_image="${IMAGE_BACKEND}:${IMAGE_TAG}"
-        # 本地已有该 tag 则跳过拉取（重复部署/代理缓存命中时显著提速）
+        local backend_image="${IMAGE_BACKEND}:${IMAGE_TAG_BACKEND}"
         if docker image inspect "$backend_image" &>/dev/null; then
             log_ok "后端镜像已缓存，跳过拉取: $backend_image"
-        else
-            local pull_retries=3
-            local pull_ok=false
-
-            for attempt in $(seq 1 $pull_retries); do
-                log_info "拉取后端镜像 (尝试 $attempt/$pull_retries): $backend_image"
-                if docker pull "$backend_image"; then
-                    pull_ok=true
-                    break
-                fi
-                if [ $attempt -lt $pull_retries ]; then
-                    log_warn "拉取失败,10 秒后重试..."
-                    sleep 10
-                fi
-            done
-
-            if [ "$pull_ok" = "true" ]; then
-                log_ok "后端镜像: $backend_image"
-            else
-                log_error "后端镜像拉取失败(已重试 $pull_retries 次): $backend_image"
-                exit 1
-            fi
+        elif ! pull_one "后端" "$backend_image"; then
+            exit 1
         fi
     fi
 
-    # 拉取前端镜像(前端镜像小,通常无需重试)
+    # 拉取前端镜像
     if [ -n "$IMAGE_FRONTEND" ]; then
-        local frontend_image="${IMAGE_FRONTEND}:${IMAGE_TAG}"
-        # 本地已有该 tag 则跳过拉取
+        local frontend_image="${IMAGE_FRONTEND}:${IMAGE_TAG_FRONTEND}"
         if docker image inspect "$frontend_image" &>/dev/null; then
             log_ok "前端镜像已缓存，跳过拉取: $frontend_image"
-        else
-            local pull_retries=3
-            local pull_ok=false
-
-            for attempt in $(seq 1 $pull_retries); do
-                log_info "拉取前端镜像 (尝试 $attempt/$pull_retries): $frontend_image"
-                if docker pull "$frontend_image"; then
-                    pull_ok=true
-                    break
-                fi
-                if [ $attempt -lt $pull_retries ]; then
-                    log_warn "拉取失败,10 秒后重试..."
-                    sleep 10
-                fi
-            done
-
-            if [ "$pull_ok" = "true" ]; then
-                log_ok "前端镜像: $frontend_image"
-            else
-                log_error "前端镜像拉取失败(已重试 $pull_retries 次): $frontend_image"
-                exit 1
-            fi
+        elif ! pull_one "前端" "$frontend_image"; then
+            exit 1
         fi
     fi
 
-    # 拉取 LibreOffice sidecar 镜像(含 LibreOffice,体积大,需重试)
+    # 拉取 LibreOffice sidecar 镜像（体积大）
     if [ -n "$IMAGE_LIBREOFFICE" ]; then
-        local lo_image="${IMAGE_LIBREOFFICE}:${IMAGE_TAG}"
-        # 本地已有该 tag 则跳过拉取
+        local lo_image="${IMAGE_LIBREOFFICE}:${IMAGE_TAG_LIBREOFFICE}"
         if docker image inspect "$lo_image" &>/dev/null; then
             log_ok "LibreOffice sidecar 镜像已缓存，跳过拉取: $lo_image"
-        else
-            local pull_retries=3
-            local pull_ok=false
-
-            for attempt in $(seq 1 $pull_retries); do
-                log_info "拉取 LibreOffice sidecar 镜像 (尝试 $attempt/$pull_retries): $lo_image"
-                if docker pull "$lo_image"; then
-                    pull_ok=true
-                    break
-                fi
-                if [ $attempt -lt $pull_retries ]; then
-                    log_warn "拉取失败,10 秒后重试..."
-                    sleep 10
-                fi
-            done
-
-            if [ "$pull_ok" = "true" ]; then
-                log_ok "LibreOffice sidecar 镜像: $lo_image"
-            else
-                log_error "LibreOffice sidecar 镜像拉取失败(已重试 $pull_retries 次): $lo_image"
-                exit 1
-            fi
+        elif ! pull_one "LibreOffice sidecar" "$lo_image"; then
+            exit 1
         fi
     fi
 
