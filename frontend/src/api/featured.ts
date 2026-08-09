@@ -38,18 +38,9 @@ export interface FeaturedContent {
   [key: string]: unknown
 }
 
-/** 公开接口 */
-export const featuredApi = {
-  /** 公开列表（仅已发布） */
-  getPublicList(params: { page?: number; page_size?: number; category?: string } = {}) {
-    return unwrappedRequest.get<{ items: FeaturedContent[]; total: number }>('/featured-contents', { params })
-  },
-
-  /** 公开详情（含相关资讯 + 上一篇/下一篇） */
-  getPublicDetail(id: number) {
-    return unwrappedRequest.get<FeaturedContent>(`/featured-content/${id}`)
-  }
-}
+// ===== 公开接口已移除 =====
+// 官网门户重构为独立 Nuxt 仓库（ADR-0001）后，公开接口改由门户数据访问层消费
+// （portal/api/featured.ts，含 no_view=1 与客户端计数端点）；管理端接口保留于此。
 
 /** 管理端接口 */
 export const adminFeaturedApi = {
