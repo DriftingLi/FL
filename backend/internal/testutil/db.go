@@ -66,6 +66,7 @@ func allModels() []interface{} {
 		&model.ForumReply{},
 		&model.AIGenerationLog{},
 		&model.AsyncTask{},
+		&model.FeaturedContent{},
 	}
 }
 

@@ -301,7 +301,8 @@
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
 | GET | `/api/featured-contents` | 无 | 内容精选列表（仅已发布） |
-| GET | `/api/featured-content/:id` | 无 | 内容详情（含相关资讯/上下一篇） |
+| GET | `/api/featured-content/:id` | 无 | 内容详情（含相关资讯/上下一篇）。带 `no_view=1` 时不改变 `view_count`（SSR/爬虫路径），不带参数保持既有计数行为 |
+| POST | `/api/featured-content/:id/view` | 无 | 客户端阅读量计数（仅已发布内容），自增并返回最新 `view_count`。与「详情请求次数」语义区分 |
 
 ## 13. AI 助手 `/api/ai-assistant`
 

@@ -28,18 +28,35 @@ func RegisterFeaturedRoutes(rg *gin.RouterGroup, deps *Deps) {
 	})
 
 	// GET /api/featured-content/:id  内容精选详情（含相关资讯 + 上/下一篇）
+	// 带 no_view=1 时不改变 view_count（SSR/爬虫路径）；不带参数保持既有计数行为。
 	rg.GET("/featured-content/:id", func(c *gin.Context) {
 		id, err := strconv.Atoi(c.Param("id"))
 		if err != nil {
 			response.BadRequest(c, "内容ID无效")
 			return
 		}
-		result, err := svc.GetPublicDetail(id)
+		countView := c.Query("no_view") != "1"
+		result, err := svc.GetPublicDetail(id, countView)
 		if err != nil {
 			response.NotFound(c, err.Error())
 			return
 		}
 		response.Success(c, result)
+	})
+
+	// POST /api/featured-content/:id/view  客户端阅读量计数（真实浏览器 hydration 后调用）
+	rg.POST("/featured-content/:id/view", func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("id"))
+		if err != nil {
+			response.BadRequest(c, "内容ID无效")
+			return
+		}
+		count, err := svc.IncrementViewCount(id)
+		if err != nil {
+			response.NotFound(c, err.Error())
+			return
+		}
+		response.Success(c, gin.H{"content_id": id, "view_count": count})
 	})
 
 	// ===== 管理端接口（需 admin 角色）=====
