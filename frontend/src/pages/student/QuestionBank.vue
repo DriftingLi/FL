@@ -70,7 +70,13 @@
                 <el-option v-for="t in tags" :key="t.id" :label="`${t.name}（${t.question_count ?? 0}题）`" :value="t.id" />
               </el-select>
             </div>
-            <el-button type="primary" plain :loading="loading" :disabled="!tagPracticeId" @click="startTagPractice">开始练习</el-button>
+            <div v-if="tagPracticeId && tagProgress.total > 0" class="card-stat">
+              <span class="stat-num">{{ tagProgress.completed }}/{{ tagProgress.total }}</span>
+              <span class="stat-label">已练习/总题数</span>
+            </div>
+            <el-button type="primary" plain :loading="loading" :disabled="!tagPracticeId" @click="startTagPractice">
+              {{ tagProgress.completed > 0 ? '继续练习' : '开始练习' }}
+            </el-button>
           </el-card>
         </el-col>
 
@@ -177,7 +183,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { Sort, MagicStick, Filter, Document, CollectionTag } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
@@ -205,8 +211,21 @@ const currentTagName = computed(() => {
 
 // 卡片展示数据
 const seqProgress = ref<PracticeProgress>({ completed: 0, total: 0, current_index: 0 })
+const tagProgress = ref<PracticeProgress>({ completed: 0, total: 0, current_index: 0 })
 const totalQuestions = ref(0)
 const latestMockScore = ref<number | null>(null)
+
+// 选择标签时查询该标签的练习进度（断点续练展示）
+watch(tagPracticeId, async (id) => {
+  tagProgress.value = { completed: 0, total: 0, current_index: 0 }
+  if (!id) return
+  try {
+    const prog = await practiceModeApi.getProgress(`tag:${id}`)
+    tagProgress.value = prog || tagProgress.value
+  } catch {
+    // 查询失败降级为无进度
+  }
+})
 
 // ===== 刷题流程 =====
 const loading = ref(false)
@@ -304,10 +323,11 @@ async function startSequential() {
 }
 
 // 获取当前练习模式的进度 key（用于断点续练）
-// 顺序练习: 'sequential'；专项练习: 'free:<type>'；随机练习: ''（不保存）
+// 顺序练习: 'sequential'；专项练习: 'free:<type>'；标签练习: 'tag:<tagID>'；随机练习: ''（不保存）
 function getPracticeModeKey(): string {
   if (mode.value === 'sequential') return 'sequential'
   if (mode.value === 'free' && specialType.value) return `free:${specialType.value}`
+  if (mode.value === 'tag' && tagPracticeId.value) return `tag:${tagPracticeId.value}`
   return ''
 }
 
@@ -414,14 +434,17 @@ async function startTagPractice() {
   if (!tagPracticeId.value) return
   loading.value = true
   try {
-    const res = await practiceModeApi.getTagQuestions({ tag_id: tagPracticeId.value, count: 0 })
-    questions.value = res || []
+    const res = await practiceModeApi.startTagPractice({ tag_id: tagPracticeId.value, count: 0 })
+    const data = res || {}
+    questions.value = data.questions || []
     if (questions.value.length === 0) {
       ElMessage.warning('该标签下暂无已发布题目')
       return
     }
     mode.value = 'tag'
-    resetSession(0)
+    const prog = await resolveProgress(getPracticeModeKey(), questions.value.length)
+    resetSession(prog.startIndex)
+    restoreState(prog.answersState)
   } catch {
     /* 错误已由拦截器提示 */
   } finally {

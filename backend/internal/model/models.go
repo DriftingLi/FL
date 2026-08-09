@@ -449,7 +449,7 @@ type PracticeProgress struct {
 	QuestionIDs  JSONB     `gorm:"column:question_ids;type:jsonb" json:"question_ids,omitempty"`
 	CurrentIndex int       `gorm:"column:current_index;default:0" json:"current_index"`
 	Total        int       `gorm:"column:total;default:0" json:"total"`
-	AnswersState JSONB     `gorm:"column:answers_state;type:jsonb;default:'{}'::jsonb" json:"answers_state"`
+	AnswersState JSONB     `gorm:"column:answers_state;type:jsonb" json:"answers_state"`
 	UpdatedAt    time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
 

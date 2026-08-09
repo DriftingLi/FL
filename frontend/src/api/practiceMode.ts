@@ -29,9 +29,12 @@ export const practiceModeApi = {
   getFreeQuestions(params?: { count?: number; type?: string }) {
     return unwrappedRequest.get<Question[]>('/practice-mode/free', { params })
   },
-  // 标签练习：按题库标签抽题（返回结构与 /free 一致、不含答案）
-  getTagQuestions(params: { tag_id: number; count?: number }) {
-    return unwrappedRequest.get<Question[]>('/practice-mode/tag', { params })
+  // 标签练习：开始/续练（返回当前批次题目 + 进度，mode 为 tag:<tagID>）
+  startTagPractice(params: { tag_id: number; count?: number }) {
+    return unwrappedRequest.get<{ questions?: Question[]; current_index?: number; total?: number }>(
+      '/practice-mode/tag',
+      { params }
+    )
   },
   // 顺序练习：开始/续练，返回当前批次题目 + 进度
   startSequential() {

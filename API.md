@@ -110,7 +110,7 @@
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/practice-mode/free` | 自由刷题 |
-| GET | `/api/practice-mode/tag` | 标签练习抽题（`tag_id` 必填，`count` 控制题量，0=全部） |
+| GET | `/api/practice-mode/tag` | 标签练习开始/续练（`tag_id` 必填，`count` 控制题量，0=全部；返回题目+进度，mode=`tag:<tagID>`） |
 | GET | `/api/practice-mode/sequential` | 顺序练习 |
 | GET | `/api/practice-mode/sequential-progress` | 顺序练习进度 |
 | POST | `/api/practice-mode/progress` | 保存练习进度 |

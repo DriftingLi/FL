@@ -30,7 +30,7 @@ func RegisterPracticeModeRoutes(rg *gin.RouterGroup, deps *Deps) {
 		response.Success(c, result)
 	})
 
-	// GET /api/practice-mode/tag  标签练习抽题（按题库标签，count 控制题量）
+	// GET /api/practice-mode/tag  标签练习开始/续练（按题库标签，count 控制题量）
 	g.GET("/tag", func(c *gin.Context) {
 		tagIDStr := c.Query("tag_id")
 		if tagIDStr == "" {
@@ -43,7 +43,9 @@ func RegisterPracticeModeRoutes(rg *gin.RouterGroup, deps *Deps) {
 			return
 		}
 		count := atoiDefault(c.Query("count"), 0) // 0=全部
-		result, err := svc.GetTagQuestions(tagID, count)
+		uid, _ := c.Get(string(middleware.CtxUserID))
+		studentID, _ := uid.(int)
+		result, err := svc.StartTagPractice(studentID, tagID, count)
 		if err != nil {
 			response.NotFound(c, err.Error())
 			return

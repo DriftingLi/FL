@@ -125,5 +125,11 @@ describe('QuestionTags 批量打标计数', () => {
 
     const batchBtn = wrapper.findAll('.el-button').find(b => b.text().includes('批量打标'))
     expect(batchBtn?.text()).toContain('(2)')
+
+    // 点击批量打标：打开打标对话框且计数正确（回归：@click 直传函数会把事件对象当参数，
+    // 导致 tagAssignQuestionIds 变成 MouseEvent，标题显示 undefined）
+    await batchBtn!.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('题目打标（2 题）')
   })
 })
