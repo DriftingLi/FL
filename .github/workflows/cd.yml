@@ -95,6 +95,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_BACKEND }}
+
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
             type=sha,prefix=,format=short
@@ -108,7 +109,7 @@ jobs:
           context: backend
           push: true
           tags: |
-            type=raw,value=${{ steps.content.outputs.content_tag }}
+            ${{ env.IMAGE_BACKEND }}:${{ steps.content.outputs.content_tag }}
             ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
@@ -155,6 +156,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_FRONTEND }}
+
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
             type=sha,prefix=,format=short
@@ -168,7 +170,7 @@ jobs:
           context: frontend
           push: true
           tags: |
-            type=raw,value=${{ steps.content.outputs.content_tag }}
+            ${{ env.IMAGE_FRONTEND }}:${{ steps.content.outputs.content_tag }}
             ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
@@ -215,6 +217,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_LIBREOFFICE }}
+
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
             type=sha,prefix=,format=short
@@ -228,7 +231,7 @@ jobs:
           context: libreoffice-sidecar
           push: true
           tags: |
-            type=raw,value=${{ steps.content.outputs.content_tag }}
+            ${{ env.IMAGE_LIBREOFFICE }}:${{ steps.content.outputs.content_tag }}
             ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
