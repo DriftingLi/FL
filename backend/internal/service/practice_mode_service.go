@@ -4,6 +4,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/rand"
 
 	"go.uber.org/zap"
@@ -42,9 +43,10 @@ func (s *PracticeModeService) GetFreeQuestions(qType string, count int) ([]map[s
 	return out, nil
 }
 
-// GetTagQuestions 标签练习抽题：从 published 题库中按题库标签随机抽取 count 题。
-// count <= 0 时返回该标签下全部已发布题目（按 id 升序，不打乱）。
-func (s *PracticeModeService) GetTagQuestions(tagID, count int) ([]map[string]any, error) {
+// StartTagPractice 标签练习开始/续练：首次进入按标签抽题并持久化题目顺序，
+// 再次进入复用已保存顺序与游标（断点续练）；已完成则重新抽题。
+// mode = "tag:<tagID>"，count <= 0 表示该标签全部题目。
+func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int) (map[string]any, error) {
 	if tagID <= 0 {
 		return nil, errors.New("请指定题库标签")
 	}
@@ -65,16 +67,77 @@ func (s *PracticeModeService) GetTagQuestions(tagID, count int) ([]map[string]an
 	if len(all) == 0 {
 		return nil, errors.New("该标签下暂无已发布题目")
 	}
-	selected := all
-	if count > 0 && len(all) > count {
-		rand.Shuffle(len(all), func(i, j int) { all[i], all[j] = all[j], all[i] })
-		selected = all[:count]
+	allIDs := make([]int, len(all))
+	for i := range all {
+		allIDs[i] = all[i].ID
 	}
-	out := make([]map[string]any, 0, len(selected))
-	for i := range selected {
-		out = append(out, questionToDict(&selected[i], false))
+	byID := make(map[int]model.Question, len(all))
+	for i := range all {
+		byID[all[i].ID] = all[i]
 	}
-	return out, nil
+
+	mode := fmt.Sprintf("tag:%d", tagID)
+	var prog model.PracticeProgress
+	if err := s.db.Where("student_id = ? AND practice_mode = ?", studentID, mode).Limit(1).Find(&prog).Error; err != nil {
+		return nil, err
+	}
+
+	ids := allIDs
+	startIdx := 0
+	if prog.ID != 0 && prog.CurrentIndex < prog.Total {
+		// 续练：解析已保存的题目顺序（顺序固定，游标位置才有效）
+		var saved []int
+		if err := json.Unmarshal(prog.QuestionIDs, &saved); err == nil && len(saved) > 0 {
+			// 题目集合未变则沿用保存顺序；已变则按新集合刷新（游标截断保护）
+			if sameIDSet(saved, allIDs) {
+				ids = saved
+				startIdx = prog.CurrentIndex
+			}
+		}
+	}
+	if startIdx == 0 && (prog.ID == 0 || prog.CurrentIndex >= prog.Total) {
+		// 首次进入或已完成：随机抽题并固定顺序
+		if count > 0 && len(ids) > count {
+			rand.Shuffle(len(ids), func(i, j int) { ids[i], ids[j] = ids[j], ids[i] })
+			ids = ids[:count]
+		}
+	}
+	idsJSON, _ := json.Marshal(ids)
+	if prog.ID == 0 {
+		prog = model.PracticeProgress{
+			StudentID:    studentID,
+			PracticeMode: mode,
+			QuestionIDs:  model.JSONB(idsJSON),
+			CurrentIndex: 0,
+			Total:        len(ids),
+			UpdatedAt:    beijingNow(),
+		}
+		if err := s.db.Create(&prog).Error; err != nil {
+			return nil, err
+		}
+	} else {
+		updates := map[string]any{"question_ids": model.JSONB(idsJSON), "updated_at": beijingNow()}
+		if startIdx == 0 {
+			updates["current_index"] = 0
+		}
+		updates["total"] = len(ids)
+		if err := s.db.Model(&prog).Updates(updates).Error; err != nil {
+			return nil, err
+		}
+	}
+
+	out := make([]map[string]any, 0, len(ids))
+	for _, id := range ids {
+		if q, ok := byID[id]; ok {
+			out = append(out, questionToDict(&q, false))
+		}
+	}
+	return map[string]any{
+		"questions":     out,
+		"current_index": startIdx,
+		"total":         len(ids),
+		"completed":     startIdx,
+	}, nil
 }
 
 // StartSequential 顺序练习：加载全部 published 题目（按 id 升序），
@@ -352,4 +415,21 @@ func (s *PracticeModeService) GetHistory(studentID, page, pageSize int, qType, s
 		"page_size": pageSize,
 		"records":   items,
 	}
+}
+
+// sameIDSet 判断两个 ID 列表是否为同一集合（忽略顺序）。
+func sameIDSet(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	set := make(map[int]bool, len(a))
+	for _, v := range a {
+		set[v] = true
+	}
+	for _, v := range b {
+		if !set[v] {
+			return false
+		}
+	}
+	return true
 }

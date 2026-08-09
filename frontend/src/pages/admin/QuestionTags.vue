@@ -62,7 +62,7 @@
             <el-button
               v-if="selectedIds.length > 0"
               type="success"
-              @click="openTagAssign"
+              @click="openTagAssign(selectedIds)"
             >
               批量打标 ({{ selectedIds.length }})
             </el-button>
