@@ -83,8 +83,9 @@ func (s *FeaturedService) GetPublicList(page, pageSize int, category string) Fea
 	}
 }
 
-// GetPublicDetail 公开详情（含相关资讯 + 上一篇/下一篇，自增阅读量）。
-func (s *FeaturedService) GetPublicDetail(id int) (map[string]any, error) {
+// GetPublicDetail 公开详情（含相关资讯 + 上一篇/下一篇）。
+// countView=false 时不改变 view_count（SSR/爬虫路径），true 时自增阅读量（现网既有行为）。
+func (s *FeaturedService) GetPublicDetail(id int, countView bool) (map[string]any, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
 		return nil, errors.New("内容不存在")
@@ -93,11 +94,13 @@ func (s *FeaturedService) GetPublicDetail(id int) (map[string]any, error) {
 		return nil, errors.New("内容不存在")
 	}
 
-	// 自增阅读量
-	s.db.Model(&model.FeaturedContent{}).
-		Where("content_id = ?", id).
-		UpdateColumn("view_count", item.ViewCount+1)
-	item.ViewCount++
+	if countView {
+		// 原子自增阅读量（并发安全，避免读改写竞态）
+		s.db.Model(&model.FeaturedContent{}).
+			Where("content_id = ?", id).
+			UpdateColumn("view_count", gorm.Expr("view_count + 1"))
+		item.ViewCount++
+	}
 
 	detail := featuredToDetailDict(&item)
 
@@ -339,6 +342,25 @@ func (s *FeaturedService) Publish(id int) (map[string]any, error) {
 	item.PublishedAt = &now
 	item.UpdatedAt = now
 	return featuredToDetailDict(&item), nil
+}
+
+// IncrementViewCount 客户端计数：仅已发布内容可计数，返回最新阅读量。
+func (s *FeaturedService) IncrementViewCount(id int) (int, error) {
+	var item model.FeaturedContent
+	if err := s.db.First(&item, id).Error; err != nil {
+		return 0, errors.New("内容不存在")
+	}
+	if item.Status != 1 {
+		return 0, errors.New("内容不存在")
+	}
+	newCount := item.ViewCount + 1
+	// 原子自增（并发安全），与 GetPublicDetail 计数路径一致
+	if err := s.db.Model(&model.FeaturedContent{}).
+		Where("content_id = ?", id).
+		UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error; err != nil {
+		return 0, err
+	}
+	return newCount, nil
 }
 
 // SaveImage 保存图片到 featured 子目录，返回访问 URL。

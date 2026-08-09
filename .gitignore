@@ -28,6 +28,9 @@ yarn-error.log*
 # 实际环境配置文件（仅保留 .example 模板入库）
 .env.production
 .env.development
+
+# ===== 官网门户（portal）：独立仓库，本地开发 gitignored，完成后发布独立 GitHub 仓库 =====
+/portal/
 .env.test
 **/private_key.pem
 *.pem

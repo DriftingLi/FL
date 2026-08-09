@@ -10,26 +10,6 @@ import {
 } from '@/utils/subdomain'
 
 const routes: RouteRecordRaw[] = [
-  // ========== 官网 ==========
-  {
-    path: '/',
-    component: () => import('@/layouts/PortalHomeLayout.vue'),
-    meta: { requiresAuth: false },
-    children: [
-      {
-        path: '',
-        name: 'PortalHome',
-        component: () => import('@/pages/portal/PortalHome.vue')
-      },
-      {
-        path: 'content/:id',
-        name: 'PortalContentDetail',
-        component: () => import('@/pages/portal/ContentDetail.vue'),
-        meta: { requiresAuth: false }
-      }
-    ]
-  },
-
   // ========== 登录 / 注册 ==========
   {
     path: '/login',
@@ -211,7 +191,8 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false, isValuationAuthPage: true }
   },
 
-  // ========== AI 助手模块（主域名，可选登录；登录后可保存历史会话）==========
+  // ========== AI 助手模块（training 子域名，可选登录；登录后可保存历史会话） ==========
+  // 官网门户重构后（ADR-0001），AI 助手归属学员工作区：由 www 迁至 training 子域名
   {
     path: '/ai-assistant',
     name: 'AIAssistant',
@@ -312,12 +293,19 @@ const routes: RouteRecordRaw[] = [
     ]
   },
 
-  // ========== 派单系统占位（二手叉车交易相关，未来扩展）==========
+  // ========== 根路径兜底（IP 直连模式） ==========
+  // 官网已重构为独立 Nuxt 仓库（ADR-0001），Vue SPA 不再承载 '/'；
+  // IP 直连模式下根路径按角色进入默认工作区
   {
-    path: '/dispatch',
-    name: 'DispatchComingSoon',
-    component: () => import('@/pages/student/DispatchComingSoon.vue'),
-    meta: { requiresAuth: false }
+    path: '/',
+    redirect: () => {
+      const authStore = useAuthStore()
+      const role = authStore.userInfo?.role
+      if (role === 'admin') return '/admin/dashboard'
+      if (role === 'tutor') return '/training/tutor'
+      if (role === 'hrwai_user') return '/training'
+      return '/login'
+    }
   },
 
   // ========== 兼容旧路由 /dashboard/* ==========
@@ -423,13 +411,8 @@ router.beforeEach(async (to, _from, next) => {
       const targetSubdomain = getTargetSubdomainForPath(to.path)
       if (currentSubdomain !== targetSubdomain) {
         if (targetSubdomain === 'main') {
-          // AI 助手部署在主域名，允许从功能子域名跳转过去；
-          // 其余公共路径（/、/dispatch 等）留在当前子域名默认工作区
-          if (to.path.startsWith('/ai-assistant')) {
-            window.location.href = buildCrossDomainAuthUrl('main', to.fullPath)
-          } else {
-            next(getDefaultWorkspaceBySubdomain())
-          }
+          // 其余公共路径（/ 等）留在当前子域名默认工作区
+          next(getDefaultWorkspaceBySubdomain())
         } else {
           // 路径属于另一个功能子域名 → 跨子域名跳转
           window.location.href = buildCrossDomainAuthUrl(targetSubdomain, to.fullPath)

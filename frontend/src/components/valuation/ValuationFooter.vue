@@ -83,7 +83,7 @@
 </template>
 
 <script setup lang="ts">
-// 与 PortalFooter 视觉风格保持一致（深色多列 + 渐变点缀）
+// 官网门户风格已迁移至独立 Nuxt 仓库（ADR-0001），此处仅保留同风格的深色多列布局
 import { onMounted, ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { getEvaluationStats } from '@/api/valuation/evaluation'
