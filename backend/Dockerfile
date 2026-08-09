@@ -21,8 +21,10 @@ COPY . .
 # 编译静态二进制（CGO 禁用，适合 scratch/alpine）
 # -ldflags="-s -w" 去除调试信息，减小体积
 # -trimpath 移除本地路径信息
+# -buildvcs=false 不嵌入 commit SHA：纯文档/配置提交时二进制与上次一致，
+#   镜像层 digest 复用，部署侧跳过拉取（配合 CD 内容哈希标签）
 ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
-RUN go build -trimpath -ldflags="-s -w" -o /bin/server ./cmd/server
+RUN go build -trimpath -buildvcs=false -ldflags="-s -w" -o /bin/server ./cmd/server
 RUN go build -trimpath -ldflags="-s -w" -o /bin/migrate ./cmd/migrate
 
 # ----- Runtime 阶段：轻量运行时镜像 -----

@@ -62,7 +62,7 @@ jobs:
       contents: read
       packages: write
     outputs:
-      image_tag: ${{ env.DEPLOY_REF }}
+      image_tag: ${{ steps.content.outputs.content_tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -76,7 +76,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # 内容哈希标签：构建上下文树未变 → 远端已有该标签 → 跳过构建/推送（部署也跳过拉取）
+      - name: 计算内容标签并检查远端是否已存在
+        id: content
+        run: |
+          CONTENT_TAG="c$(git ls-tree HEAD -- backend/ | git hash-object --stdin | cut -c1-16)"
+          echo "content_tag=${CONTENT_TAG}" >> "$GITHUB_OUTPUT"
+          if docker manifest inspect "${IMAGE_BACKEND}:${CONTENT_TAG}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "后端内容未变更（${CONTENT_TAG} 已存在），跳过构建"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: 提取镜像标签
+        if: steps.content.outputs.exists != 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -88,11 +102,14 @@ jobs:
             type=ref,event=branch
 
       - name: 构建并推送后端镜像
+        if: steps.content.outputs.exists != 'true'
         uses: docker/build-push-action@v6
         with:
           context: backend
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            type=raw,value=${{ steps.content.outputs.content_tag }}
+            ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
 
@@ -106,7 +123,7 @@ jobs:
       contents: read
       packages: write
     outputs:
-      image_tag: ${{ env.DEPLOY_REF }}
+      image_tag: ${{ steps.content.outputs.content_tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -119,7 +136,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # 内容哈希标签：构建上下文树未变 → 远端已有该标签 → 跳过构建/推送（部署也跳过拉取）
+      - name: 计算内容标签并检查远端是否已存在
+        id: content
+        run: |
+          CONTENT_TAG="c$(git ls-tree HEAD -- frontend/ | git hash-object --stdin | cut -c1-16)"
+          echo "content_tag=${CONTENT_TAG}" >> "$GITHUB_OUTPUT"
+          if docker manifest inspect "${IMAGE_FRONTEND}:${CONTENT_TAG}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "前端内容未变更（${CONTENT_TAG} 已存在），跳过构建"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: 提取镜像标签
+        if: steps.content.outputs.exists != 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -131,11 +162,14 @@ jobs:
             type=ref,event=branch
 
       - name: 构建并推送前端镜像
+        if: steps.content.outputs.exists != 'true'
         uses: docker/build-push-action@v6
         with:
           context: frontend
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            type=raw,value=${{ steps.content.outputs.content_tag }}
+            ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
 
@@ -149,7 +183,7 @@ jobs:
       contents: read
       packages: write
     outputs:
-      image_tag: ${{ env.DEPLOY_REF }}
+      image_tag: ${{ steps.content.outputs.content_tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -162,7 +196,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # 内容哈希标签：构建上下文树未变 → 远端已有该标签 → 跳过构建/推送（部署也跳过拉取）
+      - name: 计算内容标签并检查远端是否已存在
+        id: content
+        run: |
+          CONTENT_TAG="c$(git ls-tree HEAD -- libreoffice-sidecar/ | git hash-object --stdin | cut -c1-16)"
+          echo "content_tag=${CONTENT_TAG}" >> "$GITHUB_OUTPUT"
+          if docker manifest inspect "${IMAGE_LIBREOFFICE}:${CONTENT_TAG}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "LibreOffice 内容未变更（${CONTENT_TAG} 已存在），跳过构建"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: 提取镜像标签
+        if: steps.content.outputs.exists != 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -174,11 +222,14 @@ jobs:
             type=ref,event=branch
 
       - name: 构建并推送 LibreOffice sidecar 镜像
+        if: steps.content.outputs.exists != 'true'
         uses: docker/build-push-action@v6
         with:
           context: libreoffice-sidecar
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            type=raw,value=${{ steps.content.outputs.content_tag }}
+            ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
 
@@ -196,8 +247,12 @@ jobs:
     environment:
       name: ${{ inputs.environment || 'production' }}
     env:
-      # 镜像信息（来自 build-backend/build-frontend/build-libreoffice outputs）
+      # 镜像信息（来自 build-backend/build-frontend/build-libreoffice outputs：
+      # 内容哈希标签，未变更的镜像跳过构建/拉取；缺失时回退 commit SHA）
       IMAGE_TAG: ${{ needs.build-backend.outputs.image_tag || github.sha }}
+      IMAGE_TAG_BACKEND: ${{ needs.build-backend.outputs.image_tag || github.sha }}
+      IMAGE_TAG_FRONTEND: ${{ needs.build-frontend.outputs.image_tag || github.sha }}
+      IMAGE_TAG_LIBREOFFICE: ${{ needs.build-libreoffice.outputs.image_tag || github.sha }}
       # 注:job 级 env 块不能引用 workflow 级 env,必须内联 vars 表达式
       IMAGE_LIBREOFFICE: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-libreoffice
       # 镜像加速代理（ghcr pull-through 缓存，如 127.0.0.1:5000；留空则直连 ghcr.io）
@@ -359,6 +414,9 @@ jobs:
             echo "# 生成时间: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
             echo ''
             printf 'export IMAGE_TAG=%q\n' "${IMAGE_TAG:-latest}"
+            printf 'export IMAGE_TAG_BACKEND=%q\n' "${IMAGE_TAG_BACKEND:-}"
+            printf 'export IMAGE_TAG_FRONTEND=%q\n' "${IMAGE_TAG_FRONTEND:-}"
+            printf 'export IMAGE_TAG_LIBREOFFICE=%q\n' "${IMAGE_TAG_LIBREOFFICE:-}"
             printf 'export IMAGE_BACKEND=%q\n' "${IMAGE_BACKEND:-}"
             printf 'export IMAGE_FRONTEND=%q\n' "${IMAGE_FRONTEND:-}"
             printf 'export IMAGE_LIBREOFFICE=%q\n' "${IMAGE_LIBREOFFICE:-}"
