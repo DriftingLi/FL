@@ -5,8 +5,8 @@
 //   未来 n 年后 Kt_adj_future = e^(-λ·(Kh/Kb)·(age+n)) = Kt_adj^(1+n/age)
 //   future_value(n) = estimated_value × Kt_adj^(n/age)
 //   即每年衰减乘数 d = Kt_adj^(1/age)，future_value(n) = estimated_value × d^n
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import * as echarts from 'echarts'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useECharts } from '@/composables/useECharts'
 
 interface Props {
   /** 当前残值（元） */
@@ -35,7 +35,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const chartRef = ref<HTMLDivElement | null>(null)
-let chart: echarts.ECharts | null = null
+const { init } = useECharts(chartRef)
 
 // 主题色（与设计稿一致）
 const COLOR_PRIMARY = '#3E6AE1'
@@ -153,19 +153,11 @@ const chartOption = computed(() => {
 
 function renderChart() {
   if (!chartRef.value) return
-  if (!chart) {
-    chart = echarts.init(chartRef.value)
-  }
-  chart.setOption(chartOption.value, true)
-}
-
-function handleResize() {
-  chart?.resize()
+  init(chartOption.value, true)
 }
 
 onMounted(() => {
   renderChart()
-  window.addEventListener('resize', handleResize)
 })
 
 watch(
@@ -173,12 +165,6 @@ watch(
   () => renderChart(),
   { deep: true }
 )
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', handleResize)
-  chart?.dispose()
-  chart = null
-})
 </script>
 
 <template>

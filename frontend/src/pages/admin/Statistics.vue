@@ -118,19 +118,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
 import { adminApi } from '@/api/admin'
 import { downloadExport, type ExportKind } from '@/api/export'
+import { useECharts } from '@/composables/useECharts'
 
 const overview = ref<any>({})
 const courseStats = ref<{ name: string; study_count: number; total_duration: number; avg_progress: number }[]>([])
 const exporting = ref<ExportKind | ''>('')
 const barChartRef = ref<HTMLDivElement | null>(null)
 const progressChartRef = ref<HTMLDivElement | null>(null)
-let barChart: echarts.ECharts | null = null
-let progressChart: echarts.ECharts | null = null
+const { init: initBarChart } = useECharts(barChartRef)
+const { init: initProgressChart } = useECharts(progressChartRef)
 
 async function handleExport(kind: ExportKind) {
   exporting.value = kind
@@ -161,18 +162,15 @@ function getProgressColor(progress: number) {
   return '#f56c6c'
 }
 
-function initBarChart() {
-  if (!barChartRef.value || courseStats.value.length === 0) return
-
-  if (barChart) barChart.dispose()
-  barChart = echarts.init(barChartRef.value)
+function renderBarChart() {
+  if (courseStats.value.length === 0) return
 
   const sortedStats = [...courseStats.value].sort((a, b) => b.study_count - a.study_count)
   const names = sortedStats.map(c => c.name.length > 8 ? c.name.substring(0, 8) + '...' : c.name)
   const counts = sortedStats.map(c => c.study_count)
   const durations = sortedStats.map(c => c.total_duration)
 
-  barChart.setOption({
+  initBarChart({
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' }
@@ -226,16 +224,13 @@ function initBarChart() {
   })
 }
 
-function initProgressChart() {
-  if (!progressChartRef.value || courseStats.value.length === 0) return
-
-  if (progressChart) progressChart.dispose()
-  progressChart = echarts.init(progressChartRef.value)
+function renderProgressChart() {
+  if (courseStats.value.length === 0) return
 
   const names = courseStats.value.map(c => c.name.length > 8 ? c.name.substring(0, 8) + '...' : c.name)
   const progressData = courseStats.value.map(c => Math.round(c.avg_progress * 100) / 100)
 
-  progressChart.setOption({
+  initProgressChart({
     tooltip: {
       trigger: 'axis',
       formatter: '{b}: {c}%'
@@ -277,11 +272,6 @@ function initProgressChart() {
   })
 }
 
-function handleResize() {
-  barChart && barChart.resize()
-  progressChart && progressChart.resize()
-}
-
 async function loadStatistics() {
   try {
     const data = await adminApi.getStatistics()
@@ -290,8 +280,8 @@ async function loadStatistics() {
       courseStats.value = data.course_stats || []
 
       await nextTick()
-      initBarChart()
-      initProgressChart()
+      renderBarChart()
+      renderProgressChart()
     }
   } catch (error) {
     console.error('加载统计数据失败:', error)
@@ -300,13 +290,6 @@ async function loadStatistics() {
 
 onMounted(() => {
   loadStatistics()
-  window.addEventListener('resize', handleResize)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
-  if (barChart) { barChart.dispose(); barChart = null }
-  if (progressChart) { progressChart.dispose(); progressChart = null }
 })
 </script>
 
