@@ -49,24 +49,13 @@
             </div>
             <img v-if="currentQ.image_url" :src="currentQ.image_url" class="q-image" />
             <p class="q-content">{{ currentQ.content }}</p>
-            <div v-if="currentQ.type !== 'short_answer'" class="q-options">
-              <template v-if="currentQ.type === 'true_false'">
-                <div v-for="opt in [{ key: '对', label: '正确' }, { key: '错', label: '错误' }]" :key="opt.key"
-                     class="q-option" :class="{ selected: isOptSelected(opt.key) }"
-                     @click="toggleOpt(opt.key)">
-                  <span class="opt-label">{{ opt.key }}</span>
-                  <span>{{ opt.label }}</span>
-                </div>
-              </template>
-              <template v-else>
-                <div v-for="(label, key) in currentQ.options" :key="key"
-                     class="q-option" :class="{ selected: isOptSelected(key) }"
-                     @click="toggleOpt(key)">
-                  <span class="opt-label">{{ key }}</span>
-                  <span>{{ label }}</span>
-                </div>
-              </template>
-            </div>
+            <QuestionOptionPicker
+              v-if="currentQ.type !== 'short_answer'"
+              :options="currentOptions"
+              :selected-keys="selectedOptionKeys"
+              :multi-choice="currentQ.type === 'multi_choice'"
+              @select="key => toggleOpt(currentQ.id, key, currentQ.type === 'multi_choice')"
+            />
             <el-input v-else v-model="examAnswers[currentQ.id]" type="textarea" :rows="4" placeholder="请输入答案" />
           </el-card>
           <div class="nav-buttons">
@@ -97,6 +86,8 @@ import { levelExamApi, type LevelExamSession } from '@/api/levelExam'
 import { typeMap, sessionStatusMap as statusMap } from '@/constants/question'
 import type { Question } from '@/types/question'
 import { formatClock, formatDateTime } from '@/utils/format'
+import { useQuestionAnswer, useCountdown, buildQuestionOptions, isAnswerEmpty } from '@/composables/useQuestionAnswer'
+import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
 
 const statusType: Record<string, string> = { upcoming: 'info', ongoing: 'success', finished: '' }
 
@@ -107,27 +98,35 @@ const inExam = ref(false)
 const examTitle = ref('')
 const participantId = ref<number | null>(null)
 const examQuestions = ref<Question[]>([])
-const examAnswers = ref<any>({})
+const { answers: examAnswers, toggleOption: toggleOpt, reset: resetAnswers } = useQuestionAnswer()
 const qIdx = ref(0)
-const remainingTime = ref(0)
-let timer: ReturnType<typeof setInterval> | null = null
+const { remaining: remainingTime, start: startTimer, stop: stopTimer } = useCountdown({
+  autosaveInterval: 30,
+  onAutosave: saveProgress,
+  onExpire: autoSubmit
+})
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 const currentQ = computed(() => examQuestions.value[qIdx.value] || {})
+// 当前题目渲染用选项（判断题渲染对/错模板）
+const currentOptions = computed(() => buildQuestionOptions(currentQ.value))
+// 当前题目已选中的选项 keys
+const selectedOptionKeys = computed(() => {
+  const q = currentQ.value
+  const ans = examAnswers.value[q.id]
+  if (ans === undefined || ans === null) return []
+  if (q.type === 'multi_choice') return Array.isArray(ans) ? ans : []
+  return [ans]
+})
 
 function isAnswered(qid: number) {
-  const a = examAnswers.value[qid]
-  if (a === undefined || a === null || a === '') return false
-  if (Array.isArray(a)) return a.length > 0
-  return true
+  return !isAnswerEmpty(examAnswers.value[qid])
 }
 
 function findResumeIndex(questions: { id: number }[], answers: Record<string, unknown>) {
   for (let i = 0; i < questions.length; i++) {
     const qid = questions[i].id
-    const a = answers[qid]
-    if (a === undefined || a === null || a === '') return i
-    if (Array.isArray(a) && a.length === 0) return i
+    if (isAnswerEmpty(answers[qid])) return i
   }
   return 0
 }
@@ -138,7 +137,6 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (timer) clearInterval(timer)
   if (refreshTimer) clearInterval(refreshTimer)
 })
 
@@ -162,42 +160,13 @@ async function enterExam(sessionId: number) {
     const res = await levelExamApi.enterExam(sessionId)
     participantId.value = res.participant_id
     examQuestions.value = res.questions
-    examAnswers.value = res.answers || {}
-    remainingTime.value = res.remaining_time
+    resetAnswers(res.answers || {})
+    startTimer(res.remaining_time)
     examTitle.value = '考试进行中'
     inExam.value = true
     qIdx.value = findResumeIndex(res.questions, res.answers || {})
-    startTimer()
   } catch {
     /* 错误已由拦截器提示 */
-  }
-}
-
-function startTimer() {
-  if (timer) clearInterval(timer)
-  timer = setInterval(() => {
-    if (remainingTime.value <= 0) { if (timer) clearInterval(timer); autoSubmit(); return }
-    remainingTime.value--
-    if (remainingTime.value % 30 === 0) saveProgress()
-  }, 1000)
-}
-
-function isOptSelected(key: string | number) {
-  const a = examAnswers.value[currentQ.value.id]
-  if (!a) return false
-  if (currentQ.value.type === 'multi_choice') return Array.isArray(a) && a.includes(key)
-  return a === key
-}
-
-function toggleOpt(key: string | number) {
-  const qid = currentQ.value.id
-  if (currentQ.value.type === 'multi_choice') {
-    if (!examAnswers.value[qid]) examAnswers.value[qid] = []
-    const idx = examAnswers.value[qid].indexOf(key)
-    if (idx > -1) examAnswers.value[qid].splice(idx, 1)
-    else examAnswers.value[qid].push(key)
-  } else {
-    examAnswers.value[qid] = key
   }
 }
 
@@ -222,7 +191,7 @@ async function autoSubmit() {
 }
 
 async function doSubmit() {
-  if (timer) clearInterval(timer)
+  stopTimer()
   try { await saveProgress() } catch (e) {}
   try {
     if (participantId.value) {
@@ -245,7 +214,7 @@ function resetExamState() {
   examTitle.value = ''
   participantId.value = null
   examQuestions.value = []
-  examAnswers.value = {}
+  resetAnswers()
   qIdx.value = 0
   remainingTime.value = 0
 }
@@ -287,11 +256,6 @@ async function viewResult(row: { id: number; status?: string; name?: string; par
 .question-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
 .q-image { max-width: 100%; max-height: 250px; border-radius: 8px; margin-bottom: 10px; }
 .q-content { font-size: 16px; line-height: 1.8; margin-bottom: 15px; }
-.q-options { display: flex; flex-direction: column; gap: 8px; }
-.q-option { display: flex; align-items: center; padding: 10px 15px; border: 1px solid #dcdfe6; border-radius: 8px; cursor: pointer; }
-.q-option:hover { border-color: #409eff; }
-.q-option.selected { border-color: #409eff; background: #ecf5ff; }
-.opt-label { width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; background: #f5f7fa; margin-right: 10px; font-weight: bold; }
 .nav-buttons { display: flex; justify-content: center; gap: 15px; margin: 15px 0; }
 .answer-card h4 { margin-bottom: 10px; }
 .card-grid { display: flex; flex-wrap: wrap; gap: 5px; }

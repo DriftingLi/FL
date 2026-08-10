@@ -27,7 +27,8 @@ export interface SaveAnswerPayload {
 }
 
 export interface SubmitExamPayload {
-  answers: SaveAnswerPayload[]
+  /** 作答记录：{题目ID: 答案} */
+  answers: Record<string | number, unknown>
   submit?: boolean
   [key: string]: unknown
 }

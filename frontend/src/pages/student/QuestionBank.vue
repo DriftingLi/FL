@@ -127,26 +127,16 @@
         <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="q-image" />
         <p class="q-content">{{ currentQuestion.content }}</p>
 
-        <div v-if="currentQuestion.type !== 'short_answer'" class="q-options">
-          <template v-if="currentQuestion.type === 'true_false'">
-            <div v-for="opt in [{ key: '对', label: '正确' }, { key: '错', label: '错误' }]" :key="opt.key"
-                 class="q-option"
-                 :class="optionClass(opt.key)"
-                 @click="!submitted && toggleOption(opt.key)">
-              <span class="opt-label">{{ opt.key }}</span>
-              <span>{{ opt.label }}</span>
-            </div>
-          </template>
-          <template v-else>
-            <div v-for="(label, key) in currentQuestion.options" :key="key"
-                 class="q-option"
-                 :class="optionClass(key)"
-                 @click="!submitted && toggleOption(key)">
-              <span class="opt-label">{{ key }}</span>
-              <span>{{ label }}</span>
-            </div>
-          </template>
-        </div>
+        <QuestionOptionPicker
+          v-if="currentQuestion.type !== 'short_answer'"
+          :options="currentOptions"
+          :selected-keys="selectedOptionKeys"
+          :multi-choice="currentQuestion.type === 'multi_choice'"
+          :disabled="submitted"
+          :correct-answer="submitted ? lastResult.correct_answer : undefined"
+          :user-answer="submitted ? answers[currentQuestion.id] : undefined"
+          @select="key => toggleOption(currentQuestion.id, key, currentQuestion.type === 'multi_choice')"
+        />
         <el-input v-else v-model="textAnswer" type="textarea" :rows="4" placeholder="请输入答案" :disabled="submitted" />
 
         <div class="q-feedback" v-if="submitted">
@@ -193,6 +183,8 @@ import { trainingApi } from '@/api/training'
 import type { QuestionTag } from '@/api/training'
 import { typeMap, questionTypeOptions, randomCountOptions } from '@/constants/question'
 import type { PracticeProgress, Question, QuestionType, SubmitResult } from '@/types/question'
+import { useQuestionAnswer, buildQuestionOptions, deserializeAnswers, serializeAnswers } from '@/composables/useQuestionAnswer'
+import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
 
 // null = 入口；'sequential' | 'free' | 'tag' = 刷题中
 const mode = ref<'sequential' | 'free' | 'tag' | null>(null)
@@ -231,7 +223,7 @@ watch(tagPracticeId, async (id) => {
 const loading = ref(false)
 const questions = ref<Question[]>([])
 const currentIdx = ref(0)
-const answers = ref<Record<number, unknown>>({})
+const { answers, toggleOption, reset: resetAnswers } = useQuestionAnswer()
 // 按题目ID存储每题的作答状态，切换上下题时保留状态
 const textAnswerMap = ref<Record<number, string>>({})
 const submittedMap = ref<Record<number, boolean>>({})
@@ -251,6 +243,17 @@ const textAnswer = computed({
 const submitted = computed(() => (currentQuestion.value.id ? !!submittedMap.value[currentQuestion.value.id] : false))
 // 当前题目的解析结果
 const lastResult = computed(() => (currentQuestion.value.id ? resultMap.value[currentQuestion.value.id] || ({} as SubmitResult) : ({} as SubmitResult)))
+// 当前题目渲染用选项（判断题渲染对/错模板）
+const currentOptions = computed(() => buildQuestionOptions(currentQuestion.value))
+// 当前题目已选中的选项 keys
+const selectedOptionKeys = computed(() => {
+  const q = currentQuestion.value
+  if (!q || !q.id) return []
+  const ans = answers.value[q.id]
+  if (ans === undefined || ans === null) return []
+  if (q.type === 'multi_choice') return Array.isArray(ans) ? ans : []
+  return [ans]
+})
 const canSubmit = computed(() => {
   const q = currentQuestion.value
   if (!q || !q.id) return false
@@ -347,13 +350,14 @@ async function resolveProgress(modeKey: string, total: number): Promise<{ startI
 // 从后端答题状态恢复 answers/submittedMap/resultMap/correctCount/wrongCount
 function restoreState(answersState: Record<string, unknown>) {
   if (!answersState || Object.keys(answersState).length === 0) return
+  const restored = deserializeAnswers(answersState)
   const newAnswers: Record<number, unknown> = {}
   const newSubmittedMap: Record<number, boolean> = {}
   const newResultMap: Record<number, SubmitResult> = {}
   const newTextAnswerMap: Record<number, string> = {}
   let correct = 0
   let wrong = 0
-  for (const [key, val] of Object.entries(answersState)) {
+  for (const [key, val] of Object.entries(restored)) {
     const qid = Number(key)
     if (!qid) continue
     const result = val as SubmitResult
@@ -368,7 +372,7 @@ function restoreState(answersState: Record<string, unknown>) {
     if (result.is_correct === true) correct++
     else if (result.is_correct === false) wrong++
   }
-  answers.value = newAnswers
+  resetAnswers(newAnswers)
   submittedMap.value = newSubmittedMap
   resultMap.value = newResultMap
   textAnswerMap.value = newTextAnswerMap
@@ -378,11 +382,7 @@ function restoreState(answersState: Record<string, unknown>) {
 
 // 构建可序列化的答题状态对象（key 为题目ID字符串）
 function buildAnswersState(): Record<string, unknown> {
-  const state: Record<string, unknown> = {}
-  for (const [qid, result] of Object.entries(resultMap.value)) {
-    state[qid] = result
-  }
-  return state
+  return serializeAnswers(resultMap.value)
 }
 
 // 保存当前进度和答题状态到后端
@@ -454,7 +454,7 @@ async function startTagPractice() {
 
 function resetSession(startIdx: number) {
   currentIdx.value = startIdx
-  answers.value = {}
+  resetAnswers()
   textAnswerMap.value = {}
   submittedMap.value = {}
   resultMap.value = {}
@@ -463,46 +463,6 @@ function resetSession(startIdx: number) {
 }
 
 // ===== 答题交互 =====
-function isOptionSelected(key: string) {
-  const q = currentQuestion.value
-  const ans = answers.value[q.id]
-  if (!ans) return false
-  if (q.type === 'multi_choice') return Array.isArray(ans) && ans.includes(key)
-  return ans === key
-}
-
-function toggleOption(key: string) {
-  const q = currentQuestion.value
-  if (q.type === 'multi_choice') {
-    if (!answers.value[q.id]) answers.value[q.id] = []
-    const arr = answers.value[q.id] as string[]
-    const idx = arr.indexOf(key)
-    if (idx > -1) arr.splice(idx, 1)
-    else arr.push(key)
-  } else {
-    answers.value[q.id] = key
-  }
-}
-
-function optionClass(key: string) {
-  if (!submitted.value) {
-    return { selected: isOptionSelected(key) }
-  }
-  const q = currentQuestion.value
-  const correctArr = Array.isArray(lastResult.value.correct_answer)
-    ? lastResult.value.correct_answer
-    : String(lastResult.value.correct_answer || '').split(',')
-  const userAns = answers.value[q.id]
-  const userArr = Array.isArray(userAns) ? userAns : [userAns]
-  const isCorrectOpt = correctArr.map(String).includes(String(key))
-  const isUserOpt = userArr.map(String).includes(String(key))
-  return {
-    selected: isUserOpt,
-    'opt-correct': isCorrectOpt,
-    'opt-wrong': isUserOpt && !isCorrectOpt
-  }
-}
-
 async function submitAnswer() {
   const q = currentQuestion.value
   if (!canSubmit.value) return
@@ -554,7 +514,7 @@ function backToEntry() {
   mode.value = null
   questions.value = []
   currentIdx.value = 0
-  answers.value = {}
+  resetAnswers()
   textAnswerMap.value = {}
   submittedMap.value = {}
   resultMap.value = {}
@@ -594,13 +554,6 @@ function backToEntry() {
 .question-header { display: flex; gap: 8px; align-items: center; margin-bottom: 15px; }
 .q-image { max-width: 100%; max-height: 250px; border-radius: 8px; margin-bottom: 10px; }
 .q-content { font-size: 16px; line-height: 1.8; margin-bottom: 15px; white-space: pre-wrap; }
-.q-options { display: flex; flex-direction: column; gap: 8px; }
-.q-option { display: flex; align-items: center; padding: 10px 15px; border: 1px solid #dcdfe6; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
-.q-option:hover { border-color: #409eff; }
-.q-option.selected { border-color: #409eff; background: #ecf5ff; }
-.q-option.opt-correct { border-color: #67c23a; background: #f0f9eb; }
-.q-option.opt-wrong { border-color: #f56c6c; background: #fef0f0; }
-.opt-label { width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; background: #f5f7fa; margin-right: 10px; font-weight: bold; }
 .q-feedback { margin-top: 15px; }
 .feedback-explanation { margin-top: 6px; color: #606266; }
 .q-actions { display: flex; justify-content: center; margin-top: 20px; }

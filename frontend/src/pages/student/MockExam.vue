@@ -60,24 +60,13 @@
             </div>
             <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="q-image" />
             <p class="q-content">{{ currentQuestion.content }}</p>
-            <div v-if="currentQuestion.type !== 'short_answer'" class="q-options">
-              <template v-if="currentQuestion.type === 'true_false'">
-                <div v-for="opt in [{ key: '对', label: '正确' }, { key: '错', label: '错误' }]" :key="opt.key"
-                     class="q-option" :class="{ selected: isOptionSelected(opt.key) }"
-                     @click="toggleOption(opt.key)">
-                  <span class="opt-label">{{ opt.key }}</span>
-                  <span>{{ opt.label }}</span>
-                </div>
-              </template>
-              <template v-else>
-                <div v-for="(label, key) in currentQuestion.options" :key="key"
-                     class="q-option" :class="{ selected: isOptionSelected(key) }"
-                     @click="toggleOption(key)">
-                  <span class="opt-label">{{ key }}</span>
-                  <span>{{ label }}</span>
-                </div>
-              </template>
-            </div>
+            <QuestionOptionPicker
+              v-if="currentQuestion.type !== 'short_answer'"
+              :options="currentOptions"
+              :selected-keys="selectedOptionKeys"
+              :multi-choice="currentQuestion.type === 'multi_choice'"
+              @select="key => toggleOption(currentQuestion.id, key, currentQuestion.type === 'multi_choice')"
+            />
             <el-input v-else v-model="answers[currentQuestion.id]" type="textarea" :rows="4" placeholder="请输入答案" />
           </el-card>
 
@@ -94,7 +83,7 @@
               <div v-for="(q, idx) in questions" :key="q.id"
                    class="card-item" :class="{
                      current: idx === currentIdx,
-                     answered: answers[q.id] !== undefined && answers[q.id] !== '' && answers[q.id] !== null
+                     answered: !isAnswerEmpty(answers[q.id])
                    }"
                    @click="currentIdx = idx">
                 {{ idx + 1 }}
@@ -132,13 +121,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Timer } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { mockExamApi, type MockExamHistoryItem } from '@/api/mockExam'
 import { typeMap } from '@/constants/question'
 import type { Question } from '@/types/question'
 import { formatClock, formatDateTime } from '@/utils/format'
+import { useQuestionAnswer, useCountdown, buildQuestionOptions, isAnswerEmpty } from '@/composables/useQuestionAnswer'
+import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
 
 const loading = ref(false)
 const examStarted = ref(false)
@@ -146,14 +137,27 @@ const examFinished = ref(false)
 const examForm = ref({ count: 40, duration: 90 })
 const mockExamId = ref<number | null>(null)
 const questions = ref<Question[]>([])
-const answers = ref<any>({})
+const { answers, toggleOption, reset: resetAnswers } = useQuestionAnswer()
 const currentIdx = ref(0)
-const remainingTime = ref(0)
 const examResult = ref<any>({})
 const history = ref<MockExamHistoryItem[]>([])
-let timer: ReturnType<typeof setInterval> | null = null
+const { remaining: remainingTime, start: startTimer, stop: stopTimer } = useCountdown({
+  autosaveInterval: 30,
+  onAutosave: saveProgress,
+  onExpire: autoSubmit
+})
 
 const currentQuestion = computed(() => questions.value[currentIdx.value] || {})
+// 当前题目渲染用选项（判断题渲染对/错模板）
+const currentOptions = computed(() => buildQuestionOptions(currentQuestion.value))
+// 当前题目已选中的选项 keys
+const selectedOptionKeys = computed(() => {
+  const q = currentQuestion.value
+  const ans = answers.value[q.id]
+  if (ans === undefined || ans === null) return []
+  if (q.type === 'multi_choice') return Array.isArray(ans) ? ans : []
+  return [ans]
+})
 
 onMounted(async () => {
   try {
@@ -162,58 +166,18 @@ onMounted(async () => {
   } catch (e) {}
 })
 
-onUnmounted(() => {
-  if (timer) clearInterval(timer)
-})
-
 async function startExam() {
   loading.value = true
   try {
     const res = await mockExamApi.startMockExam(examForm.value)
     mockExamId.value = res.mock_exam_id
     questions.value = res.questions
-    remainingTime.value = res.remaining_time
+    startTimer(res.remaining_time)
     examStarted.value = true
-    startTimer()
   } catch {
     /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
-  }
-}
-
-function startTimer() {
-  timer = setInterval(() => {
-    if (remainingTime.value <= 0) {
-      if (timer) clearInterval(timer)
-      autoSubmit()
-      return
-    }
-    remainingTime.value--
-    if (remainingTime.value % 30 === 0) {
-      saveProgress()
-    }
-  }, 1000)
-}
-
-function isOptionSelected(key: string | number) {
-  const ans = answers.value[currentQuestion.value.id]
-  if (!ans) return false
-  if (currentQuestion.value.type === 'multi_choice') {
-    return Array.isArray(ans) && ans.includes(key)
-  }
-  return ans === key
-}
-
-function toggleOption(key: string | number) {
-  const qid = currentQuestion.value.id
-  if (currentQuestion.value.type === 'multi_choice') {
-    if (!answers.value[qid]) answers.value[qid] = []
-    const idx = answers.value[qid].indexOf(key)
-    if (idx > -1) answers.value[qid].splice(idx, 1)
-    else answers.value[qid].push(key)
-  } else {
-    answers.value[qid] = key
   }
 }
 
@@ -243,7 +207,7 @@ async function autoSubmit() {
 }
 
 async function doSubmit() {
-  if (timer) clearInterval(timer)
+  stopTimer()
   await saveProgress()
   try {
     if (!mockExamId.value) return
@@ -259,7 +223,7 @@ function resetExam() {
   examStarted.value = false
   examFinished.value = false
   questions.value = []
-  answers.value = {}
+  resetAnswers()
   currentIdx.value = 0
   examResult.value = {}
   mockExamId.value = null
@@ -277,11 +241,6 @@ function resetExam() {
 .question-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
 .q-image { max-width: 100%; max-height: 250px; border-radius: 8px; margin-bottom: 10px; }
 .q-content { font-size: 16px; line-height: 1.8; margin-bottom: 15px; }
-.q-options { display: flex; flex-direction: column; gap: 8px; }
-.q-option { display: flex; align-items: center; padding: 10px 15px; border: 1px solid #dcdfe6; border-radius: 8px; cursor: pointer; }
-.q-option:hover { border-color: #409eff; }
-.q-option.selected { border-color: #409eff; background: #ecf5ff; }
-.opt-label { width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; background: #f5f7fa; margin-right: 10px; font-weight: bold; }
 .nav-buttons { display: flex; justify-content: center; gap: 15px; margin: 15px 0; }
 .answer-card h4 { margin-bottom: 10px; }
 .card-grid { display: flex; flex-wrap: wrap; gap: 5px; }
