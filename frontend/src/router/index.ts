@@ -298,6 +298,9 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/',
     redirect: () => {
+      // valuation 子域根路径 → 估值首页（公开，无需登录）；
+      // 原逻辑会跳 /login，守卫再把 valuation 子域的登录页转成 /valuation/login
+      if (getSubdomain() === 'valuation') return '/valuation'
       const authStore = useAuthStore()
       const role = authStore.userInfo?.role
       if (role === 'admin') return '/admin/dashboard'
