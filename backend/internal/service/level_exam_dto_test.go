@@ -26,6 +26,16 @@ func topLevelKeys(t *testing.T, v any) map[string]bool {
 	return keys
 }
 
+// marshalJSON 序列化 v（shape-lock 字节断言辅助）。
+func marshalJSON(t *testing.T, v any) ([]byte, error) {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("序列化失败: %v", err)
+	}
+	return b, nil
+}
+
 // assertShapeLock 断言 key 集合与期望完全一致（不多不少）。
 func assertShapeLock(t *testing.T, v any, want ...string) {
 	t.Helper()
