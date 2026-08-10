@@ -26,6 +26,17 @@
                 <view v-for="(item, idx) in topics" :key="idx" class="topic-card" @click="onTopicClick(item.id)">
                     <text class="topic-title">{{ item.title }}</text>
                     <text class="topic-content-preview">{{ getContentPreview(item.content) }}</text>
+                    <view v-if="item.images.length > 0" class="topic-images">
+                        <view v-for="(img, i) in getFirstImages(item.images)" :key="i" class="topic-image-cell">
+                            <image class="topic-image" :src="resolveFileUrl(img)" mode="aspectFill" />
+                        </view>
+                        <view v-if="item.images.length > 3" class="topic-image-cell">
+                            <image class="topic-image" :src="resolveFileUrl(item.images[3])" mode="aspectFill" />
+                            <view class="topic-image-more">
+                                <text class="topic-image-more-text">+{{ item.images.length - 3 }}</text>
+                            </view>
+                        </view>
+                    </view>
                     <view class="topic-footer">
                         <view class="topic-author">
                             <view class="author-avatar">
@@ -62,6 +73,7 @@
     import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { getForumTopicsApi } from '../../api/forum'
+    import { resolveFileUrl } from '../../utils/format'
     import type { ForumTopic } from '../../types/index'
 
     const statusBarHeight = useStatusBarHeight()
@@ -79,6 +91,16 @@
         const single = content.replace('\n', ' ')
         if (single.length <= 80) return single
         return single.substring(0, 80) + '...'
+    }
+
+    /** 取前 3 张图片用于列表缩略图 */
+    function getFirstImages(images : string[]) : string[] {
+        const result : string[] = []
+        const max = images.length > 3 ? 3 : images.length
+        for (let i = 0; i < max; i++) {
+            result.push(images[i])
+        }
+        return result
     }
 
     /** 获取作者名首字 */
@@ -246,6 +268,45 @@
         color: #666666;
         line-height: 1.5;
         margin-bottom: 16rpx;
+    }
+
+    /* 列表图片缩略图 */
+    .topic-images {
+        flex-direction: row;
+        margin-bottom: 16rpx;
+    }
+
+    .topic-image-cell {
+        width: 160rpx;
+        height: 160rpx;
+        margin-right: 12rpx;
+        border-radius: 12rpx;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .topic-image {
+        width: 160rpx;
+        height: 160rpx;
+        border-radius: 12rpx;
+        background-color: #f0f0f0;
+    }
+
+    .topic-image-more {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        align-items: center;
+        justify-content: center;
+    }
+
+    .topic-image-more-text {
+        font-size: 36rpx;
+        color: #ffffff;
+        font-weight: bold;
     }
 
     .topic-footer {

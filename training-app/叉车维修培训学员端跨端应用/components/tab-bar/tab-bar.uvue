@@ -1,9 +1,8 @@
 <template>
     <view class="tab-bar" :style="{ paddingBottom: safeAreaBottom + 'px' }">
         <view v-for="(item, idx) in tabs" :key="idx" class="tab-item" @click="onTabClick(item.path, idx)">
-            <text :class="['tab-icon', { active: activeIndex == idx }]">{{ item.icon }}</text>
+            <image class="tab-icon" :src="activeIndex == idx ? item.activeIcon : item.icon" mode="aspectFit" />
             <text :class="['tab-text', { active: activeIndex == idx }]">{{ item.text }}</text>
-            <view v-if="activeIndex == idx" class="tab-indicator"></view>
         </view>
     </view>
 </template>
@@ -21,7 +20,6 @@
     const safeAreaBottom = ref<number>(0)
 
     // UTS 中 watch 第一个参数不支持箭头函数返回 number，需用 ref 直接监听
-    // 注意：props.activeIndex 本身不是 ref，需通过 watch 的 source 方式
     watch(props, () => {
         if (props.activeIndex != activeIndex.value) {
             activeIndex.value = props.activeIndex
@@ -41,14 +39,15 @@
         key : string
         path : string
         icon : string
+        activeIcon : string
         text : string
     }
     const tabs : TabItem[] = [
-        { key: 'dashboard', path: '/pages/dashboard/dashboard', icon: '🏠', text: '首页' },
-        { key: 'courses', path: '/pages/courses/courses', icon: '📚', text: '课程' },
-        { key: 'ai', path: '/pages/ai-assistant/ai-assistant', icon: '🤖', text: 'AI学' },
-        { key: 'forum', path: '/pages/forum/forum', icon: '💬', text: '交流' },
-        { key: 'profile', path: '/pages/profile/profile', icon: '👤', text: '我的' },
+        { key: 'dashboard', path: '/pages/dashboard/dashboard', icon: '/static/tabbar/home.png', activeIcon: '/static/tabbar/home-active.png', text: '首页' },
+        { key: 'courses', path: '/pages/courses/courses', icon: '/static/tabbar/course.png', activeIcon: '/static/tabbar/course-active.png', text: '课程' },
+        { key: 'ai', path: '/pages/ai-assistant/ai-assistant', icon: '/static/tabbar/ai.png', activeIcon: '/static/tabbar/ai-active.png', text: 'AI学' },
+        { key: 'forum', path: '/pages/forum/forum', icon: '/static/tabbar/forum.png', activeIcon: '/static/tabbar/forum-active.png', text: '交流' },
+        { key: 'profile', path: '/pages/profile/profile', icon: '/static/tabbar/profile.png', activeIcon: '/static/tabbar/profile-active.png', text: '我的' },
     ]
 
     function onTabClick(path : string, idx : number) : void {
@@ -69,41 +68,30 @@
         flex-direction: row;
         background-color: #ffffff;
         border-top: 1rpx solid #f0f0f0;
+        position: relative;
+        z-index: 10;
     }
 
     .tab-item {
         flex: 1;
         flex-direction: column;
         align-items: center;
-        padding: 16rpx 0;
+        padding: 14rpx 0 8rpx;
     }
 
     .tab-icon {
-        font-size: 44rpx;
-        margin-bottom: 8rpx;
-        opacity: 0.5;
-    }
-
-    .tab-icon.active {
-        opacity: 1;
+        width: 44rpx;
+        height: 44rpx;
+        margin-bottom: 6rpx;
     }
 
     .tab-text {
-        font-size: 22rpx;
+        font-size: 20rpx;
         color: #999999;
     }
 
     .tab-text.active {
         color: #2979ff;
         font-weight: bold;
-    }
-
-    .tab-indicator {
-        position: absolute;
-        top: 0;
-        width: 48rpx;
-        height: 4rpx;
-        background-color: #2979ff;
-        border-radius: 2rpx;
     }
 </style>

@@ -77,6 +77,9 @@
 			</view>
 		</view>
 
+		<!-- 底部导航栏（保持 tab 切换可用） -->
+		<TabBar :active-index="2"></TabBar>
+
 		<!-- 左侧会话抽屉 -->
 		<view v-if="sidebarLeft" class="drawer-mask" @click="sidebarLeft = false"></view>
 		<view v-if="sidebarLeft" class="drawer drawer-left">
@@ -187,6 +190,7 @@
 	import type { StreamChatParams } from '../../api/ai-assistant'
 	import type { AIModelOption, AIChatSession, AIChatMessage, AIFunctionItem } from '../../types/index'
 	import { isProPaid, getVersion, setVersion } from '../../utils/aiPay'
+	import TabBar from '../../components/tab-bar/tab-bar.uvue'
 
 	const auth = useAuthStore()
 	const statusBarHeight = ref<number>(20)
