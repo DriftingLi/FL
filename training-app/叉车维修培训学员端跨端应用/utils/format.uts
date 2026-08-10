@@ -1,6 +1,29 @@
 /**
  * 格式化工具
  */
+import { API_BASE_URL } from '../config/env'
+
+/**
+ * 补全后端返回的相对文件 URL（如 /static/uploads/...）
+ * 绝对 URL（http/https）原样返回；相对路径拼上 API_BASE_URL 去掉 /api 后缀的静态域名
+ */
+export function resolveFileUrl(url : string) : string {
+	if (url.length == 0) return ''
+	if (url.startsWith('http://') || url.startsWith('https://')) {
+		return url
+	}
+	let base = API_BASE_URL
+	if (base.endsWith('/api')) {
+		base = base.substring(0, base.length - 4)
+	}
+	if (base.endsWith('/')) {
+		base = base.substring(0, base.length - 1)
+	}
+	if (url.startsWith('/')) {
+		return base + url
+	}
+	return base + '/' + url
+}
 
 /**
  * 格式化日期

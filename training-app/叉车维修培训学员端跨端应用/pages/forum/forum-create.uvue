@@ -22,6 +22,22 @@
                     <textarea class="form-textarea" placeholder="请输入内容（1-10000 字）" maxlength="10000" v-model="content" />
                     <text class="form-counter">{{ content.length }}/10000</text>
                 </view>
+
+                <view class="form-item">
+                    <text class="form-label">图片</text>
+                    <view class="img-grid">
+                        <view v-for="(img, idx) in images" :key="idx" class="img-cell">
+                            <image class="img-thumb" :src="resolveFileUrl(img)" mode="aspectFill" @click="onPreviewImage(idx)" />
+                            <view class="img-remove" @click.stop="onRemoveImage(idx)">
+                                <text class="img-remove-text">×</text>
+                            </view>
+                        </view>
+                        <view v-if="images.length < 9" class="img-add" @click="onAddImage">
+                            <text class="img-add-icon">{{ uploadingImage ? '…' : '＋' }}</text>
+                            <text class="img-add-text">{{ uploadingImage ? '上传中' : images.length + '/9' }}</text>
+                        </view>
+                    </view>
+                </view>
             </view>
 
             <view class="tips-section">
@@ -44,18 +60,22 @@
     import { ref, computed } from 'vue'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
-    import { createForumTopicApi } from '../../api/forum'
+    import { createForumTopicApi, uploadForumImageApi } from '../../api/forum'
+    import { resolveFileUrl } from '../../utils/format'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     const title = ref<string>('')
     const content = ref<string>('')
+    const images = ref<string[]>([])
     const submitting = ref<boolean>(false)
+    const uploadingImage = ref<boolean>(false)
 
     /** 是否可提交 */
     const canSubmit = computed<boolean>(() : boolean => {
         if (submitting.value) return false
+        if (uploadingImage.value) return false
         if (title.value.trim().length == 0) return false
         if (content.value.trim().length == 0) return false
         return true
@@ -78,7 +98,7 @@
         submitting.value = true
         uni.showLoading({ title: '发布中...' })
         try {
-            await createForumTopicApi(title.value.trim(), content.value.trim())
+            await createForumTopicApi(title.value.trim(), content.value.trim(), images.value)
             uni.showToast({ title: '发布成功', icon: 'success' })
             setTimeout(() => {
                 goBack()
@@ -98,6 +118,72 @@
             submitting.value = false
             uni.hideLoading()
         }
+    }
+
+    /** 选择图片：批量选择并上传（最多 9 张） */
+    function onAddImage() : void {
+        if (uploadingImage.value) return
+        const remaining = 9 - images.value.length
+        if (remaining <= 0) {
+            uni.showToast({ title: '最多上传 9 张图片', icon: 'none' })
+            return
+        }
+        uni.chooseImage({
+            count: remaining,
+            sizeType: ['compressed'],
+            sourceType: ['album', 'camera'],
+            success: (res) => {
+                const paths = res.tempFilePaths as string[]
+                if (paths.length == 0) return
+                uploadImages(paths)
+            },
+            fail: (err) => {
+                console.log('[forum-create] chooseImage canceled/failed:', err)
+            },
+        })
+    }
+
+    /** 逐张上传图片，成功后把返回 URL 加入数组 */
+    async function uploadImages(paths : string[]) : Promise<void> {
+        uploadingImage.value = true
+        uni.showLoading({ title: '上传图片中...' })
+        let failed = 0
+        for (let i = 0; i < paths.length; i++) {
+            if (images.value.length >= 9) break
+            try {
+                const url = await uploadForumImageApi(paths[i])
+                images.value.push(url)
+            } catch (e) {
+                console.error('[forum-create] upload image failed:', e)
+                failed = failed + 1
+            }
+        }
+        uni.hideLoading()
+        uploadingImage.value = false
+        if (failed > 0) {
+            uni.showToast({ title: failed + ' 张图片上传失败，请重试', icon: 'none' })
+        }
+    }
+
+    /** 删除已上传图片 */
+    function onRemoveImage(index : number) : void {
+        const next : string[] = []
+        for (let i = 0; i < images.value.length; i++) {
+            if (i != index) next.push(images.value[i])
+        }
+        images.value = next
+    }
+
+    /** 预览已上传图片 */
+    function onPreviewImage(index : number) : void {
+        const urls : string[] = []
+        for (let i = 0; i < images.value.length; i++) {
+            urls.push(resolveFileUrl(images.value[i]))
+        }
+        uni.previewImage({
+            urls: urls,
+            current: index,
+        })
     }
 
     function onBack() : void {
@@ -216,6 +302,70 @@
         font-size: 22rpx;
         color: #999999;
         text-align: right;
+        margin-top: 8rpx;
+    }
+
+    /* 图片选择区 */
+    .img-grid {
+        flex-direction: row;
+        flex-wrap: wrap;
+        margin-top: 16rpx;
+    }
+
+    .img-cell {
+        width: 180rpx;
+        height: 180rpx;
+        margin-right: 16rpx;
+        margin-bottom: 16rpx;
+        position: relative;
+    }
+
+    .img-thumb {
+        width: 180rpx;
+        height: 180rpx;
+        border-radius: 12rpx;
+        background-color: #f0f0f0;
+    }
+
+    .img-remove {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 40rpx;
+        height: 40rpx;
+        border-radius: 0 0 0 12rpx;
+        background-color: rgba(0, 0, 0, 0.55);
+        align-items: center;
+        justify-content: center;
+    }
+
+    .img-remove-text {
+        font-size: 28rpx;
+        color: #ffffff;
+        line-height: 1;
+    }
+
+    .img-add {
+        width: 180rpx;
+        height: 180rpx;
+        margin-right: 16rpx;
+        margin-bottom: 16rpx;
+        border: 2rpx dashed #c0c4cc;
+        border-radius: 12rpx;
+        background-color: #fafbfc;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+    }
+
+    .img-add-icon {
+        font-size: 48rpx;
+        color: #909399;
+    }
+
+    .img-add-text {
+        font-size: 22rpx;
+        color: #909399;
         margin-top: 8rpx;
     }
 
