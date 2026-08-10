@@ -12,6 +12,8 @@
 // 跨子域名视为不同站点，localStorage 中存储的 token 不共享，
 // 用户在不同子域名间切换时需要重新登录。
 
+import { getToken } from '@/utils/storage'
+
 export type SubdomainType = 'main' | 'training' | 'valuation' | 'tutor' | 'admin'
 
 // 子域名前缀到类型的映射（用于构建跨子域名 URL）
@@ -129,7 +131,7 @@ export function buildCrossDomainAuthUrl(target: SubdomainType, path: string): st
   const base = buildSubdomainUrl(target, path)
   let token = ''
   if (typeof localStorage !== 'undefined') {
-    token = localStorage.getItem('token') || ''
+    token = getToken() || ''
   }
   if (!token) return base
   const sep = base.includes('?') ? '&' : '?'

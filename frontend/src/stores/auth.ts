@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Ref } from 'vue'
 import { authApi } from '@/api/auth'
+import { getToken, getUserInfo, setToken, setUserInfo, clearLocalAuth } from '@/utils/storage'
+import { consumeAuthTokenFromUrl } from '@/utils/authToken'
 
 export interface UserInfo {
   token?: string
@@ -19,39 +21,23 @@ export const useAuthStore = defineStore('auth', () => {
   const token: Ref<string> = ref('')
   const userInfo: Ref<UserInfo> = ref({})
   const isLoggedIn: Ref<boolean> = ref(false)
-  const isInitializing: Ref<boolean> = ref(true)
 
-  // 读取跨子域名跳转附带的一次性 token，并立即从地址栏移除
-  function consumeAuthTokenFromUrl(): string {
-    if (typeof window === 'undefined') return ''
-    const params = new URLSearchParams(window.location.search)
-    const token = params.get('auth_token')
-    if (!token) return ''
-    params.delete('auth_token')
-    const query = params.toString()
-    const newUrl = window.location.pathname + (query ? `?${query}` : '') + window.location.hash
-    window.history.replaceState(null, '', newUrl)
-    return token
-  }
+  // 初始化 Promise 缓存：main.ts 显式启动一次，路由守卫 await 同一 Promise 等待完成
+  let readyPromise: Promise<void> | null = null
 
   function initFromStorage() {
-    const savedToken = localStorage.getItem('token')
-    const savedInfo = localStorage.getItem('userInfo')
+    const savedToken = getToken()
+    const savedInfo = getUserInfo<UserInfo>()
 
-    if (savedToken && savedInfo) {
-      try {
-        const parsed = JSON.parse(savedInfo)
-        if (parsed && parsed.token && parsed.role) {
-          token.value = parsed.token
-          userInfo.value = parsed
-          isLoggedIn.value = true
-          return
-        }
-      } catch (e) {
-        console.warn('[Auth] Failed to parse saved user info')
-      }
+    if (savedToken && savedInfo && savedInfo.token && savedInfo.role) {
+      token.value = savedInfo.token
+      userInfo.value = savedInfo
+      isLoggedIn.value = true
+      return
     }
-
+    if (savedToken && !savedInfo) {
+      console.warn('[Auth] Failed to parse saved user info')
+    }
     clearAuthData()
   }
 
@@ -64,7 +50,7 @@ export const useAuthStore = defineStore('auth', () => {
       if (carriedToken) {
         token.value = carriedToken
         isLoggedIn.value = true
-        localStorage.setItem('token', carriedToken)
+        setToken(carriedToken)
       }
       // 登录态以 /auth/me 为准：父域名 Cookie 共享后，
       // 即使本地无 token（跨子域名首次访问），也能恢复登录；
@@ -78,18 +64,22 @@ export const useAuthStore = defineStore('auth', () => {
           ...info
         }
         isLoggedIn.value = true
-        localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
+        setUserInfo(userInfo.value)
       } else {
         clearAuthData()
       }
     } catch (e) {
       clearAuthData()
-    } finally {
-      isInitializing.value = false
     }
   }
 
-  validateToken()
+  /** 幂等初始化：由 main.ts 显式调用（localStorage 恢复 + /auth/me 校验 + URL auth_token 交接） */
+  function initialize(): Promise<void> {
+    if (!readyPromise) {
+      readyPromise = validateToken()
+    }
+    return readyPromise
+  }
 
   function setAuthData(data: UserInfo) {
     if (!data || !data.token) {
@@ -101,8 +91,8 @@ export const useAuthStore = defineStore('auth', () => {
     userInfo.value = data
     isLoggedIn.value = true
 
-    localStorage.setItem('token', data.token)
-    localStorage.setItem('userInfo', JSON.stringify(data))
+    setToken(data.token)
+    setUserInfo(data)
 
     // 登录响应只含基础字段（无昵称/头像等），异步拉取 /auth/me 补齐完整资料
     refreshUserInfo()
@@ -113,8 +103,7 @@ export const useAuthStore = defineStore('auth', () => {
     userInfo.value = {}
     isLoggedIn.value = false
 
-    localStorage.removeItem('token')
-    localStorage.removeItem('userInfo')
+    clearLocalAuth()
   }
 
   // 重新拉取 /auth/me 并合并到 userInfo（昵称/头像等资料更新后调用）
@@ -126,7 +115,7 @@ export const useAuthStore = defineStore('auth', () => {
           ...userInfo.value,
           ...info
         }
-        localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
+        setUserInfo(userInfo.value)
       }
     } catch (e) {
       console.warn('[Auth] refreshUserInfo failed:', e)
@@ -137,7 +126,7 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     userInfo,
     isLoggedIn,
-    isInitializing,
+    initialize,
     setAuthData,
     clearAuthData,
     refreshUserInfo
