@@ -1,0 +1,912 @@
+<template>
+	<view class="ai-page">
+		<!-- 自定义导航栏 -->
+		<view class="custom-nav" :style="{ paddingTop: statusBarHeight + 'px' }">
+			<view class="nav-content">
+				<text class="nav-icon" @click="toggleSidebar">&#9776;</text>
+				<view class="nav-center">
+                        <text class="nav-title">维修助手</text>
+					<view class="version-tabs">
+						<text class="version-tab active">基础版</text>
+						<text class="version-tab" @click="goPro">专业版</text>
+					</view>
+				
+				</view>
+				<text class="nav-icon" @click="toggleSidebarRight">&#9636;</text>
+			</view>
+		</view>
+
+		<!-- 主内容区 -->
+		<view class="main">
+			<scroll-view scroll-y class="pro-scroll" :scroll-into-view="scrollIntoViewId" scroll-with-animation>
+				<!-- 无对话：欢迎 + 新对话入口 -->
+				<view v-if="messages.length == 0 && !thinking" class="welcome-panel">
+					<!-- <view class="new-chat-card" @click="startNewChat">
+						<text class="new-chat-icon">&#9993;</text>
+						
+					</view> -->
+
+					<!-- 快捷提示语 -->
+					<view class="prompt-list">
+						<view v-for="(p, idx) in quickPrompts" :key="idx" class="prompt-card" @click="sendText(p)">
+							<text class="prompt-text">{{ p }}</text>
+						
+						</view>
+					</view>
+				
+				</view>
+
+				<!-- 聊天区 -->
+				<view v-else class="chat-area">
+					<view v-for="(msg, idx) in messages" :id="'msg-' + idx" :key="idx" class="message-row" :class="msg.role">
+						<view class="message-bubble">
+							<text class="message-text">{{ msg.content }}</text>
+						</view>
+					</view>
+					<view v-if="thinking" class="message-row assistant">
+						<view class="message-bubble thinking">
+							<text class="message-text">思考中...</text>
+						</view>
+					</view>
+				</view>
+				<view id="bottom-anchor"></view>
+			</scroll-view>
+		</view>
+
+		<!-- 底部输入区 -->
+		<view class="input-area">
+			<view class="input-row">
+				<view class="input-box">
+					<input v-model="inputText" class="chat-input" placeholder="提出你想要知道的问题" confirm-type="send" @confirm="sendInput" />
+				</view>
+				<text class="send-btn" :class="{ disabled: inputText.length == 0 }" @click="sendInput">&#10148;</text>
+			</view>
+		</view>
+
+		<!-- 左侧会话抽屉 -->
+		<view v-if="sidebarLeft" class="drawer-mask" @click="sidebarLeft = false"></view>
+		<view v-if="sidebarLeft" class="drawer drawer-left">
+			<view class="drawer-header" :style="{ paddingTop: statusBarHeight + 'px' }">
+				<text class="drawer-title">最近对话</text>
+				<text class="drawer-close" @click="sidebarLeft = false">&#10005;</text>
+			</view>
+			<scroll-view scroll-y class="drawer-body">
+				<view class="drawer-new" @click="startNewChat">
+					<text class="drawer-new-icon">+</text>
+					<text>新建对话</text>
+				</view>
+				<view v-if="sessions.length == 0" class="empty-tip">暂无历史对话</view>
+				<view v-for="(s, idx) in sessions" :key="idx" class="drawer-item" @click="loadSession(s)">
+					<text class="drawer-item-title">{{ s.title }}</text>
+					<text class="drawer-item-del" @click.stop="onDeleteSession(s.id)">&#10005;</text>
+				</view>
+			</scroll-view>
+		</view>
+
+		<!-- 右侧功能菜单抽屉 -->
+		<view v-if="sidebarRight" class="drawer-mask" @click="sidebarRight = false"></view>
+		<view v-if="sidebarRight" class="drawer drawer-right">
+			<view class="drawer-header" :style="{ paddingTop: statusBarHeight + 'px' }">
+				<text class="drawer-title">功能菜单</text>
+				<text class="drawer-close" @click="sidebarRight = false">&#10005;</text>
+			</view>
+			<scroll-view scroll-y class="drawer-body">
+				<view class="menu-item" @click="goPro">
+					<text>切换到专业版</text>
+				</view>
+				<view class="menu-item" @click="goSettings">
+					<text>对话设置</text>
+				</view>
+				<view class="menu-item" @click="goManageModels">
+					<text>自定义模型</text>
+				</view>
+				<view class="menu-item" @click="goProfile">
+					<text>个人中心</text>
+				</view>
+			</scroll-view>
+		</view>
+
+		<!-- mock 付费弹窗 -->
+		<view v-if="payVisible" class="pay-mask" @click="closePay"></view>
+		<view v-if="payVisible" class="pay-dialog">
+			<view class="pay-title">开通专业版</view>
+			<view class="pay-sub">解锁全部 AI 能力，一次购买长期有效</view>
+			<view class="pay-plan" :class="{ active: payPlan == 'month' }" @click="payPlan = 'month'">
+				<view class="plan-left">
+					<text class="plan-name">月度会员</text>
+					<text class="plan-desc">适合短期使用</text>
+				</view>
+				<text class="plan-price">{{ PRO_PRICE_MONTH }}</text>
+			</view>
+			<view class="pay-plan" :class="{ active: payPlan == 'year' }" @click="payPlan = 'year'">
+				<view class="plan-left">
+					<text class="plan-name">年度会员</text>
+					<text class="plan-desc">更划算，推荐</text>
+				</view>
+				<text class="plan-price">{{ PRO_PRICE_YEAR }}</text>
+			</view>
+			<view class="pay-actions">
+				<view class="pay-btn cancel" @click="closePay">
+					<text class="pay-btn-text">取消</text>
+				</view>
+				<view class="pay-btn primary" @click="confirmPay">
+					<text class="pay-btn-text">确认支付</text>
+				</view>
+			</view>
+			<text class="pay-tip">当前为演示环境，支付为模拟操作</text>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { onLoad, onShow } from '@dcloudio/uni-app'
+	import { ref } from 'vue'
+	import { useAuthStore } from '../../stores/auth'
+	import {
+		getPublicModelsApi,
+		getSessionsApi,
+		createSessionApi,
+		deleteSessionApi,
+		getSessionMessagesApi,
+		streamChatApi,
+	} from '../../api/ai-assistant'
+	import type { StreamChatParams } from '../../api/ai-assistant'
+	import type { AIModelOption, AIChatSession, AIChatMessage } from '../../types/index'
+	import {
+		isProPaid,
+		setVersion,
+		markProPaid,
+		mockPay,
+		PRO_PRICE_MONTH,
+		PRO_PRICE_YEAR,
+	} from '../../utils/aiPay'
+
+	const auth = useAuthStore()
+	const statusBarHeight = ref<number>(20)
+
+	// 视图状态
+	const sidebarLeft = ref<boolean>(false)
+	const sidebarRight = ref<boolean>(false)
+	const thinking = ref<boolean>(false)
+
+	// mock 付费状态
+	const payVisible = ref<boolean>(false)
+	const payPlan = ref<'month' | 'year'>('month')
+	const paying = ref<boolean>(false)
+
+	// 数据
+	const models = ref<AIModelOption[]>([])
+	const sessions = ref<AIChatSession[]>([])
+	const currentSession = ref<AIChatSession | null>(null)
+	const messages = ref<AIChatMessage[]>([])
+	const inputText = ref<string>('')
+	const scrollIntoViewId = ref<string>('')
+
+	// 基础版固定使用第一个平台模型
+	const currentModelId = ref<number>(0)
+
+	// 快捷提示语
+	const quickPrompts : string[] = [
+		'如何高效阅读书籍？',
+		'帮我写近期的学习汇报',
+		'总结这个章节的主要内容',
+	]
+
+	// 生命周期
+	onLoad((options : OnLoadOptions) => {
+		const sysInfo = uni.getSystemInfoSync()
+		statusBarHeight.value = sysInfo.statusBarHeight
+
+		auth.restoreFromStorage()
+		if (!auth.isLoggedIn.value) {
+			uni.reLaunch({ url: '/pages/login/login' })
+			return
+		}
+
+		loadModels()
+		loadSessions()
+	})
+
+	onShow(() => {
+		if (auth.isLoggedIn.value) {
+			loadSessions()
+		}
+	})
+
+	// 数据加载
+	async function loadModels() : Promise<void> {
+		try {
+			const res = await getPublicModelsApi()
+			const list = (res['list'] ?? res) as AIModelOption[]
+			models.value = list
+			if (list.length > 0 && currentModelId.value == 0) {
+				currentModelId.value = list[0].id
+			}
+		} catch (e) {
+			console.error('loadModels failed:', e)
+		}
+	}
+
+	async function loadSessions() : Promise<void> {
+		try {
+			const res = await getSessionsApi()
+			sessions.value = (res['sessions'] ?? res) as AIChatSession[]
+		} catch (e) {
+			console.error('loadSessions failed:', e)
+			sessions.value = []
+		}
+	}
+
+	async function loadSession(session : AIChatSession) : Promise<void> {
+		currentSession.value = session
+		sidebarLeft.value = false
+		sidebarRight.value = false
+		try {
+			const res = await getSessionMessagesApi(session.id)
+			messages.value = (res['messages'] ?? res) as AIChatMessage[]
+		} catch (e) {
+			console.error('loadSession failed:', e)
+			messages.value = []
+		}
+	}
+
+	async function startNewChat() : Promise<void> {
+		currentSession.value = null
+		messages.value = []
+		inputText.value = ''
+		sidebarLeft.value = false
+		sidebarRight.value = false
+	}
+
+	async function onDeleteSession(id : number) : Promise<void> {
+		uni.showModal({
+			title: '确认删除',
+			content: '删除后不可恢复',
+			success: async (res) => {
+				if (res.confirm) {
+					try {
+						await deleteSessionApi(id)
+						if (currentSession.value != null && currentSession.value.id == id) {
+							currentSession.value = null
+							messages.value = []
+						}
+						await loadSessions()
+					} catch (e) {
+						console.error('deleteSession failed:', e)
+					}
+				}
+			},
+		})
+	}
+
+	function toggleSidebar() : void {
+		sidebarLeft.value = !sidebarLeft.value
+	}
+
+	function openSidebar() : void {
+		sidebarLeft.value = true
+	}
+
+	function toggleSidebarRight() : void {
+		sidebarRight.value = !sidebarRight.value
+	}
+
+	function sendText(text : string) : void {
+		inputText.value = text
+		sendInput()
+	}
+
+	function goPro() : void {
+		sidebarRight.value = false
+		// 未付费则先引导开通专业版
+		if (!isProPaid()) {
+			openPay()
+			return
+		}
+		setVersion('pro')
+		uni.reLaunch({ url: '/pages/ai-assistant/ai-assistant' })
+	}
+
+	function openPay() : void {
+		payVisible.value = true
+	}
+
+	function closePay() : void {
+		if (paying.value) return
+		payVisible.value = false
+	}
+
+	async function confirmPay() : Promise<void> {
+		if (paying.value) return
+		paying.value = true
+		try {
+			await mockPay()
+			markProPaid()
+			setVersion('pro')
+			payVisible.value = false
+			uni.showToast({ title: '支付成功，已开通专业版', icon: 'success' })
+			setTimeout(() => {
+				uni.reLaunch({ url: '/pages/ai-assistant/ai-assistant' })
+			}, 600)
+		} finally {
+			paying.value = false
+		}
+	}
+
+	function goSettings() : void {
+		sidebarRight.value = false
+		uni.navigateTo({ url: '/pages/ai-assistant/ai-settings' })
+	}
+
+	function goManageModels() : void {
+		sidebarRight.value = false
+		uni.navigateTo({ url: '/pages/ai-assistant/custom-models' })
+	}
+
+	function goProfile() : void {
+		sidebarRight.value = false
+		uni.showToast({ title: '个人中心开发中', icon: 'none' })
+	}
+
+	function sendInput() : void {
+		const text = inputText.value.trim()
+		if (text.length == 0) return
+		if (thinking.value) {
+			uni.showToast({ title: '请等待当前回复完成', icon: 'none' })
+			return
+		}
+		if (models.value.length == 0) {
+			uni.showToast({ title: '暂无可用的 AI 模型', icon: 'none' })
+			return
+		}
+
+		const userMsg : AIChatMessage = { id: 0, role: 'user', content: text, created_at: '' }
+		messages.value.push(userMsg)
+		inputText.value = ''
+		scrollToBottom()
+
+		doStreamChat()
+	}
+
+	async function doStreamChat() : Promise<void> {
+		thinking.value = true
+		const assistantMsg : AIChatMessage = { id: 0, role: 'assistant', content: '', created_at: '' }
+		messages.value.push(assistantMsg)
+		scrollToBottom()
+
+		// 构建历史消息
+		const history : { role : string; content : string }[] = []
+		for (let i = 0; i < messages.value.length - 1; i++) {
+			const m = messages.value[i]
+			if (m.role == 'user' || m.role == 'assistant') {
+				history.push({ role: m.role, content: m.content })
+			}
+		}
+
+		let sessionID = currentSession.value?.id ?? 0
+		// 首次对话时创建会话
+		if (sessionID == 0 && history.length == 1) {
+			try {
+				const s = await createSessionApi('新会话', '基础版') as AIChatSession
+				currentSession.value = s
+				sessionID = s.id
+				await loadSessions()
+			} catch (e) {
+				console.error('createSession failed:', e)
+			}
+		}
+
+		const params : UTSJSONObject = {
+			session_id: sessionID,
+			model_source: 'admin',
+			config_id: currentModelId.value,
+			messages: history,
+		}
+
+		streamChatApi(params as StreamChatParams, {
+			onMessage: (chunk : string) => {
+				assistantMsg.content += chunk
+				scrollToBottom()
+			},
+			onError: (msg : string) => {
+				thinking.value = false
+				assistantMsg.content += '\n[错误：' + msg + ']'
+				uni.showToast({ title: msg, icon: 'none' })
+				scrollToBottom()
+			},
+			onDone: () => {
+				thinking.value = false
+				scrollToBottom()
+			},
+		})
+
+		// 兜底：8 秒后仍未结束则重置 thinking（部分端 SSE 异常时）
+		setTimeout(() => {
+			if (thinking.value) {
+				thinking.value = false
+			}
+		}, 8000)
+	}
+
+	function scrollToBottom() : void {
+		scrollIntoViewId.value = 'bottom-anchor'
+		setTimeout(() => {
+			scrollIntoViewId.value = ''
+		}, 300)
+	}
+</script>
+
+<style>
+	.ai-page {
+		flex: 1;
+		background-color: #f8f8f8;
+	}
+
+	/* 自定义导航栏 */
+	.custom-nav {
+		background-color: #ffffff;
+		border-bottom: 1rpx solid #f0f0f0;
+	}
+
+	.nav-content {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		height: 88rpx;
+		padding: 0 24rpx;
+	}
+
+	.nav-icon {
+		font-size: 40rpx;
+		color: #333333;
+		padding: 12rpx;
+	}
+
+	.nav-center {
+		flex: 1;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.version-tabs {
+		flex-direction: row;
+		align-items: center;
+		margin-bottom: 4rpx;
+	}
+
+	.version-tab {
+		font-size: 24rpx;
+		color: #999999;
+		padding: 4rpx 16rpx;
+	}
+
+	.version-tab.active {
+		color: #2979ff;
+		font-weight: 600;
+	}
+
+	.nav-title {
+		font-size: 28rpx;
+		color: #2979ff;
+		font-weight: 500;
+	}
+
+	/* 主内容 */
+	.main {
+		flex: 1;
+	}
+
+	/* 基础版首页 */
+	.welcome-panel {
+		padding: 24rpx;
+	}
+
+	.new-chat-card {
+		background-color: #f5f5f5;
+		border-radius: 16rpx;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		padding: 32rpx;
+		margin-bottom: 24rpx;
+	}
+
+	.new-chat-icon {
+		font-size: 36rpx;
+		margin-right: 12rpx;
+	}
+
+	.new-chat-text {
+		font-size: 30rpx;
+		color: #333333;
+		font-weight: 500;
+	}
+
+	/* 快捷提示语 */
+	.prompt-list {
+		flex-direction: column;
+		margin-bottom: 24rpx;
+	}
+
+	.prompt-card {
+		background-color: #ffffff;
+		border-radius: 16rpx;
+		padding: 28rpx 24rpx;
+		margin-bottom: 16rpx;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.prompt-text {
+		flex: 1;
+		font-size: 28rpx;
+		color: #333333;
+	}
+
+	.prompt-arrow {
+		font-size: 36rpx;
+		color: #cccccc;
+		margin-left: 16rpx;
+	}
+
+	.section-card {
+		background-color: #ffffff;
+		border-radius: 16rpx;
+		padding: 24rpx;
+	}
+
+	.section-header {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.section-icon {
+		font-size: 32rpx;
+		margin-right: 12rpx;
+	}
+
+	.section-title {
+		flex: 1;
+		font-size: 30rpx;
+		color: #333333;
+		font-weight: 500;
+	}
+
+	.section-arrow {
+		font-size: 28rpx;
+		color: #999999;
+	}
+
+	.section-body {
+		margin-top: 16rpx;
+	}
+
+	.empty-tip {
+		text-align: center;
+		font-size: 26rpx;
+		color: #999999;
+		padding: 32rpx 0;
+	}
+
+	.session-preview {
+		padding: 16rpx 20rpx;
+		background-color: #f5f6f8;
+		border-radius: 12rpx;
+	}
+
+	.session-preview-text {
+		font-size: 26rpx;
+		color: #666666;
+	}
+
+	/* 聊天区 */
+	.pro-scroll {
+		flex: 1;
+		padding: 24rpx;
+	}
+
+	.chat-area {
+		flex-direction: column;
+		margin-bottom: 24rpx;
+	}
+
+	.message-row {
+		flex-direction: row;
+		margin-bottom: 20rpx;
+	}
+
+	.message-row.user {
+		justify-content: flex-end;
+	}
+
+	.message-row.assistant {
+		justify-content: flex-start;
+	}
+
+	.message-bubble {
+		max-width: 80%;
+		padding: 20rpx 24rpx;
+		border-radius: 16rpx;
+	}
+
+	.message-row.user .message-bubble {
+		background-color: #2979ff;
+	}
+
+	.message-row.assistant .message-bubble {
+		background-color: #ffffff;
+	}
+
+	.message-bubble.thinking {
+		background-color: #f0f0f0;
+	}
+
+	.message-text {
+		font-size: 28rpx;
+		color: #333333;
+		line-height: 1.6;
+	}
+
+	.message-row.user .message-text {
+		color: #ffffff;
+	}
+
+	/* 底部输入区 */
+	.input-area {
+		background-color: #ffffff;
+		border-top: 1rpx solid #f0f0f0;
+		padding: 16rpx 24rpx;
+		padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
+	}
+
+	.input-row {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.input-box {
+		flex: 1;
+		background-color: #f5f5f5;
+		border-radius: 36rpx;
+		padding: 0 24rpx;
+		margin: 0 12rpx;
+	}
+
+	.chat-input {
+		height: 72rpx;
+		font-size: 28rpx;
+		color: #333333;
+	}
+
+	.send-btn {
+		font-size: 40rpx;
+		color: #2979ff;
+		padding: 12rpx;
+	}
+
+	.send-btn.disabled {
+		color: #cccccc;
+	}
+
+	/* 抽屉 */
+	.drawer-mask {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: rgba(0, 0, 0, 0.4);
+		z-index: 100;
+	}
+
+	.drawer {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 70%;
+		background-color: #ffffff;
+		z-index: 101;
+		flex-direction: column;
+	}
+
+	.drawer-left {
+		left: 0;
+	}
+
+	.drawer-right {
+		right: 0;
+	}
+
+	.drawer-header {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding: 24rpx;
+		border-bottom: 1rpx solid #f0f0f0;
+	}
+
+	.drawer-title {
+		font-size: 32rpx;
+		font-weight: 600;
+		color: #333333;
+	}
+
+	.drawer-close {
+		font-size: 36rpx;
+		color: #999999;
+		padding: 8rpx;
+	}
+
+	.drawer-body {
+		flex: 1;
+		padding: 24rpx;
+	}
+
+	.drawer-new {
+		flex-direction: row;
+		align-items: center;
+		background-color: #2979ff;
+		border-radius: 12rpx;
+		padding: 24rpx;
+		margin-bottom: 24rpx;
+	}
+
+	.drawer-new text {
+		color: #ffffff;
+		font-size: 28rpx;
+	}
+
+	.drawer-new-icon {
+		font-size: 32rpx;
+		margin-right: 12rpx;
+	}
+
+	.drawer-item {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding: 24rpx 0;
+		border-bottom: 1rpx solid #f5f5f5;
+	}
+
+	.drawer-item-title {
+		flex: 1;
+		font-size: 28rpx;
+		color: #333333;
+	}
+
+	.drawer-item-del {
+		font-size: 28rpx;
+		color: #999999;
+		padding: 8rpx;
+	}
+
+	.menu-item {
+		padding: 28rpx 0;
+		border-bottom: 1rpx solid #f5f5f5;
+	}
+
+	.menu-item text {
+		font-size: 28rpx;
+		color: #333333;
+	}
+
+	/* mock 付费弹窗 */
+	.pay-mask {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: rgba(0, 0, 0, 0.4);
+		z-index: 200;
+	}
+
+	.pay-dialog {
+		position: absolute;
+		left: 48rpx;
+		right: 48rpx;
+		top: 22%;
+		background-color: #ffffff;
+		border-radius: 24rpx;
+		padding: 40rpx 32rpx;
+		z-index: 201;
+	}
+
+	.pay-title {
+		font-size: 36rpx;
+		font-weight: bold;
+		color: #222222;
+		text-align: center;
+	}
+
+	.pay-sub {
+		font-size: 24rpx;
+		color: #999999;
+		text-align: center;
+		margin-top: 12rpx;
+		margin-bottom: 32rpx;
+	}
+
+	.pay-plan {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		background-color: #f5f6f8;
+		border-radius: 16rpx;
+		padding: 28rpx 24rpx;
+		margin-bottom: 20rpx;
+		border: 2rpx solid transparent;
+	}
+
+	.pay-plan.active {
+		background-color: #e3f2fd;
+		border-color: #2979ff;
+	}
+
+	.plan-left {
+		flex-direction: column;
+	}
+
+	.plan-name {
+		font-size: 30rpx;
+		color: #333333;
+		font-weight: 500;
+	}
+
+	.plan-desc {
+		font-size: 22rpx;
+		color: #999999;
+		margin-top: 6rpx;
+	}
+
+	.plan-price {
+		font-size: 32rpx;
+		color: #2979ff;
+		font-weight: bold;
+	}
+
+	.pay-actions {
+		flex-direction: row;
+		margin-top: 8rpx;
+	}
+
+	.pay-btn {
+		flex: 1;
+		height: 88rpx;
+		border-radius: 44rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.pay-btn.cancel {
+		background-color: #f0f0f0;
+		margin-right: 16rpx;
+	}
+
+	.pay-btn.primary {
+		background-color: #2979ff;
+	}
+
+	.pay-btn-text {
+		font-size: 30rpx;
+		font-weight: bold;
+	}
+
+	.pay-btn.cancel .pay-btn-text {
+		color: #333333;
+	}
+
+	.pay-btn.primary .pay-btn-text {
+		color: #ffffff;
+	}
+
+	.pay-tip {
+		font-size: 22rpx;
+		color: #cccccc;
+		text-align: center;
+		margin-top: 20rpx;
+	}
+</style>

@@ -1,6 +1,5 @@
 {
-    "pages": [
-        {
+    "pages": [{
             "path": "pages/index/index",
             "style": {
                 "navigationStyle": "custom",
@@ -174,6 +173,27 @@
                 "navigationStyle": "custom",
                 "navigationBarTitleText": "对话设置"
             }
+        },
+        {
+            "path": "pages/ai-assistant/version-select",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "选择版本"
+            }
+        },
+        {
+            "path": "pages/ai-assistant/ai-basic",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "维修助手基础版"
+            }
+        },
+        {
+            "path": "pages/ai-assistant/custom-models",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "自定义模型"
+            }
         }
     ],
     "globalStyle": {
@@ -187,8 +207,7 @@
         "selectedColor": "#2979ff",
         "backgroundColor": "#ffffff",
         "borderStyle": "black",
-        "list": [
-            {
+        "list": [{
                 "pagePath": "pages/dashboard/dashboard",
                 "text": "首页",
                 "iconPath": "static/tabbar/home.png",
@@ -201,7 +220,7 @@
                 "selectedIconPath": "static/tabbar/course-active.png"
             },
             {
-                "pagePath": "pages/ai-assistant/ai-assistant",
+                "pagePath": "pages/ai-assistant/version-select",
                 "text": "AI学",
                 "iconPath": "static/tabbar/ai.png",
                 "selectedIconPath": "static/tabbar/ai-active.png"

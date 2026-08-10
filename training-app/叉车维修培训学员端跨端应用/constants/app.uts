@@ -23,7 +23,7 @@ export const GRID_ITEMS : GridItem[] = [
     { key: 'wrong-questions', title: '错题本', icon: '❗', color: '#ff5722', path: '', available: false },
 
     { key: 'profile', title: '个人中心', icon: '👤', color: '#00bcd4', path: '/pages/profile/profile', available: true },
-    { key: 'ai-assistant', title: 'AI 助手', icon: '🤖', color: '#607d8b', path: '/pages/ai-assistant/ai-assistant', available: true },
+    { key: 'ai-assistant', title: 'AI 助手', icon: '🤖', color: '#607d8b', path: '/pages/ai-assistant/version-select', available: true },
 ]
 
 /** 占位入口点击提示文案 */
