@@ -2,6 +2,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"math/rand"
 	"time"
@@ -680,9 +681,9 @@ func beijingLoc() *time.Location {
 }
 
 func jsonMarshal(v interface{}) ([]byte, error) {
-	return jsonMarshalImpl(v)
+	return json.Marshal(v)
 }
 
 func jsonUnmarshal(b []byte, v interface{}) error {
-	return jsonUnmarshalImpl(b, v)
+	return json.Unmarshal(b, v)
 }
