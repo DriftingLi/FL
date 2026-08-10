@@ -24,8 +24,32 @@ func NewGradingService(db *gorm.DB, ai *AIService, logger *zap.Logger) *GradingS
 	return &GradingService{db: db, ai: ai, logger: logger}
 }
 
+// GradingParticipantDTO 阅卷列表条目：participant 全字段 + 阅卷统计附加字段。
+type GradingParticipantDTO struct {
+	LevelExamParticipantDTO
+	SessionName        string `json:"session_name"`
+	StudentName        string `json:"student_name"`
+	PassScore          int    `json:"pass_score"`
+	UngradedCount      int    `json:"ungraded_count"`
+	ObjectiveUngraded  int    `json:"objective_ungraded"`
+	SubjectiveUngraded int    `json:"subjective_ungraded"`
+	TotalAnswers       int    `json:"total_answers"`
+	GradingStatus      string `json:"grading_status"`
+}
+
+// GradingParticipantDetailDTO 阅卷详情：participant 全字段 + 详情附加字段。
+type GradingParticipantDetailDTO struct {
+	LevelExamParticipantDTO
+	SessionName        string               `json:"session_name"`
+	StudentName        string               `json:"student_name"`
+	PassScore          int                  `json:"pass_score"`
+	Answers            []LevelExamAnswerDTO `json:"answers"`
+	ObjectiveUngraded  int                  `json:"objective_ungraded"`
+	SubjectiveUngraded int                  `json:"subjective_ungraded"`
+}
+
 // GetSubmittedParticipants 获取已提交的考试参与列表。
-func (s *GradingService) GetSubmittedParticipants(sessionID *int) ([]map[string]any, error) {
+func (s *GradingService) GetSubmittedParticipants(sessionID *int) ([]GradingParticipantDTO, error) {
 	q := s.db.Model(&model.ExamParticipant{}).Where("status IN ?", []string{"submitted", "timeout"})
 	if sessionID != nil {
 		q = q.Where("exam_session_id = ?", *sessionID)
@@ -34,8 +58,7 @@ func (s *GradingService) GetSubmittedParticipants(sessionID *int) ([]map[string]
 	if err := q.Order("submit_time DESC").Find(&participants).Error; err != nil {
 		return nil, err
 	}
-	//Replace map[string]interface{} with map[string]any
-	result := make([]map[string]any, 0, len(participants))
+	result := make([]GradingParticipantDTO, 0, len(participants))
 	for i := range participants {
 		p := &participants[i]
 		var session model.ExamSession
@@ -73,18 +96,18 @@ func (s *GradingService) GetSubmittedParticipants(sessionID *int) ([]map[string]
 			passScore = session.PassScore
 		}
 
-		item := participantToDict(p)
-		item["session_name"] = session.Name
-		item["student_name"] = studentName
-		item["pass_score"] = passScore
-		item["ungraded_count"] = ungradedCount
-		item["objective_ungraded"] = objectiveUngraded
-		item["subjective_ungraded"] = subjectiveUngraded
-		item["total_answers"] = len(answers)
+		item := GradingParticipantDTO{LevelExamParticipantDTO: participantToDTO(p)}
+		item.SessionName = session.Name
+		item.StudentName = studentName
+		item.PassScore = passScore
+		item.UngradedCount = ungradedCount
+		item.ObjectiveUngraded = objectiveUngraded
+		item.SubjectiveUngraded = subjectiveUngraded
+		item.TotalAnswers = len(answers)
 		if ungradedCount > 0 {
-			item["grading_status"] = "pending"
+			item.GradingStatus = "pending"
 		} else {
-			item["grading_status"] = "completed"
+			item.GradingStatus = "completed"
 		}
 		result = append(result, item)
 	}
@@ -92,7 +115,7 @@ func (s *GradingService) GetSubmittedParticipants(sessionID *int) ([]map[string]
 }
 
 // GetParticipantDetail 获取参与详情。
-func (s *GradingService) GetParticipantDetail(participantID int) (map[string]any, error) {
+func (s *GradingService) GetParticipantDetail(participantID int) (*GradingParticipantDetailDTO, error) {
 	var p model.ExamParticipant
 	if err := s.db.First(&p, participantID).Error; err != nil {
 		return nil, errors.New("考试参与记录不存在")
@@ -105,15 +128,15 @@ func (s *GradingService) GetParticipantDetail(participantID int) (map[string]any
 	var answers []model.ExamAnswer
 	s.db.Where("exam_participant_id = ?", participantID).Find(&answers)
 
-	answerList := make([]map[string]any, 0, len(answers))
+	answerList := make([]LevelExamAnswerDTO, 0, len(answers))
 	objectiveUngraded := 0
 	subjectiveUngraded := 0
 	for i := range answers {
 		a := &answers[i]
-		item := examAnswerToDict(a)
+		item := examAnswerToDTO(a)
 		var question model.Question
 		if err := s.db.First(&question, a.QuestionID).Error; err == nil {
-			item["question"] = questionToDict(&question, true)
+			item.Question = questionToDict(&question, true)
 			if a.GraderID == nil {
 				if question.Type == "short_answer" {
 					subjectiveUngraded++
@@ -134,18 +157,18 @@ func (s *GradingService) GetParticipantDetail(participantID int) (map[string]any
 		passScore = session.PassScore
 	}
 
-	result := participantToDict(&p)
-	result["session_name"] = session.Name
-	result["student_name"] = studentName
-	result["pass_score"] = passScore
-	result["answers"] = answerList
-	result["objective_ungraded"] = objectiveUngraded
-	result["subjective_ungraded"] = subjectiveUngraded
-	return result, nil
+	item := GradingParticipantDetailDTO{LevelExamParticipantDTO: participantToDTO(&p)}
+	item.SessionName = session.Name
+	item.StudentName = studentName
+	item.PassScore = passScore
+	item.Answers = answerList
+	item.ObjectiveUngraded = objectiveUngraded
+	item.SubjectiveUngraded = subjectiveUngraded
+	return &item, nil
 }
 
 // GradeAnswer 阅卷评分。
-func (s *GradingService) GradeAnswer(answerID int, score float64, graderID int, comment string) (map[string]any, error) {
+func (s *GradingService) GradeAnswer(answerID int, score float64, graderID int, comment string) (*LevelExamAnswerDTO, error) {
 	var answer model.ExamAnswer
 	if err := s.db.First(&answer, answerID).Error; err != nil {
 		return nil, errors.New("答题记录不存在")
@@ -170,11 +193,12 @@ func (s *GradingService) GradeAnswer(answerID int, score float64, graderID int, 
 		return nil, err
 	}
 	s.updateParticipantScore(answer.ExamParticipantID)
-	return examAnswerToDict(&answer), nil
+	d := examAnswerToDTO(&answer)
+	return &d, nil
 }
 
 // RegradeAnswer 复核评分。
-func (s *GradingService) RegradeAnswer(answerID int, score float64, graderID int, comment string) (map[string]any, error) {
+func (s *GradingService) RegradeAnswer(answerID int, score float64, graderID int, comment string) (*LevelExamAnswerDTO, error) {
 	var answer model.ExamAnswer
 	if err := s.db.First(&answer, answerID).Error; err != nil {
 		return nil, errors.New("答题记录不存在")
@@ -199,11 +223,12 @@ func (s *GradingService) RegradeAnswer(answerID int, score float64, graderID int
 		return nil, err
 	}
 	s.updateParticipantScore(answer.ExamParticipantID)
-	return examAnswerToDict(&answer), nil
+	d := examAnswerToDTO(&answer)
+	return &d, nil
 }
 
 // ConfirmAIGrading 确认 AI 评分。
-func (s *GradingService) ConfirmAIGrading(answerID, graderID int) (map[string]any, error) {
+func (s *GradingService) ConfirmAIGrading(answerID, graderID int) (*LevelExamAnswerDTO, error) {
 	var answer model.ExamAnswer
 	if err := s.db.First(&answer, answerID).Error; err != nil {
 		return nil, errors.New("答题记录不存在")
@@ -227,11 +252,12 @@ func (s *GradingService) ConfirmAIGrading(answerID, graderID int) (map[string]an
 		return nil, err
 	}
 	s.updateParticipantScore(answer.ExamParticipantID)
-	return examAnswerToDict(&answer), nil
+	d := examAnswerToDTO(&answer)
+	return &d, nil
 }
 
 // AIGradeAnswer AI 评分。
-func (s *GradingService) AIGradeAnswer(answerID int, userID *int) (map[string]any, error) {
+func (s *GradingService) AIGradeAnswer(answerID int, userID *int) (*LevelExamAnswerDTO, error) {
 	var answer model.ExamAnswer
 	if err := s.db.First(&answer, answerID).Error; err != nil {
 		return nil, errors.New("答题记录不存在")
@@ -269,7 +295,8 @@ func (s *GradingService) AIGradeAnswer(answerID int, userID *int) (map[string]an
 	if err := s.db.Save(&answer).Error; err != nil {
 		return nil, err
 	}
-	return examAnswerToDict(&answer), nil
+	d := examAnswerToDTO(&answer)
+	return &d, nil
 }
 
 // BatchConfirmObjective 批量确认客观题。
