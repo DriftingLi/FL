@@ -88,7 +88,7 @@ var HealthPaths = map[string]struct{}{
 // sess 由装配根构建一次注入，避免每处路由注册重复构造会话模块。
 func JWTAuth(sess *security.Session) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !resolveClaims(c, sess, true) {
+		if !resolveClaims(c, sess) {
 			response.Unauthorized(c, "Token无效或已过期，请重新登录")
 			c.Abort()
 			return
@@ -100,15 +100,15 @@ func JWTAuth(sess *security.Session) gin.HandlerFunc {
 // OptionalAuth 可选 JWT 认证：有 token 则解析填充，无则放行。
 func OptionalAuth(sess *security.Session) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		resolveClaims(c, sess, false)
+		resolveClaims(c, sess)
 		c.Next()
 	}
 }
 
 // resolveClaims 提取 token → 校验 → 黑名单检查 → 写 context，是
-// JWTAuth（require=true）与 OptionalAuth（require=false）共享的解析核心。
-// 返回是否通过认证：require 时由调用方决定 401 中止，否则静默放行。
-func resolveClaims(c *gin.Context, sess *security.Session, require bool) bool {
+// JWTAuth 与 OptionalAuth 共享的解析核心。
+// 返回是否通过认证：JWTAuth 据此 401 中止，OptionalAuth 忽略结果静默放行。
+func resolveClaims(c *gin.Context, sess *security.Session) bool {
 	tokenStr := sess.ExtractToken(c.GetHeader("Authorization"), authCookieValue(c, sess.CookieName()))
 	if tokenStr == "" {
 		return false

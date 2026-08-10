@@ -57,12 +57,12 @@ export function useECharts(chartRef: Ref<HTMLElement | null>) {
   // 实际执行初始化（DOM 尺寸已就绪）
   function doInit() {
     if (!chartRef.value || !pendingOption) return
-    if (chartInstance) {
-      chartInstance.dispose()
+    if (!chartInstance) {
+      chartInstance = echarts.init(chartRef.value)
     }
-    chartInstance = echarts.init(chartRef.value)
+    // 实例已存在时直接 setOption 更新，避免每次渲染销毁重建图表
     chartInstance.setOption(pendingOption, pendingNotMerge)
-    // 初始化成功后清空缓存（保留 pendingOption 供后续 setOption 使用）
+    // pendingOption 保留：后续 setOption 与 ResizeObserver 触发的重绘复用
   }
 
   // 用 requestAnimationFrame 延迟初始化（兜底机制，主要靠 ResizeObserver）
@@ -103,14 +103,10 @@ export function useECharts(chartRef: Ref<HTMLElement | null>) {
     pendingOption = null
   }
 
-  function resize() {
+  function handleResize() {
     if (chartInstance) {
       chartInstance.resize()
     }
-  }
-
-  function handleResize() {
-    resize()
   }
 
   onMounted(() => {
@@ -141,9 +137,6 @@ export function useECharts(chartRef: Ref<HTMLElement | null>) {
   })
 
   return {
-    getChartInstance: () => chartInstance,
-    init,
-    dispose,
-    resize
+    init
   }
 }
