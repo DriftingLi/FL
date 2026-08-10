@@ -72,7 +72,7 @@
         <el-card v-for="(ans, idx) in detail.answers" :key="ans.id" class="answer-item">
           <div class="answer-header">
             <span class="answer-index">第{{ idx + 1 }}题</span>
-            <el-tag size="small">{{ typeMap[ans.question?.type] }}</el-tag>
+            <el-tag size="small">{{ (typeMap as Record<string, string>)[ans.question?.type] }}</el-tag>
             <span class="answer-score">
               得分：<strong>{{ ans.score }}</strong> / {{ ans.question?.score || 0 }}分
             </span>
@@ -160,8 +160,7 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Monitor, ArrowLeft } from '@element-plus/icons-vue'
 import { gradingApi } from '@/api/grading'
-
-const typeMap: Record<string, string> = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
+import { typeMap } from '@/constants/question'
 
 const loading = ref(false)
 const participants = ref<{ id: number; grading_status?: string; [key: string]: unknown }[]>([])

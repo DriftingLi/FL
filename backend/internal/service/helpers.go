@@ -3,7 +3,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"slices"
 	"strconv"
 	"time"
@@ -36,7 +35,9 @@ func toFloat(v interface{}) float64 {
 	case int32:
 		return float64(n)
 	case string:
-		return parseFloat(n)
+		// 宽容语义：字符串解析失败回退 0。
+		f, _ := parseFloat(n)
+		return f
 	case bool:
 		if n {
 			return 1
@@ -57,22 +58,14 @@ func clampFloat(v, min, max float64) float64 {
 	return v
 }
 
-// parseFloat 解析字符串为 float64，失败返回 0。
-func parseFloat(s string) float64 {
-	f, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		return 0
-	}
-	return f
+// parseFloat 解析字符串为 float64，失败返回 strconv 原生错误。
+func parseFloat(s string) (float64, error) {
+	return strconv.ParseFloat(s, 64)
 }
 
-// parseInt 解析字符串为 int，失败返回 0。
-func parseInt(s string) int {
-	i, err := strconv.Atoi(s)
-	if err != nil {
-		return 0
-	}
-	return i
+// parseInt 解析字符串为 int，失败返回 strconv 原生错误。
+func parseInt(s string) (int, error) {
+	return strconv.Atoi(s)
 }
 
 // ptrInt 返回 int 指针。
@@ -84,15 +77,4 @@ func floatPtr(v float64) *float64 { return &v }
 // containsString 判断切片是否包含字符串。
 func containsString(slice []string, s string) bool {
 	return slices.Contains(slice, s)
-}
-
-// jsonMarshalImpl 是 jsonMarshal 包装函数的实现，直接调用标准库 json.Marshal。
-// 单独抽出实现层是为了便于在测试中替换（如需 mock JSON 序列化）。
-func jsonMarshalImpl(v any) ([]byte, error) {
-	return json.Marshal(v)
-}
-
-// jsonUnmarshalImpl 是 jsonUnmarshal 包装函数的实现，直接调用标准库 json.Unmarshal。
-func jsonUnmarshalImpl(b []byte, v any) error {
-	return json.Unmarshal(b, v)
 }

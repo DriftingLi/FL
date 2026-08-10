@@ -1,4 +1,3 @@
-import { onMounted, onBeforeUnmount } from 'vue'
 import type { DirectiveBinding } from 'vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
 
@@ -26,35 +25,6 @@ function getObserver(rootMargin = '200px'): IntersectionObserver | null {
     },
     { rootMargin }
   )
-}
-
-export function useLazyLoad(rootMargin = '200px') {
-  let observer: IntersectionObserver | null = null
-
-  function observe(el: HTMLElement): void {
-    if (!el || !observer) return
-    observer.observe(el)
-    observerMap.set(el, observer)
-  }
-
-  function unobserve(el: HTMLElement): void {
-    if (!el || !observer) return
-    observer.unobserve(el)
-    observerMap.delete(el)
-  }
-
-  onMounted(() => {
-    observer = getObserver(rootMargin)
-  })
-
-  onBeforeUnmount(() => {
-    if (observer) {
-      observer.disconnect()
-      observer = null
-    }
-  })
-
-  return { observe, unobserve }
 }
 
 export const vLazy = {

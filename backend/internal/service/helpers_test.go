@@ -66,32 +66,30 @@ func TestClampFloat(t *testing.T) {
 }
 
 func TestParseFloat(t *testing.T) {
-	if got := parseFloat("3.14"); got != 3.14 {
-		t.Errorf("parseFloat('3.14') = %v", got)
+	if got, err := parseFloat("3.14"); err != nil || got != 3.14 {
+		t.Errorf("parseFloat('3.14') = %v, err=%v", got, err)
 	}
-	if got := parseFloat("invalid"); got != 0 {
-		t.Errorf("parseFloat('invalid') = %v，期望 0", got)
+	if got, err := parseFloat("-5.5"); err != nil || got != -5.5 {
+		t.Errorf("parseFloat('-5.5') = %v, err=%v", got, err)
 	}
-	if got := parseFloat(""); got != 0 {
-		t.Errorf("parseFloat('') = %v，期望 0", got)
-	}
-	if got := parseFloat("-5.5"); got != -5.5 {
-		t.Errorf("parseFloat('-5.5') = %v", got)
+	for _, s := range []string{"invalid", "", "abc12"} {
+		if got, err := parseFloat(s); err == nil {
+			t.Errorf("parseFloat(%q) 期望报错，得到 %v", s, got)
+		}
 	}
 }
 
 func TestParseInt(t *testing.T) {
-	if got := parseInt("42"); got != 42 {
-		t.Errorf("parseInt('42') = %v", got)
+	if got, err := parseInt("42"); err != nil || got != 42 {
+		t.Errorf("parseInt('42') = %v, err=%v", got, err)
 	}
-	if got := parseInt("invalid"); got != 0 {
-		t.Errorf("parseInt('invalid') = %v，期望 0", got)
+	if got, err := parseInt("-7"); err != nil || got != -7 {
+		t.Errorf("parseInt('-7') = %v, err=%v", got, err)
 	}
-	if got := parseInt(""); got != 0 {
-		t.Errorf("parseInt('') = %v，期望 0", got)
-	}
-	if got := parseInt("-7"); got != -7 {
-		t.Errorf("parseInt('-7') = %v", got)
+	for _, s := range []string{"invalid", "", "3.14"} {
+		if got, err := parseInt(s); err == nil {
+			t.Errorf("parseInt(%q) 期望报错，得到 %v", s, got)
+		}
 	}
 }
 

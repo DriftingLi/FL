@@ -4,9 +4,12 @@ package api
 
 import (
 	"github.com/gin-gonic/gin"
+
+	"forklift-training/internal/security"
+	"forklift-training/internal/service"
 )
 
 // RegisterPhoneAuthRoutes 注册 /api/auth/phone 蓝图（手机号验证码注册/登录）。
-func RegisterPhoneAuthRoutes(rg *gin.RouterGroup, deps *Deps) {
-	registerCodeChannelAuthRoutes(rg.Group("/auth/phone"), deps.Cfg, deps.CodeSvc, deps.PhoneCh, "phone", "验证码已发送，请查收手机短信")
+func RegisterPhoneAuthRoutes(rg *gin.RouterGroup, sess *security.Session, codeSvc *service.VerifyCodeService, ch service.CodeChannel) {
+	registerCodeChannelAuthRoutes(rg.Group("/auth/phone"), sess, codeSvc, ch, "phone", "验证码已发送，请查收手机短信")
 }

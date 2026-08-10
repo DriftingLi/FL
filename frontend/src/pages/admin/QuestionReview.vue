@@ -42,7 +42,7 @@
       <el-table-column type="selection" width="50" />
       <el-table-column prop="id" label="ID" width="60" />
       <el-table-column prop="type" label="题型" width="100">
-        <template #default="{ row }">{{ typeMap[row.type] }}</template>
+        <template #default="{ row }">{{ (typeMap as Record<string, string>)[row.type] }}</template>
       </el-table-column>
       <el-table-column prop="content" label="题干" show-overflow-tooltip />
       <el-table-column label="状态" width="100">
@@ -139,8 +139,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { questionBankApi } from '@/api/questionBank'
 import type { Question } from '@/types/question'
+import { typeMap } from '@/constants/question'
 
-const typeMap: Record<string, string> = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
 const statusType: Record<string, string> = { draft: 'info', pending: 'warning', published: 'success' }
 

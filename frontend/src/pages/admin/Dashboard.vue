@@ -61,9 +61,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { User, UserFilled, Notebook, Timer, TrendCharts, MagicStick } from '@element-plus/icons-vue'
-import * as echarts from 'echarts'
 import { adminApi } from '@/api/admin'
 import { useAuthStore } from '@/stores/auth'
+import { useECharts } from '@/composables/useECharts'
 
 const authStore = useAuthStore()
 const userName = computed(() =>
@@ -74,8 +74,8 @@ const overview = ref<any>({})
 const courseStats = ref<{ name: string; study_count: number; total_duration: number; avg_progress: number }[]>([])
 const barChartRef = ref<HTMLDivElement | null>(null)
 const pieChartRef = ref<HTMLDivElement | null>(null)
-let barChart: echarts.ECharts | null = null
-let pieChart: echarts.ECharts | null = null
+const { init: initBarChart } = useECharts(barChartRef)
+const { init: initPieChart } = useECharts(pieChartRef)
 
 // 移动端断点：≤768px 时切换饼图 legend 布局，避免 legend 与图像重叠
 const MOBILE_BREAKPOINT = 768
@@ -110,17 +110,14 @@ function formatDuration(minutes: number) {
 
 const brandColors = ['#2563EB', '#3B82F6', '#60A5FA', '#10B981', '#34D399', '#F59E0B', '#FBBF24', '#8B5CF6']
 
-function initBarChart() {
-  if (!barChartRef.value || courseStats.value.length === 0) return
-
-  if (barChart) barChart.dispose()
-  barChart = echarts.init(barChartRef.value)
+function renderBarChart() {
+  if (courseStats.value.length === 0) return
 
   const names = courseStats.value.map(c => c.name.length > 8 ? c.name.substring(0, 8) + '...' : c.name)
   const counts = courseStats.value.map(c => c.study_count)
   const durations = courseStats.value.map(c => c.total_duration)
 
-  barChart.setOption({
+  initBarChart({
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
@@ -172,11 +169,8 @@ function initBarChart() {
   })
 }
 
-function initPieChart() {
-  if (!pieChartRef.value || courseStats.value.length === 0) return
-
-  if (pieChart) pieChart.dispose()
-  pieChart = echarts.init(pieChartRef.value)
+function renderPieChart() {
+  if (courseStats.value.length === 0) return
 
   const data = courseStats.value.map(c => ({
     name: c.name.length > 10 ? c.name.substring(0, 10) + '...' : c.name,
@@ -203,7 +197,7 @@ function initPieChart() {
         textStyle: { fontSize: 12, color: '#4B5563' }
       }
 
-  pieChart.setOption({
+  initPieChart({
     tooltip: {
       trigger: 'item',
       formatter: '{b}: {c}%',
@@ -242,13 +236,11 @@ function initPieChart() {
 }
 
 function handleResize() {
-  // 跨越移动端断点时重新初始化饼图，切换 legend 布局避免重叠
+  // 跨越移动端断点时重新初始化饼图，切换 legend 布局避免重叠（容器缩放由 useECharts 处理）
   const wasMobile = isMobile.value
   checkMobile()
-  barChart && barChart.resize()
-  pieChart && pieChart.resize()
   if (wasMobile !== isMobile.value) {
-    initPieChart()
+    renderPieChart()
   }
 }
 
@@ -265,8 +257,8 @@ async function loadStatistics() {
       statItems.value[3].value = formatDuration(overview.value.total_study_duration || 0)
 
       await nextTick()
-      initBarChart()
-      initPieChart()
+      renderBarChart()
+      renderPieChart()
     }
   } catch (error) {
     console.error('加载统计数据失败:', error)
@@ -281,8 +273,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-  if (barChart) { barChart.dispose(); barChart = null }
-  if (pieChart) { pieChart.dispose(); pieChart = null }
 })
 </script>
 

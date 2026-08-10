@@ -15,29 +15,19 @@
     <div v-if="wrongList.length > 0">
       <el-card v-for="item in wrongList" :key="item.id" class="wrong-item">
         <div class="wrong-header">
-          <el-tag size="small">{{ item.question?.type ? typeMap[item.question.type] : '' }}</el-tag>
+          <el-tag size="small">{{ item.question?.type ? (typeMap as Record<string, string>)[item.question.type] : '' }}</el-tag>
           <span class="wrong-count">错误 {{ item.wrong_count }} 次</span>
         </div>
         <p class="wrong-content">{{ item.question?.content }}</p>
         <div v-if="redoingId === item.id" class="redo-area">
-          <div v-if="item.question?.type !== 'short_answer'" class="redo-options">
-            <template v-if="item.question?.type === 'true_false'">
-              <div v-for="opt in [{ key: '对', label: '正确' }, { key: '错', label: '错误' }]" :key="opt.key"
-                   class="redo-option" :class="{ selected: redoAnswer.includes(opt.key) }"
-                   @click="toggleRedoOption(opt.key, item.question.type)">
-                <span class="opt-label">{{ opt.key }}</span>
-                <span>{{ opt.label }}</span>
-              </div>
-            </template>
-            <template v-else>
-              <div v-for="(label, key) in item.question?.options ?? {}" :key="key"
-                   class="redo-option" :class="{ selected: redoAnswer.includes(key) }"
-                   @click="toggleRedoOption(key, item.question?.type ?? 'single_choice')">
-                <span class="opt-label">{{ key }}</span>
-                <span>{{ label }}</span>
-              </div>
-            </template>
-          </div>
+          <QuestionOptionPicker
+            v-if="item.question?.type !== 'short_answer'"
+            compact
+            :options="buildQuestionOptions(item.question ?? {})"
+            :selected-keys="redoAnswer"
+            :multi-choice="item.question?.type === 'multi_choice'"
+            @select="key => toggleRedoOption(key, item.question?.type ?? 'single_choice')"
+          />
           <el-input v-else v-model="redoTextAnswer" type="textarea" :rows="3" placeholder="请输入答案" />
           <div class="redo-actions">
             <el-button type="primary" size="small" @click="submitRedo(item)">提交</el-button>
@@ -59,8 +49,9 @@
 import { ref, watch, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { wrongQuestionApi } from '@/api/wrongQuestion'
-
-const typeMap: Record<string, string> = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
+import { typeMap } from '@/constants/question'
+import { toggleAnswer, buildQuestionOptions } from '@/composables/useQuestionAnswer'
+import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
 
 interface WrongItem {
   id: number
@@ -101,13 +92,8 @@ function startRedo(item: WrongItem) {
 }
 
 function toggleRedoOption(key: string | number, type: string) {
-  if (type === 'multi_choice') {
-    const idx = redoAnswer.value.indexOf(key)
-    if (idx > -1) redoAnswer.value.splice(idx, 1)
-    else redoAnswer.value.push(key)
-  } else {
-    redoAnswer.value = [key]
-  }
+  const next = toggleAnswer(redoAnswer.value, key, type === 'multi_choice')
+  redoAnswer.value = type === 'multi_choice' ? (next as (string | number)[]) : [next as string | number]
 }
 
 async function submitRedo(item: WrongItem) {
@@ -164,11 +150,6 @@ async function exportWrong() {
 .wrong-count { color: #f56c6c; font-size: 13px; }
 .wrong-content { font-size: 15px; line-height: 1.6; margin-bottom: 10px; }
 .redo-area { margin-top: 10px; }
-.redo-options { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
-.redo-option { display: flex; align-items: center; padding: 8px 12px; border: 1px solid #dcdfe6; border-radius: 6px; cursor: pointer; }
-.redo-option:hover { border-color: #409eff; }
-.redo-option.selected { border-color: #409eff; background: #ecf5ff; }
-.opt-label { width: 24px; height: 24px; line-height: 24px; text-align: center; border-radius: 50%; background: #f5f7fa; margin-right: 8px; font-size: 12px; }
 .redo-actions { margin-top: 8px; }
 .wrong-actions { display: flex; gap: 8px; }
 </style>

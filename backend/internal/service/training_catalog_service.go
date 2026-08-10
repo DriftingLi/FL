@@ -680,13 +680,13 @@ func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool) m
 	}
 
 	// 管理端：一次性加载全部章节，按课程分组（避免逐课程查询的 N+1）
-	var chaptersByCourse map[int][]map[string]any
+	var chaptersByCourse map[int][]ChapterDTO
 	if withChapters {
 		var chapters []model.Chapter
 		s.db.Order("order_num ASC, chapter_id ASC").Find(&chapters)
-		chaptersByCourse = make(map[int][]map[string]any, len(chapters))
+		chaptersByCourse = make(map[int][]ChapterDTO, len(chapters))
 		for i := range chapters {
-			chaptersByCourse[chapters[i].CourseID] = append(chaptersByCourse[chapters[i].CourseID], chapterToDict(&chapters[i]))
+			chaptersByCourse[chapters[i].CourseID] = append(chaptersByCourse[chapters[i].CourseID], chapterToDTO(&chapters[i]))
 		}
 	}
 
@@ -696,7 +696,7 @@ func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool) m
 		levelItems := make([]map[string]any, 0, len(levels))
 		for j := range levels {
 			lv := levelToDict(&levels[j])
-			courses := make([]map[string]any, 0)
+			courses := make([]CourseDTO, 0)
 			for k := range rows {
 				if rows[k].SpecialtyID == nil || rows[k].LevelID == nil {
 					continue
@@ -704,14 +704,15 @@ func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool) m
 				if *rows[k].SpecialtyID != specialties[i].SpecialtyID || *rows[k].LevelID != levels[j].LevelID {
 					continue
 				}
-				cd := courseToDict(&rows[k].Course)
-				cd["chapter_count"] = rows[k].ChapterCount
+				cd := courseToDTO(&rows[k].Course)
+				cd.ChapterCount = &rows[k].ChapterCount
 				if withChapters {
-					fillPrereqIDs(s.db, rows[k].CourseID, cd)
+					fillPrereqIDs(s.db, rows[k].CourseID, &cd)
 					if chs, ok := chaptersByCourse[rows[k].CourseID]; ok {
-						cd["chapters"] = chs
+						cd.Chapters = &chs
 					} else {
-						cd["chapters"] = []map[string]any{}
+						empty := []ChapterDTO{}
+						cd.Chapters = &empty
 					}
 				}
 				courses = append(courses, cd)

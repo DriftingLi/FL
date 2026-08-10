@@ -425,11 +425,11 @@ func TestGetCatalogTree(t *testing.T) {
 	if len(levels) != 1 {
 		t.Fatalf("应 1 个等级, got %d", len(levels))
 	}
-	courses := levels[0]["courses"].([]map[string]any)
+	courses := levels[0]["courses"].([]CourseDTO)
 	if len(courses) != 1 {
 		t.Fatalf("应只返回上架课程, got %d", len(courses))
 	}
-	if courses[0]["name"] != "叉车基础" || courses[0]["chapter_count"] != int64(1) {
+	if courses[0].Name != "叉车基础" || *courses[0].ChapterCount != 1 {
 		t.Fatalf("课程数据不匹配: %+v", courses[0])
 	}
 }
@@ -478,21 +478,21 @@ func TestGetAdminCatalogTree(t *testing.T) {
 	if specialties[0]["name"] != "操作" || specialties[1]["name"] != "停用方向" {
 		t.Fatalf("方向排序不匹配: %+v", specialties)
 	}
-	courses := specialties[0]["levels"].([]map[string]any)[0]["courses"].([]map[string]any)
+	courses := specialties[0]["levels"].([]map[string]any)[0]["courses"].([]CourseDTO)
 	if len(courses) != 3 {
 		t.Fatalf("管理端应包含下架课程, got %d", len(courses))
 	}
-	if courses[0]["name"] != "晚建但排序靠前" || courses[1]["name"] != "早建但排序靠后" {
+	if courses[0].Name != "晚建但排序靠前" || courses[1].Name != "早建但排序靠后" {
 		t.Fatalf("课程应按 sort_order 排序: %+v", courses)
 	}
-	chapters := courses[0]["chapters"].([]map[string]any)
+	chapters := *courses[0].Chapters
 	if len(chapters) != 2 {
 		t.Fatalf("课程应含章节节点, got %d", len(chapters))
 	}
-	if chapters[0]["title"] != "第二章" || chapters[1]["title"] != "第一章" {
+	if chapters[0].Title != "第二章" || chapters[1].Title != "第一章" {
 		t.Fatalf("章节应按 order_num 排序: %+v", chapters)
 	}
-	if courses[2]["name"] != "下架课程" {
+	if courses[2].Name != "下架课程" {
 		t.Fatalf("下架课程应保留: %+v", courses[2])
 	}
 }
@@ -586,17 +586,17 @@ func TestCourseSortOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
-	if created["sort_order"] != 5 {
+	if created.SortOrder != 5 {
 		t.Fatalf("创建返回的 sort_order 不匹配: %+v", created)
 	}
-	courseID := created["course_id"].(int)
+	courseID := created.CourseID
 
 	// 更新时修改 sort_order
 	updated, err := svc.UpdateCourse(courseID, map[string]any{"sort_order": 1})
 	if err != nil {
 		t.Fatalf("更新课程失败: %v", err)
 	}
-	if updated["sort_order"] != 1 {
+	if updated.SortOrder != 1 {
 		t.Fatalf("更新后的 sort_order 不匹配: %+v", updated)
 	}
 
@@ -613,7 +613,7 @@ func TestCourseSortOrder(t *testing.T) {
 	if len(list) != 2 {
 		t.Fatalf("应 2 门课程, got %d", len(list))
 	}
-	if list[0]["name"] != "课程C" || list[1]["name"] != "课程A" {
+	if list[0].Name != "课程C" || list[1].Name != "课程A" {
 		t.Fatalf("课程列表应按 sort_order 升序: %+v", list)
 	}
 }
@@ -649,8 +649,8 @@ func TestAdminCourse_TrainingFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
-	courseID := result["course_id"].(int)
-	if result["theory_hours"] != 30 || result["practice_hours"] != 20 {
+	courseID := result.CourseID
+	if result.TheoryHours != 30 || result.PracticeHours != 20 {
 		t.Fatalf("学时字段不匹配: %+v", result)
 	}
 
@@ -658,18 +658,17 @@ func TestAdminCourse_TrainingFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("获取详情失败: %v", err)
 	}
-	if detail["specialty"].(map[string]any)["name"] != "维修" {
-		t.Fatalf("专业方向元数据缺失: %+v", detail["specialty"])
+	if detail.Specialty.Name != "维修" {
+		t.Fatalf("专业方向元数据缺失: %+v", detail.Specialty)
 	}
-	if detail["level"].(map[string]any)["name"] != "入门" {
-		t.Fatalf("等级元数据缺失: %+v", detail["level"])
+	if detail.Level.Name != "入门" {
+		t.Fatalf("等级元数据缺失: %+v", detail.Level)
 	}
-	cert := detail["certificate_template"].(map[string]any)
-	if cert["validity_days"] != 730 {
-		t.Fatalf("证书模板元数据缺失: %+v", cert)
+	if detail.CertificateTemplate.ValidityDays != 730 {
+		t.Fatalf("证书模板元数据缺失: %+v", detail.CertificateTemplate)
 	}
-	prereqs := detail["prerequisites"].([]map[string]any)
-	if len(prereqs) != 1 || prereqs[0]["name"] != "前置课程" {
+	prereqs := *detail.Prerequisites
+	if len(prereqs) != 1 || prereqs[0].Name != "前置课程" {
 		t.Fatalf("前置课程元数据缺失: %+v", prereqs)
 	}
 
@@ -695,7 +694,7 @@ func TestAdminCourse_TrainingFields(t *testing.T) {
 		t.Fatalf("更新失败: %v", err)
 	}
 	detail, _ = svc.GetCourseDetail(courseID)
-	if len(detail["prerequisites"].([]map[string]any)) != 0 {
+	if len(*detail.Prerequisites) != 0 {
 		t.Fatal("前置课程应被清空")
 	}
 
@@ -728,8 +727,8 @@ func TestAdminCourse_TrainingFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("获取详情失败: %v", err)
 	}
-	prereqs = detail["prerequisites"].([]map[string]any)
-	if len(prereqs) != 1 || prereqs[0]["name"] != "课程C" {
+	prereqs = *detail.Prerequisites
+	if len(prereqs) != 1 || prereqs[0].Name != "课程C" {
 		t.Fatalf("成环拒绝后原关联应保留: %+v", prereqs)
 	}
 }
@@ -766,12 +765,12 @@ func TestCourseService_TrainingFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("获取详情失败: %v", err)
 	}
-	info := detail["course_info"].(map[string]any)
-	if info["theory_hours"] != 12 || info["practice_hours"] != 8 {
+	info := detail.CourseInfo
+	if info.TheoryHours != 12 || info.PracticeHours != 8 {
 		t.Fatalf("学时不匹配: %+v", info)
 	}
-	if info["level"].(map[string]any)["name"] != "入门" {
-		t.Fatalf("等级元数据缺失: %+v", info["level"])
+	if info.Level.Name != "入门" {
+		t.Fatalf("等级元数据缺失: %+v", info.Level)
 	}
 }
 

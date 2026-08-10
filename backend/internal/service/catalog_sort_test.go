@@ -88,19 +88,19 @@ func TestCreateCourseAppendsToEndOfGroup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
-	if c1["sort_order"] != 1 || c2["sort_order"] != 2 {
-		t.Fatalf("同组课程 sort_order 应为 1,2, got %v,%v", c1["sort_order"], c2["sort_order"])
+	if c1.SortOrder != 1 || c2.SortOrder != 2 {
+		t.Fatalf("同组课程 sort_order 应为 1,2, got %v,%v", c1.SortOrder, c2.SortOrder)
 	}
-	if c3["sort_order"] != 1 {
-		t.Fatalf("不同组课程 sort_order 应从 1 开始, got %v", c3["sort_order"])
+	if c3.SortOrder != 1 {
+		t.Fatalf("不同组课程 sort_order 应从 1 开始, got %v", c3.SortOrder)
 	}
 	// 显式传入 sort_order 时尊重传值
 	c4, err := svc.CreateCourse(map[string]any{"name": "课程4", "specialty_id": spec.SpecialtyID, "level_id": lv.LevelID, "sort_order": 9})
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
-	if c4["sort_order"] != 9 {
-		t.Fatalf("显式 sort_order 应为 9, got %v", c4["sort_order"])
+	if c4.SortOrder != 9 {
+		t.Fatalf("显式 sort_order 应为 9, got %v", c4.SortOrder)
 	}
 }
 

@@ -56,10 +56,10 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import dayjs from 'dayjs'
 import { Bell } from '@element-plus/icons-vue'
 import { notificationApi, type NotificationItem } from '@/api/notification'
 import { useAuthStore } from '@/stores/auth'
+import { formatTime } from '@/utils/format'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -148,10 +148,6 @@ async function handleMarkAllRead() {
   } catch (e) {
     // 静默失败
   }
-}
-
-function formatTime(value: string) {
-  return dayjs(value).format('YYYY-MM-DD HH:mm')
 }
 
 onMounted(() => {

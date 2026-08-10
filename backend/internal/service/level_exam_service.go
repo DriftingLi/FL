@@ -2,6 +2,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"math/rand"
 	"time"
@@ -36,8 +37,109 @@ func NewLevelExamService(db *gorm.DB, ai *AIService, logger *zap.Logger) *LevelE
 	return &LevelExamService{db: db, ai: ai, logger: logger}
 }
 
+// ===== DTO（JSON 契约与 B4 前的 map key 逐字一致，前端零改动约束）=====
+
+// LevelExamSessionDTO 考试场次。
+type LevelExamSessionDTO struct {
+	ID             int                       `json:"id"`
+	Name           string                    `json:"name"`
+	StartTime      string                    `json:"start_time"`
+	EndTime        string                    `json:"end_time"`
+	Duration       int                       `json:"duration"`
+	Status         string                    `json:"status"`
+	CreatedBy      *int                      `json:"created_by"`
+	QuestionConfig any                       `json:"question_config"`
+	TotalScore     int                       `json:"total_score"`
+	PassScore      int                       `json:"pass_score"`
+	CreatedAt      string                    `json:"created_at"`
+	UpdatedAt      string                    `json:"updated_at"`
+	Participants   []LevelExamParticipantDTO `json:"participants,omitempty"`
+}
+
+// LevelExamParticipantDTO 考试参与记录。
+type LevelExamParticipantDTO struct {
+	ID              int      `json:"id"`
+	ExamSessionID   int      `json:"exam_session_id"`
+	StudentID       int      `json:"student_id"`
+	Status          string   `json:"status"`
+	StartTime       string   `json:"start_time"`
+	SubmitTime      string   `json:"submit_time"`
+	RemainingTime   int      `json:"remaining_time"`
+	AnswersSnapshot any      `json:"answers_snapshot"`
+	QuestionIDs     any      `json:"question_ids"`
+	CreatedAt       string   `json:"created_at"`
+	Score           *float64 `json:"score"`
+	ObjectiveScore  *float64 `json:"objective_score"`
+	SubjectiveScore *float64 `json:"subjective_score"`
+	IsPassed        bool     `json:"is_passed"`
+	// 列表路径附带：学员姓名 / 场次名称（未加载时省略）。
+	StudentName string `json:"student_name,omitempty"`
+	SessionName string `json:"session_name,omitempty"`
+}
+
+// LevelExamAnswerDTO 考试答题记录。
+type LevelExamAnswerDTO struct {
+	ID                int      `json:"id"`
+	ExamParticipantID int      `json:"exam_participant_id"`
+	QuestionID        int      `json:"question_id"`
+	UserAnswer        string   `json:"user_answer"`
+	Score             float64  `json:"score"`
+	GradingComment    string   `json:"grading_comment"`
+	AIComment         string   `json:"ai_comment"`
+	IsCorrect         *bool    `json:"is_correct"`
+	GraderID          *int     `json:"grader_id"`
+	GradedAt          *string  `json:"graded_at"`
+	AIScore           *float64 `json:"ai_score"`
+	AIGradedAt        *string  `json:"ai_graded_at"`
+	// 结果详情路径附带题目（未加载时省略）。
+	Question map[string]any `json:"question,omitempty"`
+}
+
+// LevelExamDataDTO 进入考试返回（participant + 试卷 + 快照）。
+type LevelExamDataDTO struct {
+	ParticipantID int                 `json:"participant_id"`
+	Session       LevelExamSessionDTO `json:"session"`
+	Questions     []map[string]any    `json:"questions"`
+	Answers       any                 `json:"answers"`
+	RemainingTime int                 `json:"remaining_time"`
+	StartTime     string              `json:"start_time"`
+}
+
+// LevelExamSessionListDTO 场次列表信封。
+type LevelExamSessionListDTO struct {
+	Total    int64                 `json:"total"`
+	Page     int                   `json:"page"`
+	PageSize int                   `json:"page_size"`
+	Sessions []LevelExamSessionDTO `json:"sessions"`
+}
+
+// LevelExamHistoryDTO 学员考试历史信封。
+type LevelExamHistoryDTO struct {
+	Total    int64                     `json:"total"`
+	Page     int                       `json:"page"`
+	PageSize int                       `json:"page_size"`
+	Records  []LevelExamParticipantDTO `json:"records"`
+}
+
+// LevelExamAvailableDTO 可用考试条目（session 全字段 + 可用性附加字段，
+// 其中 status 覆盖 session 的原始状态为生效状态）。
+type LevelExamAvailableDTO struct {
+	LevelExamSessionDTO
+	Status            string `json:"status"`
+	HasParticipated   bool   `json:"has_participated"`
+	ParticipantStatus any    `json:"participant_status"`
+	ParticipantID     any    `json:"participant_id"`
+	CanEnter          bool   `json:"can_enter"`
+}
+
+// LevelExamResultDTO 考试结果详情信封。
+type LevelExamResultDTO struct {
+	Participant LevelExamParticipantDTO `json:"participant"`
+	Answers     []LevelExamAnswerDTO    `json:"answers"`
+}
+
 // CreateSession 创建考试场次。
-func (s *LevelExamService) CreateSession(data map[string]any, createdBy *int) (map[string]any, error) {
+func (s *LevelExamService) CreateSession(data map[string]any, createdBy *int) (*LevelExamSessionDTO, error) {
 	name, _ := data["name"].(string)
 	if name == "" {
 		return nil, errors.New("考试名称不能为空")
@@ -70,11 +172,12 @@ func (s *LevelExamService) CreateSession(data map[string]any, createdBy *int) (m
 	if err := s.db.Create(&session).Error; err != nil {
 		return nil, err
 	}
-	return sessionToDict(&session), nil
+	d := sessionToDTO(&session)
+	return &d, nil
 }
 
 // UpdateSession 更新场次。
-func (s *LevelExamService) UpdateSession(id int, data map[string]any) (map[string]any, error) {
+func (s *LevelExamService) UpdateSession(id int, data map[string]any) (*LevelExamSessionDTO, error) {
 	var session model.ExamSession
 	if err := s.db.First(&session, id).Error; err != nil {
 		return nil, errors.New("考试场次不存在")
@@ -104,7 +207,8 @@ func (s *LevelExamService) UpdateSession(id int, data map[string]any) (map[strin
 	if err := s.db.Save(&session).Error; err != nil {
 		return nil, err
 	}
-	return sessionToDict(&session), nil
+	d := sessionToDTO(&session)
+	return &d, nil
 }
 
 // DeleteSession 删除场次。
@@ -120,7 +224,7 @@ func (s *LevelExamService) DeleteSession(id int) error {
 }
 
 // ListSessions 列表（自动推进 upcoming→ongoing）。
-func (s *LevelExamService) ListSessions(page, pageSize int, status string, includeParticipants bool) map[string]any {
+func (s *LevelExamService) ListSessions(page, pageSize int, status string, includeParticipants bool) *LevelExamSessionListDTO {
 	if page <= 0 {
 		page = 1
 	}
@@ -136,7 +240,7 @@ func (s *LevelExamService) ListSessions(page, pageSize int, status string, inclu
 	var sessions []model.ExamSession
 	q.Order("start_time DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&sessions)
 	now := beijingNow()
-	out := make([]map[string]any, 0, len(sessions))
+	out := make([]LevelExamSessionDTO, 0, len(sessions))
 	for i := range sessions {
 		sess := &sessions[i]
 		if sess.Status == "upcoming" && now.After(sess.StartTime) {
@@ -144,42 +248,43 @@ func (s *LevelExamService) ListSessions(page, pageSize int, status string, inclu
 			sess.UpdatedAt = beijingNow()
 			s.db.Save(sess)
 		}
-		d := sessionToDict(sess)
+		d := sessionToDTO(sess)
 		if includeParticipants {
 			var parts []model.ExamParticipant
 			s.db.Where("exam_session_id = ?", sess.ID).Find(&parts)
-			ps := make([]map[string]any, 0, len(parts))
+			ps := make([]LevelExamParticipantDTO, 0, len(parts))
 			for j := range parts {
-				pd := participantToDict(&parts[j])
+				pd := participantToDTO(&parts[j])
 				var st model.Student
 				if err := s.db.First(&st, parts[j].StudentID).Error; err == nil {
-					pd["student_name"] = st.Name
+					pd.StudentName = st.Name
 				}
 				ps = append(ps, pd)
 			}
-			d["participants"] = ps
+			d.Participants = ps
 		}
 		out = append(out, d)
 	}
-	return map[string]any{
-		"total":     total,
-		"page":      page,
-		"page_size": pageSize,
-		"sessions":  out,
+	return &LevelExamSessionListDTO{
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+		Sessions: out,
 	}
 }
 
 // GetSessionDetail 场次详情。
-func (s *LevelExamService) GetSessionDetail(id int) (map[string]any, error) {
+func (s *LevelExamService) GetSessionDetail(id int) (*LevelExamSessionDTO, error) {
 	var session model.ExamSession
 	if err := s.db.First(&session, id).Error; err != nil {
 		return nil, errors.New("考试场次不存在")
 	}
-	return sessionToDict(&session), nil
+	d := sessionToDTO(&session)
+	return &d, nil
 }
 
 // UpdateSessionStatus 更新状态（带状态机校验）。
-func (s *LevelExamService) UpdateSessionStatus(id int, status string) (map[string]any, error) {
+func (s *LevelExamService) UpdateSessionStatus(id int, status string) (*LevelExamSessionDTO, error) {
 	var session model.ExamSession
 	if err := s.db.First(&session, id).Error; err != nil {
 		return nil, errors.New("考试场次不存在")
@@ -194,11 +299,12 @@ func (s *LevelExamService) UpdateSessionStatus(id int, status string) (map[strin
 	if err := s.db.Save(&session).Error; err != nil {
 		return nil, err
 	}
-	return sessionToDict(&session), nil
+	d := sessionToDTO(&session)
+	return &d, nil
 }
 
 // EnterExam 学员进入考试，组卷并创建参与记录。
-func (s *LevelExamService) EnterExam(sessionID, studentID int) (map[string]any, error) {
+func (s *LevelExamService) EnterExam(sessionID, studentID int) (*LevelExamDataDTO, error) {
 	var session model.ExamSession
 	if err := s.db.First(&session, sessionID).Error; err != nil {
 		return nil, errors.New("考试场次不存在")
@@ -266,7 +372,7 @@ func (s *LevelExamService) generateQuestionIDs(session *model.ExamSession) ([]in
 	return questionIDs, total
 }
 
-func (s *LevelExamService) getExamData(session *model.ExamSession, p *model.ExamParticipant) (map[string]any, error) {
+func (s *LevelExamService) getExamData(session *model.ExamSession, p *model.ExamParticipant) (*LevelExamDataDTO, error) {
 	var ids []int
 	if len(p.QuestionIDs) > 0 {
 		_ = jsonUnmarshal(p.QuestionIDs, &ids)
@@ -296,13 +402,14 @@ func (s *LevelExamService) getExamData(session *model.ExamSession, p *model.Exam
 	if p.StartTime != nil {
 		startISO = formatISO(*p.StartTime)
 	}
-	return map[string]any{
-		"participant_id": p.ID,
-		"session":        sessionToDict(session),
-		"questions":      ordered,
-		"answers":        answers,
-		"remaining_time": p.RemainingTime,
-		"start_time":     startISO,
+	d := sessionToDTO(session)
+	return &LevelExamDataDTO{
+		ParticipantID: p.ID,
+		Session:       d,
+		Questions:     ordered,
+		Answers:       answers,
+		RemainingTime: p.RemainingTime,
+		StartTime:     startISO,
 	}, nil
 }
 
@@ -325,7 +432,7 @@ func (s *LevelExamService) SaveAnswer(participantID, studentID int, answers map[
 }
 
 // SubmitExam 交卷评分。
-func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bool) (map[string]any, error) {
+func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bool) (*LevelExamParticipantDTO, error) {
 	var p model.ExamParticipant
 	if err := s.db.First(&p, participantID).Error; err != nil {
 		return nil, errors.New("考试参与记录不存在")
@@ -442,11 +549,12 @@ func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bo
 	if err := s.db.Save(&p).Error; err != nil {
 		return nil, err
 	}
-	return participantToDict(&p), nil
+	d := participantToDTO(&p)
+	return &d, nil
 }
 
 // GetResult 考试结果详情。
-func (s *LevelExamService) GetResult(participantID, studentID int) (map[string]any, error) {
+func (s *LevelExamService) GetResult(participantID, studentID int) (*LevelExamResultDTO, error) {
 	var p model.ExamParticipant
 	if err := s.db.First(&p, participantID).Error; err != nil {
 		return nil, errors.New("考试记录不存在")
@@ -456,23 +564,23 @@ func (s *LevelExamService) GetResult(participantID, studentID int) (map[string]a
 	}
 	var answers []model.ExamAnswer
 	s.db.Where("exam_participant_id = ?", p.ID).Find(&answers)
-	details := make([]map[string]any, 0, len(answers))
+	details := make([]LevelExamAnswerDTO, 0, len(answers))
 	for _, a := range answers {
-		d := examAnswerToDict(&a)
+		d := examAnswerToDTO(&a)
 		var q model.Question
 		if err := s.db.First(&q, a.QuestionID).Error; err == nil {
-			d["question"] = questionToDict(&q, true)
+			d.Question = questionToDict(&q, true)
 		}
 		details = append(details, d)
 	}
-	return map[string]any{
-		"participant": participantToDict(&p),
-		"answers":     details,
+	return &LevelExamResultDTO{
+		Participant: participantToDTO(&p),
+		Answers:     details,
 	}, nil
 }
 
 // GetStudentHistory 学员考试历史。
-func (s *LevelExamService) GetStudentHistory(studentID, page, pageSize int) map[string]any {
+func (s *LevelExamService) GetStudentHistory(studentID, page, pageSize int) *LevelExamHistoryDTO {
 	if page <= 0 {
 		page = 1
 	}
@@ -484,29 +592,29 @@ func (s *LevelExamService) GetStudentHistory(studentID, page, pageSize int) map[
 	q.Count(&total)
 	var parts []model.ExamParticipant
 	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&parts)
-	items := make([]map[string]any, 0, len(parts))
+	items := make([]LevelExamParticipantDTO, 0, len(parts))
 	for _, p := range parts {
 		var sess model.ExamSession
-		item := participantToDict(&p)
+		item := participantToDTO(&p)
 		if err := s.db.First(&sess, p.ExamSessionID).Error; err == nil {
-			item["session_name"] = sess.Name
+			item.SessionName = sess.Name
 		}
 		items = append(items, item)
 	}
-	return map[string]any{
-		"total":     total,
-		"page":      page,
-		"page_size": pageSize,
-		"records":   items,
+	return &LevelExamHistoryDTO{
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+		Records:  items,
 	}
 }
 
 // GetAvailableExams 可用考试列表。
-func (s *LevelExamService) GetAvailableExams(studentID int) ([]map[string]any, error) {
+func (s *LevelExamService) GetAvailableExams(studentID int) ([]LevelExamAvailableDTO, error) {
 	now := beijingNow()
 	var sessions []model.ExamSession
 	s.db.Order("start_time DESC").Find(&sessions)
-	available := []map[string]any{}
+	available := []LevelExamAvailableDTO{}
 	for i := range sessions {
 		sess := &sessions[i]
 		if sess.StartTime.IsZero() || sess.EndTime.IsZero() {
@@ -531,46 +639,48 @@ func (s *LevelExamService) GetAvailableExams(studentID int) ([]map[string]any, e
 		}
 		// 取消等级制度：可进入 = 未结束 且 未提交过
 		canEnter := effStatus != "finished" && !(hasPart && participant.Status == "submitted")
-		item := sessionToDict(sess)
-		item["status"] = effStatus
-		item["has_participated"] = hasPart
-		if hasPart {
-			item["participant_status"] = participant.Status
-			item["participant_id"] = participant.ID
-		} else {
-			item["participant_status"] = nil
-			item["participant_id"] = nil
+		item := LevelExamAvailableDTO{
+			LevelExamSessionDTO: sessionToDTO(sess),
+			Status:              effStatus,
+			HasParticipated:     hasPart,
+			CanEnter:            canEnter,
 		}
-		item["can_enter"] = canEnter
+		if hasPart {
+			item.ParticipantStatus = participant.Status
+			item.ParticipantID = participant.ID
+		} else {
+			item.ParticipantStatus = nil
+			item.ParticipantID = nil
+		}
 		available = append(available, item)
 	}
 	return available, nil
 }
 
-// ===== dict 辅助 =====
+// ===== DTO 构造（原 sessionToDict/participantToDict/examAnswerToDict 折叠入内）=====
 
-func sessionToDict(s *model.ExamSession) map[string]any {
+func sessionToDTO(s *model.ExamSession) LevelExamSessionDTO {
 	var qc any
 	if len(s.QuestionConfig) > 0 {
 		_ = jsonUnmarshal(s.QuestionConfig, &qc)
 	}
-	return map[string]any{
-		"id":              s.ID,
-		"name":            s.Name,
-		"start_time":      formatISO(s.StartTime),
-		"end_time":        formatISO(s.EndTime),
-		"duration":        s.Duration,
-		"status":          s.Status,
-		"created_by":      s.CreatedBy,
-		"question_config": qc,
-		"total_score":     s.TotalScore,
-		"pass_score":      s.PassScore,
-		"created_at":      formatISO(s.CreatedAt),
-		"updated_at":      formatISO(s.UpdatedAt),
+	return LevelExamSessionDTO{
+		ID:             s.ID,
+		Name:           s.Name,
+		StartTime:      formatISO(s.StartTime),
+		EndTime:        formatISO(s.EndTime),
+		Duration:       s.Duration,
+		Status:         s.Status,
+		CreatedBy:      s.CreatedBy,
+		QuestionConfig: qc,
+		TotalScore:     s.TotalScore,
+		PassScore:      s.PassScore,
+		CreatedAt:      formatISO(s.CreatedAt),
+		UpdatedAt:      formatISO(s.UpdatedAt),
 	}
 }
 
-func participantToDict(p *model.ExamParticipant) map[string]any {
+func participantToDTO(p *model.ExamParticipant) LevelExamParticipantDTO {
 	var ids, snap interface{}
 	if len(p.QuestionIDs) > 0 {
 		_ = jsonUnmarshal(p.QuestionIDs, &ids)
@@ -585,73 +695,48 @@ func participantToDict(p *model.ExamParticipant) map[string]any {
 	if p.SubmitTime != nil {
 		submitISO = formatISO(*p.SubmitTime)
 	}
-	d := map[string]any{
-		"id":               p.ID,
-		"exam_session_id":  p.ExamSessionID,
-		"student_id":       p.StudentID,
-		"status":           p.Status,
-		"start_time":       startISO,
-		"submit_time":      submitISO,
-		"remaining_time":   p.RemainingTime,
-		"answers_snapshot": snap,
-		"question_ids":     ids,
-		"created_at":       formatISO(p.CreatedAt),
+	return LevelExamParticipantDTO{
+		ID:              p.ID,
+		ExamSessionID:   p.ExamSessionID,
+		StudentID:       p.StudentID,
+		Status:          p.Status,
+		StartTime:       startISO,
+		SubmitTime:      submitISO,
+		RemainingTime:   p.RemainingTime,
+		AnswersSnapshot: snap,
+		QuestionIDs:     ids,
+		CreatedAt:       formatISO(p.CreatedAt),
+		Score:           p.Score,
+		ObjectiveScore:  p.ObjectiveScore,
+		SubjectiveScore: p.SubjectiveScore,
+		IsPassed:        p.IsPassed,
 	}
-	if p.Score != nil {
-		d["score"] = *p.Score
-	} else {
-		d["score"] = nil
-	}
-	if p.ObjectiveScore != nil {
-		d["objective_score"] = *p.ObjectiveScore
-	} else {
-		d["objective_score"] = nil
-	}
-	if p.SubjectiveScore != nil {
-		d["subjective_score"] = *p.SubjectiveScore
-	} else {
-		d["subjective_score"] = nil
-	}
-	d["is_passed"] = p.IsPassed
-	return d
 }
 
-func examAnswerToDict(a *model.ExamAnswer) map[string]any {
-	d := map[string]any{
-		"id":                  a.ID,
-		"exam_participant_id": a.ExamParticipantID,
-		"question_id":         a.QuestionID,
-		"user_answer":         a.UserAnswer,
-		"score":               a.Score,
-		"grading_comment":     a.GradingComment,
-		"ai_comment":          a.AIComment,
+func examAnswerToDTO(a *model.ExamAnswer) LevelExamAnswerDTO {
+	return LevelExamAnswerDTO{
+		ID:                a.ID,
+		ExamParticipantID: a.ExamParticipantID,
+		QuestionID:        a.QuestionID,
+		UserAnswer:        a.UserAnswer,
+		Score:             a.Score,
+		GradingComment:    a.GradingComment,
+		AIComment:         a.AIComment,
+		IsCorrect:         a.IsCorrect,
+		GraderID:          a.GraderID,
+		GradedAt:          isoPtr(a.GradedAt),
+		AIScore:           a.AIScore,
+		AIGradedAt:        isoPtr(a.AIGradedAt),
 	}
-	if a.IsCorrect != nil {
-		d["is_correct"] = *a.IsCorrect
-	} else {
-		d["is_correct"] = nil
+}
+
+// isoPtr 将时间转为 ISO 字符串指针（DTO 中 nil 时间序列化为 null，与旧契约一致）。
+func isoPtr(t *time.Time) *string {
+	if t == nil {
+		return nil
 	}
-	if a.GraderID != nil {
-		d["grader_id"] = *a.GraderID
-	} else {
-		d["grader_id"] = nil
-	}
-	if a.GradedAt != nil {
-		d["graded_at"] = formatISO(*a.GradedAt)
-	} else {
-		d["graded_at"] = nil
-	}
-	if a.AIScore != nil {
-		d["ai_score"] = *a.AIScore
-	} else {
-		d["ai_score"] = nil
-	}
-	if a.AIGradedAt != nil {
-		d["ai_graded_at"] = formatISO(*a.AIGradedAt)
-	} else {
-		d["ai_graded_at"] = nil
-	}
-	return d
+	s := formatISO(*t)
+	return &s
 }
 
 // parseFlexibleTime 解析多种时间格式。
@@ -680,9 +765,9 @@ func beijingLoc() *time.Location {
 }
 
 func jsonMarshal(v interface{}) ([]byte, error) {
-	return jsonMarshalImpl(v)
+	return json.Marshal(v)
 }
 
 func jsonUnmarshal(b []byte, v interface{}) error {
-	return jsonUnmarshalImpl(b, v)
+	return json.Unmarshal(b, v)
 }

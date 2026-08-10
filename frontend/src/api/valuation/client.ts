@@ -2,6 +2,7 @@
 // 后端统一响应：{code, message, data}（code = HTTP 状态码，成功即 200）
 // 拦截器解包信封：成功直接返回业务负载 data（Promise<T>），业务失败抛错并统一 toast。
 import { createHttpClient, createDefaultUnauthorizedPolicy } from '@/api/client'
+import { clearLocalAuth } from '@/utils/storage'
 
 // 维修培训 VITE_API_BASE_URL 默认为 /api（vite proxy 代理到 8080）；
 // valuation 路由统一挂在 /api/valuation/* 下，故 baseURL 解析为 <base>/api/valuation
@@ -19,22 +20,16 @@ const client = createHttpClient({
           try {
             useAuthStore().clearAuthData()
           } catch {
-            removeLocalAuth()
+            clearLocalAuth()
           }
         })
         .catch(() => {
-          removeLocalAuth()
+          clearLocalAuth()
         })
     },
     resolveLoginPath: currentPath => (currentPath.startsWith('/valuation') ? '/valuation/login' : '/login')
   })
 })
-
-// 尽力清除本地登录态（auth store 不可用时的兜底）
-function removeLocalAuth(): void {
-  localStorage.removeItem('token')
-  localStorage.removeItem('userInfo')
-}
 
 export default client
 export { API_BASE_URL }

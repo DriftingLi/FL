@@ -54,7 +54,7 @@
                       <span v-if="reply.parent_id && reply.parent_name" class="reply-quote">
                         回复 @{{ reply.parent_name }}
                       </span>
-                      <span class="reply-time">{{ formatTime(reply.created_at) }}</span>
+                      <span class="reply-time">{{ formatLocaleDateTime(reply.created_at) }}</span>
                       <el-button
                         class="reply-delete"
                         type="danger"
@@ -92,7 +92,7 @@
         <el-table-column prop="reply_count" label="回复数" width="80" align="center" />
         <el-table-column prop="view_count" label="浏览" width="70" align="center" />
         <el-table-column label="创建时间" width="160" align="center">
-          <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+          <template #default="{ row }">{{ formatLocaleDateTime(row.created_at) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right" align="center">
           <template #default="{ row }">
@@ -124,6 +124,7 @@ import {
   type AdminForumReply
 } from '@/api/forum'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
+import { formatLocaleDateTime } from '@/utils/format'
 
 const loading = ref(false)
 const topics = ref<AdminForumTopic[]>([])
@@ -138,19 +139,6 @@ const detailLoadingId = ref<number | null>(null)
 
 function displayName(author: AdminForumTopic['author']) {
   return author.nickname || author.name || author.username
-}
-
-function formatTime(iso: string) {
-  if (!iso) return '-'
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return iso
-  return d.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
 }
 
 async function loadList() {

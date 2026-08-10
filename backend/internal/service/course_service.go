@@ -18,10 +18,137 @@ import (
 
 // CoursePageResult 课程分页结果（学员端/管理端/导师端共用）。
 type CoursePageResult struct {
-	Courses []map[string]any `json:"courses"`
-	Page    int              `json:"page"`
-	Pages   int              `json:"pages"`
-	Total   int64            `json:"total"`
+	Courses []CourseDTO `json:"courses"`
+	Page    int         `json:"page"`
+	Pages   int         `json:"pages"`
+	Total   int64       `json:"total"`
+}
+
+// ===== DTO（JSON 契约与 B5 前的 map key 逐字一致，前端零改动约束）=====
+
+// CourseDTO 课程。可选字段（chapter_count 等）在未填充路径省略，与旧 map 行为一致。
+// 字段声明按 key 字母序，保持与旧 map 序列化的字节序一致。
+type CourseDTO struct {
+	CertificateName       string                  `json:"certificate_name,omitempty"`
+	CertificateTemplate   *CertificateTemplateDTO `json:"certificate_template,omitempty"`
+	CertificateTemplateID *int                    `json:"certificate_template_id"`
+	ChapterCount          *int64                  `json:"chapter_count,omitempty"`
+	CoverImage            string                  `json:"cover_image"`
+	CourseID              int                     `json:"course_id"`
+	CreatedAt             string                  `json:"created_at"`
+	Description           string                  `json:"description"`
+	Duration              int                     `json:"duration"`
+	Level                 *LevelBriefDTO          `json:"level,omitempty"`
+	LevelID               *int                    `json:"level_id"`
+	Name                  string                  `json:"name"`
+	PracticeHours         int                     `json:"practice_hours"`
+	PrerequisiteCourseIDs *[]int                  `json:"prerequisite_course_ids,omitempty"`
+	Prerequisites         *[]CourseBriefDTO       `json:"prerequisites,omitempty"`
+	SortOrder             int                     `json:"sort_order"`
+	Specialty             *SpecialtyBriefDTO      `json:"specialty,omitempty"`
+	SpecialtyID           *int                    `json:"specialty_id"`
+	Status                int16                   `json:"status"`
+	StudentCount          *int64                  `json:"student_count,omitempty"`
+	TheoryHours           int                     `json:"theory_hours"`
+	Chapters              *[]ChapterDTO           `json:"chapters,omitempty"`
+}
+
+// SpecialtyBriefDTO 专业方向简述（详情元数据）。
+type SpecialtyBriefDTO struct {
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	SpecialtyID int    `json:"specialty_id"`
+}
+
+// LevelBriefDTO 课程等级简述（详情元数据）。
+type LevelBriefDTO struct {
+	Code    string `json:"code"`
+	LevelID int    `json:"level_id"`
+	Name    string `json:"name"`
+}
+
+// CertificateTemplateDTO 证书模板（详情元数据）。
+type CertificateTemplateDTO struct {
+	Code         string `json:"code"`
+	Description  string `json:"description"`
+	ID           int    `json:"id"`
+	Name         string `json:"name"`
+	TemplateURL  string `json:"template_url"`
+	ValidityDays int    `json:"validity_days"`
+}
+
+// CourseBriefDTO 前置课程简述（仅 id/name，避免嵌套过深）。
+type CourseBriefDTO struct {
+	CourseID int    `json:"course_id"`
+	Name     string `json:"name"`
+}
+
+// ChapterDTO 章节。
+type ChapterDTO struct {
+	ChapterID   int               `json:"chapter_id"`
+	Content     string            `json:"content"`
+	ContentType string            `json:"content_type"`
+	ContentURL  string            `json:"content_url"`
+	CourseID    int               `json:"course_id"`
+	CreatedAt   string            `json:"created_at"`
+	Description string            `json:"description"`
+	Duration    int               `json:"duration"`
+	FileURL     string            `json:"file_url"`
+	OrderNum    int               `json:"order_num"`
+	Title       string            `json:"title"`
+	Files       *[]ChapterFileDTO `json:"files,omitempty"`
+}
+
+// ChapterFileDTO 章节文件（chapter_file 表条目与旧版 chapter.file_url 兼容条目同构）。
+type ChapterFileDTO struct {
+	ChapterID   *int   `json:"chapter_id"`
+	ContentType string `json:"content_type"`
+	CreatedAt   string `json:"created_at"`
+	FileID      int    `json:"file_id"`
+	FileName    string `json:"file_name"`
+	FileSize    int64  `json:"file_size"`
+	FileURL     string `json:"file_url"`
+}
+
+// ChapterDetailDTO 章节详情（含上下章 ID 与文件列表；study_status 仅学员端路径填充）。
+type ChapterDetailDTO struct {
+	ChapterDTO
+	Files             []ChapterFileDTO `json:"files"`
+	NextChapterID     *int             `json:"next_chapter_id"`
+	PreviousChapterID *int             `json:"previous_chapter_id"`
+	StudyStatus       string           `json:"study_status,omitempty"`
+}
+
+// CourseDetailDTO 学员端课程详情信封。
+type CourseDetailDTO struct {
+	CourseInfo CourseDTO    `json:"course_info"`
+	Chapters   []ChapterDTO `json:"chapters"`
+	Progress   float64      `json:"progress"`
+}
+
+// AdminCourseDetailDTO 管理端课程详情（course 字段平铺 + chapters）。
+type AdminCourseDetailDTO struct {
+	CourseDTO
+	Chapters []ChapterDTO `json:"chapters"`
+}
+
+// TutorCourseChaptersDTO 导师端课程章节列表信封。
+type TutorCourseChaptersDTO struct {
+	Course   CourseDTO    `json:"course"`
+	Chapters []ChapterDTO `json:"chapters"`
+}
+
+// ChapterSlidesDTO 章节幻灯片。
+type ChapterSlidesDTO struct {
+	ChapterID int      `json:"chapter_id"`
+	Slides    []string `json:"slides"`
+}
+
+// StudyProgressDTO 学习进度更新结果。
+type StudyProgressDTO struct {
+	Progress      float64 `json:"progress"`
+	RecordID      int     `json:"record_id"`
+	StudyDuration int64   `json:"study_duration"`
 }
 
 // CourseService 学员课程服务。
@@ -64,13 +191,13 @@ func (s *CourseService) GetCourses(page, pageSize int, specialtyID, levelID *int
 	for i := range certs {
 		certNameByID[certs[i].ID] = certs[i].Name
 	}
-	items := make([]map[string]any, 0, len(courses))
+	items := make([]CourseDTO, 0, len(courses))
 	for i := range courses {
-		item := courseToDict(&courses[i])
-		fillChapterCount(s.db, courses[i].CourseID, item)
-		fillPrereqIDs(s.db, courses[i].CourseID, item)
+		item := courseToDTO(&courses[i])
+		fillChapterCount(s.db, courses[i].CourseID, &item)
+		fillPrereqIDs(s.db, courses[i].CourseID, &item)
 		if id := courses[i].CertificateTemplateID; id != nil {
-			item["certificate_name"] = certNameByID[*id]
+			item.CertificateName = certNameByID[*id]
 		}
 		items = append(items, item)
 	}
@@ -83,16 +210,16 @@ func (s *CourseService) GetCourses(page, pageSize int, specialtyID, levelID *int
 }
 
 // GetCourseDetail 课程详情。
-func (s *CourseService) GetCourseDetail(courseID, studentID int) (map[string]any, error) {
+func (s *CourseService) GetCourseDetail(courseID, studentID int) (*CourseDetailDTO, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		return nil, errors.New("课程不存在")
 	}
 	var chapters []model.Chapter
 	s.db.Where("course_id = ?", courseID).Order("order_num").Find(&chapters)
-	chapterList := make([]map[string]any, 0, len(chapters))
+	chapterList := make([]ChapterDTO, 0, len(chapters))
 	for i := range chapters {
-		chapterList = append(chapterList, chapterToDict(&chapters[i]))
+		chapterList = append(chapterList, chapterToDTO(&chapters[i]))
 	}
 	progress := 0.0
 	if studentID > 0 {
@@ -107,18 +234,18 @@ func (s *CourseService) GetCourseDetail(courseID, studentID int) (map[string]any
 			progress = record.Progress
 		}
 	}
-	detail := courseToDict(&course)
-	fillChapterCount(s.db, course.CourseID, detail)
-	fillCourseMeta(s.db, &course, detail)
-	return map[string]any{
-		"course_info": detail,
-		"chapters":    chapterList,
-		"progress":    progress,
+	detail := courseToDTO(&course)
+	fillChapterCount(s.db, course.CourseID, &detail)
+	fillCourseMeta(s.db, &course, &detail)
+	return &CourseDetailDTO{
+		CourseInfo: detail,
+		Chapters:   chapterList,
+		Progress:   progress,
 	}, nil
 }
 
 // GetChapterDetail 章节详情。
-func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (map[string]any, error) {
+func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (*ChapterDetailDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
@@ -155,37 +282,38 @@ func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (ma
 		}
 	}
 
-	result := chapterToDict(&chapter)
+	result := chapterToDTO(&chapter)
+	var prevIDPtr, nextIDPtr *int
 	if prevID != 0 {
-		result["previous_chapter_id"] = prevID
-	} else {
-		result["previous_chapter_id"] = nil
+		prevIDPtr = &prevID
 	}
 	if nextID != 0 {
-		result["next_chapter_id"] = nextID
-	} else {
-		result["next_chapter_id"] = nil
+		nextIDPtr = &nextID
 	}
-	result["study_status"] = studyStatus
 
 	var files []model.ChapterFile
 	s.db.Where("chapter_id = ?", chapterID).Order("created_at").Find(&files)
-	fileList := make([]map[string]any, 0, len(files))
+	fileList := make([]ChapterFileDTO, 0, len(files))
 	if len(files) == 0 && chapter.FileURL != "" {
 		fileList = append(fileList, legacyFileEntry(&chapter))
 	} else {
 		for i := range files {
-			fileList = append(fileList, chapterFileToDict(&files[i]))
+			fileList = append(fileList, chapterFileToDTO(&files[i]))
 		}
 	}
-	result["files"] = fileList
-	return result, nil
+	return &ChapterDetailDTO{
+		ChapterDTO:        result,
+		Files:             fileList,
+		PreviousChapterID: prevIDPtr,
+		NextChapterID:     nextIDPtr,
+		StudyStatus:       studyStatus,
+	}, nil
 }
 
 // GetChapterSlides 章节幻灯片。
 // 优先读取 DB 中持久化的 slide_urls；为空则从 PPT 文件下载并触发转图，
 // 转图成功后把 URL 列表回写 chapter.slide_urls。
-func (s *CourseService) GetChapterSlides(chapterID int) (map[string]any, error) {
+func (s *CourseService) GetChapterSlides(chapterID int) (*ChapterSlidesDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
@@ -195,24 +323,24 @@ func (s *CourseService) GetChapterSlides(chapterID int) (map[string]any, error) 
 	if chapter.SlideUrls != "" {
 		var urls []string
 		if err := json.Unmarshal([]byte(chapter.SlideUrls), &urls); err == nil && len(urls) > 0 {
-			return map[string]any{"chapter_id": chapterID, "slides": urls}, nil
+			return &ChapterSlidesDTO{ChapterID: chapterID, Slides: urls}, nil
 		}
 	}
 
 	// 2. 查找 PPT 文件 URL
 	pptURL := resolveChapterPPTURL(s.db, &chapter, chapterID)
 	if pptURL == "" {
-		return map[string]any{"chapter_id": chapterID, "slides": []string{}}, nil
+		return &ChapterSlidesDTO{ChapterID: chapterID, Slides: []string{}}, nil
 	}
 
 	// 3. 下载 PPT 并转图
 	slideURLs := s.generateSlides(chapterID, pptURL)
-	return map[string]any{"chapter_id": chapterID, "slides": slideURLs}, nil
+	return &ChapterSlidesDTO{ChapterID: chapterID, Slides: slideURLs}, nil
 }
 
 // RegenerateChapterSlides 重新生成幻灯片。
 // 总是重新下载 PPT 并转图，覆盖 chapter.slide_urls。
-func (s *CourseService) RegenerateChapterSlides(chapterID int) (map[string]any, error) {
+func (s *CourseService) RegenerateChapterSlides(chapterID int) (*ChapterSlidesDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
@@ -225,7 +353,7 @@ func (s *CourseService) RegenerateChapterSlides(chapterID int) (map[string]any, 
 	if len(slideURLs) == 0 {
 		return nil, errors.New("PPT转图失败，请检查文件是否损坏")
 	}
-	return map[string]any{"chapter_id": chapterID, "slides": slideURLs}, nil
+	return &ChapterSlidesDTO{ChapterID: chapterID, Slides: slideURLs}, nil
 }
 
 // generateSlides 下载 PPT bytes 并调 FileService 转图，把 URL 列表持久化到 chapter.slide_urls。
@@ -275,7 +403,7 @@ func downloadFile(url string) ([]byte, error) {
 // 每次上报把 duration（分钟）累加到对应章节记录；当章节累计学习时长达到章节时长
 // （chapter.duration 分钟；未设置时按 1 分钟）自动标记完成（progress=100）。
 // 课程级进度 = 已完成章节数 / 总章节数。
-func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, duration int) (map[string]any, error) {
+func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, duration int) (*StudyProgressDTO, error) {
 	var totalChapters int64
 	s.db.Model(&model.Chapter{}).Where("course_id = ?", courseID).Count(&totalChapters)
 	if totalChapters == 0 {
@@ -361,10 +489,10 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, dura
 	s.db.Model(&model.StudyRecord{}).
 		Where("student_id = ? AND course_id = ?", studentID, courseID).
 		Select("COALESCE(SUM(study_duration), 0)").Scan(&totalDuration)
-	return map[string]any{
-		"record_id":      record.RecordID,
-		"progress":       record.Progress,
-		"study_duration": totalDuration,
+	return &StudyProgressDTO{
+		RecordID:      record.RecordID,
+		Progress:      record.Progress,
+		StudyDuration: totalDuration,
 	}, nil
 }
 
@@ -380,75 +508,75 @@ func roundFloat1(f float64) float64 {
 	return float64(int(f*10+0.5)) / 10
 }
 
-// ===== dict 辅助 =====
+// ===== DTO 构造（原 courseToDict/chapterToDict/chapterFileToDict/legacyFileEntry 折叠入内）=====
 
-func courseToDict(c *model.Course) map[string]any {
-	return map[string]any{
-		"course_id":               c.CourseID,
-		"name":                    c.Name,
-		"description":             c.Description,
-		"cover_image":             c.CoverImage,
-		"duration":                c.Duration,
-		"specialty_id":            c.SpecialtyID,
-		"level_id":                c.LevelID,
-		"theory_hours":            c.TheoryHours,
-		"practice_hours":          c.PracticeHours,
-		"certificate_template_id": c.CertificateTemplateID,
-		"sort_order":              c.SortOrder,
-		"status":                  c.Status,
-		"created_at":              formatISO(c.CreatedAt),
+func courseToDTO(c *model.Course) CourseDTO {
+	return CourseDTO{
+		CourseID:              c.CourseID,
+		Name:                  c.Name,
+		Description:           c.Description,
+		CoverImage:            c.CoverImage,
+		Duration:              c.Duration,
+		SpecialtyID:           c.SpecialtyID,
+		LevelID:               c.LevelID,
+		TheoryHours:           c.TheoryHours,
+		PracticeHours:         c.PracticeHours,
+		CertificateTemplateID: c.CertificateTemplateID,
+		SortOrder:             c.SortOrder,
+		Status:                c.Status,
+		CreatedAt:             formatISO(c.CreatedAt),
 	}
 }
 
 // fillChapterCount 填充课程章节数。
-func fillChapterCount(db *gorm.DB, courseID int, dict map[string]any) {
+func fillChapterCount(db *gorm.DB, courseID int, dto *CourseDTO) {
 	var count int64
 	db.Model(&model.Chapter{}).Where("course_id = ?", courseID).Count(&count)
-	dict["chapter_count"] = count
+	dto.ChapterCount = &count
 }
 
 // fillPrereqIDs 填充前置课程 ID 列表（供编辑表单回填，避免前端提交空数组清空关联）。
-func fillPrereqIDs(db *gorm.DB, courseID int, dict map[string]any) {
+// 无前置课程时填空数组（与旧 map 行为一致：[] 而非 null；omitempty 对空切片也省略，
+// 故用指针区分"未填充"与"空数组"两种状态）。
+func fillPrereqIDs(db *gorm.DB, courseID int, dto *CourseDTO) {
 	var ids []int
 	db.Model(&model.CoursePrerequisite{}).Where("course_id = ?", courseID).
 		Order("prerequisite_course_id ASC").Pluck("prerequisite_course_id", &ids)
-	dict["prerequisite_course_ids"] = ids
+	if ids == nil {
+		ids = []int{}
+	}
+	dto.PrerequisiteCourseIDs = &ids
 }
 
-func chapterToDict(c *model.Chapter) map[string]any {
-	return map[string]any{
-		"chapter_id":   c.ChapterID,
-		"course_id":    c.CourseID,
-		"title":        c.Title,
-		"content":      c.Content,
-		"content_url":  c.ContentURL,
-		"content_type": c.ContentType,
-		"file_url":     c.FileURL,
-		"description":  c.Description,
-		"duration":     c.Duration,
-		"order_num":    c.OrderNum,
-		"created_at":   formatISO(c.CreatedAt),
+func chapterToDTO(c *model.Chapter) ChapterDTO {
+	return ChapterDTO{
+		ChapterID:   c.ChapterID,
+		CourseID:    c.CourseID,
+		Title:       c.Title,
+		Content:     c.Content,
+		ContentURL:  c.ContentURL,
+		ContentType: c.ContentType,
+		FileURL:     c.FileURL,
+		Description: c.Description,
+		Duration:    c.Duration,
+		OrderNum:    c.OrderNum,
+		CreatedAt:   formatISO(c.CreatedAt),
 	}
 }
 
-func chapterFileToDict(f *model.ChapterFile) map[string]any {
-	d := map[string]any{
-		"file_id":      f.FileID,
-		"file_url":     f.FileURL,
-		"file_name":    f.FileName,
-		"content_type": f.ContentType,
-		"file_size":    f.FileSize,
-		"created_at":   formatISO(f.CreatedAt),
+func chapterFileToDTO(f *model.ChapterFile) ChapterFileDTO {
+	return ChapterFileDTO{
+		FileID:      f.FileID,
+		ChapterID:   f.ChapterID,
+		FileURL:     f.FileURL,
+		FileName:    f.FileName,
+		ContentType: f.ContentType,
+		FileSize:    f.FileSize,
+		CreatedAt:   formatISO(f.CreatedAt),
 	}
-	if f.ChapterID != nil {
-		d["chapter_id"] = *f.ChapterID
-	} else {
-		d["chapter_id"] = nil
-	}
-	return d
 }
 
-func legacyFileEntry(ch *model.Chapter) map[string]any {
+func legacyFileEntry(ch *model.Chapter) ChapterFileDTO {
 	fileName := ""
 	if ch.FileURL != "" {
 		parts := strings.Split(ch.FileURL, "/")
@@ -458,14 +586,14 @@ func legacyFileEntry(ch *model.Chapter) map[string]any {
 	if contentType == "" {
 		contentType = "document"
 	}
-	return map[string]any{
-		"file_id":      0,
-		"chapter_id":   ch.ChapterID,
-		"file_url":     ch.FileURL,
-		"file_name":    fileName,
-		"content_type": contentType,
-		"file_size":    0,
-		"created_at":   formatISO(ch.CreatedAt),
+	return ChapterFileDTO{
+		FileID:      0,
+		ChapterID:   &ch.ChapterID,
+		FileURL:     ch.FileURL,
+		FileName:    fileName,
+		ContentType: contentType,
+		FileSize:    0,
+		CreatedAt:   formatISO(ch.CreatedAt),
 	}
 }
 
@@ -656,37 +784,37 @@ func checkPrerequisiteCycle(db *gorm.DB, courseID int, prereqIDs []int) error {
 
 // fillCourseMeta 填充课程详情的扩展元数据：
 // specialty / level / certificate_template / prerequisites（前置课程列表）。
-func fillCourseMeta(db *gorm.DB, course *model.Course, detail map[string]any) {
+func fillCourseMeta(db *gorm.DB, course *model.Course, dto *CourseDTO) {
 	if course.SpecialtyID != nil {
 		var spec model.Specialty
 		if err := db.First(&spec, *course.SpecialtyID).Error; err == nil {
-			detail["specialty"] = map[string]any{
-				"specialty_id": spec.SpecialtyID,
-				"code":         spec.Code,
-				"name":         spec.Name,
+			dto.Specialty = &SpecialtyBriefDTO{
+				SpecialtyID: spec.SpecialtyID,
+				Code:        spec.Code,
+				Name:        spec.Name,
 			}
 		}
 	}
 	if course.LevelID != nil {
 		var level model.CourseLevel
 		if err := db.First(&level, *course.LevelID).Error; err == nil {
-			detail["level"] = map[string]any{
-				"level_id": level.LevelID,
-				"code":     level.Code,
-				"name":     level.Name,
+			dto.Level = &LevelBriefDTO{
+				LevelID: level.LevelID,
+				Code:    level.Code,
+				Name:    level.Name,
 			}
 		}
 	}
 	if course.CertificateTemplateID != nil {
 		var tpl model.CertificateTemplate
 		if err := db.First(&tpl, *course.CertificateTemplateID).Error; err == nil {
-			detail["certificate_template"] = map[string]any{
-				"id":            tpl.ID,
-				"code":          tpl.Code,
-				"name":          tpl.Name,
-				"description":   tpl.Description,
-				"validity_days": tpl.ValidityDays,
-				"template_url":  tpl.TemplateURL,
+			dto.CertificateTemplate = &CertificateTemplateDTO{
+				ID:           tpl.ID,
+				Code:         tpl.Code,
+				Name:         tpl.Name,
+				Description:  tpl.Description,
+				ValidityDays: tpl.ValidityDays,
+				TemplateURL:  tpl.TemplateURL,
 			}
 		}
 	}
@@ -702,12 +830,12 @@ func fillCourseMeta(db *gorm.DB, course *model.Course, detail map[string]any) {
 		Where("cp.course_id = ?", course.CourseID).
 		Order("c.created_at DESC, c.course_id ASC").
 		Scan(&prereqs)
-	prereqList := make([]map[string]any, 0, len(prereqs))
+	prereqList := make([]CourseBriefDTO, 0, len(prereqs))
 	prereqIDList := make([]int, 0, len(prereqs))
 	for _, p := range prereqs {
-		prereqList = append(prereqList, map[string]any{"course_id": p.CourseID, "name": p.Name})
+		prereqList = append(prereqList, CourseBriefDTO(p))
 		prereqIDList = append(prereqIDList, p.CourseID)
 	}
-	detail["prerequisites"] = prereqList
-	detail["prerequisite_course_ids"] = prereqIDList
+	dto.Prerequisites = &prereqList
+	dto.PrerequisiteCourseIDs = &prereqIDList
 }

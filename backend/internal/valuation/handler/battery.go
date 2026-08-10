@@ -15,6 +15,7 @@ import (
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation/report"
 	"forklift-training/internal/valuation/service"
 	"forklift-training/pkg/pdf"
 	"forklift-training/pkg/response"
@@ -26,34 +27,39 @@ type BatteryHandler struct {
 	service *service.BatteryRULService
 	logger  *zap.Logger
 	storage storage.Storage
-	// reportCoord 电池报告流程协调器（生成/下载/再生成单点实现）
-	reportCoord *ReportCoordinator[model.BatteryEvaluation]
+	// coord 电池报告流程协调器（生成/下载/再生成单点实现，gin-free）
+	coord *report.Coordinator[model.BatteryEvaluation]
+	// prepareSuggestions 建议 fallback 单点：详情端点与报告生成共用（不再两处复制）
+	prepareSuggestions func(ctx context.Context, e *model.BatteryEvaluation)
 }
 
 // NewBatteryHandler 构造电池处理器
 func NewBatteryHandler(repo BatteryStore, svc *service.BatteryRULService, l *zap.Logger, st storage.Storage) *BatteryHandler {
+	prepareSuggestions := func(_ context.Context, e *model.BatteryEvaluation) {
+		// 记录不含特征稳定性分数，health 传 1.0（不触发稳定性提示），与预测流程共用 builder
+		if len(e.Suggestions) == 0 {
+			e.Suggestions = service.BuildBatterySuggestions(e.BatteryType, e.SohPercent,
+				e.RulCycles, e.ConfidenceLow, e.ConfidenceHigh, 1.0)
+		}
+	}
 	return &BatteryHandler{
-		repo:    repo,
-		service: svc,
-		logger:  l,
-		storage: st,
-		reportCoord: &ReportCoordinator[model.BatteryEvaluation]{
-			logger:      l,
-			storage:     st,
-			keyPrefix:   "reports/battery_report_",
-			notFoundMsg: "电池评估记录不存在",
-			loader:      repo.GetEvaluation,
-			pathOf:      func(e *model.BatteryEvaluation) string { return e.ReportPdfPath },
-			writer:      repo.UpdateReportPath,
-			generator: func(ctx context.Context, e *model.BatteryEvaluation) ([]byte, error) {
-				// 记录不含特征稳定性分数，health 传 1.0（不触发稳定性提示），与预测流程共用 builder
-				if len(e.Suggestions) == 0 {
-					e.Suggestions = service.BuildBatterySuggestions(e.BatteryType, e.SohPercent,
-						e.RulCycles, e.ConfidenceLow, e.ConfidenceHigh, 1.0)
-				}
+		repo:               repo,
+		service:            svc,
+		logger:             l,
+		storage:            st,
+		prepareSuggestions: prepareSuggestions,
+		coord: report.New(report.Spec[model.BatteryEvaluation]{
+			Logger:    l,
+			Storage:   st,
+			KeyPrefix: "reports/battery_report_",
+			Loader:    repo.GetEvaluation,
+			PathOf:    func(e *model.BatteryEvaluation) string { return e.ReportPdfPath },
+			Writer:    repo.UpdateReportPath,
+			Prepare:   prepareSuggestions,
+			Render: func(_ context.Context, e *model.BatteryEvaluation) ([]byte, error) {
 				return pdf.GenerateBatteryReportBytes(e)
 			},
-		},
+		}),
 	}
 }
 
@@ -177,7 +183,7 @@ func (h *BatteryHandler) Get(c *gin.Context) {
 
 	// 重新生成建议（如果 DB 中没有存）
 	if len(eval.Suggestions) == 0 {
-		eval.Suggestions = h.buildSuggestionsFromRecord(eval)
+		h.prepareSuggestions(c.Request.Context(), eval)
 	}
 
 	response.Success(c, eval)
@@ -185,17 +191,10 @@ func (h *BatteryHandler) Get(c *gin.Context) {
 
 // GenerateReport 处理 POST /api/v1/battery/evaluations/:id/report
 func (h *BatteryHandler) GenerateReport(c *gin.Context) {
-	h.reportCoord.Generate(c)
+	serveReportGenerate(c, h.coord, "电池评估记录不存在", h.logger)
 }
 
 // DownloadReport 处理 GET /api/v1/battery/evaluations/:id/report
 func (h *BatteryHandler) DownloadReport(c *gin.Context) {
-	h.reportCoord.Download(c)
-}
-
-// buildSuggestionsFromRecord 基于评估字段生成建议（详情接口 fallback）
-// 与预测流程共用 service.BuildBatterySuggestions；记录不含特征稳定性分数，health 传 1.0（不触发稳定性提示）。
-func (h *BatteryHandler) buildSuggestionsFromRecord(eval *model.BatteryEvaluation) []string {
-	return service.BuildBatterySuggestions(eval.BatteryType, eval.SohPercent,
-		eval.RulCycles, eval.ConfidenceLow, eval.ConfidenceHigh, 1.0)
+	serveReportDownload(c, h.coord, "电池评估记录不存在", h.logger)
 }

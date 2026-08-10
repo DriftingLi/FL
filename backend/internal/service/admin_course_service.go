@@ -47,11 +47,11 @@ func (s *AdminCourseService) GetCourses(page, pageSize int, keyword string, spec
 	q.Count(&total)
 	var courses []model.Course
 	q.Order("sort_order ASC, created_at DESC, course_id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&courses)
-	items := make([]map[string]any, 0, len(courses))
+	items := make([]CourseDTO, 0, len(courses))
 	for i := range courses {
-		item := courseToDict(&courses[i])
-		fillChapterCount(s.db, courses[i].CourseID, item)
-		fillPrereqIDs(s.db, courses[i].CourseID, item)
+		item := courseToDTO(&courses[i])
+		fillChapterCount(s.db, courses[i].CourseID, &item)
+		fillPrereqIDs(s.db, courses[i].CourseID, &item)
 		items = append(items, item)
 	}
 	return CoursePageResult{
@@ -63,25 +63,27 @@ func (s *AdminCourseService) GetCourses(page, pageSize int, keyword string, spec
 }
 
 // GetCourseDetail 管理端课程详情。
-func (s *AdminCourseService) GetCourseDetail(courseID int) (map[string]any, error) {
+func (s *AdminCourseService) GetCourseDetail(courseID int) (*AdminCourseDetailDTO, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		return nil, errors.New("课程不存在")
 	}
 	var chapters []model.Chapter
 	s.db.Where("course_id = ?", courseID).Order("order_num").Find(&chapters)
-	chapterList := make([]map[string]any, 0, len(chapters))
+	chapterList := make([]ChapterDTO, 0, len(chapters))
 	for i := range chapters {
-		chapterList = append(chapterList, chapterToDict(&chapters[i]))
+		chapterList = append(chapterList, chapterToDTO(&chapters[i]))
 	}
-	detail := courseToDict(&course)
-	detail["chapters"] = chapterList
-	fillCourseMeta(s.db, &course, detail)
-	return detail, nil
+	detail := courseToDTO(&course)
+	fillCourseMeta(s.db, &course, &detail)
+	return &AdminCourseDetailDTO{
+		CourseDTO: detail,
+		Chapters:  chapterList,
+	}, nil
 }
 
 // CreateCourse 创建课程。专业方向与课程等级必填（旧 category 已退役）。
-func (s *AdminCourseService) CreateCourse(data map[string]any) (map[string]any, error) {
+func (s *AdminCourseService) CreateCourse(data map[string]any) (*CourseDTO, error) {
 	name, _ := data["name"].(string)
 	if name == "" {
 		return nil, errors.New("课程名称不能为空")
@@ -121,14 +123,14 @@ func (s *AdminCourseService) CreateCourse(data map[string]any) (map[string]any, 
 	if err := replaceCoursePrerequisites(s.db, course.CourseID, prerequisiteIDsFromData(data)); err != nil {
 		return nil, err
 	}
-	result := courseToDict(&course)
-	fillChapterCount(s.db, course.CourseID, result)
-	fillPrereqIDs(s.db, course.CourseID, result)
-	return result, nil
+	result := courseToDTO(&course)
+	fillChapterCount(s.db, course.CourseID, &result)
+	fillPrereqIDs(s.db, course.CourseID, &result)
+	return &result, nil
 }
 
 // UpdateCourse 更新课程。
-func (s *AdminCourseService) UpdateCourse(courseID int, data map[string]any) (map[string]any, error) {
+func (s *AdminCourseService) UpdateCourse(courseID int, data map[string]any) (*CourseDTO, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		return nil, errors.New("课程不存在")
@@ -166,10 +168,10 @@ func (s *AdminCourseService) UpdateCourse(courseID int, data map[string]any) (ma
 			return nil, err
 		}
 	}
-	result := courseToDict(&course)
-	fillChapterCount(s.db, courseID, result)
-	fillPrereqIDs(s.db, courseID, result)
-	return result, nil
+	result := courseToDTO(&course)
+	fillChapterCount(s.db, courseID, &result)
+	fillPrereqIDs(s.db, courseID, &result)
+	return &result, nil
 }
 
 // SwapCourseSort 交换两门课程的排序位置（限制在同一方向+等级组内，真实生效含同值默认）。
@@ -204,7 +206,7 @@ func (s *AdminCourseService) DeleteCourse(courseID int) (map[string]any, error) 
 }
 
 // CreateChapter 创建章节。
-func (s *AdminCourseService) CreateChapter(courseID int, data map[string]any) (map[string]any, error) {
+func (s *AdminCourseService) CreateChapter(courseID int, data map[string]any) (*ChapterDTO, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		return nil, errors.New("课程不存在")
@@ -233,11 +235,12 @@ func (s *AdminCourseService) CreateChapter(courseID int, data map[string]any) (m
 	if err := s.db.Create(&chapter).Error; err != nil {
 		return nil, err
 	}
-	return chapterToDict(&chapter), nil
+	d := chapterToDTO(&chapter)
+	return &d, nil
 }
 
 // UpdateChapter 更新章节。
-func (s *AdminCourseService) UpdateChapter(chapterID int, data map[string]any) (map[string]any, error) {
+func (s *AdminCourseService) UpdateChapter(chapterID int, data map[string]any) (*ChapterDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
@@ -260,7 +263,8 @@ func (s *AdminCourseService) UpdateChapter(chapterID int, data map[string]any) (
 	if err := s.db.Save(&chapter).Error; err != nil {
 		return nil, err
 	}
-	return chapterToDict(&chapter), nil
+	d := chapterToDTO(&chapter)
+	return &d, nil
 }
 
 // DeleteChapter 删除章节，并清理章节关联的存储文件：

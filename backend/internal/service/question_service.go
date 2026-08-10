@@ -647,7 +647,8 @@ func toInt(v interface{}) int {
 	case int64:
 		return int(n)
 	case string:
-		return parseInt(n)
+		i, _ := parseInt(n)
+		return i
 	}
 	return 0
 }

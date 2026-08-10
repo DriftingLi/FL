@@ -24,13 +24,76 @@ func NewStudentService(db *gorm.DB, logger *zap.Logger) *StudentService {
 	return &StudentService{db: db, logger: logger}
 }
 
+// ===== DTO（JSON 契约与 B8 前的 map key 逐字一致，前端零改动约束）=====
+
+// StudentDTO 学员基本信息。
+type StudentDTO struct {
+	StudentID int    `json:"student_id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	Nickname  string `json:"nickname"`
+	AvatarURL string `json:"avatar_url"`
+	Status    int16  `json:"status"`
+	CreatedAt string `json:"created_at"`
+}
+
+// StudyStatsDTO 学习统计概览。
+type StudyStatsDTO struct {
+	TotalCourses       int64   `json:"total_courses"`
+	TotalStudyDuration int64   `json:"total_study_duration"`
+	CompletedCourses   int64   `json:"completed_courses"`
+	LearningCourses    int64   `json:"learning_courses"`
+	LatestStudyTime    string  `json:"latest_study_time"`
+	ExamCount          int64   `json:"exam_count"`
+	AvgScore           float64 `json:"avg_score"`
+}
+
+// CourseProgressDTO 课程进度条目。
+type CourseProgressDTO struct {
+	CourseID      int     `json:"course_id"`
+	CourseName    string  `json:"course_name"`
+	Progress      float64 `json:"progress"`
+	StudyDuration int64   `json:"study_duration"`
+	TotalChapters int64   `json:"total_chapters"`
+	StudyDate     string  `json:"study_date"`
+}
+
+// StudentProfileDTO 学员档案信封（信息 + 统计 + 课程进度）。
+type StudentProfileDTO struct {
+	StudentInfo    StudentDTO          `json:"student_info"`
+	StudyStats     StudyStatsDTO       `json:"study_stats"`
+	CourseProgress []CourseProgressDTO `json:"course_progress"`
+}
+
+// StudyDailyStatsDTO 按天学习统计（学员仪表盘图表）。
+type StudyDailyStatsDTO struct {
+	Days         int      `json:"days"`
+	Labels       []string `json:"labels"`
+	Data         []int64  `json:"data"`
+	TotalMinutes int64    `json:"total_minutes"`
+	ActiveDays   int      `json:"active_days"`
+}
+
+// StudyRecordDTO 学习记录条目（含课程名回填；chapter_title 未匹配章节时 null）。
+type StudyRecordDTO struct {
+	RecordID      int     `json:"record_id"`
+	StudentID     int     `json:"student_id"`
+	CourseID      int     `json:"course_id"`
+	ChapterID     *int    `json:"chapter_id"`
+	StudyDuration int     `json:"study_duration"`
+	Progress      float64 `json:"progress"`
+	StudyDate     string  `json:"study_date"`
+	CourseName    string  `json:"course_name"`
+	ChapterTitle  *string `json:"chapter_title"`
+}
+
 // GetProfile 学员档案。
-func (s *StudentService) GetProfile(studentID int) (map[string]any, error) {
+func (s *StudentService) GetProfile(studentID int) (*StudentProfileDTO, error) {
 	return s.queryProfile(studentID)
 }
 
 // queryProfile 执行实际的学员档案查询。
-func (s *StudentService) queryProfile(studentID int) (map[string]any, error) {
+func (s *StudentService) queryProfile(studentID int) (*StudentProfileDTO, error) {
 	var student model.Student
 	if err := s.db.First(&student, studentID).Error; err != nil {
 		return nil, errors.New("学员不存在")
@@ -86,7 +149,7 @@ func (s *StudentService) queryProfile(studentID int) (map[string]any, error) {
 		Group("course_id").
 		Scan(&rows)
 
-	courseProgressList := make([]map[string]any, 0, len(rows))
+	courseProgressList := make([]CourseProgressDTO, 0, len(rows))
 	for _, r := range rows {
 		var course model.Course
 		if err := s.db.First(&course, r.CourseID).Error; err != nil {
@@ -98,39 +161,39 @@ func (s *StudentService) queryProfile(studentID int) (map[string]any, error) {
 		if !r.LatestDate.IsZero() {
 			studyDate = formatISO(r.LatestDate)
 		}
-		courseProgressList = append(courseProgressList, map[string]any{
-			"course_id":      course.CourseID,
-			"course_name":    course.Name,
-			"progress":       r.MaxProgress,
-			"study_duration": r.TotalDuration,
-			"total_chapters": totalChapters,
-			"study_date":     studyDate,
+		courseProgressList = append(courseProgressList, CourseProgressDTO{
+			CourseID:      course.CourseID,
+			CourseName:    course.Name,
+			Progress:      r.MaxProgress,
+			StudyDuration: r.TotalDuration,
+			TotalChapters: totalChapters,
+			StudyDate:     studyDate,
 		})
 	}
 
-	return map[string]any{
-		"student_info": studentToDict(&student),
-		"study_stats": map[string]any{
-			"total_courses":        totalCourses,
-			"total_study_duration": totalStudyDuration,
-			"completed_courses":    completedCourses,
-			"learning_courses":     learningCourses,
-			"latest_study_time":    latestStudyTime,
-			"exam_count":           examCount,
-			"avg_score":            roundFloat1(avgScore),
+	return &StudentProfileDTO{
+		StudentInfo: studentToDTO(&student),
+		StudyStats: StudyStatsDTO{
+			TotalCourses:       totalCourses,
+			TotalStudyDuration: totalStudyDuration,
+			CompletedCourses:   completedCourses,
+			LearningCourses:    learningCourses,
+			LatestStudyTime:    latestStudyTime,
+			ExamCount:          examCount,
+			AvgScore:           roundFloat1(avgScore),
 		},
-		"course_progress": courseProgressList,
+		CourseProgress: courseProgressList,
 	}, nil
 }
 
 // GetStudyStats 学习统计（按天分组），用于学员仪表盘图表。
 // days 仅允许 7 或 30，其他值统一回退为 7。
-func (s *StudentService) GetStudyStats(studentID, days int) map[string]any {
+func (s *StudentService) GetStudyStats(studentID, days int) *StudyDailyStatsDTO {
 	return s.queryStudyStats(studentID, days)
 }
 
 // queryStudyStats 执行实际的学习统计查询。
-func (s *StudentService) queryStudyStats(studentID, days int) map[string]any {
+func (s *StudentService) queryStudyStats(studentID, days int) *StudyDailyStatsDTO {
 	if days != 7 && days != 30 {
 		days = 7
 	}
@@ -180,12 +243,12 @@ func (s *StudentService) queryStudyStats(studentID, days int) map[string]any {
 		data = append(data, mins)
 	}
 
-	return map[string]any{
-		"days":          days,
-		"labels":        labels,
-		"data":          data,
-		"total_minutes": totalMinutes,
-		"active_days":   activeDays,
+	return &StudyDailyStatsDTO{
+		Days:         days,
+		Labels:       labels,
+		Data:         data,
+		TotalMinutes: totalMinutes,
+		ActiveDays:   activeDays,
 	}
 }
 
@@ -193,7 +256,7 @@ func (s *StudentService) queryStudyStats(studentID, days int) map[string]any {
 type StudyRecordPageResult struct {
 	Page    int              `json:"page"`
 	Pages   int              `json:"pages"`
-	Records []map[string]any `json:"records"`
+	Records []StudyRecordDTO `json:"records"`
 	Total   int64            `json:"total"`
 }
 
@@ -221,25 +284,22 @@ func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, en
 	var records []model.StudyRecord
 	q.Order("study_date DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&records)
 
-	items := make([]map[string]any, 0, len(records))
+	items := make([]StudyRecordDTO, 0, len(records))
 	for i := range records {
 		r := &records[i]
-		item := studyRecordToDict(r)
+		item := studyRecordToDTO(r)
 		var course model.Course
 		if err := s.db.First(&course, r.CourseID).Error; err == nil {
-			item["course_name"] = course.Name
+			item.CourseName = course.Name
 		} else {
-			item["course_name"] = "未知课程"
+			item.CourseName = "未知课程"
 		}
 		if r.ChapterID != nil {
 			var chapter model.Chapter
 			if err := s.db.First(&chapter, *r.ChapterID).Error; err == nil {
-				item["chapter_title"] = chapter.Title
-			} else {
-				item["chapter_title"] = nil
+				title := chapter.Title
+				item.ChapterTitle = &title
 			}
-		} else {
-			item["chapter_title"] = nil
 		}
 		items = append(items, item)
 	}
@@ -251,34 +311,28 @@ func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, en
 	}
 }
 
-// ===== dict 辅助 =====
+// ===== DTO 构造（原 studentToDict/studyRecordToDict 折叠入内）=====
 
-func studentToDict(s *model.Student) map[string]any {
-	d := map[string]any{
-		"student_id": s.StudentID,
-		"username":   s.Username,
-		"name":       s.Name,
-		"nickname":   s.Nickname,
-		"avatar_url": s.AvatarURL,
-		"status":     s.Status,
-		"created_at": formatISO(s.CreatedAt),
+func studentToDTO(s *model.Student) StudentDTO {
+	return StudentDTO{
+		StudentID: s.StudentID,
+		Username:  s.Username,
+		Name:      s.Name,
+		Nickname:  s.Nickname,
+		AvatarURL: s.AvatarURL,
+		Status:    s.Status,
+		CreatedAt: formatISO(s.CreatedAt),
 	}
-	return d
 }
 
-func studyRecordToDict(r *model.StudyRecord) map[string]any {
-	d := map[string]any{
-		"record_id":      r.RecordID,
-		"student_id":     r.StudentID,
-		"course_id":      r.CourseID,
-		"study_duration": r.StudyDuration,
-		"progress":       r.Progress,
-		"study_date":     formatISO(r.StudyDate),
+func studyRecordToDTO(r *model.StudyRecord) StudyRecordDTO {
+	return StudyRecordDTO{
+		RecordID:      r.RecordID,
+		StudentID:     r.StudentID,
+		CourseID:      r.CourseID,
+		ChapterID:     r.ChapterID,
+		StudyDuration: r.StudyDuration,
+		Progress:      r.Progress,
+		StudyDate:     formatISO(r.StudyDate),
 	}
-	if r.ChapterID != nil {
-		d["chapter_id"] = *r.ChapterID
-	} else {
-		d["chapter_id"] = nil
-	}
-	return d
 }

@@ -28,8 +28,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/security"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation/dictcrud"
 	vservice "forklift-training/internal/valuation/service"
@@ -42,7 +42,7 @@ import (
 //   - 管理员组 /api/valuation/admin：字典 CRUD（需主体系 admin JWT）
 func RegisterRoutes(
 	r *gin.Engine,
-	cfg *config.Config,
+	sess *security.Session,
 	logger *zap.Logger,
 	dictRepo DictionaryConfigStore,
 	evalRepo EvaluationStore,
@@ -105,7 +105,7 @@ func RegisterRoutes(
 	// === 可选认证组（登录与否都能用，登录则记录 user_id） ===
 	// 评估提交：未登录可提交（user_id 落 NULL），登录用户提交则归属到自己
 	optional := r.Group("/api/valuation")
-	optional.Use(middleware.OptionalAuth(cfg))
+	optional.Use(middleware.OptionalAuth(sess))
 	{
 		optional.POST("/evaluations", evalHandler.Create)
 	}
@@ -114,7 +114,7 @@ func RegisterRoutes(
 	// 评估历史/详情 + 电池 RUL CRUD + /auth/me + /auth/logout
 	// 已统一到主体系 JWT,与培训学员端共用同一 token
 	valAuth := r.Group("/api/valuation")
-	valAuth.Use(middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
+	valAuth.Use(middleware.JWTAuth(sess), middleware.RoleRequired("hrwai_user"))
 	{
 		valAuth.GET("/evaluations", evalHandler.List)
 		valAuth.GET("/evaluations/:id", evalHandler.Get)
@@ -132,7 +132,7 @@ func RegisterRoutes(
 	// 全部字典写面由描述符注册表驱动（ADR-0008）：POST/PUT/DELETE 按描述符声明注册，
 	// 不再逐实体手写路由。失效 pattern 来自 repository 缓存契约单点（PatternsOf）。
 	admin := r.Group("/api/valuation/admin")
-	admin.Use(middleware.JWTAuth(cfg))
+	admin.Use(middleware.JWTAuth(sess))
 	admin.Use(middleware.RoleRequired("admin"))
 	{
 		configHandler.registerDictCRUDRoutes(admin, dictcrud.NewRegistry(dictcrud.AllDescriptors()...))

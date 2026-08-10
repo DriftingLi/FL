@@ -7,6 +7,8 @@
 package service
 
 import (
+	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -45,7 +47,8 @@ func TestCreateCourseRequiresSpecialtyAndLevel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建失败: %v", err)
 	}
-	if _, ok := created["category"]; ok {
+	b, _ := json.Marshal(created)
+	if bytes.Contains(b, []byte(`"category"`)) {
 		t.Fatal("课程 dict 不应包含 category")
 	}
 }
@@ -103,26 +106,27 @@ func TestStudentCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 
 	list := svc.GetCourses(1, 10, nil, nil)
 	items := list.Courses
-	var item map[string]any
+	var item CourseDTO
 	for _, c := range items {
-		if c["course_id"] == course.CourseID {
+		if c.CourseID == course.CourseID {
 			item = c
 		}
 	}
-	if item == nil {
+	if item.CourseID == 0 {
 		t.Fatalf("未找到主课程, items: %+v", items)
 	}
-	if item["chapter_count"] != int64(2) {
-		t.Fatalf("chapter_count 应为 2, got %v", item["chapter_count"])
+	if item.ChapterCount == nil || *item.ChapterCount != 2 {
+		t.Fatalf("chapter_count 应为 2, got %v", item.ChapterCount)
 	}
-	ids, ok := item["prerequisite_course_ids"].([]int)
-	if !ok || len(ids) != 1 || ids[0] != prereq.CourseID {
-		t.Fatalf("prerequisite_course_ids 应为 [%d], got %v", prereq.CourseID, item["prerequisite_course_ids"])
+	ids := *item.PrerequisiteCourseIDs
+	if len(ids) != 1 || ids[0] != prereq.CourseID {
+		t.Fatalf("prerequisite_course_ids 应为 [%d], got %v", prereq.CourseID, ids)
 	}
-	if item["certificate_name"] != "测试证书" {
-		t.Fatalf("certificate_name 应为 测试证书, got %v", item["certificate_name"])
+	if item.CertificateName != "测试证书" {
+		t.Fatalf("certificate_name 应为 测试证书, got %v", item.CertificateName)
 	}
-	if _, ok := item["category"]; ok {
+	b, _ := json.Marshal(item)
+	if bytes.Contains(b, []byte(`"category"`)) {
 		t.Fatal("学生端列表不应包含 category")
 	}
 }
@@ -140,7 +144,7 @@ func TestStudentCourseListOmitsUnmountedCourses(t *testing.T) {
 
 	items := svc.GetCourses(1, 10, nil, nil).Courses
 	for _, c := range items {
-		if c["course_id"] == unmounted.CourseID {
+		if c.CourseID == unmounted.CourseID {
 			t.Fatal("未挂方向/等级的课程不应出现在学生端列表")
 		}
 	}
@@ -156,15 +160,16 @@ func TestStudentCourseDetailHasChapterCountAndPrereqIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("详情失败: %v", err)
 	}
-	info := detail["course_info"].(map[string]any)
-	if info["chapter_count"] != int64(2) {
-		t.Fatalf("chapter_count 应为 2, got %v", info["chapter_count"])
+	info := detail.CourseInfo
+	if info.ChapterCount == nil || *info.ChapterCount != 2 {
+		t.Fatalf("chapter_count 应为 2, got %v", info.ChapterCount)
 	}
-	ids, ok := info["prerequisite_course_ids"].([]int)
-	if !ok || len(ids) != 1 || ids[0] != prereq.CourseID {
-		t.Fatalf("prerequisite_course_ids 应为 [%d], got %v", prereq.CourseID, info["prerequisite_course_ids"])
+	ids := *info.PrerequisiteCourseIDs
+	if len(ids) != 1 || ids[0] != prereq.CourseID {
+		t.Fatalf("prerequisite_course_ids 应为 [%d], got %v", prereq.CourseID, ids)
 	}
-	if _, ok := info["category"]; ok {
+	b, _ := json.Marshal(info)
+	if bytes.Contains(b, []byte(`"category"`)) {
 		t.Fatal("学生端详情不应包含 category")
 	}
 }
@@ -180,23 +185,24 @@ func TestAdminCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 	if len(items) != 2 {
 		t.Fatalf("应返回 2 门课程, got %d", len(items))
 	}
-	var item map[string]any
+	var item CourseDTO
 	for _, c := range items {
-		if c["course_id"] == course.CourseID {
+		if c.CourseID == course.CourseID {
 			item = c
 		}
 	}
-	if item == nil {
+	if item.CourseID == 0 {
 		t.Fatal("未找到主课程")
 	}
-	if item["chapter_count"] != int64(2) {
-		t.Fatalf("chapter_count 应为 2, got %v", item["chapter_count"])
+	if item.ChapterCount == nil || *item.ChapterCount != 2 {
+		t.Fatalf("chapter_count 应为 2, got %v", item.ChapterCount)
 	}
-	ids, ok := item["prerequisite_course_ids"].([]int)
-	if !ok || len(ids) != 1 || ids[0] != prereq.CourseID {
-		t.Fatalf("prerequisite_course_ids 应为 [%d], got %v", prereq.CourseID, item["prerequisite_course_ids"])
+	ids := *item.PrerequisiteCourseIDs
+	if len(ids) != 1 || ids[0] != prereq.CourseID {
+		t.Fatalf("prerequisite_course_ids 应为 [%d], got %v", prereq.CourseID, ids)
 	}
-	if _, ok := item["category"]; ok {
+	b, _ := json.Marshal(item)
+	if bytes.Contains(b, []byte(`"category"`)) {
 		t.Fatal("管理端列表不应包含 category")
 	}
 }
@@ -209,17 +215,17 @@ func TestTutorCourseListHasChapterCount(t *testing.T) {
 
 	list := svc.GetCourses(nil, 1, 10)
 	items := list.Courses
-	var item map[string]any
+	var item CourseDTO
 	for _, c := range items {
-		if c["course_id"] == course.CourseID {
+		if c.CourseID == course.CourseID {
 			item = c
 		}
 	}
-	if item == nil {
+	if item.CourseID == 0 {
 		t.Fatalf("未找到主课程, items: %+v", items)
 	}
-	if item["chapter_count"] != int64(2) {
-		t.Fatalf("chapter_count 应为 2, got %v", item["chapter_count"])
+	if item.ChapterCount == nil || *item.ChapterCount != 2 {
+		t.Fatalf("chapter_count 应为 2, got %v", item.ChapterCount)
 	}
 }
 
@@ -233,11 +239,12 @@ func TestUpdateCourseWithoutPrereqKeyKeepsPrereqs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("更新失败: %v", err)
 	}
-	ids, ok := updated["prerequisite_course_ids"].([]int)
-	if !ok || len(ids) != 1 || ids[0] != prereq.CourseID {
-		t.Fatalf("更新后前置课程应保留 [%d], got %v", prereq.CourseID, updated["prerequisite_course_ids"])
+	ids := *updated.PrerequisiteCourseIDs
+	if len(ids) != 1 || ids[0] != prereq.CourseID {
+		t.Fatalf("更新后前置课程应保留 [%d], got %v", prereq.CourseID, ids)
 	}
-	if _, ok := updated["category"]; ok {
+	b, _ := json.Marshal(updated)
+	if bytes.Contains(b, []byte(`"category"`)) {
 		t.Fatal("更新结果不应包含 category")
 	}
 }

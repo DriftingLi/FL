@@ -1,5 +1,4 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
-import { watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   getSubdomain,
@@ -364,17 +363,8 @@ const router = createRouter({
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
-  // 等待 auth store 初始化完成
-  if (authStore.isInitializing) {
-    await new Promise<void>(resolve => {
-      const unwatch = watch(() => authStore.isInitializing, (val) => {
-        if (!val) {
-          unwatch()
-          resolve()
-        }
-      })
-    })
-  }
+  // 等待认证初始化完成（main.ts 显式启动，幂等；同一 Promise 等待不重复执行）
+  await authStore.initialize()
 
   const isValuationPath = to.path === '/valuation' || to.path.startsWith('/valuation/')
   const isValuationLoginPage = to.name === 'ValuationLogin' || to.name === 'ValuationRegister'

@@ -21,6 +21,7 @@ import (
 	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
+	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
@@ -138,6 +139,7 @@ func newCodeAuthTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fakeChann
 		Cfg:     cfg,
 		DB:      db,
 		Logger:  zap.NewNop(),
+		Session: security.SessionFromConfig(cfg),
 		AuthSvc: authSvc,
 		CodeSvc: codeSvc,
 		EmailCh: emailCh,
@@ -147,9 +149,9 @@ func newCodeAuthTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fakeChann
 	r := gin.New()
 	r.Use(gin.Recovery())
 	api := r.Group("/api")
-	RegisterEmailAuthRoutes(api, deps)
-	RegisterPhoneAuthRoutes(api, deps)
-	RegisterProfileBindRoutes(api, deps)
+	RegisterEmailAuthRoutes(api, deps.Session, deps.CodeSvc, deps.EmailCh)
+	RegisterPhoneAuthRoutes(api, deps.Session, deps.CodeSvc, deps.PhoneCh)
+	RegisterProfileBindRoutes(api, deps.Session, deps.AuthSvc, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
 
 	return r, store, emailCh, phoneCh
 }

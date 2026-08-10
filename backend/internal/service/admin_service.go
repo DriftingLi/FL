@@ -178,8 +178,54 @@ func (s *AdminService) ToggleHrwaiUserStatus(id int) (int16, error) {
 	return next, nil
 }
 
+// ===== DTO（JSON 契约与 B7 前的 map key 逐字一致，前端零改动约束）=====
+
+// TutorDTO 导师（列表项）。
+type TutorDTO struct {
+	TutorID   int    `json:"tutor_id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	Status    int16  `json:"status"`
+	CreatedAt string `json:"created_at"`
+}
+
+// TutorListDTO 导师列表信封。
+type TutorListDTO struct {
+	Total  int64      `json:"total"`
+	Page   int        `json:"page"`
+	Tutors []TutorDTO `json:"tutors"`
+}
+
+// TutorDeletedDTO 删除导师结果。
+type TutorDeletedDTO struct {
+	TutorID int `json:"tutor_id"`
+}
+
+// AdminOverviewDTO 统计看板概览。
+type AdminOverviewDTO struct {
+	TotalStudents      int64 `json:"total_students"`
+	ActiveToday        int64 `json:"active_today"`
+	TotalCourses       int64 `json:"total_courses"`
+	TotalStudyDuration int64 `json:"total_study_duration"`
+}
+
+// CourseStatDTO 课程统计条目。
+type CourseStatDTO struct {
+	CourseID      int     `json:"course_id"`
+	Name          string  `json:"name"`
+	StudyCount    int64   `json:"study_count"`
+	TotalDuration int64   `json:"total_duration"`
+	AvgProgress   float64 `json:"avg_progress"`
+}
+
+// AdminStatisticsDTO 统计看板。
+type AdminStatisticsDTO struct {
+	Overview    AdminOverviewDTO `json:"overview"`
+	CourseStats []CourseStatDTO  `json:"course_stats"`
+}
+
 // GetTutors 导师列表。
-func (s *AdminService) GetTutors(page, pageSize int, keyword string) map[string]any {
+func (s *AdminService) GetTutors(page, pageSize int, keyword string) *TutorListDTO {
 	if page <= 0 {
 		page = 1
 	}
@@ -195,19 +241,19 @@ func (s *AdminService) GetTutors(page, pageSize int, keyword string) map[string]
 	q.Count(&total)
 	var tutors []model.Tutor
 	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&tutors)
-	items := make([]map[string]any, 0, len(tutors))
+	items := make([]TutorDTO, 0, len(tutors))
 	for i := range tutors {
-		items = append(items, tutorToDict(&tutors[i]))
+		items = append(items, tutorToDTO(&tutors[i]))
 	}
-	return map[string]any{
-		"total":  total,
-		"page":   page,
-		"tutors": items,
+	return &TutorListDTO{
+		Total:  total,
+		Page:   page,
+		Tutors: items,
 	}
 }
 
 // DeleteTutor 删除导师。
-func (s *AdminService) DeleteTutor(tutorID int) (map[string]any, error) {
+func (s *AdminService) DeleteTutor(tutorID int) (*TutorDeletedDTO, error) {
 	var tutor model.Tutor
 	if err := s.db.First(&tutor, tutorID).Error; err != nil {
 		return nil, errors.New("导师不存在")
@@ -215,7 +261,7 @@ func (s *AdminService) DeleteTutor(tutorID int) (map[string]any, error) {
 	if err := s.db.Delete(&tutor).Error; err != nil {
 		return nil, err
 	}
-	return map[string]any{"tutor_id": tutorID}, nil
+	return &TutorDeletedDTO{TutorID: tutorID}, nil
 }
 
 // ResetTutorPassword 重置导师密码。
@@ -249,12 +295,12 @@ func (s *AdminService) ToggleTutorStatus(tutorID int) (int, error) {
 }
 
 // GetStatistics 统计看板。
-func (s *AdminService) GetStatistics() map[string]any {
+func (s *AdminService) GetStatistics() *AdminStatisticsDTO {
 	return s.queryStatistics()
 }
 
 // queryStatistics 执行实际的统计查询。
-func (s *AdminService) queryStatistics() map[string]any {
+func (s *AdminService) queryStatistics() *AdminStatisticsDTO {
 	var totalStudents, totalCourses, totalStudyDuration int64
 	s.db.Model(&model.Student{}).Count(&totalStudents)
 	s.db.Model(&model.Course{}).Count(&totalCourses)
@@ -289,36 +335,36 @@ func (s *AdminService) queryStatistics() map[string]any {
 		Group("course.course_id").
 		Scan(&rows)
 
-	courseStats := make([]map[string]any, 0, len(rows))
+	courseStats := make([]CourseStatDTO, 0, len(rows))
 	for _, r := range rows {
-		courseStats = append(courseStats, map[string]any{
-			"course_id":      r.CourseID,
-			"name":           r.Name,
-			"study_count":    r.StudyCount,
-			"total_duration": r.TotalDuration,
-			"avg_progress":   roundFloat2(r.AvgProgress),
+		courseStats = append(courseStats, CourseStatDTO{
+			CourseID:      r.CourseID,
+			Name:          r.Name,
+			StudyCount:    r.StudyCount,
+			TotalDuration: r.TotalDuration,
+			AvgProgress:   roundFloat2(r.AvgProgress),
 		})
 	}
 
-	return map[string]any{
-		"overview": map[string]any{
-			"total_students":       totalStudents,
-			"active_today":         activeToday,
-			"total_courses":        totalCourses,
-			"total_study_duration": totalStudyDuration,
+	return &AdminStatisticsDTO{
+		Overview: AdminOverviewDTO{
+			TotalStudents:      totalStudents,
+			ActiveToday:        activeToday,
+			TotalCourses:       totalCourses,
+			TotalStudyDuration: totalStudyDuration,
 		},
-		"course_stats": courseStats,
+		CourseStats: courseStats,
 	}
 }
 
-// ===== dict 辅助 =====
+// ===== DTO 构造（原 tutorToDict 折叠入内）=====
 
-func tutorToDict(t *model.Tutor) map[string]any {
-	return map[string]any{
-		"tutor_id":   t.TutorID,
-		"username":   t.Username,
-		"name":       t.Name,
-		"status":     t.Status,
-		"created_at": formatISO(t.CreatedAt),
+func tutorToDTO(t *model.Tutor) TutorDTO {
+	return TutorDTO{
+		TutorID:   t.TutorID,
+		Username:  t.Username,
+		Name:      t.Name,
+		Status:    t.Status,
+		CreatedAt: formatISO(t.CreatedAt),
 	}
 }

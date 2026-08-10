@@ -36,6 +36,12 @@ export function removeUserInfo(): void {
   localStorage.removeItem(USER_INFO_KEY)
 }
 
+/** 清除本地登录态（token + userInfo）——auth store 与 401 兜底共用 */
+export function clearLocalAuth(): void {
+  removeToken()
+  removeUserInfo()
+}
+
 export function getStorage<T = unknown>(key: string): T | null {
   try {
     const value = localStorage.getItem(key)
