@@ -24,8 +24,13 @@ if (!store.currentResult && !routeId.value) {
   router.replace('/valuation')
 }
 // 有路由 id 但 store 无结果（刷新/直达）→ 兜底拉详情（模板 v-if 兜底渲染）
+// 匿名用户刷新：详情接口需登录 → fetchDetail 失败 → 跳回表单页（评估结果不可恢复，需重新评估）
 if (!store.currentResult && routeId.value) {
-  void store.fetchDetail(routeId.value)
+  void store.fetchDetail(routeId.value).then(ok => {
+    if (!ok && !store.currentResult) {
+      router.replace('/valuation')
+    }
+  })
 }
 
 const r = computed(() => store.currentResult)

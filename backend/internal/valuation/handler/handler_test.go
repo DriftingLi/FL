@@ -571,6 +571,30 @@ func TestEvaluationCreate_Smoke(t *testing.T) {
 	if !ok || len(sugs) == 0 {
 		t.Errorf("suggestions 应为非空数组: %v", data["suggestions"])
 	}
+	// 创建响应必须包含输入参数（匿名提交流程不再依赖需登录的详情接口）
+	if data["brand"] != "合力" || data["sale_year"] == nil || data["factory_year"] == nil {
+		t.Errorf("创建响应缺少输入参数（brand/sale_year/factory_year）: %v", data["brand"])
+	}
+	if data["condition_rating"] == nil || data["province"] == nil || data["city"] == nil {
+		t.Errorf("创建响应缺少输入参数（condition_rating/province/city）: %v", data)
+	}
+}
+
+// TestBatteryCreate_Anonymous 匿名提交电池评估应成功（历史/详情才需登录）。
+func TestBatteryCreate_Anonymous(t *testing.T) {
+	r, _, _, _ := newTestValuationEngineWithStorage(t, storage.NewLocalStorage(t.TempDir()))
+
+	w := performRequest(r, http.MethodPost, "/api/valuation/battery/evaluations", batteryCreateRequest())
+	if w.Code != http.StatusOK {
+		t.Fatalf("状态码 = %d, 期望 200\nbody=%s", w.Code, w.Body.String())
+	}
+	code, _, data := decodeBody(t, w)
+	if code != http.StatusOK {
+		t.Fatalf("业务码 = %d, 期望 200\nbody=%s", code, w.Body.String())
+	}
+	if data["evaluation_id"] == nil || data["rul_cycles"] == nil || data["soh_percent"] == nil {
+		t.Errorf("电池创建响应缺少 evaluation_id/rul_cycles/soh_percent: %v", data)
+	}
 }
 
 func TestEvaluationCreate_InvalidParam_Envelope(t *testing.T) {

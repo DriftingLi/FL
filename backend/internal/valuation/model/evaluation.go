@@ -158,9 +158,30 @@ type EvaluationDetail struct {
 }
 
 // EvaluationResponse 创建评估响应 DTO（HTTP 出参）
-// 返回 ID + 全部 K 系数 + 残值 + 置信区间 + 维度评分 + 建议
+// 返回 ID + 输入参数 + 全部 K 系数 + 残值 + 置信区间 + 维度评分 + 建议。
+// 输入参数随创建响应一并返回（与详情接口同源，ADR-0004）：
+// 匿名用户提交评估后可直接渲染结果页，无需调用需登录的详情接口。
 type EvaluationResponse struct {
-	ID              int64            `json:"id"`
+	ID int64 `json:"id"`
+	// 输入参数（与 EvaluationRequest / evaluations 表字段一致）
+	Brand                      string  `json:"brand"`
+	VehicleType                string  `json:"vehicle_type"`
+	Series                     string  `json:"series"`
+	Tonnage                    float64 `json:"tonnage"`
+	ConfigType                 string  `json:"config_type"`
+	MastType                   string  `json:"mast_type"`
+	MastHeightMM               int     `json:"mast_height_mm"`
+	FactoryYear                int     `json:"factory_year"`
+	SaleYear                   int     `json:"sale_year"`
+	UsageHours                 int     `json:"usage_hours"`
+	OriginalPaint              bool    `json:"original_paint"`
+	Province                   string  `json:"province"`
+	City                       string  `json:"city"`
+	HasLicensePlate            bool    `json:"has_license_plate"`
+	HasRegistrationCertificate bool    `json:"has_registration_certificate"`
+	HasMaintenanceRecords      bool    `json:"has_maintenance_records"`
+	ConditionRating            string  `json:"condition_rating"`
+	// 计算结果
 	OriginalPrice   float64          `json:"original_price"`
 	KTime           float64          `json:"k_time"`
 	KHours          float64          `json:"k_hours"`

@@ -13,10 +13,14 @@
 //	  ├── /dictionaries/*               字典查询（只读 GET）
 //	  └── /health                       健康检查
 //
+//	/api/valuation                      可选认证组（登录与否都能用，登录则记录 user_id）
+//	  ├── POST /evaluations             评估提交
+//	  └── POST /battery/evaluations     电池 RUL 评估提交
+//
 //	/api/valuation                      估值鉴权组（统一主体系 JWT）
 //	  ├── GET  /evaluations             评估历史/详情（需登录）
 //	  ├── GET  /evaluations/:id
-//	  ├── /battery/evaluations          电池 RUL 评估 CRUD（需登录）
+//	  ├── /battery/evaluations          电池 RUL 评估历史（需登录）
 //	  ├── GET  /auth/me                 获取当前估值用户
 //	  └── POST /auth/logout             估值用户登出
 //
@@ -36,9 +40,10 @@ import (
 )
 
 // RegisterRoutes 注册残值评估模块路由。
-// 路由分四组：
-//   - 公开组 /api/valuation：字典查询、评估提交、统计、健康检查、报告生成/下载、登录/注册（匿名可访问）
-//   - 估值鉴权组 /api/valuation：评估历史/详情、电池 RUL CRUD、/auth/me、/auth/logout（需估值专属 ValuationJWTAuth）
+// 路由分五组：
+//   - 公开组 /api/valuation：字典查询、统计、健康检查、报告生成/下载、登录/注册（匿名可访问）
+//   - 可选认证组 /api/valuation：评估提交、电池评估提交（匿名可提交，登录则记录 user_id）
+//   - 估值鉴权组 /api/valuation：评估历史/详情、电池历史、/auth/me、/auth/logout（需登录）
 //   - 管理员组 /api/valuation/admin：字典 CRUD（需主体系 admin JWT）
 func RegisterRoutes(
 	r *gin.Engine,
@@ -103,11 +108,12 @@ func RegisterRoutes(
 	}
 
 	// === 可选认证组（登录与否都能用，登录则记录 user_id） ===
-	// 评估提交：未登录可提交（user_id 落 NULL），登录用户提交则归属到自己
+	// 评估提交/电池评估：未登录可提交（user_id 落 NULL），登录用户提交则归属到自己
 	optional := r.Group("/api/valuation")
 	optional.Use(middleware.OptionalAuth(sess))
 	{
 		optional.POST("/evaluations", evalHandler.Create)
+		optional.POST("/battery/evaluations", batteryHandler.Create)
 	}
 
 	// === HRWAI 账号鉴权组（需 middleware.JWTAuth + role=hrwai_user） ===
@@ -119,7 +125,6 @@ func RegisterRoutes(
 		valAuth.GET("/evaluations", evalHandler.List)
 		valAuth.GET("/evaluations/:id", evalHandler.Get)
 
-		valAuth.POST("/battery/evaluations", batteryHandler.Create)
 		valAuth.GET("/battery/evaluations", batteryHandler.List)
 		valAuth.GET("/battery/evaluations/:id", batteryHandler.Get)
 
