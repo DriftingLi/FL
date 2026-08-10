@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -22,10 +23,10 @@ func NewMockExamHandler(svc *service.MockExamService) *MockExamHandler {
 }
 
 // RegisterMockExamRoutes 注册 /api/mock-exam 蓝图。
-func RegisterMockExamRoutes(rg *gin.RouterGroup, deps *Deps) {
-	h := NewMockExamHandler(deps.MockExamSvc)
+func RegisterMockExamRoutes(rg *gin.RouterGroup, sess *security.Session, svc *service.MockExamService) {
+	h := NewMockExamHandler(svc)
 
-	g := rg.Group("/mock-exam", middleware.JWTAuth(deps.Session), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/mock-exam", middleware.JWTAuth(sess), middleware.RoleRequired("hrwai_user"))
 
 	// POST /api/mock-exam/start  开始模拟考试（count 题量 + duration 时长）
 	g.POST("/start", h.Start)

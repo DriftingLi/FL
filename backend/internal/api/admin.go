@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -29,13 +30,13 @@ func NewAdminHandler(adminSvc *service.AdminService, courseSvc *service.AdminCou
 }
 
 // RegisterAdminRoutes 注册 /api/admin 蓝图（管理员后台）。
-func RegisterAdminRoutes(rg *gin.RouterGroup, deps *Deps) {
-	h := NewAdminHandler(deps.AdminSvc, deps.AdminCourseSvc, deps.AuthSvc, deps.AIConfigSvc, deps.ContentGenSvc)
+func RegisterAdminRoutes(rg *gin.RouterGroup, sess *security.Session, adminSvc *service.AdminService, courseSvc *service.AdminCourseService, authSvc *service.AuthService, aiConfigSvc *service.AIConfigService, contentGenSvc *service.ContentGenerateService) {
+	h := NewAdminHandler(adminSvc, courseSvc, authSvc, aiConfigSvc, contentGenSvc)
 
-	g := rg.Group("/admin", middleware.JWTAuth(deps.Session), middleware.RoleRequired("admin"))
+	g := rg.Group("/admin", middleware.JWTAuth(sess), middleware.RoleRequired("admin"))
 
 	// ===== AI 配置（多配置管理 + 功能绑定）=====
-	registerSettingsRoutes(g, h.aiConfigSvc, deps.DB)
+	NewAIConfigHandler(aiConfigSvc).registerAIConfigRoutes(g)
 
 	// ===== 课程管理 =====
 	g.GET("/courses", h.ListCourses)

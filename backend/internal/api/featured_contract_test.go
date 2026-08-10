@@ -45,7 +45,8 @@ func TestFeaturedDetailNoViewParam(t *testing.T) {
 
 	r := gin.New()
 	api := r.Group("/api")
-	RegisterFeaturedRoutes(api, newContractDeps(t, db, nil))
+	deps := newContractDeps(t, db, nil)
+	RegisterFeaturedRoutes(api, deps.Session, deps.FeaturedSvc, deps.FileSvc)
 
 	// no_view=1：阅读量不变
 	rec := performRequest(r, "GET", "/api/featured-content/"+strconv.Itoa(id)+"?no_view=1")
@@ -85,7 +86,8 @@ func TestFeaturedViewEndpoint(t *testing.T) {
 
 	r := gin.New()
 	api := r.Group("/api")
-	RegisterFeaturedRoutes(api, newContractDeps(t, db, nil))
+	deps := newContractDeps(t, db, nil)
+	RegisterFeaturedRoutes(api, deps.Session, deps.FeaturedSvc, deps.FileSvc)
 
 	rec := performRequest(r, "POST", "/api/featured-content/"+strconv.Itoa(id)+"/view")
 	if rec.Code != http.StatusOK {

@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -22,10 +23,10 @@ func NewLevelExamHandler(svc *service.LevelExamService) *LevelExamHandler {
 }
 
 // RegisterLevelExamRoutes 注册 /api/level-exam 蓝图（等级考试与晋级）。
-func RegisterLevelExamRoutes(rg *gin.RouterGroup, deps *Deps) {
-	h := NewLevelExamHandler(deps.LevelExamSvc)
+func RegisterLevelExamRoutes(rg *gin.RouterGroup, sess *security.Session, svc *service.LevelExamService) {
+	h := NewLevelExamHandler(svc)
 
-	g := rg.Group("/level-exam", middleware.JWTAuth(deps.Session))
+	g := rg.Group("/level-exam", middleware.JWTAuth(sess))
 
 	// ===== 场次管理（管理员） =====
 	g.GET("/sessions", h.ListSessions)

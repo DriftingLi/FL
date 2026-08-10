@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -20,10 +21,10 @@ func NewStudentHandler(svc *service.StudentService) *StudentHandler {
 }
 
 // RegisterStudentRoutes 注册 /api/student 蓝图。
-func RegisterStudentRoutes(rg *gin.RouterGroup, deps *Deps) {
-	h := NewStudentHandler(deps.StudentSvc)
+func RegisterStudentRoutes(rg *gin.RouterGroup, sess *security.Session, svc *service.StudentService) {
+	h := NewStudentHandler(svc)
 
-	g := rg.Group("/student", middleware.JWTAuth(deps.Session), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/student", middleware.JWTAuth(sess), middleware.RoleRequired("hrwai_user"))
 
 	// GET /api/student/profile  学员信息+学习统计+课程进度
 	g.GET("/profile", h.GetProfile)

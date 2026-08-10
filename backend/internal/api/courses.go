@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -22,15 +23,15 @@ func NewCourseHandler(svc *service.CourseService) *CourseHandler {
 }
 
 // RegisterCoursesRoutes 注册 /api/courses 蓝图（学员侧课程浏览与学习进度）。
-func RegisterCoursesRoutes(rg *gin.RouterGroup, deps *Deps) {
-	h := NewCourseHandler(deps.CourseSvc)
+func RegisterCoursesRoutes(rg *gin.RouterGroup, sess *security.Session, svc *service.CourseService) {
+	h := NewCourseHandler(svc)
 
 	// 公开访问
 	rg.GET("/courses", h.ListCourses)
 	rg.GET("/chapter/:chapter_id/slides", h.GetChapterSlides)
 
 	// 需要登录
-	auth := rg.Group("", middleware.JWTAuth(deps.Session))
+	auth := rg.Group("", middleware.JWTAuth(sess))
 	auth.GET("/course/:course_id", h.GetCourseDetail)
 	auth.GET("/course/:course_id/chapter/:chapter_id", h.GetChapterDetail)
 	auth.POST("/chapter/:chapter_id/slides/regenerate", h.RegenerateChapterSlides)

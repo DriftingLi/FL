@@ -39,7 +39,8 @@ func TestCoursesListCategoryParamRetired(t *testing.T) {
 
 	r := gin.New()
 	api := r.Group("/api")
-	RegisterCoursesRoutes(api, newContractDeps(t, db, nil))
+	deps := newContractDeps(t, db, nil)
+	RegisterCoursesRoutes(api, deps.Session, deps.CourseSvc)
 
 	// 传入已退役的 category 参数：应被忽略，课程仍返回
 	rec := performRequest(r, "GET", "/api/courses?category=CATEGORY_01")

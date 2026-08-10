@@ -13,22 +13,35 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/security"
+	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
 
-// RegisterExportRoutes 注册 /api/admin/export 蓝图（仅管理员，返回 CSV 附件）。
-func RegisterExportRoutes(rg *gin.RouterGroup, deps *Deps) {
-	svc := deps.ExportSvc
-	g := rg.Group("/admin/export", middleware.JWTAuth(deps.Session), middleware.RoleRequired("admin"))
-
-	g.GET("/students", exportCSVHandler(func() ([][]any, error) { return svc.Students() }, "学员名单.csv"))
-	g.GET("/exam-records", exportCSVHandler(func() ([][]any, error) { return svc.ExamRecords() }, "成绩单.csv"))
-	g.GET("/questions", exportCSVHandler(func() ([][]any, error) { return svc.Questions() }, "题库.csv"))
-	g.GET("/evaluations", exportCSVHandler(func() ([][]any, error) { return svc.Evaluations() }, "评估记录.csv"))
+// ExportHandler 管理端数据导出 handler。
+type ExportHandler struct {
+	svc *service.ExportService
 }
 
-// exportCSVHandler 将取数结果生成为 CSV 附件响应（带 UTF-8 BOM，Excel 可直接打开不乱码）。
-func exportCSVHandler(fetch func() ([][]any, error), filename string) gin.HandlerFunc {
+// NewExportHandler 创建管理端数据导出 handler。
+func NewExportHandler(svc *service.ExportService) *ExportHandler {
+	return &ExportHandler{svc: svc}
+}
+
+// RegisterExportRoutes 注册 /api/admin/export 蓝图（仅管理员，返回 CSV 附件）。
+func RegisterExportRoutes(rg *gin.RouterGroup, sess *security.Session, svc *service.ExportService) {
+	h := NewExportHandler(svc)
+
+	g := rg.Group("/admin/export", middleware.JWTAuth(sess), middleware.RoleRequired("admin"))
+
+	g.GET("/students", h.exportCSV(func() ([][]any, error) { return svc.Students() }, "学员名单.csv"))
+	g.GET("/exam-records", h.exportCSV(func() ([][]any, error) { return svc.ExamRecords() }, "成绩单.csv"))
+	g.GET("/questions", h.exportCSV(func() ([][]any, error) { return svc.Questions() }, "题库.csv"))
+	g.GET("/evaluations", h.exportCSV(func() ([][]any, error) { return svc.Evaluations() }, "评估记录.csv"))
+}
+
+// exportCSV 将取数结果生成为 CSV 附件响应（带 UTF-8 BOM，Excel 可直接打开不乱码）。
+func (h *ExportHandler) exportCSV(fetch func() ([][]any, error), filename string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rows, err := fetch()
 		if err != nil {
