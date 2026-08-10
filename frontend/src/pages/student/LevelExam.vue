@@ -9,7 +9,7 @@
         <el-table :data="exams" stripe v-loading="loading">
           <el-table-column prop="name" label="考试名称" />
           <el-table-column prop="start_time" label="开始时间" width="180">
-            <template #default="{ row }">{{ formatDateTime(row.start_time) }}</template>
+            <template #default="{ row }">{{ formatDateTime(row.start_time, '') }}</template>
           </el-table-column>
           <el-table-column prop="duration" label="时长(分钟)" width="100" />
           <el-table-column prop="status" label="状态" width="100">
@@ -35,7 +35,7 @@
         <div class="exam-title">{{ examTitle }}</div>
         <div class="timer" :class="{ warning: remainingTime < 300 }">
           <el-icon><Timer /></el-icon>
-          <span>{{ formatTime(remainingTime) }}</span>
+          <span>{{ formatClock(remainingTime) }}</span>
         </div>
         <el-button type="danger" @click="confirmSubmit">交卷</el-button>
       </div>
@@ -96,6 +96,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { levelExamApi, type LevelExamSession } from '@/api/levelExam'
 import { typeMap, sessionStatusMap as statusMap } from '@/constants/question'
 import type { Question } from '@/types/question'
+import { formatClock, formatDateTime } from '@/utils/format'
 
 const statusType: Record<string, string> = { upcoming: 'info', ongoing: 'success', finished: '' }
 
@@ -113,14 +114,6 @@ let timer: ReturnType<typeof setInterval> | null = null
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 const currentQ = computed(() => examQuestions.value[qIdx.value] || {})
-
-function formatDateTime(dtStr: string) {
-  if (!dtStr) return ''
-  const d = new Date(dtStr)
-  if (isNaN(d.getTime())) return dtStr
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
 
 function isAnswered(qid: number) {
   const a = examAnswers.value[qid]
@@ -187,10 +180,6 @@ function startTimer() {
     remainingTime.value--
     if (remainingTime.value % 30 === 0) saveProgress()
   }, 1000)
-}
-
-function formatTime(s: number) {
-  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 }
 
 function isOptSelected(key: string | number) {

@@ -36,7 +36,7 @@
             </template>
           </el-table-column>
           <el-table-column prop="created_at" label="时间" width="180">
-            <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
+            <template #default="{ row }">{{ formatDateTime(row.created_at, '') }}</template>
           </el-table-column>
         </el-table>
       </el-card>
@@ -46,7 +46,7 @@
       <div class="exam-toolbar">
         <div class="timer" :class="{ warning: remainingTime < 300 }">
           <el-icon><Timer /></el-icon>
-          <span>{{ formatTime(remainingTime) }}</span>
+          <span>{{ formatClock(remainingTime) }}</span>
         </div>
         <el-button type="danger" @click="confirmSubmit">交卷</el-button>
       </div>
@@ -138,6 +138,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { mockExamApi, type MockExamHistoryItem } from '@/api/mockExam'
 import { typeMap } from '@/constants/question'
 import type { Question } from '@/types/question'
+import { formatClock, formatDateTime } from '@/utils/format'
 
 const loading = ref(false)
 const examStarted = ref(false)
@@ -193,20 +194,6 @@ function startTimer() {
       saveProgress()
     }
   }, 1000)
-}
-
-function formatTime(seconds: number) {
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-}
-
-function formatDateTime(dtStr: string) {
-  if (!dtStr) return ''
-  const d = new Date(dtStr)
-  if (isNaN(d.getTime())) return dtStr
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 function isOptionSelected(key: string | number) {

@@ -15,7 +15,7 @@
     <div v-if="wrongList.length > 0">
       <el-card v-for="item in wrongList" :key="item.id" class="wrong-item">
         <div class="wrong-header">
-          <el-tag size="small">{{ item.question?.type ? typeMap[item.question.type] : '' }}</el-tag>
+          <el-tag size="small">{{ item.question?.type ? (typeMap as Record<string, string>)[item.question.type] : '' }}</el-tag>
           <span class="wrong-count">错误 {{ item.wrong_count }} 次</span>
         </div>
         <p class="wrong-content">{{ item.question?.content }}</p>
@@ -59,8 +59,7 @@
 import { ref, watch, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { wrongQuestionApi } from '@/api/wrongQuestion'
-
-const typeMap: Record<string, string> = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
+import { typeMap } from '@/constants/question'
 
 interface WrongItem {
   id: number

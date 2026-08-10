@@ -9,6 +9,7 @@ import { listEvaluations } from '@/api/valuation/evaluation'
 import type { EvaluationDetail } from '@/types/valuation/evaluation'
 import { CONDITION_RATING_COLOR } from '@/utils/valuationConstants'
 import { formatTonnage, formatWan } from '@/utils/valuationFormat'
+import { formatTime } from '@/utils/format'
 
 const router = useRouter()
 
@@ -79,12 +80,6 @@ function formatValue(v: number): string {
 function formatRate(estimated: number, original: number): string {
   if (!original || original <= 0) return '-'
   return ((estimated / original) * 100).toFixed(1) + '%'
-}
-
-function formatTime(t?: string): string {
-  if (!t) return '-'
-  // 后端返回 RFC3339，取日期部分
-  return t.replace('T', ' ').slice(0, 16)
 }
 
 function ratingColor(rating: string): string {

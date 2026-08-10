@@ -21,7 +21,7 @@
                 {{ authorLetter(topic.author) }}
               </el-avatar>
               <span class="discussion-author">{{ displayName(topic.author) }}</span>
-              <span class="discussion-time">{{ formatTime(topic.created_at) }}</span>
+              <span class="discussion-time">{{ formatRelativeTime(topic.created_at) }}</span>
               <el-icon class="expand-icon">
                 <ArrowDown v-if="expandedTopicId !== topic.id" />
                 <ArrowUp v-else />
@@ -41,7 +41,7 @@
                       {{ authorLetter(reply.author) }}
                     </el-avatar>
                     <span class="reply-author">{{ displayName(reply.author) }}</span>
-                    <span class="reply-time">{{ formatTime(reply.created_at) }}</span>
+                    <span class="reply-time">{{ formatRelativeTime(reply.created_at) }}</span>
                     <div class="reply-actions">
                       <el-button type="primary" size="small" @click="startReplyTo(reply)">回复</el-button>
                       <el-button v-if="reply.can_delete" text type="danger" size="small" @click="removeReply(reply.id)">
@@ -121,6 +121,7 @@ import { EditPen, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumImageUploader from '@/components/student/ForumImageUploader.vue'
+import { formatRelativeTime } from '@/utils/format'
 
 const props = defineProps<{
   chapterId: number
@@ -147,18 +148,6 @@ function displayName(author: ForumTopicItem['author']) {
 
 function authorLetter(author: ForumTopicItem['author']) {
   return (displayName(author) || '?').charAt(0).toUpperCase()
-}
-
-function formatTime(iso: string) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return iso
-  const now = new Date()
-  const diff = now.getTime() - d.getTime()
-  if (diff < 60 * 1000) return '刚刚'
-  if (diff < 60 * 60 * 1000) return `${Math.floor(diff / 60000)} 分钟前`
-  if (diff < 24 * 60 * 60 * 1000) return `${Math.floor(diff / 3600000)} 小时前`
-  return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 async function loadTopics() {

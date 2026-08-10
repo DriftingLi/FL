@@ -12,7 +12,7 @@
           </el-avatar>
           <div class="topic-author-info">
             <span class="author-name">{{ displayName(topic.author) }}</span>
-            <span class="topic-time">{{ formatTime(topic.created_at) }}</span>
+            <span class="topic-time">{{ formatLocaleDateTime(topic.created_at, '') }}</span>
           </div>
           <el-button
             v-if="topic.can_delete"
@@ -53,7 +53,7 @@
             <div class="reply-main">
               <div class="reply-meta">
                 <span class="author-name">{{ displayName(reply.author) }}</span>
-                <span class="reply-time">{{ formatTime(reply.created_at) }}</span>
+                <span class="reply-time">{{ formatLocaleDateTime(reply.created_at, '') }}</span>
                 <el-button
                   class="reply-btn"
                   type="primary"
@@ -115,6 +115,7 @@ import { ArrowLeft, View, ChatDotRound } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumImageUploader from '@/components/student/ForumImageUploader.vue'
+import { formatLocaleDateTime } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -133,19 +134,6 @@ function displayName(author: ForumTopicItem['author']) {
 
 function authorLetter(author: ForumTopicItem['author']) {
   return (displayName(author) || '?').charAt(0).toUpperCase()
-}
-
-function formatTime(iso: string) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return iso
-  return d.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
 }
 
 async function loadDetail() {

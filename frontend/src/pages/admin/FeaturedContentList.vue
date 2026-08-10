@@ -96,6 +96,7 @@ import { useRouter } from 'vue-router'
 import { Plus, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminFeaturedApi, featuredCategoryOptions, categoryLabel } from '@/api/featured'
+import { formatDateTime } from '@/utils/format'
 
 const router = useRouter()
 
@@ -190,22 +191,6 @@ async function handleAction(cmd: string, row: any) {
         // 用户取消
       }
       break
-  }
-}
-
-function formatDateTime(dateStr: string): string {
-  if (!dateStr) return ''
-  try {
-    const d = new Date(dateStr)
-    if (isNaN(d.getTime())) return ''
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    const h = String(d.getHours()).padStart(2, '0')
-    const min = String(d.getMinutes()).padStart(2, '0')
-    return `${y}-${m}-${day} ${h}:${min}`
-  } catch {
-    return ''
   }
 }
 
