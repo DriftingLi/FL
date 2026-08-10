@@ -11,7 +11,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -359,26 +358,67 @@ func (m *memEvalStore) UpdateEvaluationReportPath(_ context.Context, id int64, p
 	return nil
 }
 
-type memBatteryStore struct{}
+// memBatteryStore 持久化电池评估内存 store（电池报告测试用：创建/加载/回写）。
+type memBatteryStore struct {
+	mu      sync.Mutex
+	nextID  int64
+	records map[int64]*model.BatteryEvaluation
+}
+
+func (m *memBatteryStore) init() {
+	if m.records == nil {
+		m.records = map[int64]*model.BatteryEvaluation{}
+	}
+}
 
 func (m *memBatteryStore) CreateEvaluation(_ context.Context, eval *model.BatteryEvaluation, _ []model.CycleFeature, _ int) (*model.BatteryEvaluation, error) {
-	eval.ID = 1
-	return eval, nil
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.init()
+	m.nextID++
+	cp := *eval
+	cp.ID = m.nextID
+	m.records[cp.ID] = &cp
+	return &cp, nil
 }
 
-func (m *memBatteryStore) GetEvaluation(context.Context, int64) (*model.BatteryEvaluation, error) {
+func (m *memBatteryStore) GetEvaluation(_ context.Context, id int64) (*model.BatteryEvaluation, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.init()
+	if r, ok := m.records[id]; ok {
+		cp := *r
+		return &cp, nil
+	}
 	return nil, pgx.ErrNoRows
 }
 
-func (m *memBatteryStore) GetEvaluationByUser(context.Context, int64, int) (*model.BatteryEvaluation, error) {
-	return nil, pgx.ErrNoRows
+func (m *memBatteryStore) GetEvaluationByUser(ctx context.Context, id int64, _ int) (*model.BatteryEvaluation, error) {
+	return m.GetEvaluation(ctx, id)
 }
 
-func (m *memBatteryStore) ListEvaluations(context.Context, string, int, int, int) ([]model.BatteryEvaluationSummary, int, error) {
-	return nil, 0, nil
+func (m *memBatteryStore) ListEvaluations(_ context.Context, _ string, _ int, _, _ int) ([]model.BatteryEvaluationSummary, int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.init()
+	var items []model.BatteryEvaluationSummary
+	for _, r := range m.records {
+		items = append(items, model.BatteryEvaluationSummary{
+			ID: r.ID, BatteryType: r.BatteryType, BatteryModel: r.BatteryModel,
+			CycleCount: r.CycleCount, RulCycles: r.RulCycles, SohPercent: r.SohPercent,
+			Confidence: r.Confidence, CreatedAt: r.CreatedAt,
+		})
+	}
+	return items, len(items), nil
 }
 
-func (m *memBatteryStore) UpdateReportPath(context.Context, int64, string) error {
+func (m *memBatteryStore) UpdateReportPath(_ context.Context, id int64, path string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.init()
+	if r, ok := m.records[id]; ok {
+		r.ReportPdfPath = path
+	}
 	return nil
 }
 
@@ -395,16 +435,19 @@ func (m *memReportGenerator) GenerateReport(*model.EvaluationDetail, map[string]
 // newTestValuationEngine 用内存 adapter 装配生产路由（与 main 相同的 RegisterRoutes）。
 // 返回引擎与各 store 引用，测试可按需断言或注入数据。
 func newTestValuationEngine(t *testing.T) (*gin.Engine, *memDictStore, *memEvalStore) {
-	return newTestValuationEngineWithStorage(t, storage.NewLocalStorage(t.TempDir()))
+	r, dict, evalStore, _ := newTestValuationEngineWithStorage(t, storage.NewLocalStorage(t.TempDir()))
+	return r, dict, evalStore
 }
 
 // newTestValuationEngineWithStorage 允许注入自定义存储（报告测试用计数 fake）。
-func newTestValuationEngineWithStorage(t *testing.T, st storage.Storage) (*gin.Engine, *memDictStore, *memEvalStore) {
+// 第 4 个返回值是电池 store（电池报告测试用）。
+func newTestValuationEngineWithStorage(t *testing.T, st storage.Storage) (*gin.Engine, *memDictStore, *memEvalStore, *memBatteryStore) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
 	dict := newSeedMemDict()
 	evalStore := newMemEvalStore()
+	batteryStore := &memBatteryStore{}
 
 	valuationSvc, err := vservice.NewValuationService(dict, evalStore)
 	if err != nil {
@@ -420,12 +463,12 @@ func newTestValuationEngineWithStorage(t *testing.T, st storage.Storage) (*gin.E
 	r.Use(gin.Recovery())
 
 	RegisterRoutes(r, sess, zap.NewNop(),
-		dict, evalStore, &memBatteryStore{},
+		dict, evalStore, batteryStore,
 		valuationSvc, vservice.NewBatteryRULService(),
 		&memReportGenerator{}, st,
 		nil, // ValuationAuthService 未装配：本 seam 覆盖的公开评估路径不触达 /auth/*
 	)
-	return r, dict, evalStore
+	return r, dict, evalStore, batteryStore
 }
 
 // performRequest 向测试引擎发起请求并返回响应记录器（与主体系 router_test_helper 同模式）。
@@ -648,136 +691,4 @@ func equalStrings(a, b []string) bool {
 		}
 	}
 	return true
-}
-
-// =====================================================
-// 报告协调器测试（#16）
-// =====================================================
-
-// memStorage 计数存储 fake：统计 Save 次数（断言并发下载不重复上传）。
-type memStorage struct {
-	mu    sync.Mutex
-	saves int
-	urls  map[string][]byte
-}
-
-func newMemStorage() *memStorage {
-	return &memStorage{urls: map[string][]byte{}}
-}
-
-func (m *memStorage) Save(_ context.Context, key string, content []byte, _ string) (string, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.saves++
-	m.urls[key] = content
-	return "https://fake-cdn/" + key, nil
-}
-
-func (m *memStorage) Delete(context.Context, string) error { return nil }
-
-func (m *memStorage) Exists(_ context.Context, url string) (bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	key := strings.TrimPrefix(url, "https://fake-cdn/")
-	_, ok := m.urls[key]
-	return ok, nil
-}
-
-func (m *memStorage) List(_ context.Context, prefix string) ([]string, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	var urls []string
-	for key := range m.urls {
-		if strings.HasPrefix(key, prefix) {
-			urls = append(urls, "https://fake-cdn/"+key)
-		}
-	}
-	return urls, nil
-}
-
-func createEvalForReport(t *testing.T, r *gin.Engine) float64 {
-	t.Helper()
-	w := performRequest(r, http.MethodPost, "/api/valuation/evaluations", baseEvalRequest())
-	if w.Code != http.StatusOK {
-		t.Fatalf("创建评估失败: %d\n%s", w.Code, w.Body.String())
-	}
-	_, _, data := decodeBody(t, w)
-	return data["id"].(float64)
-}
-
-// TestReportGenerate_WritesPath 生成报告：上传 + 回写路径（既有行为保留）。
-func TestReportGenerate_WritesPath(t *testing.T) {
-	st := newMemStorage()
-	r, _, _ := newTestValuationEngineWithStorage(t, st)
-	id := createEvalForReport(t, r)
-
-	w := performRequest(r, http.MethodPost, "/api/valuation/evaluations/1/report", nil)
-	if w.Code != http.StatusOK {
-		t.Fatalf("生成报告状态码 = %d\nbody=%s", w.Code, w.Body.String())
-	}
-	code, _, data := decodeBody(t, w)
-	if code != http.StatusOK {
-		t.Fatalf("业务码 = %d\nbody=%s", code, w.Body.String())
-	}
-	if data["pdf_url"] == nil || data["pdf_url"].(string) == "" {
-		t.Error("生成报告缺少 pdf_url")
-	}
-	if int(data["file_size"].(float64)) != len("fake-pdf") {
-		t.Errorf("file_size 错误: %v", data["file_size"])
-	}
-	if st.saves != 1 {
-		t.Errorf("应上传 1 次, got %d", st.saves)
-	}
-	if id != 1 {
-		t.Fatalf("预期 id=1, got %v", id)
-	}
-}
-
-// TestReportDownload_RegeneratesOnMissing 下载时路径缺失 → 再生成 → 302 回写（既有行为保留）。
-func TestReportDownload_RegeneratesOnMissing(t *testing.T) {
-	st := newMemStorage()
-	r, _, _ := newTestValuationEngineWithStorage(t, st)
-	createEvalForReport(t, r)
-
-	w := performRequest(r, http.MethodGet, "/api/valuation/evaluations/1/report", nil)
-	if w.Code != http.StatusFound {
-		t.Fatalf("下载状态码 = %d, 期望 302\nbody=%s", w.Code, w.Body.String())
-	}
-	if loc := w.Header().Get("Location"); loc == "" {
-		t.Error("302 缺少 Location")
-	}
-	if st.saves != 1 {
-		t.Errorf("缺失路径应再生成上传 1 次, got %d", st.saves)
-	}
-}
-
-// TestReportDownload_ConcurrentSingleGeneration 并发下载同 ID 只产生一份 PDF（singleflight 去重）。
-func TestReportDownload_ConcurrentSingleGeneration(t *testing.T) {
-	st := newMemStorage()
-	r, _, _ := newTestValuationEngineWithStorage(t, st)
-	createEvalForReport(t, r)
-
-	const n = 8
-	var wg sync.WaitGroup
-	codes := make([]int, n)
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			req := httptest.NewRequest(http.MethodGet, "/api/valuation/evaluations/1/report", nil)
-			rec := httptest.NewRecorder()
-			r.ServeHTTP(rec, req)
-			codes[idx] = rec.Code
-		}(i)
-	}
-	wg.Wait()
-
-	for i, c := range codes {
-		if c != http.StatusFound {
-			t.Errorf("并发请求 %d 状态码 = %d, 期望 302", i, c)
-		}
-	}
-	if st.saves != 1 {
-		t.Errorf("并发下载应只上传 1 份 PDF（无孤儿文件）, got %d", st.saves)
-	}
 }
