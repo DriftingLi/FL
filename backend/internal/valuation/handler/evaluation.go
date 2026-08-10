@@ -57,8 +57,9 @@ func (h *EvaluationHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// 3. 返回响应（ID + 全部 K 系数 + 残值 + 置信区间 + 维度评分 + 建议）
-	response.Success(c, buildEvaluationResponse(id, result))
+	// 3. 返回响应（ID + 输入参数 + 全部 K 系数 + 残值 + 置信区间 + 维度评分 + 建议）
+	// 输入参数随创建响应返回：匿名用户提交流程不再依赖需登录的详情接口
+	response.Success(c, buildEvaluationResponse(id, result, &req))
 }
 
 // Get 处理 GET /api/valuation/evaluations/:id
@@ -151,9 +152,9 @@ func (h *EvaluationHandler) Stats(c *gin.Context) {
 	response.Success(c, gin.H{"total": total})
 }
 
-// buildEvaluationResponse 把 EvaluationResult + 持久化 ID 转换为响应 DTO
+// buildEvaluationResponse 把 EvaluationRequest + EvaluationResult + 持久化 ID 转换为响应 DTO
 // 维度评分顺序与雷达图保持一致（由 service.BuildDimensionScores 单一装配，此处不再排序）
-func buildEvaluationResponse(id int64, r *model.EvaluationResult) model.EvaluationResponse {
+func buildEvaluationResponse(id int64, r *model.EvaluationResult, req *model.EvaluationRequest) model.EvaluationResponse {
 	// 兜底：若维度评分缺失，返回空切片（避免 JSON null）
 	dimScores := r.DimensionScores
 	if dimScores == nil {
@@ -164,19 +165,36 @@ func buildEvaluationResponse(id int64, r *model.EvaluationResult) model.Evaluati
 		suggestions = []string{}
 	}
 	return model.EvaluationResponse{
-		ID:              id,
-		OriginalPrice:   r.OriginalPrice,
-		KTime:           r.KTime,
-		KHours:          r.KHours,
-		KBrand:          r.KBrand,
-		KCondition:      r.KCondition,
-		KMarket:         r.KMarket,
-		KTimeAdjusted:   r.KTimeAdjusted,
-		EstimatedValue:  r.EstimatedValue,
-		ConfidenceLow:   r.ConfidenceLow,
-		ConfidenceHigh:  r.ConfidenceHigh,
-		DimensionScores: dimScores,
-		Suggestions:     suggestions,
+		ID:                         id,
+		Brand:                      req.Brand,
+		VehicleType:                req.VehicleType,
+		Series:                     req.Series,
+		Tonnage:                    req.Tonnage,
+		ConfigType:                 req.ConfigType,
+		MastType:                   req.MastType,
+		MastHeightMM:               req.MastHeightMM,
+		FactoryYear:                req.FactoryYear,
+		SaleYear:                   req.SaleYear,
+		UsageHours:                 req.UsageHours,
+		OriginalPaint:              req.OriginalPaint,
+		Province:                   req.Province,
+		City:                       req.City,
+		HasLicensePlate:            req.HasLicensePlate,
+		HasRegistrationCertificate: req.HasRegistrationCertificate,
+		HasMaintenanceRecords:      req.HasMaintenanceRecords,
+		ConditionRating:            req.ConditionRating,
+		OriginalPrice:              r.OriginalPrice,
+		KTime:                      r.KTime,
+		KHours:                     r.KHours,
+		KBrand:                     r.KBrand,
+		KCondition:                 r.KCondition,
+		KMarket:                    r.KMarket,
+		KTimeAdjusted:              r.KTimeAdjusted,
+		EstimatedValue:             r.EstimatedValue,
+		ConfidenceLow:              r.ConfidenceLow,
+		ConfidenceHigh:             r.ConfidenceHigh,
+		DimensionScores:            dimScores,
+		Suggestions:                suggestions,
 		// 评估时点锁定的 λ 值（供前端走势图数据驱动）
 		LambdaElectric:   r.LambdaElectric,
 		LambdaCombustion: r.LambdaCombustion,

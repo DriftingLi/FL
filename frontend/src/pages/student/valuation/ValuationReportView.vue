@@ -10,6 +10,7 @@ import FutureValueChart from '@/components/valuation/FutureValueChart.vue'
 import { getEvaluationDetail } from '@/api/valuation/evaluation'
 import { generateReport, getReportDownloadUrl } from '@/api/valuation/report'
 import { downloadEvaluationReportBlob } from '@/api/valuation/evaluation'
+import { useEvaluationStore } from '@/stores/valuationEvaluation'
 import {
   formatBoolean,
   formatBytes,
@@ -23,6 +24,7 @@ import type { EvaluationDetailResponse } from '@/types/valuation/evaluation'
 
 const route = useRoute()
 const router = useRouter()
+const store = useEvaluationStore()
 
 const id = computed(() => {
   const v = route.params.id
@@ -31,7 +33,10 @@ const id = computed(() => {
   return 0
 })
 
-const data = ref<EvaluationDetailResponse | null>(null)
+const detailData = ref<EvaluationDetailResponse | null>(null)
+// 渲染数据：优先提交后的内存结果（匿名用户可完整渲染，创建响应含输入参数），
+// 详情接口数据仅作刷新/直达兜底（详情需登录，匿名时保持 null）
+const data = computed<EvaluationDetailResponse | null>(() => store.currentResult ?? detailData.value)
 const loading = ref(false)
 const generating = ref(false)
 const pdfInfo = ref<{ file_name: string; file_size: number } | null>(null)
@@ -44,8 +49,8 @@ async function loadDetail() {
   if (!id.value) return
   loading.value = true
   try {
-    data.value = await getEvaluationDetail(id.value)
-    const pdfPath = data.value?.report_pdf_path
+    detailData.value = await getEvaluationDetail(id.value)
+    const pdfPath = detailData.value?.report_pdf_path
     if (pdfPath) {
       const filename = pdfPath.split(/[\\/]/).pop() ?? ''
       pdfInfo.value = { file_name: filename, file_size: 0 }
@@ -235,7 +240,19 @@ const basicInfoItems = computed(() => {
         <el-button type="primary" link :icon="Download" @click="onDownload">下载</el-button>
       </div>
     </div>
-    <el-empty v-else description="未找到该评估记录" />
+    <!-- 匿名/无数据降级：报告生成与下载为公开接口，详情展示需登录 -->
+    <div v-else class="app-container report-view valuation-root">
+      <PageHeader :title="`评估报告 #${id}`" :subtitle="`生成于 ${formatDateTime(new Date().toISOString())}`">
+        <template #actions>
+          <el-button :icon="ArrowLeft" @click="backToResult">返回结果</el-button>
+          <el-button :icon="Download" @click="onDownload">下载 PDF</el-button>
+          <el-button type="primary" :icon="CircleCheck" :loading="generating" @click="onGenerate">
+            {{ pdfInfo ? '重新生成 PDF' : '生成 PDF' }}
+          </el-button>
+        </template>
+      </PageHeader>
+      <el-empty description="登录后可查看报告详情" />
+    </div>
   </div>
 </template>
 
