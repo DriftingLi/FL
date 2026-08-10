@@ -200,7 +200,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onUnmounted } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { authApi } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
@@ -208,6 +208,7 @@ import { getDefaultWorkspaceBySubdomain } from '@/utils/subdomain'
 import { ElMessage, type FormInstance } from 'element-plus'
 import type { FormItemRule } from 'element-plus'
 import { EditPen } from '@element-plus/icons-vue'
+import { useCountdown } from '@/composables/useQuestionAnswer'
 import {
   passwordRules,
   nicknameRules,
@@ -222,9 +223,8 @@ const authStore = useAuthStore()
 const formRef = ref<FormInstance | null>(null)
 const loading = ref(false)
 const registerMode = ref<'phone' | 'email'>('phone')
-const countdown = ref(0)
+const { remaining: countdown, start: startCountdown } = useCountdown()
 const codeSending = ref(false)
-let countdownTimer: number | undefined
 
 const formData = reactive({
   nickname: '',
@@ -291,15 +291,7 @@ async function handleSendCode() {
       await authApi.sendEmailCode({ email, purpose: 'register' })
     }
     ElMessage.success('验证码已发送，请查收')
-    countdown.value = 60
-    if (countdownTimer) window.clearInterval(countdownTimer)
-    countdownTimer = window.setInterval(() => {
-      countdown.value--
-      if (countdown.value <= 0 && countdownTimer) {
-        window.clearInterval(countdownTimer)
-        countdownTimer = undefined
-      }
-    }, 1000)
+    startCountdown(60)
   } catch (e) {
     // 拦截器已提示
   } finally {
@@ -342,13 +334,6 @@ async function handleRegister() {
     loading.value = false
   }
 }
-
-onUnmounted(() => {
-  if (countdownTimer) {
-    window.clearInterval(countdownTimer)
-    countdownTimer = undefined
-  }
-})
 </script>
 
 <style scoped>

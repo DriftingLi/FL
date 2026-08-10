@@ -51,7 +51,7 @@
           </template>
         </el-table-column>
         <el-table-column label="提交时间" width="170">
-          <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+          <template #default="{ row }">{{ formatLocaleDateTime(row.created_at) }}</template>
         </el-table-column>
         <el-table-column v-if="activeStatus === 'rejected'" label="驳回原因" min-width="140">
           <template #default="{ row }">{{ row.reject_reason || '-' }}</template>
@@ -111,6 +111,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, ArrowRight, ArrowDown } from '@element-plus/icons-vue'
 import { adminApi, type ProfileChangeRequest } from '@/api/admin'
+import { formatLocaleDateTime } from '@/utils/format'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -125,19 +126,6 @@ const currentRow = ref<ProfileChangeRequest | null>(null)
 
 function displayName(row: ProfileChangeRequest) {
   return row.nickname || row.name || row.username
-}
-
-function formatTime(iso: string) {
-  if (!iso) return '-'
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return iso
-  return d.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
 }
 
 async function loadList() {

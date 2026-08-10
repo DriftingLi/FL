@@ -79,7 +79,7 @@
               <!-- 展示模式 -->
               <template v-else>
                 <span class="session-title" @dblclick.stop="startRename(s)">{{ s.title || '新会话' }}</span>
-                <span class="session-time">{{ formatTime(s.updated_at) }}</span>
+                <span class="session-time">{{ formatShortDateTime(s.updated_at) }}</span>
               </template>
             </div>
             <div v-if="editingSessionId !== s.id" class="session-actions">
@@ -218,6 +218,7 @@ import { useAIAssistantStore } from '@/stores/aiAssistant'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import { buildSubdomainUrl } from '@/utils/subdomain'
+import { formatShortDateTime } from '@/utils/format'
 import ModelSelector from '@/components/ai-assistant/ModelSelector.vue'
 import UserModelDialog from '@/components/ai-assistant/UserModelDialog.vue'
 import CustomModelDialog from '@/components/ai-assistant/CustomModelDialog.vue'
@@ -323,12 +324,6 @@ function renderMarkdown(content: string): string {
   } catch {
     return content
   }
-}
-
-function formatTime(t: string): string {
-  if (!t) return ''
-  const d = new Date(t)
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 async function scrollToBottom() {

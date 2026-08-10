@@ -17,7 +17,9 @@ export function useECharts(chartRef: Ref<HTMLElement | null>) {
   // 导致 "cartesian2d cannot be found for series.line" 等错误
   let chartInstance: echarts.ECharts | null = null
   // 缓存的 option：当 init 被调用但 DOM 尺寸为 0 时，缓存 option 等 DOM 就绪后应用
-  let pendingOption: echarts.EChartsOption | null = null
+  let pendingOption: echarts.EChartsCoreOption | null = null
+  // 缓存 setOption 的 notMerge 标记（随 option 一并应用）
+  let pendingNotMerge = false
   // 延迟初始化的 raf id（用于取消）
   let initRafId: number | null = null
   // 重试计数（防止无限重试）
@@ -26,10 +28,11 @@ export function useECharts(chartRef: Ref<HTMLElement | null>) {
   // ResizeObserver 实例
   let resizeObserver: ResizeObserver | null = null
 
-  function init(option: echarts.EChartsOption) {
+  function init(option: echarts.EChartsCoreOption, notMerge = false) {
     if (!chartRef.value) return
     // 缓存 option，供延迟初始化或 ResizeObserver 触发时使用
     pendingOption = option
+    pendingNotMerge = notMerge
 
     // 取消上一次的延迟初始化（如果存在）
     if (initRafId !== null) {
@@ -58,7 +61,7 @@ export function useECharts(chartRef: Ref<HTMLElement | null>) {
       chartInstance.dispose()
     }
     chartInstance = echarts.init(chartRef.value)
-    chartInstance.setOption(pendingOption)
+    chartInstance.setOption(pendingOption, pendingNotMerge)
     // 初始化成功后清空缓存（保留 pendingOption 供后续 setOption 使用）
   }
 

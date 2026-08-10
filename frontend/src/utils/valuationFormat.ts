@@ -1,5 +1,7 @@
 // 通用格式化工具
-import dayjs from 'dayjs'
+import { formatDateTime } from './format'
+
+export { formatDateTime }
 
 /** 金额（万元）格式化：入参为元，自动除以 10000 转万元，保留 2 位小数 + 单位 */
 export function formatWan(value: number | undefined | null, digits = 2): string {
@@ -23,12 +25,6 @@ export function formatPercent(ratio: number | undefined | null, digits = 1): str
 export function formatInt(value: number | undefined | null): string {
   if (value == null || Number.isNaN(value)) return '-'
   return Math.round(value).toLocaleString('zh-CN')
-}
-
-/** ISO 时间字符串 → yyyy-MM-dd HH:mm */
-export function formatDateTime(iso?: string | null): string {
-  if (!iso) return '-'
-  return dayjs(iso).format('YYYY-MM-DD HH:mm')
 }
 
 /** 文件大小 → 自适应单位 */

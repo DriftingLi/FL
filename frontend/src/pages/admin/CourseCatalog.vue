@@ -6,7 +6,7 @@
       <div class="cc-card cc-actions-card">
         <el-button size="small" type="primary" plain @click="openDirectionDialog()">新增方向</el-button>
         <el-button size="small" plain @click="openLevelDialog()">新增等级</el-button>
-        <el-button size="small" plain @click="certificateDialogVisible = true">证书模板</el-button>
+        <el-button size="small" plain @click="openCertificateDialog()">证书模板</el-button>
       </div>
       <!-- 卡片 2：专业方向 -->
       <div class="cc-card">
@@ -161,209 +161,36 @@
       </div>
     </main>
 
-    <!-- 课程编辑抽屉（全字段 + 章节管理） -->
-    <el-drawer v-model="drawerVisible" :title="drawerForm.course_id ? '编辑课程' : '新增课程'" size="560px">
-      <el-form ref="courseFormRef" :model="drawerForm" :rules="courseRules" label-width="96px">
-        <el-form-item label="课程名称" prop="name">
-          <el-input v-model="drawerForm.name" placeholder="课程名称" maxlength="50" />
-        </el-form-item>
-        <el-form-item label="专业方向" prop="specialty_id">
-          <el-select v-model="drawerForm.specialty_id" placeholder="必选" style="width: 100%">
-            <el-option v-for="d in directions" :key="d.specialty_id" :label="d.name" :value="d.specialty_id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="课程等级" prop="level_id">
-          <el-select v-model="drawerForm.level_id" placeholder="必选" style="width: 100%">
-            <el-option v-for="l in levels" :key="l.level_id" :label="l.name" :value="l.level_id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="学时">
-          <div class="cc-hours">
-            <el-input-number v-model="drawerForm.theory_hours" :min="0" :max="999" controls-position="right" />
-            <span class="cc-hours-unit">理论</span>
-            <el-input-number v-model="drawerForm.practice_hours" :min="0" :max="999" controls-position="right" />
-            <span class="cc-hours-unit">实操</span>
-          </div>
-        </el-form-item>
-        <el-form-item label="课程时长">
-          <el-input-number v-model="drawerForm.duration" :min="0" :step="10" controls-position="right" />
-          <span class="cc-hours-unit">分钟</span>
-        </el-form-item>
-        <el-form-item label="证书模板">
-          <el-select v-model="drawerForm.certificate_template_id" clearable placeholder="不关联" style="width: 100%">
-            <el-option v-for="t in certificateTemplates" :key="t.id" :label="t.name" :value="t.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="前置课程">
-          <el-select
-            v-model="drawerForm.prerequisite_course_ids"
-            multiple
-            filterable
-            collapse-tags
-            placeholder="选择需先完成的课程"
-            style="width: 100%"
-          >
-            <el-option
-              v-for="c in courseOptions"
-              :key="c.course_id"
-              :label="c.name"
-              :value="c.course_id"
-              :disabled="c.course_id === drawerForm.course_id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="课程简介">
-          <el-input v-model="drawerForm.description" type="textarea" :rows="2" maxlength="500" />
-        </el-form-item>
-        <el-form-item label="上架状态">
-          <el-radio-group v-model="drawerForm.status">
-            <el-radio :value="1">上架</el-radio>
-            <el-radio :value="0">下架</el-radio>
-          </el-radio-group>
-        </el-form-item>
-      </el-form>
-
-      <div class="cc-chapters" v-if="drawerForm.course_id">
-        <div class="cc-chapters-head">
-          章节管理
-          <el-button size="small" type="primary" plain @click="openChapterDialog()">新增章节</el-button>
-        </div>
-        <div v-for="(ch, i) in drawerChapters" :key="ch.chapter_id" class="cc-chapter-row">
-          <span class="cc-chapter-idx">{{ i + 1 }}</span>
-          <span class="cc-chapter-title">{{ ch.title }}</span>
-          <el-link :underline="'never'" @click="openChapterDialog(ch)">编辑</el-link>
-          <el-link :underline="'never'" @click="moveChapter(ch, -1)">上移</el-link>
-          <el-link :underline="'never'" @click="moveChapter(ch, 1)">下移</el-link>
-          <el-popconfirm title="确定删除该章节？" @confirm="handleDeleteChapter(ch)">
-            <template #reference>
-              <el-link type="danger" :underline="'never'">删除</el-link>
-            </template>
-          </el-popconfirm>
-        </div>
-        <div v-if="drawerChapters.length === 0" class="cc-chapters-empty">暂无章节</div>
-      </div>
-
-      <template #footer>
-        <el-button @click="drawerVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitCourse">保存</el-button>
-      </template>
-    </el-drawer>
-
-    <!-- 专业方向对话框 -->
-    <el-dialog v-model="directionDialogVisible" :title="directionForm.specialty_id ? '编辑专业方向' : '新增专业方向'" width="460px" destroy-on-close>
-      <el-form ref="directionFormRef" :model="directionForm" :rules="nameRules" label-width="80px">
-        <el-form-item label="名称" prop="name">
-          <el-input v-model="directionForm.name" placeholder="如：操作、维修、安全、电池" maxlength="30" />
-        </el-form-item>
-        <el-form-item label="编码" prop="code">
-          <el-input v-model="directionForm.code" placeholder="唯一编码，如 OPERATE" maxlength="30" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="directionDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitDirection">保存</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 课程等级对话框（等级全局共享） -->
-    <el-dialog v-model="levelDialogVisible" :title="levelForm.level_id ? '编辑课程等级' : '新增课程等级'" width="460px" destroy-on-close>
-      <el-form ref="levelFormRef" :model="levelForm" :rules="nameRules" label-width="80px">
-        <el-form-item label="等级名称" prop="name">
-          <el-input v-model="levelForm.name" placeholder="如：入门、进阶、专项、认证" maxlength="30" />
-        </el-form-item>
-        <el-form-item label="编码" prop="code">
-          <el-input v-model="levelForm.code" placeholder="唯一编码，如 BEGINNER" maxlength="30" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="levelDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitLevel">保存</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 章节对话框 -->
-    <el-dialog v-model="chapterDialogVisible" :title="chapterForm.chapter_id ? '编辑章节' : '新增章节'" width="520px" destroy-on-close>
-      <el-form ref="chapterFormRef" :model="chapterForm" :rules="chapterRules" label-width="90px">
-        <el-form-item label="章节标题" prop="title">
-          <el-input v-model="chapterForm.title" placeholder="章节标题" maxlength="100" />
-        </el-form-item>
-        <el-form-item label="时长(分钟)">
-          <el-input-number v-model="chapterForm.duration" :min="0" :max="9999" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="内容链接">
-          <el-input v-model="chapterForm.content_url" placeholder="外部内容链接（可选）" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="chapterDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitChapter">保存</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 证书模板管理 -->
-    <el-dialog v-model="certificateDialogVisible" title="证书模板管理" width="720px" destroy-on-close>
-      <div class="certificate-header">
-        <el-button type="primary" size="small" @click="openCertificateForm()">
-          <el-icon><Plus /></el-icon> 新增模板
-        </el-button>
-      </div>
-      <el-table :data="certificateTemplates" stripe border size="small" v-loading="certificateLoading">
-        <el-table-column prop="id" label="ID" width="60" align="center" />
-        <el-table-column prop="name" label="模板名称" min-width="140" show-overflow-tooltip />
-        <el-table-column prop="code" label="编码" width="110" />
-        <el-table-column label="默认有效期(天)" width="120" align="center">
-          <template #default="{ row }">
-            {{ row.validity_days ?? '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="description" label="说明" min-width="160" show-overflow-tooltip />
-        <el-table-column label="操作" width="120" align="center">
-          <template #default="{ row }">
-            <el-button link size="small" @click="openCertificateForm(row)">编辑</el-button>
-            <el-popconfirm title="确定删除该模板？" @confirm="handleDeleteCertificate(row)">
-              <template #reference>
-                <el-button link size="small" type="danger">删除</el-button>
-              </template>
-            </el-popconfirm>
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-empty v-if="!certificateLoading && certificateTemplates.length === 0" description="暂无证书模板" />
-      <template #footer>
-        <el-button @click="certificateDialogVisible = false">关闭</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="certificateFormVisible" :title="certificateForm.id ? '编辑模板' : '新增模板'" width="480px" destroy-on-close append-to-body>
-      <el-form ref="certificateFormRef" :model="certificateForm" :rules="certificateRules" label-width="110px">
-        <el-form-item label="模板名称" prop="name">
-          <el-input v-model="certificateForm.name" placeholder="如：叉车维修技能培训合格证书" maxlength="50" />
-        </el-form-item>
-        <el-form-item label="编码" prop="code">
-          <el-input v-model="certificateForm.code" placeholder="唯一编码，如 FORKLIFT_MAINTENANCE_CERT" maxlength="30" />
-        </el-form-item>
-        <el-form-item label="有效期(天)" prop="validity_days">
-          <el-input-number v-model="certificateForm.validity_days" :min="1" :max="36500" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="说明">
-          <el-input v-model="certificateForm.description" type="textarea" :rows="3" maxlength="300" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="certificateFormVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitCertificate">保存</el-button>
-      </template>
-    </el-dialog>
+    <!-- 课程编辑抽屉（全字段 + 章节管理）与弹窗表单已拆分为子组件 -->
+    <CourseCatalogCourseDrawer
+      ref="courseDrawerRef"
+      :directions="directions"
+      :levels="levels"
+      :certificate-templates="certificateTemplates"
+      :course-options="courseOptions"
+      :default-specialty-id="filterSpecialty"
+      :submitting="submitting"
+      @saved="loadCourses"
+    />
+    <CourseCatalogDialogs
+      ref="catalogDialogsRef"
+      :certificate-templates="certificateTemplates"
+      :submitting="submitting"
+      @catalog-changed="loadCatalog"
+      @certificates-changed="loadCertificateTemplates"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
-import { Plus, Search, ArrowDown, CaretTop, CaretBottom } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
+import { ref, computed, onMounted } from 'vue'
+import { Search, ArrowDown, CaretTop, CaretBottom } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { trainingApi, type CatalogDirectionNode, type CatalogLevel, type CertificateTemplate } from '@/api/training'
-import { adminApi, type AdminCourseItem, type ChapterPayload } from '@/api/admin'
+import { adminApi, type AdminCourseItem } from '@/api/admin'
 import { levelTagType } from '@/constants/level'
+import CourseCatalogCourseDrawer from '@/components/admin/CourseCatalogCourseDrawer.vue'
+import CourseCatalogDialogs from '@/components/admin/CourseCatalogDialogs.vue'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -457,6 +284,26 @@ const canSortCourses = computed(
   () => filterSpecialty.value !== null && filterSpecialty.value > 0 && filterLevel.value !== null
 )
 
+// ===== 子组件（抽屉/弹窗）入口 =====
+const courseDrawerRef = ref<InstanceType<typeof CourseCatalogCourseDrawer> | null>(null)
+const catalogDialogsRef = ref<InstanceType<typeof CourseCatalogDialogs> | null>(null)
+
+function openDrawer(course?: AdminCourseItem | null) {
+  courseDrawerRef.value?.open(course ?? null)
+}
+
+function openDirectionDialog(d?: CatalogDirectionNode | null) {
+  catalogDialogsRef.value?.openDirectionDialog(d ?? null)
+}
+
+function openLevelDialog(l?: CatalogLevel | null) {
+  catalogDialogsRef.value?.openLevelDialog(l ?? null)
+}
+
+function openCertificateDialog() {
+  catalogDialogsRef.value?.openCertificateDialog()
+}
+
 // ===== 排序（后端 swap 端点，同值默认也生效） =====
 async function moveDirection(d: CatalogDirectionNode, delta: -1 | 1) {
   const sibs = directions.value
@@ -517,24 +364,6 @@ async function moveCourse(row: AdminCourseItem, delta: -1 | 1) {
   }
 }
 
-async function moveChapter(ch: { chapter_id: number; order_num?: number }, delta: -1 | 1) {
-  const idx = drawerChapters.value.findIndex(c => c.chapter_id === ch.chapter_id)
-  const target = drawerChapters.value[idx + delta]
-  if (!target) return
-  submitting.value = true
-  try {
-    await adminApi.updateChapter(ch.chapter_id, { order_num: (target.order_num ?? idx + delta) + 0 } as ChapterPayload)
-    await adminApi.updateChapter(target.chapter_id, { order_num: (ch.order_num ?? idx) + 0 } as ChapterPayload)
-    ElMessage.success('排序已更新')
-    await loadDrawerDetail()
-  } catch (error) {
-    console.error('排序失败:', error)
-    /* 错误已由拦截器提示 */
-  } finally {
-    submitting.value = false
-  }
-}
-
 // ===== 加载 =====
 async function loadCourses() {
   loading.value = true
@@ -581,208 +410,6 @@ const courseOptions = computed(() =>
     name: `${specialtyNameOf(c.specialty_id) || '?'}/${levelNameOf(c.level_id) || '?'} · ${c.name}`
   }))
 )
-
-// ===== 方向 =====
-const directionDialogVisible = ref(false)
-const directionFormRef = ref<FormInstance | null>(null)
-const directionForm = reactive<{ specialty_id: number | null; name: string; code: string }>({
-  specialty_id: null,
-  name: '',
-  code: ''
-})
-
-const nameRules = {
-  name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
-  code: [{ required: true, message: '请输入唯一编码', trigger: 'blur' }]
-}
-
-function openDirectionDialog(d?: CatalogDirectionNode | null) {
-  directionForm.specialty_id = d?.specialty_id ?? null
-  directionForm.name = d?.name ?? ''
-  directionForm.code = d?.code ?? ''
-  directionDialogVisible.value = true
-}
-
-async function submitDirection() {
-  if (!directionFormRef.value) return
-  await directionFormRef.value.validate()
-  submitting.value = true
-  try {
-    // trainingApi 已解包信封：成功即业务成功（拦截器保证 200/201 才 resolve）
-    if (directionForm.specialty_id) {
-      await trainingApi.updateDirection(directionForm.specialty_id, {
-        name: directionForm.name,
-        code: directionForm.code
-      })
-      ElMessage.success('已更新')
-    } else {
-      await trainingApi.createDirection({ name: directionForm.name, code: directionForm.code })
-      ElMessage.success('已创建')
-    }
-    directionDialogVisible.value = false
-    await loadCatalog()
-  } catch (error) {
-    console.error('保存方向失败:', error)
-    /* 错误已由拦截器提示 */
-  } finally {
-    submitting.value = false
-  }
-}
-
-// ===== 等级 =====
-const levelDialogVisible = ref(false)
-const levelFormRef = ref<FormInstance | null>(null)
-const levelForm = reactive<{ level_id: number | null; name: string; code: string }>({
-  level_id: null,
-  name: '',
-  code: ''
-})
-
-function openLevelDialog(l?: CatalogLevel | null) {
-  levelForm.level_id = l?.level_id ?? null
-  levelForm.name = l?.name ?? ''
-  levelForm.code = l?.code ?? ''
-  levelDialogVisible.value = true
-}
-
-async function submitLevel() {
-  if (!levelFormRef.value) return
-  await levelFormRef.value.validate()
-  submitting.value = true
-  try {
-    // trainingApi 已解包信封：成功即业务成功（拦截器保证 200/201 才 resolve）
-    if (levelForm.level_id) {
-      await trainingApi.updateLevel(levelForm.level_id, { name: levelForm.name, code: levelForm.code })
-      ElMessage.success('已更新')
-    } else {
-      await trainingApi.createLevel({ name: levelForm.name, code: levelForm.code })
-      ElMessage.success('已创建')
-    }
-    levelDialogVisible.value = false
-    await loadCatalog()
-  } catch (error) {
-    console.error('保存等级失败:', error)
-    /* 错误已由拦截器提示 */
-  } finally {
-    submitting.value = false
-  }
-}
-
-// ===== 课程（抽屉） =====
-const drawerVisible = ref(false)
-const courseFormRef = ref<FormInstance | null>(null)
-const drawerChapters = ref<{ chapter_id: number; title: string; duration?: number; order_num?: number }[]>([])
-const drawerForm = reactive<Record<string, any>>({
-  course_id: null,
-  name: '',
-  specialty_id: null,
-  level_id: null,
-  status: 1,
-  theory_hours: 0,
-  practice_hours: 0,
-  duration: 0,
-  certificate_template_id: null,
-  prerequisite_course_ids: [],
-  description: ''
-})
-
-const courseRules = {
-  name: [{ required: true, message: '请输入课程名称', trigger: 'blur' }],
-  specialty_id: [{ required: true, message: '请选择专业方向', trigger: 'change' }],
-  level_id: [{ required: true, message: '请选择课程等级', trigger: 'change' }]
-}
-
-async function openDrawer(course?: AdminCourseItem | null) {
-  drawerVisible.value = true
-  drawerChapters.value = []
-  if (!course) {
-    Object.assign(drawerForm, {
-      course_id: null,
-      name: '',
-      specialty_id: filterSpecialty.value !== null && filterSpecialty.value > 0 ? filterSpecialty.value : null,
-      level_id: null,
-      status: 1,
-      theory_hours: 0,
-      practice_hours: 0,
-      duration: 0,
-      certificate_template_id: null,
-      prerequisite_course_ids: [],
-      description: ''
-    })
-    return
-  }
-  Object.assign(drawerForm, {
-    course_id: course.course_id,
-    name: course.name,
-    specialty_id: course.specialty_id,
-    level_id: course.level_id,
-    status: course.status,
-    theory_hours: course.theory_hours || 0,
-    practice_hours: course.practice_hours || 0,
-    duration: course.duration || 0,
-    certificate_template_id: course.certificate_template_id,
-    prerequisite_course_ids: course.prerequisite_course_ids || [],
-    description: course.description || ''
-  })
-  await loadDrawerDetail()
-}
-
-async function loadDrawerDetail() {
-  try {
-    const detail = await adminApi.getCourseDetail(drawerForm.course_id)
-    if (detail) {
-      Object.assign(drawerForm, {
-        name: detail.name ?? drawerForm.name,
-        specialty_id: detail.specialty_id ?? null,
-        level_id: detail.level_id ?? null,
-        status: detail.status ?? drawerForm.status,
-        theory_hours: detail.theory_hours ?? 0,
-        practice_hours: detail.practice_hours ?? 0,
-        duration: detail.duration ?? 0,
-        certificate_template_id: detail.certificate_template_id ?? null,
-        prerequisite_course_ids: detail.prerequisite_course_ids || [],
-        description: detail.description ?? ''
-      })
-      drawerChapters.value = detail.chapters || []
-    }
-  } catch (error) {
-    console.error('加载课程详情失败:', error)
-  }
-}
-
-async function submitCourse() {
-  if (!courseFormRef.value) return
-  await courseFormRef.value.validate()
-  submitting.value = true
-  try {
-    const payload = {
-      name: drawerForm.name,
-      specialty_id: drawerForm.specialty_id,
-      level_id: drawerForm.level_id,
-      status: drawerForm.status,
-      theory_hours: drawerForm.theory_hours,
-      practice_hours: drawerForm.practice_hours,
-      duration: drawerForm.duration,
-      certificate_template_id: drawerForm.certificate_template_id ?? 0,
-      prerequisite_course_ids: drawerForm.prerequisite_course_ids,
-      description: drawerForm.description
-    }
-    if (drawerForm.course_id) {
-      await adminApi.updateCourse(drawerForm.course_id, payload)
-      ElMessage.success('已更新')
-    } else {
-      await adminApi.createCourse(payload)
-      ElMessage.success('已创建')
-    }
-    drawerVisible.value = false
-    await loadCourses()
-  } catch (error) {
-    console.error('保存课程失败:', error)
-    /* 错误已由拦截器提示 */
-  } finally {
-    submitting.value = false
-  }
-}
 
 async function toggleStatus(row: AdminCourseItem) {
   if (isUnmounted(row)) {
@@ -833,135 +460,6 @@ async function handleDeleteCourse(row: AdminCourseItem) {
     await loadCourses()
   } catch (error) {
     console.error('删除失败:', error)
-    /* 错误已由拦截器提示 */
-  }
-}
-
-// ===== 章节 =====
-const chapterDialogVisible = ref(false)
-const chapterFormRef = ref<FormInstance | null>(null)
-const chapterForm = reactive<{ chapter_id: number | null; title: string; duration: number; content_url: string }>({
-  chapter_id: null,
-  title: '',
-  duration: 0,
-  content_url: ''
-})
-
-const chapterRules = {
-  title: [{ required: true, message: '请输入章节标题', trigger: 'blur' }]
-}
-
-function openChapterDialog(ch?: { chapter_id: number; title: string; duration?: number; content_url?: string }) {
-  chapterForm.chapter_id = ch?.chapter_id ?? null
-  chapterForm.title = ch?.title ?? ''
-  chapterForm.duration = ch?.duration ?? 0
-  chapterForm.content_url = ch?.content_url ?? ''
-  chapterDialogVisible.value = true
-}
-
-async function submitChapter() {
-  if (!chapterFormRef.value) return
-  await chapterFormRef.value.validate()
-  submitting.value = true
-  try {
-    const payload = {
-      title: chapterForm.title,
-      duration: chapterForm.duration,
-      content_url: chapterForm.content_url || undefined
-    }
-    if (chapterForm.chapter_id) {
-      await adminApi.updateChapter(chapterForm.chapter_id, payload)
-      ElMessage.success('已更新')
-    } else {
-      await adminApi.createChapter(drawerForm.course_id, payload)
-      ElMessage.success('已创建')
-    }
-    chapterDialogVisible.value = false
-    await loadDrawerDetail()
-  } catch (error) {
-    console.error('保存章节失败:', error)
-    /* 错误已由拦截器提示 */
-  } finally {
-    submitting.value = false
-  }
-}
-
-async function handleDeleteChapter(ch: { chapter_id: number }) {
-  try {
-    await adminApi.deleteChapter(ch.chapter_id)
-    ElMessage.success('已删除')
-    await loadDrawerDetail()
-  } catch (error) {
-    console.error('删除章节失败:', error)
-    /* 错误已由拦截器提示 */
-  }
-}
-
-// ===== 证书模板 =====
-const certificateDialogVisible = ref(false)
-const certificateLoading = ref(false)
-const certificateFormVisible = ref(false)
-const certificateFormRef = ref<FormInstance | null>(null)
-const certificateForm = reactive<{ id: number | null; name: string; code: string; validity_days: number; description: string }>({
-  id: null,
-  name: '',
-  code: '',
-  validity_days: 365,
-  description: ''
-})
-
-const certificateRules = {
-  name: [{ required: true, message: '请输入模板名称', trigger: 'blur' }],
-  code: [{ required: true, message: '请输入唯一编码', trigger: 'blur' }],
-  validity_days: [{ required: true, message: '请输入有效期', trigger: 'change' }]
-}
-
-function openCertificateForm(tpl?: CertificateTemplate | null) {
-  certificateForm.id = tpl?.id ?? null
-  certificateForm.name = tpl?.name ?? ''
-  certificateForm.code = tpl?.code ?? ''
-  certificateForm.validity_days = tpl?.validity_days ?? 365
-  certificateForm.description = tpl?.description ?? ''
-  certificateFormVisible.value = true
-}
-
-async function submitCertificate() {
-  if (!certificateFormRef.value) return
-  await certificateFormRef.value.validate()
-  submitting.value = true
-  try {
-    // trainingApi 已解包信封：成功即业务成功（拦截器保证 200/201 才 resolve）
-    const payload = {
-      name: certificateForm.name,
-      code: certificateForm.code,
-      validity_days: certificateForm.validity_days,
-      description: certificateForm.description
-    }
-    if (certificateForm.id) {
-      await trainingApi.updateCertificateTemplate(certificateForm.id, payload)
-      ElMessage.success('已更新')
-    } else {
-      await trainingApi.createCertificateTemplate(payload)
-      ElMessage.success('已创建')
-    }
-    certificateFormVisible.value = false
-    await loadCertificateTemplates()
-  } catch (error) {
-    console.error('保存模板失败:', error)
-    /* 错误已由拦截器提示 */
-  } finally {
-    submitting.value = false
-  }
-}
-
-async function handleDeleteCertificate(tpl: CertificateTemplate) {
-  try {
-    // trainingApi 已解包信封：成功即业务成功
-    await trainingApi.deleteCertificateTemplate(tpl.id)
-    ElMessage.success('已删除')
-    await loadCertificateTemplates()
-  } catch (error) {
-    console.error('删除模板失败:', error)
     /* 错误已由拦截器提示 */
   }
 }
@@ -1130,64 +628,6 @@ onMounted(() => {
   margin-top: var(--space-4);
 }
 
-/* ===== 抽屉 ===== */
-.cc-hours {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.cc-hours-unit {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-}
-
-.cc-chapters {
-  margin-top: var(--space-4);
-  border-top: 1px solid var(--color-border-light);
-  padding-top: var(--space-3);
-}
-
-.cc-chapters-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-  margin-bottom: var(--space-2);
-}
-
-.cc-chapter-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-1);
-  border-bottom: 1px dashed var(--color-border-light);
-  font-size: var(--text-sm);
-}
-
-.cc-chapter-idx {
-  width: 20px;
-  color: var(--color-text-tertiary);
-}
-
-.cc-chapter-title {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.cc-chapters-empty {
-  color: var(--color-text-tertiary);
-  font-size: var(--text-xs);
-  padding: var(--space-3) 0;
-}
-
-.certificate-header {
-  margin-bottom: var(--space-3);
-}
-
 @media (max-width: 900px) {
   .cc-layout {
     flex-direction: column;
@@ -1208,15 +648,6 @@ onMounted(() => {
   .cc-search {
     flex: 1 1 100%;
     max-width: none;
-  }
-
-  .cc-hours {
-    flex-wrap: wrap;
-  }
-
-  .cc-hours :deep(.el-input-number) {
-    flex: 1;
-    min-width: 90px;
   }
 }
 </style>

@@ -31,7 +31,7 @@
             <div class="topic-meta">
               <span class="author-name">{{ displayName(topic.author) }}</span>
               <span class="meta-divider">·</span>
-              <span>{{ formatTime(topic.created_at) }}</span>
+              <span>{{ formatRelativeTime(topic.created_at) }}</span>
               <span class="meta-right">
                 <span v-if="topic.images && topic.images.length > 0" class="img-mark">
                   <el-icon><Picture /></el-icon>
@@ -97,6 +97,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { EditPen, View, ChatDotRound, Picture } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem } from '@/api/forum'
+import { formatRelativeTime } from '@/utils/format'
 import ForumImageUploader from '@/components/student/ForumImageUploader.vue'
 
 const router = useRouter()
@@ -116,18 +117,6 @@ function displayName(author: ForumTopicItem['author']) {
 
 function authorLetter(author: ForumTopicItem['author']) {
   return (displayName(author) || '?').charAt(0).toUpperCase()
-}
-
-function formatTime(iso: string) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return iso
-  const now = new Date()
-  const diff = now.getTime() - d.getTime()
-  if (diff < 60 * 1000) return '刚刚'
-  if (diff < 60 * 60 * 1000) return `${Math.floor(diff / 60000)} 分钟前`
-  if (diff < 24 * 60 * 60 * 1000) return `${Math.floor(diff / 3600000)} 小时前`
-  return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 async function loadTopics() {

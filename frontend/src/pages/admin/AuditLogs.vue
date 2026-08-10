@@ -61,8 +61,8 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import dayjs from 'dayjs'
 import { adminApi, type AuditLogItem } from '@/api/admin'
+import { formatTime } from '@/utils/format'
 
 const items = ref<AuditLogItem[]>([])
 const total = ref(0)
@@ -72,10 +72,6 @@ const query = reactive<{ role: string; keyword: string }>({
   role: '',
   keyword: ''
 })
-
-function formatTime(value: string) {
-  return dayjs(value).format('YYYY-MM-DD HH:mm')
-}
 
 async function load(p: number) {
   page.value = p
