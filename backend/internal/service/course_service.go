@@ -833,7 +833,7 @@ func fillCourseMeta(db *gorm.DB, course *model.Course, dto *CourseDTO) {
 	prereqList := make([]CourseBriefDTO, 0, len(prereqs))
 	prereqIDList := make([]int, 0, len(prereqs))
 	for _, p := range prereqs {
-		prereqList = append(prereqList, CourseBriefDTO{CourseID: p.CourseID, Name: p.Name})
+		prereqList = append(prereqList, CourseBriefDTO(p))
 		prereqIDList = append(prereqIDList, p.CourseID)
 	}
 	dto.Prerequisites = &prereqList
