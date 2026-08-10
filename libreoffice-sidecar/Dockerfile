@@ -19,7 +19,11 @@ RUN apk add --no-cache \
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+# pip 源：默认官方 PyPI——GitHub Actions 海外 runner 直连官方源最快，
+# 之前写死清华镜像导致海外 CI 反复 ReadTimeout 构建失败；
+# 国内构建可用 --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple 覆盖
+ARG PIP_INDEX_URL=https://pypi.org/simple
+RUN pip install --no-cache-dir -r requirements.txt -i ${PIP_INDEX_URL}
 
 COPY app.py .
 
