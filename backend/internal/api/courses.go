@@ -13,7 +13,6 @@ import (
 // RegisterCoursesRoutes 注册 /api/courses 蓝图（学员侧课程浏览与学习进度）。
 func RegisterCoursesRoutes(rg *gin.RouterGroup, deps *Deps) {
 	svc := deps.CourseSvc
-	cfg := deps.Cfg
 
 	// GET /api/courses  课程列表（公开访问，可按专业方向/等级过滤）
 	rg.GET("/courses", func(c *gin.Context) {
@@ -40,7 +39,7 @@ func RegisterCoursesRoutes(rg *gin.RouterGroup, deps *Deps) {
 	})
 
 	// 以下路由需要登录
-	auth := rg.Group("", middleware.JWTAuth(cfg))
+	auth := rg.Group("", middleware.JWTAuth(deps.Session))
 
 	// GET /api/course/:course_id  课程详情（含章节与学习进度）
 	auth.GET("/course/:course_id", func(c *gin.Context) {

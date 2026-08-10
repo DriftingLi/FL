@@ -21,6 +21,7 @@ import (
 	"forklift-training/internal/db"
 	applogger "forklift-training/internal/logger"
 	migratedb "forklift-training/internal/migrate"
+	"forklift-training/internal/security"
 	"forklift-training/internal/storage"
 	vconfig "forklift-training/internal/valuation/config"
 	vhandler "forklift-training/internal/valuation/handler"
@@ -211,7 +212,9 @@ func setupValuation(r *gin.Engine, cfg *config.Config, authSvc vhandler.Valuatio
 	// 4. 注册路由（/api/valuation/*，公开组 + 估值独立鉴权组 + admin 组）
 	// 认证经 ValuationAuth 窄接口注入主体系 AuthService（spec #75 D4）
 	// PDF 报告通过 storage 抽象层上传（local=本地磁盘 / r2=Cloudflare R2 对象存储）
-	vhandler.RegisterRoutes(r, cfg, logger, dictRepo, evalRepo, batteryRepo, valuationSvc, batterySvc, pdfGen, st, authSvc)
+	// Session 单例：与主体系共用同一实例（装配一次，B2 D4）
+	sess := security.SessionFromConfig(cfg)
+	vhandler.RegisterRoutes(r, sess, logger, dictRepo, evalRepo, batteryRepo, valuationSvc, batterySvc, pdfGen, st, authSvc)
 	logger.Info("valuation 路由注册完成", zap.String("prefix", "/api/valuation"))
 
 	return func() {

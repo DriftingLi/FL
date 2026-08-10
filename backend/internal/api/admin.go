@@ -18,7 +18,7 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, deps *Deps) {
 	aiConfigSvc := deps.AIConfigSvc
 	contentGenSvc := deps.ContentGenSvc
 
-	g := rg.Group("/admin", middleware.JWTAuth(deps.Cfg), middleware.RoleRequired("admin"))
+	g := rg.Group("/admin", middleware.JWTAuth(deps.Session), middleware.RoleRequired("admin"))
 
 	// ===== AI 配置（多配置管理 + 功能绑定）=====
 	registerSettingsRoutes(g, aiConfigSvc, deps.DB)

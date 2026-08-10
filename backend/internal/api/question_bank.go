@@ -14,9 +14,8 @@ import (
 func RegisterQuestionBankRoutes(rg *gin.RouterGroup, deps *Deps) {
 	svc := deps.QuestionBankSvc
 	fileSvc := deps.FileSvc
-	cfg := deps.Cfg
 
-	g := rg.Group("/question-bank", middleware.JWTAuth(cfg))
+	g := rg.Group("/question-bank", middleware.JWTAuth(deps.Session))
 
 	// ===== 题目 CRUD =====
 

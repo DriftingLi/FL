@@ -21,6 +21,7 @@ import (
 	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
+	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
@@ -138,6 +139,7 @@ func newCodeAuthTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fakeChann
 		Cfg:     cfg,
 		DB:      db,
 		Logger:  zap.NewNop(),
+		Session: security.SessionFromConfig(cfg),
 		AuthSvc: authSvc,
 		CodeSvc: codeSvc,
 		EmailCh: emailCh,

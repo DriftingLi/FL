@@ -14,9 +14,8 @@ import (
 // RegisterWrongQuestionRoutes 注册 /api/wrong-questions 蓝图。
 func RegisterWrongQuestionRoutes(rg *gin.RouterGroup, deps *Deps) {
 	svc := deps.WrongQuestionSvc
-	cfg := deps.Cfg
 
-	g := rg.Group("/wrong-questions", middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/wrong-questions", middleware.JWTAuth(deps.Session), middleware.RoleRequired("hrwai_user"))
 
 	// GET /api/wrong-questions  错题列表（分页+过滤）
 	g.GET("", func(c *gin.Context) {

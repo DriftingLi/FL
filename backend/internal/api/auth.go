@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
@@ -17,7 +16,6 @@ import (
 
 // AuthHandler 认证相关 handler。
 type AuthHandler struct {
-	cfg       *config.Config
 	authSvc   *service.AuthService
 	fileSvc   *service.FileService
 	storage   storage.Storage
@@ -25,11 +23,11 @@ type AuthHandler struct {
 	session   *security.Session
 }
 
-// NewAuthHandler 创建认证 handler。
-func NewAuthHandler(cfg *config.Config, authSvc *service.AuthService, fileSvc *service.FileService, st storage.Storage, reviewSvc *service.ProfileReviewService, logger *zap.Logger) *AuthHandler {
+// NewAuthHandler 创建认证 handler。session 由装配根构建一次注入。
+func NewAuthHandler(sess *security.Session, authSvc *service.AuthService, fileSvc *service.FileService, st storage.Storage, reviewSvc *service.ProfileReviewService, logger *zap.Logger) *AuthHandler {
 	return &AuthHandler{
-		cfg: cfg, authSvc: authSvc, fileSvc: fileSvc, storage: st, reviewSvc: reviewSvc,
-		session: security.SessionFromConfig(cfg),
+		authSvc: authSvc, fileSvc: fileSvc, storage: st, reviewSvc: reviewSvc,
+		session: sess,
 	}
 }
 
@@ -53,7 +51,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	setAuthCookie(c, h.cfg, result.Token)
+	setAuthCookie(c, h.session, result.Token)
 	response.SuccessWithMsg(c, "登录成功", result)
 }
 
@@ -102,7 +100,7 @@ func (h *AuthHandler) AdminLogin(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	setAuthCookie(c, h.cfg, result.Token)
+	setAuthCookie(c, h.session, result.Token)
 	response.SuccessWithMsg(c, "管理员登录成功", result)
 }
 
@@ -125,7 +123,7 @@ func (h *AuthHandler) TutorLogin(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	setAuthCookie(c, h.cfg, result.Token)
+	setAuthCookie(c, h.session, result.Token)
 	response.SuccessWithMsg(c, "导师登录成功", result)
 }
 
@@ -133,7 +131,7 @@ func (h *AuthHandler) TutorLogin(c *gin.Context) {
 // 将当前 token 写入 Redis 黑名单，TTL = token 剩余有效期，使其在后续请求中被 JWTAuth 中间件拒绝。
 func (h *AuthHandler) Logout(c *gin.Context) {
 	// 与 JWTAuth 中间件同一套提取逻辑（session 模块统一实现）：Bearer 头优先，其次 Cookie
-	tokenStr := h.session.ExtractToken(c.GetHeader("Authorization"), authCookieFromReq(c, h.cfg))
+	tokenStr := h.session.ExtractToken(c.GetHeader("Authorization"), authCookieFromReq(c, h.session))
 	if tokenStr != "" {
 		// 已通过 JWTAuth 中间件校验，这里仅吊销（无效 token 静默忽略）
 		_ = h.session.Revoke(c.Request.Context(), tokenStr)
@@ -143,8 +141,8 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 }
 
 // authCookieFromReq 读取父域名登录 Cookie。
-func authCookieFromReq(c *gin.Context, cfg *config.Config) string {
-	tk, err := c.Cookie(cfg.AuthCookie.Name)
+func authCookieFromReq(c *gin.Context, sess *security.Session) string {
+	tk, err := c.Cookie(sess.CookieName())
 	if err != nil {
 		return ""
 	}

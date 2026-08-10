@@ -76,11 +76,11 @@ func NewRouter(deps *Deps) *gin.Engine {
 		auth.POST("/register", authH.Register)
 		auth.POST("/admin-login", authH.AdminLogin)
 		auth.POST("/tutor-login", authH.TutorLogin)
-		auth.POST("/logout", middleware.JWTAuth(cfg), authH.Logout)
-		auth.GET("/me", middleware.JWTAuth(cfg), authH.Me)
+		auth.POST("/logout", middleware.JWTAuth(deps.Session), authH.Logout)
+		auth.GET("/me", middleware.JWTAuth(deps.Session), authH.Me)
 		// 个人资料：昵称 / 头像
-		auth.PUT("/profile", middleware.JWTAuth(cfg), authH.UpdateProfile)
-		auth.POST("/avatar", middleware.JWTAuth(cfg), authH.UploadAvatar)
+		auth.PUT("/profile", middleware.JWTAuth(deps.Session), authH.UpdateProfile)
+		auth.POST("/avatar", middleware.JWTAuth(deps.Session), authH.UploadAvatar)
 	}
 
 	// 邮箱验证码注册/登录

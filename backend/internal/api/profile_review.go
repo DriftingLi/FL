@@ -15,9 +15,8 @@ import (
 // RegisterProfileReviewRoutes 注册 /api/admin/profile-reviews 蓝图（仅管理员）。
 func RegisterProfileReviewRoutes(rg *gin.RouterGroup, deps *Deps) {
 	svc := deps.ReviewSvc
-	cfg := deps.Cfg
 
-	g := rg.Group("/admin/profile-reviews", middleware.JWTAuth(cfg), middleware.RoleRequired("admin"))
+	g := rg.Group("/admin/profile-reviews", middleware.JWTAuth(deps.Session), middleware.RoleRequired("admin"))
 
 	// GET /api/admin/profile-reviews?status=pending|approved|rejected|all&page=&page_size=
 	g.GET("", func(c *gin.Context) {

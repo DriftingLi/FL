@@ -14,9 +14,8 @@ import (
 // RegisterPracticeModeRoutes 注册 /api/practice-mode 蓝图（题库练习）。
 func RegisterPracticeModeRoutes(rg *gin.RouterGroup, deps *Deps) {
 	svc := deps.PracticeModeSvc
-	cfg := deps.Cfg
 
-	g := rg.Group("/practice-mode", middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/practice-mode", middleware.JWTAuth(deps.Session), middleware.RoleRequired("hrwai_user"))
 
 	// GET /api/practice-mode/free  随机练习抽题（count 控制题量）
 	g.GET("/free", func(c *gin.Context) {

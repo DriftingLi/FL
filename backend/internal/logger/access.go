@@ -9,18 +9,13 @@ import (
 	"forklift-training/internal/middleware"
 )
 
-// healthPaths 健康检查探活路径：不出现在访问日志中，避免刷屏淹没真实请求。
-var healthPaths = map[string]struct{}{
-	"/api/health":      {},
-	"/api/health/live": {},
-}
-
 // AccessLog 请求访问日志中间件。
 // 记录 method/path/status/duration/ip/user_id/user_role/request_id；
 // 不记录请求体与 query（避免 PII 与凭证进入日志流）。
+// 健康检查探活路径（middleware.HealthPaths）跳过，避免刷屏淹没真实请求。
 func AccessLog(l *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if _, skip := healthPaths[c.Request.URL.Path]; skip {
+		if _, skip := middleware.HealthPaths[c.Request.URL.Path]; skip {
 			c.Next()
 			return
 		}

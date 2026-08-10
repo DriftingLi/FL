@@ -150,6 +150,11 @@ func (s *Session) ExtractToken(authHeader, cookieValue string) string {
 	return cookieValue
 }
 
+// CookieName 返回登录态 Cookie 名称（中间件读取 Cookie 用，避免重复持有配置）。
+func (s *Session) CookieName() string {
+	return s.cookie.Name
+}
+
 // SetCookie 将 JWT 写入父域名 httpOnly Cookie，实现子域名间登录态共享。
 func (s *Session) SetCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{

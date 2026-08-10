@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
-	"forklift-training/internal/config"
 	"forklift-training/internal/security"
 	"forklift-training/pkg/response"
 )
@@ -78,56 +77,52 @@ func Recovery(logger *zap.Logger) gin.HandlerFunc {
 	})
 }
 
+// HealthPaths 健康检查探活路径：不出现在访问日志中（避免探活刷屏），
+// 也不受限流拦截（容器编排探活不应被限流挡掉）。
+var HealthPaths = map[string]struct{}{
+	"/api/health":      {},
+	"/api/health/live": {},
+}
+
 // JWTAuth 强制 JWT 认证中间件。
-func JWTAuth(cfg *config.Config) gin.HandlerFunc {
-	sess := security.SessionFromConfig(cfg)
+// sess 由装配根构建一次注入，避免每处路由注册重复构造会话模块。
+func JWTAuth(sess *security.Session) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tokenStr := sess.ExtractToken(c.GetHeader("Authorization"), authCookieValue(c, cfg.AuthCookie.Name))
-		if tokenStr == "" {
+		if !resolveClaims(c, sess, true) {
 			response.Unauthorized(c, "Token无效或已过期，请重新登录")
 			c.Abort()
 			return
 		}
-
-		claims, err := sess.Verify(tokenStr)
-		if err != nil {
-			response.Unauthorized(c, "Token无效或已过期，请重新登录")
-			c.Abort()
-			return
-		}
-
-		// 检查 token 黑名单（已登出 token 会被加入黑名单直到自然过期）
-		if revoked, _ := sess.IsRevoked(c.Request.Context(), tokenStr); revoked {
-			response.Unauthorized(c, "Token无效或已过期，请重新登录")
-			c.Abort()
-			return
-		}
-
-		c.Set(string(CtxUserID), claims.UserID)
-		c.Set(string(CtxUsername), claims.Username)
-		c.Set(string(CtxUserRole), claims.Role)
 		c.Next()
 	}
 }
 
 // OptionalAuth 可选 JWT 认证：有 token 则解析填充，无则放行。
-func OptionalAuth(cfg *config.Config) gin.HandlerFunc {
-	sess := security.SessionFromConfig(cfg)
+func OptionalAuth(sess *security.Session) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tokenStr := sess.ExtractToken(c.GetHeader("Authorization"), authCookieValue(c, cfg.AuthCookie.Name))
-		if tokenStr == "" {
-			c.Next()
-			return
-		}
-		if claims, err := sess.Verify(tokenStr); err == nil {
-			if revoked, _ := sess.IsRevoked(c.Request.Context(), tokenStr); !revoked {
-				c.Set(string(CtxUserID), claims.UserID)
-				c.Set(string(CtxUsername), claims.Username)
-				c.Set(string(CtxUserRole), claims.Role)
-			}
-		}
+		resolveClaims(c, sess, false)
 		c.Next()
 	}
+}
+
+// resolveClaims 提取 token → 校验 → 黑名单检查 → 写 context，是
+// JWTAuth（require=true）与 OptionalAuth（require=false）共享的解析核心。
+// 返回是否通过认证：require 时由调用方决定 401 中止，否则静默放行。
+func resolveClaims(c *gin.Context, sess *security.Session, require bool) bool {
+	tokenStr := sess.ExtractToken(c.GetHeader("Authorization"), authCookieValue(c, sess.CookieName()))
+	if tokenStr == "" {
+		return false
+	}
+	if claims, err := sess.Verify(tokenStr); err == nil {
+		// 检查 token 黑名单（已登出 token 会被加入黑名单直到自然过期）
+		if revoked, _ := sess.IsRevoked(c.Request.Context(), tokenStr); !revoked {
+			c.Set(string(CtxUserID), claims.UserID)
+			c.Set(string(CtxUsername), claims.Username)
+			c.Set(string(CtxUserRole), claims.Role)
+			return true
+		}
+	}
+	return false
 }
 
 // authCookieValue 读取父域名登录 Cookie（不存在时返回空串）。

@@ -13,9 +13,8 @@ import (
 // RegisterLevelExamRoutes 注册 /api/level-exam 蓝图（等级考试与晋级）。
 func RegisterLevelExamRoutes(rg *gin.RouterGroup, deps *Deps) {
 	svc := deps.LevelExamSvc
-	cfg := deps.Cfg
 
-	g := rg.Group("/level-exam", middleware.JWTAuth(cfg))
+	g := rg.Group("/level-exam", middleware.JWTAuth(deps.Session))
 
 	// ===== 场次管理（管理员） =====
 

@@ -16,7 +16,6 @@ import (
 //   - /api/catalog/*、/api/specialties、/api/levels、/api/tags：学员端查询
 func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, deps *Deps) {
 	svc := deps.TrainingCatalogSvc
-	cfg := deps.Cfg
 
 	// ===== 学员端查询（公开） =====
 
@@ -42,7 +41,7 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, deps *Deps) {
 
 	// ===== 管理端 CRUD =====
 
-	g := rg.Group("/admin", middleware.JWTAuth(cfg), middleware.RoleRequired("admin"))
+	g := rg.Group("/admin", middleware.JWTAuth(deps.Session), middleware.RoleRequired("admin"))
 
 	// GET /api/admin/catalog/tree  管理端目录树（含停用项与章节节点）
 	g.GET("/catalog/tree", func(c *gin.Context) {

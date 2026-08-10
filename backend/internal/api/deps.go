@@ -5,6 +5,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
 )
@@ -16,6 +17,7 @@ type Deps struct {
 	DB      *gorm.DB
 	Storage storage.Storage
 	Logger  *zap.Logger
+	Session *security.Session
 
 	AuthSvc         *service.AuthService
 	CodeSvc         *service.VerifyCodeService
@@ -72,6 +74,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		DB:                 db,
 		Storage:            st,
 		Logger:             logger,
+		Session:            security.SessionFromConfig(cfg),
 		AuthSvc:            authSvc,
 		CodeSvc:            codeSvc,
 		EmailCh:            emailCh,
@@ -101,6 +104,6 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		TrainingCatalogSvc: service.NewTrainingCatalogService(db, logger),
 		AIAssistantSvc:     service.NewAIAssistantService(db, aiConfigSvc, cfg.SecretKey, logger),
 	}
-	d.AuthH = NewAuthHandler(cfg, authSvc, fileSvc, st, reviewSvc, logger)
+	d.AuthH = NewAuthHandler(d.Session, authSvc, fileSvc, st, reviewSvc, logger)
 	return d
 }

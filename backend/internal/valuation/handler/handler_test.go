@@ -415,10 +415,11 @@ func newTestValuationEngineWithStorage(t *testing.T, st storage.Storage) (*gin.E
 		JWTSecretKey: "test-secret",
 		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
 	}
+	sess := security.SessionFromConfig(cfg)
 	r := gin.New()
 	r.Use(gin.Recovery())
 
-	RegisterRoutes(r, cfg, zap.NewNop(),
+	RegisterRoutes(r, sess, zap.NewNop(),
 		dict, evalStore, &memBatteryStore{},
 		valuationSvc, vservice.NewBatteryRULService(),
 		&memReportGenerator{}, st,

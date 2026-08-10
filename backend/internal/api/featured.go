@@ -15,7 +15,6 @@ import (
 func RegisterFeaturedRoutes(rg *gin.RouterGroup, deps *Deps) {
 	svc := deps.FeaturedSvc
 	fileSvc := deps.FileSvc
-	cfg := deps.Cfg
 
 	// ===== 公开接口（无鉴权）=====
 
@@ -61,7 +60,7 @@ func RegisterFeaturedRoutes(rg *gin.RouterGroup, deps *Deps) {
 
 	// ===== 管理端接口（需 admin 角色）=====
 
-	g := rg.Group("/admin", middleware.JWTAuth(cfg), middleware.RoleRequired("admin"))
+	g := rg.Group("/admin", middleware.JWTAuth(deps.Session), middleware.RoleRequired("admin"))
 
 	// GET /api/admin/featured-contents  管理端列表（含草稿）
 	g.GET("/featured-contents", func(c *gin.Context) {

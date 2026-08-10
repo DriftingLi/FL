@@ -13,9 +13,8 @@ import (
 // RegisterMockExamRoutes 注册 /api/mock-exam 蓝图。
 func RegisterMockExamRoutes(rg *gin.RouterGroup, deps *Deps) {
 	svc := deps.MockExamSvc
-	cfg := deps.Cfg
 
-	g := rg.Group("/mock-exam", middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/mock-exam", middleware.JWTAuth(deps.Session), middleware.RoleRequired("hrwai_user"))
 
 	// POST /api/mock-exam/start  开始模拟考试（count 题量 + duration 时长）
 	g.POST("/start", func(c *gin.Context) {

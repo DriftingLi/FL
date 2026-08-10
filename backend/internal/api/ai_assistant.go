@@ -40,11 +40,11 @@ func RegisterAIAssistantRoutes(rg *gin.RouterGroup, deps *Deps) {
 	// 公开路由：列出管理员配置的可用模型（未登录可访问）
 	g.GET("/models", h.ListPublicModels)
 	// 流式对话：可选认证（未登录可临时对话，登录则可保存会话）
-	g.POST("/chat", middleware.OptionalAuth(cfg), h.StreamChat)
+	g.POST("/chat", middleware.OptionalAuth(deps.Session), h.StreamChat)
 
 	// 需登录路由：会话管理 + 用户自定义模型管理（HRWAI 账号鉴权）
 	authed := g.Group("")
-	authed.Use(middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
+	authed.Use(middleware.JWTAuth(deps.Session), middleware.RoleRequired("hrwai_user"))
 	authed.GET("/sessions", h.ListSessions)
 	authed.POST("/sessions", h.CreateSession)
 	authed.DELETE("/sessions/:id", h.DeleteSession)

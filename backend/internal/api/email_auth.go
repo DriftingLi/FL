@@ -8,5 +8,5 @@ import (
 
 // RegisterEmailAuthRoutes 注册 /api/auth/email 蓝图（邮箱验证码注册/登录）。
 func RegisterEmailAuthRoutes(rg *gin.RouterGroup, deps *Deps) {
-	registerCodeChannelAuthRoutes(rg.Group("/auth/email"), deps.Cfg, deps.CodeSvc, deps.EmailCh, "email", "验证码已发送，请查收邮箱")
+	registerCodeChannelAuthRoutes(rg.Group("/auth/email"), deps.Session, deps.CodeSvc, deps.EmailCh, "email", "验证码已发送，请查收邮箱")
 }

@@ -8,5 +8,5 @@ import (
 
 // RegisterPhoneAuthRoutes 注册 /api/auth/phone 蓝图（手机号验证码注册/登录）。
 func RegisterPhoneAuthRoutes(rg *gin.RouterGroup, deps *Deps) {
-	registerCodeChannelAuthRoutes(rg.Group("/auth/phone"), deps.Cfg, deps.CodeSvc, deps.PhoneCh, "phone", "验证码已发送，请查收手机短信")
+	registerCodeChannelAuthRoutes(rg.Group("/auth/phone"), deps.Session, deps.CodeSvc, deps.PhoneCh, "phone", "验证码已发送，请查收手机短信")
 }

@@ -15,7 +15,7 @@ import (
 
 // RegisterProfileBindRoutes 注册 /api/auth/profile 蓝图（登录后绑定/修改手机号、邮箱）。
 func RegisterProfileBindRoutes(rg *gin.RouterGroup, deps *Deps) {
-	g := rg.Group("/auth/profile", middleware.JWTAuth(deps.Cfg))
+	g := rg.Group("/auth/profile", middleware.JWTAuth(deps.Session))
 	authSvc := deps.AuthSvc
 	codeSvc := deps.CodeSvc
 

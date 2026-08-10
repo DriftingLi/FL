@@ -14,8 +14,7 @@ import (
 // RegisterNotificationRoutes 注册 /api/notifications 蓝图（登录用户站内信）。
 func RegisterNotificationRoutes(rg *gin.RouterGroup, deps *Deps) {
 	svc := deps.NotificationSvc
-	cfg := deps.Cfg
-	g := rg.Group("/notifications", middleware.JWTAuth(cfg))
+	g := rg.Group("/notifications", middleware.JWTAuth(deps.Session))
 
 	// GET /api/notifications?page=&page_size= 分页查询通知（含未读数）
 	g.GET("", func(c *gin.Context) {

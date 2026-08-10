@@ -13,9 +13,8 @@ import (
 // RegisterGradingRoutes 注册 /api/grading 蓝图（导师阅卷）。
 func RegisterGradingRoutes(rg *gin.RouterGroup, deps *Deps) {
 	svc := deps.GradingSvc
-	cfg := deps.Cfg
 
-	g := rg.Group("/grading", middleware.JWTAuth(cfg), middleware.RoleRequired("tutor", "admin"))
+	g := rg.Group("/grading", middleware.JWTAuth(deps.Session), middleware.RoleRequired("tutor", "admin"))
 
 	// GET /api/grading/participants  已提交参与记录列表
 	g.GET("/participants", func(c *gin.Context) {

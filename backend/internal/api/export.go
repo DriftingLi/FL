@@ -19,8 +19,7 @@ import (
 // RegisterExportRoutes 注册 /api/admin/export 蓝图（仅管理员，返回 CSV 附件）。
 func RegisterExportRoutes(rg *gin.RouterGroup, deps *Deps) {
 	svc := deps.ExportSvc
-	cfg := deps.Cfg
-	g := rg.Group("/admin/export", middleware.JWTAuth(cfg), middleware.RoleRequired("admin"))
+	g := rg.Group("/admin/export", middleware.JWTAuth(deps.Session), middleware.RoleRequired("admin"))
 
 	g.GET("/students", exportCSVHandler(func() ([][]any, error) { return svc.Students() }, "学员名单.csv"))
 	g.GET("/exam-records", exportCSVHandler(func() ([][]any, error) { return svc.ExamRecords() }, "成绩单.csv"))

@@ -17,9 +17,8 @@ import (
 func RegisterTutorRoutes(rg *gin.RouterGroup, deps *Deps) {
 	svc := deps.TutorSvc
 	fileSvc := deps.FileSvc
-	cfg := deps.Cfg
 
-	g := rg.Group("/tutor", middleware.JWTAuth(cfg), middleware.RoleRequired("tutor"))
+	g := rg.Group("/tutor", middleware.JWTAuth(deps.Session), middleware.RoleRequired("tutor"))
 
 	// GET /api/tutor/courses  导师课程列表
 	g.GET("/courses", func(c *gin.Context) {

@@ -18,9 +18,8 @@ import (
 // RegisterForumRoutes 注册 /api/forum 蓝图（需登录，hrwai_user）。
 func RegisterForumRoutes(rg *gin.RouterGroup, deps *Deps) {
 	svc := deps.ForumSvc
-	cfg := deps.Cfg
 
-	g := rg.Group("/forum", middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/forum", middleware.JWTAuth(deps.Session), middleware.RoleRequired("hrwai_user"))
 
 	// POST /api/forum/upload-image  上传论坛图片（图文分离，先传图后随发帖/回复提交 URL）
 	// 返回统一信封：{ code: 0, message: "图片上传成功", data: { url } }
@@ -163,7 +162,7 @@ func RegisterForumRoutes(rg *gin.RouterGroup, deps *Deps) {
 	})
 
 	// ===== 管理员论坛管理 =====
-	adminG := rg.Group("/admin/forum", middleware.JWTAuth(cfg), middleware.RoleRequired("admin"))
+	adminG := rg.Group("/admin/forum", middleware.JWTAuth(deps.Session), middleware.RoleRequired("admin"))
 
 	// GET /api/admin/forum/topics?scope=all|general|chapter&chapter_id=&page=&page_size=&keyword=
 	adminG.GET("/topics", func(c *gin.Context) {

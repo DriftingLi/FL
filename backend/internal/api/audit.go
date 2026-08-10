@@ -22,7 +22,7 @@ type AuditLogPageResult struct {
 
 // RegisterAuditRoutes 注册 /api/admin/audit-logs 蓝图（仅管理员）。
 func RegisterAuditRoutes(rg *gin.RouterGroup, deps *Deps) {
-	g := rg.Group("/admin/audit-logs", middleware.JWTAuth(deps.Cfg), middleware.RoleRequired("admin"))
+	g := rg.Group("/admin/audit-logs", middleware.JWTAuth(deps.Session), middleware.RoleRequired("admin"))
 	db := deps.DB
 
 	// GET /api/admin/audit-logs?page=&page_size=&actor_id=&role=&keyword=

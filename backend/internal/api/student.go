@@ -11,9 +11,8 @@ import (
 // RegisterStudentRoutes 注册 /api/student 蓝图。
 func RegisterStudentRoutes(rg *gin.RouterGroup, deps *Deps) {
 	svc := deps.StudentSvc
-	cfg := deps.Cfg
 
-	g := rg.Group("/student", middleware.JWTAuth(cfg), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/student", middleware.JWTAuth(deps.Session), middleware.RoleRequired("hrwai_user"))
 
 	// GET /api/student/profile  学员信息+学习统计+课程进度
 	g.GET("/profile", func(c *gin.Context) {

@@ -9,8 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -34,7 +34,7 @@ func str(body map[string]interface{}, key string) string {
 
 // registerCodeChannelAuthRoutes 注册 /auth/<prefix> 蓝图（验证码注册/登录，通道注入）。
 // targetField: 请求体中的目标字段名（email / phone）；sentMsg: 发送成功提示文案。
-func registerCodeChannelAuthRoutes(g *gin.RouterGroup, cfg *config.Config, codeSvc *service.VerifyCodeService,
+func registerCodeChannelAuthRoutes(g *gin.RouterGroup, sess *security.Session, codeSvc *service.VerifyCodeService,
 	ch service.CodeChannel, targetField, sentMsg string) {
 	// POST /auth/<prefix>/send-code {targetField, purpose: register|login}
 	g.POST("/send-code", func(c *gin.Context) {
@@ -77,7 +77,7 @@ func registerCodeChannelAuthRoutes(g *gin.RouterGroup, cfg *config.Config, codeS
 			response.BadRequest(c, err.Error())
 			return
 		}
-		setAuthCookie(c, cfg, result.Token)
+		setAuthCookie(c, sess, result.Token)
 		response.Created(c, "注册成功", result)
 	})
 
@@ -95,7 +95,7 @@ func registerCodeChannelAuthRoutes(g *gin.RouterGroup, cfg *config.Config, codeS
 			response.BadRequest(c, err.Error())
 			return
 		}
-		setAuthCookie(c, cfg, result.Token)
+		setAuthCookie(c, sess, result.Token)
 		response.SuccessWithMsg(c, "登录成功", result)
 	})
 }

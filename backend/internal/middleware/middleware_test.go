@@ -43,7 +43,8 @@ func generateToken(t *testing.T, userID int, username, role string) string {
 // newTestRouter 创建带 JWTAuth + RoleRequired 的测试路由器。
 func newTestRouter(cfg *config.Config, roles ...string) *gin.Engine {
 	r := gin.New()
-	protected := r.Group("/protected", JWTAuth(cfg))
+	sess := security.SessionFromConfig(cfg)
+	protected := r.Group("/protected", JWTAuth(sess))
 	if len(roles) > 0 {
 		protected.Use(RoleRequired(roles...))
 	}
@@ -138,8 +139,9 @@ func TestJWTAuth_ExpiredToken(t *testing.T) {
 
 func TestOptionalAuth_WithToken(t *testing.T) {
 	cfg := &config.Config{JWTSecretKey: testSecret}
+	sess := security.SessionFromConfig(cfg)
 	r := gin.New()
-	r.GET("/optional", OptionalAuth(cfg), func(c *gin.Context) {
+	r.GET("/optional", OptionalAuth(sess), func(c *gin.Context) {
 		uid, exists := c.Get(string(CtxUserID))
 		c.JSON(200, gin.H{"user_id": uid, "exists": exists})
 	})
@@ -157,8 +159,9 @@ func TestOptionalAuth_WithToken(t *testing.T) {
 
 func TestOptionalAuth_WithoutToken(t *testing.T) {
 	cfg := &config.Config{JWTSecretKey: testSecret}
+	sess := security.SessionFromConfig(cfg)
 	r := gin.New()
-	r.GET("/optional", OptionalAuth(cfg), func(c *gin.Context) {
+	r.GET("/optional", OptionalAuth(sess), func(c *gin.Context) {
 		c.JSON(200, gin.H{"ok": true})
 	})
 
@@ -168,6 +171,63 @@ func TestOptionalAuth_WithoutToken(t *testing.T) {
 
 	if w.Code != 200 {
 		t.Fatalf("无 token 可选认证应放行，得到 %d", w.Code)
+	}
+}
+
+func TestOptionalAuth_InvalidToken(t *testing.T) {
+	cfg := &config.Config{JWTSecretKey: testSecret}
+	sess := security.SessionFromConfig(cfg)
+	r := gin.New()
+	r.GET("/optional", OptionalAuth(sess), func(c *gin.Context) {
+		_, exists := c.Get(string(CtxUserID))
+		c.JSON(200, gin.H{"authenticated": exists})
+	})
+
+	req, _ := http.NewRequest("GET", "/optional", nil)
+	req.Header.Set("Authorization", "Bearer invalid-token-string")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("无效 token 可选认证应放行，得到 %d", w.Code)
+	}
+	if w.Body.String() != `{"authenticated":false}` {
+		t.Fatalf("无效 token 不应写入用户上下文，得到 %s", w.Body.String())
+	}
+}
+
+func TestOptionalAuth_RevokedToken(t *testing.T) {
+	cfg := &config.Config{JWTSecretKey: testSecret}
+	sess := security.SessionFromConfig(cfg)
+
+	token := generateToken(t, 42, "optuser", "hrwai_user")
+
+	// 依赖真实 Redis 黑名单（全局缓存）；无 Redis 时跳过
+	ctx := context.Background()
+	if err := sess.Revoke(ctx, token); err != nil {
+		t.Skipf("Redis 不可用，跳过黑名单分支测试: %v", err)
+	}
+	revoked, _ := sess.IsRevoked(ctx, token)
+	if !revoked {
+		t.Skip("Redis 黑名单写入失败，跳过")
+	}
+
+	r := gin.New()
+	r.GET("/optional", OptionalAuth(sess), func(c *gin.Context) {
+		_, exists := c.Get(string(CtxUserID))
+		c.JSON(200, gin.H{"authenticated": exists})
+	})
+
+	req, _ := http.NewRequest("GET", "/optional", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("已吊销 token 可选认证应放行，得到 %d", w.Code)
+	}
+	if w.Body.String() != `{"authenticated":false}` {
+		t.Fatalf("已吊销 token 不应写入用户上下文，得到 %s", w.Body.String())
 	}
 }
 
