@@ -82,6 +82,12 @@ fi
 HEALTH_CHECK_RETRIES="${HEALTH_CHECK_RETRIES:-20}"
 HEALTH_CHECK_INTERVAL="${HEALTH_CHECK_INTERVAL:-6}"
 
+# compose up --wait 超时（秒）：容器就绪等待上限，超时后由 health_check() 轮询兜底
+UP_WAIT_TIMEOUT="${UP_WAIT_TIMEOUT:-60}"
+
+# 后台备份 join 超时（秒）：迁移前等待备份完成的上限
+BACKUP_WAIT_TIMEOUT="${BACKUP_WAIT_TIMEOUT:-120}"
+
 # SSL 证书目录（固定路径，由 write_ssl_certs() 写入，frontend 容器挂载）
 SSL_CERT_DIR="${DEPLOY_PATH}/nginx/ssl"
 
@@ -380,6 +386,26 @@ create_backup() {
     fi
 
     log_ok "备份完成: $BACKUP_FILE"
+}
+
+# ======================================================================
+# 等待后台备份完成（备份与早期无依赖步骤并行，任何 DB 写操作前 join）
+# ======================================================================
+wait_backup() {
+    local pid="$1"
+    local waited=0
+    log_info ">>> 等待后台备份完成..."
+    while kill -0 "$pid" 2>/dev/null; do
+        sleep 2
+        waited=$((waited + 2))
+        if [ "$waited" -ge "${BACKUP_WAIT_TIMEOUT:-120}" ]; then
+            log_warn "备份超时（${waited}s），继续部署（本次部署窗口的回滚保障可能不完整）"
+            return 1
+        fi
+    done
+    wait "$pid" 2>/dev/null || log_warn "备份进程异常退出（详见上方日志）"
+    log_ok "备份已完成"
+    return 0
 }
 
 # ======================================================================
@@ -737,10 +763,13 @@ restart_services() {
     # 写入 .env 文件
     write_env_file
 
-    # 启动服务（不做健康等待，由后续 health_check() 统一处理）
-    docker compose -f "$COMPOSE_FILE" up -d --wait-timeout 1 --remove-orphans 2>&1 | tail -10 || true
-    log_info "等待容器稳定 (10s)..."
-    sleep 10
+    # 启动服务并等待容器就绪：
+    # - --wait：compose v2 原生等待全部服务 healthy/running（事件驱动，替代固定 sleep + 轮询）
+    # - --wait-timeout 超时后 up 返回非 0，由下方 health_check() HTTP 轮询兜底确认
+    # 注：host 网络模式 frontend 无 healthcheck（compose 中 disable），--wait 按 running 处理
+    if ! docker compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout "${UP_WAIT_TIMEOUT:-60}" --remove-orphans 2>&1 | tail -10; then
+        log_warn "compose --wait 超时或失败，由后续健康检查兜底确认"
+    fi
 
     # 快速诊断：如果 backend 不在 running 状态，打日志
     local be_stat
@@ -968,7 +997,10 @@ main() {
             # host 网络模式下 nginx-host.conf 是 HTTP-only，不需要 SSL 证书
             # 若未来切回 bridge + HTTPS，可重新启用 write_ssl_certs
             # write_ssl_certs
-            create_backup
+            # 备份与后续无依赖步骤（登录/镜像拉取）并行执行，迁移前 join——
+            # 隐藏备份耗时（pg_dump + 异地同步），同时保证备份先于任何 DB 写操作完成
+            create_backup &
+            BACKUP_PID=$!
             login_registry
             ensure_registry_proxy
             pull_images
@@ -976,6 +1008,9 @@ main() {
             # 先拉起数据库与 Redis，供迁移预检读取当前版本
             docker compose -f "$COMPOSE_FILE" up -d "$POSTGRES_SERVICE" "$REDIS_SERVICE" 2>&1 | tail -5 || true
             wait_postgres
+
+            # 迁移前 join 后台备份（回滚保障：备份必先于 fix_dirty/迁移落盘）
+            wait_backup "$BACKUP_PID"
 
             # 迁移兼容性预检：若镜像迁移版本落后数据库，启动后会崩溃循环
             if ! preflight_migration_check "${IMAGE_BACKEND}:${IMAGE_TAG}"; then
