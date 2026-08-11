@@ -97,6 +97,11 @@ SKIP_MIGRATION="${SKIP_MIGRATION:-false}"
 # 清理策略：保留最近 N 个镜像
 KEEP_IMAGES="${KEEP_IMAGES:-3}"
 
+# ghcr pull-through 缓存上限（MB）：缓存超阈值即清空重建（清空后拉取按需回源）。
+# 默认 15GB——服务器磁盘 30G（约 24G 可用），6GB 旧阈值导致清空过频、
+# 每次清空后 testing 部署需全量回源（实测拉取 43 分钟）
+CACHE_LIMIT_MB="${CACHE_LIMIT_MB:-15000}"
+
 # ======================================================================
 # 工具函数
 # ======================================================================
@@ -440,8 +445,8 @@ ensure_registry_proxy() {
         CACHE_DIR="/var/lib/docker/volumes/ghcr-cache/_data"
         if [ -d "$CACHE_DIR" ]; then
             CACHE_MB=$(du -sm "$CACHE_DIR" 2>/dev/null | awk '{print $1}')
-            if [ "${CACHE_MB:-0}" -gt 6000 ]; then
-                log_warn "ghcr-cache 缓存 ${CACHE_MB}MB 超过 6GB 阈值，清空缓存卷（拉取按需回源）"
+            if [ "${CACHE_MB:-0}" -gt "${CACHE_LIMIT_MB:-15000}" ]; then
+                log_warn "ghcr-cache 缓存 ${CACHE_MB}MB 超过 ${CACHE_LIMIT_MB:-15000}MB 阈值，清空缓存卷（拉取按需回源）"
                 docker rm -f ghcr-proxy >/dev/null 2>&1 || true
                 docker volume rm ghcr-cache >/dev/null 2>&1 || true
             fi
