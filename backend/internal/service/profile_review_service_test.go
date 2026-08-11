@@ -1,7 +1,9 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"testing"
 	"time"
 
@@ -29,6 +31,10 @@ func (m *memReviewStorage) Delete(_ context.Context, url string) error {
 func (m *memReviewStorage) Exists(context.Context, string) (bool, error) { return true, nil }
 
 func (m *memReviewStorage) List(context.Context, string) ([]string, error) { return nil, nil }
+
+func (m *memReviewStorage) Get(_ context.Context, url string) (io.ReadCloser, error) {
+	return io.NopCloser(bytes.NewReader([]byte(url))), nil
+}
 
 func newReviewTestSvc(t *testing.T) (*ProfileReviewService, *NotificationService, *gorm.DB, *memReviewStorage) {
 	t.Helper()

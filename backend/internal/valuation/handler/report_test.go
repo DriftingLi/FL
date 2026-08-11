@@ -4,8 +4,10 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -66,6 +68,17 @@ func (m *memStorage) List(_ context.Context, prefix string) ([]string, error) {
 	return urls, nil
 }
 
+func (m *memStorage) Get(_ context.Context, url string) (io.ReadCloser, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := strings.TrimPrefix(url, "https://fake-cdn/")
+	content, ok := m.urls[key]
+	if !ok {
+		return nil, fmt.Errorf("file not found: %s", key)
+	}
+	return io.NopCloser(bytes.NewReader(content)), nil
+}
+
 func createEvalForReport(t *testing.T, r *gin.Engine) float64 {
 	t.Helper()
 	w := performRequest(r, http.MethodPost, "/api/valuation/evaluations", baseEvalRequest())
@@ -104,18 +117,21 @@ func TestReportGenerate_WritesPath(t *testing.T) {
 	}
 }
 
-// TestReportDownload_RegeneratesOnMissing 下载时路径缺失 → 再生成 → 302 回写（既有行为保留，B3 迁移）。
+// TestReportDownload_RegeneratesOnMissing 下载时路径缺失 → 再生成 → 流式返回 PDF（B3 迁移 + 代理下载改造）。
 func TestReportDownload_RegeneratesOnMissing(t *testing.T) {
 	st := newMemStorage()
 	r, _, _, _ := newTestValuationEngineWithStorage(t, st)
 	createEvalForReport(t, r)
 
 	w := performRequest(r, http.MethodGet, "/api/valuation/evaluations/1/report", nil)
-	if w.Code != http.StatusFound {
-		t.Fatalf("下载状态码 = %d, 期望 302\nbody=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Fatalf("下载状态码 = %d, 期望 200\nbody=%s", w.Code, w.Body.String())
 	}
-	if loc := w.Header().Get("Location"); loc == "" {
-		t.Error("302 缺少 Location")
+	if ct := w.Header().Get("Content-Type"); ct != "application/pdf" {
+		t.Errorf("Content-Type = %q, 期望 application/pdf", ct)
+	}
+	if cd := w.Header().Get("Content-Disposition"); cd == "" || !strings.Contains(cd, "attachment") {
+		t.Errorf("Content-Disposition 应含 attachment, got %q", cd)
 	}
 	if st.saves != 1 {
 		t.Errorf("缺失路径应再生成上传 1 次, got %d", st.saves)
@@ -144,8 +160,8 @@ func TestReportDownload_ConcurrentSingleGeneration(t *testing.T) {
 	wg.Wait()
 
 	for i, c := range codes {
-		if c != http.StatusFound {
-			t.Errorf("并发请求 %d 状态码 = %d, 期望 302", i, c)
+		if c != http.StatusOK {
+			t.Errorf("并发请求 %d 状态码 = %d, 期望 200", i, c)
 		}
 	}
 	if st.saves != 1 {
@@ -256,18 +272,15 @@ func TestBatteryReport_RegenerateDeletesOld(t *testing.T) {
 	}
 }
 
-// TestBatteryReport_DownloadRegeneratesOnMissing 电池报告下载时路径缺失 → 再生成 → 302 回写（B3 补测试）。
+// TestBatteryReport_DownloadRegeneratesOnMissing 电池报告下载时路径缺失 → 再生成 → 流式返回 PDF（B3 补测试 + 代理下载改造）。
 func TestBatteryReport_DownloadRegeneratesOnMissing(t *testing.T) {
 	st := newMemStorage()
 	r, _, _, _ := newTestValuationEngineWithStorage(t, st)
 	id := createBatteryForReport(t, r, authHeader(t, 1))
 
 	w := performRequest(r, http.MethodGet, fmt.Sprintf("/api/valuation/battery/evaluations/%d/report", id), nil)
-	if w.Code != http.StatusFound {
-		t.Fatalf("电池报告下载状态码 = %d, 期望 302\nbody=%s", w.Code, w.Body.String())
-	}
-	if loc := w.Header().Get("Location"); loc == "" {
-		t.Error("302 缺少 Location")
+	if w.Code != http.StatusOK {
+		t.Fatalf("电池报告下载状态码 = %d, 期望 200\nbody=%s", w.Code, w.Body.String())
 	}
 	if st.saves != 1 {
 		t.Errorf("缺失路径应再生成上传 1 次, got %d", st.saves)
@@ -296,8 +309,8 @@ func TestBatteryReport_ConcurrentSingleGeneration(t *testing.T) {
 	wg.Wait()
 
 	for i, c := range codes {
-		if c != http.StatusFound {
-			t.Errorf("并发请求 %d 状态码 = %d, 期望 302", i, c)
+		if c != http.StatusOK {
+			t.Errorf("并发请求 %d 状态码 = %d, 期望 200", i, c)
 		}
 	}
 	if st.saves != 1 {

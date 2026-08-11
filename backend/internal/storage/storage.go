@@ -8,6 +8,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,6 +31,9 @@ type Storage interface {
 	// List 按 key 前缀列出所有文件，返回可访问的 URL 列表（与 Save 返回格式一致）。
 	// 前缀为空时列出全部文件；prefix 与 key 分隔符（/）对齐，如 "images/forum" 匹配 "images/forum/xxx.webp"。
 	List(ctx context.Context, prefix string) ([]string, error)
+	// Get 按 URL 读取文件内容（流式），调用方负责关闭返回的 ReadCloser。
+	// 用于代理下载等需要后端中转内容的场景（绕开对象存储的浏览器跨域限制）。
+	Get(ctx context.Context, url string) (io.ReadCloser, error)
 }
 
 // LocalStorage 本地磁盘存储（本地开发与回退模式）。
@@ -92,6 +96,15 @@ func (s *LocalStorage) Exists(ctx context.Context, url string) (bool, error) {
 // 兼容直接传入 key（无前缀）的情况。
 func localURLToKey(url string) string {
 	return strings.TrimPrefix(url, "/static/uploads/")
+}
+
+// Get 打开本地文件流式读取。
+func (s *LocalStorage) Get(ctx context.Context, url string) (io.ReadCloser, error) {
+	if url == "" {
+		return nil, fmt.Errorf("url 为空")
+	}
+	key := localURLToKey(url)
+	return os.Open(filepath.Join(s.baseDir, key))
 }
 
 // List 按 key 前缀列出本地文件，返回 /static/uploads/<key> 形式的 URL 列表。
