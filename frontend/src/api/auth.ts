@@ -105,5 +105,15 @@ export const authApi = {
 
   updateProfilePassword(password: string) {
     return unwrappedRequest.post<null>('/auth/profile/password', { password })
+  },
+
+  // ===== 修改登录账号（短信验证码确认）=====
+
+  sendAccountChangeCode() {
+    return unwrappedRequest.post<null>('/auth/account/send-code')
+  },
+
+  updateAccount(data: { account: string; code: string }) {
+    return unwrappedRequest.put<null>('/auth/account', data)
   }
 }

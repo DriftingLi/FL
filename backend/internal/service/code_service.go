@@ -28,7 +28,7 @@ import (
 	"forklift-training/internal/model"
 )
 
-// CodePurpose 验证码用途（三态：注册 / 登录 / 绑定）。
+// CodePurpose 验证码用途（注册 / 登录 / 绑定 / 修改账号）。
 type CodePurpose string
 
 const (
@@ -38,6 +38,8 @@ const (
 	CodePurposeLogin CodePurpose = "login"
 	// CodePurposeBind 绑定/修改邮箱或手机号验证码。
 	CodePurposeBind CodePurpose = "bind"
+	// CodePurposeAccountChange 修改登录账号验证码。
+	CodePurposeAccountChange CodePurpose = "account_change"
 )
 
 // CodeChannel 验证码通道 adapter：归一化、账号查询、文案与发送的差异收敛于此。
@@ -272,6 +274,8 @@ func (c *EmailChannel) Render(purpose CodePurpose, code string, ttl time.Duratio
 		title, op = "【和润天下】登录验证码", "登录"
 	case CodePurposeBind:
 		title, op = "【和润天下】邮箱绑定验证码", "绑定/修改邮箱"
+	case CodePurposeAccountChange:
+		title, op = "【和润天下】修改登录账号验证码", "修改登录账号"
 	}
 	body := fmt.Sprintf(
 		"您好！\n\n您正在进行%s操作，本次验证码为：%s\n验证码 %d 分钟内有效，请勿泄露给他人。\n\n如非本人操作，请忽略本邮件。",
@@ -370,11 +374,18 @@ func (c *SmsChannel) Render(purpose CodePurpose, code string, ttl time.Duration)
 		op = "登录"
 	case CodePurposeBind:
 		op = "绑定/修改手机号"
+	case CodePurposeAccountChange:
+		op = "修改登录账号"
 	}
 	var content string
 	if purpose == CodePurposeBind {
 		content = fmt.Sprintf(
 			"【和润天下】您正在绑定/修改手机号，验证码为：%s，%d 分钟内有效，请勿泄露给他人。",
+			code, int(ttl.Minutes()),
+		)
+	} else if purpose == CodePurposeAccountChange {
+		content = fmt.Sprintf(
+			"【和润天下】您正在修改登录账号，验证码为：%s，%d 分钟内有效，请勿泄露给他人。",
 			code, int(ttl.Minutes()),
 		)
 	} else {
@@ -470,6 +481,8 @@ func (s *VerifyCodeService) send(ctx context.Context, ch CodeChannel, purpose Co
 		if count == 0 {
 			return errors.New("该" + ch.Noun() + "尚未注册")
 		}
+	case CodePurposeAccountChange:
+		// 目标是当前用户自己的手机号，无需占用校验
 	default:
 		return errors.New("无效的验证码用途")
 	}
@@ -629,6 +642,52 @@ func (s *VerifyCodeService) Bind(ctx context.Context, ch CodeChannel, userID int
 	}
 	return s.db.WithContext(ctx).Model(&model.HrwaiUser{}).
 		Where("id = ?", userID).Update(ch.BindColumn(), target).Error
+}
+
+// SendAccountChange 发送修改登录账号验证码到当前用户已绑定手机号（短信通道）。
+func (s *VerifyCodeService) SendAccountChange(ctx context.Context, ch CodeChannel, userID int) error {
+	phone, err := s.currentUserPhone(ctx, userID)
+	if err != nil {
+		return err
+	}
+	return s.send(ctx, ch, CodePurposeAccountChange, phone, userID)
+}
+
+// ChangeAccount 修改当前用户登录账号（短信验证码确认 + 格式/唯一性校验）。
+func (s *VerifyCodeService) ChangeAccount(ctx context.Context, ch CodeChannel, userID int, newAccount, code string) error {
+	newAccount = strings.TrimSpace(newAccount)
+	if !IsValidAccount(newAccount) {
+		return errors.New("账号需为 4-20 位字母、数字或下划线")
+	}
+	phone, err := s.currentUserPhone(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if err := s.Verify(ctx, ch, CodePurposeAccountChange, phone, code); err != nil {
+		return err
+	}
+	var count int64
+	if err := s.db.WithContext(ctx).Model(&model.HrwaiUser{}).
+		Where("account = ? AND id <> ?", newAccount, userID).Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return errors.New("该账号已被占用")
+	}
+	return s.db.WithContext(ctx).Model(&model.HrwaiUser{}).
+		Where("id = ?", userID).Update("account", newAccount).Error
+}
+
+// currentUserPhone 读取当前用户手机号并校验格式（未绑定手机号时报错）。
+func (s *VerifyCodeService) currentUserPhone(ctx context.Context, userID int) (string, error) {
+	var user model.HrwaiUser
+	if err := s.db.WithContext(ctx).Select("phone").First(&user, userID).Error; err != nil {
+		return "", errors.New("用户不存在")
+	}
+	if !IsValidPhone(user.Phone) {
+		return "", errors.New("请先绑定手机号")
+	}
+	return user.Phone, nil
 }
 
 // codeKey 构造验证码缓存 key；throttle=true 时为发送频率限制 key。

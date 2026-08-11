@@ -27,7 +27,8 @@ func NewProfileBindHandler(authSvc *service.AuthService, codeSvc *service.Verify
 	return &ProfileBindHandler{authSvc: authSvc, codeSvc: codeSvc, emailCh: emailCh, phoneCh: phoneCh}
 }
 
-// RegisterProfileBindRoutes 注册 /api/auth/profile 蓝图（登录后绑定/修改手机号、邮箱）。
+// RegisterProfileBindRoutes 注册 /api/auth/profile 蓝图（登录后绑定/修改手机号、邮箱）
+// 与 /api/auth/account 蓝图（短信验证码确认修改登录账号）。
 func RegisterProfileBindRoutes(rg *gin.RouterGroup, sess *security.Session, authSvc *service.AuthService, codeSvc *service.VerifyCodeService, emailCh, phoneCh service.CodeChannel) {
 	h := NewProfileBindHandler(authSvc, codeSvc, emailCh, phoneCh)
 
@@ -40,6 +41,11 @@ func RegisterProfileBindRoutes(rg *gin.RouterGroup, sess *security.Session, auth
 	g.POST("/phone", h.bindPhone)
 	// POST /api/auth/profile/password {password} 设置/修改密码（账号密码登录用）
 	g.POST("/password", h.UpdatePassword)
+
+	// 修改登录账号（短信验证码确认）：PUT /api/auth/account、POST /api/auth/account/send-code
+	acct := rg.Group("/auth/account", middleware.JWTAuth(sess))
+	acct.PUT("", h.UpdateAccount)
+	acct.POST("/send-code", h.SendAccountChangeCode)
 }
 
 // SendCode 发送绑定验证码 POST /api/auth/profile/send-code {channel: email|phone, target}
@@ -93,6 +99,38 @@ func (h *ProfileBindHandler) UpdatePassword(c *gin.Context) {
 		return
 	}
 	response.SuccessWithMsg(c, "密码设置成功", nil)
+}
+
+// SendAccountChangeCode 发送修改登录账号验证码 POST /api/auth/account/send-code
+// 验证码发送到当前用户已绑定手机号（复用短信通道，生产未接入时开发日志降级）。
+func (h *ProfileBindHandler) SendAccountChangeCode(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+	if err := h.codeSvc.SendAccountChange(ctx, h.phoneCh, middleware.CurrentUserID(c)); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "验证码已发送，请查收", nil)
+}
+
+// UpdateAccount 修改登录账号 PUT /api/auth/account {account, code}
+// 短信验证码确认 + 格式 4~20 位字母/数字/下划线 + 唯一性校验（复用 profile_bind 验证码模式）。
+func (h *ProfileBindHandler) UpdateAccount(c *gin.Context) {
+	var req struct {
+		Account string `json:"account"`
+		Code    string `json:"code"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "请求参数错误")
+		return
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+	if err := h.codeSvc.ChangeAccount(ctx, h.phoneCh, middleware.CurrentUserID(c), req.Account, req.Code); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "账号修改成功", nil)
 }
 
 // handleCodeChannelBind 绑定/修改目标字段的公共实现（通道注入）。

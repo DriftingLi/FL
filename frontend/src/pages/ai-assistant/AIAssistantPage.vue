@@ -232,7 +232,7 @@ const homeUrl = buildSubdomainUrl('main', '/')
 const isLoggedIn = computed(() => store.isLoggedIn)
 const displayName = computed(() => {
   const info = authStore.userInfo
-  return info?.name || info?.username || 'HRWAI 用户'
+  return info?.username || 'HRWAI 用户'
 })
 
 const inputText = ref('')

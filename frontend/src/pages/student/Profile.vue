@@ -9,10 +9,13 @@
         <span class="card-title">基本信息</span>
       </template>
       <el-descriptions :column="1" border>
+        <el-descriptions-item label="UID">
+          <span>{{ userInfo.uid || '未生成' }}</span>
+        </el-descriptions-item>
         <el-descriptions-item label="账号">
           <div class="cell-row">
-            <span>{{ userInfo.username || '未生成' }}</span>
-            <el-tag size="small" type="info">注册时随机生成，用于账号密码登录</el-tag>
+            <span>{{ userInfo.account || '未生成' }}</span>
+            <el-button link type="primary" size="small" @click="openAccountDialog">设置账号</el-button>
           </div>
         </el-descriptions-item>
         <el-descriptions-item label="昵称">
@@ -121,6 +124,31 @@
         <el-button type="primary" :loading="savingPassword" @click="handleSetPassword">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 设置账号（短信验证码确认） -->
+    <el-dialog v-model="accountDialogVisible" title="设置账号" width="440px">
+      <el-form label-width="0">
+        <el-form-item>
+          <el-input
+            v-model="newAccount"
+            placeholder="新账号（4-20位字母/数字/下划线）"
+            maxlength="20"
+          />
+        </el-form-item>
+        <el-form-item>
+          <div class="code-row">
+            <el-input v-model="accountCode" placeholder="短信验证码" maxlength="6" @keyup.enter="handleUpdateAccount" />
+            <el-button :disabled="countdown > 0 || codeSending" @click="handleSendAccountCode">
+              {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
+            </el-button>
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="accountDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="updatingAccount" @click="handleUpdateAccount">确认修改</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -156,10 +184,57 @@ const password = ref('')
 const confirmPassword = ref('')
 const savingPassword = ref(false)
 
+const accountDialogVisible = ref(false)
+const newAccount = ref('')
+const accountCode = ref('')
+const updatingAccount = ref(false)
+
 const bindTitle = computed(() => (bindChannel.value === 'email' ? '修改邮箱' : '修改手机号'))
 
 function openProfileDialog() {
   profileDialogRef.value?.open()
+}
+
+function openAccountDialog() {
+  newAccount.value = ''
+  accountCode.value = ''
+  accountDialogVisible.value = true
+}
+
+async function handleSendAccountCode() {
+  codeSending.value = true
+  try {
+    await authApi.sendAccountChangeCode()
+    ElMessage.success('验证码已发送至绑定手机号，请查收')
+    startCountdown()
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    codeSending.value = false
+  }
+}
+
+async function handleUpdateAccount() {
+  const account = newAccount.value.trim()
+  if (!/^[A-Za-z0-9_]{4,20}$/.test(account)) {
+    ElMessage.warning('账号需为4-20位字母、数字或下划线')
+    return
+  }
+  if (accountCode.value.length !== 6) {
+    ElMessage.warning('请输入6位验证码')
+    return
+  }
+  updatingAccount.value = true
+  try {
+    await authApi.updateAccount({ account, code: accountCode.value.trim() })
+    ElMessage.success('账号修改成功')
+    accountDialogVisible.value = false
+    await authStore.refreshUserInfo()
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    updatingAccount.value = false
+  }
 }
 
 function openBind(channel: 'phone' | 'email') {
