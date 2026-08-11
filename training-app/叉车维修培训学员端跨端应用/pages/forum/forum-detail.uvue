@@ -35,6 +35,9 @@
                     <view class="topic-stats">
                         <text class="stat-text">👁 {{ topic.views_count }}</text>
                     </view>
+                    <view v-if="canDelete" class="topic-delete" @click="onDelete">
+                        <text class="topic-delete-text">删除</text>
+                    </view>
                 </view>
                 <view class="topic-content">
                     <text class="content-text">{{ topic.content }}</text>
@@ -44,9 +47,6 @@
                             <image class="img-thumb" :src="resolveFileUrl(img)" mode="aspectFill" />
                         </view>
                     </view>
-                </view>
-                <view v-if="canDelete" class="topic-delete" @click="onDelete">
-                    <text class="topic-delete-text">删除帖子</text>
                 </view>
             </view>
 
@@ -507,6 +507,16 @@
         color: #999999;
     }
 
+    /* 删除帖子按钮（贴主可见，位于卡片头部右上角） */
+    .topic-delete {
+        padding: 8rpx 0 8rpx 20rpx;
+    }
+
+    .topic-delete-text {
+        font-size: 24rpx;
+        color: #f44336;
+    }
+
     .topic-content {
         flex-direction: column;
     }
@@ -515,22 +525,6 @@
         font-size: 30rpx;
         color: #333333;
         line-height: 1.8;
-    }
-
-    /* 删除帖子按钮（贴主可见，位于正文下方） */
-    .topic-delete {
-        margin-top: 24rpx;
-        height: 80rpx;
-        border-radius: 12rpx;
-        background-color: #fff2f2;
-        border: 1rpx solid #ffd6d6;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .topic-delete-text {
-        font-size: 28rpx;
-        color: #f44336;
     }
 
     /* 图片墙（帖子/回复展示） */
