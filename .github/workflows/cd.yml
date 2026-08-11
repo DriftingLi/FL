@@ -83,7 +83,7 @@ jobs:
           CONTENT_TAG="c$(git ls-tree HEAD -- backend/ | git hash-object --stdin | cut -c1-16)"
           echo "content_tag=${CONTENT_TAG}" >> "$GITHUB_OUTPUT"
           echo "image_ref=${IMAGE_BACKEND,,}" >> "$GITHUB_OUTPUT"
-          if docker manifest inspect "${IMAGE_BACKEND}:${CONTENT_TAG}" >/dev/null 2>&1; then
+          if docker manifest inspect "${IMAGE_BACKEND,,}:${CONTENT_TAG}" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "后端内容未变更（${CONTENT_TAG} 已存在），跳过构建"
           else
@@ -145,7 +145,7 @@ jobs:
           CONTENT_TAG="c$(git ls-tree HEAD -- frontend/ | git hash-object --stdin | cut -c1-16)"
           echo "content_tag=${CONTENT_TAG}" >> "$GITHUB_OUTPUT"
           echo "image_ref=${IMAGE_FRONTEND,,}" >> "$GITHUB_OUTPUT"
-          if docker manifest inspect "${IMAGE_FRONTEND}:${CONTENT_TAG}" >/dev/null 2>&1; then
+          if docker manifest inspect "${IMAGE_FRONTEND,,}:${CONTENT_TAG}" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "前端内容未变更（${CONTENT_TAG} 已存在），跳过构建"
           else
@@ -207,7 +207,7 @@ jobs:
           CONTENT_TAG="c$(git ls-tree HEAD -- libreoffice-sidecar/ | git hash-object --stdin | cut -c1-16)"
           echo "content_tag=${CONTENT_TAG}" >> "$GITHUB_OUTPUT"
           echo "image_ref=${IMAGE_LIBREOFFICE,,}" >> "$GITHUB_OUTPUT"
-          if docker manifest inspect "${IMAGE_LIBREOFFICE}:${CONTENT_TAG}" >/dev/null 2>&1; then
+          if docker manifest inspect "${IMAGE_LIBREOFFICE,,}:${CONTENT_TAG}" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "LibreOffice 内容未变更（${CONTENT_TAG} 已存在），跳过构建"
           else
