@@ -110,6 +110,7 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int) (map
 			QuestionIDs:  model.JSONB(idsJSON),
 			CurrentIndex: 0,
 			Total:        len(ids),
+			AnswersState: model.JSONB("{}"),
 			UpdatedAt:    beijingNow(),
 		}
 		if err := s.db.Create(&prog).Error; err != nil {
@@ -169,6 +170,7 @@ func (s *PracticeModeService) StartSequential(studentID int) (map[string]any, er
 			QuestionIDs:  model.JSONB(idsJSON),
 			CurrentIndex: 0,
 			Total:        len(ids),
+			AnswersState: model.JSONB("{}"),
 			UpdatedAt:    beijingNow(),
 		}
 		if err := s.db.Create(&prog).Error; err != nil {
