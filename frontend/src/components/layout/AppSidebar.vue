@@ -15,10 +15,10 @@
           alt="头像"
         />
         <div v-else class="user-avatar-circle">
-          {{ (authStore.userInfo?.name || authStore.userInfo?.username || '?').charAt(0) }}
+          {{ (authStore.userInfo?.username || '?').charAt(0) }}
         </div>
         <div v-if="!effectiveCollapsed" class="user-info">
-          <span class="user-name">{{ authStore.userInfo?.nickname || authStore.userInfo?.name || authStore.userInfo?.username }}</span>
+          <span class="user-name">{{ authStore.userInfo?.username }}</span>
           <span class="role-badge" :class="roleClass">{{ roleLabel }}</span>
         </div>
         <el-icon v-if="!effectiveCollapsed" class="user-dropdown-arrow"><ArrowDown /></el-icon>

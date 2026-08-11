@@ -85,10 +85,10 @@ type CourseBriefDTO struct {
 
 // ChapterDTO 章节。
 type ChapterDTO struct {
-	ChapterID   int               `json:"chapter_id"`
-	Content     string            `json:"content"`
-	ContentType string            `json:"content_type"`
-	ContentURL  string            `json:"content_url"`
+	ChapterID   int    `json:"chapter_id"`
+	Content     string `json:"content"`
+	ContentType string `json:"content_type"`
+
 	CourseID    int               `json:"course_id"`
 	CreatedAt   string            `json:"created_at"`
 	Description string            `json:"description"`
@@ -554,7 +554,6 @@ func chapterToDTO(c *model.Chapter) ChapterDTO {
 		CourseID:    c.CourseID,
 		Title:       c.Title,
 		Content:     c.Content,
-		ContentURL:  c.ContentURL,
 		ContentType: c.ContentType,
 		FileURL:     c.FileURL,
 		Description: c.Description,

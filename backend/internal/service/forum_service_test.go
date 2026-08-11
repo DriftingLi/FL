@@ -45,9 +45,10 @@ func newForumTestSvc(t *testing.T) (*ForumService, *gorm.DB, *memForumStorage) {
 func seedForumUser(t *testing.T, db *gorm.DB, name string) *model.HrwaiUser {
 	t.Helper()
 	u := &model.HrwaiUser{
-		Username:  "forum_" + name,
+		UID:       900000000000000000 + int64(len(name)),
+		Account:   "forum_" + name,
+		Username:  name,
 		Password:  "x",
-		Name:      name,
 		Phone:     "f_" + name,
 		Status:    1,
 		CreatedAt: time.Now(),

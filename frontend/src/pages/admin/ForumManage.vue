@@ -138,7 +138,7 @@ const replyMap = ref<Record<number, AdminForumReply[]>>({})
 const detailLoadingId = ref<number | null>(null)
 
 function displayName(author: AdminForumTopic['author']) {
-  return author.nickname || author.name || author.username
+  return author.username
 }
 
 async function loadList() {

@@ -60,10 +60,10 @@ func (j *JSONB) UnmarshalJSON(data []byte) error {
 // admin / tutor 账号仍保留独立表,不并入此表。
 type HrwaiUser struct {
 	ID        int    `gorm:"column:id;primaryKey" json:"id"`
+	UID       int64  `gorm:"column:uid" json:"uid,string"`
+	Account   string `gorm:"column:account;uniqueIndex" json:"account"`
 	Username  string `gorm:"column:username;uniqueIndex" json:"username"`
 	Password  string `gorm:"column:password" json:"-"`
-	Name      string `gorm:"column:name" json:"name"`
-	Nickname  string `gorm:"column:nickname" json:"nickname"`
 	AvatarURL string `gorm:"column:avatar_url" json:"avatar_url"`
 	Phone     string `gorm:"column:phone;uniqueIndex" json:"phone"`
 	Email     string `gorm:"column:email" json:"email,omitempty"`
@@ -77,25 +77,6 @@ type HrwaiUser struct {
 }
 
 func (HrwaiUser) TableName() string { return "hrwai_users" }
-
-// Student 兼容旧代码引用,实际映射同一张 hrwai_users 表。
-// StudentID Go 字段名保留(避免大量改下游代码),但 gorm column 改为 id(对应新表主键)。
-// deprecated: 后续请改用 model.HrwaiUser
-type Student struct {
-	StudentID int       `gorm:"column:id;primaryKey" json:"student_id"`
-	Username  string    `gorm:"column:username;uniqueIndex" json:"username"`
-	Password  string    `gorm:"column:password" json:"-"`
-	Name      string    `gorm:"column:name" json:"name"`
-	Nickname  string    `gorm:"column:nickname" json:"nickname"`
-	AvatarURL string    `gorm:"column:avatar_url" json:"avatar_url"`
-	Phone     string    `gorm:"column:phone;uniqueIndex" json:"phone"`
-	Email     string    `gorm:"column:email" json:"email,omitempty"`
-	Company   string    `gorm:"column:company" json:"company,omitempty"`
-	Status    int16     `gorm:"column:status;default:1" json:"status"`
-	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
-}
-
-func (Student) TableName() string { return "hrwai_users" }
 
 // ===== 2. 管理员 =====
 
@@ -121,12 +102,6 @@ type Tutor struct {
 }
 
 func (Tutor) TableName() string { return "tutor" }
-
-// ===== 3.5 残值评估模块独立用户(已并入 hrwai_users) =====
-
-// ValuationUser 别名,实际映射同一张 hrwai_users 表。
-// deprecated: 后续请改用 model.HrwaiUser
-type ValuationUser = HrwaiUser
 
 // ===== 4. 课程 =====
 
@@ -216,7 +191,6 @@ type Chapter struct {
 	CourseID    int    `gorm:"column:course_id" json:"course_id"`
 	Title       string `gorm:"column:title" json:"title"`
 	Content     string `gorm:"column:content" json:"content"`
-	ContentURL  string `gorm:"column:content_url" json:"content_url"`
 	ContentType string `gorm:"column:content_type;default:text" json:"content_type"`
 	FileURL     string `gorm:"column:file_url" json:"file_url"`
 	// SlideUrls PPT 转图后的幻灯片 URL 列表（JSON 数组字符串）。
@@ -257,19 +231,6 @@ type StudyRecord struct {
 }
 
 func (StudyRecord) TableName() string { return "study_record" }
-
-// ===== 8. 考核记录 =====
-
-type ExamRecord struct {
-	ExamID    int       `gorm:"column:exam_id;primaryKey" json:"exam_id"`
-	StudentID int       `gorm:"column:student_id" json:"student_id"`
-	CourseID  int       `gorm:"column:course_id" json:"course_id"`
-	Score     *float64  `gorm:"column:score;type:numeric(5,2)" json:"score,omitempty"`
-	Answers   JSONB     `gorm:"column:answers;type:jsonb" json:"answers,omitempty"`
-	ExamDate  time.Time `gorm:"column:exam_date" json:"exam_date"`
-}
-
-func (ExamRecord) TableName() string { return "exam_record" }
 
 // ===== 9. AI 生成记录 =====
 

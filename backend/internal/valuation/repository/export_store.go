@@ -24,7 +24,7 @@ func NewExportStore(pool *pgxpool.Pool) *ExportStore {
 // ListEvaluationExports 评估记录导出行（与导出契约列一一对应，含主表用户 join）。
 func (s *ExportStore) ListEvaluationExports(ctx context.Context) ([]vmain.EvaluationExportRow, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT e.id, COALESCE(u.username, '') AS username, COALESCE(u.name, '') AS name,
+		SELECT e.id, COALESCE(u.account, '') AS account, COALESCE(u.username, '') AS username,
 		       e.brand, e.vehicle_type, e.series, e.tonnage, e.config_type, e.mast_type,
 		       e.mast_height_mm, e.factory_year, e.sale_year, e.usage_hours, e.original_paint,
 		       e.province, e.city, e.has_license_plate, e.has_registration_certificate AS has_registration_cert,
@@ -47,7 +47,7 @@ func (s *ExportStore) ListEvaluationExports(ctx context.Context) ([]vmain.Evalua
 		var reportPath *string
 		var createdAt time.Time
 		if err := rows.Scan(
-			&r.ID, &r.Username, &r.Name, &r.Brand, &r.VehicleType, &r.Series, &r.Tonnage,
+			&r.ID, &r.Account, &r.Username, &r.Brand, &r.VehicleType, &r.Series, &r.Tonnage,
 			&r.ConfigType, &r.MastType, &r.MastHeightMM, &r.FactoryYear, &r.SaleYear,
 			&r.UsageHours, &r.OriginalPaint, &r.Province, &r.City,
 			&r.HasLicensePlate, &r.HasRegistrationCert, &r.HasMaintenanceRecords,

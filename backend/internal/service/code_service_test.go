@@ -195,7 +195,7 @@ func TestSendRegisterCode(t *testing.T) {
 	}
 	// 已注册邮箱不能发送注册验证码
 	_ = svc.db.Create(&model.HrwaiUser{
-		Username: "exists", Password: "x", Name: "已注册",
+		UID: 700000000000000001, Account: "exists", Username: "已注册", Password: "x",
 		Phone: "test_mail_exists", Email: "taken@example.com", Status: 1, CreatedAt: time.Now(),
 	})
 	if err := svc.Send(ctx, ch, CodePurposeRegister, "taken@example.com"); err == nil || !strings.Contains(err.Error(), "已注册") {
@@ -209,7 +209,7 @@ func TestSendLoginCode(t *testing.T) {
 	db := svc.db
 	ctx := context.Background()
 	_ = db.Create(&model.HrwaiUser{
-		Username: "mail_login_user", Password: "x", Name: "登录用户",
+		UID: 700000000000000002, Account: "mail_login_user", Username: "登录用户", Password: "x",
 		Phone: "test_mail_login", Email: "login@example.com", Status: 1, CreatedAt: time.Now(),
 	})
 
@@ -257,8 +257,12 @@ func TestRegisterAndLoginWithCode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("注册失败: %v", err)
 	}
-	if regRes.Token == "" || regRes.Role != HrwaiRole || regRes.Username == "" || regRes.Username == email {
+	if regRes.Token == "" || regRes.Role != HrwaiRole || regRes.Account == "" || regRes.Account == email || regRes.Username != "张三" {
 		t.Errorf("注册结果异常: %+v", regRes)
+	}
+	var created model.HrwaiUser
+	if err := svc.db.First(&created, regRes.UserID).Error; err != nil || created.UID <= 0 {
+		t.Errorf("注册用户应有非零 uid: %+v err=%v", created, err)
 	}
 	if mailer := ch.mailer.(*fakeMailer); len(mailer.sent) != 1 {
 		t.Fatalf("注册应发送 1 封邮件，实际 %d", len(mailer.sent))
@@ -362,8 +366,8 @@ func TestBindEmail(t *testing.T) {
 	ch := testEmailChannel(&fakeMailer{})
 	db := svc.db
 	ctx := context.Background()
-	u1 := &model.HrwaiUser{Username: "ebind1", Password: "x", Name: "用户一", Phone: "test_ebind_1", Email: "old1@example.com", Status: 1, CreatedAt: time.Now()}
-	u2 := &model.HrwaiUser{Username: "ebind2", Password: "x", Name: "用户二", Phone: "test_ebind_2", Email: "taken2@example.com", Status: 1, CreatedAt: time.Now()}
+	u1 := &model.HrwaiUser{UID: 700000000000000003, Account: "ebind1", Username: "用户一", Password: "x", Phone: "test_ebind_1", Email: "old1@example.com", Status: 1, CreatedAt: time.Now()}
+	u2 := &model.HrwaiUser{UID: 700000000000000004, Account: "ebind2", Username: "用户二", Password: "x", Phone: "test_ebind_2", Email: "taken2@example.com", Status: 1, CreatedAt: time.Now()}
 	_ = db.Create(u1)
 	_ = db.Create(u2)
 
@@ -421,8 +425,12 @@ func TestPhoneRegisterAndLogin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("手机号注册失败: %v", err)
 	}
-	if regRes.Token == "" || regRes.Role != HrwaiRole || regRes.Username == "" || regRes.Username == phone {
+	if regRes.Token == "" || regRes.Role != HrwaiRole || regRes.Account == "" || regRes.Account == phone || regRes.Username != "张三" {
 		t.Errorf("注册结果异常（账号应随机生成）: %+v", regRes)
+	}
+	var created model.HrwaiUser
+	if err := svc.db.First(&created, regRes.UserID).Error; err != nil || created.UID <= 0 {
+		t.Errorf("注册用户应有非零 uid: %+v err=%v", created, err)
 	}
 	// 重复注册
 	if err := svc.Send(ctx, ch, CodePurposeRegister, phone); err == nil || !strings.Contains(err.Error(), "已注册") {
@@ -451,8 +459,8 @@ func TestPhoneBind(t *testing.T) {
 	ch := testSmsChannel(&fakeSMSProvider{})
 	db := svc.db
 	ctx := context.Background()
-	u1 := &model.HrwaiUser{Username: "pbind1", Password: "x", Name: "用户一", Phone: "13800001111", Status: 1, CreatedAt: time.Now()}
-	u2 := &model.HrwaiUser{Username: "pbind2", Password: "x", Name: "用户二", Phone: "13800002222", Status: 1, CreatedAt: time.Now()}
+	u1 := &model.HrwaiUser{UID: 700000000000000005, Account: "pbind1", Username: "用户一", Password: "x", Phone: "13800001111", Status: 1, CreatedAt: time.Now()}
+	u2 := &model.HrwaiUser{UID: 700000000000000006, Account: "pbind2", Username: "用户二", Password: "x", Phone: "13800002222", Status: 1, CreatedAt: time.Now()}
 	_ = db.Create(u1)
 	_ = db.Create(u2)
 

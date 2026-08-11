@@ -61,7 +61,7 @@ func TestIssueVerify_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("校验失败: %v", err)
 	}
-	if claims.UserID != 42 || claims.Username != "hrwai01" || claims.Role != "hrwai_user" {
+	if claims.UserID != 42 || claims.Account != "hrwai01" || claims.Role != "hrwai_user" {
 		t.Errorf("claims 解析异常: %+v", claims)
 	}
 }
@@ -89,7 +89,7 @@ func TestVerify_RejectsAlgNone(t *testing.T) {
 func TestVerify_RejectsExpired(t *testing.T) {
 	sess := newTestSession(nil)
 	claims := &Claims{
-		UserID: 1, Username: "u", Role: "hrwai_user",
+		UserID: 1, Account: "u", Role: "hrwai_user",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 		},

@@ -30,23 +30,15 @@ const (
 	ForumReplyMaxImages = 3 // 回复最多图片数
 )
 
-// ForumAuthor 论坛作者信息（昵称优先，其次姓名/用户名）。
+// ForumAuthor 论坛作者信息（展示名为昵称）。
 type ForumAuthor struct {
 	UserID    int    `json:"user_id"`
 	Username  string `json:"username"`
-	Name      string `json:"name"`
-	Nickname  string `json:"nickname"`
 	AvatarURL string `json:"avatar_url"`
 }
 
-// DisplayName 返回论坛展示名：昵称 > 姓名 > 用户名。
+// DisplayName 返回论坛展示名（昵称）。
 func (a ForumAuthor) DisplayName() string {
-	if s := strings.TrimSpace(a.Nickname); s != "" {
-		return s
-	}
-	if s := strings.TrimSpace(a.Name); s != "" {
-		return s
-	}
 	return a.Username
 }
 
@@ -107,8 +99,6 @@ type topicRow struct {
 	CreatedAt    time.Time
 	UserID       int
 	Username     string
-	Name         string
-	Nickname     string
 	AvatarURL    string
 }
 
@@ -130,8 +120,7 @@ func (r topicRow) toDTO(viewerID int) ForumTopicDTO {
 		LastReplyAt:  lastReplyAt,
 		CreatedAt:    formatISO(r.CreatedAt),
 		Author: ForumAuthor{
-			UserID: r.UserID, Username: r.Username,
-			Name: r.Name, Nickname: r.Nickname, AvatarURL: r.AvatarURL,
+			UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL,
 		},
 		CanDelete: r.UserID == viewerID,
 	}
@@ -160,7 +149,7 @@ func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, k
 
 	q := s.db.Table("forum_topics AS t").
 		Select("t.id, t.chapter_id, t.title, t.content, t.images, t.view_count, t.reply_count, t.last_reply_at, t.created_at, " +
-			"u.id AS user_id, u.username, u.name, u.nickname, u.avatar_url, " +
+			"u.id AS user_id, u.username, u.avatar_url, " +
 			"COALESCE(ch.title, '') AS chapter_title").
 		Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
 		Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id")
@@ -208,7 +197,7 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int) (map[string]any, er
 	var row topicRow
 	err := s.db.Table("forum_topics AS t").
 		Select("t.id, t.chapter_id, t.title, t.content, t.images, t.view_count, t.reply_count, t.last_reply_at, t.created_at, "+
-			"u.id AS user_id, u.username, u.name, u.nickname, u.avatar_url, "+
+			"u.id AS user_id, u.username, u.avatar_url, "+
 			"COALESCE(ch.title, '') AS chapter_title").
 		Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
 		Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").
@@ -236,15 +225,13 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int) (map[string]any, er
 		CreatedAt  time.Time
 		UserID     int
 		Username   string
-		Name       string
-		Nickname   string
 		AvatarURL  string
 		ParentName string
 	}
 	if err := s.db.Table("forum_replies AS r").
 		Select("r.id, r.topic_id, r.parent_id, r.content, r.images, r.created_at, "+
-			"u.id AS user_id, u.username, u.name, u.nickname, u.avatar_url, "+
-			"COALESCE(NULLIF(pu.nickname, ''), NULLIF(pu.name, ''), pu.username, '') AS parent_name").
+			"u.id AS user_id, u.username, u.avatar_url, "+
+			"COALESCE(pu.username, '') AS parent_name").
 		Joins("JOIN hrwai_users AS u ON u.id = r.user_id").
 		Joins("LEFT JOIN forum_replies AS pr ON pr.id = r.parent_id").
 		Joins("LEFT JOIN hrwai_users AS pu ON pu.id = pr.user_id").
@@ -260,8 +247,7 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int) (map[string]any, er
 			ID: r.ID, TopicID: r.TopicID, ParentID: r.ParentID, ParentName: r.ParentName,
 			Content: r.Content, Images: parseImageURLs(r.Images), CreatedAt: formatISO(r.CreatedAt),
 			Author: ForumAuthor{
-				UserID: r.UserID, Username: r.Username,
-				Name: r.Name, Nickname: r.Nickname, AvatarURL: r.AvatarURL,
+				UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL,
 			},
 			CanDelete: r.UserID == viewerID,
 		})
@@ -326,8 +312,7 @@ func (s *ForumService) CreateTopic(userID int, chapterID *int, title, content st
 		Images:    images,
 		CreatedAt: formatISO(topic.CreatedAt),
 		Author: ForumAuthor{
-			UserID: u.ID, Username: u.Username,
-			Name: u.Name, Nickname: u.Nickname, AvatarURL: u.AvatarURL,
+			UserID: u.ID, Username: u.Username, AvatarURL: u.AvatarURL,
 		},
 		CanDelete: true,
 	}, nil
@@ -368,8 +353,7 @@ func (s *ForumService) ReplyTopic(userID int, topicID int64, content string, par
 		var pu model.HrwaiUser
 		if err := s.db.First(&pu, parent.UserID).Error; err == nil {
 			parentName = ForumAuthor{
-				UserID: pu.ID, Username: pu.Username,
-				Name: pu.Name, Nickname: pu.Nickname, AvatarURL: pu.AvatarURL,
+				UserID: pu.ID, Username: pu.Username, AvatarURL: pu.AvatarURL,
 			}.DisplayName()
 		}
 	}
@@ -406,8 +390,7 @@ func (s *ForumService) ReplyTopic(userID int, topicID int64, content string, par
 		ID: reply.ID, TopicID: reply.TopicID, ParentID: reply.ParentID,
 		ParentName: parentName, Content: reply.Content, Images: images, CreatedAt: formatISO(reply.CreatedAt),
 		Author: ForumAuthor{
-			UserID: u.ID, Username: u.Username,
-			Name: u.Name, Nickname: u.Nickname, AvatarURL: u.AvatarURL,
+			UserID: u.ID, Username: u.Username, AvatarURL: u.AvatarURL,
 		},
 		CanDelete: true,
 	}, nil

@@ -29,9 +29,9 @@ func NewAdminService(db *gorm.DB, logger *zap.Logger) *AdminService {
 // HrwaiUserSummary HRWAI 用户摘要(列表项,不含密码)。
 type HrwaiUserSummary struct {
 	ID        int       `json:"id"`
+	UID       int64     `json:"uid,string"`
+	Account   string    `json:"account"`
 	Username  string    `json:"username"`
-	Name      string    `json:"name"`
-	Nickname  string    `json:"nickname"`
 	Phone     string    `json:"phone"`
 	Email     string    `json:"email"`
 	Company   string    `json:"company"`
@@ -47,7 +47,7 @@ type HrwaiUserPageResult struct {
 	Total    int64              `json:"total"`
 }
 
-// ListHrwaiUsers 分页查询 HRWAI 用户,支持按用户名/姓名/手机号模糊搜索。
+// ListHrwaiUsers 分页查询 HRWAI 用户,支持按账号/昵称/手机号模糊搜索。
 func (s *AdminService) ListHrwaiUsers(page, pageSize int, keyword string) (*HrwaiUserPageResult, error) {
 	if page < 1 {
 		page = 1
@@ -59,7 +59,7 @@ func (s *AdminService) ListHrwaiUsers(page, pageSize int, keyword string) (*Hrwa
 	q := s.db.Model(&model.HrwaiUser{})
 	if keyword != "" {
 		like := "%" + keyword + "%"
-		q = q.Where("username LIKE ? OR name LIKE ? OR nickname LIKE ? OR phone LIKE ?", like, like, like, like)
+		q = q.Where("account LIKE ? OR username LIKE ? OR phone LIKE ?", like, like, like)
 	}
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
@@ -73,9 +73,9 @@ func (s *AdminService) ListHrwaiUsers(page, pageSize int, keyword string) (*Hrwa
 	for _, u := range users {
 		list = append(list, HrwaiUserSummary{
 			ID:        u.ID,
+			UID:       u.UID,
+			Account:   u.Account,
 			Username:  u.Username,
-			Name:      u.Name,
-			Nickname:  u.Nickname,
 			Phone:     u.Phone,
 			Email:     u.Email,
 			Company:   u.Company,
@@ -91,25 +91,44 @@ func (s *AdminService) ListHrwaiUsers(page, pageSize int, keyword string) (*Hrwa
 	}, nil
 }
 
-// CreateHrwaiUser 管理员新增 HRWAI 用户。username 缺省时用手机号充填。
-func (s *AdminService) CreateHrwaiUser(phone, password, name, email, company string) (*model.HrwaiUser, error) {
-	if phone == "" || password == "" || name == "" {
-		return nil, errors.New("手机号、密码和姓名不能为空")
+// CreateHrwaiUser 管理员新增 HRWAI 用户。account 缺省时随机生成，昵称缺省时自动生成。
+func (s *AdminService) CreateHrwaiUser(phone, password, account, username, email, company string) (*model.HrwaiUser, error) {
+	if phone == "" || password == "" {
+		return nil, errors.New("手机号、密码不能为空")
 	}
 	var count int64
 	s.db.Model(&model.HrwaiUser{}).Where("phone = ?", phone).Count(&count)
 	if count > 0 {
 		return nil, errors.New("手机号已被注册")
 	}
+	if account != "" {
+		if !IsValidAccount(account) {
+			return nil, errors.New("账号格式非法（4-20 位字母/数字/下划线）")
+		}
+		var acctCount int64
+		s.db.Model(&model.HrwaiUser{}).Where("account = ?", account).Count(&acctCount)
+		if acctCount > 0 {
+			return nil, errors.New("账号已被占用")
+		}
+	} else {
+		var err error
+		account, err = generateRandomAccount()
+		if err != nil {
+			return nil, errors.New("注册失败，请稍后再试")
+		}
+	}
+	if username == "" {
+		username = generateDefaultNickname(s.db)
+	}
 	hashed, err := HashPassword(password)
 	if err != nil {
 		return nil, err
 	}
 	user := model.HrwaiUser{
-		Username:  phone,
+		UID:       NextUID(),
+		Account:   account,
+		Username:  username,
 		Password:  hashed,
-		Name:      name,
-		Nickname:  generateDefaultNickname(s.db),
 		Phone:     phone,
 		Email:     email,
 		Company:   company,
@@ -123,15 +142,15 @@ func (s *AdminService) CreateHrwaiUser(phone, password, name, email, company str
 }
 
 // UpdateHrwaiUser 管理员更新 HRWAI 用户资料(不含密码)。
-func (s *AdminService) UpdateHrwaiUser(id int, name, email, company string, status int16) error {
+func (s *AdminService) UpdateHrwaiUser(id int, username, email, company string, status int16) error {
 	if id <= 0 {
 		return errors.New("用户 ID 非法")
 	}
 	updates := map[string]interface{}{
-		"name":    name,
-		"email":   email,
-		"company": company,
-		"status":  status,
+		"username": username,
+		"email":    email,
+		"company":  company,
+		"status":   status,
 	}
 	return s.db.Model(&model.HrwaiUser{}).Where("id = ?", id).Updates(updates).Error
 }
@@ -302,7 +321,7 @@ func (s *AdminService) GetStatistics() *AdminStatisticsDTO {
 // queryStatistics 执行实际的统计查询。
 func (s *AdminService) queryStatistics() *AdminStatisticsDTO {
 	var totalStudents, totalCourses, totalStudyDuration int64
-	s.db.Model(&model.Student{}).Count(&totalStudents)
+	s.db.Model(&model.HrwaiUser{}).Count(&totalStudents)
 	s.db.Model(&model.Course{}).Count(&totalCourses)
 	s.db.Model(&model.StudyRecord{}).Select("COALESCE(SUM(study_duration), 0)").Scan(&totalStudyDuration)
 

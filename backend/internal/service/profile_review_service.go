@@ -32,8 +32,6 @@ type ProfileChangeRequestDTO struct {
 	ID           int64   `json:"id"`
 	UserID       int     `json:"user_id"`
 	Username     string  `json:"username"`
-	Name         string  `json:"name"`
-	Nickname     string  `json:"nickname"`
 	AvatarURL    string  `json:"avatar_url"`
 	FieldType    string  `json:"field_type"`
 	OldValue     string  `json:"old_value"`
@@ -80,7 +78,7 @@ func (s *ProfileReviewService) CreateRequest(userID int, fieldType, newValue str
 	if err := s.db.First(&user, userID).Error; err != nil {
 		return nil, errors.New("用户不存在")
 	}
-	oldValue := user.Nickname
+	oldValue := user.Username
 	if fieldType == ProfileFieldAvatar {
 		oldValue = user.AvatarURL
 	}
@@ -151,7 +149,7 @@ func (s *ProfileReviewService) ListRequests(status string, page, pageSize int) (
 	q := s.db.Table("profile_change_requests AS r").
 		Select("r.id, r.user_id, r.field_type, r.old_value, r.new_value, r.status, r.reject_reason, " +
 			"r.reviewed_by, r.reviewed_at, r.created_at, " +
-			"u.username, u.name, u.nickname, u.avatar_url").
+			"u.username, u.avatar_url").
 		Joins("JOIN hrwai_users AS u ON u.id = r.user_id")
 	if status != "" && status != "all" {
 		q = q.Where("r.status = ?", status)
@@ -174,8 +172,6 @@ func (s *ProfileReviewService) ListRequests(status string, page, pageSize int) (
 		ReviewedAt   *time.Time
 		CreatedAt    time.Time
 		Username     string
-		Name         string
-		Nickname     string
 		AvatarURL    string
 	}
 	if err := q.Order("r.id DESC").Offset((page - 1) * pageSize).Limit(pageSize).
@@ -188,8 +184,7 @@ func (s *ProfileReviewService) ListRequests(status string, page, pageSize int) (
 		r := rows[i]
 		items = append(items, ProfileChangeRequestDTO{
 			ID: r.ID, UserID: r.UserID,
-			Username: r.Username, Name: r.Name,
-			Nickname: r.Nickname, AvatarURL: r.AvatarURL,
+			Username: r.Username, AvatarURL: r.AvatarURL,
 			FieldType: r.FieldType, OldValue: r.OldValue, NewValue: r.NewValue,
 			Status: r.Status, RejectReason: r.RejectReason,
 			ReviewedBy: r.ReviewedBy,
@@ -237,7 +232,7 @@ func (s *ProfileReviewService) review(requestID int64, reviewerID int, status, r
 		if status == ProfileStatusApproved {
 			updates := map[string]any{}
 			if req.FieldType == ProfileFieldNickname {
-				updates["nickname"] = req.NewValue
+				updates["username"] = req.NewValue
 			} else {
 				updates["avatar_url"] = req.NewValue
 			}
@@ -303,8 +298,6 @@ func (s *ProfileReviewService) toDTO(req *model.ProfileChangeRequest, user *mode
 		ID:           req.ID,
 		UserID:       user.ID,
 		Username:     user.Username,
-		Name:         user.Name,
-		Nickname:     user.Nickname,
 		AvatarURL:    user.AvatarURL,
 		FieldType:    req.FieldType,
 		OldValue:     req.OldValue,

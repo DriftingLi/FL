@@ -554,7 +554,7 @@ func (s *VerifyCodeService) RegisterWithCode(ctx context.Context, ch CodeChannel
 		return nil, errors.New("该" + ch.Noun() + "已注册，请直接登录")
 	}
 
-	username, err := generateRandomUsername()
+	account, err := generateRandomAccount()
 	if err != nil {
 		return nil, errors.New("注册失败，请稍后再试")
 	}
@@ -563,10 +563,10 @@ func (s *VerifyCodeService) RegisterWithCode(ctx context.Context, ch CodeChannel
 		return nil, errors.New("注册失败，请稍后再试")
 	}
 	user := model.HrwaiUser{
-		Username:  username,
+		UID:       NextUID(),
+		Account:   account,
+		Username:  nickname,
 		Password:  hashed,
-		Name:      "",
-		Nickname:  nickname,
 		Company:   strings.TrimSpace(company),
 		Status:    1,
 		CreatedAt: beijingNow(),
@@ -576,12 +576,12 @@ func (s *VerifyCodeService) RegisterWithCode(ctx context.Context, ch CodeChannel
 		return nil, errors.New("注册失败，该" + ch.Noun() + "可能已被注册")
 	}
 
-	token, err := s.authSvc.GenerateToken(user.ID, user.Username, HrwaiRole)
+	token, err := s.authSvc.GenerateToken(user.ID, user.Account, HrwaiRole)
 	if err != nil {
 		return nil, err
 	}
 	return &LoginResult{
-		Token: token, UserID: user.ID, Username: user.Username, Name: user.Name, Role: HrwaiRole,
+		Token: token, UserID: user.ID, Account: user.Account, Username: user.Username, Role: HrwaiRole,
 	}, nil
 }
 
@@ -602,12 +602,12 @@ func (s *VerifyCodeService) LoginWithCode(ctx context.Context, ch CodeChannel, t
 	if user.Status != 1 {
 		return nil, errors.New("账号已被禁用，请联系管理员")
 	}
-	token, err := s.authSvc.GenerateToken(user.ID, user.Username, HrwaiRole)
+	token, err := s.authSvc.GenerateToken(user.ID, user.Account, HrwaiRole)
 	if err != nil {
 		return nil, err
 	}
 	return &LoginResult{
-		Token: token, UserID: user.ID, Username: user.Username, Name: user.Name, Role: HrwaiRole,
+		Token: token, UserID: user.ID, Account: user.Account, Username: user.Username, Role: HrwaiRole,
 	}, nil
 }
 

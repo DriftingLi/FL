@@ -2,10 +2,8 @@
 -- 回滚合并 baseline：按依赖反向顺序 DROP 全部最终态表（被引用多的表后删）。
 
 DROP TABLE IF EXISTS hrwai_users CASCADE;
-DROP TABLE IF EXISTS student CASCADE;
 DROP TABLE IF EXISTS course CASCADE;
 DROP TABLE IF EXISTS question CASCADE;
-DROP TABLE IF EXISTS knowledge_point CASCADE;
 DROP TABLE IF EXISTS chapter CASCADE;
 DROP TABLE IF EXISTS question_tag CASCADE;
 DROP TABLE IF EXISTS certificate_template CASCADE;
@@ -18,8 +16,6 @@ DROP TABLE IF EXISTS ai_configs CASCADE;
 DROP TABLE IF EXISTS battery_evaluations CASCADE;
 DROP TABLE IF EXISTS exam_participant CASCADE;
 DROP TABLE IF EXISTS exam_session CASCADE;
-DROP TABLE IF EXISTS _deprecated_valuation_users CASCADE;
-DROP TABLE IF EXISTS _deprecated_student CASCADE;
 DROP TABLE IF EXISTS question_tag_relation CASCADE;
 DROP TABLE IF EXISTS course_prerequisite CASCADE;
 DROP TABLE IF EXISTS audit_logs CASCADE;
@@ -29,7 +25,6 @@ DROP TABLE IF EXISTS ai_user_models CASCADE;
 DROP TABLE IF EXISTS ai_chat_messages CASCADE;
 DROP TABLE IF EXISTS ai_feature_bindings CASCADE;
 DROP TABLE IF EXISTS system_settings CASCADE;
-DROP TABLE IF EXISTS valuation_users CASCADE;
 DROP TABLE IF EXISTS featured_content CASCADE;
 DROP TABLE IF EXISTS coefficient_configs CASCADE;
 DROP TABLE IF EXISTS battery_cycle_features CASCADE;
@@ -54,7 +49,6 @@ DROP TABLE IF EXISTS wrong_question CASCADE;
 DROP TABLE IF EXISTS question_practice_record CASCADE;
 DROP TABLE IF EXISTS exam_answer CASCADE;
 DROP TABLE IF EXISTS ai_generation_log CASCADE;
-DROP TABLE IF EXISTS exam_record CASCADE;
 DROP TABLE IF EXISTS study_record CASCADE;
 DROP TABLE IF EXISTS chapter_file CASCADE;
 DROP TABLE IF EXISTS tutor CASCADE;

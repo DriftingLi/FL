@@ -5,7 +5,9 @@ const DASHBOARD_TIMEOUT = 45000
 /** 学员主页 / 学习记录 */
 export interface StudentProfile {
   user_id?: number
-  nickname?: string
+  uid?: string
+  account?: string
+  username?: string
   avatar_url?: string
   study_stats?: Record<string, unknown>
   course_progress?: Array<Record<string, unknown>>

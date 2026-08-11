@@ -46,35 +46,6 @@ func (h *ValuationAuthHandler) Login(c *gin.Context) {
 	response.Success(c, result)
 }
 
-// registerRequest 注册请求体。
-type registerRequest struct {
-	Phone    string `json:"phone"`
-	Password string `json:"password"`
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Company  string `json:"company"`
-}
-
-// Register 处理 POST /api/valuation/auth/register
-// username 由后端用手机号自动生成，前端无需提交 username。
-func (h *ValuationAuthHandler) Register(c *gin.Context) {
-	var req registerRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "请求参数错误")
-		return
-	}
-	if req.Phone == "" || req.Password == "" || req.Name == "" {
-		response.BadRequest(c, "手机号、密码和姓名不能为空")
-		return
-	}
-	result, err := h.authSvc.HrwaiRegister(req.Phone, req.Password, req.Name, req.Email, req.Company)
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.Success(c, result)
-}
-
 // Me 处理 GET /api/valuation/auth/me（需 middleware.JWTAuth）
 func (h *ValuationAuthHandler) Me(c *gin.Context) {
 	uid := middleware.CurrentUserID(c)
@@ -89,8 +60,9 @@ func (h *ValuationAuthHandler) Me(c *gin.Context) {
 	}
 	response.Success(c, map[string]interface{}{
 		"user_id":  user.ID,
+		"uid":      vmain.FormatUID(user.UID),
+		"account":  user.Account,
 		"username": user.Username,
-		"name":     user.Name,
 		"phone":    user.Phone,
 		"email":    user.Email,
 		"company":  user.Company,

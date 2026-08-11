@@ -29,9 +29,9 @@ func NewStudentService(db *gorm.DB, logger *zap.Logger) *StudentService {
 // StudentDTO 学员基本信息。
 type StudentDTO struct {
 	StudentID int    `json:"student_id"`
+	UID       int64  `json:"uid,string"`
+	Account   string `json:"account"`
 	Username  string `json:"username"`
-	Name      string `json:"name"`
-	Nickname  string `json:"nickname"`
 	AvatarURL string `json:"avatar_url"`
 	Status    int16  `json:"status"`
 	CreatedAt string `json:"created_at"`
@@ -39,13 +39,11 @@ type StudentDTO struct {
 
 // StudyStatsDTO 学习统计概览。
 type StudyStatsDTO struct {
-	TotalCourses       int64   `json:"total_courses"`
-	TotalStudyDuration int64   `json:"total_study_duration"`
-	CompletedCourses   int64   `json:"completed_courses"`
-	LearningCourses    int64   `json:"learning_courses"`
-	LatestStudyTime    string  `json:"latest_study_time"`
-	ExamCount          int64   `json:"exam_count"`
-	AvgScore           float64 `json:"avg_score"`
+	TotalCourses       int64  `json:"total_courses"`
+	TotalStudyDuration int64  `json:"total_study_duration"`
+	CompletedCourses   int64  `json:"completed_courses"`
+	LearningCourses    int64  `json:"learning_courses"`
+	LatestStudyTime    string `json:"latest_study_time"`
 }
 
 // CourseProgressDTO 课程进度条目。
@@ -94,7 +92,7 @@ func (s *StudentService) GetProfile(studentID int) (*StudentProfileDTO, error) {
 
 // queryProfile 执行实际的学员档案查询。
 func (s *StudentService) queryProfile(studentID int) (*StudentProfileDTO, error) {
-	var student model.Student
+	var student model.HrwaiUser
 	if err := s.db.First(&student, studentID).Error; err != nil {
 		return nil, errors.New("学员不存在")
 	}
@@ -125,13 +123,6 @@ func (s *StudentService) queryProfile(studentID int) (*StudentProfileDTO, error)
 	if !latestRecord.StudyDate.IsZero() {
 		latestStudyTime = formatISO(latestRecord.StudyDate)
 	}
-
-	// 考试次数与平均分
-	var examCount int64
-	s.db.Model(&model.ExamRecord{}).Where("student_id = ?", studentID).Count(&examCount)
-	var avgScore float64
-	s.db.Model(&model.ExamRecord{}).Where("student_id = ?", studentID).
-		Select("COALESCE(AVG(score), 0)").Scan(&avgScore)
 
 	// 各课程进度
 	type courseProgressRow struct {
@@ -179,8 +170,6 @@ func (s *StudentService) queryProfile(studentID int) (*StudentProfileDTO, error)
 			CompletedCourses:   completedCourses,
 			LearningCourses:    learningCourses,
 			LatestStudyTime:    latestStudyTime,
-			ExamCount:          examCount,
-			AvgScore:           roundFloat1(avgScore),
 		},
 		CourseProgress: courseProgressList,
 	}, nil
@@ -313,12 +302,12 @@ func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, en
 
 // ===== DTO 构造（原 studentToDict/studyRecordToDict 折叠入内）=====
 
-func studentToDTO(s *model.Student) StudentDTO {
+func studentToDTO(s *model.HrwaiUser) StudentDTO {
 	return StudentDTO{
-		StudentID: s.StudentID,
+		StudentID: s.ID,
+		UID:       s.UID,
+		Account:   s.Account,
 		Username:  s.Username,
-		Name:      s.Name,
-		Nickname:  s.Nickname,
 		AvatarURL: s.AvatarURL,
 		Status:    s.Status,
 		CreatedAt: formatISO(s.CreatedAt),

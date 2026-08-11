@@ -43,7 +43,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 	if req.Username == "" || req.Password == "" {
-		response.BadRequest(c, "用户名和密码不能为空")
+		response.BadRequest(c, "账号和密码不能为空")
 		return
 	}
 	result, err := h.authSvc.HrwaiLogin(req.Username, req.Password)
@@ -53,32 +53,6 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 	setAuthCookie(c, h.session, result.Token)
 	response.SuccessWithMsg(c, "登录成功", result)
-}
-
-// Register 学员注册 POST /api/auth/register
-// 用户名由后端用手机号自动生成，前端无需提交 username。
-func (h *AuthHandler) Register(c *gin.Context) {
-	var req struct {
-		Phone    string `json:"phone"`
-		Password string `json:"password"`
-		Name     string `json:"name"`
-		Email    string `json:"email"`
-		Company  string `json:"company"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "请求参数错误")
-		return
-	}
-	if req.Phone == "" || req.Password == "" || req.Name == "" {
-		response.BadRequest(c, "手机号、密码和姓名不能为空")
-		return
-	}
-	result, err := h.authSvc.HrwaiRegister(req.Phone, req.Password, req.Name, req.Email, req.Company)
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.Created(c, "注册成功", result)
 }
 
 // AdminLogin 管理员登录 POST /api/auth/admin-login
@@ -154,13 +128,13 @@ func authCookieFromReq(c *gin.Context, sess *security.Session) string {
 func (h *AuthHandler) Me(c *gin.Context) {
 	userID, _ := c.Get(string(middleware.CtxUserID))
 	role, _ := c.Get(string(middleware.CtxUserRole))
-	username, _ := c.Get(string(middleware.CtxUsername))
+	account, _ := c.Get(string(middleware.CtxAccount))
 
 	uid, _ := userID.(int)
 	roleStr, _ := role.(string)
-	uname, _ := username.(string)
+	acct, _ := account.(string)
 
-	response.Success(c, h.authSvc.GetProfile(uid, roleStr, uname))
+	response.Success(c, h.authSvc.GetProfile(uid, roleStr, acct))
 }
 
 // UpdateProfile 提交个人资料（昵称）修改审核 POST /api/auth/profile

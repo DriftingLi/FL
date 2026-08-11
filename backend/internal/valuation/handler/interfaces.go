@@ -38,7 +38,6 @@ type ReportGenerator interface {
 // 取代旧薄包装的 Main()/DB() 泄漏，见 spec #75 D4）。
 type ValuationAuth interface {
 	HrwaiLogin(account, password string) (*vmain.LoginResult, error)
-	HrwaiRegister(phone, password, name, email, company string) (map[string]any, error)
 	GetHrwaiUserByID(id int) (*mainmodel.HrwaiUser, error)
 	ExtractToken(authorization, cookie string) string
 	RevokeToken(ctx context.Context, tokenStr string) error

@@ -8,21 +8,14 @@ export interface LoginPayload {
   password: string
 }
 
-export interface RegisterPayload {
-  phone: string
-  password: string
-  name: string
-  email?: string
-  company?: string
-}
-
-/** 登录 / /auth/me 返回的用户信息 */
+/** 登录 / /auth/me 返回的用户信息（username 为昵称，uid 为字符串形式的雪花 ID） */
 export interface AuthUserInfo {
   token?: string
   user_id?: number
+  uid?: string
+  account?: string
   username?: string
   name?: string
-  nickname?: string
   avatar_url?: string
   role?: string
   email?: string
@@ -33,10 +26,6 @@ export interface AuthUserInfo {
 export const authApi = {
   login(data: LoginPayload) {
     return unwrappedRequest.post<AuthUserInfo>('/auth/login', data)
-  },
-
-  register(data: RegisterPayload) {
-    return unwrappedRequest.post<AuthUserInfo>('/auth/register', data)
   },
 
   adminLogin(data: LoginPayload) {

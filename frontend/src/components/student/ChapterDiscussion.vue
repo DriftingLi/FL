@@ -61,7 +61,7 @@
 
             <div class="reply-input-bar">
               <el-tag v-if="replyingTo" closable size="small" type="info" @close="replyingTo = null">
-                回复 @{{ replyingTo.name }}
+                回复 @{{ replyingTo.username }}
               </el-tag>
               <div class="reply-input-row">
                 <el-input
@@ -138,12 +138,12 @@ const detailContent = ref('')
 const replies = ref<ForumReplyItem[]>([])
 const replyContent = ref('')
 const replyImages = ref<string[]>([])
-const replyingTo = ref<{ id: number; name: string } | null>(null)
+const replyingTo = ref<{ id: number; username: string } | null>(null)
 const createVisible = ref(false)
 const createForm = ref<{ title: string; content: string; images: string[] }>({ title: '', content: '', images: [] })
 
 function displayName(author: ForumTopicItem['author']) {
-  return author.nickname || author.name || author.username
+  return author.username
 }
 
 function authorLetter(author: ForumTopicItem['author']) {
@@ -224,7 +224,7 @@ async function submitCreate() {
 }
 
 function startReplyTo(reply: ForumReplyItem) {
-  replyingTo.value = { id: reply.id, name: displayName(reply.author) }
+  replyingTo.value = { id: reply.id, username: displayName(reply.author) }
 }
 
 async function submitReply(topicId: number) {

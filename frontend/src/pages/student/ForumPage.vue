@@ -112,7 +112,7 @@ const createDialogVisible = ref(false)
 const createForm = ref<{ title: string; content: string; images: string[] }>({ title: '', content: '', images: [] })
 
 function displayName(author: ForumTopicItem['author']) {
-  return author.nickname || author.name || author.username
+  return author.username
 }
 
 function authorLetter(author: ForumTopicItem['author']) {

@@ -275,7 +275,8 @@ func (h *AdminHandler) CreateHrwaiUser(c *gin.Context) {
 	var req struct {
 		Phone    string `json:"phone"`
 		Password string `json:"password"`
-		Name     string `json:"name"`
+		Account  string `json:"account"`
+		Username string `json:"username"`
 		Email    string `json:"email"`
 		Company  string `json:"company"`
 	}
@@ -283,16 +284,16 @@ func (h *AdminHandler) CreateHrwaiUser(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误")
 		return
 	}
-	user, err := h.adminSvc.CreateHrwaiUser(req.Phone, req.Password, req.Name, req.Email, req.Company)
+	user, err := h.adminSvc.CreateHrwaiUser(req.Phone, req.Password, req.Account, req.Username, req.Email, req.Company)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
 	response.Created(c, "用户添加成功", map[string]any{
 		"id":       user.ID,
+		"uid":      service.FormatUID(user.UID),
+		"account":  user.Account,
 		"username": user.Username,
-		"name":     user.Name,
-		"nickname": user.Nickname,
 		"phone":    user.Phone,
 	})
 }
@@ -305,24 +306,20 @@ func (h *AdminHandler) UpdateHrwaiUser(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Name    string `json:"name"`
-		Email   string `json:"email"`
-		Company string `json:"company"`
-		Status  int16  `json:"status"`
+		Username string `json:"username"`
+		Email    string `json:"email"`
+		Company  string `json:"company"`
+		Status   int16  `json:"status"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "请求参数错误")
-		return
-	}
-	if req.Name == "" {
-		response.BadRequest(c, "姓名不能为空")
 		return
 	}
 	if req.Status != 0 && req.Status != 1 {
 		response.BadRequest(c, "状态值非法(仅支持 0/1)")
 		return
 	}
-	if err := h.adminSvc.UpdateHrwaiUser(id, req.Name, req.Email, req.Company, req.Status); err != nil {
+	if err := h.adminSvc.UpdateHrwaiUser(id, req.Username, req.Email, req.Company, req.Status); err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}

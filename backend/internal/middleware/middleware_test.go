@@ -24,9 +24,9 @@ const testSecret = "test-jwt-secret"
 func generateToken(t *testing.T, userID int, username, role string) string {
 	t.Helper()
 	claims := &Claims{
-		UserID:   userID,
-		Username: username,
-		Role:     role,
+		UserID:  userID,
+		Account: username,
+		Role:    role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -118,9 +118,9 @@ func TestJWTAuth_ExpiredToken(t *testing.T) {
 
 	// 生成已过期的 token
 	claims := &Claims{
-		UserID:   1,
-		Username: "user",
-		Role:     "student",
+		UserID:  1,
+		Account: "user",
+		Role:    "student",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 		},

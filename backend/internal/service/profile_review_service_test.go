@@ -41,10 +41,10 @@ func newReviewTestSvc(t *testing.T) (*ProfileReviewService, *NotificationService
 func seedHrwaiUser(t *testing.T, db *gorm.DB, phone, email string) *model.HrwaiUser {
 	t.Helper()
 	u := &model.HrwaiUser{
-		Username:  "hr_" + phone,
+		UID:       800000000000000000 + int64(len(phone)),
+		Account:   "hr_" + phone,
+		Username:  "旧昵称",
 		Password:  "x",
-		Name:      "测试学员",
-		Nickname:  "旧昵称",
 		Phone:     phone,
 		Email:     email,
 		Status:    1,
@@ -81,8 +81,8 @@ func TestProfileReview_Approve_EmitsNotification(t *testing.T) {
 	// 审核通过后资料已生效
 	var after model.HrwaiUser
 	_ = db.First(&after, user.ID).Error
-	if after.Nickname != "新昵称" {
-		t.Errorf("昵称应已生效: %q", after.Nickname)
+	if after.Username != "新昵称" {
+		t.Errorf("昵称应已生效: %q", after.Username)
 	}
 }
 

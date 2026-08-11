@@ -11,9 +11,9 @@ export interface AdminHrwaiUsersQuery {
 
 export interface HrwaiUser {
   id: number
+  uid?: string
+  account: string
   username: string
-  name: string
-  nickname?: string
   phone: string
   email?: string
   company?: string
@@ -24,13 +24,14 @@ export interface HrwaiUser {
 export interface CreateHrwaiUserPayload {
   phone: string
   password: string
-  name: string
+  account?: string
+  username?: string
   email?: string
   company?: string
 }
 
 export interface UpdateHrwaiUserPayload {
-  name: string
+  username: string
   email?: string
   company?: string
   status: number
@@ -59,8 +60,6 @@ export interface ProfileChangeRequest {
   id: number
   user_id: number
   username: string
-  name: string
-  nickname: string
   avatar_url: string
   field_type: 'nickname' | 'avatar'
   old_value: string

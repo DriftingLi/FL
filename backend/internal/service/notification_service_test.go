@@ -15,7 +15,7 @@ func TestNotificationService_CreateAndList(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := NewNotificationService(db, zap.NewNop())
 	student := testutil.SeedStudent(t, db, "notify_user", "x")
-	uid := student.StudentID
+	uid := student.ID
 
 	if err := svc.Create(uid, "profile_review", "资料审核通过", "您的昵称修改已生效", ""); err != nil {
 		t.Fatalf("创建通知失败: %v", err)
@@ -49,7 +49,7 @@ func TestNotificationService_CreateAndList(t *testing.T) {
 
 	// 其他用户查询不到任何通知
 	other := testutil.SeedStudent(t, db, "notify_other", "x")
-	count, err = svc.UnreadCount(other.StudentID)
+	count, err = svc.UnreadCount(other.ID)
 	if err != nil || count != 0 {
 		t.Fatalf("其他用户未读数应为 0，得到 %d, err=%v", count, err)
 	}
@@ -59,7 +59,7 @@ func TestNotificationService_MarkRead(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := NewNotificationService(db, zap.NewNop())
 	student := testutil.SeedStudent(t, db, "notify_mark", "x")
-	uid := student.StudentID
+	uid := student.ID
 
 	if err := svc.Create(uid, "system", "标题", "内容", "/training"); err != nil {
 		t.Fatalf("创建通知失败: %v", err)
@@ -109,7 +109,7 @@ func TestNotificationService_CreateWithTx_CommitAndRollback(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := NewNotificationService(db, zap.NewNop())
 	student := testutil.SeedStudent(t, db, "notify_tx", "x")
-	uid := student.StudentID
+	uid := student.ID
 
 	// 事务内写入并提交 → 通知落库
 	err := db.Transaction(func(tx *gorm.DB) error {

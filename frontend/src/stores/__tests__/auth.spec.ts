@@ -131,15 +131,15 @@ describe('token 持久化 round-trip', () => {
 
   it('/auth/me 返回资料合并进 userInfo 并持久化', async () => {
     localStorage.setItem('token', 't-merge')
-    localStorage.setItem('userInfo', JSON.stringify({ token: 't-merge', role: 'hrwai_user', nickname: '老张' }))
+    localStorage.setItem('userInfo', JSON.stringify({ token: 't-merge', role: 'hrwai_user', username: '老张' }))
     getUserInfo.mockResolvedValue({ role: 'hrwai_user', avatar_url: 'a.png' })
 
     const store = createStore()
     await flushPromises()
 
-    expect(store.userInfo.nickname).toBe('老张')
+    expect(store.userInfo.username).toBe('老张')
     expect(store.userInfo.avatar_url).toBe('a.png')
-    expect(JSON.parse(localStorage.getItem('userInfo') || '{}')).toMatchObject({ nickname: '老张', avatar_url: 'a.png' })
+    expect(JSON.parse(localStorage.getItem('userInfo') || '{}')).toMatchObject({ username: '老张', avatar_url: 'a.png' })
   })
 
   it('initialize 幂等：多次调用只执行一次校验', async () => {
