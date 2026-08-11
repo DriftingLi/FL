@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -43,6 +44,10 @@ func (m *forumImgStorage) Delete(_ context.Context, url string) error {
 func (m *forumImgStorage) Exists(context.Context, string) (bool, error) { return true, nil }
 
 func (m *forumImgStorage) List(_ context.Context, _ string) ([]string, error) { return m.files, nil }
+
+func (m *forumImgStorage) Get(_ context.Context, url string) (io.ReadCloser, error) {
+	return io.NopCloser(bytes.NewReader([]byte(url))), nil
+}
 
 // newForumImageTestSvc 构造论坛图片服务 + 内存存储。
 func newForumImageTestSvc(t *testing.T) (*ForumImageService, *gorm.DB, *forumImgStorage) {

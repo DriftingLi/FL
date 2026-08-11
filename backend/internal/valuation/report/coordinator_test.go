@@ -5,8 +5,12 @@
 package report
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -53,6 +57,17 @@ func (s *memStorage) Exists(_ context.Context, url string) (bool, error) {
 }
 
 func (s *memStorage) List(context.Context, string) ([]string, error) { return nil, nil }
+
+func (s *memStorage) Get(_ context.Context, url string) (io.ReadCloser, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := strings.TrimPrefix(url, "/static/uploads/")
+	content, ok := s.m[key]
+	if !ok {
+		return nil, fmt.Errorf("file not found: %s", key)
+	}
+	return io.NopCloser(bytes.NewReader(content)), nil
+}
 
 func (s *memStorage) hasKey(key string) bool {
 	s.mu.Lock()

@@ -196,5 +196,5 @@ func (h *BatteryHandler) GenerateReport(c *gin.Context) {
 
 // DownloadReport 处理 GET /api/v1/battery/evaluations/:id/report
 func (h *BatteryHandler) DownloadReport(c *gin.Context) {
-	serveReportDownload(c, h.coord, "电池评估记录不存在", h.logger)
+	serveReportDownload(c, h.coord, h.storage, "电池评估记录不存在", h.logger)
 }

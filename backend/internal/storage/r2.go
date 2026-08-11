@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -123,6 +124,25 @@ func (s *R2Storage) urlToKey(url string) string {
 	}
 	// 兼容 local 模式 URL
 	return strings.TrimPrefix(url, "/static/uploads/")
+}
+
+// Get 流式读取 R2 对象内容（GetObject → Body），调用方负责关闭。
+func (s *R2Storage) Get(ctx context.Context, url string) (io.ReadCloser, error) {
+	if url == "" {
+		return nil, fmt.Errorf("url 为空")
+	}
+	key := s.urlToKey(url)
+	if key == "" || key == url {
+		return nil, fmt.Errorf("无法从 URL 解析对象 key: %s", url)
+	}
+	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("R2 GetObject 失败: %w", err)
+	}
+	return out.Body, nil
 }
 
 // List 按 key 前缀列出 R2 中的文件，返回 https://<publicDomain>/<key> 形式的 URL 列表。

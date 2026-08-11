@@ -17,15 +17,17 @@ import (
 
 // ReportHandler 报告 HTTP 处理器（薄壳：协调器装配 + 端点注册）。
 type ReportHandler struct {
-	coord  *report.Coordinator[model.EvaluationDetail]
-	logger *zap.Logger
+	coord   *report.Coordinator[model.EvaluationDetail]
+	storage storage.Storage
+	logger  *zap.Logger
 }
 
 // NewReportHandler 构造报告处理器
 // resolver 用于未回填历史记录重建建议时动态读取 coefficient_configs（与评估流程同一份配置）。
 func NewReportHandler(evalRepo EvaluationStore, gen ReportGenerator, l *zap.Logger, st storage.Storage, resolver service.ConfigResolver) *ReportHandler {
 	return &ReportHandler{
-		logger: l,
+		logger:  l,
+		storage: st,
 		coord: report.New(report.Spec[model.EvaluationDetail]{
 			Logger:    l,
 			Storage:   st,
@@ -62,5 +64,5 @@ func (h *ReportHandler) Generate(c *gin.Context) {
 
 // Download 处理 GET /api/valuation/evaluations/:id/report
 func (h *ReportHandler) Download(c *gin.Context) {
-	serveReportDownload(c, h.coord, "评估记录不存在", h.logger)
+	serveReportDownload(c, h.coord, h.storage, "评估记录不存在", h.logger)
 }

@@ -1,7 +1,9 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +33,10 @@ func (m *memForumStorage) Delete(_ context.Context, url string) error {
 func (m *memForumStorage) Exists(context.Context, string) (bool, error) { return true, nil }
 
 func (m *memForumStorage) List(_ context.Context, _ string) ([]string, error) { return m.files, nil }
+
+func (m *memForumStorage) Get(_ context.Context, url string) (io.ReadCloser, error) {
+	return io.NopCloser(bytes.NewReader([]byte(url))), nil
+}
 
 // newForumTestSvc 构造论坛服务 + 内存存储（记录删除调用）。
 func newForumTestSvc(t *testing.T) (*ForumService, *gorm.DB, *memForumStorage) {
