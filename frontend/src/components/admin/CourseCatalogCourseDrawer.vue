@@ -133,22 +133,20 @@ async function submitCourse() {
 // ===== 章节 =====
 const chapterDialogVisible = ref(false)
 const chapterFormRef = ref<FormInstance | null>(null)
-const chapterForm = reactive<{ chapter_id: number | null; title: string; duration: number; content_url: string }>({
+const chapterForm = reactive<{ chapter_id: number | null; title: string; duration: number }>({
   chapter_id: null,
   title: '',
-  duration: 0,
-  content_url: ''
+  duration: 0
 })
 
 const chapterRules = {
   title: [{ required: true, message: '请输入章节标题', trigger: 'blur' }]
 }
 
-function openChapterDialog(ch?: { chapter_id: number; title: string; duration?: number; content_url?: string }) {
+function openChapterDialog(ch?: { chapter_id: number; title: string; duration?: number }) {
   chapterForm.chapter_id = ch?.chapter_id ?? null
   chapterForm.title = ch?.title ?? ''
   chapterForm.duration = ch?.duration ?? 0
-  chapterForm.content_url = ch?.content_url ?? ''
   chapterDialogVisible.value = true
 }
 
@@ -158,8 +156,7 @@ async function submitChapter() {
   try {
     const payload = {
       title: chapterForm.title,
-      duration: chapterForm.duration,
-      content_url: chapterForm.content_url || undefined
+      duration: chapterForm.duration
     }
     if (chapterForm.chapter_id) {
       await adminApi.updateChapter(chapterForm.chapter_id, payload)
@@ -302,9 +299,6 @@ defineExpose({ open })
       </el-form-item>
       <el-form-item label="时长(分钟)">
         <el-input-number v-model="chapterForm.duration" :min="0" :max="9999" style="width: 100%" />
-      </el-form-item>
-      <el-form-item label="内容链接">
-        <el-input v-model="chapterForm.content_url" placeholder="外部内容链接（可选）" />
       </el-form-item>
     </el-form>
     <template #footer>

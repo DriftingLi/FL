@@ -37,7 +37,7 @@
             <el-form-item prop="username">
               <el-input
                 v-model="formData.username"
-                placeholder="请输入您的账号"
+                placeholder="账号或手机号"
                 prefix-icon="User"
                 size="large"
                 class="form-input"

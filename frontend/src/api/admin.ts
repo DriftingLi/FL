@@ -180,7 +180,6 @@ export interface ChapterPayload {
   title: string
   content?: string
   content_type?: string
-  content_url?: string
   file_url?: string
   description?: string
   duration?: number
