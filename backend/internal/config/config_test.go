@@ -172,20 +172,6 @@ func TestGetenv(t *testing.T) {
 	}
 }
 
-func TestChainDef(t *testing.T) {
-	viper.AutomaticEnv()
-	setDefaults()
-
-	if got := chainDef("fallback", "test_chain_a", "test_chain_b"); got != "fallback" {
-		t.Errorf("全部缺失应回退 fallback，got %q", got)
-	}
-	os.Setenv("TEST_CHAIN_A", "first")
-	defer os.Unsetenv("TEST_CHAIN_A")
-	if got := chainDef("fallback", "test_chain_a", "test_chain_b"); got != "first" {
-		t.Errorf("链式回退应按序取第一个非空，got %q", got)
-	}
-}
-
 func TestPositiveInt_Fallback(t *testing.T) {
 	viper.AutomaticEnv()
 	setDefaults()

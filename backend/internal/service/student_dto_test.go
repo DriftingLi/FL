@@ -6,20 +6,23 @@ import "testing"
 
 func TestStudentDTOShapeLock(t *testing.T) {
 	student := StudentDTO{
-		StudentID: 42, Username: "13800000000", Name: "张三", Nickname: "小张",
+		StudentID: 42, UID: 1000000000000000042, Account: "acct_42", Username: "小张",
 		AvatarURL: "/static/uploads/avatars/a.webp", Status: 1, CreatedAt: "2026-08-01T10:00:00",
 	}
 	assertShapeLock(t, student,
-		"student_id", "username", "name", "nickname", "avatar_url", "status", "created_at",
+		"student_id", "uid", "account", "username", "avatar_url", "status", "created_at",
 	)
+	if b, _ := marshalJSON(t, student); string(b) != `{"student_id":42,"uid":"1000000000000000042","account":"acct_42","username":"小张","avatar_url":"/static/uploads/avatars/a.webp","status":1,"created_at":"2026-08-01T10:00:00"}` {
+		t.Fatalf("student 序列化与契约不符: %s", b)
+	}
 
 	stats := StudyStatsDTO{
 		TotalCourses: 5, TotalStudyDuration: 360, CompletedCourses: 2, LearningCourses: 1,
-		LatestStudyTime: "2026-08-01T09:00:00", ExamCount: 3, AvgScore: 78.5,
+		LatestStudyTime: "2026-08-01T09:00:00",
 	}
 	assertShapeLock(t, stats,
 		"total_courses", "total_study_duration", "completed_courses", "learning_courses",
-		"latest_study_time", "exam_count", "avg_score",
+		"latest_study_time",
 	)
 
 	progress := CourseProgressDTO{

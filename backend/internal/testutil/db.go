@@ -37,7 +37,6 @@ func NewMemoryDB(t *testing.T) *gorm.DB {
 // allModels 返回全部模型，按外键依赖顺序排列。
 func allModels() []interface{} {
 	return []interface{}{
-		&model.Student{},
 		&model.HrwaiUser{},
 		&model.Notification{},
 		&model.AuditLog{},
@@ -58,7 +57,6 @@ func allModels() []interface{} {
 		&model.QuestionTagRelation{},
 		&model.ExamParticipant{},
 		&model.ExamAnswer{},
-		&model.ExamRecord{},
 		&model.QuestionPracticeRecord{},
 		&model.PracticeProgress{},
 		&model.WrongQuestion{},
@@ -71,14 +69,19 @@ func allModels() []interface{} {
 	}
 }
 
+// seedUIDCounter 为测试用户生成递增 uid（雪花语义仅需唯一即可）。
+var seedUIDCounter int64 = 1000000000000000000
+
 // SeedStudent 插入一个测试学员，返回其 ID。
-// phone 自动从 username 派生以保证唯一性(hrwai_users.phone 为 NOT NULL UNIQUE)。
-func SeedStudent(t *testing.T, db *gorm.DB, username, hashedPassword string) *model.Student {
+// username 作为昵称；account 自动派生以保证唯一性；uid 取自递增计数器。
+func SeedStudent(t *testing.T, db *gorm.DB, username, hashedPassword string) *model.HrwaiUser {
 	t.Helper()
-	s := &model.Student{
+	seedUIDCounter++
+	s := &model.HrwaiUser{
+		UID:       seedUIDCounter,
+		Account:   "acct_" + username,
 		Username:  username,
 		Password:  hashedPassword,
-		Name:      username,
 		Phone:     "test_" + username,
 		Status:    1,
 		CreatedAt: Now(),

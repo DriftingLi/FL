@@ -18,7 +18,7 @@ func generateDefaultNickname(db *gorm.DB) string {
 	for i := 0; i < 10; i++ {
 		nickname := "叉车人" + randomDigits(6)
 		var count int64
-		if err := db.Model(&model.HrwaiUser{}).Where("nickname = ?", nickname).Count(&count).Error; err != nil {
+		if err := db.Model(&model.HrwaiUser{}).Where("username = ?", nickname).Count(&count).Error; err != nil {
 			continue
 		}
 		if count == 0 {
@@ -27,6 +27,19 @@ func generateDefaultNickname(db *gorm.DB) string {
 	}
 	// 兜底：毫秒时间戳尾部 6 位，冲突概率极低
 	return fmt.Sprintf("叉车人%06d", time.Now().UnixMilli()%1000000)
+}
+
+// IsValidAccount 校验登录账号格式（4-20 位字母/数字/下划线）。
+func IsValidAccount(account string) bool {
+	if len(account) < 4 || len(account) > 20 {
+		return false
+	}
+	for _, r := range account {
+		if !(r >= 'a' && r <= 'z') && !(r >= 'A' && r <= 'Z') && !(r >= '0' && r <= '9') && r != '_' {
+			return false
+		}
+	}
+	return true
 }
 
 // randomDigits 使用密码学安全随机数生成 n 位十进制数字串。

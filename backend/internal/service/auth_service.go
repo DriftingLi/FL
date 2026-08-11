@@ -45,21 +45,21 @@ func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpiry time.Duration, admi
 func (s *AuthService) SetProfileReviewService(rs *ProfileReviewService) { s.reviewSvc = rs }
 
 // GetProfile 组装 /auth/me 返回的用户资料（按角色查询对应账号表）。
-// 响应字段为前端约定（auth store 依赖 user_id/username/role/name、
+// 响应字段为前端约定（auth store 依赖 user_id/account/role/uid/username、
 // 学员资料字段与 has_password / pending_profile_change），保持稳定。
-func (s *AuthService) GetProfile(userID int, role, username string) map[string]any {
+func (s *AuthService) GetProfile(userID int, role, account string) map[string]any {
 	data := map[string]any{
-		"user_id":  userID,
-		"username": username,
-		"role":     role,
-		"name":     "",
+		"user_id": userID,
+		"account": account,
+		"role":    role,
 	}
 	switch role {
 	case HrwaiRole:
 		var u model.HrwaiUser
 		if err := s.db.First(&u, userID).Error; err == nil {
-			data["name"] = u.Name
-			data["nickname"] = u.Nickname
+			data["uid"] = FormatUID(u.UID)
+			data["account"] = u.Account
+			data["username"] = u.Username
 			data["avatar_url"] = u.AvatarURL
 			data["phone"] = u.Phone
 			data["email"] = u.Email
@@ -75,11 +75,13 @@ func (s *AuthService) GetProfile(userID int, role, username string) map[string]a
 		var t model.Tutor
 		if err := s.db.First(&t, userID).Error; err == nil {
 			data["name"] = t.Name
+			data["username"] = t.Username
 		}
 	case "admin":
 		var a model.Admin
 		if err := s.db.First(&a, userID).Error; err == nil {
 			data["name"] = a.Name
+			data["username"] = a.Username
 		}
 	}
 	return data
@@ -112,108 +114,55 @@ func VerifyPassword(password, hashed string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password)) == nil
 }
 
-// GenerateToken 签发 JWT（委托会话模块，claims 结构：user_id/username/role）。
-func (s *AuthService) GenerateToken(userID int, username, role string) (string, error) {
-	return s.session.Issue(userID, username, role)
+// GenerateToken 签发 JWT（委托会话模块，claims 结构：user_id/account/role）。
+func (s *AuthService) GenerateToken(userID int, account, role string) (string, error) {
+	return s.session.Issue(userID, account, role)
 }
 
 // LoginResult 登录返回结构。
 type LoginResult struct {
 	Token    string `json:"token"`
 	UserID   int    `json:"user_id"`
+	Account  string `json:"account"`
 	Username string `json:"username"`
-	Name     string `json:"name"`
 	Role     string `json:"role"`
 }
 
 // HrwaiRole 统一 HRWAI 账号角色名(替代原 "student" 和 "valuation_user")。
 const HrwaiRole = "hrwai_user"
 
-// HrwaiLogin 统一 HRWAI 账号登录,支持用户名或手机号。
+// HrwaiLogin 统一 HRWAI 账号登录,支持账号或手机号。
 // 三套前端(培训学员端 / 残值评估 / AI 助手)共用此登录方法。
 func (s *AuthService) HrwaiLogin(account, password string) (*LoginResult, error) {
 	var user model.HrwaiUser
-	// 同一输入既可能是用户名也可能是手机号，二者择一命中即可
-	if err := s.db.Where("username = ? OR phone = ?", account, account).First(&user).Error; err != nil {
+	// 同一输入既可能是登录账号也可能是手机号，二者择一命中即可
+	if err := s.db.Where("account = ? OR phone = ?", account, account).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("用户名或密码错误")
+			return nil, errors.New("账号或密码错误")
 		}
 		return nil, err
 	}
 	if !VerifyPassword(password, user.Password) {
-		return nil, errors.New("用户名或密码错误")
+		return nil, errors.New("账号或密码错误")
 	}
 	if user.Status != 1 {
 		return nil, errors.New("账号已被禁用，请联系管理员")
 	}
-	token, err := s.GenerateToken(user.ID, user.Username, HrwaiRole)
+	token, err := s.GenerateToken(user.ID, user.Account, HrwaiRole)
 	if err != nil {
 		return nil, err
 	}
 	return &LoginResult{
 		Token:    token,
 		UserID:   user.ID,
+		Account:  user.Account,
 		Username: user.Username,
-		Name:     user.Name,
 		Role:     HrwaiRole,
 	}, nil
 }
 
-// HrwaiRegister 统一 HRWAI 账号注册（手机号+密码，兼容旧流程）。
-// 账号（username）注册时随机生成，与手机号/邮箱概念解耦。
-func (s *AuthService) HrwaiRegister(phone, password, name, email, company string) (map[string]any, error) {
-	var count int64
-	s.db.Model(&model.HrwaiUser{}).Where("phone = ?", phone).Count(&count)
-	if count > 0 {
-		return nil, errors.New("手机号已被注册")
-	}
-	// 手机号注册时若填写邮箱：校验格式与唯一性（同一邮箱不能注册多个账户）
-	email = NormalizeEmail(email)
-	if email != "" {
-		if !IsValidEmail(email) {
-			return nil, errors.New("邮箱格式不正确")
-		}
-		var emailCount int64
-		if err := s.db.Model(&model.HrwaiUser{}).
-			Where("LOWER(email) = ?", email).Count(&emailCount).Error; err != nil {
-			return nil, err
-		}
-		if emailCount > 0 {
-			return nil, errors.New("该邮箱已被注册")
-		}
-	}
-	username, err := generateRandomUsername()
-	if err != nil {
-		return nil, errors.New("注册失败，请稍后再试")
-	}
-	hashed, err := HashPassword(password)
-	if err != nil {
-		return nil, err
-	}
-	user := model.HrwaiUser{
-		Username:  username,
-		Password:  hashed,
-		Name:      name,
-		Nickname:  generateDefaultNickname(s.db),
-		Phone:     phone,
-		Email:     email,
-		Company:   company,
-		Status:    1,
-		CreatedAt: beijingNow(),
-	}
-	if err := s.db.Create(&user).Error; err != nil {
-		return nil, err
-	}
-	return map[string]any{
-		"id":       user.ID,
-		"username": user.Username,
-		"phone":    user.Phone,
-		"name":     user.Name,
-	}, nil
-}
-
-// generateRandomUsername 生成随机账号（如 hr1a2b3c4d5e6f78）。
-func generateRandomUsername() (string, error) {
+// generateRandomAccount 生成随机登录账号（如 hr1a2b3c4d5e6f78）。
+func generateRandomAccount() (string, error) {
 	b := make([]byte, 9)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
@@ -261,8 +210,8 @@ func (s *AuthService) AdminLogin(username, password string) (*LoginResult, error
 	return &LoginResult{
 		Token:    token,
 		UserID:   admin.AdminID,
+		Account:  admin.Username,
 		Username: admin.Username,
-		Name:     admin.Name,
 		Role:     "admin",
 	}, nil
 }
@@ -289,8 +238,8 @@ func (s *AuthService) TutorLogin(username, password string) (*LoginResult, error
 	return &LoginResult{
 		Token:    token,
 		UserID:   tutor.TutorID,
+		Account:  tutor.Username,
 		Username: tutor.Username,
-		Name:     tutor.Name,
 		Role:     "tutor",
 	}, nil
 }
@@ -369,9 +318,9 @@ func (s *AuthService) EnsureDefaultUsers() error {
 		}
 	}
 
-	// 3. 默认学员 student
+	// 3. 默认学员 student（hrwai_users）
 	var studentCount int64
-	if err := s.db.Model(&model.Student{}).Where("username = ?", "student").Count(&studentCount).Error; err != nil {
+	if err := s.db.Model(&model.HrwaiUser{}).Where("account = ?", "student").Count(&studentCount).Error; err != nil {
 		return err
 	}
 	if studentCount == 0 {
@@ -379,10 +328,11 @@ func (s *AuthService) EnsureDefaultUsers() error {
 		if err != nil {
 			return err
 		}
-		student := model.Student{
-			Username:  "student",
+		student := model.HrwaiUser{
+			UID:       NextUID(),
+			Account:   "student",
+			Username:  "测试学员",
 			Password:  hashed,
-			Name:      "测试学员",
 			Phone:     "13800000000",
 			Status:    1,
 			CreatedAt: beijingNow(),

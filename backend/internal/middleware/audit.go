@@ -61,7 +61,7 @@ func AuditLog(cfg *config.Config, db *gorm.DB, logger *zap.Logger) gin.HandlerFu
 		record := model.AuditLog{
 			ActorID:   userID,
 			ActorRole: role,
-			ActorName: CurrentUsername(c),
+			ActorName: CurrentAccount(c),
 			Action:    describeAuditAction(method, c.Request.URL.Path),
 			Path:      c.Request.URL.Path,
 			Method:    method,

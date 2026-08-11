@@ -66,12 +66,12 @@ const nicknamePending = computed(() => pending.value?.field_type === 'nickname')
 const avatarUrl = computed(() => (authStore.userInfo as any)?.avatar_url || '')
 
 const letter = computed(() => {
-  const name = authStore.userInfo?.nickname || authStore.userInfo?.name || authStore.userInfo?.username || '?'
+  const name = authStore.userInfo?.username || '?'
   return name.charAt(0).toUpperCase()
 })
 
 function open() {
-  nickname.value = authStore.userInfo?.nickname || ''
+  nickname.value = authStore.userInfo?.username || ''
   visible.value = true
 }
 

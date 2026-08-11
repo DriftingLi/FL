@@ -87,7 +87,7 @@
       <div class="reply-editor">
         <div v-if="replyingTo" class="replying-bar">
           <el-tag closable type="info" size="small" @close="replyingTo = null">
-            回复 @{{ replyingTo.name }}
+            回复 @{{ replyingTo.username }}
           </el-tag>
         </div>
         <el-input
@@ -126,10 +126,10 @@ const topic = ref<ForumTopicItem | null>(null)
 const replies = ref<ForumReplyItem[]>([])
 const replyContent = ref('')
 const replyImages = ref<string[]>([])
-const replyingTo = ref<{ id: number; name: string } | null>(null)
+const replyingTo = ref<{ id: number; username: string } | null>(null)
 
 function displayName(author: ForumTopicItem['author']) {
-  return author.nickname || author.name || author.username
+  return author.username
 }
 
 function authorLetter(author: ForumTopicItem['author']) {
@@ -175,7 +175,7 @@ async function submitReply() {
 }
 
 function startReplyTo(reply: ForumReplyItem) {
-  replyingTo.value = { id: reply.id, name: displayName(reply.author) }
+  replyingTo.value = { id: reply.id, username: displayName(reply.author) }
 }
 
 async function removeTopic() {

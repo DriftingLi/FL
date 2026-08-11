@@ -8,9 +8,10 @@ import { consumeAuthTokenFromUrl } from '@/utils/authToken'
 export interface UserInfo {
   token?: string
   user_id?: number
+  uid?: string
+  account?: string
   username?: string
   name?: string
-  nickname?: string
   avatar_url?: string
   role?: string
   avatar?: string

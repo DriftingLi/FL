@@ -7,7 +7,7 @@ import { Plus, Search, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { adminApi, type HrwaiUser } from '@/api/admin'
-import { phoneRules, passwordRules, nameRules, emailRules, companyRules } from '@/utils/validate'
+import { phoneRules, passwordRules, emailRules, companyRules } from '@/utils/validate'
 
 const loading = ref(false)
 const users = ref<HrwaiUser[]>([])
@@ -23,7 +23,8 @@ const formRef = ref<FormInstance>()
 const formData = reactive({
   phone: '',
   password: '',
-  name: '',
+  account: '',
+  username: '',
   email: '',
   company: ''
 })
@@ -41,7 +42,6 @@ const pwdFormData = reactive({
 const formRules: FormRules = {
   phone: phoneRules,
   password: passwordRules,
-  name: nameRules,
   email: emailRules,
   company: companyRules
 }
@@ -82,7 +82,8 @@ function openCreateDialog() {
   Object.assign(formData, {
     phone: '',
     password: '',
-    name: '',
+    account: '',
+    username: '',
     email: '',
     company: ''
   })
@@ -98,12 +99,12 @@ async function handleSubmit() {
     const created = await adminApi.createHrwaiUser({
       phone: formData.phone,
       password: formData.password,
-      name: formData.name,
+      account: formData.account || undefined,
+      username: formData.username || undefined,
       email: formData.email || undefined,
       company: formData.company || undefined
     })
-    const nickname = created?.nickname
-    ElMessage.success(nickname ? `用户添加成功，默认昵称：${nickname}` : '用户添加成功')
+    ElMessage.success(created?.username ? `用户添加成功，昵称：${created.username}` : '用户添加成功')
     dialogVisible.value = false
     loadUsers()
   } catch (error) {
@@ -116,7 +117,7 @@ async function handleSubmit() {
 
 function openResetPwdDialog(row: HrwaiUser) {
   pwdFormData.id = row.id
-  pwdFormData.name = row.name
+  pwdFormData.name = `${row.username}（${row.account}）`
   pwdFormData.password = ''
   pwdDialogVisible.value = true
 }
@@ -199,7 +200,7 @@ onMounted(() => {
     <div class="filter-bar">
       <el-input
         v-model="searchKeyword"
-        placeholder="搜索用户名 / 姓名 / 昵称 / 手机号"
+        placeholder="搜索账号 / 昵称 / 手机号"
         clearable
         style="width: 280px"
         @clear="handleSearch"
@@ -214,11 +215,15 @@ onMounted(() => {
 
     <el-table :data="users" v-loading="loading" stripe border style="width: 100%">
       <el-table-column prop="id" label="ID" width="70" align="center" />
-      <el-table-column prop="username" label="用户名" min-width="140" />
-      <el-table-column prop="name" label="姓名" min-width="120" />
-      <el-table-column prop="nickname" label="昵称" min-width="120">
+      <el-table-column prop="uid" label="UID" min-width="150">
         <template #default="{ row }">
-          {{ row.nickname || '-' }}
+          {{ row.uid || '-' }}
+        </template>
+      </el-table-column>
+      <el-table-column prop="account" label="账号" min-width="120" />
+      <el-table-column prop="username" label="昵称" min-width="120">
+        <template #default="{ row }">
+          {{ row.username || '-' }}
         </template>
       </el-table-column>
       <el-table-column prop="phone" label="手机号" width="130" />
@@ -292,8 +297,11 @@ onMounted(() => {
         <el-form-item label="密码" prop="password">
           <el-input v-model="formData.password" type="password" placeholder="请输入密码（6-20字符）" maxlength="20" show-password />
         </el-form-item>
-        <el-form-item label="姓名" prop="name">
-          <el-input v-model="formData.name" placeholder="请输入姓名（2-10字符）" maxlength="10" show-word-limit />
+        <el-form-item label="账号" prop="account">
+          <el-input v-model="formData.account" placeholder="选填，缺省自动生成（4-20位字母/数字/下划线）" maxlength="20" />
+        </el-form-item>
+        <el-form-item label="昵称" prop="username">
+          <el-input v-model="formData.username" placeholder="选填，缺省自动生成" maxlength="30" />
         </el-form-item>
         <el-form-item label="邮箱" prop="email">
           <el-input v-model="formData.email" placeholder="选填" maxlength="50" />

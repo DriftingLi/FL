@@ -56,10 +56,10 @@ const authStore = useAuthStore()
 // 跨子域名跳回主域名（router-link to="/" 在当前子域名下会被路由守卫重定向）
 const mainSiteUrl = computed(() => buildSubdomainUrl('main', '/'))
 
-// 估值用户显示名：优先 name，回退到 username
+// 估值用户显示名：昵称（username）
 const displayName = computed(() => {
   const info = authStore.userInfo
-  return info?.name || info?.username || '评估用户'
+  return info?.username || '评估用户'
 })
 
 // 退出登录：调用后端写黑名单 → 清除本地登录态 → 跳回估值首页

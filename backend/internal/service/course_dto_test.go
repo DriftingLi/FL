@@ -67,12 +67,12 @@ func TestCourseDTOShapeLock(t *testing.T) {
 
 func TestChapterDTOShapeLock(t *testing.T) {
 	ch := ChapterDTO{
-		ChapterID: 1, CourseID: 1, Title: "第一章", Content: "正文", ContentURL: "",
+		ChapterID: 1, CourseID: 1, Title: "第一章", Content: "正文",
 		ContentType: "text", FileURL: "", Description: "", Duration: 30, OrderNum: 1,
 		CreatedAt: "2026-08-01T10:00:00",
 	}
 	assertShapeLock(t, ch,
-		"chapter_id", "course_id", "title", "content", "content_url",
+		"chapter_id", "course_id", "title", "content",
 		"content_type", "file_url", "description", "duration", "order_num", "created_at",
 	)
 
@@ -85,7 +85,7 @@ func TestChapterDTOShapeLock(t *testing.T) {
 		StudyStatus:       "not_started",
 	}
 	assertShapeLock(t, detail,
-		"chapter_id", "course_id", "title", "content", "content_url",
+		"chapter_id", "course_id", "title", "content",
 		"content_type", "file_url", "description", "duration", "order_num", "created_at",
 		"files", "previous_chapter_id", "next_chapter_id", "study_status",
 	)

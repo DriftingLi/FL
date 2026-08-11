@@ -17,7 +17,7 @@
         </el-descriptions-item>
         <el-descriptions-item label="昵称">
           <div class="cell-row">
-            <span>{{ userInfo.nickname || userInfo.name || '未设置' }}</span>
+            <span>{{ userInfo.username || '未设置' }}</span>
             <el-button link type="primary" size="small" @click="openProfileDialog">修改昵称/头像</el-button>
           </div>
         </el-descriptions-item>

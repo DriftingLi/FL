@@ -216,7 +216,6 @@ func (s *AdminCourseService) CreateChapter(courseID int, data map[string]any) (*
 		return nil, errors.New("章节标题不能为空")
 	}
 	content, _ := data["content"].(string)
-	contentURL, _ := data["content_url"].(string)
 	duration := toIntDefault(data["duration"], 0)
 
 	var maxOrder int
@@ -224,13 +223,12 @@ func (s *AdminCourseService) CreateChapter(courseID int, data map[string]any) (*
 		Select("COALESCE(MAX(order_num), 0)").Scan(&maxOrder)
 
 	chapter := model.Chapter{
-		CourseID:   courseID,
-		Title:      title,
-		Content:    content,
-		ContentURL: contentURL,
-		Duration:   duration,
-		OrderNum:   maxOrder + 1,
-		CreatedAt:  beijingNow(),
+		CourseID:  courseID,
+		Title:     title,
+		Content:   content,
+		Duration:  duration,
+		OrderNum:  maxOrder + 1,
+		CreatedAt: beijingNow(),
 	}
 	if err := s.db.Create(&chapter).Error; err != nil {
 		return nil, err
@@ -250,9 +248,6 @@ func (s *AdminCourseService) UpdateChapter(chapterID int, data map[string]any) (
 	}
 	if v, ok := data["content"]; ok {
 		chapter.Content, _ = v.(string)
-	}
-	if v, ok := data["content_url"]; ok {
-		chapter.ContentURL, _ = v.(string)
 	}
 	if v, ok := data["duration"]; ok {
 		chapter.Duration = toIntDefault(v, chapter.Duration)

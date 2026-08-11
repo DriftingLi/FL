@@ -14,8 +14,6 @@ export interface ForumTopicItem {
   author: {
     user_id: number
     username: string
-    name: string
-    nickname: string
     avatar_url: string
   }
   can_delete?: boolean
@@ -32,8 +30,6 @@ export interface ForumReplyItem {
   author: {
     user_id: number
     username: string
-    name: string
-    nickname: string
     avatar_url: string
   }
   can_delete?: boolean
@@ -101,8 +97,6 @@ export interface AdminForumTopic {
   author: {
     user_id: number
     username: string
-    name: string
-    nickname: string
     avatar_url: string
   }
 }
@@ -118,8 +112,6 @@ export interface AdminForumReply {
   author: {
     user_id: number
     username: string
-    name: string
-    nickname: string
     avatar_url: string
   }
 }

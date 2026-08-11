@@ -63,7 +63,7 @@ func (s *GradingService) GetSubmittedParticipants(sessionID *int) ([]GradingPart
 		p := &participants[i]
 		var session model.ExamSession
 		s.db.First(&session, p.ExamSessionID)
-		var student model.Student
+		var student model.HrwaiUser
 		s.db.First(&student, p.StudentID)
 
 		var answers []model.ExamAnswer
@@ -88,8 +88,8 @@ func (s *GradingService) GetSubmittedParticipants(sessionID *int) ([]GradingPart
 		}
 
 		studentName := fmt.Sprintf("学员%d", p.StudentID)
-		if student.StudentID != 0 {
-			studentName = student.Name
+		if student.ID != 0 {
+			studentName = student.Username
 		}
 		passScore := 60
 		if session.ID != 0 {
@@ -122,7 +122,7 @@ func (s *GradingService) GetParticipantDetail(participantID int) (*GradingPartic
 	}
 	var session model.ExamSession
 	s.db.First(&session, p.ExamSessionID)
-	var student model.Student
+	var student model.HrwaiUser
 	s.db.First(&student, p.StudentID)
 
 	var answers []model.ExamAnswer
@@ -149,8 +149,8 @@ func (s *GradingService) GetParticipantDetail(participantID int) (*GradingPartic
 	}
 
 	studentName := fmt.Sprintf("学员%d", p.StudentID)
-	if student.StudentID != 0 {
-		studentName = student.Name
+	if student.ID != 0 {
+		studentName = student.Username
 	}
 	passScore := 60
 	if session.ID != 0 {

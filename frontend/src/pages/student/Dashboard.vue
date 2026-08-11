@@ -80,7 +80,7 @@ import { studentApi } from '@/api/student'
 const authStore = useAuthStore()
 
 const userName = computed(() =>
-  authStore.userInfo?.nickname || authStore.userInfo?.name || authStore.userInfo?.username || '同学'
+  authStore.userInfo?.username || '同学'
 )
 
 // 进行中的课程

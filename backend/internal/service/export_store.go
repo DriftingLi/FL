@@ -8,8 +8,8 @@ import (
 // EvaluationExportRow 评估记录导出行（ExportStore 契约的数据形状，由主 app 导出模块定义）。
 type EvaluationExportRow struct {
 	ID                    int64
+	Account               string
 	Username              string
-	Name                  string
 	Brand                 string
 	VehicleType           string
 	Series                string

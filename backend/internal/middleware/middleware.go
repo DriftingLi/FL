@@ -19,8 +19,8 @@ type ContextKey string
 const (
 	// CtxUserID 用户ID
 	CtxUserID ContextKey = "user_id"
-	// CtxUsername 用户名
-	CtxUsername ContextKey = "username"
+	// CtxAccount 登录账号
+	CtxAccount ContextKey = "account"
 	// CtxUserRole 用户角色
 	CtxUserRole ContextKey = "role"
 	// CtxRequestID 请求ID
@@ -117,7 +117,7 @@ func resolveClaims(c *gin.Context, sess *security.Session) bool {
 		// 检查 token 黑名单（已登出 token 会被加入黑名单直到自然过期）
 		if revoked, _ := sess.IsRevoked(c.Request.Context(), tokenStr); !revoked {
 			c.Set(string(CtxUserID), claims.UserID)
-			c.Set(string(CtxUsername), claims.Username)
+			c.Set(string(CtxAccount), claims.Account)
 			c.Set(string(CtxUserRole), claims.Role)
 			return true
 		}
@@ -169,9 +169,9 @@ func CurrentUserID(c *gin.Context) int {
 	return uid
 }
 
-// CurrentUsername 从 gin.Context 读取当前登录用户名(未登录返回空串)。
-func CurrentUsername(c *gin.Context) string {
-	v, ok := c.Get(string(CtxUsername))
+// CurrentAccount 从 gin.Context 读取当前登录账号(未登录返回空串)。
+func CurrentAccount(c *gin.Context) string {
+	v, ok := c.Get(string(CtxAccount))
 	if !ok {
 		return ""
 	}

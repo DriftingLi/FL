@@ -20,9 +20,9 @@ import (
 
 // Claims JWT 声明。
 type Claims struct {
-	UserID   int    `json:"user_id"`
-	Username string `json:"username"`
-	Role     string `json:"role"`
+	UserID  int    `json:"user_id"`
+	Account string `json:"account"`
+	Role    string `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -86,14 +86,14 @@ func SessionFromConfig(cfg *config.Config) *Session {
 	}, RedisBlacklistStore{})
 }
 
-// Issue 签发 JWT，claims 结构：user_id/username/role，过期时长由配置决定（默认 24 小时）。
-func (s *Session) Issue(userID int, username, role string) (string, error) {
+// Issue 签发 JWT，claims 结构：user_id/account/role，过期时长由配置决定（默认 24 小时）。
+func (s *Session) Issue(userID int, account, role string) (string, error) {
 	claims := &Claims{
-		UserID:   userID,
-		Username: username,
-		Role:     role,
+		UserID:  userID,
+		Account: account,
+		Role:    role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   username,
+			Subject:   account,
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.jwtExpiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},

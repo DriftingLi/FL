@@ -125,7 +125,7 @@ const rejectReason = ref('')
 const currentRow = ref<ProfileChangeRequest | null>(null)
 
 function displayName(row: ProfileChangeRequest) {
-  return row.nickname || row.name || row.username
+  return row.username
 }
 
 async function loadList() {

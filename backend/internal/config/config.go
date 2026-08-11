@@ -235,9 +235,9 @@ func Load() (*Config, error) {
 			R2Bucket:          viper.GetString("r2_bucket"),
 			R2PublicDomain:    viper.GetString("r2_public_domain"),
 		},
-		AIAPIKey:  chainDef("", "ai_api_key", "deepseek_api_key", "zhipu_api_key", "openai_api_key"),
-		AIBaseURL: chainDef("https://api.deepseek.com", "ai_base_url", "deepseek_api_url", "zhipu_base_url"),
-		AIModel:   chainDef("deepseek-v4-flash", "ai_model", "model", "zhipu_model"),
+		AIAPIKey:  viper.GetString("ai_api_key"),
+		AIBaseURL: viper.GetString("ai_base_url"),
+		AIModel:   viper.GetString("ai_model"),
 		Valuation: ValuationConfig{
 			PDFOutputDir:      viper.GetString("valuation_pdf_output_dir"),
 			DBMaxOpenConns:    positiveInt("valuation_db_max_open_conns", 20),
@@ -445,17 +445,6 @@ func positiveFloat(key string, def float64) float64 {
 func positiveDuration(key string, def time.Duration) time.Duration {
 	if v := viper.GetDuration(key); v > 0 {
 		return v
-	}
-	return def
-}
-
-// chainDef 按顺序返回第一个非空值，全部为空时返回 def。
-// 用于 AI 配置字段的多名称兼容回退（如 AI_API_KEY > DEEPSEEK_API_KEY > ZHIPU_API_KEY）。
-func chainDef(def string, keys ...string) string {
-	for _, k := range keys {
-		if v := viper.GetString(k); v != "" {
-			return v
-		}
 	}
 	return def
 }

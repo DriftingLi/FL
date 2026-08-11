@@ -75,7 +75,6 @@ func RegisterRoutes(
 
 		// 估值模块独立登录/注册（公开接口）
 		public.POST("/auth/login", valuationAuthHandler.Login)
-		public.POST("/auth/register", valuationAuthHandler.Register)
 
 		// 报告生成与下载（无需登录）
 		public.POST("/evaluations/:id/report", reportHandler.Generate)

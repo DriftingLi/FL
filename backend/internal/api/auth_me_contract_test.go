@@ -28,15 +28,15 @@ func TestAuthMeContract_ShapeUnchanged(t *testing.T) {
 	}{
 		{
 			name: "hrwai_user", role: "hrwai_user", username: "alice",
-			want: `{"code":200,"message":"success","data":{"avatar_url":"","company":"","email":"","has_password":true,"name":"alice","nickname":"","pending_profile_change":null,"phone":"test_alice","role":"hrwai_user","user_id":1,"username":"alice"}}`,
+			want: `{"code":200,"message":"success","data":{"account":"acct_alice","avatar_url":"","company":"","email":"","has_password":true,"pending_profile_change":null,"phone":"test_alice","role":"hrwai_user","uid":"1000000000000000001","user_id":1,"username":"alice"}}`,
 		},
 		{
 			name: "tutor", role: "tutor", username: "tutor1",
-			want: `{"code":200,"message":"success","data":{"name":"tutor1","role":"tutor","user_id":1,"username":"tutor1"}}`,
+			want: `{"code":200,"message":"success","data":{"account":"tutor1","name":"tutor1","role":"tutor","user_id":1,"username":"tutor1"}}`,
 		},
 		{
 			name: "admin", role: "admin", username: "admin1",
-			want: `{"code":200,"message":"success","data":{"name":"admin1","role":"admin","user_id":1,"username":"admin1"}}`,
+			want: `{"code":200,"message":"success","data":{"account":"admin1","name":"admin1","role":"admin","user_id":1,"username":"admin1"}}`,
 		},
 	}
 
@@ -46,7 +46,7 @@ func TestAuthMeContract_ShapeUnchanged(t *testing.T) {
 			var userID int
 			switch tc.role {
 			case "hrwai_user":
-				userID = testutil.SeedStudent(t, db, tc.username, "hash123").StudentID
+				userID = testutil.SeedStudent(t, db, tc.username, "hash123").ID
 			case "tutor":
 				userID = testutil.SeedTutor(t, db, tc.username, "hash123").TutorID
 			case "admin":

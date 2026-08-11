@@ -28,9 +28,8 @@ func NewExportService(db *gorm.DB, exports ExportStore, logger *zap.Logger) *Exp
 func (s *ExportService) Students() ([][]any, error) {
 	var rows []struct {
 		ID        int
+		Account   string
 		Username  string
-		Name      string
-		Nickname  string
 		Phone     string
 		Email     string
 		Company   string
@@ -40,14 +39,14 @@ func (s *ExportService) Students() ([][]any, error) {
 	if err := s.db.Table("hrwai_users").Order("id ASC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	out := [][]any{{"ID", "用户名", "姓名", "昵称", "手机号", "邮箱", "公司", "状态", "注册时间"}}
+	out := [][]any{{"ID", "账号", "昵称", "手机号", "邮箱", "公司", "状态", "注册时间"}}
 	for _, r := range rows {
 		status := "禁用"
 		if r.Status == 1 {
 			status = "启用"
 		}
 		out = append(out, []any{
-			r.ID, r.Username, r.Name, r.Nickname, r.Phone, r.Email, r.Company, status, formatISO(r.CreatedAt),
+			r.ID, r.Account, r.Username, r.Phone, r.Email, r.Company, status, formatISO(r.CreatedAt),
 		})
 	}
 	return out, nil
@@ -57,9 +56,8 @@ func (s *ExportService) Students() ([][]any, error) {
 func (s *ExportService) ExamRecords() ([][]any, error) {
 	var rows []struct {
 		StudentID  int
+		Account    string
 		Username   string
-		Name       string
-		Nickname   string
 		Phone      string
 		ExamName   string
 		Score      *float64
@@ -67,7 +65,7 @@ func (s *ExportService) ExamRecords() ([][]any, error) {
 		SubmitTime *time.Time
 	}
 	err := s.db.Table("exam_participant AS ep").
-		Select("ep.student_id, u.username, u.name, u.nickname, u.phone, es.name AS exam_name, " +
+		Select("ep.student_id, u.account, u.username, u.phone, es.name AS exam_name, " +
 			"ep.score, ep.is_passed, ep.submit_time").
 		Joins("JOIN exam_session AS es ON es.id = ep.exam_session_id").
 		Joins("JOIN hrwai_users AS u ON u.id = ep.student_id").
@@ -77,7 +75,7 @@ func (s *ExportService) ExamRecords() ([][]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := [][]any{{"学员ID", "用户名", "姓名", "昵称", "手机号", "考试名称", "分数", "是否通过", "提交时间"}}
+	out := [][]any{{"学员ID", "账号", "昵称", "手机号", "考试名称", "分数", "是否通过", "提交时间"}}
 	for _, r := range rows {
 		score := ""
 		if r.Score != nil {
@@ -92,7 +90,7 @@ func (s *ExportService) ExamRecords() ([][]any, error) {
 			submit = formatISO(*r.SubmitTime)
 		}
 		out = append(out, []any{
-			r.StudentID, r.Username, r.Name, r.Nickname, r.Phone, r.ExamName, score, passed, submit,
+			r.StudentID, r.Account, r.Username, r.Phone, r.ExamName, score, passed, submit,
 		})
 	}
 	return out, nil
@@ -139,13 +137,13 @@ func (s *ExportService) Evaluations() ([][]any, error) {
 		return nil, err
 	}
 	out := [][]any{{
-		"ID", "用户名", "姓名", "品牌", "车型", "系列", "吨位", "配置", "门架类型", "门架高度mm",
+		"ID", "账号", "昵称", "品牌", "车型", "系列", "吨位", "配置", "门架类型", "门架高度mm",
 		"出厂年份", "销售年份", "工时", "原厂漆", "省份", "城市", "有牌照", "有登记证", "有维保记录",
 		"车况", "原价", "Kt", "Kh", "Kb", "Kc", "Km", "评估值", "置信下限", "置信上限", "报告PDF", "创建时间",
 	}}
 	for _, r := range rows {
 		out = append(out, []any{
-			r.ID, r.Username, r.Name, r.Brand, r.VehicleType, r.Series, r.Tonnage, r.ConfigType,
+			r.ID, r.Account, r.Username, r.Brand, r.VehicleType, r.Series, r.Tonnage, r.ConfigType,
 			r.MastType, r.MastHeightMM, r.FactoryYear, r.SaleYear, r.UsageHours, yesNo(r.OriginalPaint),
 			r.Province, r.City, yesNo(r.HasLicensePlate), yesNo(r.HasRegistrationCert),
 			yesNo(r.HasMaintenanceRecords), r.ConditionRating, r.OriginalPrice,

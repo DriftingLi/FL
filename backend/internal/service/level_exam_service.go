@@ -255,9 +255,9 @@ func (s *LevelExamService) ListSessions(page, pageSize int, status string, inclu
 			ps := make([]LevelExamParticipantDTO, 0, len(parts))
 			for j := range parts {
 				pd := participantToDTO(&parts[j])
-				var st model.Student
+				var st model.HrwaiUser
 				if err := s.db.First(&st, parts[j].StudentID).Error; err == nil {
-					pd.StudentName = st.Name
+					pd.StudentName = st.Username
 				}
 				ps = append(ps, pd)
 			}
