@@ -551,12 +551,15 @@ pull_one() {
         fi
     done
     # 回退直连（仅代理改写过的地址）：认证拉取绕过代理挂起/缓存损坏
+    # 注意：去掉代理前缀后镜像名没有 registry（如 driftingli/fl-backend:tag），
+    # docker 默认解析到 Docker Hub（registry-1.docker.io）——必须补 ${REGISTRY}/ 前缀
     local direct="${image#${REGISTRY_PROXY}/}"
     if [ "$direct" != "$image" ] && [ -n "$GITHUB_TOKEN" ]; then
-        log_warn "代理拉取失败，回退直连 ghcr.io 认证拉取: $direct"
-        echo "$GITHUB_TOKEN" | docker login ghcr.io -u oauth2 --password-stdin >/dev/null 2>&1 || true
-        if docker pull "$direct"; then
-            docker tag "$direct" "$image"
+        local ghcr_ref="${REGISTRY}/${direct}"
+        log_warn "代理拉取失败，回退直连 ${REGISTRY} 认证拉取: ${ghcr_ref}"
+        echo "$GITHUB_TOKEN" | docker login "$REGISTRY" -u oauth2 --password-stdin >/dev/null 2>&1 || true
+        if timeout "${DOCKER_PULL_TIMEOUT:-600}" docker pull "$ghcr_ref"; then
+            docker tag "$ghcr_ref" "$image"
             log_ok "直连拉取成功并补 tag: $image"
             return 0
         fi
