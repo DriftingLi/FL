@@ -431,6 +431,34 @@ login_registry() {
 }
 
 # ======================================================================
+# 启动 ghcr pull-through 缓存容器（registry:2）
+# 先清理同名残留容器再创建（缓存卷 ghcr-cache 保留，除非超阈值另行清空）
+# ======================================================================
+start_registry_proxy() {
+    docker rm -f ghcr-proxy >/dev/null 2>&1 || true
+    log_info "启动 ghcr pull-through 缓存容器 (registry:2)..."
+    docker pull registry:2 >/dev/null 2>&1 || true
+    local proxy_env=(-e REGISTRY_PROXY_REMOTEURL=https://ghcr.io)
+    local proxy_mount=(-v ghcr-cache:/var/lib/registry)
+    # 上游认证（read:packages PAT）：避免 ghcr.io 匿名 IP 限流导致拉取爬行/挂起
+    # 凭据文件：${DEPLOY_PATH}/.ghcr-pull-token（root 600，ops 维护轮换）
+    # 注：registry 2.8.x 不支持 *_FILE 后缀 env，须在容器创建时读文件注入
+    GHCR_PULL_TOKEN_FILE="${GHCR_PULL_TOKEN_FILE:-$DEPLOY_PATH/.ghcr-pull-token}"
+    if [ -f "$GHCR_PULL_TOKEN_FILE" ]; then
+        proxy_env+=(-e REGISTRY_PROXY_USERNAME=oauth2 \
+            -e "REGISTRY_PROXY_PASSWORD=$(cat "$GHCR_PULL_TOKEN_FILE")")
+    fi
+    docker run -d --name ghcr-proxy --restart unless-stopped \
+        -p 127.0.0.1:5000:5000 \
+        "${proxy_env[@]}" \
+        "${proxy_mount[@]}" \
+        registry:2 >/dev/null 2>&1 || true
+    if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ghcr-proxy'; then
+        docker start ghcr-proxy >/dev/null 2>&1 || true
+    fi
+}
+
+# ======================================================================
 # 确保镜像加速代理可用（本地 pull-through 缓存）
 # ======================================================================
 ensure_registry_proxy() {
@@ -452,25 +480,8 @@ ensure_registry_proxy() {
             fi
         fi
         if ! docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'ghcr-proxy'; then
-            log_info "启动 ghcr pull-through 缓存容器 (registry:2)..."
-            docker pull registry:2 >/dev/null 2>&1 || true
-            local proxy_env=(-e REGISTRY_PROXY_REMOTEURL=https://ghcr.io)
-            local proxy_mount=(-v ghcr-cache:/var/lib/registry)
-            # 上游认证（read:packages PAT）：避免 ghcr.io 匿名 IP 限流导致拉取爬行/挂起
-            # 凭据文件：${DEPLOY_PATH}/.ghcr-pull-token（root 600，ops 维护轮换）
-            # 注：registry 2.8.x 不支持 *_FILE 后缀 env，须在容器创建时读文件注入
-            GHCR_PULL_TOKEN_FILE="${GHCR_PULL_TOKEN_FILE:-$DEPLOY_PATH/.ghcr-pull-token}"
-            if [ -f "$GHCR_PULL_TOKEN_FILE" ]; then
-                proxy_env+=(-e REGISTRY_PROXY_USERNAME=oauth2 \
-                    -e "REGISTRY_PROXY_PASSWORD=$(cat "$GHCR_PULL_TOKEN_FILE")")
-            fi
-            docker run -d --name ghcr-proxy --restart unless-stopped \
-                -p 127.0.0.1:5000:5000 \
-                "${proxy_env[@]}" \
-                "${proxy_mount[@]}" \
-                registry:2 >/dev/null 2>&1 || true
-        fi
-        if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ghcr-proxy'; then
+            start_registry_proxy
+        elif ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ghcr-proxy'; then
             docker start ghcr-proxy >/dev/null 2>&1 || true
         fi
     fi
@@ -495,13 +506,28 @@ ensure_registry_proxy() {
 # ======================================================================
 
 # 代理健康检查：探测超时则重启（registry:2 上游连接可能挂起导致拉取卡死）
+# 重启后仍不可用则删除重建（缓存卷保留）；仍失败返回非 0，由调用方决定回退直连
 ensure_proxy_healthy() {
     [ -z "$REGISTRY_PROXY" ] && return 0
-    if ! timeout 5 curl -s -o /dev/null "http://${REGISTRY_PROXY}/v2/"; then
-        log_warn "镜像加速代理探测超时，重启 ghcr-proxy ..."
-        docker restart ghcr-proxy >/dev/null 2>&1 || true
-        sleep 3
+    if timeout 5 curl -s -o /dev/null "http://${REGISTRY_PROXY}/v2/"; then
+        return 0
     fi
+    log_warn "镜像加速代理探测超时，重启 ghcr-proxy ..."
+    docker restart ghcr-proxy >/dev/null 2>&1 || true
+    sleep 3
+    if timeout 5 curl -s -o /dev/null "http://${REGISTRY_PROXY}/v2/"; then
+        log_ok "镜像加速代理重启成功"
+        return 0
+    fi
+    log_warn "镜像加速代理重启后仍不可用，删除重建（缓存卷保留）..."
+    start_registry_proxy
+    sleep 3
+    if timeout 5 curl -s -o /dev/null "http://${REGISTRY_PROXY}/v2/"; then
+        log_ok "镜像加速代理重建成功"
+        return 0
+    fi
+    log_error "镜像加速代理重建后仍不可用，本次拉取回退直连 ghcr.io"
+    return 1
 }
 
 # 拉取单个镜像：3 次重试；代理路径失败时回退直连 ghcr.io 认证拉取
@@ -511,13 +537,17 @@ pull_one() {
     local retries=3
     for attempt in $(seq 1 $retries); do
         log_info "拉取${name}镜像 (尝试 $attempt/$retries): $image"
-        if docker pull "$image"; then
+        # docker pull 加超时（默认 600s）：registry 上游挂起时不再无限等待，
+        # 超时后按失败处理 → 重启代理重试 / 回退直连
+        if timeout "${DOCKER_PULL_TIMEOUT:-600}" docker pull "$image"; then
             log_ok "${name}镜像: $image"
             return 0
         fi
         if [ $attempt -lt $retries ]; then
             log_warn "拉取失败,10 秒后重试..."
             sleep 10
+            # 重试前确保代理健康（registry:2 挂起是拉取卡死的常见原因，重启后再重试）
+            ensure_proxy_healthy || true
         fi
     done
     # 回退直连（仅代理改写过的地址）：认证拉取绕过代理挂起/缓存损坏
@@ -537,15 +567,10 @@ pull_one() {
 
 pull_images() {
     log_info ">>> 拉取最新镜像..."
-    ensure_proxy_healthy
+    ensure_proxy_healthy || true
 
-    # 国内服务器拉取 ghcr.io 镜像易超时,配置客户端选项:
-    # - max-concurrent-downloads=5: 并发拉取层数(默认 3,提高可加速)
-    # - 通过环境变量 DOCKER_PULL_TIMEOUT 控制单次拉取超时(默认 600s=10min)
-    local pull_opts=""
-    if [ -n "${DOCKER_PULL_TIMEOUT:-}" ]; then
-        pull_opts="--disable-content-trust=false"
-    fi
+    # 单次拉取超时由 pull_one 中的 timeout "${DOCKER_PULL_TIMEOUT:-600}" 控制
+    # （registry 上游挂起时自动失败重试，不再无限等待）
 
     # 拉取后端镜像（本地已有该 tag 则跳过：内容标签命中即零传输）
     if [ -n "$IMAGE_BACKEND" ]; then
