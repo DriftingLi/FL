@@ -27,7 +27,7 @@ func newAccountChangeTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fake
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db := testutil.NewMemoryDB(t)
-	authSvc := service.NewAuthService(db, "test-secret", time.Hour, "admin", "tutor", "student", zap.NewNop())
+	authSvc := service.NewAuthService(db, security.NewSession("test-secret", time.Hour, security.CookieConfig{}), "admin", "tutor", "student", zap.NewNop())
 	store := newMemCodeStore()
 	codeSvc := service.NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
 

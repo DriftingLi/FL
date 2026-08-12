@@ -55,7 +55,9 @@ type Deps struct {
 // NewDeps 构建全部 service 单实例。进程启动早期由 main 调用一次。
 // exportStore 经 ExportStore seam 注入（生产为估值模块 pgx adapter）。
 func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger, exportStore service.ExportStore) *Deps {
-	authSvc := service.NewAuthService(db, cfg.JWTSecretKey, cfg.JWTExpiry(),
+	// 会话唯一实例：签发（AuthService）与校验（中间件/估值模块）共用同一实例
+	sess := security.SessionFromConfig(cfg)
+	authSvc := service.NewAuthService(db, sess,
 		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student, logger)
 	codeSvc := service.NewVerifyCodeService(db, authSvc, cfg.EmailCodeTTL, &service.RedisAuthCodeStore{}, logger)
 	emailCh := service.NewEmailChannel(cfg.SMTP, cfg.IsProd(), logger)
@@ -74,7 +76,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		DB:                 db,
 		Storage:            st,
 		Logger:             logger,
-		Session:            security.SessionFromConfig(cfg),
+		Session:            sess,
 		AuthSvc:            authSvc,
 		CodeSvc:            codeSvc,
 		EmailCh:            emailCh,

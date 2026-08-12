@@ -131,7 +131,7 @@ func main() {
 	startForumImageCleanup(deps, logger)
 
 	// 7.5 装配残值评估子模块（注册 /api/valuation/* 路由）
-	cleanup := setupValuation(router, cfg, deps.AuthSvc, vpool, st, logger)
+	cleanup := setupValuation(router, cfg, deps.AuthSvc, deps.Session, vpool, st, logger)
 	defer cleanup()
 
 	// 8. 启动 HTTP 服务
@@ -185,7 +185,7 @@ func createValuationPool(cfg *config.Config, logger *zap.Logger) (*pgxpool.Pool,
 // 返回 cleanup 函数用于释放 pgx 连接池（pool 由调用方创建并共用）。
 //
 //nolint:gocritic
-func setupValuation(r *gin.Engine, cfg *config.Config, authSvc vhandler.ValuationAuth, pool *pgxpool.Pool, st storage.Storage, logger *zap.Logger) func() {
+func setupValuation(r *gin.Engine, cfg *config.Config, authSvc vhandler.ValuationAuth, sess *security.Session, pool *pgxpool.Pool, st storage.Storage, logger *zap.Logger) func() {
 	// 1. 装配数据访问层（手写 pgx 仓储）
 	dictRepo := vrepo.NewDictionaryRepository(pool)
 	evalRepo := vrepo.NewEvaluationRepository(pool)
@@ -212,8 +212,7 @@ func setupValuation(r *gin.Engine, cfg *config.Config, authSvc vhandler.Valuatio
 	// 4. 注册路由（/api/valuation/*，公开组 + 估值独立鉴权组 + admin 组）
 	// 认证经 ValuationAuth 窄接口注入主体系 AuthService（spec #75 D4）
 	// PDF 报告通过 storage 抽象层上传（local=本地磁盘 / r2=Cloudflare R2 对象存储）
-	// Session 单例：与主体系共用同一实例（装配一次，B2 D4）
-	sess := security.SessionFromConfig(cfg)
+	// Session 单例：与主体系共用同一实例（装配一次，B2 D4；现由 NewDeps 创建）
 	vhandler.RegisterRoutes(r, sess, logger, dictRepo, evalRepo, batteryRepo, valuationSvc, batterySvc, pdfGen, st, authSvc)
 	logger.Info("valuation 路由注册完成", zap.String("prefix", "/api/valuation"))
 

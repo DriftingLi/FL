@@ -63,7 +63,7 @@ func RegisterRoutes(
 	reportHandler := NewReportHandler(evalRepo, pdfGen, logger, st, vservice.NewCoefficientProvider(dictRepo))
 	batteryHandler := NewBatteryHandler(batteryRepo, batterySvc, logger, st)
 	healthHandler := NewHealthHandler()
-	valuationAuthHandler := NewValuationAuthHandler(valuationAuthSvc)
+	valuationAuthHandler := NewValuationAuthHandler(valuationAuthSvc, sess)
 
 	// === 公开组（无需登录）：字典查询 + 统计 + 健康检查 + 报告生成/下载 + 登录/注册 ===
 	// 评估提交（POST /evaluations）已移至"可选认证组"，登录用户提交时记录 user_id
