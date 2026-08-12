@@ -129,10 +129,7 @@ func (h *BatteryHandler) Create(c *gin.Context) {
 func (h *BatteryHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	page, pageSize = paging.Clamp(page, pageSize, 20)
-	if pageSize > 100 {
-		pageSize = 20
-	}
+	page, pageSize = paging.ClampMax(page, pageSize, 20, 100)
 	offset := (page - 1) * pageSize
 
 	batteryType := c.Query("battery_type")

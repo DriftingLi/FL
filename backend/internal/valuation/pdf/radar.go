@@ -16,6 +16,15 @@ import (
 // （与详情接口同源）；顺时针从顶部开始，间隔 72°
 var radarDimensionOrder = model.DimensionLabels
 
+// dimensionScoreByLabel 维度评分切片 → 按标签取值（顺序契约在 model.DimensionLabels）。
+func dimensionScoreByLabel(scores []model.DimensionScore) map[string]float64 {
+	scoreByLabel := make(map[string]float64, len(scores))
+	for _, ds := range scores {
+		scoreByLabel[ds.Label] = ds.Value
+	}
+	return scoreByLabel
+}
+
 // radarMaxValue 雷达图最大刻度值
 // 5 维值均钳制到 [0, 1]，满刻度 1.0 对应 100%
 const radarMaxValue = 1.0
@@ -26,10 +35,7 @@ const radarMaxValue = 1.0
 // radius: 雷达图半径（mm）
 // dimensionScores: 维度评分切片（Label/Value，顺序任意；按 model.DimensionLabels 取序）
 func drawRadarChart(pdf *gofpdf.Fpdf, cx, cy, radius float64, dimensionScores []model.DimensionScore) {
-	scoreByLabel := make(map[string]float64, len(dimensionScores))
-	for _, ds := range dimensionScores {
-		scoreByLabel[ds.Label] = ds.Value
-	}
+	scoreByLabel := dimensionScoreByLabel(dimensionScores)
 	// 1. 计算每个维度的角度（弧度），从顶部 -90° 开始顺时针，每维间隔 72°
 	angles := make([]float64, len(radarDimensionOrder))
 	for i := range radarDimensionOrder {

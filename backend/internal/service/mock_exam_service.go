@@ -163,13 +163,14 @@ func (s *MockExamService) Start(studentID, count, duration int) (*MockExamStartD
 }
 
 // SaveProgress 保存进度。
+// 行为冻结：仅校验归属（旧实现无进行中校验；已交卷的晚到自动保存静默忽略）。
 func (s *MockExamService) SaveProgress(mockExamID, studentID int, answers map[string]any, remainingTime int) error {
 	var mock model.MockExam
 	if err := s.db.First(&mock, mockExamID).Error; err != nil {
 		return errors.New("模拟考试不存在")
 	}
-	if err := guardOwnedInProgress(mock.StudentID, mock.Status, studentID, "无权操作此考试", "考试不在进行中"); err != nil {
-		return err
+	if mock.StudentID != studentID {
+		return errors.New("无权操作此考试")
 	}
 	ansJSON, _ := jsonMarshal(answers)
 	mock.Answers = model.JSONB(ansJSON)

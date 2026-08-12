@@ -120,4 +120,17 @@ func TestQuestionDTO_Tags(t *testing.T) {
 	if _, ok := asMap2["tags"]; ok {
 		t.Error("未设置 Tags 时 JSON 不应出现 tags key")
 	}
+
+	// 设置 typed-nil 切片（题库管理面无标签路径）：emit "tags":null，与历史 map 一致
+	nilSlice := newQuestionDTO(q, true)
+	nilSlice.Tags = []map[string]any(nil)
+	gotNil, _ := json.Marshal(nilSlice)
+	var asMap3 map[string]any
+	if err := json.Unmarshal(gotNil, &asMap3); err != nil {
+		t.Fatal(err)
+	}
+	v, ok := asMap3["tags"]
+	if !ok || v != nil {
+		t.Errorf("typed-nil 切片应序列化为 null, got %#v (present=%v)", v, ok)
+	}
 }

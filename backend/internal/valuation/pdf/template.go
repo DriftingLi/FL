@@ -663,10 +663,7 @@ func drawConfidenceBar(pdf *gofpdf.Fpdf, x, y, w float64, r *model.EvaluationDet
 // drawRadarAndDimensions 雷达图 + 维度进度条(并排)
 func drawRadarAndDimensions(pdf *gofpdf.Fpdf, x, y, w float64, dimensionScores []model.DimensionScore) {
 	// 维度分 → 按标签取值（顺序固定为 model.DimensionLabels）
-	scoreByLabel := make(map[string]float64, len(dimensionScores))
-	for _, ds := range dimensionScores {
-		scoreByLabel[ds.Label] = ds.Value
-	}
+	scoreByLabel := dimensionScoreByLabel(dimensionScores)
 	// 左侧雷达图
 	radarW := 70.0
 	dimX := x + radarW + 4

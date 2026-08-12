@@ -15,6 +15,16 @@ func Clamp(page, pageSize, defaultPageSize int) (int, int) {
 	return page, pageSize
 }
 
+// ClampMax 分页参数钳制（带上限）：<=0 回退默认值，>max 也回退默认值。
+// 用于「页大小有上限」的列表（超上限回退默认，而非截断到上限）。
+func ClampMax(page, pageSize, defaultPageSize, maxPageSize int) (int, int) {
+	page, pageSize = Clamp(page, pageSize, defaultPageSize)
+	if pageSize > maxPageSize {
+		pageSize = defaultPageSize
+	}
+	return page, pageSize
+}
+
 // Page 分页信封字段（total/page/page_size，各列表接口共用）。
 type Page struct {
 	Total    int64 `json:"total"`

@@ -98,10 +98,7 @@ func (h *EvaluationHandler) Get(c *gin.Context) {
 func (h *EvaluationHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	page, pageSize = paging.Clamp(page, pageSize, 20)
-	if pageSize > 100 {
-		pageSize = 20
-	}
+	page, pageSize = paging.ClampMax(page, pageSize, 20, 100)
 	offset := (page - 1) * pageSize
 
 	// 品牌筛选参数（为空时不过滤）

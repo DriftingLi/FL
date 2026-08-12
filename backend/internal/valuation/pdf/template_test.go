@@ -203,11 +203,11 @@ func TestGenerateReportCombustion(t *testing.T) {
 		ConfidenceHigh:             4.73,
 	}
 	dimScores := []model.DimensionScore{
-		{Label: "时间维度", Value: 0.61},
-		{Label: "使用强度", Value: 0.90},
-		{Label: "品牌", Value: 1.00},
-		{Label: "车况", Value: 0.75},
-		{Label: "市场", Value: 0.98},
+		{Label: model.DimensionLabelTime, Value: 0.61},
+		{Label: model.DimensionLabelHours, Value: 0.90},
+		{Label: model.DimensionLabelBrand, Value: 1.00},
+		{Label: model.DimensionLabelCondition, Value: 0.75},
+		{Label: model.DimensionLabelMarket, Value: 0.98},
 	}
 	suggestions := []string{
 		"车况一般,多个维度有折损,建议折价处理",
@@ -260,11 +260,11 @@ func TestGenerateReportEmptySuggestions(t *testing.T) {
 		ConfidenceHigh:             11.40,
 	}
 	dimScores := []model.DimensionScore{
-		{Label: "时间维度", Value: 0.85},
-		{Label: "使用强度", Value: 1.10},
-		{Label: "品牌", Value: 1.10},
-		{Label: "车况", Value: 1.10},
-		{Label: "市场", Value: 1.00},
+		{Label: model.DimensionLabelTime, Value: 0.85},
+		{Label: model.DimensionLabelHours, Value: 1.10},
+		{Label: model.DimensionLabelBrand, Value: 1.10},
+		{Label: model.DimensionLabelCondition, Value: 1.10},
+		{Label: model.DimensionLabelMarket, Value: 1.00},
 	}
 
 	data, err := gen.GenerateReport(detail, dimScores, nil)

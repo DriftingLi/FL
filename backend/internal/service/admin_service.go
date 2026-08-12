@@ -50,10 +50,7 @@ type HrwaiUserPageResult struct {
 
 // ListHrwaiUsers 分页查询 HRWAI 用户,支持按账号/昵称/手机号模糊搜索。
 func (s *AdminService) ListHrwaiUsers(page, pageSize int, keyword string) (*HrwaiUserPageResult, error) {
-	page, pageSize = paging.Clamp(page, pageSize, 20)
-	if pageSize > 100 {
-		pageSize = 20
-	}
+	page, pageSize = paging.ClampMax(page, pageSize, 20, 100)
 	offset := (page - 1) * pageSize
 	q := s.db.Model(&model.HrwaiUser{})
 	if keyword != "" {
