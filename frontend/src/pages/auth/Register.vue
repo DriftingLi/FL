@@ -208,7 +208,7 @@ import { getDefaultWorkspaceBySubdomain } from '@/utils/subdomain'
 import { ElMessage, type FormInstance } from 'element-plus'
 import type { FormItemRule } from 'element-plus'
 import { EditPen } from '@element-plus/icons-vue'
-import { useCountdown } from '@/composables/useQuestionAnswer'
+import { useCountdown } from '@/composables/useCountdown'
 import {
   passwordRules,
   nicknameRules,

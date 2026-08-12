@@ -798,8 +798,8 @@ func TestQuestionBank_Tags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建题目失败: %v", err)
 	}
-	if len(q1["tags"].([]map[string]any)) != 1 || q1["tags"].([]map[string]any)[0]["name"] != "法规" {
-		t.Fatalf("创建返回的标签不匹配: %+v", q1["tags"])
+	if len(q1.Tags.([]map[string]any)) != 1 || q1.Tags.([]map[string]any)[0]["name"] != "法规" {
+		t.Fatalf("创建返回的标签不匹配: %+v", q1.Tags)
 	}
 
 	// 按标签过滤
@@ -807,29 +807,29 @@ func TestQuestionBank_Tags(t *testing.T) {
 	if byTag["total"].(int64) != 1 {
 		t.Fatalf("按标签过滤应 1 条, got %v", byTag["total"])
 	}
-	q := byTag["questions"].([]map[string]any)[0]
-	if q["content"] != "液压题" {
+	q := byTag["questions"].([]QuestionDTO)[0]
+	if q.Content != "液压题" {
 		t.Fatalf("过滤结果不匹配: %+v", q)
 	}
-	if len(q["tags"].([]map[string]any)) != 1 {
-		t.Fatalf("列表应附带标签: %+v", q["tags"])
+	if len(q.Tags.([]map[string]any)) != 1 {
+		t.Fatalf("列表应附带标签: %+v", q.Tags)
 	}
 
 	// 更新题目时替换标签
-	updated, err := qsvc.UpdateQuestion(q1["id"].(int), map[string]any{"tag_ids": []int{tag2.ID}})
+	updated, err := qsvc.UpdateQuestion(q1.ID, map[string]any{"tag_ids": []int{tag2.ID}})
 	if err != nil {
 		t.Fatalf("更新题目失败: %v", err)
 	}
-	if len(updated["tags"].([]map[string]any)) != 1 || updated["tags"].([]map[string]any)[0]["name"] != "液压" {
-		t.Fatalf("更新后标签不匹配: %+v", updated["tags"])
+	if len(updated.Tags.([]map[string]any)) != 1 || updated.Tags.([]map[string]any)[0]["name"] != "液压" {
+		t.Fatalf("更新后标签不匹配: %+v", updated.Tags)
 	}
 
 	// 详情含标签
-	got, err := qsvc.GetQuestion(q2["id"].(int))
+	got, err := qsvc.GetQuestion(q2.ID)
 	if err != nil {
 		t.Fatalf("获取题目失败: %v", err)
 	}
-	if len(got["tags"].([]map[string]any)) != 1 {
-		t.Fatalf("详情应含标签: %+v", got["tags"])
+	if len(got.Tags.([]map[string]any)) != 1 {
+		t.Fatalf("详情应含标签: %+v", got.Tags)
 	}
 }

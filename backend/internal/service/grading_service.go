@@ -136,7 +136,8 @@ func (s *GradingService) GetParticipantDetail(participantID int) (*GradingPartic
 		item := examAnswerToDTO(a)
 		var question model.Question
 		if err := s.db.First(&question, a.QuestionID).Error; err == nil {
-			item.Question = questionToDict(&question, true)
+			q := newQuestionDTO(&question, true)
+			item.Question = &q
 			if a.GraderID == nil {
 				if question.Type == "short_answer" {
 					subjectiveUngraded++
@@ -183,7 +184,7 @@ func (s *GradingService) GradeAnswer(answerID int, score float64, graderID int, 
 	}
 
 	answer.Score = score
-	correct := score >= maxScore*0.6
+	correct := score >= maxScore*shortAnswerPassRatio
 	answer.IsCorrect = &correct
 	answer.GraderID = &graderID
 	now := beijingNow()
@@ -213,7 +214,7 @@ func (s *GradingService) RegradeAnswer(answerID int, score float64, graderID int
 	}
 
 	answer.Score = score
-	correct := score >= maxScore*0.6
+	correct := score >= maxScore*shortAnswerPassRatio
 	answer.IsCorrect = &correct
 	answer.GraderID = &graderID
 	now := beijingNow()
@@ -242,7 +243,7 @@ func (s *GradingService) ConfirmAIGrading(answerID, graderID int) (*LevelExamAns
 
 	maxScore := s.questionMaxScore(answer.QuestionID)
 	answer.Score = *answer.AIScore
-	correct := *answer.AIScore >= maxScore*0.6
+	correct := *answer.AIScore >= maxScore*shortAnswerPassRatio
 	answer.IsCorrect = &correct
 	answer.GraderID = &graderID
 	now := beijingNow()
@@ -278,9 +279,9 @@ func (s *GradingService) AIGradeAnswer(answerID int, userID *int) (*LevelExamAns
 
 	maxScore := float64(question.Score)
 	if question.Score <= 0 {
-		maxScore = examScoreMap[question.Type]
+		maxScore = questionMaxScore("level_exam", question.Type)
 	}
-	res := s.ai.GradeShortAnswer(question.Content, question.ReferenceAnswer, question.ScoringCriteria, answer.UserAnswer, maxScore, userID)
+	res := aiGradeShortAnswer(s.ai, question.Content, question.ReferenceAnswer, question.ScoringCriteria, answer.UserAnswer, maxScore, userID)
 	if res == nil {
 		return nil, errors.New("AI评分失败，请稍后重试或手动阅卷")
 	}
@@ -403,7 +404,7 @@ func (s *GradingService) updateParticipantScore(participantID int) {
 	s.db.Save(&p)
 }
 
-// questionMaxScore 获取题目满分（优先 question.score，否则用 examScoreMap）。
+// questionMaxScore 获取题目满分（优先 question.score，否则按定级考试分值表）。
 func (s *GradingService) questionMaxScore(questionID int) float64 {
 	var question model.Question
 	if err := s.db.First(&question, questionID).Error; err != nil {
@@ -412,7 +413,7 @@ func (s *GradingService) questionMaxScore(questionID int) float64 {
 	if question.Score > 0 {
 		return float64(question.Score)
 	}
-	if v, ok := examScoreMap[question.Type]; ok {
+	if v := questionMaxScore("level_exam", question.Type); v > 0 {
 		return v
 	}
 	return 10

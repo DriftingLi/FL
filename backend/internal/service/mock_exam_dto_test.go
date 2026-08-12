@@ -7,7 +7,7 @@ import "testing"
 func TestMockExamDTOShapeLock(t *testing.T) {
 	start := MockExamStartDTO{
 		MockExamID: 1, Duration: 90, TotalScore: 100, TotalQuestions: 40,
-		RemainingTime: 5400, Questions: []map[string]any{{"id": 1}},
+		RemainingTime: 5400, Questions: []QuestionDTO{{ID: 1}},
 	}
 	assertShapeLock(t, start,
 		"mock_exam_id", "duration", "total_score", "total_questions", "remaining_time", "questions",
@@ -15,7 +15,7 @@ func TestMockExamDTOShapeLock(t *testing.T) {
 
 	resume := MockExamResumeDTO{
 		MockExamID: 1, Duration: 90, RemainingTime: 5000,
-		Questions: []map[string]any{}, Answers: map[string]any{}, StartTime: "2026-08-01T10:00:00",
+		Questions: []QuestionDTO{}, Answers: map[string]any{}, StartTime: "2026-08-01T10:00:00",
 	}
 	assertShapeLock(t, resume,
 		"mock_exam_id", "duration", "remaining_time", "questions", "answers", "start_time",

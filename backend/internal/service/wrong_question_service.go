@@ -51,7 +51,7 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 		item := wrongQuestionToDict(wq)
 		var question model.Question
 		if err := s.db.First(&question, wq.QuestionID).Error; err == nil {
-			item["question"] = questionToDict(&question, true)
+			item["question"] = newQuestionDTO(&question, true)
 		}
 		result = append(result, item)
 	}
@@ -74,7 +74,7 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 		return nil, errors.New("题目不存在")
 	}
 
-	isCorrect := checkAnswer(&question, userAnswer)
+	isCorrect, _ := gradeQuestion(&question, userAnswer, 0)
 	if isCorrect != nil && *isCorrect {
 		wq.IsRemoved = true
 	} else if isCorrect != nil && !*isCorrect {

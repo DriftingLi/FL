@@ -31,13 +31,13 @@ func TestCreateQuestion_SingleChoice_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建题目失败: %v", err)
 	}
-	if result["type"] != "single_choice" || result["content"] != "叉车作业前应检查什么？" {
+	if result.Type != "single_choice" || result.Content != "叉车作业前应检查什么？" {
 		t.Fatalf("创建结果不匹配: %+v", result)
 	}
-	if result["status"] != "pending" {
-		t.Fatalf("默认状态应为 pending, got %v", result["status"])
+	if result.Status != "pending" {
+		t.Fatalf("默认状态应为 pending, got %v", result.Status)
 	}
-	if result["id"] == nil || result["id"].(int) == 0 {
+	if result.ID == 0 {
 		t.Fatal("题目 ID 不应为空")
 	}
 }
@@ -91,8 +91,8 @@ func TestCreateQuestion_ShortAnswer_NoAnswer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("简答题可不提供答案: %v", err)
 	}
-	if result["type"] != "short_answer" {
-		t.Fatalf("题型应为 short_answer, got %v", result["type"])
+	if result.Type != "short_answer" {
+		t.Fatalf("题型应为 short_answer, got %v", result.Type)
 	}
 }
 
@@ -114,9 +114,9 @@ func TestCreateQuestion_WithTagIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("带标签创建失败: %v", err)
 	}
-	tags := result["tags"].([]map[string]any)
+	tags := result.Tags.([]map[string]any)
 	if len(tags) != 1 || tags[0]["id"] != tag.ID {
-		t.Fatalf("标签未关联: %+v", result["tags"])
+		t.Fatalf("标签未关联: %+v", result.Tags)
 	}
 }
 
@@ -129,8 +129,8 @@ func TestGetQuestion_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("查询题目失败: %v", err)
 	}
-	if result["content"] != "叉车可以超载运行" {
-		t.Fatalf("内容不匹配: %v", result["content"])
+	if result.Content != "叉车可以超载运行" {
+		t.Fatalf("内容不匹配: %v", result.Content)
 	}
 }
 
@@ -154,8 +154,8 @@ func TestUpdateQuestion_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("更新失败: %v", err)
 	}
-	if result["content"] != "新题干" {
-		t.Fatalf("内容未更新: %v", result["content"])
+	if result.Content != "新题干" {
+		t.Fatalf("内容未更新: %v", result.Content)
 	}
 }
 
@@ -210,7 +210,7 @@ func TestListQuestions_Pagination(t *testing.T) {
 	if result["total"].(int64) != 5 {
 		t.Fatalf("总数应为 5, got %v", result["total"])
 	}
-	questions := result["questions"].([]map[string]any)
+	questions := result["questions"].([]QuestionDTO)
 	if len(questions) != 2 {
 		t.Fatalf("本页应 2 条, got %d", len(questions))
 	}
@@ -249,8 +249,8 @@ func TestPublishQuestion_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("发布失败: %v", err)
 	}
-	if result["status"] != "published" {
-		t.Fatalf("状态应为 published, got %v", result["status"])
+	if result.Status != "published" {
+		t.Fatalf("状态应为 published, got %v", result.Status)
 	}
 }
 
