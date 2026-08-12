@@ -228,6 +228,15 @@ export function del(url : string, options : RequestOptions | null = null) : Prom
 	return request<UTSJSONObject>(opts)
 }
 
+/** PATCH 请求快捷方法 */
+export function patch(url : string, data : any | null = null, options : RequestOptions | null = null) : Promise<UTSJSONObject> {
+	const opts : RequestOptions = options != null ? options! : { url: url } as RequestOptions
+	opts.url = url
+	opts.method = 'PATCH'
+	opts.data = data
+	return request<UTSJSONObject>(opts)
+}
+
 /**
  * 上传文件（multipart/form-data）
  * @note uni.uploadFile 不走统一 request 封装，需手动注入 Authorization 与解包 ApiResponse

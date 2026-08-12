@@ -5,9 +5,9 @@ import { Ref, ComputedRef } from 'vue'
 
 /** 后端通用 JSON 响应格式 */
 export type ApiResponse<T> = {
-	code : number
-	message : string
-	data : T
+    code : number
+    message : string
+    data : T
 }
 
 /**
@@ -19,269 +19,270 @@ export type UserRole = string
 
 /** 用户信息 */
 export type UserInfo = {
-	user_id : number
-	username : string
-	name : string
-	role : string
-	avatar ?: string
+    user_id : number
+    username : string
+    name : string
+    role : string
+    avatar ?: string
 }
 
 /** 登录参数 */
 export type LoginParams = {
-	username : string  // 用户名或手机号
-	password : string
+    username : string  // 用户名或手机号
+    password : string
 }
 
 /** 登录响应数据 */
 export type LoginResult = {
-	token : string
-	user : UserInfo
+    token : string
+    user : UserInfo
 }
 
 /** 注册参数 */
 export type RegisterParams = {
-	phone : string
-	password : string
-	name : string
+    phone : string
+    password : string
+    name : string
 }
 
 /** 更新个人资料参数（昵称/头像） */
 export type UpdateProfileParams = {
-	name ?: string       // 昵称
-	avatar ?: string     // 头像 URL
+    name ?: string       // 昵称
+    avatar ?: string     // 头像 URL
 }
 
 /** 上传头像响应 */
 export type UploadAvatarResult = {
-	avatar : string      // 头像访问 URL
+    avatar : string      // 头像访问 URL
 }
 
 /** 学习统计单日数据 */
 export type StudyStatsItem = {
-	date : string       // YYYY-MM-DD
-	minutes : number    // 学习分钟数
+    date : string       // YYYY-MM-DD
+    minutes : number    // 学习分钟数
 }
 
 /** 学习统计响应 */
 export type StudyStats = {
-	days : number
-	labels : string[]
-	data : number[]
-	total_minutes : number
-	active_days : number
+    days : number
+    labels : string[]
+    data : number[]
+    total_minutes : number
+    active_days : number
 }
 
 /** 课程进度项 */
 export type CourseProgressItem = {
-	course_id : number
-	course_name : string
-	progress : number
-	study_date ?: string
+    course_id : number
+    course_name : string
+    progress : number
+    study_date ?: string
 }
 
 /** 学员档案 */
 export type StudentProfile = {
-	student_id : number
-	username : string
-	name : string
-	phone : string
-	email ?: string
-	company ?: string
-	total_study_duration : number
-	total_courses : number
-	completed_courses : number
-	course_progress : CourseProgressItem[]
+    student_id : number
+    username : string
+    name : string
+    phone : string
+    email ?: string
+    company ?: string
+    total_study_duration : number
+    total_courses : number
+    completed_courses : number
+    course_progress : CourseProgressItem[]
 }
 
 /** 学习记录条目 */
 export type StudyRecord = {
-	record_id : number
-	course_id : number
-	course_name : string
-	chapter_id : number
-	chapter_title : string
-	study_duration : number
-	study_date : string
+    record_id : number
+    course_id : number
+    course_name : string
+    chapter_id : number
+    chapter_title : string
+    study_duration : number
+    study_date : string
 }
 
 /** 学习记录分页响应 */
 export type StudyRecordsResult = {
-	records : StudyRecord[]
-	total : number
-	page : number
-	page_size : number
+    records : StudyRecord[]
+    total : number
+    page : number
+    page_size : number
 }
 
 /** 九宫格入口配置项 */
 export type GridItem = {
-	key : string
-	title : string
-	icon : string        // emoji 或字符
-	color : string       // 卡片主题色（hex）
-	path : string        // 跳转路径，空字符串表示占位
-	available : boolean  // 是否已开发
+    key : string
+    title : string
+    icon : string        // emoji 或字符
+    color : string       // 卡片主题色（hex）
+    path : string        // 跳转路径，空字符串表示占位
+    available : boolean  // 是否已开发
 }
 
 /** 认证 store 实例类型（useAuthStore 返回值） */
 export type AuthStore = {
-	token : Ref<string>
-	user : Ref<UserInfo | null>
-	isInitializing : Ref<boolean>
-	isLoggedIn : ComputedRef<boolean>
-	displayName : ComputedRef<string>
-	setAuthData : (t : string, u : UserInfo) => void
-	clearAuthData : () => void
-	restoreFromStorage : () => boolean
-	validateToken : () => Promise<void>
-	login : (params : LoginParams) => Promise<void>
-	logout : () => Promise<void>
-	/** 更新本地用户信息（昵称/头像），并持久化到 storage */
-	updateUser : (patch : UpdateProfileParams) => void
+    token : Ref<string>
+    user : Ref<UserInfo | null>
+    isInitializing : Ref<boolean>
+    isLoggedIn : ComputedRef<boolean>
+    displayName : ComputedRef<string>
+    setAuthData : (t : string, u : UserInfo) => void
+    clearAuthData : () => void
+    restoreFromStorage : () => boolean
+    validateToken : () => Promise<void>
+    login : (params : LoginParams) => Promise<void>
+    logout : () => Promise<void>
+    /** 更新本地用户信息（昵称/头像），并持久化到 storage */
+    updateUser : (patch : UpdateProfileParams) => void
 }
 
 /** 题目选项 */
 export type QuestionOption = {
-	key : string
-	text : string
+    key : string
+    text : string
 }
 
 /** 考核题目 */
 export type ExamQuestion = {
-	question_id : number
-	type : string          // 题型：single_choice / multiple_choice / true_false
-	title : string
-	options : QuestionOption[]
-	score : number
+    question_id : number
+    type : string          // 题型：single_choice / multiple_choice / true_false
+    title : string
+    options : QuestionOption[]
+    score : number
 }
 
 /** 考核提交参数 */
 export type ExamSubmitParams = {
-	course_id : number
-	answers : UTSJSONObject   // { 题号: 答案 }
+    course_id : number
+    answers : UTSJSONObject   // { 题号: 答案 }
 }
 
 /** 考核结果 */
 export type ExamResult = {
-	score : number
-	total_score : number
-	passed : boolean
-	details : UTSJSONObject[]
+    score : number
+    total_score : number
+    passed : boolean
+    details : UTSJSONObject[]
 }
 
 /** 模拟考试开始参数 */
 export type MockExamStartParams = {
-	count : number
-	duration : number
+    count : number
+    duration : number
 }
 
 /** 模拟考试信息 */
 export type MockExamInfo = {
-	mock_exam_id : number
-	questions : ExamQuestion[]
-	duration : number          // 考试时长（分钟）
-	remaining_time : number    // 剩余时间（秒）
+    mock_exam_id : number
+    questions : ExamQuestion[]
+    duration : number          // 考试时长（分钟）
+    remaining_time : number    // 剩余时间（秒）
 }
 
 /** 模拟考试保存参数 */
 export type MockExamSaveParams = {
-	mock_exam_id : number
-	answers : UTSJSONObject
-	remaining_time : number
+    mock_exam_id : number
+    answers : UTSJSONObject
+    remaining_time : number
 }
 
 /** 模拟考试结果详情（单题） */
 export type MockExamResultDetail = {
-	question_id : number
-	title : string
-	type : string
-	user_answer : string
-	correct_answer : string
-	is_correct : boolean
+    question_id : number
+    title : string
+    type : string
+    user_answer : string
+    correct_answer : string
+    is_correct : boolean
 }
 
 /** 模拟考试结果 */
 export type MockExamResult = {
-	mock_exam_id : number
-	score : number
-	total_score : number
-	passed : boolean
-	correct_count : number
-	total_questions : number
-	used_time : number          // 用时（秒）
-	details : MockExamResultDetail[]
+    mock_exam_id : number
+    score : number
+    total_score : number
+    passed : boolean
+    correct_count : number
+    total_questions : number
+    used_time : number          // 用时（秒）
+    details : MockExamResultDetail[]
 }
 
 /** 模拟考试历史项 */
 export type MockExamHistoryItem = {
-	mock_exam_id : number
-	score : number
-	total_score : number
-	passed : boolean
-	correct_count : number
-	total_questions : number
-	duration : number            // 考试时长（分钟）
-	used_time : number           // 用时（秒）
-	status : string             // completed / in_progress
-	created_at : string
-	completed_at : string
+    mock_exam_id : number
+    score : number
+    total_score : number
+    passed : boolean
+    correct_count : number
+    total_questions : number
+    duration : number            // 考试时长（分钟）
+    used_time : number           // 用时（秒）
+    status : string             // completed / in_progress
+    created_at : string
+    completed_at : string
 }
 
 /** 模拟考试历史结果 */
 export type MockExamHistoryResult = {
-	items : MockExamHistoryItem[]
-	total : number
-	page : number
-	page_size : number
+    items : MockExamHistoryItem[]
+    total : number
+    page : number
+    page_size : number
 }
 
 /** 错题项 */
 export type WrongQuestionItem = {
-	question_id : number
-	type : string
-	title : string
-	options : QuestionOption[]
-	correct_answer : string
-	user_answer : string
-	wrong_count : number
-	created_at : string
+    question_id : number
+    type : string
+    title : string
+    options : QuestionOption[]
+    correct_answer : string
+    user_answer : string
+    wrong_count : number
+    created_at : string
 }
 
 /** 错题列表结果 */
 export type WrongQuestionListResult = {
-	items : WrongQuestionItem[]
-	total : number
-	page : number
-	page_size : number
+    items : WrongQuestionItem[]
+    total : number
+    page : number
+    page_size : number
 }
 
 /** 错题统计 */
 export type WrongQuestionStats = {
-	total : number
-	by_type : UTSJSONObject               // { 题型: 数量 }
-	by_knowledge_point : UTSJSONObject    // { 知识点: 数量 }
+    total : number
+    by_type : UTSJSONObject               // { 题型: 数量 }
+    by_knowledge_point : UTSJSONObject    // { 知识点: 数量 }
 }
 
 // ===== 论坛模块类型 =====
 
 /** 论坛帖子 */
 export type ForumTopic = {
-	id : number
-	title : string
-	content : string
-	author_id : number
-	author_name : string
-	author_avatar : string
-	replies_count : number
-	views_count : number
-	created_at : string
+    id : number
+    title : string
+    content : string
+    images : string[]
+    author_id : number
+    author_name : string
+    author_avatar : string
+    replies_count : number
+    views_count : number
+    created_at : string
 }
 
 /** 帖子列表响应 */
 export type ForumTopicListResult = {
-	items : ForumTopic[]
-	total : number
-	page : number
-	page_size : number
+    items : ForumTopic[]
+    total : number
+    page : number
+    page_size : number
 }
 
 /** 帖子回复 */
@@ -289,10 +290,13 @@ export type ForumReply = {
 	id : number
 	topic_id : number
 	content : string
+	images : string[]
 	author_id : number
 	author_name : string
 	author_avatar : string
 	created_at : string
+	/** 是否可删除（后端返回，贴主本人为 true） */
+	can_delete : boolean
 }
 
 /** 帖子详情（含回复列表） */
@@ -300,12 +304,15 @@ export type ForumTopicDetail = {
 	id : number
 	title : string
 	content : string
+	images : string[]
 	author_id : number
 	author_name : string
 	author_avatar : string
 	replies_count : number
 	views_count : number
 	created_at : string
+	/** 是否可删除（后端返回，贴主本人为 true） */
+	can_delete : boolean
 	replies : ForumReply[]
 }
 
@@ -313,227 +320,345 @@ export type ForumTopicDetail = {
 
 /** 课程列表项 */
 export type CourseItem = {
-	course_id : number
-	title : string
-	category : string
-	description : string
-	cover_url : string
-	duration : number
-	chapter_count : number
+    course_id : number
+    title : string
+    category : string
+    description : string
+    cover_url : string
+    duration : number
+    chapter_count : number
+    /** 专业方向 ID（0 表示未设置） */
+    specialty_id : number
+    /** 课程等级 ID（0 表示未设置） */
+    level_id : number
+}
+
+/** 专业方向（筛选项） */
+export type SpecialtyItem = {
+    specialty_id : number
+    name : string
+}
+
+/** 课程等级（筛选项） */
+export type LevelItem = {
+    level_id : number
+    name : string
+}
+
+/** 课程分类（兼容旧接口，value 为专业方向 ID 字符串） */
+export type CourseCategory = {
+    id : number
+    name : string
+    value : string
 }
 
 /** 课程列表响应 */
 export type CourseListResult = {
-	items : CourseItem[]
-	total : number
-	page : number
-	page_size : number
+    items : CourseItem[]
+    total : number
+    page : number
+    page_size : number
 }
 
 /** 章节项 */
 export type ChapterItem = {
-	chapter_id : number
-	title : string
-	order_num : number
-	duration : number
+    chapter_id : number
+    title : string
+    order_num : number
+    duration : number
 }
 
 /** 章节附件文件 */
 export type ChapterFile = {
-	file_id : number
-	file_name : string
-	file_url : string
-	content_type : string  // video / document / ppt / image
+    file_id : number
+    file_name : string
+    file_url : string
+    content_type : string  // video / document / ppt / image
 }
 
 /** 章节详情 */
 export type ChapterDetail = {
-	chapter_id : number
-	title : string
-	content : string               // 图文内容（markdown/html）
-	files : ChapterFile[]          // 附件列表
-	previous_chapter_id : number   // 上一章节 ID（0 表示无）
-	next_chapter_id : number       // 下一章节 ID（0 表示无）
-	study_status : string          // 学习状态：completed / studying / ''
-	duration : number              // 章节时长（秒）
+    chapter_id : number
+    title : string
+    content : string               // 图文内容（markdown/html）
+    files : ChapterFile[]          // 附件列表
+    previous_chapter_id : number   // 上一章节 ID（0 表示无）
+    next_chapter_id : number       // 下一章节 ID（0 表示无）
+    study_status : string          // 学习状态：completed / studying / ''
+    duration : number              // 章节时长（秒）
 }
 
 /** Markdown 解析后的块类型 */
 export type MarkdownBlock = {
-	type : string      // heading / paragraph / code / list / quote / divider / image
-	level : number     // 标题层级 1-6（非标题为 0）
-	text : string      // 文本内容
-	items : string[]   // 列表项（仅 list 类型）
+    type : string      // heading / paragraph / code / list / quote / divider / image
+    level : number     // 标题层级 1-6（非标题为 0）
+    text : string      // 文本内容
+    items : string[]   // 列表项（仅 list 类型）
 }
 
 /** 课程详情 */
 export type CourseDetail = {
-	course_id : number
-	title : string
-	description : string
-	category : string
-	cover_url : string
-	duration : number
-	chapters : ChapterItem[]
-	progress_pct : number
+    course_id : number
+    title : string
+    description : string
+    category : string
+    cover_url : string
+    duration : number
+    chapters : ChapterItem[]
+    progress_pct : number
+    /** 专业方向 ID（0 表示未设置） */
+    specialty_id : number
+    /** 课程等级 ID（0 表示未设置） */
+    level_id : number
 }
 
 // ===== 等级考试模块类型 =====
 
 /** 等级考试场次（可参加考试列表项） */
 export type LevelExamSession = {
-	id : number
-	name : string
-	start_time : string      // ISO 时间
-	end_time : string
-	duration : number        // 考试时长（分钟）
-	status : string          // upcoming / ongoing / finished
-	total_score : number
-	pass_score : number
-	has_participated : boolean
-	participant_status : string   // '' 表示未参加，否则 in_progress / submitted
-	participant_id : number       // 0 表示未参加
-	can_enter : boolean
+    id : number
+    name : string
+    start_time : string      // ISO 时间
+    end_time : string
+    duration : number        // 考试时长（分钟）
+    status : string          // upcoming / ongoing / finished
+    total_score : number
+    pass_score : number
+    has_participated : boolean
+    participant_status : string   // '' 表示未参加，否则 in_progress / submitted
+    participant_id : number       // 0 表示未参加
+    can_enter : boolean
 }
 
 /** 等级考试历史项 */
 export type LevelExamHistoryItem = {
-	id : number              // participant_id
-	exam_session_id : number
-	session_name : string
-	status : string          // in_progress / submitted / timeout
-	start_time : string
-	submit_time : string
-	score : number           // 未出分时为 0
-	objective_score : number
-	subjective_score : number
-	is_passed : boolean
+    id : number              // participant_id
+    exam_session_id : number
+    session_name : string
+    status : string          // in_progress / submitted / timeout
+    start_time : string
+    submit_time : string
+    score : number           // 未出分时为 0
+    objective_score : number
+    subjective_score : number
+    is_passed : boolean
 }
 
 /** 等级考试历史分页响应 */
 export type LevelExamHistoryResult = {
-	records : LevelExamHistoryItem[]
-	total : number
-	page : number
-	page_size : number
+    records : LevelExamHistoryItem[]
+    total : number
+    page : number
+    page_size : number
 }
 
 /** 进入等级考试返回的信息 */
 export type LevelExamInfo = {
-	participant_id : number
-	session : LevelExamSession
-	questions : ExamQuestion[]
-	answers : UTSJSONObject   // 已保存的答案快照 { 题目ID: 答案 }
-	remaining_time : number   // 剩余时间（秒）
-	start_time : string
+    participant_id : number
+    session : LevelExamSession
+    questions : ExamQuestion[]
+    answers : UTSJSONObject   // 已保存的答案快照 { 题目ID: 答案 }
+    remaining_time : number   // 剩余时间（秒）
+    start_time : string
 }
 
 /** 等级考试结果明细（单题） */
 export type LevelExamResultDetail = {
-	id : number
-	question_id : number
-	title : string
-	type : string
-	user_answer : string
-	is_correct : boolean      // null 表示未判定（简答题/未阅卷）
-	score : number
-	correct_answer : string
-	explanation : string
+    id : number
+    question_id : number
+    title : string
+    type : string
+    user_answer : string
+    is_correct : boolean      // null 表示未判定（简答题/未阅卷）
+    score : number
+    correct_answer : string
+    explanation : string
 }
 
 /** 等级考试结果 */
 export type LevelExamResult = {
-	participant : UTSJSONObject   // participantToDict（含 score/is_passed 等）
-	answers : LevelExamResultDetail[]
+    participant : UTSJSONObject   // participantToDict（含 score/is_passed 等）
+    answers : LevelExamResultDetail[]
 }
 
 // ===== 题库练习模块类型 =====
 
 /** 练习题目 */
 export type Question = {
-	question_id : number
-	type : string
-	title : string
-	options : QuestionOption[]
-	correct_answer : string
-	explanation : string
-	knowledge_point ?: string
+    question_id : number
+    type : string
+    title : string
+    options : QuestionOption[]
+    correct_answer : string
+    explanation : string
+    knowledge_point ?: string
 }
 
 /** 提交答案参数 */
 export type SubmitAnswerParams = {
-	question_id : number
-	user_answer : string
-	practice_type : string
+    question_id : number
+    user_answer : string
+    practice_type : string
 }
 
 /** 提交答案响应 */
 export type SubmitAnswerResult = {
-	correct : boolean
-	correct_answer : string
-	explanation : string
+    correct : boolean
+    correct_answer : string
+    explanation : string
 }
 
 /** 题库课程分类 */
 export type QuestionCategory = {
-	code : string          // 分类编码，如 CATEGORY_01
-	name : string          // 分类名称
-	question_count : number // 题目数量
+    code : string          // 分类编码，如 CATEGORY_01
+    name : string          // 分类名称
+    question_count : number // 题目数量
 }
 
 /** 知识点 */
 export type KnowledgePoint = {
-	id : number
-	name : string
-	parent_id : number
-	category : string
-	question_count : number
+    id : number
+    name : string
+    parent_id : number
+    category : string
+    question_count : number
 }
 
 /** 练习统计 */
 export type PracticeStats = {
-	total_practiced : number   // 总练习题数
-	correct_count : number     // 答对题数
-	accuracy : number          // 正确率（0-100）
-	today_count : number       // 今日练习数
-	streak_days : number       // 连续练习天数
+    total_practiced : number   // 总练习题数
+    correct_count : number     // 答对题数
+    accuracy : number          // 正确率（0-100）
+    today_count : number       // 今日练习数
+    streak_days : number       // 连续练习天数
 }
 
 /** 练习历史记录项 */
 export type PracticeHistoryItem = {
-	record_id : number
-	question_id : number
-	question_title : string
-	type : string
-	user_answer : string
-	correct_answer : string
-	is_correct : boolean
-	practice_type : string
-	created_at : string
+    record_id : number
+    question_id : number
+    question_title : string
+    type : string
+    user_answer : string
+    correct_answer : string
+    is_correct : boolean
+    practice_type : string
+    created_at : string
 }
 
 /** 练习历史结果 */
 export type PracticeHistoryResult = {
-	items : PracticeHistoryItem[]
-	total : number
-	page : number
-	page_size : number
+    items : PracticeHistoryItem[]
+    total : number
+    page : number
+    page_size : number
 }
 
 /** 练习进度 */
 export type PracticeProgress = {
-	index : number             // 当前题序号
-	practice_mode : string     // 练习模式
-	total : number             // 总题量
-	answers_state : UTSJSONObject // 已答题状态
+    index : number             // 当前题序号
+    practice_mode : string     // 练习模式
+    total : number             // 总题量
+    answers_state : UTSJSONObject // 已答题状态
 }
 
 /** 答题状态（用于做题页面跟踪每题作答情况） */
 export type AnswerState = {
-	question_id : number
-	user_answer : string
-	is_correct : boolean
-	correct_answer : string
-	submitted : boolean
+    question_id : number
+    user_answer : string
+    is_correct : boolean
+    correct_answer : string
+    submitted : boolean
 }
 
+// ===== AI 助手模块类型 =====
+
+/** AI 对话消息 */
+export type AiChatMessage = {
+    role : string       // user | assistant | system
+    content : string
+}
+
+/** 平台可用模型 */
+export type AiModel = {
+    id : number
+    name : string
+    model : string
+    source : string     // admin / system 等
+    description : string
+}
+
+/** 用户自定义模型 */
+export type AiUserModel = {
+    id : number
+    name : string
+    base_url : string
+    model : string
+    api_key : string
+    created_at : string
+}
+
+/** AI 会话 */
+export type AiSession = {
+    id : number
+    title : string
+    model_source : string
+    model_id : number
+    created_at : string
+    updated_at : string
+}
+
+/** AI 会话消息（含 id） */
+export type AiSessionMessage = {
+    id : number
+    role : string
+    content : string
+    created_at : string
+}
+
+/** 对话设置（本地缓存） */
+export type AiChatSettings = {
+    model_source : string   // admin | custom
+    model_id : number       // 用户模型 id，0 表示未选
+    model_name : string     // 展示名
+    base_url : string
+    model : string
+    api_key : string
+}
+
+/** AI 模型下拉选项（平台 + 用户自定义统一展示） */
+export type AIModelOption = {
+    id : number
+    name : string
+    model : string
+    source ?: string        // admin | user | custom
+    description ?: string
+    base_url ?: string
+    api_key ?: string
+}
+
+/** AI 会话（聊天页使用） */
+export type AIChatSession = {
+    id : number
+    title : string
+    model_source : string
+    model_id : number
+    created_at : string
+    updated_at : string
+}
+
+/** AI 对话消息（聊天页使用，含 id/时间） */
+export type AIChatMessage = {
+    id : number
+    role : string       // user | assistant | system
+    content : string
+    created_at : string
+}
+
+/** AI 功能快捷入口 */
+export type AIFunctionItem = {
+    key : string
+    title : string
+    icon : string
+    prompt : string
+}

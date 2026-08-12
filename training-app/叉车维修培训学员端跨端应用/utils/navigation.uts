@@ -1,0 +1,20 @@
+/**
+ * 页面导航工具
+ * 由于本应用大量使用 reLaunch 切换页面（tab-bar / 首页宫格），
+ * 目标页经常是页面栈中的唯一一页，直接 uni.navigateBack 会报
+ * "cannot navigate back at first page"。
+ * 统一使用 goBack()，无上级页面时回退到首页。
+ */
+
+/**
+ * 安全返回上一页；若当前为栈中第一页则 reLaunch 到 fallback 页面。
+ * @param fallback 无上级页面时的回退页，默认首页 dashboard
+ */
+export function goBack(fallback: string = '/pages/dashboard/dashboard'): void {
+	const pages = getCurrentPages()
+	if (pages != null && pages.length > 1) {
+		uni.navigateBack({})
+	} else {
+		uni.reLaunch({ url: fallback })
+	}
+}

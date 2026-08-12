@@ -100,6 +100,7 @@
     import { ref, computed } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
     import { getMockExamResultApi } from '../../api/mockExam'
     import type { MockExamResult, MockExamResultDetail } from '../../types/index'
 
@@ -183,7 +184,7 @@
     }
 
     function onBack() : void {
-        uni.navigateBack()
+        goBack()
     }
 
     function onViewHistory() : void {

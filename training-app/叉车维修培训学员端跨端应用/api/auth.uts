@@ -15,7 +15,9 @@ function buildUserInfo(obj : UTSJSONObject) : UserInfo {
 	try {
 		const user_id = obj['user_id'] as number
 		const username = obj['username'] as string
-		const name = obj['name'] as string
+		// 后端新统一用户体系 /auth/login 与 /auth/me 返回名称为 username（旧字段 name 已废弃）
+		const nameRaw = obj['name']
+		const name : string = nameRaw == null ? username : nameRaw as string
 		const role = obj['role'] as string
 		const user : UserInfo = {
 			user_id: user_id,

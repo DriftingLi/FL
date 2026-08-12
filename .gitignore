@@ -167,3 +167,6 @@ training-app/叉车维修培训学员端跨端应用/forklift-training-ui/restor
 training-app/叉车维修培训学员端跨端应用/forklift-training-ui/runtime-dispatch-manifest.json
 training-app/叉车维修培训学员端跨端应用/forklift-training-ui/runtime-orchestration-summary.json
 training-app/叉车维修培训学员端跨端应用/forklift-training-ui/assets/ai-assistant.jpg
+
+# ===== 项目备份目录（含嵌套 .git，不入库）=====
+training-app/*-backup-*/

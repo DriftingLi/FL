@@ -96,6 +96,7 @@
     import { ref } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
     import { getCourseDetailApi } from '../../api/course'
     import type { CourseDetail, ChapterItem } from '../../types/index'
 
@@ -107,26 +108,44 @@
     const loading = ref<boolean>(true)
 
     function getCategoryIcon(category : string) : string {
-        if (category == 'CATEGORY_01') return '📖'
-        if (category == 'CATEGORY_02') return '⚠️'
-        if (category == 'CATEGORY_03') return '🔧'
-        if (category == 'CATEGORY_04') return '🚀'
+        if (category == 'theory' || category == 'CATEGORY_01') return '📖'
+        if (category == 'safety' || category == 'CATEGORY_02') return '⚠️'
+        if (category == 'practice' || category == 'CATEGORY_03') return '🔧'
+        if (category == 'advanced' || category == 'CATEGORY_04') return '🚀'
+        if (category == 'structure') return '🏗️'
+        if (category == 'hydraulic') return '⚙️'
+        if (category == 'driving') return '🚜'
+        if (category == 'maintenance') return '🔨'
+        if (category == 'cargo') return '📦'
+        if (category == 'troubleshooting') return '🔍'
         return '📚'
     }
 
     function getCategoryName(category : string) : string {
-        if (category == 'CATEGORY_01') return '基础理论'
-        if (category == 'CATEGORY_02') return '安全规范'
-        if (category == 'CATEGORY_03') return '实操技能'
-        if (category == 'CATEGORY_04') return '进阶提升'
+        if (category == 'theory' || category == 'CATEGORY_01') return '基础理论'
+        if (category == 'safety' || category == 'CATEGORY_02') return '安全规范'
+        if (category == 'practice' || category == 'CATEGORY_03') return '实操技能'
+        if (category == 'advanced' || category == 'CATEGORY_04') return '进阶提升'
+        if (category == 'structure') return '结构系统'
+        if (category == 'hydraulic') return '液压系统'
+        if (category == 'driving') return '驾驶操作'
+        if (category == 'maintenance') return '维护保养'
+        if (category == 'cargo') return '货物装卸'
+        if (category == 'troubleshooting') return '故障排查'
         return '其他'
     }
 
     function getCoverColor(category : string) : string {
-        if (category == 'CATEGORY_01') return '#e3f2fd'
-        if (category == 'CATEGORY_02') return '#fff3e0'
-        if (category == 'CATEGORY_03') return '#e8f5e9'
-        if (category == 'CATEGORY_04') return '#f3e5f5'
+        if (category == 'theory' || category == 'CATEGORY_01') return '#e3f2fd'
+        if (category == 'safety' || category == 'CATEGORY_02') return '#fff3e0'
+        if (category == 'practice' || category == 'CATEGORY_03') return '#e8f5e9'
+        if (category == 'advanced' || category == 'CATEGORY_04') return '#f3e5f5'
+        if (category == 'structure') return '#fce4ec'
+        if (category == 'hydraulic') return '#e1f5fe'
+        if (category == 'driving') return '#fff8e1'
+        if (category == 'maintenance') return '#efebe9'
+        if (category == 'cargo') return '#e0f2f1'
+        if (category == 'troubleshooting') return '#fbe9e7'
         return '#f0f0f0'
     }
 
@@ -158,7 +177,7 @@
     }
 
     function onBack() : void {
-        uni.navigateBack()
+        goBack()
     }
 
     function onChapterClick(chapterId : number) : void {

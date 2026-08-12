@@ -1,188 +1,155 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+        <!-- 顶部导航栏 -->
+        <view class="nav-bar">
+            <view class="nav-left" @click="onRoleToggle">
+                <text class="nav-title">叉车司机</text>
+                <text class="nav-arrow">▾</text>
+            </view>
+            <view class="nav-right" @click="onCartClick">
+                <text class="nav-cart-icon">🛒</text>
+            </view>
+        </view>
+
         <scroll-view class="content-scroll" scroll-y="true">
-            <view class="header">
-                <view class="greeting">
-                    <text class="greeting-text">你好，{{ userName }}</text>
-                    <text class="greeting-sub">今天也要努力学习哦！</text>
-                </view>
-                <view class="avatar">
-                    <text class="avatar-icon">👤</text>
-                </view>
-            </view>
-            <view class="stats-card">
-                <view class="stat-item">
-                    <text class="stats-label">课程总数</text>
-                    <text class="stats-value">{{ totalCourses }}</text>
-                </view>
-                <view class="stat-divider"></view>
-                <view class="stat-item">
-                    <text class="stats-label">已完成</text>
-                    <text class="stats-value">{{ completedCourses }}</text>
-                </view>
-                <view class="stat-divider"></view>
-                <view class="stat-item">
-                    <text class="stats-label">学习时长</text>
-                    <text class="stats-value">{{ studyHours }}</text>
+            <!-- Banner 占位 -->
+            <view class="banner-placeholder"></view>
+
+            <!-- 功能入口（4+2 布局） -->
+            <view class="menu-grid">
+                <view v-for="(item, idx) in menuItems" :key="idx" class="menu-item" @click="onMenuClick(item)">
+                    <view class="menu-icon-box" :style="{ backgroundColor: item.color }"></view>
+                    <text class="menu-label">{{ item.title }}</text>
                 </view>
             </view>
-            <view class="section">
-                <view class="section-header">
-                    <text class="section-title">快速入口</text>
-                </view>
-                <view class="grid">
-                    <view class="grid-item" @click="onGridClick('courses')">
-                        <view class="grid-icon-wrap">
-                            <text class="grid-icon">📚</text>
-                        </view>
-                        <text class="grid-text">课程中心</text>
-                    </view>
-                    <view class="grid-item" @click="onGridClick('exam')">
-                        <view class="grid-icon-wrap">
-                            <text class="grid-icon">📝</text>
-                        </view>
-                        <text class="grid-text">在线考试</text>
-                    </view>
-                    <view class="grid-item" @click="onGridClick('practice')">
-                        <view class="grid-icon-wrap">
-                            <text class="grid-icon">✏️</text>
-                        </view>
-                        <text class="grid-text">题库练习</text>
-                    </view>
-                    <view class="grid-item" @click="onGridClick('profile')">
-                        <view class="grid-icon-wrap">
-                            <text class="grid-icon">👤</text>
-                        </view>
-                        <text class="grid-text">个人中心</text>
-                    </view>
+
+            <!-- Tab 切换 -->
+            <view class="tab-row">
+                <view v-for="(tab, idx) in contentTabs" :key="idx" class="tab-item"
+                    :class="{ 'tab-active': activeTab == idx }" @click="onTabChange(idx)">
+                    <text class="tab-text" :class="{ 'tab-text-active': activeTab == idx }">{{ tab }}</text>
+                    <view v-if="activeTab == idx" class="tab-underline"></view>
                 </view>
             </view>
-            <view class="section">
-                <view class="section-header">
-                    <text class="section-title">最近学习</text>
-                    <text class="section-more" @click="onGridClick('courses')">查看全部 →</text>
+
+            <!-- 筛选标签 -->
+            <view class="filter-row">
+                <view class="filter-tags">
+                    <view v-for="(tag, idx) in filterTags" :key="idx" class="filter-tag"
+                        :class="{ 'filter-tag-active': activeFilter == idx }" @click="onFilterChange(idx)">
+                        <text class="filter-tag-text"
+                            :class="{ 'filter-tag-text-active': activeFilter == idx }">{{ tag }}</text>
+                    </view>
+                </view>
+                <view class="filter-btn" @click="onFilterBtnClick">
+                    <text class="filter-btn-text">筛选</text>
+                </view>
+            </view>
+
+            <!-- 课程卡片列表 -->
+            <view class="course-list">
+                <!-- <view v-for="(course, idx) in recentCourses" :key="idx" class="course-card"
+                    @click="onCourseClick(course.course_id)">
+                    <view class="course-card-top">
+                        <view class="course-badge">
+                            <text class="course-badge-text">合集</text>
+                        </view>
+                        <text class="course-card-title">{{ course.title }}</text>
+                    </view>
+                    <view class="course-card-tags">
+                        <view class="course-tag">
+                            <text class="course-tag-text">直播授课</text>
+                        </view>
+                        <view class="course-tag">
+                            <text class="course-tag-text">电子资料</text>
+                        </view>
+                    </view>
+                    <view class="course-card-bottom">
+                        <text class="course-price">¥ {{ course.price > 0 ? course.price : 0 }}</text>
+                        <text class="course-buyers">{{ course.buyers }}+人购买</text>
+                    </view>
                 </view>
                 <view v-if="recentCourses.length == 0" class="empty-tip">
-                    <text class="empty-text">暂无学习记录</text>
-                </view>
-                <view class="course-list">
-                    <view v-for="(course, idx) in recentCourses" :key="idx" class="course-item"
-                        @click="onCourseClick(course.course_id)">
-                        <view class="course-cover">
-                            <text class="course-icon">{{ getCategoryIcon(course.category) }}</text>
-                        </view>
-                        <view class="course-info">
-                            <text class="course-title">{{ course.title }}</text>
-                            <text class="course-progress">{{ course.chapter_count }}章 ·
-                                {{ formatDuration(course.duration) }}</text>
-                        </view>
-                        <view class="course-arrow">
-                            <text class="arrow-icon">›</text>
-                        </view>
-                    </view>
-                </view>
+                    <text class="empty-text">暂无推荐课程</text>
+                </view> -->
+                 <view class="empty-tip">
+                    <text class="empty-text">暂无推荐课程</text>
+                </view> 
             </view>
         </scroll-view>
-        <tab-bar :active-index="0"></tab-bar>
+
+        <!-- <tab-bar :active-index="0"></tab-bar> -->
     </view>
 </template>
 
 <script setup lang="uts">
     import { ref, computed } from 'vue'
-    import { useAuthStore } from '../../stores/auth'
-    import { getProfileApi } from '../../api/student'
     import { getCourseListApi } from '../../api/course'
     import { useStatusBarHeight } from '../../utils/system'
-    import type { StudentProfile, CourseItem } from '../../types/index'
+    import { UNAVAILABLE_TOAST } from '../../constants/app'
+    import type { CourseItem } from '../../types/index'
 
-    const authStore = useAuthStore()
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
-    const profile = ref<StudentProfile | null>(null)
+
+    // 功能入口菜单（6 项，4+2 布局）
+    type MenuItem = {
+        key : string
+        title : string
+        icon : string
+        color : string
+        path : string
+        available : boolean
+    }
+
+    const menuItems : MenuItem[] = [
+        { key: 'course-mall', title: '课程商城', icon: '', color: '#b0c4de', path: '/pages/courses/courses', available: true },
+        { key: 'question-bank', title: '题库练习', icon: '✏️', color: '#ff9900', path: '/pages/practice/practice', available: true },
+        { key: 'material-course', title: '资料课程', icon: '', color: '#b0c4de', path: '', available: false },
+        { key: 'exam-info', title: '考情资讯', icon: '', color: '#b0c4de', path: '', available: false },
+        { key: 'exam', title: '考试', icon: '', color: '#b0c4de', path: '/pages/exam/exam', available: true },
+        { key: 'certificate', title: '证书', icon: '', color: '#b0c4de', path: '', available: false },
+    ]
+
+    // 内容 Tab
+    const contentTabs : string[] = ['推荐课程', '精品活动', '精品课程']
+    const activeTab = ref<number>(0)
+
+    // 筛选标签
+    const filterTags : string[] = ['笔试', '实操技能', '综合评审']
+    const activeFilter = ref<number>(0)
+
+    // 课程列表
     const recentCourses = ref<CourseItem[]>([])
 
-    const userName = computed<string>(() : string => {
-        if (authStore.user.value != null) {
-            const u = authStore.user.value
-            if (u.name.length > 0) return u.name
-            if (u.username.length > 0) return u.username
-        }
-        return '同学'
-    })
-
-    const totalCourses = computed<number>(() : number => {
-        if (profile.value != null) {
-            return profile.value.total_courses
-        }
-        return recentCourses.value.length
-    })
-
-    const completedCourses = computed<number>(() : number => {
-        if (profile.value != null) {
-            return profile.value.completed_courses
-        }
-        return 0
-    })
-
-    const studyHours = computed<string>(() : string => {
-        if (profile.value != null) {
-            const minutes = profile.value.total_study_duration
-            const hours = Math.floor(minutes / 60)
-            const mins = minutes % 60
-            if (hours > 0) {
-                return hours + 'h' + mins + 'm'
-            }
-            return mins + 'm'
-        }
-        return '0m'
-    })
-
-    function getCategoryIcon(category : string) : string {
-        if (category == 'CATEGORY_01') return '📖'
-        if (category == 'CATEGORY_02') return '⚠️'
-        if (category == 'CATEGORY_03') return '🔧'
-        if (category == 'CATEGORY_04') return '🚀'
-        return '📚'
+    function onRoleToggle() : void {
+        uni.showToast({ title: '角色切换开发中', icon: 'none' })
     }
 
-    function formatDuration(seconds : number) : string {
-        if (seconds <= 0) return ''
-        const minutes = Math.floor(seconds / 60)
-        if (minutes < 60) return minutes + '分钟'
-        const hours = Math.floor(minutes / 60)
-        const mins = minutes % 60
-        return hours + 'h' + mins + 'm'
+    function onCartClick() : void {
+        uni.showToast({ title: '购物车开发中', icon: 'none' })
     }
 
-    async function loadProfile() {
-        try {
-            const data = await getProfileApi()
-            profile.value = data
-        } catch (e) {
-            console.error('[dashboard] load profile failed:', e)
+    function onMenuClick(item : MenuItem) : void {
+        if (!item.available || item.path.length == 0) {
+            uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
+            return
         }
+        uni.reLaunch({ url: item.path })
     }
 
-    async function loadRecentCourses() {
-        try {
-            const result = await getCourseListApi(1, 3, '')
-            recentCourses.value = result.items
-        } catch (e) {
-            console.error('[dashboard] load courses failed:', e)
-        }
+    function onTabChange(idx : number) : void {
+        activeTab.value = idx
     }
 
-    function onGridClick(type : string) : void {
-        if (type == 'courses') {
-            uni.reLaunch({ url: '/pages/courses/courses' })
-        } else if (type == 'exam') {
-            uni.reLaunch({ url: '/pages/exam/exam' })
-        } else if (type == 'practice') {
-            uni.navigateTo({ url: '/pages/practice/practice' })
-        } else if (type == 'profile') {
-            uni.reLaunch({ url: '/pages/profile/profile' })
-        }
+    function onFilterChange(idx : number) : void {
+        activeFilter.value = idx
+    }
+
+    function onFilterBtnClick() : void {
+        uni.showToast({ title: '筛选功能开发中', icon: 'none' })
     }
 
     function onCourseClick(courseId : number) : void {
@@ -191,7 +158,15 @@
         })
     }
 
-    loadProfile()
+    async function loadRecentCourses() {
+        try {
+            const result = await getCourseListApi(1, 10, '')
+            recentCourses.value = result.items
+        } catch (e) {
+            console.error('[dashboard] load courses failed:', e)
+        }
+    }
+
     loadRecentCourses()
 </script>
 
@@ -203,197 +178,231 @@
     }
 
     .status-bar {
-        background-color: #2979ff;
+        background-color: #ffffff;
     }
 
     .content-scroll {
         flex: 1;
     }
 
-    .header {
-        background-color: #2979ff;
-        padding: 32rpx 32rpx 48rpx;
+    /* 顶部导航栏 */
+    .nav-bar {
+        background-color: #ffffff;
         flex-direction: row;
         justify-content: space-between;
         align-items: center;
+        padding: 20rpx 32rpx;
     }
 
-    .greeting {
-        flex-direction: column;
-    }
-
-    .greeting-text {
-        font-size: 40rpx;
-        font-weight: bold;
-        color: #ffffff;
-        margin-bottom: 8rpx;
-    }
-
-    .greeting-sub {
-        font-size: 26rpx;
-        color: rgba(255, 255, 255, 0.8);
-    }
-
-    .avatar {
-        width: 88rpx;
-        height: 88rpx;
-        border-radius: 44rpx;
-        background-color: #4a9aff;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .avatar-icon {
-        font-size: 44rpx;
-    }
-
-    .stats-card {
-        margin: -32rpx 24rpx 24rpx;
-        background-color: #ffffff;
-        border-radius: 16rpx;
-        padding: 32rpx;
+    .nav-left {
         flex-direction: row;
-        justify-content: space-around;
-        border: 1px solid #eeeeee;
-    }
-
-    .stat-item {
-        flex: 1;
-        flex-direction: column;
         align-items: center;
     }
 
-    .stats-label {
-        font-size: 24rpx;
-        color: #999999;
-        margin-bottom: 12rpx;
-    }
-
-    .stats-value {
-        font-size: 40rpx;
-        font-weight: bold;
-        color: #333333;
-    }
-
-    .stat-divider {
-        width: 1rpx;
-        background-color: #f0f0f0;
-    }
-
-    .section {
-        background-color: #ffffff;
-        margin-bottom: 16rpx;
-        padding: 24rpx;
-    }
-
-    .section-header {
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 24rpx;
-    }
-
-    .section-title {
+    .nav-title {
         font-size: 32rpx;
         font-weight: bold;
         color: #333333;
     }
 
-    .section-more {
-        font-size: 26rpx;
-        color: #2979ff;
+    .nav-arrow {
+        font-size: 24rpx;
+        color: #999999;
+        margin-left: 8rpx;
     }
 
-    .grid {
-        flex-direction: row;
-        flex-wrap: wrap;
-        justify-content: space-between;
-    }
-
-    .grid-item {
-        width: 340rpx;
-        background-color: #f8f9fa;
-        border-radius: 12rpx;
-        padding: 32rpx 0;
-        flex-direction: column;
-        align-items: center;
-        margin-bottom: 16rpx;
-    }
-
-    .grid-icon-wrap {
-        width: 88rpx;
-        height: 88rpx;
-        border-radius: 44rpx;
-        background-color: #e3f2fd;
+    .nav-right {
+        width: 64rpx;
+        height: 64rpx;
         align-items: center;
         justify-content: center;
-        margin-bottom: 16rpx;
     }
 
-    .grid-icon {
+    .nav-cart-icon {
         font-size: 44rpx;
     }
 
-    .grid-text {
-        font-size: 26rpx;
+    /* Banner 占位 */
+    .banner-placeholder {
+        height: 240rpx;
+        margin: 24rpx;
+        border-radius: 16rpx;
+        background-color: #e8f4fd;
+    }
+
+    /* 功能入口网格 */
+    .menu-grid {
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: 0 24rpx;
+    }
+
+    .menu-item {
+        width: 25%;
+        padding: 20rpx 0;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .menu-icon-box {
+        width: 80rpx;
+        height: 80rpx;
+        border-radius: 8rpx;
+        margin-bottom: 12rpx;
+    }
+
+    .menu-label {
+        font-size: 24rpx;
         color: #333333;
     }
 
+    /* 内容 Tab */
+    .tab-row {
+        flex-direction: row;
+        padding: 24rpx 32rpx 0;
+    }
+
+    .tab-item {
+        margin-right: 40rpx;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .tab-text {
+        font-size: 28rpx;
+        color: #999999;
+        padding-bottom: 12rpx;
+    }
+
+    .tab-text-active {
+        color: #333333;
+        font-weight: bold;
+    }
+
+    .tab-underline {
+        width: 40rpx;
+        height: 6rpx;
+        border-radius: 3rpx;
+        background-color: #2979ff;
+    }
+
+    /* 筛选标签 */
+    .filter-row {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20rpx 32rpx;
+    }
+
+    .filter-tags {
+        flex: 1;
+        flex-direction: row;
+    }
+
+    .filter-tag {
+        padding: 8rpx 24rpx;
+        border-radius: 24rpx;
+        border: 1rpx solid #e0e0e0;
+        margin-right: 16rpx;
+        background-color: #ffffff;
+    }
+
+    .filter-tag-active {
+        border-color: #2979ff;
+        background-color: #e8f0fe;
+    }
+
+    .filter-tag-text {
+        font-size: 24rpx;
+        color: #666666;
+    }
+
+    .filter-tag-text-active {
+        color: #2979ff;
+    }
+
+    .filter-btn {
+        padding: 8rpx 24rpx;
+        border-radius: 24rpx;
+        border: 1rpx solid #e0e0e0;
+        background-color: #ffffff;
+    }
+
+    .filter-btn-text {
+        font-size: 24rpx;
+        color: #666666;
+    }
+
+    /* 课程卡片 */
     .course-list {
+        padding: 0 24rpx;
+    }
+
+    .course-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        margin-bottom: 16rpx;
         flex-direction: column;
     }
 
-    .course-item {
+    .course-card-top {
         flex-direction: row;
         align-items: center;
-        padding: 20rpx 0;
-        border-bottom: 1rpx solid #f5f5f5;
+        margin-bottom: 16rpx;
     }
 
-    .course-item:last-child {
-        border-bottom: none;
+    .course-badge {
+        background-color: #19be6b;
+        border-radius: 8rpx;
+        padding: 4rpx 12rpx;
+        margin-right: 16rpx;
     }
 
-    .course-cover {
-        width: 100rpx;
-        height: 100rpx;
-        border-radius: 12rpx;
-        background-color: #f0f0f0;
-        align-items: center;
-        justify-content: center;
-        margin-right: 20rpx;
+    .course-badge-text {
+        font-size: 20rpx;
+        color: #ffffff;
     }
 
-    .course-icon {
-        font-size: 48rpx;
-    }
-
-    .course-info {
+    .course-card-title {
         flex: 1;
-        flex-direction: column;
-    }
-
-    .course-title {
         font-size: 30rpx;
+        font-weight: bold;
         color: #333333;
-        margin-bottom: 8rpx;
     }
 
-    .course-progress {
-        font-size: 24rpx;
+    .course-card-tags {
+        flex-direction: row;
+        margin-bottom: 16rpx;
+    }
+
+    .course-tag {
+        padding: 4rpx 16rpx;
+        border-radius: 4rpx;
+        background-color: #f5f5f5;
+        margin-right: 12rpx;
+    }
+
+    .course-tag-text {
+        font-size: 22rpx;
         color: #999999;
     }
 
-    .course-arrow {
-        width: 48rpx;
-        height: 48rpx;
+    .course-card-bottom {
+        flex-direction: row;
+        justify-content: space-between;
         align-items: center;
-        justify-content: center;
     }
 
-    .arrow-icon {
-        font-size: 40rpx;
-        color: #cccccc;
+    .course-price {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #f44336;
+    }
+
+    .course-buyers {
+        font-size: 24rpx;
+        color: #999999;
     }
 
     .empty-tip {

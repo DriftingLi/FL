@@ -1,0 +1,58 @@
+/**
+ * AI 助手版本 / 付费（mock）工具
+ * 纯前端模拟：无后端、无真实支付。
+ * - ai_version：'' | 'basic' | 'pro'（当前使用的版本）
+ * - ai_pro_paid：'1' 表示已付费解锁专业版
+ */
+import { getStorage, setStorage } from './storage'
+
+/** 存储 key: 当前使用版本 */
+const VERSION_KEY = 'ai_version'
+
+/** 存储 key: 专业版是否已付费解锁 */
+const PRO_PAID_KEY = 'ai_pro_paid'
+
+/** 专业版 mock 价格（静态数据） */
+export const PRO_PRICE_MONTH = '¥19.9/月'
+export const PRO_PRICE_YEAR = '¥199/年'
+
+/** 当前版本类型 */
+export type AiVersion = '' | 'basic' | 'pro'
+
+/** 读取当前版本，未选择返回 '' */
+export function getVersion() : AiVersion {
+	const v = getStorage(VERSION_KEY)
+	if (v == 'basic' || v == 'pro') {
+		return v as AiVersion
+	}
+	return '' as AiVersion
+}
+
+/** 记录当前版本 */
+export function setVersion(v : AiVersion) : void {
+	setStorage(VERSION_KEY, v)
+}
+
+/** 是否已付费解锁专业版 */
+export function isProPaid() : boolean {
+	return getStorage(PRO_PAID_KEY) == '1'
+}
+
+/** 标记专业版已付费（mock 支付成功时调用） */
+export function markProPaid() : void {
+	setStorage(PRO_PAID_KEY, '1')
+}
+
+/**
+ * 模拟支付：展示 loading 约 1.5s 后成功。
+ * @returns 支付成功返回 true（当前恒为 true，纯 mock）
+ */
+export function mockPay() : Promise<boolean> {
+	return new Promise<boolean>((resolve) => {
+		uni.showLoading({ title: '支付中...' })
+		setTimeout(() => {
+			uni.hideLoading()
+			resolve(true)
+		}, 1500)
+	})
+}

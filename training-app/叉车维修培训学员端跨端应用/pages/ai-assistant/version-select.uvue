@@ -1,0 +1,459 @@
+<template>
+	<view class="page" :style="{ height: windowHeight + 'px' }">
+		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+		<view class="header">
+			<view class="header-left" @click="onBack">
+				<text class="back-icon">‹</text>
+			</view>
+			<text class="header-title">AI 助手</text>
+			<view class="header-right"></view>
+		</view>
+
+		<scroll-view class="content" scroll-y="true">
+			<view class="intro">
+				<text class="intro-title">选择使用版本</text>
+				<text class="intro-desc">基础版免费使用，专业版需付费解锁更多功能</text>
+			</view>
+
+			<!-- 基础版卡片（免费，当前默认锁定） -->
+			<view class="version-card basic-card" @click="selectBasic">
+				<view class="card-top">
+					<view class="card-badge badge-basic">基础版</view>
+					<view class="card-price free">免费</view>
+				</view>
+				<view class="card-desc">简洁易用，满足日常问答与最近会话回顾</view>
+				<view class="feature-list">
+					<view class="feature-row">
+						<text class="feature-dot">●</text>
+						<text class="feature-text">新对话</text>
+					</view>
+					<view class="feature-row">
+						<text class="feature-dot">●</text>
+						<text class="feature-text">最近对话折叠面板</text>
+					</view>
+					<view class="feature-row">
+						<text class="feature-dot">●</text>
+						<text class="feature-text">历史会话记录</text>
+					</view>
+				</view>
+				<view class="card-btn btn-basic">
+					<text class="btn-text">使用基础版</text>
+				</view>
+			</view>
+
+			<!-- 专业版卡片（需付费解锁） -->
+			<view class="version-card pro-card" @click="openPay">
+				<view class="card-top">
+					<view class="card-badge badge-pro">专业版</view>
+					<view class="card-price">付费解锁</view>
+				</view>
+				<view class="card-desc">面向维修作业的完整 AI 能力，支持多模型与扩展工具</view>
+				<view class="feature-list">
+					<view class="feature-row">
+						<text class="feature-dot">●</text>
+						<text class="feature-text">功能快捷入口（故障代码 / 图纸 / 习题 / 维保）</text>
+					</view>
+					<view class="feature-row">
+						<text class="feature-dot">●</text>
+						<text class="feature-text">模型选择与自定义 API Key</text>
+					</view>
+					<view class="feature-row">
+						<text class="feature-dot">●</text>
+						<text class="feature-text">深度思考、图片识别、语音输入</text>
+					</view>
+				</view>
+				<view class="card-btn btn-pro">
+					<text class="btn-text">立即开通 {{ PRO_PRICE_MONTH }}</text>
+				</view>
+			</view>
+		</scroll-view>
+
+		<!-- mock 付费弹窗 -->
+		<view v-if="payVisible" class="pay-mask" @click="closePay"></view>
+		<view v-if="payVisible" class="pay-dialog">
+			<view class="pay-title">开通专业版</view>
+			<view class="pay-sub">解锁全部 AI 能力，一次购买长期有效</view>
+			<view class="pay-plan" :class="{ active: payPlan == 'month' }" @click="payPlan = 'month'">
+				<view class="plan-left">
+					<text class="plan-name">月度会员</text>
+					<text class="plan-desc">适合短期使用</text>
+				</view>
+				<text class="plan-price">{{ PRO_PRICE_MONTH }}</text>
+			</view>
+			<view class="pay-plan" :class="{ active: payPlan == 'year' }" @click="payPlan = 'year'">
+				<view class="plan-left">
+					<text class="plan-name">年度会员</text>
+					<text class="plan-desc">更划算，推荐</text>
+				</view>
+				<text class="plan-price">{{ PRO_PRICE_YEAR }}</text>
+			</view>
+			<view class="pay-actions">
+				<view class="pay-btn cancel" @click="closePay">
+					<text class="pay-btn-text">取消</text>
+				</view>
+				<view class="pay-btn primary" @click="confirmPay">
+					<text class="pay-btn-text">确认支付</text>
+				</view>
+			</view>
+			<text class="pay-tip">当前为演示环境，支付为模拟操作</text>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { ref } from 'vue'
+	import { onLoad } from '@dcloudio/uni-app'
+	import { useStatusBarHeight } from '../../utils/system'
+	import { goBack } from '../../utils/navigation'
+	import {
+		getVersion,
+		setVersion,
+		isProPaid,
+		markProPaid,
+		mockPay,
+		PRO_PRICE_MONTH,
+		PRO_PRICE_YEAR,
+	} from '../../utils/aiPay'
+
+	const statusBarHeight = useStatusBarHeight()
+	const windowHeight = uni.getSystemInfoSync().windowHeight
+
+	const payVisible = ref<boolean>(false)
+	const payPlan = ref<'month' | 'year'>('month')
+	const paying = ref<boolean>(false)
+
+	// 作为 tabBar 网关：已选过版本则直接进入对应页面
+	onLoad(() => {
+		const v = getVersion()
+		if (v == 'basic') {
+			uni.reLaunch({ url: '/pages/ai-assistant/ai-basic' })
+			return
+		}
+		if (v == 'pro' && isProPaid()) {
+			uni.reLaunch({ url: '/pages/ai-assistant/ai-assistant' })
+			return
+		}
+		// 未选过或未解锁：展示选择页
+	})
+
+	function onBack() : void {
+		goBack()
+	}
+
+	function selectBasic() : void {
+		setVersion('basic')
+		uni.reLaunch({ url: '/pages/ai-assistant/ai-basic' })
+	}
+
+	function openPay() : void {
+		payVisible.value = true
+	}
+
+	function closePay() : void {
+		if (paying.value) return
+		payVisible.value = false
+	}
+
+	async function confirmPay() : Promise<void> {
+		if (paying.value) return
+		paying.value = true
+		try {
+			await mockPay()
+			markProPaid()
+			setVersion('pro')
+			payVisible.value = false
+			uni.showToast({ title: '支付成功，已开通专业版', icon: 'success' })
+			setTimeout(() => {
+				uni.reLaunch({ url: '/pages/ai-assistant/ai-assistant' })
+			}, 600)
+		} finally {
+			paying.value = false
+		}
+	}
+</script>
+
+<style>
+	.page {
+		display: flex;
+		flex-direction: column;
+		background-color: #f5f6f8;
+	}
+
+	.status-bar {
+		background-color: #ffffff;
+	}
+
+	.header {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding: 16rpx 24rpx;
+		background-color: #ffffff;
+		border-bottom: 1rpx solid #f0f0f0;
+	}
+
+	.header-left,
+	.header-right {
+		width: 72rpx;
+		height: 72rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.back-icon {
+		font-size: 48rpx;
+		color: #333333;
+		font-weight: bold;
+	}
+
+	.header-title {
+		font-size: 34rpx;
+		font-weight: bold;
+		color: #222222;
+	}
+
+	.content {
+		flex: 1;
+		height: 0;
+		padding: 32rpx 24rpx;
+	}
+
+	.intro {
+		margin-bottom: 32rpx;
+	}
+
+	.intro-title {
+		font-size: 40rpx;
+		font-weight: bold;
+		color: #222222;
+	}
+
+	.intro-desc {
+		font-size: 26rpx;
+		color: #999999;
+		margin-top: 12rpx;
+		line-height: 1.6;
+	}
+
+	.version-card {
+		background-color: #ffffff;
+		border-radius: 24rpx;
+		padding: 32rpx;
+		margin-bottom: 32rpx;
+	}
+
+	.basic-card {
+		border: 2rpx solid #e5e5e5;
+	}
+
+	.pro-card {
+		border: 2rpx solid #2979ff;
+	}
+
+	.card-top {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 16rpx;
+	}
+
+	.card-badge {
+		padding: 8rpx 24rpx;
+		border-radius: 28rpx;
+		font-size: 28rpx;
+		font-weight: bold;
+	}
+
+	.badge-basic {
+		background-color: #f0f0f0;
+		color: #333333;
+	}
+
+	.badge-pro {
+		background-color: #e3f2fd;
+		color: #2979ff;
+	}
+
+	.card-price {
+		font-size: 26rpx;
+		color: #999999;
+	}
+
+	.card-price.free {
+		color: #19be6b;
+		font-weight: bold;
+	}
+
+	.card-desc {
+		font-size: 26rpx;
+		color: #666666;
+		line-height: 1.6;
+		margin-bottom: 24rpx;
+	}
+
+	.feature-list {
+		margin-bottom: 32rpx;
+	}
+
+	.feature-row {
+		flex-direction: row;
+		align-items: flex-start;
+		padding: 8rpx 0;
+	}
+
+	.feature-dot {
+		font-size: 22rpx;
+		color: #2979ff;
+		margin-right: 12rpx;
+		margin-top: 6rpx;
+	}
+
+	.feature-text {
+		flex: 1;
+		font-size: 26rpx;
+		color: #333333;
+		line-height: 1.5;
+	}
+
+	.card-btn {
+		height: 88rpx;
+		border-radius: 44rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.btn-basic {
+		background-color: #f0f0f0;
+	}
+
+	.btn-pro {
+		background-color: #2979ff;
+	}
+
+	.btn-text {
+		font-size: 30rpx;
+		font-weight: bold;
+		color: #333333;
+	}
+
+	.btn-pro .btn-text {
+		color: #ffffff;
+	}
+
+	/* mock 付费弹窗 */
+	.pay-mask {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: rgba(0, 0, 0, 0.4);
+		z-index: 200;
+	}
+
+	.pay-dialog {
+		position: absolute;
+		left: 48rpx;
+		right: 48rpx;
+		top: 22%;
+		background-color: #ffffff;
+		border-radius: 24rpx;
+		padding: 40rpx 32rpx;
+		z-index: 201;
+	}
+
+	.pay-title {
+		font-size: 36rpx;
+		font-weight: bold;
+		color: #222222;
+		text-align: center;
+	}
+
+	.pay-sub {
+		font-size: 24rpx;
+		color: #999999;
+		text-align: center;
+		margin-top: 12rpx;
+		margin-bottom: 32rpx;
+	}
+
+	.pay-plan {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		background-color: #f5f6f8;
+		border-radius: 16rpx;
+		padding: 28rpx 24rpx;
+		margin-bottom: 20rpx;
+		border: 2rpx solid transparent;
+	}
+
+	.pay-plan.active {
+		background-color: #e3f2fd;
+		border-color: #2979ff;
+	}
+
+	.plan-left {
+		flex-direction: column;
+	}
+
+	.plan-name {
+		font-size: 30rpx;
+		color: #333333;
+		font-weight: 500;
+	}
+
+	.plan-desc {
+		font-size: 22rpx;
+		color: #999999;
+		margin-top: 6rpx;
+	}
+
+	.plan-price {
+		font-size: 32rpx;
+		color: #2979ff;
+		font-weight: bold;
+	}
+
+	.pay-actions {
+		flex-direction: row;
+		margin-top: 8rpx;
+	}
+
+	.pay-btn {
+		flex: 1;
+		height: 88rpx;
+		border-radius: 44rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.pay-btn.cancel {
+		background-color: #f0f0f0;
+		margin-right: 16rpx;
+	}
+
+	.pay-btn.primary {
+		background-color: #2979ff;
+	}
+
+	.pay-btn-text {
+		font-size: 30rpx;
+		font-weight: bold;
+	}
+
+	.pay-btn.cancel .pay-btn-text {
+		color: #333333;
+	}
+
+	.pay-btn.primary .pay-btn-text {
+		color: #ffffff;
+	}
+
+	.pay-tip {
+		font-size: 22rpx;
+		color: #cccccc;
+		text-align: center;
+		margin-top: 20rpx;
+	}
+</style>
