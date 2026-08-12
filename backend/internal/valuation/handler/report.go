@@ -46,12 +46,8 @@ func NewReportHandler(evalRepo EvaluationStore, gen ReportGenerator, l *zap.Logg
 				}
 			},
 			Render: func(_ context.Context, d *model.EvaluationDetail) ([]byte, error) {
-				// 维度分转换为 PDF 生成器 adapter 的输入契约（map），非业务装配
-				dimScores := make(map[string]float64, len(d.DimensionScores))
-				for _, s := range d.DimensionScores {
-					dimScores[s.Label] = s.Value
-				}
-				return gen.GenerateReport(d, dimScores, d.Suggestions)
+				// 维度分为 typed 切片直传（顺序契约在 model.DimensionLabels，不再经 label 拼接）
+				return gen.GenerateReport(d, d.DimensionScores, d.Suggestions)
 			},
 		}),
 	}

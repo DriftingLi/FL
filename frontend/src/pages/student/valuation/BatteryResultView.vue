@@ -3,13 +3,14 @@
 // 视觉风格：复用现有 ResultView 的 section / suggestion / card-surface 风格
 import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import { Edit, Download } from '@element-plus/icons-vue'
 import PageHeader from '@/components/valuation/PageHeader.vue'
 import BatteryResultCard from '@/components/valuation/BatteryResultCard.vue'
 import BatteryRadar from '@/components/valuation/BatteryRadar.vue'
+import ResultSuggestions from '@/components/valuation/ResultSuggestions.vue'
 import { useBatteryStore } from '@/stores/valuationBattery'
 import { downloadBatteryReportBlob, generateBatteryReport } from '@/api/valuation/battery'
+import { downloadReport } from '@/composables/useReportDownload'
 import { BATTERY_TYPE_LABELS, type BatteryType } from '@/types/valuation/battery'
 
 const router = useRouter()
@@ -22,9 +23,6 @@ if (!store.currentResult) {
 
 const r = computed(() => store.currentResult)
 const id = computed(() => store.currentId)
-
-// 报告生成状态
-const generating = computed(() => false)
 
 // 进入页面时拉取详情（拿完整 suggestions、feature_importance）
 onMounted(async () => {
@@ -51,23 +49,16 @@ function goEdit() {
 
 async function downloadPdf() {
   if (!id.value) return
-  try {
-    // 先确保后端有报告（已生成过则快速返回）
-    await generateBatteryReport(id.value)
-    const blob = await downloadBatteryReportBlob(id.value)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `battery_report_${id.value}.pdf`
-    a.style.display = 'none'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(url), 1500)
-    ElMessage.success('PDF 报告下载已开始')
-  } catch (e) {
-    void e
-  }
+  const batteryId: number = id.value
+  await downloadReport(
+    async () => {
+      // 先确保后端有报告（已生成过则快速返回）
+      await generateBatteryReport(batteryId)
+      return downloadBatteryReportBlob(batteryId)
+    },
+    `battery_report_${batteryId}.pdf`,
+    { successMessage: 'PDF 报告下载已开始' }
+  )
 }
 </script>
 
@@ -79,7 +70,7 @@ async function downloadPdf() {
     >
       <template #actions>
         <el-button :icon="Edit" @click="goEdit">重新评估</el-button>
-        <el-button type="primary" :icon="Download" :loading="generating" @click="downloadPdf">
+        <el-button type="primary" :icon="Download" @click="downloadPdf">
           下载 PDF
         </el-button>
       </template>
@@ -134,13 +125,7 @@ async function downloadPdf() {
         <span class="title-icon">💡</span>
         评估建议
       </h2>
-      <ul v-if="suggestions.length" class="suggestion-list">
-        <li v-for="(s, idx) in suggestions" :key="idx">
-          <span class="suggestion-num">{{ String(idx + 1).padStart(2, '0') }}</span>
-          <span class="suggestion-text">{{ s }}</span>
-        </li>
-      </ul>
-      <el-empty v-else description="暂无建议" />
+      <ResultSuggestions :items="suggestions" variant="battery" />
     </section>
   </div>
   <el-empty v-else description="暂无评估结果" />
@@ -170,36 +155,6 @@ async function downloadPdf() {
 .title-icon {
   color: var(--color-primary);
   font-size: 18px;
-}
-.suggestion-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--sp-3) var(--sp-6);
-}
-.suggestion-list li {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  font-size: var(--fs-base);
-  line-height: 1.6;
-  color: var(--color-text);
-}
-.suggestion-num {
-  font-family: var(--font-mono);
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-medium);
-  color: var(--color-primary);
-  background: rgba(62, 106, 225, 0.08);
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-.suggestion-text {
-  flex: 1;
 }
 .feature-list {
   display: flex;
@@ -234,9 +189,6 @@ async function downloadPdf() {
   font-size: var(--fs-xs);
 }
 @media (max-width: 768px) {
-  .suggestion-list {
-    grid-template-columns: 1fr;
-  }
   .radar-block,
   .section-block {
     margin-top: var(--sp-4);

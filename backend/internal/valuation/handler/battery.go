@@ -15,9 +15,10 @@ import (
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation/pdf"
 	"forklift-training/internal/valuation/report"
 	"forklift-training/internal/valuation/service"
-	"forklift-training/pkg/pdf"
+	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
 
@@ -128,12 +129,7 @@ func (h *BatteryHandler) Create(c *gin.Context) {
 func (h *BatteryHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
-	}
+	page, pageSize = paging.ClampMax(page, pageSize, 20, 100)
 	offset := (page - 1) * pageSize
 
 	batteryType := c.Query("battery_type")

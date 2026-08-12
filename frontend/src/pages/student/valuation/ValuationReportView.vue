@@ -7,10 +7,12 @@ import PageHeader from '@/components/valuation/PageHeader.vue'
 import ResultCard from '@/components/valuation/ResultCard.vue'
 import DimensionRadar from '@/components/valuation/DimensionRadar.vue'
 import FutureValueChart from '@/components/valuation/FutureValueChart.vue'
+import ResultSuggestions from '@/components/valuation/ResultSuggestions.vue'
 import { getEvaluationDetail } from '@/api/valuation/evaluation'
 import { generateReport, getReportDownloadUrl } from '@/api/valuation/report'
 import { downloadEvaluationReportBlob } from '@/api/valuation/evaluation'
 import { useEvaluationStore } from '@/stores/valuationEvaluation'
+import { downloadReport } from '@/composables/useReportDownload'
 import {
   formatBoolean,
   formatBytes,
@@ -73,35 +75,19 @@ async function onGenerate() {
 
 async function onDownload() {
   if (!id.value) return
-  const fileName = pdfInfo.value?.file_name || `evaluation_report_${id.value}.pdf`
-  try {
-    const blob = await downloadEvaluationReportBlob(id.value)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName
-    a.style.display = 'none'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(url), 1500)
-  } catch {
-    window.open(getReportDownloadUrl(id.value), '_blank')
-  }
+  const reportId: number = id.value
+  const fileName = pdfInfo.value?.file_name || `evaluation_report_${reportId}.pdf`
+  await downloadReport(
+    () => downloadEvaluationReportBlob(reportId),
+    fileName,
+    { fallbackUrl: getReportDownloadUrl(reportId) }
+  )
 }
 
 function backToResult() {
   // 带 id 返回：结果页可兜底拉详情，刷新/直达路径一致
   router.push({ path: '/valuation/result', query: { id: String(route.params.id) } })
 }
-
-// 维度评分转 Map
-const dimensionScoresMap = computed(() => {
-  const arr = data.value?.dimension_scores ?? []
-  const map: Record<string, number> = {}
-  for (const d of arr) map[d.label] = d.value
-  return map
-})
 
 // 使用年限 = 评估年份 - 出厂年份
 const usageYears = computed(() => {
@@ -165,7 +151,7 @@ const basicInfoItems = computed(() => {
         <el-col :xs="24" :lg="10">
           <section class="card-surface radar-block">
             <h2 class="section-title">维度评分</h2>
-            <DimensionRadar :scores="dimensionScoresMap" height="320px" />
+            <DimensionRadar :scores="data.dimension_scores || []" height="320px" />
           </section>
         </el-col>
       </el-row>
@@ -214,12 +200,7 @@ const basicInfoItems = computed(() => {
       <!-- 评估建议 -->
       <section class="card-surface section-block" v-if="data.suggestions && data.suggestions.length">
         <h2 class="section-title">评估建议</h2>
-        <ul class="suggestion-list">
-          <li v-for="(s, idx) in data.suggestions" :key="idx">
-            <span class="suggestion-num">{{ String(idx + 1).padStart(2, '0') }}</span>
-            <span class="suggestion-text">{{ s }}</span>
-          </li>
-        </ul>
+        <ResultSuggestions :items="data.suggestions" />
       </section>
 
       <!-- 免责声明 -->
@@ -314,38 +295,6 @@ const basicInfoItems = computed(() => {
   background: rgba(62, 106, 225, 0.06);
 }
 
-/* ===== 评估建议 ===== */
-.suggestion-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--sp-3) var(--sp-6);
-}
-.suggestion-list li {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  font-size: var(--fs-sm);
-  line-height: 1.75;
-  color: var(--color-text-secondary);
-}
-.suggestion-num {
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-medium);
-  color: var(--color-accent);
-  background: rgba(62, 106, 225, 0.08);
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-.suggestion-text {
-  flex: 1;
-}
-
 /* ===== 免责声明 ===== */
 .disclaimer {
   background: var(--color-bg-muted);
@@ -384,9 +333,6 @@ const basicInfoItems = computed(() => {
     padding-bottom: var(--sp-10);
   }
   .info-grid {
-    grid-template-columns: 1fr;
-  }
-  .suggestion-list {
     grid-template-columns: 1fr;
   }
   .radar-block,

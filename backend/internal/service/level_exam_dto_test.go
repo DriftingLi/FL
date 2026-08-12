@@ -79,7 +79,8 @@ func TestLevelExamAnswerDTOShapeLock(t *testing.T) {
 	)
 
 	// question 为结果详情附加字段（省略时不出现在契约中）
-	a.Question = map[string]any{"id": 10}
+	q := QuestionDTO{ID: 10}
+	a.Question = &q
 	assertShapeLock(t, a,
 		"id", "exam_participant_id", "question_id", "user_answer", "score",
 		"grading_comment", "ai_comment", "is_correct", "grader_id", "graded_at",
@@ -91,7 +92,7 @@ func TestLevelExamDataDTOShapeLock(t *testing.T) {
 	d := LevelExamDataDTO{
 		ParticipantID: 1,
 		Session:       sampleSession(),
-		Questions:     []map[string]any{},
+		Questions:     []QuestionDTO{},
 		Answers:       map[string]any{},
 		RemainingTime: 5400,
 		StartTime:     "2026-07-01T09:05:00",

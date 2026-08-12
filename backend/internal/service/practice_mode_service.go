@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
 // PracticeModeService 题库练习模式服务。
@@ -28,7 +29,7 @@ func NewPracticeModeService(db *gorm.DB, ai *AIService, logger *zap.Logger) *Pra
 
 // GetFreeQuestions 随机练习抽题：从 published 题库按条件随机抽取 count 题。
 // count <= 0 时返回全部符合条件的题目（按 id 升序，不打乱）。
-func (s *PracticeModeService) GetFreeQuestions(qType string, count int) ([]map[string]any, error) {
+func (s *PracticeModeService) GetFreeQuestions(qType string, count int) ([]QuestionDTO, error) {
 	selected, err := sampleQuestions(s.db, qType, count)
 	if err != nil {
 		return nil, errors.New("查询题目失败")
@@ -36,9 +37,9 @@ func (s *PracticeModeService) GetFreeQuestions(qType string, count int) ([]map[s
 	if len(selected) == 0 {
 		return nil, errors.New("没有符合条件的题目")
 	}
-	out := make([]map[string]any, 0, len(selected))
+	out := make([]QuestionDTO, 0, len(selected))
 	for i := range selected {
-		out = append(out, questionToDict(&selected[i], false))
+		out = append(out, newQuestionDTO(&selected[i], false))
 	}
 	return out, nil
 }
@@ -127,10 +128,10 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int) (map
 		}
 	}
 
-	out := make([]map[string]any, 0, len(ids))
+	out := make([]QuestionDTO, 0, len(ids))
 	for _, id := range ids {
 		if q, ok := byID[id]; ok {
-			out = append(out, questionToDict(&q, false))
+			out = append(out, newQuestionDTO(&q, false))
 		}
 	}
 	return map[string]any{
@@ -188,9 +189,9 @@ func (s *PracticeModeService) StartSequential(studentID int) (map[string]any, er
 	}
 
 	// 一次性返回全部题目，前端从游标处开始作答
-	all := make([]map[string]any, 0, len(questions))
+	all := make([]QuestionDTO, 0, len(questions))
 	for i := range questions {
-		all = append(all, questionToDict(&questions[i], false))
+		all = append(all, newQuestionDTO(&questions[i], false))
 	}
 	return map[string]any{
 		"questions":     all,
@@ -202,15 +203,12 @@ func (s *PracticeModeService) StartSequential(studentID int) (map[string]any, er
 
 // SaveProgress 保存练习游标和答题状态。upsert 语义：记录不存在则创建。
 // practiceMode 为空时默认 "sequential"；total > 0 时同步更新 total；
-// answersState 非空时更新答题状态 JSONB。
+// answersState 经三态初始化（nil/空/显式 null → {}，#142）。
 func (s *PracticeModeService) SaveProgress(studentID, index int, practiceMode string, total int, answersState json.RawMessage) error {
 	if practiceMode == "" {
 		practiceMode = "sequential"
 	}
-	// 默认空对象
-	if len(answersState) == 0 {
-		answersState = json.RawMessage("{}")
-	}
+	answersState = initAnswersState(answersState)
 	var prog model.PracticeProgress
 	err := s.db.Where("student_id = ? AND practice_mode = ?", studentID, practiceMode).Limit(1).Find(&prog).Error
 	if err != nil {
@@ -285,7 +283,7 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 	if err := s.db.First(&q, questionID).Error; err != nil {
 		return nil, errors.New("题目不存在")
 	}
-	isCorrect := checkAnswer(&q, userAnswer)
+	isCorrect, _ := gradeQuestion(&q, userAnswer, 0)
 	userAnswerStr := stringifyAnswer(userAnswer)
 	rec := model.QuestionPracticeRecord{
 		StudentID:    studentID,
@@ -318,19 +316,16 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 			maxScore = 10
 		}
 		result["max_score"] = maxScore
-		if s.ai != nil {
-			aiRes := s.ai.GradeShortAnswer(q.Content, q.ReferenceAnswer, q.ScoringCriteria, userAnswerStr, float64(maxScore), nil)
-			if aiRes != nil {
-				result["ai_score"] = aiRes.Score
-				result["ai_comment"] = aiRes.Comment
-				if aiRes.Fallback {
-					result["ai_fallback"] = true
-				} else {
-					passed := aiRes.Score >= float64(maxScore)*0.6
-					result["is_correct"] = passed
-					rec.IsCorrect = passed
-					s.db.Save(&rec)
-				}
+		if aiRes := aiGradeShortAnswer(s.ai, q.Content, q.ReferenceAnswer, q.ScoringCriteria, userAnswerStr, float64(maxScore), nil); aiRes != nil {
+			result["ai_score"] = aiRes.Score
+			result["ai_comment"] = aiRes.Comment
+			if aiRes.Fallback {
+				result["ai_fallback"] = true
+			} else {
+				passed := aiRes.Score >= float64(maxScore)*shortAnswerPassRatio
+				result["is_correct"] = passed
+				rec.IsCorrect = passed
+				s.db.Save(&rec)
 			}
 		}
 	}
@@ -374,26 +369,19 @@ func (s *PracticeModeService) GetStats(studentID int) map[string]any {
 
 // GetHistory 练习历史分页。
 func (s *PracticeModeService) GetHistory(studentID, page, pageSize int, qType, startDate, endDate string) map[string]any {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 20
-	}
-	q := s.db.Model(&model.QuestionPracticeRecord{}).Where("student_id = ?", studentID)
-	if qType != "" {
-		q = q.Joins("JOIN question ON question.id = question_practice_record.question_id").Where("question.type = ?", qType)
-	}
-	if startDate != "" {
-		q = q.Where("created_at >= ?", startDate)
-	}
-	if endDate != "" {
-		q = q.Where("created_at <= ?", endDate)
-	}
-	var total int64
-	q.Count(&total)
-	var records []model.QuestionPracticeRecord
-	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&records)
+	records, total, page, pageSize := paging.Query[model.QuestionPracticeRecord](s.db, page, pageSize, 20, "created_at DESC", func(q *gorm.DB) *gorm.DB {
+		q = q.Where("student_id = ?", studentID)
+		if qType != "" {
+			q = q.Joins("JOIN question ON question.id = question_practice_record.question_id").Where("question.type = ?", qType)
+		}
+		if startDate != "" {
+			q = q.Where("created_at >= ?", startDate)
+		}
+		if endDate != "" {
+			q = q.Where("created_at <= ?", endDate)
+		}
+		return q
+	})
 	items := make([]map[string]any, 0, len(records))
 	for _, r := range records {
 		item := map[string]any{
@@ -407,7 +395,7 @@ func (s *PracticeModeService) GetHistory(studentID, page, pageSize int, qType, s
 		}
 		var qq model.Question
 		if err := s.db.First(&qq, r.QuestionID).Error; err == nil {
-			item["question"] = questionToDict(&qq, false)
+			item["question"] = newQuestionDTO(&qq, false)
 		}
 		items = append(items, item)
 	}

@@ -424,7 +424,7 @@ func (m *memBatteryStore) UpdateReportPath(_ context.Context, id int64, path str
 
 type memReportGenerator struct{}
 
-func (m *memReportGenerator) GenerateReport(*model.EvaluationDetail, map[string]float64, []string) ([]byte, error) {
+func (m *memReportGenerator) GenerateReport(*model.EvaluationDetail, []model.DimensionScore, []string) ([]byte, error) {
 	return []byte("fake-pdf"), nil
 }
 

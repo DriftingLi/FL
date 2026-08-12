@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
 // WrongQuestionService 错题本服务。
@@ -26,24 +27,17 @@ func NewWrongQuestionService(db *gorm.DB, logger *zap.Logger) *WrongQuestionServ
 
 // GetWrongQuestions 错题列表。
 func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, qType string, minWrongCount *int) map[string]any {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 20
-	}
-	q := s.db.Model(&model.WrongQuestion{}).Where("student_id = ? AND is_removed = ?", studentID, false)
-	if qType != "" {
-		q = q.Joins("JOIN question ON question.id = wrong_question.question_id")
-		q = q.Where("question.type = ?", qType)
-	}
-	if minWrongCount != nil {
-		q = q.Where("wrong_question.wrong_count >= ?", *minWrongCount)
-	}
-	var total int64
-	q.Count(&total)
-	var items []model.WrongQuestion
-	q.Order("wrong_question.last_wrong_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&items)
+	items, total, page, pageSize := paging.Query[model.WrongQuestion](s.db, page, pageSize, 20, "wrong_question.last_wrong_at DESC", func(q *gorm.DB) *gorm.DB {
+		q = q.Where("student_id = ? AND is_removed = ?", studentID, false)
+		if qType != "" {
+			q = q.Joins("JOIN question ON question.id = wrong_question.question_id")
+			q = q.Where("question.type = ?", qType)
+		}
+		if minWrongCount != nil {
+			q = q.Where("wrong_question.wrong_count >= ?", *minWrongCount)
+		}
+		return q
+	})
 
 	result := make([]map[string]any, 0, len(items))
 	for i := range items {
@@ -51,7 +45,7 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 		item := wrongQuestionToDict(wq)
 		var question model.Question
 		if err := s.db.First(&question, wq.QuestionID).Error; err == nil {
-			item["question"] = questionToDict(&question, true)
+			item["question"] = newQuestionDTO(&question, true)
 		}
 		result = append(result, item)
 	}
@@ -74,7 +68,7 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 		return nil, errors.New("题目不存在")
 	}
 
-	isCorrect := checkAnswer(&question, userAnswer)
+	isCorrect, _ := gradeQuestion(&question, userAnswer, 0)
 	if isCorrect != nil && *isCorrect {
 		wq.IsRemoved = true
 	} else if isCorrect != nil && !*isCorrect {

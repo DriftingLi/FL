@@ -278,17 +278,17 @@ func (s *ValuationService) lookupOriginalPrice(ctx context.Context, req *model.E
 	return op.OriginalPrice, nil
 }
 
-// BuildDimensionScores 由结果字段派生 5 维度评分切片
-// 维度顺序与雷达图保持一致：出厂时间 / 使用强度 / 品牌价值 / 市场需求 / 车辆情况
+// BuildDimensionScores 由结果字段派生 5 维度评分切片。
+// 标签与顺序来自 model 包单一契约（与 PDF 雷达图同源，model.DimensionLabels）。
 // 每个维度值钳制到 [0, 1]，对应前端雷达图 max=1
 // 供 handler.Get 在详情接口实时计算维度评分（dimension_scores 未入库）
 func BuildDimensionScores(kTime, kHours, kBrand, kCondition, kMarket float64) []model.DimensionScore {
 	return []model.DimensionScore{
-		{Label: "出厂时间", Value: roundTo4(clamp01(kTime))},
-		{Label: "使用强度", Value: roundTo4(clamp01(kHours))},
-		{Label: "品牌价值", Value: roundTo4(clamp01(kBrand))},
-		{Label: "市场需求", Value: roundTo4(clamp01(kMarket))},
-		{Label: "车辆情况", Value: roundTo4(clamp01(kCondition))},
+		{Label: model.DimensionLabelTime, Value: roundTo4(clamp01(kTime))},
+		{Label: model.DimensionLabelHours, Value: roundTo4(clamp01(kHours))},
+		{Label: model.DimensionLabelBrand, Value: roundTo4(clamp01(kBrand))},
+		{Label: model.DimensionLabelMarket, Value: roundTo4(clamp01(kMarket))},
+		{Label: model.DimensionLabelCondition, Value: roundTo4(clamp01(kCondition))},
 	}
 }
 

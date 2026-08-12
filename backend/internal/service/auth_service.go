@@ -2,7 +2,6 @@
 package service
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -29,11 +28,11 @@ type AuthService struct {
 	logger *zap.Logger
 }
 
-// NewAuthService 创建认证服务。
-func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpiry time.Duration, adminPwd, tutorPwd, studentPwd string, logger *zap.Logger) *AuthService {
+// NewAuthService 创建认证服务。sess 为装配根创建的唯一会话实例（签发/校验同实例）。
+func NewAuthService(db *gorm.DB, sess *security.Session, adminPwd, tutorPwd, studentPwd string, logger *zap.Logger) *AuthService {
 	return &AuthService{
 		db:                db,
-		session:           security.NewSession(jwtSecret, jwtExpiry, security.CookieConfig{}),
+		session:           sess,
 		defaultAdminPwd:   adminPwd,
 		defaultTutorPwd:   tutorPwd,
 		defaultStudentPwd: studentPwd,
@@ -87,19 +86,6 @@ func (s *AuthService) GetProfile(userID int, role, account string) map[string]an
 	return data
 }
 
-// Session 返回会话模块（供 handler 消费统一接口）。
-func (s *AuthService) Session() *security.Session { return s.session }
-
-// ExtractToken 从请求头/ Cookie 提取 token（委托会话模块，供外部消费方经窄接口使用）。
-func (s *AuthService) ExtractToken(authorization, cookie string) string {
-	return s.session.ExtractToken(authorization, cookie)
-}
-
-// RevokeToken 吊销会话（登出），委托会话模块写入黑名单。
-func (s *AuthService) RevokeToken(ctx context.Context, tokenStr string) error {
-	return s.session.Revoke(ctx, tokenStr)
-}
-
 // HashPassword 使用 bcrypt 加密密码。
 func HashPassword(password string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -131,6 +117,38 @@ type LoginResult struct {
 // HrwaiRole 统一 HRWAI 账号角色名(替代原 "student" 和 "valuation_user")。
 const HrwaiRole = "hrwai_user"
 
+// loginCredentials 登录骨架按角色差异点：查表结果（密码/禁用语义）。
+// status 为 nil 表示该角色无禁用语义（admin 表无 status 字段）。
+type loginCredentials struct {
+	id       int
+	account  string
+	username string
+	password string
+	status   *int16
+}
+
+// verifyAndIssue 登录共享骨架：验密 → 禁用校验 → 签发 → 组结果。
+// plainPassword 为用户输入的明文，errMessage 为验密失败的统一文案（防账号枚举）。
+func (s *AuthService) verifyAndIssue(plainPassword string, c loginCredentials, role, errMessage string) (*LoginResult, error) {
+	if !VerifyPassword(plainPassword, c.password) {
+		return nil, errors.New(errMessage)
+	}
+	if c.status != nil && *c.status != 1 {
+		return nil, errors.New("账号已被禁用，请联系管理员")
+	}
+	token, err := s.GenerateToken(c.id, c.account, role)
+	if err != nil {
+		return nil, err
+	}
+	return &LoginResult{
+		Token:    token,
+		UserID:   c.id,
+		Account:  c.account,
+		Username: c.username,
+		Role:     role,
+	}, nil
+}
+
 // HrwaiLogin 统一 HRWAI 账号登录,支持账号或手机号。
 // 三套前端(培训学员端 / 残值评估 / AI 助手)共用此登录方法。
 func (s *AuthService) HrwaiLogin(account, password string) (*LoginResult, error) {
@@ -142,23 +160,11 @@ func (s *AuthService) HrwaiLogin(account, password string) (*LoginResult, error)
 		}
 		return nil, err
 	}
-	if !VerifyPassword(password, user.Password) {
-		return nil, errors.New("账号或密码错误")
-	}
-	if user.Status != 1 {
-		return nil, errors.New("账号已被禁用，请联系管理员")
-	}
-	token, err := s.GenerateToken(user.ID, user.Account, HrwaiRole)
-	if err != nil {
-		return nil, err
-	}
-	return &LoginResult{
-		Token:    token,
-		UserID:   user.ID,
-		Account:  user.Account,
-		Username: user.Username,
-		Role:     HrwaiRole,
-	}, nil
+	status := user.Status
+	return s.verifyAndIssue(password, loginCredentials{
+		id: user.ID, account: user.Account, username: user.Username,
+		password: user.Password, status: &status,
+	}, HrwaiRole, "账号或密码错误")
 }
 
 // generateRandomAccount 生成随机登录账号（如 hr1a2b3c4d5e6f78）。
@@ -191,7 +197,7 @@ func (s *AuthService) UpdatePassword(userID int, password string) error {
 	return s.db.Model(&model.HrwaiUser{}).Where("id = ?", userID).Update("password", hashed).Error
 }
 
-// AdminLogin 管理员登录。
+// AdminLogin 管理员登录（admin 表无 status 字段，无禁用语义）。
 func (s *AuthService) AdminLogin(username, password string) (*LoginResult, error) {
 	var admin model.Admin
 	if err := s.db.Where("username = ?", username).First(&admin).Error; err != nil {
@@ -200,20 +206,10 @@ func (s *AuthService) AdminLogin(username, password string) (*LoginResult, error
 		}
 		return nil, err
 	}
-	if !VerifyPassword(password, admin.Password) {
-		return nil, errors.New("管理员账号或密码错误")
-	}
-	token, err := s.GenerateToken(admin.AdminID, admin.Username, "admin")
-	if err != nil {
-		return nil, err
-	}
-	return &LoginResult{
-		Token:    token,
-		UserID:   admin.AdminID,
-		Account:  admin.Username,
-		Username: admin.Username,
-		Role:     "admin",
-	}, nil
+	return s.verifyAndIssue(password, loginCredentials{
+		id: admin.AdminID, account: admin.Username, username: admin.Username,
+		password: admin.Password,
+	}, "admin", "管理员账号或密码错误")
 }
 
 // TutorLogin 导师登录。
@@ -225,23 +221,11 @@ func (s *AuthService) TutorLogin(username, password string) (*LoginResult, error
 		}
 		return nil, err
 	}
-	if !VerifyPassword(password, tutor.Password) {
-		return nil, errors.New("导师账号或密码错误")
-	}
-	if tutor.Status != 1 {
-		return nil, errors.New("账号已被禁用，请联系管理员")
-	}
-	token, err := s.GenerateToken(tutor.TutorID, tutor.Username, "tutor")
-	if err != nil {
-		return nil, err
-	}
-	return &LoginResult{
-		Token:    token,
-		UserID:   tutor.TutorID,
-		Account:  tutor.Username,
-		Username: tutor.Username,
-		Role:     "tutor",
-	}, nil
+	status := tutor.Status
+	return s.verifyAndIssue(password, loginCredentials{
+		id: tutor.TutorID, account: tutor.Username, username: tutor.Username,
+		password: tutor.Password, status: &status,
+	}, "tutor", "导师账号或密码错误")
 }
 
 // TutorRegister 导师注册。

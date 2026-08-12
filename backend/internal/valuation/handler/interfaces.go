@@ -30,15 +30,15 @@ type BatteryStore interface {
 }
 
 // ReportGenerator PDF 报告生成接口（ReportHandler 消费；生产为 pdf.Generator，测试为内存替身）。
+// dimensionScores 为 typed 维度评分切片（标签契约见 model.DimensionLabels）。
 type ReportGenerator interface {
-	GenerateReport(r *model.EvaluationDetail, dimensionScores map[string]float64, suggestions []string) ([]byte, error)
+	GenerateReport(r *model.EvaluationDetail, dimensionScores []model.DimensionScore, suggestions []string) ([]byte, error)
 }
 
 // ValuationAuth 估值模块消费的认证窄接口（主体系 AuthService 直接满足，
 // 取代旧薄包装的 Main()/DB() 泄漏，见 spec #75 D4）。
+// token 提取/吊销经会话模块处理（Logout 直接使用注入的 Session 实例）。
 type ValuationAuth interface {
 	HrwaiLogin(account, password string) (*vmain.LoginResult, error)
 	GetHrwaiUserByID(id int) (*mainmodel.HrwaiUser, error)
-	ExtractToken(authorization, cookie string) string
-	RevokeToken(ctx context.Context, tokenStr string) error
 }

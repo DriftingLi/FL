@@ -414,18 +414,17 @@ func TestGetCatalogTree(t *testing.T) {
 	}
 
 	tree := svc.GetCatalogTree()
-	specialties := tree["specialties"].([]map[string]any)
-	if len(specialties) != 1 {
-		t.Fatalf("应只返回启用的专业方向, got %d", len(specialties))
+	if len(tree.Specialties) != 1 {
+		t.Fatalf("应只返回启用的专业方向, got %d", len(tree.Specialties))
 	}
-	if specialties[0]["name"] != "操作" {
-		t.Fatalf("专业方向名称不匹配: %+v", specialties[0])
+	if tree.Specialties[0].Name != "操作" {
+		t.Fatalf("专业方向名称不匹配: %+v", tree.Specialties[0])
 	}
-	levels := specialties[0]["levels"].([]map[string]any)
+	levels := tree.Specialties[0].Levels
 	if len(levels) != 1 {
 		t.Fatalf("应 1 个等级, got %d", len(levels))
 	}
-	courses := levels[0]["courses"].([]CourseDTO)
+	courses := levels[0].Courses
 	if len(courses) != 1 {
 		t.Fatalf("应只返回上架课程, got %d", len(courses))
 	}
@@ -471,14 +470,14 @@ func TestGetAdminCatalogTree(t *testing.T) {
 	db.Create(&ch2)
 
 	tree := svc.GetAdminCatalogTree()
-	specialties := tree["specialties"].([]map[string]any)
+	specialties := tree.Specialties
 	if len(specialties) != 2 {
 		t.Fatalf("管理端应包含停用方向, got %d", len(specialties))
 	}
-	if specialties[0]["name"] != "操作" || specialties[1]["name"] != "停用方向" {
+	if specialties[0].Name != "操作" || specialties[1].Name != "停用方向" {
 		t.Fatalf("方向排序不匹配: %+v", specialties)
 	}
-	courses := specialties[0]["levels"].([]map[string]any)[0]["courses"].([]CourseDTO)
+	courses := specialties[0].Levels[0].Courses
 	if len(courses) != 3 {
 		t.Fatalf("管理端应包含下架课程, got %d", len(courses))
 	}
@@ -798,8 +797,8 @@ func TestQuestionBank_Tags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建题目失败: %v", err)
 	}
-	if len(q1["tags"].([]map[string]any)) != 1 || q1["tags"].([]map[string]any)[0]["name"] != "法规" {
-		t.Fatalf("创建返回的标签不匹配: %+v", q1["tags"])
+	if len(q1.Tags.([]map[string]any)) != 1 || q1.Tags.([]map[string]any)[0]["name"] != "法规" {
+		t.Fatalf("创建返回的标签不匹配: %+v", q1.Tags)
 	}
 
 	// 按标签过滤
@@ -807,29 +806,29 @@ func TestQuestionBank_Tags(t *testing.T) {
 	if byTag["total"].(int64) != 1 {
 		t.Fatalf("按标签过滤应 1 条, got %v", byTag["total"])
 	}
-	q := byTag["questions"].([]map[string]any)[0]
-	if q["content"] != "液压题" {
+	q := byTag["questions"].([]QuestionDTO)[0]
+	if q.Content != "液压题" {
 		t.Fatalf("过滤结果不匹配: %+v", q)
 	}
-	if len(q["tags"].([]map[string]any)) != 1 {
-		t.Fatalf("列表应附带标签: %+v", q["tags"])
+	if len(q.Tags.([]map[string]any)) != 1 {
+		t.Fatalf("列表应附带标签: %+v", q.Tags)
 	}
 
 	// 更新题目时替换标签
-	updated, err := qsvc.UpdateQuestion(q1["id"].(int), map[string]any{"tag_ids": []int{tag2.ID}})
+	updated, err := qsvc.UpdateQuestion(q1.ID, map[string]any{"tag_ids": []int{tag2.ID}})
 	if err != nil {
 		t.Fatalf("更新题目失败: %v", err)
 	}
-	if len(updated["tags"].([]map[string]any)) != 1 || updated["tags"].([]map[string]any)[0]["name"] != "液压" {
-		t.Fatalf("更新后标签不匹配: %+v", updated["tags"])
+	if len(updated.Tags.([]map[string]any)) != 1 || updated.Tags.([]map[string]any)[0]["name"] != "液压" {
+		t.Fatalf("更新后标签不匹配: %+v", updated.Tags)
 	}
 
 	// 详情含标签
-	got, err := qsvc.GetQuestion(q2["id"].(int))
+	got, err := qsvc.GetQuestion(q2.ID)
 	if err != nil {
 		t.Fatalf("获取题目失败: %v", err)
 	}
-	if len(got["tags"].([]map[string]any)) != 1 {
-		t.Fatalf("详情应含标签: %+v", got["tags"])
+	if len(got.Tags.([]map[string]any)) != 1 {
+		t.Fatalf("详情应含标签: %+v", got.Tags)
 	}
 }

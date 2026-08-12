@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
 
@@ -151,6 +152,114 @@ type StudyProgressDTO struct {
 	StudyDuration int64   `json:"study_duration"`
 }
 
+// ===== 课程挂载不变式（唯一事实源）=====
+//
+// 领域规则：课程必须同时挂专业方向与课程等级才「存在/可见」——
+// 学员端列表与目录树只展示已挂载课程；创建/编辑/排序校验同源（ADR-0006 口径）。
+
+// courseMounted 挂载判定。
+func courseMounted(specialtyID, levelID *int) bool {
+	return specialtyID != nil && levelID != nil
+}
+
+// mountedCourseScope 学员端可见课程查询范围：挂载不变式的 SQL 形态。
+func mountedCourseScope(q *gorm.DB) *gorm.DB {
+	return q.Where("specialty_id IS NOT NULL AND level_id IS NOT NULL")
+}
+
+// validateMountedCourseInput 挂载不变式的写入校验：创建必填；编辑携带时不允许清空。
+func validateMountedCourseInput(data map[string]any, update bool) error {
+	_, hasSpec := data["specialty_id"]
+	_, hasLevel := data["level_id"]
+	if !update || hasSpec {
+		if toInt(data["specialty_id"]) <= 0 {
+			return errors.New("专业方向不能为空")
+		}
+	}
+	if !update || hasLevel {
+		if toInt(data["level_id"]) <= 0 {
+			return errors.New("课程等级不能为空")
+		}
+	}
+	return nil
+}
+
+// ===== 课程列表/详情共享实现（学员端/管理端同源）=====
+
+// courseListOptions 列表差异点：学员端仅已挂载+上架，管理端全量（可关键字搜索）。
+type courseListOptions struct {
+	onlyMounted     bool
+	keyword         string
+	specialtyID     *int
+	levelID         *int
+	defaultPageSize int
+}
+
+// listCourses 课程列表共享实现（分页归一化、章节数/前置课程回填、信封组装只此一份）。
+func listCourses(db *gorm.DB, page, pageSize int, opts courseListOptions) CoursePageResult {
+	courses, total, page, pageSize := paging.Query[model.Course](db, page, pageSize, opts.defaultPageSize, "sort_order ASC, created_at DESC, course_id DESC", func(q *gorm.DB) *gorm.DB {
+		if opts.onlyMounted {
+			// 挂载不变式 + 上架：学员端可见性口径
+			q = q.Where("status = ?", 1)
+			q = mountedCourseScope(q)
+		}
+		if opts.keyword != "" {
+			q = q.Where("name LIKE ?", "%"+opts.keyword+"%")
+		}
+		if opts.specialtyID != nil {
+			q = q.Where("specialty_id = ?", *opts.specialtyID)
+		}
+		if opts.levelID != nil {
+			q = q.Where("level_id = ?", *opts.levelID)
+		}
+		return q
+	})
+
+	// 证书模板数量少，一次加载映射（学员端路径附带证书名，避免逐课程 N+1）
+	var certNameByID map[int]string
+	if opts.onlyMounted {
+		var certs []model.CertificateTemplate
+		db.Find(&certs)
+		certNameByID = make(map[int]string, len(certs))
+		for i := range certs {
+			certNameByID[certs[i].ID] = certs[i].Name
+		}
+	}
+	items := make([]CourseDTO, 0, len(courses))
+	for i := range courses {
+		item := courseToDTO(&courses[i])
+		fillChapterCount(db, courses[i].CourseID, &item)
+		fillPrereqIDs(db, courses[i].CourseID, &item)
+		if opts.onlyMounted {
+			if id := courses[i].CertificateTemplateID; id != nil {
+				item.CertificateName = certNameByID[*id]
+			}
+		}
+		items = append(items, item)
+	}
+	return CoursePageResult{
+		Courses: items,
+		Page:    page,
+		Pages:   response.PageCount(total, pageSize),
+		Total:   total,
+	}
+}
+
+// loadCourseWithChapters 课程 + 章节列表共享装载（学员端/管理端详情同源）。
+func loadCourseWithChapters(db *gorm.DB, courseID int) (*model.Course, []ChapterDTO, error) {
+	var course model.Course
+	if err := db.First(&course, courseID).Error; err != nil {
+		return nil, nil, errors.New("课程不存在")
+	}
+	var chapters []model.Chapter
+	db.Where("course_id = ?", courseID).Order("order_num").Find(&chapters)
+	chapterList := make([]ChapterDTO, 0, len(chapters))
+	for i := range chapters {
+		chapterList = append(chapterList, chapterToDTO(&chapters[i]))
+	}
+	return &course, chapterList, nil
+}
+
 // CourseService 学员课程服务。
 type CourseService struct {
 	db          *gorm.DB
@@ -164,62 +273,18 @@ func NewCourseService(db *gorm.DB, fileService *FileService, logger *zap.Logger)
 }
 
 // GetCourses 课程列表（可额外按专业方向/课程等级过滤）。
-// 未挂专业方向/等级的课程不展示（与目录树口径统一）。
+// 未挂专业方向/等级的课程不展示（与目录树口径统一，见挂载不变式）。
 func (s *CourseService) GetCourses(page, pageSize int, specialtyID, levelID *int) CoursePageResult {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 12
-	}
-	q := s.db.Model(&model.Course{}).
-		Where("status = ? AND specialty_id IS NOT NULL AND level_id IS NOT NULL", 1)
-	if specialtyID != nil {
-		q = q.Where("specialty_id = ?", *specialtyID)
-	}
-	if levelID != nil {
-		q = q.Where("level_id = ?", *levelID)
-	}
-	var total int64
-	q.Count(&total)
-	var courses []model.Course
-	q.Order("sort_order ASC, created_at DESC, course_id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&courses)
-	// 证书模板数量少，一次加载映射（避免逐课程 N+1）
-	var certs []model.CertificateTemplate
-	s.db.Find(&certs)
-	certNameByID := make(map[int]string, len(certs))
-	for i := range certs {
-		certNameByID[certs[i].ID] = certs[i].Name
-	}
-	items := make([]CourseDTO, 0, len(courses))
-	for i := range courses {
-		item := courseToDTO(&courses[i])
-		fillChapterCount(s.db, courses[i].CourseID, &item)
-		fillPrereqIDs(s.db, courses[i].CourseID, &item)
-		if id := courses[i].CertificateTemplateID; id != nil {
-			item.CertificateName = certNameByID[*id]
-		}
-		items = append(items, item)
-	}
-	return CoursePageResult{
-		Courses: items,
-		Page:    page,
-		Pages:   response.PageCount(total, pageSize),
-		Total:   total,
-	}
+	return listCourses(s.db, page, pageSize, courseListOptions{
+		onlyMounted: true, specialtyID: specialtyID, levelID: levelID, defaultPageSize: 12,
+	})
 }
 
 // GetCourseDetail 课程详情。
 func (s *CourseService) GetCourseDetail(courseID, studentID int) (*CourseDetailDTO, error) {
-	var course model.Course
-	if err := s.db.First(&course, courseID).Error; err != nil {
-		return nil, errors.New("课程不存在")
-	}
-	var chapters []model.Chapter
-	s.db.Where("course_id = ?", courseID).Order("order_num").Find(&chapters)
-	chapterList := make([]ChapterDTO, 0, len(chapters))
-	for i := range chapters {
-		chapterList = append(chapterList, chapterToDTO(&chapters[i]))
+	course, chapterList, err := loadCourseWithChapters(s.db, courseID)
+	if err != nil {
+		return nil, err
 	}
 	progress := 0.0
 	if studentID > 0 {
@@ -234,9 +299,9 @@ func (s *CourseService) GetCourseDetail(courseID, studentID int) (*CourseDetailD
 			progress = record.Progress
 		}
 	}
-	detail := courseToDTO(&course)
+	detail := courseToDTO(course)
 	fillChapterCount(s.db, course.CourseID, &detail)
-	fillCourseMeta(s.db, &course, &detail)
+	fillCourseMeta(s.db, course, &detail)
 	return &CourseDetailDTO{
 		CourseInfo: detail,
 		Chapters:   chapterList,

@@ -9,7 +9,6 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
-	"forklift-training/pkg/response"
 )
 
 // AdminCourseService 管理端课程服务。
@@ -27,72 +26,33 @@ func NewAdminCourseService(db *gorm.DB, fileSvc *FileService, logger *zap.Logger
 
 // GetCourses 管理端课程列表。
 func (s *AdminCourseService) GetCourses(page, pageSize int, keyword string, specialtyID, levelID *int) CoursePageResult {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-	q := s.db.Model(&model.Course{})
-	if keyword != "" {
-		q = q.Where("name LIKE ?", "%"+keyword+"%")
-	}
-	if specialtyID != nil {
-		q = q.Where("specialty_id = ?", *specialtyID)
-	}
-	if levelID != nil {
-		q = q.Where("level_id = ?", *levelID)
-	}
-	var total int64
-	q.Count(&total)
-	var courses []model.Course
-	q.Order("sort_order ASC, created_at DESC, course_id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&courses)
-	items := make([]CourseDTO, 0, len(courses))
-	for i := range courses {
-		item := courseToDTO(&courses[i])
-		fillChapterCount(s.db, courses[i].CourseID, &item)
-		fillPrereqIDs(s.db, courses[i].CourseID, &item)
-		items = append(items, item)
-	}
-	return CoursePageResult{
-		Courses: items,
-		Page:    page,
-		Pages:   response.PageCount(total, pageSize),
-		Total:   total,
-	}
+	return listCourses(s.db, page, pageSize, courseListOptions{
+		keyword: keyword, specialtyID: specialtyID, levelID: levelID, defaultPageSize: 10,
+	})
 }
 
 // GetCourseDetail 管理端课程详情。
 func (s *AdminCourseService) GetCourseDetail(courseID int) (*AdminCourseDetailDTO, error) {
-	var course model.Course
-	if err := s.db.First(&course, courseID).Error; err != nil {
-		return nil, errors.New("课程不存在")
+	course, chapterList, err := loadCourseWithChapters(s.db, courseID)
+	if err != nil {
+		return nil, err
 	}
-	var chapters []model.Chapter
-	s.db.Where("course_id = ?", courseID).Order("order_num").Find(&chapters)
-	chapterList := make([]ChapterDTO, 0, len(chapters))
-	for i := range chapters {
-		chapterList = append(chapterList, chapterToDTO(&chapters[i]))
-	}
-	detail := courseToDTO(&course)
-	fillCourseMeta(s.db, &course, &detail)
+	detail := courseToDTO(course)
+	fillCourseMeta(s.db, course, &detail)
 	return &AdminCourseDetailDTO{
 		CourseDTO: detail,
 		Chapters:  chapterList,
 	}, nil
 }
 
-// CreateCourse 创建课程。专业方向与课程等级必填（旧 category 已退役）。
+// CreateCourse 创建课程。专业方向与课程等级必填（挂载不变式，旧 category 已退役）。
 func (s *AdminCourseService) CreateCourse(data map[string]any) (*CourseDTO, error) {
 	name, _ := data["name"].(string)
 	if name == "" {
 		return nil, errors.New("课程名称不能为空")
 	}
-	if toInt(data["specialty_id"]) <= 0 {
-		return nil, errors.New("专业方向不能为空")
-	}
-	if toInt(data["level_id"]) <= 0 {
-		return nil, errors.New("课程等级不能为空")
+	if err := validateMountedCourseInput(data, false); err != nil {
+		return nil, err
 	}
 	description, _ := data["description"].(string)
 	coverImage, _ := data["cover_image"].(string)
@@ -150,12 +110,9 @@ func (s *AdminCourseService) UpdateCourse(courseID int, data map[string]any) (*C
 	if v, ok := data["status"]; ok {
 		course.Status = int16(toIntDefault(v, int(course.Status)))
 	}
-	// 编辑时若携带方向/等级字段则不允许清空（应用层必填，DB 列保持可空以兼容存量）
-	if _, ok := data["specialty_id"]; ok && toInt(data["specialty_id"]) <= 0 {
-		return nil, errors.New("专业方向不能为空")
-	}
-	if _, ok := data["level_id"]; ok && toInt(data["level_id"]) <= 0 {
-		return nil, errors.New("课程等级不能为空")
+	// 编辑时若携带方向/等级字段则不允许清空（挂载不变式；DB 列保持可空以兼容存量）
+	if err := validateMountedCourseInput(data, true); err != nil {
+		return nil, err
 	}
 	if err := applyCourseTrainingFields(s.db, &course, data); err != nil {
 		return nil, err
@@ -183,7 +140,7 @@ func (s *AdminCourseService) SwapCourseSort(a, b int) error {
 	if err := s.db.First(&cb, b).Error; err != nil {
 		return errors.New("课程不存在")
 	}
-	if ca.SpecialtyID == nil || ca.LevelID == nil || cb.SpecialtyID == nil || cb.LevelID == nil {
+	if !courseMounted(ca.SpecialtyID, ca.LevelID) || !courseMounted(cb.SpecialtyID, cb.LevelID) {
 		return errors.New("未挂载方向/等级的课程不能参与排序")
 	}
 	if *ca.SpecialtyID != *cb.SpecialtyID || *ca.LevelID != *cb.LevelID {

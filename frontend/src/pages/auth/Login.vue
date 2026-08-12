@@ -171,7 +171,7 @@ import { authApi, type AuthUserInfo } from '@/api/auth'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { UserFilled, Avatar, Setting, ChatDotRound } from '@element-plus/icons-vue'
 import { usernameRules, passwordRules, requiredEmailRules, emailCodeRules, phoneRules } from '@/utils/validate'
-import { useCountdown } from '@/composables/useQuestionAnswer'
+import { useCountdown } from '@/composables/useCountdown'
 import {
   getSubdomain,
   getRoleForSubdomain,

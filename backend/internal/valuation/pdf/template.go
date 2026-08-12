@@ -87,19 +87,17 @@ var (
 	gradeD = rgb{220, 38, 38}
 )
 
-// Generator 报告生成器
-type Generator struct {
-	outputDir string
-}
+// Generator 报告生成器（无状态：所有入口均返回 PDF 字节，不落盘）。
+type Generator struct{}
 
-// NewGenerator 构造报告生成器
-func NewGenerator(outputDir string) *Generator {
-	return &Generator{outputDir: outputDir}
+// NewGenerator 构造报告生成器。
+func NewGenerator() *Generator {
+	return &Generator{}
 }
 
 // GenerateReport 生成 3 页简洁版评估报告 PDF，返回 PDF 二进制内容。
 // 入参 r 含评估详情(含输入字段与计算结果);dimensionScores 为 5 维评分;suggestions 为处置建议文本列表。
-func (g *Generator) GenerateReport(r *model.EvaluationDetail, dimensionScores map[string]float64, suggestions []string) ([]byte, error) {
+func (g *Generator) GenerateReport(r *model.EvaluationDetail, dimensionScores []model.DimensionScore, suggestions []string) ([]byte, error) {
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(pageMargin, pageMargin, pageMargin)
 	// 关闭自动分页,由 3 个 render 方法自行控制 AddPage
@@ -125,18 +123,6 @@ func (g *Generator) GenerateReport(r *model.EvaluationDetail, dimensionScores ma
 		return nil, fmt.Errorf("生成 PDF 失败: %w", err)
 	}
 	return buf.Bytes(), nil
-}
-
-// joinPath 拼接输出路径
-func joinPath(dir, filename string) string {
-	if dir == "" {
-		return filename
-	}
-	last := dir[len(dir)-1]
-	if last == '/' || last == '\\' {
-		return dir + filename
-	}
-	return dir + "/" + filename
 }
 
 // =====================================================
@@ -331,7 +317,7 @@ func absF(v float64) float64 {
 // 第 2 页:评估基本信息 + 评估结果摘要
 // =====================================================
 
-func (g *Generator) renderBasicInfoAndSummary(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, dimensionScores map[string]float64) {
+func (g *Generator) renderBasicInfoAndSummary(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, dimensionScores []model.DimensionScore) {
 	drawPageHeader(pdf, r)
 
 	// 评估基本信息
@@ -675,7 +661,9 @@ func drawConfidenceBar(pdf *gofpdf.Fpdf, x, y, w float64, r *model.EvaluationDet
 }
 
 // drawRadarAndDimensions 雷达图 + 维度进度条(并排)
-func drawRadarAndDimensions(pdf *gofpdf.Fpdf, x, y, w float64, dimensionScores map[string]float64) {
+func drawRadarAndDimensions(pdf *gofpdf.Fpdf, x, y, w float64, dimensionScores []model.DimensionScore) {
+	// 维度分 → 按标签取值（顺序固定为 model.DimensionLabels）
+	scoreByLabel := dimensionScoreByLabel(dimensionScores)
 	// 左侧雷达图
 	radarW := 70.0
 	dimX := x + radarW + 4
@@ -709,8 +697,8 @@ func drawRadarAndDimensions(pdf *gofpdf.Fpdf, x, y, w float64, dimensionScores m
 	valW := 14.0
 	barW := dimW - labelW - valW
 
-	for i, dim := range radarDimensionOrder {
-		v := dimensionScores[dim]
+	for i, dim := range model.DimensionLabels {
+		v := scoreByLabel[dim]
 		rowY := dimY0 + float64(i)*rowH
 		// 维度名
 		pdf.SetFont(FontSimHei, "", 9.5)

@@ -8,18 +8,19 @@ import (
 
 func TestCheckAnswer_SingleChoice(t *testing.T) {
 	q := &model.Question{Type: "single_choice", Answer: "A"}
+	judge := func(a interface{}) *bool { isCorrect, _ := gradeQuestion(q, a, 0); return isCorrect }
 	// 正确
-	r := checkAnswer(q, "A")
+	r := judge("A")
 	if r == nil || !*r {
 		t.Error("单选 A 应判定正确")
 	}
 	// 错误
-	r = checkAnswer(q, "B")
+	r = judge("B")
 	if r == nil || *r {
 		t.Error("单选 B 应判定错误")
 	}
 	// 大小写不敏感
-	r = checkAnswer(q, "a")
+	r = judge("a")
 	if r == nil || !*r {
 		t.Error("单选 a 应判定正确（大小写不敏感）")
 	}
@@ -27,11 +28,12 @@ func TestCheckAnswer_SingleChoice(t *testing.T) {
 
 func TestCheckAnswer_TrueFalse(t *testing.T) {
 	q := &model.Question{Type: "true_false", Answer: "TRUE"}
-	r := checkAnswer(q, "true")
+	judge := func(a interface{}) *bool { isCorrect, _ := gradeQuestion(q, a, 0); return isCorrect }
+	r := judge("true")
 	if r == nil || !*r {
 		t.Error("判断 true 应判定正确")
 	}
-	r = checkAnswer(q, "false")
+	r = judge("false")
 	if r == nil || *r {
 		t.Error("判断 false 应判定错误")
 	}
@@ -39,18 +41,19 @@ func TestCheckAnswer_TrueFalse(t *testing.T) {
 
 func TestCheckAnswer_MultiChoice(t *testing.T) {
 	q := &model.Question{Type: "multi_choice", Answer: "A,B,C"}
+	judge := func(a interface{}) *bool { isCorrect, _ := gradeQuestion(q, a, 0); return isCorrect }
 	// 完全正确
-	r := checkAnswer(q, []interface{}{"A", "B", "C"})
+	r := judge([]interface{}{"A", "B", "C"})
 	if r == nil || !*r {
 		t.Error("多选 ABC 应判定正确")
 	}
 	// 顺序无关
-	r = checkAnswer(q, []interface{}{"C", "A", "B"})
+	r = judge([]interface{}{"C", "A", "B"})
 	if r == nil || !*r {
 		t.Error("多选 CAB 应判定正确（顺序无关）")
 	}
 	// 不完全正确
-	r = checkAnswer(q, []interface{}{"A", "B"})
+	r = judge([]interface{}{"A", "B"})
 	if r == nil || *r {
 		t.Error("多选 AB 应判定错误")
 	}
@@ -58,7 +61,7 @@ func TestCheckAnswer_MultiChoice(t *testing.T) {
 
 func TestCheckAnswer_ShortAnswer(t *testing.T) {
 	q := &model.Question{Type: "short_answer", Answer: "参考答案"}
-	r := checkAnswer(q, "任何答案")
+	r, _ := gradeQuestion(q, "任何答案", 0)
 	if r != nil {
 		t.Error("简答题应返回 nil（无法判定）")
 	}
@@ -66,7 +69,7 @@ func TestCheckAnswer_ShortAnswer(t *testing.T) {
 
 func TestCheckAnswer_NilAnswer(t *testing.T) {
 	q := &model.Question{Type: "single_choice", Answer: "A"}
-	r := checkAnswer(q, nil)
+	r, _ := gradeQuestion(q, nil, 0)
 	if r != nil {
 		t.Error("未作答应返回 nil")
 	}

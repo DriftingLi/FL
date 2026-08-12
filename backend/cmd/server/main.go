@@ -25,9 +25,9 @@ import (
 	"forklift-training/internal/storage"
 	vconfig "forklift-training/internal/valuation/config"
 	vhandler "forklift-training/internal/valuation/handler"
+	"forklift-training/internal/valuation/pdf"
 	vrepo "forklift-training/internal/valuation/repository"
 	vservice "forklift-training/internal/valuation/service"
-	"forklift-training/pkg/pdf"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -131,7 +131,7 @@ func main() {
 	startForumImageCleanup(deps, logger)
 
 	// 7.5 装配残值评估子模块（注册 /api/valuation/* 路由）
-	cleanup := setupValuation(router, cfg, deps.AuthSvc, vpool, st, logger)
+	cleanup := setupValuation(router, cfg, deps.AuthSvc, deps.Session, vpool, st, logger)
 	defer cleanup()
 
 	// 8. 启动 HTTP 服务
@@ -185,7 +185,7 @@ func createValuationPool(cfg *config.Config, logger *zap.Logger) (*pgxpool.Pool,
 // 返回 cleanup 函数用于释放 pgx 连接池（pool 由调用方创建并共用）。
 //
 //nolint:gocritic
-func setupValuation(r *gin.Engine, cfg *config.Config, authSvc vhandler.ValuationAuth, pool *pgxpool.Pool, st storage.Storage, logger *zap.Logger) func() {
+func setupValuation(r *gin.Engine, cfg *config.Config, authSvc vhandler.ValuationAuth, sess *security.Session, pool *pgxpool.Pool, st storage.Storage, logger *zap.Logger) func() {
 	// 1. 装配数据访问层（手写 pgx 仓储）
 	dictRepo := vrepo.NewDictionaryRepository(pool)
 	evalRepo := vrepo.NewEvaluationRepository(pool)
@@ -199,21 +199,13 @@ func setupValuation(r *gin.Engine, cfg *config.Config, authSvc vhandler.Valuatio
 	batterySvc := vservice.NewBatteryRULService()
 	batteryRepo := vrepo.NewBatteryRepository(pool)
 
-	// 3. 装配 PDF 生成器（outputDir 仅用于本地缓存/兼容旧路径，R2 模式下不写入）
-	pdfDir := cfg.Valuation.PDFOutputDir
-	if pdfDir == "" {
-		pdfDir = "storage/reports"
-	}
-	if err := os.MkdirAll(pdfDir, 0o755); err != nil {
-		logger.Warn("创建 PDF 输出目录失败", zap.Error(err), zap.String("dir", pdfDir))
-	}
-	pdfGen := pdf.NewGenerator(pdfDir)
+	// 3. 装配 PDF 生成器（字节输出，不落盘；存储经 storage 抽象层）
+	pdfGen := pdf.NewGenerator()
 
 	// 4. 注册路由（/api/valuation/*，公开组 + 估值独立鉴权组 + admin 组）
 	// 认证经 ValuationAuth 窄接口注入主体系 AuthService（spec #75 D4）
 	// PDF 报告通过 storage 抽象层上传（local=本地磁盘 / r2=Cloudflare R2 对象存储）
-	// Session 单例：与主体系共用同一实例（装配一次，B2 D4）
-	sess := security.SessionFromConfig(cfg)
+	// Session 单例：与主体系共用同一实例（装配一次，B2 D4；现由 NewDeps 创建）
 	vhandler.RegisterRoutes(r, sess, logger, dictRepo, evalRepo, batteryRepo, valuationSvc, batterySvc, pdfGen, st, authSvc)
 	logger.Info("valuation 路由注册完成", zap.String("prefix", "/api/valuation"))
 

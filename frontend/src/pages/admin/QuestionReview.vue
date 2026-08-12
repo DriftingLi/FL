@@ -154,7 +154,7 @@ const selectedIds = ref<number[]>([])
 const pendingCount = ref(0)
 
 const detailVisible = ref(false)
-const currentQuestion = ref<(Question & { reject_reason?: string }) | null>(null)
+const currentQuestion = ref<Question | null>(null)
 
 // 驳回相关
 const rejectDialogVisible = ref(false)

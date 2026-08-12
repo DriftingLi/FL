@@ -12,14 +12,13 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
 // 题型与课程分类常量（已取消等级制度）。
 var (
 	validQuestionTypes  = []string{"single_choice", "multi_choice", "true_false", "fault_image", "short_answer"}
 	validQuestionStatus = []string{"draft", "pending", "published"}
-	examScoreMap        = map[string]float64{"single_choice": 3, "multi_choice": 4, "true_false": 2, "fault_image": 6, "short_answer": 5}
-	mockExamScoreMap    = map[string]float64{"single_choice": 3, "multi_choice": 4, "true_false": 2, "fault_image": 4, "short_answer": 10}
 )
 
 // sampleQuestions 统一抽题函数：从 published 题库按条件随机抽取 count 题。
@@ -40,70 +39,15 @@ func sampleQuestions(db *gorm.DB, qType string, count int) ([]model.Question, er
 	return all, nil
 }
 
-// questionToDict 将 Question 转为 dict。
-// includeAnswer=false 时剔除答案、解析、参考答案、评分标准（学员侧）。
-func questionToDict(q *model.Question, includeAnswer bool) map[string]any {
-	var options any
-	if len(q.Options) > 0 {
-		_ = json.Unmarshal(q.Options, &options)
-	}
-	d := map[string]any{
-		"id":              q.ID,
-		"type":            q.Type,
-		"content":         q.Content,
-		"options":         options,
-		"image_url":       q.ImageURL,
-		"status":          q.Status,
-		"reject_reason":   q.RejectReason,
-		"score":           q.Score,
-		"created_by":      q.CreatedBy,
-		"created_by_type": q.CreatedByType,
-		"created_at":      formatISO(q.CreatedAt),
-		"updated_at":      formatISO(q.UpdatedAt),
-	}
-	if includeAnswer {
-		d["answer"] = q.Answer
-		d["explanation"] = q.Explanation
-		d["reference_answer"] = q.ReferenceAnswer
-		d["scoring_criteria"] = q.ScoringCriteria
-	}
-	return d
-}
-
-// checkAnswer 判定答案对错。
-// 返回 *bool：nil 表示无法判定（简答题/未作答），true/false 表示对/错。
-func checkAnswer(q *model.Question, userAnswer interface{}) *bool {
-	if userAnswer == nil {
-		return nil
-	}
-	if q.Type == "short_answer" {
-		return nil
-	}
-	if q.Type == "multi_choice" {
-		correct := normalizeAnswerList(q.Answer)
-		user := normalizeUserAnswerList(userAnswer)
-		if user == nil {
-			b := false
-			return &b
-		}
-		eq := stringSliceEqual(correct, user)
-		return &eq
-	}
-	// 单选/判断/故障识图：字符串大写比较
-	ua := stringifyAnswer(userAnswer)
-	//nolint:staticcheck
-	res := strings.EqualFold(strings.TrimSpace(ua), strings.TrimSpace(q.Answer))
-	return &res
-}
-
-// gradeQuestion 评分。
-// 返回 (isCorrect, earned)：isCorrect 为 nil 表示无法判定；earned 为得分。
+// gradeQuestion 评分（判题唯一实现）。
+// 返回 (isCorrect, earned)：isCorrect 为 nil 表示无法判定（简答题/未作答），earned 为得分。
+// maxScore 为 0 时按定级考试分值表取默认值。
 func gradeQuestion(q *model.Question, userAnswer interface{}, maxScore float64) (*bool, float64) {
 	if userAnswer == nil {
 		return nil, 0
 	}
 	if maxScore == 0 {
-		maxScore = examScoreMap[q.Type]
+		maxScore = questionMaxScore("level_exam", q.Type)
 	}
 	switch q.Type {
 	case "single_choice", "true_false", "fault_image":
@@ -278,23 +222,23 @@ func NewQuestionBankService(db *gorm.DB, fileSvc *FileService, logger *zap.Logge
 }
 
 // CreateQuestion 创建题目。
-func (s *QuestionBankService) CreateQuestion(data map[string]any, createdBy *int, createdByType string) (map[string]any, error) {
+func (s *QuestionBankService) CreateQuestion(data map[string]any, createdBy *int, createdByType string) (QuestionDTO, error) {
 	qType, _ := data["type"].(string)
 	if !containsString(validQuestionTypes, qType) {
-		return nil, errors.New("无效的题型，支持的题型：" + strings.Join(validQuestionTypes, ", "))
+		return QuestionDTO{}, errors.New("无效的题型，支持的题型：" + strings.Join(validQuestionTypes, ", "))
 	}
 	content, _ := data["content"].(string)
 	if content == "" {
-		return nil, errors.New("题干不能为空")
+		return QuestionDTO{}, errors.New("题干不能为空")
 	}
 	answer := stringifyAnswer(data["answer"])
 	if answer == "" && qType != "short_answer" {
-		return nil, errors.New("答案不能为空")
+		return QuestionDTO{}, errors.New("答案不能为空")
 	}
 	options := data["options"]
 	if qType == "single_choice" || qType == "multi_choice" || qType == "fault_image" {
 		if options == nil {
-			return nil, errors.New("选项不能为空")
+			return QuestionDTO{}, errors.New("选项不能为空")
 		}
 	}
 	status, _ := data["status"].(string)
@@ -324,41 +268,41 @@ func (s *QuestionBankService) CreateQuestion(data map[string]any, createdBy *int
 		UpdatedAt:       beijingNow(),
 	}
 	if err := s.db.Create(&q).Error; err != nil {
-		return nil, err
+		return QuestionDTO{}, err
 	}
 	if v, ok := data["tag_ids"]; ok {
 		if err := replaceQuestionTags(s.db, q.ID, toIntSlice(v)); err != nil {
-			return nil, err
+			return QuestionDTO{}, err
 		}
 	}
-	d := questionToDict(&q, true)
-	d["tags"] = s.loadTagsByQuestion(q.ID)
+	d := newQuestionDTO(&q, true)
+	d.Tags = s.loadTagsByQuestion(q.ID)
 	return d, nil
 }
 
 // GetQuestion 查询题目详情。
-func (s *QuestionBankService) GetQuestion(id int) (map[string]any, error) {
+func (s *QuestionBankService) GetQuestion(id int) (QuestionDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
-		return nil, errors.New("题目不存在")
+		return QuestionDTO{}, errors.New("题目不存在")
 	}
-	d := questionToDict(&q, true)
-	d["tags"] = s.loadTagsByQuestion(q.ID)
+	d := newQuestionDTO(&q, true)
+	d.Tags = s.loadTagsByQuestion(q.ID)
 	return d, nil
 }
 
 // UpdateQuestion 更新题目。
 // 特殊处理：当 status 由 draft 改为 pending（导师重新提交审核）时，清空驳回理由。
-func (s *QuestionBankService) UpdateQuestion(id int, data map[string]any) (map[string]any, error) {
+func (s *QuestionBankService) UpdateQuestion(id int, data map[string]any) (QuestionDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
-		return nil, errors.New("题目不存在")
+		return QuestionDTO{}, errors.New("题目不存在")
 	}
 	if t, ok := data["type"].(string); ok && !containsString(validQuestionTypes, t) {
-		return nil, errors.New("无效的题型")
+		return QuestionDTO{}, errors.New("无效的题型")
 	}
 	if st, ok := data["status"].(string); ok && !containsString(validQuestionStatus, st) {
-		return nil, errors.New("无效的状态")
+		return QuestionDTO{}, errors.New("无效的状态")
 	}
 	// 检测重新提交：原本 draft 状态，新状态为 pending → 视为导师修改后重新提交，清空驳回理由
 	resubmitting := q.Status == "draft" && data["status"] == "pending"
@@ -368,15 +312,15 @@ func (s *QuestionBankService) UpdateQuestion(id int, data map[string]any) (map[s
 	}
 	q.UpdatedAt = beijingNow()
 	if err := s.db.Save(&q).Error; err != nil {
-		return nil, err
+		return QuestionDTO{}, err
 	}
 	if v, ok := data["tag_ids"]; ok {
 		if err := replaceQuestionTags(s.db, id, toIntSlice(v)); err != nil {
-			return nil, err
+			return QuestionDTO{}, err
 		}
 	}
-	d := questionToDict(&q, true)
-	d["tags"] = s.loadTagsByQuestion(id)
+	d := newQuestionDTO(&q, true)
+	d.Tags = s.loadTagsByQuestion(id)
 	return d, nil
 }
 
@@ -400,33 +344,25 @@ func (s *QuestionBankService) DeleteQuestion(id int) error {
 
 // ListQuestions 题目列表分页查询（可按标签 tagID 过滤，结果附带标签列表）。
 func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int) map[string]any {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 20
-	}
-	q := s.db.Model(&model.Question{})
-	if qType != "" {
-		q = q.Where("type = ?", qType)
-	}
-	if status != "" {
-		q = q.Where("status = ?", status)
-	}
-	if keyword != "" {
-		q = q.Where("content LIKE ?", "%"+keyword+"%")
-	}
-	if tagID != nil {
-		q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", *tagID)
-	}
-	var total int64
-	q.Count(&total)
-	var list []model.Question
-	q.Order("created_at DESC, id ASC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list)
-	out := make([]map[string]any, 0, len(list))
+	list, total, page, pageSize := paging.Query[model.Question](s.db, page, pageSize, 20, "created_at DESC, id ASC", func(q *gorm.DB) *gorm.DB {
+		if qType != "" {
+			q = q.Where("type = ?", qType)
+		}
+		if status != "" {
+			q = q.Where("status = ?", status)
+		}
+		if keyword != "" {
+			q = q.Where("content LIKE ?", "%"+keyword+"%")
+		}
+		if tagID != nil {
+			q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", *tagID)
+		}
+		return q
+	})
+	out := make([]QuestionDTO, 0, len(list))
 	ids := make([]int, 0, len(list))
 	for i := range list {
-		out = append(out, questionToDict(&list[i], true))
+		out = append(out, newQuestionDTO(&list[i], true))
 		ids = append(ids, list[i].ID)
 	}
 	s.attachTagsBatch(ids, out)
@@ -443,17 +379,17 @@ func (s *QuestionBankService) loadTagsByQuestion(questionID int) []map[string]an
 	return s.loadTagsBatch([]int{questionID})[questionID]
 }
 
-// attachTagsBatch 批量附加标签到题目 dict（避免逐题查询 N+1）。
-func (s *QuestionBankService) attachTagsBatch(questionIDs []int, dicts []map[string]any) {
+// attachTagsBatch 批量附加标签到题目 DTO（避免逐题查询 N+1）。
+func (s *QuestionBankService) attachTagsBatch(questionIDs []int, dtos []QuestionDTO) {
 	if len(questionIDs) == 0 {
 		return
 	}
 	byID := s.loadTagsBatch(questionIDs)
 	for i, id := range questionIDs {
 		if tags, ok := byID[id]; ok {
-			dicts[i]["tags"] = tags
+			dtos[i].Tags = tags
 		} else {
-			dicts[i]["tags"] = []map[string]any{}
+			dtos[i].Tags = []map[string]any{}
 		}
 	}
 }
@@ -494,18 +430,18 @@ func (s *QuestionBankService) loadTagsBatch(questionIDs []int) map[int][]map[str
 }
 
 // PublishQuestion 发布题目（管理员审核通过）。同时清空驳回理由。
-func (s *QuestionBankService) PublishQuestion(id int) (map[string]any, error) {
+func (s *QuestionBankService) PublishQuestion(id int) (QuestionDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
-		return nil, errors.New("题目不存在")
+		return QuestionDTO{}, errors.New("题目不存在")
 	}
 	q.Status = "published"
 	q.RejectReason = ""
 	q.UpdatedAt = beijingNow()
 	if err := s.db.Save(&q).Error; err != nil {
-		return nil, err
+		return QuestionDTO{}, err
 	}
-	return questionToDict(&q, true), nil
+	return newQuestionDTO(&q, true), nil
 }
 
 // BatchPublish 批量发布（管理员审核通过）。同时清空驳回理由。
@@ -522,21 +458,21 @@ func (s *QuestionBankService) BatchPublish(ids []int) map[string]any {
 }
 
 // RejectQuestion 驳回题目（管理员审核）。状态回退为 draft，记录驳回理由供导师查看修改。
-func (s *QuestionBankService) RejectQuestion(id int, reason string) (map[string]any, error) {
+func (s *QuestionBankService) RejectQuestion(id int, reason string) (QuestionDTO, error) {
 	if reason == "" {
-		return nil, errors.New("请填写驳回理由")
+		return QuestionDTO{}, errors.New("请填写驳回理由")
 	}
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
-		return nil, errors.New("题目不存在")
+		return QuestionDTO{}, errors.New("题目不存在")
 	}
 	q.Status = "draft"
 	q.RejectReason = reason
 	q.UpdatedAt = beijingNow()
 	if err := s.db.Save(&q).Error; err != nil {
-		return nil, err
+		return QuestionDTO{}, err
 	}
-	return questionToDict(&q, true), nil
+	return newQuestionDTO(&q, true), nil
 }
 
 // BatchReject 批量驳回（管理员审核）。状态回退为 draft，统一记录同一驳回理由。

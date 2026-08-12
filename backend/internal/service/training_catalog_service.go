@@ -113,6 +113,46 @@ func countByCode(db *gorm.DB, table, idCol, code string, excludeID int) (int64, 
 	return n, nil
 }
 
+// ===== 目录实体 CRUD 轻量共享骨架 =====
+//
+// 四个目录实体（专业方向/课程等级/证书模板/题库标签）的 CRUD 同构：
+// 必填校验、撞码检查、删除、排序交换共享骨架，各实体保留字段映射薄入口。
+
+// validateCatalogCodeName 必填 code/name 校验。
+func validateCatalogCodeName(code, name, codeErr, nameErr string) error {
+	if code == "" {
+		return errors.New(codeErr)
+	}
+	if name == "" {
+		return errors.New(nameErr)
+	}
+	return nil
+}
+
+// ensureCodeUnique 撞码检查（excludeID>0 时排除自身，供更新校验）。
+func ensureCodeUnique(db *gorm.DB, table, idCol, code string, excludeID int, dupMsg string) error {
+	dup, err := countByCode(db, table, idCol, code, excludeID)
+	if err != nil {
+		return err
+	}
+	if dup > 0 {
+		return errors.New(dupMsg)
+	}
+	return nil
+}
+
+// deleteCatalogEntity 删除骨架：记录不存在返回指定文案。
+func deleteCatalogEntity(db *gorm.DB, model interface{}, id int, notFoundMsg string) error {
+	result := db.Delete(model, id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return errors.New(notFoundMsg)
+	}
+	return nil
+}
+
 // ListSpecialties 专业方向列表（管理端含停用项，学员端仅启用项）。
 func (s *TrainingCatalogService) ListSpecialties(activeOnly bool) []SpecialtyDict {
 	q := s.db.Model(&model.Specialty{})
@@ -130,21 +170,14 @@ func (s *TrainingCatalogService) ListSpecialties(activeOnly bool) []SpecialtyDic
 
 // CreateSpecialty 创建专业方向。
 func (s *TrainingCatalogService) CreateSpecialty(in SpecialtyInput) (SpecialtyDict, error) {
-	if in.Code == "" {
-		return SpecialtyDict{}, errors.New("专业方向编码不能为空")
-	}
-	if in.Name == "" {
-		return SpecialtyDict{}, errors.New("专业方向名称不能为空")
+	if err := validateCatalogCodeName(in.Code, in.Name, "专业方向编码不能为空", "专业方向名称不能为空"); err != nil {
+		return SpecialtyDict{}, err
 	}
 	if err := validateStatus(in.Status); err != nil {
 		return SpecialtyDict{}, err
 	}
-	dup, err := countByCode(s.db, "specialty", "specialty_id", in.Code, 0)
-	if err != nil {
+	if err := ensureCodeUnique(s.db, "specialty", "specialty_id", in.Code, 0, "专业方向编码已存在"); err != nil {
 		return SpecialtyDict{}, err
-	}
-	if dup > 0 {
-		return SpecialtyDict{}, errors.New("专业方向编码已存在")
 	}
 	spec := model.Specialty{
 		Code:        in.Code,
@@ -176,12 +209,8 @@ func (s *TrainingCatalogService) UpdateSpecialty(id int, in SpecialtyInput) (Spe
 	}
 	if in.Code != "" {
 		if in.Code != spec.Code {
-			dup, err := countByCode(s.db, "specialty", "specialty_id", in.Code, id)
-			if err != nil {
+			if err := ensureCodeUnique(s.db, "specialty", "specialty_id", in.Code, id, "专业方向编码已存在"); err != nil {
 				return SpecialtyDict{}, err
-			}
-			if dup > 0 {
-				return SpecialtyDict{}, errors.New("专业方向编码已存在")
 			}
 		}
 		spec.Code = in.Code
@@ -206,14 +235,7 @@ func (s *TrainingCatalogService) UpdateSpecialty(id int, in SpecialtyInput) (Spe
 
 // DeleteSpecialty 删除专业方向（已关联课程置空 specialty_id，不级联删除课程）。
 func (s *TrainingCatalogService) DeleteSpecialty(id int) error {
-	result := s.db.Delete(&model.Specialty{}, id)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return errors.New("专业方向不存在")
-	}
-	return nil
+	return deleteCatalogEntity(s.db, &model.Specialty{}, id, "专业方向不存在")
 }
 
 // ===== 课程等级 =====
@@ -235,21 +257,14 @@ func (s *TrainingCatalogService) ListLevels(activeOnly bool) []LevelDict {
 
 // CreateLevel 创建课程等级。
 func (s *TrainingCatalogService) CreateLevel(in LevelInput) (LevelDict, error) {
-	if in.Code == "" {
-		return LevelDict{}, errors.New("课程等级编码不能为空")
-	}
-	if in.Name == "" {
-		return LevelDict{}, errors.New("课程等级名称不能为空")
+	if err := validateCatalogCodeName(in.Code, in.Name, "课程等级编码不能为空", "课程等级名称不能为空"); err != nil {
+		return LevelDict{}, err
 	}
 	if err := validateStatus(in.Status); err != nil {
 		return LevelDict{}, err
 	}
-	dup, err := countByCode(s.db, "course_level", "level_id", in.Code, 0)
-	if err != nil {
+	if err := ensureCodeUnique(s.db, "course_level", "level_id", in.Code, 0, "课程等级编码已存在"); err != nil {
 		return LevelDict{}, err
-	}
-	if dup > 0 {
-		return LevelDict{}, errors.New("课程等级编码已存在")
 	}
 	level := model.CourseLevel{
 		Code:        in.Code,
@@ -281,12 +296,8 @@ func (s *TrainingCatalogService) UpdateLevel(id int, in LevelInput) (LevelDict, 
 	}
 	if in.Code != "" {
 		if in.Code != level.Code {
-			dup, err := countByCode(s.db, "course_level", "level_id", in.Code, id)
-			if err != nil {
+			if err := ensureCodeUnique(s.db, "course_level", "level_id", in.Code, id, "课程等级编码已存在"); err != nil {
 				return LevelDict{}, err
-			}
-			if dup > 0 {
-				return LevelDict{}, errors.New("课程等级编码已存在")
 			}
 		}
 		level.Code = in.Code
@@ -311,14 +322,7 @@ func (s *TrainingCatalogService) UpdateLevel(id int, in LevelInput) (LevelDict, 
 
 // DeleteLevel 删除课程等级（已关联课程置空 level_id，不级联删除课程）。
 func (s *TrainingCatalogService) DeleteLevel(id int) error {
-	result := s.db.Delete(&model.CourseLevel{}, id)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return errors.New("课程等级不存在")
-	}
-	return nil
+	return deleteCatalogEntity(s.db, &model.CourseLevel{}, id, "课程等级不存在")
 }
 
 // ===== 证书模板 =====
@@ -340,11 +344,8 @@ func (s *TrainingCatalogService) ListCertificateTemplates(activeOnly bool) []Cer
 
 // CreateCertificateTemplate 创建证书模板。
 func (s *TrainingCatalogService) CreateCertificateTemplate(in CertificateTemplateInput) (CertificateTemplateDict, error) {
-	if in.Code == "" {
-		return CertificateTemplateDict{}, errors.New("证书模板编码不能为空")
-	}
-	if in.Name == "" {
-		return CertificateTemplateDict{}, errors.New("证书模板名称不能为空")
+	if err := validateCatalogCodeName(in.Code, in.Name, "证书模板编码不能为空", "证书模板名称不能为空"); err != nil {
+		return CertificateTemplateDict{}, err
 	}
 	if err := validateStatus(in.Status); err != nil {
 		return CertificateTemplateDict{}, err
@@ -353,12 +354,8 @@ func (s *TrainingCatalogService) CreateCertificateTemplate(in CertificateTemplat
 	if validityDays <= 0 {
 		return CertificateTemplateDict{}, errors.New("证书有效期必须为正整数（天）")
 	}
-	dup, err := countByCode(s.db, "certificate_template", "id", in.Code, 0)
-	if err != nil {
+	if err := ensureCodeUnique(s.db, "certificate_template", "id", in.Code, 0, "证书模板编码已存在"); err != nil {
 		return CertificateTemplateDict{}, err
-	}
-	if dup > 0 {
-		return CertificateTemplateDict{}, errors.New("证书模板编码已存在")
 	}
 	tpl := model.CertificateTemplate{
 		Code:         in.Code,
@@ -387,12 +384,8 @@ func (s *TrainingCatalogService) UpdateCertificateTemplate(id int, in Certificat
 	}
 	if in.Code != "" {
 		if in.Code != tpl.Code {
-			dup, err := countByCode(s.db, "certificate_template", "id", in.Code, id)
-			if err != nil {
+			if err := ensureCodeUnique(s.db, "certificate_template", "id", in.Code, id, "证书模板编码已存在"); err != nil {
 				return CertificateTemplateDict{}, err
-			}
-			if dup > 0 {
-				return CertificateTemplateDict{}, errors.New("证书模板编码已存在")
 			}
 		}
 		tpl.Code = in.Code
@@ -424,14 +417,7 @@ func (s *TrainingCatalogService) UpdateCertificateTemplate(id int, in Certificat
 
 // DeleteCertificateTemplate 删除证书模板（已关联课程置空 certificate_template_id）。
 func (s *TrainingCatalogService) DeleteCertificateTemplate(id int) error {
-	result := s.db.Delete(&model.CertificateTemplate{}, id)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return errors.New("证书模板不存在")
-	}
-	return nil
+	return deleteCatalogEntity(s.db, &model.CertificateTemplate{}, id, "证书模板不存在")
 }
 
 // ===== 题库标签 =====
@@ -495,21 +481,14 @@ func idsOfTags(tags []model.QuestionTag) []int {
 
 // CreateQuestionTag 创建题库标签。
 func (s *TrainingCatalogService) CreateQuestionTag(in QuestionTagInput) (QuestionTagDict, error) {
-	if in.Code == "" {
-		return QuestionTagDict{}, errors.New("标签编码不能为空")
-	}
-	if in.Name == "" {
-		return QuestionTagDict{}, errors.New("标签名称不能为空")
+	if err := validateCatalogCodeName(in.Code, in.Name, "标签编码不能为空", "标签名称不能为空"); err != nil {
+		return QuestionTagDict{}, err
 	}
 	if err := validateStatus(in.Status); err != nil {
 		return QuestionTagDict{}, err
 	}
-	var dup int64
-	if err := s.db.Model(&model.QuestionTag{}).Where("code = ?", in.Code).Count(&dup).Error; err != nil {
+	if err := ensureCodeUnique(s.db, "question_tag", "id", in.Code, 0, "标签编码已存在"); err != nil {
 		return QuestionTagDict{}, err
-	}
-	if dup > 0 {
-		return QuestionTagDict{}, errors.New("标签编码已存在")
 	}
 	tag := model.QuestionTag{
 		Code:        in.Code,
@@ -536,12 +515,8 @@ func (s *TrainingCatalogService) UpdateQuestionTag(id int, in QuestionTagInput) 
 		return QuestionTagDict{}, err
 	}
 	if in.Code != "" && in.Code != tag.Code {
-		var dup int64
-		if err := s.db.Model(&model.QuestionTag{}).Where("code = ? AND id <> ?", in.Code, id).Count(&dup).Error; err != nil {
+		if err := ensureCodeUnique(s.db, "question_tag", "id", in.Code, id, "标签编码已存在"); err != nil {
 			return QuestionTagDict{}, err
-		}
-		if dup > 0 {
-			return QuestionTagDict{}, errors.New("标签编码已存在")
 		}
 		tag.Code = in.Code
 	}
@@ -566,14 +541,7 @@ func (s *TrainingCatalogService) UpdateQuestionTag(id int, in QuestionTagInput) 
 
 // DeleteQuestionTag 删除题库标签（自动清理题目关联）。
 func (s *TrainingCatalogService) DeleteQuestionTag(id int) error {
-	result := s.db.Delete(&model.QuestionTag{}, id)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return errors.New("题库标签不存在")
-	}
-	return nil
+	return deleteCatalogEntity(s.db, &model.QuestionTag{}, id, "题库标签不存在")
 }
 
 // ===== 题目-标签关联 =====
@@ -632,20 +600,20 @@ func replaceQuestionTags(db *gorm.DB, questionID int, tagIDs []int) error {
 // ===== 目录树（学员端） =====
 
 // GetCatalogTree 目录树（学员端）：专业方向 → 等级 → 课程（仅启用项，课程含章节数）。
-func (s *TrainingCatalogService) GetCatalogTree() map[string]any {
+func (s *TrainingCatalogService) GetCatalogTree() *CatalogTreeDTO {
 	return s.getCatalogTree(true, false)
 }
 
 // GetAdminCatalogTree 目录树（管理端）：专业方向 → 等级 → 课程 → 章节。
 // 含停用项与全部课程，课程节点附带章节列表（章节拖拽排序用 order_num）。
-func (s *TrainingCatalogService) GetAdminCatalogTree() map[string]any {
+func (s *TrainingCatalogService) GetAdminCatalogTree() *CatalogTreeDTO {
 	return s.getCatalogTree(false, true)
 }
 
 // getCatalogTree 构建目录树。
 // activeOnly=true 时仅返回启用项（学员端）；withChapters=true 时课程节点附带章节列表（管理端）。
-// 目录树节点 = 列表字典字段 + 嵌套子节点，是独立投影；构建保持内部 map 方式（接口面为 typed DTO）。
-func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool) map[string]any {
+// 节点字段按 key 字母序声明，与旧 map 投影字节序一致（shape-lock 测试锁定）。
+func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool) *CatalogTreeDTO {
 	var specialties []model.Specialty
 	{
 		q := s.db.Model(&model.Specialty{})
@@ -690,15 +658,15 @@ func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool) m
 		}
 	}
 
-	tree := make([]map[string]any, 0, len(specialties))
+	tree := make([]CatalogSpecialtyNode, 0, len(specialties))
 	for i := range specialties {
-		spec := specialtyToDict(&specialties[i])
-		levelItems := make([]map[string]any, 0, len(levels))
+		spec := newCatalogSpecialtyNode(&specialties[i])
+		levelItems := make([]CatalogLevelNode, 0, len(levels))
 		for j := range levels {
-			lv := levelToDict(&levels[j])
+			lv := newCatalogLevelNode(&levels[j])
 			courses := make([]CourseDTO, 0)
 			for k := range rows {
-				if rows[k].SpecialtyID == nil || rows[k].LevelID == nil {
+				if !courseMounted(rows[k].SpecialtyID, rows[k].LevelID) {
 					continue
 				}
 				if *rows[k].SpecialtyID != specialties[i].SpecialtyID || *rows[k].LevelID != levels[j].LevelID {
@@ -717,13 +685,13 @@ func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool) m
 				}
 				courses = append(courses, cd)
 			}
-			lv["courses"] = courses
+			lv.Courses = courses
 			levelItems = append(levelItems, lv)
 		}
-		spec["levels"] = levelItems
+		spec.Levels = levelItems
 		tree = append(tree, spec)
 	}
-	return map[string]any{"specialties": tree}
+	return &CatalogTreeDTO{Specialties: tree}
 }
 
 // ===== 辅助 =====
@@ -825,28 +793,59 @@ func tagDict(t *model.QuestionTag) QuestionTagDict {
 	}
 }
 
-// ===== 目录树投影用 map 字典（节点 = 列表字典字段 + 嵌套子节点） =====
+// ===== 目录树节点（typed 投影，字段按 key 字母序与旧 map 字节序一致）=====
 
-func specialtyToDict(s *model.Specialty) map[string]any {
-	return map[string]any{
-		"specialty_id": s.SpecialtyID,
-		"code":         s.Code,
-		"name":         s.Name,
-		"description":  s.Description,
-		"sort_order":   s.SortOrder,
-		"status":       s.Status,
-		"created_at":   formatISO(s.CreatedAt),
+// CatalogTreeDTO 目录树响应契约。
+type CatalogTreeDTO struct {
+	Specialties []CatalogSpecialtyNode `json:"specialties"`
+}
+
+// CatalogSpecialtyNode 目录树专业方向节点。
+type CatalogSpecialtyNode struct {
+	Code        string             `json:"code"`
+	CreatedAt   string             `json:"created_at"`
+	Description string             `json:"description"`
+	Levels      []CatalogLevelNode `json:"levels"`
+	Name        string             `json:"name"`
+	SortOrder   int                `json:"sort_order"`
+	SpecialtyID int                `json:"specialty_id"`
+	Status      int16              `json:"status"`
+}
+
+// CatalogLevelNode 目录树课程等级节点。
+type CatalogLevelNode struct {
+	Code        string      `json:"code"`
+	Courses     []CourseDTO `json:"courses"`
+	CreatedAt   string      `json:"created_at"`
+	Description string      `json:"description"`
+	LevelID     int         `json:"level_id"`
+	Name        string      `json:"name"`
+	SortOrder   int         `json:"sort_order"`
+	Status      int16       `json:"status"`
+}
+
+// newCatalogSpecialtyNode 构造目录树专业方向节点。
+func newCatalogSpecialtyNode(s *model.Specialty) CatalogSpecialtyNode {
+	return CatalogSpecialtyNode{
+		Code:        s.Code,
+		CreatedAt:   formatISO(s.CreatedAt),
+		Description: s.Description,
+		Name:        s.Name,
+		SortOrder:   s.SortOrder,
+		SpecialtyID: s.SpecialtyID,
+		Status:      s.Status,
 	}
 }
 
-func levelToDict(l *model.CourseLevel) map[string]any {
-	return map[string]any{
-		"level_id":    l.LevelID,
-		"code":        l.Code,
-		"name":        l.Name,
-		"description": l.Description,
-		"sort_order":  l.SortOrder,
-		"status":      l.Status,
-		"created_at":  formatISO(l.CreatedAt),
+// newCatalogLevelNode 构造目录树课程等级节点。
+func newCatalogLevelNode(l *model.CourseLevel) CatalogLevelNode {
+	return CatalogLevelNode{
+		Code:        l.Code,
+		CreatedAt:   formatISO(l.CreatedAt),
+		Description: l.Description,
+		LevelID:     l.LevelID,
+		Name:        l.Name,
+		SortOrder:   l.SortOrder,
+		Status:      l.Status,
 	}
 }

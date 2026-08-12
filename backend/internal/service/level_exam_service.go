@@ -11,15 +11,16 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
-// 等级考试组卷配置。
-var examQuestionConfig = map[string]map[string]int{
-	"single_choice": {"count": 12, "score": 3},
-	"true_false":    {"count": 8, "score": 2},
-	"multi_choice":  {"count": 5, "score": 4},
-	"fault_image":   {"count": 3, "score": 6},
-	"short_answer":  {"count": 2, "score": 5},
+// 等级考试组卷配置（各题型题量；分值见 questionScoreByFlow["level_exam"]）。
+var examQuestionConfig = map[string]int{
+	"single_choice": 12,
+	"true_false":    8,
+	"multi_choice":  5,
+	"fault_image":   3,
+	"short_answer":  2,
 }
 
 var validSessionStatuses = []string{"upcoming", "ongoing", "finished"} //nolint:unused
@@ -92,14 +93,14 @@ type LevelExamAnswerDTO struct {
 	AIScore           *float64 `json:"ai_score"`
 	AIGradedAt        *string  `json:"ai_graded_at"`
 	// 结果详情路径附带题目（未加载时省略）。
-	Question map[string]any `json:"question,omitempty"`
+	Question *QuestionDTO `json:"question,omitempty"`
 }
 
 // LevelExamDataDTO 进入考试返回（participant + 试卷 + 快照）。
 type LevelExamDataDTO struct {
 	ParticipantID int                 `json:"participant_id"`
 	Session       LevelExamSessionDTO `json:"session"`
-	Questions     []map[string]any    `json:"questions"`
+	Questions     []QuestionDTO       `json:"questions"`
 	Answers       any                 `json:"answers"`
 	RemainingTime int                 `json:"remaining_time"`
 	StartTime     string              `json:"start_time"`
@@ -223,32 +224,20 @@ func (s *LevelExamService) DeleteSession(id int) error {
 	return s.db.Delete(&session).Error
 }
 
-// ListSessions 列表（自动推进 upcoming→ongoing）。
+// ListSessions 列表（GET 纯读：展示用基于时间的生效状态，不写库）。
 func (s *LevelExamService) ListSessions(page, pageSize int, status string, includeParticipants bool) *LevelExamSessionListDTO {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 20
-	}
-	q := s.db.Model(&model.ExamSession{})
-	if status != "" {
-		q = q.Where("status = ?", status)
-	}
-	var total int64
-	q.Count(&total)
-	var sessions []model.ExamSession
-	q.Order("start_time DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&sessions)
+	sessions, total, page, pageSize := paging.Query[model.ExamSession](s.db, page, pageSize, 20, "start_time DESC", func(q *gorm.DB) *gorm.DB {
+		if status != "" {
+			q = q.Where("status = ?", status)
+		}
+		return q
+	})
 	now := beijingNow()
 	out := make([]LevelExamSessionDTO, 0, len(sessions))
 	for i := range sessions {
 		sess := &sessions[i]
-		if sess.Status == "upcoming" && now.After(sess.StartTime) {
-			sess.Status = "ongoing"
-			sess.UpdatedAt = beijingNow()
-			s.db.Save(sess)
-		}
 		d := sessionToDTO(sess)
+		d.Status = effectiveExamStatus(sess.Status, sess.StartTime, sess.EndTime, now)
 		if includeParticipants {
 			var parts []model.ExamParticipant
 			s.db.Where("exam_session_id = ?", sess.ID).Find(&parts)
@@ -273,13 +262,14 @@ func (s *LevelExamService) ListSessions(page, pageSize int, status string, inclu
 	}
 }
 
-// GetSessionDetail 场次详情。
+// GetSessionDetail 场次详情（展示基于时间的生效状态，不写库）。
 func (s *LevelExamService) GetSessionDetail(id int) (*LevelExamSessionDTO, error) {
 	var session model.ExamSession
 	if err := s.db.First(&session, id).Error; err != nil {
 		return nil, errors.New("考试场次不存在")
 	}
 	d := sessionToDTO(&session)
+	d.Status = effectiveExamStatus(session.Status, session.StartTime, session.EndTime, beijingNow())
 	return &d, nil
 }
 
@@ -310,8 +300,8 @@ func (s *LevelExamService) EnterExam(sessionID, studentID int) (*LevelExamDataDT
 		return nil, errors.New("考试场次不存在")
 	}
 	now := beijingNow()
-	if session.Status == "upcoming" && now.After(session.StartTime) {
-		session.Status = "ongoing"
+	if newStatus, advanced := advanceExamStatus(session.Status, session.StartTime, now); advanced {
+		session.Status = newStatus
 		session.UpdatedAt = beijingNow()
 		s.db.Save(&session)
 	}
@@ -354,10 +344,10 @@ func (s *LevelExamService) EnterExam(sessionID, studentID int) (*LevelExamDataDT
 func (s *LevelExamService) generateQuestionIDs(session *model.ExamSession) ([]int, int) {
 	questionIDs := []int{}
 	total := 0
-	for qType, cfg := range examQuestionConfig {
+	for qType, count := range examQuestionConfig {
 		var questions []model.Question
 		s.db.Where("type = ? AND status = ?", qType, "published").Find(&questions)
-		actual := cfg["count"]
+		actual := count
 		if actual > len(questions) {
 			actual = len(questions)
 		}
@@ -367,7 +357,7 @@ func (s *LevelExamService) generateQuestionIDs(session *model.ExamSession) ([]in
 				questionIDs = append(questionIDs, questions[perm[i]].ID)
 			}
 		}
-		total += actual * cfg["score"]
+		total += actual * int(questionMaxScore("level_exam", qType))
 	}
 	return questionIDs, total
 }
@@ -377,27 +367,12 @@ func (s *LevelExamService) getExamData(session *model.ExamSession, p *model.Exam
 	if len(p.QuestionIDs) > 0 {
 		_ = jsonUnmarshal(p.QuestionIDs, &ids)
 	}
-	var questions []model.Question
-	if len(ids) > 0 {
-		s.db.Where("id IN ?", ids).Find(&questions)
+	ordered, _ := loadOrderedQuestions(s.db, ids)
+	questions := make([]QuestionDTO, 0, len(ordered))
+	for i := range ordered {
+		questions = append(questions, newQuestionDTO(&ordered[i], false))
 	}
-	qMap := map[int]*model.Question{}
-	for i := range questions {
-		qMap[questions[i].ID] = &questions[i]
-	}
-	ordered := make([]map[string]any, 0, len(ids))
-	for _, qid := range ids {
-		if q, ok := qMap[qid]; ok {
-			ordered = append(ordered, questionToDict(q, false))
-		}
-	}
-	var answers interface{}
-	if len(p.AnswersSnapshot) > 0 {
-		_ = jsonUnmarshal(p.AnswersSnapshot, &answers)
-	}
-	if answers == nil {
-		answers = map[string]any{}
-	}
+	answers := answersMapRoundTrip(p.AnswersSnapshot)
 	startISO := ""
 	if p.StartTime != nil {
 		startISO = formatISO(*p.StartTime)
@@ -406,7 +381,7 @@ func (s *LevelExamService) getExamData(session *model.ExamSession, p *model.Exam
 	return &LevelExamDataDTO{
 		ParticipantID: p.ID,
 		Session:       d,
-		Questions:     ordered,
+		Questions:     questions,
 		Answers:       answers,
 		RemainingTime: p.RemainingTime,
 		StartTime:     startISO,
@@ -419,11 +394,8 @@ func (s *LevelExamService) SaveAnswer(participantID, studentID int, answers map[
 	if err := s.db.First(&p, participantID).Error; err != nil {
 		return errors.New("考试参与记录不存在")
 	}
-	if p.StudentID != studentID {
-		return errors.New("无权操作")
-	}
-	if p.Status != "in_progress" {
-		return errors.New("考试不在进行中")
+	if err := guardOwnedInProgress(p.StudentID, p.Status, studentID, "无权操作", "考试不在进行中"); err != nil {
+		return err
 	}
 	b, _ := jsonMarshal(answers)
 	p.AnswersSnapshot = model.JSONB(b)
@@ -437,28 +409,15 @@ func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bo
 	if err := s.db.First(&p, participantID).Error; err != nil {
 		return nil, errors.New("考试参与记录不存在")
 	}
-	if p.StudentID != studentID {
-		return nil, errors.New("无权操作")
+	if err := guardOwnedInProgress(p.StudentID, p.Status, studentID, "无权操作", "考试不在进行中"); err != nil {
+		return nil, err
 	}
-	if p.Status != "in_progress" {
-		return nil, errors.New("考试不在进行中")
-	}
-	var answers map[string]any
-	if len(p.AnswersSnapshot) > 0 {
-		_ = jsonUnmarshal(p.AnswersSnapshot, &answers)
-	}
+	answers := answersMapRoundTrip(p.AnswersSnapshot)
 	var ids []int
 	if len(p.QuestionIDs) > 0 {
 		_ = jsonUnmarshal(p.QuestionIDs, &ids)
 	}
-	var questions []model.Question
-	if len(ids) > 0 {
-		s.db.Where("id IN ?", ids).Find(&questions)
-	}
-	qMap := map[int]*model.Question{}
-	for i := range questions {
-		qMap[questions[i].ID] = &questions[i]
-	}
+	_, qMap := loadOrderedQuestions(s.db, ids)
 
 	objectiveScore := 0.0
 	subjectiveScore := 0.0
@@ -473,8 +432,7 @@ func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bo
 			continue
 		}
 		userAnswer := answers[intToString(qid)]
-		cfg := examQuestionConfig[question.Type]
-		maxScore := float64(cfg["score"])
+		maxScore := questionMaxScore("level_exam", question.Type)
 		isCorrect, earned := gradeQuestion(question, userAnswer, maxScore)
 
 		if question.Type == "short_answer" {
@@ -486,19 +444,16 @@ func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bo
 				Score:             0,
 			}
 			s.db.Create(&ans)
-			if s.ai != nil {
-				aiRes := s.ai.GradeShortAnswer(question.Content, question.ReferenceAnswer, question.ScoringCriteria, stringifyAnswer(userAnswer), maxScore, nil)
-				if aiRes != nil {
-					ans.AIScore = floatPtr(aiRes.Score)
-					comment := aiRes.Comment
-					if aiRes.Fallback {
-						comment = "[AI评分降级] " + comment
-					}
-					ans.AIComment = comment
-					now := beijingNow()
-					ans.AIGradedAt = &now
-					s.db.Save(&ans)
+			if aiRes := aiGradeShortAnswer(s.ai, question.Content, question.ReferenceAnswer, question.ScoringCriteria, stringifyAnswer(userAnswer), maxScore, nil); aiRes != nil {
+				ans.AIScore = floatPtr(aiRes.Score)
+				comment := aiRes.Comment
+				if aiRes.Fallback {
+					comment = "[AI评分降级] " + comment
 				}
+				ans.AIComment = comment
+				now := beijingNow()
+				ans.AIGradedAt = &now
+				s.db.Save(&ans)
 			}
 			_ = hasSubjective
 		} else {
@@ -569,7 +524,8 @@ func (s *LevelExamService) GetResult(participantID, studentID int) (*LevelExamRe
 		d := examAnswerToDTO(&a)
 		var q model.Question
 		if err := s.db.First(&q, a.QuestionID).Error; err == nil {
-			d.Question = questionToDict(&q, true)
+			question := newQuestionDTO(&q, true)
+			d.Question = &question
 		}
 		details = append(details, d)
 	}
@@ -581,17 +537,9 @@ func (s *LevelExamService) GetResult(participantID, studentID int) (*LevelExamRe
 
 // GetStudentHistory 学员考试历史。
 func (s *LevelExamService) GetStudentHistory(studentID, page, pageSize int) *LevelExamHistoryDTO {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-	q := s.db.Model(&model.ExamParticipant{}).Where("student_id = ?", studentID)
-	var total int64
-	q.Count(&total)
-	var parts []model.ExamParticipant
-	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&parts)
+	parts, total, page, pageSize := paging.Query[model.ExamParticipant](s.db, page, pageSize, 10, "created_at DESC", func(q *gorm.DB) *gorm.DB {
+		return q.Where("student_id = ?", studentID)
+	})
 	items := make([]LevelExamParticipantDTO, 0, len(parts))
 	for _, p := range parts {
 		var sess model.ExamSession
@@ -620,18 +568,7 @@ func (s *LevelExamService) GetAvailableExams(studentID int) ([]LevelExamAvailabl
 		if sess.StartTime.IsZero() || sess.EndTime.IsZero() {
 			continue
 		}
-		if sess.Status == "upcoming" && now.After(sess.StartTime) {
-			sess.Status = "ongoing"
-			sess.UpdatedAt = beijingNow()
-			s.db.Save(sess)
-		}
-		effStatus := sess.Status
-		if effStatus == "upcoming" && now.After(sess.StartTime) {
-			effStatus = "ongoing"
-		}
-		if effStatus != "finished" && now.After(sess.EndTime) {
-			effStatus = "finished"
-		}
+		effStatus := effectiveExamStatus(sess.Status, sess.StartTime, sess.EndTime, now)
 		var participant model.ExamParticipant
 		hasPart := s.db.Where("exam_session_id = ? AND student_id = ?", sess.ID, studentID).First(&participant).Error == nil
 		if effStatus == "finished" && !hasPart {

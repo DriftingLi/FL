@@ -4,10 +4,11 @@
 // 维度顺序由 API 返回的 dimension_scores 数据驱动（后端为唯一来源）
 import { computed, onMounted, ref, watch } from 'vue'
 import { useECharts } from '@/composables/useECharts'
+import type { DimensionScore } from '@/types/valuation/evaluation'
 
 interface Props {
-  /** 维度评分（中文标签 → 0~1） */
-  scores: Record<string, number>
+  /** 维度评分（label + value，顺序由后端契约 model.DimensionLabels 决定） */
+  scores: DimensionScore[]
   height?: string
 }
 
@@ -24,13 +25,12 @@ const COLOR_BG = '#FFFFFF'
 const COLOR_BG_ALT = '#FAFAFA'
 
 /** 维度列表：按 API 返回的维度评分顺序渲染（数据驱动，后端为唯一来源） */
-const orderedDimensions = computed(() => {
-  const scoreMap: Record<string, number> = props.scores ?? {}
-  return Object.entries(scoreMap).map(([label, value]) => ({
-    name: label,
-    value: Number(value.toFixed(3))
+const orderedDimensions = computed(() =>
+  (props.scores ?? []).map((d) => ({
+    name: d.label,
+    value: Number(d.value.toFixed(3))
   }))
-})
+)
 
 const chartOption = computed(() => {
   const dims = orderedDimensions.value
