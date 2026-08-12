@@ -7,20 +7,12 @@
     </template>
 
     <template v-else-if="chapterDetail">
-      <!-- 面包屑 -->
-      <div class="breadcrumb">
-        <el-button text @click="goBackToChapters">
-          <el-icon><ArrowLeft /></el-icon> 返回章节列表
-        </el-button>
-        <span class="separator">/</span>
-        <span class="course-name">{{ courseName || '课程' }}</span>
-        <span class="separator">/</span>
-        <span class="chapter-name">{{ chapterDetail.title }}</span>
-      </div>
-
       <!-- 章节标题 + 元信息编辑 -->
       <div class="chapter-header">
         <div class="title-row">
+          <el-button text @click="goBackToChapters">
+            <el-icon><ArrowLeft /></el-icon> 返回章节列表
+          </el-button>
           <h1 class="chapter-title">{{ chapterDetail.title }}</h1>
           <el-button size="small" type="primary" @click="openMetaDialog">
             <el-icon><Edit /></el-icon> 编辑信息
@@ -47,9 +39,11 @@
                 </el-button>
               </div>
               <MarkdownEditor
+                :key="chapterDetail.chapter_id"
                 v-model="editContent"
                 :height="560"
-                placeholder="请输入章节正文内容（支持 Markdown 语法）..."
+                :upload-url="chapterImageUploadUrl"
+                placeholder="请输入章节正文内容（支持 Markdown 语法，可粘贴或上传图片）..."
               />
             </div>
           </el-tab-pane>
@@ -128,9 +122,6 @@
                       :fileName="selectedFile.file_name"
                       :chapterId="chapterDetail.chapter_id"
                     />
-                  </template>
-                  <template v-else-if="group.type === 'image'">
-                    <ImageViewer :src="selectedFile.file_url" :fileName="selectedFile.file_name" />
                   </template>
                 </div>
               </div>
@@ -221,7 +212,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeft, ArrowRight, Edit, Check, Upload, Delete,
-  VideoCamera, Document, Picture
+  VideoCamera, Document
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { tutorApi } from '@/api/tutor'
@@ -230,7 +221,6 @@ import FileUpload from '@/components/tutor/FileUpload.vue'
 import VideoPlayer from '@/components/student/VideoPlayer.vue'
 import DocumentViewer from '@/components/student/DocumentViewer.vue'
 import PptViewer from '@/components/student/PptViewer.vue'
-import ImageViewer from '@/components/student/ImageViewer.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -248,14 +238,20 @@ const originalContent = ref('')
 const savingContent = ref(false)
 const contentChanged = computed(() => editContent.value !== originalContent.value)
 
-// 文件分组
-const TYPE_ORDER = ['video', 'document', 'ppt', 'image']
+// 文件分组（图片不再作为独立章节文件上传，统一走图文 Markdown 粘贴）
+const TYPE_ORDER = ['video', 'document', 'ppt']
 const TYPE_CONFIG: Record<string, { label: string, icon: any, color: string }> = {
   video: { label: '视频', icon: VideoCamera, color: '#f56c6c' },
   document: { label: '文档', icon: Document, color: '#409eff' },
-  ppt: { label: 'PPT', icon: Document, color: '#e6a23c' },
-  image: { label: '图片', icon: Picture, color: '#67c23a' }
+  ppt: { label: 'PPT', icon: Document, color: '#e6a23c' }
 }
+
+// Vditor 图片上传走 /api/tutor/upload-image（返回 Vditor 期望的 {code,msg,data:{succMap}} 格式）。
+// 携带 chapter_id 按章节分目录存储 images/chapters/<chapterId>/，删除章节时可按前缀清理。
+const chapterImageUploadUrl = computed(() => {
+  const chapterId = chapterDetail.value?.chapter_id
+  return chapterId ? `/api/tutor/upload-image?chapter_id=${chapterId}` : '/api/tutor/upload-image'
+})
 
 const chapterFiles = computed(() => chapterDetail.value?.files || [])
 
@@ -310,20 +306,18 @@ async function saveMeta() {
   }
   savingMeta.value = true
   try {
-    const res = await tutorApi.updateChapter(chapterDetail.value.chapter_id, {
+    await tutorApi.updateChapter(chapterDetail.value.chapter_id, {
       title: metaForm.value.title.trim(),
       description: metaForm.value.description,
       duration: metaForm.value.duration
     })
-    if (res.code === 200) {
-      chapterDetail.value.title = metaForm.value.title.trim()
-      chapterDetail.value.description = metaForm.value.description
-      chapterDetail.value.duration = metaForm.value.duration
-      ElMessage.success('章节信息更新成功')
-      metaDialogVisible.value = false
-    }
-  } catch (e: any) {
-    ElMessage.error(e.message || '更新失败')
+    chapterDetail.value.title = metaForm.value.title.trim()
+    chapterDetail.value.description = metaForm.value.description
+    chapterDetail.value.duration = metaForm.value.duration
+    ElMessage.success('章节信息更新成功')
+    metaDialogVisible.value = false
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     savingMeta.value = false
   }
@@ -334,16 +328,14 @@ async function saveContent() {
   if (!chapterDetail.value) return
   savingContent.value = true
   try {
-    const res = await tutorApi.updateChapter(chapterDetail.value.chapter_id, {
+    await tutorApi.updateChapter(chapterDetail.value.chapter_id, {
       content: editContent.value
     })
-    if (res.code === 200) {
-      chapterDetail.value.content = editContent.value
-      originalContent.value = editContent.value
-      ElMessage.success('正文保存成功')
-    }
-  } catch (e: any) {
-    ElMessage.error(e.message || '保存失败')
+    chapterDetail.value.content = editContent.value
+    originalContent.value = editContent.value
+    ElMessage.success('正文保存成功')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     savingContent.value = false
   }
@@ -389,18 +381,14 @@ async function handleDeleteFile(file: any) {
       '确认删除',
       { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
     )
-    const res = await tutorApi.deleteFile(file.file_id)
-    if (res.code === 200) {
-      ElMessage.success('文件删除成功')
-      if (selectedFileId.value === file.file_id) {
-        selectedFileId.value = null
-      }
-      await loadChapterDetail()
+    await tutorApi.deleteFile(file.file_id)
+    ElMessage.success('文件删除成功')
+    if (selectedFileId.value === file.file_id) {
+      selectedFileId.value = null
     }
-  } catch (e: any) {
-    if (e !== 'cancel') {
-      ElMessage.error(e.message || '删除失败')
-    }
+    await loadChapterDetail()
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -409,25 +397,19 @@ async function loadChapterDetail() {
   loading.value = true
   chapterNotFound.value = false
   try {
-    const chapterId = route.params.chapterId
+    const chapterId = Number(route.params.chapterId)
     const res = await tutorApi.getChapterDetail(chapterId)
-    if (res.code === 200) {
-      chapterDetail.value = res.data
-      editContent.value = res.data.content || ''
-      originalContent.value = res.data.content || ''
-      // 默认 tab：图文优先，否则第一个媒体 tab
-      activeTab.value = 'content'
-      selectedFileId.value = null
-      // 顺便加载课程信息拿课程名 + 章节列表（用于上下章标题）
-      await loadCourseInfo()
-    } else {
-      chapterNotFound.value = true
-    }
+    chapterDetail.value = res
+    editContent.value = res.content || ''
+    originalContent.value = res.content || ''
+    // 默认 tab：图文优先，否则第一个媒体 tab
+    activeTab.value = 'content'
+    selectedFileId.value = null
+    // 顺便加载课程信息拿课程名 + 章节列表（用于上下章标题）
+    await loadCourseInfo()
   } catch (e: any) {
     if (e?.response?.status === 404) {
       chapterNotFound.value = true
-    } else {
-      ElMessage.error('加载章节详情失败')
     }
   } finally {
     loading.value = false
@@ -436,12 +418,10 @@ async function loadChapterDetail() {
 
 async function loadCourseInfo() {
   try {
-    const courseId = route.params.courseId
+    const courseId = Number(route.params.courseId)
     const res = await tutorApi.getCourseChapters(courseId)
-    if (res.code === 200) {
-      courseName.value = res.data.course?.name || ''
-      chapters.value = res.data.chapters || []
-    }
+    courseName.value = res.course?.name || ''
+    chapters.value = res.chapters || []
   } catch (e) {
     // 静默失败
   }
@@ -503,25 +483,6 @@ onMounted(() => {
   max-width: 1200px;
   margin: 0 auto;
   padding-bottom: 60px;
-}
-
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: #606266;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
-.separator {
-  color: #c0c4cc;
-}
-
-.course-name,
-.chapter-name {
-  color: #303133;
 }
 
 .chapter-header {

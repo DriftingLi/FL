@@ -4,7 +4,6 @@ on:
   pull_request:
     branches: [master, develop]
   push:
-    branches: [master, develop]
   workflow_dispatch:
 
 concurrency:
@@ -72,8 +71,8 @@ jobs:
 
       - name: golangci-lint 代码检查
         run: |
-          # 安装与系统 Go 版本匹配的 golangci-lint（避免预编译二进制版本不兼容）
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          # 固定版本安装，避免 @latest 随上游变动导致 CI 结果漂移
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
           golangci-lint run --timeout=5m
         working-directory: backend
 
@@ -81,7 +80,7 @@ jobs:
   # Stage 3: 后端 - 单元测试
   # ============================================================
   backend-test:
-    needs: backend-lint
+    needs: [backend-lint, changes]
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     services:
@@ -158,10 +157,6 @@ jobs:
 
       - name: TypeScript 类型检查
         run: npm run type-check
-
-      - name: ESLint 检查（如有配置）
-        continue-on-error: true
-        run: npx eslint src/ --ext .ts,.vue --max-warnings 0 || echo "ESLint 暂未配置，跳过"
 
       - name: 生产构建
         run: npm run build
@@ -254,12 +249,17 @@ jobs:
 
   # ============================================================
   # Stage 7: CI 汇总（作为 CD 流水线的依赖门禁）
+  # CI 全部通过后,主动调用 CD workflow 的 workflow_dispatch 触发部署
   # ============================================================
   ci-summary:
     # 注：security-scan 为参考性质，不阻断流水线
     needs: [backend-lint, backend-test, frontend-check, migration-check]
-    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: always() && github.event_name == 'push'
     runs-on: ubuntu-latest
+    # 触发 CD workflow_dispatch 需要 actions:write 权限
+    permissions:
+      actions: write
+      contents: read
     steps:
       - name: 检查是否全部通过
         run: |
@@ -296,3 +296,28 @@ jobs:
 
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**全部检查通过, 可以进入 CD 部署!**" >> $GITHUB_STEP_SUMMARY
+
+      # CI 全部通过后,主动触发 CD workflow
+      # gh CLI 需要 git 仓库上下文,必须先 checkout 代码
+      - uses: actions/checkout@v4
+        if: success()
+
+      - name: 触发 CD 部署
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # master → production(pve-02 生产), 其他分支 → testing(pve-01 测试)
+          if [ "${{ github.ref }}" = "refs/heads/master" ]; then
+            ENV="production"
+          else
+            ENV="testing"
+          fi
+          echo ">>> 触发 CD workflow,ref=${{ github.sha }},environment=${ENV}"
+          gh workflow run cd.yml \
+            --ref "${{ github.ref_name }}" \
+            -f ref="${{ github.sha }}" \
+            -f environment="${ENV}"
+          echo "✅ CD workflow 已触发 (env: ${ENV})"
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**已触发 CD 部署 (commit: \`${{ github.sha }}\`, env: ${ENV})**" >> $GITHUB_STEP_SUMMARY

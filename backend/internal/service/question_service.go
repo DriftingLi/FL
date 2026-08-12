@@ -8,29 +8,25 @@ import (
 	"sort"
 	"strings"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
 // 题型与课程分类常量（已取消等级制度）。
 var (
 	validQuestionTypes  = []string{"single_choice", "multi_choice", "true_false", "fault_image", "short_answer"}
 	validQuestionStatus = []string{"draft", "pending", "published"}
-	validCategories     = []string{"CATEGORY_01", "CATEGORY_02", "CATEGORY_03", "CATEGORY_04"}
-	examScoreMap        = map[string]float64{"single_choice": 3, "multi_choice": 4, "true_false": 2, "fault_image": 6, "short_answer": 5}
-	mockExamScoreMap    = map[string]float64{"single_choice": 3, "multi_choice": 4, "true_false": 2, "fault_image": 4, "short_answer": 10}
 )
 
 // sampleQuestions 统一抽题函数：从 published 题库按条件随机抽取 count 题。
-// qType 为空表示不限题型；kpIDs 为空表示不限知识点。
-func sampleQuestions(db *gorm.DB, qType string, kpIDs []int, count int) ([]model.Question, error) {
+// qType 为空表示不限题型。
+func sampleQuestions(db *gorm.DB, qType string, count int) ([]model.Question, error) {
 	q := db.Model(&model.Question{}).Where("status = ?", "published")
 	if qType != "" {
 		q = q.Where("type = ?", qType)
-	}
-	if len(kpIDs) > 0 {
-		q = q.Where("knowledge_point_id IN ?", kpIDs)
 	}
 	var all []model.Question
 	if err := q.Find(&all).Error; err != nil {
@@ -43,71 +39,15 @@ func sampleQuestions(db *gorm.DB, qType string, kpIDs []int, count int) ([]model
 	return all, nil
 }
 
-// questionToDict 将 Question 转为 dict。
-// includeAnswer=false 时剔除答案、解析、参考答案、评分标准（学员侧）。
-func questionToDict(q *model.Question, includeAnswer bool) map[string]any {
-	var options any
-	if len(q.Options) > 0 {
-		_ = json.Unmarshal(q.Options, &options)
-	}
-	d := map[string]any{
-		"id":                 q.ID,
-		"type":               q.Type,
-		"content":            q.Content,
-		"options":            options,
-		"image_url":          q.ImageURL,
-		"knowledge_point_id": q.KnowledgePointID,
-		"status":             q.Status,
-		"reject_reason":      q.RejectReason,
-		"score":              q.Score,
-		"created_by":         q.CreatedBy,
-		"created_by_type":    q.CreatedByType,
-		"created_at":         formatISO(q.CreatedAt),
-		"updated_at":         formatISO(q.UpdatedAt),
-	}
-	if includeAnswer {
-		d["answer"] = q.Answer
-		d["explanation"] = q.Explanation
-		d["reference_answer"] = q.ReferenceAnswer
-		d["scoring_criteria"] = q.ScoringCriteria
-	}
-	return d
-}
-
-// checkAnswer 判定答案对错。
-// 返回 *bool：nil 表示无法判定（简答题/未作答），true/false 表示对/错。
-func checkAnswer(q *model.Question, userAnswer interface{}) *bool {
-	if userAnswer == nil {
-		return nil
-	}
-	if q.Type == "short_answer" {
-		return nil
-	}
-	if q.Type == "multi_choice" {
-		correct := normalizeAnswerList(q.Answer)
-		user := normalizeUserAnswerList(userAnswer)
-		if user == nil {
-			b := false
-			return &b
-		}
-		eq := stringSliceEqual(correct, user)
-		return &eq
-	}
-	// 单选/判断/故障识图：字符串大写比较
-	ua := stringifyAnswer(userAnswer)
-	//nolint:staticcheck
-	res := strings.EqualFold(strings.TrimSpace(ua), strings.TrimSpace(q.Answer))
-	return &res
-}
-
-// gradeQuestion 评分。
-// 返回 (isCorrect, earned)：isCorrect 为 nil 表示无法判定；earned 为得分。
+// gradeQuestion 评分（判题唯一实现）。
+// 返回 (isCorrect, earned)：isCorrect 为 nil 表示无法判定（简答题/未作答），earned 为得分。
+// maxScore 为 0 时按定级考试分值表取默认值。
 func gradeQuestion(q *model.Question, userAnswer interface{}, maxScore float64) (*bool, float64) {
 	if userAnswer == nil {
 		return nil, 0
 	}
 	if maxScore == 0 {
-		maxScore = examScoreMap[q.Type]
+		maxScore = questionMaxScore("level_exam", q.Type)
 	}
 	switch q.Type {
 	case "single_choice", "true_false", "fault_image":
@@ -145,17 +85,18 @@ func gradeQuestion(q *model.Question, userAnswer interface{}, maxScore float64) 
 }
 
 // addToWrongQuestions 错题入库（去重、计数）。
+// 使用 Limit(1).Find() 替代 First()，避免首次错题入库时 GORM logger 误报 record not found
 func addToWrongQuestions(db *gorm.DB, studentID, questionID int) error {
 	var wq model.WrongQuestion
-	err := db.Where("student_id = ? AND question_id = ?", studentID, questionID).First(&wq).Error
-	if err == nil {
+	err := db.Where("student_id = ? AND question_id = ?", studentID, questionID).Limit(1).Find(&wq).Error
+	if err != nil {
+		return err
+	}
+	if wq.ID != 0 {
 		wq.WrongCount++
 		wq.LastWrongAt = beijingNow()
 		wq.IsRemoved = false
 		return db.Save(&wq).Error
-	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return err
 	}
 	wq = model.WrongQuestion{
 		StudentID:   studentID,
@@ -269,42 +210,36 @@ func round1(f *float64) {
 
 // QuestionBankService 题库 CRUD 与知识点管理。
 type QuestionBankService struct {
-	db *gorm.DB
+	db      *gorm.DB
+	fileSvc *FileService
+
+	logger *zap.Logger
 }
 
-// NewQuestionBankService 创建题库服务。
-func NewQuestionBankService(db *gorm.DB) *QuestionBankService {
-	return &QuestionBankService{db: db}
+// NewQuestionBankService 创建题库服务。fileSvc 用于删除题目时清理题图（可 nil，nil 时跳过）。
+func NewQuestionBankService(db *gorm.DB, fileSvc *FileService, logger *zap.Logger) *QuestionBankService {
+	return &QuestionBankService{db: db, fileSvc: fileSvc, logger: logger}
 }
 
 // CreateQuestion 创建题目。
-func (s *QuestionBankService) CreateQuestion(data map[string]any, createdBy *int, createdByType string) (map[string]any, error) {
+func (s *QuestionBankService) CreateQuestion(data map[string]any, createdBy *int, createdByType string) (QuestionDTO, error) {
 	qType, _ := data["type"].(string)
 	if !containsString(validQuestionTypes, qType) {
-		return nil, errors.New("无效的题型，支持的题型：" + strings.Join(validQuestionTypes, ", "))
+		return QuestionDTO{}, errors.New("无效的题型，支持的题型：" + strings.Join(validQuestionTypes, ", "))
 	}
 	content, _ := data["content"].(string)
 	if content == "" {
-		return nil, errors.New("题干不能为空")
+		return QuestionDTO{}, errors.New("题干不能为空")
 	}
 	answer := stringifyAnswer(data["answer"])
 	if answer == "" && qType != "short_answer" {
-		return nil, errors.New("答案不能为空")
+		return QuestionDTO{}, errors.New("答案不能为空")
 	}
 	options := data["options"]
 	if qType == "single_choice" || qType == "multi_choice" || qType == "fault_image" {
 		if options == nil {
-			return nil, errors.New("选项不能为空")
+			return QuestionDTO{}, errors.New("选项不能为空")
 		}
-	}
-	var kpID *int
-	if v, ok := data["knowledge_point_id"]; ok && v != nil {
-		id := toInt(v)
-		var kp model.KnowledgePoint
-		if err := s.db.First(&kp, id).Error; err != nil {
-			return nil, errors.New("知识点不存在")
-		}
-		kpID = &id
 	}
 	status, _ := data["status"].(string)
 	if status == "" {
@@ -317,49 +252,57 @@ func (s *QuestionBankService) CreateQuestion(data map[string]any, createdBy *int
 		}
 	}
 	q := model.Question{
-		Type:             qType,
-		Content:          content,
-		Options:          optionsBytes,
-		Answer:           answer,
-		Explanation:      getString(data, "explanation"),
-		ImageURL:         getString(data, "image_url"),
-		ReferenceAnswer:  getString(data, "reference_answer"),
-		ScoringCriteria:  getString(data, "scoring_criteria"),
-		Score:            toIntDefault(data["score"], 0),
-		KnowledgePointID: kpID,
-		Status:           status,
-		CreatedBy:        createdBy,
-		CreatedByType:    orDefault(createdByType, "tutor"),
-		CreatedAt:        beijingNow(),
-		UpdatedAt:        beijingNow(),
+		Type:            qType,
+		Content:         content,
+		Options:         optionsBytes,
+		Answer:          answer,
+		Explanation:     getString(data, "explanation"),
+		ImageURL:        getString(data, "image_url"),
+		ReferenceAnswer: getString(data, "reference_answer"),
+		ScoringCriteria: getString(data, "scoring_criteria"),
+		Score:           toIntDefault(data["score"], 0),
+		Status:          status,
+		CreatedBy:       createdBy,
+		CreatedByType:   orDefault(createdByType, "tutor"),
+		CreatedAt:       beijingNow(),
+		UpdatedAt:       beijingNow(),
 	}
 	if err := s.db.Create(&q).Error; err != nil {
-		return nil, err
+		return QuestionDTO{}, err
 	}
-	return questionToDict(&q, true), nil
+	if v, ok := data["tag_ids"]; ok {
+		if err := replaceQuestionTags(s.db, q.ID, toIntSlice(v)); err != nil {
+			return QuestionDTO{}, err
+		}
+	}
+	d := newQuestionDTO(&q, true)
+	d.Tags = s.loadTagsByQuestion(q.ID)
+	return d, nil
 }
 
 // GetQuestion 查询题目详情。
-func (s *QuestionBankService) GetQuestion(id int) (map[string]any, error) {
+func (s *QuestionBankService) GetQuestion(id int) (QuestionDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
-		return nil, errors.New("题目不存在")
+		return QuestionDTO{}, errors.New("题目不存在")
 	}
-	return questionToDict(&q, true), nil
+	d := newQuestionDTO(&q, true)
+	d.Tags = s.loadTagsByQuestion(q.ID)
+	return d, nil
 }
 
 // UpdateQuestion 更新题目。
 // 特殊处理：当 status 由 draft 改为 pending（导师重新提交审核）时，清空驳回理由。
-func (s *QuestionBankService) UpdateQuestion(id int, data map[string]any) (map[string]any, error) {
+func (s *QuestionBankService) UpdateQuestion(id int, data map[string]any) (QuestionDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
-		return nil, errors.New("题目不存在")
+		return QuestionDTO{}, errors.New("题目不存在")
 	}
 	if t, ok := data["type"].(string); ok && !containsString(validQuestionTypes, t) {
-		return nil, errors.New("无效的题型")
+		return QuestionDTO{}, errors.New("无效的题型")
 	}
 	if st, ok := data["status"].(string); ok && !containsString(validQuestionStatus, st) {
-		return nil, errors.New("无效的状态")
+		return QuestionDTO{}, errors.New("无效的状态")
 	}
 	// 检测重新提交：原本 draft 状态，新状态为 pending → 视为导师修改后重新提交，清空驳回理由
 	resubmitting := q.Status == "draft" && data["status"] == "pending"
@@ -369,52 +312,60 @@ func (s *QuestionBankService) UpdateQuestion(id int, data map[string]any) (map[s
 	}
 	q.UpdatedAt = beijingNow()
 	if err := s.db.Save(&q).Error; err != nil {
-		return nil, err
+		return QuestionDTO{}, err
 	}
-	return questionToDict(&q, true), nil
+	if v, ok := data["tag_ids"]; ok {
+		if err := replaceQuestionTags(s.db, id, toIntSlice(v)); err != nil {
+			return QuestionDTO{}, err
+		}
+	}
+	d := newQuestionDTO(&q, true)
+	d.Tags = s.loadTagsByQuestion(id)
+	return d, nil
 }
 
-// DeleteQuestion 删除题目。
+// DeleteQuestion 删除题目，并清理题图存储文件。
 func (s *QuestionBankService) DeleteQuestion(id int) error {
-	result := s.db.Delete(&model.Question{}, id)
-	if result.Error != nil {
-		return result.Error
+	var q model.Question
+	if err := s.db.First(&q, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("题目不存在")
+		}
+		return err
 	}
-	if result.RowsAffected == 0 {
-		return errors.New("题目不存在")
+	if err := s.db.Delete(&q).Error; err != nil {
+		return err
+	}
+	if s.fileSvc != nil && q.ImageURL != "" {
+		_ = s.fileSvc.DeleteFile(q.ImageURL)
 	}
 	return nil
 }
 
-// ListQuestions 题目列表分页查询。
-func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, kpID *int, status, keyword string) map[string]any {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 20
-	}
-	q := s.db.Model(&model.Question{})
-	if qType != "" {
-		q = q.Where("type = ?", qType)
-	}
-	if kpID != nil {
-		q = q.Where("knowledge_point_id = ?", *kpID)
-	}
-	if status != "" {
-		q = q.Where("status = ?", status)
-	}
-	if keyword != "" {
-		q = q.Where("content LIKE ?", "%"+keyword+"%")
-	}
-	var total int64
-	q.Count(&total)
-	var list []model.Question
-	q.Order("created_at DESC, id ASC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list)
-	out := make([]map[string]any, 0, len(list))
+// ListQuestions 题目列表分页查询（可按标签 tagID 过滤，结果附带标签列表）。
+func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int) map[string]any {
+	list, total, page, pageSize := paging.Query[model.Question](s.db, page, pageSize, 20, "created_at DESC, id ASC", func(q *gorm.DB) *gorm.DB {
+		if qType != "" {
+			q = q.Where("type = ?", qType)
+		}
+		if status != "" {
+			q = q.Where("status = ?", status)
+		}
+		if keyword != "" {
+			q = q.Where("content LIKE ?", "%"+keyword+"%")
+		}
+		if tagID != nil {
+			q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", *tagID)
+		}
+		return q
+	})
+	out := make([]QuestionDTO, 0, len(list))
+	ids := make([]int, 0, len(list))
 	for i := range list {
-		out = append(out, questionToDict(&list[i], true))
+		out = append(out, newQuestionDTO(&list[i], true))
+		ids = append(ids, list[i].ID)
 	}
+	s.attachTagsBatch(ids, out)
 	return map[string]any{
 		"total":     total,
 		"page":      page,
@@ -423,19 +374,74 @@ func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, kp
 	}
 }
 
+// loadTagsByQuestion 加载单题标签列表。
+func (s *QuestionBankService) loadTagsByQuestion(questionID int) []map[string]any {
+	return s.loadTagsBatch([]int{questionID})[questionID]
+}
+
+// attachTagsBatch 批量附加标签到题目 DTO（避免逐题查询 N+1）。
+func (s *QuestionBankService) attachTagsBatch(questionIDs []int, dtos []QuestionDTO) {
+	if len(questionIDs) == 0 {
+		return
+	}
+	byID := s.loadTagsBatch(questionIDs)
+	for i, id := range questionIDs {
+		if tags, ok := byID[id]; ok {
+			dtos[i].Tags = tags
+		} else {
+			dtos[i].Tags = []map[string]any{}
+		}
+	}
+}
+
+// loadTagsBatch 批量加载题目标签，key 为题目 ID。
+func (s *QuestionBankService) loadTagsBatch(questionIDs []int) map[int][]map[string]any {
+	result := make(map[int][]map[string]any, len(questionIDs))
+	if len(questionIDs) == 0 {
+		return result
+	}
+	type tagRow struct {
+		QuestionID int    `gorm:"column:question_id"`
+		TagID      int    `gorm:"column:tag_id"`
+		TagCode    string `gorm:"column:tag_code"`
+		TagName    string `gorm:"column:tag_name"`
+		SortOrder  int    `gorm:"column:tag_sort"`
+		Status     int16  `gorm:"column:tag_status"`
+	}
+	var rows []tagRow
+	if err := s.db.Table("question_tag_relation AS qtr").
+		Select("qtr.question_id, qtr.tag_id, t.code AS tag_code, t.name AS tag_name, t.sort_order AS tag_sort, t.status AS tag_status").
+		Joins("JOIN question_tag AS t ON t.id = qtr.tag_id").
+		Where("qtr.question_id IN ?", questionIDs).
+		Order("t.sort_order ASC, t.id ASC").
+		Scan(&rows).Error; err != nil {
+		return result
+	}
+	for i := range rows {
+		result[rows[i].QuestionID] = append(result[rows[i].QuestionID], map[string]any{
+			"id":         rows[i].TagID,
+			"code":       rows[i].TagCode,
+			"name":       rows[i].TagName,
+			"sort_order": rows[i].SortOrder,
+			"status":     rows[i].Status,
+		})
+	}
+	return result
+}
+
 // PublishQuestion 发布题目（管理员审核通过）。同时清空驳回理由。
-func (s *QuestionBankService) PublishQuestion(id int) (map[string]any, error) {
+func (s *QuestionBankService) PublishQuestion(id int) (QuestionDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
-		return nil, errors.New("题目不存在")
+		return QuestionDTO{}, errors.New("题目不存在")
 	}
 	q.Status = "published"
 	q.RejectReason = ""
 	q.UpdatedAt = beijingNow()
 	if err := s.db.Save(&q).Error; err != nil {
-		return nil, err
+		return QuestionDTO{}, err
 	}
-	return questionToDict(&q, true), nil
+	return newQuestionDTO(&q, true), nil
 }
 
 // BatchPublish 批量发布（管理员审核通过）。同时清空驳回理由。
@@ -452,21 +458,21 @@ func (s *QuestionBankService) BatchPublish(ids []int) map[string]any {
 }
 
 // RejectQuestion 驳回题目（管理员审核）。状态回退为 draft，记录驳回理由供导师查看修改。
-func (s *QuestionBankService) RejectQuestion(id int, reason string) (map[string]any, error) {
+func (s *QuestionBankService) RejectQuestion(id int, reason string) (QuestionDTO, error) {
 	if reason == "" {
-		return nil, errors.New("请填写驳回理由")
+		return QuestionDTO{}, errors.New("请填写驳回理由")
 	}
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
-		return nil, errors.New("题目不存在")
+		return QuestionDTO{}, errors.New("题目不存在")
 	}
 	q.Status = "draft"
 	q.RejectReason = reason
 	q.UpdatedAt = beijingNow()
 	if err := s.db.Save(&q).Error; err != nil {
-		return nil, err
+		return QuestionDTO{}, err
 	}
-	return questionToDict(&q, true), nil
+	return newQuestionDTO(&q, true), nil
 }
 
 // BatchReject 批量驳回（管理员审核）。状态回退为 draft，统一记录同一驳回理由。
@@ -523,150 +529,10 @@ func (s *QuestionBankService) GetStats() map[string]any {
 		s.db.Model(&model.Question{}).Where("status = ?", st).Count(&c)
 		byStatus[st] = c
 	}
-	// 按课程分类统计（经 knowledge_point.category 关联）
-	byCategory := map[string]int64{}
-	for _, cat := range validCategories {
-		var c int64
-		s.db.Model(&model.Question{}).
-			Joins("LEFT JOIN knowledge_point ON knowledge_point.id = question.knowledge_point_id").
-			Where("knowledge_point.category = ? AND question.status = ?", cat, "published").
-			Count(&c)
-		byCategory[cat] = c
-	}
-	var kps []model.KnowledgePoint
-	s.db.Find(&kps)
-	byKP := make([]map[string]any, 0, len(kps))
-	for _, kp := range kps {
-		var c int64
-		s.db.Model(&model.Question{}).Where("knowledge_point_id = ?", kp.ID).Count(&c)
-		byKP = append(byKP, map[string]any{"id": kp.ID, "name": kp.Name, "category": kp.Category, "count": c})
-	}
 	return map[string]any{
-		"total":              total,
-		"by_type":            byType,
-		"by_status":          byStatus,
-		"by_category":        byCategory,
-		"by_knowledge_point": byKP,
-	}
-}
-
-// GetCategories 返回课程四分类及其题目数。
-func (s *QuestionBankService) GetCategories() []map[string]any {
-	out := make([]map[string]any, 0, len(validCategories))
-	for _, cat := range validCategories {
-		var c int64
-		s.db.Model(&model.Question{}).
-			Joins("LEFT JOIN knowledge_point ON knowledge_point.id = question.knowledge_point_id").
-			Where("knowledge_point.category = ? AND question.status = ?", cat, "published").
-			Count(&c)
-		out = append(out, map[string]any{"category": cat, "count": c})
-	}
-	return out
-}
-
-// CreateKnowledgePoint 创建知识点。
-func (s *QuestionBankService) CreateKnowledgePoint(data map[string]any) (map[string]any, error) {
-	name, _ := data["name"].(string)
-	if name == "" {
-		return nil, errors.New("知识点名称不能为空")
-	}
-	category, _ := data["category"].(string)
-	if category != "" && !containsString(validCategories, category) {
-		return nil, errors.New("无效的课程分类")
-	}
-	var parentID *int
-	if v, ok := data["parent_id"]; ok && v != nil {
-		pid := toInt(v)
-		var p model.KnowledgePoint
-		if err := s.db.First(&p, pid).Error; err != nil {
-			return nil, errors.New("父知识点不存在")
-		}
-		parentID = &pid
-	}
-	kp := model.KnowledgePoint{
-		Name:        name,
-		Category:    category,
-		ParentID:    parentID,
-		Description: getString(data, "description"),
-		CreatedAt:   beijingNow(),
-	}
-	if err := s.db.Create(&kp).Error; err != nil {
-		return nil, err
-	}
-	return kpToDict(&kp), nil
-}
-
-// GetKnowledgePoints 查询知识点列表。
-func (s *QuestionBankService) GetKnowledgePoints(category string, parentID *int) []map[string]any {
-	q := s.db.Model(&model.KnowledgePoint{})
-	if category != "" {
-		q = q.Where("category = ?", category)
-	}
-	if parentID != nil {
-		q = q.Where("parent_id = ?", *parentID)
-	}
-	var kps []model.KnowledgePoint
-	q.Order("created_at ASC").Find(&kps)
-	out := make([]map[string]any, 0, len(kps))
-	for i := range kps {
-		out = append(out, kpToDict(&kps[i]))
-	}
-	return out
-}
-
-// UpdateKnowledgePoint 更新知识点。
-func (s *QuestionBankService) UpdateKnowledgePoint(id int, data map[string]any) (map[string]any, error) {
-	var kp model.KnowledgePoint
-	if err := s.db.First(&kp, id).Error; err != nil {
-		return nil, errors.New("知识点不存在")
-	}
-	if v, ok := data["name"]; ok {
-		kp.Name, _ = v.(string)
-	}
-	if v, ok := data["category"]; ok {
-		if c, _ := v.(string); c != "" && !containsString(validCategories, c) {
-			return nil, errors.New("无效的课程分类")
-		}
-		kp.Category, _ = v.(string)
-	}
-	if v, ok := data["parent_id"]; ok {
-		if v == nil {
-			kp.ParentID = nil
-		} else {
-			pid := toInt(v)
-			kp.ParentID = &pid
-		}
-	}
-	if v, ok := data["description"]; ok {
-		kp.Description, _ = v.(string)
-	}
-	if err := s.db.Save(&kp).Error; err != nil {
-		return nil, err
-	}
-	return kpToDict(&kp), nil
-}
-
-// DeleteKnowledgePoint 删除知识点（有题目时拒绝）。
-func (s *QuestionBankService) DeleteKnowledgePoint(id int) error {
-	var c int64
-	s.db.Model(&model.Question{}).Where("knowledge_point_id = ?", id).Count(&c)
-	if c > 0 {
-		return errors.New("该知识点下还有题目，无法删除")
-	}
-	if err := s.db.Delete(&model.KnowledgePoint{}, id).Error; err != nil {
-		return errors.New("知识点不存在")
-	}
-	return nil
-}
-
-func kpToDict(kp *model.KnowledgePoint) map[string]any {
-	return map[string]any{
-		"id":          kp.ID,
-		"name":        kp.Name,
-		"category":    kp.Category,
-		"parent_id":   kp.ParentID,
-		"description": kp.Description,
-		"created_at":  formatISO(kp.CreatedAt),
+		"total":     total,
+		"by_type":   byType,
+		"by_status": byStatus,
 	}
 }
 
@@ -702,14 +568,6 @@ func applyQuestionFields(q *model.Question, data map[string]any) {
 	if v, ok := data["score"]; ok {
 		q.Score = toIntDefault(v, q.Score)
 	}
-	if v, ok := data["knowledge_point_id"]; ok {
-		if v == nil {
-			q.KnowledgePointID = nil
-		} else {
-			id := toInt(v)
-			q.KnowledgePointID = &id
-		}
-	}
 	if v, ok := data["status"]; ok {
 		q.Status, _ = v.(string)
 	}
@@ -725,7 +583,8 @@ func toInt(v interface{}) int {
 	case int64:
 		return int(n)
 	case string:
-		return parseInt(n)
+		i, _ := parseInt(n)
+		return i
 	}
 	return 0
 }

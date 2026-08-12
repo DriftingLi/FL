@@ -7,12 +7,6 @@
     </template>
 
     <template v-else-if="chapterDetail">
-      <BreadcrumbNav
-        :courseName="courseName"
-        :courseId="courseId"
-        :chapterName="chapterDetail.title"
-      />
-
       <div class="chapter-header">
         <div class="header-left">
           <h1 class="chapter-title">{{ chapterDetail.title }}</h1>
@@ -81,24 +75,13 @@
         <el-empty v-if="!chapterDetail.content && chapterFiles.length === 0" description="该章节暂无内容" />
       </div>
 
-      <div class="study-floating-panel">
-        <div class="study-timer">
-          <el-icon class="timer-icon"><Timer /></el-icon>
-          <div class="timer-info">
-            <span class="timer-label">已学习</span>
-            <span class="timer-value">{{ formatStudyTime(studySeconds) }}</span>
-          </div>
-        </div>
-        <el-button type="success" @click="completeStudy" size="large" class="complete-btn">
-          完成本章学习
-        </el-button>
-      </div>
+      <ChapterDiscussion v-if="chapterDetail.chapter_id" :chapter-id="chapterDetail.chapter_id" />
 
       <div class="chapter-navigation">
         <div class="nav-prev">
           <el-button
             :disabled="!chapterDetail.previous_chapter_id"
-            @click="navigateToChapter(chapterDetail.previous_chapter_id)"
+            @click="navigateToChapter(chapterDetail.previous_chapter_id ?? 0)"
             text
           >
             <el-icon><ArrowLeft /></el-icon>
@@ -112,7 +95,7 @@
         <div class="nav-next">
           <el-button
             :disabled="!chapterDetail.next_chapter_id"
-            @click="navigateToChapter(chapterDetail.next_chapter_id)"
+            @click="navigateToChapter(chapterDetail.next_chapter_id ?? 0)"
             text
           >
             <div class="nav-btn-content" v-if="chapterDetail.next_chapter_id">
@@ -131,19 +114,18 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Timer, ArrowLeft, ArrowRight, VideoCamera, Document, Picture } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ArrowLeft, ArrowRight, VideoCamera, Document, Picture } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import { markedHighlight } from 'marked-highlight'
 import hljs from 'highlight.js'
 import { courseApi } from '@/api/course'
-import { useAuthStore } from '@/stores/auth'
+import { useCourseStore } from '@/stores/course'
 import '@/assets/styles/markdown.css'
 import VideoPlayer from '@/components/student/VideoPlayer.vue'
 import DocumentViewer from '@/components/student/DocumentViewer.vue'
 import PptViewer from '@/components/student/PptViewer.vue'
 import ImageViewer from '@/components/student/ImageViewer.vue'
-import BreadcrumbNav from '@/components/student/BreadcrumbNav.vue'
+import ChapterDiscussion from '@/components/student/ChapterDiscussion.vue'
 
 marked.use(
   markedHighlight({
@@ -160,22 +142,41 @@ marked.use(
 
 const route = useRoute()
 const router = useRouter()
-const authStore = useAuthStore()
+const courseStore = useCourseStore()
+
+interface ChapterDetail {
+  chapter_id: number
+  title: string
+  content?: string
+  study_status?: string
+  previous_chapter_id?: number | null
+  next_chapter_id?: number | null
+  files?: {
+    content_type?: string
+    file_url?: string
+    [key: string]: unknown
+  }[]
+}
+
+interface ChapterItem {
+  chapter_id: number
+  title: string
+}
 
 const loading = ref(false)
 const chapterNotFound = ref(false)
-const chapterDetail = ref(null)
+const chapterDetail = ref<ChapterDetail | null>(null)
 const courseName = ref('')
-const chapters = ref([])
+const chapters = ref<ChapterItem[]>([])
 const isStudying = ref(false)
 const studySeconds = ref(0)
 const activeTab = ref('')
-let studyTimer = null
-let studyStartTime = null
+let studyTimer: ReturnType<typeof setInterval> | null = null
+let studyStartTime: number | null = null
 // 已上报到后端的秒数，用于计算增量上报
 let reportedSeconds = 0
 // 自动上报定时器
-let autoReportTimer = null
+let autoReportTimer: ReturnType<typeof setInterval> | null = null
 // 自动上报间隔（秒）
 const AUTO_REPORT_INTERVAL = 60
 
@@ -187,7 +188,7 @@ const chapterFiles = computed(() => {
 })
 
 const TYPE_ORDER = ['video', 'document', 'ppt', 'image']
-const TYPE_CONFIG = {
+const TYPE_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
   video: { label: '视频', icon: VideoCamera, color: '#f56c6c' },
   document: { label: '文档', icon: Document, color: '#409eff' },
   ppt: { label: 'PPT', icon: Document, color: '#e6a23c' },
@@ -195,7 +196,7 @@ const TYPE_CONFIG = {
 }
 
 const fileGroups = computed(() => {
-  const groups = {}
+  const groups: Record<string, any[]> = {}
   for (const file of chapterFiles.value) {
     const type = file.content_type || 'document'
     if (!groups[type]) {
@@ -235,22 +236,18 @@ watch(
 )
 
 const getPrevChapterTitle = computed(() => {
-  if (!chapterDetail.value?.previous_chapter_id) return ''
-  const prev = chapters.value.find(c => c.chapter_id === chapterDetail.value.previous_chapter_id)
+  const detail = chapterDetail.value
+  if (!detail?.previous_chapter_id) return ''
+  const prev = chapters.value.find(c => c.chapter_id === detail.previous_chapter_id)
   return prev ? prev.title : ''
 })
 
 const getNextChapterTitle = computed(() => {
-  if (!chapterDetail.value?.next_chapter_id) return ''
-  const next = chapters.value.find(c => c.chapter_id === chapterDetail.value.next_chapter_id)
+  const detail = chapterDetail.value
+  if (!detail?.next_chapter_id) return ''
+  const next = chapters.value.find(c => c.chapter_id === detail.next_chapter_id)
   return next ? next.title : ''
 })
-
-function formatStudyTime(seconds) {
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-}
 
 async function reportIncremental(isFinal = false) {
   if (!chapterDetail.value?.chapter_id || !courseId.value) return
@@ -263,8 +260,9 @@ async function reportIncremental(isFinal = false) {
   const chapter_id = chapterDetail.value.chapter_id
 
   try {
-    const res = await courseApi.updateProgress(courseId.value, { chapter_id, duration: durationMinutes })
-    if (res.code === 200) reportedSeconds += incrementalSeconds
+    // 拦截器已解包信封；成功返回即业务负载，失败抛错
+    const detail = await courseApi.updateProgress(Number(courseId.value), { chapter_id, duration: durationMinutes })
+    if (detail === null) reportedSeconds += incrementalSeconds
   } catch (error) {
     if (!isFinal) console.warn('上报学习时长增量失败:', error)
   }
@@ -278,18 +276,18 @@ async function loadChapterDetail() {
   stopStudy()
 
   try {
-    const res = await courseApi.getChapterDetail(courseId.value, chapterId.value)
-    if (res.code === 200) {
-      chapterDetail.value = res.data
-    } else {
-      chapterNotFound.value = true
-    }
+    // 拦截器已解包信封；章节不存在由后端 404 触发 catch 分支
+    const detail = await courseApi.getChapterDetail(Number(courseId.value), Number(chapterId.value))
+    chapterDetail.value = detail
+    // 章节加载成功后启动学习计时
+    beginStudy()
   } catch (error) {
-    if (error?.response?.status === 404) {
+    const err = error as { response?: { status?: number } }
+    if (err?.response?.status === 404) {
       chapterNotFound.value = true
     } else {
       console.error('加载章节详情失败:', error)
-      ElMessage.error('加载章节详情失败')
+      /* 错误已由拦截器提示 */
     }
   } finally {
     loading.value = false
@@ -297,12 +295,11 @@ async function loadChapterDetail() {
 }
 
 async function loadCourseInfo() {
+  // 复用侧栏章节模式已加载的课程数据，避免重复请求；未命中时由 store 发起请求
   try {
-    const res = await courseApi.getCourseDetail(courseId.value)
-    if (res.code === 200) {
-      courseName.value = res.data.course_info?.name || ''
-      chapters.value = res.data.chapters || []
-    }
+    await courseStore.loadCourse(courseId.value)
+    courseName.value = courseStore.courseInfo?.name || ''
+    chapters.value = courseStore.chapters || []
   } catch (error) {
     console.error('加载课程信息失败:', error)
   }
@@ -314,7 +311,9 @@ function beginStudy() {
   studySeconds.value = 0
   reportedSeconds = 0
   studyTimer = setInterval(() => {
-    studySeconds.value = Math.floor((Date.now() - studyStartTime) / 1000)
+    if (studyStartTime) {
+      studySeconds.value = Math.floor((Date.now() - studyStartTime) / 1000)
+    }
   }, 1000)
   // 启动自动上报：每隔 AUTO_REPORT_INTERVAL 秒上报一次增量时长
   autoReportTimer = setInterval(() => {
@@ -334,33 +333,7 @@ function stopStudy() {
   isStudying.value = false
 }
 
-async function completeStudy() {
-  const chapterId = chapterDetail.value?.chapter_id
-  if (!chapterId) return
-
-  const finalIncremental = studySeconds.value - reportedSeconds
-  const totalDuration = Math.max(Math.ceil((reportedSeconds + finalIncremental) / 60), 1)
-  stopStudy()
-
-  try {
-    const res = await courseApi.updateProgress(courseId.value, {
-      chapter_id: chapterId,
-      duration: totalDuration
-    })
-    if (res.code === 200) {
-      reportedSeconds += finalIncremental
-      ElMessage.success('学习进度已保存')
-      await loadChapterDetail()
-    } else {
-      ElMessage.error(res.message || '保存学习进度失败')
-    }
-  } catch (error) {
-    console.error('保存学习进度失败:', error)
-    ElMessage.error('保存学习进度失败，请稍后重试')
-  }
-}
-
-function navigateToChapter(targetChapterId) {
+function navigateToChapter(targetChapterId: string | number) {
   if (!targetChapterId) return
   router.push({
     name: 'ChapterView',
@@ -369,7 +342,7 @@ function navigateToChapter(targetChapterId) {
 }
 
 function goBackToCourse() {
-  router.push({ name: 'CourseDetail', params: { id: courseId.value } })
+  router.push({ name: 'CourseList' })
 }
 
 watch(() => route.params.chapterId, (newVal) => {
@@ -396,9 +369,12 @@ function handleVisibilityChange() {
   } else {
     // 回到前台：若仍在学习状态则恢复计时
     if (isStudying.value && !studyTimer && chapterDetail.value) {
-      studyStartTime = Date.now() - studySeconds.value * 1000
+      const newStart = Date.now() - studySeconds.value * 1000
+      studyStartTime = newStart
       studyTimer = setInterval(() => {
-        studySeconds.value = Math.floor((Date.now() - studyStartTime) / 1000)
+        if (studyStartTime) {
+          studySeconds.value = Math.floor((Date.now() - studyStartTime) / 1000)
+        }
       }, 1000)
       autoReportTimer = setInterval(() => {
         reportIncremental(false)
@@ -524,65 +500,6 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.study-floating-panel {
-  position: fixed;
-  right: 24px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  padding: 20px 18px;
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
-  z-index: 100;
-  min-width: 140px;
-}
-
-.study-timer {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.timer-icon {
-  font-size: 28px;
-  color: #409eff;
-  animation: timer-pulse 2s ease-in-out infinite;
-}
-
-@keyframes timer-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-.timer-info {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-
-.timer-label {
-  font-size: 12px;
-  color: #909399;
-}
-
-.timer-value {
-  font-size: 24px;
-  color: #409eff;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 1px;
-}
-
-.complete-btn {
-  width: 100%;
-}
-
 .chapter-navigation {
   display: flex;
   justify-content: space-between;
@@ -650,25 +567,6 @@ onBeforeUnmount(() => {
 
   .image-gallery {
     grid-template-columns: 1fr;
-  }
-
-  .study-floating-panel {
-    right: 12px;
-    padding: 14px 12px;
-    min-width: 110px;
-    gap: 10px;
-  }
-
-  .timer-icon {
-    font-size: 22px;
-  }
-
-  .timer-value {
-    font-size: 18px;
-  }
-
-  .complete-btn {
-    font-size: 13px;
   }
 
   .nav-title {

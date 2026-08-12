@@ -3,7 +3,8 @@
 // 适用于管理员后台「就地编辑 + 批量保存变更项」场景（如算法参数 5 个分区）
 //
 // 设计要点：
-// - original 与 draft 为独立浅拷贝，编辑 draft 不会污染 original
+// - original 与 draft 为独立深拷贝（structuredClone），编辑 draft 不会污染 original；
+//   对嵌套对象/数组/字典也安全，避免 shallow 共享引用带来的隐 bug
 // - dirty 检测与保存均支持 filter，用于共享底层数组但按前缀分区的场景
 //   （如 coefficient_configs 中 kc_ 前缀与非 kc_ 前缀分属两个分区，但共用一条 draft）
 // - save 不内置 loading 态，由调用方持有独立 savingXxx ref，保留各分区按钮独立 loading 的精确行为
@@ -24,7 +25,9 @@ export function useDirtyDraft<T>(opts: DirtyDraftOptions<T>) {
   const draft = ref([]) as unknown as Ref<T[]>
 
   function clone(items: T[]): T[] {
-    return items.map((x) => ({ ...x }))
+    // structuredClone 是浏览器原生深拷贝（Chrome 98+, Safari 15.4+），处理 Date/Map/Set/TypedArray/循环引用，
+    // 本项目 esbuild target ES2020 已满足。避免 `{ ...x }` 浅拷贝在嵌套对象上共享引用导致编辑 draft 污染 original。
+    return items.map((x) => structuredClone(x))
   }
 
   // 装载服务器数据：original 与 draft 各持一份独立拷贝

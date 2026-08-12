@@ -5,8 +5,8 @@
 //   未来 n 年后 Kt_adj_future = e^(-λ·(Kh/Kb)·(age+n)) = Kt_adj^(1+n/age)
 //   future_value(n) = estimated_value × Kt_adj^(n/age)
 //   即每年衰减乘数 d = Kt_adj^(1/age)，future_value(n) = estimated_value × d^n
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import * as echarts from 'echarts'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useECharts } from '@/composables/useECharts'
 
 interface Props {
   /** 当前残值（元） */
@@ -19,6 +19,8 @@ interface Props {
   kHours: number
   /** 品牌系数 Kb */
   kBrand: number
+  /** 评估时点锁定的衰减率 λ（API 下发，ADR-0004；age=0 时用于推算年衰减） */
+  lambda: number
   /** 评估年份（用于 X 轴标签，不传则用相对标签） */
   saleYear?: number
   /** 预测未来年数 */
@@ -33,7 +35,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const chartRef = ref<HTMLDivElement | null>(null)
-let chart: echarts.ECharts | null = null
+const { init } = useECharts(chartRef)
 
 // 主题色（与设计稿一致）
 const COLOR_PRIMARY = '#3E6AE1'
@@ -43,20 +45,18 @@ const COLOR_TEXT_MUTED = '#999999'
 const COLOR_GRID = '#F0F0F0'
 const COLOR_AXIS = '#EEEEEE'
 
-// age=0 时无法反推 λ，用电动 0.12 与内燃 0.10 的均值兜底
-const DEFAULT_LAMBDA = 0.11
-
-/** 计算年衰减乘数 d：future_value(n) = estimated_value × d^n */
+/** 计算年衰减乘数 d：future_value(n) = estimated_value × d^n
+ *  age>0：锚定评估时点的 Kt_adj（曲线从当前残值精确出发）
+ *  age=0（新车）或 Kt 缺失：用评估时点锁定的 λ 直接推算 d = e^(-λ·(Kh/Kb))，无硬编码兜底 */
 function computeAnnualDecay(): number {
-  const { age, kTime, kHours, kBrand } = props
-  if (kBrand <= 0 || kTime <= 0) return Math.exp(-DEFAULT_LAMBDA)
+  const { age, kTime, kHours, kBrand, lambda } = props
+  if (kBrand <= 0) return Math.exp(-lambda)
 
-  const ktAdjusted = Math.pow(kTime, kHours / kBrand)
-
-  if (age > 0) {
-    return Math.pow(ktAdjusted, 1 / age)
+  const exponent = kHours / kBrand
+  if (age > 0 && kTime > 0) {
+    return Math.pow(Math.pow(kTime, exponent), 1 / age)
   }
-  return Math.exp(-DEFAULT_LAMBDA)
+  return Math.exp(-lambda * exponent)
 }
 
 interface FuturePoint {
@@ -153,19 +153,11 @@ const chartOption = computed(() => {
 
 function renderChart() {
   if (!chartRef.value) return
-  if (!chart) {
-    chart = echarts.init(chartRef.value)
-  }
-  chart.setOption(chartOption.value, true)
-}
-
-function handleResize() {
-  chart?.resize()
+  init(chartOption.value, true)
 }
 
 onMounted(() => {
   renderChart()
-  window.addEventListener('resize', handleResize)
 })
 
 watch(
@@ -173,12 +165,6 @@ watch(
   () => renderChart(),
   { deep: true }
 )
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', handleResize)
-  chart?.dispose()
-  chart = null
-})
 </script>
 
 <template>

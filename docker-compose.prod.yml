@@ -17,11 +17,19 @@ services:
       POSTGRES_USER: ${DB_USER:-forklift}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       TZ: Asia/Shanghai
+    # Docker 19.03 的默认 seccomp 配置不包含 clone3() 等系统调用，
+    # 导致 PostgreSQL 15 报 "could not write to file postmaster.pid: Operation not permitted"
+    # pve-02(production)仍为 Docker 19.03，需保留此项；Docker 24+ 可移除
+    # pve-01(testing)通过 LXC 运行 Docker 24+，此项无害但非必需
+    security_opt:
+      - seccomp:unconfined
     # 仅内网可访问，不对外暴露端口（仅 backend 容器通过 Docker 网络访问）
     expose:
       - "5432"
     volumes:
-      - pgdata-prod:/var/lib/postgresql/data
+      # 支持 bind mount 覆盖：测试环境(Docker 19.03)用 bind mount 绕过 named volume 权限 bug
+      # 默认 named volume（production），测试环境设置 PG_VOLUME=./data/pgdata
+      - ${PG_VOLUME:-pgdata-prod}:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-forklift} -d forklift_training"]
       interval: 10s
@@ -67,7 +75,8 @@ services:
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     volumes:
-      - redisdata-prod:/data
+      # 测试环境用 bind mount: REDIS_VOLUME=./data/redis
+      - ${REDIS_VOLUME:-redisdata-prod}:/data
     healthcheck:
       # 密码为空时 redis-cli ping；非空时 redis-cli -a <password> ping
       test: ["CMD-SHELL", "redis-cli $${REDIS_PASSWORD:+-a $${REDIS_PASSWORD}} ping | grep -q PONG"]
@@ -88,7 +97,38 @@ services:
         max-file: "3"
 
   # ==========================================
+  # LibreOffice Sidecar 服务（PPT → PDF → PNG 转换）
+  # 通过 HTTP multipart API 提供转换能力，无需共享 volume
+  # 拆分自 backend 容器，使 backend 镜像从 ~500MB 减小到 ~50MB
+  # ==========================================
+  libreoffice:
+    build:
+      context: ./libreoffice-sidecar
+      dockerfile: Dockerfile
+    image: ${LIBREOFFICE_IMAGE:-forklift-libreoffice:latest}
+    container_name: forklift-libreoffice-prod
+    restart: unless-stopped
+    expose:
+      - "8000"
+    networks:
+      - forklift-net
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.5"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ==========================================
   # Go 后端服务（仅内网可访问，通过前端 Nginx 反代）
+  # PPT 转图片功能由 libreoffice sidecar 容器提供
   # ==========================================
   backend:
     build:
@@ -102,6 +142,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      libreoffice:
+        condition: service_started
     environment:
       APP_ENV: production
       PORT: "8080"
@@ -109,42 +151,58 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       JWT_EXPIRES_HOURS: "${JWT_EXPIRES_HOURS:-24}"
+      # 登录态 Cookie（父域名共享登录）
+      AUTH_COOKIE_NAME: ${AUTH_COOKIE_NAME:-hrwai_token}
+      AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:-}
+      AUTH_COOKIE_SECURE: "${AUTH_COOKIE_SECURE:-true}"
       # CORS：必须包含主域名 + 四个子域名（training/valuation/mentor/manage，逗号分隔）
       # 例：https://www.example.com,https://training.example.com,https://valuation.example.com,https://mentor.example.com,https://manage.example.com
       CORS_ORIGINS: ${CORS_ORIGINS}
       UPLOAD_FOLDER: /data/uploads
       VOLUME_MOUNT_PATH: /data
       MAX_CONTENT_LENGTH_MB: "250"
-      ZHIPU_API_KEY: ${ZHIPU_API_KEY}
-      ZHIPU_BASE_URL: ${ZHIPU_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
-      ZHIPU_MODEL: ${ZHIPU_MODEL:-glm-4.7-flash}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      COZE_PROJECT_ID: ${COZE_PROJECT_ID:-}
-      COZE_OAUTH_APP_ID: ${COZE_OAUTH_APP_ID:-}
-      COZE_OAUTH_KID: ${COZE_OAUTH_KID:-}
-      COZE_OAUTH_PRIVATE_KEY: ${COZE_OAUTH_PRIVATE_KEY:-}
-      COZE_OAUTH_PRIVATE_KEY_PATH: ${COZE_OAUTH_PRIVATE_KEY_PATH:-}
       ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD}
       TUTOR_DEFAULT_PASSWORD: ${TUTOR_DEFAULT_PASSWORD}
       STUDENT_DEFAULT_PASSWORD: ${STUDENT_DEFAULT_PASSWORD}
       VALUATION_PDF_OUTPUT_DIR: /data/reports
-      VALUATION_JWT_SECRET_KEY: ${VALUATION_JWT_SECRET_KEY:-}
+      # 统一系统运行日志（zap）：生产写文件到 /data/logs（lumberjack 轮转+压缩+保留），stdout 兜底
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      LOG_FORMAT: "${LOG_FORMAT:-console}"
+      LOG_DIR: ${LOG_DIR:-/data/logs}
+      LOG_MAX_SIZE_MB: "${LOG_MAX_SIZE_MB:-100}"
+      LOG_MAX_BACKUPS: "${LOG_MAX_BACKUPS:-7}"
+      LOG_MAX_AGE_DAYS: "${LOG_MAX_AGE_DAYS:-30}"
+      LOG_COMPRESS: "${LOG_COMPRESS:-true}"
       REDIS_ADDR: redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       REDIS_DB: "${REDIS_DB:-0}"
       REDIS_POOL_SIZE: "${REDIS_POOL_SIZE:-10}"
       REDIS_KEY_PREFIX: "${REDIS_KEY_PREFIX:-fl:}"
+      # LibreOffice sidecar HTTP 地址(容器内服务名 + 端口)
+      LIBREOFFICE_SIDECAR_URL: http://libreoffice:8000
+      # 文件存储：local=本地磁盘 / r2=Cloudflare R2 对象存储
+      # r2 模式下上传文件、PDF 报告、PPT 转图片均存到 R2，本地 /data/uploads 与 /data/reports 仅用于 fallback
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-}
+      # 绑定到 R2 bucket 的自定义域名（如 https://cdn.example.com），尾部斜杠会被去除
+      R2_PUBLIC_DOMAIN: ${R2_PUBLIC_DOMAIN:-}
       TZ: Asia/Shanghai
-    # 仅内网可访问，不对外暴露端口（通过前端 Nginx 反代 /api/ 路径访问）
-    expose:
-      - "8080"
+    # 端口映射到宿主机回环，供 host 模式的 frontend nginx 反代访问
+    # PVE 环境：frontend 用 network_mode: host，需通过 127.0.0.1:${BACKEND_HOST_PORT} 访问 backend
+    # 默认 8080；测试环境(pve-01)8080 被 cadvisor 占用，通过环境变量改用 18080
+    ports:
+      - "127.0.0.1:${BACKEND_HOST_PORT:-8080}:8080"
     volumes:
-      - uploads-data:/data/uploads
-      - reports-data:/data/reports
-      # Coze 私钥文件（避免 .env 转义问题）
-      - ./coze_private_key.pem:/etc/secrets/coze_private_key.pem:ro
+      # 测试环境用 bind mount: UPLOADS_VOLUME=./data/uploads, REPORTS_VOLUME=./data/reports
+      - ${UPLOADS_VOLUME:-uploads-data}:/data/uploads
+      - ${REPORTS_VOLUME:-reports-data}:/data/reports
+      # 日志卷：应用内 lumberjack 轮转持久化（测试环境 bind mount: LOGS_VOLUME=./data/logs）
+      - ${LOGS_VOLUME:-logs-data}:/data/logs
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health/live"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -154,10 +212,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
-          cpus: "1.0"
+          memory: 1G
+          cpus: "1.5"
         reservations:
-          memory: 256M
+          memory: 384M
           cpus: "0.25"
     logging:
       driver: json-file
@@ -175,17 +233,22 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    ports:
-      - "80:80"
-      - "443:443"
+    # PVE 环境用 host 网络模式，绕过 Docker 网桥 iptables FORWARD policy DROP 拦截
+    # nginx 直接监听宿主机 51820 端口，proxy_pass 到 127.0.0.1:8080 访问 backend
+    network_mode: host
+    # 禁用镜像内置 healthcheck（原 healthcheck 访问 127.0.0.1:8080/api/health，
+    # 但 host 网络模式下容器内 wget 行为异常导致误报 unhealthy，实际服务正常）
+    healthcheck:
+      disable: true
     environment:
-      # 域名（由 GitHub Secrets 注入，启动时 envsubst 替换 nginx 配置中的 ${DOMAIN}）
       DOMAIN: ${DOMAIN:-localhost}
+      # backend 宿主机映射端口（默认 8080；测试环境用 18080 避免与 cadvisor 冲突）
+      BACKEND_HOST_PORT: ${BACKEND_HOST_PORT:-8080}
+      # 官网门户（hrwai-portal）宿主机监听端口（默认 3000）
+      PORTAL_HOST_PORT: ${PORTAL_HOST_PORT:-3000}
     volumes:
-      # SSL 证书挂载（只读，路径与 deploy-remote.sh 中 write_ssl_certs() 一致）
-      - ${DEPLOY_PATH:-/opt/forklift-training}/nginx/ssl:/etc/nginx/ssl:ro
-    networks:
-      - forklift-net
+      # host 模式专用 nginx 配置（listen 51820 + proxy_pass 127.0.0.1:8080）
+      - ./frontend/nginx-host.conf:/etc/nginx/conf.d/default.conf.template:ro
     deploy:
       resources:
         limits:
@@ -212,4 +275,6 @@ volumes:
   uploads-data:
     driver: local
   reports-data:
+    driver: local
+  logs-data:
     driver: local

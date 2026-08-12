@@ -14,36 +14,132 @@
               <component :is="roleIcon" />
             </el-icon>
           </div>
-          <h1 class="card-title">欢迎登录</h1>
+          <h1 class="card-title">欢迎回来</h1>
           <p class="card-subtitle">{{ subtitleByRole }}</p>
           <div class="role-badge" :class="`badge-${currentRole}`">
             {{ roleLabel }}
           </div>
         </div>
 
-        <el-form ref="formRef" :model="formData" :rules="rules" label-width="0" class="login-form">
-          <el-form-item prop="username">
-            <el-input
-              v-model="formData.username"
-              placeholder="请输入手机号或用户名"
-              prefix-icon="User"
-              size="large"
-              class="form-input"
-            />
-          </el-form-item>
+        <el-radio-group
+          v-if="currentRole === 'hrwai_user'"
+          v-model="loginMode"
+          class="mode-switch"
+        >
+          <el-radio-button label="password">账号密码登录</el-radio-button>
+          <el-radio-button label="email">邮箱登录</el-radio-button>
+          <el-radio-button label="phone">手机号登录</el-radio-button>
+          <el-radio-button label="wechat">微信扫码</el-radio-button>
+        </el-radio-group>
 
-          <el-form-item prop="password">
-            <el-input
-              v-model="formData.password"
-              type="password"
-              placeholder="请输入密码"
-              prefix-icon="Lock"
-              show-password
-              size="large"
-              class="form-input"
-              @keyup.enter="handleLogin"
-            />
-          </el-form-item>
+        <el-form ref="formRef" :model="formData" :rules="rules" label-width="0" class="login-form">
+          <template v-if="loginMode === 'password'">
+            <el-form-item prop="username">
+              <el-input
+                v-model="formData.username"
+                placeholder="账号或手机号"
+                prefix-icon="User"
+                size="large"
+                class="form-input"
+              />
+            </el-form-item>
+
+            <el-form-item prop="password">
+              <el-input
+                v-model="formData.password"
+                type="password"
+                placeholder="请输入密码"
+                prefix-icon="Lock"
+                show-password
+                size="large"
+                class="form-input"
+                @keyup.enter="handleLogin"
+              />
+            </el-form-item>
+          </template>
+
+          <template v-else-if="loginMode === 'email'">
+            <el-form-item prop="email">
+              <el-input
+                v-model="formData.email"
+                placeholder="请输入邮箱"
+                prefix-icon="Message"
+                size="large"
+                class="form-input"
+                @keyup.enter="handleLogin"
+              />
+            </el-form-item>
+
+            <el-form-item prop="code">
+              <div class="code-row">
+                <el-input
+                  v-model="formData.code"
+                  placeholder="6位邮箱验证码"
+                  prefix-icon="Message"
+                  size="large"
+                  class="form-input code-input"
+                  maxlength="6"
+                  @keyup.enter="handleLogin"
+                />
+                <el-button
+                  :disabled="countdown > 0 || codeSending"
+                  size="large"
+                  class="code-btn"
+                  @click="handleSendCode"
+                >
+                  {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
+                </el-button>
+              </div>
+            </el-form-item>
+          </template>
+
+          <template v-else-if="loginMode === 'phone'">
+            <el-form-item prop="phone">
+              <el-input
+                v-model="formData.phone"
+                placeholder="请输入手机号"
+                prefix-icon="Phone"
+                size="large"
+                class="form-input"
+                maxlength="11"
+                @keyup.enter="handleLogin"
+              />
+            </el-form-item>
+
+            <el-form-item prop="code">
+              <div class="code-row">
+                <el-input
+                  v-model="formData.code"
+                  placeholder="6位手机验证码"
+                  prefix-icon="Message"
+                  size="large"
+                  class="form-input code-input"
+                  maxlength="6"
+                  @keyup.enter="handleLogin"
+                />
+                <el-button
+                  :disabled="countdown > 0 || codeSending"
+                  size="large"
+                  class="code-btn"
+                  @click="handleSendCode"
+                >
+                  {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
+                </el-button>
+              </div>
+            </el-form-item>
+          </template>
+
+          <template v-else>
+            <el-form-item>
+              <div class="wechat-box">
+                <div class="wechat-qr-placeholder">
+                  <el-icon :size="42"><ChatDotRound /></el-icon>
+                  <p class="wechat-title">微信扫码登录</p>
+                  <span class="wechat-tip">微信授权暂未配置，待开放平台配置完成后开放</span>
+                </div>
+              </div>
+            </el-form-item>
+          </template>
 
           <el-form-item>
             <el-button
@@ -71,23 +167,26 @@
 import { ref, reactive, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { authApi } from '@/api/auth'
-import { ElMessage } from 'element-plus'
-import { UserFilled, Avatar, Setting } from '@element-plus/icons-vue'
-import { usernameRules, passwordRules } from '@/utils/validate'
+import { authApi, type AuthUserInfo } from '@/api/auth'
+import { ElMessage, type FormInstance } from 'element-plus'
+import { UserFilled, Avatar, Setting, ChatDotRound } from '@element-plus/icons-vue'
+import { usernameRules, passwordRules, requiredEmailRules, emailCodeRules, phoneRules } from '@/utils/validate'
+import { useCountdown } from '@/composables/useCountdown'
 import {
   getSubdomain,
   getRoleForSubdomain,
   getDefaultWorkspaceBySubdomain,
-  buildSubdomainUrl,
   type SubdomainType
 } from '@/utils/subdomain'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
-const formRef = ref(null)
+const formRef = ref<FormInstance | null>(null)
 const loading = ref(false)
+const loginMode = ref<'password' | 'email' | 'phone' | 'wechat'>('password')
+const { remaining: countdown, start: startCountdown } = useCountdown()
+const codeSending = ref(false)
 
 // 当前子域名决定角色（不再支持手动切换）
 const subdomain: SubdomainType = getSubdomain()
@@ -96,9 +195,9 @@ const currentRole = getRoleForSubdomain()
 const isStudentSubdomain = subdomain === 'training' || subdomain === 'valuation'
 
 const subtitleMap: Record<SubdomainType, string> = {
-  main: '登录您的账户',
-  training: '登录您的账户继续学习',
-  valuation: '登录查看残值评估历史',
+  main: '登录您的HRWAI账户',
+  training: '登录您的HRWAI账户',
+  valuation: '登录您的HRWAI账户',
   tutor: '登录导师工作台',
   admin: '登录管理后台'
 }
@@ -117,21 +216,54 @@ const roleIconMap: Record<string, any> = {
 const roleLabel = computed(() => roleLabelMap[currentRole])
 const roleIcon = computed(() => roleIconMap[currentRole])
 
-// 跨子域名入口引导（仅学员登录页显示）
-const mentorLoginUrl = computed(() => buildSubdomainUrl('tutor', '/login'))
-const adminLoginUrl = computed(() => buildSubdomainUrl('admin', '/login'))
-
 const formData = reactive({
   username: '',
-  password: ''
+  password: '',
+  email: '',
+  phone: '',
+  code: ''
 })
 
-const rules = {
-  username: usernameRules,
-  password: passwordRules
+const rules = computed(() => {
+  if (loginMode.value === 'email') return { email: requiredEmailRules, code: emailCodeRules }
+  if (loginMode.value === 'phone') return { phone: phoneRules, code: emailCodeRules }
+  if (loginMode.value === 'wechat') return {}
+  return { username: usernameRules, password: passwordRules }
+})
+
+async function handleSendCode() {
+  codeSending.value = true
+  try {
+    if (loginMode.value === 'phone') {
+      const phone = formData.phone.trim()
+      if (!/^1[3-9]\d{9}$/.test(phone)) {
+        ElMessage.warning('请输入正确的手机号')
+        return
+      }
+      await authApi.sendPhoneCode({ phone, purpose: 'login' })
+    } else {
+      const email = formData.email.trim()
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        ElMessage.warning('请输入正确的邮箱地址')
+        return
+      }
+      await authApi.sendEmailCode({ email, purpose: 'login' })
+    }
+    ElMessage.success('验证码已发送，请查收')
+    startCountdown(60)
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    codeSending.value = false
+  }
 }
 
 async function handleLogin() {
+  if (loginMode.value === 'wechat') {
+    ElMessage.info('微信扫码登录暂未开放，请等待开放平台配置')
+    return
+  }
+  if (!formRef.value) return
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
 
@@ -142,21 +274,30 @@ async function handleLogin() {
       password: formData.password,
       role: currentRole
     }
-    let res
-    if (currentRole === 'student') {
-      res = await authApi.login(payload)
+    let userInfo: AuthUserInfo
+    if (loginMode.value === 'email') {
+      userInfo = await authApi.emailLogin({
+        email: formData.email.trim(),
+        code: formData.code.trim()
+      })
+    } else if (loginMode.value === 'phone') {
+      userInfo = await authApi.phoneLogin({
+        phone: formData.phone.trim(),
+        code: formData.code.trim()
+      })
+    } else if (currentRole === 'hrwai_user') {
+      userInfo = await authApi.login(payload)
     } else if (currentRole === 'tutor') {
-      res = await authApi.tutorLogin(payload)
+      userInfo = await authApi.tutorLogin(payload)
     } else {
-      res = await authApi.adminLogin(payload)
+      userInfo = await authApi.adminLogin(payload)
     }
 
-    if (res.code === 200 || res.code === 201) {
-      authStore.setAuthData(res.data)
-      ElMessage.success('登录成功')
+    authStore.setAuthData(userInfo)
+    ElMessage.success('登录成功')
 
-      // 默认跳转到当前子域名对应的工作区
-      const dashboard = getDefaultWorkspaceBySubdomain()
+    // 默认跳转到当前子域名对应的工作区
+    const dashboard = getDefaultWorkspaceBySubdomain()
 
       // redirect 回跳：仅允许在同身份工作台内回跳，防止越权/钓鱼
       const role = authStore.userInfo?.role
@@ -164,9 +305,9 @@ async function handleLogin() {
       const isSafeRedirect = (target: string): boolean => {
         if (role === 'admin') return target.startsWith('/admin')
         if (role === 'tutor') return target.startsWith('/training/tutor')
-        if (role === 'student') {
-          // 学员可回跳到培训或残值评估路径
-          return target.startsWith('/training') || target.startsWith('/valuation')
+        if (role === 'hrwai_user') {
+          // 学员可回跳到培训、残值评估或 AI 助手路径
+          return target.startsWith('/training') || target.startsWith('/valuation') || target.startsWith('/ai-assistant')
         }
         return false
       }
@@ -176,15 +317,12 @@ async function handleLogin() {
       } else {
         router.push(dashboard)
       }
-    }
   } catch (e) {
-    console.error('Login error:', e)
-    if (e.response) {
-      console.error('Response data:', e.response.data)
-      console.error('Status:', e.response.status)
-    }
-    if (e.message && !e.message.includes('Network')) {
-      ElMessage.error(e.message || '登录失败，请检查用户名和密码')
+    const err = e as { response?: { data?: unknown; status?: number }; message?: string }
+    console.error('Login error:', err)
+    if (err.response) {
+      console.error('Response data:', err.response.data)
+      console.error('Status:', err.response.status)
     }
   } finally {
     loading.value = false
@@ -271,7 +409,7 @@ async function handleLogin() {
 
 .card-header {
   text-align: center;
-  margin-bottom: 36px;
+  margin-bottom: 20px;
 }
 
 .card-icon {
@@ -341,6 +479,92 @@ async function handleLogin() {
 
 .login-form {
   margin-top: 8px;
+}
+
+.mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.mode-switch :deep(.el-radio-button) {
+  display: flex;
+}
+
+.mode-switch :deep(.el-radio-button__inner) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  width: 100%;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  background: #FFFFFF;
+  color: #64748B;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0;
+  box-shadow: none;
+  transition: all 0.25s ease;
+}
+
+.mode-switch :deep(.el-radio-button:not(.is-active):hover .el-radio-button__inner) {
+  border-color: #93C5FD;
+  color: #0284C7;
+  background: #F0F9FF;
+}
+
+.mode-switch :deep(.el-radio-button.is-active .el-radio-button__inner) {
+  background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%);
+  border-color: transparent;
+  color: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+}
+
+.code-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.code-input {
+  flex: 1;
+}
+
+.code-btn {
+  min-width: 124px;
+}
+
+.wechat-box {
+  width: 100%;
+}
+
+.wechat-qr-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 16px;
+  border: 2px dashed #CBD5E1;
+  border-radius: 12px;
+  color: #94A3B8;
+  background: #F8FAFC;
+}
+
+.wechat-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #64748B;
+}
+
+.wechat-tip {
+  font-size: 12px;
+  color: #94A3B8;
+  text-align: center;
+  line-height: 1.5;
 }
 
 .form-input :deep(.el-input__wrapper) {

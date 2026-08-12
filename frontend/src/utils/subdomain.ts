@@ -1,8 +1,8 @@
 // 子域名解析工具：通过 window.location.hostname 判断当前访问的子域名类型。
 // 五类子域名约定：
-//   - 主域名（www.example.com / localhost）：官网、派单等公共页面（无登录）
+//   - 主域名（www.example.com / localhost）：官网门户（独立 Nuxt 仓库承载，见 CONTEXT.md「门户与内容」）
 //   - training.主域名：学员培训 + AI 助手 + 学员登录
-//   - valuation.主域名：残值评估（含历史）+ 学员登录（与 training 共享用户体系）
+//   - valuation.主域名：残值评估（含历史）+ HRWAI 账号登录
 //   - mentor.主域名：导师登录与工作区
 //   - manage.主域名：管理员登录与后台（hostname 前缀为 manage，内部类型仍为 admin）
 //
@@ -11,6 +11,8 @@
 //
 // 跨子域名视为不同站点，localStorage 中存储的 token 不共享，
 // 用户在不同子域名间切换时需要重新登录。
+
+import { getToken } from '@/utils/storage'
 
 export type SubdomainType = 'main' | 'training' | 'valuation' | 'tutor' | 'admin'
 
@@ -87,13 +89,13 @@ export function getTargetSubdomainForPath(path: string): SubdomainType {
   if (path.startsWith('/training/tutor')) return 'tutor'
   // 学员培训
   if (path.startsWith('/training')) return 'training'
-  // AI 助手与培训共用 training 子域名
-  if (path.startsWith('/ai-assistant')) return 'training'
   // 管理员后台
   if (path.startsWith('/admin')) return 'admin'
   // 残值评估所有界面（含历史、报告、电池评估）
   if (path.startsWith('/valuation')) return 'valuation'
-  // 其它路径（/、/dispatch、/dashboard 兼容重定向等）在主域名
+  // AI 助手归属学员工作区（training 子域名）：官网门户重构后由主域名迁入
+  if (path.startsWith('/ai-assistant')) return 'training'
+  // 其它路径（/、/dashboard 兼容重定向等）在主域名
   return 'main'
 }
 
@@ -123,6 +125,19 @@ export function buildSubdomainUrl(target: SubdomainType, path: string): string {
   return `${protocol}//${prefix}.${rootDomain}${port}${normalizedPath}`
 }
 
+// 构建跨子域名跳转 URL：已登录时附带一次性 auth_token 参数，
+// 目标子域名读取后写入本地并立即从地址栏清除，用于 Cookie 不可用环境下的登录态交接。
+export function buildCrossDomainAuthUrl(target: SubdomainType, path: string): string {
+  const base = buildSubdomainUrl(target, path)
+  let token = ''
+  if (typeof localStorage !== 'undefined') {
+    token = getToken() || ''
+  }
+  if (!token) return base
+  const sep = base.includes('?') ? '&' : '?'
+  return `${base}${sep}auth_token=${encodeURIComponent(token)}`
+}
+
 // 获取当前子域名对应的默认工作区路径（同子域名内的相对路径）
 export function getDefaultWorkspaceBySubdomain(): string {
   const sub = getSubdomain()
@@ -134,11 +149,11 @@ export function getDefaultWorkspaceBySubdomain(): string {
 }
 
 // 获取当前子域名对应的登录角色
-// training 子域名走学员登录；valuation 子域名走独立的 valuation_user 登录体系
-export function getRoleForSubdomain(): 'student' | 'tutor' | 'admin' | 'valuation_user' {
+// training 和 valuation 子域名统一走 HRWAI 账号登录体系
+export function getRoleForSubdomain(): 'hrwai_user' | 'tutor' | 'admin' {
   const sub = getSubdomain()
   if (sub === 'tutor') return 'tutor'
   if (sub === 'admin') return 'admin'
-  if (sub === 'valuation') return 'valuation_user'
-  return 'student'
+  // training / valuation / 其他 → 统一 hrwai_user
+  return 'hrwai_user'
 }

@@ -72,7 +72,7 @@
         <el-card v-for="(ans, idx) in detail.answers" :key="ans.id" class="answer-item">
           <div class="answer-header">
             <span class="answer-index">第{{ idx + 1 }}题</span>
-            <el-tag size="small">{{ typeMap[ans.question?.type] }}</el-tag>
+            <el-tag size="small">{{ (typeMap as Record<string, string>)[ans.question?.type] }}</el-tag>
             <span class="answer-score">
               得分：<strong>{{ ans.score }}</strong> / {{ ans.question?.score || 0 }}分
             </span>
@@ -160,12 +160,11 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Monitor, ArrowLeft } from '@element-plus/icons-vue'
 import { gradingApi } from '@/api/grading'
-
-const typeMap = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
+import { typeMap } from '@/constants/question'
 
 const loading = ref(false)
-const participants = ref([])
-const selectedParticipant = ref(null)
+const participants = ref<{ id: number; grading_status?: string; [key: string]: unknown }[]>([])
+const selectedParticipant = ref<number | null>(null)
 const detail = ref<any>({})
 const confirmingObj = ref(false)
 
@@ -178,16 +177,17 @@ async function loadParticipants() {
   loading.value = true
   try {
     const res = await gradingApi.getSubmittedParticipants()
-    participants.value = res.data || []
+    const data = res || []
+    participants.value = Array.isArray(data) ? data : (data.participants || data.items || [])
   } catch (e) {} finally { loading.value = false }
 }
 
-async function openDetail(row) {
+async function openDetail(row: { id: number; [key: string]: unknown }) {
   try {
     const res = await gradingApi.getParticipantDetail(row.id)
-    const data = res.data || {}
+    const data = res || {}
     if (data.answers) {
-      data.answers.forEach(a => {
+      data.answers.forEach((a: { ai_score?: number | null; score?: number | null; [key: string]: unknown }) => {
         a._score = a.ai_score != null ? a.ai_score : 0
         a._comment = ''
         a._confirming = false
@@ -199,8 +199,8 @@ async function openDetail(row) {
     }
     detail.value = data
     selectedParticipant.value = row.id
-  } catch (e) {
-    ElMessage.error('加载详情失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -218,15 +218,18 @@ async function confirmAllObjective() {
       { confirmButtonText: '确认', cancelButtonText: '取消', type: 'info' }
     )
     confirmingObj.value = true
+    if (selectedParticipant.value == null) return
     await gradingApi.confirmObjectiveAnswers(selectedParticipant.value)
     ElMessage.success('客观题批改确认成功')
-    await openDetail({ id: selectedParticipant.value })
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e.message || '确认失败')
+    if (selectedParticipant.value != null) {
+      await openDetail({ id: selectedParticipant.value })
+    }
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally { confirmingObj.value = false }
 }
 
-async function confirmAi(ans) {
+async function confirmAi(ans: { id: number; ai_score?: number | null; _confirming?: boolean; [key: string]: unknown }) {
   try {
     await ElMessageBox.confirm(
       `确认采用AI建议评分 ${ans.ai_score} 分？`,
@@ -236,50 +239,56 @@ async function confirmAi(ans) {
     ans._confirming = true
     await gradingApi.confirmAiGrading(ans.id)
     ElMessage.success('AI评分确认成功')
-    await openDetail({ id: selectedParticipant.value })
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e.message || '确认失败')
+    if (selectedParticipant.value != null) {
+      await openDetail({ id: selectedParticipant.value })
+    }
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally { ans._confirming = false }
 }
 
-async function triggerAi(ans) {
+async function triggerAi(ans: { id: number; ai_score?: number | null; ai_comment?: string; _aiLoading?: boolean; _score: number; [key: string]: unknown }) {
   try {
     ans._aiLoading = true
     const res = await gradingApi.aiGradeAnswer(ans.id)
-    if (res.data) {
-      ans.ai_score = res.data.ai_score
-      ans.ai_comment = res.data.ai_comment
-      ans._score = res.data.ai_score || 0
+    if (res) {
+      ans.ai_score = res.ai_score
+      ans.ai_comment = res.ai_comment
+      ans._score = res.ai_score || 0
       ElMessage.success('AI评分完成')
     }
-  } catch (e) {
-    ElMessage.error(e.message || 'AI评分失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally { ans._aiLoading = false }
 }
 
-async function gradeAnswer(ans) {
+async function gradeAnswer(ans: { id: number; _score: number; _comment?: string; [key: string]: unknown }) {
   try {
     await gradingApi.gradeAnswer(ans.id, { score: ans._score, comment: ans._comment })
     ElMessage.success('评分成功')
-    await openDetail({ id: selectedParticipant.value })
-  } catch (e) {
-    ElMessage.error(e.message || '评分失败')
+    if (selectedParticipant.value != null) {
+      await openDetail({ id: selectedParticipant.value })
+    }
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 
-function startRegrade(ans) {
+function startRegrade(ans: { score?: number | null; _regrading?: boolean; _regradeScore: number; _regradeComment?: string; [key: string]: unknown }) {
   ans._regrading = true
   ans._regradeScore = ans.score || 0
   ans._regradeComment = ''
 }
 
-async function doRegrade(ans) {
+async function doRegrade(ans: { id: number; _regradeScore: number; _regradeComment?: string; [key: string]: unknown }) {
   try {
     await gradingApi.regradeAnswer(ans.id, { score: ans._regradeScore, comment: ans._regradeComment })
     ElMessage.success('复核成功')
-    await openDetail({ id: selectedParticipant.value })
-  } catch (e) {
-    ElMessage.error(e.message || '复核失败')
+    if (selectedParticipant.value != null) {
+      await openDetail({ id: selectedParticipant.value })
+    }
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 </script>

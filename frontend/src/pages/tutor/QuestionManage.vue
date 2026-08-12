@@ -25,7 +25,7 @@
     <el-table :data="questions" stripe v-loading="loading">
       <el-table-column prop="id" label="ID" width="60" />
       <el-table-column prop="type" label="题型" width="100">
-        <template #default="{ row }">{{ typeMap[row.type] }}</template>
+        <template #default="{ row }">{{ (typeMap as Record<string, string>)[row.type] }}</template>
       </el-table-column>
       <el-table-column prop="content" label="题干" show-overflow-tooltip />
       <el-table-column label="状态" width="120">
@@ -40,19 +40,21 @@
           <el-tag v-else :type="statusType[row.status]" size="small">{{ statusMap[row.status] }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="280">
+      <el-table-column label="操作" width="90" fixed="right" align="center">
         <template #default="{ row }">
-          <el-button size="small" @click="viewDetail(row)">查看</el-button>
-          <el-button size="small" type="primary" @click="editQuestion(row)">编辑</el-button>
-          <el-button
-            v-if="row.status === 'draft'"
-            size="small"
-            type="success"
-            @click="submitForReview(row)"
-          >
-            提交审核
-          </el-button>
-          <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+          <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
+            <el-button type="primary" link size="small">
+              操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="view">查看</el-dropdown-item>
+                <el-dropdown-item command="edit">编辑</el-dropdown-item>
+                <el-dropdown-item v-if="row.status === 'draft'" command="review">提交审核</el-dropdown-item>
+                <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </template>
       </el-table-column>
     </el-table>
@@ -92,22 +94,24 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
+import type { Question } from '@/types/question'
+import { typeMap } from '@/constants/question'
 
 const router = useRouter()
-const typeMap = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
-const statusMap = { draft: '草稿', pending: '待审核', published: '已发布' }
-const statusType = { draft: 'info', pending: 'warning', published: 'success' }
+const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
+const statusType: Record<string, string> = { draft: 'info', pending: 'warning', published: 'success' }
 
 const loading = ref(false)
-const questions = ref([])
+const questions = ref<Question[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const filters = ref({ type: '', status: '', keyword: '' })
 const detailVisible = ref(false)
-const currentQuestion = ref(null)
+const currentQuestion = ref<(Question & { reject_reason?: string }) | null>(null)
 
 onMounted(() => loadData())
 
@@ -115,33 +119,50 @@ async function loadData() {
   loading.value = true
   try {
     const res = await questionBankApi.getQuestions({ page: page.value, page_size: pageSize.value, ...filters.value })
-    questions.value = res.data?.questions || []
-    total.value = res.data?.total || 0
+    questions.value = res?.questions || []
+    total.value = res?.total || 0
   } catch (e) {} finally { loading.value = false }
 }
 
-function viewDetail(row) {
+function viewDetail(row: Question) {
   currentQuestion.value = row
   detailVisible.value = true
 }
 
-function editQuestion(row) {
+function editQuestion(row: Question) {
   router.push({ path: '/training/tutor/question-create', query: { id: row.id } })
 }
 
 // 提交审核：将 draft 题目状态改为 pending（后端会清空驳回理由）
-async function submitForReview(row) {
+async function submitForReview(row: Question) {
   try {
     await ElMessageBox.confirm('确定提交该题目给管理员审核？', '提示', { type: 'info' })
     await questionBankApi.updateQuestion(row.id, { status: 'pending' })
     ElMessage.success('已提交审核')
     await loadData()
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error('提交失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 
-async function handleDelete(row) {
+function handleAction(cmd: string, row: Question) {
+  switch (cmd) {
+    case 'view':
+      viewDetail(row)
+      break
+    case 'edit':
+      editQuestion(row)
+      break
+    case 'review':
+      submitForReview(row)
+      break
+    case 'delete':
+      handleDelete(row)
+      break
+  }
+}
+
+async function handleDelete(row: Question) {
   try {
     await ElMessageBox.confirm('确定删除此题目？', '提示', { type: 'warning' })
     await questionBankApi.deleteQuestion(row.id)

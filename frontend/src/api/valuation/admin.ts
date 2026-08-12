@@ -49,32 +49,26 @@ function createCrud(resource: string, options: CreateCrudOptions = {}): CrudEndp
   const dictBase = `/dictionaries/${resource}` // GET 列表（学生端字典端点，admin 与学生共用）
   const adminBase = `/admin/${resource}` // POST/PUT/DELETE 写操作（需 admin）
   return {
-    list<T = AdminRow>(params?: Record<string, unknown>) {
+    async list<T = AdminRow>(params?: Record<string, unknown>) {
       const merged = isPaginated
         ? { page: 1, page_size: 100, ...params }
         : params
-      return client
-        .get<unknown, { data: T[] | OriginalPricesPage }>(dictBase, { params: merged })
-        .then((r) => {
-          const data = r.data
-          if (isPaginated && data && typeof data === 'object' && 'list' in data) {
-            return (data.list as T[]) ?? []
-          }
-          return (data as T[]) ?? []
-        })
+      // 拦截器已解包信封，data 即业务负载
+      const data = await client.get<T[] | OriginalPricesPage>(dictBase, { params: merged })
+      if (isPaginated && data && typeof data === 'object' && 'list' in data) {
+        return (data.list as T[]) ?? []
+      }
+      return (data as T[]) ?? []
     },
-    create<T = AdminRow>(payload: Record<string, unknown>) {
-      return client
-        .post<unknown, { data: T }>(adminBase, payload)
-        .then((r) => r.data)
+    async create<T = AdminRow>(payload: Record<string, unknown>) {
+      return client.post<T>(adminBase, payload)
     },
-    update<T = AdminRow>(id: AdminResourceId, payload: Record<string, unknown>) {
-      return client
-        .put<unknown, { data: T }>(`${adminBase}/${encodeURIComponent(id)}`, payload)
-        .then((r) => r.data)
+    async update<T = AdminRow>(id: AdminResourceId, payload: Record<string, unknown>) {
+      return client.put<T>(`${adminBase}/${encodeURIComponent(id)}`, payload)
     },
-    remove(id: AdminResourceId) {
-      return client.delete(`${adminBase}/${encodeURIComponent(id)}`).then(() => undefined)
+    async remove(id: AdminResourceId): Promise<void> {
+      await client.delete(`${adminBase}/${encodeURIComponent(id)}`)
+      return undefined
     },
     getIdOf(row: AdminRow | null | undefined): AdminResourceId | undefined {
       if (!row) return undefined
@@ -126,8 +120,8 @@ export interface AlgorithmParameters {
 
 /** 拉取算法参数聚合数据（一次返回 4 类参数） */
 export async function listAlgorithmParameters(): Promise<AlgorithmParameters> {
-  const resp = await client.get<unknown, { data: AlgorithmParameters }>('/dictionaries/algorithm-parameters')
-  return resp.data ?? { coefficients: [], brands: [], condition_ratings: [], region_coefficients: [] }
+  const resp = await client.get<AlgorithmParameters>('/dictionaries/algorithm-parameters')
+  return resp ?? { coefficients: [], brands: [], condition_ratings: [], region_coefficients: [] }
 }
 
 /** 更新单个全局系数（PUT /admin/coefficient-configs/:key） */

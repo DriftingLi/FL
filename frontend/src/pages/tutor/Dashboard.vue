@@ -117,8 +117,8 @@ async function loadData() {
   try {
     // 加载导师课程（page_size=100 拉取所有课程，仪表盘需展示全部）
     const courseRes = await tutorApi.getCourses({ page: 1, page_size: 100 })
-    if (courseRes.code === 200 && courseRes.data) {
-      const courses = Array.isArray(courseRes.data) ? courseRes.data : (courseRes.data.courses || [])
+    if (courseRes) {
+      const courses = Array.isArray(courseRes) ? courseRes : (courseRes.courses || [])
       myCourses.value = courses.map((c: any) => ({
         title: c.name || c.course_name,
         subtitle: `${c.student_count || 0} 名学员`,
@@ -132,8 +132,8 @@ async function loadData() {
   try {
     // 加载待批阅（后端不支持 status 过滤，前端按 grading_status 过滤）
     const gradingRes = await gradingApi.getSubmittedParticipants({ page: 1, page_size: 100 })
-    if (gradingRes.code === 200 && gradingRes.data) {
-      const allItems = Array.isArray(gradingRes.data) ? gradingRes.data : (gradingRes.data.participants || gradingRes.data.items || [])
+    if (gradingRes) {
+      const allItems = Array.isArray(gradingRes) ? gradingRes : (gradingRes.participants || gradingRes.items || [])
       // 仅保留未批改完成的试卷
       const pendingItems = allItems.filter((p: any) => p.grading_status !== 'completed')
       pendingCount.value = pendingItems.length
@@ -153,8 +153,8 @@ async function loadGradingStats() {
   try {
     const days = currentTab.value === 'month' ? 30 : 7
     const res = await tutorApi.getGradingStats({ days })
-    if (res.code === 200 && res.data) {
-      gradingStats.value = res.data as GradingStats
+    if (res) {
+      gradingStats.value = res as GradingStats
     }
   } catch (error) {
     console.error('加载阅卷统计失败:', error)
@@ -166,6 +166,9 @@ async function loadGradingStats() {
 
 function renderGradingChart() {
   if (!chartRef.value || !gradingStats.value) return
+  // 数据全为 0 时 chartRef 被 v-show 隐藏（display:none），此时初始化会触发
+  // ECharts "Can't get DOM width or height" 警告，直接跳过
+  if (statsEmpty.value) return
 
   const labels = gradingStats.value.labels
   const data = gradingStats.value.data

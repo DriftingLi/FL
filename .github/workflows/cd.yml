@@ -1,21 +1,24 @@
 name: CD - 持续部署
 
 on:
-  # CI 通过后自动触发部署（确保部署的是已测试的代码）
-  workflow_run:
-    workflows: ["CI - 持续集成"]
-    types: [completed]
-    branches: [master]
-  # 手动触发（可跳过 CI 门禁，用于紧急修复）
+  # CI 通过后由 ci-summary job 主动调用 workflow_dispatch 触发（确保部署的是已测试的代码）
+  # 不再使用 workflow_run 被动触发:被取消的 CI 也会触发 workflow_run(conclusion=cancelled),
+  # 导致 CD 先失败一次;且短时间内多次 CI 完成时 workflow_run 事件可能被 GitHub 去重抑制,
+  # 导致成功的 CI 不再触发 CD。
   workflow_dispatch:
     inputs:
+      # 触发 CD 的 commit SHA(由 ci-summary 传入,确保部署的就是 CI 验证过的代码)
+      ref:
+        description: 部署的 commit SHA(由 CI 自动传入,留空则用默认分支 HEAD)
+        type: string
+        default: ""
       environment:
         description: 部署目标环境
         type: choice
-        default: staging
+        default: production
         options:
-          - staging
           - production
+          - testing
       skip_backend:
         description: 跳过后端部署
         type: boolean
@@ -30,7 +33,8 @@ on:
         default: false
 
 concurrency:
-  group: cd-${{ github.ref }}-${{ github.event_name }}
+  # 同一环境同时只允许一条部署：不同分支并发部署到 testing/production 会互相抢占 Docker 资源
+  group: cd-${{ inputs.environment }}
   cancel-in-progress: false
 
 env:
@@ -39,47 +43,31 @@ env:
   REGISTRY: ghcr.io
   IMAGE_BACKEND: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-backend
   IMAGE_FRONTEND: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-frontend
+  IMAGE_LIBREOFFICE: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-libreoffice
   DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/forklift-training' }}
   COMPOSE_FILE: ${{ vars.COMPOSE_FILE || 'docker-compose.prod.yml' }}
+  # 部署的 commit SHA:
+  # - workflow_dispatch 触发时优先用 inputs.ref(CI 传入),否则用当前分支 HEAD
+  # - CI 主动触发 CD 时会显式传入 ref=触发 CI 的 commit,确保部署的就是 CI 验证过的代码
+  DEPLOY_REF: ${{ inputs.ref || github.sha }}
 
 jobs:
-  # ============================================================
-  # Stage 0: CI 门禁（workflow_run 触发时检查 CI 是否成功）
-  # ============================================================
-  ci-gate:
-    if: ${{ github.event_name == 'workflow_run' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: 检查 CI 结论
-        run: |
-          CONCLUSION="${{ github.event.workflow_run.conclusion }}"
-          echo "CI 结论: $CONCLUSION"
-          if [ "$CONCLUSION" != "success" ]; then
-            echo "::error::CI 未通过 ($CONCLUSION)，取消部署"
-            exit 1
-          fi
-          echo "✅ CI 已通过，继续部署"
-
   # ============================================================
   # Stage 1: 构建后端 Docker 镜像并推送 ghcr.io
   # ============================================================
   build-backend:
-    needs: ci-gate
-    if: |
-      always() &&
-      (github.event_name == 'workflow_dispatch' || needs.ci-gate.result == 'success') &&
-      !(github.event_name == 'workflow_dispatch' && inputs.skip_backend)
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_backend) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     outputs:
-      image_tag: ${{ github.event.workflow_run.head_sha || github.sha }}
+      image_tag: ${{ steps.content.outputs.content_tag }}
     steps:
       - uses: actions/checkout@v4
         with:
-          # workflow_run 模式下检出触发 CI 的那个 commit
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # 检出 CI 验证过的那个 commit(inputs.ref 优先,否则当前 HEAD)
+          ref: ${{ env.DEPLOY_REF }}
 
       - name: 登录 GitHub Container Registry
         uses: docker/login-action@v3
@@ -88,23 +76,42 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # 内容哈希标签：构建上下文树未变 → 远端已有该标签 → 跳过构建/推送（部署也跳过拉取）
+      - name: 计算内容标签并检查远端是否已存在
+        id: content
+        run: |
+          CONTENT_TAG="c$(git ls-tree HEAD -- backend/ | git hash-object --stdin | cut -c1-16)"
+          echo "content_tag=${CONTENT_TAG}" >> "$GITHUB_OUTPUT"
+          echo "image_ref=${IMAGE_BACKEND,,}" >> "$GITHUB_OUTPUT"
+          if docker manifest inspect "${IMAGE_BACKEND,,}:${CONTENT_TAG}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "后端内容未变更（${CONTENT_TAG} 已存在），跳过构建"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: 提取镜像标签
+        if: steps.content.outputs.exists != 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_BACKEND }}
+
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
             type=sha,prefix=,format=short
-            type=raw,value=${{ github.event.workflow_run.head_sha || github.sha }}
+            type=raw,value=${{ env.DEPLOY_REF }}
             type=ref,event=branch
 
       - name: 构建并推送后端镜像
+        if: steps.content.outputs.exists != 'true'
         uses: docker/build-push-action@v6
         with:
           context: backend
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.content.outputs.image_ref }}:${{ steps.content.outputs.content_tag }}
+            ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
 
@@ -112,22 +119,17 @@ jobs:
   # Stage 1.5: 构建前端 Docker 镜像并推送 ghcr.io（与后端并行）
   # ============================================================
   build-frontend:
-    needs: ci-gate
-    if: |
-      always() &&
-      (github.event_name == 'workflow_dispatch' || needs.ci-gate.result == 'success') &&
-      !(github.event_name == 'workflow_dispatch' && inputs.skip_frontend)
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_frontend) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     outputs:
-      image_tag: ${{ github.event.workflow_run.head_sha || github.sha }}
+      image_tag: ${{ steps.content.outputs.content_tag }}
     steps:
       - uses: actions/checkout@v4
         with:
-          # workflow_run 模式下检出触发 CI 的那个 commit
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ env.DEPLOY_REF }}
 
       - name: 登录 GitHub Container Registry
         uses: docker/login-action@v3
@@ -136,23 +138,104 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # 内容哈希标签：构建上下文树未变 → 远端已有该标签 → 跳过构建/推送（部署也跳过拉取）
+      - name: 计算内容标签并检查远端是否已存在
+        id: content
+        run: |
+          CONTENT_TAG="c$(git ls-tree HEAD -- frontend/ | git hash-object --stdin | cut -c1-16)"
+          echo "content_tag=${CONTENT_TAG}" >> "$GITHUB_OUTPUT"
+          echo "image_ref=${IMAGE_FRONTEND,,}" >> "$GITHUB_OUTPUT"
+          if docker manifest inspect "${IMAGE_FRONTEND,,}:${CONTENT_TAG}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "前端内容未变更（${CONTENT_TAG} 已存在），跳过构建"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: 提取镜像标签
+        if: steps.content.outputs.exists != 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_FRONTEND }}
+
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
             type=sha,prefix=,format=short
-            type=raw,value=${{ github.event.workflow_run.head_sha || github.sha }}
+            type=raw,value=${{ env.DEPLOY_REF }}
             type=ref,event=branch
 
       - name: 构建并推送前端镜像
+        if: steps.content.outputs.exists != 'true'
         uses: docker/build-push-action@v6
         with:
           context: frontend
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.content.outputs.image_ref }}:${{ steps.content.outputs.content_tag }}
+            ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+
+  # ============================================================
+  # Stage 1.6: 构建 LibreOffice sidecar 镜像并推送（与前端并行）
+  # 拆分自 backend，使 backend 镜像从 ~500MB 减小到 ~50MB
+  # ============================================================
+  build-libreoffice:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.content.outputs.content_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_REF }}
+
+      - name: 登录 GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 内容哈希标签：构建上下文树未变 → 远端已有该标签 → 跳过构建/推送（部署也跳过拉取）
+      - name: 计算内容标签并检查远端是否已存在
+        id: content
+        run: |
+          CONTENT_TAG="c$(git ls-tree HEAD -- libreoffice-sidecar/ | git hash-object --stdin | cut -c1-16)"
+          echo "content_tag=${CONTENT_TAG}" >> "$GITHUB_OUTPUT"
+          echo "image_ref=${IMAGE_LIBREOFFICE,,}" >> "$GITHUB_OUTPUT"
+          if docker manifest inspect "${IMAGE_LIBREOFFICE,,}:${CONTENT_TAG}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "LibreOffice 内容未变更（${CONTENT_TAG} 已存在），跳过构建"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 提取镜像标签
+        if: steps.content.outputs.exists != 'true'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_LIBREOFFICE }}
+
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
+            type=sha,prefix=,format=short
+            type=raw,value=${{ env.DEPLOY_REF }}
+            type=ref,event=branch
+
+      - name: 构建并推送 LibreOffice sidecar 镜像
+        if: steps.content.outputs.exists != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: libreoffice-sidecar
+          push: true
+          tags: |
+            ${{ steps.content.outputs.image_ref }}:${{ steps.content.outputs.content_tag }}
+            ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
 
@@ -160,22 +243,33 @@ jobs:
   # Stage 2: 通过公网 SSH 部署全栈到自托管服务器
   # ============================================================
   deploy:
-    needs: [build-backend, build-frontend]
+    needs: [build-backend, build-frontend, build-libreoffice]
     if: |
       always() &&
       needs.build-backend.result == 'success' &&
-      needs.build-frontend.result == 'success'
+      needs.build-frontend.result == 'success' &&
+      needs.build-libreoffice.result == 'success'
     runs-on: ubuntu-latest
     environment:
-      name: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+      name: ${{ inputs.environment || 'production' }}
     env:
-      # 镜像信息（来自 build-backend/build-frontend outputs）
+      # 镜像信息（来自 build-backend/build-frontend/build-libreoffice outputs：
+      # 内容哈希标签，未变更的镜像跳过构建/拉取；缺失时回退 commit SHA）
       IMAGE_TAG: ${{ needs.build-backend.outputs.image_tag || github.sha }}
+      IMAGE_TAG_BACKEND: ${{ needs.build-backend.outputs.image_tag || github.sha }}
+      IMAGE_TAG_FRONTEND: ${{ needs.build-frontend.outputs.image_tag || github.sha }}
+      IMAGE_TAG_LIBREOFFICE: ${{ needs.build-libreoffice.outputs.image_tag || github.sha }}
+      # 注:job 级 env 块不能引用 workflow 级 env,必须内联 vars 表达式
+      IMAGE_LIBREOFFICE: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-libreoffice
+      # 镜像加速代理（ghcr pull-through 缓存，如 127.0.0.1:5000；留空则直连 ghcr.io）
+      # 在仓库级 Variables 设置 REGISTRY_PROXY=127.0.0.1:5000，所有环境统一生效
+      # （当前生产也部署在 lxc201，代理同样可用；若未来生产迁到独立服务器，请改用环境级变量单独配置）
+      REGISTRY_PROXY: ${{ vars.REGISTRY_PROXY || '' }}
+      # 旧版本镜像保留数量（部署后清理更早版本；可在仓库级 Variables 中覆盖）
+      KEEP_IMAGES: ${{ vars.KEEP_IMAGES || '3' }}
       # SSL 证书内容（从 GitHub Secrets 注入，部署时写入服务器固定路径）
       SSL_FULLCHAIN: ${{ secrets.SSL_FULLCHAIN }}
       SSL_PRIVKEY: ${{ secrets.SSL_PRIVKEY }}
-      # 残值评估
-      VALUATION_JWT_SECRET_KEY: ${{ secrets.VALUATION_JWT_SECRET_KEY }}
       # 域名（启动时 envsubst 替换 nginx 配置中的 ${DOMAIN}）
       DOMAIN: ${{ secrets.DOMAIN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -187,42 +281,64 @@ jobs:
       SECRET_KEY: ${{ secrets.SECRET_KEY }}
       JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
       JWT_EXPIRES_HOURS: ${{ secrets.JWT_EXPIRES_HOURS || '24' }}
+      # 登录态 Cookie（父域名共享登录；testing 走 http 时 Secure=false）
+      AUTH_COOKIE_NAME: ${{ secrets.AUTH_COOKIE_NAME || 'hrwai_token' }}
+      AUTH_COOKIE_DOMAIN: ${{ secrets.AUTH_COOKIE_DOMAIN }}
+      AUTH_COOKIE_SECURE: ${{ inputs.environment == 'production' && 'true' || 'false' }}
       # 默认账号
       ADMIN_DEFAULT_PASSWORD: ${{ secrets.ADMIN_DEFAULT_PASSWORD }}
       TUTOR_DEFAULT_PASSWORD: ${{ secrets.TUTOR_DEFAULT_PASSWORD }}
       STUDENT_DEFAULT_PASSWORD: ${{ secrets.STUDENT_DEFAULT_PASSWORD }}
       # CORS
       CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
-      # AI 配置
-      ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
-      ZHIPU_BASE_URL: ${{ secrets.ZHIPU_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4' }}
-      ZHIPU_MODEL: ${{ secrets.ZHIPU_MODEL || 'glm-4.7-flash' }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      # Coze 配置
-      COZE_PROJECT_ID: ${{ secrets.COZE_PROJECT_ID }}
-      COZE_OAUTH_APP_ID: ${{ secrets.COZE_OAUTH_APP_ID }}
-      COZE_OAUTH_KID: ${{ secrets.COZE_OAUTH_KID }}
-      COZE_OAUTH_PRIVATE_KEY: ${{ secrets.COZE_OAUTH_PRIVATE_KEY }}
-      COZE_OAUTH_PRIVATE_KEY_PATH: ${{ secrets.COZE_OAUTH_PRIVATE_KEY_PATH }}
       # 部署选项
-      SKIP_MIGRATION: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_migration || 'false' }}
+      SKIP_MIGRATION: ${{ inputs.skip_migration || 'false' }}
       # Redis 缓存
       REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD || '' }}
       REDIS_DB: ${{ secrets.REDIS_DB || '0' }}
       REDIS_POOL_SIZE: ${{ secrets.REDIS_POOL_SIZE || '10' }}
       REDIS_KEY_PREFIX: ${{ secrets.REDIS_KEY_PREFIX || 'fl:' }}
+      # Cloudflare R2 对象存储（留空则回退到本地磁盘 STORAGE_DRIVER=local）
+      STORAGE_DRIVER: ${{ secrets.STORAGE_DRIVER || 'local' }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_PUBLIC_DOMAIN: ${{ secrets.R2_PUBLIC_DOMAIN }}
+      # backend 宿主机映射端口（production 默认 8080；testing 用 18080 避免与 cadvisor 冲突）
+      BACKEND_HOST_PORT: ${{ secrets.BACKEND_HOST_PORT || '8080' }}
+      # 异地备份（production: pve-02 → pve-01；testing: 留空跳过）
+      BACKUP_REMOTE_HOST: ${{ secrets.BACKUP_REMOTE_HOST }}
+      BACKUP_REMOTE_DIR: ${{ secrets.BACKUP_REMOTE_DIR || '/opt/forklift-backups' }}
+      BACKUP_REMOTE_KEY: ${{ secrets.BACKUP_REMOTE_KEY || '/root/.ssh/pve01-sync' }}
       # SSH 连接（公网 IP）
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT || '2222' }}
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      # SSH 跳板配置（production 和 testing 均已迁移到 LXC,使用 ProxyJump）
+      # production: SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(172.17.1.201)
+      # testing: SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(172.17.1.200)
+      #         pve-02 与 LXC 同网段路由可达,无需 pve-01 中转
+      SSH_JUMP_HOST: ${{ secrets.SSH_JUMP_HOST || '' }}
+      # Volume 路径：testing 已迁移到 LXC + Docker 24+,named volume 正常工作
+      # 旧 Docker 19.03 的 named volume 权限 bug 已通过 Docker 升级解决,无需 bind mount
+      # 留空 → deploy-remote.sh 默认使用 named volume（pgdata-prod / redisdata-prod 等）
+      PG_VOLUME: ''
+      REDIS_VOLUME: ''
+      UPLOADS_VOLUME: ''
+      REPORTS_VOLUME: ''
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ env.DEPLOY_REF }}
 
       # --------------------------------------------------------
       # Step 2.1: 配置 SSH
+      #   production/testing: 两层 ProxyJump (pve-02 → LXC)
+      #           SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(目标)
+      #           pve-02 与 LXC 同网段(172.17.1.0/24)路由可达
+      #   若某环境未配置 SSH_JUMP_HOST，则直连 (SSH_HOST:SSH_PORT)
       # --------------------------------------------------------
       - name: 配置 SSH
         run: |
@@ -231,23 +347,63 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p "$SSH_PORT" \
             -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
-          echo "AddressFamily inet" >> ~/.ssh/config
+
+          if [ -n "$SSH_JUMP_HOST" ]; then
+            # 有跳板环境（production/testing）: 两层 ProxyJump (pve-02 → LXC)
+            cat > ~/.ssh/config << EOF
+          Host jump
+              HostName $SSH_HOST
+              Port $SSH_PORT
+              User $SSH_USER
+              IdentityFile ~/.ssh/deploy_key
+              StrictHostKeyChecking no
+
+          Host target
+              HostName $SSH_JUMP_HOST
+              User $SSH_USER
+              IdentityFile ~/.ssh/deploy_key
+              ProxyJump jump
+              StrictHostKeyChecking no
+          EOF
+            echo "SSH_TARGET=target" >> $GITHUB_ENV
+            echo "SSH_PORT_OPT=" >> $GITHUB_ENV
+            echo "SSH 配置: 跳板模式 (jump=$SSH_HOST:$SSH_PORT → target=$SSH_JUMP_HOST)"
+          else
+            # 无跳板环境: 直连
+            cat > ~/.ssh/config << EOF
+          Host target
+              HostName $SSH_HOST
+              Port $SSH_PORT
+              User $SSH_USER
+              IdentityFile ~/.ssh/deploy_key
+              StrictHostKeyChecking no
+          EOF
+            echo "SSH_TARGET=target" >> $GITHUB_ENV
+            echo "SSH_PORT_OPT=" >> $GITHUB_ENV
+            echo "SSH 配置: 直连模式 ($SSH_HOST:$SSH_PORT)"
+          fi
 
       # --------------------------------------------------------
       # Step 2.2: 上传部署脚本和配置
       # --------------------------------------------------------
       - name: 上传部署脚本和配置
         run: |
-          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15"
-
-          scp $SSH_OPTS \
-            -P "$SSH_PORT" \
+          # 主部署文件：脚本 + compose
+          scp -o ConnectTimeout=15 -o ServerAliveInterval=30 \
             scripts/deploy-remote.sh docker-compose.prod.yml \
-            "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"
+            "target:$DEPLOY_PATH/"
 
-          ssh $SSH_OPTS \
-            -p "$SSH_PORT" \
-            "$SSH_USER@$SSH_HOST" \
+          # nginx-host.conf 必须放在 $DEPLOY_PATH/frontend/ 下（compose volume 挂载路径）
+          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+            "target" \
+            "mkdir -p $DEPLOY_PATH/frontend"
+
+          scp -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+            frontend/nginx-host.conf \
+            "target:$DEPLOY_PATH/frontend/nginx-host.conf"
+
+          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+            "target" \
             "chmod +x $DEPLOY_PATH/deploy-remote.sh"
 
       # --------------------------------------------------------
@@ -264,33 +420,32 @@ jobs:
             echo "# 生成时间: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
             echo ''
             printf 'export IMAGE_TAG=%q\n' "${IMAGE_TAG:-latest}"
+            printf 'export IMAGE_TAG_BACKEND=%q\n' "${IMAGE_TAG_BACKEND:-}"
+            printf 'export IMAGE_TAG_FRONTEND=%q\n' "${IMAGE_TAG_FRONTEND:-}"
+            printf 'export IMAGE_TAG_LIBREOFFICE=%q\n' "${IMAGE_TAG_LIBREOFFICE:-}"
             printf 'export IMAGE_BACKEND=%q\n' "${IMAGE_BACKEND:-}"
             printf 'export IMAGE_FRONTEND=%q\n' "${IMAGE_FRONTEND:-}"
+            printf 'export IMAGE_LIBREOFFICE=%q\n' "${IMAGE_LIBREOFFICE:-}"
             printf 'export SSL_FULLCHAIN=%q\n' "${SSL_FULLCHAIN:-}"
             printf 'export SSL_PRIVKEY=%q\n' "${SSL_PRIVKEY:-}"
             printf 'export DOMAIN=%q\n' "${DOMAIN:-}"
             printf 'export GITHUB_TOKEN=%q\n' "${GITHUB_TOKEN:-}"
             printf 'export REGISTRY=%q\n' "${REGISTRY:-ghcr.io}"
+            printf 'export REGISTRY_PROXY=%q\n' "${REGISTRY_PROXY:-}"
+            printf 'export KEEP_IMAGES=%q\n' "${KEEP_IMAGES:-3}"
             printf 'export DATABASE_URL=%q\n' "${DATABASE_URL:-}"
             printf 'export DB_USER=%q\n' "${DB_USER:-forklift}"
             printf 'export DB_PASSWORD=%q\n' "${DB_PASSWORD:-}"
             printf 'export SECRET_KEY=%q\n' "${SECRET_KEY:-}"
             printf 'export JWT_SECRET_KEY=%q\n' "${JWT_SECRET_KEY:-}"
             printf 'export JWT_EXPIRES_HOURS=%q\n' "${JWT_EXPIRES_HOURS:-24}"
+            printf 'export AUTH_COOKIE_NAME=%q\n' "${AUTH_COOKIE_NAME:-hrwai_token}"
+            printf 'export AUTH_COOKIE_DOMAIN=%q\n' "${AUTH_COOKIE_DOMAIN:-}"
+            printf 'export AUTH_COOKIE_SECURE=%q\n' "${AUTH_COOKIE_SECURE:-true}"
             printf 'export ADMIN_DEFAULT_PASSWORD=%q\n' "${ADMIN_DEFAULT_PASSWORD:-}"
             printf 'export TUTOR_DEFAULT_PASSWORD=%q\n' "${TUTOR_DEFAULT_PASSWORD:-}"
             printf 'export STUDENT_DEFAULT_PASSWORD=%q\n' "${STUDENT_DEFAULT_PASSWORD:-}"
             printf 'export CORS_ORIGINS=%q\n' "${CORS_ORIGINS:-}"
-            printf 'export ZHIPU_API_KEY=%q\n' "${ZHIPU_API_KEY:-}"
-            printf 'export ZHIPU_BASE_URL=%q\n' "${ZHIPU_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}"
-            printf 'export ZHIPU_MODEL=%q\n' "${ZHIPU_MODEL:-glm-4.7-flash}"
-            printf 'export OPENAI_API_KEY=%q\n' "${OPENAI_API_KEY:-}"
-            printf 'export COZE_PROJECT_ID=%q\n' "${COZE_PROJECT_ID:-}"
-            printf 'export COZE_OAUTH_APP_ID=%q\n' "${COZE_OAUTH_APP_ID:-}"
-            printf 'export COZE_OAUTH_KID=%q\n' "${COZE_OAUTH_KID:-}"
-            printf 'export COZE_OAUTH_PRIVATE_KEY=%q\n' "${COZE_OAUTH_PRIVATE_KEY:-}"
-            printf 'export COZE_OAUTH_PRIVATE_KEY_PATH=%q\n' "${COZE_OAUTH_PRIVATE_KEY_PATH:-}"
-            printf 'export VALUATION_JWT_SECRET_KEY=%q\n' "${VALUATION_JWT_SECRET_KEY:-}"
             printf 'export COMPOSE_FILE=%q\n' "${COMPOSE_FILE:-docker-compose.prod.yml}"
             printf 'export DEPLOY_PATH=%q\n' "${DEPLOY_PATH:-/opt/forklift-training}"
             printf 'export SKIP_MIGRATION=%q\n' "${SKIP_MIGRATION:-false}"
@@ -298,27 +453,49 @@ jobs:
             printf 'export REDIS_DB=%q\n' "${REDIS_DB:-0}"
             printf 'export REDIS_POOL_SIZE=%q\n' "${REDIS_POOL_SIZE:-10}"
             printf 'export REDIS_KEY_PREFIX=%q\n' "${REDIS_KEY_PREFIX:-fl:}"
+            printf 'export STORAGE_DRIVER=%q\n' "${STORAGE_DRIVER:-local}"
+            printf 'export R2_ACCOUNT_ID=%q\n' "${R2_ACCOUNT_ID:-}"
+            printf 'export R2_ACCESS_KEY_ID=%q\n' "${R2_ACCESS_KEY_ID:-}"
+            printf 'export R2_SECRET_ACCESS_KEY=%q\n' "${R2_SECRET_ACCESS_KEY:-}"
+            printf 'export R2_BUCKET=%q\n' "${R2_BUCKET:-}"
+            printf 'export R2_PUBLIC_DOMAIN=%q\n' "${R2_PUBLIC_DOMAIN:-}"
+            printf 'export BACKUP_REMOTE_HOST=%q\n' "${BACKUP_REMOTE_HOST:-}"
+            printf 'export BACKUP_REMOTE_DIR=%q\n' "${BACKUP_REMOTE_DIR:-}"
+            printf 'export BACKUP_REMOTE_KEY=%q\n' "${BACKUP_REMOTE_KEY:-}"
+            printf 'export BACKEND_HOST_PORT=%q\n' "${BACKEND_HOST_PORT:-8080}"
+            printf 'export PG_VOLUME=%q\n' "${PG_VOLUME:-}"
+            printf 'export REDIS_VOLUME=%q\n' "${REDIS_VOLUME:-}"
+            printf 'export UPLOADS_VOLUME=%q\n' "${UPLOADS_VOLUME:-}"
+            printf 'export REPORTS_VOLUME=%q\n' "${REPORTS_VOLUME:-}"
           } > /tmp/deploy-env.sh
 
           echo "环境变量文件已生成（$(wc -l < /tmp/deploy-env.sh) 行）"
           echo "注意：密钥值已被 GitHub Actions 自动 mask，不会出现在日志中"
 
-          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15"
-
           # 上传环境变量文件
-          scp $SSH_OPTS \
-            -P "$SSH_PORT" \
+          scp -o ConnectTimeout=15 -o ServerAliveInterval=30 \
             /tmp/deploy-env.sh \
-            "$SSH_USER@$SSH_HOST:/tmp/deploy-env.sh"
+            "target:/tmp/deploy-env.sh"
 
           # 执行远程部署
-          ssh $SSH_OPTS \
-            -p "$SSH_PORT" \
-            "$SSH_USER@$SSH_HOST" \
+          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+            "target" \
             "set -e; source /tmp/deploy-env.sh; shred -u /tmp/deploy-env.sh 2>/dev/null || rm -f /tmp/deploy-env.sh; cd \"\$DEPLOY_PATH\" && bash deploy-remote.sh"
 
       # --------------------------------------------------------
-      # Step 2.4: 清理
+      # Step 2.4: 测试环境部署成功后停止容器（避免空转占用资源）
+      # --------------------------------------------------------
+      - name: 测试环境停止容器
+        if: success() && inputs.environment == 'testing'
+        run: |
+          echo "测试环境部署成功，停止容器以释放资源..."
+          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+            "target" \
+            "cd $DEPLOY_PATH && docker compose -f docker-compose.prod.yml down 2>&1 || true"
+          echo "✅ 测试环境容器已停止"
+
+      # --------------------------------------------------------
+      # Step 2.5: 清理
       # --------------------------------------------------------
       - name: 清理 SSH 密钥
         if: always()
@@ -326,115 +503,16 @@ jobs:
           rm -f ~/.ssh/deploy_key /tmp/deploy-env.sh
 
   # ============================================================
-  # Stage 3: 健康检查（后端 + 前端）
-  # ============================================================
-  health-check:
-    needs: deploy
-    if: |
-      always() &&
-      needs.deploy.result == 'success'
-    runs-on: ubuntu-latest
-    steps:
-      - name: 等待服务就绪
-        run: sleep 15
-
-      - name: API 健康检查
-        env:
-          API_URL: ${{ vars.API_URL || secrets.API_URL }}
-        run: |
-          if [ -z "$API_URL" ]; then
-            echo "::warning::未配置 API_URL，跳过健康检查"
-            exit 0
-          fi
-          for i in $(seq 1 15); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-              --connect-timeout 5 --max-time 10 \
-              "$API_URL/api/health" 2>/dev/null || echo "000")
-            if [ "$STATUS" = "200" ]; then
-              echo "✅ 后端健康 ($STATUS)"
-              exit 0
-            fi
-            echo "⏳ 等待... ($STATUS) [$i/15]"
-            sleep 6
-          done
-          echo "❌ 后端健康检查失败!"
-          exit 1
-
-      - name: 前端健康检查
-        env:
-          FRONTEND_URL: ${{ vars.FRONTEND_URL || secrets.FRONTEND_URL }}
-        run: |
-          if [ -z "$FRONTEND_URL" ]; then
-            echo "::warning::未配置 FRONTEND_URL，跳过前端健康检查"
-            exit 0
-          fi
-          for i in $(seq 1 15); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-              --connect-timeout 5 --max-time 10 \
-              "$FRONTEND_URL/health" 2>/dev/null || echo "000")
-            if [ "$STATUS" = "200" ]; then
-              echo "✅ 前端健康 ($STATUS)"
-              exit 0
-            fi
-            echo "⏳ 等待前端... ($STATUS) [$i/15]"
-            sleep 6
-          done
-          echo "❌ 前端健康检查失败!"
-          exit 1
-
-  # ============================================================
-  # Stage 4: 全栈自动回滚（通过公网 SSH）
-  # ============================================================
-  rollback:
-    needs: [deploy, health-check]
-    if: |
-      always() &&
-      needs.deploy.result == 'success' &&
-      needs.health-check.result == 'failure'
-    runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
-    env:
-      SSH_HOST: ${{ secrets.SSH_HOST }}
-      SSH_USER: ${{ secrets.SSH_USER }}
-      SSH_PORT: ${{ secrets.SSH_PORT || '2222' }}
-      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: 配置 SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -p "$SSH_PORT" \
-            -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
-
-      - name: 执行远程回滚
-        run: |
-          ssh -i ~/.ssh/deploy_key \
-            -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
-            -p "$SSH_PORT" \
-            "$SSH_USER@$SSH_HOST" \
-            "cd \"$DEPLOY_PATH\" && bash deploy-remote.sh --rollback"
-          echo "::warning::全栈自动回滚已执行!"
-
-      - name: 清理
-        if: always()
-        run: |
-          rm -f ~/.ssh/deploy_key
-
-  # ============================================================
   # Stage 6: 部署汇总
   # ============================================================
   notify:
-    needs: [deploy, health-check]
+    needs: deploy
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: 汇总部署状态
         run: |
           DEPLOY_STATUS="${{ needs.deploy.result }}"
-          HEALTH_STATUS="${{ needs.health-check.result }}"
 
           echo "# 部署报告" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -442,7 +520,6 @@ jobs:
           echo "|------|------|" >> $GITHUB_STEP_SUMMARY
           echo "| 全栈部署 (公网 SSH) | $([ "$DEPLOY_STATUS" = 'success' ] && echo '✅' || ([ "$DEPLOY_STATUS" = 'skipped' ] && echo '⏭️') || echo '❌') |" >> $GITHUB_STEP_SUMMARY
           echo "| 前端 | $([ "$DEPLOY_STATUS" = 'success' ] && echo '✅ 已部署' || echo '⚠️') |" >> $GITHUB_STEP_SUMMARY
-          echo "| 健康检查 | $([ "$HEALTH_STATUS" = 'success' ] && echo '✅' || ([ "$HEALTH_STATUS" = 'skipped' ] && echo '⏭️') || echo '⚠️ 已回滚') |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- 后端 API: ${{ vars.API_URL || '未配置' }}" >> $GITHUB_STEP_SUMMARY
           echo "- 前端: ${{ vars.FRONTEND_URL || '未配置' }}" >> $GITHUB_STEP_SUMMARY

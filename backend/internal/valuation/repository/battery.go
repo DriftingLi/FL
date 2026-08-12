@@ -27,7 +27,8 @@ func NewBatteryRepository(pool *pgxpool.Pool) *BatteryRepository {
 }
 
 // CreateEvaluation 插入评估主记录，返回完整行（含 id/timestamps）
-func (r *BatteryRepository) CreateEvaluation(ctx context.Context, eval *model.BatteryEvaluation, features []model.CycleFeature) (*model.BatteryEvaluation, error) {
+// userID>0 时写入归属；userID=0 时落 NULL（匿名/历史数据）
+func (r *BatteryRepository) CreateEvaluation(ctx context.Context, eval *model.BatteryEvaluation, features []model.CycleFeature, userID int) (*model.BatteryEvaluation, error) {
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("开启事务失败: %w", err)
@@ -50,12 +51,14 @@ func (r *BatteryRepository) CreateEvaluation(ctx context.Context, eval *model.Ba
 	row := tx.QueryRow(ctx, `
 		INSERT INTO battery_evaluations (
 			battery_type, battery_model, cycle_count, rul_cycles, soh_percent,
-			confidence, confidence_low, confidence_high, feature_importance, report_pdf_path
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			confidence, confidence_low, confidence_high, feature_importance, report_pdf_path,
+			user_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING id, created_at, updated_at
 	`,
 		string(eval.BatteryType), nullableString(modelText), eval.CycleCount, eval.RulCycles, eval.SohPercent,
 		eval.Confidence, int32(eval.ConfidenceLow), int32(eval.ConfidenceHigh), importanceJSON, nullableString(reportPath),
+		nullableUserID(userID),
 	)
 	var id int64
 	var createdAt, updatedAt time.Time
@@ -88,14 +91,21 @@ func (r *BatteryRepository) CreateEvaluation(ctx context.Context, eval *model.Ba
 	return eval, nil
 }
 
-// GetEvaluation 查询评估详情（含周期特征）
+// GetEvaluation 查询评估详情（含周期特征，不按用户过滤）
+// 用于公开的报告生成/下载场景；鉴权详情请用 GetEvaluationByUser
 func (r *BatteryRepository) GetEvaluation(ctx context.Context, id int64) (*model.BatteryEvaluation, error) {
-	row := r.pool.QueryRow(ctx, `
-		SELECT id, battery_type, battery_model, cycle_count, rul_cycles, soh_percent,
-		       confidence, confidence_low, confidence_high, feature_importance, report_pdf_path,
-		       created_at, updated_at
-		FROM battery_evaluations WHERE id = $1
-	`, id)
+	return r.getBatteryEvaluation(ctx, id, 0, false)
+}
+
+// GetEvaluationByUser 查询评估详情并校验归属（user_id 必须等于 userID）
+// 用于登录用户查看自己的电池评估详情；不属于该用户的记录返回 pgx.ErrNoRows
+func (r *BatteryRepository) GetEvaluationByUser(ctx context.Context, id int64, userID int) (*model.BatteryEvaluation, error) {
+	return r.getBatteryEvaluation(ctx, id, userID, true)
+}
+
+// getBatteryEvaluation 主表查询 + 周期特征加载。
+// enforceOwner=true 时追加 user_id 过滤；=false 时仅按 id 查询（公开场景）
+func (r *BatteryRepository) getBatteryEvaluation(ctx context.Context, id int64, userID int, enforceOwner bool) (*model.BatteryEvaluation, error) {
 	var (
 		bid           int64
 		batteryType   string
@@ -111,9 +121,28 @@ func (r *BatteryRepository) GetEvaluation(ctx context.Context, id int64) (*model
 		createdAt     time.Time
 		updatedAt     time.Time
 	)
-	if err := row.Scan(&bid, &batteryType, &batteryModel, &cycleCount, &rulCycles, &soh,
-		&conf, &confLow, &confHigh, &importanceRaw, &reportPath, &createdAt, &updatedAt); err != nil {
-		return nil, err
+	if enforceOwner {
+		row := r.pool.QueryRow(ctx, `
+			SELECT id, battery_type, battery_model, cycle_count, rul_cycles, soh_percent,
+			       confidence, confidence_low, confidence_high, feature_importance, report_pdf_path,
+			       created_at, updated_at
+			FROM battery_evaluations WHERE id = $1 AND user_id = $2
+		`, id, userID)
+		if err := row.Scan(&bid, &batteryType, &batteryModel, &cycleCount, &rulCycles, &soh,
+			&conf, &confLow, &confHigh, &importanceRaw, &reportPath, &createdAt, &updatedAt); err != nil {
+			return nil, err
+		}
+	} else {
+		row := r.pool.QueryRow(ctx, `
+			SELECT id, battery_type, battery_model, cycle_count, rul_cycles, soh_percent,
+			       confidence, confidence_low, confidence_high, feature_importance, report_pdf_path,
+			       created_at, updated_at
+			FROM battery_evaluations WHERE id = $1
+		`, id)
+		if err := row.Scan(&bid, &batteryType, &batteryModel, &cycleCount, &rulCycles, &soh,
+			&conf, &confLow, &confHigh, &importanceRaw, &reportPath, &createdAt, &updatedAt); err != nil {
+			return nil, err
+		}
 	}
 	eval := &model.BatteryEvaluation{
 		ID:             bid,
@@ -184,36 +213,42 @@ func (r *BatteryRepository) GetEvaluation(ctx context.Context, id int64) (*model
 }
 
 // ListEvaluations 分页查询摘要
-func (r *BatteryRepository) ListEvaluations(ctx context.Context, batteryType string, limit, offset int) ([]model.BatteryEvaluationSummary, int, error) {
+// batteryType 为空时不过滤；userID>0 时仅返回该用户的记录，userID=0 时返回全部
+func (r *BatteryRepository) ListEvaluations(ctx context.Context, batteryType string, userID int, limit, offset int) ([]model.BatteryEvaluationSummary, int, error) {
+	// 动态拼装 WHERE：battery_type / user_id 均为可选过滤
+	where := make([]string, 0, 2)
+	args := make([]any, 0, 3)
+	argIdx := 1
+	if batteryType != "" {
+		where = append(where, fmt.Sprintf("battery_type = $%d", argIdx))
+		args = append(args, batteryType)
+		argIdx++
+	}
+	if userID > 0 {
+		where = append(where, fmt.Sprintf("user_id = $%d", argIdx))
+		args = append(args, userID)
+		argIdx++
+	}
+	whereClause := ""
+	if len(where) > 0 {
+		whereClause = "WHERE " + joinStrings(where, " AND ")
+	}
+
 	// 总数
 	var total int
-	if batteryType != "" {
-		if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM battery_evaluations WHERE battery_type = $1`, batteryType).Scan(&total); err != nil {
-			return nil, 0, err
-		}
-	} else {
-		if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM battery_evaluations`).Scan(&total); err != nil {
-			return nil, 0, err
-		}
+	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM battery_evaluations %s`, whereClause)
+	if err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
 	}
+
 	// 列表
-	var (
-		rows pgx.Rows
-		err  error
-	)
-	if batteryType != "" {
-		rows, err = r.pool.Query(ctx, `
-			SELECT id, battery_type, battery_model, cycle_count, rul_cycles, soh_percent, confidence, created_at
-			FROM battery_evaluations WHERE battery_type = $1
-			ORDER BY created_at DESC LIMIT $2 OFFSET $3
-		`, batteryType, limit, offset)
-	} else {
-		rows, err = r.pool.Query(ctx, `
-			SELECT id, battery_type, battery_model, cycle_count, rul_cycles, soh_percent, confidence, created_at
-			FROM battery_evaluations
-			ORDER BY created_at DESC LIMIT $1 OFFSET $2
-		`, limit, offset)
-	}
+	listArgs := append(args, limit, offset)
+	listQuery := fmt.Sprintf(`
+		SELECT id, battery_type, battery_model, cycle_count, rul_cycles, soh_percent, confidence, created_at
+		FROM battery_evaluations %s
+		ORDER BY created_at DESC LIMIT $%d OFFSET $%d
+	`, whereClause, argIdx, argIdx+1)
+	rows, err := r.pool.Query(ctx, listQuery, listArgs...)
 	if err != nil {
 		return nil, 0, err
 	}

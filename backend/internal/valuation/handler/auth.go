@@ -1,28 +1,26 @@
 // Package handler 实现残值评估模块的 HTTP 处理器。
-// 本文件：估值模块独立认证 handler（/api/valuation/auth/*）。
+// 本文件：估值模块认证 handler（/api/valuation/auth/*）。
+// 已统一到主体系 AuthService 与 security 会话模块,本 handler 仅作为前端兼容入口。
 package handler
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"net/http"
-	"time"
-
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 
-	"forklift-training/internal/cache"
-	vservice "forklift-training/internal/valuation/service"
+	"forklift-training/internal/middleware"
+	"forklift-training/internal/security"
+	vmain "forklift-training/internal/service"
+	"forklift-training/pkg/response"
 )
 
-// ValuationAuthHandler 估值模块独立认证处理器。
+// ValuationAuthHandler 估值模块认证处理器（消费 ValuationAuth 窄接口，主体系 AuthService 直接满足）。
 type ValuationAuthHandler struct {
-	authSvc *vservice.ValuationAuthService
+	authSvc ValuationAuth
+	sess    *security.Session
 }
 
-// NewValuationAuthHandler 构造估值认证处理器。
-func NewValuationAuthHandler(authSvc *vservice.ValuationAuthService) *ValuationAuthHandler {
-	return &ValuationAuthHandler{authSvc: authSvc}
+// NewValuationAuthHandler 构造估值认证处理器。sess 为装配根注入的唯一会话实例。
+func NewValuationAuthHandler(authSvc ValuationAuth, sess *security.Session) *ValuationAuthHandler {
+	return &ValuationAuthHandler{authSvc: authSvc, sess: sess}
 }
 
 // loginRequest 登录请求体。
@@ -35,91 +33,55 @@ type loginRequest struct {
 func (h *ValuationAuthHandler) Login(c *gin.Context) {
 	var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "请求参数错误")
+		response.BadRequest(c, "请求参数错误")
 		return
 	}
 	if req.Account == "" || req.Password == "" {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "用户名和密码不能为空")
+		response.BadRequest(c, "用户名和密码不能为空")
 		return
 	}
-	result, err := h.authSvc.Login(req.Account, req.Password)
+	result, err := h.authSvc.HrwaiLogin(req.Account, req.Password)
 	if err != nil {
-		Fail(c, CodeBadRequest, err.Error())
+		response.BadRequest(c, err.Error())
 		return
 	}
-	OK(c, result)
+	response.Success(c, result)
 }
 
-// registerRequest 注册请求体。
-type registerRequest struct {
-	Phone    string `json:"phone"`
-	Password string `json:"password"`
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Company  string `json:"company"`
-}
-
-// Register 处理 POST /api/valuation/auth/register
-// username 由后端用手机号自动生成，前端无需提交 username。
-func (h *ValuationAuthHandler) Register(c *gin.Context) {
-	var req registerRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "请求参数错误")
-		return
-	}
-	if req.Phone == "" || req.Password == "" || req.Name == "" {
-		Error(c, http.StatusBadRequest, CodeBadRequest, "手机号、密码和姓名不能为空")
-		return
-	}
-	result, err := h.authSvc.Register(req.Phone, req.Password, req.Name, req.Email, req.Company)
-	if err != nil {
-		Fail(c, CodeBadRequest, err.Error())
-		return
-	}
-	OK(c, result)
-}
-
-// Me 处理 GET /api/valuation/auth/me（需 ValuationJWTAuth）
+// Me 处理 GET /api/valuation/auth/me（需 middleware.JWTAuth）
 func (h *ValuationAuthHandler) Me(c *gin.Context) {
-	userID, _ := c.Get(CtxValuationUserID)
-	uid, _ := userID.(int)
+	uid := middleware.CurrentUserID(c)
 	if uid == 0 {
-		Error(c, http.StatusUnauthorized, 40100, "Token无效或已过期，请重新登录")
+		response.Unauthorized(c, "Token无效或已过期，请重新登录")
 		return
 	}
-	user, err := h.authSvc.GetByID(uid)
+	user, err := h.authSvc.GetHrwaiUserByID(uid)
 	if err != nil {
-		Error(c, http.StatusNotFound, CodeNotFound, "用户不存在")
+		response.NotFound(c, "用户不存在")
 		return
 	}
-	OK(c, map[string]interface{}{
+	response.Success(c, map[string]interface{}{
 		"user_id":  user.ID,
+		"uid":      vmain.FormatUID(user.UID),
+		"account":  user.Account,
 		"username": user.Username,
-		"name":     user.Name,
 		"phone":    user.Phone,
 		"email":    user.Email,
 		"company":  user.Company,
-		"role":     vservice.ValuationRole,
+		"role":     vmain.HrwaiRole,
 	})
 }
 
-// Logout 处理 POST /api/valuation/auth/logout（需 ValuationJWTAuth）
-// 将当前 token 写入 Redis 独立黑名单，TTL = token 剩余有效期。
+// Logout 处理 POST /api/valuation/auth/logout（需 middleware.JWTAuth）
+// 将当前 token 写入黑名单（统一前缀 jwt:blacklist:，由会话模块实现），TTL = token 剩余有效期。
 func (h *ValuationAuthHandler) Logout(c *gin.Context) {
-	tokenStr := extractValuationBearerToken(c)
+	// 与旧行为一致：仅从 Authorization 头提取 Bearer token
+	tokenStr := h.sess.ExtractToken(c.GetHeader("Authorization"), "")
 	if tokenStr == "" {
-		OK(c, nil)
+		response.Success(c, nil)
 		return
 	}
-	// 已通过 ValuationJWTAuth 校验，这里仅解析 claims 获取过期时间，不重复校验签名
-	claims := &vservice.ValuationClaims{}
-	if _, _, err := jwt.NewParser().ParseUnverified(tokenStr, claims); err == nil && claims.ExpiresAt != nil {
-		tokenHash := sha256.Sum256([]byte(tokenStr))
-		blacklistKey := valuationBlacklistPrefix + hex.EncodeToString(tokenHash[:])
-		ttl := time.Until(claims.ExpiresAt.Time)
-		if ttl > 0 {
-			_ = cache.Set(c.Request.Context(), blacklistKey, "1", ttl)
-		}
-	}
-	OK(c, nil)
+	// 已通过 middleware.JWTAuth 校验，直接吊销（无效 token 静默忽略）
+	_ = h.sess.Revoke(c.Request.Context(), tokenStr)
+	response.Success(c, nil)
 }

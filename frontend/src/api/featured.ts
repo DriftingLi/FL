@@ -1,5 +1,5 @@
 import axios from 'axios'
-import request from './request'
+import { unwrappedRequest } from './request'
 import { useAuthStore } from '@/stores/auth'
 
 /** 内容精选分类标签映射 */
@@ -23,29 +23,35 @@ export function categoryLabel(category: string): string {
   return featuredCategoryLabels[category] || '资讯'
 }
 
-/** 公开接口 */
-export const featuredApi = {
-  /** 公开列表（仅已发布） */
-  getPublicList(params: { page?: number; page_size?: number; category?: string } = {}) {
-    return request.get('/featured-contents', { params })
-  },
-
-  /** 公开详情（含相关资讯 + 上一篇/下一篇） */
-  getPublicDetail(id: number) {
-    return request.get(`/featured-content/${id}`)
-  }
+/** 精选内容项 */
+export interface FeaturedContent {
+  id: number
+  title: string
+  category?: string
+  summary?: string
+  cover_image?: string
+  content?: string
+  source?: string
+  status?: number
+  sort_order?: number
+  created_at?: string
+  [key: string]: unknown
 }
+
+// ===== 公开接口已移除 =====
+// 官网门户重构为独立 Nuxt 仓库（ADR-0001）后，公开接口改由门户数据访问层消费
+// （portal/api/featured.ts，含 no_view=1 与客户端计数端点）；管理端接口保留于此。
 
 /** 管理端接口 */
 export const adminFeaturedApi = {
   /** 管理端列表（含草稿） */
   getList(params: { page?: number; page_size?: number; category?: string; status?: string } = {}) {
-    return request.get('/admin/featured-contents', { params })
+    return unwrappedRequest.get<{ items: FeaturedContent[]; total: number }>('/admin/featured-contents', { params })
   },
 
   /** 管理端详情 */
   getDetail(id: number) {
-    return request.get(`/admin/featured-content/${id}`)
+    return unwrappedRequest.get<FeaturedContent>(`/admin/featured-content/${id}`)
   },
 
   /** 创建内容精选 */
@@ -59,7 +65,7 @@ export const adminFeaturedApi = {
     status?: number
     sort_order?: number
   }) {
-    return request.post('/admin/featured-content', data)
+    return unwrappedRequest.post<FeaturedContent>('/admin/featured-content', data)
   },
 
   /** 更新内容精选 */
@@ -73,17 +79,17 @@ export const adminFeaturedApi = {
     status?: number
     sort_order?: number
   }) {
-    return request.put(`/admin/featured-content/${id}`, data)
+    return unwrappedRequest.put<FeaturedContent>(`/admin/featured-content/${id}`, data)
   },
 
   /** 删除内容精选 */
   remove(id: number) {
-    return request.delete(`/admin/featured-content/${id}`)
+    return unwrappedRequest.delete<null>(`/admin/featured-content/${id}`)
   },
 
   /** 发布内容精选（草稿 → 已发布） */
   publish(id: number) {
-    return request.post(`/admin/featured-content/${id}/publish`)
+    return unwrappedRequest.post<null>(`/admin/featured-content/${id}/publish`)
   },
 
   /** 上传图片（Markdown 编辑器内嵌 + 封面）

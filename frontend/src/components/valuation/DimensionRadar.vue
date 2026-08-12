@@ -1,21 +1,21 @@
 <script setup lang="ts">
 // 维度评分雷达图（设计稿风格：Electric Blue 单色 + 极淡灰背景网格）
 // 改用 echarts.init 直接渲染（维修培训统一用法，不再依赖 vue-echarts）
-// 维度顺序由 DIMENSION_LABELS 常量提供，但以 scores 实际数据为准（数据驱动，避免硬编码漏维度）
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import * as echarts from 'echarts'
-import { DIMENSION_LABELS } from '@/utils/valuationConstants'
+// 维度顺序由 API 返回的 dimension_scores 数据驱动（后端为唯一来源）
+import { computed, onMounted, ref, watch } from 'vue'
+import { useECharts } from '@/composables/useECharts'
+import type { DimensionScore } from '@/types/valuation/evaluation'
 
 interface Props {
-  /** 维度评分（中文标签 → 0~1） */
-  scores: Record<string, number>
+  /** 维度评分（label + value，顺序由后端契约 model.DimensionLabels 决定） */
+  scores: DimensionScore[]
   height?: string
 }
 
 const props = withDefaults(defineProps<Props>(), { height: '320px' })
 
 const chartRef = ref<HTMLDivElement | null>(null)
-let chart: echarts.ECharts | null = null
+const { init } = useECharts(chartRef)
 
 // 唯一主题色：Electric Blue（与设计稿 CTA 同一色系）
 const COLOR_PRIMARY = '#3E6AE1'
@@ -24,24 +24,13 @@ const COLOR_GRID = '#EEEEEE'
 const COLOR_BG = '#FFFFFF'
 const COLOR_BG_ALT = '#FAFAFA'
 
-/** 排序后的维度列表：先按 DIMENSION_LABELS 顺序，再补齐后端新增的维度 */
-const orderedDimensions = computed(() => {
-  const scoreMap: Record<string, number> = props.scores ?? {}
-  const seen = new Set<string>()
-  const result: { name: string; value: number }[] = []
-  for (const label of DIMENSION_LABELS) {
-    if (scoreMap[label] !== undefined) {
-      result.push({ name: label, value: Number(scoreMap[label].toFixed(3)) })
-      seen.add(label)
-    }
-  }
-  for (const [label, value] of Object.entries(scoreMap)) {
-    if (!seen.has(label)) {
-      result.push({ name: label, value: Number(value.toFixed(3)) })
-    }
-  }
-  return result
-})
+/** 维度列表：按 API 返回的维度评分顺序渲染（数据驱动，后端为唯一来源） */
+const orderedDimensions = computed(() =>
+  (props.scores ?? []).map((d) => ({
+    name: d.label,
+    value: Number(d.value.toFixed(3))
+  }))
+)
 
 const chartOption = computed(() => {
   const dims = orderedDimensions.value
@@ -95,19 +84,11 @@ const chartOption = computed(() => {
 
 function renderChart() {
   if (!chartRef.value) return
-  if (!chart) {
-    chart = echarts.init(chartRef.value)
-  }
-  chart.setOption(chartOption.value, true)
-}
-
-function handleResize() {
-  chart?.resize()
+  init(chartOption.value, true)
 }
 
 onMounted(() => {
   renderChart()
-  window.addEventListener('resize', handleResize)
 })
 
 watch(
@@ -115,12 +96,6 @@ watch(
   () => renderChart(),
   { deep: true }
 )
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', handleResize)
-  chart?.dispose()
-  chart = null
-})
 </script>
 
 <template>

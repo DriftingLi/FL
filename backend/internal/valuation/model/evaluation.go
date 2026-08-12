@@ -95,10 +95,33 @@ type EvaluationResult struct {
 	ConfidenceLow  float64
 	ConfidenceHigh float64
 
-	// 6 维度评分（label → value，便于前端展示）
-	DimensionScores map[string]float64
+	// 本次评估使用的 λ 值（评估时点锁定，供前端走势图数据驱动）
+	LambdaElectric   float64
+	LambdaCombustion float64
+
+	// 6 维度评分（固定顺序：出厂时间/使用强度/品牌价值/市场需求/车辆情况，便于前端展示）
+	DimensionScores []DimensionScore
 	// 文本建议
 	Suggestions []string
+}
+
+// 五维系数标签（唯一事实源）：详情接口 BuildDimensionScores 与 PDF 雷达图共用。
+// 变更标签需同步评估呈现契约（前端雷达图数据驱动，后端为唯一来源）。
+const (
+	DimensionLabelTime      = "出厂时间"
+	DimensionLabelHours     = "使用强度"
+	DimensionLabelBrand     = "品牌价值"
+	DimensionLabelMarket    = "市场需求"
+	DimensionLabelCondition = "车辆情况"
+)
+
+// DimensionLabels 五维标签的固定展示顺序（雷达图顺时针从顶部开始，间隔 72°）。
+var DimensionLabels = []string{
+	DimensionLabelTime,
+	DimensionLabelHours,
+	DimensionLabelBrand,
+	DimensionLabelMarket,
+	DimensionLabelCondition,
 }
 
 // DimensionScore 维度评分条目（label + value）
@@ -147,12 +170,37 @@ type EvaluationDetail struct {
 	ConfidenceHigh  float64          `json:"confidence_high"`
 	ReportPdfPath   string           `json:"report_pdf_path,omitempty"`
 	DimensionScores []DimensionScore `json:"dimension_scores"`
+	// 评估时点锁定的建议与 λ 值（ADR-0004 评估事实性）
+	Suggestions      []string `json:"suggestions"`
+	LambdaElectric   float64  `json:"lambda_electric"`
+	LambdaCombustion float64  `json:"lambda_combustion"`
 }
 
 // EvaluationResponse 创建评估响应 DTO（HTTP 出参）
-// 返回 ID + 全部 K 系数 + 残值 + 置信区间 + 维度评分 + 建议
+// 返回 ID + 输入参数 + 全部 K 系数 + 残值 + 置信区间 + 维度评分 + 建议。
+// 输入参数随创建响应一并返回（与详情接口同源，ADR-0004）：
+// 匿名用户提交评估后可直接渲染结果页，无需调用需登录的详情接口。
 type EvaluationResponse struct {
-	ID              int64            `json:"id"`
+	ID int64 `json:"id"`
+	// 输入参数（与 EvaluationRequest / evaluations 表字段一致）
+	Brand                      string  `json:"brand"`
+	VehicleType                string  `json:"vehicle_type"`
+	Series                     string  `json:"series"`
+	Tonnage                    float64 `json:"tonnage"`
+	ConfigType                 string  `json:"config_type"`
+	MastType                   string  `json:"mast_type"`
+	MastHeightMM               int     `json:"mast_height_mm"`
+	FactoryYear                int     `json:"factory_year"`
+	SaleYear                   int     `json:"sale_year"`
+	UsageHours                 int     `json:"usage_hours"`
+	OriginalPaint              bool    `json:"original_paint"`
+	Province                   string  `json:"province"`
+	City                       string  `json:"city"`
+	HasLicensePlate            bool    `json:"has_license_plate"`
+	HasRegistrationCertificate bool    `json:"has_registration_certificate"`
+	HasMaintenanceRecords      bool    `json:"has_maintenance_records"`
+	ConditionRating            string  `json:"condition_rating"`
+	// 计算结果
 	OriginalPrice   float64          `json:"original_price"`
 	KTime           float64          `json:"k_time"`
 	KHours          float64          `json:"k_hours"`
@@ -165,6 +213,9 @@ type EvaluationResponse struct {
 	ConfidenceHigh  float64          `json:"confidence_high"`
 	DimensionScores []DimensionScore `json:"dimension_scores"`
 	Suggestions     []string         `json:"suggestions"`
+	// 本次评估使用的 λ 值（评估时点锁定，供前端走势图数据驱动）
+	LambdaElectric   float64 `json:"lambda_electric"`
+	LambdaCombustion float64 `json:"lambda_combustion"`
 }
 
 // CalcWeights 加权权重（用于 PDF 计算过程展示）

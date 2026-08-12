@@ -1,57 +1,90 @@
-import request from './request'
+import { unwrappedRequest } from './request'
+import type { Question } from '@/types/question'
+
+export interface QuestionsQuery {
+  page?: number
+  page_size?: number
+  keyword?: string
+  type?: string
+  status?: string
+  created_by?: number
+  /** 按题库标签筛选（LH-28） */
+  tag_id?: number
+}
+
+export interface QuestionPayload {
+  type: string
+  content: string
+  options?: Record<string, unknown>
+  answer: string
+  explanation?: string
+  image_url?: string
+  reference_answer?: string
+  scoring_criteria?: string
+  score?: number
+  status?: string
+  /** 题库标签（LH-28，创建/更新时全量替换） */
+  tag_ids?: number[]
+}
+
+export interface BatchRejectPayload {
+  question_ids: number[]
+  reason: string
+}
+
+/** 题库统计（学员端卡片用） */
+export interface QuestionBankStats {
+  total?: number
+  [key: string]: unknown
+}
 
 export const questionBankApi = {
-  getQuestions(params) {
-    return request.get('/question-bank/questions', { params })
+  getQuestions(params: QuestionsQuery) {
+    return unwrappedRequest.get<{ questions: Question[]; total: number }>('/question-bank/questions', { params })
   },
-  createQuestion(data) {
-    return request.post('/question-bank/questions', data)
+
+  createQuestion(data: QuestionPayload) {
+    return unwrappedRequest.post<Question>('/question-bank/questions', data)
   },
-  getQuestion(id) {
-    return request.get(`/question-bank/questions/${id}`)
+
+  getQuestion(id: number) {
+    return unwrappedRequest.get<Question>(`/question-bank/questions/${id}`)
   },
-  updateQuestion(id, data) {
-    return request.put(`/question-bank/questions/${id}`, data)
+
+  updateQuestion(id: number, data: Partial<QuestionPayload>) {
+    return unwrappedRequest.put<Question>(`/question-bank/questions/${id}`, data)
   },
-  deleteQuestion(id) {
-    return request.delete(`/question-bank/questions/${id}`)
+
+  deleteQuestion(id: number) {
+    return unwrappedRequest.delete<null>(`/question-bank/questions/${id}`)
   },
-  publishQuestion(id) {
-    return request.post(`/question-bank/questions/${id}/publish`)
+
+  publishQuestion(id: number) {
+    return unwrappedRequest.post<null>(`/question-bank/questions/${id}/publish`)
   },
-  rejectQuestion(id, reason) {
-    return request.post(`/question-bank/questions/${id}/reject`, { reason })
+
+  rejectQuestion(id: number, reason: string) {
+    return unwrappedRequest.post<null>(`/question-bank/questions/${id}/reject`, { reason })
   },
-  batchPublish(questionIds) {
-    return request.post('/question-bank/questions/batch-publish', { question_ids: questionIds })
+
+  batchPublish(questionIds: number[]) {
+    return unwrappedRequest.post<null>('/question-bank/questions/batch-publish', { question_ids: questionIds })
   },
-  batchReject(questionIds, reason) {
-    return request.post('/question-bank/questions/batch-reject', { question_ids: questionIds, reason })
+
+  batchReject(questionIds: number[], reason: string) {
+    return unwrappedRequest.post<null>('/question-bank/questions/batch-reject', { question_ids: questionIds, reason })
   },
-  batchImport(questions) {
-    return request.post('/question-bank/questions/batch-import', { questions })
+
+  batchImport(questions: QuestionPayload[]) {
+    return unwrappedRequest.post<{ success_count?: number; failed_count?: number }>('/question-bank/questions/batch-import', { questions })
   },
+
   getStats() {
-    return request.get('/question-bank/stats')
+    return unwrappedRequest.get<QuestionBankStats>('/question-bank/stats')
   },
-  // 课程四分类及其题目数（章节练习用）
-  getCategories() {
-    return request.get('/question-bank/categories')
-  },
-  getKnowledgePoints(params?) {
-    return request.get('/question-bank/knowledge-points', { params })
-  },
-  createKnowledgePoint(data) {
-    return request.post('/question-bank/knowledge-points', data)
-  },
-  updateKnowledgePoint(id, data) {
-    return request.put(`/question-bank/knowledge-points/${id}`, data)
-  },
-  deleteKnowledgePoint(id) {
-    return request.delete(`/question-bank/knowledge-points/${id}`)
-  },
-  uploadImage(formData) {
-    return request.post('/question-bank/upload-image', formData, {
+
+  uploadImage(formData: FormData) {
+    return unwrappedRequest.post<{ url: string }>('/question-bank/upload-image', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 30000
     })

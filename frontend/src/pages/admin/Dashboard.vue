@@ -60,10 +60,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { User, UserFilled, Notebook, Timer, TrendCharts, MagicStick, Calendar, Setting } from '@element-plus/icons-vue'
-import * as echarts from 'echarts'
+import { User, UserFilled, Notebook, Timer, TrendCharts, MagicStick } from '@element-plus/icons-vue'
 import { adminApi } from '@/api/admin'
 import { useAuthStore } from '@/stores/auth'
+import { useECharts } from '@/composables/useECharts'
 
 const authStore = useAuthStore()
 const userName = computed(() =>
@@ -71,11 +71,18 @@ const userName = computed(() =>
 )
 
 const overview = ref<any>({})
-const courseStats = ref([])
-const barChartRef = ref(null)
-const pieChartRef = ref(null)
-let barChart = null
-let pieChart = null
+const courseStats = ref<{ name: string; study_count: number; total_duration: number; avg_progress: number }[]>([])
+const barChartRef = ref<HTMLDivElement | null>(null)
+const pieChartRef = ref<HTMLDivElement | null>(null)
+const { init: initBarChart } = useECharts(barChartRef)
+const { init: initPieChart } = useECharts(pieChartRef)
+
+// 移动端断点：≤768px 时切换饼图 legend 布局，避免 legend 与图像重叠
+const MOBILE_BREAKPOINT = 768
+const isMobile = ref(false)
+function checkMobile() {
+  isMobile.value = window.innerWidth <= MOBILE_BREAKPOINT
+}
 
 const statItems = ref([
   { label: '学员总数', value: '0', icon: User, color: '#2563EB', bgColor: '#EFF6FF' },
@@ -85,13 +92,13 @@ const statItems = ref([
 ])
 
 const quickActions = [
-  { label: '学员管理', path: '/admin/students', icon: User, color: '#2563EB', bgColor: '#EFF6FF' },
-  { label: '课程管理', path: '/admin/courses', icon: Notebook, color: '#10B981', bgColor: '#ECFDF5' },
+  { label: '用户管理', path: '/admin/hrwai-users', icon: User, color: '#2563EB', bgColor: '#EFF6FF' },
+  { label: '课程管理', path: '/admin/course-catalog', icon: Notebook, color: '#10B981', bgColor: '#ECFDF5' },
   { label: '统计分析', path: '/admin/statistics', icon: TrendCharts, color: '#F59E0B', bgColor: '#FFFBEB' },
   { label: '内容生成', path: '/admin/content-generate', icon: MagicStick, color: '#8B5CF6', bgColor: '#F5F3FF' }
 ]
 
-function formatDuration(minutes) {
+function formatDuration(minutes: number) {
   if (!minutes || minutes <= 0) return '0分钟'
   const hours = Math.floor(minutes / 60)
   const mins = minutes % 60
@@ -103,17 +110,14 @@ function formatDuration(minutes) {
 
 const brandColors = ['#2563EB', '#3B82F6', '#60A5FA', '#10B981', '#34D399', '#F59E0B', '#FBBF24', '#8B5CF6']
 
-function initBarChart() {
-  if (!barChartRef.value || courseStats.value.length === 0) return
-
-  if (barChart) barChart.dispose()
-  barChart = echarts.init(barChartRef.value)
+function renderBarChart() {
+  if (courseStats.value.length === 0) return
 
   const names = courseStats.value.map(c => c.name.length > 8 ? c.name.substring(0, 8) + '...' : c.name)
   const counts = courseStats.value.map(c => c.study_count)
   const durations = courseStats.value.map(c => c.total_duration)
 
-  barChart.setOption({
+  initBarChart({
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
@@ -165,18 +169,35 @@ function initBarChart() {
   })
 }
 
-function initPieChart() {
-  if (!pieChartRef.value || courseStats.value.length === 0) return
-
-  if (pieChart) pieChart.dispose()
-  pieChart = echarts.init(pieChartRef.value)
+function renderPieChart() {
+  if (courseStats.value.length === 0) return
 
   const data = courseStats.value.map(c => ({
     name: c.name.length > 10 ? c.name.substring(0, 10) + '...' : c.name,
     value: Math.round(c.avg_progress * 100) / 100
   }))
 
-  pieChart.setOption({
+  // 移动端：legend 水平放底部并启用滚动，避免与饼图重叠；桌面端：legend 垂直放右侧
+  const mobile = isMobile.value
+  const legend = mobile
+    ? {
+        orient: 'horizontal' as const,
+        bottom: 0,
+        left: 'center' as const,
+        type: 'scroll' as const,
+        textStyle: { fontSize: 11, color: '#4B5563' },
+        itemWidth: 10,
+        itemHeight: 10,
+        itemGap: 8
+      }
+    : {
+        orient: 'vertical' as const,
+        right: 10,
+        top: 'center' as const,
+        textStyle: { fontSize: 12, color: '#4B5563' }
+      }
+
+  initPieChart({
     tooltip: {
       trigger: 'item',
       formatter: '{b}: {c}%',
@@ -186,18 +207,14 @@ function initPieChart() {
       textStyle: { color: '#111827' },
       extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 8px;'
     },
-    legend: {
-      orient: 'vertical',
-      right: 10,
-      top: 'center',
-      textStyle: { fontSize: 12, color: '#4B5563' }
-    },
+    legend,
     color: brandColors,
     series: [
       {
         type: 'pie',
-        radius: ['40%', '70%'],
-        center: ['40%', '50%'],
+        // 移动端缩小半径并下移中心，为底部 legend 留出空间
+        radius: mobile ? ['35%', '58%'] : ['40%', '70%'],
+        center: mobile ? ['50%', '45%'] : ['40%', '50%'],
         avoidLabelOverlap: false,
         itemStyle: {
           borderRadius: 6,
@@ -219,16 +236,20 @@ function initPieChart() {
 }
 
 function handleResize() {
-  barChart && barChart.resize()
-  pieChart && pieChart.resize()
+  // 跨越移动端断点时重新初始化饼图，切换 legend 布局避免重叠（容器缩放由 useECharts 处理）
+  const wasMobile = isMobile.value
+  checkMobile()
+  if (wasMobile !== isMobile.value) {
+    renderPieChart()
+  }
 }
 
 async function loadStatistics() {
   try {
-    const res = await adminApi.getStatistics()
-    if (res.code === 200 && res.data) {
-      overview.value = res.data.overview || {}
-      courseStats.value = res.data.course_stats || []
+    const data = await adminApi.getStatistics()
+    if (data) {
+      overview.value = data.overview || {}
+      courseStats.value = data.course_stats || []
 
       statItems.value[0].value = overview.value.total_students || 0
       statItems.value[1].value = overview.value.active_today || 0
@@ -236,8 +257,8 @@ async function loadStatistics() {
       statItems.value[3].value = formatDuration(overview.value.total_study_duration || 0)
 
       await nextTick()
-      initBarChart()
-      initPieChart()
+      renderBarChart()
+      renderPieChart()
     }
   } catch (error) {
     console.error('加载统计数据失败:', error)
@@ -245,14 +266,13 @@ async function loadStatistics() {
 }
 
 onMounted(() => {
+  checkMobile()
   loadStatistics()
   window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-  if (barChart) { barChart.dispose(); barChart = null }
-  if (pieChart) { pieChart.dispose(); pieChart = null }
 })
 </script>
 

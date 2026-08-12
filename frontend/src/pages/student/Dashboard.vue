@@ -80,7 +80,7 @@ import { studentApi } from '@/api/student'
 const authStore = useAuthStore()
 
 const userName = computed(() =>
-  authStore.userInfo?.name || authStore.userInfo?.username || '同学'
+  authStore.userInfo?.username || '同学'
 )
 
 // 进行中的课程
@@ -120,36 +120,48 @@ const statsEmpty = computed(() => {
 async function loadCourses() {
   try {
     const res = await studentApi.getProfile()
-    if (res.code === 200 && res.data?.course_progress) {
-      // 进行中的课程：0 < progress < 100，按最近学习时间降序
-      activeCourses.value = res.data.course_progress
+    if (res?.course_progress) {
+      activeCourses.value = res.course_progress
         .filter((c: any) => c.progress > 0 && c.progress < 100)
         .sort((a: any, b: any) => (b.study_date || '').localeCompare(a.study_date || ''))
         .slice(0, 5)
         .map((c: any) => ({
           title: c.course_name,
           badge: `${Math.round(c.progress)}%`,
-          path: `/training/course/${c.course_id}`
+          path: `/training/courses`
         }))
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('加载课程失败:', error)
+    /* 错误已由拦截器提示 */
   }
 }
 
 async function loadRecentLearning() {
   try {
-    const res = await studentApi.getRecords({ page: 1, page_size: 5 })
-    if (res.code === 200 && res.data?.records) {
-      recentLearning.value = res.data.records.map((r: any) => ({
+    // 多拉一些记录再按课程去重：study_record 是逐章节/逐次学习的行，
+    // 同一门课会占多条记录，直接取前 5 条会导致“最近学习”卡片出现重复课程。
+    const res = await studentApi.getRecords({ page: 1, page_size: 50 })
+    if (res?.records) {
+      // 记录已按 study_date 倒序，第一次遇到的 course_id 即该课程最新学习记录
+      const seenCourses = new Set<number>()
+      const recentCourses: any[] = []
+      for (const r of res.records) {
+        if (!r.course_id || seenCourses.has(r.course_id)) continue
+        seenCourses.add(r.course_id)
+        recentCourses.push(r)
+        if (recentCourses.length >= 5) break
+      }
+      recentLearning.value = recentCourses.map((r: any) => ({
         title: r.course_name || '未知课程',
         subtitle: r.chapter_title || `${r.study_duration || 0} 分钟`,
         badge: r.study_duration ? `${r.study_duration}分钟` : '',
-        path: r.course_id ? `/training/course/${r.course_id}` : ''
+        path: `/training/courses`
       }))
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('加载最近学习失败:', error)
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -158,12 +170,13 @@ async function loadStudyStats() {
   try {
     const days = currentTab.value === '30d' ? 30 : 7
     const res = await studentApi.getStudyStats({ days })
-    if (res.code === 200 && res.data) {
-      studyStats.value = res.data as StudyStats
+    if (res) {
+      studyStats.value = res as StudyStats
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('加载学习统计失败:', error)
     studyStats.value = null
+    /* 错误已由拦截器提示 */
   } finally {
     statsLoading.value = false
   }
@@ -171,6 +184,9 @@ async function loadStudyStats() {
 
 function renderStudyChart() {
   if (!chartRef.value || !studyStats.value) return
+  // 数据全为 0 时 chartRef 被 v-show 隐藏（display:none），此时初始化会触发
+  // ECharts "Can't get DOM width or height" 警告，直接跳过
+  if (statsEmpty.value) return
 
   const labels = studyStats.value.labels
   const data = studyStats.value.data

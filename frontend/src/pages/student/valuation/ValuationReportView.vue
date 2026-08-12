@@ -7,9 +7,12 @@ import PageHeader from '@/components/valuation/PageHeader.vue'
 import ResultCard from '@/components/valuation/ResultCard.vue'
 import DimensionRadar from '@/components/valuation/DimensionRadar.vue'
 import FutureValueChart from '@/components/valuation/FutureValueChart.vue'
+import ResultSuggestions from '@/components/valuation/ResultSuggestions.vue'
 import { getEvaluationDetail } from '@/api/valuation/evaluation'
 import { generateReport, getReportDownloadUrl } from '@/api/valuation/report'
 import { downloadEvaluationReportBlob } from '@/api/valuation/evaluation'
+import { useEvaluationStore } from '@/stores/valuationEvaluation'
+import { downloadReport } from '@/composables/useReportDownload'
 import {
   formatBoolean,
   formatBytes,
@@ -23,6 +26,7 @@ import type { EvaluationDetailResponse } from '@/types/valuation/evaluation'
 
 const route = useRoute()
 const router = useRouter()
+const store = useEvaluationStore()
 
 const id = computed(() => {
   const v = route.params.id
@@ -31,7 +35,10 @@ const id = computed(() => {
   return 0
 })
 
-const data = ref<EvaluationDetailResponse | null>(null)
+const detailData = ref<EvaluationDetailResponse | null>(null)
+// 渲染数据：优先提交后的内存结果（匿名用户可完整渲染，创建响应含输入参数），
+// 详情接口数据仅作刷新/直达兜底（详情需登录，匿名时保持 null）
+const data = computed<EvaluationDetailResponse | null>(() => store.currentResult ?? detailData.value)
 const loading = ref(false)
 const generating = ref(false)
 const pdfInfo = ref<{ file_name: string; file_size: number } | null>(null)
@@ -44,8 +51,8 @@ async function loadDetail() {
   if (!id.value) return
   loading.value = true
   try {
-    data.value = await getEvaluationDetail(id.value)
-    const pdfPath = data.value?.report_pdf_path
+    detailData.value = await getEvaluationDetail(id.value)
+    const pdfPath = detailData.value?.report_pdf_path
     if (pdfPath) {
       const filename = pdfPath.split(/[\\/]/).pop() ?? ''
       pdfInfo.value = { file_name: filename, file_size: 0 }
@@ -68,34 +75,19 @@ async function onGenerate() {
 
 async function onDownload() {
   if (!id.value) return
-  const fileName = pdfInfo.value?.file_name || `evaluation_report_${id.value}.pdf`
-  try {
-    const blob = await downloadEvaluationReportBlob(id.value)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName
-    a.style.display = 'none'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(url), 1500)
-  } catch {
-    window.open(getReportDownloadUrl(id.value), '_blank')
-  }
+  const reportId: number = id.value
+  const fileName = pdfInfo.value?.file_name || `evaluation_report_${reportId}.pdf`
+  await downloadReport(
+    () => downloadEvaluationReportBlob(reportId),
+    fileName,
+    { fallbackUrl: getReportDownloadUrl(reportId) }
+  )
 }
 
 function backToResult() {
-  router.push('/valuation/result')
+  // 带 id 返回：结果页可兜底拉详情，刷新/直达路径一致
+  router.push({ path: '/valuation/result', query: { id: String(route.params.id) } })
 }
-
-// 维度评分转 Map
-const dimensionScoresMap = computed(() => {
-  const arr = data.value?.dimension_scores ?? []
-  const map: Record<string, number> = {}
-  for (const d of arr) map[d.label] = d.value
-  return map
-})
 
 // 使用年限 = 评估年份 - 出厂年份
 const usageYears = computed(() => {
@@ -159,7 +151,7 @@ const basicInfoItems = computed(() => {
         <el-col :xs="24" :lg="10">
           <section class="card-surface radar-block">
             <h2 class="section-title">维度评分</h2>
-            <DimensionRadar :scores="dimensionScoresMap" height="320px" />
+            <DimensionRadar :scores="data.dimension_scores || []" height="320px" />
           </section>
         </el-col>
       </el-row>
@@ -173,6 +165,7 @@ const basicInfoItems = computed(() => {
           :k-time="data.k_time"
           :k-hours="data.k_hours"
           :k-brand="data.k_brand"
+          :lambda="data.lambda_electric"
           :sale-year="data.sale_year || 0"
           height="320px"
         />
@@ -207,12 +200,7 @@ const basicInfoItems = computed(() => {
       <!-- 评估建议 -->
       <section class="card-surface section-block" v-if="data.suggestions && data.suggestions.length">
         <h2 class="section-title">评估建议</h2>
-        <ul class="suggestion-list">
-          <li v-for="(s, idx) in data.suggestions" :key="idx">
-            <span class="suggestion-num">{{ String(idx + 1).padStart(2, '0') }}</span>
-            <span class="suggestion-text">{{ s }}</span>
-          </li>
-        </ul>
+        <ResultSuggestions :items="data.suggestions" />
       </section>
 
       <!-- 免责声明 -->
@@ -233,7 +221,19 @@ const basicInfoItems = computed(() => {
         <el-button type="primary" link :icon="Download" @click="onDownload">下载</el-button>
       </div>
     </div>
-    <el-empty v-else description="未找到该评估记录" />
+    <!-- 匿名/无数据降级：报告生成与下载为公开接口，详情展示需登录 -->
+    <div v-else class="app-container report-view valuation-root">
+      <PageHeader :title="`评估报告 #${id}`" :subtitle="`生成于 ${formatDateTime(new Date().toISOString())}`">
+        <template #actions>
+          <el-button :icon="ArrowLeft" @click="backToResult">返回结果</el-button>
+          <el-button :icon="Download" @click="onDownload">下载 PDF</el-button>
+          <el-button type="primary" :icon="CircleCheck" :loading="generating" @click="onGenerate">
+            {{ pdfInfo ? '重新生成 PDF' : '生成 PDF' }}
+          </el-button>
+        </template>
+      </PageHeader>
+      <el-empty description="登录后可查看报告详情" />
+    </div>
   </div>
 </template>
 
@@ -295,38 +295,6 @@ const basicInfoItems = computed(() => {
   background: rgba(62, 106, 225, 0.06);
 }
 
-/* ===== 评估建议 ===== */
-.suggestion-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--sp-3) var(--sp-6);
-}
-.suggestion-list li {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  font-size: var(--fs-sm);
-  line-height: 1.75;
-  color: var(--color-text-secondary);
-}
-.suggestion-num {
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-medium);
-  color: var(--color-accent);
-  background: rgba(62, 106, 225, 0.08);
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-.suggestion-text {
-  flex: 1;
-}
-
 /* ===== 免责声明 ===== */
 .disclaimer {
   background: var(--color-bg-muted);
@@ -365,9 +333,6 @@ const basicInfoItems = computed(() => {
     padding-bottom: var(--sp-10);
   }
   .info-grid {
-    grid-template-columns: 1fr;
-  }
-  .suggestion-list {
     grid-template-columns: 1fr;
   }
   .radar-block,

@@ -18,72 +18,164 @@
           <p class="card-subtitle">填写以下信息完成注册</p>
         </div>
 
+        <el-radio-group v-model="registerMode" class="mode-switch">
+          <el-radio-button label="phone">手机号注册</el-radio-button>
+          <el-radio-button label="email">邮箱注册</el-radio-button>
+        </el-radio-group>
+
         <el-form ref="formRef" :model="formData" :rules="rules" label-width="0" class="register-form">
-          <el-form-item prop="name">
+          <el-form-item prop="nickname">
             <el-input
-              v-model="formData.name"
-              placeholder="真实姓名"
+              v-model="formData.nickname"
+              placeholder="昵称（1-30字，展示用）"
               prefix-icon="Postcard"
               size="large"
               class="form-input"
             />
           </el-form-item>
 
-          <el-form-item prop="phone">
-            <el-input
-              v-model="formData.phone"
-              placeholder="手机号"
-              prefix-icon="Phone"
-              size="large"
-              class="form-input"
-              maxlength="11"
-            />
-          </el-form-item>
+          <template v-if="registerMode === 'phone'">
+            <el-form-item prop="phone">
+              <el-input
+                v-model="formData.phone"
+                placeholder="请输入手机号"
+                prefix-icon="Phone"
+                size="large"
+                class="form-input"
+                maxlength="11"
+                @keyup.enter="handleRegister"
+              />
+            </el-form-item>
 
-          <el-form-item prop="password">
-            <el-input
-              v-model="formData.password"
-              type="password"
-              placeholder="密码（6-20位字符）"
-              prefix-icon="Lock"
-              show-password
-              size="large"
-              class="form-input"
-            />
-          </el-form-item>
+            <el-form-item prop="code">
+              <div class="code-row">
+                <el-input
+                  v-model="formData.code"
+                  placeholder="6位手机验证码"
+                  prefix-icon="Message"
+                  size="large"
+                  class="form-input code-input"
+                  maxlength="6"
+                  @keyup.enter="handleRegister"
+                />
+                <el-button
+                  :disabled="countdown > 0 || codeSending"
+                  size="large"
+                  class="code-btn"
+                  @click="handleSendCode"
+                >
+                  {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
+                </el-button>
+              </div>
+            </el-form-item>
 
-          <el-form-item prop="confirmPassword">
-            <el-input
-              v-model="formData.confirmPassword"
-              type="password"
-              placeholder="确认密码"
-              prefix-icon="Lock"
-              show-password
-              size="large"
-              class="form-input"
-            />
-          </el-form-item>
+            <el-form-item prop="password">
+              <el-input
+                v-model="formData.password"
+                type="password"
+                placeholder="设置密码（6-20位，用于账号密码登录）"
+                prefix-icon="Lock"
+                show-password
+                size="large"
+                class="form-input"
+              />
+            </el-form-item>
 
-          <el-form-item prop="company">
-            <el-input
-              v-model="formData.company"
-              placeholder="单位（选填）"
-              prefix-icon="OfficeBuilding"
-              size="large"
-              class="form-input"
-            />
-          </el-form-item>
+            <el-form-item prop="confirmPassword">
+              <el-input
+                v-model="formData.confirmPassword"
+                type="password"
+                placeholder="确认密码"
+                prefix-icon="Lock"
+                show-password
+                size="large"
+                class="form-input"
+                @keyup.enter="handleRegister"
+              />
+            </el-form-item>
 
-          <el-form-item prop="email">
-            <el-input
-              v-model="formData.email"
-              placeholder="邮箱（选填）"
-              prefix-icon="Message"
-              size="large"
-              class="form-input"
-              @keyup.enter="handleRegister"
-            />
-          </el-form-item>
+            <el-form-item prop="company">
+              <el-input
+                v-model="formData.company"
+                placeholder="您的公司（选填）"
+                prefix-icon="OfficeBuilding"
+                size="large"
+                class="form-input"
+                @keyup.enter="handleRegister"
+              />
+            </el-form-item>
+          </template>
+
+          <template v-else>
+            <el-form-item prop="email">
+              <el-input
+                v-model="formData.email"
+                placeholder="请输入邮箱"
+                prefix-icon="Message"
+                size="large"
+                class="form-input"
+                @keyup.enter="handleRegister"
+              />
+            </el-form-item>
+
+            <el-form-item prop="code">
+              <div class="code-row">
+                <el-input
+                  v-model="formData.code"
+                  placeholder="6位邮箱验证码"
+                  prefix-icon="Message"
+                  size="large"
+                  class="form-input code-input"
+                  maxlength="6"
+                  @keyup.enter="handleRegister"
+                />
+                <el-button
+                  :disabled="countdown > 0 || codeSending"
+                  size="large"
+                  class="code-btn"
+                  @click="handleSendCode"
+                >
+                  {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
+                </el-button>
+              </div>
+            </el-form-item>
+
+            <el-form-item prop="password">
+              <el-input
+                v-model="formData.password"
+                type="password"
+                placeholder="设置密码（6-20位，用于账号密码登录）"
+                prefix-icon="Lock"
+                show-password
+                size="large"
+                class="form-input"
+              />
+            </el-form-item>
+
+            <el-form-item prop="confirmPassword">
+              <el-input
+                v-model="formData.confirmPassword"
+                type="password"
+                placeholder="确认密码"
+                prefix-icon="Lock"
+                show-password
+                size="large"
+                class="form-input"
+                @keyup.enter="handleRegister"
+              />
+            </el-form-item>
+
+            <el-form-item prop="company">
+              <el-input
+                v-model="formData.company"
+                placeholder="您的公司（选填）"
+                prefix-icon="OfficeBuilding"
+                size="large"
+                class="form-input"
+              />
+            </el-form-item>
+          </template>
+
 
           <el-form-item>
             <el-button
@@ -108,27 +200,43 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { authApi } from '@/api/auth'
-import { ElMessage } from 'element-plus'
+import { useAuthStore } from '@/stores/auth'
+import { getDefaultWorkspaceBySubdomain } from '@/utils/subdomain'
+import { ElMessage, type FormInstance } from 'element-plus'
+import type { FormItemRule } from 'element-plus'
 import { EditPen } from '@element-plus/icons-vue'
-import { passwordRules, nameRules, phoneRules, emailRules, companyRules } from '@/utils/validate'
+import { useCountdown } from '@/composables/useCountdown'
+import {
+  passwordRules,
+  nicknameRules,
+  phoneRules,
+  companyRules,
+  requiredEmailRules,
+  emailCodeRules
+} from '@/utils/validate'
 
 const router = useRouter()
-const formRef = ref(null)
+const authStore = useAuthStore()
+const formRef = ref<FormInstance | null>(null)
 const loading = ref(false)
+const registerMode = ref<'phone' | 'email'>('phone')
+const { remaining: countdown, start: startCountdown } = useCountdown()
+const codeSending = ref(false)
 
 const formData = reactive({
-  name: '',
+  nickname: '',
   phone: '',
   password: '',
   confirmPassword: '',
   company: '',
-  email: ''
+  email: '',
+  code: ''
 })
 
-const validateConfirmPassword = (rule, value, callback) => {
+const validateConfirmPassword: FormItemRule['validator'] = (_rule, value: string, callback) => {
   if (value === '') {
     callback(new Error('请再次输入密码'))
   } else if (value !== formData.password) {
@@ -138,38 +246,88 @@ const validateConfirmPassword = (rule, value, callback) => {
   }
 }
 
-const rules = {
-  name: nameRules,
-  phone: phoneRules,
-  password: passwordRules,
-  confirmPassword: [
-    { required: true, message: '请确认密码', trigger: 'blur' },
-    { validator: validateConfirmPassword, trigger: 'blur' }
-  ],
-  company: companyRules,
-  email: emailRules
+const rules = computed(() =>
+  registerMode.value === 'email'
+    ? {
+        nickname: nicknameRules,
+        email: requiredEmailRules,
+        code: emailCodeRules,
+        password: passwordRules,
+        confirmPassword: [
+          { required: true, message: '请确认密码', trigger: 'blur' },
+          { validator: validateConfirmPassword, trigger: 'blur' }
+        ],
+        company: companyRules
+      }
+    : {
+        nickname: nicknameRules,
+        phone: phoneRules,
+        code: emailCodeRules,
+        password: passwordRules,
+        confirmPassword: [
+          { required: true, message: '请确认密码', trigger: 'blur' },
+          { validator: validateConfirmPassword, trigger: 'blur' }
+        ],
+        company: companyRules
+      }
+)
+
+async function handleSendCode() {
+  codeSending.value = true
+  try {
+    if (registerMode.value === 'phone') {
+      const phone = formData.phone.trim()
+      if (!/^1[3-9]\d{9}$/.test(phone)) {
+        ElMessage.warning('请输入正确的手机号')
+        return
+      }
+      await authApi.sendPhoneCode({ phone, purpose: 'register' })
+    } else {
+      const email = formData.email.trim()
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        ElMessage.warning('请输入正确的邮箱地址')
+        return
+      }
+      await authApi.sendEmailCode({ email, purpose: 'register' })
+    }
+    ElMessage.success('验证码已发送，请查收')
+    startCountdown(60)
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    codeSending.value = false
+  }
 }
 
 async function handleRegister() {
+  if (!formRef.value) return
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
 
   loading.value = true
   try {
-    const res = await authApi.register({
-      name: formData.name,
-      phone: formData.phone,
-      password: formData.password,
-      company: formData.company,
-      email: formData.email
-    })
-
-    if (res.code === 201 || res.code === 200) {
-      ElMessage.success('注册成功，即将跳转到登录页...')
-      setTimeout(() => {
-        router.push('/login')
-      }, 1500)
+    if (registerMode.value === 'email') {
+      const info = await authApi.emailRegister({
+        nickname: formData.nickname,
+        email: formData.email.trim(),
+        code: formData.code.trim(),
+        company: formData.company,
+        password: formData.password
+      })
+      authStore.setAuthData(info)
+    } else if (registerMode.value === 'phone') {
+      const info = await authApi.phoneRegister({
+        nickname: formData.nickname,
+        phone: formData.phone.trim(),
+        code: formData.code.trim(),
+        company: formData.company,
+        password: formData.password
+      })
+      authStore.setAuthData(info)
     }
+
+    ElMessage.success('注册成功')
+    router.push(getDefaultWorkspaceBySubdomain())
   } catch (e) {
     console.error('Register error:', e)
   } finally {
@@ -257,7 +415,7 @@ async function handleRegister() {
 
 .card-header {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 20px;
 }
 
 .card-icon {
@@ -291,6 +449,63 @@ async function handleRegister() {
 .register-form {
   margin-top: 4px;
 }
+
+.mode-switch {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.mode-switch :deep(.el-radio-button) {
+  flex: 1;
+  display: flex;
+}
+
+.mode-switch :deep(.el-radio-button__inner) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  width: 100%;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  background: #FFFFFF;
+  color: #64748B;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0;
+  box-shadow: none;
+  transition: all 0.25s ease;
+}
+
+.mode-switch :deep(.el-radio-button:not(.is-active):hover .el-radio-button__inner) {
+  border-color: #99F6E4;
+  color: #0D9488;
+  background: #F0FDFA;
+}
+
+.mode-switch :deep(.el-radio-button.is-active .el-radio-button__inner) {
+  background: linear-gradient(135deg, #0EA5E9 0%, #14B8A6 100%);
+  border-color: transparent;
+  color: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+}
+
+.code-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.code-input {
+  flex: 1;
+}
+
+.code-btn {
+  min-width: 124px;
+}
+
 
 .form-input :deep(.el-input__wrapper) {
   border-radius: 12px;

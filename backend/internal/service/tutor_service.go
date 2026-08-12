@@ -2,15 +2,16 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/response"
 )
 
 // TutorService 导师服务。
@@ -18,15 +19,17 @@ type TutorService struct {
 	db           *gorm.DB
 	uploadFolder string
 	fileService  *FileService
+
+	logger *zap.Logger
 }
 
 // NewTutorService 创建导师服务实例。
-func NewTutorService(db *gorm.DB, uploadFolder string, fileService *FileService) *TutorService {
-	return &TutorService{db: db, uploadFolder: uploadFolder, fileService: fileService}
+func NewTutorService(db *gorm.DB, uploadFolder string, fileService *FileService, logger *zap.Logger) *TutorService {
+	return &TutorService{db: db, uploadFolder: uploadFolder, fileService: fileService, logger: logger}
 }
 
 // GetCourses 导师课程列表。
-func (s *TutorService) GetCourses(tutorID *int, page, pageSize int) map[string]any {
+func (s *TutorService) GetCourses(tutorID *int, page, pageSize int) CoursePageResult {
 	if page <= 0 {
 		page = 1
 	}
@@ -38,27 +41,24 @@ func (s *TutorService) GetCourses(tutorID *int, page, pageSize int) map[string]a
 	q.Count(&total)
 	var courses []model.Course
 	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&courses)
-	items := make([]map[string]any, 0, len(courses))
+	items := make([]CourseDTO, 0, len(courses))
 	for i := range courses {
-		item := courseToDict(&courses[i])
-		var chapterCount int64
-		s.db.Model(&model.Chapter{}).Where("course_id = ?", courses[i].CourseID).Count(&chapterCount)
-		item["chapter_count"] = chapterCount
+		item := courseToDTO(&courses[i])
+		fillChapterCount(s.db, courses[i].CourseID, &item)
 		// 统计该课程的学习学员数（study_record 表中去重的 student_id 数量）
 		var studentCount int64
 		s.db.Table("study_record").
 			Where("course_id = ?", courses[i].CourseID).
 			Distinct("student_id").
 			Count(&studentCount)
-		item["student_count"] = studentCount
+		item.StudentCount = &studentCount
 		items = append(items, item)
 	}
-	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	return map[string]any{
-		"total":   total,
-		"page":    page,
-		"pages":   pages,
-		"courses": items,
+	return CoursePageResult{
+		Courses: items,
+		Page:    page,
+		Pages:   response.PageCount(total, pageSize),
+		Total:   total,
 	}
 }
 
@@ -125,38 +125,39 @@ func (s *TutorService) GetGradingStats(tutorID, days int) map[string]any {
 }
 
 // GetCourseChapters 导师章节列表（含文件）。
-func (s *TutorService) GetCourseChapters(courseID int) (map[string]any, error) {
+func (s *TutorService) GetCourseChapters(courseID int) (*TutorCourseChaptersDTO, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		return nil, errors.New("课程不存在")
 	}
 	var chapters []model.Chapter
 	s.db.Where("course_id = ?", courseID).Order("order_num").Find(&chapters)
-	resultChapters := make([]map[string]any, 0, len(chapters))
+	resultChapters := make([]ChapterDTO, 0, len(chapters))
 	for i := range chapters {
 		ch := &chapters[i]
-		chDict := chapterToDict(ch)
+		chDTO := chapterToDTO(ch)
 		var files []model.ChapterFile
 		s.db.Where("chapter_id = ?", ch.ChapterID).Order("created_at").Find(&files)
-		fileList := make([]map[string]any, 0, len(files))
+		fileList := make([]ChapterFileDTO, 0, len(files))
 		if len(files) == 0 && ch.FileURL != "" {
 			fileList = append(fileList, legacyFileEntry(ch))
 		} else {
 			for j := range files {
-				fileList = append(fileList, chapterFileToDict(&files[j]))
+				fileList = append(fileList, chapterFileToDTO(&files[j]))
 			}
 		}
-		chDict["files"] = fileList
-		resultChapters = append(resultChapters, chDict)
+		chDTO.Files = &fileList
+		resultChapters = append(resultChapters, chDTO)
 	}
-	return map[string]any{
-		"course":   courseToDict(&course),
-		"chapters": resultChapters,
+	cd := courseToDTO(&course)
+	return &TutorCourseChaptersDTO{
+		Course:   cd,
+		Chapters: resultChapters,
 	}, nil
 }
 
 // GetChapterDetail 章节详情（含上下章ID + 文件列表，供导师端编辑页使用）。
-func (s *TutorService) GetChapterDetail(chapterID int) (map[string]any, error) {
+func (s *TutorService) GetChapterDetail(chapterID int) (*ChapterDetailDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
@@ -179,31 +180,32 @@ func (s *TutorService) GetChapterDetail(chapterID int) (map[string]any, error) {
 	// 文件列表
 	var files []model.ChapterFile
 	s.db.Where("chapter_id = ?", chapterID).Order("created_at").Find(&files)
-	fileList := make([]map[string]any, 0, len(files))
+	fileList := make([]ChapterFileDTO, 0, len(files))
 	if len(files) == 0 && chapter.FileURL != "" {
 		fileList = append(fileList, legacyFileEntry(&chapter))
 	} else {
 		for j := range files {
-			fileList = append(fileList, chapterFileToDict(&files[j]))
+			fileList = append(fileList, chapterFileToDTO(&files[j]))
 		}
 	}
-	result := chapterToDict(&chapter)
+	result := chapterToDTO(&chapter)
+	var prevIDPtr, nextIDPtr *int
 	if prevID != 0 {
-		result["previous_chapter_id"] = prevID
-	} else {
-		result["previous_chapter_id"] = nil
+		prevIDPtr = &prevID
 	}
 	if nextID != 0 {
-		result["next_chapter_id"] = nextID
-	} else {
-		result["next_chapter_id"] = nil
+		nextIDPtr = &nextID
 	}
-	result["files"] = fileList
-	return result, nil
+	return &ChapterDetailDTO{
+		ChapterDTO:        result,
+		Files:             fileList,
+		PreviousChapterID: prevIDPtr,
+		NextChapterID:     nextIDPtr,
+	}, nil
 }
 
 // UploadChapterFile 上传章节文件。
-func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileContent []byte) (map[string]any, error) {
+func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileContent []byte) (*ChapterFileDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
@@ -222,7 +224,10 @@ func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileCon
 	}
 
 	contentType := s.fileService.GetContentType(filename)
-	fileURL, filePath := s.fileService.SaveFile(fileContent, filename, "chapters")
+	fileURL, err := s.fileService.SaveFile(fileContent, filename, "chapters")
+	if err != nil {
+		return nil, fmt.Errorf("保存文件失败: %w", err)
+	}
 
 	chapterFile := model.ChapterFile{
 		ChapterID:   &chapterID,
@@ -242,18 +247,21 @@ func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileCon
 		s.db.Save(&chapter)
 	}
 
-	// PPT 自动转图片
+	// PPT 自动转图片并持久化 slide URL 列表到 chapter.slide_urls
 	if contentType == "ppt" {
-		slidesDir := filepath.Join(s.uploadFolder, "slides", fmt.Sprintf("%d", chapterID))
-		_ = os.RemoveAll(slidesDir)
-		_ = s.fileService.ConvertPPTToImages(filePath, slidesDir)
+		slideURLs := s.fileService.ConvertPPTToImages(fileContent, chapterID)
+		if len(slideURLs) > 0 {
+			slideURLsJSON, _ := json.Marshal(slideURLs)
+			s.db.Model(&model.Chapter{}).Where("chapter_id = ?", chapterID).Update("slide_urls", string(slideURLsJSON))
+		}
 	}
 
-	return chapterFileToDict(&chapterFile), nil
+	d := chapterFileToDTO(&chapterFile)
+	return &d, nil
 }
 
 // UpdateChapterInfo 更新章节信息。
-func (s *TutorService) UpdateChapterInfo(chapterID int, data map[string]any) (map[string]any, error) {
+func (s *TutorService) UpdateChapterInfo(chapterID int, data map[string]any) (*ChapterDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
@@ -276,7 +284,8 @@ func (s *TutorService) UpdateChapterInfo(chapterID int, data map[string]any) (ma
 	if err := s.db.Save(&chapter).Error; err != nil {
 		return nil, err
 	}
-	return chapterToDict(&chapter), nil
+	d := chapterToDTO(&chapter)
+	return &d, nil
 }
 
 // DeleteChapterFileByID 删除章节文件。
@@ -286,7 +295,7 @@ func (s *TutorService) DeleteChapterFileByID(fileID int) (map[string]any, error)
 		return nil, errors.New("文件不存在")
 	}
 	if s.fileService != nil {
-		s.fileService.DeleteFile(chapterFile.FileURL)
+		_ = s.fileService.DeleteFile(chapterFile.FileURL)
 	}
 	chapterID := chapterFile.ChapterID
 	s.db.Delete(&chapterFile)
@@ -320,7 +329,7 @@ func (s *TutorService) BatchDeleteChapterFiles(fileIDs []int) map[string]any {
 			continue
 		}
 		if s.fileService != nil {
-			s.fileService.DeleteFile(chapterFile.FileURL)
+			_ = s.fileService.DeleteFile(chapterFile.FileURL)
 		}
 		chapterID := chapterFile.ChapterID
 		s.db.Delete(&chapterFile)

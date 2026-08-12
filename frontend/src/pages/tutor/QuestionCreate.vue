@@ -11,9 +11,9 @@
           <el-option label="简答题" value="short_answer" />
         </el-select>
       </el-form-item>
-      <el-form-item label="知识点">
-        <el-select v-model="form.knowledge_point_id" clearable placeholder="选择知识点">
-          <el-option v-for="kp in knowledgePoints" :key="kp.id" :label="kp.name" :value="kp.id" />
+      <el-form-item label="考点标签">
+        <el-select v-model="form.tag_ids" multiple filterable collapse-tags placeholder="选择标签（可多选）">
+          <el-option v-for="t in tags" :key="t.id" :label="t.name" :value="t.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="题干" required>
@@ -47,7 +47,7 @@
       <el-form-item v-if="hasOptions" label="选项" required>
         <div v-for="key in optionKeys" :key="key" class="option-row">
           <span class="opt-key">{{ key }}</span>
-          <el-input v-model="form.options[key]" :placeholder="`选项${key}内容`" />
+          <el-input v-model="form.options![key]" :placeholder="`选项${key}内容`" />
         </div>
       </el-form-item>
       <el-form-item v-if="form.type === 'true_false'" label="正确答案" required>
@@ -91,21 +91,34 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { questionBankApi } from '@/api/questionBank'
+import { questionBankApi, type QuestionPayload } from '@/api/questionBank'
+import { trainingApi } from '@/api/training'
 
 const route = useRoute()
 const router = useRouter()
 
 const isEdit = computed(() => !!route.query.id)
 const hasOptions = computed(() => ['single_choice', 'multi_choice', 'fault_image'].includes(form.value.type))
-const optionKeys = ['A', 'B', 'C', 'D']
+const optionKeys = ['A', 'B', 'C', 'D'] as const
 
 const submitting = ref(false)
-const knowledgePoints = ref([])
-const multiAnswer = ref([])
+const tags = ref<{ id: number; name: string }[]>([])
+const multiAnswer = ref<string[]>([])
 const imageUploading = ref(false)
 
-const form = ref({
+const form = ref<{
+  type: string
+  content: string
+  options: { A: string; B: string; C: string; D: string } | null
+  answer: string
+  explanation: string
+  image_url: string
+  reference_answer: string
+  scoring_criteria: string
+  score: number
+  tag_ids: number[]
+  status: string
+}>({
   type: 'single_choice',
   content: '',
   options: { A: '', B: '', C: '', D: '' },
@@ -115,26 +128,32 @@ const form = ref({
   reference_answer: '',
   scoring_criteria: '',
   score: 3,
-  knowledge_point_id: null,
+  tag_ids: [],
   status: 'pending'
 })
 
 onMounted(async () => {
   try {
-    const res = await questionBankApi.getKnowledgePoints()
-    knowledgePoints.value = res.data || []
+    // 拦截器已解包信封
+    const data = await trainingApi.getTags()
+    tags.value = data.tags || []
   } catch (e) {}
 
   if (isEdit.value) {
     try {
-      const res = await questionBankApi.getQuestion(route.query.id)
-      const q = res.data
-      form.value = { ...form.value, ...q }
+      const res = await questionBankApi.getQuestion(Number(route.query.id))
+      const q = res
+      form.value = {
+        ...form.value,
+        ...q,
+        options: (q.options as { A: string; B: string; C: string; D: string } | undefined) ?? form.value.options,
+        tag_ids: (q as unknown as Record<string, unknown>).tag_ids as number[] | undefined ?? form.value.tag_ids
+      }
       if (q.type === 'multi_choice' && q.answer) {
         multiAnswer.value = q.answer.split(',')
       }
-    } catch (e) {
-      ElMessage.error('获取题目失败')
+    } catch {
+      /* 错误已由拦截器提示 */
     }
   }
 })
@@ -153,7 +172,7 @@ function onTypeChange() {
   multiAnswer.value = []
 }
 
-function beforeImageUpload(file) {
+function beforeImageUpload(file: File) {
   const allowedTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp']
   if (!allowedTypes.includes(file.type)) {
     ElMessage.error('不支持的图片格式，请上传 PNG/JPG/GIF/WebP/BMP 格式')
@@ -167,16 +186,16 @@ function beforeImageUpload(file) {
   return true
 }
 
-async function handleImageUpload(options) {
+async function handleImageUpload(options: { file: File }) {
   imageUploading.value = true
   try {
     const formData = new FormData()
     formData.append('image', options.file)
     const res = await questionBankApi.uploadImage(formData)
-    form.value.image_url = res.data.url
+    form.value.image_url = res.url
     ElMessage.success('图片上传成功')
-  } catch (e) {
-    ElMessage.error(e.response?.data?.message || '图片上传失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     imageUploading.value = false
   }
@@ -189,20 +208,23 @@ function removeImage() {
 async function submitForm() {
   submitting.value = true
   try {
-    const data = { ...form.value }
+    const data: QuestionPayload = {
+      ...form.value,
+      options: form.value.options ?? undefined
+    }
     if (data.type === 'multi_choice') {
       data.answer = multiAnswer.value.sort().join(',')
     }
     if (isEdit.value) {
-      await questionBankApi.updateQuestion(route.query.id, data)
+      await questionBankApi.updateQuestion(Number(route.query.id), data)
       ElMessage.success('更新成功')
     } else {
       await questionBankApi.createQuestion(data)
       ElMessage.success('创建成功')
     }
     router.push('/training/tutor/question-manage')
-  } catch (e) {
-    ElMessage.error(e.message || '操作失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     submitting.value = false
   }

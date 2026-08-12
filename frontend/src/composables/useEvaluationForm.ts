@@ -1,10 +1,9 @@
 // 表单状态与提交 composable（统一表单，供 ValuationInputView 使用）
 // config_type 为单一字段，由用户从下拉列表直接选择（选项来自 original_prices 级联查询）
 // 后端存储的 config_type 为复合字符串（如"手波/国产发动机"、"磷酸铁锂(LFP)"）
-import { reactive, ref, computed } from 'vue'
+import { reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { createEvaluation } from '@/api/valuation/evaluation'
 import { useEvaluationStore } from '@/stores/valuationEvaluation'
 import type {
   ConditionRating,
@@ -43,7 +42,8 @@ export interface BaseFormState {
 export function useEvaluationForm() {
   const router = useRouter()
   const store = useEvaluationStore()
-  const submitting = ref(false)
+  // 提交状态由 store 统一持有（按钮禁用态）
+  const submitting = computed(() => store.submitting)
 
   // 基础信息（默认值）
   const form = reactive<BaseFormState>({
@@ -78,6 +78,7 @@ export function useEvaluationForm() {
       !form.mast_type ||
       form.mast_height_mm == null ||
       form.factory_year == null ||
+      form.sale_year == null ||
       form.usage_hours == null ||
       !form.province ||
       !form.city ||
@@ -151,7 +152,7 @@ export function useEvaluationForm() {
     form.condition_rating = undefined
   }
 
-  /** 提交评估 */
+  /** 提交评估：创建 + 拉取详情收敛到 store，成功后跳转结果页（路由带 id，刷新可恢复） */
   async function submit(): Promise<boolean> {
     if (submitting.value) return false
     const check = validate()
@@ -164,18 +165,15 @@ export function useEvaluationForm() {
       ElMessage.warning('请补全表单')
       return false
     }
-    submitting.value = true
     try {
-      const result = await createEvaluation(payload)
-      store.setResult(result, result.id)
-      await router.push({ name: 'ValuationResult' })
+      const id = await store.submitEvaluation(payload)
+      if (id == null) return false
+      await router.push({ name: 'ValuationResult', query: { id: String(id) } })
       return true
     } catch (e) {
       // 错误提示由 axios 拦截器统一处理
       console.error('[submit] failed', e)
       return false
-    } finally {
-      submitting.value = false
     }
   }
 

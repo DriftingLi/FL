@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"testing"
+
+	"github.com/spf13/viper"
 )
 
 func TestValidate_Development(t *testing.T) {
@@ -71,16 +73,38 @@ func TestValidate_Production_AllPresent(t *testing.T) {
 		SecretKey:    "real-secret",
 		JWTSecretKey: "real-jwt-secret",
 		DatabaseURL:  "postgres://localhost/db",
+		CORSOrigins:  []string{"https://example.com"},
 		Redis: RedisConfig{
 			Addr:     "localhost:6379",
 			Password: "real-redis-password",
 		},
-		Valuation: ValuationConfig{
-			JWTSecretKey: "real-valuation-jwt-secret",
+		AuthCookie: AuthCookieConfig{
+			Name:   "hrwai_token",
+			Domain: "example.com",
 		},
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Errorf("全部必填项存在时不应报错: %v", err)
+	}
+}
+
+func TestValidate_Production_MissingAuthCookieDomain(t *testing.T) {
+	cfg := &Config{
+		AppEnv:       "production",
+		SecretKey:    "real-secret",
+		JWTSecretKey: "real-jwt-secret",
+		DatabaseURL:  "postgres://localhost/db",
+		CORSOrigins:  []string{"https://example.com"},
+		Redis: RedisConfig{
+			Addr:     "localhost:6379",
+			Password: "real-redis-password",
+		},
+		DefaultPasswords: DefaultPasswordsConfig{
+			Admin: "admin123", Tutor: "tutor123", Student: "student123",
+		},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Error("生产环境缺少 AUTH_COOKIE_DOMAIN 应报错")
 	}
 }
 
@@ -131,13 +155,30 @@ func TestSplitOrigins(t *testing.T) {
 }
 
 func TestGetenv(t *testing.T) {
+	// Viper 环境变量语义：非空 env 胜出；空 env / 未设置回退默认值。
+	viper.AutomaticEnv()
+	setDefaults()
+
 	os.Setenv("TEST_GETENV_KEY", "testvalue")
 	defer os.Unsetenv("TEST_GETENV_KEY")
-
-	if got := getenv("TEST_GETENV_KEY", "default"); got != "testvalue" {
-		t.Errorf("getenv 已设置键 = %q，期望 'testvalue'", got)
+	if got := viper.GetString("test_getenv_key"); got != "testvalue" {
+		t.Errorf("已设置键 = %q，期望 'testvalue'", got)
 	}
-	if got := getenv("TEST_GETENV_MISSING", "default"); got != "default" {
-		t.Errorf("getenv 未设置键 = %q，期望 'default'", got)
+
+	os.Setenv("TEST_GETENV_MISSING", "")
+	defer os.Unsetenv("TEST_GETENV_MISSING")
+	if got := viper.GetString("log_level"); got != "info" {
+		t.Errorf("空 env 应回退默认值，got %q", got)
+	}
+}
+
+func TestPositiveInt_Fallback(t *testing.T) {
+	viper.AutomaticEnv()
+	setDefaults()
+
+	os.Setenv("TEST_JUNK_INT", "abc")
+	defer os.Unsetenv("TEST_JUNK_INT")
+	if got := positiveInt("test_junk_int", 7); got != 7 {
+		t.Errorf("非法整数应回退默认值，got %d", got)
 	}
 }

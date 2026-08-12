@@ -1,0 +1,111 @@
+package api
+
+import (
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+
+	"forklift-training/internal/config"
+	"forklift-training/internal/security"
+	"forklift-training/internal/service"
+	"forklift-training/internal/storage"
+)
+
+// Deps 是后端 service 装配根：全部 service 在此构建一次，经 NewRouter 注入各蓝图注册。
+// 蓝图注册函数不再自行构造 service，实例归属唯一（对应 spec #75 D9）。
+type Deps struct {
+	Cfg     *config.Config
+	DB      *gorm.DB
+	Storage storage.Storage
+	Logger  *zap.Logger
+	Session *security.Session
+
+	AuthSvc         *service.AuthService
+	CodeSvc         *service.VerifyCodeService
+	EmailCh         service.CodeChannel
+	PhoneCh         service.CodeChannel
+	WechatAuthSvc   *service.WechatAuthService
+	FileSvc         *service.FileService
+	NotificationSvc *service.NotificationService
+	ReviewSvc       *service.ProfileReviewService
+	AIConfigSvc     *service.AIConfigService
+	AISvc           *service.AIService
+	ContentGenSvc   *service.ContentGenerateService
+	ExportStore     service.ExportStore
+	AuthH           *AuthHandler
+
+	CourseSvc          *service.CourseService
+	AdminSvc           *service.AdminService
+	AdminCourseSvc     *service.AdminCourseService
+	ForumSvc           *service.ForumService
+	ForumImageSvc      *service.ForumImageService
+	FeaturedSvc        *service.FeaturedService
+	ExportSvc          *service.ExportService
+	StudentSvc         *service.StudentService
+	QuestionBankSvc    *service.QuestionBankService
+	PracticeModeSvc    *service.PracticeModeService
+	LevelExamSvc       *service.LevelExamService
+	GradingSvc         *service.GradingService
+	MockExamSvc        *service.MockExamService
+	TutorSvc           *service.TutorService
+	WrongQuestionSvc   *service.WrongQuestionService
+	TrainingCatalogSvc *service.TrainingCatalogService
+	AIAssistantSvc     *service.AIAssistantService
+}
+
+// NewDeps 构建全部 service 单实例。进程启动早期由 main 调用一次。
+// exportStore 经 ExportStore seam 注入（生产为估值模块 pgx adapter）。
+func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger, exportStore service.ExportStore) *Deps {
+	// 会话唯一实例：签发（AuthService）与校验（中间件/估值模块）共用同一实例
+	sess := security.SessionFromConfig(cfg)
+	authSvc := service.NewAuthService(db, sess,
+		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student, logger)
+	codeSvc := service.NewVerifyCodeService(db, authSvc, cfg.EmailCodeTTL, &service.RedisAuthCodeStore{}, logger)
+	emailCh := service.NewEmailChannel(cfg.SMTP, cfg.IsProd(), logger)
+	phoneCh := service.NewSmsChannel(cfg.IsProd(), logger)
+	wechatAuthSvc := service.NewWechatAuthService(cfg.Wechat, logger)
+	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st, logger)
+	notificationSvc := service.NewNotificationService(db, logger)
+	reviewSvc := service.NewProfileReviewService(db, notificationSvc, st, logger)
+	authSvc.SetProfileReviewService(reviewSvc)
+	aiConfigSvc := service.NewAIConfigService(db, cfg.SecretKey, logger)
+	aiSvc := service.NewAIService(db, aiConfigSvc, logger)
+	contentGenSvc := service.NewContentGenerateService(db, aiSvc, logger)
+
+	d := &Deps{
+		Cfg:                cfg,
+		DB:                 db,
+		Storage:            st,
+		Logger:             logger,
+		Session:            sess,
+		AuthSvc:            authSvc,
+		CodeSvc:            codeSvc,
+		EmailCh:            emailCh,
+		PhoneCh:            phoneCh,
+		WechatAuthSvc:      wechatAuthSvc,
+		FileSvc:            fileSvc,
+		NotificationSvc:    notificationSvc,
+		ReviewSvc:          reviewSvc,
+		AIConfigSvc:        aiConfigSvc,
+		AISvc:              aiSvc,
+		ContentGenSvc:      contentGenSvc,
+		CourseSvc:          service.NewCourseService(db, fileSvc, logger),
+		AdminSvc:           service.NewAdminService(db, logger),
+		AdminCourseSvc:     service.NewAdminCourseService(db, fileSvc, logger),
+		ForumSvc:           service.NewForumService(db, fileSvc, logger),
+		ForumImageSvc:      service.NewForumImageService(db, fileSvc, logger),
+		FeaturedSvc:        service.NewFeaturedService(db, fileSvc, logger),
+		ExportSvc:          service.NewExportService(db, exportStore, logger),
+		StudentSvc:         service.NewStudentService(db, logger),
+		QuestionBankSvc:    service.NewQuestionBankService(db, fileSvc, logger),
+		PracticeModeSvc:    service.NewPracticeModeService(db, aiSvc, logger),
+		LevelExamSvc:       service.NewLevelExamService(db, aiSvc, logger),
+		GradingSvc:         service.NewGradingService(db, aiSvc, logger),
+		MockExamSvc:        service.NewMockExamService(db, aiSvc, logger),
+		TutorSvc:           service.NewTutorService(db, cfg.UploadFolder, fileSvc, logger),
+		WrongQuestionSvc:   service.NewWrongQuestionService(db, logger),
+		TrainingCatalogSvc: service.NewTrainingCatalogService(db, logger),
+		AIAssistantSvc:     service.NewAIAssistantService(db, aiConfigSvc, cfg.SecretKey, logger),
+	}
+	d.AuthH = NewAuthHandler(d.Session, authSvc, fileSvc, st, reviewSvc, logger)
+	return d
+}

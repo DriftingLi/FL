@@ -2,11 +2,13 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
+	"go.uber.org/zap"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sashabaranov/go-openai"
@@ -15,66 +17,41 @@ import (
 	"forklift-training/internal/model"
 )
 
-// 智谱 GLM 默认模型与提示词。
-const (
-	fallbackText = `## 叉车维修知识
-
-抱歉，AI服务暂时不可用，以下是预设参考内容：
-
-### 常见故障检查要点
-
-1. **液压系统**：检查油位、管路密封、泵的工作压力
-2. **电气系统**：检查蓄电池电压、线路连接、保险丝状态
-3. **制动系统**：检查制动液液位、蹄片磨损、管路泄漏
-4. **转向系统**：检查液压油位、转向器间隙、轮胎气压
-
-### 维修安全注意事项
-
-- 维修前必须关闭发动机并断开电源
-- 液压系统维修前必须释放系统压力
-- 使用合格的工具和配件
-- 维修后必须进行功能测试
-
-> 如需更详细的内容，请稍后重试或联系管理员。`
-
-	//nolint:unused
-	contentSystemPrompt = `你是一名叉车维修培训内容编写专家。请为以下章节编写详细的培训内容。
-要求：
-1. 使用Markdown格式
-2. 内容专业准确，适合培训教学
-3. 包含理论讲解和实操要点
-4. 标注安全注意事项
-5. 字数800-1500字`
-
-	gradingSystemPrompt = `你是一名专业的叉车维修培训考试阅卷专家。请根据参考答案和评分标准，对学员的简答题答案进行评分。
+// AI 评分系统提示词。
+const gradingSystemPrompt = `你是一名专业的叉车维修培训考试阅卷专家。请根据参考答案和评分标准，对学员的简答题答案进行评分。
 要求：
 1. 严格按照评分标准逐项评分，意思正确但表述不同也应给分
 2. 评分应客观公正，不苛求表述完全一致
 3. 给出具体得分和简要评语，评语需指出得分点和失分点
 4. 只返回JSON格式，不要返回其他内容：{"score": 分数值, "comment": "评语"}
 5. 分数值为数字类型，不要加引号`
-)
 
-// AIService 封装智谱 GLM 调用、文本生成与简答题评分。
+// 章节内容生成系统提示词。
+const chapterContentSystemPrompt = `你是一名叉车维修培训内容编写专家。请根据课程信息和章节标题，生成适合培训学员的章节内容。
+要求：
+1. 内容使用 Markdown 格式
+2. 包含概述、核心知识点、操作要点、安全注意事项、小结等部分
+3. 内容专业、准确、实用，字数 800-1500 字
+4. 不要在内容开头重复章节标题（前端会自动显示）
+5. 可适当使用 Markdown 标题（##、###）、列表、加粗等格式增强可读性`
+
+// AIService 封装 OpenAI 兼容 API 调用、文本生成与简答题评分。
+// 调用时按 feature_key 查找绑定配置（AIConfigService），未绑定时返回错误。
 type AIService struct {
-	db      *gorm.DB
-	client  *openai.Client
-	apiKey  string
-	baseURL string
-	model   string
+	db          *gorm.DB
+	aiConfigSvc *AIConfigService
+	client      *openai.Client
+	clientSig   string // 当前 client 使用的 "key|url|model" 签名，用于检测配置变化
+	apiKey      string
+	baseURL     string
+	model       string
+	mu          sync.Mutex // 保护 client 重建并发安全
+	logger      *zap.Logger
 }
 
-// NewAIService 创建 AI 服务。apiKey 为空时 client 为 nil，调用时降级返回 fallback。
-func NewAIService(db *gorm.DB, apiKey, baseURL, modelName string) *AIService {
-	svc := &AIService{db: db, apiKey: apiKey, baseURL: baseURL, model: modelName}
-	if apiKey != "" {
-		cfg := openai.DefaultConfig(apiKey)
-		if baseURL != "" {
-			cfg.BaseURL = baseURL
-		}
-		svc.client = openai.NewClientWithConfig(cfg)
-	}
-	return svc
+// NewAIService 创建 AI 服务。aiConfigSvc 用于按功能查找绑定配置。
+func NewAIService(db *gorm.DB, aiConfigSvc *AIConfigService, logger *zap.Logger) *AIService {
+	return &AIService{db: db, aiConfigSvc: aiConfigSvc, logger: logger}
 }
 
 // AIGradeResult 简答题 AI 评分结果。
@@ -82,99 +59,6 @@ type AIGradeResult struct {
 	Score    float64 `json:"score"`
 	Comment  string  `json:"comment"`
 	Fallback bool    `json:"fallback,omitempty"`
-}
-
-// TestConnection 测试 AI 连接。
-func (s *AIService) TestConnection() map[string]any {
-	if s.apiKey == "" {
-		return map[string]any{
-			"status":         "error",
-			"message":        "ZHIPU_API_KEY未配置，请在环境变量或.env文件中设置",
-			"api_key_exists": false,
-			"api_key_length": 0,
-		}
-	}
-	keyPrefix := s.apiKey
-	if len(keyPrefix) > 10 {
-		keyPrefix = keyPrefix[:6] + "..."
-	}
-	content, err := s.callModel([]openai.ChatCompletionMessage{
-		{Role: openai.ChatMessageRoleUser, Content: `请回复"连接测试成功"四个字`},
-	}, 50, 0.1)
-	if err != nil {
-		return map[string]any{
-			"status":         "error",
-			"message":        fmt.Sprintf("AI连接失败: %s", err.Error()),
-			"api_key_exists": true,
-			"api_key_prefix": keyPrefix,
-			"error_type":     "RuntimeError",
-			"model":          s.model,
-		}
-	}
-	if content == "" {
-		return map[string]any{
-			"status":         "error",
-			"message":        "AI返回空内容，可能是内容安全过滤或API限流",
-			"api_key_exists": true,
-			"api_key_prefix": keyPrefix,
-			"model":          s.model,
-		}
-	}
-	preview := content
-	if len(preview) > 100 {
-		preview = preview[:100]
-	}
-	return map[string]any{
-		"status":           "success",
-		"message":          "AI连接正常",
-		"api_key_exists":   true,
-		"api_key_prefix":   keyPrefix,
-		"response_preview": preview,
-		"model":            s.model,
-	}
-}
-
-// GenerateText 根据关键词生成培训内容。
-func (s *AIService) GenerateText(keyword string, userID int, userType string) map[string]any {
-	if strings.TrimSpace(keyword) == "" {
-		// 抛错由调用方处理；这里返回错误标记。
-		return map[string]any{"error": "关键词不能为空"}
-	}
-	systemPrompt := `你是一名专业的叉车维修培训讲师，擅长用通俗易懂的语言讲解叉车维修知识。请按照以下结构组织内容：
-1. 概述：简要介绍该知识点
-2. 详细讲解：分点说明关键内容
-3. 实操要点：给出实际操作建议
-4. 安全提示：标注重要安全注意事项
-请使用Markdown格式输出，内容专业、准确、实用。`
-	userPrompt := fmt.Sprintf("请详细讲解以下叉车维修知识点：%s", keyword)
-	now := time.Now().Format("2006-01-02 15:04:05")
-
-	content, err := s.callModel([]openai.ChatCompletionMessage{
-		{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
-		{Role: openai.ChatMessageRoleUser, Content: userPrompt},
-	}, 3000, 0.7)
-
-	if err != nil {
-		slog.Error("AI generate_text failed", "error", err)
-		if userID != 0 {
-			s.saveLog(userID, userType, "text", map[string]any{"keyword": keyword}, err.Error(), 0)
-		}
-		return map[string]any{
-			"content":      fallbackText,
-			"keywords":     keyword,
-			"generated_at": now,
-			"fallback":     true,
-			"error":        err.Error(),
-		}
-	}
-	if userID != 0 {
-		s.saveLog(userID, userType, "text", map[string]any{"keyword": keyword}, content, 1)
-	}
-	return map[string]any{
-		"content":      content,
-		"keywords":     keyword,
-		"generated_at": now,
-	}
 }
 
 // GradeShortAnswer 简答题 AI 评分。
@@ -191,10 +75,10 @@ func (s *AIService) GradeShortAnswer(questionContent, referenceAnswer, scoringCr
 	content, err := s.callModel([]openai.ChatCompletionMessage{
 		{Role: openai.ChatMessageRoleSystem, Content: gradingSystemPrompt},
 		{Role: openai.ChatMessageRoleUser, Content: userPrompt},
-	}, 1000, 0.3)
+	}, 1000, 0.3, FeatureGradeShortAnswer)
 
 	if err != nil || content == "" {
-		slog.Error("AI grade_short_answer failed", "error", err)
+		s.logger.Error("AI grade_short_answer failed", zap.Error(err))
 		return &AIGradeResult{Score: 0, Comment: "AI评分暂不可用，请等待导师人工评分", Fallback: true}
 	}
 	result := parseGradingResponse(content, maxScore)
@@ -211,47 +95,66 @@ func (s *AIService) GradeShortAnswer(questionContent, referenceAnswer, scoringCr
 	return result
 }
 
-// GetGenerationHistory 查询生成历史。
-func (s *AIService) GetGenerationHistory(userID int, generationType string, limit int) []map[string]any {
-	q := s.db.Model(&model.AIGenerationLog{}).Where("user_id = ? AND status = ?", userID, 1)
-	if generationType != "" {
-		q = q.Where("generation_type = ?", generationType)
+// GenerateChapterContent 为指定章节生成 Markdown 内容。
+// 调用 LLM 根据课程上下文和章节标题生成培训内容，写入 ai_generation_log（generation_type=chapter_content）。
+func (s *AIService) GenerateChapterContent(courseName, courseCategory, courseDescription, chapterTitle string, userID *int) (string, error) {
+	userPrompt := fmt.Sprintf("【课程名称】%s\n【课程分类】%s\n【课程简介】%s\n【章节标题】%s\n\n请根据以上信息生成该章节的培训内容（Markdown 格式）。",
+		courseName, orDefault(courseCategory, "无"), orDefault(courseDescription, "无"), chapterTitle)
+
+	content, err := s.callModel([]openai.ChatCompletionMessage{
+		{Role: openai.ChatMessageRoleSystem, Content: chapterContentSystemPrompt},
+		{Role: openai.ChatMessageRoleUser, Content: userPrompt},
+	}, 2000, 0.5, FeatureGenerateChapterContent)
+	if err != nil {
+		return "", err
 	}
-	if limit <= 0 {
-		limit = 10
+	if userID != nil {
+		s.saveLog(*userID, "admin", "chapter_content", map[string]any{
+			"course_name":   courseName,
+			"chapter_title": chapterTitle,
+		}, truncate(content, 5000), 1)
 	}
-	var logs []model.AIGenerationLog
-	if err := q.Order("created_at DESC").Limit(limit).Find(&logs).Error; err != nil {
-		slog.Error("GetGenerationHistory failed", "error", err)
-		return []map[string]any{}
+	return content, nil
+}
+
+// ensureClient 检查 AI 配置是否变化，必要时重建 openai.Client。
+// featureKey 用于查找该功能绑定的配置；未绑定时返回错误（不再降级到环境变量）。
+func (s *AIService) ensureClient(ctx context.Context, featureKey string) error {
+	if featureKey == "" || s.aiConfigSvc == nil {
+		return fmt.Errorf("AI 功能 %q 未绑定配置，请在管理员后台 AI 配置页面绑定", featureKey)
 	}
-	out := make([]map[string]any, 0, len(logs))
-	for _, log := range logs {
-		var params interface{}
-		if len(log.InputParams) > 0 {
-			_ = json.Unmarshal(log.InputParams, &params)
-		}
-		if params == nil {
-			params = map[string]any{}
-		}
-		out = append(out, map[string]any{
-			"log_id":          log.LogID,
-			"generation_type": log.GenerationType,
-			"input_params":    params,
-			"output_result":   log.OutputResult,
-			"created_at":      formatISO(log.CreatedAt),
-		})
+	cur := s.aiConfigSvc.ResolveConfig(ctx, featureKey)
+	sig := cur.APIKey + "|" + cur.BaseURL + "|" + cur.Model
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if sig == s.clientSig && s.client != nil {
+		s.model = cur.Model
+		return nil
 	}
-	return out
+	if cur.APIKey == "" {
+		return fmt.Errorf("AI 功能 %q 未绑定配置，请在管理员后台 AI 配置页面绑定", featureKey)
+	}
+	cfg := openai.DefaultConfig(cur.APIKey)
+	if cur.BaseURL != "" {
+		cfg.BaseURL = cur.BaseURL
+	}
+	s.client = openai.NewClientWithConfig(cfg)
+	s.clientSig = sig
+	s.apiKey, s.baseURL, s.model = cur.APIKey, cur.BaseURL, cur.Model
+	s.logger.Info("AI client 已重建", zap.String("base_url", cur.BaseURL), zap.String("model", cur.Model), zap.String("source", cur.Source), zap.String("feature", featureKey))
+	return nil
 }
 
 // callModel 调用模型，重试 2 次。
-func (s *AIService) callModel(messages []openai.ChatCompletionMessage, maxTokens int, temperature float32) (string, error) {
-	if s.client == nil {
-		return "", fmt.Errorf("AI服务未配置，请设置ZHIPU_API_KEY")
-	}
+// featureKey 用于按功能解析绑定的 AI 配置。
+func (s *AIService) callModel(messages []openai.ChatCompletionMessage, maxTokens int, temperature float32, featureKey string) (string, error) {
 	ctx, cancel := withTimeout(120 * time.Second)
 	defer cancel()
+
+	if err := s.ensureClient(ctx, featureKey); err != nil {
+		return "", err
+	}
 
 	for attempt := 1; attempt <= 2; attempt++ {
 		req := openai.ChatCompletionRequest{
@@ -262,7 +165,7 @@ func (s *AIService) callModel(messages []openai.ChatCompletionMessage, maxTokens
 		}
 		resp, err := s.client.CreateChatCompletion(ctx, req)
 		if err != nil {
-			slog.Error("AI call failed", "attempt", attempt, "error", err)
+			s.logger.Error("AI call failed", zap.Int("attempt", attempt), zap.Error(err))
 			if attempt == 2 {
 				return "", err
 			}
@@ -314,7 +217,7 @@ func (s *AIService) saveLog(userID int, userType, generationType string, inputPa
 		CreatedAt:      beijingNow(),
 	}
 	if err := s.db.Create(&log).Error; err != nil {
-		slog.Error("saveLog failed", "error", err)
+		s.logger.Error("saveLog failed", zap.Error(err))
 	}
 }
 
@@ -352,7 +255,8 @@ func parseGradingResponse(content string, maxScore float64) *AIGradeResult {
 	}
 	// "score": 数字
 	if m := regexp.MustCompile(`"score"\s*:\s*([\d.]+)`).FindStringSubmatch(text); len(m) > 1 {
-		score := clampFloat(parseFloat(m[1]), 0, maxScore)
+		f, _ := parseFloat(m[1]) // AI 评分解析失败显式回退 0。
+		score := clampFloat(f, 0, maxScore)
 		comment := ""
 		if cm := regexp.MustCompile(`"comment"\s*:\s*"((?:[^"\\]|\\.)*)"`).FindStringSubmatch(text); len(cm) > 1 {
 			comment = strings.ReplaceAll(strings.ReplaceAll(cm[1], `\n`, "\n"), `\"`, `"`)
@@ -361,10 +265,12 @@ func parseGradingResponse(content string, maxScore float64) *AIGradeResult {
 	}
 	// 数字/满分 形式
 	if m := regexp.MustCompile(fmt.Sprintf(`(\d+(?:\.\d+)?)\s*/\s*%g`, maxScore)).FindStringSubmatch(text); len(m) > 1 {
-		return &AIGradeResult{Score: clampFloat(parseFloat(m[1]), 0, maxScore), Comment: "AI评分"}
+		f, _ := parseFloat(m[1]) // AI 评分解析失败显式回退 0。
+		return &AIGradeResult{Score: clampFloat(f, 0, maxScore), Comment: "AI评分"}
 	}
 	if m := regexp.MustCompile(`(\d+(?:\.\d+)?)\s*分`).FindStringSubmatch(text); len(m) > 1 {
-		return &AIGradeResult{Score: clampFloat(parseFloat(m[1]), 0, maxScore), Comment: "AI评分"}
+		f, _ := parseFloat(m[1]) // AI 评分解析失败显式回退 0。
+		return &AIGradeResult{Score: clampFloat(f, 0, maxScore), Comment: "AI评分"}
 	}
 	return nil
 }

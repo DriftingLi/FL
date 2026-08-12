@@ -1,7 +1,7 @@
 // Package cache 提供 Redis 缓存层：连接管理、通用读写封装与 Cache-Aside 辅助方法。
 // 设计原则：
 //   - Redis 不可用时降级为 nil/miss，不回传 error，让调用方自动回退到 DB 直查
-//   - 异常仅通过 slog 记录，不中断业务流程
+//   - 异常仅通过统一日志器记录，不中断业务流程
 //   - Key 统一使用可配置前缀（REDIS_KEY_PREFIX），避免多项目共享同一 Redis 实例时的冲突
 package cache
 

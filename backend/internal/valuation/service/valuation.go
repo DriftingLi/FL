@@ -19,7 +19,6 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"forklift-training/internal/cache"
 	"forklift-training/internal/valuation/model"
@@ -27,29 +26,28 @@ import (
 )
 
 // ValuationService 评估服务
-// 持有 *pgxpool.Pool 与字典仓储，所有系数从 DB 实时查询
+// 持有字典读取窄接口与评估存储窄接口，所有系数从 DB 实时查询
 type ValuationService struct {
-	pool     *pgxpool.Pool
-	dictRepo *repository.DictionaryRepository
-	evalRepo *repository.EvaluationRepository
+	dictRepo DictionaryReader
+	evalRepo EvaluationStore
 	provider *CoefficientProvider
 }
 
+// EvaluationStore 评估记录持久化接口（Persist 消费窄接口，生产为 pgx 仓储，测试为内存替身）。
+type EvaluationStore interface {
+	CreateEvaluation(ctx context.Context, p *repository.CreateEvaluationParams) (int64, error)
+}
+
 // NewValuationService 构造评估服务
-// pool: pgx 连接池
 // dictRepo: 字典仓储（brand_types / brands / vehicle_types / condition_ratings / region_coefficients / coefficient_configs / original_prices）
 // evalRepo: 评估记录仓储（持久化评估结果）
 //
 // 原实现使用 panic 做空值断言，会绕过 error 返回链导致启动流程难以优雅处理。
 // 改为返回 error，由调用方在装配阶段决定 fail-fast 策略（main.go 启动时 os.Exit）。
 func NewValuationService(
-	pool *pgxpool.Pool,
-	dictRepo *repository.DictionaryRepository,
-	evalRepo *repository.EvaluationRepository,
+	dictRepo DictionaryReader,
+	evalRepo EvaluationStore,
 ) (*ValuationService, error) {
-	if pool == nil {
-		return nil, fmt.Errorf("NewValuationService: pool 不能为 nil")
-	}
 	if dictRepo == nil {
 		return nil, fmt.Errorf("NewValuationService: dictRepo 不能为 nil")
 	}
@@ -57,7 +55,6 @@ func NewValuationService(
 		return nil, fmt.Errorf("NewValuationService: evalRepo 不能为 nil")
 	}
 	return &ValuationService{
-		pool:     pool,
 		dictRepo: dictRepo,
 		evalRepo: evalRepo,
 		provider: NewCoefficientProvider(dictRepo),
@@ -97,6 +94,12 @@ func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRe
 
 // evaluateInternal 包含原 Evaluate 的全部计算逻辑（纯函数，无副作用）
 func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.EvaluationRequest) (*model.EvaluationResult, error) {
+	// 0. 系数快照：一次全表读取替代逐 key 串行缓存往返（失败时回退逐 key provider，保持既有容错）
+	coeff := coefficientReader(s.provider)
+	if snap, err := LoadCoefficientSnapshot(ctx, s.dictRepo); err == nil {
+		coeff = snap
+	}
+
 	// 1. 业务参数校验
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -117,13 +120,13 @@ func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.Eval
 	}
 
 	// 4. 计算 Kt（基于 factory_year 与 sale_year）
-	ktRes, err := CalcKTime(ctx, powerType, req.FactoryYear, req.SaleYear, s.provider)
+	ktRes, err := CalcKTime(ctx, powerType, req.FactoryYear, req.SaleYear, coeff)
 	if err != nil {
 		return nil, err
 	}
 
 	// 5. 计算 Kh（age 复用 Kt 计算结果）
-	khRes, err := CalcKHours(ctx, ktRes.Age, req.UsageHours, s.provider)
+	khRes, err := CalcKHours(ctx, ktRes.Age, req.UsageHours, coeff)
 	if err != nil {
 		return nil, err
 	}
@@ -134,10 +137,10 @@ func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.Eval
 		return nil, err
 	}
 
-	// 7. 计算 Kc（condition_rating + 修正项，4 个修正项从 coefficient_configs 读取）
+	// 7. 计算 Kc（condition_rating + 修正项，4 个修正项从系数快照读取）
 	kcRes, err := CalcKCondition(ctx, req.ConditionRating,
 		req.OriginalPaint, req.HasMaintenanceRecords, req.HasLicensePlate, req.HasRegistrationCertificate,
-		s.dictRepo, s.provider)
+		s.dictRepo, coeff)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +163,7 @@ func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.Eval
 	}
 
 	// 10. 置信区间
-	confRange, err := s.provider.Get(ctx, KeyConfidenceRange)
+	confRange, err := coeff.Get(ctx, KeyConfidenceRange)
 	if err != nil || confRange <= 0 {
 		confRange = 0.10
 	}
@@ -181,11 +184,14 @@ func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.Eval
 		EstimatedValue:    roundTo2(estimated),
 		ConfidenceLow:     roundTo2(confLow),
 		ConfidenceHigh:    roundTo2(confHigh),
+		// 评估时点锁定的 λ 值（ADR-0004：评估事实性，随建议一起持久化）
+		LambdaElectric:   coeff.ReadFloat(ctx, KeyLambdaElectric, defaultLambdaElectric),
+		LambdaCombustion: coeff.ReadFloat(ctx, KeyLambdaCombustion, defaultLambdaCombustion),
 	}
 
 	// 12. 派生维度评分 + 文本建议
-	result.DimensionScores = buildDimensionScores(result)
-	result.Suggestions = buildSuggestions(result, s.provider, ctx)
+	result.DimensionScores = BuildDimensionScores(result.KTime, result.KHours, result.KBrand, result.KCondition, result.KMarket)
+	result.Suggestions = BuildSuggestions(ctx, FromResult(result), coeff)
 	return result, nil
 }
 
@@ -201,7 +207,8 @@ func inferPowerType(vehicleType string) model.PowerType {
 
 // Persist 持久化评估结果到 evaluations 表，返回新 ID
 // 由 handler 在拿到 EvaluationResult 后调用
-func (s *ValuationService) Persist(ctx context.Context, result *model.EvaluationResult) (int64, error) {
+// userID>0 时写入归属（登录用户提交）；userID=0 时落 NULL（匿名提交）
+func (s *ValuationService) Persist(ctx context.Context, result *model.EvaluationResult, userID int) (int64, error) {
 	if s.evalRepo == nil {
 		return 0, fmt.Errorf("evalRepo 未装配")
 	}
@@ -232,6 +239,11 @@ func (s *ValuationService) Persist(ctx context.Context, result *model.Evaluation
 		EstimatedValue:             result.EstimatedValue,
 		ConfidenceLow:              result.ConfidenceLow,
 		ConfidenceHigh:             result.ConfidenceHigh,
+		UserID:                     userID,
+		// 评估事实性（ADR-0004）：建议与 λ 值在评估时点锁定持久化
+		Suggestions:      result.Suggestions,
+		LambdaElectric:   result.LambdaElectric,
+		LambdaCombustion: result.LambdaCombustion,
 	}
 	return s.evalRepo.CreateEvaluation(ctx, params)
 }
@@ -266,125 +278,26 @@ func (s *ValuationService) lookupOriginalPrice(ctx context.Context, req *model.E
 	return op.OriginalPrice, nil
 }
 
-// BuildDimensionScores 由结果字段派生 5 维度评分切片
-// 维度顺序与雷达图保持一致：出厂时间 / 使用强度 / 品牌价值 / 市场需求 / 车辆情况
+// BuildDimensionScores 由结果字段派生 5 维度评分切片。
+// 标签与顺序来自 model 包单一契约（与 PDF 雷达图同源，model.DimensionLabels）。
 // 每个维度值钳制到 [0, 1]，对应前端雷达图 max=1
 // 供 handler.Get 在详情接口实时计算维度评分（dimension_scores 未入库）
 func BuildDimensionScores(kTime, kHours, kBrand, kCondition, kMarket float64) []model.DimensionScore {
 	return []model.DimensionScore{
-		{Label: "出厂时间", Value: roundTo4(clamp01(kTime))},
-		{Label: "使用强度", Value: roundTo4(clamp01(kHours))},
-		{Label: "品牌价值", Value: roundTo4(clamp01(kBrand))},
-		{Label: "市场需求", Value: roundTo4(clamp01(kMarket))},
-		{Label: "车辆情况", Value: roundTo4(clamp01(kCondition))},
+		{Label: model.DimensionLabelTime, Value: roundTo4(clamp01(kTime))},
+		{Label: model.DimensionLabelHours, Value: roundTo4(clamp01(kHours))},
+		{Label: model.DimensionLabelBrand, Value: roundTo4(clamp01(kBrand))},
+		{Label: model.DimensionLabelMarket, Value: roundTo4(clamp01(kMarket))},
+		{Label: model.DimensionLabelCondition, Value: roundTo4(clamp01(kCondition))},
 	}
 }
 
-// buildDimensionScores 把结果包装成 5 维中文标签的 map（Evaluate 流程内部使用）
-func buildDimensionScores(r *model.EvaluationResult) map[string]float64 {
-	scores := BuildDimensionScores(r.KTime, r.KHours, r.KBrand, r.KCondition, r.KMarket)
-	m := make(map[string]float64, len(scores))
-	for _, s := range scores {
-		m[s.Label] = s.Value
-	}
-	return m
-}
-
-// buildSuggestions 基于评估结果生成文本建议
-// 每条建议是一个短句，前端直接用 <li> 列表展示
-// 000015：证件扣减/油漆保养加成百分比动态读取，并补充可售性提示
-func buildSuggestions(r *model.EvaluationResult, provider *CoefficientProvider, ctx context.Context) []string {
-	s := make([]string, 0, 10)
-
-	// 1. 车况维度（核心）
-	switch {
-	case r.KCondition >= 1.00:
-		s = append(s, "车况优秀，原漆、维保记录、证件齐全，建议正常出售")
-	case r.KCondition >= 0.85:
-		s = append(s, "车况良好，残值稳定，可作为二手设备出售")
-	case r.KCondition >= 0.65:
-		s = append(s, "车况一般，建议整备后出售以提升残值")
-	case r.KCondition >= 0.45:
-		s = append(s, "车况较差，多个维度有折损，建议折价处理")
-	default:
-		s = append(s, "车况很差，建议拆件出售或作为配件使用")
-	}
-
-	// 2. 证件缺失提示 + 可售性警告
-	//    缺车牌 → 无法上路；缺登记证 → 无法过户；缺双证 → 无法正常出售
-	licensePct := readWithFallback(ctx, provider, KeyKcNoLicensePenaltyPct, defaultKcNoLicensePenaltyPct)
-	regPct := readWithFallback(ctx, provider, KeyKcNoRegistrationPenaltyPct, defaultKcNoRegistrationPenaltyPct)
-	licensePctShown := licensePct * 100
-	regPctShown := regPct * 100
-	missingBoth := !r.HasLicensePlate && !r.HasRegistrationCertificate
-
-	if !r.HasLicensePlate {
-		s = append(s, fmt.Sprintf("缺少车牌，残值扣减 %.0f%%，无法正常上路行驶，建议补办后再出售", licensePctShown))
-	}
-	if !r.HasRegistrationCertificate {
-		s = append(s, fmt.Sprintf("缺少登记证，残值扣减 %.0f%%，无法正常过户，建议补办后交易", regPctShown))
-	}
-	if missingBoth {
-		s = append(s, "车牌与登记证均缺失，无法正常出售与过户，强烈建议补齐证件后再交易")
-	}
-
-	// 3. 原厂漆与维保记录加分项提示（百分比动态读取）
-	paintBonus := readWithFallback(ctx, provider, KeyKcPaintBonus, defaultKcPaintBonus)
-	maintenanceBonus := readWithFallback(ctx, provider, KeyKcMaintenanceBonus, defaultKcMaintenanceBonus)
-	switch {
-	case r.OriginalPaint && r.HasMaintenanceRecords:
-		totalPct := (paintBonus + maintenanceBonus) * 100
-		s = append(s, fmt.Sprintf("原厂漆完整且有维保记录，加成 %.0f%%，对保值有利", totalPct))
-	case r.OriginalPaint:
-		s = append(s, fmt.Sprintf("原厂漆完整，加成 %.0f%%", paintBonus*100))
-	case r.HasMaintenanceRecords:
-		s = append(s, fmt.Sprintf("有维保记录，加成 %.0f%%", maintenanceBonus*100))
-	}
-
-	// 4. 品牌/强度对时间衰减的修正方向
-	//    Kb 高 → 衰减速率被压低（保值好）；Kh 高 → 衰减速率被抬高（磨损大）
-	//    用 Kh/Kb 比值判断：> 1.05 加速衰减；< 0.95 减缓衰减；中间视为持平
-	ratioHK := 1.0
-	if r.KBrand > 0 {
-		ratioHK = r.KHours / r.KBrand
-	}
-	switch {
-	case ratioHK >= 1.10:
-		s = append(s, "使用强度显著高于品牌保值能力，时间衰减被加速")
-	case ratioHK >= 1.05:
-		s = append(s, "使用强度略高于品牌保值能力，时间衰减略快")
-	case ratioHK <= 0.90:
-		s = append(s, "品牌保值能力强于使用强度折损，时间衰减被明显减缓")
-	case ratioHK <= 0.95:
-		s = append(s, "品牌保值能力略占优，时间衰减略缓")
-	}
-
-	// 5. 原始时间衰减水平（不含品牌/强度修正）
-	if r.KTime < 0.50 {
-		s = append(s, "使用年限较长，原始时间衰减明显")
-	}
-
-	// 6. 市场维度
-	if r.KMarket < 0.99 {
-		s = append(s, "区域市场系数偏低，二手需求较弱")
-	} else if r.KMarket > 1.02 {
-		s = append(s, "区域市场系数偏高，二手需求旺盛")
-	}
-
-	// 7. 残值率（已钳制 ≤ 100%）
-	if r.OriginalPrice > 0 {
-		rate := r.EstimatedValue / r.OriginalPrice
-		switch {
-		case rate >= 1.0:
-			s = append(s, "残值率达 100% 上限（综合车况、市场极优），按原价出售")
-		case rate >= 0.7:
-			s = append(s, "残值率较高，建议按当前车况正常出售")
-		case rate < 0.3:
-			s = append(s, "残值率较低，建议拆件出售或作为配件使用")
-		}
-	}
-
-	return s
+// RebuildDerivedFromDetail 从持久化记录重建派生字段（单一装配点）：
+// KTimeAdjusted 与维度评分是入库 K 系数的纯函数（不漂移，ADR-0004），
+// 建议直接读持久化值。详情/列表/报告/创建响应全部经过这里，装配只实现一次。
+func RebuildDerivedFromDetail(d *model.EvaluationDetail) {
+	d.KTimeAdjusted = AdjustKTimeByBrandAndIntensity(d.KTime, d.KHours, d.KBrand)
+	d.DimensionScores = BuildDimensionScores(d.KTime, d.KHours, d.KBrand, d.KCondition, d.KMarket)
 }
 
 // roundTo2 四舍五入到 2 位小数（保留金额精度）

@@ -130,9 +130,30 @@ export interface ApiResponse<T> {
   data: T
 }
 
-/** 评估结果（POST /evaluations 响应） */
+/** 评估结果（POST /evaluations 响应）
+ * 创建响应即含输入参数（后端与详情同源返回，ADR-0004）：
+ * 匿名用户提交后可直接渲染结果页，无需调用需登录的详情接口。
+ */
 export interface EvaluationResult {
   id: number
+  /** 输入参数（与 CreateEvaluationRequest 一致） */
+  brand: string
+  vehicle_type: string
+  series: string
+  tonnage: number
+  config_type: string
+  mast_type: string
+  mast_height_mm: number
+  factory_year: number
+  sale_year: number
+  usage_hours: number
+  original_paint: boolean
+  province: string
+  city: string
+  has_license_plate: boolean
+  has_registration_certificate: boolean
+  has_maintenance_records: boolean
+  condition_rating: ConditionRating
   /** 估算残值（元，前端 formatWan 除以 10000 展示） */
   estimated_value: number
   /** 置信区间下限（元） */
@@ -155,27 +176,13 @@ export interface EvaluationResult {
   dimension_scores: DimensionScore[]
   /** 文本建议 */
   suggestions: string[]
+  /** 评估时点锁定的 λ 值（ADR-0004，供走势图数据驱动） */
+  lambda_electric: number
+  lambda_combustion: number
 }
 
-/** 评估详情（GET /evaluations/:id 响应，继承结果字段并补全输入参数） */
+/** 评估详情（GET /evaluations/:id 响应，继承结果字段并补全报告字段） */
 export interface EvaluationDetail extends EvaluationResult {
-  brand: string
-  vehicle_type: string
-  series: string
-  tonnage: number
-  config_type: string
-  mast_type: string
-  mast_height_mm: number
-  factory_year: number
-  sale_year: number
-  usage_hours: number
-  original_paint: boolean
-  province: string
-  city: string
-  has_license_plate: boolean
-  has_registration_certificate: boolean
-  has_maintenance_records: boolean
-  condition_rating: ConditionRating
   report_pdf_path?: string
   created_at?: string
 }

@@ -2,41 +2,89 @@
 package service
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
+	"forklift-training/internal/security"
 )
 
 // AuthService 认证服务，处理学员/管理员/导师的登录、注册与令牌签发。
 type AuthService struct {
-	db                *gorm.DB
-	jwtSecret         string
-	jwtExpiry         time.Duration
+	db        *gorm.DB
+	session   *security.Session
+	reviewSvc *ProfileReviewService
+
 	defaultAdminPwd   string
 	defaultTutorPwd   string
 	defaultStudentPwd string
+
+	logger *zap.Logger
 }
 
-// NewAuthService 创建认证服务。
-func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpiry time.Duration, adminPwd, tutorPwd, studentPwd string) *AuthService {
+// NewAuthService 创建认证服务。sess 为装配根创建的唯一会话实例（签发/校验同实例）。
+func NewAuthService(db *gorm.DB, sess *security.Session, adminPwd, tutorPwd, studentPwd string, logger *zap.Logger) *AuthService {
 	return &AuthService{
 		db:                db,
-		jwtSecret:         jwtSecret,
-		jwtExpiry:         jwtExpiry,
+		session:           sess,
 		defaultAdminPwd:   adminPwd,
 		defaultTutorPwd:   tutorPwd,
 		defaultStudentPwd: studentPwd,
+		logger:            logger,
 	}
 }
 
-// DB 返回底层 *gorm.DB，供 handler 复用查询。
-func (s *AuthService) DB() *gorm.DB { return s.db }
+// SetProfileReviewService 注入资料审核服务（GetProfile 组装待审资料状态用）。
+func (s *AuthService) SetProfileReviewService(rs *ProfileReviewService) { s.reviewSvc = rs }
+
+// GetProfile 组装 /auth/me 返回的用户资料（按角色查询对应账号表）。
+// 响应字段为前端约定（auth store 依赖 user_id/account/role/uid/username、
+// 学员资料字段与 has_password / pending_profile_change），保持稳定。
+func (s *AuthService) GetProfile(userID int, role, account string) map[string]any {
+	data := map[string]any{
+		"user_id": userID,
+		"account": account,
+		"role":    role,
+	}
+	switch role {
+	case HrwaiRole:
+		var u model.HrwaiUser
+		if err := s.db.First(&u, userID).Error; err == nil {
+			data["uid"] = FormatUID(u.UID)
+			data["account"] = u.Account
+			data["username"] = u.Username
+			data["avatar_url"] = u.AvatarURL
+			data["phone"] = u.Phone
+			data["email"] = u.Email
+			data["company"] = u.Company
+			// 是否已设置密码（决定个人资料页"账号密码"卡片提示文案）
+			data["has_password"] = u.Password != ""
+		}
+		// 待审核的资料修改（昵称/头像），供前端展示"审核中"状态
+		if pending, err := s.reviewSvc.GetPendingForUser(userID); err == nil {
+			data["pending_profile_change"] = pending
+		}
+	case "tutor":
+		var t model.Tutor
+		if err := s.db.First(&t, userID).Error; err == nil {
+			data["name"] = t.Name
+			data["username"] = t.Username
+		}
+	case "admin":
+		var a model.Admin
+		if err := s.db.First(&a, userID).Error; err == nil {
+			data["name"] = a.Name
+			data["username"] = a.Username
+		}
+	}
+	return data
+}
 
 // HashPassword 使用 bcrypt 加密密码。
 func HashPassword(password string) (string, error) {
@@ -52,93 +100,104 @@ func VerifyPassword(password, hashed string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password)) == nil
 }
 
-// GenerateToken 签发 JWT，claims 结构：user_id/username/role，过期时长由 JWT_EXPIRES_HOURS 配置（默认 24 小时）。
-func (s *AuthService) GenerateToken(userID int, username, role string) (string, error) {
-	claims := &middleware.Claims{
-		UserID:   userID,
-		Username: username,
-		Role:     role,
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   username,
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.jwtExpiry)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(s.jwtSecret))
+// GenerateToken 签发 JWT（委托会话模块，claims 结构：user_id/account/role）。
+func (s *AuthService) GenerateToken(userID int, account, role string) (string, error) {
+	return s.session.Issue(userID, account, role)
 }
 
 // LoginResult 登录返回结构。
 type LoginResult struct {
 	Token    string `json:"token"`
 	UserID   int    `json:"user_id"`
+	Account  string `json:"account"`
 	Username string `json:"username"`
-	Name     string `json:"name"`
 	Role     string `json:"role"`
 }
 
-// StudentLogin 学员登录，支持用户名或手机号。
-func (s *AuthService) StudentLogin(account, password string) (*LoginResult, error) {
-	var student model.Student
-	// 同一输入既可能是用户名也可能是手机号，二者择一命中即可
-	if err := s.db.Where("username = ? OR phone = ?", account, account).First(&student).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("用户名或密码错误")
-		}
-		return nil, err
+// HrwaiRole 统一 HRWAI 账号角色名(替代原 "student" 和 "valuation_user")。
+const HrwaiRole = "hrwai_user"
+
+// loginCredentials 登录骨架按角色差异点：查表结果（密码/禁用语义）。
+// status 为 nil 表示该角色无禁用语义（admin 表无 status 字段）。
+type loginCredentials struct {
+	id       int
+	account  string
+	username string
+	password string
+	status   *int16
+}
+
+// verifyAndIssue 登录共享骨架：验密 → 禁用校验 → 签发 → 组结果。
+// plainPassword 为用户输入的明文，errMessage 为验密失败的统一文案（防账号枚举）。
+func (s *AuthService) verifyAndIssue(plainPassword string, c loginCredentials, role, errMessage string) (*LoginResult, error) {
+	if !VerifyPassword(plainPassword, c.password) {
+		return nil, errors.New(errMessage)
 	}
-	if !VerifyPassword(password, student.Password) {
-		return nil, errors.New("用户名或密码错误")
-	}
-	if student.Status != 1 {
+	if c.status != nil && *c.status != 1 {
 		return nil, errors.New("账号已被禁用，请联系管理员")
 	}
-	token, err := s.GenerateToken(student.StudentID, student.Username, "student")
+	token, err := s.GenerateToken(c.id, c.account, role)
 	if err != nil {
 		return nil, err
 	}
 	return &LoginResult{
 		Token:    token,
-		UserID:   student.StudentID,
-		Username: student.Username,
-		Name:     student.Name,
-		Role:     "student",
+		UserID:   c.id,
+		Account:  c.account,
+		Username: c.username,
+		Role:     role,
 	}, nil
 }
 
-// StudentRegister 学员注册，username 由手机号自动生成，避免前端再单独填写用户名。
-func (s *AuthService) StudentRegister(phone, password, name, email, company string) (map[string]any, error) {
-	var count int64
-	s.db.Model(&model.Student{}).Where("phone = ?", phone).Count(&count)
-	if count > 0 {
-		return nil, errors.New("手机号已被注册")
+// HrwaiLogin 统一 HRWAI 账号登录,支持账号或手机号。
+// 三套前端(培训学员端 / 残值评估 / AI 助手)共用此登录方法。
+func (s *AuthService) HrwaiLogin(account, password string) (*LoginResult, error) {
+	var user model.HrwaiUser
+	// 同一输入既可能是登录账号也可能是手机号，二者择一命中即可
+	if err := s.db.Where("account = ? OR phone = ?", account, account).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("账号或密码错误")
+		}
+		return nil, err
+	}
+	status := user.Status
+	return s.verifyAndIssue(password, loginCredentials{
+		id: user.ID, account: user.Account, username: user.Username,
+		password: user.Password, status: &status,
+	}, HrwaiRole, "账号或密码错误")
+}
+
+// generateRandomAccount 生成随机登录账号（如 hr1a2b3c4d5e6f78）。
+func generateRandomAccount() (string, error) {
+	b := make([]byte, 9)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return "hr" + hex.EncodeToString(b), nil
+}
+
+// GetHrwaiUserByID 用于 /me 接口查询用户信息。
+func (s *AuthService) GetHrwaiUserByID(id int) (*model.HrwaiUser, error) {
+	var user model.HrwaiUser
+	if err := s.db.First(&user, id).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// UpdatePassword 设置/修改当前用户密码（账号密码登录用）。
+func (s *AuthService) UpdatePassword(userID int, password string) error {
+	if len(password) < 6 || len(password) > 20 {
+		return errors.New("密码长度需为 6-20 位")
 	}
 	hashed, err := HashPassword(password)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	student := model.Student{
-		Username:  phone,
-		Password:  hashed,
-		Name:      name,
-		Phone:     phone,
-		Email:     email,
-		Company:   company,
-		Status:    1,
-		CreatedAt: beijingNow(),
-	}
-	if err := s.db.Create(&student).Error; err != nil {
-		return nil, err
-	}
-	return map[string]any{
-		"student_id": student.StudentID,
-		"username":   student.Username,
-		"name":       student.Name,
-		"phone":      student.Phone,
-	}, nil
+	return s.db.Model(&model.HrwaiUser{}).Where("id = ?", userID).Update("password", hashed).Error
 }
 
-// AdminLogin 管理员登录。
+// AdminLogin 管理员登录（admin 表无 status 字段，无禁用语义）。
 func (s *AuthService) AdminLogin(username, password string) (*LoginResult, error) {
 	var admin model.Admin
 	if err := s.db.Where("username = ?", username).First(&admin).Error; err != nil {
@@ -147,20 +206,10 @@ func (s *AuthService) AdminLogin(username, password string) (*LoginResult, error
 		}
 		return nil, err
 	}
-	if !VerifyPassword(password, admin.Password) {
-		return nil, errors.New("管理员账号或密码错误")
-	}
-	token, err := s.GenerateToken(admin.AdminID, admin.Username, "admin")
-	if err != nil {
-		return nil, err
-	}
-	return &LoginResult{
-		Token:    token,
-		UserID:   admin.AdminID,
-		Username: admin.Username,
-		Name:     admin.Name,
-		Role:     "admin",
-	}, nil
+	return s.verifyAndIssue(password, loginCredentials{
+		id: admin.AdminID, account: admin.Username, username: admin.Username,
+		password: admin.Password,
+	}, "admin", "管理员账号或密码错误")
 }
 
 // TutorLogin 导师登录。
@@ -172,23 +221,11 @@ func (s *AuthService) TutorLogin(username, password string) (*LoginResult, error
 		}
 		return nil, err
 	}
-	if !VerifyPassword(password, tutor.Password) {
-		return nil, errors.New("导师账号或密码错误")
-	}
-	if tutor.Status != 1 {
-		return nil, errors.New("账号已被禁用，请联系管理员")
-	}
-	token, err := s.GenerateToken(tutor.TutorID, tutor.Username, "tutor")
-	if err != nil {
-		return nil, err
-	}
-	return &LoginResult{
-		Token:    token,
-		UserID:   tutor.TutorID,
-		Username: tutor.Username,
-		Name:     tutor.Name,
-		Role:     "tutor",
-	}, nil
+	status := tutor.Status
+	return s.verifyAndIssue(password, loginCredentials{
+		id: tutor.TutorID, account: tutor.Username, username: tutor.Username,
+		password: tutor.Password, status: &status,
+	}, "tutor", "导师账号或密码错误")
 }
 
 // TutorRegister 导师注册。
@@ -265,9 +302,9 @@ func (s *AuthService) EnsureDefaultUsers() error {
 		}
 	}
 
-	// 3. 默认学员 student
+	// 3. 默认学员 student（hrwai_users）
 	var studentCount int64
-	if err := s.db.Model(&model.Student{}).Where("username = ?", "student").Count(&studentCount).Error; err != nil {
+	if err := s.db.Model(&model.HrwaiUser{}).Where("account = ?", "student").Count(&studentCount).Error; err != nil {
 		return err
 	}
 	if studentCount == 0 {
@@ -275,10 +312,12 @@ func (s *AuthService) EnsureDefaultUsers() error {
 		if err != nil {
 			return err
 		}
-		student := model.Student{
-			Username:  "student",
+		student := model.HrwaiUser{
+			UID:       NextUID(),
+			Account:   "student",
+			Username:  "测试学员",
 			Password:  hashed,
-			Name:      "测试学员",
+			Phone:     "13800000000",
 			Status:    1,
 			CreatedAt: beijingNow(),
 		}

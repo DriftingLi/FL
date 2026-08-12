@@ -1,0 +1,110 @@
+# 本地开发环境：Docker 容器化 PostgreSQL + Redis + Go 后端
+# 使用：make dev-up / docker compose up -d
+# 前端通过 Vite dev server 运行在宿主机（npm run dev），通过 CORS 访问 backend
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: forklift-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: forklift_training
+      POSTGRES_USER: forklift
+      POSTGRES_PASSWORD: forklift123
+      TZ: Asia/Shanghai
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U forklift -d forklift_training"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: forklift-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 100mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # LibreOffice sidecar:用于 PPT→PDF→PNG 转换(无宿主污染)
+  # backend 通过 HTTP 调用该容器
+  libreoffice:
+    build:
+      context: ../libreoffice-sidecar
+      dockerfile: Dockerfile
+    image: forklift-libreoffice:local
+    container_name: forklift-libreoffice-local
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      # 与 backend 共享 uploads 目录,sidecar 通过路径访问 PPT 文件并写入 PNG
+      - ./static/uploads:/data/uploads
+    ports:
+      - "8000:8000"
+
+  # Go 后端（容器化本地开发）：通过 .env 注入配置，监听 8080 端口
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: forklift-backend:local
+    container_name: forklift-backend-local
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      libreoffice:
+        condition: service_started
+    environment:
+      APP_ENV: development
+      PORT: "8080"
+      # 通过 env_file 加载 backend/.env 的所有变量（DATABASE_URL/REDIS_ADDR/AI_* 等）
+      # 但 DATABASE_URL/REDIS_ADDR 需指向容器内 postgres/redis 主机名
+      DATABASE_URL: postgres://forklift:forklift123@postgres:5432/forklift_training?sslmode=disable
+      REDIS_ADDR: redis:6379
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:5174,http://training.localhost:5173,http://valuation.localhost:5173}
+      MAX_CONTENT_LENGTH_MB: "250"
+      # LibreOffice sidecar HTTP 地址(容器内服务名 + 端口)
+      LIBREOFFICE_SIDECAR_URL: http://libreoffice:8000
+      TZ: Asia/Shanghai
+    env_file:
+      - .env
+    ports:
+      # 宿主端口用 18080：8080 落在 Windows Hyper-V 动态排除端口段（当前 8025-8124）内，
+      # mirrored 网络模式下无法绑定（报 "port is already allocated"）。保留段随重启变化，18080 远离常规段。
+      - "18080:8080"
+    volumes:
+      # 挂载本地代码用于热更新开发（可选；不修改代码时镜像内已含编译产物）
+      # 注：entrypoint 仍执行镜像内编译好的 /app/bin/server，挂载仅用于备份/调试
+      - ./static/uploads:/data/uploads
+      - ./storage/reports:/data/reports
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local

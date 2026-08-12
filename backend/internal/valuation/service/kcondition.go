@@ -58,14 +58,14 @@ const (
 // hasMaintenanceRecords: 是否有维保记录
 // hasLicensePlate: 是否有车牌
 // hasRegistrationCertificate: 是否有登记证
-// dictRepo: 字典仓储（用于查询 condition_ratings）
-// provider: 系数提供者（用于查询 4 个 Kc 修正项）
+// dictRepo: 系数表读取接口（用于查询 condition_ratings）
+// provider: 系数键读取接口（用于查询 4 个 Kc 修正项）
 func CalcKCondition(
 	ctx context.Context,
 	rating string,
 	originalPaint, hasMaintenanceRecords, hasLicensePlate, hasRegistrationCertificate bool,
-	dictRepo *repository.DictionaryRepository,
-	provider *CoefficientProvider,
+	dictRepo DictionaryReader,
+	provider ConfigReader,
 ) (KcResult, error) {
 	// 1. 查询车况评级基准系数
 	//    字典表未命中时用 1.0 兜底（中性车况，不阻断评估流程）
@@ -131,14 +131,14 @@ func CalcKCondition(
 	return res, nil
 }
 
-// readWithFallback 从 provider 读取系数，失败或非正数时返回 fallback 默认值
+// readWithFallback 从 ConfigReader 读取系数，失败或非正数时返回 fallback 默认值
 // 与 khours.go 中 annual/lower/mid/high/maxR 的兜底模式保持一致
-// provider 为 nil 时直接返回 fallback（避免 nil 指针 panic，主要供测试与极端兜底使用）
-func readWithFallback(ctx context.Context, provider *CoefficientProvider, key string, fallback float64) float64 {
-	if provider == nil {
+// reader 为 nil 时直接返回 fallback（避免 nil 指针 panic，主要供测试与极端兜底使用）
+func readWithFallback(ctx context.Context, reader ConfigReader, key string, fallback float64) float64 {
+	if reader == nil {
 		return fallback
 	}
-	v, err := provider.Get(ctx, key)
+	v, err := reader.Get(ctx, key)
 	if err != nil || v <= 0 {
 		return fallback
 	}

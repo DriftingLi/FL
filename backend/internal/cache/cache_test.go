@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"go.uber.org/zap"
 	"time"
 
 	"forklift-training/internal/config"
@@ -36,7 +38,7 @@ func setupTestRedis(t *testing.T) {
 		PoolTimeout:  3 * time.Second,
 		IdleTimeout:  2 * time.Minute,
 	}
-	if _, err := InitRedis(cfg); err != nil {
+	if _, err := InitRedis(cfg, zap.NewNop()); err != nil {
 		t.Skipf("Redis 不可用，跳过测试: %v", err)
 	}
 }
@@ -55,7 +57,7 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 	if client != nil {
 		_ = InvalidatePattern(context.Background(), "*")
-		CloseRedis(client)
+		CloseRedis(client, zap.NewNop())
 	}
 	os.Exit(code)
 }

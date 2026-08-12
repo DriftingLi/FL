@@ -1,15 +1,36 @@
 <template>
-  <aside class="app-sidebar" :class="{ collapsed }">
-    <!-- 用户信息区 -->
-    <div class="sidebar-user">
-      <div class="user-avatar-circle">
-        {{ (authStore.userInfo?.name || authStore.userInfo?.username || '?').charAt(0) }}
+  <aside class="app-sidebar" :class="{ collapsed: effectiveCollapsed }">
+    <!-- 用户信息区（含退出登录下拉菜单） -->
+    <el-dropdown
+      class="sidebar-user-dropdown"
+      trigger="click"
+      :placement="effectiveCollapsed ? 'right-start' : 'bottom-start'"
+      @command="handleUserCommand"
+    >
+      <div class="sidebar-user" :class="{ 'is-collapsed': effectiveCollapsed }">
+        <img
+          v-if="authStore.userInfo?.avatar_url"
+          :src="String(authStore.userInfo.avatar_url)"
+          class="user-avatar-circle user-avatar-img"
+          alt="头像"
+        />
+        <div v-else class="user-avatar-circle">
+          {{ (authStore.userInfo?.username || '?').charAt(0) }}
+        </div>
+        <div v-if="!effectiveCollapsed" class="user-info">
+          <span class="user-name">{{ authStore.userInfo?.username }}</span>
+          <span class="role-badge" :class="roleClass">{{ roleLabel }}</span>
+        </div>
+        <el-icon v-if="!effectiveCollapsed" class="user-dropdown-arrow"><ArrowDown /></el-icon>
       </div>
-      <div v-if="!collapsed" class="user-info">
-        <span class="user-name">{{ authStore.userInfo?.name || authStore.userInfo?.username }}</span>
-        <span class="role-badge" :class="roleClass">{{ roleLabel }}</span>
-      </div>
-    </div>
+      <template #dropdown>
+        <el-dropdown-menu>
+          <el-dropdown-item command="logout">
+            <el-icon><SwitchButton /></el-icon>退出登录
+          </el-dropdown-item>
+        </el-dropdown-menu>
+      </template>
+    </el-dropdown>
 
     <!-- 分隔线 -->
     <div class="sidebar-divider"></div>
@@ -19,7 +40,7 @@
       <template v-for="item in menuItems" :key="item.key">
         <!-- 有子项的分组 -->
         <template v-if="item.children && item.children.length">
-          <div v-if="!collapsed" class="nav-group-label">
+          <div v-if="!effectiveCollapsed" class="nav-group-label">
             <el-icon v-if="item.icon" class="nav-group-icon"><component :is="item.icon" /></el-icon>
             <span>{{ item.label }}</span>
           </div>
@@ -38,7 +59,7 @@
             <div class="nav-item-icon">
               <el-icon><component :is="child.icon" /></el-icon>
             </div>
-            <span v-if="!collapsed" class="nav-item-label">{{ child.label }}</span>
+            <span v-if="!effectiveCollapsed" class="nav-item-label">{{ child.label }}</span>
           </router-link>
         </template>
 
@@ -52,7 +73,7 @@
           <div class="nav-item-icon">
             <el-icon><component :is="item.icon" /></el-icon>
           </div>
-          <span v-if="!collapsed" class="nav-item-label">{{ item.label }}</span>
+          <span v-if="!effectiveCollapsed" class="nav-item-label">{{ item.label }}</span>
         </router-link>
       </template>
     </nav>
@@ -60,44 +81,58 @@
     <!-- 底部功能区 -->
     <div class="sidebar-divider"></div>
     <div class="sidebar-footer">
-      <button class="footer-btn collapse-btn" @click="$emit('toggle-collapse')">
-        <component :is="collapsed ? Expand : Fold" class="collapse-icon" />
-        <span v-if="!collapsed" class="footer-btn-label">收起侧栏</span>
-      </button>
+      <div class="footer-row">
+        <button class="footer-btn collapse-btn" @click="$emit('toggle-collapse')">
+          <component :is="effectiveCollapsed ? Expand : Fold" class="collapse-icon" />
+          <span v-if="!effectiveCollapsed" class="footer-btn-label">收起侧栏</span>
+        </button>
+        <NotificationPanel
+          v-if="authStore.isLoggedIn && authStore.userInfo?.role === 'hrwai_user'"
+          class="sidebar-notification"
+        />
+      </div>
     </div>
+
   </aside>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
-import { Expand, Fold } from '@element-plus/icons-vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessageBox } from 'element-plus'
+import { Expand, Fold, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import type { NavItem } from '@/config/navigation'
+import NotificationPanel from '@/components/layout/NotificationPanel.vue'
 
-defineProps<{
+const props = defineProps<{
   menuItems: NavItem[]
   collapsed: boolean
+  mobileOpen?: boolean
 }>()
 
 defineEmits<{
   'toggle-collapse': []
 }>()
 
+// 移动端打开侧边栏时强制展开（显示文字），无视桌面端折叠状态
+const effectiveCollapsed = computed(() => props.collapsed && !props.mobileOpen)
+
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 
 const roleLabel = computed(() => {
   const role = authStore.userInfo?.role
   if (role === 'admin') return '管理员'
   if (role === 'tutor') return '导师'
-  if (role === 'student') return '学员'
+  if (role === 'hrwai_user') return '学员'
   return '用户'
 })
 
 const roleClass = computed(() => {
   const role = authStore.userInfo?.role
-  return role || 'student'
+  return role || 'hrwai_user'
 })
 
 function isRouteActive(item: NavItem): boolean {
@@ -107,6 +142,22 @@ function isRouteActive(item: NavItem): boolean {
   // （如 /training、/training/tutor），不能走前缀匹配，否则访问任何子路由时仪表盘都会高亮。
   if (path === '/' || item.exact) return route.path === path
   return route.path === path || route.path.startsWith(path + '/')
+}
+
+async function handleUserCommand(command: string) {
+  if (command === 'logout') {
+    try {
+      await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+      authStore.clearAuthData()
+      router.push('/login')
+    } catch (e) {
+      // 用户取消，不做任何操作
+    }
+  }
 }
 </script>
 
@@ -131,12 +182,26 @@ function isRouteActive(item: NavItem): boolean {
 }
 
 /* 用户信息区 */
+.sidebar-user-dropdown {
+  display: block;
+  width: 100%;
+  flex-shrink: 0;
+}
+
 .sidebar-user {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-4) var(--space-4) var(--space-3);
-  flex-shrink: 0;
+  cursor: pointer;
+  border-radius: 0;
+  outline: none;
+  transition: background var(--duration-fast) var(--ease-default);
+}
+
+.sidebar-user:hover,
+.sidebar-user:focus-visible {
+  background: var(--color-bg-page);
 }
 
 .app-sidebar.collapsed .sidebar-user {
@@ -159,11 +224,17 @@ function isRouteActive(item: NavItem): boolean {
   flex-shrink: 0;
 }
 
+.user-avatar-img {
+  object-fit: cover;
+}
+
 .user-info {
   display: flex;
   flex-direction: column;
   gap: 2px;
   overflow: hidden;
+  flex: 1;
+  min-width: 0;
 }
 
 .user-name {
@@ -173,6 +244,13 @@ function isRouteActive(item: NavItem): boolean {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.user-dropdown-arrow {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .role-badge {
@@ -333,6 +411,20 @@ function isRouteActive(item: NavItem): boolean {
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-default);
   font-family: var(--font-body);
+}
+
+.footer-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.footer-row .footer-btn {
+  flex: 1;
+}
+
+.app-sidebar.collapsed .sidebar-notification {
+  display: none;
 }
 
 .footer-btn:hover {

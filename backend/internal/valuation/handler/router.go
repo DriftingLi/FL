@@ -13,10 +13,14 @@
 //	  ├── /dictionaries/*               字典查询（只读 GET）
 //	  └── /health                       健康检查
 //
-//	/api/valuation                      估值鉴权组（ValuationJWTAuth，独立 JWT secret）
+//	/api/valuation                      可选认证组（登录与否都能用，登录则记录 user_id）
+//	  ├── POST /evaluations             评估提交
+//	  └── POST /battery/evaluations     电池 RUL 评估提交
+//
+//	/api/valuation                      估值鉴权组（统一主体系 JWT）
 //	  ├── GET  /evaluations             评估历史/详情（需登录）
 //	  ├── GET  /evaluations/:id
-//	  ├── /battery/evaluations          电池 RUL 评估 CRUD（需登录）
+//	  ├── /battery/evaluations          电池 RUL 评估历史（需登录）
 //	  ├── GET  /auth/me                 获取当前估值用户
 //	  └── POST /auth/logout             估值用户登出
 //
@@ -26,54 +30,51 @@ package handler
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 
-	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
-	vrepo "forklift-training/internal/valuation/repository"
+	"forklift-training/internal/security"
+	"forklift-training/internal/storage"
+	"forklift-training/internal/valuation/dictcrud"
 	vservice "forklift-training/internal/valuation/service"
-	"forklift-training/pkg/pdf"
 )
 
 // RegisterRoutes 注册残值评估模块路由。
-// 路由分四组：
-//   - 公开组 /api/valuation：字典查询、评估提交、统计、健康检查、报告生成/下载、登录/注册（匿名可访问）
-//   - 估值鉴权组 /api/valuation：评估历史/详情、电池 RUL CRUD、/auth/me、/auth/logout（需估值专属 ValuationJWTAuth）
+// 路由分五组：
+//   - 公开组 /api/valuation：字典查询、统计、健康检查、报告生成/下载、登录/注册（匿名可访问）
+//   - 可选认证组 /api/valuation：评估提交、电池评估提交（匿名可提交，登录则记录 user_id）
+//   - 估值鉴权组 /api/valuation：评估历史/详情、电池历史、/auth/me、/auth/logout（需登录）
 //   - 管理员组 /api/valuation/admin：字典 CRUD（需主体系 admin JWT）
 func RegisterRoutes(
 	r *gin.Engine,
-	cfg *config.Config,
+	sess *security.Session,
 	logger *zap.Logger,
-	pool *pgxpool.Pool,
-	dictRepo *vrepo.DictionaryRepository,
-	evalRepo *vrepo.EvaluationRepository,
+	dictRepo DictionaryConfigStore,
+	evalRepo EvaluationStore,
+	batteryRepo BatteryStore,
 	valuationSvc *vservice.ValuationService,
 	batterySvc *vservice.BatteryRULService,
-	pdfGen *pdf.Generator,
-	pdfOutputDir string,
-	valuationAuthSvc *vservice.ValuationAuthService,
+	pdfGen ReportGenerator,
+	st storage.Storage,
+	valuationAuthSvc ValuationAuth,
 ) {
 	evalHandler := NewEvaluationHandler(valuationSvc, evalRepo, logger)
 	configHandler := NewConfigHandler(dictRepo, logger)
-	reportHandler := NewReportHandler(evalRepo, pdfGen, logger)
-	batteryRepo := vrepo.NewBatteryRepository(pool)
-	batteryHandler := NewBatteryHandler(batteryRepo, batterySvc, logger, pdfOutputDir)
+	reportHandler := NewReportHandler(evalRepo, pdfGen, logger, st, vservice.NewCoefficientProvider(dictRepo))
+	batteryHandler := NewBatteryHandler(batteryRepo, batterySvc, logger, st)
 	healthHandler := NewHealthHandler()
-	valuationAuthHandler := NewValuationAuthHandler(valuationAuthSvc)
+	valuationAuthHandler := NewValuationAuthHandler(valuationAuthSvc, sess)
 
-	// === 公开组（无需登录）：字典查询 + 评估提交 + 统计 + 健康检查 + 报告生成/下载 + 登录/注册 ===
-	// 未登录用户可提交评估并被计数（evaluations 表无 user_id，记录匿名存储）
-	// 报告生成/下载也改为公开：未登录用户可下载已生成的评估报告
+	// === 公开组（无需登录）：字典查询 + 统计 + 健康检查 + 报告生成/下载 + 登录/注册 ===
+	// 评估提交（POST /evaluations）已移至"可选认证组"，登录用户提交时记录 user_id
+	// 报告生成/下载公开：未登录用户可下载已生成的评估报告
 	public := r.Group("/api/valuation")
 	{
-		public.POST("/evaluations", evalHandler.Create)
 		public.GET("/evaluations/stats", evalHandler.Stats)
 		public.GET("/health", healthHandler.Check)
 
 		// 估值模块独立登录/注册（公开接口）
 		public.POST("/auth/login", valuationAuthHandler.Login)
-		public.POST("/auth/register", valuationAuthHandler.Register)
 
 		// 报告生成与下载（无需登录）
 		public.POST("/evaluations/:id/report", reportHandler.Generate)
@@ -105,16 +106,24 @@ func RegisterRoutes(
 		}
 	}
 
-	// === 估值独立鉴权组（需估值专属 ValuationJWTAuth） ===
+	// === 可选认证组（登录与否都能用，登录则记录 user_id） ===
+	// 评估提交/电池评估：未登录可提交（user_id 落 NULL），登录用户提交则归属到自己
+	optional := r.Group("/api/valuation")
+	optional.Use(middleware.OptionalAuth(sess))
+	{
+		optional.POST("/evaluations", evalHandler.Create)
+		optional.POST("/battery/evaluations", batteryHandler.Create)
+	}
+
+	// === HRWAI 账号鉴权组（需 middleware.JWTAuth + role=hrwai_user） ===
 	// 评估历史/详情 + 电池 RUL CRUD + /auth/me + /auth/logout
-	// 使用独立 JWT secret，与主体系 token 互不兼容
+	// 已统一到主体系 JWT,与培训学员端共用同一 token
 	valAuth := r.Group("/api/valuation")
-	valAuth.Use(ValuationJWTAuth(cfg.Valuation.JWTSecretKey))
+	valAuth.Use(middleware.JWTAuth(sess), middleware.RoleRequired("hrwai_user"))
 	{
 		valAuth.GET("/evaluations", evalHandler.List)
 		valAuth.GET("/evaluations/:id", evalHandler.Get)
 
-		valAuth.POST("/battery/evaluations", batteryHandler.Create)
 		valAuth.GET("/battery/evaluations", batteryHandler.List)
 		valAuth.GET("/battery/evaluations/:id", batteryHandler.Get)
 
@@ -124,65 +133,12 @@ func RegisterRoutes(
 
 	// === 管理员 CRUD 接口（要求主体系 JWT role=admin） ===
 	// 残值配置管理仍走主体系 admin JWT，不参与此次独立化
+	// 全部字典写面由描述符注册表驱动（ADR-0008）：POST/PUT/DELETE 按描述符声明注册，
+	// 不再逐实体手写路由。失效 pattern 来自 repository 缓存契约单点（PatternsOf）。
 	admin := r.Group("/api/valuation/admin")
-	admin.Use(middleware.JWTAuth(cfg))
+	admin.Use(middleware.JWTAuth(sess))
 	admin.Use(middleware.RoleRequired("admin"))
 	{
-		// brands
-		admin.POST("/brands", configHandler.CreateBrand)
-		admin.PUT("/brands/:id", configHandler.UpdateBrand)
-		admin.DELETE("/brands/:id", configHandler.DeleteBrand)
-
-		// vehicle_types
-		admin.POST("/vehicle-types", configHandler.CreateVehicleType)
-		admin.PUT("/vehicle-types/:id", configHandler.UpdateVehicleType)
-		admin.DELETE("/vehicle-types/:id", configHandler.DeleteVehicleType)
-
-		// series
-		admin.POST("/series", configHandler.CreateSeries)
-		admin.PUT("/series/:id", configHandler.UpdateSeries)
-		admin.DELETE("/series/:id", configHandler.DeleteSeries)
-
-		// tonnages
-		admin.POST("/tonnages", configHandler.CreateTonnage)
-		admin.DELETE("/tonnages/:id", configHandler.DeleteTonnage)
-
-		// mast_types
-		admin.POST("/mast-types", configHandler.CreateMastType)
-		admin.DELETE("/mast-types/:id", configHandler.DeleteMastType)
-
-		// mast_heights
-		admin.POST("/mast-heights", configHandler.CreateMastHeight)
-		admin.DELETE("/mast-heights/:id", configHandler.DeleteMastHeight)
-
-		// battery_types
-		admin.POST("/battery-types", configHandler.CreateBatteryType)
-		admin.DELETE("/battery-types/:id", configHandler.DeleteBatteryType)
-
-		// transmission_types
-		admin.POST("/transmission-types", configHandler.CreateTransmissionType)
-		admin.DELETE("/transmission-types/:id", configHandler.DeleteTransmissionType)
-
-		// engine_types
-		admin.POST("/engine-types", configHandler.CreateEngineType)
-		admin.DELETE("/engine-types/:id", configHandler.DeleteEngineType)
-
-		// condition_ratings
-		admin.POST("/condition-ratings", configHandler.CreateConditionRating)
-		admin.PUT("/condition-ratings/:id", configHandler.UpdateConditionRating)
-		admin.DELETE("/condition-ratings/:id", configHandler.DeleteConditionRating)
-
-		// region_coefficients
-		admin.POST("/region-coefficients", configHandler.CreateRegionCoefficient)
-		admin.PUT("/region-coefficients/:id", configHandler.UpdateRegionCoefficient)
-		admin.DELETE("/region-coefficients/:id", configHandler.DeleteRegionCoefficient)
-
-		// original_prices
-		admin.POST("/original-prices", configHandler.CreateOriginalPrice)
-		admin.PUT("/original-prices/:id", configHandler.UpdateOriginalPrice)
-		admin.DELETE("/original-prices/:id", configHandler.DeleteOriginalPrice)
-
-		// coefficient_configs（仅支持按 key 更新值，不允许新增/删除）
-		admin.PUT("/coefficient-configs/:key", configHandler.UpdateCoefficient)
+		configHandler.registerDictCRUDRoutes(admin, dictcrud.NewRegistry(dictcrud.AllDescriptors()...))
 	}
 }

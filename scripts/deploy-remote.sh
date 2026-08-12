@@ -37,18 +37,56 @@ COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 BACKEND_SERVICE="${BACKEND_SERVICE:-backend}"
 FRONTEND_SERVICE="${FRONTEND_SERVICE:-frontend}"
 POSTGRES_SERVICE="${POSTGRES_SERVICE:-postgres}"
+REDIS_SERVICE="${REDIS_SERVICE:-redis}"
+
+# 已知容器名（compose 中显式指定），用于部署前清理可能残留的冲突容器
+KNOWN_CONTAINERS="forklift-backend-prod forklift-frontend-prod forklift-pg-prod forklift-redis-prod forklift-libreoffice-prod"
 
 # 注册表认证
 REGISTRY="${REGISTRY:-ghcr.io}"
 IMAGE_BACKEND="${IMAGE_BACKEND:-}"
 IMAGE_BACKEND="${IMAGE_BACKEND,,}"  # Docker 镜像名必须全小写
 IMAGE_FRONTEND="${IMAGE_FRONTEND:-}"
+IMAGE_FRONTEND="${IMAGE_FRONTEND,,}"  # Docker 镜像名必须全小写
+IMAGE_LIBREOFFICE="${IMAGE_LIBREOFFICE:-}"
+IMAGE_LIBREOFFICE="${IMAGE_LIBREOFFICE,,}"  # Docker 镜像名必须全小写
 IMAGE_TAG="${IMAGE_TAG:-latest}"
+# 各镜像独立标签（CD 传入内容哈希标签：未变更的镜像跳过构建/拉取）；缺省统一用 IMAGE_TAG
+IMAGE_TAG_BACKEND="${IMAGE_TAG_BACKEND:-$IMAGE_TAG}"
+IMAGE_TAG_FRONTEND="${IMAGE_TAG_FRONTEND:-$IMAGE_TAG}"
+IMAGE_TAG_LIBREOFFICE="${IMAGE_TAG_LIBREOFFICE:-$IMAGE_TAG}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
+
+# 镜像加速代理（ghcr.io pull-through 缓存，如 127.0.0.1:5000）
+# 设置后镜像地址自动改写为 ${REGISTRY_PROXY}/<org>/<image>，由本地代理缓存加速拉取
+REGISTRY_PROXY="${REGISTRY_PROXY:-}"
+if [ -n "$REGISTRY_PROXY" ]; then
+    REGISTRY_PROXY="${REGISTRY_PROXY%/}"
+    # 保存原始镜像名（代理不可用时回退直连 / 清理镜像时覆盖新旧两种路径）
+    IMAGE_BACKEND_ORIG="${IMAGE_BACKEND}"
+    IMAGE_FRONTEND_ORIG="${IMAGE_FRONTEND}"
+    IMAGE_LIBREOFFICE_ORIG="${IMAGE_LIBREOFFICE}"
+    case "$IMAGE_BACKEND" in
+        ghcr.io/*) IMAGE_BACKEND="${REGISTRY_PROXY}/${IMAGE_BACKEND#ghcr.io/}" ;;
+    esac
+    case "$IMAGE_FRONTEND" in
+        ghcr.io/*) IMAGE_FRONTEND="${REGISTRY_PROXY}/${IMAGE_FRONTEND#ghcr.io/}" ;;
+    esac
+    case "$IMAGE_LIBREOFFICE" in
+        ghcr.io/*) IMAGE_LIBREOFFICE="${REGISTRY_PROXY}/${IMAGE_LIBREOFFICE#ghcr.io/}" ;;
+    esac
+    log_info "已启用镜像加速代理: ${REGISTRY_PROXY}"
+fi
 
 # 健康检查
 HEALTH_CHECK_RETRIES="${HEALTH_CHECK_RETRIES:-20}"
 HEALTH_CHECK_INTERVAL="${HEALTH_CHECK_INTERVAL:-6}"
+
+# compose up --wait 超时（秒）：容器就绪等待上限，超时后由 health_check() 轮询兜底
+UP_WAIT_TIMEOUT="${UP_WAIT_TIMEOUT:-60}"
+
+# 后台备份 join 超时（秒）：迁移前等待备份完成的上限
+BACKUP_WAIT_TIMEOUT="${BACKUP_WAIT_TIMEOUT:-120}"
 
 # SSL 证书目录（固定路径，由 write_ssl_certs() 写入，frontend 容器挂载）
 SSL_CERT_DIR="${DEPLOY_PATH}/nginx/ssl"
@@ -58,6 +96,11 @@ SKIP_MIGRATION="${SKIP_MIGRATION:-false}"
 
 # 清理策略：保留最近 N 个镜像
 KEEP_IMAGES="${KEEP_IMAGES:-3}"
+
+# ghcr pull-through 缓存上限（MB）：缓存超阈值即清空重建（清空后拉取按需回源）。
+# 默认 15GB——服务器磁盘 30G（约 24G 可用），6GB 旧阈值导致清空过频、
+# 每次清空后 testing 部署需全量回源（实测拉取 43 分钟）
+CACHE_LIMIT_MB="${CACHE_LIMIT_MB:-15000}"
 
 # ======================================================================
 # 工具函数
@@ -92,13 +135,6 @@ write_env_file() {
         fi
     }
 
-    # PEM 私钥写入独立文件（必须在 {} > .env 块之外，防止 log_ok ANSI 码污染 .env）
-    if [ -n "${COZE_OAUTH_PRIVATE_KEY:-}" ]; then
-        printf '%s' "${COZE_OAUTH_PRIVATE_KEY}" > "${DEPLOY_PATH}/coze_private_key.pem"
-        chmod 600 "${DEPLOY_PATH}/coze_private_key.pem"
-        log_ok "Coze 私钥已写入文件"
-    fi
-
     {
         echo "# 由 deploy-remote.sh 自动生成 — $(date '+%Y-%m-%d %H:%M:%S')"
         echo "APP_ENV=production"
@@ -117,6 +153,13 @@ write_env_file() {
         env_val "${JWT_SECRET_KEY:-}"; echo
         echo "JWT_EXPIRES_HOURS=${JWT_EXPIRES_HOURS:-24}"
 
+        # 登录态 Cookie（父域名共享登录）
+        printf 'AUTH_COOKIE_NAME='
+        env_val "${AUTH_COOKIE_NAME:-hrwai_token}"; echo
+        printf 'AUTH_COOKIE_DOMAIN='
+        env_val "${AUTH_COOKIE_DOMAIN:-}"; echo
+        echo "AUTH_COOKIE_SECURE=${AUTH_COOKIE_SECURE:-true}"
+
         printf 'ADMIN_DEFAULT_PASSWORD='
         env_val "${ADMIN_DEFAULT_PASSWORD:-}"; echo
         printf 'TUTOR_DEFAULT_PASSWORD='
@@ -127,30 +170,9 @@ write_env_file() {
         printf 'CORS_ORIGINS='
         env_val "${CORS_ORIGINS:-}"; echo
 
-        printf 'ZHIPU_API_KEY='
-        env_val "${ZHIPU_API_KEY:-}"; echo
-        printf 'ZHIPU_BASE_URL='
-        env_val "${ZHIPU_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}"; echo
-        printf 'ZHIPU_MODEL='
-        env_val "${ZHIPU_MODEL:-glm-4.7-flash}"; echo
-        printf 'OPENAI_API_KEY='
-        env_val "${OPENAI_API_KEY:-}"; echo
-
-        printf 'COZE_PROJECT_ID='
-        env_val "${COZE_PROJECT_ID:-}"; echo
-        printf 'COZE_OAUTH_APP_ID='
-        env_val "${COZE_OAUTH_APP_ID:-}"; echo
-        printf 'COZE_OAUTH_KID='
-        env_val "${COZE_OAUTH_KID:-}"; echo
-        echo "COZE_OAUTH_PRIVATE_KEY_PATH=/etc/secrets/coze_private_key.pem"
-        # COZE_OAUTH_PRIVATE_KEY 不写入 .env（已写入独立文件，见上方）
-
-        echo "# 残值评估 JWT 密钥（生产环境必需）"
-        printf 'VALUATION_JWT_SECRET_KEY='
-        env_val "${VALUATION_JWT_SECRET_KEY:-}"; echo
-
-        echo "BACKEND_IMAGE=${IMAGE_BACKEND}:${IMAGE_TAG}"
-        echo "FRONTEND_IMAGE=${IMAGE_FRONTEND}:${IMAGE_TAG}"
+        echo "BACKEND_IMAGE=${IMAGE_BACKEND}:${IMAGE_TAG_BACKEND}"
+        echo "FRONTEND_IMAGE=${IMAGE_FRONTEND}:${IMAGE_TAG_FRONTEND}"
+        echo "LIBREOFFICE_IMAGE=${IMAGE_LIBREOFFICE:-forklift-libreoffice}:${IMAGE_TAG_LIBREOFFICE}"
         echo "DOMAIN=${DOMAIN:-localhost}"
 
         echo "UPLOAD_FOLDER=/data/uploads"
@@ -161,6 +183,28 @@ write_env_file() {
         echo "REDIS_DB=${REDIS_DB:-0}"
         echo "REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-10}"
         echo "REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-fl:}"
+
+        echo "# Cloudflare R2 对象存储（留空 STORAGE_DRIVER 或设为 local 则回退到本地磁盘）"
+        echo "STORAGE_DRIVER=${STORAGE_DRIVER:-local}"
+        printf 'R2_ACCOUNT_ID='
+        env_val "${R2_ACCOUNT_ID:-}"; echo
+        printf 'R2_ACCESS_KEY_ID='
+        env_val "${R2_ACCESS_KEY_ID:-}"; echo
+        printf 'R2_SECRET_ACCESS_KEY='
+        env_val "${R2_SECRET_ACCESS_KEY:-}"; echo
+        echo "R2_BUCKET=${R2_BUCKET:-}"
+        printf 'R2_PUBLIC_DOMAIN='
+        env_val "${R2_PUBLIC_DOMAIN:-}"; echo
+
+        echo "BACKEND_HOST_PORT=${BACKEND_HOST_PORT:-8080}"
+
+        # Volume 路径配置
+        # 默认 named volume（production）；测试环境(Docker 19.03)用 bind mount 绕过 volume 权限 bug
+        # 测试环境设置: PG_VOLUME=./data/pgdata, REDIS_VOLUME=./data/redis 等
+        echo "PG_VOLUME=${PG_VOLUME:-pgdata-prod}"
+        echo "REDIS_VOLUME=${REDIS_VOLUME:-redisdata-prod}"
+        echo "UPLOADS_VOLUME=${UPLOADS_VOLUME:-uploads-data}"
+        echo "REPORTS_VOLUME=${REPORTS_VOLUME:-reports-data}"
     } > "${DEPLOY_PATH}/.env.tmp"
     rm -f "${DEPLOY_PATH}/.env"
     mv "${DEPLOY_PATH}/.env.tmp" "${DEPLOY_PATH}/.env"
@@ -278,6 +322,7 @@ create_backup() {
     {
         echo "=== 备份时间: $(date) ==="
         echo "=== Git 提交: ${IMAGE_TAG:-unknown} ==="
+        echo "=== 镜像标签: backend=${IMAGE_TAG_BACKEND} frontend=${IMAGE_TAG_FRONTEND} libreoffice=${IMAGE_TAG_LIBREOFFICE} ==="
         echo ""
         echo "--- 运行中的容器 ---"
         docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps 2>/dev/null || echo "无法获取容器状态"
@@ -288,7 +333,7 @@ create_backup() {
         echo "--- 备份 .env ---"
         if [ -f "$DEPLOY_PATH/.env" ]; then
             # 仅保存非敏感信息
-            grep -v -E '(SECRET_KEY|JWT_SECRET_KEY|PASSWORD|API_KEY)' "$DEPLOY_PATH/.env" 2>/dev/null || true
+            grep -v -E '(SECRET_KEY|JWT_SECRET_KEY|PASSWORD|API_KEY|R2_SECRET|R2_ACCESS_KEY)' "$DEPLOY_PATH/.env" 2>/dev/null || true
         fi
         echo ""
         if [ -f "$DB_BACKUP_FILE" ]; then
@@ -323,7 +368,49 @@ create_backup() {
     # 清理旧数据库备份（保留最近 10 份，每份约几 MB）
     ls -t "$BACKUP_DIR"/db_backup_*.sql.gz 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null || true
 
+    # ---- 异地备份:同步到 pve-01（仅 production 环境配置了 BACKUP_REMOTE_HOST 时执行） ----
+    if [ -n "${BACKUP_REMOTE_HOST:-}" ] && [ -f "$DB_BACKUP_FILE" ]; then
+        log_info "同步数据库备份到 ${BACKUP_REMOTE_HOST}..."
+        local remote_dir="${BACKUP_REMOTE_DIR:-/opt/forklift-backups}"
+        local ssh_key="${BACKUP_REMOTE_KEY:-/root/.ssh/pve01-sync}"
+        # 先确保远端备份目录存在（目录缺失会导致 scp 静默失败）
+        ssh -i "$ssh_key" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            "$BACKUP_REMOTE_HOST" "mkdir -p ${remote_dir}" >/dev/null 2>&1 || true
+        if scp -i "$ssh_key" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            "$DB_BACKUP_FILE" "${BACKUP_REMOTE_HOST}:${remote_dir}/" 2>/tmp/backup_scp.err; then
+            log_ok "异地备份完成: ${BACKUP_REMOTE_HOST}:${remote_dir}/$(basename "$DB_BACKUP_FILE")"
+            # 清理远程旧备份（保留最近 10 份）
+            ssh -i "$ssh_key" -o StrictHostKeyChecking=no "$BACKUP_REMOTE_HOST" \
+                "ls -t ${remote_dir}/db_backup_*.sql.gz 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null" 2>/dev/null || true
+        else
+            local scp_err
+            scp_err=$(tail -1 /tmp/backup_scp.err 2>/dev/null || echo "未知错误")
+            log_warn "异地备份失败: ${scp_err}，继续部署"
+        fi
+        rm -f /tmp/backup_scp.err
+    fi
+
     log_ok "备份完成: $BACKUP_FILE"
+}
+
+# ======================================================================
+# 等待后台备份完成（备份与早期无依赖步骤并行，任何 DB 写操作前 join）
+# ======================================================================
+wait_backup() {
+    local pid="$1"
+    local waited=0
+    log_info ">>> 等待后台备份完成..."
+    while kill -0 "$pid" 2>/dev/null; do
+        sleep 2
+        waited=$((waited + 2))
+        if [ "$waited" -ge "${BACKUP_WAIT_TIMEOUT:-120}" ]; then
+            log_warn "备份超时（${waited}s），继续部署（本次部署窗口的回滚保障可能不完整）"
+            return 1
+        fi
+    done
+    wait "$pid" 2>/dev/null || log_warn "备份进程异常退出（详见上方日志）"
+    log_ok "备份已完成"
+    return 0
 }
 
 # ======================================================================
@@ -344,25 +431,251 @@ login_registry() {
 }
 
 # ======================================================================
-# 拉取 Docker 镜像
+# 启动 ghcr pull-through 缓存容器（registry:2）
+# 先清理同名残留容器再创建（缓存卷 ghcr-cache 保留，除非超阈值另行清空）
 # ======================================================================
-pull_images() {
-    log_info ">>> 拉取最新镜像..."
+start_registry_proxy() {
+    docker rm -f ghcr-proxy >/dev/null 2>&1 || true
+    log_info "启动 ghcr pull-through 缓存容器 (registry:2)..."
+    docker pull registry:2 >/dev/null 2>&1 || true
+    local proxy_env=(-e REGISTRY_PROXY_REMOTEURL=https://ghcr.io)
+    local proxy_mount=(-v ghcr-cache:/var/lib/registry)
+    # 上游认证（read:packages PAT）：避免 ghcr.io 匿名 IP 限流导致拉取爬行/挂起
+    # 凭据文件：${DEPLOY_PATH}/.ghcr-pull-token（root 600，ops 维护轮换）
+    # 注：registry 2.8.x 不支持 *_FILE 后缀 env，须在容器创建时读文件注入
+    GHCR_PULL_TOKEN_FILE="${GHCR_PULL_TOKEN_FILE:-$DEPLOY_PATH/.ghcr-pull-token}"
+    if [ -f "$GHCR_PULL_TOKEN_FILE" ]; then
+        proxy_env+=(-e REGISTRY_PROXY_USERNAME=oauth2 \
+            -e "REGISTRY_PROXY_PASSWORD=$(cat "$GHCR_PULL_TOKEN_FILE")")
+    fi
+    docker run -d --name ghcr-proxy --restart unless-stopped \
+        -p 127.0.0.1:5000:5000 \
+        "${proxy_env[@]}" \
+        "${proxy_mount[@]}" \
+        registry:2 >/dev/null 2>&1 || true
+    if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ghcr-proxy'; then
+        docker start ghcr-proxy >/dev/null 2>&1 || true
+    fi
+}
 
-    if [ -n "$IMAGE_BACKEND" ]; then
-        docker pull "${IMAGE_BACKEND}:${IMAGE_TAG}" || {
-            log_error "后端镜像拉取失败: ${IMAGE_BACKEND}:${IMAGE_TAG}"
-            exit 1
-        }
-        log_ok "后端镜像: ${IMAGE_BACKEND}:${IMAGE_TAG}"
+# ======================================================================
+# 确保镜像加速代理可用（本地 pull-through 缓存）
+# ======================================================================
+ensure_registry_proxy() {
+    [ -z "$REGISTRY_PROXY" ] && return 0
+
+    log_info ">>> 检查镜像加速代理: ${REGISTRY_PROXY} ..."
+
+    # 仅当代理是本机回环地址时，自动创建/启动 registry:2 缓存容器
+    if [ "$REGISTRY_PROXY" = "127.0.0.1:5000" ]; then
+        # 缓存卷只增不减（pull-through 无自动回收），超阈值即清空重建，
+        # 否则长时间积累会撑满磁盘（曾导致 testing 部署失败：磁盘 0GB < 2GB）
+        CACHE_DIR="/var/lib/docker/volumes/ghcr-cache/_data"
+        if [ -d "$CACHE_DIR" ]; then
+            CACHE_MB=$(du -sm "$CACHE_DIR" 2>/dev/null | awk '{print $1}')
+            if [ "${CACHE_MB:-0}" -gt "${CACHE_LIMIT_MB:-15000}" ]; then
+                log_warn "ghcr-cache 缓存 ${CACHE_MB}MB 超过 ${CACHE_LIMIT_MB:-15000}MB 阈值，清空缓存卷（拉取按需回源）"
+                docker rm -f ghcr-proxy >/dev/null 2>&1 || true
+                docker volume rm ghcr-cache >/dev/null 2>&1 || true
+            fi
+        fi
+        if ! docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'ghcr-proxy'; then
+            start_registry_proxy
+        elif ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ghcr-proxy'; then
+            docker start ghcr-proxy >/dev/null 2>&1 || true
+        fi
     fi
 
-    if [ -n "$IMAGE_FRONTEND" ]; then
-        docker pull "${IMAGE_FRONTEND}:${IMAGE_TAG}" || {
-            log_error "前端镜像拉取失败: ${IMAGE_FRONTEND}:${IMAGE_TAG}"
+    # 等待代理就绪（最多 10 秒），失败则回退直连 ghcr.io
+    for i in $(seq 1 10); do
+        if curl -s -o /dev/null "http://${REGISTRY_PROXY}/v2/"; then
+            log_ok "镜像加速代理就绪: ${REGISTRY_PROXY}"
+            return 0
+        fi
+        sleep 1
+    done
+    log_warn "镜像加速代理未就绪 (${REGISTRY_PROXY})，本次部署回退直连 ghcr.io"
+    IMAGE_BACKEND="${IMAGE_BACKEND_ORIG:-$IMAGE_BACKEND}"
+    IMAGE_FRONTEND="${IMAGE_FRONTEND_ORIG:-$IMAGE_FRONTEND}"
+    IMAGE_LIBREOFFICE="${IMAGE_LIBREOFFICE_ORIG:-$IMAGE_LIBREOFFICE}"
+    return 0
+}
+
+# ======================================================================
+# 拉取 Docker 镜像
+# ======================================================================
+
+# 代理健康检查：探测超时则重启（registry:2 上游连接可能挂起导致拉取卡死）
+# 重启后仍不可用则删除重建（缓存卷保留）；仍失败返回非 0，由调用方决定回退直连
+ensure_proxy_healthy() {
+    [ -z "$REGISTRY_PROXY" ] && return 0
+    if timeout 5 curl -s -o /dev/null "http://${REGISTRY_PROXY}/v2/"; then
+        return 0
+    fi
+    log_warn "镜像加速代理探测超时，重启 ghcr-proxy ..."
+    docker restart ghcr-proxy >/dev/null 2>&1 || true
+    sleep 3
+    if timeout 5 curl -s -o /dev/null "http://${REGISTRY_PROXY}/v2/"; then
+        log_ok "镜像加速代理重启成功"
+        return 0
+    fi
+    log_warn "镜像加速代理重启后仍不可用，删除重建（缓存卷保留）..."
+    start_registry_proxy
+    sleep 3
+    if timeout 5 curl -s -o /dev/null "http://${REGISTRY_PROXY}/v2/"; then
+        log_ok "镜像加速代理重建成功"
+        return 0
+    fi
+    log_error "镜像加速代理重建后仍不可用，本次拉取回退直连 ghcr.io"
+    return 1
+}
+
+# 拉取单个镜像：3 次重试；代理路径失败时回退直连 ghcr.io 认证拉取
+pull_one() {
+    local name="$1"
+    local image="$2"
+    local retries=3
+    for attempt in $(seq 1 $retries); do
+        log_info "拉取${name}镜像 (尝试 $attempt/$retries): $image"
+        # docker pull 加超时（默认 600s）：registry 上游挂起时不再无限等待，
+        # 超时后按失败处理 → 重启代理重试 / 回退直连
+        if timeout "${DOCKER_PULL_TIMEOUT:-600}" docker pull "$image"; then
+            log_ok "${name}镜像: $image"
+            return 0
+        fi
+        if [ $attempt -lt $retries ]; then
+            log_warn "拉取失败,10 秒后重试..."
+            sleep 10
+            # 重试前确保代理健康（registry:2 挂起是拉取卡死的常见原因，重启后再重试）
+            ensure_proxy_healthy || true
+        fi
+    done
+    # 回退直连（仅代理改写过的地址）：认证拉取绕过代理挂起/缓存损坏
+    # 注意：去掉代理前缀后镜像名没有 registry（如 driftingli/fl-backend:tag），
+    # docker 默认解析到 Docker Hub（registry-1.docker.io）——必须补 ${REGISTRY}/ 前缀
+    local direct="${image#${REGISTRY_PROXY}/}"
+    if [ "$direct" != "$image" ] && [ -n "$GITHUB_TOKEN" ]; then
+        local ghcr_ref="${REGISTRY}/${direct}"
+        log_warn "代理拉取失败，回退直连 ${REGISTRY} 认证拉取: ${ghcr_ref}"
+        echo "$GITHUB_TOKEN" | docker login "$REGISTRY" -u oauth2 --password-stdin >/dev/null 2>&1 || true
+        if timeout "${DOCKER_PULL_TIMEOUT:-600}" docker pull "$ghcr_ref"; then
+            docker tag "$ghcr_ref" "$image"
+            log_ok "直连拉取成功并补 tag: $image"
+            return 0
+        fi
+    fi
+    log_error "${name}镜像拉取失败(已重试 $retries 次): $image"
+    return 1
+}
+
+pull_images() {
+    log_info ">>> 拉取最新镜像..."
+    ensure_proxy_healthy || true
+
+    # 单次拉取超时由 pull_one 中的 timeout "${DOCKER_PULL_TIMEOUT:-600}" 控制
+    # （registry 上游挂起时自动失败重试，不再无限等待）
+
+    # 拉取后端镜像（本地已有该 tag 则跳过：内容标签命中即零传输）
+    if [ -n "$IMAGE_BACKEND" ]; then
+        local backend_image="${IMAGE_BACKEND}:${IMAGE_TAG_BACKEND}"
+        if docker image inspect "$backend_image" &>/dev/null; then
+            log_ok "后端镜像已缓存，跳过拉取: $backend_image"
+        elif ! pull_one "后端" "$backend_image"; then
             exit 1
-        }
-        log_ok "前端镜像: ${IMAGE_FRONTEND}:${IMAGE_TAG}"
+        fi
+    fi
+
+    # 拉取前端镜像
+    if [ -n "$IMAGE_FRONTEND" ]; then
+        local frontend_image="${IMAGE_FRONTEND}:${IMAGE_TAG_FRONTEND}"
+        if docker image inspect "$frontend_image" &>/dev/null; then
+            log_ok "前端镜像已缓存，跳过拉取: $frontend_image"
+        elif ! pull_one "前端" "$frontend_image"; then
+            exit 1
+        fi
+    fi
+
+    # 拉取 LibreOffice sidecar 镜像（体积大）
+    if [ -n "$IMAGE_LIBREOFFICE" ]; then
+        local lo_image="${IMAGE_LIBREOFFICE}:${IMAGE_TAG_LIBREOFFICE}"
+        if docker image inspect "$lo_image" &>/dev/null; then
+            log_ok "LibreOffice sidecar 镜像已缓存，跳过拉取: $lo_image"
+        elif ! pull_one "LibreOffice sidecar" "$lo_image"; then
+            exit 1
+        fi
+    fi
+
+    # ---- 拉取基础镜像（postgres + redis）----
+    # compose up 时若缺少基础镜像会自动拉取，但国内访问 Docker Hub 易超时
+    # 显式拉取可走 daemon.json 配置的国内镜像源，且能利用重试逻辑
+    local base_images="postgres:15-alpine redis:7-alpine"
+    for img in $base_images; do
+        if docker image inspect "$img" &>/dev/null; then
+            log_ok "基础镜像已缓存: $img"
+            continue
+        fi
+        log_info "拉取基础镜像: $img"
+        if docker pull "$img"; then
+            log_ok "基础镜像: $img"
+        else
+            log_error "基础镜像拉取失败: $img"
+            exit 1
+        fi
+    done
+}
+
+# ======================================================================
+# 修复 dirty 数据库状态
+# 当 schema_migrations.dirty=true 时,数据库因迁移中断进入脏状态,
+# 后续 migrate up 会被拒绝。此函数自动检测并 force 到 version-1 清除 dirty。
+# ======================================================================
+fix_dirty_state() {
+    log_info ">>> 检查数据库迁移状态..."
+
+    local pg_id
+    pg_id=$(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps -q "$POSTGRES_SERVICE" 2>/dev/null)
+    if [ -z "$pg_id" ]; then
+        log_warn "PostgreSQL 容器未运行,跳过 dirty 检查"
+        return 0
+    fi
+
+    # 查询当前版本和 dirty 状态
+    # 注意：全新数据库 schema_migrations 表尚未创建，psql 会报错返回非零；
+    # 在 set -euo pipefail 下需用 || true 防止脚本退出
+    local cur_ver dirty
+    cur_ver=$(docker exec "$pg_id" psql -U "${DB_USER:-forklift}" -d forklift_training \
+        -tAc "SELECT COALESCE(version,0) FROM schema_migrations LIMIT 1;" 2>/dev/null | tr -d ' \n' || true)
+    dirty=$(docker exec "$pg_id" psql -U "${DB_USER:-forklift}" -d forklift_training \
+        -tAc "SELECT COALESCE(dirty,false) FROM schema_migrations LIMIT 1;" 2>/dev/null | tr -d ' \n' || true)
+    cur_ver=${cur_ver:-0}
+    dirty=${dirty:-f}
+
+    if [ "$dirty" != "t" ] && [ "$dirty" != "true" ]; then
+        log_ok "数据库迁移状态正常 (version=$cur_ver, dirty=false)"
+        return 0
+    fi
+
+    log_warn "数据库处于 dirty 状态 (version=$cur_ver, dirty=true)"
+    log_info "自动修复:执行 migrate force $((cur_ver - 1)) 清除 dirty 标志"
+
+    local force_ver=$((cur_ver - 1))
+    if [ "$force_ver" -lt 0 ]; then
+        force_ver=0
+    fi
+
+    local migrate_db_url
+    migrate_db_url="postgres://${DB_USER:-forklift}:${DB_PASSWORD}@localhost:5432/forklift_training?sslmode=disable"
+
+    if docker run --rm --network container:"$pg_id" \
+        -e "DATABASE_URL=${migrate_db_url}" \
+        "${IMAGE_BACKEND}:${IMAGE_TAG}" \
+        /app/bin/migrate force "$force_ver" 2>&1; then
+        log_ok "已清除 dirty 标志 (force 到版本 $force_ver)"
+    else
+        log_error "自动 force 失败,需手动修复"
+        log_info "手动修复命令:"
+        log_info "  docker exec $pg_id psql -U ${DB_USER:-forklift} -d forklift_training -c \"UPDATE schema_migrations SET version=$force_ver, dirty=false;\""
+        return 1
     fi
 }
 
@@ -385,14 +698,7 @@ run_migration() {
     fi
 
     # 等待数据库就绪
-    for i in $(seq 1 15); do
-        if docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" exec -T "$POSTGRES_SERVICE" \
-            pg_isready -U "${DB_USER:-forklift}" -d forklift_training &>/dev/null; then
-            log_ok "数据库就绪"
-            break
-        fi
-        sleep 2
-    done
+    wait_postgres
 
     # 通过临时容器运行迁移（使用镜像中独立的 migrate 二进制）
     # 用 DB_USER/DB_PASSWORD 拼接连接串（和 docker-compose 一致），不依赖 GitHub Secret 的 DATABASE_URL
@@ -409,6 +715,69 @@ run_migration() {
 }
 
 # ======================================================================
+# 等待数据库就绪
+# ======================================================================
+wait_postgres() {
+    log_info ">>> 等待数据库就绪..."
+    for i in $(seq 1 15); do
+        if docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" exec -T "$POSTGRES_SERVICE" \
+            pg_isready -U "${DB_USER:-forklift}" -d forklift_training &>/dev/null; then
+            log_ok "数据库就绪"
+            return 0
+        fi
+        sleep 2
+    done
+    log_warn "数据库在超时时间内未就绪，部分依赖数据库的步骤可能失败"
+    return 1
+}
+
+# ======================================================================
+# 迁移兼容性预检（防止旧镜像启动后因缺少迁移文件崩溃循环）
+#   后端 cmd/server 启动时会自动执行 migrate up；若镜像内迁移文件版本
+#   落后于数据库当前版本，会报 "no migration found for version N" 并退出。
+#   预检在启动后端容器前拦截这种情况。
+# 返回: 0=通过/可跳过, 1=镜像迁移版本落后，应终止部署
+# ======================================================================
+preflight_migration_check() {
+    local image="${1:-}"
+    [ -z "$image" ] && { log_warn "未指定镜像，跳过迁移预检"; return 0; }
+
+    log_info ">>> 迁移兼容性预检: $image"
+
+    # 1. 镜像内最大迁移版本（统计 /app/migrations/*.up.sql 的 6 位序号）
+    local img_max="0"
+    if docker image inspect "$image" &>/dev/null; then
+        img_max=$(docker run --rm --entrypoint sh "$image" -c \
+            'ls /app/migrations/*.up.sql 2>/dev/null | grep -oE "[0-9]{6}" | sort -n | tail -1' 2>/dev/null | tr -d ' \n')
+        img_max=${img_max:-0}
+    else
+        log_warn "本地无镜像 $image，无法读取其迁移版本，跳过预检（请确认镜像已拉取）"
+        return 0
+    fi
+
+    # 2. 数据库当前版本（schema_migrations.version）
+    local db_ver="0"
+    local pg_id
+    pg_id=$(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps -q "$POSTGRES_SERVICE" 2>/dev/null)
+    if [ -n "$pg_id" ]; then
+        db_ver=$(docker exec "$pg_id" psql -U "${DB_USER:-forklift}" -d forklift_training \
+            -tAc "SELECT COALESCE(version,0) FROM schema_migrations LIMIT 1;" 2>/dev/null | tr -d ' \n')
+        db_ver=${db_ver:-0}
+    fi
+
+    log_info "镜像最大迁移版本=$img_max, 数据库当前版本=$db_ver"
+
+    if [ "${db_ver:-0}" -gt "${img_max:-0}" ]; then
+        log_error "❌ 镜像迁移版本($img_max)落后于数据库($db_ver)!"
+        log_error "   该镜像启动后会因缺少迁移文件而崩溃循环 (no migration found for version ...)。"
+        log_error "   请重新构建并推送包含最新迁移文件(直至 v${db_ver})的后端镜像，再部署/回滚。"
+        return 1
+    fi
+    log_ok "迁移兼容性预检通过"
+    return 0
+}
+
+# ======================================================================
 # 重启服务
 # ======================================================================
 restart_services() {
@@ -416,31 +785,42 @@ restart_services() {
 
     cd "$DEPLOY_PATH"
 
+    # 移除可能残留的冲突容器（同名但非本 compose 项目管理的容器会导致 up 失败）
+    for c in $KNOWN_CONTAINERS; do
+        if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$c"; then
+            log_warn "移除残留容器: $c"
+            docker rm -f "$c" 2>/dev/null || true
+        fi
+    done
+
     # 写入 .env 文件
     write_env_file
 
-    # 先启动 backend（依赖 postgres + redis）
-    log_info "停止后端容器..."
-    docker compose -f "$COMPOSE_FILE" down "$BACKEND_SERVICE" 2>&1 || true
-    sleep 3
-    log_info "启动后端容器..."
-    docker compose -f "$COMPOSE_FILE" up -d "$BACKEND_SERVICE" 2>&1 | tail -5
-    log_ok "后端服务已重启"
+    # 启动服务并等待容器就绪：
+    # - --wait：compose v2 原生等待全部服务 healthy/running（事件驱动，替代固定 sleep + 轮询）
+    # - --wait-timeout 超时后 up 返回非 0，由下方 health_check() HTTP 轮询兜底确认
+    # 注：host 网络模式 frontend 无 healthcheck（compose 中 disable），--wait 按 running 处理
+    if ! docker compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout "${UP_WAIT_TIMEOUT:-60}" --remove-orphans 2>&1 | tail -10; then
+        log_warn "compose --wait 超时或失败，由后续健康检查兜底确认"
+    fi
 
-    # 再启动 frontend（依赖 backend healthy）
-    log_info "停止前端容器..."
-    docker compose -f "$COMPOSE_FILE" down "$FRONTEND_SERVICE" 2>&1 || true
-    sleep 2
-    log_info "启动前端容器..."
-    docker compose -f "$COMPOSE_FILE" up -d "$FRONTEND_SERVICE" 2>&1 | tail -5
-    log_ok "前端服务已重启"
+    # 快速诊断：如果 backend 不在 running 状态，打日志
+    local be_stat
+    be_stat=$(docker compose -f "$COMPOSE_FILE" ps -q "$BACKEND_SERVICE" 2>/dev/null)
+    if [ -z "$be_stat" ]; then
+        log_warn "后端容器未创建，最后 30 行日志："
+        docker compose -f "$COMPOSE_FILE" logs --tail 30 "$BACKEND_SERVICE" 2>&1 || echo "  无法��取日志"
+        echo ""
+    fi
+
+    log_ok "全栈服务已重启"
 }
 
 # ======================================================================
 # 健康检查
 # ======================================================================
 health_check() {
-    log_info ">>> 后端健康检查（通过前端容器反代 localhost/api/health）..."
+    log_info ">>> 后端健康检查 (localhost:8080/api/health)..."
 
     RETRY=0
     while [ $RETRY -lt $HEALTH_CHECK_RETRIES ]; do
@@ -451,10 +831,13 @@ health_check() {
             return 1
         fi
 
-        # HTTP 健康检查（backend 不再对外暴露端口，通过前端 80 端口反代检查）
-        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            --connect-timeout 3 --max-time 5 \
-            "http://localhost/api/health" 2>/dev/null || echo "000")
+        # HTTP 健康检查（通过容器内部 wget，避免宿主机端口冲突）
+        if docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" exec -T "$BACKEND_SERVICE" \
+            wget -qO- http://localhost:8080/api/health 2>/dev/null | grep -q '"status":"ok"'; then
+            HTTP_CODE="200"
+        else
+            HTTP_CODE="000"
+        fi
 
         if [ "$HTTP_CODE" = "200" ]; then
             log_ok "后端健康检查通过 ($HTTP_CODE)"
@@ -481,41 +864,14 @@ health_check() {
     fi
 
     # ===== 前端健康检查 =====
-    log_info ">>> 前端健康检查 (localhost:80/health)..."
+    log_info ">>> 前端健康检查..."
 
-    FRONTEND_RETRY=0
-    FRONTEND_MAX_RETRIES=10
-    while [ $FRONTEND_RETRY -lt $FRONTEND_MAX_RETRIES ]; do
-        FRONTEND_STATUS=$(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps -q "$FRONTEND_SERVICE" 2>/dev/null)
-        if [ -z "$FRONTEND_STATUS" ]; then
-            log_error "前端容器未运行!"
-            echo ""
-            echo "=== 前端容器日志（最后 30 行）==="
-            docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" logs --tail 30 "$FRONTEND_SERVICE" 2>&1 || echo "无法获取日志"
-            return 1
-        fi
-
-        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            --connect-timeout 3 --max-time 5 \
-            "http://localhost:80/health" 2>/dev/null || echo "000")
-
-        if [ "$HTTP_CODE" = "200" ]; then
-            log_ok "前端健康检查通过 ($HTTP_CODE)"
-            return 0
-        fi
-
-        FRONTEND_RETRY=$((FRONTEND_RETRY + 1))
-        sleep 3
-    done
-
-    log_error "前端健康检查超时!"
-    echo ""
-    echo "=== 前端容器日志（最后 30 行）==="
-    docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" logs --tail 30 "$FRONTEND_SERVICE" 2>&1 || echo "无法获取日志"
-    echo ""
-    echo "=== 容器状态 ==="
-    docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps 2>&1
-    return 1
+    FRONTEND_STATUS=$(docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps -q "$FRONTEND_SERVICE" 2>/dev/null)
+    if [ -z "$FRONTEND_STATUS" ]; then
+        log_error "前端容器未运行!"
+        return 1
+    fi
+    log_ok "前端容器运行中"
 }
 
 # ======================================================================
@@ -531,6 +887,9 @@ cleanup() {
         log_ok "已清理 $DANGLING 个悬空镜像"
     fi
 
+    # 清理旧版本镜像（保留最近 KEEP_IMAGES 个）
+    prune_old_images
+
     # 清理旧备份（保留最近 10 个）
     if [ -d "$BACKUP_DIR" ]; then
         ls -t "$BACKUP_DIR"/backup_*.txt 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null || true
@@ -543,6 +902,37 @@ cleanup() {
 }
 
 # ======================================================================
+# 清理旧版本镜像（按仓库保留最近 KEEP_IMAGES 个）
+# ======================================================================
+prune_old_images() {
+    if [ "${KEEP_IMAGES:-3}" -le 0 ]; then
+        log_info ">>> KEEP_IMAGES<=0，跳过旧镜像清理"
+        return 0
+    fi
+    log_info ">>> 清理旧版本镜像 (每个仓库保留最近 ${KEEP_IMAGES} 个)..."
+
+    local repo
+    for repo in "${IMAGE_BACKEND}" "${IMAGE_FRONTEND}" "${IMAGE_LIBREOFFICE}" \
+                "${IMAGE_BACKEND_ORIG:-}" "${IMAGE_FRONTEND_ORIG:-}" "${IMAGE_LIBREOFFICE_ORIG:-}"; do
+        [ -z "$repo" ] && continue
+        # 按创建时间倒序列出该仓库的镜像，保留前 KEEP_IMAGES 个，其余删除
+        local kept=0
+        local created id ref
+        while IFS='|' read -r created id ref; do
+            [ -z "$ref" ] && continue
+            kept=$((kept + 1))
+            if [ "$kept" -le "$KEEP_IMAGES" ]; then
+                continue
+            fi
+            log_info "删除旧镜像: ${ref} (${id})"
+            docker image rm "${id}" >/dev/null 2>&1 || true
+        done < <(docker images --format '{{.CreatedAt}}|{{.ID}}|{{.Repository}}:{{.Tag}}' "$repo" 2>/dev/null | grep -v '|<none>' | sort -r)
+    done
+
+    log_ok "旧镜像清理完成"
+}
+
+# ======================================================================
 # 回滚操作
 # ======================================================================
 do_rollback() {
@@ -551,49 +941,66 @@ do_rollback() {
     cd "$DEPLOY_PATH"
 
     # 读取上一个版本
-    if [ -f "${BACKUP_DIR}/last-version.txt" ]; then
-        # shellcheck disable=SC1090
-        source "${BACKUP_DIR}/last-version.txt"
+    if [ ! -f "${BACKUP_DIR}/last-version.txt" ]; then
+        log_error "未找到备份文件，无法回滚"
+        exit 1
+    fi
 
-        # 设置环境变量使 compose 使用旧镜像
-        export BACKEND_IMAGE="${PREVIOUS_BACKEND_IMAGE:-unknown}"
-        export FRONTEND_IMAGE="${PREVIOUS_FRONTEND_IMAGE:-unknown}"
-        write_env_file
+    # shellcheck disable=SC1090
+    source "${BACKUP_DIR}/last-version.txt"
 
-        # 回滚 backend
-        if [ "${PREVIOUS_BACKEND_IMAGE:-unknown}" != "unknown" ]; then
+    # 记录当前实际运行的镜像（回滚失败时保持，避免 .env 被污染为不兼容镜像）
+    local cur_be cur_fe
+    cur_be=$(docker compose -f "$COMPOSE_FILE" ps -q "$BACKEND_SERVICE" 2>/dev/null | head -1)
+    cur_be=$([ -n "$cur_be" ] && docker inspect --format='{{.Config.Image}}' "$cur_be" 2>/dev/null || echo "unknown")
+    cur_fe=$(docker compose -f "$COMPOSE_FILE" ps -q "$FRONTEND_SERVICE" 2>/dev/null | head -1)
+    cur_fe=$([ -n "$cur_fe" ] && docker inspect --format='{{.Config.Image}}' "$cur_fe" 2>/dev/null || echo "unknown")
+
+    # 启动数据库以便迁移预检读取当前版本
+    docker compose -f "$COMPOSE_FILE" up -d "$POSTGRES_SERVICE" 2>&1 | tail -3 || true
+    wait_postgres
+
+    # 回滚 backend（先做迁移兼容性预检，避免回滚到旧镜像后崩溃循环）
+    if [ "${PREVIOUS_BACKEND_IMAGE:-unknown}" != "unknown" ]; then
+        if preflight_migration_check "${PREVIOUS_BACKEND_IMAGE}"; then
             log_info "回滚后端到: $PREVIOUS_BACKEND_IMAGE"
+            export BACKEND_IMAGE="${PREVIOUS_BACKEND_IMAGE}"
+            write_env_file
             docker compose -f "$COMPOSE_FILE" down "$BACKEND_SERVICE" 2>&1 || true
             sleep 3
             docker compose -f "$COMPOSE_FILE" up -d "$BACKEND_SERVICE" 2>&1
         else
-            log_warn "无后端历史版本，跳过后端回滚"
-        fi
-
-        # 回滚 frontend
-        if [ "${PREVIOUS_FRONTEND_IMAGE:-unknown}" != "unknown" ]; then
-            log_info "回滚前端到: $PREVIOUS_FRONTEND_IMAGE"
-            docker compose -f "$COMPOSE_FILE" down "$FRONTEND_SERVICE" 2>&1 || true
-            sleep 2
-            docker compose -f "$COMPOSE_FILE" up -d "$FRONTEND_SERVICE" 2>&1
-        else
-            log_warn "无前端历史版本，跳过前端回滚"
-        fi
-
-        sleep 10
-
-        if health_check; then
-            log_ok "回滚成功"
-            log_info "如需恢复数据库，可执行："
-            log_info "  gunzip -c ${BACKUP_DIR}/db_backup_*.sql.gz | docker compose -f \$DEPLOY_PATH/\$COMPOSE_FILE exec -T \$POSTGRES_SERVICE psql -U ${DB_USER:-forklift} -d forklift_training"
-        else
-            log_error "回滚后健康检查也失败了! 需要人工介入!"
-            log_info "可尝试恢复最近的数据库备份："
-            log_info "  ls -t ${BACKUP_DIR}/db_backup_*.sql.gz | head -1"
-            exit 1
+            log_error "❌ 拒绝回滚后端到 ${PREVIOUS_BACKEND_IMAGE}（迁移版本落后数据库，会崩溃循环）"
+            log_error "   保持当前后端镜像: ${cur_be}"
+            export BACKEND_IMAGE="${cur_be}"
+            write_env_file
         fi
     else
-        log_error "未找到备份文件，无法回滚"
+        log_warn "无后端历史版本，跳过后端回滚"
+    fi
+
+    # 回滚 frontend
+    if [ "${PREVIOUS_FRONTEND_IMAGE:-unknown}" != "unknown" ]; then
+        log_info "回滚前端到: $PREVIOUS_FRONTEND_IMAGE"
+        export FRONTEND_IMAGE="${PREVIOUS_FRONTEND_IMAGE}"
+        write_env_file
+        docker compose -f "$COMPOSE_FILE" down "$FRONTEND_SERVICE" 2>&1 || true
+        sleep 2
+        docker compose -f "$COMPOSE_FILE" up -d "$FRONTEND_SERVICE" 2>&1
+    else
+        log_warn "无前端历史版本，跳过前端回滚"
+    fi
+
+    sleep 10
+
+    if health_check; then
+        log_ok "回滚成功"
+        log_info "如需恢复数据库，可执行："
+        log_info "  gunzip -c ${BACKUP_DIR}/db_backup_*.sql.gz | docker compose -f \$DEPLOY_PATH/\$COMPOSE_FILE exec -T \$POSTGRES_SERVICE psql -U ${DB_USER:-forklift} -d forklift_training"
+    else
+        log_error "回滚后健康检查也失败了! 需要人工介入!"
+        log_info "可尝试恢复最近的数据库备份："
+        log_info "  ls -t ${BACKUP_DIR}/db_backup_*.sql.gz | head -1"
         exit 1
     fi
 }
@@ -620,11 +1027,35 @@ main() {
         deploy|*)
             pre_deploy_check
             write_env_file
-            write_ssl_certs
-            create_backup
+            # host 网络模式下 nginx-host.conf 是 HTTP-only，不需要 SSL 证书
+            # 若未来切回 bridge + HTTPS，可重新启用 write_ssl_certs
+            # write_ssl_certs
+            # 备份与后续无依赖步骤（登录/镜像拉取）并行执行，迁移前 join——
+            # 隐藏备份耗时（pg_dump + 异地同步），同时保证备份先于任何 DB 写操作完成
+            create_backup &
+            BACKUP_PID=$!
             login_registry
+            ensure_registry_proxy
             pull_images
-            # 先重启（启动 postgres + redis + backend，创建网络），再迁移
+
+            # 先拉起数据库与 Redis，供迁移预检读取当前版本
+            docker compose -f "$COMPOSE_FILE" up -d "$POSTGRES_SERVICE" "$REDIS_SERVICE" 2>&1 | tail -5 || true
+            wait_postgres
+
+            # 迁移前 join 后台备份（回滚保障：备份必先于 fix_dirty/迁移落盘）
+            wait_backup "$BACKUP_PID"
+
+            # 迁移兼容性预检：若镜像迁移版本落后数据库，启动后会崩溃循环
+            if ! preflight_migration_check "${IMAGE_BACKEND}:${IMAGE_TAG}"; then
+                log_error "迁移预检失败，终止部署（避免后端因缺少迁移文件崩溃循环）"
+                exit 1
+            fi
+
+            # 修复 dirty 数据库状态（必须在 restart_services 之前执行）
+            # 否则 backend 启动时看到 dirty=true 会崩溃循环
+            fix_dirty_state
+
+            # 重启全栈（postgres/redis 已运行，此处拉起 backend + frontend）
             restart_services
             run_migration
 

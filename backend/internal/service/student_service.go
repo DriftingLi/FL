@@ -5,29 +5,95 @@ import (
 	"errors"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
+	"forklift-training/pkg/response"
 )
 
 // StudentService 学员服务。
 type StudentService struct {
 	db *gorm.DB
+
+	logger *zap.Logger
 }
 
 // NewStudentService 创建学员服务实例。
-func NewStudentService(db *gorm.DB) *StudentService {
-	return &StudentService{db: db}
+func NewStudentService(db *gorm.DB, logger *zap.Logger) *StudentService {
+	return &StudentService{db: db, logger: logger}
+}
+
+// ===== DTO（JSON 契约与 B8 前的 map key 逐字一致，前端零改动约束）=====
+
+// StudentDTO 学员基本信息。
+type StudentDTO struct {
+	StudentID int    `json:"student_id"`
+	UID       int64  `json:"uid,string"`
+	Account   string `json:"account"`
+	Username  string `json:"username"`
+	AvatarURL string `json:"avatar_url"`
+	Status    int16  `json:"status"`
+	CreatedAt string `json:"created_at"`
+}
+
+// StudyStatsDTO 学习统计概览。
+type StudyStatsDTO struct {
+	TotalCourses       int64  `json:"total_courses"`
+	TotalStudyDuration int64  `json:"total_study_duration"`
+	CompletedCourses   int64  `json:"completed_courses"`
+	LearningCourses    int64  `json:"learning_courses"`
+	LatestStudyTime    string `json:"latest_study_time"`
+}
+
+// CourseProgressDTO 课程进度条目。
+type CourseProgressDTO struct {
+	CourseID      int     `json:"course_id"`
+	CourseName    string  `json:"course_name"`
+	Progress      float64 `json:"progress"`
+	StudyDuration int64   `json:"study_duration"`
+	TotalChapters int64   `json:"total_chapters"`
+	StudyDate     string  `json:"study_date"`
+}
+
+// StudentProfileDTO 学员档案信封（信息 + 统计 + 课程进度）。
+type StudentProfileDTO struct {
+	StudentInfo    StudentDTO          `json:"student_info"`
+	StudyStats     StudyStatsDTO       `json:"study_stats"`
+	CourseProgress []CourseProgressDTO `json:"course_progress"`
+}
+
+// StudyDailyStatsDTO 按天学习统计（学员仪表盘图表）。
+type StudyDailyStatsDTO struct {
+	Days         int      `json:"days"`
+	Labels       []string `json:"labels"`
+	Data         []int64  `json:"data"`
+	TotalMinutes int64    `json:"total_minutes"`
+	ActiveDays   int      `json:"active_days"`
+}
+
+// StudyRecordDTO 学习记录条目（含课程名回填；chapter_title 未匹配章节时 null）。
+type StudyRecordDTO struct {
+	RecordID      int     `json:"record_id"`
+	StudentID     int     `json:"student_id"`
+	CourseID      int     `json:"course_id"`
+	ChapterID     *int    `json:"chapter_id"`
+	StudyDuration int     `json:"study_duration"`
+	Progress      float64 `json:"progress"`
+	StudyDate     string  `json:"study_date"`
+	CourseName    string  `json:"course_name"`
+	ChapterTitle  *string `json:"chapter_title"`
 }
 
 // GetProfile 学员档案。
-func (s *StudentService) GetProfile(studentID int) (map[string]any, error) {
+func (s *StudentService) GetProfile(studentID int) (*StudentProfileDTO, error) {
 	return s.queryProfile(studentID)
 }
 
 // queryProfile 执行实际的学员档案查询。
-func (s *StudentService) queryProfile(studentID int) (map[string]any, error) {
-	var student model.Student
+func (s *StudentService) queryProfile(studentID int) (*StudentProfileDTO, error) {
+	var student model.HrwaiUser
 	if err := s.db.First(&student, studentID).Error; err != nil {
 		return nil, errors.New("学员不存在")
 	}
@@ -43,28 +109,21 @@ func (s *StudentService) queryProfile(studentID int) (map[string]any, error) {
 
 	// 已完成课程数
 	var completedCourses int64
-	s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND progress >= 100", studentID).
+	s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND chapter_id IS NULL AND progress >= 100", studentID).
 		Distinct("course_id").Count(&completedCourses)
 
 	// 学习中课程数
 	var learningCourses int64
-	s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND progress > 0 AND progress < 100", studentID).
+	s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND chapter_id IS NULL AND progress > 0 AND progress < 100", studentID).
 		Distinct("course_id").Count(&learningCourses)
 
-	// 最近学习时间
+	// 最近学习时间（学员可能无任何学习记录，使用 Limit(1).Find() 避免 First() 在空结果时打印 record not found 日志）
 	var latestRecord model.StudyRecord
-	s.db.Where("student_id = ?", studentID).Order("study_date DESC").First(&latestRecord)
+	s.db.Where("student_id = ?", studentID).Order("study_date DESC").Limit(1).Find(&latestRecord)
 	latestStudyTime := ""
 	if !latestRecord.StudyDate.IsZero() {
 		latestStudyTime = formatISO(latestRecord.StudyDate)
 	}
-
-	// 考试次数与平均分
-	var examCount int64
-	s.db.Model(&model.ExamRecord{}).Where("student_id = ?", studentID).Count(&examCount)
-	var avgScore float64
-	s.db.Model(&model.ExamRecord{}).Where("student_id = ?", studentID).
-		Select("COALESCE(AVG(score), 0)").Scan(&avgScore)
 
 	// 各课程进度
 	type courseProgressRow struct {
@@ -75,12 +134,14 @@ func (s *StudentService) queryProfile(studentID int) (map[string]any, error) {
 	}
 	var rows []courseProgressRow
 	s.db.Model(&model.StudyRecord{}).
-		Select("course_id, MAX(progress) as max_progress, SUM(study_duration) as total_duration, MAX(study_date) as latest_date").
+		// 进度只看课程级记录（chapter_id IS NULL）；学习时长汇总该课程全部记录
+		Select("course_id, MAX(progress) FILTER (WHERE chapter_id IS NULL) AS max_progress, "+
+			"SUM(study_duration) AS total_duration, MAX(study_date) AS latest_date").
 		Where("student_id = ?", studentID).
 		Group("course_id").
 		Scan(&rows)
 
-	courseProgressList := make([]map[string]any, 0, len(rows))
+	courseProgressList := make([]CourseProgressDTO, 0, len(rows))
 	for _, r := range rows {
 		var course model.Course
 		if err := s.db.First(&course, r.CourseID).Error; err != nil {
@@ -92,40 +153,37 @@ func (s *StudentService) queryProfile(studentID int) (map[string]any, error) {
 		if !r.LatestDate.IsZero() {
 			studyDate = formatISO(r.LatestDate)
 		}
-		courseProgressList = append(courseProgressList, map[string]any{
-			"course_id":      course.CourseID,
-			"course_name":    course.Name,
-			"category":       course.Category,
-			"progress":       r.MaxProgress,
-			"study_duration": r.TotalDuration,
-			"total_chapters": totalChapters,
-			"study_date":     studyDate,
+		courseProgressList = append(courseProgressList, CourseProgressDTO{
+			CourseID:      course.CourseID,
+			CourseName:    course.Name,
+			Progress:      r.MaxProgress,
+			StudyDuration: r.TotalDuration,
+			TotalChapters: totalChapters,
+			StudyDate:     studyDate,
 		})
 	}
 
-	return map[string]any{
-		"student_info": studentToDict(&student),
-		"study_stats": map[string]any{
-			"total_courses":        totalCourses,
-			"total_study_duration": totalStudyDuration,
-			"completed_courses":    completedCourses,
-			"learning_courses":     learningCourses,
-			"latest_study_time":    latestStudyTime,
-			"exam_count":           examCount,
-			"avg_score":            roundFloat1(avgScore),
+	return &StudentProfileDTO{
+		StudentInfo: studentToDTO(&student),
+		StudyStats: StudyStatsDTO{
+			TotalCourses:       totalCourses,
+			TotalStudyDuration: totalStudyDuration,
+			CompletedCourses:   completedCourses,
+			LearningCourses:    learningCourses,
+			LatestStudyTime:    latestStudyTime,
 		},
-		"course_progress": courseProgressList,
+		CourseProgress: courseProgressList,
 	}, nil
 }
 
 // GetStudyStats 学习统计（按天分组），用于学员仪表盘图表。
 // days 仅允许 7 或 30，其他值统一回退为 7。
-func (s *StudentService) GetStudyStats(studentID, days int) map[string]any {
+func (s *StudentService) GetStudyStats(studentID, days int) *StudyDailyStatsDTO {
 	return s.queryStudyStats(studentID, days)
 }
 
 // queryStudyStats 执行实际的学习统计查询。
-func (s *StudentService) queryStudyStats(studentID, days int) map[string]any {
+func (s *StudentService) queryStudyStats(studentID, days int) *StudyDailyStatsDTO {
 	if days != 7 && days != 30 {
 		days = 7
 	}
@@ -175,96 +233,89 @@ func (s *StudentService) queryStudyStats(studentID, days int) map[string]any {
 		data = append(data, mins)
 	}
 
-	return map[string]any{
-		"days":          days,
-		"labels":        labels,
-		"data":          data,
-		"total_minutes": totalMinutes,
-		"active_days":   activeDays,
+	return &StudyDailyStatsDTO{
+		Days:         days,
+		Labels:       labels,
+		Data:         data,
+		TotalMinutes: totalMinutes,
+		ActiveDays:   activeDays,
 	}
 }
 
-// GetRecords 学习记录列表。
-func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, endDate string) map[string]any {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-	q := s.db.Model(&model.StudyRecord{}).Where("student_id = ?", studentID)
-	if startDate != "" {
-		if t, err := time.Parse("2006-01-02", startDate); err == nil {
-			q = q.Where("study_date >= ?", t)
-		}
-	}
-	if endDate != "" {
-		if t, err := time.Parse("2006-01-02", endDate); err == nil {
-			q = q.Where("study_date <= ?", t.Add(24*time.Hour-time.Nanosecond))
-		}
-	}
-	var total int64
-	q.Count(&total)
-	var records []model.StudyRecord
-	q.Order("study_date DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&records)
+// StudyRecordPageResult 学习记录分页结果。
+type StudyRecordPageResult struct {
+	Page    int              `json:"page"`
+	Pages   int              `json:"pages"`
+	Records []StudyRecordDTO `json:"records"`
+	Total   int64            `json:"total"`
+}
 
-	items := make([]map[string]any, 0, len(records))
+// GetRecords 学习记录列表。
+func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, endDate string) StudyRecordPageResult {
+	records, total, page, pageSize := paging.Query[model.StudyRecord](s.db, page, pageSize, 10, "study_date DESC", func(q *gorm.DB) *gorm.DB {
+		q = q.Where("student_id = ?", studentID)
+		if startDate != "" {
+			if t, err := time.Parse("2006-01-02", startDate); err == nil {
+				q = q.Where("study_date >= ?", t)
+			}
+		}
+		if endDate != "" {
+			if t, err := time.Parse("2006-01-02", endDate); err == nil {
+				q = q.Where("study_date <= ?", t.Add(24*time.Hour-time.Nanosecond))
+			}
+		}
+		return q
+	})
+
+	items := make([]StudyRecordDTO, 0, len(records))
 	for i := range records {
 		r := &records[i]
-		item := studyRecordToDict(r)
+		item := studyRecordToDTO(r)
 		var course model.Course
 		if err := s.db.First(&course, r.CourseID).Error; err == nil {
-			item["course_name"] = course.Name
+			item.CourseName = course.Name
 		} else {
-			item["course_name"] = "未知课程"
+			item.CourseName = "未知课程"
 		}
 		if r.ChapterID != nil {
 			var chapter model.Chapter
 			if err := s.db.First(&chapter, *r.ChapterID).Error; err == nil {
-				item["chapter_title"] = chapter.Title
-			} else {
-				item["chapter_title"] = nil
+				title := chapter.Title
+				item.ChapterTitle = &title
 			}
-		} else {
-			item["chapter_title"] = nil
 		}
 		items = append(items, item)
 	}
-	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	return map[string]any{
-		"total":   total,
-		"page":    page,
-		"pages":   pages,
-		"records": items,
+	return StudyRecordPageResult{
+		Page:    page,
+		Pages:   response.PageCount(total, pageSize),
+		Records: items,
+		Total:   total,
 	}
 }
 
-// ===== dict 辅助 =====
+// ===== DTO 构造（原 studentToDict/studyRecordToDict 折叠入内）=====
 
-func studentToDict(s *model.Student) map[string]any {
-	d := map[string]any{
-		"student_id": s.StudentID,
-		"username":   s.Username,
-		"name":       s.Name,
-		"status":     s.Status,
-		"created_at": formatISO(s.CreatedAt),
+func studentToDTO(s *model.HrwaiUser) StudentDTO {
+	return StudentDTO{
+		StudentID: s.ID,
+		UID:       s.UID,
+		Account:   s.Account,
+		Username:  s.Username,
+		AvatarURL: s.AvatarURL,
+		Status:    s.Status,
+		CreatedAt: formatISO(s.CreatedAt),
 	}
-	return d
 }
 
-func studyRecordToDict(r *model.StudyRecord) map[string]any {
-	d := map[string]any{
-		"record_id":      r.RecordID,
-		"student_id":     r.StudentID,
-		"course_id":      r.CourseID,
-		"study_duration": r.StudyDuration,
-		"progress":       r.Progress,
-		"study_date":     formatISO(r.StudyDate),
+func studyRecordToDTO(r *model.StudyRecord) StudyRecordDTO {
+	return StudyRecordDTO{
+		RecordID:      r.RecordID,
+		StudentID:     r.StudentID,
+		CourseID:      r.CourseID,
+		ChapterID:     r.ChapterID,
+		StudyDuration: r.StudyDuration,
+		Progress:      r.Progress,
+		StudyDate:     formatISO(r.StudyDate),
 	}
-	if r.ChapterID != nil {
-		d["chapter_id"] = *r.ChapterID
-	} else {
-		d["chapter_id"] = nil
-	}
-	return d
 }

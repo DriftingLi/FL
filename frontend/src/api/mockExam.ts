@@ -1,22 +1,68 @@
-import request from './request'
+import { unwrappedRequest } from './request'
+import type { Question } from '@/types/question'
+
+export interface StartMockExamPayload {
+  course_id?: number
+  category?: string
+  question_count?: number
+  duration_minutes?: number
+  [key: string]: unknown
+}
+
+export interface MockExamProgressPayload {
+  current_index?: number
+  answers_state?: Record<string, unknown>
+  remaining_seconds?: number
+  answers?: unknown
+  remaining_time?: number
+  [key: string]: unknown
+}
+
+export interface MockExamHistoryQuery {
+  page?: number
+  page_size?: number
+}
+
+/** 模拟考历史记录项 */
+export interface MockExamHistoryItem {
+  id: number
+  score?: number | null
+  total_score?: number
+  status?: string
+  finished_at?: string
+  [key: string]: unknown
+}
+
+/** 模拟考结果 */
+export interface MockExamResult {
+  score?: number
+  total_score?: number
+  correct_count?: number
+  [key: string]: unknown
+}
 
 export const mockExamApi = {
-  startMockExam(data) {
-    return request.post('/mock-exam/start', data)
+  startMockExam(data: StartMockExamPayload) {
+    return unwrappedRequest.post<{ mock_exam_id: number; questions: Question[]; remaining_time: number }>('/mock-exam/start', data)
   },
-  saveProgress(mockExamId, data) {
-    return request.post(`/mock-exam/${mockExamId}/save`, data)
+
+  saveProgress(mockExamId: number, data: MockExamProgressPayload) {
+    return unwrappedRequest.post<null>(`/mock-exam/${mockExamId}/save`, data)
   },
-  resumeMockExam(mockExamId) {
-    return request.get(`/mock-exam/${mockExamId}/resume`)
+
+  resumeMockExam(mockExamId: number) {
+    return unwrappedRequest.get<{ questions: Question[]; remaining_time: number }>(`/mock-exam/${mockExamId}/resume`)
   },
-  submitMockExam(mockExamId) {
-    return request.post(`/mock-exam/${mockExamId}/submit`)
+
+  submitMockExam(mockExamId: number) {
+    return unwrappedRequest.post<MockExamResult>(`/mock-exam/${mockExamId}/submit`)
   },
-  getMockExamResult(mockExamId) {
-    return request.get(`/mock-exam/${mockExamId}/result`)
+
+  getMockExamResult(mockExamId: number) {
+    return unwrappedRequest.get<MockExamResult>(`/mock-exam/${mockExamId}/result`)
   },
-  getMockExamHistory(params) {
-    return request.get('/mock-exam/history', { params })
+
+  getMockExamHistory(params: MockExamHistoryQuery) {
+    return unwrappedRequest.get<{ exams: MockExamHistoryItem[] }>('/mock-exam/history', { params })
   }
 }

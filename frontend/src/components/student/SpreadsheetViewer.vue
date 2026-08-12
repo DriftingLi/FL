@@ -30,8 +30,8 @@ const props = defineProps({
 
 const resolvedSrc = computed(() => resolveFileUrl(props.src))
 
-const tableData = ref([])
-const columns = ref([])
+const tableData = ref<Record<string, string>[]>([])
+const columns = ref<string[]>([])
 
 const isCsv = computed(() => {
   const name = props.fileName || props.src
@@ -50,17 +50,17 @@ onMounted(async () => {
   }
 })
 
-function parseCsv(text) {
-  const lines = text.split('\n').filter(line => line.trim())
+function parseCsv(text: string) {
+  const lines = text.split('\n').filter((line: string) => line.trim())
   if (lines.length === 0) return
 
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
+  const headers = lines[0].split(',').map((h: string) => h.trim().replace(/^"|"$/g, ''))
   columns.value = headers
 
-  tableData.value = lines.slice(1).map(line => {
-    const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''))
-    const row = {}
-    headers.forEach((h, i) => {
+  tableData.value = lines.slice(1).map((line: string) => {
+    const values = line.split(',').map((v: string) => v.trim().replace(/^"|"$/g, ''))
+    const row: Record<string, string> = {}
+    headers.forEach((h: string, i: number) => {
       row[h] = values[i] || ''
     })
     return row

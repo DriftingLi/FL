@@ -4,20 +4,33 @@ package service
 import (
 	"errors"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
+	"forklift-training/pkg/response"
 )
+
+// FeaturedContentPageResult 内容精选分页结果。
+type FeaturedContentPageResult struct {
+	Items []map[string]any `json:"items"`
+	Page  int              `json:"page"`
+	Pages int              `json:"pages"`
+	Total int64            `json:"total"`
+}
 
 // FeaturedService 内容精选服务。
 type FeaturedService struct {
 	db      *gorm.DB
 	fileSvc *FileService
+
+	logger *zap.Logger
 }
 
 // NewFeaturedService 创建内容精选服务实例。
-func NewFeaturedService(db *gorm.DB, fileSvc *FileService) *FeaturedService {
-	return &FeaturedService{db: db, fileSvc: fileSvc}
+func NewFeaturedService(db *gorm.DB, fileSvc *FileService, logger *zap.Logger) *FeaturedService {
+	return &FeaturedService{db: db, fileSvc: fileSvc, logger: logger}
 }
 
 // featuredCategoryLabels 分类中文标签映射。
@@ -43,37 +56,29 @@ func (s *FeaturedService) IsValidCategory(category string) bool {
 }
 
 // GetPublicList 公开列表（仅已发布）。
-func (s *FeaturedService) GetPublicList(page, pageSize int, category string) map[string]any {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-	q := s.db.Model(&model.FeaturedContent{}).Where("status = ?", 1)
-	if category != "" {
-		q = q.Where("category = ?", category)
-	}
-	var total int64
-	q.Count(&total)
-	var items []model.FeaturedContent
-	q.Order("published_at DESC, content_id DESC").
-		Offset((page - 1) * pageSize).Limit(pageSize).Find(&items)
+func (s *FeaturedService) GetPublicList(page, pageSize int, category string) FeaturedContentPageResult {
+	items, total, page, pageSize := paging.Query[model.FeaturedContent](s.db, page, pageSize, 10, "published_at DESC, content_id DESC", func(q *gorm.DB) *gorm.DB {
+		q = q.Where("status = ?", 1)
+		if category != "" {
+			q = q.Where("category = ?", category)
+		}
+		return q
+	})
 	list := make([]map[string]any, 0, len(items))
 	for i := range items {
 		list = append(list, featuredToListDict(&items[i]))
 	}
-	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	return map[string]any{
-		"total": total,
-		"page":  page,
-		"pages": pages,
-		"items": list,
+	return FeaturedContentPageResult{
+		Items: list,
+		Page:  page,
+		Pages: response.PageCount(total, pageSize),
+		Total: total,
 	}
 }
 
-// GetPublicDetail 公开详情（含相关资讯 + 上一篇/下一篇，自增阅读量）。
-func (s *FeaturedService) GetPublicDetail(id int) (map[string]any, error) {
+// GetPublicDetail 公开详情（含相关资讯 + 上一篇/下一篇）。
+// countView=false 时不改变 view_count（SSR/爬虫路径），true 时自增阅读量（现网既有行为）。
+func (s *FeaturedService) GetPublicDetail(id int, countView bool) (map[string]any, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
 		return nil, errors.New("内容不存在")
@@ -82,11 +87,13 @@ func (s *FeaturedService) GetPublicDetail(id int) (map[string]any, error) {
 		return nil, errors.New("内容不存在")
 	}
 
-	// 自增阅读量
-	s.db.Model(&model.FeaturedContent{}).
-		Where("content_id = ?", id).
-		UpdateColumn("view_count", item.ViewCount+1)
-	item.ViewCount++
+	if countView {
+		// 原子自增阅读量（并发安全，避免读改写竞态）
+		s.db.Model(&model.FeaturedContent{}).
+			Where("content_id = ?", id).
+			UpdateColumn("view_count", gorm.Expr("view_count + 1"))
+		item.ViewCount++
+	}
 
 	detail := featuredToDetailDict(&item)
 
@@ -132,35 +139,25 @@ func (s *FeaturedService) GetPublicDetail(id int) (map[string]any, error) {
 }
 
 // AdminList 管理端列表（含草稿）。
-func (s *FeaturedService) AdminList(page, pageSize int, category, status string) map[string]any {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-	q := s.db.Model(&model.FeaturedContent{})
-	if category != "" {
-		q = q.Where("category = ?", category)
-	}
-	if status != "" {
-		q = q.Where("status = ?", status)
-	}
-	var total int64
-	q.Count(&total)
-	var items []model.FeaturedContent
-	q.Order("created_at DESC, content_id DESC").
-		Offset((page - 1) * pageSize).Limit(pageSize).Find(&items)
+func (s *FeaturedService) AdminList(page, pageSize int, category, status string) FeaturedContentPageResult {
+	items, total, page, pageSize := paging.Query[model.FeaturedContent](s.db, page, pageSize, 10, "created_at DESC, content_id DESC", func(q *gorm.DB) *gorm.DB {
+		if category != "" {
+			q = q.Where("category = ?", category)
+		}
+		if status != "" {
+			q = q.Where("status = ?", status)
+		}
+		return q
+	})
 	list := make([]map[string]any, 0, len(items))
 	for i := range items {
 		list = append(list, featuredToListDict(&items[i]))
 	}
-	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	return map[string]any{
-		"total": total,
-		"page":  page,
-		"pages": pages,
-		"items": list,
+	return FeaturedContentPageResult{
+		Items: list,
+		Page:  page,
+		Pages: response.PageCount(total, pageSize),
+		Total: total,
 	}
 }
 
@@ -275,7 +272,7 @@ func (s *FeaturedService) Update(id int, data map[string]any) (map[string]any, e
 	return featuredToDetailDict(&item), nil
 }
 
-// Delete 删除内容精选。
+// Delete 删除内容精选，并清理封面与正文内本站图片（featured/ 前缀）的存储文件。
 func (s *FeaturedService) Delete(id int) (map[string]any, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
@@ -284,8 +281,28 @@ func (s *FeaturedService) Delete(id int) (map[string]any, error) {
 	if err := s.db.Delete(&item).Error; err != nil {
 		return nil, err
 	}
-	// 删除关联的封面与正文内图片由 fileSvc 处理（可选，此处略）
+	// 清理封面与正文图片（仅清理本站 featured 子目录文件，外部链接不动）
+	s.deleteFeaturedImages(item.CoverImage, item.Content)
 	return map[string]any{"content_id": id}, nil
+}
+
+// deleteFeaturedImages 清理精选内容关联的图片存储文件。
+// cover 为封面 URL；content 正文中 ![...](url) 语法引用的图片 URL 会被提取。
+// 仅删除 featured/ 子目录（local /static/uploads/featured/、R2 <domain>/featured/）下的文件。
+func (s *FeaturedService) deleteFeaturedImages(cover, content string) {
+	if s.fileSvc == nil {
+		return
+	}
+	var urls []string
+	if cover != "" && isFeaturedImageURL(cover) {
+		urls = append(urls, cover)
+	}
+	for _, u := range markdownImageURLs(content) {
+		if isFeaturedImageURL(u) {
+			urls = append(urls, u)
+		}
+	}
+	s.fileSvc.DeleteFiles(urls)
 }
 
 // Publish 发布内容精选（草稿 → 已发布）。
@@ -311,13 +328,31 @@ func (s *FeaturedService) Publish(id int) (map[string]any, error) {
 	return featuredToDetailDict(&item), nil
 }
 
+// IncrementViewCount 客户端计数：仅已发布内容可计数，返回最新阅读量。
+func (s *FeaturedService) IncrementViewCount(id int) (int, error) {
+	var item model.FeaturedContent
+	if err := s.db.First(&item, id).Error; err != nil {
+		return 0, errors.New("内容不存在")
+	}
+	if item.Status != 1 {
+		return 0, errors.New("内容不存在")
+	}
+	newCount := item.ViewCount + 1
+	// 原子自增（并发安全），与 GetPublicDetail 计数路径一致
+	if err := s.db.Model(&model.FeaturedContent{}).
+		Where("content_id = ?", id).
+		UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error; err != nil {
+		return 0, err
+	}
+	return newCount, nil
+}
+
 // SaveImage 保存图片到 featured 子目录，返回访问 URL。
 func (s *FeaturedService) SaveImage(content []byte, filename string) (string, error) {
 	if s.fileSvc == nil {
 		return "", errors.New("文件服务未初始化")
 	}
-	url, _ := s.fileSvc.SaveFile(content, filename, "featured")
-	return url, nil
+	return s.fileSvc.SaveFile(content, filename, "featured")
 }
 
 // ===== dict 辅助 =====

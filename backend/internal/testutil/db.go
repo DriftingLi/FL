@@ -37,34 +37,52 @@ func NewMemoryDB(t *testing.T) *gorm.DB {
 // allModels 返回全部模型，按外键依赖顺序排列。
 func allModels() []interface{} {
 	return []interface{}{
-		&model.Student{},
+		&model.HrwaiUser{},
+		&model.Notification{},
+		&model.AuditLog{},
+		&model.ProfileChangeRequest{},
 		&model.Admin{},
 		&model.Tutor{},
 		&model.Course{},
-		&model.KnowledgePoint{},
+		&model.Specialty{},
+		&model.CourseLevel{},
+		&model.CertificateTemplate{},
+		&model.CoursePrerequisite{},
 		&model.Chapter{},
 		&model.ChapterFile{},
 		&model.StudyRecord{},
 		&model.ExamSession{},
 		&model.Question{},
+		&model.QuestionTag{},
+		&model.QuestionTagRelation{},
 		&model.ExamParticipant{},
 		&model.ExamAnswer{},
-		&model.ExamRecord{},
 		&model.QuestionPracticeRecord{},
+		&model.PracticeProgress{},
 		&model.WrongQuestion{},
 		&model.MockExam{},
+		&model.ForumTopic{},
+		&model.ForumReply{},
 		&model.AIGenerationLog{},
 		&model.AsyncTask{},
+		&model.FeaturedContent{},
 	}
 }
 
+// seedUIDCounter 为测试用户生成递增 uid（雪花语义仅需唯一即可）。
+var seedUIDCounter int64 = 1000000000000000000
+
 // SeedStudent 插入一个测试学员，返回其 ID。
-func SeedStudent(t *testing.T, db *gorm.DB, username, hashedPassword string) *model.Student {
+// username 作为昵称；account 自动派生以保证唯一性；uid 取自递增计数器。
+func SeedStudent(t *testing.T, db *gorm.DB, username, hashedPassword string) *model.HrwaiUser {
 	t.Helper()
-	s := &model.Student{
+	seedUIDCounter++
+	s := &model.HrwaiUser{
+		UID:       seedUIDCounter,
+		Account:   "acct_" + username,
 		Username:  username,
 		Password:  hashedPassword,
-		Name:      username,
+		Phone:     "test_" + username,
 		Status:    1,
 		CreatedAt: Now(),
 	}
@@ -128,7 +146,6 @@ func SeedCourse(t *testing.T, db *gorm.DB, name string) *model.Course {
 	t.Helper()
 	c := &model.Course{
 		Name:      name,
-		Category:  "general",
 		Status:    1,
 		CreatedAt: Now(),
 	}
@@ -136,18 +153,4 @@ func SeedCourse(t *testing.T, db *gorm.DB, name string) *model.Course {
 		t.Fatalf("插入测试课程失败: %v", err)
 	}
 	return c
-}
-
-// SeedKnowledgePoint 插入一个测试知识点。
-func SeedKnowledgePoint(t *testing.T, db *gorm.DB, name, category string) *model.KnowledgePoint {
-	t.Helper()
-	kp := &model.KnowledgePoint{
-		Name:      name,
-		Category:  category,
-		CreatedAt: Now(),
-	}
-	if err := db.Create(kp).Error; err != nil {
-		t.Fatalf("插入测试知识点失败: %v", err)
-	}
-	return kp
 }

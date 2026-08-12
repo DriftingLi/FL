@@ -12,6 +12,8 @@ frontend/node_modules_old/
 frontend/dist/
 frontend/.vite/
 frontend/build*.log
+# vditor 本地 CDN 资源（由 vite.config.ts 中 vditor-static-copy 插件从 node_modules/vditor/dist 复制生成）
+frontend/public/vditor/dist/
 
 # ===== Node (通用) =====
 node_modules/
@@ -26,7 +28,9 @@ yarn-error.log*
 # 实际环境配置文件（仅保留 .example 模板入库）
 .env.production
 .env.development
-.env.staging
+
+# ===== 官网门户（portal）：独立仓库，本地开发 gitignored，完成后发布独立 GitHub 仓库 =====
+/portal/
 .env.test
 **/private_key.pem
 *.pem
@@ -48,8 +52,7 @@ backend/static/
 !backend/static/videos/.gitkeep
 !backend/static/images/.gitkeep
 
-# Docker Compose 本地覆盖文件（仅保留 .example 模板入库）
-backend/docker-compose.yml
+# Docker Compose 本地覆盖文件（本地开发栈定义入库）
 
 # ===== 日志 =====
 *.log
@@ -69,18 +72,37 @@ backend/storage/
 Thumbs.db
 
 # ===== 临时与备份目录 =====
+# .scratch/ 为 scratch 工作区（portal 移交文件等），不入库
 _ftmp_clean/
+.scratch/
 .empty_tmp/
 node_modules_old/
 
 # ===== Trae 相关文件 =====
 .trae/
 
+# ===== Codex 相关文件 =====
+.codex/
+
+# ===== 本地文档（不入库；ADRs 例外：架构决策记录是核心资产，必须版本化）=====
+docs/*
+!docs/adr/
+
 # ===== WorkBuddy 相关文件 =====
 .workbuddy/
 
 # ===== SpecStory 相关文件 =====
 .specstory/
+
+# ===== Multica 运行时文件（自动生成，不入库）=====
+.agent_context/
+.multica/
+
+# ===== 文档清理暂存区（复查后手动删除）=====
+.trash/
+
+# ===== 敏感文件隔离区（密钥/证书，严禁入库）=====
+.secrets-quarantine/
 
 # ===== 上传临时目录 =====
 .uploads/
@@ -91,8 +113,7 @@ node_modules_old/
 *.zip
 
 # ===== 本地开发配置 =====
-# 本地 Docker Compose 配置文件（仅保留 .example 和生产配置入库）
-docker-compose.local.yml
+# 本地 Docker Compose 配置文件（本地开发栈定义入库，覆盖/环境差异用 .example）
 
 # ===== Go 本地开发 =====
 backend/tmp/
@@ -113,8 +134,7 @@ backend/.air.toml
 
 # ===== 调试和性能分析 =====
 debug
-*.prof
-*.test
+*:prof
 cpu.prof
 mem.prof
 training-app/叉车维修培训学员端跨端应用/forklift-training-ui/reference/01_login.jpg

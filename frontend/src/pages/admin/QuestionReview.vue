@@ -42,7 +42,7 @@
       <el-table-column type="selection" width="50" />
       <el-table-column prop="id" label="ID" width="60" />
       <el-table-column prop="type" label="题型" width="100">
-        <template #default="{ row }">{{ typeMap[row.type] }}</template>
+        <template #default="{ row }">{{ (typeMap as Record<string, string>)[row.type] }}</template>
       </el-table-column>
       <el-table-column prop="content" label="题干" show-overflow-tooltip />
       <el-table-column label="状态" width="100">
@@ -50,25 +50,20 @@
           <el-tag :type="statusType[row.status]" size="small">{{ statusMap[row.status] }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="240">
+      <el-table-column label="操作" width="90" fixed="right" align="center">
         <template #default="{ row }">
-          <el-button size="small" @click="viewDetail(row)">查看</el-button>
-          <el-button
-            v-if="row.status === 'pending'"
-            size="small"
-            type="success"
-            @click="publishSingle(row)"
-          >
-            发布
-          </el-button>
-          <el-button
-            v-if="row.status === 'pending'"
-            size="small"
-            type="danger"
-            @click="rejectSingle(row)"
-          >
-            驳回
-          </el-button>
+          <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
+            <el-button type="primary" link size="small">
+              操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="view">查看</el-dropdown-item>
+                <el-dropdown-item v-if="row.status === 'pending'" command="publish">发布</el-dropdown-item>
+                <el-dropdown-item v-if="row.status === 'pending'" command="reject" divided>驳回</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </template>
       </el-table-column>
     </el-table>
@@ -141,23 +136,25 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { questionBankApi } from '@/api/questionBank'
+import type { Question } from '@/types/question'
+import { typeMap } from '@/constants/question'
 
-const typeMap = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', fault_image: '故障识图', short_answer: '简答题' }
-const statusMap = { draft: '草稿', pending: '待审核', published: '已发布' }
-const statusType = { draft: 'info', pending: 'warning', published: 'success' }
+const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
+const statusType: Record<string, string> = { draft: 'info', pending: 'warning', published: 'success' }
 
 const loading = ref(false)
-const questions = ref([])
+const questions = ref<Question[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const filters = ref({ type: '', status: 'pending', keyword: '' })
-const selectedIds = ref([])
+const selectedIds = ref<number[]>([])
 const pendingCount = ref(0)
 
 const detailVisible = ref(false)
-const currentQuestion = ref(null)
+const currentQuestion = ref<Question | null>(null)
 
 // 驳回相关
 const rejectDialogVisible = ref(false)
@@ -169,16 +166,31 @@ let rejectTargetId = 0
 
 onMounted(() => loadData())
 
+// 操作下拉菜单统一入口
+function handleAction(cmd: string, row: any) {
+  switch (cmd) {
+    case 'view':
+      viewDetail(row)
+      break
+    case 'publish':
+      publishSingle(row)
+      break
+    case 'reject':
+      rejectSingle(row)
+      break
+  }
+}
+
 async function loadData() {
   loading.value = true
   try {
     const res = await questionBankApi.getQuestions({ page: page.value, page_size: pageSize.value, ...filters.value })
-    questions.value = res.data?.questions || []
-    total.value = res.data?.total || 0
+    questions.value = res?.questions || []
+    total.value = res?.total || 0
     // 加载待审核总数（仅当不是 pending 筛选时单独查询）
     await loadPendingCount()
-  } catch (e) {
-    ElMessage.error('加载题目失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -187,33 +199,33 @@ async function loadData() {
 async function loadPendingCount() {
   try {
     const res = await questionBankApi.getQuestions({ page: 1, page_size: 1, status: 'pending' })
-    pendingCount.value = res.data?.total || 0
+    pendingCount.value = res?.total || 0
   } catch (e) {}
 }
 
-function handleSelection(rows) {
-  selectedIds.value = rows.map(r => r.id)
+function handleSelection(rows: { id: number }[]) {
+  selectedIds.value = rows.map((r: { id: number }) => r.id)
 }
 
-function viewDetail(row) {
+function viewDetail(row: any) {
   currentQuestion.value = row
   detailVisible.value = true
 }
 
 // 单题发布
-async function publishSingle(row) {
+async function publishSingle(row: { id: number }) {
   try {
     await ElMessageBox.confirm(`确定发布题目 #${row.id}？发布后学员可见。`, '确认发布', { type: 'success' })
     await questionBankApi.publishQuestion(row.id)
     ElMessage.success('发布成功')
     await loadData()
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error('发布失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 
 // 单题驳回
-function rejectSingle(row) {
+function rejectSingle(row: { id: number }) {
   rejectMode = 'single'
   rejectTargetId = row.id
   rejectReason.value = ''
@@ -227,8 +239,8 @@ async function batchPublish() {
     await questionBankApi.batchPublish(selectedIds.value)
     ElMessage.success('批量发布成功')
     await loadData()
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error('批量发布失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 
@@ -274,8 +286,8 @@ async function confirmReject() {
     }
     rejectDialogVisible.value = false
     await loadData()
-  } catch (e) {
-    ElMessage.error('驳回失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     rejecting.value = false
   }

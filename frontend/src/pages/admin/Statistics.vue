@@ -52,6 +52,42 @@
 
     <el-card class="table-card">
       <template #header>
+        <span class="card-title">数据导出</span>
+      </template>
+      <div class="export-actions">
+        <el-button
+          type="primary"
+          :loading="exporting === 'students'"
+          @click="handleExport('students')"
+        >
+          学员名单
+        </el-button>
+        <el-button
+          type="success"
+          :loading="exporting === 'exam-records'"
+          @click="handleExport('exam-records')"
+        >
+          考试成绩
+        </el-button>
+        <el-button
+          type="warning"
+          :loading="exporting === 'questions'"
+          @click="handleExport('questions')"
+        >
+          题库
+        </el-button>
+        <el-button
+          type="info"
+          :loading="exporting === 'evaluations'"
+          @click="handleExport('evaluations')"
+        >
+          评估记录
+        </el-button>
+      </div>
+    </el-card>
+
+    <el-card class="table-card">
+      <template #header>
         <span class="card-title">课程学习详细数据</span>
       </template>
       <el-table :data="courseStats" stripe border style="width: 100%">
@@ -82,18 +118,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
+import { ElMessage } from 'element-plus'
 import { adminApi } from '@/api/admin'
+import { downloadExport, type ExportKind } from '@/api/export'
+import { useECharts } from '@/composables/useECharts'
 
 const overview = ref<any>({})
-const courseStats = ref([])
-const barChartRef = ref(null)
-const progressChartRef = ref(null)
-let barChart = null
-let progressChart = null
+const courseStats = ref<{ name: string; study_count: number; total_duration: number; avg_progress: number }[]>([])
+const exporting = ref<ExportKind | ''>('')
+const barChartRef = ref<HTMLDivElement | null>(null)
+const progressChartRef = ref<HTMLDivElement | null>(null)
+const { init: initBarChart } = useECharts(barChartRef)
+const { init: initProgressChart } = useECharts(progressChartRef)
 
-function formatDuration(minutes) {
+async function handleExport(kind: ExportKind) {
+  exporting.value = kind
+  try {
+    await downloadExport(kind)
+    ElMessage.success('导出成功')
+  } catch {
+    /* 错误已由拦截器提示 */
+  } finally {
+    exporting.value = ''
+  }
+}
+
+function formatDuration(minutes: number) {
   if (!minutes || minutes <= 0) return '0分钟'
   const hours = Math.floor(minutes / 60)
   const mins = minutes % 60
@@ -103,25 +155,22 @@ function formatDuration(minutes) {
   return `${mins}分钟`
 }
 
-function getProgressColor(progress) {
+function getProgressColor(progress: number) {
   if (progress >= 100) return '#67c23a'
   if (progress >= 60) return '#409eff'
   if (progress >= 30) return '#e6a23c'
   return '#f56c6c'
 }
 
-function initBarChart() {
-  if (!barChartRef.value || courseStats.value.length === 0) return
-
-  if (barChart) barChart.dispose()
-  barChart = echarts.init(barChartRef.value)
+function renderBarChart() {
+  if (courseStats.value.length === 0) return
 
   const sortedStats = [...courseStats.value].sort((a, b) => b.study_count - a.study_count)
   const names = sortedStats.map(c => c.name.length > 8 ? c.name.substring(0, 8) + '...' : c.name)
   const counts = sortedStats.map(c => c.study_count)
   const durations = sortedStats.map(c => c.total_duration)
 
-  barChart.setOption({
+  initBarChart({
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' }
@@ -175,16 +224,13 @@ function initBarChart() {
   })
 }
 
-function initProgressChart() {
-  if (!progressChartRef.value || courseStats.value.length === 0) return
-
-  if (progressChart) progressChart.dispose()
-  progressChart = echarts.init(progressChartRef.value)
+function renderProgressChart() {
+  if (courseStats.value.length === 0) return
 
   const names = courseStats.value.map(c => c.name.length > 8 ? c.name.substring(0, 8) + '...' : c.name)
   const progressData = courseStats.value.map(c => Math.round(c.avg_progress * 100) / 100)
 
-  progressChart.setOption({
+  initProgressChart({
     tooltip: {
       trigger: 'axis',
       formatter: '{b}: {c}%'
@@ -226,21 +272,16 @@ function initProgressChart() {
   })
 }
 
-function handleResize() {
-  barChart && barChart.resize()
-  progressChart && progressChart.resize()
-}
-
 async function loadStatistics() {
   try {
-    const res = await adminApi.getStatistics()
-    if (res.code === 200 && res.data) {
-      overview.value = res.data.overview || {}
-      courseStats.value = res.data.course_stats || []
+    const data = await adminApi.getStatistics()
+    if (data) {
+      overview.value = data.overview || {}
+      courseStats.value = data.course_stats || []
 
       await nextTick()
-      initBarChart()
-      initProgressChart()
+      renderBarChart()
+      renderProgressChart()
     }
   } catch (error) {
     console.error('加载统计数据失败:', error)
@@ -249,13 +290,6 @@ async function loadStatistics() {
 
 onMounted(() => {
   loadStatistics()
-  window.addEventListener('resize', handleResize)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
-  if (barChart) { barChart.dispose(); barChart = null }
-  if (progressChart) { progressChart.dispose(); progressChart = null }
 })
 </script>
 
@@ -326,6 +360,12 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   min-height: 260px;
+}
+
+.export-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .table-card {

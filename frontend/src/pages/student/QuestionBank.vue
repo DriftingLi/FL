@@ -57,20 +57,26 @@
           </el-card>
         </el-col>
 
-        <!-- 章节练习 -->
+        <!-- 标签练习 -->
         <el-col :xs="24" :sm="12" :md="8">
-          <el-card shadow="hover" class="practice-card card-chapter">
+          <el-card shadow="hover" class="practice-card card-tag">
             <div class="card-head">
-              <el-icon :size="28" color="#f56c6c"><Reading /></el-icon>
-              <h3>章节练习</h3>
+              <el-icon :size="28" color="#7952b3"><CollectionTag /></el-icon>
+              <h3>标签练习</h3>
             </div>
             <div class="card-select">
-              <span class="select-label">分类</span>
-              <el-select v-model="chapterCategory" size="small" placeholder="选择分类" style="width: 130px">
-                <el-option v-for="o in categoryOptions" :key="o.value" :label="o.label" :value="o.value" />
+              <span class="select-label">考点标签</span>
+              <el-select v-model="tagPracticeId" size="small" filterable placeholder="选择标签" style="width: 130px" :loading="tagsLoading">
+                <el-option v-for="t in tags" :key="t.id" :label="`${t.name}（${t.question_count ?? 0}题）`" :value="t.id" />
               </el-select>
             </div>
-            <el-button type="danger" :loading="loading" :disabled="!chapterCategory" @click="startCategory">开始练习</el-button>
+            <div v-if="tagPracticeId && tagProgress.total > 0" class="card-stat">
+              <span class="stat-num">{{ tagProgress.completed }}/{{ tagProgress.total }}</span>
+              <span class="stat-label">已练习/总题数</span>
+            </div>
+            <el-button type="primary" plain :loading="loading" :disabled="!tagPracticeId" @click="startTagPractice">
+              {{ tagProgress.completed > 0 ? '继续练习' : '开始练习' }}
+            </el-button>
           </el-card>
         </el-col>
 
@@ -104,8 +110,8 @@
           第 {{ currentIdx + 1 }}/{{ questions.length }} 题
           <span class="progress-stats">已答对 {{ correctCount }} · 已答错 {{ wrongCount }}</span>
           <el-tag v-if="mode === 'sequential'" size="small" type="primary" style="margin-left: 10px">顺序练习</el-tag>
-          <el-tag v-else-if="mode === 'category'" size="small" type="danger" style="margin-left: 10px">
-            {{ chapterCategory ? categoryMap[chapterCategory] : '章节练习' }}
+          <el-tag v-else-if="mode === 'tag'" size="small" style="margin-left: 10px">
+            标签：{{ currentTagName }}
           </el-tag>
           <el-tag v-else-if="specialType && mode === 'free'" size="small" type="warning" style="margin-left: 10px">
             {{ typeMap[specialType] }}
@@ -121,26 +127,16 @@
         <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="q-image" />
         <p class="q-content">{{ currentQuestion.content }}</p>
 
-        <div v-if="currentQuestion.type !== 'short_answer'" class="q-options">
-          <template v-if="currentQuestion.type === 'true_false'">
-            <div v-for="opt in [{ key: '对', label: '正确' }, { key: '错', label: '错误' }]" :key="opt.key"
-                 class="q-option"
-                 :class="optionClass(opt.key)"
-                 @click="!submitted && toggleOption(opt.key)">
-              <span class="opt-label">{{ opt.key }}</span>
-              <span>{{ opt.label }}</span>
-            </div>
-          </template>
-          <template v-else>
-            <div v-for="(label, key) in currentQuestion.options" :key="key"
-                 class="q-option"
-                 :class="optionClass(key)"
-                 @click="!submitted && toggleOption(key)">
-              <span class="opt-label">{{ key }}</span>
-              <span>{{ label }}</span>
-            </div>
-          </template>
-        </div>
+        <QuestionOptionPicker
+          v-if="currentQuestion.type !== 'short_answer'"
+          :options="currentOptions"
+          :selected-keys="selectedOptionKeys"
+          :multi-choice="currentQuestion.type === 'multi_choice'"
+          :disabled="submitted"
+          :correct-answer="submitted ? lastResult.correct_answer : undefined"
+          :user-answer="submitted ? answers[currentQuestion.id] : undefined"
+          @select="key => toggleOption(currentQuestion.id, key, currentQuestion.type === 'multi_choice')"
+        />
         <el-input v-else v-model="textAnswer" type="textarea" :rows="4" placeholder="请输入答案" :disabled="submitted" />
 
         <div class="q-feedback" v-if="submitted">
@@ -167,32 +163,9 @@
           <el-button v-if="!submitted" type="primary" :disabled="!canSubmit" @click="submitAnswer">
             提交答案
           </el-button>
-          <el-button v-if="currentIdx < questions.length - 1" type="primary" plain @click="nextQuestion">
+          <el-button v-if="currentIdx < questions.length - 1" type="primary" @click="nextQuestion">
             下一题
           </el-button>
-          <el-button v-if="currentIdx === questions.length - 1" type="success" @click="nextQuestion">
-            查看结果
-          </el-button>
-        </div>
-      </el-card>
-    </div>
-
-    <!-- ===== 刷题完成 ===== -->
-    <div v-if="showResult" class="practice-result">
-      <el-card>
-        <h2>本次练习结果</h2>
-        <div class="score-display">
-          <div class="score-circle" :class="{ passed: accuracy >= 60 }">
-            <span class="score-num">{{ correctCount }}</span>
-            <span class="score-total">/{{ questions.length }}</span>
-          </div>
-          <p>正确率：{{ accuracy }}%</p>
-          <p>答对 {{ correctCount }} 题 · 答错 {{ wrongCount }} 题</p>
-        </div>
-        <div class="result-actions">
-          <el-button v-if="mode === 'sequential'" type="primary" @click="startSequential">继续顺序练习</el-button>
-          <el-button v-else type="primary" @click="restartPractice">再来一组</el-button>
-          <el-button @click="backToEntry">返回题库</el-button>
         </div>
       </el-card>
     </div>
@@ -200,34 +173,57 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { Sort, MagicStick, Filter, Reading, Document } from '@element-plus/icons-vue'
+import { ref, computed, watch, onMounted } from 'vue'
+import { Sort, MagicStick, Filter, Document, CollectionTag } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
 import { practiceModeApi } from '@/api/practiceMode'
 import { mockExamApi } from '@/api/mockExam'
-import { typeMap, questionTypeOptions, categoryMap, categoryOptions, randomCountOptions } from '@/constants/question'
-import type { CourseCategory, PracticeProgress, Question, QuestionType, SubmitResult } from '@/types/question'
+import { trainingApi } from '@/api/training'
+import type { QuestionTag } from '@/api/training'
+import { typeMap, questionTypeOptions, randomCountOptions } from '@/constants/question'
+import type { PracticeProgress, Question, QuestionType, SubmitResult } from '@/types/question'
+import { useQuestionAnswer, buildQuestionOptions, deserializeAnswers, serializeAnswers } from '@/composables/useQuestionAnswer'
+import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
 
-// null = 入口；'sequential' | 'free' | 'category' = 刷题中
-const mode = ref<'sequential' | 'free' | 'category' | null>(null)
-const showResult = ref(false)
+// null = 入口；'sequential' | 'free' | 'tag' = 刷题中
+const mode = ref<'sequential' | 'free' | 'tag' | null>(null)
 
 // 卡片选择器状态
 const randomCount = ref(20)
 const specialType = ref<QuestionType | ''>('')
-const chapterCategory = ref<CourseCategory | ''>('')
+const tagPracticeId = ref<number | null>(null)
+const tags = ref<QuestionTag[]>([])
+const tagsLoading = ref(false)
+
+const currentTagName = computed(() => {
+  const t = tags.value.find(item => item.id === tagPracticeId.value)
+  return t?.name || ''
+})
 
 // 卡片展示数据
 const seqProgress = ref<PracticeProgress>({ completed: 0, total: 0, current_index: 0 })
+const tagProgress = ref<PracticeProgress>({ completed: 0, total: 0, current_index: 0 })
 const totalQuestions = ref(0)
 const latestMockScore = ref<number | null>(null)
+
+// 选择标签时查询该标签的练习进度（断点续练展示）
+watch(tagPracticeId, async (id) => {
+  tagProgress.value = { completed: 0, total: 0, current_index: 0 }
+  if (!id) return
+  try {
+    const prog = await practiceModeApi.getProgress(`tag:${id}`)
+    tagProgress.value = prog || tagProgress.value
+  } catch {
+    // 查询失败降级为无进度
+  }
+})
 
 // ===== 刷题流程 =====
 const loading = ref(false)
 const questions = ref<Question[]>([])
 const currentIdx = ref(0)
-const answers = ref<Record<number, unknown>>({})
+const { answers, toggleOption, reset: resetAnswers } = useQuestionAnswer()
 // 按题目ID存储每题的作答状态，切换上下题时保留状态
 const textAnswerMap = ref<Record<number, string>>({})
 const submittedMap = ref<Record<number, boolean>>({})
@@ -247,6 +243,17 @@ const textAnswer = computed({
 const submitted = computed(() => (currentQuestion.value.id ? !!submittedMap.value[currentQuestion.value.id] : false))
 // 当前题目的解析结果
 const lastResult = computed(() => (currentQuestion.value.id ? resultMap.value[currentQuestion.value.id] || ({} as SubmitResult) : ({} as SubmitResult)))
+// 当前题目渲染用选项（判断题渲染对/错模板）
+const currentOptions = computed(() => buildQuestionOptions(currentQuestion.value))
+// 当前题目已选中的选项 keys
+const selectedOptionKeys = computed(() => {
+  const q = currentQuestion.value
+  if (!q || !q.id) return []
+  const ans = answers.value[q.id]
+  if (ans === undefined || ans === null) return []
+  if (q.type === 'multi_choice') return Array.isArray(ans) ? ans : []
+  return [ans]
+})
 const canSubmit = computed(() => {
   const q = currentQuestion.value
   if (!q || !q.id) return false
@@ -256,14 +263,24 @@ const canSubmit = computed(() => {
   if (Array.isArray(ans)) return ans.length > 0
   return ans !== ''
 })
-const accuracy = computed(() => {
-  if (questions.value.length === 0) return 0
-  return Math.round((correctCount.value / questions.value.length) * 100)
-})
 
 onMounted(() => {
   loadCardData()
+  loadTags()
 })
+
+async function loadTags() {
+  tagsLoading.value = true
+  try {
+    // 拦截器已解包信封
+    const data = await trainingApi.getTags()
+    tags.value = data.tags || []
+  } catch (e) {
+    // 静默失败，标签入口降级为不可用
+  } finally {
+    tagsLoading.value = false
+  }
+}
 
 async function loadCardData() {
   try {
@@ -272,11 +289,11 @@ async function loadCardData() {
       practiceModeApi.getSequentialProgress(),
       mockExamApi.getMockExamHistory({ page: 1, page_size: 1 })
     ])
-    totalQuestions.value = (statsRes.data?.total as number) || 0
-    if (progRes.data) {
-      seqProgress.value = progRes.data
+    totalQuestions.value = (statsRes.total as number) || 0
+    if (progRes) {
+      seqProgress.value = progRes
     }
-    const exams = histRes.data?.exams || []
+    const exams = histRes.exams || []
     if (exams.length > 0 && exams[0].score != null) {
       latestMockScore.value = Number(exams[0].score)
     }
@@ -290,31 +307,30 @@ async function startSequential() {
   loading.value = true
   try {
     const res = await practiceModeApi.startSequential()
-    const data = res.data || {}
+    const data = res || {}
     questions.value = data.questions || []
     if (questions.value.length === 0) {
       ElMessage.warning('题库暂无题目')
       return
     }
     mode.value = 'sequential'
-    showResult.value = false
     // 获取持久化的答题状态
     const prog = await resolveProgress('sequential', questions.value.length)
     resetSession(prog.startIndex)
     restoreState(prog.answersState)
-  } catch (e: any) {
-    ElMessage.error(e.message || '加载题目失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
 }
 
 // 获取当前练习模式的进度 key（用于断点续练）
-// 顺序练习: 'sequential'；专项练习: 'free:<type>'；章节练习: 'category:<category>'；随机练习: ''（不保存）
+// 顺序练习: 'sequential'；专项练习: 'free:<type>'；标签练习: 'tag:<tagID>'；随机练习: ''（不保存）
 function getPracticeModeKey(): string {
   if (mode.value === 'sequential') return 'sequential'
   if (mode.value === 'free' && specialType.value) return `free:${specialType.value}`
-  if (mode.value === 'category' && chapterCategory.value) return `category:${chapterCategory.value}`
+  if (mode.value === 'tag' && tagPracticeId.value) return `tag:${tagPracticeId.value}`
   return ''
 }
 
@@ -323,7 +339,7 @@ async function resolveProgress(modeKey: string, total: number): Promise<{ startI
   if (!modeKey) return { startIndex: 0, answersState: {} }
   try {
     const progRes = await practiceModeApi.getProgress(modeKey)
-    const data = progRes.data || {}
+    const data = progRes || {}
     const idx = data.current_index || 0
     const startIndex = idx > 0 && idx < total ? idx : 0
     return { startIndex, answersState: data.answers_state || {} }
@@ -334,13 +350,14 @@ async function resolveProgress(modeKey: string, total: number): Promise<{ startI
 // 从后端答题状态恢复 answers/submittedMap/resultMap/correctCount/wrongCount
 function restoreState(answersState: Record<string, unknown>) {
   if (!answersState || Object.keys(answersState).length === 0) return
+  const restored = deserializeAnswers(answersState)
   const newAnswers: Record<number, unknown> = {}
   const newSubmittedMap: Record<number, boolean> = {}
   const newResultMap: Record<number, SubmitResult> = {}
   const newTextAnswerMap: Record<number, string> = {}
   let correct = 0
   let wrong = 0
-  for (const [key, val] of Object.entries(answersState)) {
+  for (const [key, val] of Object.entries(restored)) {
     const qid = Number(key)
     if (!qid) continue
     const result = val as SubmitResult
@@ -355,7 +372,7 @@ function restoreState(answersState: Record<string, unknown>) {
     if (result.is_correct === true) correct++
     else if (result.is_correct === false) wrong++
   }
-  answers.value = newAnswers
+  resetAnswers(newAnswers)
   submittedMap.value = newSubmittedMap
   resultMap.value = newResultMap
   textAnswerMap.value = newTextAnswerMap
@@ -365,11 +382,7 @@ function restoreState(answersState: Record<string, unknown>) {
 
 // 构建可序列化的答题状态对象（key 为题目ID字符串）
 function buildAnswersState(): Record<string, unknown> {
-  const state: Record<string, unknown> = {}
-  for (const [qid, result] of Object.entries(resultMap.value)) {
-    state[qid] = result
-  }
-  return state
+  return serializeAnswers(resultMap.value)
 }
 
 // 保存当前进度和答题状态到后端
@@ -401,41 +414,39 @@ async function startFree(type?: string) {
       params.count = randomCount.value
     }
     const res = await practiceModeApi.getFreeQuestions(params)
-    questions.value = res.data || []
+    questions.value = res || []
     if (questions.value.length === 0) {
       ElMessage.warning('暂无符合条件的题目')
       return
     }
     mode.value = 'free'
-    showResult.value = false
     const prog = await resolveProgress(modeKey, questions.value.length)
     resetSession(prog.startIndex)
     restoreState(prog.answersState)
-  } catch (e: any) {
-    ElMessage.error(e.message || '加载题目失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
 }
 
-async function startCategory() {
-  if (!chapterCategory.value) return
+async function startTagPractice() {
+  if (!tagPracticeId.value) return
   loading.value = true
   try {
-    const modeKey = `category:${chapterCategory.value}`
-    const res = await practiceModeApi.getCategoryQuestions({ category: chapterCategory.value, count: 0 })
-    questions.value = res.data || []
+    const res = await practiceModeApi.startTagPractice({ tag_id: tagPracticeId.value, count: 0 })
+    const data = res || {}
+    questions.value = data.questions || []
     if (questions.value.length === 0) {
-      ElMessage.warning('该分类下暂无题目')
+      ElMessage.warning('该标签下暂无已发布题目')
       return
     }
-    mode.value = 'category'
-    showResult.value = false
-    const prog = await resolveProgress(modeKey, questions.value.length)
+    mode.value = 'tag'
+    const prog = await resolveProgress(getPracticeModeKey(), questions.value.length)
     resetSession(prog.startIndex)
     restoreState(prog.answersState)
-  } catch (e: any) {
-    ElMessage.error(e.message || '加载题目失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }
@@ -443,7 +454,7 @@ async function startCategory() {
 
 function resetSession(startIdx: number) {
   currentIdx.value = startIdx
-  answers.value = {}
+  resetAnswers()
   textAnswerMap.value = {}
   submittedMap.value = {}
   resultMap.value = {}
@@ -452,46 +463,6 @@ function resetSession(startIdx: number) {
 }
 
 // ===== 答题交互 =====
-function isOptionSelected(key: string) {
-  const q = currentQuestion.value
-  const ans = answers.value[q.id]
-  if (!ans) return false
-  if (q.type === 'multi_choice') return Array.isArray(ans) && ans.includes(key)
-  return ans === key
-}
-
-function toggleOption(key: string) {
-  const q = currentQuestion.value
-  if (q.type === 'multi_choice') {
-    if (!answers.value[q.id]) answers.value[q.id] = []
-    const arr = answers.value[q.id] as string[]
-    const idx = arr.indexOf(key)
-    if (idx > -1) arr.splice(idx, 1)
-    else arr.push(key)
-  } else {
-    answers.value[q.id] = key
-  }
-}
-
-function optionClass(key: string) {
-  if (!submitted.value) {
-    return { selected: isOptionSelected(key) }
-  }
-  const q = currentQuestion.value
-  const correctArr = Array.isArray(lastResult.value.correct_answer)
-    ? lastResult.value.correct_answer
-    : String(lastResult.value.correct_answer || '').split(',')
-  const userAns = answers.value[q.id]
-  const userArr = Array.isArray(userAns) ? userAns : [userAns]
-  const isCorrectOpt = correctArr.map(String).includes(String(key))
-  const isUserOpt = userArr.map(String).includes(String(key))
-  return {
-    selected: isUserOpt,
-    'opt-correct': isCorrectOpt,
-    'opt-wrong': isUserOpt && !isCorrectOpt
-  }
-}
-
 async function submitAnswer() {
   const q = currentQuestion.value
   if (!canSubmit.value) return
@@ -499,10 +470,10 @@ async function submitAnswer() {
   try {
     const res = await practiceModeApi.submitAnswer({
       question_id: q.id,
-      user_answer: userAnswer,
+      user_answer: userAnswer as string,
       practice_type: mode.value || 'free'
     })
-    resultMap.value[q.id] = res.data || {}
+    resultMap.value[q.id] = res || ({} as SubmitResult)
     submittedMap.value[q.id] = true
     if (resultMap.value[q.id].is_correct) {
       correctCount.value++
@@ -511,17 +482,12 @@ async function submitAnswer() {
     }
     // 提交后持久化答题状态（游标不变，仅更新 answers_state）
     await saveCurrentProgress(currentIdx.value)
-  } catch (e: any) {
-    ElMessage.error(e.message || '提交答案失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   }
 }
 
 async function nextQuestion() {
-  // 最后一题：直接查看结果，不再推进游标
-  if (currentIdx.value === questions.value.length - 1) {
-    showResult.value = true
-    return
-  }
   // 所有有断点的模式：推进游标并保存进度+答题状态
   const newIndex = currentIdx.value + 1
   currentIdx.value++
@@ -546,26 +512,15 @@ async function confirmQuit() {
 
 function backToEntry() {
   mode.value = null
-  showResult.value = false
   questions.value = []
   currentIdx.value = 0
-  answers.value = {}
+  resetAnswers()
   textAnswerMap.value = {}
   submittedMap.value = {}
   resultMap.value = {}
   correctCount.value = 0
   wrongCount.value = 0
   loadCardData()
-}
-
-function restartPractice() {
-  if (mode.value === 'free' && specialType.value) {
-    startFree(specialType.value)
-  } else if (mode.value === 'category') {
-    startCategory()
-  } else {
-    startFree()
-  }
 }
 </script>
 
@@ -588,7 +543,7 @@ function restartPractice() {
 .card-sequential { border-top: 3px solid #409eff; }
 .card-random { border-top: 3px solid #67c23a; }
 .card-special { border-top: 3px solid #e6a23c; }
-.card-chapter { border-top: 3px solid #f56c6c; }
+.card-tag { border-top: 3px solid #7952b3; }
 .card-mock { border-top: 3px solid #909399; }
 
 .practice-area { margin-top: 10px; }
@@ -599,23 +554,7 @@ function restartPractice() {
 .question-header { display: flex; gap: 8px; align-items: center; margin-bottom: 15px; }
 .q-image { max-width: 100%; max-height: 250px; border-radius: 8px; margin-bottom: 10px; }
 .q-content { font-size: 16px; line-height: 1.8; margin-bottom: 15px; white-space: pre-wrap; }
-.q-options { display: flex; flex-direction: column; gap: 8px; }
-.q-option { display: flex; align-items: center; padding: 10px 15px; border: 1px solid #dcdfe6; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
-.q-option:hover { border-color: #409eff; }
-.q-option.selected { border-color: #409eff; background: #ecf5ff; }
-.q-option.opt-correct { border-color: #67c23a; background: #f0f9eb; }
-.q-option.opt-wrong { border-color: #f56c6c; background: #fef0f0; }
-.opt-label { width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; background: #f5f7fa; margin-right: 10px; font-weight: bold; }
 .q-feedback { margin-top: 15px; }
 .feedback-explanation { margin-top: 6px; color: #606266; }
 .q-actions { display: flex; justify-content: center; margin-top: 20px; }
-
-.practice-result { margin-top: 20px; }
-.practice-result h2 { text-align: center; margin-bottom: 20px; }
-.score-display { text-align: center; margin: 20px 0; }
-.score-circle { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; width: 150px; height: 150px; border-radius: 50%; border: 6px solid #f56c6c; margin-bottom: 10px; }
-.score-circle.passed { border-color: #67c23a; }
-.score-num { font-size: 36px; font-weight: bold; }
-.score-total { font-size: 14px; color: #909399; }
-.result-actions { display: flex; justify-content: center; gap: 12px; margin-top: 20px; }
 </style>

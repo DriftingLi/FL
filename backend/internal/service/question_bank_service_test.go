@@ -4,6 +4,7 @@ package service
 import (
 	"testing"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/testutil"
@@ -12,7 +13,7 @@ import (
 func newQuestionBankSvc(t *testing.T) (*QuestionBankService, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewQuestionBankService(db), db
+	return NewQuestionBankService(db, nil, zap.NewNop()), db
 }
 
 // --- CreateQuestion ---
@@ -30,13 +31,13 @@ func TestCreateQuestion_SingleChoice_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建题目失败: %v", err)
 	}
-	if result["type"] != "single_choice" || result["content"] != "叉车作业前应检查什么？" {
+	if result.Type != "single_choice" || result.Content != "叉车作业前应检查什么？" {
 		t.Fatalf("创建结果不匹配: %+v", result)
 	}
-	if result["status"] != "pending" {
-		t.Fatalf("默认状态应为 pending, got %v", result["status"])
+	if result.Status != "pending" {
+		t.Fatalf("默认状态应为 pending, got %v", result.Status)
 	}
-	if result["id"] == nil || result["id"].(int) == 0 {
+	if result.ID == 0 {
 		t.Fatal("题目 ID 不应为空")
 	}
 }
@@ -90,28 +91,32 @@ func TestCreateQuestion_ShortAnswer_NoAnswer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("简答题可不提供答案: %v", err)
 	}
-	if result["type"] != "short_answer" {
-		t.Fatalf("题型应为 short_answer, got %v", result["type"])
+	if result.Type != "short_answer" {
+		t.Fatalf("题型应为 short_answer, got %v", result.Type)
 	}
 }
 
-func TestCreateQuestion_WithKnowledgePoint(t *testing.T) {
+func TestCreateQuestion_WithTagIDs(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
-	kp := testutil.SeedKnowledgePoint(t, db, "液压系统", "CATEGORY_01")
+	catalogSvc := NewTrainingCatalogService(db, zap.NewNop())
+	tag, err := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压"})
+	if err != nil {
+		t.Fatalf("创建标签失败: %v", err)
+	}
 	data := map[string]any{
-		"type":               "single_choice",
-		"content":            "test",
-		"options":            []string{"A", "B"},
-		"answer":             "A",
-		"knowledge_point_id": kp.ID,
+		"type":    "single_choice",
+		"content": "test",
+		"options": []string{"A", "B"},
+		"answer":  "A",
+		"tag_ids": []int{tag.ID},
 	}
 	result, err := svc.CreateQuestion(data, nil, "tutor")
 	if err != nil {
-		t.Fatalf("带知识点创建失败: %v", err)
+		t.Fatalf("带标签创建失败: %v", err)
 	}
-	kpID, ok := result["knowledge_point_id"].(*int)
-	if !ok || kpID == nil || *kpID != kp.ID {
-		t.Fatalf("知识点 ID 不匹配: got %v, want %d", result["knowledge_point_id"], kp.ID)
+	tags := result.Tags.([]map[string]any)
+	if len(tags) != 1 || tags[0]["id"] != tag.ID {
+		t.Fatalf("标签未关联: %+v", result.Tags)
 	}
 }
 
@@ -124,8 +129,8 @@ func TestGetQuestion_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("查询题目失败: %v", err)
 	}
-	if result["content"] != "叉车可以超载运行" {
-		t.Fatalf("内容不匹配: %v", result["content"])
+	if result.Content != "叉车可以超载运行" {
+		t.Fatalf("内容不匹配: %v", result.Content)
 	}
 }
 
@@ -149,8 +154,8 @@ func TestUpdateQuestion_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("更新失败: %v", err)
 	}
-	if result["content"] != "新题干" {
-		t.Fatalf("内容未更新: %v", result["content"])
+	if result.Content != "新题干" {
+		t.Fatalf("内容未更新: %v", result.Content)
 	}
 }
 
@@ -201,11 +206,11 @@ func TestListQuestions_Pagination(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		testutil.SeedQuestion(t, db, "single_choice", "题目前5", "A")
 	}
-	result := svc.ListQuestions(1, 2, "", nil, "", "")
+	result := svc.ListQuestions(1, 2, "", "", "", nil)
 	if result["total"].(int64) != 5 {
 		t.Fatalf("总数应为 5, got %v", result["total"])
 	}
-	questions := result["questions"].([]map[string]any)
+	questions := result["questions"].([]QuestionDTO)
 	if len(questions) != 2 {
 		t.Fatalf("本页应 2 条, got %d", len(questions))
 	}
@@ -218,7 +223,7 @@ func TestListQuestions_FilterByType(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
 	testutil.SeedQuestion(t, db, "single_choice", "单选题", "A")
 	testutil.SeedQuestion(t, db, "true_false", "判断题", "true")
-	result := svc.ListQuestions(1, 20, "true_false", nil, "", "")
+	result := svc.ListQuestions(1, 20, "true_false", "", "", nil)
 	if result["total"].(int64) != 1 {
 		t.Fatalf("判断题应 1 条, got %v", result["total"])
 	}
@@ -226,7 +231,7 @@ func TestListQuestions_FilterByType(t *testing.T) {
 
 func TestListQuestions_DefaultPage(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	result := svc.ListQuestions(0, 0, "", nil, "", "")
+	result := svc.ListQuestions(0, 0, "", "", "", nil)
 	if result["page"].(int) != 1 {
 		t.Fatalf("默认页码应为 1, got %v", result["page"])
 	}
@@ -244,8 +249,8 @@ func TestPublishQuestion_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("发布失败: %v", err)
 	}
-	if result["status"] != "published" {
-		t.Fatalf("状态应为 published, got %v", result["status"])
+	if result.Status != "published" {
+		t.Fatalf("状态应为 published, got %v", result.Status)
 	}
 }
 

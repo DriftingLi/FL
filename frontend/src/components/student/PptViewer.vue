@@ -94,10 +94,10 @@ const props = defineProps({
 
 const resolvedSrc = computed(() => resolveFileUrl(props.src))
 
-const containerRef = ref(null)
-const stripRef = ref(null)
+const containerRef = ref<HTMLDivElement | null>(null)
+const stripRef = ref<HTMLDivElement | null>(null)
 
-const slides = ref([])
+const slides = ref<string[]>([])
 const currentSlideIndex = ref(0)
 const loading = ref(true)
 const loadError = ref(false)
@@ -111,16 +111,13 @@ async function loadSlides() {
   loading.value = true
   loadError.value = false
   try {
-    const res = await courseApi.getChapterSlides(props.chapterId)
-    let rawSlides = []
-    if (res && res.data && Array.isArray(res.data.slides)) {
-      rawSlides = res.data.slides
-    } else if (res && Array.isArray((res as any).slides)) {
-      rawSlides = (res as any).slides
-    } else if (res && Array.isArray(res)) {
-      rawSlides = res
+    const res = await courseApi.getChapterSlides(Number(props.chapterId))
+    // 拦截器已解包信封，返回 { slides?: string[] }
+    let rawSlides: string[] = []
+    if (res && Array.isArray(res.slides)) {
+      rawSlides = res.slides
     }
-    slides.value = rawSlides.map(s => resolveFileUrl(s))
+    slides.value = rawSlides.map((s: string) => resolveFileUrl(s))
     currentSlideIndex.value = 0
     if (slides.value.length === 0) {
       loadError.value = true
@@ -147,7 +144,7 @@ function nextSlide() {
   }
 }
 
-function goToSlide(index) {
+function goToSlide(index: number) {
   currentSlideIndex.value = index
   scrollToThumbnail()
 }
@@ -186,29 +183,29 @@ function onSlideImageError() {
 async function regenerateSlides() {
   regenerating.value = true
   try {
-    await courseApi.regenerateSlides(props.chapterId)
+    await courseApi.regenerateSlides(Number(props.chapterId))
     ElMessage.success('幻灯片重新生成成功')
     await loadSlides()
   } catch (e) {
     console.error('Failed to regenerate slides:', e)
-    ElMessage.error('重新生成幻灯片失败')
+    /* 错误已由拦截器提示 */
   } finally {
     regenerating.value = false
   }
 }
 
-function onSlideTouchStart(e) {
+function onSlideTouchStart(e: TouchEvent) {
   if (e.touches.length === 1) {
     touchStartX.value = e.touches[0].clientX
     touchStartY.value = e.touches[0].clientY
   }
 }
 
-function onSlideTouchMove(e) {
+function onSlideTouchMove(e: TouchEvent) {
   e.preventDefault()
 }
 
-function onSlideTouchEnd(e) {
+function onSlideTouchEnd(e: TouchEvent) {
   if (e.changedTouches.length !== 1) return
   const dx = e.changedTouches[0].clientX - touchStartX.value
   const dy = e.changedTouches[0].clientY - touchStartY.value
@@ -221,8 +218,9 @@ function onSlideTouchEnd(e) {
   }
 }
 
-function onKeyDown(e) {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+function onKeyDown(e: KeyboardEvent) {
+  const target = e.target as HTMLElement
+  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
   switch (e.key) {
     case 'ArrowLeft':
       e.preventDefault()

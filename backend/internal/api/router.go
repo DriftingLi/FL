@@ -9,26 +9,29 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 
 	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
+	applogger "forklift-training/internal/logger"
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/service"
-	"forklift-training/pkg/response"
 )
 
 // NewRouter 创建并配置 Gin 引擎，注册全部路由与中间件。
-func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
+// service 实例统一由 NewDeps 构建（装配根），本函数只做路由装配。
+func NewRouter(deps *Deps) *gin.Engine {
+	cfg := deps.Cfg
 	if cfg.IsProd() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
 	r := gin.New()
 	r.Use(middleware.RequestID())
-	r.Use(middleware.Logger())
-	r.Use(middleware.Recovery())
-	r.Use(middleware.CORS(cfg.CORSOrigins))
+	r.Use(applogger.AccessLog(deps.Logger))
+	r.Use(middleware.Recovery(deps.Logger))
+	r.Use(middleware.CORS(cfg.CORSOrigins, cfg.IsProd()))
+	// 限流：基于客户端 IP 的 token bucket，防暴力枚举/撞库/爬虫
+	// 健康检查 /api/health 在中间件内放行，不受限流影响
+	r.Use(middleware.RateLimit(cfg, deps.Logger))
 
 	// 健康检查与根路由（无需鉴权）
 	// 探测 Redis 连通性，异常时返回 503 便于容器编排重启
@@ -45,6 +48,11 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "backend is running"})
 	})
+	// 存活探针（liveness）：仅表示进程存活，不依赖外部组件。
+	// 容器编排探活应使用本端点，避免 Redis 抖动导致容器被重启。
+	r.GET("/api/health/live", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
 	r.GET("/api", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "Forklift Training System API", "version": "1.0.0"})
 	})
@@ -54,44 +62,58 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	// /static/*         其他静态资源从本地 static/ 目录提供
 	registerStaticRoutes(r, cfg)
 
-	// 初始化服务
-	authSvc := service.NewAuthService(db, cfg.JWTSecretKey, cfg.JWTExpiry(),
-		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student)
-	authH := NewAuthHandler(authSvc)
+	authH := deps.AuthH
 
 	// ===== API 路由组 =====
 	api := r.Group("/api")
+	// 审计日志：记录管理员/讲师写操作（不依赖中间件顺序，见 middleware.AuditLog）
+	api.Use(middleware.AuditLog(cfg, deps.DB, deps.Logger))
 
 	// 认证蓝图 /api/auth/*
 	auth := api.Group("/auth")
 	{
 		auth.POST("/login", authH.Login)
-		auth.POST("/register", authH.Register)
 		auth.POST("/admin-login", authH.AdminLogin)
 		auth.POST("/tutor-login", authH.TutorLogin)
-		auth.POST("/logout", middleware.JWTAuth(cfg), authH.Logout)
-		auth.GET("/me", middleware.JWTAuth(cfg), authH.Me)
+		auth.POST("/logout", middleware.JWTAuth(deps.Session), authH.Logout)
+		auth.GET("/me", middleware.JWTAuth(deps.Session), authH.Me)
+		// 个人资料：昵称 / 头像
+		auth.PUT("/profile", middleware.JWTAuth(deps.Session), authH.UpdateProfile)
+		auth.POST("/avatar", middleware.JWTAuth(deps.Session), authH.UploadAvatar)
 	}
 
-	// 注册全部 14 个业务蓝图：
-	//   auth/courses/exam/student/question-bank/
-	//   level-exam/grading/ai/tutor/wrong-questions/mock-exam/admin
-	//   practice-mode（题库练习模式：自由刷题/知识点专项，对应 question_practice_record）
-	RegisterCoursesRoutes(api, cfg, db)
-	RegisterExamRoutes(api, cfg, db)
-	RegisterStudentRoutes(api, cfg, db)
-	RegisterQuestionBankRoutes(api, cfg, db)
-	RegisterPracticeModeRoutes(api, cfg, db)
-	RegisterLevelExamRoutes(api, cfg, db)
-	RegisterGradingRoutes(api, cfg, db)
-	RegisterAIRoutes(api, cfg, db)
-	RegisterAdminRoutes(api, cfg, db)
-	RegisterTutorRoutes(api, cfg, db)
-	RegisterWrongQuestionRoutes(api, cfg, db)
-	RegisterMockExamRoutes(api, cfg, db)
-	RegisterFeaturedRoutes(api, cfg, db)
+	// 邮箱验证码注册/登录
+	RegisterEmailAuthRoutes(api, deps.Session, deps.CodeSvc, deps.EmailCh)
+	// 手机号验证码注册/登录
+	RegisterPhoneAuthRoutes(api, deps.Session, deps.CodeSvc, deps.PhoneCh)
+	// 微信扫码登录（框架占位）
+	RegisterWechatAuthRoutes(api, deps.WechatAuthSvc)
+	// 个人信息页：手机号/邮箱绑定修改
+	RegisterProfileBindRoutes(api, deps.Session, deps.AuthSvc, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
 
-	_ = response.Success // 确保包引用
+	// 注册全部 12 个业务蓝图：
+	//   auth/courses/student/question-bank/
+	//   level-exam/grading/tutor/wrong-questions/mock-exam/admin
+	//   practice-mode（题库练习模式：自由刷题/知识点专项，对应 question_practice_record）
+	RegisterCoursesRoutes(api, deps.Session, deps.CourseSvc)
+	RegisterStudentRoutes(api, deps.Session, deps.StudentSvc)
+	RegisterQuestionBankRoutes(api, deps.Session, deps.QuestionBankSvc, deps.FileSvc)
+	RegisterPracticeModeRoutes(api, deps.Session, deps.PracticeModeSvc)
+	RegisterLevelExamRoutes(api, deps.Session, deps.LevelExamSvc)
+	RegisterGradingRoutes(api, deps.Session, deps.GradingSvc)
+	RegisterAdminRoutes(api, deps.Session, deps.AdminSvc, deps.AdminCourseSvc, deps.AuthSvc, deps.AIConfigSvc, deps.ContentGenSvc)
+	RegisterTutorRoutes(api, deps.Session, deps.TutorSvc, deps.FileSvc)
+	RegisterWrongQuestionRoutes(api, deps.Session, deps.WrongQuestionSvc)
+	RegisterMockExamRoutes(api, deps.Session, deps.MockExamSvc)
+	RegisterFeaturedRoutes(api, deps.Session, deps.FeaturedSvc, deps.FileSvc)
+	RegisterAIAssistantRoutes(api, deps.Session, deps.AIAssistantSvc)
+	RegisterForumRoutes(api, deps.Session, deps.ForumSvc, deps.ForumImageSvc)
+	RegisterProfileReviewRoutes(api, deps.Session, deps.ReviewSvc)
+	RegisterNotificationRoutes(api, deps.Session, deps.NotificationSvc)
+	RegisterAuditRoutes(api, deps.Session, deps.DB)
+	RegisterExportRoutes(api, deps.Session, deps.ExportSvc)
+	RegisterTrainingCatalogRoutes(api, deps.Session, deps.TrainingCatalogSvc)
+
 	return r
 }
 
@@ -106,7 +128,8 @@ func registerStaticRoutes(r *gin.Engine, cfg *config.Config) {
 	// 预计算 static 目录的绝对路径，避免依赖进程工作目录
 	staticDir := resolveStaticDir()
 
-	r.GET("/static/*filepath", func(c *gin.Context) {
+	// 静态文件 handler：同时支持 GET 和 HEAD（前端 DocumentViewer/ImageViewer 用 HEAD 检查文件存在性）
+	staticHandler := func(c *gin.Context) {
 		reqPath := c.Param("filepath") // 含前导 /
 
 		// 防止路径穿越攻击
@@ -132,7 +155,9 @@ func registerStaticRoutes(r *gin.Engine, cfg *config.Config) {
 			return
 		}
 		c.File(fullPath)
-	})
+	}
+	r.GET("/static/*filepath", staticHandler)
+	r.HEAD("/static/*filepath", staticHandler)
 }
 
 // resolveStaticDir 解析静态资源目录（返回绝对路径）。

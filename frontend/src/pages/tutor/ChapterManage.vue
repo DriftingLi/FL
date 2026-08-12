@@ -49,7 +49,6 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, ArrowRight, Timer, Document, EditPen } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
 import { tutorApi } from '@/api/tutor'
 
 const route = useRoute()
@@ -88,15 +87,13 @@ function getFileCount(chapter: any): number {
 async function loadChapters() {
   loading.value = true
   try {
-    const courseId = route.params.id
+    const courseId = Number(route.params.id)
     const res = await tutorApi.getCourseChapters(courseId)
-    if (res.code === 200) {
-      courseInfo.value = res.data.course
-      chapters.value = res.data.chapters || []
-    }
+    courseInfo.value = res.course
+    chapters.value = res.chapters || []
   } catch (e) {
     console.error('Failed to load chapters:', e)
-    ElMessage.error('加载章节失败')
+    /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
   }

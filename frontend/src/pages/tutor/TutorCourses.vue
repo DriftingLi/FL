@@ -2,7 +2,6 @@
   <div class="tutor-courses-page">
     <div class="page-header">
       <h2>我的课程</h2>
-      <p class="page-desc">管理您负责的课程章节内容</p>
     </div>
 
     <div v-loading="loading" class="course-grid">
@@ -21,9 +20,14 @@
           </div>
         </div>
         <div class="card-body">
-          <el-tag :type="getCategoryTagType(course.category)" size="small">
-            {{ getCategoryName(course.category) }}
-          </el-tag>
+          <div class="card-tags">
+            <el-tag v-if="levelNameOf(course.level_id)" :type="levelTagType(levelNameOf(course.level_id))" size="small">
+              {{ levelNameOf(course.level_id) }}
+            </el-tag>
+            <el-tag v-if="specialtyNameOf(course.specialty_id)" type="primary" effect="plain" size="small">
+              {{ specialtyNameOf(course.specialty_id) }}
+            </el-tag>
+          </div>
           <h3 class="card-title">{{ course.name }}</h3>
           <p class="card-desc">{{ course.description || '暂无简介' }}</p>
           <div class="card-footer">
@@ -52,34 +56,42 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRight } from '@element-plus/icons-vue'
-import { tutorApi } from '@/api/tutor'
+import { tutorApi, type TutorCourse } from '@/api/tutor'
+import { trainingApi, type CatalogDirectionNode, type CatalogLevel } from '@/api/training'
+import { levelTagType } from '@/constants/level'
 
 const router = useRouter()
 const loading = ref(false)
-const courses = ref([])
+const courses = ref<TutorCourse[]>([])
 const currentPage = ref(1)
 const pageSize = ref(12)
 const total = ref(0)
 
-const categoryMap = {
-  'CATEGORY_01': '基础理论',
-  'CATEGORY_02': '安全规范',
-  'CATEGORY_03': '实操技能',
-  'CATEGORY_04': '进阶提升'
+const directions = ref<CatalogDirectionNode[]>([])
+const levels = ref<CatalogLevel[]>([])
+
+function specialtyNameOf(id?: number | null) {
+  if (!id) return ''
+  return directions.value.find(d => d.specialty_id === id)?.name || ''
 }
 
-function getCategoryName(category) {
-  return categoryMap[category] || '其他'
+function levelNameOf(id?: number | null) {
+  if (!id) return ''
+  return levels.value.find(l => l.level_id === id)?.name || ''
 }
 
-function getCategoryTagType(category) {
-  const types = {
-    'CATEGORY_01': '',
-    'CATEGORY_02': 'success',
-    'CATEGORY_03': 'warning',
-    'CATEGORY_04': 'danger'
+async function loadCatalog() {
+  try {
+    // 拦截器已解包信封
+    const [treeData, levelsData] = await Promise.all([
+      trainingApi.getCatalogTree(),
+      trainingApi.getLevels()
+    ])
+    directions.value = treeData.specialties || []
+    levels.value = levelsData.levels || []
+  } catch (e) {
+    // 静默失败：方向/等级标签降级为空
   }
-  return types[category] || 'info'
 }
 
 async function loadCourses() {
@@ -89,10 +101,8 @@ async function loadCourses() {
       page: currentPage.value,
       page_size: pageSize.value
     })
-    if (res.code === 200) {
-      courses.value = res.data.courses
-      total.value = res.data.total
-    }
+    courses.value = res.courses
+    total.value = res.total
   } catch (e) {
     console.error('Failed to load courses:', e)
   } finally {
@@ -100,11 +110,12 @@ async function loadCourses() {
   }
 }
 
-function goToChapters(courseId) {
+function goToChapters(courseId: number) {
   router.push(`/training/tutor/course/${courseId}/chapters`)
 }
 
 onMounted(() => {
+  loadCatalog()
   loadCourses()
 })
 </script>
@@ -123,11 +134,6 @@ onMounted(() => {
   font-size: 22px;
   color: #303133;
   margin-bottom: 8px;
-}
-
-.page-desc {
-  color: #909399;
-  font-size: 14px;
 }
 
 .course-grid {
@@ -178,6 +184,12 @@ onMounted(() => {
 
 .card-body {
   padding: 16px;
+}
+
+.card-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .card-title {

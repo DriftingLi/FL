@@ -1,21 +1,38 @@
 <script setup lang="ts">
 // 评估结果页（设计稿风格：白底 + Electric Blue 残值 + 维度雷达 + 建议）
+// 数据源：store 详情（提交后由 store.submitEvaluation 写入）；
+// 刷新/直达恢复：路由带 id 时兜底 fetchDetail
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useEvaluationStore } from '@/stores/valuationEvaluation'
 import { Edit, Download } from '@element-plus/icons-vue'
 import PageHeader from '@/components/valuation/PageHeader.vue'
 import ResultCard from '@/components/valuation/ResultCard.vue'
 import DimensionRadar from '@/components/valuation/DimensionRadar.vue'
 import FutureValueChart from '@/components/valuation/FutureValueChart.vue'
+import ResultSuggestions from '@/components/valuation/ResultSuggestions.vue'
 import { downloadEvaluationReportBlob } from '@/api/valuation/evaluation'
+import { downloadReport } from '@/composables/useReportDownload'
 
 const router = useRouter()
+const route = useRoute()
 const store = useEvaluationStore()
 
-// 守卫：没有结果时跳回首页
-if (!store.currentResult) {
+// 路由 id：刷新/直达时用于兜底恢复
+const routeId = computed(() => Number(route.query.id) || 0)
+
+// 无结果且无路由 id → 无恢复来源，跳回首页
+if (!store.currentResult && !routeId.value) {
   router.replace('/valuation')
+}
+// 有路由 id 但 store 无结果（刷新/直达）→ 兜底拉详情（模板 v-if 兜底渲染）
+// 匿名用户刷新：详情接口需登录 → fetchDetail 失败 → 跳回表单页（评估结果不可恢复，需重新评估）
+if (!store.currentResult && routeId.value) {
+  void store.fetchDetail(routeId.value).then(ok => {
+    if (!ok && !store.currentResult) {
+      router.replace('/valuation')
+    }
+  })
 }
 
 const r = computed(() => store.currentResult)
@@ -27,36 +44,18 @@ function goEdit() {
 
 async function downloadPdf() {
   if (!id.value) return
-  const fileName = `evaluation_report_${id.value}.pdf`
-  try {
-    const blob = await downloadEvaluationReportBlob(id.value)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName
-    a.style.display = 'none'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(url), 1500)
-  } catch {
-    // 拦截器已 ElMessage.error
-  }
+  const evalId: number = id.value
+  await downloadReport(
+    () => downloadEvaluationReportBlob(evalId),
+    `evaluation_report_${evalId}.pdf`
+  )
 }
 
-// 维度评分 → Record<string, number>（兼容 DimensionRadar 旧 props 签名）
-const dimensionScoresMap = computed(() => {
-  const arr = r.value?.dimension_scores ?? []
-  const map: Record<string, number> = {}
-  for (const d of arr) map[d.label] = d.value
-  return map
-})
-
-// 使用年限 = 评估年份 - 出厂年份（从草稿表单获取，用于未来估价推算）
+// 使用年限 = 详情返回的成交年份 - 出厂年份（API 数据驱动，不再依赖内存草稿）
 const usageYears = computed(() => {
-  const draft = store.draftForm
-  if (draft?.factory_year && draft?.sale_year) {
-    return draft.sale_year - draft.factory_year
+  const d = r.value
+  if (d?.sale_year && d?.factory_year) {
+    return d.sale_year - d.factory_year
   }
   return 0
 })
@@ -87,7 +86,7 @@ const usageYears = computed(() => {
       <el-col :xs="24" :lg="10">
         <section class="card-surface radar-block">
           <h2 class="section-title">维度评分</h2>
-          <DimensionRadar :scores="dimensionScoresMap" height="320px" />
+          <DimensionRadar :scores="r.dimension_scores || []" height="320px" />
         </section>
       </el-col>
     </el-row>
@@ -101,7 +100,8 @@ const usageYears = computed(() => {
         :k-time="r.k_time"
         :k-hours="r.k_hours"
         :k-brand="r.k_brand"
-        :sale-year="store.draftForm?.sale_year || 0"
+        :lambda="r.lambda_electric"
+        :sale-year="r.sale_year || 0"
         height="320px"
       />
     </section>
@@ -109,13 +109,7 @@ const usageYears = computed(() => {
     <!-- 评估建议 -->
     <section class="card-surface section-block">
       <h2 class="section-title">评估建议</h2>
-      <ul v-if="r.suggestions && r.suggestions.length" class="suggestion-list">
-        <li v-for="(s, idx) in r.suggestions" :key="idx">
-          <span class="suggestion-num">{{ String(idx + 1).padStart(2, '0') }}</span>
-          <span class="suggestion-text">{{ s }}</span>
-        </li>
-      </ul>
-      <el-empty v-else description="暂无建议" />
+      <ResultSuggestions :items="r.suggestions || []" />
     </section>
   </div>
   <el-empty v-else description="暂无评估结果" />
@@ -141,42 +135,9 @@ const usageYears = computed(() => {
   margin: 0 0 var(--sp-5);
   color: var(--color-text);
 }
-.suggestion-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--sp-3) var(--sp-6);
-}
-.suggestion-list li {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  font-size: var(--fs-sm);
-  line-height: 1.75;
-  color: var(--color-text-secondary);
-}
-.suggestion-num {
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-medium);
-  color: var(--color-accent);
-  background: rgba(62, 106, 225, 0.08);
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-.suggestion-text {
-  flex: 1;
-}
 @media (max-width: 768px) {
   .result-view {
     padding-bottom: var(--sp-10);
-  }
-  .suggestion-list {
-    grid-template-columns: 1fr;
   }
   .radar-block,
   .section-block {

@@ -2,7 +2,6 @@
   <div class="content-generate-page">
     <div class="page-header">
       <h2>课程内容预生成</h2>
-      <p class="subtitle">使用AI自动生成课程章节内容</p>
     </div>
 
     <div class="generate-card">
@@ -42,7 +41,7 @@
             </el-checkbox>
           </el-checkbox-group>
           <div class="select-actions">
-            <el-button text type="primary" size="small" @click="selectAll">全选</el-button>
+            <el-button type="primary" size="small" class="select-all-btn" @click="selectAll">全选</el-button>
             <el-button text size="small" @click="selectNone">取消全选</el-button>
           </div>
         </el-form-item>
@@ -51,13 +50,17 @@
           <el-button
             type="primary"
             size="large"
-            :loading="generating"
-            :disabled="!selectedCourseId || selectedChapterIds.length === 0"
+            :loading="generating || isTaskRunning"
+            :disabled="!selectedCourseId || selectedChapterIds.length === 0 || isTaskRunning"
             @click="handleGenerate"
           >
             <el-icon><MagicStick /></el-icon>
-            开始生成
+            {{ isTaskRunning ? '生成中...' : '开始生成' }}
           </el-button>
+          <span v-if="isTaskRunning" class="generating-tip">
+            <el-icon class="is-loading"><Loading /></el-icon>
+            正在生成，请勿重复提交
+          </span>
         </el-form-item>
       </el-form>
     </div>
@@ -72,17 +75,20 @@
         style="margin-bottom: 16px"
       />
       <div class="progress-detail">
-        <span v-if="generateTask.total > 0">
-          {{ generateTask.completed || 0 }} / {{ generateTask.total }} 个章节
+        <span v-if="(generateTask.total ?? 0) > 0" class="progress-count">
+          已完成 {{ generateTask.completed || 0 }} / {{ generateTask.total }} 个章节
         </span>
         <span v-if="generateTask.status === 'processing'" class="progress-status processing">
-          <el-icon class="is-loading"><Loading /></el-icon> 生成中...
+          <el-icon class="is-loading"><Loading /></el-icon> 正在调用 AI 生成内容，预计每个章节约 20-40 秒...
         </span>
         <span v-else-if="generateTask.status === 'completed'" class="progress-status completed">
           生成完成
         </span>
         <span v-else-if="generateTask.status === 'failed'" class="progress-status failed">
           生成失败
+        </span>
+        <span v-else-if="generateTask.status === 'pending'" class="progress-status pending">
+          <el-icon class="is-loading"><Loading /></el-icon> 任务排队中...
         </span>
       </div>
 
@@ -124,17 +130,6 @@
         <el-button @click="previewVisible = false">关闭</el-button>
       </template>
     </el-dialog>
-
-    <div class="tips-card">
-      <h4>使用说明</h4>
-      <ul>
-        <li>AI将根据课程名称和章节标题自动生成培训内容</li>
-        <li>生成的内容会直接写入对应章节，覆盖原有内容</li>
-        <li>已标记"已有内容"的章节如需更新，请勾选后重新生成</li>
-        <li>生成过程可能需要几分钟，请耐心等待</li>
-        <li>如AI服务未配置，生成将返回错误提示</li>
-      </ul>
-    </div>
   </div>
 </template>
 
@@ -146,13 +141,38 @@ import { marked } from 'marked'
 import { adminApi } from '@/api/admin'
 import '@/assets/styles/markdown.css'
 
-const courses = ref([])
-const chapters = ref([])
-const selectedCourseId = ref(null)
-const selectedChapterIds = ref([])
+interface GenerateCourse {
+  course_id: number
+  name: string
+}
+
+interface GenerateChapter {
+  chapter_id: number
+  title: string
+  content?: string
+}
+
+interface GenerateTask {
+  task_id: string
+  status: string
+  total?: number
+  completed?: number
+  results?: {
+    chapter_id: number
+    title: string
+    status: string
+    content?: string
+    error?: string
+  }[]
+}
+
+const courses = ref<GenerateCourse[]>([])
+const chapters = ref<GenerateChapter[]>([])
+const selectedCourseId = ref<number | null>(null)
+const selectedChapterIds = ref<number[]>([])
 const generating = ref(false)
-const generateTask = ref(null)
-let pollTimer = null
+const generateTask = ref<GenerateTask | null>(null)
+let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const previewVisible = ref(false)
 const previewTitle = ref('')
@@ -165,35 +185,40 @@ const renderedPreview = computed(() => {
 
 const progressPercent = computed(() => {
   if (!generateTask.value) return 0
+  const { total = 0, completed = 0 } = generateTask.value
   if (generateTask.value.status === 'completed') return 100
-  if (generateTask.value.status === 'failed') return generateTask.value.total > 0
-    ? Math.round((generateTask.value.completed / generateTask.value.total) * 100)
-    : 0
-  if (!generateTask.value.total || generateTask.value.total === 0) return 0
-  return Math.round((generateTask.value.completed / generateTask.value.total) * 100)
+  if (total === 0) return 0
+  return Math.round((completed / total) * 100)
+})
+
+// 任务运行中（pending/processing）：用于锁住"开始生成"按钮，防止重复提交
+const isTaskRunning = computed(() => {
+  if (!generateTask.value) return false
+  const s = generateTask.value.status
+  return s === 'pending' || s === 'processing'
 })
 
 async function loadCourses() {
   try {
-    const res = await adminApi.getCourses({ page: 1, page_size: 100 })
-    if (res.code === 200) {
-      courses.value = res.data.courses
+    const data = await adminApi.getCourses({ page: 1, page_size: 100 })
+    if (data) {
+      courses.value = data.courses
     }
   } catch (error) {
     console.error('加载课程失败:', error)
   }
 }
 
-async function handleCourseChange(courseId) {
+async function handleCourseChange(courseId: number) {
   selectedChapterIds.value = []
   chapters.value = []
 
   if (!courseId) return
 
   try {
-    const res = await adminApi.getCourseDetail(courseId)
-    if (res.code === 200) {
-      chapters.value = res.data.chapters || []
+    const detail = await adminApi.getCourseDetail(courseId)
+    if (detail) {
+      chapters.value = detail.chapters || []
     }
   } catch (error) {
     console.error('加载章节失败:', error)
@@ -218,50 +243,56 @@ async function handleGenerate() {
   generateTask.value = null
 
   try {
-    const res = await adminApi.generateContent({
+    const task = await adminApi.generateContent({
       course_id: selectedCourseId.value,
       chapter_ids: selectedChapterIds.value
     })
 
-    if (res.code === 200) {
-      generateTask.value = res.data
-      startPolling(res.data.task_id)
+    if (task) {
+      generateTask.value = task
+      startPolling(task.task_id)
     }
   } catch (error) {
     console.error('内容生成失败:', error)
-    ElMessage.error('内容生成失败，请检查AI服务配置')
+    /* 错误已由拦截器提示 */
   } finally {
     generating.value = false
   }
 }
 
-function startPolling(taskId) {
+function startPolling(taskId: string) {
   if (pollTimer) clearInterval(pollTimer)
 
   pollTimer = setInterval(async () => {
     try {
-      const res = await adminApi.getGenerateStatus(taskId)
-      if (res.code === 200) {
-        generateTask.value = res.data
-        if (res.data.status === 'completed' || res.data.status === 'failed') {
-          clearInterval(pollTimer)
-          pollTimer = null
-          const successCount = (res.data.results || []).filter(r => r.status === 'success').length
-          const total = res.data.total || res.data.results?.length || 0
-          if (res.data.status === 'completed') {
+      const task = await adminApi.getGenerateStatus(taskId)
+      if (task) {
+        generateTask.value = task
+        if (task.status === 'completed' || task.status === 'failed') {
+          if (pollTimer) {
+            clearInterval(pollTimer)
+            pollTimer = null
+          }
+          const successCount = (task.results || []).filter((r: { status: string }) => r.status === 'success').length
+          const total = task.total || task.results?.length || 0
+          if (task.status === 'completed') {
             ElMessage.success(`生成完成：${successCount}/${total} 个章节成功`)
           }
-          handleCourseChange(selectedCourseId.value)
+          if (selectedCourseId.value) {
+            handleCourseChange(selectedCourseId.value)
+          }
         }
       }
     } catch (error) {
-      clearInterval(pollTimer)
-      pollTimer = null
+      if (pollTimer) {
+        clearInterval(pollTimer)
+        pollTimer = null
+      }
     }
   }, 3000)
 }
 
-function previewChapter(item) {
+function previewChapter(item: { title: string; content?: string }) {
   previewTitle.value = item.title
   previewContent.value = item.content || ''
   previewVisible.value = true
@@ -295,14 +326,8 @@ loadCourses()
   margin-bottom: 8px;
 }
 
-.subtitle {
-  color: #909399;
-  font-size: 14px;
-}
-
 .generate-card,
-.progress-card,
-.tips-card {
+.progress-card {
   background: #fff;
   border-radius: 12px;
   padding: 24px;
@@ -312,6 +337,29 @@ loadCourses()
 
 .select-actions {
   margin-top: 8px;
+}
+
+/* 全选按钮：白色字体 + primary 背景 */
+.select-all-btn {
+  color: #fff !important;
+}
+
+.generating-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 12px;
+  font-size: 13px;
+  color: #409eff;
+}
+
+.progress-count {
+  font-weight: 500;
+  color: #303133;
+}
+
+.progress-status.pending {
+  color: #909399;
 }
 
 .progress-card h3 {
@@ -404,27 +452,13 @@ loadCourses()
   border-radius: 8px;
 }
 
-.tips-card h4 {
-  font-size: 15px;
-  color: #303133;
-  margin-bottom: 10px;
-}
-
-.tips-card ul {
-  padding-left: 20px;
-  color: #909399;
-  font-size: 13px;
-  line-height: 2;
-}
-
 @media screen and (max-width: 768px) {
   .content-generate-page {
     padding: 12px;
   }
 
   .generate-card,
-  .progress-card,
-  .tips-card {
+  .progress-card {
     padding: 16px;
   }
 

@@ -62,7 +62,6 @@
           <div class="cover-actions" v-if="form.cover_image">
             <el-button link type="danger" @click="form.cover_image = ''">移除封面</el-button>
           </div>
-          <div class="form-hint">建议尺寸 16:9，JPG/PNG，不超过 5MB</div>
         </el-form-item>
 
         <el-form-item label="正文" prop="content">
@@ -77,7 +76,6 @@
 
         <el-form-item label="排序">
           <el-input-number v-model="form.sort_order" :min="0" :max="9999" />
-          <span class="form-hint">数字越小越靠前（默认 0）</span>
         </el-form-item>
 
         <el-form-item label="状态">
@@ -147,21 +145,15 @@ async function loadDetail() {
   if (!isEdit.value) return
   loading.value = true
   try {
-    const res = await adminFeaturedApi.getDetail(editId.value)
-    if (res.code === 200 && res.data) {
-      const d = res.data
-      form.title = d.title || ''
-      form.category = d.category || ''
-      form.source = d.source || ''
-      form.summary = d.summary || ''
-      form.cover_image = d.cover_image || ''
-      form.content = d.content || ''
-      form.sort_order = d.sort_order || 0
-      form.status = d.status ?? 0
-    } else {
-      ElMessage.error('内容不存在或加载失败')
-      router.push('/admin/featured-content')
-    }
+    const d = await adminFeaturedApi.getDetail(editId.value)
+    form.title = d.title || ''
+    form.category = d.category || ''
+    form.source = d.source || ''
+    form.summary = d.summary || ''
+    form.cover_image = d.cover_image || ''
+    form.content = d.content || ''
+    form.sort_order = d.sort_order || 0
+    form.status = d.status ?? 0
   } catch (e: any) {
     // 错误已由全局拦截器提示
     router.push('/admin/featured-content')
@@ -225,17 +217,13 @@ async function handleSave() {
   }
   try {
     if (isEdit.value) {
-      const res = await adminFeaturedApi.update(editId.value, payload)
-      if (res.code === 200) {
-        ElMessage.success(form.status === 1 ? '已保存并发布' : '草稿已保存')
-        router.push('/admin/featured-content')
-      }
+      await adminFeaturedApi.update(editId.value, payload)
+      ElMessage.success(form.status === 1 ? '已保存并发布' : '草稿已保存')
+      router.push('/admin/featured-content')
     } else {
-      const res = await adminFeaturedApi.create(payload)
-      if (res.code === 200 || res.code === 201) {
-        ElMessage.success(form.status === 1 ? '已创建并发布' : '草稿已创建')
-        router.push('/admin/featured-content')
-      }
+      await adminFeaturedApi.create(payload)
+      ElMessage.success(form.status === 1 ? '已创建并发布' : '草稿已创建')
+      router.push('/admin/featured-content')
     }
   } catch (e: any) {
     // 错误已由全局拦截器提示
@@ -322,12 +310,6 @@ onMounted(() => {
 
 .cover-actions {
   margin-top: 8px;
-}
-
-.form-hint {
-  margin-left: 12px;
-  color: #94a3b8;
-  font-size: 12px;
 }
 
 @media (max-width: 768px) {

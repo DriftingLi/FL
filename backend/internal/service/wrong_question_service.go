@@ -6,46 +6,38 @@ import (
 	"fmt"
 	"strings"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
 // WrongQuestionService 错题本服务。
 type WrongQuestionService struct {
 	db *gorm.DB
+
+	logger *zap.Logger
 }
 
 // NewWrongQuestionService 创建错题本服务实例。
-func NewWrongQuestionService(db *gorm.DB) *WrongQuestionService {
-	return &WrongQuestionService{db: db}
+func NewWrongQuestionService(db *gorm.DB, logger *zap.Logger) *WrongQuestionService {
+	return &WrongQuestionService{db: db, logger: logger}
 }
 
 // GetWrongQuestions 错题列表。
-func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, qType string, knowledgePointID *int, minWrongCount *int) map[string]any {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 20
-	}
-	q := s.db.Model(&model.WrongQuestion{}).Where("student_id = ? AND is_removed = ?", studentID, false)
-	if qType != "" || knowledgePointID != nil {
-		q = q.Joins("JOIN question ON question.id = wrong_question.question_id")
+func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, qType string, minWrongCount *int) map[string]any {
+	items, total, page, pageSize := paging.Query[model.WrongQuestion](s.db, page, pageSize, 20, "wrong_question.last_wrong_at DESC", func(q *gorm.DB) *gorm.DB {
+		q = q.Where("student_id = ? AND is_removed = ?", studentID, false)
 		if qType != "" {
+			q = q.Joins("JOIN question ON question.id = wrong_question.question_id")
 			q = q.Where("question.type = ?", qType)
 		}
-		if knowledgePointID != nil {
-			q = q.Where("question.knowledge_point_id = ?", *knowledgePointID)
+		if minWrongCount != nil {
+			q = q.Where("wrong_question.wrong_count >= ?", *minWrongCount)
 		}
-	}
-	if minWrongCount != nil {
-		q = q.Where("wrong_question.wrong_count >= ?", *minWrongCount)
-	}
-	var total int64
-	q.Count(&total)
-	var items []model.WrongQuestion
-	q.Order("wrong_question.last_wrong_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&items)
+		return q
+	})
 
 	result := make([]map[string]any, 0, len(items))
 	for i := range items {
@@ -53,7 +45,7 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 		item := wrongQuestionToDict(wq)
 		var question model.Question
 		if err := s.db.First(&question, wq.QuestionID).Error; err == nil {
-			item["question"] = questionToDict(&question, true)
+			item["question"] = newQuestionDTO(&question, true)
 		}
 		result = append(result, item)
 	}
@@ -76,7 +68,7 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 		return nil, errors.New("题目不存在")
 	}
 
-	isCorrect := checkAnswer(&question, userAnswer)
+	isCorrect, _ := gradeQuestion(&question, userAnswer, 0)
 	if isCorrect != nil && *isCorrect {
 		wq.IsRemoved = true
 	} else if isCorrect != nil && !*isCorrect {
@@ -115,7 +107,6 @@ func (s *WrongQuestionService) GetStats(studentID int) map[string]any {
 	s.db.Where("student_id = ? AND is_removed = ?", studentID, false).Find(&items)
 
 	byType := map[string]int{}
-	byKnowledgePoint := map[string]int{}
 	total := len(items)
 	for i := range items {
 		wq := &items[i]
@@ -124,19 +115,10 @@ func (s *WrongQuestionService) GetStats(studentID int) map[string]any {
 			continue
 		}
 		byType[question.Type]++
-		if question.KnowledgePointID != nil {
-			var kp model.KnowledgePoint
-			kpName := "未分类"
-			if err := s.db.First(&kp, *question.KnowledgePointID).Error; err == nil {
-				kpName = kp.Name
-			}
-			byKnowledgePoint[kpName]++
-		}
 	}
 	return map[string]any{
-		"total":              total,
-		"by_type":            byType,
-		"by_knowledge_point": byKnowledgePoint,
+		"total":   total,
+		"by_type": byType,
 	}
 }
 
@@ -157,16 +139,15 @@ func (s *WrongQuestionService) ExportWrongQuestions(studentID int) []map[string]
 			_ = jsonUnmarshal(question.Options, &options)
 		}
 		item := map[string]any{
-			"question_id":        question.ID,
-			"type":               question.Type,
-			"content":            question.Content,
-			"options":            options,
-			"correct_answer":     question.Answer,
-			"explanation":        question.Explanation,
-			"wrong_count":        wq.WrongCount,
-			"image_url":          question.ImageURL,
-			"knowledge_point_id": question.KnowledgePointID,
-			"last_wrong_at":      formatISO(wq.LastWrongAt),
+			"question_id":    question.ID,
+			"type":           question.Type,
+			"content":        question.Content,
+			"options":        options,
+			"correct_answer": question.Answer,
+			"explanation":    question.Explanation,
+			"wrong_count":    wq.WrongCount,
+			"image_url":      question.ImageURL,
+			"last_wrong_at":  formatISO(wq.LastWrongAt),
 		}
 		exportData = append(exportData, item)
 	}

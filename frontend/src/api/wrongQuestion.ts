@@ -1,19 +1,50 @@
-import request from './request'
+import { unwrappedRequest } from './request'
+
+export interface WrongQuestionsQuery {
+  page?: number
+  page_size?: number
+  practice_type?: string
+  type?: string
+}
+
+/** 错题项 */
+export interface WrongQuestionItem {
+  id: number
+  question_id: number
+  wrong_count?: number
+  question?: {
+    type?: string
+    content?: string
+    options?: Record<string, string>
+    [key: string]: unknown
+  }
+  [key: string]: unknown
+}
+
+/** 重做判定结果 */
+export interface RedoResult {
+  is_correct?: boolean
+  [key: string]: unknown
+}
 
 export const wrongQuestionApi = {
-  getWrongQuestions(params) {
-    return request.get('/wrong-questions', { params })
+  getWrongQuestions(params: WrongQuestionsQuery) {
+    return unwrappedRequest.get<{ items: WrongQuestionItem[]; total: number }>('/wrong-questions', { params })
   },
-  redoWrongQuestion(questionId, userAnswer) {
-    return request.post(`/wrong-questions/${questionId}/redo`, { user_answer: userAnswer })
+
+  redoWrongQuestion(questionId: number, userAnswer: string) {
+    return unwrappedRequest.post<RedoResult>(`/wrong-questions/${questionId}/redo`, { user_answer: userAnswer })
   },
-  removeWrongQuestion(questionId) {
-    return request.post(`/wrong-questions/${questionId}/remove`)
+
+  removeWrongQuestion(questionId: number) {
+    return unwrappedRequest.post<null>(`/wrong-questions/${questionId}/remove`)
   },
+
   getWrongQuestionStats() {
-    return request.get('/wrong-questions/stats')
+    return unwrappedRequest.get<Record<string, unknown>>('/wrong-questions/stats')
   },
+
   exportWrongQuestions() {
-    return request.get('/wrong-questions/export', { responseType: 'blob' })
+    return unwrappedRequest.get<Blob>('/wrong-questions/export', { responseType: 'blob' })
   }
 }

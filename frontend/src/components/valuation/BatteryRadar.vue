@@ -1,8 +1,8 @@
 // 电池特征重要性雷达图（6 维）
 // 改用 echarts.init 直接渲染（维修培训统一用法，不再依赖 vue-echarts）
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import * as echarts from 'echarts'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useECharts } from '@/composables/useECharts'
 import { BATTERY_FEATURE_GROUPS, type FeatureImportance } from '@/types/valuation/battery'
 
 interface Props {
@@ -12,7 +12,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), { height: '300px' })
 
 const chartRef = ref<HTMLDivElement | null>(null)
-let chart: echarts.ECharts | null = null
+const { init } = useECharts(chartRef)
 
 // 按特征组聚合：组内 Top-1 作为该组得分
 const grouped = computed(() => {
@@ -57,19 +57,11 @@ const option = computed(() => ({
 
 function renderChart() {
   if (!chartRef.value) return
-  if (!chart) {
-    chart = echarts.init(chartRef.value)
-  }
-  chart.setOption(option.value, true)
-}
-
-function handleResize() {
-  chart?.resize()
+  init(option.value, true)
 }
 
 onMounted(() => {
   renderChart()
-  window.addEventListener('resize', handleResize)
 })
 
 watch(
@@ -77,12 +69,6 @@ watch(
   () => renderChart(),
   { deep: true }
 )
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', handleResize)
-  chart?.dispose()
-  chart = null
-})
 </script>
 
 <template>

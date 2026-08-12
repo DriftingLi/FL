@@ -18,12 +18,21 @@
           <el-tag :type="statusType[row.status]" size="small">{{ statusMap[row.status] }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="250">
+      <el-table-column label="操作" width="90" fixed="right" align="center">
         <template #default="{ row }">
-          <el-button v-if="row.status === 'upcoming'" size="small" @click="editSession(row)">编辑</el-button>
-          <el-button v-if="row.status === 'upcoming'" size="small" type="success" @click="changeStatus(row, 'ongoing')">开始</el-button>
-          <el-button v-if="row.status === 'ongoing'" size="small" type="warning" @click="changeStatus(row, 'finished')">结束</el-button>
-          <el-button v-if="row.status === 'upcoming'" size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+          <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
+            <el-button type="primary" link size="small">
+              操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item v-if="row.status === 'upcoming'" command="edit">编辑</el-dropdown-item>
+                <el-dropdown-item v-if="row.status === 'upcoming'" command="start">开始</el-dropdown-item>
+                <el-dropdown-item v-if="row.status === 'ongoing'" command="finish">结束</el-dropdown-item>
+                <el-dropdown-item v-if="row.status === 'upcoming'" command="delete" divided>删除</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </template>
       </el-table-column>
     </el-table>
@@ -59,15 +68,17 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { levelExamApi } from '@/api/levelExam'
+import { ArrowDown } from '@element-plus/icons-vue'
+import { levelExamApi, type LevelExamSession } from '@/api/levelExam'
+import { formatDateTime } from '@/utils/format'
 
-const statusMap = { upcoming: '未开始', ongoing: '进行中', finished: '已结束' }
-const statusType = { upcoming: 'info', ongoing: 'success', finished: '' }
+const statusMap: Record<string, string> = { upcoming: '未开始', ongoing: '进行中', finished: '已结束' }
+const statusType: Record<string, string> = { upcoming: 'info', ongoing: 'success', finished: '' }
 
 const loading = ref(false)
-const sessions = ref([])
+const sessions = ref<LevelExamSession[]>([])
 const dialogVisible = ref(false)
-const editingId = ref(null)
+const editingId = ref<number | null>(null)
 const submitting = ref(false)
 const sessionForm = ref({
   name: '', start_time: '', end_time: ''
@@ -79,7 +90,7 @@ async function loadData() {
   loading.value = true
   try {
     const res = await levelExamApi.getSessions({ page: 1, page_size: 50 })
-    sessions.value = res.data?.sessions || []
+    sessions.value = res?.sessions || []
   } catch (e) {} finally { loading.value = false }
 }
 
@@ -89,24 +100,16 @@ function showCreateDialog() {
   dialogVisible.value = true
 }
 
-function editSession(row) {
+function editSession(row: { id: number; name: string; start_time: string; end_time: string }) {
   editingId.value = row.id
   sessionForm.value = { name: row.name, start_time: row.start_time, end_time: row.end_time }
   dialogVisible.value = true
 }
 
-function toLocalISOString(date) {
+function toLocalISOString(date: string | Date) {
   const d = new Date(date)
-  const pad = (n) => String(n).padStart(2, '0')
+  const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-}
-
-function formatDateTime(dtStr) {
-  if (!dtStr) return ''
-  const d = new Date(dtStr)
-  if (isNaN(d.getTime())) return dtStr
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 async function submitSession() {
@@ -115,7 +118,8 @@ async function submitSession() {
     const data = {
       name: sessionForm.value.name,
       start_time: sessionForm.value.start_time ? toLocalISOString(sessionForm.value.start_time) : '',
-      end_time: sessionForm.value.end_time ? toLocalISOString(sessionForm.value.end_time) : ''
+      end_time: sessionForm.value.end_time ? toLocalISOString(sessionForm.value.end_time) : '',
+      duration: 90
     }
     if (editingId.value) {
       await levelExamApi.updateSession(editingId.value, data)
@@ -126,12 +130,12 @@ async function submitSession() {
     }
     dialogVisible.value = false
     await loadData()
-  } catch (e) {
-    ElMessage.error(e.message || '操作失败')
+  } catch {
+    /* 错误已由拦截器提示 */
   } finally { submitting.value = false }
 }
 
-async function changeStatus(row, status) {
+async function changeStatus(row: { id: number }, status: string) {
   try {
     await ElMessageBox.confirm(`确定将考试状态改为"${statusMap[status]}"？`, '提示', { type: 'warning' })
     await levelExamApi.updateSessionStatus(row.id, status)
@@ -140,13 +144,31 @@ async function changeStatus(row, status) {
   } catch (e) {}
 }
 
-async function handleDelete(row) {
+async function handleDelete(row: { id: number }) {
   try {
     await ElMessageBox.confirm('确定删除此考试场次？', '提示', { type: 'warning' })
     await levelExamApi.deleteSession(row.id)
     ElMessage.success('删除成功')
     await loadData()
   } catch (e) {}
+}
+
+// 操作下拉菜单统一入口
+function handleAction(cmd: string, row: any) {
+  switch (cmd) {
+    case 'edit':
+      editSession(row)
+      break
+    case 'start':
+      changeStatus(row, 'ongoing')
+      break
+    case 'finish':
+      changeStatus(row, 'finished')
+      break
+    case 'delete':
+      handleDelete(row)
+      break
+  }
 }
 </script>
 

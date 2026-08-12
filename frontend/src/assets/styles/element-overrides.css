@@ -202,11 +202,22 @@
 .el-button--primary {
   background: var(--gradient-brand);
   border: none;
+  color: #ffffff;
+  --el-button-text-color: #ffffff;
+  --el-button-hover-text-color: #ffffff;
+  --el-button-active-text-color: #ffffff;
 }
 
 .el-button--primary:hover,
 .el-button--primary:focus {
   opacity: 0.92;
+  color: #ffffff;
+}
+
+.el-button--primary.is-disabled,
+.el-button--primary.is-disabled:hover {
+  opacity: 0.5;
+  color: #ffffff;
 }
 
 .el-button--large {
