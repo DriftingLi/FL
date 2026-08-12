@@ -55,7 +55,18 @@ func RegisterTutorRoutes(rg *gin.RouterGroup, sess *security.Session, svc *servi
 func (h *TutorHandler) ListCourses(c *gin.Context) {
 	page := atoiDefault(c.Query("page"), 1)
 	pageSize := atoiDefault(c.Query("page_size"), 10)
-	response.Success(c, h.svc.GetCourses(nil, page, pageSize))
+	var specialtyID, levelID *int
+	if s := c.Query("specialty_id"); s != "" {
+		if id, err := strconv.Atoi(s); err == nil && id > 0 {
+			specialtyID = &id
+		}
+	}
+	if s := c.Query("level_id"); s != "" {
+		if id, err := strconv.Atoi(s); err == nil && id > 0 {
+			levelID = &id
+		}
+	}
+	response.Success(c, h.svc.GetCourses(nil, page, pageSize, specialtyID, levelID))
 }
 
 // GetGradingStats 导师仪表盘阅卷统计 GET /api/tutor/grading-stats（按天分组）

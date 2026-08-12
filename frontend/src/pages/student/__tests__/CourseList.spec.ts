@@ -88,17 +88,18 @@ beforeEach(() => {
 })
 
 describe('CourseList 左右分栏课程中心', () => {
-  it('渲染方向导航（全部+各方向带课程数）与全局等级筛选', async () => {
+  it('渲染方向/等级双卡片导航（全部+各方向带课程数）', async () => {
     const wrapper = mountPage()
     await flushPromises()
 
     const navNames = wrapper.findAll('.cc-nav-name').map(n => n.text())
     expect(navNames).toContain('全部课程')
     expect(navNames).toContain('维修')
-    expect(wrapper.find('.cc-nav-count').text()).toBe('2')
-
-    const pills = wrapper.findAll('.cc-pill').map(p => p.text())
-    expect(pills).toEqual(['全部等级', '入门', '进阶'])
+    expect(navNames).toContain('全部等级')
+    expect(navNames).toContain('入门')
+    expect(navNames).toContain('进阶')
+    // 侧栏第一张卡片（专业方向）首个导航项计数 = 树内课程总数
+    expect(wrapper.find('.cc-filter-card .cc-nav-count').text()).toBe('2')
   })
 
   it('课程卡片渲染章节数/学时/证书标签', async () => {
@@ -112,11 +113,12 @@ describe('CourseList 左右分栏课程中心', () => {
     expect(cards[0].text()).toContain('叉车维修技能培训合格证书')
   })
 
-  it('点击等级 pill 后按等级重新请求列表', async () => {
+  it('点击等级导航项后按等级重新请求列表', async () => {
     const wrapper = mountPage()
     await flushPromises()
 
-    await wrapper.findAll('.cc-pill')[1].trigger('click')
+    // 第二张侧栏卡片（课程等级）中第 2 项 = 「入门」
+    await wrapper.findAll('.cc-filter-card')[1].findAll('.cc-nav-item')[1].trigger('click')
     await flushPromises()
 
     expect(courseApi.getCourses).toHaveBeenLastCalledWith({
