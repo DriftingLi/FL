@@ -127,4 +127,21 @@ describe('CourseList 左右分栏课程中心', () => {
       level_id: 1
     })
   })
+
+  it('选中等级后方向卡片计数反向联动（只数该等级课程）', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+
+    // 树内：维修方向 入门 1 门 + 进阶 1 门 → 选中「入门」后各计数收敛为 1
+    await wrapper.findAll('.cc-filter-card')[1].findAll('.cc-nav-item')[1].trigger('click')
+    await flushPromises()
+
+    const navNames = wrapper.findAll('.cc-nav-name').map(n => n.text())
+    expect(navNames[0]).toBe('全部课程')
+    // 「全部课程」计数随等级筛选变为 1
+    const counts = wrapper.findAll('.cc-nav-count').map(n => n.text())
+    expect(counts[0]).toBe('1')
+    // 「维修」方向计数随等级筛选变为 1
+    expect(counts[1]).toBe('1')
+  })
 })
