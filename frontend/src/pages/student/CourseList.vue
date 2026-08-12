@@ -206,33 +206,46 @@ const levels = ref<CatalogLevel[]>([])
 const specialtyId = ref<number | null>(null)
 const levelId = ref<number | null>(null)
 
-const totalAll = computed(() =>
-  directions.value.reduce((sum, d) => sum + directionCount(d), 0)
-)
+// ===== 计数（双向联动）：等级筛选影响方向卡计数，方向筛选影响等级卡计数 =====
 
-function directionCount(d: CatalogDirectionNode): number {
-  return (d.levels || []).reduce((sum, lv) => sum + (lv.courses?.length || 0), 0)
+// 当前方向筛选范围的方向列表
+function scopedDirections(): CatalogDirectionNode[] {
+  return specialtyId.value === null
+    ? directions.value
+    : directions.value.filter(d => d.specialty_id === specialtyId.value)
 }
 
-// 当前方向筛选范围内的课程总数（等级卡片计数随方向筛选联动，与管理端口径一致）
-const scopedTotal = computed(() => {
-  const dirs = specialtyId.value === null
-    ? directions.value
-    : directions.value.filter(d => d.specialty_id === specialtyId.value)
-  return dirs.reduce((sum, d) => sum + directionCount(d), 0)
-})
-
-function countOfLevel(levelIdValue: number): number {
-  const dirs = specialtyId.value === null
-    ? directions.value
-    : directions.value.filter(d => d.specialty_id === specialtyId.value)
+// 范围内课程数：方向范围 + 可选等级过滤
+function countCourses(levelFilter: number | null): number {
   let n = 0
-  for (const d of dirs) {
+  for (const d of scopedDirections()) {
     for (const lv of d.levels || []) {
-      if (lv.level_id === levelIdValue) n += lv.courses?.length || 0
+      if (levelFilter !== null && lv.level_id !== levelFilter) continue
+      n += lv.courses?.length || 0
     }
   }
   return n
+}
+
+// 「全部课程」计数：随等级筛选变化
+const totalAll = computed(() => countCourses(levelId.value))
+
+// 各方向计数：随等级筛选变化（只数该方向内的课程）
+function directionCount(d: CatalogDirectionNode): number {
+  let n = 0
+  for (const lv of d.levels || []) {
+    if (levelId.value !== null && lv.level_id !== levelId.value) continue
+    n += lv.courses?.length || 0
+  }
+  return n
+}
+
+// 「全部等级」计数：随方向筛选变化
+const scopedTotal = computed(() => countCourses(null))
+
+// 各等级计数：随方向筛选变化
+function countOfLevel(levelIdValue: number): number {
+  return countCourses(levelIdValue)
 }
 
 function levelNameOf(levelIdValue?: number | null) {
