@@ -10,7 +10,9 @@ import PageHeader from '@/components/valuation/PageHeader.vue'
 import ResultCard from '@/components/valuation/ResultCard.vue'
 import DimensionRadar from '@/components/valuation/DimensionRadar.vue'
 import FutureValueChart from '@/components/valuation/FutureValueChart.vue'
+import ResultSuggestions from '@/components/valuation/ResultSuggestions.vue'
 import { downloadEvaluationReportBlob } from '@/api/valuation/evaluation'
+import { downloadReport } from '@/composables/useReportDownload'
 
 const router = useRouter()
 const route = useRoute()
@@ -42,30 +44,12 @@ function goEdit() {
 
 async function downloadPdf() {
   if (!id.value) return
-  const fileName = `evaluation_report_${id.value}.pdf`
-  try {
-    const blob = await downloadEvaluationReportBlob(id.value)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName
-    a.style.display = 'none'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(url), 1500)
-  } catch {
-    // 拦截器已 ElMessage.error
-  }
+  const evalId: number = id.value
+  await downloadReport(
+    () => downloadEvaluationReportBlob(evalId),
+    `evaluation_report_${evalId}.pdf`
+  )
 }
-
-// 维度评分 → Record<string, number>（兼容 DimensionRadar 旧 props 签名）
-const dimensionScoresMap = computed(() => {
-  const arr = r.value?.dimension_scores ?? []
-  const map: Record<string, number> = {}
-  for (const d of arr) map[d.label] = d.value
-  return map
-})
 
 // 使用年限 = 详情返回的成交年份 - 出厂年份（API 数据驱动，不再依赖内存草稿）
 const usageYears = computed(() => {
@@ -102,7 +86,7 @@ const usageYears = computed(() => {
       <el-col :xs="24" :lg="10">
         <section class="card-surface radar-block">
           <h2 class="section-title">维度评分</h2>
-          <DimensionRadar :scores="dimensionScoresMap" height="320px" />
+          <DimensionRadar :scores="r.dimension_scores || []" height="320px" />
         </section>
       </el-col>
     </el-row>
@@ -125,13 +109,7 @@ const usageYears = computed(() => {
     <!-- 评估建议 -->
     <section class="card-surface section-block">
       <h2 class="section-title">评估建议</h2>
-      <ul v-if="r.suggestions && r.suggestions.length" class="suggestion-list">
-        <li v-for="(s, idx) in r.suggestions" :key="idx">
-          <span class="suggestion-num">{{ String(idx + 1).padStart(2, '0') }}</span>
-          <span class="suggestion-text">{{ s }}</span>
-        </li>
-      </ul>
-      <el-empty v-else description="暂无建议" />
+      <ResultSuggestions :items="r.suggestions || []" />
     </section>
   </div>
   <el-empty v-else description="暂无评估结果" />
@@ -157,42 +135,9 @@ const usageYears = computed(() => {
   margin: 0 0 var(--sp-5);
   color: var(--color-text);
 }
-.suggestion-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--sp-3) var(--sp-6);
-}
-.suggestion-list li {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  font-size: var(--fs-sm);
-  line-height: 1.75;
-  color: var(--color-text-secondary);
-}
-.suggestion-num {
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-medium);
-  color: var(--color-accent);
-  background: rgba(62, 106, 225, 0.08);
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-.suggestion-text {
-  flex: 1;
-}
 @media (max-width: 768px) {
   .result-view {
     padding-bottom: var(--sp-10);
-  }
-  .suggestion-list {
-    grid-template-columns: 1fr;
   }
   .radar-block,
   .section-block {

@@ -6,7 +6,6 @@ package pdf
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/jung-kurt/gofpdf"
@@ -23,44 +22,32 @@ const (
 	batteryTableRowSize = 7.0
 )
 
-// GenerateBatteryReport 生成电池 RUL 评估报告 PDF
-// 6 章节：电池信息 → 评估结论 → 健康度仪表 → Top-5 特征 → 置信区间 → 免责声明
-func (g *Generator) GenerateBatteryReport(eval *model.BatteryEvaluation) (string, error) {
+// GenerateBatteryReportBytes 生成电池 RUL 评估报告 PDF，返回二进制内容。
+// 单一入口：handler 拿到 bytes 后上传到对象存储。
+func GenerateBatteryReportBytes(eval *model.BatteryEvaluation) ([]byte, error) {
 	if eval == nil {
-		return "", fmt.Errorf("评估记录不能为空")
+		return nil, fmt.Errorf("评估记录不能为空")
 	}
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(pageMargin, pageMargin, pageMargin)
 	pdf.SetAutoPageBreak(true, pageMargin)
 	if err := ensureFontLoaded(pdf); err != nil {
-		return "", err
+		return nil, err
 	}
-
-	// 封面页
+	g := &Generator{}
 	pdf.AddPage()
 	g.renderBatteryCover(pdf, eval)
-	// 正文
 	pdf.AddPage()
 	g.renderBatteryInfo(pdf, eval)
 	g.renderBatteryConclusion(pdf, eval)
 	g.renderBatteryTopFeatures(pdf, eval)
 	g.renderBatteryConfidence(pdf, eval)
 	g.renderBatteryDisclaimer(pdf)
-
-	filename := fmt.Sprintf("battery_report_%d_%s.pdf",
-		eval.ID, time.Now().Format("20060102150405"))
-	outputPath := joinPath(g.outputDir, filename)
-
-	// 确保输出目录存在
-	if g.outputDir != "" {
-		if err := os.MkdirAll(g.outputDir, 0o755); err != nil {
-			return "", fmt.Errorf("创建输出目录失败: %w", err)
-		}
+	buf := &bytes.Buffer{}
+	if err := pdf.Output(buf); err != nil {
+		return nil, fmt.Errorf("生成 PDF 失败: %w", err)
 	}
-	if err := pdf.OutputFileAndClose(outputPath); err != nil {
-		return "", fmt.Errorf("保存 PDF 失败: %w", err)
-	}
-	return outputPath, nil
+	return buf.Bytes(), nil
 }
 
 // renderBatteryCover 电池报告封面
@@ -233,63 +220,4 @@ func batteryTypeName(t model.BatteryType) string {
 		return "其他类型"
 	}
 	return string(t)
-}
-
-// GenerateBatteryReportToPath 静态函数：直接生成 PDF 到指定路径（handler 调用入口）
-func GenerateBatteryReportToPath(_, fullPath string, eval *model.BatteryEvaluation) error {
-	// 把 outputDir 临时改成 fullPath 的目录
-	g := &Generator{outputDir: fullPath}
-	// 重用 Generator.GenerateBatteryReport 但跳过其内部拼路径
-	// 这里直接调内部实现
-	return g.generateBatteryReportInternal(fullPath, eval)
-}
-
-// generateBatteryReportInternal 直接输出到 fullPath（不重新拼路径）
-func (g *Generator) generateBatteryReportInternal(fullPath string, eval *model.BatteryEvaluation) error {
-	if eval == nil {
-		return fmt.Errorf("评估记录不能为空")
-	}
-	pdf := gofpdf.New("P", "mm", "A4", "")
-	pdf.SetMargins(pageMargin, pageMargin, pageMargin)
-	pdf.SetAutoPageBreak(true, pageMargin)
-	if err := ensureFontLoaded(pdf); err != nil {
-		return err
-	}
-	pdf.AddPage()
-	g.renderBatteryCover(pdf, eval)
-	pdf.AddPage()
-	g.renderBatteryInfo(pdf, eval)
-	g.renderBatteryConclusion(pdf, eval)
-	g.renderBatteryTopFeatures(pdf, eval)
-	g.renderBatteryConfidence(pdf, eval)
-	g.renderBatteryDisclaimer(pdf)
-	return pdf.OutputFileAndClose(fullPath)
-}
-
-// GenerateBatteryReportBytes 生成电池 RUL 评估报告 PDF，返回二进制内容。
-// 供 R2 存储模式使用：handler 拿到 bytes 后上传到对象存储。
-func GenerateBatteryReportBytes(eval *model.BatteryEvaluation) ([]byte, error) {
-	if eval == nil {
-		return nil, fmt.Errorf("评估记录不能为空")
-	}
-	pdf := gofpdf.New("P", "mm", "A4", "")
-	pdf.SetMargins(pageMargin, pageMargin, pageMargin)
-	pdf.SetAutoPageBreak(true, pageMargin)
-	if err := ensureFontLoaded(pdf); err != nil {
-		return nil, err
-	}
-	g := &Generator{}
-	pdf.AddPage()
-	g.renderBatteryCover(pdf, eval)
-	pdf.AddPage()
-	g.renderBatteryInfo(pdf, eval)
-	g.renderBatteryConclusion(pdf, eval)
-	g.renderBatteryTopFeatures(pdf, eval)
-	g.renderBatteryConfidence(pdf, eval)
-	g.renderBatteryDisclaimer(pdf)
-	buf := &bytes.Buffer{}
-	if err := pdf.Output(buf); err != nil {
-		return nil, fmt.Errorf("生成 PDF 失败: %w", err)
-	}
-	return buf.Bytes(), nil
 }

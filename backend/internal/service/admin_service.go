@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
 // AdminService 管理员服务。
@@ -49,10 +50,8 @@ type HrwaiUserPageResult struct {
 
 // ListHrwaiUsers 分页查询 HRWAI 用户,支持按账号/昵称/手机号模糊搜索。
 func (s *AdminService) ListHrwaiUsers(page, pageSize int, keyword string) (*HrwaiUserPageResult, error) {
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 100 {
+	page, pageSize = paging.Clamp(page, pageSize, 20)
+	if pageSize > 100 {
 		pageSize = 20
 	}
 	offset := (page - 1) * pageSize
@@ -245,21 +244,13 @@ type AdminStatisticsDTO struct {
 
 // GetTutors 导师列表。
 func (s *AdminService) GetTutors(page, pageSize int, keyword string) *TutorListDTO {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-	q := s.db.Model(&model.Tutor{})
-	if keyword != "" {
-		like := "%" + keyword + "%"
-		q = q.Where("username LIKE ? OR name LIKE ?", like, like)
-	}
-	var total int64
-	q.Count(&total)
-	var tutors []model.Tutor
-	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&tutors)
+	tutors, total, page, _ := paging.Query[model.Tutor](s.db, page, pageSize, 10, "created_at DESC", func(q *gorm.DB) *gorm.DB {
+		if keyword != "" {
+			like := "%" + keyword + "%"
+			q = q.Where("username LIKE ? OR name LIKE ?", like, like)
+		}
+		return q
+	})
 	items := make([]TutorDTO, 0, len(tutors))
 	for i := range tutors {
 		items = append(items, tutorToDTO(&tutors[i]))

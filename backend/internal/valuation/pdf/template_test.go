@@ -91,13 +91,13 @@ func sampleDetail() *model.EvaluationDetail {
 }
 
 // sampleDimensionScores 5 维评分(与雷达图顺序一致)
-func sampleDimensionScores() map[string]float64 {
-	return map[string]float64{
-		"出厂时间": 0.74,
-		"使用强度": 0.90,
-		"品牌价值": 1.00,
-		"市场需求": 0.95,
-		"车辆情况": 0.82,
+func sampleDimensionScores() []model.DimensionScore {
+	return []model.DimensionScore{
+		{Label: "出厂时间", Value: 0.74},
+		{Label: "使用强度", Value: 0.90},
+		{Label: "品牌价值", Value: 1.00},
+		{Label: "市场需求", Value: 0.95},
+		{Label: "车辆情况", Value: 0.82},
 	}
 }
 
@@ -113,7 +113,7 @@ func sampleSuggestions() []string {
 
 // TestGenerateReport 验证 PDF 生成器能成功生成内容、首字节为 PDF 魔数,且为 3 页
 func TestGenerateReport(t *testing.T) {
-	gen := NewGenerator("")
+	gen := NewGenerator()
 
 	detail := sampleDetail()
 	dimScores := sampleDimensionScores()
@@ -171,7 +171,7 @@ func TestGenerateReport(t *testing.T) {
 
 // TestGenerateReportCombustion 内燃叉车样例(无电池类型,无原厂漆加成)
 func TestGenerateReportCombustion(t *testing.T) {
-	gen := NewGenerator("")
+	gen := NewGenerator()
 
 	detail := &model.EvaluationDetail{
 		ID:                         2002,
@@ -202,12 +202,12 @@ func TestGenerateReportCombustion(t *testing.T) {
 		ConfidenceLow:              4.28,
 		ConfidenceHigh:             4.73,
 	}
-	dimScores := map[string]float64{
-		"时间维度": 0.61,
-		"使用强度": 0.90,
-		"品牌":   1.00,
-		"车况":   0.75,
-		"市场":   0.98,
+	dimScores := []model.DimensionScore{
+		{Label: "时间维度", Value: 0.61},
+		{Label: "使用强度", Value: 0.90},
+		{Label: "品牌", Value: 1.00},
+		{Label: "车况", Value: 0.75},
+		{Label: "市场", Value: 0.98},
 	}
 	suggestions := []string{
 		"车况一般,多个维度有折损,建议折价处理",
@@ -228,7 +228,7 @@ func TestGenerateReportCombustion(t *testing.T) {
 
 // TestGenerateReportEmptySuggestions 建议列表为空时也应能生成(且仍为 3 页)
 func TestGenerateReportEmptySuggestions(t *testing.T) {
-	gen := NewGenerator("")
+	gen := NewGenerator()
 
 	detail := &model.EvaluationDetail{
 		ID:                         3,
@@ -259,12 +259,12 @@ func TestGenerateReportEmptySuggestions(t *testing.T) {
 		ConfidenceLow:              9.32,
 		ConfidenceHigh:             11.40,
 	}
-	dimScores := map[string]float64{
-		"时间维度": 0.85,
-		"使用强度": 1.10,
-		"品牌":   1.10,
-		"车况":   1.10,
-		"市场":   1.00,
+	dimScores := []model.DimensionScore{
+		{Label: "时间维度", Value: 0.85},
+		{Label: "使用强度", Value: 1.10},
+		{Label: "品牌", Value: 1.10},
+		{Label: "车况", Value: 1.10},
+		{Label: "市场", Value: 1.00},
 	}
 
 	data, err := gen.GenerateReport(detail, dimScores, nil)

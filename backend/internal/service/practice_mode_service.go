@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
 // PracticeModeService 题库练习模式服务。
@@ -368,26 +369,19 @@ func (s *PracticeModeService) GetStats(studentID int) map[string]any {
 
 // GetHistory 练习历史分页。
 func (s *PracticeModeService) GetHistory(studentID, page, pageSize int, qType, startDate, endDate string) map[string]any {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 20
-	}
-	q := s.db.Model(&model.QuestionPracticeRecord{}).Where("student_id = ?", studentID)
-	if qType != "" {
-		q = q.Joins("JOIN question ON question.id = question_practice_record.question_id").Where("question.type = ?", qType)
-	}
-	if startDate != "" {
-		q = q.Where("created_at >= ?", startDate)
-	}
-	if endDate != "" {
-		q = q.Where("created_at <= ?", endDate)
-	}
-	var total int64
-	q.Count(&total)
-	var records []model.QuestionPracticeRecord
-	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&records)
+	records, total, page, pageSize := paging.Query[model.QuestionPracticeRecord](s.db, page, pageSize, 20, "created_at DESC", func(q *gorm.DB) *gorm.DB {
+		q = q.Where("student_id = ?", studentID)
+		if qType != "" {
+			q = q.Joins("JOIN question ON question.id = question_practice_record.question_id").Where("question.type = ?", qType)
+		}
+		if startDate != "" {
+			q = q.Where("created_at >= ?", startDate)
+		}
+		if endDate != "" {
+			q = q.Where("created_at <= ?", endDate)
+		}
+		return q
+	})
 	items := make([]map[string]any, 0, len(records))
 	for _, r := range records {
 		item := map[string]any{

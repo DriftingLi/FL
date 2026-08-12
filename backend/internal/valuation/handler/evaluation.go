@@ -14,6 +14,7 @@ import (
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/valuation/model"
 	"forklift-training/internal/valuation/service"
+	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
 
@@ -97,10 +98,8 @@ func (h *EvaluationHandler) Get(c *gin.Context) {
 func (h *EvaluationHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 100 {
+	page, pageSize = paging.Clamp(page, pageSize, 20)
+	if pageSize > 100 {
 		pageSize = 20
 	}
 	offset := (page - 1) * pageSize

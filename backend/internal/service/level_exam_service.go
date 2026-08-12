@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
 // 等级考试组卷配置（各题型题量；分值见 questionScoreByFlow["level_exam"]）。
@@ -225,20 +226,12 @@ func (s *LevelExamService) DeleteSession(id int) error {
 
 // ListSessions 列表（GET 纯读：展示用基于时间的生效状态，不写库）。
 func (s *LevelExamService) ListSessions(page, pageSize int, status string, includeParticipants bool) *LevelExamSessionListDTO {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 20
-	}
-	q := s.db.Model(&model.ExamSession{})
-	if status != "" {
-		q = q.Where("status = ?", status)
-	}
-	var total int64
-	q.Count(&total)
-	var sessions []model.ExamSession
-	q.Order("start_time DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&sessions)
+	sessions, total, page, pageSize := paging.Query[model.ExamSession](s.db, page, pageSize, 20, "start_time DESC", func(q *gorm.DB) *gorm.DB {
+		if status != "" {
+			q = q.Where("status = ?", status)
+		}
+		return q
+	})
 	now := beijingNow()
 	out := make([]LevelExamSessionDTO, 0, len(sessions))
 	for i := range sessions {
@@ -544,17 +537,9 @@ func (s *LevelExamService) GetResult(participantID, studentID int) (*LevelExamRe
 
 // GetStudentHistory 学员考试历史。
 func (s *LevelExamService) GetStudentHistory(studentID, page, pageSize int) *LevelExamHistoryDTO {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-	q := s.db.Model(&model.ExamParticipant{}).Where("student_id = ?", studentID)
-	var total int64
-	q.Count(&total)
-	var parts []model.ExamParticipant
-	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&parts)
+	parts, total, page, pageSize := paging.Query[model.ExamParticipant](s.db, page, pageSize, 10, "created_at DESC", func(q *gorm.DB) *gorm.DB {
+		return q.Where("student_id = ?", studentID)
+	})
 	items := make([]LevelExamParticipantDTO, 0, len(parts))
 	for _, p := range parts {
 		var sess model.ExamSession

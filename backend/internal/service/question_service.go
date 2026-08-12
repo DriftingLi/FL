@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
 // 题型与课程分类常量（已取消等级制度）。
@@ -343,29 +344,21 @@ func (s *QuestionBankService) DeleteQuestion(id int) error {
 
 // ListQuestions 题目列表分页查询（可按标签 tagID 过滤，结果附带标签列表）。
 func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int) map[string]any {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 20
-	}
-	q := s.db.Model(&model.Question{})
-	if qType != "" {
-		q = q.Where("type = ?", qType)
-	}
-	if status != "" {
-		q = q.Where("status = ?", status)
-	}
-	if keyword != "" {
-		q = q.Where("content LIKE ?", "%"+keyword+"%")
-	}
-	if tagID != nil {
-		q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", *tagID)
-	}
-	var total int64
-	q.Count(&total)
-	var list []model.Question
-	q.Order("created_at DESC, id ASC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list)
+	list, total, page, pageSize := paging.Query[model.Question](s.db, page, pageSize, 20, "created_at DESC, id ASC", func(q *gorm.DB) *gorm.DB {
+		if qType != "" {
+			q = q.Where("type = ?", qType)
+		}
+		if status != "" {
+			q = q.Where("status = ?", status)
+		}
+		if keyword != "" {
+			q = q.Where("content LIKE ?", "%"+keyword+"%")
+		}
+		if tagID != nil {
+			q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", *tagID)
+		}
+		return q
+	})
 	out := make([]QuestionDTO, 0, len(list))
 	ids := make([]int, 0, len(list))
 	for i := range list {

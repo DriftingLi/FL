@@ -8,17 +8,13 @@ import (
 	"math"
 
 	"github.com/jung-kurt/gofpdf"
+
+	"forklift-training/internal/valuation/model"
 )
 
-// radarDimensionOrder 5 维度的固定展示顺序（顺时针从顶部开始，间隔 72°）
-// 5 维独立展示，各维度值钳制到 [0, 1]，与前端雷达图 max=1 对齐
-var radarDimensionOrder = []string{
-	"出厂时间", // 顶部 -90°
-	"使用强度", // -18°
-	"品牌价值", // 54°
-	"市场需求", // 126°
-	"车辆情况", // 198° / -162°
-}
+// radarDimensionOrder 5 维度的固定展示顺序：来自 model.DimensionLabels 单一契约
+// （与详情接口同源）；顺时针从顶部开始，间隔 72°
+var radarDimensionOrder = model.DimensionLabels
 
 // radarMaxValue 雷达图最大刻度值
 // 5 维值均钳制到 [0, 1]，满刻度 1.0 对应 100%
@@ -28,8 +24,12 @@ const radarMaxValue = 1.0
 // pdf: gofpdf 实例
 // cx, cy: 雷达图中心坐标（mm）
 // radius: 雷达图半径（mm）
-// dimensionScores: 维度名 → 评分（K 系数值，已钳制到 [0,1]）
-func drawRadarChart(pdf *gofpdf.Fpdf, cx, cy, radius float64, dimensionScores map[string]float64) {
+// dimensionScores: 维度评分切片（Label/Value，顺序任意；按 model.DimensionLabels 取序）
+func drawRadarChart(pdf *gofpdf.Fpdf, cx, cy, radius float64, dimensionScores []model.DimensionScore) {
+	scoreByLabel := make(map[string]float64, len(dimensionScores))
+	for _, ds := range dimensionScores {
+		scoreByLabel[ds.Label] = ds.Value
+	}
 	// 1. 计算每个维度的角度（弧度），从顶部 -90° 开始顺时针，每维间隔 72°
 	angles := make([]float64, len(radarDimensionOrder))
 	for i := range radarDimensionOrder {
@@ -86,7 +86,7 @@ func drawRadarChart(pdf *gofpdf.Fpdf, cx, cy, radius float64, dimensionScores ma
 	// 评分值按 value/radarMaxValue 归一化到 0~1 范围用于绘图
 	dataPoints := make([]gofpdf.PointType, len(radarDimensionOrder))
 	for i, dimName := range radarDimensionOrder {
-		value := dimensionScores[dimName]
+		value := scoreByLabel[dimName]
 		if value < 0 {
 			value = 0
 		}

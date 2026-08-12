@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
 // mockExamDefaultCount 模拟考试默认题量（取消等级后：固定题量随机抽）。
@@ -330,17 +331,9 @@ func (s *MockExamService) GetResult(mockExamID, studentID int) (*MockExamResultD
 
 // GetHistory 历史列表。
 func (s *MockExamService) GetHistory(studentID, page, pageSize int) *MockExamHistoryDTO {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-	q := s.db.Model(&model.MockExam{}).Where("student_id = ?", studentID)
-	var total int64
-	q.Count(&total)
-	var exams []model.MockExam
-	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&exams)
+	exams, total, page, pageSize := paging.Query[model.MockExam](s.db, page, pageSize, 10, "created_at DESC", func(q *gorm.DB) *gorm.DB {
+		return q.Where("student_id = ?", studentID)
+	})
 	items := make([]MockExamHistoryItemDTO, 0, len(exams))
 	for i := range exams {
 		items = append(items, mockExamToDTO(&exams[i]))

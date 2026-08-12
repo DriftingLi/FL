@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
 
@@ -196,31 +197,23 @@ type courseListOptions struct {
 
 // listCourses 课程列表共享实现（分页归一化、章节数/前置课程回填、信封组装只此一份）。
 func listCourses(db *gorm.DB, page, pageSize int, opts courseListOptions) CoursePageResult {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = opts.defaultPageSize
-	}
-	q := db.Model(&model.Course{})
-	if opts.onlyMounted {
-		// 挂载不变式 + 上架：学员端可见性口径
-		q = q.Where("status = ?", 1)
-		q = mountedCourseScope(q)
-	}
-	if opts.keyword != "" {
-		q = q.Where("name LIKE ?", "%"+opts.keyword+"%")
-	}
-	if opts.specialtyID != nil {
-		q = q.Where("specialty_id = ?", *opts.specialtyID)
-	}
-	if opts.levelID != nil {
-		q = q.Where("level_id = ?", *opts.levelID)
-	}
-	var total int64
-	q.Count(&total)
-	var courses []model.Course
-	q.Order("sort_order ASC, created_at DESC, course_id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&courses)
+	courses, total, page, pageSize := paging.Query[model.Course](db, page, pageSize, opts.defaultPageSize, "sort_order ASC, created_at DESC, course_id DESC", func(q *gorm.DB) *gorm.DB {
+		if opts.onlyMounted {
+			// 挂载不变式 + 上架：学员端可见性口径
+			q = q.Where("status = ?", 1)
+			q = mountedCourseScope(q)
+		}
+		if opts.keyword != "" {
+			q = q.Where("name LIKE ?", "%"+opts.keyword+"%")
+		}
+		if opts.specialtyID != nil {
+			q = q.Where("specialty_id = ?", *opts.specialtyID)
+		}
+		if opts.levelID != nil {
+			q = q.Where("level_id = ?", *opts.levelID)
+		}
+		return q
+	})
 
 	// 证书模板数量少，一次加载映射（学员端路径附带证书名，避免逐课程 N+1）
 	var certNameByID map[int]string

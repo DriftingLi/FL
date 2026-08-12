@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
 
@@ -56,21 +57,13 @@ func (s *FeaturedService) IsValidCategory(category string) bool {
 
 // GetPublicList 公开列表（仅已发布）。
 func (s *FeaturedService) GetPublicList(page, pageSize int, category string) FeaturedContentPageResult {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-	q := s.db.Model(&model.FeaturedContent{}).Where("status = ?", 1)
-	if category != "" {
-		q = q.Where("category = ?", category)
-	}
-	var total int64
-	q.Count(&total)
-	var items []model.FeaturedContent
-	q.Order("published_at DESC, content_id DESC").
-		Offset((page - 1) * pageSize).Limit(pageSize).Find(&items)
+	items, total, page, pageSize := paging.Query[model.FeaturedContent](s.db, page, pageSize, 10, "published_at DESC, content_id DESC", func(q *gorm.DB) *gorm.DB {
+		q = q.Where("status = ?", 1)
+		if category != "" {
+			q = q.Where("category = ?", category)
+		}
+		return q
+	})
 	list := make([]map[string]any, 0, len(items))
 	for i := range items {
 		list = append(list, featuredToListDict(&items[i]))
@@ -147,24 +140,15 @@ func (s *FeaturedService) GetPublicDetail(id int, countView bool) (map[string]an
 
 // AdminList 管理端列表（含草稿）。
 func (s *FeaturedService) AdminList(page, pageSize int, category, status string) FeaturedContentPageResult {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-	q := s.db.Model(&model.FeaturedContent{})
-	if category != "" {
-		q = q.Where("category = ?", category)
-	}
-	if status != "" {
-		q = q.Where("status = ?", status)
-	}
-	var total int64
-	q.Count(&total)
-	var items []model.FeaturedContent
-	q.Order("created_at DESC, content_id DESC").
-		Offset((page - 1) * pageSize).Limit(pageSize).Find(&items)
+	items, total, page, pageSize := paging.Query[model.FeaturedContent](s.db, page, pageSize, 10, "created_at DESC, content_id DESC", func(q *gorm.DB) *gorm.DB {
+		if category != "" {
+			q = q.Where("category = ?", category)
+		}
+		if status != "" {
+			q = q.Where("status = ?", status)
+		}
+		return q
+	})
 	list := make([]map[string]any, 0, len(items))
 	for i := range items {
 		list = append(list, featuredToListDict(&items[i]))

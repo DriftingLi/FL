@@ -30,8 +30,9 @@ type BatteryStore interface {
 }
 
 // ReportGenerator PDF 报告生成接口（ReportHandler 消费；生产为 pdf.Generator，测试为内存替身）。
+// dimensionScores 为 typed 维度评分切片（标签契约见 model.DimensionLabels）。
 type ReportGenerator interface {
-	GenerateReport(r *model.EvaluationDetail, dimensionScores map[string]float64, suggestions []string) ([]byte, error)
+	GenerateReport(r *model.EvaluationDetail, dimensionScores []model.DimensionScore, suggestions []string) ([]byte, error)
 }
 
 // ValuationAuth 估值模块消费的认证窄接口（主体系 AuthService 直接满足，

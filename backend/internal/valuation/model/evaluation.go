@@ -105,6 +105,25 @@ type EvaluationResult struct {
 	Suggestions []string
 }
 
+// 五维系数标签（唯一事实源）：详情接口 BuildDimensionScores 与 PDF 雷达图共用。
+// 变更标签需同步评估呈现契约（前端雷达图数据驱动，后端为唯一来源）。
+const (
+	DimensionLabelTime      = "出厂时间"
+	DimensionLabelHours     = "使用强度"
+	DimensionLabelBrand     = "品牌价值"
+	DimensionLabelMarket    = "市场需求"
+	DimensionLabelCondition = "车辆情况"
+)
+
+// DimensionLabels 五维标签的固定展示顺序（雷达图顺时针从顶部开始，间隔 72°）。
+var DimensionLabels = []string{
+	DimensionLabelTime,
+	DimensionLabelHours,
+	DimensionLabelBrand,
+	DimensionLabelMarket,
+	DimensionLabelCondition,
+}
+
 // DimensionScore 维度评分条目（label + value）
 type DimensionScore struct {
 	Label string  `json:"label"`

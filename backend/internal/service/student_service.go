@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
 
@@ -251,27 +252,20 @@ type StudyRecordPageResult struct {
 
 // GetRecords 学习记录列表。
 func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, endDate string) StudyRecordPageResult {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-	q := s.db.Model(&model.StudyRecord{}).Where("student_id = ?", studentID)
-	if startDate != "" {
-		if t, err := time.Parse("2006-01-02", startDate); err == nil {
-			q = q.Where("study_date >= ?", t)
+	records, total, page, pageSize := paging.Query[model.StudyRecord](s.db, page, pageSize, 10, "study_date DESC", func(q *gorm.DB) *gorm.DB {
+		q = q.Where("student_id = ?", studentID)
+		if startDate != "" {
+			if t, err := time.Parse("2006-01-02", startDate); err == nil {
+				q = q.Where("study_date >= ?", t)
+			}
 		}
-	}
-	if endDate != "" {
-		if t, err := time.Parse("2006-01-02", endDate); err == nil {
-			q = q.Where("study_date <= ?", t.Add(24*time.Hour-time.Nanosecond))
+		if endDate != "" {
+			if t, err := time.Parse("2006-01-02", endDate); err == nil {
+				q = q.Where("study_date <= ?", t.Add(24*time.Hour-time.Nanosecond))
+			}
 		}
-	}
-	var total int64
-	q.Count(&total)
-	var records []model.StudyRecord
-	q.Order("study_date DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&records)
+		return q
+	})
 
 	items := make([]StudyRecordDTO, 0, len(records))
 	for i := range records {

@@ -25,9 +25,9 @@ import (
 	"forklift-training/internal/storage"
 	vconfig "forklift-training/internal/valuation/config"
 	vhandler "forklift-training/internal/valuation/handler"
+	"forklift-training/internal/valuation/pdf"
 	vrepo "forklift-training/internal/valuation/repository"
 	vservice "forklift-training/internal/valuation/service"
-	"forklift-training/pkg/pdf"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -199,15 +199,8 @@ func setupValuation(r *gin.Engine, cfg *config.Config, authSvc vhandler.Valuatio
 	batterySvc := vservice.NewBatteryRULService()
 	batteryRepo := vrepo.NewBatteryRepository(pool)
 
-	// 3. 装配 PDF 生成器（outputDir 仅用于本地缓存/兼容旧路径，R2 模式下不写入）
-	pdfDir := cfg.Valuation.PDFOutputDir
-	if pdfDir == "" {
-		pdfDir = "storage/reports"
-	}
-	if err := os.MkdirAll(pdfDir, 0o755); err != nil {
-		logger.Warn("创建 PDF 输出目录失败", zap.Error(err), zap.String("dir", pdfDir))
-	}
-	pdfGen := pdf.NewGenerator(pdfDir)
+	// 3. 装配 PDF 生成器（字节输出，不落盘；存储经 storage 抽象层）
+	pdfGen := pdf.NewGenerator()
 
 	// 4. 注册路由（/api/valuation/*，公开组 + 估值独立鉴权组 + admin 组）
 	// 认证经 ValuationAuth 窄接口注入主体系 AuthService（spec #75 D4）
