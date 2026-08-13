@@ -119,4 +119,19 @@ describe('CourseCatalog 左树右表', () => {
     expect(adminApi.updateCourse).toHaveBeenCalledWith(3, { status: 1 })
     expect(successSpy).toHaveBeenCalled()
   })
+
+  it('左侧导航渲染筛选卡片计数（全量/方向/未挂载 facet）', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const navItems = wrapper.findAll('.cc-nav-item')
+    // 「全部课程」= 3 门全量；「维修」方向 = 2；「未挂载课程」= 1
+    expect(navItems[0].text()).toContain('全部课程')
+    expect(navItems[0].find('.cc-nav-count').text()).toBe('3')
+    expect(navItems[1].text()).toContain('维修')
+    expect(navItems[1].find('.cc-nav-count').text()).toBe('2')
+    const unmountedItem = navItems.find(n => n.text().includes('未挂载课程'))
+    expect(unmountedItem).toBeTruthy()
+    expect(unmountedItem!.find('.cc-nav-count').text()).toBe('1')
+  })
 })
