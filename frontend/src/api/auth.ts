@@ -100,6 +100,6 @@ export const authApi = {
   },
 
   updateAccount(data: { account: string; code: string }) {
-    return unwrappedRequest.put<null>('/auth/account', data)
+    return unwrappedRequest.put<UserProfile>('/auth/account', data)
   }
 }

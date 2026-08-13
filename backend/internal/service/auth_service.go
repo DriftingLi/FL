@@ -142,6 +142,12 @@ func (s *AuthService) verifyAndIssue(plainPassword string, c loginCredentials, r
 	if !VerifyPassword(plainPassword, c.password) {
 		return nil, errors.New(errMessage)
 	}
+	return s.issueLogin(c, role)
+}
+
+// issueLogin 登录骨架后半段：禁用校验 → 签发 → 组结果。
+// 密码三入口与验证码登录/注册共用（ADR-0011 向验证码路径的延伸，ADR-0012 §5）。
+func (s *AuthService) issueLogin(c loginCredentials, role string) (*LoginResult, error) {
 	if c.status != nil && *c.status != 1 {
 		return nil, errors.New("账号已被禁用，请联系管理员")
 	}

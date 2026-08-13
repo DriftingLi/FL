@@ -228,7 +228,11 @@ async function handleUpdateAccount() {
   }
   updatingAccount.value = true
   try {
-    await authApi.updateAccount({ account, code: accountCode.value.trim() })
+    const result = await authApi.updateAccount({ account, code: accountCode.value.trim() })
+    // 响应携带新签发的 token：替换本地登录态（JWT claim 随新账号同步）
+    if (result?.token) {
+      authStore.setAuthData(result)
+    }
     ElMessage.success('账号修改成功')
     accountDialogVisible.value = false
     await authStore.refreshUserInfo()
