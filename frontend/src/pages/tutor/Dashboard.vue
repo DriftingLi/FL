@@ -77,12 +77,11 @@ import type { QuickCardItem } from '@/components/dashboard/QuickCard.vue'
 import { useECharts } from '@/composables/useECharts'
 import { tutorApi } from '@/api/tutor'
 import { gradingApi } from '@/api/grading'
+import { displayNameOf } from '@/types/user'
 
 const authStore = useAuthStore()
 
-const userName = computed(() =>
-  authStore.userInfo?.name || authStore.userInfo?.username || '导师'
-)
+const userName = computed(() => displayNameOf(authStore.userInfo) || '导师')
 
 const pendingCount = ref(0)
 const pendingGrading = ref<QuickCardItem[]>([])

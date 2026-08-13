@@ -64,11 +64,10 @@ import { User, UserFilled, Notebook, Timer, TrendCharts, MagicStick } from '@ele
 import { adminApi } from '@/api/admin'
 import { useAuthStore } from '@/stores/auth'
 import { useECharts } from '@/composables/useECharts'
+import { displayNameOf } from '@/types/user'
 
 const authStore = useAuthStore()
-const userName = computed(() =>
-  authStore.userInfo?.name || authStore.userInfo?.username || '管理员'
-)
+const userName = computed(() => displayNameOf(authStore.userInfo) || '管理员')
 
 const overview = ref<any>({})
 const courseStats = ref<{ name: string; study_count: number; total_duration: number; avg_progress: number }[]>([])
