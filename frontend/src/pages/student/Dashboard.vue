@@ -76,12 +76,11 @@ import QuickCard from '@/components/dashboard/QuickCard.vue'
 import type { QuickCardItem } from '@/components/dashboard/QuickCard.vue'
 import { useECharts } from '@/composables/useECharts'
 import { studentApi } from '@/api/student'
+import { displayNameOf } from '@/types/user'
 
 const authStore = useAuthStore()
 
-const userName = computed(() =>
-  authStore.userInfo?.username || '同学'
-)
+const userName = computed(() => displayNameOf(authStore.userInfo) || '同学')
 
 // 进行中的课程
 const activeCourses = ref<QuickCardItem[]>([])
