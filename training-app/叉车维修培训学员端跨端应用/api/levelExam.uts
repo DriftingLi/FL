@@ -1,0 +1,333 @@
+/**
+ * 等级考试 API
+ * 对应后端 /api/level-exam 蓝图（学员考试流程）：
+ *   GET  /level-exam/available           可参加考试列表（返回数组）
+ *   GET  /level-exam/history             考试历史（分页）
+ *   POST /level-exam/sessions/:id/enter  进入考试（组卷）
+ *   POST /level-exam/participants/:id/save    保存作答
+ *   POST /level-exam/participants/:id/submit  交卷
+ *   GET  /level-exam/participants/:id/result  考试结果
+ *
+ * @note 后端响应结构（与 mock-exam 不同）：
+ *   available: [{ id, name, start_time, end_time, duration, status,
+ *     total_score, pass_score, has_participated, participant_status,
+ *     participant_id, can_enter }]
+ *   history: { records: [...], total, page, page_size }
+ *   enter: { participant_id, session: {...}, questions: [...],
+ *     answers: {...}, remaining_time, start_time }
+ *   result: { participant: {...}, answers: [{ id, question_id,
+ *     user_answer, score, is_correct, question: { id, type, content,
+ *     options, answer, explanation } }] }
+ */
+import { get, post } from './request'
+import type { LevelExamSession, LevelExamHistoryItem, LevelExamHistoryResult, LevelExamInfo, LevelExamResult, LevelExamResultDetail, ExamQuestion, QuestionOption } from '../types/index'
+
+/** 安全转换为 number */
+function toNumber(v : any | null, defaultVal : number = 0) : number {
+	if (v == null) return defaultVal
+	const s = `${v}`
+	const n = parseFloat(s)
+	if (isNaN(n)) return defaultVal
+	return n
+}
+
+/** 安全转换为 string */
+function toStr(v : any | null, defaultVal : string = '') : string {
+	if (v == null) return defaultVal
+	return `${v}`
+}
+
+/** 安全转换为 boolean */
+function toBool(v : any | null, defaultVal : boolean = false) : boolean {
+	if (v == null) return defaultVal
+	const s = `${v}`
+	return s == 'true' || s == '1'
+}
+
+/**
+ * 将后端 options Map 转换为前端 Array<{key, text}>
+ * 后端格式：{"A": "选项A", "B": "选项B"}
+ */
+function buildOptions(raw : any | null) : QuestionOption[] {
+	const options : QuestionOption[] = []
+	if (raw == null) return options
+	const optsMap = raw as UTSJSONObject
+	for (const k in optsMap) {
+		const opt : QuestionOption = {
+			key: k,
+			text: toStr(optsMap[k]),
+		} as QuestionOption
+		options.push(opt)
+	}
+	return options
+}
+
+/** 从 UTSJSONObject 构造 ExamQuestion（后端 id → question_id，content → title） */
+function buildExamQuestion(obj : UTSJSONObject) : ExamQuestion {
+	const q : ExamQuestion = {
+		question_id: toNumber(obj['id']),
+		type: toStr(obj['type']),
+		title: toStr(obj['content']),
+		options: buildOptions(obj['options']),
+		score: toNumber(obj['score']),
+	} as ExamQuestion
+	return q
+}
+
+/** 从 UTSJSONObject 构造 LevelExamSession（可参加考试列表项） */
+function buildSession(obj : UTSJSONObject) : LevelExamSession {
+	const session : LevelExamSession = {
+		id: toNumber(obj['id']),
+		name: toStr(obj['name']),
+		start_time: toStr(obj['start_time']),
+		end_time: toStr(obj['end_time']),
+		duration: toNumber(obj['duration']),
+		status: toStr(obj['status']),
+		total_score: toNumber(obj['total_score']),
+		pass_score: toNumber(obj['pass_score']),
+		has_participated: toBool(obj['has_participated']),
+		participant_status: toStr(obj['participant_status']),
+		participant_id: toNumber(obj['participant_id']),
+		can_enter: toBool(obj['can_enter']),
+	} as LevelExamSession
+	return session
+}
+
+/** 从 UTSJSONObject 构造 LevelExamHistoryItem */
+function buildHistoryItem(obj : UTSJSONObject) : LevelExamHistoryItem {
+	const item : LevelExamHistoryItem = {
+		id: toNumber(obj['id']),
+		exam_session_id: toNumber(obj['exam_session_id']),
+		session_name: toStr(obj['session_name']),
+		status: toStr(obj['status']),
+		start_time: toStr(obj['start_time']),
+		submit_time: toStr(obj['submit_time']),
+		score: toNumber(obj['score']),
+		objective_score: toNumber(obj['objective_score']),
+		subjective_score: toNumber(obj['subjective_score']),
+		is_passed: toBool(obj['is_passed']),
+	} as LevelExamHistoryItem
+	return item
+}
+
+/** 从 UTSJSONObject 构造 LevelExamHistoryResult */
+function buildHistoryResult(obj : UTSJSONObject) : LevelExamHistoryResult {
+	const records : LevelExamHistoryItem[] = []
+	const recordsRaw = obj['records']
+	if (recordsRaw != null) {
+		const recordsArray = recordsRaw as Array<UTSJSONObject>
+		for (let i = 0; i < recordsArray.length; i++) {
+			records.push(buildHistoryItem(recordsArray[i]))
+		}
+	}
+	const result : LevelExamHistoryResult = {
+		records: records,
+		total: toNumber(obj['total']),
+		page: toNumber(obj['page'], 1),
+		page_size: toNumber(obj['page_size'], 10),
+	} as LevelExamHistoryResult
+	return result
+}
+
+/** 从 UTSJSONObject 构造 LevelExamInfo（进入考试后） */
+function buildLevelExamInfo(obj : UTSJSONObject) : LevelExamInfo {
+	const questions : ExamQuestion[] = []
+	const questionsRaw = obj['questions']
+	if (questionsRaw != null) {
+		const questionsArray = questionsRaw as Array<UTSJSONObject>
+		for (let i = 0; i < questionsArray.length; i++) {
+			questions.push(buildExamQuestion(questionsArray[i]))
+		}
+	}
+	let session : LevelExamSession = {
+		id: 0, name: '', start_time: '', end_time: '', duration: 0,
+		status: '', total_score: 0, pass_score: 0,
+		has_participated: false, participant_status: '', participant_id: 0, can_enter: false,
+	} as LevelExamSession
+	const sessionRaw = obj['session']
+	if (sessionRaw != null) {
+		session = buildSession(sessionRaw as UTSJSONObject)
+	}
+	let answers : UTSJSONObject = {} as UTSJSONObject
+	const answersRaw = obj['answers']
+	if (answersRaw != null) {
+		answers = answersRaw as UTSJSONObject
+	}
+	const info : LevelExamInfo = {
+		participant_id: toNumber(obj['participant_id']),
+		session: session,
+		questions: questions,
+		answers: answers,
+		remaining_time: toNumber(obj['remaining_time']),
+		start_time: toStr(obj['start_time']),
+	} as LevelExamInfo
+	return info
+}
+
+/** 从 UTSJSONObject 构造 LevelExamResultDetail（单题，question 嵌套在 answers[]） */
+function buildResultDetail(obj : UTSJSONObject) : LevelExamResultDetail {
+	// 题目信息在嵌套的 question 字段
+	let questionId = toNumber(obj['question_id'])
+	let qType = ''
+	let qTitle = ''
+	let qCorrectAnswer = ''
+	let qExplanation = ''
+	const questionRaw = obj['question']
+	if (questionRaw != null) {
+		const questionObj = questionRaw as UTSJSONObject
+		questionId = toNumber(questionObj['id'])
+		qType = toStr(questionObj['type'])
+		qTitle = toStr(questionObj['content'])
+		qCorrectAnswer = toStr(questionObj['answer'])
+		qExplanation = toStr(questionObj['explanation'])
+	}
+	const detail : LevelExamResultDetail = {
+		id: toNumber(obj['id']),
+		question_id: questionId,
+		title: qTitle,
+		type: qType,
+		user_answer: toStr(obj['user_answer']),
+		is_correct: toBool(obj['is_correct']),
+		score: toNumber(obj['score']),
+		correct_answer: qCorrectAnswer,
+		explanation: qExplanation,
+	} as LevelExamResultDetail
+	return detail
+}
+
+/** 从 UTSJSONObject 构造 LevelExamResult */
+function buildLevelExamResult(obj : UTSJSONObject) : LevelExamResult {
+	const answers : LevelExamResultDetail[] = []
+	const answersRaw = obj['answers']
+	if (answersRaw != null) {
+		const answersArray = answersRaw as Array<UTSJSONObject>
+		for (let i = 0; i < answersArray.length; i++) {
+			answers.push(buildResultDetail(answersArray[i]))
+		}
+	}
+	let participant : UTSJSONObject = {} as UTSJSONObject
+	const participantRaw = obj['participant']
+	if (participantRaw != null) {
+		participant = participantRaw as UTSJSONObject
+	}
+	const result : LevelExamResult = {
+		participant: participant,
+		answers: answers,
+	} as LevelExamResult
+	return result
+}
+
+/**
+ * 可参加考试列表
+ * @note 后端返回数组（非 { items: [...] } 对象）
+ */
+export function getAvailableLevelExamsApi() : Promise<LevelExamSession[]> {
+	return get('/level-exam/available').then((data : UTSJSONObject) : LevelExamSession[] => {
+		const list : LevelExamSession[] = []
+		const arr = data as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			list.push(buildSession(arr[i]))
+		}
+		return list
+	}).catch((e) : LevelExamSession[] => {
+		console.warn('[getAvailableLevelExamsApi] network failed:', e)
+		return [] as LevelExamSession[]
+	})
+}
+
+/**
+ * 考试历史（分页）
+ * @param page 页码，默认 1
+ * @param pageSize 每页条数，默认 10
+ */
+export function getLevelExamHistoryApi(page : number = 1, pageSize : number = 10) : Promise<LevelExamHistoryResult> {
+	const params : UTSJSONObject = {
+		page: page.toString(),
+		page_size: pageSize.toString(),
+	} as UTSJSONObject
+	return get('/level-exam/history', params).then((data : UTSJSONObject) : LevelExamHistoryResult => {
+		console.log('[getLevelExamHistoryApi] raw data:', JSON.stringify(data))
+		return buildHistoryResult(data)
+	}).catch((e) : LevelExamHistoryResult => {
+		console.warn('[getLevelExamHistoryApi] network failed:', e)
+		return { records: [] as LevelExamHistoryItem[], total: 0, page: page, page_size: pageSize } as LevelExamHistoryResult
+	})
+}
+
+/**
+ * 进入考试（组卷，返回题目与已保存进度）
+ * @param sessionId 场次 ID
+ */
+export function enterLevelExamApi(sessionId : number) : Promise<LevelExamInfo> {
+	const url = '/level-exam/sessions/' + sessionId + '/enter'
+	return post(url, null).then((data : UTSJSONObject) : LevelExamInfo => {
+		console.log('[enterLevelExamApi] raw data:', JSON.stringify(data))
+		return buildLevelExamInfo(data)
+	}).catch((e) : LevelExamInfo => {
+		console.error('[enterLevelExamApi] failed:', e)
+		let msg = '进入考试失败'
+		if (e instanceof Error) {
+			const errObj = e as Error
+			const m = errObj.message
+			if (m != null && m.length > 0) {
+				msg = msg + ': ' + m
+			}
+		}
+		throw new Error(msg)
+	})
+}
+
+/**
+ * 保存作答进度
+ * @param participantId 参与记录 ID
+ * @param answers 答案对象 { 题目ID: 答案 }
+ * @param remainingTime 剩余时间（秒）
+ */
+export function saveLevelExamApi(participantId : number, answers : UTSJSONObject, remainingTime : number) : Promise<UTSJSONObject> {
+	const url = '/level-exam/participants/' + participantId + '/save'
+	const payload : UTSJSONObject = {
+		answers: answers,
+		remaining_time: remainingTime,
+	} as UTSJSONObject
+	return post(url, payload)
+}
+
+/**
+ * 交卷
+ * @param participantId 参与记录 ID
+ * @param answers 最终答案对象（后端会先保存再评分）
+ * @param remainingTime 剩余时间（秒）
+ * @param isTimeout 是否超时自动交卷
+ */
+export function submitLevelExamApi(participantId : number, answers : UTSJSONObject, remainingTime : number, isTimeout : boolean = false) : Promise<UTSJSONObject> {
+	const url = '/level-exam/participants/' + participantId + '/submit'
+	const payload : UTSJSONObject = {
+		is_timeout: isTimeout,
+		answers: answers,
+		remaining_time: remainingTime,
+	} as UTSJSONObject
+	return post(url, payload)
+}
+
+/**
+ * 获取考试结果
+ * @param participantId 参与记录 ID
+ */
+export function getLevelExamResultApi(participantId : number) : Promise<LevelExamResult> {
+	const url = '/level-exam/participants/' + participantId + '/result'
+	return get(url).then((data : UTSJSONObject) : LevelExamResult => {
+		console.log('[getLevelExamResultApi] raw data:', JSON.stringify(data))
+		return buildLevelExamResult(data)
+	}).catch((e) : LevelExamResult => {
+		console.error('[getLevelExamResultApi] failed:', e)
+		let msg = '获取考试结果失败'
+		if (e instanceof Error) {
+			const errObj = e as Error
+			const m = errObj.message
+			if (m != null && m.length > 0) {
+				msg = msg + ': ' + m
+			}
+		}
+		throw new Error(msg)
+	})
+}

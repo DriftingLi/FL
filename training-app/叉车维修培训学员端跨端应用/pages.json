@@ -1,39 +1,243 @@
 {
-	"pages": [
-		{
-			"path": "pages/index/index",
-			"style": {
-				"navigationStyle": "custom",
-				"navigationBarTitleText": "叉车维修培训"
-			}
-		},
-		{
-			"path": "pages/login/login",
-			"style": {
-				"navigationStyle": "custom",
-				"navigationBarTitleText": "登录"
-			}
-		},
-		{
-			"path": "pages/register/register",
-			"style": {
-				"navigationBarTitleText": "注册"
-			}
-		},
-		{
-			"path": "pages/dashboard/dashboard",
-			"style": {
-				"navigationStyle": "custom",
-				"navigationBarTitleText": "仪表盘",
-				"enablePullDownRefresh": true
-			}
-		}
-	],
-	"globalStyle": {
-		"navigationBarTextStyle": "black",
-		"navigationBarTitleText": "叉车维修培训",
-		"navigationBarBackgroundColor": "#F8F8F8",
-		"backgroundColor": "#F8F8F8"
-	},
-	"uniIdRouter": {}
+    "pages": [{
+            "path": "pages/index/index",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "叉车维修培训"
+            }
+        },
+        {
+            "path": "pages/login/login",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "登录"
+            }
+        },
+        {
+            "path": "pages/register/register",
+            "style": {
+                "navigationBarTitleText": "注册"
+            }
+        },
+        {
+            "path": "pages/dashboard/dashboard",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "首页",
+                "enablePullDownRefresh": true
+            }
+        },
+        {
+            "path": "pages/courses/courses",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "课程中心"
+            }
+        },
+        {
+            "path": "pages/courses/course-detail",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "课程详情"
+            }
+        },
+        {
+            "path": "pages/courses/chapter-view",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "章节学习"
+            }
+        },
+        {
+            "path": "pages/exam/exam",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "考试"
+            }
+        },
+        {
+            "path": "pages/exam/mock-exam",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "模拟考试"
+            }
+        },
+        {
+            "path": "pages/exam/mock-exam-result",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "考试成绩"
+            }
+        },
+        {
+            "path": "pages/exam/level-exam-do",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "等级考试"
+            }
+        },
+        {
+            "path": "pages/exam/level-exam-result",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "等级考试成绩"
+            }
+        },
+        {
+            "path": "pages/profile/profile",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "我的"
+            }
+        },
+        {
+            "path": "pages/profile/settings",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "设置"
+            }
+        },
+        {
+            "path": "pages/profile/records",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "学习记录"
+            }
+        },
+        {
+            "path": "pages/profile/practice-records",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "练习记录"
+            }
+        },
+        {
+            "path": "pages/profile/mock-exam-records",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "模考历史"
+            }
+        },
+        {
+            "path": "pages/profile/wrong-questions",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "错题本"
+            }
+        },
+        {
+            "path": "pages/practice/practice",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "题库练习"
+            }
+        },
+        {
+            "path": "pages/practice/practice-do",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "答题"
+            }
+        },
+        {
+            "path": "pages/forum/forum",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "学员论坛"
+            }
+        },
+        {
+            "path": "pages/forum/forum-detail",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "帖子详情"
+            }
+        },
+        {
+            "path": "pages/forum/forum-create",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "发布新帖"
+            }
+        },
+        {
+            "path": "pages/ai-assistant/ai-assistant",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "AI 助手"
+            }
+        },
+        {
+            "path": "pages/ai-assistant/ai-settings",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "对话设置"
+            }
+        },
+        {
+            "path": "pages/ai-assistant/version-select",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "选择版本"
+            }
+        },
+        {
+            "path": "pages/ai-assistant/ai-basic",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "维修助手基础版"
+            }
+        },
+        {
+            "path": "pages/ai-assistant/custom-models",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "自定义模型"
+            }
+        }
+    ],
+    "globalStyle": {
+        "navigationBarTextStyle": "black",
+        "navigationBarTitleText": "叉车维修培训",
+        "navigationBarBackgroundColor": "#F8F8F8",
+        "backgroundColor": "#F8F8F8"
+    },
+    "tabBar": {
+        "color": "#999999",
+        "selectedColor": "#2979ff",
+        "backgroundColor": "#ffffff",
+        "borderStyle": "black",
+        "list": [{
+                "pagePath": "pages/dashboard/dashboard",
+                "text": "首页",
+                "iconPath": "static/tabbar/home.png",
+                "selectedIconPath": "static/tabbar/home-active.png"
+            },
+            {
+                "pagePath": "pages/courses/courses",
+                "text": "课程",
+                "iconPath": "static/tabbar/course.png",
+                "selectedIconPath": "static/tabbar/course-active.png"
+            },
+            {
+                "pagePath": "pages/ai-assistant/version-select",
+                "text": "AI学",
+                "iconPath": "static/tabbar/ai.png",
+                "selectedIconPath": "static/tabbar/ai-active.png"
+            },
+            {
+                "pagePath": "pages/forum/forum",
+                "text": "交流",
+                "iconPath": "static/tabbar/forum.png",
+                "selectedIconPath": "static/tabbar/forum-active.png"
+            },
+            {
+                "pagePath": "pages/profile/profile",
+                "text": "我的",
+                "iconPath": "static/tabbar/profile.png",
+                "selectedIconPath": "static/tabbar/profile-active.png"
+            }
+        ]
+    },
+    "uniIdRouter": {}
 }

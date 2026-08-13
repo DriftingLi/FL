@@ -1,0 +1,780 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">题库练习</text>
+            <view class="header-right"></view>
+        </view>
+        <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMoreHistory">
+            <!-- 练习统计 -->
+            <view class="stats-card">
+                <view class="stat-item">
+                    <text class="stat-num">{{ stats.total_practiced }}</text>
+                    <text class="stat-label">累计练习</text>
+                </view>
+                <view class="stat-divider"></view>
+                <view class="stat-item">
+                    <text class="stat-num">{{ stats.correct_count }}</text>
+                    <text class="stat-label">答对题数</text>
+                </view>
+                <view class="stat-divider"></view>
+                <view class="stat-item">
+                    <text class="stat-num">{{ stats.accuracy }}%</text>
+                    <text class="stat-label">正确率</text>
+                </view>
+                <view class="stat-divider"></view>
+                <view class="stat-item">
+                    <text class="stat-num">{{ stats.today_count }}</text>
+                    <text class="stat-label">今日练习</text>
+                </view>
+            </view>
+
+            <!-- 练习模式 -->
+            <view class="section">
+                <view class="section-header">
+                    <text class="section-title">练习模式</text>
+                </view>
+                <view class="mode-grid">
+                    <view class="mode-card" @click="onStartFree">
+                        <view class="mode-icon-wrap mode-color-free">
+                            <text class="mode-icon">🎲</text>
+                        </view>
+                        <text class="mode-name">随机练习</text>
+                        <text class="mode-desc">随机抽题练习</text>
+                    </view>
+                    <view class="mode-card" @click="onStartSequential">
+                        <view class="mode-icon-wrap mode-color-seq">
+                            <text class="mode-icon">📋</text>
+                        </view>
+                        <text class="mode-name">顺序练习</text>
+                        <text class="mode-desc">按顺序逐题练习</text>
+                    </view>
+                    <view class="mode-card" @click="onStartCategory">
+                        <view class="mode-icon-wrap mode-color-cat">
+                            <text class="mode-icon">📂</text>
+                        </view>
+                        <text class="mode-name">章节练习</text>
+                        <text class="mode-desc">按课程分类练习</text>
+                    </view>
+                    <view class="mode-card" @click="onStartKnowledgePoint">
+                        <view class="mode-icon-wrap mode-color-kp">
+                            <text class="mode-icon">🎯</text>
+                        </view>
+                        <text class="mode-name">专项练习</text>
+                        <text class="mode-desc">按知识点练习</text>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 顺序练习进度（有进度时显示） -->
+            <view v-if="seqProgress.total > 0" class="section">
+                <view class="section-header">
+                    <text class="section-title">顺序练习进度</text>
+                    <text class="section-more" @click="onContinueSequential">继续练习 →</text>
+                </view>
+                <view class="progress-card" @click="onContinueSequential">
+                    <view class="progress-info">
+                        <text class="progress-text">已练习 {{ seqProgress.index }} / {{ seqProgress.total }} 题</text>
+                        <view class="progress-bar-wrap">
+                            <view class="progress-bar" :style="{ width: seqPercent + '%' }"></view>
+                        </view>
+                    </view>
+                    <text class="progress-percent">{{ seqPercent }}%</text>
+                </view>
+            </view>
+
+            <!-- 练习历史 -->
+            <view class="section">
+                <view class="section-header">
+                    <text class="section-title">练习历史</text>
+                </view>
+                <view v-if="history.length == 0 && !historyLoading" class="empty-tip">
+                    <text class="empty-text">暂无练习记录</text>
+                </view>
+                <view class="history-list">
+                    <view v-for="(item, idx) in history" :key="idx" class="history-item">
+                        <view class="history-status" :class="{ correct: item.is_correct, wrong: !item.is_correct }">
+                            <text class="history-status-text">{{ item.is_correct ? '✓' : '✗' }}</text>
+                        </view>
+                        <view class="history-info">
+                            <text class="history-title">{{ item.question_title }}</text>
+                            <view class="history-meta">
+                                <text class="history-type">{{ getTypeName(item.type) }}</text>
+                                <text class="history-mode">{{ getModeName(item.practice_type) }}</text>
+                                <text class="history-time">{{ formatDate(item.created_at) }}</text>
+                            </view>
+                        </view>
+                    </view>
+                </view>
+                <view v-if="historyLoading" class="loading-more">
+                    <text class="loading-text">加载中...</text>
+                </view>
+                <view v-if="historyNoMore && history.length > 0" class="loading-more">
+                    <text class="loading-text">没有更多了</text>
+                </view>
+            </view>
+        </scroll-view>
+
+        <!-- 章节练习分类选择弹窗 -->
+        <view v-if="showCategoryPicker" class="picker-mask" @click="onCloseCategoryPicker">
+            <view class="picker-box" @click.stop="">
+                <view class="picker-header">
+                    <text class="picker-title">选择课程分类</text>
+                    <text class="picker-close" @click="onCloseCategoryPicker">×</text>
+                </view>
+                <scroll-view class="picker-scroll" scroll-y="true">
+                    <view v-for="(cat, idx) in categoryList" :key="idx" class="picker-item"
+                        @click="onPickCategory(cat)">
+                        <view class="picker-item-info">
+                            <text class="picker-item-name">{{ cat.name }}</text>
+                            <text class="picker-item-count">{{ cat.question_count }}题</text>
+                        </view>
+                        <text class="picker-item-arrow">›</text>
+                    </view>
+                    <view v-if="categoryList.length == 0" class="empty-tip">
+                        <text class="empty-text">暂无分类数据</text>
+                    </view>
+                </scroll-view>
+            </view>
+        </view>
+
+        <!-- 知识点选择弹窗 -->
+        <view v-if="showKpPicker" class="picker-mask" @click="onCloseKpPicker">
+            <view class="picker-box" @click.stop="">
+                <view class="picker-header">
+                    <text class="picker-title">选择知识点</text>
+                    <text class="picker-close" @click="onCloseKpPicker">×</text>
+                </view>
+                <scroll-view class="picker-scroll" scroll-y="true">
+                    <view v-for="(kp, idx) in kpList" :key="idx" class="picker-item"
+                        @click="onPickKnowledgePoint(kp)">
+                        <view class="picker-item-info">
+                            <text class="picker-item-name">{{ kp.name }}</text>
+                            <text class="picker-item-count">{{ kp.question_count }}题</text>
+                        </view>
+                        <text class="picker-item-arrow">›</text>
+                    </view>
+                    <view v-if="kpList.length == 0" class="empty-tip">
+                        <text class="empty-text">暂无知识点数据</text>
+                    </view>
+                </scroll-view>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onShow } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
+    import {
+        getPracticeStatsApi,
+        getPracticeHistoryApi,
+        getSequentialProgressApi,
+        getCategoriesApi,
+        getKnowledgePointsApi,
+    } from '../../api/practice'
+    import type { PracticeStats, PracticeHistoryItem, PracticeProgress, QuestionCategory, KnowledgePoint } from '../../types/index'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    // 统计数据
+    const stats = ref<PracticeStats>({
+        total_practiced: 0,
+        correct_count: 0,
+        accuracy: 0,
+        today_count: 0,
+        streak_days: 0,
+    } as PracticeStats)
+
+    // 顺序练习进度
+    const seqProgress = ref<PracticeProgress>({
+        index: 0,
+        practice_mode: 'sequential',
+        total: 0,
+        answers_state: {} as UTSJSONObject,
+    } as PracticeProgress)
+
+    const seqPercent = computed<number>(() : number => {
+        if (seqProgress.value.total <= 0) return 0
+        return Math.floor(seqProgress.value.index * 100 / seqProgress.value.total)
+    })
+
+    // 练习历史
+    const history = ref<PracticeHistoryItem[]>([])
+    const historyPage = ref<number>(1)
+    const historyPageSize = 20
+    const historyTotal = ref<number>(0)
+    const historyLoading = ref<boolean>(false)
+    const historyNoMore = ref<boolean>(false)
+
+    // 分类/知识点选择弹窗
+    const showCategoryPicker = ref<boolean>(false)
+    const categoryList = ref<QuestionCategory[]>([])
+    const showKpPicker = ref<boolean>(false)
+    const kpList = ref<KnowledgePoint[]>([])
+
+    function getTypeName(type : string) : string {
+        if (type == 'single' || type == 'single_choice') return '单选题'
+        if (type == 'multi' || type == 'multiple_choice' || type == 'multi_choice') return '多选题'
+        if (type == 'judge' || type == 'true_false') return '判断题'
+        return '其他'
+    }
+
+    function getModeName(mode : string) : string {
+        if (mode == 'free') return '随机练习'
+        if (mode == 'sequential') return '顺序练习'
+        if (mode == 'category') return '章节练习'
+        if (mode == 'knowledge_point') return '专项练习'
+        return '练习'
+    }
+
+    function formatDate(dateStr : string) : string {
+        if (dateStr.length < 10) return dateStr
+        return dateStr.substring(0, 10)
+    }
+
+    function onBack() : void {
+        goBack()
+    }
+
+    async function loadStats() {
+        try {
+            const data = await getPracticeStatsApi()
+            stats.value = data
+        } catch (e) {
+            console.error('[practice] load stats failed:', e)
+        }
+    }
+
+    async function loadSeqProgress() {
+        try {
+            const data = await getSequentialProgressApi()
+            seqProgress.value = data
+        } catch (e) {
+            console.error('[practice] load seq progress failed:', e)
+        }
+    }
+
+    async function loadHistory(reset : boolean = false) {
+        if (historyLoading.value) return
+        if (reset) {
+            historyPage.value = 1
+            historyNoMore.value = false
+        }
+        if (historyNoMore.value && !reset) return
+
+        historyLoading.value = true
+        try {
+            const result = await getPracticeHistoryApi(historyPage.value, historyPageSize, '')
+            if (reset) {
+                history.value = result.items
+            } else {
+                history.value = history.value.concat(result.items)
+            }
+            historyTotal.value = result.total
+            if (history.value.length >= result.total || result.items.length == 0) {
+                historyNoMore.value = true
+            } else {
+                historyPage.value = historyPage.value + 1
+            }
+        } catch (e) {
+            console.error('[practice] load history failed:', e)
+        } finally {
+            historyLoading.value = false
+        }
+    }
+
+    function onLoadMoreHistory() : void {
+        loadHistory(false)
+    }
+
+    // ===== 练习模式入口 =====
+
+    function onStartFree() : void {
+        uni.showActionSheet({
+            itemList: ['10题', '20题', '50题'],
+            success: (res) => {
+                let count = 20
+                if (res.tapIndex == 0) count = 10
+                else if (res.tapIndex == 1) count = 20
+                else if (res.tapIndex == 2) count = 50
+                uni.navigateTo({
+                    url: '/pages/practice/practice-do?mode=free&count=' + count
+                })
+            }
+        })
+    }
+
+    function onStartSequential() : void {
+        uni.navigateTo({
+            url: '/pages/practice/practice-do?mode=sequential'
+        })
+    }
+
+    function onContinueSequential() : void {
+        uni.navigateTo({
+            url: '/pages/practice/practice-do?mode=sequential&continue=1'
+        })
+    }
+
+    async function onStartCategory() : Promise<void> {
+        if (categoryList.value.length == 0) {
+            uni.showLoading({ title: '加载分类...' })
+            try {
+                const list = await getCategoriesApi()
+                categoryList.value = list
+            } catch (e) {
+                console.error('[practice] load categories failed:', e)
+            } finally {
+                uni.hideLoading()
+            }
+        }
+        if (categoryList.value.length == 0) {
+            uni.showToast({ title: '暂无分类数据', icon: 'none' })
+            return
+        }
+        showCategoryPicker.value = true
+    }
+
+    function onCloseCategoryPicker() : void {
+        showCategoryPicker.value = false
+    }
+
+    function onPickCategory(cat : QuestionCategory) : void {
+        showCategoryPicker.value = false
+        uni.navigateTo({
+            url: '/pages/practice/practice-do?mode=category&category=' + cat.code
+        })
+    }
+
+    async function onStartKnowledgePoint() : Promise<void> {
+        if (kpList.value.length == 0) {
+            uni.showLoading({ title: '加载知识点...' })
+            try {
+                const list = await getKnowledgePointsApi()
+                kpList.value = list
+            } catch (e) {
+                console.error('[practice] load knowledge points failed:', e)
+            } finally {
+                uni.hideLoading()
+            }
+        }
+        if (kpList.value.length == 0) {
+            uni.showToast({ title: '暂无知识点数据', icon: 'none' })
+            return
+        }
+        showKpPicker.value = true
+    }
+
+    function onCloseKpPicker() : void {
+        showKpPicker.value = false
+    }
+
+    function onPickKnowledgePoint(kp : KnowledgePoint) : void {
+        showKpPicker.value = false
+        uni.navigateTo({
+            url: '/pages/practice/practice-do?mode=knowledge_point&kp_id=' + kp.id + '&kp_name=' + encodeURIComponent(kp.name)
+        })
+    }
+
+    onShow(() => {
+        loadStats()
+        loadSeqProgress()
+        if (history.value.length == 0) {
+            loadHistory(true)
+        }
+    })
+</script>
+
+<style>
+    .container {
+        display: flex;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        width: 60rpx;
+        align-items: center;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #ffffff;
+    }
+
+    .header-title {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .header-right {
+        width: 60rpx;
+    }
+
+    .content-scroll {
+        flex: 1;
+        height: 0;
+    }
+
+    /* 统计卡片 */
+    .stats-card {
+        margin: 24rpx;
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 32rpx;
+        flex-direction: row;
+        justify-content: space-around;
+        border: 1px solid #eeeeee;
+    }
+
+    .stat-item {
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .stat-num {
+        font-size: 40rpx;
+        font-weight: bold;
+        color: #2979ff;
+        margin-bottom: 8rpx;
+    }
+
+    .stat-label {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .stat-divider {
+        width: 1rpx;
+        background-color: #f0f0f0;
+    }
+
+    /* 通用 section */
+    .section {
+        background-color: #ffffff;
+        margin-bottom: 16rpx;
+        padding: 24rpx;
+    }
+
+    .section-header {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24rpx;
+    }
+
+    .section-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .section-more {
+        font-size: 26rpx;
+        color: #2979ff;
+    }
+
+    /* 练习模式网格 */
+    .mode-grid {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: space-between;
+    }
+
+    .mode-card {
+        width: 340rpx;
+        background-color: #f8f9fa;
+        border-radius: 12rpx;
+        padding: 32rpx 0;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 16rpx;
+        border: 1px solid #eeeeee;
+    }
+
+    .mode-icon-wrap {
+        width: 88rpx;
+        height: 88rpx;
+        border-radius: 44rpx;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 16rpx;
+    }
+
+    .mode-color-free {
+        background-color: #e3f2fd;
+    }
+
+    .mode-color-seq {
+        background-color: #f3e5f5;
+    }
+
+    .mode-color-cat {
+        background-color: #e8f5e9;
+    }
+
+    .mode-color-kp {
+        background-color: #fff3e0;
+    }
+
+    .mode-icon {
+        font-size: 44rpx;
+    }
+
+    .mode-name {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 8rpx;
+    }
+
+    .mode-desc {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    /* 顺序练习进度卡片 */
+    .progress-card {
+        flex-direction: row;
+        align-items: center;
+        padding: 24rpx;
+        background-color: #f0f7ff;
+        border-radius: 12rpx;
+    }
+
+    .progress-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .progress-text {
+        font-size: 26rpx;
+        color: #333333;
+        margin-bottom: 12rpx;
+    }
+
+    .progress-bar-wrap {
+        height: 12rpx;
+        background-color: #e0e0e0;
+        border-radius: 6rpx;
+        overflow: hidden;
+    }
+
+    .progress-bar {
+        height: 12rpx;
+        background-color: #2979ff;
+        border-radius: 6rpx;
+    }
+
+    .progress-percent {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #2979ff;
+        margin-left: 20rpx;
+    }
+
+    /* 练习历史 */
+    .history-list {
+        flex-direction: column;
+    }
+
+    .history-item {
+        flex-direction: row;
+        align-items: center;
+        padding: 20rpx 0;
+        border-bottom: 1rpx solid #f5f5f5;
+    }
+
+    .history-item:last-child {
+        border-bottom: none;
+    }
+
+    .history-status {
+        width: 56rpx;
+        height: 56rpx;
+        border-radius: 28rpx;
+        align-items: center;
+        justify-content: center;
+        margin-right: 20rpx;
+    }
+
+    .history-status.correct {
+        background-color: #e8f5e9;
+    }
+
+    .history-status.wrong {
+        background-color: #ffebee;
+    }
+
+    .history-status-text {
+        font-size: 32rpx;
+        font-weight: bold;
+    }
+
+    .history-status.correct .history-status-text {
+        color: #4caf50;
+    }
+
+    .history-status.wrong .history-status-text {
+        color: #f44336;
+    }
+
+    .history-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .history-title {
+        font-size: 28rpx;
+        color: #333333;
+        margin-bottom: 8rpx;
+        lines: 1;
+        text-overflow: ellipsis;
+    }
+
+    .history-meta {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .history-type {
+        font-size: 20rpx;
+        color: #ffffff;
+        background-color: #2979ff;
+        padding: 4rpx 12rpx;
+        border-radius: 6rpx;
+        margin-right: 12rpx;
+    }
+
+    .history-mode {
+        font-size: 20rpx;
+        color: #666666;
+        background-color: #f0f0f0;
+        padding: 4rpx 12rpx;
+        border-radius: 6rpx;
+        margin-right: 12rpx;
+    }
+
+    .history-time {
+        font-size: 20rpx;
+        color: #cccccc;
+    }
+
+    /* 弹窗 */
+    .picker-mask {
+        position: fixed;
+        left: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        justify-content: center;
+        align-items: center;
+    }
+
+    .picker-box {
+        width: 600rpx;
+        max-height: 800rpx;
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .picker-header {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        padding: 24rpx 32rpx;
+        border-bottom: 1rpx solid #f0f0f0;
+    }
+
+    .picker-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .picker-close {
+        font-size: 44rpx;
+        color: #999999;
+        padding: 0 8rpx;
+    }
+
+    .picker-scroll {
+        max-height: 600rpx;
+    }
+
+    .picker-item {
+        flex-direction: row;
+        align-items: center;
+        padding: 24rpx 32rpx;
+        border-bottom: 1rpx solid #f5f5f5;
+    }
+
+    .picker-item:last-child {
+        border-bottom: none;
+    }
+
+    .picker-item-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .picker-item-name {
+        font-size: 28rpx;
+        color: #333333;
+        margin-bottom: 4rpx;
+    }
+
+    .picker-item-count {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .picker-item-arrow {
+        font-size: 36rpx;
+        color: #cccccc;
+    }
+
+    .empty-tip {
+        align-items: center;
+        padding: 60rpx 0;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .loading-more {
+        align-items: center;
+        padding: 24rpx 0;
+    }
+
+    .loading-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
+</style>

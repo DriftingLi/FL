@@ -115,53 +115,69 @@ export function request<T>(options : RequestOptions) : Promise<UTSJSONObject> {
 				console.log('[request] <<< success statusCode=', res.statusCode)
 				console.log('[request] <<< data:', res.data)
 				const statusCode = res.statusCode
-				const body = res.data as UTSJSONObject
+				// 响应体可能是 HTML（如 nginx 502 错误页），as UTSJSONObject 会抛 ClassCastException
+				// 用 try/catch 包裹，确保异常时 reject 而非让 Promise 悬挂
+				try {
+					const body = res.data as UTSJSONObject
 
-				// HTTP 401：未登录/登录过期
-				if (statusCode == 401) {
-					handleUnauthorized()
-					showError('登录已过期，请重新登录', silent)
-					reject(new Error('登录已过期，请重新登录'))
-					return
-				}
-
-				// HTTP 其他错误
-				if (statusCode < 200 || statusCode >= 300) {
-					let msg = `请求失败 (${statusCode})`
-					const bodyMsg = body['message']
-					if (bodyMsg != null) {
-						msg = bodyMsg as string
+					// HTTP 401：未登录/登录过期
+					if (statusCode == 401) {
+						handleUnauthorized()
+						showError('登录已过期，请重新登录', silent)
+						reject(new Error('登录已过期，请重新登录'))
+						return
 					}
+
+					// HTTP 其他错误
+					if (statusCode < 200 || statusCode >= 300) {
+						let msg = `请求失败 (${statusCode})`
+						const bodyMsg = body['message']
+						if (bodyMsg != null) {
+							msg = bodyMsg as string
+						}
+						showError(msg, silent)
+						reject(new Error(msg))
+						return
+					}
+
+					// 业务层错误：code 非 200/201
+					const code = body['code'] as number
+					const message = (body['message'] as string) ?? '请求失败'
+					if (code != 200 && code != 201) {
+						showError(message, silent)
+						reject(new Error(message))
+						return
+					}
+
+					// 成功：返回 data 字段（UTSJSONObject，由调用方手动构造目标类型）
+				const data = body['data']
+				if (data == null) {
+					resolve({})
+				} else {
+					const dataObj = data as UTSJSONObject
+					resolve(dataObj)
+				}
+				} catch (e) {
+					// 响应非 JSON（如 nginx 返回的 HTML 502 页面），以 HTTP 状态码报错
+					// 此 reject 会被 loginApi 的 .catch() 捕获，触发 mock 数据回退
+					console.error('[request] parse response failed (non-JSON?):', e)
+					const msg = `请求失败 (${statusCode})`
 					showError(msg, silent)
 					reject(new Error(msg))
-					return
 				}
-
-				// 业务层错误：code 非 200/201
-				const code = body['code'] as number
-				const message = (body['message'] as string) ?? '请求失败'
-				if (code != 200 && code != 201) {
-					showError(message, silent)
-					reject(new Error(message))
-					return
-				}
-
-				// 成功：返回 data 字段（UTSJSONObject，由调用方手动构造目标类型）
-			const data = body['data']
-			if (data == null) {
-				resolve({})
-			} else {
-				const dataObj = data as UTSJSONObject
-				resolve(dataObj)
-			}
 			},
 			fail: (err) => {
-				console.error('[request] <<< FAIL errMsg=', err.errMsg)
-				console.error('[request] <<< FAIL err=', JSON.stringify(err))
-				const msg = '网络连接失败，请检查后端服务是否启动'
-				showError(msg, silent)
-				reject(new Error(err.errMsg ?? msg))
-			},
+			console.error('[request] <<< FAIL errMsg=', err.errMsg)
+			console.error('[request] <<< FAIL err=', JSON.stringify(err))
+			// 区分超时与其他网络错误，给出更准确的提示
+			const errMsg = err.errMsg ?? ''
+			let msg = '网络连接失败，请检查网络后重试'
+			if (errMsg.indexOf('timeout') >= 0) {
+				msg = '请求超时，请稍后重试'
+			}
+			showError(msg, silent)
+			reject(new Error(errMsg.length > 0 ? errMsg : msg))
+		},
 		})
 	})
 }
@@ -193,4 +209,135 @@ export function post(url : string, data : any | null = null, options : RequestOp
 	opts.method = 'POST'
 	opts.data = data
 	return request<UTSJSONObject>(opts)
+}
+
+/** PUT 请求快捷方法 */
+export function put(url : string, data : any | null = null, options : RequestOptions | null = null) : Promise<UTSJSONObject> {
+	const opts : RequestOptions = options != null ? options! : { url: url } as RequestOptions
+	opts.url = url
+	opts.method = 'PUT'
+	opts.data = data
+	return request<UTSJSONObject>(opts)
+}
+
+/** DELETE 请求快捷方法 */
+export function del(url : string, options : RequestOptions | null = null) : Promise<UTSJSONObject> {
+	const opts : RequestOptions = options != null ? options! : { url: url } as RequestOptions
+	opts.url = url
+	opts.method = 'DELETE'
+	return request<UTSJSONObject>(opts)
+}
+
+/** PATCH 请求快捷方法 */
+export function patch(url : string, data : any | null = null, options : RequestOptions | null = null) : Promise<UTSJSONObject> {
+	const opts : RequestOptions = options != null ? options! : { url: url } as RequestOptions
+	opts.url = url
+	opts.method = 'PATCH'
+	opts.data = data
+	return request<UTSJSONObject>(opts)
+}
+
+/**
+ * 上传文件（multipart/form-data）
+ * @note uni.uploadFile 不走统一 request 封装，需手动注入 Authorization 与解包 ApiResponse
+ * @returns 解包后的 data 字段（UTSJSONObject）
+ */
+export function uploadFile(url : string, filePath : string, name : string = 'file', formData : UTSJSONObject | null = null, options : RequestOptions | null = null) : Promise<UTSJSONObject> {
+	return new Promise<UTSJSONObject>((resolve, reject) => {
+		const silent = options?.silent ?? false
+		const timeout = options?.timeout ?? REQUEST_TIMEOUT
+		const fullURL = resolveURL(url)
+
+		// 构造请求头（与 buildHeader 同逻辑，但 uploadFile 需要 token）
+		const header : UTSJSONObject = {}
+		const token = getStorage(STORAGE_KEY_TOKEN)
+		if (token.length > 0) {
+			header['Authorization'] = `Bearer ${token}`
+		}
+		if (silent) {
+			header['X-Silent'] = '1'
+		}
+		// 注意：uploadFile 不要手动设置 Content-Type，由端侧自动生成 multipart boundary
+
+		console.log('[uploadFile] >>>', 'POST', fullURL)
+		console.log('[uploadFile] filePath=', filePath)
+
+		// formData 必须是 UTSJSONObject，null 时传空对象（uni.uploadFile 不接受 undefined）
+		const safeFormData : UTSJSONObject = formData != null ? formData! : ({} as UTSJSONObject)
+
+		uni.uploadFile({
+			url: fullURL,
+			filePath: filePath,
+			name: name,
+			header: header,
+			formData: safeFormData,
+			timeout: timeout,
+			success: (res) => {
+				console.log('[uploadFile] <<< success statusCode=', res.statusCode)
+				console.log('[uploadFile] <<< data=', res.data)
+				const statusCode = res.statusCode
+				try {
+					// res.data 是字符串，需要 JSON.parse
+					const bodyStr = res.data
+					const parsed = JSON.parse(bodyStr)
+					if (parsed == null) {
+						const msg = `上传失败 (${statusCode})`
+						showError(msg, silent)
+						reject(new Error(msg))
+						return
+					}
+					const body = parsed as UTSJSONObject
+
+					if (statusCode == 401) {
+						handleUnauthorized()
+						showError('登录已过期，请重新登录', silent)
+						reject(new Error('登录已过期，请重新登录'))
+						return
+					}
+
+					if (statusCode < 200 || statusCode >= 300) {
+						let msg = `请求失败 (${statusCode})`
+						const bodyMsg = body['message']
+						if (bodyMsg != null) {
+							msg = bodyMsg as string
+						}
+						showError(msg, silent)
+						reject(new Error(msg))
+						return
+					}
+
+					const code = body['code'] as number
+					const message = (body['message'] as string) ?? '上传失败'
+					if (code != 200 && code != 201) {
+						showError(message, silent)
+						reject(new Error(message))
+						return
+					}
+
+					const data = body['data']
+					if (data == null) {
+						resolve({})
+					} else {
+						const dataObj = data as UTSJSONObject
+						resolve(dataObj)
+					}
+				} catch (e) {
+					console.error('[uploadFile] parse response failed:', e)
+					const msg = `上传失败 (${statusCode})`
+					showError(msg, silent)
+					reject(new Error(msg))
+				}
+			},
+			fail: (err) => {
+				console.error('[uploadFile] <<< FAIL errMsg=', err.errMsg)
+				const errMsg = err.errMsg ?? ''
+				let msg = '上传失败，请检查网络后重试'
+				if (errMsg.indexOf('timeout') >= 0) {
+					msg = '上传超时，请稍后重试'
+				}
+				showError(msg, silent)
+				reject(new Error(errMsg.length > 0 ? errMsg : msg))
+			}
+		})
+	})
 }

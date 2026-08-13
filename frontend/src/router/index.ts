@@ -404,8 +404,13 @@ router.beforeEach(async (to, _from, next) => {
       const targetSubdomain = getTargetSubdomainForPath(to.path)
       if (currentSubdomain !== targetSubdomain) {
         if (targetSubdomain === 'main') {
-          // 其余公共路径（/ 等）留在当前子域名默认工作区
-          next(getDefaultWorkspaceBySubdomain())
+          // AI 助手部署在主域名，允许从功能子域名跳转过去；
+          // 其余公共路径（/、/dispatch 等）留在当前子域名默认工作区
+          if (to.path.startsWith('/ai-assistant')) {
+            window.location.href = buildCrossDomainAuthUrl('main', to.fullPath)
+          } else {
+            next(getDefaultWorkspaceBySubdomain())
+          }
         } else {
           // 路径属于另一个功能子域名 → 跨子域名跳转
           window.location.href = buildCrossDomainAuthUrl(targetSubdomain, to.fullPath)

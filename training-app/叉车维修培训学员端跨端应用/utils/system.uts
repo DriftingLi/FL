@@ -1,0 +1,25 @@
+/**
+ * 系统信息相关工具
+ */
+import { ref } from 'vue'
+import type { Ref } from 'vue'
+
+/**
+ * 创建状态栏高度响应式引用，自动获取并更新真实值。
+ * 用于自定义导航栏顶部的 status-bar 占位。
+ * @param defaultValue 获取失败时的回退高度，默认 44
+ */
+export function useStatusBarHeight(defaultValue: number = 44): Ref<number> {
+	const height = ref<number>(defaultValue)
+	uni.getSystemInfo({
+		success: (res) => {
+			const sbh = res.statusBarHeight
+			if (sbh != null) {
+				height.value = sbh as number
+			} else {
+				height.value = defaultValue
+			}
+		}
+	})
+	return height
+}

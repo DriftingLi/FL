@@ -1,0 +1,148 @@
+/**
+ * AI 助手相关接口
+ * 对应后端 /api/ai-assistant/*
+ */
+import { get, post, del } from './request'
+import { API_BASE_URL, AI_REQUEST_TIMEOUT } from '../config/env'
+import type { AIModelOption, AIChatSession, AIChatMessage } from '../types/index'
+
+/** 获取公开可用模型列表 */
+export function getPublicModelsApi() : Promise<UTSJSONObject> {
+	return get('/ai-assistant/models')
+}
+
+/** 获取当前用户会话列表 */
+export function getSessionsApi() : Promise<UTSJSONObject> {
+	return get('/ai-assistant/sessions')
+}
+
+/** 创建会话 */
+export function createSessionApi(title : string, modelName : string) : Promise<UTSJSONObject> {
+	return post('/ai-assistant/sessions', { title, model_name: modelName })
+}
+
+/** 删除会话 */
+export function deleteSessionApi(id : number) : Promise<UTSJSONObject> {
+	return del(`/ai-assistant/sessions/${id}`)
+}
+
+/** 获取会话消息 */
+export function getSessionMessagesApi(id : number) : Promise<UTSJSONObject> {
+	return get(`/ai-assistant/sessions/${id}/messages`)
+}
+
+/** 流式对话请求参数 */
+export type StreamChatParams = {
+	session_id ?: number
+	model_source : string
+	config_id ?: number
+	user_model_id ?: number
+	custom_api_key ?: string
+	custom_base_url ?: string
+	custom_model ?: string
+	messages : { role : string; content : string }[]
+}
+
+/** 流式对话回调 */
+export type StreamChatCallbacks = {
+	onMessage ?: (chunk : string) => void
+	onError ?: (msg : string) => void
+	onDone ?: () => void
+}
+
+/**
+ * 流式对话（SSE）
+ * 使用 uni.requestTask 支持中止请求
+ */
+export function streamChatApi(params : StreamChatParams, callbacks : StreamChatCallbacks) : void {
+	const token = uni.getStorageSync('auth_token') as string
+	const url = `${API_BASE_URL}/ai-assistant/chat`
+
+	uni.request({
+		url: url,
+		method: 'POST',
+		header: {
+			'Content-Type': 'application/json',
+			'Accept': 'text/event-stream',
+			'Authorization': token.length > 0 ? `Bearer ${token}` : '',
+		},
+		data: params,
+		timeout: AI_REQUEST_TIMEOUT,
+		success: (res) => {
+			const text = res.data as string
+			parseSSE(text, callbacks)
+		},
+		fail: (err) => {
+			console.error('[streamChat] fail:', err)
+			if (callbacks.onError != null) {
+				callbacks.onError(err.errMsg ?? '网络请求失败')
+			}
+		},
+	})
+}
+
+/** 简单解析 SSE 文本 */
+function parseSSE(text : string, callbacks : StreamChatCallbacks) : void {
+	const lines = text.split('\n')
+	let event = ''
+	let data = ''
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i].trim()
+		if (line.startsWith('event:')) {
+			event = line.substring(6).trim()
+		} else if (line.startsWith('data:')) {
+			data = line.substring(5).trim()
+		} else if (line.length == 0) {
+			if (event.length > 0) {
+				handleSSEEvent(event, data, callbacks)
+			}
+			event = ''
+			data = ''
+		}
+	}
+	if (event.length > 0) {
+		handleSSEEvent(event, data, callbacks)
+	}
+}
+
+function handleSSEEvent(event : string, data : string, callbacks : StreamChatCallbacks) : void {
+	if (event == 'message') {
+		try {
+			const obj = JSON.parse(data) as UTSJSONObject
+			const chunk = obj['content'] as string
+			if (chunk != null && chunk.length > 0 && callbacks.onMessage != null) {
+				callbacks.onMessage(chunk)
+			}
+		} catch (e) {
+			console.error('[streamChat] parse message error:', e)
+		}
+	} else if (event == 'error') {
+		let msg = '对话出错'
+		try {
+			const obj = JSON.parse(data) as UTSJSONObject
+			msg = (obj['message'] as string) ?? msg
+		} catch (e) {}
+		if (callbacks.onError != null) {
+			callbacks.onError(msg)
+		}
+	} else if (event == 'done') {
+		if (callbacks.onDone != null) {
+			callbacks.onDone()
+		}
+	}
+}
+
+/** 获取用户自定义模型列表 */
+export function getUserModelsApi() : Promise<UTSJSONObject> {
+	return get('/ai-assistant/user-models')
+}
+
+/** 保存（新增或更新）自定义模型 */
+export function saveUserModelApi(payload : UTSJSONObject) : Promise<UTSJSONObject> {
+	return post('/ai-assistant/user-models', payload)
+}
+
+/** 删除自定义模型 */
+export function deleteUserModelApi(id : number) : Promise<UTSJSONObject> {
+	return del(`/ai-assistant/user-models/${id}`)
+}

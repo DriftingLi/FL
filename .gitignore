@@ -134,7 +134,39 @@ backend/.air.toml
 
 # ===== 调试和性能分析 =====
 debug
-*.prof
-*.test
+*:prof
 cpu.prof
 mem.prof
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/reference/01_login.jpg
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/reference/02_register.jpg
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/reference/03_dashboard.jpg
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/reference/04_course_list.jpg
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/reference/05_course_detail.jpg
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/reference/06_chapter_study.jpg
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/reference/07_exam.jpg
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/reference/08_question_bank.jpg
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/reference/09_mock_exam.jpg
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/reference/10_level_exam.jpg
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/reference/11_wrong_questions.jpg
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/reference/13_profile.jpg
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/.design
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/colors_and_type.css
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/dispatch-packet-page-chapter-study.json
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/dispatch-packet-page-course-detail.json
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/dispatch-packet-page-courses.json
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/dispatch-packet-page-dashboard.json
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/dispatch-packet-page-exam.json
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/dispatch-packet-page-level-exam.json
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/dispatch-packet-page-login.json
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/dispatch-packet-page-mock-exam.json
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/dispatch-packet-page-profile.json
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/dispatch-packet-page-question-bank.json
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/dispatch-packet-page-register.json
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/dispatch-packet-page-wrong-questions.json
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/restore-contract-report.json
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/runtime-dispatch-manifest.json
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/runtime-orchestration-summary.json
+training-app/叉车维修培训学员端跨端应用/forklift-training-ui/assets/ai-assistant.jpg
+
+# ===== 项目备份目录（含嵌套 .git，不入库）=====
+training-app/*-backup-*/
