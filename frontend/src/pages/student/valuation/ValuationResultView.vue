@@ -50,15 +50,6 @@ async function downloadPdf() {
     `evaluation_report_${evalId}.pdf`
   )
 }
-
-// 使用年限 = 详情返回的成交年份 - 出厂年份（API 数据驱动，不再依赖内存草稿）
-const usageYears = computed(() => {
-  const d = r.value
-  if (d?.sale_year && d?.factory_year) {
-    return d.sale_year - d.factory_year
-  }
-  return 0
-})
 </script>
 
 <template>
@@ -96,11 +87,7 @@ const usageYears = computed(() => {
       <h2 class="section-title">未来估价走势</h2>
       <FutureValueChart
         :estimated-value="r.estimated_value"
-        :age="usageYears"
-        :k-time="r.k_time"
-        :k-hours="r.k_hours"
-        :k-brand="r.k_brand"
-        :lambda="r.lambda_electric"
+        :decay-anchor="r.decay_anchor || 0"
         :sale-year="r.sale_year || 0"
         height="320px"
       />

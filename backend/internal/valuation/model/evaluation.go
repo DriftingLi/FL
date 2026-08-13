@@ -99,6 +99,10 @@ type EvaluationResult struct {
 	LambdaElectric   float64
 	LambdaCombustion float64
 
+	// 未来价值曲线锚点（ADR-0012 §8）：future(n) = estimated × decay_anchor^n，
+	// 后端为公式唯一实现，评估时点锁定
+	DecayAnchor float64
+
 	// 6 维度评分（固定顺序：出厂时间/使用强度/品牌价值/市场需求/车辆情况，便于前端展示）
 	DimensionScores []DimensionScore
 	// 文本建议
@@ -174,6 +178,8 @@ type EvaluationDetail struct {
 	Suggestions      []string `json:"suggestions"`
 	LambdaElectric   float64  `json:"lambda_electric"`
 	LambdaCombustion float64  `json:"lambda_combustion"`
+	// 未来价值曲线锚点（ADR-0012 §8，评估时点锁定）
+	DecayAnchor float64 `json:"decay_anchor"`
 }
 
 // EvaluationResponse 创建评估响应 DTO（HTTP 出参）
@@ -216,6 +222,8 @@ type EvaluationResponse struct {
 	// 本次评估使用的 λ 值（评估时点锁定，供前端走势图数据驱动）
 	LambdaElectric   float64 `json:"lambda_electric"`
 	LambdaCombustion float64 `json:"lambda_combustion"`
+	// 未来价值曲线锚点（ADR-0012 §8，评估时点锁定）
+	DecayAnchor float64 `json:"decay_anchor"`
 }
 
 // CalcWeights 加权权重（用于 PDF 计算过程展示）
