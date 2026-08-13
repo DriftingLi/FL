@@ -145,9 +145,8 @@
         return ''
     }
 
-    function formatDuration(seconds : number) : string {
-        if (seconds <= 0) return ''
-        const minutes = Math.floor(seconds / 60)
+    function formatDuration(minutes : number) : string {
+        if (minutes <= 0) return ''
         if (minutes < 60) return minutes + '分钟'
         const hours = Math.floor(minutes / 60)
         const mins = minutes % 60

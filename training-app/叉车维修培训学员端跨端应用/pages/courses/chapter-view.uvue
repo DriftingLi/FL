@@ -125,7 +125,7 @@
 
 <script setup lang="uts">
     import { ref, computed } from 'vue'
-    import { onLoad } from '@dcloudio/uni-app'
+    import { onLoad, onHide, onUnload } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { parseMarkdown } from '../../utils/markdown'
@@ -145,6 +145,14 @@
     const prevTitle = ref<string>('')
     const nextTitle = ref<string>('')
 
+    // 学习计时与自动上报
+    const studySeconds = ref<number>(0)
+    let studyTimer: number | null = null
+    let studyStartTime: number | null = null
+    let autoReportTimer: number | null = null
+    let reportedSeconds = 0
+    const AUTO_REPORT_INTERVAL = 60
+
     // Markdown 解析后的内容块
     const contentBlocks = computed<MarkdownBlock[]>(() : MarkdownBlock[] => {
         if (detail.value == null) return [] as MarkdownBlock[]
@@ -152,9 +160,8 @@
         return parseMarkdown(detail.value!.content)
     })
 
-    function formatDuration(seconds : number) : string {
-        if (seconds <= 0) return '未知'
-        const minutes = Math.floor(seconds / 60)
+    function formatDuration(minutes : number) : string {
+        if (minutes <= 0) return '未知'
         if (minutes < 60) return minutes + '分钟'
         const hours = Math.floor(minutes / 60)
         const mins = minutes % 60
@@ -203,10 +210,56 @@
         }
     }
 
+    function beginStudy() : void {
+        studySeconds.value = 0
+        reportedSeconds = 0
+        studyStartTime = Date.now()
+        if (studyTimer != null) clearInterval(studyTimer)
+        if (autoReportTimer != null) clearInterval(autoReportTimer)
+        studyTimer = setInterval(() : void => {
+            if (studyStartTime != null) {
+                studySeconds.value = Math.floor((Date.now() - studyStartTime) / 1000)
+            }
+        }, 1000)
+        autoReportTimer = setInterval(() : void => {
+            reportIncremental(false)
+        }, AUTO_REPORT_INTERVAL * 1000)
+    }
+
+    function stopStudy() : void {
+        if (studyTimer != null) {
+            clearInterval(studyTimer)
+            studyTimer = null
+        }
+        if (autoReportTimer != null) {
+            clearInterval(autoReportTimer)
+            autoReportTimer = null
+        }
+        studyStartTime = null
+    }
+
+    async function reportIncremental(isFinal : boolean = false) : Promise<void> {
+        if (detail.value == null || courseId.value <= 0) return
+        const incremental = studySeconds.value - reportedSeconds
+        if (incremental <= 0) return
+        if (!isFinal && incremental < 60) return
+        const durationMinutes = Math.max(Math.ceil(incremental / 60), 1)
+        const chapterIdVal = detail.value!.chapter_id
+        try {
+            await updateCourseProgressApi(courseId.value, chapterIdVal, durationMinutes)
+            reportedSeconds += incremental
+        } catch (e) {
+            if (!isFinal) {
+                console.warn('[chapter-view] report incremental failed:', e)
+            }
+        }
+    }
+
     async function loadDetail() {
         if (courseId.value <= 0 || chapterId.value <= 0) return
         loading.value = true
         detail.value = null
+        stopStudy()
         try {
             const data = await getChapterDetailApi(courseId.value, chapterId.value)
             detail.value = data
@@ -216,6 +269,7 @@
                 courseDetail.value = cd
             }
             updateNavTitles()
+            beginStudy()
         } catch (e) {
             console.error('[chapter-view] load failed:', e)
         } finally {
@@ -277,20 +331,36 @@
         }
     }
 
+    onHide(() : void => {
+        stopStudy()
+        reportIncremental(true)
+    })
+
+    onUnload(() : void => {
+        stopStudy()
+        reportIncremental(true)
+    })
+
     function onPrevChapter() : void {
         if (detail.value == null) return
         const prevId = detail.value!.previous_chapter_id
         if (prevId == 0) return
-        chapterId.value = prevId
-        loadDetail()
+        stopStudy()
+        reportIncremental(true).then(() : void => {
+            chapterId.value = prevId
+            loadDetail()
+        })
     }
 
     function onNextChapter() : void {
         if (detail.value == null) return
         const nextId = detail.value!.next_chapter_id
         if (nextId == 0) return
-        chapterId.value = nextId
-        loadDetail()
+        stopStudy()
+        reportIncremental(true).then(() : void => {
+            chapterId.value = nextId
+            loadDetail()
+        })
     }
 
     onLoad((options : UTSJSONObject) => {

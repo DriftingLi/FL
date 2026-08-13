@@ -89,7 +89,11 @@ function buildMockExamResultDetail(obj : UTSJSONObject) : MockExamResultDetail {
 	return detail
 }
 
-/** 从 UTSJSONObject 构造 MockExamResult */
+/** 从 UTSJSONObject 构造 MockExamResult
+ * 后端 /mock-exam/:id/result 契约：
+ *   { mock_exam_id, total_score, max_score, correct_count, total_questions, accuracy, details, submit_time }
+ * 无 score / passed / used_time 字段，由 total_score/max_score/accuracy 推导。
+ */
 function buildMockExamResult(obj : UTSJSONObject) : MockExamResult {
 	const details : MockExamResultDetail[] = []
 	const detailsRaw = obj['details']
@@ -99,31 +103,58 @@ function buildMockExamResult(obj : UTSJSONObject) : MockExamResult {
 			details.push(buildMockExamResultDetail(detailsArray[i]))
 		}
 	}
+	const accuracy = toNumber(obj['accuracy'])
 	const result : MockExamResult = {
 		mock_exam_id: toNumber(obj['mock_exam_id'], toNumber(obj['exam_id'])),
-		score: toNumber(obj['score']),
-		total_score: toNumber(obj['total_score'], toNumber(obj['full_score'])),
-		passed: toBool(obj['passed'], toBool(obj['is_passed'])),
+		score: toNumber(obj['total_score']),
+		total_score: toNumber(obj['max_score']),
+		passed: accuracy >= 60,
 		correct_count: toNumber(obj['correct_count'], toNumber(obj['correct'])),
 		total_questions: toNumber(obj['total_questions'], toNumber(obj['question_count'])),
-		used_time: toNumber(obj['used_time'], toNumber(obj['duration'])),
+		used_time: toNumber(obj['used_time']),
 		details: details,
 	} as MockExamResult
 	return result
 }
 
-/** 从 UTSJSONObject 构造 MockExamHistoryItem */
+/**
+ * 从 UTSJSONObject 构造 MockExamHistoryItem
+ * 后端 /mock-exam/history 契约：
+ *   envelope: { total, page, page_size, exams: [...] }
+ *   item:     { id, student_id, question_ids, answers, start_time, submit_time,
+ *               remaining_time, duration, status, result, created_at, score }
+ *   result:   { total_score, max_score, correct_count, total_questions, accuracy, details }
+ * 展示字段（total_score / passed / correct_count / used_time 等）由上述原始字段推导。
+ */
 function buildMockExamHistoryItem(obj : UTSJSONObject) : MockExamHistoryItem {
+	const status = toStr(obj['status'], 'completed')
+	const duration = toNumber(obj['duration'])
+	const remainingTime = toNumber(obj['remaining_time'])
+	let totalScore = 0
+	let maxScore = 0
+	let correctCount = 0
+	let totalQuestions = 0
+	let accuracy = 0
+	const resultRaw = obj['result']
+	if (resultRaw != null) {
+		const resultObj = resultRaw as UTSJSONObject
+		totalScore = toNumber(resultObj['total_score'], toNumber(resultObj['score']))
+		maxScore = toNumber(resultObj['max_score'], toNumber(resultObj['full_score']))
+		correctCount = toNumber(resultObj['correct_count'], toNumber(resultObj['correct']))
+		totalQuestions = toNumber(resultObj['total_questions'], toNumber(resultObj['question_count']))
+		accuracy = toNumber(resultObj['accuracy'])
+	}
+	const usedTime = duration * 60 - remainingTime
 	const item : MockExamHistoryItem = {
 		mock_exam_id: toNumber(obj['mock_exam_id'], toNumber(obj['exam_id'], toNumber(obj['id']))),
 		score: toNumber(obj['score']),
-		total_score: toNumber(obj['total_score'], toNumber(obj['full_score'])),
-		passed: toBool(obj['passed'], toBool(obj['is_passed'])),
-		correct_count: toNumber(obj['correct_count'], toNumber(obj['correct'])),
-		total_questions: toNumber(obj['total_questions'], toNumber(obj['question_count'])),
-		duration: toNumber(obj['duration']),
-		used_time: toNumber(obj['used_time'], toNumber(obj['time_used'])),
-		status: toStr(obj['status'], 'completed'),
+		total_score: toNumber(obj['total_score'], toNumber(obj['full_score'], maxScore)),
+		passed: status != 'in_progress' && accuracy >= 60,
+		correct_count: toNumber(obj['correct_count'], toNumber(obj['correct'], correctCount)),
+		total_questions: toNumber(obj['total_questions'], toNumber(obj['question_count'], totalQuestions)),
+		duration: duration,
+		used_time: usedTime > 0 ? usedTime : toNumber(obj['used_time'], toNumber(obj['time_used'])),
+		status: status,
 		created_at: toStr(obj['created_at'], toStr(obj['start_time'])),
 		completed_at: toStr(obj['completed_at'], toStr(obj['end_time'], toStr(obj['submit_time']))),
 	} as MockExamHistoryItem
@@ -133,19 +164,27 @@ function buildMockExamHistoryItem(obj : UTSJSONObject) : MockExamHistoryItem {
 /** 从 UTSJSONObject 构造 MockExamHistoryResult */
 function buildMockExamHistoryResult(data : UTSJSONObject) : MockExamHistoryResult {
 	const items : MockExamHistoryItem[] = []
-	const listRaw = data['items']
+	const listRaw = data['exams']
 	if (listRaw != null) {
 		const arr = listRaw as Array<UTSJSONObject>
 		for (let i = 0; i < arr.length; i++) {
 			items.push(buildMockExamHistoryItem(arr[i]))
 		}
 	} else {
-		// 后端可能用 records / history 字段
-		const alt = data['records']
+		// 兼容旧字段 items / records
+		const alt = data['items']
 		if (alt != null) {
 			const arr = alt as Array<UTSJSONObject>
 			for (let i = 0; i < arr.length; i++) {
 				items.push(buildMockExamHistoryItem(arr[i]))
+			}
+		} else {
+			const fallback = data['records']
+			if (fallback != null) {
+				const arr = fallback as Array<UTSJSONObject>
+				for (let i = 0; i < arr.length; i++) {
+					items.push(buildMockExamHistoryItem(arr[i]))
+				}
 			}
 		}
 	}
