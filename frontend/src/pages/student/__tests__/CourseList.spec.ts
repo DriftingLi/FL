@@ -1,5 +1,5 @@
-// 学员端课程中心（左右分栏）组件测试：方向导航/等级筛选/章节数渲染。
-// seam：组件层，mock API 层（不依赖真实后端）。
+// 学员端课程中心（左右分栏）冒烟测试：双卡片导航渲染、课程卡片渲染、筛选触发列表请求。
+// seam：组件层，mock API 层（不依赖真实后端）。计数联动语义已收敛至 useCourseCatalog 接口测试。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
@@ -13,8 +13,7 @@ vi.mock('@/api/course', () => ({
 
 vi.mock('@/api/training', () => ({
   trainingApi: {
-    getCatalogTree: vi.fn(),
-    getLevels: vi.fn()
+    getCatalogTree: vi.fn()
   }
 }))
 
@@ -79,12 +78,6 @@ beforeEach(() => {
       }
     ]
   })
-  vi.mocked(trainingApi.getLevels).mockResolvedValue({
-    levels: [
-      { level_id: 1, name: '入门' },
-      { level_id: 2, name: '进阶' }
-    ]
-  })
 })
 
 describe('CourseList 左右分栏课程中心', () => {
@@ -128,20 +121,17 @@ describe('CourseList 左右分栏课程中心', () => {
     })
   })
 
-  it('选中等级后方向卡片计数反向联动（只数该等级课程）', async () => {
+  it('点击方向导航项后按方向重新请求列表', async () => {
     const wrapper = mountPage()
     await flushPromises()
 
-    // 树内：维修方向 入门 1 门 + 进阶 1 门 → 选中「入门」后各计数收敛为 1
-    await wrapper.findAll('.cc-filter-card')[1].findAll('.cc-nav-item')[1].trigger('click')
+    await wrapper.findAll('.cc-filter-card')[0].findAll('.cc-nav-item')[1].trigger('click')
     await flushPromises()
 
-    const navNames = wrapper.findAll('.cc-nav-name').map(n => n.text())
-    expect(navNames[0]).toBe('全部课程')
-    // 「全部课程」计数随等级筛选变为 1
-    const counts = wrapper.findAll('.cc-nav-count').map(n => n.text())
-    expect(counts[0]).toBe('1')
-    // 「维修」方向计数随等级筛选变为 1
-    expect(counts[1]).toBe('1')
+    expect(courseApi.getCourses).toHaveBeenLastCalledWith({
+      page: 1,
+      page_size: 12,
+      specialty_id: 2
+    })
   })
 })

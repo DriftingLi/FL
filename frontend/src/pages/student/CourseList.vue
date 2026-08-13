@@ -2,79 +2,59 @@
   <div class="course-center">
     <div class="course-layout">
       <aside class="cc-sidebar">
-        <!-- 卡片 1：专业方向 -->
-        <div class="cc-filter-card">
-          <div class="cc-card-title">专业方向</div>
-          <button
-            class="cc-nav-item"
-            :class="{ active: specialtyId === null }"
-            @click="selectSpecialty(null)"
-          >
-            <span class="cc-nav-name">全部课程</span>
-            <span class="cc-nav-count">{{ totalAll }}</span>
-          </button>
-          <button
+        <FacetCard title="专业方向">
+          <FacetItem
+            :active="specialtyId === null"
+            name="全部课程"
+            :count="totalAll"
+            @select="selectDirection(null)"
+          />
+          <FacetItem
             v-for="d in directions"
             :key="d.specialty_id"
-            class="cc-nav-item"
-            :class="{ active: specialtyId === d.specialty_id }"
-            @click="selectSpecialty(d.specialty_id)"
-          >
-            <span class="cc-nav-name">{{ d.name }}</span>
-            <span class="cc-nav-count">{{ directionCount(d) }}</span>
-          </button>
-        </div>
+            :active="specialtyId === d.specialty_id"
+            :name="d.name"
+            :count="countOfDirection(d.specialty_id)"
+            @select="selectDirection(d.specialty_id)"
+          />
+        </FacetCard>
 
-        <!-- 卡片 2：课程等级 -->
-        <div class="cc-filter-card">
-          <div class="cc-card-title">课程等级</div>
-          <button
-            class="cc-nav-item"
-            :class="{ active: levelId === null }"
-            @click="selectLevel(null)"
-          >
-            <span class="cc-nav-name">全部等级</span>
-            <span class="cc-nav-count">{{ scopedTotal }}</span>
-          </button>
-          <button
+        <FacetCard title="课程等级">
+          <FacetItem
+            :active="levelId === null"
+            name="全部等级"
+            :count="scopedTotal"
+            @select="selectLevel(null)"
+          />
+          <FacetItem
             v-for="l in levels"
             :key="l.level_id"
-            class="cc-nav-item"
-            :class="{ active: levelId === l.level_id }"
-            @click="selectLevel(l.level_id)"
-          >
-            <span class="cc-nav-name">{{ l.name }}</span>
-            <span class="cc-nav-count">{{ countOfLevel(l.level_id) }}</span>
-          </button>
-        </div>
+            :active="levelId === l.level_id"
+            :name="l.name"
+            :count="countOfLevel(l.level_id)"
+            @select="selectLevel(l.level_id)"
+          />
+        </FacetCard>
       </aside>
 
       <main class="cc-main">
         <div class="cc-content" v-loading="loading">
           <div v-if="courses.length > 0" class="cc-grid">
-            <div
+            <CourseCard
               v-for="course in courses"
               :key="course.course_id"
-              class="cc-card"
+              :name="course.name"
+              :description="course.description"
+              :cover-image="course.cover_image"
+              :specialty-id="course.specialty_id"
               @click="openDetail(course)"
             >
-              <div class="cc-cover" :class="coverClass(course.specialty_id)">
-                <img
-                  v-if="course.cover_image"
-                  v-lazy="course.cover_image"
-                  :alt="course.name"
-                  @error="course.cover_image = ''"
-                />
-                <div v-if="!course.cover_image" class="cc-cover-placeholder">
-                  <span>{{ course.name.charAt(0) }}</span>
-                </div>
+              <template #cover>
                 <span v-if="levelNameOf(course.level_id)" class="cc-cover-level">
                   {{ levelNameOf(course.level_id) }}
                 </span>
-              </div>
-              <div class="cc-body">
-                <h3 class="cc-name">{{ course.name }}</h3>
-                <p class="cc-desc">{{ course.description || '暂无简介' }}</p>
+              </template>
+              <template #meta>
                 <div class="cc-meta">
                   <span class="cc-meta-item">{{ course.chapter_count ?? 0 }} 章节</span>
                   <span v-if="course.theory_hours || course.practice_hours" class="cc-meta-item">
@@ -86,8 +66,8 @@
                     {{ course.certificate_name }}
                   </el-tag>
                 </div>
-              </div>
-            </div>
+              </template>
+            </CourseCard>
           </div>
 
           <div v-else-if="!loading" class="cc-empty">
@@ -186,12 +166,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRight } from '@element-plus/icons-vue'
 import { courseApi, type CourseDetail, type CourseSummary } from '@/api/course'
-import { trainingApi, type CatalogDirectionNode, type CatalogLevel } from '@/api/training'
-import { vLazy } from '@/composables/useLazyLoad'
+import { trainingApi } from '@/api/training'
+import { useCourseCatalog, treeCatalogAdapter } from '@/composables/useCourseCatalog'
+import FacetCard from '@/components/catalog/FacetCard.vue'
+import FacetItem from '@/components/catalog/FacetItem.vue'
+import CourseCard from '@/components/catalog/CourseCard.vue'
 
 const router = useRouter()
 
@@ -201,68 +184,26 @@ const currentPage = ref(1)
 const pageSize = ref(12)
 const total = ref(0)
 
-const directions = ref<CatalogDirectionNode[]>([])
-const levels = ref<CatalogLevel[]>([])
-const specialtyId = ref<number | null>(null)
-const levelId = ref<number | null>(null)
-
-// ===== 计数（双向联动）：等级筛选影响方向卡计数，方向筛选影响等级卡计数 =====
-
-// 当前方向筛选范围的方向列表
-function scopedDirections(): CatalogDirectionNode[] {
-  return specialtyId.value === null
-    ? directions.value
-    : directions.value.filter(d => d.specialty_id === specialtyId.value)
-}
-
-// 范围内课程数：方向范围 + 可选等级过滤
-function countCourses(levelFilter: number | null): number {
-  let n = 0
-  for (const d of scopedDirections()) {
-    for (const lv of d.levels || []) {
-      if (levelFilter !== null && lv.level_id !== levelFilter) continue
-      n += lv.courses?.length || 0
-    }
+const {
+  directions,
+  levels,
+  specialtyId,
+  levelId,
+  totalAll,
+  scopedTotal,
+  countOfDirection,
+  countOfLevel,
+  selectDirection,
+  selectLevel,
+  fetchCatalog,
+  levelNameOf
+} = useCourseCatalog({
+  adapter: treeCatalogAdapter(() => trainingApi.getCatalogTree()),
+  onSelect: () => {
+    currentPage.value = 1
+    loadCourses()
   }
-  return n
-}
-
-// 「全部课程」计数：随等级筛选变化
-const totalAll = computed(() => countCourses(levelId.value))
-
-// 各方向计数：随等级筛选变化（只数该方向内的课程）
-function directionCount(d: CatalogDirectionNode): number {
-  let n = 0
-  for (const lv of d.levels || []) {
-    if (levelId.value !== null && lv.level_id !== levelId.value) continue
-    n += lv.courses?.length || 0
-  }
-  return n
-}
-
-// 「全部等级」计数：随方向筛选变化
-const scopedTotal = computed(() => countCourses(null))
-
-// 各等级计数：随方向筛选变化
-function countOfLevel(levelIdValue: number): number {
-  return countCourses(levelIdValue)
-}
-
-function levelNameOf(levelIdValue?: number | null) {
-  if (!levelIdValue) return ''
-  return levels.value.find(l => l.level_id === levelIdValue)?.name || ''
-}
-
-const coverClassMap: Record<number, string> = {
-  1: 'cc-cover-operation',
-  2: 'cc-cover-maintenance',
-  3: 'cc-cover-safety',
-  4: 'cc-cover-battery'
-}
-
-function coverClass(specialtyIdValue?: number | null) {
-  return specialtyIdValue ? coverClassMap[specialtyIdValue] || 'cc-cover-default' : 'cc-cover-default'
-}
+})
 
 function formatDuration(minutes: number) {
   if (minutes < 60) {
@@ -295,31 +236,6 @@ async function loadCourses() {
   } finally {
     loading.value = false
   }
-}
-
-async function loadCatalog() {
-  try {
-    const [treeData, levelsData] = await Promise.all([
-      trainingApi.getCatalogTree(),
-      trainingApi.getLevels()
-    ])
-    directions.value = treeData.specialties || []
-    levels.value = levelsData.levels || []
-  } catch (error) {
-    console.error('加载目录失败:', error)
-  }
-}
-
-function selectSpecialty(id: number | null) {
-  specialtyId.value = id
-  currentPage.value = 1
-  loadCourses()
-}
-
-function selectLevel(id: number | null) {
-  levelId.value = id
-  currentPage.value = 1
-  loadCourses()
 }
 
 function handlePageChange() {
@@ -364,7 +280,7 @@ function goToChapter(ch: { chapter_id: number }) {
 }
 
 onMounted(() => {
-  loadCatalog()
+  fetchCatalog()
   loadCourses()
 })
 </script>
@@ -382,59 +298,13 @@ onMounted(() => {
   gap: var(--space-5);
 }
 
-/* ===== 左栏：双卡片（专业方向 / 课程等级） ===== */
+/* ===== 左栏 ===== */
 .cc-sidebar {
   width: 200px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-}
-
-.cc-filter-card {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
-  padding: var(--space-3) var(--space-2);
-}
-
-.cc-card-title {
-  font-size: var(--text-xs);
-  color: var(--color-text-tertiary);
-  padding: var(--space-1) var(--space-3);
-  margin-bottom: var(--space-1);
-}
-
-.cc-nav-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: var(--space-2) var(--space-3);
-  margin-bottom: 2px;
-  border: none;
-  border-radius: var(--radius-md);
-  background: transparent;
-  cursor: pointer;
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  color: var(--color-text-primary);
-  transition: background var(--duration-fast) var(--ease-default);
-}
-
-.cc-nav-item:hover {
-  background: var(--color-bg-sidebar-hover);
-}
-
-.cc-nav-item.active {
-  background: var(--color-primary-50);
-  color: var(--color-primary-600);
-  font-weight: var(--font-semibold);
-}
-
-.cc-nav-count {
-  font-size: var(--text-xs);
-  color: var(--color-text-tertiary);
 }
 
 /* ===== 右栏 ===== */
@@ -449,53 +319,6 @@ onMounted(() => {
   gap: var(--space-4);
 }
 
-.cc-card {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-xl);
-  overflow: hidden;
-  cursor: pointer;
-  box-shadow: var(--shadow-xs);
-  border: 1px solid var(--color-border-light);
-  transition: all var(--duration-normal) var(--ease-default);
-}
-
-.cc-card:hover {
-  box-shadow: var(--shadow-lg);
-  transform: translateY(-4px);
-}
-
-.cc-cover {
-  position: relative;
-  height: 120px;
-  overflow: hidden;
-}
-
-.cc-cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform var(--duration-slow) var(--ease-default);
-}
-
-.cc-card:hover .cc-cover img {
-  transform: scale(1.05);
-}
-
-.cc-cover-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.cc-cover-placeholder span {
-  font-size: 40px;
-  color: rgba(255, 255, 255, 0.8);
-  font-weight: var(--font-bold);
-  font-family: var(--font-display);
-}
-
 .cc-cover-level {
   position: absolute;
   top: var(--space-2);
@@ -508,56 +331,6 @@ onMounted(() => {
   font-weight: 600;
 }
 
-.cc-cover-operation .cc-cover-placeholder,
-.cc-cover-operation:not(:has(img)) {
-  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
-}
-
-.cc-cover-maintenance .cc-cover-placeholder,
-.cc-cover-maintenance:not(:has(img)) {
-  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
-}
-
-.cc-cover-safety .cc-cover-placeholder,
-.cc-cover-safety:not(:has(img)) {
-  background: linear-gradient(135deg, #b45309 0%, #f59e0b 100%);
-}
-
-.cc-cover-battery .cc-cover-placeholder,
-.cc-cover-battery:not(:has(img)) {
-  background: linear-gradient(135deg, #dc2626 0%, #f97316 100%);
-}
-
-.cc-cover-default .cc-cover-placeholder,
-.cc-cover-default:not(:has(img)) {
-  background: linear-gradient(135deg, #6b7280 0%, #9ca3af 100%);
-}
-
-.cc-body {
-  padding: var(--space-3) var(--space-4) var(--space-4);
-}
-
-.cc-name {
-  font-size: var(--text-base);
-  font-weight: var(--font-semibold);
-  color: var(--color-text-primary);
-  margin-bottom: var(--space-1);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.cc-desc {
-  font-size: var(--text-xs);
-  color: var(--color-text-secondary);
-  margin-bottom: var(--space-2);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  min-height: 34px;
-}
-
 .cc-meta {
   display: flex;
   flex-wrap: wrap;
@@ -566,6 +339,7 @@ onMounted(() => {
   color: var(--color-text-tertiary);
   margin-bottom: var(--space-2);
 }
+
 .cc-cert {
   display: flex;
 }
