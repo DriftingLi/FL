@@ -57,7 +57,7 @@ type CreateEvaluationParams struct {
 	ConfidenceLow  float64
 	ConfidenceHigh float64
 	ReportPdfPath  string
-	DecayAnchor   float64
+	DecayAnchor    float64
 	// 归属字段
 	// UserID 为 0 表示匿名提交（user_id 落 NULL）；>0 表示登录用户提交
 	UserID int
