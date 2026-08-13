@@ -55,30 +55,33 @@ type GenerateResult struct {
 	FileSize int
 }
 
-// Generate 处理 POST <prefix>/:id/report：重新加载记录 → 生成 PDF → 上传 → 回写路径。
+// Generate 处理 POST <prefix>/:id/report：singleflight 内强制重新生成。
+// 并发语义：同 ID 并发 POST 合并为一次生成（ADR-0012 §6），各请求拿到同一结果；
+// 串行 POST 各自强制重生成。
 func (c *Coordinator[T]) Generate(ctx context.Context, id int64) (GenerateResult, error) {
-	rec, err := c.spec.Loader(ctx, id)
+	v, err, _ := c.sf.Do(reportKey(id), func() (any, error) {
+		rec, loadErr := c.spec.Loader(ctx, id)
+		if loadErr != nil {
+			return GenerateResult{}, loadErr
+		}
+		url, size, genErr := c.generateAndUpload(ctx, id, rec)
+		return GenerateResult{ID: id, PDFURL: url, FileSize: size}, genErr
+	})
 	if err != nil {
 		return GenerateResult{}, err
 	}
-	url, size, err := c.generateAndUpload(ctx, id, rec)
-	if err != nil {
-		return GenerateResult{}, err
-	}
-	return GenerateResult{ID: id, PDFURL: url, FileSize: size}, nil
+	return v.(GenerateResult), nil
 }
 
-// DownloadURL 处理 GET <prefix>/:id/report：URL 有效则直接返回；否则并发安全地
-// 再生成并回写后返回。
-// 并发语义：加载→检查→再生成整体放入 singleflight（同 ID 只产生一份 PDF）；
-// 晚到的请求在 fn 重跑时发现路径已回写，短路直接返回既有 URL。
+// DownloadURL 处理 GET <prefix>/:id/report：URL 有效则直接返回；否则在 singleflight 内
+// 再生成并回写后返回（与 Generate 共用同一 key 空间，同 ID 的生成/下载互斥串行）。
 func (c *Coordinator[T]) DownloadURL(ctx context.Context, id int64) (string, error) {
-	v, err, _ := c.sf.Do(fmt.Sprintf("dl:%d", id), func() (any, error) {
+	v, err, _ := c.sf.Do(reportKey(id), func() (any, error) {
 		rec, loadErr := c.spec.Loader(ctx, id)
 		if loadErr != nil {
 			return "", loadErr
 		}
-		// 已有有效 URL 直接返回（并发/晚到请求的短路路径）
+		// 已有有效 URL 直接返回（晚到请求的短路路径）
 		if url := c.spec.PathOf(rec); url != "" && c.storageExists(ctx, url) {
 			return url, nil
 		}
@@ -91,6 +94,11 @@ func (c *Coordinator[T]) DownloadURL(ctx context.Context, id int64) (string, err
 	return v.(string), nil
 }
 
+// reportKey 生成/下载共用 singleflight key（同 ID 一份 PDF 语义只在此处声明）。
+func reportKey(id int64) string {
+	return fmt.Sprintf("report:%d", id)
+}
+
 // generateAndUpload 业务 fallback → 生成 PDF → 上传 → 回写 → 清理旧 PDF，返回 URL 与文件大小。
 // 新 PDF 上传并回写成功后删除旧 PDF（避免存储累积历史报告文件；删除失败仅告警不影响主流程）。
 func (c *Coordinator[T]) generateAndUpload(ctx context.Context, id int64, rec *T) (string, int, error) {
@@ -101,7 +109,8 @@ func (c *Coordinator[T]) generateAndUpload(ctx context.Context, id int64, rec *T
 	if err != nil {
 		return "", 0, err
 	}
-	key := fmt.Sprintf("%s%d_%s.pdf", c.spec.KeyPrefix, id, time.Now().Format("20060102150405"))
+	// 上传 key 用纳秒时间戳：singleflight 内串行调用也不会同秒互覆
+	key := fmt.Sprintf("%s%d_%d.pdf", c.spec.KeyPrefix, id, time.Now().UnixNano())
 	url, err := c.spec.Storage.Save(ctx, key, pdfBytes, "application/pdf")
 	if err != nil {
 		return "", 0, err

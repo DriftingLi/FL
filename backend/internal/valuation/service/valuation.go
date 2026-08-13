@@ -76,6 +76,9 @@ func NewValuationService(
 // 缓存：Evaluate 是纯计算函数（Persist 与计算解耦），相同输入产生相同输出，
 // 按 req JSON 的 SHA256 缓存 3 分钟（cache.TTLValuation）。
 // 所有字典/系数写操作已在 config handler 中统一失效 valuation:result:*。
+// Resolver 暴露系数配置读取器（详情接口旧记录建议 fallback 与报告 Prepare 同源）。
+func (s *ValuationService) Resolver() ConfigResolver { return s.provider }
+
 func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRequest) (*model.EvaluationResult, error) {
 	// 构造缓存 key：对规范化后的 req JSON 做 SHA256
 	reqBytes, _ := json.Marshal(req)
