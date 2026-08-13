@@ -21,6 +21,11 @@ import (
 // 仅记录 admin / tutor 角色的 POST/PUT/PATCH/DELETE 请求。
 func AuditLog(cfg *config.Config, db *gorm.DB, logger *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 测试装配（如估值模块 handler 测试）可能不注入 DB：审计降级为跳过
+		if db == nil {
+			c.Next()
+			return
+		}
 		method := c.Request.Method
 		if method != http.MethodPost && method != http.MethodPut &&
 			method != http.MethodPatch && method != http.MethodDelete {
