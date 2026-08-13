@@ -24,7 +24,7 @@ type HealthResponse struct {
 	Timestamp string `json:"timestamp"` // 响应时间戳
 }
 
-// Check 处理 GET /api/v1/health 请求
+// Check 处理 GET /api/valuation/health 请求
 func (h *HealthHandler) Check(c *gin.Context) {
 	c.JSON(http.StatusOK, HealthResponse{
 		Status:    "ok",
