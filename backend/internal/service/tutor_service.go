@@ -11,8 +11,6 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
-	"forklift-training/pkg/paging"
-	"forklift-training/pkg/response"
 )
 
 // TutorService 导师服务。
@@ -29,37 +27,13 @@ func NewTutorService(db *gorm.DB, uploadFolder string, fileService *FileService,
 	return &TutorService{db: db, uploadFolder: uploadFolder, fileService: fileService, logger: logger}
 }
 
-// GetCourses 导师课程列表（已上架课程，可按专业方向/课程等级过滤）。
-func (s *TutorService) GetCourses(tutorID *int, page, pageSize int, specialtyID, levelID *int) CoursePageResult {
-	courses, total, page, pageSize := paging.Query[model.Course](s.db, page, pageSize, 10, "created_at DESC", func(q *gorm.DB) *gorm.DB {
-		q = q.Where("status = ?", 1)
-		if specialtyID != nil {
-			q = q.Where("specialty_id = ?", *specialtyID)
-		}
-		if levelID != nil {
-			q = q.Where("level_id = ?", *levelID)
-		}
-		return q
+// GetCourses 导师课程列表（与学员端同口径：已上架 + 已挂载方向/等级，ADR-0012 §2），
+// 附学习学员数；实现收敛到课程列表 module（ListCourses）。
+func (s *TutorService) GetCourses(page, pageSize int, specialtyID, levelID *int) CoursePageResult {
+	return ListCourses(s.db, page, pageSize, CourseListOptions{
+		OnlyMounted: true, SpecialtyID: specialtyID, LevelID: levelID,
+		WithStudentCount: true, DefaultPageSize: 10,
 	})
-	items := make([]CourseDTO, 0, len(courses))
-	for i := range courses {
-		item := courseToDTO(&courses[i])
-		fillChapterCount(s.db, courses[i].CourseID, &item)
-		// 统计该课程的学习学员数（study_record 表中去重的 student_id 数量）
-		var studentCount int64
-		s.db.Table("study_record").
-			Where("course_id = ?", courses[i].CourseID).
-			Distinct("student_id").
-			Count(&studentCount)
-		item.StudentCount = &studentCount
-		items = append(items, item)
-	}
-	return CoursePageResult{
-		Courses: items,
-		Page:    page,
-		Pages:   response.PageCount(total, pageSize),
-		Total:   total,
-	}
 }
 
 // GetGradingStats 阅卷统计（按天分组），用于导师仪表盘图表。

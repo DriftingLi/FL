@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -60,7 +61,7 @@ func (s *AuthService) GetProfile(userID int, role, account string) map[string]an
 			data["account"] = u.Account
 			data["username"] = u.Username
 			data["avatar_url"] = u.AvatarURL
-			data["phone"] = u.Phone
+			data["phone"] = MaskedPhone(u.Phone)
 			data["email"] = u.Email
 			data["company"] = u.Company
 			// 是否已设置密码（决定个人资料页"账号密码"卡片提示文案）
@@ -84,6 +85,14 @@ func (s *AuthService) GetProfile(userID int, role, account string) map[string]an
 		}
 	}
 	return data
+}
+
+// MaskedPhone 隐藏邮箱注册的占位手机号（email_ 前缀），/auth/me 源头过滤不下发客户端。
+func MaskedPhone(phone string) string {
+	if strings.HasPrefix(phone, "email_") {
+		return ""
+	}
+	return phone
 }
 
 // HashPassword 使用 bcrypt 加密密码。
