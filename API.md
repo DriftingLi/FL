@@ -25,7 +25,6 @@
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
 | POST | `/api/auth/login` | 无 | 账号密码登录 |
-| POST | `/api/auth/register` | 无 | 注册 |
 | POST | `/api/auth/admin-login` | 无 | 管理员登录 |
 | POST | `/api/auth/tutor-login` | 无 | 讲师登录 |
 | POST | `/api/auth/logout` | JWT | 登出 |
@@ -64,6 +63,8 @@
 | POST | `/api/auth/profile/email` | JWT | 绑定/修改邮箱 |
 | POST | `/api/auth/profile/phone` | JWT | 绑定/修改手机号 |
 | POST | `/api/auth/profile/password` | JWT | 修改密码 |
+| POST | `/api/auth/account/send-code` | JWT | 修改账号：发送短信验证码 |
+| PUT | `/api/auth/account` | JWT | 修改账号（响应携带新 token） |
 
 ## 3. 课程学习 `/api`
 
@@ -363,7 +364,6 @@
 | GET | `/api/valuation/evaluations/stats` | 评估统计 |
 | GET | `/api/valuation/health` | 子模块健康检查 |
 | POST | `/api/valuation/auth/login` | 估值模块登录（兼容主体系） |
-| POST | `/api/valuation/auth/register` | 估值模块注册 |
 | POST | `/api/valuation/evaluations/:id/report` | 生成评估 PDF 报告 |
 | GET | `/api/valuation/evaluations/:id/report` | 下载评估 PDF 报告 |
 | POST | `/api/valuation/battery/evaluations/:id/report` | 生成电池评估 PDF |
