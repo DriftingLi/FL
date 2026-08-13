@@ -23,31 +23,6 @@ func NewValuationAuthHandler(authSvc ValuationAuth, sess *security.Session) *Val
 	return &ValuationAuthHandler{authSvc: authSvc, sess: sess}
 }
 
-// loginRequest 登录请求体。
-type loginRequest struct {
-	Account  string `json:"account"` // 用户名或手机号
-	Password string `json:"password"`
-}
-
-// Login 处理 POST /api/valuation/auth/login
-func (h *ValuationAuthHandler) Login(c *gin.Context) {
-	var req loginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "请求参数错误")
-		return
-	}
-	if req.Account == "" || req.Password == "" {
-		response.BadRequest(c, "用户名和密码不能为空")
-		return
-	}
-	result, err := h.authSvc.HrwaiLogin(req.Account, req.Password)
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.Success(c, result)
-}
-
 // Me 处理 GET /api/valuation/auth/me（需 middleware.JWTAuth）
 func (h *ValuationAuthHandler) Me(c *gin.Context) {
 	uid := middleware.CurrentUserID(c)
