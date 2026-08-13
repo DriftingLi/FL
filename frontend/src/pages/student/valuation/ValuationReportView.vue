@@ -161,11 +161,7 @@ const basicInfoItems = computed(() => {
         <h2 class="section-title">未来估价走势</h2>
         <FutureValueChart
           :estimated-value="data.estimated_value"
-          :age="usageYears"
-          :k-time="data.k_time"
-          :k-hours="data.k_hours"
-          :k-brand="data.k_brand"
-          :lambda="data.lambda_electric"
+          :decay-anchor="data.decay_anchor || 0"
           :sale-year="data.sale_year || 0"
           height="320px"
         />

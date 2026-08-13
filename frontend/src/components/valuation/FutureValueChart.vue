@@ -1,26 +1,15 @@
 <script setup lang="ts">
-// 未来估价柱状图：基于时间衰减系数推算未来 5 年的残值走势
-// 公式推导：
-//   当前 Kt_adj = Kt^(Kh/Kb) = e^(-λ·(Kh/Kb)·age)
-//   未来 n 年后 Kt_adj_future = e^(-λ·(Kh/Kb)·(age+n)) = Kt_adj^(1+n/age)
-//   future_value(n) = estimated_value × Kt_adj^(n/age)
-//   即每年衰减乘数 d = Kt_adj^(1/age)，future_value(n) = estimated_value × d^n
+// 未来估价柱状图：future_value(n) = estimated_value × decay_anchor^n。
+// 衰减公式唯一实现在后端（ADR-0012 §8）：decay_anchor 为评估时点锁定锚点，
+// 前端只做数据渲染与乘法，不持有任何领域公式。
 import { computed, onMounted, ref, watch } from 'vue'
 import { useECharts } from '@/composables/useECharts'
 
 interface Props {
   /** 当前残值（元） */
   estimatedValue: number
-  /** 使用年限（sale_year - factory_year） */
-  age: number
-  /** 时间衰减系数 Kt = e^(-λ·age) */
-  kTime: number
-  /** 使用强度系数 Kh */
-  kHours: number
-  /** 品牌系数 Kb */
-  kBrand: number
-  /** 评估时点锁定的衰减率 λ（API 下发，ADR-0004；age=0 时用于推算年衰减） */
-  lambda: number
+  /** 年衰减锚点 d（评估时点锁定，API 下发） */
+  decayAnchor: number
   /** 评估年份（用于 X 轴标签，不传则用相对标签） */
   saleYear?: number
   /** 预测未来年数 */
@@ -45,18 +34,8 @@ const COLOR_TEXT_MUTED = '#999999'
 const COLOR_GRID = '#F0F0F0'
 const COLOR_AXIS = '#EEEEEE'
 
-/** 计算年衰减乘数 d：future_value(n) = estimated_value × d^n
- *  age>0：锚定评估时点的 Kt_adj（曲线从当前残值精确出发）
- *  age=0（新车）或 Kt 缺失：用评估时点锁定的 λ 直接推算 d = e^(-λ·(Kh/Kb))，无硬编码兜底 */
 function computeAnnualDecay(): number {
-  const { age, kTime, kHours, kBrand, lambda } = props
-  if (kBrand <= 0) return Math.exp(-lambda)
-
-  const exponent = kHours / kBrand
-  if (age > 0 && kTime > 0) {
-    return Math.pow(Math.pow(kTime, exponent), 1 / age)
-  }
-  return Math.exp(-lambda * exponent)
+  return props.decayAnchor
 }
 
 interface FuturePoint {

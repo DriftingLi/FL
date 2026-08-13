@@ -171,6 +171,8 @@ export interface EvaluationResult {
   suggestions: string[]
   /** 评估时点锁定的 λ 值（ADR-0004，供走势图数据驱动） */
   lambda_electric: number
+  /** 未来价值曲线锚点（评估时点锁定，前端只做 d^n 渲染） */
+  decay_anchor?: number
   lambda_combustion: number
 }
 
