@@ -7,7 +7,6 @@ import (
 	"context"
 
 	mainmodel "forklift-training/internal/model"
-	vmain "forklift-training/internal/service"
 	"forklift-training/internal/valuation/model"
 )
 
@@ -39,6 +38,5 @@ type ReportGenerator interface {
 // 取代旧薄包装的 Main()/DB() 泄漏，见 spec #75 D4）。
 // token 提取/吊销经会话模块处理（Logout 直接使用注入的 Session 实例）。
 type ValuationAuth interface {
-	HrwaiLogin(account, password string) (*vmain.LoginResult, error)
 	GetHrwaiUserByID(id int) (*mainmodel.HrwaiUser, error)
 }
