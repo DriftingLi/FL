@@ -88,6 +88,8 @@ func (h *EvaluationHandler) Get(c *gin.Context) {
 
 	// 重建派生字段（单一装配点：KTimeAdjusted + 维度分；建议为评估时点锁定值，ADR-0004）
 	service.RebuildDerivedFromDetail(detail)
+	// 旧记录建议 fallback（与报告 Prepare 同源单入口，ADR-0012 §6）
+	service.EnsureSuggestions(c.Request.Context(), detail, h.valuation.Resolver())
 
 	// 详情接口直接返回持久化记录（已含全部输入字段 + 计算结果 + 报告路径）
 	response.Success(c, detail)
