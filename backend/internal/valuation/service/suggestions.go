@@ -199,3 +199,42 @@ func BuildBatterySuggestions(bt model.BatteryType, soh float64, rul, low, high i
 	}
 	return out
 }
+
+// EnsureSuggestions 车辆评估旧记录建议 fallback 单一入口（ADR-0012 §6）：
+// 建议为空才填充（评估时点锁定值不被覆盖，ADR-0004）；详情接口与报告 Prepare 同源。
+func EnsureSuggestions(ctx context.Context, d *model.EvaluationDetail, resolver ConfigResolver) {
+	if len(d.Suggestions) > 0 {
+		return
+	}
+	d.Suggestions = BuildSuggestions(ctx, FromDetail(d), resolver)
+	if d.Suggestions == nil {
+		d.Suggestions = []string{}
+	}
+}
+
+// BatteryHealthFromRecord 从记录置信度反推健康度分数（创建时 Confidence = 0.6 + 0.4×healthScore）。
+// 置信度无效（≤0，旧记录缺失）时返回 1.0：不触发「特征波动」稳定性提示，保持旧记录语义。
+func BatteryHealthFromRecord(confidence float64) float64 {
+	if confidence <= 0 {
+		return 1.0
+	}
+	h := (confidence - 0.6) / 0.4
+	if h < 0 {
+		h = 0
+	}
+	if h > 1 {
+		h = 1
+	}
+	return h
+}
+
+// EnsureBatterySuggestions 电池评估旧记录建议 fallback 单一入口：
+// health 用记录内置信度反推（缺失默认 1.0），详情接口与报告 Prepare 同源。
+func EnsureBatterySuggestions(e *model.BatteryEvaluation) {
+	if len(e.Suggestions) > 0 {
+		return
+	}
+	e.Suggestions = BuildBatterySuggestions(
+		e.BatteryType, e.SohPercent, e.RulCycles, e.ConfidenceLow, e.ConfidenceHigh,
+		BatteryHealthFromRecord(e.Confidence))
+}

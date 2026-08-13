@@ -237,3 +237,52 @@ func TestDownloadURL_ConcurrentSameID_SingleGeneration(t *testing.T) {
 		t.Errorf("同 ID 并发下载只应生成 1 份 PDF，render=%d", rec.render)
 	}
 }
+
+func TestGenerate_ConcurrentSameID_SingleGeneration(t *testing.T) {
+	st := newMemStorage()
+	rec := &evalRec{}
+	var written string
+	spec := newEvalSpec(st, rec, &written)
+
+	release := make(chan struct{})
+	origRender := spec.Render
+	spec.Render = func(ctx context.Context, r *evalRec) ([]byte, error) {
+		<-release
+		return origRender(ctx, r)
+	}
+	c := New(spec)
+
+	const n = 8
+	var arrived int32
+	arrivedCh := make(chan struct{})
+	var wg sync.WaitGroup
+	results := make([]GenerateResult, n)
+	errs := make([]error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			if atomic.AddInt32(&arrived, 1) == n {
+				close(arrivedCh)
+			}
+			results[i], errs[i] = c.Generate(context.Background(), 1)
+		}(i)
+	}
+	<-arrivedCh
+	time.Sleep(50 * time.Millisecond)
+	close(release)
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("goroutine %d Generate 失败: %v", i, err)
+		}
+	}
+	if rec.render != 1 {
+		t.Errorf("同 ID 并发 POST 只应生成 1 份 PDF，render=%d", rec.render)
+	}
+	for i := 1; i < n; i++ {
+		if results[i].PDFURL != results[0].PDFURL {
+			t.Errorf("并发 POST 应拿到同一份 PDF，goroutine %d URL 不一致", i)
+		}
+	}
+}
