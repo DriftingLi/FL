@@ -1,0 +1,388 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <text class="header-title">课程中心</text>
+        </view>
+        <view class="filter-wrap">
+            <scroll-view class="filter-scroll" scroll-x="true">
+                <view class="filter-list">
+                    <text class="filter-label">专业方向</text>
+                    <view v-for="(spec, idx) in specialties" :key="idx"
+                        :class="['filter-item', { active: currentSpecialty == spec.specialty_id }]"
+                        @click="onSpecialtyClick(spec.specialty_id)">
+                        <text class="filter-text">{{ spec.name }}</text>
+                    </view>
+                </view>
+            </scroll-view>
+            <scroll-view class="filter-scroll" scroll-x="true">
+                <view class="filter-list">
+                    <text class="filter-label">等级</text>
+                    <view v-for="(lv, idx) in levels" :key="idx"
+                        :class="['filter-item', { active: currentLevel == lv.level_id }]"
+                        @click="onLevelClick(lv.level_id)">
+                        <text class="filter-text">{{ lv.name }}</text>
+                    </view>
+                </view>
+            </scroll-view>
+        </view>
+        <scroll-view class="course-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+            <view v-if="courses.length == 0 && !loading" class="empty-tip">
+                <text class="empty-text">暂无课程数据</text>
+            </view>
+            <view class="course-grid">
+                <view v-for="(course, idx) in courses" :key="idx" class="course-card"
+                    @click="onCourseClick(course.course_id)">
+                    <view class="course-card-cover">
+                        <text class="course-card-icon">{{ getCategoryIcon(course.category) }}</text>
+                        <view v-if="getCourseTag(course).length > 0" class="course-card-tag">
+                            <text class="course-card-tag-text">{{ getCourseTag(course) }}</text>
+                        </view>
+                    </view>
+                    <view class="course-card-info">
+                        <text class="course-card-title">{{ course.title }}</text>
+                        <text class="course-card-desc">{{ course.description }}</text>
+                        <view class="course-card-footer">
+                            <text v-if="course.chapter_count > 0"
+                                class="course-card-chapters">{{ course.chapter_count }}节</text>
+                            <text v-if="course.duration > 0"
+                                class="course-card-duration">{{ formatDuration(course.duration) }}</text>
+                        </view>
+                    </view>
+                </view>
+            </view>
+            <view v-if="loading" class="loading-more">
+                <text class="loading-text">加载中...</text>
+            </view>
+            <view v-if="noMore && courses.length > 0" class="loading-more">
+                <text class="loading-text">没有更多了</text>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref } from 'vue'
+    import { onShow } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { getCourseListApi, getSpecialtiesApi, getLevelsApi } from '../../api/course'
+    import type { CourseItem, SpecialtyItem, LevelItem } from '../../types/index'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+    const currentSpecialty = ref<number>(0)
+    const currentLevel = ref<number>(0)
+    const courses = ref<CourseItem[]>([])
+    const loading = ref<boolean>(false)
+    const page = ref<number>(1)
+    const pageSize = 12
+    const total = ref<number>(0)
+    const noMore = ref<boolean>(false)
+
+    // 筛选选项：专业方向（含"全部"）
+    const specialties = ref<SpecialtyItem[]>([
+        { specialty_id: 0, name: '全部' },
+    ])
+    // 筛选选项：课程等级（含"全部"）
+    const levels = ref<LevelItem[]>([
+        { level_id: 0, name: '全部' },
+    ])
+
+    async function loadSpecialties() {
+        try {
+            const specs = await getSpecialtiesApi()
+            if (specs.length > 0) {
+                const merged : SpecialtyItem[] = [{ specialty_id: 0, name: '全部' }]
+                for (let i = 0; i < specs.length; i++) {
+                    merged.push(specs[i])
+                }
+                specialties.value = merged
+            }
+        } catch (e) {
+            console.error('[courses] load specialties failed:', e)
+        }
+    }
+
+    async function loadLevels() {
+        try {
+            const lvs = await getLevelsApi()
+            if (lvs.length > 0) {
+                const merged : LevelItem[] = [{ level_id: 0, name: '全部' }]
+                for (let i = 0; i < lvs.length; i++) {
+                    merged.push(lvs[i])
+                }
+                levels.value = merged
+            }
+        } catch (e) {
+            console.error('[courses] load levels failed:', e)
+        }
+    }
+
+    function getCategoryIcon(category : string) : string {
+        if (category == 'theory' || category == 'CATEGORY_01') return '📖'
+        if (category == 'safety' || category == 'CATEGORY_02') return '⚠️'
+        if (category == 'practice' || category == 'CATEGORY_03') return '🔧'
+        if (category == 'advanced' || category == 'CATEGORY_04') return '🚀'
+        return '📚'
+    }
+
+    /** 课程卡片标签：优先课程等级名，其次专业方向名 */
+    function getCourseTag(course : CourseItem) : string {
+        if (course.level_id > 0) {
+            for (let i = 0; i < levels.value.length; i++) {
+                if (levels.value[i].level_id == course.level_id) {
+                    return levels.value[i].name
+                }
+            }
+        }
+        if (course.specialty_id > 0) {
+            for (let i = 0; i < specialties.value.length; i++) {
+                if (specialties.value[i].specialty_id == course.specialty_id) {
+                    return specialties.value[i].name
+                }
+            }
+        }
+        return ''
+    }
+
+    function formatDuration(seconds : number) : string {
+        if (seconds <= 0) return ''
+        const minutes = Math.floor(seconds / 60)
+        if (minutes < 60) return minutes + '分钟'
+        const hours = Math.floor(minutes / 60)
+        const mins = minutes % 60
+        return hours + 'h' + mins + 'm'
+    }
+
+    async function loadCourses(reset : boolean = false) {
+        if (loading.value) return
+        if (reset) {
+            page.value = 1
+            noMore.value = false
+        }
+        if (noMore.value && !reset) return
+
+        loading.value = true
+        try {
+            const result = await getCourseListApi(page.value, pageSize, currentSpecialty.value, currentLevel.value)
+            if (reset) {
+                courses.value = result.items
+            } else {
+                courses.value = courses.value.concat(result.items)
+            }
+            total.value = result.total
+            if (courses.value.length >= result.total || result.items.length == 0) {
+                noMore.value = true
+            } else {
+                page.value = page.value + 1
+            }
+        } catch (e) {
+            console.error('[courses] load failed:', e)
+            uni.showToast({ title: '加载课程失败', icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function onSpecialtyClick(id : number) : void {
+        if (currentSpecialty.value == id) return
+        currentSpecialty.value = id
+        loadCourses(true)
+    }
+
+    function onLevelClick(id : number) : void {
+        if (currentLevel.value == id) return
+        currentLevel.value = id
+        loadCourses(true)
+    }
+
+    function onLoadMore() : void {
+        loadCourses(false)
+    }
+
+    function onCourseClick(courseId : number) : void {
+        uni.navigateTo({
+            url: '/pages/courses/course-detail?id=' + courseId
+        })
+    }
+
+    onShow(async () => {
+        // 先加载筛选选项（专业方向 + 等级），再加载课程
+        await loadSpecialties()
+        await loadLevels()
+        if (courses.value.length == 0) {
+            loadCourses(true)
+        }
+    })
+</script>
+
+<style>
+    .container {
+        display: flex;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        align-items: center;
+    }
+
+    .header-title {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .filter-wrap {
+        background-color: #ffffff;
+        border-bottom: 1rpx solid #f0f0f0;
+    }
+
+    .filter-scroll {
+        white-space: nowrap;
+    }
+
+    .filter-list {
+        padding: 16rpx 0;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .filter-label {
+        font-size: 26rpx;
+        color: #999999;
+        margin-left: 24rpx;
+        margin-right: 8rpx;
+    }
+
+    .filter-item {
+        padding: 12rpx 28rpx;
+        border-radius: 32rpx;
+        background-color: #f5f5f5;
+        margin-left: 16rpx;
+    }
+
+    .filter-item.active {
+        background-color: #2979ff;
+    }
+
+    .filter-text {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    .filter-item.active .filter-text {
+        color: #ffffff;
+    }
+
+    .course-scroll {
+        flex: 1;
+        padding: 24rpx;
+        height: 0;
+    }
+
+    .empty-tip {
+        align-items: center;
+        padding: 120rpx 0;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .course-grid {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: space-between;
+    }
+
+    .course-card {
+        width: 340rpx;
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        overflow: hidden;
+        margin-bottom: 20rpx;
+        border: 1px solid #eeeeee;
+        position: relative;
+    }
+
+    .course-card-cover {
+        align-self: stretch;
+        height: 180rpx;
+        background-color: #e3f2fd;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .course-card-icon {
+        font-size: 64rpx;
+    }
+
+    .course-card-tag {
+        position: absolute;
+        left: 12rpx;
+        top: 12rpx;
+        background-color: rgba(41, 121, 255, 0.85);
+        border-radius: 6rpx;
+        padding: 4rpx 12rpx;
+    }
+
+    .course-card-tag-text {
+        font-size: 20rpx;
+        color: #ffffff;
+    }
+
+    .course-card-info {
+        padding: 20rpx;
+        flex-direction: column;
+    }
+
+    .course-card-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 8rpx;
+    }
+
+    .course-card-desc {
+        font-size: 24rpx;
+        color: #999999;
+        margin-bottom: 16rpx;
+        lines: 2;
+        text-overflow: ellipsis;
+    }
+
+    .course-card-footer {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .course-card-chapters {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .course-card-duration {
+        font-size: 22rpx;
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    .loading-more {
+        align-items: center;
+        padding: 24rpx 0;
+    }
+
+    .loading-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
+</style>

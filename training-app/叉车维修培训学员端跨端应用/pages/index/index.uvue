@@ -54,7 +54,7 @@
 
 	.title {
 		font-size: 44rpx;
-		font-weight: 600;
+		font-weight: bold;
 		color: #333333;
 		margin-bottom: 8rpx;
 	}

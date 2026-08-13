@@ -1,0 +1,470 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <text class="header-title">考试中心</text>
+        </view>
+        <scroll-view class="content-scroll" scroll-y="true">
+
+            <!-- 模拟考试入口 -->
+            <view class="section">
+                <view class="section-header">
+                    <text class="section-title">模拟考试</text>
+                    <text class="section-link" @click="onViewMockHistory">模考历史 ›</text>
+                </view>
+                <view class="mock-exam-card" @click="onStartMockExam">
+                    <view class="mock-exam-info">
+                        <text class="mock-exam-title">随机模拟考试</text>
+                        <text class="mock-exam-desc">从题库随机抽题，模拟真实考试环境</text>
+                    </view>
+                    <view class="mock-exam-action">
+                        <text class="action-btn">开始模考</text>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 等级考试（可参加） -->
+            <view class="section">
+                <view class="section-header">
+                    <text class="section-title">等级考试</text>
+                </view>
+                <view v-if="availableExams.length == 0 && !levelLoading" class="empty-tip">
+                    <text class="empty-text">暂无可用考试</text>
+                </view>
+                <view class="exam-list">
+                    <view v-for="(exam, idx) in availableExams" :key="idx" class="exam-item">
+                        <view class="exam-info">
+                            <text class="exam-title">{{ exam.name }}</text>
+                            <view class="exam-meta">
+                                <text class="exam-tag" :class="getSessionStatusClass(exam.status)">
+                                    {{ getSessionStatusName(exam.status) }}</text>
+                                <text class="exam-time">{{ formatRange(exam.start_time, exam.end_time) }}</text>
+                            </view>
+                            <text class="exam-desc">{{ exam.duration }} 分钟 · 满分 {{ exam.total_score }} 分</text>
+                        </view>
+                        <view class="exam-action">
+                            <text v-if="exam.can_enter" class="action-btn" @click="onEnterExam(exam)">
+                                {{ exam.has_participated ? '继续考试' : '开始考试' }}</text>
+                            <text v-else class="action-btn-disabled">已结束</text>
+                        </view>
+                    </view>
+                </view>
+                <view v-if="levelLoading" class="loading-more">
+                    <text class="loading-text">加载中...</text>
+                </view>
+            </view>
+
+            <!-- 等级考试历史 -->
+            <view class="section">
+                <view class="section-header">
+                    <text class="section-title">等级考试历史</text>
+                </view>
+                <view v-if="history.length == 0 && !historyLoading" class="empty-tip">
+                    <text class="empty-text">暂无考试记录</text>
+                </view>
+                <view class="exam-list">
+                    <view v-for="(record, idx) in history" :key="idx" class="exam-item"
+                        @click="onViewLevelResult(record)">
+                        <view class="exam-info">
+                            <text class="exam-title">{{ record.session_name }}</text>
+                            <view class="exam-meta">
+                                <text class="exam-tag" :class="record.is_passed ? 'passed' : getHistoryStatusClass(record.status)">
+                                    {{ getHistoryStatusName(record) }}</text>
+                                <text class="exam-time">{{ formatDate(record.submit_time) }}</text>
+                            </view>
+                            <text class="exam-desc">{{ formatScore(record.score) }} / {{ record.objective_score }} 分</text>
+                        </view>
+                        <view class="exam-action">
+                            <text class="action-btn-secondary" @click="onViewLevelResult(record)">查看结果</text>
+                        </view>
+                    </view>
+                </view>
+                <view v-if="historyLoading" class="loading-more">
+                    <text class="loading-text">加载中...</text>
+                </view>
+                <view v-if="historyNoMore && history.length > 0" class="loading-more">
+                    <text class="loading-text">没有更多了</text>
+                </view>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref } from 'vue'
+    import { onShow } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { getAvailableLevelExamsApi, getLevelExamHistoryApi } from '../../api/levelExam'
+    import type { LevelExamSession, LevelExamHistoryItem } from '../../types/index'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    // 可参加考试
+    const availableExams = ref<LevelExamSession[]>([])
+    const levelLoading = ref<boolean>(false)
+
+    // 等级考试历史
+    const history = ref<LevelExamHistoryItem[]>([])
+    const historyPage = ref<number>(1)
+    const historyPageSize = 10
+    const historyLoading = ref<boolean>(false)
+    const historyNoMore = ref<boolean>(false)
+
+    /** 场次状态文案 */
+    function getSessionStatusName(status : string) : string {
+        if (status == 'ongoing') return '进行中'
+        if (status == 'upcoming') return '未开始'
+        return '已结束'
+    }
+
+    function getSessionStatusClass(status : string) : string {
+        if (status == 'ongoing') return 'ongoing'
+        if (status == 'upcoming') return 'upcoming'
+        return 'finished'
+    }
+
+    /** 历史记录状态文案 */
+    function getHistoryStatusName(record : LevelExamHistoryItem) : string {
+        if (record.status == 'timeout') return '超时交卷'
+        if (record.status == 'in_progress') return '未完成'
+        return record.is_passed ? '通过' : '未通过'
+    }
+
+    function getHistoryStatusClass(status : string) : string {
+        if (status == 'in_progress') return 'in-progress'
+        return 'finished'
+    }
+
+    /** 格式化时间范围：08-01 09:00 ~ 10:00 */
+    function formatRange(startTime : string, endTime : string) : string {
+        const s = formatDateTime(startTime)
+        const e = formatDateTime(endTime)
+        if (s.length == 0 || e.length == 0) return ''
+        return s + ' ~ ' + e.substring(e.length - 5)
+    }
+
+    /** 格式化日期时间：MM-DD HH:mm */
+    function formatDateTime(iso : string) : string {
+        if (iso.length < 16) return iso
+        const s = iso.substring(5, 16)
+        return s.substring(0, 5) + ' ' + s.substring(6, 11)
+    }
+
+    /** 格式化日期：YYYY-MM-DD */
+    function formatDate(iso : string) : string {
+        if (iso.length < 10) return iso
+        return iso.substring(0, 10)
+    }
+
+    /** 格式化分数（整数显示整数，小数显示 1 位） */
+    function formatScore(score : number) : string {
+        if (score == Math.floor(score)) {
+            return '' + Math.floor(score)
+        }
+        return score.toFixed(1)
+    }
+
+    async function loadAvailable() : Promise<void> {
+        levelLoading.value = true
+        try {
+            const list = await getAvailableLevelExamsApi()
+            availableExams.value = list
+            console.log('[exam] available level exams:', list.length)
+        } catch (e) {
+            console.error('[exam] load available level exams failed:', e)
+        } finally {
+            levelLoading.value = false
+        }
+    }
+
+    async function loadHistory(reset : boolean = false) : Promise<void> {
+        if (historyLoading.value) return
+        if (reset) {
+            historyPage.value = 1
+            historyNoMore.value = false
+        }
+        if (historyNoMore.value && !reset) return
+
+        historyLoading.value = true
+        try {
+            const result = await getLevelExamHistoryApi(historyPage.value, historyPageSize)
+            if (reset) {
+                history.value = result.records
+            } else {
+                history.value = history.value.concat(result.records)
+            }
+            if (history.value.length >= result.total || result.records.length == 0) {
+                historyNoMore.value = true
+            } else {
+                historyPage.value = historyPage.value + 1
+            }
+        } catch (e) {
+            console.error('[exam] load level history failed:', e)
+        } finally {
+            historyLoading.value = false
+        }
+    }
+
+    // ===== 入口 =====
+
+    function onStartMockExam() : void {
+        uni.showModal({
+            title: '模拟考试',
+            content: '即将开始随机模拟考试，确认开始？',
+            success: (res) => {
+                if (res.confirm) {
+                    uni.navigateTo({
+                        url: '/pages/exam/mock-exam?mode=new&duration=90'
+                    })
+                }
+            }
+        })
+    }
+
+    function onViewMockHistory() : void {
+        uni.navigateTo({ url: '/pages/profile/mock-exam-records' })
+    }
+
+    /** 进入等级考试（新考试或继续） */
+    function onEnterExam(exam : LevelExamSession) : void {
+        const action = exam.has_participated ? '继续考试' : '开始考试'
+        uni.showModal({
+            title: action,
+            content: '即将进入「' + exam.name + '」，考试时长 ' + exam.duration + ' 分钟，确认进入？',
+            success: (res) => {
+                if (res.confirm) {
+                    uni.navigateTo({
+                        url: '/pages/exam/level-exam-do?session_id=' + exam.id
+                    })
+                }
+            }
+        })
+    }
+
+    /** 查看考试结果 */
+    function onViewLevelResult(record : LevelExamHistoryItem) : void {
+        if (record.status == 'in_progress') {
+            uni.navigateTo({
+                url: '/pages/exam/level-exam-do?session_id=' + record.exam_session_id
+            })
+            return
+        }
+        if (record.id <= 0) {
+            uni.showToast({ title: '考试结果暂未生成', icon: 'none' })
+            return
+        }
+        uni.navigateTo({
+            url: '/pages/exam/level-exam-result?participant_id=' + record.id
+        })
+    }
+
+    onShow(() => {
+        loadAvailable()
+        if (history.value.length == 0) {
+            loadHistory(true)
+        }
+    })
+</script>
+
+<style>
+    .container {
+        display: flex;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        align-items: center;
+    }
+
+    .header-title {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .content-scroll {
+        flex: 1;
+        height: 0;
+    }
+
+    .section {
+        background-color: #ffffff;
+        margin-top: 16rpx;
+        padding: 24rpx;
+    }
+
+    .section-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20rpx;
+    }
+
+    .section-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .section-link {
+        font-size: 24rpx;
+        color: #2979ff;
+    }
+
+    .mock-exam-card {
+        flex-direction: row;
+        align-items: center;
+        padding: 24rpx;
+        background-color: #f0f7ff;
+        border-radius: 12rpx;
+    }
+
+    .mock-exam-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .mock-exam-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 8rpx;
+    }
+
+    .mock-exam-desc {
+        font-size: 24rpx;
+        color: #666666;
+    }
+
+    .mock-exam-action {
+        margin-left: 20rpx;
+    }
+
+    .exam-list {
+        flex-direction: column;
+    }
+
+    .exam-item {
+        flex-direction: row;
+        align-items: center;
+        padding: 24rpx 0;
+        border-bottom: 1rpx solid #f5f5f5;
+    }
+
+    .exam-item:last-child {
+        border-bottom: none;
+    }
+
+    .exam-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .exam-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 8rpx;
+    }
+
+    .exam-desc {
+        font-size: 24rpx;
+        color: #999999;
+        margin-top: 8rpx;
+    }
+
+    .exam-meta {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .exam-tag {
+        font-size: 20rpx;
+        color: #ffffff;
+        background-color: #ff9800;
+        padding: 4rpx 16rpx;
+        border-radius: 8rpx;
+        margin-right: 16rpx;
+    }
+
+    .exam-tag.ongoing {
+        background-color: #4caf50;
+    }
+
+    .exam-tag.upcoming {
+        background-color: #ff9800;
+    }
+
+    .exam-tag.finished {
+        background-color: #9e9e9e;
+    }
+
+    .exam-tag.passed {
+        background-color: #4caf50;
+    }
+
+    .exam-tag.in-progress {
+        background-color: #ff9800;
+    }
+
+    .exam-time {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .exam-action {
+        margin-left: 20rpx;
+    }
+
+    .action-btn {
+        font-size: 26rpx;
+        color: #ffffff;
+        background-color: #2979ff;
+        padding: 12rpx 32rpx;
+        border-radius: 24rpx;
+    }
+
+    .action-btn-disabled {
+        font-size: 26rpx;
+        color: #cccccc;
+        background-color: #f5f5f5;
+        padding: 12rpx 32rpx;
+        border-radius: 24rpx;
+    }
+
+    .action-btn-secondary {
+        font-size: 26rpx;
+        color: #666666;
+        background-color: #f5f5f5;
+        padding: 12rpx 32rpx;
+        border-radius: 24rpx;
+    }
+
+    .empty-tip {
+        align-items: center;
+        padding: 60rpx 0;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .loading-more {
+        align-items: center;
+        padding: 24rpx 0;
+    }
+
+    .loading-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
+</style>

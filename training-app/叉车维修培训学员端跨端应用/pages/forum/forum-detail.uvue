@@ -1,0 +1,741 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">帖子详情</text>
+            <view class="header-right" v-if="canDelete" @click="onDelete">
+                <!-- <view class="header-right" v-if="canDelete" @click="onDelete"> -->
+                <text class="header-action-danger">删除</text>
+            </view>
+            <view class="header-right" v-else></view>
+        </view>
+
+        <scroll-view class="content-scroll" scroll-y="true">
+            <!-- 加载中 -->
+            <view v-if="loading && topic == null" class="loading-wrap">
+                <text class="loading-text">加载中...</text>
+            </view>
+
+            <!-- 帖子内容 -->
+            <view v-if="topic != null" class="topic-section">
+                <!--   <text class="topic-title">{{ topic.title }}</text> -->
+                <view class="topic-info">
+                    <view class="author-avatar" :style="{ backgroundColor: getAvatarColor(topic.author_id) }">
+                        <image v-if="topic.author_avatar.length > 0" class="author-avatar-img"
+                            :src="topic.author_avatar" mode="aspectFill" />
+                        <text v-else class="author-avatar-text">{{ getAuthorInitial(topic.author_name) }}</text>
+                    </view>
+                    <view class="author-info">
+                        <text class="author-name">{{ topic.author_name.length > 0 ? topic.author_name : '匿名学员' }}</text>
+                        <text class="post-time">{{ formatDateTime(topic.created_at) }}</text>
+                    </view>
+                    <view class="topic-stats">
+                        <text class="stat-text">👁 {{ topic.views_count }}</text>
+                    </view>
+                    <view v-if="canDelete" class="topic-delete" @click="onDelete">
+                        <text class="topic-delete-text">删除</text>
+                    </view>
+                </view>
+                <view class="topic-content">
+                    <text class="content-text">{{ topic.content }}</text>
+                    <view v-if="topic.images.length > 0" class="img-grid">
+                        <view v-for="(img, idx) in topic.images" :key="idx" class="img-cell"
+                            @click="onPreviewImages(topic.images, idx)">
+                            <image class="img-thumb" :src="resolveFileUrl(img)" mode="aspectFill" />
+                        </view>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 回复列表 -->
+            <view v-if="topic != null" class="replies-section">
+                <view class="replies-header">
+                    <text class="replies-title">全部回复（{{ replies.length }}）</text>
+                </view>
+
+                <view v-if="replies.length == 0" class="empty-replies">
+                    <text class="empty-replies-text">暂无回复，来说两句吧</text>
+                </view>
+
+                <view v-for="(reply, idx) in replies" :key="idx" class="reply-card">
+                    <view class="reply-header">
+                        <view class="reply-avatar" :style="{ backgroundColor: getAvatarColor(reply.author_id) }">
+                            <image v-if="reply.author_avatar.length > 0" class="reply-avatar-img"
+                                :src="reply.author_avatar" mode="aspectFill" />
+                            <text v-else class="reply-avatar-text">{{ getAuthorInitial(reply.author_name) }}</text>
+                        </view>
+                        <view class="reply-info">
+                            <text
+                                class="reply-author">{{ reply.author_name.length > 0 ? reply.author_name : '匿名学员' }}</text>
+                            <text class="reply-time">{{ formatDateTime(reply.created_at) }}</text>
+                        </view>
+                        <view v-if="canDeleteReply(reply)" class="reply-delete" @click="onDeleteReply(reply.id)">
+                            <text class="reply-delete-text">删除</text>
+                        </view>
+                    </view>
+                    <text class="reply-content">{{ reply.content }}</text>
+                    <view v-if="reply.images.length > 0" class="img-grid">
+                        <view v-for="(img, idx) in reply.images" :key="idx" class="img-cell small"
+                            @click="onPreviewImages(reply.images, idx)">
+                            <image class="img-thumb" :src="resolveFileUrl(img)" mode="aspectFill" />
+                        </view>
+                    </view>
+                </view>
+            </view>
+        </scroll-view>
+
+        <!-- 底部回复输入栏 -->
+        <view v-if="topic != null" class="reply-bar">
+            <view v-for="(img, idx) in replyImages" :key="idx" class="reply-preview" @click="onPreviewReplyImage(idx)">
+                <image class="reply-preview-img" :src="resolveFileUrl(img)" mode="aspectFill" />
+                <view class="reply-preview-remove" @click.stop="onRemoveReplyImage(idx)">
+                    <text class="reply-preview-remove-text">×</text>
+                </view>
+            </view>
+            <view v-if="replyImages.length < 3" class="reply-add" @click="onAddReplyImage">
+                <text class="reply-add-text">{{ uploadingReplyImage ? '…' : '＋' }}</text>
+            </view>
+            <input class="reply-input" type="text" placeholder="写下你的回复..." v-model="replyContent" />
+            <view class="reply-btn" :class="{ disabled: replyContent.length == 0 || submitting }"
+                @click="onSubmitReply">
+                <text class="reply-btn-text">{{ submitting ? '发送中' : '发送' }}</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
+    import { useAuthStore } from '../../stores/auth'
+    import {
+        getForumTopicDetailApi,
+        replyForumTopicApi,
+        deleteForumTopicApi,
+        deleteForumReplyApi,
+        uploadForumImageApi,
+    } from '../../api/forum'
+    import { resolveFileUrl } from '../../utils/format'
+    import type { ForumTopicDetail, ForumReply } from '../../types/index'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+    const authStore = useAuthStore()
+
+    const topicId = ref<number>(0)
+    const topic = ref<ForumTopicDetail | null>(null)
+    const replies = ref<ForumReply[]>([])
+    const loading = ref<boolean>(false)
+    const submitting = ref<boolean>(false)
+    const replyContent = ref<string>('')
+    const replyImages = ref<string[]>([])
+    const uploadingReplyImage = ref<boolean>(false)
+
+    /** 当前用户 ID */
+    const currentUserId = computed<number>(() : number => {
+        const u = authStore.user.value
+        if (u != null) return u.user_id
+        return 0
+    })
+
+    /** 是否可删除帖子（后端 can_delete 或作者本人） */
+    const canDelete = computed<boolean>(() : boolean => {
+        const t = topic.value
+        if (t == null) return false
+        if (t.can_delete) return true
+        return t.author_id == currentUserId.value && currentUserId.value > 0
+    })
+
+    /** 是否可删除回复（后端 can_delete 或作者本人） */
+    function canDeleteReply(reply : ForumReply) : boolean {
+        if (reply.can_delete) return true
+        return reply.author_id == currentUserId.value && currentUserId.value > 0
+    }
+
+    /** 获取作者名首字 */
+    function getAuthorInitial(name : string) : string {
+        if (name.length == 0) return '学'
+        return name.substring(0, 1)
+    }
+
+    /** 基于 author_id 稳定生成头像背景色，保证同一人在主帖和回复中颜色一致 */
+    function getAvatarColor(authorId : number) : string {
+        const colors : string[] = ['#2979ff', '#4caf50', '#ff9800', '#9c27b0', '#e91e63', '#009688', '#795548', '#607d8b']
+        if (authorId <= 0) return colors[0]
+        return colors[authorId % colors.length]
+    }
+
+    /** 格式化时间 YYYY-MM-DD HH:mm */
+    function formatDateTime(dateStr : string) : string {
+        if (dateStr.length < 16) return dateStr
+        return dateStr.substring(0, 16).replace('T', ' ')
+    }
+
+    async function loadDetail() : Promise<void> {
+        if (topicId.value == 0) return
+        loading.value = true
+        try {
+            const data = await getForumTopicDetailApi(topicId.value)
+            topic.value = data
+            replies.value = data.replies
+            console.log('[forum-detail] DIAG can_delete=', data.can_delete, 'author_id=', data.author_id, 'currentUserId=', currentUserId.value, 'user=', JSON.stringify(authStore.user.value), 'canDelete=', canDelete.value)
+        } catch (e) {
+            console.error('[forum-detail] load failed:', e)
+            uni.showToast({ title: '加载帖子失败', icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
+    /** 提交回复 */
+    async function onSubmitReply() : Promise<void> {
+        if (replyContent.value.trim().length == 0) {
+            uni.showToast({ title: '请输入回复内容', icon: 'none' })
+            return
+        }
+        if (submitting.value) return
+        submitting.value = true
+        try {
+            const reply = await replyForumTopicApi(topicId.value, replyContent.value.trim(), replyImages.value)
+            replies.value.push(reply)
+            replyContent.value = ''
+            replyImages.value = []
+            // 更新回复数
+            const t = topic.value
+            if (t != null) {
+                t.replies_count = t.replies_count + 1
+            }
+            uni.showToast({ title: '回复成功', icon: 'success' })
+        } catch (e) {
+            console.error('[forum-detail] reply failed:', e)
+            uni.showToast({ title: '回复失败', icon: 'none' })
+        } finally {
+            submitting.value = false
+        }
+    }
+
+    /** 删除帖子 */
+    function onDelete() : void {
+        uni.showModal({
+            title: '提示',
+            content: '确定删除这篇帖子吗？删除后不可恢复。',
+            success: (res) => {
+                if (res.confirm) {
+                    doDeleteTopic()
+                }
+            }
+        })
+    }
+
+    async function doDeleteTopic() : Promise<void> {
+        uni.showLoading({ title: '删除中...' })
+        try {
+            await deleteForumTopicApi(topicId.value)
+            uni.showToast({ title: '已删除', icon: 'success' })
+            setTimeout(() => {
+                goBack()
+            }, 1000)
+        } catch (e) {
+            console.error('[forum-detail] delete topic failed:', e)
+            uni.showToast({ title: '删除失败', icon: 'none' })
+        } finally {
+            uni.hideLoading()
+        }
+    }
+
+    /** 删除回复 */
+    function onDeleteReply(replyId : number) : void {
+        uni.showModal({
+            title: '提示',
+            content: '确定删除这条回复吗？',
+            success: (res) => {
+                if (res.confirm) {
+                    doDeleteReply(replyId)
+                }
+            }
+        })
+    }
+
+    async function doDeleteReply(replyId : number) : Promise<void> {
+        uni.showLoading({ title: '删除中...' })
+        try {
+            await deleteForumReplyApi(replyId)
+            // 从列表中移除
+            const newReplies : ForumReply[] = []
+            for (let i = 0; i < replies.value.length; i++) {
+                if (replies.value[i].id != replyId) {
+                    newReplies.push(replies.value[i])
+                }
+            }
+            replies.value = newReplies
+            // 更新回复数
+            const t = topic.value
+            if (t != null) {
+                t.replies_count = Math.max(0, t.replies_count - 1)
+            }
+            uni.showToast({ title: '已删除', icon: 'success' })
+        } catch (e) {
+            console.error('[forum-detail] delete reply failed:', e)
+            uni.showToast({ title: '删除失败', icon: 'none' })
+        } finally {
+            uni.hideLoading()
+        }
+    }
+
+    /** 预览一组图片（帖子/回复共用） */
+    function onPreviewImages(all : string[], index : number) : void {
+        const urls : string[] = []
+        for (let i = 0; i < all.length; i++) {
+            urls.push(resolveFileUrl(all[i]))
+        }
+        uni.previewImage({
+            urls: urls,
+            current: index,
+        })
+    }
+
+    /** 选择回复图片：批量选择并上传（最多 3 张） */
+    function onAddReplyImage() : void {
+        if (uploadingReplyImage.value) return
+        const remaining = 3 - replyImages.value.length
+        if (remaining <= 0) {
+            uni.showToast({ title: '最多上传 3 张图片', icon: 'none' })
+            return
+        }
+        uni.chooseImage({
+            count: remaining,
+            sizeType: ['compressed'],
+            sourceType: ['album', 'camera'],
+            success: (res) => {
+                const paths = res.tempFilePaths as string[]
+                if (paths.length == 0) return
+                uploadReplyImages(paths)
+            },
+            fail: (err) => {
+                console.log('[forum-detail] chooseImage canceled/failed:', err)
+            },
+        })
+    }
+
+    /** 逐张上传回复图片 */
+    async function uploadReplyImages(paths : string[]) : Promise<void> {
+        uploadingReplyImage.value = true
+        uni.showLoading({ title: '上传图片中...' })
+        let failed = 0
+        for (let i = 0; i < paths.length; i++) {
+            if (replyImages.value.length >= 3) break
+            try {
+                const url = await uploadForumImageApi(paths[i])
+                replyImages.value.push(url)
+            } catch (e) {
+                console.error('[forum-detail] upload reply image failed:', e)
+                failed = failed + 1
+            }
+        }
+        uni.hideLoading()
+        uploadingReplyImage.value = false
+        if (failed > 0) {
+            uni.showToast({ title: failed + ' 张图片上传失败，请重试', icon: 'none' })
+        }
+    }
+
+    /** 删除已选回复图片 */
+    function onRemoveReplyImage(index : number) : void {
+        const next : string[] = []
+        for (let i = 0; i < replyImages.value.length; i++) {
+            if (i != index) next.push(replyImages.value[i])
+        }
+        replyImages.value = next
+    }
+
+    /** 预览已选回复图片 */
+    function onPreviewReplyImage(index : number) : void {
+        onPreviewImages(replyImages.value, index)
+    }
+
+    function onBack() : void {
+        goBack()
+    }
+
+    onLoad((options : UTSJSONObject) => {
+        const id = options['id']
+        if (id != null) {
+            topicId.value = parseInt(`${id}`)
+        }
+        loadDetail()
+    })
+</script>
+
+<style>
+    .container {
+        display: flex;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        width: 80rpx;
+        align-items: center;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #ffffff;
+    }
+
+    .header-title {
+        flex: 1;
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+        text-align: center;
+    }
+
+    .header-right {
+        width: 80rpx;
+        align-items: center;
+    }
+
+    .header-action-danger {
+        font-size: 28rpx;
+        color: #ffcdd2;
+    }
+
+    .content-scroll {
+        flex: 1;
+        height: 0;
+    }
+
+    /* 加载中 */
+    .loading-wrap {
+        align-items: center;
+        padding: 120rpx 0;
+    }
+
+    .loading-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    /* 帖子内容区 */
+    .topic-section {
+        background-color: #ffffff;
+        padding: 32rpx;
+        margin-bottom: 16rpx;
+        flex-direction: column;
+    }
+
+    .topic-title {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #333333;
+        line-height: 1.5;
+        margin-bottom: 24rpx;
+    }
+
+    .topic-info {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 24rpx;
+        padding-bottom: 24rpx;
+        border-bottom: 1rpx solid #f0f0f0;
+    }
+
+    .author-avatar {
+        width: 64rpx;
+        height: 64rpx;
+        border-radius: 32rpx;
+        background-color: #2979ff;
+        align-items: center;
+        justify-content: center;
+        margin-right: 16rpx;
+    }
+
+    .author-avatar-text {
+        font-size: 28rpx;
+        color: #ffffff;
+        font-weight: bold;
+    }
+
+    .author-avatar-img {
+        width: 64rpx;
+        height: 64rpx;
+        border-radius: 32rpx;
+    }
+
+    .author-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .author-name {
+        font-size: 28rpx;
+        color: #333333;
+        font-weight: bold;
+        margin-bottom: 4rpx;
+    }
+
+    .post-time {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .topic-stats {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .stat-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    /* 删除帖子按钮（贴主可见，位于卡片头部右上角） */
+    .topic-delete {
+        padding: 8rpx 0 8rpx 20rpx;
+    }
+
+    .topic-delete-text {
+        font-size: 24rpx;
+        color: #f44336;
+    }
+
+    .topic-content {
+        flex-direction: column;
+    }
+
+    .content-text {
+        font-size: 30rpx;
+        color: #333333;
+        line-height: 1.8;
+    }
+
+    /* 图片墙（帖子/回复展示） */
+    .img-grid {
+        flex-direction: row;
+        flex-wrap: wrap;
+        margin-top: 24rpx;
+    }
+
+    .img-cell {
+        width: 200rpx;
+        height: 200rpx;
+        margin-right: 16rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .img-cell.small {
+        width: 160rpx;
+        height: 160rpx;
+    }
+
+    .img-thumb {
+        width: 200rpx;
+        height: 200rpx;
+        border-radius: 12rpx;
+        background-color: #f0f0f0;
+    }
+
+    .img-cell.small .img-thumb {
+        width: 160rpx;
+        height: 160rpx;
+    }
+
+    /* 回复列表 */
+    .replies-section {
+        background-color: #ffffff;
+        padding: 32rpx;
+        flex-direction: column;
+    }
+
+    .replies-header {
+        padding-bottom: 24rpx;
+        border-bottom: 1rpx solid #f0f0f0;
+        margin-bottom: 16rpx;
+    }
+
+    .replies-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .empty-replies {
+        align-items: center;
+        padding: 60rpx 0;
+    }
+
+    .empty-replies-text {
+        font-size: 26rpx;
+        color: #999999;
+    }
+
+    .reply-card {
+        flex-direction: column;
+        padding: 24rpx 0;
+        border-bottom: 1rpx solid #f5f5f5;
+    }
+
+    .reply-header {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 12rpx;
+    }
+
+    .reply-avatar {
+        width: 56rpx;
+        height: 56rpx;
+        border-radius: 28rpx;
+        background-color: #4caf50;
+        align-items: center;
+        justify-content: center;
+        margin-right: 16rpx;
+    }
+
+    .reply-avatar-text {
+        font-size: 24rpx;
+        color: #ffffff;
+        font-weight: bold;
+    }
+
+    .reply-avatar-img {
+        width: 56rpx;
+        height: 56rpx;
+        border-radius: 28rpx;
+    }
+
+    .reply-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .reply-author {
+        font-size: 26rpx;
+        color: #333333;
+        font-weight: bold;
+        margin-bottom: 4rpx;
+    }
+
+    .reply-time {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .reply-delete {
+        padding: 8rpx 16rpx;
+    }
+
+    .reply-delete-text {
+        font-size: 24rpx;
+        color: #f44336;
+    }
+
+    .reply-content {
+        font-size: 28rpx;
+        color: #333333;
+        line-height: 1.6;
+        padding-left: 72rpx;
+    }
+
+    /* 底部回复栏 */
+    .reply-bar {
+        flex-direction: row;
+        align-items: center;
+        padding: 16rpx 24rpx;
+        background-color: #ffffff;
+        border-top: 1rpx solid #eeeeee;
+    }
+
+    .reply-preview {
+        width: 56rpx;
+        height: 56rpx;
+        margin-right: 12rpx;
+        position: relative;
+    }
+
+    .reply-preview-img {
+        width: 56rpx;
+        height: 56rpx;
+        border-radius: 8rpx;
+        background-color: #f0f0f0;
+    }
+
+    .reply-preview-remove {
+        position: absolute;
+        top: -6rpx;
+        right: -6rpx;
+        width: 32rpx;
+        height: 32rpx;
+        border-radius: 16rpx;
+        background-color: rgba(0, 0, 0, 0.55);
+        align-items: center;
+        justify-content: center;
+    }
+
+    .reply-preview-remove-text {
+        font-size: 22rpx;
+        color: #ffffff;
+        line-height: 1;
+    }
+
+    .reply-add {
+        width: 56rpx;
+        height: 56rpx;
+        margin-right: 12rpx;
+        border: 1rpx solid #d0d0d0;
+        border-radius: 8rpx;
+        background-color: #f5f5f5;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .reply-add-text {
+        font-size: 36rpx;
+        color: #909399;
+        line-height: 1;
+    }
+
+    .reply-input {
+        flex: 1;
+        height: 72rpx;
+        background-color: #f5f5f5;
+        border-radius: 36rpx;
+        padding: 0 28rpx;
+        font-size: 28rpx;
+        margin-right: 16rpx;
+    }
+
+    .reply-btn {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        border-radius: 36rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .reply-btn.disabled {
+        background-color: #cccccc;
+    }
+
+    .reply-btn-text {
+        font-size: 28rpx;
+        color: #ffffff;
+    }
+</style>

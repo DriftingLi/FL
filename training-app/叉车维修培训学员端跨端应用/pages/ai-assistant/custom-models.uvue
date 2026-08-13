@@ -1,0 +1,385 @@
+<template>
+	<view class="container" :style="{ height: windowHeight + 'px' }">
+		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+		<view class="header">
+			<view class="header-left" @click="onBack">
+				<text class="back-icon">‹</text>
+			</view>
+			<text class="header-title">自定义模型</text>
+			<view class="header-right" @click="startCreate">
+				<text class="add-icon">＋</text>
+			</view>
+		</view>
+
+		<scroll-view class="content" scroll-y="true">
+			<!-- 模型列表 -->
+			<view v-if="userModels.length > 0" class="model-list">
+				<view v-for="(m, idx) in userModels" :key="idx" class="model-card">
+					<view class="model-info" @click="onSelect(m)">
+						<text class="model-name">{{ m.name }}</text>
+						<text class="model-meta">{{ m.model }}</text>
+						<text class="model-url">{{ m.base_url }}</text>
+					</view>
+					<view class="model-actions">
+						<text class="action-text" @click="startEdit(m)">编辑</text>
+						<text class="action-text danger" @click="onDelete(m.id)">删除</text>
+					</view>
+				</view>
+			</view>
+			<view v-else class="empty">
+				<text class="empty-text">暂无自定义模型，点击右上角 + 添加</text>
+			</view>
+
+			<!-- 新增/编辑表单 -->
+			<view v-if="formVisible" class="form-card">
+				<text class="form-title">{{ editingId > 0 ? '编辑模型' : '新增模型' }}</text>
+				<view class="form-item">
+					<text class="form-label">名称</text>
+					<input class="form-input" type="text" :value="formName" placeholder="如：我的 DeepSeek" @input="onNameInput" />
+				</view>
+				<view class="form-item">
+					<text class="form-label">模型名</text>
+					<input class="form-input" type="text" :value="formModel" placeholder="如：deepseek-chat" @input="onModelInput" />
+				</view>
+				<view class="form-item">
+					<text class="form-label">Base URL</text>
+					<input class="form-input" type="text" :value="formBaseUrl" placeholder="如：https://api.deepseek.com" @input="onBaseUrlInput" />
+				</view>
+				<view class="form-item">
+					<text class="form-label">API Key</text>
+					<input class="form-input" type="text" :password="true" :value="formApiKey" :placeholder="editingId > 0 ? '留空表示不修改' : 'sk-...'" @input="onApiKeyInput" />
+				</view>
+				<view class="form-actions">
+					<view class="btn-cancel" @click="closeForm">
+						<text class="btn-text">取消</text>
+					</view>
+					<view class="btn-save" @click="onSave">
+						<text class="btn-text">{{ saving ? '保存中...' : '保存' }}</text>
+					</view>
+				</view>
+			</view>
+		</scroll-view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { ref } from 'vue'
+	import { onShow } from '@dcloudio/uni-app'
+	import { useStatusBarHeight } from '../../utils/system'
+	import { goBack } from '../../utils/navigation'
+	import { getUserModelsApi, saveUserModelApi, deleteUserModelApi } from '../../api/ai-assistant'
+	import type { AIModelOption } from '../../types/index'
+
+	const statusBarHeight = useStatusBarHeight()
+	const windowHeight = uni.getSystemInfoSync().windowHeight
+
+	const userModels = ref<AIModelOption[]>([])
+	const formVisible = ref<boolean>(false)
+	const editingId = ref<number>(0)
+	const saving = ref<boolean>(false)
+	const formName = ref<string>('')
+	const formModel = ref<string>('')
+	const formBaseUrl = ref<string>('')
+	const formApiKey = ref<string>('')
+
+	function onBack() : void {
+		goBack()
+	}
+
+	async function loadModels() : Promise<void> {
+		try {
+			const res = await getUserModelsApi()
+			const arr = (res['list'] ?? res['models'] ?? res) as AIModelOption[]
+			userModels.value = arr
+		} catch (e) {
+			console.error('[custom-models] load failed:', e)
+			userModels.value = []
+		}
+	}
+
+	function onNameInput(e : InputEvent) : void {
+		formName.value = e.detail.value
+	}
+	function onModelInput(e : InputEvent) : void {
+		formModel.value = e.detail.value
+	}
+	function onBaseUrlInput(e : InputEvent) : void {
+		formBaseUrl.value = e.detail.value
+	}
+	function onApiKeyInput(e : InputEvent) : void {
+		formApiKey.value = e.detail.value
+	}
+
+	function startCreate() : void {
+		editingId.value = 0
+		formName.value = ''
+		formModel.value = ''
+		formBaseUrl.value = ''
+		formApiKey.value = ''
+		formVisible.value = true
+	}
+
+	function startEdit(m : AIModelOption) : void {
+		editingId.value = m.id
+		formName.value = m.name
+		formModel.value = m.model
+		formBaseUrl.value = m.base_url ?? ''
+		formApiKey.value = ''
+		formVisible.value = true
+	}
+
+	function closeForm() : void {
+		formVisible.value = false
+	}
+
+	async function onSave() : Promise<void> {
+		if (formName.value.trim().length == 0) {
+			uni.showToast({ title: '请输入名称', icon: 'none' })
+			return
+		}
+		if (formModel.value.trim().length == 0) {
+			uni.showToast({ title: '请输入模型名', icon: 'none' })
+			return
+		}
+		if (formBaseUrl.value.trim().length == 0) {
+			uni.showToast({ title: '请输入 Base URL', icon: 'none' })
+			return
+		}
+		if (editingId.value == 0 && formApiKey.value.trim().length == 0) {
+			uni.showToast({ title: '请输入 API Key', icon: 'none' })
+			return
+		}
+
+		saving.value = true
+		try {
+			const payload : UTSJSONObject = {
+				name: formName.value.trim(),
+				model: formModel.value.trim(),
+				base_url: formBaseUrl.value.trim(),
+			}
+			if (formApiKey.value.trim().length > 0) {
+				payload['api_key'] = formApiKey.value.trim()
+			}
+			if (editingId.value > 0) {
+				payload['id'] = editingId.value
+			}
+			await saveUserModelApi(payload)
+			uni.showToast({ title: editingId.value > 0 ? '更新成功' : '添加成功', icon: 'success' })
+			closeForm()
+			await loadModels()
+		} catch (e) {
+			console.error('[custom-models] save failed:', e)
+		} finally {
+			saving.value = false
+		}
+	}
+
+	function onDelete(id : number) : void {
+		uni.showModal({
+			title: '提示',
+			content: '确定删除该模型配置？',
+			success: async (res) => {
+				if (res.confirm) {
+					try {
+						await deleteUserModelApi(id)
+						uni.showToast({ title: '删除成功', icon: 'success' })
+						await loadModels()
+					} catch (e) {
+						console.error('[custom-models] delete failed:', e)
+					}
+				}
+			},
+		})
+	}
+
+	function onSelect(m : AIModelOption) : void {
+		// 返回 AI 助手页并选中该模型：通过 storage 传递选中模型
+		uni.setStorageSync('ai_selected_user_model', JSON.stringify({ id: m.id, name: m.name }))
+		goBack()
+	}
+
+	onShow(() => {
+		loadModels()
+	})
+</script>
+
+<style>
+	.container {
+		display: flex;
+		flex-direction: column;
+		background-color: #f5f6f8;
+	}
+
+	.status-bar {
+		background-color: #ffffff;
+	}
+
+	.header {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding: 16rpx 24rpx;
+		background-color: #ffffff;
+		border-bottom: 1rpx solid #f0f0f0;
+	}
+
+	.header-left,
+	.header-right {
+		width: 72rpx;
+		height: 72rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.back-icon {
+		font-size: 48rpx;
+		color: #333333;
+		font-weight: bold;
+	}
+
+	.header-title {
+		font-size: 34rpx;
+		font-weight: bold;
+		color: #222222;
+	}
+
+	.add-icon {
+		font-size: 44rpx;
+		color: #2979ff;
+	}
+
+	.content {
+		flex: 1;
+		height: 0;
+		padding: 24rpx;
+	}
+
+	.model-list {
+		margin-bottom: 24rpx;
+	}
+
+	.model-card {
+		background-color: #ffffff;
+		border-radius: 16rpx;
+		padding: 24rpx;
+		margin-bottom: 16rpx;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.model-info {
+		flex: 1;
+		margin-right: 16rpx;
+	}
+
+	.model-name {
+		font-size: 30rpx;
+		font-weight: bold;
+		color: #222222;
+	}
+
+	.model-meta {
+		font-size: 26rpx;
+		color: #666666;
+		margin-top: 6rpx;
+	}
+
+	.model-url {
+		font-size: 22rpx;
+		color: #999999;
+		margin-top: 6rpx;
+	}
+
+	.model-actions {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.action-text {
+		font-size: 26rpx;
+		color: #2979ff;
+		padding: 12rpx 8rpx;
+		margin-left: 8rpx;
+	}
+
+	.action-text.danger {
+		color: #dd524d;
+	}
+
+	.empty {
+		align-items: center;
+		padding: 120rpx 0;
+	}
+
+	.empty-text {
+		font-size: 28rpx;
+		color: #999999;
+	}
+
+	.form-card {
+		background-color: #ffffff;
+		border-radius: 16rpx;
+		padding: 32rpx 24rpx;
+	}
+
+	.form-title {
+		font-size: 32rpx;
+		font-weight: bold;
+		color: #222222;
+		margin-bottom: 24rpx;
+	}
+
+	.form-item {
+		margin-bottom: 24rpx;
+	}
+
+	.form-label {
+		font-size: 26rpx;
+		color: #666666;
+		margin-bottom: 12rpx;
+	}
+
+	.form-input {
+		height: 80rpx;
+		background-color: #f5f6f8;
+		border-radius: 12rpx;
+		padding: 0 24rpx;
+		font-size: 28rpx;
+		color: #333333;
+	}
+
+	.form-actions {
+		flex-direction: row;
+		margin-top: 8rpx;
+	}
+
+	.btn-cancel {
+		flex: 1;
+		height: 88rpx;
+		background-color: #f0f0f0;
+		border-radius: 44rpx;
+		align-items: center;
+		justify-content: center;
+		margin-right: 16rpx;
+	}
+
+	.btn-save {
+		flex: 1;
+		height: 88rpx;
+		background-color: #2979ff;
+		border-radius: 44rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.btn-text {
+		font-size: 30rpx;
+		font-weight: bold;
+		color: #ffffff;
+	}
+
+	.btn-cancel .btn-text {
+		color: #333333;
+	}
+</style>

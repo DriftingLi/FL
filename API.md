@@ -69,7 +69,7 @@
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
-| GET | `/api/courses` | 无 | 课程列表（公开，支持 `specialty_id` / `level_id` 过滤；未挂方向/等级的课程不展示） |
+| GET | `/api/courses` | 无 | 课程列表（公开，支持 `category` / `specialty_id` / `level_id` 过滤） |
 | GET | `/api/catalog/tree` | 无 | 课程目录树：专业方向 → 课程等级 → 课程（含章节数） |
 | GET | `/api/specialties` | 无 | 专业方向列表（仅启用项） |
 | GET | `/api/levels` | 无 | 课程等级列表（仅启用项） |
@@ -88,6 +88,15 @@
 | GET | `/api/student/records` | JWT+hrwai_user | 学习/考试记录 |
 | GET | `/api/student/study-stats` | JWT+hrwai_user | 学习统计 |
 
+### 课程考核 `/api/exam`（role=hrwai_user，数据源为 JSON 题库 `data/exam_questions.json`）
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/exam/:course_id` | 获取课程考核题目（题目与选项乱序；返回 `course_id` / `course_name` / `total_score` / `total_questions` / `single_score` / `multi_score` / `questions`） |
+| POST | `/api/exam/:course_id/submit` | 提交考核答案（`{"answers": {question_id: 答案}}`；返回 `exam_id` / `score` / `total_score` / `correct_count` / `total_questions` / `details`，同课程再次提交覆盖旧记录） |
+| GET | `/api/exam/:course_id/result` | 获取最近一次考核结果（无记录时 `data` 为 `null`，`message` 为"暂无考核记录"） |
+| GET | `/api/exam/history` | 学员考核历史（按考试时间倒序，返回 `exam_id` / `course_id` / `course_name` / `score` / `exam_date`） |
+
 ## 4. 题库练习 `/api/question-bank`
 
 | 方法 | 路径 | 鉴权 | 说明 |
@@ -103,6 +112,11 @@
 | POST | `/api/question-bank/questions/:question_id/publish` | JWT+admin | 发布题目 |
 | POST | `/api/question-bank/questions/:question_id/reject` | JWT+admin | 驳回题目 |
 | GET | `/api/question-bank/stats` | JWT | 题库统计 |
+| GET | `/api/question-bank/categories` | JWT | 分类列表 |
+| GET | `/api/question-bank/knowledge-points` | JWT | 知识点列表 |
+| POST | `/api/question-bank/knowledge-points` | JWT+tutor/admin | 新增知识点 |
+| PUT | `/api/question-bank/knowledge-points/:kp_id` | JWT+tutor/admin | 更新知识点 |
+| DELETE | `/api/question-bank/knowledge-points/:kp_id` | JWT+tutor/admin | 删除知识点 |
 | POST | `/api/question-bank/upload-image` | JWT+tutor/admin | 上传题图 |
 
 ## 5. 自由刷题模式 `/api/practice-mode`（role=hrwai_user）
@@ -110,16 +124,19 @@
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/practice-mode/free` | 自由刷题 |
-| GET | `/api/practice-mode/tag` | 标签练习开始/续练（`tag_id` 必填，`count` 控制题量，0=全部；返回题目+进度，mode=`tag:<tagID>`） |
+| GET | `/api/practice-mode/tag` | 标签练习抽题（`tag_id` 必填，`count` 控制题量，0=全部） |
 | GET | `/api/practice-mode/sequential` | 顺序练习 |
 | GET | `/api/practice-mode/sequential-progress` | 顺序练习进度 |
 | POST | `/api/practice-mode/progress` | 保存练习进度 |
 | GET | `/api/practice-mode/progress` | 查询练习进度 |
+| GET | `/api/practice-mode/category` | 分类练习 |
+| GET | `/api/practice-mode/knowledge-point` | 知识点专项练习 |
+| GET | `/api/practice-mode/knowledge-point-progress` | 知识点专项进度 |
 | POST | `/api/practice-mode/submit` | 提交练习 |
 | GET | `/api/practice-mode/stats` | 练习统计 |
 | GET | `/api/practice-mode/history` | 练习历史 |
 
-## 6. 定级考试 `/api/level-exam`
+## 6. 等级考试 `/api/level-exam`
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
@@ -169,7 +186,6 @@
 | GET | `/api/tutor/course/:course_id/chapters` | 课程章节列表 |
 | GET | `/api/tutor/chapter/:chapter_id` | 章节详情 |
 | POST | `/api/tutor/chapter/:chapter_id/upload` | 上传章节文件（课件/视频等） |
-| POST | `/api/tutor/upload-image` | 上传图文 Markdown 图片（Vditor 格式，返回 succMap；`chapter_id` 可选，按章节分目录存储） |
 | PUT | `/api/tutor/chapter/:chapter_id` | 更新章节 |
 | DELETE | `/api/tutor/file/:file_id` | 删除文件 |
 | POST | `/api/tutor/files/batch-delete` | 批量删除文件 |
@@ -203,7 +219,7 @@
 
 ### 培训目录管理（专业方向 / 等级 / 证书模板 / 题库标签）
 
-课程表单新增字段：`specialty_id`、`level_id`（创建/编辑必填）、`theory_hours`（理论学时）、`practice_hours`（实操学时）、`certificate_template_id`、`prerequisite_course_ids`（前置课程 ID 数组，编辑回填避免清空）、`sort_order`（课程排序，所属方向+等级层级内生效）。
+课程表单新增字段：`specialty_id`、`level_id`、`theory_hours`（理论学时）、`practice_hours`（实操学时）、`certificate_template_id`、`prerequisite_course_ids`（前置课程 ID 数组）、`sort_order`（课程排序，所属方向+等级层级内生效）。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -227,9 +243,6 @@
 | DELETE | `/api/admin/question-tag/:id` | 删除题库标签 |
 | GET | `/api/admin/question/:question_id/tags` | 查询题目标签 |
 | PUT | `/api/admin/question/:question_id/tags` | 全量替换题目标签（`tag_ids`） |
-| PUT | `/api/admin/specialty/:specialty_id/sort` | 交换专业方向排序（body `swap_with`） |
-| PUT | `/api/admin/level/:level_id/sort` | 交换课程等级排序（body `swap_with`） |
-| PUT | `/api/admin/course/:course_id/sort` | 交换课程排序（同一方向+等级组内，body `swap_with`） |
 
 ### 用户管理
 
@@ -300,8 +313,7 @@
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
 | GET | `/api/featured-contents` | 无 | 内容精选列表（仅已发布） |
-| GET | `/api/featured-content/:id` | 无 | 内容详情（含相关资讯/上下一篇）。带 `no_view=1` 时不改变 `view_count`（SSR/爬虫路径），不带参数保持既有计数行为 |
-| POST | `/api/featured-content/:id/view` | 无 | 客户端阅读量计数（仅已发布内容），自增并返回最新 `view_count`。与「详情请求次数」语义区分 |
+| GET | `/api/featured-content/:id` | 无 | 内容详情（含相关资讯/上下一篇） |
 
 ## 13. AI 助手 `/api/ai-assistant`
 
@@ -322,15 +334,12 @@
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/api/forum/upload-image` | 上传论坛图片（multipart `file`，返回 `{url}`；先传图后随发帖/回复提交） |
 | GET | `/api/forum/topics` | 帖子列表 |
-| POST | `/api/forum/topics` | 发帖（可选 `images: [url...]`，最多 9 张） |
+| POST | `/api/forum/topics` | 发帖 |
 | GET | `/api/forum/topics/:id` | 帖子详情 |
-| POST | `/api/forum/topics/:id/replies` | 回复（可选 `images: [url...]`，最多 3 张） |
-| DELETE | `/api/forum/topics/:id` | 删帖（主题与全部回复图片一并清理） |
-| DELETE | `/api/forum/replies/:id` | 删除回复（含下级回复图片一并清理） |
-
-> 图片说明：图文分离，正文保持纯文本，图片以 `images` 数组独立存储/展示；仅接受本站 `images/forum/` 前缀 URL；上传后未发帖的悬空图片由后端定时任务（每 6 小时）回收超过 24h 未被引用的文件。
+| POST | `/api/forum/topics/:id/replies` | 回复 |
+| DELETE | `/api/forum/topics/:id` | 删帖 |
+| DELETE | `/api/forum/replies/:id` | 删除回复 |
 
 ## 15. 通知 `/api/notifications`
 

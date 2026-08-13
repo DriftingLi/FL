@@ -1,0 +1,404 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">模考历史</text>
+            <view class="header-right"></view>
+        </view>
+
+        <!-- 汇总 -->
+        <view class="summary">
+            <text class="summary-text">共 {{ total }} 次模考</text>
+            <text v-if="passedCount > 0" class="summary-passed">通过 {{ passedCount }}</text>
+        </view>
+
+        <!-- 历史列表 -->
+        <scroll-view class="record-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+            <view v-if="records.length == 0 && !loading" class="empty-tip">
+                <text class="empty-text">暂无模考记录</text>
+            </view>
+            <view class="record-list">
+                <view v-for="(item, idx) in records" :key="idx" class="record-card"
+                    @click="onItemClick(item)">
+                    <view class="record-status" :class="getStatusClass(item)">
+                        <text class="record-status-text">{{ getStatusLabel(item) }}</text>
+                    </view>
+                    <view class="record-info">
+                        <view class="record-score-row">
+                            <text class="record-score">{{ formatScore(item.score) }}</text>
+                            <text class="record-score-total">/ {{ formatScore(item.total_score) }}</text>
+                        </view>
+                        <view class="record-meta">
+                            <text class="record-tag" :class="item.passed ? 'tag-passed' : 'tag-failed'">
+                                {{ item.passed ? '通过' : '未通过' }}
+                            </text>
+                            <text class="record-stat">{{ item.correct_count }}/{{ item.total_questions }} 题</text>
+                            <text class="record-time">{{ formatUsedTime(item.used_time) }}</text>
+                        </view>
+                        <text class="record-date">{{ formatDate(item.completed_at.length > 0 ? item.completed_at : item.created_at) }}</text>
+                    </view>
+                    <view class="record-action">
+                        <text class="record-action-text">{{ item.status == 'in_progress' ? '继续' : '查看' }}</text>
+                        <text class="record-action-arrow">›</text>
+                    </view>
+                </view>
+            </view>
+            <view v-if="loading" class="loading-more">
+                <text class="loading-text">加载中...</text>
+            </view>
+            <view v-if="noMore && records.length > 0" class="loading-more">
+                <text class="loading-text">没有更多了</text>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onShow } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { getMockExamHistoryApi } from '../../api/mockExam'
+    import type { MockExamHistoryItem } from '../../types/index'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const records = ref<MockExamHistoryItem[]>([])
+    const page = ref<number>(1)
+    const pageSize = 10
+    const total = ref<number>(0)
+    const loading = ref<boolean>(false)
+    const noMore = ref<boolean>(false)
+
+    /** 通过次数（基于已加载记录统计） */
+    const passedCount = computed<number>(() : number => {
+        let cnt = 0
+        for (let i = 0; i < records.value.length; i++) {
+            if (records.value[i].passed) cnt++
+        }
+        return cnt
+    })
+
+    /** 格式化分数 */
+    function formatScore(score : number) : string {
+        if (score == Math.floor(score)) {
+            return '' + Math.floor(score)
+        }
+        return score.toFixed(1)
+    }
+
+    /** 格式化用时 */
+    function formatUsedTime(sec : number) : string {
+        if (sec <= 0) return '--'
+        const m = Math.floor(sec / 60)
+        const s = sec % 60
+        if (m > 0) return m + '分' + s + '秒'
+        return s + '秒'
+    }
+
+    /** 格式化日期 */
+    function formatDate(dateStr : string) : string {
+        if (dateStr.length < 10) return dateStr
+        return dateStr.substring(0, 16)
+    }
+
+    /** 状态样式 */
+    function getStatusClass(item : MockExamHistoryItem) : string {
+        if (item.status == 'in_progress') return 'status-progress'
+        return item.passed ? 'status-passed' : 'status-failed'
+    }
+
+    /** 状态文案 */
+    function getStatusLabel(item : MockExamHistoryItem) : string {
+        if (item.status == 'in_progress') return '进行中'
+        return item.passed ? '通过' : '未过'
+    }
+
+    async function loadRecords(reset : boolean = false) {
+        if (loading.value) return
+        if (reset) {
+            page.value = 1
+            noMore.value = false
+        }
+        if (noMore.value && !reset) return
+
+        loading.value = true
+        try {
+            const result = await getMockExamHistoryApi(page.value, pageSize)
+            if (reset) {
+                records.value = result.items
+            } else {
+                records.value = records.value.concat(result.items)
+            }
+            total.value = result.total
+            if (records.value.length >= result.total || result.items.length == 0) {
+                noMore.value = true
+            } else {
+                page.value = page.value + 1
+            }
+        } catch (e) {
+            console.error('[mock-exam-records] load failed:', e)
+            uni.showToast({ title: '加载模考历史失败', icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function onLoadMore() : void {
+        loadRecords(false)
+    }
+
+    /** 点击记录：进行中→恢复考试，已完成→查看成绩 */
+    function onItemClick(item : MockExamHistoryItem) : void {
+        if (item.status == 'in_progress') {
+            uni.showModal({
+                title: '恢复考试',
+                content: '是否继续未完成的模拟考试？',
+                success: (res) => {
+                    if (res.confirm) {
+                        uni.navigateTo({
+                            url: '/pages/exam/mock-exam?mode=resume&mock_exam_id=' + item.mock_exam_id
+                        })
+                    }
+                }
+            })
+        } else {
+            uni.navigateTo({
+                url: '/pages/exam/mock-exam-result?mock_exam_id=' + item.mock_exam_id
+            })
+        }
+    }
+
+    function onBack() : void {
+        uni.navigateBack()
+    }
+
+    onShow(() => {
+        if (records.value.length == 0) {
+            loadRecords(true)
+        }
+    })
+</script>
+
+<style>
+    .container {
+        display: flex;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        width: 80rpx;
+        align-items: center;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #ffffff;
+    }
+
+    .header-title {
+        flex: 1;
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+        text-align: center;
+    }
+
+    .header-right {
+        width: 80rpx;
+    }
+
+    /* 汇总 */
+    .summary {
+        padding: 20rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .summary-text {
+        font-size: 26rpx;
+        color: #999999;
+    }
+
+    .summary-passed {
+        font-size: 24rpx;
+        color: #4caf50;
+        margin-left: 16rpx;
+    }
+
+    /* 列表 */
+    .record-scroll {
+        flex: 1;
+        height: 0;
+        padding: 0 24rpx;
+    }
+
+    .record-list {
+        flex-direction: column;
+    }
+
+    .record-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        margin-bottom: 16rpx;
+        border: 1px solid #eeeeee;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .record-status {
+        width: 80rpx;
+        height: 80rpx;
+        border-radius: 40rpx;
+        align-items: center;
+        justify-content: center;
+        margin-right: 20rpx;
+    }
+
+    .status-passed {
+        background-color: #e8f5e9;
+    }
+
+    .status-failed {
+        background-color: #ffebee;
+    }
+
+    .status-progress {
+        background-color: #fff3e0;
+    }
+
+    .record-status-text {
+        font-size: 22rpx;
+        font-weight: bold;
+    }
+
+    .status-passed .record-status-text {
+        color: #4caf50;
+    }
+
+    .status-failed .record-status-text {
+        color: #f44336;
+    }
+
+    .status-progress .record-status-text {
+        color: #ff9800;
+    }
+
+    .record-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .record-score-row {
+        flex-direction: row;
+        align-items: baseline;
+        margin-bottom: 8rpx;
+    }
+
+    .record-score {
+        font-size: 40rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .record-score-total {
+        font-size: 24rpx;
+        color: #999999;
+        margin-left: 8rpx;
+    }
+
+    .record-meta {
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 8rpx;
+    }
+
+    .record-tag {
+        font-size: 20rpx;
+        padding: 4rpx 12rpx;
+        border-radius: 6rpx;
+        margin-right: 12rpx;
+    }
+
+    .tag-passed {
+        color: #ffffff;
+        background-color: #4caf50;
+    }
+
+    .tag-failed {
+        color: #ffffff;
+        background-color: #f44336;
+    }
+
+    .record-stat {
+        font-size: 22rpx;
+        color: #666666;
+        margin-right: 12rpx;
+    }
+
+    .record-time {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .record-date {
+        font-size: 20rpx;
+        color: #cccccc;
+    }
+
+    .record-action {
+        flex-direction: row;
+        align-items: center;
+        margin-left: 12rpx;
+    }
+
+    .record-action-text {
+        font-size: 24rpx;
+        color: #2979ff;
+    }
+
+    .record-action-arrow {
+        font-size: 32rpx;
+        color: #2979ff;
+        margin-left: 4rpx;
+    }
+
+    /* 空/加载状态 */
+    .empty-tip {
+        align-items: center;
+        padding: 120rpx 0;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .loading-more {
+        align-items: center;
+        padding: 24rpx 0;
+    }
+
+    .loading-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
+</style>

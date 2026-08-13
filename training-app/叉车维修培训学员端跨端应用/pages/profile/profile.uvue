@@ -1,0 +1,417 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <scroll-view class="content-scroll" scroll-y>
+            <view class="header">
+                <view class="user-card">
+                    <!-- <view class="user-avatar" @click="onChangeAvatar"> -->
+                    <view class="user-avatar">
+                        <image v-if="avatarUrl.length > 0" class="avatar-img" :src="avatarUrl" mode="aspectFill">
+                        </image>
+                        <text v-else class="avatar-icon">👤</text>
+                        <view class="avatar-edit-badge">
+                            <text class="avatar-edit-icon">✎</text>
+                        </view>
+                    </view>
+                    <view class="user-info">
+                        <text class="user-name">{{ userName }}</text>
+                        <text class="user-role">叉车学员</text>
+                    </view>
+                </view>
+            </view>
+            <view class="stats-row">
+                <view class="stats-item">
+                    <text class="stats-num">{{ totalHours }}</text>
+                    <text class="stats-label">累计学时</text>
+                </view>
+                <view class="stats-divider"></view>
+                <view class="stats-item">
+                    <text class="stats-num">{{ completedCourses }}</text>
+                    <text class="stats-label">已完成课程</text>
+                </view>
+                <view class="stats-divider"></view>
+                <view class="stats-item">
+                    <text class="stats-num">{{ totalCourses }}</text>
+                    <text class="stats-label">课程总数</text>
+                </view>
+            </view>
+            <view class="menu-section">
+                <!-- <view class="menu-item" @click="onMenuClick('edit-profile')">
+                    <text class="menu-icon">✎</text>
+                    <text class="menu-text">编辑资料</text>
+                    <text class="menu-arrow">›</text>
+                </view> -->
+                <view class="menu-item" @click="onMenuClick('wrong')">
+                    <text class="menu-icon">❌</text>
+                    <text class="menu-text">错题本</text>
+                    <text class="menu-arrow">›</text>
+                </view>
+                <view class="menu-item" @click="onMenuClick('records')">
+                    <text class="menu-icon">📊</text>
+                    <text class="menu-text">学习记录</text>
+                    <text class="menu-arrow">›</text>
+                </view>
+                <view class="menu-item" @click="onMenuClick('practice')">
+                    <text class="menu-icon">✏️</text>
+                    <text class="menu-text">练习记录</text>
+                    <text class="menu-arrow">›</text>
+                </view>
+                <view class="menu-item" @click="onMenuClick('mock-exam')">
+                    <text class="menu-icon">📝</text>
+                    <text class="menu-text">模考历史</text>
+                    <text class="menu-arrow">›</text>
+                </view>
+                <view class="menu-item" @click="onMenuClick('settings')">
+                    <text class="menu-icon">⚙️</text>
+                    <text class="menu-text">设置</text>
+                    <text class="menu-arrow">›</text>
+                </view>
+                <!-- <view class="menu-item" @click="onMenuClick('about')">
+					<text class="menu-icon">ℹ️</text>
+					<text class="menu-text">关于我们</text>
+					<text class="menu-arrow">›</text>
+				</view> -->
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onShow } from '@dcloudio/uni-app'
+    import { useAuthStore } from '../../stores/auth'
+    import { getProfileApi } from '../../api/student'
+    import { updateProfileApi, uploadAvatarApi } from '../../api/auth'
+    import { useStatusBarHeight } from '../../utils/system'
+    import type { StudentProfile, UpdateProfileParams } from '../../types/index'
+
+    const authStore = useAuthStore()
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+    const profile = ref<StudentProfile | null>(null)
+    const uploadingAvatar = ref<boolean>(false)
+
+    const userName = computed<string>(() : string => {
+        const u = authStore.user.value
+        if (u != null) {
+            if (u.name.length > 0) return u.name
+            if (u.username.length > 0) return u.username
+        }
+        return '同学'
+    })
+
+    const avatarUrl = computed<string>(() : string => {
+        const u = authStore.user.value
+        if (u != null && u.avatar != null && u.avatar.length > 0) {
+            return u.avatar!
+        }
+        return ''
+    })
+
+    const totalHours = computed<string>(() : string => {
+        if (profile.value != null) {
+            const minutes = profile.value.total_study_duration
+            const hours = Math.floor(minutes / 60)
+            const mins = minutes % 60
+            if (hours > 0) {
+                return hours + 'h' + mins + 'm'
+            }
+            return mins + 'm'
+        }
+        return '0m'
+    })
+
+    const completedCourses = computed<number>(() : number => {
+        if (profile.value != null) {
+            return profile.value.completed_courses
+        }
+        return 0
+    })
+
+    const totalCourses = computed<number>(() : number => {
+        if (profile.value != null) {
+            return profile.value.total_courses
+        }
+        return 0
+    })
+
+    async function loadProfile() {
+        try {
+            const data = await getProfileApi()
+            profile.value = data
+        } catch (e) {
+            console.error('[profile] load failed:', e)
+        }
+    }
+
+    /** 点击头像，选择图片并上传 */
+    function onChangeAvatar() : void {
+        if (uploadingAvatar.value) return
+        uni.chooseImage({
+            count: 1,
+            sizeType: ['compressed'],
+            sourceType: ['album', 'camera'],
+            success: (res) => {
+                const tempFilePaths = res.tempFilePaths
+                if (tempFilePaths.length == 0) return
+                const filePath = tempFilePaths[0]
+                uploadAvatar(filePath)
+            },
+            fail: (err) => {
+                // 用户取消时不报错
+                console.log('[profile] chooseImage canceled/failed:', err)
+            }
+        })
+    }
+
+    /** 上传头像到后端，并用返回的 URL 更新个人资料 */
+    async function uploadAvatar(filePath : string) : Promise<void> {
+        uploadingAvatar.value = true
+        uni.showLoading({ title: '上传中...' })
+        try {
+            // 1. 上传文件 -> 获得 avatar URL
+            const upRes = await uploadAvatarApi(filePath)
+            const newAvatarUrl = upRes.avatar
+            if (newAvatarUrl.length == 0) {
+                throw new Error('上传成功但未返回头像地址')
+            }
+            // 2. 调用 PUT /auth/profile 同步头像到用户资料
+            try {
+                const patch : UpdateProfileParams = { avatar: newAvatarUrl } as UpdateProfileParams
+                const updatedUser = await updateProfileApi(patch)
+                authStore.setAuthData(authStore.token.value, updatedUser)
+            } catch (e) {
+                // PUT 失败时，仍用上传返回的 URL 更新本地状态（后端可能已自动绑定）
+                console.warn('[profile] updateProfileApi failed, fallback to local update:', e)
+                const patch : UpdateProfileParams = { avatar: newAvatarUrl } as UpdateProfileParams
+                authStore.updateUser(patch)
+            }
+            uni.showToast({ title: '头像更新成功', icon: 'success' })
+        } catch (e) {
+            console.error('[profile] uploadAvatar failed:', e)
+            let msg = '头像上传失败'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) {
+                    msg = m
+                }
+            }
+            uni.showToast({ title: msg, icon: 'none' })
+        } finally {
+            uploadingAvatar.value = false
+            uni.hideLoading()
+        }
+    }
+
+    /** 编辑昵称 */
+    function onEditNickname() : void {
+        const current = authStore.user.value
+        const currentName = current != null ? current.name : ''
+        uni.showModal({
+            title: '修改昵称',
+            editable: true,
+            placeholderText: '请输入新昵称',
+            content: currentName,
+            success: async (res) => {
+                if (!res.confirm) return
+                const content = res.content
+                const newName = (content != null ? content : '').trim()
+                if (newName.length == 0) {
+                    uni.showToast({ title: '昵称不能为空', icon: 'none' })
+                    return
+                }
+                if (newName == currentName) return
+                uni.showLoading({ title: '保存中...' })
+                try {
+                    const patch : UpdateProfileParams = { name: newName } as UpdateProfileParams
+                    const updatedUser = await updateProfileApi(patch)
+                    authStore.setAuthData(authStore.token.value, updatedUser)
+                    uni.showToast({ title: '修改成功', icon: 'success' })
+                } catch (e) {
+                    console.error('[profile] updateNickname failed:', e)
+                    let msg = '修改失败'
+                    if (e instanceof Error) {
+                        const errObj = e as Error
+                        const m = errObj.message
+                        if (m != null && m.length > 0) {
+                            msg = m
+                        }
+                    }
+                    uni.showToast({ title: msg, icon: 'none' })
+                } finally {
+                    uni.hideLoading()
+                }
+            }
+        })
+    }
+
+    function onMenuClick(type : string) : void {
+        if (type == 'edit-profile') {
+            onEditNickname()
+        } else if (type == 'wrong') {
+            uni.navigateTo({ url: '/pages/profile/wrong-questions' })
+        } else if (type == 'records') {
+            uni.navigateTo({ url: '/pages/profile/records' })
+        } else if (type == 'practice') {
+            uni.navigateTo({ url: '/pages/profile/practice-records' })
+        } else if (type == 'mock-exam') {
+            uni.navigateTo({ url: '/pages/profile/mock-exam-records' })
+        } else if (type == 'settings') {
+            uni.navigateTo({ url: '/pages/profile/settings' })
+        }
+        // else if (type == 'about') {
+        //     uni.showToast({ title: '叉车维修培训学员端 v1.0', icon: 'none' })
+        // }
+    }
+
+    onShow(() => {
+        loadProfile()
+    })
+</script>
+
+<style>
+    .container {
+        flex: 1;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .content-scroll {
+        flex: 1;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 32rpx;
+    }
+
+    .user-card {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .user-avatar {
+        width: 120rpx;
+        height: 120rpx;
+        border-radius: 60rpx;
+        background-color: #4a9aff;
+        align-items: center;
+        justify-content: center;
+        margin-right: 24rpx;
+        position: relative;
+    }
+
+    .avatar-img {
+        width: 120rpx;
+        height: 120rpx;
+        border-radius: 60rpx;
+    }
+
+    .avatar-edit-badge {
+        position: absolute;
+        right: -6rpx;
+        bottom: -6rpx;
+        width: 40rpx;
+        height: 40rpx;
+        border-radius: 20rpx;
+        background-color: #ffffff;
+        align-items: center;
+        justify-content: center;
+        border: 1rpx solid #dddddd;
+    }
+
+    .avatar-edit-icon {
+        font-size: 24rpx;
+        color: #2979ff;
+    }
+
+    .avatar-icon {
+        font-size: 64rpx;
+    }
+
+    .user-info {
+        flex-direction: column;
+    }
+
+    .user-name {
+        font-size: 40rpx;
+        font-weight: bold;
+        color: #ffffff;
+        margin-bottom: 8rpx;
+    }
+
+    .user-role {
+        font-size: 26rpx;
+        color: #cfe5ff;
+    }
+
+    .stats-row {
+        background-color: #ffffff;
+        margin: -32rpx 24rpx 24rpx;
+        border-radius: 16rpx;
+        padding: 32rpx;
+        flex-direction: row;
+        justify-content: space-around;
+        border: 1px solid #eeeeee;
+    }
+
+    .stats-item {
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .stats-num {
+        font-size: 40rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 8rpx;
+    }
+
+    .stats-label {
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    .stats-divider {
+        width: 1rpx;
+        background-color: #f0f0f0;
+    }
+
+    .menu-section {
+        background-color: #ffffff;
+        margin-bottom: 24rpx;
+    }
+
+    .menu-item {
+        flex-direction: row;
+        align-items: center;
+        padding: 32rpx;
+        border-bottom: 1rpx solid #f5f5f5;
+    }
+
+    .menu-item:last-child {
+        border-bottom: none;
+    }
+
+    .menu-icon {
+        font-size: 44rpx;
+        margin-right: 20rpx;
+    }
+
+    .menu-text {
+        flex: 1;
+        font-size: 32rpx;
+        color: #333333;
+    }
+
+    .menu-arrow {
+        font-size: 40rpx;
+        color: #cccccc;
+    }
+</style>

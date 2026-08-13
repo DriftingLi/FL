@@ -1,0 +1,415 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon" @click="onBack">‹</text>
+            </view>
+            <text class="header-title">发布新帖</text>
+            <view class="header-right"></view>
+        </view>
+
+        <scroll-view class="content-scroll" scroll-y="true">
+            <view class="form-section">
+                <view class="form-item">
+                    <text class="form-label">标题</text>
+                    <input class="form-input" type="text" placeholder="请输入标题（1-100 字）" maxlength="100" v-model="title" />
+                    <text class="form-counter">{{ title.length }}/100</text>
+                </view>
+
+                <view class="form-item">
+                    <text class="form-label">内容</text>
+                    <textarea class="form-textarea" placeholder="请输入内容（1-10000 字）" maxlength="10000" v-model="content" />
+                    <text class="form-counter">{{ content.length }}/10000</text>
+                </view>
+
+                <view class="form-item">
+                    <text class="form-label">图片</text>
+                    <view class="img-grid">
+                        <view v-for="(img, idx) in images" :key="idx" class="img-cell">
+                            <image class="img-thumb" :src="resolveFileUrl(img)" mode="aspectFill" @click="onPreviewImage(idx)" />
+                            <view class="img-remove" @click.stop="onRemoveImage(idx)">
+                                <text class="img-remove-text">×</text>
+                            </view>
+                        </view>
+                        <view v-if="images.length < 9" class="img-add" @click="onAddImage">
+                            <text class="img-add-icon">{{ uploadingImage ? '…' : '＋' }}</text>
+                            <text class="img-add-text">{{ uploadingImage ? '上传中' : images.length + '/9' }}</text>
+                        </view>
+                    </view>
+                </view>
+            </view>
+
+            <view class="tips-section">
+                <text class="tips-title">发帖须知</text>
+                <text class="tips-text">• 请遵守社区规范，文明发言</text>
+                <text class="tips-text">• 禁止发布与叉车维修培训无关的内容</text>
+                <text class="tips-text">• 禁止发布广告、灌水等不良信息</text>
+            </view>
+
+            <view class="submit-section">
+                <view class="submit-btn" @click="onSubmit">
+                    <text class="submit-btn-text" @click="onSubmit">发布</text>
+                </view>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
+    import { createForumTopicApi, uploadForumImageApi } from '../../api/forum'
+    import { resolveFileUrl } from '../../utils/format'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const title = ref<string>('')
+    const content = ref<string>('')
+    const images = ref<string[]>([])
+    const submitting = ref<boolean>(false)
+    const uploadingImage = ref<boolean>(false)
+
+    /** 是否可提交 */
+    const canSubmit = computed<boolean>(() : boolean => {
+        if (submitting.value) return false
+        if (uploadingImage.value) return false
+        if (title.value.trim().length == 0) return false
+        if (content.value.trim().length == 0) return false
+        return true
+    })
+
+    /** 提交发帖 */
+    async function onSubmit() : Promise<void> {
+        // 提交中防抖
+        if (submitting.value) return
+        // 校验未通过时给出明确提示，避免用户以为按钮"点不到"
+        if (title.value.trim().length == 0) {
+            uni.showToast({ title: '请输入标题', icon: 'none' })
+            return
+        }
+        if (content.value.trim().length == 0) {
+            uni.showToast({ title: '请输入内容', icon: 'none' })
+            return
+        }
+
+        submitting.value = true
+        uni.showLoading({ title: '发布中...' })
+        try {
+            await createForumTopicApi(title.value.trim(), content.value.trim(), images.value)
+            uni.showToast({ title: '发布成功', icon: 'success' })
+            setTimeout(() => {
+                goBack()
+            }, 1000)
+        } catch (e) {
+            console.error('[forum-create] submit failed:', e)
+            let msg = '发布失败'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) {
+                    msg = m
+                }
+            }
+            uni.showToast({ title: msg, icon: 'none' })
+        } finally {
+            submitting.value = false
+            uni.hideLoading()
+        }
+    }
+
+    /** 选择图片：批量选择并上传（最多 9 张） */
+    function onAddImage() : void {
+        if (uploadingImage.value) return
+        const remaining = 9 - images.value.length
+        if (remaining <= 0) {
+            uni.showToast({ title: '最多上传 9 张图片', icon: 'none' })
+            return
+        }
+        uni.chooseImage({
+            count: remaining,
+            sizeType: ['compressed'],
+            sourceType: ['album', 'camera'],
+            success: (res) => {
+                const paths = res.tempFilePaths as string[]
+                if (paths.length == 0) return
+                uploadImages(paths)
+            },
+            fail: (err) => {
+                console.log('[forum-create] chooseImage canceled/failed:', err)
+            },
+        })
+    }
+
+    /** 逐张上传图片，成功后把返回 URL 加入数组 */
+    async function uploadImages(paths : string[]) : Promise<void> {
+        uploadingImage.value = true
+        uni.showLoading({ title: '上传图片中...' })
+        let failed = 0
+        for (let i = 0; i < paths.length; i++) {
+            if (images.value.length >= 9) break
+            try {
+                const url = await uploadForumImageApi(paths[i])
+                images.value.push(url)
+            } catch (e) {
+                console.error('[forum-create] upload image failed:', e)
+                failed = failed + 1
+            }
+        }
+        uni.hideLoading()
+        uploadingImage.value = false
+        if (failed > 0) {
+            uni.showToast({ title: failed + ' 张图片上传失败，请重试', icon: 'none' })
+        }
+    }
+
+    /** 删除已上传图片 */
+    function onRemoveImage(index : number) : void {
+        const next : string[] = []
+        for (let i = 0; i < images.value.length; i++) {
+            if (i != index) next.push(images.value[i])
+        }
+        images.value = next
+    }
+
+    /** 预览已上传图片 */
+    function onPreviewImage(index : number) : void {
+        const urls : string[] = []
+        for (let i = 0; i < images.value.length; i++) {
+            urls.push(resolveFileUrl(images.value[i]))
+        }
+        uni.previewImage({
+            urls: urls,
+            current: index,
+        })
+    }
+
+    function onBack() : void {
+        // 有内容时提示确认
+        if (title.value.length > 0 || content.value.length > 0) {
+            uni.showModal({
+                title: '提示',
+                content: '确定放弃编辑吗？已输入的内容将丢失。',
+                success: (res) => {
+                    if (res.confirm) {
+                        goBack()
+                    }
+                }
+            })
+        } else {
+            goBack()
+        }
+    }
+</script>
+
+<style>
+    .container {
+        display: flex;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        width: 80rpx;
+        align-items: center;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #ffffff;
+    }
+
+    .header-title {
+        flex: 1;
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+        text-align: center;
+    }
+
+    .header-right {
+        width: 80rpx;
+        align-items: center;
+    }
+
+    .header-action {
+        font-size: 28rpx;
+        color: #ffffff;
+    }
+
+    .content-scroll {
+        flex: 1;
+        height: 0;
+    }
+
+    /* 表单区 */
+    .form-section {
+        background-color: #ffffff;
+        margin: 24rpx;
+        border-radius: 16rpx;
+        padding: 32rpx;
+        border: 1px solid #eeeeee;
+        flex-direction: column;
+    }
+
+    .form-item {
+        flex-direction: column;
+        margin-bottom: 32rpx;
+    }
+
+    .form-label {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 16rpx;
+    }
+
+    .form-input {
+        height: 88rpx;
+        background-color: #f8f9fa;
+        border-radius: 12rpx;
+        padding: 0 24rpx;
+        font-size: 30rpx;
+        color: #333333;
+        border: 1rpx solid #e0e0e0;
+    }
+
+    .form-textarea {
+        height: 400rpx;
+        background-color: #f8f9fa;
+        border-radius: 12rpx;
+        padding: 24rpx;
+        font-size: 30rpx;
+        color: #333333;
+        border: 1rpx solid #e0e0e0;
+    }
+
+    .form-counter {
+        font-size: 22rpx;
+        color: #999999;
+        text-align: right;
+        margin-top: 8rpx;
+    }
+
+    /* 图片选择区 */
+    .img-grid {
+        flex-direction: row;
+        flex-wrap: wrap;
+        margin-top: 16rpx;
+    }
+
+    .img-cell {
+        width: 180rpx;
+        height: 180rpx;
+        margin-right: 16rpx;
+        margin-bottom: 16rpx;
+        position: relative;
+    }
+
+    .img-thumb {
+        width: 180rpx;
+        height: 180rpx;
+        border-radius: 12rpx;
+        background-color: #f0f0f0;
+    }
+
+    .img-remove {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 40rpx;
+        height: 40rpx;
+        border-radius: 0 0 0 12rpx;
+        background-color: rgba(0, 0, 0, 0.55);
+        align-items: center;
+        justify-content: center;
+    }
+
+    .img-remove-text {
+        font-size: 28rpx;
+        color: #ffffff;
+        line-height: 1;
+    }
+
+    .img-add {
+        width: 180rpx;
+        height: 180rpx;
+        margin-right: 16rpx;
+        margin-bottom: 16rpx;
+        border: 2rpx dashed #c0c4cc;
+        border-radius: 12rpx;
+        background-color: #fafbfc;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+    }
+
+    .img-add-icon {
+        font-size: 48rpx;
+        color: #909399;
+    }
+
+    .img-add-text {
+        font-size: 22rpx;
+        color: #909399;
+        margin-top: 8rpx;
+    }
+
+    /* 发帖须知 */
+    .tips-section {
+        background-color: #ffffff;
+        margin: 0 24rpx 24rpx;
+        border-radius: 16rpx;
+        padding: 32rpx;
+        border: 1px solid #eeeeee;
+        flex-direction: column;
+    }
+
+    .tips-title {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 16rpx;
+    }
+
+    .tips-text {
+        font-size: 24rpx;
+        color: #999999;
+        line-height: 1.8;
+    }
+
+    /* 发布按钮区 */
+    .submit-section {
+        padding: 24rpx 24rpx 64rpx;
+        align-items: center;
+    }
+
+    .submit-btn {
+        width: 100%;
+        height: 88rpx;
+        border-radius: 44rpx;
+        background-color: #2979ff;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .submit-btn-text {
+        font-size: 32rpx;
+        color: #ffffff;
+        font-weight: bold;
+    }
+</style>

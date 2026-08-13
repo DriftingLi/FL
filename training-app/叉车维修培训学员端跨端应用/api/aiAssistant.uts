@@ -1,0 +1,509 @@
+/**
+ * AI 助手 API
+ * - GET  /ai-assistant/models
+ * - POST /ai-assistant/chat           流式 SSE（登录可保存会话）
+ * - GET/POST/DELETE/PATCH sessions
+ * - GET/POST/DELETE user-models
+ *
+ * @note chat 为 SSE 流：event: delta/done/error + data: {...}
+ *       uni.request 不支持增量流式回调，这里整包接收后解析 delta 文本。
+ */
+import { get, post, del, patch } from './request'
+import { API_BASE_URL, AI_REQUEST_TIMEOUT } from '../config/env'
+import { STORAGE_KEY_TOKEN } from '../constants/app'
+import { getStorage } from '../utils/storage'
+import type {
+	AiChatMessage,
+	AiModel,
+	AiUserModel,
+	AiSession,
+	AiSessionMessage,
+	AiChatSettings,
+} from '../types/index'
+
+function toNumber(v : any | null, defaultVal : number = 0) : number {
+	if (v == null) return defaultVal
+	const s = `${v}`
+	const n = parseFloat(s)
+	if (isNaN(n)) return defaultVal
+	return n
+}
+
+function toStr(v : any | null, defaultVal : string = '') : string {
+	if (v == null) return defaultVal
+	return `${v}`
+}
+
+function buildAiModel(obj : UTSJSONObject) : AiModel {
+	return {
+		id: toNumber(obj['id'], toNumber(obj['model_id'])),
+		name: toStr(obj['name'], toStr(obj['display_name'], '默认模型')),
+		model: toStr(obj['model'], toStr(obj['model_name'])),
+		source: toStr(obj['source'], toStr(obj['model_source'], 'admin')),
+		description: toStr(obj['description']),
+	} as AiModel
+}
+
+function buildUserModel(obj : UTSJSONObject) : AiUserModel {
+	return {
+		id: toNumber(obj['id'], toNumber(obj['model_id'])),
+		name: toStr(obj['name'], toStr(obj['display_name'], '自定义模型')),
+		base_url: toStr(obj['base_url'], toStr(obj['baseUrl'])),
+		model: toStr(obj['model'], toStr(obj['model_name'])),
+		api_key: toStr(obj['api_key'], toStr(obj['apiKey'])),
+		created_at: toStr(obj['created_at']),
+	} as AiUserModel
+}
+
+function buildSession(obj : UTSJSONObject) : AiSession {
+	return {
+		id: toNumber(obj['id'], toNumber(obj['session_id'])),
+		title: toStr(obj['title'], '新对话'),
+		model_source: toStr(obj['model_source']),
+		model_id: toNumber(obj['model_id']),
+		created_at: toStr(obj['created_at']),
+		updated_at: toStr(obj['updated_at']),
+	} as AiSession
+}
+
+function buildSessionMessage(obj : UTSJSONObject) : AiSessionMessage {
+	return {
+		id: toNumber(obj['id'], toNumber(obj['message_id'])),
+		role: toStr(obj['role'], 'assistant'),
+		content: toStr(obj['content']),
+		created_at: toStr(obj['created_at']),
+	} as AiSessionMessage
+}
+
+/** 从 data 中提取数组（兼容直接数组 / {key:[]}） */
+function extractArray(data : UTSJSONObject, key : string) : Array<UTSJSONObject> {
+	const raw = data[key]
+	if (raw != null) {
+		return raw as Array<UTSJSONObject>
+	}
+	// data 本身可能就是数组（request 层把 data 解包后若是数组会转成 UTSJSONObject 有问题）
+	// 这里再尝试 items/list
+	const items = data['items']
+	if (items != null) return items as Array<UTSJSONObject>
+	const list = data['list']
+	if (list != null) return list as Array<UTSJSONObject>
+	return [] as Array<UTSJSONObject>
+}
+
+/** 可用模型列表（公开） */
+export function getAiModelsApi() : Promise<AiModel[]> {
+	return get('/ai-assistant/models', null).then((data : UTSJSONObject) : AiModel[] => {
+		const arr = extractArray(data, 'models')
+		const out : AiModel[] = []
+		for (let i = 0; i < arr.length; i++) {
+			out.push(buildAiModel(arr[i]))
+		}
+		return out
+	}).catch((_e) : AiModel[] => {
+		return [] as AiModel[]
+	})
+}
+
+/** 用户自定义模型列表 */
+export function getAiUserModelsApi() : Promise<AiUserModel[]> {
+	return get('/ai-assistant/user-models').then((data : UTSJSONObject) : AiUserModel[] => {
+		const arr = extractArray(data, 'models')
+		// 兼容 user_models / items
+		let list = arr
+		if (list.length == 0) {
+			const um = data['user_models']
+			if (um != null) list = um as Array<UTSJSONObject>
+		}
+		const out : AiUserModel[] = []
+		for (let i = 0; i < list.length; i++) {
+			out.push(buildUserModel(list[i]))
+		}
+		return out
+	})
+}
+
+/** 保存自定义模型（新建或更新：有 id 时后端若支持则带上） */
+export function saveAiUserModelApi(payload : UTSJSONObject) : Promise<AiUserModel> {
+	return post('/ai-assistant/user-models', payload).then((data : UTSJSONObject) : AiUserModel => {
+		// 后端可能直接返回模型对象，或包在 model 字段
+		const m = data['model']
+		if (m != null) {
+			return buildUserModel(m as UTSJSONObject)
+		}
+		return buildUserModel(data)
+	})
+}
+
+/** 删除自定义模型 */
+export function deleteAiUserModelApi(id : number) : Promise<void> {
+	return del('/ai-assistant/user-models/' + id).then((_d : UTSJSONObject) : void => { })
+}
+
+/** 会话列表 */
+export function getAiSessionsApi() : Promise<AiSession[]> {
+	return get('/ai-assistant/sessions').then((data : UTSJSONObject) : AiSession[] => {
+		const arr = extractArray(data, 'sessions')
+		const out : AiSession[] = []
+		for (let i = 0; i < arr.length; i++) {
+			out.push(buildSession(arr[i]))
+		}
+		return out
+	})
+}
+
+/** 创建会话 */
+export function createAiSessionApi(title : string = '新对话') : Promise<AiSession> {
+	const payload : UTSJSONObject = { title: title }
+	return post('/ai-assistant/sessions', payload).then((data : UTSJSONObject) : AiSession => {
+		const s = data['session']
+		if (s != null) return buildSession(s as UTSJSONObject)
+		return buildSession(data)
+	})
+}
+
+/** 删除会话 */
+export function deleteAiSessionApi(id : number) : Promise<void> {
+	return del('/ai-assistant/sessions/' + id).then((_d : UTSJSONObject) : void => { })
+}
+
+/** 重命名会话 */
+export function renameAiSessionApi(id : number, title : string) : Promise<void> {
+	const payload : UTSJSONObject = { title: title }
+	return patch('/ai-assistant/sessions/' + id + '/title', payload).then((_d : UTSJSONObject) : void => { })
+}
+
+/** 会话消息 */
+export function getAiSessionMessagesApi(id : number) : Promise<AiSessionMessage[]> {
+	return get('/ai-assistant/sessions/' + id + '/messages').then((data : UTSJSONObject) : AiSessionMessage[] => {
+		const arr = extractArray(data, 'messages')
+		const out : AiSessionMessage[] = []
+		for (let i = 0; i < arr.length; i++) {
+			out.push(buildSessionMessage(arr[i]))
+		}
+		return out
+	})
+}
+
+/**
+ * 解析 SSE 文本，拼接所有 delta 内容
+ * 兼容：
+ *   event: delta\ndata: {"content":"x"}\n\n
+ *   data: {"delta":"x"}\n\n
+ *   data: {"choices":[{"delta":{"content":"x"}}]}\n\n
+ */
+/** 从 SSE data JSON 中提取增量文本；返回空串表示本行无内容 */
+function extractDeltaText(obj : UTSJSONObject) : string {
+	const c1 = obj['content']
+	if (c1 != null) return toStr(c1)
+	const d1 = obj['delta']
+	if (d1 != null) {
+		// delta 可能是字符串或对象
+		const asStr = toStr(d1)
+		// 若 toStr 得到 [object Object] 之类则再取 content
+		if (asStr.length > 0 && !asStr.startsWith('{') && asStr.indexOf('[object') < 0) {
+			// 纯文本 delta
+			// 但对象 toStr 通常是 JSON 或 [object]，这里优先尝试对象字段
+		}
+		try {
+			const dObj = d1 as UTSJSONObject
+			const dc = dObj['content']
+			if (dc != null) return toStr(dc)
+		} catch (_e) { }
+		if (asStr.length > 0 && asStr.indexOf('[object') < 0 && !asStr.startsWith('{')) {
+			return asStr
+		}
+	}
+	const t1 = obj['text']
+	if (t1 != null) return toStr(t1)
+	const choices = obj['choices']
+	if (choices != null) {
+		try {
+			const arr = choices as Array<UTSJSONObject>
+			if (arr.length > 0) {
+				const ch0 = arr[0]
+				const delta = ch0['delta']
+				if (delta != null) {
+					const deltaObj = delta as UTSJSONObject
+					return toStr(deltaObj['content'])
+				}
+				const message = ch0['message']
+				if (message != null) {
+					const mObj = message as UTSJSONObject
+					return toStr(mObj['content'])
+				}
+			}
+		} catch (_e) { }
+	}
+	return ''
+}
+
+export function parseSseContent(raw : string) : string {
+	if (raw.length == 0) return ''
+	// 若不是 SSE，可能是 JSON
+	const trimmed = raw.trim()
+	if (trimmed.startsWith('{') && trimmed.indexOf('event:') < 0 && trimmed.indexOf('data:') < 0) {
+		try {
+			const obj = JSON.parse(trimmed) as UTSJSONObject
+			const code = obj['code']
+			if (code != null) {
+				const codeNum = toNumber(code, 200)
+				if (codeNum != 200 && codeNum != 201) {
+					throw new Error(toStr(obj['message'], '请求失败'))
+				}
+			}
+			const d = obj['data']
+			if (d != null) {
+				const ds = toStr(d)
+				if (ds.length > 0 && ds.indexOf('[object') < 0 && !ds.startsWith('{')) {
+					return ds
+				}
+				try {
+					const dObj = d as UTSJSONObject
+					const c = dObj['content']
+					if (c != null) return toStr(c)
+					const a = dObj['answer']
+					if (a != null) return toStr(a)
+				} catch (_e) { }
+			}
+			const content = obj['content']
+			if (content != null) return toStr(content)
+		} catch (e) {
+			if (e instanceof Error) {
+				throw e
+			}
+		}
+	}
+
+	let result = ''
+	let errMsg = ''
+	const lines = raw.split('\n')
+	for (let i = 0; i < lines.length; i++) {
+		let line = lines[i]
+		if (line.endsWith('\r')) {
+			line = line.substring(0, line.length - 1)
+		}
+		if (!line.startsWith('data:')) continue
+		let payload = line.substring(5).trim()
+		if (payload.length == 0 || payload == '[DONE]') continue
+		try {
+			const obj = JSON.parse(payload) as UTSJSONObject
+			// error 字段
+			const err = obj['error']
+			if (err != null) {
+				const es = toStr(err)
+				if (es.length > 0 && es.indexOf('[object') < 0 && !es.startsWith('{')) {
+					errMsg = es
+				} else {
+					try {
+						const errObj = err as UTSJSONObject
+						errMsg = toStr(errObj['message'], toStr(errObj['msg'], '对话失败'))
+					} catch (_e) {
+						errMsg = '对话失败'
+					}
+				}
+				continue
+			}
+			const piece = extractDeltaText(obj)
+			if (piece.length > 0) {
+				result += piece
+				continue
+			}
+			// 纯错误 message 行
+			const msg = obj['message']
+			if (msg != null && obj['content'] == null && obj['delta'] == null && obj['choices'] == null) {
+				const t = toStr(msg)
+				if (t.length > 0 && result.length == 0) {
+					errMsg = t
+				}
+			}
+		} catch (_e) {
+			// 非 JSON data 行，忽略
+		}
+	}
+	if (result.length == 0 && errMsg.length > 0) {
+		throw new Error(errMsg)
+	}
+	return result
+}
+
+/**
+ * 流式对话（整包接收 SSE 后解析）
+ * @returns 助手回复文本；session_id 若后端在响应头/正文返回则无法可靠提取，由调用方自行维护
+ */
+export function chatAiApi(
+	messages : AiChatMessage[],
+	settings : AiChatSettings,
+	sessionId : number = 0,
+) : Promise<string> {
+	return new Promise<string>((resolve, reject) => {
+		const url = API_BASE_URL + '/ai-assistant/chat'
+		const header : UTSJSONObject = {}
+		header['Content-Type'] = 'application/json'
+		header['Accept'] = 'text/event-stream'
+		const token = getStorage(STORAGE_KEY_TOKEN)
+		if (token.length > 0) {
+			header['Authorization'] = `Bearer ${token}`
+		}
+
+		// 构造 messages 数组（避免直接传 Proxy）
+		const msgArr : UTSJSONObject[] = []
+		for (let i = 0; i < messages.length; i++) {
+			const m = messages[i]
+			const item : UTSJSONObject = {
+				role: m.role,
+				content: m.content,
+			}
+			msgArr.push(item)
+		}
+
+		const body : UTSJSONObject = {
+			messages: msgArr,
+			model_source: settings.model_source.length > 0 ? settings.model_source : 'admin',
+		}
+		if (sessionId > 0) {
+			body['session_id'] = sessionId
+		}
+		if (settings.model_source == 'custom') {
+			if (settings.model_id > 0) {
+				body['model_id'] = settings.model_id
+			}
+			if (settings.base_url.length > 0) {
+				body['base_url'] = settings.base_url
+			}
+			if (settings.model.length > 0) {
+				body['model'] = settings.model
+			}
+			if (settings.api_key.length > 0) {
+				body['api_key'] = settings.api_key
+			}
+		} else {
+			if (settings.model_id > 0) {
+				body['model_id'] = settings.model_id
+			}
+			if (settings.model.length > 0) {
+				body['model'] = settings.model
+			}
+		}
+
+		console.log('[chatAiApi] >>> POST', url)
+		uni.request({
+			url: url,
+			method: 'POST',
+			data: body,
+			header: header,
+			timeout: AI_REQUEST_TIMEOUT,
+			// 部分端需要 text 才能拿到 SSE 原文
+			// #ifdef H5
+			// #endif
+			success: (res) => {
+				console.log('[chatAiApi] <<< status=', res.statusCode)
+				const statusCode = res.statusCode
+				if (statusCode == 401) {
+					reject(new Error('登录已过期，请重新登录'))
+					return
+				}
+				if (statusCode < 200 || statusCode >= 300) {
+					// 尝试解析错误
+					try {
+						const bodyObj = res.data as UTSJSONObject
+						const msg = toStr(bodyObj['message'], `请求失败 (${statusCode})`)
+						reject(new Error(msg))
+					} catch (_e) {
+						reject(new Error(`请求失败 (${statusCode})`))
+					}
+					return
+				}
+				const dataAny = res.data
+				if (dataAny == null) {
+					reject(new Error('空响应'))
+					return
+				}
+				// SSE 原文一般为 string；若被解析成对象则 stringify
+				let raw = ''
+				try {
+					const asObj = dataAny as UTSJSONObject
+					// 对象形态：业务 JSON 或已解析结构
+					if (asObj != null && (asObj['code'] != null || asObj['data'] != null || asObj['content'] != null || asObj['choices'] != null)) {
+						raw = JSON.stringify(dataAny)
+					} else {
+						raw = `${dataAny}`
+					}
+				} catch (_e) {
+					raw = `${dataAny}`
+				}
+				if (raw.length == 0) {
+					raw = `${dataAny}`
+				}
+				try {
+					const text = parseSseContent(raw)
+					if (text.length == 0) {
+						reject(new Error('未收到有效回复，请检查模型配置'))
+						return
+					}
+					resolve(text)
+				} catch (e) {
+					if (e instanceof Error) {
+						reject(e)
+					} else {
+						reject(new Error('解析回复失败'))
+					}
+				}
+			},
+			fail: (err) => {
+				console.error('[chatAiApi] fail', err.errMsg)
+				const errMsg = err.errMsg ?? ''
+				if (errMsg.indexOf('timeout') >= 0) {
+					reject(new Error('请求超时，请稍后重试'))
+				} else {
+					reject(new Error(errMsg.length > 0 ? errMsg : '网络连接失败'))
+				}
+			},
+		})
+	})
+}
+
+/** 默认对话设置 */
+export function defaultAiChatSettings() : AiChatSettings {
+	return {
+		model_source: 'admin',
+		model_id: 0,
+		model_name: '默认模型',
+		base_url: '',
+		model: '',
+		api_key: '',
+	} as AiChatSettings
+}
+
+const SETTINGS_KEY = 'ai_chat_settings'
+
+/** 读取本地对话设置 */
+export function loadAiChatSettings() : AiChatSettings {
+	const raw = getStorage(SETTINGS_KEY)
+	if (raw.length == 0) return defaultAiChatSettings()
+	try {
+		const obj = JSON.parse(raw) as UTSJSONObject
+		return {
+			model_source: toStr(obj['model_source'], 'admin'),
+			model_id: toNumber(obj['model_id']),
+			model_name: toStr(obj['model_name'], '默认模型'),
+			base_url: toStr(obj['base_url']),
+			model: toStr(obj['model']),
+			api_key: toStr(obj['api_key']),
+		} as AiChatSettings
+	} catch (_e) {
+		return defaultAiChatSettings()
+	}
+}
+
+/** 保存本地对话设置 */
+export function saveAiChatSettings(settings : AiChatSettings) : void {
+	const obj : UTSJSONObject = {
+		model_source: settings.model_source,
+		model_id: settings.model_id,
+		model_name: settings.model_name,
+		base_url: settings.base_url,
+		model: settings.model,
+		api_key: settings.api_key,
+	}
+	uni.setStorageSync(SETTINGS_KEY, JSON.stringify(obj))
+}
