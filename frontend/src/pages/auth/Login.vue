@@ -167,7 +167,8 @@
 import { ref, reactive, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { authApi, type AuthUserInfo } from '@/api/auth'
+import { authApi } from '@/api/auth'
+import type { UserProfile } from '@/types/user'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { UserFilled, Avatar, Setting, ChatDotRound } from '@element-plus/icons-vue'
 import { usernameRules, passwordRules, requiredEmailRules, emailCodeRules, phoneRules } from '@/utils/validate'
@@ -274,7 +275,7 @@ async function handleLogin() {
       password: formData.password,
       role: currentRole
     }
-    let userInfo: AuthUserInfo
+    let userInfo: UserProfile
     if (loginMode.value === 'email') {
       userInfo = await authApi.emailLogin({
         email: formData.email.trim(),

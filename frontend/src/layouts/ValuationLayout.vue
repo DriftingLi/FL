@@ -49,6 +49,7 @@ import ValuationFooter from '@/components/valuation/ValuationFooter.vue'
 import { buildSubdomainUrl } from '@/utils/subdomain'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
+import { displayNameOf } from '@/types/user'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -57,10 +58,7 @@ const authStore = useAuthStore()
 const mainSiteUrl = computed(() => buildSubdomainUrl('main', '/'))
 
 // 估值用户显示名：昵称（username）
-const displayName = computed(() => {
-  const info = authStore.userInfo
-  return info?.username || '评估用户'
-})
+const displayName = computed(() => displayNameOf(authStore.userInfo) || '评估用户')
 
 // 退出登录：调用后端写黑名单 → 清除本地登录态 → 跳回估值首页
 async function handleLogout() {

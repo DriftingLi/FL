@@ -2,38 +2,24 @@
 // 业务失败抛错并统一 toast，调用方不再自检 res.code）
 import { unwrappedRequest } from './request'
 import type { AxiosRequestConfig } from 'axios'
+import type { UserProfile } from '@/types/user'
 
 export interface LoginPayload {
   username: string
   password: string
 }
 
-/** 登录 / /auth/me 返回的用户信息（username 为昵称，uid 为字符串形式的雪花 ID） */
-export interface AuthUserInfo {
-  token?: string
-  user_id?: number
-  uid?: string
-  account?: string
-  username?: string
-  name?: string
-  avatar_url?: string
-  role?: string
-  email?: string
-  phone?: string
-  [key: string]: any
-}
-
 export const authApi = {
   login(data: LoginPayload) {
-    return unwrappedRequest.post<AuthUserInfo>('/auth/login', data)
+    return unwrappedRequest.post<UserProfile>('/auth/login', data)
   },
 
   adminLogin(data: LoginPayload) {
-    return unwrappedRequest.post<AuthUserInfo>('/auth/admin-login', data)
+    return unwrappedRequest.post<UserProfile>('/auth/admin-login', data)
   },
 
   tutorLogin(data: LoginPayload) {
-    return unwrappedRequest.post<AuthUserInfo>('/auth/tutor-login', data)
+    return unwrappedRequest.post<UserProfile>('/auth/tutor-login', data)
   },
 
   logout() {
@@ -41,11 +27,11 @@ export const authApi = {
   },
 
   getUserInfo(config?: AxiosRequestConfig) {
-    return unwrappedRequest.get<AuthUserInfo>('/auth/me', config)
+    return unwrappedRequest.get<UserProfile>('/auth/me', config)
   },
 
   updateProfile(data: { nickname: string }) {
-    return unwrappedRequest.put<AuthUserInfo>('/auth/profile', data)
+    return unwrappedRequest.put<UserProfile>('/auth/profile', data)
   },
 
   uploadAvatar(formData: FormData) {
@@ -62,11 +48,11 @@ export const authApi = {
   },
 
   emailRegister(data: { email: string; code: string; nickname: string; company?: string; password: string }) {
-    return unwrappedRequest.post<AuthUserInfo>('/auth/email/register', data)
+    return unwrappedRequest.post<UserProfile>('/auth/email/register', data)
   },
 
   emailLogin(data: { email: string; code: string }) {
-    return unwrappedRequest.post<AuthUserInfo>('/auth/email/login', data)
+    return unwrappedRequest.post<UserProfile>('/auth/email/login', data)
   },
 
   // ===== 手机号验证码注册/登录（与邮箱流程对齐）=====
@@ -76,11 +62,11 @@ export const authApi = {
   },
 
   phoneRegister(data: { phone: string; code: string; nickname: string; company?: string; password: string }) {
-    return unwrappedRequest.post<AuthUserInfo>('/auth/phone/register', data)
+    return unwrappedRequest.post<UserProfile>('/auth/phone/register', data)
   },
 
   phoneLogin(data: { phone: string; code: string }) {
-    return unwrappedRequest.post<AuthUserInfo>('/auth/phone/login', data)
+    return unwrappedRequest.post<UserProfile>('/auth/phone/login', data)
   },
 
   // ===== 微信扫码（框架占位）=====
@@ -96,11 +82,11 @@ export const authApi = {
   },
 
   updateProfileEmail(data: { email: string; code: string }) {
-    return unwrappedRequest.post<AuthUserInfo>('/auth/profile/email', data)
+    return unwrappedRequest.post<UserProfile>('/auth/profile/email', data)
   },
 
   updateProfilePhone(data: { phone: string; code: string }) {
-    return unwrappedRequest.post<AuthUserInfo>('/auth/profile/phone', data)
+    return unwrappedRequest.post<UserProfile>('/auth/profile/phone', data)
   },
 
   updateProfilePassword(password: string) {
