@@ -53,7 +53,7 @@ func TestValuationAuthMe_MasksEmailPlaceholderPhone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("构造估值服务失败: %v", err)
 	}
-	RegisterRoutes(r, sess, zap.NewNop(),
+	RegisterRoutes(r, sess, zap.NewNop(), nil, nil,
 		dict, evalStore, batteryStore,
 		valuationSvc, vservice.NewBatteryRULService(),
 		&memReportGenerator{}, &memStorage{},
