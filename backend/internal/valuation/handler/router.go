@@ -31,7 +31,9 @@ package handler
 import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 
+	"forklift-training/internal/config"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
 	"forklift-training/internal/storage"
@@ -49,6 +51,8 @@ func RegisterRoutes(
 	r *gin.Engine,
 	sess *security.Session,
 	logger *zap.Logger,
+	auditCfg *config.Config,
+	auditDB *gorm.DB,
 	dictRepo DictionaryConfigStore,
 	evalRepo EvaluationStore,
 	batteryRepo BatteryStore,
@@ -138,6 +142,8 @@ func RegisterRoutes(
 	admin := r.Group("/api/valuation/admin")
 	admin.Use(middleware.JWTAuth(sess))
 	admin.Use(middleware.RoleRequired("admin"))
+	// 管理员写操作审计：与主体系同一留痕口径（合规用途，ADR-0012 §7）
+	admin.Use(middleware.AuditLog(auditCfg, auditDB, logger))
 	{
 		configHandler.registerDictCRUDRoutes(admin, dictcrud.NewRegistry(dictcrud.AllDescriptors()...))
 	}
