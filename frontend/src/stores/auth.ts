@@ -2,25 +2,13 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Ref } from 'vue'
 import { authApi } from '@/api/auth'
+import type { UserProfile } from '@/types/user'
 import { getToken, getUserInfo, setToken, setUserInfo, clearLocalAuth } from '@/utils/storage'
 import { consumeAuthTokenFromUrl } from '@/utils/authToken'
 
-export interface UserInfo {
-  token?: string
-  user_id?: number
-  uid?: string
-  account?: string
-  username?: string
-  name?: string
-  avatar_url?: string
-  role?: string
-  avatar?: string
-  [key: string]: any
-}
-
 export const useAuthStore = defineStore('auth', () => {
   const token: Ref<string> = ref('')
-  const userInfo: Ref<UserInfo> = ref({})
+  const userInfo: Ref<UserProfile> = ref({})
   const isLoggedIn: Ref<boolean> = ref(false)
 
   // 初始化 Promise 缓存：main.ts 显式启动一次，路由守卫 await 同一 Promise 等待完成
@@ -28,7 +16,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   function initFromStorage() {
     const savedToken = getToken()
-    const savedInfo = getUserInfo<UserInfo>()
+    const savedInfo = getUserInfo<UserProfile>()
 
     if (savedToken && savedInfo && savedInfo.token && savedInfo.role) {
       token.value = savedInfo.token
@@ -82,7 +70,7 @@ export const useAuthStore = defineStore('auth', () => {
     return readyPromise
   }
 
-  function setAuthData(data: UserInfo) {
+  function setAuthData(data: UserProfile) {
     if (!data || !data.token) {
       console.warn('[Auth] setAuthData called with invalid data')
       return
