@@ -2,47 +2,54 @@
   <div class="course-center">
     <div class="course-layout">
       <aside class="cc-sidebar">
-        <div class="cc-sidebar-title">专业方向</div>
-        <button
-          class="cc-nav-item"
-          :class="{ active: specialtyId === null }"
-          @click="selectSpecialty(null)"
-        >
-          <span class="cc-nav-name">全部课程</span>
-          <span class="cc-nav-count">{{ totalAll }}</span>
-        </button>
-        <button
-          v-for="d in directions"
-          :key="d.specialty_id"
-          class="cc-nav-item"
-          :class="{ active: specialtyId === d.specialty_id }"
-          @click="selectSpecialty(d.specialty_id)"
-        >
-          <span class="cc-nav-name">{{ d.name }}</span>
-          <span class="cc-nav-count">{{ directionCount(d) }}</span>
-        </button>
-      </aside>
-
-      <main class="cc-main">
-        <div class="cc-level-pills">
+        <!-- 卡片 1：专业方向 -->
+        <div class="cc-filter-card">
+          <div class="cc-card-title">专业方向</div>
           <button
-            class="cc-pill"
+            class="cc-nav-item"
+            :class="{ active: specialtyId === null }"
+            @click="selectSpecialty(null)"
+          >
+            <span class="cc-nav-name">全部课程</span>
+            <span class="cc-nav-count">{{ totalAll }}</span>
+          </button>
+          <button
+            v-for="d in directions"
+            :key="d.specialty_id"
+            class="cc-nav-item"
+            :class="{ active: specialtyId === d.specialty_id }"
+            @click="selectSpecialty(d.specialty_id)"
+          >
+            <span class="cc-nav-name">{{ d.name }}</span>
+            <span class="cc-nav-count">{{ directionCount(d) }}</span>
+          </button>
+        </div>
+
+        <!-- 卡片 2：课程等级 -->
+        <div class="cc-filter-card">
+          <div class="cc-card-title">课程等级</div>
+          <button
+            class="cc-nav-item"
             :class="{ active: levelId === null }"
             @click="selectLevel(null)"
           >
-            全部等级
+            <span class="cc-nav-name">全部等级</span>
+            <span class="cc-nav-count">{{ scopedTotal }}</span>
           </button>
           <button
             v-for="l in levels"
             :key="l.level_id"
-            class="cc-pill"
+            class="cc-nav-item"
             :class="{ active: levelId === l.level_id }"
             @click="selectLevel(l.level_id)"
           >
-            {{ l.name }}
+            <span class="cc-nav-name">{{ l.name }}</span>
+            <span class="cc-nav-count">{{ countOfLevel(l.level_id) }}</span>
           </button>
         </div>
+      </aside>
 
+      <main class="cc-main">
         <div class="cc-content" v-loading="loading">
           <div v-if="courses.length > 0" class="cc-grid">
             <div
@@ -199,12 +206,46 @@ const levels = ref<CatalogLevel[]>([])
 const specialtyId = ref<number | null>(null)
 const levelId = ref<number | null>(null)
 
-const totalAll = computed(() =>
-  directions.value.reduce((sum, d) => sum + directionCount(d), 0)
-)
+// ===== 计数（双向联动）：等级筛选影响方向卡计数，方向筛选影响等级卡计数 =====
 
+// 当前方向筛选范围的方向列表
+function scopedDirections(): CatalogDirectionNode[] {
+  return specialtyId.value === null
+    ? directions.value
+    : directions.value.filter(d => d.specialty_id === specialtyId.value)
+}
+
+// 范围内课程数：方向范围 + 可选等级过滤
+function countCourses(levelFilter: number | null): number {
+  let n = 0
+  for (const d of scopedDirections()) {
+    for (const lv of d.levels || []) {
+      if (levelFilter !== null && lv.level_id !== levelFilter) continue
+      n += lv.courses?.length || 0
+    }
+  }
+  return n
+}
+
+// 「全部课程」计数：随等级筛选变化
+const totalAll = computed(() => countCourses(levelId.value))
+
+// 各方向计数：随等级筛选变化（只数该方向内的课程）
 function directionCount(d: CatalogDirectionNode): number {
-  return (d.levels || []).reduce((sum, lv) => sum + (lv.courses?.length || 0), 0)
+  let n = 0
+  for (const lv of d.levels || []) {
+    if (levelId.value !== null && lv.level_id !== levelId.value) continue
+    n += lv.courses?.length || 0
+  }
+  return n
+}
+
+// 「全部等级」计数：随方向筛选变化
+const scopedTotal = computed(() => countCourses(null))
+
+// 各等级计数：随方向筛选变化
+function countOfLevel(levelIdValue: number): number {
+  return countCourses(levelIdValue)
 }
 
 function levelNameOf(levelIdValue?: number | null) {
@@ -341,17 +382,23 @@ onMounted(() => {
   gap: var(--space-5);
 }
 
-/* ===== 左栏：专业方向导航 ===== */
+/* ===== 左栏：双卡片（专业方向 / 课程等级） ===== */
 .cc-sidebar {
   width: 200px;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.cc-filter-card {
   background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
   padding: var(--space-3) var(--space-2);
 }
 
-.cc-sidebar-title {
+.cc-card-title {
   font-size: var(--text-xs);
   color: var(--color-text-tertiary);
   padding: var(--space-1) var(--space-3);
@@ -394,37 +441,6 @@ onMounted(() => {
 .cc-main {
   flex: 1;
   min-width: 0;
-}
-
-.cc-level-pills {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  margin-bottom: var(--space-4);
-}
-
-.cc-pill {
-  padding: var(--space-1) var(--space-4);
-  border-radius: var(--radius-full);
-  border: 1.5px solid var(--color-border);
-  background: var(--color-bg-card);
-  color: var(--color-text-secondary);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-default);
-  font-family: var(--font-body);
-}
-
-.cc-pill:hover {
-  border-color: var(--color-primary-300);
-  color: var(--color-primary-500);
-}
-
-.cc-pill.active {
-  border-color: var(--color-primary-500);
-  background: var(--color-primary-500);
-  color: white;
 }
 
 .cc-grid {
@@ -655,11 +671,7 @@ onMounted(() => {
   margin-bottom: var(--space-4);
 }
 
-@media screen and (max-width: 768px) {
-  .detail-descriptions :deep(.el-descriptions__body .el-descriptions__table) {
-    display: block;
-  }
-
+@media (max-width: 900px) {
   .course-layout {
     flex-direction: column;
     /* 纵向后子元素需横向拉伸，否则 .cc-main 宽度=内容宽度导致整页横向溢出 */
@@ -668,17 +680,12 @@ onMounted(() => {
 
   .cc-sidebar {
     width: 100%;
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-1);
   }
+}
 
-  .cc-sidebar-title {
-    width: 100%;
-  }
-
-  .cc-nav-item {
-    width: auto;
+@media screen and (max-width: 768px) {
+  .detail-descriptions :deep(.el-descriptions__body .el-descriptions__table) {
+    display: block;
   }
 }
 </style>

@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
 
@@ -28,19 +29,18 @@ func NewTutorService(db *gorm.DB, uploadFolder string, fileService *FileService,
 	return &TutorService{db: db, uploadFolder: uploadFolder, fileService: fileService, logger: logger}
 }
 
-// GetCourses 导师课程列表。
-func (s *TutorService) GetCourses(tutorID *int, page, pageSize int) CoursePageResult {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-	q := s.db.Model(&model.Course{}).Where("status = ?", 1)
-	var total int64
-	q.Count(&total)
-	var courses []model.Course
-	q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&courses)
+// GetCourses 导师课程列表（已上架课程，可按专业方向/课程等级过滤）。
+func (s *TutorService) GetCourses(tutorID *int, page, pageSize int, specialtyID, levelID *int) CoursePageResult {
+	courses, total, page, pageSize := paging.Query[model.Course](s.db, page, pageSize, 10, "created_at DESC", func(q *gorm.DB) *gorm.DB {
+		q = q.Where("status = ?", 1)
+		if specialtyID != nil {
+			q = q.Where("specialty_id = ?", *specialtyID)
+		}
+		if levelID != nil {
+			q = q.Where("level_id = ?", *levelID)
+		}
+		return q
+	})
 	items := make([]CourseDTO, 0, len(courses))
 	for i := range courses {
 		item := courseToDTO(&courses[i])
