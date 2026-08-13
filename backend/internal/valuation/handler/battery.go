@@ -37,11 +37,8 @@ type BatteryHandler struct {
 // NewBatteryHandler 构造电池处理器
 func NewBatteryHandler(repo BatteryStore, svc *service.BatteryRULService, l *zap.Logger, st storage.Storage) *BatteryHandler {
 	prepareSuggestions := func(_ context.Context, e *model.BatteryEvaluation) {
-		// 记录不含特征稳定性分数，health 传 1.0（不触发稳定性提示），与预测流程共用 builder
-		if len(e.Suggestions) == 0 {
-			e.Suggestions = service.BuildBatterySuggestions(e.BatteryType, e.SohPercent,
-				e.RulCycles, e.ConfidenceLow, e.ConfidenceHigh, 1.0)
-		}
+		// 旧记录建议 fallback 单入口：health 由记录置信度反推（缺失默认 1.0）
+		service.EnsureBatterySuggestions(e)
 	}
 	return &BatteryHandler{
 		repo:               repo,
