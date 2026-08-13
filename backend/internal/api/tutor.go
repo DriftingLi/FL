@@ -207,12 +207,12 @@ func (h *TutorHandler) UpdateChapterInfo(c *gin.Context) {
 		response.BadRequest(c, "章节ID无效")
 		return
 	}
-	var data map[string]interface{}
+	var data service.ChapterInput
 	if err := c.ShouldBindJSON(&data); err != nil {
 		response.BadRequest(c, "请求数据无效")
 		return
 	}
-	result, err := h.svc.UpdateChapterInfo(chapterID, data)
+	result, err := h.svc.UpdateChapterInfo(chapterID, &data)
 	if err != nil {
 		response.NotFound(c, err.Error())
 		return
@@ -249,6 +249,5 @@ func (h *TutorHandler) BatchDeleteChapterFiles(c *gin.Context) {
 		return
 	}
 	result := h.svc.BatchDeleteChapterFiles(req.FileIDs)
-	count, _ := result["success_count"].(int)
-	response.SuccessWithMsg(c, "成功删除"+strconv.Itoa(count)+"个文件", result)
+	response.SuccessWithMsg(c, "成功删除"+strconv.Itoa(result.SuccessCount)+"个文件", result)
 }

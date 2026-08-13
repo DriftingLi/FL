@@ -39,7 +39,7 @@ func (s *TutorService) GetCourses(page, pageSize int, specialtyID, levelID *int)
 // GetGradingStats 阅卷统计（按天分组），用于导师仪表盘图表。
 // 统计当前导师 grader_id 命中的 exam_answer 行数（即导师本人批阅题数）。
 // days 仅允许 7 或 30，其他值统一回退为 7。
-func (s *TutorService) GetGradingStats(tutorID, days int) map[string]any {
+func (s *TutorService) GetGradingStats(tutorID, days int) *GradingStatsDTO {
 	if days != 7 && days != 30 {
 		days = 7
 	}
@@ -89,12 +89,12 @@ func (s *TutorService) GetGradingStats(tutorID, days int) map[string]any {
 		data = append(data, cnt)
 	}
 
-	return map[string]any{
-		"days":        days,
-		"labels":      labels,
-		"data":        data,
-		"total_count": totalCount,
-		"active_days": activeDays,
+	return &GradingStatsDTO{
+		Days:       days,
+		Labels:     labels,
+		Data:       data,
+		TotalCount: totalCount,
+		ActiveDays: activeDays,
 	}
 }
 
@@ -235,25 +235,28 @@ func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileCon
 }
 
 // UpdateChapterInfo 更新章节信息。
-func (s *TutorService) UpdateChapterInfo(chapterID int, data map[string]any) (*ChapterDTO, error) {
+func (s *TutorService) UpdateChapterInfo(chapterID int, in *ChapterInput) (*ChapterDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
 	}
-	if v, ok := data["title"].(string); ok && v != "" {
-		chapter.Title = v
+	if in == nil {
+		in = &ChapterInput{}
 	}
-	if v, ok := data["content"]; ok {
-		chapter.Content, _ = v.(string)
+	if in.Title != nil && *in.Title != "" {
+		chapter.Title = *in.Title
 	}
-	if v, ok := data["duration"]; ok {
-		chapter.Duration = toIntDefault(v, chapter.Duration)
+	if in.Content != nil {
+		chapter.Content = *in.Content
 	}
-	if v, ok := data["order_num"]; ok {
-		chapter.OrderNum = toIntDefault(v, chapter.OrderNum)
+	if in.Duration != nil {
+		chapter.Duration = *in.Duration
 	}
-	if v, ok := data["description"]; ok {
-		chapter.Description, _ = v.(string)
+	if in.OrderNum != nil {
+		chapter.OrderNum = *in.OrderNum
+	}
+	if in.Description != nil {
+		chapter.Description = *in.Description
 	}
 	if err := s.db.Save(&chapter).Error; err != nil {
 		return nil, err
@@ -263,7 +266,7 @@ func (s *TutorService) UpdateChapterInfo(chapterID int, data map[string]any) (*C
 }
 
 // DeleteChapterFileByID 删除章节文件。
-func (s *TutorService) DeleteChapterFileByID(fileID int) (map[string]any, error) {
+func (s *TutorService) DeleteChapterFileByID(fileID int) (*DeleteFileResult, error) {
 	var chapterFile model.ChapterFile
 	if err := s.db.First(&chapterFile, fileID).Error; err != nil {
 		return nil, errors.New("文件不存在")
@@ -289,11 +292,11 @@ func (s *TutorService) DeleteChapterFileByID(fileID int) (map[string]any, error)
 			s.db.Save(&chapter)
 		}
 	}
-	return map[string]any{"file_id": fileID, "deleted": true}, nil
+	return &DeleteFileResult{FileID: fileID, Deleted: true}, nil
 }
 
 // BatchDeleteChapterFiles 批量删除文件。
-func (s *TutorService) BatchDeleteChapterFiles(fileIDs []int) map[string]any {
+func (s *TutorService) BatchDeleteChapterFiles(fileIDs []int) *BatchDeleteFilesResult {
 	successCount := 0
 	failedIDs := make([]int, 0)
 	for _, fid := range fileIDs {
@@ -319,9 +322,9 @@ func (s *TutorService) BatchDeleteChapterFiles(fileIDs []int) map[string]any {
 		}
 		successCount++
 	}
-	return map[string]any{
-		"success_count": successCount,
-		"failed_count":  len(failedIDs),
-		"failed_ids":    failedIDs,
+	return &BatchDeleteFilesResult{
+		SuccessCount: successCount,
+		FailedCount:  len(failedIDs),
+		FailedIDs:    failedIDs,
 	}
 }

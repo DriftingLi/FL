@@ -46,11 +46,10 @@ export interface CertificateTemplate {
   [key: string]: unknown
 }
 
-/** 目录树中的课程节点（courseToDict + chapter_count，sort_order 由后端补齐） */
+/** 目录树中的课程节点（courseToDTO + chapter_count，sort_order 由后端补齐） */
 export interface CatalogCourseNode {
   course_id: number
   name: string
-  category?: string
   description?: string
   cover_image?: string
   duration?: number

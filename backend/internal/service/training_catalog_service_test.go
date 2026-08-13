@@ -342,10 +342,7 @@ func TestSetQuestionTags(t *testing.T) {
 	if err := svc.SetQuestionTags(q.ID, []int{tag1.ID, tag2.ID}); err != nil {
 		t.Fatalf("设置标签失败: %v", err)
 	}
-	tags, err := svc.GetQuestionTags(q.ID)
-	if err != nil {
-		t.Fatalf("查询标签失败: %v", err)
-	}
+	tags := svc.loadQuestionTags(q.ID)
 	if len(tags) != 2 {
 		t.Fatalf("应 2 个标签, got %d", len(tags))
 	}
@@ -357,7 +354,7 @@ func TestSetQuestionTags(t *testing.T) {
 	if err := svc.SetQuestionTags(q.ID, []int{tag2.ID}); err != nil {
 		t.Fatalf("替换标签失败: %v", err)
 	}
-	tags, _ = svc.GetQuestionTags(q.ID)
+	tags = svc.loadQuestionTags(q.ID)
 	if len(tags) != 1 {
 		t.Fatal("替换后应只剩 1 个标签")
 	}
@@ -366,7 +363,7 @@ func TestSetQuestionTags(t *testing.T) {
 	if err := svc.SetQuestionTags(q.ID, []int{}); err != nil {
 		t.Fatalf("清空标签失败: %v", err)
 	}
-	tags, _ = svc.GetQuestionTags(q.ID)
+	tags = svc.loadQuestionTags(q.ID)
 	if len(tags) != 0 {
 		t.Fatal("清空后应为 0 个标签")
 	}
@@ -578,9 +575,9 @@ func TestCourseSortOrder(t *testing.T) {
 	db.Create(&lv)
 
 	// 创建时设置 sort_order
-	created, err := svc.CreateCourse(map[string]any{
-		"name": "课程A", "category": "CATEGORY_01",
-		"specialty_id": spec.SpecialtyID, "level_id": lv.LevelID, "sort_order": 5,
+	created, err := svc.CreateCourse(&CourseInput{
+		Name:        ptrStr("课程A"),
+		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), SortOrder: ptrInt(5),
 	})
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
@@ -591,7 +588,7 @@ func TestCourseSortOrder(t *testing.T) {
 	courseID := created.CourseID
 
 	// 更新时修改 sort_order
-	updated, err := svc.UpdateCourse(courseID, map[string]any{"sort_order": 1})
+	updated, err := svc.UpdateCourse(courseID, &CourseInput{SortOrder: ptrInt(1)})
 	if err != nil {
 		t.Fatalf("更新课程失败: %v", err)
 	}
@@ -600,7 +597,7 @@ func TestCourseSortOrder(t *testing.T) {
 	}
 
 	// 负值应报错
-	if _, err := svc.CreateCourse(map[string]any{"name": "课程B", "category": "CATEGORY_01", "sort_order": -1}); err == nil {
+	if _, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程B"), SortOrder: ptrInt(-1)}); err == nil {
 		t.Fatal("负排序值应报错")
 	}
 
@@ -634,15 +631,14 @@ func TestAdminCourse_TrainingFields(t *testing.T) {
 	prereq := model.Course{Name: "前置课程", Status: 1, CreatedAt: testutil.Now()}
 	db.Create(&prereq)
 
-	data := map[string]any{
-		"name":                    "液压系统维护",
-		"category":                "CATEGORY_04",
-		"specialty_id":            spec.SpecialtyID,
-		"level_id":                lv.LevelID,
-		"certificate_template_id": tpl.ID,
-		"theory_hours":            30,
-		"practice_hours":          20,
-		"prerequisite_course_ids": []int{prereq.CourseID},
+	data := &CourseInput{
+		Name:                  ptrStr("液压系统维护"),
+		SpecialtyID:           ptrInt(spec.SpecialtyID),
+		LevelID:               ptrInt(lv.LevelID),
+		CertificateTemplateID: ptrInt(tpl.ID),
+		TheoryHours:           ptrInt(30),
+		PracticeHours:         ptrInt(20),
+		PrerequisiteCourseIDs: []int{prereq.CourseID},
 	}
 	result, err := svc.CreateCourse(data)
 	if err != nil {
@@ -672,24 +668,24 @@ func TestAdminCourse_TrainingFields(t *testing.T) {
 	}
 
 	// 不存在的引用应报错
-	if _, err := svc.CreateCourse(map[string]any{"name": "x", "category": "CATEGORY_01", "specialty_id": 9999}); err == nil {
+	if _, err := svc.CreateCourse(&CourseInput{Name: ptrStr("x"), SpecialtyID: ptrInt(9999)}); err == nil {
 		t.Fatal("不存在的专业方向应报错")
 	}
-	if _, err := svc.CreateCourse(map[string]any{"name": "x", "category": "CATEGORY_01", "theory_hours": -1}); err == nil {
+	if _, err := svc.CreateCourse(&CourseInput{Name: ptrStr("x"), TheoryHours: ptrInt(-1)}); err == nil {
 		t.Fatal("负学时应报错")
 	}
-	if _, err := svc.CreateCourse(map[string]any{"name": "x", "category": "CATEGORY_01", "prerequisite_course_ids": []int{9999}}); err == nil {
+	if _, err := svc.CreateCourse(&CourseInput{Name: ptrStr("x"), PrerequisiteCourseIDs: []int{9999}}); err == nil {
 		t.Fatal("不存在的前置课程应报错")
 	}
 
 	// 更新：等级不可清空（应用层必填，旧 category 退役后方向/等级为必备维度）
-	if _, err := svc.UpdateCourse(courseID, map[string]any{
-		"level_id": 0, "prerequisite_course_ids": []any{},
+	if _, err := svc.UpdateCourse(courseID, &CourseInput{
+		LevelID: ptrInt(0), PrerequisiteCourseIDs: []int{},
 	}); err == nil {
 		t.Fatal("清空课程等级应报错")
 	}
 	// 只替换前置课程（不含方向/等级字段）应成功，且前置课程被清空
-	if _, err := svc.UpdateCourse(courseID, map[string]any{"prerequisite_course_ids": []any{}}); err != nil {
+	if _, err := svc.UpdateCourse(courseID, &CourseInput{PrerequisiteCourseIDs: []int{}}); err != nil {
 		t.Fatalf("更新失败: %v", err)
 	}
 	detail, _ = svc.GetCourseDetail(courseID)
@@ -698,7 +694,7 @@ func TestAdminCourse_TrainingFields(t *testing.T) {
 	}
 
 	// 自己作为前置课程应报错
-	if _, err := svc.UpdateCourse(courseID, map[string]any{"prerequisite_course_ids": []int{courseID}}); err == nil {
+	if _, err := svc.UpdateCourse(courseID, &CourseInput{PrerequisiteCourseIDs: []int{courseID}}); err == nil {
 		t.Fatal("自引用前置课程应报错")
 	}
 
@@ -709,16 +705,16 @@ func TestAdminCourse_TrainingFields(t *testing.T) {
 	db.Create(&a)
 	db.Create(&b)
 	db.Create(&c)
-	if _, err := svc.UpdateCourse(a.CourseID, map[string]any{"prerequisite_course_ids": []int{b.CourseID}}); err != nil {
+	if _, err := svc.UpdateCourse(a.CourseID, &CourseInput{PrerequisiteCourseIDs: []int{b.CourseID}}); err != nil {
 		t.Fatalf("设置前置课程失败: %v", err)
 	}
-	if _, err := svc.UpdateCourse(b.CourseID, map[string]any{"prerequisite_course_ids": []int{c.CourseID}}); err != nil {
+	if _, err := svc.UpdateCourse(b.CourseID, &CourseInput{PrerequisiteCourseIDs: []int{c.CourseID}}); err != nil {
 		t.Fatalf("设置前置课程失败: %v", err)
 	}
-	if _, err := svc.UpdateCourse(c.CourseID, map[string]any{"prerequisite_course_ids": []int{a.CourseID}}); err == nil {
+	if _, err := svc.UpdateCourse(c.CourseID, &CourseInput{PrerequisiteCourseIDs: []int{a.CourseID}}); err == nil {
 		t.Fatal("多级依赖成环应报错")
 	}
-	if _, err := svc.UpdateCourse(b.CourseID, map[string]any{"prerequisite_course_ids": []int{a.CourseID}}); err == nil {
+	if _, err := svc.UpdateCourse(b.CourseID, &CourseInput{PrerequisiteCourseIDs: []int{a.CourseID}}); err == nil {
 		t.Fatal("两课程互相依赖应报错")
 	}
 	// 成环请求被拒绝后，原有关联应保持不变

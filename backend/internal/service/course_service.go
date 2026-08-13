@@ -165,19 +165,14 @@ func mountedCourseScope(q *gorm.DB) *gorm.DB {
 	return q.Where("specialty_id IS NOT NULL AND level_id IS NOT NULL")
 }
 
-// validateMountedCourseInput 挂载不变式的写入校验：创建必填；编辑携带时不允许清空。
-func validateMountedCourseInput(data map[string]any, update bool) error {
-	_, hasSpec := data["specialty_id"]
-	_, hasLevel := data["level_id"]
-	if !update || hasSpec {
-		if toInt(data["specialty_id"]) <= 0 {
-			return errors.New("专业方向不能为空")
-		}
+// validateMountedCourseInput 挂载不变式的写入校验（typed）：创建必填；编辑携带时不允许清空。
+// 语义与旧 map 版一致：Create 由 CreateCourse 显式校验，此处收编「编辑携带 0/负数」分支。
+func validateMountedCourseInputUpdate(in *CourseInput) error {
+	if in.SpecialtyID != nil && *in.SpecialtyID <= 0 {
+		return errors.New("专业方向不能为空")
 	}
-	if !update || hasLevel {
-		if toInt(data["level_id"]) <= 0 {
-			return errors.New("课程等级不能为空")
-		}
+	if in.LevelID != nil && *in.LevelID <= 0 {
+		return errors.New("课程等级不能为空")
 	}
 	return nil
 }
@@ -602,11 +597,11 @@ func legacyFileEntry(ch *model.Chapter) ChapterFileDTO {
 
 // ===== 培训目录扩展辅助（课程等级/学时/前置课程/证书模板） =====
 
-// applyCourseTrainingFields 应用课程培训扩展字段（专业方向/等级/学时/证书模板）。
-// specialty_id / level_id / certificate_template_id 传 0 或空表示清空（置 NULL）。
-func applyCourseTrainingFields(db *gorm.DB, course *model.Course, data map[string]any) error {
-	if v, ok := data["specialty_id"]; ok {
-		id := toInt(v)
+// applyCourseTrainingFields 应用课程培训扩展字段（专业方向/等级/学时/证书模板，typed）。
+// specialty_id / level_id / certificate_template_id 传 0 表示清空（置 NULL）。
+func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInput) error {
+	if in.SpecialtyID != nil {
+		id := *in.SpecialtyID
 		if id < 0 {
 			return errors.New("专业方向ID无效")
 		}
@@ -623,8 +618,8 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, data map[strin
 			course.SpecialtyID = ptrInt(id)
 		}
 	}
-	if v, ok := data["level_id"]; ok {
-		id := toInt(v)
+	if in.LevelID != nil {
+		id := *in.LevelID
 		if id < 0 {
 			return errors.New("课程等级ID无效")
 		}
@@ -641,8 +636,8 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, data map[strin
 			course.LevelID = ptrInt(id)
 		}
 	}
-	if v, ok := data["certificate_template_id"]; ok {
-		id := toInt(v)
+	if in.CertificateTemplateID != nil {
+		id := *in.CertificateTemplateID
 		if id < 0 {
 			return errors.New("证书模板ID无效")
 		}
@@ -659,37 +654,25 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, data map[strin
 			course.CertificateTemplateID = ptrInt(id)
 		}
 	}
-	if v, ok := data["theory_hours"]; ok {
-		hours := toInt(v)
-		if hours < 0 {
+	if in.TheoryHours != nil {
+		if *in.TheoryHours < 0 {
 			return errors.New("理论学时不能为负数")
 		}
-		course.TheoryHours = hours
+		course.TheoryHours = *in.TheoryHours
 	}
-	if v, ok := data["practice_hours"]; ok {
-		hours := toInt(v)
-		if hours < 0 {
+	if in.PracticeHours != nil {
+		if *in.PracticeHours < 0 {
 			return errors.New("实操学时不能为负数")
 		}
-		course.PracticeHours = hours
+		course.PracticeHours = *in.PracticeHours
 	}
-	if v, ok := data["sort_order"]; ok {
-		order := toInt(v)
-		if order < 0 {
+	if in.SortOrder != nil {
+		if *in.SortOrder < 0 {
 			return errors.New("课程排序值不能为负数")
 		}
-		course.SortOrder = order
+		course.SortOrder = *in.SortOrder
 	}
 	return nil
-}
-
-// prerequisiteIDsFromData 提取前置课程 ID 列表。
-func prerequisiteIDsFromData(data map[string]any) []int {
-	v, ok := data["prerequisite_course_ids"]
-	if !ok {
-		return nil
-	}
-	return toIntSlice(v)
 }
 
 // toIntSlice 将任意值转为 int 切片（支持 []any / []float64 等 JSON 解码结果）。
