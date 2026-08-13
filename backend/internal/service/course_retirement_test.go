@@ -213,7 +213,7 @@ func TestTutorCourseListHasChapterCount(t *testing.T) {
 	svc := NewTutorService(db, "", nil, zap.NewNop())
 	course, _ := seedCatalogCourse(t, db)
 
-	list := svc.GetCourses(nil, 1, 10, nil, nil)
+	list := svc.GetCourses(1, 10, nil, nil)
 	items := list.Courses
 	var item CourseDTO
 	for _, c := range items {

@@ -26,8 +26,8 @@ func NewAdminCourseService(db *gorm.DB, fileSvc *FileService, logger *zap.Logger
 
 // GetCourses 管理端课程列表。
 func (s *AdminCourseService) GetCourses(page, pageSize int, keyword string, specialtyID, levelID *int) CoursePageResult {
-	return listCourses(s.db, page, pageSize, courseListOptions{
-		keyword: keyword, specialtyID: specialtyID, levelID: levelID, defaultPageSize: 10,
+	return ListCourses(s.db, page, pageSize, CourseListOptions{
+		Keyword: keyword, SpecialtyID: specialtyID, LevelID: levelID, DefaultPageSize: 10,
 	})
 }
 

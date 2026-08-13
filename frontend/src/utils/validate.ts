@@ -1,8 +1,19 @@
 import type { FormItemRule } from 'element-plus'
 
+// ===== 格式校验单一事实源（useSendCode 与表单规则共用） =====
+
+/** 邮箱：与后端 net/mail 语义对齐的宽松校验（接受无点域，如 a@b.c / a@b） */
+export const isValidEmail = (value: string): boolean => /^[^\s@]+@[^\s@]+$/.test(value)
+
+/** 手机号：11 位，1[3-9] 开头 */
+export const isValidPhone = (value: string): boolean => /^1[3-9]\d{9}$/.test(value)
+
+/** 登录账号：与后端 IsValidAccount 对齐（4-20 位字母/数字/下划线） */
+export const isValidAccount = (value: string): boolean => /^[A-Za-z0-9_]{4,20}$/.test(value)
+
 export const usernameRules: FormItemRule[] = [
-  { required: true, message: '请输入用户名', trigger: 'blur' },
-  { min: 3, max: 20, message: '长度在3到20个字符', trigger: 'blur' },
+  { required: true, message: '请输入账号', trigger: 'blur' },
+  { min: 4, max: 20, message: '长度在4到20个字符', trigger: 'blur' },
   { pattern: /^[a-zA-Z0-9_]+$/, message: '只能包含字母、数字和下划线', trigger: 'blur' }
 ]
 
@@ -27,7 +38,7 @@ export const phoneRules: FormItemRule[] = [
   { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的11位手机号', trigger: 'blur' }
 ]
 
-// 邮箱为选填项：仅在用户填写内容时校验格式
+// 邮箱为选填项：仅在用户填写内容时校验格式（与后端 net/mail 语义对齐）
 export const emailRules: FormItemRule[] = [
   {
     validator: (_rule, value: string, callback) => {
@@ -35,7 +46,7 @@ export const emailRules: FormItemRule[] = [
         callback()
         return
       }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      if (!isValidEmail(value)) {
         callback(new Error('请输入正确的邮箱地址'))
         return
       }
@@ -50,10 +61,10 @@ export const companyRules: FormItemRule[] = [
   { max: 50, message: '长度不能超过50个字符', trigger: 'blur' }
 ]
 
-// 邮箱注册/登录必填校验
+// 邮箱注册/登录必填校验（与后端 net/mail 语义对齐）
 export const requiredEmailRules: FormItemRule[] = [
   { required: true, message: '请输入邮箱', trigger: 'blur' },
-  { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: '请输入正确的邮箱地址', trigger: 'blur' }
+  { pattern: /^[^\s@]+@[^\s@]+$/, message: '请输入正确的邮箱地址', trigger: 'blur' }
 ]
 
 export const emailCodeRules: FormItemRule[] = [
