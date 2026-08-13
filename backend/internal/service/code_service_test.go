@@ -532,3 +532,48 @@ func TestSenderUnconfigured_Production(t *testing.T) {
 		t.Error("未配置通道不应写入验证码")
 	}
 }
+
+// TestVerifyWrongCodeDoesNotExtendTTL 锁定 ADR-0012 §5：
+// 错输验证码不得重写完整 TTL（错误输入不能延长验证码生命周期）。
+func TestVerifyWrongCodeDoesNotExtendTTL(t *testing.T) {
+	svc, store := newCodeTestSvc(t)
+	ch := testEmailChannel(&fakeMailer{})
+	ctx := context.Background()
+	email := "ttl@example.com"
+	if err := svc.Send(ctx, ch, CodePurposeRegister, email); err != nil {
+		t.Fatalf("发送验证码失败: %v", err)
+	}
+	key := codeKeyForTest(ch, CodePurposeRegister, email)
+
+	// 读取发送时锁定的到期时间
+	raw, err := store.Get(ctx, key)
+	if err != nil {
+		t.Fatalf("读取验证码失败: %v", err)
+	}
+	var v0 authCodeValue
+	if err := json.Unmarshal([]byte(raw), &v0); err != nil {
+		t.Fatalf("解析验证码失败: %v", err)
+	}
+	if v0.ExpiresAt.IsZero() {
+		t.Fatal("发送的验证码应携带 ExpiresAt")
+	}
+
+	// 错输一次：ExpiresAt 保持不变（生命周期不被延长）
+	if err := svc.Verify(ctx, ch, CodePurposeRegister, email, "000000"); err == nil {
+		t.Fatal("错输验证码应失败")
+	}
+	raw2, err := store.Get(ctx, key)
+	if err != nil {
+		t.Fatalf("错输后验证码应仍在: %v", err)
+	}
+	var v1 authCodeValue
+	if err := json.Unmarshal([]byte(raw2), &v1); err != nil {
+		t.Fatalf("解析验证码失败: %v", err)
+	}
+	if !v1.ExpiresAt.Equal(v0.ExpiresAt) {
+		t.Fatalf("错输后 ExpiresAt 漂移: %v → %v", v0.ExpiresAt, v1.ExpiresAt)
+	}
+	if v1.Attempts != 1 {
+		t.Fatalf("Attempts = %d, want 1", v1.Attempts)
+	}
+}

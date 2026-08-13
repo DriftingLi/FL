@@ -8,7 +8,6 @@
 //	  ├── GET  /evaluations/:id/report  下载 PDF 报告
 //	  ├── POST /battery/evaluations/:id/report   生成电池报告
 //	  ├── GET  /battery/evaluations/:id/report   下载电池报告
-//	  ├── POST /auth/login              估值模块独立登录
 //	  ├── POST /auth/register           估值模块独立注册
 //	  ├── /dictionaries/*               字典查询（只读 GET）
 //	  └── /health                       健康检查
@@ -72,9 +71,6 @@ func RegisterRoutes(
 	{
 		public.GET("/evaluations/stats", evalHandler.Stats)
 		public.GET("/health", healthHandler.Check)
-
-		// 估值模块独立登录/注册（公开接口）
-		public.POST("/auth/login", valuationAuthHandler.Login)
 
 		// 报告生成与下载（无需登录）
 		public.POST("/evaluations/:id/report", reportHandler.Generate)

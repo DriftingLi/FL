@@ -126,11 +126,13 @@ func (h *ProfileBindHandler) UpdateAccount(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
-	if err := h.codeSvc.ChangeAccount(ctx, h.phoneCh, middleware.CurrentUserID(c), req.Account, req.Code); err != nil {
+	result, err := h.codeSvc.ChangeAccount(ctx, h.phoneCh, middleware.CurrentUserID(c), req.Account, req.Code)
+	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	response.SuccessWithMsg(c, "账号修改成功", nil)
+	// 响应携带新签发的 token（前端替换本地登录态，JWT claim 随新账号同步）
+	response.SuccessWithMsg(c, "账号修改成功", result)
 }
 
 // handleCodeChannelBind 绑定/修改目标字段的公共实现（通道注入）。
