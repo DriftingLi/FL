@@ -75,16 +75,16 @@ func TestCreateCourseAppendsToEndOfGroup(t *testing.T) {
 		t.Fatalf("创建方向失败: %v", err)
 	}
 
-	c1, err := svc.CreateCourse(map[string]any{"name": "课程1", "specialty_id": spec.SpecialtyID, "level_id": lv.LevelID})
+	c1, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程1"), SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID)})
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
-	c2, err := svc.CreateCourse(map[string]any{"name": "课程2", "specialty_id": spec.SpecialtyID, "level_id": lv.LevelID})
+	c2, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程2"), SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID)})
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
 	// 另一方向+等级组：从 1 重新开始
-	c3, err := svc.CreateCourse(map[string]any{"name": "课程3", "specialty_id": spec2.SpecialtyID, "level_id": lv.LevelID})
+	c3, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程3"), SpecialtyID: ptrInt(spec2.SpecialtyID), LevelID: ptrInt(lv.LevelID)})
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestCreateCourseAppendsToEndOfGroup(t *testing.T) {
 		t.Fatalf("不同组课程 sort_order 应从 1 开始, got %v", c3.SortOrder)
 	}
 	// 显式传入 sort_order 时尊重传值
-	c4, err := svc.CreateCourse(map[string]any{"name": "课程4", "specialty_id": spec.SpecialtyID, "level_id": lv.LevelID, "sort_order": 9})
+	c4, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程4"), SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), SortOrder: ptrInt(9)})
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}

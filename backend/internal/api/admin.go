@@ -84,12 +84,12 @@ func (h *AdminHandler) ListCourses(c *gin.Context) {
 
 // CreateCourse 创建课程 POST /api/admin/course
 func (h *AdminHandler) CreateCourse(c *gin.Context) {
-	var data map[string]any
+	var data service.CourseInput
 	if err := c.ShouldBindJSON(&data); err != nil {
 		response.BadRequest(c, "请求数据无效")
 		return
 	}
-	result, err := h.courseSvc.CreateCourse(data)
+	result, err := h.courseSvc.CreateCourse(&data)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -119,12 +119,12 @@ func (h *AdminHandler) UpdateCourse(c *gin.Context) {
 		response.BadRequest(c, "课程ID无效")
 		return
 	}
-	var data map[string]interface{}
+	var data service.CourseInput
 	if err := c.ShouldBindJSON(&data); err != nil {
 		response.BadRequest(c, "请求数据无效")
 		return
 	}
-	result, err := h.courseSvc.UpdateCourse(courseID, data)
+	result, err := h.courseSvc.UpdateCourse(courseID, &data)
 	if err != nil {
 		response.NotFound(c, err.Error())
 		return
@@ -175,12 +175,12 @@ func (h *AdminHandler) CreateChapter(c *gin.Context) {
 		response.BadRequest(c, "课程ID无效")
 		return
 	}
-	var data map[string]interface{}
+	var data service.ChapterInput
 	if err := c.ShouldBindJSON(&data); err != nil {
 		response.BadRequest(c, "请求数据无效")
 		return
 	}
-	result, err := h.courseSvc.CreateChapter(courseID, data)
+	result, err := h.courseSvc.CreateChapter(courseID, &data)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -195,12 +195,12 @@ func (h *AdminHandler) UpdateChapter(c *gin.Context) {
 		response.BadRequest(c, "章节ID无效")
 		return
 	}
-	var data map[string]interface{}
+	var data service.ChapterInput
 	if err := c.ShouldBindJSON(&data); err != nil {
 		response.BadRequest(c, "请求数据无效")
 		return
 	}
-	result, err := h.courseSvc.UpdateChapter(chapterID, data)
+	result, err := h.courseSvc.UpdateChapter(chapterID, &data)
 	if err != nil {
 		response.NotFound(c, err.Error())
 		return

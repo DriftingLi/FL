@@ -546,15 +546,6 @@ func (s *TrainingCatalogService) DeleteQuestionTag(id int) error {
 
 // ===== 题目-标签关联 =====
 
-// GetQuestionTags 查询题目已关联的标签列表。
-func (s *TrainingCatalogService) GetQuestionTags(questionID int) ([]QuestionTagRef, error) {
-	var q model.Question
-	if err := s.db.First(&q, questionID).Error; err != nil {
-		return nil, errors.New("题目不存在")
-	}
-	return s.loadQuestionTags(questionID), nil
-}
-
 // SetQuestionTags 全量替换题目标签关联。
 func (s *TrainingCatalogService) SetQuestionTags(questionID int, tagIDs []int) error {
 	var q model.Question
