@@ -192,7 +192,28 @@ func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.Eval
 	// 12. 派生维度评分 + 文本建议
 	result.DimensionScores = BuildDimensionScores(result.KTime, result.KHours, result.KBrand, result.KCondition, result.KMarket)
 	result.Suggestions = BuildSuggestions(ctx, FromResult(result), coeff)
+
+	// 13. 未来价值曲线锚点（ADR-0012 §8）：公式唯一实现在此，
+	//     future(n) = estimated × d^n；d 与评估时点系数/λ 一并锁定
+	anchorLambda := result.LambdaElectric
+	if powerType == model.PowerTypeCombustion {
+		anchorLambda = result.LambdaCombustion
+	}
+	result.DecayAnchor = roundTo4(DecayAnchor(ktAdjusted, khRes.KHours, kbRes.KBrand, ktRes.Age, anchorLambda))
 	return result, nil
+}
+
+// DecayAnchor 未来价值曲线年衰减锚点 d：future(n) = estimated × d^n。
+// age>0：d = Kt_adj^(1/age)，曲线从当前残值精确出发；
+// age=0（新车）或 Kt_adj 缺失：用评估时点 λ 与 Kh/Kb 推算 d = e^(-λ·Kh/Kb)。
+func DecayAnchor(ktAdjusted, kHours, kBrand float64, age int, lambda float64) float64 {
+	if age > 0 && ktAdjusted > 0 {
+		return math.Pow(ktAdjusted, 1/float64(age))
+	}
+	if kBrand <= 0 {
+		return math.Exp(-lambda)
+	}
+	return math.Exp(-lambda * (kHours / kBrand))
 }
 
 // inferPowerType 从车型名推断动力类型
@@ -244,6 +265,7 @@ func (s *ValuationService) Persist(ctx context.Context, result *model.Evaluation
 		Suggestions:      result.Suggestions,
 		LambdaElectric:   result.LambdaElectric,
 		LambdaCombustion: result.LambdaCombustion,
+		DecayAnchor:      result.DecayAnchor,
 	}
 	return s.evalRepo.CreateEvaluation(ctx, params)
 }
@@ -298,6 +320,11 @@ func BuildDimensionScores(kTime, kHours, kBrand, kCondition, kMarket float64) []
 func RebuildDerivedFromDetail(d *model.EvaluationDetail) {
 	d.KTimeAdjusted = AdjustKTimeByBrandAndIntensity(d.KTime, d.KHours, d.KBrand)
 	d.DimensionScores = BuildDimensionScores(d.KTime, d.KHours, d.KBrand, d.KCondition, d.KMarket)
+	// 旧记录无锚点：从已锁定的 Kt/Kh/Kb/λ 重推（age=0 边界用电动 λ，主流车型口径）
+	if d.DecayAnchor == 0 {
+		age := d.SaleYear - d.FactoryYear
+		d.DecayAnchor = roundTo4(DecayAnchor(d.KTimeAdjusted, d.KHours, d.KBrand, age, d.LambdaElectric))
+	}
 }
 
 // roundTo2 四舍五入到 2 位小数（保留金额精度）

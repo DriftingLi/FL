@@ -194,5 +194,7 @@ func buildEvaluationResponse(id int64, r *model.EvaluationResult, req *model.Eva
 		// 评估时点锁定的 λ 值（供前端走势图数据驱动）
 		LambdaElectric:   r.LambdaElectric,
 		LambdaCombustion: r.LambdaCombustion,
+		// 未来价值曲线锚点（ADR-0012 §8）
+		DecayAnchor: r.DecayAnchor,
 	}
 }

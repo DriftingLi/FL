@@ -57,6 +57,7 @@ type CreateEvaluationParams struct {
 	ConfidenceLow  float64
 	ConfidenceHigh float64
 	ReportPdfPath  string
+	DecayAnchor   float64
 	// 归属字段
 	// UserID 为 0 表示匿名提交（user_id 落 NULL）；>0 表示登录用户提交
 	UserID int
@@ -81,7 +82,7 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 			original_price, k_time, k_hours, k_brand, k_condition, k_market,
 			estimated_value, confidence_low, confidence_high, report_pdf_path,
 			user_id,
-			suggestions, lambda_electric, lambda_combustion
+			suggestions, lambda_electric, lambda_combustion, decay_anchor
 		) VALUES (
 			$1, $2, $3, $4,
 			$5, $6, $7,
@@ -92,7 +93,7 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 			$18, $19, $20, $21, $22, $23,
 			$24, $25, $26, $27,
 			$28,
-			$29, $30, $31
+			$29, $30, $31, $32
 		)
 		RETURNING id, created_at, updated_at`,
 		p.Brand, p.VehicleType, p.Series, p.Tonnage,
@@ -104,7 +105,7 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 		p.OriginalPrice, p.KTime, p.KHours, p.KBrand, p.KCondition, p.KMarket,
 		p.EstimatedValue, p.ConfidenceLow, p.ConfidenceHigh, nullableString(p.ReportPdfPath),
 		nullableUserID(p.UserID),
-		nullableJSON(p.Suggestions), p.LambdaElectric, p.LambdaCombustion,
+		nullableJSON(p.Suggestions), p.LambdaElectric, p.LambdaCombustion, p.DecayAnchor,
 	).Scan(&id, new(time.Time), new(time.Time))
 	if err != nil {
 		return 0, fmt.Errorf("插入评估记录失败: %w", err)
@@ -165,7 +166,7 @@ func (r *EvaluationRepository) scanEvaluationByID(ctx context.Context, id int64,
 			       condition_rating,
 			       original_price, k_time, k_hours, k_brand, k_condition, k_market,
 			       estimated_value, confidence_low, confidence_high, report_pdf_path,
-			       suggestions, lambda_electric, lambda_combustion,
+			       suggestions, lambda_electric, lambda_combustion, decay_anchor,
 			       created_at, updated_at
 			FROM evaluations WHERE id = $1 AND user_id = $2`, id, userID)
 	} else {
@@ -178,7 +179,7 @@ func (r *EvaluationRepository) scanEvaluationByID(ctx context.Context, id int64,
 			       condition_rating,
 			       original_price, k_time, k_hours, k_brand, k_condition, k_market,
 			       estimated_value, confidence_low, confidence_high, report_pdf_path,
-			       suggestions, lambda_electric, lambda_combustion,
+			       suggestions, lambda_electric, lambda_combustion, decay_anchor,
 			       created_at, updated_at
 			FROM evaluations WHERE id = $1`, id)
 	}
@@ -191,7 +192,7 @@ func (r *EvaluationRepository) scanEvaluationByID(ctx context.Context, id int64,
 		&d.ConditionRating,
 		&d.OriginalPrice, &d.KTime, &d.KHours, &d.KBrand, &d.KCondition, &d.KMarket,
 		&d.EstimatedValue, &d.ConfidenceLow, &d.ConfidenceHigh, &reportPath,
-		&suggestionsJSON, &d.LambdaElectric, &d.LambdaCombustion,
+		&suggestionsJSON, &d.LambdaElectric, &d.LambdaCombustion, &d.DecayAnchor,
 		&createdAt, &updatedAt,
 	); err != nil {
 		return d, err
@@ -241,7 +242,7 @@ func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string
 			       condition_rating,
 			       original_price, k_time, k_hours, k_brand, k_condition, k_market,
 			       estimated_value, confidence_low, confidence_high, report_pdf_path,
-			       suggestions, lambda_electric, lambda_combustion,
+			       suggestions, lambda_electric, lambda_combustion, decay_anchor,
 			       created_at, updated_at
 			FROM evaluations %s
 			ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, whereClause, argIdx, argIdx+1)
