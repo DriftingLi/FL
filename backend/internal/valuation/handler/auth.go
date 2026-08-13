@@ -65,7 +65,7 @@ func (h *ValuationAuthHandler) Me(c *gin.Context) {
 		"uid":      vmain.FormatUID(user.UID),
 		"account":  user.Account,
 		"username": user.Username,
-		"phone":    user.Phone,
+		"phone":    vmain.MaskedPhone(user.Phone),
 		"email":    user.Email,
 		"company":  user.Company,
 		"role":     vmain.HrwaiRole,

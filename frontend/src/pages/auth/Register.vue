@@ -208,7 +208,7 @@ import { getDefaultWorkspaceBySubdomain } from '@/utils/subdomain'
 import { ElMessage, type FormInstance } from 'element-plus'
 import type { FormItemRule } from 'element-plus'
 import { EditPen } from '@element-plus/icons-vue'
-import { useCountdown } from '@/composables/useCountdown'
+import { useSendCode } from '@/composables/useSendCode'
 import {
   passwordRules,
   nicknameRules,
@@ -223,8 +223,13 @@ const authStore = useAuthStore()
 const formRef = ref<FormInstance | null>(null)
 const loading = ref(false)
 const registerMode = ref<'phone' | 'email'>('phone')
-const { remaining: countdown, start: startCountdown } = useCountdown()
-const codeSending = ref(false)
+const { sending: codeSending, remaining: countdown, send: sendCode } = useSendCode({
+  purpose: 'register',
+  sendCode: (channel, target) =>
+    channel === 'phone'
+      ? authApi.sendPhoneCode({ phone: target, purpose: 'register' })
+      : authApi.sendEmailCode({ email: target, purpose: 'register' })
+})
 
 const formData = reactive({
   nickname: '',
@@ -273,29 +278,10 @@ const rules = computed(() =>
 )
 
 async function handleSendCode() {
-  codeSending.value = true
-  try {
-    if (registerMode.value === 'phone') {
-      const phone = formData.phone.trim()
-      if (!/^1[3-9]\d{9}$/.test(phone)) {
-        ElMessage.warning('请输入正确的手机号')
-        return
-      }
-      await authApi.sendPhoneCode({ phone, purpose: 'register' })
-    } else {
-      const email = formData.email.trim()
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        ElMessage.warning('请输入正确的邮箱地址')
-        return
-      }
-      await authApi.sendEmailCode({ email, purpose: 'register' })
-    }
-    ElMessage.success('验证码已发送，请查收')
-    startCountdown(60)
-  } catch (e) {
-    // 拦截器已提示
-  } finally {
-    codeSending.value = false
+  if (registerMode.value === 'phone') {
+    await sendCode(formData.phone.trim(), 'phone')
+  } else {
+    await sendCode(formData.email.trim(), 'email')
   }
 }
 
