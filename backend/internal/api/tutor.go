@@ -66,7 +66,7 @@ func (h *TutorHandler) ListCourses(c *gin.Context) {
 			levelID = &id
 		}
 	}
-	response.Success(c, h.svc.GetCourses(nil, page, pageSize, specialtyID, levelID))
+	response.Success(c, h.svc.GetCourses(page, pageSize, specialtyID, levelID))
 }
 
 // GetGradingStats 导师仪表盘阅卷统计 GET /api/tutor/grading-stats（按天分组）

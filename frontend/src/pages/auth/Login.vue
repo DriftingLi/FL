@@ -172,7 +172,7 @@ import type { UserProfile } from '@/types/user'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { UserFilled, Avatar, Setting, ChatDotRound } from '@element-plus/icons-vue'
 import { usernameRules, passwordRules, requiredEmailRules, emailCodeRules, phoneRules } from '@/utils/validate'
-import { useCountdown } from '@/composables/useCountdown'
+import { useSendCode } from '@/composables/useSendCode'
 import {
   getSubdomain,
   getRoleForSubdomain,
@@ -186,8 +186,13 @@ const authStore = useAuthStore()
 const formRef = ref<FormInstance | null>(null)
 const loading = ref(false)
 const loginMode = ref<'password' | 'email' | 'phone' | 'wechat'>('password')
-const { remaining: countdown, start: startCountdown } = useCountdown()
-const codeSending = ref(false)
+const { sending: codeSending, remaining: countdown, send: sendCode } = useSendCode({
+  purpose: 'login',
+  sendCode: (channel, target) =>
+    channel === 'phone'
+      ? authApi.sendPhoneCode({ phone: target, purpose: 'login' })
+      : authApi.sendEmailCode({ email: target, purpose: 'login' })
+})
 
 // 当前子域名决定角色（不再支持手动切换）
 const subdomain: SubdomainType = getSubdomain()
@@ -233,29 +238,10 @@ const rules = computed(() => {
 })
 
 async function handleSendCode() {
-  codeSending.value = true
-  try {
-    if (loginMode.value === 'phone') {
-      const phone = formData.phone.trim()
-      if (!/^1[3-9]\d{9}$/.test(phone)) {
-        ElMessage.warning('请输入正确的手机号')
-        return
-      }
-      await authApi.sendPhoneCode({ phone, purpose: 'login' })
-    } else {
-      const email = formData.email.trim()
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        ElMessage.warning('请输入正确的邮箱地址')
-        return
-      }
-      await authApi.sendEmailCode({ email, purpose: 'login' })
-    }
-    ElMessage.success('验证码已发送，请查收')
-    startCountdown(60)
-  } catch (e) {
-    // 拦截器已提示
-  } finally {
-    codeSending.value = false
+  if (loginMode.value === 'phone') {
+    await sendCode(formData.phone.trim(), 'phone')
+  } else {
+    await sendCode(formData.email.trim(), 'email')
   }
 }
 
