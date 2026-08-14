@@ -56,19 +56,19 @@
       <template #header>
         <span class="card-title">账号密码</span>
       </template>
-      <div class="cell-row">
-        <template v-if="userInfo.has_password">
-          <span>已设置密码，可使用「账号密码登录」</span>
-          <el-tag size="small" type="success">已设置</el-tag>
-        </template>
-        <template v-else>
-          <span>尚未设置密码，设置后可使用「账号密码登录」</span>
-          <el-tag size="small" type="warning">未设置</el-tag>
-        </template>
-        <el-button type="primary" plain @click="passwordDialogVisible = true">
-          {{ userInfo.has_password ? '修改密码' : '设置密码' }}
-        </el-button>
-      </div>
+      <el-descriptions :column="1" border>
+        <el-descriptions-item label="登录密码">
+          <div class="cell-row">
+            <span>{{ userInfo.has_password ? '已设置，可使用「账号密码登录」' : '尚未设置' }}</span>
+            <el-tag size="small" :type="userInfo.has_password ? 'success' : 'warning'">
+              {{ userInfo.has_password ? '已设置' : '未设置' }}
+            </el-tag>
+            <el-button link type="primary" size="small" @click="passwordDialogVisible = true">
+              {{ userInfo.has_password ? '修改密码' : '设置密码' }}
+            </el-button>
+          </div>
+        </el-descriptions-item>
+      </el-descriptions>
     </el-card>
 
     <ProfileEditDialog ref="profileDialogRef" />
@@ -98,9 +98,17 @@
       </template>
     </el-dialog>
 
-    <!-- 设置/修改密码 -->
+    <!-- 设置/修改密码（短信验证码确认） -->
     <el-dialog v-model="passwordDialogVisible" :title="userInfo.has_password ? '修改密码' : '设置密码'" width="440px">
       <el-form label-width="0">
+        <el-form-item>
+          <div class="code-row">
+            <el-input v-model="passwordCode" placeholder="短信验证码" maxlength="6" @keyup.enter="handleSetPassword" />
+            <el-button :disabled="passwordCountdown > 0 || passwordSending" @click="handleSendPasswordCode">
+              {{ passwordSending ? '发送中...' : passwordCountdown > 0 ? `${passwordCountdown}s 后重发` : '获取验证码' }}
+            </el-button>
+          </div>
+        </el-form-item>
         <el-form-item>
           <el-input
             v-model="password"
@@ -184,6 +192,7 @@ const {
 const passwordDialogVisible = ref(false)
 const password = ref('')
 const confirmPassword = ref('')
+const passwordCode = ref('')
 const savingPassword = ref(false)
 
 const accountDialogVisible = ref(false)
@@ -198,6 +207,15 @@ const {
 } = useSendCode({
   purpose: 'account_change',
   sendCode: () => authApi.sendAccountChangeCode()
+})
+
+const {
+  sending: passwordSending,
+  remaining: passwordCountdown,
+  send: sendPasswordCode
+} = useSendCode({
+  purpose: 'change_password',
+  sendCode: () => authApi.sendChangePasswordCode()
 })
 
 const bindTitle = computed(() => (bindChannel.value === 'email' ? '修改邮箱' : '修改手机号'))
@@ -282,7 +300,15 @@ async function handleBind() {
   }
 }
 
+async function handleSendPasswordCode() {
+  await sendPasswordCode('', 'phone')
+}
+
 async function handleSetPassword() {
+  if (passwordCode.value.trim().length !== 6) {
+    ElMessage.warning('请输入6位验证码')
+    return
+  }
   if (password.value.length < 6 || password.value.length > 20) {
     ElMessage.warning('密码长度需为6-20位')
     return
@@ -293,11 +319,12 @@ async function handleSetPassword() {
   }
   savingPassword.value = true
   try {
-    await authApi.updateProfilePassword(password.value)
+    await authApi.updateProfilePassword({ code: passwordCode.value.trim(), password: password.value })
     ElMessage.success('密码设置成功')
     passwordDialogVisible.value = false
     password.value = ''
     confirmPassword.value = ''
+    passwordCode.value = ''
     // 刷新用户信息以更新 has_password 状态
     await authStore.refreshUserInfo()
   } catch (e) {

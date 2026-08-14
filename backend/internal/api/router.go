@@ -90,7 +90,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 	// 微信扫码登录（框架占位）
 	RegisterWechatAuthRoutes(api, deps.WechatAuthSvc)
 	// 个人信息页：手机号/邮箱绑定修改
-	RegisterProfileBindRoutes(api, rd, deps.AuthSvc, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
+	RegisterProfileBindRoutes(api, rd, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
 
 	// 注册全部 12 个业务蓝图：
 	//   auth/courses/student/question-bank/

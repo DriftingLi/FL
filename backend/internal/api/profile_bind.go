@@ -15,21 +15,20 @@ import (
 
 // ProfileBindHandler 个人信息绑定修改 handler。
 type ProfileBindHandler struct {
-	authSvc *service.AuthService
 	codeSvc *service.VerifyCodeService
 	emailCh service.CodeChannel
 	phoneCh service.CodeChannel
 }
 
 // NewProfileBindHandler 创建个人信息绑定修改 handler。
-func NewProfileBindHandler(authSvc *service.AuthService, codeSvc *service.VerifyCodeService, emailCh, phoneCh service.CodeChannel) *ProfileBindHandler {
-	return &ProfileBindHandler{authSvc: authSvc, codeSvc: codeSvc, emailCh: emailCh, phoneCh: phoneCh}
+func NewProfileBindHandler(codeSvc *service.VerifyCodeService, emailCh, phoneCh service.CodeChannel) *ProfileBindHandler {
+	return &ProfileBindHandler{codeSvc: codeSvc, emailCh: emailCh, phoneCh: phoneCh}
 }
 
 // RegisterProfileBindRoutes 注册 /api/auth/profile 蓝图（登录后绑定/修改手机号、邮箱）
 // 与 /api/auth/account 蓝图（短信验证码确认修改登录账号）。
-func RegisterProfileBindRoutes(rg *gin.RouterGroup, rd RouterDeps, authSvc *service.AuthService, codeSvc *service.VerifyCodeService, emailCh, phoneCh service.CodeChannel) {
-	h := NewProfileBindHandler(authSvc, codeSvc, emailCh, phoneCh)
+func RegisterProfileBindRoutes(rg *gin.RouterGroup, rd RouterDeps, codeSvc *service.VerifyCodeService, emailCh, phoneCh service.CodeChannel) {
+	h := NewProfileBindHandler(codeSvc, emailCh, phoneCh)
 
 	g := rg.Group("/auth/profile", middleware.JWTAuth(rd.Session))
 
@@ -38,7 +37,9 @@ func RegisterProfileBindRoutes(rg *gin.RouterGroup, rd RouterDeps, authSvc *serv
 	// 绑定/修改端点按通道生成（一份骨架，通道作为 adapter 注入）
 	g.POST("/email", h.bindEmail)
 	g.POST("/phone", h.bindPhone)
-	// POST /api/auth/profile/password {password} 设置/修改密码（账号密码登录用）
+	// POST /api/auth/profile/password/send-code 发送修改密码验证码
+	g.POST("/password/send-code", h.SendChangePasswordCode)
+	// POST /api/auth/profile/password {code, password} 设置/修改密码（短信验证码确认）
 	g.POST("/password", h.UpdatePassword)
 
 	// 修改登录账号（短信验证码确认）：PUT /api/auth/account、POST /api/auth/account/send-code
@@ -83,17 +84,30 @@ func (h *ProfileBindHandler) bindPhone(c *gin.Context) {
 	handleCodeChannelBind(c, h.codeSvc, h.phoneCh, "phone", "手机号修改成功")
 }
 
-// UpdatePassword 设置/修改密码 POST /api/auth/profile/password
+// SendChangePasswordCode 发送修改密码验证码 POST /api/auth/profile/password/send-code
+func (h *ProfileBindHandler) SendChangePasswordCode(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+	if err := h.codeSvc.SendChangePasswordCode(ctx, h.phoneCh, middleware.CurrentUserID(c)); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "验证码已发送，请查收", nil)
+}
+
+// UpdatePassword 设置/修改密码 POST /api/auth/profile/password {code, password}
 func (h *ProfileBindHandler) UpdatePassword(c *gin.Context) {
 	var req struct {
+		Code     string `json:"code"`
 		Password string `json:"password"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "请求参数错误")
 		return
 	}
-	userID := middleware.CurrentUserID(c)
-	if err := h.authSvc.UpdatePassword(userID, req.Password); err != nil {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+	if err := h.codeSvc.ChangePassword(ctx, h.phoneCh, middleware.CurrentUserID(c), req.Code, req.Password); err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}

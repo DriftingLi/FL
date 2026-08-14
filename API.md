@@ -62,7 +62,8 @@
 | POST | `/api/auth/profile/send-code` | JWT | 发送绑定验证码 |
 | POST | `/api/auth/profile/email` | JWT | 绑定/修改邮箱 |
 | POST | `/api/auth/profile/phone` | JWT | 绑定/修改手机号 |
-| POST | `/api/auth/profile/password` | JWT | 修改密码 |
+| POST | `/api/auth/profile/password/send-code` | JWT | 修改密码：发送短信验证码 |
+| POST | `/api/auth/profile/password` | JWT | 修改密码（短信验证码确认） |
 | POST | `/api/auth/account/send-code` | JWT | 修改账号：发送短信验证码 |
 | PUT | `/api/auth/account` | JWT | 修改账号（响应携带新 token） |
 

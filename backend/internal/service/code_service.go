@@ -42,6 +42,8 @@ const (
 	CodePurposeAccountChange CodePurpose = "account_change"
 	// CodePurposeResetPassword 忘记密码/重置密码验证码。
 	CodePurposeResetPassword CodePurpose = "reset_password"
+	// CodePurposeChangePassword 修改登录密码验证码。
+	CodePurposeChangePassword CodePurpose = "change_password"
 )
 
 // CodeChannel 验证码通道 adapter：归一化、账号查询、文案与发送的差异收敛于此。
@@ -285,6 +287,8 @@ func (c *EmailChannel) Render(purpose CodePurpose, code string, ttl time.Duratio
 		title, op = "【和润天下】修改登录账号验证码", "修改登录账号"
 	case CodePurposeResetPassword:
 		title, op = "【和润天下】找回密码验证码", "找回密码"
+	case CodePurposeChangePassword:
+		title, op = "【和润天下】修改密码验证码", "修改密码"
 	}
 	body := fmt.Sprintf(
 		"您好！\n\n您正在进行%s操作，本次验证码为：%s\n验证码 %d 分钟内有效，请勿泄露给他人。\n\n如非本人操作，请忽略本邮件。",
@@ -397,6 +401,8 @@ func (c *SmsChannel) Render(purpose CodePurpose, code string, ttl time.Duration)
 		op = "修改登录账号"
 	case CodePurposeResetPassword:
 		op = "找回密码"
+	case CodePurposeChangePassword:
+		op = "修改密码"
 	}
 	var content string
 	if purpose == CodePurposeBind {
@@ -407,6 +413,11 @@ func (c *SmsChannel) Render(purpose CodePurpose, code string, ttl time.Duration)
 	} else if purpose == CodePurposeAccountChange {
 		content = fmt.Sprintf(
 			"【和润天下】您正在修改登录账号，验证码为：%s，%d 分钟内有效，请勿泄露给他人。",
+			code, int(ttl.Minutes()),
+		)
+	} else if purpose == CodePurposeChangePassword {
+		content = fmt.Sprintf(
+			"【和润天下】您正在修改登录密码，验证码为：%s，%d 分钟内有效，请勿泄露给他人。",
 			code, int(ttl.Minutes()),
 		)
 	} else {
@@ -508,6 +519,8 @@ func (s *VerifyCodeService) send(ctx context.Context, ch CodeChannel, purpose Co
 			return errors.New("该" + ch.Noun() + "尚未注册")
 		}
 	case CodePurposeAccountChange:
+		// 目标是当前用户自己的手机号，无需占用校验
+	case CodePurposeChangePassword:
 		// 目标是当前用户自己的手机号，无需占用校验
 	default:
 		return errors.New("无效的验证码用途")
@@ -734,6 +747,30 @@ func (s *VerifyCodeService) ChangeAccount(ctx context.Context, ch CodeChannel, u
 	return s.authSvc.issueLogin(loginCredentials{
 		id: user.ID, account: user.Account, username: user.Username, status: &user.Status,
 	}, HrwaiRole)
+}
+
+// SendChangePasswordCode 发送修改登录密码验证码到当前用户已绑定手机号（短信通道）。
+func (s *VerifyCodeService) SendChangePasswordCode(ctx context.Context, ch CodeChannel, userID int) error {
+	phone, err := s.currentUserPhone(ctx, userID)
+	if err != nil {
+		return err
+	}
+	return s.send(ctx, ch, CodePurposeChangePassword, phone, userID)
+}
+
+// ChangePassword 修改登录密码：短信验证码确认 + 密码长度校验（复用 authSvc.UpdatePassword）。
+func (s *VerifyCodeService) ChangePassword(ctx context.Context, ch CodeChannel, userID int, code, password string) error {
+	if len(password) < 6 || len(password) > 20 {
+		return errors.New("密码长度需为 6-20 位")
+	}
+	phone, err := s.currentUserPhone(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if err := s.Verify(ctx, ch, CodePurposeChangePassword, phone, code); err != nil {
+		return err
+	}
+	return s.authSvc.UpdatePassword(userID, password)
 }
 
 // currentUserPhone 读取当前用户手机号并校验格式（未绑定手机号时报错）。

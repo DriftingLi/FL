@@ -99,8 +99,12 @@ export const authApi = {
     return unwrappedRequest.post<UserProfile>('/auth/profile/phone', data)
   },
 
-  updateProfilePassword(password: string) {
-    return unwrappedRequest.post<null>('/auth/profile/password', { password })
+  updateProfilePassword(data: { code: string; password: string }) {
+    return unwrappedRequest.post<null>('/auth/profile/password', data)
+  },
+
+  sendChangePasswordCode() {
+    return unwrappedRequest.post<null>('/auth/profile/password/send-code')
   },
 
   // ===== 修改登录账号（短信验证码确认）=====
