@@ -78,8 +78,8 @@ type fakeSMSProvider struct {
 	sent []string
 }
 
-func (f *fakeSMSProvider) Send(to, content string) error {
-	f.sent = append(f.sent, to+"|"+content)
+func (f *fakeSMSProvider) Send(to, code string, _ int) error {
+	f.sent = append(f.sent, to+"|"+code)
 	return nil
 }
 
@@ -452,6 +452,64 @@ func TestPhoneRegisterAndLogin(t *testing.T) {
 	// 未注册手机号登录
 	if err := svc.Send(ctx, ch, CodePurposeLogin, "13700009999"); err == nil || !strings.Contains(err.Error(), "尚未注册") {
 		t.Errorf("未注册手机号应报尚未注册: %v", err)
+	}
+}
+
+// TestPhoneResetPassword 手机号忘记密码：发码→校验→重置，密码生效且验证码消费。
+func TestPhoneResetPassword(t *testing.T) {
+	svc, store := newCodeTestSvc(t)
+	ch := testSmsChannel(&fakeSMSProvider{})
+	ctx := context.Background()
+	phone := "13900002222"
+
+	// 未注册手机号找回密码 → 发码报「尚未注册」
+	if err := svc.Send(ctx, ch, CodePurposeResetPassword, phone); err == nil || !strings.Contains(err.Error(), "尚未注册") {
+		t.Fatalf("未注册手机号找回应报尚未注册: %v", err)
+	}
+
+	// 注册一个手机号账号
+	if err := svc.Send(ctx, ch, CodePurposeRegister, phone); err != nil {
+		t.Fatalf("注册发码失败: %v", err)
+	}
+	regCode := extractCode(t, store, ch, CodePurposeRegister, phone)
+	if _, err := svc.RegisterWithCode(ctx, ch, phone, regCode, "李四", "", "oldpass123"); err != nil {
+		t.Fatalf("注册失败: %v", err)
+	}
+
+	// 发找回密码验证码
+	if err := svc.Send(ctx, ch, CodePurposeResetPassword, phone); err != nil {
+		t.Fatalf("找回密码发码失败: %v", err)
+	}
+	resetCode := extractCode(t, store, ch, CodePurposeResetPassword, phone)
+
+	// 错误验证码
+	if err := svc.ResetPasswordWithCode(ctx, ch, phone, "000000", "newpass123"); err == nil || !strings.Contains(err.Error(), "验证码") {
+		t.Fatalf("错误验证码应失败: %v", err)
+	}
+	// 密码过短（先于验证码校验，不消费验证码）
+	if err := svc.ResetPasswordWithCode(ctx, ch, phone, resetCode, "123"); err == nil || !strings.Contains(err.Error(), "6-20") {
+		t.Fatalf("密码过短应失败: %v", err)
+	}
+	// 正确验证码 + 合法密码
+	if err := svc.ResetPasswordWithCode(ctx, ch, phone, resetCode, "newpass123"); err != nil {
+		t.Fatalf("重置密码失败: %v", err)
+	}
+
+	// 新密码已生效、旧密码失效
+	var user model.HrwaiUser
+	if err := svc.db.Where("phone = ?", phone).First(&user).Error; err != nil {
+		t.Fatalf("查询用户失败: %v", err)
+	}
+	if !VerifyPassword("newpass123", user.Password) {
+		t.Error("新密码未生效")
+	}
+	if VerifyPassword("oldpass123", user.Password) {
+		t.Error("旧密码仍有效")
+	}
+
+	// 验证码已消费，复用应失败
+	if err := svc.ResetPasswordWithCode(ctx, ch, phone, resetCode, "another123"); err == nil {
+		t.Error("验证码应已被消费")
 	}
 }
 

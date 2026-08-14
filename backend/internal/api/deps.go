@@ -70,7 +70,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student, logger)
 	codeSvc := service.NewVerifyCodeService(db, authSvc, cfg.EmailCodeTTL, &service.RedisAuthCodeStore{}, logger)
 	emailCh := service.NewEmailChannel(cfg.SMTP, cfg.IsProd(), logger)
-	phoneCh := service.NewSmsChannel(cfg.IsProd(), logger)
+	phoneCh := service.NewSmsChannel(cfg.SMS, cfg.IsProd(), logger)
 	wechatAuthSvc := service.NewWechatAuthService(cfg.Wechat, logger)
 	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st, logger)
 	notificationSvc := service.NewNotificationService(db, logger)

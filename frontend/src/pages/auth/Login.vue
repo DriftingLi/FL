@@ -156,6 +156,8 @@
           <div class="form-footer" v-if="isStudentSubdomain">
             <span class="footer-text">还没有账号？</span>
             <router-link to="/register" class="footer-link">立即注册</router-link>
+            <span class="footer-sep">·</span>
+            <router-link to="/forgot-password" class="footer-link">忘记密码？</router-link>
           </div>
         </el-form>
       </div>
@@ -639,6 +641,11 @@ async function handleLogin() {
 
 .footer-link:hover {
   color: #0284C7;
+}
+
+.footer-sep {
+  margin: 0 10px;
+  color: #CBD5E1;
 }
 
 @media screen and (max-width: 480px) {

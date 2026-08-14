@@ -6,14 +6,15 @@ import { ElMessage } from 'element-plus'
 import { useCountdown } from '@/composables/useCountdown'
 import { isValidEmail, isValidPhone } from '@/utils/validate'
 
-export type SendCodePurpose = 'register' | 'login' | 'bind' | 'account_change'
+export type SendCodePurpose = 'register' | 'login' | 'bind' | 'account_change' | 'reset_password'
 export type SendCodeChannel = 'email' | 'phone'
 
 const SUCCESS_MESSAGE: Record<SendCodePurpose, string> = {
   register: '验证码已发送，请查收',
   login: '验证码已发送，请查收',
   bind: '验证码已发送，请查收',
-  account_change: '验证码已发送至绑定手机号，请查收'
+  account_change: '验证码已发送至绑定手机号，请查收',
+  reset_password: '验证码已发送，请查收'
 }
 
 export interface UseSendCodeOptions {
