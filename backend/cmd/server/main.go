@@ -122,6 +122,19 @@ func main() {
 		logger.Warn("未检测到已启用的 AI 模型配置：简答题评分将走导师人工评分，AI 助手/课程内容生成不可用；请在管理端「AI 设置」中配置模型")
 	}
 
+	// 5.7 检查腾讯云短信签名/模板审核状态（已配置时自检，失败仅告警不阻断启动）
+	if cfg.SMS.Configured() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if smsCh, ok := deps.PhoneCh.(*svc.SmsChannel); ok {
+			if err := smsCh.ValidateReady(ctx); err != nil {
+				logger.Warn("腾讯云短信签名/模板自检未通过", zap.Error(err))
+			} else {
+				logger.Info("腾讯云短信签名/模板自检通过")
+			}
+		}
+		cancel()
+	}
+
 	// 6. 确保上传/PDF 目录存在
 	ensureUploadDirs(cfg, logger)
 

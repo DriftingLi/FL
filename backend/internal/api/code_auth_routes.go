@@ -56,6 +56,8 @@ func registerCodeChannelAuthRoutes(g *gin.RouterGroup, sess *security.Session, c
 	g.POST("/register", h.Register)
 	// POST /auth/<prefix>/login {targetField, code} 验证码通过后登录
 	g.POST("/login", h.Login)
+	// POST /auth/<prefix>/reset-password {targetField, code, password} 忘记密码：验证码通过后重置密码
+	g.POST("/reset-password", h.ResetPassword)
 }
 
 // SendCode 发送验证码 POST /auth/<prefix>/send-code {targetField, purpose: register|login}
@@ -73,8 +75,10 @@ func (h *CodeChannelAuthHandler) SendCode(c *gin.Context) {
 		err = h.codeSvc.Send(ctx, h.ch, service.CodePurposeRegister, str(body, h.targetField))
 	case service.CodePurposeLogin:
 		err = h.codeSvc.Send(ctx, h.ch, service.CodePurposeLogin, str(body, h.targetField))
+	case service.CodePurposeResetPassword:
+		err = h.codeSvc.Send(ctx, h.ch, service.CodePurposeResetPassword, str(body, h.targetField))
 	default:
-		response.BadRequest(c, "purpose 必须为 register 或 login")
+		response.BadRequest(c, "purpose 必须为 register、login 或 reset_password")
 		return
 	}
 	if err != nil {
@@ -119,4 +123,20 @@ func (h *CodeChannelAuthHandler) Login(c *gin.Context) {
 	}
 	setAuthCookie(c, h.sess, result.Token)
 	response.SuccessWithMsg(c, "登录成功", result)
+}
+
+// ResetPassword 忘记密码：验证码校验通过后重置密码（不自动登录）。
+func (h *CodeChannelAuthHandler) ResetPassword(c *gin.Context) {
+	body, ok := bindBody(c)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	if err := h.codeSvc.ResetPasswordWithCode(ctx, h.ch, str(body, h.targetField), str(body, "code"), str(body, "password")); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "密码已重置，请使用新密码登录", nil)
 }

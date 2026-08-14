@@ -39,6 +39,8 @@ type Config struct {
 	DefaultPasswords DefaultPasswordsConfig
 	// SMTP 邮件发送配置（邮箱验证码注册/登录）。
 	SMTP SMTPConfig
+	// SMS 腾讯云短信配置（手机验证码注册/登录）。
+	SMS SMSConfig
 	// EmailCodeTTL 邮箱验证码有效期（EMAIL_CODE_TTL_MINUTES，默认 5 分钟）。
 	EmailCodeTTL time.Duration
 	// Wechat 微信开放平台配置（扫码登录，授权信息待接入）。
@@ -57,6 +59,21 @@ type SMTPConfig struct {
 	Password string // SMTP_PASSWORD
 	From     string // SMTP_FROM 发件人邮箱
 	FromName string // SMTP_FROM_NAME，默认 和润天下
+}
+
+// SMSConfig 腾讯云短信配置（手机验证码注册/登录）。
+type SMSConfig struct {
+	SecretID   string // TENCENT_SMS_SECRET_ID 腾讯云 API 密钥 SecretId
+	SecretKey  string // TENCENT_SMS_SECRET_KEY 腾讯云 API 密钥 SecretKey
+	SdkAppID   string // TENCENT_SMS_SDK_APP_ID 短信应用 SdkAppId
+	SignName   string // TENCENT_SMS_SIGN_NAME 已审核通过的短信签名（如 和润天下）
+	TemplateID string // TENCENT_SMS_TEMPLATE_ID 已审核通过的验证码模板 ID
+	Region     string // TENCENT_SMS_REGION 接入地域，默认 ap-guangzhou
+}
+
+// Configured 返回短信通道是否已完整配置（生产发送必需）。
+func (c SMSConfig) Configured() bool {
+	return c.SecretID != "" && c.SecretKey != "" && c.SdkAppID != "" && c.SignName != "" && c.TemplateID != ""
 }
 
 // WechatConfig 微信开放平台配置（扫码登录框架占位，授权信息待接入）。
@@ -185,6 +202,12 @@ func setDefaults() {
 	viper.SetDefault("smtp_from", "")
 	viper.SetDefault("smtp_from_name", "和润天下")
 	viper.SetDefault("email_code_ttl_minutes", 5)
+	viper.SetDefault("tencent_sms_secret_id", "")
+	viper.SetDefault("tencent_sms_secret_key", "")
+	viper.SetDefault("tencent_sms_sdk_app_id", "")
+	viper.SetDefault("tencent_sms_sign_name", "")
+	viper.SetDefault("tencent_sms_template_id", "")
+	viper.SetDefault("tencent_sms_region", "ap-guangzhou")
 	viper.SetDefault("wechat_app_id", "")
 	viper.SetDefault("wechat_app_secret", "")
 	viper.SetDefault("auth_cookie_name", "hrwai_token")
@@ -275,6 +298,14 @@ func Load() (*Config, error) {
 			Password: viper.GetString("smtp_password"),
 			From:     viper.GetString("smtp_from"),
 			FromName: viper.GetString("smtp_from_name"),
+		},
+		SMS: SMSConfig{
+			SecretID:   viper.GetString("tencent_sms_secret_id"),
+			SecretKey:  viper.GetString("tencent_sms_secret_key"),
+			SdkAppID:   viper.GetString("tencent_sms_sdk_app_id"),
+			SignName:   viper.GetString("tencent_sms_sign_name"),
+			TemplateID: viper.GetString("tencent_sms_template_id"),
+			Region:     viper.GetString("tencent_sms_region"),
 		},
 		EmailCodeTTL: time.Duration(positiveInt("email_code_ttl_minutes", 5)) * time.Minute,
 		Wechat: WechatConfig{

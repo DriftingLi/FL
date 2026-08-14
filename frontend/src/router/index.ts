@@ -22,6 +22,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/auth/Register.vue'),
     meta: { requiresAuth: false }
   },
+  {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: () => import('@/pages/auth/ForgotPassword.vue'),
+    meta: { requiresAuth: false }
+  },
 
   // ========== 培训模块 - 学员子区 ==========
   {
@@ -187,6 +193,12 @@ const routes: RouteRecordRaw[] = [
     path: '/valuation/register',
     name: 'ValuationRegister',
     component: () => import('@/pages/auth/Register.vue'),
+    meta: { requiresAuth: false, isValuationAuthPage: true }
+  },
+  {
+    path: '/valuation/forgot-password',
+    name: 'ValuationForgotPassword',
+    component: () => import('@/pages/auth/ForgotPassword.vue'),
     meta: { requiresAuth: false, isValuationAuthPage: true }
   },
 
@@ -370,7 +382,7 @@ router.beforeEach(async (to, _from, next) => {
   await authStore.initialize()
 
   const isValuationPath = to.path === '/valuation' || to.path.startsWith('/valuation/')
-  const isValuationLoginPage = to.name === 'ValuationLogin' || to.name === 'ValuationRegister'
+  const isValuationLoginPage = to.name === 'ValuationLogin' || to.name === 'ValuationRegister' || to.name === 'ValuationForgotPassword'
 
   // ===== 子域名边界检查 =====
   // 五类子域名：main（公共）、training（学员培训+AI助手）、valuation（残值评估）、
@@ -378,7 +390,7 @@ router.beforeEach(async (to, _from, next) => {
   // 跨子域名访问会触发整页跳转（不同 origin，token 不共享）
   // IP 直连模式下跳过子域名边界检查（无 DNS 子域名环境，通过路径直接访问所有工作区）
   const currentSubdomain = getSubdomain()
-  const isLoginPath = to.path === '/login' || to.path === '/register'
+  const isLoginPath = to.path === '/login' || to.path === '/register' || to.path === '/forgot-password'
   const skipSubdomainCheck = isIpDirectMode()
 
   if (!skipSubdomainCheck) {
@@ -396,7 +408,9 @@ router.beforeEach(async (to, _from, next) => {
         return
       }
       if (currentSubdomain === 'valuation') {
-        next(to.path === '/register' ? '/valuation/register' : '/valuation/login')
+        if (to.path === '/register') next('/valuation/register')
+        else if (to.path === '/forgot-password') next('/valuation/forgot-password')
+        else next('/valuation/login')
         return
       }
     } else {

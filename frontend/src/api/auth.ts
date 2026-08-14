@@ -43,7 +43,7 @@ export const authApi = {
 
   // ===== 邮箱验证码注册/登录 =====
 
-  sendEmailCode(data: { email: string; purpose: 'register' | 'login' }) {
+  sendEmailCode(data: { email: string; purpose: 'register' | 'login' | 'reset_password' }) {
     return unwrappedRequest.post<null>('/auth/email/send-code', data)
   },
 
@@ -57,7 +57,7 @@ export const authApi = {
 
   // ===== 手机号验证码注册/登录（与邮箱流程对齐）=====
 
-  sendPhoneCode(data: { phone: string; purpose: 'register' | 'login' }) {
+  sendPhoneCode(data: { phone: string; purpose: 'register' | 'login' | 'reset_password' }) {
     return unwrappedRequest.post<null>('/auth/phone/send-code', data)
   },
 
@@ -67,6 +67,16 @@ export const authApi = {
 
   phoneLogin(data: { phone: string; code: string }) {
     return unwrappedRequest.post<UserProfile>('/auth/phone/login', data)
+  },
+
+  // ===== 忘记密码（验证码重置）=====
+
+  emailResetPassword(data: { email: string; code: string; password: string }) {
+    return unwrappedRequest.post<null>('/auth/email/reset-password', data)
+  },
+
+  phoneResetPassword(data: { phone: string; code: string; password: string }) {
+    return unwrappedRequest.post<null>('/auth/phone/reset-password', data)
   },
 
   // ===== 微信扫码（框架占位）=====

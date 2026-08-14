@@ -40,6 +40,8 @@ const (
 	CodePurposeBind CodePurpose = "bind"
 	// CodePurposeAccountChange 修改登录账号验证码。
 	CodePurposeAccountChange CodePurpose = "account_change"
+	// CodePurposeResetPassword 忘记密码/重置密码验证码。
+	CodePurposeResetPassword CodePurpose = "reset_password"
 )
 
 // CodeChannel 验证码通道 adapter：归一化、账号查询、文案与发送的差异收敛于此。
@@ -58,8 +60,9 @@ type CodeChannel interface {
 	FindUser(ctx context.Context, db *gorm.DB, target string) (*model.HrwaiUser, error)
 	// Render 生成发送文案（邮箱通道 title 为邮件主题，短信通道忽略 title）。
 	Render(purpose CodePurpose, code string, ttl time.Duration) (title, body string)
-	// Send 发送验证码。
-	Send(target, title, body string) error
+	// Send 发送验证码。title/body 为 Render 生成的文案（邮件通道使用）；
+	// code/ttl 供模板类通道（短信）填充模板参数。
+	Send(target, title, body, code string, ttl time.Duration) error
 	// ApplyTarget 把 target 写入新注册用户（邮箱注册需生成 phone 占位值）。
 	ApplyTarget(user *model.HrwaiUser, target string)
 	// BindColumn 绑定/修改时写入的用户表字段（"email" / "phone"）。
@@ -124,9 +127,10 @@ func (s LogMailSender) Send(to, subject, body string) error {
 	return nil
 }
 
-// SMSProvider 短信发送接口（真实短信通道待接入，开发环境用日志降级）。
+// SMSProvider 短信发送接口。Send 接收目标手机号、验证码与有效期（分钟），
+// 由实现方按已审核模板填充 TemplateParamSet 后发送。
 type SMSProvider interface {
-	Send(to, content string) error
+	Send(to, code string, minutes int) error
 }
 
 // LogSMSProvider 开发环境降级实现：验证码写入服务日志。
@@ -134,9 +138,9 @@ type LogSMSProvider struct {
 	logger *zap.Logger
 }
 
-// Send 将短信内容写入日志。
-func (s LogSMSProvider) Send(to, content string) error {
-	s.logger.Info("短信发送（开发环境降级为日志）", zap.String("to", to), zap.String("content", content))
+// Send 将验证码短信写入日志（开发环境降级）。
+func (s LogSMSProvider) Send(to, code string, minutes int) error {
+	s.logger.Info("短信发送（开发环境降级为日志）", zap.String("to", to), zap.String("code", code), zap.Int("minutes", minutes))
 	return nil
 }
 
@@ -279,6 +283,8 @@ func (c *EmailChannel) Render(purpose CodePurpose, code string, ttl time.Duratio
 		title, op = "【和润天下】邮箱绑定验证码", "绑定/修改邮箱"
 	case CodePurposeAccountChange:
 		title, op = "【和润天下】修改登录账号验证码", "修改登录账号"
+	case CodePurposeResetPassword:
+		title, op = "【和润天下】找回密码验证码", "找回密码"
 	}
 	body := fmt.Sprintf(
 		"您好！\n\n您正在进行%s操作，本次验证码为：%s\n验证码 %d 分钟内有效，请勿泄露给他人。\n\n如非本人操作，请忽略本邮件。",
@@ -287,8 +293,8 @@ func (c *EmailChannel) Render(purpose CodePurpose, code string, ttl time.Duratio
 	return title, body
 }
 
-// Send 发送验证码邮件。
-func (c *EmailChannel) Send(target, title, body string) error {
+// Send 发送验证码邮件（code/ttl 已由 Render 拼入 body，此处忽略）。
+func (c *EmailChannel) Send(target, title, body string, _ string, _ time.Duration) error {
 	if err := c.mailer.Send(target, title, body); err != nil {
 		c.logger.Error("验证码邮件发送失败", zap.String("email", target), zap.Error(err))
 		return errors.New("验证码发送失败，请稍后再试")
@@ -316,13 +322,23 @@ type SmsChannel struct {
 }
 
 // NewSmsChannel 构造短信通道。
-// 真实短信通道待接入：开发环境降级为日志打印验证码，生产环境未配置时发送接口报错。
-func NewSmsChannel(isProd bool, logger *zap.Logger) *SmsChannel {
+// 已配置腾讯云短信时接入真实 provider；未配置时生产报错、开发降级为日志打印验证码。
+func NewSmsChannel(smsCfg config.SMSConfig, isProd bool, logger *zap.Logger) *SmsChannel {
 	var sms SMSProvider = LogSMSProvider{logger: logger}
-	if isProd {
+	if smsCfg.Configured() {
+		sms = NewTencentSMSProvider(smsCfg)
+	} else if isProd {
 		sms = nil
 	}
 	return &SmsChannel{sms: sms, logger: logger}
+}
+
+// ValidateReady 校验短信签名/模板审核状态（未接入真实 provider 时跳过，返回 nil）。
+func (c *SmsChannel) ValidateReady(ctx context.Context) error {
+	if p, ok := c.sms.(*TencentSMSProvider); ok {
+		return p.ValidateReady(ctx)
+	}
+	return nil
 }
 
 // SenderReady 短信服务未配置时报错。
@@ -379,6 +395,8 @@ func (c *SmsChannel) Render(purpose CodePurpose, code string, ttl time.Duration)
 		op = "绑定/修改手机号"
 	case CodePurposeAccountChange:
 		op = "修改登录账号"
+	case CodePurposeResetPassword:
+		op = "找回密码"
 	}
 	var content string
 	if purpose == CodePurposeBind {
@@ -400,9 +418,9 @@ func (c *SmsChannel) Render(purpose CodePurpose, code string, ttl time.Duration)
 	return "", content
 }
 
-// Send 发送验证码短信。
-func (c *SmsChannel) Send(target, title, body string) error {
-	if err := c.sms.Send(target, body); err != nil {
+// Send 发送验证码短信（title/body 不使用，短信走已审核模板 + code/ttl 参数）。
+func (c *SmsChannel) Send(target string, _, _ string, code string, ttl time.Duration) error {
+	if err := c.sms.Send(target, code, int(ttl.Minutes())); err != nil {
 		c.logger.Error("验证码短信发送失败", zap.String("phone", target), zap.Error(err))
 		return errors.New("验证码发送失败，请稍后再试")
 	}
@@ -484,6 +502,11 @@ func (s *VerifyCodeService) send(ctx context.Context, ch CodeChannel, purpose Co
 		if count == 0 {
 			return errors.New("该" + ch.Noun() + "尚未注册")
 		}
+	case CodePurposeResetPassword:
+		// 忘记密码：账号必须已存在
+		if count == 0 {
+			return errors.New("该" + ch.Noun() + "尚未注册")
+		}
 	case CodePurposeAccountChange:
 		// 目标是当前用户自己的手机号，无需占用校验
 	default:
@@ -509,7 +532,7 @@ func (s *VerifyCodeService) send(ctx context.Context, ch CodeChannel, purpose Co
 	}
 
 	title, body := ch.Render(purpose, code, s.codeTTL)
-	return ch.Send(target, title, body)
+	return ch.Send(target, title, body, code, s.codeTTL)
 }
 
 // Verify 校验验证码并限制错误次数（最多 5 次），成功后删除验证码。
@@ -624,6 +647,29 @@ func (s *VerifyCodeService) LoginWithCode(ctx context.Context, ch CodeChannel, t
 	return s.authSvc.issueLogin(loginCredentials{
 		id: user.ID, account: user.Account, username: user.Username, status: &user.Status,
 	}, HrwaiRole)
+}
+
+// ResetPasswordWithCode 忘记密码：验证码校验通过后重置密码（不自动登录，返回 nil）。
+func (s *VerifyCodeService) ResetPasswordWithCode(ctx context.Context, ch CodeChannel, target, code, password string) error {
+	target, err := ch.Normalize(target)
+	if err != nil {
+		return err
+	}
+	if len(password) < 6 || len(password) > 20 {
+		return errors.New("密码长度需为 6-20 位")
+	}
+	if err := s.Verify(ctx, ch, CodePurposeResetPassword, target, code); err != nil {
+		return err
+	}
+	user, err := ch.FindUser(ctx, s.db, target)
+	if err != nil {
+		return errors.New("该" + ch.Noun() + "尚未注册")
+	}
+	hashed, err := HashPassword(password)
+	if err != nil {
+		return errors.New("密码重置失败，请稍后再试")
+	}
+	return s.db.WithContext(ctx).Model(&model.HrwaiUser{}).Where("id = ?", user.ID).Update("password", hashed).Error
 }
 
 // Bind 校验验证码后绑定/修改当前用户目标字段（格式与唯一性双重校验）。

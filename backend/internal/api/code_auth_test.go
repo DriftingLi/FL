@@ -102,7 +102,7 @@ func (c *fakeChannel) Render(purpose service.CodePurpose, code string, ttl time.
 	return "title", "code=" + code
 }
 
-func (c *fakeChannel) Send(target, title, body string) error { return nil }
+func (c *fakeChannel) Send(target, title, body, _ string, _ time.Duration) error { return nil }
 
 func (c *fakeChannel) ApplyTarget(user *model.HrwaiUser, target string) {
 	switch c.column {
@@ -267,6 +267,54 @@ func TestCodeAuth_PhoneRegisterLogin(t *testing.T) {
 	}
 }
 
+// TestCodeAuth_PhoneResetPassword 手机号忘记密码：发码→重置→新密码可登录。
+func TestCodeAuth_PhoneResetPassword(t *testing.T) {
+	r, store, _, phoneCh := newCodeAuthTestRouter(t)
+	phone := "13800138001"
+
+	// 注册手机号账号
+	w := codeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
+		map[string]interface{}{"phone": phone, "purpose": "register"}, "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("register send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
+	}
+	code := extractStoredCode(t, store, phoneCh, service.CodePurposeRegister, phone)
+	w = codeAuthRequest(r, http.MethodPost, "/api/auth/phone/register",
+		map[string]interface{}{"phone": phone, "code": code, "nickname": "找回学员", "password": "oldpass123"}, "")
+	if w.Code != http.StatusCreated {
+		t.Fatalf("register 状态码 = %d\nbody=%s", w.Code, w.Body.String())
+	}
+
+	// 未注册手机号找回 → 400
+	w = codeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
+		map[string]interface{}{"phone": "13700000000", "purpose": "reset_password"}, "")
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("未注册找回应 400\nbody=%s", w.Body.String())
+	}
+
+	// 发找回密码验证码
+	w = codeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
+		map[string]interface{}{"phone": phone, "purpose": "reset_password"}, "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("reset send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
+	}
+	code = extractStoredCode(t, store, phoneCh, service.CodePurposeResetPassword, phone)
+
+	// 错误验证码 → 400
+	w = codeAuthRequest(r, http.MethodPost, "/api/auth/phone/reset-password",
+		map[string]interface{}{"phone": phone, "code": "000000", "password": "newpass123"}, "")
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("错误验证码应 400\nbody=%s", w.Body.String())
+	}
+
+	// 正确验证码 + 合法密码 → 200
+	w = codeAuthRequest(r, http.MethodPost, "/api/auth/phone/reset-password",
+		map[string]interface{}{"phone": phone, "code": code, "password": "newpass123"}, "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("reset-password 状态码 = %d\nbody=%s", w.Code, w.Body.String())
+	}
+}
+
 // TestCodeAuth_InvalidPurpose 非法 purpose 返回 400（purpose 校验行为不变）。
 func TestCodeAuth_InvalidPurpose(t *testing.T) {
 	r, _, _, _ := newCodeAuthTestRouter(t)
@@ -275,7 +323,7 @@ func TestCodeAuth_InvalidPurpose(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("非法 purpose 状态码 = %d, 期望 400\nbody=%s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "purpose 必须为 register 或 login") {
+	if !strings.Contains(w.Body.String(), "purpose 必须为 register、login 或 reset_password") {
 		t.Errorf("purpose 错误文案不符: %s", w.Body.String())
 	}
 }
