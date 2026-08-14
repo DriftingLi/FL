@@ -20,6 +20,10 @@ Issues 存放在 GitHub Issues（使用 `gh` CLI）。See `docs/agents/issue-tra
 
 Single-context：root `CONTEXT.md` + `docs/adr/`。See `docs/agents/domain.md`.
 
+### Security scan
+
+AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
+
 ## 前端 UI 约定
 
 页面保持整洁：不要写冗余的小标题、装饰性提示与说明性 hint 文本，有的话就清理，仅保留必要的功能性提示。删除 hint 时同步删除对应的 CSS class 与 scoped style，避免残留死代码。
@@ -38,6 +42,7 @@ Single-context：root `CONTEXT.md` + `docs/adr/`。See `docs/agents/domain.md`.
   - `npm run type-check`（vue-tsc）
   - `npm test`（vitest）
 - **部署配置**：改 `docker-compose*.yml` / `deploy.sh` 后可用 `docker compose -f docker-compose.prod.yml config -q` 做语法校验
+- **安全检测**：改动触及认证/授权/密钥/DB 连接/AI 生成代码时，跑 `python -m deepsec shield scan backend frontend/src`，确认无新增 critical/high（已知误报见 `docs/agents/security-scan.md`）。
 
 ## 发布流程（push / PR / merge）
 
