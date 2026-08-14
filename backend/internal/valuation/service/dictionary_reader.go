@@ -11,11 +11,6 @@ import (
 	"forklift-training/internal/valuation/repository"
 )
 
-// ConfigReader 系数键读取接口（Kt/Kh/Kc 只依赖按 key 读系数）。
-type ConfigReader interface {
-	Get(ctx context.Context, key string) (float64, error)
-}
-
 // DictionaryReader 系数表读取接口（评估服务与 K 系数计算消费的窄 interface）。
 type DictionaryReader interface {
 	GetBrandByName(ctx context.Context, name string) (repository.Brand, error)
@@ -27,12 +22,6 @@ type DictionaryReader interface {
 	GetCoefficientByKey(ctx context.Context, key string) (repository.CoefficientConfig, error)
 	// ListCoefficientConfigs 系数配置全表读取（快照加载用，一次缓存往返）。
 	ListCoefficientConfigs(ctx context.Context) ([]repository.CoefficientConfig, error)
-}
-
-// coefficientReader 评估流程使用的系数读取面（快照与逐 key provider 都满足）。
-type coefficientReader interface {
-	ConfigReader
-	ConfigResolver
 }
 
 // λ 兜底默认值（与迁移种子一致；仅在系数配置缺失时用于评估结果锁定的 λ 字段）。
@@ -66,7 +55,7 @@ func (s *CoefficientSnapshot) Get(_ context.Context, key string) (float64, error
 
 // ReadFloat 从快照读取系数，失败或非正数时返回 fallback（与 provider 语义一致）。
 func (s *CoefficientSnapshot) ReadFloat(ctx context.Context, key string, fallback float64) float64 {
-	return readWithFallback(ctx, s, key, fallback)
+	return coefReadFloat(ctx, s, key, fallback)
 }
 
 // LoadCoefficientSnapshot 一次加载系数快照；读取失败返回错误（调用方回退逐 key provider）。

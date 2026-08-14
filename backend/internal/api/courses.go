@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -23,7 +22,7 @@ func NewCourseHandler(svc *service.CourseService) *CourseHandler {
 }
 
 // RegisterCoursesRoutes 注册 /api/courses 蓝图（学员侧课程浏览与学习进度）。
-func RegisterCoursesRoutes(rg *gin.RouterGroup, sess *security.Session, svc *service.CourseService) {
+func RegisterCoursesRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.CourseService) {
 	h := NewCourseHandler(svc)
 
 	// 公开访问
@@ -31,7 +30,7 @@ func RegisterCoursesRoutes(rg *gin.RouterGroup, sess *security.Session, svc *ser
 	rg.GET("/chapter/:chapter_id/slides", h.GetChapterSlides)
 
 	// 需要登录
-	auth := rg.Group("", middleware.JWTAuth(sess))
+	auth := rg.Group("", middleware.JWTAuth(rd.Session))
 	auth.GET("/course/:course_id", h.GetCourseDetail)
 	auth.GET("/course/:course_id/chapter/:chapter_id", h.GetChapterDetail)
 	auth.POST("/chapter/:chapter_id/slides/regenerate", h.RegenerateChapterSlides)
@@ -42,8 +41,8 @@ func RegisterCoursesRoutes(rg *gin.RouterGroup, sess *security.Session, svc *ser
 func (h *CourseHandler) ListCourses(c *gin.Context) {
 	page := atoiDefault(c.Query("page"), 1)
 	pageSize := atoiDefault(c.Query("page_size"), 12)
-	specialtyID := queryIntPtr(c, "specialty_id")
-	levelID := queryIntPtr(c, "level_id")
+	specialtyID := queryIDPtr(c, "specialty_id")
+	levelID := queryIDPtr(c, "level_id")
 	response.Success(c, h.svc.GetCourses(page, pageSize, specialtyID, levelID))
 }
 

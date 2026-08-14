@@ -77,6 +77,12 @@ func questionMaxScore(flow, qType string) float64 {
 // shortAnswerPassRatio 简答题及格线：得分 ≥ 满分 × 0.6 记为正确（阅卷/练习共用）。
 const shortAnswerPassRatio = 0.6
 
+// shortAnswerPassed 简答题及格判定：score ≥ maxScore × shortAnswerPassRatio。
+// 0.6 及格公式的唯一实现——阅卷/复核/AI 确认/练习提交均经此推导，不各自重写。
+func shortAnswerPassed(score, maxScore float64) bool {
+	return score >= maxScore*shortAnswerPassRatio
+}
+
 // aiGradeShortAnswer AI 简答评分的统一入口；ai 为 nil 时返回 nil（调用方降级）。
 func aiGradeShortAnswer(ai *AIService, questionContent, referenceAnswer, scoringCriteria, studentAnswer string, maxScore float64, userID *int) *AIGradeResult {
 	if ai == nil {

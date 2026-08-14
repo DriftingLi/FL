@@ -322,7 +322,7 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 			if aiRes.Fallback {
 				result["ai_fallback"] = true
 			} else {
-				passed := aiRes.Score >= float64(maxScore)*shortAnswerPassRatio
+				passed := shortAnswerPassed(aiRes.Score, float64(maxScore))
 				result["is_correct"] = passed
 				rec.IsCorrect = passed
 				s.db.Save(&rec)
@@ -382,6 +382,12 @@ func (s *PracticeModeService) GetHistory(studentID, page, pageSize int, qType, s
 		}
 		return q
 	})
+	questionIDs := make([]int, 0, len(records))
+	for i := range records {
+		questionIDs = append(questionIDs, records[i].QuestionID)
+	}
+	questions := loadQuestionsByIDs(s.db, questionIDs)
+
 	items := make([]map[string]any, 0, len(records))
 	for _, r := range records {
 		item := map[string]any{
@@ -393,9 +399,8 @@ func (s *PracticeModeService) GetHistory(studentID, page, pageSize int, qType, s
 			"user_answer":   r.UserAnswer,
 			"created_at":    formatISO(r.CreatedAt),
 		}
-		var qq model.Question
-		if err := s.db.First(&qq, r.QuestionID).Error; err == nil {
-			item["question"] = newQuestionDTO(&qq, false)
+		if qq, ok := questions[r.QuestionID]; ok {
+			item["question"] = newQuestionDTO(qq, false)
 		}
 		items = append(items, item)
 	}

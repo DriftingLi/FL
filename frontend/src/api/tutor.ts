@@ -1,5 +1,6 @@
 import { unwrappedRequest } from './request'
 import type { AxiosProgressEvent } from 'axios'
+import type { CourseSummary, CourseChapter } from './course'
 
 export interface TutorCoursesQuery {
   page?: number
@@ -21,27 +22,14 @@ export interface BatchDeleteFilesPayload {
   file_ids: number[]
 }
 
-/** 课程摘要（导师端） */
-export interface TutorCourse {
-  course_id: number
-  name: string
-  cover_image?: string
-  description?: string
-  chapter_count?: number
-  specialty_id?: number | null
-  level_id?: number | null
-  [key: string]: unknown
-}
+/** 课程摘要（导师端）= CourseSummary 子集，单一事实源派生 */
+export type TutorCourse = Pick<
+  CourseSummary,
+  'course_id' | 'name' | 'cover_image' | 'description' | 'chapter_count' | 'specialty_id' | 'level_id'
+>
 
-/** 导师章节 */
-export interface TutorChapter {
-  chapter_id: number
-  title: string
-  content?: string
-  order_num?: number
-  duration?: number
-  [key: string]: unknown
-}
+/** 导师章节 = CourseChapter 子集，单一事实源派生 */
+export type TutorChapter = Pick<CourseChapter, 'chapter_id' | 'title' | 'content' | 'order_num' | 'duration'>
 
 /** 导师章节详情（含课程与章节列表） */
 export interface TutorChapterDetail {

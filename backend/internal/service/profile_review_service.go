@@ -14,6 +14,7 @@ import (
 
 	"forklift-training/internal/model"
 	"forklift-training/internal/storage"
+	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
 
@@ -130,6 +131,22 @@ func (s *ProfileReviewService) GetPendingForUser(userID int) (*ProfileChangeRequ
 	return s.toDTO(&req, &user), nil
 }
 
+// reviewRequestRow 列表查询的扫描结构（JOIN hrwai_users 后 Scan 到自定义行）。
+type reviewRequestRow struct {
+	ID           int64
+	UserID       int
+	FieldType    string
+	OldValue     string
+	NewValue     string
+	Status       string
+	RejectReason string
+	ReviewedBy   *int
+	ReviewedAt   *time.Time
+	CreatedAt    time.Time
+	Username     string
+	AvatarURL    string
+}
+
 // ProfileChangeRequestPageResult 资料审核请求分页结果。
 type ProfileChangeRequestPageResult struct {
 	Page     int                       `json:"page"`
@@ -140,44 +157,19 @@ type ProfileChangeRequestPageResult struct {
 
 // ListRequests 分页查询审核请求（可按下单状态过滤）。
 func (s *ProfileReviewService) ListRequests(status string, page, pageSize int) (*ProfileChangeRequestPageResult, error) {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 || pageSize > 100 {
-		pageSize = 10
-	}
-	q := s.db.Table("profile_change_requests AS r").
-		Select("r.id, r.user_id, r.field_type, r.old_value, r.new_value, r.status, r.reject_reason, " +
-			"r.reviewed_by, r.reviewed_at, r.created_at, " +
-			"u.username, u.avatar_url").
-		Joins("JOIN hrwai_users AS u ON u.id = r.user_id")
-	if status != "" && status != "all" {
-		q = q.Where("r.status = ?", status)
-	}
-
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
-		return nil, err
-	}
-
-	var rows []struct {
-		ID           int64
-		UserID       int
-		FieldType    string
-		OldValue     string
-		NewValue     string
-		Status       string
-		RejectReason string
-		ReviewedBy   *int
-		ReviewedAt   *time.Time
-		CreatedAt    time.Time
-		Username     string
-		AvatarURL    string
-	}
-	if err := q.Order("r.id DESC").Offset((page - 1) * pageSize).Limit(pageSize).
-		Scan(&rows).Error; err != nil {
-		return nil, err
-	}
+	rows, total, page, pageSize := paging.QueryWithScan[reviewRequestRow](s.db, page, pageSize, 10, 100,
+		"r.id DESC",
+		func(q *gorm.DB) *gorm.DB {
+			q = q.Table("profile_change_requests AS r").
+				Select("r.id, r.user_id, r.field_type, r.old_value, r.new_value, r.status, r.reject_reason, " +
+					"r.reviewed_by, r.reviewed_at, r.created_at, " +
+					"u.username, u.avatar_url").
+				Joins("JOIN hrwai_users AS u ON u.id = r.user_id")
+			if status != "" && status != "all" {
+				q = q.Where("r.status = ?", status)
+			}
+			return q
+		})
 
 	items := make([]ProfileChangeRequestDTO, 0, len(rows))
 	for i := range rows {

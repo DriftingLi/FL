@@ -10,6 +10,15 @@ import (
 	"forklift-training/internal/storage"
 )
 
+// RouterDeps 聚合蓝图注册所需的横切依赖（Session/DB/Logger）。
+// Register*Routes 统一收 RouterDeps 替代逐处重复传 sess *security.Session；
+// 业务 service 仍按需注入（不吞整个 Deps），保留 ADR-0009 按需注入精神。
+type RouterDeps struct {
+	Session *security.Session
+	DB      *gorm.DB
+	Logger  *zap.Logger
+}
+
 // Deps 是后端 service 装配根：全部 service 在此构建一次，经 NewRouter 注入各蓝图注册。
 // 蓝图注册函数不再自行构造 service，实例归属唯一（对应 spec #75 D9）。
 type Deps struct {
@@ -27,8 +36,8 @@ type Deps struct {
 	FileSvc         *service.FileService
 	NotificationSvc *service.NotificationService
 	ReviewSvc       *service.ProfileReviewService
+	AuditSvc        *service.AuditService
 	AIConfigSvc     *service.AIConfigService
-	AISvc           *service.AIService
 	ContentGenSvc   *service.ContentGenerateService
 	ExportStore     service.ExportStore
 	AuthH           *AuthHandler
@@ -86,7 +95,6 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		NotificationSvc:    notificationSvc,
 		ReviewSvc:          reviewSvc,
 		AIConfigSvc:        aiConfigSvc,
-		AISvc:              aiSvc,
 		ContentGenSvc:      contentGenSvc,
 		CourseSvc:          service.NewCourseService(db, fileSvc, logger),
 		AdminSvc:           service.NewAdminService(db, logger),
@@ -104,8 +112,14 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		TutorSvc:           service.NewTutorService(db, cfg.UploadFolder, fileSvc, logger),
 		WrongQuestionSvc:   service.NewWrongQuestionService(db, logger),
 		TrainingCatalogSvc: service.NewTrainingCatalogService(db, logger),
+		AuditSvc:           service.NewAuditService(db),
 		AIAssistantSvc:     service.NewAIAssistantService(db, aiConfigSvc, cfg.SecretKey, logger),
 	}
 	d.AuthH = NewAuthHandler(d.Session, authSvc, fileSvc, st, reviewSvc, logger)
 	return d
+}
+
+// RouterDeps 投影当前装配根的横切依赖，供 NewRouter 传给各蓝图注册（单一装配点）。
+func (d *Deps) RouterDeps() RouterDeps {
+	return RouterDeps{Session: d.Session, DB: d.DB, Logger: d.Logger}
 }

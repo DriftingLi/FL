@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -23,10 +22,10 @@ func NewGradingHandler(svc *service.GradingService) *GradingHandler {
 }
 
 // RegisterGradingRoutes 注册 /api/grading 蓝图（导师阅卷）。
-func RegisterGradingRoutes(rg *gin.RouterGroup, sess *security.Session, svc *service.GradingService) {
+func RegisterGradingRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.GradingService) {
 	h := NewGradingHandler(svc)
 
-	g := rg.Group("/grading", middleware.JWTAuth(sess), middleware.RoleRequired("tutor", "admin"))
+	g := rg.Group("/grading", middleware.JWTAuth(rd.Session), middleware.RoleRequired("tutor", "admin"))
 
 	// GET /api/grading/participants  已提交参与记录列表
 	g.GET("/participants", h.GetSubmittedParticipants)
@@ -48,12 +47,7 @@ func RegisterGradingRoutes(rg *gin.RouterGroup, sess *security.Session, svc *ser
 
 // GetSubmittedParticipants 已提交参与记录列表 GET /api/grading/participants
 func (h *GradingHandler) GetSubmittedParticipants(c *gin.Context) {
-	var sessionID *int
-	if s := c.Query("session_id"); s != "" {
-		if id, err := strconv.Atoi(s); err == nil {
-			sessionID = &id
-		}
-	}
+	sessionID := queryIDPtr(c, "session_id")
 	result, err := h.svc.GetSubmittedParticipants(sessionID)
 	if err != nil {
 		response.ServerError(c, err.Error())
@@ -181,11 +175,6 @@ func (h *GradingHandler) AIGradeAnswer(c *gin.Context) {
 
 // GetGradingStats 阅卷统计 GET /api/grading/stats
 func (h *GradingHandler) GetGradingStats(c *gin.Context) {
-	var sessionID *int
-	if s := c.Query("session_id"); s != "" {
-		if id, err := strconv.Atoi(s); err == nil {
-			sessionID = &id
-		}
-	}
+	sessionID := queryIDPtr(c, "session_id")
 	response.Success(c, h.svc.GetGradingStats(sessionID))
 }

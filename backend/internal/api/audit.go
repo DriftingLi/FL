@@ -6,11 +6,10 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
-	"forklift-training/internal/security"
+	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
 
@@ -24,19 +23,19 @@ type AuditLogPageResult struct {
 
 // AuditHandler 审计日志 handler。
 type AuditHandler struct {
-	db *gorm.DB
+	svc *service.AuditService
 }
 
 // NewAuditHandler 创建审计日志 handler。
-func NewAuditHandler(db *gorm.DB) *AuditHandler {
-	return &AuditHandler{db: db}
+func NewAuditHandler(svc *service.AuditService) *AuditHandler {
+	return &AuditHandler{svc: svc}
 }
 
 // RegisterAuditRoutes 注册 /api/admin/audit-logs 蓝图（仅管理员）。
-func RegisterAuditRoutes(rg *gin.RouterGroup, sess *security.Session, db *gorm.DB) {
-	h := NewAuditHandler(db)
+func RegisterAuditRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.AuditService) {
+	h := NewAuditHandler(svc)
 
-	g := rg.Group("/admin/audit-logs", middleware.JWTAuth(sess), middleware.RoleRequired("admin"))
+	g := rg.Group("/admin/audit-logs", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
 
 	// GET /api/admin/audit-logs?page=&page_size=&actor_id=&role=&keyword=
 	g.GET("", h.List)
@@ -50,31 +49,11 @@ func (h *AuditHandler) List(c *gin.Context) {
 		pageSize = 100
 	}
 
-	q := h.db.Model(&model.AuditLog{})
-	if actorID := atoiDefault(c.Query("actor_id"), 0); actorID > 0 {
-		q = q.Where("actor_id = ?", actorID)
-	}
-	if role := strings.TrimSpace(c.Query("role")); role != "" {
-		q = q.Where("actor_role = ?", role)
-	}
-	if keyword := strings.TrimSpace(c.Query("keyword")); keyword != "" {
-		like := "%" + keyword + "%"
-		q = q.Where("path ILIKE ? OR action ILIKE ? OR actor_name ILIKE ?", like, like, like)
-	}
+	actorID := atoiDefault(c.Query("actor_id"), 0)
+	role := strings.TrimSpace(c.Query("role"))
+	keyword := strings.TrimSpace(c.Query("keyword"))
 
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
-		response.ServerError(c, "查询失败: "+err.Error())
-		return
-	}
-	var logs []model.AuditLog
-	if err := q.Order("id DESC").
-		Offset((page - 1) * pageSize).
-		Limit(pageSize).
-		Find(&logs).Error; err != nil {
-		response.ServerError(c, "查询失败: "+err.Error())
-		return
-	}
+	logs, total, page, pageSize := h.svc.List(page, pageSize, actorID, role, keyword)
 	response.Success(c, AuditLogPageResult{
 		Items: logs,
 		Page:  page,

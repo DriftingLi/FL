@@ -24,7 +24,7 @@ type ReportHandler struct {
 
 // NewReportHandler 构造报告处理器
 // resolver 用于未回填历史记录重建建议时动态读取 coefficient_configs（与评估流程同一份配置）。
-func NewReportHandler(evalRepo EvaluationStore, gen ReportGenerator, l *zap.Logger, st storage.Storage, resolver service.ConfigResolver) *ReportHandler {
+func NewReportHandler(evalRepo EvaluationStore, gen ReportGenerator, l *zap.Logger, st storage.Storage, resolver service.CoefficientResolver) *ReportHandler {
 	return &ReportHandler{
 		logger:  l,
 		storage: st,

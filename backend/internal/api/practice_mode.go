@@ -3,12 +3,10 @@ package api
 
 import (
 	"encoding/json"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -24,10 +22,10 @@ func NewPracticeModeHandler(svc *service.PracticeModeService) *PracticeModeHandl
 }
 
 // RegisterPracticeModeRoutes 注册 /api/practice-mode 蓝图（题库练习）。
-func RegisterPracticeModeRoutes(rg *gin.RouterGroup, sess *security.Session, svc *service.PracticeModeService) {
+func RegisterPracticeModeRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.PracticeModeService) {
 	h := NewPracticeModeHandler(svc)
 
-	g := rg.Group("/practice-mode", middleware.JWTAuth(sess), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/practice-mode", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
 
 	g.GET("/free", h.GetFreeQuestions)
 	g.GET("/tag", h.StartTagPractice)
@@ -59,8 +57,8 @@ func (h *PracticeModeHandler) StartTagPractice(c *gin.Context) {
 		response.BadRequest(c, "请指定题库标签")
 		return
 	}
-	tagID, err := strconv.Atoi(tagIDStr)
-	if err != nil || tagID <= 0 {
+	tagID, ok := requiredPositiveID(tagIDStr)
+	if !ok {
 		response.BadRequest(c, "题库标签ID无效")
 		return
 	}

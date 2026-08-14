@@ -9,7 +9,6 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -75,7 +74,7 @@ func TestAuthService_GenerateToken(t *testing.T) {
 		t.Fatal("token 不应为空")
 	}
 	// 解析验证 claims
-	claims := &middleware.Claims{}
+	claims := &security.Claims{}
 	parsed, err := jwt.ParseWithClaims(token, claims, func(tk *jwt.Token) (interface{}, error) {
 		return []byte(testJWTSecret), nil
 	})

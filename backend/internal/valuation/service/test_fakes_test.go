@@ -23,6 +23,10 @@ func (m *memConfigReader) Get(_ context.Context, key string) (float64, error) {
 	return 0, errors.New("coefficient not found: " + key)
 }
 
+func (m *memConfigReader) ReadFloat(ctx context.Context, key string, fallback float64) float64 {
+	return coefReadFloat(ctx, m, key, fallback)
+}
+
 // newDefaultConfigReader 与迁移种子一致的默认系数。
 func newDefaultConfigReader() *memConfigReader {
 	return &memConfigReader{values: map[string]float64{

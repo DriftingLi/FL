@@ -149,9 +149,9 @@ func newCodeAuthTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fakeChann
 	r := gin.New()
 	r.Use(gin.Recovery())
 	api := r.Group("/api")
-	RegisterEmailAuthRoutes(api, deps.Session, deps.CodeSvc, deps.EmailCh)
-	RegisterPhoneAuthRoutes(api, deps.Session, deps.CodeSvc, deps.PhoneCh)
-	RegisterProfileBindRoutes(api, deps.Session, deps.AuthSvc, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
+	RegisterEmailAuthRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.EmailCh)
+	RegisterPhoneAuthRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.PhoneCh)
+	RegisterProfileBindRoutes(api, deps.RouterDeps(), deps.AuthSvc, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
 
 	return r, store, emailCh, phoneCh
 }

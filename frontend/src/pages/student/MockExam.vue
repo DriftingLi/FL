@@ -1,6 +1,6 @@
 <template>
   <div class="mock-exam">
-    <div v-if="!examStarted && !examFinished" class="exam-start">
+    <div v-if="!inExam && !examFinished" class="exam-start">
       <el-card>
         <h2>模拟考试</h2>
         <el-form :model="examForm" label-width="100px">
@@ -43,7 +43,7 @@
     </div>
 
     <AnsweringSessionShell
-      v-if="examStarted && !examFinished"
+      v-if="inExam && !examFinished"
       ref="shellRef"
       v-model:answers="answers"
       v-model:remaining-time="remainingTime"
@@ -83,22 +83,35 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { mockExamApi, type MockExamHistoryItem } from '@/api/mockExam'
-import type { Question } from '@/types/question'
 import { formatDateTime } from '@/utils/format'
-import AnsweringSessionShell from '@/components/student/AnsweringSessionShell.vue'
+import { useExamSession } from '@/composables/useExamSession'
 
 const loading = ref(false)
-const examStarted = ref(false)
 const examFinished = ref(false)
 const examForm = ref({ count: 40, duration: 90 })
 const mockExamId = ref<number | null>(null)
-const questions = ref<Question[]>([])
-const answers = ref<Record<number, unknown>>({})
-const currentIdx = ref(0)
-const remainingTime = ref(0)
 const examResult = ref<any>({})
 const history = ref<MockExamHistoryItem[]>([])
-const shellRef = ref<InstanceType<typeof AnsweringSessionShell> | null>(null)
+
+// 答题会话编排（进入/续时/断点续传/交卷顺序约束收敛进 useExamSession）
+const { inExam, currentIdx, remainingTime, questions, answers, shellRef, start, saveProgress, submit, reset } = useExamSession({
+  enter: async () => {
+    const res = await mockExamApi.startMockExam(examForm.value)
+    mockExamId.value = res.mock_exam_id
+    return { questions: res.questions, remaining_time: res.remaining_time }
+  },
+  save: async (ans, remaining) => {
+    if (!mockExamId.value) return
+    await mockExamApi.saveProgress(mockExamId.value, {
+      answers: ans,
+      remaining_time: remaining
+    })
+  },
+  submit: async () => {
+    if (!mockExamId.value) return null
+    return mockExamApi.submitMockExam(mockExamId.value)
+  }
+})
 
 onMounted(async () => {
   try {
@@ -110,12 +123,7 @@ onMounted(async () => {
 async function startExam() {
   loading.value = true
   try {
-    const res = await mockExamApi.startMockExam(examForm.value)
-    mockExamId.value = res.mock_exam_id
-    questions.value = res.questions
-    answers.value = {}
-    shellRef.value?.begin(res.remaining_time)
-    examStarted.value = true
+    await start()
   } catch {
     /* 错误已由拦截器提示 */
   } finally {
@@ -123,22 +131,9 @@ async function startExam() {
   }
 }
 
-async function saveProgress() {
-  if (!mockExamId.value) return
-  try {
-    await mockExamApi.saveProgress(mockExamId.value, {
-      answers: answers.value,
-      remaining_time: remainingTime.value
-    })
-  } catch (e) {}
-}
-
 async function handleSubmit(payload: { is_timeout: boolean; answers: Record<number, unknown>; remaining_time: number }) {
-  void payload
-  try { await saveProgress() } catch (e) {}
   try {
-    if (!mockExamId.value) return
-    const res = await mockExamApi.submitMockExam(mockExamId.value)
+    const res = await submit(payload)
     examResult.value = res || {}
     examFinished.value = true
   } catch {
@@ -147,14 +142,10 @@ async function handleSubmit(payload: { is_timeout: boolean; answers: Record<numb
 }
 
 function resetExam() {
-  examStarted.value = false
   examFinished.value = false
-  questions.value = []
-  answers.value = {}
-  currentIdx.value = 0
-  remainingTime.value = 0
   examResult.value = {}
   mockExamId.value = null
+  reset()
 }
 </script>
 

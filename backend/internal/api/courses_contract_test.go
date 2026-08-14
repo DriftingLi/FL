@@ -44,7 +44,7 @@ func TestCoursesListCategoryParamRetired(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, nil)
-	RegisterCoursesRoutes(api, deps.Session, deps.CourseSvc)
+	RegisterCoursesRoutes(api, deps.RouterDeps(), deps.CourseSvc)
 
 	// 传入已退役的 category 参数：应被忽略，课程仍返回
 	rec := performRequest(r, "GET", "/api/courses?category=CATEGORY_01")
@@ -122,7 +122,7 @@ func TestTutorCoursesListContract(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterTutorRoutes(api, deps.Session, deps.TutorSvc, deps.FileSvc)
+	RegisterTutorRoutes(api, deps.RouterDeps(), deps.TutorSvc, deps.FileSvc)
 
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
 		Issue(1, "tutor1", "tutor")

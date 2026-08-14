@@ -77,7 +77,7 @@ func NewValuationService(
 // 按 req JSON 的 SHA256 缓存 3 分钟（cache.TTLValuation）。
 // 所有字典/系数写操作已在 config handler 中统一失效 valuation:result:*。
 // Resolver 暴露系数配置读取器（详情接口旧记录建议 fallback 与报告 Prepare 同源）。
-func (s *ValuationService) Resolver() ConfigResolver { return s.provider }
+func (s *ValuationService) Resolver() CoefficientResolver { return s.provider }
 
 func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRequest) (*model.EvaluationResult, error) {
 	// 构造缓存 key：对规范化后的 req JSON 做 SHA256
@@ -98,7 +98,7 @@ func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRe
 // evaluateInternal 包含原 Evaluate 的全部计算逻辑（纯函数，无副作用）
 func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.EvaluationRequest) (*model.EvaluationResult, error) {
 	// 0. 系数快照：一次全表读取替代逐 key 串行缓存往返（失败时回退逐 key provider，保持既有容错）
-	coeff := coefficientReader(s.provider)
+	var coeff CoefficientResolver = s.provider
 	if snap, err := LoadCoefficientSnapshot(ctx, s.dictRepo); err == nil {
 		coeff = snap
 	}
