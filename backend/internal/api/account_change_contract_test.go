@@ -60,7 +60,7 @@ func newAccountChangeTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fake
 	auth.POST("/login", authH.Login)
 	RegisterEmailAuthRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.EmailCh)
 	RegisterPhoneAuthRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.PhoneCh)
-	RegisterProfileBindRoutes(api, deps.RouterDeps(), deps.AuthSvc, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
+	RegisterProfileBindRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
 
 	return r, store, phoneCh, db
 }

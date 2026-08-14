@@ -6,7 +6,7 @@ import { ElMessage } from 'element-plus'
 import { useCountdown } from '@/composables/useCountdown'
 import { isValidEmail, isValidPhone } from '@/utils/validate'
 
-export type SendCodePurpose = 'register' | 'login' | 'bind' | 'account_change' | 'reset_password'
+export type SendCodePurpose = 'register' | 'login' | 'bind' | 'account_change' | 'reset_password' | 'change_password'
 export type SendCodeChannel = 'email' | 'phone'
 
 const SUCCESS_MESSAGE: Record<SendCodePurpose, string> = {
@@ -14,7 +14,8 @@ const SUCCESS_MESSAGE: Record<SendCodePurpose, string> = {
   login: '验证码已发送，请查收',
   bind: '验证码已发送，请查收',
   account_change: '验证码已发送至绑定手机号，请查收',
-  reset_password: '验证码已发送，请查收'
+  reset_password: '验证码已发送，请查收',
+  change_password: '验证码已发送至绑定手机号，请查收'
 }
 
 export interface UseSendCodeOptions {
@@ -29,7 +30,8 @@ export function useSendCode(options: UseSendCodeOptions) {
   const countdown = useCountdown()
 
   async function send(target: string, channel: SendCodeChannel): Promise<boolean> {
-    if (purpose !== 'account_change') {
+    // account_change / change_password 发往已绑定手机号，无 target 输入，跳过格式校验
+    if (purpose !== 'account_change' && purpose !== 'change_password') {
       const invalid = channel === 'phone' ? !isValidPhone(target) : !isValidEmail(target)
       if (invalid) {
         ElMessage.warning(channel === 'phone' ? '请输入正确的手机号' : '请输入正确的邮箱地址')

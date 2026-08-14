@@ -513,6 +513,55 @@ func TestPhoneResetPassword(t *testing.T) {
 	}
 }
 
+// TestPhoneChangePassword 修改密码：发码→校验→更新，密码生效且验证码消费。
+func TestPhoneChangePassword(t *testing.T) {
+	svc, store := newCodeTestSvc(t)
+	ch := testSmsChannel(&fakeSMSProvider{})
+	ctx := context.Background()
+	phone := "13900003333"
+
+	// 注册手机号账号
+	if err := svc.Send(ctx, ch, CodePurposeRegister, phone); err != nil {
+		t.Fatalf("注册发码失败: %v", err)
+	}
+	regCode := extractCode(t, store, ch, CodePurposeRegister, phone)
+	regRes, err := svc.RegisterWithCode(ctx, ch, phone, regCode, "王五", "", "oldpass123")
+	if err != nil {
+		t.Fatalf("注册失败: %v", err)
+	}
+
+	// 发修改密码验证码
+	if err := svc.SendChangePasswordCode(ctx, ch, regRes.UserID); err != nil {
+		t.Fatalf("修改密码发码失败: %v", err)
+	}
+	changeCode := extractCode(t, store, ch, CodePurposeChangePassword, phone)
+
+	// 密码过短（先于验证码校验，不消费验证码）
+	if err := svc.ChangePassword(ctx, ch, regRes.UserID, changeCode, "123"); err == nil || !strings.Contains(err.Error(), "6-20") {
+		t.Fatalf("密码过短应失败: %v", err)
+	}
+	// 错误验证码
+	if err := svc.ChangePassword(ctx, ch, regRes.UserID, "000000", "newpass123"); err == nil || !strings.Contains(err.Error(), "验证码") {
+		t.Fatalf("错误验证码应失败: %v", err)
+	}
+	// 正确验证码 + 合法密码
+	if err := svc.ChangePassword(ctx, ch, regRes.UserID, changeCode, "newpass123"); err != nil {
+		t.Fatalf("修改密码失败: %v", err)
+	}
+
+	// 新密码已生效、旧密码失效
+	var user model.HrwaiUser
+	if err := svc.db.Where("phone = ?", phone).First(&user).Error; err != nil {
+		t.Fatalf("查询用户失败: %v", err)
+	}
+	if !VerifyPassword("newpass123", user.Password) {
+		t.Error("新密码未生效")
+	}
+	if VerifyPassword("oldpass123", user.Password) {
+		t.Error("旧密码仍有效")
+	}
+}
+
 func TestPhoneBind(t *testing.T) {
 	svc, store := newCodeTestSvc(t)
 	ch := testSmsChannel(&fakeSMSProvider{})

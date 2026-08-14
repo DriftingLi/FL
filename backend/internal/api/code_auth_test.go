@@ -151,7 +151,7 @@ func newCodeAuthTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fakeChann
 	api := r.Group("/api")
 	RegisterEmailAuthRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.EmailCh)
 	RegisterPhoneAuthRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.PhoneCh)
-	RegisterProfileBindRoutes(api, deps.RouterDeps(), deps.AuthSvc, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
+	RegisterProfileBindRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
 
 	return r, store, emailCh, phoneCh
 }
@@ -365,6 +365,47 @@ func TestCodeAuth_ProfileBind(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "手机号修改成功") {
 		t.Errorf("绑定文案不符: %s", w.Body.String())
+	}
+}
+
+// TestCodeAuth_ProfileChangePassword 修改密码：短信验证码确认后更新密码。
+func TestCodeAuth_ProfileChangePassword(t *testing.T) {
+	r, store, _, phoneCh := newCodeAuthTestRouter(t)
+	phone := "13900139001"
+
+	// 注册手机号账号（拿 token）
+	w := codeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
+		map[string]interface{}{"phone": phone, "purpose": "register"}, "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("register send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
+	}
+	code := extractStoredCode(t, store, phoneCh, service.CodePurposeRegister, phone)
+	w = codeAuthRequest(r, http.MethodPost, "/api/auth/phone/register",
+		map[string]interface{}{"phone": phone, "code": code, "nickname": "改密学员", "password": "oldpass123"}, "")
+	if w.Code != http.StatusCreated {
+		t.Fatalf("register 状态码 = %d\nbody=%s", w.Code, w.Body.String())
+	}
+	token := extractToken(t, w)
+
+	// 发修改密码验证码
+	w = codeAuthRequest(r, http.MethodPost, "/api/auth/profile/password/send-code", nil, token)
+	if w.Code != http.StatusOK {
+		t.Fatalf("password send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
+	}
+	changeCode := extractStoredCode(t, store, phoneCh, service.CodePurposeChangePassword, phone)
+
+	// 错误验证码 → 400
+	w = codeAuthRequest(r, http.MethodPost, "/api/auth/profile/password",
+		map[string]interface{}{"code": "000000", "password": "newpass123"}, token)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("错误验证码应 400\nbody=%s", w.Body.String())
+	}
+
+	// 正确验证码 + 合法密码 → 200
+	w = codeAuthRequest(r, http.MethodPost, "/api/auth/profile/password",
+		map[string]interface{}{"code": changeCode, "password": "newpass123"}, token)
+	if w.Code != http.StatusOK {
+		t.Fatalf("修改密码状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
 }
 

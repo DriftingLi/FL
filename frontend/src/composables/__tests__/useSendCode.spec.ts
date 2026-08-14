@@ -92,3 +92,14 @@ describe('send（account_change 目的）', () => {
     expect(warningSpy).not.toHaveBeenCalled()
   })
 })
+
+describe('send（change_password 目的）', () => {
+  it('跳过目标格式校验（验证码发往已绑定手机号）', async () => {
+    const { mod, sendCode } = mountSendCode('change_password')
+    const ok = await mod.send('', 'phone')
+    expect(ok).toBe(true)
+    expect(sendCode).toHaveBeenCalledWith('phone', '')
+    expect(successSpy).toHaveBeenCalledWith('验证码已发送至绑定手机号，请查收')
+    expect(warningSpy).not.toHaveBeenCalled()
+  })
+})
