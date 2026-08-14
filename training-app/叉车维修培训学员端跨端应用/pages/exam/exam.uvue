@@ -2,15 +2,11 @@
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
         <view class="header">
-<<<<<<< HEAD
             <view class="header-left" @click="onBack">
                 <text class="back-icon">‹</text>
             </view>
             <text class="header-title">考试中心</text>
             <view class="header-right"></view>
-=======
-            <text class="header-title">考试中心</text>
->>>>>>> origin/master
         </view>
         <scroll-view class="content-scroll" scroll-y="true">
 
@@ -234,13 +230,9 @@
         uni.navigateTo({ url: '/pages/profile/mock-exam-records' })
     }
 
-<<<<<<< HEAD
     function onBack() : void {
         uni.navigateBack()
     }
-
-=======
->>>>>>> origin/master
     /** 进入等级考试（新考试或继续） */
     function onEnterExam(exam : LevelExamSession) : void {
         const action = exam.has_participated ? '继续考试' : '开始考试'
@@ -296,7 +288,6 @@
     .header {
         background-color: #2979ff;
         padding: 16rpx 32rpx;
-<<<<<<< HEAD
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
@@ -322,15 +313,6 @@
 
     .header-right {
         width: 80rpx;
-=======
-        align-items: center;
-    }
-
-    .header-title {
-        font-size: 36rpx;
-        font-weight: bold;
-        color: #ffffff;
->>>>>>> origin/master
     }
 
     .content-scroll {

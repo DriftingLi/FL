@@ -151,14 +151,8 @@
 
     const coverColor = ref<string>('#e3f2fd')
 
-<<<<<<< HEAD
     function formatDuration(minutes : number) : string {
         if (minutes <= 0) return '未知'
-=======
-    function formatDuration(seconds : number) : string {
-        if (seconds <= 0) return '未知'
-        const minutes = Math.floor(seconds / 60)
->>>>>>> origin/master
         if (minutes < 60) return minutes + '分钟'
         const hours = Math.floor(minutes / 60)
         const mins = minutes % 60
