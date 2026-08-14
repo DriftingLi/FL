@@ -403,7 +403,7 @@ export function getChapterSlidesApi(chapterId : number) : Promise<UTSJSONObject>
  * 更新学习进度
  * @param courseId 课程 ID
  * @param chapterId 当前学习章节 ID
- * @param duration 本次学习时长（秒）
+ * @param duration 本次学习时长（分钟）
  */
 export function updateCourseProgressApi(courseId : number, chapterId : number, duration : number) : Promise<UTSJSONObject> {
 	const payload : UTSJSONObject = {
