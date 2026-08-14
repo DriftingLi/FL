@@ -30,7 +30,7 @@ type KtResult struct {
 // factoryYear: 出厂年份
 // saleYear: 成交年份
 // provider: 系数提供者，提供 λ
-func CalcKTime(ctx context.Context, powerType model.PowerType, factoryYear, saleYear int, provider ConfigReader) (KtResult, error) {
+func CalcKTime(ctx context.Context, powerType model.PowerType, factoryYear, saleYear int, provider CoefficientResolver) (KtResult, error) {
 	age := saleYear - factoryYear
 	if age < 0 {
 		return KtResult{}, model.ErrInvalidYear

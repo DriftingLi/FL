@@ -14,13 +14,15 @@ import (
 const (
 	CacheKeyBrandsList            = "dict:brands:list"
 	CacheKeyCoefList              = "dict:coef:list"
-	CacheKeyAlgoParams            = "dict:algo_params"
 	CacheKeyTonnagesList          = "dict:specs:tonnages:list"
 	CacheKeyMastTypesList         = "dict:specs:mast_types:list"
 	CacheKeyMastHeightsList       = "dict:specs:mast_heights:list"
 	CacheKeyBatteryTypesList      = "dict:specs:battery_types:list"
 	CacheKeyTransmissionTypesList = "dict:specs:transmission_types:list"
 	CacheKeyEngineTypesList       = "dict:specs:engine_types:list"
+	CacheKeyConditionList         = "dict:condition:list"
+	CacheKeyVtList                = "dict:vt:list"
+	CacheKeyRegionProvinces       = "dict:region:provinces"
 )
 
 // 读 key 前缀常量（SafeKey 构造 key 的公共前缀）。
@@ -72,7 +74,7 @@ var dictCacheContracts = []cacheContract{
 	},
 	{
 		Name:               "vehicle_types",
-		ReadKeyPrefixes:    []string{CachePrefixVtGet, CachePrefixVtByBrand},
+		ReadKeyPrefixes:    []string{CacheKeyVtList, CachePrefixVtGet, CachePrefixVtByBrand},
 		InvalidatePatterns: []string{"dict:vt:*"},
 	},
 	{
@@ -112,18 +114,18 @@ var dictCacheContracts = []cacheContract{
 	},
 	{
 		Name:               "condition_ratings",
-		ReadKeyPrefixes:    []string{CachePrefixConditionGet},
+		ReadKeyPrefixes:    []string{CacheKeyConditionList, CachePrefixConditionGet},
 		InvalidatePatterns: []string{"dict:condition:*"},
 	},
 	{
 		Name:               "region_coefficients",
-		ReadKeyPrefixes:    []string{CachePrefixRegionList, CachePrefixRegionCities, CachePrefixRegionGet},
+		ReadKeyPrefixes:    []string{CacheKeyRegionProvinces, CachePrefixRegionList, CachePrefixRegionCities, CachePrefixRegionGet},
 		InvalidatePatterns: []string{"dict:region:*"},
 	},
 	{
 		Name:               "coefficient_configs",
-		ReadKeyPrefixes:    []string{CachePrefixCoefGet, CacheKeyCoefList, CacheKeyAlgoParams},
-		InvalidatePatterns: []string{"dict:coef:*", CacheKeyAlgoParams},
+		ReadKeyPrefixes:    []string{CachePrefixCoefGet, CacheKeyCoefList},
+		InvalidatePatterns: []string{"dict:coef:*"},
 	},
 	{
 		Name:               "original_prices",

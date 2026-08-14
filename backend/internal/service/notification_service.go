@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
 
@@ -91,32 +92,17 @@ type NotificationListPageResult struct {
 
 // List 分页查询当前用户通知，并附带未读数（一次请求同时支撑列表与角标）。
 func (s *NotificationService) List(userID int, page, pageSize int) (*NotificationListPageResult, error) {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 || pageSize > 50 {
-		pageSize = 10
-	}
-
-	var total int64
-	if err := s.db.Model(&model.Notification{}).
-		Where("user_id = ?", userID).Count(&total).Error; err != nil {
-		return nil, err
-	}
 	var unread int64
 	if err := s.db.Model(&model.Notification{}).
 		Where("user_id = ? AND is_read = ?", userID, false).Count(&unread).Error; err != nil {
 		return nil, err
 	}
 
-	var rows []model.Notification
-	if err := s.db.Where("user_id = ?", userID).
-		Order("id DESC").
-		Offset((page - 1) * pageSize).
-		Limit(pageSize).
-		Find(&rows).Error; err != nil {
-		return nil, err
-	}
+	rows, total, page, pageSize := paging.QueryWithScan[model.Notification](s.db, page, pageSize, 10, 50,
+		"id DESC",
+		func(q *gorm.DB) *gorm.DB {
+			return q.Model(&model.Notification{}).Where("user_id = ?", userID)
+		})
 
 	items := make([]NotificationDTO, 0, len(rows))
 	for i := range rows {

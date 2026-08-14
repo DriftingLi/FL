@@ -9,21 +9,16 @@ import (
 
 // ListSeries 列出全部系列（可按 brand 筛选）
 func (r *DictionaryRepository) ListSeries(ctx context.Context, brand string) ([]Series, error) {
-	query := `SELECT id, brand, name, earliest_factory_year FROM series ORDER BY id ASC`
 	args := []any{}
+	spec := readSpecSeriesList
 	if brand != "" {
-		query = `SELECT id, brand, name, earliest_factory_year FROM series WHERE brand = $1 ORDER BY id ASC`
+		spec.Where = "brand = $1"
 		args = append(args, brand)
 	}
-	return listCached(r, ctx, cacheKey(CachePrefixSeriesByBrand, brand), "查询系列", query,
-		func(rows pgx.Rows) (Series, error) {
-			var s Series
-			err := rows.Scan(&s.ID, &s.Brand, &s.Name, &s.EarliestFactoryYear)
-			return s, err
-		}, args...)
+	return readList[Series](r, ctx, spec, cacheKey(CachePrefixSeriesByBrand, brand), "查询系列", args...)
 }
 
-// ListSeriesConfigOptions 查询指定 series 支持的配置维度及可选项
+// ListSeriesConfigOptions 查询指定 series 支持的配置维度及可选项（复杂查询，保留 typed）
 // 返回三个维度的可选项列表；列表为空表示该 series 不支持此维度
 func (r *DictionaryRepository) ListSeriesConfigOptions(ctx context.Context, brand, series string) (SeriesConfigOptions, error) {
 	type scoRow struct {
@@ -47,14 +42,14 @@ func (r *DictionaryRepository) ListSeriesConfigOptions(ctx context.Context, bran
 		Engine:       make([]string, 0, 4),
 		Battery:      make([]string, 0, 4),
 	}
-	for _, r := range rows {
-		switch r.dimension {
+	for _, rr := range rows {
+		switch rr.dimension {
 		case "transmission":
-			out.Transmission = append(out.Transmission, r.optionName)
+			out.Transmission = append(out.Transmission, rr.optionName)
 		case "engine":
-			out.Engine = append(out.Engine, r.optionName)
+			out.Engine = append(out.Engine, rr.optionName)
 		case "battery":
-			out.Battery = append(out.Battery, r.optionName)
+			out.Battery = append(out.Battery, rr.optionName)
 		}
 	}
 	return out, nil

@@ -519,12 +519,16 @@ func (s *LevelExamService) GetResult(participantID, studentID int) (*LevelExamRe
 	}
 	var answers []model.ExamAnswer
 	s.db.Where("exam_participant_id = ?", p.ID).Find(&answers)
+	qIDs := make([]int, 0, len(answers))
+	for i := range answers {
+		qIDs = append(qIDs, answers[i].QuestionID)
+	}
+	questions := loadQuestionsByIDs(s.db, qIDs)
 	details := make([]LevelExamAnswerDTO, 0, len(answers))
 	for _, a := range answers {
 		d := examAnswerToDTO(&a)
-		var q model.Question
-		if err := s.db.First(&q, a.QuestionID).Error; err == nil {
-			question := newQuestionDTO(&q, true)
+		if q, ok := questions[a.QuestionID]; ok {
+			question := newQuestionDTO(q, true)
 			d.Question = &question
 		}
 		details = append(details, d)

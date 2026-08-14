@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -13,11 +14,15 @@ type memResolver struct {
 	values map[string]float64
 }
 
-func (r *memResolver) ReadFloat(_ context.Context, key string, fallback float64) float64 {
-	if v, ok := r.values[key]; ok && v > 0 {
-		return v
+func (r *memResolver) Get(_ context.Context, key string) (float64, error) {
+	if v, ok := r.values[key]; ok {
+		return v, nil
 	}
-	return fallback
+	return 0, errors.New("coefficient not found: " + key)
+}
+
+func (r *memResolver) ReadFloat(ctx context.Context, key string, fallback float64) float64 {
+	return coefReadFloat(ctx, r, key, fallback)
 }
 
 func newDefaultResolver() *memResolver {
@@ -29,7 +34,7 @@ func newDefaultResolver() *memResolver {
 	}}
 }
 
-func suggestionTexts(in SuggestionsInput, resolver ConfigResolver) []string {
+func suggestionTexts(in SuggestionsInput, resolver CoefficientResolver) []string {
 	return BuildSuggestions(context.Background(), in, resolver)
 }
 

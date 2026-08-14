@@ -69,6 +69,14 @@ func (s *GradingService) GetSubmittedParticipants(sessionID *int) ([]GradingPart
 		var answers []model.ExamAnswer
 		s.db.Where("exam_participant_id = ?", p.ID).Find(&answers)
 
+		uqIDs := make([]int, 0, len(answers))
+		for j := range answers {
+			if answers[j].GraderID == nil {
+				uqIDs = append(uqIDs, answers[j].QuestionID)
+			}
+		}
+		uqTypes := loadQuestionsByIDs(s.db, uqIDs, "id", "type")
+
 		ungradedCount := 0
 		objectiveUngraded := 0
 		subjectiveUngraded := 0
@@ -76,9 +84,8 @@ func (s *GradingService) GetSubmittedParticipants(sessionID *int) ([]GradingPart
 			a := &answers[j]
 			if a.GraderID == nil {
 				ungradedCount++
-				var question model.Question
-				if err := s.db.First(&question, a.QuestionID).Error; err == nil {
-					if question.Type == "short_answer" {
+				if q, ok := uqTypes[a.QuestionID]; ok {
+					if q.Type == "short_answer" {
 						subjectiveUngraded++
 					} else {
 						objectiveUngraded++
@@ -128,15 +135,20 @@ func (s *GradingService) GetParticipantDetail(participantID int) (*GradingPartic
 	var answers []model.ExamAnswer
 	s.db.Where("exam_participant_id = ?", participantID).Find(&answers)
 
+	qIDs := make([]int, 0, len(answers))
+	for i := range answers {
+		qIDs = append(qIDs, answers[i].QuestionID)
+	}
+	questions := loadQuestionsByIDs(s.db, qIDs)
+
 	answerList := make([]LevelExamAnswerDTO, 0, len(answers))
 	objectiveUngraded := 0
 	subjectiveUngraded := 0
 	for i := range answers {
 		a := &answers[i]
 		item := examAnswerToDTO(a)
-		var question model.Question
-		if err := s.db.First(&question, a.QuestionID).Error; err == nil {
-			q := newQuestionDTO(&question, true)
+		if question, ok := questions[a.QuestionID]; ok {
+			q := newQuestionDTO(question, true)
 			item.Question = &q
 			if a.GraderID == nil {
 				if question.Type == "short_answer" {
@@ -184,13 +196,11 @@ func (s *GradingService) GradeAnswer(answerID int, score float64, graderID int, 
 	}
 
 	answer.Score = score
-	correct := score >= maxScore*shortAnswerPassRatio
-	answer.IsCorrect = &correct
 	answer.GraderID = &graderID
 	now := beijingNow()
 	answer.GradedAt = &now
 	answer.GradingComment = comment
-	if err := s.db.Save(&answer).Error; err != nil {
+	if _, err := s.applyShortAnswerGrade(&answer, score, maxScore); err != nil {
 		return nil, err
 	}
 	s.updateParticipantScore(answer.ExamParticipantID)
@@ -214,13 +224,11 @@ func (s *GradingService) RegradeAnswer(answerID int, score float64, graderID int
 	}
 
 	answer.Score = score
-	correct := score >= maxScore*shortAnswerPassRatio
-	answer.IsCorrect = &correct
 	answer.GraderID = &graderID
 	now := beijingNow()
 	answer.GradedAt = &now
 	answer.GradingComment = comment
-	if err := s.db.Save(&answer).Error; err != nil {
+	if _, err := s.applyShortAnswerGrade(&answer, score, maxScore); err != nil {
 		return nil, err
 	}
 	s.updateParticipantScore(answer.ExamParticipantID)
@@ -243,13 +251,11 @@ func (s *GradingService) ConfirmAIGrading(answerID, graderID int) (*LevelExamAns
 
 	maxScore := s.questionMaxScore(answer.QuestionID)
 	answer.Score = *answer.AIScore
-	correct := *answer.AIScore >= maxScore*shortAnswerPassRatio
-	answer.IsCorrect = &correct
 	answer.GraderID = &graderID
 	now := beijingNow()
 	answer.GradedAt = &now
 	answer.GradingComment = fmt.Sprintf("[AI评分确认] %s", answer.AIComment)
-	if err := s.db.Save(&answer).Error; err != nil {
+	if _, err := s.applyShortAnswerGrade(&answer, *answer.AIScore, maxScore); err != nil {
 		return nil, err
 	}
 	s.updateParticipantScore(answer.ExamParticipantID)
@@ -314,16 +320,23 @@ func (s *GradingService) BatchConfirmObjective(participantID, graderID int) (map
 
 	confirmedCount := 0
 	now := beijingNow()
+	uqIDs := make([]int, 0, len(answers))
+	for i := range answers {
+		if answers[i].GraderID == nil {
+			uqIDs = append(uqIDs, answers[i].QuestionID)
+		}
+	}
+	uqTypes := loadQuestionsByIDs(s.db, uqIDs, "id", "type")
 	for i := range answers {
 		a := &answers[i]
 		if a.GraderID != nil {
 			continue
 		}
-		var question model.Question
-		if err := s.db.First(&question, a.QuestionID).Error; err != nil {
+		q, ok := uqTypes[a.QuestionID]
+		if !ok {
 			continue
 		}
-		if question.Type != "short_answer" {
+		if q.Type != "short_answer" {
 			a.GraderID = &graderID
 			a.GradedAt = &now
 			a.GradingComment = "[系统自动批改-导师确认]"
@@ -367,6 +380,12 @@ func (s *GradingService) updateParticipantScore(participantID int) {
 	var answers []model.ExamAnswer
 	s.db.Where("exam_participant_id = ?", participantID).Find(&answers)
 
+	qIDs := make([]int, 0, len(answers))
+	for i := range answers {
+		qIDs = append(qIDs, answers[i].QuestionID)
+	}
+	qTypes := loadQuestionsByIDs(s.db, qIDs, "id", "type")
+
 	hasUngraded := false
 	objectiveScore := 0.0
 	subjectiveScore := 0.0
@@ -375,9 +394,8 @@ func (s *GradingService) updateParticipantScore(participantID int) {
 		if a.GraderID == nil {
 			hasUngraded = true
 		}
-		var question model.Question
-		if err := s.db.First(&question, a.QuestionID).Error; err == nil {
-			if question.Type == "short_answer" {
+		if q, ok := qTypes[a.QuestionID]; ok {
+			if q.Type == "short_answer" {
 				subjectiveScore += a.Score
 			} else {
 				objectiveScore += a.Score
@@ -402,6 +420,24 @@ func (s *GradingService) updateParticipantScore(participantID int) {
 		p.IsPassed = false
 	}
 	s.db.Save(&p)
+}
+
+// ShortAnswerGradeResult 简答题判分结果（评分 → 及格判定 → 落库 IsCorrect → Save 的原子返回值）。
+type ShortAnswerGradeResult struct {
+	Score    float64
+	IsPassed bool
+}
+
+// applyShortAnswerGrade 简答题判分原子入口：由 score 推导 IsCorrect（≥ maxScore×0.6）并写入 answer 落库。
+// 及格线只在 shortAnswerPassed 推导，调用方不再重写 0.6 公式；score 来源与其余落库字段
+// （GraderID/GradedAt/GradingComment）由调用方在调用前设置，字段语义保持不变。
+func (s *GradingService) applyShortAnswerGrade(answer *model.ExamAnswer, score, maxScore float64) (ShortAnswerGradeResult, error) {
+	passed := shortAnswerPassed(score, maxScore)
+	answer.IsCorrect = &passed
+	if err := s.db.Save(answer).Error; err != nil {
+		return ShortAnswerGradeResult{}, err
+	}
+	return ShortAnswerGradeResult{Score: score, IsPassed: passed}, nil
 }
 
 // questionMaxScore 获取题目满分（优先 question.score，否则按定级考试分值表）。

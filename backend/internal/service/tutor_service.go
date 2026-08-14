@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -40,19 +39,8 @@ func (s *TutorService) GetCourses(page, pageSize int, specialtyID, levelID *int)
 // 统计当前导师 grader_id 命中的 exam_answer 行数（即导师本人批阅题数）。
 // days 仅允许 7 或 30，其他值统一回退为 7。
 func (s *TutorService) GetGradingStats(tutorID, days int) *GradingStatsDTO {
-	if days != 7 && days != 30 {
-		days = 7
-	}
-
-	// 计算最近 days 天的起止时间（北京时间）
-	end := beijingNow()
-	startOfDay := end.Add(-time.Duration(end.Hour()) * time.Hour).
-		Add(-time.Duration(end.Minute()) * time.Minute).
-		Add(-time.Duration(end.Second()) * time.Second).
-		Add(-time.Duration(end.Nanosecond()) * time.Nanosecond)
-	start := startOfDay.AddDate(0, 0, -(days - 1))
-
-	// 按天聚合当前导师已批阅题数
+	// 按天聚合当前导师已批阅题数（起点由 BuildDailySeries/dailySeriesStart 统一钳制与推导）
+	start := dailySeriesStart(days)
 	type dailyRow struct {
 		Day   string
 		Count int64
@@ -65,36 +53,18 @@ func (s *TutorService) GetGradingStats(tutorID, days int) *GradingStatsDTO {
 		Order("day ASC").
 		Scan(&rows)
 
-	// 构建日期 -> 题数映射
 	countByDay := make(map[string]int64, len(rows))
-	var totalCount int64
 	for _, r := range rows {
 		countByDay[r.Day] = r.Count
-		totalCount += r.Count
 	}
 
-	// 生成最近 days 天的完整序列（含无批阅记录的天，补 0）
-	// start 由 beijingNow() 派生，携带 Asia/Shanghai 时区，AddDate 保留时区
-	labels := make([]string, 0, days)
-	data := make([]int64, 0, days)
-	activeDays := 0
-	for i := 0; i < days; i++ {
-		d := start.AddDate(0, 0, i)
-		key := d.Format("2006-01-02")
-		cnt := countByDay[key]
-		if cnt > 0 {
-			activeDays++
-		}
-		labels = append(labels, d.Format("1/2"))
-		data = append(data, cnt)
-	}
-
+	series := BuildDailySeries(days, countByDay)
 	return &GradingStatsDTO{
-		Days:       days,
-		Labels:     labels,
-		Data:       data,
-		TotalCount: totalCount,
-		ActiveDays: activeDays,
+		Days:       series.Days,
+		Labels:     series.Labels,
+		Data:       series.Data,
+		TotalCount: series.Total,
+		ActiveDays: series.ActiveDays,
 	}
 }
 

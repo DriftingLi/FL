@@ -2,13 +2,11 @@
 package api
 
 import (
-	"io"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -25,7 +23,7 @@ func NewFeaturedHandler(svc *service.FeaturedService, fileSvc *service.FileServi
 }
 
 // RegisterFeaturedRoutes 注册内容精选路由（公开 + 管理端）。
-func RegisterFeaturedRoutes(rg *gin.RouterGroup, sess *security.Session, svc *service.FeaturedService, fileSvc *service.FileService) {
+func RegisterFeaturedRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.FeaturedService, fileSvc *service.FileService) {
 	h := NewFeaturedHandler(svc, fileSvc)
 
 	// ===== 公开接口（无鉴权）=====
@@ -34,7 +32,7 @@ func RegisterFeaturedRoutes(rg *gin.RouterGroup, sess *security.Session, svc *se
 	rg.POST("/featured-content/:id/view", h.IncrementViewCount)
 
 	// ===== 管理端接口（需 admin 角色）=====
-	g := rg.Group("/admin", middleware.JWTAuth(sess), middleware.RoleRequired("admin"))
+	g := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
 	g.GET("/featured-contents", h.AdminList)
 	g.GET("/featured-content/:id", h.AdminDetail)
 	g.POST("/featured-content", h.Create)
@@ -173,50 +171,9 @@ func (h *FeaturedHandler) Publish(c *gin.Context) {
 	response.SuccessWithMsg(c, "内容发布成功", result)
 }
 
-// vditorFeatureError 构造 Vditor 期望的错误响应体。
-func vditorFeatureError(msg string, errFiles []string) gin.H {
-	return gin.H{"msg": msg, "code": 1, "data": gin.H{"errFiles": errFiles, "succMap": map[string]string{}}}
-}
-
 // UploadImage 上传图片（Markdown 编辑器内嵌 + 封面）POST /api/admin/featured-content/upload-image
 // 返回 Vditor 期望的响应格式：{ msg: "", code: 0, data: { errFiles: [], succMap: { "name": "url" } } }
 func (h *FeaturedHandler) UploadImage(c *gin.Context) {
-	file, err := c.FormFile("file")
-	if err != nil {
-		c.JSON(200, vditorFeatureError("未找到上传文件", []string{}))
-		return
-	}
-	if file.Filename == "" {
-		c.JSON(200, vditorFeatureError("未选择文件", []string{}))
-		return
-	}
-	src, err := file.Open()
-	if err != nil {
-		c.JSON(200, vditorFeatureError("文件打开失败", []string{file.Filename}))
-		return
-	}
-	defer src.Close()
-	content, err := io.ReadAll(src)
-	if err != nil {
-		c.JSON(200, vditorFeatureError("文件读取失败", []string{file.Filename}))
-		return
-	}
-	// 校验图片格式与大小
-	if ok, msg := h.fileSvc.ValidateImageFile(file.Filename, file.Size); !ok {
-		c.JSON(200, vditorFeatureError(msg, []string{file.Filename}))
-		return
-	}
-	url, err := h.svc.SaveImage(content, file.Filename)
-	if err != nil {
-		c.JSON(200, vditorFeatureError("文件保存失败", []string{file.Filename}))
-		return
-	}
-	c.JSON(200, gin.H{
-		"msg":  "",
-		"code": 0,
-		"data": gin.H{
-			"errFiles": []string{},
-			"succMap":  map[string]string{file.Filename: url},
-		},
-	})
+	// 封面/内嵌图存 featured 目录（FeaturedService.SaveImage 单点）
+	uploadVditorImage(c, h.fileSvc, h.svc.SaveImage)
 }

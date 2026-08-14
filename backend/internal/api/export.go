@@ -13,7 +13,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -29,10 +28,10 @@ func NewExportHandler(svc *service.ExportService) *ExportHandler {
 }
 
 // RegisterExportRoutes 注册 /api/admin/export 蓝图（仅管理员，返回 CSV 附件）。
-func RegisterExportRoutes(rg *gin.RouterGroup, sess *security.Session, svc *service.ExportService) {
+func RegisterExportRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ExportService) {
 	h := NewExportHandler(svc)
 
-	g := rg.Group("/admin/export", middleware.JWTAuth(sess), middleware.RoleRequired("admin"))
+	g := rg.Group("/admin/export", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
 
 	g.GET("/students", h.exportCSV(func() ([][]any, error) { return svc.Students() }, "学员名单.csv"))
 	g.GET("/exam-records", h.exportCSV(func() ([][]any, error) { return svc.ExamRecords() }, "成绩单.csv"))

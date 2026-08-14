@@ -462,7 +462,7 @@ func newTestValuationEngineWithStorage(t *testing.T, st storage.Storage) (*gin.E
 	r := gin.New()
 	r.Use(gin.Recovery())
 
-	RegisterRoutes(r, sess, zap.NewNop(), nil, nil,
+	RegisterRoutes(r, sess, zap.NewNop(), nil,
 		dict, evalStore, batteryStore,
 		valuationSvc, vservice.NewBatteryRULService(),
 		&memReportGenerator{}, st,

@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -29,10 +28,10 @@ func NewProfileBindHandler(authSvc *service.AuthService, codeSvc *service.Verify
 
 // RegisterProfileBindRoutes 注册 /api/auth/profile 蓝图（登录后绑定/修改手机号、邮箱）
 // 与 /api/auth/account 蓝图（短信验证码确认修改登录账号）。
-func RegisterProfileBindRoutes(rg *gin.RouterGroup, sess *security.Session, authSvc *service.AuthService, codeSvc *service.VerifyCodeService, emailCh, phoneCh service.CodeChannel) {
+func RegisterProfileBindRoutes(rg *gin.RouterGroup, rd RouterDeps, authSvc *service.AuthService, codeSvc *service.VerifyCodeService, emailCh, phoneCh service.CodeChannel) {
 	h := NewProfileBindHandler(authSvc, codeSvc, emailCh, phoneCh)
 
-	g := rg.Group("/auth/profile", middleware.JWTAuth(sess))
+	g := rg.Group("/auth/profile", middleware.JWTAuth(rd.Session))
 
 	// POST /api/auth/profile/send-code {channel: email|phone, target}
 	g.POST("/send-code", h.SendCode)
@@ -43,7 +42,7 @@ func RegisterProfileBindRoutes(rg *gin.RouterGroup, sess *security.Session, auth
 	g.POST("/password", h.UpdatePassword)
 
 	// 修改登录账号（短信验证码确认）：PUT /api/auth/account、POST /api/auth/account/send-code
-	acct := rg.Group("/auth/account", middleware.JWTAuth(sess))
+	acct := rg.Group("/auth/account", middleware.JWTAuth(rd.Session))
 	acct.PUT("", h.UpdateAccount)
 	acct.POST("/send-code", h.SendAccountChangeCode)
 }

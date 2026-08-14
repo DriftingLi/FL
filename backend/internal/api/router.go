@@ -63,11 +63,12 @@ func NewRouter(deps *Deps) *gin.Engine {
 	registerStaticRoutes(r, cfg)
 
 	authH := deps.AuthH
+	rd := deps.RouterDeps()
 
 	// ===== API 路由组 =====
 	api := r.Group("/api")
 	// 审计日志：记录管理员/讲师写操作（不依赖中间件顺序，见 middleware.AuditLog）
-	api.Use(middleware.AuditLog(cfg, deps.DB, deps.Logger))
+	api.Use(middleware.AuditLog(deps.AuditSvc, deps.Logger))
 
 	// 认证蓝图 /api/auth/*
 	auth := api.Group("/auth")
@@ -83,36 +84,36 @@ func NewRouter(deps *Deps) *gin.Engine {
 	}
 
 	// 邮箱验证码注册/登录
-	RegisterEmailAuthRoutes(api, deps.Session, deps.CodeSvc, deps.EmailCh)
+	RegisterEmailAuthRoutes(api, rd, deps.CodeSvc, deps.EmailCh)
 	// 手机号验证码注册/登录
-	RegisterPhoneAuthRoutes(api, deps.Session, deps.CodeSvc, deps.PhoneCh)
+	RegisterPhoneAuthRoutes(api, rd, deps.CodeSvc, deps.PhoneCh)
 	// 微信扫码登录（框架占位）
 	RegisterWechatAuthRoutes(api, deps.WechatAuthSvc)
 	// 个人信息页：手机号/邮箱绑定修改
-	RegisterProfileBindRoutes(api, deps.Session, deps.AuthSvc, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
+	RegisterProfileBindRoutes(api, rd, deps.AuthSvc, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
 
 	// 注册全部 12 个业务蓝图：
 	//   auth/courses/student/question-bank/
 	//   level-exam/grading/tutor/wrong-questions/mock-exam/admin
 	//   practice-mode（题库练习模式：自由刷题/知识点专项，对应 question_practice_record）
-	RegisterCoursesRoutes(api, deps.Session, deps.CourseSvc)
-	RegisterStudentRoutes(api, deps.Session, deps.StudentSvc)
-	RegisterQuestionBankRoutes(api, deps.Session, deps.QuestionBankSvc, deps.FileSvc)
-	RegisterPracticeModeRoutes(api, deps.Session, deps.PracticeModeSvc)
-	RegisterLevelExamRoutes(api, deps.Session, deps.LevelExamSvc)
-	RegisterGradingRoutes(api, deps.Session, deps.GradingSvc)
-	RegisterAdminRoutes(api, deps.Session, deps.AdminSvc, deps.AdminCourseSvc, deps.AuthSvc, deps.AIConfigSvc, deps.ContentGenSvc)
-	RegisterTutorRoutes(api, deps.Session, deps.TutorSvc, deps.FileSvc)
-	RegisterWrongQuestionRoutes(api, deps.Session, deps.WrongQuestionSvc)
-	RegisterMockExamRoutes(api, deps.Session, deps.MockExamSvc)
-	RegisterFeaturedRoutes(api, deps.Session, deps.FeaturedSvc, deps.FileSvc)
-	RegisterAIAssistantRoutes(api, deps.Session, deps.AIAssistantSvc)
-	RegisterForumRoutes(api, deps.Session, deps.ForumSvc, deps.ForumImageSvc)
-	RegisterProfileReviewRoutes(api, deps.Session, deps.ReviewSvc)
-	RegisterNotificationRoutes(api, deps.Session, deps.NotificationSvc)
-	RegisterAuditRoutes(api, deps.Session, deps.DB)
-	RegisterExportRoutes(api, deps.Session, deps.ExportSvc)
-	RegisterTrainingCatalogRoutes(api, deps.Session, deps.TrainingCatalogSvc)
+	RegisterCoursesRoutes(api, rd, deps.CourseSvc)
+	RegisterStudentRoutes(api, rd, deps.StudentSvc)
+	RegisterQuestionBankRoutes(api, rd, deps.QuestionBankSvc, deps.FileSvc)
+	RegisterPracticeModeRoutes(api, rd, deps.PracticeModeSvc)
+	RegisterLevelExamRoutes(api, rd, deps.LevelExamSvc)
+	RegisterGradingRoutes(api, rd, deps.GradingSvc)
+	RegisterAdminRoutes(api, rd, deps.AdminSvc, deps.AdminCourseSvc, deps.AuthSvc, deps.AIConfigSvc, deps.ContentGenSvc)
+	RegisterTutorRoutes(api, rd, deps.TutorSvc, deps.FileSvc)
+	RegisterWrongQuestionRoutes(api, rd, deps.WrongQuestionSvc)
+	RegisterMockExamRoutes(api, rd, deps.MockExamSvc)
+	RegisterFeaturedRoutes(api, rd, deps.FeaturedSvc, deps.FileSvc)
+	RegisterAIAssistantRoutes(api, rd, deps.AIAssistantSvc)
+	RegisterForumRoutes(api, rd, deps.ForumSvc, deps.ForumImageSvc)
+	RegisterProfileReviewRoutes(api, rd, deps.ReviewSvc)
+	RegisterNotificationRoutes(api, rd, deps.NotificationSvc)
+	RegisterAuditRoutes(api, rd, deps.AuditSvc)
+	RegisterExportRoutes(api, rd, deps.ExportSvc)
+	RegisterTrainingCatalogRoutes(api, rd, deps.TrainingCatalogSvc)
 
 	return r
 }

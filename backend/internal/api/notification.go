@@ -8,7 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -24,10 +23,10 @@ func NewNotificationHandler(svc *service.NotificationService) *NotificationHandl
 }
 
 // RegisterNotificationRoutes 注册 /api/notifications 蓝图（登录用户站内信）。
-func RegisterNotificationRoutes(rg *gin.RouterGroup, sess *security.Session, svc *service.NotificationService) {
+func RegisterNotificationRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.NotificationService) {
 	h := NewNotificationHandler(svc)
 
-	g := rg.Group("/notifications", middleware.JWTAuth(sess))
+	g := rg.Group("/notifications", middleware.JWTAuth(rd.Session))
 
 	// GET /api/notifications?page=&page_size= 分页查询通知（含未读数）
 	g.GET("", h.List)

@@ -22,8 +22,8 @@ func TestRetiredPracticeEndpointsReturn404(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterPracticeModeRoutes(api, deps.Session, deps.PracticeModeSvc)
-	RegisterQuestionBankRoutes(api, deps.Session, deps.QuestionBankSvc, deps.FileSvc)
+	RegisterPracticeModeRoutes(api, deps.RouterDeps(), deps.PracticeModeSvc)
+	RegisterQuestionBankRoutes(api, deps.RouterDeps(), deps.QuestionBankSvc, deps.FileSvc)
 
 	cases := []struct {
 		method string
@@ -51,7 +51,7 @@ func TestQuestionBankQuestionsIgnoresKpParam(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterQuestionBankRoutes(api, deps.Session, deps.QuestionBankSvc, deps.FileSvc)
+	RegisterQuestionBankRoutes(api, deps.RouterDeps(), deps.QuestionBankSvc, deps.FileSvc)
 
 	// 未登录访问会被 JWT 中间件拦下（401），但绝不应因已删的 knowledge_point_id 参数而 500
 	rec := performRequest(r, "GET", "/api/question-bank/questions?knowledge_point_id=1")
@@ -69,7 +69,7 @@ func TestTutorCourseRoutesAbsent(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterTutorRoutes(api, deps.Session, deps.TutorSvc, deps.FileSvc)
+	RegisterTutorRoutes(api, deps.RouterDeps(), deps.TutorSvc, deps.FileSvc)
 
 	for _, tc := range []struct {
 		method string

@@ -12,6 +12,7 @@ import (
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
+	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 	vservice "forklift-training/internal/valuation/service"
 )
@@ -33,7 +34,7 @@ func TestValuationAdminWriteAudited(t *testing.T) {
 	if err != nil {
 		t.Fatalf("构造估值服务失败: %v", err)
 	}
-	RegisterRoutes(r, sess, zap.NewNop(), cfg, auditDB,
+	RegisterRoutes(r, sess, zap.NewNop(), service.NewAuditService(auditDB),
 		dict, evalStore, batteryStore,
 		valuationSvc, vservice.NewBatteryRULService(),
 		&memReportGenerator{}, &memStorage{},

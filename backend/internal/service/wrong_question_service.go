@@ -39,13 +39,18 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 		return q
 	})
 
+	questionIDs := make([]int, 0, len(items))
+	for i := range items {
+		questionIDs = append(questionIDs, items[i].QuestionID)
+	}
+	questions := loadQuestionsByIDs(s.db, questionIDs)
+
 	result := make([]map[string]any, 0, len(items))
 	for i := range items {
 		wq := &items[i]
 		item := wrongQuestionToDict(wq)
-		var question model.Question
-		if err := s.db.First(&question, wq.QuestionID).Error; err == nil {
-			item["question"] = newQuestionDTO(&question, true)
+		if q, ok := questions[wq.QuestionID]; ok {
+			item["question"] = newQuestionDTO(q, true)
 		}
 		result = append(result, item)
 	}
@@ -108,13 +113,15 @@ func (s *WrongQuestionService) GetStats(studentID int) map[string]any {
 
 	byType := map[string]int{}
 	total := len(items)
+	qIDs := make([]int, 0, len(items))
 	for i := range items {
-		wq := &items[i]
-		var question model.Question
-		if err := s.db.First(&question, wq.QuestionID).Error; err != nil {
-			continue
+		qIDs = append(qIDs, items[i].QuestionID)
+	}
+	questions := loadQuestionsByIDs(s.db, qIDs, "id", "type")
+	for i := range items {
+		if q, ok := questions[items[i].QuestionID]; ok {
+			byType[q.Type]++
 		}
-		byType[question.Type]++
 	}
 	return map[string]any{
 		"total":   total,
@@ -127,11 +134,17 @@ func (s *WrongQuestionService) ExportWrongQuestions(studentID int) []map[string]
 	var items []model.WrongQuestion
 	s.db.Where("student_id = ? AND is_removed = ?", studentID, false).Find(&items)
 
+	qIDs := make([]int, 0, len(items))
+	for i := range items {
+		qIDs = append(qIDs, items[i].QuestionID)
+	}
+	questions := loadQuestionsByIDs(s.db, qIDs)
+
 	exportData := make([]map[string]any, 0, len(items))
 	for i := range items {
 		wq := &items[i]
-		var question model.Question
-		if err := s.db.First(&question, wq.QuestionID).Error; err != nil {
+		question, ok := questions[wq.QuestionID]
+		if !ok {
 			continue
 		}
 		var options interface{}

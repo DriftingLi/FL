@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -26,10 +25,10 @@ func NewTutorHandler(svc *service.TutorService, fileSvc *service.FileService) *T
 }
 
 // RegisterTutorRoutes 注册 /api/tutor 蓝图。
-func RegisterTutorRoutes(rg *gin.RouterGroup, sess *security.Session, svc *service.TutorService, fileSvc *service.FileService) {
+func RegisterTutorRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.TutorService, fileSvc *service.FileService) {
 	h := NewTutorHandler(svc, fileSvc)
 
-	g := rg.Group("/tutor", middleware.JWTAuth(sess), middleware.RoleRequired("tutor"))
+	g := rg.Group("/tutor", middleware.JWTAuth(rd.Session), middleware.RoleRequired("tutor"))
 
 	// GET /api/tutor/courses  导师课程列表
 	g.GET("/courses", h.ListCourses)
@@ -55,17 +54,8 @@ func RegisterTutorRoutes(rg *gin.RouterGroup, sess *security.Session, svc *servi
 func (h *TutorHandler) ListCourses(c *gin.Context) {
 	page := atoiDefault(c.Query("page"), 1)
 	pageSize := atoiDefault(c.Query("page_size"), 10)
-	var specialtyID, levelID *int
-	if s := c.Query("specialty_id"); s != "" {
-		if id, err := strconv.Atoi(s); err == nil && id > 0 {
-			specialtyID = &id
-		}
-	}
-	if s := c.Query("level_id"); s != "" {
-		if id, err := strconv.Atoi(s); err == nil && id > 0 {
-			levelID = &id
-		}
-	}
+	specialtyID := queryIDPtr(c, "specialty_id")
+	levelID := queryIDPtr(c, "level_id")
 	response.Success(c, h.svc.GetCourses(page, pageSize, specialtyID, levelID))
 }
 
@@ -142,61 +132,22 @@ func (h *TutorHandler) UploadChapterFile(c *gin.Context) {
 	response.SuccessWithMsg(c, "文件上传成功", result)
 }
 
-// vditorError 构造 Vditor 期望的错误响应体。
-func vditorError(msg string, errFiles []string) gin.H {
-	return gin.H{"msg": msg, "code": 1, "data": gin.H{"errFiles": errFiles, "succMap": map[string]string{}}}
-}
-
 // UploadImage 上传图文 Markdown 中的图片（Vditor 格式）POST /api/tutor/upload-image
 // form 字段：file（图片）、chapter_id（可选，用于按章节分目录存储 images/chapters/<chapterId>/）
 // 返回 Vditor 期望的响应格式：{ msg: "", code: 0, data: { errFiles: [], succMap: { "name": "url" } } }
 func (h *TutorHandler) UploadImage(c *gin.Context) {
-	file, err := c.FormFile("file")
-	if err != nil {
-		c.JSON(200, vditorError("未找到上传文件", []string{}))
-		return
-	}
-	if file.Filename == "" {
-		c.JSON(200, vditorError("未选择文件", []string{}))
-		return
-	}
-	src, err := file.Open()
-	if err != nil {
-		c.JSON(200, vditorError("文件打开失败", []string{file.Filename}))
-		return
-	}
-	defer src.Close()
-	content, err := io.ReadAll(src)
-	if err != nil {
-		c.JSON(200, vditorError("文件读取失败", []string{file.Filename}))
-		return
-	}
-	if ok, msg := h.fileSvc.ValidateImageFile(file.Filename, file.Size); !ok {
-		c.JSON(200, vditorError(msg, []string{file.Filename}))
-		return
-	}
 	// 按章节分目录存储，便于删除章节时按前缀清理（历史旧目录孤儿文件不处理）
 	// chapter_id 支持 query（Vditor 走 URL）与 form（直接 multipart）两种传递方式
-	subfolder := "images/chapters"
-	chapterIDStr := c.Query("chapter_id")
-	if chapterIDStr == "" {
-		chapterIDStr = c.PostForm("chapter_id")
-	}
-	if chapterID, err := strconv.Atoi(chapterIDStr); err == nil && chapterID > 0 {
-		subfolder = fmt.Sprintf("images/chapters/%d", chapterID)
-	}
-	url, err := h.fileSvc.SaveFile(content, file.Filename, subfolder)
-	if err != nil {
-		c.JSON(200, vditorError("文件保存失败", []string{file.Filename}))
-		return
-	}
-	c.JSON(200, gin.H{
-		"msg":  "",
-		"code": 0,
-		"data": gin.H{
-			"errFiles": []string{},
-			"succMap":  map[string]string{file.Filename: url},
-		},
+	uploadVditorImage(c, h.fileSvc, func(content []byte, filename string) (string, error) {
+		subfolder := "images/chapters"
+		chapterIDStr := c.Query("chapter_id")
+		if chapterIDStr == "" {
+			chapterIDStr = c.PostForm("chapter_id")
+		}
+		if chapterID, err := strconv.Atoi(chapterIDStr); err == nil && chapterID > 0 {
+			subfolder = fmt.Sprintf("images/chapters/%d", chapterID)
+		}
+		return h.fileSvc.SaveFile(content, filename, subfolder)
 	})
 }
 

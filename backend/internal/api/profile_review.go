@@ -8,7 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -24,10 +23,10 @@ func NewProfileReviewHandler(svc *service.ProfileReviewService) *ProfileReviewHa
 }
 
 // RegisterProfileReviewRoutes 注册 /api/admin/profile-reviews 蓝图（仅管理员）。
-func RegisterProfileReviewRoutes(rg *gin.RouterGroup, sess *security.Session, svc *service.ProfileReviewService) {
+func RegisterProfileReviewRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ProfileReviewService) {
 	h := NewProfileReviewHandler(svc)
 
-	g := rg.Group("/admin/profile-reviews", middleware.JWTAuth(sess), middleware.RoleRequired("admin"))
+	g := rg.Group("/admin/profile-reviews", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
 
 	// GET /api/admin/profile-reviews?status=pending|approved|rejected|all&page=&page_size=
 	g.GET("", h.ListRequests)

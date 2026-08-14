@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -24,10 +23,10 @@ func NewQuestionBankHandler(svc *service.QuestionBankService, fileSvc *service.F
 }
 
 // RegisterQuestionBankRoutes 注册 /api/question-bank 蓝图。
-func RegisterQuestionBankRoutes(rg *gin.RouterGroup, sess *security.Session, svc *service.QuestionBankService, fileSvc *service.FileService) {
+func RegisterQuestionBankRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.QuestionBankService, fileSvc *service.FileService) {
 	h := NewQuestionBankHandler(svc, fileSvc)
 
-	g := rg.Group("/question-bank", middleware.JWTAuth(sess))
+	g := rg.Group("/question-bank", middleware.JWTAuth(rd.Session))
 
 	// ===== 题目 CRUD =====
 	g.GET("/questions", h.ListQuestions)
@@ -52,12 +51,7 @@ func (h *QuestionBankHandler) ListQuestions(c *gin.Context) {
 	qType := c.Query("type")
 	status := c.Query("status")
 	keyword := c.Query("keyword")
-	var tagID *int
-	if s := c.Query("tag_id"); s != "" {
-		if id, err := strconv.Atoi(s); err == nil {
-			tagID = &id
-		}
-	}
+	tagID := queryIDPtr(c, "tag_id")
 	response.Success(c, h.svc.ListQuestions(page, pageSize, qType, status, keyword, tagID))
 }
 

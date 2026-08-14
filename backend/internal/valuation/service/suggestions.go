@@ -11,14 +11,9 @@ import (
 	"forklift-training/internal/valuation/model"
 )
 
-// ConfigResolver 系数配置读取接口（评估流程用 CoefficientProvider，测试用内存实现）。
-type ConfigResolver interface {
-	ReadFloat(ctx context.Context, key string, fallback float64) float64
-}
-
 // ReadFloat 从 provider 读取系数，失败或非正数时返回 fallback 默认值。
 func (p *CoefficientProvider) ReadFloat(ctx context.Context, key string, fallback float64) float64 {
-	return readWithFallback(ctx, p, key, fallback)
+	return coefReadFloat(ctx, p, key, fallback)
 }
 
 // SuggestionsInput 建议生成的输入（评估结果与持久化记录都可映射，保持 builder 中立）。
@@ -74,7 +69,7 @@ func FromDetail(d *model.EvaluationDetail) SuggestionsInput {
 // 每条建议是一个短句，前端直接用 <li> 列表展示
 // 000015：证件扣减/油漆保养加成百分比动态读取，并补充可售性提示
 // 评估流程与 PDF 重建都走本函数，百分比统一从 resolver 动态读取。
-func BuildSuggestions(ctx context.Context, in SuggestionsInput, resolver ConfigResolver) []string {
+func BuildSuggestions(ctx context.Context, in SuggestionsInput, resolver CoefficientResolver) []string {
 	s := make([]string, 0, 10)
 
 	// 1. 车况维度（核心）
@@ -202,7 +197,7 @@ func BuildBatterySuggestions(bt model.BatteryType, soh float64, rul, low, high i
 
 // EnsureSuggestions 车辆评估旧记录建议 fallback 单一入口（ADR-0012 §6）：
 // 建议为空才填充（评估时点锁定值不被覆盖，ADR-0004）；详情接口与报告 Prepare 同源。
-func EnsureSuggestions(ctx context.Context, d *model.EvaluationDetail, resolver ConfigResolver) {
+func EnsureSuggestions(ctx context.Context, d *model.EvaluationDetail, resolver CoefficientResolver) {
 	if len(d.Suggestions) > 0 {
 		return
 	}
