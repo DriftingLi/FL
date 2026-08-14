@@ -78,16 +78,15 @@ export default defineConfig({
       interval: 200
     },
     proxy: {
-      // 后端容器宿主端口 18080（8080 落在 Windows Hyper-V 排除端口段 8025-8124 内，见 backend/docker-compose.yml 注释）
       '/api': {
-        target: 'http://127.0.0.1:18080',
+        target: 'http://127.0.0.1:8080',
         changeOrigin: true,
         timeout: 60000,
         proxyTimeout: 60000,
         ws: false
       },
       '/static': {
-        target: 'http://127.0.0.1:18080',
+        target: 'http://127.0.0.1:8080',
         changeOrigin: true,
         timeout: 60000,
         proxyTimeout: 60000

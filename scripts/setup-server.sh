@@ -297,11 +297,11 @@ STUDENT_DEFAULT_PASSWORD=请替换为强密码
 # 主域名为 www，管理员后台用 manage 替代 admin
 CORS_ORIGINS=https://www.your-domain.com,https://training.your-domain.com,https://valuation.your-domain.com,https://mentor.your-domain.com,https://manage.your-domain.com
 
-# AI 配置
-ZHIPU_API_KEY=your-zhipu-api-key
-ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas/v4
-ZHIPU_MODEL=glm-4.7-flash
-OPENAI_API_KEY=
+# AI 配置（OpenAI 兼容格式：可填阶跃星辰 StepFun / DeepSeek / 智谱 GLM）
+# StepFun 示例：AI_BASE_URL=https://api.stepfun.com/v1  AI_MODEL=step-3.7-flash
+AI_API_KEY=your-ai-api-key
+AI_BASE_URL=https://api.deepseek.com
+AI_MODEL=deepseek-v4-flash
 
 # 后端镜像（CD 流水线自动填充）
 BACKEND_IMAGE=ghcr.io/YOUR_ORG/forklift-training-backend

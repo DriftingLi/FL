@@ -9,7 +9,7 @@
 - **课程管理**：课程 CRUD、章节内容编排、PPT / 视频 / 图文混排
 - **考试系统**：课程考试、模拟考试、等级考试，自动判分与成绩统计
 - **练习中心**：自由练习、知识点练习、错题本、练习统计
-- **AI 助手**：基于大模型的智能问答与内容生成（Coze Web SDK / 智谱 GLM）
+- **AI 助手**：基于大模型的智能问答与内容生成（OpenAI 兼容接口，支持 StepFun / DeepSeek / 智谱 GLM 等）
 
 ### 残值评估模块
 
@@ -64,7 +64,7 @@
 - 认证：golang-jwt/v5（双体系）
 - 日志：zap
 - PDF 生成：gofpdf（中文 SimHei 字体）
-- AI 集成：智谱 GLM（OpenAI 兼容接口）+ go-openai（备用）+ Coze Web SDK
+- AI 集成：OpenAI 兼容接口（StepFun / DeepSeek / 智谱 GLM / OpenAI）+ go-openai + eino（流式）+ Coze Web SDK
 - 测试库：glebarez/sqlite（单元测试用 SQLite）
 
 ### 前端（frontend）
@@ -224,8 +224,7 @@ npm run dev                   # 默认 :5173
 | `UPLOAD_FOLDER` | 上传目录 | static/uploads |
 | `MAX_CONTENT_LENGTH_MB` | 上传大小上限 | 250 |
 | `ADMIN_DEFAULT_PASSWORD` / `TUTOR_DEFAULT_PASSWORD` / `STUDENT_DEFAULT_PASSWORD` | 默认账号密码（生产必改） | 空 |
-| `ZHIPU_API_KEY` / `ZHIPU_BASE_URL` / `ZHIPU_MODEL` | 智谱 GLM 配置 | glm-4.7-flash |
-| `OPENAI_API_KEY` | OpenAI 密钥（ZHIPU 为空时备用） | 空 |
+| `AI_API_KEY` / `AI_BASE_URL` / `AI_MODEL` | 默认 AI 供应商（OpenAI 兼容格式，如 StepFun / DeepSeek / 智谱 GLM） | 空 / 空 / 空 |
 | `COZE_*` | Coze OAuth / Web SDK 配置 | 空 |
 | `VALUATION_PDF_OUTPUT_DIR` | 评估报告 PDF 输出目录 | storage/reports |
 

@@ -135,6 +135,22 @@
         label-width="100px"
         autocomplete="off"
       >
+        <el-form-item label="供应商预设">
+          <el-select
+            v-model="presetKey"
+            placeholder="选择预设自动填充 Base URL / 模型"
+            clearable
+            style="width: 100%"
+            @change="handlePresetChange"
+          >
+            <el-option
+              v-for="p in providerPresets"
+              :key="p.key"
+              :value="p.key"
+              :label="p.label"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="名称" prop="name">
           <el-input
             v-model="form.name"
@@ -198,6 +214,21 @@ const form = ref({
   description: '',
   is_active: true
 })
+
+// 供应商预设：选择后自动填充 Base URL 与模型
+const providerPresets = [
+  { key: 'stepfun', label: 'StepFun（阶跃星辰）', name: 'StepFun', base_url: 'https://api.stepfun.com/v1', model: 'step-3.7-flash' },
+  { key: 'deepseek', label: 'DeepSeek', name: 'DeepSeek', base_url: 'https://api.deepseek.com', model: 'deepseek-v4-flash' }
+]
+const presetKey = ref('')
+
+function handlePresetChange(key: string) {
+  const p = providerPresets.find((x) => x.key === key)
+  if (!p) return
+  form.value.name = p.name
+  form.value.base_url = p.base_url
+  form.value.model = p.model
+}
 
 // api_key 仅在新建时必填（编辑时留空表示不修改）
 const rules = computed<Record<string, FormItemRule[]>>(() => ({
@@ -283,6 +314,7 @@ async function handleUnbind(featureKey: string, configId: number) {
 function openCreateDialog() {
   dialogMode.value = 'create'
   editingId.value = null
+  presetKey.value = ''
   form.value = {
     name: '',
     api_key: '',
@@ -297,6 +329,7 @@ function openCreateDialog() {
 function openEditDialog(row: AIConfig) {
   dialogMode.value = 'edit'
   editingId.value = row.id
+  presetKey.value = ''
   form.value = {
     name: row.name,
     api_key: '',
