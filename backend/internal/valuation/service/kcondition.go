@@ -65,7 +65,7 @@ func CalcKCondition(
 	rating string,
 	originalPaint, hasMaintenanceRecords, hasLicensePlate, hasRegistrationCertificate bool,
 	dictRepo DictionaryReader,
-	provider ConfigReader,
+	provider CoefficientResolver,
 ) (KcResult, error) {
 	// 1. 查询车况评级基准系数
 	//    字典表未命中时用 1.0 兜底（中性车况，不阻断评估流程）
@@ -79,10 +79,10 @@ func CalcKCondition(
 	}
 
 	// 2. 从 provider 读取 4 个修正项（失败时回退默认值）
-	paintBonus := readWithFallback(ctx, provider, KeyKcPaintBonus, defaultKcPaintBonus)
-	maintenanceBonus := readWithFallback(ctx, provider, KeyKcMaintenanceBonus, defaultKcMaintenanceBonus)
-	licensePenaltyPct := readWithFallback(ctx, provider, KeyKcNoLicensePenaltyPct, defaultKcNoLicensePenaltyPct)
-	registrationPenaltyPct := readWithFallback(ctx, provider, KeyKcNoRegistrationPenaltyPct, defaultKcNoRegistrationPenaltyPct)
+	paintBonus := coefReadFloat(ctx, provider, KeyKcPaintBonus, defaultKcPaintBonus)
+	maintenanceBonus := coefReadFloat(ctx, provider, KeyKcMaintenanceBonus, defaultKcMaintenanceBonus)
+	licensePenaltyPct := coefReadFloat(ctx, provider, KeyKcNoLicensePenaltyPct, defaultKcNoLicensePenaltyPct)
+	registrationPenaltyPct := coefReadFloat(ctx, provider, KeyKcNoRegistrationPenaltyPct, defaultKcNoRegistrationPenaltyPct)
 
 	// 3. 装配修正项（条件性生效）
 	res := KcResult{
@@ -129,18 +129,4 @@ func CalcKCondition(
 	}
 	res.KCondition = raw
 	return res, nil
-}
-
-// readWithFallback 从 ConfigReader 读取系数，失败或非正数时返回 fallback 默认值
-// 与 khours.go 中 annual/lower/mid/high/maxR 的兜底模式保持一致
-// reader 为 nil 时直接返回 fallback（避免 nil 指针 panic，主要供测试与极端兜底使用）
-func readWithFallback(ctx context.Context, reader ConfigReader, key string, fallback float64) float64 {
-	if reader == nil {
-		return fallback
-	}
-	v, err := reader.Get(ctx, key)
-	if err != nil || v <= 0 {
-		return fallback
-	}
-	return v
 }

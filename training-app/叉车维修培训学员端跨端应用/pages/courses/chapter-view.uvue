@@ -125,7 +125,11 @@
 
 <script setup lang="uts">
     import { ref, computed } from 'vue'
+<<<<<<< HEAD
     import { onLoad, onHide, onUnload } from '@dcloudio/uni-app'
+=======
+    import { onLoad } from '@dcloudio/uni-app'
+>>>>>>> origin/master
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { parseMarkdown } from '../../utils/markdown'
@@ -145,6 +149,7 @@
     const prevTitle = ref<string>('')
     const nextTitle = ref<string>('')
 
+<<<<<<< HEAD
     // 学习计时与自动上报
     const studySeconds = ref<number>(0)
     let studyTimer: number | null = null
@@ -153,6 +158,8 @@
     let reportedSeconds = 0
     const AUTO_REPORT_INTERVAL = 60
 
+=======
+>>>>>>> origin/master
     // Markdown 解析后的内容块
     const contentBlocks = computed<MarkdownBlock[]>(() : MarkdownBlock[] => {
         if (detail.value == null) return [] as MarkdownBlock[]
@@ -160,8 +167,14 @@
         return parseMarkdown(detail.value!.content)
     })
 
+<<<<<<< HEAD
     function formatDuration(minutes : number) : string {
         if (minutes <= 0) return '未知'
+=======
+    function formatDuration(seconds : number) : string {
+        if (seconds <= 0) return '未知'
+        const minutes = Math.floor(seconds / 60)
+>>>>>>> origin/master
         if (minutes < 60) return minutes + '分钟'
         const hours = Math.floor(minutes / 60)
         const mins = minutes % 60
@@ -210,6 +223,7 @@
         }
     }
 
+<<<<<<< HEAD
     function beginStudy() : void {
         studySeconds.value = 0
         reportedSeconds = 0
@@ -255,11 +269,16 @@
         }
     }
 
+=======
+>>>>>>> origin/master
     async function loadDetail() {
         if (courseId.value <= 0 || chapterId.value <= 0) return
         loading.value = true
         detail.value = null
+<<<<<<< HEAD
         stopStudy()
+=======
+>>>>>>> origin/master
         try {
             const data = await getChapterDetailApi(courseId.value, chapterId.value)
             detail.value = data
@@ -269,7 +288,10 @@
                 courseDetail.value = cd
             }
             updateNavTitles()
+<<<<<<< HEAD
             beginStudy()
+=======
+>>>>>>> origin/master
         } catch (e) {
             console.error('[chapter-view] load failed:', e)
         } finally {
@@ -331,6 +353,7 @@
         }
     }
 
+<<<<<<< HEAD
     onHide(() : void => {
         stopStudy()
         reportIncremental(true)
@@ -341,26 +364,38 @@
         reportIncremental(true)
     })
 
+=======
+>>>>>>> origin/master
     function onPrevChapter() : void {
         if (detail.value == null) return
         const prevId = detail.value!.previous_chapter_id
         if (prevId == 0) return
+<<<<<<< HEAD
         stopStudy()
         reportIncremental(true).then(() : void => {
             chapterId.value = prevId
             loadDetail()
         })
+=======
+        chapterId.value = prevId
+        loadDetail()
+>>>>>>> origin/master
     }
 
     function onNextChapter() : void {
         if (detail.value == null) return
         const nextId = detail.value!.next_chapter_id
         if (nextId == 0) return
+<<<<<<< HEAD
         stopStudy()
         reportIncremental(true).then(() : void => {
             chapterId.value = nextId
             loadDetail()
         })
+=======
+        chapterId.value = nextId
+        loadDetail()
+>>>>>>> origin/master
     }
 
     onLoad((options : UTSJSONObject) => {

@@ -11,14 +11,9 @@ import (
 	"forklift-training/internal/valuation/model"
 )
 
-// ConfigResolver 系数配置读取接口（评估流程用 CoefficientProvider，测试用内存实现）。
-type ConfigResolver interface {
-	ReadFloat(ctx context.Context, key string, fallback float64) float64
-}
-
 // ReadFloat 从 provider 读取系数，失败或非正数时返回 fallback 默认值。
 func (p *CoefficientProvider) ReadFloat(ctx context.Context, key string, fallback float64) float64 {
-	return readWithFallback(ctx, p, key, fallback)
+	return coefReadFloat(ctx, p, key, fallback)
 }
 
 // SuggestionsInput 建议生成的输入（评估结果与持久化记录都可映射，保持 builder 中立）。
@@ -74,7 +69,7 @@ func FromDetail(d *model.EvaluationDetail) SuggestionsInput {
 // 每条建议是一个短句，前端直接用 <li> 列表展示
 // 000015：证件扣减/油漆保养加成百分比动态读取，并补充可售性提示
 // 评估流程与 PDF 重建都走本函数，百分比统一从 resolver 动态读取。
-func BuildSuggestions(ctx context.Context, in SuggestionsInput, resolver ConfigResolver) []string {
+func BuildSuggestions(ctx context.Context, in SuggestionsInput, resolver CoefficientResolver) []string {
 	s := make([]string, 0, 10)
 
 	// 1. 车况维度（核心）
@@ -198,4 +193,43 @@ func BuildBatterySuggestions(bt model.BatteryType, soh float64, rul, low, high i
 		out = append(out, "特征波动较大，建议结合历史多循环数据复核预测结果。")
 	}
 	return out
+}
+
+// EnsureSuggestions 车辆评估旧记录建议 fallback 单一入口（ADR-0012 §6）：
+// 建议为空才填充（评估时点锁定值不被覆盖，ADR-0004）；详情接口与报告 Prepare 同源。
+func EnsureSuggestions(ctx context.Context, d *model.EvaluationDetail, resolver CoefficientResolver) {
+	if len(d.Suggestions) > 0 {
+		return
+	}
+	d.Suggestions = BuildSuggestions(ctx, FromDetail(d), resolver)
+	if d.Suggestions == nil {
+		d.Suggestions = []string{}
+	}
+}
+
+// BatteryHealthFromRecord 从记录置信度反推健康度分数（创建时 Confidence = 0.6 + 0.4×healthScore）。
+// 置信度无效（≤0，旧记录缺失）时返回 1.0：不触发「特征波动」稳定性提示，保持旧记录语义。
+func BatteryHealthFromRecord(confidence float64) float64 {
+	if confidence <= 0 {
+		return 1.0
+	}
+	h := (confidence - 0.6) / 0.4
+	if h < 0 {
+		h = 0
+	}
+	if h > 1 {
+		h = 1
+	}
+	return h
+}
+
+// EnsureBatterySuggestions 电池评估旧记录建议 fallback 单一入口：
+// health 用记录内置信度反推（缺失默认 1.0），详情接口与报告 Prepare 同源。
+func EnsureBatterySuggestions(e *model.BatteryEvaluation) {
+	if len(e.Suggestions) > 0 {
+		return
+	}
+	e.Suggestions = BuildBatterySuggestions(
+		e.BatteryType, e.SohPercent, e.RulCycles, e.ConfidenceLow, e.ConfidenceHigh,
+		BatteryHealthFromRecord(e.Confidence))
 }

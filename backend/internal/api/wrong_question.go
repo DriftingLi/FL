@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -23,10 +22,10 @@ func NewWrongQuestionHandler(svc *service.WrongQuestionService) *WrongQuestionHa
 }
 
 // RegisterWrongQuestionRoutes 注册 /api/wrong-questions 蓝图。
-func RegisterWrongQuestionRoutes(rg *gin.RouterGroup, sess *security.Session, svc *service.WrongQuestionService) {
+func RegisterWrongQuestionRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.WrongQuestionService) {
 	h := NewWrongQuestionHandler(svc)
 
-	g := rg.Group("/wrong-questions", middleware.JWTAuth(sess), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/wrong-questions", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
 
 	// GET /api/wrong-questions  错题列表（分页+过滤）
 	g.GET("", h.List)
@@ -47,12 +46,7 @@ func (h *WrongQuestionHandler) List(c *gin.Context) {
 	page := atoiDefault(c.Query("page"), 1)
 	pageSize := atoiDefault(c.Query("page_size"), 20)
 	qType := c.Query("type")
-	var minWrongCount *int
-	if s := c.Query("min_wrong_count"); s != "" {
-		if v, err := strconv.Atoi(s); err == nil {
-			minWrongCount = &v
-		}
-	}
+	minWrongCount := queryIntPtr(c, "min_wrong_count")
 	response.Success(c, h.svc.GetWrongQuestions(studentID, page, pageSize, qType, minWrongCount))
 }
 

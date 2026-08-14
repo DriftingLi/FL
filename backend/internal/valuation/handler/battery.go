@@ -1,6 +1,6 @@
 // Package handler - 电池 RUL 评估 HTTP 接口
 // 5 个端点：Create / List / Get / GenerateReport / DownloadReport
-// 路径前缀：/api/v1/battery/*，与现有 /api/v1/evaluations/* 完全独立
+// 路径前缀：/api/valuation/battery/*，与 /api/valuation/evaluations/* 完全独立
 package handler
 
 import (
@@ -37,11 +37,8 @@ type BatteryHandler struct {
 // NewBatteryHandler 构造电池处理器
 func NewBatteryHandler(repo BatteryStore, svc *service.BatteryRULService, l *zap.Logger, st storage.Storage) *BatteryHandler {
 	prepareSuggestions := func(_ context.Context, e *model.BatteryEvaluation) {
-		// 记录不含特征稳定性分数，health 传 1.0（不触发稳定性提示），与预测流程共用 builder
-		if len(e.Suggestions) == 0 {
-			e.Suggestions = service.BuildBatterySuggestions(e.BatteryType, e.SohPercent,
-				e.RulCycles, e.ConfidenceLow, e.ConfidenceHigh, 1.0)
-		}
+		// 旧记录建议 fallback 单入口：health 由记录置信度反推（缺失默认 1.0）
+		service.EnsureBatterySuggestions(e)
 	}
 	return &BatteryHandler{
 		repo:               repo,
@@ -64,7 +61,7 @@ func NewBatteryHandler(repo BatteryStore, svc *service.BatteryRULService, l *zap
 	}
 }
 
-// Create 处理 POST /api/v1/battery/evaluations
+// Create 处理 POST /api/valuation/battery/evaluations
 // 接收循环充放电数据 → 调用 service 预测 → 持久化 → 返回 RUL/SOH
 func (h *BatteryHandler) Create(c *gin.Context) {
 	var req model.CreateBatteryRequest
@@ -124,7 +121,7 @@ func (h *BatteryHandler) Create(c *gin.Context) {
 	})
 }
 
-// List 处理 GET /api/v1/battery/evaluations?battery_type=lfp
+// List 处理 GET /api/valuation/battery/evaluations?battery_type=lfp
 // 分页查询评估历史摘要
 func (h *BatteryHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -156,7 +153,7 @@ func (h *BatteryHandler) List(c *gin.Context) {
 	})
 }
 
-// Get 处理 GET /api/v1/battery/evaluations/:id
+// Get 处理 GET /api/valuation/battery/evaluations/:id
 // 查询评估详情（含周期特征），仅返回属于当前登录用户的记录
 func (h *BatteryHandler) Get(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -185,12 +182,12 @@ func (h *BatteryHandler) Get(c *gin.Context) {
 	response.Success(c, eval)
 }
 
-// GenerateReport 处理 POST /api/v1/battery/evaluations/:id/report
+// GenerateReport 处理 POST /api/valuation/battery/evaluations/:id/report
 func (h *BatteryHandler) GenerateReport(c *gin.Context) {
 	serveReportGenerate(c, h.coord, "电池评估记录不存在", h.logger)
 }
 
-// DownloadReport 处理 GET /api/v1/battery/evaluations/:id/report
+// DownloadReport 处理 GET /api/valuation/battery/evaluations/:id/report
 func (h *BatteryHandler) DownloadReport(c *gin.Context) {
 	serveReportDownload(c, h.coord, h.storage, "电池评估记录不存在", h.logger)
 }

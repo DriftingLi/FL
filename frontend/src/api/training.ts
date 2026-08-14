@@ -1,6 +1,7 @@
 // 已迁移模块：走 unwrappedRequest（拦截器解包信封，成功直接返回业务数据 Promise<T>，
 // 业务失败抛错并统一 toast，调用方不再自检 res.code）
 import { unwrappedRequest } from './request'
+import type { CourseSummary } from './course'
 
 // ===== 培训目录体系：专业方向(specialty) → 等级(level) → 课程 → 章节 =====
 // 契约与后端 LH-27 真实路由/字段对齐：
@@ -46,26 +47,8 @@ export interface CertificateTemplate {
   [key: string]: unknown
 }
 
-/** 目录树中的课程节点（courseToDict + chapter_count，sort_order 由后端补齐） */
-export interface CatalogCourseNode {
-  course_id: number
-  name: string
-  category?: string
-  description?: string
-  cover_image?: string
-  duration?: number
-  specialty_id?: number | null
-  level_id?: number | null
-  theory_hours?: number
-  practice_hours?: number
-  certificate_template_id?: number | null
-  status?: number
-  created_at?: string
-  chapter_count?: number
-  sort_order?: number
-  prerequisite_course_ids?: number[]
-  [key: string]: unknown
-}
+/** 目录树中的课程节点 = CourseSummary + sort_order（sort_order 由后端补齐），单一事实源派生 */
+export type CatalogCourseNode = CourseSummary & { sort_order?: number }
 
 /** 等级节点（含课程） */
 export interface CatalogLevelNode extends CatalogLevel {

@@ -76,6 +76,9 @@ func NewValuationService(
 // 缓存：Evaluate 是纯计算函数（Persist 与计算解耦），相同输入产生相同输出，
 // 按 req JSON 的 SHA256 缓存 3 分钟（cache.TTLValuation）。
 // 所有字典/系数写操作已在 config handler 中统一失效 valuation:result:*。
+// Resolver 暴露系数配置读取器（详情接口旧记录建议 fallback 与报告 Prepare 同源）。
+func (s *ValuationService) Resolver() CoefficientResolver { return s.provider }
+
 func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRequest) (*model.EvaluationResult, error) {
 	// 构造缓存 key：对规范化后的 req JSON 做 SHA256
 	reqBytes, _ := json.Marshal(req)
@@ -95,7 +98,7 @@ func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRe
 // evaluateInternal 包含原 Evaluate 的全部计算逻辑（纯函数，无副作用）
 func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.EvaluationRequest) (*model.EvaluationResult, error) {
 	// 0. 系数快照：一次全表读取替代逐 key 串行缓存往返（失败时回退逐 key provider，保持既有容错）
-	coeff := coefficientReader(s.provider)
+	var coeff CoefficientResolver = s.provider
 	if snap, err := LoadCoefficientSnapshot(ctx, s.dictRepo); err == nil {
 		coeff = snap
 	}
@@ -192,7 +195,28 @@ func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.Eval
 	// 12. 派生维度评分 + 文本建议
 	result.DimensionScores = BuildDimensionScores(result.KTime, result.KHours, result.KBrand, result.KCondition, result.KMarket)
 	result.Suggestions = BuildSuggestions(ctx, FromResult(result), coeff)
+
+	// 13. 未来价值曲线锚点（ADR-0012 §8）：公式唯一实现在此，
+	//     future(n) = estimated × d^n；d 与评估时点系数/λ 一并锁定
+	anchorLambda := result.LambdaElectric
+	if powerType == model.PowerTypeCombustion {
+		anchorLambda = result.LambdaCombustion
+	}
+	result.DecayAnchor = roundTo4(DecayAnchor(ktAdjusted, khRes.KHours, kbRes.KBrand, ktRes.Age, anchorLambda))
 	return result, nil
+}
+
+// DecayAnchor 未来价值曲线年衰减锚点 d：future(n) = estimated × d^n。
+// age>0：d = Kt_adj^(1/age)，曲线从当前残值精确出发；
+// age=0（新车）或 Kt_adj 缺失：用评估时点 λ 与 Kh/Kb 推算 d = e^(-λ·Kh/Kb)。
+func DecayAnchor(ktAdjusted, kHours, kBrand float64, age int, lambda float64) float64 {
+	if age > 0 && ktAdjusted > 0 {
+		return math.Pow(ktAdjusted, 1/float64(age))
+	}
+	if kBrand <= 0 {
+		return math.Exp(-lambda)
+	}
+	return math.Exp(-lambda * (kHours / kBrand))
 }
 
 // inferPowerType 从车型名推断动力类型
@@ -244,6 +268,7 @@ func (s *ValuationService) Persist(ctx context.Context, result *model.Evaluation
 		Suggestions:      result.Suggestions,
 		LambdaElectric:   result.LambdaElectric,
 		LambdaCombustion: result.LambdaCombustion,
+		DecayAnchor:      result.DecayAnchor,
 	}
 	return s.evalRepo.CreateEvaluation(ctx, params)
 }
@@ -298,6 +323,11 @@ func BuildDimensionScores(kTime, kHours, kBrand, kCondition, kMarket float64) []
 func RebuildDerivedFromDetail(d *model.EvaluationDetail) {
 	d.KTimeAdjusted = AdjustKTimeByBrandAndIntensity(d.KTime, d.KHours, d.KBrand)
 	d.DimensionScores = BuildDimensionScores(d.KTime, d.KHours, d.KBrand, d.KCondition, d.KMarket)
+	// 旧记录无锚点：从已锁定的 Kt/Kh/Kb/λ 重推（age=0 边界用电动 λ，主流车型口径）
+	if d.DecayAnchor == 0 {
+		age := d.SaleYear - d.FactoryYear
+		d.DecayAnchor = roundTo4(DecayAnchor(d.KTimeAdjusted, d.KHours, d.KBrand, age, d.LambdaElectric))
+	}
 }
 
 // roundTo2 四舍五入到 2 位小数（保留金额精度）

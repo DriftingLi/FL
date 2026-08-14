@@ -11,7 +11,6 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -28,10 +27,10 @@ func NewForumHandler(svc *service.ForumService, imageSvc *service.ForumImageServ
 }
 
 // RegisterForumRoutes 注册 /api/forum 蓝图（需登录，hrwai_user）。
-func RegisterForumRoutes(rg *gin.RouterGroup, sess *security.Session, svc *service.ForumService, imageSvc *service.ForumImageService) {
+func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumService, imageSvc *service.ForumImageService) {
 	h := NewForumHandler(svc, imageSvc)
 
-	g := rg.Group("/forum", middleware.JWTAuth(sess), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/forum", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
 
 	// POST /api/forum/upload-image  上传论坛图片（图文分离，先传图后随发帖/回复提交 URL）
 	g.POST("/upload-image", h.UploadImage)
@@ -49,7 +48,7 @@ func RegisterForumRoutes(rg *gin.RouterGroup, sess *security.Session, svc *servi
 	g.DELETE("/replies/:id", h.DeleteReply)
 
 	// ===== 管理员论坛管理 =====
-	adminG := rg.Group("/admin/forum", middleware.JWTAuth(sess), middleware.RoleRequired("admin"))
+	adminG := rg.Group("/admin/forum", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
 	adminG.GET("/topics", h.ListTopics)
 	adminG.GET("/topics/:id", h.AdminGetTopic)
 	adminG.DELETE("/topics/:id", h.AdminDeleteTopic)

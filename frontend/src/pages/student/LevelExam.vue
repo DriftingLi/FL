@@ -33,10 +33,10 @@
     <AnsweringSessionShell
       v-if="inExam"
       ref="shellRef"
-      v-model:answers="examAnswers"
+      v-model:answers="answers"
       v-model:remaining-time="remainingTime"
-      v-model:current-index="qIdx"
-      :questions="examQuestions"
+      v-model:current-index="currentIdx"
+      :questions="questions"
       title="考试进行中"
       @autosave="saveProgress"
       @submit="handleSubmit"
@@ -49,32 +49,39 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { levelExamApi, type LevelExamSession } from '@/api/levelExam'
 import { sessionStatusMap as statusMap } from '@/constants/question'
-import type { Question } from '@/types/question'
 import { formatDateTime } from '@/utils/format'
-import { isAnswerEmpty } from '@/composables/useQuestionAnswer'
-import AnsweringSessionShell from '@/components/student/AnsweringSessionShell.vue'
+import { useExamSession } from '@/composables/useExamSession'
 
 const statusType: Record<string, string> = { upcoming: 'info', ongoing: 'success', finished: '' }
 
 const loading = ref(false)
 const exams = ref<LevelExamSession[]>([])
 
-const inExam = ref(false)
 const participantId = ref<number | null>(null)
-const examQuestions = ref<Question[]>([])
-const examAnswers = ref<Record<number, unknown>>({})
-const remainingTime = ref(0)
-const qIdx = ref(0)
-const shellRef = ref<InstanceType<typeof AnsweringSessionShell> | null>(null)
+// 进入考试时暂存场次 id，供 enter adapter 使用
+let pendingSessionId: number | null = null
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 
-function findResumeIndex(questions: { id: number }[], answers: Record<string, unknown>) {
-  for (let i = 0; i < questions.length; i++) {
-    const qid = questions[i].id
-    if (isAnswerEmpty(answers[qid])) return i
+// 答题会话编排（进入/续时/断点续传/交卷顺序约束收敛进 useExamSession）
+const { inExam, remainingTime, currentIdx, questions, answers, shellRef, start, saveProgress, submit, reset } = useExamSession({
+  enter: async () => {
+    const res = await levelExamApi.enterExam(pendingSessionId!)
+    participantId.value = res.participant_id
+    return { questions: res.questions, answers: res.answers, remaining_time: res.remaining_time }
+  },
+  save: async (ans, remaining) => {
+    if (!participantId.value) return
+    await levelExamApi.saveAnswer(participantId.value, { answers: ans, remaining_time: remaining })
+  },
+  submit: async (payload) => {
+    if (!participantId.value) return null
+    return levelExamApi.submitExam(participantId.value, {
+      is_timeout: payload.is_timeout,
+      answers: payload.answers,
+      remaining_time: payload.remaining_time
+    })
   }
-  return 0
-}
+})
 
 onMounted(async () => {
   await loadExams()
@@ -101,36 +108,18 @@ async function loadExams() {
 }
 
 async function enterExam(sessionId: number) {
+  pendingSessionId = sessionId
   try {
-    const res = await levelExamApi.enterExam(sessionId)
-    participantId.value = res.participant_id
-    examQuestions.value = res.questions
-    examAnswers.value = { ...(res.answers || {}) }
-    shellRef.value?.begin(res.remaining_time)
-    inExam.value = true
-    qIdx.value = findResumeIndex(res.questions, res.answers || {})
+    await start()
   } catch {
     /* 错误已由拦截器提示 */
   }
 }
 
-async function saveProgress() {
-  try {
-    if (participantId.value) {
-      await levelExamApi.saveAnswer(participantId.value, { answers: examAnswers.value, remaining_time: remainingTime.value })
-    }
-  } catch (e) {}
-}
-
 async function handleSubmit(payload: { is_timeout: boolean; answers: Record<number, unknown>; remaining_time: number }) {
-  try { await saveProgress() } catch (e) {}
   try {
+    await submit(payload)
     if (participantId.value) {
-      await levelExamApi.submitExam(participantId.value, {
-        is_timeout: payload.is_timeout,
-        answers: payload.answers,
-        remaining_time: payload.remaining_time
-      })
       ElMessage.success('交卷成功，请等待导师批改')
     }
     resetExamState()
@@ -141,12 +130,9 @@ async function handleSubmit(payload: { is_timeout: boolean; answers: Record<numb
 }
 
 function resetExamState() {
-  inExam.value = false
+  reset()
   participantId.value = null
-  examQuestions.value = []
-  examAnswers.value = {}
-  qIdx.value = 0
-  remainingTime.value = 0
+  pendingSessionId = null
 }
 
 async function viewResult(row: { id: number; status?: string; name?: string; participant_id?: number; [key: string]: unknown }) {

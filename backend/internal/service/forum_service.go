@@ -14,6 +14,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
 
@@ -140,45 +141,31 @@ func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, k
 	if scope == "" {
 		scope = ForumScopeAll
 	}
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 || pageSize > 100 {
-		pageSize = 10
+	if scope == ForumScopeChapter && chapterID <= 0 {
+		return nil, errors.New("查询章节讨论区需要有效的 chapter_id")
 	}
 
-	q := s.db.Table("forum_topics AS t").
-		Select("t.id, t.chapter_id, t.title, t.content, t.images, t.view_count, t.reply_count, t.last_reply_at, t.created_at, " +
-			"u.id AS user_id, u.username, u.avatar_url, " +
-			"COALESCE(ch.title, '') AS chapter_title").
-		Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
-		Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id")
-
-	switch scope {
-	case ForumScopeGeneral:
-		q = q.Where("t.chapter_id IS NULL")
-	case ForumScopeChapter:
-		if chapterID <= 0 {
-			return nil, errors.New("查询章节讨论区需要有效的 chapter_id")
-		}
-		q = q.Where("t.chapter_id = ?", chapterID)
-	}
-	if keyword = strings.TrimSpace(keyword); keyword != "" {
-		like := "%" + keyword + "%"
-		q = q.Where("(t.title ILIKE ? OR t.content ILIKE ?)", like, like)
-	}
-
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
-		return nil, err
-	}
-
-	var rows []topicRow
-	if err := q.Order("COALESCE(t.last_reply_at, t.created_at) DESC, t.id DESC").
-		Offset((page - 1) * pageSize).Limit(pageSize).
-		Scan(&rows).Error; err != nil {
-		return nil, err
-	}
+	rows, total, page, pageSize := paging.QueryWithScan[topicRow](s.db, page, pageSize, 10, 100,
+		"COALESCE(t.last_reply_at, t.created_at) DESC, t.id DESC",
+		func(q *gorm.DB) *gorm.DB {
+			q = q.Table("forum_topics AS t").
+				Select("t.id, t.chapter_id, t.title, t.content, t.images, t.view_count, t.reply_count, t.last_reply_at, t.created_at, " +
+					"u.id AS user_id, u.username, u.avatar_url, " +
+					"COALESCE(ch.title, '') AS chapter_title").
+				Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
+				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id")
+			switch scope {
+			case ForumScopeGeneral:
+				q = q.Where("t.chapter_id IS NULL")
+			case ForumScopeChapter:
+				q = q.Where("t.chapter_id = ?", chapterID)
+			}
+			if keyword = strings.TrimSpace(keyword); keyword != "" {
+				like := "%" + keyword + "%"
+				q = q.Where("(t.title ILIKE ? OR t.content ILIKE ?)", like, like)
+			}
+			return q
+		})
 
 	items := make([]ForumTopicDTO, 0, len(rows))
 	for _, r := range rows {

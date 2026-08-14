@@ -5,14 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
-	"forklift-training/pkg/paging"
-	"forklift-training/pkg/response"
 )
 
 // TutorService 导师服务。
@@ -29,56 +26,21 @@ func NewTutorService(db *gorm.DB, uploadFolder string, fileService *FileService,
 	return &TutorService{db: db, uploadFolder: uploadFolder, fileService: fileService, logger: logger}
 }
 
-// GetCourses 导师课程列表（已上架课程，可按专业方向/课程等级过滤）。
-func (s *TutorService) GetCourses(tutorID *int, page, pageSize int, specialtyID, levelID *int) CoursePageResult {
-	courses, total, page, pageSize := paging.Query[model.Course](s.db, page, pageSize, 10, "created_at DESC", func(q *gorm.DB) *gorm.DB {
-		q = q.Where("status = ?", 1)
-		if specialtyID != nil {
-			q = q.Where("specialty_id = ?", *specialtyID)
-		}
-		if levelID != nil {
-			q = q.Where("level_id = ?", *levelID)
-		}
-		return q
+// GetCourses 导师课程列表（与学员端同口径：已上架 + 已挂载方向/等级，ADR-0012 §2），
+// 附学习学员数；实现收敛到课程列表 module（ListCourses）。
+func (s *TutorService) GetCourses(page, pageSize int, specialtyID, levelID *int) CoursePageResult {
+	return ListCourses(s.db, page, pageSize, CourseListOptions{
+		OnlyMounted: true, SpecialtyID: specialtyID, LevelID: levelID,
+		WithStudentCount: true, DefaultPageSize: 10,
 	})
-	items := make([]CourseDTO, 0, len(courses))
-	for i := range courses {
-		item := courseToDTO(&courses[i])
-		fillChapterCount(s.db, courses[i].CourseID, &item)
-		// 统计该课程的学习学员数（study_record 表中去重的 student_id 数量）
-		var studentCount int64
-		s.db.Table("study_record").
-			Where("course_id = ?", courses[i].CourseID).
-			Distinct("student_id").
-			Count(&studentCount)
-		item.StudentCount = &studentCount
-		items = append(items, item)
-	}
-	return CoursePageResult{
-		Courses: items,
-		Page:    page,
-		Pages:   response.PageCount(total, pageSize),
-		Total:   total,
-	}
 }
 
 // GetGradingStats 阅卷统计（按天分组），用于导师仪表盘图表。
 // 统计当前导师 grader_id 命中的 exam_answer 行数（即导师本人批阅题数）。
 // days 仅允许 7 或 30，其他值统一回退为 7。
-func (s *TutorService) GetGradingStats(tutorID, days int) map[string]any {
-	if days != 7 && days != 30 {
-		days = 7
-	}
-
-	// 计算最近 days 天的起止时间（北京时间）
-	end := beijingNow()
-	startOfDay := end.Add(-time.Duration(end.Hour()) * time.Hour).
-		Add(-time.Duration(end.Minute()) * time.Minute).
-		Add(-time.Duration(end.Second()) * time.Second).
-		Add(-time.Duration(end.Nanosecond()) * time.Nanosecond)
-	start := startOfDay.AddDate(0, 0, -(days - 1))
-
-	// 按天聚合当前导师已批阅题数
+func (s *TutorService) GetGradingStats(tutorID, days int) *GradingStatsDTO {
+	// 按天聚合当前导师已批阅题数（起点由 BuildDailySeries/dailySeriesStart 统一钳制与推导）
+	start := dailySeriesStart(days)
 	type dailyRow struct {
 		Day   string
 		Count int64
@@ -91,36 +53,18 @@ func (s *TutorService) GetGradingStats(tutorID, days int) map[string]any {
 		Order("day ASC").
 		Scan(&rows)
 
-	// 构建日期 -> 题数映射
 	countByDay := make(map[string]int64, len(rows))
-	var totalCount int64
 	for _, r := range rows {
 		countByDay[r.Day] = r.Count
-		totalCount += r.Count
 	}
 
-	// 生成最近 days 天的完整序列（含无批阅记录的天，补 0）
-	// start 由 beijingNow() 派生，携带 Asia/Shanghai 时区，AddDate 保留时区
-	labels := make([]string, 0, days)
-	data := make([]int64, 0, days)
-	activeDays := 0
-	for i := 0; i < days; i++ {
-		d := start.AddDate(0, 0, i)
-		key := d.Format("2006-01-02")
-		cnt := countByDay[key]
-		if cnt > 0 {
-			activeDays++
-		}
-		labels = append(labels, d.Format("1/2"))
-		data = append(data, cnt)
-	}
-
-	return map[string]any{
-		"days":        days,
-		"labels":      labels,
-		"data":        data,
-		"total_count": totalCount,
-		"active_days": activeDays,
+	series := BuildDailySeries(days, countByDay)
+	return &GradingStatsDTO{
+		Days:       series.Days,
+		Labels:     series.Labels,
+		Data:       series.Data,
+		TotalCount: series.Total,
+		ActiveDays: series.ActiveDays,
 	}
 }
 
@@ -261,25 +205,28 @@ func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileCon
 }
 
 // UpdateChapterInfo 更新章节信息。
-func (s *TutorService) UpdateChapterInfo(chapterID int, data map[string]any) (*ChapterDTO, error) {
+func (s *TutorService) UpdateChapterInfo(chapterID int, in *ChapterInput) (*ChapterDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
 	}
-	if v, ok := data["title"].(string); ok && v != "" {
-		chapter.Title = v
+	if in == nil {
+		in = &ChapterInput{}
 	}
-	if v, ok := data["content"]; ok {
-		chapter.Content, _ = v.(string)
+	if in.Title != nil && *in.Title != "" {
+		chapter.Title = *in.Title
 	}
-	if v, ok := data["duration"]; ok {
-		chapter.Duration = toIntDefault(v, chapter.Duration)
+	if in.Content != nil {
+		chapter.Content = *in.Content
 	}
-	if v, ok := data["order_num"]; ok {
-		chapter.OrderNum = toIntDefault(v, chapter.OrderNum)
+	if in.Duration != nil {
+		chapter.Duration = *in.Duration
 	}
-	if v, ok := data["description"]; ok {
-		chapter.Description, _ = v.(string)
+	if in.OrderNum != nil {
+		chapter.OrderNum = *in.OrderNum
+	}
+	if in.Description != nil {
+		chapter.Description = *in.Description
 	}
 	if err := s.db.Save(&chapter).Error; err != nil {
 		return nil, err
@@ -289,7 +236,7 @@ func (s *TutorService) UpdateChapterInfo(chapterID int, data map[string]any) (*C
 }
 
 // DeleteChapterFileByID 删除章节文件。
-func (s *TutorService) DeleteChapterFileByID(fileID int) (map[string]any, error) {
+func (s *TutorService) DeleteChapterFileByID(fileID int) (*DeleteFileResult, error) {
 	var chapterFile model.ChapterFile
 	if err := s.db.First(&chapterFile, fileID).Error; err != nil {
 		return nil, errors.New("文件不存在")
@@ -315,11 +262,11 @@ func (s *TutorService) DeleteChapterFileByID(fileID int) (map[string]any, error)
 			s.db.Save(&chapter)
 		}
 	}
-	return map[string]any{"file_id": fileID, "deleted": true}, nil
+	return &DeleteFileResult{FileID: fileID, Deleted: true}, nil
 }
 
 // BatchDeleteChapterFiles 批量删除文件。
-func (s *TutorService) BatchDeleteChapterFiles(fileIDs []int) map[string]any {
+func (s *TutorService) BatchDeleteChapterFiles(fileIDs []int) *BatchDeleteFilesResult {
 	successCount := 0
 	failedIDs := make([]int, 0)
 	for _, fid := range fileIDs {
@@ -345,9 +292,9 @@ func (s *TutorService) BatchDeleteChapterFiles(fileIDs []int) map[string]any {
 		}
 		successCount++
 	}
-	return map[string]any{
-		"success_count": successCount,
-		"failed_count":  len(failedIDs),
-		"failed_ids":    failedIDs,
+	return &BatchDeleteFilesResult{
+		SuccessCount: successCount,
+		FailedCount:  len(failedIDs),
+		FailedIDs:    failedIDs,
 	}
 }

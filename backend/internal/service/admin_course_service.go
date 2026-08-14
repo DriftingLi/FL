@@ -26,8 +26,8 @@ func NewAdminCourseService(db *gorm.DB, fileSvc *FileService, logger *zap.Logger
 
 // GetCourses 管理端课程列表。
 func (s *AdminCourseService) GetCourses(page, pageSize int, keyword string, specialtyID, levelID *int) CoursePageResult {
-	return listCourses(s.db, page, pageSize, courseListOptions{
-		keyword: keyword, specialtyID: specialtyID, levelID: levelID, defaultPageSize: 10,
+	return ListCourses(s.db, page, pageSize, CourseListOptions{
+		Keyword: keyword, SpecialtyID: specialtyID, LevelID: levelID, DefaultPageSize: 10,
 	})
 }
 
@@ -46,41 +46,47 @@ func (s *AdminCourseService) GetCourseDetail(courseID int) (*AdminCourseDetailDT
 }
 
 // CreateCourse 创建课程。专业方向与课程等级必填（挂载不变式，旧 category 已退役）。
-func (s *AdminCourseService) CreateCourse(data map[string]any) (*CourseDTO, error) {
-	name, _ := data["name"].(string)
-	if name == "" {
+func (s *AdminCourseService) CreateCourse(in *CourseInput) (*CourseDTO, error) {
+	if in == nil || in.Name == nil || *in.Name == "" {
 		return nil, errors.New("课程名称不能为空")
 	}
-	if err := validateMountedCourseInput(data, false); err != nil {
-		return nil, err
+	// 挂载不变式：创建必填方向与等级
+	if in.SpecialtyID == nil || *in.SpecialtyID <= 0 {
+		return nil, errors.New("专业方向不能为空")
 	}
-	description, _ := data["description"].(string)
-	coverImage, _ := data["cover_image"].(string)
-	duration := toIntDefault(data["duration"], 0)
+	if in.LevelID == nil || *in.LevelID <= 0 {
+		return nil, errors.New("课程等级不能为空")
+	}
 	status := int16(1)
-	if v, ok := data["status"]; ok {
-		status = int16(toIntDefault(v, 1))
+	if in.Status != nil {
+		status = *in.Status
 	}
 	course := model.Course{
-		Name:        name,
-		Description: description,
-		CoverImage:  coverImage,
-		Duration:    duration,
-		Status:      status,
-		CreatedAt:   beijingNow(),
+		Name:      *in.Name,
+		Status:    status,
+		CreatedAt: beijingNow(),
 	}
-	if err := applyCourseTrainingFields(s.db, &course, data); err != nil {
+	if in.Description != nil {
+		course.Description = *in.Description
+	}
+	if in.CoverImage != nil {
+		course.CoverImage = *in.CoverImage
+	}
+	if in.Duration != nil {
+		course.Duration = *in.Duration
+	}
+	if err := applyCourseTrainingFields(s.db, &course, in); err != nil {
 		return nil, err
 	}
 	// 未显式传 sort_order 时，自动排到所属方向+等级组的末尾（max+1）
-	if _, ok := data["sort_order"]; !ok && course.SpecialtyID != nil && course.LevelID != nil {
+	if in.SortOrder == nil && course.SpecialtyID != nil && course.LevelID != nil {
 		course.SortOrder = nextSortOrderValue(s.db, "course",
 			map[string]any{"specialty_id": *course.SpecialtyID, "level_id": *course.LevelID})
 	}
 	if err := s.db.Create(&course).Error; err != nil {
 		return nil, err
 	}
-	if err := replaceCoursePrerequisites(s.db, course.CourseID, prerequisiteIDsFromData(data)); err != nil {
+	if err := replaceCoursePrerequisites(s.db, course.CourseID, in.PrerequisiteCourseIDs); err != nil {
 		return nil, err
 	}
 	result := courseToDTO(&course)
@@ -90,38 +96,41 @@ func (s *AdminCourseService) CreateCourse(data map[string]any) (*CourseDTO, erro
 }
 
 // UpdateCourse 更新课程。
-func (s *AdminCourseService) UpdateCourse(courseID int, data map[string]any) (*CourseDTO, error) {
+func (s *AdminCourseService) UpdateCourse(courseID int, in *CourseInput) (*CourseDTO, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		return nil, errors.New("课程不存在")
 	}
-	if v, ok := data["name"].(string); ok && v != "" {
-		course.Name = v
+	if in == nil {
+		in = &CourseInput{}
 	}
-	if v, ok := data["description"]; ok {
-		course.Description, _ = v.(string)
+	if in.Name != nil && *in.Name != "" {
+		course.Name = *in.Name
 	}
-	if v, ok := data["cover_image"]; ok {
-		course.CoverImage, _ = v.(string)
+	if in.Description != nil {
+		course.Description = *in.Description
 	}
-	if v, ok := data["duration"]; ok {
-		course.Duration = toIntDefault(v, course.Duration)
+	if in.CoverImage != nil {
+		course.CoverImage = *in.CoverImage
 	}
-	if v, ok := data["status"]; ok {
-		course.Status = int16(toIntDefault(v, int(course.Status)))
+	if in.Duration != nil {
+		course.Duration = *in.Duration
+	}
+	if in.Status != nil {
+		course.Status = *in.Status
 	}
 	// 编辑时若携带方向/等级字段则不允许清空（挂载不变式；DB 列保持可空以兼容存量）
-	if err := validateMountedCourseInput(data, true); err != nil {
+	if err := validateMountedCourseInputUpdate(in); err != nil {
 		return nil, err
 	}
-	if err := applyCourseTrainingFields(s.db, &course, data); err != nil {
+	if err := applyCourseTrainingFields(s.db, &course, in); err != nil {
 		return nil, err
 	}
 	if err := s.db.Save(&course).Error; err != nil {
 		return nil, err
 	}
-	if prereqIDs, ok := data["prerequisite_course_ids"]; ok {
-		if err := replaceCoursePrerequisites(s.db, courseID, toIntSlice(prereqIDs)); err != nil {
+	if in.PrerequisiteCourseIDs != nil {
+		if err := replaceCoursePrerequisites(s.db, courseID, in.PrerequisiteCourseIDs); err != nil {
 			return nil, err
 		}
 	}
@@ -151,7 +160,7 @@ func (s *AdminCourseService) SwapCourseSort(a, b int) error {
 }
 
 // DeleteCourse 删除课程。
-func (s *AdminCourseService) DeleteCourse(courseID int) (map[string]any, error) {
+func (s *AdminCourseService) DeleteCourse(courseID int) (*DeleteCourseResult, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		return nil, errors.New("课程不存在")
@@ -159,21 +168,18 @@ func (s *AdminCourseService) DeleteCourse(courseID int) (map[string]any, error) 
 	if err := s.db.Delete(&course).Error; err != nil {
 		return nil, err
 	}
-	return map[string]any{"course_id": courseID}, nil
+	return &DeleteCourseResult{CourseID: courseID}, nil
 }
 
 // CreateChapter 创建章节。
-func (s *AdminCourseService) CreateChapter(courseID int, data map[string]any) (*ChapterDTO, error) {
+func (s *AdminCourseService) CreateChapter(courseID int, in *ChapterInput) (*ChapterDTO, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		return nil, errors.New("课程不存在")
 	}
-	title, _ := data["title"].(string)
-	if title == "" {
+	if in == nil || in.Title == nil || *in.Title == "" {
 		return nil, errors.New("章节标题不能为空")
 	}
-	content, _ := data["content"].(string)
-	duration := toIntDefault(data["duration"], 0)
 
 	var maxOrder int
 	s.db.Model(&model.Chapter{}).Where("course_id = ?", courseID).
@@ -181,11 +187,15 @@ func (s *AdminCourseService) CreateChapter(courseID int, data map[string]any) (*
 
 	chapter := model.Chapter{
 		CourseID:  courseID,
-		Title:     title,
-		Content:   content,
-		Duration:  duration,
+		Title:     *in.Title,
 		OrderNum:  maxOrder + 1,
 		CreatedAt: beijingNow(),
+	}
+	if in.Content != nil {
+		chapter.Content = *in.Content
+	}
+	if in.Duration != nil {
+		chapter.Duration = *in.Duration
 	}
 	if err := s.db.Create(&chapter).Error; err != nil {
 		return nil, err
@@ -195,22 +205,25 @@ func (s *AdminCourseService) CreateChapter(courseID int, data map[string]any) (*
 }
 
 // UpdateChapter 更新章节。
-func (s *AdminCourseService) UpdateChapter(chapterID int, data map[string]any) (*ChapterDTO, error) {
+func (s *AdminCourseService) UpdateChapter(chapterID int, in *ChapterInput) (*ChapterDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
 	}
-	if v, ok := data["title"].(string); ok && v != "" {
-		chapter.Title = v
+	if in == nil {
+		in = &ChapterInput{}
 	}
-	if v, ok := data["content"]; ok {
-		chapter.Content, _ = v.(string)
+	if in.Title != nil && *in.Title != "" {
+		chapter.Title = *in.Title
 	}
-	if v, ok := data["duration"]; ok {
-		chapter.Duration = toIntDefault(v, chapter.Duration)
+	if in.Content != nil {
+		chapter.Content = *in.Content
 	}
-	if v, ok := data["order_num"]; ok {
-		chapter.OrderNum = toIntDefault(v, chapter.OrderNum)
+	if in.Duration != nil {
+		chapter.Duration = *in.Duration
+	}
+	if in.OrderNum != nil {
+		chapter.OrderNum = *in.OrderNum
 	}
 	if err := s.db.Save(&chapter).Error; err != nil {
 		return nil, err
@@ -221,7 +234,7 @@ func (s *AdminCourseService) UpdateChapter(chapterID int, data map[string]any) (
 
 // DeleteChapter 删除章节，并清理章节关联的存储文件：
 // PPT 幻灯片（slides/<chapterID>/ 前缀）与图文 Markdown 图片（images/chapters/<chapterID>/ 前缀）。
-func (s *AdminCourseService) DeleteChapter(chapterID int) (map[string]any, error) {
+func (s *AdminCourseService) DeleteChapter(chapterID int) (*DeleteChapterResult, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
@@ -233,5 +246,5 @@ func (s *AdminCourseService) DeleteChapter(chapterID int) (map[string]any, error
 		s.fileSvc.DeleteFiles(s.fileSvc.ListFiles(fmt.Sprintf("slides/%d", chapterID)))
 		s.fileSvc.DeleteFiles(s.fileSvc.ListFiles(fmt.Sprintf("images/chapters/%d", chapterID)))
 	}
-	return map[string]any{"chapter_id": chapterID}, nil
+	return &DeleteChapterResult{ChapterID: chapterID}, nil
 }

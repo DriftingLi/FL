@@ -2,6 +2,7 @@
 package repository
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -100,6 +101,34 @@ func TestPatternsOf_AllEntities(t *testing.T) {
 	for _, c := range dictCacheContracts {
 		if got := PatternsOf(c.Name); got == nil {
 			t.Errorf("PatternsOf(%q) 返回 nil", c.Name)
+		}
+	}
+}
+
+// TestCacheContract_NoDictLiteralKeys 静态扫描本包全部 .go 源文件，禁止任何 "dict:"
+// 缓存 key 字面量散落在读方法里：所有缓存 key 必须从契约常量/前缀（dict_cache_keys.go）
+// + cacheKey/常量构造。新增读方法若漏声明进 dictCacheContracts 或直接书写字面量即测试失败。
+//
+// 契约 source-of-truth 是 dict_cache_keys.go 本文件内声明的常量；该文件本身允许出现
+// "dict:"（常量定义点），故排除自身。
+func TestCacheContract_NoDictLiteralKeys(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("读取包目录失败: %v", err)
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || name == "dict_cache_keys.go" || name == "dict_cache_keys_test.go" {
+			continue
+		}
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("读取 %s 失败: %v", name, err)
+		}
+		for i, line := range strings.Split(string(data), "\n") {
+			if strings.Contains(line, `"dict:`) || strings.Contains(line, "`dict:") {
+				t.Errorf("%s:%d 含游离的 dict:* 缓存 key 字面量，应从契约常量/前缀构造: %s", name, i+1, strings.TrimSpace(line))
+			}
 		}
 	}
 }

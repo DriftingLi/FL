@@ -462,7 +462,7 @@ func newTestValuationEngineWithStorage(t *testing.T, st storage.Storage) (*gin.E
 	r := gin.New()
 	r.Use(gin.Recovery())
 
-	RegisterRoutes(r, sess, zap.NewNop(),
+	RegisterRoutes(r, sess, zap.NewNop(), nil,
 		dict, evalStore, batteryStore,
 		valuationSvc, vservice.NewBatteryRULService(),
 		&memReportGenerator{}, st,
@@ -657,6 +657,10 @@ func TestEvaluationFactuality_LockedSuggestionsAndLambda(t *testing.T) {
 	if data["lambda_combustion"].(float64) != 0.10 {
 		t.Errorf("创建响应 lambda_combustion = %v, 期望 0.10", data["lambda_combustion"])
 	}
+	anchor, ok := data["decay_anchor"].(float64)
+	if !ok || anchor <= 0 {
+		t.Fatalf("创建响应 decay_anchor 缺失或非正数: %v", data["decay_anchor"])
+	}
 
 	// 修改系数配置（影响建议文案的 Kc 修正项）
 	dict.coefficients[vservice.KeyKcPaintBonus] = 0.05
@@ -675,6 +679,10 @@ func TestEvaluationFactuality_LockedSuggestionsAndLambda(t *testing.T) {
 	}
 	if detail["lambda_electric"].(float64) != lambdaE {
 		t.Errorf("详情 lambda_electric 漂移: %v ≠ %v", detail["lambda_electric"], lambdaE)
+	}
+	detailAnchor, ok := detail["decay_anchor"].(float64)
+	if !ok || detailAnchor != anchor {
+		t.Errorf("详情 decay_anchor 漂移: %v ≠ %v（锁定字段重推应一致）", detailAnchor, anchor)
 	}
 }
 

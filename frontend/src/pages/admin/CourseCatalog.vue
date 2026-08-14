@@ -9,70 +9,59 @@
         <el-button size="small" plain @click="openCertificateDialog()">证书模板</el-button>
       </div>
       <!-- 卡片 2：专业方向 -->
-      <div class="cc-card">
-        <div class="cc-card-title">专业方向</div>
-        <button
-          class="cc-nav-item"
-          :class="{ active: filterSpecialty === null }"
-          @click="selectSpecialty(null)"
-        >
-          <span class="cc-nav-name">全部课程</span>
-          <span class="cc-nav-count">{{ allCourses.length }}</span>
-        </button>
+      <FacetCard title="专业方向">
+        <FacetItem
+          :active="specialtyId === null"
+          name="全部课程"
+          :count="totalAll"
+          @select="selectDirection(null)"
+        />
 
         <div v-for="d in directions" :key="d.specialty_id" class="cc-nav-row">
-          <button
-            class="cc-nav-item"
-            :class="{ active: filterSpecialty === d.specialty_id }"
-            @click="selectSpecialty(d.specialty_id)"
-          >
-            <span class="cc-nav-name">{{ d.name }}</span>
-            <span class="cc-nav-count">{{ countOfDirection(d.specialty_id) }}</span>
-          </button>
+          <FacetItem
+            :active="specialtyId === d.specialty_id"
+            :name="d.name"
+            :count="countOfDirection(d.specialty_id)"
+            @select="selectDirection(d.specialty_id)"
+          />
           <span class="cc-nav-move">
             <el-icon class="cc-move-icon" @click.stop="moveDirection(d, -1)"><CaretTop /></el-icon>
             <el-icon class="cc-move-icon" @click.stop="moveDirection(d, 1)"><CaretBottom /></el-icon>
           </span>
         </div>
 
-        <button
-          v-if="unmountedCourses.length > 0"
-          class="cc-nav-item cc-nav-warn"
-          :class="{ active: filterSpecialty === -1 }"
-          @click="selectSpecialty(-1)"
-        >
-          <span class="cc-nav-name">未挂载课程</span>
-          <span class="cc-nav-count">{{ unmountedCourses.length }}</span>
-        </button>
-      </div>
+        <FacetItem
+          v-if="unmountedCount > 0"
+          warn
+          :active="specialtyId === UNMOUNTED_SPECIALTY_ID"
+          name="未挂载课程"
+          :count="unmountedCount"
+          @select="selectDirection(UNMOUNTED_SPECIALTY_ID)"
+        />
+      </FacetCard>
 
       <!-- 卡片 3：课程等级 -->
-      <div class="cc-card">
-        <div class="cc-card-title">课程等级</div>
-        <button
-          class="cc-nav-item"
-          :class="{ active: filterLevel === null }"
-          @click="selectLevel(null)"
-        >
-          <span class="cc-nav-name">全部等级</span>
-          <span class="cc-nav-count">{{ scopedCourses.length }}</span>
-        </button>
+      <FacetCard title="课程等级">
+        <FacetItem
+          :active="levelId === null"
+          name="全部等级"
+          :count="scopedTotal"
+          @select="selectLevel(null)"
+        />
 
         <div v-for="l in levels" :key="l.level_id" class="cc-level-row">
-          <button
-            class="cc-nav-item"
-            :class="{ active: filterLevel === l.level_id }"
-            @click="selectLevel(l.level_id)"
-          >
-            <span class="cc-nav-name">{{ l.name }}</span>
-            <span class="cc-nav-count">{{ countOfLevel(l.level_id) }}</span>
-          </button>
+          <FacetItem
+            :active="levelId === l.level_id"
+            :name="l.name"
+            :count="countOfLevel(l.level_id)"
+            @select="selectLevel(l.level_id)"
+          />
           <span class="cc-nav-move">
             <el-icon class="cc-move-icon" @click.stop="moveLevel(l, -1)"><CaretTop /></el-icon>
             <el-icon class="cc-move-icon" @click.stop="moveLevel(l, 1)"><CaretBottom /></el-icon>
           </span>
         </div>
-      </div>
+      </FacetCard>
     </aside>
 
     <!-- 右侧课程表格 -->
@@ -168,15 +157,15 @@
       :levels="levels"
       :certificate-templates="certificateTemplates"
       :course-options="courseOptions"
-      :default-specialty-id="filterSpecialty"
+      :default-specialty-id="specialtyId"
       :submitting="submitting"
-      @saved="loadCourses"
+      @saved="refreshCatalog"
     />
     <CourseCatalogDialogs
       ref="catalogDialogsRef"
       :certificate-templates="certificateTemplates"
       :submitting="submitting"
-      @catalog-changed="loadCatalog"
+      @catalog-changed="refreshCatalog"
       @certificates-changed="loadCertificateTemplates"
     />
   </div>
@@ -189,6 +178,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { trainingApi, type CatalogDirectionNode, type CatalogLevel, type CertificateTemplate } from '@/api/training'
 import { adminApi, type AdminCourseItem } from '@/api/admin'
 import { levelTagType } from '@/constants/level'
+import { useCourseCatalog, UNMOUNTED_SPECIALTY_ID } from '@/composables/useCourseCatalog'
+import FacetCard from '@/components/catalog/FacetCard.vue'
+import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCatalogCourseDrawer from '@/components/admin/CourseCatalogCourseDrawer.vue'
 import CourseCatalogDialogs from '@/components/admin/CourseCatalogDialogs.vue'
 
@@ -197,50 +189,69 @@ const submitting = ref(false)
 
 // ===== 数据源：管理端课程列表（客户端过滤/分页，课程规模小） =====
 const allCourses = ref<AdminCourseItem[]>([])
-const directions = ref<CatalogDirectionNode[]>([])
-const levels = ref<CatalogLevel[]>([])
 const certificateTemplates = ref<CertificateTemplate[]>([])
-
-const filterSpecialty = ref<number | null>(null)
-const filterLevel = ref<number | null>(null)
-const filterStatus = ref<number | null>(null)
-const keyword = ref('')
-const currentPage = ref(1)
-const pageSize = ref(10)
-
-const unmountedCourses = computed(() => allCourses.value.filter(c => isUnmounted(c)))
-const mountedCourses = computed(() => allCourses.value.filter(c => !isUnmounted(c)))
 
 function isUnmounted(c: AdminCourseItem): boolean {
   return c.specialty_id === null || c.specialty_id === undefined || c.level_id === null || c.level_id === undefined
 }
 
-function countOfDirection(id: number): number {
-  return allCourses.value.filter(c => c.specialty_id === id).length
-}
-
-// 当前方向筛选范围内的课程（等级卡片计数随方向筛选实时调整）
-const scopedCourses = computed(() => {
-  if (filterSpecialty.value === -1) return unmountedCourses.value
-  if (filterSpecialty.value !== null) {
-    return allCourses.value.filter(c => c.specialty_id === filterSpecialty.value)
+const {
+  directions,
+  levels,
+  specialtyId,
+  levelId,
+  totalAll,
+  scopedTotal,
+  countOfDirection,
+  countOfLevel,
+  unmountedCount,
+  selectDirection,
+  selectLevel,
+  fetchCatalog,
+  levelNameOf,
+  specialtyNameOf
+} = useCourseCatalog({
+  adapter: {
+    async load() {
+      const [treeData, levelsData, coursesData] = await Promise.all([
+        trainingApi.getAdminCatalogTree(),
+        trainingApi.getLevels(),
+        adminApi.getCourses({ page: 1, page_size: 500 })
+      ])
+      allCourses.value = coursesData.courses || []
+      return {
+        directions: treeData.specialties || [],
+        levels: levelsData.levels || [],
+        items: (coursesData.courses || []).map(c => ({
+          specialty_id: isUnmounted(c) ? null : (c.specialty_id ?? null),
+          level_id: isUnmounted(c) ? null : (c.level_id ?? null),
+          count: 1
+        }))
+      }
+    }
+  },
+  bidirectional: false,
+  onSelect: () => {
+    currentPage.value = 1
   }
-  return allCourses.value
 })
 
-function countOfLevel(id: number): number {
-  return scopedCourses.value.filter(c => c.level_id === id).length
-}
+const mountedCourses = computed(() => allCourses.value.filter(c => !isUnmounted(c)))
+
+const filterStatus = ref<number | null>(null)
+const keyword = ref('')
+const currentPage = ref(1)
+const pageSize = ref(10)
 
 const filteredCourses = computed(() => {
   const k = keyword.value.trim().toLowerCase()
   return allCourses.value.filter(c => {
-    if (filterSpecialty.value === -1) {
+    if (specialtyId.value === UNMOUNTED_SPECIALTY_ID) {
       if (!isUnmounted(c)) return false
-    } else if (filterSpecialty.value !== null && c.specialty_id !== filterSpecialty.value) {
+    } else if (specialtyId.value !== null && c.specialty_id !== specialtyId.value) {
       return false
     }
-    if (filterSpecialty.value !== -1 && filterLevel.value !== null && c.level_id !== filterLevel.value) {
+    if (specialtyId.value !== UNMOUNTED_SPECIALTY_ID && levelId.value !== null && c.level_id !== levelId.value) {
       return false
     }
     if (filterStatus.value !== null && c.status !== filterStatus.value) return false
@@ -254,34 +265,17 @@ const pagedCourses = computed(() => {
   return filteredCourses.value.slice(start, start + pageSize.value)
 })
 
-function levelNameOf(levelIdValue?: number | null) {
-  if (!levelIdValue) return ''
-  return levels.value.find(l => l.level_id === levelIdValue)?.name || ''
-}
-
-function specialtyNameOf(specialtyIdValue?: number | null) {
-  if (!specialtyIdValue) return ''
-  return directions.value.find(d => d.specialty_id === specialtyIdValue)?.name || ''
-}
-
 function certificateNameOf(id?: number | null) {
   if (!id) return ''
   return certificateTemplates.value.find(t => t.id === id)?.name || ''
 }
 
-function selectSpecialty(id: number | null) {
-  filterSpecialty.value = id
-  currentPage.value = 1
-}
-
-function selectLevel(id: number | null) {
-  filterLevel.value = id
-  currentPage.value = 1
-}
-
 // 课程排序仅在同时选中具体方向 + 具体等级时可用（全部/未挂载不提供）
 const canSortCourses = computed(
-  () => filterSpecialty.value !== null && filterSpecialty.value > 0 && filterLevel.value !== null
+  () =>
+    specialtyId.value !== null &&
+    specialtyId.value !== UNMOUNTED_SPECIALTY_ID &&
+    levelId.value !== null
 )
 
 // ===== 子组件（抽屉/弹窗）入口 =====
@@ -315,7 +309,7 @@ async function moveDirection(d: CatalogDirectionNode, delta: -1 | 1) {
     // trainingApi 已解包信封：成功即业务成功
     await trainingApi.swapDirection(d.specialty_id, target.specialty_id)
     ElMessage.success('排序已更新')
-    await loadCatalog()
+    await refreshCatalog()
   } catch (error) {
     console.error('排序失败:', error)
     /* 错误已由拦截器提示 */
@@ -334,7 +328,7 @@ async function moveLevel(l: CatalogLevel, delta: -1 | 1) {
     // trainingApi 已解包信封：成功即业务成功
     await trainingApi.swapLevel(l.level_id, target.level_id)
     ElMessage.success('排序已更新')
-    await loadCatalog()
+    await refreshCatalog()
   } catch (error) {
     console.error('排序失败:', error)
     /* 错误已由拦截器提示 */
@@ -355,7 +349,7 @@ async function moveCourse(row: AdminCourseItem, delta: -1 | 1) {
   try {
     await adminApi.swapCourse(row.course_id, target.course_id)
     ElMessage.success('排序已更新')
-    await loadCourses()
+    await refreshCatalog()
   } catch (error) {
     console.error('排序失败:', error)
     /* 错误已由拦截器提示 */
@@ -365,32 +359,16 @@ async function moveCourse(row: AdminCourseItem, delta: -1 | 1) {
 }
 
 // ===== 加载 =====
-async function loadCourses() {
+// adapter 回填页面级 allCourses（表格/抽屉共用），计数组 items 由同一数据派生
+async function refreshCatalog() {
   loading.value = true
   try {
-    const data = await adminApi.getCourses({ page: 1, page_size: 500 })
-    if (data) {
-      allCourses.value = data.courses || []
-    }
+    await fetchCatalog()
   } catch (error) {
     console.error('加载课程失败:', error)
     /* 错误已由拦截器提示 */
   } finally {
     loading.value = false
-  }
-}
-
-async function loadCatalog() {
-  try {
-    // trainingApi 已解包信封：成功直接返回业务负载
-    const [treeData, levelsData] = await Promise.all([
-      trainingApi.getAdminCatalogTree(),
-      trainingApi.getLevels()
-    ])
-    directions.value = treeData.specialties || []
-    levels.value = levelsData.levels || []
-  } catch (error) {
-    console.error('加载目录失败:', error)
   }
 }
 
@@ -420,7 +398,7 @@ async function toggleStatus(row: AdminCourseItem) {
   try {
     await adminApi.updateCourse(row.course_id, { status: row.status === 1 ? 0 : 1 })
     ElMessage.success(row.status === 1 ? '已下架' : '已上架')
-    await loadCourses()
+    await refreshCatalog()
   } catch (error) {
     console.error('切换状态失败:', error)
     /* 错误已由拦截器提示 */
@@ -457,7 +435,7 @@ async function handleDeleteCourse(row: AdminCourseItem) {
   try {
     await adminApi.deleteCourse(row.course_id)
     ElMessage.success('已删除')
-    await loadCourses()
+    await refreshCatalog()
   } catch (error) {
     console.error('删除失败:', error)
     /* 错误已由拦截器提示 */
@@ -465,8 +443,7 @@ async function handleDeleteCourse(row: AdminCourseItem) {
 }
 
 onMounted(() => {
-  loadCourses()
-  loadCatalog()
+  refreshCatalog()
   loadCertificateTemplates()
 })
 </script>
@@ -506,13 +483,6 @@ onMounted(() => {
   margin-left: 0;
 }
 
-.cc-card-title {
-  font-size: var(--text-xs);
-  color: var(--color-text-tertiary);
-  padding: var(--space-1) var(--space-3);
-  margin-bottom: var(--space-1);
-}
-
 .cc-nav-row {
   display: flex;
   align-items: center;
@@ -540,49 +510,6 @@ onMounted(() => {
 
 .cc-move-icon:hover {
   color: var(--color-primary-600);
-}
-
-.cc-nav-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: var(--space-2) var(--space-3);
-  margin-bottom: 2px;
-  border: none;
-  border-radius: var(--radius-md);
-  background: transparent;
-  cursor: pointer;
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  color: var(--color-text-primary);
-  transition: background var(--duration-fast) var(--ease-default);
-}
-
-.cc-nav-item:hover {
-  background: var(--color-bg-sidebar-hover);
-}
-
-.cc-nav-item.active {
-  background: var(--color-primary-50);
-  color: var(--color-primary-600);
-  font-weight: var(--font-semibold);
-}
-
-.cc-nav-warn.active {
-  background: var(--color-danger-light);
-  color: var(--color-danger);
-}
-
-.cc-nav-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.cc-nav-count {
-  font-size: var(--text-xs);
-  color: var(--color-text-tertiary);
 }
 
 .cc-level-row {

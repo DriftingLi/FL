@@ -43,9 +43,7 @@
       <div class="stats-header">
         <div class="stats-title-group">
           <h2 class="stats-title">阅卷统计</h2>
-          <span v-if="gradingStats" class="stats-summary">
-            共批阅 {{ gradingStats.total_count }} 题 · 活跃 {{ gradingStats.active_days }} 天
-          </span>
+          <span v-if="summary" class="stats-summary">{{ summary }}</span>
         </div>
         <div class="time-range-tabs">
           <button
@@ -69,48 +67,55 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { ArrowRight } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import QuickCard from '@/components/dashboard/QuickCard.vue'
 import type { QuickCardItem } from '@/components/dashboard/QuickCard.vue'
-import { useECharts } from '@/composables/useECharts'
+import { useRoleDashboard } from '@/composables/useRoleDashboard'
 import { tutorApi } from '@/api/tutor'
 import { gradingApi } from '@/api/grading'
+import { displayNameOf } from '@/types/user'
 
 const authStore = useAuthStore()
 
-const userName = computed(() =>
-  authStore.userInfo?.name || authStore.userInfo?.username || '导师'
-)
+const userName = computed(() => displayNameOf(authStore.userInfo) || '导师')
 
 const pendingCount = ref(0)
 const pendingGrading = ref<QuickCardItem[]>([])
 const myCourses = ref<QuickCardItem[]>([])
 const recentGrading = ref<QuickCardItem[]>([])
 
-const chartRef = ref<HTMLElement | null>(null)
-const { init: initChart } = useECharts(chartRef)
-
-const timeTabs = [
-  { label: '本周', value: 'week' },
-  { label: '本月', value: 'month' }
-]
-const currentTab = ref('week')
-
-// 阅卷统计数据
-interface GradingStats {
-  days: number
-  labels: string[]
-  data: number[]
-  total_count: number
-  active_days: number
-}
-const gradingStats = ref<GradingStats | null>(null)
-const statsLoading = ref(false)
-const statsEmpty = computed(() => {
-  if (!gradingStats.value) return true
-  return gradingStats.value.data.every((v) => v === 0)
+// 阅卷统计 section（骨架/加载/空态/tab 切换/图表组装收敛进 useRoleDashboard）
+const {
+  chartRef,
+  timeTabs,
+  currentTab,
+  statsLoading,
+  statsEmpty,
+  summary,
+  loadStats: loadGradingStats,
+  renderChart: renderGradingChart
+} = useRoleDashboard({
+  statsFetcher: async (days) => {
+    const res = await tutorApi.getGradingStats({ days })
+    if (!res) return null
+    return {
+      days: res.days,
+      labels: res.labels,
+      data: res.data,
+      total: res.total_count,
+      active_days: res.active_days
+    }
+  },
+  seriesType: 'bar',
+  unit: '题',
+  yAxisName: '题数',
+  summaryText: (s) => `共批阅 ${s.total} 题 · 活跃 ${s.active_days} 天`,
+  timeTabs: [
+    { label: '本周', value: 'week', days: 7 },
+    { label: '本月', value: 'month', days: 30 }
+  ]
 })
 
 async function loadData() {
@@ -147,85 +152,6 @@ async function loadData() {
     console.error('加载批阅数据失败:', error)
   }
 }
-
-async function loadGradingStats() {
-  statsLoading.value = true
-  try {
-    const days = currentTab.value === 'month' ? 30 : 7
-    const res = await tutorApi.getGradingStats({ days })
-    if (res) {
-      gradingStats.value = res as GradingStats
-    }
-  } catch (error) {
-    console.error('加载阅卷统计失败:', error)
-    gradingStats.value = null
-  } finally {
-    statsLoading.value = false
-  }
-}
-
-function renderGradingChart() {
-  if (!chartRef.value || !gradingStats.value) return
-  // 数据全为 0 时 chartRef 被 v-show 隐藏（display:none），此时初始化会触发
-  // ECharts "Can't get DOM width or height" 警告，直接跳过
-  if (statsEmpty.value) return
-
-  const labels = gradingStats.value.labels
-  const data = gradingStats.value.data
-
-  initChart({
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: '#fff',
-      borderColor: '#E2E8F0',
-      borderWidth: 1,
-      textStyle: { color: '#0F172A' },
-      extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 8px;',
-      valueFormatter: (val: any) => `${val} 题`
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '3%',
-      top: '10%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      data: labels,
-      axisLabel: { fontSize: 11, color: '#64748B' },
-      axisLine: { lineStyle: { color: '#E2E8F0' } },
-      axisTick: { show: false }
-    },
-    yAxis: {
-      type: 'value',
-      name: '题数',
-      nameTextStyle: { color: '#94A3B8', fontSize: 11 },
-      axisLine: { show: false },
-      axisTick: { show: false },
-      splitLine: { lineStyle: { color: '#F1F5F9' } },
-      minInterval: 1
-    },
-    series: [
-      {
-        type: 'bar',
-        data: data,
-        barWidth: '40%',
-        itemStyle: {
-          color: '#0EA5E9',
-          borderRadius: [4, 4, 0, 0]
-        }
-      }
-    ]
-  })
-}
-
-// tab 切换时重新加载
-watch(currentTab, async () => {
-  await loadGradingStats()
-  await nextTick()
-  renderGradingChart()
-})
 
 onMounted(async () => {
   await loadData()

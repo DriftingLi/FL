@@ -34,15 +34,15 @@ func TestCreateCourseRequiresSpecialtyAndLevel(t *testing.T) {
 	}
 
 	// 只给名称（旧体系曾要求 category，新体系改为方向/等级必填）
-	if _, err := svc.CreateCourse(map[string]any{"name": "课程A"}); err == nil || !strings.Contains(err.Error(), "专业方向不能为空") {
+	if _, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程A")}); err == nil || !strings.Contains(err.Error(), "专业方向不能为空") {
 		t.Fatalf("缺少专业方向应报错, got: %v", err)
 	}
-	if _, err := svc.CreateCourse(map[string]any{"name": "课程A", "specialty_id": spec.SpecialtyID}); err == nil || !strings.Contains(err.Error(), "课程等级不能为空") {
+	if _, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程A"), SpecialtyID: ptrInt(spec.SpecialtyID)}); err == nil || !strings.Contains(err.Error(), "课程等级不能为空") {
 		t.Fatalf("缺少课程等级应报错, got: %v", err)
 	}
 
-	created, err := svc.CreateCourse(map[string]any{
-		"name": "课程A", "specialty_id": spec.SpecialtyID, "level_id": lv.LevelID,
+	created, err := svc.CreateCourse(&CourseInput{
+		Name: ptrStr("课程A"), SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID),
 	})
 	if err != nil {
 		t.Fatalf("创建失败: %v", err)
@@ -213,7 +213,7 @@ func TestTutorCourseListHasChapterCount(t *testing.T) {
 	svc := NewTutorService(db, "", nil, zap.NewNop())
 	course, _ := seedCatalogCourse(t, db)
 
-	list := svc.GetCourses(nil, 1, 10, nil, nil)
+	list := svc.GetCourses(1, 10, nil, nil)
 	items := list.Courses
 	var item CourseDTO
 	for _, c := range items {
@@ -235,7 +235,7 @@ func TestUpdateCourseWithoutPrereqKeyKeepsPrereqs(t *testing.T) {
 	svc := NewAdminCourseService(db, nil, zap.NewNop())
 	course, prereq := seedCatalogCourse(t, db)
 
-	updated, err := svc.UpdateCourse(course.CourseID, map[string]any{"name": "改名"})
+	updated, err := svc.UpdateCourse(course.CourseID, &CourseInput{Name: ptrStr("改名")})
 	if err != nil {
 		t.Fatalf("更新失败: %v", err)
 	}

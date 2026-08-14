@@ -8,7 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -26,17 +25,16 @@ func NewTrainingCatalogHandler(svc *service.TrainingCatalogService) *TrainingCat
 // RegisterTrainingCatalogRoutes 注册培训目录蓝图：
 //   - /api/admin/*：专业方向 / 课程等级 / 证书模板 / 题库标签 CRUD 与题目打标（管理端）
 //   - /api/catalog/*、/api/specialties、/api/levels、/api/tags：学员端查询
-func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, sess *security.Session, svc *service.TrainingCatalogService) {
+func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.TrainingCatalogService) {
 	h := NewTrainingCatalogHandler(svc)
 
 	// ===== 学员端查询（公开） =====
 	rg.GET("/catalog/tree", h.GetCatalogTree)
-	rg.GET("/specialties", h.ListPublicSpecialties)
 	rg.GET("/levels", h.ListPublicLevels)
 	rg.GET("/tags", h.ListPublicTags)
 
 	// ===== 管理端 CRUD =====
-	g := rg.Group("/admin", middleware.JWTAuth(sess), middleware.RoleRequired("admin"))
+	g := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
 	g.GET("/catalog/tree", h.GetAdminCatalogTree)
 
 	// ---- 专业方向 ----
@@ -66,18 +64,12 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, sess *security.Session, 
 	g.DELETE("/question-tag/:id", h.DeleteQuestionTag)
 
 	// ---- 题目打标 ----
-	g.GET("/question/:question_id/tags", h.GetQuestionTags)
 	g.PUT("/question/:question_id/tags", h.SetQuestionTags)
 }
 
 // GetCatalogTree 课程目录树（学员端）GET /api/catalog/tree
 func (h *TrainingCatalogHandler) GetCatalogTree(c *gin.Context) {
 	response.Success(c, h.svc.GetCatalogTree())
-}
-
-// ListPublicSpecialties 专业方向列表（仅启用项）GET /api/specialties
-func (h *TrainingCatalogHandler) ListPublicSpecialties(c *gin.Context) {
-	response.Success(c, gin.H{"specialties": h.svc.ListSpecialties(true)})
 }
 
 // ListPublicLevels 课程等级列表（仅启用项）GET /api/levels
@@ -351,21 +343,6 @@ func (h *TrainingCatalogHandler) DeleteQuestionTag(c *gin.Context) {
 		return
 	}
 	response.SuccessWithMsg(c, "题库标签删除成功", nil)
-}
-
-// GetQuestionTags 查询题目标签 GET /api/admin/question/:question_id/tags
-func (h *TrainingCatalogHandler) GetQuestionTags(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("question_id"))
-	if err != nil {
-		response.BadRequest(c, "题目ID无效")
-		return
-	}
-	result, err := h.svc.GetQuestionTags(id)
-	if err != nil {
-		response.NotFound(c, err.Error())
-		return
-	}
-	response.Success(c, gin.H{"tags": result})
 }
 
 // SetQuestionTags 全量替换题目标签 PUT /api/admin/question/:question_id/tags

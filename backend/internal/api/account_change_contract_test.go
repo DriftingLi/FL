@@ -6,6 +6,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
@@ -57,9 +58,9 @@ func newAccountChangeTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fake
 	authH := NewAuthHandler(security.SessionFromConfig(cfg), authSvc, nil, nil, nil, zap.NewNop())
 	auth := api.Group("/auth")
 	auth.POST("/login", authH.Login)
-	RegisterEmailAuthRoutes(api, deps.Session, deps.CodeSvc, deps.EmailCh)
-	RegisterPhoneAuthRoutes(api, deps.Session, deps.CodeSvc, deps.PhoneCh)
-	RegisterProfileBindRoutes(api, deps.Session, deps.AuthSvc, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
+	RegisterEmailAuthRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.EmailCh)
+	RegisterPhoneAuthRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.PhoneCh)
+	RegisterProfileBindRoutes(api, deps.RouterDeps(), deps.AuthSvc, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
 
 	return r, store, phoneCh, db
 }
@@ -143,6 +144,22 @@ func TestAuthAccountChange_FullFlow(t *testing.T) {
 	}
 	if !bytes.Contains(w.Body.Bytes(), []byte("账号修改成功")) {
 		t.Errorf("修改成功文案不符: %s", w.Body.String())
+	}
+	// 响应携带新签发的 token（JWT claim 随新账号同步，ADR-0012 §5）
+	var env struct {
+		Data struct {
+			Token   string `json:"token"`
+			Account string `json:"account"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatalf("解析修改账号响应失败: %v", err)
+	}
+	if env.Data.Token == "" {
+		t.Errorf("修改账号响应应携带新 token")
+	}
+	if env.Data.Account != "new_acct_2" {
+		t.Errorf("响应 account = %q, want new_acct_2", env.Data.Account)
 	}
 
 	// 7. 数据库 account 已变更为新值（/me 响应形状由 auth_me 契约测试锁定）

@@ -175,9 +175,12 @@ func IsValidPhone(phone string) bool {
 }
 
 // authCodeValue 验证码存储值（含错误次数限制，最多 5 次）。
+// ExpiresAt 为发送时锁定的到期时间：错输重写 Attempts 时按剩余时长续存，
+// 错误输入不得延长验证码生命周期（ADR-0012 §5）；零值为旧数据，按旧语义整段重写。
 type authCodeValue struct {
-	Code     string `json:"code"`
-	Attempts int    `json:"attempts"`
+	Code      string    `json:"code"`
+	Attempts  int       `json:"attempts"`
+	ExpiresAt time.Time `json:"expires_at,omitempty"`
 }
 
 // generateEmailCode 生成 6 位数字验证码（加密安全随机数）。
@@ -497,7 +500,7 @@ func (s *VerifyCodeService) send(ctx context.Context, ch CodeChannel, purpose Co
 	if err != nil {
 		return errors.New("验证码生成失败，请稍后再试")
 	}
-	val, _ := json.Marshal(authCodeValue{Code: code})
+	val, _ := json.Marshal(authCodeValue{Code: code, ExpiresAt: time.Now().Add(s.codeTTL)})
 	if err := s.store.Set(ctx, s.codeKey(ch, purpose, target, false), string(val), s.codeTTL); err != nil {
 		return errors.New("验证码生成失败，请稍后再试")
 	}
@@ -531,7 +534,17 @@ func (s *VerifyCodeService) Verify(ctx context.Context, ch CodeChannel, purpose 
 	if v.Code != strings.TrimSpace(code) {
 		v.Attempts++
 		val, _ := json.Marshal(v)
-		_ = s.store.Set(ctx, key, string(val), s.codeTTL)
+		// 按发送时锁定的到期时间续存（错输不得延长生命周期，ADR-0012 §5）；
+		// 旧数据无 ExpiresAt：按旧语义整段重写 TTL
+		ttl := s.codeTTL
+		if !v.ExpiresAt.IsZero() {
+			ttl = time.Until(v.ExpiresAt)
+			if ttl <= 0 {
+				_ = s.store.Del(ctx, key)
+				return errors.New("验证码错误或已过期")
+			}
+		}
+		_ = s.store.Set(ctx, key, string(val), ttl)
 		return errors.New("验证码错误或已过期")
 	}
 	_ = s.store.Del(ctx, key)
@@ -589,13 +602,9 @@ func (s *VerifyCodeService) RegisterWithCode(ctx context.Context, ch CodeChannel
 		return nil, errors.New("注册失败，该" + ch.Noun() + "可能已被注册")
 	}
 
-	token, err := s.authSvc.GenerateToken(user.ID, user.Account, HrwaiRole)
-	if err != nil {
-		return nil, err
-	}
-	return &LoginResult{
-		Token: token, UserID: user.ID, Account: user.Account, Username: user.Username, Role: HrwaiRole,
-	}, nil
+	return s.authSvc.issueLogin(loginCredentials{
+		id: user.ID, account: user.Account, username: user.Username, status: &user.Status,
+	}, HrwaiRole)
 }
 
 // LoginWithCode 验证码登录：校验通过后签发登录令牌。
@@ -612,16 +621,9 @@ func (s *VerifyCodeService) LoginWithCode(ctx context.Context, ch CodeChannel, t
 	if err != nil {
 		return nil, errors.New("该" + ch.Noun() + "尚未注册")
 	}
-	if user.Status != 1 {
-		return nil, errors.New("账号已被禁用，请联系管理员")
-	}
-	token, err := s.authSvc.GenerateToken(user.ID, user.Account, HrwaiRole)
-	if err != nil {
-		return nil, err
-	}
-	return &LoginResult{
-		Token: token, UserID: user.ID, Account: user.Account, Username: user.Username, Role: HrwaiRole,
-	}, nil
+	return s.authSvc.issueLogin(loginCredentials{
+		id: user.ID, account: user.Account, username: user.Username, status: &user.Status,
+	}, HrwaiRole)
 }
 
 // Bind 校验验证码后绑定/修改当前用户目标字段（格式与唯一性双重校验）。
@@ -654,28 +656,38 @@ func (s *VerifyCodeService) SendAccountChange(ctx context.Context, ch CodeChanne
 }
 
 // ChangeAccount 修改当前用户登录账号（短信验证码确认 + 格式/唯一性校验）。
-func (s *VerifyCodeService) ChangeAccount(ctx context.Context, ch CodeChannel, userID int, newAccount, code string) error {
+// 成功后重签 JWT（claim 随新账号同步，审计与 /me 口径不再陈旧，ADR-0012 §5）。
+func (s *VerifyCodeService) ChangeAccount(ctx context.Context, ch CodeChannel, userID int, newAccount, code string) (*LoginResult, error) {
 	newAccount = strings.TrimSpace(newAccount)
 	if !IsValidAccount(newAccount) {
-		return errors.New("账号需为 4-20 位字母、数字或下划线")
+		return nil, errors.New("账号需为 4-20 位字母、数字或下划线")
 	}
 	phone, err := s.currentUserPhone(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := s.Verify(ctx, ch, CodePurposeAccountChange, phone, code); err != nil {
-		return err
+		return nil, err
 	}
 	var count int64
 	if err := s.db.WithContext(ctx).Model(&model.HrwaiUser{}).
 		Where("account = ? AND id <> ?", newAccount, userID).Count(&count).Error; err != nil {
-		return err
+		return nil, err
 	}
 	if count > 0 {
-		return errors.New("该账号已被占用")
+		return nil, errors.New("该账号已被占用")
 	}
-	return s.db.WithContext(ctx).Model(&model.HrwaiUser{}).
-		Where("id = ?", userID).Update("account", newAccount).Error
+	if err := s.db.WithContext(ctx).Model(&model.HrwaiUser{}).
+		Where("id = ?", userID).Update("account", newAccount).Error; err != nil {
+		return nil, err
+	}
+	var user model.HrwaiUser
+	if err := s.db.WithContext(ctx).First(&user, userID).Error; err != nil {
+		return nil, errors.New("用户不存在")
+	}
+	return s.authSvc.issueLogin(loginCredentials{
+		id: user.ID, account: user.Account, username: user.Username, status: &user.Status,
+	}, HrwaiRole)
 }
 
 // currentUserPhone 读取当前用户手机号并校验格式（未绑定手机号时报错）。
@@ -684,7 +696,8 @@ func (s *VerifyCodeService) currentUserPhone(ctx context.Context, userID int) (s
 	if err := s.db.WithContext(ctx).Select("phone").First(&user, userID).Error; err != nil {
 		return "", errors.New("用户不存在")
 	}
-	if !IsValidPhone(user.Phone) {
+	// 显式拒绝邮箱注册的占位手机号（email_ 前缀），不依赖 IsValidPhone 巧合兜底
+	if strings.HasPrefix(user.Phone, "email_") || !IsValidPhone(user.Phone) {
 		return "", errors.New("请先绑定手机号")
 	}
 	return user.Phone, nil

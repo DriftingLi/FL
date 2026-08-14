@@ -32,7 +32,7 @@ type KhResult struct {
 // CalcKHours 计算使用强度系数 Kh
 // age 必须来自 Kt 计算（factory_year 与 sale_year 之差），保证一致性
 // 区间阈值通过 provider 从 coefficient_configs 读取（key: k_hours_ratio_low/mid/high/max）
-func CalcKHours(ctx context.Context, age, usageHours int, provider ConfigReader) (KhResult, error) {
+func CalcKHours(ctx context.Context, age, usageHours int, provider CoefficientResolver) (KhResult, error) {
 	if usageHours < 0 {
 		return KhResult{}, model.ErrInvalidUsageHours
 	}
@@ -41,10 +41,7 @@ func CalcKHours(ctx context.Context, age, usageHours int, provider ConfigReader)
 	}
 
 	// 读取年化标准小时数（失败时使用默认值 1750）
-	annual, err := provider.Get(ctx, KeyAnnualUsageHours)
-	if err != nil || annual <= 0 {
-		annual = defaultAnnualUsageHours
-	}
+	annual := provider.ReadFloat(ctx, KeyAnnualUsageHours, defaultAnnualUsageHours)
 
 	// 计算标准小时数（age=0 时按 1 年计算）
 	effectiveAge := age
@@ -55,22 +52,10 @@ func CalcKHours(ctx context.Context, age, usageHours int, provider ConfigReader)
 	ratio := float64(usageHours) / standard
 
 	// 读取 4 个区间阈值（失败时使用硬编码默认值）
-	low, errLow := provider.Get(ctx, KeyKHoursRatioLow)
-	if errLow != nil || low <= 0 {
-		low = 0.7
-	}
-	mid, errMid := provider.Get(ctx, KeyKHoursRatioMid)
-	if errMid != nil || mid <= 0 {
-		mid = 1.0
-	}
-	high, errHigh := provider.Get(ctx, KeyKHoursRatioHigh)
-	if errHigh != nil || high <= 0 {
-		high = 1.3
-	}
-	maxR, errMax := provider.Get(ctx, KeyKHoursRatioMax)
-	if errMax != nil || maxR <= 0 {
-		maxR = 1.6
-	}
+	low := provider.ReadFloat(ctx, KeyKHoursRatioLow, 0.7)
+	mid := provider.ReadFloat(ctx, KeyKHoursRatioMid, 1.0)
+	high := provider.ReadFloat(ctx, KeyKHoursRatioHigh, 1.3)
+	maxR := provider.ReadFloat(ctx, KeyKHoursRatioMax, 1.6)
 
 	// 区间查表（保持原有逻辑：低段闭区间，高段开区间，末段闭区间）
 	var factor float64

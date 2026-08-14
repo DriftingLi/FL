@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -29,10 +28,10 @@ func NewProfileBindHandler(authSvc *service.AuthService, codeSvc *service.Verify
 
 // RegisterProfileBindRoutes 注册 /api/auth/profile 蓝图（登录后绑定/修改手机号、邮箱）
 // 与 /api/auth/account 蓝图（短信验证码确认修改登录账号）。
-func RegisterProfileBindRoutes(rg *gin.RouterGroup, sess *security.Session, authSvc *service.AuthService, codeSvc *service.VerifyCodeService, emailCh, phoneCh service.CodeChannel) {
+func RegisterProfileBindRoutes(rg *gin.RouterGroup, rd RouterDeps, authSvc *service.AuthService, codeSvc *service.VerifyCodeService, emailCh, phoneCh service.CodeChannel) {
 	h := NewProfileBindHandler(authSvc, codeSvc, emailCh, phoneCh)
 
-	g := rg.Group("/auth/profile", middleware.JWTAuth(sess))
+	g := rg.Group("/auth/profile", middleware.JWTAuth(rd.Session))
 
 	// POST /api/auth/profile/send-code {channel: email|phone, target}
 	g.POST("/send-code", h.SendCode)
@@ -43,7 +42,7 @@ func RegisterProfileBindRoutes(rg *gin.RouterGroup, sess *security.Session, auth
 	g.POST("/password", h.UpdatePassword)
 
 	// 修改登录账号（短信验证码确认）：PUT /api/auth/account、POST /api/auth/account/send-code
-	acct := rg.Group("/auth/account", middleware.JWTAuth(sess))
+	acct := rg.Group("/auth/account", middleware.JWTAuth(rd.Session))
 	acct.PUT("", h.UpdateAccount)
 	acct.POST("/send-code", h.SendAccountChangeCode)
 }
@@ -126,11 +125,13 @@ func (h *ProfileBindHandler) UpdateAccount(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
-	if err := h.codeSvc.ChangeAccount(ctx, h.phoneCh, middleware.CurrentUserID(c), req.Account, req.Code); err != nil {
+	result, err := h.codeSvc.ChangeAccount(ctx, h.phoneCh, middleware.CurrentUserID(c), req.Account, req.Code)
+	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	response.SuccessWithMsg(c, "账号修改成功", nil)
+	// 响应携带新签发的 token（前端替换本地登录态，JWT claim 随新账号同步）
+	response.SuccessWithMsg(c, "账号修改成功", result)
 }
 
 // handleCodeChannelBind 绑定/修改目标字段的公共实现（通道注入）。

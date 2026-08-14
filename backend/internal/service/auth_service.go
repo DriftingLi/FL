@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -60,7 +61,7 @@ func (s *AuthService) GetProfile(userID int, role, account string) map[string]an
 			data["account"] = u.Account
 			data["username"] = u.Username
 			data["avatar_url"] = u.AvatarURL
-			data["phone"] = u.Phone
+			data["phone"] = MaskedPhone(u.Phone)
 			data["email"] = u.Email
 			data["company"] = u.Company
 			// 是否已设置密码（决定个人资料页"账号密码"卡片提示文案）
@@ -84,6 +85,14 @@ func (s *AuthService) GetProfile(userID int, role, account string) map[string]an
 		}
 	}
 	return data
+}
+
+// MaskedPhone 隐藏邮箱注册的占位手机号（email_ 前缀），/auth/me 源头过滤不下发客户端。
+func MaskedPhone(phone string) string {
+	if strings.HasPrefix(phone, "email_") {
+		return ""
+	}
+	return phone
 }
 
 // HashPassword 使用 bcrypt 加密密码。
@@ -133,6 +142,12 @@ func (s *AuthService) verifyAndIssue(plainPassword string, c loginCredentials, r
 	if !VerifyPassword(plainPassword, c.password) {
 		return nil, errors.New(errMessage)
 	}
+	return s.issueLogin(c, role)
+}
+
+// issueLogin 登录骨架后半段：禁用校验 → 签发 → 组结果。
+// 密码三入口与验证码登录/注册共用（ADR-0011 向验证码路径的延伸，ADR-0012 §5）。
+func (s *AuthService) issueLogin(c loginCredentials, role string) (*LoginResult, error) {
 	if c.status != nil && *c.status != 1 {
 		return nil, errors.New("账号已被禁用，请联系管理员")
 	}

@@ -8,7 +8,6 @@
 //	  ├── GET  /evaluations/:id/report  下载 PDF 报告
 //	  ├── POST /battery/evaluations/:id/report   生成电池报告
 //	  ├── GET  /battery/evaluations/:id/report   下载电池报告
-//	  ├── POST /auth/login              估值模块独立登录
 //	  ├── POST /auth/register           估值模块独立注册
 //	  ├── /dictionaries/*               字典查询（只读 GET）
 //	  └── /health                       健康检查
@@ -34,6 +33,7 @@ import (
 
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
+	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation/dictcrud"
 	vservice "forklift-training/internal/valuation/service"
@@ -49,6 +49,7 @@ func RegisterRoutes(
 	r *gin.Engine,
 	sess *security.Session,
 	logger *zap.Logger,
+	auditSvc *service.AuditService,
 	dictRepo DictionaryConfigStore,
 	evalRepo EvaluationStore,
 	batteryRepo BatteryStore,
@@ -72,9 +73,6 @@ func RegisterRoutes(
 	{
 		public.GET("/evaluations/stats", evalHandler.Stats)
 		public.GET("/health", healthHandler.Check)
-
-		// 估值模块独立登录/注册（公开接口）
-		public.POST("/auth/login", valuationAuthHandler.Login)
 
 		// 报告生成与下载（无需登录）
 		public.POST("/evaluations/:id/report", reportHandler.Generate)
@@ -138,6 +136,8 @@ func RegisterRoutes(
 	admin := r.Group("/api/valuation/admin")
 	admin.Use(middleware.JWTAuth(sess))
 	admin.Use(middleware.RoleRequired("admin"))
+	// 管理员写操作审计：与主体系同一留痕口径（合规用途，ADR-0012 §7）
+	admin.Use(middleware.AuditLog(auditSvc, logger))
 	{
 		configHandler.registerDictCRUDRoutes(admin, dictcrud.NewRegistry(dictcrud.AllDescriptors()...))
 	}

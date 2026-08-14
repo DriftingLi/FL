@@ -89,11 +89,15 @@ function buildMockExamResultDetail(obj : UTSJSONObject) : MockExamResultDetail {
 	return detail
 }
 
+<<<<<<< HEAD
 /** 从 UTSJSONObject 构造 MockExamResult
  * 后端 /mock-exam/:id/result 契约：
  *   { mock_exam_id, total_score, max_score, correct_count, total_questions, accuracy, details, submit_time }
  * 无 score / passed / used_time 字段，由 total_score/max_score/accuracy 推导。
  */
+=======
+/** 从 UTSJSONObject 构造 MockExamResult */
+>>>>>>> origin/master
 function buildMockExamResult(obj : UTSJSONObject) : MockExamResult {
 	const details : MockExamResultDetail[] = []
 	const detailsRaw = obj['details']
@@ -103,6 +107,7 @@ function buildMockExamResult(obj : UTSJSONObject) : MockExamResult {
 			details.push(buildMockExamResultDetail(detailsArray[i]))
 		}
 	}
+<<<<<<< HEAD
 	const accuracy = toNumber(obj['accuracy'])
 	const result : MockExamResult = {
 		mock_exam_id: toNumber(obj['mock_exam_id'], toNumber(obj['exam_id'])),
@@ -112,11 +117,22 @@ function buildMockExamResult(obj : UTSJSONObject) : MockExamResult {
 		correct_count: toNumber(obj['correct_count'], toNumber(obj['correct'])),
 		total_questions: toNumber(obj['total_questions'], toNumber(obj['question_count'])),
 		used_time: toNumber(obj['used_time']),
+=======
+	const result : MockExamResult = {
+		mock_exam_id: toNumber(obj['mock_exam_id'], toNumber(obj['exam_id'])),
+		score: toNumber(obj['score']),
+		total_score: toNumber(obj['total_score'], toNumber(obj['full_score'])),
+		passed: toBool(obj['passed'], toBool(obj['is_passed'])),
+		correct_count: toNumber(obj['correct_count'], toNumber(obj['correct'])),
+		total_questions: toNumber(obj['total_questions'], toNumber(obj['question_count'])),
+		used_time: toNumber(obj['used_time'], toNumber(obj['duration'])),
+>>>>>>> origin/master
 		details: details,
 	} as MockExamResult
 	return result
 }
 
+<<<<<<< HEAD
 /**
  * 从 UTSJSONObject 构造 MockExamHistoryItem
  * 后端 /mock-exam/history 契约：
@@ -155,6 +171,20 @@ function buildMockExamHistoryItem(obj : UTSJSONObject) : MockExamHistoryItem {
 		duration: duration,
 		used_time: usedTime > 0 ? usedTime : toNumber(obj['used_time'], toNumber(obj['time_used'])),
 		status: status,
+=======
+/** 从 UTSJSONObject 构造 MockExamHistoryItem */
+function buildMockExamHistoryItem(obj : UTSJSONObject) : MockExamHistoryItem {
+	const item : MockExamHistoryItem = {
+		mock_exam_id: toNumber(obj['mock_exam_id'], toNumber(obj['exam_id'], toNumber(obj['id']))),
+		score: toNumber(obj['score']),
+		total_score: toNumber(obj['total_score'], toNumber(obj['full_score'])),
+		passed: toBool(obj['passed'], toBool(obj['is_passed'])),
+		correct_count: toNumber(obj['correct_count'], toNumber(obj['correct'])),
+		total_questions: toNumber(obj['total_questions'], toNumber(obj['question_count'])),
+		duration: toNumber(obj['duration']),
+		used_time: toNumber(obj['used_time'], toNumber(obj['time_used'])),
+		status: toStr(obj['status'], 'completed'),
+>>>>>>> origin/master
 		created_at: toStr(obj['created_at'], toStr(obj['start_time'])),
 		completed_at: toStr(obj['completed_at'], toStr(obj['end_time'], toStr(obj['submit_time']))),
 	} as MockExamHistoryItem
@@ -164,20 +194,30 @@ function buildMockExamHistoryItem(obj : UTSJSONObject) : MockExamHistoryItem {
 /** 从 UTSJSONObject 构造 MockExamHistoryResult */
 function buildMockExamHistoryResult(data : UTSJSONObject) : MockExamHistoryResult {
 	const items : MockExamHistoryItem[] = []
+<<<<<<< HEAD
 	const listRaw = data['exams']
+=======
+	const listRaw = data['items']
+>>>>>>> origin/master
 	if (listRaw != null) {
 		const arr = listRaw as Array<UTSJSONObject>
 		for (let i = 0; i < arr.length; i++) {
 			items.push(buildMockExamHistoryItem(arr[i]))
 		}
 	} else {
+<<<<<<< HEAD
 		// 兼容旧字段 items / records
 		const alt = data['items']
+=======
+		// 后端可能用 records / history 字段
+		const alt = data['records']
+>>>>>>> origin/master
 		if (alt != null) {
 			const arr = alt as Array<UTSJSONObject>
 			for (let i = 0; i < arr.length; i++) {
 				items.push(buildMockExamHistoryItem(arr[i]))
 			}
+<<<<<<< HEAD
 		} else {
 			const fallback = data['records']
 			if (fallback != null) {
@@ -186,6 +226,8 @@ function buildMockExamHistoryResult(data : UTSJSONObject) : MockExamHistoryResul
 					items.push(buildMockExamHistoryItem(arr[i]))
 				}
 			}
+=======
+>>>>>>> origin/master
 		}
 	}
 	const result : MockExamHistoryResult = {

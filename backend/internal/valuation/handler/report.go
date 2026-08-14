@@ -24,7 +24,7 @@ type ReportHandler struct {
 
 // NewReportHandler 构造报告处理器
 // resolver 用于未回填历史记录重建建议时动态读取 coefficient_configs（与评估流程同一份配置）。
-func NewReportHandler(evalRepo EvaluationStore, gen ReportGenerator, l *zap.Logger, st storage.Storage, resolver service.ConfigResolver) *ReportHandler {
+func NewReportHandler(evalRepo EvaluationStore, gen ReportGenerator, l *zap.Logger, st storage.Storage, resolver service.CoefficientResolver) *ReportHandler {
 	return &ReportHandler{
 		logger:  l,
 		storage: st,
@@ -38,12 +38,7 @@ func NewReportHandler(evalRepo EvaluationStore, gen ReportGenerator, l *zap.Logg
 			Prepare: func(ctx context.Context, d *model.EvaluationDetail) {
 				// 单一装配点：KTimeAdjusted + 维度分（建议为评估时点锁定值，ADR-0004）
 				service.RebuildDerivedFromDetail(d)
-				if len(d.Suggestions) == 0 {
-					d.Suggestions = service.BuildSuggestions(ctx, service.FromDetail(d), resolver)
-				}
-				if d.Suggestions == nil {
-					d.Suggestions = []string{}
-				}
+				service.EnsureSuggestions(ctx, d, resolver)
 			},
 			Render: func(_ context.Context, d *model.EvaluationDetail) ([]byte, error) {
 				// 维度分为 typed 切片直传（顺序契约在 model.DimensionLabels，不再经 label 拼接）

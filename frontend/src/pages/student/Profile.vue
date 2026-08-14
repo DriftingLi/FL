@@ -35,9 +35,9 @@
       <el-descriptions :column="1" border>
         <el-descriptions-item label="手机号">
           <div class="cell-row">
-            <span>{{ displayPhone || '未绑定' }}</span>
+            <span>{{ userInfo.phone || '未绑定' }}</span>
             <el-button link type="primary" size="small" @click="openBind('phone')">
-              {{ displayPhone ? '修改' : '绑定' }}
+              {{ userInfo.phone ? '修改' : '绑定' }}
             </el-button>
           </div>
         </el-descriptions-item>
@@ -86,8 +86,8 @@
         <el-form-item>
           <div class="code-row">
             <el-input v-model="bindCode" placeholder="6位验证码" maxlength="6" @keyup.enter="handleBind" />
-            <el-button :disabled="countdown > 0 || codeSending" @click="handleSendBindCode">
-              {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
+            <el-button :disabled="bindCountdown > 0 || bindSending" @click="handleSendBindCode">
+              {{ bindSending ? '发送中...' : bindCountdown > 0 ? `${bindCountdown}s 后重发` : '获取验证码' }}
             </el-button>
           </div>
         </el-form-item>
@@ -138,8 +138,8 @@
         <el-form-item>
           <div class="code-row">
             <el-input v-model="accountCode" placeholder="短信验证码" maxlength="6" @keyup.enter="handleUpdateAccount" />
-            <el-button :disabled="countdown > 0 || codeSending" @click="handleSendAccountCode">
-              {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
+            <el-button :disabled="accountCountdown > 0 || accountSending" @click="handleSendAccountCode">
+              {{ accountSending ? '发送中...' : accountCountdown > 0 ? `${accountCountdown}s 后重发` : '获取验证码' }}
             </el-button>
           </div>
         </el-form-item>
@@ -153,10 +153,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
+import { isValidAccount } from '@/utils/validate'
+import { useSendCode } from '@/composables/useSendCode'
 import ProfileEditDialog from '@/components/layout/ProfileEditDialog.vue'
 
 const authStore = useAuthStore()
@@ -164,20 +166,20 @@ const profileDialogRef = ref<InstanceType<typeof ProfileEditDialog> | null>(null
 
 const userInfo = computed(() => authStore.userInfo || {})
 
-// 邮箱注册账号的 phone 是占位值（email_ 前缀），不视为已绑定手机号
-const displayPhone = computed(() => {
-  const phone = userInfo.value.phone || ''
-  return phone.startsWith('email_') ? '' : phone
-})
-
 const bindVisible = ref(false)
 const bindChannel = ref<'phone' | 'email'>('phone')
 const bindTarget = ref('')
 const bindCode = ref('')
 const binding = ref(false)
-const countdown = ref(0)
-const codeSending = ref(false)
-let countdownTimer: number | undefined
+
+const {
+  sending: bindSending,
+  remaining: bindCountdown,
+  send: sendBindCode
+} = useSendCode({
+  purpose: 'bind',
+  sendCode: (channel, target) => authApi.sendProfileCode({ channel, target })
+})
 
 const passwordDialogVisible = ref(false)
 const password = ref('')
@@ -188,6 +190,15 @@ const accountDialogVisible = ref(false)
 const newAccount = ref('')
 const accountCode = ref('')
 const updatingAccount = ref(false)
+
+const {
+  sending: accountSending,
+  remaining: accountCountdown,
+  send: sendAccountCode
+} = useSendCode({
+  purpose: 'account_change',
+  sendCode: () => authApi.sendAccountChangeCode()
+})
 
 const bindTitle = computed(() => (bindChannel.value === 'email' ? '修改邮箱' : '修改手机号'))
 
@@ -202,21 +213,12 @@ function openAccountDialog() {
 }
 
 async function handleSendAccountCode() {
-  codeSending.value = true
-  try {
-    await authApi.sendAccountChangeCode()
-    ElMessage.success('验证码已发送至绑定手机号，请查收')
-    startCountdown()
-  } catch (e) {
-    // 拦截器已提示
-  } finally {
-    codeSending.value = false
-  }
+  await sendAccountCode('', 'phone')
 }
 
 async function handleUpdateAccount() {
   const account = newAccount.value.trim()
-  if (!/^[A-Za-z0-9_]{4,20}$/.test(account)) {
+  if (!isValidAccount(account)) {
     ElMessage.warning('账号需为4-20位字母、数字或下划线')
     return
   }
@@ -226,7 +228,11 @@ async function handleUpdateAccount() {
   }
   updatingAccount.value = true
   try {
-    await authApi.updateAccount({ account, code: accountCode.value.trim() })
+    const result = await authApi.updateAccount({ account, code: accountCode.value.trim() })
+    // 响应携带新签发的 token：替换本地登录态（JWT claim 随新账号同步）
+    if (result?.token) {
+      authStore.setAuthData(result)
+    }
     ElMessage.success('账号修改成功')
     accountDialogVisible.value = false
     await authStore.refreshUserInfo()
@@ -244,41 +250,8 @@ function openBind(channel: 'phone' | 'email') {
   bindVisible.value = true
 }
 
-function startCountdown() {
-  countdown.value = 60
-  if (countdownTimer) window.clearInterval(countdownTimer)
-  countdownTimer = window.setInterval(() => {
-    countdown.value--
-    if (countdown.value <= 0 && countdownTimer) {
-      window.clearInterval(countdownTimer)
-      countdownTimer = undefined
-    }
-  }, 1000)
-}
-
 async function handleSendBindCode() {
-  const target = bindTarget.value.trim()
-  if (bindChannel.value === 'email') {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target)) {
-      ElMessage.warning('请输入正确的邮箱地址')
-      return
-    }
-  } else {
-    if (!/^1[3-9]\d{9}$/.test(target)) {
-      ElMessage.warning('请输入正确的手机号')
-      return
-    }
-  }
-  codeSending.value = true
-  try {
-    await authApi.sendProfileCode({ channel: bindChannel.value, target })
-    ElMessage.success('验证码已发送，请查收')
-    startCountdown()
-  } catch (e) {
-    // 拦截器已提示
-  } finally {
-    codeSending.value = false
-  }
+  await sendBindCode(bindTarget.value.trim(), bindChannel.value)
 }
 
 async function handleBind() {
@@ -336,13 +309,6 @@ async function handleSetPassword() {
 
 onMounted(() => {
   authStore.refreshUserInfo()
-})
-
-onUnmounted(() => {
-  if (countdownTimer) {
-    window.clearInterval(countdownTimer)
-    countdownTimer = undefined
-  }
 })
 </script>
 

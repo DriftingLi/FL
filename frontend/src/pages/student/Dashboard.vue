@@ -43,9 +43,7 @@
       <div class="stats-header">
         <div class="stats-title-group">
           <h2 class="stats-title">学习统计</h2>
-          <span v-if="studyStats" class="stats-summary">
-            共 {{ studyStats.total_minutes }} 分钟 · 活跃 {{ studyStats.active_days }} 天
-          </span>
+          <span v-if="summary" class="stats-summary">{{ summary }}</span>
         </div>
         <div class="time-range-tabs">
           <button
@@ -69,19 +67,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { ArrowRight } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import QuickCard from '@/components/dashboard/QuickCard.vue'
 import type { QuickCardItem } from '@/components/dashboard/QuickCard.vue'
-import { useECharts } from '@/composables/useECharts'
+import { useRoleDashboard } from '@/composables/useRoleDashboard'
 import { studentApi } from '@/api/student'
+import { displayNameOf } from '@/types/user'
 
 const authStore = useAuthStore()
 
-const userName = computed(() =>
-  authStore.userInfo?.username || '同学'
-)
+const userName = computed(() => displayNameOf(authStore.userInfo) || '同学')
 
 // 进行中的课程
 const activeCourses = ref<QuickCardItem[]>([])
@@ -92,29 +89,36 @@ const pendingExams = ref<QuickCardItem[]>([])
 // 最近学习
 const recentLearning = ref<QuickCardItem[]>([])
 
-// 图表
-const chartRef = ref<HTMLElement | null>(null)
-const { init: initChart } = useECharts(chartRef)
-
-const timeTabs = [
-  { label: '近7天', value: '7d' },
-  { label: '近30天', value: '30d' }
-]
-const currentTab = ref('7d')
-
-// 学习统计数据
-interface StudyStats {
-  days: number
-  labels: string[]
-  data: number[]
-  total_minutes: number
-  active_days: number
-}
-const studyStats = ref<StudyStats | null>(null)
-const statsLoading = ref(false)
-const statsEmpty = computed(() => {
-  if (!studyStats.value) return true
-  return studyStats.value.data.every((v) => v === 0)
+// 学习统计 section（骨架/加载/空态/tab 切换/图表组装收敛进 useRoleDashboard）
+const {
+  chartRef,
+  timeTabs,
+  currentTab,
+  statsLoading,
+  statsEmpty,
+  summary,
+  loadStats: loadStudyStats,
+  renderChart: renderStudyChart
+} = useRoleDashboard({
+  statsFetcher: async (days) => {
+    const res = await studentApi.getStudyStats({ days })
+    if (!res) return null
+    return {
+      days: res.days,
+      labels: res.labels,
+      data: res.data,
+      total: res.total_minutes,
+      active_days: res.active_days
+    }
+  },
+  seriesType: 'line',
+  unit: '分钟',
+  yAxisName: '分钟',
+  summaryText: (s) => `共 ${s.total} 分钟 · 活跃 ${s.active_days} 天`,
+  timeTabs: [
+    { label: '近7天', value: '7d', days: 7 },
+    { label: '近30天', value: '30d', days: 30 }
+  ]
 })
 
 async function loadCourses() {
@@ -164,95 +168,6 @@ async function loadRecentLearning() {
     /* 错误已由拦截器提示 */
   }
 }
-
-async function loadStudyStats() {
-  statsLoading.value = true
-  try {
-    const days = currentTab.value === '30d' ? 30 : 7
-    const res = await studentApi.getStudyStats({ days })
-    if (res) {
-      studyStats.value = res as StudyStats
-    }
-  } catch (error: any) {
-    console.error('加载学习统计失败:', error)
-    studyStats.value = null
-    /* 错误已由拦截器提示 */
-  } finally {
-    statsLoading.value = false
-  }
-}
-
-function renderStudyChart() {
-  if (!chartRef.value || !studyStats.value) return
-  // 数据全为 0 时 chartRef 被 v-show 隐藏（display:none），此时初始化会触发
-  // ECharts "Can't get DOM width or height" 警告，直接跳过
-  if (statsEmpty.value) return
-
-  const labels = studyStats.value.labels
-  const data = studyStats.value.data
-
-  initChart({
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: '#fff',
-      borderColor: '#E2E8F0',
-      borderWidth: 1,
-      textStyle: { color: '#0F172A' },
-      extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 8px;',
-      valueFormatter: (val: any) => `${val} 分钟`
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '3%',
-      top: '10%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      data: labels,
-      axisLabel: { fontSize: 11, color: '#64748B' },
-      axisLine: { lineStyle: { color: '#E2E8F0' } },
-      axisTick: { show: false }
-    },
-    yAxis: {
-      type: 'value',
-      name: '分钟',
-      nameTextStyle: { color: '#94A3B8', fontSize: 11 },
-      axisLine: { show: false },
-      axisTick: { show: false },
-      splitLine: { lineStyle: { color: '#F1F5F9' } }
-    },
-    series: [
-      {
-        type: 'line',
-        data: data,
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 6,
-        lineStyle: { color: '#0EA5E9', width: 2.5 },
-        itemStyle: { color: '#0EA5E9', borderWidth: 2, borderColor: '#fff' },
-        areaStyle: {
-          color: {
-            type: 'linear',
-            x: 0, y: 0, x2: 0, y2: 1,
-            colorStops: [
-              { offset: 0, color: 'rgba(14, 165, 233, 0.15)' },
-              { offset: 1, color: 'rgba(14, 165, 233, 0.01)' }
-            ]
-          }
-        }
-      }
-    ]
-  })
-}
-
-// tab 切换时重新加载
-watch(currentTab, async () => {
-  await loadStudyStats()
-  await nextTick()
-  renderStudyChart()
-})
 
 onMounted(async () => {
   await Promise.all([loadCourses(), loadRecentLearning(), loadStudyStats()])

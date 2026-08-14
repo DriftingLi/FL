@@ -11,7 +11,6 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -29,7 +28,7 @@ func NewAIAssistantHandler(svc *service.AIAssistantService) *AIAssistantHandler 
 // RegisterAIAssistantRoutes 注册 /api/ai-assistant 路由。
 // 公开路由：GET /models、POST /chat（可选认证）。
 // 登录路由：sessions CRUD、user-models CRUD（强制 middleware.JWTAuth + role=hrwai_user）。
-func RegisterAIAssistantRoutes(rg *gin.RouterGroup, sess *security.Session, svc *service.AIAssistantService) {
+func RegisterAIAssistantRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.AIAssistantService) {
 	h := NewAIAssistantHandler(svc)
 
 	g := rg.Group("/ai-assistant")
@@ -37,11 +36,11 @@ func RegisterAIAssistantRoutes(rg *gin.RouterGroup, sess *security.Session, svc 
 	// 公开路由：列出管理员配置的可用模型（未登录可访问）
 	g.GET("/models", h.ListPublicModels)
 	// 流式对话：可选认证（未登录可临时对话，登录则可保存会话）
-	g.POST("/chat", middleware.OptionalAuth(sess), h.StreamChat)
+	g.POST("/chat", middleware.OptionalAuth(rd.Session), h.StreamChat)
 
 	// 需登录路由：会话管理 + 用户自定义模型管理（HRWAI 账号鉴权）
 	authed := g.Group("")
-	authed.Use(middleware.JWTAuth(sess), middleware.RoleRequired("hrwai_user"))
+	authed.Use(middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
 	authed.GET("/sessions", h.ListSessions)
 	authed.POST("/sessions", h.CreateSession)
 	authed.DELETE("/sessions/:id", h.DeleteSession)

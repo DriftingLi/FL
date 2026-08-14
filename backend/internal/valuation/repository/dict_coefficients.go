@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-
-	"forklift-training/internal/cache"
 )
 
 // scanCoefficient 扫描一行系数配置（description 可空 + updated_at 格式化）。
@@ -29,7 +27,7 @@ func scanCoefficient(row interface{ Scan(dest ...any) error }) (CoefficientConfi
 // ListCoefficientConfigs 列出全部系数配置
 func (r *DictionaryRepository) ListCoefficientConfigs(ctx context.Context) ([]CoefficientConfig, error) {
 	return listCached(r, ctx, CacheKeyCoefList, "查询系数配置",
-		`SELECT id, key, value, description, updated_at FROM coefficient_configs ORDER BY key ASC`,
+		readSpecCoefList.selectSQL(),
 		func(rows pgx.Rows) (CoefficientConfig, error) {
 			return scanCoefficient(rows)
 		})
@@ -38,7 +36,7 @@ func (r *DictionaryRepository) ListCoefficientConfigs(ctx context.Context) ([]Co
 // GetCoefficientByKey 按 key 查询系数
 func (r *DictionaryRepository) GetCoefficientByKey(ctx context.Context, key string) (CoefficientConfig, error) {
 	return getCached(r, ctx, cacheKey(CachePrefixCoefGet, key), "查询系数配置",
-		`SELECT id, key, value, description, updated_at FROM coefficient_configs WHERE key = $1`,
+		readSpecCoefGet.selectSQL(),
 		func(row pgx.Row) (CoefficientConfig, error) {
 			return scanCoefficient(row)
 		}, key)
@@ -55,26 +53,24 @@ type AlgorithmParameters struct {
 	RegionCoefficients []RegionCoefficient `json:"region_coefficients"`
 }
 
-// ListAlgorithmParameters 聚合查询全部算法参数（4 类），供管理员后台一次加载
+// ListAlgorithmParameters 聚合查询全部算法参数（4 类），供管理员后台一次加载。
+// 各类子查询各自已缓存（ListCoefficientConfigs/ListBrands/ListConditionRatings/
+// ListRegionCoefficients 均走 listCached），本方法不再包一层聚合缓存——消除嵌套复读
+// 与失效契约漏覆盖（ADR-0013 候选 2）。
 func (r *DictionaryRepository) ListAlgorithmParameters(ctx context.Context) (AlgorithmParameters, error) {
-	const cacheKey = CacheKeyAlgoParams
-	var result AlgorithmParameters
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (any, error) {
-		var ap AlgorithmParameters
-		var e error
-		if ap.Coefficients, e = r.ListCoefficientConfigs(ctx); e != nil {
-			return nil, fmt.Errorf("查询算法系数失败: %w", e)
-		}
-		if ap.Brands, e = r.ListBrands(ctx); e != nil {
-			return nil, fmt.Errorf("查询品牌系数失败: %w", e)
-		}
-		if ap.ConditionRatings, e = r.ListConditionRatings(ctx); e != nil {
-			return nil, fmt.Errorf("查询车况系数失败: %w", e)
-		}
-		if ap.RegionCoefficients, e = r.ListRegionCoefficients(ctx, ""); e != nil {
-			return nil, fmt.Errorf("查询区域系数失败: %w", e)
-		}
-		return ap, nil
-	})
-	return result, err
+	var ap AlgorithmParameters
+	var e error
+	if ap.Coefficients, e = r.ListCoefficientConfigs(ctx); e != nil {
+		return ap, fmt.Errorf("查询算法系数失败: %w", e)
+	}
+	if ap.Brands, e = r.ListBrands(ctx); e != nil {
+		return ap, fmt.Errorf("查询品牌系数失败: %w", e)
+	}
+	if ap.ConditionRatings, e = r.ListConditionRatings(ctx); e != nil {
+		return ap, fmt.Errorf("查询车况系数失败: %w", e)
+	}
+	if ap.RegionCoefficients, e = r.ListRegionCoefficients(ctx, ""); e != nil {
+		return ap, fmt.Errorf("查询区域系数失败: %w", e)
+	}
+	return ap, nil
 }

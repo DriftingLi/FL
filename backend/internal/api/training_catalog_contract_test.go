@@ -161,13 +161,6 @@ func TestCatalogContract_Specialty(t *testing.T) {
 	}
 	assertDictKeys(t, list.Specialties[0], []string{"code", "created_at", "description", "name", "sort_order", "specialty_id", "status"})
 
-	// 学员端公开列表（仅启用项）：当前启用，1 条
-	rec = catalogRequest(t, r, "", "GET", "/api/specialties", "")
-	_, _, data = unpackData(t, rec, http.StatusOK)
-	if err := json.Unmarshal([]byte(data), &list); err != nil || len(list.Specialties) != 1 {
-		t.Fatalf("学员端列表解析失败: %v, data=%s", err, data)
-	}
-
 	// 更新（改名 + 停用）
 	rec = catalogRequest(t, r, token, "PUT", fmt.Sprintf("/api/admin/specialty/%d", specID),
 		`{"name":"操作方向","status":0}`)
@@ -179,13 +172,6 @@ func TestCatalogContract_Specialty(t *testing.T) {
 	assertDictKeys(t, updated, []string{"code", "created_at", "description", "name", "sort_order", "specialty_id", "status"})
 	if updated["name"] != "操作方向" || updated["status"] != float64(0) {
 		t.Fatalf("更新返回字段不匹配: %+v", updated)
-	}
-
-	// 停用后学员端不可见、管理端仍可见
-	rec = catalogRequest(t, r, "", "GET", "/api/specialties", "")
-	_, _, data = unpackData(t, rec, http.StatusOK)
-	if err := json.Unmarshal([]byte(data), &list); err != nil || len(list.Specialties) != 0 {
-		t.Fatalf("停用项不应出现在学员端列表: %s", data)
 	}
 
 	// 交换排序：再建一个，交换后顺序翻转
@@ -399,19 +385,6 @@ func TestCatalogContract_QuestionTag(t *testing.T) {
 	}
 	if ids, ok := setResp["tag_ids"].([]any); !ok || len(ids) != 1 || ids[0] != float64(tagID) {
 		t.Fatalf("打标响应 tag_ids 不匹配: %+v", setResp)
-	}
-
-	rec = catalogRequest(t, r, token, "GET", fmt.Sprintf("/api/admin/question/%d/tags", q.ID), "")
-	_, _, data = unpackData(t, rec, http.StatusOK)
-	var tagsResp struct {
-		Tags []map[string]any `json:"tags"`
-	}
-	if err := json.Unmarshal([]byte(data), &tagsResp); err != nil || len(tagsResp.Tags) != 1 {
-		t.Fatalf("题目标签查询解析失败: %v, data=%s", err, data)
-	}
-	assertDictKeys(t, tagsResp.Tags[0], []string{"code", "id", "name", "sort_order", "status"})
-	if tagsResp.Tags[0]["id"] != float64(tagID) || tagsResp.Tags[0]["name"] != "液压系统" {
-		t.Fatalf("题目标签查询结果不匹配: %+v", tagsResp.Tags[0])
 	}
 
 	// 列表 question_count 随题目数变化（管理端全量）

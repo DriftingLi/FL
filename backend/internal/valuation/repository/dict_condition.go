@@ -3,28 +3,14 @@ package repository
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5"
 )
 
 // ListConditionRatings 列出全部车况评级
 func (r *DictionaryRepository) ListConditionRatings(ctx context.Context) ([]ConditionRating, error) {
-	return listCached(r, ctx, "dict:condition:list", "查询车况评级",
-		`SELECT id, rating, label, base_coefficient FROM condition_ratings ORDER BY base_coefficient DESC`,
-		func(rows pgx.Rows) (ConditionRating, error) {
-			var c ConditionRating
-			err := rows.Scan(&c.ID, &c.Rating, &c.Label, &c.BaseCoefficient)
-			return c, err
-		})
+	return readList[ConditionRating](r, ctx, readSpecConditionList, CacheKeyConditionList, "查询车况评级")
 }
 
 // GetConditionRating 按 rating 查询（供 service 计算 Kc 使用）
 func (r *DictionaryRepository) GetConditionRating(ctx context.Context, rating string) (ConditionRating, error) {
-	return getCached(r, ctx, cacheKey(CachePrefixConditionGet, rating), "查询车况评级",
-		`SELECT id, rating, label, base_coefficient FROM condition_ratings WHERE rating = $1`,
-		func(row pgx.Row) (ConditionRating, error) {
-			var c ConditionRating
-			err := row.Scan(&c.ID, &c.Rating, &c.Label, &c.BaseCoefficient)
-			return c, err
-		}, rating)
+	return readGet[ConditionRating](r, ctx, readSpecConditionGet, cacheKey(CachePrefixConditionGet, rating), "查询车况评级", rating)
 }

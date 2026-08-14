@@ -123,13 +123,6 @@ export interface CreateEvaluationRequest {
   condition_rating: ConditionRating
 }
 
-/** 后端统一响应包装 */
-export interface ApiResponse<T> {
-  code: number
-  message: string
-  data: T
-}
-
 /** 评估结果（POST /evaluations 响应）
  * 创建响应即含输入参数（后端与详情同源返回，ADR-0004）：
  * 匿名用户提交后可直接渲染结果页，无需调用需登录的详情接口。
@@ -178,6 +171,8 @@ export interface EvaluationResult {
   suggestions: string[]
   /** 评估时点锁定的 λ 值（ADR-0004，供走势图数据驱动） */
   lambda_electric: number
+  /** 未来价值曲线锚点（评估时点锁定，前端只做 d^n 渲染） */
+  decay_anchor?: number
   lambda_combustion: number
 }
 

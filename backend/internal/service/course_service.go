@@ -13,8 +13,6 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
-	"forklift-training/pkg/paging"
-	"forklift-training/pkg/response"
 )
 
 // CoursePageResult 课程分页结果（学员端/管理端/导师端共用）。
@@ -167,83 +165,19 @@ func mountedCourseScope(q *gorm.DB) *gorm.DB {
 	return q.Where("specialty_id IS NOT NULL AND level_id IS NOT NULL")
 }
 
-// validateMountedCourseInput 挂载不变式的写入校验：创建必填；编辑携带时不允许清空。
-func validateMountedCourseInput(data map[string]any, update bool) error {
-	_, hasSpec := data["specialty_id"]
-	_, hasLevel := data["level_id"]
-	if !update || hasSpec {
-		if toInt(data["specialty_id"]) <= 0 {
-			return errors.New("专业方向不能为空")
-		}
+// validateMountedCourseInput 挂载不变式的写入校验（typed）：创建必填；编辑携带时不允许清空。
+// 语义与旧 map 版一致：Create 由 CreateCourse 显式校验，此处收编「编辑携带 0/负数」分支。
+func validateMountedCourseInputUpdate(in *CourseInput) error {
+	if in.SpecialtyID != nil && *in.SpecialtyID <= 0 {
+		return errors.New("专业方向不能为空")
 	}
-	if !update || hasLevel {
-		if toInt(data["level_id"]) <= 0 {
-			return errors.New("课程等级不能为空")
-		}
+	if in.LevelID != nil && *in.LevelID <= 0 {
+		return errors.New("课程等级不能为空")
 	}
 	return nil
 }
 
-// ===== 课程列表/详情共享实现（学员端/管理端同源）=====
-
-// courseListOptions 列表差异点：学员端仅已挂载+上架，管理端全量（可关键字搜索）。
-type courseListOptions struct {
-	onlyMounted     bool
-	keyword         string
-	specialtyID     *int
-	levelID         *int
-	defaultPageSize int
-}
-
-// listCourses 课程列表共享实现（分页归一化、章节数/前置课程回填、信封组装只此一份）。
-func listCourses(db *gorm.DB, page, pageSize int, opts courseListOptions) CoursePageResult {
-	courses, total, page, pageSize := paging.Query[model.Course](db, page, pageSize, opts.defaultPageSize, "sort_order ASC, created_at DESC, course_id DESC", func(q *gorm.DB) *gorm.DB {
-		if opts.onlyMounted {
-			// 挂载不变式 + 上架：学员端可见性口径
-			q = q.Where("status = ?", 1)
-			q = mountedCourseScope(q)
-		}
-		if opts.keyword != "" {
-			q = q.Where("name LIKE ?", "%"+opts.keyword+"%")
-		}
-		if opts.specialtyID != nil {
-			q = q.Where("specialty_id = ?", *opts.specialtyID)
-		}
-		if opts.levelID != nil {
-			q = q.Where("level_id = ?", *opts.levelID)
-		}
-		return q
-	})
-
-	// 证书模板数量少，一次加载映射（学员端路径附带证书名，避免逐课程 N+1）
-	var certNameByID map[int]string
-	if opts.onlyMounted {
-		var certs []model.CertificateTemplate
-		db.Find(&certs)
-		certNameByID = make(map[int]string, len(certs))
-		for i := range certs {
-			certNameByID[certs[i].ID] = certs[i].Name
-		}
-	}
-	items := make([]CourseDTO, 0, len(courses))
-	for i := range courses {
-		item := courseToDTO(&courses[i])
-		fillChapterCount(db, courses[i].CourseID, &item)
-		fillPrereqIDs(db, courses[i].CourseID, &item)
-		if opts.onlyMounted {
-			if id := courses[i].CertificateTemplateID; id != nil {
-				item.CertificateName = certNameByID[*id]
-			}
-		}
-		items = append(items, item)
-	}
-	return CoursePageResult{
-		Courses: items,
-		Page:    page,
-		Pages:   response.PageCount(total, pageSize),
-		Total:   total,
-	}
-}
+// ===== 课程详情共享实现（学员端/管理端同源）=====
 
 // loadCourseWithChapters 课程 + 章节列表共享装载（学员端/管理端详情同源）。
 func loadCourseWithChapters(db *gorm.DB, courseID int) (*model.Course, []ChapterDTO, error) {
@@ -275,8 +209,8 @@ func NewCourseService(db *gorm.DB, fileService *FileService, logger *zap.Logger)
 // GetCourses 课程列表（可额外按专业方向/课程等级过滤）。
 // 未挂专业方向/等级的课程不展示（与目录树口径统一，见挂载不变式）。
 func (s *CourseService) GetCourses(page, pageSize int, specialtyID, levelID *int) CoursePageResult {
-	return listCourses(s.db, page, pageSize, courseListOptions{
-		onlyMounted: true, specialtyID: specialtyID, levelID: levelID, defaultPageSize: 12,
+	return ListCourses(s.db, page, pageSize, CourseListOptions{
+		OnlyMounted: true, SpecialtyID: specialtyID, LevelID: levelID, DefaultPageSize: 12,
 	})
 }
 
@@ -663,11 +597,11 @@ func legacyFileEntry(ch *model.Chapter) ChapterFileDTO {
 
 // ===== 培训目录扩展辅助（课程等级/学时/前置课程/证书模板） =====
 
-// applyCourseTrainingFields 应用课程培训扩展字段（专业方向/等级/学时/证书模板）。
-// specialty_id / level_id / certificate_template_id 传 0 或空表示清空（置 NULL）。
-func applyCourseTrainingFields(db *gorm.DB, course *model.Course, data map[string]any) error {
-	if v, ok := data["specialty_id"]; ok {
-		id := toInt(v)
+// applyCourseTrainingFields 应用课程培训扩展字段（专业方向/等级/学时/证书模板，typed）。
+// specialty_id / level_id / certificate_template_id 传 0 表示清空（置 NULL）。
+func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInput) error {
+	if in.SpecialtyID != nil {
+		id := *in.SpecialtyID
 		if id < 0 {
 			return errors.New("专业方向ID无效")
 		}
@@ -684,8 +618,8 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, data map[strin
 			course.SpecialtyID = ptrInt(id)
 		}
 	}
-	if v, ok := data["level_id"]; ok {
-		id := toInt(v)
+	if in.LevelID != nil {
+		id := *in.LevelID
 		if id < 0 {
 			return errors.New("课程等级ID无效")
 		}
@@ -702,8 +636,8 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, data map[strin
 			course.LevelID = ptrInt(id)
 		}
 	}
-	if v, ok := data["certificate_template_id"]; ok {
-		id := toInt(v)
+	if in.CertificateTemplateID != nil {
+		id := *in.CertificateTemplateID
 		if id < 0 {
 			return errors.New("证书模板ID无效")
 		}
@@ -720,37 +654,25 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, data map[strin
 			course.CertificateTemplateID = ptrInt(id)
 		}
 	}
-	if v, ok := data["theory_hours"]; ok {
-		hours := toInt(v)
-		if hours < 0 {
+	if in.TheoryHours != nil {
+		if *in.TheoryHours < 0 {
 			return errors.New("理论学时不能为负数")
 		}
-		course.TheoryHours = hours
+		course.TheoryHours = *in.TheoryHours
 	}
-	if v, ok := data["practice_hours"]; ok {
-		hours := toInt(v)
-		if hours < 0 {
+	if in.PracticeHours != nil {
+		if *in.PracticeHours < 0 {
 			return errors.New("实操学时不能为负数")
 		}
-		course.PracticeHours = hours
+		course.PracticeHours = *in.PracticeHours
 	}
-	if v, ok := data["sort_order"]; ok {
-		order := toInt(v)
-		if order < 0 {
+	if in.SortOrder != nil {
+		if *in.SortOrder < 0 {
 			return errors.New("课程排序值不能为负数")
 		}
-		course.SortOrder = order
+		course.SortOrder = *in.SortOrder
 	}
 	return nil
-}
-
-// prerequisiteIDsFromData 提取前置课程 ID 列表。
-func prerequisiteIDsFromData(data map[string]any) []int {
-	v, ok := data["prerequisite_course_ids"]
-	if !ok {
-		return nil
-	}
-	return toIntSlice(v)
 }
 
 // toIntSlice 将任意值转为 int 切片（支持 []any / []float64 等 JSON 解码结果）。
