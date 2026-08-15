@@ -57,6 +57,9 @@ func NewRouter(deps *Deps) *gin.Engine {
 		c.JSON(200, gin.H{"message": "Forklift Training System API", "version": "1.0.0"})
 	})
 
+	// 图形验证码（人机验证）：无需鉴权
+	RegisterCaptchaRoutes(r, deps.CaptchaSvc)
+
 	// 静态资源：等价 static_folder + VOLUME_MOUNT_PATH 行为
 	// /static/uploads/* 优先从 VOLUME_MOUNT_PATH/uploads 提供，否则本地 UploadFolder
 	// /static/*         其他静态资源从本地 static/ 目录提供
@@ -83,10 +86,10 @@ func NewRouter(deps *Deps) *gin.Engine {
 		auth.POST("/avatar", middleware.JWTAuth(deps.Session), authH.UploadAvatar)
 	}
 
-	// 邮箱验证码注册/登录
-	RegisterEmailAuthRoutes(api, rd, deps.CodeSvc, deps.EmailCh)
-	// 手机号验证码注册/登录
-	RegisterPhoneAuthRoutes(api, rd, deps.CodeSvc, deps.PhoneCh)
+	// 邮箱验证码注册/登录（发码需过图形验证码）
+	RegisterEmailAuthRoutes(api, rd, deps.CodeSvc, deps.EmailCh, deps.CaptchaSvc, cfg.CaptchaEnabled)
+	// 手机号验证码注册/登录（发码需过图形验证码）
+	RegisterPhoneAuthRoutes(api, rd, deps.CodeSvc, deps.PhoneCh, deps.CaptchaSvc, cfg.CaptchaEnabled)
 	// 微信扫码登录（框架占位）
 	RegisterWechatAuthRoutes(api, deps.WechatAuthSvc)
 	// 个人信息页：手机号/邮箱绑定修改

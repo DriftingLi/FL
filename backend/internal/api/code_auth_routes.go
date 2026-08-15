@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/captcha"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -33,22 +34,24 @@ func str(body map[string]interface{}, key string) string {
 
 // CodeChannelAuthHandler 验证码注册/登录 handler（通道注入，一份骨架两通道共用）。
 type CodeChannelAuthHandler struct {
-	sess        *security.Session
-	codeSvc     *service.VerifyCodeService
-	ch          service.CodeChannel
-	targetField string // 请求体中的目标字段名（email / phone）
-	sentMsg     string // 发送成功提示文案
+	sess           *security.Session
+	codeSvc        *service.VerifyCodeService
+	ch             service.CodeChannel
+	targetField    string // 请求体中的目标字段名（email / phone）
+	sentMsg        string // 发送成功提示文案
+	captchaSvc     *captcha.Service
+	captchaEnabled bool
 }
 
 // NewCodeChannelAuthHandler 创建验证码注册/登录 handler。
-func NewCodeChannelAuthHandler(sess *security.Session, codeSvc *service.VerifyCodeService, ch service.CodeChannel, targetField, sentMsg string) *CodeChannelAuthHandler {
-	return &CodeChannelAuthHandler{sess: sess, codeSvc: codeSvc, ch: ch, targetField: targetField, sentMsg: sentMsg}
+func NewCodeChannelAuthHandler(sess *security.Session, codeSvc *service.VerifyCodeService, ch service.CodeChannel, targetField, sentMsg string, captchaSvc *captcha.Service, captchaEnabled bool) *CodeChannelAuthHandler {
+	return &CodeChannelAuthHandler{sess: sess, codeSvc: codeSvc, ch: ch, targetField: targetField, sentMsg: sentMsg, captchaSvc: captchaSvc, captchaEnabled: captchaEnabled}
 }
 
 // registerCodeChannelAuthRoutes 注册 /auth/<prefix> 蓝图（验证码注册/登录，通道注入）。
 func registerCodeChannelAuthRoutes(g *gin.RouterGroup, sess *security.Session, codeSvc *service.VerifyCodeService,
-	ch service.CodeChannel, targetField, sentMsg string) {
-	h := NewCodeChannelAuthHandler(sess, codeSvc, ch, targetField, sentMsg)
+	ch service.CodeChannel, targetField, sentMsg string, captchaSvc *captcha.Service, captchaEnabled bool) {
+	h := NewCodeChannelAuthHandler(sess, codeSvc, ch, targetField, sentMsg, captchaSvc, captchaEnabled)
 
 	// POST /auth/<prefix>/send-code {targetField, purpose: register|login}
 	g.POST("/send-code", h.SendCode)
@@ -60,7 +63,8 @@ func registerCodeChannelAuthRoutes(g *gin.RouterGroup, sess *security.Session, c
 	g.POST("/reset-password", h.ResetPassword)
 }
 
-// SendCode 发送验证码 POST /auth/<prefix>/send-code {targetField, purpose: register|login}
+// SendCode 发送验证码 POST /auth/<prefix>/send-code
+// body: {targetField, purpose, captcha_id, captcha_value}；开启人机验证时先校验图形验证码。
 func (h *CodeChannelAuthHandler) SendCode(c *gin.Context) {
 	body, ok := bindBody(c)
 	if !ok {
@@ -68,6 +72,13 @@ func (h *CodeChannelAuthHandler) SendCode(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
+
+	if h.captchaEnabled {
+		if !h.captchaSvc.Verify(ctx, str(body, "captcha_id"), str(body, "captcha_value")) {
+			response.BadRequest(c, "图形验证码错误或已过期")
+			return
+		}
+	}
 
 	var err error
 	switch service.CodePurpose(str(body, "purpose")) {

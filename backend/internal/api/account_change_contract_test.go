@@ -16,6 +16,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/cache"
+	"forklift-training/internal/captcha"
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -31,6 +32,7 @@ func newAccountChangeTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fake
 	authSvc := service.NewAuthService(db, security.NewSession("test-secret", time.Hour, security.CookieConfig{}), "admin", "tutor", "student", zap.NewNop())
 	store := newMemCodeStore()
 	codeSvc := service.NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
+	captchaSvc := captcha.NewService(store)
 
 	phoneCh := &fakeChannel{column: "phone", keyPref: "phone_code", noun: "手机号"}
 	emailCh := &fakeChannel{column: "email", keyPref: "email_code", noun: "邮箱"}
@@ -58,8 +60,8 @@ func newAccountChangeTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fake
 	authH := NewAuthHandler(security.SessionFromConfig(cfg), authSvc, nil, nil, nil, zap.NewNop())
 	auth := api.Group("/auth")
 	auth.POST("/login", authH.Login)
-	RegisterEmailAuthRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.EmailCh)
-	RegisterPhoneAuthRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.PhoneCh)
+	RegisterEmailAuthRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.EmailCh, captchaSvc, false)
+	RegisterPhoneAuthRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.PhoneCh, captchaSvc, false)
 	RegisterProfileBindRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
 
 	return r, store, phoneCh, db

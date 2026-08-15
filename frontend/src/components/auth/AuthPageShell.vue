@@ -312,6 +312,27 @@ function goMain() {
   min-width: 124px;
 }
 
+.captcha-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  align-items: center;
+}
+
+.captcha-input {
+  flex: 1;
+}
+
+.captcha-img {
+  height: 40px;
+  width: 110px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+
 .auth-btn {
   width: 100%;
   height: 48px;

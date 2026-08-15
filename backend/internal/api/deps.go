@@ -4,6 +4,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/captcha"
 	"forklift-training/internal/config"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
@@ -32,6 +33,7 @@ type Deps struct {
 	CodeSvc         *service.VerifyCodeService
 	EmailCh         service.CodeChannel
 	PhoneCh         service.CodeChannel
+	CaptchaSvc      *captcha.Service
 	WechatAuthSvc   *service.WechatAuthService
 	FileSvc         *service.FileService
 	NotificationSvc *service.NotificationService
@@ -69,6 +71,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	authSvc := service.NewAuthService(db, sess,
 		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student, logger)
 	codeSvc := service.NewVerifyCodeService(db, authSvc, cfg.EmailCodeTTL, &service.RedisAuthCodeStore{}, logger)
+	captchaSvc := captcha.NewService(captcha.RedisStore{})
 	emailCh := service.NewEmailChannel(cfg.SMTP, cfg.IsProd(), logger)
 	phoneCh := service.NewSmsChannel(cfg.SMS, cfg.IsProd(), logger)
 	wechatAuthSvc := service.NewWechatAuthService(cfg.Wechat, logger)
@@ -90,6 +93,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		CodeSvc:            codeSvc,
 		EmailCh:            emailCh,
 		PhoneCh:            phoneCh,
+		CaptchaSvc:         captchaSvc,
 		WechatAuthSvc:      wechatAuthSvc,
 		FileSvc:            fileSvc,
 		NotificationSvc:    notificationSvc,

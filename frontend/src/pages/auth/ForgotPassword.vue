@@ -31,6 +31,27 @@
           />
         </el-form-item>
 
+        <el-form-item>
+          <div class="captcha-row">
+            <el-input
+              v-model="captchaValue"
+              placeholder="图形验证码"
+              size="large"
+              class="form-input captcha-input"
+              maxlength="4"
+              @keyup.enter="handleSendCode"
+            />
+            <img
+              v-if="captchaImage"
+              :src="captchaImage"
+              class="captcha-img"
+              alt="验证码"
+              title="看不清？点击刷新"
+              @click="refreshCaptcha"
+            />
+          </div>
+        </el-form-item>
+
         <el-form-item prop="code">
           <div class="code-row">
             <el-input
@@ -112,6 +133,27 @@
           />
         </el-form-item>
 
+        <el-form-item>
+          <div class="captcha-row">
+            <el-input
+              v-model="captchaValue"
+              placeholder="图形验证码"
+              size="large"
+              class="form-input captcha-input"
+              maxlength="4"
+              @keyup.enter="handleSendCode"
+            />
+            <img
+              v-if="captchaImage"
+              :src="captchaImage"
+              class="captcha-img"
+              alt="验证码"
+              title="看不清？点击刷新"
+              @click="refreshCaptcha"
+            />
+          </div>
+        </el-form-item>
+
         <el-form-item prop="code">
           <div class="code-row">
             <el-input
@@ -183,12 +225,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { authApi } from '@/api/auth'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Message } from '@element-plus/icons-vue'
 import { useSendCode } from '@/composables/useSendCode'
+import { useCaptcha } from '@/composables/useCaptcha'
 import { useAuthFlow } from '@/composables/useAuthFlow'
 import AuthPageShell, { type AltMode, type AltModeKey } from '@/components/auth/AuthPageShell.vue'
 import { passwordRules, phoneRules, requiredEmailRules, emailCodeRules, confirmPasswordRule } from '@/utils/validate'
@@ -226,12 +269,17 @@ const activeAlt = computed<AltModeKey | null>(() => (flow.mode.value === 'email'
 const mainFormRef = ref<FormInstance | null>(null)
 const emailFormRef = ref<FormInstance | null>(null)
 
+const { captchaId, captchaImage, captchaValue, refreshCaptcha } = useCaptcha()
+onMounted(() => {
+  refreshCaptcha()
+})
+
 const { sending: codeSending, remaining: countdown, send: sendCode } = useSendCode({
   purpose: 'reset_password',
   sendCode: (channel, target) =>
     channel === 'phone'
-      ? authApi.sendPhoneCode({ phone: target, purpose: 'reset_password' })
-      : authApi.sendEmailCode({ email: target, purpose: 'reset_password' })
+      ? authApi.sendPhoneCode({ phone: target, purpose: 'reset_password', captcha_id: captchaId.value, captcha_value: captchaValue.value.trim() })
+      : authApi.sendEmailCode({ email: target, purpose: 'reset_password', captcha_id: captchaId.value, captcha_value: captchaValue.value.trim() })
 })
 
 const formData = reactive({
@@ -269,10 +317,16 @@ const emailFieldRules: FormRules = {
 }
 
 async function handleSendCode() {
-  if (flow.mode.value === 'phone') {
-    await sendCode(formData.phone.trim(), 'phone')
-  } else {
-    await sendCode(formData.email.trim(), 'email')
+  if (captchaValue.value.trim() === '') {
+    ElMessage.warning('请输入图形验证码')
+    return
+  }
+  const ok =
+    flow.mode.value === 'phone'
+      ? await sendCode(formData.phone.trim(), 'phone')
+      : await sendCode(formData.email.trim(), 'email')
+  if (!ok) {
+    refreshCaptcha()
   }
 }
 
