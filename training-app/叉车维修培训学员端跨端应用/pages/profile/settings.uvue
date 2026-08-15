@@ -122,6 +122,31 @@
         })
     }
 
+    /** 上传头像：multipart 上传到 /auth/avatar，走资料审核。声明在 onEditAvatar 之前，避免 Kotlin 局部函数前向引用 */
+    async function uploadAvatar(filePath : string) : Promise<void> {
+        uploadingAvatar.value = true
+        uni.showLoading({ title: '上传中...' })
+        try {
+            // 后端 multipart 字段名为 file，校验后入库 pending 审核请求，审核通过后生效
+            await uploadAvatarApi(filePath)
+            uni.showToast({ title: '头像已提交，审核通过后生效', icon: 'none' })
+        } catch (e) {
+            console.error('[settings] uploadAvatar failed:', e)
+            let msg = '头像上传失败'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) {
+                    msg = m
+                }
+            }
+            uni.showToast({ title: msg, icon: 'none' })
+        } finally {
+            uploadingAvatar.value = false
+            uni.hideLoading()
+        }
+    }
+
     /** 修改头像：选择图片 -> 上传 -> 更新资料 */
     function onEditAvatar() : void {
         if (uploadingAvatar.value) return
@@ -140,28 +165,17 @@
         })
     }
 
-    async function uploadAvatar(filePath : string) : Promise<void> {
-        uploadingAvatar.value = true
-        uni.showLoading({ title: '上传中...' })
+    /** 提交昵称修改（走资料审核）。声明在 onEditNickname 之前，避免 Kotlin 局部函数前向引用 */
+    async function submitNickname(newName : string) : Promise<void> {
+        uni.showLoading({ title: '保存中...' })
         try {
-            const upRes = await uploadAvatarApi(filePath)
-            const newAvatarUrl = upRes.avatar
-            if (newAvatarUrl.length == 0) {
-                throw new Error('上传成功但未返回头像地址')
-            }
-            try {
-                const patch : UpdateProfileParams = { avatar: newAvatarUrl } as UpdateProfileParams
-                const updatedUser = await updateProfileApi(patch)
-                authStore.setAuthData(authStore.token.value, updatedUser)
-            } catch (e) {
-                console.warn('[settings] updateProfileApi failed, fallback to local update:', e)
-                const patch : UpdateProfileParams = { avatar: newAvatarUrl } as UpdateProfileParams
-                authStore.updateUser(patch)
-            }
-            uni.showToast({ title: '头像更新成功', icon: 'success' })
+            const patch : UpdateProfileParams = { nickname: newName } as UpdateProfileParams
+            // 后端走资料审核：提交修改请求，审核通过后昵称生效
+            await updateProfileApi(patch)
+            uni.showToast({ title: '昵称已提交，审核通过后生效', icon: 'none' })
         } catch (e) {
-            console.error('[settings] uploadAvatar failed:', e)
-            let msg = '头像上传失败'
+            console.error('[settings] updateNickname failed:', e)
+            let msg = '修改失败'
             if (e instanceof Error) {
                 const errObj = e as Error
                 const m = errObj.message
@@ -171,7 +185,6 @@
             }
             uni.showToast({ title: msg, icon: 'none' })
         } finally {
-            uploadingAvatar.value = false
             uni.hideLoading()
         }
     }
@@ -185,7 +198,8 @@
             editable: true,
             placeholderText: '请输入新昵称',
             content: currentName,
-            success: async (res) => {
+            // uni.showModal 的 success 回调不可为 async（error17），转由独立异步函数执行
+            success: (res) => {
                 if (!res.confirm) return
                 const content = res.content
                 const newName = (content != null ? content : '').trim()
@@ -194,26 +208,7 @@
                     return
                 }
                 if (newName == currentName) return
-                uni.showLoading({ title: '保存中...' })
-                try {
-                    const patch : UpdateProfileParams = { name: newName } as UpdateProfileParams
-                    const updatedUser = await updateProfileApi(patch)
-                    authStore.setAuthData(authStore.token.value, updatedUser)
-                    uni.showToast({ title: '修改成功', icon: 'success' })
-                } catch (e) {
-                    console.error('[settings] updateNickname failed:', e)
-                    let msg = '修改失败'
-                    if (e instanceof Error) {
-                        const errObj = e as Error
-                        const m = errObj.message
-                        if (m != null && m.length > 0) {
-                            msg = m
-                        }
-                    }
-                    uni.showToast({ title: msg, icon: 'none' })
-                } finally {
-                    uni.hideLoading()
-                }
+                submitNickname(newName)
             }
         })
     }

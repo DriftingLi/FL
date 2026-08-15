@@ -74,9 +74,9 @@
                 <view v-if="recentCourses.length == 0" class="empty-tip">
                     <text class="empty-text">暂无推荐课程</text>
                 </view> -->
-                 <view class="empty-tip">
+                <view class="empty-tip">
                     <text class="empty-text">暂无推荐课程</text>
-                </view> 
+                </view>
             </view>
         </scroll-view>
 
@@ -160,7 +160,7 @@
 
     async function loadRecentCourses() {
         try {
-            const result = await getCourseListApi(1, 10, '')
+            const result = await getCourseListApi(1, 10, 0)
             recentCourses.value = result.items
         } catch (e) {
             console.error('[dashboard] load courses failed:', e)

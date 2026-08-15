@@ -2,12 +2,23 @@
 	<view class="register-page">
 		<view class="form">
 			<view class="form-item">
-				<text class="label">姓名</text>
-				<input class="input-base" type="text" placeholder="请输入姓名" :maxlength="20" v-model="form.name" />
+				<text class="label">昵称</text>
+				<input class="input-base" type="text" placeholder="请输入昵称" :maxlength="20" v-model="form.nickname" />
 			</view>
 			<view class="form-item">
 				<text class="label">手机号</text>
 				<input class="input-base" type="number" placeholder="请输入 11 位手机号" :maxlength="11" v-model="form.phone" />
+			</view>
+			<view class="form-item code-row">
+				<view class="code-input-wrap">
+					<input class="input-base" type="number" placeholder="请输入验证码" :maxlength="6" v-model="form.code" />
+				</view>
+				<button class="code-btn" :disabled="sendingCode || countdown > 0" @click="onSendCode">
+					{{ countdown > 0 ? countdown + 's' : '获取验证码' }}
+				</button>
+			</view>
+			<view class="form-item hint" v-if="codeHint.length > 0">
+				<text class="hint-text">{{ codeHint }}</text>
 			</view>
 			<view class="form-item">
 				<text class="label">密码</text>
@@ -31,16 +42,17 @@
 </template>
 
 <script setup lang="uts">
-	import { onLoad } from '@dcloudio/uni-app'
-	import { reactive, ref } from 'vue'
+	import { onLoad, onUnload } from '@dcloudio/uni-app'
+	import { reactive, ref, computed } from 'vue'
 	import { useAuthStore } from '../../stores/auth'
-	import { registerApi } from '../../api/auth'
+	import { registerApi, sendPhoneCodeApi } from '../../api/auth'
 	import type { RegisterParams } from '../../types/index'
 
 	// 注册表单数据类型（UTS 必须显式声明，否则 reactive 字段会被推断为 Any?）
 	type RegisterForm = {
-		name : string
+		nickname : string
 		phone : string
+		code : string
 		password : string
 		confirmPassword : string
 	}
@@ -48,13 +60,28 @@
 	const auth = useAuthStore()
 
 	const form = reactive({
-		name: '',
+		nickname: '',
 		phone: '',
+		code: '',
 		password: '',
 		confirmPassword: '',
 	} as RegisterForm)
 
 	const loading = ref<boolean>(false)
+	const sendingCode = ref<boolean>(false)
+	// 验证码倒计时（秒）
+	const countdown = ref<number>(0)
+	let countdownTimer : number | null = null
+	/** 清理倒计时定时器（局部副本承接：Kotlin 禁止对闭包中修改的 var 智能转换） */
+	function clearCountdownTimer() : void {
+		const timer = countdownTimer
+		if (timer != null) {
+			clearInterval(timer)
+			countdownTimer = null
+		}
+	}
+	// 连续输错次数（对齐后端：错误上限 5 次，发新码或重新输入时清零）
+	const wrongAttempts = ref<number>(0)
 
 	onLoad((options : OnLoadOptions) => {
 		// 已登录则跳转仪表盘
@@ -64,24 +91,84 @@
 		}
 	})
 
-	function validate() : string {
-		const name : string = form.name
+	// 页面卸载时清理倒计时定时器
+	onUnload(() => {
+		clearCountdownTimer()
+	})
+
+	function validatePhone() : string {
 		const phone : string = form.phone
-		const password : string = form.password
-		const confirmPassword : string = form.confirmPassword
-		if (name.length == 0) return '请输入姓名'
 		if (phone.length != 11) return '请输入 11 位手机号'
 		if (!phone.startsWith('1')) return '手机号格式不正确'
 		if (!/^\d{11}$/.test(phone)) return '手机号必须为数字'
+		return ''
+	}
+
+	function startCountdown() : void {
+		countdown.value = 60
+		clearCountdownTimer()
+		countdownTimer = setInterval(() => {
+			countdown.value -= 1
+			if (countdown.value <= 0) {
+				clearCountdownTimer()
+			}
+		}, 1000) as number
+	}
+
+	async function onSendCode() : Promise<void> {
+		if (sendingCode.value || countdown.value > 0) return
+		const err = validatePhone()
+		if (err.length > 0) {
+			uni.showToast({ title: err, icon: 'none' })
+			return
+		}
+		sendingCode.value = true
+		uni.showLoading({ title: '发送中...', mask: true })
+		try {
+			await sendPhoneCodeApi(form.phone)
+			// 新验证码下发后重置本地连续输错计数（对齐后端错误上限）
+			wrongAttempts.value = 0
+			uni.hideLoading()
+			uni.showToast({ title: '验证码已发送，请查收短信', icon: 'none' })
+			startCountdown()
+		} catch (e) {
+			uni.hideLoading()
+			console.error('[register] send code failed:', e)
+			let msg = '验证码发送失败'
+			if (e instanceof Error) {
+				const errObj = e as Error
+				const m = errObj.message
+				if (m != null && m.length > 0) {
+					msg = m
+				}
+			}
+			uni.showToast({ title: msg, icon: 'none' })
+		} finally {
+			sendingCode.value = false
+		}
+	}
+
+	function validate() : string {
+		const nickname : string = form.nickname
+		const phone : string = form.phone
+		const code : string = form.code
+		const password : string = form.password
+		const confirmPassword : string = form.confirmPassword
+		if (nickname.length == 0) return '请输入昵称'
+		if (phone.length != 11) return '请输入 11 位手机号'
+		if (!phone.startsWith('1')) return '手机号格式不正确'
+		if (!/^\d{11}$/.test(phone)) return '手机号必须为数字'
+		if (code.length == 0) return '请输入验证码'
+		if (code.length != 6) return '请输入 6 位验证码'
 		if (password.length < 6) return '密码至少 6 位'
 		if (password != confirmPassword) return '两次输入的密码不一致'
 		return ''
 	}
 
 	async function onSubmit() : Promise<void> {
-		const err = validate()
-		if (err.length > 0) {
-			uni.showToast({ title: err, icon: 'none' })
+		const errMsg = validate()
+		if (errMsg.length > 0) {
+			uni.showToast({ title: errMsg, icon: 'none' })
 			return
 		}
 
@@ -90,27 +177,34 @@
 
 		const params : RegisterParams = {
 			phone: form.phone,
+			code: form.code,
+			nickname: form.nickname,
 			password: form.password,
-			name: form.name,
 		}
 
 		try {
-			await registerApi(params)
+			// 验证码通过后自动登录
+			const result = await registerApi(params)
+			auth.setAuthData(result.token, result.user)
 			uni.hideLoading()
-			uni.showToast({ title: '注册成功，请登录', icon: 'success', duration: 1500 })
+			uni.showToast({ title: '注册成功', icon: 'success', duration: 1500 })
 			setTimeout(() => {
-				uni.redirectTo({ url: '/pages/login/login' })
+				uni.reLaunch({ url: '/pages/dashboard/dashboard' })
 			}, 1000)
 		} catch (e) {
 			uni.hideLoading()
 			console.error('[register] failed:', e)
-			// UTS 中 catch 的 e 可能是任何 Throwable（含 Java 异常），用 instanceof 判断避免 as 强转失败
+			// 验证码错误时累计连续输错次数（后端上限 5 次，到达后需重新获取）
+			const m = e instanceof Error ? (e as Error).message : ''
+			if (m.indexOf('验证码') >= 0) {
+				wrongAttempts.value += 1
+			}
 			let msg = '注册失败，请重试'
 			if (e instanceof Error) {
 				const err = e as Error
-				const m = err.message
-				if (m != null && m.length > 0) {
-					msg = m
+				const mm = err.message
+				if (mm != null && mm.length > 0) {
+					msg = mm
 				}
 			}
 			uni.showToast({ title: msg, icon: 'none' })
@@ -118,6 +212,17 @@
 			loading.value = false
 		}
 	}
+
+	// 验证码提示：说明后端规则 + 实时展示连续输错次数
+	const codeHint = computed<string>(() : string => {
+		if (wrongAttempts.value >= 5) {
+			return '验证码错误次数过多，请点击获取验证码重新发送'
+		}
+		if (wrongAttempts.value > 0) {
+			return '验证码错误，还可再试 ' + (5 - wrongAttempts.value) + ' 次'
+		}
+		return '6 位数字验证码，5 分钟内有效'
+	})
 
 	function goLogin() : void {
 		uni.redirectTo({ url: '/pages/login/login' })
@@ -140,10 +245,44 @@
 		margin-bottom: 32rpx;
 	}
 
+	/* 验证码行：输入框 + 获取验证码按钮 */
+	.code-row {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.code-input-wrap {
+		flex: 1;
+		margin-right: 16rpx;
+	}
+
+	.code-btn {
+		width: 200rpx;
+		height: 80rpx;
+		line-height: 80rpx;
+		padding: 0;
+		font-size: 26rpx;
+		color: #2979ff;
+		border: 1px solid #2979ff;
+		border-radius: 8rpx;
+		background-color: #ffffff;
+	}
+
 	.label {
 		font-size: 26rpx;
 		color: #666666;
 		margin-bottom: 12rpx;
+	}
+
+	/* 验证码规则提示 */
+	.hint {
+		margin-top: -16rpx;
+		margin-bottom: 24rpx;
+	}
+
+	.hint-text {
+		font-size: 22rpx;
+		color: #999999;
 	}
 
 	.submit-btn {

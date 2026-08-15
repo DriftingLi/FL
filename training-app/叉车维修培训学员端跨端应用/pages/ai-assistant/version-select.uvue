@@ -123,7 +123,7 @@
 	const paying = ref<boolean>(false)
 
 	// 作为 tabBar 网关：已选过版本则直接进入对应页面
-	onLoad(() => {
+	onLoad((options : OnLoadOptions) => {
 		const v = getVersion()
 		if (v == 'basic') {
 			uni.reLaunch({ url: '/pages/ai-assistant/ai-basic' })

@@ -7,7 +7,7 @@
 			</view>
 			<text class="header-title">自定义模型</text>
 			<view class="header-right" @click="startCreate">
-				<text class="add-icon">＋</text>
+				<text class="add-label">＋ 添加</text>
 			</view>
 		</view>
 
@@ -27,7 +27,15 @@
 				</view>
 			</view>
 			<view v-else class="empty">
-				<text class="empty-text">暂无自定义模型，点击右上角 + 添加</text>
+				<text class="empty-text">暂无自定义模型</text>
+				<view class="empty-add-btn" @click="startCreate">
+					<text class="empty-add-text">＋ 添加模型</text>
+				</view>
+			</view>
+
+			<!-- 列表底部：常驻添加按钮 -->
+			<view v-if="userModels.length > 0" class="bottom-add-btn" @click="startCreate">
+				<text class="bottom-add-text">＋ 添加模型</text>
 			</view>
 
 			<!-- 新增/编辑表单 -->
@@ -35,15 +43,15 @@
 				<text class="form-title">{{ editingId > 0 ? '编辑模型' : '新增模型' }}</text>
 				<view class="form-item">
 					<text class="form-label">名称</text>
-					<input class="form-input" type="text" :value="formName" placeholder="如：我的 DeepSeek" @input="onNameInput" />
+					<input class="form-input" type="text" :value="formName" placeholder="如：Inferera/Qwen" @input="onNameInput" />
 				</view>
 				<view class="form-item">
 					<text class="form-label">模型名</text>
-					<input class="form-input" type="text" :value="formModel" placeholder="如：deepseek-chat" @input="onModelInput" />
+					<input class="form-input" type="text" :value="formModel" placeholder="如：qwen3-5-plus" @input="onModelInput" />
 				</view>
 				<view class="form-item">
 					<text class="form-label">Base URL</text>
-					<input class="form-input" type="text" :value="formBaseUrl" placeholder="如：https://api.deepseek.com" @input="onBaseUrlInput" />
+					<input class="form-input" type="text" :value="formBaseUrl" placeholder="https://api.inferera.com/v1" @input="onBaseUrlInput" />
 				</view>
 				<view class="form-item">
 					<text class="form-label">API Key</text>
@@ -173,19 +181,26 @@
 		}
 	}
 
+	/** 执行删除模型配置（供 showModal 同步 success 回调调用）。声明在 onDelete 之前，
+	 *  避免 Kotlin 局部函数前向引用解析失败（UTS error18）。 */
+	async function doDelete(id : number) : Promise<void> {
+		try {
+			await deleteUserModelApi(id)
+			uni.showToast({ title: '删除成功', icon: 'success' })
+			await loadModels()
+		} catch (e) {
+			console.error('[custom-models] delete failed:', e)
+		}
+	}
+
 	function onDelete(id : number) : void {
 		uni.showModal({
 			title: '提示',
 			content: '确定删除该模型配置？',
-			success: async (res) => {
+			// uni.showModal 的 success 回调不可为 async（error17），转由独立异步函数执行
+			success: (res) => {
 				if (res.confirm) {
-					try {
-						await deleteUserModelApi(id)
-						uni.showToast({ title: '删除成功', icon: 'success' })
-						await loadModels()
-					} catch (e) {
-						console.error('[custom-models] delete failed:', e)
-					}
+					doDelete(id)
 				}
 			},
 		})
@@ -242,9 +257,11 @@
 		color: #222222;
 	}
 
-	.add-icon {
-		font-size: 44rpx;
+	.add-label {
+		font-size: 30rpx;
 		color: #2979ff;
+		font-weight: 600;
+		padding: 8rpx 12rpx;
 	}
 
 	.content {
@@ -314,6 +331,38 @@
 	.empty-text {
 		font-size: 28rpx;
 		color: #999999;
+		margin-bottom: 40rpx;
+	}
+
+	.empty-add-btn {
+		width: 320rpx;
+		height: 88rpx;
+		background-color: #2979ff;
+		border-radius: 44rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.empty-add-text {
+		font-size: 30rpx;
+		color: #ffffff;
+		font-weight: 600;
+	}
+
+	.bottom-add-btn {
+		height: 88rpx;
+		background-color: #ffffff;
+		border: 2rpx solid #2979ff;
+		border-radius: 44rpx;
+		align-items: center;
+		justify-content: center;
+		margin-top: 8rpx;
+	}
+
+	.bottom-add-text {
+		font-size: 30rpx;
+		color: #2979ff;
+		font-weight: 600;
 	}
 
 	.form-card {

@@ -68,7 +68,7 @@
 			<scroll-view scroll-y class="drawer-body">
 				<view class="drawer-new" @click="startNewChat">
 					<text class="drawer-new-icon">+</text>
-					<text>新建对话</text>
+					<text class="drawer-new-text">新建对话</text>
 				</view>
 				<view v-if="sessions.length == 0" class="empty-tip">暂无历史对话</view>
 				<view v-for="(s, idx) in sessions" :key="idx" class="drawer-item" @click="loadSession(s)">
@@ -87,16 +87,16 @@
 			</view>
 			<scroll-view scroll-y class="drawer-body">
 				<view class="menu-item" @click="goPro">
-					<text>切换到专业版</text>
+					<text class="menu-item-text">切换到专业版</text>
 				</view>
 				<view class="menu-item" @click="goSettings">
-					<text>对话设置</text>
+					<text class="menu-item-text">对话设置</text>
 				</view>
 				<view class="menu-item" @click="goManageModels">
-					<text>自定义模型</text>
+					<text class="menu-item-text">自定义模型</text>
 				</view>
 				<view class="menu-item" @click="goProfile">
-					<text>个人中心</text>
+					<text class="menu-item-text">个人中心</text>
 				</view>
 			</scroll-view>
 		</view>
@@ -138,9 +138,13 @@
 	import { ref } from 'vue'
 	import { useAuthStore } from '../../stores/auth'
 	import { getPublicModelsApi } from '../../api/ai-assistant'
+	import {
+		loadAiChatSettings,
+		saveAiChatSettings,
+	} from '../../api/aiAssistant'
 	import { useAiChat } from '../../composables/useAiChat'
 	import type { ChatBodyBuilder } from '../../composables/useAiChat'
-	import type { AiModel } from '../../types/index'
+	import type { AiModel, AiChatMessage } from '../../types/index'
 	import {
 		isProPaid,
 		setVersion,
@@ -180,11 +184,11 @@
 	// 数据（模型）
 	const models = ref<AiModel[]>([])
 
-	// 基础版固定使用第一个平台模型
+	// 基础版固定使用平台模型，默认第一个；可从'对话设置'里保存的 admin 选择水合
 	const currentModelId = ref<number>(0)
 
 	/** 基础版请求体：固定使用平台模型（admin） */
-	const buildBody : ChatBodyBuilder = (history : { role : string; content : string }[], sessionID : number) : UTSJSONObject => {
+	const buildBody : ChatBodyBuilder = (history : AiChatMessage[], sessionID : number) : UTSJSONObject => {
 		const params : UTSJSONObject = {
 			session_id: sessionID,
 			model_source: 'admin',
@@ -216,38 +220,41 @@
 		'叉车日常保养的检查要点有哪些？',
 	]
 
-	// 生命周期
-	onLoad((options : OnLoadOptions) => {
-		const sysInfo = uni.getSystemInfoSync()
-		statusBarHeight.value = sysInfo.statusBarHeight
-
-		auth.restoreFromStorage()
-		if (!auth.isLoggedIn.value) {
-			uni.reLaunch({ url: '/pages/login/login' })
-			return
-		}
-
-		loadModels()
-		loadSessions()
-	})
-
-	onShow(() => {
-		if (auth.isLoggedIn.value) {
-			loadSessions()
-		}
-	})
 
 	// 数据加载
 	async function loadModels() : Promise<void> {
 		try {
 			const list = await getPublicModelsApi()
 			models.value = list
-			if (list.length > 0 && currentModelId.value == 0) {
+			// 基础版只走平台模型：优先采用'对话设置'中保存的 admin 选择，其次默认第一个
+			const saved = loadAiChatSettings()
+			let applied = false
+			if (saved.model_source == 'admin' && saved.model_id > 0) {
+				for (let i = 0; i < list.length; i++) {
+					if (list[i].id == saved.model_id) {
+						currentModelId.value = saved.model_id
+						applied = true
+						break
+					}
+				}
+			}
+			if (!applied && currentModelId.value == 0 && list.length > 0) {
 				currentModelId.value = list[0].id
+				// 记录为当前 admin 选择，便于设置页保持同口径
+				const s = loadAiChatSettings()
+				s.model_source = 'admin'
+				s.model_id = currentModelId.value
+				if (list[0].name.length > 0) s.model_name = list[0].name
+				if (list[0].model.length > 0) s.model = list[0].model
+				saveAiChatSettings(s)
 			}
 		} catch (e) {
 			console.error('loadModels failed:', e)
 		}
+	}
+
+	function openPay() : void {
+		payVisible.value = true
 	}
 
 	function goPro() : void {
@@ -259,10 +266,6 @@
 		}
 		setVersion('pro')
 		uni.reLaunch({ url: '/pages/ai-assistant/ai-assistant' })
-	}
-
-	function openPay() : void {
-		payVisible.value = true
 	}
 
 	function closePay() : void {
@@ -301,6 +304,27 @@
 		sidebarRight.value = false
 		uni.switchTab({ url: '/pages/profile/profile' })
 	}
+
+	// 生命周期
+	onLoad((options : OnLoadOptions) => {
+		const sysInfo = uni.getSystemInfoSync()
+		statusBarHeight.value = sysInfo.statusBarHeight
+
+		auth.restoreFromStorage()
+		if (!auth.isLoggedIn.value) {
+			uni.reLaunch({ url: '/pages/login/login' })
+			return
+		}
+
+		loadModels()
+		loadSessions()
+	})
+
+	onShow(() => {
+		if (auth.isLoggedIn.value) {
+			loadSessions()
+		}
+	})
 </script>
 
 <style>
@@ -423,7 +447,7 @@
 	}
 
 	.message-bubble {
-		max-width: 80%;
+		max-width: 600rpx;
 		padding: 20rpx 24rpx;
 		border-radius: 16rpx;
 	}
@@ -455,7 +479,6 @@
 		background-color: #ffffff;
 		border-top: 1rpx solid #f0f0f0;
 		padding: 16rpx 24rpx;
-		padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
 	}
 
 	.input-row {
@@ -550,7 +573,7 @@
 		margin-bottom: 24rpx;
 	}
 
-	.drawer-new text {
+	.drawer-new-text {
 		color: #ffffff;
 		font-size: 28rpx;
 	}
@@ -585,7 +608,7 @@
 		border-bottom: 1rpx solid #f5f5f5;
 	}
 
-	.menu-item text {
+	.menu-item-text {
 		font-size: 28rpx;
 		color: #333333;
 	}

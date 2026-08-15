@@ -273,26 +273,7 @@
         return lastRedoAnswer.value.length > 0 ? lastRedoAnswer.value : '未作答'
     }
 
-    /** 本地比对：用户答案与正确答案 key 集合是否一致（模板调用） */
-    function redoResultLocalMatch() : boolean {
-        const r = redoResult.value
-        if (r == null) return false
-        if (r.correct) return false
-        const correctKeys = parseAnswerKeys(r.correct_answer)
-        const userKeys = parseAnswerKeys(lastRedoAnswer.value)
-        if (correctKeys.length != userKeys.length) return false
-        if (correctKeys.length == 0) return false
-        const sortedCorrect = correctKeys.slice().sort().join('')
-        const sortedUser = userKeys.slice().sort().join('')
-        return sortedCorrect == sortedUser
-    }
-
-    /** 选项是否已选中 */
-    function isSelected(key : string) : boolean {
-        return selectedKeys.value.indexOf(key) >= 0
-    }
-
-    /** 将答案字符串解析为 key 数组，兼容多种分隔符 */
+    /** 将答案字符串解析为 key 数组，兼容多种分隔符（声明在 redoResultLocalMatch 之前，避免 Kotlin 局部函数前向引用） */
     function parseAnswerKeys(answer : string) : string[] {
         if (answer.length == 0) return [] as string[]
         if (answer == 'true' || answer == 'false') return [answer] as string[]
@@ -316,6 +297,25 @@
             keys.push(answer.charAt(i))
         }
         return keys
+    }
+
+    /** 本地比对：用户答案与正确答案 key 集合是否一致（模板调用） */
+    function redoResultLocalMatch() : boolean {
+        const r = redoResult.value
+        if (r == null) return false
+        if (r.correct) return false
+        const correctKeys = parseAnswerKeys(r.correct_answer)
+        const userKeys = parseAnswerKeys(lastRedoAnswer.value)
+        if (correctKeys.length != userKeys.length) return false
+        if (correctKeys.length == 0) return false
+        const sortedCorrect = correctKeys.slice().sort().join('')
+        const sortedUser = userKeys.slice().sort().join('')
+        return sortedCorrect == sortedUser
+    }
+
+    /** 选项是否已选中 */
+    function isSelected(key : string) : boolean {
+        return selectedKeys.value.indexOf(key) >= 0
     }
 
     /** 答案是否包含某 key */
@@ -497,19 +497,7 @@
         }
     }
 
-    /** 移出错题本 */
-    function onRemove(item : WrongQuestionItem) : void {
-        uni.showModal({
-            title: '提示',
-            content: '确定将此题移出错题本？',
-            success: (res) => {
-                if (res.confirm) {
-                    doRemove(item)
-                }
-            }
-        })
-    }
-
+    /** 执行移出错题本（声明在 onRemove 之前，避免 Kotlin 局部函数前向引用） */
     async function doRemove(item : WrongQuestionItem) : Promise<void> {
         uni.showLoading({ title: '处理中...' })
         try {
@@ -539,6 +527,19 @@
         }
     }
 
+    /** 移出错题本 */
+    function onRemove(item : WrongQuestionItem) : void {
+        uni.showModal({
+            title: '提示',
+            content: '确定将此题移出错题本？',
+            success: (res) => {
+                if (res.confirm) {
+                    doRemove(item)
+                }
+            }
+        })
+    }
+
     /** 导出错题本（使用 downloadFile 处理 .txt 附件） */
     function onExport() : void {
         const token = authStore.token.value
@@ -556,7 +557,6 @@
                 if (res.statusCode == 200) {
                     uni.openDocument({
                         filePath: res.tempFilePath,
-                        showMenu: true,
                         success: () => {
                             uni.showToast({ title: '导出成功', icon: 'success' })
                         },

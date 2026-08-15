@@ -5,10 +5,10 @@
  * - 401 由 request 层自动清空并跳转登录页
  */
 import { ref, computed } from 'vue'
-import { loginApi, logoutApi, getUserInfoApi } from '../api/auth'
+import { loginApi, phoneLoginApi, emailLoginApi, logoutApi, getUserInfoApi } from '../api/auth'
 import { setStorage, setStorageJSON, getStorage, getStorageJSON, removeStorage } from '../utils/storage'
 import { STORAGE_KEY_TOKEN, STORAGE_KEY_USER } from '../constants/app'
-import type { LoginParams, UserInfo, AuthStore, UpdateProfileParams } from '../types/index'
+import type { LoginParams, CodeLoginParams, UserInfo, AuthStore, UpdateProfileParams } from '../types/index'
 
 // 全局响应式状态（模块级单例，多次调用 useAuthStore 共享同一份状态）
 const token = ref<string>('')
@@ -121,6 +121,30 @@ async function login(params : LoginParams) : Promise<void> {
 	}
 }
 
+/** 邮箱/手机号验证码登录 */
+async function loginByCode(params : CodeLoginParams) : Promise<void> {
+	try {
+		const result = params.channel == 'email'
+			? await emailLoginApi(params.target, params.code)
+			: await phoneLoginApi(params.target, params.code)
+		if (result == null) {
+			throw new Error('登录响应为空')
+		}
+		setAuthData(result.token, result.user)
+	} catch (e) {
+		console.error('[auth] loginByCode exception:', e)
+		let msg = '登录失败（响应解析错误）'
+		if (e instanceof Error) {
+			const errObj = e as Error
+			const m = errObj.message
+			if (m != null && m.length > 0) {
+				msg = m
+			}
+		}
+		throw new Error(msg)
+	}
+}
+
 async function logout() : Promise<void> {
 	// 1. 先带 token 通知后端写黑名单（静默，失败不提示）
 	//    必须在 clearAuthData 之前调用，否则请求头没有 Authorization 会被后端 401，
@@ -162,13 +186,9 @@ function updateUser(patch : UpdateProfileParams) : void {
 	if (currentAvatar != null && currentAvatar.length > 0) {
 		updated.avatar = currentAvatar
 	}
-	const name = patch.name
-	if (name != null && name.length > 0) {
-		updated.name = name
-	}
-	const avatar = patch.avatar
-	if (avatar != null && avatar.length > 0) {
-		updated.avatar = avatar
+	const nickname = patch.nickname
+	if (nickname != null && nickname.length > 0) {
+		updated.name = nickname
 	}
 	user.value = updated
 	setStorageJSON(STORAGE_KEY_USER, updated)
@@ -187,6 +207,7 @@ export function useAuthStore() : AuthStore {
 		restoreFromStorage: () : boolean => restoreFromStorage(),
 		validateToken: () : Promise<void> => validateToken(),
 		login: (params : LoginParams) : Promise<void> => login(params),
+		loginByCode: (params : CodeLoginParams) : Promise<void> => loginByCode(params),
 		logout: () : Promise<void> => logout(),
 		updateUser: (patch : UpdateProfileParams) : void => updateUser(patch),
 	} as AuthStore

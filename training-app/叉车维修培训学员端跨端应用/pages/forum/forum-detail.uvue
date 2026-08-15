@@ -41,10 +41,10 @@
                 </view>
                 <view class="topic-content">
                     <text class="content-text">{{ topic.content }}</text>
-                    <view v-if="topic.images.length > 0" class="img-grid">
-                        <view v-for="(img, idx) in topic.images" :key="idx" class="img-cell"
-                            @click="onPreviewImages(topic.images, idx)">
-                            <image class="img-thumb" :src="resolveFileUrl(img)" mode="aspectFill" />
+                    <view v-if="topicImages.length > 0" class="img-grid">
+                        <view v-for="(img, idx) in topicImages" :key="idx" class="img-cell"
+                            @click="onPreviewTopicImages(idx)">
+                            <image class="img-thumb" :src="img" mode="aspectFill" />
                         </view>
                     </view>
                 </view>
@@ -77,10 +77,10 @@
                         </view>
                     </view>
                     <text class="reply-content">{{ reply.content }}</text>
-                    <view v-if="reply.images.length > 0" class="img-grid">
-                        <view v-for="(img, idx) in reply.images" :key="idx" class="img-cell small"
-                            @click="onPreviewImages(reply.images, idx)">
-                            <image class="img-thumb" :src="resolveFileUrl(img)" mode="aspectFill" />
+                    <view v-if="replyImageList(reply).length > 0" class="img-grid">
+                        <view v-for="(img, idx) in replyImageList(reply)" :key="idx" class="img-cell small"
+                            @click="onPreviewReplyImages(reply, idx)">
+                            <image class="img-thumb" :src="img" mode="aspectFill" />
                         </view>
                     </view>
                 </view>
@@ -89,8 +89,8 @@
 
         <!-- 底部回复输入栏 -->
         <view v-if="topic != null" class="reply-bar">
-            <view v-for="(img, idx) in replyImages" :key="idx" class="reply-preview" @click="onPreviewReplyImage(idx)">
-                <image class="reply-preview-img" :src="resolveFileUrl(img)" mode="aspectFill" />
+            <view v-for="(img, idx) in replyPreviewImages" :key="idx" class="reply-preview" @click="onPreviewReplyImage(idx)">
+                <image class="reply-preview-img" :src="img" mode="aspectFill" />
                 <view class="reply-preview-remove" @click.stop="onRemoveReplyImage(idx)">
                     <text class="reply-preview-remove-text">×</text>
                 </view>
@@ -129,11 +129,36 @@
 
     const topicId = ref<number>(0)
     const topic = ref<ForumTopicDetail | null>(null)
+    /**
+     * 帖子图片列表（computed 包装：模板中直接访问 topic.value 的链式属性时，
+     * Kotlin 因 value 是可并发修改的 mutable property 无法 smart cast，转由 computed 取值）
+     */
+    const topicImages = computed<string[]>(() : string[] => {
+        const t = topic.value
+        if (t == null) return []
+        // 预解析为完整 URL：模板中不再调用 resolveFileUrl（UTS 模板函数解析不稳定）
+        const urls : string[] = []
+        for (let i = 0; i < t.images.length; i++) {
+            urls.push(resolveFileUrl(t.images[i]))
+        }
+        return urls
+    })
     const replies = ref<ForumReply[]>([])
     const loading = ref<boolean>(false)
     const submitting = ref<boolean>(false)
     const replyContent = ref<string>('')
     const replyImages = ref<string[]>([])
+    /**
+     * 回复图片预览 URL（预解析：模板中不调用 import 的 resolveFileUrl，规避 error18；
+     * replyImages 仍保存原始路径用于提交后端）
+     */
+    const replyPreviewImages = computed<string[]>(() : string[] => {
+        const urls : string[] = []
+        for (let i = 0; i < replyImages.value.length; i++) {
+            urls.push(resolveFileUrl(replyImages.value[i]))
+        }
+        return urls
+    })
     const uploadingReplyImage = ref<boolean>(false)
 
     /** 当前用户 ID */
@@ -155,6 +180,15 @@
     function canDeleteReply(reply : ForumReply) : boolean {
         if (reply.can_delete) return true
         return reply.author_id == currentUserId.value && currentUserId.value > 0
+    }
+
+    /** 回复图片列表（预解析为完整 URL：模板中不再调用函数，规避 UTS 模板函数解析问题） */
+    function replyImageList(reply : ForumReply) : string[] {
+        const urls : string[] = []
+        for (let i = 0; i < reply.images.length; i++) {
+            urls.push(resolveFileUrl(reply.images[i]))
+        }
+        return urls
     }
 
     /** 获取作者名首字 */
@@ -219,19 +253,7 @@
         }
     }
 
-    /** 删除帖子 */
-    function onDelete() : void {
-        uni.showModal({
-            title: '提示',
-            content: '确定删除这篇帖子吗？删除后不可恢复。',
-            success: (res) => {
-                if (res.confirm) {
-                    doDeleteTopic()
-                }
-            }
-        })
-    }
-
+    /** 执行删除帖子（声明在 onDelete 之前，避免 Kotlin 局部函数前向引用） */
     async function doDeleteTopic() : Promise<void> {
         uni.showLoading({ title: '删除中...' })
         try {
@@ -248,19 +270,20 @@
         }
     }
 
-    /** 删除回复 */
-    function onDeleteReply(replyId : number) : void {
+    /** 删除帖子 */
+    function onDelete() : void {
         uni.showModal({
             title: '提示',
-            content: '确定删除这条回复吗？',
+            content: '确定删除这篇帖子吗？删除后不可恢复。',
             success: (res) => {
                 if (res.confirm) {
-                    doDeleteReply(replyId)
+                    doDeleteTopic()
                 }
             }
         })
     }
 
+    /** 执行删除回复（声明在 onDeleteReply 之前，避免 Kotlin 局部函数前向引用） */
     async function doDeleteReply(replyId : number) : Promise<void> {
         uni.showLoading({ title: '删除中...' })
         try {
@@ -287,6 +310,19 @@
         }
     }
 
+    /** 删除回复 */
+    function onDeleteReply(replyId : number) : void {
+        uni.showModal({
+            title: '提示',
+            content: '确定删除这条回复吗？',
+            success: (res) => {
+                if (res.confirm) {
+                    doDeleteReply(replyId)
+                }
+            }
+        })
+    }
+
     /** 预览一组图片（帖子/回复共用） */
     function onPreviewImages(all : string[], index : number) : void {
         const urls : string[] = []
@@ -297,6 +333,40 @@
             urls: urls,
             current: index,
         })
+    }
+
+    /** 预览帖子图片（index 从模板传入；定义在 onPreviewImages 之后，UTS 局部函数不可前向引用） */
+    function onPreviewTopicImages(index : number) : void {
+        const t = topic.value
+        if (t == null) return
+        onPreviewImages(t.images, index)
+    }
+
+    /** 预览回复图片 */
+    function onPreviewReplyImages(reply : ForumReply, index : number) : void {
+        onPreviewImages(reply.images, index)
+    }
+
+    /** 逐张上传回复图片（声明在 onAddReplyImage 之前，避免 Kotlin 局部函数前向引用） */
+    async function uploadReplyImages(paths : string[]) : Promise<void> {
+        uploadingReplyImage.value = true
+        uni.showLoading({ title: '上传图片中...' })
+        let failed = 0
+        for (let i = 0; i < paths.length; i++) {
+            if (replyImages.value.length >= 3) break
+            try {
+                const url = await uploadForumImageApi(paths[i])
+                replyImages.value.push(url)
+            } catch (e) {
+                console.error('[forum-detail] upload reply image failed:', e)
+                failed = failed + 1
+            }
+        }
+        uni.hideLoading()
+        uploadingReplyImage.value = false
+        if (failed > 0) {
+            uni.showToast({ title: failed + ' 张图片上传失败，请重试', icon: 'none' })
+        }
     }
 
     /** 选择回复图片：批量选择并上传（最多 3 张） */
@@ -320,28 +390,6 @@
                 console.log('[forum-detail] chooseImage canceled/failed:', err)
             },
         })
-    }
-
-    /** 逐张上传回复图片 */
-    async function uploadReplyImages(paths : string[]) : Promise<void> {
-        uploadingReplyImage.value = true
-        uni.showLoading({ title: '上传图片中...' })
-        let failed = 0
-        for (let i = 0; i < paths.length; i++) {
-            if (replyImages.value.length >= 3) break
-            try {
-                const url = await uploadForumImageApi(paths[i])
-                replyImages.value.push(url)
-            } catch (e) {
-                console.error('[forum-detail] upload reply image failed:', e)
-                failed = failed + 1
-            }
-        }
-        uni.hideLoading()
-        uploadingReplyImage.value = false
-        if (failed > 0) {
-            uni.showToast({ title: failed + ' 张图片上传失败，请重试', icon: 'none' })
-        }
     }
 
     /** 删除已选回复图片 */

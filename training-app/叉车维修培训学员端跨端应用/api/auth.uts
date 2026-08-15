@@ -3,7 +3,7 @@
  */
 import { get, post, put, uploadFile } from './request'
 import type { RequestOptions } from './request'
-import type { LoginParams, LoginResult, RegisterParams, UserInfo, UpdateProfileParams, UploadAvatarResult } from '../types/index'
+import type { LoginParams, LoginResult, RegisterParams, UserInfo, UpdateProfileParams, UploadAvatarResult, ProfileChangeRequest } from '../types/index'
 
 /**
  * 从 UTSJSONObject 构造 UserInfo
@@ -113,16 +113,86 @@ export function loginApi(params : LoginParams) : Promise<LoginResult> {
 	})
 }
 
-/** 学员注册（手机号 + 密码 + 姓名，username 由后端按手机号生成） */
-export function registerApi(params : RegisterParams) : Promise<UTSJSONObject> {
+/** 发送短信验证码（注册用） POST /auth/phone/send-code {phone, purpose:'register'} */
+export function sendPhoneCodeApi(phone : string) : Promise<UTSJSONObject> {
+	return sendCodeApi(phone, 'phone', 'register')
+}
+
+/**
+ * 学员注册（手机号 + 短信验证码 + 昵称 + 密码） POST /auth/phone/register
+ * @note 后端为验证码制注册（/auth/register 不存在），验证码通过后自动登录并返回 token + 用户信息
+ * @returns 注册成功即自动登录（与登录同构的 token + user）
+ */
+export function registerApi(params : RegisterParams) : Promise<LoginResult> {
 	// Android 端 uni.request 的 data 不支持 type 字面量对象（Kotlin data class）
 	// 必须显式构造 UTSJSONObject
 	const payload : UTSJSONObject = {
 		phone: params.phone,
-		password: params.password,
-		name: params.name
+		code: params.code,
+		nickname: params.nickname,
+		password: params.password
 	} as UTSJSONObject
-	return post('/auth/register', payload)
+	return post('/auth/phone/register', payload).then((data : UTSJSONObject) : LoginResult => {
+		const token = data['token'] as string
+		const user = buildUserInfo(data)
+		const result : LoginResult = {
+			token: token,
+			user: user,
+		}
+		return result
+	})
+}
+
+/**
+ * 发送验证码（邮箱/手机号，purpose: register / login）
+ * @param target 手机号或邮箱
+ * @param channel email | phone
+ * @param purpose 用途：register / login
+ */
+export function sendCodeApi(target : string, channel : string, purpose : string) : Promise<UTSJSONObject> {
+	const payload : UTSJSONObject = {
+		purpose: purpose
+	} as UTSJSONObject
+	if (channel == 'email') {
+		payload['email'] = target
+		return post('/auth/email/send-code', payload)
+	}
+	payload['phone'] = target
+	return post('/auth/phone/send-code', payload)
+}
+
+/** 手机号验证码登录 POST /auth/phone/login */
+export function phoneLoginApi(phone : string, code : string) : Promise<LoginResult> {
+	const payload : UTSJSONObject = {
+		phone: phone,
+		code: code
+	} as UTSJSONObject
+	return post('/auth/phone/login', payload).then((data : UTSJSONObject) : LoginResult => {
+		const token = data['token'] as string
+		const user = buildUserInfo(data)
+		const result : LoginResult = {
+			token: token,
+			user: user,
+		}
+		return result
+	})
+}
+
+/** 邮箱验证码登录 POST /auth/email/login */
+export function emailLoginApi(email : string, code : string) : Promise<LoginResult> {
+	const payload : UTSJSONObject = {
+		email: email,
+		code: code
+	} as UTSJSONObject
+	return post('/auth/email/login', payload).then((data : UTSJSONObject) : LoginResult => {
+		const token = data['token'] as string
+		const user = buildUserInfo(data)
+		const result : LoginResult = {
+			token: token,
+			user: user,
+		}
+		return result
+	})
 }
 
 /** 登出（token SHA256 写入 Redis 黑名单） */
@@ -143,44 +213,76 @@ export function getUserInfoApi() : Promise<UserInfo> {
 }
 
 /**
- * 更新个人资料（昵称/头像）
- * @note 只传需要更新的字段；后端返回更新后的完整用户信息
- *       后端字段映射：前端 name -> 后端 nickname（"内容未发生变化" 通常是字段名不匹配导致）
+ * 更新个人资料（昵称） PUT /auth/profile
+ * @note 后端仅支持 nickname 字段，且走资料审核流：返回审核请求（pending），不即时生效；
+ *       审核通过后由管理员在管理端审核并以站内信通知。
  */
-export function updateProfileApi(params : UpdateProfileParams) : Promise<UserInfo> {
+export function updateProfileApi(params : UpdateProfileParams) : Promise<ProfileChangeRequest> {
 	const payload : UTSJSONObject = {} as UTSJSONObject
-	const name = params.name
-	if (name != null && name.length > 0) {
-		// 后端期望字段名为 nickname（昵称）
-		payload['nickname'] = name
+	const nickname = params.nickname
+	if (nickname != null && nickname.length > 0) {
+		payload['nickname'] = nickname
 	}
-	const avatar = params.avatar
-	if (avatar != null && avatar.length > 0) {
-		payload['avatar'] = avatar
-	}
-	return put('/auth/profile', payload).then((data : UTSJSONObject) : UserInfo => {
-		return buildUserInfo(data)
+	return put('/auth/profile', payload).then((data : UTSJSONObject) : ProfileChangeRequest => {
+		return buildReviewRequest(data)
 	})
 }
 
+/** 从 UTSJSONObject 构造 ProfileChangeRequest（后端审核请求 DTO） */
+function buildReviewRequest(obj : UTSJSONObject) : ProfileChangeRequest {
+	// UTS 中 as 是强转（Kotlin 级），字段为 null 时 as string 会抛 ClassCastException，
+	// 因此对可空字段用显式 null 判断回退默认值（与 buildUserInfo 同风格）
+	let id = 0
+	const idRaw = obj['id']
+	if (idRaw != null) {
+		id = idRaw as number
+	}
+	let user_id = 0
+	const uidRaw = obj['user_id']
+	if (uidRaw != null) {
+		user_id = uidRaw as number
+	}
+	const username = safeStr(obj['username'], '')
+	const avatar_url = safeStr(obj['avatar_url'], '')
+	const field_type = safeStr(obj['field_type'], '')
+	const old_value = safeStr(obj['old_value'], '')
+	const new_value = safeStr(obj['new_value'], '')
+	let status = safeStr(obj['status'], 'pending')
+	status = status.length > 0 ? status : 'pending'
+	const reject_reason = safeStr(obj['reject_reason'], '')
+	const created_at = safeStr(obj['created_at'], '')
+
+	const req : ProfileChangeRequest = {
+		id: id,
+		user_id: user_id,
+		username: username,
+		avatar_url: avatar_url,
+		field_type: field_type,
+		old_value: old_value,
+		new_value: new_value,
+		status: status,
+		reject_reason: reject_reason,
+		created_at: created_at,
+	} as ProfileChangeRequest
+	return req
+}
+
+/** 安全取字符串：null/缺省返回默认值，避免 UTS 强转异常 */
+function safeStr(v : any | null, defaultVal : string) : string {
+	if (v == null) return defaultVal
+	return `${v}`
+}
+
 /**
- * 上传头像（multipart/form-data）
+ * 上传头像（multipart/form-data） POST /auth/avatar
  * @param filePath 本地临时文件路径（由 uni.chooseImage 返回）
- * @returns 上传头像响应，含 avatar URL
+ * @note 后端 multipart 字段名固定为 file；返回头像修改审核请求（pending），审核通过后生效
  */
 export function uploadAvatarApi(filePath : string) : Promise<UploadAvatarResult> {
-	return uploadFile('/auth/avatar', filePath, 'avatar').then((data : UTSJSONObject) : UploadAvatarResult => {
-		// 兼容后端两种返回：直接返回 { avatar } 或 data 字段含 url
-		let avatarUrl = ''
-		const avatar = data['avatar']
-		if (avatar != null) {
-			avatarUrl = avatar as string
-		} else {
-			const url = data['url']
-			if (url != null) {
-				avatarUrl = url as string
-			}
-		}
-		return { avatar: avatarUrl } as UploadAvatarResult
+	return uploadFile('/auth/avatar', filePath, 'file').then((data : UTSJSONObject) : UploadAvatarResult => {
+		const result : UploadAvatarResult = {
+			request: buildReviewRequest(data)
+		} as UploadAvatarResult
+		return result
 	})
 }

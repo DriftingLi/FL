@@ -308,7 +308,7 @@
 
     .record-score-row {
         flex-direction: row;
-        align-items: baseline;
+        align-items: flex-end;
         margin-bottom: 8rpx;
     }
 

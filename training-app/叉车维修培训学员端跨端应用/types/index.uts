@@ -32,28 +32,55 @@ export type LoginParams = {
     password : string
 }
 
+/** 邮箱/手机号验证码登录参数 */
+export type CodeLoginParams = {
+    target : string   // 手机号或邮箱
+    channel : string  // phone / email
+    code : string     // 验证码
+}
+
 /** 登录响应数据 */
 export type LoginResult = {
     token : string
     user : UserInfo
 }
 
-/** 注册参数 */
+/** 注册参数（验证码制，POST /auth/phone/register） */
 export type RegisterParams = {
-    phone : string
-    password : string
-    name : string
+    phone : string      // 手机号
+    code : string       // 短信验证码（send-code 下发）
+    nickname : string   // 昵称（后端字段名 nickname）
+    password : string   // 密码
 }
 
-/** 更新个人资料参数（昵称/头像） */
+/**
+ * 更新个人资料参数（昵称）
+ * @note 后端 PUT /auth/profile 仅支持 nickname 字段，走资料审核流（提交→审核→生效）
+ */
 export type UpdateProfileParams = {
-    name ?: string       // 昵称
-    avatar ?: string     // 头像 URL
+    nickname ?: string   // 昵称（提交审核用）
 }
 
-/** 上传头像响应 */
+/** 资料修改审核请求（后端返回，status 为 pending 表示待审） */
+export type ProfileChangeRequest = {
+    id : number
+    user_id : number
+    username : string
+    avatar_url : string
+    field_type : string   // nickname / avatar
+    old_value : string
+    new_value : string
+    status : string       // pending / approved / rejected
+    reject_reason : string
+    created_at : string
+}
+
+/**
+ * 上传头像响应
+ * @note 后端 POST /auth/avatar 的 multipart 上传字段名为 file，返回头像修改审核请求（审核通过后生效）
+ */
 export type UploadAvatarResult = {
-    avatar : string      // 头像访问 URL
+    request : ProfileChangeRequest   // 头像修改审核请求（pending）
 }
 
 /** 学习统计单日数据 */
@@ -134,6 +161,8 @@ export type AuthStore = {
     restoreFromStorage : () => boolean
     validateToken : () => Promise<void>
     login : (params : LoginParams) => Promise<void>
+    /** 邮箱/手机号验证码登录 */
+    loginByCode : (params : CodeLoginParams) => Promise<void>
     logout : () => Promise<void>
     /** 更新本地用户信息（昵称/头像），并持久化到 storage */
     updateUser : (patch : UpdateProfileParams) => void
@@ -618,7 +647,7 @@ export type AiSessionMessage = {
 
 /** 对话设置（本地缓存） */
 export type AiChatSettings = {
-    model_source : string   // admin | custom
+    model_source : string   // admin | user | custom
     model_id : number       // 用户模型 id，0 表示未选
     model_name : string     // 展示名
     base_url : string
