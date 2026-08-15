@@ -185,7 +185,6 @@ const {
   sendCode: (channel, target) => authApi.sendProfileCode({ channel, target })
 })
 const bindDialog = useVerifyDialog({
-  purpose: 'bind',
   sendCode: (target, channel) => sendBindCode(target, channel),
   submitAsync: (target, code) =>
     bindChannel.value === 'email'
@@ -214,7 +213,6 @@ const {
 const password = ref('')
 const confirmPassword = ref('')
 const passwordDialog = useVerifyDialog({
-  purpose: 'change_password',
   sendCode: (target, channel) => sendPasswordCode(target, channel),
   submitAsync: async (_target, code) => {
     if (password.value.length < 6 || password.value.length > 20) {
@@ -249,7 +247,6 @@ const {
   sendCode: () => authApi.sendAccountChangeCode()
 })
 const accountDialog = useVerifyDialog({
-  purpose: 'account_change',
   sendCode: (target, channel) => sendAccountCode(target, channel),
   submitAsync: async (target, code) => {
     if (!isValidAccount(target)) {

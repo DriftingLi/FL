@@ -21,7 +21,6 @@ function mountDialog(opts: MountOptions = {}) {
     ? vi.fn().mockRejectedValue(new Error('server error'))
     : vi.fn().mockResolvedValue(undefined)
   const dialog = useVerifyDialog({
-    purpose: 'bind',
     sendCode,
     submitAsync,
     onSuccess: opts.onSuccess
@@ -123,7 +122,6 @@ describe('sending/submitting 状态复位', () => {
   it('send 失败（拦截器已提示）后 sending 仍复位', async () => {
     const sendCode = vi.fn().mockRejectedValue(new Error('throttled'))
     const dialog = useVerifyDialog({
-      purpose: 'bind',
       sendCode,
       submitAsync: vi.fn()
     })

@@ -1,6 +1,6 @@
 // usePracticeSession：练习会话状态机 module 的接口级测试。
 // 断言 external behavior：三态反序列化（null/[]/absent）、断点恢复、
-// 退出清空、buildAnswersState round-trip、游标推进/进度保存编排。
+// 退出清空、序列化 round-trip（经 saveProgress 可观测）、游标推进/进度保存编排。
 // seam：composable 接口——三个 adapter（start/submit/saveProgress）用内存 stub，
 // API 与进度 key 语义由 adapter 注入，本测试不触达 API 层。
 import { describe, it, expect } from 'vitest'
@@ -14,8 +14,8 @@ function q(id: number): Question {
 
 function makeAdapters(
   overrides: Partial<PracticeSessionAdapters> = {}
-): PracticeSessionAdapters & { saved: { mode: PracticeMode; index: number }[] } {
-  const saved: { mode: PracticeMode; index: number }[] = []
+): PracticeSessionAdapters & { saved: { mode: PracticeMode; index: number; answersState: Record<string, unknown> }[] } {
+  const saved: { mode: PracticeMode; index: number; answersState: Record<string, unknown> }[] = []
   return {
     start: async () => ({
       questions: [q(1), q(2), q(3)],
@@ -30,7 +30,7 @@ function makeAdapters(
       user_answer: 'A'
     }),
     saveProgress: async payload => {
-      saved.push({ mode: payload.mode, index: payload.index })
+      saved.push({ mode: payload.mode, index: payload.index, answersState: payload.answersState })
     },
     ...overrides,
     saved
@@ -103,7 +103,7 @@ describe('usePracticeSession（答题/编排）', () => {
     await s.submitAnswer()
 
     expect(s.submittedMap.value[1]).toBe(true)
-    expect(s.resultMap.value[1].is_correct).toBe(true)
+    expect(s.resultMap.value[1]?.is_correct).toBe(true)
     expect(s.correctCount.value).toBe(1)
     expect(s.wrongCount.value).toBe(0)
   })
@@ -154,7 +154,7 @@ describe('usePracticeSession（退出清空）', () => {
   })
 })
 
-describe('usePracticeSession（buildAnswersState round-trip）', () => {
+describe('usePracticeSession（序列化 round-trip 经 saveProgress 可观测）', () => {
   it('恢复后再序列化得到一致的独立字面量（key 为题目ID字符串）', async () => {
     const answersState = {
       '1': { is_correct: true, correct_answer: 'A', explanation: 'ok', question_id: 1, user_answer: 'A' },
@@ -166,7 +166,9 @@ describe('usePracticeSession（buildAnswersState round-trip）', () => {
     const s = usePracticeSession(adapters)
     await s.start('sequential')
 
-    expect(s.buildAnswersState()).toEqual(answersState)
+    // 内部 buildAnswersState 序列化结果经 saveCurrentProgress → saveProgress 暴露
+    await s.nextQuestion()
+    expect(adapters.saved.at(-1)?.answersState).toEqual(answersState)
   })
 })
 

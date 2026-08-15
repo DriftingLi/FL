@@ -88,19 +88,16 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: 'select-alt', key: AltModeKey | null): void
-  (e: 'update:activeAlt', key: AltModeKey | null): void
 }>()
 
 const altModes = props.altModes
 
 function selectAlt(key: AltModeKey) {
   emit('select-alt', key)
-  emit('update:activeAlt', key)
 }
 
 function goMain() {
   emit('select-alt', null)
-  emit('update:activeAlt', null)
 }
 </script>
 
@@ -290,5 +287,89 @@ function goMain() {
   .title {
     font-size: 21px;
   }
+}
+
+/* ===== 认证表单共享样式（Login / Register / ForgotPassword 三页收敛于此外壳）=====
+   页面把 el-form/el-input/el-button 等经 slot 注入，故此处用 :deep 触达 slot 内容。
+   视觉与三页原 scoped 样式逐字节一致（像素级不变）；Login 特有的 6px input 内边距
+   由其页面内覆盖（见 Login.vue .auth-form .form-input :deep(.el-input__wrapper)）。 */
+
+.auth-form {
+  margin-top: 4px;
+}
+
+.code-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.code-input {
+  flex: 1;
+}
+
+.code-btn {
+  min-width: 124px;
+}
+
+.auth-btn {
+  width: 100%;
+  height: 48px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 12px;
+  letter-spacing: 0.08em;
+  margin-top: 8px;
+  --el-button-bg-color: #2563eb;
+  --el-button-border-color: #2563eb;
+  --el-button-text-color: #fff;
+  --el-button-hover-bg-color: #1d4ed8;
+  --el-button-hover-border-color: #1d4ed8;
+  --el-button-active-bg-color: #1d4ed8;
+  --el-button-active-border-color: #1d4ed8;
+}
+
+.form-input :deep(.el-input__wrapper) {
+  border-radius: 12px;
+  padding: 4px 14px;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+  transition: all 0.2s ease;
+  background: #f8fafc;
+}
+
+.form-input :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px #cbd5e1 inset;
+  background: #fff;
+}
+
+.form-input :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2) inset;
+  background: #fff;
+}
+
+.form-input :deep(.el-input__prefix-inner) {
+  color: #94a3b8;
+}
+
+.form-footer {
+  text-align: center;
+}
+
+.footer-text {
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+.footer-link {
+  font-size: 14px;
+  font-weight: 600;
+  color: #2563eb;
+  text-decoration: none;
+  margin-left: 4px;
+  transition: color 0.15s ease;
+}
+
+.footer-link:hover {
+  color: #1d4ed8;
 }
 </style>

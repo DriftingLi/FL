@@ -120,7 +120,7 @@
         <el-button size="small" @click="confirmQuit">退出练习</el-button>
       </div>
 
-      <el-card class="question-card">
+      <el-card v-if="currentQuestion" class="question-card">
         <div class="question-header">
           <el-tag size="small">{{ typeMap[currentQuestion.type] || '题目' }}</el-tag>
         </div>
@@ -133,13 +133,13 @@
           :selected-keys="selectedOptionKeys"
           :multi-choice="currentQuestion.type === 'multi_choice'"
           :disabled="submitted"
-          :correct-answer="submitted ? lastResult.correct_answer : undefined"
+          :correct-answer="submitted && lastResult ? lastResult.correct_answer : undefined"
           :user-answer="submitted ? answers[currentQuestion.id] : undefined"
-          @select="key => toggleOption(currentQuestion.id, key, currentQuestion.type === 'multi_choice')"
+          @select="key => { if (!currentQuestion) return; toggleOption(currentQuestion.id, key, currentQuestion.type === 'multi_choice') }"
         />
         <el-input v-else v-model="textAnswer" type="textarea" :rows="4" placeholder="请输入答案" :disabled="submitted" />
 
-        <div class="q-feedback" v-if="submitted">
+        <div class="q-feedback" v-if="submitted && lastResult">
           <el-alert
             :title="lastResult.is_correct ? '回答正确' : '回答错误'"
             :type="lastResult.is_correct ? 'success' : 'error'"

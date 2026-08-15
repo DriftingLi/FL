@@ -13,7 +13,7 @@
 // 用户在不同子域名间切换时需要重新登录。
 
 import { getToken } from '@/utils/storage'
-import { findPathEntry } from './authRedirect'
+import { findPathEntry, resolveWorkspaceForRole } from './authRedirect'
 
 export type SubdomainType = 'main' | 'training' | 'valuation' | 'tutor' | 'admin'
 
@@ -129,14 +129,14 @@ export function buildCrossDomainAuthUrl(target: SubdomainType, path: string): st
   return `${base}${sep}auth_token=${encodeURIComponent(token)}`
 }
 
-// 获取当前子域名对应的默认工作区路径（同子域名内的相对路径）
+// 获取当前子域名对应的默认工作区路径（同子域名内的相对路径）。
+// 「角色 → 默认工作区」单点：tutor/admin/hrwai_user 统一交由 authRedirect.resolveWorkspaceForRole 派生，
+// 消除两处「角色→工作区」重复映射；valuation 子域名与 training 同为 hrwai_user（resolve 归一为 /training），
+// 但其残值评估入口独立，此处保留既有行为。
 export function getDefaultWorkspaceBySubdomain(): string {
   const sub = getSubdomain()
-  if (sub === 'tutor') return '/training/tutor'
-  if (sub === 'admin') return '/admin/dashboard'
-  if (sub === 'training') return '/training'
   if (sub === 'valuation') return '/valuation'
-  return '/' // 主域名
+  return resolveWorkspaceForRole(getRoleForSubdomain())
 }
 
 // 获取当前子域名对应的登录角色

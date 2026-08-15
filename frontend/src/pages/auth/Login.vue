@@ -339,63 +339,7 @@ async function handleLogin() {
 </script>
 
 <style scoped>
-.auth-form {
-  margin-top: 4px;
-}
-
-.code-row {
-  display: flex;
-  gap: 10px;
-  width: 100%;
-}
-
-.code-input {
-  flex: 1;
-}
-
-.code-btn {
-  min-width: 124px;
-}
-
-.auth-btn {
-  width: 100%;
-  height: 48px;
-  font-size: 16px;
-  font-weight: 600;
-  border-radius: 12px;
-  letter-spacing: 0.08em;
-  margin-top: 8px;
-  --el-button-bg-color: #2563eb;
-  --el-button-border-color: #2563eb;
-  --el-button-text-color: #fff;
-  --el-button-hover-bg-color: #1d4ed8;
-  --el-button-hover-border-color: #1d4ed8;
-  --el-button-active-bg-color: #1d4ed8;
-  --el-button-active-border-color: #1d4ed8;
-}
-
-.form-input :deep(.el-input__wrapper) {
-  border-radius: 12px;
-  padding: 6px 14px;
-  box-shadow: 0 0 0 1px #e2e8f0 inset;
-  transition: all 0.2s ease;
-  background: #f8fafc;
-}
-
-.form-input :deep(.el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px #cbd5e1 inset;
-  background: #fff;
-}
-
-.form-input :deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2) inset;
-  background: #fff;
-}
-
-.form-input :deep(.el-input__prefix-inner) {
-  color: #94a3b8;
-}
-
+/* 表单共享样式已在 AuthPageShell 外壳收敛（:deep 触达 slot） */
 .wechat-box {
   width: 100%;
 }
@@ -426,26 +370,9 @@ async function handleLogin() {
   line-height: 1.5;
 }
 
-.form-footer {
-  text-align: center;
-}
-
-.footer-text {
-  font-size: 14px;
-  color: #94a3b8;
-}
-
-.footer-link {
-  font-size: 14px;
-  font-weight: 600;
-  color: #2563eb;
-  text-decoration: none;
-  margin-left: 4px;
-  transition: color 0.15s ease;
-}
-
-.footer-link:hover {
-  color: #1d4ed8;
+/* Login 独有：input 内边距 6px（其余认证页为 4px，由外壳统一），此处覆盖保持像素级不变 */
+.auth-form .form-input :deep(.el-input__wrapper) {
+  padding: 6px 14px;
 }
 
 .footer-sep {
