@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"io"
 
 	"github.com/gin-gonic/gin"
@@ -33,76 +34,95 @@ func NewAuthHandler(sess *security.Session, authSvc *service.AuthService, fileSv
 
 // Login 学员登录 POST /api/auth/login
 func (h *AuthHandler) Login(c *gin.Context) {
-	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-		Role     string `json:"role"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "请求参数错误")
-		return
-	}
-	if req.Username == "" || req.Password == "" {
-		response.BadRequest(c, "账号和密码不能为空")
-		return
-	}
-	result, err := h.authSvc.HrwaiLogin(req.Username, req.Password)
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	setAuthCookie(c, h.session, result.Token)
-	response.SuccessWithMsg(c, "登录成功", result)
+	Endpoint[loginReq, service.LoginResult]{
+		Parse: func(c *gin.Context) (*loginReq, error) {
+			req, err := bindJSON[loginReq](c)
+			if err != nil {
+				return nil, err
+			}
+			if req.Username == "" || req.Password == "" {
+				return nil, badRequest("账号和密码不能为空")
+			}
+			return req, nil
+		},
+		Invoke: func(ctx context.Context, req *loginReq) (*service.LoginResult, error) {
+			return h.authSvc.HrwaiLogin(req.Username, req.Password)
+		},
+		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			setAuthCookie(c, h.session, resp.Token)
+			response.SuccessWithMsg(c, "登录成功", resp)
+		},
+	}.Handle(c)
 }
 
 // AdminLogin 管理员登录 POST /api/auth/admin-login
 func (h *AuthHandler) AdminLogin(c *gin.Context) {
-	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "请求参数错误")
-		return
-	}
-	if req.Username == "" || req.Password == "" {
-		response.BadRequest(c, "用户名和密码不能为空")
-		return
-	}
-	result, err := h.authSvc.AdminLogin(req.Username, req.Password)
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	setAuthCookie(c, h.session, result.Token)
-	response.SuccessWithMsg(c, "管理员登录成功", result)
+	Endpoint[loginReq, service.LoginResult]{
+		Parse: func(c *gin.Context) (*loginReq, error) {
+			req, err := bindJSON[loginReq](c)
+			if err != nil {
+				return nil, err
+			}
+			if req.Username == "" || req.Password == "" {
+				return nil, badRequest("用户名和密码不能为空")
+			}
+			return req, nil
+		},
+		Invoke: func(ctx context.Context, req *loginReq) (*service.LoginResult, error) {
+			return h.authSvc.AdminLogin(req.Username, req.Password)
+		},
+		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			setAuthCookie(c, h.session, resp.Token)
+			response.SuccessWithMsg(c, "管理员登录成功", resp)
+		},
+	}.Handle(c)
 }
 
 // TutorLogin 导师登录 POST /api/auth/tutor-login
 func (h *AuthHandler) TutorLogin(c *gin.Context) {
-	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "请求参数错误")
-		return
-	}
-	if req.Username == "" || req.Password == "" {
-		response.BadRequest(c, "用户名和密码不能为空")
-		return
-	}
-	result, err := h.authSvc.TutorLogin(req.Username, req.Password)
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	setAuthCookie(c, h.session, result.Token)
-	response.SuccessWithMsg(c, "导师登录成功", result)
+	Endpoint[loginReq, service.LoginResult]{
+		Parse: func(c *gin.Context) (*loginReq, error) {
+			req, err := bindJSON[loginReq](c)
+			if err != nil {
+				return nil, err
+			}
+			if req.Username == "" || req.Password == "" {
+				return nil, badRequest("用户名和密码不能为空")
+			}
+			return req, nil
+		},
+		Invoke: func(ctx context.Context, req *loginReq) (*service.LoginResult, error) {
+			return h.authSvc.TutorLogin(req.Username, req.Password)
+		},
+		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			setAuthCookie(c, h.session, resp.Token)
+			response.SuccessWithMsg(c, "导师登录成功", resp)
+		},
+	}.Handle(c)
+}
+
+// loginReq 登录请求体（三种角色共用字段）。
+type loginReq struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Role     string `json:"role"`
 }
 
 // Logout 登出 POST /api/auth/logout
 // 将当前 token 写入 Redis 黑名单，TTL = token 剩余有效期，使其在后续请求中被 JWTAuth 中间件拒绝。
+// 本 handler 无 service 调用、纯会话操作，保留为薄适配（ADR-0009 一次性适配例外）。
 func (h *AuthHandler) Logout(c *gin.Context) {
 	// 与 JWTAuth 中间件同一套提取逻辑（session 模块统一实现）：Bearer 头优先，其次 Cookie
 	tokenStr := h.session.ExtractToken(c.GetHeader("Authorization"), authCookieFromReq(c, h.session))
@@ -123,44 +143,73 @@ func authCookieFromReq(c *gin.Context, sess *security.Session) string {
 	return tk
 }
 
+// meReq /auth/me 请求（身份来自 JWT 中间件上下文）。
+type meReq struct {
+	UserID  int
+	Role    string
+	Account string
+}
+
 // Me 获取当前用户 GET /api/auth/me
 // 资料组装收编在 AuthService.GetProfile（响应形状由契约测试锁定）。
 func (h *AuthHandler) Me(c *gin.Context) {
-	userID, _ := c.Get(string(middleware.CtxUserID))
-	role, _ := c.Get(string(middleware.CtxUserRole))
-	account, _ := c.Get(string(middleware.CtxAccount))
-
-	uid, _ := userID.(int)
-	roleStr, _ := role.(string)
-	acct, _ := account.(string)
-
-	response.Success(c, h.authSvc.GetProfile(uid, roleStr, acct))
+	Endpoint[meReq, service.ProfileDTO]{
+		Parse: func(c *gin.Context) (*meReq, error) {
+			return &meReq{
+				UserID:  middleware.CurrentUserID(c),
+				Role:    middleware.CurrentRole(c),
+				Account: middleware.CurrentAccount(c),
+			}, nil
+		},
+		Invoke: func(ctx context.Context, req *meReq) (*service.ProfileDTO, error) {
+			return h.authSvc.GetProfile(req.UserID, req.Role, req.Account), nil
+		},
+		Render: func(c *gin.Context, _ *meReq, resp *service.ProfileDTO, _ error) {
+			response.Success(c, resp)
+		},
+	}.Handle(c)
 }
 
 // UpdateProfile 提交个人资料（昵称）修改审核 POST /api/auth/profile
 func (h *AuthHandler) UpdateProfile(c *gin.Context) {
-	userID, _ := c.Get(string(middleware.CtxUserID))
-	uid, _ := userID.(int)
-	if uid <= 0 {
-		response.Unauthorized(c, "请先登录")
-		return
-	}
-	var req struct {
-		Nickname string `json:"nickname"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "请求参数错误")
-		return
-	}
-	reqDTO, err := h.reviewSvc.CreateRequest(uid, service.ProfileFieldNickname, req.Nickname)
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.SuccessWithMsg(c, "昵称修改已提交，审核通过后生效", reqDTO)
+	Endpoint[updateProfileReq, service.ProfileChangeRequestDTO]{
+		Parse: func(c *gin.Context) (*updateProfileReq, error) {
+			uid := middleware.CurrentUserID(c)
+			if uid <= 0 {
+				return nil, &ParseError{Status: 401, Message: "请先登录"}
+			}
+			req, err := bindJSON[updateProfileReq](c)
+			if err != nil {
+				return nil, err
+			}
+			return &updateProfileReq{UID: uid, Nickname: req.Nickname}, nil
+		},
+		Invoke: func(ctx context.Context, req *updateProfileReq) (*service.ProfileChangeRequestDTO, error) {
+			return h.reviewSvc.CreateRequest(req.UID, service.ProfileFieldNickname, req.Nickname)
+		},
+		Render: func(c *gin.Context, _ *updateProfileReq, resp *service.ProfileChangeRequestDTO, err error) {
+			if err != nil {
+				var pe *ParseError
+				if asParseError(err, &pe) {
+					renderStatus(c, pe.Status, pe.Message)
+					return
+				}
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "昵称修改已提交，审核通过后生效", resp)
+		},
+	}.Handle(c)
+}
+
+// updateProfileReq 更新个人资料请求。
+type updateProfileReq struct {
+	UID      int
+	Nickname string
 }
 
 // UploadAvatar 上传头像并提交审核 POST /api/auth/avatar（multipart，图片自动压缩为 WebP 后存入 local/R2）
+// multipart + 多步文件处理，保留为薄适配（ADR-0009 一次性适配例外）。
 func (h *AuthHandler) UploadAvatar(c *gin.Context) {
 	userID, _ := c.Get(string(middleware.CtxUserID))
 	uid, _ := userID.(int)

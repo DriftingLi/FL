@@ -141,24 +141,31 @@ func (s *StudentService) queryProfile(studentID int) (*StudentProfileDTO, error)
 		Group("course_id").
 		Scan(&rows)
 
+	// 批量回填课程名与章节数（batch_backfill module），消除逐课程 N+1；
+	// 未知课程跳过整行（courseNameFound 缺省 false，与旧逐行 First 失败 continue 同语义）。
+	courseIDs := make([]int, 0, len(rows))
+	for _, r := range rows {
+		courseIDs = append(courseIDs, r.CourseID)
+	}
+	courseNames := batchCourseNames(s.db, courseIDs)
+	chapterCounts := batchChapterCounts(s.db, courseIDs)
+
 	courseProgressList := make([]CourseProgressDTO, 0, len(rows))
 	for _, r := range rows {
-		var course model.Course
-		if err := s.db.First(&course, r.CourseID).Error; err != nil {
+		name, ok := courseNameFound(courseNames, r.CourseID)
+		if !ok {
 			continue
 		}
-		var totalChapters int64
-		s.db.Model(&model.Chapter{}).Where("course_id = ?", r.CourseID).Count(&totalChapters)
 		studyDate := ""
 		if !r.LatestDate.IsZero() {
 			studyDate = formatISO(r.LatestDate)
 		}
 		courseProgressList = append(courseProgressList, CourseProgressDTO{
-			CourseID:      course.CourseID,
-			CourseName:    course.Name,
+			CourseID:      r.CourseID,
+			CourseName:    name,
 			Progress:      r.MaxProgress,
 			StudyDuration: r.TotalDuration,
-			TotalChapters: totalChapters,
+			TotalChapters: chapterCounts[r.CourseID],
 			StudyDate:     studyDate,
 		})
 	}
@@ -239,20 +246,28 @@ func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, en
 		return q
 	})
 
+	// 批量回填课程名与章节标题（batch_backfill module），消除逐记录 N+1。
+	// 未知课程缺省文案由 courseName 统一解析为 UnknownCourseName；
+	// chapter_title 未匹配章节时保持 null（与旧逐行 First 失败不赋值同语义）。
+	courseIDs := make([]int, 0, len(records))
+	chapterIDs := make([]int, 0, len(records))
+	for i := range records {
+		r := &records[i]
+		courseIDs = append(courseIDs, r.CourseID)
+		if r.ChapterID != nil {
+			chapterIDs = append(chapterIDs, *r.ChapterID)
+		}
+	}
+	courseNames := batchCourseNames(s.db, courseIDs)
+	chapterTitles := batchChapterTitles(s.db, chapterIDs)
+
 	items := make([]StudyRecordDTO, 0, len(records))
 	for i := range records {
 		r := &records[i]
 		item := studyRecordToDTO(r)
-		var course model.Course
-		if err := s.db.First(&course, r.CourseID).Error; err == nil {
-			item.CourseName = course.Name
-		} else {
-			item.CourseName = "未知课程"
-		}
+		item.CourseName = courseName(courseNames, r.CourseID)
 		if r.ChapterID != nil {
-			var chapter model.Chapter
-			if err := s.db.First(&chapter, *r.ChapterID).Error; err == nil {
-				title := chapter.Title
+			if title, ok := chapterTitles[*r.ChapterID]; ok {
 				item.ChapterTitle = &title
 			}
 		}

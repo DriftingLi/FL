@@ -6,7 +6,6 @@ export interface StartMockExamPayload {
   category?: string
   question_count?: number
   duration_minutes?: number
-  [key: string]: unknown
 }
 
 export interface MockExamProgressPayload {
@@ -15,7 +14,6 @@ export interface MockExamProgressPayload {
   remaining_seconds?: number
   answers?: unknown
   remaining_time?: number
-  [key: string]: unknown
 }
 
 export interface MockExamHistoryQuery {
@@ -30,7 +28,6 @@ export interface MockExamHistoryItem {
   total_score?: number
   status?: string
   finished_at?: string
-  [key: string]: unknown
 }
 
 /** 模拟考结果 */
@@ -38,7 +35,6 @@ export interface MockExamResult {
   score?: number
   total_score?: number
   correct_count?: number
-  [key: string]: unknown
 }
 
 export const mockExamApi = {

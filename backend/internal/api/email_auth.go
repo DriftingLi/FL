@@ -5,10 +5,11 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/captcha"
 	"forklift-training/internal/service"
 )
 
 // RegisterEmailAuthRoutes 注册 /api/auth/email 蓝图（邮箱验证码注册/登录）。
-func RegisterEmailAuthRoutes(rg *gin.RouterGroup, rd RouterDeps, codeSvc *service.VerifyCodeService, ch service.CodeChannel) {
-	registerCodeChannelAuthRoutes(rg.Group("/auth/email"), rd.Session, codeSvc, ch, "email", "验证码已发送，请查收邮箱")
+func RegisterEmailAuthRoutes(rg *gin.RouterGroup, rd RouterDeps, codeSvc *service.VerifyCodeService, ch service.CodeChannel, captchaSvc *captcha.Service, captchaEnabled bool) {
+	registerCodeChannelAuthRoutes(rg.Group("/auth/email"), rd.Session, codeSvc, ch, "email", "验证码已发送，请查收邮箱", captchaSvc, captchaEnabled)
 }

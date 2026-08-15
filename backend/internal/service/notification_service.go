@@ -3,6 +3,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -15,15 +16,17 @@ import (
 )
 
 // NotificationDTO 站内信通知展示对象。
+// Payload 为结构化业务标记（JSONB，加性字段，如 review_status），旧契约字段不变。
 type NotificationDTO struct {
-	ID        int64   `json:"id"`
-	Type      string  `json:"type"`
-	Title     string  `json:"title"`
-	Content   string  `json:"content"`
-	Link      string  `json:"link"`
-	IsRead    bool    `json:"is_read"`
-	CreatedAt string  `json:"created_at"`
-	ReadAt    *string `json:"read_at,omitempty"`
+	ID        int64       `json:"id"`
+	Type      string      `json:"type"`
+	Title     string      `json:"title"`
+	Content   string      `json:"content"`
+	Link      string      `json:"link"`
+	Payload   model.JSONB `json:"payload,omitempty"`
+	IsRead    bool        `json:"is_read"`
+	CreatedAt string      `json:"created_at"`
+	ReadAt    *string     `json:"read_at,omitempty"`
 }
 
 // GormCreator 通知写入执行器（*gorm.DB 与 *gorm.Tx 均满足，事务内写入用）。
@@ -43,33 +46,37 @@ func NewNotificationService(db *gorm.DB, logger *zap.Logger) *NotificationServic
 	return &NotificationService{db: db, logger: logger}
 }
 
-// Create 创建一条站内信通知。
-func (s *NotificationService) Create(userID int, typ, title, content, link string) error {
-	return s.CreateWithTx(s.db, userID, typ, title, content, link, time.Now())
+// Create 创建一条站内信通知（payload 为可选结构化标记，nil 表示无）。
+func (s *NotificationService) Create(userID int, typ, title, content, link string, payload model.JSONB) error {
+	return s.CreateWithTx(s.db, userID, typ, title, content, link, payload, time.Now())
 }
 
 // CreateWithTx 在指定事务/连接内创建站内信。
 // 业务事件（如资料审核）与业务写同事务提交，避免通知丢失；createdAt 由调用方控制时区语义。
-func (s *NotificationService) CreateWithTx(tx GormCreator, userID int, typ, title, content, link string, createdAt time.Time) error {
+func (s *NotificationService) CreateWithTx(tx GormCreator, userID int, typ, title, content, link string, payload model.JSONB, createdAt time.Time) error {
 	n := model.Notification{
 		UserID:    userID,
 		Type:      typ,
 		Title:     title,
 		Content:   content,
 		Link:      link,
+		Payload:   payload,
 		CreatedAt: createdAt,
 	}
 	return tx.Create(&n).Error
 }
 
 // ProfileReviewNotification 构造资料审核结果站内信参数（type=profile_review）。
-func (s *NotificationService) ProfileReviewNotification(req *model.ProfileChangeRequest, status, reason string) (typ, title, content string) {
+// 返回 (type, title, content, payload)：标题保持人读文案；payload 为结构化判定标记
+// （如 {"review_status":"approved"|"rejected"}），供前端确定性消费，不依赖标题文案。
+func (s *NotificationService) ProfileReviewNotification(req *model.ProfileChangeRequest, status, reason string) (typ, title, content string, payload model.JSONB) {
 	fieldLabel := "昵称"
 	if req.FieldType == ProfileFieldAvatar {
 		fieldLabel = "头像"
 	}
 	title = "资料审核通过"
 	content = "您的" + fieldLabel + "修改已通过审核，修改已生效。"
+	payload = reviewStatusPayload(ProfileStatusApproved)
 	if status == ProfileStatusRejected {
 		title = "资料审核被驳回"
 		content = "您的" + fieldLabel + "修改申请未通过审核"
@@ -77,8 +84,20 @@ func (s *NotificationService) ProfileReviewNotification(req *model.ProfileChange
 			content += "，原因：" + reason
 		}
 		content += "。"
+		payload = reviewStatusPayload(ProfileStatusRejected)
 	}
-	return "profile_review", title, content
+	return "profile_review", title, content, payload
+}
+
+// reviewStatusPayload 构造审核状态结构化标记，如 {"review_status":"approved"}。
+func reviewStatusPayload(reviewStatus string) model.JSONB {
+	b, err := json.Marshal(struct {
+		ReviewStatus string `json:"review_status"`
+	}{ReviewStatus: reviewStatus})
+	if err != nil {
+		return nil
+	}
+	return model.JSONB(b)
 }
 
 // NotificationListPageResult 站内信分页结果（含未读数）。
@@ -164,6 +183,7 @@ func toNotificationDTO(n *model.Notification) NotificationDTO {
 		Title:     n.Title,
 		Content:   n.Content,
 		Link:      n.Link,
+		Payload:   n.Payload,
 		IsRead:    n.IsRead,
 		CreatedAt: formatISO(n.CreatedAt),
 		ReadAt:    formatTimePtr(n.ReadAt),

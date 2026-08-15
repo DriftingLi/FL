@@ -90,7 +90,7 @@ export interface AuditLogItem {
   request_id: string
   ip: string
   status: number
-  detail?: any
+  detail?: unknown
   created_at: string
 }
 
@@ -209,14 +209,29 @@ export interface GenerateTask {
     content?: string
     error?: string
   }[]
-  [key: string]: unknown
+}
+
+/** 统计看板概览（与后端 AdminOverviewDTO 对齐） */
+export interface AdminStatisticsOverview {
+  total_students?: number
+  active_today?: number
+  total_courses?: number
+  total_study_duration?: number
+}
+
+/** 课程统计条目（与后端 CourseStatDTO 对齐） */
+export interface AdminCourseStat {
+  course_id?: number
+  name: string
+  study_count: number
+  total_duration: number
+  avg_progress: number
 }
 
 /** 管理员统计 */
 export interface AdminStatistics {
-  overview?: Record<string, unknown>
-  course_stats?: { name: string; study_count: number; total_duration: number; avg_progress: number }[]
-  [key: string]: unknown
+  overview?: AdminStatisticsOverview
+  course_stats?: AdminCourseStat[]
 }
 
 /** 导师管理列表项 */
@@ -226,7 +241,6 @@ export interface AdminTutor {
   name: string
   status: number
   created_at?: string
-  [key: string]: unknown
 }
 
 export const adminApi = {

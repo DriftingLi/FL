@@ -52,7 +52,7 @@
           <router-link
             v-for="child in item.children"
             :key="child.key"
-            :to="child.path || ''"
+            :to="itemTo(child)"
             class="nav-item"
             :class="{ active: isRouteActive(child) }"
           >
@@ -65,8 +65,8 @@
 
         <!-- 无子项的顶级导航 -->
         <router-link
-          v-else-if="item.path"
-          :to="item.path"
+          v-else-if="item.routeName"
+          :to="itemTo(item)"
           class="nav-item"
           :class="{ active: isRouteActive(item) }"
         >
@@ -135,13 +135,15 @@ const roleClass = computed(() => {
   return role || 'hrwai_user'
 })
 
+function itemTo(item: NavItem) {
+  return { name: item.routeName, params: item.routeParams || {} }
+}
+
 function isRouteActive(item: NavItem): boolean {
-  const path = item.path
-  if (!path) return false
-  // exact=true 或根路径仅精确匹配：仪表盘路径恰好是其他菜单的父级
-  // （如 /training、/training/tutor），不能走前缀匹配，否则访问任何子路由时仪表盘都会高亮。
-  if (path === '/' || item.exact) return route.path === path
-  return route.path === path || route.path.startsWith(path + '/')
+  if (!item.routeName) return false
+  // 以路由 name 精确匹配（name 唯一，天然无父级前缀误报）。
+  // exact 标记保留并与 name 匹配语义一致（始终精确）。
+  return route.name === item.routeName
 }
 
 async function handleUserCommand(command: string) {

@@ -4,15 +4,11 @@
 // banner 与 QuickCard 三列因角色语义差异留在各页面（薄 adapter 注入数据），QuickCard 组件复用不变。
 import { ref, computed, watch, nextTick } from 'vue'
 import { useECharts } from './useECharts'
+import type { StudyStats } from '@/api/student'
 
-/** 归一化后的按天统计（页面 adapter 把后端字段名 total_minutes/total_count 映射为 total） */
-export interface RoleDashboardStats {
-  days: number
-  labels: string[]
-  data: number[]
-  total: number
-  active_days: number
-}
+/** 归一化后的按天统计：days/labels/data/active_days 直接复用学员 StudyStats 形状，
+ *  total 为各角色总数（学员 total_minutes / 导师 total_count）归一化而来 */
+export type RoleDashboardStats = Omit<StudyStats, 'total_minutes'> & { total: number }
 
 export interface RoleDashboardTimeTab {
   label: string

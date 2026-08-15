@@ -144,6 +144,28 @@ func TestTruncate(t *testing.T) {
 	}
 }
 
+func TestFormatTimePtr(t *testing.T) {
+	// nil 指针返回 nil
+	if got := formatTimePtr(nil); got != nil {
+		t.Errorf("formatTimePtr(nil) 期望 nil，得到 %v", got)
+	}
+	// 非零时间返回按 formatISO 格式化的字符串指针
+	ts := time.Date(2026, 6, 26, 14, 30, 0, 0, time.UTC)
+	p := formatTimePtr(&ts)
+	if p == nil {
+		t.Fatal("formatTimePtr(非零时间) 不应返回 nil")
+	}
+	if *p != "2026-06-26T14:30:00.000000" {
+		t.Errorf("期望 '2026-06-26T14:30:00.000000'，得到 %q", *p)
+	}
+	// 零时间返回空字符串指针（沿用 formatISO 契约）
+	zero := time.Time{}
+	pz := formatTimePtr(&zero)
+	if pz == nil || *pz != "" {
+		t.Errorf("formatTimePtr(零时间) 期望空字符串指针，得到 %v", pz)
+	}
+}
+
 func TestWithTimeout(t *testing.T) {
 	ctx, cancel := withTimeout(5 * time.Second)
 	defer cancel()

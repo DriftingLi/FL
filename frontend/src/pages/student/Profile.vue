@@ -63,7 +63,7 @@
             <el-tag size="small" :type="userInfo.has_password ? 'success' : 'warning'">
               {{ userInfo.has_password ? '已设置' : '未设置' }}
             </el-tag>
-            <el-button link type="primary" size="small" @click="passwordDialogVisible = true">
+            <el-button link type="primary" size="small" @click="passwordDialog.open()">
               {{ userInfo.has_password ? '修改密码' : '设置密码' }}
             </el-button>
           </div>
@@ -85,27 +85,27 @@
         </el-form-item>
         <el-form-item>
           <div class="code-row">
-            <el-input v-model="bindCode" placeholder="6位验证码" maxlength="6" @keyup.enter="handleBind" />
+            <el-input v-model="bindCode" placeholder="6位验证码" maxlength="6" @keyup.enter="bindDialog.submit" />
             <el-button :disabled="bindCountdown > 0 || bindSending" @click="handleSendBindCode">
-              {{ bindSending ? '发送中...' : bindCountdown > 0 ? `${bindCountdown}s 后重发` : '获取验证码' }}
+              {{ bindSending ? '发送中...' : bindCountdown > 0 ? bindCountdown + 's 后重发' : '获取验证码' }}
             </el-button>
           </div>
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="bindVisible = false">取消</el-button>
-        <el-button type="primary" :loading="binding" @click="handleBind">确认修改</el-button>
+        <el-button type="primary" :loading="bindSubmitting" @click="bindDialog.submit">确认修改</el-button>
       </template>
     </el-dialog>
 
     <!-- 设置/修改密码（短信验证码确认） -->
-    <el-dialog v-model="passwordDialogVisible" :title="userInfo.has_password ? '修改密码' : '设置密码'" width="440px">
+    <el-dialog v-model="passwordVisible" :title="userInfo.has_password ? '修改密码' : '设置密码'" width="440px">
       <el-form label-width="0">
         <el-form-item>
           <div class="code-row">
-            <el-input v-model="passwordCode" placeholder="短信验证码" maxlength="6" @keyup.enter="handleSetPassword" />
+            <el-input v-model="passwordCode" placeholder="短信验证码" maxlength="6" @keyup.enter="passwordDialog.submit" />
             <el-button :disabled="passwordCountdown > 0 || passwordSending" @click="handleSendPasswordCode">
-              {{ passwordSending ? '发送中...' : passwordCountdown > 0 ? `${passwordCountdown}s 后重发` : '获取验证码' }}
+              {{ passwordSending ? '发送中...' : passwordCountdown > 0 ? passwordCountdown + 's 后重发' : '获取验证码' }}
             </el-button>
           </div>
         </el-form-item>
@@ -123,18 +123,18 @@
             type="password"
             show-password
             placeholder="确认新密码"
-            @keyup.enter="handleSetPassword"
+            @keyup.enter="passwordDialog.submit"
           />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="passwordDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="savingPassword" @click="handleSetPassword">保存</el-button>
+        <el-button @click="passwordVisible = false">取消</el-button>
+        <el-button type="primary" :loading="passwordSubmitting" @click="passwordDialog.submit">保存</el-button>
       </template>
     </el-dialog>
 
     <!-- 设置账号（短信验证码确认） -->
-    <el-dialog v-model="accountDialogVisible" title="设置账号" width="440px">
+    <el-dialog v-model="accountVisible" title="设置账号" width="440px">
       <el-form label-width="0">
         <el-form-item>
           <el-input
@@ -145,16 +145,16 @@
         </el-form-item>
         <el-form-item>
           <div class="code-row">
-            <el-input v-model="accountCode" placeholder="短信验证码" maxlength="6" @keyup.enter="handleUpdateAccount" />
+            <el-input v-model="accountCode" placeholder="短信验证码" maxlength="6" @keyup.enter="accountDialog.submit" />
             <el-button :disabled="accountCountdown > 0 || accountSending" @click="handleSendAccountCode">
-              {{ accountSending ? '发送中...' : accountCountdown > 0 ? `${accountCountdown}s 后重发` : '获取验证码' }}
+              {{ accountSending ? '发送中...' : accountCountdown > 0 ? accountCountdown + 's 后重发' : '获取验证码' }}
             </el-button>
           </div>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="accountDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="updatingAccount" @click="handleUpdateAccount">确认修改</el-button>
+        <el-button @click="accountVisible = false">取消</el-button>
+        <el-button type="primary" :loading="accountSubmitting" @click="accountDialog.submit">确认修改</el-button>
       </template>
     </el-dialog>
   </div>
@@ -167,6 +167,7 @@ import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import { isValidAccount } from '@/utils/validate'
 import { useSendCode } from '@/composables/useSendCode'
+import { useVerifyDialog } from '@/composables/useVerifyDialog'
 import ProfileEditDialog from '@/components/layout/ProfileEditDialog.vue'
 
 const authStore = useAuthStore()
@@ -174,164 +175,124 @@ const profileDialogRef = ref<InstanceType<typeof ProfileEditDialog> | null>(null
 
 const userInfo = computed(() => authStore.userInfo || {})
 
-const bindVisible = ref(false)
+// ---- 绑定/修改手机号或邮箱（useSendCode 负责发送+倒计时，useVerifyDialog 负责对话框状态机）----
 const bindChannel = ref<'phone' | 'email'>('phone')
-const bindTarget = ref('')
-const bindCode = ref('')
-const binding = ref(false)
-
 const {
-  sending: bindSending,
   remaining: bindCountdown,
   send: sendBindCode
 } = useSendCode({
   purpose: 'bind',
   sendCode: (channel, target) => authApi.sendProfileCode({ channel, target })
 })
-
-const passwordDialogVisible = ref(false)
-const password = ref('')
-const confirmPassword = ref('')
-const passwordCode = ref('')
-const savingPassword = ref(false)
-
-const accountDialogVisible = ref(false)
-const newAccount = ref('')
-const accountCode = ref('')
-const updatingAccount = ref(false)
-
-const {
-  sending: accountSending,
-  remaining: accountCountdown,
-  send: sendAccountCode
-} = useSendCode({
-  purpose: 'account_change',
-  sendCode: () => authApi.sendAccountChangeCode()
+const bindDialog = useVerifyDialog({
+  sendCode: (target, channel) => sendBindCode(target, channel),
+  submitAsync: (target, code) =>
+    bindChannel.value === 'email'
+      ? authApi.updateProfileEmail({ email: target, code })
+      : authApi.updateProfilePhone({ phone: target, code }),
+  onSuccess: async () => {
+    ElMessage.success('修改成功')
+    await authStore.refreshUserInfo()
+  }
 })
+const bindVisible = bindDialog.visible
+const bindTarget = bindDialog.target
+const bindCode = bindDialog.code
+const bindSending = bindDialog.sending
+const bindSubmitting = bindDialog.submitting
+const bindTitle = computed(() => (bindChannel.value === 'email' ? '修改邮箱' : '修改手机号'))
 
+// ---- 设置/修改密码（短信验证码确认）----
 const {
-  sending: passwordSending,
   remaining: passwordCountdown,
   send: sendPasswordCode
 } = useSendCode({
   purpose: 'change_password',
   sendCode: () => authApi.sendChangePasswordCode()
 })
+const password = ref('')
+const confirmPassword = ref('')
+const passwordDialog = useVerifyDialog({
+  sendCode: (target, channel) => sendPasswordCode(target, channel),
+  submitAsync: async (_target, code) => {
+    if (password.value.length < 6 || password.value.length > 20) {
+      ElMessage.warning('密码长度需为6-20位')
+      throw new Error('password-length-invalid')
+    }
+    if (password.value !== confirmPassword.value) {
+      ElMessage.warning('两次输入的密码不一致')
+      throw new Error('password-mismatch')
+    }
+    await authApi.updateProfilePassword({ code, password: password.value })
+  },
+  onSuccess: async () => {
+    ElMessage.success('密码设置成功')
+    password.value = ''
+    confirmPassword.value = ''
+    // 刷新用户信息以更新 has_password 状态
+    await authStore.refreshUserInfo()
+  }
+})
+const passwordVisible = passwordDialog.visible
+const passwordCode = passwordDialog.code
+const passwordSending = passwordDialog.sending
+const passwordSubmitting = passwordDialog.submitting
 
-const bindTitle = computed(() => (bindChannel.value === 'email' ? '修改邮箱' : '修改手机号'))
+// ---- 设置账号（短信验证码确认）----
+const {
+  remaining: accountCountdown,
+  send: sendAccountCode
+} = useSendCode({
+  purpose: 'account_change',
+  sendCode: () => authApi.sendAccountChangeCode()
+})
+const accountDialog = useVerifyDialog({
+  sendCode: (target, channel) => sendAccountCode(target, channel),
+  submitAsync: async (target, code) => {
+    if (!isValidAccount(target)) {
+      ElMessage.warning('账号需为4-20位字母、数字或下划线')
+      throw new Error('account-invalid')
+    }
+    // 响应携带新签发的 token：替换本地登录态（JWT claim 随新账号同步）
+    const result = await authApi.updateAccount({ account: target, code })
+    if (result?.token) {
+      authStore.setAuthData(result)
+    }
+  },
+  onSuccess: async () => {
+    ElMessage.success('账号修改成功')
+    await authStore.refreshUserInfo()
+  }
+})
+const accountVisible = accountDialog.visible
+const newAccount = accountDialog.target
+const accountCode = accountDialog.code
+const accountSending = accountDialog.sending
+const accountSubmitting = accountDialog.submitting
 
 function openProfileDialog() {
   profileDialogRef.value?.open()
 }
 
 function openAccountDialog() {
-  newAccount.value = ''
-  accountCode.value = ''
-  accountDialogVisible.value = true
-}
-
-async function handleSendAccountCode() {
-  await sendAccountCode('', 'phone')
-}
-
-async function handleUpdateAccount() {
-  const account = newAccount.value.trim()
-  if (!isValidAccount(account)) {
-    ElMessage.warning('账号需为4-20位字母、数字或下划线')
-    return
-  }
-  if (accountCode.value.length !== 6) {
-    ElMessage.warning('请输入6位验证码')
-    return
-  }
-  updatingAccount.value = true
-  try {
-    const result = await authApi.updateAccount({ account, code: accountCode.value.trim() })
-    // 响应携带新签发的 token：替换本地登录态（JWT claim 随新账号同步）
-    if (result?.token) {
-      authStore.setAuthData(result)
-    }
-    ElMessage.success('账号修改成功')
-    accountDialogVisible.value = false
-    await authStore.refreshUserInfo()
-  } catch (e) {
-    // 拦截器已提示
-  } finally {
-    updatingAccount.value = false
-  }
+  accountDialog.open()
 }
 
 function openBind(channel: 'phone' | 'email') {
   bindChannel.value = channel
-  bindTarget.value = ''
-  bindCode.value = ''
-  bindVisible.value = true
+  bindDialog.open()
 }
 
 async function handleSendBindCode() {
-  await sendBindCode(bindTarget.value.trim(), bindChannel.value)
-}
-
-async function handleBind() {
-  const target = bindTarget.value.trim()
-  const code = bindCode.value.trim()
-  if (!target) {
-    ElMessage.warning('请输入手机号或邮箱')
-    return
-  }
-  if (code.length !== 6) {
-    ElMessage.warning('请输入6位验证码')
-    return
-  }
-  binding.value = true
-  try {
-    if (bindChannel.value === 'email') {
-      await authApi.updateProfileEmail({ email: target, code })
-    } else {
-      await authApi.updateProfilePhone({ phone: target, code })
-    }
-    ElMessage.success('修改成功')
-    bindVisible.value = false
-    await authStore.refreshUserInfo()
-  } catch (e) {
-    // 拦截器已提示
-  } finally {
-    binding.value = false
-  }
+  await bindDialog.send(bindTarget.value, bindChannel.value)
 }
 
 async function handleSendPasswordCode() {
-  await sendPasswordCode('', 'phone')
+  await passwordDialog.send('', 'phone')
 }
 
-async function handleSetPassword() {
-  if (passwordCode.value.trim().length !== 6) {
-    ElMessage.warning('请输入6位验证码')
-    return
-  }
-  if (password.value.length < 6 || password.value.length > 20) {
-    ElMessage.warning('密码长度需为6-20位')
-    return
-  }
-  if (password.value !== confirmPassword.value) {
-    ElMessage.warning('两次输入的密码不一致')
-    return
-  }
-  savingPassword.value = true
-  try {
-    await authApi.updateProfilePassword({ code: passwordCode.value.trim(), password: password.value })
-    ElMessage.success('密码设置成功')
-    passwordDialogVisible.value = false
-    password.value = ''
-    confirmPassword.value = ''
-    passwordCode.value = ''
-    // 刷新用户信息以更新 has_password 状态
-    await authStore.refreshUserInfo()
-  } catch (e) {
-    // 拦截器已提示
-  } finally {
-    savingPassword.value = false
-  }
+async function handleSendAccountCode() {
+  await accountDialog.send('', 'phone')
 }
 
 onMounted(() => {

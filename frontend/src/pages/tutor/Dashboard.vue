@@ -100,13 +100,8 @@ const {
   statsFetcher: async (days) => {
     const res = await tutorApi.getGradingStats({ days })
     if (!res) return null
-    return {
-      days: res.days,
-      labels: res.labels,
-      data: res.data,
-      total: res.total_count,
-      active_days: res.active_days
-    }
+    // 与学员 StudyStats 共享 days/labels/data/active_days，仅需归一化 total
+    return { ...res, total: res.total_count }
   },
   seriesType: 'bar',
   unit: '题',
@@ -124,9 +119,9 @@ async function loadData() {
     const courseRes = await tutorApi.getCourses({ page: 1, page_size: 100 })
     if (courseRes) {
       const courses = Array.isArray(courseRes) ? courseRes : (courseRes.courses || [])
-      myCourses.value = courses.map((c: any) => ({
-        title: c.name || c.course_name,
-        subtitle: `${c.student_count || 0} 名学员`,
+      myCourses.value = courses.map((c) => ({
+        title: c.name || '未命名课程',
+        subtitle: `${c.student_count ?? 0} 名学员`,
         path: c.course_id ? `/training/tutor/course/${c.course_id}/chapters` : ''
       }))
     }
@@ -140,9 +135,9 @@ async function loadData() {
     if (gradingRes) {
       const allItems = Array.isArray(gradingRes) ? gradingRes : (gradingRes.participants || gradingRes.items || [])
       // 仅保留未批改完成的试卷
-      const pendingItems = allItems.filter((p: any) => p.grading_status !== 'completed')
+      const pendingItems = allItems.filter((p) => p.grading_status !== 'completed')
       pendingCount.value = pendingItems.length
-      pendingGrading.value = pendingItems.slice(0, 5).map((p: any) => ({
+      pendingGrading.value = pendingItems.slice(0, 5).map((p) => ({
         title: `${p.student_name || '学员'} - ${p.exam_name || p.session_name || '考试'}`,
         badge: `${p.ungraded_count ?? 0}题待批`,
         path: p.participant_id ? `/training/tutor/grading?participant=${p.participant_id}` : '/training/tutor/grading'

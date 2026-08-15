@@ -86,7 +86,7 @@ async function onDownload() {
 
 function backToResult() {
   // 带 id 返回：结果页可兜底拉详情，刷新/直达路径一致
-  router.push({ path: '/valuation/result', query: { id: String(route.params.id) } })
+  router.push({ name: 'ValuationResult', query: { id: String(route.params.id) } })
 }
 
 // 使用年限 = 评估年份 - 出厂年份

@@ -97,7 +97,8 @@ const currentMenuItems = computed<NavItem[]>(() => {
   const chapterItems: NavItem[] = courseStore.chapters.map((ch, index) => ({
     key: `chapter-${ch.chapter_id}`,
     label: `${index + 1}. ${ch.title}`,
-    path: `/training/course/${courseId}/chapter/${ch.chapter_id}`,
+    routeName: 'ChapterView',
+    routeParams: { courseId, chapterId: ch.chapter_id },
     icon: createChapterIcon(index + 1)
   }))
 
@@ -105,7 +106,7 @@ const currentMenuItems = computed<NavItem[]>(() => {
     {
       key: 'back-to-courses',
       label: '返回课程中心',
-      path: '/training/courses',
+      routeName: 'CourseList',
       icon: BackIcon
     },
     ...chapterItems

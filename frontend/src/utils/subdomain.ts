@@ -13,6 +13,7 @@
 // 用户在不同子域名间切换时需要重新登录。
 
 import { getToken } from '@/utils/storage'
+import { findPathEntry, resolveWorkspaceForRole } from './authRedirect'
 
 export type SubdomainType = 'main' | 'training' | 'valuation' | 'tutor' | 'admin'
 
@@ -84,19 +85,9 @@ export function isIpDirectMode(): boolean {
 // 根据路径推导应该所在的子域名类型。
 // 用于路由守卫：当前子域名与目标子域名不一致时触发跨子域名跳转。
 // 注意：/login 和 /register 不在此处理，由路由守卫特殊处理（每个子域名都可有自己的登录页）。
+// 前缀归属从 authRedirect.PATH_AUTH_ENTRIES 单点派生（含 /ai-assistant 归 training）。
 export function getTargetSubdomainForPath(path: string): SubdomainType {
-  // 导师工作区（必须在 /training 之前匹配，否则会被 /training 吞掉）
-  if (path.startsWith('/training/tutor')) return 'tutor'
-  // 学员培训
-  if (path.startsWith('/training')) return 'training'
-  // 管理员后台
-  if (path.startsWith('/admin')) return 'admin'
-  // 残值评估所有界面（含历史、报告、电池评估）
-  if (path.startsWith('/valuation')) return 'valuation'
-  // AI 助手归属学员工作区（training 子域名）：官网门户重构后由主域名迁入
-  if (path.startsWith('/ai-assistant')) return 'training'
-  // 其它路径（/、/dashboard 兼容重定向等）在主域名
-  return 'main'
+  return findPathEntry(path)?.subdomain ?? 'main'
 }
 
 // 构建跨子域名的绝对 URL。
@@ -138,14 +129,14 @@ export function buildCrossDomainAuthUrl(target: SubdomainType, path: string): st
   return `${base}${sep}auth_token=${encodeURIComponent(token)}`
 }
 
-// 获取当前子域名对应的默认工作区路径（同子域名内的相对路径）
+// 获取当前子域名对应的默认工作区路径（同子域名内的相对路径）。
+// 「角色 → 默认工作区」单点：tutor/admin/hrwai_user 统一交由 authRedirect.resolveWorkspaceForRole 派生，
+// 消除两处「角色→工作区」重复映射；valuation 子域名与 training 同为 hrwai_user（resolve 归一为 /training），
+// 但其残值评估入口独立，此处保留既有行为。
 export function getDefaultWorkspaceBySubdomain(): string {
   const sub = getSubdomain()
-  if (sub === 'tutor') return '/training/tutor'
-  if (sub === 'admin') return '/admin/dashboard'
-  if (sub === 'training') return '/training'
   if (sub === 'valuation') return '/valuation'
-  return '/' // 主域名
+  return resolveWorkspaceForRole(getRoleForSubdomain())
 }
 
 // 获取当前子域名对应的登录角色

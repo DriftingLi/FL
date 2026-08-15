@@ -52,6 +52,19 @@ func QueryWithScan[T any](db *gorm.DB, page, pageSize, defaultPageSize, maxPageS
 // build 附加过滤条件（可选）；order 为空跳过排序。返回 (items, total, page, pageSize)。
 func Query[T any](db *gorm.DB, page, pageSize, defaultPageSize int, order string, build func(q *gorm.DB) *gorm.DB) ([]T, int64, int, int) {
 	page, pageSize = Clamp(page, pageSize, defaultPageSize)
+	return queryFind[T](db, page, pageSize, order, build)
+}
+
+// QueryWithMax 分页查询（带页大小上限）：ClampMax 钳制 → count → find（同一过滤条件作用域）。
+// 与 Query 的差异仅在钳制：超过 maxPageSize 回退默认值（而非截断到上限），供有页大小上限的列表使用。
+// build 附加过滤条件（可选）；order 为空跳过排序。返回 (items, total, page, pageSize)。
+func QueryWithMax[T any](db *gorm.DB, page, pageSize, defaultPageSize, maxPageSize int, order string, build func(q *gorm.DB) *gorm.DB) ([]T, int64, int, int) {
+	page, pageSize = ClampMax(page, pageSize, defaultPageSize, maxPageSize)
+	return queryFind[T](db, page, pageSize, order, build)
+}
+
+// queryFind 分页查询公共实现：count → order → offset/limit → find（钳制由调用方完成）。
+func queryFind[T any](db *gorm.DB, page, pageSize int, order string, build func(q *gorm.DB) *gorm.DB) ([]T, int64, int, int) {
 	q := db.Model(new(T))
 	if build != nil {
 		q = build(q)

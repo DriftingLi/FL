@@ -9,7 +9,7 @@ import type { CourseSummary } from './course'
 //   管理端      /admin/specialty*、/admin/level*、/admin/certificate-template*、
 //              /admin/question-tag*、/admin/question/:id/tags、/admin/catalog/tree（后端补齐）
 
-/** 专业方向 */
+/** 专业方向（与后端SpecialtyBrief/catalog direction 契约对齐） */
 export interface CatalogDirection {
   specialty_id: number
   name: string
@@ -18,7 +18,6 @@ export interface CatalogDirection {
   sort_order?: number
   status?: number
   created_at?: string
-  [key: string]: unknown
 }
 
 /** 课程等级（全局共享，不归属方向） */
@@ -30,7 +29,6 @@ export interface CatalogLevel {
   sort_order?: number
   status?: number
   created_at?: string
-  [key: string]: unknown
 }
 
 /** 证书模板（有效期单位为天 validity_days） */
@@ -44,7 +42,6 @@ export interface CertificateTemplate {
   status?: number
   created_at?: string
   updated_at?: string
-  [key: string]: unknown
 }
 
 /** 目录树中的课程节点 = CourseSummary + sort_order（sort_order 由后端补齐），单一事实源派生 */
@@ -76,7 +73,6 @@ export interface QuestionTag {
   question_count?: number
   created_at?: string
   updated_at?: string
-  [key: string]: unknown
 }
 
 export interface TagPayload {

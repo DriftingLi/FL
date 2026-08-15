@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strconv"
@@ -52,49 +53,87 @@ func RegisterTutorRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.TutorS
 
 // ListCourses 导师课程列表 GET /api/tutor/courses
 func (h *TutorHandler) ListCourses(c *gin.Context) {
-	page := atoiDefault(c.Query("page"), 1)
-	pageSize := atoiDefault(c.Query("page_size"), 10)
-	specialtyID := queryIDPtr(c, "specialty_id")
-	levelID := queryIDPtr(c, "level_id")
-	response.Success(c, h.svc.GetCourses(page, pageSize, specialtyID, levelID))
+	Endpoint[tutorCourseListReq, service.CoursePageResult]{
+		Parse: func(c *gin.Context) (*tutorCourseListReq, error) {
+			return &tutorCourseListReq{
+				Page:        atoiDefault(c.Query("page"), 1),
+				PageSize:    atoiDefault(c.Query("page_size"), 10),
+				SpecialtyID: queryIDPtr(c, "specialty_id"),
+				LevelID:     queryIDPtr(c, "level_id"),
+			}, nil
+		},
+		Invoke: func(ctx context.Context, req *tutorCourseListReq) (*service.CoursePageResult, error) {
+			result := h.svc.GetCourses(req.Page, req.PageSize, req.SpecialtyID, req.LevelID)
+			return &result, nil
+		},
+		Render: func(c *gin.Context, _ *tutorCourseListReq, resp *service.CoursePageResult, _ error) {
+			response.Success(c, resp)
+		},
+	}.Handle(c)
 }
 
 // GetGradingStats 导师仪表盘阅卷统计 GET /api/tutor/grading-stats（按天分组）
 func (h *TutorHandler) GetGradingStats(c *gin.Context) {
-	uid, _ := c.Get(string(middleware.CtxUserID))
-	tutorID, _ := uid.(int)
-	days := atoiDefault(c.Query("days"), 7)
-	response.Success(c, h.svc.GetGradingStats(tutorID, days))
+	Endpoint[tutorGradingStatsReq, service.GradingStatsDTO]{
+		Parse: func(c *gin.Context) (*tutorGradingStatsReq, error) {
+			return &tutorGradingStatsReq{
+				TutorID: middleware.CurrentUserID(c),
+				Days:    atoiDefault(c.Query("days"), 7),
+			}, nil
+		},
+		Invoke: func(ctx context.Context, req *tutorGradingStatsReq) (*service.GradingStatsDTO, error) {
+			return h.svc.GetGradingStats(req.TutorID, req.Days), nil
+		},
+		Render: func(c *gin.Context, _ *tutorGradingStatsReq, resp *service.GradingStatsDTO, _ error) {
+			response.Success(c, resp)
+		},
+	}.Handle(c)
 }
 
 // GetCourseChapters 课程章节列表（含文件）GET /api/tutor/course/:course_id/chapters
 func (h *TutorHandler) GetCourseChapters(c *gin.Context) {
-	courseID, err := strconv.Atoi(c.Param("course_id"))
-	if err != nil {
-		response.BadRequest(c, "课程ID无效")
-		return
-	}
-	result, err := h.svc.GetCourseChapters(courseID)
-	if err != nil {
-		response.NotFound(c, err.Error())
-		return
-	}
-	response.Success(c, result)
+	Endpoint[idParam, service.TutorCourseChaptersDTO]{
+		Parse: func(c *gin.Context) (*idParam, error) {
+			id, err := pathInt(c, "course_id", "课程ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &idParam{ID: id}, nil
+		},
+		Invoke: func(ctx context.Context, req *idParam) (*service.TutorCourseChaptersDTO, error) {
+			return h.svc.GetCourseChapters(req.ID)
+		},
+		Render: func(c *gin.Context, _ *idParam, resp *service.TutorCourseChaptersDTO, err error) {
+			if err != nil {
+				response.NotFound(c, err.Error())
+				return
+			}
+			response.Success(c, resp)
+		},
+	}.Handle(c)
 }
 
 // GetChapterDetail 章节详情（含上下章ID + 文件列表）GET /api/tutor/chapter/:chapter_id
 func (h *TutorHandler) GetChapterDetail(c *gin.Context) {
-	chapterID, err := strconv.Atoi(c.Param("chapter_id"))
-	if err != nil {
-		response.BadRequest(c, "章节ID无效")
-		return
-	}
-	result, err := h.svc.GetChapterDetail(chapterID)
-	if err != nil {
-		response.NotFound(c, err.Error())
-		return
-	}
-	response.Success(c, result)
+	Endpoint[idParam, service.ChapterDetailDTO]{
+		Parse: func(c *gin.Context) (*idParam, error) {
+			id, err := pathInt(c, "chapter_id", "章节ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &idParam{ID: id}, nil
+		},
+		Invoke: func(ctx context.Context, req *idParam) (*service.ChapterDetailDTO, error) {
+			return h.svc.GetChapterDetail(req.ID)
+		},
+		Render: func(c *gin.Context, _ *idParam, resp *service.ChapterDetailDTO, err error) {
+			if err != nil {
+				response.NotFound(c, err.Error())
+				return
+			}
+			response.Success(c, resp)
+		},
+	}.Handle(c)
 }
 
 // UploadChapterFile 上传章节文件 POST /api/tutor/chapter/:chapter_id/upload
@@ -153,52 +192,91 @@ func (h *TutorHandler) UploadImage(c *gin.Context) {
 
 // UpdateChapterInfo 更新章节信息 PUT /api/tutor/chapter/:chapter_id
 func (h *TutorHandler) UpdateChapterInfo(c *gin.Context) {
-	chapterID, err := strconv.Atoi(c.Param("chapter_id"))
-	if err != nil {
-		response.BadRequest(c, "章节ID无效")
-		return
-	}
-	var data service.ChapterInput
-	if err := c.ShouldBindJSON(&data); err != nil {
-		response.BadRequest(c, "请求数据无效")
-		return
-	}
-	result, err := h.svc.UpdateChapterInfo(chapterID, &data)
-	if err != nil {
-		response.NotFound(c, err.Error())
-		return
-	}
-	response.SuccessWithMsg(c, "章节更新成功", result)
+	Endpoint[chapterIDInput, service.ChapterDTO]{
+		Parse: func(c *gin.Context) (*chapterIDInput, error) {
+			id, err := pathInt(c, "chapter_id", "章节ID无效")
+			if err != nil {
+				return nil, err
+			}
+			data, err := bindJSONMsg[service.ChapterInput](c, "请求数据无效")
+			if err != nil {
+				return nil, err
+			}
+			return &chapterIDInput{ID: id, Input: data}, nil
+		},
+		Invoke: func(ctx context.Context, req *chapterIDInput) (*service.ChapterDTO, error) {
+			return h.svc.UpdateChapterInfo(req.ID, req.Input)
+		},
+		Render: func(c *gin.Context, _ *chapterIDInput, resp *service.ChapterDTO, err error) {
+			if err != nil {
+				response.NotFound(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "章节更新成功", resp)
+		},
+	}.Handle(c)
 }
 
 // DeleteChapterFile 删除章节文件 DELETE /api/tutor/file/:file_id
 func (h *TutorHandler) DeleteChapterFile(c *gin.Context) {
-	fileID, err := strconv.Atoi(c.Param("file_id"))
-	if err != nil {
-		response.BadRequest(c, "文件ID无效")
-		return
-	}
-	result, err := h.svc.DeleteChapterFileByID(fileID)
-	if err != nil {
-		response.NotFound(c, err.Error())
-		return
-	}
-	response.SuccessWithMsg(c, "文件删除成功", result)
+	Endpoint[idParam, service.DeleteFileResult]{
+		Parse: func(c *gin.Context) (*idParam, error) {
+			id, err := pathInt(c, "file_id", "文件ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &idParam{ID: id}, nil
+		},
+		Invoke: func(ctx context.Context, req *idParam) (*service.DeleteFileResult, error) {
+			return h.svc.DeleteChapterFileByID(req.ID)
+		},
+		Render: func(c *gin.Context, _ *idParam, resp *service.DeleteFileResult, err error) {
+			if err != nil {
+				response.NotFound(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "文件删除成功", resp)
+		},
+	}.Handle(c)
 }
 
 // BatchDeleteChapterFiles 批量删除文件 POST /api/tutor/files/batch-delete
 func (h *TutorHandler) BatchDeleteChapterFiles(c *gin.Context) {
-	var req struct {
-		FileIDs []int `json:"file_ids"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "请求参数错误")
-		return
-	}
-	if len(req.FileIDs) == 0 {
-		response.BadRequest(c, "请选择要删除的文件")
-		return
-	}
-	result := h.svc.BatchDeleteChapterFiles(req.FileIDs)
-	response.SuccessWithMsg(c, "成功删除"+strconv.Itoa(result.SuccessCount)+"个文件", result)
+	Endpoint[batchDeleteFilesReq, service.BatchDeleteFilesResult]{
+		Parse: func(c *gin.Context) (*batchDeleteFilesReq, error) {
+			req, err := bindJSON[batchDeleteFilesReq](c)
+			if err != nil {
+				return nil, err
+			}
+			if len(req.FileIDs) == 0 {
+				return nil, badRequest("请选择要删除的文件")
+			}
+			return req, nil
+		},
+		Invoke: func(ctx context.Context, req *batchDeleteFilesReq) (*service.BatchDeleteFilesResult, error) {
+			return h.svc.BatchDeleteChapterFiles(req.FileIDs), nil
+		},
+		Render: func(c *gin.Context, _ *batchDeleteFilesReq, resp *service.BatchDeleteFilesResult, _ error) {
+			response.SuccessWithMsg(c, "成功删除"+strconv.Itoa(resp.SuccessCount)+"个文件", resp)
+		},
+	}.Handle(c)
+}
+
+// batchDeleteFilesReq 批量删除文件请求体。
+type batchDeleteFilesReq struct {
+	FileIDs []int `json:"file_ids"`
+}
+
+// tutorCourseListReq 导师课程列表查询参数。
+type tutorCourseListReq struct {
+	Page        int
+	PageSize    int
+	SpecialtyID *int
+	LevelID     *int
+}
+
+// tutorGradingStatsReq 导师阅卷统计请求（身份 + days 窗口）。
+type tutorGradingStatsReq struct {
+	TutorID int
+	Days    int
 }

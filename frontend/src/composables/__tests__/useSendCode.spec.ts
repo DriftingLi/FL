@@ -23,10 +23,10 @@ beforeEach(() => {
 })
 
 describe('格式校验（单一实现）', () => {
-  it('邮箱校验与后端 net/mail 语义对齐：接受无点域', () => {
+  it('邮箱校验与后端 IsValidEmail 对齐：域名须含点', () => {
     expect(isValidEmail('a@b.c')).toBe(true)
     expect(isValidEmail('user@example.com')).toBe(true)
-    expect(isValidEmail('a@b')).toBe(true)
+    expect(isValidEmail('a@b')).toBe(false)
     expect(isValidEmail('a b@c')).toBe(false)
     expect(isValidEmail('abc')).toBe(false)
   })

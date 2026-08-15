@@ -111,15 +111,15 @@
                 <h3>预览：{{ selectedFile.file_name }}</h3>
                 <div class="preview-content">
                   <template v-if="group.type === 'video'">
-                    <VideoPlayer :src="selectedFile.file_url" />
+                    <VideoPlayer :src="selectedFile.file_url || ''" />
                   </template>
                   <template v-else-if="group.type === 'document'">
-                    <DocumentViewer :src="selectedFile.file_url" :fileName="selectedFile.file_name" />
+                    <DocumentViewer :src="selectedFile.file_url || ''" :fileName="selectedFile.file_name || ''" />
                   </template>
                   <template v-else-if="group.type === 'ppt'">
                     <PptViewer
-                      :src="selectedFile.file_url"
-                      :fileName="selectedFile.file_name"
+                      :src="selectedFile.file_url || ''"
+                      :fileName="selectedFile.file_name || ''"
                       :chapterId="chapterDetail.chapter_id"
                     />
                   </template>
@@ -199,7 +199,7 @@
       <FileUpload
         v-if="uploadDialogVisible"
         ref="fileUploadRef"
-        :chapter-id="chapterDetail?.chapter_id"
+        :chapter-id="chapterDetail?.chapter_id ?? 0"
         :initial-filter="uploadType"
         @upload-all="handleUploadAll"
       />
@@ -215,7 +215,8 @@ import {
   VideoCamera, Document
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { tutorApi } from '@/api/tutor'
+import { tutorApi, type TutorChapter, type TutorChapterDetail } from '@/api/tutor'
+import type { ChapterFile } from '@/api/course'
 import MarkdownEditor from '@/components/tutor/MarkdownEditor.vue'
 import FileUpload from '@/components/tutor/FileUpload.vue'
 import VideoPlayer from '@/components/student/VideoPlayer.vue'
@@ -227,9 +228,9 @@ const router = useRouter()
 
 const loading = ref(false)
 const chapterNotFound = ref(false)
-const chapterDetail = ref<any>(null)
+const chapterDetail = ref<TutorChapterDetail | null>(null)
 const courseName = ref('')
-const chapters = ref<any[]>([])
+const chapters = ref<TutorChapter[]>([])
 const activeTab = ref('content')
 
 // 正文编辑
@@ -276,7 +277,7 @@ const fileGroups = computed(() => {
 const selectedFileId = ref<number | null>(null)
 const selectedFile = computed(() => {
   if (selectedFileId.value == null) return null
-  return chapterFiles.value.find((f: any) => f.file_id === selectedFileId.value) || null
+  return chapterFiles.value.find((f) => f.file_id === selectedFileId.value) || null
 })
 
 function selectFile(fileId: number) {
@@ -374,14 +375,16 @@ function handleUploadAll(result: any) {
 }
 
 // 删除文件
-async function handleDeleteFile(file: any) {
+async function handleDeleteFile(file: ChapterFile) {
   try {
     await ElMessageBox.confirm(
       `确定要删除文件"${file.file_name}"吗？`,
       '确认删除',
       { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
     )
-    await tutorApi.deleteFile(file.file_id)
+    if (file.file_id != null) {
+      await tutorApi.deleteFile(file.file_id)
+    }
     ElMessage.success('文件删除成功')
     if (selectedFileId.value === file.file_id) {
       selectedFileId.value = null
@@ -428,14 +431,16 @@ async function loadCourseInfo() {
 }
 
 const getPrevChapterTitle = computed(() => {
-  if (!chapterDetail.value?.previous_chapter_id) return ''
-  const prev = chapters.value.find(c => c.chapter_id === chapterDetail.value.previous_chapter_id)
+  const detail = chapterDetail.value
+  if (!detail?.previous_chapter_id) return ''
+  const prev = chapters.value.find(c => c.chapter_id === detail.previous_chapter_id)
   return prev ? prev.title : ''
 })
 
 const getNextChapterTitle = computed(() => {
-  if (!chapterDetail.value?.next_chapter_id) return ''
-  const next = chapters.value.find(c => c.chapter_id === chapterDetail.value.next_chapter_id)
+  const detail = chapterDetail.value
+  if (!detail?.next_chapter_id) return ''
+  const next = chapters.value.find(c => c.chapter_id === detail.next_chapter_id)
   return next ? next.title : ''
 })
 

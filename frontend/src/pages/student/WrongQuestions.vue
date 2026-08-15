@@ -51,6 +51,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { wrongQuestionApi } from '@/api/wrongQuestion'
 import { typeMap } from '@/constants/question'
 import { toggleAnswer, buildQuestionOptions } from '@/composables/useQuestionAnswer'
+import { downloadBlob } from '@/composables/useReportDownload'
 import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
 
 interface WrongItem {
@@ -62,7 +63,6 @@ interface WrongItem {
     options?: Record<string, string>
     content?: string
   }
-  [key: string]: unknown
 }
 
 const wrongList = ref<WrongItem[]>([])
@@ -125,16 +125,7 @@ async function removeWrong(questionId: number) {
 
 async function exportWrong() {
   try {
-    const res = await wrongQuestionApi.exportWrongQuestions()
-    const blob = new Blob([res as unknown as BlobPart], { type: 'text/plain; charset=utf-8' })
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', 'wrong_questions.txt')
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    window.URL.revokeObjectURL(url)
+    downloadBlob(await wrongQuestionApi.exportWrongQuestions(), 'wrong_questions.txt')
   } catch {
     /* 错误已由拦截器提示 */
   }

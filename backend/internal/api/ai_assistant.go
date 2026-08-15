@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -55,193 +56,283 @@ func RegisterAIAssistantRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.
 
 // ListPublicModels 列出管理员配置的 is_active=true 模型（公开）。
 func (h *AIAssistantHandler) ListPublicModels(c *gin.Context) {
-	models, err := h.svc.ListPublicModels(c.Request.Context())
-	if err != nil {
-		response.ServerError(c, err.Error())
-		return
-	}
-	response.Success(c, models)
+	Endpoint[struct{}, []service.ModelOption]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.ModelOption, error) {
+			models, err := h.svc.ListPublicModels(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return &models, nil
+		},
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.ModelOption, err error) {
+			if err != nil {
+				response.ServerError(c, err.Error())
+				return
+			}
+			response.Success(c, resp)
+		},
+	}.Handle(c)
 }
 
 // ListUserModels 列出登录用户的自定义模型（api_key 脱敏）。
 func (h *AIAssistantHandler) ListUserModels(c *gin.Context) {
-	userID := middleware.CurrentUserID(c)
-	if userID == 0 {
-		response.Unauthorized(c, "请先登录")
-		return
-	}
-	models, err := h.svc.ListUserModels(c.Request.Context(), userID)
-	if err != nil {
-		response.ServerError(c, err.Error())
-		return
-	}
-	response.Success(c, models)
+	Endpoint[aiUserIDReq, []service.UserModelDTO]{
+		Parse: func(c *gin.Context) (*aiUserIDReq, error) {
+			uid := middleware.CurrentUserID(c)
+			if uid == 0 {
+				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
+			}
+			return &aiUserIDReq{UserID: uid}, nil
+		},
+		Invoke: func(ctx context.Context, req *aiUserIDReq) (*[]service.UserModelDTO, error) {
+			models, err := h.svc.ListUserModels(c.Request.Context(), req.UserID)
+			if err != nil {
+				return nil, err
+			}
+			return &models, nil
+		},
+		Render: func(c *gin.Context, _ *aiUserIDReq, resp *[]service.UserModelDTO, err error) {
+			if err != nil {
+				response.ServerError(c, err.Error())
+				return
+			}
+			response.Success(c, resp)
+		},
+	}.Handle(c)
 }
 
 // SaveUserModel 创建/更新用户自定义模型。
 func (h *AIAssistantHandler) SaveUserModel(c *gin.Context) {
-	userID := middleware.CurrentUserID(c)
-	if userID == 0 {
-		response.Unauthorized(c, "请先登录")
-		return
-	}
-	var req service.SaveUserModelReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "请求数据无效")
-		return
-	}
-	if req.Name == "" || req.APIKey == "" || req.BaseURL == "" || req.Model == "" {
-		response.BadRequest(c, "name/api_key/base_url/model 均为必填")
-		return
-	}
-	if err := h.svc.SaveUserModel(c.Request.Context(), userID, req); err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.Success(c, nil)
+	Endpoint[aiUserModelSaveReq, struct{}]{
+		Parse: func(c *gin.Context) (*aiUserModelSaveReq, error) {
+			uid := middleware.CurrentUserID(c)
+			if uid == 0 {
+				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
+			}
+			req, err := bindJSONMsg[service.SaveUserModelReq](c, "请求数据无效")
+			if err != nil {
+				return nil, err
+			}
+			if req.Name == "" || req.APIKey == "" || req.BaseURL == "" || req.Model == "" {
+				return nil, badRequest("name/api_key/base_url/model 均为必填")
+			}
+			return &aiUserModelSaveReq{UserID: uid, Req: *req}, nil
+		},
+		Invoke: func(ctx context.Context, req *aiUserModelSaveReq) (*struct{}, error) {
+			if err := h.svc.SaveUserModel(c.Request.Context(), req.UserID, req.Req); err != nil {
+				return nil, err
+			}
+			return &struct{}{}, nil
+		},
+		Render: func(c *gin.Context, _ *aiUserModelSaveReq, _ *struct{}, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.Success(c, nil)
+		},
+	}.Handle(c)
 }
 
 // DeleteUserModel 删除用户自定义模型。
 func (h *AIAssistantHandler) DeleteUserModel(c *gin.Context) {
-	userID := middleware.CurrentUserID(c)
-	if userID == 0 {
-		response.Unauthorized(c, "请先登录")
-		return
-	}
-	modelID, _ := strconv.Atoi(c.Param("id"))
-	if modelID <= 0 {
-		response.BadRequest(c, "无效的模型 ID")
-		return
-	}
-	if err := h.svc.DeleteUserModel(c.Request.Context(), userID, modelID); err != nil {
-		if err == gorm.ErrRecordNotFound {
-			response.NotFound(c, "模型不存在")
-			return
-		}
-		response.ServerError(c, err.Error())
-		return
-	}
-	response.Success(c, nil)
+	Endpoint[aiModelIDReq, struct{}]{
+		Parse: func(c *gin.Context) (*aiModelIDReq, error) {
+			uid := middleware.CurrentUserID(c)
+			if uid == 0 {
+				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
+			}
+			id, _ := strconv.Atoi(c.Param("id"))
+			if id <= 0 {
+				return nil, badRequest("无效的模型 ID")
+			}
+			return &aiModelIDReq{UserID: uid, ID: id}, nil
+		},
+		Invoke: func(ctx context.Context, req *aiModelIDReq) (*struct{}, error) {
+			if err := h.svc.DeleteUserModel(c.Request.Context(), req.UserID, req.ID); err != nil {
+				return nil, err
+			}
+			return &struct{}{}, nil
+		},
+		Render: func(c *gin.Context, _ *aiModelIDReq, _ *struct{}, err error) {
+			if err != nil {
+				if err == gorm.ErrRecordNotFound {
+					response.NotFound(c, "模型不存在")
+					return
+				}
+				response.ServerError(c, err.Error())
+				return
+			}
+			response.Success(c, nil)
+		},
+	}.Handle(c)
 }
 
 // ListSessions 列出登录用户的会话。
 func (h *AIAssistantHandler) ListSessions(c *gin.Context) {
-	userID := middleware.CurrentUserID(c)
-	if userID == 0 {
-		response.Unauthorized(c, "请先登录")
-		return
-	}
-	sessions, err := h.svc.ListSessions(c.Request.Context(), userID)
-	if err != nil {
-		response.ServerError(c, err.Error())
-		return
-	}
-	response.Success(c, sessions)
+	Endpoint[aiUserIDReq, []service.AIChatSessionDTO]{
+		Parse: func(c *gin.Context) (*aiUserIDReq, error) {
+			uid := middleware.CurrentUserID(c)
+			if uid == 0 {
+				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
+			}
+			return &aiUserIDReq{UserID: uid}, nil
+		},
+		Invoke: func(ctx context.Context, req *aiUserIDReq) (*[]service.AIChatSessionDTO, error) {
+			sessions, err := h.svc.ListSessions(c.Request.Context(), req.UserID)
+			if err != nil {
+				return nil, err
+			}
+			return &sessions, nil
+		},
+		Render: func(c *gin.Context, _ *aiUserIDReq, resp *[]service.AIChatSessionDTO, err error) {
+			if err != nil {
+				response.ServerError(c, err.Error())
+				return
+			}
+			response.Success(c, resp)
+		},
+	}.Handle(c)
 }
 
 // CreateSession 创建会话。
 func (h *AIAssistantHandler) CreateSession(c *gin.Context) {
-	userID := middleware.CurrentUserID(c)
-	if userID == 0 {
-		response.Unauthorized(c, "请先登录")
-		return
-	}
-	var req struct {
-		Title     string `json:"title"`
-		ModelName string `json:"model_name"`
-	}
-	_ = c.ShouldBindJSON(&req)
-	session, err := h.svc.CreateSession(c.Request.Context(), userID, req.Title, req.ModelName)
-	if err != nil {
-		response.ServerError(c, err.Error())
-		return
-	}
-	response.Success(c, session)
+	Endpoint[aiSessionCreateReq, service.AIChatSessionDTO]{
+		Parse: func(c *gin.Context) (*aiSessionCreateReq, error) {
+			uid := middleware.CurrentUserID(c)
+			if uid == 0 {
+				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
+			}
+			var body struct {
+				Title     string `json:"title"`
+				ModelName string `json:"model_name"`
+			}
+			_ = c.ShouldBindJSON(&body)
+			return &aiSessionCreateReq{UserID: uid, Title: body.Title, ModelName: body.ModelName}, nil
+		},
+		Invoke: func(ctx context.Context, req *aiSessionCreateReq) (*service.AIChatSessionDTO, error) {
+			return h.svc.CreateSession(c.Request.Context(), req.UserID, req.Title, req.ModelName)
+		},
+		Render: func(c *gin.Context, _ *aiSessionCreateReq, resp *service.AIChatSessionDTO, err error) {
+			if err != nil {
+				response.ServerError(c, err.Error())
+				return
+			}
+			response.Success(c, resp)
+		},
+	}.Handle(c)
 }
 
 // DeleteSession 删除会话及其消息。
 func (h *AIAssistantHandler) DeleteSession(c *gin.Context) {
-	userID := middleware.CurrentUserID(c)
-	if userID == 0 {
-		response.Unauthorized(c, "请先登录")
-		return
-	}
-	sessionID, _ := strconv.Atoi(c.Param("id"))
-	if sessionID <= 0 {
-		response.BadRequest(c, "无效的会话 ID")
-		return
-	}
-	if err := h.svc.DeleteSession(c.Request.Context(), userID, sessionID); err != nil {
-		if err == gorm.ErrRecordNotFound {
-			response.NotFound(c, "会话不存在")
-			return
-		}
-		response.ServerError(c, err.Error())
-		return
-	}
-	response.Success(c, nil)
+	Endpoint[aiModelIDReq, struct{}]{
+		Parse: func(c *gin.Context) (*aiModelIDReq, error) {
+			uid := middleware.CurrentUserID(c)
+			if uid == 0 {
+				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
+			}
+			id, _ := strconv.Atoi(c.Param("id"))
+			if id <= 0 {
+				return nil, badRequest("无效的会话 ID")
+			}
+			return &aiModelIDReq{UserID: uid, ID: id}, nil
+		},
+		Invoke: func(ctx context.Context, req *aiModelIDReq) (*struct{}, error) {
+			if err := h.svc.DeleteSession(c.Request.Context(), req.UserID, req.ID); err != nil {
+				return nil, err
+			}
+			return &struct{}{}, nil
+		},
+		Render: func(c *gin.Context, _ *aiModelIDReq, _ *struct{}, err error) {
+			if err != nil {
+				if err == gorm.ErrRecordNotFound {
+					response.NotFound(c, "会话不存在")
+					return
+				}
+				response.ServerError(c, err.Error())
+				return
+			}
+			response.Success(c, nil)
+		},
+	}.Handle(c)
 }
 
 // RenameSession 修改会话标题。
 // Body: {"title": "新标题"}；标题非空，最多 100 字符。
 func (h *AIAssistantHandler) RenameSession(c *gin.Context) {
-	userID := middleware.CurrentUserID(c)
-	if userID == 0 {
-		response.Unauthorized(c, "请先登录")
-		return
-	}
-	sessionID, _ := strconv.Atoi(c.Param("id"))
-	if sessionID <= 0 {
-		response.BadRequest(c, "无效的会话 ID")
-		return
-	}
-	var req struct {
-		Title string `json:"title"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "请求数据无效")
-		return
-	}
-	if err := h.svc.RenameSession(c.Request.Context(), userID, sessionID, req.Title); err != nil {
-		if err == gorm.ErrRecordNotFound {
-			response.NotFound(c, "会话不存在")
-			return
-		}
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.Success(c, map[string]string{"message": "已更新会话标题"})
+	Endpoint[aiSessionRenameReq, struct{}]{
+		Parse: func(c *gin.Context) (*aiSessionRenameReq, error) {
+			uid := middleware.CurrentUserID(c)
+			if uid == 0 {
+				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
+			}
+			id, _ := strconv.Atoi(c.Param("id"))
+			if id <= 0 {
+				return nil, badRequest("无效的会话 ID")
+			}
+			req, err := bindJSONMsg[aiSessionRenameReqBody](c, "请求数据无效")
+			if err != nil {
+				return nil, err
+			}
+			return &aiSessionRenameReq{UserID: uid, ID: id, Title: req.Title}, nil
+		},
+		Invoke: func(ctx context.Context, req *aiSessionRenameReq) (*struct{}, error) {
+			if err := h.svc.RenameSession(c.Request.Context(), req.UserID, req.ID, req.Title); err != nil {
+				return nil, err
+			}
+			return &struct{}{}, nil
+		},
+		Render: func(c *gin.Context, _ *aiSessionRenameReq, _ *struct{}, err error) {
+			if err != nil {
+				if err == gorm.ErrRecordNotFound {
+					response.NotFound(c, "会话不存在")
+					return
+				}
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.Success(c, map[string]string{"message": "已更新会话标题"})
+		},
+	}.Handle(c)
 }
 
 // GetSessionMessages 获取指定会话的消息列表。
 func (h *AIAssistantHandler) GetSessionMessages(c *gin.Context) {
-	userID := middleware.CurrentUserID(c)
-	if userID == 0 {
-		response.Unauthorized(c, "请先登录")
-		return
-	}
-	sessionID, _ := strconv.Atoi(c.Param("id"))
-	if sessionID <= 0 {
-		response.BadRequest(c, "无效的会话 ID")
-		return
-	}
-	messages, err := h.svc.GetSessionMessages(c.Request.Context(), userID, sessionID)
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			response.NotFound(c, "会话不存在")
-			return
-		}
-		response.ServerError(c, err.Error())
-		return
-	}
-	response.Success(c, messages)
+	Endpoint[aiModelIDReq, []service.AIChatMessageDTO]{
+		Parse: func(c *gin.Context) (*aiModelIDReq, error) {
+			uid := middleware.CurrentUserID(c)
+			if uid == 0 {
+				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
+			}
+			id, _ := strconv.Atoi(c.Param("id"))
+			if id <= 0 {
+				return nil, badRequest("无效的会话 ID")
+			}
+			return &aiModelIDReq{UserID: uid, ID: id}, nil
+		},
+		Invoke: func(ctx context.Context, req *aiModelIDReq) (*[]service.AIChatMessageDTO, error) {
+			msgs, err := h.svc.GetSessionMessages(c.Request.Context(), req.UserID, req.ID)
+			if err != nil {
+				return nil, err
+			}
+			return &msgs, nil
+		},
+		Render: func(c *gin.Context, _ *aiModelIDReq, resp *[]service.AIChatMessageDTO, err error) {
+			if err != nil {
+				if err == gorm.ErrRecordNotFound {
+					response.NotFound(c, "会话不存在")
+					return
+				}
+				response.ServerError(c, err.Error())
+				return
+			}
+			response.Success(c, resp)
+		},
+	}.Handle(c)
 }
 
 // StreamChat 流式对话（SSE 推送）。
-// 事件类型：
-//   - message: 增量内容 {"content": "..."}
-//   - error:   错误信息 {"message": "..."}
-//   - done:    正常结束（无 data）
+// SSE 流式响应不适用 Endpoint 的 JSON 信封，保留为薄适配（ADR-0009 一次性适配例外）。
 func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 	userID := middleware.CurrentUserID(c) // 可选认证，未登录为 0
 
@@ -278,4 +369,42 @@ func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 		return
 	}
 	sendEvent("done", nil)
+}
+
+// ===== typed request structs =====
+
+// aiUserIDReq 仅带登录用户 ID 的请求。
+type aiUserIDReq struct {
+	UserID int
+}
+
+// aiModelIDReq 带用户 ID + 路径 id 的请求。
+type aiModelIDReq struct {
+	UserID int
+	ID     int
+}
+
+// aiUserModelSaveReq 保存用户模型请求（含用户 ID + service 请求体）。
+type aiUserModelSaveReq struct {
+	UserID int
+	Req    service.SaveUserModelReq
+}
+
+// aiSessionCreateReq 创建会话请求。
+type aiSessionCreateReq struct {
+	UserID    int
+	Title     string
+	ModelName string
+}
+
+// aiSessionRenameReq 重命名会话请求。
+type aiSessionRenameReq struct {
+	UserID int
+	ID     int
+	Title  string
+}
+
+// aiSessionRenameReqBody 重命名会话请求体。
+type aiSessionRenameReqBody struct {
+	Title string `json:"title"`
 }

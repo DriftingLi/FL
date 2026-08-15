@@ -285,6 +285,13 @@ jobs:
       AUTH_COOKIE_NAME: ${{ secrets.AUTH_COOKIE_NAME || 'hrwai_token' }}
       AUTH_COOKIE_DOMAIN: ${{ secrets.AUTH_COOKIE_DOMAIN }}
       AUTH_COOKIE_SECURE: ${{ inputs.environment == 'production' && 'true' || 'false' }}
+      # SMTP 邮件（验证码通道；腾讯企业邮 SSL 465）
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT || '465' }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME || secrets.SMTP_FROM }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      SMTP_FROM: ${{ secrets.SMTP_FROM }}
+      SMTP_FROM_NAME: ${{ secrets.SMTP_FROM_NAME || '和润天下' }}
       # 默认账号
       ADMIN_DEFAULT_PASSWORD: ${{ secrets.ADMIN_DEFAULT_PASSWORD }}
       TUTOR_DEFAULT_PASSWORD: ${{ secrets.TUTOR_DEFAULT_PASSWORD }}
@@ -445,6 +452,12 @@ jobs:
             printf 'export ADMIN_DEFAULT_PASSWORD=%q\n' "${ADMIN_DEFAULT_PASSWORD:-}"
             printf 'export TUTOR_DEFAULT_PASSWORD=%q\n' "${TUTOR_DEFAULT_PASSWORD:-}"
             printf 'export STUDENT_DEFAULT_PASSWORD=%q\n' "${STUDENT_DEFAULT_PASSWORD:-}"
+            printf 'export SMTP_HOST=%q\n' "${SMTP_HOST:-}"
+            printf 'export SMTP_PORT=%q\n' "${SMTP_PORT:-465}"
+            printf 'export SMTP_USERNAME=%q\n' "${SMTP_USERNAME:-${SMTP_FROM:-}}"
+            printf 'export SMTP_PASSWORD=%q\n' "${SMTP_PASSWORD:-}"
+            printf 'export SMTP_FROM=%q\n' "${SMTP_FROM:-}"
+            printf 'export SMTP_FROM_NAME=%q\n' "${SMTP_FROM_NAME:-和润天下}"
             printf 'export CORS_ORIGINS=%q\n' "${CORS_ORIGINS:-}"
             printf 'export COMPOSE_FILE=%q\n' "${COMPOSE_FILE:-docker-compose.prod.yml}"
             printf 'export DEPLOY_PATH=%q\n' "${DEPLOY_PATH:-/opt/forklift-training}"

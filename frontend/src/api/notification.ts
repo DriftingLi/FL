@@ -2,12 +2,18 @@
 // 业务失败抛错并统一 toast，调用方不再自检 res.code）
 import { unwrappedRequest } from './request'
 
+/** 通知结构化标记（后端 JSONB payload，加性字段，如资料审核 {"review_status":"approved"}） */
+export interface NotificationPayload {
+  review_status?: 'approved' | 'rejected'
+}
+
 export interface NotificationItem {
   id: number
   type: string
   title: string
   content: string
   link: string
+  payload?: NotificationPayload | null
   is_read: boolean
   created_at: string
   read_at?: string

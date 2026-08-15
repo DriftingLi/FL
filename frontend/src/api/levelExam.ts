@@ -23,14 +23,14 @@ export interface SaveAnswerPayload {
   time_used?: number
   answers?: unknown
   remaining_time?: number
-  [key: string]: unknown
 }
 
 export interface SubmitExamPayload {
   /** 作答记录：{题目ID: 答案} */
   answers: Record<string | number, unknown>
   submit?: boolean
-  [key: string]: unknown
+  is_timeout?: boolean
+  remaining_time?: number
 }
 
 export interface ExamHistoryQuery {
@@ -38,15 +38,25 @@ export interface ExamHistoryQuery {
   page_size?: number
 }
 
-/** 考试场次（学员端列表项） */
+/** 考试场次（学员端列表项，含可用性附加字段，与后端 LevelExamSessionDTO/LevelExamAvailableDTO 对齐） */
 export interface LevelExamSession {
   id: number
   name: string
   status?: string
   start_time?: string
   end_time?: string
-  participant_id?: number
-  [key: string]: unknown
+  duration?: number
+  total_score?: number
+  pass_score?: number
+  created_by?: number | null
+  question_config?: Record<string, unknown>
+  created_at?: string
+  updated_at?: string
+  // 可用性附加字段
+  has_participated?: boolean
+  can_enter?: boolean
+  participant_status?: string | null
+  participant_id?: number | null
 }
 
 /** 进入考试返回 */
@@ -62,9 +72,7 @@ export interface LevelExamResult {
   participant: {
     score?: number | null
     is_passed?: boolean
-    [key: string]: unknown
   }
-  [key: string]: unknown
 }
 
 export const levelExamApi = {

@@ -306,21 +306,33 @@ func TestGetProfile_HrwaiUser(t *testing.T) {
 	u.Company = "和润"
 	tdb.Save(u)
 
-	data := svc.GetProfile(u.ID, HrwaiRole, u.Account)
-	if data["user_id"] != u.ID || data["account"] != "acct_alice" || data["username"] != "小爱" || data["role"] != HrwaiRole {
-		t.Fatalf("基础字段异常: %+v", data)
+	dto := svc.GetProfile(u.ID, HrwaiRole, u.Account)
+	if dto.UserID != u.ID || dto.Account != "acct_alice" || dto.Role != HrwaiRole {
+		t.Fatalf("基础字段异常: %+v", dto)
 	}
-	if data["uid"] != FormatUID(u.UID) || data["avatar_url"] != "https://example.com/avatar.png" {
-		t.Fatalf("资料字段异常: %+v", data)
+	if dto.Username == nil || *dto.Username != "小爱" {
+		t.Fatalf("昵称字段异常: %+v", dto.Username)
 	}
-	if data["phone"] != "test_alice" || data["email"] != "alice@example.com" || data["company"] != "和润" {
-		t.Fatalf("联系方式字段异常: %+v", data)
+	if dto.UID == nil || *dto.UID != FormatUID(u.UID) {
+		t.Fatalf("uid 字段异常: %+v", dto.UID)
 	}
-	if data["has_password"] != true {
-		t.Fatalf("已设置密码时应 has_password=true: %+v", data)
+	if dto.AvatarURL == nil || *dto.AvatarURL != "https://example.com/avatar.png" {
+		t.Fatalf("头像字段异常: %+v", dto.AvatarURL)
 	}
-	if pending, _ := data["pending_profile_change"].(*ProfileChangeRequestDTO); pending != nil {
-		t.Fatalf("无待审资料时应为 nil: %+v", data["pending_profile_change"])
+	if dto.Phone == nil || *dto.Phone != "test_alice" {
+		t.Fatalf("手机号字段异常: %+v", dto.Phone)
+	}
+	if dto.Email == nil || *dto.Email != "alice@example.com" {
+		t.Fatalf("邮箱字段异常: %+v", dto.Email)
+	}
+	if dto.Company == nil || *dto.Company != "和润" {
+		t.Fatalf("公司字段异常: %+v", dto.Company)
+	}
+	if dto.HasPassword == nil || !*dto.HasPassword {
+		t.Fatalf("已设置密码时应 has_password=true: %+v", dto.HasPassword)
+	}
+	if dto.PendingProfileChange != nil && *dto.PendingProfileChange != nil {
+		t.Fatalf("无待审资料时应为 nil: %+v", dto.PendingProfileChange)
 	}
 }
 
@@ -328,9 +340,9 @@ func TestGetProfile_HasPasswordFalse(t *testing.T) {
 	svc, tdb := newGetProfileSvc(t)
 	u := testutil.SeedStudent(t, tdb, "nopwd", "") // 未设置密码
 
-	data := svc.GetProfile(u.ID, HrwaiRole, u.Account)
-	if data["has_password"] != false {
-		t.Fatalf("未设置密码时应 has_password=false: %+v", data)
+	dto := svc.GetProfile(u.ID, HrwaiRole, u.Account)
+	if dto.HasPassword == nil || *dto.HasPassword {
+		t.Fatalf("未设置密码时应 has_password=false: %+v", dto.HasPassword)
 	}
 }
 
@@ -343,11 +355,11 @@ func TestGetProfile_PendingReview(t *testing.T) {
 		t.Fatalf("提交待审请求失败: %v", err)
 	}
 
-	data := svc.GetProfile(u.ID, HrwaiRole, u.Account)
-	pending, ok := data["pending_profile_change"].(*ProfileChangeRequestDTO)
-	if !ok || pending == nil {
-		t.Fatalf("应有待审资料对象: %v", data["pending_profile_change"])
+	dto := svc.GetProfile(u.ID, HrwaiRole, u.Account)
+	if dto.PendingProfileChange == nil || *dto.PendingProfileChange == nil {
+		t.Fatalf("应有待审资料对象: %v", dto.PendingProfileChange)
 	}
+	pending := *dto.PendingProfileChange
 	if pending.ID != req.ID || pending.Status != ProfileStatusPending {
 		t.Fatalf("待审资料异常: %+v", pending)
 	}
@@ -358,9 +370,9 @@ func TestGetProfile_Tutor(t *testing.T) {
 	hash, _ := HashPassword("tutorpwd")
 	tu := testutil.SeedTutor(t, tdb, "tutor1", hash)
 
-	data := svc.GetProfile(tu.TutorID, "tutor", tu.Username)
-	if data["name"] != "tutor1" {
-		t.Fatalf("导师姓名异常: %+v", data)
+	dto := svc.GetProfile(tu.TutorID, "tutor", tu.Username)
+	if dto.Name == nil || *dto.Name != "tutor1" {
+		t.Fatalf("导师姓名异常: %+v", dto)
 	}
 }
 
@@ -369,19 +381,19 @@ func TestGetProfile_Admin(t *testing.T) {
 	hash, _ := HashPassword("adminpwd")
 	a := testutil.SeedAdmin(t, tdb, "admin1", hash)
 
-	data := svc.GetProfile(a.AdminID, "admin", a.Username)
-	if data["name"] != "admin1" {
-		t.Fatalf("管理员姓名异常: %+v", data)
+	dto := svc.GetProfile(a.AdminID, "admin", a.Username)
+	if dto.Name == nil || *dto.Name != "admin1" {
+		t.Fatalf("管理员姓名异常: %+v", dto)
 	}
 }
 
 func TestGetProfile_UserNotFound(t *testing.T) {
 	svc, _ := newGetProfileSvc(t)
-	data := svc.GetProfile(999, HrwaiRole, "ghost")
-	if _, ok := data["name"]; ok {
-		t.Fatalf("用户不存在时不应有 name 字段: %+v", data)
+	dto := svc.GetProfile(999, HrwaiRole, "ghost")
+	if dto.Name != nil {
+		t.Fatalf("用户不存在时不应有 name 字段: %+v", dto.Name)
 	}
-	if _, ok := data["has_password"]; ok {
+	if dto.HasPassword != nil {
 		t.Fatal("用户不存在时不应有 has_password 字段")
 	}
 }

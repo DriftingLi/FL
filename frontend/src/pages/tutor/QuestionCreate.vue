@@ -222,7 +222,7 @@ async function submitForm() {
       await questionBankApi.createQuestion(data)
       ElMessage.success('创建成功')
     }
-    router.push('/training/tutor/question-manage')
+    router.push({ name: 'TutorQuestionManage' })
   } catch {
     /* 错误已由拦截器提示 */
   } finally {

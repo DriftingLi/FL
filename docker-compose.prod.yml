@@ -164,6 +164,13 @@ services:
       ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD}
       TUTOR_DEFAULT_PASSWORD: ${TUTOR_DEFAULT_PASSWORD}
       STUDENT_DEFAULT_PASSWORD: ${STUDENT_DEFAULT_PASSWORD}
+      # SMTP 邮件（验证码通道；腾讯企业邮 SSL 465）
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: "${SMTP_PORT:-465}"
+      SMTP_USERNAME: ${SMTP_USERNAME:-${SMTP_FROM:-}}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-和润天下}
       VALUATION_PDF_OUTPUT_DIR: /data/reports
       # 统一系统运行日志（zap）：生产写文件到 /data/logs（lumberjack 轮转+压缩+保留），stdout 兜底
       LOG_LEVEL: "${LOG_LEVEL:-info}"

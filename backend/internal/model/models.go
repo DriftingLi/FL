@@ -585,6 +585,7 @@ func (ProfileChangeRequest) TableName() string { return "profile_change_requests
 // ===== 26. 站内信通知 =====
 
 // Notification 站内信通知（P0 通知基础设施，当前仅站内信渠道）。
+// Payload 为结构化业务标记（JSONB，如资料审核 {"review_status":"approved"}），加性扩展，不参与人读文案。
 type Notification struct {
 	ID        int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	UserID    int        `gorm:"column:user_id" json:"user_id"`
@@ -592,6 +593,7 @@ type Notification struct {
 	Title     string     `gorm:"column:title" json:"title"`
 	Content   string     `gorm:"column:content" json:"content"`
 	Link      string     `gorm:"column:link" json:"link"`
+	Payload   JSONB      `gorm:"column:payload;type:jsonb" json:"payload,omitempty"`
 	IsRead    bool       `gorm:"column:is_read;default:false" json:"is_read"`
 	CreatedAt time.Time  `gorm:"column:created_at" json:"created_at"`
 	ReadAt    *time.Time `gorm:"column:read_at" json:"read_at,omitempty"`

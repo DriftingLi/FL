@@ -83,12 +83,4 @@ func shortAnswerPassed(score, maxScore float64) bool {
 	return score >= maxScore*shortAnswerPassRatio
 }
 
-// aiGradeShortAnswer AI 简答评分的统一入口；ai 为 nil 时返回 nil（调用方降级）。
-func aiGradeShortAnswer(ai *AIService, questionContent, referenceAnswer, scoringCriteria, studentAnswer string, maxScore float64, userID *int) *AIGradeResult {
-	if ai == nil {
-		return nil
-	}
-	return ai.GradeShortAnswer(questionContent, referenceAnswer, scoringCriteria, studentAnswer, maxScore, userID)
-}
-
 func strPtr(s string) *string { return &s }

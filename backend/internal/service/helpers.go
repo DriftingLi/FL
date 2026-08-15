@@ -78,3 +78,12 @@ func floatPtr(v float64) *float64 { return &v }
 func containsString(slice []string, s string) bool {
 	return slices.Contains(slice, s)
 }
+
+// formatTimePtr 格式化时间指针，nil 返回 nil。
+func formatTimePtr(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	s := formatISO(*t)
+	return &s
+}

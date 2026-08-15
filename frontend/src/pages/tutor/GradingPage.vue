@@ -159,11 +159,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Monitor, ArrowLeft } from '@element-plus/icons-vue'
-import { gradingApi } from '@/api/grading'
+import { gradingApi, type GradingParticipant, type GradingAnswer } from '@/api/grading'
 import { typeMap } from '@/constants/question'
 
 const loading = ref(false)
-const participants = ref<{ id: number; grading_status?: string; [key: string]: unknown }[]>([])
+const participants = ref<GradingParticipant[]>([])
 const selectedParticipant = ref<number | null>(null)
 const detail = ref<any>({})
 const confirmingObj = ref(false)
@@ -187,8 +187,8 @@ async function openDetail(row: { id: number; [key: string]: unknown }) {
     const res = await gradingApi.getParticipantDetail(row.id)
     const data = res || {}
     if (data.answers) {
-      data.answers.forEach((a: { ai_score?: number | null; score?: number | null; [key: string]: unknown }) => {
-        a._score = a.ai_score != null ? a.ai_score : 0
+      data.answers.forEach((a: GradingAnswer) => {
+        a._score = a.ai_score != null ? Number(a.ai_score) : 0
         a._comment = ''
         a._confirming = false
         a._aiLoading = false

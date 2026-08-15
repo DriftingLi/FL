@@ -3,7 +3,7 @@
 package api
 
 import (
-	"strconv"
+	"context"
 
 	"github.com/gin-gonic/gin"
 
@@ -38,51 +38,114 @@ func RegisterNotificationRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service
 	g.POST("/read-all", h.MarkAllRead)
 }
 
+// notificationListReq 通知列表请求（用户 ID + 分页）。
+type notificationListReq struct {
+	UserID   int
+	Page     int
+	PageSize int
+}
+
 // List 分页查询通知（含未读数）GET /api/notifications?page=&page_size=
 func (h *NotificationHandler) List(c *gin.Context) {
-	userID := middleware.CurrentUserID(c)
-	page := atoiDefault(c.Query("page"), 1)
-	pageSize := atoiDefault(c.Query("page_size"), 10)
-	result, err := h.svc.List(userID, page, pageSize)
-	if err != nil {
-		response.ServerError(c, "查询失败: "+err.Error())
-		return
-	}
-	response.Success(c, result)
+	Endpoint[notificationListReq, service.NotificationListPageResult]{
+		Parse: func(c *gin.Context) (*notificationListReq, error) {
+			return &notificationListReq{
+				UserID:   middleware.CurrentUserID(c),
+				Page:     atoiDefault(c.Query("page"), 1),
+				PageSize: atoiDefault(c.Query("page_size"), 10),
+			}, nil
+		},
+		Invoke: func(ctx context.Context, req *notificationListReq) (*service.NotificationListPageResult, error) {
+			return h.svc.List(req.UserID, req.Page, req.PageSize)
+		},
+		Render: func(c *gin.Context, _ *notificationListReq, resp *service.NotificationListPageResult, err error) {
+			if err != nil {
+				response.ServerError(c, "查询失败: "+err.Error())
+				return
+			}
+			response.Success(c, resp)
+		},
+	}.Handle(c)
 }
 
 // UnreadCount 未读数 GET /api/notifications/unread-count
 func (h *NotificationHandler) UnreadCount(c *gin.Context) {
-	userID := middleware.CurrentUserID(c)
-	count, err := h.svc.UnreadCount(userID)
-	if err != nil {
-		response.ServerError(c, "查询失败: "+err.Error())
-		return
-	}
-	response.Success(c, gin.H{"count": count})
+	Endpoint[notificationUserIDReq, int64]{
+		Parse: func(c *gin.Context) (*notificationUserIDReq, error) {
+			return &notificationUserIDReq{UserID: middleware.CurrentUserID(c)}, nil
+		},
+		Invoke: func(ctx context.Context, req *notificationUserIDReq) (*int64, error) {
+			count, err := h.svc.UnreadCount(req.UserID)
+			if err != nil {
+				return nil, err
+			}
+			return &count, nil
+		},
+		Render: func(c *gin.Context, _ *notificationUserIDReq, resp *int64, err error) {
+			if err != nil {
+				response.ServerError(c, "查询失败: "+err.Error())
+				return
+			}
+			response.Success(c, gin.H{"count": *resp})
+		},
+	}.Handle(c)
+}
+
+// markReadReq 单条标记已读请求（路径 ID + 用户 ID）。
+type markReadReq struct {
+	UserID int
+	ID     int64
+}
+
+// notificationUserIDReq 仅带登录用户 ID 的请求（未读数 / 全部已读）。
+type notificationUserIDReq struct {
+	UserID int
 }
 
 // MarkRead 单条标记已读 POST /api/notifications/:id/read
 func (h *NotificationHandler) MarkRead(c *gin.Context) {
-	userID := middleware.CurrentUserID(c)
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || id <= 0 {
-		response.BadRequest(c, "通知ID无效")
-		return
-	}
-	if err := h.svc.MarkRead(userID, id); err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.SuccessWithMsg(c, "已标记为已读", nil)
+	Endpoint[markReadReq, struct{}]{
+		Parse: func(c *gin.Context) (*markReadReq, error) {
+			id, err := pathInt64(c, "id", "通知ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &markReadReq{UserID: middleware.CurrentUserID(c), ID: id}, nil
+		},
+		Invoke: func(ctx context.Context, req *markReadReq) (*struct{}, error) {
+			if err := h.svc.MarkRead(req.UserID, req.ID); err != nil {
+				return nil, err
+			}
+			return nil, nil
+		},
+		Render: func(c *gin.Context, _ *markReadReq, _ *struct{}, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "已标记为已读", nil)
+		},
+	}.Handle(c)
 }
 
 // MarkAllRead 全部标记已读 POST /api/notifications/read-all
 func (h *NotificationHandler) MarkAllRead(c *gin.Context) {
-	userID := middleware.CurrentUserID(c)
-	if err := h.svc.MarkAllRead(userID); err != nil {
-		response.ServerError(c, "操作失败: "+err.Error())
-		return
-	}
-	response.SuccessWithMsg(c, "已全部标记为已读", nil)
+	Endpoint[notificationUserIDReq, struct{}]{
+		Parse: func(c *gin.Context) (*notificationUserIDReq, error) {
+			return &notificationUserIDReq{UserID: middleware.CurrentUserID(c)}, nil
+		},
+		Invoke: func(ctx context.Context, req *notificationUserIDReq) (*struct{}, error) {
+			if err := h.svc.MarkAllRead(req.UserID); err != nil {
+				return nil, err
+			}
+			return nil, nil
+		},
+		Render: func(c *gin.Context, _ *notificationUserIDReq, _ *struct{}, err error) {
+			if err != nil {
+				response.ServerError(c, "操作失败: "+err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "已全部标记为已读", nil)
+		},
+	}.Handle(c)
 }

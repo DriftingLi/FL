@@ -81,6 +81,9 @@ func TestProfileReview_Approve_EmitsNotification(t *testing.T) {
 	if n.Type != "profile_review" || n.Title != "资料审核通过" {
 		t.Errorf("通知内容异常: %+v", n)
 	}
+	if string(n.Payload) != "{\"review_status\":\"approved\"}" {
+		t.Errorf("通过审核通知 payload 应含 review_status=approved: %s", n.Payload)
+	}
 	if !notifySvc.hasNotification(user.ID, n.ID) {
 		t.Error("通知应通过站内信模块落库")
 	}
@@ -110,6 +113,9 @@ func TestProfileReview_Reject_EmitsNotificationWithReason(t *testing.T) {
 	}
 	if n.Title != "资料审核被驳回" || n.Content != "您的头像修改申请未通过审核，原因：照片不清晰。" {
 		t.Errorf("驳回通知内容异常: %+v", n)
+	}
+	if string(n.Payload) != "{\"review_status\":\"rejected\"}" {
+		t.Errorf("驳回审核通知 payload 应含 review_status=rejected: %s", n.Payload)
 	}
 }
 

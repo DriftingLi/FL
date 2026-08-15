@@ -243,7 +243,7 @@ func (s *CourseService) GetCourseDetail(courseID, studentID int) (*CourseDetailD
 	}, nil
 }
 
-// GetChapterDetail 章节详情。
+// GetChapterDetail 章节详情（学员端路径回填 study_status）。
 func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (*ChapterDetailDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
@@ -252,61 +252,7 @@ func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (*C
 	if chapter.CourseID != courseID {
 		return nil, errors.New("章节不属于该课程")
 	}
-	var chapters []model.Chapter
-	s.db.Where("course_id = ?", courseID).Order("order_num").Find(&chapters)
-
-	prevID, nextID := 0, 0
-	for i, ch := range chapters {
-		if ch.ChapterID == chapterID {
-			if i > 0 {
-				prevID = chapters[i-1].ChapterID
-			}
-			if i < len(chapters)-1 {
-				nextID = chapters[i+1].ChapterID
-			}
-			break
-		}
-	}
-
-	studyStatus := "not_started"
-	if studentID > 0 {
-		var record model.StudyRecord
-		// 同上：使用 Limit(1).Find() 避免首次访问章节时 GORM 误报 record not found。
-		if err := s.db.Where("student_id = ? AND course_id = ? AND chapter_id = ?", studentID, courseID, chapterID).Limit(1).Find(&record).Error; err == nil && record.RecordID > 0 {
-			if record.Progress >= 100 {
-				studyStatus = "completed"
-			} else {
-				studyStatus = "studying"
-			}
-		}
-	}
-
-	result := chapterToDTO(&chapter)
-	var prevIDPtr, nextIDPtr *int
-	if prevID != 0 {
-		prevIDPtr = &prevID
-	}
-	if nextID != 0 {
-		nextIDPtr = &nextID
-	}
-
-	var files []model.ChapterFile
-	s.db.Where("chapter_id = ?", chapterID).Order("created_at").Find(&files)
-	fileList := make([]ChapterFileDTO, 0, len(files))
-	if len(files) == 0 && chapter.FileURL != "" {
-		fileList = append(fileList, legacyFileEntry(&chapter))
-	} else {
-		for i := range files {
-			fileList = append(fileList, chapterFileToDTO(&files[i]))
-		}
-	}
-	return &ChapterDetailDTO{
-		ChapterDTO:        result,
-		Files:             fileList,
-		PreviousChapterID: prevIDPtr,
-		NextChapterID:     nextIDPtr,
-		StudyStatus:       studyStatus,
-	}, nil
+	return chapterDetailShared(s.db, &chapter, true, studentID), nil
 }
 
 // GetChapterSlides 章节幻灯片。
@@ -593,6 +539,110 @@ func legacyFileEntry(ch *model.Chapter) ChapterFileDTO {
 		FileSize:    0,
 		CreatedAt:   formatISO(ch.CreatedAt),
 	}
+}
+
+// ===== 章节详情共享实现（学员端/导师端同源，Ticket #214 C4）=====
+
+// chapterPrevNext 按章节 order_num 顺序计算给定章节的 prev/next 章节 ID。
+// 首章节 prev=0、末章节 next=0（调用方转为 nil 指针）。
+func chapterPrevNext(chapters []model.Chapter, chapterID int) (prevID, nextID int) {
+	for i, ch := range chapters {
+		if ch.ChapterID == chapterID {
+			if i > 0 {
+				prevID = chapters[i-1].ChapterID
+			}
+			if i < len(chapters)-1 {
+				nextID = chapters[i+1].ChapterID
+			}
+			break
+		}
+	}
+	return
+}
+
+// loadChapterFiles 装载单个章节的文件列表（chapter_file 表条目；无条目且 chapter.file_url 非空时
+// 折叠 legacy 兼容条目）。两者两端详情共用。
+func loadChapterFiles(db *gorm.DB, chapter *model.Chapter) []ChapterFileDTO {
+	var files []model.ChapterFile
+	db.Where("chapter_id = ?", chapter.ChapterID).Order("created_at").Find(&files)
+	fileList := make([]ChapterFileDTO, 0, len(files))
+	if len(files) == 0 && chapter.FileURL != "" {
+		fileList = append(fileList, legacyFileEntry(chapter))
+	} else {
+		for i := range files {
+			fileList = append(fileList, chapterFileToDTO(&files[i]))
+		}
+	}
+	return fileList
+}
+
+// loadChapterFilesBulk 批量装载多个章节的文件列表（一次 IN 查询），消除逐章节 N+1。
+// 返回 map[chapterID][]ChapterFileDTO；无文件的章节不在 map 中（legacy 兼容在调用侧合并）。
+func loadChapterFilesBulk(db *gorm.DB, chapters []model.Chapter) map[int][]ChapterFileDTO {
+	if len(chapters) == 0 {
+		return map[int][]ChapterFileDTO{}
+	}
+	ids := make([]int, 0, len(chapters))
+	for i := range chapters {
+		ids = append(ids, chapters[i].ChapterID)
+	}
+	var files []model.ChapterFile
+	db.Where("chapter_id IN ?", ids).Order("created_at").Find(&files)
+	result := make(map[int][]ChapterFileDTO, len(chapters))
+	for i := range files {
+		if files[i].ChapterID == nil {
+			continue
+		}
+		cid := *files[i].ChapterID
+		result[cid] = append(result[cid], chapterFileToDTO(&files[i]))
+	}
+	return result
+}
+
+// chapterStudyStatus 计算章节学习状态（仅学员端路径使用；studentID<=0 时返回空串省略）。
+// 无学习记录 → not_started；progress>=100 → completed；其余 → studying。
+func chapterStudyStatus(db *gorm.DB, studentID, courseID, chapterID int) string {
+	if studentID <= 0 {
+		return ""
+	}
+	var record model.StudyRecord
+	// Limit(1).Find() 避免首次访问章节时 GORM 误报 record not found。
+	if err := db.Where("student_id = ? AND course_id = ? AND chapter_id = ?", studentID, courseID, chapterID).
+		Limit(1).Find(&record).Error; err != nil || record.RecordID == 0 {
+		return "not_started"
+	}
+	if record.Progress >= 100 {
+		return "completed"
+	}
+	return "studying"
+}
+
+// chapterDetailShared 章节详情共享实现：prev/next 计算、文件列表装载 + legacy 兼容、
+// 可选 study_status 回填（fillStudyStatus=true 且 studentID>0 时）。
+// 学员端与导师端详情响应 shape 零漂移；两端唯一差异是学员端回填 study_status。
+func chapterDetailShared(db *gorm.DB, chapter *model.Chapter, fillStudyStatus bool, studentID int) *ChapterDetailDTO {
+	var chapters []model.Chapter
+	db.Where("course_id = ?", chapter.CourseID).Order("order_num").Find(&chapters)
+	prevID, nextID := chapterPrevNext(chapters, chapter.ChapterID)
+
+	var prevIDPtr, nextIDPtr *int
+	if prevID != 0 {
+		prevIDPtr = &prevID
+	}
+	if nextID != 0 {
+		nextIDPtr = &nextID
+	}
+
+	d := &ChapterDetailDTO{
+		ChapterDTO:        chapterToDTO(chapter),
+		Files:             loadChapterFiles(db, chapter),
+		PreviousChapterID: prevIDPtr,
+		NextChapterID:     nextIDPtr,
+	}
+	if fillStudyStatus {
+		d.StudyStatus = chapterStudyStatus(db, studentID, chapter.CourseID, chapter.ChapterID)
+	}
+	return d
 }
 
 // ===== 培训目录扩展辅助（课程等级/学时/前置课程/证书模板） =====

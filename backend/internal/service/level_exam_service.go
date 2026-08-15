@@ -93,7 +93,9 @@ type LevelExamAnswerDTO struct {
 	AIScore           *float64 `json:"ai_score"`
 	AIGradedAt        *string  `json:"ai_graded_at"`
 	// 结果详情路径附带题目（未加载时省略）。
-	Question *QuestionDTO `json:"question,omitempty"`
+	// AI 评分降级标记（加性变更：短答 AI 评分降级时出现，否则省略）。
+	AIFallback *bool        `json:"ai_fallback,omitempty"`
+	Question   *QuestionDTO `json:"question,omitempty"`
 }
 
 // LevelExamDataDTO 进入考试返回（participant + 试卷 + 快照）。
@@ -389,21 +391,29 @@ func (s *LevelExamService) getExamData(session *model.ExamSession, p *model.Exam
 }
 
 // SaveAnswer 保存答案快照。
+// 经保存会话进度深模块（session_progress.go）唯一实现：load → 守卫（本人+进行中）→
+// 快照 JSONB 三态归一 → db.Save（与 mock SaveProgress 同口径）。
 func (s *LevelExamService) SaveAnswer(participantID, studentID int, answers map[string]any, remainingTime int) error {
-	var p model.ExamParticipant
-	if err := s.db.First(&p, participantID).Error; err != nil {
-		return errors.New("考试参与记录不存在")
-	}
-	if err := guardOwnedInProgress(p.StudentID, p.Status, studentID, "无权操作", "考试不在进行中"); err != nil {
-		return err
-	}
-	b, _ := jsonMarshal(answers)
-	p.AnswersSnapshot = model.JSONB(b)
-	p.RemainingTime = remainingTime
-	return s.db.Save(&p).Error
+	return saveSessionProgress(s.db, SessionProgressSpec[model.ExamParticipant]{
+		notFoundErr: "考试参与记录不存在",
+		load: func(db *gorm.DB) (model.ExamParticipant, error) {
+			var p model.ExamParticipant
+			return p, db.First(&p, participantID).Error
+		},
+		guard: func(p model.ExamParticipant) error {
+			return guardOwnedInProgress(p.StudentID, p.Status, studentID, "无权操作", "考试不在进行中")
+		},
+		write: func(p *model.ExamParticipant, snapshot model.JSONB, rt int) {
+			p.AnswersSnapshot = snapshot
+			p.RemainingTime = rt
+		},
+	}, answers, remainingTime)
 }
 
 // SubmitExam 交卷评分。
+// 语义：提交后即「待阅卷结算」——客观题即时判题回填 ObjectiveScore，
+// 简答/未人工阅卷答题的分数与 IsPassed 不在此结算，统由阅卷端
+// GradingService.updateParticipantScore 在所有答题阅卷后置后重算。
 func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bool) (*LevelExamParticipantDTO, error) {
 	var p model.ExamParticipant
 	if err := s.db.First(&p, participantID).Error; err != nil {
@@ -420,55 +430,48 @@ func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bo
 	_, qMap := loadOrderedQuestions(s.db, ids)
 
 	objectiveScore := 0.0
-	subjectiveScore := 0.0
-	hasSubjective := false
 
 	// 清旧答题
 	s.db.Where("exam_participant_id = ?", p.ID).Delete(&model.ExamAnswer{})
 
-	for _, qid := range ids {
-		question := qMap[qid]
-		if question == nil {
-			continue
-		}
-		userAnswer := answers[intToString(qid)]
-		maxScore := questionMaxScore("level_exam", question.Type)
-		isCorrect, earned := gradeQuestion(question, userAnswer, maxScore)
+	engine := newGradingEngine(s.db)
+	flow := gradingFlow{
+		ai: shortAnswerGraderOf(s.ai),
+		maxScore: func(q *model.Question) float64 {
+			return questionMaxScore("level_exam", q.Type)
+		},
+	}
+	results := engine.gradeSet(flow, qMap, ids, answers, studentID)
+
+	for _, r := range results {
+		question := r.Question
+		qid := question.ID
 
 		if question.Type == "short_answer" {
-			hasSubjective = true
 			ans := model.ExamAnswer{
 				ExamParticipantID: p.ID,
 				QuestionID:        qid,
-				UserAnswer:        stringifyAnswer(userAnswer),
+				UserAnswer:        stringifyAnswer(r.UserAnswer),
 				Score:             0,
 			}
 			s.db.Create(&ans)
-			if aiRes := aiGradeShortAnswer(s.ai, question.Content, question.ReferenceAnswer, question.ScoringCriteria, stringifyAnswer(userAnswer), maxScore, nil); aiRes != nil {
-				ans.AIScore = floatPtr(aiRes.Score)
-				comment := aiRes.Comment
-				if aiRes.Fallback {
-					comment = "[AI评分降级] " + comment
-				}
-				ans.AIComment = comment
+			if r.ShortAnswer != nil {
+				ans.AIScore = floatPtr(r.ShortAnswer.Score)
+				ans.AIComment = r.ShortAnswer.Comment
 				now := beijingNow()
 				ans.AIGradedAt = &now
 				s.db.Save(&ans)
 			}
-			_ = hasSubjective
 		} else {
-			objectiveScore += earned
-			if isCorrect != nil && !*isCorrect {
-				_ = addToWrongQuestions(s.db, studentID, qid)
-			}
+			objectiveScore += r.Earned
 			ans := model.ExamAnswer{
 				ExamParticipantID: p.ID,
 				QuestionID:        qid,
-				UserAnswer:        stringifyAnswer(userAnswer),
-				Score:             earned,
+				UserAnswer:        stringifyAnswer(r.UserAnswer),
+				Score:             r.Earned,
 			}
-			if isCorrect != nil {
-				ans.IsCorrect = isCorrect
+			if r.IsCorrect != nil {
+				ans.IsCorrect = r.IsCorrect
 			}
 			s.db.Create(&ans)
 		}
@@ -482,13 +485,17 @@ func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bo
 	submitTime := beijingNow()
 	p.SubmitTime = &submitTime
 	p.ObjectiveScore = floatPtr(objectiveScore)
-	p.SubjectiveScore = floatPtr(subjectiveScore)
+	// 主观分（简答）待阅卷结算：提交时不回填真实分，恒记 0；
+	// 阅卷完成后由 GradingService.updateParticipantScore 置后重算并回填。
+	p.SubjectiveScore = floatPtr(0)
 
-	// 是否还有未阅卷答题
+	// 提交后待阅卷结算：交卷时尚未手动阅卷的答题（grader_id IS NULL，含全部简答与客观题）
+	// 不计入总分。Score/IsPassed 不在此判定，而由阅卷端 GradingService.updateParticipantScore
+	// 在所有答题阅卷完成后置后重算；此处仅当确无未阅卷答题时用客观分结算（主观分提交时恒 0）。
 	var ungradedCount int64
 	s.db.Model(&model.ExamAnswer{}).Where("exam_participant_id = ? AND grader_id IS NULL", p.ID).Count(&ungradedCount)
 	if ungradedCount == 0 {
-		total := objectiveScore + subjectiveScore
+		total := objectiveScore // 主观分提交时恒 0，故 total 即客观分（等价于 objectiveScore + 0）
 		p.Score = floatPtr(total)
 		var session model.ExamSession
 		passScore := 60.0
@@ -655,7 +662,7 @@ func participantToDTO(p *model.ExamParticipant) LevelExamParticipantDTO {
 }
 
 func examAnswerToDTO(a *model.ExamAnswer) LevelExamAnswerDTO {
-	return LevelExamAnswerDTO{
+	d := LevelExamAnswerDTO{
 		ID:                a.ID,
 		ExamParticipantID: a.ExamParticipantID,
 		QuestionID:        a.QuestionID,
@@ -669,6 +676,12 @@ func examAnswerToDTO(a *model.ExamAnswer) LevelExamAnswerDTO {
 		AIScore:           a.AIScore,
 		AIGradedAt:        isoPtr(a.AIGradedAt),
 	}
+	// 降级标记单点还原：AI 注释携带统一前缀即视为降级（读侧无独立落库列）。
+	if hasFallbackComment(a.AIComment) {
+		fb := true
+		d.AIFallback = &fb
+	}
+	return d
 }
 
 // isoPtr 将时间转为 ISO 字符串指针（DTO 中 nil 时间序列化为 null，与旧契约一致）。

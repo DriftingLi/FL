@@ -25,7 +25,6 @@ export interface GradingParticipant {
   session_name?: string
   participant_id?: number
   ungraded_count?: number
-  [key: string]: unknown
 }
 
 /** 待批改列表响应（后端兼容数组或分页对象两种形态） */
@@ -33,25 +32,37 @@ export type GradingParticipantList =
   | GradingParticipant[]
   | { participants?: GradingParticipant[]; items?: GradingParticipant[] }
 
+/** 答题明细（含后端评分字段 + 前端批改交互阶段字段） */
+export interface GradingAnswer {
+  id: number
+  question_id?: number
+  user_answer?: string
+  score?: number | null
+  ai_score?: number | null
+  ai_comment?: string
+  grading_comment?: string
+  is_correct?: boolean | null
+  grader_id?: number | null
+  question?: { type?: string; score?: number }
+  // 前端批改交互阶段字段（内存态，不入库）
+  _score?: number
+  _comment?: string
+  _confirming?: boolean
+  _aiLoading?: boolean
+  _regrading?: boolean
+  _regradeScore?: number
+  _regradeComment?: string
+}
+
 /** 参与者详情（含答题明细） */
 export interface GradingParticipantDetail {
-  answers?: {
-    id: number
-    ai_score?: number | null
-    ai_comment?: string
-    score?: number | null
-    _score?: number
-    _comment?: string
-    [key: string]: unknown
-  }[]
-  [key: string]: unknown
+  answers?: GradingAnswer[]
 }
 
 /** AI 评分结果 */
 export interface AiGradeResult {
   ai_score?: number
   ai_comment?: string
-  [key: string]: unknown
 }
 
 export const gradingApi = {

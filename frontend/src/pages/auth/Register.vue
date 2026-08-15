@@ -1,234 +1,346 @@
 <template>
-  <div class="register-page">
-    <div class="register-bg">
-      <div class="bg-blob bg-blob-1"></div>
-      <div class="bg-blob bg-blob-2"></div>
-      <div class="bg-blob bg-blob-3"></div>
-    </div>
+  <AuthPageShell
+    title="创建账户"
+    subtitle="填写以下信息完成注册"
+    badge-text="学员端"
+    badge-tone="student"
+    :alt-modes="altModes"
+    :active-alt="activeAlt"
+    back-label="返回手机号注册"
+    divider-text="或使用以下方式注册"
+    @select-alt="onSelectAlt"
+  >
+    <template #main>
+      <el-form
+        ref="mainFormRef"
+        :model="formData"
+        :rules="mainFieldRules"
+        label-width="0"
+        class="auth-form"
+        @submit.prevent
+      >
+        <el-form-item prop="nickname">
+          <el-input
+            v-model="formData.nickname"
+            placeholder="昵称（1-30字，展示用）"
+            prefix-icon="Postcard"
+            size="large"
+            class="form-input"
+            @keyup.enter="handleRegister"
+          />
+        </el-form-item>
 
-    <div class="register-card-wrap">
-      <div class="register-card">
-        <div class="card-header">
-          <div class="card-icon">
-            <el-icon :size="24">
-              <EditPen />
-            </el-icon>
-          </div>
-          <h1 class="card-title">创建账户</h1>
-          <p class="card-subtitle">填写以下信息完成注册</p>
-        </div>
+        <el-form-item prop="phone">
+          <el-input
+            v-model="formData.phone"
+            placeholder="请输入手机号"
+            prefix-icon="Phone"
+            size="large"
+            class="form-input"
+            maxlength="11"
+            @keyup.enter="handleRegister"
+          />
+        </el-form-item>
 
-        <el-radio-group v-model="registerMode" class="mode-switch">
-          <el-radio-button label="phone">手机号注册</el-radio-button>
-          <el-radio-button label="email">邮箱注册</el-radio-button>
-        </el-radio-group>
-
-        <el-form ref="formRef" :model="formData" :rules="rules" label-width="0" class="register-form">
-          <el-form-item prop="nickname">
+        <el-form-item>
+          <div class="captcha-row">
             <el-input
-              v-model="formData.nickname"
-              placeholder="昵称（1-30字，展示用）"
-              prefix-icon="Postcard"
+              v-model="captchaValue"
+              placeholder="图形验证码"
               size="large"
-              class="form-input"
+              class="form-input captcha-input"
+              maxlength="4"
+              @keyup.enter="handleSendCode"
             />
-          </el-form-item>
-
-          <template v-if="registerMode === 'phone'">
-            <el-form-item prop="phone">
-              <el-input
-                v-model="formData.phone"
-                placeholder="请输入手机号"
-                prefix-icon="Phone"
-                size="large"
-                class="form-input"
-                maxlength="11"
-                @keyup.enter="handleRegister"
-              />
-            </el-form-item>
-
-            <el-form-item prop="code">
-              <div class="code-row">
-                <el-input
-                  v-model="formData.code"
-                  placeholder="6位手机验证码"
-                  prefix-icon="Message"
-                  size="large"
-                  class="form-input code-input"
-                  maxlength="6"
-                  @keyup.enter="handleRegister"
-                />
-                <el-button
-                  :disabled="countdown > 0 || codeSending"
-                  size="large"
-                  class="code-btn"
-                  @click="handleSendCode"
-                >
-                  {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
-                </el-button>
-              </div>
-            </el-form-item>
-
-            <el-form-item prop="password">
-              <el-input
-                v-model="formData.password"
-                type="password"
-                placeholder="设置密码（6-20位，用于账号密码登录）"
-                prefix-icon="Lock"
-                show-password
-                size="large"
-                class="form-input"
-              />
-            </el-form-item>
-
-            <el-form-item prop="confirmPassword">
-              <el-input
-                v-model="formData.confirmPassword"
-                type="password"
-                placeholder="确认密码"
-                prefix-icon="Lock"
-                show-password
-                size="large"
-                class="form-input"
-                @keyup.enter="handleRegister"
-              />
-            </el-form-item>
-
-            <el-form-item prop="company">
-              <el-input
-                v-model="formData.company"
-                placeholder="您的公司（选填）"
-                prefix-icon="OfficeBuilding"
-                size="large"
-                class="form-input"
-                @keyup.enter="handleRegister"
-              />
-            </el-form-item>
-          </template>
-
-          <template v-else>
-            <el-form-item prop="email">
-              <el-input
-                v-model="formData.email"
-                placeholder="请输入邮箱"
-                prefix-icon="Message"
-                size="large"
-                class="form-input"
-                @keyup.enter="handleRegister"
-              />
-            </el-form-item>
-
-            <el-form-item prop="code">
-              <div class="code-row">
-                <el-input
-                  v-model="formData.code"
-                  placeholder="6位邮箱验证码"
-                  prefix-icon="Message"
-                  size="large"
-                  class="form-input code-input"
-                  maxlength="6"
-                  @keyup.enter="handleRegister"
-                />
-                <el-button
-                  :disabled="countdown > 0 || codeSending"
-                  size="large"
-                  class="code-btn"
-                  @click="handleSendCode"
-                >
-                  {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
-                </el-button>
-              </div>
-            </el-form-item>
-
-            <el-form-item prop="password">
-              <el-input
-                v-model="formData.password"
-                type="password"
-                placeholder="设置密码（6-20位，用于账号密码登录）"
-                prefix-icon="Lock"
-                show-password
-                size="large"
-                class="form-input"
-              />
-            </el-form-item>
-
-            <el-form-item prop="confirmPassword">
-              <el-input
-                v-model="formData.confirmPassword"
-                type="password"
-                placeholder="确认密码"
-                prefix-icon="Lock"
-                show-password
-                size="large"
-                class="form-input"
-                @keyup.enter="handleRegister"
-              />
-            </el-form-item>
-
-            <el-form-item prop="company">
-              <el-input
-                v-model="formData.company"
-                placeholder="您的公司（选填）"
-                prefix-icon="OfficeBuilding"
-                size="large"
-                class="form-input"
-              />
-            </el-form-item>
-          </template>
-
-
-          <el-form-item>
-            <el-button
-              type="primary"
-              :loading="loading"
-              class="register-btn"
-              size="large"
-              @click="handleRegister"
-            >
-              {{ loading ? '注册中...' : '注 册' }}
-            </el-button>
-          </el-form-item>
-
-          <div class="form-footer">
-            <span class="footer-text">已有账号？</span>
-            <router-link to="/login" class="footer-link">返回登录</router-link>
+            <img
+              v-if="captchaImage"
+              :src="captchaImage"
+              class="captcha-img"
+              alt="验证码"
+              title="看不清？点击刷新"
+              @click="refreshCaptcha"
+            />
           </div>
-        </el-form>
+        </el-form-item>
+
+        <el-form-item prop="code">
+          <div class="code-row">
+            <el-input
+              v-model="formData.code"
+              placeholder="6位手机验证码"
+              prefix-icon="Message"
+              size="large"
+              class="form-input code-input"
+              maxlength="6"
+              @keyup.enter="handleRegister"
+            />
+            <el-button
+              :disabled="countdown > 0 || codeSending"
+              size="large"
+              class="code-btn"
+              @click="handleSendCode"
+            >
+              {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
+            </el-button>
+          </div>
+        </el-form-item>
+
+        <el-form-item prop="password">
+          <el-input
+            v-model="formData.password"
+            type="password"
+            placeholder="设置密码（6-20位，用于账号密码登录）"
+            prefix-icon="Lock"
+            show-password
+            size="large"
+            class="form-input"
+          />
+        </el-form-item>
+
+        <el-form-item prop="confirmPassword">
+          <el-input
+            v-model="formData.confirmPassword"
+            type="password"
+            placeholder="确认密码"
+            prefix-icon="Lock"
+            show-password
+            size="large"
+            class="form-input"
+            @keyup.enter="handleRegister"
+          />
+        </el-form-item>
+
+        <el-form-item prop="company">
+          <el-input
+            v-model="formData.company"
+            placeholder="您的公司（选填）"
+            prefix-icon="OfficeBuilding"
+            size="large"
+            class="form-input"
+            @keyup.enter="handleRegister"
+          />
+        </el-form-item>
+
+        <el-form-item>
+          <el-button
+            type="primary"
+            :loading="flow.loading"
+            class="auth-btn"
+            size="large"
+            @click="handleRegister"
+          >
+            {{ flow.loading ? '注册中...' : '注 册' }}
+          </el-button>
+        </el-form-item>
+      </el-form>
+    </template>
+
+    <template #alt-email>
+      <el-form
+        ref="emailFormRef"
+        :model="formData"
+        :rules="emailFieldRules"
+        label-width="0"
+        class="auth-form"
+        @submit.prevent
+      >
+        <el-form-item prop="nickname">
+          <el-input
+            v-model="formData.nickname"
+            placeholder="昵称（1-30字，展示用）"
+            prefix-icon="Postcard"
+            size="large"
+            class="form-input"
+            @keyup.enter="handleRegister"
+          />
+        </el-form-item>
+
+        <el-form-item prop="email">
+          <el-input
+            v-model="formData.email"
+            placeholder="请输入邮箱"
+            prefix-icon="Message"
+            size="large"
+            class="form-input"
+            @keyup.enter="handleRegister"
+          />
+        </el-form-item>
+
+        <el-form-item>
+          <div class="captcha-row">
+            <el-input
+              v-model="captchaValue"
+              placeholder="图形验证码"
+              size="large"
+              class="form-input captcha-input"
+              maxlength="4"
+              @keyup.enter="handleSendCode"
+            />
+            <img
+              v-if="captchaImage"
+              :src="captchaImage"
+              class="captcha-img"
+              alt="验证码"
+              title="看不清？点击刷新"
+              @click="refreshCaptcha"
+            />
+          </div>
+        </el-form-item>
+
+        <el-form-item prop="code">
+          <div class="code-row">
+            <el-input
+              v-model="formData.code"
+              placeholder="6位邮箱验证码"
+              prefix-icon="Message"
+              size="large"
+              class="form-input code-input"
+              maxlength="6"
+              @keyup.enter="handleRegister"
+            />
+            <el-button
+              :disabled="countdown > 0 || codeSending"
+              size="large"
+              class="code-btn"
+              @click="handleSendCode"
+            >
+              {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
+            </el-button>
+          </div>
+        </el-form-item>
+
+        <el-form-item prop="password">
+          <el-input
+            v-model="formData.password"
+            type="password"
+            placeholder="设置密码（6-20位，用于账号密码登录）"
+            prefix-icon="Lock"
+            show-password
+            size="large"
+            class="form-input"
+          />
+        </el-form-item>
+
+        <el-form-item prop="confirmPassword">
+          <el-input
+            v-model="formData.confirmPassword"
+            type="password"
+            placeholder="确认密码"
+            prefix-icon="Lock"
+            show-password
+            size="large"
+            class="form-input"
+            @keyup.enter="handleRegister"
+          />
+        </el-form-item>
+
+        <el-form-item prop="company">
+          <el-input
+            v-model="formData.company"
+            placeholder="您的公司（选填）"
+            prefix-icon="OfficeBuilding"
+            size="large"
+            class="form-input"
+            @keyup.enter="handleRegister"
+          />
+        </el-form-item>
+
+        <el-form-item>
+          <el-button
+            type="primary"
+            :loading="flow.loading"
+            class="auth-btn"
+            size="large"
+            @click="handleRegister"
+          >
+            {{ flow.loading ? '注册中...' : '注 册' }}
+          </el-button>
+        </el-form-item>
+      </el-form>
+    </template>
+
+    <template #footer>
+      <div class="form-footer">
+        <span class="footer-text">已有账号？</span>
+        <router-link to="/login" class="footer-link">返回登录</router-link>
       </div>
-    </div>
-  </div>
+    </template>
+  </AuthPageShell>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { authApi } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
+import type { UserProfile } from '@/types/user'
 import { getDefaultWorkspaceBySubdomain } from '@/utils/subdomain'
-import { ElMessage, type FormInstance } from 'element-plus'
-import type { FormItemRule } from 'element-plus'
-import { EditPen } from '@element-plus/icons-vue'
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { Message } from '@element-plus/icons-vue'
 import { useSendCode } from '@/composables/useSendCode'
+import { useCaptcha } from '@/composables/useCaptcha'
+import { useAuthFlow } from '@/composables/useAuthFlow'
+import AuthPageShell, { type AltMode, type AltModeKey } from '@/components/auth/AuthPageShell.vue'
 import {
   passwordRules,
   nicknameRules,
   phoneRules,
   companyRules,
   requiredEmailRules,
-  emailCodeRules
+  emailCodeRules,
+  confirmPasswordRule
 } from '@/utils/validate'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const formRef = ref<FormInstance | null>(null)
-const loading = ref(false)
-const registerMode = ref<'phone' | 'email'>('phone')
+
+type RegisterMode = 'phone' | 'email'
+
+// useAuthFlow：收敛「mode 状态 + validate→submit→跳转」顺序约束与 loading/错误处理
+const flow = useAuthFlow<RegisterMode>({
+  modes: ['phone', 'email'],
+  submit: async (m) => {
+    if (m === 'email') {
+      return authApi.emailRegister({
+        nickname: formData.nickname,
+        email: formData.email.trim(),
+        code: formData.code.trim(),
+        company: formData.company,
+        password: formData.password
+      })
+    }
+    return authApi.phoneRegister({
+      nickname: formData.nickname,
+      phone: formData.phone.trim(),
+      code: formData.code.trim(),
+      company: formData.company,
+      password: formData.password
+    })
+  },
+  afterSuccess: async (_m, info) => {
+    authStore.setAuthData(info as UserProfile)
+    ElMessage.success('注册成功')
+    router.push(getDefaultWorkspaceBySubdomain())
+  }
+})
+
+// 当前激活的 alt 方式：null = 手机号注册（主方式），来自 useAuthFlow 的 mode 派生
+const activeAlt = computed<AltModeKey | null>(() => (flow.mode === 'email' ? 'email' : null))
+
+const mainFormRef = ref<FormInstance | null>(null)
+const emailFormRef = ref<FormInstance | null>(null)
+
+const { captchaId, captchaImage, captchaValue, refreshCaptcha } = useCaptcha()
+onMounted(() => {
+  refreshCaptcha()
+})
+
 const { sending: codeSending, remaining: countdown, send: sendCode } = useSendCode({
   purpose: 'register',
   sendCode: (channel, target) =>
     channel === 'phone'
-      ? authApi.sendPhoneCode({ phone: target, purpose: 'register' })
-      : authApi.sendEmailCode({ email: target, purpose: 'register' })
+      ? authApi.sendPhoneCode({ phone: target, purpose: 'register', captcha_id: captchaId.value, captcha_value: captchaValue.value.trim() })
+      : authApi.sendEmailCode({ email: target, purpose: 'register', captcha_id: captchaId.value, captcha_value: captchaValue.value.trim() })
 })
 
 const formData = reactive({
@@ -241,340 +353,56 @@ const formData = reactive({
   code: ''
 })
 
-const validateConfirmPassword: FormItemRule['validator'] = (_rule, value: string, callback) => {
-  if (value === '') {
-    callback(new Error('请再次输入密码'))
-  } else if (value !== formData.password) {
-    callback(new Error('两次输入密码不一致'))
-  } else {
-    callback()
-  }
+const altModes: AltMode[] = [{ key: 'email', label: '邮箱注册', icon: Message }]
+
+function onSelectAlt(key: AltModeKey | null) {
+  flow.setMode((key === 'email' ? 'email' : 'phone') as RegisterMode)
 }
 
-const rules = computed(() =>
-  registerMode.value === 'email'
-    ? {
-        nickname: nicknameRules,
-        email: requiredEmailRules,
-        code: emailCodeRules,
-        password: passwordRules,
-        confirmPassword: [
-          { required: true, message: '请确认密码', trigger: 'blur' },
-          { validator: validateConfirmPassword, trigger: 'blur' }
-        ],
-        company: companyRules
-      }
-    : {
-        nickname: nicknameRules,
-        phone: phoneRules,
-        code: emailCodeRules,
-        password: passwordRules,
-        confirmPassword: [
-          { required: true, message: '请确认密码', trigger: 'blur' },
-          { validator: validateConfirmPassword, trigger: 'blur' }
-        ],
-        company: companyRules
-      }
-)
+// 确认密码校验：复用 validate.ts 单一确认规则（Register 文案「请再次输入密码」）
+const confirmPasswordRules = [
+  { required: true, message: '请确认密码', trigger: 'blur' },
+  confirmPasswordRule(formData, 'password', '请再次输入密码')
+]
+
+const mainFieldRules: FormRules = {
+  nickname: nicknameRules,
+  phone: phoneRules,
+  code: emailCodeRules,
+  password: passwordRules,
+  confirmPassword: confirmPasswordRules,
+  company: companyRules
+}
+
+const emailFieldRules: FormRules = {
+  nickname: nicknameRules,
+  email: requiredEmailRules,
+  code: emailCodeRules,
+  password: passwordRules,
+  confirmPassword: confirmPasswordRules,
+  company: companyRules
+}
 
 async function handleSendCode() {
-  if (registerMode.value === 'phone') {
-    await sendCode(formData.phone.trim(), 'phone')
-  } else {
-    await sendCode(formData.email.trim(), 'email')
+  if (captchaValue.value.trim() === '') {
+    ElMessage.warning('请输入图形验证码')
+    return
+  }
+  const ok =
+    flow.mode === 'phone'
+      ? await sendCode(formData.phone.trim(), 'phone')
+      : await sendCode(formData.email.trim(), 'email')
+  if (!ok) {
+    refreshCaptcha()
   }
 }
 
 async function handleRegister() {
-  if (!formRef.value) return
-  const valid = await formRef.value.validate().catch(() => false)
-  if (!valid) return
-
-  loading.value = true
-  try {
-    if (registerMode.value === 'email') {
-      const info = await authApi.emailRegister({
-        nickname: formData.nickname,
-        email: formData.email.trim(),
-        code: formData.code.trim(),
-        company: formData.company,
-        password: formData.password
-      })
-      authStore.setAuthData(info)
-    } else if (registerMode.value === 'phone') {
-      const info = await authApi.phoneRegister({
-        nickname: formData.nickname,
-        phone: formData.phone.trim(),
-        code: formData.code.trim(),
-        company: formData.company,
-        password: formData.password
-      })
-      authStore.setAuthData(info)
-    }
-
-    ElMessage.success('注册成功')
-    router.push(getDefaultWorkspaceBySubdomain())
-  } catch (e) {
-    console.error('Register error:', e)
-  } finally {
-    loading.value = false
-  }
+  const targetRef = flow.mode === 'email' ? emailFormRef.value : mainFormRef.value
+  await flow.handleSubmit(targetRef)
 }
 </script>
 
 <style scoped>
-.register-page {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #F1F5F9;
-  position: relative;
-  overflow: hidden;
-  padding: 40px 24px;
-}
-
-.register-bg {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.bg-blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.3;
-}
-
-.bg-blob-1 {
-  width: 460px;
-  height: 460px;
-  background: #A7F3D0;
-  top: -120px;
-  left: -80px;
-  animation: blob-float 12s ease-in-out infinite;
-}
-
-.bg-blob-2 {
-  width: 360px;
-  height: 360px;
-  background: #BAE6FD;
-  bottom: -100px;
-  right: -60px;
-  animation: blob-float 14s ease-in-out infinite 3s;
-}
-
-.bg-blob-3 {
-  width: 240px;
-  height: 240px;
-  background: #C4B5FD;
-  top: 45%;
-  right: 25%;
-  opacity: 0.15;
-  animation: blob-float 10s ease-in-out infinite 1.5s;
-}
-
-@keyframes blob-float {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(20px, -20px) scale(1.05); }
-  66% { transform: translate(-15px, 15px) scale(0.95); }
-}
-
-.register-card-wrap {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  max-width: 440px;
-}
-
-.register-card {
-  background: #FFFFFF;
-  border-radius: 20px;
-  padding: 44px 40px 36px;
-  box-shadow:
-    0 4px 6px -1px rgba(15, 23, 42, 0.05),
-    0 20px 50px -12px rgba(15, 23, 42, 0.1);
-  border: 1px solid rgba(226, 232, 240, 0.6);
-}
-
-.card-header {
-  text-align: center;
-  margin-bottom: 20px;
-}
-
-.card-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 20px;
-  color: white;
-  background: linear-gradient(135deg, #0EA5E9 0%, #14B8A6 100%);
-  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.25);
-}
-
-.card-title {
-  font-size: 26px;
-  font-weight: 700;
-  color: #0F172A;
-  margin: 0 0 8px;
-  letter-spacing: -0.02em;
-}
-
-.card-subtitle {
-  font-size: 14px;
-  color: #64748B;
-  margin: 0;
-  line-height: 1.5;
-}
-
-.register-form {
-  margin-top: 4px;
-}
-
-.mode-switch {
-  display: flex;
-  gap: 8px;
-  width: 100%;
-  margin-bottom: 16px;
-}
-
-.mode-switch :deep(.el-radio-button) {
-  flex: 1;
-  display: flex;
-}
-
-.mode-switch :deep(.el-radio-button__inner) {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 40px;
-  width: 100%;
-  border: 1px solid #E2E8F0;
-  border-radius: 10px;
-  background: #FFFFFF;
-  color: #64748B;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 0;
-  box-shadow: none;
-  transition: all 0.25s ease;
-}
-
-.mode-switch :deep(.el-radio-button:not(.is-active):hover .el-radio-button__inner) {
-  border-color: #99F6E4;
-  color: #0D9488;
-  background: #F0FDFA;
-}
-
-.mode-switch :deep(.el-radio-button.is-active .el-radio-button__inner) {
-  background: linear-gradient(135deg, #0EA5E9 0%, #14B8A6 100%);
-  border-color: transparent;
-  color: #FFFFFF;
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
-}
-
-.code-row {
-  display: flex;
-  gap: 10px;
-  width: 100%;
-}
-
-.code-input {
-  flex: 1;
-}
-
-.code-btn {
-  min-width: 124px;
-}
-
-
-.form-input :deep(.el-input__wrapper) {
-  border-radius: 12px;
-  padding: 4px 14px;
-  box-shadow: 0 0 0 1px #E2E8F0 inset;
-  transition: all 0.2s ease;
-  background: #F8FAFC;
-}
-
-.form-input :deep(.el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px #CBD5E1 inset;
-  background: #FFFFFF;
-}
-
-.form-input :deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.25) inset;
-  background: #FFFFFF;
-}
-
-.form-input :deep(.el-input__prefix-inner) {
-  color: #94A3B8;
-}
-
-.register-btn {
-  width: 100%;
-  height: 48px;
-  font-size: 16px;
-  font-weight: 600;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #0EA5E9 0%, #14B8A6 100%);
-  border: none;
-  letter-spacing: 0.08em;
-  margin-top: 8px;
-  transition: all 0.2s ease;
-}
-
-.register-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.3);
-  opacity: 0.95;
-}
-
-.form-footer {
-  text-align: center;
-  margin-top: 24px;
-}
-
-.footer-text {
-  font-size: 14px;
-  color: #94A3B8;
-}
-
-.footer-link {
-  font-size: 14px;
-  font-weight: 600;
-  color: #0EA5E9;
-  text-decoration: none;
-  margin-left: 4px;
-  transition: color 0.15s ease;
-}
-
-.footer-link:hover {
-  color: #0284C7;
-}
-
-@media screen and (max-width: 480px) {
-  .register-page {
-    padding: 24px 16px;
-  }
-
-  .register-card {
-    padding: 36px 24px 28px;
-    border-radius: 16px;
-  }
-
-  .card-title {
-    font-size: 22px;
-  }
-
-  .card-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 14px;
-  }
-}
+/* 表单共享样式已在 AuthPageShell 外壳收敛（:deep 触达 slot） */
 </style>

@@ -3,6 +3,8 @@
 package api
 
 import (
+	"context"
+
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/service"
@@ -33,18 +35,36 @@ func RegisterWechatAuthRoutes(rg *gin.RouterGroup, svc *service.WechatAuthServic
 
 // GetQRCodeInfo 获取扫码登录占位信息 POST /api/auth/wechat/qrcode
 func (h *WechatAuthHandler) GetQRCodeInfo(c *gin.Context) {
-	response.Success(c, h.svc.QRCodeInfo())
+	Endpoint[struct{}, map[string]any]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*map[string]any, error) {
+			result := h.svc.QRCodeInfo()
+			return &result, nil
+		},
+		Render: func(c *gin.Context, _ *struct{}, resp *map[string]any, _ error) {
+			response.Success(c, *resp)
+		},
+	}.Handle(c)
 }
 
 // LoginWithQRCode 扫码登录占位 POST /api/auth/wechat/login（未配置授权时明确报错）
 func (h *WechatAuthHandler) LoginWithQRCode(c *gin.Context) {
-	var req struct {
-		Code string `json:"code"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "请求参数错误")
-		return
-	}
-	_, err := h.svc.LoginWithQRCode(req.Code)
-	response.BadRequest(c, err.Error())
+	Endpoint[wechatLoginReq, service.LoginResult]{
+		Parse: func(c *gin.Context) (*wechatLoginReq, error) {
+			return bindJSON[wechatLoginReq](c)
+		},
+		Invoke: func(ctx context.Context, req *wechatLoginReq) (*service.LoginResult, error) {
+			return h.svc.LoginWithQRCode(req.Code)
+		},
+		Render: func(c *gin.Context, _ *wechatLoginReq, _ *service.LoginResult, err error) {
+			// 占位服务 err 一定非 nil，始终 BadRequest(err.Error())；成功（err==nil）无返回。
+			if err != nil {
+				response.BadRequest(c, err.Error())
+			}
+		},
+	}.Handle(c)
+}
+
+// wechatLoginReq 扫码登录请求体。
+type wechatLoginReq struct {
+	Code string `json:"code"`
 }

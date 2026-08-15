@@ -71,12 +71,22 @@ func TestLevelExamParticipantDTOShapeLock(t *testing.T) {
 
 func TestLevelExamAnswerDTOShapeLock(t *testing.T) {
 	a := LevelExamAnswerDTO{ID: 1, ExamParticipantID: 1, QuestionID: 10, UserAnswer: "A", Score: 3}
-	// 指针字段 nil → null（graded_at/ai_graded_at 等）
+	// 指针字段 nil → null（graded_at/ai_graded_at 等）；ai_fallback 加性字段未降级时省略（omitempty）
 	assertShapeLock(t, a,
 		"id", "exam_participant_id", "question_id", "user_answer", "score",
 		"grading_comment", "ai_comment", "is_correct", "grader_id", "graded_at",
 		"ai_score", "ai_graded_at",
 	)
+
+	// AI 评分降级：ai_fallback 出现（加性变更）。
+	fallback := true
+	a.AIFallback = &fallback
+	assertShapeLock(t, a,
+		"id", "exam_participant_id", "question_id", "user_answer", "score",
+		"grading_comment", "ai_comment", "is_correct", "grader_id", "graded_at",
+		"ai_score", "ai_graded_at", "ai_fallback",
+	)
+	a.AIFallback = nil
 
 	// question 为结果详情附加字段（省略时不出现在契约中）
 	q := QuestionDTO{ID: 10}
