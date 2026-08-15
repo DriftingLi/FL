@@ -44,13 +44,19 @@ func RegisterFeaturedRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Fea
 
 // GetPublicList 内容精选列表（仅已发布）GET /api/featured-contents
 func (h *FeaturedHandler) GetPublicList(c *gin.Context) {
-	Endpoint[struct{}, service.FeaturedContentPageResult]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.FeaturedContentPageResult, error) {
-			result := h.svc.GetPublicList(atoiDefault(c.Query("page"), 1),
-				atoiDefault(c.Query("page_size"), 10), c.Query("category"))
+	Endpoint[featuredListReq, service.FeaturedContentPageResult]{
+		Parse: func(c *gin.Context) (*featuredListReq, error) {
+			return &featuredListReq{
+				Page:     atoiDefault(c.Query("page"), 1),
+				PageSize: atoiDefault(c.Query("page_size"), 10),
+				Category: c.Query("category"),
+			}, nil
+		},
+		Invoke: func(ctx context.Context, req *featuredListReq) (*service.FeaturedContentPageResult, error) {
+			result := h.svc.GetPublicList(req.Page, req.PageSize, req.Category)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.FeaturedContentPageResult, _ error) {
+		Render: func(c *gin.Context, _ *featuredListReq, resp *service.FeaturedContentPageResult, _ error) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)
@@ -113,13 +119,20 @@ func (h *FeaturedHandler) IncrementViewCount(c *gin.Context) {
 
 // AdminList 管理端列表（含草稿）GET /api/admin/featured-contents
 func (h *FeaturedHandler) AdminList(c *gin.Context) {
-	Endpoint[struct{}, service.FeaturedContentPageResult]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.FeaturedContentPageResult, error) {
-			result := h.svc.AdminList(atoiDefault(c.Query("page"), 1),
-				atoiDefault(c.Query("page_size"), 10), c.Query("category"), c.Query("status"))
+	Endpoint[adminFeaturedListReq, service.FeaturedContentPageResult]{
+		Parse: func(c *gin.Context) (*adminFeaturedListReq, error) {
+			return &adminFeaturedListReq{
+				Page:     atoiDefault(c.Query("page"), 1),
+				PageSize: atoiDefault(c.Query("page_size"), 10),
+				Category: c.Query("category"),
+				Status:   c.Query("status"),
+			}, nil
+		},
+		Invoke: func(ctx context.Context, req *adminFeaturedListReq) (*service.FeaturedContentPageResult, error) {
+			result := h.svc.AdminList(req.Page, req.PageSize, req.Category, req.Status)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.FeaturedContentPageResult, _ error) {
+		Render: func(c *gin.Context, _ *adminFeaturedListReq, resp *service.FeaturedContentPageResult, _ error) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)
@@ -269,6 +282,21 @@ func (h *FeaturedHandler) Publish(c *gin.Context) {
 func (h *FeaturedHandler) UploadImage(c *gin.Context) {
 	// 封面/内嵌图存 featured 目录（FeaturedService.SaveImage 单点）
 	uploadVditorImage(c, h.fileSvc, h.svc.SaveImage)
+}
+
+// featuredListReq 公开内容精选列表查询参数。
+type featuredListReq struct {
+	Page     int
+	PageSize int
+	Category string
+}
+
+// adminFeaturedListReq 管理端内容精选列表查询参数。
+type adminFeaturedListReq struct {
+	Page     int
+	PageSize int
+	Category string
+	Status   string
 }
 
 // featuredDetailReq 内容详情请求（id + countView）。

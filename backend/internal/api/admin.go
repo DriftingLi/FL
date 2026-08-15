@@ -74,17 +74,21 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, rd RouterDeps, adminSvc *service.A
 
 // ListCourses 课程列表 GET /api/admin/courses
 func (h *AdminHandler) ListCourses(c *gin.Context) {
-	Endpoint[struct{}, service.CoursePageResult]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.CoursePageResult, error) {
-			page := atoiDefault(c.Query("page"), 1)
-			pageSize := atoiDefault(c.Query("page_size"), 10)
-			keyword := c.Query("keyword")
-			specialtyID := queryIDPtr(c, "specialty_id")
-			levelID := queryIDPtr(c, "level_id")
-			result := h.courseSvc.GetCourses(page, pageSize, keyword, specialtyID, levelID)
+	Endpoint[adminCourseListReq, service.CoursePageResult]{
+		Parse: func(c *gin.Context) (*adminCourseListReq, error) {
+			return &adminCourseListReq{
+				Page:        atoiDefault(c.Query("page"), 1),
+				PageSize:    atoiDefault(c.Query("page_size"), 10),
+				Keyword:     c.Query("keyword"),
+				SpecialtyID: queryIDPtr(c, "specialty_id"),
+				LevelID:     queryIDPtr(c, "level_id"),
+			}, nil
+		},
+		Invoke: func(ctx context.Context, req *adminCourseListReq) (*service.CoursePageResult, error) {
+			result := h.courseSvc.GetCourses(req.Page, req.PageSize, req.Keyword, req.SpecialtyID, req.LevelID)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.CoursePageResult, _ error) {
+		Render: func(c *gin.Context, _ *adminCourseListReq, resp *service.CoursePageResult, _ error) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)
@@ -345,14 +349,18 @@ func (h *AdminHandler) GetGenerationTask(c *gin.Context) {
 
 // ListHrwaiUsers HRWAI 用户列表 GET /api/admin/hrwai-users
 func (h *AdminHandler) ListHrwaiUsers(c *gin.Context) {
-	Endpoint[struct{}, service.HrwaiUserPageResult]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.HrwaiUserPageResult, error) {
-			page := atoiDefault(c.Query("page"), 1)
-			pageSize := atoiDefault(c.Query("page_size"), 20)
-			keyword := c.Query("keyword")
-			return h.adminSvc.ListHrwaiUsers(page, pageSize, keyword)
+	Endpoint[hrwaiUserListReq, service.HrwaiUserPageResult]{
+		Parse: func(c *gin.Context) (*hrwaiUserListReq, error) {
+			return &hrwaiUserListReq{
+				Page:     atoiDefault(c.Query("page"), 1),
+				PageSize: atoiDefault(c.Query("page_size"), 20),
+				Keyword:  c.Query("keyword"),
+			}, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.HrwaiUserPageResult, err error) {
+		Invoke: func(ctx context.Context, req *hrwaiUserListReq) (*service.HrwaiUserPageResult, error) {
+			return h.adminSvc.ListHrwaiUsers(req.Page, req.PageSize, req.Keyword)
+		},
+		Render: func(c *gin.Context, _ *hrwaiUserListReq, resp *service.HrwaiUserPageResult, err error) {
 			if err != nil {
 				response.BadRequest(c, "查询用户列表失败")
 				return
@@ -519,14 +527,18 @@ func (h *AdminHandler) DeleteHrwaiUser(c *gin.Context) {
 
 // ListTutors 导师列表 GET /api/admin/tutors
 func (h *AdminHandler) ListTutors(c *gin.Context) {
-	Endpoint[struct{}, service.TutorListDTO]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.TutorListDTO, error) {
-			page := atoiDefault(c.Query("page"), 1)
-			pageSize := atoiDefault(c.Query("page_size"), 10)
-			keyword := c.Query("keyword")
-			return h.adminSvc.GetTutors(page, pageSize, keyword), nil
+	Endpoint[tutorListReq, service.TutorListDTO]{
+		Parse: func(c *gin.Context) (*tutorListReq, error) {
+			return &tutorListReq{
+				Page:     atoiDefault(c.Query("page"), 1),
+				PageSize: atoiDefault(c.Query("page_size"), 10),
+				Keyword:  c.Query("keyword"),
+			}, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.TutorListDTO, _ error) {
+		Invoke: func(ctx context.Context, req *tutorListReq) (*service.TutorListDTO, error) {
+			return h.adminSvc.GetTutors(req.Page, req.PageSize, req.Keyword), nil
+		},
+		Render: func(c *gin.Context, _ *tutorListReq, resp *service.TutorListDTO, _ error) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)
@@ -730,4 +742,27 @@ type createTutorReq struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Name     string `json:"name"`
+}
+
+// adminCourseListReq 管理端课程列表查询参数。
+type adminCourseListReq struct {
+	Page        int
+	PageSize    int
+	Keyword     string
+	SpecialtyID *int
+	LevelID     *int
+}
+
+// hrwaiUserListReq HRWAI 用户列表查询参数。
+type hrwaiUserListReq struct {
+	Page     int
+	PageSize int
+	Keyword  string
+}
+
+// tutorListReq 导师列表查询参数。
+type tutorListReq struct {
+	Page     int
+	PageSize int
+	Keyword  string
 }

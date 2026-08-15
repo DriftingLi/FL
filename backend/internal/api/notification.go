@@ -70,15 +70,18 @@ func (h *NotificationHandler) List(c *gin.Context) {
 
 // UnreadCount 未读数 GET /api/notifications/unread-count
 func (h *NotificationHandler) UnreadCount(c *gin.Context) {
-	Endpoint[struct{}, int64]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*int64, error) {
-			count, err := h.svc.UnreadCount(middleware.CurrentUserID(c))
+	Endpoint[notificationUserIDReq, int64]{
+		Parse: func(c *gin.Context) (*notificationUserIDReq, error) {
+			return &notificationUserIDReq{UserID: middleware.CurrentUserID(c)}, nil
+		},
+		Invoke: func(ctx context.Context, req *notificationUserIDReq) (*int64, error) {
+			count, err := h.svc.UnreadCount(req.UserID)
 			if err != nil {
 				return nil, err
 			}
 			return &count, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *int64, err error) {
+		Render: func(c *gin.Context, _ *notificationUserIDReq, resp *int64, err error) {
 			if err != nil {
 				response.ServerError(c, "查询失败: "+err.Error())
 				return
@@ -92,6 +95,11 @@ func (h *NotificationHandler) UnreadCount(c *gin.Context) {
 type markReadReq struct {
 	UserID int
 	ID     int64
+}
+
+// notificationUserIDReq 仅带登录用户 ID 的请求（未读数 / 全部已读）。
+type notificationUserIDReq struct {
+	UserID int
 }
 
 // MarkRead 单条标记已读 POST /api/notifications/:id/read
@@ -122,14 +130,17 @@ func (h *NotificationHandler) MarkRead(c *gin.Context) {
 
 // MarkAllRead 全部标记已读 POST /api/notifications/read-all
 func (h *NotificationHandler) MarkAllRead(c *gin.Context) {
-	Endpoint[struct{}, struct{}]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*struct{}, error) {
-			if err := h.svc.MarkAllRead(middleware.CurrentUserID(c)); err != nil {
+	Endpoint[notificationUserIDReq, struct{}]{
+		Parse: func(c *gin.Context) (*notificationUserIDReq, error) {
+			return &notificationUserIDReq{UserID: middleware.CurrentUserID(c)}, nil
+		},
+		Invoke: func(ctx context.Context, req *notificationUserIDReq) (*struct{}, error) {
+			if err := h.svc.MarkAllRead(req.UserID); err != nil {
 				return nil, err
 			}
 			return nil, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, _ *struct{}, err error) {
+		Render: func(c *gin.Context, _ *notificationUserIDReq, _ *struct{}, err error) {
 			if err != nil {
 				response.ServerError(c, "操作失败: "+err.Error())
 				return

@@ -58,7 +58,7 @@ func RegisterAIAssistantRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.
 func (h *AIAssistantHandler) ListPublicModels(c *gin.Context) {
 	Endpoint[struct{}, []service.ModelOption]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.ModelOption, error) {
-			models, err := h.svc.ListPublicModels(c.Request.Context())
+			models, err := h.svc.ListPublicModels(ctx)
 			if err != nil {
 				return nil, err
 			}

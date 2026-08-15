@@ -147,6 +147,18 @@ write_env_file() {
         printf 'DB_PASSWORD='
         env_val "${DB_PASSWORD:-}"; echo
 
+        # SMTP 邮件（验证码通道；腾讯企业邮 SSL 465）
+        printf 'SMTP_HOST='
+        env_val "${SMTP_HOST:-}"; echo
+        echo "SMTP_PORT=${SMTP_PORT:-465}"
+        printf 'SMTP_USERNAME='
+        env_val "${SMTP_USERNAME:-${SMTP_FROM:-}}"; echo
+        printf 'SMTP_PASSWORD='
+        env_val "${SMTP_PASSWORD:-}"; echo
+        printf 'SMTP_FROM='
+        env_val "${SMTP_FROM:-}"; echo
+        echo "SMTP_FROM_NAME=${SMTP_FROM_NAME:-和润天下}"
+
         printf 'SECRET_KEY='
         env_val "${SECRET_KEY:-}"; echo
         printf 'JWT_SECRET_KEY='

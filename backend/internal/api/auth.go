@@ -143,23 +143,28 @@ func authCookieFromReq(c *gin.Context, sess *security.Session) string {
 	return tk
 }
 
+// meReq /auth/me 请求（身份来自 JWT 中间件上下文）。
+type meReq struct {
+	UserID  int
+	Role    string
+	Account string
+}
+
 // Me 获取当前用户 GET /api/auth/me
 // 资料组装收编在 AuthService.GetProfile（响应形状由契约测试锁定）。
 func (h *AuthHandler) Me(c *gin.Context) {
-	Endpoint[struct{}, map[string]any]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*map[string]any, error) {
-			userID, _ := c.Get(string(middleware.CtxUserID))
-			role, _ := c.Get(string(middleware.CtxUserRole))
-			account, _ := c.Get(string(middleware.CtxAccount))
-
-			uid, _ := userID.(int)
-			roleStr, _ := role.(string)
-			acct, _ := account.(string)
-
-			result := h.authSvc.GetProfile(uid, roleStr, acct)
-			return &result, nil
+	Endpoint[meReq, service.ProfileDTO]{
+		Parse: func(c *gin.Context) (*meReq, error) {
+			return &meReq{
+				UserID:  middleware.CurrentUserID(c),
+				Role:    middleware.CurrentRole(c),
+				Account: middleware.CurrentAccount(c),
+			}, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *map[string]any, _ error) {
+		Invoke: func(ctx context.Context, req *meReq) (*service.ProfileDTO, error) {
+			return h.authSvc.GetProfile(req.UserID, req.Role, req.Account), nil
+		},
+		Render: func(c *gin.Context, _ *meReq, resp *service.ProfileDTO, _ error) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)

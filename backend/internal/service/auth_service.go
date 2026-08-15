@@ -46,45 +46,67 @@ func (s *AuthService) SetProfileReviewService(rs *ProfileReviewService) { s.revi
 // GetProfile 组装 /auth/me 返回的用户资料（按角色查询对应账号表）。
 // 响应字段为前端约定（auth store 依赖 user_id/account/role/uid/username、
 // 学员资料字段与 has_password / pending_profile_change），保持稳定。
-func (s *AuthService) GetProfile(userID int, role, account string) map[string]any {
-	data := map[string]any{
-		"user_id": userID,
-		"account": account,
-		"role":    role,
+func (s *AuthService) GetProfile(userID int, role, account string) *ProfileDTO {
+	dto := &ProfileDTO{
+		UserID:  userID,
+		Account: account,
+		Role:    role,
 	}
 	switch role {
 	case HrwaiRole:
 		var u model.HrwaiUser
 		if err := s.db.First(&u, userID).Error; err == nil {
-			data["uid"] = FormatUID(u.UID)
-			data["account"] = u.Account
-			data["username"] = u.Username
-			data["avatar_url"] = u.AvatarURL
-			data["phone"] = MaskedPhone(u.Phone)
-			data["email"] = u.Email
-			data["company"] = u.Company
+			dto.Account = u.Account
+			dto.UID = ptr(FormatUID(u.UID))
+			dto.Username = ptr(u.Username)
+			dto.AvatarURL = ptr(u.AvatarURL)
+			dto.Phone = ptr(MaskedPhone(u.Phone))
+			dto.Email = ptr(u.Email)
+			dto.Company = ptr(u.Company)
 			// 是否已设置密码（决定个人资料页"账号密码"卡片提示文案）
-			data["has_password"] = u.Password != ""
+			dto.HasPassword = ptr(u.Password != "")
 		}
-		// 待审核的资料修改（昵称/头像），供前端展示"审核中"状态
+		// 待审核的资料修改（昵称/头像），供前端展示"审核中"状态。
+		// GetPendingForUser 无待审时返回 nil -> 序列化为 null（键存在）；出错时键缺失。
 		if pending, err := s.reviewSvc.GetPendingForUser(userID); err == nil {
-			data["pending_profile_change"] = pending
+			dto.PendingProfileChange = &pending
 		}
 	case "tutor":
 		var t model.Tutor
 		if err := s.db.First(&t, userID).Error; err == nil {
-			data["name"] = t.Name
-			data["username"] = t.Username
+			dto.Name = ptr(t.Name)
+			dto.Username = ptr(t.Username)
 		}
 	case "admin":
 		var a model.Admin
 		if err := s.db.First(&a, userID).Error; err == nil {
-			data["name"] = a.Name
-			data["username"] = a.Username
+			dto.Name = ptr(a.Name)
+			dto.Username = ptr(a.Username)
 		}
 	}
-	return data
+	return dto
 }
+
+// ProfileDTO /auth/me 响应体（形状由契约测试 auth_me_contract_test.go 字节级锁定，
+// 勿改 json tag 与字段声明顺序）。指针字段 + omitempty 表达「键存在/键缺失」两态；
+// PendingProfileChange 用双指针表达三态：nil=键缺失、&nil=输出 null、&对象=输出对象。
+type ProfileDTO struct {
+	Account              string                    `json:"account"`
+	Name                 *string                   `json:"name,omitempty"`
+	AvatarURL            *string                   `json:"avatar_url,omitempty"`
+	Company              *string                   `json:"company,omitempty"`
+	Email                *string                   `json:"email,omitempty"`
+	HasPassword          *bool                     `json:"has_password,omitempty"`
+	PendingProfileChange **ProfileChangeRequestDTO `json:"pending_profile_change,omitempty"`
+	Phone                *string                   `json:"phone,omitempty"`
+	Role                 string                    `json:"role"`
+	UID                  *string                   `json:"uid,omitempty"`
+	UserID               int                       `json:"user_id"`
+	Username             *string                   `json:"username,omitempty"`
+}
+
+// ptr 构造 T 的指针（ProfileDTO 指针字段表达键缺失/存在两态）。
+func ptr[T any](v T) *T { return &v }
 
 // MaskedPhone 隐藏邮箱注册的占位手机号（email_ 前缀），/auth/me 源头过滤不下发客户端。
 func MaskedPhone(phone string) string {

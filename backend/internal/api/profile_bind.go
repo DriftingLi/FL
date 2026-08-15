@@ -97,15 +97,23 @@ func (h *ProfileBindHandler) bindPhone(c *gin.Context) {
 
 // SendChangePasswordCode 发送修改密码验证码 POST /api/auth/profile/password/send-code
 func (h *ProfileBindHandler) SendChangePasswordCode(c *gin.Context) {
-	Endpoint[struct{}, struct{}]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*struct{}, error) {
-			if err := h.codeSvc.SendChangePasswordCode(ctx, h.phoneCh, middleware.CurrentUserID(c)); err != nil {
+	Endpoint[profileUserIDReq, struct{}]{
+		Parse: func(c *gin.Context) (*profileUserIDReq, error) {
+			return &profileUserIDReq{UserID: middleware.CurrentUserID(c)}, nil
+		},
+		Invoke: func(ctx context.Context, req *profileUserIDReq) (*struct{}, error) {
+			if err := h.codeSvc.SendChangePasswordCode(ctx, h.phoneCh, req.UserID); err != nil {
 				return nil, err
 			}
 			return &struct{}{}, nil
 		},
-		Render: successMsgRenderer[struct{}]("验证码已发送，请查收"),
+		Render: successMsgRenderer[profileUserIDReq]("验证码已发送，请查收"),
 	}.Handle(c)
+}
+
+// profileUserIDReq 仅带登录用户 ID 的请求（发送验证码类）。
+type profileUserIDReq struct {
+	UserID int
 }
 
 // changePasswordReq 设置/修改密码请求 {code, password}。
@@ -132,14 +140,17 @@ func (h *ProfileBindHandler) UpdatePassword(c *gin.Context) {
 
 // SendAccountChangeCode 发送修改登录账号验证码 POST /api/auth/account/send-code
 func (h *ProfileBindHandler) SendAccountChangeCode(c *gin.Context) {
-	Endpoint[struct{}, struct{}]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*struct{}, error) {
-			if err := h.codeSvc.SendAccountChange(ctx, h.phoneCh, middleware.CurrentUserID(c)); err != nil {
+	Endpoint[profileUserIDReq, struct{}]{
+		Parse: func(c *gin.Context) (*profileUserIDReq, error) {
+			return &profileUserIDReq{UserID: middleware.CurrentUserID(c)}, nil
+		},
+		Invoke: func(ctx context.Context, req *profileUserIDReq) (*struct{}, error) {
+			if err := h.codeSvc.SendAccountChange(ctx, h.phoneCh, req.UserID); err != nil {
 				return nil, err
 			}
 			return &struct{}{}, nil
 		},
-		Render: successMsgRenderer[struct{}]("验证码已发送，请查收"),
+		Render: successMsgRenderer[profileUserIDReq]("验证码已发送，请查收"),
 	}.Handle(c)
 }
 
