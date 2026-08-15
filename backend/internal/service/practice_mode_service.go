@@ -204,6 +204,9 @@ func (s *PracticeModeService) StartSequential(studentID int) (*PracticeStartResu
 // SaveProgress 保存练习游标和答题状态。upsert 语义：记录不存在则创建。
 // practiceMode 为空时默认 "sequential"；total > 0 时同步更新 total；
 // answersState 经三态初始化（nil/空/显式 null → {}，#142）。
+// 守卫口径对齐（session_progress.go）：practice_progress 无 status 字段（schema 冻结
+// ADR-0010），经 (student_id, practice_mode) 定位即天然归属本人，且无终端状态，
+// 恒视为在途——故无需在途校验；JSONB 归一复用共享实现 initAnswersState。
 func (s *PracticeModeService) SaveProgress(studentID, index int, practiceMode string, total int, answersState json.RawMessage) error {
 	if practiceMode == "" {
 		practiceMode = "sequential"
@@ -321,15 +324,15 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 			maxScore = 10
 		}
 		result.MaxScore = maxScore
-		if aiRes := aiGradeShortAnswer(s.ai, q.Content, q.ReferenceAnswer, q.ScoringCriteria, userAnswerStr, float64(maxScore), nil); aiRes != nil {
-			result.AIScore = &aiRes.Score
-			result.AIComment = aiRes.Comment
-			if aiRes.Fallback {
+		if sg := gradeShortAnswer(shortAnswerGraderOf(s.ai), &q, userAnswerStr, float64(maxScore), nil); sg != nil {
+			result.AIScore = &sg.Score
+			result.AIComment = sg.Comment
+			if sg.Fallback {
 				result.AIFallback = boolPtr(true)
 			} else {
-				passed := shortAnswerPassed(aiRes.Score, float64(maxScore))
-				result.IsCorrect = boolPtr(passed)
-				rec.IsCorrect = passed
+				// 练习流保留 IsCorrect 重写语义：AI 及格即覆盖 IsCorrect 并落库。
+				result.IsCorrect = boolPtr(sg.Passed)
+				rec.IsCorrect = sg.Passed
 				s.db.Save(&rec)
 			}
 		}

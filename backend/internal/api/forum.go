@@ -3,9 +3,9 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -82,164 +82,308 @@ func (h *ForumHandler) UploadImage(c *gin.Context) {
 
 // ListTopics 主题列表 GET /api/forum/topics?scope=all|general|chapter&chapter_id=&page=&page_size=&keyword=
 func (h *ForumHandler) ListTopics(c *gin.Context) {
-	scope := c.Query("scope")
-	chapterID := atoiDefault(c.Query("chapter_id"), 0)
-	page := atoiDefault(c.Query("page"), 1)
-	pageSize := atoiDefault(c.Query("page_size"), 10)
-	result, err := h.svc.ListTopics(scope, chapterID, page, pageSize, c.Query("keyword"))
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.Success(c, result)
+	Endpoint[listTopicsReq, service.ForumTopicPageResult]{
+		Invoke: func(ctx context.Context, req *listTopicsReq) (*service.ForumTopicPageResult, error) {
+			return h.svc.ListTopics(req.Scope, req.ChapterID, req.Page, req.PageSize, req.Keyword)
+		},
+		Render: func(c *gin.Context, _ *listTopicsReq, resp *service.ForumTopicPageResult, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.Success(c, resp)
+		},
+	}.Handle(c)
 }
 
 // CreateTopic 发帖 POST /api/forum/topics
 func (h *ForumHandler) CreateTopic(c *gin.Context) {
-	uid, _ := c.Get(string(middleware.CtxUserID))
-	userID, _ := uid.(int)
-	var req struct {
-		ChapterID *int     `json:"chapter_id"`
-		Title     string   `json:"title"`
-		Content   string   `json:"content"`
-		Images    []string `json:"images"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "请求参数错误")
-		return
-	}
-	topic, err := h.svc.CreateTopic(userID, req.ChapterID, req.Title, req.Content, req.Images)
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.Created(c, "发布成功", topic)
+	Endpoint[createTopicReq, service.ForumTopicDTO]{
+		Parse: func(c *gin.Context) (*createTopicReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			userID, _ := uid.(int)
+			var body struct {
+				ChapterID *int     `json:"chapter_id"`
+				Title     string   `json:"title"`
+				Content   string   `json:"content"`
+				Images    []string `json:"images"`
+			}
+			if err := c.ShouldBindJSON(&body); err != nil {
+				return nil, badRequest("请求参数错误")
+			}
+			return &createTopicReq{UserID: userID, ChapterID: body.ChapterID, Title: body.Title, Content: body.Content, Images: body.Images}, nil
+		},
+		Invoke: func(ctx context.Context, req *createTopicReq) (*service.ForumTopicDTO, error) {
+			return h.svc.CreateTopic(req.UserID, req.ChapterID, req.Title, req.Content, req.Images)
+		},
+		Render: func(c *gin.Context, _ *createTopicReq, resp *service.ForumTopicDTO, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.Created(c, "发布成功", resp)
+		},
+	}.Handle(c)
 }
 
 // GetTopic 主题详情（含回复）GET /api/forum/topics/:id
 func (h *ForumHandler) GetTopic(c *gin.Context) {
-	uid, _ := c.Get(string(middleware.CtxUserID))
-	userID, _ := uid.(int)
-	topicID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || topicID <= 0 {
-		response.BadRequest(c, "主题ID无效")
-		return
-	}
-	result, err := h.svc.GetTopic(topicID, userID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			response.NotFound(c, "主题不存在")
-			return
-		}
-		response.ServerError(c, "查询失败: "+err.Error())
-		return
-	}
-	response.Success(c, result)
+	Endpoint[topicGetReq, map[string]any]{
+		Parse: func(c *gin.Context) (*topicGetReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			userID, _ := uid.(int)
+			topicID, err := pathInt64(c, "id", "主题ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &topicGetReq{TopicID: topicID, UserID: userID}, nil
+		},
+		Invoke: func(ctx context.Context, req *topicGetReq) (*map[string]any, error) {
+			result, err := h.svc.GetTopic(req.TopicID, req.UserID)
+			if err != nil {
+				return nil, err
+			}
+			return &result, nil
+		},
+		Render: func(c *gin.Context, _ *topicGetReq, resp *map[string]any, err error) {
+			if err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					response.NotFound(c, "主题不存在")
+					return
+				}
+				response.ServerError(c, "查询失败: "+err.Error())
+				return
+			}
+			response.Success(c, resp)
+		},
+	}.Handle(c)
 }
 
 // ReplyTopic 回复 POST /api/forum/topics/:id/replies
 func (h *ForumHandler) ReplyTopic(c *gin.Context) {
-	uid, _ := c.Get(string(middleware.CtxUserID))
-	userID, _ := uid.(int)
-	topicID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || topicID <= 0 {
-		response.BadRequest(c, "主题ID无效")
-		return
-	}
-	var req struct {
-		Content       string   `json:"content"`
-		ParentReplyID *int64   `json:"parent_reply_id"`
-		Images        []string `json:"images"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "请求参数错误")
-		return
-	}
-	reply, err := h.svc.ReplyTopic(userID, topicID, req.Content, req.ParentReplyID, req.Images)
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.Created(c, "回复成功", reply)
+	Endpoint[replyTopicReq, service.ForumReplyDTO]{
+		Parse: func(c *gin.Context) (*replyTopicReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			userID, _ := uid.(int)
+			topicID, err := pathInt64(c, "id", "主题ID无效")
+			if err != nil {
+				return nil, err
+			}
+			var body struct {
+				Content       string   `json:"content"`
+				ParentReplyID *int64   `json:"parent_reply_id"`
+				Images        []string `json:"images"`
+			}
+			if err := c.ShouldBindJSON(&body); err != nil {
+				return nil, badRequest("请求参数错误")
+			}
+			return &replyTopicReq{UserID: userID, TopicID: topicID, Content: body.Content, ParentReplyID: body.ParentReplyID, Images: body.Images}, nil
+		},
+		Invoke: func(ctx context.Context, req *replyTopicReq) (*service.ForumReplyDTO, error) {
+			return h.svc.ReplyTopic(req.UserID, req.TopicID, req.Content, req.ParentReplyID, req.Images)
+		},
+		Render: func(c *gin.Context, _ *replyTopicReq, resp *service.ForumReplyDTO, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.Created(c, "回复成功", resp)
+		},
+	}.Handle(c)
 }
 
 // DeleteTopic 删除自己的主题 DELETE /api/forum/topics/:id
 func (h *ForumHandler) DeleteTopic(c *gin.Context) {
-	uid, _ := c.Get(string(middleware.CtxUserID))
-	userID, _ := uid.(int)
-	topicID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || topicID <= 0 {
-		response.BadRequest(c, "主题ID无效")
-		return
-	}
-	if err := h.svc.DeleteTopic(userID, topicID); err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.SuccessWithMsg(c, "已删除", nil)
+	Endpoint[topicDeleteReq, struct{}]{
+		Parse: func(c *gin.Context) (*topicDeleteReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			userID, _ := uid.(int)
+			topicID, err := pathInt64(c, "id", "主题ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &topicDeleteReq{TopicID: topicID, UserID: userID}, nil
+		},
+		Invoke: func(ctx context.Context, req *topicDeleteReq) (*struct{}, error) {
+			if err := h.svc.DeleteTopic(req.UserID, req.TopicID); err != nil {
+				return nil, err
+			}
+			return &struct{}{}, nil
+		},
+		Render: func(c *gin.Context, _ *topicDeleteReq, _ *struct{}, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "已删除", nil)
+		},
+	}.Handle(c)
 }
 
 // DeleteReply 删除自己的回复 DELETE /api/forum/replies/:id
 func (h *ForumHandler) DeleteReply(c *gin.Context) {
-	uid, _ := c.Get(string(middleware.CtxUserID))
-	userID, _ := uid.(int)
-	replyID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || replyID <= 0 {
-		response.BadRequest(c, "回复ID无效")
-		return
-	}
-	if err := h.svc.DeleteReply(userID, replyID); err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.SuccessWithMsg(c, "已删除", nil)
+	Endpoint[replyDeleteReq, struct{}]{
+		Parse: func(c *gin.Context) (*replyDeleteReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			userID, _ := uid.(int)
+			replyID, err := pathInt64(c, "id", "回复ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &replyDeleteReq{ReplyID: replyID, UserID: userID}, nil
+		},
+		Invoke: func(ctx context.Context, req *replyDeleteReq) (*struct{}, error) {
+			if err := h.svc.DeleteReply(req.UserID, req.ReplyID); err != nil {
+				return nil, err
+			}
+			return &struct{}{}, nil
+		},
+		Render: func(c *gin.Context, _ *replyDeleteReq, _ *struct{}, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "已删除", nil)
+		},
+	}.Handle(c)
 }
 
 // AdminGetTopic 管理员查看帖子详情（含回复）GET /api/admin/forum/topics/:id
 func (h *ForumHandler) AdminGetTopic(c *gin.Context) {
-	uid, _ := c.Get(string(middleware.CtxUserID))
-	userID, _ := uid.(int)
-	topicID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || topicID <= 0 {
-		response.BadRequest(c, "主题ID无效")
-		return
-	}
-	result, err := h.svc.GetTopic(topicID, userID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			response.NotFound(c, "主题不存在")
-			return
-		}
-		response.ServerError(c, "查询失败: "+err.Error())
-		return
-	}
-	response.Success(c, result)
+	Endpoint[topicGetReq, map[string]any]{
+		Parse: func(c *gin.Context) (*topicGetReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			userID, _ := uid.(int)
+			topicID, err := pathInt64(c, "id", "主题ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &topicGetReq{TopicID: topicID, UserID: userID}, nil
+		},
+		Invoke: func(ctx context.Context, req *topicGetReq) (*map[string]any, error) {
+			result, err := h.svc.GetTopic(req.TopicID, req.UserID)
+			if err != nil {
+				return nil, err
+			}
+			return &result, nil
+		},
+		Render: func(c *gin.Context, _ *topicGetReq, resp *map[string]any, err error) {
+			if err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					response.NotFound(c, "主题不存在")
+					return
+				}
+				response.ServerError(c, "查询失败: "+err.Error())
+				return
+			}
+			response.Success(c, resp)
+		},
+	}.Handle(c)
 }
 
 // AdminDeleteTopic 管理员删除任意主题 DELETE /api/admin/forum/topics/:id
 func (h *ForumHandler) AdminDeleteTopic(c *gin.Context) {
-	topicID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || topicID <= 0 {
-		response.BadRequest(c, "主题ID无效")
-		return
-	}
-	if err := h.svc.AdminDeleteTopic(topicID); err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.SuccessWithMsg(c, "已删除", nil)
+	Endpoint[topicIDReq, struct{}]{
+		Parse: func(c *gin.Context) (*topicIDReq, error) {
+			topicID, err := pathInt64(c, "id", "主题ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &topicIDReq{TopicID: topicID}, nil
+		},
+		Invoke: func(ctx context.Context, req *topicIDReq) (*struct{}, error) {
+			if err := h.svc.AdminDeleteTopic(req.TopicID); err != nil {
+				return nil, err
+			}
+			return &struct{}{}, nil
+		},
+		Render: func(c *gin.Context, _ *topicIDReq, _ *struct{}, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "已删除", nil)
+		},
+	}.Handle(c)
 }
 
 // AdminDeleteReply 管理员删除任意回复 DELETE /api/admin/forum/replies/:id
 func (h *ForumHandler) AdminDeleteReply(c *gin.Context) {
-	replyID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || replyID <= 0 {
-		response.BadRequest(c, "回复ID无效")
-		return
-	}
-	if err := h.svc.AdminDeleteReply(replyID); err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.SuccessWithMsg(c, "已删除", nil)
+	Endpoint[replyIDReq, struct{}]{
+		Parse: func(c *gin.Context) (*replyIDReq, error) {
+			replyID, err := pathInt64(c, "id", "回复ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &replyIDReq{ReplyID: replyID}, nil
+		},
+		Invoke: func(ctx context.Context, req *replyIDReq) (*struct{}, error) {
+			if err := h.svc.AdminDeleteReply(req.ReplyID); err != nil {
+				return nil, err
+			}
+			return &struct{}{}, nil
+		},
+		Render: func(c *gin.Context, _ *replyIDReq, _ *struct{}, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "已删除", nil)
+		},
+	}.Handle(c)
+}
+
+// listTopicsReq 主题列表请求（查询参数）。
+type listTopicsReq struct {
+	Scope     string
+	ChapterID int
+	Page      int
+	PageSize  int
+	Keyword   string
+}
+
+// createTopicReq 发帖请求。
+type createTopicReq struct {
+	UserID    int
+	ChapterID *int
+	Title     string
+	Content   string
+	Images    []string
+}
+
+// topicGetReq 主题详情请求。
+type topicGetReq struct {
+	TopicID int64
+	UserID  int
+}
+
+// replyTopicReq 回复请求。
+type replyTopicReq struct {
+	UserID        int
+	TopicID       int64
+	Content       string
+	ParentReplyID *int64
+	Images        []string
+}
+
+// topicDeleteReq 删除自己主题请求。
+type topicDeleteReq struct {
+	TopicID int64
+	UserID  int
+}
+
+// replyDeleteReq 删除自己回复请求。
+type replyDeleteReq struct {
+	ReplyID int64
+	UserID  int
+}
+
+// topicIDReq 管理员删除主题请求。
+type topicIDReq struct {
+	TopicID int64
+}
+
+// replyIDReq 管理员删除回复请求。
+type replyIDReq struct {
+	ReplyID int64
 }

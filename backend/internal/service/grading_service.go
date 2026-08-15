@@ -287,16 +287,12 @@ func (s *GradingService) AIGradeAnswer(answerID int, userID *int) (*LevelExamAns
 	if question.Score <= 0 {
 		maxScore = questionMaxScore("level_exam", question.Type)
 	}
-	res := aiGradeShortAnswer(s.ai, question.Content, question.ReferenceAnswer, question.ScoringCriteria, answer.UserAnswer, maxScore, userID)
-	if res == nil {
+	sg := gradeShortAnswer(shortAnswerGraderOf(s.ai), &question, answer.UserAnswer, maxScore, userID)
+	if sg == nil {
 		return nil, errors.New("AI评分失败，请稍后重试或手动阅卷")
 	}
-	answer.AIScore = floatPtr(res.Score)
-	comment := res.Comment
-	if res.Fallback {
-		comment = "[AI评分降级] " + comment
-	}
-	answer.AIComment = comment
+	answer.AIScore = floatPtr(sg.Score)
+	answer.AIComment = sg.Comment
 	now := beijingNow()
 	answer.AIGradedAt = &now
 	if err := s.db.Save(&answer).Error; err != nil {

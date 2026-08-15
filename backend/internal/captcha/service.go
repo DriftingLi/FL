@@ -41,6 +41,10 @@ func (RedisStore) Del(ctx context.Context, keys ...string) error {
 
 func storeKey(id string) string { return cache.SafeKey("captcha", id) }
 
+// StoreKey 返回验证码答案在共享缓存中的 key 约定（cache.SafeKey("captcha", id)）。
+// 供测试等外部调用方按统一约定读取/校验，避免重拼 key 公式导致的不一致。
+func StoreKey(id string) string { return storeKey(id) }
+
 // Service 图形验证码服务：生成图片 + 校验（校验即消费）。
 type Service struct {
 	store Store

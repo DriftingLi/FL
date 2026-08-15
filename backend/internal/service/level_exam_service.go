@@ -93,7 +93,9 @@ type LevelExamAnswerDTO struct {
 	AIScore           *float64 `json:"ai_score"`
 	AIGradedAt        *string  `json:"ai_graded_at"`
 	// 结果详情路径附带题目（未加载时省略）。
-	Question *QuestionDTO `json:"question,omitempty"`
+	// AI 评分降级标记（加性变更：短答 AI 评分降级时出现，否则省略）。
+	AIFallback *bool        `json:"ai_fallback,omitempty"`
+	Question   *QuestionDTO `json:"question,omitempty"`
 }
 
 // LevelExamDataDTO 进入考试返回（participant + 试卷 + 快照）。
@@ -389,18 +391,23 @@ func (s *LevelExamService) getExamData(session *model.ExamSession, p *model.Exam
 }
 
 // SaveAnswer 保存答案快照。
+// 经保存会话进度深模块（session_progress.go）唯一实现：load → 守卫（本人+进行中）→
+// 快照 JSONB 三态归一 → db.Save（与 mock SaveProgress 同口径）。
 func (s *LevelExamService) SaveAnswer(participantID, studentID int, answers map[string]any, remainingTime int) error {
-	var p model.ExamParticipant
-	if err := s.db.First(&p, participantID).Error; err != nil {
-		return errors.New("考试参与记录不存在")
-	}
-	if err := guardOwnedInProgress(p.StudentID, p.Status, studentID, "无权操作", "考试不在进行中"); err != nil {
-		return err
-	}
-	b, _ := jsonMarshal(answers)
-	p.AnswersSnapshot = model.JSONB(b)
-	p.RemainingTime = remainingTime
-	return s.db.Save(&p).Error
+	return saveSessionProgress(s.db, SessionProgressSpec[model.ExamParticipant]{
+		notFoundErr: "考试参与记录不存在",
+		load: func(db *gorm.DB) (model.ExamParticipant, error) {
+			var p model.ExamParticipant
+			return p, db.First(&p, participantID).Error
+		},
+		guard: func(p model.ExamParticipant) error {
+			return guardOwnedInProgress(p.StudentID, p.Status, studentID, "无权操作", "考试不在进行中")
+		},
+		write: func(p *model.ExamParticipant, snapshot model.JSONB, rt int) {
+			p.AnswersSnapshot = snapshot
+			p.RemainingTime = rt
+		},
+	}, answers, remainingTime)
 }
 
 // SubmitExam 交卷评分。
@@ -427,47 +434,44 @@ func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bo
 	// 清旧答题
 	s.db.Where("exam_participant_id = ?", p.ID).Delete(&model.ExamAnswer{})
 
-	for _, qid := range ids {
-		question := qMap[qid]
-		if question == nil {
-			continue
-		}
-		userAnswer := answers[intToString(qid)]
-		maxScore := questionMaxScore("level_exam", question.Type)
-		isCorrect, earned := gradeQuestion(question, userAnswer, maxScore)
+	engine := newGradingEngine(s.db)
+	flow := gradingFlow{
+		ai: shortAnswerGraderOf(s.ai),
+		maxScore: func(q *model.Question) float64 {
+			return questionMaxScore("level_exam", q.Type)
+		},
+	}
+	results := engine.gradeSet(flow, qMap, ids, answers, studentID)
+
+	for _, r := range results {
+		question := r.Question
+		qid := question.ID
 
 		if question.Type == "short_answer" {
 			ans := model.ExamAnswer{
 				ExamParticipantID: p.ID,
 				QuestionID:        qid,
-				UserAnswer:        stringifyAnswer(userAnswer),
+				UserAnswer:        stringifyAnswer(r.UserAnswer),
 				Score:             0,
 			}
 			s.db.Create(&ans)
-			if aiRes := aiGradeShortAnswer(s.ai, question.Content, question.ReferenceAnswer, question.ScoringCriteria, stringifyAnswer(userAnswer), maxScore, nil); aiRes != nil {
-				ans.AIScore = floatPtr(aiRes.Score)
-				comment := aiRes.Comment
-				if aiRes.Fallback {
-					comment = "[AI评分降级] " + comment
-				}
-				ans.AIComment = comment
+			if r.ShortAnswer != nil {
+				ans.AIScore = floatPtr(r.ShortAnswer.Score)
+				ans.AIComment = r.ShortAnswer.Comment
 				now := beijingNow()
 				ans.AIGradedAt = &now
 				s.db.Save(&ans)
 			}
 		} else {
-			objectiveScore += earned
-			if isCorrect != nil && !*isCorrect {
-				_ = addToWrongQuestions(s.db, studentID, qid)
-			}
+			objectiveScore += r.Earned
 			ans := model.ExamAnswer{
 				ExamParticipantID: p.ID,
 				QuestionID:        qid,
-				UserAnswer:        stringifyAnswer(userAnswer),
-				Score:             earned,
+				UserAnswer:        stringifyAnswer(r.UserAnswer),
+				Score:             r.Earned,
 			}
-			if isCorrect != nil {
-				ans.IsCorrect = isCorrect
+			if r.IsCorrect != nil {
+				ans.IsCorrect = r.IsCorrect
 			}
 			s.db.Create(&ans)
 		}
@@ -658,7 +662,7 @@ func participantToDTO(p *model.ExamParticipant) LevelExamParticipantDTO {
 }
 
 func examAnswerToDTO(a *model.ExamAnswer) LevelExamAnswerDTO {
-	return LevelExamAnswerDTO{
+	d := LevelExamAnswerDTO{
 		ID:                a.ID,
 		ExamParticipantID: a.ExamParticipantID,
 		QuestionID:        a.QuestionID,
@@ -672,6 +676,12 @@ func examAnswerToDTO(a *model.ExamAnswer) LevelExamAnswerDTO {
 		AIScore:           a.AIScore,
 		AIGradedAt:        isoPtr(a.AIGradedAt),
 	}
+	// 降级标记单点还原：AI 注释携带统一前缀即视为降级（读侧无独立落库列）。
+	if hasFallbackComment(a.AIComment) {
+		fb := true
+		d.AIFallback = &fb
+	}
+	return d
 }
 
 // isoPtr 将时间转为 ISO 字符串指针（DTO 中 nil 时间序列化为 null，与旧契约一致）。
