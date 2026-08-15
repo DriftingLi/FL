@@ -299,7 +299,7 @@ const flow = useAuthFlow<LoginMode>({
 
 // 当前激活的 alt 方式：null = 密码登录（主方式），来自 useAuthFlow 的 mode 派生
 const activeAlt = computed<AltModeKey | null>(() =>
-  flow.mode.value === 'password' ? null : (flow.mode.value as AltModeKey)
+  flow.mode === 'password' ? null : (flow.mode as AltModeKey)
 )
 
 const mainFormRef = ref<FormInstance | null>(null)
@@ -375,7 +375,7 @@ async function handleSendCode() {
     return
   }
   const ok =
-    flow.mode.value === 'phone'
+    flow.mode === 'phone'
       ? await sendCode(formData.phone.trim(), 'phone')
       : await sendCode(formData.email.trim(), 'email')
   if (!ok) {
@@ -384,7 +384,7 @@ async function handleSendCode() {
 }
 
 async function handleLogin() {
-  const m = flow.mode.value
+  const m = flow.mode
   // wechat 无独立表单：走主表单 ref（由 submit 内拦截提示「暂未开放」）
   const targetRef =
     m === 'email' ? emailFormRef.value : m === 'phone' ? phoneFormRef.value : mainFormRef.value

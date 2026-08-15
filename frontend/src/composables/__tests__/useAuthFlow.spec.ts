@@ -42,13 +42,13 @@ beforeEach(() => {
 describe('mode 状态', () => {
   it('mode 默认取 modes[0] 首项', () => {
     const { flow } = mount({ modes: ['m1', 'm2'] })
-    expect(flow.mode.value).toBe('m1')
+    expect(flow.mode).toBe('m1')
   })
 
   it('setMode 切换当前 mode', () => {
     const { flow } = mount({ modes: ['m1', 'm2'] })
     flow.setMode('m2')
-    expect(flow.mode.value).toBe('m2')
+    expect(flow.mode).toBe('m2')
   })
 })
 
@@ -57,14 +57,14 @@ describe('handleSubmit（validate→submit→afterSuccess）', () => {
     const { flow, submit } = mount()
     await flow.handleSubmit(makeFormRef('reject'))
     expect(submit).not.toHaveBeenCalled()
-    expect(flow.loading.value).toBe(false)
+    expect(flow.loading).toBe(false)
   })
 
   it('validate 失败（resolve false）不调 submit，loading 复位为 false', async () => {
     const { flow, submit } = mount()
     await flow.handleSubmit(makeFormRef('false'))
     expect(submit).not.toHaveBeenCalled()
-    expect(flow.loading.value).toBe(false)
+    expect(flow.loading).toBe(false)
   })
 
   it('validate 通过：先 submit 后 afterSuccess，且按当前 mode 传参', async () => {
@@ -76,7 +76,7 @@ describe('handleSubmit（validate→submit→afterSuccess）', () => {
     expect(afterSuccess).toHaveBeenCalledTimes(1)
     // afterSuccess 在 submit 之后
     expect(submit.mock.invocationCallOrder[0]).toBeLessThan(afterSuccess.mock.invocationCallOrder[0])
-    expect(flow.loading.value).toBe(false)
+    expect(flow.loading).toBe(false)
   })
 
   it('submit 成功时把返回值传给 afterSuccess', async () => {
@@ -91,7 +91,7 @@ describe('handleSubmit（validate→submit→afterSuccess）', () => {
     const { flow } = mount({ submit, afterSuccess })
     await flow.handleSubmit(makeFormRef('ok'))
     expect(afterSuccess).not.toHaveBeenCalled()
-    expect(flow.loading.value).toBe(false)
+    expect(flow.loading).toBe(false)
   })
 
   it('submit 返回 false 视为「阻止后续」：不调 afterSuccess，loading 复位为 false', async () => {
@@ -100,7 +100,7 @@ describe('handleSubmit（validate→submit→afterSuccess）', () => {
     const { flow } = mount({ submit, afterSuccess })
     await flow.handleSubmit(makeFormRef('ok'))
     expect(afterSuccess).not.toHaveBeenCalled()
-    expect(flow.loading.value).toBe(false)
+    expect(flow.loading).toBe(false)
   })
 
   it('formRef 为空时直接返回，不调 validate/submit/afterSuccess', async () => {

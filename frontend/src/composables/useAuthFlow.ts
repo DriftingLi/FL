@@ -4,7 +4,7 @@
 //   → loading=true → await submit(mode) → await afterSuccess(mode, result) → finally loading=false。
 // 异常不抛给页面（console.error 记录，与页面原 catch 行为一致）。
 // 约定：submit 返回 false 视为「阻止后续」（如 wechat 未开放），不执行 afterSuccess。
-import { ref } from 'vue'
+import { ref, reactive } from 'vue'
 
 // 表单实例的极简结构 seam：Element Plus FormInstance（validate(可选回调) => Promise<boolean>）
 // 天然满足该结构，单测可用内存 fake 直接注入，避免与 element-plus 实现耦合。
@@ -51,5 +51,6 @@ export function useAuthFlow<Mode extends string>(options: UseAuthFlowOptions<Mod
     }
   }
 
-  return { mode, setMode, loading, handleSubmit }
+  // reactive 包装：flow.loading 在模板/JS 中深度解包为 boolean（嵌套 ref 不会自动解包）
+  return reactive({ mode, setMode, loading, handleSubmit })
 }

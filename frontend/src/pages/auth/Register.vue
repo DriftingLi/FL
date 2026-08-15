@@ -325,7 +325,7 @@ const flow = useAuthFlow<RegisterMode>({
 })
 
 // 当前激活的 alt 方式：null = 手机号注册（主方式），来自 useAuthFlow 的 mode 派生
-const activeAlt = computed<AltModeKey | null>(() => (flow.mode.value === 'email' ? 'email' : null))
+const activeAlt = computed<AltModeKey | null>(() => (flow.mode === 'email' ? 'email' : null))
 
 const mainFormRef = ref<FormInstance | null>(null)
 const emailFormRef = ref<FormInstance | null>(null)
@@ -389,7 +389,7 @@ async function handleSendCode() {
     return
   }
   const ok =
-    flow.mode.value === 'phone'
+    flow.mode === 'phone'
       ? await sendCode(formData.phone.trim(), 'phone')
       : await sendCode(formData.email.trim(), 'email')
   if (!ok) {
@@ -398,7 +398,7 @@ async function handleSendCode() {
 }
 
 async function handleRegister() {
-  const targetRef = flow.mode.value === 'email' ? emailFormRef.value : mainFormRef.value
+  const targetRef = flow.mode === 'email' ? emailFormRef.value : mainFormRef.value
   await flow.handleSubmit(targetRef)
 }
 </script>
