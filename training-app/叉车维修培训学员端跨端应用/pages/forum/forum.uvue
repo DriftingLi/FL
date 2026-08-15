@@ -28,10 +28,10 @@
                     <text class="topic-content-preview">{{ getContentPreview(item.content) }}</text>
                     <view v-if="item.images.length > 0" class="topic-images">
                         <view v-for="(img, i) in getFirstImages(item.images)" :key="i" class="topic-image-cell">
-                            <image class="topic-image" :src="resolveFileUrl(img)" mode="aspectFill" />
+                            <image class="topic-image" :src="resolveImg(img)" mode="aspectFill" />
                         </view>
                         <view v-if="item.images.length > 3" class="topic-image-cell">
-                            <image class="topic-image" :src="resolveFileUrl(item.images[3])" mode="aspectFill" />
+                            <image class="topic-image" :src="resolveImg(item.images[3])" mode="aspectFill" />
                             <view class="topic-image-more">
                                 <text class="topic-image-more-text">+{{ item.images.length - 3 }}</text>
                             </view>
@@ -101,6 +101,11 @@
             result.push(images[i])
         }
         return result
+    }
+
+    /** 解析图片完整 URL（模板中直接调用 import 的 resolveFileUrl 触发 error18，用页面函数包装） */
+    function resolveImg(url : string) : string {
+        return resolveFileUrl(url)
     }
 
     /** 获取作者名首字 */
@@ -410,10 +415,7 @@
         background-color: #2979ff;
         align-items: center;
         justify-content: center;
-        shadow-color: rgba(0, 0, 0, 0.3);
-        shadow-offset: 0rpx 4rpx;
-        shadow-opacity: 0.3;
-        shadow-radius: 8rpx;
+        box-shadow: 0rpx 4rpx 8rpx rgba(0, 0, 0, 0.3);
     }
 
     .fab-icon {

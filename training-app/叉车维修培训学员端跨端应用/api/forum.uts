@@ -13,7 +13,7 @@
  *
  * 回复对象：{ id, content, created_at, author: { user_id, username, name, nickname, avatar_url } }
  */
-import { get, post, del, uploadFile, type RequestOptions } from './request'
+import { get, post, del, uploadFile } from './request'
 import type { ForumTopic, ForumTopicListResult, ForumTopicDetail, ForumReply } from '../types/index'
 
 /** 安全转换为 number */
@@ -226,9 +226,17 @@ export function getForumTopicsApi(page : number = 1, pageSize : number = 10, sco
     return get('/forum/topics', params).then((data : UTSJSONObject) : ForumTopicListResult => {
         console.log('[getForumTopicsApi] raw data:', JSON.stringify(data))
         return buildTopicListResult(data)
-    }).catch((e) : ForumTopicListResult => {
+    }).catch((e : any | null) : ForumTopicListResult => {
         console.error('[getForumTopicsApi] failed:', e)
-        throw e
+        let msg = '获取帖子列表失败'
+        if (e instanceof Error) {
+            const err = e as Error
+            const m = err.message
+            if (m != null && m.length > 0) {
+                msg = m
+            }
+        }
+        throw new Error(msg)
     })
 }
 
@@ -241,9 +249,17 @@ export function getForumTopicDetailApi(topicId : number) : Promise<ForumTopicDet
     return get(url).then((data : UTSJSONObject) : ForumTopicDetail => {
         console.log('[getForumTopicDetailApi] raw data:', JSON.stringify(data))
         return buildTopicDetail(data)
-    }).catch((e) : ForumTopicDetail => {
+    }).catch((e : any | null) : ForumTopicDetail => {
         console.error('[getForumTopicDetailApi] failed:', e)
-        throw e
+        let msg = '获取帖子详情失败'
+        if (e instanceof Error) {
+            const err = e as Error
+            const m = err.message
+            if (m != null && m.length > 0) {
+                msg = m
+            }
+        }
+        throw new Error(msg)
     })
 }
 
@@ -253,15 +269,24 @@ export function getForumTopicDetailApi(topicId : number) : Promise<ForumTopicDet
  * @returns 上传成功后的图片 URL（相对或绝对路径，提交发帖/回复时原样回传）
  */
 export function uploadForumImageApi(filePath : string) : Promise<string> {
-    return uploadFile('/forum/upload-image', filePath, 'file', null, { timeout: 120000 } as RequestOptions).then((data : UTSJSONObject) : string => {
+    // 与 auth.uts 同款 3 参调用（UTS 对带默认值参数的第 4/5 位置实参会触发 overload 解析错误，勿传）
+    return uploadFile('/forum/upload-image', filePath, 'file').then((data : UTSJSONObject) : string => {
         const url = data['url']
         if (url == null) {
             throw new Error('上传成功但未返回图片地址')
         }
         return toStr(url)
-    }).catch((e) : string => {
+    }).catch((e : any | null) : string => {
         console.error('[uploadForumImageApi] failed:', e)
-        throw e
+        let msg = '上传图片失败'
+        if (e instanceof Error) {
+            const err = e as Error
+            const m = err.message
+            if (m != null && m.length > 0) {
+                msg = m
+            }
+        }
+        throw new Error(msg)
     })
 }
 
@@ -280,9 +305,17 @@ export function createForumTopicApi(title : string, content : string, images : s
     return post('/forum/topics', payload).then((data : UTSJSONObject) : ForumTopic => {
         console.log('[createForumTopicApi] raw data:', JSON.stringify(data))
         return buildTopic(data)
-    }).catch((e) : ForumTopic => {
+    }).catch((e : any | null) : ForumTopic => {
         console.error('[createForumTopicApi] failed:', e)
-        throw e
+        let msg = '发布帖子失败'
+        if (e instanceof Error) {
+            const err = e as Error
+            const m = err.message
+            if (m != null && m.length > 0) {
+                msg = m
+            }
+        }
+        throw new Error(msg)
     })
 }
 
@@ -301,9 +334,17 @@ export function replyForumTopicApi(topicId : number, content : string, images : 
     return post(url, payload).then((data : UTSJSONObject) : ForumReply => {
         console.log('[replyForumTopicApi] raw data:', JSON.stringify(data))
         return buildReply(data, topicId)
-    }).catch((e) : ForumReply => {
+    }).catch((e : any | null) : ForumReply => {
         console.error('[replyForumTopicApi] failed:', e)
-        throw e
+        let msg = '回复失败'
+        if (e instanceof Error) {
+            const err = e as Error
+            const m = err.message
+            if (m != null && m.length > 0) {
+                msg = m
+            }
+        }
+        throw new Error(msg)
     })
 }
 

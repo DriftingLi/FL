@@ -9,26 +9,59 @@
 		</view>
 
 		<view class="form">
-			<view class="form-item">
-				<input class="input-base" type="text" placeholder="用户名或手机号" :maxlength="50"
-					:value="form.username" @input="onUsernameInput" @confirm="onConfirm" />
-			</view>
-			<view class="form-item">
-				<input class="input-base" :password="true" placeholder="密码（至少 6 位）" :maxlength="32"
-					:value="form.password" @input="onPasswordInput" @confirm="onConfirm" />
+			<!-- 登录方式切换 -->
+			<view class="mode-tabs">
+				<text class="mode-tab" :class="{ 'mode-tab-active': mode == 'password' }" @click="switchMode('password')">密码登录</text>
+				<text class="mode-tab" :class="{ 'mode-tab-active': mode == 'code' }" @click="switchMode('code')">验证码登录</text>
 			</view>
 
-			<button class="btn-primary submit-btn" :disabled="loading" @click="onSubmit">
-				{{ loading ? '登录中...' : '登 录' }}
-			</button>
+			<!-- 密码登录 -->
+			<template v-if="mode == 'password'">
+				<view class="form-item">
+					<input class="input-base" type="text" placeholder="用户名或手机号" :maxlength="50"
+						:value="form.username" @input="onUsernameInput" @confirm="onConfirm" />
+				</view>
+				<view class="form-item">
+					<input class="input-base" :password="true" placeholder="密码（至少 6 位）" :maxlength="32"
+						:value="form.password" @input="onPasswordInput" @confirm="onConfirm" />
+				</view>
+
+				<button class="btn-primary submit-btn" :disabled="loading" @click="onSubmit">
+					{{ loading ? '登录中...' : '登 录' }}
+				</button>
+			</template>
+
+			<!-- 验证码登录 -->
+			<template v-else>
+				<view class="form-item">
+					<input class="input-base" type="text" placeholder="手机号或邮箱" :maxlength="50"
+						:value="target" @input="onTargetInput" @confirm="onConfirm" />
+				</view>
+				<view class="form-item code-row">
+					<view class="code-input-wrap">
+						<input class="input-base" type="number" placeholder="请输入验证码" :maxlength="6"
+							:value="code" @input="onCodeInput" @confirm="onConfirm" />
+					</view>
+					<button class="code-btn" :disabled="sendingCode || countdown > 0" @click="onSendCode">
+						{{ countdown > 0 ? countdown + 's' : '获取验证码' }}
+					</button>
+				</view>
+				<view class="form-item hint" v-if="codeHint.length > 0">
+					<text class="hint-text">{{ codeHint }}</text>
+				</view>
+
+				<button class="btn-primary submit-btn" :disabled="loading" @click="onSubmit">
+					{{ loading ? '登录中...' : '登 录' }}
+				</button>
+			</template>
 
 			<view class="footer">
 				<text class="footer-text">还没有账号？</text>
 				<text class="footer-link" @click="goRegister">立即注册</text>
 			</view>
 
-			<!-- 其他登录方式 -->
-			<view class="other-login">
+			<!-- 其他登录方式（仅密码登录显示） -->
+			<view class="other-login" v-if="mode == 'password'">
 				<view class="divider">
 					<view class="divider-line"></view>
 					<text class="divider-text">其他登录方式</text>
@@ -47,19 +80,40 @@
 </template>
 
 <script setup lang="uts">
-	import { onLoad, onShow } from '@dcloudio/uni-app'
-	import { reactive, ref } from 'vue'
+	import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
+	import { reactive, ref, computed } from 'vue'
 	import { useAuthStore } from '../../stores/auth'
-	import type { LoginParams } from '../../types/index'
+	import { sendCodeApi } from '../../api/auth'
+	import type { LoginParams, CodeLoginParams } from '../../types/index'
 
 	const auth = useAuthStore()
 
+	// 登录模式：password（用户名/密码） | code（验证码登录）
+	const mode = ref<string>('password')
+
+	// 密码登录表单
 	const form = reactive<LoginParams>({
 		username: '',
 		password: '',
 	})
+	// 验证码登录表单（target 为手机号或邮箱）
+	const target = ref<string>('')
+	const code = ref<string>('')
 
 	const loading = ref<boolean>(false)
+	const sendingCode = ref<boolean>(false)
+	const countdown = ref<number>(0)
+	let countdownTimer : number | null = null
+	/** 清理倒计时定时器（局部副本承接：Kotlin 禁止对闭包中修改的 var 智能转换） */
+	function clearCountdownTimer() : void {
+		const timer = countdownTimer
+		if (timer != null) {
+			clearInterval(timer)
+			countdownTimer = null
+		}
+	}
+	// 连续输错次数（对齐后端：错误上限 5 次，发新码时清零）
+	const wrongAttempts = ref<number>(0)
 	const statusBarHeight = ref<number>(20)
 
 	onLoad((options : OnLoadOptions) => {
@@ -79,7 +133,71 @@
 		form.password = ''
 	})
 
+	onUnload(() => {
+		clearCountdownTimer()
+	})
+
+	function switchMode(m : string) : void {
+		if (m == mode.value) return
+		mode.value = m
+		clearCountdownTimer()
+		countdown.value = 0
+	}
+
+	function startCountdown() : void {
+		countdown.value = 60
+		clearCountdownTimer()
+		countdownTimer = setInterval(() => {
+			countdown.value -= 1
+			if (countdown.value <= 0) {
+				clearCountdownTimer()
+			}
+		}, 1000) as number
+	}
+
+	async function onSendCode() : Promise<void> {
+		if (sendingCode.value || countdown.value > 0) return
+		const t = target.value.trim()
+		if (t.length == 0) {
+			uni.showToast({ title: '请输入手机号或邮箱', icon: 'none' })
+			return
+		}
+		// 简单判定 charset：是否邮箱
+		const isEmail = t.indexOf('@') > 0
+		sendingCode.value = true
+		uni.showLoading({ title: '发送中...', mask: true })
+		try {
+			await sendCodeApi(t, isEmail ? 'email' : 'phone', 'login')
+			// 新验证码下发后重置本地连续输错计数（对齐后端错误上限）
+			wrongAttempts.value = 0
+			uni.hideLoading()
+			uni.showToast({ title: '验证码已发送，请查收', icon: 'none' })
+			startCountdown()
+		} catch (e) {
+			uni.hideLoading()
+			console.error('[login] send code failed:', e)
+			let msg = '验证码发送失败'
+			if (e instanceof Error) {
+				const errObj = e as Error
+				const m = errObj.message
+				if (m != null && m.length > 0) {
+					msg = m
+				}
+			}
+			uni.showToast({ title: msg, icon: 'none' })
+		} finally {
+			sendingCode.value = false
+		}
+	}
+
 	function validate() : string {
+		if (mode.value == 'code') {
+			const t = target.value.trim()
+			if (t.length == 0) return '请输入手机号或邮箱'
+			if (code.value.length == 0) return '请输入验证码'
+			if (code.value.length != 6) return '请输入 6 位验证码'
+			return ''
+		}
 		if (form.username.length == 0) return '请输入用户名或手机号'
 		if (form.password.length == 0) return '请输入密码'
 		if (form.password.length < 6) return '密码至少 6 位'
@@ -96,15 +214,24 @@
 		loading.value = true
 		uni.showLoading({ title: '登录中...', mask: true })
 
-		// 显式构造 LoginParams，避免传 reactive Proxy 给 uni.request
-		// Android 端 uni.request 的 data 不支持 reactive Proxy 对象
-		const params : LoginParams = {
-			username: form.username,
-			password: form.password,
-		}
-
 		try {
-			await auth.login(params)
+			if (mode.value == 'code') {
+				const t = target.value.trim()
+				const isEmail = t.indexOf('@') > 0
+				const params : CodeLoginParams = {
+					target: t,
+					channel: isEmail ? 'email' : 'phone',
+					code: code.value,
+				}
+				await auth.loginByCode(params)
+			} else {
+				// 显式构造 LoginParams，避免传 reactive Proxy 给 uni.request
+				const params : LoginParams = {
+					username: form.username,
+					password: form.password,
+				}
+				await auth.login(params)
+			}
 			uni.hideLoading()
 			uni.showToast({ title: '登录成功', icon: 'success', duration: 1000 })
 			setTimeout(() => {
@@ -114,7 +241,13 @@
 			uni.hideLoading()
 			// 打印完整异常对象，便于定位（UTS 中 ClassCastException 的 message 可能为空）
 			console.error('[login] failed:', e)
-			// UTS 中 catch 的 e 可能是任何 Throwable（含 Java 异常），用 instanceof 判断避免 as 强转失败
+			// 验证码登录输错时累计连续输错次数（后端上限 5 次，到达后需重新获取）
+			if (mode.value == 'code') {
+				const m = e instanceof Error ? (e as Error).message : ''
+				if (m.indexOf('验证码') >= 0) {
+					wrongAttempts.value += 1
+				}
+			}
 			let msg = '登录失败，请重试'
 			if (e instanceof Error) {
 				const errObj = e as Error
@@ -140,6 +273,25 @@
 	function onPasswordInput(e : InputEvent) : void {
 		form.password = e.detail.value
 	}
+
+	function onTargetInput(e : InputEvent) : void {
+		target.value = e.detail.value
+	}
+
+	function onCodeInput(e : InputEvent) : void {
+		code.value = e.detail.value
+	}
+
+	// 验证码提示：说明后端规则 + 实时展示连续输错次数
+	const codeHint = computed<string>(() : string => {
+		if (wrongAttempts.value >= 5) {
+			return '验证码错误次数过多，请点击获取验证码重新发送'
+		}
+		if (wrongAttempts.value > 0) {
+			return '验证码错误，还可再试 ' + (5 - wrongAttempts.value) + ' 次'
+		}
+		return '6 位数字验证码，5 分钟内有效'
+	})
 
 	function goRegister() : void {
 		uni.navigateTo({ url: '/pages/register/register' })
@@ -185,6 +337,59 @@
 
 	.form {
 		padding: 0 48rpx;
+	}
+
+	/* 登录方式切换 */
+	.mode-tabs {
+		flex-direction: row;
+		margin-bottom: 32rpx;
+	}
+
+	.mode-tab {
+		font-size: 28rpx;
+		color: #666666;
+		margin-right: 40rpx;
+		padding-bottom: 8rpx;
+	}
+
+	.mode-tab-active {
+		color: #2979ff;
+		font-weight: bold;
+		border-bottom: 4rpx solid #2979ff;
+	}
+
+	/* 验证码行：输入框 + 获取验证码按钮 */
+	.code-row {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.code-input-wrap {
+		flex: 1;
+		margin-right: 16rpx;
+	}
+
+	.code-btn {
+		width: 200rpx;
+		height: 80rpx;
+		line-height: 80rpx;
+		padding: 0;
+		font-size: 26rpx;
+		color: #2979ff;
+		border: 1px solid #2979ff;
+		border-radius: 8rpx;
+		background-color: #ffffff;
+	}
+
+	/* 验证码规则提示 */
+	.hint {
+		margin-top: -16rpx;
+		margin-bottom: 24rpx;
+	}
+
+	.hint-text {
+		font-size: 22rpx;
+		color: #999999;
 	}
 
 	.form-item {

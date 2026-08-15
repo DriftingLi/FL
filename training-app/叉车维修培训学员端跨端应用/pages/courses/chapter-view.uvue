@@ -60,8 +60,8 @@
                     <!-- 分隔线 -->
                     <view v-else-if="block.type == 'divider'" class="md-divider"></view>
                     <!-- 图片 -->
-                    <image v-else-if="block.type == 'image'" class="md-image"
-                        :src="block.text" mode="widthFix" @click="onImageClick(block.text)"></image>
+                    <image v-else-if="block.type == 'image'" class="md-image" :src="block.text" mode="widthFix"
+                        @click="onImageClick(block.text)"></image>
                 </view>
             </view>
 
@@ -69,8 +69,7 @@
             <view v-if="detail!.files.length > 0" class="section">
                 <text class="section-title">附件资料</text>
                 <view class="file-list">
-                    <view v-for="(file, idx) in detail!.files" :key="idx" class="file-item"
-                        @click="onFileClick(file)">
+                    <view v-for="(file, idx) in detail!.files" :key="idx" class="file-item" @click="onFileClick(file)">
                         <view class="file-icon-wrap" :class="getFileIconClass(file.content_type)">
                             <text class="file-icon">{{ getFileIcon(file.content_type) }}</text>
                         </view>
@@ -147,9 +146,9 @@
 
     // 学习计时与自动上报
     const studySeconds = ref<number>(0)
-    let studyTimer: number | null = null
-    let studyStartTime: number | null = null
-    let autoReportTimer: number | null = null
+    let studyTimer : number | null = null
+    let studyStartTime : number | null = null
+    let autoReportTimer : number | null = null
     let reportedSeconds = 0
     const AUTO_REPORT_INTERVAL = 60
     // Markdown 解析后的内容块
@@ -208,35 +207,6 @@
             if (ch.chapter_id == nextId) nextTitle.value = ch.title
         }
     }
-
-    function beginStudy() : void {
-        studySeconds.value = 0
-        reportedSeconds = 0
-        studyStartTime = Date.now()
-        if (studyTimer != null) clearInterval(studyTimer)
-        if (autoReportTimer != null) clearInterval(autoReportTimer)
-        studyTimer = setInterval(() : void => {
-            if (studyStartTime != null) {
-                studySeconds.value = Math.floor((Date.now() - studyStartTime) / 1000)
-            }
-        }, 1000)
-        autoReportTimer = setInterval(() : void => {
-            reportIncremental(false)
-        }, AUTO_REPORT_INTERVAL * 1000)
-    }
-
-    function stopStudy() : void {
-        if (studyTimer != null) {
-            clearInterval(studyTimer)
-            studyTimer = null
-        }
-        if (autoReportTimer != null) {
-            clearInterval(autoReportTimer)
-            autoReportTimer = null
-        }
-        studyStartTime = null
-    }
-
     async function reportIncremental(isFinal : boolean = false) : Promise<void> {
         if (detail.value == null || courseId.value <= 0) return
         const incremental = studySeconds.value - reportedSeconds
@@ -253,6 +223,43 @@
             }
         }
     }
+    function beginStudy() : void {
+        studySeconds.value = 0
+        reportedSeconds = 0
+        studyStartTime = Date.now()
+        // 局部变量承接后判空（studyTimer 被闭包捕获修改，Kotlin 禁止智能转换）
+        const st1 = studyTimer
+        if (st1 != null) clearInterval(st1)
+        const at1 = autoReportTimer
+        if (at1 != null) clearInterval(at1)
+        studyTimer = setInterval(() : void => {
+            // studyStartTime 被本闭包捕获且他处修改，Kotlin 禁止智能转换，用局部变量承接
+            const sst = studyStartTime
+            if (sst != null) {
+                studySeconds.value = Math.floor((Date.now() - sst) / 1000)
+            }
+        }, 1000)
+        autoReportTimer = setInterval(() : void => {
+            reportIncremental(false)
+        }, AUTO_REPORT_INTERVAL * 1000)
+    }
+
+    function stopStudy() : void {
+        // 局部变量承接后判空（studyTimer 被闭包捕获修改，Kotlin 禁止智能转换）
+        const st2 = studyTimer
+        if (st2 != null) {
+            clearInterval(st2)
+            studyTimer = null
+        }
+        const at2 = autoReportTimer
+        if (at2 != null) {
+            clearInterval(at2)
+            autoReportTimer = null
+        }
+        studyStartTime = null
+    }
+
+
     async function loadDetail() {
         if (courseId.value <= 0 || chapterId.value <= 0) return
         loading.value = true

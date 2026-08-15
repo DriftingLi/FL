@@ -24,10 +24,20 @@
 						</view>
 					</view>
 					<view class="divider"></view>
+					<view class="source-row" @click="onSelectSource('user')">
+						<view class="source-left">
+							<text class="source-name">已保存模型</text>
+							<text class="source-desc">从我的自定义模型中选用</text>
+						</view>
+						<view :class="['radio', settings.model_source == 'user' ? 'radio-on' : '']">
+							<view v-if="settings.model_source == 'user'" class="radio-dot"></view>
+						</view>
+					</view>
+					<view class="divider"></view>
 					<view class="source-row" @click="onSelectSource('custom')">
 						<view class="source-left">
-							<text class="source-name">自定义模型</text>
-							<text class="source-desc">填写 API 地址与密钥</text>
+							<text class="source-name">临时自定义</text>
+							<text class="source-desc">本次填写 API 地址与密钥</text>
 						</view>
 						<view :class="['radio', settings.model_source == 'custom' ? 'radio-on' : '']">
 							<view v-if="settings.model_source == 'custom'" class="radio-dot"></view>
@@ -70,11 +80,11 @@
 					<view class="form-item">
 						<text class="form-label">Base URL</text>
 						<input class="form-input" type="text" :value="formBaseUrl"
-							placeholder="https://api.openai.com/v1" @input="onBaseUrlInput" />
+							placeholder="https://api.inferera.com/v1" @input="onBaseUrlInput" />
 					</view>
 					<view class="form-item">
 						<text class="form-label">Model</text>
-						<input class="form-input" type="text" :value="formModel" placeholder="gpt-4o-mini"
+						<input class="form-input" type="text" :value="formModel" placeholder="qwen3-5-plus"
 							@input="onModelInput" />
 					</view>
 					<view class="form-item">
@@ -84,26 +94,33 @@
 					</view>
 				</view>
 
-				<!-- 已保存的自定义模型 -->
-				<view v-if="userModels.length > 0" class="saved-block">
+			</view>
+
+			<!-- 已保存的自定义模型（user / custom 均可选用） -->
+			<view v-if="settings.model_source == 'user' || settings.model_source == 'custom'" class="section">
+				<view class="section-head">
 					<text class="section-title">已保存模型</text>
-					<view class="card">
-						<view v-for="(m, idx) in userModels" :key="idx">
-							<view class="model-row">
-								<view class="model-left" @click="onSelectUserModel(m)">
-									<text class="model-name">{{ m.name }}</text>
-									<text class="model-sub">{{ m.model }}</text>
-								</view>
-								<view class="model-actions">
-									<view :class="['radio', settings.model_id == m.id && settings.model_source == 'custom' ? 'radio-on' : '']"
-										@click="onSelectUserModel(m)">
-										<view v-if="settings.model_id == m.id && settings.model_source == 'custom'" class="radio-dot"></view>
-									</view>
-									<text class="del-text" @click="onDeleteUserModel(m.id)">删除</text>
-								</view>
+					<text class="section-add" @click="goManageModels">＋ 新增</text>
+				</view>
+				<view v-if="userModels.length == 0" class="card add-model-card" @click="goManageModels">
+					<text class="add-model-text">暂无已保存模型，点击去添加</text>
+				</view>
+				<view v-else class="card">
+					<view v-for="(m, idx) in userModels" :key="idx">
+						<view class="model-row">
+							<view class="model-left" @click="onSelectUserModel(m)">
+								<text class="model-name">{{ m.name }}</text>
+								<text class="model-sub">{{ m.model }}</text>
 							</view>
-							<view v-if="idx < userModels.length - 1" class="divider"></view>
+							<view class="model-actions">
+								<view :class="['radio', settings.model_id == m.id && settings.model_source == 'user' ? 'radio-on' : '']"
+									@click="onSelectUserModel(m)">
+									<view v-if="settings.model_id == m.id && settings.model_source == 'user'" class="radio-dot"></view>
+								</view>
+								<text class="del-text" @click="onDeleteUserModel(m.id)">删除</text>
+							</view>
 						</view>
+						<view v-if="idx < userModels.length - 1" class="divider"></view>
 					</view>
 				</view>
 			</view>
@@ -146,6 +163,10 @@
 	const formModel = ref<string>('')
 	const formApiKey = ref<string>('')
 
+	function goManageModels() : void {
+		uni.navigateTo({ url: '/pages/ai-assistant/custom-models' })
+	}
+
 	function onBack() : void {
 		// 页面栈只有一层时 navigateBack 会失败，回退到 AI 助手页
 		const pages = getCurrentPages()
@@ -169,6 +190,15 @@
 		formApiKey.value = e.detail.value
 	}
 
+	function onSelectPlatformModel(m : AiModel) : void {
+		settings.value.model_source = 'admin'
+		settings.value.model_id = m.id
+		settings.value.model_name = m.name
+		settings.value.model = m.model
+		settings.value.base_url = ''
+		settings.value.api_key = ''
+	}
+
 	function onSelectSource(source : string) : void {
 		settings.value.model_source = source
 		if (source == 'admin') {
@@ -179,49 +209,52 @@
 		}
 	}
 
-	function onSelectPlatformModel(m : AiModel) : void {
-		settings.value.model_source = 'admin'
-		settings.value.model_id = m.id
-		settings.value.model_name = m.name
-		settings.value.model = m.model
-		settings.value.base_url = ''
-		settings.value.api_key = ''
-	}
-
 	function onSelectUserModel(m : AiUserModel) : void {
-		settings.value.model_source = 'custom'
+		// 已保存模型即后端 user 模型：model_source='user'，按 user_model_id 对话
+		settings.value.model_source = 'user'
 		settings.value.model_id = m.id
 		settings.value.model_name = m.name
-		settings.value.base_url = m.base_url
 		settings.value.model = m.model
-		settings.value.api_key = m.api_key
+		settings.value.base_url = m.base_url
+		settings.value.api_key = '' // 本地不落明文 key，后端按 id 鉴权
 		formName.value = m.name
 		formBaseUrl.value = m.base_url
 		formModel.value = m.model
-		formApiKey.value = m.api_key
+		formApiKey.value = ''
+	}
+
+	/** 执行删除自定义模型（供 showModal 同步 success 回调调用）。声明在 onDeleteUserModel 之前，
+	 *  避免 Kotlin 局部函数前向引用解析失败（UTS error18）。 */
+	async function doDeleteAiModel(id : number) : Promise<void> {
+		try {
+			await deleteAiUserModelApi(id)
+			const next : AiUserModel[] = []
+			for (let i = 0; i < userModels.value.length; i++) {
+				if (userModels.value[i].id != id) next.push(userModels.value[i])
+			}
+			userModels.value = next
+			if (settings.value.model_id == id) {
+				settings.value.model_id = 0
+				settings.value.model_source = 'admin'
+				settings.value.model_name = '默认模型'
+				settings.value.base_url = ''
+				settings.value.model = ''
+				settings.value.api_key = ''
+			}
+			uni.showToast({ title: '已删除', icon: 'success' })
+		} catch (e) {
+			uni.showToast({ title: '删除失败', icon: 'none' })
+		}
 	}
 
 	async function onDeleteUserModel(id : number) : Promise<void> {
 		uni.showModal({
 			title: '删除模型',
 			content: '确定删除该自定义模型吗？',
-			success: async (res) => {
+			// uni.showModal 的 success 回调不可为 async（error17），转由独立异步函数执行
+			success: (res) => {
 				if (!res.confirm) return
-				try {
-					await deleteAiUserModelApi(id)
-					const next : AiUserModel[] = []
-					for (let i = 0; i < userModels.value.length; i++) {
-						if (userModels.value[i].id != id) next.push(userModels.value[i])
-					}
-					userModels.value = next
-					if (settings.value.model_id == id) {
-						settings.value.model_id = 0
-						settings.value.model_name = '自定义模型'
-					}
-					uni.showToast({ title: '已删除', icon: 'success' })
-				} catch (e) {
-					uni.showToast({ title: '删除失败', icon: 'none' })
-				}
+				doDeleteAiModel(id)
 			}
 		})
 	}
@@ -269,9 +302,14 @@
 					settings.value.api_key = apiKey
 				}
 			} else {
-				// admin：若未选模型也允许保存（后端可能用默认绑定）
+				// admin / user：若未选中具体模型也允许保存（后端可能用默认绑定）
 				if (settings.value.model_name.length == 0) {
 					settings.value.model_name = '默认模型'
+				}
+				// user 来源始终不落明文 key
+				if (settings.value.model_source == 'user') {
+					settings.value.base_url = ''
+					settings.value.api_key = ''
 				}
 			}
 
@@ -369,6 +407,37 @@
 		color: #999999;
 		margin-bottom: 16rpx;
 		margin-left: 8rpx;
+	}
+
+	.section-head {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 8rpx;
+	}
+
+	.section-head .section-title {
+		margin-bottom: 0;
+	}
+
+	.section-add {
+		font-size: 26rpx;
+		color: #2979ff;
+		font-weight: 600;
+		padding: 6rpx 12rpx;
+		margin-right: 8rpx;
+	}
+
+	.add-model-card {
+		padding: 40rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.add-model-text {
+		font-size: 28rpx;
+		color: #2979ff;
+		font-weight: 600;
 	}
 
 	.card {

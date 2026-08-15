@@ -1,46 +1,69 @@
 /**
- * AI 助手相关接口
+ * AI 助手相关接口（流式对话 + 会话/模型管理）
  * 对应后端 /api/ai-assistant/*
+ *
+ * 模型/会话/自定义模型的逐字段构造复用 api/aiAssistant.uts（强类型返回，
+ * 规避 Android 端 UTSJSONObject as type 字面量的 ClassCastException）。
  */
-import { get, post, del } from './request'
+import { post } from './request'
 import { API_BASE_URL, AI_REQUEST_TIMEOUT } from '../config/env'
-import type { AIModelOption, AIChatSession, AIChatMessage } from '../types/index'
+import { STORAGE_KEY_TOKEN } from '../constants/app'
+import { getStorage } from '../utils/storage'
+import {
+	getAiModelsApi,
+	getAiUserModelsApi,
+	saveAiUserModelApi,
+	deleteAiUserModelApi,
+	getAiSessionsApi,
+	deleteAiSessionApi,
+	getAiSessionMessagesApi,
+	buildSession,
+} from './aiAssistant'
+import type { AiModel, AiUserModel, AiSession, AiSessionMessage } from '../types/index'
 
-/** 获取公开可用模型列表 */
-export function getPublicModelsApi() : Promise<UTSJSONObject> {
-	return get('/ai-assistant/models')
+/** 获取公开可用模型列表（强类型） */
+export function getPublicModelsApi() : Promise<AiModel[]> {
+	return getAiModelsApi()
 }
 
-/** 获取当前用户会话列表 */
-export function getSessionsApi() : Promise<UTSJSONObject> {
-	return get('/ai-assistant/sessions')
+/** 获取当前用户自定义模型列表（强类型） */
+export function getUserModelsApi() : Promise<AiUserModel[]> {
+	return getAiUserModelsApi()
 }
 
-/** 创建会话 */
-export function createSessionApi(title : string, modelName : string) : Promise<UTSJSONObject> {
-	return post('/ai-assistant/sessions', { title, model_name: modelName })
+/** 保存自定义模型（创建/更新） */
+export function saveUserModelApi(payload : UTSJSONObject) : Promise<AiUserModel> {
+	return saveAiUserModelApi(payload)
+}
+
+/** 删除自定义模型 */
+export function deleteUserModelApi(id : number) : Promise<void> {
+	return deleteAiUserModelApi(id)
+}
+
+/** 获取当前用户会话列表（强类型） */
+export function getSessionsApi() : Promise<AiSession[]> {
+	return getAiSessionsApi()
+}
+
+/** 创建会话（携带后端所需的 model_name） */
+export function createSessionApi(title : string, modelName : string) : Promise<AiSession> {
+	const payload : UTSJSONObject = { title: title, model_name: modelName }
+	return post('/ai-assistant/sessions', payload).then((data : UTSJSONObject) : AiSession => {
+		const s = data['session']
+		if (s != null) return buildSession(s as UTSJSONObject)
+		return buildSession(data)
+	})
 }
 
 /** 删除会话 */
-export function deleteSessionApi(id : number) : Promise<UTSJSONObject> {
-	return del(`/ai-assistant/sessions/${id}`)
+export function deleteSessionApi(id : number) : Promise<void> {
+	return deleteAiSessionApi(id)
 }
 
-/** 获取会话消息 */
-export function getSessionMessagesApi(id : number) : Promise<UTSJSONObject> {
-	return get(`/ai-assistant/sessions/${id}/messages`)
-}
-
-/** 流式对话请求参数 */
-export type StreamChatParams = {
-	session_id ?: number
-	model_source : string
-	config_id ?: number
-	user_model_id ?: number
-	custom_api_key ?: string
-	custom_base_url ?: string
-	custom_model ?: string
-	messages : { role : string; content : string }[]
+/** 获取会话消息（强类型） */
+export function getSessionMessagesApi(id : number) : Promise<AiSessionMessage[]> {
+	return getAiSessionMessagesApi(id)
 }
 
 /** 流式对话回调 */
@@ -52,36 +75,93 @@ export type StreamChatCallbacks = {
 
 /**
  * 流式对话（SSE）
- * 使用 uni.requestTask 支持中止请求
+ * 后端事件契约：event: message {"content"} / error {"message"} / done（无 data）
+ * @param params 请求体（UTSJSONObject：session_id / model_source / config_id /
+ *               user_model_id / custom_api_key / custom_base_url / custom_model / messages）
+ * @returns 请求对象（支持 abort 时返回之，否则返回 null，可由调用方选择中止）
  */
-export function streamChatApi(params : StreamChatParams, callbacks : StreamChatCallbacks) : void {
-	const token = uni.getStorageSync('auth_token') as string
+export function streamChatApi(params : UTSJSONObject, callbacks : StreamChatCallbacks) : any | null {
+	const token = getStorage(STORAGE_KEY_TOKEN)
 	const url = `${API_BASE_URL}/ai-assistant/chat`
 
-	uni.request({
+	const header : UTSJSONObject = {
+		'Content-Type': 'application/json',
+		'Accept': 'text/event-stream',
+	}
+	if (token.length > 0) {
+		header['Authorization'] = `Bearer ${token}`
+	}
+
+	const task = uni.request({
 		url: url,
 		method: 'POST',
-		header: {
-			'Content-Type': 'application/json',
-			'Accept': 'text/event-stream',
-			'Authorization': token.length > 0 ? `Bearer ${token}` : '',
-		},
 		data: params,
+		header: header,
 		timeout: AI_REQUEST_TIMEOUT,
 		success: (res) => {
-			const text = res.data as string
-			parseSSE(text, callbacks)
+			const statusCode = res.statusCode
+			if (statusCode == 401) {
+				emitError(callbacks, '登录已过期，请重新登录')
+				return
+			}
+			if (statusCode < 200 || statusCode >= 300) {
+				// 尝试解析业务错误信息；失败则用状态码兜底
+				let msg = `请求失败 (${statusCode})`
+				try {
+					const bodyObj = res.data as UTSJSONObject
+					const bm = bodyObj['message']
+					if (bm != null) msg = bm as string
+				} catch (e) {
+					// 忽略：非 JSON 错误体（如 nginx 502 HTML）
+				}
+				emitError(callbacks, msg)
+				return
+			}
+			// SSE 原文一般为 string；若被反序列化为对象则序列化后再解析
+			let raw = ''
+			try {
+				const asObj = res.data as UTSJSONObject
+				if (asObj != null && (asObj['content'] != null || asObj['message'] != null ||
+						asObj['choices'] != null || asObj['data'] != null)) {
+					raw = JSON.stringify(res.data)
+				} else {
+					raw = `${res.data}`
+				}
+			} catch (e) {
+				raw = `${res.data}`
+			}
+			if (raw.length == 0) {
+				raw = `${res.data}`
+			}
+			parseSSE(raw, callbacks)
 		},
 		fail: (err) => {
-			console.error('[streamChat] fail:', err)
-			if (callbacks.onError != null) {
-				callbacks.onError(err.errMsg ?? '网络请求失败')
+			console.error('[streamChat] fail:', err.errMsg)
+			let msg = '网络请求失败'
+			const errMsg = err.errMsg ?? ''
+			if (errMsg.indexOf('timeout') >= 0) {
+				msg = '请求超时，请稍后重试'
+			} else if (errMsg.length > 0) {
+				msg = errMsg
 			}
+			emitError(callbacks, msg)
 		},
 	})
+	if (task != null) {
+		return task
+	}
+	return null
 }
 
-/** 简单解析 SSE 文本 */
+/** 触发 onError（若存在） */
+function emitError(callbacks : StreamChatCallbacks, msg : string) : void {
+	console.error('[streamChat] error:', msg)
+	if (callbacks.onError != null) {
+		callbacks.onError(msg)
+	}
+}
+
+/** 简单解析 SSE 文本（兼容后端 message / error / done 事件） */
 function parseSSE(text : string, callbacks : StreamChatCallbacks) : void {
 	const lines = text.split('\n')
 	let event = ''
@@ -120,29 +200,15 @@ function handleSSEEvent(event : string, data : string, callbacks : StreamChatCal
 		let msg = '对话出错'
 		try {
 			const obj = JSON.parse(data) as UTSJSONObject
-			msg = (obj['message'] as string) ?? msg
+			const m = obj['message']
+			if (m != null) {
+				msg = m as string
+			}
 		} catch (e) {}
-		if (callbacks.onError != null) {
-			callbacks.onError(msg)
-		}
+		emitError(callbacks, msg)
 	} else if (event == 'done') {
 		if (callbacks.onDone != null) {
 			callbacks.onDone()
 		}
 	}
-}
-
-/** 获取用户自定义模型列表 */
-export function getUserModelsApi() : Promise<UTSJSONObject> {
-	return get('/ai-assistant/user-models')
-}
-
-/** 保存（新增或更新）自定义模型 */
-export function saveUserModelApi(payload : UTSJSONObject) : Promise<UTSJSONObject> {
-	return post('/ai-assistant/user-models', payload)
-}
-
-/** 删除自定义模型 */
-export function deleteUserModelApi(id : number) : Promise<UTSJSONObject> {
-	return del(`/ai-assistant/user-models/${id}`)
 }

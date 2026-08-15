@@ -275,7 +275,7 @@
 
     .summary-score {
         flex-direction: row;
-        align-items: baseline;
+        align-items: flex-end;
         margin-bottom: 32rpx;
     }
 

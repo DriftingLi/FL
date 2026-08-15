@@ -1,0 +1,238 @@
+/**
+ * AI 助手聊天核心逻辑（composable）
+ *
+ * 供 基础版(ai-basic) / 专业版(ai-assistant) 两个聊天页共用，消除两页重复的：
+ * - 会话 / 消息 / 输入 / 思考 / 滚动 / 侧栏 的响应式状态
+ * - 会话加载 / 消息加载 / 新建 / 删除 / 滚动到底 / 侧栏开关
+ * - 发送消息 / 流式对话主体（差异通过「会话标签 + 请求体构造回调」传入）
+ *
+ * 每页独立状态：每次调用 useAiChat() 都新建 ref，两页互不共享。
+ * 有差异的「模型可用性校验」仍留在各页面（依赖页面私有状态 models/userModels/custom 等）。
+ */
+import { ref, type Ref } from 'vue'
+import {
+	getSessionsApi,
+	createSessionApi,
+	deleteSessionApi,
+	getSessionMessagesApi,
+	streamChatApi,
+} from '../api/ai-assistant'
+import type { AiSession, AiSessionMessage, AiChatMessage } from '../types/index'
+
+/** 构造差异化请求体：基础版固定 admin，专业版按 model_source 分支 */
+export type ChatBodyBuilder = (history : AiChatMessage[], sessionID : number) => UTSJSONObject
+
+/** useAiChat 返回值类型（显式声明，避免 UTS 对返回对象的函数字段做调用推断） */
+export type UseAiChatResult = {
+	statusBarHeight : Ref<number>
+	sessions : Ref<AiSession[]>
+	currentSession : Ref<AiSession | null>
+	messages : Ref<AiSessionMessage[]>
+	inputText : Ref<string>
+	thinking : Ref<boolean>
+	scrollIntoViewId : Ref<string>
+	sidebarLeft : Ref<boolean>
+	sidebarRight : Ref<boolean>
+	scrollToBottom : () => void
+	loadSessions : () => Promise<void>
+	loadSession : (session : AiSession) => Promise<void>
+	startNewChat : () => Promise<void>
+	onDeleteSession : (id : number) => Promise<void>
+	toggleSidebarLeft : () => void
+	toggleSidebarRight : () => void
+	sendInput : (sessionTag : string, buildBody : ChatBodyBuilder) => void
+}
+
+export function useAiChat() {
+	// ===== 状态（每页独立） =====
+	const statusBarHeight = ref<number>(20)
+	const sessions = ref<AiSession[]>([])
+	const currentSession = ref<AiSession | null>(null)
+	const messages = ref<AiSessionMessage[]>([])
+	const inputText = ref<string>('')
+	const thinking = ref<boolean>(false)
+	const scrollIntoViewId = ref<string>('')
+	const sidebarLeft = ref<boolean>(false)
+	const sidebarRight = ref<boolean>(false)
+
+	// ===== 方法 =====
+
+	/** 滚动到消息底部 */
+	function scrollToBottom() : void {
+		scrollIntoViewId.value = 'bottom-anchor'
+		setTimeout(() => {
+			scrollIntoViewId.value = ''
+		}, 300)
+	}
+
+	/** 加载当前用户会话列表 */
+	async function loadSessions() : Promise<void> {
+		try {
+			sessions.value = await getSessionsApi()
+		} catch (e) {
+			console.error('loadSessions failed:', e)
+			sessions.value = []
+		}
+	}
+
+	/** 加载指定会话的消息 */
+	async function loadSession(session : AiSession) : Promise<void> {
+		currentSession.value = session
+		sidebarLeft.value = false
+		sidebarRight.value = false
+		try {
+			messages.value = await getSessionMessagesApi(session.id)
+		} catch (e) {
+			console.error('loadSession failed:', e)
+			messages.value = []
+		}
+	}
+
+	/** 新建（清空）当前对话 */
+	async function startNewChat() : Promise<void> {
+		currentSession.value = null
+		messages.value = []
+		inputText.value = ''
+		sidebarLeft.value = false
+		sidebarRight.value = false
+	}
+
+	/** 执行删除会话（供 showModal 同步 success 回调调用，fire-and-forget）。声明在 onDeleteSession 之前，
+	 *  避免 Kotlin 局部函数前向引用解析失败（UTS error18）。 */
+	async function doDeleteSession(id : number) : Promise<void> {
+		try {
+			await deleteSessionApi(id)
+			if (currentSession.value != null && currentSession.value.id == id) {
+				currentSession.value = null
+				messages.value = []
+			}
+			await loadSessions()
+		} catch (e) {
+			console.error('deleteSession failed:', e)
+		}
+	}
+
+	/** 删除会话（二次确认后调用后端并刷新列表） */
+	async function onDeleteSession(id : number) : Promise<void> {
+		uni.showModal({
+			title: '确认删除',
+			content: '删除后不可恢复',
+			// uni.showModal 的 success 回调不可为 async（会返回 UTSPromise 导致类型不匹配），
+			// 故改为同步回调内触发独立的异步删除函数
+			success: (res) => {
+				if (res.confirm) {
+					doDeleteSession(id)
+				}
+			},
+		})
+	}
+
+	/** 切换左侧会话抽屉 */
+	function toggleSidebarLeft() : void {
+		sidebarLeft.value = !sidebarLeft.value
+	}
+
+	/** 切换右侧功能菜单抽屉 */
+	function toggleSidebarRight() : void {
+		sidebarRight.value = !sidebarRight.value
+	}
+
+	/**
+	 * 流式对话主体：追加助手占位、组装历史、首段建会话、SSE 流、兜底。
+	 * @note 声明在 sendInput 之前，避免 Kotlin 局部函数前向引用解析失败（UTS error18）
+	 */
+	async function doStreamChat(sessionTag : string, buildBody : ChatBodyBuilder) : Promise<void> {
+		thinking.value = true
+		const assistantMsg : AiSessionMessage = { id: 0, role: 'assistant', content: '', created_at: '' }
+		messages.value.push(assistantMsg)
+		scrollToBottom()
+
+		// 构建历史消息
+		const history : AiChatMessage[] = []
+		for (let i = 0; i < messages.value.length - 1; i++) {
+			const m = messages.value[i]
+			if (m.role == 'user' || m.role == 'assistant') {
+				history.push({ role: m.role, content: m.content })
+			}
+		}
+
+		// 首次对话时创建会话（两页均登录态下可进入，无需再判断登录）
+		let sessionID = currentSession.value?.id ?? 0
+		if (sessionID == 0 && history.length == 1) {
+			try {
+				const s = await createSessionApi('新会话', sessionTag)
+				currentSession.value = s
+				sessionID = s.id
+				await loadSessions()
+			} catch (e) {
+				console.error('createSession failed:', e)
+			}
+		}
+
+		const params = buildBody(history, sessionID)
+		streamChatApi(params, {
+			onMessage: (chunk : string) => {
+				assistantMsg.content += chunk
+				scrollToBottom()
+			},
+			onError: (msg : string) => {
+				thinking.value = false
+				assistantMsg.content += '\n[错误：' + msg + ']'
+				uni.showToast({ title: msg, icon: 'none' })
+				scrollToBottom()
+			},
+			onDone: () => {
+				thinking.value = false
+				scrollToBottom()
+			},
+		})
+
+		// 兜底：30 秒后仍未结束则重置 thinking（部分端 SSE 静默/异常时，避免会话卡死）
+		setTimeout(() => {
+			if (thinking.value) {
+				thinking.value = false
+			}
+		}, 30000)
+	}
+
+	/**
+	 * 从输入框发送当前文本（含非空/思考中校验、追加用户消息、流式对话）
+	 * @param sessionTag 新建会话时写入的模型/版本标签（基础版 '基础版'；专业版当前模型名）
+	 * @param buildBody  构造差异化请求体（接收历史消息与 sessionID，返回完整 body）
+	 */
+	function sendInput(sessionTag : string, buildBody : ChatBodyBuilder) : void {
+		const text = inputText.value.trim()
+		if (text.length == 0) return
+		if (thinking.value) {
+			uni.showToast({ title: '请等待当前回复完成', icon: 'none' })
+			return
+		}
+		const userMsg : AiSessionMessage = { id: 0, role: 'user', content: text, created_at: '' }
+		messages.value.push(userMsg)
+		inputText.value = ''
+		scrollToBottom()
+		doStreamChat(sessionTag, buildBody)
+	}
+
+	// 函数字段用箭头包裹返回（UTS 要求返回对象里的函数是调用表达式，不能用裸引用，见 error18），
+	// 且整体以显式类型 UseAiChatResult 强转（与 stores/auth.uts 同款写法规避类型推断问题）
+	return {
+		statusBarHeight: statusBarHeight,
+		sessions: sessions,
+		currentSession: currentSession,
+		messages: messages,
+		inputText: inputText,
+		thinking: thinking,
+		scrollIntoViewId: scrollIntoViewId,
+		sidebarLeft: sidebarLeft,
+		sidebarRight: sidebarRight,
+		scrollToBottom: () => scrollToBottom(),
+		loadSessions: () => loadSessions(),
+		loadSession: (session : AiSession) => loadSession(session),
+		startNewChat: () => startNewChat(),
+		onDeleteSession: (id : number) => onDeleteSession(id),
+		toggleSidebarLeft: () => toggleSidebarLeft(),
+		toggleSidebarRight: () => toggleSidebarRight(),
+		sendInput: (sessionTag : string, buildBody : ChatBodyBuilder) => sendInput(sessionTag, buildBody),
+	} as UseAiChatResult
+}

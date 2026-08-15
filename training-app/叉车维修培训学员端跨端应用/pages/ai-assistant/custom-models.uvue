@@ -7,7 +7,7 @@
 			</view>
 			<text class="header-title">自定义模型</text>
 			<view class="header-right" @click="startCreate">
-				<text class="add-icon">＋</text>
+				<text class="add-label">＋ 添加</text>
 			</view>
 		</view>
 
@@ -27,7 +27,15 @@
 				</view>
 			</view>
 			<view v-else class="empty">
-				<text class="empty-text">暂无自定义模型，点击右上角 + 添加</text>
+				<text class="empty-text">暂无自定义模型</text>
+				<view class="empty-add-btn" @click="startCreate">
+					<text class="empty-add-text">＋ 添加模型</text>
+				</view>
+			</view>
+
+			<!-- 列表底部：常驻添加按钮 -->
+			<view v-if="userModels.length > 0" class="bottom-add-btn" @click="startCreate">
+				<text class="bottom-add-text">＋ 添加模型</text>
 			</view>
 
 			<!-- 新增/编辑表单 -->
@@ -35,15 +43,15 @@
 				<text class="form-title">{{ editingId > 0 ? '编辑模型' : '新增模型' }}</text>
 				<view class="form-item">
 					<text class="form-label">名称</text>
-					<input class="form-input" type="text" :value="formName" placeholder="如：我的 DeepSeek" @input="onNameInput" />
+					<input class="form-input" type="text" :value="formName" placeholder="如：Inferera/Qwen" @input="onNameInput" />
 				</view>
 				<view class="form-item">
 					<text class="form-label">模型名</text>
-					<input class="form-input" type="text" :value="formModel" placeholder="如：deepseek-chat" @input="onModelInput" />
+					<input class="form-input" type="text" :value="formModel" placeholder="如：qwen3-5-plus" @input="onModelInput" />
 				</view>
 				<view class="form-item">
 					<text class="form-label">Base URL</text>
-					<input class="form-input" type="text" :value="formBaseUrl" placeholder="如：https://api.deepseek.com" @input="onBaseUrlInput" />
+					<input class="form-input" type="text" :value="formBaseUrl" placeholder="https://api.inferera.com/v1" @input="onBaseUrlInput" />
 				</view>
 				<view class="form-item">
 					<text class="form-label">API Key</text>
@@ -68,12 +76,13 @@
 	import { useStatusBarHeight } from '../../utils/system'
 	import { goBack } from '../../utils/navigation'
 	import { getUserModelsApi, saveUserModelApi, deleteUserModelApi } from '../../api/ai-assistant'
-	import type { AIModelOption } from '../../types/index'
+	import type { AiUserModel } from '../../types/index'
+	import { STORAGE_KEY_AI_SELECTED_USER_MODEL } from '../../constants/app'
 
 	const statusBarHeight = useStatusBarHeight()
 	const windowHeight = uni.getSystemInfoSync().windowHeight
 
-	const userModels = ref<AIModelOption[]>([])
+	const userModels = ref<AiUserModel[]>([])
 	const formVisible = ref<boolean>(false)
 	const editingId = ref<number>(0)
 	const saving = ref<boolean>(false)
@@ -88,9 +97,7 @@
 
 	async function loadModels() : Promise<void> {
 		try {
-			const res = await getUserModelsApi()
-			const arr = (res['list'] ?? res['models'] ?? res) as AIModelOption[]
-			userModels.value = arr
+			userModels.value = await getUserModelsApi()
 		} catch (e) {
 			console.error('[custom-models] load failed:', e)
 			userModels.value = []
@@ -119,7 +126,7 @@
 		formVisible.value = true
 	}
 
-	function startEdit(m : AIModelOption) : void {
+	function startEdit(m : AiUserModel) : void {
 		editingId.value = m.id
 		formName.value = m.name
 		formModel.value = m.model
@@ -174,27 +181,34 @@
 		}
 	}
 
+	/** 执行删除模型配置（供 showModal 同步 success 回调调用）。声明在 onDelete 之前，
+	 *  避免 Kotlin 局部函数前向引用解析失败（UTS error18）。 */
+	async function doDelete(id : number) : Promise<void> {
+		try {
+			await deleteUserModelApi(id)
+			uni.showToast({ title: '删除成功', icon: 'success' })
+			await loadModels()
+		} catch (e) {
+			console.error('[custom-models] delete failed:', e)
+		}
+	}
+
 	function onDelete(id : number) : void {
 		uni.showModal({
 			title: '提示',
 			content: '确定删除该模型配置？',
-			success: async (res) => {
+			// uni.showModal 的 success 回调不可为 async（error17），转由独立异步函数执行
+			success: (res) => {
 				if (res.confirm) {
-					try {
-						await deleteUserModelApi(id)
-						uni.showToast({ title: '删除成功', icon: 'success' })
-						await loadModels()
-					} catch (e) {
-						console.error('[custom-models] delete failed:', e)
-					}
+					doDelete(id)
 				}
 			},
 		})
 	}
 
-	function onSelect(m : AIModelOption) : void {
+	function onSelect(m : AiUserModel) : void {
 		// 返回 AI 助手页并选中该模型：通过 storage 传递选中模型
-		uni.setStorageSync('ai_selected_user_model', JSON.stringify({ id: m.id, name: m.name }))
+		uni.setStorageSync(STORAGE_KEY_AI_SELECTED_USER_MODEL, JSON.stringify({ id: m.id, name: m.name }))
 		goBack()
 	}
 
@@ -243,9 +257,11 @@
 		color: #222222;
 	}
 
-	.add-icon {
-		font-size: 44rpx;
+	.add-label {
+		font-size: 30rpx;
 		color: #2979ff;
+		font-weight: 600;
+		padding: 8rpx 12rpx;
 	}
 
 	.content {
@@ -315,6 +331,38 @@
 	.empty-text {
 		font-size: 28rpx;
 		color: #999999;
+		margin-bottom: 40rpx;
+	}
+
+	.empty-add-btn {
+		width: 320rpx;
+		height: 88rpx;
+		background-color: #2979ff;
+		border-radius: 44rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.empty-add-text {
+		font-size: 30rpx;
+		color: #ffffff;
+		font-weight: 600;
+	}
+
+	.bottom-add-btn {
+		height: 88rpx;
+		background-color: #ffffff;
+		border: 2rpx solid #2979ff;
+		border-radius: 44rpx;
+		align-items: center;
+		justify-content: center;
+		margin-top: 8rpx;
+	}
+
+	.bottom-add-text {
+		font-size: 30rpx;
+		color: #2979ff;
+		font-weight: 600;
 	}
 
 	.form-card {

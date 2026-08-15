@@ -117,18 +117,18 @@
     const details = ref<LevelExamResultDetail[]>([])
     const participant = ref<UTSJSONObject>({} as UTSJSONObject)
 
+    /** 客观分（声明在 totalScore 之前：其闭包引用 objectiveScore，Kotlin 需先声明） */
+    const objectiveScore = computed<number>(() : number => {
+        const raw = participant.value['objective_score']
+        if (raw != null) return parseFloat(`${raw}`)
+        return 0
+    })
+
     /** 总分（未出分时用客观分兜底） */
     const totalScore = computed<number>(() : number => {
         const raw = participant.value['score']
         if (raw != null) return parseFloat(`${raw}`)
         return objectiveScore.value
-    })
-
-    /** 客观分 */
-    const objectiveScore = computed<number>(() : number => {
-        const raw = participant.value['objective_score']
-        if (raw != null) return parseFloat(`${raw}`)
-        return 0
     })
 
     /** 主观分 */
@@ -338,7 +338,7 @@
 
     .summary-score {
         flex-direction: row;
-        align-items: baseline;
+        align-items: flex-end;
         margin-bottom: 32rpx;
     }
 

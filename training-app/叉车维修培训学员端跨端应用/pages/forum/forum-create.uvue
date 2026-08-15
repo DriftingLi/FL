@@ -27,7 +27,7 @@
                     <text class="form-label">图片</text>
                     <view class="img-grid">
                         <view v-for="(img, idx) in images" :key="idx" class="img-cell">
-                            <image class="img-thumb" :src="resolveFileUrl(img)" mode="aspectFill" @click="onPreviewImage(idx)" />
+                            <image class="img-thumb" :src="imgSrc(img)" mode="aspectFill" @click="onPreviewImage(idx)" />
                             <view class="img-remove" @click.stop="onRemoveImage(idx)">
                                 <text class="img-remove-text">×</text>
                             </view>
@@ -71,6 +71,11 @@
     const images = ref<string[]>([])
     const submitting = ref<boolean>(false)
     const uploadingImage = ref<boolean>(false)
+
+    /** 模板用：补全图片 URL（UTS 模板内直接调用导入函数有解析限制，走本地包装） */
+    function imgSrc(url : string) : string {
+        return resolveFileUrl(url)
+    }
 
     /** 是否可提交 */
     const canSubmit = computed<boolean>(() : boolean => {
@@ -120,6 +125,28 @@
         }
     }
 
+    /** 逐张上传图片，成功后把返回 URL 加入数组（声明在 onAddImage 之前，避免 Kotlin 局部函数前向引用） */
+    async function uploadImages(paths : string[]) : Promise<void> {
+        uploadingImage.value = true
+        uni.showLoading({ title: '上传图片中...' })
+        let failed = 0
+        for (let i = 0; i < paths.length; i++) {
+            if (images.value.length >= 9) break
+            try {
+                const url = await uploadForumImageApi(paths[i])
+                images.value.push(url)
+            } catch (e) {
+                console.error('[forum-create] upload image failed:', e)
+                failed = failed + 1
+            }
+        }
+        uni.hideLoading()
+        uploadingImage.value = false
+        if (failed > 0) {
+            uni.showToast({ title: failed + ' 张图片上传失败，请重试', icon: 'none' })
+        }
+    }
+
     /** 选择图片：批量选择并上传（最多 9 张） */
     function onAddImage() : void {
         if (uploadingImage.value) return
@@ -141,28 +168,6 @@
                 console.log('[forum-create] chooseImage canceled/failed:', err)
             },
         })
-    }
-
-    /** 逐张上传图片，成功后把返回 URL 加入数组 */
-    async function uploadImages(paths : string[]) : Promise<void> {
-        uploadingImage.value = true
-        uni.showLoading({ title: '上传图片中...' })
-        let failed = 0
-        for (let i = 0; i < paths.length; i++) {
-            if (images.value.length >= 9) break
-            try {
-                const url = await uploadForumImageApi(paths[i])
-                images.value.push(url)
-            } catch (e) {
-                console.error('[forum-create] upload image failed:', e)
-                failed = failed + 1
-            }
-        }
-        uni.hideLoading()
-        uploadingImage.value = false
-        if (failed > 0) {
-            uni.showToast({ title: failed + ' 张图片上传失败，请重试', icon: 'none' })
-        }
     }
 
     /** 删除已上传图片 */

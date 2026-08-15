@@ -3,7 +3,7 @@
 		<!-- 自定义导航栏 -->
 		<view class="custom-nav" :style="{ paddingTop: statusBarHeight + 'px' }">
 			<view class="nav-content">
-				<text class="nav-icon" @click="toggleSidebar">&#9776;</text>
+				<text class="nav-icon" @click="toggleSidebarLeft">&#9776;</text>
 				<view class="nav-center">
                         <text class="nav-title">维修助手</text>
 					<view class="version-tabs">
@@ -19,21 +19,13 @@
 		<!-- 主内容区 -->
 		<view class="main">
 			<scroll-view scroll-y class="pro-scroll" :scroll-into-view="scrollIntoViewId" scroll-with-animation>
-				<!-- 无对话：欢迎 + 新对话入口 -->
+				<!-- 无对话：欢迎 + 快捷提示语 -->
 				<view v-if="messages.length == 0 && !thinking" class="welcome-panel">
-					<!-- <view class="new-chat-card" @click="startNewChat">
-						<text class="new-chat-icon">&#9993;</text>
-						
-					</view> -->
-
-					<!-- 快捷提示语 -->
 					<view class="prompt-list">
 						<view v-for="(p, idx) in quickPrompts" :key="idx" class="prompt-card" @click="sendText(p)">
 							<text class="prompt-text">{{ p }}</text>
-						
 						</view>
 					</view>
-				
 				</view>
 
 				<!-- 聊天区 -->
@@ -57,9 +49,9 @@
 		<view class="input-area">
 			<view class="input-row">
 				<view class="input-box">
-					<input v-model="inputText" class="chat-input" placeholder="提出你想要知道的问题" confirm-type="send" @confirm="sendInput" />
+					<input v-model="inputText" class="chat-input" placeholder="提出你想要知道的问题" confirm-type="send" @confirm="onSend" />
 				</view>
-				<text class="send-btn" :class="{ disabled: inputText.length == 0 }" @click="sendInput">&#10148;</text>
+				<text class="send-btn" :class="{ disabled: inputText.length == 0 }" @click="onSend">&#10148;</text>
 			</view>
 		</view>
 
@@ -76,7 +68,7 @@
 			<scroll-view scroll-y class="drawer-body">
 				<view class="drawer-new" @click="startNewChat">
 					<text class="drawer-new-icon">+</text>
-					<text>新建对话</text>
+					<text class="drawer-new-text">新建对话</text>
 				</view>
 				<view v-if="sessions.length == 0" class="empty-tip">暂无历史对话</view>
 				<view v-for="(s, idx) in sessions" :key="idx" class="drawer-item" @click="loadSession(s)">
@@ -95,16 +87,16 @@
 			</view>
 			<scroll-view scroll-y class="drawer-body">
 				<view class="menu-item" @click="goPro">
-					<text>切换到专业版</text>
+					<text class="menu-item-text">切换到专业版</text>
 				</view>
 				<view class="menu-item" @click="goSettings">
-					<text>对话设置</text>
+					<text class="menu-item-text">对话设置</text>
 				</view>
 				<view class="menu-item" @click="goManageModels">
-					<text>自定义模型</text>
+					<text class="menu-item-text">自定义模型</text>
 				</view>
 				<view class="menu-item" @click="goProfile">
-					<text>个人中心</text>
+					<text class="menu-item-text">个人中心</text>
 				</view>
 			</scroll-view>
 		</view>
@@ -145,16 +137,14 @@
 	import { onLoad, onShow } from '@dcloudio/uni-app'
 	import { ref } from 'vue'
 	import { useAuthStore } from '../../stores/auth'
+	import { getPublicModelsApi } from '../../api/ai-assistant'
 	import {
-		getPublicModelsApi,
-		getSessionsApi,
-		createSessionApi,
-		deleteSessionApi,
-		getSessionMessagesApi,
-		streamChatApi,
-	} from '../../api/ai-assistant'
-	import type { StreamChatParams } from '../../api/ai-assistant'
-	import type { AIModelOption, AIChatSession, AIChatMessage } from '../../types/index'
+		loadAiChatSettings,
+		saveAiChatSettings,
+	} from '../../api/aiAssistant'
+	import { useAiChat } from '../../composables/useAiChat'
+	import type { ChatBodyBuilder } from '../../composables/useAiChat'
+	import type { AiModel, AiChatMessage } from '../../types/index'
 	import {
 		isProPaid,
 		setVersion,
@@ -166,138 +156,105 @@
 	import TabBar from '../../components/tab-bar/tab-bar.uvue'
 
 	const auth = useAuthStore()
-	const statusBarHeight = ref<number>(20)
 
-	// 视图状态
-	const sidebarLeft = ref<boolean>(false)
-	const sidebarRight = ref<boolean>(false)
-	const thinking = ref<boolean>(false)
+	// 聊天核心逻辑（基础版/专业版共用，包含会话/消息/输入/侧栏/发送状态与方法）
+	const {
+		statusBarHeight,
+		sessions,
+		messages,
+		inputText,
+		thinking,
+		scrollIntoViewId,
+		sidebarLeft,
+		sidebarRight,
+		loadSessions,
+		loadSession,
+		startNewChat,
+		onDeleteSession,
+		toggleSidebarLeft,
+		toggleSidebarRight,
+		sendInput,
+	} = useAiChat()
 
 	// mock 付费状态
 	const payVisible = ref<boolean>(false)
 	const payPlan = ref<'month' | 'year'>('month')
 	const paying = ref<boolean>(false)
 
-	// 数据
-	const models = ref<AIModelOption[]>([])
-	const sessions = ref<AIChatSession[]>([])
-	const currentSession = ref<AIChatSession | null>(null)
-	const messages = ref<AIChatMessage[]>([])
-	const inputText = ref<string>('')
-	const scrollIntoViewId = ref<string>('')
+	// 数据（模型）
+	const models = ref<AiModel[]>([])
 
-	// 基础版固定使用第一个平台模型
+	// 基础版固定使用平台模型，默认第一个；可从'对话设置'里保存的 admin 选择水合
 	const currentModelId = ref<number>(0)
+
+	/** 基础版请求体：固定使用平台模型（admin） */
+	const buildBody : ChatBodyBuilder = (history : AiChatMessage[], sessionID : number) : UTSJSONObject => {
+		const params : UTSJSONObject = {
+			session_id: sessionID,
+			model_source: 'admin',
+			config_id: currentModelId.value,
+			messages: history,
+		}
+		return params
+	}
+
+	// 发送前校验（基础版仅需存在平台模型），通过后走公共 sendInput
+	function onSend() : void {
+		if (models.value.length == 0) {
+			uni.showToast({ title: '暂无可用的 AI 模型', icon: 'none' })
+			return
+		}
+		sendInput('基础版', buildBody)
+	}
+
+	// 快捷提示语点击：填入输入框并发送
+	function sendText(text : string) : void {
+		inputText.value = text
+		onSend()
+	}
 
 	// 快捷提示语
 	const quickPrompts : string[] = [
-		'如何高效阅读书籍？',
-		'帮我写近期的学习汇报',
-		'总结这个章节的主要内容',
+		'叉车液压系统常见故障有哪些，如何排查？',
+		'叉车启动困难可能是什么原因？',
+		'叉车日常保养的检查要点有哪些？',
 	]
 
-	// 生命周期
-	onLoad((options : OnLoadOptions) => {
-		const sysInfo = uni.getSystemInfoSync()
-		statusBarHeight.value = sysInfo.statusBarHeight
-
-		auth.restoreFromStorage()
-		if (!auth.isLoggedIn.value) {
-			uni.reLaunch({ url: '/pages/login/login' })
-			return
-		}
-
-		loadModels()
-		loadSessions()
-	})
-
-	onShow(() => {
-		if (auth.isLoggedIn.value) {
-			loadSessions()
-		}
-	})
 
 	// 数据加载
 	async function loadModels() : Promise<void> {
 		try {
-			const res = await getPublicModelsApi()
-			const list = (res['list'] ?? res) as AIModelOption[]
+			const list = await getPublicModelsApi()
 			models.value = list
-			if (list.length > 0 && currentModelId.value == 0) {
+			// 基础版只走平台模型：优先采用'对话设置'中保存的 admin 选择，其次默认第一个
+			const saved = loadAiChatSettings()
+			let applied = false
+			if (saved.model_source == 'admin' && saved.model_id > 0) {
+				for (let i = 0; i < list.length; i++) {
+					if (list[i].id == saved.model_id) {
+						currentModelId.value = saved.model_id
+						applied = true
+						break
+					}
+				}
+			}
+			if (!applied && currentModelId.value == 0 && list.length > 0) {
 				currentModelId.value = list[0].id
+				// 记录为当前 admin 选择，便于设置页保持同口径
+				const s = loadAiChatSettings()
+				s.model_source = 'admin'
+				s.model_id = currentModelId.value
+				if (list[0].name.length > 0) s.model_name = list[0].name
+				if (list[0].model.length > 0) s.model = list[0].model
+				saveAiChatSettings(s)
 			}
 		} catch (e) {
 			console.error('loadModels failed:', e)
 		}
 	}
 
-	async function loadSessions() : Promise<void> {
-		try {
-			const res = await getSessionsApi()
-			sessions.value = (res['sessions'] ?? res) as AIChatSession[]
-		} catch (e) {
-			console.error('loadSessions failed:', e)
-			sessions.value = []
-		}
-	}
-
-	async function loadSession(session : AIChatSession) : Promise<void> {
-		currentSession.value = session
-		sidebarLeft.value = false
-		sidebarRight.value = false
-		try {
-			const res = await getSessionMessagesApi(session.id)
-			messages.value = (res['messages'] ?? res) as AIChatMessage[]
-		} catch (e) {
-			console.error('loadSession failed:', e)
-			messages.value = []
-		}
-	}
-
-	async function startNewChat() : Promise<void> {
-		currentSession.value = null
-		messages.value = []
-		inputText.value = ''
-		sidebarLeft.value = false
-		sidebarRight.value = false
-	}
-
-	async function onDeleteSession(id : number) : Promise<void> {
-		uni.showModal({
-			title: '确认删除',
-			content: '删除后不可恢复',
-			success: async (res) => {
-				if (res.confirm) {
-					try {
-						await deleteSessionApi(id)
-						if (currentSession.value != null && currentSession.value.id == id) {
-							currentSession.value = null
-							messages.value = []
-						}
-						await loadSessions()
-					} catch (e) {
-						console.error('deleteSession failed:', e)
-					}
-				}
-			},
-		})
-	}
-
-	function toggleSidebar() : void {
-		sidebarLeft.value = !sidebarLeft.value
-	}
-
-	function openSidebar() : void {
-		sidebarLeft.value = true
-	}
-
-	function toggleSidebarRight() : void {
-		sidebarRight.value = !sidebarRight.value
-	}
-
-	function sendText(text : string) : void {
-		inputText.value = text
-		sendInput()
+	function openPay() : void {
+		payVisible.value = true
 	}
 
 	function goPro() : void {
@@ -309,10 +266,6 @@
 		}
 		setVersion('pro')
 		uni.reLaunch({ url: '/pages/ai-assistant/ai-assistant' })
-	}
-
-	function openPay() : void {
-		payVisible.value = true
 	}
 
 	function closePay() : void {
@@ -349,95 +302,29 @@
 
 	function goProfile() : void {
 		sidebarRight.value = false
-		uni.showToast({ title: '个人中心开发中', icon: 'none' })
+		uni.switchTab({ url: '/pages/profile/profile' })
 	}
 
-	function sendInput() : void {
-		const text = inputText.value.trim()
-		if (text.length == 0) return
-		if (thinking.value) {
-			uni.showToast({ title: '请等待当前回复完成', icon: 'none' })
+	// 生命周期
+	onLoad((options : OnLoadOptions) => {
+		const sysInfo = uni.getSystemInfoSync()
+		statusBarHeight.value = sysInfo.statusBarHeight
+
+		auth.restoreFromStorage()
+		if (!auth.isLoggedIn.value) {
+			uni.reLaunch({ url: '/pages/login/login' })
 			return
 		}
-		if (models.value.length == 0) {
-			uni.showToast({ title: '暂无可用的 AI 模型', icon: 'none' })
-			return
+
+		loadModels()
+		loadSessions()
+	})
+
+	onShow(() => {
+		if (auth.isLoggedIn.value) {
+			loadSessions()
 		}
-
-		const userMsg : AIChatMessage = { id: 0, role: 'user', content: text, created_at: '' }
-		messages.value.push(userMsg)
-		inputText.value = ''
-		scrollToBottom()
-
-		doStreamChat()
-	}
-
-	async function doStreamChat() : Promise<void> {
-		thinking.value = true
-		const assistantMsg : AIChatMessage = { id: 0, role: 'assistant', content: '', created_at: '' }
-		messages.value.push(assistantMsg)
-		scrollToBottom()
-
-		// 构建历史消息
-		const history : { role : string; content : string }[] = []
-		for (let i = 0; i < messages.value.length - 1; i++) {
-			const m = messages.value[i]
-			if (m.role == 'user' || m.role == 'assistant') {
-				history.push({ role: m.role, content: m.content })
-			}
-		}
-
-		let sessionID = currentSession.value?.id ?? 0
-		// 首次对话时创建会话
-		if (sessionID == 0 && history.length == 1) {
-			try {
-				const s = await createSessionApi('新会话', '基础版') as AIChatSession
-				currentSession.value = s
-				sessionID = s.id
-				await loadSessions()
-			} catch (e) {
-				console.error('createSession failed:', e)
-			}
-		}
-
-		const params : UTSJSONObject = {
-			session_id: sessionID,
-			model_source: 'admin',
-			config_id: currentModelId.value,
-			messages: history,
-		}
-
-		streamChatApi(params as StreamChatParams, {
-			onMessage: (chunk : string) => {
-				assistantMsg.content += chunk
-				scrollToBottom()
-			},
-			onError: (msg : string) => {
-				thinking.value = false
-				assistantMsg.content += '\n[错误：' + msg + ']'
-				uni.showToast({ title: msg, icon: 'none' })
-				scrollToBottom()
-			},
-			onDone: () => {
-				thinking.value = false
-				scrollToBottom()
-			},
-		})
-
-		// 兜底：8 秒后仍未结束则重置 thinking（部分端 SSE 异常时）
-		setTimeout(() => {
-			if (thinking.value) {
-				thinking.value = false
-			}
-		}, 8000)
-	}
-
-	function scrollToBottom() : void {
-		scrollIntoViewId.value = 'bottom-anchor'
-		setTimeout(() => {
-			scrollIntoViewId.value = ''
-		}, 300)
-	}
+	})
 </script>
 
 <style>
@@ -506,27 +393,6 @@
 		padding: 24rpx;
 	}
 
-	.new-chat-card {
-		background-color: #f5f5f5;
-		border-radius: 16rpx;
-		flex-direction: row;
-		align-items: center;
-		justify-content: center;
-		padding: 32rpx;
-		margin-bottom: 24rpx;
-	}
-
-	.new-chat-icon {
-		font-size: 36rpx;
-		margin-right: 12rpx;
-	}
-
-	.new-chat-text {
-		font-size: 30rpx;
-		color: #333333;
-		font-weight: 500;
-	}
-
 	/* 快捷提示语 */
 	.prompt-list {
 		flex-direction: column;
@@ -549,60 +415,11 @@
 		color: #333333;
 	}
 
-	.prompt-arrow {
-		font-size: 36rpx;
-		color: #cccccc;
-		margin-left: 16rpx;
-	}
-
-	.section-card {
-		background-color: #ffffff;
-		border-radius: 16rpx;
-		padding: 24rpx;
-	}
-
-	.section-header {
-		flex-direction: row;
-		align-items: center;
-	}
-
-	.section-icon {
-		font-size: 32rpx;
-		margin-right: 12rpx;
-	}
-
-	.section-title {
-		flex: 1;
-		font-size: 30rpx;
-		color: #333333;
-		font-weight: 500;
-	}
-
-	.section-arrow {
-		font-size: 28rpx;
-		color: #999999;
-	}
-
-	.section-body {
-		margin-top: 16rpx;
-	}
-
 	.empty-tip {
 		text-align: center;
 		font-size: 26rpx;
 		color: #999999;
 		padding: 32rpx 0;
-	}
-
-	.session-preview {
-		padding: 16rpx 20rpx;
-		background-color: #f5f6f8;
-		border-radius: 12rpx;
-	}
-
-	.session-preview-text {
-		font-size: 26rpx;
-		color: #666666;
 	}
 
 	/* 聊天区 */
@@ -630,7 +447,7 @@
 	}
 
 	.message-bubble {
-		max-width: 80%;
+		max-width: 600rpx;
 		padding: 20rpx 24rpx;
 		border-radius: 16rpx;
 	}
@@ -662,7 +479,6 @@
 		background-color: #ffffff;
 		border-top: 1rpx solid #f0f0f0;
 		padding: 16rpx 24rpx;
-		padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
 	}
 
 	.input-row {
@@ -757,7 +573,7 @@
 		margin-bottom: 24rpx;
 	}
 
-	.drawer-new text {
+	.drawer-new-text {
 		color: #ffffff;
 		font-size: 28rpx;
 	}
@@ -792,7 +608,7 @@
 		border-bottom: 1rpx solid #f5f5f5;
 	}
 
-	.menu-item text {
+	.menu-item-text {
 		font-size: 28rpx;
 		color: #333333;
 	}

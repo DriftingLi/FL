@@ -149,14 +149,24 @@ export function request<T>(options : RequestOptions) : Promise<UTSJSONObject> {
 						return
 					}
 
-					// 成功：返回 data 字段（UTSJSONObject，由调用方手动构造目标类型）
-				const data = body['data']
-				if (data == null) {
-					resolve({})
-				} else {
-					const dataObj = data as UTSJSONObject
-					resolve(dataObj)
-				}
+					// 成功：返回 data 字段。
+					// 说明：后端各接口 data 有「对象」与「裸数组」两种形态。Android 端数组无法
+					// as UTSJSONObject（会抛 ClassCastException），此处捕获后统一包装为
+					// { list: [...] }，由各 API 层按 list 字段取值（与既有 res['list'] 取法一致）。
+					const data = body['data']
+					if (data == null) {
+						resolve({})
+					} else {
+						let dataObj : UTSJSONObject
+						try {
+							dataObj = data as UTSJSONObject
+						} catch (e) {
+							// data 为数组：包装为 { list: [...] }
+							const wrapped : UTSJSONObject = { list: data }
+							dataObj = wrapped
+						}
+						resolve(dataObj)
+					}
 				} catch (e) {
 					// 响应非 JSON（如 nginx 返回的 HTML 502 页面），以 HTTP 状态码报错
 					// 此 reject 会被 loginApi 的 .catch() 捕获，触发 mock 数据回退

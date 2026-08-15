@@ -7,7 +7,8 @@
             </view>
             <text class="header-title">等级考试</text>
             <view class="header-right">
-                <text class="timer-text" :class="{ warning: isTimeWarning, danger: isTimeDanger }">{{ timerDisplay }}</text>
+                <text class="timer-text"
+                    :class="{ warning: isTimeWarning, danger: isTimeDanger }">{{ timerDisplay }}</text>
             </view>
         </view>
 
@@ -34,9 +35,7 @@
             <!-- 题号导航条 -->
             <scroll-view class="palette-scroll" scroll-x="true">
                 <view class="palette-list">
-                    <view v-for="(q, idx) in questions" :key="idx"
-                        class="palette-chip"
-                        :class="getPaletteClass(idx)"
+                    <view v-for="(q, idx) in questions" :key="idx" class="palette-chip" :class="getPaletteClass(idx)"
                         @click="onJumpTo(idx)">
                         <text class="palette-chip-text" :class="getPaletteTextClass(idx)">{{ idx + 1 }}</text>
                     </view>
@@ -62,10 +61,8 @@
 
                 <!-- 客观题：选项列表 -->
                 <view v-else class="option-list">
-                    <view v-for="(opt, idx) in currentQuestion.options" :key="idx"
-                        class="option-item"
-                        :class="isSelected(opt.key) ? 'option-selected' : ''"
-                        @click="onOptionClick(opt.key)">
+                    <view v-for="(opt, idx) in currentQuestion.options" :key="idx" class="option-item"
+                        :class="isSelected(opt.key) ? 'option-selected' : ''" @click="onOptionClick(opt.key)">
                         <view class="option-key" :class="isSelected(opt.key) ? 'option-key-selected' : ''">
                             <text class="option-key-text">{{ opt.key }}</text>
                         </view>
@@ -135,6 +132,9 @@
     const remainingTime = ref<number>(0)
     let timerId : number = 0
     let lastSaveTime : number = 0
+    // 交卷处理函数引用（具体类型而非 any：UTS 闭包内对 any 类型变量解析有问题）
+    type AutoSubmitHandler = (auto : boolean) => Promise<void>
+    let autoSubmitFn : AutoSubmitHandler | null = null
 
     const currentQuestion = computed<ExamQuestion>(() : ExamQuestion => {
         if (questions.value.length == 0) {
@@ -242,25 +242,6 @@
         }
         return 'palette-text-unanswered'
     }
-
-    /** 点击选项 */
-    function onOptionClick(key : string) : void {
-        if (isMultiChoice()) {
-            const idx = selectedKeys.value.indexOf(key)
-            if (idx >= 0) {
-                selectedKeys.value.splice(idx, 1)
-            } else {
-                selectedKeys.value.push(key)
-            }
-        } else {
-            // 单选/判断/识图：替换为单元素数组
-            const arr : string[] = [key]
-            selectedKeys.value = arr
-        }
-        // 同步到 answers
-        saveCurrentAnswer()
-    }
-
     /** 将当前题选中答案同步到 answers */
     function saveCurrentAnswer() : void {
         const qid = currentQuestion.value.question_id.toString()
@@ -288,18 +269,28 @@
         answersVersion.value = answersVersion.value + 1
     }
 
-    /** 简答题输入 */
-    function onShortAnswerInput() : void {
+    /** 点击选项 */
+    function onOptionClick(key : string) : void {
+        if (isMultiChoice()) {
+            const idx = selectedKeys.value.indexOf(key)
+            if (idx >= 0) {
+                selectedKeys.value.splice(idx, 1)
+            } else {
+                selectedKeys.value.push(key)
+            }
+        } else {
+            // 单选/判断/识图：替换为单元素数组
+            const arr : string[] = [key]
+            selectedKeys.value = arr
+        }
+        // 同步到 answers
         saveCurrentAnswer()
     }
 
-    /** 跳转到指定题号 */
-    function onJumpTo(idx : number) : void {
-        if (idx == currentIndex.value) return
-        // 保存当前题答案
+
+    /** 简答题输入 */
+    function onShortAnswerInput() : void {
         saveCurrentAnswer()
-        currentIndex.value = idx
-        loadSelectedKeys()
     }
 
     /** 从 answers 中加载当前题已选答案到 selectedKeys / shortAnswerText */
@@ -326,6 +317,15 @@
         selectedKeys.value = arr
     }
 
+    /** 跳转到指定题号 */
+    function onJumpTo(idx : number) : void {
+        if (idx == currentIndex.value) return
+        // 保存当前题答案
+        saveCurrentAnswer()
+        currentIndex.value = idx
+        loadSelectedKeys()
+    }
+
     function onPrev() : void {
         if (currentIndex.value <= 0) {
             uni.showToast({ title: '已是第一题', icon: 'none' })
@@ -342,35 +342,6 @@
         currentIndex.value = currentIndex.value + 1
         loadSelectedKeys()
     }
-
-    /** 启动倒计时 */
-    function startTimer() : void {
-        stopTimer()
-        timerId = setInterval(() : void => {
-            if (remainingTime.value > 0) {
-                remainingTime.value = remainingTime.value - 1
-                // 每 30 秒自动保存
-                const now = Date.now()
-                if (now - lastSaveTime > 30000) {
-                    lastSaveTime = now
-                    doSaveProgress(false)
-                }
-            } else {
-                // 时间到，自动交卷
-                stopTimer()
-                uni.showToast({ title: '考试时间已到，自动交卷', icon: 'none' })
-                doSubmit(true)
-            }
-        }, 1000) as number
-    }
-
-    function stopTimer() : void {
-        if (timerId != 0) {
-            clearInterval(timerId)
-            timerId = 0
-        }
-    }
-
     /** 保存进度 */
     async function doSaveProgress(showTip : boolean) : Promise<void> {
         if (participantId.value == 0) return
@@ -390,6 +361,41 @@
             }
         }
     }
+
+    function stopTimer() : void {
+        if (timerId != 0) {
+            clearInterval(timerId)
+            timerId = 0
+        }
+    }
+    /** 启动倒计时 */
+    function startTimer() : void {
+        stopTimer()
+        timerId = setInterval(() : void => {
+            if (remainingTime.value > 0) {
+                remainingTime.value = remainingTime.value - 1
+                // 每 30 秒自动保存
+                const now = Date.now()
+                if (now - lastSaveTime > 30000) {
+                    lastSaveTime = now
+                    doSaveProgress(false)
+                }
+            } else {
+                // 时间到，自动交卷（通过 autoSubmitFn 间接触发，避免局部函数互相前向引用）
+                stopTimer()
+                uni.showToast({ title: '考试时间已到，自动交卷', icon: 'none' })
+                // autoSubmitFn 在 setInterval 捕获闭包中被修改，Kotlin 无法非空 smart cast，
+                // 用不可变局部副本绕过；async 返回的 Promise 无需 await（fire-and-forget）
+                const submitFn = autoSubmitFn
+                if (submitFn != null) {
+                    submitFn(true)
+                }
+            }
+        }, 1000) as number
+    }
+
+
+
 
     /** 加载题目（进入考试） */
     async function loadExam() : Promise<void> {
@@ -426,23 +432,6 @@
         } finally {
             loading.value = false
         }
-    }
-
-    /** 点击交卷 */
-    function onSubmitClick() : void {
-        const unanswered = questions.value.length - answeredCount.value
-        const content = unanswered > 0
-            ? '还有 ' + unanswered + ' 题未作答，确定交卷吗？'
-            : '确定要交卷吗？'
-        uni.showModal({
-            title: '交卷确认',
-            content: content,
-            success: (res) => {
-                if (res.confirm) {
-                    doSubmit(false)
-                }
-            }
-        })
     }
 
     /** 交卷 */
@@ -489,6 +478,26 @@
             submitting.value = false
         }
     }
+    // 绑定 autoSubmitFn：startTimer 超时自动交卷的间接入口（打破局部函数互相引用环）
+    autoSubmitFn = doSubmit
+
+    /** 点击交卷 */
+    function onSubmitClick() : void {
+        const unanswered = questions.value.length - answeredCount.value
+        const content = unanswered > 0
+            ? '还有 ' + unanswered + ' 题未作答，确定交卷吗？'
+            : '确定要交卷吗？'
+        uni.showModal({
+            title: '交卷确认',
+            content: content,
+            success: (res) => {
+                if (res.confirm) {
+                    doSubmit(false)
+                }
+            }
+        })
+    }
+
 
     function onBack() : void {
         uni.showModal({

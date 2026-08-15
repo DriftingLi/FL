@@ -72,11 +72,13 @@
                         <view class="exam-info">
                             <text class="exam-title">{{ record.session_name }}</text>
                             <view class="exam-meta">
-                                <text class="exam-tag" :class="record.is_passed ? 'passed' : getHistoryStatusClass(record.status)">
+                                <text class="exam-tag"
+                                    :class="record.is_passed ? 'passed' : getHistoryStatusClass(record.status)">
                                     {{ getHistoryStatusName(record) }}</text>
                                 <text class="exam-time">{{ formatDate(record.submit_time) }}</text>
                             </view>
-                            <text class="exam-desc">{{ formatScore(record.score) }} / {{ record.objective_score }} 分</text>
+                            <text class="exam-desc">{{ formatScore(record.score) }} / {{ record.objective_score }}
+                                分</text>
                         </view>
                         <view class="exam-action">
                             <text class="action-btn-secondary" @click="onViewLevelResult(record)">查看结果</text>
@@ -141,12 +143,7 @@
     }
 
     /** 格式化时间范围：08-01 09:00 ~ 10:00 */
-    function formatRange(startTime : string, endTime : string) : string {
-        const s = formatDateTime(startTime)
-        const e = formatDateTime(endTime)
-        if (s.length == 0 || e.length == 0) return ''
-        return s + ' ~ ' + e.substring(e.length - 5)
-    }
+
 
     /** 格式化日期时间：MM-DD HH:mm */
     function formatDateTime(iso : string) : string {
@@ -154,7 +151,12 @@
         const s = iso.substring(5, 16)
         return s.substring(0, 5) + ' ' + s.substring(6, 11)
     }
-
+    function formatRange(startTime : string, endTime : string) : string {
+        const s = formatDateTime(startTime)
+        const e = formatDateTime(endTime)
+        if (s.length == 0 || e.length == 0) return ''
+        return s + ' ~ ' + e.substring(e.length - 5)
+    }
     /** 格式化日期：YYYY-MM-DD */
     function formatDate(iso : string) : string {
         if (iso.length < 10) return iso
