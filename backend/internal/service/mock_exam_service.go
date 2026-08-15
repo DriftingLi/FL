@@ -163,19 +163,23 @@ func (s *MockExamService) Start(studentID, count, duration int) (*MockExamStartD
 }
 
 // SaveProgress 保存进度。
-// 行为冻结：仅校验归属（旧实现无进行中校验；已交卷的晚到自动保存静默忽略）。
+// 经保存会话进度深模块（session_progress.go）唯一实现：load → 守卫（本人+进行中）→
+// 快照 JSONB 三态归一 → db.Save。提交后/已结束的会话不再接受进度保存（对齐 level 最严口径）。
 func (s *MockExamService) SaveProgress(mockExamID, studentID int, answers map[string]any, remainingTime int) error {
-	var mock model.MockExam
-	if err := s.db.First(&mock, mockExamID).Error; err != nil {
-		return errors.New("模拟考试不存在")
-	}
-	if mock.StudentID != studentID {
-		return errors.New("无权操作此考试")
-	}
-	ansJSON, _ := jsonMarshal(answers)
-	mock.Answers = model.JSONB(ansJSON)
-	mock.RemainingTime = remainingTime
-	return s.db.Save(&mock).Error
+	return saveSessionProgress(s.db, SessionProgressSpec[model.MockExam]{
+		notFoundErr: "模拟考试不存在",
+		load: func(db *gorm.DB) (model.MockExam, error) {
+			var m model.MockExam
+			return m, db.First(&m, mockExamID).Error
+		},
+		guard: func(m model.MockExam) error {
+			return guardOwnedInProgress(m.StudentID, m.Status, studentID, "无权操作此考试", "考试不在进行中")
+		},
+		write: func(m *model.MockExam, snapshot model.JSONB, rt int) {
+			m.Answers = snapshot
+			m.RemainingTime = rt
+		},
+	}, answers, remainingTime)
 }
 
 // Resume 恢复考试。
@@ -229,38 +233,37 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 	}
 	_, qMap := loadOrderedQuestions(s.db, ids)
 
+	engine := newGradingEngine(s.db)
+	flow := gradingFlow{
+		ai:       shortAnswerGraderOf(s.ai),
+		maxScore: mockExamMaxScore,
+	}
+	results := engine.gradeSet(flow, qMap, ids, answersMap, studentID)
+
 	totalScore := 0.0
 	maxScore := 0.0
 	correctCount := 0
-	details := make([]MockExamAnswerDetailDTO, 0, len(ids))
+	details := make([]MockExamAnswerDetailDTO, 0, len(results))
 
-	for _, qid := range ids {
-		question, ok := qMap[qid]
-		if !ok {
-			continue
-		}
-		userAnswer := answersMap[intToString(qid)]
-		isCorrect, earned := gradeQuestion(question, userAnswer, mockExamMaxScore(question))
-		qMax := mockExamMaxScore(question)
-		maxScore += qMax
-
-		if isCorrect != nil && *isCorrect {
+	for _, r := range results {
+		question := r.Question
+		qid := question.ID
+		if r.IsCorrect != nil && *r.IsCorrect {
 			correctCount++
-			totalScore += earned
-		} else if isCorrect != nil && !*isCorrect {
-			_ = addToWrongQuestions(s.db, studentID, qid)
+			totalScore += r.Earned
 		}
+		maxScore += r.MaxScore
 
 		detail := MockExamAnswerDetailDTO{
 			QuestionID:    qid,
 			Type:          question.Type,
 			Content:       question.Content,
-			UserAnswer:    userAnswer,
+			UserAnswer:    r.UserAnswer,
 			CorrectAnswer: question.Answer,
-			Score:         earned,
-			MaxScore:      qMax,
+			Score:         r.Earned,
+			MaxScore:      r.MaxScore,
 			Explanation:   question.Explanation,
-			IsCorrect:     isCorrect,
+			IsCorrect:     r.IsCorrect,
 		}
 		var options interface{}
 		if len(question.Options) > 0 {
@@ -268,15 +271,13 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 		}
 		detail.Options = options
 
-		if question.Type == "short_answer" {
-			if aiRes := aiGradeShortAnswer(s.ai, question.Content, question.ReferenceAnswer, question.ScoringCriteria, stringifyAnswer(userAnswer), qMax, nil); aiRes != nil {
-				detail.AIScore = &aiRes.Score
-				comment := aiRes.Comment
-				detail.AIComment = &comment
-				if aiRes.Fallback {
-					fallback := true
-					detail.AIFallback = &fallback
-				}
+		if r.ShortAnswer != nil {
+			detail.AIScore = &r.ShortAnswer.Score
+			comment := r.ShortAnswer.Comment
+			detail.AIComment = &comment
+			if r.ShortAnswer.Fallback {
+				fallback := true
+				detail.AIFallback = &fallback
 			}
 		}
 		details = append(details, detail)

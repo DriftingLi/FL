@@ -25,7 +25,7 @@ export function useNotificationAction(options: NotificationActionOptions) {
     return item?.type === 'profile_review' && item?.payload?.review_status === 'approved'
   }
 
-  async function refreshUserInfo() {
+  async function runSync() {
     try {
       await options.refreshUserInfo()
     } catch (e) {
@@ -35,7 +35,7 @@ export function useNotificationAction(options: NotificationActionOptions) {
 
   /** 立即同步用户资料（用于面板打开/点击命中通过通知时） */
   function requestImmediateSync(): Promise<void> {
-    return refreshUserInfo()
+    return runSync()
   }
 
   /** 60s 节流同步：窗口内多次调用只触发一次（现状 refreshUnread 轮询语义） */
@@ -43,7 +43,7 @@ export function useNotificationAction(options: NotificationActionOptions) {
     const t = now()
     if (lastSync !== null && t - lastSync < THROTTLE_MS) return Promise.resolve()
     lastSync = t
-    return refreshUserInfo()
+    return runSync()
   }
 
   /** 列表/面板刷新：存在「未读」审核通过通知时立即同步（保持现状 refresh 行为） */

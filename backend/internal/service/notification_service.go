@@ -3,6 +3,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -90,7 +91,13 @@ func (s *NotificationService) ProfileReviewNotification(req *model.ProfileChange
 
 // reviewStatusPayload 构造审核状态结构化标记，如 {"review_status":"approved"}。
 func reviewStatusPayload(reviewStatus string) model.JSONB {
-	return model.JSONB([]byte("{\"review_status\":\"" + reviewStatus + "\"}"))
+	b, err := json.Marshal(struct {
+		ReviewStatus string `json:"review_status"`
+	}{ReviewStatus: reviewStatus})
+	if err != nil {
+		return nil
+	}
+	return model.JSONB(b)
 }
 
 // NotificationListPageResult 站内信分页结果（含未读数）。

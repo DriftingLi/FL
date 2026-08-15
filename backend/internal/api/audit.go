@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -44,18 +45,25 @@ func RegisterAuditRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.AuditS
 // List 审计日志列表 GET /api/admin/audit-logs?page=&page_size=&actor_id=&role=&keyword=
 func (h *AuditHandler) List(c *gin.Context) {
 	// 分页钳制（含页大小上限 100）收进 AuditService.List，handler 只负责传参。
-	page := atoiDefault(c.Query("page"), 1)
-	pageSize := atoiDefault(c.Query("page_size"), 20)
+	Endpoint[struct{}, AuditLogPageResult]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*AuditLogPageResult, error) {
+			page := atoiDefault(c.Query("page"), 1)
+			pageSize := atoiDefault(c.Query("page_size"), 20)
 
-	actorID := atoiDefault(c.Query("actor_id"), 0)
-	role := strings.TrimSpace(c.Query("role"))
-	keyword := strings.TrimSpace(c.Query("keyword"))
+			actorID := atoiDefault(c.Query("actor_id"), 0)
+			role := strings.TrimSpace(c.Query("role"))
+			keyword := strings.TrimSpace(c.Query("keyword"))
 
-	logs, total, page, pageSize := h.svc.List(page, pageSize, actorID, role, keyword)
-	response.Success(c, AuditLogPageResult{
-		Items: logs,
-		Page:  page,
-		Pages: response.PageCount(total, pageSize),
-		Total: total,
-	})
+			logs, total, page, pageSize := h.svc.List(page, pageSize, actorID, role, keyword)
+			return &AuditLogPageResult{
+				Items: logs,
+				Page:  page,
+				Pages: response.PageCount(total, pageSize),
+				Total: total,
+			}, nil
+		},
+		Render: func(c *gin.Context, _ *struct{}, resp *AuditLogPageResult, _ error) {
+			response.Success(c, resp)
+		},
+	}.Handle(c)
 }

@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -39,71 +40,159 @@ func RegisterWrongQuestionRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *servic
 	g.GET("/export", h.Export)
 }
 
+// listWrongQuestionsReq 错题列表查询请求。
+type listWrongQuestionsReq struct {
+	StudentID     int
+	Page          int
+	PageSize      int
+	QType         string
+	MinWrongCount *int
+}
+
 // List 错题列表 GET /api/wrong-questions（分页+过滤）
 func (h *WrongQuestionHandler) List(c *gin.Context) {
-	uid, _ := c.Get(string(middleware.CtxUserID))
-	studentID, _ := uid.(int)
-	page := atoiDefault(c.Query("page"), 1)
-	pageSize := atoiDefault(c.Query("page_size"), 20)
-	qType := c.Query("type")
-	minWrongCount := queryIntPtr(c, "min_wrong_count")
-	response.Success(c, h.svc.GetWrongQuestions(studentID, page, pageSize, qType, minWrongCount))
+	Endpoint[listWrongQuestionsReq, map[string]any]{
+		Parse: func(c *gin.Context) (*listWrongQuestionsReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			studentID, _ := uid.(int)
+			return &listWrongQuestionsReq{
+				StudentID:     studentID,
+				Page:          atoiDefault(c.Query("page"), 1),
+				PageSize:      atoiDefault(c.Query("page_size"), 20),
+				QType:         c.Query("type"),
+				MinWrongCount: queryIntPtr(c, "min_wrong_count"),
+			}, nil
+		},
+		Invoke: func(ctx context.Context, req *listWrongQuestionsReq) (*map[string]any, error) {
+			result := h.svc.GetWrongQuestions(req.StudentID, req.Page, req.PageSize, req.QType, req.MinWrongCount)
+			return &result, nil
+		},
+		Render: func(c *gin.Context, _ *listWrongQuestionsReq, resp *map[string]any, _ error) {
+			response.Success(c, deref(resp))
+		},
+	}.Handle(c)
+}
+
+// redoWrongQuestionReq 重做错题请求。
+type redoWrongQuestionReq struct {
+	StudentID  int
+	QuestionID int
+	UserAnswer interface{}
 }
 
 // Redo 重做错题 POST /api/wrong-questions/:question_id/redo
 func (h *WrongQuestionHandler) Redo(c *gin.Context) {
-	uid, _ := c.Get(string(middleware.CtxUserID))
-	studentID, _ := uid.(int)
-	questionID, err := strconv.Atoi(c.Param("question_id"))
-	if err != nil {
-		response.BadRequest(c, "题目ID无效")
-		return
-	}
-	var req struct {
-		UserAnswer interface{} `json:"user_answer"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "请求数据无效")
-		return
-	}
-	result, err := h.svc.RedoWrongQuestion(studentID, questionID, req.UserAnswer)
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.Success(c, result)
+	Endpoint[redoWrongQuestionReq, map[string]any]{
+		Parse: func(c *gin.Context) (*redoWrongQuestionReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			studentID, _ := uid.(int)
+			questionID, err := strconv.Atoi(c.Param("question_id"))
+			if err != nil {
+				return nil, badRequest("题目ID无效")
+			}
+			var req struct {
+				UserAnswer interface{} `json:"user_answer"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				return nil, badRequest("请求数据无效")
+			}
+			return &redoWrongQuestionReq{StudentID: studentID, QuestionID: questionID, UserAnswer: req.UserAnswer}, nil
+		},
+		Invoke: func(ctx context.Context, req *redoWrongQuestionReq) (*map[string]any, error) {
+			result, err := h.svc.RedoWrongQuestion(req.StudentID, req.QuestionID, req.UserAnswer)
+			if err != nil {
+				return nil, err
+			}
+			return &result, nil
+		},
+		Render: func(c *gin.Context, _ *redoWrongQuestionReq, resp *map[string]any, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.Success(c, deref(resp))
+		},
+	}.Handle(c)
+}
+
+// removeWrongQuestionReq 移出错题本请求。
+type removeWrongQuestionReq struct {
+	StudentID  int
+	QuestionID int
 }
 
 // Remove 移出错题本 POST /api/wrong-questions/:question_id/remove
 func (h *WrongQuestionHandler) Remove(c *gin.Context) {
-	uid, _ := c.Get(string(middleware.CtxUserID))
-	studentID, _ := uid.(int)
-	questionID, err := strconv.Atoi(c.Param("question_id"))
-	if err != nil {
-		response.BadRequest(c, "题目ID无效")
-		return
-	}
-	result, err := h.svc.RemoveWrongQuestion(studentID, questionID)
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.SuccessWithMsg(c, "已移出错题本", result)
+	Endpoint[removeWrongQuestionReq, map[string]any]{
+		Parse: func(c *gin.Context) (*removeWrongQuestionReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			studentID, _ := uid.(int)
+			questionID, err := strconv.Atoi(c.Param("question_id"))
+			if err != nil {
+				return nil, badRequest("题目ID无效")
+			}
+			return &removeWrongQuestionReq{StudentID: studentID, QuestionID: questionID}, nil
+		},
+		Invoke: func(ctx context.Context, req *removeWrongQuestionReq) (*map[string]any, error) {
+			result, err := h.svc.RemoveWrongQuestion(req.StudentID, req.QuestionID)
+			if err != nil {
+				return nil, err
+			}
+			return &result, nil
+		},
+		Render: func(c *gin.Context, _ *removeWrongQuestionReq, resp *map[string]any, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "已移出错题本", deref(resp))
+		},
+	}.Handle(c)
+}
+
+// getWrongStatsReq 错题统计请求。
+type getWrongStatsReq struct {
+	StudentID int
 }
 
 // GetStats 错题统计 GET /api/wrong-questions/stats
 func (h *WrongQuestionHandler) GetStats(c *gin.Context) {
-	uid, _ := c.Get(string(middleware.CtxUserID))
-	studentID, _ := uid.(int)
-	response.Success(c, h.svc.GetStats(studentID))
+	Endpoint[getWrongStatsReq, service.WrongQuestionStatsDTO]{
+		Parse: func(c *gin.Context) (*getWrongStatsReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			studentID, _ := uid.(int)
+			return &getWrongStatsReq{StudentID: studentID}, nil
+		},
+		Invoke: func(ctx context.Context, req *getWrongStatsReq) (*service.WrongQuestionStatsDTO, error) {
+			return h.svc.GetStats(req.StudentID), nil
+		},
+		Render: func(c *gin.Context, _ *getWrongStatsReq, resp *service.WrongQuestionStatsDTO, _ error) {
+			response.Success(c, resp)
+		},
+	}.Handle(c)
+}
+
+// exportWrongQuestionsReq 导出错题本请求。
+type exportWrongQuestionsReq struct {
+	StudentID int
 }
 
 // Export 导出错题本（纯文本附件）GET /api/wrong-questions/export
 func (h *WrongQuestionHandler) Export(c *gin.Context) {
-	uid, _ := c.Get(string(middleware.CtxUserID))
-	studentID, _ := uid.(int)
-	data := h.svc.ExportWrongQuestions(studentID)
-	text := service.FormatWrongQuestionsText(data)
-	c.Header("Content-Disposition", "attachment; filename=wrong_questions.txt")
-	c.Data(200, "text/plain; charset=utf-8", []byte(text))
+	Endpoint[exportWrongQuestionsReq, struct{}]{
+		Parse: func(c *gin.Context) (*exportWrongQuestionsReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			studentID, _ := uid.(int)
+			return &exportWrongQuestionsReq{StudentID: studentID}, nil
+		},
+		Invoke: func(ctx context.Context, req *exportWrongQuestionsReq) (*struct{}, error) {
+			data := h.svc.ExportWrongQuestions(req.StudentID)
+			text := service.FormatWrongQuestionsText(data)
+			c.Header("Content-Disposition", "attachment; filename=wrong_questions.txt")
+			c.Data(200, "text/plain; charset=utf-8", []byte(text))
+			return &struct{}{}, nil
+		},
+		Render: func(c *gin.Context, _ *exportWrongQuestionsReq, _ *struct{}, _ error) {
+		},
+	}.Handle(c)
 }

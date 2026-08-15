@@ -9,7 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"forklift-training/internal/cache"
+	"forklift-training/internal/captcha"
 )
 
 // fetchCaptcha 获取一张验证码并返回其 id 与答案（答案从内存存储读取）。
@@ -31,7 +31,7 @@ func fetchCaptcha(t *testing.T, r *gin.Engine, store *memCodeStore) (id, answer 
 	if !strings.HasPrefix(resp.Data.Image, "data:image/png;base64,") {
 		t.Errorf("image 应为 PNG data URL")
 	}
-	raw, ok := store.m[cache.SafeKey("captcha", resp.Data.ID)]
+	raw, ok := store.m[captcha.StoreKey(resp.Data.ID)]
 	if !ok {
 		t.Fatalf("答案未写入存储: id=%s", resp.Data.ID)
 	}
@@ -89,4 +89,25 @@ func TestCaptcha_EnabledContract(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("手机号通道带验证码应成功: %d\nbody=%s", w.Code, w.Body.String())
 	}
+}
+
+// TestCaptcha_GenerateShapeLock 冻结 GET /api/captcha 的 data 顶层键集 {id, image}（对照 GenerateCaptchaDTO）。
+func TestCaptcha_GenerateShapeLock(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := newMemCodeStore()
+	r := gin.New()
+	RegisterCaptchaRoutes(r, captcha.NewService(store))
+
+	w := codeAuthRequest(r, http.MethodGet, "/api/captcha", nil, "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /api/captcha 状态码 = %d\nbody=%s", w.Code, w.Body.String())
+	}
+
+	var body struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("captcha 响应解析失败: %s", w.Body.String())
+	}
+	assertDictKeys(t, body.Data, []string{"id", "image"})
 }
