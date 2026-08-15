@@ -143,11 +143,11 @@ function resetFilter() {
 }
 
 function goCreate() {
-  router.push('/admin/featured-content/edit')
+  router.push({ name: 'AdminFeaturedContentEdit' })
 }
 
 function goEdit(id: number) {
-  router.push(`/admin/featured-content/edit/${id}`)
+  router.push({ name: 'AdminFeaturedContentEdit', params: { id } })
 }
 
 async function handlePublish(id: number) {

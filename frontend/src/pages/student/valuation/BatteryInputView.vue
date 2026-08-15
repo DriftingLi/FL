@@ -156,7 +156,7 @@ async function submit() {
   try {
     const data = await store.submitCycles(payload)
     ElMessage.success(`评估完成：RUL=${data.rul_cycles} 循环，SOH=${data.soh_percent.toFixed(1)}%`)
-    router.push('/valuation/battery/result')
+    router.push({ name: 'ValuationBatteryResult' })
   } catch (e) {
     // store.error 已设置，client 拦截器也提示过
     void e

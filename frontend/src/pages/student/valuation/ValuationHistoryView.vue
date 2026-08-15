@@ -65,11 +65,11 @@ function onFilterChange() {
 }
 
 function goReport(id: number) {
-  router.push(`/valuation/report/${id}`)
+  router.push({ name: 'ValuationReport', params: { id } })
 }
 
 function goBack() {
-  router.push('/valuation')
+  router.push({ name: 'ValuationHome' })
 }
 
 function formatValue(v: number): string {

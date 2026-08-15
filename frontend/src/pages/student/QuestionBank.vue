@@ -53,7 +53,7 @@
                 <el-option v-for="o in questionTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </div>
-            <el-button type="warning" :loading="loading" :disabled="!specialType" @click="startFree(specialType)">开始练习</el-button>
+            <el-button type="warning" :loading="loading" :disabled="!specialType" @click="startFree()">开始练习</el-button>
           </el-card>
         </el-col>
 
@@ -97,7 +97,7 @@
                 <span class="stat-label">暂无考试记录</span>
               </template>
             </div>
-            <el-button type="primary" @click="$router.push('/training/mock-exam')">进入模拟考试</el-button>
+            <el-button type="primary" @click="$router.push({ name: 'MockExam' })">进入模拟考试</el-button>
           </el-card>
         </el-col>
       </el-row>
@@ -182,12 +182,15 @@ import { mockExamApi } from '@/api/mockExam'
 import { trainingApi } from '@/api/training'
 import type { QuestionTag } from '@/api/training'
 import { typeMap, questionTypeOptions, randomCountOptions } from '@/constants/question'
-import type { PracticeProgress, Question, QuestionType, SubmitResult } from '@/types/question'
-import { useQuestionAnswer, buildQuestionOptions, deserializeAnswers, serializeAnswers } from '@/composables/useQuestionAnswer'
+import type { PracticeProgress, QuestionType } from '@/types/question'
+import {
+  usePracticeSession,
+  type PracticeMode,
+  type PracticeStartData
+} from '@/composables/usePracticeSession'
 import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
 
 // null = 入口；'sequential' | 'free' | 'tag' = 刷题中
-const mode = ref<'sequential' | 'free' | 'tag' | null>(null)
 
 // 卡片选择器状态
 const randomCount = ref(20)
@@ -219,50 +222,114 @@ watch(tagPracticeId, async (id) => {
   }
 })
 
-// ===== 刷题流程 =====
-const loading = ref(false)
-const questions = ref<Question[]>([])
-const currentIdx = ref(0)
-const { answers, toggleOption, reset: resetAnswers } = useQuestionAnswer()
-// 按题目ID存储每题的作答状态，切换上下题时保留状态
-const textAnswerMap = ref<Record<number, string>>({})
-const submittedMap = ref<Record<number, boolean>>({})
-const resultMap = ref<Record<number, SubmitResult>>({})
-const correctCount = ref(0)
-const wrongCount = ref(0)
+// 进度 key 语义：顺序练习 'sequential'；专项练习 'free:<type>'；标签练习 'tag:<tagID>'；随机练习（free 且无题型）'' 不保存
+function getPracticeModeKey(currentMode: PracticeMode): string {
+  if (currentMode === 'sequential') return 'sequential'
+  if (currentMode === 'free' && specialType.value) return `free:${specialType.value}`
+  if (currentMode === 'tag' && tagPracticeId.value) return `tag:${tagPracticeId.value}`
+  return ''
+}
 
-const currentQuestion = computed(() => questions.value[currentIdx.value] || ({} as Question))
-// 当前题目的简答文本（v-model 双向绑定到 Map）
-const textAnswer = computed({
-  get: () => (currentQuestion.value.id ? textAnswerMap.value[currentQuestion.value.id] || '' : ''),
-  set: (v: string) => {
-    if (currentQuestion.value.id) textAnswerMap.value[currentQuestion.value.id] = v
+// 查询断点续练起始位置和持久化答题状态（answers_state 三态这里归一为 null）
+async function resolveProgress(modeKey: string, total: number): Promise<{ startIndex: number; answersState: Record<string, unknown> | null }> {
+  if (!modeKey) return { startIndex: 0, answersState: null }
+  try {
+    const progRes = await practiceModeApi.getProgress(modeKey)
+    const data = progRes || {}
+    const idx = data.current_index || 0
+    const startIndex = idx > 0 && idx < total ? idx : 0
+    return { startIndex, answersState: data.answers_state || null }
+  } catch (e) {}
+  return { startIndex: 0, answersState: null }
+}
+
+// 练习会话状态机：三个 start 模式 + 进度保存作为 adapter 注入，页面不触碰 API 层
+const {
+  mode, questions, currentIdx, answers, toggleOption,
+  correctCount, wrongCount,
+  currentQuestion, textAnswer, submitted, lastResult, currentOptions,
+  selectedOptionKeys, canSubmit, loading,
+  start, submitAnswer, nextQuestion, prevQuestion, quit
+} = usePracticeSession({
+  start: async (startMode: PracticeMode): Promise<PracticeStartData | null> => {
+    if (startMode === 'sequential') {
+      const res = await practiceModeApi.startSequential()
+      const data = res || {}
+      const qs = data.questions || []
+      if (!qs.length) return null
+      return { questions: qs, ...(await resolveProgress('sequential', qs.length)) }
+    }
+    if (startMode === 'tag') {
+      if (!tagPracticeId.value) return null
+      const res = await practiceModeApi.startTagPractice({ tag_id: tagPracticeId.value, count: 0 })
+      const data = res || {}
+      const qs = data.questions || []
+      if (!qs.length) return null
+      return { questions: qs, ...(await resolveProgress(`tag:${tagPracticeId.value}`, qs.length)) }
+    }
+    // free：专项（选了题型）或随机
+    const params: Record<string, unknown> = {}
+    let modeKey = ''
+    if (specialType.value) {
+      params.type = specialType.value
+      params.count = 0
+      modeKey = `free:${specialType.value}`
+    } else {
+      params.count = randomCount.value
+    }
+    const qs = (await practiceModeApi.getFreeQuestions(params)) || []
+    if (!qs.length) return null
+    return { questions: qs, ...(await resolveProgress(modeKey, qs.length)) }
+  },
+  submit: async (payload) => {
+    try {
+      return await practiceModeApi.submitAnswer({
+        question_id: payload.question_id,
+        user_answer: payload.user_answer as string,
+        practice_type: payload.practice_type || 'free'
+      })
+    } catch (e) {
+      return null
+    }
+  },
+  saveProgress: async (payload) => {
+    // 随机练习 modeKey 为空：不保存进度
+    const modeKey = getPracticeModeKey(payload.mode)
+    if (!modeKey) return
+    try {
+      await practiceModeApi.saveProgress(payload.index, modeKey, payload.total, payload.answersState)
+      if (payload.mode === 'sequential') seqProgress.value.completed = payload.index
+    } catch (e) {
+      // 保存失败不阻断练习
+    }
   }
 })
-// 当前题目是否已提交
-const submitted = computed(() => (currentQuestion.value.id ? !!submittedMap.value[currentQuestion.value.id] : false))
-// 当前题目的解析结果
-const lastResult = computed(() => (currentQuestion.value.id ? resultMap.value[currentQuestion.value.id] || ({} as SubmitResult) : ({} as SubmitResult)))
-// 当前题目渲染用选项（判断题渲染对/错模板）
-const currentOptions = computed(() => buildQuestionOptions(currentQuestion.value))
-// 当前题目已选中的选项 keys
-const selectedOptionKeys = computed(() => {
-  const q = currentQuestion.value
-  if (!q || !q.id) return []
-  const ans = answers.value[q.id]
-  if (ans === undefined || ans === null) return []
-  if (q.type === 'multi_choice') return Array.isArray(ans) ? ans : []
-  return [ans]
-})
-const canSubmit = computed(() => {
-  const q = currentQuestion.value
-  if (!q || !q.id) return false
-  if (q.type === 'short_answer') return textAnswer.value.trim() !== ''
-  const ans = answers.value[q.id]
-  if (ans === undefined || ans === null) return false
-  if (Array.isArray(ans)) return ans.length > 0
-  return ans !== ''
-})
+
+// ===== 开始各模式（薄 wrapper：启动会话 + 空题数提示）=====
+async function startSequential() {
+  const ok = await start('sequential')
+  if (!ok) ElMessage.warning('题库暂无题目')
+}
+
+async function startFree() {
+  const ok = await start('free')
+  if (!ok) ElMessage.warning('暂无符合条件的题目')
+}
+
+async function startTagPractice() {
+  if (!tagPracticeId.value) return
+  const ok = await start('tag')
+  if (!ok) ElMessage.warning('该标签下暂无已发布题目')
+}
+
+async function confirmQuit() {
+  try {
+    await ElMessageBox.confirm('确定要退出本次练习吗？', '提示', { type: 'warning' })
+    // 退出时保存当前游标和答题状态并返回入口，随后刷新卡片进度展示
+    await quit()
+    loadCardData()
+  } catch (e) {}
+}
 
 onMounted(() => {
   loadCardData()
@@ -300,227 +367,6 @@ async function loadCardData() {
   } catch (e) {
     // 静默失败，卡片展示降级为默认值
   }
-}
-
-// ===== 开始各模式 =====
-async function startSequential() {
-  loading.value = true
-  try {
-    const res = await practiceModeApi.startSequential()
-    const data = res || {}
-    questions.value = data.questions || []
-    if (questions.value.length === 0) {
-      ElMessage.warning('题库暂无题目')
-      return
-    }
-    mode.value = 'sequential'
-    // 获取持久化的答题状态
-    const prog = await resolveProgress('sequential', questions.value.length)
-    resetSession(prog.startIndex)
-    restoreState(prog.answersState)
-  } catch {
-    /* 错误已由拦截器提示 */
-  } finally {
-    loading.value = false
-  }
-}
-
-// 获取当前练习模式的进度 key（用于断点续练）
-// 顺序练习: 'sequential'；专项练习: 'free:<type>'；标签练习: 'tag:<tagID>'；随机练习: ''（不保存）
-function getPracticeModeKey(): string {
-  if (mode.value === 'sequential') return 'sequential'
-  if (mode.value === 'free' && specialType.value) return `free:${specialType.value}`
-  if (mode.value === 'tag' && tagPracticeId.value) return `tag:${tagPracticeId.value}`
-  return ''
-}
-
-// 查询断点续练起始位置和持久化答题状态
-async function resolveProgress(modeKey: string, total: number): Promise<{ startIndex: number; answersState: Record<string, unknown> }> {
-  if (!modeKey) return { startIndex: 0, answersState: {} }
-  try {
-    const progRes = await practiceModeApi.getProgress(modeKey)
-    const data = progRes || {}
-    const idx = data.current_index || 0
-    const startIndex = idx > 0 && idx < total ? idx : 0
-    return { startIndex, answersState: data.answers_state || {} }
-  } catch (e) {}
-  return { startIndex: 0, answersState: {} }
-}
-
-// 从后端答题状态恢复 answers/submittedMap/resultMap/correctCount/wrongCount
-function restoreState(answersState: Record<string, unknown>) {
-  if (!answersState || Object.keys(answersState).length === 0) return
-  const restored = deserializeAnswers(answersState)
-  const newAnswers: Record<number, unknown> = {}
-  const newSubmittedMap: Record<number, boolean> = {}
-  const newResultMap: Record<number, SubmitResult> = {}
-  const newTextAnswerMap: Record<number, string> = {}
-  let correct = 0
-  let wrong = 0
-  for (const [key, val] of Object.entries(restored)) {
-    const qid = Number(key)
-    if (!qid) continue
-    const result = val as SubmitResult
-    newResultMap[qid] = result
-    newSubmittedMap[qid] = true
-    if (result.user_answer !== undefined && result.user_answer !== null) {
-      newAnswers[qid] = result.user_answer
-      if (typeof result.user_answer === 'string') {
-        newTextAnswerMap[qid] = result.user_answer
-      }
-    }
-    if (result.is_correct === true) correct++
-    else if (result.is_correct === false) wrong++
-  }
-  resetAnswers(newAnswers)
-  submittedMap.value = newSubmittedMap
-  resultMap.value = newResultMap
-  textAnswerMap.value = newTextAnswerMap
-  correctCount.value = correct
-  wrongCount.value = wrong
-}
-
-// 构建可序列化的答题状态对象（key 为题目ID字符串）
-function buildAnswersState(): Record<string, unknown> {
-  return serializeAnswers(resultMap.value)
-}
-
-// 保存当前进度和答题状态到后端
-async function saveCurrentProgress(index: number) {
-  const modeKey = getPracticeModeKey()
-  if (!modeKey) return
-  try {
-    await practiceModeApi.saveProgress(index, modeKey, questions.value.length, buildAnswersState())
-    if (mode.value === 'sequential') {
-      seqProgress.value.completed = index
-    }
-  } catch (e) {
-    // 保存失败不阻断练习
-  }
-}
-
-async function startFree(type?: string) {
-  loading.value = true
-  try {
-    const params: Record<string, unknown> = {}
-    let modeKey = ''
-    if (type) {
-      // 专项练习：返回该题型全部题目（按顺序），支持断点续练
-      params.type = type
-      params.count = 0
-      modeKey = `free:${type}`
-    } else {
-      // 随机练习：随机抽取指定数量，不保存进度
-      params.count = randomCount.value
-    }
-    const res = await practiceModeApi.getFreeQuestions(params)
-    questions.value = res || []
-    if (questions.value.length === 0) {
-      ElMessage.warning('暂无符合条件的题目')
-      return
-    }
-    mode.value = 'free'
-    const prog = await resolveProgress(modeKey, questions.value.length)
-    resetSession(prog.startIndex)
-    restoreState(prog.answersState)
-  } catch {
-    /* 错误已由拦截器提示 */
-  } finally {
-    loading.value = false
-  }
-}
-
-async function startTagPractice() {
-  if (!tagPracticeId.value) return
-  loading.value = true
-  try {
-    const res = await practiceModeApi.startTagPractice({ tag_id: tagPracticeId.value, count: 0 })
-    const data = res || {}
-    questions.value = data.questions || []
-    if (questions.value.length === 0) {
-      ElMessage.warning('该标签下暂无已发布题目')
-      return
-    }
-    mode.value = 'tag'
-    const prog = await resolveProgress(getPracticeModeKey(), questions.value.length)
-    resetSession(prog.startIndex)
-    restoreState(prog.answersState)
-  } catch {
-    /* 错误已由拦截器提示 */
-  } finally {
-    loading.value = false
-  }
-}
-
-function resetSession(startIdx: number) {
-  currentIdx.value = startIdx
-  resetAnswers()
-  textAnswerMap.value = {}
-  submittedMap.value = {}
-  resultMap.value = {}
-  correctCount.value = 0
-  wrongCount.value = 0
-}
-
-// ===== 答题交互 =====
-async function submitAnswer() {
-  const q = currentQuestion.value
-  if (!canSubmit.value) return
-  const userAnswer = q.type === 'short_answer' ? textAnswer.value : answers.value[q.id]
-  try {
-    const res = await practiceModeApi.submitAnswer({
-      question_id: q.id,
-      user_answer: userAnswer as string,
-      practice_type: mode.value || 'free'
-    })
-    resultMap.value[q.id] = res || ({} as SubmitResult)
-    submittedMap.value[q.id] = true
-    if (resultMap.value[q.id].is_correct) {
-      correctCount.value++
-    } else {
-      wrongCount.value++
-    }
-    // 提交后持久化答题状态（游标不变，仅更新 answers_state）
-    await saveCurrentProgress(currentIdx.value)
-  } catch {
-    /* 错误已由拦截器提示 */
-  }
-}
-
-async function nextQuestion() {
-  // 所有有断点的模式：推进游标并保存进度+答题状态
-  const newIndex = currentIdx.value + 1
-  currentIdx.value++
-  await saveCurrentProgress(newIndex)
-}
-
-// 上一题：回到上一题，状态由 Map 自动恢复（进度不回退）
-function prevQuestion() {
-  if (currentIdx.value > 0) {
-    currentIdx.value--
-  }
-}
-
-async function confirmQuit() {
-  try {
-    await ElMessageBox.confirm('确定要退出本次练习吗？', '提示', { type: 'warning' })
-    // 所有有断点的模式：退出时保存当前游标和答题状态
-    await saveCurrentProgress(currentIdx.value)
-    backToEntry()
-  } catch (e) {}
-}
-
-function backToEntry() {
-  mode.value = null
-  questions.value = []
-  currentIdx.value = 0
-  resetAnswers()
-  textAnswerMap.value = {}
-  submittedMap.value = {}
-  resultMap.value = {}
-  correctCount.value = 0
-  wrongCount.value = 0
-  loadCardData()
 }
 </script>
 
