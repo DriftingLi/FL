@@ -73,7 +73,7 @@ import { useAuthStore } from '@/stores/auth'
 import QuickCard from '@/components/dashboard/QuickCard.vue'
 import type { QuickCardItem } from '@/components/dashboard/QuickCard.vue'
 import { useRoleDashboard } from '@/composables/useRoleDashboard'
-import { studentApi } from '@/api/student'
+import { studentApi, type StudyRecordItem } from '@/api/student'
 import { displayNameOf } from '@/types/user'
 
 const authStore = useAuthStore()
@@ -103,13 +103,8 @@ const {
   statsFetcher: async (days) => {
     const res = await studentApi.getStudyStats({ days })
     if (!res) return null
-    return {
-      days: res.days,
-      labels: res.labels,
-      data: res.data,
-      total: res.total_minutes,
-      active_days: res.active_days
-    }
+    // RoleDashboardStats 与 StudyStats 共享 days/labels/data/active_days，仅需归一化 total
+    return { ...res, total: res.total_minutes }
   },
   seriesType: 'line',
   unit: '分钟',
@@ -126,16 +121,19 @@ async function loadCourses() {
     const res = await studentApi.getProfile()
     if (res?.course_progress) {
       activeCourses.value = res.course_progress
-        .filter((c: any) => c.progress > 0 && c.progress < 100)
-        .sort((a: any, b: any) => (b.study_date || '').localeCompare(a.study_date || ''))
+        .filter((c) => {
+          const p = c.progress ?? 0
+          return p > 0 && p < 100
+        })
+        .sort((a, b) => (b.study_date || '').localeCompare(a.study_date || ''))
         .slice(0, 5)
-        .map((c: any) => ({
-          title: c.course_name,
-          badge: `${Math.round(c.progress)}%`,
+        .map((c) => ({
+          title: c.course_name || '未命名课程',
+          badge: `${Math.round(c.progress ?? 0)}%`,
           path: `/training/courses`
         }))
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('加载课程失败:', error)
     /* 错误已由拦截器提示 */
   }
@@ -149,21 +147,21 @@ async function loadRecentLearning() {
     if (res?.records) {
       // 记录已按 study_date 倒序，第一次遇到的 course_id 即该课程最新学习记录
       const seenCourses = new Set<number>()
-      const recentCourses: any[] = []
+      const recentCourses: StudyRecordItem[] = []
       for (const r of res.records) {
         if (!r.course_id || seenCourses.has(r.course_id)) continue
         seenCourses.add(r.course_id)
         recentCourses.push(r)
         if (recentCourses.length >= 5) break
       }
-      recentLearning.value = recentCourses.map((r: any) => ({
+      recentLearning.value = recentCourses.map((r) => ({
         title: r.course_name || '未知课程',
         subtitle: r.chapter_title || `${r.study_duration || 0} 分钟`,
         badge: r.study_duration ? `${r.study_duration}分钟` : '',
         path: `/training/courses`
       }))
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('加载最近学习失败:', error)
     /* 错误已由拦截器提示 */
   }

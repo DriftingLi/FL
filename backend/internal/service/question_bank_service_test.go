@@ -347,8 +347,8 @@ func TestBatchImport_WithErrors(t *testing.T) {
 func TestGetStats_Empty(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
 	result := svc.GetStats()
-	if result["total"].(int64) != 0 {
-		t.Fatalf("空库总数应为 0, got %v", result["total"])
+	if result.Total != 0 {
+		t.Fatalf("空库总数应为 0, got %v", result.Total)
 	}
 }
 
@@ -358,7 +358,7 @@ func TestGetStats_WithData(t *testing.T) {
 	testutil.SeedQuestion(t, db, "single_choice", "q2", "A")
 	testutil.SeedQuestion(t, db, "true_false", "q3", "true")
 	result := svc.GetStats()
-	if result["total"].(int64) != 3 {
-		t.Fatalf("总数应为 3, got %v", result["total"])
+	if result.Total != 3 {
+		t.Fatalf("总数应为 3, got %v", result.Total)
 	}
 }

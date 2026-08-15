@@ -4,7 +4,6 @@ package repository
 
 import (
 	"context"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -22,18 +21,12 @@ func NewExportStore(pool *pgxpool.Pool) *ExportStore {
 }
 
 // ListEvaluationExports 评估记录导出行（与导出契约列一一对应，含主表用户 join）。
+// SELECT 列序与 position Scan 均从 service.EvaluationExportColumns 单点 spec 派生（#229），
+// 与 service 表头/取值同源，SQL 返回序与表头序不会彼此漂移。
 func (s *ExportStore) ListEvaluationExports(ctx context.Context) ([]vmain.EvaluationExportRow, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT e.id, COALESCE(u.account, '') AS account, COALESCE(u.username, '') AS username,
-		       e.brand, e.vehicle_type, e.series, e.tonnage, e.config_type, e.mast_type,
-		       e.mast_height_mm, e.factory_year, e.sale_year, e.usage_hours, e.original_paint,
-		       e.province, e.city, e.has_license_plate, e.has_registration_certificate AS has_registration_cert,
-		       e.has_maintenance_records, e.condition_rating, e.original_price, e.k_time, e.k_hours,
-		       e.k_brand, e.k_condition, e.k_market, e.estimated_value, e.confidence_low, e.confidence_high,
-		       e.report_pdf_path, e.created_at
-		FROM evaluations AS e
-		LEFT JOIN hrwai_users AS u ON u.id = e.user_id
-		ORDER BY e.id DESC`)
+	query := "SELECT " + vmain.BuildEvalExportSelect() +
+		"\n\tFROM evaluations AS e\n\tLEFT JOIN hrwai_users AS u ON u.id = e.user_id\n\tORDER BY e.id DESC"
+	rows, err := s.pool.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -42,27 +35,13 @@ func (s *ExportStore) ListEvaluationExports(ctx context.Context) ([]vmain.Evalua
 	out := make([]vmain.EvaluationExportRow, 0, 16)
 	for rows.Next() {
 		var r vmain.EvaluationExportRow
-		var kTime, kHours, kBrand, kCondition, kMarket *float64
-		var confLow, confHigh *float64
-		var reportPath *string
-		var createdAt time.Time
-		if err := rows.Scan(
-			&r.ID, &r.Account, &r.Username, &r.Brand, &r.VehicleType, &r.Series, &r.Tonnage,
-			&r.ConfigType, &r.MastType, &r.MastHeightMM, &r.FactoryYear, &r.SaleYear,
-			&r.UsageHours, &r.OriginalPaint, &r.Province, &r.City,
-			&r.HasLicensePlate, &r.HasRegistrationCert, &r.HasMaintenanceRecords,
-			&r.ConditionRating, &r.OriginalPrice,
-			&kTime, &kHours, &kBrand, &kCondition, &kMarket,
-			&r.EstimatedValue, &confLow, &confHigh, &reportPath, &createdAt,
-		); err != nil {
+		dests, commits := vmain.ScanEvalExportDestinations(&r)
+		if err := rows.Scan(dests...); err != nil {
 			return nil, err
 		}
-		r.KTime, r.KHours, r.KBrand, r.KCondition, r.KMarket = kTime, kHours, kBrand, kCondition, kMarket
-		r.ConfidenceLow, r.ConfidenceHigh = confLow, confHigh
-		if reportPath != nil {
-			r.ReportPDFPath = *reportPath
+		for _, commit := range commits {
+			commit()
 		}
-		r.CreatedAt = createdAt
 		out = append(out, r)
 	}
 	return out, rows.Err()

@@ -16,8 +16,15 @@ export interface ApiResponse<T = any> {
   data: T
 }
 
+/** Raw blob 响应：同时携带响应头，供需要读取 Content-Disposition 等响应头做文件名解析的下载场景（导出文件名单点，#230）。 */
+export interface RawBlobResponse<T = Blob> {
+  data: T
+  headers: Record<string, string | string[] | undefined>
+}
+
 /** 解包客户端类型：拦截器成功直接返回业务负载 T；responseType 为 blob/arraybuffer 时返回二进制数据 */
 type UnwrappedRequest = {
+  get<T = any>(url: string, config: AxiosRequestConfig & { responseType: 'blob'; raw: true }): Promise<RawBlobResponse<T>>
   get<T = any>(url: string, config: AxiosRequestConfig & { responseType: 'blob' }): Promise<Blob>
   get<T = any>(url: string, config: AxiosRequestConfig & { responseType: 'arraybuffer' }): Promise<ArrayBuffer>
   get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T>
@@ -101,8 +108,15 @@ export function createHttpClient<O extends HttpClientOptions>(opts: O): Unwrappe
 
   client.interceptors.response.use(
     response => {
-      // 二进制响应直接放行（返回 Blob/ArrayBuffer 本身）
+      // 二进制响应：默认直接放行 Blob/ArrayBuffer 本身；请求标记 raw 时返回含响应头的完整对象
+      //（供读取 Content-Disposition 等响应头的下载场景解析文件名，#230）。
       if (response.config.responseType === 'blob' || response.config.responseType === 'arraybuffer') {
+        if ((response.config as AxiosRequestConfig & { raw?: boolean }).raw) {
+          return {
+            data: response.data,
+            headers: response.headers
+          }
+        }
         return response.data
       }
 

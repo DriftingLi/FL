@@ -513,27 +513,22 @@ func (s *QuestionBankService) BatchImport(items []any, createdBy *int) map[strin
 	}
 }
 
-// GetStats 题库统计。
-func (s *QuestionBankService) GetStats() map[string]any {
+// GetStats 题库统计（经统计聚合 module，一次 GROUP BY + 维度零填充）。
+func (s *QuestionBankService) GetStats() *QuestionBankStatsDTO {
 	var total int64
 	s.db.Model(&model.Question{}).Count(&total)
-	byType := map[string]int64{}
+	byType := groupByCount(s.db.Model(&model.Question{}), "type")
+	byStatus := groupByCount(s.db.Model(&model.Question{}), "status")
+	// 保留旧语义：by_type / by_status 对合法维度零填充（未出现的维度以 0 呈现）。
+	byt := make(map[string]int64, len(validQuestionTypes))
 	for _, t := range validQuestionTypes {
-		var c int64
-		s.db.Model(&model.Question{}).Where("type = ?", t).Count(&c)
-		byType[t] = c
+		byt[t] = byType[t]
 	}
-	byStatus := map[string]int64{}
+	bys := make(map[string]int64, len(validQuestionStatus))
 	for _, st := range validQuestionStatus {
-		var c int64
-		s.db.Model(&model.Question{}).Where("status = ?", st).Count(&c)
-		byStatus[st] = c
+		bys[st] = byStatus[st]
 	}
-	return map[string]any{
-		"total":     total,
-		"by_type":   byType,
-		"by_status": byStatus,
-	}
+	return &QuestionBankStatsDTO{Total: total, ByType: byt, ByStatus: bys}
 }
 
 func applyQuestionFields(q *model.Question, data map[string]any) {

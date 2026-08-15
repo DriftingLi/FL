@@ -75,6 +75,27 @@
           />
         </el-form-item>
 
+        <el-form-item>
+          <div class="captcha-row">
+            <el-input
+              v-model="captchaValue"
+              placeholder="图形验证码"
+              size="large"
+              class="form-input captcha-input"
+              maxlength="4"
+              @keyup.enter="handleSendCode"
+            />
+            <img
+              v-if="captchaImage"
+              :src="captchaImage"
+              class="captcha-img"
+              alt="验证码"
+              title="看不清？点击刷新"
+              @click="refreshCaptcha"
+            />
+          </div>
+        </el-form-item>
+
         <el-form-item prop="code">
           <div class="code-row">
             <el-input
@@ -130,6 +151,27 @@
             maxlength="11"
             @keyup.enter="handleLogin"
           />
+        </el-form-item>
+
+        <el-form-item>
+          <div class="captcha-row">
+            <el-input
+              v-model="captchaValue"
+              placeholder="图形验证码"
+              size="large"
+              class="form-input captcha-input"
+              maxlength="4"
+              @keyup.enter="handleSendCode"
+            />
+            <img
+              v-if="captchaImage"
+              :src="captchaImage"
+              class="captcha-img"
+              alt="验证码"
+              title="看不清？点击刷新"
+              @click="refreshCaptcha"
+            />
+          </div>
         </el-form-item>
 
         <el-form-item prop="code">
@@ -190,7 +232,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
@@ -200,6 +242,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Message, Phone, ChatDotRound } from '@element-plus/icons-vue'
 import { usernameRules, passwordRules, requiredEmailRules, emailCodeRules, phoneRules } from '@/utils/validate'
 import { useSendCode } from '@/composables/useSendCode'
+import { useCaptcha } from '@/composables/useCaptcha'
 import { useAuthFlow } from '@/composables/useAuthFlow'
 import AuthPageShell, { type AltMode, type AltModeKey } from '@/components/auth/AuthPageShell.vue'
 import {
@@ -263,12 +306,17 @@ const mainFormRef = ref<FormInstance | null>(null)
 const emailFormRef = ref<FormInstance | null>(null)
 const phoneFormRef = ref<FormInstance | null>(null)
 
+const { captchaId, captchaImage, captchaValue, refreshCaptcha } = useCaptcha()
+onMounted(() => {
+  refreshCaptcha()
+})
+
 const { sending: codeSending, remaining: countdown, send: sendCode } = useSendCode({
   purpose: 'login',
   sendCode: (channel, target) =>
     channel === 'phone'
-      ? authApi.sendPhoneCode({ phone: target, purpose: 'login' })
-      : authApi.sendEmailCode({ email: target, purpose: 'login' })
+      ? authApi.sendPhoneCode({ phone: target, purpose: 'login', captcha_id: captchaId.value, captcha_value: captchaValue.value.trim() })
+      : authApi.sendEmailCode({ email: target, purpose: 'login', captcha_id: captchaId.value, captcha_value: captchaValue.value.trim() })
 })
 
 // 当前子域名决定角色（不再支持手动切换）
@@ -322,10 +370,16 @@ const emailFieldRules: FormRules = { email: requiredEmailRules, code: emailCodeR
 const phoneFieldRules: FormRules = { phone: phoneRules, code: emailCodeRules }
 
 async function handleSendCode() {
-  if (flow.mode.value === 'phone') {
-    await sendCode(formData.phone.trim(), 'phone')
-  } else if (flow.mode.value === 'email') {
-    await sendCode(formData.email.trim(), 'email')
+  if (captchaValue.value.trim() === '') {
+    ElMessage.warning('请输入图形验证码')
+    return
+  }
+  const ok =
+    flow.mode.value === 'phone'
+      ? await sendCode(formData.phone.trim(), 'phone')
+      : await sendCode(formData.email.trim(), 'email')
+  if (!ok) {
+    refreshCaptcha()
   }
 }
 
@@ -339,63 +393,7 @@ async function handleLogin() {
 </script>
 
 <style scoped>
-.auth-form {
-  margin-top: 4px;
-}
-
-.code-row {
-  display: flex;
-  gap: 10px;
-  width: 100%;
-}
-
-.code-input {
-  flex: 1;
-}
-
-.code-btn {
-  min-width: 124px;
-}
-
-.auth-btn {
-  width: 100%;
-  height: 48px;
-  font-size: 16px;
-  font-weight: 600;
-  border-radius: 12px;
-  letter-spacing: 0.08em;
-  margin-top: 8px;
-  --el-button-bg-color: #2563eb;
-  --el-button-border-color: #2563eb;
-  --el-button-text-color: #fff;
-  --el-button-hover-bg-color: #1d4ed8;
-  --el-button-hover-border-color: #1d4ed8;
-  --el-button-active-bg-color: #1d4ed8;
-  --el-button-active-border-color: #1d4ed8;
-}
-
-.form-input :deep(.el-input__wrapper) {
-  border-radius: 12px;
-  padding: 6px 14px;
-  box-shadow: 0 0 0 1px #e2e8f0 inset;
-  transition: all 0.2s ease;
-  background: #f8fafc;
-}
-
-.form-input :deep(.el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px #cbd5e1 inset;
-  background: #fff;
-}
-
-.form-input :deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2) inset;
-  background: #fff;
-}
-
-.form-input :deep(.el-input__prefix-inner) {
-  color: #94a3b8;
-}
-
+/* 表单共享样式已在 AuthPageShell 外壳收敛（:deep 触达 slot） */
 .wechat-box {
   width: 100%;
 }
@@ -426,26 +424,9 @@ async function handleLogin() {
   line-height: 1.5;
 }
 
-.form-footer {
-  text-align: center;
-}
-
-.footer-text {
-  font-size: 14px;
-  color: #94a3b8;
-}
-
-.footer-link {
-  font-size: 14px;
-  font-weight: 600;
-  color: #2563eb;
-  text-decoration: none;
-  margin-left: 4px;
-  transition: color 0.15s ease;
-}
-
-.footer-link:hover {
-  color: #1d4ed8;
+/* Login 独有：input 内边距 6px（其余认证页为 4px，由外壳统一），此处覆盖保持像素级不变 */
+.auth-form .form-input :deep(.el-input__wrapper) {
+  padding: 6px 14px;
 }
 
 .footer-sep {

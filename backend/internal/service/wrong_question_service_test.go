@@ -105,11 +105,12 @@ func TestGetStats_WrongQuestion_WithData(t *testing.T) {
 	seedWrongQuestion(t, db, 1, 2, 1)
 
 	result := svc.GetStats(1)
-	if result["total"] == nil {
-		t.Fatal("应返回 total")
+	if result.Total != 2 {
+		t.Fatalf("总数应为 2, got %v", result.Total)
 	}
-	if result["total"].(int) != 2 {
-		t.Fatalf("总数应为 2, got %v", result["total"])
+	// 仅存在的题目贡献类型（question 2 无对应题目，不计入 by_type）
+	if result.ByType["single_choice"] != 1 {
+		t.Fatalf("by_type 应统计 1 道有题目对应关系的单选错题, got %v", result.ByType)
 	}
 }
 

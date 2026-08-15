@@ -15,6 +15,7 @@
 - **验证码通道（channel）**：邮箱（SMTP，开发降级日志）与短信（腾讯云 SMS SendSms，开发降级日志）是同一验证码状态机两侧的 adapter。
 - **会话（session）**：签发（issue）/ 校验（verify）/ 吊销（revoke）JWT 的生命周期；登出即把 token hash 写入黑名单（`jwt:blacklist:`），TTL = token 剩余有效期。
 - **登录态 Cookie**：父域名 httpOnly Cookie（hrwai_token），子域名间共享登录；Bearer 头优先于 Cookie。注：生产为 HTTP（443 不可用）时 Secure cookie 被浏览器拒绝，Cookie 通道失效、登录态跨子域不共享，见 ADR-0003。
+- **认证页（auth page）**：登录/注册/找回密码三页共用认证页外壳（AuthPageShell，白底极简 + 主次分离——密码为主入口，邮箱/手机/微信收纳为「或使用以下方式登录」图标按钮；tutor/admin 仅密码入口）。三页提交流程共用 useAuthFlow 状态机；redirect 回跳白名单（isSafeRedirect）与「路径前缀→身份」表单点（authRedirect），见 ADR-0014。
 - **资料审核（profile review）**：昵称/头像修改走提交→审核（通过/驳回）流程，审核结果以站内信通知。
 
 ## 通知与审计

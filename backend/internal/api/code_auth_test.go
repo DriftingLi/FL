@@ -19,6 +19,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/cache"
+	"forklift-training/internal/captcha"
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -120,12 +121,20 @@ func (c *fakeChannel) BindColumn() string { return c.column }
 // =====================================================
 
 func newCodeAuthTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fakeChannel, *fakeChannel) {
+	r, store, emailCh, phoneCh, _ := newCodeAuthTestRouterX(t, false)
+	return r, store, emailCh, phoneCh
+}
+
+// newCodeAuthTestRouterX 构造测试路由（captchaEnabled 控制人机验证开关）。
+// 返回 captcha 服务供测试读取/注入验证码答案。
+func newCodeAuthTestRouterX(t *testing.T, captchaEnabled bool) (*gin.Engine, *memCodeStore, *fakeChannel, *fakeChannel, *captcha.Service) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db := testutil.NewMemoryDB(t)
 	authSvc := service.NewAuthService(db, security.NewSession("test-secret", time.Hour, security.CookieConfig{}), "admin", "tutor", "student", zap.NewNop())
 	store := newMemCodeStore()
 	codeSvc := service.NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
+	captchaSvc := captcha.NewService(store) // memCodeStore 实现 captcha.Store（Get/Set/Del 同构）
 
 	emailCh := &fakeChannel{column: "email", keyPref: "email_code", noun: "邮箱"}
 	phoneCh := &fakeChannel{column: "phone", keyPref: "phone_code", noun: "手机号"}
@@ -149,11 +158,12 @@ func newCodeAuthTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fakeChann
 	r := gin.New()
 	r.Use(gin.Recovery())
 	api := r.Group("/api")
-	RegisterEmailAuthRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.EmailCh)
-	RegisterPhoneAuthRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.PhoneCh)
+	RegisterCaptchaRoutes(r, captchaSvc)
+	RegisterEmailAuthRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.EmailCh, captchaSvc, captchaEnabled)
+	RegisterPhoneAuthRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.PhoneCh, captchaSvc, captchaEnabled)
 	RegisterProfileBindRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
 
-	return r, store, emailCh, phoneCh
+	return r, store, emailCh, phoneCh, captchaSvc
 }
 
 func codeAuthRequest(r *gin.Engine, method, path string, body map[string]interface{}, token string) *httptest.ResponseRecorder {

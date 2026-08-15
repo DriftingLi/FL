@@ -63,7 +63,6 @@ interface WrongItem {
     options?: Record<string, string>
     content?: string
   }
-  [key: string]: unknown
 }
 
 const wrongList = ref<WrongItem[]>([])

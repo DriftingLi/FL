@@ -16,15 +16,12 @@ export interface WrongQuestionItem {
     type?: string
     content?: string
     options?: Record<string, string>
-    [key: string]: unknown
   }
-  [key: string]: unknown
 }
 
 /** 重做判定结果 */
 export interface RedoResult {
   is_correct?: boolean
-  [key: string]: unknown
 }
 
 export const wrongQuestionApi = {

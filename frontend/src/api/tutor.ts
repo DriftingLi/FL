@@ -1,6 +1,6 @@
 import { unwrappedRequest } from './request'
 import type { AxiosProgressEvent } from 'axios'
-import type { CourseSummary, CourseChapter } from './course'
+import type { CourseSummary, CourseChapter, ChapterDetail } from './course'
 
 export interface TutorCoursesQuery {
   page?: number
@@ -31,24 +31,24 @@ export type TutorCourse = Pick<
 /** 导师章节 = CourseChapter 子集，单一事实源派生 */
 export type TutorChapter = Pick<CourseChapter, 'chapter_id' | 'title' | 'content' | 'order_num' | 'duration'>
 
-/** 导师章节详情（含课程与章节列表） */
-export interface TutorChapterDetail {
-  chapter_id: number
-  title: string
-  content?: string
-  course?: { name?: string; [key: string]: unknown }
+/** 导师章节详情 = 课程章节详情（含 files，后端返回 ChapterDetailDTO）+ 课程/章节列表附加字段 */
+export interface TutorChapterDetail extends ChapterDetail {
+  course?: {
+    course_id?: number
+    name?: string
+    cover_image?: string
+    description?: string
+  }
   chapters?: TutorChapter[]
-  [key: string]: unknown
 }
 
-/** 阅卷统计（按天分组） */
+/** 阅卷统计（按天分组，与后端 daily series 对齐，total 题为 total_count） */
 export interface GradingStatsData {
   days: number
   labels: string[]
   data: number[]
   total_count: number
   active_days: number
-  [key: string]: unknown
 }
 
 export const tutorApi = {

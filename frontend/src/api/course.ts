@@ -7,10 +7,9 @@ export interface UpdateProgressPayload {
   study_duration?: number
   chapter_id?: number
   duration?: number
-  [key: string]: unknown
 }
 
-/** 课程摘要（列表项，courseToDict 字段） */
+/** 课程摘要（列表项，courseToDict 字段，与后端 CourseDTO 契约对齐） */
 export interface CourseSummary {
   course_id: number
   name: string
@@ -27,11 +26,13 @@ export interface CourseSummary {
   certificate_template_id?: number | null
   certificate_name?: string
   prerequisite_course_ids?: number[]
+  sort_order?: number
   created_at?: string
-  [key: string]: unknown
+  /** 学习人数（详情元数据，导师端列表展示用） */
+  student_count?: number
 }
 
-/** 章节（课程详情内嵌） */
+/** 章节（课程详情内嵌，与后端 ChapterDTO 对齐） */
 export interface CourseChapter {
   chapter_id: number
   title: string
@@ -39,7 +40,9 @@ export interface CourseChapter {
   content_type?: string
   order_num?: number
   duration?: number
-  [key: string]: unknown
+  course_id?: number
+  file_url?: string
+  description?: string
 }
 
 /** 课程详情主体（课程字段 + 嵌套 specialty/level/certificate_template/prerequisites） */
@@ -55,8 +58,10 @@ export interface CourseDetail extends CourseSummary {
     template_url?: string
   }
   prerequisites?: { course_id: number; name: string }[]
+  chapter_count?: number
+  student_count?: number
   study_progress?: number
-  [key: string]: unknown
+  chapters?: CourseChapter[]
 }
 
 /** 学员端课程详情响应（后端包一层 course_info） */
@@ -64,7 +69,17 @@ export interface CourseDetailResponse {
   course_info?: CourseDetail
   chapters?: CourseChapter[]
   progress?: number
-  [key: string]: unknown
+}
+
+/** 章节文件（与后端 ChapterFileDTO 对齐） */
+export interface ChapterFile {
+  chapter_id?: number | null
+  content_type?: string
+  created_at?: string
+  file_id?: number
+  file_name?: string
+  file_size?: number
+  file_url?: string
 }
 
 /** 章节详情（含文件与前后章节导航） */
@@ -72,16 +87,16 @@ export interface ChapterDetail {
   chapter_id: number
   title: string
   content?: string
+  course_id?: number
+  content_type?: string
+  file_url?: string
+  description?: string
+  duration?: number
+  order_num?: number
   study_status?: string
   previous_chapter_id?: number | null
   next_chapter_id?: number | null
-  files?: {
-    content_type?: string
-    file_url?: string
-    url?: string
-    [key: string]: unknown
-  }[]
-  [key: string]: unknown
+  files?: ChapterFile[]
 }
 
 export const courseApi = {

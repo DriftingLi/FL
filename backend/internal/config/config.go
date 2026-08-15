@@ -30,12 +30,14 @@ type Config struct {
 	// Storage 文件存储配置（local 本地磁盘 / r2 Cloudflare R2 对象存储）。
 	Storage StorageConfig
 	// AI 服务配置（OpenAI 兼容格式）。优先级：AI_* > DEEPSEEK_* > ZHIPU_* > OPENAI_API_KEY。
-	AIAPIKey         string
-	AIBaseURL        string
-	AIModel          string
-	Valuation        ValuationConfig
-	Redis            RedisConfig
-	RateLimit        RateLimitConfig
+	AIAPIKey  string
+	AIBaseURL string
+	AIModel   string
+	Valuation ValuationConfig
+	Redis     RedisConfig
+	RateLimit RateLimitConfig
+	// CaptchaEnabled 图形验证码开关（生产默认开启、其他默认关闭；显式 true/false 可覆盖）。
+	CaptchaEnabled   bool
 	DefaultPasswords DefaultPasswordsConfig
 	// SMTP 邮件发送配置（邮箱验证码注册/登录）。
 	SMTP SMTPConfig
@@ -235,6 +237,7 @@ func Load() (*Config, error) {
 	// 生产默认开启，且仅显式 "false" 可关闭（需区分"未设置"与"显式空值"）。
 	rateLimitEnabled := envBoolOr("rate_limit_enabled", appEnv == "production")
 	authCookieSecure := envBoolOr("auth_cookie_secure", appEnv == "production")
+	captchaEnabled := envBoolOr("captcha_enabled", appEnv == "production")
 
 	cfg := &Config{
 		AppEnv:          appEnv,
@@ -286,6 +289,7 @@ func Load() (*Config, error) {
 			RPS:     positiveFloat("rate_limit_rps", 20),
 			Burst:   positiveInt("rate_limit_burst", 40),
 		},
+		CaptchaEnabled: captchaEnabled,
 		DefaultPasswords: DefaultPasswordsConfig{
 			Admin:   viper.GetString("admin_default_password"),
 			Tutor:   viper.GetString("tutor_default_password"),

@@ -47,7 +47,7 @@ func (s *PracticeModeService) GetFreeQuestions(qType string, count int) ([]Quest
 // StartTagPractice 标签练习开始/续练：首次进入按标签抽题并持久化题目顺序，
 // 再次进入复用已保存顺序与游标（断点续练）；已完成则重新抽题。
 // mode = "tag:<tagID>"，count <= 0 表示该标签全部题目。
-func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int) (map[string]any, error) {
+func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int) (*PracticeStartResultDTO, error) {
 	if tagID <= 0 {
 		return nil, errors.New("请指定题库标签")
 	}
@@ -134,17 +134,17 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int) (map
 			out = append(out, newQuestionDTO(&q, false))
 		}
 	}
-	return map[string]any{
-		"questions":     out,
-		"current_index": startIdx,
-		"total":         len(ids),
-		"completed":     startIdx,
+	return &PracticeStartResultDTO{
+		Questions:    out,
+		CurrentIndex: startIdx,
+		Total:        len(ids),
+		Completed:    startIdx,
 	}, nil
 }
 
 // StartSequential 顺序练习：加载全部 published 题目（按 id 升序），
 // 复用已有 practice_progress 游标续练；一次性返回全部题目，前端从游标处开始作答。
-func (s *PracticeModeService) StartSequential(studentID int) (map[string]any, error) {
+func (s *PracticeModeService) StartSequential(studentID int) (*PracticeStartResultDTO, error) {
 	var questions []model.Question
 	if err := s.db.Where("status = ?", "published").Order("id ASC").Find(&questions).Error; err != nil {
 		return nil, errors.New("查询题目失败")
@@ -193,11 +193,11 @@ func (s *PracticeModeService) StartSequential(studentID int) (map[string]any, er
 	for i := range questions {
 		all = append(all, newQuestionDTO(&questions[i], false))
 	}
-	return map[string]any{
-		"questions":     all,
-		"current_index": prog.CurrentIndex,
-		"total":         prog.Total,
-		"completed":     prog.CurrentIndex,
+	return &PracticeStartResultDTO{
+		Questions:    all,
+		CurrentIndex: prog.CurrentIndex,
+		Total:        prog.Total,
+		Completed:    prog.CurrentIndex,
 	}, nil
 }
 
@@ -245,16 +245,16 @@ func (s *PracticeModeService) SaveProgress(studentID, index int, practiceMode st
 
 // GetProgress 查询任意模式的练习进度（卡片展示/断点续练用）。
 // 使用 Limit(1).Find() 替代 First()，避免首次进入时 GORM logger 误报 record not found
-func (s *PracticeModeService) GetProgress(studentID int, practiceMode string) map[string]any {
+func (s *PracticeModeService) GetProgress(studentID int, practiceMode string) *ProgressResultDTO {
 	if practiceMode == "" {
 		practiceMode = "sequential"
 	}
 	var prog model.PracticeProgress
 	if err := s.db.Where("student_id = ? AND practice_mode = ?", studentID, practiceMode).Limit(1).Find(&prog).Error; err != nil {
-		return map[string]any{"completed": 0, "total": 0, "current_index": 0, "answers_state": map[string]any{}}
+		return emptyProgressResult()
 	}
 	if prog.ID == 0 {
-		return map[string]any{"completed": 0, "total": 0, "current_index": 0, "answers_state": map[string]any{}}
+		return emptyProgressResult()
 	}
 	// 解析 answers_state JSONB 为 map
 	var stateMap map[string]any
@@ -264,21 +264,26 @@ func (s *PracticeModeService) GetProgress(studentID int, practiceMode string) ma
 	if stateMap == nil {
 		stateMap = map[string]any{}
 	}
-	return map[string]any{
-		"completed":     prog.CurrentIndex,
-		"total":         prog.Total,
-		"current_index": prog.CurrentIndex,
-		"answers_state": stateMap,
+	return &ProgressResultDTO{
+		Completed:    prog.CurrentIndex,
+		Total:        prog.Total,
+		CurrentIndex: prog.CurrentIndex,
+		AnswersState: stateMap,
 	}
 }
 
+// emptyProgressResult 无进度记录时的空结果（与旧 map 输出的空态逐字一致）。
+func emptyProgressResult() *ProgressResultDTO {
+	return &ProgressResultDTO{Completed: 0, Total: 0, CurrentIndex: 0, AnswersState: map[string]any{}}
+}
+
 // GetSequentialProgress 查询顺序练习进度（卡片展示用，向后兼容）。
-func (s *PracticeModeService) GetSequentialProgress(studentID int) map[string]any {
+func (s *PracticeModeService) GetSequentialProgress(studentID int) *ProgressResultDTO {
 	return s.GetProgress(studentID, "sequential")
 }
 
 // SubmitAnswer 提交答案并判定。
-func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer any, practiceType string) (map[string]any, error) {
+func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer any, practiceType string) (*SubmitResultDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, questionID).Error; err != nil {
 		return nil, errors.New("题目不存在")
@@ -301,29 +306,29 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 		_ = addToWrongQuestions(s.db, studentID, questionID)
 	}
 
-	result := map[string]any{
-		"is_correct":     isCorrect,
-		"correct_answer": q.Answer,
-		"explanation":    q.Explanation,
-		"question_id":    questionID,
-		"user_answer":    userAnswer,
+	result := &SubmitResultDTO{
+		IsCorrect:     isCorrect,
+		CorrectAnswer: q.Answer,
+		Explanation:   q.Explanation,
+		QuestionID:    questionID,
+		UserAnswer:    userAnswer,
 	}
 	if q.Type == "short_answer" {
-		result["reference_answer"] = q.ReferenceAnswer
-		result["scoring_criteria"] = q.ScoringCriteria
+		result.ReferenceAnswer = q.ReferenceAnswer
+		result.ScoringCriteria = q.ScoringCriteria
 		maxScore := q.Score
 		if maxScore <= 0 {
 			maxScore = 10
 		}
-		result["max_score"] = maxScore
+		result.MaxScore = maxScore
 		if aiRes := aiGradeShortAnswer(s.ai, q.Content, q.ReferenceAnswer, q.ScoringCriteria, userAnswerStr, float64(maxScore), nil); aiRes != nil {
-			result["ai_score"] = aiRes.Score
-			result["ai_comment"] = aiRes.Comment
+			result.AIScore = &aiRes.Score
+			result.AIComment = aiRes.Comment
 			if aiRes.Fallback {
-				result["ai_fallback"] = true
+				result.AIFallback = boolPtr(true)
 			} else {
 				passed := shortAnswerPassed(aiRes.Score, float64(maxScore))
-				result["is_correct"] = passed
+				result.IsCorrect = boolPtr(passed)
 				rec.IsCorrect = passed
 				s.db.Save(&rec)
 			}
@@ -332,8 +337,8 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 	return result, nil
 }
 
-// GetStats 学员练习统计。
-func (s *PracticeModeService) GetStats(studentID int) map[string]any {
+// GetStats 学员练习统计（经统计聚合 module，一次 GROUP BY 按题型聚合；by_type 正确率为加性新增 key）。
+func (s *PracticeModeService) GetStats(studentID int) *PracticeStatsDTO {
 	var total, correct int64
 	s.db.Model(&model.QuestionPracticeRecord{}).Where("student_id = ?", studentID).Count(&total)
 	s.db.Model(&model.QuestionPracticeRecord{}).Where("student_id = ? AND is_correct = ?", studentID, true).Count(&correct)
@@ -342,33 +347,32 @@ func (s *PracticeModeService) GetStats(studentID int) map[string]any {
 	if total > 0 {
 		accuracy = roundFloat1(float64(correct) / float64(total) * 100)
 	}
-	byType := map[string]map[string]int64{}
+	base := s.db.Model(&model.QuestionPracticeRecord{}).
+		Joins("JOIN question ON question.id = question_practice_record.question_id").
+		Where("question_practice_record.student_id = ?", studentID)
+	all, filtered := groupByCountWithFilter(base, "question.type", "CASE WHEN question_practice_record.is_correct THEN 1 ELSE 0 END")
+	// 保留旧语义：by_type 对合法题型零填充；accuracy 为每题型正确率（加性新 key）。
+	byType := make(map[string]PracticeTypeStat, len(validQuestionTypes))
 	for _, t := range validQuestionTypes {
-		var tt, tc int64
-		s.db.Joins("JOIN question ON question.id = question_practice_record.question_id").
-			Where("question_practice_record.student_id = ? AND question.type = ?", studentID, t).
-			Count(&tt)
-		s.db.Joins("JOIN question ON question.id = question_practice_record.question_id").
-			Where("question_practice_record.student_id = ? AND is_correct = ? AND question.type = ?", studentID, true, t).
-			Count(&tc)
+		tt := all[t]
+		tc := filtered[t]
 		acc := 0.0
 		if tt > 0 {
 			acc = roundFloat1(float64(tc) / float64(tt) * 100)
 		}
-		byType[t] = map[string]int64{"total": tt, "correct": tc}
-		_ = acc
+		byType[t] = PracticeTypeStat{Total: tt, Correct: tc, Accuracy: acc}
 	}
-	return map[string]any{
-		"total":    total,
-		"correct":  correct,
-		"wrong":    wrong,
-		"accuracy": accuracy,
-		"by_type":  byType,
+	return &PracticeStatsDTO{
+		Total:    total,
+		Correct:  correct,
+		Wrong:    wrong,
+		Accuracy: accuracy,
+		ByType:   byType,
 	}
 }
 
 // GetHistory 练习历史分页。
-func (s *PracticeModeService) GetHistory(studentID, page, pageSize int, qType, startDate, endDate string) map[string]any {
+func (s *PracticeModeService) GetHistory(studentID, page, pageSize int, qType, startDate, endDate string) *HistoryResultDTO {
 	records, total, page, pageSize := paging.Query[model.QuestionPracticeRecord](s.db, page, pageSize, 20, "created_at DESC", func(q *gorm.DB) *gorm.DB {
 		q = q.Where("student_id = ?", studentID)
 		if qType != "" {
@@ -388,27 +392,28 @@ func (s *PracticeModeService) GetHistory(studentID, page, pageSize int, qType, s
 	}
 	questions := loadQuestionsByIDs(s.db, questionIDs)
 
-	items := make([]map[string]any, 0, len(records))
-	for _, r := range records {
-		item := map[string]any{
-			"id":            r.ID,
-			"student_id":    r.StudentID,
-			"question_id":   r.QuestionID,
-			"is_correct":    r.IsCorrect,
-			"practice_type": r.PracticeType,
-			"user_answer":   r.UserAnswer,
-			"created_at":    formatISO(r.CreatedAt),
+	items := make([]HistoryItemDTO, 0, len(records))
+	for _, rc := range records {
+		item := HistoryItemDTO{
+			ID:           rc.ID,
+			StudentID:    rc.StudentID,
+			QuestionID:   rc.QuestionID,
+			IsCorrect:    rc.IsCorrect,
+			PracticeType: rc.PracticeType,
+			UserAnswer:   rc.UserAnswer,
+			CreatedAt:    formatISO(rc.CreatedAt),
 		}
-		if qq, ok := questions[r.QuestionID]; ok {
-			item["question"] = newQuestionDTO(qq, false)
+		if qq, ok := questions[rc.QuestionID]; ok {
+			d := newQuestionDTO(qq, false)
+			item.Question = &d
 		}
 		items = append(items, item)
 	}
-	return map[string]any{
-		"total":     total,
-		"page":      page,
-		"page_size": pageSize,
-		"records":   items,
+	return &HistoryResultDTO{
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+		Records:  items,
 	}
 }
 

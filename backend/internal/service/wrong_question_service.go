@@ -106,27 +106,18 @@ func (s *WrongQuestionService) RemoveWrongQuestion(studentID, questionID int) (m
 	return map[string]any{"removed": true}, nil
 }
 
-// GetStats 错题统计。
-func (s *WrongQuestionService) GetStats(studentID int) map[string]any {
-	var items []model.WrongQuestion
-	s.db.Where("student_id = ? AND is_removed = ?", studentID, false).Find(&items)
-
-	byType := map[string]int{}
-	total := len(items)
-	qIDs := make([]int, 0, len(items))
-	for i := range items {
-		qIDs = append(qIDs, items[i].QuestionID)
-	}
-	questions := loadQuestionsByIDs(s.db, qIDs, "id", "type")
-	for i := range items {
-		if q, ok := questions[items[i].QuestionID]; ok {
-			byType[q.Type]++
-		}
-	}
-	return map[string]any{
-		"total":   total,
-		"by_type": byType,
-	}
+// GetStats 错题统计（经统计聚合 module，一次 GROUP BY）。
+// 保留旧语义：仅统计未移除错题；by_type 只含实际存在题型的维度（不零填充）。
+func (s *WrongQuestionService) GetStats(studentID int) *WrongQuestionStatsDTO {
+	var total int64
+	s.db.Model(&model.WrongQuestion{}).Where("student_id = ? AND is_removed = ?", studentID, false).Count(&total)
+	byType := groupByCount(
+		s.db.Model(&model.WrongQuestion{}).
+			Joins("JOIN question ON question.id = wrong_question.question_id").
+			Where("wrong_question.student_id = ? AND wrong_question.is_removed = ?", studentID, false),
+		"question.type",
+	)
+	return &WrongQuestionStatsDTO{Total: total, ByType: byType}
 }
 
 // ExportWrongQuestions 导出错题。

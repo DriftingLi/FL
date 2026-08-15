@@ -58,7 +58,7 @@ export function usePracticeSession(adapters: PracticeSessionAdapters) {
   const questions = ref<Question[]>([])
   const currentIdx = ref(0)
   const submittedMap = ref<Record<number, boolean>>({})
-  const resultMap = ref<Record<number, SubmitResult>>({})
+  const resultMap = ref<Record<number, SubmitResult | null>>({})
   const correctCount = ref(0)
   const wrongCount = ref(0)
   const textAnswerMap = ref<Record<number, string>>({})
@@ -67,22 +67,32 @@ export function usePracticeSession(adapters: PracticeSessionAdapters) {
   const { answers, toggleOption, reset: resetAnswers } = useQuestionAnswer()
 
   // ===== 当前题目派生状态 =====
-  const currentQuestion = computed(() => questions.value[currentIdx.value] || ({} as Question))
+  // 当前题目（无题目/游标越界时为 null，派生态据此判空，与 selectedOptionKeys/canSubmit 一致）
+  const currentQuestion = computed<Question | null>(() => questions.value[currentIdx.value] ?? null)
   // 当前题目的简答文本（v-model 双向绑定到 Map）
   const textAnswer: Ref<string> = computed({
-    get: () => (currentQuestion.value.id ? textAnswerMap.value[currentQuestion.value.id] || '' : ''),
+    get: () => {
+      const q = currentQuestion.value
+      return q && q.id ? textAnswerMap.value[q.id] || '' : ''
+    },
     set: (v) => {
-      if (currentQuestion.value.id) textAnswerMap.value[currentQuestion.value.id] = v
+      const q = currentQuestion.value
+      if (q && q.id) textAnswerMap.value[q.id] = v
     }
   })
   // 当前题目是否已提交
-  const submitted = computed(() => (currentQuestion.value.id ? !!submittedMap.value[currentQuestion.value.id] : false))
-  // 当前题目的解析结果
-  const lastResult = computed(() =>
-    currentQuestion.value.id ? resultMap.value[currentQuestion.value.id] || ({} as SubmitResult) : ({} as SubmitResult)
-  )
-  // 当前题目渲染用选项（判断题渲染对/错模板）
-  const currentOptions = computed(() => buildQuestionOptions(currentQuestion.value))
+  const submitted = computed(() => {
+    const q = currentQuestion.value
+    return q && q.id ? !!submittedMap.value[q.id] : false
+  })
+  // 当前题目的解析结果（无当前题目 / 尚未答时为 null）
+  const lastResult = computed<SubmitResult | null>(() => {
+    const q = currentQuestion.value
+    if (!q || !q.id) return null
+    return resultMap.value[q.id] ?? null
+  })
+  // 当前题目渲染用选项（判断题渲染对/错模板；无题目时传空态推导）
+  const currentOptions = computed(() => buildQuestionOptions(currentQuestion.value ?? {}))
   // 当前题目已选中的选项 keys
   const selectedOptionKeys = computed((): (string | number)[] => {
     const q = currentQuestion.value
@@ -188,7 +198,7 @@ export function usePracticeSession(adapters: PracticeSessionAdapters) {
   /** 提交当前题目答案并判定，写回 resultMap/submittedMap 并推进统计 */
   async function submitAnswer() {
     const q = currentQuestion.value
-    if (!canSubmit.value) return
+    if (!canSubmit.value || !q) return
     const userAnswer: unknown = q.type === 'short_answer' ? textAnswer.value : answers.value[q.id]
     try {
       const res = await adapters.submit({
@@ -196,9 +206,9 @@ export function usePracticeSession(adapters: PracticeSessionAdapters) {
         user_answer: userAnswer,
         practice_type: mode.value
       })
-      resultMap.value[q.id] = res || ({} as SubmitResult)
+      resultMap.value[q.id] = res
       submittedMap.value[q.id] = true
-      if (resultMap.value[q.id].is_correct) correctCount.value++
+      if (resultMap.value[q.id]?.is_correct) correctCount.value++
       else wrongCount.value++
       // 提交后持久化答题状态（游标不变，仅更新 answers_state）
       await saveCurrentProgress(currentIdx.value)
@@ -264,10 +274,6 @@ export function usePracticeSession(adapters: PracticeSessionAdapters) {
     nextQuestion,
     prevQuestion,
     quit,
-    backToEntry,
-    saveCurrentProgress,
-    buildAnswersState,
-    restoreState,
-    resetSession
+    saveCurrentProgress
   }
 }

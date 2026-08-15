@@ -16,7 +16,7 @@ export interface UseAuthFlowOptions<Mode extends string = string> {
   /** 允许的 mode 列表；mode 默认取首项 */
   modes: readonly Mode[]
   /** 提交实现（data-source adapter）：按当前 mode 执行各自的 authApi 调用；可返回业务数据或 false 阻止后续 */
-  submit: (mode: Mode, formData?: unknown) => Promise<unknown> | unknown
+  submit: (mode: Mode) => Promise<unknown> | unknown
   /** 成功后回调：setAuthData / 成功提示 / 跳转；receive 为 submit 返回的业务数据 */
   afterSuccess: (mode: Mode, result?: unknown) => Promise<unknown> | unknown
 }

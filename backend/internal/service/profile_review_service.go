@@ -244,9 +244,9 @@ func (s *ProfileReviewService) review(requestID int64, reviewerID int, status, r
 			return err
 		}
 		// 审核结果以站内信通知学员（与审核状态流转同事务，避免通知丢失）
-		// 通知的构造与写入统一走站内信模块
-		typ, title, content := s.notificationSvc.ProfileReviewNotification(&req, status, reason)
-		return s.notificationSvc.CreateWithTx(tx, req.UserID, typ, title, content, "", now)
+		// 通知的构造与写入统一走站内信模块；payload 携带结构化审核标记（如 review_status）
+		typ, title, content, payload := s.notificationSvc.ProfileReviewNotification(&req, status, reason)
+		return s.notificationSvc.CreateWithTx(tx, req.UserID, typ, title, content, "", payload, now)
 	})
 	if err != nil {
 		return nil, err
