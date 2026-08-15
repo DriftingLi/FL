@@ -25,49 +25,52 @@ import {
 export interface NavItem {
   key: string
   label: string
-  path?: string
+  /** 目标路由的 name（见 src/router/index.ts 各路由的 name 字段），而非硬编码路径。 */
+  routeName?: string
+  /** 目标路由需要的动态参数（如章节页 ChapterView 需要 courseId/chapterId）。 */
+  routeParams?: Record<string, string | number>
   icon?: Component
   children?: NavItem[]
-  // exact=true 时仅精确匹配 route.path 才高亮，
-  // 用于路径恰好是其他菜单父级的情况（如学员/导师仪表盘）。
+  // exact=true 时仅精确匹配 route.name 才高亮。
+  // name 匹配天然精确，因此该标记保留以兼容既有语义，但不再参与前缀判断。
   exact?: boolean
 }
 
 const studentNav: NavItem[] = [
-  { key: 'dashboard', label: '仪表盘', path: '/training', icon: HomeFilled, exact: true },
-  { key: 'courses', label: '课程中心', path: '/training/courses', icon: Notebook },
-  { key: 'forum', label: '学员论坛', path: '/training/forum', icon: ChatDotRound },
-  { key: 'question-bank', label: '题库练习', path: '/training/question-bank', icon: EditPen },
-  { key: 'level-exam', label: '考试中心', path: '/training/level-exam', icon: Document },
-  { key: 'wrong-questions', label: '错题本', path: '/training/wrong-questions', icon: CircleCloseFilled },
-  { key: 'ai-assistant', label: 'AI助手', path: '/ai-assistant', icon: MagicStick },
-  { key: 'valuation', label: '残值评估', path: '/valuation', icon: PriceTag },
-  { key: 'profile', label: '个人资料', path: '/training/profile', icon: User }
+  { key: 'dashboard', label: '仪表盘', routeName: 'StudentDashboard', icon: HomeFilled, exact: true },
+  { key: 'courses', label: '课程中心', routeName: 'CourseList', icon: Notebook },
+  { key: 'forum', label: '学员论坛', routeName: 'ForumPage', icon: ChatDotRound },
+  { key: 'question-bank', label: '题库练习', routeName: 'QuestionBank', icon: EditPen },
+  { key: 'level-exam', label: '考试中心', routeName: 'LevelExam', icon: Document },
+  { key: 'wrong-questions', label: '错题本', routeName: 'WrongQuestions', icon: CircleCloseFilled },
+  { key: 'ai-assistant', label: 'AI助手', routeName: 'AIAssistant', icon: MagicStick },
+  { key: 'valuation', label: '残值评估', routeName: 'ValuationHome', icon: PriceTag },
+  { key: 'profile', label: '个人资料', routeName: 'StudentProfile', icon: User }
 ]
 
 const adminNav: NavItem[] = [
-  { key: 'dashboard', label: '仪表盘', path: '/admin/dashboard', icon: DataAnalysis },
-  { key: 'hrwai-users', label: '用户管理', path: '/admin/hrwai-users', icon: User },
-  { key: 'profile-review', label: '资料审核', path: '/admin/profile-review', icon: CircleCheck },
-  { key: 'forum-manage', label: '论坛管理', path: '/admin/forum-manage', icon: ChatDotRound },
-  { key: 'tutors', label: '导师管理', path: '/admin/tutors', icon: UserFilled },
-  { key: 'course-catalog', label: '课程管理', path: '/admin/course-catalog', icon: FolderOpened },
-  { key: 'question-review', label: '题库审核', path: '/admin/question-review', icon: EditPen },
-  { key: 'question-tags', label: '题库标签', path: '/admin/question-tags', icon: CollectionTag },
-  { key: 'exam-sessions', label: '考试场次', path: '/admin/exam-sessions', icon: Calendar },
-  { key: 'statistics', label: '统计分析', path: '/admin/statistics', icon: TrendCharts },
-  { key: 'audit-logs', label: '审计日志', path: '/admin/audit-logs', icon: Memo },
-  { key: 'valuation-config', label: '残值配置', path: '/admin/valuation-config', icon: PriceTag },
-  { key: 'ai-settings', label: 'AI 配置', path: '/admin/ai-settings', icon: Setting },
-  { key: 'content-generate', label: '内容生成', path: '/admin/content-generate', icon: MagicStick },
-  { key: 'featured-content', label: '内容精选', path: '/admin/featured-content', icon: Document }
+  { key: 'dashboard', label: '仪表盘', routeName: 'AdminDashboard', icon: DataAnalysis },
+  { key: 'hrwai-users', label: '用户管理', routeName: 'HrwaiUserManage', icon: User },
+  { key: 'profile-review', label: '资料审核', routeName: 'ProfileReview', icon: CircleCheck },
+  { key: 'forum-manage', label: '论坛管理', routeName: 'ForumManage', icon: ChatDotRound },
+  { key: 'tutors', label: '导师管理', routeName: 'TutorManage', icon: UserFilled },
+  { key: 'course-catalog', label: '课程管理', routeName: 'CourseCatalog', icon: FolderOpened },
+  { key: 'question-review', label: '题库审核', routeName: 'QuestionReview', icon: EditPen },
+  { key: 'question-tags', label: '题库标签', routeName: 'QuestionTags', icon: CollectionTag },
+  { key: 'exam-sessions', label: '考试场次', routeName: 'ExamSessionManage', icon: Calendar },
+  { key: 'statistics', label: '统计分析', routeName: 'Statistics', icon: TrendCharts },
+  { key: 'audit-logs', label: '审计日志', routeName: 'AuditLogs', icon: Memo },
+  { key: 'valuation-config', label: '残值配置', routeName: 'ValuationConfigManage', icon: PriceTag },
+  { key: 'ai-settings', label: 'AI 配置', routeName: 'AISettings', icon: Setting },
+  { key: 'content-generate', label: '内容生成', routeName: 'ContentGenerate', icon: MagicStick },
+  { key: 'featured-content', label: '内容精选', routeName: 'AdminFeaturedContentList', icon: Document }
 ]
 
 const tutorNav: NavItem[] = [
-  { key: 'dashboard', label: '仪表盘', path: '/training/tutor', icon: HomeFilled, exact: true },
-  { key: 'courses', label: '我的课程', path: '/training/tutor/courses', icon: Notebook },
-  { key: 'question-manage', label: '题库管理', path: '/training/tutor/question-manage', icon: EditPen },
-  { key: 'grading', label: '人工阅卷', path: '/training/tutor/grading', icon: Finished }
+  { key: 'dashboard', label: '仪表盘', routeName: 'TutorDashboard', icon: HomeFilled, exact: true },
+  { key: 'courses', label: '我的课程', routeName: 'TutorCourses', icon: Notebook },
+  { key: 'question-manage', label: '题库管理', routeName: 'TutorQuestionManage', icon: EditPen },
+  { key: 'grading', label: '人工阅卷', routeName: 'TutorGrading', icon: Finished }
 ]
 
 export const roleNavigation: Record<string, NavItem[]> = {

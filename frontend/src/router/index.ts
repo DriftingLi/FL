@@ -7,6 +7,7 @@ import {
   getDefaultWorkspaceBySubdomain,
   isIpDirectMode
 } from '@/utils/subdomain'
+import { resolveWorkspaceForRole } from '@/utils/authRedirect'
 
 const routes: RouteRecordRaw[] = [
   // ========== 登录 / 注册 ==========
@@ -14,19 +15,19 @@ const routes: RouteRecordRaw[] = [
     path: '/login',
     name: 'Login',
     component: () => import('@/pages/auth/Login.vue'),
-    meta: { requiresAuth: false }
+    meta: { requiresAuth: false, authPage: true }
   },
   {
     path: '/register',
     name: 'Register',
     component: () => import('@/pages/auth/Register.vue'),
-    meta: { requiresAuth: false }
+    meta: { requiresAuth: false, authPage: true }
   },
   {
     path: '/forgot-password',
     name: 'ForgotPassword',
     component: () => import('@/pages/auth/ForgotPassword.vue'),
-    meta: { requiresAuth: false }
+    meta: { requiresAuth: false, authPage: true }
   },
 
   // ========== 培训模块 - 学员子区 ==========
@@ -187,19 +188,19 @@ const routes: RouteRecordRaw[] = [
     path: '/valuation/login',
     name: 'ValuationLogin',
     component: () => import('@/pages/auth/Login.vue'),
-    meta: { requiresAuth: false, isValuationAuthPage: true }
+    meta: { requiresAuth: false, isValuationAuthPage: true, authPage: true }
   },
   {
     path: '/valuation/register',
     name: 'ValuationRegister',
     component: () => import('@/pages/auth/Register.vue'),
-    meta: { requiresAuth: false, isValuationAuthPage: true }
+    meta: { requiresAuth: false, isValuationAuthPage: true, authPage: true }
   },
   {
     path: '/valuation/forgot-password',
     name: 'ValuationForgotPassword',
     component: () => import('@/pages/auth/ForgotPassword.vue'),
-    meta: { requiresAuth: false, isValuationAuthPage: true }
+    meta: { requiresAuth: false, isValuationAuthPage: true, authPage: true }
   },
 
   // ========== AI 助手模块（training 子域名，可选登录；登录后可保存历史会话） ==========
@@ -314,11 +315,9 @@ const routes: RouteRecordRaw[] = [
       // 原逻辑会跳 /login，守卫再把 valuation 子域的登录页转成 /valuation/login
       if (getSubdomain() === 'valuation') return '/valuation'
       const authStore = useAuthStore()
-      const role = authStore.userInfo?.role
-      if (role === 'admin') return '/admin/dashboard'
-      if (role === 'tutor') return '/training/tutor'
-      if (role === 'hrwai_user') return '/training'
-      return '/login'
+      const workspace = resolveWorkspaceForRole(authStore.userInfo?.role)
+      // 未知角色 resolveWorkspaceForRole 返回 '/'，根路径按原逻辑回登录页
+      return workspace === '/' ? '/login' : workspace
     }
   },
 
@@ -327,18 +326,13 @@ const routes: RouteRecordRaw[] = [
     path: '/dashboard',
     redirect: () => {
       const authStore = useAuthStore()
-      const role = authStore.userInfo?.role
-      if (role === 'admin') return '/admin/dashboard'
-      if (role === 'tutor') return '/training/tutor'
-      if (role === 'hrwai_user') return '/training'
-      return '/'
+      return resolveWorkspaceForRole(authStore.userInfo?.role)
     }
   },
   {
     path: '/dashboard/:pathMatch(.*)*',
     redirect: to => {
       const authStore = useAuthStore()
-      const role = authStore.userInfo?.role
       const subPath = (to.params.pathMatch as string[])?.[0] || ''
 
       // 特殊路径映射
@@ -348,11 +342,8 @@ const routes: RouteRecordRaw[] = [
       if (subPath === 'ai-generate') {
         return '/ai-assistant'
       }
-      // 默认按角色跳转
-      if (role === 'admin') return '/admin/dashboard'
-      if (role === 'tutor') return '/training/tutor'
-      if (role === 'hrwai_user') return '/training'
-      return '/'
+      // 默认按角色跳转（单点函数 resolveWorkspaceForRole）
+      return resolveWorkspaceForRole(authStore.userInfo?.role)
     }
   },
 
@@ -382,7 +373,12 @@ router.beforeEach(async (to, _from, next) => {
   await authStore.initialize()
 
   const isValuationPath = to.path === '/valuation' || to.path.startsWith('/valuation/')
-  const isValuationLoginPage = to.name === 'ValuationLogin' || to.name === 'ValuationRegister' || to.name === 'ValuationForgotPassword'
+  // 认证页标记（meta.authPage）：/login、/register、/forgot-password 及 /valuation 下的独立登录/注册/找回密码
+  const isAuthPage = to.matched.some(record => record.meta?.authPage)
+  // valuation 子域名独立认证页（回跳 /valuation/history 特判）
+  const isValuationLoginPage = isAuthPage && isValuationPath
+  // 主体系认证页（training / 主域名通用登录流程，不含 valuation 认证页）
+  const isLoginPath = isAuthPage && !isValuationPath
 
   // ===== 子域名边界检查 =====
   // 五类子域名：main（公共）、training（学员培训+AI助手）、valuation（残值评估）、
@@ -390,7 +386,6 @@ router.beforeEach(async (to, _from, next) => {
   // 跨子域名访问会触发整页跳转（不同 origin，token 不共享）
   // IP 直连模式下跳过子域名边界检查（无 DNS 子域名环境，通过路径直接访问所有工作区）
   const currentSubdomain = getSubdomain()
-  const isLoginPath = to.path === '/login' || to.path === '/register' || to.path === '/forgot-password'
   const skipSubdomainCheck = isIpDirectMode()
 
   if (!skipSubdomainCheck) {
@@ -480,13 +475,14 @@ router.beforeEach(async (to, _from, next) => {
     : (requiredRole ? requiredRole === userRole : true)
 
   if (!roleMatched) {
-    if (userRole === 'admin') {
-      next('/admin/dashboard')
-    } else if (userRole === 'tutor') {
-      next('/training/tutor')
+    // 管理员/导师回各自工作台（单点函数 resolveWorkspaceForRole）
+    if (userRole === 'admin' || userRole === 'tutor') {
+      next(resolveWorkspaceForRole(userRole))
     } else if (isValuationPath) {
+      // 学员/未知角色访问估值受限页 → 回估值首页（公开，无需登录）
       next('/valuation')
     } else {
+      // 其余 → 学员工作区
       next('/training')
     }
     return

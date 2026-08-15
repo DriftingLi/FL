@@ -2,7 +2,7 @@
   <div class="question-manage">
     <div class="page-header">
       <h2>题库管理</h2>
-      <el-button type="primary" @click="$router.push('/training/tutor/question-create')">新增题目</el-button>
+      <el-button type="primary" @click="$router.push({ name: 'TutorQuestionCreate' })">新增题目</el-button>
     </div>
 
     <div class="filter-bar">
@@ -130,7 +130,7 @@ function viewDetail(row: Question) {
 }
 
 function editQuestion(row: Question) {
-  router.push({ path: '/training/tutor/question-create', query: { id: row.id } })
+  router.push({ name: 'TutorQuestionCreate', query: { id: row.id } })
 }
 
 // 提交审核：将 draft 题目状态改为 pending（后端会清空驳回理由）

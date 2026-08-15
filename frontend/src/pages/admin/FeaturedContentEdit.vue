@@ -156,7 +156,7 @@ async function loadDetail() {
     form.status = d.status ?? 0
   } catch (e: any) {
     // 错误已由全局拦截器提示
-    router.push('/admin/featured-content')
+    router.push({ name: 'AdminFeaturedContentList' })
   } finally {
     loading.value = false
   }
@@ -219,11 +219,11 @@ async function handleSave() {
     if (isEdit.value) {
       await adminFeaturedApi.update(editId.value, payload)
       ElMessage.success(form.status === 1 ? '已保存并发布' : '草稿已保存')
-      router.push('/admin/featured-content')
+      router.push({ name: 'AdminFeaturedContentList' })
     } else {
       await adminFeaturedApi.create(payload)
       ElMessage.success(form.status === 1 ? '已创建并发布' : '草稿已创建')
-      router.push('/admin/featured-content')
+      router.push({ name: 'AdminFeaturedContentList' })
     }
   } catch (e: any) {
     // 错误已由全局拦截器提示
@@ -233,7 +233,7 @@ async function handleSave() {
 }
 
 function goBack() {
-  router.push('/admin/featured-content')
+  router.push({ name: 'AdminFeaturedContentList' })
 }
 
 onMounted(() => {

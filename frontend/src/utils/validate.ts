@@ -78,10 +78,18 @@ export const emailCodeRules: FormItemRule[] = [
 
 type FormModel = Record<string, unknown>
 
-export const confirmPasswordRule = (formRef: FormModel, fieldName = 'password'): FormItemRule => ({
+/**
+ * 确认密码校验（激活于 Register/Forgot 两页，替代内联 validator）。
+ * 空值文案可参数化：Register「请再次输入密码」/ Forgot「请再次输入新密码」。
+ */
+export const confirmPasswordRule = (
+  formRef: FormModel,
+  fieldName = 'password',
+  message = '请再次输入密码'
+): FormItemRule => ({
   validator: (_rule, value: string, callback) => {
     if (value === '') {
-      callback(new Error('请再次输入密码'))
+      callback(new Error(message))
     } else if (value !== formRef[fieldName]) {
       callback(new Error('两次输入密码不一致'))
     } else {

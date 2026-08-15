@@ -18,7 +18,7 @@ const store = useBatteryStore()
 
 // 守卫：没有结果时跳回录入页
 if (!store.currentResult) {
-  router.replace('/valuation/battery')
+  router.replace({ name: 'ValuationBatteryInput' })
 }
 
 const r = computed(() => store.currentResult)
@@ -44,7 +44,7 @@ const batteryTypeName = computed(
 
 function goEdit() {
   store.reset()
-  router.push('/valuation/battery')
+  router.push({ name: 'ValuationBatteryInput' })
 }
 
 async function downloadPdf() {

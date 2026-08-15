@@ -100,12 +100,12 @@ async function loadChapters() {
 }
 
 function goBack() {
-  router.push('/training/tutor/courses')
+  router.push({ name: 'TutorCourses' })
 }
 
 function goToEdit(chapterId: number) {
   const courseId = route.params.id
-  router.push(`/training/tutor/course/${courseId}/chapter/${chapterId}`)
+  router.push({ name: 'TutorChapterEdit', params: { courseId, chapterId } })
 }
 
 onMounted(() => {

@@ -120,6 +120,7 @@ import { markedHighlight } from 'marked-highlight'
 import hljs from 'highlight.js'
 import { courseApi } from '@/api/course'
 import { useCourseStore } from '@/stores/course'
+import { useStudyTracker } from '@/composables/useStudyTracker'
 import '@/assets/styles/markdown.css'
 import VideoPlayer from '@/components/student/VideoPlayer.vue'
 import DocumentViewer from '@/components/student/DocumentViewer.vue'
@@ -168,20 +169,38 @@ const chapterNotFound = ref(false)
 const chapterDetail = ref<ChapterDetail | null>(null)
 const courseName = ref('')
 const chapters = ref<ChapterItem[]>([])
-const isStudying = ref(false)
-const studySeconds = ref(0)
 const activeTab = ref('')
-let studyTimer: ReturnType<typeof setInterval> | null = null
-let studyStartTime: number | null = null
-// 已上报到后端的秒数，用于计算增量上报
-let reportedSeconds = 0
-// 自动上报定时器
-let autoReportTimer: ReturnType<typeof setInterval> | null = null
-// 自动上报间隔（秒）
-const AUTO_REPORT_INTERVAL = 60
 
 const courseId = computed(() => route.params.courseId as string)
 const chapterId = computed(() => route.params.chapterId)
+
+// 学习时长上报收敛到 useStudyTracker：页面只注入 loadDetail / reportDuration 两个 adapter，
+// 60s 阈值、取整、visibility 暂停恢复、切章/卸载追报的时序均由 composable 吸收。
+// reportDuration 返回「后端已确认上报的累计秒数」，据此推进上报游标（detail===null 不再脆弱判据）。
+let confirmedTotalSeconds = 0
+const studyTracker = useStudyTracker({
+  loadDetail: () => {
+    if (!chapterDetail.value?.chapter_id || !courseId.value) return null
+    return { courseId: Number(courseId.value), chapterId: chapterDetail.value.chapter_id }
+  },
+  reportDuration: async (incrementalSeconds) => {
+    // 增量秒数按现状规则取整为分钟上报（不足 1 分钟按 1 分钟）
+    const durationMinutes = Math.max(Math.ceil(incrementalSeconds / 60), 1)
+    try {
+      // 拦截器已解包信封；detail 恒为 null（无业务负载），确认信号是「不抛错」而非 detail 值
+      const detail = await courseApi.updateProgress(Number(courseId.value), {
+        chapter_id: chapterDetail.value!.chapter_id,
+        duration: durationMinutes
+      })
+      void detail // detail 不承载确认计数；视为 0 额外，整段增量计入已确认累计
+      confirmedTotalSeconds += incrementalSeconds
+    } catch (error) {
+      // 上报失败不推进游标（非最终追报时拦截器已提示）
+      console.warn('上报学习时长增量失败:', error)
+    }
+    return confirmedTotalSeconds
+  }
+})
 
 const chapterFiles = computed(() => {
   return chapterDetail.value?.files || []
@@ -249,38 +268,19 @@ const getNextChapterTitle = computed(() => {
   return next ? next.title : ''
 })
 
-async function reportIncremental(isFinal = false) {
-  if (!chapterDetail.value?.chapter_id || !courseId.value) return
-  const incrementalSeconds = studySeconds.value - reportedSeconds
-  if (incrementalSeconds <= 0) return
-
-  if (!isFinal && incrementalSeconds < 60) return
-
-  const durationMinutes = Math.max(Math.ceil(incrementalSeconds / 60), 1)
-  const chapter_id = chapterDetail.value.chapter_id
-
-  try {
-    // 拦截器已解包信封；成功返回即业务负载，失败抛错
-    const detail = await courseApi.updateProgress(Number(courseId.value), { chapter_id, duration: durationMinutes })
-    if (detail === null) reportedSeconds += incrementalSeconds
-  } catch (error) {
-    if (!isFinal) console.warn('上报学习时长增量失败:', error)
-  }
-}
-
 async function loadChapterDetail() {
   loading.value = true
   chapterNotFound.value = false
-  // 切换章节前先上报当前章节的增量时长
-  await reportIncremental(false)
-  stopStudy()
+  // 切换章节前先上报当前章节的增量时长，再停表（先报增量再停表）
+  await studyTracker.reportIncremental(false)
+  studyTracker.stop()
 
   try {
     // 拦截器已解包信封；章节不存在由后端 404 触发 catch 分支
     const detail = await courseApi.getChapterDetail(Number(courseId.value), Number(chapterId.value))
     chapterDetail.value = detail
     // 章节加载成功后启动学习计时
-    beginStudy()
+    studyTracker.begin()
   } catch (error) {
     const err = error as { response?: { status?: number } }
     if (err?.response?.status === 404) {
@@ -305,34 +305,6 @@ async function loadCourseInfo() {
   }
 }
 
-function beginStudy() {
-  isStudying.value = true
-  studyStartTime = Date.now()
-  studySeconds.value = 0
-  reportedSeconds = 0
-  studyTimer = setInterval(() => {
-    if (studyStartTime) {
-      studySeconds.value = Math.floor((Date.now() - studyStartTime) / 1000)
-    }
-  }, 1000)
-  // 启动自动上报：每隔 AUTO_REPORT_INTERVAL 秒上报一次增量时长
-  autoReportTimer = setInterval(() => {
-    reportIncremental(false)
-  }, AUTO_REPORT_INTERVAL * 1000)
-}
-
-function stopStudy() {
-  if (studyTimer) {
-    clearInterval(studyTimer)
-    studyTimer = null
-  }
-  if (autoReportTimer) {
-    clearInterval(autoReportTimer)
-    autoReportTimer = null
-  }
-  isStudying.value = false
-}
-
 function navigateToChapter(targetChapterId: string | number) {
   if (!targetChapterId) return
   router.push({
@@ -351,43 +323,21 @@ watch(() => route.params.chapterId, (newVal) => {
   }
 })
 
-// 页面可见性变化：切到后台时暂停计时并上报，回到前台时恢复
+// 页面可见性变化：切到后台暂停计时并上报，回到前台恢复（时序收敛进 composable）
 function handleVisibilityChange() {
   if (document.hidden) {
-    if (isStudying.value) {
-      // 暂停计时器，上报已学习时长
-      if (studyTimer) {
-        clearInterval(studyTimer)
-        studyTimer = null
-      }
-      if (autoReportTimer) {
-        clearInterval(autoReportTimer)
-        autoReportTimer = null
-      }
-      reportIncremental(false)
-    }
+    studyTracker.pause()
   } else {
-    // 回到前台：若仍在学习状态则恢复计时
-    if (isStudying.value && !studyTimer && chapterDetail.value) {
-      const newStart = Date.now() - studySeconds.value * 1000
-      studyStartTime = newStart
-      studyTimer = setInterval(() => {
-        if (studyStartTime) {
-          studySeconds.value = Math.floor((Date.now() - studyStartTime) / 1000)
-        }
-      }, 1000)
-      autoReportTimer = setInterval(() => {
-        reportIncremental(false)
-      }, AUTO_REPORT_INTERVAL * 1000)
-    }
+    // 回到前台：仅在仍有有效章节且在学习状态时恢复计时
+    if (chapterDetail.value) studyTracker.resume()
   }
 }
 
-// 页面关闭/刷新时上报
+// 页面关闭/刷新时追报未提交时长
 function handleBeforeUnload() {
-  if (isStudying.value) {
-    reportIncremental(true)
-  }
+  if (!studyTracker.isStudying.value) return
+  // keepalive 上报：composable 内部按 final 语义强制报满
+  void studyTracker.reportIncremental(true)
 }
 
 onMounted(() => {
@@ -398,11 +348,9 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  // 离开组件时使用 fetch keepalive 上报未提交时长
-  if (isStudying.value) {
-    reportIncremental(true)
-  }
-  stopStudy()
+  // 离开组件时使用 fetch keepalive 上报未提交时长，再停表
+  void studyTracker.reportIncremental(true)
+  studyTracker.stop()
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('beforeunload', handleBeforeUnload)
 })
