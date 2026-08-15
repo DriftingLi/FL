@@ -69,6 +69,7 @@ func (s *TutorService) GetGradingStats(tutorID, days int) *GradingStatsDTO {
 }
 
 // GetCourseChapters 导师章节列表（含文件）。
+// 文件列表批量装载（一次 IN 查询）消除逐章节 N+1。
 func (s *TutorService) GetCourseChapters(courseID int) (*TutorCourseChaptersDTO, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
@@ -76,20 +77,21 @@ func (s *TutorService) GetCourseChapters(courseID int) (*TutorCourseChaptersDTO,
 	}
 	var chapters []model.Chapter
 	s.db.Where("course_id = ?", courseID).Order("order_num").Find(&chapters)
+
+	filesByChapter := loadChapterFilesBulk(s.db, chapters)
 	resultChapters := make([]ChapterDTO, 0, len(chapters))
 	for i := range chapters {
 		ch := &chapters[i]
-		chDTO := chapterToDTO(ch)
-		var files []model.ChapterFile
-		s.db.Where("chapter_id = ?", ch.ChapterID).Order("created_at").Find(&files)
-		fileList := make([]ChapterFileDTO, 0, len(files))
-		if len(files) == 0 && ch.FileURL != "" {
-			fileList = append(fileList, legacyFileEntry(ch))
-		} else {
-			for j := range files {
-				fileList = append(fileList, chapterFileToDTO(&files[j]))
-			}
+		fileList := filesByChapter[ch.ChapterID]
+		// legacy 兼容：无 chapter_file 条目且 chapter.file_url 非空时折叠 legacy 条目
+		if len(fileList) == 0 && ch.FileURL != "" {
+			legacy := legacyFileEntry(ch)
+			fileList = []ChapterFileDTO{legacy}
 		}
+		if fileList == nil {
+			fileList = []ChapterFileDTO{}
+		}
+		chDTO := chapterToDTO(ch)
 		chDTO.Files = &fileList
 		resultChapters = append(resultChapters, chDTO)
 	}
@@ -101,51 +103,13 @@ func (s *TutorService) GetCourseChapters(courseID int) (*TutorCourseChaptersDTO,
 }
 
 // GetChapterDetail 章节详情（含上下章ID + 文件列表，供导师端编辑页使用）。
+// 实现收敛到共享章节详情 module；导师端不回填 study_status（fillStudyStatus=false）。
 func (s *TutorService) GetChapterDetail(chapterID int) (*ChapterDetailDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
 	}
-	// 同课程章节按 order_num 排序，计算上下章ID
-	var chapters []model.Chapter
-	s.db.Where("course_id = ?", chapter.CourseID).Order("order_num").Find(&chapters)
-	prevID, nextID := 0, 0
-	for i, ch := range chapters {
-		if ch.ChapterID == chapterID {
-			if i > 0 {
-				prevID = chapters[i-1].ChapterID
-			}
-			if i < len(chapters)-1 {
-				nextID = chapters[i+1].ChapterID
-			}
-			break
-		}
-	}
-	// 文件列表
-	var files []model.ChapterFile
-	s.db.Where("chapter_id = ?", chapterID).Order("created_at").Find(&files)
-	fileList := make([]ChapterFileDTO, 0, len(files))
-	if len(files) == 0 && chapter.FileURL != "" {
-		fileList = append(fileList, legacyFileEntry(&chapter))
-	} else {
-		for j := range files {
-			fileList = append(fileList, chapterFileToDTO(&files[j]))
-		}
-	}
-	result := chapterToDTO(&chapter)
-	var prevIDPtr, nextIDPtr *int
-	if prevID != 0 {
-		prevIDPtr = &prevID
-	}
-	if nextID != 0 {
-		nextIDPtr = &nextID
-	}
-	return &ChapterDetailDTO{
-		ChapterDTO:        result,
-		Files:             fileList,
-		PreviousChapterID: prevIDPtr,
-		NextChapterID:     nextIDPtr,
-	}, nil
+	return chapterDetailShared(s.db, &chapter, false, 0), nil
 }
 
 // UploadChapterFile 上传章节文件。

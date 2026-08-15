@@ -30,7 +30,7 @@ func (s *AuditService) Write(record model.AuditLog) error {
 }
 
 // List 审计日志分页查询：过滤 + count + find，返回 (items, total, page, pageSize)。
-// 页大小上限 100 在调用方钳制后再传入（既有行为冻结）。
+// 页大小上限 100 在本层钳制（ClampMax 语义：超上限回退默认值，而非截断到上限）。
 func (s *AuditService) List(page, pageSize, actorID int, role, keyword string) ([]model.AuditLog, int64, int, int) {
 	build := func(q *gorm.DB) *gorm.DB {
 		if actorID > 0 {
@@ -45,7 +45,7 @@ func (s *AuditService) List(page, pageSize, actorID int, role, keyword string) (
 		}
 		return q
 	}
-	return paging.Query[model.AuditLog](s.db, page, pageSize, 20, "id DESC", build)
+	return paging.QueryWithMax[model.AuditLog](s.db, page, pageSize, 20, 100, "id DESC", build)
 }
 
 // DescribeAction 将 HTTP 方法与路径转成普通人能看懂的操作描述（命名单点）。

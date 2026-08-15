@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -89,7 +88,7 @@ func (s *AuthService) GetProfile(userID int, role, account string) map[string]an
 
 // MaskedPhone 隐藏邮箱注册的占位手机号（email_ 前缀），/auth/me 源头过滤不下发客户端。
 func MaskedPhone(phone string) string {
-	if strings.HasPrefix(phone, "email_") {
+	if IsPlaceholderPhone(phone) {
 		return ""
 	}
 	return phone

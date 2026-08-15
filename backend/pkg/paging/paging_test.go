@@ -46,3 +46,28 @@ func TestQuery(t *testing.T) {
 		t.Fatalf("默认分页 = %d/%d, want 1/10", page2, pageSize2)
 	}
 }
+func TestQueryWithMax(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	for i := 0; i < 5; i++ {
+		testutil.SeedQuestion(t, db, "single_choice", "题目", "A")
+	}
+	// 页大小超过上限 maxPageSize=2 时回退默认 defaultPageSize=3（不截断到 2）
+	items, total, page, pageSize := QueryWithMax[model.Question](db, 1, 100, 3, 2, "id ASC", nil)
+	if total != 5 {
+		t.Fatalf("total = %d, want 5", total)
+	}
+	if pageSize != 3 {
+		t.Fatalf("pageSize = %d, want 默认 3 (ClampMax 超上限回退默认)", pageSize)
+	}
+	if len(items) != 3 {
+		t.Fatalf("本页应返回 3 条, got %d", len(items))
+	}
+	if page != 1 {
+		t.Fatalf("page = %d, want 1", page)
+	}
+	// 合法页大小不被钳制
+	_, _, _, pageSize2 := QueryWithMax[model.Question](db, 1, 2, 3, 2, "id ASC", nil)
+	if pageSize2 != 2 {
+		t.Fatalf("pageSize2 = %d, want 2 (合法页大小不被钳制)", pageSize2)
+	}
+}
