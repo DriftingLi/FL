@@ -40,6 +40,8 @@ export function useVerifyDialog(options: UseVerifyDialogOptions) {
     sending.value = true
     try {
       await sendCode(value.trim(), channel)
+    } catch (e) {
+      // 发送失败由拦截器统一提示，不外抛
     } finally {
       sending.value = false
     }

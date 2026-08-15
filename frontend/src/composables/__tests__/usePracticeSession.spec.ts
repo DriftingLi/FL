@@ -117,7 +117,7 @@ describe('usePracticeSession（答题/编排）', () => {
     await s.nextQuestion()
 
     expect(s.currentIdx.value).toBe(1)
-    expect(adapters.saved).toEqual([{ mode: 'sequential', index: 1 }])
+    expect(adapters.saved).toEqual([{ mode: 'sequential', index: 1, answersState: {} }])
   })
 
   it('prevQuestion 回退游标且不再保存进度', async () => {
@@ -129,7 +129,7 @@ describe('usePracticeSession（答题/编排）', () => {
     expect(s.currentIdx.value).toBe(0)
 
     await s.nextQuestion()
-    expect(adapters.saved).toEqual([{ mode: 'sequential', index: 1 }])
+    expect(adapters.saved).toEqual([{ mode: 'sequential', index: 1, answersState: {} }])
   })
 })
 
@@ -142,7 +142,7 @@ describe('usePracticeSession（退出清空）', () => {
 
     await s.quit()
 
-    expect(adapters.saved.at(-1)).toEqual({ mode: 'sequential', index: 0 })
+    expect(adapters.saved.at(-1)).toEqual({ mode: 'sequential', index: 0, answersState: {} })
     expect(s.mode.value).toBeNull()
     expect(s.questions.value).toEqual([])
     expect(s.currentIdx.value).toBe(0)

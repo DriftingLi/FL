@@ -17,7 +17,8 @@ export interface NotificationActionOptions {
 export function useNotificationAction(options: NotificationActionOptions) {
   const THROTTLE_MS = options.throttleMs ?? 60_000
   const now = options.now ?? Date.now
-  let lastSync = 0
+  // null 表示从未同步过：首次调用无条件通过（对假时钟从 0 开始的测试同样成立）
+  let lastSync: number | null = null
 
   /** 判定「资料审核通过」：type=profile_review 且 payload.review_status=approved */
   function isProfileApproved(item: Pick<NotificationItem, 'type' | 'payload'> | null | undefined): boolean {
@@ -40,7 +41,7 @@ export function useNotificationAction(options: NotificationActionOptions) {
   /** 60s 节流同步：窗口内多次调用只触发一次（现状 refreshUnread 轮询语义） */
   function requestThrottledSync(): Promise<void> {
     const t = now()
-    if (t - lastSync < THROTTLE_MS) return Promise.resolve()
+    if (lastSync !== null && t - lastSync < THROTTLE_MS) return Promise.resolve()
     lastSync = t
     return refreshUserInfo()
   }
