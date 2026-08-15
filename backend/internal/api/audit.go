@@ -22,6 +22,15 @@ type AuditLogPageResult struct {
 	Total int64            `json:"total"`
 }
 
+// auditLogListReq 审计日志列表查询参数。
+type auditLogListReq struct {
+	Page     int
+	PageSize int
+	ActorID  int
+	Role     string
+	Keyword  string
+}
+
 // AuditHandler 审计日志 handler。
 type AuditHandler struct {
 	svc *service.AuditService
@@ -45,16 +54,18 @@ func RegisterAuditRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.AuditS
 // List 审计日志列表 GET /api/admin/audit-logs?page=&page_size=&actor_id=&role=&keyword=
 func (h *AuditHandler) List(c *gin.Context) {
 	// 分页钳制（含页大小上限 100）收进 AuditService.List，handler 只负责传参。
-	Endpoint[struct{}, AuditLogPageResult]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*AuditLogPageResult, error) {
-			page := atoiDefault(c.Query("page"), 1)
-			pageSize := atoiDefault(c.Query("page_size"), 20)
-
-			actorID := atoiDefault(c.Query("actor_id"), 0)
-			role := strings.TrimSpace(c.Query("role"))
-			keyword := strings.TrimSpace(c.Query("keyword"))
-
-			logs, total, page, pageSize := h.svc.List(page, pageSize, actorID, role, keyword)
+	Endpoint[auditLogListReq, AuditLogPageResult]{
+		Parse: func(c *gin.Context) (*auditLogListReq, error) {
+			return &auditLogListReq{
+				Page:     atoiDefault(c.Query("page"), 1),
+				PageSize: atoiDefault(c.Query("page_size"), 20),
+				ActorID:  atoiDefault(c.Query("actor_id"), 0),
+				Role:     strings.TrimSpace(c.Query("role")),
+				Keyword:  strings.TrimSpace(c.Query("keyword")),
+			}, nil
+		},
+		Invoke: func(ctx context.Context, req *auditLogListReq) (*AuditLogPageResult, error) {
+			logs, total, page, pageSize := h.svc.List(req.Page, req.PageSize, req.ActorID, req.Role, req.Keyword)
 			return &AuditLogPageResult{
 				Items: logs,
 				Page:  page,
@@ -62,7 +73,7 @@ func (h *AuditHandler) List(c *gin.Context) {
 				Total: total,
 			}, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *AuditLogPageResult, _ error) {
+		Render: func(c *gin.Context, _ *auditLogListReq, resp *AuditLogPageResult, _ error) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)

@@ -48,15 +48,18 @@ func RegisterGradingRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Grad
 
 // GetSubmittedParticipants 已提交参与记录列表 GET /api/grading/participants
 func (h *GradingHandler) GetSubmittedParticipants(c *gin.Context) {
-	Endpoint[struct{}, []service.GradingParticipantDTO]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.GradingParticipantDTO, error) {
-			result, err := h.svc.GetSubmittedParticipants(queryIDPtr(c, "session_id"))
+	Endpoint[submittedParticipantsReq, []service.GradingParticipantDTO]{
+		Parse: func(c *gin.Context) (*submittedParticipantsReq, error) {
+			return &submittedParticipantsReq{SessionID: queryIDPtr(c, "session_id")}, nil
+		},
+		Invoke: func(ctx context.Context, req *submittedParticipantsReq) (*[]service.GradingParticipantDTO, error) {
+			result, err := h.svc.GetSubmittedParticipants(req.SessionID)
 			if err != nil {
 				return nil, err
 			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.GradingParticipantDTO, err error) {
+		Render: func(c *gin.Context, _ *submittedParticipantsReq, resp *[]service.GradingParticipantDTO, err error) {
 			if err != nil {
 				response.ServerError(c, err.Error())
 				return
@@ -229,12 +232,15 @@ func (h *GradingHandler) AIGradeAnswer(c *gin.Context) {
 
 // GetGradingStats 阅卷统计 GET /api/grading/stats
 func (h *GradingHandler) GetGradingStats(c *gin.Context) {
-	Endpoint[struct{}, map[string]any]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*map[string]any, error) {
-			result := h.svc.GetGradingStats(queryIDPtr(c, "session_id"))
+	Endpoint[gradingStatsReq, map[string]any]{
+		Parse: func(c *gin.Context) (*gradingStatsReq, error) {
+			return &gradingStatsReq{SessionID: queryIDPtr(c, "session_id")}, nil
+		},
+		Invoke: func(ctx context.Context, req *gradingStatsReq) (*map[string]any, error) {
+			result := h.svc.GetGradingStats(req.SessionID)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *map[string]any, _ error) {
+		Render: func(c *gin.Context, _ *gradingStatsReq, resp *map[string]any, _ error) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)
@@ -263,4 +269,14 @@ type gradeReq struct {
 type gradingIDReq struct {
 	AnswerID int
 	GraderID int
+}
+
+// submittedParticipantsReq 已提交参与记录列表请求（可选 session_id 过滤）。
+type submittedParticipantsReq struct {
+	SessionID *int
+}
+
+// gradingStatsReq 阅卷统计请求（可选 session_id 过滤）。
+type gradingStatsReq struct {
+	SessionID *int
 }

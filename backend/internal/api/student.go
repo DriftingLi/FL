@@ -37,11 +37,14 @@ func RegisterStudentRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Stud
 
 // GetProfile 学员信息+学习统计+课程进度 GET /api/student/profile
 func (h *StudentHandler) GetProfile(c *gin.Context) {
-	Endpoint[struct{}, service.StudentProfileDTO]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.StudentProfileDTO, error) {
-			return h.svc.GetProfile(middleware.CurrentUserID(c))
+	Endpoint[studentUserIDReq, service.StudentProfileDTO]{
+		Parse: func(c *gin.Context) (*studentUserIDReq, error) {
+			return &studentUserIDReq{UserID: middleware.CurrentUserID(c)}, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.StudentProfileDTO, err error) {
+		Invoke: func(ctx context.Context, req *studentUserIDReq) (*service.StudentProfileDTO, error) {
+			return h.svc.GetProfile(req.UserID)
+		},
+		Render: func(c *gin.Context, _ *studentUserIDReq, resp *service.StudentProfileDTO, err error) {
 			if err != nil {
 				response.NotFound(c, err.Error())
 				return
@@ -53,26 +56,56 @@ func (h *StudentHandler) GetProfile(c *gin.Context) {
 
 // GetRecords 学员学习记录分页 GET /api/student/records
 func (h *StudentHandler) GetRecords(c *gin.Context) {
-	Endpoint[struct{}, service.StudyRecordPageResult]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.StudyRecordPageResult, error) {
-			result := h.svc.GetRecords(middleware.CurrentUserID(c),
-				atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10),
-				c.Query("start_date"), c.Query("end_date"))
+	Endpoint[studyRecordsReq, service.StudyRecordPageResult]{
+		Parse: func(c *gin.Context) (*studyRecordsReq, error) {
+			return &studyRecordsReq{
+				UserID:    middleware.CurrentUserID(c),
+				Page:      atoiDefault(c.Query("page"), 1),
+				PageSize:  atoiDefault(c.Query("page_size"), 10),
+				StartDate: c.Query("start_date"),
+				EndDate:   c.Query("end_date"),
+			}, nil
+		},
+		Invoke: func(ctx context.Context, req *studyRecordsReq) (*service.StudyRecordPageResult, error) {
+			result := h.svc.GetRecords(req.UserID, req.Page, req.PageSize, req.StartDate, req.EndDate)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.StudyRecordPageResult, _ error) {
+		Render: func(c *gin.Context, _ *studyRecordsReq, resp *service.StudyRecordPageResult, _ error) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)
 }
 
+// studentUserIDReq 仅带学员 ID 的请求。
+type studentUserIDReq struct {
+	UserID int
+}
+
+// studyRecordsReq 学习记录分页请求。
+type studyRecordsReq struct {
+	UserID    int
+	Page      int
+	PageSize  int
+	StartDate string
+	EndDate   string
+}
+
+// studyStatsReq 学习统计请求（days 窗口）。
+type studyStatsReq struct {
+	UserID int
+	Days   int
+}
+
 // GetStudyStats 学员仪表盘学习统计（按天分组）GET /api/student/study-stats
 func (h *StudentHandler) GetStudyStats(c *gin.Context) {
-	Endpoint[struct{}, service.StudyDailyStatsDTO]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.StudyDailyStatsDTO, error) {
-			return h.svc.GetStudyStats(middleware.CurrentUserID(c), atoiDefault(c.Query("days"), 7)), nil
+	Endpoint[studyStatsReq, service.StudyDailyStatsDTO]{
+		Parse: func(c *gin.Context) (*studyStatsReq, error) {
+			return &studyStatsReq{UserID: middleware.CurrentUserID(c), Days: atoiDefault(c.Query("days"), 7)}, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.StudyDailyStatsDTO, _ error) {
+		Invoke: func(ctx context.Context, req *studyStatsReq) (*service.StudyDailyStatsDTO, error) {
+			return h.svc.GetStudyStats(req.UserID, req.Days), nil
+		},
+		Render: func(c *gin.Context, _ *studyStatsReq, resp *service.StudyDailyStatsDTO, _ error) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)

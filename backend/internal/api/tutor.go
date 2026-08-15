@@ -53,16 +53,20 @@ func RegisterTutorRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.TutorS
 
 // ListCourses 导师课程列表 GET /api/tutor/courses
 func (h *TutorHandler) ListCourses(c *gin.Context) {
-	Endpoint[struct{}, service.CoursePageResult]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.CoursePageResult, error) {
-			page := atoiDefault(c.Query("page"), 1)
-			pageSize := atoiDefault(c.Query("page_size"), 10)
-			specialtyID := queryIDPtr(c, "specialty_id")
-			levelID := queryIDPtr(c, "level_id")
-			result := h.svc.GetCourses(page, pageSize, specialtyID, levelID)
+	Endpoint[tutorCourseListReq, service.CoursePageResult]{
+		Parse: func(c *gin.Context) (*tutorCourseListReq, error) {
+			return &tutorCourseListReq{
+				Page:        atoiDefault(c.Query("page"), 1),
+				PageSize:    atoiDefault(c.Query("page_size"), 10),
+				SpecialtyID: queryIDPtr(c, "specialty_id"),
+				LevelID:     queryIDPtr(c, "level_id"),
+			}, nil
+		},
+		Invoke: func(ctx context.Context, req *tutorCourseListReq) (*service.CoursePageResult, error) {
+			result := h.svc.GetCourses(req.Page, req.PageSize, req.SpecialtyID, req.LevelID)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.CoursePageResult, _ error) {
+		Render: func(c *gin.Context, _ *tutorCourseListReq, resp *service.CoursePageResult, _ error) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)
@@ -70,14 +74,17 @@ func (h *TutorHandler) ListCourses(c *gin.Context) {
 
 // GetGradingStats 导师仪表盘阅卷统计 GET /api/tutor/grading-stats（按天分组）
 func (h *TutorHandler) GetGradingStats(c *gin.Context) {
-	Endpoint[struct{}, service.GradingStatsDTO]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.GradingStatsDTO, error) {
-			uid, _ := c.Get(string(middleware.CtxUserID))
-			tutorID, _ := uid.(int)
-			days := atoiDefault(c.Query("days"), 7)
-			return h.svc.GetGradingStats(tutorID, days), nil
+	Endpoint[tutorGradingStatsReq, service.GradingStatsDTO]{
+		Parse: func(c *gin.Context) (*tutorGradingStatsReq, error) {
+			return &tutorGradingStatsReq{
+				TutorID: middleware.CurrentUserID(c),
+				Days:    atoiDefault(c.Query("days"), 7),
+			}, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.GradingStatsDTO, _ error) {
+		Invoke: func(ctx context.Context, req *tutorGradingStatsReq) (*service.GradingStatsDTO, error) {
+			return h.svc.GetGradingStats(req.TutorID, req.Days), nil
+		},
+		Render: func(c *gin.Context, _ *tutorGradingStatsReq, resp *service.GradingStatsDTO, _ error) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)
@@ -258,4 +265,18 @@ func (h *TutorHandler) BatchDeleteChapterFiles(c *gin.Context) {
 // batchDeleteFilesReq 批量删除文件请求体。
 type batchDeleteFilesReq struct {
 	FileIDs []int `json:"file_ids"`
+}
+
+// tutorCourseListReq 导师课程列表查询参数。
+type tutorCourseListReq struct {
+	Page        int
+	PageSize    int
+	SpecialtyID *int
+	LevelID     *int
+}
+
+// tutorGradingStatsReq 导师阅卷统计请求（身份 + days 窗口）。
+type tutorGradingStatsReq struct {
+	TutorID int
+	Days    int
 }
