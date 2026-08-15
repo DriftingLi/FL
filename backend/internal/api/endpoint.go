@@ -18,7 +18,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -61,8 +60,7 @@ type Endpoint[Req, Resp any] struct {
 	Parse ParseFunc[Req]
 	// Invoke 调用 service。为 nil 时跳过调用（Resp 保持 nil）。
 	Invoke InvokeFunc[Req, Resp]
-	// Render 渲染响应。为 nil 时使用默认渲染器：err==nil → 200 Success；
-	// err 为 *ParseError → 其状态码；其他 err → 500 ServerError(err.Error())。
+	// Render 渲染响应，全权负责写响应（含 err→状态码/信封）。所有端点均须显式提供。
 	Render RenderFunc[Req, Resp]
 }
 
@@ -100,24 +98,7 @@ func (e Endpoint[Req, Resp]) parse(c *gin.Context) (*Req, error) {
 }
 
 func (e Endpoint[Req, Resp]) render(c *gin.Context, req *Req, resp *Resp, err error) {
-	if e.Render != nil {
-		e.Render(c, req, resp, err)
-		return
-	}
-	defaultRender(c, resp, err)
-}
-
-// defaultRender 默认渲染器：err==nil → 200 Success；*ParseError → 其状态码；其他 → 500。
-func defaultRender[Resp any](c *gin.Context, resp *Resp, err error) {
-	var pe *ParseError
-	switch {
-	case err == nil:
-		response.Success(c, deref(resp))
-	case errors.As(err, &pe):
-		renderStatus(c, pe.Status, pe.Message)
-	default:
-		response.ServerError(c, err.Error())
-	}
+	e.Render(c, req, resp, err)
 }
 
 // deref 解引用指针；nil 返回 nil（保持 JSON "data": null 语义）。

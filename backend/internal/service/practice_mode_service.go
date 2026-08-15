@@ -285,32 +285,34 @@ func (s *PracticeModeService) GetSequentialProgress(studentID int) *ProgressResu
 	return s.GetProgress(studentID, "sequential")
 }
 
-// SubmitAnswer 提交答案并判定。
+// SubmitAnswer 提交答案并判定。判分经 grading_engine.gradeOne 单题入口（错题入库/分值表经 flow 注入）。
 func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer any, practiceType string) (*SubmitResultDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, questionID).Error; err != nil {
 		return nil, errors.New("题目不存在")
 	}
-	isCorrect, _ := gradeQuestion(&q, userAnswer, 0)
-	userAnswerStr := stringifyAnswer(userAnswer)
+
+	engine := newGradingEngine(s.db)
+	flow := gradingFlow{
+		ai:       shortAnswerGraderOf(s.ai),
+		maxScore: practiceMaxScore,
+	}
+	gr := engine.gradeOne(flow, &q, userAnswer, studentID)
+
 	rec := model.QuestionPracticeRecord{
 		StudentID:    studentID,
 		QuestionID:   questionID,
-		IsCorrect:    isCorrect != nil && *isCorrect,
+		IsCorrect:    gr.IsCorrect != nil && *gr.IsCorrect,
 		PracticeType: orDefault(practiceType, "free"),
-		UserAnswer:   userAnswerStr,
+		UserAnswer:   stringifyAnswer(userAnswer),
 		CreatedAt:    beijingNow(),
 	}
 	if err := s.db.Create(&rec).Error; err != nil {
 		return nil, err
 	}
-	// 错题入库
-	if isCorrect != nil && !*isCorrect {
-		_ = addToWrongQuestions(s.db, studentID, questionID)
-	}
 
 	result := &SubmitResultDTO{
-		IsCorrect:     isCorrect,
+		IsCorrect:     gr.IsCorrect,
 		CorrectAnswer: q.Answer,
 		Explanation:   q.Explanation,
 		QuestionID:    questionID,
@@ -319,12 +321,8 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 	if q.Type == "short_answer" {
 		result.ReferenceAnswer = q.ReferenceAnswer
 		result.ScoringCriteria = q.ScoringCriteria
-		maxScore := q.Score
-		if maxScore <= 0 {
-			maxScore = 10
-		}
-		result.MaxScore = maxScore
-		if sg := gradeShortAnswer(shortAnswerGraderOf(s.ai), &q, userAnswerStr, float64(maxScore), nil); sg != nil {
+		result.MaxScore = int(gr.MaxScore)
+		if sg := gr.ShortAnswer; sg != nil {
 			result.AIScore = &sg.Score
 			result.AIComment = sg.Comment
 			if sg.Fallback {
@@ -338,6 +336,18 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 		}
 	}
 	return result, nil
+}
+
+// practiceMaxScore 练习流单题满分解析：客观题按定级分值表，简答题按题目自定义分（默认 10）。
+// 与 SubmitAnswer 既有语义一致（客观走 level_exam 分值表、简答走 q.Score）。
+func practiceMaxScore(q *model.Question) float64 {
+	if q.Type == "short_answer" {
+		if q.Score > 0 {
+			return float64(q.Score)
+		}
+		return 10
+	}
+	return questionMaxScore("level_exam", q.Type)
 }
 
 // GetStats 学员练习统计（经统计聚合 module，一次 GROUP BY 按题型聚合；by_type 正确率为加性新增 key）。

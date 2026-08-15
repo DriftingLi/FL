@@ -184,6 +184,11 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *updateProfileReq, resp *service.ProfileChangeRequestDTO, err error) {
 			if err != nil {
+				var pe *ParseError
+				if asParseError(err, &pe) {
+					renderStatus(c, pe.Status, pe.Message)
+					return
+				}
 				response.BadRequest(c, err.Error())
 				return
 			}
