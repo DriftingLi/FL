@@ -43,11 +43,9 @@ func RegisterAuditRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.AuditS
 
 // List 审计日志列表 GET /api/admin/audit-logs?page=&page_size=&actor_id=&role=&keyword=
 func (h *AuditHandler) List(c *gin.Context) {
+	// 分页钳制（含页大小上限 100）收进 AuditService.List，handler 只负责传参。
 	page := atoiDefault(c.Query("page"), 1)
 	pageSize := atoiDefault(c.Query("page_size"), 20)
-	if pageSize > 100 {
-		pageSize = 100
-	}
 
 	actorID := atoiDefault(c.Query("actor_id"), 0)
 	role := strings.TrimSpace(c.Query("role"))

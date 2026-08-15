@@ -2,8 +2,12 @@ import type { FormItemRule } from 'element-plus'
 
 // ===== 格式校验单一事实源（useSendCode 与表单规则共用） =====
 
-/** 邮箱：与后端 net/mail 语义对齐的宽松校验（接受无点域，如 a@b.c / a@b） */
-export const isValidEmail = (value: string): boolean => /^[^\s@]+@[^\s@]+$/.test(value)
+// 邮箱格式：local@domain，domain 含点（与后端 IsValidEmail 的 net/mail + 域名含点语义对齐，
+// 拒绝 a@b 这类无点域）。isValidEmail 与 requiredEmailRules 共用这一单一模式（seam 单一事实源）。
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** 邮箱：与后端 net/mail + 域名含点语义对齐（拒绝无点域 a@b，接受 a@b.c）。 */
+export const isValidEmail = (value: string): boolean => EMAIL_PATTERN.test(value)
 
 /** 手机号：11 位，1[3-9] 开头 */
 export const isValidPhone = (value: string): boolean => /^1[3-9]\d{9}$/.test(value)
@@ -64,7 +68,7 @@ export const companyRules: FormItemRule[] = [
 // 邮箱注册/登录必填校验（与后端 net/mail 语义对齐）
 export const requiredEmailRules: FormItemRule[] = [
   { required: true, message: '请输入邮箱', trigger: 'blur' },
-  { pattern: /^[^\s@]+@[^\s@]+$/, message: '请输入正确的邮箱地址', trigger: 'blur' }
+  { pattern: EMAIL_PATTERN, message: '请输入正确的邮箱地址', trigger: 'blur' }
 ]
 
 export const emailCodeRules: FormItemRule[] = [

@@ -404,6 +404,9 @@ func (s *LevelExamService) SaveAnswer(participantID, studentID int, answers map[
 }
 
 // SubmitExam 交卷评分。
+// 语义：提交后即「待阅卷结算」——客观题即时判题回填 ObjectiveScore，
+// 简答/未人工阅卷答题的分数与 IsPassed 不在此结算，统由阅卷端
+// GradingService.updateParticipantScore 在所有答题阅卷后置后重算。
 func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bool) (*LevelExamParticipantDTO, error) {
 	var p model.ExamParticipant
 	if err := s.db.First(&p, participantID).Error; err != nil {
@@ -420,8 +423,6 @@ func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bo
 	_, qMap := loadOrderedQuestions(s.db, ids)
 
 	objectiveScore := 0.0
-	subjectiveScore := 0.0
-	hasSubjective := false
 
 	// 清旧答题
 	s.db.Where("exam_participant_id = ?", p.ID).Delete(&model.ExamAnswer{})
@@ -436,7 +437,6 @@ func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bo
 		isCorrect, earned := gradeQuestion(question, userAnswer, maxScore)
 
 		if question.Type == "short_answer" {
-			hasSubjective = true
 			ans := model.ExamAnswer{
 				ExamParticipantID: p.ID,
 				QuestionID:        qid,
@@ -455,7 +455,6 @@ func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bo
 				ans.AIGradedAt = &now
 				s.db.Save(&ans)
 			}
-			_ = hasSubjective
 		} else {
 			objectiveScore += earned
 			if isCorrect != nil && !*isCorrect {
@@ -482,13 +481,17 @@ func (s *LevelExamService) SubmitExam(participantID, studentID int, isTimeout bo
 	submitTime := beijingNow()
 	p.SubmitTime = &submitTime
 	p.ObjectiveScore = floatPtr(objectiveScore)
-	p.SubjectiveScore = floatPtr(subjectiveScore)
+	// 主观分（简答）待阅卷结算：提交时不回填真实分，恒记 0；
+	// 阅卷完成后由 GradingService.updateParticipantScore 置后重算并回填。
+	p.SubjectiveScore = floatPtr(0)
 
-	// 是否还有未阅卷答题
+	// 提交后待阅卷结算：交卷时尚未手动阅卷的答题（grader_id IS NULL，含全部简答与客观题）
+	// 不计入总分。Score/IsPassed 不在此判定，而由阅卷端 GradingService.updateParticipantScore
+	// 在所有答题阅卷完成后置后重算；此处仅当确无未阅卷答题时用客观分结算（主观分提交时恒 0）。
 	var ungradedCount int64
 	s.db.Model(&model.ExamAnswer{}).Where("exam_participant_id = ? AND grader_id IS NULL", p.ID).Count(&ungradedCount)
 	if ungradedCount == 0 {
-		total := objectiveScore + subjectiveScore
+		total := objectiveScore // 主观分提交时恒 0，故 total 即客观分（等价于 objectiveScore + 0）
 		p.Score = floatPtr(total)
 		var session model.ExamSession
 		passScore := 60.0

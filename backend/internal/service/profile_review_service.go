@@ -301,12 +301,3 @@ func (s *ProfileReviewService) toDTO(req *model.ProfileChangeRequest, user *mode
 		CreatedAt:    formatISO(req.CreatedAt),
 	}
 }
-
-// formatTimePtr 格式化时间指针，nil 返回 nil。
-func formatTimePtr(t *time.Time) *string {
-	if t == nil {
-		return nil
-	}
-	s := formatISO(*t)
-	return &s
-}
