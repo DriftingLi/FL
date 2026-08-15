@@ -3,7 +3,7 @@
 		<!-- 自定义导航栏 -->
 		<view class="custom-nav" :style="{ paddingTop: statusBarHeight + 'px' }">
 			<view class="nav-content">
-				<text class="nav-icon" @click="toggleSidebar">&#9776;</text>
+				<text class="nav-icon" @click="toggleSidebarLeft">&#9776;</text>
 				<view class="nav-center">
                     <text class="nav-title">维修助手</text>
 					<view class="version-tabs">
@@ -63,17 +63,14 @@
 					<text class="model-name">{{ currentModelName }}</text>
 					<text class="model-arrow">&#9662;</text>
 				</view>
-				<view class="deep-thinking" :class="{ active: deepThinking }" @click="deepThinking = !deepThinking">
-					<text class="dt-text">深度思考</text>
-				</view>
 			</view>
 			<view class="input-row">
 				<text class="tool-icon" @click="chooseImage">&#128206;</text>
 				<view class="input-box">
-					<input v-model="inputText" class="chat-input" placeholder="提出你想要知道的问题" confirm-type="send" @confirm="sendInput" />
+					<input v-model="inputText" class="chat-input" placeholder="提出你想要知道的问题" confirm-type="send" @confirm="onSend" />
 				</view>
 				<text class="tool-icon" @click="startVoice">&#127908;</text>
-				<text class="send-btn" :class="{ disabled: inputText.length == 0 }" @click="sendInput">&#10148;</text>
+				<text class="send-btn" :class="{ disabled: inputText.length == 0 }" @click="onSend">&#10148;</text>
 			</view>
 		</view>
 
@@ -181,25 +178,37 @@
 	import {
 		getPublicModelsApi,
 		getUserModelsApi,
-		getSessionsApi,
-		createSessionApi,
-		deleteSessionApi,
-		getSessionMessagesApi,
-		streamChatApi,
 	} from '../../api/ai-assistant'
-	import type { StreamChatParams } from '../../api/ai-assistant'
-	import type { AIModelOption, AIChatSession, AIChatMessage, AIFunctionItem } from '../../types/index'
+	import { useAiChat } from '../../composables/useAiChat'
+	import type { ChatBodyBuilder } from '../../composables/useAiChat'
+	import type { AiModel, AiUserModel, AIModelOption, AIFunctionItem } from '../../types/index'
 	import { isProPaid, getVersion, setVersion } from '../../utils/aiPay'
+	import { STORAGE_KEY_AI_SELECTED_USER_MODEL } from '../../constants/app'
 	import TabBar from '../../components/tab-bar/tab-bar.uvue'
 
 	const auth = useAuthStore()
-	const statusBarHeight = ref<number>(20)
+
+	// 聊天核心逻辑（基础版/专业版共用，包含会话/消息/输入/侧栏/发送状态与方法）
+	const {
+		statusBarHeight,
+		sessions,
+		messages,
+		inputText,
+		thinking,
+		scrollIntoViewId,
+		sidebarLeft,
+		sidebarRight,
+		loadSessions,
+		loadSession,
+		startNewChat,
+		onDeleteSession,
+		toggleSidebarLeft,
+		toggleSidebarRight,
+		sendInput,
+	} = useAiChat()
 
 	// 视图状态
-	const sidebarLeft = ref<boolean>(false)
-	const sidebarRight = ref<boolean>(false)
 	const showModelPicker = ref<boolean>(false)
-	const deepThinking = ref<boolean>(false)
 
 	// 自定义 API Key 临时使用
 	const showCustomForm = ref<boolean>(false)
@@ -207,25 +216,27 @@
 	const customBaseUrl = ref<string>('')
 	const customApiKey = ref<string>('')
 
-	// 数据
-	const models = ref<AIModelOption[]>([])
-	const userModels = ref<AIModelOption[]>([])
-	const sessions = ref<AIChatSession[]>([])
-	const currentSession = ref<AIChatSession | null>(null)
-	const messages = ref<AIChatMessage[]>([])
-	const inputText = ref<string>('')
-	const thinking = ref<boolean>(false)
-	const scrollIntoViewId = ref<string>('')
+	// 数据（模型）
+	const models = ref<AiModel[]>([])
+	const userModels = ref<AiUserModel[]>([])
 
 	const currentModelId = ref<number>(0)
 	const currentModelSource = ref<'admin' | 'user' | 'custom'>('admin')
 	const allModels = computed<AIModelOption[]>(() : AIModelOption[] => {
 		const arr : AIModelOption[] = []
 		for (let i = 0; i < models.value.length; i++) {
-			arr.push(models.value[i])
+			const m = models.value[i]
+			const item : AIModelOption = {
+				id: m.id, name: m.name, model: m.model, source: m.source, description: m.description,
+			}
+			arr.push(item)
 		}
 		for (let i = 0; i < userModels.value.length; i++) {
-			arr.push(userModels.value[i])
+			const m = userModels.value[i]
+			const item : AIModelOption = {
+				id: m.id, name: m.name, model: m.model, source: 'user', base_url: m.base_url,
+			}
+			arr.push(item)
 		}
 		return arr
 	})
@@ -242,6 +253,44 @@
 		return '选择模型'
 	})
 
+	// 专业版请求体：按 model_source 分支构造（admin / user / custom）
+	const buildBody : ChatBodyBuilder = (history : { role : string; content : string }[], sessionID : number) : UTSJSONObject => {
+		const params : UTSJSONObject = {
+			session_id: sessionID,
+			model_source: currentModelSource.value,
+			messages: history,
+		}
+		if (currentModelSource.value == 'admin') {
+			params['config_id'] = currentModelId.value
+		} else if (currentModelSource.value == 'user') {
+			params['user_model_id'] = currentModelId.value
+		} else {
+			params['custom_api_key'] = customApiKey.value
+			params['custom_base_url'] = customBaseUrl.value
+			params['custom_model'] = customModel.value
+		}
+		return params
+	}
+
+	// 发送前校验（专业版需有可用模型或已配置自定义模型），通过后走公共 sendInput
+	function onSend() : void {
+		if (models.value.length == 0 && userModels.value.length == 0 && currentModelSource.value != 'custom') {
+			uni.showToast({ title: '暂无可用的 AI 模型', icon: 'none' })
+			return
+		}
+		if (currentModelSource.value == 'custom' && customModel.value.trim().length == 0) {
+			uni.showToast({ title: '请先配置自定义模型', icon: 'none' })
+			return
+		}
+		sendInput(currentModelName.value, buildBody)
+	}
+
+	// 功能入口 / 快捷提示语点击：填入输入框并发送
+	function sendText(text : string) : void {
+		inputText.value = text
+		onSend()
+	}
+
 	const functionItems : AIFunctionItem[] = [
 		{ key: 'fault-code', title: '故障代码查询', icon: '🔧', prompt: '帮我查询叉车故障代码含义' },
 		{ key: 'drawing', title: '图纸识别', icon: '📐', prompt: '请识别这张叉车图纸' },
@@ -250,9 +299,9 @@
 	]
 
 	const quickPrompts : string[] = [
-		'如何高效阅读书籍？',
-		'帮我写近期的学习汇报',
-		'总结这个章节的主要内容',
+		'叉车液压系统常见故障有哪些，如何排查？',
+		'叉车启动困难可能是什么原因？',
+		'叉车日常保养的检查要点有哪些？',
 	]
 
 	// 生命周期
@@ -287,9 +336,9 @@
 			loadSessions()
 		}
 		// 从自定义模型管理页选择返回时，选中对应模型
-		const selectedRaw = uni.getStorageSync('ai_selected_user_model') as string
+		const selectedRaw = uni.getStorageSync(STORAGE_KEY_AI_SELECTED_USER_MODEL) as string
 		if (selectedRaw.length > 0) {
-			uni.removeStorageSync('ai_selected_user_model')
+			uni.removeStorageSync(STORAGE_KEY_AI_SELECTED_USER_MODEL)
 			try {
 				const sel = JSON.parse(selectedRaw) as UTSJSONObject
 				const id = parseFloat(`${sel['id']}`)
@@ -304,8 +353,7 @@
 	// 数据加载
 	async function loadModels() : Promise<void> {
 		try {
-			const res = await getPublicModelsApi()
-			const list = (res['list'] ?? res) as AIModelOption[]
+			const list = await getPublicModelsApi()
 			models.value = list
 			if (list.length > 0 && currentModelId.value == 0) {
 				currentModelId.value = list[0].id
@@ -316,65 +364,11 @@
 		// 登录用户同时加载自定义模型
 		if (auth.isLoggedIn.value) {
 			try {
-				const res2 = await getUserModelsApi()
-				const list2 = (res2['list'] ?? res2) as AIModelOption[]
-				userModels.value = list2
+				userModels.value = await getUserModelsApi()
 			} catch (e) {
 				console.error('loadUserModels failed:', e)
 			}
 		}
-	}
-
-	async function loadSessions() : Promise<void> {
-		try {
-			const res = await getSessionsApi()
-			sessions.value = (res['sessions'] ?? res) as AIChatSession[]
-		} catch (e) {
-			console.error('loadSessions failed:', e)
-			sessions.value = []
-		}
-	}
-
-	async function loadSession(session : AIChatSession) : Promise<void> {
-		currentSession.value = session
-		sidebarLeft.value = false
-		sidebarRight.value = false
-		try {
-			const res = await getSessionMessagesApi(session.id)
-			messages.value = (res['messages'] ?? res) as AIChatMessage[]
-		} catch (e) {
-			console.error('loadSession failed:', e)
-			messages.value = []
-		}
-	}
-
-	async function startNewChat() : Promise<void> {
-		currentSession.value = null
-		messages.value = []
-		inputText.value = ''
-		sidebarLeft.value = false
-		sidebarRight.value = false
-	}
-
-	async function onDeleteSession(id : number) : Promise<void> {
-		uni.showModal({
-			title: '确认删除',
-			content: '删除后不可恢复',
-			success: async (res) => {
-				if (res.confirm) {
-					try {
-						await deleteSessionApi(id)
-						if (currentSession.value != null && currentSession.value.id == id) {
-							currentSession.value = null
-							messages.value = []
-						}
-						await loadSessions()
-					} catch (e) {
-						console.error('deleteSession failed:', e)
-					}
-				}
-			},
-		})
 	}
 
 	function goBasic() : void {
@@ -383,124 +377,12 @@
 		uni.reLaunch({ url: '/pages/ai-assistant/ai-basic' })
 	}
 
-	function toggleSidebar() : void {
-		sidebarLeft.value = !sidebarLeft.value
-	}
-
-	function toggleSidebarRight() : void {
-		sidebarRight.value = !sidebarRight.value
-	}
-
 	function onFunctionClick(item : AIFunctionItem) : void {
 		if (item.key == 'drawing') {
 			chooseImage(item.prompt)
 			return
 		}
 		sendText(item.prompt)
-	}
-
-	function sendText(text : string) : void {
-		inputText.value = text
-		sendInput()
-	}
-
-	function sendInput() : void {
-		const text = inputText.value.trim()
-		if (text.length == 0) return
-		if (thinking.value) {
-			uni.showToast({ title: '请等待当前回复完成', icon: 'none' })
-			return
-		}
-		if (models.value.length == 0 && userModels.value.length == 0 && currentModelSource.value != 'custom') {
-			uni.showToast({ title: '暂无可用的 AI 模型', icon: 'none' })
-			return
-		}
-		if (currentModelSource.value == 'custom' && customModel.value.trim().length == 0) {
-			uni.showToast({ title: '请先配置自定义模型', icon: 'none' })
-			return
-		}
-
-		const userMsg : AIChatMessage = { id: 0, role: 'user', content: text, created_at: '' }
-		messages.value.push(userMsg)
-		inputText.value = ''
-		scrollToBottom()
-
-		doStreamChat()
-	}
-
-	async function doStreamChat() : Promise<void> {
-		thinking.value = true
-		const assistantMsg : AIChatMessage = { id: 0, role: 'assistant', content: '', created_at: '' }
-		messages.value.push(assistantMsg)
-		scrollToBottom()
-
-		// 构建历史消息
-		const history : { role : string; content : string }[] = []
-		for (let i = 0; i < messages.value.length - 1; i++) {
-			const m = messages.value[i]
-			if (m.role == 'user' || m.role == 'assistant') {
-				history.push({ role: m.role, content: m.content })
-			}
-		}
-
-		let sessionID = currentSession.value?.id ?? 0
-		// 登录用户首次对话时创建会话
-		if (auth.isLoggedIn.value && sessionID == 0 && history.length == 1) {
-			try {
-				const s = await createSessionApi('新会话', currentModelName.value) as AIChatSession
-				currentSession.value = s
-				sessionID = s.id
-				await loadSessions()
-			} catch (e) {
-				console.error('createSession failed:', e)
-			}
-		}
-
-		const params : UTSJSONObject = {
-			session_id: sessionID,
-			model_source: currentModelSource.value,
-			messages: history,
-		}
-		if (currentModelSource.value == 'admin') {
-			params['config_id'] = currentModelId.value
-		} else if (currentModelSource.value == 'user') {
-			params['user_model_id'] = currentModelId.value
-		} else {
-			params['custom_api_key'] = customApiKey.value
-			params['custom_base_url'] = customBaseUrl.value
-			params['custom_model'] = customModel.value
-		}
-
-		streamChatApi(params as StreamChatParams, {
-			onMessage: (chunk : string) => {
-				assistantMsg.content += chunk
-				scrollToBottom()
-			},
-			onError: (msg : string) => {
-				thinking.value = false
-				assistantMsg.content += '\n[错误：' + msg + ']'
-				uni.showToast({ title: msg, icon: 'none' })
-				scrollToBottom()
-			},
-			onDone: () => {
-				thinking.value = false
-				scrollToBottom()
-			},
-		})
-
-		// 兜底：8 秒后仍未结束则重置 thinking（部分端 SSE 异常时）
-		setTimeout(() => {
-			if (thinking.value) {
-				thinking.value = false
-			}
-		}, 8000)
-	}
-
-	function scrollToBottom() : void {
-		scrollIntoViewId.value = 'bottom-anchor'
-		setTimeout(() => {
-			scrollIntoViewId.value = ''
-		}, 300)
 	}
 
 	function selectModel(m : AIModelOption) : void {
@@ -600,7 +482,7 @@
 
 	function goProfile() : void {
 		sidebarRight.value = false
-		uni.showToast({ title: '个人中心开发中', icon: 'none' })
+		uni.switchTab({ url: '/pages/profile/profile' })
 	}
 
 	function goSettings() : void {
@@ -820,26 +702,6 @@
 	.model-arrow {
 		font-size: 20rpx;
 		color: #999999;
-	}
-
-	.deep-thinking {
-		background-color: #f5f5f5;
-		border-radius: 24rpx;
-		padding: 10rpx 20rpx;
-	}
-
-	.deep-thinking.active {
-		background-color: #e3f2fd;
-	}
-
-	.dt-text {
-		font-size: 24rpx;
-		color: #666666;
-	}
-
-	.deep-thinking.active .dt-text {
-		color: #2979ff;
-		font-weight: 500;
 	}
 
 	.input-row {

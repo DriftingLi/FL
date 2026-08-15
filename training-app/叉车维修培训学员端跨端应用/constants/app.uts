@@ -9,6 +9,12 @@ export const STORAGE_KEY_TOKEN = 'auth_token'
 /** 存储 key: 用户信息（JSON 字符串） */
 export const STORAGE_KEY_USER = 'auth_user'
 
+/**
+ * 存储 key: AI 助手——从自定义模型管理页选中的模型（跨页传递，JSON 字符串）
+ * 写入于 custom-models.uvue 的 onSelect，消费并清除于 ai-assistant.uvue 的 onShow
+ */
+export const STORAGE_KEY_AI_SELECTED_USER_MODEL = 'ai_selected_user_model'
+
 /** 仪表盘九宫格入口配置
  * - available=true 表示已开发，点击跳转 path
  * - available=false 表示占位，点击提示"功能开发中"

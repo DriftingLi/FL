@@ -68,12 +68,13 @@
 	import { useStatusBarHeight } from '../../utils/system'
 	import { goBack } from '../../utils/navigation'
 	import { getUserModelsApi, saveUserModelApi, deleteUserModelApi } from '../../api/ai-assistant'
-	import type { AIModelOption } from '../../types/index'
+	import type { AiUserModel } from '../../types/index'
+	import { STORAGE_KEY_AI_SELECTED_USER_MODEL } from '../../constants/app'
 
 	const statusBarHeight = useStatusBarHeight()
 	const windowHeight = uni.getSystemInfoSync().windowHeight
 
-	const userModels = ref<AIModelOption[]>([])
+	const userModels = ref<AiUserModel[]>([])
 	const formVisible = ref<boolean>(false)
 	const editingId = ref<number>(0)
 	const saving = ref<boolean>(false)
@@ -88,9 +89,7 @@
 
 	async function loadModels() : Promise<void> {
 		try {
-			const res = await getUserModelsApi()
-			const arr = (res['list'] ?? res['models'] ?? res) as AIModelOption[]
-			userModels.value = arr
+			userModels.value = await getUserModelsApi()
 		} catch (e) {
 			console.error('[custom-models] load failed:', e)
 			userModels.value = []
@@ -119,7 +118,7 @@
 		formVisible.value = true
 	}
 
-	function startEdit(m : AIModelOption) : void {
+	function startEdit(m : AiUserModel) : void {
 		editingId.value = m.id
 		formName.value = m.name
 		formModel.value = m.model
@@ -192,9 +191,9 @@
 		})
 	}
 
-	function onSelect(m : AIModelOption) : void {
+	function onSelect(m : AiUserModel) : void {
 		// 返回 AI 助手页并选中该模型：通过 storage 传递选中模型
-		uni.setStorageSync('ai_selected_user_model', JSON.stringify({ id: m.id, name: m.name }))
+		uni.setStorageSync(STORAGE_KEY_AI_SELECTED_USER_MODEL, JSON.stringify({ id: m.id, name: m.name }))
 		goBack()
 	}
 

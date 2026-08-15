@@ -637,24 +637,6 @@ export type AIModelOption = {
     api_key ?: string
 }
 
-/** AI 会话（聊天页使用） */
-export type AIChatSession = {
-    id : number
-    title : string
-    model_source : string
-    model_id : number
-    created_at : string
-    updated_at : string
-}
-
-/** AI 对话消息（聊天页使用，含 id/时间） */
-export type AIChatMessage = {
-    id : number
-    role : string       // user | assistant | system
-    content : string
-    created_at : string
-}
-
 /** AI 功能快捷入口 */
 export type AIFunctionItem = {
     key : string

@@ -55,7 +55,7 @@ function buildUserModel(obj : UTSJSONObject) : AiUserModel {
 	} as AiUserModel
 }
 
-function buildSession(obj : UTSJSONObject) : AiSession {
+export function buildSession(obj : UTSJSONObject) : AiSession {
 	return {
 		id: toNumber(obj['id'], toNumber(obj['session_id'])),
 		title: toStr(obj['title'], '新对话'),
