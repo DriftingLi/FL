@@ -119,68 +119,62 @@ func (h *GradingHandler) BatchConfirmObjective(c *gin.Context) {
 	}.Handle(c)
 }
 
-// GradeAnswer 首次阅卷 POST /api/grading/:answer_id/grade
-func (h *GradingHandler) GradeAnswer(c *gin.Context) {
+// gradeAnswer 首次阅卷/复核共用的 Endpoint 配置：仅 Invoke 一行不同。
+// mode 为 "grade"（首次阅卷）或 "regrade"（复核），switches service 调用与成功文案。
+func (h *GradingHandler) gradeAnswer(c *gin.Context, mode string) {
 	Endpoint[gradeReq, service.LevelExamAnswerDTO]{
-		Parse: func(c *gin.Context) (*gradeReq, error) {
-			uid, _ := c.Get(string(middleware.CtxUserID))
-			graderID, _ := uid.(int)
-			answerID, err := pathInt(c, "answer_id", "答题记录ID无效")
-			if err != nil {
-				return nil, err
-			}
-			var body struct {
-				Score   float64 `json:"score"`
-				Comment string  `json:"comment"`
-			}
-			if err := c.ShouldBindJSON(&body); err != nil {
-				return nil, badRequest("请求数据无效")
-			}
-			return &gradeReq{AnswerID: answerID, Score: body.Score, GraderID: graderID, Comment: body.Comment}, nil
-		},
+		Parse: h.parseGradeReq,
 		Invoke: func(ctx context.Context, req *gradeReq) (*service.LevelExamAnswerDTO, error) {
+			if mode == "regrade" {
+				return h.svc.RegradeAnswer(req.AnswerID, req.Score, req.GraderID, req.Comment)
+			}
 			return h.svc.GradeAnswer(req.AnswerID, req.Score, req.GraderID, req.Comment)
 		},
-		Render: func(c *gin.Context, _ *gradeReq, resp *service.LevelExamAnswerDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "阅卷成功", resp)
-		},
+		Render: h.renderGradeReq(mode),
 	}.Handle(c)
+}
+
+// parseGradeReq 阅卷/复核请求体解析（shared）。
+func (h *GradingHandler) parseGradeReq(c *gin.Context) (*gradeReq, error) {
+	uid, _ := c.Get(string(middleware.CtxUserID))
+	graderID, _ := uid.(int)
+	answerID, err := pathInt(c, "answer_id", "答题记录ID无效")
+	if err != nil {
+		return nil, err
+	}
+	var body struct {
+		Score   float64 `json:"score"`
+		Comment string  `json:"comment"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		return nil, badRequest("请求数据无效")
+	}
+	return &gradeReq{AnswerID: answerID, Score: body.Score, GraderID: graderID, Comment: body.Comment}, nil
+}
+
+// renderGradeReq 阅卷/复核响应渲染（shared），按 mode 区分为成功文案。
+func (h *GradingHandler) renderGradeReq(mode string) func(c *gin.Context, _ *gradeReq, resp *service.LevelExamAnswerDTO, err error) {
+	msg := "阅卷成功"
+	if mode == "regrade" {
+		msg = "复核成功"
+	}
+	return func(c *gin.Context, _ *gradeReq, resp *service.LevelExamAnswerDTO, err error) {
+		if err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.SuccessWithMsg(c, msg, resp)
+	}
+}
+
+// GradeAnswer 首次阅卷 POST /api/grading/:answer_id/grade
+func (h *GradingHandler) GradeAnswer(c *gin.Context) {
+	h.gradeAnswer(c, "grade")
 }
 
 // RegradeAnswer 复核 POST /api/grading/:answer_id/regrade
 func (h *GradingHandler) RegradeAnswer(c *gin.Context) {
-	Endpoint[gradeReq, service.LevelExamAnswerDTO]{
-		Parse: func(c *gin.Context) (*gradeReq, error) {
-			uid, _ := c.Get(string(middleware.CtxUserID))
-			graderID, _ := uid.(int)
-			answerID, err := pathInt(c, "answer_id", "答题记录ID无效")
-			if err != nil {
-				return nil, err
-			}
-			var body struct {
-				Score   float64 `json:"score"`
-				Comment string  `json:"comment"`
-			}
-			if err := c.ShouldBindJSON(&body); err != nil {
-				return nil, badRequest("请求数据无效")
-			}
-			return &gradeReq{AnswerID: answerID, Score: body.Score, GraderID: graderID, Comment: body.Comment}, nil
-		},
-		Invoke: func(ctx context.Context, req *gradeReq) (*service.LevelExamAnswerDTO, error) {
-			return h.svc.RegradeAnswer(req.AnswerID, req.Score, req.GraderID, req.Comment)
-		},
-		Render: func(c *gin.Context, _ *gradeReq, resp *service.LevelExamAnswerDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "复核成功", resp)
-		},
-	}.Handle(c)
+	h.gradeAnswer(c, "regrade")
 }
 
 // ConfirmAIGrading 确认 AI 评分 POST /api/grading/:answer_id/confirm-ai

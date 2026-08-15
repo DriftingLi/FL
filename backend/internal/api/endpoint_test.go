@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+
+	"forklift-training/pkg/response"
 )
 
 func init() {
@@ -27,12 +29,27 @@ func doEndpoint(t *testing.T, e Endpoint[int, string]) *httptest.ResponseRecorde
 	return w
 }
 
+// renderAsDefault 测试用显式 Render：复刻既有默认渲染语义（err==nil → 200；
+// *ParseError → 其状态码；其他 → 500）。原 defaultRender 删除后，测试改用显式 Render 断言同一行为。
+func renderAsDefault[Resp any](c *gin.Context, _ *int, resp *Resp, err error) {
+	var pe *ParseError
+	switch {
+	case err == nil:
+		response.Success(c, deref(resp))
+	case asParseError(err, &pe):
+		renderStatus(c, pe.Status, pe.Message)
+	default:
+		response.ServerError(c, err.Error())
+	}
+}
+
 // TestEndpoint_ParseFailure_BadRequest parse 返回 badRequest → 400 + 原文案。
 func TestEndpoint_ParseFailure_BadRequest(t *testing.T) {
 	e := Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
 			return nil, badRequest("参数非法")
 		},
+		Render: renderAsDefault[string],
 	}
 	w := doEndpoint(t, e)
 	if w.Code != http.StatusBadRequest {
@@ -49,6 +66,7 @@ func TestEndpoint_InvokeServiceError_ServerError(t *testing.T) {
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			return nil, errors.New("服务崩了")
 		},
+		Render: renderAsDefault[string],
 	}
 	w := doEndpoint(t, e)
 	if w.Code != http.StatusInternalServerError {
@@ -65,6 +83,7 @@ func TestEndpoint_ParseNotFound(t *testing.T) {
 		Parse: func(c *gin.Context) (*int, error) {
 			return nil, &ParseError{Status: http.StatusNotFound, Message: "不存在"}
 		},
+		Render: renderAsDefault[string],
 	}
 	w := doEndpoint(t, e)
 	if w.Code != http.StatusNotFound {
@@ -79,6 +98,7 @@ func TestEndpoint_Success_200(t *testing.T) {
 			v := "ok"
 			return &v, nil
 		},
+		Render: renderAsDefault[string],
 	}
 	w := doEndpoint(t, e)
 	if w.Code != http.StatusOK {
@@ -95,6 +115,7 @@ func TestEndpoint_PanicRecovery_ServerError(t *testing.T) {
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			panic("boom")
 		},
+		Render: renderAsDefault[string],
 	}
 	w := doEndpoint(t, e)
 	if w.Code != http.StatusInternalServerError {
@@ -115,6 +136,7 @@ func TestEndpoint_NilParse_UsesZeroReq(t *testing.T) {
 			v := "zero"
 			return &v, nil
 		},
+		Render: renderAsDefault[string],
 	}
 	w := doEndpoint(t, e)
 	if w.Code != http.StatusOK {
