@@ -95,13 +95,13 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { adminFeaturedApi, featuredCategoryOptions, categoryLabel } from '@/api/featured'
+import { adminFeaturedApi, featuredCategoryOptions, categoryLabel, type FeaturedContent } from '@/api/featured'
 import { formatDateTime } from '@/utils/format'
 
 const router = useRouter()
 
 const loading = ref(false)
-const list = ref<any[]>([])
+const list = ref<FeaturedContent[]>([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
@@ -112,7 +112,7 @@ const filterStatus = ref<number | undefined>(undefined)
 async function loadList() {
   loading.value = true
   try {
-    const params: any = {
+    const params: { page?: number; page_size?: number; category?: string; status?: string } = {
       page: currentPage.value,
       page_size: pageSize.value
     }

@@ -35,7 +35,9 @@ export interface BatchRejectPayload {
 /** 题库统计（学员端卡片用） */
 export interface QuestionBankStats {
   total?: number
-  [key: string]: unknown
+  published?: number
+  pending?: number
+  total_count?: number
 }
 
 export const questionBankApi = {

@@ -58,6 +58,7 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Bell } from '@element-plus/icons-vue'
 import { notificationApi, type NotificationItem } from '@/api/notification'
+import { useNotificationAction } from '@/composables/useNotificationAction'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/format'
 
@@ -68,28 +69,11 @@ const unreadCount = ref(0)
 const total = ref(0)
 const loading = ref(false)
 let timer: number | undefined
-let lastUserSync = 0
 
-// 资料审核通过后，同步最新昵称/头像到本地缓存（昵称/头像修改需管理员审核后才生效）
-function isProfileApproved(item: NotificationItem) {
-  return item.type === 'profile_review' && item.title.includes('通过')
-}
-
-async function syncUserInfoAfterApproval() {
-  try {
-    await authStore.refreshUserInfo()
-  } catch (e) {
-    // 静默失败，下次轮询再同步
-  }
-}
-
-// 节流：未读通知存在时最多每 60 秒同步一次用户资料
-async function maybeSyncUserInfo() {
-  const now = Date.now()
-  if (now - lastUserSync < 60000) return
-  lastUserSync = now
-  await syncUserInfoAfterApproval()
-}
+// 通知动作判定 module：审核通过判定（仅依赖结构化 payload）+ 60s 节流 + refreshUserInfo 同步
+const { isProfileApproved, requestThrottledSync, syncIfUnreadApproved } = useNotificationAction({
+  refreshUserInfo: () => authStore.refreshUserInfo()
+})
 
 async function refresh() {
   loading.value = true
@@ -99,9 +83,8 @@ async function refresh() {
       items.value = data.items || []
       total.value = data.total || 0
       unreadCount.value = data.unread_count || 0
-      if (items.value.some(item => !item.is_read && isProfileApproved(item))) {
-        await syncUserInfoAfterApproval()
-      }
+      // 未读审核通过通知 → 同步最新昵称/头像
+      await syncIfUnreadApproved(items.value)
     }
   } catch (e) {
     // 静默失败，保留旧数据
@@ -116,7 +99,8 @@ async function refreshUnread() {
     if (data) {
       unreadCount.value = data.count || 0
       if (unreadCount.value > 0) {
-        await maybeSyncUserInfo()
+        // 60s 节流同步用户资料（默认窗口，与现状 lastUserSync 一致）
+        await requestThrottledSync()
       }
     }
   } catch (e) {
@@ -131,7 +115,7 @@ async function handleClick(item: NotificationItem) {
     notificationApi.markRead(item.id).catch(() => {})
   }
   if (isProfileApproved(item)) {
-    await syncUserInfoAfterApproval()
+    await authStore.refreshUserInfo().catch(() => {})
   }
   if (item.link) {
     router.push(item.link)

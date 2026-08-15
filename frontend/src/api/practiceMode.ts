@@ -1,26 +1,39 @@
 import { unwrappedRequest } from './request'
 import type { PracticeProgress, Question, SubmitResult } from '@/types/question'
 
-/** 练习进度（断点续练用，含答题状态） */
+/** 练习进度（断点续练用，含答题状态；与后端 ProgressResultDTO 对齐） */
 export interface PracticeProgressData extends PracticeProgress {
   answers_state?: Record<string, unknown>
   practice_mode?: string
-  [key: string]: unknown
 }
 
 /** 练习统计 */
 export interface PracticeStats {
-  [key: string]: unknown
+  total?: number
+  completed?: number
+  in_progress?: number
+  total_count?: number
+  correct_count?: number
 }
 
-/** 练习历史项 */
+/** 练习历史分页结果（与后端 HistoryResultDTO 对齐） */
+export interface PracticeHistory {
+  total: number
+  page: number
+  page_size: number
+  records: PracticeHistoryItem[]
+}
+
+/** 练习历史项（与后端 HistoryItemDTO 对齐） */
 export interface PracticeHistoryItem {
   id: number
-  practice_mode?: string
-  correct_count?: number
-  total_count?: number
-  finished_at?: string
-  [key: string]: unknown
+  student_id?: number
+  question_id?: number
+  is_correct?: boolean
+  practice_type?: string
+  user_answer?: string
+  created_at?: string
+  question?: Question
 }
 
 // 题库练习模式接口，对应后端 /api/practice-mode
@@ -62,6 +75,6 @@ export const practiceModeApi = {
   },
   // 练习历史
   getHistory(params: { page?: number; page_size?: number }) {
-    return unwrappedRequest.get<{ items: PracticeHistoryItem[]; total: number }>('/practice-mode/history', { params })
+    return unwrappedRequest.get<PracticeHistory>('/practice-mode/history', { params })
   }
 }

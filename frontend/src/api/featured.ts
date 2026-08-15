@@ -35,7 +35,6 @@ export interface FeaturedContent {
   status?: number
   sort_order?: number
   created_at?: string
-  [key: string]: unknown
 }
 
 // ===== 公开接口已移除 =====

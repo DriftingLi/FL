@@ -58,15 +58,15 @@ func TestStartTagPractice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("抽题失败: %v", err)
 	}
-	questions := got["questions"].([]QuestionDTO)
+	questions := got.Questions
 	if len(questions) != 1 {
 		t.Fatalf("应抽 1 道已发布题, got %d", len(questions))
 	}
 	if questions[0].ID != q1.ID {
 		t.Fatalf("抽题结果不匹配: %+v", questions[0])
 	}
-	if got["current_index"] != 0 {
-		t.Fatalf("首次进入游标应为 0, got %v", got["current_index"])
+	if got.CurrentIndex != 0 {
+		t.Fatalf("首次进入游标应为 0, got %v", got.CurrentIndex)
 	}
 	// 不返回答案（学员侧）
 	if questions[0].Answer != nil {
@@ -78,8 +78,8 @@ func TestStartTagPractice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("抽题失败: %v", err)
 	}
-	order1 := make([]int, 0, len(r1["questions"].([]QuestionDTO)))
-	for _, q := range r1["questions"].([]QuestionDTO) {
+	order1 := make([]int, 0, len(r1.Questions))
+	for _, q := range r1.Questions {
 		order1 = append(order1, q.ID)
 	}
 	mode := fmt.Sprintf("tag:%d", tag2.ID)
@@ -90,11 +90,11 @@ func TestStartTagPractice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("续练失败: %v", err)
 	}
-	if r2["current_index"] != 1 {
-		t.Fatalf("续练游标应为 1, got %v", r2["current_index"])
+	if r2.CurrentIndex != 1 {
+		t.Fatalf("续练游标应为 1, got %v", r2.CurrentIndex)
 	}
-	order2 := make([]int, 0, len(r2["questions"].([]QuestionDTO)))
-	for _, q := range r2["questions"].([]QuestionDTO) {
+	order2 := make([]int, 0, len(r2.Questions))
+	for _, q := range r2.Questions {
 		order2 = append(order2, q.ID)
 	}
 	if !sameIDSet(order1, order2) {
@@ -114,8 +114,8 @@ func TestStartTagPractice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("重新抽题失败: %v", err)
 	}
-	if r3["current_index"] != 0 {
-		t.Fatalf("完成后再次进入游标应归零, got %v", r3["current_index"])
+	if r3.CurrentIndex != 0 {
+		t.Fatalf("完成后再次进入游标应归零, got %v", r3.CurrentIndex)
 	}
 
 	// count 限制（新学生首次进入）
@@ -123,8 +123,8 @@ func TestStartTagPractice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("抽题失败: %v", err)
 	}
-	if len(limited["questions"].([]QuestionDTO)) != 1 {
-		t.Fatalf("count=1 应抽 1 题, got %d", len(limited["questions"].([]QuestionDTO)))
+	if len(limited.Questions) != 1 {
+		t.Fatalf("count=1 应抽 1 题, got %d", len(limited.Questions))
 	}
 
 	// 错误分支
@@ -162,7 +162,7 @@ func TestGetTagQuestions_QuestionToDict(t *testing.T) {
 	if err != nil {
 		t.Fatalf("抽题失败: %v", err)
 	}
-	qs := got["questions"].([]QuestionDTO)
+	qs := got.Questions
 	if len(qs) != 1 {
 		t.Fatalf("应抽 1 题, got %d", len(qs))
 	}

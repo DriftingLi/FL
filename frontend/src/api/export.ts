@@ -1,9 +1,11 @@
 import { unwrappedRequest } from './request'
-import { downloadBlob } from '@/composables/useReportDownload'
+import { downloadBlob, dispositionHeaderValue } from '@/composables/useReportDownload'
 
 export type ExportKind = 'students' | 'exam-records' | 'questions' | 'evaluations'
 
-const exportLabels: Record<ExportKind, string> = {
+// 后端为下载文件名唯一真值（随 Content-Disposition 下发，#230）。
+// 以下仅作跨域拿不到响应头时的显式回退名，不再作为文件名来源。
+const exportFallbackNames: Record<ExportKind, string> = {
   students: '学员名单.csv',
   'exam-records': '成绩单.csv',
   questions: '题库.csv',
@@ -11,9 +13,12 @@ const exportLabels: Record<ExportKind, string> = {
 }
 
 export async function downloadExport(kind: ExportKind) {
-  // responseType: 'blob' 时拦截器直接返回 response.data（Blob），不走 ApiResponse 解包
-  const blob = await unwrappedRequest.get<Blob>(`/admin/export/${kind}`, {
-    responseType: 'blob'
+  // responseType: blob + raw 时拦截器返回 { data, headers }，可从响应头解析文件名
+  const res = await unwrappedRequest.get<Blob>(`/admin/export/${kind}`, {
+    responseType: 'blob',
+    raw: true
   })
-  downloadBlob(blob, exportLabels[kind])
+  downloadBlob(res.data, exportFallbackNames[kind], {
+    disposition: dispositionHeaderValue(res.headers['content-disposition'])
+  })
 }

@@ -23,8 +23,8 @@
         <div class="chapter-body">
           <div class="chapter-title">{{ chapter.title }}</div>
           <div class="chapter-meta">
-            <el-tag size="small" :type="getContentTypeTagType(chapter.content_type)">
-              {{ getContentTypeLabel(chapter.content_type) }}
+            <el-tag size="small" :type="getContentTypeTagType(chapter.content_type || '')">
+              {{ getContentTypeLabel(chapter.content_type || '') }}
             </el-tag>
             <span v-if="chapter.duration" class="meta-item">
               <el-icon><Timer /></el-icon> {{ chapter.duration }}分钟
@@ -49,14 +49,14 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, ArrowRight, Timer, Document, EditPen } from '@element-plus/icons-vue'
-import { tutorApi } from '@/api/tutor'
+import { tutorApi, type TutorChapter, type TutorCourse } from '@/api/tutor'
 
 const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
-const courseInfo = ref<any>(null)
-const chapters = ref<any[]>([])
+const courseInfo = ref<TutorCourse | null>(null)
+const chapters = ref<(TutorChapter & { content_type?: string; files?: unknown[] })[]>([])
 
 function getContentTypeTagType(contentType: string) {
   const types: Record<string, string> = {
@@ -80,7 +80,7 @@ function getContentTypeLabel(contentType: string) {
   return labels[contentType] || contentType || '未设置'
 }
 
-function getFileCount(chapter: any): number {
+function getFileCount(chapter: { files?: unknown[] }): number {
   return (chapter.files || []).length
 }
 
@@ -89,7 +89,7 @@ async function loadChapters() {
   try {
     const courseId = Number(route.params.id)
     const res = await tutorApi.getCourseChapters(courseId)
-    courseInfo.value = res.course
+    courseInfo.value = res.course ?? null
     chapters.value = res.chapters || []
   } catch (e) {
     console.error('Failed to load chapters:', e)

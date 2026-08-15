@@ -131,26 +131,23 @@ func (s *ExportService) Questions() ([][]any, error) {
 }
 
 // Evaluations 残值评估记录导出行（数据经 ExportStore seam 取自估值模块，见 spec #75 D4）。
+// 表头与取值均从 EvaluationExportColumns 单点 spec 派生（#229），与既有输出逐字一致。
 func (s *ExportService) Evaluations() ([][]any, error) {
 	rows, err := s.exports.ListEvaluationExports(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	out := [][]any{{
-		"ID", "账号", "昵称", "品牌", "车型", "系列", "吨位", "配置", "门架类型", "门架高度mm",
-		"出厂年份", "销售年份", "工时", "原厂漆", "省份", "城市", "有牌照", "有登记证", "有维保记录",
-		"车况", "原价", "Kt", "Kh", "Kb", "Kc", "Km", "评估值", "置信下限", "置信上限", "报告PDF", "创建时间",
-	}}
+	hdr := make([]any, 0, len(EvaluationExportColumns))
+	for _, col := range EvaluationExportColumns {
+		hdr = append(hdr, col.Header)
+	}
+	out := [][]any{hdr}
 	for _, r := range rows {
-		out = append(out, []any{
-			r.ID, r.Account, r.Username, r.Brand, r.VehicleType, r.Series, r.Tonnage, r.ConfigType,
-			r.MastType, r.MastHeightMM, r.FactoryYear, r.SaleYear, r.UsageHours, yesNo(r.OriginalPaint),
-			r.Province, r.City, yesNo(r.HasLicensePlate), yesNo(r.HasRegistrationCert),
-			yesNo(r.HasMaintenanceRecords), r.ConditionRating, r.OriginalPrice,
-			coeff(r.KTime), coeff(r.KHours), coeff(r.KBrand), coeff(r.KCondition), coeff(r.KMarket),
-			r.EstimatedValue, nullableFloat(r.ConfidenceLow), nullableFloat(r.ConfidenceHigh),
-			r.ReportPDFPath, formatISO(r.CreatedAt),
-		})
+		cell := make([]any, 0, len(EvaluationExportColumns))
+		for _, col := range EvaluationExportColumns {
+			cell = append(cell, col.Value(r))
+		}
+		out = append(out, cell)
 	}
 	return out, nil
 }

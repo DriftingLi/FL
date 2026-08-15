@@ -159,7 +159,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { trainingApi, type QuestionTag } from '@/api/training'
-import { questionBankApi } from '@/api/questionBank'
+import { questionBankApi, type QuestionsQuery } from '@/api/questionBank'
 import { questionTypeOptions, typeMap } from '@/constants/question'
 import type { Question } from '@/types/question'
 
@@ -211,7 +211,7 @@ async function loadTags() {
 async function loadQuestions() {
   questionsLoading.value = true
   try {
-    const params: Record<string, unknown> = {
+    const params: QuestionsQuery = {
       page: currentPage.value,
       page_size: pageSize.value
     }
@@ -219,7 +219,7 @@ async function loadQuestions() {
     if (keyword.value) params.keyword = keyword.value
     if (filterType.value) params.type = filterType.value
 
-    const res = await questionBankApi.getQuestions(params as never)
+    const res = await questionBankApi.getQuestions(params)
     questions.value = res.questions || []
     total.value = res.total || 0
   } catch (error) {

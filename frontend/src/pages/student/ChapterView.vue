@@ -118,7 +118,7 @@ import { ArrowLeft, ArrowRight, VideoCamera, Document, Picture } from '@element-
 import { marked } from 'marked'
 import { markedHighlight } from 'marked-highlight'
 import hljs from 'highlight.js'
-import { courseApi } from '@/api/course'
+import { courseApi, type ChapterDetail } from '@/api/course'
 import { useCourseStore } from '@/stores/course'
 import { useStudyTracker } from '@/composables/useStudyTracker'
 import '@/assets/styles/markdown.css'
@@ -144,20 +144,6 @@ marked.use(
 const route = useRoute()
 const router = useRouter()
 const courseStore = useCourseStore()
-
-interface ChapterDetail {
-  chapter_id: number
-  title: string
-  content?: string
-  study_status?: string
-  previous_chapter_id?: number | null
-  next_chapter_id?: number | null
-  files?: {
-    content_type?: string
-    file_url?: string
-    [key: string]: unknown
-  }[]
-}
 
 interface ChapterItem {
   chapter_id: number

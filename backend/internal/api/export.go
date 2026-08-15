@@ -28,6 +28,7 @@ func NewExportHandler(svc *service.ExportService) *ExportHandler {
 }
 
 // RegisterExportRoutes 注册 /api/admin/export 蓝图（仅管理员，返回 CSV 附件）。
+// 文件名为后端唯一真值（随 Content-Disposition 下发，前端优先读取、拿不到再回退，#230）。
 func RegisterExportRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ExportService) {
 	h := NewExportHandler(svc)
 
@@ -47,31 +48,43 @@ func (h *ExportHandler) exportCSV(fetch func() ([][]any, error), filename string
 			response.ServerError(c, "导出失败: "+err.Error())
 			return
 		}
-
-		var buf bytes.Buffer
-		buf.WriteString("\xEF\xBB\xBF") // UTF-8 BOM
-		w := csv.NewWriter(&buf)
-		for _, row := range rows {
-			rec := make([]string, len(row))
-			for i, v := range row {
-				rec[i] = cellString(v)
-			}
-			if err := w.Write(rec); err != nil {
-				response.ServerError(c, "导出失败: "+err.Error())
-				return
-			}
-		}
-		w.Flush()
-		if err := w.Error(); err != nil {
+		buf, err := encodeCSV(rows)
+		if err != nil {
 			response.ServerError(c, "导出失败: "+err.Error())
 			return
 		}
-
-		encoded := url.PathEscape(filename)
-		c.Header("Content-Disposition", `attachment; filename="export.csv"; filename*=UTF-8''`+encoded)
+		c.Header("Content-Disposition", contentDisposition(filename))
 		c.Header("Content-Type", "text/csv; charset=utf-8")
-		c.Data(http.StatusOK, "text/csv; charset=utf-8", buf.Bytes())
+		c.Data(http.StatusOK, "text/csv; charset=utf-8", buf)
 	}
+}
+
+// encodeCSV 将取数行序列化为带 UTF-8 BOM 的 CSV 字节。
+// 逗号/引号由 encoding/csv 转义，单元格值经 cellString 归一化（#230 独立可测函数）。
+func encodeCSV(rows [][]any) ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteString("\xEF\xBB\xBF") // UTF-8 BOM
+	w := csv.NewWriter(&buf)
+	for _, row := range rows {
+		rec := make([]string, len(row))
+		for i, v := range row {
+			rec[i] = cellString(v)
+		}
+		if err := w.Write(rec); err != nil {
+			return nil, err
+		}
+	}
+	w.Flush()
+	if err := w.Error(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// contentDisposition 生成 RFC 5987 附件响应头（ASCII 兜底名 + UTF-8 文件名）。
+func contentDisposition(filename string) string {
+	encoded := url.PathEscape(filename)
+	return "attachment; filename=\"export.csv\"; filename*=UTF-8''" + encoded
 }
 
 // cellString 将单元格值转为 CSV 字符串。

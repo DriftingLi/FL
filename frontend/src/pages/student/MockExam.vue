@@ -96,7 +96,10 @@ const history = ref<MockExamHistoryItem[]>([])
 // 答题会话编排（进入/续时/断点续传/交卷顺序约束收敛进 useExamSession）
 const { inExam, currentIdx, remainingTime, questions, answers, shellRef, start, saveProgress, submit, reset } = useExamSession({
   enter: async () => {
-    const res = await mockExamApi.startMockExam(examForm.value)
+    const res = await mockExamApi.startMockExam({
+      question_count: examForm.value.count,
+      duration_minutes: examForm.value.duration
+    })
     mockExamId.value = res.mock_exam_id
     return { questions: res.questions, remaining_time: res.remaining_time }
   },
