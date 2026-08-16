@@ -14,16 +14,16 @@ import (
 // FeaturedHandler 内容精选 handler。
 type FeaturedHandler struct {
 	svc     *service.FeaturedService
-	fileSvc *service.FileService
+	fileSvc *service.FileStore
 }
 
 // NewFeaturedHandler 创建内容精选 handler。
-func NewFeaturedHandler(svc *service.FeaturedService, fileSvc *service.FileService) *FeaturedHandler {
+func NewFeaturedHandler(svc *service.FeaturedService, fileSvc *service.FileStore) *FeaturedHandler {
 	return &FeaturedHandler{svc: svc, fileSvc: fileSvc}
 }
 
 // RegisterFeaturedRoutes 注册内容精选路由（公开 + 管理端）。
-func RegisterFeaturedRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.FeaturedService, fileSvc *service.FileService) {
+func RegisterFeaturedRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.FeaturedService, fileSvc *service.FileStore) {
 	h := NewFeaturedHandler(svc, fileSvc)
 
 	// ===== 公开接口（无鉴权）=====
@@ -65,7 +65,7 @@ func (h *FeaturedHandler) GetPublicList(c *gin.Context) {
 // GetPublicDetail 内容精选详情（含相关资讯 + 上/下一篇）GET /api/featured-content/:id
 // 带 no_view=1 时不改变 view_count（SSR/爬虫路径）；不带参数保持既有计数行为。
 func (h *FeaturedHandler) GetPublicDetail(c *gin.Context) {
-	Endpoint[featuredDetailReq, map[string]any]{
+	Endpoint[featuredDetailReq, service.FeaturedContentDetailDTO]{
 		Parse: func(c *gin.Context) (*featuredDetailReq, error) {
 			id, err := pathInt(c, "id", "内容ID无效")
 			if err != nil {
@@ -73,14 +73,10 @@ func (h *FeaturedHandler) GetPublicDetail(c *gin.Context) {
 			}
 			return &featuredDetailReq{ID: id, CountView: c.Query("no_view") != "1"}, nil
 		},
-		Invoke: func(ctx context.Context, req *featuredDetailReq) (*map[string]any, error) {
-			result, err := h.svc.GetPublicDetail(req.ID, req.CountView)
-			if err != nil {
-				return nil, err
-			}
-			return &result, nil
+		Invoke: func(ctx context.Context, req *featuredDetailReq) (*service.FeaturedContentDetailDTO, error) {
+			return h.svc.GetPublicDetail(req.ID, req.CountView)
 		},
-		Render: func(c *gin.Context, _ *featuredDetailReq, resp *map[string]any, err error) {
+		Render: func(c *gin.Context, _ *featuredDetailReq, resp *service.FeaturedContentDetailDTO, err error) {
 			if err != nil {
 				response.NotFound(c, err.Error())
 				return
@@ -140,22 +136,12 @@ func (h *FeaturedHandler) AdminList(c *gin.Context) {
 
 // AdminDetail 管理端详情 GET /api/admin/featured-content/:id
 func (h *FeaturedHandler) AdminDetail(c *gin.Context) {
-	Endpoint[featuredIDReq, map[string]any]{
-		Parse: func(c *gin.Context) (*featuredIDReq, error) {
-			id, err := pathInt(c, "id", "内容ID无效")
-			if err != nil {
-				return nil, err
-			}
-			return &featuredIDReq{ID: id}, nil
+	Endpoint[featuredIDReq, service.FeaturedContentAdminDetailDTO]{
+		Parse: parseFeaturedID,
+		Invoke: func(ctx context.Context, req *featuredIDReq) (*service.FeaturedContentAdminDetailDTO, error) {
+			return h.svc.AdminDetail(req.ID)
 		},
-		Invoke: func(ctx context.Context, req *featuredIDReq) (*map[string]any, error) {
-			result, err := h.svc.AdminDetail(req.ID)
-			if err != nil {
-				return nil, err
-			}
-			return &result, nil
-		},
-		Render: func(c *gin.Context, _ *featuredIDReq, resp *map[string]any, err error) {
+		Render: func(c *gin.Context, _ *featuredIDReq, resp *service.FeaturedContentAdminDetailDTO, err error) {
 			if err != nil {
 				response.NotFound(c, err.Error())
 				return
@@ -167,22 +153,14 @@ func (h *FeaturedHandler) AdminDetail(c *gin.Context) {
 
 // Create 创建内容精选 POST /api/admin/featured-content
 func (h *FeaturedHandler) Create(c *gin.Context) {
-	Endpoint[map[string]any, map[string]any]{
-		Parse: func(c *gin.Context) (*map[string]any, error) {
-			var data map[string]any
-			if err := c.ShouldBindJSON(&data); err != nil {
-				return nil, badRequest("请求数据无效")
-			}
-			return &data, nil
+	Endpoint[service.FeaturedContentInput, service.FeaturedContentAdminDetailDTO]{
+		Parse: func(c *gin.Context) (*service.FeaturedContentInput, error) {
+			return bindJSONMsg[service.FeaturedContentInput](c, "请求数据无效")
 		},
-		Invoke: func(ctx context.Context, req *map[string]any) (*map[string]any, error) {
-			result, err := h.svc.Create(*req)
-			if err != nil {
-				return nil, err
-			}
-			return &result, nil
+		Invoke: func(ctx context.Context, req *service.FeaturedContentInput) (*service.FeaturedContentAdminDetailDTO, error) {
+			return h.svc.Create(*req)
 		},
-		Render: func(c *gin.Context, _ *map[string]any, resp *map[string]any, err error) {
+		Render: func(c *gin.Context, _ *service.FeaturedContentInput, resp *service.FeaturedContentAdminDetailDTO, err error) {
 			if err != nil {
 				response.BadRequest(c, err.Error())
 				return
@@ -194,26 +172,12 @@ func (h *FeaturedHandler) Create(c *gin.Context) {
 
 // Update 更新内容精选 PUT /api/admin/featured-content/:id
 func (h *FeaturedHandler) Update(c *gin.Context) {
-	Endpoint[featuredUpdateReq, map[string]any]{
-		Parse: func(c *gin.Context) (*featuredUpdateReq, error) {
-			id, err := pathInt(c, "id", "内容ID无效")
-			if err != nil {
-				return nil, err
-			}
-			var data map[string]any
-			if err := c.ShouldBindJSON(&data); err != nil {
-				return nil, badRequest("请求数据无效")
-			}
-			return &featuredUpdateReq{ID: id, Data: data}, nil
+	Endpoint[featuredUpdateReq, service.FeaturedContentAdminDetailDTO]{
+		Parse: parseFeaturedUpdate,
+		Invoke: func(ctx context.Context, req *featuredUpdateReq) (*service.FeaturedContentAdminDetailDTO, error) {
+			return h.svc.Update(req.ID, req.Input)
 		},
-		Invoke: func(ctx context.Context, req *featuredUpdateReq) (*map[string]any, error) {
-			result, err := h.svc.Update(req.ID, req.Data)
-			if err != nil {
-				return nil, err
-			}
-			return &result, nil
-		},
-		Render: func(c *gin.Context, _ *featuredUpdateReq, resp *map[string]any, err error) {
+		Render: func(c *gin.Context, _ *featuredUpdateReq, resp *service.FeaturedContentAdminDetailDTO, err error) {
 			if err != nil {
 				response.BadRequest(c, err.Error())
 				return
@@ -225,22 +189,12 @@ func (h *FeaturedHandler) Update(c *gin.Context) {
 
 // Delete 删除内容精选 DELETE /api/admin/featured-content/:id
 func (h *FeaturedHandler) Delete(c *gin.Context) {
-	Endpoint[featuredIDReq, map[string]any]{
-		Parse: func(c *gin.Context) (*featuredIDReq, error) {
-			id, err := pathInt(c, "id", "内容ID无效")
-			if err != nil {
-				return nil, err
-			}
-			return &featuredIDReq{ID: id}, nil
+	Endpoint[featuredIDReq, service.FeaturedDeleteResult]{
+		Parse: parseFeaturedID,
+		Invoke: func(ctx context.Context, req *featuredIDReq) (*service.FeaturedDeleteResult, error) {
+			return h.svc.Delete(req.ID)
 		},
-		Invoke: func(ctx context.Context, req *featuredIDReq) (*map[string]any, error) {
-			result, err := h.svc.Delete(req.ID)
-			if err != nil {
-				return nil, err
-			}
-			return &result, nil
-		},
-		Render: func(c *gin.Context, _ *featuredIDReq, resp *map[string]any, err error) {
+		Render: func(c *gin.Context, _ *featuredIDReq, resp *service.FeaturedDeleteResult, err error) {
 			if err != nil {
 				response.NotFound(c, err.Error())
 				return
@@ -252,22 +206,12 @@ func (h *FeaturedHandler) Delete(c *gin.Context) {
 
 // Publish 发布内容精选 POST /api/admin/featured-content/:id/publish
 func (h *FeaturedHandler) Publish(c *gin.Context) {
-	Endpoint[featuredIDReq, map[string]any]{
-		Parse: func(c *gin.Context) (*featuredIDReq, error) {
-			id, err := pathInt(c, "id", "内容ID无效")
-			if err != nil {
-				return nil, err
-			}
-			return &featuredIDReq{ID: id}, nil
+	Endpoint[featuredIDReq, service.FeaturedContentAdminDetailDTO]{
+		Parse: parseFeaturedID,
+		Invoke: func(ctx context.Context, req *featuredIDReq) (*service.FeaturedContentAdminDetailDTO, error) {
+			return h.svc.Publish(req.ID)
 		},
-		Invoke: func(ctx context.Context, req *featuredIDReq) (*map[string]any, error) {
-			result, err := h.svc.Publish(req.ID)
-			if err != nil {
-				return nil, err
-			}
-			return &result, nil
-		},
-		Render: func(c *gin.Context, _ *featuredIDReq, resp *map[string]any, err error) {
+		Render: func(c *gin.Context, _ *featuredIDReq, resp *service.FeaturedContentAdminDetailDTO, err error) {
 			if err != nil {
 				response.NotFound(c, err.Error())
 				return
@@ -310,14 +254,34 @@ type featuredIDReq struct {
 	ID int
 }
 
-// featuredUpdateReq 更新请求（id + data）。
+// featuredUpdateReq 更新请求（id + typed input）。
 type featuredUpdateReq struct {
-	ID   int
-	Data map[string]any
+	ID    int
+	Input service.FeaturedContentUpdateInput
 }
 
 // viewCountResp 计数响应（content_id + view_count）。
 type viewCountResp struct {
 	ID    int
 	Count int
+}
+
+func parseFeaturedID(c *gin.Context) (*featuredIDReq, error) {
+	id, err := pathInt(c, "id", "内容ID无效")
+	if err != nil {
+		return nil, err
+	}
+	return &featuredIDReq{ID: id}, nil
+}
+
+func parseFeaturedUpdate(c *gin.Context) (*featuredUpdateReq, error) {
+	id, err := pathInt(c, "id", "内容ID无效")
+	if err != nil {
+		return nil, err
+	}
+	input, err := bindJSONMsg[service.FeaturedContentUpdateInput](c, "请求数据无效")
+	if err != nil {
+		return nil, err
+	}
+	return &featuredUpdateReq{ID: id, Input: *input}, nil
 }

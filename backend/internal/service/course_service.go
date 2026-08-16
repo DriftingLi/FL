@@ -196,14 +196,14 @@ func loadCourseWithChapters(db *gorm.DB, courseID int) (*model.Course, []Chapter
 
 // CourseService 学员课程服务。
 type CourseService struct {
-	db          *gorm.DB
-	fileService *FileService
-	logger      *zap.Logger
+	db            *gorm.DB
+	slideRenderer *SlideRenderer
+	logger        *zap.Logger
 }
 
 // NewCourseService 创建课程服务实例。
-func NewCourseService(db *gorm.DB, fileService *FileService, logger *zap.Logger) *CourseService {
-	return &CourseService{db: db, fileService: fileService, logger: logger}
+func NewCourseService(db *gorm.DB, slideRenderer *SlideRenderer, logger *zap.Logger) *CourseService {
+	return &CourseService{db: db, slideRenderer: slideRenderer, logger: logger}
 }
 
 // GetCourses 课程列表（可额外按专业方向/课程等级过滤）。
@@ -301,9 +301,9 @@ func (s *CourseService) RegenerateChapterSlides(chapterID int) (*ChapterSlidesDT
 	return &ChapterSlidesDTO{ChapterID: chapterID, Slides: slideURLs}, nil
 }
 
-// generateSlides 下载 PPT bytes 并调 FileService 转图，把 URL 列表持久化到 chapter.slide_urls。
+// generateSlides 下载 PPT bytes 并调 SlideRenderer 转图，把 URL 列表持久化到 chapter.slide_urls。
 func (s *CourseService) generateSlides(chapterID int, pptURL string) []string {
-	if s.fileService == nil {
+	if s.slideRenderer == nil {
 		return nil
 	}
 	pptBytes, err := downloadFile(pptURL)
@@ -311,7 +311,7 @@ func (s *CourseService) generateSlides(chapterID int, pptURL string) []string {
 		s.logger.Error("下载 PPT 失败", zap.String("url", pptURL), zap.Error(err))
 		return nil
 	}
-	slideURLs := s.fileService.ConvertPPTToImages(pptBytes, chapterID)
+	slideURLs := s.slideRenderer.Render(pptBytes, chapterID)
 	if len(slideURLs) > 0 {
 		slideURLsJSON, _ := json.Marshal(slideURLs)
 		s.db.Model(&model.Chapter{}).Where("chapter_id = ?", chapterID).Update("slide_urls", string(slideURLsJSON))

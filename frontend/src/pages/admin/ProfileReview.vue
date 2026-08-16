@@ -4,7 +4,7 @@
       <template #header>
         <div class="card-header">
           <span class="card-title">资料审核（昵称 / 头像）</span>
-          <el-button :icon="Refresh" circle @click="loadList" />
+          <el-button :icon="Refresh" circle @click="load" />
         </div>
       </template>
 
@@ -14,7 +14,7 @@
         <el-tab-pane label="已拒绝" name="rejected" />
       </el-tabs>
 
-      <el-table v-loading="loading" :data="requests" stripe style="width: 100%">
+      <el-table v-loading="loading" :data="list" stripe style="width: 100%">
         <el-table-column prop="id" label="ID" width="70" />
         <el-table-column label="用户" min-width="160">
           <template #default="{ row }">
@@ -84,7 +84,7 @@
           :page-size="pageSize"
           :total="total"
           layout="total, prev, pager, next"
-          @current-change="loadList"
+          @current-change="load"
         />
       </div>
     </el-card>
@@ -111,14 +111,10 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, ArrowRight, ArrowDown } from '@element-plus/icons-vue'
 import { adminApi, type ProfileChangeRequest } from '@/api/admin'
+import { useAdminTable } from '@/composables/useAdminTable'
 import { formatLocaleDateTime } from '@/utils/format'
 
-const loading = ref(false)
 const submitting = ref(false)
-const requests = ref<ProfileChangeRequest[]>([])
-const total = ref(0)
-const currentPage = ref(1)
-const pageSize = ref(10)
 const activeStatus = ref<'pending' | 'approved' | 'rejected'>('pending')
 const rejectDialogVisible = ref(false)
 const rejectReason = ref('')
@@ -128,35 +124,25 @@ function displayName(row: ProfileChangeRequest) {
   return row.username
 }
 
-async function loadList() {
-  loading.value = true
-  try {
+// admin 列表状态机：本页只声明 fetch 与行操作 adapter
+const table = useAdminTable<ProfileChangeRequest>({
+  fetch: async (paging, filters) => {
     const data = await adminApi.listProfileReviews({
-      status: activeStatus.value,
-      page: currentPage.value,
-      page_size: pageSize.value
+      status: String(filters.status || 'pending'),
+      page: paging.page,
+      page_size: paging.pageSize
     })
-    requests.value = data?.requests || []
-    total.value = data?.total || 0
-  } catch (e) {
-    console.error('加载资料审核列表失败:', e)
-    /* 错误已由拦截器提示 */
-  } finally {
-    loading.value = false
+    return { list: data?.requests || [], total: data?.total || 0 }
+  },
+  actions: {
+    approve,
+    reject: openReject
   }
-}
+})
+const { loading, list, total, currentPage, pageSize, load, handleAction } = table
 
 function handleTabChange() {
-  currentPage.value = 1
-  loadList()
-}
-
-function handleAction(cmd: string, row: ProfileChangeRequest) {
-  if (cmd === 'approve') {
-    approve(row)
-  } else if (cmd === 'reject') {
-    openReject(row)
-  }
+  table.applyFilters({ status: activeStatus.value })
 }
 
 async function approve(row: ProfileChangeRequest) {
@@ -168,7 +154,7 @@ async function approve(row: ProfileChangeRequest) {
   try {
     await adminApi.approveProfileReview(row.id)
     ElMessage.success('已通过审核')
-    loadList()
+    load()
   } catch (e) {
     console.error('审核失败:', e)
     /* 错误已由拦截器提示 */
@@ -188,7 +174,7 @@ async function reject() {
     await adminApi.rejectProfileReview(currentRow.value.id, rejectReason.value.trim())
     ElMessage.success('已驳回')
     rejectDialogVisible.value = false
-    loadList()
+    load()
   } catch (e) {
     console.error('驳回失败:', e)
     /* 错误已由拦截器提示 */
@@ -197,7 +183,7 @@ async function reject() {
   }
 }
 
-onMounted(loadList)
+onMounted(load)
 </script>
 
 <style scoped>

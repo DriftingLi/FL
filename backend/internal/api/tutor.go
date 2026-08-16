@@ -17,16 +17,16 @@ import (
 // TutorHandler 导师端 handler。
 type TutorHandler struct {
 	svc     *service.TutorService
-	fileSvc *service.FileService
+	fileSvc *service.FileStore
 }
 
 // NewTutorHandler 创建导师端 handler。
-func NewTutorHandler(svc *service.TutorService, fileSvc *service.FileService) *TutorHandler {
+func NewTutorHandler(svc *service.TutorService, fileSvc *service.FileStore) *TutorHandler {
 	return &TutorHandler{svc: svc, fileSvc: fileSvc}
 }
 
 // RegisterTutorRoutes 注册 /api/tutor 蓝图。
-func RegisterTutorRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.TutorService, fileSvc *service.FileService) {
+func RegisterTutorRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.TutorService, fileSvc *service.FileStore) {
 	h := NewTutorHandler(svc, fileSvc)
 
 	g := rg.Group("/tutor", middleware.JWTAuth(rd.Session), middleware.RoleRequired("tutor"))
@@ -186,7 +186,7 @@ func (h *TutorHandler) UploadImage(c *gin.Context) {
 		if chapterID, err := strconv.Atoi(chapterIDStr); err == nil && chapterID > 0 {
 			subfolder = fmt.Sprintf("images/chapters/%d", chapterID)
 		}
-		return h.fileSvc.SaveFile(content, filename, subfolder)
+		return h.fileSvc.Save(content, filename, subfolder)
 	})
 }
 
