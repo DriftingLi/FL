@@ -12,7 +12,7 @@ import (
 
 func newTutorServiceForTest(t *testing.T, db *gorm.DB) *TutorService {
 	t.Helper()
-	return NewTutorService(db, "", nil, zap.NewNop())
+	return NewTutorService(db, "", nil, nil, zap.NewNop())
 }
 
 // seedUnmountedCourse 建一门未挂方向/等级的已上架课程（导师端旧口径可见，新口径不可见）。

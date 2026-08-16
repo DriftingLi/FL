@@ -51,7 +51,7 @@ func TestVditorErrorEnvelopeShapeLock(t *testing.T) {
 // TestVditorSuccessEnvelopeShapeLock 冻结 Vditor 成功信封：code=0、succMap 以文件名映射 URL。
 func TestVditorSuccessEnvelopeShapeLock(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	fs := service.NewFileService("", nil, zap.NewNop())
+	fs := service.NewFileStore("", nil, zap.NewNop())
 
 	r := gin.New()
 	r.POST("/upload-image", func(c *gin.Context) {

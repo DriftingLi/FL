@@ -15,16 +15,16 @@ import (
 // QuestionBankHandler 题库管理 handler。
 type QuestionBankHandler struct {
 	svc     *service.QuestionBankService
-	fileSvc *service.FileService
+	fileSvc *service.FileStore
 }
 
 // NewQuestionBankHandler 创建题库管理 handler。
-func NewQuestionBankHandler(svc *service.QuestionBankService, fileSvc *service.FileService) *QuestionBankHandler {
+func NewQuestionBankHandler(svc *service.QuestionBankService, fileSvc *service.FileStore) *QuestionBankHandler {
 	return &QuestionBankHandler{svc: svc, fileSvc: fileSvc}
 }
 
 // RegisterQuestionBankRoutes 注册 /api/question-bank 蓝图。
-func RegisterQuestionBankRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.QuestionBankService, fileSvc *service.FileService) {
+func RegisterQuestionBankRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.QuestionBankService, fileSvc *service.FileStore) {
 	h := NewQuestionBankHandler(svc, fileSvc)
 
 	g := rg.Group("/question-bank", middleware.JWTAuth(rd.Session))
@@ -416,12 +416,12 @@ func (h *QuestionBankHandler) UploadImage(c *gin.Context) {
 		response.ServerError(c, "图片上传失败")
 		return
 	}
-	ok, msg := h.fileSvc.ValidateImageFile(file.Filename, file.Size)
+	ok, msg := h.fileSvc.ValidateImage(file.Filename, file.Size)
 	if !ok {
 		response.BadRequest(c, msg)
 		return
 	}
-	url, err := h.fileSvc.SaveFile(buf, file.Filename, "images/questions")
+	url, err := h.fileSvc.Save(buf, file.Filename, "images/questions")
 	if err != nil {
 		response.ServerError(c, "图片上传失败: "+err.Error())
 		return

@@ -75,14 +75,14 @@ type ForumReplyDTO struct {
 // ForumService 论坛服务。
 type ForumService struct {
 	db      *gorm.DB
-	fileSvc *FileService
+	fileSvc *FileStore
 
 	logger *zap.Logger
 }
 
 // NewForumService 构造论坛服务。
 // fileSvc 用于删除帖子/回复时清理图片存储（可 nil，nil 时跳过清理）。
-func NewForumService(db *gorm.DB, fileSvc *FileService, logger *zap.Logger) *ForumService {
+func NewForumService(db *gorm.DB, fileSvc *FileStore, logger *zap.Logger) *ForumService {
 	return &ForumService{db: db, fileSvc: fileSvc, logger: logger}
 }
 

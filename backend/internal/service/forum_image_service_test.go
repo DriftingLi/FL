@@ -54,7 +54,7 @@ func newForumImageTestSvc(t *testing.T) (*ForumImageService, *gorm.DB, *forumImg
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
 	st := &forumImgStorage{}
-	fileSvc := NewFileService("", st, zap.NewNop())
+	fileSvc := NewFileStore("", st, zap.NewNop())
 	svc := NewForumImageService(db, fileSvc, zap.NewNop())
 	return svc, db, st
 }
@@ -101,7 +101,7 @@ func TestForumImage_Upload_Success(t *testing.T) {
 		t.Fatalf("应保存到 %s/ 前缀，得到 %q", ForumImageDirPrefix, key)
 	}
 	name := strings.TrimPrefix(key, ForumImageDirPrefix+"/")
-	if ms, ok := svc.fileSvc.ExtractTimestamp(name); !ok || ms <= 0 {
+	if ms, ok := forumFileTimestamp(name); !ok || ms <= 0 {
 		t.Fatalf("文件名应内嵌毫秒时间戳，得到 %q (ok=%v, ms=%d)", name, ok, ms)
 	}
 	if !strings.HasSuffix(name, ".png") {

@@ -52,11 +52,11 @@ func TestGetPublicDetailNoViewSkipsCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetPublicDetail(no_view) 失败: %v", err)
 	}
-	if got := detail["view_count"]; got != 5 {
+	if got := detail.ViewCount; got != 5 {
 		t.Errorf("no_view 后 view_count = %v，期望 5", got)
 	}
-	if detail["title"] != "计数语义" {
-		t.Errorf("详情标题 = %v，期望 计数语义", detail["title"])
+	if detail.Title != "计数语义" {
+		t.Errorf("详情标题 = %v，期望 计数语义", detail.Title)
 	}
 
 	// 正常请求：自增一次
@@ -64,7 +64,7 @@ func TestGetPublicDetailNoViewSkipsCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetPublicDetail(count) 失败: %v", err)
 	}
-	if got := detail2["view_count"]; got != 6 {
+	if got := detail2.ViewCount; got != 6 {
 		t.Errorf("计数请求后 view_count = %v，期望 6", got)
 	}
 }
