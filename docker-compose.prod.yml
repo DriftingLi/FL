@@ -241,8 +241,11 @@ services:
       backend:
         condition: service_healthy
     # PVE 环境用 host 网络模式，绕过 Docker 网桥 iptables FORWARD policy DROP 拦截
-    # nginx 直接监听宿主机 51820 端口，proxy_pass 到 127.0.0.1:8080 访问 backend
+    # nginx 直接监听宿主机 80/443 端口（80 统一 301 → HTTPS），proxy_pass 到 127.0.0.1:8080 访问 backend
     network_mode: host
+    # 镜像以非 root 用户运行（USER nginx），监听 443(<1024) 需 NET_BIND_SERVICE 能力
+    cap_add:
+      - NET_BIND_SERVICE
     # 禁用镜像内置 healthcheck（原 healthcheck 访问 127.0.0.1:8080/api/health，
     # 但 host 网络模式下容器内 wget 行为异常导致误报 unhealthy，实际服务正常）
     healthcheck:
@@ -254,8 +257,11 @@ services:
       # 官网门户（hrwai-portal）宿主机监听端口（默认 3000）
       PORTAL_HOST_PORT: ${PORTAL_HOST_PORT:-3000}
     volumes:
-      # host 模式专用 nginx 配置（listen 51820 + proxy_pass 127.0.0.1:8080）
+      # host 模式专用 nginx 配置（listen 80/443 + proxy_pass 127.0.0.1:8080）
       - ./frontend/nginx-host.conf:/etc/nginx/conf.d/default.conf.template:ro
+      # SSL 证书：CD 流水线（write_ssl_certs）写入 ${DEPLOY_PATH}/nginx/ssl，
+      # 挂载到容器 /etc/nginx/ssl（nginx-host.conf 引用固定路径）
+      - ${SSL_CERT_DIR:-./nginx/ssl}:/etc/nginx/ssl:ro
     deploy:
       resources:
         limits:

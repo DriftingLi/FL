@@ -43,7 +43,8 @@ RUN chmod +x /docker-entrypoint.sh
 RUN echo "ok" > /usr/share/nginx/html/health
 
 # 设置非 root 运行所需的目录权限
-# nginx master 进程需要写 pid/cache/log 目录；监听 51820(>1024) 无需 root
+# nginx master 进程需要写 pid/cache/log 目录；监听 80/443(<1024) 需 compose 注入
+# NET_BIND_SERVICE 能力（docker-compose.prod.yml cap_add）
 # 注意：镜像内 /var/run 是指向 /run 的符号链接，chown -R 只改链接本身，
 # 必须直接 chown /run，否则 nginx 用户无法创建 /run/nginx.pid
 RUN mkdir -p /var/cache/nginx/client_temp /var/cache/nginx/proxy_temp \

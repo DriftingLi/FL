@@ -281,7 +281,7 @@ jobs:
       SECRET_KEY: ${{ secrets.SECRET_KEY }}
       JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
       JWT_EXPIRES_HOURS: ${{ secrets.JWT_EXPIRES_HOURS || '24' }}
-      # 登录态 Cookie（父域名共享登录；testing 走 http 时 Secure=false）
+      # 登录态 Cookie（父域名共享登录；production 走 HTTPS 时 Secure=true）
       AUTH_COOKIE_NAME: ${{ secrets.AUTH_COOKIE_NAME || 'hrwai_token' }}
       AUTH_COOKIE_DOMAIN: ${{ secrets.AUTH_COOKIE_DOMAIN }}
       AUTH_COOKIE_SECURE: ${{ inputs.environment == 'production' && 'true' || 'false' }}

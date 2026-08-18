@@ -187,6 +187,9 @@ write_env_file() {
         echo "LIBREOFFICE_IMAGE=${IMAGE_LIBREOFFICE:-forklift-libreoffice}:${IMAGE_TAG_LIBREOFFICE}"
         echo "DOMAIN=${DOMAIN:-localhost}"
 
+        # SSL 证书目录（compose 挂载到 frontend 容器 /etc/nginx/ssl，nginx-host.conf 引用固定路径）
+        echo "SSL_CERT_DIR=${SSL_CERT_DIR:-${DEPLOY_PATH}/nginx/ssl}"
+
         echo "UPLOAD_FOLDER=/data/uploads"
         echo "VOLUME_MOUNT_PATH=/data"
         echo "MAX_CONTENT_LENGTH_MB=250"
@@ -250,7 +253,10 @@ write_ssl_certs() {
     printf '%s\n' "${SSL_FULLCHAIN}" > "${SSL_CERT_DIR}/fullchain.pem"
     printf '%s\n' "${SSL_PRIVKEY}" > "${SSL_CERT_DIR}/privkey.pem"
 
-    # 设置权限（证书文件可读，私钥仅 owner 可读）
+    # 设置权限：frontend 镜像以非 root 运行（nginx:alpine 固定 UID 101），
+    # 证书必须 chown 到 101:101，否则容器内 nginx 读不到 privkey 启动失败
+    # （证书文件可读，私钥仅 owner 可读）
+    chown 101:101 "${SSL_CERT_DIR}/fullchain.pem" "${SSL_CERT_DIR}/privkey.pem"
     chmod 644 "${SSL_CERT_DIR}/fullchain.pem"
     chmod 600 "${SSL_CERT_DIR}/privkey.pem"
 
@@ -1039,9 +1045,9 @@ main() {
         deploy|*)
             pre_deploy_check
             write_env_file
-            # host 网络模式下 nginx-host.conf 是 HTTP-only，不需要 SSL 证书
-            # 若未来切回 bridge + HTTPS，可重新启用 write_ssl_certs
-            # write_ssl_certs
+            # 写入 SSL 证书（host 网络模式 + nginx-host.conf 已在 80/443 提供 HTTPS，
+            # 证书内容来自 GitHub Secrets SSL_FULLCHAIN/SSL_PRIVKEY，写入 $SSL_CERT_DIR）
+            write_ssl_certs
             # 备份与后续无依赖步骤（登录/镜像拉取）并行执行，迁移前 join——
             # 隐藏备份耗时（pg_dump + 异地同步），同时保证备份先于任何 DB 写操作完成
             create_backup &

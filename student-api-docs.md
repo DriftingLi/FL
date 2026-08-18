@@ -1,6 +1,6 @@
 # 叉车维修培训系统 · 学员端 API 文档
 
-> 基础 URL：`http://www.gccsmile.com:51820`
+> 基础 URL：`https://www.gccsmile.com`
 > 认证方式：`Authorization: Bearer <token>`（登录后获取）
 > 响应格式：`{"code":200,"message":"success","data":...}`
 
@@ -671,7 +671,7 @@
 
 ### Apifox 设置
 
-1. 创建环境，变量 `base_url`=`http://www.gccsmile.com:51820`，`token`=留空
+1. 创建环境，变量 `base_url`=`https://www.gccsmile.com`，`token`=留空
 2. 接口根目录 → Auth → Bearer Token → `{{token}}` → 应用到子接口
 3. 公开接口（注册/登录/课程列表/幻灯片）单独设 `No Auth`
 
