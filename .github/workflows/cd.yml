@@ -33,8 +33,9 @@ on:
         default: false
 
 concurrency:
-  # 同一环境同时只允许一条部署：不同分支并发部署到 testing/production 会互相抢占 Docker 资源
-  group: cd-${{ inputs.environment }}
+  # 同一环境同一 ref 同时只允许一条部署（同 ref 串行，避免部署互相抢占 Docker 资源）；
+  # 按 ref 区分组：卡死的 run（如 checkout 挂起无法取消）不会阻塞其他 ref 的部署
+  group: cd-${{ inputs.environment }}-${{ inputs.ref }}
   cancel-in-progress: false
 
 env:
