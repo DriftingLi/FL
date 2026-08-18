@@ -114,8 +114,8 @@ export function loginApi(params : LoginParams) : Promise<LoginResult> {
 }
 
 /** 发送短信验证码（注册用） POST /auth/phone/send-code {phone, purpose:'register'} */
-export function sendPhoneCodeApi(phone : string) : Promise<UTSJSONObject> {
-	return sendCodeApi(phone, 'phone', 'register')
+export function sendPhoneCodeApi(phone : string, captchaId : string, captchaValue : string) : Promise<UTSJSONObject> {
+	return sendCodeApi(phone, 'phone', 'register', captchaId, captchaValue)
 }
 
 /**
@@ -148,17 +148,28 @@ export function registerApi(params : RegisterParams) : Promise<LoginResult> {
  * @param target 手机号或邮箱
  * @param channel email | phone
  * @param purpose 用途：register / login
+ * @param captchaId 图形验证码 id（GET /captcha 返回，生产环境必填）
+ * @param captchaValue 图形验证码答案
  */
-export function sendCodeApi(target : string, channel : string, purpose : string) : Promise<UTSJSONObject> {
+export function sendCodeApi(target : string, channel : string, purpose : string, captchaId : string, captchaValue : string) : Promise<UTSJSONObject> {
 	const payload : UTSJSONObject = {
 		purpose: purpose
 	} as UTSJSONObject
+	if (captchaId.length > 0 && captchaValue.length > 0) {
+		payload['captcha_id'] = captchaId
+		payload['captcha_value'] = captchaValue
+	}
 	if (channel == 'email') {
 		payload['email'] = target
 		return post('/auth/email/send-code', payload)
 	}
 	payload['phone'] = target
 	return post('/auth/phone/send-code', payload)
+}
+
+/** 获取图形验证码 GET /captcha（无需鉴权）→ { id, image(base64 data URL) } */
+export function getCaptchaApi() : Promise<UTSJSONObject> {
+	return get('/captcha')
 }
 
 /** 手机号验证码登录 POST /auth/phone/login */
@@ -283,6 +294,101 @@ export function uploadAvatarApi(filePath : string) : Promise<UploadAvatarResult>
 		const result : UploadAvatarResult = {
 			request: buildReviewRequest(data)
 		} as UploadAvatarResult
+		return result
+	})
+}
+
+/** 微信扫码登录：获取登录二维码（后端框架占位） POST /auth/wechat/qrcode */
+export function wechatQrcodeApi() : Promise<UTSJSONObject> {
+	return post('/auth/wechat/qrcode')
+}
+
+/** 微信扫码登录（后端框架占位） POST /auth/wechat/login */
+export function wechatLoginApi(code : string) : Promise<LoginResult> {
+	const payload : UTSJSONObject = {
+		code: code
+	} as UTSJSONObject
+	return post('/auth/wechat/login', payload).then((data : UTSJSONObject) : LoginResult => {
+		const token = data['token'] as string
+		const user = buildUserInfo(data)
+		const result : LoginResult = {
+			token: token,
+			user: user,
+		}
+		return result
+	})
+}
+
+// ========== 账号绑定修改（JWT） POST /auth/profile/* ==========
+
+/** 发送绑定验证码 POST /auth/profile/send-code（channel: email | phone，target 为邮箱或手机号） */
+export function profileSendCodeApi(target : string, channel : string) : Promise<UTSJSONObject> {
+	const payload : UTSJSONObject = {} as UTSJSONObject
+	if (channel == 'email') {
+		payload['email'] = target
+	} else {
+		payload['phone'] = target
+	}
+	return post('/auth/profile/send-code', payload)
+}
+
+/** 绑定/修改邮箱（验证码确认） POST /auth/profile/email */
+export function profileBindEmailApi(email : string, code : string) : Promise<UTSJSONObject> {
+	const payload : UTSJSONObject = {
+		email: email,
+		code: code
+	} as UTSJSONObject
+	return post('/auth/profile/email', payload)
+}
+
+/** 绑定/修改手机号（验证码确认） POST /auth/profile/phone */
+export function profileBindPhoneApi(phone : string, code : string) : Promise<UTSJSONObject> {
+	const payload : UTSJSONObject = {
+		phone: phone,
+		code: code
+	} as UTSJSONObject
+	return post('/auth/profile/phone', payload)
+}
+
+/** 修改密码：发送短信验证码 POST /auth/profile/password/send-code */
+export function changePasswordSendCodeApi(phone : string) : Promise<UTSJSONObject> {
+	const payload : UTSJSONObject = {
+		phone: phone
+	} as UTSJSONObject
+	return post('/auth/profile/password/send-code', payload)
+}
+
+/** 修改密码（短信验证码确认） POST /auth/profile/password */
+export function changePasswordApi(phone : string, code : string, newPassword : string) : Promise<UTSJSONObject> {
+	const payload : UTSJSONObject = {
+		phone: phone,
+		code: code,
+		newPassword: newPassword
+	} as UTSJSONObject
+	return post('/auth/profile/password', payload)
+}
+
+/** 修改账号：发送短信验证码 POST /auth/account/send-code */
+export function changeAccountSendCodeApi(phone : string) : Promise<UTSJSONObject> {
+	const payload : UTSJSONObject = {
+		phone: phone
+	} as UTSJSONObject
+	return post('/auth/account/send-code', payload)
+}
+
+/** 修改账号（短信验证码确认，响应携带新 token） PUT /auth/account */
+export function changeAccountApi(newUsername : string, code : string) : Promise<LoginResult> {
+	const payload : UTSJSONObject = {
+		username: newUsername,
+		code: code
+	} as UTSJSONObject
+	return put('/auth/account', payload).then((data : UTSJSONObject) : LoginResult => {
+		const token = data['token'] as string
+		const user = buildUserInfo(data)
+		const result : LoginResult = {
+			token: token,
+			user: user,
+		}
 		return result
 	})
 }
