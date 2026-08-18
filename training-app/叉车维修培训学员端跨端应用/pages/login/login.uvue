@@ -2,77 +2,144 @@
 	<scroll-view scroll-y class="login-page">
 		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
 
+		<!-- 顶部品牌区 -->
 		<view class="header">
-			<image class="logo" src="/static/logo.png" mode="aspectFit"></image>
-			<text class="app-title">叉车维修培训</text>
-			<text class="app-subtitle">学员端</text>
+			<view class="logo-box">
+				<!-- 绿色叉车 logo（纯 view 绘制） -->
+				<view class="mast-l"></view>
+				<view class="mast-r"></view>
+				<view class="fork-v"></view>
+				<view class="fork-h"></view>
+				<view class="f-body"></view>
+				<view class="f-cab"></view>
+				<view class="f-window"></view>
+				<view class="f-wheel f-wheel-back"></view>
+				<view class="f-wheel f-wheel-front"></view>
+				<view class="f-hub f-hub-back"></view>
+				<view class="f-hub f-hub-front"></view>
+				<view class="f-wrench-ring"></view>
+				<view class="f-wrench-handle"></view>
+			</view>
+			<text class="app-title">叉车维修培训系统</text>
 		</view>
 
 		<view class="form">
-			<!-- 登录方式切换 -->
-			<view class="mode-tabs">
-				<text class="mode-tab" :class="{ 'mode-tab-active': mode == 'password' }" @click="switchMode('password')">密码登录</text>
-				<text class="mode-tab" :class="{ 'mode-tab-active': mode == 'code' }" @click="switchMode('code')">验证码登录</text>
-			</view>
-
-			<!-- 密码登录 -->
-			<template v-if="mode == 'password'">
+			<!-- ===== 手机号验证码登录（默认） ===== -->
+			<template v-if="mode == 'phone'">
 				<view class="form-item">
-					<input class="input-base" type="text" placeholder="用户名或手机号" :maxlength="50"
-						:value="form.username" @input="onUsernameInput" @confirm="onConfirm" />
-				</view>
-				<view class="form-item">
-					<input class="input-base" :password="true" placeholder="密码（至少 6 位）" :maxlength="32"
-						:value="form.password" @input="onPasswordInput" @confirm="onConfirm" />
-				</view>
-
-				<button class="btn-primary submit-btn" :disabled="loading" @click="onSubmit">
-					{{ loading ? '登录中...' : '登 录' }}
-				</button>
-			</template>
-
-			<!-- 验证码登录 -->
-			<template v-else>
-				<view class="form-item">
-					<input class="input-base" type="text" placeholder="手机号或邮箱" :maxlength="50"
-						:value="target" @input="onTargetInput" @confirm="onConfirm" />
+					<view class="input-wrap">
+						<text class="input-prefix">+86</text>
+						<input class="input-base" type="number" placeholder="请输入手机号" :maxlength="11"
+							:value="phone" @input="onPhoneInput" @confirm="onConfirm" />
+					</view>
 				</view>
 				<view class="form-item code-row">
 					<view class="code-input-wrap">
-						<input class="input-base" type="number" placeholder="请输入验证码" :maxlength="6"
-							:value="code" @input="onCodeInput" @confirm="onConfirm" />
+						<view class="input-wrap">
+							<input class="input-base" type="number" placeholder="请输入验证码" :maxlength="6"
+								:value="phoneCode" @input="onPhoneCodeInput" @confirm="onConfirm" />
+						</view>
 					</view>
-					<button class="code-btn" :disabled="sendingCode || countdown > 0" @click="onSendCode">
+					<button class="code-btn" :class="{ 'code-btn-disabled': sendingCode || countdown > 0 }" :disabled="sendingCode || countdown > 0" @click="onSendCode('phone')">
 						{{ countdown > 0 ? countdown + 's' : '获取验证码' }}
 					</button>
+				</view>
+				<view class="form-item captcha-row">
+					<view class="input-wrap captcha-input-wrap">
+						<input class="input-base captcha-input" type="text" placeholder="图形验证码" :maxlength="4"
+							:value="captchaValue" @input="onCaptchaInput" />
+					</view>
+					<image class="captcha-img" :src="captchaImage" mode="aspectFit" @click="refreshCaptcha" />
 				</view>
 				<view class="form-item hint" v-if="codeHint.length > 0">
 					<text class="hint-text">{{ codeHint }}</text>
 				</view>
-
-				<button class="btn-primary submit-btn" :disabled="loading" @click="onSubmit">
-					{{ loading ? '登录中...' : '登 录' }}
-				</button>
 			</template>
 
-			<view class="footer">
-				<text class="footer-text">还没有账号？</text>
-				<text class="footer-link" @click="goRegister">立即注册</text>
+			<!-- ===== 账号密码登录 ===== -->
+			<template v-else-if="mode == 'password'">
+				<view class="form-item">
+					<view class="input-wrap">
+						<input class="input-base" type="text" placeholder="用户名或手机号" :maxlength="50"
+							:value="username" @input="onUsernameInput" @confirm="onConfirm" />
+					</view>
+				</view>
+				<view class="form-item">
+					<view class="input-wrap">
+						<input class="input-base" :password="true" placeholder="请输入密码" :maxlength="32"
+							:value="password" @input="onPasswordInput" @confirm="onConfirm" />
+					</view>
+				</view>
+			</template>
+
+			<!-- ===== 邮箱验证码登录 ===== -->
+			<template v-else>
+				<view class="form-item">
+					<view class="input-wrap">
+						<input class="input-base" type="text" placeholder="请输入邮箱" :maxlength="50"
+							:value="email" @input="onEmailInput" @confirm="onConfirm" />
+					</view>
+				</view>
+				<view class="form-item code-row">
+					<view class="code-input-wrap">
+						<view class="input-wrap">
+							<input class="input-base" type="number" placeholder="请输入验证码" :maxlength="6"
+								:value="emailCode" @input="onEmailCodeInput" @confirm="onConfirm" />
+						</view>
+					</view>
+					<button class="code-btn" :class="{ 'code-btn-disabled': sendingCode || countdown > 0 }" :disabled="sendingCode || countdown > 0" @click="onSendCode('email')">
+						{{ countdown > 0 ? countdown + 's' : '获取验证码' }}
+					</button>
+				</view>
+				<view class="form-item captcha-row">
+					<view class="input-wrap captcha-input-wrap">
+						<input class="input-base captcha-input" type="text" placeholder="图形验证码" :maxlength="4"
+							:value="captchaValue" @input="onCaptchaInput" />
+					</view>
+					<image class="captcha-img" :src="captchaImage" mode="aspectFit" @click="refreshCaptcha" />
+				</view>
+				<view class="form-item hint" v-if="codeHint.length > 0">
+					<text class="hint-text">{{ codeHint }}</text>
+				</view>
+			</template>
+
+			<!-- 协议勾选（手机号/邮箱验证码方式展示） -->
+			<view class="form-item agree-row" v-if="mode != 'password'" @click="toggleAgree">
+				<view class="checkbox" :class="{ 'checkbox-checked': agreed }">
+					<text v-if="agreed" class="check-mark">✓</text>
+				</view>
+				<text class="agree-text">同意</text>
+				<text class="agree-link" @click.stop="showAgreement('用户协议')">《用户协议》</text>
+				<text class="agree-text">和</text>
+				<text class="agree-link" @click.stop="showAgreement('用户隐私')">《用户隐私》</text>
 			</view>
 
-			<!-- 其他登录方式（仅密码登录显示） -->
-			<view class="other-login" v-if="mode == 'password'">
-				<view class="divider">
-					<view class="divider-line"></view>
-					<text class="divider-text">其他登录方式</text>
-					<view class="divider-line"></view>
-				</view>
+			<!-- 注册引导 -->
+			<view class="form-item register-row">
+				<text class="register-text">若手机号未注册，</text>
+				<text class="register-link" @click="goRegister">即刻注册</text>
+			</view>
 
-				<view class="wx-login-btn" @click="onWxLogin">
-					<view class="wx-icon">
-						<text class="wx-icon-text">微信</text>
-					</view>
-					<text class="wx-login-text">微信登录</text>
+			<button class="btn-login" :class="{ 'btn-login-disabled': loading }" :disabled="loading" @click="onSubmit">
+				{{ loading ? '登录中...' : '登 录' }}
+			</button>
+		</view>
+
+		<!-- 底部登录方式切换 -->
+		<view class="mode-switch">
+			<view class="mode-item" :class="{ 'mode-item-active': mode == 'phone' }" @click="switchMode('phone')">
+				<view class="mode-ic">
+					<text class="mode-ic-text">📱</text>
+				</view>
+			</view>
+			<view class="mode-item" :class="{ 'mode-item-active': mode == 'password' }" @click="switchMode('password')">
+				<view class="mode-ic">
+					<text class="mode-ic-text">🔑</text>
+				</view>
+			</view>
+			<view class="mode-item" :class="{ 'mode-item-active': mode == 'email' }" @click="switchMode('email')">
+				<view class="mode-ic">
+					<text class="mode-ic-text">✉️</text>
 				</view>
 			</view>
 		</view>
@@ -81,29 +148,59 @@
 
 <script setup lang="uts">
 	import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
-	import { reactive, ref, computed } from 'vue'
+	import { ref, computed } from 'vue'
 	import { useAuthStore } from '../../stores/auth'
-	import { sendCodeApi } from '../../api/auth'
-	import type { LoginParams, CodeLoginParams } from '../../types/index'
+	import { sendCodeApi, phoneLoginApi, emailLoginApi, loginApi, getCaptchaApi } from '../../api/auth'
 
 	const auth = useAuthStore()
 
-	// 登录模式：password（用户名/密码） | code（验证码登录）
-	const mode = ref<string>('password')
+	// 登录方式：phone（手机验证码，默认） | password（账号密码） | email（邮箱验证码）
+	const mode = ref<string>('phone')
 
-	// 密码登录表单
-	const form = reactive<LoginParams>({
-		username: '',
-		password: '',
-	})
-	// 验证码登录表单（target 为手机号或邮箱）
-	const target = ref<string>('')
-	const code = ref<string>('')
+	// 手机号 + 验证码
+	const phone = ref<string>('')
+	const phoneCode = ref<string>('')
+	// 账号 + 密码
+	const username = ref<string>('')
+	const password = ref<string>('')
+	// 邮箱 + 验证码
+	const email = ref<string>('')
+	const emailCode = ref<string>('')
+
+	// 协议勾选
+	const agreed = ref<boolean>(false)
+
+	// 图形验证码（人机验证，生产环境发送短信/邮箱验证码前必填）
+	const captchaId = ref<string>('')
+	const captchaImage = ref<string>('')
+	const captchaValue = ref<string>('')
+	const captchaLoading = ref<boolean>(false)
+
+	/** 加载图形验证码（进入页面/切换方式/点击图片刷新） */
+	async function loadCaptcha() : Promise<void> {
+		if (captchaLoading.value) return
+		captchaLoading.value = true
+		try {
+			const data = await getCaptchaApi()
+			captchaId.value = data['id'] as string
+			captchaImage.value = data['image'] as string
+			captchaValue.value = ''
+		} catch (e) {
+			console.error('[login] load captcha failed:', e)
+		} finally {
+			captchaLoading.value = false
+		}
+	}
+
+	function refreshCaptcha() : void {
+		loadCaptcha()
+	}
 
 	const loading = ref<boolean>(false)
 	const sendingCode = ref<boolean>(false)
 	const countdown = ref<number>(0)
 	let countdownTimer : number | null = null
+
 	/** 清理倒计时定时器（局部副本承接：Kotlin 禁止对闭包中修改的 var 智能转换） */
 	function clearCountdownTimer() : void {
 		const timer = countdownTimer
@@ -112,36 +209,47 @@
 			countdownTimer = null
 		}
 	}
-	// 连续输错次数（对齐后端：错误上限 5 次，发新码时清零）
-	const wrongAttempts = ref<number>(0)
+
 	const statusBarHeight = ref<number>(20)
 
 	onLoad((options : OnLoadOptions) => {
-		// 读取状态栏高度
 		const sysInfo = uni.getSystemInfoSync()
 		statusBarHeight.value = sysInfo.statusBarHeight
 
-		// 已登录则跳转仪表盘
 		auth.restoreFromStorage()
 		if (auth.isLoggedIn.value) {
 			uni.reLaunch({ url: '/pages/dashboard/dashboard' })
+			return
 		}
+		loadCaptcha()
 	})
 
 	onShow(() => {
-		// 从注册页返回时清空密码
-		form.password = ''
+		// 从注册页返回时保留已填手机号
 	})
 
 	onUnload(() => {
 		clearCountdownTimer()
 	})
 
+	// 连续输错次数（对齐后端：错误上限 5 次，发新码时清零）
+	const wrongAttempts = ref<number>(0)
+
 	function switchMode(m : string) : void {
 		if (m == mode.value) return
 		mode.value = m
 		clearCountdownTimer()
 		countdown.value = 0
+		wrongAttempts.value = 0
+		loadCaptcha()
+	}
+
+	function toggleAgree() : void {
+		agreed.value = !agreed.value
+	}
+
+	function showAgreement(name : string) : void {
+		uni.showToast({ title: name + '详情页建设中', icon: 'none' })
 	}
 
 	function startCountdown() : void {
@@ -155,20 +263,46 @@
 		}, 1000) as number
 	}
 
-	async function onSendCode() : Promise<void> {
+	function validatePhoneNum(p : string) : string {
+		if (p.length != 11) return '请输入 11 位手机号'
+		if (!p.startsWith('1')) return '手机号格式不正确'
+		if (!/^d{11}$/.test(p)) return '手机号必须为数字'
+		return ''
+	}
+
+	async function onSendCode(channel : string) : Promise<void> {
 		if (sendingCode.value || countdown.value > 0) return
-		const t = target.value.trim()
-		if (t.length == 0) {
-			uni.showToast({ title: '请输入手机号或邮箱', icon: 'none' })
+		if (captchaId.value.length == 0 || captchaValue.value.length == 0) {
+			uni.showToast({ title: '请先输入图形验证码', icon: 'none' })
+			loadCaptcha()
 			return
 		}
-		// 简单判定 charset：是否邮箱
-		const isEmail = t.indexOf('@') > 0
+		let target = ''
+		if (channel == 'phone') {
+			const err = validatePhoneNum(phone.value)
+			if (err.length > 0) {
+				uni.showToast({ title: err, icon: 'none' })
+				return
+			}
+			target = phone.value
+		} else {
+			const t = email.value.trim()
+			if (t.length == 0) {
+				uni.showToast({ title: '请输入邮箱', icon: 'none' })
+				return
+			}
+			if (t.indexOf('@') <= 0 || t.indexOf('.') <= 0) {
+				uni.showToast({ title: '邮箱格式不正确', icon: 'none' })
+				return
+			}
+			target = t
+		}
 		sendingCode.value = true
 		uni.showLoading({ title: '发送中...', mask: true })
 		try {
-			await sendCodeApi(t, isEmail ? 'email' : 'phone', 'login')
-			// 新验证码下发后重置本地连续输错计数（对齐后端错误上限）
+			await sendCodeApi(target, channel, 'login', captchaId.value, captchaValue.value)
+			// 发送成功后刷新图形验证码（答案用后即焚，防止重放）
+			loadCaptcha()
 			wrongAttempts.value = 0
 			uni.hideLoading()
 			uni.showToast({ title: '验证码已发送，请查收', icon: 'none' })
@@ -191,20 +325,37 @@
 	}
 
 	function validate() : string {
-		if (mode.value == 'code') {
-			const t = target.value.trim()
-			if (t.length == 0) return '请输入手机号或邮箱'
-			if (code.value.length == 0) return '请输入验证码'
-			if (code.value.length != 6) return '请输入 6 位验证码'
+		if (mode.value == 'phone') {
+			const p = phone.value
+			const err = validatePhoneNum(p)
+			if (err.length > 0) return err
+			if (phoneCode.value.length == 0) return '请输入验证码'
+			if (phoneCode.value.length != 6) return '请输入 6 位验证码'
 			return ''
 		}
-		if (form.username.length == 0) return '请输入用户名或手机号'
-		if (form.password.length == 0) return '请输入密码'
-		if (form.password.length < 6) return '密码至少 6 位'
+		if (mode.value == 'password') {
+			if (username.value.length == 0) return '请输入用户名或手机号'
+			if (password.value.length == 0) return '请输入密码'
+			if (password.value.length < 6) return '密码至少 6 位'
+			return ''
+		}
+		const t = email.value.trim()
+		if (t.length == 0) return '请输入邮箱'
+		if (t.indexOf('@') <= 0 || t.indexOf('.') <= 0) return '邮箱格式不正确'
+		if (emailCode.value.length == 0) return '请输入验证码'
+		if (emailCode.value.length != 6) return '请输入 6 位验证码'
 		return ''
 	}
 
 	async function onSubmit() : Promise<void> {
+		// 账号密码登录不强制勾选协议（账号已是注册过的用户）
+		if (mode.value != 'password') {
+			const errAgree = agreed.value == false ? '请先同意用户协议和隐私政策' : ''
+			if (errAgree.length > 0) {
+				uni.showToast({ title: errAgree, icon: 'none' })
+				return
+			}
+		}
 		const err = validate()
 		if (err.length > 0) {
 			uni.showToast({ title: err, icon: 'none' })
@@ -215,22 +366,23 @@
 		uni.showLoading({ title: '登录中...', mask: true })
 
 		try {
-			if (mode.value == 'code') {
-				const t = target.value.trim()
-				const isEmail = t.indexOf('@') > 0
-				const params : CodeLoginParams = {
-					target: t,
-					channel: isEmail ? 'email' : 'phone',
-					code: code.value,
-				}
-				await auth.loginByCode(params)
+			if (mode.value == 'phone') {
+				await auth.loginByCode({
+					target: phone.value,
+					channel: 'phone',
+					code: phoneCode.value,
+				})
+			} else if (mode.value == 'email') {
+				await auth.loginByCode({
+					target: email.value.trim(),
+					channel: 'email',
+					code: emailCode.value,
+				})
 			} else {
-				// 显式构造 LoginParams，避免传 reactive Proxy 给 uni.request
-				const params : LoginParams = {
-					username: form.username,
-					password: form.password,
-				}
-				await auth.login(params)
+				await auth.login({
+					username: username.value,
+					password: password.value,
+				})
 			}
 			uni.hideLoading()
 			uni.showToast({ title: '登录成功', icon: 'success', duration: 1000 })
@@ -239,10 +391,8 @@
 			}, 500)
 		} catch (e) {
 			uni.hideLoading()
-			// 打印完整异常对象，便于定位（UTS 中 ClassCastException 的 message 可能为空）
 			console.error('[login] failed:', e)
-			// 验证码登录输错时累计连续输错次数（后端上限 5 次，到达后需重新获取）
-			if (mode.value == 'code') {
+			if (mode.value != 'password') {
 				const m = e instanceof Error ? (e as Error).message : ''
 				if (m.indexOf('验证码') >= 0) {
 					wrongAttempts.value += 1
@@ -262,26 +412,6 @@
 		}
 	}
 
-	function onConfirm() : void {
-		onSubmit()
-	}
-
-	function onUsernameInput(e : InputEvent) : void {
-		form.username = e.detail.value
-	}
-
-	function onPasswordInput(e : InputEvent) : void {
-		form.password = e.detail.value
-	}
-
-	function onTargetInput(e : InputEvent) : void {
-		target.value = e.detail.value
-	}
-
-	function onCodeInput(e : InputEvent) : void {
-		code.value = e.detail.value
-	}
-
 	// 验证码提示：说明后端规则 + 实时展示连续输错次数
 	const codeHint = computed<string>(() : string => {
 		if (wrongAttempts.value >= 5) {
@@ -297,8 +427,36 @@
 		uni.navigateTo({ url: '/pages/register/register' })
 	}
 
-	function onWxLogin() : void {
-		uni.showToast({ title: '微信登录暂未开通', icon: 'none' })
+	function onConfirm() : void {
+		onSubmit()
+	}
+
+	function onPhoneInput(e : InputEvent) : void {
+		phone.value = e.detail.value
+	}
+
+	function onPhoneCodeInput(e : InputEvent) : void {
+		phoneCode.value = e.detail.value
+	}
+
+	function onUsernameInput(e : InputEvent) : void {
+		username.value = e.detail.value
+	}
+
+	function onPasswordInput(e : InputEvent) : void {
+		password.value = e.detail.value
+	}
+
+	function onEmailInput(e : InputEvent) : void {
+		email.value = e.detail.value
+	}
+
+	function onEmailCodeInput(e : InputEvent) : void {
+		emailCode.value = e.detail.value
+	}
+
+	function onCaptchaInput(e : InputEvent) : void {
+		captchaValue.value = e.detail.value
 	}
 </script>
 
@@ -312,50 +470,189 @@
 		background-color: #ffffff;
 	}
 
+	/* ===== 顶部品牌区 ===== */
 	.header {
 		align-items: center;
-		padding: 60rpx 0 80rpx 0;
+		padding: 70rpx 0 60rpx 0;
 	}
 
-	.logo {
-		width: 160rpx;
-		height: 160rpx;
-		margin-bottom: 24rpx;
+	.logo-box {
+		position: relative;
+		width: 200rpx;
+		height: 200rpx;
+	}
+
+	/* 叉车 logo（坐标系 0-200rpx） */
+	.mast-l {
+		position: absolute;
+		left: 104rpx;
+		top: 30rpx;
+		width: 12rpx;
+		height: 106rpx;
+		border-radius: 6rpx;
+		background-color: #16A34A;
+	}
+
+	.mast-r {
+		position: absolute;
+		left: 122rpx;
+		top: 30rpx;
+		width: 12rpx;
+		height: 106rpx;
+		border-radius: 6rpx;
+		background-color: #22C55E;
+	}
+
+	.fork-v {
+		position: absolute;
+		left: 104rpx;
+		top: 88rpx;
+		width: 12rpx;
+		height: 50rpx;
+		background-color: #15803D;
+	}
+
+	.fork-h {
+		position: absolute;
+		left: 104rpx;
+		top: 132rpx;
+		width: 72rpx;
+		height: 12rpx;
+		border-radius: 6rpx;
+		background-color: #15803D;
+	}
+
+	.f-body {
+		position: absolute;
+		left: 16rpx;
+		top: 66rpx;
+		width: 82rpx;
+		height: 42rpx;
+		border-radius: 12rpx;
+		background-color: #22C55E;
+	}
+
+	.f-cab {
+		position: absolute;
+		left: 34rpx;
+		top: 30rpx;
+		width: 48rpx;
+		height: 44rpx;
+		border-radius: 12rpx;
+		background-color: #16A34A;
+	}
+
+	.f-window {
+		position: absolute;
+		left: 44rpx;
+		top: 40rpx;
+		width: 26rpx;
+		height: 26rpx;
+		border-radius: 8rpx;
+		background-color: rgba(255, 255, 255, 0.45);
+	}
+
+	.f-wheel {
+		position: absolute;
+		width: 30rpx;
+		height: 30rpx;
+		border-radius: 50%;
+		background-color: #14532D;
+	}
+
+	.f-wheel-back {
+		left: 28rpx;
+		top: 106rpx;
+	}
+
+	.f-wheel-front {
+		left: 68rpx;
+		top: 106rpx;
+	}
+
+	.f-hub {
+		position: absolute;
+		width: 12rpx;
+		height: 12rpx;
+		border-radius: 50%;
+		background-color: #86EFAC;
+	}
+
+	.f-hub-back {
+		left: 37rpx;
+		top: 115rpx;
+	}
+
+	.f-hub-front {
+		left: 77rpx;
+		top: 115rpx;
+	}
+
+	/* 扳手（叉车右侧） */
+	.f-wrench-ring {
+		position: absolute;
+		left: 148rpx;
+		top: 26rpx;
+		width: 26rpx;
+		height: 26rpx;
+		border-radius: 50%;
+		border: 5rpx solid #16A34A;
+	}
+
+	.f-wrench-handle {
+		position: absolute;
+		left: 154rpx;
+		top: 44rpx;
+		width: 12rpx;
+		height: 20rpx;
+		border-radius: 6rpx;
+		background-color: #16A34A;
 	}
 
 	.app-title {
+		margin-top: 28rpx;
 		font-size: 44rpx;
 		font-weight: bold;
 		color: #333333;
-		margin-bottom: 8rpx;
+		text-align: center;
 	}
 
-	.app-subtitle {
-		font-size: 24rpx;
-		color: #999999;
-	}
-
+	/* ===== 表单区 ===== */
 	.form {
-		padding: 0 48rpx;
+		padding: 0 56rpx;
 	}
 
-	/* 登录方式切换 */
-	.mode-tabs {
+	.form-item {
+		margin-bottom: 28rpx;
+	}
+
+	/* 灰底圆角输入框 */
+	.input-wrap {
 		flex-direction: row;
-		margin-bottom: 32rpx;
+		align-items: center;
+		background-color: #F5F6FA;
+		border-radius: 16rpx;
+		height: 96rpx;
+		padding: 0 28rpx;
 	}
 
-	.mode-tab {
-		font-size: 28rpx;
-		color: #666666;
-		margin-right: 40rpx;
-		padding-bottom: 8rpx;
-	}
-
-	.mode-tab-active {
-		color: #2979ff;
+	.input-prefix {
+		font-size: 32rpx;
+		color: #333333;
 		font-weight: bold;
-		border-bottom: 4rpx solid #2979ff;
+		margin-right: 16rpx;
+		border-right: 2rpx solid #E0E2EA;
+		padding-right: 16rpx;
+	}
+
+	.input-base {
+		flex: 1;
+		height: 96rpx;
+		border: none;
+		background-color: transparent;
+		padding: 0;
+		font-size: 30rpx;
+		color: #333333;
 	}
 
 	/* 验证码行：输入框 + 获取验证码按钮 */
@@ -366,25 +663,52 @@
 
 	.code-input-wrap {
 		flex: 1;
-		margin-right: 16rpx;
+		margin-right: 20rpx;
 	}
 
 	.code-btn {
 		width: 200rpx;
-		height: 80rpx;
-		line-height: 80rpx;
+		height: 96rpx;
+		line-height: 96rpx;
 		padding: 0;
 		font-size: 26rpx;
 		color: #2979ff;
-		border: 1px solid #2979ff;
-		border-radius: 8rpx;
 		background-color: #ffffff;
+		border: 2rpx solid #2979ff;
+		border-radius: 48rpx;
+		text-align: center;
+	}
+
+	.code-btn-disabled {
+		opacity: 0.5;
+	}
+
+	/* 图形验证码行：输入框 + 图片 */
+	.captcha-row {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.captcha-input-wrap {
+		flex: 1;
+		margin-right: 20rpx;
+	}
+
+	.captcha-input {
+		font-size: 26rpx;
+	}
+
+	.captcha-img {
+		width: 180rpx;
+		height: 96rpx;
+		border-radius: 16rpx;
+		background-color: #F5F6FA;
 	}
 
 	/* 验证码规则提示 */
 	.hint {
 		margin-top: -16rpx;
-		margin-bottom: 24rpx;
+		margin-bottom: 16rpx;
 	}
 
 	.hint-text {
@@ -392,83 +716,102 @@
 		color: #999999;
 	}
 
-	.form-item {
-		margin-bottom: 32rpx;
-	}
-
-	.submit-btn {
-		margin-top: 16rpx;
-		width: 100%;
-	}
-
-	.footer {
+	/* 协议行 */
+	.agree-row {
 		flex-direction: row;
-		justify-content: center;
-		margin-top: 48rpx;
+		align-items: center;
+		margin-top: 8rpx;
 	}
 
-	.footer-text {
-		font-size: 26rpx;
+	.checkbox {
+		width: 34rpx;
+		height: 34rpx;
+		border-radius: 50%;
+		border: 2rpx solid #C8CDD8;
+		align-items: center;
+		justify-content: center;
+		background-color: #ffffff;
+		margin-right: 12rpx;
+	}
+
+	.checkbox-checked {
+		background-color: #2979ff;
+		border-color: #2979ff;
+	}
+
+	.check-mark {
+		font-size: 24rpx;
+		color: #ffffff;
+	}
+
+	.agree-text {
+		font-size: 25rpx;
 		color: #666666;
 	}
 
-	.footer-link {
-		font-size: 26rpx;
+	.agree-link {
 		color: #2979ff;
-		margin-left: 8rpx;
 	}
 
-	/* 其他登录方式 */
-	.other-login {
-		margin-top: 80rpx;
+	/* 注册引导 */
+	.register-row {
+		margin-top: -4rpx;
 	}
 
-	.divider {
-		flex-direction: row;
-		align-items: center;
-		margin-bottom: 48rpx;
+	.register-text {
+		font-size: 25rpx;
+		color: #666666;
 	}
 
-	.divider-line {
-		flex: 1;
-		height: 1px;
-		background-color: #e5e5e5;
+	.register-link {
+		color: #2979ff;
 	}
 
-	.divider-text {
-		font-size: 24rpx;
-		color: #999999;
-		margin: 0 24rpx;
-	}
-
-	.wx-login-btn {
-		flex-direction: row;
-		align-items: center;
-		justify-content: center;
+	/* 登录按钮 */
+	.btn-login {
+		margin-top: 16rpx;
+		width: 100%;
 		height: 96rpx;
-		background-color: #07C160;
+		line-height: 96rpx;
 		border-radius: 48rpx;
+		background-color: #2979ff;
+		color: #ffffff;
+		font-size: 34rpx;
+		font-weight: bold;
+		text-align: center;
+		border: none;
 	}
 
-	.wx-icon {
-		width: 48rpx;
-		height: 48rpx;
-		border-radius: 24rpx;
-		background-color: #ffffff;
+	.btn-login-disabled {
+		opacity: 0.6;
+	}
+
+	/* ===== 底部登录方式切换 ===== */
+	.mode-switch {
+		flex-direction: row;
+		justify-content: center;
+		align-items: center;
+		padding: 80rpx 0 90rpx 0;
+	}
+
+	.mode-item {
+		margin: 0 36rpx;
+	}
+
+	.mode-ic {
+		width: 88rpx;
+		height: 88rpx;
+		border-radius: 50%;
+		background-color: #F0F1F5;
 		align-items: center;
 		justify-content: center;
-		margin-right: 16rpx;
 	}
 
-	.wx-icon-text {
-		font-size: 20rpx;
-		color: #07C160;
-		font-weight: bold;
+	.mode-item-active .mode-ic {
+		background-color: #2BB673;
 	}
 
-	.wx-login-text {
-		font-size: 30rpx;
-		color: #ffffff;
-		font-weight: bold;
+	.mode-ic-text {
+		font-size: 40rpx;
 	}
 </style>
