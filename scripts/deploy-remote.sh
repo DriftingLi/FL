@@ -253,9 +253,8 @@ write_ssl_certs() {
     printf '%s\n' "${SSL_FULLCHAIN}" > "${SSL_CERT_DIR}/fullchain.pem"
     printf '%s\n' "${SSL_PRIVKEY}" > "${SSL_CERT_DIR}/privkey.pem"
 
-    # 设置权限：frontend 镜像以非 root 运行（nginx:alpine 固定 UID 101），
-    # 证书必须 chown 到 101:101，否则容器内 nginx 读不到 privkey 启动失败
-    # （证书文件可读，私钥仅 owner 可读）
+    # 设置权限：chown 到 nginx:alpine 固定 UID 101，保证 nginx 用户可读
+    # （master 以 root 运行绑 80/443，worker 降权为 nginx；证书文件可读，私钥仅 owner 可读）
     chown 101:101 "${SSL_CERT_DIR}/fullchain.pem" "${SSL_CERT_DIR}/privkey.pem"
     chmod 644 "${SSL_CERT_DIR}/fullchain.pem"
     chmod 600 "${SSL_CERT_DIR}/privkey.pem"
