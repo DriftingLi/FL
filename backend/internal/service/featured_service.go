@@ -12,24 +12,16 @@ import (
 	"forklift-training/pkg/response"
 )
 
-// FeaturedContentPageResult 内容精选分页结果。
-type FeaturedContentPageResult struct {
-	Items []map[string]any `json:"items"`
-	Page  int              `json:"page"`
-	Pages int              `json:"pages"`
-	Total int64            `json:"total"`
-}
-
 // FeaturedService 内容精选服务。
 type FeaturedService struct {
 	db      *gorm.DB
-	fileSvc *FileService
+	fileSvc *FileStore
 
 	logger *zap.Logger
 }
 
 // NewFeaturedService 创建内容精选服务实例。
-func NewFeaturedService(db *gorm.DB, fileSvc *FileService, logger *zap.Logger) *FeaturedService {
+func NewFeaturedService(db *gorm.DB, fileSvc *FileStore, logger *zap.Logger) *FeaturedService {
 	return &FeaturedService{db: db, fileSvc: fileSvc, logger: logger}
 }
 
@@ -43,10 +35,7 @@ var featuredCategoryLabels = map[string]string{
 
 // CategoryLabel 返回分类的中文标签。
 func (s *FeaturedService) CategoryLabel(category string) string {
-	if label, ok := featuredCategoryLabels[category]; ok {
-		return label
-	}
-	return "资讯"
+	return featuredCategoryLabel(category)
 }
 
 // IsValidCategory 校验分类是否合法。
@@ -64,9 +53,9 @@ func (s *FeaturedService) GetPublicList(page, pageSize int, category string) Fea
 		}
 		return q
 	})
-	list := make([]map[string]any, 0, len(items))
+	list := make([]FeaturedContentDTO, 0, len(items))
 	for i := range items {
-		list = append(list, featuredToListDict(&items[i]))
+		list = append(list, featuredContentDTO(&items[i]))
 	}
 	return FeaturedContentPageResult{
 		Items: list,
@@ -78,7 +67,7 @@ func (s *FeaturedService) GetPublicList(page, pageSize int, category string) Fea
 
 // GetPublicDetail 公开详情（含相关资讯 + 上一篇/下一篇）。
 // countView=false 时不改变 view_count（SSR/爬虫路径），true 时自增阅读量（现网既有行为）。
-func (s *FeaturedService) GetPublicDetail(id int, countView bool) (map[string]any, error) {
+func (s *FeaturedService) GetPublicDetail(id int, countView bool) (*FeaturedContentDetailDTO, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
 		return nil, errors.New("内容不存在")
@@ -95,47 +84,37 @@ func (s *FeaturedService) GetPublicDetail(id int, countView bool) (map[string]an
 		item.ViewCount++
 	}
 
-	detail := featuredToDetailDict(&item)
+	detail := featuredContentDetailDTO(&item)
 
 	// 相关资讯：同分类最新 5 篇（排除自身）
 	var related []model.FeaturedContent
 	s.db.Where("status = ? AND category = ? AND content_id <> ?", 1, item.Category, id).
 		Order("published_at DESC, content_id DESC").Limit(5).Find(&related)
-	relatedList := make([]map[string]any, 0, len(related))
+	relatedList := make([]FeaturedContentDTO, 0, len(related))
 	for i := range related {
-		relatedList = append(relatedList, featuredToListDict(&related[i]))
+		relatedList = append(relatedList, featuredContentDTO(&related[i]))
 	}
-	detail["related"] = relatedList
+	detail.Related = relatedList
 
 	// 上一篇：发布时间晚于当前（更近期）
 	var prev model.FeaturedContent
-	hasPrev := true
 	if err := s.db.Where("status = ? AND content_id <> ? AND (published_at > ? OR (published_at = ? AND content_id < ?))",
 		1, id, item.PublishedAt, item.PublishedAt, id).
-		Order("published_at ASC, content_id ASC").First(&prev).Error; err != nil {
-		hasPrev = false
-	}
-	if hasPrev {
-		detail["prev"] = featuredToNavDict(&prev)
-	} else {
-		detail["prev"] = nil
+		Order("published_at ASC, content_id ASC").First(&prev).Error; err == nil {
+		dto := featuredNavDTO(&prev)
+		detail.Prev = &dto
 	}
 
 	// 下一篇：发布时间早于当前（更早期）
 	var next model.FeaturedContent
-	hasNext := true
 	if err := s.db.Where("status = ? AND content_id <> ? AND (published_at < ? OR (published_at = ? AND content_id > ?))",
 		1, id, item.PublishedAt, item.PublishedAt, id).
-		Order("published_at DESC, content_id DESC").First(&next).Error; err != nil {
-		hasNext = false
-	}
-	if hasNext {
-		detail["next"] = featuredToNavDict(&next)
-	} else {
-		detail["next"] = nil
+		Order("published_at DESC, content_id DESC").First(&next).Error; err == nil {
+		dto := featuredNavDTO(&next)
+		detail.Next = &dto
 	}
 
-	return detail, nil
+	return &detail, nil
 }
 
 // AdminList 管理端列表（含草稿）。
@@ -149,9 +128,9 @@ func (s *FeaturedService) AdminList(page, pageSize int, category, status string)
 		}
 		return q
 	})
-	list := make([]map[string]any, 0, len(items))
+	list := make([]FeaturedContentDTO, 0, len(items))
 	for i := range items {
-		list = append(list, featuredToListDict(&items[i]))
+		list = append(list, featuredContentDTO(&items[i]))
 	}
 	return FeaturedContentPageResult{
 		Items: list,
@@ -162,42 +141,44 @@ func (s *FeaturedService) AdminList(page, pageSize int, category, status string)
 }
 
 // AdminDetail 管理端详情（含正文 Markdown）。
-func (s *FeaturedService) AdminDetail(id int) (map[string]any, error) {
+func (s *FeaturedService) AdminDetail(id int) (*FeaturedContentAdminDetailDTO, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
 		return nil, errors.New("内容不存在")
 	}
-	return featuredToDetailDict(&item), nil
+	dto := featuredContentAdminDetailDTO(&item)
+	return &dto, nil
 }
 
-// Create 创建内容精选。
-// data 字段：title(必填)、category(必填)、summary、cover_image、content、source、status(0/1)。
-func (s *FeaturedService) Create(data map[string]any) (map[string]any, error) {
-	title, _ := data["title"].(string)
-	if title == "" {
+// Create 创建内容精选（默认草稿；status=1 时写入 published_at）。
+func (s *FeaturedService) Create(in FeaturedContentInput) (*FeaturedContentAdminDetailDTO, error) {
+	if in.Title == "" {
 		return nil, errors.New("标题不能为空")
 	}
-	category, _ := data["category"].(string)
-	if category == "" || !s.IsValidCategory(category) {
+	if in.Category == "" || !s.IsValidCategory(in.Category) {
 		return nil, errors.New("分类无效")
 	}
 	status := int16(0) // 默认草稿
-	if v, ok := data["status"]; ok {
-		status = int16(toIntDefault(v, 0))
+	if in.Status != nil {
+		status = *in.Status
 	}
 	if status != 0 && status != 1 {
 		status = 0
 	}
+	sortOrder := 0
+	if in.SortOrder != nil {
+		sortOrder = *in.SortOrder
+	}
 	now := beijingNow()
 	item := model.FeaturedContent{
-		Title:      title,
-		Summary:    getString(data, "summary"),
-		CoverImage: getString(data, "cover_image"),
-		Content:    getString(data, "content"),
-		Category:   category,
-		Source:     getString(data, "source"),
+		Title:      in.Title,
+		Summary:    in.Summary,
+		CoverImage: in.CoverImage,
+		Content:    in.Content,
+		Category:   in.Category,
+		Source:     in.Source,
 		Status:     status,
-		SortOrder:  toIntDefault(data["sort_order"], 0),
+		SortOrder:  sortOrder,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
@@ -207,73 +188,70 @@ func (s *FeaturedService) Create(data map[string]any) (map[string]any, error) {
 	if err := s.db.Create(&item).Error; err != nil {
 		return nil, err
 	}
-	return featuredToDetailDict(&item), nil
+	dto := featuredContentAdminDetailDTO(&item)
+	return &dto, nil
 }
 
 // Update 更新内容精选。
-// 若从草稿改为已发布且未提供 published_at，则补写当前时间。
-func (s *FeaturedService) Update(id int, data map[string]any) (map[string]any, error) {
+// 若从草稿改为已发布，则补写当前时间；已发布 → 草稿保留 published_at。
+func (s *FeaturedService) Update(id int, in FeaturedContentUpdateInput) (*FeaturedContentAdminDetailDTO, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
 		return nil, errors.New("内容不存在")
 	}
-	if v, ok := data["title"]; ok {
-		if s, _ := v.(string); s != "" {
-			item.Title = s
-		}
+	if in.Title != nil && *in.Title != "" {
+		item.Title = *in.Title
 	}
-	if v, ok := data["category"]; ok {
-		cat, _ := v.(string)
-		if cat != "" && !s.IsValidCategory(cat) {
-			return nil, errors.New("分类无效")
-		}
+	if in.Category != nil {
+		cat := *in.Category
 		if cat != "" {
+			if !s.IsValidCategory(cat) {
+				return nil, errors.New("分类无效")
+			}
 			item.Category = cat
 		}
 	}
-	// 直接覆盖可写字段
-	if v, ok := data["summary"]; ok {
-		item.Summary, _ = v.(string)
+	if in.Summary != nil {
+		item.Summary = *in.Summary
 	}
-	if v, ok := data["cover_image"]; ok {
-		item.CoverImage, _ = v.(string)
+	if in.CoverImage != nil {
+		item.CoverImage = *in.CoverImage
 	}
-	if v, ok := data["content"]; ok {
-		item.Content, _ = v.(string)
+	if in.Content != nil {
+		item.Content = *in.Content
 	}
-	if v, ok := data["source"]; ok {
-		item.Source, _ = v.(string)
+	if in.Source != nil {
+		item.Source = *in.Source
 	}
-	if v, ok := data["sort_order"]; ok {
-		item.SortOrder = toIntDefault(v, 0)
+	if in.SortOrder != nil {
+		item.SortOrder = *in.SortOrder
 	}
 
 	// 状态变更处理
 	oldStatus := item.Status
 	newStatus := oldStatus
-	if v, ok := data["status"]; ok {
-		newStatus = int16(toIntDefault(v, int(oldStatus)))
+	if in.Status != nil {
+		newStatus = *in.Status
 		if newStatus != 0 && newStatus != 1 {
 			newStatus = oldStatus
 		}
 	}
 	if oldStatus == 0 && newStatus == 1 {
-		// 草稿 → 已发布：写入 published_at
 		now := beijingNow()
 		item.PublishedAt = &now
 	}
-	// 已发布 → 草稿：保留 published_at 便于重新发布时参考
 	item.Status = newStatus
 	item.UpdatedAt = beijingNow()
 
 	if err := s.db.Save(&item).Error; err != nil {
 		return nil, err
 	}
-	return featuredToDetailDict(&item), nil
+	dto := featuredContentAdminDetailDTO(&item)
+	return &dto, nil
 }
 
 // Delete 删除内容精选，并清理封面与正文内本站图片（featured/ 前缀）的存储文件。
-func (s *FeaturedService) Delete(id int) (map[string]any, error) {
+func (s *FeaturedService) Delete(id int) (*FeaturedDeleteResult, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
 		return nil, errors.New("内容不存在")
@@ -283,7 +261,7 @@ func (s *FeaturedService) Delete(id int) (map[string]any, error) {
 	}
 	// 清理封面与正文图片（仅清理本站 featured 子目录文件，外部链接不动）
 	s.deleteFeaturedImages(item.CoverImage, item.Content)
-	return map[string]any{"content_id": id}, nil
+	return &FeaturedDeleteResult{ContentID: id}, nil
 }
 
 // deleteFeaturedImages 清理精选内容关联的图片存储文件。
@@ -306,13 +284,14 @@ func (s *FeaturedService) deleteFeaturedImages(cover, content string) {
 }
 
 // Publish 发布内容精选（草稿 → 已发布）。
-func (s *FeaturedService) Publish(id int) (map[string]any, error) {
+func (s *FeaturedService) Publish(id int) (*FeaturedContentAdminDetailDTO, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
 		return nil, errors.New("内容不存在")
 	}
 	if item.Status == 1 {
-		return featuredToDetailDict(&item), nil
+		dto := featuredContentAdminDetailDTO(&item)
+		return &dto, nil
 	}
 	now := beijingNow()
 	if err := s.db.Model(&item).Updates(map[string]any{
@@ -325,7 +304,8 @@ func (s *FeaturedService) Publish(id int) (map[string]any, error) {
 	item.Status = 1
 	item.PublishedAt = &now
 	item.UpdatedAt = now
-	return featuredToDetailDict(&item), nil
+	dto := featuredContentAdminDetailDTO(&item)
+	return &dto, nil
 }
 
 // IncrementViewCount 客户端计数：仅已发布内容可计数，返回最新阅读量。
@@ -352,56 +332,7 @@ func (s *FeaturedService) SaveImage(content []byte, filename string) (string, er
 	if s.fileSvc == nil {
 		return "", errors.New("文件服务未初始化")
 	}
-	return s.fileSvc.SaveFile(content, filename, "featured")
-}
-
-// ===== dict 辅助 =====
-
-// featuredToListDict 列表项 dict（不含 content 正文）。
-func featuredToListDict(c *model.FeaturedContent) map[string]any {
-	d := map[string]any{
-		"content_id":     c.ContentID,
-		"title":          c.Title,
-		"summary":        c.Summary,
-		"cover_image":    c.CoverImage,
-		"category":       c.Category,
-		"category_label": featuredCategoryLabel(c.Category),
-		"source":         c.Source,
-		"status":         c.Status,
-		"view_count":     c.ViewCount,
-		"sort_order":     c.SortOrder,
-		"created_at":     formatISO(c.CreatedAt),
-		"updated_at":     formatISO(c.UpdatedAt),
-	}
-	if c.PublishedAt != nil {
-		d["published_at"] = formatISO(*c.PublishedAt)
-	} else {
-		d["published_at"] = nil
-	}
-	return d
-}
-
-// featuredToDetailDict 详情 dict（含 content 正文）。
-func featuredToDetailDict(c *model.FeaturedContent) map[string]any {
-	d := featuredToListDict(c)
-	d["content"] = c.Content
-	return d
-}
-
-// featuredToNavDict 上一篇/下一篇导航 dict（仅 id + title + category）。
-func featuredToNavDict(c *model.FeaturedContent) map[string]any {
-	d := map[string]any{
-		"content_id":     c.ContentID,
-		"title":          c.Title,
-		"category":       c.Category,
-		"category_label": featuredCategoryLabel(c.Category),
-	}
-	if c.PublishedAt != nil {
-		d["published_at"] = formatISO(*c.PublishedAt)
-	} else {
-		d["published_at"] = nil
-	}
-	return d
+	return s.fileSvc.Save(content, filename, "featured")
 }
 
 // featuredCategoryLabel 返回分类中文标签。

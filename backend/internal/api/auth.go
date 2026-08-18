@@ -18,14 +18,14 @@ import (
 // AuthHandler 认证相关 handler。
 type AuthHandler struct {
 	authSvc   *service.AuthService
-	fileSvc   *service.FileService
+	fileSvc   *service.FileStore
 	storage   storage.Storage
 	reviewSvc *service.ProfileReviewService
 	session   *security.Session
 }
 
 // NewAuthHandler 创建认证 handler。session 由装配根构建一次注入。
-func NewAuthHandler(sess *security.Session, authSvc *service.AuthService, fileSvc *service.FileService, st storage.Storage, reviewSvc *service.ProfileReviewService, logger *zap.Logger) *AuthHandler {
+func NewAuthHandler(sess *security.Session, authSvc *service.AuthService, fileSvc *service.FileStore, st storage.Storage, reviewSvc *service.ProfileReviewService, logger *zap.Logger) *AuthHandler {
 	return &AuthHandler{
 		authSvc: authSvc, fileSvc: fileSvc, storage: st, reviewSvc: reviewSvc,
 		session: sess,
@@ -222,7 +222,7 @@ func (h *AuthHandler) UploadAvatar(c *gin.Context) {
 		response.BadRequest(c, "未找到上传文件")
 		return
 	}
-	if ok, msg := h.fileSvc.ValidateImageFile(file.Filename, file.Size); !ok {
+	if ok, msg := h.fileSvc.ValidateImage(file.Filename, file.Size); !ok {
 		response.BadRequest(c, msg)
 		return
 	}
@@ -238,7 +238,7 @@ func (h *AuthHandler) UploadAvatar(c *gin.Context) {
 		return
 	}
 
-	url, err := h.fileSvc.SaveFile(content, file.Filename, "avatars")
+	url, err := h.fileSvc.Save(content, file.Filename, "avatars")
 	if err != nil {
 		response.ServerError(c, "头像保存失败: "+err.Error())
 		return

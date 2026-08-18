@@ -1,7 +1,7 @@
 // Package service 实现业务服务层。
 // 本文件：论坛图片模块——上传（校验 + 命名）与悬空图片生命周期（孤儿清理）。
-// 命名契约（文件名内嵌毫秒时间戳）由 FileService 单一拥有：SaveFile 负责写入，
-// ExtractTimestamp 负责提取，本模块不再自行解析时间戳。
+// 命名契约（文件名内嵌毫秒时间戳）由 FileStore.Save 写入；本模块自行解析该契约，
+// 不再依赖 FileStore 暴露 ExtractTimestamp（ADR-0015）。
 package service
 
 import (
@@ -9,6 +9,8 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,13 +29,13 @@ const (
 // ForumImageService 论坛图片模块：上传与悬空清理。
 type ForumImageService struct {
 	db      *gorm.DB
-	fileSvc *FileService
+	fileSvc *FileStore
 
 	logger *zap.Logger
 }
 
 // NewForumImageService 构造论坛图片服务。
-func NewForumImageService(db *gorm.DB, fileSvc *FileService, logger *zap.Logger) *ForumImageService {
+func NewForumImageService(db *gorm.DB, fileSvc *FileStore, logger *zap.Logger) *ForumImageService {
 	return &ForumImageService{db: db, fileSvc: fileSvc, logger: logger}
 }
 
@@ -46,13 +48,13 @@ type ForumImageError struct {
 func (e *ForumImageError) Error() string { return e.Message }
 
 // Upload 上传论坛图片：读取 multipart 文件头内容、校验格式/大小，
-// 经 FileService.SaveFile 保存到 images/forum/ 子目录（文件名 <name>_<毫秒时间戳>.<ext>），
+// 经 FileStore.Save 保存到 images/forum/ 子目录（文件名 <name>_<毫秒时间戳>.<ext>），
 // 返回完整可访问 URL。
 func (s *ForumImageService) Upload(ctx context.Context, fileHeader *multipart.FileHeader) (string, error) {
 	if fileHeader.Filename == "" {
 		return "", &ForumImageError{Status: http.StatusBadRequest, Message: "未选择文件"}
 	}
-	if ok, msg := s.fileSvc.ValidateImageFile(fileHeader.Filename, fileHeader.Size); !ok {
+	if ok, msg := s.fileSvc.ValidateImage(fileHeader.Filename, fileHeader.Size); !ok {
 		return "", &ForumImageError{Status: http.StatusBadRequest, Message: msg}
 	}
 	src, err := fileHeader.Open()
@@ -64,7 +66,7 @@ func (s *ForumImageService) Upload(ctx context.Context, fileHeader *multipart.Fi
 	if err != nil {
 		return "", &ForumImageError{Status: http.StatusInternalServerError, Message: "图片上传失败"}
 	}
-	url, err := s.fileSvc.SaveFile(content, fileHeader.Filename, ForumImageDirPrefix)
+	url, err := s.fileSvc.Save(content, fileHeader.Filename, ForumImageDirPrefix)
 	if err != nil {
 		return "", &ForumImageError{Status: http.StatusInternalServerError, Message: "图片上传失败: " + err.Error()}
 	}
@@ -78,7 +80,7 @@ func (s *ForumImageService) CleanupOrphans(_ context.Context) int {
 	if s.fileSvc == nil {
 		return 0
 	}
-	stored := s.fileSvc.ListFiles(ForumImageDirPrefix)
+	stored := s.fileSvc.List(ForumImageDirPrefix)
 	if len(stored) == 0 {
 		return 0
 	}
@@ -93,8 +95,8 @@ func (s *ForumImageService) CleanupOrphans(_ context.Context) int {
 		if !isForumImageURL(u) {
 			continue
 		}
-		if ms, ok := s.fileSvc.ExtractTimestamp(u); ok && time.UnixMilli(ms).Before(cutoff) {
-			if err := s.fileSvc.DeleteFile(u); err == nil {
+		if ms, ok := forumFileTimestamp(u); ok && time.UnixMilli(ms).Before(cutoff) {
+			if err := s.fileSvc.Delete(u); err == nil {
 				cleaned++
 			}
 		}
@@ -122,6 +124,28 @@ func (s *ForumImageService) collectReferencedImages() map[string]bool {
 		}
 	}
 	return ref
+}
+
+// forumFileTimestampRe 匹配 FileStore.Save 写入的毫秒时间戳（<name>_<ms>.<ext>）。
+var forumFileTimestampRe = regexp.MustCompile(`_(\d{10,})\.`)
+
+// forumFileTimestamp 从文件名/URL 提取 FileStore.Save 内嵌的毫秒时间戳。
+// 解析失败或时间戳非正数时返回 ok=false。
+func forumFileTimestamp(filename string) (int64, bool) {
+	idx := strings.LastIndex(filename, "/")
+	name := filename
+	if idx >= 0 {
+		name = filename[idx+1:]
+	}
+	m := forumFileTimestampRe.FindStringSubmatch(name)
+	if len(m) < 2 {
+		return 0, false
+	}
+	ms, err := strconv.ParseInt(m[1], 10, 64)
+	if err != nil || ms <= 0 {
+		return 0, false
+	}
+	return ms, true
 }
 
 // isForumImageURL 判断 URL 是否指向本站 images/forum/ 子目录。

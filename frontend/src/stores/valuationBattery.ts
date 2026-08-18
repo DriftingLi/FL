@@ -1,6 +1,7 @@
-// 电池 RUL 评估状态：当前结果 + 加载/错误态
+// 电池 RUL 评估状态：结果旅程的薄 adapter（ADR-0015）。
+// 状态机由 createValuationJourney 唯一实现；本 store 注入电池持久化 adapter。
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import type { Ref } from 'vue'
 import {
   createBatteryEvaluation,
   getBatteryEvaluation
@@ -10,69 +11,47 @@ import type {
   CreateBatteryResponse,
   BatteryEvaluationDetail
 } from '@/types/valuation/battery'
+import { createValuationJourney } from '@/composables/createValuationJourney'
 
 export const useBatteryStore = defineStore('battery', () => {
-  /** 当前评估结果摘要（Create 接口返回） */
-  const currentResult = ref<CreateBatteryResponse | null>(null)
-  /** 评估详情（含 20 维特征、cycle_features、suggestions） */
-  const currentDetail = ref<BatteryEvaluationDetail | null>(null)
-  /** 当前评估 ID（用于结果页跳报告） */
-  const currentId = ref<number | null>(null)
-  /** 提交/加载中 */
-  const loading = ref(false)
-  /** 错误信息 */
-  const error = ref<string | null>(null)
+  const journey = createValuationJourney<CreateBatteryRequest, CreateBatteryResponse, BatteryEvaluationDetail>(
+    {
+      submit: createBatteryEvaluation,
+      fetch: getBatteryEvaluation
+    },
+    {
+      idOfSubmit: r => r.evaluation_id,
+      idOfDetail: d => d.id,
+      submitErrorFallback: '提交失败',
+      loadErrorFallback: '加载失败'
+    }
+  )
+
+  // fetchWritesResult=false，因此 currentResult 只会写入提交结果；类型收窄到 CreateBatteryResponse。
+  const currentResult = journey.currentResult as Ref<CreateBatteryResponse | null>
+  const currentDetail = journey.currentDetail
 
   /** 提交循环数据并预测 */
-  async function submitCycles(payload: CreateBatteryRequest): Promise<CreateBatteryResponse> {
-    loading.value = true
-    error.value = null
-    try {
-      const data = await createBatteryEvaluation(payload)
-      currentResult.value = data
-      currentId.value = data.evaluation_id
-      return data
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : '提交失败'
-      error.value = msg
-      throw e
-    } finally {
-      loading.value = false
-    }
+  function submitCycles(payload: CreateBatteryRequest): Promise<CreateBatteryResponse> {
+    return journey.submit(payload)
   }
 
   /** 按 ID 拉取详情 */
-  async function fetchDetail(id: number): Promise<BatteryEvaluationDetail> {
-    loading.value = true
-    error.value = null
-    try {
-      const data = await getBatteryEvaluation(id)
-      currentDetail.value = data
-      currentId.value = data.id
-      return data
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : '加载失败'
-      error.value = msg
-      throw e
-    } finally {
-      loading.value = false
-    }
+  function fetchDetail(id: number): Promise<BatteryEvaluationDetail> {
+    return journey.fetch(id)
   }
 
   /** 重置全部状态（用于离开结果页后） */
   function reset() {
-    currentResult.value = null
-    currentDetail.value = null
-    currentId.value = null
-    error.value = null
+    journey.reset()
   }
 
   return {
     currentResult,
     currentDetail,
-    currentId,
-    loading,
-    error,
+    currentId: journey.currentId,
+    loading: journey.loading,
+    error: journey.error,
     submitCycles,
     fetchDetail,
     reset

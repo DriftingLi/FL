@@ -1,57 +1,66 @@
-// 评估状态：当前结果 + 提交 + 详情拉取（评估旅程状态收敛于此）
-// 重构说明：移除 ForkliftType（统一表单不再区分电动/内燃）；
-// 提交后拉取详情（含输入字段/建议/λ 锁定值），结果页刷新可按路由 id 兜底恢复
+// 评估状态：残值评估结果旅程的薄 adapter（ADR-0015）。
+// 状态机由 createValuationJourney 唯一实现；本 store 只注入持久化 adapter 与旧接口兼容语义。
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed } from 'vue'
 import { createEvaluation, getEvaluationDetail } from '@/api/valuation/evaluation'
 import type { CreateEvaluationRequest, EvaluationDetailResponse } from '@/types/valuation/evaluation'
+import { createValuationJourney } from '@/composables/createValuationJourney'
 
 export const useEvaluationStore = defineStore('evaluation', () => {
-  /** 最近一次评估结果（详情形态：含输入字段 + 建议 + λ 锁定值） */
-  const currentResult = ref<EvaluationDetailResponse | null>(null)
-  /** 最近一次评估的 id（用于跳转报告页） */
-  const currentId = ref<number | null>(null)
-  /** 提交中（按钮禁用态，composable 不再维护第二份状态） */
-  const submitting = ref(false)
-
-  /** 写入评估结果 */
-  function setResult(r: EvaluationDetailResponse, id: number) {
-    currentResult.value = r
-    currentId.value = id
-  }
-
-  /** 提交评估：创建即返回完整结果（含输入参数，ADR-0004 创建响应与详情同源）→ 落 store，返回 id。
-   * 不再追加调用详情接口——详情需登录（所有权校验），匿名用户提交后依赖创建响应渲染结果页。 */
-  async function submitEvaluation(payload: CreateEvaluationRequest): Promise<number | null> {
-    if (submitting.value) return null
-    submitting.value = true
-    try {
-      const result = await createEvaluation(payload)
-      currentResult.value = result
-      currentId.value = result.id
-      return result.id
-    } finally {
-      submitting.value = false
+  const journey = createValuationJourney<CreateEvaluationRequest, EvaluationDetailResponse, EvaluationDetailResponse>(
+    {
+      submit: createEvaluation,
+      fetch: getEvaluationDetail
+    },
+    {
+      idOfSubmit: r => r.id,
+      idOfDetail: d => d.id,
+      fetchWritesResult: true,
+      submitErrorFallback: '提交失败',
+      loadErrorFallback: '加载失败'
     }
+  )
+
+  /** 提交中（按钮禁用态，保留旧 submitting 命名，映射到 journey.loading） */
+  const submitting = computed(() => journey.loading.value)
+
+  /** 写入评估结果（保留旧 setResult 兼容入口） */
+  function setResult(r: EvaluationDetailResponse, id: number) {
+    journey.currentResult.value = r
+    journey.currentId.value = id
   }
 
-  /** 按 id 拉取详情（刷新恢复 / 直达结果页），成功返回 true */
+  /** 提交评估：创建即返回完整结果 → 落 journey，返回 id；在途重复调用返回 null。 */
+  async function submitEvaluation(payload: CreateEvaluationRequest): Promise<number | null> {
+    if (journey.loading.value) return null
+    await journey.submit(payload)
+    return journey.currentId.value
+  }
+
+  /** 按 id 拉取详情（刷新恢复 / 直达结果页），成功返回 true。 */
   async function fetchDetail(id: number): Promise<boolean> {
     try {
-      const detail = await getEvaluationDetail(id)
-      currentResult.value = detail
-      currentId.value = detail.id
+      await journey.fetch(id)
       return true
     } catch {
       return false
     }
   }
 
-  /** 清空全部 */
+  /** 清空全部（保留旧 clearAll 命名，内部为 journey.reset） */
   function clearAll() {
-    currentResult.value = null
-    currentId.value = null
+    journey.reset()
   }
 
-  return { currentResult, currentId, submitting, setResult, submitEvaluation, fetchDetail, clearAll }
+  return {
+    currentResult: journey.currentResult,
+    currentId: journey.currentId,
+    loading: journey.loading,
+    error: journey.error,
+    submitting,
+    setResult,
+    submitEvaluation,
+    fetchDetail,
+    clearAll
+  }
 })

@@ -21,9 +21,9 @@ func vditorError(msg string, errFiles []string) gin.H {
 }
 
 // uploadVditorImage 统一的 Vditor 图片上传适配器。
-// 公共骨架：FormFile 读取 → 空文件名守卫 → Open/ReadAll → ValidateImageFile → 保存（saver 注入）→ 信封。
+// 公共骨架：FormFile 读取 → 空文件名守卫 → Open/ReadAll → ValidateImage → 保存（saver 注入）→ 信封。
 // 返回 Vditor 期望格式：{ msg:"", code:0, data:{ errFiles:[], succMap:{"name":"url"} } }。
-func uploadVditorImage(c *gin.Context, fileSvc *service.FileService, saver vditorUploadSaver) {
+func uploadVditorImage(c *gin.Context, fileSvc *service.FileStore, saver vditorUploadSaver) {
 	file, err := c.FormFile("file")
 	if err != nil {
 		c.JSON(200, vditorError("未找到上传文件", []string{}))
@@ -44,7 +44,7 @@ func uploadVditorImage(c *gin.Context, fileSvc *service.FileService, saver vdito
 		c.JSON(200, vditorError("文件读取失败", []string{file.Filename}))
 		return
 	}
-	if ok, msg := fileSvc.ValidateImageFile(file.Filename, file.Size); !ok {
+	if ok, msg := fileSvc.ValidateImage(file.Filename, file.Size); !ok {
 		c.JSON(200, vditorError(msg, []string{file.Filename}))
 		return
 	}

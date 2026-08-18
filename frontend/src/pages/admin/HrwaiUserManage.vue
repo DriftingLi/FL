@@ -4,17 +4,12 @@
 // 合并原学员管理与评估用户管理,支持分页列表 + 关键词搜索 + 新增 + 编辑 + 重置密码 + 启用/禁用 + 删除
 import { ref, reactive, onMounted } from 'vue'
 import { Plus, Search, ArrowDown } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { adminApi, type HrwaiUser } from '@/api/admin'
+import { useAdminTable } from '@/composables/useAdminTable'
+import { formatDateTime } from '@/utils/format'
 import { phoneRules, passwordRules, emailRules, companyRules } from '@/utils/validate'
-
-const loading = ref(false)
-const users = ref<HrwaiUser[]>([])
-const searchKeyword = ref('')
-const currentPage = ref(1)
-const pageSize = ref(10)
-const total = ref(0)
 
 // 新增弹窗
 const dialogVisible = ref(false)
@@ -50,32 +45,47 @@ const pwdFormRules: FormRules = {
   password: passwordRules
 }
 
-function formatDate(dateStr: string): string {
-  if (!dateStr) return '-'
-  const d = new Date(dateStr)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-
-async function loadUsers() {
-  loading.value = true
+async function handleToggleStatus(row: HrwaiUser) {
   try {
-    const data = await adminApi.getHrwaiUsers({
-      page: currentPage.value,
-      page_size: pageSize.value,
-      keyword: searchKeyword.value || undefined
-    })
-    users.value = data?.list ?? []
-    total.value = data?.total ?? 0
+    const toggled = await adminApi.toggleHrwaiUserStatus(row.id)
+    const next = toggled?.status
+    ElMessage.success(next === 1 ? '已启用' : '已禁用')
+    table.load()
   } catch (error) {
-    console.error('加载 HRWAI 用户列表失败:', error)
-  } finally {
-    loading.value = false
+    console.error('切换状态失败:', error)
   }
 }
 
-function handleSearch() {
-  currentPage.value = 1
-  loadUsers()
+async function handleDelete(row: HrwaiUser) {
+  try {
+    await adminApi.deleteHrwaiUser(row.id)
+    ElMessage.success('用户已删除')
+    table.load()
+  } catch (error) {
+    console.error('删除用户失败:', error)
+  }
+}
+
+// admin 列表状态机：本页只声明 fetch 与行操作 adapter
+const table = useAdminTable<HrwaiUser>({
+  fetch: async (paging, filters) => {
+    const data = await adminApi.getHrwaiUsers({
+      page: paging.page,
+      page_size: paging.pageSize,
+      keyword: filters.keyword ? String(filters.keyword) : undefined
+    })
+    return { list: data?.list ?? [], total: data?.total ?? 0 }
+  },
+  actions: {
+    resetPwd: openResetPwdDialog,
+    toggle: handleToggleStatus,
+    delete: deleteRow
+  }
+})
+const { loading, list, total, currentPage, pageSize, searchKeyword, load, search, handleAction } = table
+
+function deleteRow(row: HrwaiUser): Promise<void> {
+  return table.confirmDelete(row, r => handleDelete(r), '确定删除该用户？删除后不可恢复')
 }
 
 function openCreateDialog() {
@@ -106,7 +116,7 @@ async function handleSubmit() {
     })
     ElMessage.success(created?.username ? `用户添加成功，昵称：${created.username}` : '用户添加成功')
     dialogVisible.value = false
-    loadUsers()
+    table.load()
   } catch (error) {
     // 错误提示已由 request 拦截器处理
     console.error('保存 HRWAI 用户失败:', error)
@@ -138,53 +148,8 @@ async function handleResetPwd() {
   }
 }
 
-async function handleToggleStatus(row: HrwaiUser) {
-  try {
-    const toggled = await adminApi.toggleHrwaiUserStatus(row.id)
-    const next = toggled?.status
-    ElMessage.success(next === 1 ? '已启用' : '已禁用')
-    loadUsers()
-  } catch (error) {
-    console.error('切换状态失败:', error)
-  }
-}
-
-async function handleDelete(row: HrwaiUser) {
-  try {
-    await adminApi.deleteHrwaiUser(row.id)
-    ElMessage.success('用户已删除')
-    loadUsers()
-  } catch (error) {
-    console.error('删除用户失败:', error)
-  }
-}
-
-// 操作下拉菜单统一入口
-async function handleAction(cmd: string, row: HrwaiUser) {
-  switch (cmd) {
-    case 'resetPwd':
-      openResetPwdDialog(row)
-      break
-    case 'toggle':
-      handleToggleStatus(row)
-      break
-    case 'delete':
-      try {
-        await ElMessageBox.confirm('确定删除该用户？删除后不可恢复', '提示', {
-          type: 'warning',
-          confirmButtonText: '确定',
-          cancelButtonText: '取消'
-        })
-        await handleDelete(row)
-      } catch {
-        // 用户取消
-      }
-      break
-  }
-}
-
 onMounted(() => {
-  loadUsers()
+  table.load()
 })
 </script>
 
@@ -203,17 +168,17 @@ onMounted(() => {
         placeholder="搜索账号 / 昵称 / 手机号"
         clearable
         style="width: 280px"
-        @clear="handleSearch"
-        @keyup.enter="handleSearch"
+        @clear="search"
+        @keyup.enter="search"
       >
         <template #prefix>
           <el-icon><Search /></el-icon>
         </template>
       </el-input>
-      <el-button type="primary" @click="handleSearch">搜索</el-button>
+      <el-button type="primary" @click="search">搜索</el-button>
     </div>
 
-    <el-table :data="users" v-loading="loading" stripe border style="width: 100%">
+    <el-table :data="list" v-loading="loading" stripe border style="width: 100%">
       <el-table-column prop="id" label="ID" width="70" align="center" />
       <el-table-column prop="uid" label="UID" min-width="150">
         <template #default="{ row }">
@@ -246,7 +211,7 @@ onMounted(() => {
       </el-table-column>
       <el-table-column prop="created_at" label="注册时间" width="160" align="center">
         <template #default="{ row }">
-          {{ formatDate(row.created_at) }}
+          {{ formatDateTime(row.created_at) }}
         </template>
       </el-table-column>
       <el-table-column label="操作" width="90" fixed="right" align="center">
@@ -274,8 +239,8 @@ onMounted(() => {
         :total="total"
         :page-sizes="[10, 20, 50]"
         layout="total, sizes, prev, pager, next"
-        @size-change="loadUsers"
-        @current-change="loadUsers"
+        @size-change="load"
+        @current-change="load"
       />
     </div>
 

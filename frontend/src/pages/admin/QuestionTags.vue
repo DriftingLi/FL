@@ -48,17 +48,17 @@
 
           <div class="filter-bar">
             <el-input
-              v-model="keyword"
+              v-model="searchKeyword"
               placeholder="搜索题干"
               clearable
               style="width: 220px"
-              @keyup.enter="loadQuestions"
-              @clear="loadQuestions"
+              @keyup.enter="search"
+              @clear="search"
             />
-            <el-select v-model="filterType" placeholder="题型" clearable style="width: 130px" @change="loadQuestions">
+            <el-select v-model="filterType" placeholder="题型" clearable style="width: 130px" @change="applyQuestionFilters">
               <el-option v-for="o in questionTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
             </el-select>
-            <el-button type="primary" @click="loadQuestions">查询</el-button>
+            <el-button type="primary" @click="search">查询</el-button>
             <el-button
               v-if="selectedIds.length > 0"
               type="success"
@@ -69,8 +69,8 @@
           </div>
 
           <el-table
-            :data="questions"
-            v-loading="questionsLoading"
+            :data="list"
+            v-loading="loading"
             stripe
             border
             size="small"
@@ -106,8 +106,8 @@
               :total="total"
               :page-sizes="[10, 20, 50]"
               layout="total, sizes, prev, pager, next"
-              @size-change="currentPage = 1; loadQuestions()"
-              @current-change="loadQuestions"
+              @size-change="search"
+              @current-change="load"
             />
           </div>
         </el-card>
@@ -161,19 +161,14 @@ import { ElMessage, type FormInstance } from 'element-plus'
 import { trainingApi, type QuestionTag } from '@/api/training'
 import { questionBankApi, type QuestionsQuery } from '@/api/questionBank'
 import { questionTypeOptions, typeMap } from '@/constants/question'
+import { useAdminTable } from '@/composables/useAdminTable'
 import type { Question } from '@/types/question'
 
 const tags = ref<QuestionTag[]>([])
 const tagsLoading = ref(false)
 const currentTagId = ref<number | null>(null)
 
-const questions = ref<Question[]>([])
-const questionsLoading = ref(false)
-const keyword = ref('')
 const filterType = ref('')
-const currentPage = ref(1)
-const pageSize = ref(10)
-const total = ref(0)
 const selectedIds = ref<number[]>([])
 
 const currentTagName = computed(() => {
@@ -208,32 +203,33 @@ async function loadTags() {
   }
 }
 
-async function loadQuestions() {
-  questionsLoading.value = true
-  try {
+// 题目列表状态机：tags 侧栏仍为局部状态，questions 表格收编到 useAdminTable
+const table = useAdminTable<Question>({
+  fetch: async (paging, filters) => {
     const params: QuestionsQuery = {
-      page: currentPage.value,
-      page_size: pageSize.value
+      page: paging.page,
+      page_size: paging.pageSize
     }
-    if (currentTagId.value) params.tag_id = currentTagId.value
-    if (keyword.value) params.keyword = keyword.value
-    if (filterType.value) params.type = filterType.value
-
+    if (filters.tag_id) params.tag_id = Number(filters.tag_id)
+    if (filters.keyword) params.keyword = String(filters.keyword)
+    if (filters.type) params.type = String(filters.type)
     const res = await questionBankApi.getQuestions(params)
-    questions.value = res.questions || []
-    total.value = res.total || 0
-  } catch (error) {
-    console.error('加载题目失败:', error)
-    /* 错误已由拦截器提示 */
-  } finally {
-    questionsLoading.value = false
-  }
+    return { list: res.questions || [], total: res.total || 0 }
+  },
+  searchable: true
+})
+const { loading, list, total, currentPage, pageSize, searchKeyword, load, search } = table
+
+function applyQuestionFilters() {
+  table.applyFilters({
+    tag_id: currentTagId.value ?? '',
+    type: filterType.value
+  })
 }
 
 function selectTag(tagId: number) {
   currentTagId.value = currentTagId.value === tagId ? null : tagId
-  currentPage.value = 1
-  loadQuestions()
+  applyQuestionFilters()
 }
 
 function handleSelectionChange(rows?: Question[] | undefined) {
@@ -279,7 +275,7 @@ async function handleDeleteTag(tag: QuestionTag) {
     ElMessage.success('标签已删除')
     if (currentTagId.value === tag.id) currentTagId.value = null
     await loadTags()
-    loadQuestions()
+    load()
   } catch (error) {
     console.error('删除标签失败:', error)
     /* 错误已由拦截器提示 */
@@ -300,7 +296,7 @@ async function submitTagAssign() {
     }
     ElMessage.success('打标完成')
     tagAssignVisible.value = false
-    loadQuestions()
+    load()
   } catch (error) {
     console.error('打标失败:', error)
     /* 错误已由拦截器提示 */
@@ -311,7 +307,7 @@ async function submitTagAssign() {
 
 onMounted(() => {
   loadTags()
-  loadQuestions()
+  load()
 })
 </script>
 
