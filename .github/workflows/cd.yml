@@ -33,8 +33,9 @@ on:
         default: false
 
 concurrency:
-  # 同一环境同时只允许一条部署：不同分支并发部署到 testing/production 会互相抢占 Docker 资源
-  group: cd-${{ inputs.environment }}
+  # 同一环境同一 ref 同时只允许一条部署（同 ref 串行，避免部署互相抢占 Docker 资源）；
+  # 按 ref 区分组：卡死的 run（如 checkout 挂起无法取消）不会阻塞其他 ref 的部署
+  group: cd-${{ inputs.environment }}-${{ inputs.ref }}
   cancel-in-progress: false
 
 env:
@@ -281,7 +282,7 @@ jobs:
       SECRET_KEY: ${{ secrets.SECRET_KEY }}
       JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
       JWT_EXPIRES_HOURS: ${{ secrets.JWT_EXPIRES_HOURS || '24' }}
-      # 登录态 Cookie（父域名共享登录；testing 走 http 时 Secure=false）
+      # 登录态 Cookie（父域名共享登录；production 走 HTTPS 时 Secure=true）
       AUTH_COOKIE_NAME: ${{ secrets.AUTH_COOKIE_NAME || 'hrwai_token' }}
       AUTH_COOKIE_DOMAIN: ${{ secrets.AUTH_COOKIE_DOMAIN }}
       AUTH_COOKIE_SECURE: ${{ inputs.environment == 'production' && 'true' || 'false' }}
