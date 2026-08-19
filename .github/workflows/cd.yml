@@ -33,9 +33,12 @@ on:
         default: false
 
 concurrency:
-  # 同一环境同一 ref 同时只允许一条部署（同 ref 串行，避免部署互相抢占 Docker 资源）；
-  # 按 ref 区分组：卡死的 run（如 checkout 挂起无法取消）不会阻塞其他 ref 的部署
-  group: cd-${{ inputs.environment }}-${{ inputs.ref }}
+  # 同一环境同时只允许一条部署（串行，避免部署互相抢占 Docker 资源/竞争 .env）。
+  # 仅按环境分组、不按 ref：连续合并多个 PR 时不同 ref 的 CD 若不互斥会并发部署
+  # 同一目标（曾致两条 production CD 并发竞争 .env.tmp，.env 丢失后 compose 回退
+  # Docker Hub 默认镜像名拉取超时，栈停机）。代价：卡死的 run 会阻塞后续部署，
+  # 需手动 cancel（github.com/*/actions 页面）。
+  group: cd-${{ inputs.environment }}
   cancel-in-progress: false
 
 env:

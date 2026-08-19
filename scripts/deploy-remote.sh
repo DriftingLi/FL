@@ -227,9 +227,11 @@ write_env_file() {
         echo "REDIS_VOLUME=${REDIS_VOLUME:-redisdata-prod}"
         echo "UPLOADS_VOLUME=${UPLOADS_VOLUME:-uploads-data}"
         echo "REPORTS_VOLUME=${REPORTS_VOLUME:-reports-data}"
-    } > "${DEPLOY_PATH}/.env.tmp"
+    } > "${DEPLOY_PATH}/.env.tmp.$$"
+    # 唯一临时文件（$$）：并发部署时两条进程写各自 tmp，避免共享 .env.tmp 的
+    # rm/mv 交错把 .env 删丢（曾致 compose 回退默认镜像名去拉 Docker Hub 超时）
     rm -f "${DEPLOY_PATH}/.env"
-    mv "${DEPLOY_PATH}/.env.tmp" "${DEPLOY_PATH}/.env"
+    mv "${DEPLOY_PATH}/.env.tmp.$$" "${DEPLOY_PATH}/.env"
     chmod 600 "${DEPLOY_PATH}/.env"
     log_ok ".env 文件已生成（$(wc -l < "${DEPLOY_PATH}/.env") 行）"
 }
