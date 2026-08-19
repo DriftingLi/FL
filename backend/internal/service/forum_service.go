@@ -57,6 +57,8 @@ type ForumTopicDTO struct {
 	CreatedAt    string      `json:"created_at"`
 	Author       ForumAuthor `json:"author"`
 	CanDelete    bool        `json:"can_delete"`
+	LikesCount   int64       `json:"likes_count"`
+	LikedByMe    bool        `json:"liked_by_me"`
 }
 
 // ForumReplyDTO 论坛回复对象。
@@ -240,8 +242,13 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int) (map[string]any, er
 		})
 	}
 
+	// 点赞状态（ADR-0018）：详情返回计数与当前用户是否已赞。
+	topicDTO := row.toDTO(viewerID)
+	topicDTO.LikesCount = s.topicLikesCount(topicID)
+	topicDTO.LikedByMe = viewerID > 0 && s.hasLiked(viewerID, topicID)
+
 	return map[string]any{
-		"topic":   row.toDTO(viewerID),
+		"topic":   topicDTO,
 		"replies": replyDTOs,
 	}, nil
 }
@@ -584,4 +591,239 @@ func marshalImageURLs(urls []string) model.JSONB {
 	}
 	b, _ := json.Marshal(urls)
 	return model.JSONB(b)
+}
+
+// ===== 论坛互动（ADR-0018：点赞 / 举报 / 我的帖子 / 我的回复）=====
+
+// LikeTopic 点赞主题（幂等：重复点赞不报错、不重复计数）。
+func (s *ForumService) LikeTopic(userID int, topicID int64) (int64, error) {
+	var cnt int64
+	if err := s.db.Model(&model.ForumTopic{}).Where("id = ?", topicID).Count(&cnt).Error; err != nil {
+		return 0, err
+	}
+	if cnt == 0 {
+		return 0, errors.New("主题不存在")
+	}
+	var existing model.ForumTopicLike
+	if err := s.db.Where("topic_id = ? AND user_id = ?", topicID, userID).
+		Limit(1).Find(&existing).Error; err != nil {
+		return 0, err
+	}
+	if existing.ID == 0 {
+		if err := s.db.Create(&model.ForumTopicLike{
+			TopicID: topicID, UserID: userID, CreatedAt: beijingNow(),
+		}).Error; err != nil {
+			return 0, err
+		}
+	}
+	return s.topicLikesCount(topicID), nil
+}
+
+// UnlikeTopic 取消点赞（幂等：未点赞时直接返回当前计数）。
+func (s *ForumService) UnlikeTopic(userID int, topicID int64) (int64, error) {
+	if err := s.db.Where("topic_id = ? AND user_id = ?", topicID, userID).
+		Delete(&model.ForumTopicLike{}).Error; err != nil {
+		return 0, err
+	}
+	return s.topicLikesCount(topicID), nil
+}
+
+// topicLikesCount 主题点赞数。
+func (s *ForumService) topicLikesCount(topicID int64) int64 {
+	var n int64
+	s.db.Model(&model.ForumTopicLike{}).Where("topic_id = ?", topicID).Count(&n)
+	return n
+}
+
+// hasLiked 当前用户是否已点赞。
+func (s *ForumService) hasLiked(userID int, topicID int64) bool {
+	var n int64
+	s.db.Model(&model.ForumTopicLike{}).Where("topic_id = ? AND user_id = ?", topicID, userID).Count(&n)
+	return n > 0
+}
+
+// CreateReport 举报主题或回复（topicID/replyID 二选一，由调用方保证）。
+func (s *ForumService) CreateReport(userID int, topicID, replyID *int64, reason string) error {
+	reason = strings.TrimSpace(reason)
+	if utf8.RuneCountInString(reason) < 1 || utf8.RuneCountInString(reason) > 500 {
+		return errors.New("举报理由长度需在 1-500 个字符之间")
+	}
+	if (topicID == nil) == (replyID == nil) {
+		return errors.New("举报对象必须为主题或回复之一")
+	}
+	if topicID != nil {
+		var cnt int64
+		s.db.Model(&model.ForumTopic{}).Where("id = ?", *topicID).Count(&cnt)
+		if cnt == 0 {
+			return errors.New("主题不存在")
+		}
+	}
+	if replyID != nil {
+		var cnt int64
+		s.db.Model(&model.ForumReply{}).Where("id = ?", *replyID).Count(&cnt)
+		if cnt == 0 {
+			return errors.New("回复不存在")
+		}
+	}
+	return s.db.Create(&model.ForumReport{
+		ReporterID: userID, TopicID: topicID, ReplyID: replyID,
+		Reason: reason, Status: 0, CreatedAt: beijingNow(),
+	}).Error
+}
+
+// ForumReportDTO 管理端举报条目。
+type ForumReportDTO struct {
+	ID         int64  `json:"id"`
+	ReporterID int    `json:"reporter_id"`
+	Reporter   string `json:"reporter"`
+	TopicID    *int64 `json:"topic_id,omitempty"`
+	TopicTitle string `json:"topic_title"`
+	ReplyID    *int64 `json:"reply_id,omitempty"`
+	Reason     string `json:"reason"`
+	Status     int16  `json:"status"`
+	CreatedAt  string `json:"created_at"`
+}
+
+// ForumReportPageResult 举报分页结果。
+type ForumReportPageResult struct {
+	Page    int              `json:"page"`
+	Pages   int              `json:"pages"`
+	Total   int64            `json:"total"`
+	Reports []ForumReportDTO `json:"reports"`
+}
+
+// ListReports 管理端举报列表（status: nil 全部 / 0 待处理 / 1 已处理）。
+func (s *ForumService) ListReports(page, pageSize int, status *int16) (*ForumReportPageResult, error) {
+	type reportRow struct {
+		ID         int64
+		ReporterID int
+		Reporter   string
+		TopicID    *int64
+		TopicTitle string
+		ReplyID    *int64
+		Reason     string
+		Status     int16
+		CreatedAt  time.Time
+	}
+	rows, total, page, pageSize := paging.QueryWithScan[reportRow](s.db, page, pageSize, 20, 100,
+		"r.created_at DESC, r.id DESC",
+		func(q *gorm.DB) *gorm.DB {
+			q = q.Table("forum_report AS r").
+				Select("r.id, r.reporter_id, r.topic_id, r.reply_id, r.reason, r.status, r.created_at, " +
+					"COALESCE(u.username, '') AS reporter, COALESCE(t.title, '') AS topic_title").
+				Joins("LEFT JOIN hrwai_users AS u ON u.id = r.reporter_id").
+				Joins("LEFT JOIN forum_topics AS t ON t.id = r.topic_id")
+			if status != nil {
+				q = q.Where("r.status = ?", *status)
+			}
+			return q
+		})
+	items := make([]ForumReportDTO, 0, len(rows))
+	for _, r := range rows {
+		items = append(items, ForumReportDTO{
+			ID: r.ID, ReporterID: r.ReporterID, Reporter: r.Reporter,
+			TopicID: r.TopicID, TopicTitle: r.TopicTitle, ReplyID: r.ReplyID,
+			Reason: r.Reason, Status: r.Status, CreatedAt: formatISO(r.CreatedAt),
+		})
+	}
+	return &ForumReportPageResult{
+		Page: page, Pages: response.PageCount(total, pageSize),
+		Total: total, Reports: items,
+	}, nil
+}
+
+// HandleReport 管理端处理举报（status: 0 待处理 / 1 已处理）。
+func (s *ForumService) HandleReport(reportID int64, status int16) error {
+	if status != 0 && status != 1 {
+		return errors.New("状态仅支持 0（待处理）/ 1（已处理）")
+	}
+	res := s.db.Model(&model.ForumReport{}).Where("id = ?", reportID).
+		Update("status", status)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return errors.New("举报不存在")
+	}
+	return nil
+}
+
+// MyTopics 我的帖子（复用主题列表行装配，按最后活跃倒序）。
+func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResult, error) {
+	rows, total, page, pageSize := paging.QueryWithScan[topicRow](s.db, page, pageSize, 10, 100,
+		"COALESCE(t.last_reply_at, t.created_at) DESC, t.id DESC",
+		func(q *gorm.DB) *gorm.DB {
+			return q.Table("forum_topics AS t").
+				Select("t.id, t.chapter_id, t.title, t.content, t.images, t.view_count, t.reply_count, t.last_reply_at, t.created_at, "+
+					"u.id AS user_id, u.username, u.avatar_url, COALESCE(ch.title, '') AS chapter_title").
+				Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
+				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").
+				Where("t.user_id = ?", userID)
+		})
+	items := make([]ForumTopicDTO, 0, len(rows))
+	for _, r := range rows {
+		items = append(items, r.toDTO(userID))
+	}
+	return &ForumTopicPageResult{
+		Page: page, Pages: response.PageCount(total, pageSize),
+		Topics: items, Total: total,
+	}, nil
+}
+
+// MyReplyDTO 我的回复条目（带主题标题回填）。
+type MyReplyDTO struct {
+	ID         int64       `json:"id"`
+	TopicID    int64       `json:"topic_id"`
+	TopicTitle string      `json:"topic_title"`
+	ParentID   *int64      `json:"parent_id,omitempty"`
+	Content    string      `json:"content"`
+	Images     []string    `json:"images"`
+	CreatedAt  string      `json:"created_at"`
+	Author     ForumAuthor `json:"author"`
+}
+
+// MyReplyPageResult 我的回复分页结果。
+type MyReplyPageResult struct {
+	Page    int          `json:"page"`
+	Pages   int          `json:"pages"`
+	Total   int64        `json:"total"`
+	Replies []MyReplyDTO `json:"replies"`
+}
+
+// MyReplies 我的回复（主题被删时标题为空串，条目保留）。
+func (s *ForumService) MyReplies(userID, page, pageSize int) (*MyReplyPageResult, error) {
+	type myReplyRow struct {
+		ID         int64
+		TopicID    int64
+		TopicTitle string
+		ParentID   *int64
+		Content    string
+		Images     string
+		CreatedAt  time.Time
+		UserID     int
+		Username   string
+		AvatarURL  string
+	}
+	rows, total, page, pageSize := paging.QueryWithScan[myReplyRow](s.db, page, pageSize, 10, 100,
+		"r.created_at DESC, r.id DESC",
+		func(q *gorm.DB) *gorm.DB {
+			return q.Table("forum_replies AS r").
+				Select("r.id, r.topic_id, r.parent_id, r.content, r.images, r.created_at, "+
+					"u.id AS user_id, u.username, u.avatar_url, COALESCE(t.title, '') AS topic_title").
+				Joins("JOIN hrwai_users AS u ON u.id = r.user_id").
+				Joins("LEFT JOIN forum_topics AS t ON t.id = r.topic_id").
+				Where("r.user_id = ?", userID)
+		})
+	items := make([]MyReplyDTO, 0, len(rows))
+	for _, r := range rows {
+		items = append(items, MyReplyDTO{
+			ID: r.ID, TopicID: r.TopicID, TopicTitle: r.TopicTitle, ParentID: r.ParentID,
+			Content: r.Content, Images: parseImageURLs(r.Images), CreatedAt: formatISO(r.CreatedAt),
+			Author: ForumAuthor{UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL},
+		})
+	}
+	return &MyReplyPageResult{
+		Page: page, Pages: response.PageCount(total, pageSize),
+		Total: total, Replies: items,
+	}, nil
 }

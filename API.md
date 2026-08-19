@@ -833,6 +833,12 @@ data: null
 | POST | `/api/forum/topics/:id/replies` | 回复（images 最多 3 张；支持回复楼层） |
 | DELETE | `/api/forum/topics/:id` | 删除自己的帖子 |
 | DELETE | `/api/forum/replies/:id` | 删除自己的回复 |
+| POST | `/api/forum/topics/:id/like` | 点赞（幂等，ADR-0018） |
+| DELETE | `/api/forum/topics/:id/like` | 取消点赞（幂等） |
+| POST | `/api/forum/topics/:id/report` | 举报主题（reason 1-500 字） |
+| POST | `/api/forum/replies/:id/report` | 举报回复 |
+| GET | `/api/forum/my-topics` | 我的帖子（分页） |
+| GET | `/api/forum/my-replies` | 我的回复（分页，含主题标题回填） |
 
 **管理端 `/api/admin/forum`（role=admin）**
 
@@ -842,6 +848,8 @@ data: null
 | GET | `/api/admin/forum/topics/:id` | 帖子详情 |
 | DELETE | `/api/admin/forum/topics/:id` | 删除帖子 |
 | DELETE | `/api/admin/forum/replies/:id` | 删除回复 |
+| GET | `/api/admin/forum/reports?status=&page=&page_size=` | 举报列表（status 0 待处理/1 已处理，缺省全部） |
+| PUT | `/api/admin/forum/reports/:id` | 处理举报（body: `{"status": 1}`） |
 
 **POST /api/forum/upload-image**
 
@@ -866,7 +874,7 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 响应 200：data 为帖子对象 + `replies` 数组：
 
 ```json
-{ "code": 200, "message": "success", "data": { "id": 1, "title": "...", "content": "...", "images": [], "view_count": 10, "reply_count": 2, "last_reply_at": "...", "created_at": "...", "author": { ... }, "can_delete": true, "replies": [ { "id": 1, "topic_id": 1, "parent_id": null, "parent_name": null, "content": "回复内容", "images": [], "created_at": "...", "author": { ... }, "can_delete": true } ] } }
+{ "code": 200, "message": "success", "data": { "id": 1, "title": "...", "content": "...", "images": [], "view_count": 10, "reply_count": 2, "last_reply_at": "...", "created_at": "...", "author": { ... }, "can_delete": true, "likes_count": 3, "liked_by_me": true, "replies": [ { "id": 1, "topic_id": 1, "parent_id": null, "parent_name": null, "content": "回复内容", "images": [], "created_at": "...", "author": { ... }, "can_delete": true } ] } }
 ```
 
 **POST /api/forum/topics/:id/replies**
@@ -874,6 +882,64 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 请求体：`{ "content": "回复内容", "images": [], "parent_reply_id": 0 }`
 
 **DELETE /api/forum/topics/:id** / **DELETE /api/forum/replies/:id**：请求体 `{}`，响应 200 `{ "code": 200, "message": "删除成功", "data": null }`。
+
+---
+
+## 14a. 通用收藏 `/api/favorites`（role=hrwai_user，ADR-0018）
+
+多态收藏：`target_type` ∈ course / chapter / question / featured / topic；user+type+id 唯一（幂等）。收藏时校验目标存在且可见（课程=已发布+挂载、题目=published、精选=已发布）；列表实时回填目标快照，目标已删除的条目不出现。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/favorites?target_type=&page=&page_size=` | 我的收藏列表（快照回填） |
+| POST | `/api/favorites` | 收藏（body: `{ "target_type": "course", "target_id": 1 }`，幂等） |
+| DELETE | `/api/favorites/:id` | 取消收藏（仅本人） |
+| GET | `/api/favorites/check?target_type=&target_id=` | 是否已收藏 |
+
+**POST /api/favorites** 响应 201：
+
+```json
+{ "code": 201, "message": "收藏成功", "data": { "favorite_id": 1, "target_type": "course", "target_id": 1, "title": "叉车基本构造", "cover": "/static/covers/c1.png", "created_at": "..." } }
+```
+
+**GET /api/favorites/check** 响应 200：`{ "code": 200, "message": "success", "data": { "favorited": true, "favorite_id": 1 } }`
+
+## 14b. 全局搜索 `/api/search`（公开，ADR-0018）
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/search?keyword=&type=&page=&page_size=` | 全局搜索 |
+
+`type` ∈ course / question / content / topic；缺省返回各分区 top 5 + 总数，指定类型时分页。可见性与业务口径一致：课程=已发布+挂载、题目=published、精选=已发布、帖子全量（物理删除即消失）。匹配为标题/内容 LIKE（不区分大小写）。
+
+**GET /api/search?keyword=液压**（全部分区）响应 200：
+
+```json
+{ "code": 200, "message": "success", "data": { "keyword": "液压", "courses": { "items": [ { "type": "course", "id": 1, "title": "液压传动维修", "cover": "...", "summary": "液压系统原理与维修" } ], "total": 1 }, "questions": { "items": [ { "type": "question", "id": 5, "title": "液压油温过高的原因不包括…", "cover": "", "summary": "" } ], "total": 1 }, "contents": { "items": [], "total": 0 }, "topics": { "items": [], "total": 0 } } }
+```
+
+**GET /api/search?keyword=液压&type=course**（分页）响应 200：
+
+```json
+{ "code": 200, "message": "success", "data": { "keyword": "液压", "type": "course", "total": 1, "page": 1, "pages": 1, "items": [ { "type": "course", "id": 1, "title": "液压传动维修", "cover": "...", "summary": "..." } ] } }
+```
+
+## 14c. 学习资料 `/api/materials`（role=hrwai_user，ADR-0018）
+
+资料 = 已发布课程下章节挂载的课件附件（chapter_file 聚合视图，不建独立资料库）；`file_url` 为静态直链可直接下载。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/materials?course_id=&page=&page_size=` | 资料列表（可按课程过滤） |
+| GET | `/api/materials/:id` | 资料详情（含课程/章节回填） |
+| GET | `/api/materials/:id/download` | 下载地址（`{ "file_url": "...", "file_name": "..." }`） |
+| GET | `/api/student/materials` | 学员可访问资料（同列表，清单别名） |
+
+**GET /api/materials** 响应 200：
+
+```json
+{ "code": 200, "message": "success", "data": { "page": 1, "pages": 1, "total": 1, "materials": [ { "file_id": 1, "chapter_id": 1, "chapter_title": "液压泵拆装", "course_id": 1, "course_name": "液压传动维修", "file_name": "液压手册.pdf", "file_url": "/static/uploads/chapters/h.pdf", "content_type": "document", "file_size": 1024, "created_at": "..." } ] } }
+```
 
 ---
 
@@ -1216,3 +1282,4 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 - **新增补录**：`/api/captcha`、`/api/auth/{email|phone}/reset-password`、`/api/featured-content/:id/view`、`/api/forum/upload-image`、`PUT /api/admin/course/:course_id/sort`、`PUT /api/admin/specialty/:specialty_id/sort`、`PUT /api/admin/level/:level_id/sort`、`/api/admin/profile-reviews`、`/api/admin/audit-logs`
 - **修正**：`/api/valuation/battery/evaluations` 为可选认证（非强制 JWT）；AI 会话列表返回 `{sessions: []}`；论坛列表返回 `{topics: []}`
 - 全部端点补充请求格式（path/query/body）与返回格式（JSON 示例）
+- **新增（ADR-0018）**：论坛互动（like/report/my-topics/my-replies + 管理端举报）、通用收藏 `/api/favorites`、全局搜索 `/api/search`、学习资料 `/api/materials`

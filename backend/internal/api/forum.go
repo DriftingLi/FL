@@ -47,12 +47,29 @@ func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumS
 	// DELETE /api/forum/replies/:id 删除自己的回复
 	g.DELETE("/replies/:id", h.DeleteReply)
 
+	// ===== 互动（ADR-0018）=====
+	// POST /api/forum/topics/:id/like 点赞（幂等）
+	g.POST("/topics/:id/like", h.LikeTopic)
+	// DELETE /api/forum/topics/:id/like 取消点赞（幂等）
+	g.DELETE("/topics/:id/like", h.UnlikeTopic)
+	// POST /api/forum/topics/:id/report 举报主题
+	g.POST("/topics/:id/report", h.ReportTopic)
+	// POST /api/forum/replies/:id/report 举报回复
+	g.POST("/replies/:id/report", h.ReportReply)
+	// GET /api/forum/my-topics 我的帖子
+	g.GET("/my-topics", h.MyTopics)
+	// GET /api/forum/my-replies 我的回复
+	g.GET("/my-replies", h.MyReplies)
+
 	// ===== 管理员论坛管理 =====
 	adminG := rg.Group("/admin/forum", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
 	adminG.GET("/topics", h.ListTopics)
 	adminG.GET("/topics/:id", h.AdminGetTopic)
 	adminG.DELETE("/topics/:id", h.AdminDeleteTopic)
 	adminG.DELETE("/replies/:id", h.AdminDeleteReply)
+	// 举报管理（ADR-0018）：status query 0 待处理 / 1 已处理，缺省全部
+	adminG.GET("/reports", h.ListReports)
+	adminG.PUT("/reports/:id", h.HandleReport)
 }
 
 // UploadImage 上传论坛图片 POST /api/forum/upload-image
@@ -386,4 +403,134 @@ type topicIDReq struct {
 // replyIDReq 管理员删除回复请求。
 type replyIDReq struct {
 	ReplyID int64
+}
+
+// LikeTopic 点赞 POST /api/forum/topics/:id/like
+func (h *ForumHandler) LikeTopic(c *gin.Context) {
+	topicID, err := pathInt64(c, "id", "主题 ID 无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	count, err := h.svc.LikeTopic(middleware.CurrentUserID(c), topicID)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "点赞成功", gin.H{"likes_count": count, "liked": true})
+}
+
+// UnlikeTopic 取消点赞 DELETE /api/forum/topics/:id/like
+func (h *ForumHandler) UnlikeTopic(c *gin.Context) {
+	topicID, err := pathInt64(c, "id", "主题 ID 无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	count, err := h.svc.UnlikeTopic(middleware.CurrentUserID(c), topicID)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "已取消点赞", gin.H{"likes_count": count, "liked": false})
+}
+
+// ReportTopic 举报主题 POST /api/forum/topics/:id/report
+func (h *ForumHandler) ReportTopic(c *gin.Context) {
+	h.report(c, "topic")
+}
+
+// ReportReply 举报回复 POST /api/forum/replies/:id/report
+func (h *ForumHandler) ReportReply(c *gin.Context) {
+	h.report(c, "reply")
+}
+
+// report 举报公共实现（kind: topic / reply，目标 ID 取路径参数 id）。
+func (h *ForumHandler) report(c *gin.Context, kind string) {
+	id, err := pathInt64(c, "id", "目标 ID 无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	var v int64 = id
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		response.BadRequest(c, "请求参数错误")
+		return
+	}
+	var topicID, replyID *int64
+	if kind == "topic" {
+		topicID = &v
+	} else {
+		replyID = &v
+	}
+	if err := h.svc.CreateReport(middleware.CurrentUserID(c), topicID, replyID, body.Reason); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "举报已提交，等待处理", nil)
+}
+
+// MyTopics 我的帖子 GET /api/forum/my-topics
+func (h *ForumHandler) MyTopics(c *gin.Context) {
+	resp, err := h.svc.MyTopics(middleware.CurrentUserID(c),
+		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.Success(c, resp)
+}
+
+// MyReplies 我的回复 GET /api/forum/my-replies
+func (h *ForumHandler) MyReplies(c *gin.Context) {
+	resp, err := h.svc.MyReplies(middleware.CurrentUserID(c),
+		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.Success(c, resp)
+}
+
+// ListReports 管理端举报列表 GET /api/admin/forum/reports?status=&page=&page_size=
+func (h *ForumHandler) ListReports(c *gin.Context) {
+	var status *int16
+	if raw := c.Query("status"); raw != "" {
+		v := int16(atoiDefault(raw, -1))
+		if v != 0 && v != 1 {
+			response.BadRequest(c, "status 仅支持 0（待处理）/ 1（已处理）")
+			return
+		}
+		status = &v
+	}
+	resp, err := h.svc.ListReports(atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20), status)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.Success(c, resp)
+}
+
+// HandleReport 处理举报 PUT /api/admin/forum/reports/:id
+func (h *ForumHandler) HandleReport(c *gin.Context) {
+	id, err := pathInt64(c, "id", "举报 ID 无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	var body struct {
+		Status int16 `json:"status"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		response.BadRequest(c, "请求参数错误")
+		return
+	}
+	if err := h.svc.HandleReport(id, body.Status); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "举报状态已更新", nil)
 }
