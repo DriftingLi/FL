@@ -281,7 +281,8 @@ jobs:
       # 密钥
       SECRET_KEY: ${{ secrets.SECRET_KEY }}
       JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
-      JWT_EXPIRES_HOURS: ${{ secrets.JWT_EXPIRES_HOURS || '24' }}
+      JWT_EXPIRES_HOURS: ${{ secrets.JWT_EXPIRES_HOURS || '2' }}
+      JWT_REFRESH_EXPIRES_DAYS: ${{ secrets.JWT_REFRESH_EXPIRES_DAYS || '7' }}
       # 登录态 Cookie（父域名共享登录；production 走 HTTPS 时 Secure=true）
       AUTH_COOKIE_NAME: ${{ secrets.AUTH_COOKIE_NAME || 'hrwai_token' }}
       AUTH_COOKIE_DOMAIN: ${{ secrets.AUTH_COOKIE_DOMAIN }}
@@ -446,7 +447,8 @@ jobs:
             printf 'export DB_PASSWORD=%q\n' "${DB_PASSWORD:-}"
             printf 'export SECRET_KEY=%q\n' "${SECRET_KEY:-}"
             printf 'export JWT_SECRET_KEY=%q\n' "${JWT_SECRET_KEY:-}"
-            printf 'export JWT_EXPIRES_HOURS=%q\n' "${JWT_EXPIRES_HOURS:-24}"
+            printf 'export JWT_EXPIRES_HOURS=%q\n' "${JWT_EXPIRES_HOURS:-2}"
+            printf 'export JWT_REFRESH_EXPIRES_DAYS=%q\n' "${JWT_REFRESH_EXPIRES_DAYS:-7}"
             printf 'export AUTH_COOKIE_NAME=%q\n' "${AUTH_COOKIE_NAME:-hrwai_token}"
             printf 'export AUTH_COOKIE_DOMAIN=%q\n' "${AUTH_COOKIE_DOMAIN:-}"
             printf 'export AUTH_COOKIE_SECURE=%q\n' "${AUTH_COOKIE_SECURE:-true}"

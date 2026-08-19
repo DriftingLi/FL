@@ -7,7 +7,43 @@
 import axios from 'axios'
 import type { AxiosRequestConfig, AxiosInstance } from 'axios'
 import { ElMessage } from 'element-plus'
-import { getToken } from '@/utils/storage'
+import { getToken, getRefreshToken, setToken, setRefreshToken } from '@/utils/storage'
+
+// ===== 双令牌静默刷新（ADR-0012）：模块级共享的单飞行，三端实例并发去重 =====
+// 401 时统一用 refresh token 换新 access + 新 refresh，再重试原请求；
+// 刷新失败才走各实例的 onUnauthorized（清登录态 + 跳登录）。
+let refreshPromise: Promise<boolean> | null = null
+
+// 刷新专用裸 client（不走本工厂拦截器，避免 401 递归）；路径固定为全局 /api/auth/refresh
+const refreshHttp = axios.create({ baseURL: '/api', timeout: 30000 })
+
+function isRefreshEndpoint(url: string): boolean {
+  return url.includes('/auth/refresh')
+}
+
+/** 静默刷新（单飞行）：并发 401 只发一次刷新请求，成功后更新双令牌 */
+function tryRefreshTokens(): Promise<boolean> {
+  const rt = getRefreshToken()
+  if (!rt) return Promise.resolve(false)
+  if (!refreshPromise) {
+    refreshPromise = refreshHttp
+      .post('/auth/refresh', { refresh_token: rt })
+      .then(res => {
+        const data = res.data?.data
+        if (data?.token && data?.refresh_token) {
+          setToken(data.token)
+          setRefreshToken(data.refresh_token)
+          return true
+        }
+        return false
+      })
+      .catch(() => false)
+      .finally(() => {
+        refreshPromise = null
+      })
+  }
+  return refreshPromise
+}
 
 /** 后端通用 JSON 响应格式（code = HTTP 状态码，统一信封，见 ADR-0005） */
 export interface ApiResponse<T = any> {
@@ -139,6 +175,17 @@ export function createHttpClient<O extends HttpClientOptions>(opts: O): Unwrappe
         const status = err.response.status
         const data = err.response.data
         if (status === 401) {
+          const url = err.config?.url || ''
+          const cfg = err.config as AxiosRequestConfig & { _retry?: boolean }
+          // 双令牌（ADR-0012）：非刷新端点、未重试过、本地有 refresh → 静默刷新后重试原请求
+          if (!isRefreshEndpoint(url) && !cfg._retry && getRefreshToken()) {
+            const refreshed = await tryRefreshTokens()
+            if (refreshed) {
+              cfg._retry = true
+              // 重走本 client：请求拦截器重新读取已更新的 access token，再走解包
+              return client.request(cfg)
+            }
+          }
           opts.onUnauthorized()
           if (!isSilent(err.config)) {
             ElMessage.error('登录已过期，请重新登录')

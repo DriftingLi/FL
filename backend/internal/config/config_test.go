@@ -116,6 +116,14 @@ func TestJWTExpiry(t *testing.T) {
 	}
 }
 
+func TestJWTRefreshExpiry(t *testing.T) {
+	cfg := &Config{JWTRefreshExpiresDays: 7}
+	d := cfg.JWTRefreshExpiry()
+	if d.Hours() != 7*24 {
+		t.Errorf("JWTRefreshExpiry = %v，期望 7d", d)
+	}
+}
+
 func TestIsProd(t *testing.T) {
 	cfg := &Config{AppEnv: "production"}
 	if !cfg.IsProd() {

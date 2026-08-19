@@ -150,7 +150,8 @@ services:
       DATABASE_URL: postgres://${DB_USER:-forklift}:${DB_PASSWORD}@postgres:5432/forklift_training?sslmode=disable
       SECRET_KEY: ${SECRET_KEY}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-      JWT_EXPIRES_HOURS: "${JWT_EXPIRES_HOURS:-24}"
+      JWT_EXPIRES_HOURS: "${JWT_EXPIRES_HOURS:-2}"
+      JWT_REFRESH_EXPIRES_DAYS: "${JWT_REFRESH_EXPIRES_DAYS:-7}"
       # 登录态 Cookie（父域名共享登录）
       AUTH_COOKIE_NAME: ${AUTH_COOKIE_NAME:-hrwai_token}
       AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:-}

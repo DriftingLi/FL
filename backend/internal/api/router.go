@@ -79,7 +79,10 @@ func NewRouter(deps *Deps) *gin.Engine {
 		auth.POST("/login", authH.Login)
 		auth.POST("/admin-login", authH.AdminLogin)
 		auth.POST("/tutor-login", authH.TutorLogin)
-		auth.POST("/logout", middleware.JWTAuth(deps.Session), authH.Logout)
+		// 双令牌会话（ADR-0012）：/refresh 用 refresh token 自身鉴权（不经过 JWTAuth）；
+		// /logout 撤销请求体 refresh token，不依赖 JWTAuth（access 过期时也能撤销 refresh / 登出）。
+		auth.POST("/refresh", authH.Refresh)
+		auth.POST("/logout", authH.Logout)
 		auth.GET("/me", middleware.JWTAuth(deps.Session), authH.Me)
 		// 个人资料：昵称 / 头像
 		auth.PUT("/profile", middleware.JWTAuth(deps.Session), authH.UpdateProfile)
