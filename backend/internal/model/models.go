@@ -566,6 +566,41 @@ type ForumReply struct {
 
 func (ForumReply) TableName() string { return "forum_replies" }
 
+// ForumTopicLike 论坛主题点赞（topic_id+user_id 唯一约束保证幂等，ADR-0018）。
+type ForumTopicLike struct {
+	ID        int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	TopicID   int64     `gorm:"column:topic_id" json:"topic_id"`
+	UserID    int       `gorm:"column:user_id" json:"user_id"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (ForumTopicLike) TableName() string { return "forum_topic_like" }
+
+// Favorite 通用收藏：target_type + target_id 多态定位
+// （course/chapter/question/featured/topic，ADR-0018；user+type+id 唯一）。
+type Favorite struct {
+	FavoriteID int64     `gorm:"column:favorite_id;primaryKey;autoIncrement" json:"favorite_id"`
+	UserID     int       `gorm:"column:user_id" json:"user_id"`
+	TargetType string    `gorm:"column:target_type;size:20" json:"target_type"`
+	TargetID   int       `gorm:"column:target_id" json:"target_id"`
+	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (Favorite) TableName() string { return "favorite" }
+
+// ForumReport 论坛举报：topic_id 与 reply_id 二选一；status 0 待处理 / 1 已处理（ADR-0018）。
+type ForumReport struct {
+	ID         int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	ReporterID int       `gorm:"column:reporter_id" json:"reporter_id"`
+	TopicID    *int64    `gorm:"column:topic_id" json:"topic_id,omitempty"`
+	ReplyID    *int64    `gorm:"column:reply_id" json:"reply_id,omitempty"`
+	Reason     string    `gorm:"column:reason" json:"reason"`
+	Status     int16     `gorm:"column:status;default:0" json:"status"`
+	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (ForumReport) TableName() string { return "forum_report" }
+
 // ===== 25. 资料修改审核 =====
 
 // ProfileChangeRequest 用户资料（昵称/头像）修改审核请求。

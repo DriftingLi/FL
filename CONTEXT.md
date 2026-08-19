@@ -30,6 +30,9 @@
 - **专业方向（specialty）**：课程目录一级维度，全局共享（操作/维修/安全/电池等），管理员维护。
 - **课程等级（course level）**：课程目录二级维度，**全局共享**（不归属方向，入门/进阶/专项/认证），任意方向的课程可挂任意等级。
 - **课程（course）/ 章节（chapter）**：PPT/视频/图文混排内容；PPT 经 LibreOffice sidecar 转 WebP。课程挂专业方向 + 课程等级（创建/编辑必填），可关联证书模板与前置课程。
+- **收藏（favorite）**：多态收藏（target_type+target_id：course/chapter/question/featured/topic；user+type+id 唯一幂等），列表实时回填目标快照、目标删除即条目消失，见 ADR-0018。
+- **全局搜索（search）**：course/question/content/topic 四类 LOWER LIKE 聚合（type 缺省各分区 top5），可见性与业务口径一致（挂载不变式/published/已发布），见 ADR-0018。
+- **学习资料（material）**：已发布课程下章节附件（chapter_file）的聚合视图，不建独立资料库；file_url 为静态直链，见 ADR-0018。
 - **学习位置（learning position）**：学员在某课程的最后学习状态——最后章节（last_chapter_id）、章节播放位置（video_position，秒）、最后学习时间戳（last_studied_at），挂在 study_record 双轨记录上（课程级承载 last_*、章节级承载位置）；章节完成以 progress≥100 为单一事实源（时长自动完成与显式 completed 收敛于此），见 ADR-0017。
 - **证书模板（certificate template）**：课程可选关联的培训合格证书，含有效期（天）；课程挂靠后学员完成学习可获证。
 - **前置课程（course prerequisite）**：课程间的依赖关系（A 完成才能学 B），防自指防成环；编辑回填 prerequisite_course_ids 避免误清空。
@@ -40,7 +43,7 @@
 - **题库标签（question tag）**：题目分类维度（法规/结构/液压/电气/制动/故障诊断/应急等），创建需唯一编码；题目可多标签，标签练习按标签抽题。
 - **标签练习（tag practice）**：按题库标签抽题的练习模式（原「章节练习」已退役并入）。
 - **AI 助手**：大模型流式对话（DeepSeek 默认，可配置 OpenAI 兼容模型）。归属 training 子域名（学员工作区功能），由主域名迁入。
-- **论坛（forum）**：综合讨论区 + 章节讨论区；发帖/回复（可回复别人的回复）。**图文分离**——主题与回复可携带 `images` 图片 URL 数组（JSONB），正文保持纯文本，不做 markdown 渲染。
+- **论坛（forum）**：综合讨论区 + 章节讨论区；发帖/回复（可回复别人的回复）。**图文分离**——主题与回复可携带 `images` 图片 URL 数组（JSONB），正文保持纯文本，不做 markdown 渲染。 互动（ADR-0018）：主题点赞（forum_topic_like，幂等）、举报（forum_report，待处理/已处理二态，管理端处置沿用删帖/删回复流）、我的帖子/我的回复。
 - **论坛图片（forum image）**：先经 `POST /api/forum/upload-image` 上传到 `images/forum/` 子目录拿 URL，随发帖/回复提交；删除主题/回复时图片存储一并清理；上传后未发帖的**悬空图片**由进程内定时任务（每 6 小时）扫描差集、回收超过 24h 未被引用的文件。
 
 ## 残值评估（valuation）

@@ -120,6 +120,10 @@ func NewRouter(deps *Deps) *gin.Engine {
 	RegisterAuditRoutes(api, rd, deps.AuditSvc)
 	RegisterExportRoutes(api, rd, deps.ExportSvc)
 	RegisterTrainingCatalogRoutes(api, rd, deps.TrainingCatalogSvc)
+	// 移动端 P1 通用能力（ADR-0018）：通用收藏 / 全局搜索 / 学习资料聚合
+	RegisterFavoriteRoutes(api, rd, deps.FavoriteSvc)
+	RegisterSearchRoutes(api, rd, deps.SearchSvc)
+	RegisterMaterialRoutes(api, rd, deps.MaterialSvc)
 
 	return r
 }
