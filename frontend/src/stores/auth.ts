@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import type { Ref } from 'vue'
 import { authApi } from '@/api/auth'
 import type { UserProfile } from '@/types/user'
-import { getToken, getUserInfo, setToken, setUserInfo, clearLocalAuth } from '@/utils/storage'
+import { getToken, getUserInfo, setToken, setRefreshToken, setUserInfo, clearLocalAuth } from '@/utils/storage'
 import { consumeAuthTokenFromUrl } from '@/utils/authToken'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -81,6 +81,9 @@ export const useAuthStore = defineStore('auth', () => {
     isLoggedIn.value = true
 
     setToken(data.token)
+    if (data.refresh_token) {
+      setRefreshToken(data.refresh_token)
+    }
     setUserInfo(data)
 
     // 登录响应只含基础字段（无昵称/头像等），异步拉取 /auth/me 补齐完整资料

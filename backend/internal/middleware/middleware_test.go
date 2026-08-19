@@ -24,9 +24,10 @@ const testSecret = "test-jwt-secret"
 func generateToken(t *testing.T, userID int, username, role string) string {
 	t.Helper()
 	claims := &Claims{
-		UserID:  userID,
-		Account: username,
-		Role:    role,
+		UserID:    userID,
+		Account:   username,
+		Role:      role,
+		TokenType: security.TokenTypeAccess,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

@@ -3,6 +3,7 @@
 import { unwrappedRequest } from './request'
 import type { AxiosRequestConfig } from 'axios'
 import type { UserProfile } from '@/types/user'
+import { getRefreshToken } from '@/utils/storage'
 
 export interface LoginPayload {
   username: string
@@ -23,7 +24,9 @@ export const authApi = {
   },
 
   logout() {
-    return unwrappedRequest.post<null>('/auth/logout')
+    // 双令牌（ADR-0012）：撤销请求体携带的 refresh token（登出后 refresh 失效）
+    const refresh_token = getRefreshToken() || ''
+    return unwrappedRequest.post<null>('/auth/logout', { refresh_token })
   },
 
   getUserInfo(config?: AxiosRequestConfig) {

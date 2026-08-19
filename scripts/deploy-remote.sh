@@ -163,7 +163,8 @@ write_env_file() {
         env_val "${SECRET_KEY:-}"; echo
         printf 'JWT_SECRET_KEY='
         env_val "${JWT_SECRET_KEY:-}"; echo
-        echo "JWT_EXPIRES_HOURS=${JWT_EXPIRES_HOURS:-24}"
+        echo "JWT_EXPIRES_HOURS=${JWT_EXPIRES_HOURS:-2}"
+        echo "JWT_REFRESH_EXPIRES_DAYS=${JWT_REFRESH_EXPIRES_DAYS:-7}"
 
         # 登录态 Cookie（父域名共享登录）
         printf 'AUTH_COOKIE_NAME='
