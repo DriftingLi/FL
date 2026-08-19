@@ -2,12 +2,12 @@
 
 本文档为叉车维修培训系统 + 残值评估子系统 + AI 助手的 HTTP 接口总清单（路径 / 方法 / 鉴权 / 请求格式 / 返回格式）。
 
-> **准确性基准**：本清单以 `backend/internal/api` 实际注册的路由与 `backend/internal/service` 的 typed DTO 契约为准（2026-08-16，d5e0b6e）。与历史文档的差异（已下线端点等）见文末「变更记录」。
+> **准确性基准**：本清单以 `backend/internal/api` 实际注册的路由与 `backend/internal/service` 的 typed DTO 契约为准（2026-08-19，6c0dfec）。与历史文档的差异（已下线端点等）见文末「变更记录」。
 
 ## 0. 通用约定
 
 - 基础路径：`/api`；静态资源：`/static/*`
-- 鉴权方式：`Authorization: Bearer <JWT>`；部分接口同时写入登录 Cookie（HttpOnly）
+- 鉴权方式：`Authorization: Bearer <access JWT>`（access 2h 过期，用 `POST /api/auth/refresh` 以 refresh token 换新双令牌，见 ADR-0016）；部分接口同时写入登录 Cookie（HttpOnly，仅携带 access）
 - 角色：`admin`（管理员）/ `tutor`（讲师）/ `hrwai_user`（学员/普通用户）
 - 响应统一包裹 `{ "code": number, "message": string, "data": any }`（AI 流式对话与文件下载除外，见各节）
 - 响应码：`200` 成功 / `201` 创建成功 / `400` 参数或业务错误 / `401` 未认证 / `403` 无权限 / `404` 不存在 / `500` 服务器错误；错误时 `data` 为 `null`
@@ -55,7 +55,8 @@
 | POST | `/api/auth/login` | 无 | 学员/普通用户账号密码登录 |
 | POST | `/api/auth/admin-login` | 无 | 管理员登录 |
 | POST | `/api/auth/tutor-login` | 无 | 讲师登录 |
-| POST | `/api/auth/logout` | JWT | 登出 |
+| POST | `/api/auth/refresh` | 无（refresh token 自身鉴权） | 刷新双令牌（轮换，旧 refresh 作废） |
+| POST | `/api/auth/logout` | 无 | 登出（请求体带 refresh token 时将其撤销） |
 | GET | `/api/auth/me` | JWT | 当前用户信息 |
 
 **POST /api/auth/login**（admin-login / tutor-login 同格式）
@@ -69,12 +70,22 @@
 `role` 仅兼容历史，实际按登录端点区分角色。响应 200（同时写入登录 Cookie）：
 
 ```json
-{ "code": 200, "message": "登录成功", "data": { "token": "eyJhbGciOi...", "user_id": 1, "account": "13800000001", "username": "13800000001", "role": "hrwai_user" } }
+{ "code": 200, "message": "登录成功", "data": { "token": "eyJhbGciOi...", "refresh_token": "eyJhbGciOi...", "user_id": 1, "account": "13800000001", "username": "13800000001", "role": "hrwai_user" } }
+```
+
+双令牌说明：`token` 为 access（2h），`refresh_token` 为 refresh（7 天）；access 过期后以 refresh 调下述刷新端点换新对（轮换），refresh 仅存客户端本地、不写 Cookie。
+
+**POST /api/auth/refresh**
+
+请求体：`{ "refresh_token": "eyJhbGciOi..." }`。校验失败（类型不符/已撤销/过期）统一返回 401（防枚举）。响应 200：
+
+```json
+{ "code": 200, "message": "success", "data": { "token": "eyJhbGciOi...", "refresh_token": "eyJhbGciOi..." } }
 ```
 
 **POST /api/auth/logout**
 
-请求体：`{}`（可空）。响应 200：`{ "code": 200, "message": "已登出", "data": null }`
+请求体：`{ "refresh_token": "eyJhbGciOi..." }`（可空；带 refresh token 时将其撤销入黑名单）。本端点不依赖 JWT——access 过期也能登出。响应 200：`{ "code": 200, "message": "已登出", "data": null }`
 
 **GET /api/auth/me**
 
@@ -137,7 +148,7 @@ multipart/form-data：`file`（图片）。响应 200：`data` 为头像修改�
 
 请求体：`{ "phone": "13800000001", "code": "123456", "nickname": "张三", "company": "某公司", "password": "Test1234" }`（company 可选）
 
-响应 201（自动登录，data 同 2.1 登录返回）：`{ "code": 201, "message": "注册成功", "data": { "token": "...", "user_id": 1, "account": "...", "username": "...", "role": "hrwai_user" } }`
+响应 201（自动登录，data 同 2.1 登录返回）：`{ "code": 201, "message": "注册成功", "data": { "token": "...", "refresh_token": "...", "user_id": 1, "account": "...", "username": "...", "role": "hrwai_user" } }`
 
 **POST /api/auth/{email|phone}/login**
 
@@ -164,7 +175,7 @@ multipart/form-data：`file`（图片）。响应 200：`data` 为头像修改�
 | POST | `/api/auth/profile/password/send-code` | JWT | 修改密码：发送短信验证码 |
 | POST | `/api/auth/profile/password` | JWT | 修改密码（短信验证码确认） |
 | POST | `/api/auth/account/send-code` | JWT | 修改账号：发送短信验证码 |
-| PUT | `/api/auth/account` | JWT | 修改登录账号（响应携带新 token） |
+| PUT | `/api/auth/account` | JWT | 修改登录账号（响应携带新双令牌） |
 
 **POST /api/auth/profile/send-code**（account/send-code、password/send-code 同格式）
 
@@ -182,7 +193,7 @@ multipart/form-data：`file`（图片）。响应 200：`data` 为头像修改�
 
 请求体：`{ "account": "13900000000", "code": "123456" }`
 
-响应 200，data 为登录结果（含**新 token**，客户端需更新存储）。
+响应 200，data 为登录结果（含**新 token 与新 refresh_token**，客户端需更新存储）。
 
 ---
 
