@@ -976,9 +976,24 @@ prune_old_images() {
     fi
     log_info ">>> 清理旧版本镜像 (每个仓库保留最近 ${KEEP_IMAGES} 个)..."
 
+    # 附加清理仓库：国内镜像源前缀（回退拉取遗留的镜像源 tag）与门户镜像
+    # （hrwai-portal 独立流水线部署，不在 IMAGE_* 清单内，不清理会无限堆积）。
+    local mirror_repos=()
+    if [ -n "${REGISTRY_MIRROR:-}" ]; then
+        local orig
+        for orig in "${IMAGE_BACKEND_ORIG:-}" "${IMAGE_FRONTEND_ORIG:-}" "${IMAGE_LIBREOFFICE_ORIG:-}"; do
+            [ -z "$orig" ] && continue
+            case "$orig" in
+                ghcr.io/*) mirror_repos+=("${REGISTRY_MIRROR}/${orig#ghcr.io/}") ;;
+            esac
+        done
+    fi
+    local portal_repo="${PRUNE_PORTAL_REPO:-127.0.0.1:5000/driftingli/hrwai-portal}"
+
     local repo
     for repo in "${IMAGE_BACKEND}" "${IMAGE_FRONTEND}" "${IMAGE_LIBREOFFICE}" \
-                "${IMAGE_BACKEND_ORIG:-}" "${IMAGE_FRONTEND_ORIG:-}" "${IMAGE_LIBREOFFICE_ORIG:-}"; do
+                "${IMAGE_BACKEND_ORIG:-}" "${IMAGE_FRONTEND_ORIG:-}" "${IMAGE_LIBREOFFICE_ORIG:-}" \
+                "${mirror_repos[@]:-}" "${portal_repo:-}"; do
         [ -z "$repo" ] && continue
         # 按创建时间倒序列出该仓库的镜像，保留前 KEEP_IMAGES 个，其余删除
         local kept=0
@@ -990,7 +1005,10 @@ prune_old_images() {
                 continue
             fi
             log_info "删除旧镜像: ${ref} (${id})"
-            docker image rm "${id}" >/dev/null 2>&1 || true
+            # -f 必需：同一镜像常被 代理/镜像源/直连 多前缀引用（同 ID 多 tag），
+            # 不带 -f 时 rmi 报 "referenced in multiple repositories" 且被 || true
+            # 静默吞掉——曾致旧版本镜像永不清理、无限堆积（testing 堆了 10 天 ~3GB）
+            docker image rm -f "${id}" >/dev/null 2>&1 || true
         done < <(docker images --format '{{.CreatedAt}}|{{.ID}}|{{.Repository}}:{{.Tag}}' "$repo" 2>/dev/null | grep -v '|<none>' | sort -r)
     done
 
