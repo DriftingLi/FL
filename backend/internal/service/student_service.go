@@ -3,6 +3,7 @@ package service
 
 import (
 	"errors"
+	"sort"
 	"time"
 
 	"go.uber.org/zap"
@@ -305,4 +306,261 @@ func studyRecordToDTO(r *model.StudyRecord) StudyRecordDTO {
 		Progress:      r.Progress,
 		StudyDate:     formatISO(r.StudyDate),
 	}
+}
+
+// ===== 我的课程（ADR-0017：学习位置与 continue-learning）=====
+
+// StudentCourseDTO 我的课程条目：course_progress 的超集（补 cover/方向/等级/
+// 完成章节数/最后学习位置）。
+type StudentCourseDTO struct {
+	CourseID          int     `json:"course_id"`
+	CourseName        string  `json:"course_name"`
+	Cover             string  `json:"cover"`
+	SpecialtyID       *int    `json:"specialty_id"`
+	LevelID           *int    `json:"level_id"`
+	Progress          float64 `json:"progress"`
+	CompletedChapters int64   `json:"completed_chapters"`
+	TotalChapters     int64   `json:"total_chapters"`
+	StudyDuration     int64   `json:"study_duration"`
+	LastChapterID     *int    `json:"last_chapter_id"`
+	LastChapterTitle  string  `json:"last_chapter_title"`
+	LastPosition      int     `json:"last_position"`
+	LastStudiedAt     string  `json:"last_studied_at"`
+}
+
+// StudentCoursesDTO 我的课程信封（continue_learning 为最后学习时间最新的课程）。
+type StudentCoursesDTO struct {
+	Courses          []StudentCourseDTO `json:"courses"`
+	ContinueLearning *StudentCourseDTO  `json:"continue_learning"`
+}
+
+// StudentCourseChapterDTO 单课程章节学习状态。
+type StudentCourseChapterDTO struct {
+	ChapterID     int     `json:"chapter_id"`
+	Title         string  `json:"title"`
+	Progress      float64 `json:"progress"`
+	VideoPosition int     `json:"video_position"`
+	Completed     bool    `json:"completed"`
+}
+
+// StudentCourseDetailDTO 单课程学习详情（我的课程条目 + 每章状态）。
+type StudentCourseDetailDTO struct {
+	StudentCourseDTO
+	Chapters []StudentCourseChapterDTO `json:"chapters"`
+}
+
+// GetStudentCourses 我的课程列表（按最后学习时间倒序）+ 继续学习 top1。
+// 课程级记录驱动（chapter_id IS NULL 一行一课程），课程元信息/章节计数/完成计数/
+// 最后章节标题与播放位置全部 batch 回填（batch_backfill 模式，无逐课程 N+1）。
+func (s *StudentService) GetStudentCourses(studentID int) (*StudentCoursesDTO, error) {
+	type courseRow struct {
+		CourseID      int        `gorm:"column:course_id"`
+		Progress      float64    `gorm:"column:progress"`
+		LastChapterID *int       `gorm:"column:last_chapter_id"`
+		LastStudiedAt *time.Time `gorm:"column:last_studied_at"`
+	}
+	var rows []courseRow
+	s.db.Model(&model.StudyRecord{}).
+		Select("course_id, progress, last_chapter_id, last_studied_at").
+		Where("student_id = ? AND chapter_id IS NULL", studentID).
+		Scan(&rows)
+	result := &StudentCoursesDTO{Courses: make([]StudentCourseDTO, 0, len(rows))}
+	if len(rows) == 0 {
+		return result, nil
+	}
+
+	courseIDs := make([]int, 0, len(rows))
+	for _, r := range rows {
+		courseIDs = append(courseIDs, r.CourseID)
+	}
+
+	// 课程元信息（名称/封面/方向/等级）；课程已删则跳过（与 queryProfile 同语义）。
+	metas := make(map[int]model.Course, len(rows))
+	{
+		var ms []model.Course
+		s.db.Select("course_id, name, cover_image, specialty_id, level_id").
+			Where("course_id IN ?", courseIDs).Find(&ms)
+		for _, m := range ms {
+			metas[m.CourseID] = m
+		}
+	}
+	chapterCounts := batchChapterCounts(s.db, courseIDs)
+
+	// 学习时长（该课程全部记录求和，与 profile 口径一致）。
+	durationByCourse := make(map[int]int64, len(rows))
+	{
+		var ds []struct {
+			CourseID int   `gorm:"column:course_id"`
+			Total    int64 `gorm:"column:total"`
+		}
+		s.db.Model(&model.StudyRecord{}).
+			Select("course_id, COALESCE(SUM(study_duration), 0) AS total").
+			Where("student_id = ? AND course_id IN ?", studentID, courseIDs).
+			Group("course_id").Scan(&ds)
+		for _, d := range ds {
+			durationByCourse[d.CourseID] = d.Total
+		}
+	}
+
+	// 完成章节数（progress >= 100 单一事实源）。
+	completedByCourse := make(map[int]int64, len(rows))
+	{
+		var ns []struct {
+			CourseID int   `gorm:"column:course_id"`
+			N        int64 `gorm:"column:n"`
+		}
+		s.db.Model(&model.StudyRecord{}).
+			Select("course_id, COUNT(DISTINCT chapter_id) AS n").
+			Where("student_id = ? AND course_id IN ? AND chapter_id IS NOT NULL AND progress >= 100", studentID, courseIDs).
+			Group("course_id").Scan(&ns)
+		for _, n := range ns {
+			completedByCourse[n.CourseID] = n.N
+		}
+	}
+
+	// 最后章节标题与播放位置（章节级记录，每 student+chapter 唯一）。
+	lastChapterIDs := make([]int, 0, len(rows))
+	for _, r := range rows {
+		if r.LastChapterID != nil {
+			lastChapterIDs = append(lastChapterIDs, *r.LastChapterID)
+		}
+	}
+	titleByChapter := make(map[int]string, len(lastChapterIDs))
+	posByChapter := make(map[int]int, len(lastChapterIDs))
+	if len(lastChapterIDs) > 0 {
+		var chs []model.Chapter
+		s.db.Select("chapter_id, title").Where("chapter_id IN ?", lastChapterIDs).Find(&chs)
+		for _, ch := range chs {
+			titleByChapter[ch.ChapterID] = ch.Title
+		}
+		var prs []struct {
+			ChapterID     int `gorm:"column:chapter_id"`
+			VideoPosition int `gorm:"column:video_position"`
+		}
+		s.db.Model(&model.StudyRecord{}).
+			Select("chapter_id, video_position").
+			Where("student_id = ? AND chapter_id IN ?", studentID, lastChapterIDs).
+			Scan(&prs)
+		for _, pr := range prs {
+			posByChapter[pr.ChapterID] = pr.VideoPosition
+		}
+	}
+
+	for _, r := range rows {
+		meta, ok := metas[r.CourseID]
+		if !ok {
+			continue
+		}
+		dto := StudentCourseDTO{
+			CourseID:          r.CourseID,
+			CourseName:        meta.Name,
+			Cover:             meta.CoverImage,
+			SpecialtyID:       meta.SpecialtyID,
+			LevelID:           meta.LevelID,
+			Progress:          r.Progress,
+			CompletedChapters: completedByCourse[r.CourseID],
+			TotalChapters:     chapterCounts[r.CourseID],
+			StudyDuration:     durationByCourse[r.CourseID],
+		}
+		if r.LastChapterID != nil {
+			dto.LastChapterID = r.LastChapterID
+			dto.LastChapterTitle = titleByChapter[*r.LastChapterID]
+			dto.LastPosition = posByChapter[*r.LastChapterID]
+		}
+		if r.LastStudiedAt != nil {
+			dto.LastStudiedAt = formatISO(*r.LastStudiedAt)
+		}
+		result.Courses = append(result.Courses, dto)
+	}
+
+	// 最后学习时间倒序（formatISO 为 UTC 定长格式，字典序即时间序；无值排后）。
+	sort.SliceStable(result.Courses, func(i, j int) bool {
+		return result.Courses[i].LastStudiedAt > result.Courses[j].LastStudiedAt
+	})
+	if len(result.Courses) > 0 {
+		top := result.Courses[0]
+		result.ContinueLearning = &top
+	}
+	return result, nil
+}
+
+// GetStudentCourseDetail 单课程学习详情（含每章进度/播放位置/完成状态）。
+// 共享 loadLearningPosition（课程详情增强同一数据源）。
+func (s *StudentService) GetStudentCourseDetail(studentID, courseID int) (*StudentCourseDetailDTO, error) {
+	var course model.Course
+	if err := s.db.First(&course, courseID).Error; err != nil {
+		return nil, errors.New("课程不存在")
+	}
+	lp := loadLearningPosition(s.db, studentID, courseID)
+
+	var chapters []model.Chapter
+	s.db.Where("course_id = ?", courseID).Order("order_num ASC").Find(&chapters)
+
+	type chRow struct {
+		ChapterID     int     `gorm:"column:chapter_id"`
+		Progress      float64 `gorm:"column:progress"`
+		VideoPosition int     `gorm:"column:video_position"`
+	}
+	var chRows []chRow
+	s.db.Model(&model.StudyRecord{}).
+		Select("chapter_id, progress, video_position").
+		Where("student_id = ? AND course_id = ? AND chapter_id IS NOT NULL", studentID, courseID).
+		Scan(&chRows)
+	chBy := make(map[int]chRow, len(chRows))
+	for _, r := range chRows {
+		chBy[r.ChapterID] = r
+	}
+
+	var totalDuration int64
+	s.db.Model(&model.StudyRecord{}).
+		Where("student_id = ? AND course_id = ?", studentID, courseID).
+		Select("COALESCE(SUM(study_duration), 0)").Scan(&totalDuration)
+
+	lastTitle := ""
+	if lp.LastChapterID != nil {
+		var ch model.Chapter
+		if err := s.db.Select("title").First(&ch, *lp.LastChapterID).Error; err == nil {
+			lastTitle = ch.Title
+		}
+	}
+	lastStudiedAt := ""
+	if lp.LastStudiedAt != nil {
+		lastStudiedAt = formatISO(*lp.LastStudiedAt)
+	}
+
+	detail := &StudentCourseDetailDTO{
+		StudentCourseDTO: StudentCourseDTO{
+			CourseID:          course.CourseID,
+			CourseName:        course.Name,
+			Cover:             course.CoverImage,
+			SpecialtyID:       course.SpecialtyID,
+			LevelID:           course.LevelID,
+			Progress:          lp.Progress,
+			CompletedChapters: lp.CompletedChapters,
+			TotalChapters:     int64(len(chapters)),
+			StudyDuration:     totalDuration,
+			LastChapterID:     lp.LastChapterID,
+			LastChapterTitle:  lastTitle,
+			LastPosition:      lp.LastPosition,
+			LastStudiedAt:     lastStudiedAt,
+		},
+		Chapters: make([]StudentCourseChapterDTO, 0, len(chapters)),
+	}
+	for _, ch := range chapters {
+		r, ok := chBy[ch.ChapterID]
+		progress := 0.0
+		videoPosition := 0
+		if ok {
+			progress = r.Progress
+			videoPosition = r.VideoPosition
+		}
+		detail.Chapters = append(detail.Chapters, StudentCourseChapterDTO{
+			ChapterID:     ch.ChapterID,
+			Title:         ch.Title,
+			Progress:      progress,
+			VideoPosition: videoPosition,
+			Completed:     progress >= 100,
+		})
+	}
+	return detail, nil
 }

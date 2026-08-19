@@ -169,23 +169,35 @@ func (h *CourseHandler) UpdateStudyProgress(c *gin.Context) {
 				return nil, err
 			}
 			var body struct {
-				ChapterID *int `json:"chapter_id"`
-				Duration  int  `json:"duration"`
+				ChapterID       *int `json:"chapter_id"`
+				Duration        int  `json:"duration"`
+				DurationSeconds int  `json:"duration_seconds"`
+				VideoPosition   *int `json:"video_position"`
+				Completed       bool `json:"completed"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
 				return nil, badRequest("请求参数错误")
 			}
-			if body.Duration < 0 {
+			if body.Duration < 0 || body.DurationSeconds < 0 {
 				return nil, badRequest("学习时长不能为负数")
+			}
+			if body.VideoPosition != nil && *body.VideoPosition < 0 {
+				return nil, badRequest("播放位置不能为负数")
 			}
 			chapterID := 0
 			if body.ChapterID != nil {
 				chapterID = *body.ChapterID
 			}
-			return &studyProgressReq{StudentID: studentID, CourseID: courseID, ChapterID: chapterID, Duration: body.Duration}, nil
+			return &studyProgressReq{StudentID: studentID, CourseID: courseID, Input: service.StudyProgressInput{
+				ChapterID:     chapterID,
+				Duration:      body.Duration,
+				DurationSecs:  body.DurationSeconds,
+				VideoPosition: body.VideoPosition,
+				Completed:     body.Completed,
+			}}, nil
 		},
 		Invoke: func(ctx context.Context, req *studyProgressReq) (*service.StudyProgressDTO, error) {
-			return h.svc.UpdateStudyProgress(req.StudentID, req.CourseID, req.ChapterID, req.Duration)
+			return h.svc.UpdateStudyProgress(req.StudentID, req.CourseID, req.Input)
 		},
 		Render: func(c *gin.Context, _ *studyProgressReq, resp *service.StudyProgressDTO, err error) {
 			if err != nil {
@@ -215,12 +227,11 @@ type chapterDetailReq struct {
 	StudentID int
 }
 
-// studyProgressReq 学习进度请求。
+// studyProgressReq 学习进度请求（上报参数经 service.StudyProgressInput 承载，ADR-0017）。
 type studyProgressReq struct {
 	StudentID int
 	CourseID  int
-	ChapterID int
-	Duration  int
+	Input     service.StudyProgressInput
 }
 
 // courseListReq 学员端课程列表查询参数。
