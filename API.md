@@ -248,20 +248,20 @@ Query：`page`（默认 1）、`page_size`（默认 12）、`specialty_id`、`le
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
-| GET | `/api/course/:course_id` | JWT | 课程详情（含章节、学习进度） |
+| GET | `/api/course/:course_id` | JWT | 课程详情（含章节、学习进度与学习位置，ADR-0017） |
 | GET | `/api/course/:course_id/chapter/:chapter_id` | JWT | 章节详情（含课件文件、上下章、学习状态） |
 | POST | `/api/chapter/:chapter_id/slides/regenerate` | JWT | 重新生成章节课件（AI） |
-| POST | `/api/course/:course_id/progress` | JWT | 上报学习进度 |
+| POST | `/api/course/:course_id/progress` | JWT | 上报学习进度（分钟/秒级时长、播放位置、显式完成，ADR-0017） |
 
 **GET /api/course/:course_id**
 
 响应 200：
 
 ```json
-{ "code": 200, "message": "success", "data": { "course_info": { "course_id": 1, "name": "叉车基本构造", "description": "...", "cover_image": "", "duration": 120, "specialty_id": 1, "level_id": 2, "theory_hours": 20, "practice_hours": 10, "certificate_template_id": null, "sort_order": 1, "status": 1, "created_at": "..." }, "chapters": [ { "chapter_id": 1, "course_id": 1, "title": "第一章 叉车分类与型号", "content": "markdown 图文内容", "content_type": "text", "description": "", "duration": 40, "file_url": "", "order_num": 1, "created_at": "..." } ], "progress": 33 } }
+{ "code": 200, "message": "success", "data": { "course_info": { "course_id": 1, "name": "叉车基本构造", "description": "...", "cover_image": "", "duration": 120, "specialty_id": 1, "level_id": 2, "theory_hours": 20, "practice_hours": 10, "certificate_template_id": null, "sort_order": 1, "status": 1, "created_at": "..." }, "chapters": [ { "chapter_id": 1, "course_id": 1, "title": "第一章 叉车分类与型号", "content": "markdown 图文内容", "content_type": "text", "description": "", "duration": 40, "file_url": "", "order_num": 1, "created_at": "..." } ], "progress": 33, "is_enrolled": true, "completed_chapters": 1, "last_chapter_id": 1, "last_position": 823, "last_studied_at": "2026-08-19T02:00:00.000000" } }
 ```
 
-`progress` 为 0-100 的课程学习进度（浮点）。
+`progress` 为 0-100 的课程学习进度（浮点）。学习位置字段（ADR-0017）：`is_enrolled` 以「存在学习记录」代理报名语义；`last_chapter_id`/`last_position`（秒）/`last_studied_at` 为最后学习章节与位置，未学时为零值/null。
 
 **GET /api/course/:course_id/chapter/:chapter_id**
 
@@ -278,13 +278,13 @@ Query：`page`（默认 1）、`page_size`（默认 12）、`specialty_id`、`le
 请求体：
 
 ```json
-{ "chapter_id": 1, "duration": 2 }
+{ "chapter_id": 1, "duration": 2, "duration_seconds": 95, "video_position": 823, "completed": false }
 ```
 
-`duration` 为本次学习增量（分钟，≥0）。响应 200：
+`duration` 为本次学习增量（分钟，≥0）；新增字段全部可选（ADR-0017）：`duration_seconds`（秒，>0 时优先并按 ceil 换算分钟累加）、`video_position`（该章节最后播放位置，秒，≥0）、`completed`（显式完成该章节，直接置 progress=100）。带 `chapter_id` 的上报会刷新该课程最后学习位置。响应 200：
 
 ```json
-{ "code": 200, "message": "学习进度更新成功", "data": { "progress": 33, "record_id": 12, "study_duration": 45 } }
+{ "code": 200, "message": "学习进度更新成功", "data": { "progress": 33, "record_id": 12, "study_duration": 45, "completed_chapters": 1 } }
 ```
 
 ---
@@ -296,6 +296,8 @@ Query：`page`（默认 1）、`page_size`（默认 12）、`specialty_id`、`le
 | GET | `/api/student/profile` | 学员个人资料 + 学习统计 + 各课程进度 |
 | GET | `/api/student/records` | 学习/考试记录（分页，可按日期过滤） |
 | GET | `/api/student/study-stats` | 学习统计（按天聚合，days=7|30） |
+| GET | `/api/student/courses` | 我的课程（含最后学习位置与 continue_learning，ADR-0017） |
+| GET | `/api/student/courses/:course_id` | 单课程学习详情（每章进度/播放位置/完成状态） |
 
 **GET /api/student/profile**
 
@@ -325,6 +327,22 @@ Query：`page`（默认 1）、`page_size`（默认 10）、`start_date`（YYYY-
 
 ```json
 { "code": 200, "message": "success", "data": { "days": 7, "labels": ["08-10", "08-11", "08-12", "08-13", "08-14", "08-15", "08-16"], "data": [0, 0, 0, 30, 45, 0, 60], "total_minutes": 135, "active_days": 3 } }
+```
+
+**GET /api/student/courses**
+
+我的课程（该学员已开始学习的课程，按 `last_studied_at` 倒序）；`continue_learning` 为最后学习时间最新的课程（无学习记录时为 null）。响应 200：
+
+```json
+{ "code": 200, "message": "success", "data": { "courses": [ { "course_id": 1, "course_name": "叉车基本构造", "cover": "/static/covers/c1.png", "specialty_id": 1, "level_id": 2, "progress": 68, "completed_chapters": 5, "total_chapters": 8, "study_duration": 120, "last_chapter_id": 1008, "last_chapter_title": "第三章 液压系统", "last_position": 823, "last_studied_at": "2026-08-19T02:00:00.000000" } ], "continue_learning": { "course_id": 1, "course_name": "叉车基本构造", "cover": "...", "specialty_id": 1, "level_id": 2, "progress": 68, "completed_chapters": 5, "total_chapters": 8, "study_duration": 120, "last_chapter_id": 1008, "last_chapter_title": "第三章 液压系统", "last_position": 823, "last_studied_at": "2026-08-19T02:00:00.000000" } } }
+```
+
+**GET /api/student/courses/:course_id**
+
+单课程学习详情：我的课程条目字段 + 全部章节的学习状态（未学章节零值并入，按章节顺序）。响应 200：
+
+```json
+{ "code": 200, "message": "success", "data": { "course_id": 1, "course_name": "叉车基本构造", "cover": "...", "specialty_id": 1, "level_id": 2, "progress": 68, "completed_chapters": 5, "total_chapters": 8, "study_duration": 120, "last_chapter_id": 1008, "last_chapter_title": "第三章 液压系统", "last_position": 823, "last_studied_at": "...", "chapters": [ { "chapter_id": 1008, "title": "第三章 液压系统", "progress": 40, "video_position": 823, "completed": false } ] } }
 ```
 
 ---

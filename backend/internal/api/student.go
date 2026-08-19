@@ -33,6 +33,10 @@ func RegisterStudentRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Stud
 	g.GET("/records", h.GetRecords)
 	// GET /api/student/study-stats  学员仪表盘学习统计（按天分组，query: days=7|30）
 	g.GET("/study-stats", h.GetStudyStats)
+	// GET /api/student/courses  我的课程（含继续学习 top1，ADR-0017）
+	g.GET("/courses", h.GetStudentCourses)
+	// GET /api/student/courses/:course_id  单课程学习详情（每章状态与播放位置）
+	g.GET("/courses/:course_id", h.GetStudentCourseDetail)
 }
 
 // GetProfile 学员信息+学习统计+课程进度 GET /api/student/profile
@@ -106,6 +110,54 @@ func (h *StudentHandler) GetStudyStats(c *gin.Context) {
 			return h.svc.GetStudyStats(req.UserID, req.Days), nil
 		},
 		Render: func(c *gin.Context, _ *studyStatsReq, resp *service.StudyDailyStatsDTO, _ error) {
+			response.Success(c, resp)
+		},
+	}.Handle(c)
+}
+
+// studentCourseReq 单课程学习状态请求。
+type studentCourseReq struct {
+	UserID   int
+	CourseID int
+}
+
+// GetStudentCourses 我的课程 GET /api/student/courses
+func (h *StudentHandler) GetStudentCourses(c *gin.Context) {
+	Endpoint[studentUserIDReq, service.StudentCoursesDTO]{
+		Parse: func(c *gin.Context) (*studentUserIDReq, error) {
+			return &studentUserIDReq{UserID: middleware.CurrentUserID(c)}, nil
+		},
+		Invoke: func(ctx context.Context, req *studentUserIDReq) (*service.StudentCoursesDTO, error) {
+			return h.svc.GetStudentCourses(req.UserID)
+		},
+		Render: func(c *gin.Context, _ *studentUserIDReq, resp *service.StudentCoursesDTO, err error) {
+			if err != nil {
+				response.NotFound(c, err.Error())
+				return
+			}
+			response.Success(c, resp)
+		},
+	}.Handle(c)
+}
+
+// GetStudentCourseDetail 单课程学习详情 GET /api/student/courses/:course_id
+func (h *StudentHandler) GetStudentCourseDetail(c *gin.Context) {
+	Endpoint[studentCourseReq, service.StudentCourseDetailDTO]{
+		Parse: func(c *gin.Context) (*studentCourseReq, error) {
+			courseID, err := pathInt(c, "course_id", "课程ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &studentCourseReq{UserID: middleware.CurrentUserID(c), CourseID: courseID}, nil
+		},
+		Invoke: func(ctx context.Context, req *studentCourseReq) (*service.StudentCourseDetailDTO, error) {
+			return h.svc.GetStudentCourseDetail(req.UserID, req.CourseID)
+		},
+		Render: func(c *gin.Context, _ *studentCourseReq, resp *service.StudentCourseDetailDTO, err error) {
+			if err != nil {
+				response.NotFound(c, err.Error())
+				return
+			}
 			response.Success(c, resp)
 		},
 	}.Handle(c)

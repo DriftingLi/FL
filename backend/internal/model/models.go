@@ -221,13 +221,16 @@ func (ChapterFile) TableName() string { return "chapter_file" }
 // ===== 7. 学习记录 =====
 
 type StudyRecord struct {
-	RecordID      int       `gorm:"column:record_id;primaryKey" json:"record_id"`
-	StudentID     int       `gorm:"column:student_id" json:"student_id"`
-	CourseID      int       `gorm:"column:course_id" json:"course_id"`
-	ChapterID     *int      `gorm:"column:chapter_id" json:"chapter_id,omitempty"`
-	StudyDuration int       `gorm:"column:study_duration;default:0" json:"study_duration"`
-	Progress      float64   `gorm:"column:progress;type:numeric(5,2);default:0" json:"progress"`
-	StudyDate     time.Time `gorm:"column:study_date" json:"study_date"`
+	RecordID      int        `gorm:"column:record_id;primaryKey" json:"record_id"`
+	StudentID     int        `gorm:"column:student_id" json:"student_id"`
+	CourseID      int        `gorm:"column:course_id" json:"course_id"`
+	ChapterID     *int       `gorm:"column:chapter_id" json:"chapter_id,omitempty"`
+	StudyDuration int        `gorm:"column:study_duration;default:0" json:"study_duration"`
+	Progress      float64    `gorm:"column:progress;type:numeric(5,2);default:0" json:"progress"`
+	StudyDate     time.Time  `gorm:"column:study_date" json:"study_date"`
+	VideoPosition int        `gorm:"column:video_position;default:0" json:"video_position"`
+	LastChapterID *int       `gorm:"column:last_chapter_id" json:"last_chapter_id,omitempty"`
+	LastStudiedAt *time.Time `gorm:"column:last_studied_at" json:"last_studied_at,omitempty"`
 }
 
 func (StudyRecord) TableName() string { return "study_record" }
