@@ -78,6 +78,12 @@ if [ -n "$REGISTRY_PROXY" ]; then
     log_info "已启用镜像加速代理: ${REGISTRY_PROXY}"
 fi
 
+# ghcr 国内镜像源（南大 ghcr.nju.edu.cn，透传 ghcr 认证可拉私有镜像）：
+# 晚高峰 ghcr CDN 限速时代理回源/直连均易超时（曾致 testing CD 连续失败），
+# 作为拉取回退链路的第一回退（代理 → 镜像源 → 直连 ghcr.io，见 pull_one）。
+# 置空禁用；仅对 ghcr.io 镜像生效。
+REGISTRY_MIRROR="${REGISTRY_MIRROR:-ghcr.nju.edu.cn}"
+
 # 健康检查
 HEALTH_CHECK_RETRIES="${HEALTH_CHECK_RETRIES:-20}"
 HEALTH_CHECK_INTERVAL="${HEALTH_CHECK_INTERVAL:-6}"
@@ -504,7 +510,7 @@ ensure_registry_proxy() {
         fi
     fi
 
-    # 等待代理就绪（最多 10 秒），失败则回退直连 ghcr.io
+    # 等待代理就绪（最多 10 秒），失败则改走国内镜像源（镜像源仍失败由 pull_one 回退直连兜底）
     for i in $(seq 1 10); do
         if curl -s -o /dev/null "http://${REGISTRY_PROXY}/v2/"; then
             log_ok "镜像加速代理就绪: ${REGISTRY_PROXY}"
@@ -512,11 +518,27 @@ ensure_registry_proxy() {
         fi
         sleep 1
     done
-    log_warn "镜像加速代理未就绪 (${REGISTRY_PROXY})，本次部署回退直连 ghcr.io"
+    log_warn "镜像加速代理未就绪 (${REGISTRY_PROXY})，本次部署改走国内镜像源 ${REGISTRY_MIRROR:-（未配置）}"
     IMAGE_BACKEND="${IMAGE_BACKEND_ORIG:-$IMAGE_BACKEND}"
     IMAGE_FRONTEND="${IMAGE_FRONTEND_ORIG:-$IMAGE_FRONTEND}"
     IMAGE_LIBREOFFICE="${IMAGE_LIBREOFFICE_ORIG:-$IMAGE_LIBREOFFICE}"
+    rewrite_to_mirror
     return 0
+}
+
+# ghcr.io/* 镜像改写为国内镜像源前缀（代理不可用时改走镜像源加速；
+# 镜像源再失败由 pull_one 回退直连 ghcr.io 兜底）。非 ghcr.io 镜像不动。
+rewrite_to_mirror() {
+    [ -z "$REGISTRY_MIRROR" ] && return 0
+    case "$IMAGE_BACKEND" in
+        ghcr.io/*) IMAGE_BACKEND="${REGISTRY_MIRROR}/${IMAGE_BACKEND#ghcr.io/}" ;;
+    esac
+    case "$IMAGE_FRONTEND" in
+        ghcr.io/*) IMAGE_FRONTEND="${REGISTRY_MIRROR}/${IMAGE_FRONTEND#ghcr.io/}" ;;
+    esac
+    case "$IMAGE_LIBREOFFICE" in
+        ghcr.io/*) IMAGE_LIBREOFFICE="${REGISTRY_MIRROR}/${IMAGE_LIBREOFFICE#ghcr.io/}" ;;
+    esac
 }
 
 # ======================================================================
@@ -524,7 +546,7 @@ ensure_registry_proxy() {
 # ======================================================================
 
 # 代理健康检查：探测超时则重启（registry:2 上游连接可能挂起导致拉取卡死）
-# 重启后仍不可用则删除重建（缓存卷保留）；仍失败返回非 0，由调用方决定回退直连
+# 重启后仍不可用则删除重建（缓存卷保留）；仍失败返回非 0，由调用方走镜像源/直连回退链路
 ensure_proxy_healthy() {
     [ -z "$REGISTRY_PROXY" ] && return 0
     if timeout 5 curl -s -o /dev/null "http://${REGISTRY_PROXY}/v2/"; then
@@ -544,11 +566,11 @@ ensure_proxy_healthy() {
         log_ok "镜像加速代理重建成功"
         return 0
     fi
-    log_error "镜像加速代理重建后仍不可用，本次拉取回退直连 ghcr.io"
+    log_error "镜像加速代理重建后仍不可用，本次拉取走镜像源/直连回退链路"
     return 1
 }
 
-# 拉取单个镜像：3 次重试；代理路径失败时回退直连 ghcr.io 认证拉取
+# 拉取单个镜像：3 次重试；回退链路：国内镜像源（透传 ghcr 认证）→ 直连 ghcr.io 认证拉取
 pull_one() {
     local name="$1"
     local image="$2"
@@ -556,7 +578,7 @@ pull_one() {
     for attempt in $(seq 1 $retries); do
         log_info "拉取${name}镜像 (尝试 $attempt/$retries): $image"
         # docker pull 加超时（默认 600s）：registry 上游挂起时不再无限等待，
-        # 超时后按失败处理 → 重启代理重试 / 回退直连
+        # 超时后按失败处理 → 重启代理重试 / 走回退链路
         if timeout "${DOCKER_PULL_TIMEOUT:-600}" docker pull "$image"; then
             log_ok "${name}镜像: $image"
             return 0
@@ -568,21 +590,44 @@ pull_one() {
             ensure_proxy_healthy || true
         fi
     done
-    # 回退直连（仅代理改写过的地址）：认证拉取绕过代理挂起/缓存损坏
-    # 注意：去掉代理前缀后镜像名没有 registry（如 driftingli/fl-backend:tag），
-    # docker 默认解析到 Docker Hub（registry-1.docker.io）——必须补 ${REGISTRY}/ 前缀
-    local direct="${image#${REGISTRY_PROXY}/}"
-    if [ "$direct" != "$image" ] && [ -n "$GITHUB_TOKEN" ]; then
-        local ghcr_ref="${REGISTRY}/${direct}"
-        log_warn "代理拉取失败，回退直连 ${REGISTRY} 认证拉取: ${ghcr_ref}"
+
+    # ghcr 核心路径（<org>/<image>:<tag>）：从代理/镜像源/直连任一前缀提取，供回退引用。
+    # 注意：去掉 registry 前缀后的镜像名（如 driftingli/fl-backend:tag）会被 docker
+    # 解析到 Docker Hub（registry-1.docker.io）——回退引用必须补对应 registry 前缀。
+    local core=""
+    case "$image" in
+        "${REGISTRY_PROXY}/"*) core="${image#${REGISTRY_PROXY}/}" ;;
+        "${REGISTRY_MIRROR}/"*) core="${image#${REGISTRY_MIRROR}/}" ;;
+        "${REGISTRY}/"*) core="${image#${REGISTRY}/}" ;;
+    esac
+
+    # 回退 1：国内镜像源（仅 ghcr.io；镜像源路径本身失败时跳过，不重复尝试）
+    if [ -n "$core" ] && [ "$REGISTRY" = "ghcr.io" ] && [ -n "$REGISTRY_MIRROR" ] &&
+        [ -n "$GITHUB_TOKEN" ] && [ "$image" != "${REGISTRY_MIRROR}/${core}" ]; then
+        local mirror_ref="${REGISTRY_MIRROR}/${core}"
+        log_warn "代理拉取失败，回退国内镜像源 ${REGISTRY_MIRROR} 认证拉取: ${mirror_ref}"
+        echo "$GITHUB_TOKEN" | docker login "$REGISTRY_MIRROR" -u oauth2 --password-stdin >/dev/null 2>&1 || true
+        if timeout "${DOCKER_PULL_TIMEOUT:-600}" docker pull "$mirror_ref"; then
+            docker tag "$mirror_ref" "$image"
+            docker rmi "$mirror_ref" >/dev/null 2>&1 || true
+            log_ok "镜像源拉取成功并补 tag: $image"
+            return 0
+        fi
+    fi
+
+    # 回退 2：直连 ghcr.io 认证拉取（已是直连路径时跳过；最终兜底）
+    if [ -n "$core" ] && [ -n "$GITHUB_TOKEN" ] && [ "$image" != "${REGISTRY}/${core}" ]; then
+        local ghcr_ref="${REGISTRY}/${core}"
+        log_warn "回退直连 ${REGISTRY} 认证拉取: ${ghcr_ref}"
         echo "$GITHUB_TOKEN" | docker login "$REGISTRY" -u oauth2 --password-stdin >/dev/null 2>&1 || true
         if timeout "${DOCKER_PULL_TIMEOUT:-600}" docker pull "$ghcr_ref"; then
             docker tag "$ghcr_ref" "$image"
+            docker rmi "$ghcr_ref" >/dev/null 2>&1 || true
             log_ok "直连拉取成功并补 tag: $image"
             return 0
         fi
     fi
-    log_error "${name}镜像拉取失败(已重试 $retries 次): $image"
+    log_error "${name}镜像拉取失败(已重试 $retries 次 + 镜像源/直连回退): $image"
     return 1
 }
 
