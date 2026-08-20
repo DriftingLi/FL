@@ -14,15 +14,28 @@
             <span class="author-name">{{ displayName(topic.author) }}</span>
             <span class="topic-time">{{ formatLocaleDateTime(topic.created_at, '') }}</span>
           </div>
-          <el-button
-            v-if="topic.can_delete"
-            class="delete-btn"
-            type="danger"
-            text
-            @click="removeTopic"
-          >
-            删除
-          </el-button>
+          <div class="topic-actions">
+            <el-tooltip :content="topicFavorited ? '取消收藏' : '收藏'" placement="top">
+              <el-button
+                :icon="topicFavorited ? StarFilled : Star"
+                :type="topicFavorited ? 'warning' : 'default'"
+                circle
+                size="small"
+                @click="toggleFavorite"
+              />
+            </el-tooltip>
+            <el-button text size="small" @click="openReport('topic')">举报</el-button>
+            <el-button
+              v-if="topic.can_delete"
+              class="delete-btn"
+              type="danger"
+              text
+              size="small"
+              @click="removeTopic"
+            >
+              删除
+            </el-button>
+          </div>
         </div>
         <div class="topic-body">
           <div class="topic-title-row">
@@ -39,6 +52,17 @@
             {{ topic.view_count }} 次浏览
             <el-icon class="reply-icon"><ChatDotRound /></el-icon>
             {{ topic.reply_count }} 条回复
+            <button
+              class="like-btn"
+              :class="{ liked: topic.liked_by_me }"
+              type="button"
+              @click="toggleLike"
+            >
+              <el-icon :size="15">
+                <component :is="topic.liked_by_me ? StarFilled : Star" />
+              </el-icon>
+              {{ topic.likes_count ?? 0 }}
+            </button>
           </div>
         </div>
       </div>
@@ -63,6 +87,14 @@
                   回复
                 </el-button>
                 <el-button
+                  class="reply-btn"
+                  text
+                  size="small"
+                  @click="openReport('reply', reply.id)"
+                >
+                  举报
+                </el-button>
+                <el-button
                   v-if="reply.can_delete"
                   class="delete-btn"
                   type="danger"
@@ -83,6 +115,22 @@
         </template>
         <el-empty v-else description="暂无回复，来说两句吧" :image-size="80" />
       </div>
+
+      <!-- 举报对话框（帖子/回复共用，ADR-0018） -->
+      <el-dialog v-model="reportVisible" title="举报" width="440px">
+        <el-input
+          v-model="reportReason"
+          type="textarea"
+          :rows="4"
+          maxlength="500"
+          show-word-limit
+          placeholder="请填写举报理由（1-500 字）"
+        />
+        <template #footer>
+          <el-button @click="reportVisible = false">取消</el-button>
+          <el-button type="primary" :loading="reportSubmitting" @click="submitReport">提交</el-button>
+        </template>
+      </el-dialog>
 
       <div class="reply-editor">
         <div v-if="replyingTo" class="replying-bar">
@@ -111,8 +159,9 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, View, ChatDotRound } from '@element-plus/icons-vue'
+import { ArrowLeft, View, ChatDotRound, Star, StarFilled } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
+import { favoriteApi } from '@/api/favorite'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumImageUploader from '@/components/student/ForumImageUploader.vue'
 import { formatLocaleDateTime } from '@/utils/format'
@@ -218,7 +267,105 @@ function goBack() {
   }
 }
 
-onMounted(loadDetail)
+// ===== 互动（ADR-0018）：点赞 / 收藏 / 举报 =====
+
+const likePending = ref(false)
+
+async function toggleLike() {
+  if (!topic.value || likePending.value) return
+  likePending.value = true
+  try {
+    const topicId = Number(route.params.topicId)
+    const res = topic.value.liked_by_me
+      ? await forumApi.unlikeTopic(topicId)
+      : await forumApi.likeTopic(topicId)
+    topic.value.liked_by_me = res?.liked ?? !topic.value.liked_by_me
+    topic.value.likes_count = res?.likes_count ?? topic.value.likes_count ?? 0
+  } catch (e) {
+    console.error('点赞操作失败:', e)
+    /* 错误已由拦截器提示 */
+  } finally {
+    likePending.value = false
+  }
+}
+
+// 收藏帖子
+const topicFavorited = ref(false)
+const topicFavoriteId = ref<number>(0)
+
+async function loadFavoriteState() {
+  topicFavorited.value = false
+  topicFavoriteId.value = 0
+  try {
+    const res = await favoriteApi.check({ target_type: 'topic', target_id: Number(route.params.topicId) })
+    topicFavorited.value = !!res?.favorited
+    topicFavoriteId.value = res?.favorite_id || 0
+  } catch (e) {
+    console.error('查询收藏状态失败:', e)
+  }
+}
+
+async function toggleFavorite() {
+  const topicId = Number(route.params.topicId)
+  try {
+    if (topicFavorited.value) {
+      await favoriteApi.remove(topicFavoriteId.value)
+      topicFavorited.value = false
+      topicFavoriteId.value = 0
+      ElMessage.success('已取消收藏')
+    } else {
+      const res = await favoriteApi.add({ target_type: 'topic', target_id: topicId })
+      topicFavorited.value = true
+      topicFavoriteId.value = res?.favorite_id || 0
+      ElMessage.success('已收藏')
+    }
+  } catch (e) {
+    console.error('收藏操作失败:', e)
+    /* 错误已由拦截器提示 */
+  }
+}
+
+// 举报（帖子/回复共用对话框）
+const reportVisible = ref(false)
+const reportReason = ref('')
+const reportSubmitting = ref(false)
+const reportTarget = ref<{ kind: 'topic' | 'reply'; id: number } | null>(null)
+
+function openReport(kind: 'topic' | 'reply', replyId?: number) {
+  reportTarget.value = { kind, id: kind === 'topic' ? Number(route.params.topicId) : replyId! }
+  reportReason.value = ''
+  reportVisible.value = true
+}
+
+async function submitReport() {
+  const reason = reportReason.value.trim()
+  if (!reportTarget.value) return
+  if (reason.length < 1 || reason.length > 500) {
+    ElMessage.warning('举报理由需为 1-500 字')
+    return
+  }
+  reportSubmitting.value = true
+  try {
+    const { kind, id } = reportTarget.value
+    if (kind === 'topic') {
+      await forumApi.reportTopic(id, reason)
+    } else {
+      await forumApi.reportReply(id, reason)
+    }
+    ElMessage.success('举报已提交，等待处理')
+    reportVisible.value = false
+  } catch (e) {
+    console.error('举报失败:', e)
+    /* 错误已由拦截器提示 */
+  } finally {
+    reportSubmitting.value = false
+  }
+}
+
+onMounted(() => {
+  loadDetail()
+  loadFavoriteState()
+})
 </script>
 
 <style scoped>
@@ -304,6 +451,36 @@ onMounted(loadDetail)
   margin-top: 16px;
   font-size: 13px;
   color: #909399;
+}
+
+.topic-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.like-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  color: #909399;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.like-btn:hover {
+  color: #e6a23c;
+  background: #fdf6ec;
+}
+
+.like-btn.liked {
+  color: #e6a23c;
 }
 
 .reply-icon {

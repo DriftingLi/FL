@@ -7,6 +7,12 @@ export interface UpdateProgressPayload {
   study_duration?: number
   chapter_id?: number
   duration?: number
+  /** 秒级时长（>0 时后端优先于 duration 分钟） */
+  duration_seconds?: number
+  /** 章节最后播放位置（秒） */
+  video_position?: number
+  /** 显式完成该章节（置 progress=100） */
+  completed?: boolean
 }
 
 /** 课程摘要（列表项，courseToDict 字段，与后端 CourseDTO 契约对齐） */
@@ -64,11 +70,16 @@ export interface CourseDetail extends CourseSummary {
   chapters?: CourseChapter[]
 }
 
-/** 学员端课程详情响应（后端包一层 course_info） */
+/** 学员端课程详情响应（后端包一层 course_info；学习位置字段 ADR-0017） */
 export interface CourseDetailResponse {
   course_info?: CourseDetail
   chapters?: CourseChapter[]
   progress?: number
+  is_enrolled?: boolean
+  completed_chapters?: number
+  last_chapter_id?: number | null
+  last_position?: number
+  last_studied_at?: string
 }
 
 /** 章节文件（与后端 ChapterFileDTO 对齐） */

@@ -6,10 +6,20 @@
         <h1 class="banner-title">欢迎回来，{{ userName }}！</h1>
         <p class="banner-subtitle">继续学习，向叉车维修专家迈进</p>
       </div>
-      <router-link to="/training/courses" class="banner-action">
-        浏览全部课程
-        <el-icon><ArrowRight /></el-icon>
-      </router-link>
+      <div class="banner-actions">
+        <router-link
+          v-if="continueLearning"
+          :to="continueLearningPath"
+          class="banner-action banner-action-primary"
+        >
+          继续学习：{{ continueLearning.last_chapter_title || continueLearning.course_name }}
+          <el-icon><ArrowRight /></el-icon>
+        </router-link>
+        <router-link to="/training/courses" class="banner-action">
+          浏览全部课程
+          <el-icon><ArrowRight /></el-icon>
+        </router-link>
+      </div>
     </div>
 
     <!-- 三列快捷卡片 -->
@@ -73,7 +83,7 @@ import { useAuthStore } from '@/stores/auth'
 import QuickCard from '@/components/dashboard/QuickCard.vue'
 import type { QuickCardItem } from '@/components/dashboard/QuickCard.vue'
 import { useRoleDashboard } from '@/composables/useRoleDashboard'
-import { studentApi, type StudyRecordItem } from '@/api/student'
+import { studentApi, type StudyRecordItem, type StudentCourseItem } from '@/api/student'
 import { displayNameOf } from '@/types/user'
 
 const authStore = useAuthStore()
@@ -82,6 +92,14 @@ const userName = computed(() => displayNameOf(authStore.userInfo) || '同学')
 
 // 进行中的课程
 const activeCourses = ref<QuickCardItem[]>([])
+
+// 继续学习（最后学习时间最新的课程，ADR-0017）
+const continueLearning = ref<StudentCourseItem | null>(null)
+const continueLearningPath = computed(() => {
+  const cl = continueLearning.value
+  if (!cl?.last_chapter_id) return ''
+  return `/training/course/${cl.course_id}/chapter/${cl.last_chapter_id}`
+})
 
 // 待完成考试
 const pendingExams = ref<QuickCardItem[]>([])
@@ -118,19 +136,21 @@ const {
 
 async function loadCourses() {
   try {
-    const res = await studentApi.getProfile()
-    if (res?.course_progress) {
-      activeCourses.value = res.course_progress
+    // 我的课程（ADR-0017）：含最后学习位置，点击直达最后学习章节
+    const res = await studentApi.getStudentCourses()
+    continueLearning.value = res?.continue_learning || null
+    if (res?.courses) {
+      activeCourses.value = res.courses
         .filter((c) => {
           const p = c.progress ?? 0
           return p > 0 && p < 100
         })
-        .sort((a, b) => (b.study_date || '').localeCompare(a.study_date || ''))
         .slice(0, 5)
         .map((c) => ({
           title: c.course_name || '未命名课程',
+          subtitle: c.last_chapter_title || '',
           badge: `${Math.round(c.progress ?? 0)}%`,
-          path: `/training/courses`
+          path: c.last_chapter_id ? `/training/course/${c.course_id}/chapter/${c.last_chapter_id}` : ''
         }))
     }
   } catch (error) {
@@ -206,24 +226,42 @@ onMounted(async () => {
   color: var(--color-text-secondary);
 }
 
+.banner-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
 .banner-action {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-5);
-  background: var(--color-primary-500);
-  border: 1px solid var(--color-primary-600);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-primary-200);
   border-radius: var(--radius-lg);
-  color: white;
+  color: var(--color-primary-600);
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
   text-decoration: none;
-  transition: background var(--duration-fast);
+  transition: all var(--duration-fast);
   white-space: nowrap;
 }
 
+.banner-action-primary {
+  background: var(--color-primary-500);
+  border-color: var(--color-primary-600);
+  color: white;
+}
+
 .banner-action:hover {
+  border-color: var(--color-primary-400);
+}
+
+.banner-action-primary:hover {
   background: var(--color-primary-600);
+  color: white;
 }
 
 /* 三列快捷卡片 */

@@ -7,7 +7,32 @@
       </el-button>
     </div>
 
-    <div v-loading="loading" class="topic-list">
+    <el-radio-group v-model="mode" class="forum-mode" @change="handleModeChange">
+      <el-radio-button value="all">全部</el-radio-button>
+      <el-radio-button value="my-topics">我的帖子</el-radio-button>
+      <el-radio-button value="my-replies">我的回复</el-radio-button>
+    </el-radio-group>
+
+    <!-- 我的回复列表（条目带主题标题回填，点击跳对应帖子） -->
+    <div v-if="mode === 'my-replies'" v-loading="loading" class="topic-list">
+      <template v-if="myReplies.length > 0">
+        <div v-for="reply in myReplies" :key="reply.id" class="topic-item" @click="goDetail(reply.topic_id)">
+          <div class="topic-main">
+            <div class="topic-title-row">
+              <el-tag size="small" type="info">回复</el-tag>
+              <h3 class="topic-title">{{ reply.topic_title || '原帖已删除' }}</h3>
+            </div>
+            <p class="topic-excerpt">{{ reply.content }}</p>
+            <div class="topic-meta">
+              <span>{{ formatRelativeTime(reply.created_at) }}</span>
+            </div>
+          </div>
+        </div>
+      </template>
+      <el-empty v-else-if="!loading" description="暂无回复" />
+    </div>
+
+    <div v-else v-loading="loading" class="topic-list">
       <template v-if="topics.length > 0">
         <div
           v-for="topic in topics"
@@ -96,7 +121,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { EditPen, View, ChatDotRound, Picture } from '@element-plus/icons-vue'
-import { forumApi, type ForumTopicItem } from '@/api/forum'
+import { forumApi, type ForumTopicItem, type MyReplyItem } from '@/api/forum'
 import { formatRelativeTime } from '@/utils/format'
 import ForumImageUploader from '@/components/student/ForumImageUploader.vue'
 
@@ -108,6 +133,16 @@ const topics = ref<ForumTopicItem[]>([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
+
+// 列表模式：全部 / 我的帖子 / 我的回复（ADR-0018）
+type ForumMode = 'all' | 'my-topics' | 'my-replies'
+const mode = ref<ForumMode>('all')
+const myReplies = ref<MyReplyItem[]>([])
+
+function handleModeChange() {
+  currentPage.value = 1
+  loadTopics()
+}
 const createDialogVisible = ref(false)
 const createForm = ref<{ title: string; content: string; images: string[] }>({ title: '', content: '', images: [] })
 
@@ -122,13 +157,20 @@ function authorLetter(author: ForumTopicItem['author']) {
 async function loadTopics() {
   loading.value = true
   try {
-    const res = await forumApi.listTopics({
-      scope: 'general',
-      page: currentPage.value,
-      page_size: pageSize.value
-    })
-    topics.value = res.topics || []
-    total.value = res.total || 0
+    const params = { page: currentPage.value, page_size: pageSize.value }
+    if (mode.value === 'my-replies') {
+      const res = await forumApi.getMyReplies(params)
+      myReplies.value = res.replies || []
+      total.value = res.total || 0
+    } else if (mode.value === 'my-topics') {
+      const res = await forumApi.getMyTopics(params)
+      topics.value = res.topics || []
+      total.value = res.total || 0
+    } else {
+      const res = await forumApi.listTopics({ scope: 'general', ...params })
+      topics.value = res.topics || []
+      total.value = res.total || 0
+    }
   } catch (e) {
     console.error('加载论坛列表失败:', e)
     /* 错误已由拦截器提示 */
@@ -191,6 +233,10 @@ onMounted(loadTopics)
   font-weight: 600;
   color: #303133;
   margin: 0 0 6px;
+}
+
+.forum-mode {
+  margin-bottom: 12px;
 }
 
 .topic-list {
