@@ -52,17 +52,6 @@
             {{ topic.view_count }} 次浏览
             <el-icon class="reply-icon"><ChatDotRound /></el-icon>
             {{ topic.reply_count }} 条回复
-            <button
-              class="like-btn"
-              :class="{ liked: topic.liked_by_me }"
-              type="button"
-              @click="toggleLike"
-            >
-              <el-icon :size="15">
-                <component :is="topic.liked_by_me ? StarFilled : Star" />
-              </el-icon>
-              {{ topic.likes_count ?? 0 }}
-            </button>
           </div>
         </div>
       </div>
@@ -267,27 +256,8 @@ function goBack() {
   }
 }
 
-// ===== 互动（ADR-0018）：点赞 / 收藏 / 举报 =====
-
-const likePending = ref(false)
-
-async function toggleLike() {
-  if (!topic.value || likePending.value) return
-  likePending.value = true
-  try {
-    const topicId = Number(route.params.topicId)
-    const res = topic.value.liked_by_me
-      ? await forumApi.unlikeTopic(topicId)
-      : await forumApi.likeTopic(topicId)
-    topic.value.liked_by_me = res?.liked ?? !topic.value.liked_by_me
-    topic.value.likes_count = res?.likes_count ?? topic.value.likes_count ?? 0
-  } catch (e) {
-    console.error('点赞操作失败:', e)
-    /* 错误已由拦截器提示 */
-  } finally {
-    likePending.value = false
-  }
-}
+// ===== 互动（ADR-0018）：收藏 / 举报 =====
+// （点赞 web 端不展示：星形与收藏重复且无后续消费场景，API 保留供移动端使用）
 
 // 收藏帖子
 const topicFavorited = ref(false)
@@ -458,29 +428,6 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
   margin-left: auto;
-}
-
-.like-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: none;
-  background: transparent;
-  color: #909399;
-  font-size: 13px;
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
-  transition: all 0.2s;
-}
-
-.like-btn:hover {
-  color: #e6a23c;
-  background: #fdf6ec;
-}
-
-.like-btn.liked {
-  color: #e6a23c;
 }
 
 .reply-icon {

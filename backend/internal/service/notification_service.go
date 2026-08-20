@@ -89,6 +89,18 @@ func (s *NotificationService) ProfileReviewNotification(req *model.ProfileChange
 	return "profile_review", title, content, payload
 }
 
+// forumTopicPayload 构造论坛事件通知结构化标记（{"topic_id": N}），
+// 供前端/移动端确定性定位帖子（不依赖 link 文案解析）。
+func forumTopicPayload(topicID int64) model.JSONB {
+	b, err := json.Marshal(struct {
+		TopicID int64 `json:"topic_id"`
+	}{TopicID: topicID})
+	if err != nil {
+		return nil
+	}
+	return model.JSONB(b)
+}
+
 // reviewStatusPayload 构造审核状态结构化标记，如 {"review_status":"approved"}。
 func reviewStatusPayload(reviewStatus string) model.JSONB {
 	b, err := json.Marshal(struct {
