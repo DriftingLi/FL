@@ -47,6 +47,8 @@ type Config struct {
 	EmailCodeTTL time.Duration
 	// Wechat 微信开放平台配置（扫码登录，授权信息待接入）。
 	Wechat WechatConfig
+	// WechatPay 微信支付商户平台配置（Native/JSAPI 下单、回调验签）。
+	WechatPay WechatPayConfig
 	// AuthCookie 登录态 Cookie 配置（父域名共享登录）。
 	AuthCookie AuthCookieConfig
 	// Log 统一系统运行日志配置（zap）。
@@ -82,6 +84,34 @@ func (c SMSConfig) Configured() bool {
 type WechatConfig struct {
 	AppID     string // WECHAT_APP_ID
 	AppSecret string // WECHAT_APP_SECRET
+}
+
+// WechatPayConfig 微信支付商户平台配置（APIv3）。
+// 商户号与证书在商户平台（pay.weixin.qq.com）申请，与开放平台扫码登录互不相同。
+// 回调地址必须为 HTTPS，本地开发需内网穿透或测试白名单。
+type WechatPayConfig struct {
+	// MchID 商户号。
+	MchID string // WECHAT_PAY_MCH_ID
+	// AppID 微信支付绑定的公众号/小程序 AppID（Native/JSAPI 下单必填）。
+	AppID string // WECHAT_PAY_APP_ID
+	// APIv3Key APIv3 密钥（32 位，商户平台设置，用于回调报文解密）。
+	APIv3Key string // WECHAT_PAY_API_V3_KEY
+	// MchCertSerialNo 商户 API 证书序列号。
+	MchCertSerialNo string // WECHAT_PAY_MCH_CERT_SERIAL_NO
+	// MchPrivateKeyPath 商户 API 私钥文件路径（apiclient_key.pem）。
+	MchPrivateKeyPath string // WECHAT_PAY_MCH_PRIVATE_KEY_PATH
+	// WechatPayPublicKeyID 微信支付公钥 ID（新验签方式，商户平台「账户中心-API安全」获取）。
+	WechatPayPublicKeyID string // WECHAT_PAY_PUBLIC_KEY_ID
+	// WechatPayPublicKeyPath 微信支付公钥文件路径（pub_key.pem，优先于平台证书自动下载）。
+	WechatPayPublicKeyPath string // WECHAT_PAY_PUBLIC_KEY_PATH
+	// NotifyURL 支付结果回调地址（HTTPS），如 https://api.example.com/api/pay/notify。
+	NotifyURL string // WECHAT_PAY_NOTIFY_URL
+}
+
+// Configured 返回微信支付是否已完整配置（未配置时下单接口明确报错）。
+func (c WechatPayConfig) Configured() bool {
+	return c.MchID != "" && c.AppID != "" && c.APIv3Key != "" &&
+		c.MchCertSerialNo != "" && c.MchPrivateKeyPath != "" && c.NotifyURL != ""
 }
 
 // AuthCookieConfig 登录态 Cookie 配置。
@@ -212,6 +242,14 @@ func setDefaults() {
 	viper.SetDefault("tencent_sms_region", "ap-guangzhou")
 	viper.SetDefault("wechat_app_id", "")
 	viper.SetDefault("wechat_app_secret", "")
+	viper.SetDefault("wechat_pay_mch_id", "")
+	viper.SetDefault("wechat_pay_app_id", "")
+	viper.SetDefault("wechat_pay_api_v3_key", "")
+	viper.SetDefault("wechat_pay_mch_cert_serial_no", "")
+	viper.SetDefault("wechat_pay_mch_private_key_path", "")
+	viper.SetDefault("wechat_pay_public_key_id", "")
+	viper.SetDefault("wechat_pay_public_key_path", "")
+	viper.SetDefault("wechat_pay_notify_url", "")
 	viper.SetDefault("auth_cookie_name", "hrwai_token")
 	viper.SetDefault("auth_cookie_domain", "localhost")
 	viper.SetDefault("log_level", "info")
@@ -315,6 +353,16 @@ func Load() (*Config, error) {
 		Wechat: WechatConfig{
 			AppID:     viper.GetString("wechat_app_id"),
 			AppSecret: viper.GetString("wechat_app_secret"),
+		},
+		WechatPay: WechatPayConfig{
+			MchID:                  viper.GetString("wechat_pay_mch_id"),
+			AppID:                  viper.GetString("wechat_pay_app_id"),
+			APIv3Key:               viper.GetString("wechat_pay_api_v3_key"),
+			MchCertSerialNo:        viper.GetString("wechat_pay_mch_cert_serial_no"),
+			MchPrivateKeyPath:      viper.GetString("wechat_pay_mch_private_key_path"),
+			WechatPayPublicKeyID:   viper.GetString("wechat_pay_public_key_id"),
+			WechatPayPublicKeyPath: viper.GetString("wechat_pay_public_key_path"),
+			NotifyURL:              viper.GetString("wechat_pay_notify_url"),
 		},
 		AuthCookie: AuthCookieConfig{
 			Name:   viper.GetString("auth_cookie_name"),
@@ -427,6 +475,11 @@ func (c *Config) Validate() error {
 	// 子域名共享登录 Cookie 必须配置父域名（localhost 仅限开发环境）
 	if c.AuthCookie.Domain == "" || c.AuthCookie.Domain == "localhost" {
 		missing = append(missing, "AUTH_COOKIE_DOMAIN(必须为父域名，如 example.com)")
+	}
+	// 微信支付：任一关键字段已配置但未完整时视为误配，要求全部补齐
+	if !c.WechatPay.Configured() && (c.WechatPay.MchID != "" || c.WechatPay.APIv3Key != "" ||
+		c.WechatPay.MchCertSerialNo != "" || c.WechatPay.MchPrivateKeyPath != "" || c.WechatPay.NotifyURL != "") {
+		missing = append(missing, "WECHAT_PAY_*(微信支付配置不完整：MCH_ID/APP_ID/API_V3_KEY/MCH_CERT_SERIAL_NO/MCH_PRIVATE_KEY_PATH/NOTIFY_URL 需同时配置)")
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("生产环境缺少必填配置: %s", strings.Join(missing, ", "))

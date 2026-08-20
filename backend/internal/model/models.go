@@ -620,3 +620,48 @@ type AuditLog struct {
 }
 
 func (AuditLog) TableName() string { return "audit_logs" }
+
+// ===== 28. 支付订单 =====
+
+// PayOrder 微信支付订单（Native / JSAPI 共用一张表）。
+// 金额单位：分（int64）；状态机：created → paid → refunded，created 超时/关闭 → closed。
+// 回调幂等：以 out_trade_no 唯一，重复回调不重复入账。
+type PayOrder struct {
+	ID int64 `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	// UserID 下单学员（hrwai_users.id）。
+	UserID int `gorm:"column:user_id;index" json:"user_id"`
+	// OutTradeNo 商户订单号（业务方生成，唯一，下单与回调对账键）。
+	OutTradeNo string `gorm:"column:out_trade_no;uniqueIndex" json:"out_trade_no"`
+	// TransactionID 微信支付单号（支付成功后回填）。
+	TransactionID string `gorm:"column:transaction_id" json:"transaction_id,omitempty"`
+	// PayType 支付方式：native / jsapi。
+	PayType string `gorm:"column:pay_type" json:"pay_type"`
+	// Subject 商品描述（透传下单 description）。
+	Subject string `gorm:"column:subject" json:"subject"`
+	// Amount 订单金额（分）。
+	Amount int64 `gorm:"column:amount" json:"amount"`
+	// Status 订单状态：created / paid / refunded / closed。
+	Status string `gorm:"column:status;default:created;index" json:"status"`
+	// NotifyRaw 最近一次回调原文（JSONB，审计用）。
+	NotifyRaw JSONB `gorm:"column:notify_raw;type:jsonb" json:"notify_raw,omitempty"`
+	// PaidAt 支付成功时间（回调确认后回填）。
+	PaidAt    *time.Time `gorm:"column:paid_at" json:"paid_at,omitempty"`
+	CreatedAt time.Time  `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt time.Time  `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (PayOrder) TableName() string { return "pay_orders" }
+
+// PayOrderStatus 支付订单状态常量。
+const (
+	PayOrderStatusCreated  = "created"  // 已下单待支付
+	PayOrderStatusPaid     = "paid"     // 已支付
+	PayOrderStatusRefunded = "refunded" // 已退款
+	PayOrderStatusClosed   = "closed"   // 已关闭（超时未支付）
+)
+
+// PayType 支付方式常量。
+const (
+	PayTypeNative = "native" // PC 扫码
+	PayTypeJSAPI  = "jsapi"  // 小程序/公众号内支付
+)

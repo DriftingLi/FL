@@ -9,6 +9,8 @@ export interface ForumTopicItem {
   images?: string[]
   view_count: number
   reply_count: number
+  like_count: number
+  liked: boolean
   last_reply_at?: string | null
   created_at: string
   author: {
@@ -22,6 +24,7 @@ export interface ForumTopicItem {
 export interface ForumReplyItem {
   id: number
   topic_id: number
+  topic_title?: string
   parent_id?: number | null
   parent_name?: string
   content: string
@@ -78,6 +81,39 @@ export const forumApi = {
 
   deleteReply(id: number) {
     return unwrappedRequest.delete<null>(`/forum/replies/${id}`)
+  },
+
+  likeTopic(id: number) {
+    return unwrappedRequest.post<{ liked: boolean; like_count: number }>(
+      `/forum/topics/${id}/like`
+    )
+  },
+
+  unlikeTopic(id: number) {
+    return unwrappedRequest.delete<{ liked: boolean; like_count: number }>(
+      `/forum/topics/${id}/like`
+    )
+  },
+
+  reportTopic(id: number, reason: string) {
+    return unwrappedRequest.post<null>(`/forum/topics/${id}/report`, { reason })
+  },
+
+  reportReply(id: number, reason: string) {
+    return unwrappedRequest.post<null>(`/forum/replies/${id}/report`, { reason })
+  },
+
+  myTopics(params: { page?: number; page_size?: number }) {
+    return unwrappedRequest.get<{
+      topics: ForumTopicItem[]; total: number; page: number; pages: number
+    }>('/forum/my-topics', { params })
+  },
+
+  myReplies(params: { page?: number; page_size?: number }) {
+    return unwrappedRequest.get<{
+      replies: (ForumReplyItem & { topic_title: string })[];
+      total: number; page: number; pages: number
+    }>('/forum/my-replies', { params })
   }
 }
 
