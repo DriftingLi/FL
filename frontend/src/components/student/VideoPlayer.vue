@@ -18,6 +18,9 @@
         @loadedmetadata="onLoadedMetadata"
         @waiting="onWaiting"
         @canplay="onCanPlay"
+        @timeupdate="onTimeUpdate"
+        @pause="onPause"
+        @ended="onEnded"
       >
         您的浏览器不支持视频播放
       </video>
@@ -72,8 +75,15 @@ import { Download, Loading, Monitor } from '@element-plus/icons-vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
 
 const props = defineProps({
-  src: { type: String, required: true }
+  src: { type: String, required: true },
+  /** 断点续播位置（秒，ADR-0017）：loadedmetadata 时自动 seek */
+  initialPosition: { type: Number, default: 0 }
 })
+
+// position-update：节流上报当前播放位置（秒），父组件随进度上报落库
+const emit = defineEmits<{
+  (e: 'position-update', seconds: number): void
+}>()
 
 const resolvedSrc = computed(() => resolveFileUrl(props.src))
 
@@ -117,6 +127,40 @@ function retryLoad() {
 
 function onLoadedMetadata() {
   error.value = false
+  // 断点续播：恢复上次播放位置（保留 5 秒回退缓冲，便于衔接上下文）
+  if (props.initialPosition > 0 && videoRef.value) {
+    const target = Math.max(props.initialPosition - 5, 0)
+    if (target < videoRef.value.duration) {
+      videoRef.value.currentTime = target
+    }
+  }
+}
+
+// 播放位置节流上报（10s 一次；pause/ended 立即上报），父组件随学习进度上报落库
+const POSITION_EMIT_INTERVAL = 10
+let lastEmittedPosition = 0
+let lastEmitTime = 0
+
+function emitPosition(force = false) {
+  const video = videoRef.value
+  if (!video || !isFinite(video.currentTime)) return
+  const now = Date.now()
+  if (!force && now - lastEmitTime < POSITION_EMIT_INTERVAL * 1000) return
+  lastEmitTime = now
+  lastEmittedPosition = Math.floor(video.currentTime)
+  emit('position-update', lastEmittedPosition)
+}
+
+function onTimeUpdate() {
+  emitPosition()
+}
+
+function onPause() {
+  emitPosition(true)
+}
+
+function onEnded() {
+  emitPosition(true)
 }
 
 function onWaiting() {
@@ -155,6 +199,7 @@ function downloadVideo() {
 }
 
 onBeforeUnmount(() => {
+  emitPosition(true)
   if (document.pictureInPictureElement) {
     document.exitPictureInPicture()
   }

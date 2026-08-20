@@ -5,6 +5,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -57,6 +58,8 @@ type ForumTopicDTO struct {
 	CreatedAt    string      `json:"created_at"`
 	Author       ForumAuthor `json:"author"`
 	CanDelete    bool        `json:"can_delete"`
+	LikesCount   int64       `json:"likes_count"`
+	LikedByMe    bool        `json:"liked_by_me"`
 }
 
 // ForumReplyDTO 论坛回复对象。
@@ -74,16 +77,18 @@ type ForumReplyDTO struct {
 
 // ForumService 论坛服务。
 type ForumService struct {
-	db      *gorm.DB
-	fileSvc *FileService
+	db              *gorm.DB
+	fileSvc         *FileStore
+	notificationSvc *NotificationService
 
 	logger *zap.Logger
 }
 
 // NewForumService 构造论坛服务。
-// fileSvc 用于删除帖子/回复时清理图片存储（可 nil，nil 时跳过清理）。
-func NewForumService(db *gorm.DB, fileSvc *FileService, logger *zap.Logger) *ForumService {
-	return &ForumService{db: db, fileSvc: fileSvc, logger: logger}
+// fileSvc 用于删除帖子/回复时清理图片存储（可 nil，nil 时跳过清理）；
+// notificationSvc 用于论坛事件站内信（回复/举报处理/管理端删帖，见各触发点）。
+func NewForumService(db *gorm.DB, fileSvc *FileStore, notificationSvc *NotificationService, logger *zap.Logger) *ForumService {
+	return &ForumService{db: db, fileSvc: fileSvc, notificationSvc: notificationSvc, logger: logger}
 }
 
 // topicRow 列表查询的扫描结构。
@@ -240,8 +245,13 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int) (map[string]any, er
 		})
 	}
 
+	// 点赞状态（ADR-0018）：详情返回计数与当前用户是否已赞。
+	topicDTO := row.toDTO(viewerID)
+	topicDTO.LikesCount = s.topicLikesCount(topicID)
+	topicDTO.LikedByMe = viewerID > 0 && s.hasLiked(viewerID, topicID)
+
 	return map[string]any{
-		"topic":   row.toDTO(viewerID),
+		"topic":   topicDTO,
 		"replies": replyDTOs,
 	}, nil
 }
@@ -326,6 +336,7 @@ func (s *ForumService) ReplyTopic(userID int, topicID int64, content string, par
 
 	// 校验被回复的回复存在且属于同一主题
 	var parentName string
+	var parentAuthorID int // 被回复人（楼中楼通知用）
 	if parentReplyID != nil && *parentReplyID > 0 {
 		var parent model.ForumReply
 		if err := s.db.First(&parent, *parentReplyID).Error; err != nil {
@@ -337,6 +348,7 @@ func (s *ForumService) ReplyTopic(userID int, topicID int64, content string, par
 		if parent.TopicID != topicID {
 			return nil, errors.New("被回复的回复不属于该主题")
 		}
+		parentAuthorID = parent.UserID
 		var pu model.HrwaiUser
 		if err := s.db.First(&pu, parent.UserID).Error; err == nil {
 			parentName = ForumAuthor{
@@ -344,6 +356,11 @@ func (s *ForumService) ReplyTopic(userID int, topicID int64, content string, par
 			}.DisplayName()
 		}
 	}
+
+	// 回复人展示名（通知文案用；查询失败回退空串，不阻断回复）
+	var replier model.HrwaiUser
+	_ = s.db.Select("username").First(&replier, userID).Error
+	replierName := replier.Username
 
 	now := beijingNow()
 	reply := model.ForumReply{
@@ -358,12 +375,36 @@ func (s *ForumService) ReplyTopic(userID int, topicID int64, content string, par
 		if err := tx.Create(&reply).Error; err != nil {
 			return err
 		}
-		return tx.Model(&model.ForumTopic{}).Where("id = ?", topicID).
+		if err := tx.Model(&model.ForumTopic{}).Where("id = ?", topicID).
 			Updates(map[string]any{
 				"reply_count":   gorm.Expr("reply_count + 1"),
 				"last_reply_at": now,
 				"updated_at":    now,
-			}).Error
+			}).Error; err != nil {
+			return err
+		}
+		// 站内信通知（与回复同事务提交，避免通知丢失；与资料审核同模式）：
+		// 1) 楼主被回复（回复人是楼主本人时不通知）
+		// 2) 楼中楼被回复人（非自己、非楼主——楼主已由 1) 覆盖，避免重复通知）
+		link := fmt.Sprintf("/training/forum/%d", topicID)
+		payload := forumTopicPayload(topicID)
+		if topic.UserID != userID {
+			if err := s.notificationSvc.CreateWithTx(tx, topic.UserID, "forum_reply",
+				"你的帖子有新回复",
+				fmt.Sprintf("%s 回复了你的帖子「%s」", replierName, topic.Title),
+				link, payload, now); err != nil {
+				return err
+			}
+		}
+		if parentAuthorID != 0 && parentAuthorID != userID && parentAuthorID != topic.UserID {
+			if err := s.notificationSvc.CreateWithTx(tx, parentAuthorID, "forum_reply",
+				"你的回复有新回复",
+				fmt.Sprintf("%s 在帖子「%s」中回复了你", replierName, topic.Title),
+				link, payload, now); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -398,7 +439,7 @@ func (s *ForumService) DeleteTopic(userID int, topicID int64) error {
 	return s.deleteTopicWithImages(topicID)
 }
 
-// AdminDeleteTopic 管理员删除任意主题（不校验作者）。图片一并清理。
+// AdminDeleteTopic 管理员删除任意主题（不校验作者）。图片一并清理；站内信通知作者。
 func (s *ForumService) AdminDeleteTopic(topicID int64) error {
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
@@ -407,7 +448,17 @@ func (s *ForumService) AdminDeleteTopic(topicID int64) error {
 		}
 		return err
 	}
-	return s.deleteTopicWithImages(topicID)
+	if err := s.deleteTopicWithImages(topicID); err != nil {
+		return err
+	}
+	// 通知作者（尽力而为：内容已删，通知失败不回滚，仅记日志）
+	if err := s.notificationSvc.Create(topic.UserID, "forum_topic_deleted",
+		"你的帖子已被删除",
+		"管理员删除了你的帖子「"+topic.Title+"」。",
+		"", nil); err != nil {
+		s.logger.Warn("删帖通知发送失败", zap.Int64("topic_id", topicID), zap.Error(err))
+	}
+	return nil
 }
 
 // deleteTopicWithImages 删除主题前收集主题 + 全部回复（含子回复）的图片并清理存储。
@@ -449,7 +500,7 @@ func (s *ForumService) DeleteReply(userID int, replyID int64) error {
 	return s.deleteReplyWithImages(replyID, reply.TopicID)
 }
 
-// AdminDeleteReply 管理员删除任意回复（不校验作者；其下级回复随外键级联删除）。图片一并清理。
+// AdminDeleteReply 管理员删除任意回复（不校验作者；其下级回复随外键级联删除）。图片一并清理；站内信通知回复作者。
 func (s *ForumService) AdminDeleteReply(replyID int64) error {
 	var reply model.ForumReply
 	if err := s.db.First(&reply, replyID).Error; err != nil {
@@ -458,7 +509,23 @@ func (s *ForumService) AdminDeleteReply(replyID int64) error {
 		}
 		return err
 	}
-	return s.deleteReplyWithImages(replyID, reply.TopicID)
+	topicTitle := ""
+	var topic model.ForumTopic
+	if err := s.db.Select("title").First(&topic, reply.TopicID).Error; err == nil {
+		topicTitle = topic.Title
+	}
+	if err := s.deleteReplyWithImages(replyID, reply.TopicID); err != nil {
+		return err
+	}
+	// 通知回复作者（尽力而为：内容已删，通知失败不回滚，仅记日志）
+	if err := s.notificationSvc.Create(reply.UserID, "forum_reply_deleted",
+		"你的回复已被删除",
+		"管理员删除了你在帖子「"+topicTitle+"」中的回复。",
+		fmt.Sprintf("/training/forum/%d", reply.TopicID),
+		forumTopicPayload(reply.TopicID)); err != nil {
+		s.logger.Warn("删回复通知发送失败", zap.Int64("reply_id", replyID), zap.Error(err))
+	}
+	return nil
 }
 
 // deleteReplyWithImages 删除回复前收集本回复 + 全部下级回复的图片并清理存储。
@@ -584,4 +651,269 @@ func marshalImageURLs(urls []string) model.JSONB {
 	}
 	b, _ := json.Marshal(urls)
 	return model.JSONB(b)
+}
+
+// ===== 论坛互动（ADR-0018：点赞 / 举报 / 我的帖子 / 我的回复）=====
+
+// LikeTopic 点赞主题（幂等：重复点赞不报错、不重复计数）。
+func (s *ForumService) LikeTopic(userID int, topicID int64) (int64, error) {
+	var cnt int64
+	if err := s.db.Model(&model.ForumTopic{}).Where("id = ?", topicID).Count(&cnt).Error; err != nil {
+		return 0, err
+	}
+	if cnt == 0 {
+		return 0, errors.New("主题不存在")
+	}
+	var existing model.ForumTopicLike
+	if err := s.db.Where("topic_id = ? AND user_id = ?", topicID, userID).
+		Limit(1).Find(&existing).Error; err != nil {
+		return 0, err
+	}
+	if existing.ID == 0 {
+		if err := s.db.Create(&model.ForumTopicLike{
+			TopicID: topicID, UserID: userID, CreatedAt: beijingNow(),
+		}).Error; err != nil {
+			return 0, err
+		}
+	}
+	return s.topicLikesCount(topicID), nil
+}
+
+// UnlikeTopic 取消点赞（幂等：未点赞时直接返回当前计数）。
+func (s *ForumService) UnlikeTopic(userID int, topicID int64) (int64, error) {
+	if err := s.db.Where("topic_id = ? AND user_id = ?", topicID, userID).
+		Delete(&model.ForumTopicLike{}).Error; err != nil {
+		return 0, err
+	}
+	return s.topicLikesCount(topicID), nil
+}
+
+// topicLikesCount 主题点赞数。
+func (s *ForumService) topicLikesCount(topicID int64) int64 {
+	var n int64
+	s.db.Model(&model.ForumTopicLike{}).Where("topic_id = ?", topicID).Count(&n)
+	return n
+}
+
+// hasLiked 当前用户是否已点赞。
+func (s *ForumService) hasLiked(userID int, topicID int64) bool {
+	var n int64
+	s.db.Model(&model.ForumTopicLike{}).Where("topic_id = ? AND user_id = ?", topicID, userID).Count(&n)
+	return n > 0
+}
+
+// CreateReport 举报主题或回复（topicID/replyID 二选一，由调用方保证）。
+func (s *ForumService) CreateReport(userID int, topicID, replyID *int64, reason string) error {
+	reason = strings.TrimSpace(reason)
+	if utf8.RuneCountInString(reason) < 1 || utf8.RuneCountInString(reason) > 500 {
+		return errors.New("举报理由长度需在 1-500 个字符之间")
+	}
+	if (topicID == nil) == (replyID == nil) {
+		return errors.New("举报对象必须为主题或回复之一")
+	}
+	if topicID != nil {
+		var cnt int64
+		s.db.Model(&model.ForumTopic{}).Where("id = ?", *topicID).Count(&cnt)
+		if cnt == 0 {
+			return errors.New("主题不存在")
+		}
+	}
+	if replyID != nil {
+		var cnt int64
+		s.db.Model(&model.ForumReply{}).Where("id = ?", *replyID).Count(&cnt)
+		if cnt == 0 {
+			return errors.New("回复不存在")
+		}
+	}
+	return s.db.Create(&model.ForumReport{
+		ReporterID: userID, TopicID: topicID, ReplyID: replyID,
+		Reason: reason, Status: 0, CreatedAt: beijingNow(),
+	}).Error
+}
+
+// ForumReportDTO 管理端举报条目。
+type ForumReportDTO struct {
+	ID         int64  `json:"id"`
+	ReporterID int    `json:"reporter_id"`
+	Reporter   string `json:"reporter"`
+	TopicID    *int64 `json:"topic_id,omitempty"`
+	TopicTitle string `json:"topic_title"`
+	ReplyID    *int64 `json:"reply_id,omitempty"`
+	Reason     string `json:"reason"`
+	Status     int16  `json:"status"`
+	CreatedAt  string `json:"created_at"`
+}
+
+// ForumReportPageResult 举报分页结果。
+type ForumReportPageResult struct {
+	Page    int              `json:"page"`
+	Pages   int              `json:"pages"`
+	Total   int64            `json:"total"`
+	Reports []ForumReportDTO `json:"reports"`
+}
+
+// ListReports 管理端举报列表（status: nil 全部 / 0 待处理 / 1 已处理）。
+func (s *ForumService) ListReports(page, pageSize int, status *int16) (*ForumReportPageResult, error) {
+	type reportRow struct {
+		ID         int64
+		ReporterID int
+		Reporter   string
+		TopicID    *int64
+		TopicTitle string
+		ReplyID    *int64
+		Reason     string
+		Status     int16
+		CreatedAt  time.Time
+	}
+	rows, total, page, pageSize := paging.QueryWithScan[reportRow](s.db, page, pageSize, 20, 100,
+		"r.created_at DESC, r.id DESC",
+		func(q *gorm.DB) *gorm.DB {
+			q = q.Table("forum_report AS r").
+				Select("r.id, r.reporter_id, r.topic_id, r.reply_id, r.reason, r.status, r.created_at, " +
+					"COALESCE(u.username, '') AS reporter, COALESCE(t.title, '') AS topic_title").
+				Joins("LEFT JOIN hrwai_users AS u ON u.id = r.reporter_id").
+				Joins("LEFT JOIN forum_topics AS t ON t.id = r.topic_id")
+			if status != nil {
+				q = q.Where("r.status = ?", *status)
+			}
+			return q
+		})
+	items := make([]ForumReportDTO, 0, len(rows))
+	for _, r := range rows {
+		items = append(items, ForumReportDTO{
+			ID: r.ID, ReporterID: r.ReporterID, Reporter: r.Reporter,
+			TopicID: r.TopicID, TopicTitle: r.TopicTitle, ReplyID: r.ReplyID,
+			Reason: r.Reason, Status: r.Status, CreatedAt: formatISO(r.CreatedAt),
+		})
+	}
+	return &ForumReportPageResult{
+		Page: page, Pages: response.PageCount(total, pageSize),
+		Total: total, Reports: items,
+	}, nil
+}
+
+// HandleReport 管理端处理举报（status: 0 待处理 / 1 已处理）；标记已处理时站内信通知举报人。
+func (s *ForumService) HandleReport(reportID int64, status int16) error {
+	if status != 0 && status != 1 {
+		return errors.New("状态仅支持 0（待处理）/ 1（已处理）")
+	}
+	var report model.ForumReport
+	if err := s.db.First(&report, reportID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("举报不存在")
+		}
+		return err
+	}
+	if err := s.db.Model(&model.ForumReport{}).Where("id = ?", reportID).
+		Update("status", status).Error; err != nil {
+		return err
+	}
+	// 待处理 → 已处理时通知举报人（重复标记不重复通知；尽力而为，失败仅记日志）
+	if status == 1 && report.Status != 1 {
+		s.notifyReportHandled(&report)
+	}
+	return nil
+}
+
+// notifyReportHandled 举报处理完成站内信。举报对象可能已被删除：
+// 主题已删时降级文案（不带标题与链接）。
+func (s *ForumService) notifyReportHandled(report *model.ForumReport) {
+	target := "帖子"
+	if report.ReplyID != nil {
+		target = "回复"
+	}
+	content := "你举报的" + target + "已处理完毕。"
+	link := ""
+	var payload model.JSONB
+	if report.TopicID != nil {
+		var topic model.ForumTopic
+		if err := s.db.Select("title").First(&topic, *report.TopicID).Error; err == nil {
+			content = fmt.Sprintf("你举报的%s「%s」已处理完毕。", target, topic.Title)
+			link = fmt.Sprintf("/training/forum/%d", *report.TopicID)
+			payload = forumTopicPayload(*report.TopicID)
+		}
+	}
+	if err := s.notificationSvc.Create(report.ReporterID, "forum_report", "举报已处理", content, link, payload); err != nil {
+		s.logger.Warn("举报处理通知发送失败", zap.Int64("report_id", report.ID), zap.Error(err))
+	}
+}
+
+// MyTopics 我的帖子（复用主题列表行装配，按最后活跃倒序）。
+func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResult, error) {
+	rows, total, page, pageSize := paging.QueryWithScan[topicRow](s.db, page, pageSize, 10, 100,
+		"COALESCE(t.last_reply_at, t.created_at) DESC, t.id DESC",
+		func(q *gorm.DB) *gorm.DB {
+			return q.Table("forum_topics AS t").
+				Select("t.id, t.chapter_id, t.title, t.content, t.images, t.view_count, t.reply_count, t.last_reply_at, t.created_at, "+
+					"u.id AS user_id, u.username, u.avatar_url, COALESCE(ch.title, '') AS chapter_title").
+				Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
+				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").
+				Where("t.user_id = ?", userID)
+		})
+	items := make([]ForumTopicDTO, 0, len(rows))
+	for _, r := range rows {
+		items = append(items, r.toDTO(userID))
+	}
+	return &ForumTopicPageResult{
+		Page: page, Pages: response.PageCount(total, pageSize),
+		Topics: items, Total: total,
+	}, nil
+}
+
+// MyReplyDTO 我的回复条目（带主题标题回填）。
+type MyReplyDTO struct {
+	ID         int64       `json:"id"`
+	TopicID    int64       `json:"topic_id"`
+	TopicTitle string      `json:"topic_title"`
+	ParentID   *int64      `json:"parent_id,omitempty"`
+	Content    string      `json:"content"`
+	Images     []string    `json:"images"`
+	CreatedAt  string      `json:"created_at"`
+	Author     ForumAuthor `json:"author"`
+}
+
+// MyReplyPageResult 我的回复分页结果。
+type MyReplyPageResult struct {
+	Page    int          `json:"page"`
+	Pages   int          `json:"pages"`
+	Total   int64        `json:"total"`
+	Replies []MyReplyDTO `json:"replies"`
+}
+
+// MyReplies 我的回复（主题被删时标题为空串，条目保留）。
+func (s *ForumService) MyReplies(userID, page, pageSize int) (*MyReplyPageResult, error) {
+	type myReplyRow struct {
+		ID         int64
+		TopicID    int64
+		TopicTitle string
+		ParentID   *int64
+		Content    string
+		Images     string
+		CreatedAt  time.Time
+		UserID     int
+		Username   string
+		AvatarURL  string
+	}
+	rows, total, page, pageSize := paging.QueryWithScan[myReplyRow](s.db, page, pageSize, 10, 100,
+		"r.created_at DESC, r.id DESC",
+		func(q *gorm.DB) *gorm.DB {
+			return q.Table("forum_replies AS r").
+				Select("r.id, r.topic_id, r.parent_id, r.content, r.images, r.created_at, "+
+					"u.id AS user_id, u.username, u.avatar_url, COALESCE(t.title, '') AS topic_title").
+				Joins("JOIN hrwai_users AS u ON u.id = r.user_id").
+				Joins("LEFT JOIN forum_topics AS t ON t.id = r.topic_id").
+				Where("r.user_id = ?", userID)
+		})
+	items := make([]MyReplyDTO, 0, len(rows))
+	for _, r := range rows {
+		items = append(items, MyReplyDTO{
+			ID: r.ID, TopicID: r.TopicID, TopicTitle: r.TopicTitle, ParentID: r.ParentID,
+			Content: r.Content, Images: parseImageURLs(r.Images), CreatedAt: formatISO(r.CreatedAt),
+			Author: ForumAuthor{UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL},
+		})
+	}
+	return &MyReplyPageResult{
+		Page: page, Pages: response.PageCount(total, pageSize),
+		Total: total, Replies: items,
+	}, nil
 }

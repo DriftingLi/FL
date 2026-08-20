@@ -35,7 +35,8 @@ type Deps struct {
 	PhoneCh         service.CodeChannel
 	CaptchaSvc      *captcha.Service
 	WechatAuthSvc   *service.WechatAuthService
-	FileSvc         *service.FileService
+	FileSvc         *service.FileStore
+	SlideRenderer   *service.SlideRenderer
 	NotificationSvc *service.NotificationService
 	ReviewSvc       *service.ProfileReviewService
 	AuditSvc        *service.AuditService
@@ -50,6 +51,9 @@ type Deps struct {
 	ForumSvc           *service.ForumService
 	ForumImageSvc      *service.ForumImageService
 	FeaturedSvc        *service.FeaturedService
+	FavoriteSvc        *service.FavoriteService
+	SearchSvc          *service.SearchService
+	MaterialSvc        *service.MaterialService
 	ExportSvc          *service.ExportService
 	StudentSvc         *service.StudentService
 	QuestionBankSvc    *service.QuestionBankService
@@ -74,8 +78,9 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	captchaSvc := captcha.NewService(captcha.RedisStore{})
 	emailCh := service.NewEmailChannel(cfg.SMTP, cfg.IsProd(), logger)
 	phoneCh := service.NewSmsChannel(cfg.SMS, cfg.IsProd(), logger)
-	wechatAuthSvc := service.NewWechatAuthService(cfg.Wechat, logger)
-	fileSvc := service.NewFileService(cfg.LibreOfficeSidecarURL, st, logger)
+	wechatAuthSvc := service.NewWechatAuthService(cfg.Wechat, db, authSvc, logger)
+	fileSvc := service.NewFileStore(cfg.LibreOfficeSidecarURL, st, logger)
+	slideRenderer := service.NewSlideRenderer(cfg.LibreOfficeSidecarURL, st, logger)
 	notificationSvc := service.NewNotificationService(db, logger)
 	reviewSvc := service.NewProfileReviewService(db, notificationSvc, st, logger)
 	authSvc.SetProfileReviewService(reviewSvc)
@@ -96,16 +101,20 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		CaptchaSvc:         captchaSvc,
 		WechatAuthSvc:      wechatAuthSvc,
 		FileSvc:            fileSvc,
+		SlideRenderer:      slideRenderer,
 		NotificationSvc:    notificationSvc,
 		ReviewSvc:          reviewSvc,
 		AIConfigSvc:        aiConfigSvc,
 		ContentGenSvc:      contentGenSvc,
-		CourseSvc:          service.NewCourseService(db, fileSvc, logger),
+		CourseSvc:          service.NewCourseService(db, slideRenderer, logger),
 		AdminSvc:           service.NewAdminService(db, logger),
 		AdminCourseSvc:     service.NewAdminCourseService(db, fileSvc, logger),
-		ForumSvc:           service.NewForumService(db, fileSvc, logger),
+		ForumSvc:           service.NewForumService(db, fileSvc, notificationSvc, logger),
 		ForumImageSvc:      service.NewForumImageService(db, fileSvc, logger),
 		FeaturedSvc:        service.NewFeaturedService(db, fileSvc, logger),
+		FavoriteSvc:        service.NewFavoriteService(db, logger),
+		SearchSvc:          service.NewSearchService(db, logger),
+		MaterialSvc:        service.NewMaterialService(db, logger),
 		ExportSvc:          service.NewExportService(db, exportStore, logger),
 		StudentSvc:         service.NewStudentService(db, logger),
 		QuestionBankSvc:    service.NewQuestionBankService(db, fileSvc, logger),
@@ -113,7 +122,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		LevelExamSvc:       service.NewLevelExamService(db, aiSvc, logger),
 		GradingSvc:         service.NewGradingService(db, aiSvc, logger),
 		MockExamSvc:        service.NewMockExamService(db, aiSvc, logger),
-		TutorSvc:           service.NewTutorService(db, cfg.UploadFolder, fileSvc, logger),
+		TutorSvc:           service.NewTutorService(db, cfg.UploadFolder, fileSvc, slideRenderer, logger),
 		WrongQuestionSvc:   service.NewWrongQuestionService(db, logger),
 		TrainingCatalogSvc: service.NewTrainingCatalogService(db, logger),
 		AuditSvc:           service.NewAuditService(db),

@@ -17,6 +17,14 @@
           >
             已完成
           </el-tag>
+          <el-button
+            v-else
+            size="small"
+            :loading="markingCompleted"
+            @click="markCompleted"
+          >
+            标记完成
+          </el-button>
         </div>
       </div>
 
@@ -47,8 +55,12 @@
 
             <div class="section-content">
               <template v-if="group.type === 'video'">
-                <div v-for="file in group.files" :key="file.file_id" class="media-item">
-                  <VideoPlayer :src="file.file_url" />
+                <div v-for="(file, idx) in group.files" :key="file.file_id" class="media-item">
+                  <VideoPlayer
+                    :src="file.file_url"
+                    :initial-position="idx === 0 ? chapterVideoPosition : 0"
+                    @position-update="onVideoPositionUpdate"
+                  />
                 </div>
               </template>
               <template v-else-if="group.type === 'document'">
@@ -115,10 +127,12 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, ArrowRight, VideoCamera, Document, Picture } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { marked } from 'marked'
 import { markedHighlight } from 'marked-highlight'
 import hljs from 'highlight.js'
 import { courseApi, type ChapterDetail } from '@/api/course'
+import { studentApi, type StudentChapterProgress } from '@/api/student'
 import { useCourseStore } from '@/stores/course'
 import { useStudyTracker } from '@/composables/useStudyTracker'
 import '@/assets/styles/markdown.css'
@@ -157,6 +171,27 @@ const courseName = ref('')
 const chapters = ref<ChapterItem[]>([])
 const activeTab = ref('')
 
+// 学习状态（ADR-0017）：每课程加载一次（切章不重复请求），
+// 提供 video_position（断点续播）与 completed（标记完成态）
+const chapterStateMap = ref<Map<number, StudentChapterProgress>>(new Map())
+const chapterVideoPosition = ref(0)
+// 当前章节最新播放位置（秒）：随进度上报落库，主视频（每章第一个视频文件）更新
+let latestVideoPosition = 0
+
+function onVideoPositionUpdate(seconds: number) {
+  latestVideoPosition = seconds
+}
+
+async function loadCourseLearningState() {
+  try {
+    const detail = await studentApi.getStudentCourseDetail(Number(courseId.value))
+    chapterStateMap.value = new Map((detail?.chapters || []).map((ch) => [ch.chapter_id, ch]))
+  } catch (error) {
+    console.error('加载课程学习状态失败:', error)
+  }
+}
+
+
 const courseId = computed(() => route.params.courseId as string)
 const chapterId = computed(() => route.params.chapterId)
 
@@ -170,14 +205,22 @@ const studyTracker = useStudyTracker({
     return { courseId: Number(courseId.value), chapterId: chapterDetail.value.chapter_id }
   },
   reportDuration: async (incrementalSeconds) => {
-    // 增量秒数按现状规则取整为分钟上报（不足 1 分钟按 1 分钟）
-    const durationMinutes = Math.max(Math.ceil(incrementalSeconds / 60), 1)
+    // ADR-0017：duration_seconds 秒级上报（后端优先于分钟字段、内部 ceil 累加），
+    // 同时携带当前章节最新播放位置（video_position，秒）
+    const payload: {
+      chapter_id: number
+      duration_seconds: number
+      video_position?: number
+    } = {
+      chapter_id: chapterDetail.value!.chapter_id,
+      duration_seconds: incrementalSeconds
+    }
+    if (latestVideoPosition > 0) {
+      payload.video_position = latestVideoPosition
+    }
     try {
       // 拦截器已解包信封；detail 恒为 null（无业务负载），确认信号是「不抛错」而非 detail 值
-      const detail = await courseApi.updateProgress(Number(courseId.value), {
-        chapter_id: chapterDetail.value!.chapter_id,
-        duration: durationMinutes
-      })
+      const detail = await courseApi.updateProgress(Number(courseId.value), payload)
       void detail // detail 不承载确认计数；视为 0 额外，整段增量计入已确认累计
       confirmedTotalSeconds += incrementalSeconds
     } catch (error) {
@@ -265,6 +308,9 @@ async function loadChapterDetail() {
     // 拦截器已解包信封；章节不存在由后端 404 触发 catch 分支
     const detail = await courseApi.getChapterDetail(Number(courseId.value), Number(chapterId.value))
     chapterDetail.value = detail
+    // 断点续播位置（学习状态缓存；无记录为 0）
+    chapterVideoPosition.value = chapterStateMap.value.get(detail.chapter_id)?.video_position || 0
+    latestVideoPosition = chapterVideoPosition.value
     // 章节加载成功后启动学习计时
     studyTracker.begin()
   } catch (error) {
@@ -303,6 +349,42 @@ function goBackToCourse() {
   router.push({ name: 'CourseList' })
 }
 
+// 标记完成（ADR-0017 显式完成路径）：置章节 progress=100 并刷新章节详情
+const markingCompleted = ref(false)
+
+async function markCompleted() {
+  if (!chapterDetail.value?.chapter_id) return
+  markingCompleted.value = true
+  try {
+    await courseApi.updateProgress(Number(courseId.value), {
+      chapter_id: chapterDetail.value.chapter_id,
+      completed: true
+    })
+    // 本地学习状态同步置完成（侧栏/再次进入不再显示按钮）
+    const state = chapterStateMap.value.get(chapterDetail.value.chapter_id)
+    if (state) {
+      state.completed = true
+      state.progress = 100
+    } else {
+      chapterStateMap.value.set(chapterDetail.value.chapter_id, {
+        chapter_id: chapterDetail.value.chapter_id,
+        title: chapterDetail.value.title,
+        progress: 100,
+        completed: true
+      })
+    }
+    // 刷新章节详情（study_status → completed，头部 tag 切换）
+    const detail = await courseApi.getChapterDetail(Number(courseId.value), Number(chapterId.value))
+    chapterDetail.value = detail
+    ElMessage.success('已标记完成')
+  } catch (error) {
+    console.error('标记完成失败:', error)
+    /* 错误已由拦截器提示 */
+  } finally {
+    markingCompleted.value = false
+  }
+}
+
 watch(() => route.params.chapterId, (newVal) => {
   if (newVal) {
     loadChapterDetail()
@@ -329,6 +411,7 @@ function handleBeforeUnload() {
 onMounted(() => {
   loadChapterDetail()
   loadCourseInfo()
+  loadCourseLearningState()
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('beforeunload', handleBeforeUnload)
 })

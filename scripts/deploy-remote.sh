@@ -78,6 +78,12 @@ if [ -n "$REGISTRY_PROXY" ]; then
     log_info "已启用镜像加速代理: ${REGISTRY_PROXY}"
 fi
 
+# ghcr 国内镜像源（南大 ghcr.nju.edu.cn，透传 ghcr 认证可拉私有镜像）：
+# 晚高峰 ghcr CDN 限速时代理回源/直连均易超时（曾致 testing CD 连续失败），
+# 作为拉取回退链路的第一回退（代理 → 镜像源 → 直连 ghcr.io，见 pull_one）。
+# 置空禁用；仅对 ghcr.io 镜像生效。
+REGISTRY_MIRROR="${REGISTRY_MIRROR:-ghcr.nju.edu.cn}"
+
 # 健康检查
 HEALTH_CHECK_RETRIES="${HEALTH_CHECK_RETRIES:-20}"
 HEALTH_CHECK_INTERVAL="${HEALTH_CHECK_INTERVAL:-6}"
@@ -163,7 +169,8 @@ write_env_file() {
         env_val "${SECRET_KEY:-}"; echo
         printf 'JWT_SECRET_KEY='
         env_val "${JWT_SECRET_KEY:-}"; echo
-        echo "JWT_EXPIRES_HOURS=${JWT_EXPIRES_HOURS:-24}"
+        echo "JWT_EXPIRES_HOURS=${JWT_EXPIRES_HOURS:-2}"
+        echo "JWT_REFRESH_EXPIRES_DAYS=${JWT_REFRESH_EXPIRES_DAYS:-7}"
 
         # 登录态 Cookie（父域名共享登录）
         printf 'AUTH_COOKIE_NAME='
@@ -186,6 +193,9 @@ write_env_file() {
         echo "FRONTEND_IMAGE=${IMAGE_FRONTEND}:${IMAGE_TAG_FRONTEND}"
         echo "LIBREOFFICE_IMAGE=${IMAGE_LIBREOFFICE:-forklift-libreoffice}:${IMAGE_TAG_LIBREOFFICE}"
         echo "DOMAIN=${DOMAIN:-localhost}"
+
+        # SSL 证书目录（compose 挂载到 frontend 容器 /etc/nginx/ssl，nginx-host.conf 引用固定路径）
+        echo "SSL_CERT_DIR=${SSL_CERT_DIR:-${DEPLOY_PATH}/nginx/ssl}"
 
         echo "UPLOAD_FOLDER=/data/uploads"
         echo "VOLUME_MOUNT_PATH=/data"
@@ -217,9 +227,11 @@ write_env_file() {
         echo "REDIS_VOLUME=${REDIS_VOLUME:-redisdata-prod}"
         echo "UPLOADS_VOLUME=${UPLOADS_VOLUME:-uploads-data}"
         echo "REPORTS_VOLUME=${REPORTS_VOLUME:-reports-data}"
-    } > "${DEPLOY_PATH}/.env.tmp"
+    } > "${DEPLOY_PATH}/.env.tmp.$$"
+    # 唯一临时文件（$$）：并发部署时两条进程写各自 tmp，避免共享 .env.tmp 的
+    # rm/mv 交错把 .env 删丢（曾致 compose 回退默认镜像名去拉 Docker Hub 超时）
     rm -f "${DEPLOY_PATH}/.env"
-    mv "${DEPLOY_PATH}/.env.tmp" "${DEPLOY_PATH}/.env"
+    mv "${DEPLOY_PATH}/.env.tmp.$$" "${DEPLOY_PATH}/.env"
     chmod 600 "${DEPLOY_PATH}/.env"
     log_ok ".env 文件已生成（$(wc -l < "${DEPLOY_PATH}/.env") 行）"
 }
@@ -250,7 +262,9 @@ write_ssl_certs() {
     printf '%s\n' "${SSL_FULLCHAIN}" > "${SSL_CERT_DIR}/fullchain.pem"
     printf '%s\n' "${SSL_PRIVKEY}" > "${SSL_CERT_DIR}/privkey.pem"
 
-    # 设置权限（证书文件可读，私钥仅 owner 可读）
+    # 设置权限：chown 到 nginx:alpine 固定 UID 101，保证 nginx 用户可读
+    # （master 以 root 运行绑 80/443，worker 降权为 nginx；证书文件可读，私钥仅 owner 可读）
+    chown 101:101 "${SSL_CERT_DIR}/fullchain.pem" "${SSL_CERT_DIR}/privkey.pem"
     chmod 644 "${SSL_CERT_DIR}/fullchain.pem"
     chmod 600 "${SSL_CERT_DIR}/privkey.pem"
 
@@ -498,7 +512,7 @@ ensure_registry_proxy() {
         fi
     fi
 
-    # 等待代理就绪（最多 10 秒），失败则回退直连 ghcr.io
+    # 等待代理就绪（最多 10 秒），失败则改走国内镜像源（镜像源仍失败由 pull_one 回退直连兜底）
     for i in $(seq 1 10); do
         if curl -s -o /dev/null "http://${REGISTRY_PROXY}/v2/"; then
             log_ok "镜像加速代理就绪: ${REGISTRY_PROXY}"
@@ -506,11 +520,27 @@ ensure_registry_proxy() {
         fi
         sleep 1
     done
-    log_warn "镜像加速代理未就绪 (${REGISTRY_PROXY})，本次部署回退直连 ghcr.io"
+    log_warn "镜像加速代理未就绪 (${REGISTRY_PROXY})，本次部署改走国内镜像源 ${REGISTRY_MIRROR:-（未配置）}"
     IMAGE_BACKEND="${IMAGE_BACKEND_ORIG:-$IMAGE_BACKEND}"
     IMAGE_FRONTEND="${IMAGE_FRONTEND_ORIG:-$IMAGE_FRONTEND}"
     IMAGE_LIBREOFFICE="${IMAGE_LIBREOFFICE_ORIG:-$IMAGE_LIBREOFFICE}"
+    rewrite_to_mirror
     return 0
+}
+
+# ghcr.io/* 镜像改写为国内镜像源前缀（代理不可用时改走镜像源加速；
+# 镜像源再失败由 pull_one 回退直连 ghcr.io 兜底）。非 ghcr.io 镜像不动。
+rewrite_to_mirror() {
+    [ -z "$REGISTRY_MIRROR" ] && return 0
+    case "$IMAGE_BACKEND" in
+        ghcr.io/*) IMAGE_BACKEND="${REGISTRY_MIRROR}/${IMAGE_BACKEND#ghcr.io/}" ;;
+    esac
+    case "$IMAGE_FRONTEND" in
+        ghcr.io/*) IMAGE_FRONTEND="${REGISTRY_MIRROR}/${IMAGE_FRONTEND#ghcr.io/}" ;;
+    esac
+    case "$IMAGE_LIBREOFFICE" in
+        ghcr.io/*) IMAGE_LIBREOFFICE="${REGISTRY_MIRROR}/${IMAGE_LIBREOFFICE#ghcr.io/}" ;;
+    esac
 }
 
 # ======================================================================
@@ -518,7 +548,7 @@ ensure_registry_proxy() {
 # ======================================================================
 
 # 代理健康检查：探测超时则重启（registry:2 上游连接可能挂起导致拉取卡死）
-# 重启后仍不可用则删除重建（缓存卷保留）；仍失败返回非 0，由调用方决定回退直连
+# 重启后仍不可用则删除重建（缓存卷保留）；仍失败返回非 0，由调用方走镜像源/直连回退链路
 ensure_proxy_healthy() {
     [ -z "$REGISTRY_PROXY" ] && return 0
     if timeout 5 curl -s -o /dev/null "http://${REGISTRY_PROXY}/v2/"; then
@@ -538,11 +568,11 @@ ensure_proxy_healthy() {
         log_ok "镜像加速代理重建成功"
         return 0
     fi
-    log_error "镜像加速代理重建后仍不可用，本次拉取回退直连 ghcr.io"
+    log_error "镜像加速代理重建后仍不可用，本次拉取走镜像源/直连回退链路"
     return 1
 }
 
-# 拉取单个镜像：3 次重试；代理路径失败时回退直连 ghcr.io 认证拉取
+# 拉取单个镜像：3 次重试；回退链路：国内镜像源（透传 ghcr 认证）→ 直连 ghcr.io 认证拉取
 pull_one() {
     local name="$1"
     local image="$2"
@@ -550,7 +580,7 @@ pull_one() {
     for attempt in $(seq 1 $retries); do
         log_info "拉取${name}镜像 (尝试 $attempt/$retries): $image"
         # docker pull 加超时（默认 600s）：registry 上游挂起时不再无限等待，
-        # 超时后按失败处理 → 重启代理重试 / 回退直连
+        # 超时后按失败处理 → 重启代理重试 / 走回退链路
         if timeout "${DOCKER_PULL_TIMEOUT:-600}" docker pull "$image"; then
             log_ok "${name}镜像: $image"
             return 0
@@ -562,21 +592,44 @@ pull_one() {
             ensure_proxy_healthy || true
         fi
     done
-    # 回退直连（仅代理改写过的地址）：认证拉取绕过代理挂起/缓存损坏
-    # 注意：去掉代理前缀后镜像名没有 registry（如 driftingli/fl-backend:tag），
-    # docker 默认解析到 Docker Hub（registry-1.docker.io）——必须补 ${REGISTRY}/ 前缀
-    local direct="${image#${REGISTRY_PROXY}/}"
-    if [ "$direct" != "$image" ] && [ -n "$GITHUB_TOKEN" ]; then
-        local ghcr_ref="${REGISTRY}/${direct}"
-        log_warn "代理拉取失败，回退直连 ${REGISTRY} 认证拉取: ${ghcr_ref}"
+
+    # ghcr 核心路径（<org>/<image>:<tag>）：从代理/镜像源/直连任一前缀提取，供回退引用。
+    # 注意：去掉 registry 前缀后的镜像名（如 driftingli/fl-backend:tag）会被 docker
+    # 解析到 Docker Hub（registry-1.docker.io）——回退引用必须补对应 registry 前缀。
+    local core=""
+    case "$image" in
+        "${REGISTRY_PROXY}/"*) core="${image#${REGISTRY_PROXY}/}" ;;
+        "${REGISTRY_MIRROR}/"*) core="${image#${REGISTRY_MIRROR}/}" ;;
+        "${REGISTRY}/"*) core="${image#${REGISTRY}/}" ;;
+    esac
+
+    # 回退 1：国内镜像源（仅 ghcr.io；镜像源路径本身失败时跳过，不重复尝试）
+    if [ -n "$core" ] && [ "$REGISTRY" = "ghcr.io" ] && [ -n "$REGISTRY_MIRROR" ] &&
+        [ -n "$GITHUB_TOKEN" ] && [ "$image" != "${REGISTRY_MIRROR}/${core}" ]; then
+        local mirror_ref="${REGISTRY_MIRROR}/${core}"
+        log_warn "代理拉取失败，回退国内镜像源 ${REGISTRY_MIRROR} 认证拉取: ${mirror_ref}"
+        echo "$GITHUB_TOKEN" | docker login "$REGISTRY_MIRROR" -u oauth2 --password-stdin >/dev/null 2>&1 || true
+        if timeout "${DOCKER_PULL_TIMEOUT:-600}" docker pull "$mirror_ref"; then
+            docker tag "$mirror_ref" "$image"
+            docker rmi "$mirror_ref" >/dev/null 2>&1 || true
+            log_ok "镜像源拉取成功并补 tag: $image"
+            return 0
+        fi
+    fi
+
+    # 回退 2：直连 ghcr.io 认证拉取（已是直连路径时跳过；最终兜底）
+    if [ -n "$core" ] && [ -n "$GITHUB_TOKEN" ] && [ "$image" != "${REGISTRY}/${core}" ]; then
+        local ghcr_ref="${REGISTRY}/${core}"
+        log_warn "回退直连 ${REGISTRY} 认证拉取: ${ghcr_ref}"
         echo "$GITHUB_TOKEN" | docker login "$REGISTRY" -u oauth2 --password-stdin >/dev/null 2>&1 || true
         if timeout "${DOCKER_PULL_TIMEOUT:-600}" docker pull "$ghcr_ref"; then
             docker tag "$ghcr_ref" "$image"
+            docker rmi "$ghcr_ref" >/dev/null 2>&1 || true
             log_ok "直连拉取成功并补 tag: $image"
             return 0
         fi
     fi
-    log_error "${name}镜像拉取失败(已重试 $retries 次): $image"
+    log_error "${name}镜像拉取失败(已重试 $retries 次 + 镜像源/直连回退): $image"
     return 1
 }
 
@@ -923,9 +976,24 @@ prune_old_images() {
     fi
     log_info ">>> 清理旧版本镜像 (每个仓库保留最近 ${KEEP_IMAGES} 个)..."
 
+    # 附加清理仓库：国内镜像源前缀（回退拉取遗留的镜像源 tag）与门户镜像
+    # （hrwai-portal 独立流水线部署，不在 IMAGE_* 清单内，不清理会无限堆积）。
+    local mirror_repos=()
+    if [ -n "${REGISTRY_MIRROR:-}" ]; then
+        local orig
+        for orig in "${IMAGE_BACKEND_ORIG:-}" "${IMAGE_FRONTEND_ORIG:-}" "${IMAGE_LIBREOFFICE_ORIG:-}"; do
+            [ -z "$orig" ] && continue
+            case "$orig" in
+                ghcr.io/*) mirror_repos+=("${REGISTRY_MIRROR}/${orig#ghcr.io/}") ;;
+            esac
+        done
+    fi
+    local portal_repo="${PRUNE_PORTAL_REPO:-127.0.0.1:5000/driftingli/hrwai-portal}"
+
     local repo
     for repo in "${IMAGE_BACKEND}" "${IMAGE_FRONTEND}" "${IMAGE_LIBREOFFICE}" \
-                "${IMAGE_BACKEND_ORIG:-}" "${IMAGE_FRONTEND_ORIG:-}" "${IMAGE_LIBREOFFICE_ORIG:-}"; do
+                "${IMAGE_BACKEND_ORIG:-}" "${IMAGE_FRONTEND_ORIG:-}" "${IMAGE_LIBREOFFICE_ORIG:-}" \
+                "${mirror_repos[@]:-}" "${portal_repo:-}"; do
         [ -z "$repo" ] && continue
         # 按创建时间倒序列出该仓库的镜像，保留前 KEEP_IMAGES 个，其余删除
         local kept=0
@@ -937,7 +1005,10 @@ prune_old_images() {
                 continue
             fi
             log_info "删除旧镜像: ${ref} (${id})"
-            docker image rm "${id}" >/dev/null 2>&1 || true
+            # -f 必需：同一镜像常被 代理/镜像源/直连 多前缀引用（同 ID 多 tag），
+            # 不带 -f 时 rmi 报 "referenced in multiple repositories" 且被 || true
+            # 静默吞掉——曾致旧版本镜像永不清理、无限堆积（testing 堆了 10 天 ~3GB）
+            docker image rm -f "${id}" >/dev/null 2>&1 || true
         done < <(docker images --format '{{.CreatedAt}}|{{.ID}}|{{.Repository}}:{{.Tag}}' "$repo" 2>/dev/null | grep -v '|<none>' | sort -r)
     done
 
@@ -1039,9 +1110,9 @@ main() {
         deploy|*)
             pre_deploy_check
             write_env_file
-            # host 网络模式下 nginx-host.conf 是 HTTP-only，不需要 SSL 证书
-            # 若未来切回 bridge + HTTPS，可重新启用 write_ssl_certs
-            # write_ssl_certs
+            # 写入 SSL 证书（host 网络模式 + nginx-host.conf 已在 80/443 提供 HTTPS，
+            # 证书内容来自 GitHub Secrets SSL_FULLCHAIN/SSL_PRIVKEY，写入 $SSL_CERT_DIR）
+            write_ssl_certs
             # 备份与后续无依赖步骤（登录/镜像拉取）并行执行，迁移前 join——
             # 隐藏备份耗时（pg_dump + 异地同步），同时保证备份先于任何 DB 写操作完成
             create_backup &

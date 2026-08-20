@@ -33,7 +33,11 @@ on:
         default: false
 
 concurrency:
-  # 同一环境同时只允许一条部署：不同分支并发部署到 testing/production 会互相抢占 Docker 资源
+  # 同一环境同时只允许一条部署（串行，避免部署互相抢占 Docker 资源/竞争 .env）。
+  # 仅按环境分组、不按 ref：连续合并多个 PR 时不同 ref 的 CD 若不互斥会并发部署
+  # 同一目标（曾致两条 production CD 并发竞争 .env.tmp，.env 丢失后 compose 回退
+  # Docker Hub 默认镜像名拉取超时，栈停机）。代价：卡死的 run 会阻塞后续部署，
+  # 需手动 cancel（github.com/*/actions 页面）。
   group: cd-${{ inputs.environment }}
   cancel-in-progress: false
 
@@ -280,8 +284,9 @@ jobs:
       # 密钥
       SECRET_KEY: ${{ secrets.SECRET_KEY }}
       JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
-      JWT_EXPIRES_HOURS: ${{ secrets.JWT_EXPIRES_HOURS || '24' }}
-      # 登录态 Cookie（父域名共享登录；testing 走 http 时 Secure=false）
+      JWT_EXPIRES_HOURS: ${{ secrets.JWT_EXPIRES_HOURS || '2' }}
+      JWT_REFRESH_EXPIRES_DAYS: ${{ secrets.JWT_REFRESH_EXPIRES_DAYS || '7' }}
+      # 登录态 Cookie（父域名共享登录；production 走 HTTPS 时 Secure=true）
       AUTH_COOKIE_NAME: ${{ secrets.AUTH_COOKIE_NAME || 'hrwai_token' }}
       AUTH_COOKIE_DOMAIN: ${{ secrets.AUTH_COOKIE_DOMAIN }}
       AUTH_COOKIE_SECURE: ${{ inputs.environment == 'production' && 'true' || 'false' }}
@@ -445,7 +450,8 @@ jobs:
             printf 'export DB_PASSWORD=%q\n' "${DB_PASSWORD:-}"
             printf 'export SECRET_KEY=%q\n' "${SECRET_KEY:-}"
             printf 'export JWT_SECRET_KEY=%q\n' "${JWT_SECRET_KEY:-}"
-            printf 'export JWT_EXPIRES_HOURS=%q\n' "${JWT_EXPIRES_HOURS:-24}"
+            printf 'export JWT_EXPIRES_HOURS=%q\n' "${JWT_EXPIRES_HOURS:-2}"
+            printf 'export JWT_REFRESH_EXPIRES_DAYS=%q\n' "${JWT_REFRESH_EXPIRES_DAYS:-7}"
             printf 'export AUTH_COOKIE_NAME=%q\n' "${AUTH_COOKIE_NAME:-hrwai_token}"
             printf 'export AUTH_COOKIE_DOMAIN=%q\n' "${AUTH_COOKIE_DOMAIN:-}"
             printf 'export AUTH_COOKIE_SECURE=%q\n' "${AUTH_COOKIE_SECURE:-true}"

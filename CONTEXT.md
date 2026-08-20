@@ -13,14 +13,15 @@
 - **统一账号**：hrwai_users 表 + 统一 JWT（角色 hrwai_user）；支持用户名或手机号登录。
 - **验证码（code）**：邮箱/手机号注册、登录、绑定、改账号、找回/修改密码的 6 位数字验证码。用途六态：register / login / bind / account_change / reset_password / change_password。错误上限 5 次，发送节流 60 秒，TTL 5 分钟。
 - **验证码通道（channel）**：邮箱（SMTP，开发降级日志）与短信（腾讯云 SMS SendSms，开发降级日志）是同一验证码状态机两侧的 adapter。
-- **会话（session）**：签发（issue）/ 校验（verify）/ 吊销（revoke）JWT 的生命周期；登出即把 token hash 写入黑名单（`jwt:blacklist:`），TTL = token 剩余有效期。
-- **登录态 Cookie**：父域名 httpOnly Cookie（hrwai_token），子域名间共享登录；Bearer 头优先于 Cookie。注：生产为 HTTP（443 不可用）时 Secure cookie 被浏览器拒绝，Cookie 通道失效、登录态跨子域不共享，见 ADR-0003。
+- **会话（session）**：签发（issue）/ 校验（verify）/ 吊销（revoke）JWT 的生命周期。双令牌（ADR-0016）：access 2h（中间件仅收 access）+ refresh 7 天轮换；黑名单（`jwt:blacklist:`）只管理 refresh——刷新轮换即作废旧 refresh（防重放），登出撤销 refresh；access 生命周期短，不入黑名单、自然过期。
+- **登录态 Cookie**：父域名 httpOnly Cookie（hrwai_token），子域名间共享登录；Bearer 头优先于 Cookie。生产已启用 HTTPS（PR #254），Cookie 通道恢复、仅携带 access（不自动续期，见 ADR-0016）；HTTP 时期的历史约束见 ADR-0003（已解决）。
+- **微信小程序登录（wx-login）**：小程序端 uni.login 临时 code 换 openid 登录（POST /api/auth/wx-login，code2session）；openid 已绑定直接登录，未注册自动建号绑定（account 取 `wx_`+openid 前 12 位，昵称「微信学员」+openid 后 6 位），复用统一登录骨架签发双令牌。凭证经 `WECHAT_APP_ID`/`WECHAT_APP_SECRET` 配置；微信扫码登录（开放平台）仍为占位。契约见 `docs/docs/reference/微信小程序登录-文档说明.md`。
 - **认证页（auth page）**：登录/注册/找回密码三页共用认证页外壳（AuthPageShell，白底极简 + 主次分离——密码为主入口，邮箱/手机/微信收纳为「或使用以下方式登录」图标按钮；tutor/admin 仅密码入口）。三页提交流程共用 useAuthFlow 状态机；redirect 回跳白名单（isSafeRedirect）与「路径前缀→身份」表单点（authRedirect），见 ADR-0014。
 - **资料审核（profile review）**：昵称/头像修改走提交→审核（通过/驳回）流程，审核结果以站内信通知。
 
 ## 通知与审计
 
-- **站内信（notification）**：站内信通知基础设施，当前唯一渠道；资料审核等业务事件通过站内信模块发出。
+- **站内信（notification）**：站内信通知基础设施，当前唯一渠道；资料审核、论坛互动（帖子被回复/楼中楼被回复/举报处理结果/管理端删帖删回复，link 指向 `/training/forum/:id`、payload 携带 topic_id）等业务事件通过站内信模块发出。
 - **审计日志（audit log）**：管理员/讲师写操作由中间件统一记录，落库留痕（合规用途，与系统运行日志区分）。
 - **系统运行日志（app log）**：zap 统一日志栈（`internal/logger`），排查用——级别过滤、敏感字段脱敏、访问日志（request_id/user_id/role）、生产文件轮转持久化（`/data/logs`）。与「审计日志」的边界：前者是运行期诊断输出（console/文件），后者是业务写操作的持久化记录（DB 表），两者互不替代。
 
@@ -30,6 +31,10 @@
 - **专业方向（specialty）**：课程目录一级维度，全局共享（操作/维修/安全/电池等），管理员维护。
 - **课程等级（course level）**：课程目录二级维度，**全局共享**（不归属方向，入门/进阶/专项/认证），任意方向的课程可挂任意等级。
 - **课程（course）/ 章节（chapter）**：PPT/视频/图文混排内容；PPT 经 LibreOffice sidecar 转 WebP。课程挂专业方向 + 课程等级（创建/编辑必填），可关联证书模板与前置课程。
+- **收藏（favorite）**：多态收藏（target_type+target_id：course/chapter/question/featured/topic；user+type+id 唯一幂等），列表实时回填目标快照、目标删除即条目消失，见 ADR-0018。
+- **全局搜索（search）**：course/question/content/topic 四类 LOWER LIKE 聚合（type 缺省各分区 top5），可见性与业务口径一致（挂载不变式/published/已发布），见 ADR-0018。
+- **学习资料（material）**：已发布课程下章节附件（chapter_file）的聚合视图，不建独立资料库；file_url 为静态直链，见 ADR-0018。
+- **学习位置（learning position）**：学员在某课程的最后学习状态——最后章节（last_chapter_id）、章节播放位置（video_position，秒）、最后学习时间戳（last_studied_at），挂在 study_record 双轨记录上（课程级承载 last_*、章节级承载位置）；章节完成以 progress≥100 为单一事实源（时长自动完成与显式 completed 收敛于此），见 ADR-0017。
 - **证书模板（certificate template）**：课程可选关联的培训合格证书，含有效期（天）；课程挂靠后学员完成学习可获证。
 - **前置课程（course prerequisite）**：课程间的依赖关系（A 完成才能学 B），防自指防成环；编辑回填 prerequisite_course_ids 避免误清空。
 - **考试（exam）/ 模拟考试（mock exam）/ 定级考试（原等级考试，level exam）**：自动判分 + AI 评分；题目类型满分规则由判分规则表定义。定级考试为考试中心功能名，与目录维度「课程等级」无关。
@@ -39,7 +44,7 @@
 - **题库标签（question tag）**：题目分类维度（法规/结构/液压/电气/制动/故障诊断/应急等），创建需唯一编码；题目可多标签，标签练习按标签抽题。
 - **标签练习（tag practice）**：按题库标签抽题的练习模式（原「章节练习」已退役并入）。
 - **AI 助手**：大模型流式对话（DeepSeek 默认，可配置 OpenAI 兼容模型）。归属 training 子域名（学员工作区功能），由主域名迁入。
-- **论坛（forum）**：综合讨论区 + 章节讨论区；发帖/回复（可回复别人的回复）。**图文分离**——主题与回复可携带 `images` 图片 URL 数组（JSONB），正文保持纯文本，不做 markdown 渲染。
+- **论坛（forum）**：综合讨论区 + 章节讨论区；发帖/回复（可回复别人的回复）。**图文分离**——主题与回复可携带 `images` 图片 URL 数组（JSONB），正文保持纯文本，不做 markdown 渲染。 互动（ADR-0018）：主题点赞（forum_topic_like，幂等）、举报（forum_report，待处理/已处理二态，管理端处置沿用删帖/删回复流）、我的帖子/我的回复。
 - **论坛图片（forum image）**：先经 `POST /api/forum/upload-image` 上传到 `images/forum/` 子目录拿 URL，随发帖/回复提交；删除主题/回复时图片存储一并清理；上传后未发帖的**悬空图片**由进程内定时任务（每 6 小时）扫描差集、回收超过 24h 未被引用的文件。
 
 ## 残值评估（valuation）

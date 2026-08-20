@@ -210,7 +210,7 @@ func TestAdminCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 // TestTutorCourseListHasChapterCount 导师端课程列表返回章节数。
 func TestTutorCourseListHasChapterCount(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewTutorService(db, "", nil, zap.NewNop())
+	svc := NewTutorService(db, "", nil, nil, zap.NewNop())
 	course, _ := seedCatalogCourse(t, db)
 
 	list := svc.GetCourses(1, 10, nil, nil)

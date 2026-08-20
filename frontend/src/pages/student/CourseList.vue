@@ -96,6 +96,18 @@
       width="680px"
       destroy-on-close
     >
+      <template #header>
+        <div class="detail-header">
+          <span class="detail-header-title">{{ detailCourse?.name || '课程详情' }}</span>
+          <el-button
+            v-if="detailCourse"
+            :icon="courseFavorited ? StarFilled : Star"
+            :type="courseFavorited ? 'warning' : 'default'"
+            circle
+            @click="toggleCourseFavorite"
+          />
+        </div>
+      </template>
       <div v-loading="detailLoading">
         <template v-if="detailCourse">
           <div class="detail-brief">
@@ -134,6 +146,17 @@
             </el-descriptions-item>
           </el-descriptions>
 
+          <div v-if="courseLearning?.is_enrolled" class="detail-progress">
+            <el-progress
+              :percentage="Math.round(courseLearning.progress ?? 0)"
+              :stroke-width="10"
+              class="progress-bar"
+            />
+            <span class="progress-text">
+              已完成 {{ courseLearning.completed_chapters ?? 0 }}/{{ courseLearning.total_chapters ?? detailChapters.length }} 章
+            </span>
+          </div>
+
           <div class="chapter-section">
             <h4>章节内容（{{ detailChapters.length }}）</h4>
             <div v-if="detailChapters.length > 0" class="chapter-list">
@@ -145,6 +168,7 @@
               >
                 <span class="chapter-index">{{ i + 1 }}</span>
                 <span class="chapter-title">{{ ch.title }}</span>
+                <el-tag v-if="chapterCompleted(ch.chapter_id)" size="small" type="success" effect="plain">已完成</el-tag>
                 <span v-if="ch.duration" class="chapter-duration">{{ ch.duration }}分钟</span>
                 <el-icon class="chapter-arrow"><ArrowRight /></el-icon>
               </div>
@@ -158,24 +182,28 @@
         <el-button
           v-if="detailChapters.length > 0"
           type="primary"
-          @click="goToChapter(detailChapters[0])"
-        >开始学习</el-button>
+          @click="goToChapter(continueChapter ?? detailChapters[0])"
+        >{{ continueChapter ? `继续学习：${continueChapterTitle}` : '开始学习' }}</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { ArrowRight } from '@element-plus/icons-vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ArrowRight, Star, StarFilled } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { courseApi, type CourseDetail, type CourseSummary } from '@/api/course'
+import { studentApi, type StudentCourseDetail } from '@/api/student'
+import { favoriteApi } from '@/api/favorite'
 import { trainingApi } from '@/api/training'
 import { useCourseCatalog, treeCatalogAdapter } from '@/composables/useCourseCatalog'
 import FacetCard from '@/components/catalog/FacetCard.vue'
 import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCard from '@/components/catalog/CourseCard.vue'
 
+const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
@@ -253,6 +281,90 @@ const detailLoading = ref(false)
 const detailCourse = ref<CourseDetail | null>(null)
 const detailChapters = ref<{ chapter_id: number; title: string; duration?: number }[]>([])
 
+// 学习状态（ADR-0017）：进度/完成章节数/最后学习章节；未学课程为 null
+const courseLearning = ref<{ is_enrolled?: boolean; progress?: number; completed_chapters?: number; total_chapters?: number } | null>(null)
+const completedChapterIds = ref<Set<number>>(new Set())
+
+// 收藏状态（ADR-0018）
+const courseFavorited = ref(false)
+const courseFavoriteId = ref<number>(0)
+
+const continueChapter = computed(() => {
+  const learning = courseLearning.value
+  if (!learning?.is_enrolled) return null
+  const lastId = learningDetail.value?.last_chapter_id
+  return lastId ? detailChapters.value.find((ch) => ch.chapter_id === lastId) || null : null
+})
+
+const continueChapterTitle = computed(() => continueChapter.value?.title || '')
+
+// 单课程学习详情（每章完成状态/最后位置，ADR-0017）
+const learningDetail = ref<StudentCourseDetail | null>(null)
+
+function chapterCompleted(chapterId: number) {
+  return completedChapterIds.value.has(chapterId)
+}
+
+async function loadCourseFavorite(courseId: number) {
+  courseFavorited.value = false
+  courseFavoriteId.value = 0
+  try {
+    const res = await favoriteApi.check({ target_type: 'course', target_id: courseId })
+    courseFavorited.value = !!res?.favorited
+    courseFavoriteId.value = res?.favorite_id || 0
+  } catch (error) {
+    console.error('查询收藏状态失败:', error)
+  }
+}
+
+async function toggleCourseFavorite() {
+  const courseId = detailCourse.value?.course_id
+  if (!courseId) return
+  try {
+    if (courseFavorited.value) {
+      await favoriteApi.remove(courseFavoriteId.value)
+      courseFavorited.value = false
+      courseFavoriteId.value = 0
+      ElMessage.success('已取消收藏')
+    } else {
+      const res = await favoriteApi.add({ target_type: 'course', target_id: courseId })
+      courseFavorited.value = true
+      courseFavoriteId.value = res?.favorite_id || 0
+      ElMessage.success('已收藏')
+    }
+  } catch (error) {
+    console.error('收藏操作失败:', error)
+    /* 错误已由拦截器提示 */
+  }
+}
+
+async function loadLearningState(courseId: number) {
+  courseLearning.value = null
+  learningDetail.value = null
+  completedChapterIds.value = new Set()
+  try {
+    // 课程详情（is_enrolled/进度/最后章节）与单课程学习详情（每章完成态）并行
+    const [detail, learning] = await Promise.all([
+      courseApi.getCourseDetail(courseId).catch(() => null),
+      studentApi.getStudentCourseDetail(courseId).catch(() => null)
+    ])
+    courseLearning.value = detail
+      ? {
+          is_enrolled: detail.is_enrolled,
+          progress: detail.progress,
+          completed_chapters: detail.completed_chapters,
+          total_chapters: detail.chapters?.length || learning?.total_chapters
+        }
+      : null
+    learningDetail.value = learning
+    completedChapterIds.value = new Set(
+      (learning?.chapters || []).filter((ch) => ch.completed).map((ch) => ch.chapter_id)
+    )
+  } catch (error) {
+    console.error('加载学习状态失败:', error)
+  }
+}
+
 async function openDetail(course: CourseSummary) {
   detailCourse.value = course
   detailVisible.value = true
@@ -262,9 +374,32 @@ async function openDetail(course: CourseSummary) {
     const data = await courseApi.getCourseDetail(course.course_id)
     detailCourse.value = { ...course, ...(data.course_info || {}) }
     detailChapters.value = data.chapters || []
+    loadLearningState(course.course_id)
+    loadCourseFavorite(course.course_id)
   } catch (error) {
     console.error('加载课程详情失败:', error)
     /* 错误已由拦截器提示 */
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+// 按 id 打开详情（搜索/收藏跳转带 query.course_id）
+async function openDetailById(courseId: number) {
+  detailCourse.value = null
+  detailVisible.value = true
+  detailLoading.value = true
+  detailChapters.value = []
+  try {
+    const data = await courseApi.getCourseDetail(courseId)
+    detailCourse.value = (data.course_info || null) as CourseDetail | null
+    detailChapters.value = data.chapters || []
+    loadLearningState(courseId)
+    loadCourseFavorite(courseId)
+  } catch (error) {
+    console.error('加载课程详情失败:', error)
+    /* 错误已由拦截器提示 */
+    detailVisible.value = false
   } finally {
     detailLoading.value = false
   }
@@ -282,6 +417,11 @@ function goToChapter(ch: { chapter_id: number }) {
 onMounted(() => {
   fetchCatalog()
   loadCourses()
+  // 搜索/收藏跳转：?course_id= 自动打开课程详情
+  const queryCourseId = Number(route.query.course_id)
+  if (queryCourseId > 0) {
+    openDetailById(queryCourseId)
+  }
 })
 </script>
 
@@ -426,6 +566,37 @@ onMounted(() => {
 
 .chapter-arrow {
   color: var(--color-text-tertiary);
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-right: 24px;
+}
+
+.detail-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.detail-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0 4px;
+}
+
+.progress-bar {
+  flex: 1;
+}
+
+.progress-text {
+  font-size: 13px;
+  color: #909399;
+  white-space: nowrap;
 }
 
 .detail-brief {

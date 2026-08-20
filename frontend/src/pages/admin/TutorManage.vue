@@ -13,17 +13,17 @@
         placeholder="搜索用户名或姓名"
         clearable
         style="width: 280px"
-        @clear="handleSearch"
-        @keyup.enter="handleSearch"
+        @clear="search"
+        @keyup.enter="search"
       >
         <template #prefix>
           <el-icon><Search /></el-icon>
         </template>
       </el-input>
-      <el-button type="primary" @click="handleSearch">搜索</el-button>
+      <el-button type="primary" @click="search">搜索</el-button>
     </div>
 
-    <el-table :data="tutors" v-loading="loading" stripe border style="width: 100%">
+    <el-table :data="list" v-loading="loading" stripe border style="width: 100%">
       <el-table-column prop="tutor_id" label="ID" width="70" align="center" />
       <el-table-column prop="username" label="用户名" min-width="160" />
       <el-table-column prop="name" label="姓名" min-width="140" />
@@ -36,7 +36,7 @@
       </el-table-column>
       <el-table-column prop="created_at" label="创建时间" width="200" align="center">
         <template #default="{ row }">
-          {{ formatDate(row.created_at) }}
+          {{ formatDateTime(row.created_at) }}
         </template>
       </el-table-column>
       <el-table-column label="操作" width="90" fixed="right" align="center">
@@ -64,8 +64,8 @@
         :total="total"
         :page-sizes="[10, 20, 50]"
         layout="total, sizes, prev, pager, next"
-        @size-change="loadTutors"
-        @current-change="loadTutors"
+        @size-change="load"
+        @current-change="load"
       />
     </div>
 
@@ -118,25 +118,14 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { Plus, Search, ArrowDown } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { adminApi, type AdminTutor } from '@/api/admin'
+import { useAdminTable } from '@/composables/useAdminTable'
+import { formatDateTime } from '@/utils/format'
 import { usernameRules, passwordRules, nameRules } from '@/utils/validate'
 
-interface TutorRow {
-  tutor_id: number
-  username: string
-  name: string
-  status: number
-  created_at: string
-}
-
-const loading = ref(false)
-const tutors = ref<AdminTutor[]>([])
-const searchKeyword = ref('')
-const currentPage = ref(1)
-const pageSize = ref(10)
-const total = ref(0)
+type TutorRow = AdminTutor
 
 const dialogVisible = ref(false)
 const submitting = ref(false)
@@ -167,39 +156,49 @@ const pwdFormRules: FormRules = {
   password: passwordRules
 }
 
-function formatDate(dateStr: string): string {
-  if (!dateStr) return '-'
-  const d = new Date(dateStr)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-
-async function loadTutors() {
-  loading.value = true
+async function handleToggleStatus(row: TutorRow) {
   try {
-    const params: Record<string, any> = {
-      page: currentPage.value,
-      page_size: pageSize.value
-    }
-    if (searchKeyword.value) {
-      params.keyword = searchKeyword.value
-    }
-
-    const data = await adminApi.getTutors(params)
-    if (data) {
-      tutors.value = data.tutors || []
-      total.value = data.total || 0
-    }
+    await adminApi.toggleTutorStatus(row.tutor_id)
+    ElMessage.success(row.status === 1 ? '已禁用' : '已启用')
+    load()
   } catch (error) {
-    console.error('加载导师列表失败:', error)
-    /* 错误已由拦截器提示 */
-  } finally {
-    loading.value = false
+    console.error('切换状态失败:', error)
   }
 }
 
-function handleSearch() {
-  currentPage.value = 1
-  loadTutors()
+async function handleDelete(tutorId: number) {
+  try {
+    await adminApi.deleteTutor(tutorId)
+    ElMessage.success('导师已删除')
+    load()
+  } catch (error) {
+    console.error('删除导师失败:', error)
+    /* 错误已由拦截器提示 */
+  }
+}
+
+// admin 列表状态机：本页只声明 fetch 与行操作 adapter
+const table = useAdminTable<AdminTutor>({
+  fetch: async (paging, filters) => {
+    const data = await adminApi.getTutors({
+      page: paging.page,
+      page_size: paging.pageSize,
+      keyword: filters.keyword ? String(filters.keyword) : undefined
+    })
+    return { list: data?.tutors || [], total: data?.total || 0 }
+  },
+  actions: {
+    resetPwd: openResetPwdDialog,
+    toggle: handleToggleStatus,
+    delete: deleteRow
+  }
+})
+const { loading, list, total, currentPage, pageSize, searchKeyword, load, search, handleAction } = table
+
+function deleteRow(row: AdminTutor): Promise<void> {
+  return table.confirmDelete(row, async r => {
+    await handleDelete(r.tutor_id)
+  }, '确定删除该导师？删除后不可恢复')
 }
 
 function openAddDialog() {
@@ -222,7 +221,7 @@ async function handleSubmit() {
     })
     ElMessage.success('导师添加成功')
     dialogVisible.value = false
-    loadTutors()
+    load()
   } catch (error) {
     console.error('添加导师失败:', error)
   } finally {
@@ -253,53 +252,8 @@ async function handleResetPwd() {
   }
 }
 
-async function handleToggleStatus(row: TutorRow) {
-  try {
-    await adminApi.toggleTutorStatus(row.tutor_id)
-    ElMessage.success(row.status === 1 ? '已禁用' : '已启用')
-    loadTutors()
-  } catch (error) {
-    console.error('切换状态失败:', error)
-  }
-}
-
-async function handleDelete(tutorId: number) {
-  try {
-    await adminApi.deleteTutor(tutorId)
-    ElMessage.success('导师已删除')
-    loadTutors()
-  } catch (error) {
-    console.error('删除导师失败:', error)
-    /* 错误已由拦截器提示 */
-  }
-}
-
-// 操作下拉菜单统一入口
-async function handleAction(cmd: string, row: TutorRow) {
-  switch (cmd) {
-    case 'resetPwd':
-      openResetPwdDialog(row)
-      break
-    case 'toggle':
-      handleToggleStatus(row)
-      break
-    case 'delete':
-      try {
-        await ElMessageBox.confirm('确定删除该导师？删除后不可恢复', '提示', {
-          type: 'warning',
-          confirmButtonText: '确定',
-          cancelButtonText: '取消'
-        })
-        await handleDelete(row.tutor_id)
-      } catch {
-        // 用户取消
-      }
-      break
-  }
-}
-
 onMounted(() => {
-  loadTutors()
+  load()
 })
 </script>
 

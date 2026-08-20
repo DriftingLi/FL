@@ -14,16 +14,17 @@ import (
 
 // TutorService 导师服务。
 type TutorService struct {
-	db           *gorm.DB
-	uploadFolder string
-	fileService  *FileService
+	db            *gorm.DB
+	uploadFolder  string
+	fileStore     *FileStore
+	slideRenderer *SlideRenderer
 
 	logger *zap.Logger
 }
 
 // NewTutorService 创建导师服务实例。
-func NewTutorService(db *gorm.DB, uploadFolder string, fileService *FileService, logger *zap.Logger) *TutorService {
-	return &TutorService{db: db, uploadFolder: uploadFolder, fileService: fileService, logger: logger}
+func NewTutorService(db *gorm.DB, uploadFolder string, fileStore *FileStore, slideRenderer *SlideRenderer, logger *zap.Logger) *TutorService {
+	return &TutorService{db: db, uploadFolder: uploadFolder, fileStore: fileStore, slideRenderer: slideRenderer, logger: logger}
 }
 
 // GetCourses 导师课程列表（与学员端同口径：已上架 + 已挂载方向/等级，ADR-0012 §2），
@@ -121,18 +122,18 @@ func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileCon
 	if filename == "" {
 		return nil, errors.New("文件名不能为空")
 	}
-	if s.fileService == nil {
+	if s.fileStore == nil {
 		return nil, errors.New("文件服务不可用")
 	}
-	if !s.fileService.AllowedFile(filename) {
+	if !allowedFile(filename) {
 		return nil, errors.New("不支持的文件格式")
 	}
-	if !s.fileService.ValidateFileSize(int64(len(fileContent)), filename) {
+	if !validateFileSize(int64(len(fileContent)), filename) {
 		return nil, errors.New("文件大小超出限制")
 	}
 
-	contentType := s.fileService.GetContentType(filename)
-	fileURL, err := s.fileService.SaveFile(fileContent, filename, "chapters")
+	contentType := fileContentType(filename)
+	fileURL, err := s.fileStore.Save(fileContent, filename, "chapters")
 	if err != nil {
 		return nil, fmt.Errorf("保存文件失败: %w", err)
 	}
@@ -156,8 +157,8 @@ func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileCon
 	}
 
 	// PPT 自动转图片并持久化 slide URL 列表到 chapter.slide_urls
-	if contentType == "ppt" {
-		slideURLs := s.fileService.ConvertPPTToImages(fileContent, chapterID)
+	if contentType == "ppt" && s.slideRenderer != nil {
+		slideURLs := s.slideRenderer.Render(fileContent, chapterID)
 		if len(slideURLs) > 0 {
 			slideURLsJSON, _ := json.Marshal(slideURLs)
 			s.db.Model(&model.Chapter{}).Where("chapter_id = ?", chapterID).Update("slide_urls", string(slideURLsJSON))
@@ -205,8 +206,8 @@ func (s *TutorService) DeleteChapterFileByID(fileID int) (*DeleteFileResult, err
 	if err := s.db.First(&chapterFile, fileID).Error; err != nil {
 		return nil, errors.New("文件不存在")
 	}
-	if s.fileService != nil {
-		_ = s.fileService.DeleteFile(chapterFile.FileURL)
+	if s.fileStore != nil {
+		_ = s.fileStore.Delete(chapterFile.FileURL)
 	}
 	chapterID := chapterFile.ChapterID
 	s.db.Delete(&chapterFile)
@@ -239,8 +240,8 @@ func (s *TutorService) BatchDeleteChapterFiles(fileIDs []int) *BatchDeleteFilesR
 			failedIDs = append(failedIDs, fid)
 			continue
 		}
-		if s.fileService != nil {
-			_ = s.fileService.DeleteFile(chapterFile.FileURL)
+		if s.fileStore != nil {
+			_ = s.fileStore.Delete(chapterFile.FileURL)
 		}
 		chapterID := chapterFile.ChapterID
 		s.db.Delete(&chapterFile)

@@ -21,6 +21,8 @@ export interface PendingProfileChange {
 /** 用户资料（登录响应与 /auth/me 共用同一 shape，取代双份手写 AuthUserInfo/UserInfo） */
 export interface UserProfile {
   token?: string
+  /** refresh token（双令牌会话 ADR-0012，仅登录响应下发，前端单独存储） */
+  refresh_token?: string
   user_id?: number
   uid?: string
   account?: string

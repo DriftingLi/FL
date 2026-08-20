@@ -194,7 +194,7 @@ type Chapter struct {
 	ContentType string `gorm:"column:content_type;default:text" json:"content_type"`
 	FileURL     string `gorm:"column:file_url" json:"file_url"`
 	// SlideUrls PPT 转图后的幻灯片 URL 列表（JSON 数组字符串）。
-	// 为空表示未生成；由 FileService.ConvertPPTToImages 生成后写入。
+	// 为空表示未生成；由 SlideRenderer.Render 生成后写入。
 	SlideUrls   string    `gorm:"column:slide_urls" json:"slide_urls"`
 	Description string    `gorm:"column:description" json:"description"`
 	Duration    int       `gorm:"column:duration;default:0" json:"duration"`
@@ -221,13 +221,16 @@ func (ChapterFile) TableName() string { return "chapter_file" }
 // ===== 7. 学习记录 =====
 
 type StudyRecord struct {
-	RecordID      int       `gorm:"column:record_id;primaryKey" json:"record_id"`
-	StudentID     int       `gorm:"column:student_id" json:"student_id"`
-	CourseID      int       `gorm:"column:course_id" json:"course_id"`
-	ChapterID     *int      `gorm:"column:chapter_id" json:"chapter_id,omitempty"`
-	StudyDuration int       `gorm:"column:study_duration;default:0" json:"study_duration"`
-	Progress      float64   `gorm:"column:progress;type:numeric(5,2);default:0" json:"progress"`
-	StudyDate     time.Time `gorm:"column:study_date" json:"study_date"`
+	RecordID      int        `gorm:"column:record_id;primaryKey" json:"record_id"`
+	StudentID     int        `gorm:"column:student_id" json:"student_id"`
+	CourseID      int        `gorm:"column:course_id" json:"course_id"`
+	ChapterID     *int       `gorm:"column:chapter_id" json:"chapter_id,omitempty"`
+	StudyDuration int        `gorm:"column:study_duration;default:0" json:"study_duration"`
+	Progress      float64    `gorm:"column:progress;type:numeric(5,2);default:0" json:"progress"`
+	StudyDate     time.Time  `gorm:"column:study_date" json:"study_date"`
+	VideoPosition int        `gorm:"column:video_position;default:0" json:"video_position"`
+	LastChapterID *int       `gorm:"column:last_chapter_id" json:"last_chapter_id,omitempty"`
+	LastStudiedAt *time.Time `gorm:"column:last_studied_at" json:"last_studied_at,omitempty"`
 }
 
 func (StudyRecord) TableName() string { return "study_record" }
@@ -562,6 +565,41 @@ type ForumReply struct {
 }
 
 func (ForumReply) TableName() string { return "forum_replies" }
+
+// ForumTopicLike 论坛主题点赞（topic_id+user_id 唯一约束保证幂等，ADR-0018）。
+type ForumTopicLike struct {
+	ID        int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	TopicID   int64     `gorm:"column:topic_id" json:"topic_id"`
+	UserID    int       `gorm:"column:user_id" json:"user_id"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (ForumTopicLike) TableName() string { return "forum_topic_like" }
+
+// Favorite 通用收藏：target_type + target_id 多态定位
+// （course/chapter/question/featured/topic，ADR-0018；user+type+id 唯一）。
+type Favorite struct {
+	FavoriteID int64     `gorm:"column:favorite_id;primaryKey;autoIncrement" json:"favorite_id"`
+	UserID     int       `gorm:"column:user_id" json:"user_id"`
+	TargetType string    `gorm:"column:target_type;size:20" json:"target_type"`
+	TargetID   int       `gorm:"column:target_id" json:"target_id"`
+	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (Favorite) TableName() string { return "favorite" }
+
+// ForumReport 论坛举报：topic_id 与 reply_id 二选一；status 0 待处理 / 1 已处理（ADR-0018）。
+type ForumReport struct {
+	ID         int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	ReporterID int       `gorm:"column:reporter_id" json:"reporter_id"`
+	TopicID    *int64    `gorm:"column:topic_id" json:"topic_id,omitempty"`
+	ReplyID    *int64    `gorm:"column:reply_id" json:"reply_id,omitempty"`
+	Reason     string    `gorm:"column:reason" json:"reason"`
+	Status     int16     `gorm:"column:status;default:0" json:"status"`
+	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (ForumReport) TableName() string { return "forum_report" }
 
 // ===== 25. 资料修改审核 =====
 

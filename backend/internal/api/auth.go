@@ -18,14 +18,14 @@ import (
 // AuthHandler 认证相关 handler。
 type AuthHandler struct {
 	authSvc   *service.AuthService
-	fileSvc   *service.FileService
+	fileSvc   *service.FileStore
 	storage   storage.Storage
 	reviewSvc *service.ProfileReviewService
 	session   *security.Session
 }
 
 // NewAuthHandler 创建认证 handler。session 由装配根构建一次注入。
-func NewAuthHandler(sess *security.Session, authSvc *service.AuthService, fileSvc *service.FileService, st storage.Storage, reviewSvc *service.ProfileReviewService, logger *zap.Logger) *AuthHandler {
+func NewAuthHandler(sess *security.Session, authSvc *service.AuthService, fileSvc *service.FileStore, st storage.Storage, reviewSvc *service.ProfileReviewService, logger *zap.Logger) *AuthHandler {
 	return &AuthHandler{
 		authSvc: authSvc, fileSvc: fileSvc, storage: st, reviewSvc: reviewSvc,
 		session: sess,
@@ -121,26 +121,52 @@ type loginReq struct {
 }
 
 // Logout 登出 POST /api/auth/logout
-// 将当前 token 写入 Redis 黑名单，TTL = token 剩余有效期，使其在后续请求中被 JWTAuth 中间件拒绝。
-// 本 handler 无 service 调用、纯会话操作，保留为薄适配（ADR-0009 一次性适配例外）。
+// 双令牌会话（ADR-0012）：撤销请求体携带的 refresh token（写黑名单至其自然过期）并清除登录
+// Cookie；access 短生命周期自然过期，不入黑名单。本 handler 不依赖 JWTAuth——access 过期时
+// 亦能撤销 refresh，保证登出语义可靠。
+// 无 service 调用、纯会话操作，保留为薄适配（ADR-0009 一次性适配例外）。
 func (h *AuthHandler) Logout(c *gin.Context) {
-	// 与 JWTAuth 中间件同一套提取逻辑（session 模块统一实现）：Bearer 头优先，其次 Cookie
-	tokenStr := h.session.ExtractToken(c.GetHeader("Authorization"), authCookieFromReq(c, h.session))
-	if tokenStr != "" {
-		// 已通过 JWTAuth 中间件校验，这里仅吊销（无效 token 静默忽略）
-		_ = h.session.Revoke(c.Request.Context(), tokenStr)
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	_ = c.ShouldBindJSON(&req) // refresh_token 缺失或解析失败时只清本地/Cookie，静默放行
+	if req.RefreshToken != "" {
+		_ = h.session.RevokeRefresh(c.Request.Context(), req.RefreshToken)
 	}
 	h.session.ClearCookie(c.Writer)
 	response.SuccessWithMsg(c, "已登出", nil)
 }
 
-// authCookieFromReq 读取父域名登录 Cookie。
-func authCookieFromReq(c *gin.Context, sess *security.Session) string {
-	tk, err := c.Cookie(sess.CookieName())
-	if err != nil {
-		return ""
+// Refresh 刷新双令牌 POST /api/auth/refresh
+// 请求体带 refresh token：校验类型/黑名单/有效期 → 签发新 access + 新 refresh（轮换），
+// 旧 refresh 立即入黑名单防重放；失败统一返回 401（不区分原因，防枚举）。
+// 本端点不经过 JWTAuth（用 refresh token 自身鉴权）。
+func (h *AuthHandler) Refresh(c *gin.Context) {
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
 	}
-	return tk
+	if err := c.ShouldBindJSON(&req); err != nil || req.RefreshToken == "" {
+		response.Unauthorized(c, "登录已过期，请重新登录")
+		return
+	}
+	rt := req.RefreshToken
+	claims, err := h.session.ValidateRefresh(rt)
+	if err != nil {
+		response.Unauthorized(c, "登录已过期，请重新登录")
+		return
+	}
+	if revoked, _ := h.session.IsRevoked(c.Request.Context(), rt); revoked {
+		response.Unauthorized(c, "登录已过期，请重新登录")
+		return
+	}
+	access, refresh, err := h.session.IssuePair(claims.UserID, claims.Account, claims.Role)
+	if err != nil {
+		response.ServerError(c, "服务器内部错误")
+		return
+	}
+	// 轮换：旧 refresh 立即入黑名单（防重放）
+	_ = h.session.RevokeRefresh(c.Request.Context(), rt)
+	response.Success(c, map[string]string{"token": access, "refresh_token": refresh})
 }
 
 // meReq /auth/me 请求（身份来自 JWT 中间件上下文）。
@@ -222,7 +248,7 @@ func (h *AuthHandler) UploadAvatar(c *gin.Context) {
 		response.BadRequest(c, "未找到上传文件")
 		return
 	}
-	if ok, msg := h.fileSvc.ValidateImageFile(file.Filename, file.Size); !ok {
+	if ok, msg := h.fileSvc.ValidateImage(file.Filename, file.Size); !ok {
 		response.BadRequest(c, msg)
 		return
 	}
@@ -238,7 +264,7 @@ func (h *AuthHandler) UploadAvatar(c *gin.Context) {
 		return
 	}
 
-	url, err := h.fileSvc.SaveFile(content, file.Filename, "avatars")
+	url, err := h.fileSvc.Save(content, file.Filename, "avatars")
 	if err != nil {
 		response.ServerError(c, "头像保存失败: "+err.Error())
 		return

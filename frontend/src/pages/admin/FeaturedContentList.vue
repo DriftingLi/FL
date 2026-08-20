@@ -32,7 +32,7 @@
         <el-option label="草稿" :value="0" />
         <el-option label="已发布" :value="1" />
       </el-select>
-      <el-button type="primary" @click="loadList">查询</el-button>
+      <el-button type="primary" @click="handleFilterChange">查询</el-button>
       <el-button @click="resetFilter">重置</el-button>
     </div>
 
@@ -83,8 +83,8 @@
         :total="total"
         :page-sizes="[10, 20, 50]"
         layout="total, sizes, prev, pager, next"
-        @size-change="loadList"
-        @current-change="loadList"
+        @size-change="load"
+        @current-change="load"
       />
     </div>
   </div>
@@ -94,52 +94,50 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, ArrowDown } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { adminFeaturedApi, featuredCategoryOptions, categoryLabel, type FeaturedContent } from '@/api/featured'
+import { useAdminTable } from '@/composables/useAdminTable'
 import { formatDateTime } from '@/utils/format'
 
 const router = useRouter()
 
-const loading = ref(false)
-const list = ref<FeaturedContent[]>([])
-const total = ref(0)
-const currentPage = ref(1)
-const pageSize = ref(10)
-
 const filterCategory = ref('')
 const filterStatus = ref<number | undefined>(undefined)
 
-async function loadList() {
-  loading.value = true
-  try {
+// admin 列表状态机：本页只声明 fetch 与行操作 adapter
+const table = useAdminTable<FeaturedContent>({
+  fetch: async (paging, filters) => {
     const params: { page?: number; page_size?: number; category?: string; status?: string } = {
-      page: currentPage.value,
-      page_size: pageSize.value
+      page: paging.page,
+      page_size: paging.pageSize
     }
-    if (filterCategory.value) params.category = filterCategory.value
-    if (filterStatus.value !== undefined && filterStatus.value !== null) {
-      params.status = String(filterStatus.value)
+    if (filters.category) params.category = String(filters.category)
+    if (filters.status !== undefined && filters.status !== null && filters.status !== '') {
+      params.status = String(filters.status)
     }
     const res = await adminFeaturedApi.getList(params)
-    list.value = res.items || []
-    total.value = res.total || 0
-  } catch (e: any) {
-    // 错误已由全局拦截器提示
-  } finally {
-    loading.value = false
+    return { list: res.items || [], total: res.total || 0 }
+  },
+  actions: {
+    edit: (row: FeaturedContent) => goEdit(row.content_id),
+    publish: (row: FeaturedContent) => handlePublish(row.content_id),
+    delete: deleteRow
   }
+})
+const { loading, list, total, currentPage, pageSize, load, handleAction } = table
+
+function deleteRow(row: FeaturedContent): Promise<void> {
+  return table.confirmDelete(row, r => handleDelete(r.content_id), '确定删除该内容？删除后不可恢复')
 }
 
 function handleFilterChange() {
-  currentPage.value = 1
-  loadList()
+  table.applyFilters({ category: filterCategory.value, status: filterStatus.value ?? '' })
 }
 
 function resetFilter() {
   filterCategory.value = ''
   filterStatus.value = undefined
-  currentPage.value = 1
-  loadList()
+  table.applyFilters({ category: '', status: '' })
 }
 
 function goCreate() {
@@ -154,7 +152,7 @@ async function handlePublish(id: number) {
   try {
     await adminFeaturedApi.publish(id)
     ElMessage.success('发布成功')
-    loadList()
+    load()
   } catch (e: any) {
     // 错误已由全局拦截器提示
   }
@@ -164,38 +162,14 @@ async function handleDelete(id: number) {
   try {
     await adminFeaturedApi.remove(id)
     ElMessage.success('删除成功')
-    loadList()
+    load()
   } catch (e: any) {
     // 错误已由全局拦截器提示
   }
 }
 
-// 操作下拉菜单统一入口
-async function handleAction(cmd: string, row: any) {
-  switch (cmd) {
-    case 'edit':
-      goEdit(row.content_id)
-      break
-    case 'publish':
-      handlePublish(row.content_id)
-      break
-    case 'delete':
-      try {
-        await ElMessageBox.confirm('确定删除该内容？删除后不可恢复', '提示', {
-          type: 'warning',
-          confirmButtonText: '确定',
-          cancelButtonText: '取消'
-        })
-        await handleDelete(row.content_id)
-      } catch {
-        // 用户取消
-      }
-      break
-  }
-}
-
 onMounted(() => {
-  loadList()
+  load()
 })
 </script>
 

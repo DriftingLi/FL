@@ -130,18 +130,20 @@ func VerifyPassword(password, hashed string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password)) == nil
 }
 
-// GenerateToken 签发 JWT（委托会话模块，claims 结构：user_id/account/role）。
+// GenerateToken 签发 access token（委托会话模块，双令牌会话 ADR-0012）。
 func (s *AuthService) GenerateToken(userID int, account, role string) (string, error) {
 	return s.session.Issue(userID, account, role)
 }
 
-// LoginResult 登录返回结构。
+// LoginResult 登录返回结构（双令牌：access token + refresh token）。
+// 旧字段 token 保留，前端向后兼容；refresh_token 仅前端本地存储，不写入 Cookie。
 type LoginResult struct {
-	Token    string `json:"token"`
-	UserID   int    `json:"user_id"`
-	Account  string `json:"account"`
-	Username string `json:"username"`
-	Role     string `json:"role"`
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token"`
+	UserID       int    `json:"user_id"`
+	Account      string `json:"account"`
+	Username     string `json:"username"`
+	Role         string `json:"role"`
 }
 
 // HrwaiRole 统一 HRWAI 账号角色名(替代原 "student" 和 "valuation_user")。
@@ -172,16 +174,17 @@ func (s *AuthService) issueLogin(c loginCredentials, role string) (*LoginResult,
 	if c.status != nil && *c.status != 1 {
 		return nil, errors.New("账号已被禁用，请联系管理员")
 	}
-	token, err := s.GenerateToken(c.id, c.account, role)
+	access, refresh, err := s.session.IssuePair(c.id, c.account, role)
 	if err != nil {
 		return nil, err
 	}
 	return &LoginResult{
-		Token:    token,
-		UserID:   c.id,
-		Account:  c.account,
-		Username: c.username,
-		Role:     role,
+		Token:        access,
+		RefreshToken: refresh,
+		UserID:       c.id,
+		Account:      c.account,
+		Username:     c.username,
+		Role:         role,
 	}, nil
 }
 

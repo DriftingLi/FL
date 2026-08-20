@@ -170,3 +170,6 @@ training-app/叉车维修培训学员端跨端应用/forklift-training-ui/assets
 
 # ===== 项目备份目录（含嵌套 .git，不入库）=====
 training-app/*-backup-*/
+
+# ===== 可视化产物（本地生成，不入库）=====
+viz/

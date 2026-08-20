@@ -116,7 +116,9 @@ func TestChapterFileDTOShapeLock(t *testing.T) {
 
 func TestCourseEnvelopeDTOShapeLock(t *testing.T) {
 	detail := CourseDetailDTO{CourseInfo: sampleCourseDTO(), Chapters: []ChapterDTO{}, Progress: 0}
-	assertShapeLock(t, detail, "course_info", "chapters", "progress")
+	// ADR-0017：学习位置与完成状态并入课程详情信封。
+	assertShapeLock(t, detail, "course_info", "chapters", "progress",
+		"is_enrolled", "completed_chapters", "last_chapter_id", "last_position", "last_studied_at")
 
 	admin := AdminCourseDetailDTO{CourseDTO: sampleCourseDTO(), Chapters: []ChapterDTO{}}
 	keys := topLevelKeys(t, admin)
@@ -133,7 +135,7 @@ func TestCourseEnvelopeDTOShapeLock(t *testing.T) {
 	assertShapeLock(t, slides, "chapter_id", "slides")
 
 	progress := StudyProgressDTO{RecordID: 1, Progress: 50.5, StudyDuration: 30}
-	assertShapeLock(t, progress, "record_id", "progress", "study_duration")
+	assertShapeLock(t, progress, "record_id", "progress", "study_duration", "completed_chapters")
 
 	page := CoursePageResult{Courses: []CourseDTO{sampleCourseDTO()}, Page: 1, Pages: 1, Total: 1}
 	assertShapeLock(t, page, "courses", "page", "pages", "total")

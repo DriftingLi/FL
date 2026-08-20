@@ -1,6 +1,6 @@
 # 叉车维修培训系统 · 学员端 API 文档
 
-> 基础 URL：`http://www.gccsmile.com:51820`
+> 基础 URL：`https://www.gccsmile.com`
 > 认证方式：`Authorization: Bearer <token>`（登录后获取）
 > 响应格式：`{"code":200,"message":"success","data":...}`
 
@@ -31,7 +31,8 @@
   "data": {
     "user_id": 1,
     "username": "13800000001",
-    "token": "eyJhbG..."
+    "token": "eyJhbG...",
+    "refresh_token": "eyJhbG..."
   }
 }
 ```
@@ -67,12 +68,15 @@
   "data": {
     "user_id": 1,
     "username": "13800000001",
-    "token": "eyJhbG..."
+    "token": "eyJhbG...",
+    "refresh_token": "eyJhbG..."
   }
 }
 ```
 
 > 🔑 **token** 需要存入环境变量，后续所有需要鉴权的接口都带上 `Authorization: Bearer {{token}}`
+>
+> 🔑 **token** 为 access 令牌（2 小时过期）；**refresh_token** 用于过期后调 `POST /api/auth/refresh`（见 1.5）换新令牌对
 
 ---
 
@@ -100,12 +104,42 @@
 
 ### 1.4 登出 `POST /api/auth/logout`
 
-> 需要 Token
+> 无需 Token（请求体可带 refresh_token，服务端将其撤销）
+
+**请求体**（可选）
+```json
+{ "refresh_token": "{{refresh_token}}" }
+```
 
 **响应** `200`
 ```json
 { "code": 200, "message": "已登出" }
 ```
+
+---
+
+### 1.5 刷新令牌 `POST /api/auth/refresh`
+
+> 无需 access Token，用 refresh_token 自身鉴权
+
+**请求体**
+```json
+{ "refresh_token": "{{refresh_token}}" }
+```
+
+**响应** `200`
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "token": "eyJhbG...",
+    "refresh_token": "eyJhbG..."
+  }
+}
+```
+
+> 轮换语义：每次刷新签发新令牌对，旧 refresh_token 立即作废（防重放），需同步更新环境变量；刷新失败统一返回 401，需重新登录。
 
 ---
 
@@ -671,7 +705,7 @@
 
 ### Apifox 设置
 
-1. 创建环境，变量 `base_url`=`http://www.gccsmile.com:51820`，`token`=留空
+1. 创建环境，变量 `base_url`=`https://www.gccsmile.com`，`token`/`refresh_token`=留空
 2. 接口根目录 → Auth → Bearer Token → `{{token}}` → 应用到子接口
 3. 公开接口（注册/登录/课程列表/幻灯片）单独设 `No Auth`
 
@@ -681,13 +715,14 @@
 var jsonData = pm.response.json();
 if (jsonData.code === 200 && jsonData.data && jsonData.data.token) {
     pm.environment.set("token", jsonData.data.token);
+    pm.environment.set("refresh_token", jsonData.data.refresh_token || "");
 }
 ```
 
 ### 推荐执行顺序
 
 ```
-1.1 注册 → 1.2 登录 → 1.3 /me → 2.1 profile
+1.1 注册 → 1.2 登录 → 1.3 /me → 1.5 刷新令牌（token 过期时） → 2.1 profile
 → 3.1 课程列表 → 3.2 课程详情 → 3.3 幻灯片 → 3.4 更新进度
 → 4.3 随机练习 → 4.8 提交答案 → 4.11 练习统计
 → 6.1 模拟考试 → 6.2 保存进度 → 6.4 交卷 → 6.5 成绩

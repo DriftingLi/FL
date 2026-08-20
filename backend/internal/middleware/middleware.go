@@ -105,22 +105,21 @@ func OptionalAuth(sess *security.Session) gin.HandlerFunc {
 	}
 }
 
-// resolveClaims 提取 token → 校验 → 黑名单检查 → 写 context，是
+// resolveClaims 提取 token → 校验（仅 access 类型）→ 写 context，是
 // JWTAuth 与 OptionalAuth 共享的解析核心。
 // 返回是否通过认证：JWTAuth 据此 401 中止，OptionalAuth 忽略结果静默放行。
+// 双令牌会话（ADR-0012）：access 短生命周期不入黑名单，refresh 传入鉴权端点被 VerifyAccess 拒绝；
+// 登出撤销的是 refresh（由 /logout 处理器处理），access 自然过期。
 func resolveClaims(c *gin.Context, sess *security.Session) bool {
 	tokenStr := sess.ExtractToken(c.GetHeader("Authorization"), authCookieValue(c, sess.CookieName()))
 	if tokenStr == "" {
 		return false
 	}
-	if claims, err := sess.Verify(tokenStr); err == nil {
-		// 检查 token 黑名单（已登出 token 会被加入黑名单直到自然过期）
-		if revoked, _ := sess.IsRevoked(c.Request.Context(), tokenStr); !revoked {
-			c.Set(string(CtxUserID), claims.UserID)
-			c.Set(string(CtxAccount), claims.Account)
-			c.Set(string(CtxUserRole), claims.Role)
-			return true
-		}
+	if claims, err := sess.VerifyAccess(tokenStr); err == nil {
+		c.Set(string(CtxUserID), claims.UserID)
+		c.Set(string(CtxAccount), claims.Account)
+		c.Set(string(CtxUserRole), claims.Role)
+		return true
 	}
 	return false
 }

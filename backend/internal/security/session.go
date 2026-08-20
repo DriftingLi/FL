@@ -2,12 +2,17 @@
 // 本文件：会话（session）模块——JWT 签发/校验/吊销与登录态 Cookie 的唯一实现。
 // 中间件、AuthService 与各登录路径都消费本模块的 interface，黑名单 key 与
 // Bearer/Cookie 解析逻辑不再散落各处。
+//
+// 双令牌会话（ADR-0012）：access（2h，鉴权中间件专用，不入黑名单）+
+// refresh（7 天，刷新端点专用，轮换时旧值立即入黑名单防重放）；登出吊销 refresh。
 package security
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -18,11 +23,22 @@ import (
 	"forklift-training/internal/config"
 )
 
+// TokenType 令牌类型（双令牌会话，ADR-0012）：access 供鉴权中间件用（短生命周期、不入黑名单），
+// refresh 仅刷新端点用（长周期、可轮换吊销）。
+const (
+	TokenTypeAccess  = "access"
+	TokenTypeRefresh = "refresh"
+)
+
+// defaultRefreshExpiry 默认 refresh token 有效期（JWT_REFRESH_EXPIRES_DAYS=7，可配置覆盖）。
+const defaultRefreshExpiry = 7 * 24 * time.Hour
+
 // Claims JWT 声明。
 type Claims struct {
-	UserID  int    `json:"user_id"`
-	Account string `json:"account"`
-	Role    string `json:"role"`
+	UserID    int    `json:"user_id"`
+	Account   string `json:"account"`
+	Role      string `json:"role"`
+	TokenType string `json:"token_type"`
 	jwt.RegisteredClaims
 }
 
@@ -55,51 +71,119 @@ func (RedisBlacklistStore) Set(ctx context.Context, key, value string, ttl time.
 // Session 会话模块：签发（issue）/ 校验（verify）/ 吊销（revoke）JWT，
 // 并负责 Bearer/Cookie 令牌提取与登录态 Cookie 写清除。
 type Session struct {
-	jwtSecret string
-	jwtExpiry time.Duration
-	cookie    CookieConfig
-	blacklist BlacklistStore
+	jwtSecret     string
+	jwtExpiry     time.Duration
+	refreshExpiry time.Duration
+	cookie        CookieConfig
+	blacklist     BlacklistStore
 }
 
-// NewSession 构造会话模块（默认 Redis 黑名单存储）。
+// NewSession 构造会话模块（默认 Redis 黑名单存储；refresh 默认 7 天）。
 func NewSession(jwtSecret string, jwtExpiry time.Duration, cookie CookieConfig) *Session {
-	return NewSessionWithBlacklist(jwtSecret, jwtExpiry, cookie, RedisBlacklistStore{})
+	return NewSessionWithBlacklistAndRefresh(jwtSecret, jwtExpiry, defaultRefreshExpiry, cookie, RedisBlacklistStore{})
 }
 
-// NewSessionWithBlacklist 构造会话模块，黑名单存储可注入（ADR-0002：
+// NewSessionWithBlacklist 构造会话模块，黑名单存储可注入，refresh 默认 7 天（ADR-0002：
 // 生产 Redis，测试内存实现；默认存储见 NewSession）。
 func NewSessionWithBlacklist(jwtSecret string, jwtExpiry time.Duration, cookie CookieConfig, blacklist BlacklistStore) *Session {
+	return NewSessionWithBlacklistAndRefresh(jwtSecret, jwtExpiry, defaultRefreshExpiry, cookie, blacklist)
+}
+
+// NewSessionWithBlacklistAndRefresh 构造会话模块：黑名单存储与 refresh 有效期均可注入（测试用）。
+func NewSessionWithBlacklistAndRefresh(jwtSecret string, jwtExpiry, refreshExpiry time.Duration, cookie CookieConfig, blacklist BlacklistStore) *Session {
 	return &Session{
-		jwtSecret: jwtSecret,
-		jwtExpiry: jwtExpiry,
-		cookie:    cookie,
-		blacklist: blacklist,
+		jwtSecret:     jwtSecret,
+		jwtExpiry:     jwtExpiry,
+		refreshExpiry: refreshExpiry,
+		cookie:        cookie,
+		blacklist:     blacklist,
 	}
 }
 
-// SessionFromConfig 从应用配置构造会话模块（黑名单固定为 Redis 存储）。
+// SessionFromConfig 从应用配置构造会话模块（黑名单固定为 Redis 存储，refresh 用配置值）。
 func SessionFromConfig(cfg *config.Config) *Session {
-	return NewSessionWithBlacklist(cfg.JWTSecretKey, cfg.JWTExpiry(), CookieConfig{
+	return NewSessionWithBlacklistAndRefresh(cfg.JWTSecretKey, cfg.JWTExpiry(), cfg.JWTRefreshExpiry(), CookieConfig{
 		Name:   cfg.AuthCookie.Name,
 		Domain: cfg.AuthCookie.Domain,
 		Secure: cfg.AuthCookie.Secure,
 	}, RedisBlacklistStore{})
 }
 
-// Issue 签发 JWT，claims 结构：user_id/account/role，过期时长由配置决定（默认 24 小时）。
+// Issue 签发 access token（双令牌会话：短生命周期、只供鉴权中间件，ADR-0012）。
+// claims：user_id/account/role/token_type=access，过期时长由配置决定（默认 2h）。
 func (s *Session) Issue(userID int, account, role string) (string, error) {
+	return s.issue(userID, account, role, TokenTypeAccess, s.jwtExpiry)
+}
+
+// IssueRefresh 签发 refresh token（仅刷新端点专用，长周期、轮换吊销）。
+func (s *Session) IssueRefresh(userID int, account, role string) (string, error) {
+	return s.issue(userID, account, role, TokenTypeRefresh, s.refreshExpiry)
+}
+
+// IssuePair 一次签发双令牌（登录/刷新共用），返回 (access, refresh, error)。
+func (s *Session) IssuePair(userID int, account, role string) (string, string, error) {
+	access, err := s.Issue(userID, account, role)
+	if err != nil {
+		return "", "", err
+	}
+	refresh, err := s.IssueRefresh(userID, account, role)
+	if err != nil {
+		return "", "", err
+	}
+	return access, refresh, nil
+}
+
+// issue 签发单个 JWT（按 token_type 设置 claims 与有效期）。
+func (s *Session) issue(userID int, account, role, tokenType string, expiry time.Duration) (string, error) {
 	claims := &Claims{
-		UserID:  userID,
-		Account: account,
-		Role:    role,
+		UserID:    userID,
+		Account:   account,
+		Role:      role,
+		TokenType: tokenType,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   account,
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.jwtExpiry)),
+			ID:        randomJWTID(), // 每次签发唯一，保证轮换后的新 token 与旧 token 一定不同
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(s.jwtSecret))
+}
+
+// VerifyAccess 校验 access token（鉴权中间件专用）：Verify 之上额外要求 token_type=access，
+// refresh token 传入鉴权端点直接拒绝。
+func (s *Session) VerifyAccess(tokenStr string) (*Claims, error) {
+	claims, err := s.Verify(tokenStr)
+	if err != nil {
+		return nil, err
+	}
+	if claims.TokenType != TokenTypeAccess {
+		return nil, errors.New("token type must be access")
+	}
+	return claims, nil
+}
+
+// ValidateRefresh 校验 refresh token（刷新端点专用）：要求 token_type=refresh。
+func (s *Session) ValidateRefresh(tokenStr string) (*Claims, error) {
+	claims, err := s.Verify(tokenStr)
+	if err != nil {
+		return nil, err
+	}
+	if claims.TokenType != TokenTypeRefresh {
+		return nil, errors.New("token type must be refresh")
+	}
+	return claims, nil
+}
+
+// RevokeRefresh 吊销 refresh token：写入黑名单，TTL = token 剩余有效期。
+// 供刷新轮换（旧 refresh 立即失效防重放）与登出（撤销长周期会话）使用。
+// 无效或类型不是 refresh 的令牌静默忽略（access 短生命周期，不入黑名单）。
+func (s *Session) RevokeRefresh(ctx context.Context, tokenStr string) error {
+	if _, err := s.ValidateRefresh(tokenStr); err != nil {
+		return nil
+	}
+	return s.Revoke(ctx, tokenStr)
 }
 
 // Verify 解析并校验 JWT（显式校验签名算法，拒绝非 HMAC 算法，防止 alg=none 攻击）。
@@ -181,6 +265,15 @@ func (s *Session) ClearCookie(w http.ResponseWriter) {
 		Secure:   s.cookie.Secure,
 		SameSite: http.SameSiteLaxMode,
 	})
+}
+
+// randomJWTID 生成随机 jti（防重放/保证每次签发唯一；crypto/rand 失败时退化为时间戳）。
+func randomJWTID() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err == nil {
+		return hex.EncodeToString(b)
+	}
+	return fmt.Sprintf("fallback-%d", time.Now().UnixNano())
 }
 
 // blacklistKey 黑名单缓存 key（唯一实现，不再散落字面量）。

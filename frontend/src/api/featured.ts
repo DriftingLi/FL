@@ -23,18 +23,22 @@ export function categoryLabel(category: string): string {
   return featuredCategoryLabels[category] || '资讯'
 }
 
-/** 精选内容项 */
+/** 精选内容项（wire key 与后端 typed DTO 一致：主键为 content_id） */
 export interface FeaturedContent {
-  id: number
+  content_id: number
   title: string
   category?: string
+  category_label?: string
   summary?: string
   cover_image?: string
   content?: string
   source?: string
   status?: number
+  view_count?: number
   sort_order?: number
+  published_at?: string | null
   created_at?: string
+  updated_at?: string
 }
 
 // ===== 公开接口已移除 =====

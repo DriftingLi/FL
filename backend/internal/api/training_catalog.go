@@ -25,7 +25,7 @@ func NewTrainingCatalogHandler(svc *service.TrainingCatalogService) *TrainingCat
 
 // RegisterTrainingCatalogRoutes 注册培训目录蓝图：
 //   - /api/admin/*：专业方向 / 课程等级 / 证书模板 / 题库标签 CRUD 与题目打标（管理端）
-//   - /api/catalog/*、/api/specialties、/api/levels、/api/tags：学员端查询
+//   - /api/catalog/*、/api/levels、/api/tags：学员端查询
 func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.TrainingCatalogService) {
 	h := NewTrainingCatalogHandler(svc)
 

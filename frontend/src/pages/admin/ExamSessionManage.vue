@@ -5,7 +5,7 @@
       <el-button type="primary" @click="showCreateDialog">创建考试场次</el-button>
     </div>
 
-    <el-table :data="sessions" stripe v-loading="loading">
+    <el-table :data="list" stripe v-loading="loading">
       <el-table-column prop="id" label="ID" width="60" />
       <el-table-column prop="name" label="考试名称" />
       <el-table-column prop="start_time" label="开始时间" width="180">
@@ -70,13 +70,12 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { levelExamApi, type LevelExamSession } from '@/api/levelExam'
+import { useAdminTable } from '@/composables/useAdminTable'
 import { formatDateTime } from '@/utils/format'
 
 const statusMap: Record<string, string> = { upcoming: '未开始', ongoing: '进行中', finished: '已结束' }
 const statusType: Record<string, string> = { upcoming: 'info', ongoing: 'success', finished: '' }
 
-const loading = ref(false)
-const sessions = ref<LevelExamSession[]>([])
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const submitting = ref(false)
@@ -84,15 +83,25 @@ const sessionForm = ref({
   name: '', start_time: '', end_time: ''
 })
 
-onMounted(() => loadData())
 
-async function loadData() {
-  loading.value = true
-  try {
-    const res = await levelExamApi.getSessions({ page: 1, page_size: 50 })
-    sessions.value = res?.sessions || []
-  } catch (e) {} finally { loading.value = false }
-}
+
+// admin 列表状态机：本页无搜索/分页 UI，但仍复用统一的 loading/list/load 语义
+const table = useAdminTable<LevelExamSession>({
+  pageSize: 50,
+  fetch: async (paging) => {
+    const res = await levelExamApi.getSessions({ page: paging.page, page_size: paging.pageSize })
+    return { list: res?.sessions || [], total: res?.sessions?.length || 0 }
+  },
+  actions: {
+    edit: editSession,
+    start: (row: LevelExamSession) => changeStatus(row, 'ongoing'),
+    finish: (row: LevelExamSession) => changeStatus(row, 'finished'),
+    delete: handleDelete
+  }
+})
+const { loading, list, load, handleAction } = table
+
+onMounted(() => load())
 
 function showCreateDialog() {
   editingId.value = null
@@ -100,9 +109,9 @@ function showCreateDialog() {
   dialogVisible.value = true
 }
 
-function editSession(row: { id: number; name: string; start_time: string; end_time: string }) {
+function editSession(row: LevelExamSession) {
   editingId.value = row.id
-  sessionForm.value = { name: row.name, start_time: row.start_time, end_time: row.end_time }
+  sessionForm.value = { name: row.name, start_time: row.start_time || '', end_time: row.end_time || '' }
   dialogVisible.value = true
 }
 
@@ -129,7 +138,7 @@ async function submitSession() {
       ElMessage.success('创建成功')
     }
     dialogVisible.value = false
-    await loadData()
+    await load()
   } catch {
     /* 错误已由拦截器提示 */
   } finally { submitting.value = false }
@@ -140,7 +149,7 @@ async function changeStatus(row: { id: number }, status: string) {
     await ElMessageBox.confirm(`确定将考试状态改为"${statusMap[status]}"？`, '提示', { type: 'warning' })
     await levelExamApi.updateSessionStatus(row.id, status)
     ElMessage.success('状态更新成功')
-    await loadData()
+    await load()
   } catch (e) {}
 }
 
@@ -149,27 +158,10 @@ async function handleDelete(row: { id: number }) {
     await ElMessageBox.confirm('确定删除此考试场次？', '提示', { type: 'warning' })
     await levelExamApi.deleteSession(row.id)
     ElMessage.success('删除成功')
-    await loadData()
+    await load()
   } catch (e) {}
 }
 
-// 操作下拉菜单统一入口
-function handleAction(cmd: string, row: any) {
-  switch (cmd) {
-    case 'edit':
-      editSession(row)
-      break
-    case 'start':
-      changeStatus(row, 'ongoing')
-      break
-    case 'finish':
-      changeStatus(row, 'finished')
-      break
-    case 'delete':
-      handleDelete(row)
-      break
-  }
-}
 </script>
 
 <style scoped>

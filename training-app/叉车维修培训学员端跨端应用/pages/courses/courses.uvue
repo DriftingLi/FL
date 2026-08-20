@@ -63,6 +63,7 @@
 
 <script setup lang="uts">
     import { ref } from 'vue'
+
     import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { getCourseListApi, getCatalogTreeSpecialties, getLevelsApi } from '../../api/course'

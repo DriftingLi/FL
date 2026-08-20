@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -119,10 +120,17 @@ type ChapterDetailDTO struct {
 }
 
 // CourseDetailDTO 学员端课程详情信封。
+// 学习位置与完成状态（ADR-0017）：is_enrolled 以「存在学习记录」代理报名语义；
+// 未登录 / 未学时为零值。
 type CourseDetailDTO struct {
-	CourseInfo CourseDTO    `json:"course_info"`
-	Chapters   []ChapterDTO `json:"chapters"`
-	Progress   float64      `json:"progress"`
+	CourseInfo        CourseDTO    `json:"course_info"`
+	Chapters          []ChapterDTO `json:"chapters"`
+	Progress          float64      `json:"progress"`
+	IsEnrolled        bool         `json:"is_enrolled"`
+	CompletedChapters int64        `json:"completed_chapters"`
+	LastChapterID     *int         `json:"last_chapter_id"`
+	LastPosition      int          `json:"last_position"`
+	LastStudiedAt     string       `json:"last_studied_at"`
 }
 
 // AdminCourseDetailDTO 管理端课程详情（course 字段平铺 + chapters）。
@@ -145,9 +153,22 @@ type ChapterSlidesDTO struct {
 
 // StudyProgressDTO 学习进度更新结果。
 type StudyProgressDTO struct {
-	Progress      float64 `json:"progress"`
-	RecordID      int     `json:"record_id"`
-	StudyDuration int64   `json:"study_duration"`
+	Progress          float64 `json:"progress"`
+	RecordID          int     `json:"record_id"`
+	StudyDuration     int64   `json:"study_duration"`
+	CompletedChapters int64   `json:"completed_chapters"`
+}
+
+// StudyProgressInput 学习进度上报入参（ADR-0017）。
+// Duration 为分钟；DurationSecs 为秒（>0 时优先，按 ceil 换算分钟累加，秒级精度不落库）；
+// VideoPosition 为该章节最后播放位置（秒；nil 表示本次上报不含位置）；
+// Completed 为显式完成（直接置章节 progress=100，与时长自动完成收敛到同一事实源）。
+type StudyProgressInput struct {
+	ChapterID     int
+	Duration      int
+	DurationSecs  int
+	VideoPosition *int
+	Completed     bool
 }
 
 // ===== 课程挂载不变式（唯一事实源）=====
@@ -196,14 +217,14 @@ func loadCourseWithChapters(db *gorm.DB, courseID int) (*model.Course, []Chapter
 
 // CourseService 学员课程服务。
 type CourseService struct {
-	db          *gorm.DB
-	fileService *FileService
-	logger      *zap.Logger
+	db            *gorm.DB
+	slideRenderer *SlideRenderer
+	logger        *zap.Logger
 }
 
 // NewCourseService 创建课程服务实例。
-func NewCourseService(db *gorm.DB, fileService *FileService, logger *zap.Logger) *CourseService {
-	return &CourseService{db: db, fileService: fileService, logger: logger}
+func NewCourseService(db *gorm.DB, slideRenderer *SlideRenderer, logger *zap.Logger) *CourseService {
+	return &CourseService{db: db, slideRenderer: slideRenderer, logger: logger}
 }
 
 // GetCourses 课程列表（可额外按专业方向/课程等级过滤）。
@@ -214,32 +235,34 @@ func (s *CourseService) GetCourses(page, pageSize int, specialtyID, levelID *int
 	})
 }
 
-// GetCourseDetail 课程详情。
+// GetCourseDetail 课程详情（含学员学习位置与完成状态，ADR-0017）。
 func (s *CourseService) GetCourseDetail(courseID, studentID int) (*CourseDetailDTO, error) {
 	course, chapterList, err := loadCourseWithChapters(s.db, courseID)
 	if err != nil {
 		return nil, err
 	}
 	progress := 0.0
+	lp := learningPosition{}
 	if studentID > 0 {
-		var record model.StudyRecord
-		// 优先取课程级记录（chapter_id IS NULL）；历史数据没有 NULL 记录时回退到任意一条记录。
-		if err := s.db.Where("student_id = ? AND course_id = ? AND chapter_id IS NULL", studentID, courseID).
-			Order("record_id ASC").Limit(1).Find(&record).Error; err == nil && record.RecordID == 0 {
-			s.db.Where("student_id = ? AND course_id = ?", studentID, courseID).
-				Order("record_id ASC").Limit(1).Find(&record)
-		}
-		if record.RecordID > 0 {
-			progress = record.Progress
-		}
+		lp = loadLearningPosition(s.db, studentID, courseID)
+		progress = lp.Progress
+	}
+	lastStudiedAt := ""
+	if lp.LastStudiedAt != nil {
+		lastStudiedAt = formatISO(*lp.LastStudiedAt)
 	}
 	detail := courseToDTO(course)
 	fillChapterCount(s.db, course.CourseID, &detail)
 	fillCourseMeta(s.db, course, &detail)
 	return &CourseDetailDTO{
-		CourseInfo: detail,
-		Chapters:   chapterList,
-		Progress:   progress,
+		CourseInfo:        detail,
+		Chapters:          chapterList,
+		Progress:          progress,
+		IsEnrolled:        lp.RecordID > 0,
+		CompletedChapters: lp.CompletedChapters,
+		LastChapterID:     lp.LastChapterID,
+		LastPosition:      lp.LastPosition,
+		LastStudiedAt:     lastStudiedAt,
 	}, nil
 }
 
@@ -301,9 +324,9 @@ func (s *CourseService) RegenerateChapterSlides(chapterID int) (*ChapterSlidesDT
 	return &ChapterSlidesDTO{ChapterID: chapterID, Slides: slideURLs}, nil
 }
 
-// generateSlides 下载 PPT bytes 并调 FileService 转图，把 URL 列表持久化到 chapter.slide_urls。
+// generateSlides 下载 PPT bytes 并调 SlideRenderer 转图，把 URL 列表持久化到 chapter.slide_urls。
 func (s *CourseService) generateSlides(chapterID int, pptURL string) []string {
-	if s.fileService == nil {
+	if s.slideRenderer == nil {
 		return nil
 	}
 	pptBytes, err := downloadFile(pptURL)
@@ -311,7 +334,7 @@ func (s *CourseService) generateSlides(chapterID int, pptURL string) []string {
 		s.logger.Error("下载 PPT 失败", zap.String("url", pptURL), zap.Error(err))
 		return nil
 	}
-	slideURLs := s.fileService.ConvertPPTToImages(pptBytes, chapterID)
+	slideURLs := s.slideRenderer.Render(pptBytes, chapterID)
 	if len(slideURLs) > 0 {
 		slideURLsJSON, _ := json.Marshal(slideURLs)
 		s.db.Model(&model.Chapter{}).Where("chapter_id = ?", chapterID).Update("slide_urls", string(slideURLsJSON))
@@ -348,7 +371,18 @@ func downloadFile(url string) ([]byte, error) {
 // 每次上报把 duration（分钟）累加到对应章节记录；当章节累计学习时长达到章节时长
 // （chapter.duration 分钟；未设置时按 1 分钟）自动标记完成（progress=100）。
 // 课程级进度 = 已完成章节数 / 总章节数。
-func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, duration int) (*StudyProgressDTO, error) {
+// ADR-0017：支持秒级时长（DurationSecs 优先）、章节播放位置（VideoPosition）与
+// 显式完成（Completed）；带章节的上报同步刷新课程级记录 last_chapter_id / last_studied_at。
+func (s *CourseService) UpdateStudyProgress(studentID, courseID int, in StudyProgressInput) (*StudyProgressDTO, error) {
+	duration := in.Duration
+	if in.DurationSecs > 0 {
+		duration = (in.DurationSecs + 59) / 60
+	}
+	if duration < 0 {
+		duration = 0
+	}
+	chapterID := in.ChapterID
+
 	var totalChapters int64
 	s.db.Model(&model.Chapter{}).Where("course_id = ?", courseID).Count(&totalChapters)
 	if totalChapters == 0 {
@@ -377,7 +411,7 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, dura
 		}
 	}
 
-	// 2. 章节级记录：累加学习时长，达到阈值自动标记完成。
+	// 2. 章节级记录：累加学习时长，达到阈值自动标记完成；记录播放位置与显式完成。
 	if chapterID > 0 {
 		threshold := 1
 		var chapter model.Chapter
@@ -393,7 +427,10 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, dura
 				"study_duration": ch.StudyDuration,
 				"study_date":     ch.StudyDate,
 			}
-			if ch.StudyDuration >= threshold {
+			if in.VideoPosition != nil && *in.VideoPosition >= 0 {
+				updates["video_position"] = *in.VideoPosition
+			}
+			if ch.StudyDuration >= threshold || in.Completed {
 				updates["progress"] = 100
 			}
 			if err := s.db.Model(&model.StudyRecord{}).Where("record_id = ?", ch.RecordID).
@@ -402,8 +439,12 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, dura
 			}
 		} else {
 			chProgress := 0.0
-			if duration >= threshold {
+			if duration >= threshold || in.Completed {
 				chProgress = 100
+			}
+			videoPosition := 0
+			if in.VideoPosition != nil && *in.VideoPosition > 0 {
+				videoPosition = *in.VideoPosition
 			}
 			newChapter := model.StudyRecord{
 				StudentID:     studentID,
@@ -411,6 +452,7 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, dura
 				ChapterID:     &chapterID,
 				StudyDuration: duration,
 				Progress:      chProgress,
+				VideoPosition: videoPosition,
 				StudyDate:     beijingNow(),
 			}
 			if err := s.db.Create(&newChapter).Error; err != nil {
@@ -425,6 +467,12 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, dura
 		Where("student_id = ? AND course_id = ? AND chapter_id IS NOT NULL AND progress >= 100", studentID, courseID).
 		Distinct("chapter_id").Count(&completedChapters)
 
+	// 4. 刷新课程级学习位置（ADR-0017）：带章节的上报即最后学习位置。
+	if chapterID > 0 {
+		record.LastChapterID = &chapterID
+		now := beijingNow()
+		record.LastStudiedAt = &now
+	}
 	record.Progress = roundFloat2(float64(completedChapters) / float64(totalChapters) * 100)
 	if err := s.db.Save(&record).Error; err != nil {
 		return nil, err
@@ -435,10 +483,53 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID, chapterID, dura
 		Where("student_id = ? AND course_id = ?", studentID, courseID).
 		Select("COALESCE(SUM(study_duration), 0)").Scan(&totalDuration)
 	return &StudyProgressDTO{
-		RecordID:      record.RecordID,
-		Progress:      record.Progress,
-		StudyDuration: totalDuration,
+		RecordID:          record.RecordID,
+		Progress:          record.Progress,
+		StudyDuration:     totalDuration,
+		CompletedChapters: completedChapters,
 	}, nil
+}
+
+// learningPosition 学员在某课程的学习状态快照（ADR-0017 共享查询，
+// 「我的课程」与课程详情 continue-learning 数据源）。
+type learningPosition struct {
+	RecordID          int
+	Progress          float64
+	LastChapterID     *int
+	LastPosition      int
+	LastStudiedAt     *time.Time
+	CompletedChapters int64
+}
+
+// loadLearningPosition 装载学员在某课程的学习状态（课程级记录 + 完成章节数 +
+// 最后章节播放位置）。未学时 RecordID=0；课程级记录缺失时回退任意一条记录
+// （历史数据兼容，与旧课程详情进度读取同语义）。
+func loadLearningPosition(db *gorm.DB, studentID, courseID int) learningPosition {
+	var lp learningPosition
+	var record model.StudyRecord
+	if err := db.Where("student_id = ? AND course_id = ? AND chapter_id IS NULL", studentID, courseID).
+		Order("record_id ASC").Limit(1).Find(&record).Error; err == nil && record.RecordID == 0 {
+		db.Where("student_id = ? AND course_id = ?", studentID, courseID).
+			Order("record_id ASC").Limit(1).Find(&record)
+	}
+	if record.RecordID == 0 {
+		return lp
+	}
+	lp.RecordID = record.RecordID
+	lp.Progress = record.Progress
+	lp.LastChapterID = record.LastChapterID
+	lp.LastStudiedAt = record.LastStudiedAt
+	db.Model(&model.StudyRecord{}).
+		Where("student_id = ? AND course_id = ? AND chapter_id IS NOT NULL AND progress >= 100", studentID, courseID).
+		Distinct("chapter_id").Count(&lp.CompletedChapters)
+	if record.LastChapterID != nil {
+		var ch model.StudyRecord
+		db.Select("video_position").
+			Where("student_id = ? AND course_id = ? AND chapter_id = ?", studentID, courseID, *record.LastChapterID).
+			Limit(1).Find(&ch)
+		lp.LastPosition = ch.VideoPosition
+	}
+	return lp
 }
 
 // ===== 辅助 =====

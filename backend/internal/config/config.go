@@ -14,16 +14,17 @@ import (
 
 // Config 持有应用运行所需的全部配置。
 type Config struct {
-	AppEnv           string
-	Port             string
-	SecretKey        string
-	JWTSecretKey     string
-	JWTExpiresHours  int
-	DatabaseURL      string
-	CORSOrigins      []string
-	UploadFolder     string
-	VolumeMountPath  string
-	MaxContentLength int64
+	AppEnv                string
+	Port                  string
+	SecretKey             string
+	JWTSecretKey          string
+	JWTExpiresHours       int
+	JWTRefreshExpiresDays int
+	DatabaseURL           string
+	CORSOrigins           []string
+	UploadFolder          string
+	VolumeMountPath       string
+	MaxContentLength      int64
 	// LibreOfficeSidecarURL LibreOffice sidecar HTTP 地址(如 http://libreoffice:8000)。
 	// 为空时降级到本地 exec 调用(向后兼容)。
 	LibreOfficeSidecarURL string
@@ -159,7 +160,8 @@ func setDefaults() {
 	viper.SetDefault("port", "8080")
 	viper.SetDefault("secret_key", "dev-secret-key")
 	viper.SetDefault("jwt_secret_key", "jwt-secret-key")
-	viper.SetDefault("jwt_expires_hours", 24)
+	viper.SetDefault("jwt_expires_hours", 2)
+	viper.SetDefault("jwt_refresh_expires_days", 7)
 	viper.SetDefault("max_content_length_mb", 250)
 	viper.SetDefault("database_url", "")
 	viper.SetDefault("cors_origins", "http://localhost:5173,http://localhost:5174,"+
@@ -240,12 +242,13 @@ func Load() (*Config, error) {
 	captchaEnabled := envBoolOr("captcha_enabled", appEnv == "production")
 
 	cfg := &Config{
-		AppEnv:          appEnv,
-		Port:            viper.GetString("port"),
-		SecretKey:       viper.GetString("secret_key"),
-		JWTSecretKey:    viper.GetString("jwt_secret_key"),
-		JWTExpiresHours: positiveInt("jwt_expires_hours", 24),
-		DatabaseURL:     viper.GetString("database_url"),
+		AppEnv:                appEnv,
+		Port:                  viper.GetString("port"),
+		SecretKey:             viper.GetString("secret_key"),
+		JWTSecretKey:          viper.GetString("jwt_secret_key"),
+		JWTExpiresHours:       positiveInt("jwt_expires_hours", 2),
+		JWTRefreshExpiresDays: positiveInt("jwt_refresh_expires_days", 7),
+		DatabaseURL:           viper.GetString("database_url"),
 		// 本地开发默认允许所有子域名 origin（生产环境必须通过 CORS_ORIGINS 注入实际域名）
 		CORSOrigins:     splitOrigins(viper.GetString("cors_origins")),
 		UploadFolder:    viper.GetString("upload_folder"),
@@ -434,9 +437,14 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// JWTExpiry 返回 JWT 过期时长。
+// JWTExpiry 返回 access token 过期时长（JWT_EXPIRES_HOURS，默认 2h）。
 func (c *Config) JWTExpiry() time.Duration {
 	return time.Duration(c.JWTExpiresHours) * time.Hour
+}
+
+// JWTRefreshExpiry 返回 refresh token 过期时长（JWT_REFRESH_EXPIRES_DAYS，默认 7 天）。
+func (c *Config) JWTRefreshExpiry() time.Duration {
+	return time.Duration(c.JWTRefreshExpiresDays) * 24 * time.Hour
 }
 
 // IsProd 是否为生产环境。
