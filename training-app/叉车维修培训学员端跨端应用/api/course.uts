@@ -295,6 +295,7 @@ export function getCourseListApi(page : number = 1, pageSize : number = 12, spec
 
 /**
  * 专业方向列表（公开，仅启用项）
+ * @deprecated 仅管理端可用；学员端请使用 getCatalogTreeSpecialties
  */
 export function getSpecialtiesApi() : Promise<SpecialtyItem[]> {
 	return get('/specialties').then((data : UTSJSONObject) : SpecialtyItem[] => {
@@ -310,6 +311,33 @@ export function getSpecialtiesApi() : Promise<SpecialtyItem[]> {
 		return items
 	}).catch((e) : SpecialtyItem[] => {
 		console.warn('[getSpecialtiesApi] network failed, using mock data:', e)
+		return getMockSpecialties()
+	})
+}
+
+/**
+ * 从课程目录树提取专业方向（学员端公开接口）
+ * 后端无独立的学员端 /specialties 端点，通过 /catalog/tree 获取后提取
+ */
+export function getCatalogTreeSpecialties() : Promise<SpecialtyItem[]> {
+	return get('/catalog/tree').then((data : UTSJSONObject) : SpecialtyItem[] => {
+		console.log('[getCatalogTreeSpecialties] raw data:', JSON.stringify(data))
+		const items : SpecialtyItem[] = []
+		const raw = data['specialties']
+		if (raw != null) {
+			const arr = raw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				const node = arr[i]
+				const id = toNumber(node['specialty_id'])
+				const name = toStr(node['name'])
+				if (id > 0 && name.length > 0) {
+					items.push({ specialty_id: id, name: name } as SpecialtyItem)
+				}
+			}
+		}
+		return items
+	}).catch((e) : SpecialtyItem[] => {
+		console.warn('[getCatalogTreeSpecialties] failed, using mock data:', e)
 		return getMockSpecialties()
 	})
 }

@@ -118,6 +118,7 @@ function buildReply(obj : UTSJSONObject, fallbackTopicId : number = 0) : ForumRe
 	const reply : ForumReply = {
 		id: toNumber(obj['id']),
 		topic_id: toNumber(obj['topic_id'], fallbackTopicId),
+		topic_title: toStr(obj['topic_title']),
 		content: toStr(obj['content']),
 		images: extractImages(obj),
 		author_id: extractAuthorId(obj),
@@ -143,6 +144,8 @@ function buildTopic(obj : UTSJSONObject) : ForumTopic {
         author_avatar: extractAuthorAvatar(obj),
         replies_count: toNumber(obj['reply_count']),
         views_count: toNumber(obj['view_count']),
+        like_count: toNumber(obj['like_count']),
+        liked: toBool(obj['liked']),
         created_at: toStr(obj['created_at']),
     } as ForumTopic
     return topic
@@ -204,6 +207,8 @@ function buildTopicDetail(obj : UTSJSONObject) : ForumTopicDetail {
         author_avatar: extractAuthorAvatar(topicObj),
         replies_count: toNumber(topicObj['reply_count']),
         views_count: toNumber(topicObj['view_count']),
+        like_count: toNumber(topicObj['like_count']),
+        liked: toBool(topicObj['liked']),
 		created_at: toStr(topicObj['created_at']),
 		can_delete: toBool(topicObj['can_delete']),
 		replies: replies,
@@ -364,4 +369,103 @@ export function deleteForumTopicApi(topicId : number) : Promise<UTSJSONObject> {
 export function deleteForumReplyApi(replyId : number) : Promise<UTSJSONObject> {
     const url = '/forum/replies/' + replyId
     return del(url)
+}
+
+// ===== 新增接口：点赞 / 取消点赞 / 举报 / 我的帖子 / 我的回复 =====
+
+/**
+ * 点赞帖子
+ * @param topicId 帖子 ID
+ */
+export function likeTopicApi(topicId : number) : Promise<{liked : boolean, like_count : number}> {
+    const url = '/forum/topics/' + topicId + '/like'
+    return post(url).then((data : UTSJSONObject) : {liked : boolean, like_count : number} => {
+        return {
+            liked: toBool(data['liked']),
+            like_count: toNumber(data['like_count']),
+        }
+    })
+}
+
+/**
+ * 取消点赞帖子
+ * @param topicId 帖子 ID
+ */
+export function unlikeTopicApi(topicId : number) : Promise<{liked : boolean, like_count : number}> {
+    const url = '/forum/topics/' + topicId + '/like'
+    return del(url).then((data : UTSJSONObject) : {liked : boolean, like_count : number} => {
+        return {
+            liked: toBool(data['liked']),
+            like_count: toNumber(data['like_count']),
+        }
+    })
+}
+
+/**
+ * 举报帖子
+ * @param topicId 帖子 ID
+ * @param reason 举报原因（1-500 字）
+ */
+export function reportTopicApi(topicId : number, reason : string) : Promise<void> {
+    const url = '/forum/topics/' + topicId + '/report'
+    const payload : UTSJSONObject = { reason: reason } as UTSJSONObject
+    return post(url, payload).then(() : void => {
+        // 举报成功，无返回数据
+    })
+}
+
+/**
+ * 举报回复
+ * @param replyId 回复 ID
+ * @param reason 举报原因（1-500 字）
+ */
+export function reportReplyApi(replyId : number, reason : string) : Promise<void> {
+    const url = '/forum/replies/' + replyId + '/report'
+    const payload : UTSJSONObject = { reason: reason } as UTSJSONObject
+    return post(url, payload).then(() : void => {
+        // 举报成功，无返回数据
+    })
+}
+
+/**
+ * 获取我的帖子列表
+ * @param page 页码
+ * @param pageSize 每页条数
+ */
+export function getMyTopicsApi(page : number = 1, pageSize : number = 10) : Promise<ForumTopicListResult> {
+    const params : UTSJSONObject = {
+        page: page.toString(),
+        page_size: pageSize.toString(),
+    } as UTSJSONObject
+    return get('/forum/my-topics', params).then((data : UTSJSONObject) : ForumTopicListResult => {
+        return buildTopicListResult(data)
+    })
+}
+
+/**
+ * 获取我的回复列表（含主题标题回填）
+ * @param page 页码
+ * @param pageSize 每页条数
+ */
+export function getMyRepliesApi(page : number = 1, pageSize : number = 10) : Promise<{items : ForumReply[], total : number, page : number, page_size : number}> {
+    const params : UTSJSONObject = {
+        page: page.toString(),
+        page_size: pageSize.toString(),
+    } as UTSJSONObject
+    return get('/forum/my-replies', params).then((data : UTSJSONObject) : {items : ForumReply[], total : number, page : number, page_size : number} => {
+        const items : ForumReply[] = []
+        const repliesRaw = data['replies']
+        if (repliesRaw != null) {
+            const repliesArray = repliesRaw as Array<UTSJSONObject>
+            for (let i = 0; i < repliesArray.length; i++) {
+                items.push(buildReply(repliesArray[i]))
+            }
+        }
+        return {
+            items: items,
+            total: toNumber(data['total']),
+            page: toNumber(data['page']),
+            page_size: toNumber(data['pages']),
+        }
+    })
 }

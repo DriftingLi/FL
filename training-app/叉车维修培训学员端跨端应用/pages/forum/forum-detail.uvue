@@ -10,7 +10,9 @@
                 <!-- <view class="header-right" v-if="canDelete" @click="onDelete"> -->
                 <text class="header-action-danger">删除</text>
             </view>
-            <view class="header-right" v-else></view>
+            <view class="header-right" v-else>
+                <text class="header-action" @click="onReportTopic">举报</text>
+            </view>
         </view>
 
         <scroll-view class="content-scroll" scroll-y="true">
@@ -33,6 +35,10 @@
                         <text class="post-time">{{ formatDateTime(topic.created_at) }}</text>
                     </view>
                     <view class="topic-stats">
+                        <view class="stat-like" @click="onToggleLike">
+                            <text class="stat-like-icon">{{ topic.liked ? '❤️' : '🤍' }}</text>
+                            <text class="stat-like-count">{{ topic.like_count > 0 ? topic.like_count : '' }}</text>
+                        </view>
                         <text class="stat-text">👁 {{ topic.views_count }}</text>
                     </view>
                     <view v-if="canDelete" class="topic-delete" @click="onDelete">
@@ -75,6 +81,9 @@
                         <view v-if="canDeleteReply(reply)" class="reply-delete" @click="onDeleteReply(reply.id)">
                             <text class="reply-delete-text">删除</text>
                         </view>
+                        <view v-else class="reply-more" @click="onReportReply(reply.id)">
+                            <text class="reply-more-text">举报</text>
+                        </view>
                     </view>
                     <text class="reply-content">{{ reply.content }}</text>
                     <view v-if="replyImageList(reply).length > 0" class="img-grid">
@@ -104,6 +113,23 @@
                 <text class="reply-btn-text">{{ submitting ? '发送中' : '发送' }}</text>
             </view>
         </view>
+
+        <!-- 举报弹窗 -->
+        <view v-if="showReportModal" class="report-modal-mask" @click="onCloseReport">
+            <view class="report-modal" @click.stop>
+                <text class="report-modal-title">{{ reportTargetType === 'topic' ? '举报帖子' : '举报回复' }}</text>
+                <textarea class="report-textarea" placeholder="请输入举报原因（1-500字）" maxlength="500" v-model="reportReason" />
+                <text class="report-counter">{{ reportReason.length }}/500</text>
+                <view class="report-actions">
+                    <view class="report-cancel" @click="onCloseReport">
+                        <text class="report-cancel-text">取消</text>
+                    </view>
+                    <view class="report-confirm" :class="{ disabled: reportReason.length < 1 || submittingReport }" @click="onSubmitReport">
+                        <text class="report-confirm-text">{{ submittingReport ? '提交中...' : '提交' }}</text>
+                    </view>
+                </view>
+            </view>
+        </view>
     </view>
 </template>
 
@@ -119,6 +145,10 @@
         deleteForumTopicApi,
         deleteForumReplyApi,
         uploadForumImageApi,
+        likeTopicApi,
+        unlikeTopicApi,
+        reportTopicApi,
+        reportReplyApi,
     } from '../../api/forum'
     import { resolveFileUrl } from '../../utils/format'
     import type { ForumTopicDetail, ForumReply } from '../../types/index'
@@ -160,6 +190,13 @@
         return urls
     })
     const uploadingReplyImage = ref<boolean>(false)
+
+    // 举报相关状态
+    const showReportModal = ref<boolean>(false)
+    const reportTargetType = ref<string>('topic')
+    const reportTargetId = ref<number>(0)
+    const reportReason = ref<string>('')
+    const submittingReport = ref<boolean>(false)
 
     /** 当前用户 ID */
     const currentUserId = computed<number>(() : number => {
@@ -406,6 +443,83 @@
         onPreviewImages(replyImages.value, index)
     }
 
+    // ===== 点赞 =====
+    async function onToggleLike() : Promise<void> {
+        const t = topic.value
+        if (t == null) return
+        const wasLiked = t.liked
+        const oldCount = t.like_count
+        t.liked = !wasLiked
+        t.like_count = wasLiked ? oldCount - 1 : oldCount + 1
+        if (t.like_count < 0) t.like_count = 0
+        try {
+            if (wasLiked) {
+                const result = await unlikeTopicApi(t.id)
+                t.liked = result.liked
+                t.like_count = result.like_count
+            } else {
+                const result = await likeTopicApi(t.id)
+                t.liked = result.liked
+                t.like_count = result.like_count
+            }
+        } catch (e) {
+            t.liked = wasLiked
+            t.like_count = oldCount
+            console.error('[forum-detail] toggle like failed:', e)
+        }
+    }
+
+    // ===== 举报 =====
+    function onReportTopic() : void {
+        const t = topic.value
+        if (t == null) return
+        reportTargetType.value = 'topic'
+        reportTargetId.value = t.id
+        reportReason.value = ''
+        showReportModal.value = true
+    }
+
+    function onReportReply(replyId : number) : void {
+        reportTargetType.value = 'reply'
+        reportTargetId.value = replyId
+        reportReason.value = ''
+        showReportModal.value = true
+    }
+
+    function onCloseReport() : void {
+        showReportModal.value = false
+        reportReason.value = ''
+    }
+
+    async function onSubmitReport() : Promise<void> {
+        if (reportReason.value.trim().length < 1) {
+            uni.showToast({ title: '请输入举报原因', icon: 'none' })
+            return
+        }
+        if (submittingReport.value) return
+        submittingReport.value = true
+        try {
+            if (reportTargetType.value == 'topic') {
+                await reportTopicApi(reportTargetId.value, reportReason.value.trim())
+            } else {
+                await reportReplyApi(reportTargetId.value, reportReason.value.trim())
+            }
+            uni.showToast({ title: '举报已提交，感谢反馈', icon: 'success' })
+            onCloseReport()
+        } catch (e) {
+            console.error('[forum-detail] report failed:', e)
+            let msg = '举报失败'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) msg = m
+            }
+            uni.showToast({ title: msg, icon: 'none' })
+        } finally {
+            submittingReport.value = false
+        }
+    }
+
     function onBack() : void {
         goBack()
     }
@@ -464,6 +578,11 @@
     .header-action-danger {
         font-size: 28rpx;
         color: #ffcdd2;
+    }
+
+    .header-action {
+        font-size: 26rpx;
+        color: #ffffff;
     }
 
     .content-scroll {
@@ -548,6 +667,22 @@
     .topic-stats {
         flex-direction: row;
         align-items: center;
+    }
+
+    .stat-like {
+        flex-direction: row;
+        align-items: center;
+        margin-right: 20rpx;
+    }
+
+    .stat-like-icon {
+        font-size: 28rpx;
+        margin-right: 6rpx;
+    }
+
+    .stat-like-count {
+        font-size: 24rpx;
+        color: #999999;
     }
 
     .stat-text {
@@ -785,5 +920,98 @@
     .reply-btn-text {
         font-size: 28rpx;
         color: #ffffff;
+    }
+    /* 举报弹窗 */
+    .report-modal-mask {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        align-items: center;
+        justify-content: center;
+        z-index: 999;
+    }
+
+    .report-modal {
+        width: 600rpx;
+        background-color: #ffffff;
+        border-radius: 24rpx;
+        padding: 40rpx;
+        flex-direction: column;
+    }
+
+    .report-modal-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+        text-align: center;
+        margin-bottom: 32rpx;
+    }
+
+    .report-textarea {
+        width: 100%;
+        height: 240rpx;
+        background-color: #f5f5f5;
+        border-radius: 12rpx;
+        padding: 20rpx;
+        font-size: 28rpx;
+        color: #333333;
+        margin-bottom: 8rpx;
+    }
+
+    .report-counter {
+        font-size: 22rpx;
+        color: #999999;
+        text-align: right;
+        margin-bottom: 24rpx;
+    }
+
+    .report-actions {
+        flex-direction: row;
+        justify-content: space-between;
+    }
+
+    .report-cancel {
+        flex: 1;
+        height: 80rpx;
+        border-radius: 40rpx;
+        background-color: #f5f5f5;
+        align-items: center;
+        justify-content: center;
+        margin-right: 16rpx;
+    }
+
+    .report-cancel-text {
+        font-size: 28rpx;
+        color: #666666;
+    }
+
+    .report-confirm {
+        flex: 1;
+        height: 80rpx;
+        border-radius: 40rpx;
+        background-color: #2979ff;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .report-confirm.disabled {
+        background-color: #cccccc;
+    }
+
+    .report-confirm-text {
+        font-size: 28rpx;
+        color: #ffffff;
+    }
+
+    .reply-more {
+        padding: 8rpx 16rpx;
+    }
+
+    .reply-more-text {
+        font-size: 24rpx;
+        color: #999999;
     }
 </style>

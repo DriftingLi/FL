@@ -45,12 +45,37 @@ export type LoginResult = {
     user : UserInfo
 }
 
+/**
+ * 小程序微信一键登录响应（POST /auth/wx-login）
+ * @note 老用户与新用户共用同一形状；新用户 isNew=true 用于前端弹"已为您自动注册"提示
+ */
+export type WechatLoginResult = LoginResult & {
+    isNew ?: boolean
+}
+
 /** 注册参数（验证码制，POST /auth/phone/register） */
 export type RegisterParams = {
     phone : string      // 手机号
     code : string       // 短信验证码（send-code 下发）
     nickname : string   // 昵称（后端字段名 nickname）
     password : string   // 密码
+}
+
+/** 邮箱注册参数（验证码制，POST /auth/email/register） */
+export type EmailRegisterParams = {
+    email : string      // 邮箱
+    code : string       // 邮箱验证码（send-code 下发）
+    nickname : string   // 昵称（后端字段名 nickname）
+    password : string   // 密码
+    company ?: string   // 公司（选填，后端字段名 company）
+}
+
+/** 忘记密码重置参数（验证码制，POST /auth/{email|phone}/reset-password） */
+export type ResetPasswordParams = {
+    target : string     // 手机号或邮箱
+    channel : string    // phone / email
+    code : string       // 验证码（purpose=reset_password 下发）
+    password : string   // 新密码
 }
 
 /**
@@ -163,6 +188,11 @@ export type AuthStore = {
     login : (params : LoginParams) => Promise<void>
     /** 邮箱/手机号验证码登录 */
     loginByCode : (params : CodeLoginParams) => Promise<void>
+    /**
+     * 小程序微信一键登录
+     * @returns WechatLoginResult（含 isNew 提示字段）
+     */
+    loginByWechat : () => Promise<WechatLoginResult>
     logout : () => Promise<void>
     /** 更新本地用户信息（昵称/头像），并持久化到 storage */
     updateUser : (patch : UpdateProfileParams) => void
@@ -303,6 +333,8 @@ export type ForumTopic = {
     author_avatar : string
     replies_count : number
     views_count : number
+    like_count : number
+    liked : boolean
     created_at : string
 }
 
@@ -318,6 +350,7 @@ export type ForumTopicListResult = {
 export type ForumReply = {
 	id : number
 	topic_id : number
+	topic_title : string
 	content : string
 	images : string[]
 	author_id : number
@@ -339,6 +372,8 @@ export type ForumTopicDetail = {
 	author_avatar : string
 	replies_count : number
 	views_count : number
+	like_count : number
+	liked : boolean
 	created_at : string
 	/** 是否可删除（后端返回，贴主本人为 true） */
 	can_delete : boolean

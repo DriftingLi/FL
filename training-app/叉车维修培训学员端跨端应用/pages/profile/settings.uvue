@@ -9,48 +9,77 @@
             <view class="header-right"></view>
         </view>
         <scroll-view class="content-scroll" scroll-y="true">
-            <!-- 账号信息 -->
+            <!-- 账号与安全 -->
             <view class="section">
-                <text class="section-title">账号</text>
                 <view class="card">
-                    <view class="cell" @click="onEditAvatar">
-                        <text class="cell-label">头像</text>
-                        <view class="cell-avatar-wrap">
-                            <image v-if="avatarUrl.length > 0" class="cell-avatar" :src="avatarUrl" mode="aspectFill">
-                            </image>
-                            <view v-else class="cell-avatar-placeholder">
-                                <text class="cell-avatar-icon">👤</text>
-                            </view>
-                        </view>
+                    <view class="cell" @click="onNavigate('personal-info')">
+                        <text class="cell-label">账号与安全</text>
                         <text class="cell-arrow">›</text>
                     </view>
-                    <view class="cell" @click="onEditNickname">
-                        <text class="cell-label">昵称</text>
-                        <text class="cell-value">{{ userName }}</text>
+                </view>
+            </view>
+
+            <!-- 功能设置 -->
+            <view class="section">
+                <view class="card">
+                    <view class="cell" @click="onFeature('address')">
+                        <text class="cell-label">收货地址</text>
                         <text class="cell-arrow">›</text>
                     </view>
-                    <view class="cell">
-                        <text class="cell-label">手机号</text>
-                        <text class="cell-value">{{ loginName }}</text>
+                    <view class="cell cell-border-none" @click="onToggleCareMode">
+                        <text class="cell-label">关怀模式</text>
+                        <text class="cell-value">{{ careModeEnabled ? '已开启' : '未开启' }}</text>
                     </view>
+                </view>
+            </view>
+
+            <!-- 通知与存储 -->
+            <view class="section">
+                <view class="card">
+                    <view class="cell" @click="onFeature('notification')">
+                        <text class="cell-label">通知设置</text>
+                        <text class="cell-arrow">›</text>
+                    </view>
+                    <!-- <view class="cell" @click="onClearCache"> -->
                     <view class="cell">
-                        <text class="cell-label">角色</text>
-                        <text class="cell-value">叉车学员</text>
+                        <text class="cell-label">清理缓存</text>
+                        <text class="cell-value">{{ cacheSize }}</text>
+                    </view>
+                    <view class="cell" @click="onFeature('general')">
+                        <text class="cell-label">通用</text>
+                        <text class="cell-arrow">›</text>
+                    </view>
+                    <view class="cell cell-border-none" @click="onFeature('device')">
+                        <text class="cell-label">登录设备管理</text>
+                        <text class="cell-arrow">›</text>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 隐私 -->
+            <view class="section">
+                <view class="card">
+                    <view class="cell" @click="onFeature('privacy')">
+                        <text class="cell-label">隐私</text>
+                        <text class="cell-arrow">›</text>
+                    </view>
+                    <view class="cell" @click="onFeature('info-collection')">
+                        <text class="cell-label">个人信息收集清单</text>
+                        <text class="cell-arrow">›</text>
+                    </view>
+                    <view class="cell cell-border-none" @click="onFeature('third-party')">
+                        <text class="cell-label">第三方收集清单</text>
+                        <text class="cell-arrow">›</text>
                     </view>
                 </view>
             </view>
 
             <!-- 关于 -->
             <view class="section">
-                <text class="section-title">关于</text>
                 <view class="card">
-                    <view class="cell" @click="onAbout">
+                    <view class="cell cell-border-none" @click="onAbout">
                         <text class="cell-label">关于我们</text>
                         <text class="cell-arrow">›</text>
-                    </view>
-                    <view class="cell">
-                        <text class="cell-label">当前版本</text>
-                        <text class="cell-value">v1.0.0</text>
                     </view>
                 </view>
             </view>
@@ -66,44 +95,106 @@
 </template>
 
 <script setup lang="uts">
-    import { ref, computed } from 'vue'
+    import { ref, onMounted } from 'vue'
     import { useStatusBarHeight } from '../../utils/system'
     import { useAuthStore } from '../../stores/auth'
-    import { updateProfileApi, uploadAvatarApi } from '../../api/auth'
-    import type { UpdateProfileParams } from '../../types/index'
+    import { STORAGE_KEY_TOKEN, STORAGE_KEY_USER } from '../../constants/app'
 
     const authStore = useAuthStore()
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
-    const uploadingAvatar = ref<boolean>(false)
 
-    const userName = computed<string>(() : string => {
-        const u = authStore.user.value
-        if (u != null) {
-            if (u.name.length > 0) return u.name
-            if (u.username.length > 0) return u.username
-        }
-        return '同学'
+    // 关怀模式（本地存储）
+    const careModeEnabled = ref<boolean>(false)
+    // 缓存大小
+    const cacheSize = ref<string>('0 KB')
+
+    onMounted(() => {
+        // 读取关怀模式状态
+        const careMode = uni.getStorageSync('care_mode')
+        careModeEnabled.value = careMode === 'true'
+        // 计算缓存大小
+        calculateCacheSize()
     })
 
-    const loginName = computed<string>(() : string => {
-        const u = authStore.user.value
-        if (u != null) {
-            return u.username
+    function calculateCacheSize() : void {
+        try {
+            const info = uni.getStorageInfoSync()
+            const size = info.currentSize || 0
+            if (size > 1024) {
+                cacheSize.value = (size / 1024).toFixed(1) + ' MB'
+            } else {
+                cacheSize.value = size + ' KB'
+            }
+        } catch (e) {
+            cacheSize.value = '0 KB'
         }
-        return '-'
-    })
-
-    const avatarUrl = computed<string>(() : string => {
-        const u = authStore.user.value
-        if (u != null && u.avatar != null && u.avatar.length > 0) {
-            return u.avatar!
-        }
-        return ''
-    })
+    }
 
     function onBack() : void {
         uni.navigateBack()
+    }
+
+    function onNavigate(type : string) : void {
+        if (type === 'personal-info') {
+            uni.navigateTo({ url: '/pages/profile/personal-info' })
+        }
+    }
+
+    function onToggleCareMode() : void {
+        careModeEnabled.value = !careModeEnabled.value
+        uni.setStorageSync('care_mode', careModeEnabled.value.toString())
+        uni.showToast({
+            title: careModeEnabled.value ? '关怀模式已开启' : '关怀模式已关闭',
+            icon: 'none'
+        })
+    }
+
+    function onClearCache() : void {
+        uni.showModal({
+            title: '提示',
+            content: '确定要清理缓存吗？',
+            success: (res) => {
+                if (res.confirm) {
+                    uni.showLoading({ title: '清理中...' })
+                    try {
+                        // 保留登录信息（使用正确的 key）
+                        const token = uni.getStorageSync(STORAGE_KEY_TOKEN)
+                        const userInfo = uni.getStorageSync(STORAGE_KEY_USER)
+                        const careMode = uni.getStorageSync('care_mode')
+
+                        // 清除所有缓存
+                        uni.clearStorageSync()
+
+                        // 恢复必要信息
+                        if (token) uni.setStorageSync(STORAGE_KEY_TOKEN, token)
+                        if (userInfo) uni.setStorageSync(STORAGE_KEY_USER, userInfo)
+                        if (careMode) uni.setStorageSync('care_mode', careMode)
+
+                        calculateCacheSize()
+                        uni.showToast({ title: '清理完成', icon: 'success' })
+                    } catch (e) {
+                        uni.showToast({ title: '清理失败', icon: 'none' })
+                    } finally {
+                        uni.hideLoading()
+                    }
+                }
+            }
+        })
+    }
+
+    function onFeature(type : string) : void {
+        const titles : Record<string, string> = {
+            'address': '收货地址',
+            'notification': '通知设置',
+            'general': '通用设置',
+            'device': '登录设备管理',
+            'privacy': '隐私政策',
+            'info-collection': '个人信息收集清单',
+            'third-party': '第三方收集清单'
+        }
+        const title = titles[type] || type
+        uni.showToast({ title: title + '（开发中）', icon: 'none' })
     }
 
     function onAbout() : void {
@@ -116,99 +207,9 @@
             content: '确认退出登录？',
             success: (res) => {
                 if (res.confirm) {
+                    // authStore.logout() 内部已包含 logoutApi 调用，无需重复调用
                     authStore.logout()
                 }
-            }
-        })
-    }
-
-    /** 上传头像：multipart 上传到 /auth/avatar，走资料审核。声明在 onEditAvatar 之前，避免 Kotlin 局部函数前向引用 */
-    async function uploadAvatar(filePath : string) : Promise<void> {
-        uploadingAvatar.value = true
-        uni.showLoading({ title: '上传中...' })
-        try {
-            // 后端 multipart 字段名为 file，校验后入库 pending 审核请求，审核通过后生效
-            await uploadAvatarApi(filePath)
-            uni.showToast({ title: '头像已提交，审核通过后生效', icon: 'none' })
-        } catch (e) {
-            console.error('[settings] uploadAvatar failed:', e)
-            let msg = '头像上传失败'
-            if (e instanceof Error) {
-                const errObj = e as Error
-                const m = errObj.message
-                if (m != null && m.length > 0) {
-                    msg = m
-                }
-            }
-            uni.showToast({ title: msg, icon: 'none' })
-        } finally {
-            uploadingAvatar.value = false
-            uni.hideLoading()
-        }
-    }
-
-    /** 修改头像：选择图片 -> 上传 -> 更新资料 */
-    function onEditAvatar() : void {
-        if (uploadingAvatar.value) return
-        uni.chooseImage({
-            count: 1,
-            sizeType: ['compressed'],
-            sourceType: ['album', 'camera'],
-            success: (res) => {
-                const tempFilePaths = res.tempFilePaths
-                if (tempFilePaths.length == 0) return
-                uploadAvatar(tempFilePaths[0])
-            },
-            fail: (err) => {
-                console.log('[settings] chooseImage canceled/failed:', err)
-            }
-        })
-    }
-
-    /** 提交昵称修改（走资料审核）。声明在 onEditNickname 之前，避免 Kotlin 局部函数前向引用 */
-    async function submitNickname(newName : string) : Promise<void> {
-        uni.showLoading({ title: '保存中...' })
-        try {
-            const patch : UpdateProfileParams = { nickname: newName } as UpdateProfileParams
-            // 后端走资料审核：提交修改请求，审核通过后昵称生效
-            await updateProfileApi(patch)
-            uni.showToast({ title: '昵称已提交，审核通过后生效', icon: 'none' })
-        } catch (e) {
-            console.error('[settings] updateNickname failed:', e)
-            let msg = '修改失败'
-            if (e instanceof Error) {
-                const errObj = e as Error
-                const m = errObj.message
-                if (m != null && m.length > 0) {
-                    msg = m
-                }
-            }
-            uni.showToast({ title: msg, icon: 'none' })
-        } finally {
-            uni.hideLoading()
-        }
-    }
-
-    /** 修改昵称 */
-    function onEditNickname() : void {
-        const current = authStore.user.value
-        const currentName = current != null ? current.name : ''
-        uni.showModal({
-            title: '修改昵称',
-            editable: true,
-            placeholderText: '请输入新昵称',
-            content: currentName,
-            // uni.showModal 的 success 回调不可为 async（error17），转由独立异步函数执行
-            success: (res) => {
-                if (!res.confirm) return
-                const content = res.content
-                const newName = (content != null ? content : '').trim()
-                if (newName.length == 0) {
-                    uni.showToast({ title: '昵称不能为空', icon: 'none' })
-                    return
-                }
-                if (newName == currentName) return
-                submitNickname(newName)
             }
         })
     }
@@ -222,15 +223,16 @@
     }
 
     .status-bar {
-        background-color: #2979ff;
+        background-color: #ffffff;
     }
 
     .header {
-        background-color: #2979ff;
+        background-color: #ffffff;
         padding: 16rpx 32rpx;
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
+        border-bottom: 1rpx solid #f0f0f0;
     }
 
     .header-left {
@@ -240,13 +242,13 @@
 
     .back-icon {
         font-size: 48rpx;
-        color: #ffffff;
+        color: #333333;
     }
 
     .header-title {
         font-size: 36rpx;
         font-weight: bold;
-        color: #ffffff;
+        color: #333333;
     }
 
     .header-right {
@@ -263,17 +265,9 @@
         padding: 0 32rpx;
     }
 
-    .section-title {
-        font-size: 26rpx;
-        color: #999999;
-        margin-bottom: 16rpx;
-        padding-left: 8rpx;
-    }
-
     .card {
         background-color: #ffffff;
         border-radius: 16rpx;
-        border: 1px solid #eeeeee;
         flex-direction: column;
     }
 
@@ -284,7 +278,7 @@
         border-bottom: 1rpx solid #f5f5f5;
     }
 
-    .cell:last-child {
+    .cell-border-none {
         border-bottom: none;
     }
 
@@ -297,38 +291,12 @@
     .cell-value {
         font-size: 28rpx;
         color: #999999;
+        margin-right: 8rpx;
     }
 
     .cell-arrow {
         font-size: 40rpx;
         color: #cccccc;
-    }
-
-    .cell-avatar-wrap {
-        width: 80rpx;
-        height: 80rpx;
-        margin-right: 16rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .cell-avatar {
-        width: 80rpx;
-        height: 80rpx;
-        border-radius: 40rpx;
-    }
-
-    .cell-avatar-placeholder {
-        width: 80rpx;
-        height: 80rpx;
-        border-radius: 40rpx;
-        background-color: #4a9aff;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .cell-avatar-icon {
-        font-size: 44rpx;
     }
 
     .logout-wrap {
@@ -337,7 +305,6 @@
 
     .logout-btn {
         background-color: #ffffff;
-        border: 1rpx solid #ff5252;
         border-radius: 48rpx;
         padding: 24rpx 0;
         align-items: center;

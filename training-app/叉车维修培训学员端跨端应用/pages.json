@@ -20,6 +20,19 @@
             }
         },
         {
+            "path": "pages/forgot-password/forgot-password",
+            "style": {
+                "navigationBarTitleText": "找回密码"
+            }
+        },
+        {
+            "path": "pages/guide/choose-cert",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "选择学习阶段"
+            }
+        },
+        {
             "path": "pages/dashboard/dashboard",
             "style": {
                 "navigationStyle": "custom",
@@ -98,6 +111,13 @@
             }
         },
         {
+            "path": "pages/profile/personal-info",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "个人信息"
+            }
+        },
+        {
             "path": "pages/profile/records",
             "style": {
                 "navigationStyle": "custom",
@@ -158,6 +178,13 @@
             "style": {
                 "navigationStyle": "custom",
                 "navigationBarTitleText": "发布新帖"
+            }
+        },
+        {
+            "path": "pages/forum/my-forum",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "我的论坛"
             }
         },
         {

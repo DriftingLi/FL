@@ -5,10 +5,10 @@
  * - 401 由 request 层自动清空并跳转登录页
  */
 import { ref, computed } from 'vue'
-import { loginApi, phoneLoginApi, emailLoginApi, logoutApi, getUserInfoApi } from '../api/auth'
+import { loginApi, phoneLoginApi, emailLoginApi, mpWechatLoginApi, logoutApi, getUserInfoApi } from '../api/auth'
 import { setStorage, setStorageJSON, getStorage, getStorageJSON, removeStorage } from '../utils/storage'
 import { STORAGE_KEY_TOKEN, STORAGE_KEY_USER } from '../constants/app'
-import type { LoginParams, CodeLoginParams, UserInfo, AuthStore, UpdateProfileParams } from '../types/index'
+import type { LoginParams, CodeLoginParams, UserInfo, AuthStore, UpdateProfileParams, WechatLoginResult } from '../types/index'
 
 // 全局响应式状态（模块级单例，多次调用 useAuthStore 共享同一份状态）
 const token = ref<string>('')
@@ -89,7 +89,17 @@ async function validateToken() : Promise<void> {
 			clearAuthData()
 		}
 	} catch (e) {
-		clearAuthData()
+		// 区分 401（token 过期）和网络错误（弱网/超时）：
+		// - 401：request 层 handleUnauthorized() 已清空 storage 并跳转登录页，
+		//        此处同步清空内存状态
+		// - 网络错误：storage 中 token 仍在，保留现有登录态，避免弱网误登出
+		const stillHasToken = getStorage(STORAGE_KEY_TOKEN).length > 0
+		if (stillHasToken) {
+			console.warn('[auth] validateToken network error, keeping existing auth:', e)
+		} else {
+			// token 已被 request 层清空（401），同步清空内存状态
+			clearAuthData()
+		}
 	} finally {
 		isInitializing.value = false
 	}
@@ -134,6 +144,51 @@ async function loginByCode(params : CodeLoginParams) : Promise<void> {
 	} catch (e) {
 		console.error('[auth] loginByCode exception:', e)
 		let msg = '登录失败（响应解析错误）'
+		if (e instanceof Error) {
+			const errObj = e as Error
+			const m = errObj.message
+			if (m != null && m.length > 0) {
+				msg = m
+			}
+		}
+		throw new Error(msg)
+	}
+}
+
+/**
+ * 小程序微信一键登录
+ * 1. 调用 uni.login({provider: 'weixin'}) 拿到临时登录凭证 code
+ * 2. POST /auth/wx-login { code } 给后端换 openid/unionid 并拿到 token + userInfo
+ * 3. 老用户（isNew!=true）静默登录；新用户（isNew=true）后端已自动以 openid 为唯一键建账户
+ * @returns WechatLoginResult（含 isNew 字段，前端用于弹"已为您自动注册"提示）
+ * @note 必须在小程序环境下调用，非小程序调用 uni.login 会失败（已在调用处 try/catch）
+ */
+async function loginByWechat() : Promise<WechatLoginResult> {
+	// 1. 拉起微信授权拿到 code
+	const loginRes = await new Promise<UTSJSONObject>((resolve, reject) => {
+		uni.login({
+			provider: 'weixin',
+			success: (res) => resolve(res as UTSJSONObject),
+			fail: (err) => reject(err),
+		})
+	})
+	const code = loginRes['code'] as string
+	if (code == null || code.length == 0) {
+		throw new Error('微信授权失败：未获取到 code')
+	}
+	console.log('[auth] wechat login code obtained, len=', code.length)
+
+	// 2. 调后端接口换 token + userInfo（含 isNew 透传）
+	try {
+		const result = await mpWechatLoginApi(code)
+		if (result == null) {
+			throw new Error('登录响应为空')
+		}
+		setAuthData(result.token, result.user)
+		return result
+	} catch (e) {
+		console.error('[auth] loginByWechat exception:', e)
+		let msg = '微信登录失败（响应解析错误）'
 		if (e instanceof Error) {
 			const errObj = e as Error
 			const m = errObj.message
@@ -208,6 +263,7 @@ export function useAuthStore() : AuthStore {
 		validateToken: () : Promise<void> => validateToken(),
 		login: (params : LoginParams) : Promise<void> => login(params),
 		loginByCode: (params : CodeLoginParams) : Promise<void> => loginByCode(params),
+		loginByWechat: () : Promise<WechatLoginResult> => loginByWechat(),
 		logout: () : Promise<void> => logout(),
 		updateUser: (patch : UpdateProfileParams) : void => updateUser(patch),
 	} as AuthStore

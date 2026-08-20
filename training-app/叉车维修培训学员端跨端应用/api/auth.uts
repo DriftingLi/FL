@@ -3,7 +3,7 @@
  */
 import { get, post, put, uploadFile } from './request'
 import type { RequestOptions } from './request'
-import type { LoginParams, LoginResult, RegisterParams, UserInfo, UpdateProfileParams, UploadAvatarResult, ProfileChangeRequest } from '../types/index'
+import type { LoginParams, LoginResult, RegisterParams, EmailRegisterParams, UserInfo, UpdateProfileParams, UploadAvatarResult, ProfileChangeRequest, WechatLoginResult } from '../types/index'
 
 /**
  * 从 UTSJSONObject 构造 UserInfo
@@ -144,6 +144,57 @@ export function registerApi(params : RegisterParams) : Promise<LoginResult> {
 }
 
 /**
+ * 邮箱注册（邮箱 + 验证码 + 昵称 + 密码） POST /auth/email/register
+ * @note 与手机号注册同构：验证码通过后自动登录并返回 token + 用户信息；
+ *       company 为选填（后端字段名 company）
+ * @returns 注册成功即自动登录（与登录同构的 token + user）
+ */
+export function emailRegisterApi(params : EmailRegisterParams) : Promise<LoginResult> {
+	// Android 端 uni.request 的 data 不支持 type 字面量对象（Kotlin data class），
+	// 必须显式构造 UTSJSONObject；company 选填，仅在非空时携带
+	const payload : UTSJSONObject = {
+		email: params.email,
+		code: params.code,
+		nickname: params.nickname,
+		password: params.password
+	} as UTSJSONObject
+	const company = params.company
+	if (company != null && company.length > 0) {
+		payload['company'] = company
+	}
+	return post('/auth/email/register', payload).then((data : UTSJSONObject) : LoginResult => {
+		const token = data['token'] as string
+		const user = buildUserInfo(data)
+		const result : LoginResult = {
+			token: token,
+			user: user,
+		}
+		return result
+	})
+}
+
+/**
+ * 忘记密码：验证码重置密码（邮箱/手机号） POST /auth/{email|phone}/reset-password
+ * @param target 手机号或邮箱
+ * @param channel email | phone
+ * @param code 验证码（purpose=reset_password 下发）
+ * @param password 新密码（6-20 位）
+ * @note 重置成功不自动登录（后端返回 data: null），由调用方提示后跳登录页
+ */
+export function resetPasswordApi(target : string, channel : string, code : string, password : string) : Promise<UTSJSONObject> {
+	const payload : UTSJSONObject = {
+		code: code,
+		password: password
+	} as UTSJSONObject
+	if (channel == 'email') {
+		payload['email'] = target
+		return post('/auth/email/reset-password', payload)
+	}
+	payload['phone'] = target
+	return post('/auth/phone/reset-password', payload)
+}
+
+/**
  * 发送验证码（邮箱/手机号，purpose: register / login）
  * @param target 手机号或邮箱
  * @param channel email | phone
@@ -216,11 +267,10 @@ export function logoutApi() : Promise<UTSJSONObject> {
 export function getUserInfoApi() : Promise<UserInfo> {
 	return get('/auth/me').then((data : UTSJSONObject) : UserInfo => {
 		return buildUserInfo(data)
-	}).catch((e) : UserInfo => {
-		// 网络不可用时回退到 mock 用户
-		console.warn('[getUserInfoApi] network failed, using mock data:', e)
-		return getMockLoginResult().user
 	})
+	// 不再 catch 并回退 mock 数据：
+	// - 401 由 request 层 handleUnauthorized() 处理（清 storage + 跳登录页），此处直接传播 reject
+	// - 网络错误也应传播，由 validateToken() 区分处理（保留登录态 vs 清空）
 }
 
 /**
@@ -314,6 +364,35 @@ export function wechatLoginApi(code : string) : Promise<LoginResult> {
 		const result : LoginResult = {
 			token: token,
 			user: user,
+		}
+		return result
+	})
+}
+
+/**
+ * 小程序微信一键登录 POST /auth/wx-login
+ * @param code uni.login({provider: 'weixin'}) 返回的微信临时登录凭证
+ * @note 后端拿 code 调 jscode2session 换 openid/unionid：
+ *       - 老用户（openid 已绑定）：返回 token + userInfo
+ *       - 新用户（openid 未注册）：后端以 openid 为唯一键自动创建账户，返回 token + userInfo + isNew=true
+ * @note 完整 URL = API_BASE_URL + '/auth/wx-login'（API_BASE_URL 已包含 /api 前缀）
+ * @returns WechatLoginResult：LoginResult + 可选 isNew（true 表示后端刚自动注册的账户）
+ */
+export function mpWechatLoginApi(code : string) : Promise<WechatLoginResult> {
+	const payload : UTSJSONObject = {
+		code: code
+	} as UTSJSONObject
+	return post('/auth/wx-login', payload).then((data : UTSJSONObject) : WechatLoginResult => {
+		const token = data['token'] as string
+		const user = buildUserInfo(data)
+		const result : WechatLoginResult = {
+			token: token,
+			user: user,
+		} as WechatLoginResult
+		// 透传后端的 isNew 标记：新用户（openid 首次绑定）后端会以 openid 自动建账户并 isNew=true
+		const isNewRaw = data['isNew']
+		if (isNewRaw != null) {
+			result.isNew = isNewRaw as boolean
 		}
 		return result
 	})

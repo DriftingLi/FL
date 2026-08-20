@@ -15,24 +15,7 @@
 		<!-- 中部品牌区 -->
 		<view class="brand">
 			<view class="logo-box">
-				<view class="forklift">
-					<!-- 门架 -->
-					<view class="mast-l"></view>
-					<view class="mast-r"></view>
-					<!-- 货叉（L 形） -->
-					<view class="fork-v"></view>
-					<view class="fork-h"></view>
-					<!-- 车身 -->
-					<view class="f-body"></view>
-					<view class="f-cab"></view>
-					<view class="f-window"></view>
-					<view class="f-exhaust"></view>
-					<!-- 车轮 -->
-					<view class="f-wheel f-wheel-back"></view>
-					<view class="f-wheel f-wheel-front"></view>
-					<view class="f-hub f-hub-back"></view>
-					<view class="f-hub f-hub-front"></view>
-				</view>
+				<image src="/static/logo.png" mode="aspectFit" style="width: 176rpx; height: 140rpx;"></image>
 			</view>
 
 			<text class="title">叉车维修培训系统</text>

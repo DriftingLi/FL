@@ -8,7 +8,7 @@
             <scroll-view class="filter-scroll" scroll-x="true">
                 <view class="filter-list">
                     <text class="filter-label">专业方向</text>
-                    <view v-for="(spec, idx) in specialties" :key="idx"
+                    <view v-for="(spec, idx) in CourseList" :key="idx"
                         :class="['filter-item', { active: currentSpecialty == spec.specialty_id }]"
                         @click="onSpecialtyClick(spec.specialty_id)">
                         <text class="filter-text">{{ spec.name }}</text>
@@ -65,7 +65,7 @@
     import { ref } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
-    import { getCourseListApi, getSpecialtiesApi, getLevelsApi } from '../../api/course'
+    import { getCourseListApi, getCatalogTreeSpecialties, getLevelsApi } from '../../api/course'
     import type { CourseItem, SpecialtyItem, LevelItem } from '../../types/index'
 
     const statusBarHeight = useStatusBarHeight()
@@ -80,23 +80,23 @@
     const noMore = ref<boolean>(false)
 
     // 筛选选项：专业方向（含"全部"）
-    const specialties = ref<SpecialtyItem[]>([
-        { specialty_id: 0, name: '全部' },
+    const CourseList = ref<SpecialtyItem[]>([
+        { specialty_id: 0, name: '全部课程' },
     ])
     // 筛选选项：课程等级（含"全部"）
     const levels = ref<LevelItem[]>([
-        { level_id: 0, name: '全部' },
+        { level_id: 0, name: '全部等级' },
     ])
 
     async function loadSpecialties() {
         try {
-            const specs = await getSpecialtiesApi()
+            const specs = await getCatalogTreeSpecialties()
             if (specs.length > 0) {
                 const merged : SpecialtyItem[] = [{ specialty_id: 0, name: '全部' }]
                 for (let i = 0; i < specs.length; i++) {
                     merged.push(specs[i])
                 }
-                specialties.value = merged
+                CourseList.value = merged
             }
         } catch (e) {
             console.error('[courses] load specialties failed:', e)
@@ -136,9 +136,9 @@
             }
         }
         if (course.specialty_id > 0) {
-            for (let i = 0; i < specialties.value.length; i++) {
-                if (specialties.value[i].specialty_id == course.specialty_id) {
-                    return specialties.value[i].name
+            for (let i = 0; i < CourseList.value.length; i++) {
+                if (CourseList.value[i].specialty_id == course.specialty_id) {
+                    return CourseList.value[i].name
                 }
             }
         }

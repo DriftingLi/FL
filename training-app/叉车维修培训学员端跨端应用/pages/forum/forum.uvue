@@ -45,6 +45,10 @@
                             <text class="author-name">{{ item.author_name.length > 0 ? item.author_name : '匿名学员' }}</text>
                         </view>
                         <view class="topic-meta">
+                            <view class="meta-like" @click.stop="onToggleLike(item, idx)">
+                                <text class="meta-like-icon">{{ item.liked ? '❤️' : '🤍' }}</text>
+                                <text class="meta-like-count">{{ item.like_count > 0 ? item.like_count : '' }}</text>
+                            </view>
                             <text class="meta-item">💬 {{ item.replies_count }}</text>
                             <text class="meta-item">👁 {{ item.views_count }}</text>
                             <text class="meta-time">{{ formatDate(item.created_at) }}</text>
@@ -72,7 +76,7 @@
     import { ref } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
-    import { getForumTopicsApi } from '../../api/forum'
+    import { getForumTopicsApi, likeTopicApi, unlikeTopicApi } from '../../api/forum'
     import { resolveFileUrl } from '../../utils/format'
     import type { ForumTopic } from '../../types/index'
 
@@ -160,6 +164,32 @@
 
     function onCreate() : void {
         uni.navigateTo({ url: '/pages/forum/forum-create' })
+    }
+
+    /** 点赞/取消点赞（乐观更新） */
+    async function onToggleLike(item : ForumTopic, idx : number) : Promise<void> {
+        const wasLiked = item.liked
+        const oldCount = item.like_count
+        // 乐观更新
+        item.liked = !wasLiked
+        item.like_count = wasLiked ? oldCount - 1 : oldCount + 1
+        if (item.like_count < 0) item.like_count = 0
+        try {
+            if (wasLiked) {
+                const result = await unlikeTopicApi(item.id)
+                item.liked = result.liked
+                item.like_count = result.like_count
+            } else {
+                const result = await likeTopicApi(item.id)
+                item.liked = result.liked
+                item.like_count = result.like_count
+            }
+        } catch (e) {
+            // 回滚
+            item.liked = wasLiked
+            item.like_count = oldCount
+            console.error('[forum] toggle like failed:', e)
+        }
     }
 
     onShow(() => {
@@ -351,6 +381,22 @@
     .topic-meta {
         flex-direction: row;
         align-items: center;
+    }
+
+    .meta-like {
+        flex-direction: row;
+        align-items: center;
+        margin-right: 16rpx;
+    }
+
+    .meta-like-icon {
+        font-size: 24rpx;
+        margin-right: 4rpx;
+    }
+
+    .meta-like-count {
+        font-size: 22rpx;
+        color: #999999;
     }
 
     .meta-item {
