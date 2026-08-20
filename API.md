@@ -158,14 +158,30 @@ multipart/form-data：`file`（图片）。响应 200：`data` 为头像修改�
 
 请求体：`{ "phone": "13800000001", "code": "123456", "password": "NewPass123" }`。响应 200：`{ "code": 200, "message": "密码重置成功", "data": null }`
 
-### 2.5 微信扫码登录 `/api/auth/wechat`（框架占位）
+### 2.5 微信小程序登录 `/api/auth/wx-login`
+
+| 方法 | 路径 | 鉴权 | 说明 |
+|---|---|---|---|
+| POST | `/api/auth/wx-login` | 无 | 微信小程序一键登录（code 换 openid，未注册自动建号） |
+
+**POST /api/auth/wx-login**
+
+请求体：`{ "code": "uni.login 临时凭证" }`。后端以 code 调微信 code2session 换 openid：已绑定用户直接登录；未注册自动建号（account 取 `wx_`+openid 前 12 位，昵称「微信学员」+openid 后 6 位）并绑定 openid。响应 200，data 为登录结果平铺结构（契约见 `docs/docs/reference/微信小程序登录-文档说明.md`，AppID `wxbf0604c40fbe65f0`）：
+
+```json
+{ "code": 200, "message": "登录成功", "data": { "token": "jwt", "refresh_token": "jwt", "user_id": 1, "account": "wx_oABC_123456", "username": "微信学员123456", "name": "微信学员123456", "role": "hrwai_user", "avatar": "", "isNew": true } }
+```
+
+`isNew` 仅新用户为 true（前端据此提示已自动注册）。错误分支均 400：缺 code、未配置 AppID/Secret、code 失效（40029）、频率限制（45011）、高风险拦截（40226）。小程序凭证经环境变量 `WECHAT_APP_ID` / `WECHAT_APP_SECRET` 配置。
+
+### 2.6 微信扫码登录 `/api/auth/wechat`（框架占位）
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
 | POST | `/api/auth/wechat/qrcode` | 无 | 获取登录二维码 |
 | POST | `/api/auth/wechat/login` | 无 | 微信扫码登录 |
 
-### 2.6 账号绑定修改（短信/邮箱验证码确认）
+### 2.7 账号绑定修改（短信/邮箱验证码确认）
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
@@ -205,7 +221,6 @@ multipart/form-data：`file`（图片）。响应 200：`data` 为头像修改�
 |---|---|---|---|
 | GET | `/api/courses` | 无 | 课程列表（分页；可按专业方向/等级过滤） |
 | GET | `/api/catalog/tree` | 无 | 课程目录树：专业方向 → 课程等级 → 课程（含章节数） |
-| GET | `/api/specialties` | 无 | 专业方向列表（仅启用项） |
 | GET | `/api/levels` | 无 | 课程等级列表（仅启用项） |
 | GET | `/api/tags` | 无 | 题库标签列表（仅启用项，含已发布题目数） |
 | GET | `/api/chapter/:chapter_id/slides` | 无 | 章节课件列表（图片 URL 数组） |
@@ -227,10 +242,6 @@ Query：`page`（默认 1）、`page_size`（默认 12）、`specialty_id`、`le
 ```json
 { "code": 200, "message": "success", "data": { "specialties": [ { "specialty_id": 1, "code": "xx", "name": "内燃叉车", "description": "", "sort_order": 1, "status": 1, "created_at": "...", "levels": [ { "level_id": 2, "code": "advanced", "name": "进阶", "description": "", "sort_order": 1, "status": 1, "created_at": "...", "courses": [ { "course_id": 1, "name": "叉车基本构造", "description": "", "cover_image": "", "duration": 120, "specialty_id": 1, "level_id": 2, "theory_hours": 20, "practice_hours": 10, "certificate_template_id": null, "sort_order": 1, "status": 1, "created_at": "..." } ] } ] } ] } }
 ```
-
-**GET /api/specialties**
-
-响应 200（data 为数组）：`{ "code": 200, "message": "success", "data": [ { "specialty_id": 1, "code": "xx", "name": "内燃叉车", "description": "", "sort_order": 1, "status": 1, "created_at": "..." } ] }`
 
 **GET /api/levels**：同上，元素为 `{ level_id, code, name, description, sort_order, status, created_at }`
 
