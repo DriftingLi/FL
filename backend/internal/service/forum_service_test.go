@@ -44,7 +44,7 @@ func newForumTestSvc(t *testing.T) (*ForumService, *gorm.DB, *memForumStorage) {
 	db := testutil.NewMemoryDB(t)
 	st := &memForumStorage{}
 	fileSvc := NewFileStore("", st, zap.NewNop())
-	svc := NewForumService(db, fileSvc, zap.NewNop())
+	svc := NewForumService(db, fileSvc, NewNotificationService(db, zap.NewNop()), zap.NewNop())
 	return svc, db, st
 }
 

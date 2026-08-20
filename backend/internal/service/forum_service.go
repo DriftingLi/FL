@@ -5,6 +5,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -76,16 +77,18 @@ type ForumReplyDTO struct {
 
 // ForumService 论坛服务。
 type ForumService struct {
-	db      *gorm.DB
-	fileSvc *FileStore
+	db              *gorm.DB
+	fileSvc         *FileStore
+	notificationSvc *NotificationService
 
 	logger *zap.Logger
 }
 
 // NewForumService 构造论坛服务。
-// fileSvc 用于删除帖子/回复时清理图片存储（可 nil，nil 时跳过清理）。
-func NewForumService(db *gorm.DB, fileSvc *FileStore, logger *zap.Logger) *ForumService {
-	return &ForumService{db: db, fileSvc: fileSvc, logger: logger}
+// fileSvc 用于删除帖子/回复时清理图片存储（可 nil，nil 时跳过清理）；
+// notificationSvc 用于论坛事件站内信（回复/举报处理/管理端删帖，见各触发点）。
+func NewForumService(db *gorm.DB, fileSvc *FileStore, notificationSvc *NotificationService, logger *zap.Logger) *ForumService {
+	return &ForumService{db: db, fileSvc: fileSvc, notificationSvc: notificationSvc, logger: logger}
 }
 
 // topicRow 列表查询的扫描结构。
@@ -333,6 +336,7 @@ func (s *ForumService) ReplyTopic(userID int, topicID int64, content string, par
 
 	// 校验被回复的回复存在且属于同一主题
 	var parentName string
+	var parentAuthorID int // 被回复人（楼中楼通知用）
 	if parentReplyID != nil && *parentReplyID > 0 {
 		var parent model.ForumReply
 		if err := s.db.First(&parent, *parentReplyID).Error; err != nil {
@@ -344,6 +348,7 @@ func (s *ForumService) ReplyTopic(userID int, topicID int64, content string, par
 		if parent.TopicID != topicID {
 			return nil, errors.New("被回复的回复不属于该主题")
 		}
+		parentAuthorID = parent.UserID
 		var pu model.HrwaiUser
 		if err := s.db.First(&pu, parent.UserID).Error; err == nil {
 			parentName = ForumAuthor{
@@ -351,6 +356,11 @@ func (s *ForumService) ReplyTopic(userID int, topicID int64, content string, par
 			}.DisplayName()
 		}
 	}
+
+	// 回复人展示名（通知文案用；查询失败回退空串，不阻断回复）
+	var replier model.HrwaiUser
+	_ = s.db.Select("username").First(&replier, userID).Error
+	replierName := replier.Username
 
 	now := beijingNow()
 	reply := model.ForumReply{
@@ -365,12 +375,36 @@ func (s *ForumService) ReplyTopic(userID int, topicID int64, content string, par
 		if err := tx.Create(&reply).Error; err != nil {
 			return err
 		}
-		return tx.Model(&model.ForumTopic{}).Where("id = ?", topicID).
+		if err := tx.Model(&model.ForumTopic{}).Where("id = ?", topicID).
 			Updates(map[string]any{
 				"reply_count":   gorm.Expr("reply_count + 1"),
 				"last_reply_at": now,
 				"updated_at":    now,
-			}).Error
+			}).Error; err != nil {
+			return err
+		}
+		// 站内信通知（与回复同事务提交，避免通知丢失；与资料审核同模式）：
+		// 1) 楼主被回复（回复人是楼主本人时不通知）
+		// 2) 楼中楼被回复人（非自己、非楼主——楼主已由 1) 覆盖，避免重复通知）
+		link := fmt.Sprintf("/training/forum/%d", topicID)
+		payload := forumTopicPayload(topicID)
+		if topic.UserID != userID {
+			if err := s.notificationSvc.CreateWithTx(tx, topic.UserID, "forum_reply",
+				"你的帖子有新回复",
+				fmt.Sprintf("%s 回复了你的帖子「%s」", replierName, topic.Title),
+				link, payload, now); err != nil {
+				return err
+			}
+		}
+		if parentAuthorID != 0 && parentAuthorID != userID && parentAuthorID != topic.UserID {
+			if err := s.notificationSvc.CreateWithTx(tx, parentAuthorID, "forum_reply",
+				"你的回复有新回复",
+				fmt.Sprintf("%s 在帖子「%s」中回复了你", replierName, topic.Title),
+				link, payload, now); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -405,7 +439,7 @@ func (s *ForumService) DeleteTopic(userID int, topicID int64) error {
 	return s.deleteTopicWithImages(topicID)
 }
 
-// AdminDeleteTopic 管理员删除任意主题（不校验作者）。图片一并清理。
+// AdminDeleteTopic 管理员删除任意主题（不校验作者）。图片一并清理；站内信通知作者。
 func (s *ForumService) AdminDeleteTopic(topicID int64) error {
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
@@ -414,7 +448,17 @@ func (s *ForumService) AdminDeleteTopic(topicID int64) error {
 		}
 		return err
 	}
-	return s.deleteTopicWithImages(topicID)
+	if err := s.deleteTopicWithImages(topicID); err != nil {
+		return err
+	}
+	// 通知作者（尽力而为：内容已删，通知失败不回滚，仅记日志）
+	if err := s.notificationSvc.Create(topic.UserID, "forum_topic_deleted",
+		"你的帖子已被删除",
+		"管理员删除了你的帖子「"+topic.Title+"」。",
+		"", nil); err != nil {
+		s.logger.Warn("删帖通知发送失败", zap.Int64("topic_id", topicID), zap.Error(err))
+	}
+	return nil
 }
 
 // deleteTopicWithImages 删除主题前收集主题 + 全部回复（含子回复）的图片并清理存储。
@@ -456,7 +500,7 @@ func (s *ForumService) DeleteReply(userID int, replyID int64) error {
 	return s.deleteReplyWithImages(replyID, reply.TopicID)
 }
 
-// AdminDeleteReply 管理员删除任意回复（不校验作者；其下级回复随外键级联删除）。图片一并清理。
+// AdminDeleteReply 管理员删除任意回复（不校验作者；其下级回复随外键级联删除）。图片一并清理；站内信通知回复作者。
 func (s *ForumService) AdminDeleteReply(replyID int64) error {
 	var reply model.ForumReply
 	if err := s.db.First(&reply, replyID).Error; err != nil {
@@ -465,7 +509,23 @@ func (s *ForumService) AdminDeleteReply(replyID int64) error {
 		}
 		return err
 	}
-	return s.deleteReplyWithImages(replyID, reply.TopicID)
+	topicTitle := ""
+	var topic model.ForumTopic
+	if err := s.db.Select("title").First(&topic, reply.TopicID).Error; err == nil {
+		topicTitle = topic.Title
+	}
+	if err := s.deleteReplyWithImages(replyID, reply.TopicID); err != nil {
+		return err
+	}
+	// 通知回复作者（尽力而为：内容已删，通知失败不回滚，仅记日志）
+	if err := s.notificationSvc.Create(reply.UserID, "forum_reply_deleted",
+		"你的回复已被删除",
+		"管理员删除了你在帖子「"+topicTitle+"」中的回复。",
+		fmt.Sprintf("/training/forum/%d", reply.TopicID),
+		forumTopicPayload(reply.TopicID)); err != nil {
+		s.logger.Warn("删回复通知发送失败", zap.Int64("reply_id", replyID), zap.Error(err))
+	}
+	return nil
 }
 
 // deleteReplyWithImages 删除回复前收集本回复 + 全部下级回复的图片并清理存储。
@@ -732,20 +792,50 @@ func (s *ForumService) ListReports(page, pageSize int, status *int16) (*ForumRep
 	}, nil
 }
 
-// HandleReport 管理端处理举报（status: 0 待处理 / 1 已处理）。
+// HandleReport 管理端处理举报（status: 0 待处理 / 1 已处理）；标记已处理时站内信通知举报人。
 func (s *ForumService) HandleReport(reportID int64, status int16) error {
 	if status != 0 && status != 1 {
 		return errors.New("状态仅支持 0（待处理）/ 1（已处理）")
 	}
-	res := s.db.Model(&model.ForumReport{}).Where("id = ?", reportID).
-		Update("status", status)
-	if res.Error != nil {
-		return res.Error
+	var report model.ForumReport
+	if err := s.db.First(&report, reportID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("举报不存在")
+		}
+		return err
 	}
-	if res.RowsAffected == 0 {
-		return errors.New("举报不存在")
+	if err := s.db.Model(&model.ForumReport{}).Where("id = ?", reportID).
+		Update("status", status).Error; err != nil {
+		return err
+	}
+	// 待处理 → 已处理时通知举报人（重复标记不重复通知；尽力而为，失败仅记日志）
+	if status == 1 && report.Status != 1 {
+		s.notifyReportHandled(&report)
 	}
 	return nil
+}
+
+// notifyReportHandled 举报处理完成站内信。举报对象可能已被删除：
+// 主题已删时降级文案（不带标题与链接）。
+func (s *ForumService) notifyReportHandled(report *model.ForumReport) {
+	target := "帖子"
+	if report.ReplyID != nil {
+		target = "回复"
+	}
+	content := "你举报的" + target + "已处理完毕。"
+	link := ""
+	var payload model.JSONB
+	if report.TopicID != nil {
+		var topic model.ForumTopic
+		if err := s.db.Select("title").First(&topic, *report.TopicID).Error; err == nil {
+			content = fmt.Sprintf("你举报的%s「%s」已处理完毕。", target, topic.Title)
+			link = fmt.Sprintf("/training/forum/%d", *report.TopicID)
+			payload = forumTopicPayload(*report.TopicID)
+		}
+	}
+	if err := s.notificationSvc.Create(report.ReporterID, "forum_report", "举报已处理", content, link, payload); err != nil {
+		s.logger.Warn("举报处理通知发送失败", zap.Int64("report_id", report.ID), zap.Error(err))
+	}
 }
 
 // MyTopics 我的帖子（复用主题列表行装配，按最后活跃倒序）。

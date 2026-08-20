@@ -952,6 +952,8 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 | POST | `/api/notifications/:id/read` | 单条标记已读 |
 | POST | `/api/notifications/read-all` | 全部标记已读 |
 
+`type` 取值：`system`（系统）/ `profile_review`（资料审核，payload 含 review_status）/ `forum_reply`（帖子被回复或楼中楼被回复）/ `forum_report`（举报处理结果）/ `forum_topic_deleted`（帖子被管理端删除）/ `forum_reply_deleted`（回复被管理端删除）。论坛类通知 `link` 为 `/training/forum/:topic_id`、payload 携带 `topic_id`（帖子已删除时无 link）。
+
 **GET /api/notifications?page=1&page_size=10**
 
 响应 200：
