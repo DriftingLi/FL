@@ -18,7 +18,9 @@ vi.mock('@/api/training', () => ({
 }))
 
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn() })
+  useRouter: () => ({ push: vi.fn() }),
+  // CourseList 读取 query.course_id（搜索/收藏跳转自动打开详情）
+  useRoute: () => ({ query: {} })
 }))
 
 vi.mock('@/composables/useLazyLoad', () => ({

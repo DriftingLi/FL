@@ -47,6 +47,21 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/student/CourseList.vue')
       },
       {
+        path: 'search',
+        name: 'StudentSearch',
+        component: () => import('@/pages/student/SearchPage.vue')
+      },
+      {
+        path: 'materials',
+        name: 'StudentMaterials',
+        component: () => import('@/pages/student/Materials.vue')
+      },
+      {
+        path: 'favorites',
+        name: 'StudentFavorites',
+        component: () => import('@/pages/student/Favorites.vue')
+      },
+      {
         path: 'forum',
         name: 'ForumPage',
         component: () => import('@/pages/student/ForumPage.vue')

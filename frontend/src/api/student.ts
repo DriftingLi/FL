@@ -62,6 +62,43 @@ export interface StudyStats {
   active_days: number
 }
 
+/** 我的课程条目（ADR-0017：course_progress 超集，含最后学习位置） */
+export interface StudentCourseItem {
+  course_id: number
+  course_name: string
+  cover?: string
+  specialty_id?: number | null
+  level_id?: number | null
+  progress?: number
+  completed_chapters?: number
+  total_chapters?: number
+  study_duration?: number
+  last_chapter_id?: number | null
+  last_chapter_title?: string
+  last_position?: number
+  last_studied_at?: string
+}
+
+/** 我的课程响应（continue_learning 为最后学习时间最新的课程，无记录时 null） */
+export interface StudentCoursesData {
+  courses: StudentCourseItem[]
+  continue_learning: StudentCourseItem | null
+}
+
+/** 单课程章节学习状态 */
+export interface StudentChapterProgress {
+  chapter_id: number
+  title: string
+  progress?: number
+  video_position?: number
+  completed?: boolean
+}
+
+/** 单课程学习详情（我的课程条目 + 每章状态） */
+export interface StudentCourseDetail extends StudentCourseItem {
+  chapters: StudentChapterProgress[]
+}
+
 export const studentApi = {
   getProfile() {
     return unwrappedRequest.get<StudentProfile>('/student/profile', { timeout: DASHBOARD_TIMEOUT })
@@ -74,5 +111,15 @@ export const studentApi = {
   // 学习统计（按天分组），days=7|30
   getStudyStats(params?: { days?: number }) {
     return unwrappedRequest.get<StudyStats>('/student/study-stats', { params, timeout: DASHBOARD_TIMEOUT })
+  },
+
+  // 我的课程（含继续学习 top1，ADR-0017）
+  getStudentCourses() {
+    return unwrappedRequest.get<StudentCoursesData>('/student/courses', { timeout: DASHBOARD_TIMEOUT })
+  },
+
+  // 单课程学习详情（每章进度/播放位置/完成状态，ADR-0017）
+  getStudentCourseDetail(courseId: number) {
+    return unwrappedRequest.get<StudentCourseDetail>(`/student/courses/${courseId}`, { timeout: DASHBOARD_TIMEOUT })
   }
 }
