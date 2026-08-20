@@ -430,7 +430,6 @@ onMounted(() => {
   margin-left: auto;
 }
 
-
 .reply-icon {
   margin-left: 12px;
 }
