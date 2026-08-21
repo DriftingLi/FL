@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/url"
 	"strings"
 	"time"
@@ -13,6 +14,21 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
 )
+
+// jitterTTL 为 TTL 增加 0-10% 随机抖动，避免固定 TTL 导致的缓存惊群。
+func jitterTTL(ttl time.Duration) time.Duration {
+	if ttl <= 0 {
+		ttl = DefaultTTL
+	}
+	if ttl < time.Second {
+		return ttl
+	}
+	jitter := time.Duration(rand.Int63n(int64(ttl/10) + 1))
+	return ttl + jitter
+}
+
+// JitterTTL 导出版本，供调用方在 GetOrSetJSON 之外需要抖动时使用。
+func JitterTTL(ttl time.Duration) time.Duration { return jitterTTL(ttl) }
 
 // sfGroup 合并相同 key 的并发 loader 调用，防止缓存击穿。
 var sfGroup singleflight.Group
@@ -162,8 +178,8 @@ func GetOrSetJSON(ctx context.Context, key string, ttl time.Duration, dest any, 
 		if e != nil {
 			return nil, e
 		}
-		// 回写缓存（忽略回写失败，不影响返回业务数据）
-		if setErr := SetJSON(ctx, key, data, ttl); setErr != nil {
+		// 回写缓存（忽略回写失败，不影响返回业务数据）；增加 jitter 避免惊群
+		if setErr := SetJSON(ctx, key, data, jitterTTL(ttl)); setErr != nil {
 			pkgLogger.Warn("回写缓存失败", zap.String("key", key), zap.Error(setErr))
 		}
 		return data, nil
