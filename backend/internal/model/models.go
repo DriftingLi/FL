@@ -546,6 +546,7 @@ type ForumTopic struct {
 	Images      JSONB      `gorm:"column:images;type:jsonb" json:"images"`
 	ViewCount   int        `gorm:"column:view_count;default:0" json:"view_count"`
 	ReplyCount  int        `gorm:"column:reply_count;default:0" json:"reply_count"`
+	LikesCount  int        `gorm:"column:likes_count;default:0" json:"likes_count"`
 	LastReplyAt *time.Time `gorm:"column:last_reply_at" json:"last_reply_at"`
 	CreatedAt   time.Time  `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt   time.Time  `gorm:"column:updated_at" json:"updated_at"`
@@ -555,13 +556,14 @@ func (ForumTopic) TableName() string { return "forum_topics" }
 
 // ForumReply 论坛回复。
 type ForumReply struct {
-	ID        int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	TopicID   int64     `gorm:"column:topic_id" json:"topic_id"`
-	UserID    int       `gorm:"column:user_id" json:"user_id"`
-	ParentID  *int64    `gorm:"column:parent_id" json:"parent_id,omitempty"`
-	Content   string    `gorm:"column:content" json:"content"`
-	Images    JSONB     `gorm:"column:images;type:jsonb" json:"images"`
-	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+	ID         int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	TopicID    int64     `gorm:"column:topic_id" json:"topic_id"`
+	UserID     int       `gorm:"column:user_id" json:"user_id"`
+	ParentID   *int64    `gorm:"column:parent_id" json:"parent_id,omitempty"`
+	Content    string    `gorm:"column:content" json:"content"`
+	Images     JSONB     `gorm:"column:images;type:jsonb" json:"images"`
+	LikesCount int       `gorm:"column:likes_count;default:0" json:"likes_count"`
+	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (ForumReply) TableName() string { return "forum_replies" }

@@ -64,6 +64,8 @@ func allModels() []interface{} {
 		&model.ForumTopic{},
 		&model.ForumReply{},
 		&model.ForumTopicLike{},
+		&model.ForumReplyLike{},
+		&model.ForumCheckIn{},
 		&model.Favorite{},
 		&model.ForumReport{},
 		&model.AIGenerationLog{},

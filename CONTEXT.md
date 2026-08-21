@@ -15,7 +15,7 @@
 - **验证码通道（channel）**：邮箱（SMTP，开发降级日志）与短信（腾讯云 SMS SendSms，开发降级日志）是同一验证码状态机两侧的 adapter。
 - **会话（session）**：签发（issue）/ 校验（verify）/ 吊销（revoke）JWT 的生命周期。双令牌（ADR-0016）：access 2h（中间件仅收 access）+ refresh 7 天轮换；黑名单（`jwt:blacklist:`）只管理 refresh——刷新轮换即作废旧 refresh（防重放），登出撤销 refresh；access 生命周期短，不入黑名单、自然过期。
 - **登录态 Cookie**：父域名 httpOnly Cookie（hrwai_token），子域名间共享登录；Bearer 头优先于 Cookie。生产已启用 HTTPS（PR #254），Cookie 通道恢复、仅携带 access（不自动续期，见 ADR-0016）；HTTP 时期的历史约束见 ADR-0003（已解决）。
-- **微信小程序登录（wx-login）**：小程序端 uni.login 临时 code 换 openid 登录（POST /api/auth/wx-login，code2session）；openid 已绑定直接登录，未注册自动建号绑定（account 取 `wx_`+openid 前 12 位，昵称「微信学员」+openid 后 6 位），复用统一登录骨架签发双令牌。凭证经 `WECHAT_APP_ID`/`WECHAT_APP_SECRET` 配置；微信扫码登录（开放平台）仍为占位。契约见 `docs/docs/reference/微信小程序登录-文档说明.md`。
+- **微信小程序登录（wx-login）**：小程序端 uni.login 临时 code 换 openid 登录（POST /api/auth/wx-login，code2session）；openid 已绑定直接登录，未注册自动建号绑定（account 取 `wx_`+openid 前 12 位，昵称「微信学员」+openid 后 6 位，账号前缀冲突时追加后段或序号重试，唯一约束冲突与其它错误分类处理），复用统一登录骨架签发双令牌。凭证经 `WECHAT_APP_ID`/`WECHAT_APP_SECRET` 配置；微信扫码登录（开放平台）仍为占位。契约见 `docs/docs/reference/微信小程序登录-文档说明.md`。
 - **认证页（auth page）**：登录/注册/找回密码三页共用认证页外壳（AuthPageShell，白底极简 + 主次分离——密码为主入口，邮箱/手机/微信收纳为「或使用以下方式登录」图标按钮；tutor/admin 仅密码入口）。三页提交流程共用 useAuthFlow 状态机；redirect 回跳白名单（isSafeRedirect）与「路径前缀→身份」表单点（authRedirect），见 ADR-0014。
 - **资料审核（profile review）**：昵称/头像修改走提交→审核（通过/驳回）流程，审核结果以站内信通知。
 
@@ -44,8 +44,9 @@
 - **题库标签（question tag）**：题目分类维度（法规/结构/液压/电气/制动/故障诊断/应急等），创建需唯一编码；题目可多标签，标签练习按标签抽题。
 - **标签练习（tag practice）**：按题库标签抽题的练习模式（原「章节练习」已退役并入）。
 - **AI 助手**：大模型流式对话（DeepSeek 默认，可配置 OpenAI 兼容模型）。归属 training 子域名（学员工作区功能），由主域名迁入。
-- **论坛（forum）**：综合讨论区 + 章节讨论区；发帖/回复（可回复别人的回复）。**图文分离**——主题与回复可携带 `images` 图片 URL 数组（JSONB），正文保持纯文本，不做 markdown 渲染。 互动（ADR-0018）：主题点赞（forum_topic_like，幂等）、举报（forum_report，待处理/已处理二态，管理端处置沿用删帖/删回复流）、我的帖子/我的回复。
-- **论坛图片（forum image）**：先经 `POST /api/forum/upload-image` 上传到 `images/forum/` 子目录拿 URL，随发帖/回复提交；删除主题/回复时图片存储一并清理；上传后未发帖的**悬空图片**由进程内定时任务（每 6 小时）扫描差集、回收超过 24h 未被引用的文件。
+- **论坛（forum）**：综合讨论区 + 章节讨论区；发帖/回复（可回复别人的回复）。**图文分离**——主题与回复可携带 `images` 图片 URL 数组（JSONB），正文保持纯文本，不做 markdown 渲染。 互动（ADR-0018）：主题点赞（forum_topic_like，幂等，计数经 `likes_count` 反范式列维护，热度排序走索引）、举报（forum_report，待处理/已处理二态，管理端处置沿用删帖/删回复流）、我的帖子/我的回复。
+- **论坛图片（forum image）**：先经 `POST /api/forum/upload-image` 上传到 `images/forum/` 子目录拿 URL，随发帖/回复提交；删除主题/回复时图片存储一并清理；上传后未发帖的**悬空图片**由进程内定时任务（每 6 小时，通用守护 runner 托管，panic 恢复 + jitter 错峰 + 注入式 ticker + context 取消贯穿存储）扫描差集、回收超过 24h 未被引用的文件。
+- **每日打卡（check-in）**：学员按 `Asia/Shanghai` 自然日签到，独立 `CheckInService` 模块承载（与论坛帖子/回复解耦，共享 `ForumAuthor` 展示名 seam，路由 `/api/forum/check-in/*` 契约不变）。能力四件套：签到（幂等 `forum_checkin` PK(user_id, check_date)）、日历（按年月查 `check_date BETWEEN`，`Asia/Shanghai` 口径）、连击（streak，从今日/昨日连续往前计数）、排行榜（累计总榜 `total DESC, last_date ASC`，`streak/todayChecked` 经批量聚合回填，`Me` 名次合并查询）。日历与连击跨时区一致性由 `Asia/Shanghai` 统一承载。
 
 ## 残值评估（valuation）
 
@@ -63,4 +64,4 @@
 - **官网首页（homepage）**：门户 `/` 页面，固定区块结构（Hero/公司介绍/创始人/核心服务/合作模式/服务保障/内容精选轮播/CTA），构建时预渲染。
 - **精选内容（featured content）**：官网内容板块，管理端（Vue SPA manage 子域名）维护，门户只读消费公开 API；分类四态：公司动态/行业新闻/产品资讯/资讯。
 - **精选内容归档页（news archive）**：`/news`（全部）+ `/news/[category]`（四类）分页列表页，是每条已发布内容的可发现入口（首页轮播只展示前 6 条）。
-- **阅读量（view count）**：文章被真实浏览器访问的次数。详情接口带 `no_view=1` 时不计入（SSR/爬虫路径），由 hydration 后客户端计数端点累加——与「详情请求次数」语义区分。
+- **阅读量（view count）**：文章被真实浏览器访问的次数。门户侧详情接口带 `no_view=1` 时不计入（SSR/爬虫路径），由 hydration 后客户端计数端点累加——与「详情请求次数」语义区分；论坛侧当前为详情请求即计数（`GET /api/forum/topics/:id` 每次 +1，未做防刷），与门户侧口径差异已在 spec #279 中追溯，未来若将浏览量提为热度主序需评估防刷复用。

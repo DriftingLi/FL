@@ -15,20 +15,21 @@ import (
 	"forklift-training/pkg/response"
 )
 
-// ForumHandler 论坛 handler。
+// ForumHandler 论坛 handler（帖子/回复由 ForumService，打卡由 CheckInService）。
 type ForumHandler struct {
-	svc      *service.ForumService
-	imageSvc *service.ForumImageService
+	svc        *service.ForumService
+	checkInSvc *service.CheckInService
+	imageSvc   *service.ForumImageService
 }
 
 // NewForumHandler 创建论坛 handler。
-func NewForumHandler(svc *service.ForumService, imageSvc *service.ForumImageService) *ForumHandler {
-	return &ForumHandler{svc: svc, imageSvc: imageSvc}
+func NewForumHandler(svc *service.ForumService, checkInSvc *service.CheckInService, imageSvc *service.ForumImageService) *ForumHandler {
+	return &ForumHandler{svc: svc, checkInSvc: checkInSvc, imageSvc: imageSvc}
 }
 
 // RegisterForumRoutes 注册 /api/forum 蓝图（需登录，hrwai_user）。
-func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumService, imageSvc *service.ForumImageService) {
-	h := NewForumHandler(svc, imageSvc)
+func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumService, checkInSvc *service.CheckInService, imageSvc *service.ForumImageService) {
+	h := NewForumHandler(svc, checkInSvc, imageSvc)
 
 	g := rg.Group("/forum", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
 
@@ -557,7 +558,7 @@ func (h *ForumHandler) HandleReport(c *gin.Context) {
 
 // CheckIn 每日打卡 POST /api/forum/check-in
 func (h *ForumHandler) CheckIn(c *gin.Context) {
-	res, err := h.svc.CheckIn(middleware.CurrentUserID(c))
+	res, err := h.checkInSvc.CheckIn(middleware.CurrentUserID(c))
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -569,7 +570,7 @@ func (h *ForumHandler) CheckIn(c *gin.Context) {
 func (h *ForumHandler) GetCheckInCalendar(c *gin.Context) {
 	year := atoiDefault(c.Query("year"), 0)
 	month := atoiDefault(c.Query("month"), 0)
-	res, err := h.svc.GetCheckInCalendar(middleware.CurrentUserID(c), year, month)
+	res, err := h.checkInSvc.GetCheckInCalendar(middleware.CurrentUserID(c), year, month)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -581,7 +582,7 @@ func (h *ForumHandler) GetCheckInCalendar(c *gin.Context) {
 func (h *ForumHandler) GetCheckInRank(c *gin.Context) {
 	page := atoiDefault(c.Query("page"), 1)
 	pageSize := atoiDefault(c.Query("page_size"), 20)
-	res, err := h.svc.GetCheckInRank(middleware.CurrentUserID(c), page, pageSize)
+	res, err := h.checkInSvc.GetCheckInRank(middleware.CurrentUserID(c), page, pageSize)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return

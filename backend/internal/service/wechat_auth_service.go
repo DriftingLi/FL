@@ -162,8 +162,18 @@ func (s *WechatAuthService) code2Session(ctx context.Context, code string) (*wxS
 	return &body, nil
 }
 
+// isDuplicateError 判断是否为唯一约束冲突（兼容 postgres/sqlite 错误文案）。
+func isDuplicateError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "duplicate") || strings.Contains(msg, "DUPLICATE") || strings.Contains(msg, "UNIQUE") || strings.Contains(msg, "unique") || strings.Contains(msg, "uq_")
+}
+
 // findOrCreateByOpenID 按 openid 查用户；未注册则自动建账号并绑定。
-// account/username 由 openid 派生（openid 全局唯一，派生值天然唯一）。
+// account/username 由 openid 派生；account 前缀冲突时追加 openid 后段或序号重试（spec #279），
+// 数据库唯一约束冲突与其他错误分类处理：冲突走回查/重试，其他错误透传可观测原因。
 // 并发首登竞争由 wechat_openid 唯一索引兜底：撞唯一约束时按已存在用户处理。
 func (s *WechatAuthService) findOrCreateByOpenID(openID, unionID string) (*model.HrwaiUser, bool, error) {
 	var user model.HrwaiUser
@@ -176,33 +186,75 @@ func (s *WechatAuthService) findOrCreateByOpenID(openID, unionID string) (*model
 	}
 
 	// openid 截段：account 取前 12 位、昵称取后 6 位（同源不同段，避免与账号撞名）。
-	suffix := openID
-	if len(suffix) > 12 {
-		suffix = suffix[:12]
+	baseSuffix := openID
+	if len(baseSuffix) > 12 {
+		baseSuffix = baseSuffix[:12]
 	}
 	tail := openID
 	if len(tail) > 6 {
 		tail = tail[len(tail)-6:]
 	}
-	newUser := model.HrwaiUser{
-		UID:           NextUID(),
-		Account:       "wx_" + suffix,
-		Username:      "微信学员" + tail,
-		WechatOpenID:  openID,
-		WechatUnionID: unionID,
-		Status:        1,
-		CreatedAt:     beijingNow(),
+	// 候选账号/昵称序列：首选 "wx_"+前12，冲突时追加后6或序号重试
+	prefix4 := baseSuffix
+	if len(prefix4) > 4 {
+		prefix4 = prefix4[:4]
 	}
-	if err := s.db.Create(&newUser).Error; err != nil {
-		// 并发首登：唯一索引冲突 → 回查既有用户
-		var again model.HrwaiUser
-		if qErr := s.db.Where("wechat_openid = ?", openID).First(&again).Error; qErr == nil {
-			return &again, false, nil
+	candidates := []struct{ account, username string }{
+		{"wx_" + baseSuffix, "微信学员" + tail},
+		{"wx_" + baseSuffix + "_" + tail, "微信学员" + tail + "_" + prefix4},
+	}
+	// 再补充序号变体以覆盖极小概率的连续碰撞
+	for i := 1; i <= 3; i++ {
+		candidates = append(candidates, struct{ account, username string }{
+			account:  fmt.Sprintf("wx_%s_%s_%d", baseSuffix, tail, i),
+			username: fmt.Sprintf("微信学员%s_%d", tail, i),
+		})
+	}
+
+	// Phone 需唯一（hrwai_users.phone 唯一约束），微信自动建号使用 openID 派生的唯一占位，避免空串重复
+	phoneBase := "wxp_" + openID
+	if len(phoneBase) > 50 {
+		phoneBase = phoneBase[:50]
+	}
+	var lastErr error
+	for idx, cand := range candidates {
+		newUser := model.HrwaiUser{
+			UID:           NextUID(),
+			Account:       cand.account,
+			Username:      cand.username,
+			Phone:         phoneBase,
+			WechatOpenID:  openID,
+			WechatUnionID: unionID,
+			Status:        1,
+			CreatedAt:     beijingNow(),
 		}
-		s.logger.Warn("微信自动注册失败", zap.Error(err))
-		return nil, false, errors.New("微信登录注册失败，请稍后再试")
+		if err := s.db.Create(&newUser).Error; err == nil {
+			return &newUser, true, nil
+		} else {
+			lastErr = err
+			if isDuplicateError(err) {
+				// 并发首登：wechat_openid 已被其他请求抢先插入
+				var again model.HrwaiUser
+				if qErr := s.db.Where("wechat_openid = ?", openID).First(&again).Error; qErr == nil {
+					return &again, false, nil
+				}
+				// 非 wechat_openid 的唯一冲突（大概率 account/username 前缀碰撞）则尝试下一候选
+				// 若已是最后候选，继续循环会透传错误
+				if idx < len(candidates)-1 {
+					s.logger.Warn("微信自动建号账号冲突重试", zap.String("candidate", cand.account), zap.Error(err))
+					continue
+				}
+			}
+			// 非唯一冲突或候选耗尽：透传真实原因，便于可观测与区分「系统繁忙」与「注册失败」
+			s.logger.Warn("微信自动注册失败", zap.String("candidate", cand.account), zap.Error(err))
+			if isDuplicateError(err) {
+				return nil, false, errors.New("微信登录注册失败，请稍后再试")
+			}
+			return nil, false, fmt.Errorf("微信登录注册失败: %w", err)
+		}
 	}
-	return &newUser, true, nil
+	s.logger.Warn("微信自动建号候选耗尽", zap.Error(lastErr))
+	return nil, false, errors.New("微信登录注册失败，请稍后再试")
 }
 
 // QRCodeInfo 返回扫码登录占位信息：未配置授权时 enabled=false，前端展示占位二维码。

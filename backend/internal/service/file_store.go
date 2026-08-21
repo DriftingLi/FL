@@ -102,6 +102,17 @@ func (s *FileStore) DeleteFiles(urls []string) {
 	}
 }
 
+// DeleteWithContext 按 URL 删除文件，ctx 取消时及时返回。
+func (s *FileStore) DeleteWithContext(ctx context.Context, url string) error {
+	if url == "" {
+		return nil
+	}
+	// 继承 caller ctx，叠加超时以避免永久阻塞
+	ctx2, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	return s.storage.Delete(ctx2, url)
+}
+
 // List 按 key 前缀列出文件 URL（如 "images/forum"、"slides/12"）。
 func (s *FileStore) List(prefix string) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -112,6 +123,13 @@ func (s *FileStore) List(prefix string) []string {
 		return nil
 	}
 	return urls
+}
+
+// ListWithContext 按 key 前缀列出文件 URL，ctx 取消语义贯穿到 storage 调用。
+func (s *FileStore) ListWithContext(ctx context.Context, prefix string) ([]string, error) {
+	ctx2, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	return s.storage.List(ctx2, prefix)
 }
 
 // ValidateImage 校验图片文件格式与大小。
