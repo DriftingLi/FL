@@ -735,6 +735,7 @@ func (s *ForumService) topicLikesCount(topicID int64) int64 {
 }
 
 // hasLiked 当前用户是否已点赞（保留供外部调用，当前内部经 enrich helpers 批量处理）。
+//
 //nolint:unused
 func (s *ForumService) hasLiked(userID int, topicID int64) bool {
 	var n int64
