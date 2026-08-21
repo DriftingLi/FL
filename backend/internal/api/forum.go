@@ -61,6 +61,14 @@ func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumS
 	// GET /api/forum/my-replies 我的回复
 	g.GET("/my-replies", h.MyReplies)
 
+	// ===== 打卡（spec #268）=====
+	g.POST("/check-in", h.CheckIn)
+	g.GET("/check-in/calendar", h.GetCheckInCalendar)
+	g.GET("/check-in/rank", h.GetCheckInRank)
+	// ===== 评论点赞（spec #268）=====
+	g.POST("/replies/:id/like", h.LikeReply)
+	g.DELETE("/replies/:id/like", h.UnlikeReply)
+
 	// ===== 管理员论坛管理 =====
 	adminG := rg.Group("/admin/forum", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
 	adminG.GET("/topics", h.ListTopics)
@@ -533,4 +541,68 @@ func (h *ForumHandler) HandleReport(c *gin.Context) {
 		return
 	}
 	response.SuccessWithMsg(c, "举报状态已更新", nil)
+}
+
+// CheckIn 每日打卡 POST /api/forum/check-in
+func (h *ForumHandler) CheckIn(c *gin.Context) {
+	res, err := h.svc.CheckIn(middleware.CurrentUserID(c))
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "打卡成功", res)
+}
+
+// GetCheckInCalendar 日历 GET /api/forum/check-in/calendar?year=&month=
+func (h *ForumHandler) GetCheckInCalendar(c *gin.Context) {
+	year := atoiDefault(c.Query("year"), 0)
+	month := atoiDefault(c.Query("month"), 0)
+	res, err := h.svc.GetCheckInCalendar(middleware.CurrentUserID(c), year, month)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.Success(c, res)
+}
+
+// GetCheckInRank 排行榜 GET /api/forum/check-in/rank?page=&page_size=
+func (h *ForumHandler) GetCheckInRank(c *gin.Context) {
+	page := atoiDefault(c.Query("page"), 1)
+	pageSize := atoiDefault(c.Query("page_size"), 20)
+	res, err := h.svc.GetCheckInRank(middleware.CurrentUserID(c), page, pageSize)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.Success(c, res)
+}
+
+// LikeReply 点赞评论 POST /api/forum/replies/:id/like
+func (h *ForumHandler) LikeReply(c *gin.Context) {
+	replyID, err := pathInt64(c, "id", "回复 ID 无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	count, err := h.svc.LikeReply(middleware.CurrentUserID(c), replyID)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "点赞成功", gin.H{"likes_count": count, "liked": true})
+}
+
+// UnlikeReply 取消点赞评论 DELETE /api/forum/replies/:id/like
+func (h *ForumHandler) UnlikeReply(c *gin.Context) {
+	replyID, err := pathInt64(c, "id", "回复 ID 无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	count, err := h.svc.UnlikeReply(middleware.CurrentUserID(c), replyID)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "已取消点赞", gin.H{"likes_count": count, "liked": false})
 }

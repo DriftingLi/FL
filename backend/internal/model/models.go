@@ -576,6 +576,25 @@ type ForumTopicLike struct {
 
 func (ForumTopicLike) TableName() string { return "forum_topic_like" }
 
+// ForumCheckIn 每日打卡记录（user_id + check_date 唯一，Asia/Shanghai 自然日，spec #268）。
+type ForumCheckIn struct {
+	UserID    int       `gorm:"column:user_id;primaryKey" json:"user_id"`
+	CheckDate time.Time `gorm:"column:check_date;primaryKey;type:date" json:"check_date"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (ForumCheckIn) TableName() string { return "forum_checkin" }
+
+// ForumReplyLike 评论点赞（reply_id+user_id 唯一，与 ForumTopicLike 同构，spec #268）。
+type ForumReplyLike struct {
+	ID        int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	ReplyID   int64     `gorm:"column:reply_id" json:"reply_id"`
+	UserID    int       `gorm:"column:user_id" json:"user_id"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (ForumReplyLike) TableName() string { return "forum_reply_like" }
+
 // Favorite 通用收藏：target_type + target_id 多态定位
 // （course/chapter/question/featured/topic，ADR-0018；user+type+id 唯一）。
 type Favorite struct {
