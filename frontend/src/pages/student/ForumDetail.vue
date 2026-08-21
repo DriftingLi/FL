@@ -687,8 +687,8 @@ onBeforeUnmount(() => {
 
 .reply-thumb {
   position: relative;
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   border-radius: 6px;
   overflow: hidden;
   border: 1px solid #ebeef5;

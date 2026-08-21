@@ -113,8 +113,7 @@ const calendarCells = computed(() => {
   const startWeek = first.getDay()
   const daysInMonth = new Date(y, m, 0).getDate()
   const prevMonthDays = new Date(y, m - 1, 0).getDate()
-  const now = new Date()
-  const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const localToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date())
 
   const cells: Array<{ key: string; day: number; isCurrentMonth: boolean; isToday: boolean; checked: boolean }> = []
   // prev month filler
@@ -179,12 +178,12 @@ async function doCheckIn() {
     calendar.value.streak = res.streak
     calendar.value.total = res.total
     calendar.value.today_checked = res.today_checked
-    // 若当前月是本月，补上今日
-    const now = new Date()
-    if (calendarYear.value === now.getFullYear() && calendarMonth.value === now.getMonth() + 1) {
-      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-      if (!checkedSet.value.has(todayStr)) {
-        calendar.value.dates = [...calendar.value.dates, todayStr]
+    // 若当前月是本月，补上今日（Asia/Shanghai）
+    const beijingStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date())
+    const [by, bm] = beijingStr.split('-').map(Number)
+    if (calendarYear.value === by && calendarMonth.value === bm) {
+      if (!checkedSet.value.has(beijingStr)) {
+        calendar.value.dates = [...calendar.value.dates, beijingStr]
       }
     }
     emit('checked', { streak: res.streak, total: res.total, today_checked: res.today_checked })

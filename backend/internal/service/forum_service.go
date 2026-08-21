@@ -929,7 +929,17 @@ func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResu
 				if v, ok := m[items[i].ID]; ok {
 					items[i].LikesCount = v
 				}
-				items[i].LikedByMe = s.hasLiked(userID, items[i].ID)
+			}
+		}
+		// 批量回填当前用户是否已赞，避免 N+1
+		var likedIDs []int64
+		if err := s.db.Model(&model.ForumTopicLike{}).Where("user_id = ? AND topic_id IN ?", userID, ids).Pluck("topic_id", &likedIDs).Error; err == nil {
+			lm := make(map[int64]bool, len(likedIDs))
+			for _, id := range likedIDs {
+				lm[id] = true
+			}
+			for i := range items {
+				items[i].LikedByMe = lm[items[i].ID]
 			}
 		}
 	}
@@ -1221,7 +1231,11 @@ func (s *ForumService) LikeReply(userID int, replyID int64) (int64, error) {
 	}
 	if existing.ID == 0 {
 		if err := s.db.Create(&model.ForumReplyLike{ReplyID: replyID, UserID: userID, CreatedAt: beijingNow()}).Error; err != nil {
-			return 0, err
+			if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "uq_forum_reply_like") {
+				// 并发幂等：已被其他请求创建
+			} else {
+				return 0, err
+			}
 		}
 	}
 	return s.replyLikesCount(replyID), nil
@@ -1237,6 +1251,6 @@ func (s *ForumService) UnlikeReply(userID int, replyID int64) (int64, error) {
 
 func (s *ForumService) replyLikesCount(replyID int64) int64 {
 	var n int64
-	s.db.Model(&model.ForumReplyLike{}).Where("reply_id = ?", replyID).Count(&n)
+	_ = s.db.Model(&model.ForumReplyLike{}).Where("reply_id = ?", replyID).Count(&n).Error
 	return n
 }
