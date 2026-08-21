@@ -105,11 +105,21 @@ func (h *ForumHandler) UploadImage(c *gin.Context) {
 	response.SuccessWithMsg(c, "图片上传成功", gin.H{"url": url})
 }
 
-// ListTopics 主题列表 GET /api/forum/topics?scope=all|general|chapter&chapter_id=&page=&page_size=&keyword=
+// ListTopics 主题列表 GET /api/forum/topics?scope=all|general|chapter&chapter_id=&page=&page_size=&keyword=&sort=latest|hot
 func (h *ForumHandler) ListTopics(c *gin.Context) {
 	Endpoint[listTopicsReq, service.ForumTopicPageResult]{
+		Parse: func(c *gin.Context) (*listTopicsReq, error) {
+			return &listTopicsReq{
+				Scope:     c.Query("scope"),
+				ChapterID: atoiDefault(c.Query("chapter_id"), 0),
+				Page:      atoiDefault(c.Query("page"), 1),
+				PageSize:  atoiDefault(c.Query("page_size"), 10),
+				Keyword:   c.Query("keyword"),
+				Sort:      c.Query("sort"),
+			}, nil
+		},
 		Invoke: func(ctx context.Context, req *listTopicsReq) (*service.ForumTopicPageResult, error) {
-			return h.svc.ListTopics(req.Scope, req.ChapterID, req.Page, req.PageSize, req.Keyword)
+			return h.svc.ListTopics(req.Scope, req.ChapterID, req.Page, req.PageSize, req.Keyword, req.Sort)
 		},
 		Render: func(c *gin.Context, _ *listTopicsReq, resp *service.ForumTopicPageResult, err error) {
 			if err != nil {
@@ -151,7 +161,7 @@ func (h *ForumHandler) CreateTopic(c *gin.Context) {
 	}.Handle(c)
 }
 
-// GetTopic 主题详情（含回复）GET /api/forum/topics/:id
+// GetTopic 主题详情（含回复）GET /api/forum/topics/:id?sort=time|hot
 func (h *ForumHandler) GetTopic(c *gin.Context) {
 	Endpoint[topicGetReq, map[string]any]{
 		Parse: func(c *gin.Context) (*topicGetReq, error) {
@@ -161,10 +171,10 @@ func (h *ForumHandler) GetTopic(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return &topicGetReq{TopicID: topicID, UserID: userID}, nil
+			return &topicGetReq{TopicID: topicID, UserID: userID, Sort: c.Query("sort")}, nil
 		},
 		Invoke: func(ctx context.Context, req *topicGetReq) (*map[string]any, error) {
-			result, err := h.svc.GetTopic(req.TopicID, req.UserID)
+			result, err := h.svc.GetTopic(req.TopicID, req.UserID, req.Sort)
 			if err != nil {
 				return nil, err
 			}
@@ -273,7 +283,7 @@ func (h *ForumHandler) DeleteReply(c *gin.Context) {
 	}.Handle(c)
 }
 
-// AdminGetTopic 管理员查看帖子详情（含回复）GET /api/admin/forum/topics/:id
+// AdminGetTopic 管理员查看帖子详情（含回复）GET /api/admin/forum/topics/:id?sort=time|hot
 func (h *ForumHandler) AdminGetTopic(c *gin.Context) {
 	Endpoint[topicGetReq, map[string]any]{
 		Parse: func(c *gin.Context) (*topicGetReq, error) {
@@ -283,10 +293,10 @@ func (h *ForumHandler) AdminGetTopic(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return &topicGetReq{TopicID: topicID, UserID: userID}, nil
+			return &topicGetReq{TopicID: topicID, UserID: userID, Sort: c.Query("sort")}, nil
 		},
 		Invoke: func(ctx context.Context, req *topicGetReq) (*map[string]any, error) {
-			result, err := h.svc.GetTopic(req.TopicID, req.UserID)
+			result, err := h.svc.GetTopic(req.TopicID, req.UserID, req.Sort)
 			if err != nil {
 				return nil, err
 			}
@@ -365,6 +375,7 @@ type listTopicsReq struct {
 	Page      int
 	PageSize  int
 	Keyword   string
+	Sort      string
 }
 
 // createTopicReq 发帖请求。
@@ -380,6 +391,7 @@ type createTopicReq struct {
 type topicGetReq struct {
 	TopicID int64
 	UserID  int
+	Sort    string
 }
 
 // replyTopicReq 回复请求。

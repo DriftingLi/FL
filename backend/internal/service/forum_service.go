@@ -143,17 +143,24 @@ type ForumTopicPageResult struct {
 }
 
 // ListTopics 分页查询主题。
-// scope: all（默认）/ general（综合讨论区）/ chapter（需配合 chapterID）。
-func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, keyword string) (*ForumTopicPageResult, error) {
+// scope: all（默认）/ general（综合讨论区）/ chapter（需配合 chapterID）；sort: latest（默认，时间）/ hot（热度：点赞数→回复数→浏览数）。
+func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, keyword, sort string) (*ForumTopicPageResult, error) {
 	if scope == "" {
 		scope = ForumScopeAll
 	}
 	if scope == ForumScopeChapter && chapterID <= 0 {
 		return nil, errors.New("查询章节讨论区需要有效的 chapter_id")
 	}
+	if sort != "hot" {
+		sort = "latest"
+	}
+	order := "COALESCE(t.last_reply_at, t.created_at) DESC, t.id DESC"
+	if sort == "hot" {
+		order = "(SELECT COUNT(*) FROM forum_topic_like WHERE topic_id = t.id) DESC, t.reply_count DESC, t.view_count DESC, t.id DESC"
+	}
 
 	rows, total, page, pageSize := paging.QueryWithScan[topicRow](s.db, page, pageSize, 10, 100,
-		"COALESCE(t.last_reply_at, t.created_at) DESC, t.id DESC",
+		order,
 		func(q *gorm.DB) *gorm.DB {
 			q = q.Table("forum_topics AS t").
 				Select("t.id, t.chapter_id, t.title, t.content, t.images, t.view_count, t.reply_count, t.last_reply_at, t.created_at, " +
@@ -208,7 +215,8 @@ func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, k
 }
 
 // GetTopic 主题详情（含回复，回复带被回复人信息），并累加浏览量。
-func (s *ForumService) GetTopic(topicID int64, viewerID int) (map[string]any, error) {
+// replySort: time（默认，时间正序）/ hot（热度：点赞数→时间）
+func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort string) (map[string]any, error) {
 	var row topicRow
 	err := s.db.Table("forum_topics AS t").
 		Select("t.id, t.chapter_id, t.title, t.content, t.images, t.view_count, t.reply_count, t.last_reply_at, t.created_at, "+
@@ -243,6 +251,10 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int) (map[string]any, er
 		AvatarURL  string
 		ParentName string
 	}
+	replyOrder := "r.created_at ASC, r.id ASC"
+	if replySort == "hot" {
+		replyOrder = "(SELECT COUNT(*) FROM forum_reply_like WHERE reply_id = r.id) DESC, r.created_at ASC, r.id ASC"
+	}
 	if err := s.db.Table("forum_replies AS r").
 		Select("r.id, r.topic_id, r.parent_id, r.content, r.images, r.created_at, "+
 			"u.id AS user_id, u.username, u.avatar_url, "+
@@ -251,7 +263,7 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int) (map[string]any, er
 		Joins("LEFT JOIN forum_replies AS pr ON pr.id = r.parent_id").
 		Joins("LEFT JOIN hrwai_users AS pu ON pu.id = pr.user_id").
 		Where("r.topic_id = ?", topicID).
-		Order("r.created_at ASC, r.id ASC").
+		Order(replyOrder).
 		Scan(&replies).Error; err != nil {
 		return nil, err
 	}
