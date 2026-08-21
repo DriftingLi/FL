@@ -18,6 +18,7 @@ import (
 	"forklift-training/internal/api"
 	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
+	"forklift-training/internal/daemon"
 	"forklift-training/internal/db"
 	applogger "forklift-training/internal/logger"
 	migratedb "forklift-training/internal/migrate"
@@ -142,7 +143,9 @@ func main() {
 	router := api.NewRouter(deps)
 
 	// 7. 论坛悬空图片定期清理（每 6 小时扫描 images/forum/ 前缀，删除超 24h 未引用的图片）
-	startForumImageCleanup(deps, logger)
+	daemonCtx, daemonCancel := context.WithCancel(context.Background())
+	defer daemonCancel()
+	startForumImageCleanup(daemonCtx, deps, logger)
 
 	// 7.5 装配残值评估子模块（注册 /api/valuation/* 路由）
 	cleanup := setupValuation(router, cfg, deps.AuthSvc, deps.Session, vpool, st, logger, deps.AuditSvc)
@@ -169,6 +172,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	logger.Info("正在关闭服务...")
+	daemonCancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -249,17 +253,16 @@ func ensureUploadDirs(cfg *config.Config, logger *zap.Logger) {
 
 // startForumImageCleanup 启动论坛悬空图片清理定时任务：
 // 每 6 小时对 images/forum/ 前缀 List，与全量引用集做差集，删除超过 24h 未被引用的图片。
-// 进程内 goroutine（与限流池清理同模式），进程退出自然终止。
-func startForumImageCleanup(deps *api.Deps, logger *zap.Logger) {
+// 由通用守护 runner 托管（panic 恢复 + jitter 错峰 + 可注入 ticker + context 取消贯穿存储）。
+func startForumImageCleanup(ctx context.Context, deps *api.Deps, logger *zap.Logger) {
 	const interval = 6 * time.Hour
-	go func() {
-		for range time.Tick(interval) {
-			cleaned := deps.ForumImageSvc.CleanupOrphans(context.Background())
-			if cleaned > 0 {
-				logger.Info("论坛悬空图片清理完成", zap.Int("cleaned", cleaned))
-			}
+	runner := daemon.NewRunner("forum-image-cleanup", interval, logger, func(runCtx context.Context) {
+		cleaned := deps.ForumImageSvc.CleanupOrphans(runCtx)
+		if cleaned > 0 {
+			logger.Info("论坛悬空图片清理完成", zap.Int("cleaned", cleaned))
 		}
-	}()
+	})
+	runner.Start(ctx)
 	logger.Info("论坛悬空图片清理任务已启动", zap.String("interval", interval.String()))
 }
 

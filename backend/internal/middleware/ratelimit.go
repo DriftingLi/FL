@@ -2,6 +2,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"sync"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/daemon"
 )
 
 // ipLimiterEntry 单个 IP 的限流器及其最后访问时间（用于惰性清理）。
@@ -27,16 +29,22 @@ type ipLimiterPool struct {
 	burst   int
 }
 
-// newIPLimiterPool 创建 IP 限流池，rps 为每秒令牌数，burst 为突发上限。
-// 启动后台 goroutine 每 cleanupInterval 清理超过 maxIdle 未访问的条目。
+// newIPLimiterPoolWithLogger 创建 IP 限流池，rps 为每秒令牌数，burst 为突发上限，使用外部 logger。
+// 启动守护 runner 每 cleanupInterval 清理超过 maxIdle 未访问的条目（panic 恢复 + jitter 错峰 + 可注入 ticker）。
 // 限流池生命周期等于进程，进程退出时 goroutine 自然终止，无需显式停止。
-func newIPLimiterPool(rps float64, burst int) *ipLimiterPool {
+func newIPLimiterPoolWithLogger(rps float64, burst int, logger *zap.Logger) *ipLimiterPool {
 	p := &ipLimiterPool{
 		entries: make(map[string]*ipLimiterEntry),
 		rps:     rate.Limit(rps),
 		burst:   burst,
 	}
-	go p.cleanupLoop()
+	if logger == nil {
+		logger = zap.NewNop()
+	}
+	runner := daemon.NewRunner("rate-limit-cleanup", 5*time.Minute, logger, func(ctx context.Context) {
+		p.cleanupOnce()
+	})
+	runner.Start(context.Background())
 	return p
 }
 
@@ -60,21 +68,16 @@ func (p *ipLimiterPool) get(ip string) *rate.Limiter {
 	return limiter
 }
 
-// cleanupLoop 定期清理长时间未访问的 IP 条目，避免内存无限增长。
-func (p *ipLimiterPool) cleanupLoop() {
-	const cleanupInterval = 5 * time.Minute
+// cleanupOnce 单次清理长时间未访问的 IP 条目（由守护 runner 周期调用）。
+func (p *ipLimiterPool) cleanupOnce() {
 	const maxIdle = 10 * time.Minute
-	ticker := time.NewTicker(cleanupInterval)
-	defer ticker.Stop()
-	for range ticker.C {
-		p.mu.Lock()
-		now := time.Now()
-		for ip, entry := range p.entries {
-			if now.Sub(entry.lastSeen) > maxIdle {
-				delete(p.entries, ip)
-			}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	now := time.Now()
+	for ip, entry := range p.entries {
+		if now.Sub(entry.lastSeen) > maxIdle {
+			delete(p.entries, ip)
 		}
-		p.mu.Unlock()
 	}
 }
 
@@ -85,7 +88,7 @@ func RateLimit(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 	if !cfg.RateLimit.Enabled {
 		return func(c *gin.Context) { c.Next() }
 	}
-	pool := newIPLimiterPool(cfg.RateLimit.RPS, cfg.RateLimit.Burst)
+	pool := newIPLimiterPoolWithLogger(cfg.RateLimit.RPS, cfg.RateLimit.Burst, logger)
 	logger.Info("rate limit 已启用",
 		zap.Float64("rps", cfg.RateLimit.RPS),
 		zap.Int("burst", cfg.RateLimit.Burst),

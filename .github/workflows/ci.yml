@@ -181,27 +181,28 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: backend/go.sum
 
-      - name: Go 依赖漏洞扫描（仅报告，不阻断）
+      - name: Go 依赖漏洞扫描
         if: needs.changes.outputs.backend == 'true'
-        continue-on-error: true
         run: |
           cd backend
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./... || echo "发现漏洞，详细信息请查看日志"
+          # 固定版本安装，避免 @latest 随上游变动导致 CI 结果漂移
+          go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
+          govulncheck ./...
 
       - name: npm 依赖漏洞扫描
         if: needs.changes.outputs.frontend == 'true'
         working-directory: frontend
-        run: |
-          npm audit --audit-level=high || echo "发现高危漏洞，请检查并修复"
+        run: npm audit --audit-level=high
 
-      - name: Dockerfile 安全分析（仅报告，不阻断）
-        uses: aquasecurity/trivy-action@master
-        continue-on-error: true
+      - name: Dockerfile 安全分析
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           scan-ref: backend/Dockerfile
-          exit-code: 0
+          # 高危配置问题才阻断，与 npm audit --audit-level=high 对齐
+          severity: HIGH,CRITICAL
+          exit-code: 1
+          version: v0.74.0
 
   # ============================================================
   # Stage 6: 数据库迁移校验
@@ -255,8 +256,7 @@ jobs:
   # CI 全部通过后,主动调用 CD workflow 的 workflow_dispatch 触发部署
   # ============================================================
   ci-summary:
-    # 注：security-scan 为参考性质，不阻断流水线
-    needs: [backend-lint, backend-test, frontend-check, migration-check]
+    needs: [backend-lint, backend-test, frontend-check, security-scan, migration-check]
     if: always() && github.event_name == 'push'
     runs-on: ubuntu-latest
     # 触发 CD workflow_dispatch 需要 actions:write 权限
@@ -289,6 +289,7 @@ jobs:
           check "${{ needs.backend-test.result }}" "backend-test"
           check "${{ needs.frontend-check.result }}" "frontend-check"
           check "${{ needs.migration-check.result }}" "migration-check"
+          check "${{ needs.security-scan.result }}" "security-scan"
 
           if [ -n "$FAILED" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY

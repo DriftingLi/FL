@@ -49,6 +49,7 @@ type Deps struct {
 	AdminSvc           *service.AdminService
 	AdminCourseSvc     *service.AdminCourseService
 	ForumSvc           *service.ForumService
+	CheckInSvc         *service.CheckInService
 	ForumImageSvc      *service.ForumImageService
 	FeaturedSvc        *service.FeaturedService
 	FavoriteSvc        *service.FavoriteService
@@ -110,6 +111,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		AdminSvc:           service.NewAdminService(db, logger),
 		AdminCourseSvc:     service.NewAdminCourseService(db, fileSvc, logger),
 		ForumSvc:           service.NewForumService(db, fileSvc, notificationSvc, logger),
+		CheckInSvc:         service.NewCheckInService(db, logger),
 		ForumImageSvc:      service.NewForumImageService(db, fileSvc, logger),
 		FeaturedSvc:        service.NewFeaturedService(db, fileSvc, logger),
 		FavoriteSvc:        service.NewFavoriteService(db, logger),
