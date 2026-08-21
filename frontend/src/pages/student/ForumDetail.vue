@@ -72,7 +72,13 @@
       </div>
 
       <div class="replies-card">
-        <h3 class="replies-title">全部回复（{{ replies.length }}）</h3>
+        <div class="replies-header">
+          <h3 class="replies-title">全部回复（{{ replies.length }}）</h3>
+          <el-radio-group v-model="replySort" size="small" @change="handleReplySortChange">
+            <el-radio-button value="time">时间</el-radio-button>
+            <el-radio-button value="hot">热门</el-radio-button>
+          </el-radio-group>
+        </div>
         <template v-if="replies.length > 0">
           <div v-for="reply in replies" :key="reply.id" class="reply-item">
             <el-avatar :size="38" :src="reply.author.avatar_url || undefined" class="author-avatar">
@@ -204,6 +210,11 @@ const replyImages = ref<string[]>([])
 const replyingTo = ref<{ id: number; username: string } | null>(null)
 const replyFileInput = ref<HTMLInputElement | null>(null)
 const canSubmitReply = computed(() => replyContent.value.trim().length > 0 || replyImages.value.length > 0)
+const replySort = ref<'time' | 'hot'>('time')
+
+function handleReplySortChange() {
+  loadDetail()
+}
 
 function displayName(author: ForumTopicItem['author']) {
   return author.username
@@ -217,7 +228,7 @@ async function loadDetail() {
   loading.value = true
   try {
     const topicId = Number(route.params.topicId)
-    const res = await forumApi.getTopic(topicId)
+    const res = await forumApi.getTopic(topicId, replySort.value)
     topic.value = res.topic
     replies.value = res.replies || []
   } catch (e) {
@@ -604,11 +615,18 @@ onBeforeUnmount(() => {
   margin-left: 12px;
 }
 
+.replies-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
 .replies-title {
   font-size: 16px;
   font-weight: 600;
   color: #303133;
-  margin: 0 0 8px;
+  margin: 0;
 }
 
 .reply-item {

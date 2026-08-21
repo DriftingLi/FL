@@ -25,11 +25,17 @@
       </div>
     </div>
 
-    <el-radio-group v-model="mode" class="forum-mode" @change="handleModeChange">
-      <el-radio-button value="all">全部</el-radio-button>
-      <el-radio-button value="my-topics">我的帖子</el-radio-button>
-      <el-radio-button value="my-replies">我的回复</el-radio-button>
-    </el-radio-group>
+    <div class="forum-toolbar">
+      <el-radio-group v-model="mode" class="forum-mode" @change="handleModeChange">
+        <el-radio-button value="all">全部</el-radio-button>
+        <el-radio-button value="my-topics">我的帖子</el-radio-button>
+        <el-radio-button value="my-replies">我的回复</el-radio-button>
+      </el-radio-group>
+      <el-radio-group v-if="mode !== 'my-replies'" v-model="topicSort" size="small" class="topic-sort" @change="handleSortChange">
+        <el-radio-button value="latest">最新</el-radio-button>
+        <el-radio-button value="hot">热门</el-radio-button>
+      </el-radio-group>
+    </div>
 
     <CheckInDialog v-model="checkInDialogVisible" :initial-tab="checkInTab" @checked="onCheckInChecked" />
 
@@ -163,8 +169,14 @@ const pageSize = ref(10)
 type ForumMode = 'all' | 'my-topics' | 'my-replies'
 const mode = ref<ForumMode>('all')
 const myReplies = ref<MyReplyItem[]>([])
+const topicSort = ref<'latest' | 'hot'>('latest')
 
 function handleModeChange() {
+  currentPage.value = 1
+  loadTopics()
+}
+
+function handleSortChange() {
   currentPage.value = 1
   loadTopics()
 }
@@ -192,7 +204,7 @@ async function loadTopics() {
       topics.value = res.topics || []
       total.value = res.total || 0
     } else {
-      const res = await forumApi.listTopics({ scope: 'general', ...params })
+      const res = await forumApi.listTopics({ scope: 'general', sort: topicSort.value, ...params })
       topics.value = res.topics || []
       total.value = res.total || 0
     }
@@ -310,8 +322,16 @@ onMounted(() => {
   margin: 0 0 6px;
 }
 
-.forum-mode {
+.forum-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 12px;
+  gap: 12px;
+}
+
+.forum-mode {
+  margin-bottom: 0;
 }
 
 .topic-list {
