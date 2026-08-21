@@ -89,10 +89,11 @@ func (s *ForumImageService) CleanupOrphans(_ context.Context) int {
 	cleaned := 0
 	cutoff := time.Now().Add(-ForumImageOrphanTTL)
 	for _, u := range stored {
-		if referenced[u] {
+		key := forumImageKey(u)
+		if key == "" {
 			continue
 		}
-		if !isForumImageURL(u) {
+		if referenced[key] {
 			continue
 		}
 		if ms, ok := forumFileTimestamp(u); ok && time.UnixMilli(ms).Before(cutoff) {
@@ -104,14 +105,30 @@ func (s *ForumImageService) CleanupOrphans(_ context.Context) int {
 	return cleaned
 }
 
-// collectReferencedImages 收集全部主题与回复引用的图片 URL 集合。
+// forumImageKey 提取 images/forum/ 后的对象 key（兼容 local 与 R2 两种 URL 形态）
+// 例：/static/uploads/images/forum/a_1.webp → images/forum/a_1.webp
+//
+//	https://cdn.example.com/images/forum/a_1.webp → images/forum/a_1.webp
+func forumImageKey(u string) string {
+	idx := strings.Index(u, "images/forum/")
+	if idx < 0 {
+		return ""
+	}
+	return u[idx:]
+}
+
+// collectReferencedImages 收集全部主题与回复引用的图片 key 集合（归一化为 images/forum/...）。
 func (s *ForumImageService) collectReferencedImages() map[string]bool {
 	ref := map[string]bool{}
 	var rawList []string
 	if err := s.db.Model(&model.ForumTopic{}).Pluck("images", &rawList).Error; err == nil {
 		for _, raw := range rawList {
 			for _, u := range parseImageURLs(raw) {
-				ref[u] = true
+				if key := forumImageKey(u); key != "" {
+					ref[key] = true
+				} else if u != "" {
+					ref[u] = true
+				}
 			}
 		}
 	}
@@ -119,7 +136,11 @@ func (s *ForumImageService) collectReferencedImages() map[string]bool {
 	if err := s.db.Model(&model.ForumReply{}).Pluck("images", &rawList).Error; err == nil {
 		for _, raw := range rawList {
 			for _, u := range parseImageURLs(raw) {
-				ref[u] = true
+				if key := forumImageKey(u); key != "" {
+					ref[key] = true
+				} else if u != "" {
+					ref[u] = true
+				}
 			}
 		}
 	}
