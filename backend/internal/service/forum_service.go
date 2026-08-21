@@ -73,6 +73,8 @@ type ForumReplyDTO struct {
 	CreatedAt  string      `json:"created_at"`
 	Author     ForumAuthor `json:"author"`
 	CanDelete  bool        `json:"can_delete"`
+	LikesCount int64       `json:"likes_count"`
+	LikedByMe  bool        `json:"liked_by_me"`
 }
 
 // ForumService 论坛服务。
@@ -176,6 +178,27 @@ func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, k
 	for _, r := range rows {
 		items = append(items, r.toDTO(0))
 	}
+	if len(items) > 0 {
+		ids := make([]int64, 0, len(items))
+		for _, it := range items {
+			ids = append(ids, it.ID)
+		}
+		var counts []struct {
+			TopicID int64 `gorm:"column:topic_id"`
+			Cnt     int64 `gorm:"column:cnt"`
+		}
+		if err := s.db.Table("forum_topic_like").Select("topic_id, COUNT(*) as cnt").Where("topic_id IN ?", ids).Group("topic_id").Scan(&counts).Error; err == nil {
+			m := make(map[int64]int64, len(counts))
+			for _, c := range counts {
+				m[c.TopicID] = c.Cnt
+			}
+			for i := range items {
+				if v, ok := m[items[i].ID]; ok {
+					items[i].LikesCount = v
+				}
+			}
+		}
+	}
 	return &ForumTopicPageResult{
 		Page:   page,
 		Pages:  response.PageCount(total, pageSize),
@@ -243,6 +266,40 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int) (map[string]any, er
 			},
 			CanDelete: r.UserID == viewerID,
 		})
+	}
+	// 批量回填回复点赞数与当前用户是否已赞
+	if len(replyDTOs) > 0 {
+		ids := make([]int64, 0, len(replyDTOs))
+		for _, rd := range replyDTOs {
+			ids = append(ids, rd.ID)
+		}
+		var cnts []struct {
+			ReplyID int64 `gorm:"column:reply_id"`
+			Cnt     int64 `gorm:"column:cnt"`
+		}
+		if err := s.db.Table("forum_reply_like").Select("reply_id, COUNT(*) as cnt").Where("reply_id IN ?", ids).Group("reply_id").Scan(&cnts).Error; err == nil {
+			m := make(map[int64]int64, len(cnts))
+			for _, c := range cnts {
+				m[c.ReplyID] = c.Cnt
+			}
+			for i := range replyDTOs {
+				if v, ok := m[replyDTOs[i].ID]; ok {
+					replyDTOs[i].LikesCount = v
+				}
+			}
+		}
+		if viewerID > 0 {
+			var liked []int64
+			if err := s.db.Model(&model.ForumReplyLike{}).Where("user_id = ? AND reply_id IN ?", viewerID, ids).Pluck("reply_id", &liked).Error; err == nil {
+				lm := make(map[int64]bool, len(liked))
+				for _, id := range liked {
+					lm[id] = true
+				}
+				for i := range replyDTOs {
+					replyDTOs[i].LikedByMe = lm[replyDTOs[i].ID]
+				}
+			}
+		}
 	}
 
 	// 点赞状态（ADR-0018）：详情返回计数与当前用户是否已赞。
@@ -854,6 +911,38 @@ func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResu
 	for _, r := range rows {
 		items = append(items, r.toDTO(userID))
 	}
+	if len(items) > 0 {
+		ids := make([]int64, 0, len(items))
+		for _, it := range items {
+			ids = append(ids, it.ID)
+		}
+		var counts []struct {
+			TopicID int64 `gorm:"column:topic_id"`
+			Cnt     int64 `gorm:"column:cnt"`
+		}
+		if err := s.db.Table("forum_topic_like").Select("topic_id, COUNT(*) as cnt").Where("topic_id IN ?", ids).Group("topic_id").Scan(&counts).Error; err == nil {
+			m := make(map[int64]int64, len(counts))
+			for _, c := range counts {
+				m[c.TopicID] = c.Cnt
+			}
+			for i := range items {
+				if v, ok := m[items[i].ID]; ok {
+					items[i].LikesCount = v
+				}
+			}
+		}
+		// 批量回填当前用户是否已赞，避免 N+1
+		var likedIDs []int64
+		if err := s.db.Model(&model.ForumTopicLike{}).Where("user_id = ? AND topic_id IN ?", userID, ids).Pluck("topic_id", &likedIDs).Error; err == nil {
+			lm := make(map[int64]bool, len(likedIDs))
+			for _, id := range likedIDs {
+				lm[id] = true
+			}
+			for i := range items {
+				items[i].LikedByMe = lm[items[i].ID]
+			}
+		}
+	}
 	return &ForumTopicPageResult{
 		Page: page, Pages: response.PageCount(total, pageSize),
 		Topics: items, Total: total,
@@ -916,4 +1005,252 @@ func (s *ForumService) MyReplies(userID, page, pageSize int) (*MyReplyPageResult
 		Page: page, Pages: response.PageCount(total, pageSize),
 		Total: total, Replies: items,
 	}, nil
+}
+
+// ===== 每日打卡（spec #268）=====
+
+// CheckInResult 打卡结果。
+type CheckInResult struct {
+	Checked      bool `json:"checked"`
+	Streak       int  `json:"streak"`
+	Total        int  `json:"total"`
+	TodayChecked bool `json:"today_checked"`
+}
+
+// CheckInCalendarResult 日历结果。
+type CheckInCalendarResult struct {
+	Dates        []string `json:"dates"`
+	Streak       int      `json:"streak"`
+	Total        int      `json:"total"`
+	TodayChecked bool     `json:"today_checked"`
+}
+
+// CheckInRankItem 排行榜条目。
+type CheckInRankItem struct {
+	Rank         int         `json:"rank"`
+	User         ForumAuthor `json:"user"`
+	Total        int         `json:"total"`
+	Streak       int         `json:"streak"`
+	TodayChecked bool        `json:"today_checked"`
+}
+
+// CheckInRankResult 排行榜分页结果。
+type CheckInRankResult struct {
+	Items []CheckInRankItem `json:"items"`
+	Total int64             `json:"total"`
+	Page  int               `json:"page"`
+	Pages int               `json:"pages"`
+	Me    *CheckInRankItem  `json:"me"`
+}
+
+func beijingToday() time.Time {
+	now := beijingNow()
+	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+}
+
+func (s *ForumService) checkInStreakAndTotal(userID int) (streak, total int, todayChecked bool) {
+	var dates []time.Time
+	if err := s.db.Model(&model.ForumCheckIn{}).Where("user_id = ?", userID).Order("check_date ASC").Pluck("check_date", &dates).Error; err != nil {
+		return 0, 0, false
+	}
+	total = len(dates)
+	if total == 0 {
+		return 0, 0, false
+	}
+	set := make(map[string]bool, total)
+	for _, d := range dates {
+		// Normalize to Asia/Shanghai date string to avoid UTC shift.
+		set[d.In(beijingNow().Location()).Format("2006-01-02")] = true
+	}
+	todayStr := beijingToday().Format("2006-01-02")
+	todayChecked = set[todayStr]
+	// 计算连续天数：从今天（若已签）或昨天（若今日未签）往前连续计数；若最近一天与起点间隔>1则 streak=0
+	var cur time.Time
+	if todayChecked {
+		cur = beijingToday()
+	} else {
+		cur = beijingToday().AddDate(0, 0, -1)
+		if !set[cur.Format("2006-01-02")] {
+			return 0, total, false
+		}
+	}
+	for {
+		if set[cur.Format("2006-01-02")] {
+			streak++
+			cur = cur.AddDate(0, 0, -1)
+		} else {
+			break
+		}
+	}
+	return streak, total, todayChecked
+}
+
+// CheckIn 每日打卡（幂等，Asia/Shanghai 自然日）。
+func (s *ForumService) CheckIn(userID int) (*CheckInResult, error) {
+	today := beijingToday()
+	// 使用 DATE 类型比较时传入 today（00:00）
+	var exists int64
+	if err := s.db.Model(&model.ForumCheckIn{}).Where("user_id = ? AND check_date = ?", userID, today).Count(&exists).Error; err != nil {
+		return nil, err
+	}
+	if exists == 0 {
+		if err := s.db.Create(&model.ForumCheckIn{UserID: userID, CheckDate: today, CreatedAt: beijingNow()}).Error; err != nil {
+			// 唯一冲突视为已签（并发幂等）
+			if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "uq_") || strings.Contains(err.Error(), "pk_forum_checkin") || strings.Contains(err.Error(), "UNIQUE") {
+				// ignore
+			} else {
+				return nil, err
+			}
+		}
+	}
+	streak, total, todayChecked := s.checkInStreakAndTotal(userID)
+	return &CheckInResult{Checked: true, Streak: streak, Total: total, TodayChecked: todayChecked}, nil
+}
+
+// GetCheckInCalendar 获取某月已签日期及统计。
+func (s *ForumService) GetCheckInCalendar(userID, year, month int) (*CheckInCalendarResult, error) {
+	if year < 2000 || year > 2100 {
+		return nil, errors.New("年份无效")
+	}
+	if month < 1 || month > 12 {
+		return nil, errors.New("月份无效")
+	}
+	loc := beijingNow().Location()
+	first := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, loc)
+	// last day: first of next month -1 day
+	last := first.AddDate(0, 1, -1)
+	var dates []time.Time
+	if err := s.db.Model(&model.ForumCheckIn{}).Where("user_id = ? AND check_date BETWEEN ? AND ?", userID, first, last).Order("check_date ASC").Pluck("check_date", &dates).Error; err != nil {
+		return nil, err
+	}
+	strs := make([]string, 0, len(dates))
+	for _, d := range dates {
+		strs = append(strs, d.In(loc).Format("2006-01-02"))
+	}
+	streak, total, todayChecked := s.checkInStreakAndTotal(userID)
+	return &CheckInCalendarResult{Dates: strs, Streak: streak, Total: total, TodayChecked: todayChecked}, nil
+}
+
+// GetCheckInRank 排行榜（累计总榜，total DESC, last_date ASC）。
+func (s *ForumService) GetCheckInRank(requesterID, page, pageSize int) (*CheckInRankResult, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 || pageSize > 100 {
+		pageSize = 20
+	}
+	type aggRow struct {
+		UserID   int       `gorm:"column:user_id"`
+		Total    int       `gorm:"column:total"`
+		LastDate time.Time `gorm:"column:last_date"`
+	}
+	var totalUsers int64
+	if err := s.db.Table("(SELECT user_id FROM forum_checkin GROUP BY user_id) AS t").Count(&totalUsers).Error; err != nil {
+		return nil, err
+	}
+	pages := response.PageCount(totalUsers, pageSize)
+	if page > pages && pages > 0 {
+		page = pages
+	}
+	offset := (page - 1) * pageSize
+	var rows []aggRow
+	if err := s.db.Table("forum_checkin").Select("user_id, COUNT(*) as total, MAX(check_date) as last_date").Group("user_id").Order("total DESC, last_date ASC, user_id ASC").Limit(pageSize).Offset(offset).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	// 批量取用户信息
+	userIDs := make([]int, 0, len(rows))
+	for _, r := range rows {
+		userIDs = append(userIDs, r.UserID)
+	}
+	userMap := make(map[int]model.HrwaiUser)
+	if len(userIDs) > 0 {
+		var users []model.HrwaiUser
+		if err := s.db.Where("id IN ?", userIDs).Find(&users).Error; err == nil {
+			for _, u := range users {
+				userMap[u.ID] = u
+			}
+		}
+	}
+	// 为每行计算 streak / today_checked（小批量，每行单独查 checkin 集合，pageSize 20 可接受）
+	items := make([]CheckInRankItem, 0, len(rows))
+	for i, r := range rows {
+		u := userMap[r.UserID]
+		streak, _, todayChecked := s.checkInStreakAndTotal(r.UserID)
+		items = append(items, CheckInRankItem{
+			Rank:         offset + i + 1,
+			User:         ForumAuthor{UserID: r.UserID, Username: u.Username, AvatarURL: u.AvatarURL},
+			Total:        r.Total,
+			Streak:       streak,
+			TodayChecked: todayChecked,
+		})
+	}
+	// 当前用户排名（若不在当页仍需计算）
+	var me *CheckInRankItem
+	if requesterID > 0 {
+		var myTotal int64
+		s.db.Model(&model.ForumCheckIn{}).Where("user_id = ?", requesterID).Count(&myTotal)
+		if myTotal > 0 {
+			var myLast time.Time
+			s.db.Model(&model.ForumCheckIn{}).Where("user_id = ?", requesterID).Select("MAX(check_date)").Scan(&myLast)
+			// 计算排名：total 更高者数量 + 同 total 但 last_date 更早 + 同 total 同 last_date 但 user_id 更小 +1
+			var rank int64
+			// 先 count users with total > myTotal
+			var higher int64
+			s.db.Table("(SELECT user_id, COUNT(*) as total, MAX(check_date) as last_date FROM forum_checkin GROUP BY user_id) AS t").Where("total > ?", myTotal).Count(&higher)
+			// 再 count users with total == myTotal and (last_date < myLast OR (last_date == myLast AND user_id < requesterID))
+			var sameRank int64
+			s.db.Table("(SELECT user_id, COUNT(*) as total, MAX(check_date) as last_date FROM forum_checkin GROUP BY user_id) AS t").Where("total = ? AND (last_date < ? OR (last_date = ? AND user_id < ?))", myTotal, myLast, myLast, requesterID).Count(&sameRank)
+			rank = higher + sameRank + 1
+			var mu model.HrwaiUser
+			_ = s.db.First(&mu, requesterID).Error
+			streak, _, todayChecked := s.checkInStreakAndTotal(requesterID)
+			me = &CheckInRankItem{
+				Rank:         int(rank),
+				User:         ForumAuthor{UserID: requesterID, Username: mu.Username, AvatarURL: mu.AvatarURL},
+				Total:        int(myTotal),
+				Streak:       streak,
+				TodayChecked: todayChecked,
+			}
+		}
+	}
+	return &CheckInRankResult{Items: items, Total: totalUsers, Page: page, Pages: pages, Me: me}, nil
+}
+
+// LikeReply 点赞评论（幂等）。
+func (s *ForumService) LikeReply(userID int, replyID int64) (int64, error) {
+	var cnt int64
+	if err := s.db.Model(&model.ForumReply{}).Where("id = ?", replyID).Count(&cnt).Error; err != nil {
+		return 0, err
+	}
+	if cnt == 0 {
+		return 0, errors.New("回复不存在")
+	}
+	var existing model.ForumReplyLike
+	if err := s.db.Where("reply_id = ? AND user_id = ?", replyID, userID).Limit(1).Find(&existing).Error; err != nil {
+		return 0, err
+	}
+	if existing.ID == 0 {
+		if err := s.db.Create(&model.ForumReplyLike{ReplyID: replyID, UserID: userID, CreatedAt: beijingNow()}).Error; err != nil {
+			if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "uq_forum_reply_like") {
+				// 并发幂等：已被其他请求创建
+			} else {
+				return 0, err
+			}
+		}
+	}
+	return s.replyLikesCount(replyID), nil
+}
+
+// UnlikeReply 取消点赞评论（幂等）。
+func (s *ForumService) UnlikeReply(userID int, replyID int64) (int64, error) {
+	if err := s.db.Where("reply_id = ? AND user_id = ?", replyID, userID).Delete(&model.ForumReplyLike{}).Error; err != nil {
+		return 0, err
+	}
+	return s.replyLikesCount(replyID), nil
+}
+
+func (s *ForumService) replyLikesCount(replyID int64) int64 {
+	var n int64
+	_ = s.db.Model(&model.ForumReplyLike{}).Where("reply_id = ?", replyID).Count(&n).Error
+	return n
 }

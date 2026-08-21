@@ -7,11 +7,31 @@
       </el-button>
     </div>
 
+    <!-- 每日打卡卡片（spec #268 A1） -->
+    <div class="checkin-card" @click="openCheckIn('calendar')">
+      <div class="checkin-left">
+        <el-icon class="checkin-icon"><Calendar /></el-icon>
+        <span class="checkin-text">
+          <template v-if="checkInTodayChecked">今日已打卡</template>
+          <template v-else>今日未打卡</template>
+          <span v-if="checkInTotal > 0" class="checkin-sub">｜已连续 {{ checkInStreak }} 天｜累计 {{ checkInTotal }} 天</span>
+        </span>
+      </div>
+      <div class="checkin-right" @click.stop>
+        <el-button type="primary" size="small" :loading="checkInChecking" :disabled="checkInTodayChecked" @click="doCheckIn">
+          {{ checkInTodayChecked ? '今日已打卡' : '立即打卡' }}
+        </el-button>
+        <el-button text size="small" @click="openCheckIn('rank')">排行榜</el-button>
+      </div>
+    </div>
+
     <el-radio-group v-model="mode" class="forum-mode" @change="handleModeChange">
       <el-radio-button value="all">全部</el-radio-button>
       <el-radio-button value="my-topics">我的帖子</el-radio-button>
       <el-radio-button value="my-replies">我的回复</el-radio-button>
     </el-radio-group>
+
+    <CheckInDialog v-model="checkInDialogVisible" :initial-tab="checkInTab" @checked="onCheckInChecked" />
 
     <!-- 我的回复列表（条目带主题标题回填，点击跳对应帖子） -->
     <div v-if="mode === 'my-replies'" v-loading="loading" class="topic-list">
@@ -64,6 +84,10 @@
                 </span>
                 <el-icon><View /></el-icon>
                 {{ topic.view_count }}
+                <span class="like-mark">
+                  <span class="heart" :class="{ liked: topic.liked_by_me }">{{ topic.liked_by_me ? '♥' : '♡' }}</span>
+                  {{ topic.likes_count || 0 }}
+                </span>
                 <el-icon class="reply-icon"><ChatDotRound /></el-icon>
                 {{ topic.reply_count }}
               </span>
@@ -120,10 +144,11 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { EditPen, View, ChatDotRound, Picture } from '@element-plus/icons-vue'
+import { EditPen, View, ChatDotRound, Picture, Calendar } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem, type MyReplyItem } from '@/api/forum'
 import { formatRelativeTime } from '@/utils/format'
 import ForumImageUploader from '@/components/student/ForumImageUploader.vue'
+import CheckInDialog from '@/components/student/CheckInDialog.vue'
 
 const router = useRouter()
 
@@ -210,7 +235,57 @@ function goDetail(id: number) {
   router.push({ name: 'ForumDetail', params: { topicId: String(id) } })
 }
 
-onMounted(loadTopics)
+// ===== 打卡（spec #268 A1-A5）=====
+const checkInStreak = ref(0)
+const checkInTotal = ref(0)
+const checkInTodayChecked = ref(false)
+const checkInChecking = ref(false)
+const checkInDialogVisible = ref(false)
+const checkInTab = ref<'calendar' | 'rank'>('calendar')
+
+async function loadCheckInStatus() {
+  try {
+    const now = new Date()
+    const res = await forumApi.getCheckInCalendar({ year: now.getFullYear(), month: now.getMonth() + 1 })
+    checkInStreak.value = res.streak
+    checkInTotal.value = res.total
+    checkInTodayChecked.value = res.today_checked
+  } catch (e) {
+    console.error('加载打卡状态失败:', e)
+  }
+}
+
+function openCheckIn(tab: 'calendar' | 'rank') {
+  checkInTab.value = tab
+  checkInDialogVisible.value = true
+}
+
+async function doCheckIn() {
+  if (checkInTodayChecked.value) return
+  checkInChecking.value = true
+  try {
+    const res = await forumApi.checkIn()
+    ElMessage.success(`打卡成功，已连续 ${res.streak} 天`)
+    checkInStreak.value = res.streak
+    checkInTotal.value = res.total
+    checkInTodayChecked.value = res.today_checked
+  } catch (e) {
+    console.error('打卡失败:', e)
+  } finally {
+    checkInChecking.value = false
+  }
+}
+
+function onCheckInChecked(data: { streak: number; total: number; today_checked: boolean }) {
+  checkInStreak.value = data.streak
+  checkInTotal.value = data.total
+  checkInTodayChecked.value = data.today_checked
+}
+
+onMounted(() => {
+  loadTopics()
+  loadCheckInStatus()
+})
 </script>
 
 <style scoped>
@@ -324,6 +399,60 @@ onMounted(loadTopics)
   gap: 2px;
   margin-right: 10px;
   color: #e6a23c;
+}
+
+.like-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 10px;
+  color: #f56c6c;
+}
+
+.like-mark .heart {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.like-mark .heart.liked {
+  color: #f56c6c;
+}
+
+.checkin-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+
+.checkin-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #303133;
+}
+
+.checkin-icon {
+  font-size: 16px;
+  color: #409eff;
+}
+
+.checkin-sub {
+  color: #909399;
+  font-size: 12px;
+  margin-left: 6px;
+}
+
+.checkin-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .pagination-wrapper {

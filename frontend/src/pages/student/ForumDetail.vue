@@ -15,6 +15,17 @@
             <span class="topic-time">{{ formatLocaleDateTime(topic.created_at, '') }}</span>
           </div>
           <div class="topic-actions">
+            <el-tooltip :content="topic?.liked_by_me ? '取消点赞' : '点赞'" placement="top">
+              <el-button
+                :type="topic?.liked_by_me ? 'danger' : 'default'"
+                circle
+                size="small"
+                @click="toggleTopicLike"
+              >
+                <span class="heart-btn">{{ topic?.liked_by_me ? '♥' : '♡' }}</span>
+              </el-button>
+            </el-tooltip>
+            <span v-if="topic" class="like-count">{{ topic.likes_count || 0 }}</span>
             <el-tooltip :content="topicFavorited ? '取消收藏' : '收藏'" placement="top">
               <el-button
                 :icon="topicFavorited ? StarFilled : Star"
@@ -50,6 +61,10 @@
           <div class="topic-stats">
             <el-icon><View /></el-icon>
             {{ topic.view_count }} 次浏览
+            <span class="like-stat">
+              <span class="heart" :class="{ liked: topic.liked_by_me }">{{ topic.liked_by_me ? '♥' : '♡' }}</span>
+              {{ topic.likes_count || 0 }} 点赞
+            </span>
             <el-icon class="reply-icon"><ChatDotRound /></el-icon>
             {{ topic.reply_count }} 条回复
           </div>
@@ -82,6 +97,16 @@
                   @click="openReport('reply', reply.id)"
                 >
                   举报
+                </el-button>
+                <el-button
+                  class="like-btn"
+                  :type="reply.liked_by_me ? 'danger' : 'default'"
+                  text
+                  size="small"
+                  @click="toggleReplyLike(reply)"
+                >
+                  <span class="heart">{{ reply.liked_by_me ? '♥' : '♡' }}</span>
+                  <span v-if="(reply.likes_count || 0) > 0" class="like-count-inline">{{ reply.likes_count }}</span>
                 </el-button>
                 <el-button
                   v-if="reply.can_delete"
@@ -127,33 +152,45 @@
             回复 @{{ replyingTo.username }}
           </el-tag>
         </div>
-        <el-input
-          v-model="replyContent"
-          type="textarea"
-          :rows="4"
-          maxlength="5000"
-          show-word-limit
-          placeholder="写下你的回复…"
-        />
-        <ForumImageUploader v-model="replyImages" :max="3" />
-        <div class="editor-actions">
-          <el-button type="primary" :loading="submitting" @click="submitReply">发表回复</el-button>
+        <div class="reply-box">
+          <div v-if="replyImages.length > 0" class="reply-images-bar">
+            <div v-for="(url, index) in replyImages" :key="url + index" class="reply-thumb">
+              <el-image :src="resolveFileUrl(url)" fit="cover" class="reply-thumb-img" />
+              <button type="button" class="reply-thumb-remove" @click="removeReplyImage(index)">
+                <el-icon><Close /></el-icon>
+              </button>
+            </div>
+          </div>
+          <el-input
+            v-model="replyContent"
+            type="textarea"
+            :rows="3"
+            maxlength="5000"
+            show-word-limit
+            placeholder="写下你的回复…"
+            class="reply-textarea"
+          />
+          <div class="reply-box-footer">
+            <el-button :icon="Paperclip" text circle size="small" :disabled="replyImages.length >= 3" title="添加图片" @click="triggerReplyFile" />
+            <el-button :icon="Promotion" type="primary" circle size="small" :loading="submitting" :disabled="!canSubmitReply" title="发表回复" @click="submitReply" />
+          </div>
         </div>
+        <input ref="replyFileInput" type="file" accept="image/*" multiple style="display: none" @change="handleReplyFileSelect" />
       </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, View, ChatDotRound, Star, StarFilled } from '@element-plus/icons-vue'
+import { ArrowLeft, View, ChatDotRound, Star, StarFilled, Paperclip, Promotion, Close } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
 import { favoriteApi } from '@/api/favorite'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
-import ForumImageUploader from '@/components/student/ForumImageUploader.vue'
 import { formatLocaleDateTime } from '@/utils/format'
+import { resolveFileUrl } from '@/utils/fileUrl'
 
 const route = useRoute()
 const router = useRouter()
@@ -165,6 +202,8 @@ const replies = ref<ForumReplyItem[]>([])
 const replyContent = ref('')
 const replyImages = ref<string[]>([])
 const replyingTo = ref<{ id: number; username: string } | null>(null)
+const replyFileInput = ref<HTMLInputElement | null>(null)
+const canSubmitReply = computed(() => replyContent.value.trim().length > 0 || replyImages.value.length > 0)
 
 function displayName(author: ForumTopicItem['author']) {
   return author.username
@@ -191,7 +230,7 @@ async function loadDetail() {
 
 async function submitReply() {
   const content = replyContent.value.trim()
-  if (!content) {
+  if (!content && replyImages.value.length === 0) {
     ElMessage.warning('请输入回复内容')
     return
   }
@@ -209,6 +248,69 @@ async function submitReply() {
     /* 错误已由拦截器提示 */
   } finally {
     submitting.value = false
+  }
+}
+
+function triggerReplyFile() {
+  replyFileInput.value?.click()
+}
+
+function handleReplyFileSelect(event: Event) {
+  const target = event.target as HTMLInputElement
+  const files = Array.from(target.files ?? [])
+  if (files.length > 0) uploadReplyFiles(files)
+  target.value = ''
+}
+
+async function uploadReplyFiles(files: File[]) {
+  const remaining = 3 - replyImages.value.length
+  if (remaining <= 0) {
+    ElMessage.warning('最多上传 3 张图片')
+    return
+  }
+  const toUpload = files.filter(f => f.type.startsWith('image/')).slice(0, remaining)
+  if (toUpload.length === 0) return
+  for (const file of toUpload) {
+    if (file.size > 20 * 1024 * 1024) {
+      ElMessage.error(`"${file.name}" 超过 20MB，已跳过`)
+      continue
+    }
+    const formData = new FormData()
+    formData.append('file', file)
+    try {
+      const res = await forumApi.uploadImage(formData)
+      if (res?.url) {
+        if (replyImages.value.length >= 3) break
+        replyImages.value = [...replyImages.value, res.url]
+      } else {
+        ElMessage.error(`"${file.name}" 上传失败`)
+      }
+    } catch {
+      /* 错误已由拦截器提示 */
+    }
+  }
+}
+
+function removeReplyImage(index: number) {
+  const next = [...replyImages.value]
+  next.splice(index, 1)
+  replyImages.value = next
+}
+
+function handlePaste(event: ClipboardEvent) {
+  const items = event.clipboardData?.items
+  if (!items) return
+  if (replyImages.value.length >= 3) return
+  const files: File[] = []
+  for (const item of items) {
+    if (item.kind === 'file' && item.type.startsWith('image/')) {
+      const file = item.getAsFile()
+      if (file) files.push(file)
+    }
+  }
+  if (files.length > 0) {
+    event.preventDefault()
+    uploadReplyFiles(files)
   }
 }
 
@@ -256,8 +358,7 @@ function goBack() {
   }
 }
 
-// ===== 互动（ADR-0018）：收藏 / 举报 =====
-// （点赞 web 端不展示：星形与收藏重复且无后续消费场景，API 保留供移动端使用）
+// ===== 互动（ADR-0018）：收藏 / 点赞 / 举报 =====
 
 // 收藏帖子
 const topicFavorited = ref(false)
@@ -292,6 +393,46 @@ async function toggleFavorite() {
   } catch (e) {
     console.error('收藏操作失败:', e)
     /* 错误已由拦截器提示 */
+  }
+}
+
+async function toggleTopicLike() {
+  if (!topic.value) return
+  const topicId = Number(route.params.topicId)
+  const prevLiked = !!topic.value.liked_by_me
+  const prevCount = topic.value.likes_count || 0
+  // 乐观更新
+  topic.value.liked_by_me = !prevLiked
+  topic.value.likes_count = prevLiked ? Math.max(0, prevCount - 1) : prevCount + 1
+  try {
+    const res = prevLiked ? await forumApi.unlikeTopic(topicId) : await forumApi.likeTopic(topicId)
+    if (topic.value) {
+      topic.value.likes_count = res.likes_count
+      topic.value.liked_by_me = res.liked
+    }
+  } catch (e) {
+    // 回滚
+    if (topic.value) {
+      topic.value.liked_by_me = prevLiked
+      topic.value.likes_count = prevCount
+    }
+    console.error('点赞操作失败:', e)
+  }
+}
+
+async function toggleReplyLike(reply: ForumReplyItem) {
+  const prevLiked = !!reply.liked_by_me
+  const prevCount = reply.likes_count || 0
+  reply.liked_by_me = !prevLiked
+  reply.likes_count = prevLiked ? Math.max(0, prevCount - 1) : prevCount + 1
+  try {
+    const res = prevLiked ? await forumApi.unlikeReply(reply.id) : await forumApi.likeReply(reply.id)
+    reply.likes_count = res.likes_count
+    reply.liked_by_me = res.liked
+  } catch (e) {
+    reply.liked_by_me = prevLiked
+    reply.likes_count = prevCount
+    console.error('评论点赞失败:', e)
   }
 }
 
@@ -335,6 +476,11 @@ async function submitReport() {
 onMounted(() => {
   loadDetail()
   loadFavoriteState()
+  document.addEventListener('paste', handlePaste)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('paste', handlePaste)
 })
 </script>
 
@@ -430,6 +576,30 @@ onMounted(() => {
   margin-left: auto;
 }
 
+.like-count {
+  font-size: 12px;
+  color: #f56c6c;
+  min-width: 16px;
+  text-align: left;
+}
+
+.heart-btn {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.like-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 12px;
+  color: #f56c6c;
+}
+
+.like-stat .heart.liked {
+  color: #f56c6c;
+}
+
 .reply-icon {
   margin-left: 12px;
 }
@@ -464,6 +634,16 @@ onMounted(() => {
   margin-bottom: 6px;
 }
 
+.like-btn .heart {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.like-count-inline {
+  font-size: 12px;
+  margin-left: 2px;
+}
+
 .reply-content {
   color: #303133;
   font-size: 14px;
@@ -486,9 +666,73 @@ onMounted(() => {
   margin-bottom: 10px;
 }
 
-.editor-actions {
+.reply-box {
+  border: 1px solid #dcdfe6;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+  transition: border-color 0.2s;
+}
+
+.reply-box:focus-within {
+  border-color: #409eff;
+}
+
+.reply-images-bar {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 12px;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.reply-thumb {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #ebeef5;
+  flex-shrink: 0;
+}
+
+.reply-thumb-img {
+  width: 100%;
+  height: 100%;
+}
+
+.reply-thumb-remove {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 0 0 0 6px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+  padding: 0;
+  font-size: 10px;
+}
+
+.reply-thumb-remove:hover {
+  background: rgba(245, 108, 108, 0.9);
+}
+
+.reply-textarea :deep(.el-textarea__inner) {
+  border: none !important;
+  box-shadow: none !important;
+  padding: 4px 0;
+  resize: none;
+}
+
+.reply-box-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
 }
 </style>
