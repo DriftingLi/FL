@@ -308,7 +308,7 @@ jobs:
       # Redis 缓存
       REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD || '' }}
       REDIS_DB: ${{ secrets.REDIS_DB || '0' }}
-      REDIS_POOL_SIZE: ${{ secrets.REDIS_POOL_SIZE || '10' }}
+      REDIS_POOL_SIZE: ${{ secrets.REDIS_POOL_SIZE || '20' }}
       REDIS_KEY_PREFIX: ${{ secrets.REDIS_KEY_PREFIX || 'fl:' }}
       # Cloudflare R2 对象存储（留空则回退到本地磁盘 STORAGE_DRIVER=local）
       STORAGE_DRIVER: ${{ secrets.STORAGE_DRIVER || 'local' }}
@@ -470,7 +470,7 @@ jobs:
             printf 'export SKIP_MIGRATION=%q\n' "${SKIP_MIGRATION:-false}"
             printf 'export REDIS_PASSWORD=%q\n' "${REDIS_PASSWORD:-}"
             printf 'export REDIS_DB=%q\n' "${REDIS_DB:-0}"
-            printf 'export REDIS_POOL_SIZE=%q\n' "${REDIS_POOL_SIZE:-10}"
+            printf 'export REDIS_POOL_SIZE=%q\n' "${REDIS_POOL_SIZE:-20}"
             printf 'export REDIS_KEY_PREFIX=%q\n' "${REDIS_KEY_PREFIX:-fl:}"
             printf 'export STORAGE_DRIVER=%q\n' "${STORAGE_DRIVER:-local}"
             printf 'export R2_ACCOUNT_ID=%q\n' "${R2_ACCOUNT_ID:-}"

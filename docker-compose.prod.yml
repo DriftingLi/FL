@@ -184,7 +184,7 @@ services:
       REDIS_ADDR: redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       REDIS_DB: "${REDIS_DB:-0}"
-      REDIS_POOL_SIZE: "${REDIS_POOL_SIZE:-10}"
+      REDIS_POOL_SIZE: "${REDIS_POOL_SIZE:-20}"
       REDIS_KEY_PREFIX: "${REDIS_KEY_PREFIX:-fl:}"
       # LibreOffice sidecar HTTP 地址(容器内服务名 + 端口)
       LIBREOFFICE_SIDECAR_URL: http://libreoffice:8000

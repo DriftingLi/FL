@@ -185,14 +185,14 @@ func setDefaults() {
 	viper.SetDefault("redis_addr", "localhost:6379")
 	viper.SetDefault("redis_password", "")
 	viper.SetDefault("redis_db", 0)
-	viper.SetDefault("redis_pool_size", 10)
-	viper.SetDefault("redis_min_idle_conns", 3)
+	viper.SetDefault("redis_pool_size", 20)
+	viper.SetDefault("redis_min_idle_conns", 5)
 	viper.SetDefault("redis_max_retries", 3)
 	viper.SetDefault("redis_key_prefix", "fl:")
-	viper.SetDefault("redis_dial_timeout", "5s")
-	viper.SetDefault("redis_read_timeout", "3s")
-	viper.SetDefault("redis_write_timeout", "3s")
-	viper.SetDefault("redis_pool_timeout", "4s")
+	viper.SetDefault("redis_dial_timeout", "2s")
+	viper.SetDefault("redis_read_timeout", "2s")
+	viper.SetDefault("redis_write_timeout", "2s")
+	viper.SetDefault("redis_pool_timeout", "3s")
 	viper.SetDefault("redis_idle_timeout", "5m")
 	viper.SetDefault("rate_limit_rps", 20.0)
 	viper.SetDefault("rate_limit_burst", 40)
@@ -277,14 +277,14 @@ func Load() (*Config, error) {
 			Addr:         viper.GetString("redis_addr"),
 			Password:     viper.GetString("redis_password"),
 			DB:           nonNegInt("redis_db", 0),
-			PoolSize:     positiveInt("redis_pool_size", 10),
-			MinIdleConns: positiveInt("redis_min_idle_conns", 3),
+			PoolSize:     positiveInt("redis_pool_size", 20),
+			MinIdleConns: positiveInt("redis_min_idle_conns", 5),
 			MaxRetries:   positiveInt("redis_max_retries", 3),
 			Prefix:       viper.GetString("redis_key_prefix"),
-			DialTimeout:  positiveDuration("redis_dial_timeout", 5*time.Second),
-			ReadTimeout:  positiveDuration("redis_read_timeout", 3*time.Second),
-			WriteTimeout: positiveDuration("redis_write_timeout", 3*time.Second),
-			PoolTimeout:  positiveDuration("redis_pool_timeout", 4*time.Second),
+			DialTimeout:  positiveDuration("redis_dial_timeout", 2*time.Second),
+			ReadTimeout:  positiveDuration("redis_read_timeout", 2*time.Second),
+			WriteTimeout: positiveDuration("redis_write_timeout", 2*time.Second),
+			PoolTimeout:  positiveDuration("redis_pool_timeout", 3*time.Second),
 			IdleTimeout:  positiveDuration("redis_idle_timeout", 5*time.Minute),
 		},
 		RateLimit: RateLimitConfig{
