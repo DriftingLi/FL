@@ -48,7 +48,18 @@ type startReq struct {
 	Duration  int
 }
 
-// Start 开始模拟考试 POST /api/mock-exam/start
+// Start 开始模拟考试
+// @Summary 开始模拟考试
+// @Description 创建模拟考试会话，count 题量、duration 时长（默认 90 分钟）
+// @Tags 学员端-模拟考试
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object false "参数" example({"count":20,"duration":90})
+// @Success 200 {object} response.R{data=service.MockExamStartDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /mock-exam/start [post]
 func (h *MockExamHandler) Start(c *gin.Context) {
 	Endpoint[startReq, service.MockExamStartDTO]{
 		Parse: func(c *gin.Context) (*startReq, error) {
@@ -85,7 +96,19 @@ type saveProgressReq struct {
 	RemainingTime int
 }
 
-// SaveProgress 保存进度 POST /api/mock-exam/:mock_exam_id/save
+// SaveProgress 保存模拟考试进度
+// @Summary 保存模拟考试进度
+// @Description 保存作答与剩余时间
+// @Tags 学员端-模拟考试
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param mock_exam_id path int true "模拟考试ID"
+// @Param body body object true "作答" example({"answers":{},"remaining_time":3600})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /mock-exam/{mock_exam_id}/save [post]
 func (h *MockExamHandler) SaveProgress(c *gin.Context) {
 	Endpoint[saveProgressReq, struct{}]{
 		Parse: func(c *gin.Context) (*saveProgressReq, error) {
@@ -131,7 +154,18 @@ type mockExamIDReq struct {
 	StudentID  int
 }
 
-// Resume 恢复考试 GET /api/mock-exam/:mock_exam_id/resume
+// Resume 恢复模拟考试
+// @Summary 恢复模拟考试
+// @Description 恢复未交卷的模拟考试，返回题目与进度
+// @Tags 学员端-模拟考试
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param mock_exam_id path int true "模拟考试ID"
+// @Success 200 {object} response.R{data=service.MockExamResumeDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /mock-exam/{mock_exam_id}/resume [get]
 func (h *MockExamHandler) Resume(c *gin.Context) {
 	Endpoint[mockExamIDReq, service.MockExamResumeDTO]{
 		Parse: h.parseMockExamID,
@@ -148,7 +182,18 @@ func (h *MockExamHandler) Resume(c *gin.Context) {
 	}.Handle(c)
 }
 
-// Submit 交卷 POST /api/mock-exam/:mock_exam_id/submit
+// Submit 模拟考试交卷
+// @Summary 模拟考试交卷
+// @Description 交卷并触发判分
+// @Tags 学员端-模拟考试
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param mock_exam_id path int true "模拟考试ID"
+// @Success 200 {object} response.R{data=service.MockExamSubmitDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /mock-exam/{mock_exam_id}/submit [post]
 func (h *MockExamHandler) Submit(c *gin.Context) {
 	Endpoint[mockExamIDReq, service.MockExamSubmitDTO]{
 		Parse: h.parseMockExamID,
@@ -165,7 +210,18 @@ func (h *MockExamHandler) Submit(c *gin.Context) {
 	}.Handle(c)
 }
 
-// GetResult 获取结果 GET /api/mock-exam/:mock_exam_id/result
+// GetResult 模拟考试结果
+// @Summary 模拟考试结果
+// @Description 查询已交卷模拟考试的结果与解析
+// @Tags 学员端-模拟考试
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param mock_exam_id path int true "模拟考试ID"
+// @Success 200 {object} response.R{data=service.MockExamResultDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "不存在"
+// @Router /mock-exam/{mock_exam_id}/result [get]
 func (h *MockExamHandler) GetResult(c *gin.Context) {
 	Endpoint[mockExamIDReq, service.MockExamResultDTO]{
 		Parse: h.parseMockExamID,
@@ -182,7 +238,18 @@ func (h *MockExamHandler) GetResult(c *gin.Context) {
 	}.Handle(c)
 }
 
-// GetHistory 历史记录 GET /api/mock-exam/history
+// GetHistory 模拟考试历史
+// @Summary 模拟考试历史
+// @Description 分页查询模拟考试历史记录
+// @Tags 学员端-模拟考试
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(10)
+// @Success 200 {object} response.R{data=service.MockExamHistoryDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /mock-exam/history [get]
 func (h *MockExamHandler) GetHistory(c *gin.Context) {
 	Endpoint[struct {
 		StudentID int

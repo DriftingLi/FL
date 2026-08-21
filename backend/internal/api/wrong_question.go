@@ -49,7 +49,20 @@ type listWrongQuestionsReq struct {
 	MinWrongCount *int
 }
 
-// List 错题列表 GET /api/wrong-questions（分页+过滤）
+// List 错题列表
+// @Summary 错题列表
+// @Description 分页查询错题，支持按题型/错误次数过滤
+// @Tags 学员端-错题本
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Param type query string false "题型"
+// @Param min_wrong_count query int false "最小错误次数"
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /wrong-questions [get]
 func (h *WrongQuestionHandler) List(c *gin.Context) {
 	Endpoint[listWrongQuestionsReq, map[string]any]{
 		Parse: func(c *gin.Context) (*listWrongQuestionsReq, error) {
@@ -80,7 +93,19 @@ type redoWrongQuestionReq struct {
 	UserAnswer interface{}
 }
 
-// Redo 重做错题 POST /api/wrong-questions/:question_id/redo
+// Redo 重做错题
+// @Summary 重做错题
+// @Description 提交错题重做答案并判分
+// @Tags 学员端-错题本
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param question_id path int true "题目ID"
+// @Param body body object true "答案" example({"user_answer":"A"})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /wrong-questions/{question_id}/redo [post]
 func (h *WrongQuestionHandler) Redo(c *gin.Context) {
 	Endpoint[redoWrongQuestionReq, map[string]any]{
 		Parse: func(c *gin.Context) (*redoWrongQuestionReq, error) {
@@ -121,7 +146,18 @@ type removeWrongQuestionReq struct {
 	QuestionID int
 }
 
-// Remove 移出错题本 POST /api/wrong-questions/:question_id/remove
+// Remove 移出错题本
+// @Summary 移出错题本
+// @Description 将指定题目移出错题本
+// @Tags 学员端-错题本
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param question_id path int true "题目ID"
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /wrong-questions/{question_id}/remove [post]
 func (h *WrongQuestionHandler) Remove(c *gin.Context) {
 	Endpoint[removeWrongQuestionReq, map[string]any]{
 		Parse: func(c *gin.Context) (*removeWrongQuestionReq, error) {
@@ -155,7 +191,16 @@ type getWrongStatsReq struct {
 	StudentID int
 }
 
-// GetStats 错题统计 GET /api/wrong-questions/stats
+// GetStats 错题统计
+// @Summary 错题统计
+// @Description 汇总错题数量/题型分布等
+// @Tags 学员端-错题本
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R{data=service.WrongQuestionStatsDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /wrong-questions/stats [get]
 func (h *WrongQuestionHandler) GetStats(c *gin.Context) {
 	Endpoint[getWrongStatsReq, service.WrongQuestionStatsDTO]{
 		Parse: func(c *gin.Context) (*getWrongStatsReq, error) {
@@ -177,7 +222,15 @@ type exportWrongQuestionsReq struct {
 	StudentID int
 }
 
-// Export 导出错题本（纯文本附件）GET /api/wrong-questions/export
+// Export 导出错题本
+// @Summary 导出错题本
+// @Description 导出为纯文本附件（text/plain）
+// @Tags 学员端-错题本
+// @Produce plain
+// @Security BearerAuth
+// @Success 200 {string} string "错题文本"
+// @Failure 401 {object} response.R "未认证"
+// @Router /wrong-questions/export [get]
 func (h *WrongQuestionHandler) Export(c *gin.Context) {
 	Endpoint[exportWrongQuestionsReq, struct{}]{
 		Parse: func(c *gin.Context) (*exportWrongQuestionsReq, error) {

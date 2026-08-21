@@ -39,6 +39,7 @@ type Config struct {
 	RateLimit RateLimitConfig
 	// CaptchaEnabled 图形验证码开关（生产默认开启、其他默认关闭；显式 true/false 可覆盖）。
 	CaptchaEnabled   bool
+	Swagger          SwaggerConfig
 	DefaultPasswords DefaultPasswordsConfig
 	// SMTP 邮件发送配置（邮箱验证码注册/登录）。
 	SMTP SMTPConfig
@@ -154,6 +155,15 @@ type LogConfig struct {
 	Compress   bool   // LOG_COMPRESS，轮转压缩归档，默认 true
 }
 
+// SwaggerConfig Swagger 文档与 BasicAuth 配置（C 方案）。
+// Enabled 由 SWAGGER_ENABLED 控制（未显式设置时 dev 默认 true、prod 默认 false）；
+// User/Pass 由 SWAGGER_USER/PASS 注入，Enabled=true 且两者非空时 /swagger/*any 走 BasicAuth。
+type SwaggerConfig struct {
+	Enabled bool   // SWAGGER_ENABLED
+	User    string // SWAGGER_USER
+	Pass    string // SWAGGER_PASS
+}
+
 // setDefaults 集中定义全部配置默认值。
 func setDefaults() {
 	viper.SetDefault("app_env", "development")
@@ -223,6 +233,8 @@ func setDefaults() {
 	viper.SetDefault("log_max_backups", 7)
 	viper.SetDefault("log_max_age_days", 30)
 	viper.SetDefault("log_compress", true)
+	viper.SetDefault("swagger_user", "")
+	viper.SetDefault("swagger_pass", "")
 }
 
 // Load 从环境变量加载配置。非 production 环境会自动加载 .env 文件。
@@ -240,6 +252,7 @@ func Load() (*Config, error) {
 	rateLimitEnabled := envBoolOr("rate_limit_enabled", appEnv == "production")
 	authCookieSecure := envBoolOr("auth_cookie_secure", appEnv == "production")
 	captchaEnabled := envBoolOr("captcha_enabled", appEnv == "production")
+	swaggerEnabled := envBoolOr("swagger_enabled", appEnv != "production")
 
 	cfg := &Config{
 		AppEnv:                appEnv,
@@ -293,6 +306,11 @@ func Load() (*Config, error) {
 			Burst:   positiveInt("rate_limit_burst", 40),
 		},
 		CaptchaEnabled: captchaEnabled,
+		Swagger: SwaggerConfig{
+			Enabled: swaggerEnabled,
+			User:    viper.GetString("swagger_user"),
+			Pass:    viper.GetString("swagger_pass"),
+		},
 		DefaultPasswords: DefaultPasswordsConfig{
 			Admin:   viper.GetString("admin_default_password"),
 			Tutor:   viper.GetString("tutor_default_password"),

@@ -197,6 +197,10 @@ services:
       R2_BUCKET: ${R2_BUCKET:-}
       # 绑定到 R2 bucket 的自定义域名（如 https://cdn.example.com），尾部斜杠会被去除
       R2_PUBLIC_DOMAIN: ${R2_PUBLIC_DOMAIN:-}
+      # Swagger 文档（C 方案：旗标 + BasicAuth；prod 默认 false，临时开启需同时注入 USER/PASS）
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
+      SWAGGER_USER: ${SWAGGER_USER:-}
+      SWAGGER_PASS: ${SWAGGER_PASS:-}
       TZ: Asia/Shanghai
     # 端口映射到宿主机回环，供 host 模式的 frontend nginx 反代访问
     # PVE 环境：frontend 用 network_mode: host，需通过 127.0.0.1:${BACKEND_HOST_PORT} 访问 backend

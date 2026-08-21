@@ -2,6 +2,15 @@
 // 单一进程、单一端口（默认 :8080），同时提供：
 //   - 维修培训业务路由 /api/*
 //   - 残值评估子模块路由 /api/valuation/*
+//
+// @title 叉车维修培训系统-学员端 API
+// @version 1.0
+// @description 学员端(hrwai_user) 学习/练习/考试/收藏/搜索/资料/论坛等 P0/P1 能力（ADR-0017/0018）。鉴权：`Authorization: Bearer <access JWT>`（access 2h，`POST /api/auth/refresh` 换新双令牌）。响应统一 `{code,message,data}`（见 ADR-0005）。本页由 gin-swagger 生成，范围 B（~30 端点）。
+// @BasePath /api
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Bearer <access JWT>，示例：Bearer eyJhbGciOi...
 package main
 
 //nolint:gocritic // exitAfterDefer: os.Exit 在 defer cancel 之前，是预期的启动失败流程

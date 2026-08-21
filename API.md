@@ -2,6 +2,8 @@
 
 本文档为叉车维修培训系统 + 残值评估子系统 + AI 助手的 HTTP 接口总清单（路径 / 方法 / 鉴权 / 请求格式 / 返回格式）。
 
+> **在线交互文档（gin-swagger，C 方案）**：开发/测试环境 `GET /swagger/index.html`（需 BasicAuth `SWAGGER_USER`/`SWAGGER_PASS`，见 `.secret/swagger-credentials.pem` 与 GitHub Secrets）；生产默认关闭（`SWAGGER_ENABLED=false`）。本清单保留作离线对照，以 Swagger UI 为准。
+
 > **准确性基准**：本清单以 `backend/internal/api` 实际注册的路由与 `backend/internal/service` 的 typed DTO 契约为准（2026-08-19，6c0dfec）。与历史文档的差异（已下线端点等）见文末「变更记录」。
 
 ## 0. 通用约定

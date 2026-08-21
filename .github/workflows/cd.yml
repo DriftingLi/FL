@@ -317,6 +317,10 @@ jobs:
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_BUCKET: ${{ secrets.R2_BUCKET }}
       R2_PUBLIC_DOMAIN: ${{ secrets.R2_PUBLIC_DOMAIN }}
+      # Swagger 文档（C 方案：旗标 + BasicAuth；prod 默认 false，线上临时开启需同时注入 USER/PASS）
+      SWAGGER_ENABLED: ${{ secrets.SWAGGER_ENABLED || vars.SWAGGER_ENABLED || 'false' }}
+      SWAGGER_USER: ${{ secrets.SWAGGER_USER }}
+      SWAGGER_PASS: ${{ secrets.SWAGGER_PASS }}
       # backend 宿主机映射端口（production 默认 8080；testing 用 18080 避免与 cadvisor 冲突）
       BACKEND_HOST_PORT: ${{ secrets.BACKEND_HOST_PORT || '8080' }}
       # 异地备份（production: pve-02 → pve-01；testing: 留空跳过）
@@ -478,6 +482,9 @@ jobs:
             printf 'export R2_SECRET_ACCESS_KEY=%q\n' "${R2_SECRET_ACCESS_KEY:-}"
             printf 'export R2_BUCKET=%q\n' "${R2_BUCKET:-}"
             printf 'export R2_PUBLIC_DOMAIN=%q\n' "${R2_PUBLIC_DOMAIN:-}"
+            printf 'export SWAGGER_ENABLED=%q\n' "${SWAGGER_ENABLED:-false}"
+            printf 'export SWAGGER_USER=%q\n' "${SWAGGER_USER:-}"
+            printf 'export SWAGGER_PASS=%q\n' "${SWAGGER_PASS:-}"
             printf 'export BACKUP_REMOTE_HOST=%q\n' "${BACKUP_REMOTE_HOST:-}"
             printf 'export BACKUP_REMOTE_DIR=%q\n' "${BACKUP_REMOTE_DIR:-}"
             printf 'export BACKUP_REMOTE_KEY=%q\n' "${BACKUP_REMOTE_KEY:-}"
