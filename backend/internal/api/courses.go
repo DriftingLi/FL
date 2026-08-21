@@ -37,7 +37,18 @@ func RegisterCoursesRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Cour
 	auth.POST("/course/:course_id/progress", h.UpdateStudyProgress)
 }
 
-// ListCourses 课程列表 GET /api/courses（公开访问，可按专业方向/等级过滤）
+// ListCourses 课程列表
+// @Summary 课程列表
+// @Description 公开访问，支持按专业方向 specialty_id / 等级 level_id 过滤，分页返回
+// @Tags 学员端-课程
+// @Accept json
+// @Produce json
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(12)
+// @Param specialty_id query int false "专业方向ID"
+// @Param level_id query int false "等级ID"
+// @Success 200 {object} response.R{data=service.CoursePageResult} "success"
+// @Router /courses [get]
 func (h *CourseHandler) ListCourses(c *gin.Context) {
 	Endpoint[courseListReq, service.CoursePageResult]{
 		Parse: func(c *gin.Context) (*courseListReq, error) {
@@ -58,7 +69,16 @@ func (h *CourseHandler) ListCourses(c *gin.Context) {
 	}.Handle(c)
 }
 
-// GetChapterSlides 章节幻灯片 GET /api/chapter/:chapter_id/slides（公开访问）
+// GetChapterSlides 章节幻灯片
+// @Summary 章节幻灯片
+// @Description 公开访问，返回章节 PPT 转图片后的 slides
+// @Tags 学员端-课程
+// @Accept json
+// @Produce json
+// @Param chapter_id path int true "章节ID"
+// @Success 200 {object} response.R{data=service.ChapterSlidesDTO} "success"
+// @Failure 404 {object} response.R "章节不存在"
+// @Router /chapter/{chapter_id}/slides [get]
 func (h *CourseHandler) GetChapterSlides(c *gin.Context) {
 	Endpoint[chapterSlidesReq, service.ChapterSlidesDTO]{
 		Parse: func(c *gin.Context) (*chapterSlidesReq, error) {
@@ -81,7 +101,18 @@ func (h *CourseHandler) GetChapterSlides(c *gin.Context) {
 	}.Handle(c)
 }
 
-// GetCourseDetail 课程详情（含章节与学习进度）GET /api/course/:course_id
+// GetCourseDetail 课程详情
+// @Summary 课程详情（含学习进度）
+// @Description 需登录，返回课程信息 + 章节 + 学员维度进度/是否已选/完成章节/最后位置（ADR-0017）；未登录时 last_* 为空
+// @Tags 学员端-课程
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param course_id path int true "课程ID"
+// @Success 200 {object} response.R{data=service.CourseDetailDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "课程不存在"
+// @Router /course/{course_id} [get]
 func (h *CourseHandler) GetCourseDetail(c *gin.Context) {
 	Endpoint[courseDetailReq, service.CourseDetailDTO]{
 		Parse: func(c *gin.Context) (*courseDetailReq, error) {
@@ -106,7 +137,19 @@ func (h *CourseHandler) GetCourseDetail(c *gin.Context) {
 	}.Handle(c)
 }
 
-// GetChapterDetail 章节详情 GET /api/course/:course_id/chapter/:chapter_id
+// GetChapterDetail 章节详情
+// @Summary 章节详情
+// @Description 需登录，返回章节详情 + 相邻章节 + 学习状态
+// @Tags 学员端-课程
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param course_id path int true "课程ID"
+// @Param chapter_id path int true "章节ID"
+// @Success 200 {object} response.R{data=service.ChapterDetailDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "章节不存在"
+// @Router /course/{course_id}/chapter/{chapter_id} [get]
 func (h *CourseHandler) GetChapterDetail(c *gin.Context) {
 	Endpoint[chapterDetailReq, service.ChapterDetailDTO]{
 		Parse: func(c *gin.Context) (*chapterDetailReq, error) {
@@ -135,7 +178,18 @@ func (h *CourseHandler) GetChapterDetail(c *gin.Context) {
 	}.Handle(c)
 }
 
-// RegenerateChapterSlides 重新生成幻灯片 POST /api/chapter/:chapter_id/slides/regenerate
+// RegenerateChapterSlides 重新生成幻灯片
+// @Summary 重新生成幻灯片
+// @Description 需登录，触发章节 PPT 重新转 slides（异步）
+// @Tags 学员端-课程
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param chapter_id path int true "章节ID"
+// @Success 200 {object} response.R{data=service.ChapterSlidesDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "章节不存在"
+// @Router /chapter/{chapter_id}/slides/regenerate [post]
 func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
 	Endpoint[chapterSlidesReq, service.ChapterSlidesDTO]{
 		Parse: func(c *gin.Context) (*chapterSlidesReq, error) {
@@ -158,7 +212,19 @@ func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
 	}.Handle(c)
 }
 
-// UpdateStudyProgress 更新学习进度 POST /api/course/:course_id/progress
+// UpdateStudyProgress 更新学习进度
+// @Summary 上报学习进度
+// @Description 需登录，上报章节学习时长/播放位置/完成态（ADR-0017）；body 支持 chapter_id/duration/duration_seconds/video_position/completed
+// @Tags 学员端-课程
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param course_id path int true "课程ID"
+// @Param body body object true "进度" example({"chapter_id":1,"duration_seconds":120,"video_position":60,"completed":false})
+// @Success 200 {object} response.R{data=service.StudyProgressDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /course/{course_id}/progress [post]
 func (h *CourseHandler) UpdateStudyProgress(c *gin.Context) {
 	Endpoint[studyProgressReq, service.StudyProgressDTO]{
 		Parse: func(c *gin.Context) (*studyProgressReq, error) {

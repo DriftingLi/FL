@@ -35,6 +35,6 @@ logs/
 
 # 文档与测试
 *.md
-docs/
+# docs/  swagger 生成物（backend/docs/docs.go 等）需随构建进镜像，禁止忽略
 testdata/
 coverage.txt

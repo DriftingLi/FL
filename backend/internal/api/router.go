@@ -9,6 +9,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+
+	_ "forklift-training/docs"
 
 	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
@@ -59,6 +63,17 @@ func NewRouter(deps *Deps) *gin.Engine {
 
 	// 图形验证码（人机验证）：无需鉴权
 	RegisterCaptchaRoutes(r, deps.CaptchaSvc)
+
+	// Swagger 文档（gin-swagger，C 方案：SWAGGER_ENABLED + BasicAuth）
+	// dev 默认开启、prod 默认关闭；开启且配置 User/Pass 时走 BasicAuth
+	if cfg.Swagger.Enabled {
+		if cfg.Swagger.User != "" && cfg.Swagger.Pass != "" {
+			swaggerAuth := gin.BasicAuth(gin.Accounts{cfg.Swagger.User: cfg.Swagger.Pass})
+			r.GET("/swagger/*any", swaggerAuth, ginSwagger.WrapHandler(swaggerFiles.Handler))
+		} else {
+			r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+		}
+	}
 
 	// 静态资源：等价 static_folder + VOLUME_MOUNT_PATH 行为
 	// /static/uploads/* 优先从 VOLUME_MOUNT_PATH/uploads 提供，否则本地 UploadFolder

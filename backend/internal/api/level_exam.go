@@ -247,7 +247,16 @@ type studentCtxReq struct {
 	StudentID int
 }
 
-// GetAvailableExams 可用考试列表 GET /api/level-exam/available
+// GetAvailableExams 可用考试列表
+// @Summary 定级考试-可用列表
+// @Description 学员可参加的定级考试场次
+// @Tags 学员端-定级考试
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R{data=[]service.LevelExamAvailableDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /level-exam/available [get]
 func (h *LevelExamHandler) GetAvailableExams(c *gin.Context) {
 	Endpoint[studentCtxReq, []service.LevelExamAvailableDTO]{
 		Parse: func(c *gin.Context) (*studentCtxReq, error) {
@@ -279,7 +288,18 @@ type studentHistoryReq struct {
 	PageSize  int
 }
 
-// GetStudentHistory 学员考试历史 GET /api/level-exam/history
+// GetStudentHistory 定级考试历史
+// @Summary 定级考试历史
+// @Description 分页查询学员定级考试历史
+// @Tags 学员端-定级考试
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(10)
+// @Success 200 {object} response.R{data=service.LevelExamHistoryDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /level-exam/history [get]
 func (h *LevelExamHandler) GetStudentHistory(c *gin.Context) {
 	Endpoint[studentHistoryReq, service.LevelExamHistoryDTO]{
 		Parse: func(c *gin.Context) (*studentHistoryReq, error) {
@@ -306,7 +326,18 @@ type enterExamReq struct {
 	StudentID int
 }
 
-// EnterExam 进入考试 POST /api/level-exam/sessions/:session_id/enter
+// EnterExam 进入定级考试
+// @Summary 进入定级考试
+// @Description 进入指定场次并获取试卷与参与记录
+// @Tags 学员端-定级考试
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param session_id path int true "场次ID"
+// @Success 200 {object} response.R{data=service.LevelExamDataDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /level-exam/sessions/{session_id}/enter [post]
 func (h *LevelExamHandler) EnterExam(c *gin.Context) {
 	Endpoint[enterExamReq, service.LevelExamDataDTO]{
 		Parse: func(c *gin.Context) (*enterExamReq, error) {
@@ -339,7 +370,19 @@ type saveAnswerReq struct {
 	RemainingTime int
 }
 
-// SaveAnswer 保存答案 POST /api/level-exam/participants/:participant_id/save
+// SaveAnswer 保存定级考试答案
+// @Summary 保存答案
+// @Description 保存答题进度与剩余时间
+// @Tags 学员端-定级考试
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param participant_id path int true "参与记录ID"
+// @Param body body object true "答案" example({"answers":{},"remaining_time":3600})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /level-exam/participants/{participant_id}/save [post]
 func (h *LevelExamHandler) SaveAnswer(c *gin.Context) {
 	Endpoint[saveAnswerReq, struct{}]{
 		Parse: func(c *gin.Context) (*saveAnswerReq, error) {
@@ -388,7 +431,19 @@ type submitExamReq struct {
 	RemainingTime *int
 }
 
-// SubmitExam 交卷 POST /api/level-exam/participants/:participant_id/submit
+// SubmitExam 定级考试交卷
+// @Summary 交卷
+// @Description 提交试卷（支持 is_timeout/remaining_time）
+// @Tags 学员端-定级考试
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param participant_id path int true "参与记录ID"
+// @Param body body object false "交卷" example({"is_timeout":false,"remaining_time":0,"answers":{}})
+// @Success 200 {object} response.R{data=service.LevelExamParticipantDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /level-exam/participants/{participant_id}/submit [post]
 func (h *LevelExamHandler) SubmitExam(c *gin.Context) {
 	Endpoint[submitExamReq, service.LevelExamParticipantDTO]{
 		Parse: func(c *gin.Context) (*submitExamReq, error) {
@@ -438,7 +493,18 @@ type getResultReq struct {
 	StudentID     int
 }
 
-// GetResult 查看结果 GET /api/level-exam/participants/:participant_id/result
+// GetResult 定级考试结果
+// @Summary 查询结果
+// @Description 查询参与记录的判分结果
+// @Tags 学员端-定级考试
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param participant_id path int true "参与记录ID"
+// @Success 200 {object} response.R{data=service.LevelExamResultDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "不存在"
+// @Router /level-exam/participants/{participant_id}/result [get]
 func (h *LevelExamHandler) GetResult(c *gin.Context) {
 	Endpoint[getResultReq, service.LevelExamResultDTO]{
 		Parse: func(c *gin.Context) (*getResultReq, error) {

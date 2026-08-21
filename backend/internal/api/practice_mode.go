@@ -45,7 +45,18 @@ type freeQuestionsReq struct {
 	Count int
 }
 
-// GetFreeQuestions 随机练习抽题 GET /api/practice-mode/free（count 控制题量）
+// GetFreeQuestions 随机练习抽题
+// @Summary 随机练习抽题
+// @Description 按题型随机抽题，count 控制题量（默认 20）
+// @Tags 学员端-练习
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param count query int false "题量" default(20)
+// @Param type query string false "题型 single_choice 等"
+// @Success 200 {object} response.R{data=[]service.QuestionDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /practice-mode/free [get]
 func (h *PracticeModeHandler) GetFreeQuestions(c *gin.Context) {
 	Endpoint[freeQuestionsReq, []service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*freeQuestionsReq, error) {
@@ -78,7 +89,19 @@ type tagPracticeReq struct {
 	Count     int
 }
 
-// StartTagPractice 标签练习开始/续练 GET /api/practice-mode/tag（按题库标签，count 控制题量）
+// StartTagPractice 标签专项练习
+// @Summary 标签专项练习
+// @Description 按标签 ID 开始/续练专项练习；count=0 表示全部
+// @Tags 学员端-练习
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param tag_id query int true "题库标签ID"
+// @Param count query int false "题量 0=全部" default(0)
+// @Success 200 {object} response.R{data=service.PracticeStartResultDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /practice-mode/tag [get]
 func (h *PracticeModeHandler) StartTagPractice(c *gin.Context) {
 	Endpoint[tagPracticeReq, service.PracticeStartResultDTO]{
 		Parse: func(c *gin.Context) (*tagPracticeReq, error) {
@@ -108,7 +131,16 @@ func (h *PracticeModeHandler) StartTagPractice(c *gin.Context) {
 	}.Handle(c)
 }
 
-// StartSequential 顺序练习（开始/续练，返回当前批次+进度）GET /api/practice-mode/sequential
+// StartSequential 顺序练习
+// @Summary 顺序练习开始/续练
+// @Description 返回当前批次题目 + 进度
+// @Tags 学员端-练习
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R{data=service.PracticeStartResultDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /practice-mode/sequential [get]
 func (h *PracticeModeHandler) StartSequential(c *gin.Context) {
 	Endpoint[struct {
 		StudentID int
@@ -144,7 +176,16 @@ type studentIDReq struct {
 	StudentID int
 }
 
-// GetSequentialProgress 顺序练习进度（卡片展示用）GET /api/practice-mode/sequential-progress
+// GetSequentialProgress 顺序练习进度
+// @Summary 顺序练习进度
+// @Description 用于卡片展示的进度快照
+// @Tags 学员端-练习
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R{data=service.ProgressResultDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /practice-mode/sequential-progress [get]
 func (h *PracticeModeHandler) GetSequentialProgress(c *gin.Context) {
 	Endpoint[studentIDReq, service.ProgressResultDTO]{
 		Parse: h.parseStudentID,
@@ -166,7 +207,18 @@ type practiceSaveProgressReq struct {
 	AnswersState json.RawMessage
 }
 
-// SaveProgress 保存练习游标和答题状态（支持顺序/专项/标签练习）POST /api/practice-mode/progress
+// SaveProgress 保存练习进度
+// @Summary 保存练习游标与答题状态
+// @Description 支持顺序/标签等练习的断点续练
+// @Tags 学员端-练习
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "进度" example({"index":5,"practice_mode":"sequential","total":20,"answers_state":{}})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /practice-mode/progress [post]
 func (h *PracticeModeHandler) SaveProgress(c *gin.Context) {
 	Endpoint[practiceSaveProgressReq, struct{}]{
 		Parse: func(c *gin.Context) (*practiceSaveProgressReq, error) {
@@ -211,7 +263,17 @@ type getProgressReq struct {
 	Mode      string
 }
 
-// GetProgress 查询任意模式的练习进度（断点续练用）GET /api/practice-mode/progress?mode=xxx
+// GetProgress 查询练习进度
+// @Summary 查询练习进度
+// @Description 按 mode 查询断点续练进度；mode 为空默认为 sequential
+// @Tags 学员端-练习
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param mode query string false "练习模式" default(sequential)
+// @Success 200 {object} response.R{data=service.ProgressResultDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /practice-mode/progress [get]
 func (h *PracticeModeHandler) GetProgress(c *gin.Context) {
 	Endpoint[getProgressReq, service.ProgressResultDTO]{
 		Parse: func(c *gin.Context) (*getProgressReq, error) {
@@ -240,7 +302,18 @@ type submitAnswerReq struct {
 	PracticeType string
 }
 
-// SubmitAnswer 提交答案 POST /api/practice-mode/submit
+// SubmitAnswer 提交答案
+// @Summary 提交练习答案
+// @Description 提交单题答案并即时判分
+// @Tags 学员端-练习
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "答题" example({"question_id":1,"user_answer":"A","practice_type":"free"})
+// @Success 200 {object} response.R{data=service.SubmitResultDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /practice-mode/submit [post]
 func (h *PracticeModeHandler) SubmitAnswer(c *gin.Context) {
 	Endpoint[submitAnswerReq, service.SubmitResultDTO]{
 		Parse: func(c *gin.Context) (*submitAnswerReq, error) {
@@ -280,7 +353,16 @@ func (h *PracticeModeHandler) SubmitAnswer(c *gin.Context) {
 	}.Handle(c)
 }
 
-// GetStats 练习统计 GET /api/practice-mode/stats
+// GetStats 练习统计
+// @Summary 练习统计
+// @Description 汇总练习正确率/已练题量等
+// @Tags 学员端-练习
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R{data=service.PracticeStatsDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /practice-mode/stats [get]
 func (h *PracticeModeHandler) GetStats(c *gin.Context) {
 	Endpoint[studentIDReq, service.PracticeStatsDTO]{
 		Parse: h.parseStudentID,
@@ -303,7 +385,21 @@ type practiceHistoryReq struct {
 	EndDate   string
 }
 
-// GetHistory 练习历史 GET /api/practice-mode/history
+// GetHistory 练习历史
+// @Summary 练习历史
+// @Description 分页查询练习历史，支持按题型/日期过滤
+// @Tags 学员端-练习
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Param type query string false "题型"
+// @Param start_date query string false "开始日期 YYYY-MM-DD"
+// @Param end_date query string false "结束日期 YYYY-MM-DD"
+// @Success 200 {object} response.R{data=service.HistoryResultDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /practice-mode/history [get]
 func (h *PracticeModeHandler) GetHistory(c *gin.Context) {
 	Endpoint[practiceHistoryReq, service.HistoryResultDTO]{
 		Parse: func(c *gin.Context) (*practiceHistoryReq, error) {
