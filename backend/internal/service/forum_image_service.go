@@ -83,14 +83,14 @@ func (s *ForumImageService) CleanupOrphans(ctx context.Context) int {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	// context 贯穿到存储 List 调用
+	// context 贯穿到存储 List 调用；失败则中止本轮清理，避免在存储不可用时误删
 	stored, err := s.fileSvc.ListWithContext(ctx, ForumImageDirPrefix)
 	if err != nil {
 		if s.logger != nil {
 			s.logger.Warn("[forum_image] List 失败", zap.Error(err))
 		}
-		// 回退到无 context 的 List（尽力而为）
-		stored = s.fileSvc.List(ForumImageDirPrefix)
+		// 若是取消导致，直接返回；否则本轮不清理，避免误判
+		return 0
 	}
 	if len(stored) == 0 {
 		return 0

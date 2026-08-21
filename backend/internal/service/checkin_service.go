@@ -194,14 +194,16 @@ func (s *CheckInService) GetCheckInRank(requesterID, page, pageSize int) (*Check
 			}
 		}
 	}
-	// 批量取打卡日期（一次查询取齐本页所有用户的 streak/todayChecked，消除随总天数线性增长的 N+1）
+	// 批量取打卡日期（一次查询取齐本页所有用户的 streak/todayChecked，消除随总天数线性增长的 N+1；
+	// 进一步限定至近 400 天窗口，将行数上界从 O(total_days) 降为常数，满足 spec “或至少限定窗口”）
+	cutoff := beijingToday().AddDate(0, 0, -400)
 	type dateRow struct {
 		UserID    int       `gorm:"column:user_id"`
 		CheckDate time.Time `gorm:"column:check_date"`
 	}
 	var allDates []dateRow
 	if len(userIDs) > 0 {
-		_ = s.db.Model(&model.ForumCheckIn{}).Select("user_id, check_date").Where("user_id IN ?", userIDs).Order("check_date ASC").Find(&allDates).Error
+		_ = s.db.Model(&model.ForumCheckIn{}).Select("user_id, check_date").Where("user_id IN ? AND check_date >= ?", userIDs, cutoff).Order("check_date ASC").Find(&allDates).Error
 	}
 	grouped := make(map[int][]time.Time, len(userIDs))
 	for _, dr := range allDates {
