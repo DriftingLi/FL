@@ -42,7 +42,7 @@ func newWxSvc(t *testing.T, openID, unionID string, errCode int, lastQuery *url.
 	t.Cleanup(ts.Close)
 
 	db := testutil.NewMemoryDB(t)
-	authSvc := NewAuthService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}),
+	authSvc := NewAuthService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}), NewForumCounter(),
 		"admin123", "tutor123", "student123", zap.NewNop())
 	svc := NewWechatAuthService(config.WechatAppConfig{AppID: "wx-appid", AppSecret: "wx-secret"}, db, authSvc, zap.NewNop())
 	svc.apiBase = ts.URL
@@ -60,7 +60,7 @@ func TestWechatMiniProgramLogin_MissingCode(t *testing.T) {
 
 func TestWechatMiniProgramLogin_NotConfigured(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	authSvc := NewAuthService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}),
+	authSvc := NewAuthService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}), NewForumCounter(),
 		"admin123", "tutor123", "student123", zap.NewNop())
 	svc := NewWechatAuthService(config.WechatAppConfig{}, db, authSvc, zap.NewNop())
 	_, err := svc.MiniProgramLogin(context.Background(), "code")

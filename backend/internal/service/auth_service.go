@@ -20,6 +20,7 @@ type AuthService struct {
 	db        *gorm.DB
 	session   *security.Session
 	reviewSvc *ProfileReviewService
+	forumCnt  ForumCounter // 论坛计数唯一写入口（注销回扣点赞数用，spec #297）
 
 	defaultAdminPwd   string
 	defaultTutorPwd   string
@@ -28,11 +29,13 @@ type AuthService struct {
 	logger *zap.Logger
 }
 
-// NewAuthService 创建认证服务。sess 为装配根创建的唯一会话实例（签发/校验同实例）。
-func NewAuthService(db *gorm.DB, sess *security.Session, adminPwd, tutorPwd, studentPwd string, logger *zap.Logger) *AuthService {
+// NewAuthService 创建认证服务。sess 为装配根创建的唯一会话实例（签发/校验同实例）；
+// forumCnt 与 ForumService 共享同一计数器实例（构造注入，注销同事务回扣 likes_count）。
+func NewAuthService(db *gorm.DB, sess *security.Session, forumCnt ForumCounter, adminPwd, tutorPwd, studentPwd string, logger *zap.Logger) *AuthService {
 	return &AuthService{
 		db:                db,
 		session:           sess,
+		forumCnt:          forumCnt,
 		defaultAdminPwd:   adminPwd,
 		defaultTutorPwd:   tutorPwd,
 		defaultStudentPwd: studentPwd,
@@ -408,8 +411,11 @@ func (s *AuthService) DeleteAccount(userID int) error {
 		}
 		// 显式清理无外键或需额外处理的关联数据（有 CASCADE 的表亦显式删除以确保无残留）
 		tx.Where("user_id = ?", userID).Delete(&model.Favorite{})
-		tx.Where("user_id = ?", userID).Delete(&model.ForumTopicLike{})
-		tx.Where("user_id = ?", userID).Delete(&model.ForumReplyLike{})
+		// 点赞回扣（spec #297）：先按主题/回复聚合该用户点赞行数，同事务删除后按行数
+		// 回扣对应计数列——DELETE 行数与受影响主题集合一一对应，注销不再污染计数。
+		if err := s.refundLikesOnDelete(tx, userID); err != nil {
+			return err
+		}
 		tx.Where("reporter_id = ?", userID).Delete(&model.ForumReport{})
 		// 有 CASCADE 的表显式删除以兼容测试内存库
 		tx.Where("student_id = ?", userID).Delete(&model.QuestionPracticeRecord{})
@@ -430,6 +436,52 @@ func (s *AuthService) DeleteAccount(userID int) error {
 		}
 		return nil
 	})
+}
+
+// refundLikesOnDelete 注销事务内的点赞回扣：先查后删（先按主题/回复聚合该用户点赞行数，
+// 再 DELETE），同事务内经 ForumCounter 按行数回扣对应计数列，保证 DELETE 行数与
+// 受影响主题/回复集合一一对应（spec #297）。
+func (s *AuthService) refundLikesOnDelete(tx *gorm.DB, userID int) error {
+	var topicLikes []struct {
+		TopicID int64
+		Cnt     int
+	}
+	if err := tx.Model(&model.ForumTopicLike{}).
+		Select("topic_id, COUNT(*) AS cnt").
+		Where("user_id = ?", userID).
+		Group("topic_id").
+		Scan(&topicLikes).Error; err != nil {
+		return err
+	}
+	if err := tx.Where("user_id = ?", userID).Delete(&model.ForumTopicLike{}).Error; err != nil {
+		return err
+	}
+	for _, agg := range topicLikes {
+		if err := s.forumCnt.AdjustLikes(tx, agg.TopicID, -agg.Cnt); err != nil {
+			return err
+		}
+	}
+
+	var replyLikes []struct {
+		ReplyID int64
+		Cnt     int
+	}
+	if err := tx.Model(&model.ForumReplyLike{}).
+		Select("reply_id, COUNT(*) AS cnt").
+		Where("user_id = ?", userID).
+		Group("reply_id").
+		Scan(&replyLikes).Error; err != nil {
+		return err
+	}
+	if err := tx.Where("user_id = ?", userID).Delete(&model.ForumReplyLike{}).Error; err != nil {
+		return err
+	}
+	for _, agg := range replyLikes {
+		if err := s.forumCnt.AdjustReplyLikes(tx, agg.ReplyID, -agg.Cnt); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // beijingNow 返回当前北京时间。

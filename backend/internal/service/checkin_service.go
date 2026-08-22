@@ -6,7 +6,6 @@ package service
 
 import (
 	"errors"
-	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -118,10 +117,8 @@ func (s *CheckInService) CheckIn(userID int) (*CheckInResult, error) {
 	}
 	if exists == 0 {
 		if err := s.db.Create(&model.ForumCheckIn{UserID: userID, CheckDate: today, CreatedAt: beijingNow()}).Error; err != nil {
-			// 唯一冲突视为已签（并发幂等）
-			if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "uq_") || strings.Contains(err.Error(), "pk_forum_checkin") || strings.Contains(err.Error(), "UNIQUE") {
-				// ignore
-			} else {
+			// 唯一冲突视为已签（并发幂等，共享 isDuplicateError 谓词）
+			if !isDuplicateError(err) {
 				return nil, err
 			}
 		}

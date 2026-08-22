@@ -162,15 +162,6 @@ func (s *WechatAuthService) code2Session(ctx context.Context, code string) (*wxS
 	return &body, nil
 }
 
-// isDuplicateError 判断是否为唯一约束冲突（兼容 postgres/sqlite 错误文案）。
-func isDuplicateError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "duplicate") || strings.Contains(msg, "DUPLICATE") || strings.Contains(msg, "UNIQUE") || strings.Contains(msg, "unique") || strings.Contains(msg, "uq_")
-}
-
 // findOrCreateByOpenID 按 openid 查用户；未注册则自动建账号并绑定。
 // account/username 由 openid 派生；account 前缀冲突时追加 openid 后段或序号重试（spec #279），
 // 数据库唯一约束冲突与其他错误分类处理：冲突走回查/重试，其他错误透传可观测原因。

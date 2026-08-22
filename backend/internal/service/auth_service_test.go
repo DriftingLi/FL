@@ -19,7 +19,7 @@ const testJWTSecret = "test-secret-key-for-unit-test"
 func newAuthSvc(t *testing.T) (*AuthService, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewAuthService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}), "admin123", "tutor123", "student123", zap.NewNop()), db
+	return NewAuthService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}), NewForumCounter(), "admin123", "tutor123", "student123", zap.NewNop()), db
 }
 
 // --- HashPassword / VerifyPassword ---
