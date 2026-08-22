@@ -189,6 +189,15 @@ func (h *WrongQuestionHandler) Remove(c *gin.Context) {
 }
 
 // BatchRemove 批量移出错题本
+// @Summary 批量移出
+// @Description 批量将错题移出（is_removed=true）
+// @Tags 学员端-错题本
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "题目IDs" example({"question_ids":[1,2,3]})
+// @Success 200 {object} response.R "success"
+// @Router /wrong-questions/batch-remove [post]
 func (h *WrongQuestionHandler) BatchRemove(c *gin.Context) {
 	Endpoint[batchRemoveReq, map[string]any]{
 		Parse: func(c *gin.Context) (*batchRemoveReq, error) {

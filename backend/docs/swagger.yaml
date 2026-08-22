@@ -3572,6 +3572,166 @@ paths:
       summary: 标签专项练习
       tags:
       - 学员端-练习
+  /questions/{question_id}/comments:
+    get:
+      consumes:
+      - application/json
+      description: 分页查询题目评论，含作者昵称/头像
+      parameters:
+      - description: 题目ID
+        in: path
+        name: question_id
+        required: true
+        type: integer
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 题目评论列表
+      tags:
+      - 学员端-题目互动
+    post:
+      consumes:
+      - application/json
+      description: 学员发表题目评论，直发不审核
+      parameters:
+      - description: 题目ID
+        in: path
+        name: question_id
+        required: true
+        type: integer
+      - description: 内容
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 发表评论
+      tags:
+      - 学员端-题目互动
+  /questions/{question_id}/knowledge:
+    get:
+      description: 只读返回题目挂载的题库标签，无标签返回空数组
+      parameters:
+      - description: 题目ID
+        in: path
+        name: question_id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 考点标签
+      tags:
+      - 学员端-题目互动
+  /questions/{question_id}/note:
+    delete:
+      parameters:
+      - description: 题目ID
+        in: path
+        name: question_id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除笔记
+      tags:
+      - 学员端-题目互动
+    get:
+      parameters:
+      - description: 题目ID
+        in: path
+        name: question_id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 获取笔记
+      tags:
+      - 学员端-题目互动
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 题目ID
+        in: path
+        name: question_id
+        required: true
+        type: integer
+      - description: 笔记
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 保存笔记
+      tags:
+      - 学员端-题目互动
+  /questions/comments/{comment_id}:
+    delete:
+      parameters:
+      - description: 评论ID
+        in: path
+        name: comment_id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除评论
+      tags:
+      - 学员端-题目互动
   /search:
     get:
       consumes:
@@ -3902,6 +4062,30 @@ paths:
       security:
       - BearerAuth: []
       summary: 移出错题本
+      tags:
+      - 学员端-错题本
+  /wrong-questions/batch-remove:
+    post:
+      consumes:
+      - application/json
+      description: 批量将错题移出（is_removed=true）
+      parameters:
+      - description: 题目IDs
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 批量移出
       tags:
       - 学员端-错题本
   /wrong-questions/export:
