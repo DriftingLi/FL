@@ -16,13 +16,22 @@ import (
 // WrongQuestionService 错题本服务。
 type WrongQuestionService struct {
 	db *gorm.DB
+	// grader 短答 AI 判分 adapter（nil 时简答重做降级，与练习流口径一致）。
+	grader ShortAnswerGrader
+	// explainer AI 解析 module（与练习提交共用同一 get-or-generate 入口，spec #295/#300）。
+	explainer *QuestionExplanation
 
 	logger *zap.Logger
 }
 
-// NewWrongQuestionService 创建错题本服务实例。
-func NewWrongQuestionService(db *gorm.DB, logger *zap.Logger) *WrongQuestionService {
-	return &WrongQuestionService{db: db, logger: logger}
+// NewWrongQuestionService 创建错题本服务实例。ai 可为 nil（简答判分与解析降级）。
+func NewWrongQuestionService(db *gorm.DB, ai *AIService, logger *zap.Logger) *WrongQuestionService {
+	return &WrongQuestionService{
+		db:        db,
+		grader:    shortAnswerGraderOf(ai),
+		explainer: NewQuestionExplanation(db, ai, logger),
+		logger:    logger,
+	}
 }
 
 // GetWrongQuestions 错题列表。
@@ -62,8 +71,9 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 	}
 }
 
-// RedoWrongQuestion 重做错题。
-func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, userAnswer interface{}) (map[string]any, error) {
+// RedoWrongQuestion 重做错题：与练习/模拟考试共享同一判分管线（gradeOne）与解析五模块装配。
+// 单题即时重做形态（无会话生命周期）；结果落 question_practice_record，正确率/易错项统计含重做。
+func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, userAnswer interface{}) (*SubmitResultDTO, error) {
 	var wq model.WrongQuestion
 	if err := s.db.Where("student_id = ? AND question_id = ? AND is_removed = ?", studentID, questionID, false).First(&wq).Error; err != nil {
 		return nil, errors.New("错题记录不存在")
@@ -73,81 +83,40 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 		return nil, errors.New("题目不存在")
 	}
 
-	isCorrect, _ := gradeQuestion(&question, userAnswer, 0)
-	if isCorrect != nil && *isCorrect {
-		wq.IsRedone = true
-	} else if isCorrect != nil && !*isCorrect {
-		wq.WrongCount++
-		wq.LastWrongAt = beijingNow()
-		wq.IsRedone = false
-	}
-	s.db.Save(&wq)
+	engine := newGradingEngine(s.db)
+	flow := gradingFlow{ai: s.grader, maxScore: practiceMaxScore}
+	gr := engine.gradeOne(flow, &question, userAnswer, studentID)
 
-	result := map[string]any{
-		"correct_answer": question.Answer,
-		"explanation":    question.Explanation,
-		"is_removed":     wq.IsRemoved,
+	// 重做结果与练习同口径落练习记录（统计事实源单一）。
+	rec := model.QuestionPracticeRecord{
+		StudentID:    studentID,
+		QuestionID:   questionID,
+		IsCorrect:    gr.IsCorrect != nil && *gr.IsCorrect,
+		PracticeType: "redo",
+		UserAnswer:   stringifyAnswer(userAnswer),
+		CreatedAt:    beijingNow(),
 	}
-	if isCorrect == nil {
-		result["is_correct"] = nil
-	} else {
-		result["is_correct"] = *isCorrect
+	if err := s.db.Create(&rec).Error; err != nil {
+		return nil, err
 	}
-	// 解析增强：补充全站正确率与易错项（基于练习记录）
-	if stats := s.questionStats(questionID, question.Type); stats != nil {
-		if stats.accuracyRate != nil {
-			result["accuracy_rate"] = *stats.accuracyRate
+
+	// 错题本状态机：判错路径 gradeOne 已入库计数；此处仅按重做结果维护 is_redone 标记
+	// （定向更新，避免覆盖 addToWrongQuestions 刚写入的计数）。
+	if gr.IsCorrect != nil {
+		if err := s.db.Model(&model.WrongQuestion{}).Where("id = ?", wq.ID).Update("is_redone", *gr.IsCorrect).Error; err != nil {
+			return nil, err
 		}
-		if stats.commonWrong != nil {
-			result["common_wrong"] = *stats.commonWrong
-		}
-		result["total_attempts"] = stats.total
 	}
-	// AI 解析：有缓存用缓存，否则降级静态解析（错题流暂不触发 AI 生成）
-	if question.AIExplanation != "" {
-		result["ai_explanation"] = question.AIExplanation
-	} else {
-		result["ai_explanation"] = question.Explanation
+
+	result := &SubmitResultDTO{
+		IsCorrect:     gr.IsCorrect,
+		CorrectAnswer: question.Answer,
+		Explanation:   question.Explanation,
+		QuestionID:    questionID,
+		UserAnswer:    userAnswer,
 	}
+	finalizeSubmitResult(s.db, s.explainer, result, gr, &rec, &question)
 	return result, nil
-}
-
-type wqQuestionStat struct {
-	total        int
-	accuracyRate *float64
-	commonWrong  *string
-}
-
-func (s *WrongQuestionService) questionStats(questionID int, qType string) *wqQuestionStat {
-	var total int64
-	s.db.Model(&model.QuestionPracticeRecord{}).Where("question_id = ?", questionID).Count(&total)
-	res := &wqQuestionStat{total: int(total)}
-	if total < 5 {
-		return res
-	}
-	var correct int64
-	s.db.Model(&model.QuestionPracticeRecord{}).Where("question_id = ? AND is_correct = ?", questionID, true).Count(&correct)
-	acc := roundFloat1(float64(correct) / float64(total) * 100)
-	res.accuracyRate = &acc
-	if qType == "short_answer" {
-		return res
-	}
-	type aggRow struct {
-		UserAnswer string `gorm:"column:user_answer"`
-		Cnt        int64  `gorm:"column:cnt"`
-	}
-	var row aggRow
-	err := s.db.Model(&model.QuestionPracticeRecord{}).
-		Select("user_answer, COUNT(*) as cnt").
-		Where("question_id = ? AND is_correct = ?", questionID, false).
-		Group("user_answer").
-		Order("cnt DESC").
-		Limit(1).
-		Scan(&row).Error
-	if err == nil && row.Cnt > 0 {
-		res.commonWrong = &row.UserAnswer
-	}
-	return res
 }
 
 // RemoveWrongQuestion 移除错题。

@@ -41,13 +41,13 @@ func sampleQuestions(db *gorm.DB, qType string, count int) ([]model.Question, er
 
 // gradeQuestion 评分（判题唯一实现）。
 // 返回 (isCorrect, earned)：isCorrect 为 nil 表示无法判定（简答题/未作答），earned 为得分。
-// maxScore 为 0 时按定级考试分值表取默认值。
+// maxScore 为 0 时按练习分值表取默认值。
 func gradeQuestion(q *model.Question, userAnswer interface{}, maxScore float64) (*bool, float64) {
 	if userAnswer == nil {
 		return nil, 0
 	}
 	if maxScore == 0 {
-		maxScore = questionMaxScore("level_exam", q.Type)
+		maxScore = questionMaxScore("practice", q.Type)
 	}
 	switch q.Type {
 	case "single_choice", "true_false", "fault_image":
@@ -311,7 +311,13 @@ func (s *QuestionBankService) UpdateQuestion(id int, data map[string]any) (Quest
 		q.RejectReason = ""
 	}
 	q.UpdatedAt = beijingNow()
-	if err := s.db.Save(&q).Error; err != nil {
+	// 改题即失效旧 AI 解析（spec #295）：题目内容变更后缓存不再可信，与保存同事务清列。
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(&q).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.Question{}).Where("id = ?", id).Update("ai_explanation", "").Error
+	}); err != nil {
 		return QuestionDTO{}, err
 	}
 	if v, ok := data["tag_ids"]; ok {

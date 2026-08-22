@@ -17,14 +17,22 @@ import (
 // PracticeModeService 题库练习模式服务。
 type PracticeModeService struct {
 	db *gorm.DB
-	ai *AIService
+	// grader 短答 AI 判分 adapter（nil 时简答降级，与错题重做口径一致）。
+	grader ShortAnswerGrader
+	// explainer AI 解析 module（缓存/生成/降级策略单点，spec #295）。
+	explainer *QuestionExplanation
 
 	logger *zap.Logger
 }
 
-// NewPracticeModeService 创建题库练习服务，ai 可为 nil（简答题降级）。
+// NewPracticeModeService 创建题库练习服务，ai 可为 nil（简答题与解析降级）。
 func NewPracticeModeService(db *gorm.DB, ai *AIService, logger *zap.Logger) *PracticeModeService {
-	return &PracticeModeService{db: db, ai: ai, logger: logger}
+	return &PracticeModeService{
+		db:        db,
+		grader:    shortAnswerGraderOf(ai),
+		explainer: NewQuestionExplanation(db, ai, logger),
+		logger:    logger,
+	}
 }
 
 // GetFreeQuestions 随机练习抽题：从 published 题库按条件随机抽取 count 题。
@@ -316,7 +324,7 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 
 	engine := newGradingEngine(s.db)
 	flow := gradingFlow{
-		ai:       shortAnswerGraderOf(s.ai),
+		ai:       s.grader,
 		maxScore: practiceMaxScore,
 	}
 	gr := engine.gradeOne(flow, &q, userAnswer, studentID)
@@ -340,25 +348,20 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 		QuestionID:    questionID,
 		UserAnswer:    userAnswer,
 	}
-	// 解析增强：全站正确率与易错项聚合（基于练习记录）
-	if stats := s.questionStats(questionID, q.Type); stats != nil {
+	finalizeSubmitResult(s.db, s.explainer, result, gr, &rec, &q)
+	return result, nil
+}
+
+// finalizeSubmitResult 练习提交/错题重做共享的结果装配尾段（spec #295/#300 装配单点）：
+// 全站统计回填 → AI 解析（QuestionExplanation module 单点）→ 简答分支
+// （AI 及格覆写 IsCorrect 并二次 Save 同步练习记录，降级时 AIFallback 同写）。
+func finalizeSubmitResult(db *gorm.DB, explainer *QuestionExplanation, result *SubmitResultDTO, gr GradeResult, rec *model.QuestionPracticeRecord, q *model.Question) {
+	if stats := questionStats(db, q.ID, q.Type); stats != nil {
 		result.AccuracyRate = stats.accuracyRate
 		result.CommonWrong = stats.commonWrong
 		result.TotalAttempts = stats.total
 	}
-	// AI 解析：按需生成并缓存，未配置时降级静态解析
-	if q.AIExplanation != "" {
-		result.AIExplanation = q.AIExplanation
-	} else if s.ai != nil {
-		if content, err := s.ai.GenerateQuestionExplanation(q.Content, q.Answer, q.Explanation); err == nil && content != "" {
-			_ = s.db.Model(&model.Question{}).Where("id = ?", q.ID).Update("ai_explanation", content).Error
-			result.AIExplanation = content
-		} else {
-			result.AIExplanation = q.Explanation
-		}
-	} else {
-		result.AIExplanation = q.Explanation
-	}
+	result.AIExplanation = explainer.GetOrGenerate(q)
 	if q.Type == "short_answer" {
 		result.ReferenceAnswer = q.ReferenceAnswer
 		result.ScoringCriteria = q.ScoringCriteria
@@ -369,18 +372,17 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 			if sg.Fallback {
 				result.AIFallback = boolPtr(true)
 			} else {
-				// 练习流保留 IsCorrect 重写语义：AI 及格即覆盖 IsCorrect 并落库。
+				// 练习流保留 IsCorrect 重写语义：AI 及格即覆盖并同步练习记录。
 				result.IsCorrect = boolPtr(sg.Passed)
 				rec.IsCorrect = sg.Passed
-				s.db.Save(&rec)
+				db.Save(rec)
 			}
 		}
 	}
-	return result, nil
 }
 
-// practiceMaxScore 练习流单题满分解析：客观题按定级分值表，简答题按题目自定义分（默认 10）。
-// 与 SubmitAnswer 既有语义一致（客观走 level_exam 分值表、简答走 q.Score）。
+// practiceMaxScore 练习流单题满分解析：客观题按练习分值表（原定级表，已正名 practice），简答题按题目自定义分（默认 10）。
+// 与 SubmitAnswer 既有语义一致（客观走 practice 分值表、简答走 q.Score）。
 func practiceMaxScore(q *model.Question) float64 {
 	if q.Type == "short_answer" {
 		if q.Score > 0 {
@@ -388,7 +390,7 @@ func practiceMaxScore(q *model.Question) float64 {
 		}
 		return 10
 	}
-	return questionMaxScore("level_exam", q.Type)
+	return questionMaxScore("practice", q.Type)
 }
 
 // GetStats 学员练习统计（经统计聚合 module，一次 GROUP BY 按题型聚合；by_type 正确率为加性新增 key）。
@@ -431,15 +433,17 @@ type questionStatResult struct {
 	commonWrong  *string
 }
 
-func (s *PracticeModeService) questionStats(questionID int, qType string) *questionStatResult {
+// questionStats 单题全站统计（练习/错题重做共享唯一实现）：总数、样本≥5 时的正确率
+// 与易错项（易错项仅统计选择题，简答早退）。
+func questionStats(db *gorm.DB, questionID int, qType string) *questionStatResult {
 	var total int64
-	s.db.Model(&model.QuestionPracticeRecord{}).Where("question_id = ?", questionID).Count(&total)
+	db.Model(&model.QuestionPracticeRecord{}).Where("question_id = ?", questionID).Count(&total)
 	res := &questionStatResult{total: int(total)}
 	if total < 5 {
 		return res
 	}
 	var correct int64
-	s.db.Model(&model.QuestionPracticeRecord{}).Where("question_id = ? AND is_correct = ?", questionID, true).Count(&correct)
+	db.Model(&model.QuestionPracticeRecord{}).Where("question_id = ? AND is_correct = ?", questionID, true).Count(&correct)
 	acc := roundFloat1(float64(correct) / float64(total) * 100)
 	res.accuracyRate = &acc
 	if qType == "short_answer" {
@@ -450,7 +454,7 @@ func (s *PracticeModeService) questionStats(questionID int, qType string) *quest
 		Cnt        int64  `gorm:"column:cnt"`
 	}
 	var row aggRow
-	err := s.db.Model(&model.QuestionPracticeRecord{}).
+	err := db.Model(&model.QuestionPracticeRecord{}).
 		Select("user_answer, COUNT(*) as cnt").
 		Where("question_id = ? AND is_correct = ?", questionID, false).
 		Group("user_answer").

@@ -104,12 +104,12 @@ type redoWrongQuestionReq struct {
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
 // @Param body body object true "答案" example({"user_answer":"A"})
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.SubmitResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /wrong-questions/{question_id}/redo [post]
 func (h *WrongQuestionHandler) Redo(c *gin.Context) {
-	Endpoint[redoWrongQuestionReq, map[string]any]{
+	Endpoint[redoWrongQuestionReq, service.SubmitResultDTO]{
 		Parse: func(c *gin.Context) (*redoWrongQuestionReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -125,14 +125,10 @@ func (h *WrongQuestionHandler) Redo(c *gin.Context) {
 			}
 			return &redoWrongQuestionReq{StudentID: studentID, QuestionID: questionID, UserAnswer: req.UserAnswer}, nil
 		},
-		Invoke: func(ctx context.Context, req *redoWrongQuestionReq) (*map[string]any, error) {
-			result, err := h.svc.RedoWrongQuestion(req.StudentID, req.QuestionID, req.UserAnswer)
-			if err != nil {
-				return nil, err
-			}
-			return &result, nil
+		Invoke: func(ctx context.Context, req *redoWrongQuestionReq) (*service.SubmitResultDTO, error) {
+			return h.svc.RedoWrongQuestion(req.StudentID, req.QuestionID, req.UserAnswer)
 		},
-		Render: func(c *gin.Context, _ *redoWrongQuestionReq, resp *map[string]any, err error) {
+		Render: func(c *gin.Context, _ *redoWrongQuestionReq, resp *service.SubmitResultDTO, err error) {
 			if err != nil {
 				response.BadRequest(c, err.Error())
 				return

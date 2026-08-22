@@ -1,10 +1,9 @@
-// Package service 答题会话 module 测试：守卫、进度重建、答案三态初始化、状态展示语义。
+// Package service 答题会话 module 测试：守卫、进度重建、答案三态初始化语义。
 package service
 
 import (
 	"encoding/json"
 	"testing"
-	"time"
 
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
@@ -77,29 +76,6 @@ func TestInitAnswersState(t *testing.T) {
 			if len(m) != 1 {
 				t.Fatalf("有内容时不得清空: %q", out)
 			}
-		}
-	}
-}
-
-func TestEffectiveExamStatus(t *testing.T) {
-	start := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
-	end := start.Add(2 * time.Hour)
-
-	cases := []struct {
-		status string
-		now    time.Time
-		want   string
-	}{
-		{"upcoming", start.Add(-time.Hour), "upcoming"},
-		{"upcoming", start.Add(time.Hour), "ongoing"},
-		{"upcoming", end.Add(time.Hour), "finished"},
-		{"ongoing", end.Add(time.Hour), "finished"},
-		{"ongoing", start.Add(time.Hour), "ongoing"},
-		{"finished", start.Add(time.Hour), "finished"},
-	}
-	for _, c := range cases {
-		if got := effectiveExamStatus(c.status, start, end, c.now); got != c.want {
-			t.Errorf("effectiveExamStatus(%s, %v) = %s, want %s", c.status, c.now, got, c.want)
 		}
 	}
 }
