@@ -76,12 +76,3 @@ func effectiveExamStatus(status string, startTime, endTime, now time.Time) strin
 	}
 	return eff
 }
-
-// advanceExamStatus 写路径状态推进：upcoming 且已过开始时间 → ongoing。
-// 返回 (新状态, 是否推进)。仅由进入考试等写操作调用。
-func advanceExamStatus(status string, startTime, now time.Time) (string, bool) {
-	if status == "upcoming" && now.After(startTime) {
-		return "ongoing", true
-	}
-	return status, false
-}

@@ -63,13 +63,6 @@
           学员名单
         </el-button>
         <el-button
-          type="success"
-          :loading="exporting === 'exam-records'"
-          @click="handleExport('exam-records')"
-        >
-          考试成绩
-        </el-button>
-        <el-button
           type="warning"
           :loading="exporting === 'questions'"
           @click="handleExport('questions')"

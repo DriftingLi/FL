@@ -36,39 +36,6 @@ func (s *TutorService) GetCourses(page, pageSize int, specialtyID, levelID *int)
 	})
 }
 
-// GetGradingStats 阅卷统计（按天分组），用于导师仪表盘图表。
-// 统计当前导师 grader_id 命中的 exam_answer 行数（即导师本人批阅题数）。
-// days 仅允许 7 或 30，其他值统一回退为 7。
-func (s *TutorService) GetGradingStats(tutorID, days int) *GradingStatsDTO {
-	// 按天聚合当前导师已批阅题数（起点由 BuildDailySeries/dailySeriesStart 统一钳制与推导）
-	start := dailySeriesStart(days)
-	type dailyRow struct {
-		Day   string
-		Count int64
-	}
-	var rows []dailyRow
-	s.db.Model(&model.ExamAnswer{}).
-		Select("TO_CHAR(graded_at, 'YYYY-MM-DD') as day, COUNT(*) as count").
-		Where("grader_id = ? AND graded_at IS NOT NULL AND graded_at >= ?", tutorID, start).
-		Group("day").
-		Order("day ASC").
-		Scan(&rows)
-
-	countByDay := make(map[string]int64, len(rows))
-	for _, r := range rows {
-		countByDay[r.Day] = r.Count
-	}
-
-	series := BuildDailySeries(days, countByDay)
-	return &GradingStatsDTO{
-		Days:       series.Days,
-		Labels:     series.Labels,
-		Data:       series.Data,
-		TotalCount: series.Total,
-		ActiveDays: series.ActiveDays,
-	}
-}
-
 // GetCourseChapters 导师章节列表（含文件）。
 // 文件列表批量装载（一次 IN 查询）消除逐章节 N+1。
 func (s *TutorService) GetCourseChapters(courseID int) (*TutorCourseChaptersDTO, error) {

@@ -42,23 +42,9 @@ export interface TutorChapterDetail extends ChapterDetail {
   chapters?: TutorChapter[]
 }
 
-/** 阅卷统计（按天分组，与后端 daily series 对齐，total 题为 total_count） */
-export interface GradingStatsData {
-  days: number
-  labels: string[]
-  data: number[]
-  total_count: number
-  active_days: number
-}
-
 export const tutorApi = {
   getCourses(params: TutorCoursesQuery) {
     return unwrappedRequest.get<{ courses: TutorCourse[]; total: number }>('/tutor/courses', { params })
-  },
-
-  // 阅卷统计（按天分组），days=7|30
-  getGradingStats(params?: { days?: number }) {
-    return unwrappedRequest.get<GradingStatsData>('/tutor/grading-stats', { params })
   },
 
   getCourseChapters(courseId: number) {

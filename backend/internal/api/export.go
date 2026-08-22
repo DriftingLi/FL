@@ -35,7 +35,6 @@ func RegisterExportRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Expor
 	g := rg.Group("/admin/export", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
 
 	g.GET("/students", h.exportCSV(func() ([][]any, error) { return svc.Students() }, "学员名单.csv"))
-	g.GET("/exam-records", h.exportCSV(func() ([][]any, error) { return svc.ExamRecords() }, "成绩单.csv"))
 	g.GET("/questions", h.exportCSV(func() ([][]any, error) { return svc.Questions() }, "题库.csv"))
 	g.GET("/evaluations", h.exportCSV(func() ([][]any, error) { return svc.Evaluations() }, "评估记录.csv"))
 }

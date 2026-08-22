@@ -52,50 +52,6 @@ func (s *ExportService) Students() ([][]any, error) {
 	return out, nil
 }
 
-// ExamRecords 成绩单导出行（已提交的考试参与记录）。
-func (s *ExportService) ExamRecords() ([][]any, error) {
-	var rows []struct {
-		StudentID  int
-		Account    string
-		Username   string
-		Phone      string
-		ExamName   string
-		Score      *float64
-		IsPassed   bool
-		SubmitTime *time.Time
-	}
-	err := s.db.Table("exam_participant AS ep").
-		Select("ep.student_id, u.account, u.username, u.phone, es.name AS exam_name, " +
-			"ep.score, ep.is_passed, ep.submit_time").
-		Joins("JOIN exam_session AS es ON es.id = ep.exam_session_id").
-		Joins("JOIN hrwai_users AS u ON u.id = ep.student_id").
-		Where("ep.submit_time IS NOT NULL").
-		Order("ep.submit_time DESC").
-		Scan(&rows).Error
-	if err != nil {
-		return nil, err
-	}
-	out := [][]any{{"学员ID", "账号", "昵称", "手机号", "考试名称", "分数", "是否通过", "提交时间"}}
-	for _, r := range rows {
-		score := ""
-		if r.Score != nil {
-			score = fmt.Sprintf("%.2f", *r.Score)
-		}
-		passed := "否"
-		if r.IsPassed {
-			passed = "是"
-		}
-		submit := ""
-		if r.SubmitTime != nil {
-			submit = formatISO(*r.SubmitTime)
-		}
-		out = append(out, []any{
-			r.StudentID, r.Account, r.Username, r.Phone, r.ExamName, score, passed, submit,
-		})
-	}
-	return out, nil
-}
-
 // Questions 题库导出行。
 func (s *ExportService) Questions() ([][]any, error) {
 	var rows []struct {

@@ -92,7 +92,61 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 	} else {
 		result["is_correct"] = *isCorrect
 	}
+	// 解析增强：补充全站正确率与易错项（基于练习记录）
+	if stats := s.questionStats(questionID, question.Type); stats != nil {
+		if stats.accuracyRate != nil {
+			result["accuracy_rate"] = *stats.accuracyRate
+		}
+		if stats.commonWrong != nil {
+			result["common_wrong"] = *stats.commonWrong
+		}
+		result["total_attempts"] = stats.total
+	}
+	// AI 解析：有缓存用缓存，否则降级静态解析（错题流暂不触发 AI 生成）
+	if question.AIExplanation != "" {
+		result["ai_explanation"] = question.AIExplanation
+	} else {
+		result["ai_explanation"] = question.Explanation
+	}
 	return result, nil
+}
+
+type wqQuestionStat struct {
+	total        int
+	accuracyRate *float64
+	commonWrong  *string
+}
+
+func (s *WrongQuestionService) questionStats(questionID int, qType string) *wqQuestionStat {
+	var total int64
+	s.db.Model(&model.QuestionPracticeRecord{}).Where("question_id = ?", questionID).Count(&total)
+	res := &wqQuestionStat{total: int(total)}
+	if total < 5 {
+		return res
+	}
+	var correct int64
+	s.db.Model(&model.QuestionPracticeRecord{}).Where("question_id = ? AND is_correct = ?", questionID, true).Count(&correct)
+	acc := roundFloat1(float64(correct) / float64(total) * 100)
+	res.accuracyRate = &acc
+	if qType == "short_answer" {
+		return res
+	}
+	type aggRow struct {
+		UserAnswer string `gorm:"column:user_answer"`
+		Cnt        int64  `gorm:"column:cnt"`
+	}
+	var row aggRow
+	err := s.db.Model(&model.QuestionPracticeRecord{}).
+		Select("user_answer, COUNT(*) as cnt").
+		Where("question_id = ? AND is_correct = ?", questionID, false).
+		Group("user_answer").
+		Order("cnt DESC").
+		Limit(1).
+		Scan(&row).Error
+	if err == nil && row.Cnt > 0 {
+		res.commonWrong = &row.UserAnswer
+	}
+	return res
 }
 
 // RemoveWrongQuestion 移除错题。

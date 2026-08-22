@@ -21,6 +21,7 @@ const (
 	FeatureGradeShortAnswer       = "grade_short_answer"
 	FeatureGenerateChapterContent = "generate_chapter_content"
 	FeatureAIAssistant            = "ai_assistant"
+	FeatureQuestionExplanation    = "ai_question_analysis"
 )
 
 // AllAIFeatures 全部 AI 功能键列表（用于绑定列表的全量展示）。
@@ -28,6 +29,7 @@ var AllAIFeatures = []string{
 	FeatureGradeShortAnswer,
 	FeatureGenerateChapterContent,
 	FeatureAIAssistant,
+	FeatureQuestionExplanation,
 }
 
 // FeatureLabel 功能键对应的中文名称。
@@ -35,6 +37,7 @@ var FeatureLabel = map[string]string{
 	FeatureGradeShortAnswer:       "简答题 AI 评分",
 	FeatureGenerateChapterContent: "课程内容生成",
 	FeatureAIAssistant:            "AI 助手对话",
+	FeatureQuestionExplanation:    "题目 AI 解析",
 }
 
 // multiBindFeatures 允许多绑定的功能集合（一个 feature_key 可绑定多个 config_id）。

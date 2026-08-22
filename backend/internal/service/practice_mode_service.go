@@ -318,6 +318,25 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 		QuestionID:    questionID,
 		UserAnswer:    userAnswer,
 	}
+	// 解析增强：全站正确率与易错项聚合（基于练习记录）
+	if stats := s.questionStats(questionID, q.Type); stats != nil {
+		result.AccuracyRate = stats.accuracyRate
+		result.CommonWrong = stats.commonWrong
+		result.TotalAttempts = stats.total
+	}
+	// AI 解析：按需生成并缓存，未配置时降级静态解析
+	if q.AIExplanation != "" {
+		result.AIExplanation = q.AIExplanation
+	} else if s.ai != nil {
+		if content, err := s.ai.GenerateQuestionExplanation(q.Content, q.Answer, q.Explanation); err == nil && content != "" {
+			_ = s.db.Model(&model.Question{}).Where("id = ?", q.ID).Update("ai_explanation", content).Error
+			result.AIExplanation = content
+		} else {
+			result.AIExplanation = q.Explanation
+		}
+	} else {
+		result.AIExplanation = q.Explanation
+	}
 	if q.Type == "short_answer" {
 		result.ReferenceAnswer = q.ReferenceAnswer
 		result.ScoringCriteria = q.ScoringCriteria
@@ -382,6 +401,44 @@ func (s *PracticeModeService) GetStats(studentID int) *PracticeStatsDTO {
 		Accuracy: accuracy,
 		ByType:   byType,
 	}
+}
+
+type questionStatResult struct {
+	total        int
+	accuracyRate *float64
+	commonWrong  *string
+}
+
+func (s *PracticeModeService) questionStats(questionID int, qType string) *questionStatResult {
+	var total int64
+	s.db.Model(&model.QuestionPracticeRecord{}).Where("question_id = ?", questionID).Count(&total)
+	res := &questionStatResult{total: int(total)}
+	if total < 5 {
+		return res
+	}
+	var correct int64
+	s.db.Model(&model.QuestionPracticeRecord{}).Where("question_id = ? AND is_correct = ?", questionID, true).Count(&correct)
+	acc := roundFloat1(float64(correct) / float64(total) * 100)
+	res.accuracyRate = &acc
+	if qType == "short_answer" {
+		return res
+	}
+	type aggRow struct {
+		UserAnswer string `gorm:"column:user_answer"`
+		Cnt        int64  `gorm:"column:cnt"`
+	}
+	var row aggRow
+	err := s.db.Model(&model.QuestionPracticeRecord{}).
+		Select("user_answer, COUNT(*) as cnt").
+		Where("question_id = ? AND is_correct = ?", questionID, false).
+		Group("user_answer").
+		Order("cnt DESC").
+		Limit(1).
+		Scan(&row).Error
+	if err == nil && row.Cnt > 0 {
+		res.commonWrong = &row.UserAnswer
+	}
+	return res
 }
 
 // GetHistory 练习历史分页。

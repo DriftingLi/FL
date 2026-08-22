@@ -22,7 +22,7 @@
       </div>
     </div>
 
-    <!-- 三列快捷卡片 -->
+    <!-- 快捷卡片 -->
     <div class="quick-cards">
       <QuickCard
         title="进行中的课程"
@@ -30,14 +30,6 @@
         :max-items="5"
         more-link="/training/courses"
         empty-text="暂无进行中的课程"
-      />
-
-      <QuickCard
-        title="待完成考试"
-        :items="pendingExams"
-        :max-items="5"
-        more-link="/training/level-exam"
-        empty-text="暂无待完成的考试"
       />
 
       <QuickCard
@@ -100,9 +92,6 @@ const continueLearningPath = computed(() => {
   if (!cl?.last_chapter_id) return ''
   return `/training/course/${cl.course_id}/chapter/${cl.last_chapter_id}`
 })
-
-// 待完成考试
-const pendingExams = ref<QuickCardItem[]>([])
 
 // 最近学习
 const recentLearning = ref<QuickCardItem[]>([])
@@ -264,10 +253,10 @@ onMounted(async () => {
   color: white;
 }
 
-/* 三列快捷卡片 */
+/* 快捷卡片 */
 .quick-cards {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: var(--space-4);
 }
 

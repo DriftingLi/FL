@@ -259,6 +259,7 @@ type Question struct {
 	Options         JSONB     `gorm:"column:options;type:jsonb" json:"options,omitempty"`
 	Answer          string    `gorm:"column:answer" json:"answer"`
 	Explanation     string    `gorm:"column:explanation" json:"explanation"`
+	AIExplanation   string    `gorm:"column:ai_explanation" json:"ai_explanation,omitempty"`
 	ImageURL        string    `gorm:"column:image_url" json:"image_url"`
 	ReferenceAnswer string    `gorm:"column:reference_answer" json:"reference_answer"`
 	ScoringCriteria string    `gorm:"column:scoring_criteria" json:"scoring_criteria"`
@@ -297,65 +298,6 @@ type QuestionTagRelation struct {
 }
 
 func (QuestionTagRelation) TableName() string { return "question_tag_relation" }
-
-// ===== 12. 考试场次 =====
-
-type ExamSession struct {
-	ID             int       `gorm:"column:id;primaryKey" json:"id"`
-	Name           string    `gorm:"column:name" json:"name"`
-	StartTime      time.Time `gorm:"column:start_time" json:"start_time"`
-	EndTime        time.Time `gorm:"column:end_time" json:"end_time"`
-	Duration       int       `gorm:"column:duration" json:"duration"`
-	Status         string    `gorm:"column:status;default:upcoming" json:"status"`
-	CreatedBy      *int      `gorm:"column:created_by" json:"created_by,omitempty"`
-	QuestionConfig JSONB     `gorm:"column:question_config;type:jsonb" json:"question_config,omitempty"`
-	TotalScore     int       `gorm:"column:total_score;default:0" json:"total_score"`
-	PassScore      int       `gorm:"column:pass_score;default:60" json:"pass_score"`
-	CreatedAt      time.Time `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt      time.Time `gorm:"column:updated_at" json:"updated_at"`
-}
-
-func (ExamSession) TableName() string { return "exam_session" }
-
-// ===== 13. 考试参与记录 =====
-
-type ExamParticipant struct {
-	ID              int        `gorm:"column:id;primaryKey" json:"id"`
-	ExamSessionID   int        `gorm:"column:exam_session_id" json:"exam_session_id"`
-	StudentID       int        `gorm:"column:student_id" json:"student_id"`
-	Status          string     `gorm:"column:status;default:not_started" json:"status"`
-	StartTime       *time.Time `gorm:"column:start_time" json:"start_time,omitempty"`
-	SubmitTime      *time.Time `gorm:"column:submit_time" json:"submit_time,omitempty"`
-	RemainingTime   int        `gorm:"column:remaining_time;default:0" json:"remaining_time"`
-	Score           *float64   `gorm:"column:score;type:numeric(5,2)" json:"score,omitempty"`
-	ObjectiveScore  *float64   `gorm:"column:objective_score;type:numeric(5,2)" json:"objective_score,omitempty"`
-	SubjectiveScore *float64   `gorm:"column:subjective_score;type:numeric(5,2)" json:"subjective_score,omitempty"`
-	IsPassed        bool       `gorm:"column:is_passed;default:false" json:"is_passed"`
-	AnswersSnapshot JSONB      `gorm:"column:answers_snapshot;type:jsonb" json:"answers_snapshot,omitempty"`
-	QuestionIDs     JSONB      `gorm:"column:question_ids;type:jsonb" json:"question_ids,omitempty"`
-	CreatedAt       time.Time  `gorm:"column:created_at" json:"created_at"`
-}
-
-func (ExamParticipant) TableName() string { return "exam_participant" }
-
-// ===== 14. 考试答题记录 =====
-
-type ExamAnswer struct {
-	ID                int        `gorm:"column:id;primaryKey" json:"id"`
-	ExamParticipantID int        `gorm:"column:exam_participant_id" json:"exam_participant_id"`
-	QuestionID        int        `gorm:"column:question_id" json:"question_id"`
-	UserAnswer        string     `gorm:"column:user_answer" json:"user_answer"`
-	IsCorrect         *bool      `gorm:"column:is_correct" json:"is_correct,omitempty"`
-	Score             float64    `gorm:"column:score;type:numeric(5,2);default:0" json:"score"`
-	GraderID          *int       `gorm:"column:grader_id" json:"grader_id,omitempty"`
-	GradedAt          *time.Time `gorm:"column:graded_at" json:"graded_at,omitempty"`
-	GradingComment    string     `gorm:"column:grading_comment" json:"grading_comment"`
-	AIScore           *float64   `gorm:"column:ai_score;type:numeric(5,2)" json:"ai_score,omitempty"`
-	AIComment         string     `gorm:"column:ai_comment" json:"ai_comment"`
-	AIGradedAt        *time.Time `gorm:"column:ai_graded_at" json:"ai_graded_at,omitempty"`
-}
-
-func (ExamAnswer) TableName() string { return "exam_answer" }
 
 // ===== 15. 题库练习记录 =====
 
@@ -621,6 +563,29 @@ type ForumReport struct {
 }
 
 func (ForumReport) TableName() string { return "forum_report" }
+
+// ===== 24.5 题目评论（刷题解析） =====
+
+type QuestionComment struct {
+	ID         int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	QuestionID int       `gorm:"column:question_id" json:"question_id"`
+	UserID     int       `gorm:"column:user_id" json:"user_id"`
+	Content    string    `gorm:"column:content" json:"content"`
+	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (QuestionComment) TableName() string { return "question_comment" }
+
+// QuestionNote 题目笔记（每人每题一条，私有）。
+type QuestionNote struct {
+	ID         int       `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	QuestionID int       `gorm:"column:question_id" json:"question_id"`
+	UserID     int       `gorm:"column:user_id" json:"user_id"`
+	Content    string    `gorm:"column:content" json:"content"`
+	UpdatedAt  time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (QuestionNote) TableName() string { return "question_note" }
 
 // ===== 25. 资料修改审核 =====
 

@@ -22,6 +22,12 @@ export interface WrongQuestionItem {
 /** 重做判定结果 */
 export interface RedoResult {
   is_correct?: boolean
+  correct_answer?: string
+  explanation?: string
+  accuracy_rate?: number | null
+  common_wrong?: string | null
+  total_attempts?: number
+  ai_explanation?: string
 }
 
 export const wrongQuestionApi = {
