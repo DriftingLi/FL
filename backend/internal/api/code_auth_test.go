@@ -131,7 +131,7 @@ func newCodeAuthTestRouterX(t *testing.T, captchaEnabled bool) (*gin.Engine, *me
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db := testutil.NewMemoryDB(t)
-	authSvc := service.NewAuthService(db, security.NewSession("test-secret", time.Hour, security.CookieConfig{}), "admin", "tutor", "student", zap.NewNop())
+	authSvc := service.NewAuthService(db, security.NewSession("test-secret", time.Hour, security.CookieConfig{}), service.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
 	store := newMemCodeStore()
 	codeSvc := service.NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
 	captchaSvc := captcha.NewService(store) // memCodeStore 实现 captcha.Store（Get/Set/Del 同构）

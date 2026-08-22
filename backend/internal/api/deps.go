@@ -74,7 +74,9 @@ type Deps struct {
 func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger, exportStore service.ExportStore) *Deps {
 	// 会话唯一实例：签发（AuthService）与校验（中间件/估值模块）共用同一实例
 	sess := security.SessionFromConfig(cfg)
-	authSvc := service.NewAuthService(db, sess,
+	// 论坛计数器唯一实例：ForumService 与 AuthService 共享（计数列唯一写入口，spec #297）
+	forumCnt := service.NewForumCounter()
+	authSvc := service.NewAuthService(db, sess, forumCnt,
 		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student, logger)
 	codeSvc := service.NewVerifyCodeService(db, authSvc, cfg.EmailCodeTTL, &service.RedisAuthCodeStore{}, logger)
 	captchaSvc := captcha.NewService(captcha.RedisStore{})
@@ -111,7 +113,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		CourseSvc:            service.NewCourseService(db, slideRenderer, logger),
 		AdminSvc:             service.NewAdminService(db, logger),
 		AdminCourseSvc:       service.NewAdminCourseService(db, fileSvc, logger),
-		ForumSvc:             service.NewForumService(db, fileSvc, notificationSvc, logger),
+		ForumSvc:             service.NewForumService(db, fileSvc, notificationSvc, forumCnt, logger),
 		CheckInSvc:           service.NewCheckInService(db, logger),
 		ForumImageSvc:        service.NewForumImageService(db, fileSvc, logger),
 		FeaturedSvc:          service.NewFeaturedService(db, fileSvc, logger),

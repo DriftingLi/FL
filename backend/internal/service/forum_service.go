@@ -82,15 +82,17 @@ type ForumService struct {
 	db              *gorm.DB
 	fileSvc         *FileStore
 	notificationSvc *NotificationService
+	counters        ForumCounter // 计数列唯一写入口（spec #297）
 
 	logger *zap.Logger
 }
 
 // NewForumService 构造论坛服务。
 // fileSvc 用于删除帖子/回复时清理图片存储（可 nil，nil 时跳过清理）；
-// notificationSvc 用于论坛事件站内信（回复/举报处理/管理端删帖，见各触发点）。
-func NewForumService(db *gorm.DB, fileSvc *FileStore, notificationSvc *NotificationService, logger *zap.Logger) *ForumService {
-	return &ForumService{db: db, fileSvc: fileSvc, notificationSvc: notificationSvc, logger: logger}
+// notificationSvc 用于论坛事件站内信（回复/举报处理/管理端删帖，见各触发点）；
+// counters 为 likes_count / reply_count 唯一写入口（与 AuthService 共享同一实例）。
+func NewForumService(db *gorm.DB, fileSvc *FileStore, notificationSvc *NotificationService, counters ForumCounter, logger *zap.Logger) *ForumService {
+	return &ForumService{db: db, fileSvc: fileSvc, notificationSvc: notificationSvc, counters: counters, logger: logger}
 }
 
 // topicRow 列表查询的扫描结构。
@@ -621,22 +623,18 @@ func (s *ForumService) deleteImages(urls []string) {
 }
 
 // deleteReplyByID 删除回复并回扣主题回复数、刷新最后回复时间。
+// 回扣量取回复子树大小 N（parent_id 链，含自身）：外键 ON DELETE CASCADE 会连带删除全部下级回复，
+// 固定 -1 会让楼中楼场景计数虚高（spec #297 级联少减修复）。
 func (s *ForumService) deleteReplyByID(replyID, topicID int64) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
+		n, err := countReplySubtree(tx, replyID)
+		if err != nil {
+			return err
+		}
 		if err := tx.Delete(&model.ForumReply{}, replyID).Error; err != nil {
 			return err
 		}
-		// 回扣回复数（下限 0，避免并发下负数）
-		var topic model.ForumTopic
-		if err := tx.First(&topic, topicID).Error; err != nil {
-			return err
-		}
-		newCount := topic.ReplyCount - 1
-		if newCount < 0 {
-			newCount = 0
-		}
-		if err := tx.Model(&model.ForumTopic{}).Where("id = ?", topicID).
-			UpdateColumn("reply_count", newCount).Error; err != nil {
+		if err := s.counters.AdjustReplyCounts(tx, topicID, -int(n)); err != nil {
 			return err
 		}
 		var last model.ForumReply
@@ -651,6 +649,18 @@ func (s *ForumService) deleteReplyByID(replyID, topicID int64) error {
 		return tx.Model(&model.ForumTopic{}).Where("id = ?", topicID).
 			Update("last_reply_at", lastAt).Error
 	})
+}
+
+// countReplySubtree 统计回复子树大小（parent_id 链，含自身），递归 CTE 双方言兼容（PG/SQLite）。
+func countReplySubtree(exec *gorm.DB, replyID int64) (int64, error) {
+	var n int64
+	err := exec.Raw(`WITH RECURSIVE subtree AS (
+    SELECT id FROM forum_replies WHERE id = ?
+    UNION ALL
+    SELECT r.id FROM forum_replies r JOIN subtree st ON r.parent_id = st.id
+)
+SELECT COUNT(*) FROM subtree`, replyID).Scan(&n).Error
+	return n, err
 }
 
 // ===== 图片工具 =====
@@ -714,12 +724,12 @@ func (s *ForumService) LikeTopic(userID int, topicID int64) (int64, error) {
 			return nil
 		}
 		if err := tx.Create(&model.ForumTopicLike{TopicID: topicID, UserID: userID, CreatedAt: beijingNow()}).Error; err != nil {
-			if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "uq_forum_topic_like") {
+			if isDuplicateError(err) {
 				return nil
 			}
 			return err
 		}
-		return tx.Model(&model.ForumTopic{}).Where("id = ?", topicID).UpdateColumn("likes_count", gorm.Expr("likes_count + 1")).Error
+		return s.counters.AdjustLikes(tx, topicID, 1)
 	})
 	if err != nil {
 		return 0, err
@@ -735,7 +745,7 @@ func (s *ForumService) UnlikeTopic(userID int, topicID int64) (int64, error) {
 			return res.Error
 		}
 		if res.RowsAffected > 0 {
-			return tx.Model(&model.ForumTopic{}).Where("id = ? AND likes_count > 0", topicID).UpdateColumn("likes_count", gorm.Expr("likes_count - 1")).Error
+			return s.counters.AdjustLikes(tx, topicID, -1)
 		}
 		return nil
 	})
@@ -745,24 +755,11 @@ func (s *ForumService) UnlikeTopic(userID int, topicID int64) (int64, error) {
 	return s.topicLikesCount(topicID), nil
 }
 
-// topicLikesCount 主题点赞数（以 likes_count 列为事实源，兼容回退 COUNT）。
+// topicLikesCount 主题点赞数（读侧只认 likes_count 列为事实源，ADR-0018）。
 func (s *ForumService) topicLikesCount(topicID int64) int64 {
-	var n int
-	if err := s.db.Model(&model.ForumTopic{}).Select("likes_count").Where("id = ?", topicID).Scan(&n).Error; err == nil {
-		return int64(n)
-	}
-	var cnt int64
-	s.db.Model(&model.ForumTopicLike{}).Where("topic_id = ?", topicID).Count(&cnt)
-	return cnt
-}
-
-// hasLiked 当前用户是否已点赞（保留供外部调用，当前内部经 enrich helpers 批量处理）。
-//
-//nolint:unused
-func (s *ForumService) hasLiked(userID int, topicID int64) bool {
 	var n int64
-	s.db.Model(&model.ForumTopicLike{}).Where("topic_id = ? AND user_id = ?", topicID, userID).Count(&n)
-	return n > 0
+	_ = s.db.Model(&model.ForumTopic{}).Select("likes_count").Where("id = ?", topicID).Scan(&n).Error
+	return n
 }
 
 // enrichTopicLikedByMe 批量回填主题是否已赞（计数已由 likes_count 列提供，LikedByMe 单一 helper 收敛）。
@@ -1061,12 +1058,12 @@ func (s *ForumService) LikeReply(userID int, replyID int64) (int64, error) {
 			return nil
 		}
 		if err := tx.Create(&model.ForumReplyLike{ReplyID: replyID, UserID: userID, CreatedAt: beijingNow()}).Error; err != nil {
-			if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "uq_forum_reply_like") {
+			if isDuplicateError(err) {
 				return nil
 			}
 			return err
 		}
-		return tx.Model(&model.ForumReply{}).Where("id = ?", replyID).UpdateColumn("likes_count", gorm.Expr("likes_count + 1")).Error
+		return s.counters.AdjustReplyLikes(tx, replyID, 1)
 	})
 	if err != nil {
 		return 0, err
@@ -1082,7 +1079,7 @@ func (s *ForumService) UnlikeReply(userID int, replyID int64) (int64, error) {
 			return res.Error
 		}
 		if res.RowsAffected > 0 {
-			return tx.Model(&model.ForumReply{}).Where("id = ? AND likes_count > 0", replyID).UpdateColumn("likes_count", gorm.Expr("likes_count - 1")).Error
+			return s.counters.AdjustReplyLikes(tx, replyID, -1)
 		}
 		return nil
 	})
@@ -1092,12 +1089,9 @@ func (s *ForumService) UnlikeReply(userID int, replyID int64) (int64, error) {
 	return s.replyLikesCount(replyID), nil
 }
 
+// replyLikesCount 回复点赞数（读侧只认 likes_count 列为事实源）。
 func (s *ForumService) replyLikesCount(replyID int64) int64 {
-	var n int
-	if err := s.db.Model(&model.ForumReply{}).Select("likes_count").Where("id = ?", replyID).Scan(&n).Error; err == nil {
-		return int64(n)
-	}
-	var cnt int64
-	_ = s.db.Model(&model.ForumReplyLike{}).Where("reply_id = ?", replyID).Count(&cnt).Error
-	return cnt
+	var n int64
+	_ = s.db.Model(&model.ForumReply{}).Select("likes_count").Where("id = ?", replyID).Scan(&n).Error
+	return n
 }
