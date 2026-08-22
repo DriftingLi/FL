@@ -68,7 +68,13 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *serv
 	g.PUT("/question/:question_id/tags", h.SetQuestionTags)
 }
 
-// GetCatalogTree 课程目录树（学员端）GET /api/catalog/tree
+// GetCatalogTree 培训目录树
+// @Summary 培训目录树（公开）
+// @Description 学员端课程目录树
+// @Tags 学员端-培训目录
+// @Produce json
+// @Success 200 {object} response.R "success"
+// @Router /catalog/tree [get]
 func (h *TrainingCatalogHandler) GetCatalogTree(c *gin.Context) {
 	Endpoint[struct{}, service.CatalogTreeDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.CatalogTreeDTO, error) {
@@ -80,7 +86,13 @@ func (h *TrainingCatalogHandler) GetCatalogTree(c *gin.Context) {
 	}.Handle(c)
 }
 
-// ListPublicLevels 课程等级列表（仅启用项）GET /api/levels
+// ListPublicLevels 课程等级列表
+// @Summary 课程等级（公开）
+// @Description 仅启用项
+// @Tags 学员端-培训目录
+// @Produce json
+// @Success 200 {object} response.R "success"
+// @Router /levels [get]
 func (h *TrainingCatalogHandler) ListPublicLevels(c *gin.Context) {
 	Endpoint[struct{}, []service.LevelDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.LevelDict, error) {
@@ -93,7 +105,13 @@ func (h *TrainingCatalogHandler) ListPublicLevels(c *gin.Context) {
 	}.Handle(c)
 }
 
-// ListPublicTags 题库标签列表（仅启用项）GET /api/tags
+// ListPublicTags 题库标签列表
+// @Summary 题库标签（公开）
+// @Description 仅启用项
+// @Tags 学员端-培训目录
+// @Produce json
+// @Success 200 {object} response.R "success"
+// @Router /tags [get]
 func (h *TrainingCatalogHandler) ListPublicTags(c *gin.Context) {
 	Endpoint[struct{}, []service.QuestionTagDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.QuestionTagDict, error) {

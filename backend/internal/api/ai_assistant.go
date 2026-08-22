@@ -54,7 +54,13 @@ func RegisterAIAssistantRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.
 
 // ===== Handler 方法 =====
 
-// ListPublicModels 列出管理员配置的 is_active=true 模型（公开）。
+// ListPublicModels 可用模型列表
+// @Summary AI 可用模型（公开）
+// @Description 列出管理员配置的 is_active=true 模型
+// @Tags 学员端-AI助手
+// @Produce json
+// @Success 200 {object} response.R "success"
+// @Router /ai-assistant/models [get]
 func (h *AIAssistantHandler) ListPublicModels(c *gin.Context) {
 	Endpoint[struct{}, []service.ModelOption]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.ModelOption, error) {
@@ -74,7 +80,16 @@ func (h *AIAssistantHandler) ListPublicModels(c *gin.Context) {
 	}.Handle(c)
 }
 
-// ListUserModels 列出登录用户的自定义模型（api_key 脱敏）。
+// ListUserModels 用户自定义模型列表
+// @Summary 用户自定义模型
+// @Description 列出登录用户自定义模型（api_key 脱敏）
+// @Tags 学员端-AI助手
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /ai-assistant/user-models [get]
 func (h *AIAssistantHandler) ListUserModels(c *gin.Context) {
 	Endpoint[aiUserIDReq, []service.UserModelDTO]{
 		Parse: func(c *gin.Context) (*aiUserIDReq, error) {
@@ -101,7 +116,18 @@ func (h *AIAssistantHandler) ListUserModels(c *gin.Context) {
 	}.Handle(c)
 }
 
-// SaveUserModel 创建/更新用户自定义模型。
+// SaveUserModel 保存用户模型
+// @Summary 保存用户自定义模型
+// @Description 创建或更新用户自定义模型
+// @Tags 学员端-AI助手
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "模型" example({"name":"my-model","api_key":"sk-...","base_url":"https://api.example.com","model":"gpt-4"})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /ai-assistant/user-models [post]
 func (h *AIAssistantHandler) SaveUserModel(c *gin.Context) {
 	Endpoint[aiUserModelSaveReq, struct{}]{
 		Parse: func(c *gin.Context) (*aiUserModelSaveReq, error) {
@@ -134,7 +160,18 @@ func (h *AIAssistantHandler) SaveUserModel(c *gin.Context) {
 	}.Handle(c)
 }
 
-// DeleteUserModel 删除用户自定义模型。
+// DeleteUserModel 删除用户模型
+// @Summary 删除用户自定义模型
+// @Description 删除指定用户模型
+// @Tags 学员端-AI助手
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "模型ID"
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "不存在"
+// @Router /ai-assistant/user-models/{id} [delete]
 func (h *AIAssistantHandler) DeleteUserModel(c *gin.Context) {
 	Endpoint[aiModelIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*aiModelIDReq, error) {
@@ -168,7 +205,16 @@ func (h *AIAssistantHandler) DeleteUserModel(c *gin.Context) {
 	}.Handle(c)
 }
 
-// ListSessions 列出登录用户的会话。
+// ListSessions 会话列表
+// @Summary AI 会话列表
+// @Description 列出登录用户的会话
+// @Tags 学员端-AI助手
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /ai-assistant/sessions [get]
 func (h *AIAssistantHandler) ListSessions(c *gin.Context) {
 	Endpoint[aiUserIDReq, []service.AIChatSessionDTO]{
 		Parse: func(c *gin.Context) (*aiUserIDReq, error) {
@@ -195,7 +241,17 @@ func (h *AIAssistantHandler) ListSessions(c *gin.Context) {
 	}.Handle(c)
 }
 
-// CreateSession 创建会话。
+// CreateSession 创建会话
+// @Summary 创建 AI 会话
+// @Description 创建新会话
+// @Tags 学员端-AI助手
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object false "标题/模型" example({"title":"新对话","model_name":"gpt-4"})
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /ai-assistant/sessions [post]
 func (h *AIAssistantHandler) CreateSession(c *gin.Context) {
 	Endpoint[aiSessionCreateReq, service.AIChatSessionDTO]{
 		Parse: func(c *gin.Context) (*aiSessionCreateReq, error) {
@@ -223,7 +279,18 @@ func (h *AIAssistantHandler) CreateSession(c *gin.Context) {
 	}.Handle(c)
 }
 
-// DeleteSession 删除会话及其消息。
+// DeleteSession 删除会话
+// @Summary 删除会话
+// @Description 删除会话及其消息
+// @Tags 学员端-AI助手
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "会话ID"
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "不存在"
+// @Router /ai-assistant/sessions/{id} [delete]
 func (h *AIAssistantHandler) DeleteSession(c *gin.Context) {
 	Endpoint[aiModelIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*aiModelIDReq, error) {
@@ -257,8 +324,19 @@ func (h *AIAssistantHandler) DeleteSession(c *gin.Context) {
 	}.Handle(c)
 }
 
-// RenameSession 修改会话标题。
-// Body: {"title": "新标题"}；标题非空，最多 100 字符。
+// RenameSession 重命名会话
+// @Summary 重命名会话
+// @Description 修改会话标题，非空最多 100 字符
+// @Tags 学员端-AI助手
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "会话ID"
+// @Param body body object true "标题" example({"title":"新标题"})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /ai-assistant/sessions/{id}/title [patch]
 func (h *AIAssistantHandler) RenameSession(c *gin.Context) {
 	Endpoint[aiSessionRenameReq, struct{}]{
 		Parse: func(c *gin.Context) (*aiSessionRenameReq, error) {
@@ -296,7 +374,18 @@ func (h *AIAssistantHandler) RenameSession(c *gin.Context) {
 	}.Handle(c)
 }
 
-// GetSessionMessages 获取指定会话的消息列表。
+// GetSessionMessages 会话消息
+// @Summary 会话消息列表
+// @Description 获取指定会话的消息列表
+// @Tags 学员端-AI助手
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "会话ID"
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "不存在"
+// @Router /ai-assistant/sessions/{id}/messages [get]
 func (h *AIAssistantHandler) GetSessionMessages(c *gin.Context) {
 	Endpoint[aiModelIDReq, []service.AIChatMessageDTO]{
 		Parse: func(c *gin.Context) (*aiModelIDReq, error) {
@@ -331,8 +420,16 @@ func (h *AIAssistantHandler) GetSessionMessages(c *gin.Context) {
 	}.Handle(c)
 }
 
-// StreamChat 流式对话（SSE 推送）。
-// SSE 流式响应不适用 Endpoint 的 JSON 信封，保留为薄适配（ADR-0009 一次性适配例外）。
+// StreamChat 流式对话
+// @Summary AI 流式对话（SSE）
+// @Description 可选认证的 SSE 流式响应，不走统一 JSON 信封；事件 message/error/done
+// @Tags 学员端-AI助手
+// @Accept json
+// @Produce text/event-stream
+// @Param body body object true "消息" example({"messages":[{"role":"user","content":"你好"}]})
+// @Success 200 {string} string "SSE stream"
+// @Failure 400 {object} response.R "参数错误"
+// @Router /ai-assistant/chat [post]
 func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 	userID := middleware.CurrentUserID(c) // 可选认证，未登录为 0
 

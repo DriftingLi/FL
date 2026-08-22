@@ -15,6 +15,1481 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/ai-assistant/chat": {
+            "post": {
+                "description": "可选认证的 SSE 流式响应，不走统一 JSON 信封；事件 message/error/done",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "学员端-AI助手"
+                ],
+                "summary": "AI 流式对话（SSE）",
+                "parameters": [
+                    {
+                        "description": "消息",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "SSE stream",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/ai-assistant/models": {
+            "get": {
+                "description": "列出管理员配置的 is_active=true 模型",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-AI助手"
+                ],
+                "summary": "AI 可用模型（公开）",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/ai-assistant/sessions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "列出登录用户的会话",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-AI助手"
+                ],
+                "summary": "AI 会话列表",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "创建新会话",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-AI助手"
+                ],
+                "summary": "创建 AI 会话",
+                "parameters": [
+                    {
+                        "description": "标题/模型",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/ai-assistant/sessions/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "删除会话及其消息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-AI助手"
+                ],
+                "summary": "删除会话",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "会话ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/ai-assistant/sessions/{id}/messages": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定会话的消息列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-AI助手"
+                ],
+                "summary": "会话消息列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "会话ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/ai-assistant/sessions/{id}/title": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "修改会话标题，非空最多 100 字符",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-AI助手"
+                ],
+                "summary": "重命名会话",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "会话ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "标题",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/ai-assistant/user-models": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "列出登录用户自定义模型（api_key 脱敏）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-AI助手"
+                ],
+                "summary": "用户自定义模型",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "创建或更新用户自定义模型",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-AI助手"
+                ],
+                "summary": "保存用户自定义模型",
+                "parameters": [
+                    {
+                        "description": "模型",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/ai-assistant/user-models/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "删除指定用户模型",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-AI助手"
+                ],
+                "summary": "删除用户自定义模型",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "模型ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/account": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "短信验证码确认，格式 4~20 位字母/数字/下划线",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-个人资料"
+                ],
+                "summary": "修改登录账号",
+                "parameters": [
+                    {
+                        "description": "account/code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/account/send-code": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "向已绑定手机发送修改账号验证码",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-个人资料"
+                ],
+                "summary": "发送修改登录账号验证码",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/avatar": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "multipart 上传，自动压缩为 WebP 后存入 storage 并提交审核",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-个人资料"
+                ],
+                "summary": "上传头像",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "头像图片",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/email/login": {
+            "post": {
+                "description": "校验验证码后登录，签发双令牌",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-认证"
+                ],
+                "summary": "验证码登录",
+                "parameters": [
+                    {
+                        "description": "登录",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/email/register": {
+            "post": {
+                "description": "校验验证码后注册，成功签发双令牌并写 Cookie",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-认证"
+                ],
+                "summary": "验证码注册并自动登录",
+                "parameters": [
+                    {
+                        "description": "注册",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/email/reset-password": {
+            "post": {
+                "description": "校验验证码后重置密码，不自动登录",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-认证"
+                ],
+                "summary": "忘记密码重置",
+                "parameters": [
+                    {
+                        "description": "重置",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/email/send-code": {
+            "post": {
+                "description": "开启人机验证时需先校验图形验证码；邮箱字段 email，手机字段 phone，purpose 为 register/login/reset_password",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-认证"
+                ],
+                "summary": "发送验证码",
+                "parameters": [
+                    {
+                        "description": "发码",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/login": {
+            "post": {
+                "description": "账号密码登录（hrwai_user），成功写入登录 Cookie 并返回双令牌",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-认证"
+                ],
+                "summary": "学员登录",
+                "parameters": [
+                    {
+                        "description": "登录",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/logout": {
+            "post": {
+                "description": "撤销 refresh_token 并清除登录 Cookie；不依赖 JWTAuth，access 过期亦可登出",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-认证"
+                ],
+                "summary": "登出",
+                "parameters": [
+                    {
+                        "description": "refresh_token",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "基于 JWT 获取当前用户档案（响应形状由契约测试锁定）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-认证"
+                ],
+                "summary": "当前用户信息",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/phone/login": {
+            "post": {
+                "description": "校验验证码后登录，签发双令牌",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-认证"
+                ],
+                "summary": "验证码登录",
+                "parameters": [
+                    {
+                        "description": "登录",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/phone/register": {
+            "post": {
+                "description": "校验验证码后注册，成功签发双令牌并写 Cookie",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-认证"
+                ],
+                "summary": "验证码注册并自动登录",
+                "parameters": [
+                    {
+                        "description": "注册",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/phone/reset-password": {
+            "post": {
+                "description": "校验验证码后重置密码，不自动登录",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-认证"
+                ],
+                "summary": "忘记密码重置",
+                "parameters": [
+                    {
+                        "description": "重置",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/phone/send-code": {
+            "post": {
+                "description": "开启人机验证时需先校验图形验证码；邮箱字段 email，手机字段 phone，purpose 为 register/login/reset_password",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-认证"
+                ],
+                "summary": "发送验证码",
+                "parameters": [
+                    {
+                        "description": "发码",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/profile": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "提交后待审核通过生效",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-个人资料"
+                ],
+                "summary": "提交昵称修改审核",
+                "parameters": [
+                    {
+                        "description": "昵称",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/profile/email": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "验证码校验后绑定邮箱",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-个人资料"
+                ],
+                "summary": "绑定/修改邮箱",
+                "parameters": [
+                    {
+                        "description": "邮箱",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/profile/password": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "短信验证码校验后设置/修改密码",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-个人资料"
+                ],
+                "summary": "修改密码",
+                "parameters": [
+                    {
+                        "description": "code/password",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/profile/password/send-code": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "向已绑定手机发送修改密码验证码",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-个人资料"
+                ],
+                "summary": "发送修改密码验证码",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/profile/phone": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "验证码校验后绑定手机号",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-个人资料"
+                ],
+                "summary": "绑定/修改手机号",
+                "parameters": [
+                    {
+                        "description": "手机",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/profile/send-code": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "按 channel(email/phone) 发送绑定验证码",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-个人资料"
+                ],
+                "summary": "发送绑定验证码",
+                "parameters": [
+                    {
+                        "description": "channel/target",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/refresh": {
+            "post": {
+                "description": "轮换签发新 access/refresh，旧 refresh 入黑名单；失败统一 401",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-认证"
+                ],
+                "summary": "刷新双令牌",
+                "parameters": [
+                    {
+                        "description": "refresh_token",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/wechat/login": {
+            "post": {
+                "description": "扫码登录占位，未配置授权时明确报错",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-认证"
+                ],
+                "summary": "微信扫码登录（占位）",
+                "parameters": [
+                    {
+                        "description": "code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "未配置",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/wechat/qrcode": {
+            "post": {
+                "description": "占位实现，未配置授权时返回提示",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-认证"
+                ],
+                "summary": "获取微信扫码信息",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/wx-login": {
+            "post": {
+                "description": "uni.login code → code2session 换 openid → 查/建用户 → 签发双令牌，平铺返回 token 等",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-认证"
+                ],
+                "summary": "微信小程序登录",
+                "parameters": [
+                    {
+                        "description": "code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/captcha": {
+            "get": {
+                "description": "生成 id 与 base64 图片，用于人机验证",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-认证"
+                ],
+                "summary": "图形验证码",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/api.GenerateCaptchaDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/tree": {
+            "get": {
+                "description": "学员端课程目录树",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-培训目录"
+                ],
+                "summary": "培训目录树（公开）",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/chapter/{chapter_id}/slides": {
             "get": {
                 "description": "公开访问，返回章节 PPT 转图片后的 slides",
@@ -43,13 +1518,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.ChapterSlidesDTO"
+                                            "$ref": "#/definitions/service.ChapterSlidesDTO"
                                         }
                                     }
                                 }
@@ -59,7 +1534,7 @@ const docTemplate = `{
                     "404": {
                         "description": "章节不存在",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -98,13 +1573,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.ChapterSlidesDTO"
+                                            "$ref": "#/definitions/service.ChapterSlidesDTO"
                                         }
                                     }
                                 }
@@ -114,13 +1589,13 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "404": {
                         "description": "章节不存在",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -159,13 +1634,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.CourseDetailDTO"
+                                            "$ref": "#/definitions/service.CourseDetailDTO"
                                         }
                                     }
                                 }
@@ -175,13 +1650,13 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "404": {
                         "description": "课程不存在",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -227,13 +1702,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.ChapterDetailDTO"
+                                            "$ref": "#/definitions/service.ChapterDetailDTO"
                                         }
                                     }
                                 }
@@ -243,13 +1718,13 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "404": {
                         "description": "章节不存在",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -297,13 +1772,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.StudyProgressDTO"
+                                            "$ref": "#/definitions/service.StudyProgressDTO"
                                         }
                                     }
                                 }
@@ -313,13 +1788,13 @@ const docTemplate = `{
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -372,13 +1847,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.CoursePageResult"
+                                            "$ref": "#/definitions/service.CoursePageResult"
                                         }
                                     }
                                 }
@@ -432,13 +1907,13 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -475,19 +1950,19 @@ const docTemplate = `{
                     "201": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -531,19 +2006,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -580,19 +2055,146 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/featured-content/{id}": {
+            "get": {
+                "description": "含相关资讯与上下篇；no_view=1 时不计 view_count",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-精选内容"
+                ],
+                "summary": "精选内容详情（公开）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "内容ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "1 不计数",
+                        "name": "no_view",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/featured-content/{id}/view": {
+            "post": {
+                "description": "客户端 hydration 后计数",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-精选内容"
+                ],
+                "summary": "增加精选阅读量",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "内容ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/featured-contents": {
+            "get": {
+                "description": "仅已发布内容，支持按分类过滤",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-精选内容"
+                ],
+                "summary": "精选内容列表（公开）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "分类",
+                        "name": "category",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -620,19 +2222,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "400": {
                         "description": "已打卡",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -674,13 +2276,13 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -724,13 +2326,13 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -774,13 +2376,13 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -824,13 +2426,13 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -867,19 +2469,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -916,19 +2518,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -963,19 +2565,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -1021,19 +2623,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -1103,13 +2705,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.ForumTopicPageResult"
+                                            "$ref": "#/definitions/service.ForumTopicPageResult"
                                         }
                                     }
                                 }
@@ -1119,7 +2721,7 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -1158,13 +2760,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.ForumTopicDTO"
+                                            "$ref": "#/definitions/service.ForumTopicDTO"
                                         }
                                     }
                                 }
@@ -1174,13 +2776,13 @@ const docTemplate = `{
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -1223,19 +2825,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "404": {
                         "description": "不存在",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -1270,19 +2872,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -1319,19 +2921,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -1366,19 +2968,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -1426,13 +3028,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.ForumReplyDTO"
+                                            "$ref": "#/definitions/service.ForumReplyDTO"
                                         }
                                     }
                                 }
@@ -1442,13 +3044,13 @@ const docTemplate = `{
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -1494,19 +3096,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -1543,19 +3145,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -1585,7 +3187,7 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
@@ -1593,7 +3195,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/forklift-training_internal_service.LevelExamAvailableDTO"
+                                                "$ref": "#/definitions/service.LevelExamAvailableDTO"
                                             }
                                         }
                                     }
@@ -1604,7 +3206,7 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -1650,13 +3252,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.LevelExamHistoryDTO"
+                                            "$ref": "#/definitions/service.LevelExamHistoryDTO"
                                         }
                                     }
                                 }
@@ -1666,7 +3268,7 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -1705,13 +3307,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.LevelExamResultDTO"
+                                            "$ref": "#/definitions/service.LevelExamResultDTO"
                                         }
                                     }
                                 }
@@ -1721,13 +3323,13 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "404": {
                         "description": "不存在",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -1773,19 +3375,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -1832,13 +3434,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.LevelExamParticipantDTO"
+                                            "$ref": "#/definitions/service.LevelExamParticipantDTO"
                                         }
                                     }
                                 }
@@ -1848,13 +3450,13 @@ const docTemplate = `{
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -1893,13 +3495,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.LevelExamDataDTO"
+                                            "$ref": "#/definitions/service.LevelExamDataDTO"
                                         }
                                     }
                                 }
@@ -1909,13 +3511,33 @@ const docTemplate = `{
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/levels": {
+            "get": {
+                "description": "仅启用项",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-培训目录"
+                ],
+                "summary": "课程等级（公开）",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -1965,13 +3587,13 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -2008,19 +3630,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "404": {
                         "description": "不存在",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -2057,19 +3679,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "404": {
                         "description": "不存在",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -2115,13 +3737,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.MockExamHistoryDTO"
+                                            "$ref": "#/definitions/service.MockExamHistoryDTO"
                                         }
                                     }
                                 }
@@ -2131,7 +3753,7 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -2171,13 +3793,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.MockExamStartDTO"
+                                            "$ref": "#/definitions/service.MockExamStartDTO"
                                         }
                                     }
                                 }
@@ -2187,13 +3809,13 @@ const docTemplate = `{
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -2232,13 +3854,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.MockExamResultDTO"
+                                            "$ref": "#/definitions/service.MockExamResultDTO"
                                         }
                                     }
                                 }
@@ -2248,13 +3870,13 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "404": {
                         "description": "不存在",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -2293,13 +3915,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.MockExamResumeDTO"
+                                            "$ref": "#/definitions/service.MockExamResumeDTO"
                                         }
                                     }
                                 }
@@ -2309,13 +3931,13 @@ const docTemplate = `{
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -2361,19 +3983,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -2412,13 +4034,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.MockExamSubmitDTO"
+                                            "$ref": "#/definitions/service.MockExamSubmitDTO"
                                         }
                                     }
                                 }
@@ -2428,13 +4050,180 @@ const docTemplate = `{
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "分页查询通知（含未读数）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-通知"
+                ],
+                "summary": "通知列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/read-all": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "全部通知标记为已读",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-通知"
+                ],
+                "summary": "全部标记已读",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/unread-count": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "查询未读通知数量",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-通知"
+                ],
+                "summary": "未读通知数",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/{id}/read": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "标记指定通知为已读",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-通知"
+                ],
+                "summary": "标记单条已读",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "通知ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -2479,7 +4268,7 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
@@ -2487,7 +4276,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/forklift-training_internal_service.QuestionDTO"
+                                                "$ref": "#/definitions/service.QuestionDTO"
                                             }
                                         }
                                     }
@@ -2498,7 +4287,7 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -2562,13 +4351,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.HistoryResultDTO"
+                                            "$ref": "#/definitions/service.HistoryResultDTO"
                                         }
                                     }
                                 }
@@ -2578,7 +4367,7 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -2617,13 +4406,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.ProgressResultDTO"
+                                            "$ref": "#/definitions/service.ProgressResultDTO"
                                         }
                                     }
                                 }
@@ -2633,7 +4422,7 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -2670,19 +4459,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -2712,13 +4501,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.PracticeStartResultDTO"
+                                            "$ref": "#/definitions/service.PracticeStartResultDTO"
                                         }
                                     }
                                 }
@@ -2728,7 +4517,7 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -2758,13 +4547,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.ProgressResultDTO"
+                                            "$ref": "#/definitions/service.ProgressResultDTO"
                                         }
                                     }
                                 }
@@ -2774,7 +4563,7 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -2804,13 +4593,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.PracticeStatsDTO"
+                                            "$ref": "#/definitions/service.PracticeStatsDTO"
                                         }
                                     }
                                 }
@@ -2820,7 +4609,7 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -2861,13 +4650,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.SubmitResultDTO"
+                                            "$ref": "#/definitions/service.SubmitResultDTO"
                                         }
                                     }
                                 }
@@ -2877,13 +4666,13 @@ const docTemplate = `{
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -2929,13 +4718,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.PracticeStartResultDTO"
+                                            "$ref": "#/definitions/service.PracticeStartResultDTO"
                                         }
                                     }
                                 }
@@ -2945,13 +4734,13 @@ const docTemplate = `{
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -3003,13 +4792,13 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -3030,7 +4819,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "学员端"
+                    "学员端-学习中心"
                 ],
                 "summary": "我的课程",
                 "responses": {
@@ -3039,13 +4828,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.StudentCoursesDTO"
+                                            "$ref": "#/definitions/service.StudentCoursesDTO"
                                         }
                                     }
                                 }
@@ -3055,7 +4844,7 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -3076,7 +4865,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "学员端"
+                    "学员端-学习中心"
                 ],
                 "summary": "单课程学习详情",
                 "parameters": [
@@ -3094,13 +4883,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.StudentCourseDetailDTO"
+                                            "$ref": "#/definitions/service.StudentCourseDetailDTO"
                                         }
                                     }
                                 }
@@ -3110,69 +4899,13 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "404": {
                         "description": "课程不存在",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
-                        }
-                    }
-                }
-            }
-        },
-        "/student/materials": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "基于 chapter_file 的聚合视图，支持按 course_id 过滤；与 /student/materials 同数据",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "学员端-资料"
-                ],
-                "summary": "学习资料列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "课程ID",
-                        "name": "course_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "每页条数",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "success",
-                        "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
-                        }
-                    },
-                    "401": {
-                        "description": "未认证",
-                        "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -3193,7 +4926,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "学员端"
+                    "学员端-学习中心"
                 ],
                 "summary": "学员档案",
                 "responses": {
@@ -3202,13 +4935,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.StudentProfileDTO"
+                                            "$ref": "#/definitions/service.StudentProfileDTO"
                                         }
                                     }
                                 }
@@ -3218,13 +4951,13 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "404": {
                         "description": "学员不存在",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -3245,7 +4978,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "学员端"
+                    "学员端-学习中心"
                 ],
                 "summary": "学习记录分页",
                 "parameters": [
@@ -3282,13 +5015,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.StudyRecordPageResult"
+                                            "$ref": "#/definitions/service.StudyRecordPageResult"
                                         }
                                     }
                                 }
@@ -3298,7 +5031,7 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -3319,7 +5052,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "学员端"
+                    "学员端-学习中心"
                 ],
                 "summary": "学习统计（按天）",
                 "parameters": [
@@ -3341,13 +5074,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.StudyDailyStatsDTO"
+                                            "$ref": "#/definitions/service.StudyDailyStatsDTO"
                                         }
                                     }
                                 }
@@ -3357,7 +5090,27 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/tags": {
+            "get": {
+                "description": "仅启用项",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-培训目录"
+                ],
+                "summary": "题库标签（公开）",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -3413,13 +5166,13 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -3450,7 +5203,7 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -3480,13 +5233,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/forklift-training_pkg_response.R"
+                                    "$ref": "#/definitions/response.R"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/forklift-training_internal_service.WrongQuestionStatsDTO"
+                                            "$ref": "#/definitions/service.WrongQuestionStatsDTO"
                                         }
                                     }
                                 }
@@ -3496,7 +5249,7 @@ const docTemplate = `{
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -3542,19 +5295,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -3591,19 +5344,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "400": {
                         "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/forklift-training_pkg_response.R"
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -3611,7 +5364,30 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "forklift-training_internal_service.CertificateTemplateDTO": {
+        "api.GenerateCaptchaDTO": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "image": {
+                    "type": "string"
+                }
+            }
+        },
+        "response.R": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {},
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.CertificateTemplateDTO": {
             "type": "object",
             "properties": {
                 "code": {
@@ -3634,7 +5410,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.ChapterDTO": {
+        "service.ChapterDTO": {
             "type": "object",
             "properties": {
                 "chapter_id": {
@@ -3664,7 +5440,7 @@ const docTemplate = `{
                 "files": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.ChapterFileDTO"
+                        "$ref": "#/definitions/service.ChapterFileDTO"
                     }
                 },
                 "order_num": {
@@ -3675,7 +5451,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.ChapterDetailDTO": {
+        "service.ChapterDetailDTO": {
             "type": "object",
             "properties": {
                 "chapter_id": {
@@ -3705,7 +5481,7 @@ const docTemplate = `{
                 "files": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.ChapterFileDTO"
+                        "$ref": "#/definitions/service.ChapterFileDTO"
                     }
                 },
                 "next_chapter_id": {
@@ -3725,7 +5501,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.ChapterFileDTO": {
+        "service.ChapterFileDTO": {
             "type": "object",
             "properties": {
                 "chapter_id": {
@@ -3751,7 +5527,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.ChapterSlidesDTO": {
+        "service.ChapterSlidesDTO": {
             "type": "object",
             "properties": {
                 "chapter_id": {
@@ -3765,7 +5541,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.CourseBriefDTO": {
+        "service.CourseBriefDTO": {
             "type": "object",
             "properties": {
                 "course_id": {
@@ -3776,14 +5552,14 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.CourseDTO": {
+        "service.CourseDTO": {
             "type": "object",
             "properties": {
                 "certificate_name": {
                     "type": "string"
                 },
                 "certificate_template": {
-                    "$ref": "#/definitions/forklift-training_internal_service.CertificateTemplateDTO"
+                    "$ref": "#/definitions/service.CertificateTemplateDTO"
                 },
                 "certificate_template_id": {
                     "type": "integer"
@@ -3794,7 +5570,7 @@ const docTemplate = `{
                 "chapters": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.ChapterDTO"
+                        "$ref": "#/definitions/service.ChapterDTO"
                     }
                 },
                 "course_id": {
@@ -3813,7 +5589,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "level": {
-                    "$ref": "#/definitions/forklift-training_internal_service.LevelBriefDTO"
+                    "$ref": "#/definitions/service.LevelBriefDTO"
                 },
                 "level_id": {
                     "type": "integer"
@@ -3833,14 +5609,14 @@ const docTemplate = `{
                 "prerequisites": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.CourseBriefDTO"
+                        "$ref": "#/definitions/service.CourseBriefDTO"
                     }
                 },
                 "sort_order": {
                     "type": "integer"
                 },
                 "specialty": {
-                    "$ref": "#/definitions/forklift-training_internal_service.SpecialtyBriefDTO"
+                    "$ref": "#/definitions/service.SpecialtyBriefDTO"
                 },
                 "specialty_id": {
                     "type": "integer"
@@ -3856,20 +5632,20 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.CourseDetailDTO": {
+        "service.CourseDetailDTO": {
             "type": "object",
             "properties": {
                 "chapters": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.ChapterDTO"
+                        "$ref": "#/definitions/service.ChapterDTO"
                     }
                 },
                 "completed_chapters": {
                     "type": "integer"
                 },
                 "course_info": {
-                    "$ref": "#/definitions/forklift-training_internal_service.CourseDTO"
+                    "$ref": "#/definitions/service.CourseDTO"
                 },
                 "is_enrolled": {
                     "type": "boolean"
@@ -3888,13 +5664,13 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.CoursePageResult": {
+        "service.CoursePageResult": {
             "type": "object",
             "properties": {
                 "courses": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.CourseDTO"
+                        "$ref": "#/definitions/service.CourseDTO"
                     }
                 },
                 "page": {
@@ -3908,7 +5684,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.CourseProgressDTO": {
+        "service.CourseProgressDTO": {
             "type": "object",
             "properties": {
                 "course_id": {
@@ -3931,7 +5707,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.ForumAuthor": {
+        "service.ForumAuthor": {
             "type": "object",
             "properties": {
                 "avatar_url": {
@@ -3945,11 +5721,11 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.ForumReplyDTO": {
+        "service.ForumReplyDTO": {
             "type": "object",
             "properties": {
                 "author": {
-                    "$ref": "#/definitions/forklift-training_internal_service.ForumAuthor"
+                    "$ref": "#/definitions/service.ForumAuthor"
                 },
                 "can_delete": {
                     "type": "boolean"
@@ -3987,11 +5763,11 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.ForumTopicDTO": {
+        "service.ForumTopicDTO": {
             "type": "object",
             "properties": {
                 "author": {
-                    "$ref": "#/definitions/forklift-training_internal_service.ForumAuthor"
+                    "$ref": "#/definitions/service.ForumAuthor"
                 },
                 "can_delete": {
                     "type": "boolean"
@@ -4037,7 +5813,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.ForumTopicPageResult": {
+        "service.ForumTopicPageResult": {
             "type": "object",
             "properties": {
                 "page": {
@@ -4049,7 +5825,7 @@ const docTemplate = `{
                 "topics": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.ForumTopicDTO"
+                        "$ref": "#/definitions/service.ForumTopicDTO"
                     }
                 },
                 "total": {
@@ -4057,7 +5833,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.HistoryItemDTO": {
+        "service.HistoryItemDTO": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -4073,7 +5849,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "question": {
-                    "$ref": "#/definitions/forklift-training_internal_service.QuestionDTO"
+                    "$ref": "#/definitions/service.QuestionDTO"
                 },
                 "question_id": {
                     "type": "integer"
@@ -4086,7 +5862,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.HistoryResultDTO": {
+        "service.HistoryResultDTO": {
             "type": "object",
             "properties": {
                 "page": {
@@ -4098,7 +5874,7 @@ const docTemplate = `{
                 "records": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.HistoryItemDTO"
+                        "$ref": "#/definitions/service.HistoryItemDTO"
                     }
                 },
                 "total": {
@@ -4106,7 +5882,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.LevelBriefDTO": {
+        "service.LevelBriefDTO": {
             "type": "object",
             "properties": {
                 "code": {
@@ -4120,7 +5896,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.LevelExamAnswerDTO": {
+        "service.LevelExamAnswerDTO": {
             "type": "object",
             "properties": {
                 "ai_comment": {
@@ -4155,7 +5931,7 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "question": {
-                    "$ref": "#/definitions/forklift-training_internal_service.QuestionDTO"
+                    "$ref": "#/definitions/service.QuestionDTO"
                 },
                 "question_id": {
                     "type": "integer"
@@ -4168,7 +5944,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.LevelExamAvailableDTO": {
+        "service.LevelExamAvailableDTO": {
             "type": "object",
             "properties": {
                 "can_enter": {
@@ -4200,7 +5976,7 @@ const docTemplate = `{
                 "participants": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.LevelExamParticipantDTO"
+                        "$ref": "#/definitions/service.LevelExamParticipantDTO"
                     }
                 },
                 "pass_score": {
@@ -4221,7 +5997,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.LevelExamDataDTO": {
+        "service.LevelExamDataDTO": {
             "type": "object",
             "properties": {
                 "answers": {},
@@ -4231,21 +6007,21 @@ const docTemplate = `{
                 "questions": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.QuestionDTO"
+                        "$ref": "#/definitions/service.QuestionDTO"
                     }
                 },
                 "remaining_time": {
                     "type": "integer"
                 },
                 "session": {
-                    "$ref": "#/definitions/forklift-training_internal_service.LevelExamSessionDTO"
+                    "$ref": "#/definitions/service.LevelExamSessionDTO"
                 },
                 "start_time": {
                     "type": "string"
                 }
             }
         },
-        "forklift-training_internal_service.LevelExamHistoryDTO": {
+        "service.LevelExamHistoryDTO": {
             "type": "object",
             "properties": {
                 "page": {
@@ -4257,7 +6033,7 @@ const docTemplate = `{
                 "records": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.LevelExamParticipantDTO"
+                        "$ref": "#/definitions/service.LevelExamParticipantDTO"
                     }
                 },
                 "total": {
@@ -4265,7 +6041,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.LevelExamParticipantDTO": {
+        "service.LevelExamParticipantDTO": {
             "type": "object",
             "properties": {
                 "answers_snapshot": {},
@@ -4315,21 +6091,21 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.LevelExamResultDTO": {
+        "service.LevelExamResultDTO": {
             "type": "object",
             "properties": {
                 "answers": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.LevelExamAnswerDTO"
+                        "$ref": "#/definitions/service.LevelExamAnswerDTO"
                     }
                 },
                 "participant": {
-                    "$ref": "#/definitions/forklift-training_internal_service.LevelExamParticipantDTO"
+                    "$ref": "#/definitions/service.LevelExamParticipantDTO"
                 }
             }
         },
-        "forklift-training_internal_service.LevelExamSessionDTO": {
+        "service.LevelExamSessionDTO": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -4353,7 +6129,7 @@ const docTemplate = `{
                 "participants": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.LevelExamParticipantDTO"
+                        "$ref": "#/definitions/service.LevelExamParticipantDTO"
                     }
                 },
                 "pass_score": {
@@ -4374,7 +6150,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.MockExamAnswerDetailDTO": {
+        "service.MockExamAnswerDetailDTO": {
             "type": "object",
             "properties": {
                 "ai_comment": {
@@ -4415,13 +6191,13 @@ const docTemplate = `{
                 "user_answer": {}
             }
         },
-        "forklift-training_internal_service.MockExamHistoryDTO": {
+        "service.MockExamHistoryDTO": {
             "type": "object",
             "properties": {
                 "exams": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.MockExamHistoryItemDTO"
+                        "$ref": "#/definitions/service.MockExamHistoryItemDTO"
                     }
                 },
                 "page": {
@@ -4435,7 +6211,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.MockExamHistoryItemDTO": {
+        "service.MockExamHistoryItemDTO": {
             "type": "object",
             "properties": {
                 "answers": {},
@@ -4470,7 +6246,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.MockExamResultDTO": {
+        "service.MockExamResultDTO": {
             "type": "object",
             "properties": {
                 "accuracy": {
@@ -4482,7 +6258,7 @@ const docTemplate = `{
                 "details": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.MockExamAnswerDetailDTO"
+                        "$ref": "#/definitions/service.MockExamAnswerDetailDTO"
                     }
                 },
                 "max_score": {
@@ -4502,7 +6278,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.MockExamResumeDTO": {
+        "service.MockExamResumeDTO": {
             "type": "object",
             "properties": {
                 "answers": {},
@@ -4515,7 +6291,7 @@ const docTemplate = `{
                 "questions": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.QuestionDTO"
+                        "$ref": "#/definitions/service.QuestionDTO"
                     }
                 },
                 "remaining_time": {
@@ -4526,7 +6302,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.MockExamStartDTO": {
+        "service.MockExamStartDTO": {
             "type": "object",
             "properties": {
                 "duration": {
@@ -4538,7 +6314,7 @@ const docTemplate = `{
                 "questions": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.QuestionDTO"
+                        "$ref": "#/definitions/service.QuestionDTO"
                     }
                 },
                 "remaining_time": {
@@ -4552,7 +6328,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.MockExamSubmitDTO": {
+        "service.MockExamSubmitDTO": {
             "type": "object",
             "properties": {
                 "accuracy": {
@@ -4564,7 +6340,7 @@ const docTemplate = `{
                 "details": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.MockExamAnswerDetailDTO"
+                        "$ref": "#/definitions/service.MockExamAnswerDetailDTO"
                     }
                 },
                 "max_score": {
@@ -4578,7 +6354,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.PracticeStartResultDTO": {
+        "service.PracticeStartResultDTO": {
             "type": "object",
             "properties": {
                 "completed": {
@@ -4590,7 +6366,7 @@ const docTemplate = `{
                 "questions": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.QuestionDTO"
+                        "$ref": "#/definitions/service.QuestionDTO"
                     }
                 },
                 "total": {
@@ -4598,7 +6374,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.PracticeStatsDTO": {
+        "service.PracticeStatsDTO": {
             "type": "object",
             "properties": {
                 "accuracy": {
@@ -4607,7 +6383,7 @@ const docTemplate = `{
                 "by_type": {
                     "type": "object",
                     "additionalProperties": {
-                        "$ref": "#/definitions/forklift-training_internal_service.PracticeTypeStat"
+                        "$ref": "#/definitions/service.PracticeTypeStat"
                     }
                 },
                 "correct": {
@@ -4621,7 +6397,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.PracticeTypeStat": {
+        "service.PracticeTypeStat": {
             "type": "object",
             "properties": {
                 "accuracy": {
@@ -4635,7 +6411,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.ProgressResultDTO": {
+        "service.ProgressResultDTO": {
             "type": "object",
             "properties": {
                 "answers_state": {
@@ -4653,7 +6429,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.QuestionDTO": {
+        "service.QuestionDTO": {
             "type": "object",
             "properties": {
                 "answer": {
@@ -4708,7 +6484,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.SpecialtyBriefDTO": {
+        "service.SpecialtyBriefDTO": {
             "type": "object",
             "properties": {
                 "code": {
@@ -4722,7 +6498,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.StudentCourseChapterDTO": {
+        "service.StudentCourseChapterDTO": {
             "type": "object",
             "properties": {
                 "chapter_id": {
@@ -4742,7 +6518,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.StudentCourseDTO": {
+        "service.StudentCourseDTO": {
             "type": "object",
             "properties": {
                 "completed_chapters": {
@@ -4786,13 +6562,13 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.StudentCourseDetailDTO": {
+        "service.StudentCourseDetailDTO": {
             "type": "object",
             "properties": {
                 "chapters": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.StudentCourseChapterDTO"
+                        "$ref": "#/definitions/service.StudentCourseChapterDTO"
                     }
                 },
                 "completed_chapters": {
@@ -4836,21 +6612,21 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.StudentCoursesDTO": {
+        "service.StudentCoursesDTO": {
             "type": "object",
             "properties": {
                 "continue_learning": {
-                    "$ref": "#/definitions/forklift-training_internal_service.StudentCourseDTO"
+                    "$ref": "#/definitions/service.StudentCourseDTO"
                 },
                 "courses": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.StudentCourseDTO"
+                        "$ref": "#/definitions/service.StudentCourseDTO"
                     }
                 }
             }
         },
-        "forklift-training_internal_service.StudentDTO": {
+        "service.StudentDTO": {
             "type": "object",
             "properties": {
                 "account": {
@@ -4877,24 +6653,24 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.StudentProfileDTO": {
+        "service.StudentProfileDTO": {
             "type": "object",
             "properties": {
                 "course_progress": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.CourseProgressDTO"
+                        "$ref": "#/definitions/service.CourseProgressDTO"
                     }
                 },
                 "student_info": {
-                    "$ref": "#/definitions/forklift-training_internal_service.StudentDTO"
+                    "$ref": "#/definitions/service.StudentDTO"
                 },
                 "study_stats": {
-                    "$ref": "#/definitions/forklift-training_internal_service.StudyStatsDTO"
+                    "$ref": "#/definitions/service.StudyStatsDTO"
                 }
             }
         },
-        "forklift-training_internal_service.StudyDailyStatsDTO": {
+        "service.StudyDailyStatsDTO": {
             "type": "object",
             "properties": {
                 "active_days": {
@@ -4920,7 +6696,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.StudyProgressDTO": {
+        "service.StudyProgressDTO": {
             "type": "object",
             "properties": {
                 "completed_chapters": {
@@ -4937,7 +6713,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.StudyRecordDTO": {
+        "service.StudyRecordDTO": {
             "type": "object",
             "properties": {
                 "chapter_id": {
@@ -4969,7 +6745,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.StudyRecordPageResult": {
+        "service.StudyRecordPageResult": {
             "type": "object",
             "properties": {
                 "page": {
@@ -4981,7 +6757,7 @@ const docTemplate = `{
                 "records": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/forklift-training_internal_service.StudyRecordDTO"
+                        "$ref": "#/definitions/service.StudyRecordDTO"
                     }
                 },
                 "total": {
@@ -4989,7 +6765,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.StudyStatsDTO": {
+        "service.StudyStatsDTO": {
             "type": "object",
             "properties": {
                 "completed_courses": {
@@ -5009,7 +6785,7 @@ const docTemplate = `{
                 }
             }
         },
-        "forklift-training_internal_service.SubmitResultDTO": {
+        "service.SubmitResultDTO": {
             "type": "object",
             "properties": {
                 "ai_comment": {
@@ -5045,7 +6821,7 @@ const docTemplate = `{
                 "user_answer": {}
             }
         },
-        "forklift-training_internal_service.WrongQuestionStatsDTO": {
+        "service.WrongQuestionStatsDTO": {
             "type": "object",
             "properties": {
                 "by_type": {
@@ -5057,18 +6833,6 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
-                }
-            }
-        },
-        "forklift-training_pkg_response.R": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "integer"
-                },
-                "data": {},
-                "message": {
-                    "type": "string"
                 }
             }
         }
@@ -5090,7 +6854,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/api",
 	Schemes:          []string{},
 	Title:            "叉车维修培训系统-学员端 API",
-	Description:      "学员端(hrwai_user) 学习/练习/考试/收藏/搜索/资料/论坛等 P0/P1 能力（ADR-0017/0018）。鉴权：`Authorization: Bearer <access JWT>`（access 2h，`POST /api/auth/refresh` 换新双令牌）。响应统一 `{code,message,data}`（见 ADR-0005）。本页由 gin-swagger 生成，范围 B（~30 端点）。",
+	Description:      "学员端与公开端点：认证/验证码/微信登录/学员学习中心/课程/练习/考试/收藏/搜索/资料/论坛/通知/精选/AI助手/培训目录；鉴权：`Authorization: Bearer <access JWT>`（access 2h，`POST /api/auth/refresh` 换新双令牌）。响应统一 `{code,message,data}`（见 ADR-0005）。不含导师端、管理端与残值评估模块。",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",
