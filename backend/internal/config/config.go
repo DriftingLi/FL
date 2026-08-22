@@ -84,7 +84,7 @@ func (c SMSConfig) Configured() bool {
 
 // WechatAppConfig 一组微信应用凭证（AppID 为公开标识，AppSecret 必须仅存服务端）。
 type WechatAppConfig struct {
-	AppID     string // AppID，如 wx1234567890abcdef
+	AppID     string // AppID，如 wx 開頭的小程序 ID
 	AppSecret string // AppSecret
 }
 
