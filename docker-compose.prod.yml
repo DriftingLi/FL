@@ -172,6 +172,11 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-和润天下}
+      # 微信登录凭证（小程序与开放平台严格区分，勿混用）
+      WECHAT_MINI_PROGRAM_APP_ID: ${WECHAT_MINI_PROGRAM_APP_ID:-}
+      WECHAT_MINI_PROGRAM_APP_SECRET: ${WECHAT_MINI_PROGRAM_APP_SECRET:-}
+      WECHAT_OPEN_PLATFORM_APP_ID: ${WECHAT_OPEN_PLATFORM_APP_ID:-}
+      WECHAT_OPEN_PLATFORM_APP_SECRET: ${WECHAT_OPEN_PLATFORM_APP_SECRET:-}
       VALUATION_PDF_OUTPUT_DIR: /data/reports
       # 统一系统运行日志（zap）：生产写文件到 /data/logs（lumberjack 轮转+压缩+保留），stdout 兜底
       LOG_LEVEL: "${LOG_LEVEL:-info}"

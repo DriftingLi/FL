@@ -178,13 +178,13 @@ multipart/form-data：`file`（图片）。响应 200：`data` 为头像修改�
 
 **POST /api/auth/wx-login**
 
-请求体：`{ "code": "uni.login 临时凭证" }`。后端以 code 调微信 code2session 换 openid：已绑定用户直接登录；未注册自动建号（account 取 `wx_`+openid 前 12 位，昵称「微信学员」+openid 后 6 位）并绑定 openid。响应 200，data 为登录结果平铺结构（契约见 `docs/docs/reference/微信小程序登录-文档说明.md`，AppID 通过环境变量 `WECHAT_APP_ID`（GitHub Secrets `WECHAT_APP_ID`）配置，勿硬编码）：
+请求体：`{ "code": "uni.login 临时凭证" }`。后端以 code 调微信 code2session 换 openid：已绑定用户直接登录；未注册自动建号（account 取 `wx_`+openid 前 12 位，昵称「微信学员」+openid 后 6 位）并绑定 openid。响应 200，data 为登录结果平铺结构（契约见 `docs/docs/reference/微信小程序登录-文档说明.md`，AppID 通过环境变量 `WECHAT_MINI_PROGRAM_APP_ID`（GitHub Secrets 同名）配置，勿硬编码；小程序凭证与开放平台扫码凭证（`WECHAT_OPEN_PLATFORM_*`）严格区分）：
 
 ```json
 { "code": 200, "message": "登录成功", "data": { "token": "jwt", "refresh_token": "jwt", "user_id": 1, "account": "wx_oABC_123456", "username": "微信学员123456", "name": "微信学员123456", "role": "hrwai_user", "avatar": "", "isNew": true } }
 ```
 
-`isNew` 仅新用户为 true（前端据此提示已自动注册）。错误分支均 400：缺 code、未配置 AppID/Secret、code 失效（40029）、频率限制（45011）、高风险拦截（40226）。小程序凭证经环境变量 `WECHAT_APP_ID` / `WECHAT_APP_SECRET` 配置。
+`isNew` 仅新用户为 true（前端据此提示已自动注册）。错误分支均 400：缺 code、未配置 AppID/Secret、code 失效（40029）、频率限制（45011）、高风险拦截（40226）。小程序凭证经环境变量 `WECHAT_MINI_PROGRAM_APP_ID` / `WECHAT_MINI_PROGRAM_APP_SECRET` 配置。
 
 ### 2.6 微信扫码登录 `/api/auth/wechat`（框架占位）
 

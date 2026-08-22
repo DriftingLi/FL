@@ -47,7 +47,9 @@ type Config struct {
 	SMS SMSConfig
 	// EmailCodeTTL 邮箱验证码有效期（EMAIL_CODE_TTL_MINUTES，默认 5 分钟）。
 	EmailCodeTTL time.Duration
-	// Wechat 微信开放平台配置（扫码登录，授权信息待接入）。
+	// Wechat 微信登录凭证配置——小程序与开放平台严格区分：
+	//   - MiniProgram 小程序凭证（code2session 登录，wx-login 消费）
+	//   - OpenPlatform 开放平台网页应用凭证（扫码登录，占位待接入）
 	Wechat WechatConfig
 	// AuthCookie 登录态 Cookie 配置（父域名共享登录）。
 	AuthCookie AuthCookieConfig
@@ -80,10 +82,22 @@ func (c SMSConfig) Configured() bool {
 	return c.SecretID != "" && c.SecretKey != "" && c.SdkAppID != "" && c.SignName != "" && c.TemplateID != ""
 }
 
-// WechatConfig 微信开放平台配置（扫码登录框架占位，授权信息待接入）。
+// WechatAppConfig 一组微信应用凭证（AppID 为公开标识，AppSecret 必须仅存服务端）。
+type WechatAppConfig struct {
+	AppID     string // AppID，如 wx1234567890abcdef
+	AppSecret string // AppSecret
+}
+
+// Configured 返回该组凭证是否已配置。
+func (c WechatAppConfig) Configured() bool {
+	return c.AppID != "" && c.AppSecret != ""
+}
+
+// WechatConfig 微信登录凭证——小程序与开放平台网页应用两套独立凭证，
+// 不可混用：code2session 只认小程序凭证，扫码登录只认开放平台网页应用凭证。
 type WechatConfig struct {
-	AppID     string // WECHAT_APP_ID
-	AppSecret string // WECHAT_APP_SECRET
+	MiniProgram  WechatAppConfig // WECHAT_MINI_PROGRAM_APP_ID / WECHAT_MINI_PROGRAM_APP_SECRET
+	OpenPlatform WechatAppConfig // WECHAT_OPEN_PLATFORM_APP_ID / WECHAT_OPEN_PLATFORM_APP_SECRET（扫码登录占位）
 }
 
 // AuthCookieConfig 登录态 Cookie 配置。
@@ -222,8 +236,10 @@ func setDefaults() {
 	viper.SetDefault("tencent_sms_sign_name", "")
 	viper.SetDefault("tencent_sms_template_id", "")
 	viper.SetDefault("tencent_sms_region", "ap-guangzhou")
-	viper.SetDefault("wechat_app_id", "")
-	viper.SetDefault("wechat_app_secret", "")
+	viper.SetDefault("wechat_mini_program_app_id", "")
+	viper.SetDefault("wechat_mini_program_app_secret", "")
+	viper.SetDefault("wechat_open_platform_app_id", "")
+	viper.SetDefault("wechat_open_platform_app_secret", "")
 	viper.SetDefault("auth_cookie_name", "hrwai_token")
 	viper.SetDefault("auth_cookie_domain", "localhost")
 	viper.SetDefault("log_level", "info")
@@ -334,8 +350,8 @@ func Load() (*Config, error) {
 		},
 		EmailCodeTTL: time.Duration(positiveInt("email_code_ttl_minutes", 5)) * time.Minute,
 		Wechat: WechatConfig{
-			AppID:     viper.GetString("wechat_app_id"),
-			AppSecret: viper.GetString("wechat_app_secret"),
+			MiniProgram:  wechatAppConfig("wechat_mini_program_app_id", "wechat_mini_program_app_secret", "wechat_app_id", "wechat_app_secret"),
+			OpenPlatform: wechatAppConfig("wechat_open_platform_app_id", "wechat_open_platform_app_secret"),
 		},
 		AuthCookie: AuthCookieConfig{
 			Name:   viper.GetString("auth_cookie_name"),
@@ -508,6 +524,25 @@ func positiveDuration(key string, def time.Duration) time.Duration {
 		return v
 	}
 	return def
+}
+
+// wechatAppConfig 读取一组微信凭证；legacy 键对仅作向后兼容回退
+// （旧 WECHAT_APP_ID/WECHAT_APP_SECRET 实际是小程序凭证，未区分前缀，已废弃）。
+func wechatAppConfig(idKey, secretKey string, legacyKeys ...string) WechatAppConfig {
+	c := WechatAppConfig{
+		AppID:     viper.GetString(idKey),
+		AppSecret: viper.GetString(secretKey),
+	}
+	if c.Configured() {
+		return c
+	}
+	for i := 0; i+1 < len(legacyKeys); i += 2 {
+		id, secret := viper.GetString(legacyKeys[i]), viper.GetString(legacyKeys[i+1])
+		if id != "" && secret != "" {
+			return WechatAppConfig{AppID: id, AppSecret: secret}
+		}
+	}
+	return c
 }
 
 func splitOrigins(s string) []string {
