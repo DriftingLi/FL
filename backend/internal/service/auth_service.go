@@ -7,6 +7,8 @@ import (
 	"errors"
 	"time"
 
+	"forklift-training/internal/clock"
+
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -481,11 +483,5 @@ func (s *AuthService) refundLikesOnDelete(tx *gorm.DB, userID int) error {
 	return nil
 }
 
-// beijingNow 返回当前北京时间。
-func beijingNow() time.Time {
-	loc, _ := time.LoadLocation("Asia/Shanghai")
-	if loc == nil {
-		loc = time.FixedZone("CST", 8*3600)
-	}
-	return time.Now().In(loc)
-}
+// beijingNow 返回当前北京时间。时区政策已单点归位 internal/clock 包（spec #296），此函数仅作遗留调用方的一行委托。
+func beijingNow() time.Time { return clock.Now() }
