@@ -20,7 +20,7 @@
           <div class="header-left">
             <el-checkbox :model-value="selectedIds.has(item.question_id)" @change="(val:boolean)=>toggleSelect(item.question_id, val)" />
             <el-tag size="small">{{ item.question?.type ? (typeMap as Record<string, string>)[item.question.type] : '' }}</el-tag>
-            <el-tag v-if="(item as any).is_redone" type="success" size="small">已重做</el-tag>
+            <el-tag v-if="item.is_redone" type="success" size="small">已重做</el-tag>
           </div>
           <span class="wrong-count">错误 {{ item.wrong_count }} 次</span>
         </div>
@@ -75,7 +75,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { wrongQuestionApi } from '@/api/wrongQuestion'
+import { wrongQuestionApi, type RedoResult } from '@/api/wrongQuestion'
 import { typeMap } from '@/constants/question'
 import { toggleAnswer, buildQuestionOptions } from '@/composables/useQuestionAnswer'
 import { downloadBlob } from '@/composables/useReportDownload'
@@ -108,7 +108,7 @@ const redoingId = ref<number | null>(null)
 const redoAnswer = ref<(string | number)[]>([])
 const redoTextAnswer = ref('')
 const redoStartTime = ref<number>(Date.now())
-const redoResults = ref<Record<number, any>>({})
+const redoResults = ref<Record<number, RedoResult>>({})
 const redoDurations = ref<Record<number, number>>({})
 const wrongKnowledge = ref<Record<number, any[]>>({})
 const selectedIds = ref<Set<number>>(new Set())
@@ -166,18 +166,18 @@ async function submitRedo(item: WrongItem) {
   try {
     const answer = item.question?.type === 'short_answer' ? redoTextAnswer.value : redoAnswer.value
     const duration = (Date.now() - redoStartTime.value) / 1000
-    const res = await wrongQuestionApi.redoWrongQuestion(item.question_id, Array.isArray(answer) ? answer.join(', ') : answer) as any
+    const res = await wrongQuestionApi.redoWrongQuestion(item.question_id, Array.isArray(answer) ? answer.join(', ') : answer)
     redoDurations.value[item.id] = duration
     redoResults.value[item.id] = { ...res, user_answer: answer }
     try {
       const tags = await questionInteractionApi.listKnowledge(item.question_id)
-      wrongKnowledge.value[item.id] = (tags as any) || []
+      wrongKnowledge.value[item.id] = tags || []
     } catch { wrongKnowledge.value[item.id] = [] }
     if (res?.is_correct === true) {
       ElMessage.success('回答正确！已标记为已重做')
       // 更新列表中的标记
       const idx = wrongList.value.findIndex(w=>w.id===item.id)
-      if(idx>=0) (wrongList.value[idx] as any).is_redone = true
+      if(idx>=0) wrongList.value[idx].is_redone = true
     } else if (res?.is_correct === false) {
       ElMessage.warning('回答错误，继续加油')
     } else {

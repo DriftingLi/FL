@@ -1,10 +1,8 @@
-// Package service 判分 module：四流（定级/模拟/练习/手动阅卷）共享的判分编排。
+// Package service 判分 module：练习（含错题重做）/模拟考试共享的判分编排。
 // 吸收「逐题判分 → 按流分值累分 → 错题入库 → 短答 AI 分支」，并单点生成短答降级语义。
 package service
 
 import (
-	"strings"
-
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -13,10 +11,17 @@ import (
 // fallbackCommentPrefix 短答 AI 评分降级注释统一前缀（四流单点）。
 const fallbackCommentPrefix = "[AI评分降级] "
 
-// ShortAnswerGrader AI 简答判分 adapter。
-// *AIService 现有注入形态满足此接口（GradeShortAnswer 方法签名一致），测试可注入 fake。
+// ShortAnswerGrader AI 简答判分 adapter。测试可注入 fake；
+// *AIService 经 aiShortAnswerGrader 包装接入（剥离其 userID 日志形参，练习/重做流恒传 nil）。
 type ShortAnswerGrader interface {
-	GradeShortAnswer(questionContent, referenceAnswer, scoringCriteria, studentAnswer string, maxScore float64, userID *int) *AIGradeResult
+	GradeShortAnswer(questionContent, referenceAnswer, scoringCriteria, studentAnswer string, maxScore float64) *AIGradeResult
+}
+
+// aiShortAnswerGrader *AIService 的判分 adapter 包装。
+type aiShortAnswerGrader struct{ ai *AIService }
+
+func (a aiShortAnswerGrader) GradeShortAnswer(questionContent, referenceAnswer, scoringCriteria, studentAnswer string, maxScore float64) *AIGradeResult {
+	return a.ai.GradeShortAnswer(questionContent, referenceAnswer, scoringCriteria, studentAnswer, maxScore, nil)
 }
 
 // shortAnswerGraderOf 将 *AIService 转换为 adapter 接口，nil 归一为 nil 接口
@@ -25,7 +30,7 @@ func shortAnswerGraderOf(ai *AIService) ShortAnswerGrader {
 	if ai == nil {
 		return nil
 	}
-	return ai
+	return aiShortAnswerGrader{ai: ai}
 }
 
 // ShortAnswerGrade 短答统一判分结果（降级语义单点生成）。
@@ -38,11 +43,11 @@ type ShortAnswerGrade struct {
 
 // gradeShortAnswer 短答 AI 判分单点入口：grader 为 nil 或 AI 返回 nil 时返回 nil（调用方降级，不产生 AI 分）。
 // 统一生成降级语义——fallback 时注释加前缀且 Fallback 同写，Passed 由 shortAnswerPassed 推导。
-func gradeShortAnswer(grader ShortAnswerGrader, q *model.Question, studentAnswer string, maxScore float64, userID *int) *ShortAnswerGrade {
+func gradeShortAnswer(grader ShortAnswerGrader, q *model.Question, studentAnswer string, maxScore float64) *ShortAnswerGrade {
 	if grader == nil {
 		return nil
 	}
-	res := grader.GradeShortAnswer(q.Content, q.ReferenceAnswer, q.ScoringCriteria, studentAnswer, maxScore, userID)
+	res := grader.GradeShortAnswer(q.Content, q.ReferenceAnswer, q.ScoringCriteria, studentAnswer, maxScore)
 	if res == nil {
 		return nil
 	}
@@ -56,11 +61,6 @@ func gradeShortAnswer(grader ShortAnswerGrader, q *model.Question, studentAnswer
 		Fallback: res.Fallback,
 		Passed:   shortAnswerPassed(res.Score, maxScore),
 	}
-}
-
-// hasFallbackComment 判定短答 AI 注释是否携带统一降级前缀（读侧还原 ai_fallback 的单点）。
-func hasFallbackComment(comment string) bool {
-	return strings.HasPrefix(comment, fallbackCommentPrefix)
 }
 
 // GradeResult 单题判分结果（判分 module 统一产出，各流据此构造各自 DTO / 落库）。
@@ -78,7 +78,6 @@ type GradeResult struct {
 type gradingFlow struct {
 	ai       ShortAnswerGrader
 	maxScore func(q *model.Question) float64 // 满分解析（各流分值差异在此单点注入）
-	aiUserID *int                            // grading 流携带 userID，其余流为 nil
 }
 
 // gradingEngine 判分 module。
@@ -99,7 +98,7 @@ func (e *gradingEngine) gradeOne(f gradingFlow, q *model.Question, userAnswer an
 
 	var sa *ShortAnswerGrade
 	if q.Type == "short_answer" {
-		sa = gradeShortAnswer(f.ai, q, stringifyAnswer(userAnswer), maxScore, f.aiUserID)
+		sa = gradeShortAnswer(f.ai, q, stringifyAnswer(userAnswer), maxScore)
 	}
 	if isCorrect != nil && !*isCorrect {
 		_ = addToWrongQuestions(e.db, studentID, q.ID)

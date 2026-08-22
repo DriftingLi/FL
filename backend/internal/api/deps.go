@@ -124,7 +124,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		PracticeModeSvc:      service.NewPracticeModeService(db, aiSvc, logger),
 		MockExamSvc:          service.NewMockExamService(db, aiSvc, logger),
 		TutorSvc:             service.NewTutorService(db, cfg.UploadFolder, fileSvc, slideRenderer, logger),
-		WrongQuestionSvc:     service.NewWrongQuestionService(db, logger),
+		WrongQuestionSvc:     service.NewWrongQuestionService(db, aiSvc, logger),
 		TrainingCatalogSvc:   service.NewTrainingCatalogService(db, logger),
 		AuditSvc:             service.NewAuditService(db),
 		AIAssistantSvc:       service.NewAIAssistantService(db, aiConfigSvc, cfg.SecretKey, logger),

@@ -14,7 +14,7 @@ import (
 func newWrongQuestionSvc(t *testing.T) (*WrongQuestionService, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewWrongQuestionService(db, zap.NewNop()), db
+	return NewWrongQuestionService(db, nil, zap.NewNop()), db
 }
 
 func seedWrongQuestion(t *testing.T, db *gorm.DB, studentID, questionID, wrongCount int) {
@@ -191,6 +191,27 @@ func TestRedoWrongQuestion_Correct(t *testing.T) {
 	if result == nil {
 		t.Fatal("结果不应为 nil")
 	}
+	if result.IsCorrect == nil || !*result.IsCorrect {
+		t.Fatalf("答对应 is_correct=true, got %v", boolPtrVal(result.IsCorrect))
+	}
+	if result.CorrectAnswer != "A" || result.QuestionID != q.ID {
+		t.Fatalf("typed 契约字段缺失: %+v", result)
+	}
+	// 重做结果落练习记录（PracticeType=redo）
+	var cnt int64
+	db.Model(&model.QuestionPracticeRecord{}).Where("student_id = ? AND question_id = ? AND practice_type = ? AND is_correct = ?", 1, q.ID, "redo", true).Count(&cnt)
+	if cnt != 1 {
+		t.Fatalf("答对重做应落一条正确的练习记录, got %d", cnt)
+	}
+	// 错题本状态机：is_redone 置位
+	var wq model.WrongQuestion
+	db.First(&wq, "student_id = ? AND question_id = ?", 1, q.ID)
+	if !wq.IsRedone {
+		t.Fatal("答对后应置 is_redone=true")
+	}
+	if wq.WrongCount != 2 {
+		t.Fatalf("答对不得改计数, got %d", wq.WrongCount)
+	}
 }
 
 func TestRedoWrongQuestion_Wrong(t *testing.T) {
@@ -202,8 +223,22 @@ func TestRedoWrongQuestion_Wrong(t *testing.T) {
 	if err != nil {
 		t.Fatalf("答错也不应报错: %v", err)
 	}
-	if result == nil {
-		t.Fatal("结果不应为 nil")
+	if result.IsCorrect == nil || *result.IsCorrect {
+		t.Fatalf("答错应 is_correct=false, got %v", boolPtrVal(result.IsCorrect))
+	}
+	// 判错经 gradeOne 入库计数（wrong_count++），且 is_redone 复位
+	var wq model.WrongQuestion
+	db.First(&wq, "student_id = ? AND question_id = ?", 1, q.ID)
+	if wq.WrongCount != 3 {
+		t.Fatalf("答错应计数 +1, got %d", wq.WrongCount)
+	}
+	if wq.IsRedone {
+		t.Fatal("答错应复位 is_redone=false")
+	}
+	var cnt int64
+	db.Model(&model.QuestionPracticeRecord{}).Where("question_id = ? AND practice_type = ? AND is_correct = ?", q.ID, "redo", false).Count(&cnt)
+	if cnt != 1 {
+		t.Fatalf("答错重做应落一条错误练习记录, got %d", cnt)
 	}
 }
 
@@ -214,5 +249,20 @@ func TestRedoWrongQuestion_NotInWrongList(t *testing.T) {
 	_, err := svc.RedoWrongQuestion(1, q.ID, "A")
 	if err == nil {
 		t.Fatal("不在错题本中应返回错误")
+	}
+}
+
+func TestRedoWrongQuestion_AIExplanationCached(t *testing.T) {
+	svc, db := newWrongQuestionSvc(t)
+	q := testutil.SeedQuestion(t, db, "single_choice", "缓存解析题", "A")
+	db.Model(&model.Question{}).Where("id = ?", q.ID).Update("ai_explanation", "缓存解析")
+	seedWrongQuestion(t, db, 1, q.ID, 1)
+
+	result, err := svc.RedoWrongQuestion(1, q.ID, "A")
+	if err != nil {
+		t.Fatalf("重做失败: %v", err)
+	}
+	if result.AIExplanation != "缓存解析" {
+		t.Fatalf("应返回缓存的 AI 解析, got %q", result.AIExplanation)
 	}
 }

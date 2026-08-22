@@ -19,13 +19,21 @@ export interface WrongQuestionItem {
   }
 }
 
-/** 重做判定结果 */
+/** 重做判定结果（对齐后端 SubmitResultDTO：is_correct 简答 AI 判定前为 null） */
 export interface RedoResult {
-  is_correct?: boolean
+  is_correct?: boolean | null
   correct_answer?: string
   explanation?: string
-  accuracy_rate?: number | null
-  common_wrong?: string | null
+  question_id?: number
+  user_answer?: unknown
+  reference_answer?: string
+  scoring_criteria?: string
+  max_score?: number
+  ai_score?: number
+  ai_comment?: string
+  ai_fallback?: boolean
+  accuracy_rate?: number
+  common_wrong?: string
   total_attempts?: number
   ai_explanation?: string
 }
