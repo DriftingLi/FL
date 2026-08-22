@@ -80,7 +80,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	captchaSvc := captcha.NewService(captcha.RedisStore{})
 	emailCh := service.NewEmailChannel(cfg.SMTP, cfg.IsProd(), logger)
 	phoneCh := service.NewSmsChannel(cfg.SMS, cfg.IsProd(), logger)
-	wechatAuthSvc := service.NewWechatAuthService(cfg.Wechat, db, authSvc, logger)
+	wechatAuthSvc := service.NewWechatAuthService(cfg.Wechat.MiniProgram, db, authSvc, logger)
 	fileSvc := service.NewFileStore(cfg.LibreOfficeSidecarURL, st, logger)
 	slideRenderer := service.NewSlideRenderer(cfg.LibreOfficeSidecarURL, st, logger)
 	notificationSvc := service.NewNotificationService(db, logger)

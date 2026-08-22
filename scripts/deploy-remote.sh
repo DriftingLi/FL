@@ -164,6 +164,15 @@ write_env_file() {
         printf 'SMTP_FROM='
         env_val "${SMTP_FROM:-}"; echo
         echo "SMTP_FROM_NAME=${SMTP_FROM_NAME:-和润天下}"
+        # 微信登录凭证（小程序 / 开放平台严格区分）
+        printf 'WECHAT_MINI_PROGRAM_APP_ID='
+        env_val "${WECHAT_MINI_PROGRAM_APP_ID:-}"; echo
+        printf 'WECHAT_MINI_PROGRAM_APP_SECRET='
+        env_val "${WECHAT_MINI_PROGRAM_APP_SECRET:-}"; echo
+        printf 'WECHAT_OPEN_PLATFORM_APP_ID='
+        env_val "${WECHAT_OPEN_PLATFORM_APP_ID:-}"; echo
+        printf 'WECHAT_OPEN_PLATFORM_APP_SECRET='
+        env_val "${WECHAT_OPEN_PLATFORM_APP_SECRET:-}"; echo
 
         printf 'SECRET_KEY='
         env_val "${SECRET_KEY:-}"; echo

@@ -297,6 +297,11 @@ jobs:
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
       SMTP_FROM: ${{ secrets.SMTP_FROM }}
       SMTP_FROM_NAME: ${{ secrets.SMTP_FROM_NAME || '和润天下' }}
+      # 微信登录凭证（小程序 code2session / 开放平台扫码占位——两套凭证严格区分）
+      WECHAT_MINI_PROGRAM_APP_ID: ${{ secrets.WECHAT_MINI_PROGRAM_APP_ID || secrets.WECHAT_APP_ID }}
+      WECHAT_MINI_PROGRAM_APP_SECRET: ${{ secrets.WECHAT_MINI_PROGRAM_APP_SECRET || secrets.WECHAT_APP_SECRET }}
+      WECHAT_OPEN_PLATFORM_APP_ID: ${{ secrets.WECHAT_OPEN_PLATFORM_APP_ID }}
+      WECHAT_OPEN_PLATFORM_APP_SECRET: ${{ secrets.WECHAT_OPEN_PLATFORM_APP_SECRET }}
       # 默认账号
       ADMIN_DEFAULT_PASSWORD: ${{ secrets.ADMIN_DEFAULT_PASSWORD }}
       TUTOR_DEFAULT_PASSWORD: ${{ secrets.TUTOR_DEFAULT_PASSWORD }}

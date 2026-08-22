@@ -44,7 +44,7 @@ func newWxSvc(t *testing.T, openID, unionID string, errCode int, lastQuery *url.
 	db := testutil.NewMemoryDB(t)
 	authSvc := NewAuthService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}),
 		"admin123", "tutor123", "student123", zap.NewNop())
-	svc := NewWechatAuthService(config.WechatConfig{AppID: "wx-appid", AppSecret: "wx-secret"}, db, authSvc, zap.NewNop())
+	svc := NewWechatAuthService(config.WechatAppConfig{AppID: "wx-appid", AppSecret: "wx-secret"}, db, authSvc, zap.NewNop())
 	svc.apiBase = ts.URL
 	return svc, db
 }
@@ -62,7 +62,7 @@ func TestWechatMiniProgramLogin_NotConfigured(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	authSvc := NewAuthService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}),
 		"admin123", "tutor123", "student123", zap.NewNop())
-	svc := NewWechatAuthService(config.WechatConfig{}, db, authSvc, zap.NewNop())
+	svc := NewWechatAuthService(config.WechatAppConfig{}, db, authSvc, zap.NewNop())
 	_, err := svc.MiniProgramLogin(context.Background(), "code")
 	if err == nil || !strings.Contains(err.Error(), "未配置") {
 		t.Fatalf("未配置 AppID/Secret 应明确报错, got: %v", err)
@@ -194,7 +194,7 @@ func TestWechatMiniProgramLogin_ServiceUnavailable(t *testing.T) {
 
 func TestWechatQRCodeInfo_NotConfigured(t *testing.T) {
 	svc, _ := newWxSvc(t, "", "", 0, nil)
-	svc.cfg = config.WechatConfig{}
+	svc.cfg = config.WechatAppConfig{}
 	info := svc.QRCodeInfo()
 	if info["enabled"] != false {
 		t.Errorf("未配置授权时应 enabled=false: %+v", info)

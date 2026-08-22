@@ -31,7 +31,7 @@ const (
 
 // WechatAuthService 微信登录服务。
 type WechatAuthService struct {
-	cfg     config.WechatConfig
+	cfg     config.WechatAppConfig
 	db      *gorm.DB
 	authSvc *AuthService
 	logger  *zap.Logger
@@ -43,7 +43,7 @@ type WechatAuthService struct {
 
 // NewWechatAuthService 构造微信服务。
 // db 用于按 openid 查/建用户；authSvc 复用登录签发骨架（双令牌 + 禁用校验）。
-func NewWechatAuthService(cfg config.WechatConfig, db *gorm.DB, authSvc *AuthService, logger *zap.Logger) *WechatAuthService {
+func NewWechatAuthService(cfg config.WechatAppConfig, db *gorm.DB, authSvc *AuthService, logger *zap.Logger) *WechatAuthService {
 	return &WechatAuthService{
 		cfg:     cfg,
 		db:      db,
@@ -85,7 +85,7 @@ func (s *WechatAuthService) MiniProgramLogin(ctx context.Context, code string) (
 	if code == "" {
 		return nil, errors.New("缺少微信登录凭证 code")
 	}
-	if s.cfg.AppID == "" || s.cfg.AppSecret == "" {
+	if !s.cfg.Configured() {
 		return nil, errors.New("微信登录未配置，请联系管理员")
 	}
 
@@ -259,7 +259,7 @@ func (s *WechatAuthService) findOrCreateByOpenID(openID, unionID string) (*model
 
 // QRCodeInfo 返回扫码登录占位信息：未配置授权时 enabled=false，前端展示占位二维码。
 func (s *WechatAuthService) QRCodeInfo() map[string]any {
-	if s.cfg.AppID == "" || s.cfg.AppSecret == "" {
+	if !s.cfg.Configured() {
 		return map[string]any{
 			"enabled": false,
 			"qr_url":  "",

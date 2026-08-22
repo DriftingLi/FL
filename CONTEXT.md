@@ -15,7 +15,7 @@
 - **验证码通道（channel）**：邮箱（SMTP，开发降级日志）与短信（腾讯云 SMS SendSms，开发降级日志）是同一验证码状态机两侧的 adapter。
 - **会话（session）**：签发（issue）/ 校验（verify）/ 吊销（revoke）JWT 的生命周期。双令牌（ADR-0016）：access 2h（中间件仅收 access）+ refresh 7 天轮换；黑名单（`jwt:blacklist:`）只管理 refresh——刷新轮换即作废旧 refresh（防重放），登出撤销 refresh；access 生命周期短，不入黑名单、自然过期。
 - **登录态 Cookie**：父域名 httpOnly Cookie（hrwai_token），子域名间共享登录；Bearer 头优先于 Cookie。生产已启用 HTTPS（PR #254），Cookie 通道恢复、仅携带 access（不自动续期，见 ADR-0016）；HTTP 时期的历史约束见 ADR-0003（已解决）。
-- **微信小程序登录（wx-login）**：小程序端 uni.login 临时 code 换 openid 登录（POST /api/auth/wx-login，code2session）；openid 已绑定直接登录，未注册自动建号绑定（account 取 `wx_`+openid 前 12 位，昵称「微信学员」+openid 后 6 位，账号前缀冲突时追加后段或序号重试，唯一约束冲突与其它错误分类处理），复用统一登录骨架签发双令牌。凭证经 `WECHAT_APP_ID`/`WECHAT_APP_SECRET` 配置；微信扫码登录（开放平台）仍为占位。契约见 `docs/docs/reference/微信小程序登录-文档说明.md`。
+- **微信小程序登录（wx-login）**：小程序端 uni.login 临时 code 换 openid 登录（POST /api/auth/wx-login，code2session）；openid 已绑定直接登录，未注册自动建号绑定（account 取 `wx_`+openid 前 12 位，昵称「微信学员」+openid 后 6 位，账号前缀冲突时追加后段或序号重试，唯一约束冲突与其它错误分类处理），复用统一登录骨架签发双令牌。凭证经 `WECHAT_MINI_PROGRAM_APP_ID`/`WECHAT_MINI_PROGRAM_APP_SECRET` 配置（GitHub Secrets 同名；与网页端扫码登录的开放平台凭证 `WECHAT_OPEN_PLATFORM_*` 严格区分，两套 AppID/AppSecret 不可混用）。契约见 `docs/docs/reference/微信小程序登录-文档说明.md`。
 - **认证页（auth page）**：登录/注册/找回密码三页共用认证页外壳（AuthPageShell，白底极简 + 主次分离——密码为主入口，邮箱/手机/微信收纳为「或使用以下方式登录」图标按钮；tutor/admin 仅密码入口）。三页提交流程共用 useAuthFlow 状态机；redirect 回跳白名单（isSafeRedirect）与「路径前缀→身份」表单点（authRedirect），见 ADR-0014。
 - **资料审核（profile review）**：昵称/头像修改走提交→审核（通过/驳回）流程，审核结果以站内信通知。
 
