@@ -39,6 +39,18 @@ func RegisterQuestionInteractionRoutes(rg *gin.RouterGroup, rd RouterDeps, comme
 	g.GET("/:question_id/knowledge", h.ListKnowledge)
 }
 
+// ListComments 题目评论列表
+// @Summary 题目评论列表
+// @Description 分页查询题目评论，含作者昵称/头像
+// @Tags 学员端-题目互动
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param question_id path int true "题目ID"
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(10)
+// @Success 200 {object} response.R "success"
+// @Router /questions/{question_id}/comments [get]
 func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
 	qid, _ := strconv.Atoi(c.Param("question_id"))
 	page := atoiDefault(c.Query("page"), 1)
@@ -51,6 +63,17 @@ func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
 	response.Success(c, gin.H{"items": items, "total": total, "page": page, "page_size": pageSize})
 }
 
+// CreateComment 发表题目评论
+// @Summary 发表评论
+// @Description 学员发表题目评论，直发不审核
+// @Tags 学员端-题目互动
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param question_id path int true "题目ID"
+// @Param body body object true "内容" example({"content":"这题易错"})
+// @Success 201 {object} response.R "success"
+// @Router /questions/{question_id}/comments [post]
 func (h *QuestionInteractionHandler) CreateComment(c *gin.Context) {
 	qid, _ := strconv.Atoi(c.Param("question_id"))
 	uid := middleware.CurrentUserID(c)
@@ -69,6 +92,13 @@ func (h *QuestionInteractionHandler) CreateComment(c *gin.Context) {
 	response.Created(c, "评论成功", m)
 }
 
+// DeleteComment 删除本人评论
+// @Summary 删除评论
+// @Tags 学员端-题目互动
+// @Security BearerAuth
+// @Param comment_id path int true "评论ID"
+// @Success 200 {object} response.R "success"
+// @Router /questions/comments/{comment_id} [delete]
 func (h *QuestionInteractionHandler) DeleteComment(c *gin.Context) {
 	cid, _ := strconv.Atoi(c.Param("comment_id"))
 	uid := middleware.CurrentUserID(c)
@@ -79,6 +109,13 @@ func (h *QuestionInteractionHandler) DeleteComment(c *gin.Context) {
 	response.SuccessWithMsg(c, "已删除", nil)
 }
 
+// GetNote 获取本人笔记
+// @Summary 获取笔记
+// @Tags 学员端-题目互动
+// @Security BearerAuth
+// @Param question_id path int true "题目ID"
+// @Success 200 {object} response.R "success"
+// @Router /questions/{question_id}/note [get]
 func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
 	qid, _ := strconv.Atoi(c.Param("question_id"))
 	uid := middleware.CurrentUserID(c)
@@ -94,6 +131,16 @@ func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
 	response.Success(c, n)
 }
 
+// UpsertNote 保存笔记（每人每题一条）
+// @Summary 保存笔记
+// @Tags 学员端-题目互动
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param question_id path int true "题目ID"
+// @Param body body object true "笔记" example({"content":"我的笔记"})
+// @Success 200 {object} response.R "success"
+// @Router /questions/{question_id}/note [put]
 func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
 	qid, _ := strconv.Atoi(c.Param("question_id"))
 	uid := middleware.CurrentUserID(c)
@@ -112,6 +159,13 @@ func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
 	response.Success(c, n)
 }
 
+// DeleteNote 删除笔记
+// @Summary 删除笔记
+// @Tags 学员端-题目互动
+// @Security BearerAuth
+// @Param question_id path int true "题目ID"
+// @Success 200 {object} response.R "success"
+// @Router /questions/{question_id}/note [delete]
 func (h *QuestionInteractionHandler) DeleteNote(c *gin.Context) {
 	qid, _ := strconv.Atoi(c.Param("question_id"))
 	uid := middleware.CurrentUserID(c)
@@ -122,6 +176,14 @@ func (h *QuestionInteractionHandler) DeleteNote(c *gin.Context) {
 	response.SuccessWithMsg(c, "已删除", nil)
 }
 
+// ListKnowledge 题目考点（题库标签）
+// @Summary 考点标签
+// @Description 只读返回题目挂载的题库标签，无标签返回空数组
+// @Tags 学员端-题目互动
+// @Security BearerAuth
+// @Param question_id path int true "题目ID"
+// @Success 200 {object} response.R "success"
+// @Router /questions/{question_id}/knowledge [get]
 func (h *QuestionInteractionHandler) ListKnowledge(c *gin.Context) {
 	qid, _ := strconv.Atoi(c.Param("question_id"))
 	tags, _ := h.knowledgeSvc.ListForQuestion(qid)

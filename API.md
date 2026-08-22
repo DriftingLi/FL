@@ -637,11 +637,12 @@ multipart/form-data：`file`。响应 200（Vditor 约定结构）。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/wrong-questions` | 错题列表（分页+过滤） |
-| POST | `/api/wrong-questions/:question_id/redo` | 重做错题（提交答案判分） |
+| GET | `/api/wrong-questions` | 错题列表（分页+过滤；`is_redone` 标记已重做） |
+| POST | `/api/wrong-questions/:question_id/redo` | 重做错题（提交答案判分；做对标记 `is_redone` 而非移出） |
 | POST | `/api/wrong-questions/:question_id/remove` | 移出错题本 |
+| POST | `/api/wrong-questions/batch-remove` | 批量移出（`{question_ids:[]}`） |
 | GET | `/api/wrong-questions/stats` | 错题统计 |
-| GET | `/api/wrong-questions/export` | 导出错题本（纯文本附件） |
+| GET | `/api/wrong-questions/export` | 导出错题本（纯文本附件；空列表不可导出，前端支持全选/单选导出） |
 
 **GET /api/wrong-questions?page=1&page_size=20&type=&min_wrong_count=**
 
@@ -772,9 +773,9 @@ data: null
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | `/api/forum/upload-image` | 上传论坛图片（图文分离，先传图后随发帖/回复提交 URL） |
-| GET | `/api/forum/topics` | 帖子列表（scope=all|general|chapter；keyword 搜索；分页） |
+| GET | `/api/forum/topics` | 帖子列表（scope=all|general|chapter；keyword 搜索；分页；`sort=latest|hot` `order=asc|desc`） |
 | POST | `/api/forum/topics` | 发帖（images 最多 9 张） |
-| GET | `/api/forum/topics/:id` | 帖子详情（含回复） |
+| GET | `/api/forum/topics/:id` | 帖子详情（含回复；`sort=latest|hot|time` `order=asc|desc`） |
 | POST | `/api/forum/topics/:id/replies` | 回复（images 最多 3 张；支持回复楼层） |
 | DELETE | `/api/forum/topics/:id` | 删除自己的帖子 |
 | DELETE | `/api/forum/replies/:id` | 删除自己的回复 |
