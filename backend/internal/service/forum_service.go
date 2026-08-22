@@ -145,8 +145,8 @@ type ForumTopicPageResult struct {
 }
 
 // ListTopics 分页查询主题。
-// scope: all（默认）/ general（综合讨论区）/ chapter（需配合 chapterID）；sort: latest（默认，时间）/ hot（热度：点赞数→回复数→浏览数）。
-func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, keyword, sort string) (*ForumTopicPageResult, error) {
+// scope: all（默认）/ general（综合讨论区）/ chapter（需配合 chapterID）；sort: latest（默认，时间）/ hot（热度：点赞数→回复数→浏览数）；order: desc（默认）/ asc（正序）。
+func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, keyword, sort, order string) (*ForumTopicPageResult, error) {
 	if scope == "" {
 		scope = ForumScopeAll
 	}
@@ -156,13 +156,21 @@ func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, k
 	if sort != "hot" {
 		sort = "latest"
 	}
-	order := "COALESCE(t.last_reply_at, t.created_at) DESC, t.id DESC"
+	dir := "DESC"
+	if order == "asc" {
+		dir = "ASC"
+	}
+	// 统一 sort 别名：time 作为 latest 的别名（兼容详情页旧值）
+	if sort == "time" {
+		sort = "latest"
+	}
+	orderClause := "COALESCE(t.last_reply_at, t.created_at) " + dir + ", t.id " + dir
 	if sort == "hot" {
-		order = "t.likes_count DESC, t.reply_count DESC, t.view_count DESC, t.id DESC"
+		orderClause = "t.likes_count " + dir + ", t.reply_count " + dir + ", t.view_count " + dir + ", t.id " + dir
 	}
 
 	rows, total, page, pageSize := paging.QueryWithScan[topicRow](s.db, page, pageSize, 10, 100,
-		order,
+		orderClause,
 		func(q *gorm.DB) *gorm.DB {
 			q = q.Table("forum_topics AS t").
 				Select("t.id, t.chapter_id, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.last_reply_at, t.created_at, " +
@@ -196,8 +204,11 @@ func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, k
 }
 
 // GetTopic 主题详情（含回复，回复带被回复人信息），并累加浏览量。
-// replySort: time（默认，时间正序）/ hot（热度：点赞数→时间）
-func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort string) (map[string]any, error) {
+// replySort: time/latest（默认，时间）/ hot（热度：点赞数→时间）；order: asc/desc（默认 asc 对 time，desc 对 hot；显式传入时统一覆盖）
+func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order string) (map[string]any, error) {
+	if replySort == "latest" {
+		replySort = "time"
+	}
 	var row topicRow
 	err := s.db.Table("forum_topics AS t").
 		Select("t.id, t.chapter_id, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.last_reply_at, t.created_at, "+
@@ -233,9 +244,20 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort string) (
 		AvatarURL  string
 		ParentName string
 	}
-	replyOrder := "r.created_at ASC, r.id ASC"
+	dir := "ASC"
+	if order == "desc" {
+		dir = "DESC"
+	} else if order == "" {
+		// 默认：time/latest 按正序（先发先排），hot 按热度倒序
+		if replySort == "hot" {
+			dir = "DESC"
+		} else {
+			dir = "ASC"
+		}
+	}
+	replyOrder := "r.created_at " + dir + ", r.id " + dir
 	if replySort == "hot" {
-		replyOrder = "r.likes_count DESC, r.created_at ASC, r.id ASC"
+		replyOrder = "r.likes_count " + dir + ", r.created_at ASC, r.id ASC"
 	}
 	if err := s.db.Table("forum_replies AS r").
 		Select("r.id, r.topic_id, r.parent_id, r.content, r.images, r.likes_count, r.created_at, "+

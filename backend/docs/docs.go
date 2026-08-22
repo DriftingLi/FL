@@ -2729,6 +2729,12 @@ const docTemplate = `{
                         "description": "排序 latest|hot",
                         "name": "sort",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "排序方向 asc|desc",
+                        "name": "order",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -2848,8 +2854,14 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "排序 time|hot",
+                        "description": "排序 time|hot|latest",
                         "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "排序方向 asc|desc",
+                        "name": "order",
                         "in": "query"
                     }
                 ],

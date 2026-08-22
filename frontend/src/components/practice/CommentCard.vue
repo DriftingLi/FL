@@ -7,7 +7,14 @@
     <div v-if="comments.length===0" class="empty">暂无评论</div>
     <div v-else class="list">
       <div v-for="c in displayComments" :key="c.id" class="comment-item">
-        <span class="content">{{ c.content }}</span>
+        <div class="comment-main">
+          <div class="comment-author">
+            <el-avatar :size="24" :src="c.avatar_url || undefined">{{ (c.username||'?').charAt(0) }}</el-avatar>
+            <span class="username">{{ c.username || '用户' }}</span>
+            <span class="time">{{ c.created_at }}</span>
+          </div>
+          <span class="content">{{ c.content }}</span>
+        </div>
         <el-button v-if="c.user_id===currentUserId" link type="danger" size="small" @click="handleDelete(c.id)">删除</el-button>
       </div>
     </div>
@@ -18,8 +25,14 @@
 
     <el-dialog v-model="dialogVisible" title="所有评论" width="520px">
       <div v-for="c in comments" :key="c.id" class="comment-item">
-        <span class="content">{{ c.content }}</span>
-        <span class="time">{{ c.created_at }}</span>
+        <div class="comment-main">
+          <div class="comment-author">
+            <el-avatar :size="24" :src="c.avatar_url || undefined">{{ (c.username||'?').charAt(0) }}</el-avatar>
+            <span class="username">{{ c.username || '用户' }}</span>
+            <span class="time">{{ c.created_at }}</span>
+          </div>
+          <span class="content">{{ c.content }}</span>
+        </div>
         <el-button v-if="c.user_id===currentUserId" link type="danger" size="small" @click="handleDelete(c.id)">删除</el-button>
       </div>
       <div v-if="comments.length===0" class="empty">暂无评论</div>
@@ -78,8 +91,11 @@ onMounted(load)
 .card-title { font-weight:600; color:#303133; }
 .empty { color:#909399; font-size:13px; }
 .list { display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
-.comment-item { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid #f2f3f5; }
-.comment-item .content { flex:1; font-size:13px; color:#606266; }
+.comment-item { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; padding:8px 0; border-bottom:1px solid #f2f3f5; }
+.comment-main { flex:1; display:flex; flex-direction:column; gap:4px; }
+.comment-author { display:flex; align-items:center; gap:6px; }
+.username { font-size:12px; color:#303133; font-weight:500; }
+.comment-item .content { flex:1; font-size:13px; color:#606266; word-break:break-word; }
 .input-row { display:flex; gap:8px; margin-top:8px; }
-.time { font-size:11px; color:#c0c4cc; margin-left:8px; }
+.time { font-size:11px; color:#c0c4cc; margin-left:4px; }
 </style>

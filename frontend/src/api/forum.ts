@@ -46,6 +46,7 @@ export interface ForumListParams {
   page_size?: number
   keyword?: string
   sort?: 'latest' | 'hot'
+  order?: 'asc' | 'desc'
 }
 
 export const forumApi = {
@@ -57,9 +58,11 @@ export const forumApi = {
     return unwrappedRequest.post<ForumTopicItem>('/forum/topics', data)
   },
 
-  getTopic(id: number, sort?: 'time' | 'hot') {
-    const params = sort ? { sort } : undefined
-    return unwrappedRequest.get<{ topic: ForumTopicItem; replies: ForumReplyItem[] }>(`/forum/topics/${id}`, { params })
+  getTopic(id: number, sort?: 'latest' | 'hot' | 'time', order?: 'asc' | 'desc') {
+    const params: Record<string, string> = {}
+    if (sort) params.sort = sort
+    if (order) params.order = order
+    return unwrappedRequest.get<{ topic: ForumTopicItem; replies: ForumReplyItem[] }>(`/forum/topics/${id}`, { params: Object.keys(params).length ? params : undefined })
   },
 
   replyTopic(id: number, content: string, parentReplyId?: number | null, images?: string[]) {

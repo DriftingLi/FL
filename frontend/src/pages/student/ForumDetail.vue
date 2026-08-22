@@ -74,10 +74,13 @@
       <div class="replies-card">
         <div class="replies-header">
           <h3 class="replies-title">全部回复（{{ replies.length }}）</h3>
-          <el-radio-group v-model="replySort" size="small" @change="handleReplySortChange">
-            <el-radio-button value="time">时间</el-radio-button>
-            <el-radio-button value="hot">热门</el-radio-button>
-          </el-radio-group>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <el-radio-group v-model="replySort" size="small" @change="handleReplySortChange">
+              <el-radio-button value="latest">最新</el-radio-button>
+              <el-radio-button value="hot">热门</el-radio-button>
+            </el-radio-group>
+            <el-button size="small" :icon="replyOrder==='asc'? ArrowUp : ArrowDown" @click="toggleReplyOrder">{{ replyOrder==='asc' ? '正序' : '逆序' }}</el-button>
+          </div>
         </div>
         <template v-if="replies.length > 0">
           <div v-for="reply in replies" :key="reply.id" class="reply-item">
@@ -191,7 +194,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, View, ChatDotRound, Star, StarFilled, Paperclip, Promotion, Close } from '@element-plus/icons-vue'
+import { ArrowLeft, View, ChatDotRound, Star, StarFilled, Paperclip, Promotion, Close, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
 import { favoriteApi } from '@/api/favorite'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
@@ -210,9 +213,17 @@ const replyImages = ref<string[]>([])
 const replyingTo = ref<{ id: number; username: string } | null>(null)
 const replyFileInput = ref<HTMLInputElement | null>(null)
 const canSubmitReply = computed(() => replyContent.value.trim().length > 0 || replyImages.value.length > 0)
-const replySort = ref<'time' | 'hot'>('time')
+const replySort = ref<'latest' | 'hot'>('latest')
+const replyOrder = ref<'asc' | 'desc'>('asc')
 
 function handleReplySortChange() {
+  // 热门默认逆序，最新默认正序
+  replyOrder.value = replySort.value === 'hot' ? 'desc' : 'asc'
+  loadDetail()
+}
+
+function toggleReplyOrder(){
+  replyOrder.value = replyOrder.value === 'asc' ? 'desc' : 'asc'
   loadDetail()
 }
 
@@ -228,7 +239,7 @@ async function loadDetail() {
   loading.value = true
   try {
     const topicId = Number(route.params.topicId)
-    const res = await forumApi.getTopic(topicId, replySort.value)
+    const res = await forumApi.getTopic(topicId, replySort.value, replyOrder.value)
     topic.value = res.topic
     replies.value = res.replies || []
   } catch (e) {

@@ -75,10 +75,11 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 
 	isCorrect, _ := gradeQuestion(&question, userAnswer, 0)
 	if isCorrect != nil && *isCorrect {
-		wq.IsRemoved = true
+		wq.IsRedone = true
 	} else if isCorrect != nil && !*isCorrect {
 		wq.WrongCount++
 		wq.LastWrongAt = beijingNow()
+		wq.IsRedone = false
 	}
 	s.db.Save(&wq)
 
@@ -283,8 +284,18 @@ func wrongQuestionToDict(wq *model.WrongQuestion) map[string]any {
 		"wrong_count":   wq.WrongCount,
 		"last_wrong_at": formatISO(wq.LastWrongAt),
 		"is_removed":    wq.IsRemoved,
+		"is_redone":     wq.IsRedone,
 		"created_at":    formatISO(wq.CreatedAt),
 	}
+}
+
+// BatchRemoveWrongQuestions 批量移出错题本
+func (s *WrongQuestionService) BatchRemoveWrongQuestions(studentID int, questionIDs []int) (int, error) {
+	if len(questionIDs) == 0 {
+		return 0, errors.New("请选择要移除的题目")
+	}
+	res := s.db.Model(&model.WrongQuestion{}).Where("student_id = ? AND question_id IN ? AND is_removed = ?", studentID, questionIDs, false).Update("is_removed", true)
+	return int(res.RowsAffected), res.Error
 }
 
 func mapOr(key string, m map[string]any, def any) any {

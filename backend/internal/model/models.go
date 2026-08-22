@@ -322,6 +322,7 @@ type WrongQuestion struct {
 	WrongCount  int       `gorm:"column:wrong_count;default:1" json:"wrong_count"`
 	LastWrongAt time.Time `gorm:"column:last_wrong_at" json:"last_wrong_at"`
 	IsRemoved   bool      `gorm:"column:is_removed;default:false" json:"is_removed"`
+	IsRedone    bool      `gorm:"column:is_redone;default:false" json:"is_redone"`
 	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
 }
 

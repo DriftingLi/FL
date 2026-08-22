@@ -10,6 +10,17 @@ import (
 	"forklift-training/internal/model"
 )
 
+// QuestionCommentDTO 题目评论返回（带作者信息）
+type QuestionCommentDTO struct {
+	ID         int64  `json:"id"`
+	QuestionID int    `json:"question_id"`
+	UserID     int    `json:"user_id"`
+	Content    string `json:"content"`
+	CreatedAt  string `json:"created_at"`
+	Username   string `json:"username"`
+	AvatarURL  string `json:"avatar_url"`
+}
+
 // QuestionCommentService 题目评论服务
 type QuestionCommentService struct {
 	db     *gorm.DB
@@ -20,21 +31,41 @@ func NewQuestionCommentService(db *gorm.DB, logger *zap.Logger) *QuestionComment
 	return &QuestionCommentService{db: db, logger: logger}
 }
 
-func (s *QuestionCommentService) List(questionID, page, pageSize int) ([]model.QuestionComment, int64, error) {
+func (s *QuestionCommentService) List(questionID, page, pageSize int) ([]QuestionCommentDTO, int64, error) {
 	var total int64
 	s.db.Model(&model.QuestionComment{}).Where("question_id = ?", questionID).Count(&total)
-	var items []model.QuestionComment
+	type row struct {
+		model.QuestionComment
+		Username  string `gorm:"column:username"`
+		AvatarURL string `gorm:"column:avatar_url"`
+	}
+	var rows []row
 	offset := (page - 1) * pageSize
 	if offset < 0 {
 		offset = 0
 	}
-	if err := s.db.Where("question_id = ?", questionID).Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&items).Error; err != nil {
+	if err := s.db.Table("question_comment AS c").
+		Select("c.*, u.username, u.avatar_url").
+		Joins("LEFT JOIN hrwai_users AS u ON u.id = c.user_id").
+		Where("c.question_id = ?", questionID).
+		Order("c.created_at DESC").Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
+	}
+	items := make([]QuestionCommentDTO, len(rows))
+	for i, r := range rows {
+		items[i] = QuestionCommentDTO{
+			ID: r.ID, QuestionID: r.QuestionID, UserID: r.UserID,
+			Content: r.Content, CreatedAt: formatISO(r.CreatedAt),
+			Username: r.Username, AvatarURL: r.AvatarURL,
+		}
+		if items[i].Username == "" {
+			items[i].Username = "已注销用户"
+		}
 	}
 	return items, total, nil
 }
 
-func (s *QuestionCommentService) Create(questionID, userID int, content string) (*model.QuestionComment, error) {
+func (s *QuestionCommentService) Create(questionID, userID int, content string) (*QuestionCommentDTO, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return nil, errors.New("评论内容不能为空")
@@ -55,7 +86,17 @@ func (s *QuestionCommentService) Create(questionID, userID int, content string) 
 	if err := s.db.Create(&c).Error; err != nil {
 		return nil, err
 	}
-	return &c, nil
+	var u model.HrwaiUser
+	_ = s.db.Select("username", "avatar_url").First(&u, userID).Error
+	dto := &QuestionCommentDTO{
+		ID: c.ID, QuestionID: c.QuestionID, UserID: c.UserID,
+		Content: c.Content, CreatedAt: formatISO(c.CreatedAt),
+		Username: u.Username, AvatarURL: u.AvatarURL,
+	}
+	if dto.Username == "" {
+		dto.Username = "用户"
+	}
+	return dto, nil
 }
 
 func (s *QuestionCommentService) Delete(commentID int, userID int) error {

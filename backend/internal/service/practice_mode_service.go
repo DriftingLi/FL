@@ -267,8 +267,30 @@ func (s *PracticeModeService) GetProgress(studentID int, practiceMode string) *P
 	if stateMap == nil {
 		stateMap = map[string]any{}
 	}
+	completed := 0
+	for _, v := range stateMap {
+		if v == nil {
+			continue
+		}
+		switch val := v.(type) {
+		case string:
+			if val != "" {
+				completed++
+			}
+		case []any:
+			if len(val) > 0 {
+				completed++
+			}
+		case []string:
+			if len(val) > 0 {
+				completed++
+			}
+		default:
+			completed++
+		}
+	}
 	return &ProgressResultDTO{
-		Completed:    prog.CurrentIndex,
+		Completed:    completed,
 		Total:        prog.Total,
 		CurrentIndex: prog.CurrentIndex,
 		AnswersState: stateMap,
