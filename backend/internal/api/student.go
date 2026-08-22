@@ -42,7 +42,7 @@ func RegisterStudentRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Stud
 // GetProfile 学员信息+学习统计+课程进度
 // @Summary 学员档案
 // @Description 学员基本信息 + 学习统计 + 课程进度（角色 hrwai_user）
-// @Tags 学员端
+// @Tags 学员端-学习中心
 // @Accept json
 // @Produce json
 // @Security BearerAuth
@@ -71,7 +71,7 @@ func (h *StudentHandler) GetProfile(c *gin.Context) {
 // GetRecords 学员学习记录分页
 // @Summary 学习记录分页
 // @Description 按学员维度分页查询学习记录，支持按日期过滤
-// @Tags 学员端
+// @Tags 学员端-学习中心
 // @Accept json
 // @Produce json
 // @Security BearerAuth
@@ -126,7 +126,7 @@ type studyStatsReq struct {
 // GetStudyStats 学员仪表盘学习统计
 // @Summary 学习统计（按天）
 // @Description 按天聚合学习时长，用于仪表盘图表；days 仅支持 7 或 30，其他回退 7
-// @Tags 学员端
+// @Tags 学员端-学习中心
 // @Accept json
 // @Produce json
 // @Security BearerAuth
@@ -157,7 +157,7 @@ type studentCourseReq struct {
 // GetStudentCourses 我的课程
 // @Summary 我的课程
 // @Description 学员已产生学习记录的课程列表（按最后学习时间倒序）+ continue_learning 置顶；包含封面/方向/等级/完成章节/最后位置（ADR-0017）
-// @Tags 学员端
+// @Tags 学员端-学习中心
 // @Accept json
 // @Produce json
 // @Security BearerAuth
@@ -185,7 +185,7 @@ func (h *StudentHandler) GetStudentCourses(c *gin.Context) {
 // GetStudentCourseDetail 单课程学习详情
 // @Summary 单课程学习详情
 // @Description 指定课程的学习详情，包含每章进度/播放位置/完成状态（progress>=100 为完成）
-// @Tags 学员端
+// @Tags 学员端-学习中心
 // @Accept json
 // @Produce json
 // @Security BearerAuth

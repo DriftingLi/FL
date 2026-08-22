@@ -1,6 +1,21 @@
 basePath: /api
 definitions:
-  forklift-training_internal_service.CertificateTemplateDTO:
+  api.GenerateCaptchaDTO:
+    properties:
+      id:
+        type: string
+      image:
+        type: string
+    type: object
+  response.R:
+    properties:
+      code:
+        type: integer
+      data: {}
+      message:
+        type: string
+    type: object
+  service.CertificateTemplateDTO:
     properties:
       code:
         type: string
@@ -15,7 +30,7 @@ definitions:
       validity_days:
         type: integer
     type: object
-  forklift-training_internal_service.ChapterDTO:
+  service.ChapterDTO:
     properties:
       chapter_id:
         type: integer
@@ -35,14 +50,14 @@ definitions:
         type: string
       files:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.ChapterFileDTO'
+          $ref: '#/definitions/service.ChapterFileDTO'
         type: array
       order_num:
         type: integer
       title:
         type: string
     type: object
-  forklift-training_internal_service.ChapterDetailDTO:
+  service.ChapterDetailDTO:
     properties:
       chapter_id:
         type: integer
@@ -62,7 +77,7 @@ definitions:
         type: string
       files:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.ChapterFileDTO'
+          $ref: '#/definitions/service.ChapterFileDTO'
         type: array
       next_chapter_id:
         type: integer
@@ -75,7 +90,7 @@ definitions:
       title:
         type: string
     type: object
-  forklift-training_internal_service.ChapterFileDTO:
+  service.ChapterFileDTO:
     properties:
       chapter_id:
         type: integer
@@ -92,7 +107,7 @@ definitions:
       file_url:
         type: string
     type: object
-  forklift-training_internal_service.ChapterSlidesDTO:
+  service.ChapterSlidesDTO:
     properties:
       chapter_id:
         type: integer
@@ -101,26 +116,26 @@ definitions:
           type: string
         type: array
     type: object
-  forklift-training_internal_service.CourseBriefDTO:
+  service.CourseBriefDTO:
     properties:
       course_id:
         type: integer
       name:
         type: string
     type: object
-  forklift-training_internal_service.CourseDTO:
+  service.CourseDTO:
     properties:
       certificate_name:
         type: string
       certificate_template:
-        $ref: '#/definitions/forklift-training_internal_service.CertificateTemplateDTO'
+        $ref: '#/definitions/service.CertificateTemplateDTO'
       certificate_template_id:
         type: integer
       chapter_count:
         type: integer
       chapters:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.ChapterDTO'
+          $ref: '#/definitions/service.ChapterDTO'
         type: array
       course_id:
         type: integer
@@ -133,7 +148,7 @@ definitions:
       duration:
         type: integer
       level:
-        $ref: '#/definitions/forklift-training_internal_service.LevelBriefDTO'
+        $ref: '#/definitions/service.LevelBriefDTO'
       level_id:
         type: integer
       name:
@@ -146,12 +161,12 @@ definitions:
         type: array
       prerequisites:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.CourseBriefDTO'
+          $ref: '#/definitions/service.CourseBriefDTO'
         type: array
       sort_order:
         type: integer
       specialty:
-        $ref: '#/definitions/forklift-training_internal_service.SpecialtyBriefDTO'
+        $ref: '#/definitions/service.SpecialtyBriefDTO'
       specialty_id:
         type: integer
       status:
@@ -161,16 +176,16 @@ definitions:
       theory_hours:
         type: integer
     type: object
-  forklift-training_internal_service.CourseDetailDTO:
+  service.CourseDetailDTO:
     properties:
       chapters:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.ChapterDTO'
+          $ref: '#/definitions/service.ChapterDTO'
         type: array
       completed_chapters:
         type: integer
       course_info:
-        $ref: '#/definitions/forklift-training_internal_service.CourseDTO'
+        $ref: '#/definitions/service.CourseDTO'
       is_enrolled:
         type: boolean
       last_chapter_id:
@@ -182,11 +197,11 @@ definitions:
       progress:
         type: number
     type: object
-  forklift-training_internal_service.CoursePageResult:
+  service.CoursePageResult:
     properties:
       courses:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.CourseDTO'
+          $ref: '#/definitions/service.CourseDTO'
         type: array
       page:
         type: integer
@@ -195,7 +210,7 @@ definitions:
       total:
         type: integer
     type: object
-  forklift-training_internal_service.CourseProgressDTO:
+  service.CourseProgressDTO:
     properties:
       course_id:
         type: integer
@@ -210,7 +225,7 @@ definitions:
       total_chapters:
         type: integer
     type: object
-  forklift-training_internal_service.ForumAuthor:
+  service.ForumAuthor:
     properties:
       avatar_url:
         type: string
@@ -219,10 +234,10 @@ definitions:
       username:
         type: string
     type: object
-  forklift-training_internal_service.ForumReplyDTO:
+  service.ForumReplyDTO:
     properties:
       author:
-        $ref: '#/definitions/forklift-training_internal_service.ForumAuthor'
+        $ref: '#/definitions/service.ForumAuthor'
       can_delete:
         type: boolean
       content:
@@ -247,10 +262,10 @@ definitions:
       topic_id:
         type: integer
     type: object
-  forklift-training_internal_service.ForumTopicDTO:
+  service.ForumTopicDTO:
     properties:
       author:
-        $ref: '#/definitions/forklift-training_internal_service.ForumAuthor'
+        $ref: '#/definitions/service.ForumAuthor'
       can_delete:
         type: boolean
       chapter_id:
@@ -280,7 +295,7 @@ definitions:
       view_count:
         type: integer
     type: object
-  forklift-training_internal_service.ForumTopicPageResult:
+  service.ForumTopicPageResult:
     properties:
       page:
         type: integer
@@ -288,12 +303,12 @@ definitions:
         type: integer
       topics:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.ForumTopicDTO'
+          $ref: '#/definitions/service.ForumTopicDTO'
         type: array
       total:
         type: integer
     type: object
-  forklift-training_internal_service.HistoryItemDTO:
+  service.HistoryItemDTO:
     properties:
       created_at:
         type: string
@@ -304,7 +319,7 @@ definitions:
       practice_type:
         type: string
       question:
-        $ref: '#/definitions/forklift-training_internal_service.QuestionDTO'
+        $ref: '#/definitions/service.QuestionDTO'
       question_id:
         type: integer
       student_id:
@@ -312,7 +327,7 @@ definitions:
       user_answer:
         type: string
     type: object
-  forklift-training_internal_service.HistoryResultDTO:
+  service.HistoryResultDTO:
     properties:
       page:
         type: integer
@@ -320,12 +335,12 @@ definitions:
         type: integer
       records:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.HistoryItemDTO'
+          $ref: '#/definitions/service.HistoryItemDTO'
         type: array
       total:
         type: integer
     type: object
-  forklift-training_internal_service.LevelBriefDTO:
+  service.LevelBriefDTO:
     properties:
       code:
         type: string
@@ -334,7 +349,7 @@ definitions:
       name:
         type: string
     type: object
-  forklift-training_internal_service.LevelExamAnswerDTO:
+  service.LevelExamAnswerDTO:
     properties:
       ai_comment:
         type: string
@@ -360,7 +375,7 @@ definitions:
       is_correct:
         type: boolean
       question:
-        $ref: '#/definitions/forklift-training_internal_service.QuestionDTO'
+        $ref: '#/definitions/service.QuestionDTO'
       question_id:
         type: integer
       score:
@@ -368,7 +383,7 @@ definitions:
       user_answer:
         type: string
     type: object
-  forklift-training_internal_service.LevelExamAvailableDTO:
+  service.LevelExamAvailableDTO:
     properties:
       can_enter:
         type: boolean
@@ -390,7 +405,7 @@ definitions:
       participant_status: {}
       participants:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.LevelExamParticipantDTO'
+          $ref: '#/definitions/service.LevelExamParticipantDTO'
         type: array
       pass_score:
         type: integer
@@ -404,23 +419,23 @@ definitions:
       updated_at:
         type: string
     type: object
-  forklift-training_internal_service.LevelExamDataDTO:
+  service.LevelExamDataDTO:
     properties:
       answers: {}
       participant_id:
         type: integer
       questions:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.QuestionDTO'
+          $ref: '#/definitions/service.QuestionDTO'
         type: array
       remaining_time:
         type: integer
       session:
-        $ref: '#/definitions/forklift-training_internal_service.LevelExamSessionDTO'
+        $ref: '#/definitions/service.LevelExamSessionDTO'
       start_time:
         type: string
     type: object
-  forklift-training_internal_service.LevelExamHistoryDTO:
+  service.LevelExamHistoryDTO:
     properties:
       page:
         type: integer
@@ -428,12 +443,12 @@ definitions:
         type: integer
       records:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.LevelExamParticipantDTO'
+          $ref: '#/definitions/service.LevelExamParticipantDTO'
         type: array
       total:
         type: integer
     type: object
-  forklift-training_internal_service.LevelExamParticipantDTO:
+  service.LevelExamParticipantDTO:
     properties:
       answers_snapshot: {}
       created_at:
@@ -467,16 +482,16 @@ definitions:
       submit_time:
         type: string
     type: object
-  forklift-training_internal_service.LevelExamResultDTO:
+  service.LevelExamResultDTO:
     properties:
       answers:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.LevelExamAnswerDTO'
+          $ref: '#/definitions/service.LevelExamAnswerDTO'
         type: array
       participant:
-        $ref: '#/definitions/forklift-training_internal_service.LevelExamParticipantDTO'
+        $ref: '#/definitions/service.LevelExamParticipantDTO'
     type: object
-  forklift-training_internal_service.LevelExamSessionDTO:
+  service.LevelExamSessionDTO:
     properties:
       created_at:
         type: string
@@ -492,7 +507,7 @@ definitions:
         type: string
       participants:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.LevelExamParticipantDTO'
+          $ref: '#/definitions/service.LevelExamParticipantDTO'
         type: array
       pass_score:
         type: integer
@@ -506,7 +521,7 @@ definitions:
       updated_at:
         type: string
     type: object
-  forklift-training_internal_service.MockExamAnswerDetailDTO:
+  service.MockExamAnswerDetailDTO:
     properties:
       ai_comment:
         type: string
@@ -534,11 +549,11 @@ definitions:
         type: string
       user_answer: {}
     type: object
-  forklift-training_internal_service.MockExamHistoryDTO:
+  service.MockExamHistoryDTO:
     properties:
       exams:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.MockExamHistoryItemDTO'
+          $ref: '#/definitions/service.MockExamHistoryItemDTO'
         type: array
       page:
         type: integer
@@ -547,7 +562,7 @@ definitions:
       total:
         type: integer
     type: object
-  forklift-training_internal_service.MockExamHistoryItemDTO:
+  service.MockExamHistoryItemDTO:
     properties:
       answers: {}
       created_at:
@@ -571,7 +586,7 @@ definitions:
       submit_time:
         type: string
     type: object
-  forklift-training_internal_service.MockExamResultDTO:
+  service.MockExamResultDTO:
     properties:
       accuracy:
         type: number
@@ -579,7 +594,7 @@ definitions:
         type: integer
       details:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.MockExamAnswerDetailDTO'
+          $ref: '#/definitions/service.MockExamAnswerDetailDTO'
         type: array
       max_score:
         type: number
@@ -592,7 +607,7 @@ definitions:
       total_score:
         type: number
     type: object
-  forklift-training_internal_service.MockExamResumeDTO:
+  service.MockExamResumeDTO:
     properties:
       answers: {}
       duration:
@@ -601,14 +616,14 @@ definitions:
         type: integer
       questions:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.QuestionDTO'
+          $ref: '#/definitions/service.QuestionDTO'
         type: array
       remaining_time:
         type: integer
       start_time:
         type: string
     type: object
-  forklift-training_internal_service.MockExamStartDTO:
+  service.MockExamStartDTO:
     properties:
       duration:
         type: integer
@@ -616,7 +631,7 @@ definitions:
         type: integer
       questions:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.QuestionDTO'
+          $ref: '#/definitions/service.QuestionDTO'
         type: array
       remaining_time:
         type: integer
@@ -625,7 +640,7 @@ definitions:
       total_score:
         type: integer
     type: object
-  forklift-training_internal_service.MockExamSubmitDTO:
+  service.MockExamSubmitDTO:
     properties:
       accuracy:
         type: number
@@ -633,7 +648,7 @@ definitions:
         type: integer
       details:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.MockExamAnswerDetailDTO'
+          $ref: '#/definitions/service.MockExamAnswerDetailDTO'
         type: array
       max_score:
         type: number
@@ -642,7 +657,7 @@ definitions:
       total_score:
         type: number
     type: object
-  forklift-training_internal_service.PracticeStartResultDTO:
+  service.PracticeStartResultDTO:
     properties:
       completed:
         type: integer
@@ -650,18 +665,18 @@ definitions:
         type: integer
       questions:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.QuestionDTO'
+          $ref: '#/definitions/service.QuestionDTO'
         type: array
       total:
         type: integer
     type: object
-  forklift-training_internal_service.PracticeStatsDTO:
+  service.PracticeStatsDTO:
     properties:
       accuracy:
         type: number
       by_type:
         additionalProperties:
-          $ref: '#/definitions/forklift-training_internal_service.PracticeTypeStat'
+          $ref: '#/definitions/service.PracticeTypeStat'
         type: object
       correct:
         type: integer
@@ -670,7 +685,7 @@ definitions:
       wrong:
         type: integer
     type: object
-  forklift-training_internal_service.PracticeTypeStat:
+  service.PracticeTypeStat:
     properties:
       accuracy:
         type: number
@@ -679,7 +694,7 @@ definitions:
       total:
         type: integer
     type: object
-  forklift-training_internal_service.ProgressResultDTO:
+  service.ProgressResultDTO:
     properties:
       answers_state:
         additionalProperties: {}
@@ -691,7 +706,7 @@ definitions:
       total:
         type: integer
     type: object
-  forklift-training_internal_service.QuestionDTO:
+  service.QuestionDTO:
     properties:
       answer:
         description: 学员侧（includeAnswer=false）省略以下四个字段。
@@ -728,7 +743,7 @@ definitions:
       updated_at:
         type: string
     type: object
-  forklift-training_internal_service.SpecialtyBriefDTO:
+  service.SpecialtyBriefDTO:
     properties:
       code:
         type: string
@@ -737,7 +752,7 @@ definitions:
       specialty_id:
         type: integer
     type: object
-  forklift-training_internal_service.StudentCourseChapterDTO:
+  service.StudentCourseChapterDTO:
     properties:
       chapter_id:
         type: integer
@@ -750,7 +765,7 @@ definitions:
       video_position:
         type: integer
     type: object
-  forklift-training_internal_service.StudentCourseDTO:
+  service.StudentCourseDTO:
     properties:
       completed_chapters:
         type: integer
@@ -779,11 +794,11 @@ definitions:
       total_chapters:
         type: integer
     type: object
-  forklift-training_internal_service.StudentCourseDetailDTO:
+  service.StudentCourseDetailDTO:
     properties:
       chapters:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.StudentCourseChapterDTO'
+          $ref: '#/definitions/service.StudentCourseChapterDTO'
         type: array
       completed_chapters:
         type: integer
@@ -812,16 +827,16 @@ definitions:
       total_chapters:
         type: integer
     type: object
-  forklift-training_internal_service.StudentCoursesDTO:
+  service.StudentCoursesDTO:
     properties:
       continue_learning:
-        $ref: '#/definitions/forklift-training_internal_service.StudentCourseDTO'
+        $ref: '#/definitions/service.StudentCourseDTO'
       courses:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.StudentCourseDTO'
+          $ref: '#/definitions/service.StudentCourseDTO'
         type: array
     type: object
-  forklift-training_internal_service.StudentDTO:
+  service.StudentDTO:
     properties:
       account:
         type: string
@@ -839,18 +854,18 @@ definitions:
       username:
         type: string
     type: object
-  forklift-training_internal_service.StudentProfileDTO:
+  service.StudentProfileDTO:
     properties:
       course_progress:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.CourseProgressDTO'
+          $ref: '#/definitions/service.CourseProgressDTO'
         type: array
       student_info:
-        $ref: '#/definitions/forklift-training_internal_service.StudentDTO'
+        $ref: '#/definitions/service.StudentDTO'
       study_stats:
-        $ref: '#/definitions/forklift-training_internal_service.StudyStatsDTO'
+        $ref: '#/definitions/service.StudyStatsDTO'
     type: object
-  forklift-training_internal_service.StudyDailyStatsDTO:
+  service.StudyDailyStatsDTO:
     properties:
       active_days:
         type: integer
@@ -867,7 +882,7 @@ definitions:
       total_minutes:
         type: integer
     type: object
-  forklift-training_internal_service.StudyProgressDTO:
+  service.StudyProgressDTO:
     properties:
       completed_chapters:
         type: integer
@@ -878,7 +893,7 @@ definitions:
       study_duration:
         type: integer
     type: object
-  forklift-training_internal_service.StudyRecordDTO:
+  service.StudyRecordDTO:
     properties:
       chapter_id:
         type: integer
@@ -899,7 +914,7 @@ definitions:
       study_duration:
         type: integer
     type: object
-  forklift-training_internal_service.StudyRecordPageResult:
+  service.StudyRecordPageResult:
     properties:
       page:
         type: integer
@@ -907,12 +922,12 @@ definitions:
         type: integer
       records:
         items:
-          $ref: '#/definitions/forklift-training_internal_service.StudyRecordDTO'
+          $ref: '#/definitions/service.StudyRecordDTO'
         type: array
       total:
         type: integer
     type: object
-  forklift-training_internal_service.StudyStatsDTO:
+  service.StudyStatsDTO:
     properties:
       completed_courses:
         type: integer
@@ -925,7 +940,7 @@ definitions:
       total_study_duration:
         type: integer
     type: object
-  forklift-training_internal_service.SubmitResultDTO:
+  service.SubmitResultDTO:
     properties:
       ai_comment:
         type: string
@@ -949,7 +964,7 @@ definitions:
         type: string
       user_answer: {}
     type: object
-  forklift-training_internal_service.WrongQuestionStatsDTO:
+  service.WrongQuestionStatsDTO:
     properties:
       by_type:
         additionalProperties:
@@ -959,22 +974,952 @@ definitions:
       total:
         type: integer
     type: object
-  forklift-training_pkg_response.R:
-    properties:
-      code:
-        type: integer
-      data: {}
-      message:
-        type: string
-    type: object
 info:
   contact: {}
-  description: '学员端(hrwai_user) 学习/练习/考试/收藏/搜索/资料/论坛等 P0/P1 能力（ADR-0017/0018）。鉴权：`Authorization:
+  description: '学员端与公开端点：认证/验证码/微信登录/学员学习中心/课程/练习/考试/收藏/搜索/资料/论坛/通知/精选/AI助手/培训目录；鉴权：`Authorization:
     Bearer <access JWT>`（access 2h，`POST /api/auth/refresh` 换新双令牌）。响应统一 `{code,message,data}`（见
-    ADR-0005）。本页由 gin-swagger 生成，范围 B（~30 端点）。'
+    ADR-0005）。不含导师端、管理端与残值评估模块。'
   title: 叉车维修培训系统-学员端 API
   version: "1.0"
 paths:
+  /ai-assistant/chat:
+    post:
+      consumes:
+      - application/json
+      description: 可选认证的 SSE 流式响应，不走统一 JSON 信封；事件 message/error/done
+      parameters:
+      - description: 消息
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE stream
+          schema:
+            type: string
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: AI 流式对话（SSE）
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/models:
+    get:
+      description: 列出管理员配置的 is_active=true 模型
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: AI 可用模型（公开）
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/sessions:
+    get:
+      consumes:
+      - application/json
+      description: 列出登录用户的会话
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: AI 会话列表
+      tags:
+      - 学员端-AI助手
+    post:
+      consumes:
+      - application/json
+      description: 创建新会话
+      parameters:
+      - description: 标题/模型
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 创建 AI 会话
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/sessions/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除会话及其消息
+      parameters:
+      - description: 会话ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除会话
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/sessions/{id}/messages:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定会话的消息列表
+      parameters:
+      - description: 会话ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 会话消息列表
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/sessions/{id}/title:
+    patch:
+      consumes:
+      - application/json
+      description: 修改会话标题，非空最多 100 字符
+      parameters:
+      - description: 会话ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 标题
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 重命名会话
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/user-models:
+    get:
+      consumes:
+      - application/json
+      description: 列出登录用户自定义模型（api_key 脱敏）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 用户自定义模型
+      tags:
+      - 学员端-AI助手
+    post:
+      consumes:
+      - application/json
+      description: 创建或更新用户自定义模型
+      parameters:
+      - description: 模型
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 保存用户自定义模型
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/user-models/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定用户模型
+      parameters:
+      - description: 模型ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除用户自定义模型
+      tags:
+      - 学员端-AI助手
+  /auth/account:
+    put:
+      consumes:
+      - application/json
+      description: 短信验证码确认，格式 4~20 位字母/数字/下划线
+      parameters:
+      - description: account/code
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 修改登录账号
+      tags:
+      - 学员端-个人资料
+  /auth/account/send-code:
+    post:
+      consumes:
+      - application/json
+      description: 向已绑定手机发送修改账号验证码
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 发送修改登录账号验证码
+      tags:
+      - 学员端-个人资料
+  /auth/avatar:
+    post:
+      consumes:
+      - multipart/form-data
+      description: multipart 上传，自动压缩为 WebP 后存入 storage 并提交审核
+      parameters:
+      - description: 头像图片
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 上传头像
+      tags:
+      - 学员端-个人资料
+  /auth/email/login:
+    post:
+      consumes:
+      - application/json
+      description: 校验验证码后登录，签发双令牌
+      parameters:
+      - description: 登录
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 验证码登录
+      tags:
+      - 学员端-认证
+  /auth/email/register:
+    post:
+      consumes:
+      - application/json
+      description: 校验验证码后注册，成功签发双令牌并写 Cookie
+      parameters:
+      - description: 注册
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 验证码注册并自动登录
+      tags:
+      - 学员端-认证
+  /auth/email/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: 校验验证码后重置密码，不自动登录
+      parameters:
+      - description: 重置
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 忘记密码重置
+      tags:
+      - 学员端-认证
+  /auth/email/send-code:
+    post:
+      consumes:
+      - application/json
+      description: 开启人机验证时需先校验图形验证码；邮箱字段 email，手机字段 phone，purpose 为 register/login/reset_password
+      parameters:
+      - description: 发码
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 发送验证码
+      tags:
+      - 学员端-认证
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: 账号密码登录（hrwai_user），成功写入登录 Cookie 并返回双令牌
+      parameters:
+      - description: 登录
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 学员登录
+      tags:
+      - 学员端-认证
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: 撤销 refresh_token 并清除登录 Cookie；不依赖 JWTAuth，access 过期亦可登出
+      parameters:
+      - description: refresh_token
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 登出
+      tags:
+      - 学员端-认证
+  /auth/me:
+    get:
+      consumes:
+      - application/json
+      description: 基于 JWT 获取当前用户档案（响应形状由契约测试锁定）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 当前用户信息
+      tags:
+      - 学员端-认证
+  /auth/phone/login:
+    post:
+      consumes:
+      - application/json
+      description: 校验验证码后登录，签发双令牌
+      parameters:
+      - description: 登录
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 验证码登录
+      tags:
+      - 学员端-认证
+  /auth/phone/register:
+    post:
+      consumes:
+      - application/json
+      description: 校验验证码后注册，成功签发双令牌并写 Cookie
+      parameters:
+      - description: 注册
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 验证码注册并自动登录
+      tags:
+      - 学员端-认证
+  /auth/phone/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: 校验验证码后重置密码，不自动登录
+      parameters:
+      - description: 重置
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 忘记密码重置
+      tags:
+      - 学员端-认证
+  /auth/phone/send-code:
+    post:
+      consumes:
+      - application/json
+      description: 开启人机验证时需先校验图形验证码；邮箱字段 email，手机字段 phone，purpose 为 register/login/reset_password
+      parameters:
+      - description: 发码
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 发送验证码
+      tags:
+      - 学员端-认证
+  /auth/profile:
+    put:
+      consumes:
+      - application/json
+      description: 提交后待审核通过生效
+      parameters:
+      - description: 昵称
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 提交昵称修改审核
+      tags:
+      - 学员端-个人资料
+  /auth/profile/email:
+    post:
+      consumes:
+      - application/json
+      description: 验证码校验后绑定邮箱
+      parameters:
+      - description: 邮箱
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 绑定/修改邮箱
+      tags:
+      - 学员端-个人资料
+  /auth/profile/password:
+    post:
+      consumes:
+      - application/json
+      description: 短信验证码校验后设置/修改密码
+      parameters:
+      - description: code/password
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 修改密码
+      tags:
+      - 学员端-个人资料
+  /auth/profile/password/send-code:
+    post:
+      consumes:
+      - application/json
+      description: 向已绑定手机发送修改密码验证码
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 发送修改密码验证码
+      tags:
+      - 学员端-个人资料
+  /auth/profile/phone:
+    post:
+      consumes:
+      - application/json
+      description: 验证码校验后绑定手机号
+      parameters:
+      - description: 手机
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 绑定/修改手机号
+      tags:
+      - 学员端-个人资料
+  /auth/profile/send-code:
+    post:
+      consumes:
+      - application/json
+      description: 按 channel(email/phone) 发送绑定验证码
+      parameters:
+      - description: channel/target
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 发送绑定验证码
+      tags:
+      - 学员端-个人资料
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: 轮换签发新 access/refresh，旧 refresh 入黑名单；失败统一 401
+      parameters:
+      - description: refresh_token
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 刷新双令牌
+      tags:
+      - 学员端-认证
+  /auth/wechat/login:
+    post:
+      consumes:
+      - application/json
+      description: 扫码登录占位，未配置授权时明确报错
+      parameters:
+      - description: code
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 未配置
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 微信扫码登录（占位）
+      tags:
+      - 学员端-认证
+  /auth/wechat/qrcode:
+    post:
+      consumes:
+      - application/json
+      description: 占位实现，未配置授权时返回提示
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 获取微信扫码信息
+      tags:
+      - 学员端-认证
+  /auth/wx-login:
+    post:
+      consumes:
+      - application/json
+      description: uni.login code → code2session 换 openid → 查/建用户 → 签发双令牌，平铺返回 token
+        等
+      parameters:
+      - description: code
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 微信小程序登录
+      tags:
+      - 学员端-认证
+  /captcha:
+    get:
+      description: 生成 id 与 base64 图片，用于人机验证
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/api.GenerateCaptchaDTO'
+              type: object
+        "500":
+          description: 失败
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 图形验证码
+      tags:
+      - 学员端-认证
+  /catalog/tree:
+    get:
+      description: 学员端课程目录树
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 培训目录树（公开）
+      tags:
+      - 学员端-培训目录
   /chapter/{chapter_id}/slides:
     get:
       consumes:
@@ -993,15 +1938,15 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.ChapterSlidesDTO'
+                  $ref: '#/definitions/service.ChapterSlidesDTO'
               type: object
         "404":
           description: 章节不存在
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       summary: 章节幻灯片
       tags:
       - 学员端-课程
@@ -1023,19 +1968,19 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.ChapterSlidesDTO'
+                  $ref: '#/definitions/service.ChapterSlidesDTO'
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "404":
           description: 章节不存在
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 重新生成幻灯片
@@ -1059,19 +2004,19 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.CourseDetailDTO'
+                  $ref: '#/definitions/service.CourseDetailDTO'
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "404":
           description: 课程不存在
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 课程详情（含学习进度）
@@ -1100,19 +2045,19 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.ChapterDetailDTO'
+                  $ref: '#/definitions/service.ChapterDetailDTO'
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "404":
           description: 章节不存在
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 章节详情
@@ -1142,19 +2087,19 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.StudyProgressDTO'
+                  $ref: '#/definitions/service.StudyProgressDTO'
               type: object
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 上报学习进度
@@ -1191,10 +2136,10 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.CoursePageResult'
+                  $ref: '#/definitions/service.CoursePageResult'
               type: object
       summary: 课程列表
       tags:
@@ -1225,11 +2170,11 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 我的收藏列表
@@ -1252,15 +2197,15 @@ paths:
         "201":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 收藏
@@ -1283,15 +2228,15 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 取消收藏
@@ -1319,20 +2264,104 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 是否已收藏
       tags:
       - 学员端-收藏
+  /featured-content/{id}:
+    get:
+      consumes:
+      - application/json
+      description: 含相关资讯与上下篇；no_view=1 时不计 view_count
+      parameters:
+      - description: 内容ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 1 不计数
+        in: query
+        name: no_view
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 精选内容详情（公开）
+      tags:
+      - 学员端-精选内容
+  /featured-content/{id}/view:
+    post:
+      consumes:
+      - application/json
+      description: 客户端 hydration 后计数
+      parameters:
+      - description: 内容ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 增加精选阅读量
+      tags:
+      - 学员端-精选内容
+  /featured-contents:
+    get:
+      consumes:
+      - application/json
+      description: 仅已发布内容，支持按分类过滤
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 分类
+        in: query
+        name: category
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 精选内容列表（公开）
+      tags:
+      - 学员端-精选内容
   /forum/check-in:
     post:
       consumes:
@@ -1344,15 +2373,15 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "400":
           description: 已打卡
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 每日打卡
@@ -1378,11 +2407,11 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 打卡日历
@@ -1410,11 +2439,11 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 打卡排行榜
@@ -1442,11 +2471,11 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 我的回复
@@ -1474,11 +2503,11 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 我的帖子
@@ -1501,15 +2530,15 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 删除自己的回复
@@ -1532,15 +2561,15 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 取消点赞回复
@@ -1562,15 +2591,15 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 点赞回复
@@ -1599,15 +2628,15 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 举报回复
@@ -1653,15 +2682,15 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.ForumTopicPageResult'
+                  $ref: '#/definitions/service.ForumTopicPageResult'
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 帖子列表
@@ -1685,19 +2714,19 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.ForumTopicDTO'
+                  $ref: '#/definitions/service.ForumTopicDTO'
               type: object
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 发帖
@@ -1720,15 +2749,15 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 删除自己的帖子
@@ -1754,15 +2783,15 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "404":
           description: 不存在
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 帖子详情
@@ -1785,15 +2814,15 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 取消点赞帖子
@@ -1815,15 +2844,15 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 点赞帖子
@@ -1853,19 +2882,19 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.ForumReplyDTO'
+                  $ref: '#/definitions/service.ForumReplyDTO'
               type: object
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 回复帖子
@@ -1894,15 +2923,15 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 举报帖子
@@ -1925,15 +2954,15 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 上传论坛图片
@@ -1951,17 +2980,17 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/forklift-training_internal_service.LevelExamAvailableDTO'
+                    $ref: '#/definitions/service.LevelExamAvailableDTO'
                   type: array
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 定级考试-可用列表
@@ -1990,15 +3019,15 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.LevelExamHistoryDTO'
+                  $ref: '#/definitions/service.LevelExamHistoryDTO'
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 定级考试历史
@@ -2022,19 +3051,19 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.LevelExamResultDTO'
+                  $ref: '#/definitions/service.LevelExamResultDTO'
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "404":
           description: 不存在
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 查询结果
@@ -2063,15 +3092,15 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 保存答案
@@ -2100,19 +3129,19 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.LevelExamParticipantDTO'
+                  $ref: '#/definitions/service.LevelExamParticipantDTO'
               type: object
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 交卷
@@ -2136,24 +3165,37 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.LevelExamDataDTO'
+                  $ref: '#/definitions/service.LevelExamDataDTO'
               type: object
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 进入定级考试
       tags:
       - 学员端-定级考试
+  /levels:
+    get:
+      description: 仅启用项
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 课程等级（公开）
+      tags:
+      - 学员端-培训目录
   /materials:
     get:
       consumes:
@@ -2180,11 +3222,11 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 学习资料列表
@@ -2207,15 +3249,15 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "404":
           description: 不存在
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 资料详情
@@ -2238,15 +3280,15 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "404":
           description: 不存在
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 资料下载地址
@@ -2270,19 +3312,19 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.MockExamResultDTO'
+                  $ref: '#/definitions/service.MockExamResultDTO'
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "404":
           description: 不存在
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 模拟考试结果
@@ -2306,19 +3348,19 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.MockExamResumeDTO'
+                  $ref: '#/definitions/service.MockExamResumeDTO'
               type: object
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 恢复模拟考试
@@ -2347,15 +3389,15 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 保存模拟考试进度
@@ -2379,19 +3421,19 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.MockExamSubmitDTO'
+                  $ref: '#/definitions/service.MockExamSubmitDTO'
               type: object
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 模拟考试交卷
@@ -2420,15 +3462,15 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.MockExamHistoryDTO'
+                  $ref: '#/definitions/service.MockExamHistoryDTO'
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 模拟考试历史
@@ -2452,24 +3494,129 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.MockExamStartDTO'
+                  $ref: '#/definitions/service.MockExamStartDTO'
               type: object
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 开始模拟考试
       tags:
       - 学员端-模拟考试
+  /notifications:
+    get:
+      consumes:
+      - application/json
+      description: 分页查询通知（含未读数）
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 通知列表
+      tags:
+      - 学员端-通知
+  /notifications/{id}/read:
+    post:
+      consumes:
+      - application/json
+      description: 标记指定通知为已读
+      parameters:
+      - description: 通知ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 标记单条已读
+      tags:
+      - 学员端-通知
+  /notifications/read-all:
+    post:
+      consumes:
+      - application/json
+      description: 全部通知标记为已读
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 全部标记已读
+      tags:
+      - 学员端-通知
+  /notifications/unread-count:
+    get:
+      consumes:
+      - application/json
+      description: 查询未读通知数量
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 未读通知数
+      tags:
+      - 学员端-通知
   /practice-mode/free:
     get:
       consumes:
@@ -2492,17 +3639,17 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/forklift-training_internal_service.QuestionDTO'
+                    $ref: '#/definitions/service.QuestionDTO'
                   type: array
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 随机练习抽题
@@ -2543,15 +3690,15 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.HistoryResultDTO'
+                  $ref: '#/definitions/service.HistoryResultDTO'
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 练习历史
@@ -2575,15 +3722,15 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.ProgressResultDTO'
+                  $ref: '#/definitions/service.ProgressResultDTO'
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 查询练习进度
@@ -2606,15 +3753,15 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 保存练习游标与答题状态
@@ -2632,15 +3779,15 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.PracticeStartResultDTO'
+                  $ref: '#/definitions/service.PracticeStartResultDTO'
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 顺序练习开始/续练
@@ -2658,15 +3805,15 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.ProgressResultDTO'
+                  $ref: '#/definitions/service.ProgressResultDTO'
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 顺序练习进度
@@ -2684,15 +3831,15 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.PracticeStatsDTO'
+                  $ref: '#/definitions/service.PracticeStatsDTO'
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 练习统计
@@ -2717,19 +3864,19 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.SubmitResultDTO'
+                  $ref: '#/definitions/service.SubmitResultDTO'
               type: object
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 提交练习答案
@@ -2758,19 +3905,19 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.PracticeStartResultDTO'
+                  $ref: '#/definitions/service.PracticeStartResultDTO'
               type: object
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 标签专项练习
@@ -2807,11 +3954,11 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       summary: 全局搜索
       tags:
       - 学员端-搜索
@@ -2827,20 +3974,20 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.StudentCoursesDTO'
+                  $ref: '#/definitions/service.StudentCoursesDTO'
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 我的课程
       tags:
-      - 学员端
+      - 学员端-学习中心
   /student/courses/{course_id}:
     get:
       consumes:
@@ -2859,60 +4006,24 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.StudentCourseDetailDTO'
+                  $ref: '#/definitions/service.StudentCourseDetailDTO'
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "404":
           description: 课程不存在
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 单课程学习详情
       tags:
-      - 学员端
-  /student/materials:
-    get:
-      consumes:
-      - application/json
-      description: 基于 chapter_file 的聚合视图，支持按 course_id 过滤；与 /student/materials 同数据
-      parameters:
-      - description: 课程ID
-        in: query
-        name: course_id
-        type: integer
-      - default: 1
-        description: 页码
-        in: query
-        name: page
-        type: integer
-      - default: 20
-        description: 每页条数
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: success
-          schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
-        "401":
-          description: 未认证
-          schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
-      security:
-      - BearerAuth: []
-      summary: 学习资料列表
-      tags:
-      - 学员端-资料
+      - 学员端-学习中心
   /student/profile:
     get:
       consumes:
@@ -2925,24 +4036,24 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.StudentProfileDTO'
+                  $ref: '#/definitions/service.StudentProfileDTO'
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "404":
           description: 学员不存在
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 学员档案
       tags:
-      - 学员端
+      - 学员端-学习中心
   /student/records:
     get:
       consumes:
@@ -2974,20 +4085,20 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.StudyRecordPageResult'
+                  $ref: '#/definitions/service.StudyRecordPageResult'
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 学习记录分页
       tags:
-      - 学员端
+      - 学员端-学习中心
   /student/study-stats:
     get:
       consumes:
@@ -3009,20 +4120,33 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.StudyDailyStatsDTO'
+                  $ref: '#/definitions/service.StudyDailyStatsDTO'
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 学习统计（按天）
       tags:
-      - 学员端
+      - 学员端-学习中心
+  /tags:
+    get:
+      description: 仅启用项
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 题库标签（公开）
+      tags:
+      - 学员端-培训目录
   /wrong-questions:
     get:
       consumes:
@@ -3053,11 +4177,11 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 错题列表
@@ -3086,15 +4210,15 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 重做错题
@@ -3117,15 +4241,15 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "400":
           description: 参数错误
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 移出错题本
@@ -3144,7 +4268,7 @@ paths:
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 导出错题本
@@ -3162,15 +4286,15 @@ paths:
           description: success
           schema:
             allOf:
-            - $ref: '#/definitions/forklift-training_pkg_response.R'
+            - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/forklift-training_internal_service.WrongQuestionStatsDTO'
+                  $ref: '#/definitions/service.WrongQuestionStatsDTO'
               type: object
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/forklift-training_pkg_response.R'
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 错题统计

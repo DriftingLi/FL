@@ -53,7 +53,18 @@ type sendCodeReq struct {
 	Target  string `json:"target"`
 }
 
-// SendCode 发送绑定验证码 POST /api/auth/profile/send-code {channel: email|phone, target}
+// SendCode 发送绑定验证码
+// @Summary 发送绑定验证码
+// @Description 按 channel(email/phone) 发送绑定验证码
+// @Tags 学员端-个人资料
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "channel/target" example({"channel":"email","target":"a@b.com"})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /auth/profile/send-code [post]
 func (h *ProfileBindHandler) SendCode(c *gin.Context) {
 	Endpoint[sendCodeReq, struct{}]{
 		Parse: func(c *gin.Context) (*sendCodeReq, error) {
@@ -85,17 +96,48 @@ func (h *ProfileBindHandler) SendCode(c *gin.Context) {
 	}.Handle(c)
 }
 
-// bindEmail 绑定/修改邮箱 POST /api/auth/profile/email
+// bindEmail 绑定邮箱
+// @Summary 绑定/修改邮箱
+// @Description 验证码校验后绑定邮箱
+// @Tags 学员端-个人资料
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "邮箱" example({"email":"a@b.com","code":"123456"})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /auth/profile/email [post]
 func (h *ProfileBindHandler) bindEmail(c *gin.Context) {
 	handleCodeChannelBind(c, h.codeSvc, h.emailCh, "email", "邮箱修改成功")
 }
 
-// bindPhone 绑定/修改手机号 POST /api/auth/profile/phone
+// bindPhone 绑定手机号
+// @Summary 绑定/修改手机号
+// @Description 验证码校验后绑定手机号
+// @Tags 学员端-个人资料
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "手机" example({"phone":"13800000001","code":"123456"})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /auth/profile/phone [post]
 func (h *ProfileBindHandler) bindPhone(c *gin.Context) {
 	handleCodeChannelBind(c, h.codeSvc, h.phoneCh, "phone", "手机号修改成功")
 }
 
-// SendChangePasswordCode 发送修改密码验证码 POST /api/auth/profile/password/send-code
+// SendChangePasswordCode 发送修改密码验证码
+// @Summary 发送修改密码验证码
+// @Description 向已绑定手机发送修改密码验证码
+// @Tags 学员端-个人资料
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /auth/profile/password/send-code [post]
 func (h *ProfileBindHandler) SendChangePasswordCode(c *gin.Context) {
 	Endpoint[profileUserIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*profileUserIDReq, error) {
@@ -122,7 +164,18 @@ type changePasswordReq struct {
 	Password string `json:"password"`
 }
 
-// UpdatePassword 设置/修改密码 POST /api/auth/profile/password {code, password}
+// UpdatePassword 修改密码
+// @Summary 修改密码
+// @Description 短信验证码校验后设置/修改密码
+// @Tags 学员端-个人资料
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "code/password" example({"code":"123456","password":"new123456"})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /auth/profile/password [post]
 func (h *ProfileBindHandler) UpdatePassword(c *gin.Context) {
 	Endpoint[changePasswordReq, struct{}]{
 		Parse: func(c *gin.Context) (*changePasswordReq, error) {
@@ -138,7 +191,16 @@ func (h *ProfileBindHandler) UpdatePassword(c *gin.Context) {
 	}.Handle(c)
 }
 
-// SendAccountChangeCode 发送修改登录账号验证码 POST /api/auth/account/send-code
+// SendAccountChangeCode 发送修改账号验证码
+// @Summary 发送修改登录账号验证码
+// @Description 向已绑定手机发送修改账号验证码
+// @Tags 学员端-个人资料
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /auth/account/send-code [post]
 func (h *ProfileBindHandler) SendAccountChangeCode(c *gin.Context) {
 	Endpoint[profileUserIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*profileUserIDReq, error) {
@@ -160,8 +222,18 @@ type changeAccountReq struct {
 	Code    string `json:"code"`
 }
 
-// UpdateAccount 修改登录账号 PUT /api/auth/account {account, code}
-// 短信验证码确认 + 格式 4~20 位字母/数字/下划线 + 唯一性校验（复用 profile_bind 验证码模式）。
+// UpdateAccount 修改登录账号
+// @Summary 修改登录账号
+// @Description 短信验证码确认，格式 4~20 位字母/数字/下划线
+// @Tags 学员端-个人资料
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "account/code" example({"account":"new_account","code":"123456"})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /auth/account [put]
 func (h *ProfileBindHandler) UpdateAccount(c *gin.Context) {
 	Endpoint[changeAccountReq, service.LoginResult]{
 		Parse: func(c *gin.Context) (*changeAccountReq, error) {

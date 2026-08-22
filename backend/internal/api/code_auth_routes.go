@@ -89,8 +89,17 @@ func (h *CodeChannelAuthHandler) parseSendReq(c *gin.Context) (*codeSendReq, err
 	return &codeSendReq{Target: t.Email, Purpose: t.Purpose, CaptchaID: t.CaptchaID, CaptchaValue: t.CaptchaValue}, nil
 }
 
-// SendCode 发送验证码 POST /auth/<prefix>/send-code
-// body: {targetField, purpose, captcha_id, captcha_value}；开启人机验证时先校验图形验证码。
+// SendCode 发送验证码
+// @Summary 发送验证码
+// @Description 开启人机验证时需先校验图形验证码；邮箱字段 email，手机字段 phone，purpose 为 register/login/reset_password
+// @Tags 学员端-认证
+// @Accept json
+// @Produce json
+// @Param body body object true "发码" example({"email":"a@b.com","purpose":"register","captcha_id":"id","captcha_value":"1234"})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Router /auth/email/send-code [post]
+// @Router /auth/phone/send-code [post]
 func (h *CodeChannelAuthHandler) SendCode(c *gin.Context) {
 	Endpoint[codeSendReq, struct{}]{
 		Parse:  h.parseSendReq,
@@ -135,7 +144,17 @@ type codeRegisterReq struct {
 	Password string
 }
 
-// Register 验证码通过后注册并自动登录 POST /auth/<prefix>/register
+// Register 验证码注册
+// @Summary 验证码注册并自动登录
+// @Description 校验验证码后注册，成功签发双令牌并写 Cookie
+// @Tags 学员端-认证
+// @Accept json
+// @Produce json
+// @Param body body object true "注册" example({"email":"a@b.com","code":"123456","nickname":"张三","password":"123456"})
+// @Success 201 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Router /auth/email/register [post]
+// @Router /auth/phone/register [post]
 func (h *CodeChannelAuthHandler) Register(c *gin.Context) {
 	Endpoint[codeRegisterReq, service.LoginResult]{
 		Parse: h.parseRegisterReq,
@@ -186,7 +205,17 @@ type codeLoginReq struct {
 	Code   string
 }
 
-// Login 验证码通过后登录 POST /auth/<prefix>/login
+// Login 验证码登录
+// @Summary 验证码登录
+// @Description 校验验证码后登录，签发双令牌
+// @Tags 学员端-认证
+// @Accept json
+// @Produce json
+// @Param body body object true "登录" example({"email":"a@b.com","code":"123456"})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Router /auth/email/login [post]
+// @Router /auth/phone/login [post]
 func (h *CodeChannelAuthHandler) Login(c *gin.Context) {
 	Endpoint[codeLoginReq, service.LoginResult]{
 		Parse: h.parseLoginReq,
@@ -232,7 +261,17 @@ type codeResetReq struct {
 	Password string
 }
 
-// ResetPassword 忘记密码：验证码校验通过后重置密码（不自动登录）。
+// ResetPassword 忘记密码重置
+// @Summary 忘记密码重置
+// @Description 校验验证码后重置密码，不自动登录
+// @Tags 学员端-认证
+// @Accept json
+// @Produce json
+// @Param body body object true "重置" example({"email":"a@b.com","code":"123456","password":"new123"})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Router /auth/email/reset-password [post]
+// @Router /auth/phone/reset-password [post]
 func (h *CodeChannelAuthHandler) ResetPassword(c *gin.Context) {
 	Endpoint[codeResetReq, struct{}]{
 		Parse: h.parseResetReq,

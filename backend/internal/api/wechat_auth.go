@@ -41,8 +41,16 @@ func RegisterWechatAuthRoutes(rg *gin.RouterGroup, svc *service.WechatAuthServic
 	g.POST("/login", h.LoginWithQRCode)
 }
 
-// MiniProgramLogin 微信小程序登录 POST /api/auth/wx-login。
-// 平铺响应契约：token/refresh_token/user_id/account/username/name/role/avatar/is_new。
+// MiniProgramLogin 微信小程序登录
+// @Summary 微信小程序登录
+// @Description uni.login code → code2session 换 openid → 查/建用户 → 签发双令牌，平铺返回 token 等
+// @Tags 学员端-认证
+// @Accept json
+// @Produce json
+// @Param body body object true "code" example({"code":"wx_code"})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Router /auth/wx-login [post]
 func (h *WechatAuthHandler) MiniProgramLogin(c *gin.Context) {
 	Endpoint[wechatLoginReq, service.WxLoginResult]{
 		Parse: func(c *gin.Context) (*wechatLoginReq, error) {
@@ -61,7 +69,14 @@ func (h *WechatAuthHandler) MiniProgramLogin(c *gin.Context) {
 	}.Handle(c)
 }
 
-// GetQRCodeInfo 获取扫码登录占位信息 POST /api/auth/wechat/qrcode
+// GetQRCodeInfo 获取扫码登录二维码
+// @Summary 获取微信扫码信息
+// @Description 占位实现，未配置授权时返回提示
+// @Tags 学员端-认证
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.R "success"
+// @Router /auth/wechat/qrcode [post]
 func (h *WechatAuthHandler) GetQRCodeInfo(c *gin.Context) {
 	Endpoint[struct{}, map[string]any]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*map[string]any, error) {
@@ -74,7 +89,16 @@ func (h *WechatAuthHandler) GetQRCodeInfo(c *gin.Context) {
 	}.Handle(c)
 }
 
-// LoginWithQRCode 扫码登录占位 POST /api/auth/wechat/login（未配置授权时明确报错）
+// LoginWithQRCode 微信扫码登录
+// @Summary 微信扫码登录（占位）
+// @Description 扫码登录占位，未配置授权时明确报错
+// @Tags 学员端-认证
+// @Accept json
+// @Produce json
+// @Param body body object true "code" example({"code":"qr_code"})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "未配置"
+// @Router /auth/wechat/login [post]
 func (h *WechatAuthHandler) LoginWithQRCode(c *gin.Context) {
 	Endpoint[wechatLoginReq, service.LoginResult]{
 		Parse: func(c *gin.Context) (*wechatLoginReq, error) {

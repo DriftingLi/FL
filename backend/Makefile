@@ -28,6 +28,10 @@ fmt:
 	go fmt ./...
 	gofmt -s -w .
 
+## 重新生成 Swagger 文档（注解变更后执行）
+swagger:
+	swag init -g cmd/server/main.go -o docs
+
 ## ===== 本地 Docker PostgreSQL 开发环境 =====
 
 ## 启动本地 PG 容器
