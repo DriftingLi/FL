@@ -10,9 +10,15 @@ import (
 )
 
 func TestPlaceholderPhonePrefix_SentinelValue(t *testing.T) {
-	// 独立字面量锁定：占位前缀恒为 "email_"（与既有契约测试中的 email_ 占位值一致）。
+	// 独立字面量锁定：占位 sentinel 与既有契约一致（邮箱注册 / 微信建号 / 注销哨兵）。
 	if got := PlaceholderPhonePrefix; got != "email_" {
 		t.Errorf("PlaceholderPhonePrefix = %q, want %q", got, "email_")
+	}
+	if got := PlaceholderWechatPhonePrefix; got != "wxp_" {
+		t.Errorf("PlaceholderWechatPhonePrefix = %q, want %q", got, "wxp_")
+	}
+	if got := PlaceholderDeletedSentinel; got != "deleted__sentinel" {
+		t.Errorf("PlaceholderDeletedSentinel = %q, want %q", got, "deleted__sentinel")
 	}
 }
 
@@ -21,11 +27,16 @@ func TestIsPlaceholderPhone(t *testing.T) {
 		in   string
 		want bool
 	}{
-		{"email_0123456789abcdef0123456789abcdef", true}, // 真实占位值形态
-		{"email_", true},       // 前缀本身
-		{"13800138000", false}, // 真实手机号（符合 1[3-9] 前缀）
+		{"email_0123456789abcdef0123456789abcdef", true}, // 邮箱注册占位值形态
+		{"email_", true}, // 前缀本身
+		{"wxp_oGZUjt9xK3mQ1aB2cD3eF4gH5iJ6", true}, // 微信建号占位（openID 派生）
+		{"wxp_", true},                 // 微信前缀本身
+		{"deleted__sentinel", true},    // 注销哨兵（精确匹配）
+		{"deleted__sentinel_x", false}, // 哨兵仅精确匹配，不按前缀
+		{"13800138000", false},         // 真实手机号（符合 1[3-9] 前缀）
 		{"13800000000", false},
 		{"EMAIL_x", false}, // 大小写敏感（与既有 HasPrefix 语义一致）
+		{"WXP_x", false},
 		{"", false},
 	}
 	for _, c := range cases {

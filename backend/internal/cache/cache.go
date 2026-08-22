@@ -67,6 +67,24 @@ func Get(ctx context.Context, key string) (string, error) {
 	return val, nil
 }
 
+// SetNX 仅在 key 不存在时写入（Redis SETNX 语义），返回是否抢占成功。
+// 原子操作：并发调用同一 key 恰有一方成功，供会话轮换等「以写入即抢占」场景使用
+// （security.BlacklistStore.PutIfAbsent）。
+func SetNX(ctx context.Context, key, value string, ttl time.Duration) (bool, error) {
+	if ttl <= 0 {
+		ttl = DefaultTTL
+	}
+	if client == nil {
+		return false, fmt.Errorf("redis client 未初始化")
+	}
+	ok, err := client.SetNX(ctx, fullKey(key), value, ttl).Result()
+	if err != nil {
+		pkgLogger.Warn("Redis SetNX 失败", zap.String("key", key), zap.Error(err))
+		return false, err
+	}
+	return ok, nil
+}
+
 // Set 写入字符串值到缓存，带 TTL（<=0 使用 DefaultTTL）。
 func Set(ctx context.Context, key string, value string, ttl time.Duration) error {
 	if ttl <= 0 {
