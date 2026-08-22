@@ -507,7 +507,7 @@ func decodeBody(t *testing.T, w *httptest.ResponseRecorder) (int, string, map[st
 }
 
 // authHeader 用 seam 的测试密钥签发 Bearer token。
-// 黑名单检查无 Redis 时 fail-open（IsRevoked 出错视为未吊销），认证组路由可测。
+// 鉴权仅校验 access 类型与签名（黑名单只管理 refresh，ADR-0016），认证组路由可测。
 func authHeader(t *testing.T, userID int) string {
 	t.Helper()
 	sess := security.NewSession("test-secret", time.Hour, security.CookieConfig{Name: "hrwai_token"})

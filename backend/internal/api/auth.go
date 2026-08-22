@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"github.com/gin-gonic/gin"
@@ -168,23 +169,16 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		response.Unauthorized(c, "登录已过期，请重新登录")
 		return
 	}
-	rt := req.RefreshToken
-	claims, err := h.session.ValidateRefresh(rt)
+	// 原子轮换（ADR-0016）：校验/抢占/吊销/签发收敛在会话模块单点，并发双刷恰一成功
+	access, refresh, err := h.session.RotateRefresh(c.Request.Context(), req.RefreshToken)
 	if err != nil {
-		response.Unauthorized(c, "登录已过期，请重新登录")
-		return
-	}
-	if revoked, _ := h.session.IsRevoked(c.Request.Context(), rt); revoked {
-		response.Unauthorized(c, "登录已过期，请重新登录")
-		return
-	}
-	access, refresh, err := h.session.IssuePair(claims.UserID, claims.Account, claims.Role)
-	if err != nil {
+		if errors.Is(err, security.ErrInvalidRefresh) {
+			response.Unauthorized(c, "登录已过期，请重新登录")
+			return
+		}
 		response.ServerError(c, "服务器内部错误")
 		return
 	}
-	// 轮换：旧 refresh 立即入黑名单（防重放）
-	_ = h.session.RevokeRefresh(c.Request.Context(), rt)
 	response.Success(c, map[string]string{"token": access, "refresh_token": refresh})
 }
 

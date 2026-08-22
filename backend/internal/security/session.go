@@ -50,9 +50,12 @@ type CookieConfig struct {
 }
 
 // BlacklistStore 黑名单存储接口（生产 Redis，测试内存实现）。
+// PutIfAbsent 是会话轮换原子性的落点（SETNX 语义）：以「写入即抢占」同时完成
+// 吊销与并发互斥，并发双刷同一 refresh 恰有一路成功。
 type BlacklistStore interface {
 	Get(ctx context.Context, key string) (string, error)
 	Set(ctx context.Context, key, value string, ttl time.Duration) error
+	PutIfAbsent(ctx context.Context, key, value string, ttl time.Duration) (bool, error)
 }
 
 // RedisBlacklistStore 基于全局 Redis 缓存的黑名单存储。
@@ -68,6 +71,11 @@ func (RedisBlacklistStore) Set(ctx context.Context, key, value string, ttl time.
 	return cache.Set(ctx, key, value, ttl)
 }
 
+// PutIfAbsent 原子写入：key 不存在时写入并返回 true，已存在返回 false（SETNX 语义）。
+func (RedisBlacklistStore) PutIfAbsent(ctx context.Context, key, value string, ttl time.Duration) (bool, error) {
+	return cache.SetNX(ctx, key, value, ttl)
+}
+
 // Session 会话模块：签发（issue）/ 校验（verify）/ 吊销（revoke）JWT，
 // 并负责 Bearer/Cookie 令牌提取与登录态 Cookie 写清除。
 type Session struct {
@@ -81,12 +89,6 @@ type Session struct {
 // NewSession 构造会话模块（默认 Redis 黑名单存储；refresh 默认 7 天）。
 func NewSession(jwtSecret string, jwtExpiry time.Duration, cookie CookieConfig) *Session {
 	return NewSessionWithBlacklistAndRefresh(jwtSecret, jwtExpiry, defaultRefreshExpiry, cookie, RedisBlacklistStore{})
-}
-
-// NewSessionWithBlacklist 构造会话模块，黑名单存储可注入，refresh 默认 7 天（ADR-0002：
-// 生产 Redis，测试内存实现；默认存储见 NewSession）。
-func NewSessionWithBlacklist(jwtSecret string, jwtExpiry time.Duration, cookie CookieConfig, blacklist BlacklistStore) *Session {
-	return NewSessionWithBlacklistAndRefresh(jwtSecret, jwtExpiry, defaultRefreshExpiry, cookie, blacklist)
 }
 
 // NewSessionWithBlacklistAndRefresh 构造会话模块：黑名单存储与 refresh 有效期均可注入（测试用）。
@@ -151,10 +153,10 @@ func (s *Session) issue(userID int, account, role, tokenType string, expiry time
 	return token.SignedString([]byte(s.jwtSecret))
 }
 
-// VerifyAccess 校验 access token（鉴权中间件专用）：Verify 之上额外要求 token_type=access，
+// VerifyAccess 校验 access token（鉴权中间件专用）：verify 之上额外要求 token_type=access，
 // refresh token 传入鉴权端点直接拒绝。
 func (s *Session) VerifyAccess(tokenStr string) (*Claims, error) {
-	claims, err := s.Verify(tokenStr)
+	claims, err := s.verify(tokenStr)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +168,7 @@ func (s *Session) VerifyAccess(tokenStr string) (*Claims, error) {
 
 // ValidateRefresh 校验 refresh token（刷新端点专用）：要求 token_type=refresh。
 func (s *Session) ValidateRefresh(tokenStr string) (*Claims, error) {
-	claims, err := s.Verify(tokenStr)
+	claims, err := s.verify(tokenStr)
 	if err != nil {
 		return nil, err
 	}
@@ -176,18 +178,46 @@ func (s *Session) ValidateRefresh(tokenStr string) (*Claims, error) {
 	return claims, nil
 }
 
+// ErrInvalidRefresh 刷新失败的可判定错误：refresh 无效/过期/类型不符/已吊销/已被并发轮换消费。
+// 刷新端点据此统一按未认证处理（401 防枚举）；其余错误按服务器内部错误处理。
+var ErrInvalidRefresh = errors.New("invalid refresh token")
+
+// RotateRefresh 原子刷新轮换（ADR-0016）：校验 → 黑名单原子抢占 → 签发新对。
+// 抢占即吊销：在旧 refresh 的黑名单 key 上 PutIfAbsent（SETNX），成功的一路同时完成旧值吊销，
+// 并发双刷同一 refresh 恰有一路成功——修复原「查黑名单 → 签发 → 写黑名单」的 check-then-act 竞态。
+// 黑名单存储故障时失败关闭（返回非 ErrInvalidRefresh 错误，端点按 500 处理）；与登录链路
+// 读黑名单失败放行的取舍不同：轮换失败只影响续期，不放大故障面。
+func (s *Session) RotateRefresh(ctx context.Context, refreshToken string) (string, string, error) {
+	claims, err := s.ValidateRefresh(refreshToken)
+	if err != nil {
+		return "", "", fmt.Errorf("%w: %w", ErrInvalidRefresh, err)
+	}
+	if claims.ExpiresAt == nil || !claims.ExpiresAt.After(time.Now()) {
+		return "", "", fmt.Errorf("%w: expired", ErrInvalidRefresh)
+	}
+	won, err := s.blacklist.PutIfAbsent(ctx, s.blacklistKey(refreshToken), "1", time.Until(claims.ExpiresAt.Time))
+	if err != nil {
+		return "", "", err
+	}
+	if !won {
+		return "", "", fmt.Errorf("%w: already rotated or revoked", ErrInvalidRefresh)
+	}
+	return s.IssuePair(claims.UserID, claims.Account, claims.Role)
+}
+
 // RevokeRefresh 吊销 refresh token：写入黑名单，TTL = token 剩余有效期。
-// 供刷新轮换（旧 refresh 立即失效防重放）与登出（撤销长周期会话）使用。
+// 供登出使用（轮换路径的吊销由 RotateRefresh 的原子抢占承担）。
 // 无效或类型不是 refresh 的令牌静默忽略（access 短生命周期，不入黑名单）。
 func (s *Session) RevokeRefresh(ctx context.Context, tokenStr string) error {
 	if _, err := s.ValidateRefresh(tokenStr); err != nil {
 		return nil
 	}
-	return s.Revoke(ctx, tokenStr)
+	return s.revoke(ctx, tokenStr)
 }
 
-// Verify 解析并校验 JWT（显式校验签名算法，拒绝非 HMAC 算法，防止 alg=none 攻击）。
-func (s *Session) Verify(tokenStr string) (*Claims, error) {
+// verify 解析并校验 JWT（显式校验签名算法，拒绝非 HMAC 算法，防止 alg=none 攻击）。
+// 外部统一走 VerifyAccess / ValidateRefresh 类型分流入口，不直接暴露通用解析。
+func (s *Session) verify(tokenStr string) (*Claims, error) {
 	claims := &Claims{}
 	_, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -201,10 +231,10 @@ func (s *Session) Verify(tokenStr string) (*Claims, error) {
 	return claims, nil
 }
 
-// Revoke 将 token 写入黑名单，TTL = token 剩余有效期。
+// revoke 将 token 写入黑名单，TTL = token 剩余有效期。
 // 无效或已过期的 token 无需吊销，静默返回。
-func (s *Session) Revoke(ctx context.Context, tokenStr string) error {
-	claims, err := s.Verify(tokenStr)
+func (s *Session) revoke(ctx context.Context, tokenStr string) error {
+	claims, err := s.verify(tokenStr)
 	if err != nil || claims.ExpiresAt == nil {
 		return nil
 	}
@@ -213,16 +243,6 @@ func (s *Session) Revoke(ctx context.Context, tokenStr string) error {
 		return nil
 	}
 	return s.blacklist.Set(ctx, s.blacklistKey(tokenStr), "1", ttl)
-}
-
-// IsRevoked 判断 token 是否已被吊销。
-// 存储读异常（非 key 不存在）时放行，避免 Redis 宕机导致全员无法登录。
-func (s *Session) IsRevoked(ctx context.Context, tokenStr string) (bool, error) {
-	_, err := s.blacklist.Get(ctx, s.blacklistKey(tokenStr))
-	if err != nil {
-		return false, nil
-	}
-	return true, nil
 }
 
 // ExtractToken 提取登录令牌：优先 Bearer 头，其次父域名 Cookie（子域名共享登录）。

@@ -2,8 +2,10 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -197,20 +199,56 @@ func TestOptionalAuth_InvalidToken(t *testing.T) {
 	}
 }
 
-func TestOptionalAuth_RevokedToken(t *testing.T) {
-	cfg := &config.Config{JWTSecretKey: testSecret}
-	sess := security.SessionFromConfig(cfg)
+// memBlacklistStore 内存版黑名单存储（测试注入双，替代真实 Redis，断言确定性执行）。
+type memBlacklistStore struct {
+	mu sync.Mutex
+	m  map[string]string
+}
 
-	token := generateToken(t, 42, "optuser", "hrwai_user")
+func newMemBlacklistStore() *memBlacklistStore {
+	return &memBlacklistStore{m: map[string]string{}}
+}
 
-	// 依赖真实 Redis 黑名单（全局缓存）；无 Redis 时跳过
-	ctx := context.Background()
-	if err := sess.Revoke(ctx, token); err != nil {
-		t.Skipf("Redis 不可用，跳过黑名单分支测试: %v", err)
+func (s *memBlacklistStore) Get(_ context.Context, key string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.m[key]; !ok {
+		return "", errors.New("not found")
 	}
-	revoked, _ := sess.IsRevoked(ctx, token)
-	if !revoked {
-		t.Skip("Redis 黑名单写入失败，跳过")
+	return "1", nil
+}
+
+func (s *memBlacklistStore) Set(_ context.Context, key, value string, _ time.Duration) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.m[key] = value
+	return nil
+}
+
+// PutIfAbsent 原子抢占（SETNX 语义），与生产 Redis 行为对齐。
+func (s *memBlacklistStore) PutIfAbsent(_ context.Context, key, value string, _ time.Duration) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.m[key]; ok {
+		return false, nil
+	}
+	s.m[key] = value
+	return true, nil
+}
+
+// TestOptionalAuth_LogoutRevokesRefreshOnly 新世界（ADR-0016）：黑名单只管理 refresh。
+// 登出（吊销 refresh）后未过期的旧 access 照常通过可选认证；refresh 传入鉴权端点被类型分流拒绝。
+func TestOptionalAuth_LogoutRevokesRefreshOnly(t *testing.T) {
+	store := newMemBlacklistStore()
+	sess := security.NewSessionWithBlacklistAndRefresh(testSecret, time.Hour, time.Hour, security.CookieConfig{Name: "hrwai_token"}, store)
+
+	access, refresh, err := sess.IssuePair(42, "optuser", "hrwai_user")
+	if err != nil {
+		t.Fatalf("签发双令牌失败: %v", err)
+	}
+	// 登出语义：仅吊销 refresh（access 不入黑名单，自然过期）
+	if err := sess.RevokeRefresh(context.Background(), refresh); err != nil {
+		t.Fatalf("登出吊销 refresh 失败: %v", err)
 	}
 
 	r := gin.New()
@@ -219,16 +257,22 @@ func TestOptionalAuth_RevokedToken(t *testing.T) {
 		c.JSON(200, gin.H{"authenticated": exists})
 	})
 
+	// 未过期的旧 access 不受登出影响
 	req, _ := http.NewRequest("GET", "/optional", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", "Bearer "+access)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-
-	if w.Code != 200 {
-		t.Fatalf("已吊销 token 可选认证应放行，得到 %d", w.Code)
+	if w.Code != 200 || w.Body.String() != `{"authenticated":true}` {
+		t.Fatalf("登出仅吊销 refresh, access 应照常认证: code=%d body=%s", w.Code, w.Body.String())
 	}
-	if w.Body.String() != `{"authenticated":false}` {
-		t.Fatalf("已吊销 token 不应写入用户上下文，得到 %s", w.Body.String())
+
+	// refresh 传入鉴权端点被拒绝（token_type 分流）
+	req2, _ := http.NewRequest("GET", "/optional", nil)
+	req2.Header.Set("Authorization", "Bearer "+refresh)
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req2)
+	if w2.Code != 200 || w2.Body.String() != `{"authenticated":false}` {
+		t.Fatalf("refresh 不应写入用户上下文: code=%d body=%s", w2.Code, w2.Body.String())
 	}
 }
 
@@ -262,30 +306,41 @@ func TestRoleRequired_Denied(t *testing.T) {
 	}
 }
 
-func TestJWTAuth_RevokedToken(t *testing.T) {
-	cfg := &config.Config{JWTSecretKey: testSecret}
-	r := newTestRouter(cfg)
+// TestJWTAuth_LogoutRevokesRefreshOnly 新世界（ADR-0016）：JWTAuth 只认 access、不读黑名单。
+// 登出（吊销 refresh）后旧 access 在有效期内仍可访问；refresh 作为 Bearer 传入返回 401。
+func TestJWTAuth_LogoutRevokesRefreshOnly(t *testing.T) {
+	store := newMemBlacklistStore()
+	sess := security.NewSessionWithBlacklistAndRefresh(testSecret, time.Hour, time.Hour, security.CookieConfig{Name: "hrwai_token"}, store)
 
-	token := generateToken(t, 42, "hrwai01", "hrwai_user")
-
-	// 依赖真实 Redis 黑名单（全局缓存）；无 Redis 时跳过
-	sess := security.SessionFromConfig(cfg)
-	ctx := context.Background()
-	if err := sess.Revoke(ctx, token); err != nil {
-		t.Skipf("Redis 不可用，跳过黑名单分支测试: %v", err)
+	access, refresh, err := sess.IssuePair(42, "hrwai01", "hrwai_user")
+	if err != nil {
+		t.Fatalf("签发双令牌失败: %v", err)
 	}
-	revoked, _ := sess.IsRevoked(ctx, token)
-	if !revoked {
-		t.Skip("Redis 黑名单写入失败，跳过")
+	if err := sess.RevokeRefresh(context.Background(), refresh); err != nil {
+		t.Fatalf("登出吊销 refresh 失败: %v", err)
 	}
 
-	req, _ := http.NewRequest("GET", "/protected/endpoint", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
+	r := gin.New()
+	r.GET("/protected", JWTAuth(sess), func(c *gin.Context) {
+		c.JSON(200, gin.H{"user_id": 42})
+	})
+
+	// access 吊销不影响访问（登出只吊销 refresh）
+	req, _ := http.NewRequest("GET", "/protected", nil)
+	req.Header.Set("Authorization", "Bearer "+access)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatalf("登出后未过期 access 应照常访问，得到 %d", w.Code)
+	}
 
-	if w.Code != 401 {
-		t.Fatalf("已吊销 token 应返回 401，得到 %d", w.Code)
+	// refresh 传入鉴权端点被拒（VerifyAccess 类型分流）
+	req2, _ := http.NewRequest("GET", "/protected", nil)
+	req2.Header.Set("Authorization", "Bearer "+refresh)
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req2)
+	if w2.Code != 401 {
+		t.Fatalf("refresh 传入鉴权端点应 401，得到 %d", w2.Code)
 	}
 }
 

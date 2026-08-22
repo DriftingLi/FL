@@ -47,16 +47,20 @@ func (h *ValuationAuthHandler) Me(c *gin.Context) {
 	})
 }
 
-// Logout 处理 POST /api/valuation/auth/logout（需 middleware.JWTAuth）
-// 将当前 token 写入黑名单（统一前缀 jwt:blacklist:，由会话模块实现），TTL = token 剩余有效期。
+// Logout 处理 POST /api/valuation/auth/logout（与主站 /auth/logout 同口径，ADR-0016）：
+// 接收 refresh_token（请求体优先，回退 Bearer 头）并吊销；不依赖 JWTAuth，
+// access 过期时也能登出。黑名单只管理 refresh，access 自然过期。
 func (h *ValuationAuthHandler) Logout(c *gin.Context) {
-	// 与旧行为一致：仅从 Authorization 头提取 Bearer token
-	tokenStr := h.sess.ExtractToken(c.GetHeader("Authorization"), "")
-	if tokenStr == "" {
-		response.Success(c, nil)
-		return
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
 	}
-	// 已通过 middleware.JWTAuth 校验，直接吊销（无效 token 静默忽略）
-	_ = h.sess.Revoke(c.Request.Context(), tokenStr)
+	_ = c.ShouldBindJSON(&req)
+	tokenStr := req.RefreshToken
+	if tokenStr == "" {
+		tokenStr = h.sess.ExtractToken(c.GetHeader("Authorization"), "")
+	}
+	if tokenStr != "" {
+		_ = h.sess.RevokeRefresh(c.Request.Context(), tokenStr)
+	}
 	response.Success(c, nil)
 }

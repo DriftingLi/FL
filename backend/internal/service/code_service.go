@@ -824,7 +824,8 @@ func (s *VerifyCodeService) currentUserPhone(ctx context.Context, userID int) (s
 	if err := s.db.WithContext(ctx).Select("phone").First(&user, userID).Error; err != nil {
 		return "", errors.New("用户不存在")
 	}
-	// 显式拒绝邮箱注册的占位手机号（IsPlaceholderPhone 单点），不依赖 IsValidPhone 巧合兜底
+	// 显式拒绝占位手机号（IsPlaceholderPhone 单点：email_ / wxp_ / deleted__sentinel），
+	// 不依赖 IsValidPhone 巧合兜底
 	if IsPlaceholderPhone(user.Phone) || !IsValidPhone(user.Phone) {
 		return "", errors.New("请先绑定手机号")
 	}

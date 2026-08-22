@@ -20,8 +20,10 @@
 //	  ├── GET  /evaluations             评估历史/详情（需登录）
 //	  ├── GET  /evaluations/:id
 //	  ├── /battery/evaluations          电池 RUL 评估历史（需登录）
-//	  ├── GET  /auth/me                 获取当前估值用户
-//	  └── POST /auth/logout             估值用户登出
+//	  └── GET  /auth/me                 获取当前估值用户
+//
+//	/api/valuation                      公开组补充（无需登录，ADR-0016）
+//	  └── POST /auth/logout             估值用户登出（refresh_token 自证身份吊销）
 //
 //	/api/valuation/admin                管理员组（主体系 JWTAuth + role=admin）
 //	  └── /admin/*                      管理员 CRUD（仍走主体系 admin JWT）
@@ -43,7 +45,8 @@ import (
 // 路由分五组：
 //   - 公开组 /api/valuation：字典查询、统计、健康检查、报告生成/下载、登录/注册（匿名可访问）
 //   - 可选认证组 /api/valuation：评估提交、电池评估提交（匿名可提交，登录则记录 user_id）
-//   - 估值鉴权组 /api/valuation：评估历史/详情、电池历史、/auth/me、/auth/logout（需登录）
+//   - 估值鉴权组 /api/valuation：评估历史/详情、电池历史、/auth/me（需登录）
+//   - 公开组补充：/auth/logout（refresh_token 自证身份，不依赖 JWTAuth，ADR-0016）
 //   - 管理员组 /api/valuation/admin：字典 CRUD（需主体系 admin JWT）
 func RegisterRoutes(
 	r *gin.Engine,
@@ -102,6 +105,10 @@ func RegisterRoutes(
 			dict.GET("/earliest-factory-year", configHandler.GetEarliestFactoryYear)
 			dict.GET("/algorithm-parameters", configHandler.ListAlgorithmParameters)
 		}
+
+		// 登出与主站 /auth/logout 同口径（ADR-0016）：以 refresh_token 自证身份吊销会话，
+		// 不依赖 JWTAuth（access 过期时也能登出）
+		public.POST("/auth/logout", valuationAuthHandler.Logout)
 	}
 
 	// === 可选认证组（登录与否都能用，登录则记录 user_id） ===
@@ -114,7 +121,7 @@ func RegisterRoutes(
 	}
 
 	// === HRWAI 账号鉴权组（需 middleware.JWTAuth + role=hrwai_user） ===
-	// 评估历史/详情 + 电池 RUL CRUD + /auth/me + /auth/logout
+	// 评估历史/详情 + 电池 RUL CRUD + /auth/me
 	// 已统一到主体系 JWT,与培训学员端共用同一 token
 	valAuth := r.Group("/api/valuation")
 	valAuth.Use(middleware.JWTAuth(sess), middleware.RoleRequired("hrwai_user"))
@@ -126,7 +133,6 @@ func RegisterRoutes(
 		valAuth.GET("/battery/evaluations/:id", batteryHandler.Get)
 
 		valAuth.GET("/auth/me", valuationAuthHandler.Me)
-		valAuth.POST("/auth/logout", valuationAuthHandler.Logout)
 	}
 
 	// === 管理员 CRUD 接口（要求主体系 JWT role=admin） ===

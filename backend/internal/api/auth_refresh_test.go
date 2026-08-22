@@ -44,6 +44,17 @@ func (s *memBlacklist) Set(_ context.Context, key, _ string, _ time.Duration) er
 	return nil
 }
 
+// PutIfAbsent 原子抢占（SETNX 语义），与生产 Redis 行为对齐。
+func (s *memBlacklist) PutIfAbsent(_ context.Context, key, _ string, _ time.Duration) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.m[key]; ok {
+		return false, nil
+	}
+	s.m[key] = "1"
+	return true, nil
+}
+
 // newRefreshRouter 构造仅含 /api/auth/{refresh,logout} 的最小路由（其余服务注入 nil）。
 func newRefreshRouter(sess *security.Session) *gin.Engine {
 	gin.SetMode(gin.TestMode)

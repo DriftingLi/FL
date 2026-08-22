@@ -111,7 +111,9 @@ type ProfileDTO struct {
 // ptr 构造 T 的指针（ProfileDTO 指针字段表达键缺失/存在两态）。
 func ptr[T any](v T) *T { return &v }
 
-// MaskedPhone 隐藏邮箱注册的占位手机号（email_ 前缀），/auth/me 源头过滤不下发客户端。
+// MaskedPhone 隐藏占位手机号（邮箱注册 email_ / 微信建号 wxp_ / 注销哨兵 deleted__sentinel，
+// IsPlaceholderPhone 单点判定），/auth/me 源头过滤不下发客户端——修复微信建号用户
+// /auth/me 泄漏 wxp_ 串的问题。
 func MaskedPhone(phone string) string {
 	if IsPlaceholderPhone(phone) {
 		return ""
@@ -131,11 +133,6 @@ func HashPassword(password string) (string, error) {
 // VerifyPassword 校验密码。
 func VerifyPassword(password, hashed string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password)) == nil
-}
-
-// GenerateToken 签发 access token（委托会话模块，双令牌会话 ADR-0012）。
-func (s *AuthService) GenerateToken(userID int, account, role string) (string, error) {
-	return s.session.Issue(userID, account, role)
 }
 
 // LoginResult 登录返回结构（双令牌：access token + refresh token）。
