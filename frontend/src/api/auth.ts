@@ -33,8 +33,16 @@ export const authApi = {
     return unwrappedRequest.get<UserProfile>('/auth/me', config)
   },
 
-  updateProfile(data: { nickname: string }) {
+  updateProfile(data: { nickname?: string; company?: string }) {
     return unwrappedRequest.put<UserProfile>('/auth/profile', data)
+  },
+
+  updateCompany(data: { company: string }) {
+    return unwrappedRequest.put<UserProfile>('/auth/profile', data)
+  },
+
+  deleteAccount() {
+    return unwrappedRequest.delete<null>('/auth/account')
   },
 
   uploadAvatar(formData: FormData) {

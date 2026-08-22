@@ -349,178 +349,6 @@ definitions:
       name:
         type: string
     type: object
-  service.LevelExamAnswerDTO:
-    properties:
-      ai_comment:
-        type: string
-      ai_fallback:
-        description: |-
-          结果详情路径附带题目（未加载时省略）。
-          AI 评分降级标记（加性变更：短答 AI 评分降级时出现，否则省略）。
-        type: boolean
-      ai_graded_at:
-        type: string
-      ai_score:
-        type: number
-      exam_participant_id:
-        type: integer
-      graded_at:
-        type: string
-      grader_id:
-        type: integer
-      grading_comment:
-        type: string
-      id:
-        type: integer
-      is_correct:
-        type: boolean
-      question:
-        $ref: '#/definitions/service.QuestionDTO'
-      question_id:
-        type: integer
-      score:
-        type: number
-      user_answer:
-        type: string
-    type: object
-  service.LevelExamAvailableDTO:
-    properties:
-      can_enter:
-        type: boolean
-      created_at:
-        type: string
-      created_by:
-        type: integer
-      duration:
-        type: integer
-      end_time:
-        type: string
-      has_participated:
-        type: boolean
-      id:
-        type: integer
-      name:
-        type: string
-      participant_id: {}
-      participant_status: {}
-      participants:
-        items:
-          $ref: '#/definitions/service.LevelExamParticipantDTO'
-        type: array
-      pass_score:
-        type: integer
-      question_config: {}
-      start_time:
-        type: string
-      status:
-        type: string
-      total_score:
-        type: integer
-      updated_at:
-        type: string
-    type: object
-  service.LevelExamDataDTO:
-    properties:
-      answers: {}
-      participant_id:
-        type: integer
-      questions:
-        items:
-          $ref: '#/definitions/service.QuestionDTO'
-        type: array
-      remaining_time:
-        type: integer
-      session:
-        $ref: '#/definitions/service.LevelExamSessionDTO'
-      start_time:
-        type: string
-    type: object
-  service.LevelExamHistoryDTO:
-    properties:
-      page:
-        type: integer
-      page_size:
-        type: integer
-      records:
-        items:
-          $ref: '#/definitions/service.LevelExamParticipantDTO'
-        type: array
-      total:
-        type: integer
-    type: object
-  service.LevelExamParticipantDTO:
-    properties:
-      answers_snapshot: {}
-      created_at:
-        type: string
-      exam_session_id:
-        type: integer
-      id:
-        type: integer
-      is_passed:
-        type: boolean
-      objective_score:
-        type: number
-      question_ids: {}
-      remaining_time:
-        type: integer
-      score:
-        type: number
-      session_name:
-        type: string
-      start_time:
-        type: string
-      status:
-        type: string
-      student_id:
-        type: integer
-      student_name:
-        description: 列表路径附带：学员姓名 / 场次名称（未加载时省略）。
-        type: string
-      subjective_score:
-        type: number
-      submit_time:
-        type: string
-    type: object
-  service.LevelExamResultDTO:
-    properties:
-      answers:
-        items:
-          $ref: '#/definitions/service.LevelExamAnswerDTO'
-        type: array
-      participant:
-        $ref: '#/definitions/service.LevelExamParticipantDTO'
-    type: object
-  service.LevelExamSessionDTO:
-    properties:
-      created_at:
-        type: string
-      created_by:
-        type: integer
-      duration:
-        type: integer
-      end_time:
-        type: string
-      id:
-        type: integer
-      name:
-        type: string
-      participants:
-        items:
-          $ref: '#/definitions/service.LevelExamParticipantDTO'
-        type: array
-      pass_score:
-        type: integer
-      question_config: {}
-      start_time:
-        type: string
-      status:
-        type: string
-      total_score:
-        type: integer
-      updated_at:
-        type: string
-    type: object
   service.MockExamAnswerDetailDTO:
     properties:
       ai_comment:
@@ -942,12 +770,18 @@ definitions:
     type: object
   service.SubmitResultDTO:
     properties:
+      accuracy_rate:
+        type: number
       ai_comment:
+        type: string
+      ai_explanation:
         type: string
       ai_fallback:
         type: boolean
       ai_score:
         type: number
+      common_wrong:
+        type: string
       correct_answer:
         type: string
       explanation:
@@ -962,6 +796,8 @@ definitions:
         type: string
       scoring_criteria:
         type: string
+      total_attempts:
+        type: integer
       user_answer: {}
     type: object
   service.WrongQuestionStatsDTO:
@@ -1251,6 +1087,26 @@ paths:
       tags:
       - 学员端-AI助手
   /auth/account:
+    delete:
+      consumes:
+      - application/json
+      description: 硬删除当前学员及关联数据，论坛内容匿名化
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 注销帐号
+      tags:
+      - 学员端-个人资料
     put:
       consumes:
       - application/json
@@ -1614,9 +1470,9 @@ paths:
     put:
       consumes:
       - application/json
-      description: 提交后待审核通过生效
+      description: nickname 走资料审核；company 立即生效
       parameters:
-      - description: 昵称
+      - description: 资料
         in: body
         name: body
         required: true
@@ -1639,7 +1495,7 @@ paths:
             $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
-      summary: 提交昵称修改审核
+      summary: 提交昵称修改审核或直接更新单位
       tags:
       - 学员端-个人资料
   /auth/profile/email:
@@ -2968,221 +2824,6 @@ paths:
       summary: 上传论坛图片
       tags:
       - 学员端-论坛
-  /level-exam/available:
-    get:
-      consumes:
-      - application/json
-      description: 学员可参加的定级考试场次
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: success
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.R'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/service.LevelExamAvailableDTO'
-                  type: array
-              type: object
-        "401":
-          description: 未认证
-          schema:
-            $ref: '#/definitions/response.R'
-      security:
-      - BearerAuth: []
-      summary: 定级考试-可用列表
-      tags:
-      - 学员端-定级考试
-  /level-exam/history:
-    get:
-      consumes:
-      - application/json
-      description: 分页查询学员定级考试历史
-      parameters:
-      - default: 1
-        description: 页码
-        in: query
-        name: page
-        type: integer
-      - default: 10
-        description: 每页条数
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: success
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.R'
-            - properties:
-                data:
-                  $ref: '#/definitions/service.LevelExamHistoryDTO'
-              type: object
-        "401":
-          description: 未认证
-          schema:
-            $ref: '#/definitions/response.R'
-      security:
-      - BearerAuth: []
-      summary: 定级考试历史
-      tags:
-      - 学员端-定级考试
-  /level-exam/participants/{participant_id}/result:
-    get:
-      consumes:
-      - application/json
-      description: 查询参与记录的判分结果
-      parameters:
-      - description: 参与记录ID
-        in: path
-        name: participant_id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: success
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.R'
-            - properties:
-                data:
-                  $ref: '#/definitions/service.LevelExamResultDTO'
-              type: object
-        "401":
-          description: 未认证
-          schema:
-            $ref: '#/definitions/response.R'
-        "404":
-          description: 不存在
-          schema:
-            $ref: '#/definitions/response.R'
-      security:
-      - BearerAuth: []
-      summary: 查询结果
-      tags:
-      - 学员端-定级考试
-  /level-exam/participants/{participant_id}/save:
-    post:
-      consumes:
-      - application/json
-      description: 保存答题进度与剩余时间
-      parameters:
-      - description: 参与记录ID
-        in: path
-        name: participant_id
-        required: true
-        type: integer
-      - description: 答案
-        in: body
-        name: body
-        required: true
-        schema:
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: success
-          schema:
-            $ref: '#/definitions/response.R'
-        "400":
-          description: 参数错误
-          schema:
-            $ref: '#/definitions/response.R'
-        "401":
-          description: 未认证
-          schema:
-            $ref: '#/definitions/response.R'
-      security:
-      - BearerAuth: []
-      summary: 保存答案
-      tags:
-      - 学员端-定级考试
-  /level-exam/participants/{participant_id}/submit:
-    post:
-      consumes:
-      - application/json
-      description: 提交试卷（支持 is_timeout/remaining_time）
-      parameters:
-      - description: 参与记录ID
-        in: path
-        name: participant_id
-        required: true
-        type: integer
-      - description: 交卷
-        in: body
-        name: body
-        schema:
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: success
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.R'
-            - properties:
-                data:
-                  $ref: '#/definitions/service.LevelExamParticipantDTO'
-              type: object
-        "400":
-          description: 参数错误
-          schema:
-            $ref: '#/definitions/response.R'
-        "401":
-          description: 未认证
-          schema:
-            $ref: '#/definitions/response.R'
-      security:
-      - BearerAuth: []
-      summary: 交卷
-      tags:
-      - 学员端-定级考试
-  /level-exam/sessions/{session_id}/enter:
-    post:
-      consumes:
-      - application/json
-      description: 进入指定场次并获取试卷与参与记录
-      parameters:
-      - description: 场次ID
-        in: path
-        name: session_id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: success
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.R'
-            - properties:
-                data:
-                  $ref: '#/definitions/service.LevelExamDataDTO'
-              type: object
-        "400":
-          description: 参数错误
-          schema:
-            $ref: '#/definitions/response.R'
-        "401":
-          description: 未认证
-          schema:
-            $ref: '#/definitions/response.R'
-      security:
-      - BearerAuth: []
-      summary: 进入定级考试
-      tags:
-      - 学员端-定级考试
   /levels:
     get:
       description: 仅启用项

@@ -87,11 +87,6 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/student/MockExam.vue')
       },
       {
-        path: 'level-exam',
-        name: 'LevelExam',
-        component: () => import('@/pages/student/LevelExam.vue')
-      },
-      {
         path: 'wrong-questions',
         name: 'WrongQuestions',
         component: () => import('@/pages/student/WrongQuestions.vue')
@@ -140,11 +135,7 @@ const routes: RouteRecordRaw[] = [
         name: 'TutorQuestionCreate',
         component: () => import('@/pages/tutor/QuestionCreate.vue')
       },
-      {
-        path: 'grading',
-        name: 'TutorGrading',
-        component: () => import('@/pages/tutor/GradingPage.vue')
-      }
+
     ]
   },
 
@@ -296,11 +287,6 @@ const routes: RouteRecordRaw[] = [
         path: 'featured-content/edit/:id?',
         name: 'AdminFeaturedContentEdit',
         component: () => import('@/pages/admin/FeaturedContentEdit.vue')
-      },
-      {
-        path: 'exam-sessions',
-        name: 'ExamSessionManage',
-        component: () => import('@/pages/admin/ExamSessionManage.vue')
       },
       {
         path: 'tutors',

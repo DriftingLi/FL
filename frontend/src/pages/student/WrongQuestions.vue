@@ -20,19 +20,40 @@
         </div>
         <p class="wrong-content">{{ item.question?.content }}</p>
         <div v-if="redoingId === item.id" class="redo-area">
-          <QuestionOptionPicker
-            v-if="item.question?.type !== 'short_answer'"
-            compact
-            :options="buildQuestionOptions(item.question ?? {})"
-            :selected-keys="redoAnswer"
-            :multi-choice="item.question?.type === 'multi_choice'"
-            @select="key => toggleRedoOption(key, item.question?.type ?? 'single_choice')"
-          />
-          <el-input v-else v-model="redoTextAnswer" type="textarea" :rows="3" placeholder="请输入答案" />
-          <div class="redo-actions">
-            <el-button type="primary" size="small" @click="submitRedo(item)">提交</el-button>
-            <el-button size="small" @click="redoingId = null">取消</el-button>
-          </div>
+          <template v-if="redoResults[item.id]">
+            <AnswerResultCard
+              :correct-answer="redoResults[item.id].correct_answer || ''"
+              :user-answer="redoResults[item.id].user_answer"
+              :is-correct="!!redoResults[item.id].is_correct"
+              :duration-seconds="redoDurations[item.id]"
+              :accuracy-rate="redoResults[item.id].accuracy_rate"
+              :common-wrong="redoResults[item.id].common_wrong"
+              :question-type="item.question?.type"
+            />
+            <AIExplanationCard :ai-explanation="redoResults[item.id].ai_explanation" :fallback-explanation="redoResults[item.id].explanation" />
+            <KnowledgeCard :tags="wrongKnowledge[item.id] || []" />
+            <CommentCard :question-id="item.question_id" />
+            <NoteCard :question-id="item.question_id" />
+            <div class="redo-actions">
+              <el-button size="small" @click="redoingId = null; delete redoResults[item.id]">关闭</el-button>
+              <el-button v-if="redoResults[item.id].is_correct" type="primary" size="small" @click="redoingId = null; loadData()">完成</el-button>
+            </div>
+          </template>
+          <template v-else>
+            <QuestionOptionPicker
+              v-if="item.question?.type !== 'short_answer'"
+              compact
+              :options="buildQuestionOptions(item.question ?? {})"
+              :selected-keys="redoAnswer"
+              :multi-choice="item.question?.type === 'multi_choice'"
+              @select="key => toggleRedoOption(key, item.question?.type ?? 'single_choice')"
+            />
+            <el-input v-else v-model="redoTextAnswer" type="textarea" :rows="3" placeholder="请输入答案" />
+            <div class="redo-actions">
+              <el-button type="primary" size="small" @click="submitRedo(item)">提交</el-button>
+              <el-button size="small" @click="redoingId = null">取消</el-button>
+            </div>
+          </template>
         </div>
         <div v-else class="wrong-actions">
           <el-button type="primary" size="small" @click="startRedo(item)">重做</el-button>
@@ -53,6 +74,12 @@ import { typeMap } from '@/constants/question'
 import { toggleAnswer, buildQuestionOptions } from '@/composables/useQuestionAnswer'
 import { downloadBlob } from '@/composables/useReportDownload'
 import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
+import AnswerResultCard from '@/components/practice/AnswerResultCard.vue'
+import AIExplanationCard from '@/components/practice/AIExplanationCard.vue'
+import KnowledgeCard from '@/components/practice/KnowledgeCard.vue'
+import CommentCard from '@/components/practice/CommentCard.vue'
+import NoteCard from '@/components/practice/NoteCard.vue'
+import { questionInteractionApi } from '@/api/questionInteraction'
 
 interface WrongItem {
   id: number
@@ -73,6 +100,10 @@ const filterType = ref('')
 const redoingId = ref<number | null>(null)
 const redoAnswer = ref<(string | number)[]>([])
 const redoTextAnswer = ref('')
+const redoStartTime = ref<number>(Date.now())
+const redoResults = ref<Record<number, any>>({})
+const redoDurations = ref<Record<number, number>>({})
+const wrongKnowledge = ref<Record<number, any[]>>({})
 
 onMounted(() => loadData())
 watch(filterType, () => { page.value = 1; loadData() })
@@ -89,6 +120,9 @@ function startRedo(item: WrongItem) {
   redoingId.value = item.id
   redoAnswer.value = []
   redoTextAnswer.value = ''
+  redoStartTime.value = Date.now()
+  delete redoResults.value[item.id]
+  delete redoDurations.value[item.id]
 }
 
 function toggleRedoOption(key: string | number, type: string) {
@@ -99,16 +133,28 @@ function toggleRedoOption(key: string | number, type: string) {
 async function submitRedo(item: WrongItem) {
   try {
     const answer = item.question?.type === 'short_answer' ? redoTextAnswer.value : redoAnswer.value
-    const res = await wrongQuestionApi.redoWrongQuestion(item.question_id, Array.isArray(answer) ? answer.join(', ') : answer)
+    const duration = (Date.now() - redoStartTime.value) / 1000
+    const res = await wrongQuestionApi.redoWrongQuestion(item.question_id, Array.isArray(answer) ? answer.join(', ') : answer) as any
+    redoDurations.value[item.id] = duration
+    redoResults.value[item.id] = { ...res, user_answer: answer }
+    try {
+      const tags = await questionInteractionApi.listKnowledge(item.question_id)
+      wrongKnowledge.value[item.id] = (tags as any) || []
+    } catch { wrongKnowledge.value[item.id] = [] }
     if (res?.is_correct === true) {
-      ElMessage.success('回答正确！已移出错题本')
+      ElMessage.success('回答正确！')
     } else if (res?.is_correct === false) {
       ElMessage.warning('回答错误，继续加油')
     } else {
       ElMessage.info('简答题需要教师批改，已提交')
     }
-    redoingId.value = null
-    await loadData()
+    // 延迟刷新以便展示解析
+    setTimeout(async () => {
+      if (res?.is_correct === true) {
+        redoingId.value = null
+        await loadData()
+      }
+    }, 1500)
   } catch {
     /* 错误已由拦截器提示 */
   }

@@ -45,27 +45,28 @@ type Deps struct {
 	ExportStore     service.ExportStore
 	AuthH           *AuthHandler
 
-	CourseSvc          *service.CourseService
-	AdminSvc           *service.AdminService
-	AdminCourseSvc     *service.AdminCourseService
-	ForumSvc           *service.ForumService
-	CheckInSvc         *service.CheckInService
-	ForumImageSvc      *service.ForumImageService
-	FeaturedSvc        *service.FeaturedService
-	FavoriteSvc        *service.FavoriteService
-	SearchSvc          *service.SearchService
-	MaterialSvc        *service.MaterialService
-	ExportSvc          *service.ExportService
-	StudentSvc         *service.StudentService
-	QuestionBankSvc    *service.QuestionBankService
-	PracticeModeSvc    *service.PracticeModeService
-	LevelExamSvc       *service.LevelExamService
-	GradingSvc         *service.GradingService
-	MockExamSvc        *service.MockExamService
-	TutorSvc           *service.TutorService
-	WrongQuestionSvc   *service.WrongQuestionService
-	TrainingCatalogSvc *service.TrainingCatalogService
-	AIAssistantSvc     *service.AIAssistantService
+	CourseSvc            *service.CourseService
+	AdminSvc             *service.AdminService
+	AdminCourseSvc       *service.AdminCourseService
+	ForumSvc             *service.ForumService
+	CheckInSvc           *service.CheckInService
+	ForumImageSvc        *service.ForumImageService
+	FeaturedSvc          *service.FeaturedService
+	FavoriteSvc          *service.FavoriteService
+	SearchSvc            *service.SearchService
+	MaterialSvc          *service.MaterialService
+	ExportSvc            *service.ExportService
+	StudentSvc           *service.StudentService
+	QuestionBankSvc      *service.QuestionBankService
+	PracticeModeSvc      *service.PracticeModeService
+	MockExamSvc          *service.MockExamService
+	TutorSvc             *service.TutorService
+	WrongQuestionSvc     *service.WrongQuestionService
+	TrainingCatalogSvc   *service.TrainingCatalogService
+	AIAssistantSvc       *service.AIAssistantService
+	QuestionCommentSvc   *service.QuestionCommentService
+	QuestionNoteSvc      *service.QuestionNoteService
+	QuestionKnowledgeSvc *service.QuestionKnowledgeService
 }
 
 // NewDeps 构建全部 service 单实例。进程启动早期由 main 调用一次。
@@ -90,45 +91,46 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	contentGenSvc := service.NewContentGenerateService(db, aiSvc, logger)
 
 	d := &Deps{
-		Cfg:                cfg,
-		DB:                 db,
-		Storage:            st,
-		Logger:             logger,
-		Session:            sess,
-		AuthSvc:            authSvc,
-		CodeSvc:            codeSvc,
-		EmailCh:            emailCh,
-		PhoneCh:            phoneCh,
-		CaptchaSvc:         captchaSvc,
-		WechatAuthSvc:      wechatAuthSvc,
-		FileSvc:            fileSvc,
-		SlideRenderer:      slideRenderer,
-		NotificationSvc:    notificationSvc,
-		ReviewSvc:          reviewSvc,
-		AIConfigSvc:        aiConfigSvc,
-		ContentGenSvc:      contentGenSvc,
-		CourseSvc:          service.NewCourseService(db, slideRenderer, logger),
-		AdminSvc:           service.NewAdminService(db, logger),
-		AdminCourseSvc:     service.NewAdminCourseService(db, fileSvc, logger),
-		ForumSvc:           service.NewForumService(db, fileSvc, notificationSvc, logger),
-		CheckInSvc:         service.NewCheckInService(db, logger),
-		ForumImageSvc:      service.NewForumImageService(db, fileSvc, logger),
-		FeaturedSvc:        service.NewFeaturedService(db, fileSvc, logger),
-		FavoriteSvc:        service.NewFavoriteService(db, logger),
-		SearchSvc:          service.NewSearchService(db, logger),
-		MaterialSvc:        service.NewMaterialService(db, logger),
-		ExportSvc:          service.NewExportService(db, exportStore, logger),
-		StudentSvc:         service.NewStudentService(db, logger),
-		QuestionBankSvc:    service.NewQuestionBankService(db, fileSvc, logger),
-		PracticeModeSvc:    service.NewPracticeModeService(db, aiSvc, logger),
-		LevelExamSvc:       service.NewLevelExamService(db, aiSvc, logger),
-		GradingSvc:         service.NewGradingService(db, aiSvc, logger),
-		MockExamSvc:        service.NewMockExamService(db, aiSvc, logger),
-		TutorSvc:           service.NewTutorService(db, cfg.UploadFolder, fileSvc, slideRenderer, logger),
-		WrongQuestionSvc:   service.NewWrongQuestionService(db, logger),
-		TrainingCatalogSvc: service.NewTrainingCatalogService(db, logger),
-		AuditSvc:           service.NewAuditService(db),
-		AIAssistantSvc:     service.NewAIAssistantService(db, aiConfigSvc, cfg.SecretKey, logger),
+		Cfg:                  cfg,
+		DB:                   db,
+		Storage:              st,
+		Logger:               logger,
+		Session:              sess,
+		AuthSvc:              authSvc,
+		CodeSvc:              codeSvc,
+		EmailCh:              emailCh,
+		PhoneCh:              phoneCh,
+		CaptchaSvc:           captchaSvc,
+		WechatAuthSvc:        wechatAuthSvc,
+		FileSvc:              fileSvc,
+		SlideRenderer:        slideRenderer,
+		NotificationSvc:      notificationSvc,
+		ReviewSvc:            reviewSvc,
+		AIConfigSvc:          aiConfigSvc,
+		ContentGenSvc:        contentGenSvc,
+		CourseSvc:            service.NewCourseService(db, slideRenderer, logger),
+		AdminSvc:             service.NewAdminService(db, logger),
+		AdminCourseSvc:       service.NewAdminCourseService(db, fileSvc, logger),
+		ForumSvc:             service.NewForumService(db, fileSvc, notificationSvc, logger),
+		CheckInSvc:           service.NewCheckInService(db, logger),
+		ForumImageSvc:        service.NewForumImageService(db, fileSvc, logger),
+		FeaturedSvc:          service.NewFeaturedService(db, fileSvc, logger),
+		FavoriteSvc:          service.NewFavoriteService(db, logger),
+		SearchSvc:            service.NewSearchService(db, logger),
+		MaterialSvc:          service.NewMaterialService(db, logger),
+		ExportSvc:            service.NewExportService(db, exportStore, logger),
+		StudentSvc:           service.NewStudentService(db, logger),
+		QuestionBankSvc:      service.NewQuestionBankService(db, fileSvc, logger),
+		PracticeModeSvc:      service.NewPracticeModeService(db, aiSvc, logger),
+		MockExamSvc:          service.NewMockExamService(db, aiSvc, logger),
+		TutorSvc:             service.NewTutorService(db, cfg.UploadFolder, fileSvc, slideRenderer, logger),
+		WrongQuestionSvc:     service.NewWrongQuestionService(db, logger),
+		TrainingCatalogSvc:   service.NewTrainingCatalogService(db, logger),
+		AuditSvc:             service.NewAuditService(db),
+		AIAssistantSvc:       service.NewAIAssistantService(db, aiConfigSvc, cfg.SecretKey, logger),
+		QuestionCommentSvc:   service.NewQuestionCommentService(db, logger),
+		QuestionNoteSvc:      service.NewQuestionNoteService(db, logger),
+		QuestionKnowledgeSvc: service.NewQuestionKnowledgeService(db),
 	}
 	d.AuthH = NewAuthHandler(d.Session, authSvc, fileSvc, st, reviewSvc, logger)
 	return d

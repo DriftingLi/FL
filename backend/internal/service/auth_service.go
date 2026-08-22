@@ -368,6 +368,70 @@ func (s *AuthService) EnsureDefaultUsers() error {
 	return nil
 }
 
+// UpdateCompany 更新学员单位信息，立即生效不走审核。
+func (s *AuthService) UpdateCompany(userID int, company string) error {
+	if len(company) > 50 {
+		return errors.New("单位名称不能超过 50 个字符")
+	}
+	return s.db.Model(&model.HrwaiUser{}).Where("id = ?", userID).Update("company", company).Error
+}
+
+// DeleteAccount 硬删除学员账号并级联清理相关数据，论坛内容匿名化。
+func (s *AuthService) DeleteAccount(userID int) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var user model.HrwaiUser
+		if err := tx.First(&user, userID).Error; err != nil {
+			return errors.New("用户不存在")
+		}
+		// 确保匿名占位用户存在
+		var sentinel model.HrwaiUser
+		if err := tx.Where("account = ?", "__deleted_user").First(&sentinel).Error; err != nil {
+			sentinel = model.HrwaiUser{
+				UID:       NextUID(),
+				Account:   "__deleted_user",
+				Username:  "已注销用户",
+				Password:  "",
+				Phone:     "deleted__sentinel",
+				Status:    0,
+				CreatedAt: beijingNow(),
+			}
+			if err := tx.Create(&sentinel).Error; err != nil {
+				return err
+			}
+		}
+		// 论坛内容匿名化：重分配给占位用户，避免 CASCADE 删除
+		if err := tx.Model(&model.ForumTopic{}).Where("user_id = ?", userID).Update("user_id", sentinel.ID).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.ForumReply{}).Where("user_id = ?", userID).Update("user_id", sentinel.ID).Error; err != nil {
+			return err
+		}
+		// 显式清理无外键或需额外处理的关联数据（有 CASCADE 的表亦显式删除以确保无残留）
+		tx.Where("user_id = ?", userID).Delete(&model.Favorite{})
+		tx.Where("user_id = ?", userID).Delete(&model.ForumTopicLike{})
+		tx.Where("user_id = ?", userID).Delete(&model.ForumReplyLike{})
+		tx.Where("reporter_id = ?", userID).Delete(&model.ForumReport{})
+		// 有 CASCADE 的表显式删除以兼容测试内存库
+		tx.Where("student_id = ?", userID).Delete(&model.QuestionPracticeRecord{})
+		tx.Where("student_id = ?", userID).Delete(&model.WrongQuestion{})
+		tx.Where("student_id = ?", userID).Delete(&model.MockExam{})
+		tx.Where("student_id = ?", userID).Delete(&model.PracticeProgress{})
+		tx.Where("student_id = ?", userID).Delete(&model.StudyRecord{})
+		tx.Where("user_id = ?", userID).Delete(&model.ForumCheckIn{})
+		tx.Where("user_id = ?", userID).Delete(&model.Notification{})
+		tx.Where("user_id = ?", userID).Delete(&model.ProfileChangeRequest{})
+		tx.Where("user_id = ?", userID).Delete(&model.AIChatSession{})
+		tx.Where("user_id = ?", userID).Delete(&model.AIUserModel{})
+		tx.Where("user_id = ?", userID).Delete(&model.QuestionComment{})
+		tx.Where("user_id = ?", userID).Delete(&model.QuestionNote{})
+		// 删除用户本体（剩余 CASCADE 关联自动清理）
+		if err := tx.Delete(&model.HrwaiUser{}, userID).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
 // beijingNow 返回当前北京时间。
 func beijingNow() time.Time {
 	loc, _ := time.LoadLocation("Asia/Shanghai")

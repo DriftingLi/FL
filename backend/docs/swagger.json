@@ -481,6 +481,38 @@
                         }
                     }
                 }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "硬删除当前学员及关联数据，论坛内容匿名化",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-个人资料"
+                ],
+                "summary": "注销帐号",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
             }
         },
         "/auth/account/send-code": {
@@ -1000,7 +1032,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "提交后待审核通过生效",
+                "description": "nickname 走资料审核；company 立即生效",
                 "consumes": [
                     "application/json"
                 ],
@@ -1010,10 +1042,10 @@
                 "tags": [
                     "学员端-个人资料"
                 ],
-                "summary": "提交昵称修改审核",
+                "summary": "提交昵称修改审核或直接更新单位",
                 "parameters": [
                     {
-                        "description": "昵称",
+                        "description": "资料",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -3139,366 +3171,6 @@
                         "description": "success",
                         "schema": {
                             "$ref": "#/definitions/response.R"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    },
-                    "401": {
-                        "description": "未认证",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    }
-                }
-            }
-        },
-        "/level-exam/available": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "学员可参加的定级考试场次",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "学员端-定级考试"
-                ],
-                "summary": "定级考试-可用列表",
-                "responses": {
-                    "200": {
-                        "description": "success",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.R"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/service.LevelExamAvailableDTO"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "401": {
-                        "description": "未认证",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    }
-                }
-            }
-        },
-        "/level-exam/history": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "分页查询学员定级考试历史",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "学员端-定级考试"
-                ],
-                "summary": "定级考试历史",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 10,
-                        "description": "每页条数",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "success",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.R"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/service.LevelExamHistoryDTO"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "401": {
-                        "description": "未认证",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    }
-                }
-            }
-        },
-        "/level-exam/participants/{participant_id}/result": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "查询参与记录的判分结果",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "学员端-定级考试"
-                ],
-                "summary": "查询结果",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "参与记录ID",
-                        "name": "participant_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "success",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.R"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/service.LevelExamResultDTO"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "401": {
-                        "description": "未认证",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    },
-                    "404": {
-                        "description": "不存在",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    }
-                }
-            }
-        },
-        "/level-exam/participants/{participant_id}/save": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "保存答题进度与剩余时间",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "学员端-定级考试"
-                ],
-                "summary": "保存答案",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "参与记录ID",
-                        "name": "participant_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "答案",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "success",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    },
-                    "401": {
-                        "description": "未认证",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    }
-                }
-            }
-        },
-        "/level-exam/participants/{participant_id}/submit": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "提交试卷（支持 is_timeout/remaining_time）",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "学员端-定级考试"
-                ],
-                "summary": "交卷",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "参与记录ID",
-                        "name": "participant_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "交卷",
-                        "name": "body",
-                        "in": "body",
-                        "schema": {
-                            "type": "object"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "success",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.R"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/service.LevelExamParticipantDTO"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    },
-                    "401": {
-                        "description": "未认证",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    }
-                }
-            }
-        },
-        "/level-exam/sessions/{session_id}/enter": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "进入指定场次并获取试卷与参与记录",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "学员端-定级考试"
-                ],
-                "summary": "进入定级考试",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "场次ID",
-                        "name": "session_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "success",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.R"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/service.LevelExamDataDTO"
-                                        }
-                                    }
-                                }
-                            ]
                         }
                     },
                     "400": {
@@ -5889,260 +5561,6 @@
                 }
             }
         },
-        "service.LevelExamAnswerDTO": {
-            "type": "object",
-            "properties": {
-                "ai_comment": {
-                    "type": "string"
-                },
-                "ai_fallback": {
-                    "description": "结果详情路径附带题目（未加载时省略）。\nAI 评分降级标记（加性变更：短答 AI 评分降级时出现，否则省略）。",
-                    "type": "boolean"
-                },
-                "ai_graded_at": {
-                    "type": "string"
-                },
-                "ai_score": {
-                    "type": "number"
-                },
-                "exam_participant_id": {
-                    "type": "integer"
-                },
-                "graded_at": {
-                    "type": "string"
-                },
-                "grader_id": {
-                    "type": "integer"
-                },
-                "grading_comment": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "is_correct": {
-                    "type": "boolean"
-                },
-                "question": {
-                    "$ref": "#/definitions/service.QuestionDTO"
-                },
-                "question_id": {
-                    "type": "integer"
-                },
-                "score": {
-                    "type": "number"
-                },
-                "user_answer": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.LevelExamAvailableDTO": {
-            "type": "object",
-            "properties": {
-                "can_enter": {
-                    "type": "boolean"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "integer"
-                },
-                "duration": {
-                    "type": "integer"
-                },
-                "end_time": {
-                    "type": "string"
-                },
-                "has_participated": {
-                    "type": "boolean"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "participant_id": {},
-                "participant_status": {},
-                "participants": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.LevelExamParticipantDTO"
-                    }
-                },
-                "pass_score": {
-                    "type": "integer"
-                },
-                "question_config": {},
-                "start_time": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "total_score": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.LevelExamDataDTO": {
-            "type": "object",
-            "properties": {
-                "answers": {},
-                "participant_id": {
-                    "type": "integer"
-                },
-                "questions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.QuestionDTO"
-                    }
-                },
-                "remaining_time": {
-                    "type": "integer"
-                },
-                "session": {
-                    "$ref": "#/definitions/service.LevelExamSessionDTO"
-                },
-                "start_time": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.LevelExamHistoryDTO": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "records": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.LevelExamParticipantDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.LevelExamParticipantDTO": {
-            "type": "object",
-            "properties": {
-                "answers_snapshot": {},
-                "created_at": {
-                    "type": "string"
-                },
-                "exam_session_id": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "is_passed": {
-                    "type": "boolean"
-                },
-                "objective_score": {
-                    "type": "number"
-                },
-                "question_ids": {},
-                "remaining_time": {
-                    "type": "integer"
-                },
-                "score": {
-                    "type": "number"
-                },
-                "session_name": {
-                    "type": "string"
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "student_id": {
-                    "type": "integer"
-                },
-                "student_name": {
-                    "description": "列表路径附带：学员姓名 / 场次名称（未加载时省略）。",
-                    "type": "string"
-                },
-                "subjective_score": {
-                    "type": "number"
-                },
-                "submit_time": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.LevelExamResultDTO": {
-            "type": "object",
-            "properties": {
-                "answers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.LevelExamAnswerDTO"
-                    }
-                },
-                "participant": {
-                    "$ref": "#/definitions/service.LevelExamParticipantDTO"
-                }
-            }
-        },
-        "service.LevelExamSessionDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "integer"
-                },
-                "duration": {
-                    "type": "integer"
-                },
-                "end_time": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "participants": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.LevelExamParticipantDTO"
-                    }
-                },
-                "pass_score": {
-                    "type": "integer"
-                },
-                "question_config": {},
-                "start_time": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "total_score": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
         "service.MockExamAnswerDetailDTO": {
             "type": "object",
             "properties": {
@@ -6781,7 +6199,13 @@
         "service.SubmitResultDTO": {
             "type": "object",
             "properties": {
+                "accuracy_rate": {
+                    "type": "number"
+                },
                 "ai_comment": {
+                    "type": "string"
+                },
+                "ai_explanation": {
                     "type": "string"
                 },
                 "ai_fallback": {
@@ -6789,6 +6213,9 @@
                 },
                 "ai_score": {
                     "type": "number"
+                },
+                "common_wrong": {
+                    "type": "string"
                 },
                 "correct_answer": {
                     "type": "string"
@@ -6810,6 +6237,9 @@
                 },
                 "scoring_criteria": {
                     "type": "string"
+                },
+                "total_attempts": {
+                    "type": "integer"
                 },
                 "user_answer": {}
             }

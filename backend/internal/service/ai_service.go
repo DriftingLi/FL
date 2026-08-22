@@ -95,6 +95,21 @@ func (s *AIService) GradeShortAnswer(questionContent, referenceAnswer, scoringCr
 	return result
 }
 
+const questionExplainSystemPrompt = `你是一名叉车维修培训专家，请为以下题目生成详细解析。要求：1. 说明考点（关联知识点）；2. 解释正确选项的原因；3. 说明错误选项为何错误；4. 语言简洁专业，200-400字；5. 直接返回解析文本，不要加额外格式。`
+
+// GenerateQuestionExplanation 为题目生成 AI 解析。
+func (s *AIService) GenerateQuestionExplanation(questionContent, answer, explanation string) (string, error) {
+	userPrompt := fmt.Sprintf("【题目】%s\n\n【正确答案】%s\n\n【参考解析】%s\n\n请生成本题的 AI 解析。", questionContent, orDefault(answer, "无"), orDefault(explanation, "无"))
+	content, err := s.callModel([]openai.ChatCompletionMessage{
+		{Role: openai.ChatMessageRoleSystem, Content: questionExplainSystemPrompt},
+		{Role: openai.ChatMessageRoleUser, Content: userPrompt},
+	}, 800, 0.5, FeatureQuestionExplanation)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(content), nil
+}
+
 // GenerateChapterContent 为指定章节生成 Markdown 内容。
 // 调用 LLM 根据课程上下文和章节标题生成培训内容，写入 ai_generation_log（generation_type=chapter_content）。
 func (s *AIService) GenerateChapterContent(courseName, courseCategory, courseDescription, chapterTitle string, userID *int) (string, error) {

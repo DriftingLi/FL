@@ -224,13 +224,13 @@ func (h *AuthHandler) Me(c *gin.Context) {
 }
 
 // UpdateProfile 提交个人资料修改
-// @Summary 提交昵称修改审核
-// @Description 提交后待审核通过生效
+// @Summary 提交昵称修改审核或直接更新单位
+// @Description nickname 走资料审核；company 立即生效
 // @Tags 学员端-个人资料
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param body body object true "昵称" example({"nickname":"新昵称"})
+// @Param body body object true "资料" example({"nickname":"新昵称","company":"新单位"})
 // @Success 200 {object} response.R "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
@@ -246,9 +246,22 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return &updateProfileReq{UID: uid, Nickname: req.Nickname}, nil
+			if req.Nickname == "" && req.Company == nil {
+				return nil, badRequest("参数错误")
+			}
+			return &updateProfileReq{UID: uid, Nickname: req.Nickname, Company: req.Company}, nil
 		},
 		Invoke: func(ctx context.Context, req *updateProfileReq) (*service.ProfileChangeRequestDTO, error) {
+			// 单位立即生效
+			if req.Company != nil {
+				if err := h.authSvc.UpdateCompany(req.UID, *req.Company); err != nil {
+					return nil, err
+				}
+				// 若同时带昵称，继续走审核流
+				if req.Nickname == "" {
+					return &service.ProfileChangeRequestDTO{}, nil
+				}
+			}
 			return h.reviewSvc.CreateRequest(req.UID, service.ProfileFieldNickname, req.Nickname)
 		},
 		Render: func(c *gin.Context, _ *updateProfileReq, resp *service.ProfileChangeRequestDTO, err error) {
@@ -261,6 +274,10 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 				response.BadRequest(c, err.Error())
 				return
 			}
+			if resp != nil && resp.ID == 0 {
+				response.SuccessWithMsg(c, "单位更新成功", resp)
+				return
+			}
 			response.SuccessWithMsg(c, "昵称修改已提交，审核通过后生效", resp)
 		},
 	}.Handle(c)
@@ -268,8 +285,33 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 
 // updateProfileReq 更新个人资料请求。
 type updateProfileReq struct {
-	UID      int
-	Nickname string
+	UID      int     `json:"uid"`
+	Nickname string  `json:"nickname"`
+	Company  *string `json:"company"`
+}
+
+// DeleteAccount 注销当前学员账号（硬删除）
+// @Summary 注销帐号
+// @Description 硬删除当前学员及关联数据，论坛内容匿名化
+// @Tags 学员端-个人资料
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /auth/account [delete]
+func (h *AuthHandler) DeleteAccount(c *gin.Context) {
+	uid := middleware.CurrentUserID(c)
+	if uid <= 0 {
+		response.Unauthorized(c, "请先登录")
+		return
+	}
+	if err := h.authSvc.DeleteAccount(uid); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	h.session.ClearCookie(c.Writer)
+	response.SuccessWithMsg(c, "帐号已注销", nil)
 }
 
 // UploadAvatar 上传头像

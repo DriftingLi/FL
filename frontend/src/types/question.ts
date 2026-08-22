@@ -53,4 +53,8 @@ export interface SubmitResult {
   reference_answer?: string
   scoring_criteria?: string
   max_score?: number
+  accuracy_rate?: number | null
+  common_wrong?: string | null
+  total_attempts?: number
+  ai_explanation?: string
 }

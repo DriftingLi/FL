@@ -13,10 +13,8 @@ import {
   User,
   TrendCharts,
   UserFilled,
-  Calendar,
   ChatDotRound,
   PriceTag,
-  Finished,
   Setting,
   Memo,
   CircleCheck,
@@ -47,7 +45,6 @@ const studentNav: NavItem[] = [
   { key: 'forum', label: '学员论坛', routeName: 'ForumPage', icon: ChatDotRound },
   { key: 'favorites', label: '我的收藏', routeName: 'StudentFavorites', icon: Star },
   { key: 'question-bank', label: '题库练习', routeName: 'QuestionBank', icon: EditPen },
-  { key: 'level-exam', label: '考试中心', routeName: 'LevelExam', icon: Document },
   { key: 'wrong-questions', label: '错题本', routeName: 'WrongQuestions', icon: CircleCloseFilled },
   { key: 'ai-assistant', label: 'AI助手', routeName: 'AIAssistant', icon: MagicStick },
   { key: 'valuation', label: '残值评估', routeName: 'ValuationHome', icon: PriceTag },
@@ -63,7 +60,6 @@ const adminNav: NavItem[] = [
   { key: 'course-catalog', label: '课程管理', routeName: 'CourseCatalog', icon: FolderOpened },
   { key: 'question-review', label: '题库审核', routeName: 'QuestionReview', icon: EditPen },
   { key: 'question-tags', label: '题库标签', routeName: 'QuestionTags', icon: CollectionTag },
-  { key: 'exam-sessions', label: '考试场次', routeName: 'ExamSessionManage', icon: Calendar },
   { key: 'statistics', label: '统计分析', routeName: 'Statistics', icon: TrendCharts },
   { key: 'audit-logs', label: '审计日志', routeName: 'AuditLogs', icon: Memo },
   { key: 'valuation-config', label: '残值配置', routeName: 'ValuationConfigManage', icon: PriceTag },
@@ -75,8 +71,7 @@ const adminNav: NavItem[] = [
 const tutorNav: NavItem[] = [
   { key: 'dashboard', label: '仪表盘', routeName: 'TutorDashboard', icon: HomeFilled, exact: true },
   { key: 'courses', label: '我的课程', routeName: 'TutorCourses', icon: Notebook },
-  { key: 'question-manage', label: '题库管理', routeName: 'TutorQuestionManage', icon: EditPen },
-  { key: 'grading', label: '人工阅卷', routeName: 'TutorGrading', icon: Finished }
+  { key: 'question-manage', label: '题库管理', routeName: 'TutorQuestionManage', icon: EditPen }
 ]
 
 export const roleNavigation: Record<string, NavItem[]> = {

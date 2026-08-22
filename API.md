@@ -101,22 +101,32 @@
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
-| PUT | `/api/auth/profile` | JWT | 修改昵称（走资料审核流：提交 → 审核 → 生效） |
+| PUT | `/api/auth/profile` | JWT | 修改昵称或单位（昵称走资料审核流，单位立即生效） |
 | POST | `/api/auth/avatar` | JWT | 上传头像（multipart，字段名 `file`；同样走资料审核流） |
+| DELETE | `/api/auth/account` | JWT | 注销当前账号（硬删除，论坛内容匿名化） |
 
 **PUT /api/auth/profile**
 
-请求体：`{ "nickname": "新昵称" }`
+请求体：`{ "nickname": "新昵称" }` 或 `{ "company": "新单位" }`
 
-响应 200（返回待审核的资料修改请求）：
+- `nickname`：走资料审核流（提交 → 审核 → 生效），响应为待审核请求
+- `company`：立即生效，无需审核
+
+响应 200（昵称走审核流，单位立即生效）：
 
 ```json
 { "code": 200, "message": "修改申请已提交，等待审核", "data": { "id": 1, "user_id": 1, "username": "13800000001", "avatar_url": "", "field_type": "nickname", "old_value": "旧昵称", "new_value": "新昵称", "status": "pending", "reject_reason": "", "created_at": "2026-08-16 10:00:00" } }
 ```
 
+单位更新成功响应：`{ "code": 200, "message": "单位更新成功", "data": {} }`
+
 **POST /api/auth/avatar**
 
 multipart/form-data：`file`（图片）。响应 200：`data` 为头像修改审核请求（同上结构，`field_type: "avatar"`）。
+
+**DELETE /api/auth/account**
+
+注销当前学员账号，硬删除用户及关联数据（练习记录、错题、收藏、模拟考试、学习位置、打卡、站内信、评论与笔记），论坛帖子/回复匿名化为“已注销用户”，并清理登录态。需本地二次确认（输入账号），无需短信验证码。响应 200：`{ "code": 200, "message": "帐号已注销", "data": null }`
 
 ### 2.3 邮箱验证码 `/api/auth/email`
 
@@ -478,8 +488,12 @@ Query：`tag_id`（必填）、`count`（0=全部）。
 `user_answer`：客观题为字符串（多选为逗号拼接或数组），简答题为文本。响应 200：
 
 ```json
-{ "code": 200, "message": "success", "data": { "is_correct": true, "correct_answer": "A", "explanation": "解析", "question_id": 1, "user_answer": "A" } }
+{ "code": 200, "message": "success", "data": { "is_correct": true, "correct_answer": "A", "explanation": "解析", "question_id": 1, "user_answer": "A", "accuracy_rate": 85.5, "common_wrong": "B", "total_attempts": 120, "ai_explanation": "本题考查..." } }
 ```
+
+- `accuracy_rate`：全站正确率（基于 `question_practice_record` 聚合，样本 `<5` 时不返回，前端显示“—”）
+- `common_wrong`：易错项（全体答错样本中最多的选项；多选按选项组合聚合；简答题不返回）
+- `ai_explanation`：AI 解析（按需生成并缓存到题目，未配置 AI 时降级为静态 `explanation`）
 
 简答题追加 `reference_answer`/`scoring_criteria`/`max_score`，AI 评分后追加 `ai_score`/`ai_comment`（降级时 `ai_fallback: true`）；未判定前 `is_correct` 为 null。
 
@@ -499,85 +513,37 @@ Query：`tag_id`（必填）、`count`（0=全部）。
 { "code": 200, "message": "success", "data": { "total": 10, "page": 1, "page_size": 20, "records": [ { "id": 1, "student_id": 1, "question_id": 1, "is_correct": true, "practice_type": "free", "user_answer": "A", "created_at": "...", "question": { "id": 1, "content": "...", "type": "single_choice", "options": [...], "score": 3, "status": "published", "image_url": "", "created_by": 1, "created_by_type": "admin", "reject_reason": "", "created_at": "...", "updated_at": "..." } } ] } }
 ```
 
----
-
-## 7. 等级考试 `/api/level-exam`
-
-### 7.1 场次管理
-
-| 方法 | 路径 | 鉴权 | 说明 |
-|---|---|---|---|
-| GET | `/api/level-exam/sessions` | JWT | 场次列表（分页；可按状态过滤、选择是否带学员参与信息） |
-| POST | `/api/level-exam/sessions` | JWT+admin | 创建场次 |
-| GET | `/api/level-exam/sessions/:session_id` | JWT | 场次详情 |
-| PUT | `/api/level-exam/sessions/:session_id` | JWT+admin | 更新场次 |
-| PUT | `/api/level-exam/sessions/:session_id/status` | JWT+admin | 更新场次状态（upcoming/ongoing/finished） |
-| DELETE | `/api/level-exam/sessions/:session_id` | JWT+admin | 删除场次 |
-
-**GET /api/level-exam/sessions?page=1&page_size=10&status=&include_participants=**
-
-响应 200：
-
-```json
-{ "code": 200, "message": "success", "data": { "total": 1, "page": 1, "page_size": 10, "sessions": [ { "id": 1, "name": "2026年8月定级考试", "start_time": "2026-08-20 09:00:00", "end_time": "2026-08-20 11:00:00", "duration": 90, "status": "upcoming", "created_by": 1, "question_config": { "single_choice": 20, "multi_choice": 10, "true_false": 10, "short_answer": 2, "fault_image": 2 }, "total_score": 100, "pass_score": 60, "created_at": "...", "updated_at": "..." } ] } }
-```
-
-**POST /api/level-exam/sessions**
-
-请求体：`{ "name": "2026年8月定级考试", "start_time": "2026-08-20 09:00:00", "end_time": "2026-08-20 11:00:00" }`
-
-响应 200：data 为场次详情（同 sessions 元素）。
-
-### 7.2 学员考试流程（role=hrwai_user）
+### 6a. 题目互动 `/api/questions`（role=hrwai_user）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/level-exam/available` | 可参加的考试（含个人参与状态） |
-| GET | `/api/level-exam/history` | 考试历史（分页） |
-| POST | `/api/level-exam/sessions/:session_id/enter` | 进入考试（抽题，返回题目与剩余时间） |
-| POST | `/api/level-exam/participants/:participant_id/save` | 保存作答 |
-| POST | `/api/level-exam/participants/:participant_id/submit` | 交卷（支持超时交卷） |
-| GET | `/api/level-exam/participants/:participant_id/result` | 考试成绩（含逐题明细） |
+| GET | `/api/questions/:question_id/comments` | 题目评论列表（分页） |
+| POST | `/api/questions/:question_id/comments` | 发表评论 |
+| DELETE | `/api/questions/comments/:comment_id` | 删除本人评论 |
+| GET | `/api/questions/:question_id/knowledge` | 题目考点（题库标签只读，无标签返回空数组） |
+| GET | `/api/questions/:question_id/note` | 获取本人笔记 |
+| PUT | `/api/questions/:question_id/note` | 保存笔记（每人每题一条，覆盖更新） |
+| DELETE | `/api/questions/:question_id/note` | 删除笔记 |
 
-**GET /api/level-exam/available**
+**GET /api/questions/:question_id/comments?page=1&page_size=10**
 
-响应 200（data 为数组）：
+响应 200：`{ "code": 200, "message": "success", "data": { "items": [ { "id": 1, "question_id": 1, "user_id": 2, "content": "这题易错", "created_at": "..." } ], "total": 1, "page": 1, "page_size": 10 } }`
 
-```json
-{ "code": 200, "message": "success", "data": [ { "id": 1, "name": "2026年8月定级考试", "start_time": "...", "end_time": "...", "duration": 90, "status": "ongoing", "created_by": 1, "question_config": { ... }, "total_score": 100, "pass_score": 60, "created_at": "...", "updated_at": "...", "has_participated": true, "participant_status": "in_progress", "participant_id": 3, "can_enter": true } ] }
-```
+前端展示最新 3 条 + 总数，“查看所有评论”弹窗分页；直发不预审，本人可删。
 
-**GET /api/level-exam/history?page=1&page_size=10**
+**GET /api/questions/:question_id/knowledge**
 
-响应 200：data 为 `{ total, page, page_size, records: [ { id, exam_session_id, session_name, student_id, status, start_time, submit_time, remaining_time, answers_snapshot, question_ids, created_at, score, objective_score, subjective_score, is_passed } ] }`
+响应 200：`{ "code": 200, "message": "success", "data": [ { "id": 1, "code": "hydraulic", "name": "液压系统", "description": "...", "sort_order": 0, "status": 1 } ] }`（无标签返回 `[]`，前端显示“暂无”）
 
-**POST /api/level-exam/sessions/:session_id/enter**
+**PUT /api/questions/:question_id/note**
 
-请求体：`{}`。响应 200：
+请求体：`{ "content": "我的笔记内容" }`。每人每题仅一条，重复保存即覆盖。响应 200：`{ "code": 200, "message": "success", "data": { "id": 1, "question_id": 1, "user_id": 2, "content": "...", "updated_at": "..." } }`
 
-```json
-{ "code": 200, "message": "success", "data": { "participant_id": 3, "session": { "id": 1, "name": "..." }, "questions": [ { "id": 1, "content": "...", "options": [ { "key": "A", "text": "..." } ], "type": "single_choice", "score": 3 } ], "answers": { "1": "A" }, "remaining_time": 5400, "start_time": "2026-08-16 10:00:00" } }
-```
-
-**POST /api/level-exam/participants/:participant_id/save**
-
-请求体：`{ "answers": { "1": "A" }, "remaining_time": 5000 }`
-
-**POST /api/level-exam/participants/:participant_id/submit**
-
-请求体：`{ "answers": { "1": "A" }, "is_timeout": false, "remaining_time": 4500 }`（超时自动交卷时 `is_timeout: true`）
-
-**GET /api/level-exam/participants/:participant_id/result**
-
-响应 200：
-
-```json
-{ "code": 200, "message": "success", "data": { "participant": { "id": 3, "exam_session_id": 1, "student_id": 1, "status": "submitted", "start_time": "...", "submit_time": "...", "remaining_time": 0, "answers_snapshot": { "1": "A" }, "question_ids": [1, 2], "created_at": "...", "score": 85, "objective_score": 60, "subjective_score": 25, "is_passed": true }, "answers": [ { "id": 10, "exam_participant_id": 3, "question_id": 1, "user_answer": "A", "score": 3, "grading_comment": "", "ai_comment": "", "is_correct": true, "grader_id": null, "graded_at": null, "ai_score": null, "ai_graded_at": null, "question": { "id": 1, "content": "...", "options": [...], "type": "single_choice", "score": 3 } } ] } }
-```
+错题重做 `POST /api/wrong-questions/:question_id/redo` 同步返回上述 `accuracy_rate`/`common_wrong`/`ai_explanation` 等增强字段。
 
 ---
 
-## 8. 模拟考试 `/api/mock-exam`（role=hrwai_user）
+## 7. 模拟考试 `/api/mock-exam`（role=hrwai_user）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -628,45 +594,11 @@ Query：`tag_id`（必填）、`count`（0=全部）。
 
 ---
 
-## 9. 阅卷评分 `/api/grading`（role=tutor/admin）
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/api/grading/participants` | 阅卷列表（可 ?session_id= 过滤） |
-| GET | `/api/grading/participants/:participant_id` | 阅卷详情 |
-| POST | `/api/grading/participants/:participant_id/confirm-objective` | 确认客观题成绩 |
-| POST | `/api/grading/:answer_id/grade` | 人工评分（简答题） |
-| POST | `/api/grading/:answer_id/regrade` | 重新评分 |
-| POST | `/api/grading/:answer_id/confirm-ai` | 确认 AI 评分 |
-| POST | `/api/grading/:answer_id/ai-grade` | 触发 AI 评分 |
-| GET | `/api/grading/stats` | 阅卷统计（按天，?session_id= 可选） |
-
-**GET /api/grading/participants**
-
-响应 200（data 为数组）：
-
-```json
-{ "code": 200, "message": "success", "data": [ { "id": 3, "exam_session_id": 1, "student_id": 1, "status": "submitted", "start_time": "...", "submit_time": "...", "remaining_time": 0, "answers_snapshot": {}, "question_ids": [1, 2], "created_at": "...", "score": 0, "objective_score": 60, "subjective_score": 0, "is_passed": false, "session_name": "2026年8月定级考试", "student_name": "张三", "pass_score": 60, "ungraded_count": 2, "objective_ungraded": 0, "subjective_ungraded": 2, "total_answers": 32, "grading_status": "pending" } ] }
-```
-
-**GET /api/grading/participants/:participant_id**
-
-响应 200：data 为阅卷详情（participant 字段 + `answers`: [LevelExamAnswerDTO]）。
-
-**POST /api/grading/participants/:participant_id/confirm-objective**：请求体 `{}`
-
-**POST /api/grading/:answer_id/grade**：请求体 `{ "score": 4, "comment": "要点齐全" }`
-
-**POST /api/grading/:answer_id/ai-grade**：请求体 `{}`。响应 200：data 为 `{ "score": 4, "comment": "...", "fallback": false }`（AI 不可用时 fallback: true）
-
----
-
-## 10. 讲师端 `/api/tutor`（role=tutor）
+## 8. 讲师端 `/api/tutor`（role=tutor）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/tutor/courses` | 讲师课程列表（分页；可按方向/等级过滤） |
-| GET | `/api/tutor/grading-stats` | 讲师阅卷统计（按天分组，days=7|30） |
 | GET | `/api/tutor/course/:course_id/chapters` | 课程章节列表（含文件） |
 | GET | `/api/tutor/chapter/:chapter_id` | 章节详情（含上下章 ID + 文件列表） |
 | POST | `/api/tutor/chapter/:chapter_id/upload` | 上传章节文件（课件/视频等） |

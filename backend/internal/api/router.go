@@ -99,9 +99,10 @@ func NewRouter(deps *Deps) *gin.Engine {
 		auth.POST("/refresh", authH.Refresh)
 		auth.POST("/logout", authH.Logout)
 		auth.GET("/me", middleware.JWTAuth(deps.Session), authH.Me)
-		// 个人资料：昵称 / 头像
+		// 个人资料：昵称 / 头像 / 单位 / 注销
 		auth.PUT("/profile", middleware.JWTAuth(deps.Session), authH.UpdateProfile)
 		auth.POST("/avatar", middleware.JWTAuth(deps.Session), authH.UploadAvatar)
+		auth.DELETE("/account", middleware.JWTAuth(deps.Session), authH.DeleteAccount)
 	}
 
 	// 邮箱验证码注册/登录（发码需过图形验证码）
@@ -113,16 +114,13 @@ func NewRouter(deps *Deps) *gin.Engine {
 	// 个人信息页：手机号/邮箱绑定修改
 	RegisterProfileBindRoutes(api, rd, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
 
-	// 注册全部 12 个业务蓝图：
+	// 注册业务蓝图（定级考试与阅卷已下线，见 spec #284）：
 	//   auth/courses/student/question-bank/
-	//   level-exam/grading/tutor/wrong-questions/mock-exam/admin
-	//   practice-mode（题库练习模式：自由刷题/知识点专项，对应 question_practice_record）
+	//   tutor/wrong-questions/mock-exam/admin/practice-mode
 	RegisterCoursesRoutes(api, rd, deps.CourseSvc)
 	RegisterStudentRoutes(api, rd, deps.StudentSvc)
 	RegisterQuestionBankRoutes(api, rd, deps.QuestionBankSvc, deps.FileSvc)
 	RegisterPracticeModeRoutes(api, rd, deps.PracticeModeSvc)
-	RegisterLevelExamRoutes(api, rd, deps.LevelExamSvc)
-	RegisterGradingRoutes(api, rd, deps.GradingSvc)
 	RegisterAdminRoutes(api, rd, deps.AdminSvc, deps.AdminCourseSvc, deps.AuthSvc, deps.AIConfigSvc, deps.ContentGenSvc)
 	RegisterTutorRoutes(api, rd, deps.TutorSvc, deps.FileSvc)
 	RegisterWrongQuestionRoutes(api, rd, deps.WrongQuestionSvc)
@@ -135,6 +133,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 	RegisterAuditRoutes(api, rd, deps.AuditSvc)
 	RegisterExportRoutes(api, rd, deps.ExportSvc)
 	RegisterTrainingCatalogRoutes(api, rd, deps.TrainingCatalogSvc)
+	RegisterQuestionInteractionRoutes(api, rd, deps.QuestionCommentSvc, deps.QuestionNoteSvc, deps.QuestionKnowledgeSvc)
 	// 移动端 P1 通用能力（ADR-0018）：通用收藏 / 全局搜索 / 学习资料聚合
 	RegisterFavoriteRoutes(api, rd, deps.FavoriteSvc)
 	RegisterSearchRoutes(api, rd, deps.SearchSvc)

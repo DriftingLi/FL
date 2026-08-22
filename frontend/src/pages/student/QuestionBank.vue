@@ -139,28 +139,41 @@
         />
         <el-input v-else v-model="textAnswer" type="textarea" :rows="4" placeholder="请输入答案" :disabled="submitted" />
 
-        <div class="q-feedback" v-if="submitted && lastResult">
+        <div v-if="submitted && lastResult" class="result-area">
+          <AnswerResultCard
+            :correct-answer="lastResult.correct_answer"
+            :user-answer="lastResult.user_answer"
+            :is-correct="!!lastResult.is_correct"
+            :duration-seconds="lastDuration"
+            :accuracy-rate="lastResult.accuracy_rate"
+            :common-wrong="lastResult.common_wrong"
+            :question-type="currentQuestion.type"
+          />
+          <AIExplanationCard :ai-explanation="(lastResult as any).ai_explanation" :fallback-explanation="lastResult.explanation" />
           <el-alert
+            v-if="lastResult.ai_score !== undefined && lastResult.ai_score !== null"
             :title="lastResult.is_correct ? '回答正确' : '回答错误'"
             :type="lastResult.is_correct ? 'success' : 'error'"
             :closable="false"
             show-icon
           >
-            <template v-if="!lastResult.is_correct">
-              <div>正确答案：{{ lastResult.correct_answer }}</div>
-            </template>
-            <div v-if="lastResult.explanation" class="feedback-explanation">
-              解析：{{ lastResult.explanation }}
-            </div>
-            <div v-if="lastResult.ai_score !== undefined && lastResult.ai_score !== null">
-              AI 评分：{{ lastResult.ai_score }} 分 · {{ lastResult.ai_comment || '' }}
-            </div>
+            <div>AI 评分：{{ lastResult.ai_score }} 分 · {{ lastResult.ai_comment || '' }}</div>
           </el-alert>
+          <el-alert
+            v-else
+            :title="lastResult.is_correct ? '回答正确' : '回答错误'"
+            :type="lastResult.is_correct ? 'success' : 'error'"
+            :closable="false"
+            show-icon
+          />
+          <KnowledgeCard :tags="knowledgeTags" />
+          <CommentCard :question-id="currentQuestion.id" />
+          <NoteCard :question-id="currentQuestion.id" />
         </div>
 
         <div class="q-actions">
           <el-button v-if="currentIdx > 0" @click="prevQuestion">上一题</el-button>
-          <el-button v-if="!submitted" type="primary" :disabled="!canSubmit" @click="submitAnswer">
+          <el-button v-if="!submitted" type="primary" :disabled="!canSubmit" @click="handleSubmit">
             提交答案
           </el-button>
           <el-button v-if="currentIdx < questions.length - 1" type="primary" @click="nextQuestion">
@@ -189,6 +202,12 @@ import {
   type PracticeStartData
 } from '@/composables/usePracticeSession'
 import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
+import AnswerResultCard from '@/components/practice/AnswerResultCard.vue'
+import AIExplanationCard from '@/components/practice/AIExplanationCard.vue'
+import KnowledgeCard from '@/components/practice/KnowledgeCard.vue'
+import CommentCard from '@/components/practice/CommentCard.vue'
+import NoteCard from '@/components/practice/NoteCard.vue'
+import { questionInteractionApi } from '@/api/questionInteraction'
 
 // null = 入口；'sequential' | 'free' | 'tag' = 刷题中
 
@@ -314,6 +333,28 @@ async function startSequential() {
 async function startFree() {
   const ok = await start('free')
   if (!ok) ElMessage.warning('暂无符合条件的题目')
+}
+
+const questionStartTime = ref<number>(Date.now())
+const lastDuration = ref<number | undefined>(undefined)
+const knowledgeTags = ref<any[]>([])
+
+watch(currentQuestion, () => {
+  questionStartTime.value = Date.now()
+  lastDuration.value = undefined
+})
+
+watch(() => (lastResult.value as any)?.question_id, async (qid: number) => {
+  if (!qid) { knowledgeTags.value = []; return }
+  try {
+    const tags = await questionInteractionApi.listKnowledge(qid)
+    knowledgeTags.value = (tags as any) || []
+  } catch { knowledgeTags.value = [] }
+})
+
+async function handleSubmit() {
+  lastDuration.value = (Date.now() - questionStartTime.value) / 1000
+  await submitAnswer()
 }
 
 async function startTagPractice() {
