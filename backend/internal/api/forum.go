@@ -129,6 +129,7 @@ func (h *ForumHandler) UploadImage(c *gin.Context) {
 // @Param page_size query int false "每页条数" default(10)
 // @Param keyword query string false "关键词"
 // @Param sort query string false "排序 latest|hot"
+// @Param order query string false "排序方向 asc|desc"
 // @Success 200 {object} response.R{data=service.ForumTopicPageResult} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /forum/topics [get]
@@ -142,10 +143,11 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 				PageSize:  atoiDefault(c.Query("page_size"), 10),
 				Keyword:   c.Query("keyword"),
 				Sort:      c.Query("sort"),
+				Order:     c.Query("order"),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listTopicsReq) (*service.ForumTopicPageResult, error) {
-			return h.svc.ListTopics(req.Scope, req.ChapterID, req.Page, req.PageSize, req.Keyword, req.Sort)
+			return h.svc.ListTopics(req.Scope, req.ChapterID, req.Page, req.PageSize, req.Keyword, req.Sort, req.Order)
 		},
 		Render: func(c *gin.Context, _ *listTopicsReq, resp *service.ForumTopicPageResult, err error) {
 			if err != nil {
@@ -206,7 +208,8 @@ func (h *ForumHandler) CreateTopic(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "主题ID"
-// @Param sort query string false "排序 time|hot"
+// @Param sort query string false "排序 time|hot|latest"
+// @Param order query string false "排序方向 asc|desc"
 // @Success 200 {object} response.R "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "不存在"
@@ -220,10 +223,10 @@ func (h *ForumHandler) GetTopic(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return &topicGetReq{TopicID: topicID, UserID: userID, Sort: c.Query("sort")}, nil
+			return &topicGetReq{TopicID: topicID, UserID: userID, Sort: c.Query("sort"), Order: c.Query("order")}, nil
 		},
 		Invoke: func(ctx context.Context, req *topicGetReq) (*map[string]any, error) {
-			result, err := h.svc.GetTopic(req.TopicID, req.UserID, req.Sort)
+			result, err := h.svc.GetTopic(req.TopicID, req.UserID, req.Sort, req.Order)
 			if err != nil {
 				return nil, err
 			}
@@ -376,10 +379,10 @@ func (h *ForumHandler) AdminGetTopic(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return &topicGetReq{TopicID: topicID, UserID: userID, Sort: c.Query("sort")}, nil
+			return &topicGetReq{TopicID: topicID, UserID: userID, Sort: c.Query("sort"), Order: c.Query("order")}, nil
 		},
 		Invoke: func(ctx context.Context, req *topicGetReq) (*map[string]any, error) {
-			result, err := h.svc.GetTopic(req.TopicID, req.UserID, req.Sort)
+			result, err := h.svc.GetTopic(req.TopicID, req.UserID, req.Sort, req.Order)
 			if err != nil {
 				return nil, err
 			}
@@ -459,6 +462,7 @@ type listTopicsReq struct {
 	PageSize  int
 	Keyword   string
 	Sort      string
+	Order     string
 }
 
 // createTopicReq 发帖请求。
@@ -475,6 +479,7 @@ type topicGetReq struct {
 	TopicID int64
 	UserID  int
 	Sort    string
+	Order   string
 }
 
 // replyTopicReq 回复请求。

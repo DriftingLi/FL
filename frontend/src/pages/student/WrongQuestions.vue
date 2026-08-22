@@ -9,13 +9,19 @@
         <el-option label="故障识图" value="fault_image" />
         <el-option label="简答题" value="short_answer" />
       </el-select>
-      <el-button type="success" @click="exportWrong">导出错题</el-button>
+      <el-checkbox :model-value="isAllSelected" :indeterminate="isIndeterminate" @change="toggleSelectAll" :disabled="wrongList.length===0">全选</el-checkbox>
+      <el-button type="danger" :disabled="selectedIds.size===0" @click="handleBatchRemove">批量移出</el-button>
+      <el-button type="success" :disabled="wrongList.length===0" @click="handleExport">导出错题</el-button>
     </div>
 
     <div v-if="wrongList.length > 0">
       <el-card v-for="item in wrongList" :key="item.id" class="wrong-item">
         <div class="wrong-header">
-          <el-tag size="small">{{ item.question?.type ? (typeMap as Record<string, string>)[item.question.type] : '' }}</el-tag>
+          <div class="header-left">
+            <el-checkbox :model-value="selectedIds.has(item.question_id)" @change="(val:boolean)=>toggleSelect(item.question_id, val)" />
+            <el-tag size="small">{{ item.question?.type ? (typeMap as Record<string, string>)[item.question.type] : '' }}</el-tag>
+            <el-tag v-if="(item as any).is_redone" type="success" size="small">已重做</el-tag>
+          </div>
           <span class="wrong-count">错误 {{ item.wrong_count }} 次</span>
         </div>
         <p class="wrong-content">{{ item.question?.content }}</p>
@@ -35,8 +41,8 @@
             <CommentCard :question-id="item.question_id" />
             <NoteCard :question-id="item.question_id" />
             <div class="redo-actions">
-              <el-button size="small" @click="redoingId = null; delete redoResults[item.id]">关闭</el-button>
-              <el-button v-if="redoResults[item.id].is_correct" type="primary" size="small" @click="redoingId = null; loadData()">完成</el-button>
+              <el-button size="small" @click="redoingId = null">关闭</el-button>
+              <el-button type="primary" size="small" @click="redoingId = null">完成</el-button>
             </div>
           </template>
           <template v-else>
@@ -57,7 +63,7 @@
         </div>
         <div v-else class="wrong-actions">
           <el-button type="primary" size="small" @click="startRedo(item)">重做</el-button>
-          <el-button type="danger" size="small" @click="removeWrong(item.question_id)">移除</el-button>
+          <el-button type="danger" size="small" @click="removeWrong(item.question_id)">移出</el-button>
         </div>
       </el-card>
       <el-pagination v-model:current-page="page" :page-size="pageSize" :total="total" layout="prev, pager, next" @current-change="loadData" />
@@ -67,7 +73,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { wrongQuestionApi } from '@/api/wrongQuestion'
 import { typeMap } from '@/constants/question'
@@ -85,6 +91,7 @@ interface WrongItem {
   id: number
   question_id: number
   wrong_count?: number
+  is_redone?: boolean
   question?: {
     type?: string
     options?: Record<string, string>
@@ -104,6 +111,26 @@ const redoStartTime = ref<number>(Date.now())
 const redoResults = ref<Record<number, any>>({})
 const redoDurations = ref<Record<number, number>>({})
 const wrongKnowledge = ref<Record<number, any[]>>({})
+const selectedIds = ref<Set<number>>(new Set())
+
+const isAllSelected = computed(()=> wrongList.value.length>0 && wrongList.value.every(i=> selectedIds.value.has(i.question_id)))
+const isIndeterminate = computed(()=> {
+  const sel = selectedIds.value.size
+  return sel>0 && sel < wrongList.value.length
+})
+
+function toggleSelect(qid:number, val:boolean){
+  const n = new Set(selectedIds.value)
+  if(val) n.add(qid); else n.delete(qid)
+  selectedIds.value = n
+}
+function toggleSelectAll(val: boolean){
+  if(val){
+    selectedIds.value = new Set(wrongList.value.map(i=>i.question_id))
+  } else {
+    selectedIds.value = new Set()
+  }
+}
 
 onMounted(() => loadData())
 watch(filterType, () => { page.value = 1; loadData() })
@@ -113,6 +140,11 @@ async function loadData() {
     const res = await wrongQuestionApi.getWrongQuestions({ page: page.value, page_size: pageSize.value, type: filterType.value || undefined })
     wrongList.value = res?.items || []
     total.value = res?.total || 0
+    // 清理不在当前页的选择
+    const ids = new Set(wrongList.value.map(i=>i.question_id))
+    const n = new Set<number>()
+    selectedIds.value.forEach(id=>{ if(ids.has(id)) n.add(id) })
+    selectedIds.value = n
   } catch (e) {}
 }
 
@@ -142,19 +174,15 @@ async function submitRedo(item: WrongItem) {
       wrongKnowledge.value[item.id] = (tags as any) || []
     } catch { wrongKnowledge.value[item.id] = [] }
     if (res?.is_correct === true) {
-      ElMessage.success('回答正确！')
+      ElMessage.success('回答正确！已标记为已重做')
+      // 更新列表中的标记
+      const idx = wrongList.value.findIndex(w=>w.id===item.id)
+      if(idx>=0) (wrongList.value[idx] as any).is_redone = true
     } else if (res?.is_correct === false) {
       ElMessage.warning('回答错误，继续加油')
     } else {
       ElMessage.info('简答题需要教师批改，已提交')
     }
-    // 延迟刷新以便展示解析
-    setTimeout(async () => {
-      if (res?.is_correct === true) {
-        redoingId.value = null
-        await loadData()
-      }
-    }, 1500)
   } catch {
     /* 错误已由拦截器提示 */
   }
@@ -162,16 +190,65 @@ async function submitRedo(item: WrongItem) {
 
 async function removeWrong(questionId: number) {
   try {
-    await ElMessageBox.confirm('确定移除此错题？', '提示', { type: 'warning' })
+    await ElMessageBox.confirm('确定移出此错题？', '提示', { type: 'warning' })
     await wrongQuestionApi.removeWrongQuestion(questionId)
-    ElMessage.success('已移除')
+    ElMessage.success('已移出')
+    selectedIds.value.delete(questionId)
     await loadData()
   } catch (e) {}
 }
 
-async function exportWrong() {
+async function handleBatchRemove(){
+  if(selectedIds.value.size===0){ ElMessage.warning('请选择要移出的题目'); return }
+  try{
+    await ElMessageBox.confirm(`确定移出选中的 ${selectedIds.value.size} 道错题？`, '提示', { type: 'warning' })
+    await wrongQuestionApi.batchRemoveWrongQuestions(Array.from(selectedIds.value))
+    ElMessage.success('已批量移出')
+    selectedIds.value = new Set()
+    await loadData()
+  } catch {}
+}
+
+async function handleExport(){
+  if(wrongList.value.length===0){ ElMessage.warning('暂无错题可导出'); return }
+  if(selectedIds.value.size>0){
+    const toExport = wrongList.value.filter(i=> selectedIds.value.has(i.question_id))
+    if(toExport.length===0){ ElMessage.warning('请选择要导出的题目'); return }
+    const lines: string[] = []
+    lines.push('='.repeat(50))
+    lines.push('错题本导出')
+    lines.push(`导出时间: ${new Date().toLocaleString()}`)
+    lines.push(`错题总数: ${toExport.length}`)
+    lines.push('='.repeat(50))
+    toExport.forEach((item, idx)=>{
+      lines.push('')
+      lines.push(`【第${idx+1}题】`)
+      lines.push('-'.repeat(40))
+      const q = item.question
+      lines.push(`题型: ${(typeMap as any)[q?.type||''] || q?.type || ''}`)
+      lines.push(`题目: ${q?.content||''}`)
+      if(q?.options){
+        lines.push('选项:')
+        Object.keys(q.options).sort().forEach(k=> lines.push(`  ${k}. ${q.options![k]}`))
+      }
+      lines.push(`错误次数: ${item.wrong_count||0}`)
+      lines.push('-'.repeat(40))
+    })
+    lines.push('')
+    lines.push(`共 ${toExport.length} 道错题`)
+    lines.push('='.repeat(50))
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'wrong_questions.txt'
+    a.click()
+    URL.revokeObjectURL(url)
+    return
+  }
   try {
-    downloadBlob(await wrongQuestionApi.exportWrongQuestions(), 'wrong_questions.txt')
+    const blob = await wrongQuestionApi.exportWrongQuestions()
+    downloadBlob(blob as any, 'wrong_questions.txt')
   } catch {
     /* 错误已由拦截器提示 */
   }
@@ -181,12 +258,13 @@ async function exportWrong() {
 <style scoped>
 .wrong-questions { max-width: 900px; margin: 0 auto; }
 .wrong-questions h2 { margin-bottom: 20px; }
-.filter-bar { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; }
+.filter-bar { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
 .wrong-item { margin-bottom: 12px; }
 .wrong-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.header-left { display:flex; align-items:center; gap:8px; }
 .wrong-count { color: #f56c6c; font-size: 13px; }
 .wrong-content { font-size: 15px; line-height: 1.6; margin-bottom: 10px; }
 .redo-area { margin-top: 10px; }
-.redo-actions { margin-top: 8px; }
+.redo-actions { margin-top: 8px; display:flex; gap:8px; }
 .wrong-actions { display: flex; gap: 8px; }
 </style>

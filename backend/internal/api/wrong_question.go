@@ -32,6 +32,8 @@ func RegisterWrongQuestionRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *servic
 	g.GET("", h.List)
 	// POST /api/wrong-questions/:question_id/redo  重做错题
 	g.POST("/:question_id/redo", h.Redo)
+	// POST /api/wrong-questions/batch-remove  批量移出
+	g.POST("/batch-remove", h.BatchRemove)
 	// POST /api/wrong-questions/:question_id/remove  移出错题本
 	g.POST("/:question_id/remove", h.Remove)
 	// GET /api/wrong-questions/stats  错题统计
@@ -184,6 +186,43 @@ func (h *WrongQuestionHandler) Remove(c *gin.Context) {
 			response.SuccessWithMsg(c, "已移出错题本", deref(resp))
 		},
 	}.Handle(c)
+}
+
+// BatchRemove 批量移出错题本
+func (h *WrongQuestionHandler) BatchRemove(c *gin.Context) {
+	Endpoint[batchRemoveReq, map[string]any]{
+		Parse: func(c *gin.Context) (*batchRemoveReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			studentID, _ := uid.(int)
+			var req struct {
+				QuestionIDs []int `json:"question_ids"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				return nil, badRequest("请求数据无效")
+			}
+			return &batchRemoveReq{StudentID: studentID, QuestionIDs: req.QuestionIDs}, nil
+		},
+		Invoke: func(ctx context.Context, req *batchRemoveReq) (*map[string]any, error) {
+			cnt, err := h.svc.BatchRemoveWrongQuestions(req.StudentID, req.QuestionIDs)
+			if err != nil {
+				return nil, err
+			}
+			m := map[string]any{"removed": cnt}
+			return &m, nil
+		},
+		Render: func(c *gin.Context, _ *batchRemoveReq, resp *map[string]any, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "已批量移出", deref(resp))
+		},
+	}.Handle(c)
+}
+
+type batchRemoveReq struct {
+	StudentID   int
+	QuestionIDs []int
 }
 
 // getWrongStatsReq 错题统计请求。

@@ -20,7 +20,7 @@
         <el-form-item prop="username">
           <el-input
             v-model="formData.username"
-            placeholder="账号或手机号"
+            :placeholder="usernamePlaceholder"
             prefix-icon="User"
             size="large"
             class="form-input"
@@ -340,6 +340,10 @@ const badgeTone = computed<'student' | 'tutor' | 'admin'>(
 )
 const roleLabel = computed(() =>
   currentRole === 'tutor' ? '导师端' : currentRole === 'admin' ? '管理端' : '学员端'
+)
+
+const usernamePlaceholder = computed(() =>
+  currentRole === 'tutor' || currentRole === 'admin' ? '账号' : '账号或手机号'
 )
 
 // 非学员角色不显示 alt 方式与分隔线（tutor/admin 仅密码登录）

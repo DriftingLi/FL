@@ -35,6 +35,7 @@
         <el-radio-button value="latest">最新</el-radio-button>
         <el-radio-button value="hot">热门</el-radio-button>
       </el-radio-group>
+      <el-button v-if="mode !== 'my-replies'" size="small" :icon="topicOrder==='asc'? ArrowUp : ArrowDown" @click="toggleTopicOrder">{{ topicOrder==='asc' ? '正序' : '逆序' }}</el-button>
     </div>
 
     <CheckInDialog v-model="checkInDialogVisible" :initial-tab="checkInTab" @checked="onCheckInChecked" />
@@ -150,7 +151,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { EditPen, View, ChatDotRound, Picture, Calendar } from '@element-plus/icons-vue'
+import { EditPen, View, ChatDotRound, Picture, Calendar, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem, type MyReplyItem } from '@/api/forum'
 import { formatRelativeTime } from '@/utils/format'
 import ForumImageUploader from '@/components/student/ForumImageUploader.vue'
@@ -170,6 +171,7 @@ type ForumMode = 'all' | 'my-topics' | 'my-replies'
 const mode = ref<ForumMode>('all')
 const myReplies = ref<MyReplyItem[]>([])
 const topicSort = ref<'latest' | 'hot'>('latest')
+const topicOrder = ref<'asc' | 'desc'>('desc')
 
 function handleModeChange() {
   currentPage.value = 1
@@ -178,6 +180,13 @@ function handleModeChange() {
 
 function handleSortChange() {
   currentPage.value = 1
+  // 切换排序维度时重置为降序（最新/最热优先）
+  topicOrder.value = 'desc'
+  loadTopics()
+}
+
+function toggleTopicOrder(){
+  topicOrder.value = topicOrder.value === 'asc' ? 'desc' : 'asc'
   loadTopics()
 }
 const createDialogVisible = ref(false)
@@ -204,7 +213,7 @@ async function loadTopics() {
       topics.value = res.topics || []
       total.value = res.total || 0
     } else {
-      const res = await forumApi.listTopics({ scope: 'general', sort: topicSort.value, ...params })
+      const res = await forumApi.listTopics({ scope: 'general', sort: topicSort.value, order: topicOrder.value, ...params })
       topics.value = res.topics || []
       total.value = res.total || 0
     }

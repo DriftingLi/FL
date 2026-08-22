@@ -43,6 +43,10 @@ export const wrongQuestionApi = {
     return unwrappedRequest.post<null>(`/wrong-questions/${questionId}/remove`)
   },
 
+  batchRemoveWrongQuestions(questionIds: number[]) {
+    return unwrappedRequest.post<null>('/wrong-questions/batch-remove', { question_ids: questionIds })
+  },
+
   getWrongQuestionStats() {
     return unwrappedRequest.get<Record<string, unknown>>('/wrong-questions/stats')
   },

@@ -2531,6 +2531,10 @@ paths:
         in: query
         name: sort
         type: string
+      - description: 排序方向 asc|desc
+        in: query
+        name: order
+        type: string
       produces:
       - application/json
       responses:
@@ -2629,9 +2633,13 @@ paths:
         name: id
         required: true
         type: integer
-      - description: 排序 time|hot
+      - description: 排序 time|hot|latest
         in: query
         name: sort
+        type: string
+      - description: 排序方向 asc|desc
+        in: query
+        name: order
         type: string
       produces:
       - application/json

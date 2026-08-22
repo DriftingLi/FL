@@ -61,7 +61,7 @@
       </div>
 
       <div class="logout-row">
-        <el-button type="primary" text class="logout-btn" @click="handleLogout">退出当前账号</el-button>
+        <el-button type="primary" class="logout-btn" @click="handleLogout">退出当前账号</el-button>
       </div>
     </div>
 
@@ -164,5 +164,6 @@ onMounted(()=>{ authStore.refreshUserInfo() })
 .arrow { font-size: 14px; color: #c0c4cc; }
 .danger-group .danger-row .row-label { color: #f56c6c; }
 .logout-row { background: #fff; border-radius: 12px; display: flex; justify-content: center; padding: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-.logout-btn { color: #409eff; font-size: 15px; width: 100%; padding: 14px; }
+.logout-btn { color: #fff; font-size: 15px; width: 100%; padding: 14px; }
+.logout-btn :deep(span) { color: #fff; }
 </style>
