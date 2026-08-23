@@ -2,6 +2,7 @@
 // 本文件：每日打卡（签到/日历/连击/排行榜，Asia/Shanghai 自然日语义）。
 // 由 ForumService 拆出为独立 module（spec #279），与 ForumService 共享 ForumAuthor seam；
 // 路由前缀 /api/forum/check-in/* 与响应契约保持不变。
+// 时间统一经 internal/clock 构造注入（spec #296）：生产为 Asia/Shanghai 实钟，测试可定格。
 package service
 
 import (
@@ -11,8 +12,28 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/pkg/response"
+)
+
+const (
+	// checkInWindowDays streak 统一截断窗口（天）：排行榜条目与 Me 名次口径一致，
+	// 行数上界由 O(total_days) 降为常数（spec #296）。
+	checkInWindowDays = 400
+
+	// checkInRankOrderBy 排行榜排序 tie-break 单点定义：
+	// 分页查询与 Me 名次合并查询共用同一口径，禁止在调用处内联重复书写。
+	checkInRankOrderBy = "total DESC, last_date ASC, user_id ASC"
+
+	// checkInAggSubquery 用户维度打卡聚合子查询：分页、总数与 Me 名次合并共用同一来源。
+	checkInAggSubquery = "SELECT user_id, COUNT(*) AS total, MAX(check_date) AS last_date FROM forum_checkin GROUP BY user_id"
+
+	// checkInMeRankSQL 当前用户名次：RANK() OVER 复用 checkInRankOrderBy，
+	// 与分页 ORDER BY 完全同口径（含并列名次语义）。
+	checkInMeRankSQL = "SELECT rk FROM (" +
+		"SELECT user_id, RANK() OVER (ORDER BY " + checkInRankOrderBy + ") AS rk " +
+		"FROM (" + checkInAggSubquery + ") AS agg) AS ranked WHERE user_id = ?"
 )
 
 // CheckInResult 打卡结果。
@@ -53,77 +74,107 @@ type CheckInRankResult struct {
 type CheckInService struct {
 	db     *gorm.DB
 	logger *zap.Logger
+	clk    clock.Clock
 }
 
-// NewCheckInService 构造打卡服务。
-func NewCheckInService(db *gorm.DB, logger *zap.Logger) *CheckInService {
-	return &CheckInService{db: db, logger: logger}
+// NewCheckInService 构造打卡服务；clk 为空时回退生产实钟（Asia/Shanghai）。
+func NewCheckInService(db *gorm.DB, logger *zap.Logger, clk clock.Clock) *CheckInService {
+	if clk == nil {
+		clk = clock.Real()
+	}
+	return &CheckInService{db: db, logger: logger, clk: clk}
 }
 
-func beijingToday() time.Time {
-	now := beijingNow()
-	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+// startOfShanghaiDay 返回 t 在业务时区（Asia/Shanghai）的自然日起点 00:00。
+func startOfShanghaiDay(t time.Time) time.Time {
+	t = t.In(clock.Location())
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, clock.Location())
 }
 
-func computeStreakMetrics(dates []time.Time) (streak, total int, todayChecked bool) {
+// shanghaiDayStr 归一化为业务时区日期字符串，避免 UTC 偏移导致跨日错位。
+func shanghaiDayStr(t time.Time) string {
+	return t.In(clock.Location()).Format("2006-01-02")
+}
+
+// ComputeStreakMetrics 纯函数：由已签日期集合计算连击指标。
+// dates 无序、可含重复，内部按业务时区日期归一化去重；now 为“当前时刻”。
+// todayChecked 判定今日；streak 从今日（已签）或昨日（未签）起点连续回溯，
+// 起点缺失则 streak=0。若调用方传入窗口截断后的日期（如近 400 天），
+// 返回的 streak/total 即窗口内口径——窗口截断由查询侧负责（见 streakInWindow）。
+func ComputeStreakMetrics(dates []time.Time, now time.Time) (streak, total int, todayChecked bool) {
 	total = len(dates)
 	if total == 0 {
 		return 0, 0, false
 	}
 	set := make(map[string]bool, total)
-	loc := beijingNow().Location()
 	for _, d := range dates {
-		// Normalize to Asia/Shanghai date string to avoid UTC shift.
-		set[d.In(loc).Format("2006-01-02")] = true
+		set[shanghaiDayStr(d)] = true
 	}
-	todayStr := beijingToday().Format("2006-01-02")
-	todayChecked = set[todayStr]
-	// 计算连续天数：从今天（若已签）或昨天（若今日未签）往前连续计数；若最近一天与起点间隔>1则 streak=0
+	today := startOfShanghaiDay(now)
+	todayChecked = set[shanghaiDayStr(today)]
 	var cur time.Time
 	if todayChecked {
-		cur = beijingToday()
+		cur = today
 	} else {
-		cur = beijingToday().AddDate(0, 0, -1)
-		if !set[cur.Format("2006-01-02")] {
+		cur = today.AddDate(0, 0, -1)
+		if !set[shanghaiDayStr(cur)] {
 			return 0, total, false
 		}
 	}
-	for {
-		if set[cur.Format("2006-01-02")] {
-			streak++
-			cur = cur.AddDate(0, 0, -1)
-		} else {
-			break
-		}
+	for set[shanghaiDayStr(cur)] {
+		streak++
+		cur = cur.AddDate(0, 0, -1)
 	}
 	return streak, total, todayChecked
 }
 
-func (s *CheckInService) checkInStreakAndTotal(userID int) (streak, total int, todayChecked bool) {
+// windowCutoff streak 截断窗口起点（今日 −checkInWindowDays 天），各统计路径共用。
+func (s *CheckInService) windowCutoff(now time.Time) time.Time {
+	return startOfShanghaiDay(now).AddDate(0, 0, -checkInWindowDays)
+}
+
+// streakInWindow 计算窗口内连击与今日已签（排行榜条目与 Me 共用同一截断口径）。
+func (s *CheckInService) streakInWindow(userID int, now time.Time) (streak int, todayChecked bool) {
 	var dates []time.Time
-	if err := s.db.Model(&model.ForumCheckIn{}).Where("user_id = ?", userID).Order("check_date ASC").Pluck("check_date", &dates).Error; err != nil {
+	if err := s.db.Model(&model.ForumCheckIn{}).
+		Where("user_id = ? AND check_date >= ?", userID, s.windowCutoff(now)).
+		Order("check_date ASC").Pluck("check_date", &dates).Error; err != nil {
+		return 0, false
+	}
+	streak, _, todayChecked = ComputeStreakMetrics(dates, now)
+	return streak, todayChecked
+}
+
+// checkInStats 连击 + 全量累计天数 + 今日已签（签到/日历统计共用）。
+// total 为全生命周期计数（不受 400 天窗口截断），与响应契约保持一致；
+// streak/todayChecked 为窗口内口径。
+func (s *CheckInService) checkInStats(userID int, now time.Time) (streak, total int, todayChecked bool) {
+	var total64 int64
+	if err := s.db.Model(&model.ForumCheckIn{}).Where("user_id = ?", userID).Count(&total64).Error; err != nil {
 		return 0, 0, false
 	}
-	return computeStreakMetrics(dates)
+	streak, todayChecked = s.streakInWindow(userID, now)
+	return streak, int(total64), todayChecked
 }
 
 // CheckIn 每日打卡（幂等，Asia/Shanghai 自然日）。
 func (s *CheckInService) CheckIn(userID int) (*CheckInResult, error) {
-	today := beijingToday()
+	now := s.clk.Now()
+	today := startOfShanghaiDay(now)
 	// 使用 DATE 类型比较时传入 today（00:00）
 	var exists int64
 	if err := s.db.Model(&model.ForumCheckIn{}).Where("user_id = ? AND check_date = ?", userID, today).Count(&exists).Error; err != nil {
 		return nil, err
 	}
 	if exists == 0 {
-		if err := s.db.Create(&model.ForumCheckIn{UserID: userID, CheckDate: today, CreatedAt: beijingNow()}).Error; err != nil {
+		if err := s.db.Create(&model.ForumCheckIn{UserID: userID, CheckDate: today, CreatedAt: now}).Error; err != nil {
 			// 唯一冲突视为已签（并发幂等，共享 isDuplicateError 谓词）
 			if !isDuplicateError(err) {
 				return nil, err
 			}
 		}
 	}
-	streak, total, todayChecked := s.checkInStreakAndTotal(userID)
+	streak, total, todayChecked := s.checkInStats(userID, now)
 	return &CheckInResult{Checked: true, Streak: streak, Total: total, TodayChecked: todayChecked}, nil
 }
 
@@ -135,7 +186,7 @@ func (s *CheckInService) GetCheckInCalendar(userID, year, month int) (*CheckInCa
 	if month < 1 || month > 12 {
 		return nil, errors.New("月份无效")
 	}
-	loc := beijingNow().Location()
+	loc := clock.Location()
 	first := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, loc)
 	// last day: first of next month -1 day
 	last := first.AddDate(0, 1, -1)
@@ -145,27 +196,30 @@ func (s *CheckInService) GetCheckInCalendar(userID, year, month int) (*CheckInCa
 	}
 	strs := make([]string, 0, len(dates))
 	for _, d := range dates {
-		strs = append(strs, d.In(loc).Format("2006-01-02"))
+		strs = append(strs, shanghaiDayStr(d))
 	}
-	streak, total, todayChecked := s.checkInStreakAndTotal(userID)
+	streak, total, todayChecked := s.checkInStats(userID, s.clk.Now())
 	return &CheckInCalendarResult{Dates: strs, Streak: streak, Total: total, TodayChecked: todayChecked}, nil
 }
 
-// GetCheckInRank 排行榜（累计总榜，total DESC, last_date ASC）。
+// aggRow 排行榜聚合行（user 维度 total/last_date）。
+type aggRow struct {
+	UserID   int    `gorm:"column:user_id"`
+	Total    int    `gorm:"column:total"`
+	LastDate string `gorm:"column:last_date"`
+}
+
+// GetCheckInRank 排行榜（累计总榜，tie-break 见 checkInRankOrderBy 单点定义）。
 func (s *CheckInService) GetCheckInRank(requesterID, page, pageSize int) (*CheckInRankResult, error) {
+	now := s.clk.Now()
 	if page <= 0 {
 		page = 1
 	}
 	if pageSize <= 0 || pageSize > 100 {
 		pageSize = 20
 	}
-	type aggRow struct {
-		UserID   int       `gorm:"column:user_id"`
-		Total    int       `gorm:"column:total"`
-		LastDate time.Time `gorm:"column:last_date"`
-	}
 	var totalUsers int64
-	if err := s.db.Table("(SELECT user_id FROM forum_checkin GROUP BY user_id) AS t").Count(&totalUsers).Error; err != nil {
+	if err := s.db.Table("(" + checkInAggSubquery + ") AS agg").Count(&totalUsers).Error; err != nil {
 		return nil, err
 	}
 	pages := response.PageCount(totalUsers, pageSize)
@@ -174,7 +228,10 @@ func (s *CheckInService) GetCheckInRank(requesterID, page, pageSize int) (*Check
 	}
 	offset := (page - 1) * pageSize
 	var rows []aggRow
-	if err := s.db.Table("forum_checkin").Select("user_id, COUNT(*) as total, MAX(check_date) as last_date").Group("user_id").Order("total DESC, last_date ASC, user_id ASC").Limit(pageSize).Offset(offset).Scan(&rows).Error; err != nil {
+	if err := s.db.Table("(" + checkInAggSubquery + ") AS agg").
+		Select("user_id, total, last_date").
+		Order(checkInRankOrderBy).
+		Limit(pageSize).Offset(offset).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	// 批量取用户信息
@@ -192,8 +249,8 @@ func (s *CheckInService) GetCheckInRank(requesterID, page, pageSize int) (*Check
 		}
 	}
 	// 批量取打卡日期（一次查询取齐本页所有用户的 streak/todayChecked，消除随总天数线性增长的 N+1；
-	// 进一步限定至近 400 天窗口，将行数上界从 O(total_days) 降为常数，满足 spec “或至少限定窗口”）
-	cutoff := beijingToday().AddDate(0, 0, -400)
+	// 限定至近 checkInWindowDays 天窗口，行数上界为常数；Me 名次与本页条目共用同一截断口径）
+	cutoff := s.windowCutoff(now)
 	type dateRow struct {
 		UserID    int       `gorm:"column:user_id"`
 		CheckDate time.Time `gorm:"column:check_date"`
@@ -209,7 +266,7 @@ func (s *CheckInService) GetCheckInRank(requesterID, page, pageSize int) (*Check
 	items := make([]CheckInRankItem, 0, len(rows))
 	for i, r := range rows {
 		u := userMap[r.UserID]
-		streak, _, todayChecked := computeStreakMetrics(grouped[r.UserID])
+		streak, _, todayChecked := ComputeStreakMetrics(grouped[r.UserID], now)
 		items = append(items, CheckInRankItem{
 			Rank:         offset + i + 1,
 			User:         ForumAuthor{UserID: r.UserID, Username: u.Username, AvatarURL: u.AvatarURL},
@@ -218,30 +275,25 @@ func (s *CheckInService) GetCheckInRank(requesterID, page, pageSize int) (*Check
 			TodayChecked: todayChecked,
 		})
 	}
-	// 当前用户排名（若不在当页仍需计算）
+	// 当前用户排名（若不在当页仍需计算）；名次经 RANK() OVER 复用 checkInRankOrderBy 同口径
 	var me *CheckInRankItem
 	if requesterID > 0 {
-		var myTotal int64
-		s.db.Model(&model.ForumCheckIn{}).Where("user_id = ?", requesterID).Count(&myTotal)
-		if myTotal > 0 {
-			var myLast time.Time
-			s.db.Model(&model.ForumCheckIn{}).Where("user_id = ?", requesterID).Select("MAX(check_date)").Scan(&myLast)
-			// 计算排名：total 更高者数量 + 同 total 但 last_date 更早 + 同 total 同 last_date 但 user_id 更小 +1
-			var rank int64
-			// 先 count users with total > myTotal
-			var higher int64
-			s.db.Table("(SELECT user_id, COUNT(*) as total, MAX(check_date) as last_date FROM forum_checkin GROUP BY user_id) AS t").Where("total > ?", myTotal).Count(&higher)
-			// 再 count users with total == myTotal and (last_date < myLast OR (last_date == myLast AND user_id < requesterID))
-			var sameRank int64
-			s.db.Table("(SELECT user_id, COUNT(*) as total, MAX(check_date) as last_date FROM forum_checkin GROUP BY user_id) AS t").Where("total = ? AND (last_date < ? OR (last_date = ? AND user_id < ?))", myTotal, myLast, myLast, requesterID).Count(&sameRank)
-			rank = higher + sameRank + 1
+		var myRow aggRow
+		err := s.db.Table("("+checkInAggSubquery+") AS agg").
+			Select("user_id, total, last_date").
+			Where("user_id = ?", requesterID).Scan(&myRow).Error
+		if err == nil && myRow.Total > 0 {
+			var myRank int
+			if err := s.db.Raw(checkInMeRankSQL, requesterID).Scan(&myRank).Error; err != nil {
+				return nil, err
+			}
 			var mu model.HrwaiUser
 			_ = s.db.First(&mu, requesterID).Error
-			streak, _, todayChecked := s.checkInStreakAndTotal(requesterID)
+			streak, todayChecked := s.streakInWindow(requesterID, now)
 			me = &CheckInRankItem{
-				Rank:         int(rank),
+				Rank:         myRank,
 				User:         ForumAuthor{UserID: requesterID, Username: mu.Username, AvatarURL: mu.AvatarURL},
-				Total:        int(myTotal),
+				Total:        myRow.Total,
 				Streak:       streak,
 				TodayChecked: todayChecked,
 			}

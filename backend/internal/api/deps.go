@@ -5,6 +5,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/captcha"
+	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
@@ -114,7 +115,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		AdminSvc:             service.NewAdminService(db, logger),
 		AdminCourseSvc:       service.NewAdminCourseService(db, fileSvc, logger),
 		ForumSvc:             service.NewForumService(db, fileSvc, notificationSvc, forumCnt, logger),
-		CheckInSvc:           service.NewCheckInService(db, logger),
+		CheckInSvc:           service.NewCheckInService(db, logger, clock.Real()),
 		ForumImageSvc:        service.NewForumImageService(db, fileSvc, logger),
 		FeaturedSvc:          service.NewFeaturedService(db, fileSvc, logger),
 		FavoriteSvc:          service.NewFavoriteService(db, logger),
