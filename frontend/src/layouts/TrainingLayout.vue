@@ -2,7 +2,6 @@
   <SidebarLayout :menu-items="currentMenuItems">
     <template #top="{ collapsed }">
       <CredentialSwitcher :collapsed="collapsed" />
-      <div class="sidebar-divider"></div>
     </template>
   </SidebarLayout>
 </template>

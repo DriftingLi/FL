@@ -351,10 +351,10 @@ func (c *EmailChannel) Send(target, title, body string, _ string, _ time.Duratio
 	return nil
 }
 
-// ApplyTarget 写入邮箱并生成 phone 占位值。
+// ApplyTarget 写入邮箱，手机号置空（非手机号注册时为空）。
 func (c *EmailChannel) ApplyTarget(user *model.HrwaiUser, target string) {
 	user.Email = target
-	user.Phone = emailPlaceholderPhone(target)
+	user.Phone = ""
 }
 
 // BindColumn 绑定写入 email 字段。

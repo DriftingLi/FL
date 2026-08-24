@@ -1,6 +1,5 @@
 <template>
   <aside class="app-sidebar" :class="{ collapsed: effectiveCollapsed }">
-    <slot name="top" :collapsed="effectiveCollapsed" />
     <!-- 用户信息区（含退出登录下拉菜单） -->
     <el-dropdown
       class="sidebar-user-dropdown"
@@ -32,6 +31,8 @@
         </el-dropdown-menu>
       </template>
     </el-dropdown>
+
+    <slot name="top" :collapsed="effectiveCollapsed" />
 
     <!-- 分隔线 -->
     <div class="sidebar-divider"></div>

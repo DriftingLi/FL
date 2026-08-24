@@ -8,43 +8,46 @@
     </div>
 
     <el-card shadow="never">
+      <div class="toolbar">
+        <div class="toolbar-filters">
+          <el-select v-model="filterCategory" placeholder="类别" clearable style="width: 160px">
+            <el-option label="特种作业" value="special_operation" />
+            <el-option label="技能等级" value="skill_level" />
+          </el-select>
+          <el-input v-model="keyword" placeholder="搜索编码/名称" clearable style="width: 220px" />
+        </div>
+      </div>
       <el-table :data="filtered" v-loading="loading" stripe>
-        <el-table-column label="证件名称" min-width="220">
+        <el-table-column label="类别" width="120">
           <template #default="{ row }">
-            <span>{{ row.name }}</span>
-            <el-tag size="small" :type="row.category === 'special_operation' ? '' : 'success'" style="margin-left: 6px">
+            <el-tag size="small" :type="row.category === 'special_operation' ? '' : 'success'">
               {{ row.category === 'special_operation' ? '特种作业' : `技能等级 L${row.level}` }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="code" label="编码" width="180" />
+        <el-table-column label="证件名称" min-width="200">
+          <template #default="{ row }">
+            <span>{{ row.name }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="code" label="编码" width="170" />
         <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="sort_order" label="排序" width="70" align="center" />
         <el-table-column label="状态" width="90" align="center">
           <template #default="{ row }">
             <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">{{ row.status === 1 ? '启用' : '停用' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
-          <template #default="{ row, $index }">
-            <el-button link size="small" @click="openDialog(row)">编辑</el-button>
-            <el-button link size="small" @click="move(row, $index, -1)" :disabled="$index === 0">上移</el-button>
-            <el-button link size="small" @click="move(row, $index, 1)" :disabled="$index === filtered.length - 1">下移</el-button>
+        <el-table-column label="操作" width="150" fixed="right" align="center">
+          <template #default="{ row }">
+            <el-button link type="primary" size="small" @click="openDialog(row)">编辑</el-button>
             <el-popconfirm title="确定删除？" @confirm="handleDelete(row)">
               <template #reference>
-                <el-button link size="small" type="danger">删除</el-button>
+                <el-button link type="danger" size="small">删除</el-button>
               </template>
             </el-popconfirm>
           </template>
         </el-table-column>
       </el-table>
-      <div style="margin-top: 12px; display:flex; gap:12px;">
-        <el-select v-model="filterCategory" placeholder="类别" clearable style="width: 160px" @change="applyFilter">
-          <el-option label="特种作业" value="special_operation" />
-          <el-option label="技能等级" value="skill_level" />
-        </el-select>
-        <el-input v-model="keyword" placeholder="搜索编码/名称" clearable style="width: 220px" @input="applyFilter" />
-      </div>
     </el-card>
 
     <el-dialog v-model="dialogVisible" :title="form.id ? '编辑证件' : '新增证件'" width="520px" destroy-on-close>
@@ -109,10 +112,6 @@ const filtered = computed(() => {
     return true
   })
 })
-
-function applyFilter() {
-  // reactive via computed
-}
 
 async function load() {
   loading.value = true
@@ -215,18 +214,6 @@ async function handleDelete(row: CredentialDict) {
   }
 }
 
-async function move(row: CredentialDict, idx: number, delta: number) {
-  const target = filtered.value[idx + delta]
-  if (!target) return
-  try {
-    await credentialApi.swapCredential(row.id, target.id)
-    ElMessage.success('排序已更新')
-    await load()
-  } catch (e) {
-    console.error(e)
-  }
-}
-
 onMounted(load)
 </script>
 
@@ -243,5 +230,14 @@ onMounted(load)
 .page-header h2 {
   font-size: 20px;
   margin: 0;
+}
+.toolbar {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 12px;
+}
+.toolbar-filters {
+  display: flex;
+  gap: 12px;
 }
 </style>

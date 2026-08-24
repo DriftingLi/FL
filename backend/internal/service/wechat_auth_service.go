@@ -202,11 +202,8 @@ func (s *WechatAuthService) findOrCreateByOpenID(openID, unionID string) (*model
 		})
 	}
 
-	// Phone 需唯一（hrwai_users.phone 唯一约束），微信自动建号使用 openID 派生的唯一占位，避免空串重复
-	phoneBase := "wxp_" + openID
-	if len(phoneBase) > 50 {
-		phoneBase = phoneBase[:50]
-	}
+	// 非手机号注册时手机号置空（允许空串多用户并存，唯一约束仅对非空手机号生效）
+	phoneBase := ""
 	var lastErr error
 	for idx, cand := range candidates {
 		newUser := model.HrwaiUser{

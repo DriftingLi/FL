@@ -65,7 +65,7 @@ type HrwaiUser struct {
 	Username  string `gorm:"column:username;uniqueIndex" json:"username"`
 	Password  string `gorm:"column:password" json:"-"`
 	AvatarURL string `gorm:"column:avatar_url" json:"avatar_url"`
-	Phone     string `gorm:"column:phone;uniqueIndex" json:"phone"`
+	Phone     string `gorm:"column:phone" json:"phone"`
 	Email     string `gorm:"column:email" json:"email,omitempty"`
 	Company   string `gorm:"column:company" json:"company,omitempty"`
 	// WechatOpenID 微信开放平台 openid（微信扫码登录绑定用，框架字段）。
