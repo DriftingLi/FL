@@ -39,8 +39,9 @@ func RegisterSearchRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Searc
 // @Failure 400 {object} response.R "参数错误"
 // @Router /search [get]
 func (h *SearchHandler) Search(c *gin.Context) {
+	credID := queryIDPtr(c, "credential_id")
 	resp, err := h.svc.Search(c.Query("keyword"), c.Query("type"),
-		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20))
+		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20), credID)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return

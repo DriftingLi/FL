@@ -245,6 +245,16 @@ func (s *QuestionBankService) CreateQuestion(data map[string]any, createdBy *int
 	if status == "" {
 		status = "pending"
 	}
+	var credentialID *int
+	if v, ok := data["credential_id"]; ok {
+		if cid := toInt(v); cid > 0 {
+			var cnt int64
+			if err := s.db.Model(&model.Credential{}).Where("id = ?", cid).Count(&cnt).Error; err == nil && cnt == 0 {
+				return QuestionDTO{}, errors.New("所属证件不存在")
+			}
+			credentialID = &cid
+		}
+	}
 	var optionsBytes model.JSONB
 	if options != nil {
 		if b, err := json.Marshal(options); err == nil {
@@ -261,6 +271,7 @@ func (s *QuestionBankService) CreateQuestion(data map[string]any, createdBy *int
 		ReferenceAnswer: getString(data, "reference_answer"),
 		ScoringCriteria: getString(data, "scoring_criteria"),
 		Score:           toIntDefault(data["score"], 0),
+		CredentialID:    credentialID,
 		Status:          status,
 		CreatedBy:       createdBy,
 		CreatedByType:   orDefault(createdByType, "tutor"),
@@ -349,7 +360,7 @@ func (s *QuestionBankService) DeleteQuestion(id int) error {
 }
 
 // ListQuestions 题目列表分页查询（可按标签 tagID 过滤，结果附带标签列表）。
-func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int) map[string]any {
+func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int, credentialID ...*int) map[string]any {
 	list, total, page, pageSize := paging.Query[model.Question](s.db, page, pageSize, 20, "created_at DESC, id ASC", func(q *gorm.DB) *gorm.DB {
 		if qType != "" {
 			q = q.Where("type = ?", qType)
@@ -362,6 +373,9 @@ func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, st
 		}
 		if tagID != nil {
 			q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", *tagID)
+		}
+		if len(credentialID) > 0 && credentialID[0] != nil {
+			q = q.Where("credential_id = ?", *credentialID[0])
 		}
 		return q
 	})

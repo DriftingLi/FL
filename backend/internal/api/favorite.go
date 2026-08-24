@@ -51,8 +51,9 @@ func RegisterFavoriteRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Fav
 // @Router /favorites [get]
 func (h *FavoriteHandler) List(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
+	credID := queryIDPtr(c, "credential_id")
 	resp, err := h.svc.List(userID, c.Query("target_type"),
-		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20))
+		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20), credID)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return

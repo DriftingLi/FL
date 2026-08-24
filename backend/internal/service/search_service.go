@@ -69,7 +69,7 @@ type SearchPageDTO struct {
 }
 
 // searchSection 单类型搜索：top limit 条 + 总数。
-func (s *SearchService) searchSection(searchType, keyword string, limit int) (SearchSectionDTO, error) {
+func (s *SearchService) searchSection(searchType, keyword string, limit int, credentialID ...*int) (SearchSectionDTO, error) {
 	items, total, err := s.searchItems(searchType, keyword, 1, limit)
 	if err != nil {
 		return SearchSectionDTO{}, err
@@ -78,7 +78,7 @@ func (s *SearchService) searchSection(searchType, keyword string, limit int) (Se
 }
 
 // searchItems 单类型分页搜索。
-func (s *SearchService) searchItems(searchType, keyword string, page, pageSize int) ([]SearchItemDTO, int64, error) {
+func (s *SearchService) searchItems(searchType, keyword string, page, pageSize int, credentialID ...*int) ([]SearchItemDTO, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -96,6 +96,9 @@ func (s *SearchService) searchItems(searchType, keyword string, page, pageSize i
 		var cnt int64
 		q := s.db.Model(&model.Course{}).
 			Where("status = 1 AND specialty_id IS NOT NULL AND level_id IS NOT NULL AND LOWER(name) LIKE ?", like)
+		if len(credentialID) > 0 && credentialID[0] != nil {
+			q = q.Where("credential_id = ?", *credentialID[0])
+		}
 		q.Count(&cnt)
 		total = cnt
 		var rows []model.Course
@@ -111,6 +114,9 @@ func (s *SearchService) searchItems(searchType, keyword string, page, pageSize i
 		var cnt int64
 		q := s.db.Model(&model.Question{}).
 			Where("status = ? AND LOWER(content) LIKE ?", "published", like)
+		if len(credentialID) > 0 && credentialID[0] != nil {
+			q = q.Where("credential_id = ?", *credentialID[0])
+		}
 		q.Count(&cnt)
 		total = cnt
 		var rows []model.Question
@@ -160,25 +166,29 @@ func (s *SearchService) searchItems(searchType, keyword string, page, pageSize i
 }
 
 // Search 全局搜索。searchType 为空时返回各分区 top 5；否则该类型分页结果。
-func (s *SearchService) Search(keyword, searchType string, page, pageSize int) (any, error) {
+func (s *SearchService) Search(keyword, searchType string, page, pageSize int, credentialID ...*int) (any, error) {
 	keyword = strings.TrimSpace(keyword)
 	if keyword == "" {
 		return nil, errors.New("关键词不能为空")
 	}
+	var cred *int
+	if len(credentialID) > 0 {
+		cred = credentialID[0]
+	}
 	if searchType == "" {
-		courses, err := s.searchSection(SearchTypeCourse, keyword, 5)
+		courses, err := s.searchSection(SearchTypeCourse, keyword, 5, cred)
 		if err != nil {
 			return nil, err
 		}
-		questions, err := s.searchSection(SearchTypeQuestion, keyword, 5)
+		questions, err := s.searchSection(SearchTypeQuestion, keyword, 5, cred)
 		if err != nil {
 			return nil, err
 		}
-		contents, err := s.searchSection(SearchTypeContent, keyword, 5)
+		contents, err := s.searchSection(SearchTypeContent, keyword, 5, cred)
 		if err != nil {
 			return nil, err
 		}
-		topics, err := s.searchSection(SearchTypeTopic, keyword, 5)
+		topics, err := s.searchSection(SearchTypeTopic, keyword, 5, cred)
 		if err != nil {
 			return nil, err
 		}
@@ -186,7 +196,7 @@ func (s *SearchService) Search(keyword, searchType string, page, pageSize int) (
 			Keyword: keyword, Courses: courses, Questions: questions, Contents: contents, Topics: topics,
 		}, nil
 	}
-	items, total, err := s.searchItems(searchType, keyword, page, pageSize)
+	items, total, err := s.searchItems(searchType, keyword, page, pageSize, cred)
 	if err != nil {
 		return nil, err
 	}

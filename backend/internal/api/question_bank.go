@@ -47,12 +47,13 @@ func RegisterQuestionBankRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service
 
 // listQuestionsReq 题目列表查询参数。
 type listQuestionsReq struct {
-	Page     int
-	PageSize int
-	QType    string
-	Status   string
-	Keyword  string
-	TagID    *int
+	Page         int
+	PageSize     int
+	QType        string
+	Status       string
+	Keyword      string
+	TagID        *int
+	CredentialID *int
 }
 
 // ListQuestions 题目列表分页 GET /api/question-bank/questions
@@ -60,16 +61,17 @@ func (h *QuestionBankHandler) ListQuestions(c *gin.Context) {
 	Endpoint[listQuestionsReq, map[string]any]{
 		Parse: func(c *gin.Context) (*listQuestionsReq, error) {
 			return &listQuestionsReq{
-				Page:     atoiDefault(c.Query("page"), 1),
-				PageSize: atoiDefault(c.Query("page_size"), 20),
-				QType:    c.Query("type"),
-				Status:   c.Query("status"),
-				Keyword:  c.Query("keyword"),
-				TagID:    queryIDPtr(c, "tag_id"),
+				Page:         atoiDefault(c.Query("page"), 1),
+				PageSize:     atoiDefault(c.Query("page_size"), 20),
+				QType:        c.Query("type"),
+				Status:       c.Query("status"),
+				Keyword:      c.Query("keyword"),
+				TagID:        queryIDPtr(c, "tag_id"),
+				CredentialID: queryIDPtr(c, "credential_id"),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listQuestionsReq) (*map[string]any, error) {
-			result := h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID)
+			result := h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID, req.CredentialID)
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *listQuestionsReq, resp *map[string]any, _ error) {
