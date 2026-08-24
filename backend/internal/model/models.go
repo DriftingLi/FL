@@ -71,9 +71,11 @@ type HrwaiUser struct {
 	// WechatOpenID 微信开放平台 openid（微信扫码登录绑定用，框架字段）。
 	WechatOpenID string `gorm:"column:wechat_openid" json:"wechat_openid,omitempty"`
 	// WechatUnionID 微信开放平台 unionid（多应用互通，框架字段）。
-	WechatUnionID string    `gorm:"column:wechat_unionid" json:"wechat_unionid,omitempty"`
-	Status        int16     `gorm:"column:status;default:1" json:"status"`
-	CreatedAt     time.Time `gorm:"column:created_at" json:"created_at"`
+	WechatUnionID string `gorm:"column:wechat_unionid" json:"wechat_unionid,omitempty"`
+	// CurrentCredentialID 当前目标证件（单选上下文，NULL 表示未预筛选）。
+	CurrentCredentialID *int      `gorm:"column:current_credential_id" json:"current_credential_id,omitempty"`
+	Status              int16     `gorm:"column:status;default:1" json:"status"`
+	CreatedAt           time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (HrwaiUser) TableName() string { return "hrwai_users" }
@@ -111,6 +113,8 @@ type Course struct {
 	Description string `gorm:"column:description" json:"description"`
 	CoverImage  string `gorm:"column:cover_image" json:"cover_image"`
 	Duration    int    `gorm:"column:duration;default:0" json:"duration"`
+	// CredentialID 所属目标证件（顶层分区，单归属）。
+	CredentialID *int `gorm:"column:credential_id" json:"credential_id,omitempty"`
 	// SpecialtyID 专业方向（目录一级节点）。
 	SpecialtyID *int `gorm:"column:specialty_id" json:"specialty_id,omitempty"`
 	// LevelID 课程等级（入门/进阶/专项/认证）。
@@ -156,6 +160,26 @@ type CourseLevel struct {
 }
 
 func (CourseLevel) TableName() string { return "course_level" }
+
+// ===== 4.6.1 目标证件（target credential） =====
+
+// Credential 目标证件，学员报考的外部持证目标（与证书模板区分）。
+// category: special_operation 特种作业上岗证 / skill_level 职业技能等级；
+// level: 仅 skill_level 类填 1-5（5 初级→1 高级），特种作业为 NULL。
+type Credential struct {
+	ID          int       `gorm:"column:id;primaryKey" json:"id"`
+	Code        string    `gorm:"column:code;uniqueIndex" json:"code"`
+	Name        string    `gorm:"column:name" json:"name"`
+	Description string    `gorm:"column:description" json:"description"`
+	Category    string    `gorm:"column:category" json:"category"`
+	Level       *int      `gorm:"column:level" json:"level,omitempty"`
+	SortOrder   int       `gorm:"column:sort_order;default:0" json:"sort_order"`
+	Status      int16     `gorm:"column:status;default:1" json:"status"`
+	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (Credential) TableName() string { return "credential" }
 
 // ===== 4.7 证书模板 =====
 
@@ -253,23 +277,25 @@ func (AIGenerationLog) TableName() string { return "ai_generation_log" }
 // ===== 11. 题目 =====
 
 type Question struct {
-	ID              int       `gorm:"column:id;primaryKey" json:"id"`
-	Type            string    `gorm:"column:type" json:"type"`
-	Content         string    `gorm:"column:content" json:"content"`
-	Options         JSONB     `gorm:"column:options;type:jsonb" json:"options,omitempty"`
-	Answer          string    `gorm:"column:answer" json:"answer"`
-	Explanation     string    `gorm:"column:explanation" json:"explanation"`
-	AIExplanation   string    `gorm:"column:ai_explanation" json:"ai_explanation,omitempty"`
-	ImageURL        string    `gorm:"column:image_url" json:"image_url"`
-	ReferenceAnswer string    `gorm:"column:reference_answer" json:"reference_answer"`
-	ScoringCriteria string    `gorm:"column:scoring_criteria" json:"scoring_criteria"`
-	Score           int       `gorm:"column:score;default:0" json:"score"`
-	Status          string    `gorm:"column:status;default:draft" json:"status"`
-	RejectReason    string    `gorm:"column:reject_reason" json:"reject_reason"`
-	CreatedBy       *int      `gorm:"column:created_by" json:"created_by,omitempty"`
-	CreatedByType   string    `gorm:"column:created_by_type;default:tutor" json:"created_by_type"`
-	CreatedAt       time.Time `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt       time.Time `gorm:"column:updated_at" json:"updated_at"`
+	ID              int    `gorm:"column:id;primaryKey" json:"id"`
+	Type            string `gorm:"column:type" json:"type"`
+	Content         string `gorm:"column:content" json:"content"`
+	Options         JSONB  `gorm:"column:options;type:jsonb" json:"options,omitempty"`
+	Answer          string `gorm:"column:answer" json:"answer"`
+	Explanation     string `gorm:"column:explanation" json:"explanation"`
+	AIExplanation   string `gorm:"column:ai_explanation" json:"ai_explanation,omitempty"`
+	ImageURL        string `gorm:"column:image_url" json:"image_url"`
+	ReferenceAnswer string `gorm:"column:reference_answer" json:"reference_answer"`
+	ScoringCriteria string `gorm:"column:scoring_criteria" json:"scoring_criteria"`
+	Score           int    `gorm:"column:score;default:0" json:"score"`
+	// CredentialID 所属目标证件（顶层分区，单归属）。
+	CredentialID  *int      `gorm:"column:credential_id" json:"credential_id,omitempty"`
+	Status        string    `gorm:"column:status;default:draft" json:"status"`
+	RejectReason  string    `gorm:"column:reject_reason" json:"reject_reason"`
+	CreatedBy     *int      `gorm:"column:created_by" json:"created_by,omitempty"`
+	CreatedByType string    `gorm:"column:created_by_type;default:tutor" json:"created_by_type"`
+	CreatedAt     time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt     time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (Question) TableName() string { return "question" }

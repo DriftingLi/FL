@@ -37,6 +37,7 @@ func NewMemoryDB(t *testing.T) *gorm.DB {
 // allModels 返回全部模型，按外键依赖顺序排列。
 func allModels() []interface{} {
 	return []interface{}{
+		&model.Credential{},
 		&model.HrwaiUser{},
 		&model.Notification{},
 		&model.AuditLog{},
