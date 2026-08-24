@@ -8,6 +8,24 @@
         <el-button size="small" plain @click="openLevelDialog()">新增等级</el-button>
         <el-button size="small" plain @click="openCertificateDialog()">证书模板</el-button>
       </div>
+      <!-- 卡片：目标证件 -->
+      <FacetCard title="目标证件">
+        <FacetItem
+          :active="credentialId === null"
+          name="全部证件"
+          :count="allCourses.length"
+          @select="credentialId = null; currentPage = 1"
+        />
+        <FacetItem
+          v-for="c in credentials"
+          :key="c.id"
+          :active="credentialId === c.id"
+          :name="c.name"
+          :count="allCourses.filter(x => (x as any).credential_id === c.id).length"
+          @select="credentialId = credentialId === c.id ? null : c.id; currentPage = 1"
+        />
+      </FacetCard>
+
       <!-- 卡片 2：专业方向 -->
       <FacetCard title="专业方向">
         <FacetItem
@@ -80,6 +98,11 @@
       </div>
 
       <el-table :data="pagedCourses" v-loading="loading" style="width: 100%">
+        <el-table-column label="证件" width="140">
+          <template #default="{ row }">
+            <el-tag size="small" effect="plain">{{ credentialNameOf((row as any).credential_id) || '—' }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="课程名称" min-width="220" show-overflow-tooltip>
           <template #default="{ row }">
             <el-tag v-if="row.status === 0" type="info" size="small">草稿</el-tag>
@@ -243,12 +266,19 @@ const mountedCourses = computed(() => allCourses.value.filter(c => !isUnmounted(
 
 const filterStatus = ref<number | null>(null)
 const keyword = ref('')
+const credentialId = ref<number | null>(null)
 const currentPage = ref(1)
 const pageSize = ref(10)
+
+function credentialNameOf(id?: number | null) {
+  if (!id) return ''
+  return credentials.value.find(c => c.id === id)?.name || ''
+}
 
 const filteredCourses = computed(() => {
   const k = keyword.value.trim().toLowerCase()
   return allCourses.value.filter(c => {
+    if (credentialId.value !== null && (c as any).credential_id !== credentialId.value) return false
     if (specialtyId.value === UNMOUNTED_SPECIALTY_ID) {
       if (!isUnmounted(c)) return false
     } else if (specialtyId.value !== null && c.specialty_id !== specialtyId.value) {
