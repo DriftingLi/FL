@@ -11,6 +11,16 @@
           <el-option label="简答题" value="short_answer" />
         </el-select>
       </el-form-item>
+      <el-form-item label="所属证件" required>
+        <el-select v-model="form.credential_id" placeholder="必选" style="width: 100%">
+          <el-option-group label="特种作业">
+            <el-option v-for="c in credentials.filter(x => x.category === 'special_operation')" :key="c.id" :label="c.name" :value="c.id" />
+          </el-option-group>
+          <el-option-group label="技能等级">
+            <el-option v-for="c in credentials.filter(x => x.category === 'skill_level')" :key="c.id" :label="c.name" :value="c.id" />
+          </el-option-group>
+        </el-select>
+      </el-form-item>
       <el-form-item label="考点标签">
         <el-select v-model="form.tag_ids" multiple filterable collapse-tags placeholder="选择标签（可多选）">
           <el-option v-for="t in tags" :key="t.id" :label="t.name" :value="t.id" />
@@ -92,6 +102,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { questionBankApi, type QuestionPayload } from '@/api/questionBank'
+import { credentialApi, type CredentialDict } from '@/api/credential'
 import { trainingApi } from '@/api/training'
 
 const route = useRoute()
@@ -103,6 +114,7 @@ const optionKeys = ['A', 'B', 'C', 'D'] as const
 
 const submitting = ref(false)
 const tags = ref<{ id: number; name: string }[]>([])
+const credentials = ref<CredentialDict[]>([])
 const multiAnswer = ref<string[]>([])
 const imageUploading = ref(false)
 
@@ -117,6 +129,7 @@ const form = ref<{
   scoring_criteria: string
   score: number
   tag_ids: number[]
+  credential_id: number | null
   status: string
 }>({
   type: 'single_choice',
@@ -129,15 +142,20 @@ const form = ref<{
   scoring_criteria: '',
   score: 3,
   tag_ids: [],
+  credential_id: null,
   status: 'pending'
 })
 
 onMounted(async () => {
   try {
-    // 拦截器已解包信封
-    const data = await trainingApi.getTags()
-    tags.value = data.tags || []
+    const [tagData, credData] = await Promise.all([trainingApi.getTags(), credentialApi.listCredentials()])
+    tags.value = tagData.tags || []
+    credentials.value = credData.credentials || []
   } catch (e) {}
+  try {
+    const credOnly = await credentialApi.listCredentials()
+    if (!credentials.value.length) credentials.value = credOnly.credentials || []
+  } catch {}
 
   if (isEdit.value) {
     try {

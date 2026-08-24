@@ -8,24 +8,6 @@
         <el-button size="small" plain @click="openLevelDialog()">新增等级</el-button>
         <el-button size="small" plain @click="openCertificateDialog()">证书模板</el-button>
       </div>
-      <!-- 卡片：目标证件 -->
-      <FacetCard title="目标证件">
-        <FacetItem
-          :active="credentialId === null"
-          name="全部证件"
-          :count="allCourses.length"
-          @select="credentialId = null; currentPage = 1"
-        />
-        <FacetItem
-          v-for="c in credentials"
-          :key="c.id"
-          :active="credentialId === c.id"
-          :name="c.name"
-          :count="allCourses.filter(x => (x as any).credential_id === c.id).length"
-          @select="credentialId = credentialId === c.id ? null : c.id; currentPage = 1"
-        />
-      </FacetCard>
-
       <!-- 卡片 2：专业方向 -->
       <FacetCard title="专业方向">
         <FacetItem
@@ -90,6 +72,9 @@
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
+        <el-select v-model="credentialId" placeholder="全部证件" clearable style="width: 160px" @change="currentPage = 1">
+          <el-option v-for="c in credentials" :key="c.id" :label="c.name" :value="c.id" />
+        </el-select>
         <el-select v-model="filterStatus" placeholder="状态" clearable style="width: 120px" @change="currentPage = 1">
           <el-option label="已上架" :value="1" />
           <el-option label="未上架" :value="0" />

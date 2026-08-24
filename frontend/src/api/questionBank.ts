@@ -25,7 +25,7 @@ export interface QuestionPayload {
   scoring_criteria?: string
   score?: number
   status?: string
-  credential_id?: number
+  credential_id?: number | null
   /** 题库标签（LH-28，创建/更新时全量替换） */
   tag_ids?: number[]
 }
