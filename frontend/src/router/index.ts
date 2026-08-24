@@ -261,6 +261,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/admin/CourseCatalog.vue')
       },
       {
+        path: 'credentials',
+        name: 'CredentialManage',
+        component: () => import('@/pages/admin/Credentials.vue')
+      },
+      {
         path: 'question-tags',
         name: 'QuestionTags',
         component: () => import('@/pages/admin/QuestionTags.vue')

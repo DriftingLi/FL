@@ -11,6 +11,7 @@ func sampleCourseDTO() CourseDTO {
 		Description:           "描述",
 		CoverImage:            "/static/uploads/covers/1.png",
 		Duration:              120,
+		CredentialID:          ptrInt(1),
 		SpecialtyID:           ptrInt(1),
 		LevelID:               ptrInt(2),
 		TheoryHours:           20,
@@ -26,7 +27,7 @@ func TestCourseDTOShapeLock(t *testing.T) {
 	c := sampleCourseDTO()
 	// 未填充的可选字段（chapter_count 等）省略；created_at 等必填字段恒在
 	assertShapeLock(t, c,
-		"course_id", "name", "description", "cover_image", "duration",
+		"course_id", "name", "description", "cover_image", "credential_id", "duration",
 		"specialty_id", "level_id", "theory_hours", "practice_hours",
 		"certificate_template_id", "sort_order", "status", "created_at",
 	)
@@ -37,12 +38,12 @@ func TestCourseDTOShapeLock(t *testing.T) {
 	ids := []int{}
 	c.PrerequisiteCourseIDs = &ids
 	assertShapeLock(t, c,
-		"course_id", "name", "description", "cover_image", "duration",
+		"course_id", "name", "description", "cover_image", "credential_id", "duration",
 		"specialty_id", "level_id", "theory_hours", "practice_hours",
 		"certificate_template_id", "sort_order", "status", "created_at",
 		"chapter_count", "prerequisite_course_ids",
 	)
-	if b, _ := marshalJSON(t, c); string(b) != `{"certificate_template_id":null,"chapter_count":0,"cover_image":"/static/uploads/covers/1.png","course_id":1,"created_at":"2026-08-01T10:00:00","description":"描述","duration":120,"level_id":2,"name":"叉车基础","practice_hours":10,"prerequisite_course_ids":[],"sort_order":3,"specialty_id":1,"status":1,"theory_hours":20}` {
+	if b, _ := marshalJSON(t, c); string(b) != `{"certificate_template_id":null,"chapter_count":0,"cover_image":"/static/uploads/covers/1.png","course_id":1,"created_at":"2026-08-01T10:00:00","credential_id":1,"description":"描述","duration":120,"level_id":2,"name":"叉车基础","practice_hours":10,"prerequisite_course_ids":[],"sort_order":3,"specialty_id":1,"status":1,"theory_hours":20}` {
 		t.Fatalf("course 序列化与旧 map 契约不符（含 null/空数组语义）: %s", b)
 	}
 
@@ -56,7 +57,7 @@ func TestCourseDTOShapeLock(t *testing.T) {
 	chs := []ChapterDTO{}
 	c.Chapters = &chs
 	assertShapeLock(t, c,
-		"course_id", "name", "description", "cover_image", "duration",
+		"course_id", "name", "description", "cover_image", "credential_id", "duration",
 		"specialty_id", "level_id", "theory_hours", "practice_hours",
 		"certificate_template_id", "sort_order", "status", "created_at",
 		"chapter_count", "prerequisite_course_ids", "certificate_name",

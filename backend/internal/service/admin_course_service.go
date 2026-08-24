@@ -25,9 +25,9 @@ func NewAdminCourseService(db *gorm.DB, fileSvc *FileStore, logger *zap.Logger) 
 }
 
 // GetCourses 管理端课程列表。
-func (s *AdminCourseService) GetCourses(page, pageSize int, keyword string, specialtyID, levelID *int) CoursePageResult {
+func (s *AdminCourseService) GetCourses(page, pageSize int, keyword string, credentialID, specialtyID, levelID *int) CoursePageResult {
 	return ListCourses(s.db, page, pageSize, CourseListOptions{
-		Keyword: keyword, SpecialtyID: specialtyID, LevelID: levelID, DefaultPageSize: 10,
+		Keyword: keyword, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID, DefaultPageSize: 10,
 	})
 }
 
@@ -46,6 +46,7 @@ func (s *AdminCourseService) GetCourseDetail(courseID int) (*AdminCourseDetailDT
 }
 
 // CreateCourse 创建课程。专业方向与课程等级必填（挂载不变式，旧 category 已退役）。
+// 目标证件为可选（V1 兼容存量，未来收紧为必填），若携带则校验存在性。
 func (s *AdminCourseService) CreateCourse(in *CourseInput) (*CourseDTO, error) {
 	if in == nil || in.Name == nil || *in.Name == "" {
 		return nil, errors.New("课程名称不能为空")

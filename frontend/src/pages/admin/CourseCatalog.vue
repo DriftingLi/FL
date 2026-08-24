@@ -156,6 +156,7 @@
       :directions="directions"
       :levels="levels"
       :certificate-templates="certificateTemplates"
+      :credentials="credentials"
       :course-options="courseOptions"
       :default-specialty-id="specialtyId"
       :submitting="submitting"
@@ -176,6 +177,7 @@ import { ref, computed, onMounted } from 'vue'
 import { Search, ArrowDown, CaretTop, CaretBottom } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { trainingApi, type CatalogDirectionNode, type CatalogLevel, type CertificateTemplate } from '@/api/training'
+import { credentialApi, type CredentialDict } from '@/api/credential'
 import { adminApi, type AdminCourseItem } from '@/api/admin'
 import { levelTagType } from '@/constants/level'
 import { useCourseCatalog, UNMOUNTED_SPECIALTY_ID } from '@/composables/useCourseCatalog'
@@ -190,9 +192,10 @@ const submitting = ref(false)
 // ===== 数据源：管理端课程列表（客户端过滤/分页，课程规模小） =====
 const allCourses = ref<AdminCourseItem[]>([])
 const certificateTemplates = ref<CertificateTemplate[]>([])
+const credentials = ref<CredentialDict[]>([])
 
 function isUnmounted(c: AdminCourseItem): boolean {
-  return c.specialty_id === null || c.specialty_id === undefined || c.level_id === null || c.level_id === undefined
+  return (c as any).credential_id === null || (c as any).credential_id === undefined || c.specialty_id === null || c.specialty_id === undefined || c.level_id === null || c.level_id === undefined
 }
 
 const {
@@ -382,6 +385,15 @@ async function loadCertificateTemplates() {
   }
 }
 
+async function loadCredentials() {
+  try {
+    const data = await credentialApi.listAdminCredentials()
+    credentials.value = data.credentials || []
+  } catch (error) {
+    console.error('加载证件失败:', error)
+  }
+}
+
 const courseOptions = computed(() =>
   mountedCourses.value.map(c => ({
     course_id: c.course_id,
@@ -445,6 +457,7 @@ async function handleDeleteCourse(row: AdminCourseItem) {
 onMounted(() => {
   refreshCatalog()
   loadCertificateTemplates()
+  loadCredentials()
 })
 </script>
 

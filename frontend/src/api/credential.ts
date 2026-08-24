@@ -18,6 +18,16 @@ export type GroupedCredentials = {
   skill_level: CredentialDict[]
 }
 
+export interface CredentialPayload {
+  code: string
+  name: string
+  category: 'special_operation' | 'skill_level'
+  level?: number | null
+  description?: string
+  sort_order?: number
+  status?: number
+}
+
 export const credentialApi = {
   listCredentials() {
     return unwrappedRequest.get<{ credentials: CredentialDict[] }>('/credentials')
@@ -27,6 +37,18 @@ export const credentialApi = {
   },
   listAdminCredentials() {
     return unwrappedRequest.get<{ credentials: CredentialDict[] }>('/admin/credentials')
+  },
+  createCredential(data: CredentialPayload) {
+    return unwrappedRequest.post<CredentialDict>('/admin/credential', data)
+  },
+  updateCredential(id: number, data: Partial<CredentialPayload>) {
+    return unwrappedRequest.put<CredentialDict>(`/admin/credential/${id}`, data)
+  },
+  deleteCredential(id: number) {
+    return unwrappedRequest.delete<null>(`/admin/credential/${id}`)
+  },
+  swapCredential(id: number, swapWith: number) {
+    return unwrappedRequest.put<null>(`/admin/credential/${id}/sort`, { swap_with: swapWith })
   },
   getCurrent() {
     return unwrappedRequest.get<{ credential: CredentialDict | null }>('/me/credential')

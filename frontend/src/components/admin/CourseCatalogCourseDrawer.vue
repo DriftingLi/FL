@@ -6,11 +6,14 @@ import type { FormInstance } from 'element-plus'
 import { adminApi, type AdminCourseItem, type ChapterPayload } from '@/api/admin'
 import type { CatalogDirectionNode, CatalogLevel, CertificateTemplate } from '@/api/training'
 
+import type { CredentialDict } from '@/api/credential'
+
 const props = defineProps<{
   directions: CatalogDirectionNode[]
   levels: CatalogLevel[]
   certificateTemplates: CertificateTemplate[]
   courseOptions: { course_id: number; name: string }[]
+  credentials: CredentialDict[]
   /** 新增课程时默认选中的方向（当前方向筛选，<=0 视为未选中） */
   defaultSpecialtyId: number | null
   submitting: boolean
@@ -24,6 +27,7 @@ const drawerChapters = ref<{ chapter_id: number; title: string; duration?: numbe
 const drawerForm = reactive<Record<string, any>>({
   course_id: null,
   name: '',
+  credential_id: null,
   specialty_id: null,
   level_id: null,
   status: 1,
@@ -37,6 +41,7 @@ const drawerForm = reactive<Record<string, any>>({
 
 const courseRules = {
   name: [{ required: true, message: '请输入课程名称', trigger: 'blur' }],
+  credential_id: [{ required: true, message: '请选择所属证件', trigger: 'change' }],
   specialty_id: [{ required: true, message: '请选择专业方向', trigger: 'change' }],
   level_id: [{ required: true, message: '请选择课程等级', trigger: 'change' }]
 }
@@ -48,6 +53,7 @@ function open(course: AdminCourseItem | null) {
     Object.assign(drawerForm, {
       course_id: null,
       name: '',
+      credential_id: null,
       specialty_id: props.defaultSpecialtyId !== null && props.defaultSpecialtyId > 0 ? props.defaultSpecialtyId : null,
       level_id: null,
       status: 1,
@@ -63,6 +69,7 @@ function open(course: AdminCourseItem | null) {
   Object.assign(drawerForm, {
     course_id: course.course_id,
     name: course.name,
+    credential_id: (course as any).credential_id ?? null,
     specialty_id: course.specialty_id,
     level_id: course.level_id,
     status: course.status,
@@ -82,6 +89,7 @@ async function loadDrawerDetail() {
     if (detail) {
       Object.assign(drawerForm, {
         name: detail.name ?? drawerForm.name,
+        credential_id: (detail as any).credential_id ?? drawerForm.credential_id,
         specialty_id: detail.specialty_id ?? null,
         level_id: detail.level_id ?? null,
         status: detail.status ?? drawerForm.status,
@@ -105,6 +113,7 @@ async function submitCourse() {
   try {
     const payload = {
       name: drawerForm.name,
+      credential_id: drawerForm.credential_id,
       specialty_id: drawerForm.specialty_id,
       level_id: drawerForm.level_id,
       status: drawerForm.status,
@@ -206,6 +215,16 @@ defineExpose({ open })
   <!-- 课程编辑抽屉（全字段 + 章节管理） -->
   <el-drawer v-model="drawerVisible" :title="drawerForm.course_id ? '编辑课程' : '新增课程'" size="560px">
     <el-form ref="courseFormRef" :model="drawerForm" :rules="courseRules" label-width="96px">
+      <el-form-item label="所属证件" prop="credential_id">
+        <el-select v-model="drawerForm.credential_id" placeholder="必选" style="width: 100%">
+          <el-option-group label="特种作业">
+            <el-option v-for="c in credentials.filter((x: any) => x.category === 'special_operation')" :key="c.id" :label="c.name" :value="c.id" />
+          </el-option-group>
+          <el-option-group label="技能等级">
+            <el-option v-for="c in credentials.filter((x: any) => x.category === 'skill_level')" :key="c.id" :label="c.name" :value="c.id" />
+          </el-option-group>
+        </el-select>
+      </el-form-item>
       <el-form-item label="课程名称" prop="name">
         <el-input v-model="drawerForm.name" placeholder="课程名称" maxlength="50" />
       </el-form-item>

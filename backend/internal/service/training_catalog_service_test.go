@@ -605,7 +605,7 @@ func TestCourseSortOrder(t *testing.T) {
 	c0 := model.Course{Name: "课程C", Status: 1, SortOrder: 0,
 		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
 	db.Create(&c0)
-	list := svc.GetCourses(1, 10, "", nil, nil).Courses
+	list := svc.GetCourses(1, 10, "", nil, nil, nil).Courses
 	if len(list) != 2 {
 		t.Fatalf("应 2 门课程, got %d", len(list))
 	}
@@ -746,11 +746,11 @@ func TestCourseService_TrainingFields(t *testing.T) {
 	}
 
 	// 学员端列表按专业方向/等级过滤
-	list := svc.GetCourses(1, 10, ptrInt(spec.SpecialtyID), ptrInt(lv.LevelID))
+	list := svc.GetCourses(1, 10, nil, ptrInt(spec.SpecialtyID), ptrInt(lv.LevelID))
 	if list.Total != 1 {
 		t.Fatalf("过滤后应 1 条, got %v", list.Total)
 	}
-	empty := svc.GetCourses(1, 10, ptrInt(spec.SpecialtyID), ptrInt(9999))
+	empty := svc.GetCourses(1, 10, nil, ptrInt(spec.SpecialtyID), ptrInt(9999))
 	if empty.Total != 0 {
 		t.Fatal("不存在的等级应过滤为空")
 	}

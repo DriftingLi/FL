@@ -77,15 +77,16 @@ func (h *AdminHandler) ListCourses(c *gin.Context) {
 	Endpoint[adminCourseListReq, service.CoursePageResult]{
 		Parse: func(c *gin.Context) (*adminCourseListReq, error) {
 			return &adminCourseListReq{
-				Page:        atoiDefault(c.Query("page"), 1),
-				PageSize:    atoiDefault(c.Query("page_size"), 10),
-				Keyword:     c.Query("keyword"),
-				SpecialtyID: queryIDPtr(c, "specialty_id"),
-				LevelID:     queryIDPtr(c, "level_id"),
+				Page:         atoiDefault(c.Query("page"), 1),
+				PageSize:     atoiDefault(c.Query("page_size"), 10),
+				Keyword:      c.Query("keyword"),
+				CredentialID: queryIDPtr(c, "credential_id"),
+				SpecialtyID:  queryIDPtr(c, "specialty_id"),
+				LevelID:      queryIDPtr(c, "level_id"),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *adminCourseListReq) (*service.CoursePageResult, error) {
-			result := h.courseSvc.GetCourses(req.Page, req.PageSize, req.Keyword, req.SpecialtyID, req.LevelID)
+			result := h.courseSvc.GetCourses(req.Page, req.PageSize, req.Keyword, req.CredentialID, req.SpecialtyID, req.LevelID)
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *adminCourseListReq, resp *service.CoursePageResult, _ error) {
@@ -746,11 +747,12 @@ type createTutorReq struct {
 
 // adminCourseListReq 管理端课程列表查询参数。
 type adminCourseListReq struct {
-	Page        int
-	PageSize    int
-	Keyword     string
-	SpecialtyID *int
-	LevelID     *int
+	Page         int
+	PageSize     int
+	Keyword      string
+	CredentialID *int
+	SpecialtyID  *int
+	LevelID      *int
 }
 
 // hrwaiUserListReq HRWAI 用户列表查询参数。

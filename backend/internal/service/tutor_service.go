@@ -27,11 +27,11 @@ func NewTutorService(db *gorm.DB, uploadFolder string, fileStore *FileStore, sli
 	return &TutorService{db: db, uploadFolder: uploadFolder, fileStore: fileStore, slideRenderer: slideRenderer, logger: logger}
 }
 
-// GetCourses 导师课程列表（与学员端同口径：已上架 + 已挂载方向/等级，ADR-0012 §2），
+// GetCourses 导师课程列表（与学员端同口径：已上架 + 已挂载方向/等级/证件，ADR-0012 §2），
 // 附学习学员数；实现收敛到课程列表 module（ListCourses）。
-func (s *TutorService) GetCourses(page, pageSize int, specialtyID, levelID *int) CoursePageResult {
+func (s *TutorService) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int) CoursePageResult {
 	return ListCourses(s.db, page, pageSize, CourseListOptions{
-		OnlyMounted: true, SpecialtyID: specialtyID, LevelID: levelID,
+		OnlyMounted: true, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID,
 		WithStudentCount: true, DefaultPageSize: 10,
 	})
 }

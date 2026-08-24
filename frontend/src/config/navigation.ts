@@ -58,6 +58,7 @@ const adminNav: NavItem[] = [
   { key: 'forum-manage', label: '论坛管理', routeName: 'ForumManage', icon: ChatDotRound },
   { key: 'tutors', label: '导师管理', routeName: 'TutorManage', icon: UserFilled },
   { key: 'course-catalog', label: '课程管理', routeName: 'CourseCatalog', icon: FolderOpened },
+  { key: 'credentials', label: '证件管理', routeName: 'CredentialManage', icon: CollectionTag },
   { key: 'question-review', label: '题库审核', routeName: 'QuestionReview', icon: EditPen },
   { key: 'question-tags', label: '题库标签', routeName: 'QuestionTags', icon: CollectionTag },
   { key: 'statistics', label: '统计分析', routeName: 'Statistics', icon: TrendCharts },

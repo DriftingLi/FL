@@ -39,7 +39,7 @@ func RegisterCoursesRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Cour
 
 // ListCourses 课程列表
 // @Summary 课程列表
-// @Description 公开访问，支持按专业方向 specialty_id / 等级 level_id 过滤，分页返回
+// @Description 公开访问，支持按专业方向 specialty_id / 等级 level_id / 目标证件 credential_id 过滤，分页返回
 // @Tags 学员端-课程
 // @Accept json
 // @Produce json
@@ -47,20 +47,22 @@ func RegisterCoursesRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Cour
 // @Param page_size query int false "每页条数" default(12)
 // @Param specialty_id query int false "专业方向ID"
 // @Param level_id query int false "等级ID"
+// @Param credential_id query int false "目标证件ID"
 // @Success 200 {object} response.R{data=service.CoursePageResult} "success"
 // @Router /courses [get]
 func (h *CourseHandler) ListCourses(c *gin.Context) {
 	Endpoint[courseListReq, service.CoursePageResult]{
 		Parse: func(c *gin.Context) (*courseListReq, error) {
 			return &courseListReq{
-				Page:        atoiDefault(c.Query("page"), 1),
-				PageSize:    atoiDefault(c.Query("page_size"), 12),
-				SpecialtyID: queryIDPtr(c, "specialty_id"),
-				LevelID:     queryIDPtr(c, "level_id"),
+				Page:         atoiDefault(c.Query("page"), 1),
+				PageSize:     atoiDefault(c.Query("page_size"), 12),
+				CredentialID: queryIDPtr(c, "credential_id"),
+				SpecialtyID:  queryIDPtr(c, "specialty_id"),
+				LevelID:      queryIDPtr(c, "level_id"),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *courseListReq) (*service.CoursePageResult, error) {
-			result := h.svc.GetCourses(req.Page, req.PageSize, req.SpecialtyID, req.LevelID)
+			result := h.svc.GetCourses(req.Page, req.PageSize, req.CredentialID, req.SpecialtyID, req.LevelID)
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *courseListReq, resp *service.CoursePageResult, _ error) {
@@ -302,8 +304,9 @@ type studyProgressReq struct {
 
 // courseListReq 学员端课程列表查询参数。
 type courseListReq struct {
-	Page        int
-	PageSize    int
-	SpecialtyID *int
-	LevelID     *int
+	Page         int
+	PageSize     int
+	CredentialID *int
+	SpecialtyID  *int
+	LevelID      *int
 }

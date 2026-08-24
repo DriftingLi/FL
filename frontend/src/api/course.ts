@@ -25,6 +25,8 @@ export interface CourseSummary {
   chapter_count?: number
   status?: number
   // ===== 培训目录扩展（LH-27/28）=====
+  credential_id?: number | null
+  credential?: { id: number; code: string; name: string; category: string; level: number | null }
   specialty_id?: number | null
   level_id?: number | null
   theory_hours?: number
@@ -111,7 +113,7 @@ export interface ChapterDetail {
 }
 
 export const courseApi = {
-  getCourses(params: { page?: number; page_size?: number; keyword?: string; specialty_id?: number; level_id?: number }) {
+  getCourses(params: { page?: number; page_size?: number; keyword?: string; credential_id?: number; specialty_id?: number; level_id?: number }) {
     return unwrappedRequest.get<{ courses: CourseSummary[]; total: number }>('/courses', { params })
   },
 

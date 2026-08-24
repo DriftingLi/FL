@@ -12,6 +12,7 @@ type CourseInput struct {
 	Duration              *int    `json:"duration"`
 	Status                *int16  `json:"status"`
 	SortOrder             *int    `json:"sort_order"`
+	CredentialID          *int    `json:"credential_id"`
 	SpecialtyID           *int    `json:"specialty_id"`
 	LevelID               *int    `json:"level_id"`
 	CertificateTemplateID *int    `json:"certificate_template_id"`
