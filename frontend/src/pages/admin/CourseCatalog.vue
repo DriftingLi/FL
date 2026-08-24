@@ -195,7 +195,7 @@ const certificateTemplates = ref<CertificateTemplate[]>([])
 const credentials = ref<CredentialDict[]>([])
 
 function isUnmounted(c: AdminCourseItem): boolean {
-  return (c as any).credential_id === null || (c as any).credential_id === undefined || c.specialty_id === null || c.specialty_id === undefined || c.level_id === null || c.level_id === undefined
+  return c.specialty_id === null || c.specialty_id === undefined || c.level_id === null || c.level_id === undefined
 }
 
 const {

@@ -1,4 +1,5 @@
 import { unwrappedRequest } from './request'
+import { useCredentialStore } from '@/stores/credential'
 import type { Question } from '@/types/question'
 
 export interface QuestionsQuery {
@@ -44,6 +45,7 @@ export interface QuestionBankStats {
 
 export const questionBankApi = {
   getQuestions(params: QuestionsQuery) {
+    try { const cred = useCredentialStore().current?.id; if (cred && !(params as any).credential_id) (params as any).credential_id = cred } catch {}
     return unwrappedRequest.get<{ questions: Question[]; total: number }>('/question-bank/questions', { params })
   },
 

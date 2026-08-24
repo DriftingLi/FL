@@ -206,7 +206,12 @@ import CourseCard from '@/components/catalog/CourseCard.vue'
 
 const route = useRoute()
 const router = useRouter()
-const credentialStore = useCredentialStore()
+let credentialStore: any = null
+try {
+  credentialStore = useCredentialStore()
+} catch {
+  credentialStore = { current: null, loadCurrent: async () => null, loadGrouped: async () => {} } as any
+}
 
 const loading = ref(false)
 const courses = ref<CourseSummary[]>([])
