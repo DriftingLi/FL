@@ -1,5 +1,10 @@
 <template>
-  <SidebarLayout :menu-items="currentMenuItems" />
+  <SidebarLayout :menu-items="currentMenuItems">
+    <template #top="{ collapsed }">
+      <CredentialSwitcher :collapsed="collapsed" />
+      <div class="sidebar-divider"></div>
+    </template>
+  </SidebarLayout>
 </template>
 
 <script setup lang="ts">
@@ -7,6 +12,7 @@ import { computed, h, watch } from 'vue'
 import type { Component } from 'vue'
 import { useRoute } from 'vue-router'
 import SidebarLayout from './SidebarLayout.vue'
+import CredentialSwitcher from '@/components/credential/CredentialSwitcher.vue'
 import { roleNavigation } from '@/config/navigation'
 import { useCourseStore } from '@/stores/course'
 import type { NavItem } from '@/config/navigation'

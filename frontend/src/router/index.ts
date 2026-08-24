@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useCredentialStore } from '@/stores/credential'
 import {
   getSubdomain,
   buildCrossDomainAuthUrl,
@@ -95,6 +96,12 @@ const routes: RouteRecordRaw[] = [
         path: 'profile',
         name: 'StudentProfile',
         component: () => import('@/pages/student/Profile.vue')
+      },
+      {
+        path: 'onboarding/credential',
+        name: 'CredentialOnboarding',
+        component: () => import('@/pages/onboarding/CredentialOnboarding.vue'),
+        meta: { requiresAuth: true, role: 'hrwai_user' }
       }
     ]
   },
@@ -487,6 +494,32 @@ router.beforeEach(async (to, _from, next) => {
       next('/training')
     }
     return
+  }
+
+  // ===== 目标证件预筛选（ADR-0020）=====
+  // 强制拦截：hrwai_user 且 current_credential_id 为空时，training 工作区内除 onboarding 外均重定向至 onboarding
+  if (userRole === 'hrwai_user' && !isIpDirectMode()) {
+    const targetSubdomain = getTargetSubdomainForPath(to.path)
+    const isTrainingPath = targetSubdomain === 'training' || to.path.startsWith('/training')
+    const isOnboarding = to.name === 'CredentialOnboarding'
+    if (isTrainingPath) {
+      try {
+        const credStore = useCredentialStore()
+        if (!credStore.initialized) {
+          await credStore.loadCurrent()
+        }
+        if (credStore.current === null && !isOnboarding) {
+          next({ name: 'CredentialOnboarding' })
+          return
+        }
+        if (credStore.current !== null && isOnboarding) {
+          next('/training')
+          return
+        }
+      } catch {
+        // 网络异常时放行，避免卡死登录
+      }
+    }
   }
 
   next()
