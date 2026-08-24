@@ -7,9 +7,7 @@ package service
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/tls"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -248,12 +246,6 @@ func generateEmailCode() (string, error) {
 	return string(b), nil
 }
 
-// emailPlaceholderPhone 为邮箱注册账号生成唯一的 phone 占位值（phone 列 NOT NULL）。
-func emailPlaceholderPhone(email string) string {
-	sum := sha256.Sum256([]byte(email))
-	return PlaceholderPhonePrefix + hex.EncodeToString(sum[:])[:32]
-}
-
 // =====================================================
 // 通道 adapter：邮箱
 // =====================================================
@@ -351,10 +343,10 @@ func (c *EmailChannel) Send(target, title, body string, _ string, _ time.Duratio
 	return nil
 }
 
-// ApplyTarget 写入邮箱并生成 phone 占位值。
+// ApplyTarget 写入邮箱，手机号置空（非手机号注册时为空）。
 func (c *EmailChannel) ApplyTarget(user *model.HrwaiUser, target string) {
 	user.Email = target
-	user.Phone = emailPlaceholderPhone(target)
+	user.Phone = ""
 }
 
 // BindColumn 绑定写入 email 字段。

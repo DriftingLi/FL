@@ -6,6 +6,9 @@
     </div>
 
     <div class="filter-bar">
+      <el-select v-model="credentialId" placeholder="所属证件" clearable style="width: 180px" @change="loadData">
+        <el-option v-for="c in credentials" :key="c.id" :label="c.name" :value="c.id" />
+      </el-select>
       <el-select v-model="filters.type" placeholder="题型" clearable style="width: 130px">
         <el-option label="单选题" value="single_choice" />
         <el-option label="多选题" value="multi_choice" />
@@ -26,6 +29,9 @@
       <el-table-column prop="id" label="ID" width="60" />
       <el-table-column prop="type" label="题型" width="100">
         <template #default="{ row }">{{ (typeMap as Record<string, string>)[row.type] }}</template>
+      </el-table-column>
+      <el-table-column label="证件" width="140">
+        <template #default="{ row }">{{ credentials.find(c => c.id === (row as any).credential_id)?.name || '—' }}</template>
       </el-table-column>
       <el-table-column prop="content" label="题干" show-overflow-tooltip />
       <el-table-column label="状态" width="120">
@@ -97,6 +103,7 @@ import { useRouter } from 'vue-router'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
+import { credentialApi, type CredentialDict } from '@/api/credential'
 import type { Question } from '@/types/question'
 import { typeMap } from '@/constants/question'
 
@@ -104,6 +111,8 @@ const router = useRouter()
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
 const statusType: Record<string, string> = { draft: 'info', pending: 'warning', published: 'success' }
 
+const credentials = ref<CredentialDict[]>([])
+const credentialId = ref<number | null>(null)
 const loading = ref(false)
 const questions = ref<Question[]>([])
 const total = ref(0)
@@ -113,12 +122,24 @@ const filters = ref({ type: '', status: '', keyword: '' })
 const detailVisible = ref(false)
 const currentQuestion = ref<(Question & { reject_reason?: string }) | null>(null)
 
-onMounted(() => loadData())
+onMounted(() => {
+  loadData()
+  loadCredentials()
+})
+
+async function loadCredentials() {
+  try {
+    const data = await credentialApi.listCredentials()
+    credentials.value = data.credentials || []
+  } catch {}
+}
 
 async function loadData() {
   loading.value = true
   try {
-    const res = await questionBankApi.getQuestions({ page: page.value, page_size: pageSize.value, ...filters.value })
+    const params: any = { page: page.value, page_size: pageSize.value, ...filters.value }
+    if (credentialId.value) params.credential_id = credentialId.value
+    const res = await questionBankApi.getQuestions(params)
     questions.value = res?.questions || []
     total.value = res?.total || 0
   } catch (e) {} finally { loading.value = false }
