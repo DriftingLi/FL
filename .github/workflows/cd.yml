@@ -297,6 +297,16 @@ jobs:
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
       SMTP_FROM: ${{ secrets.SMTP_FROM }}
       SMTP_FROM_NAME: ${{ secrets.SMTP_FROM_NAME || '和润天下' }}
+      # 腾讯云短信（手机验证码通道；SecretId/SecretKey 为云 API 密钥 cam/capi，非控制台 AppKey）
+      TENCENT_SMS_SECRET_ID: ${{ secrets.TENCENT_SMS_SECRET_ID }}
+      TENCENT_SMS_SECRET_KEY: ${{ secrets.TENCENT_SMS_SECRET_KEY }}
+      TENCENT_SMS_SDK_APP_ID: ${{ secrets.TENCENT_SMS_SDK_APP_ID }}
+      TENCENT_SMS_SIGN_NAME: ${{ secrets.TENCENT_SMS_SIGN_NAME }}
+      TENCENT_SMS_TEMPLATE_REGISTER: ${{ secrets.TENCENT_SMS_TEMPLATE_REGISTER }}
+      TENCENT_SMS_TEMPLATE_LOGIN: ${{ secrets.TENCENT_SMS_TEMPLATE_LOGIN }}
+      TENCENT_SMS_TEMPLATE_PASSWORD: ${{ secrets.TENCENT_SMS_TEMPLATE_PASSWORD }}
+      TENCENT_SMS_TEMPLATE_BIND_PHONE: ${{ secrets.TENCENT_SMS_TEMPLATE_BIND_PHONE }}
+      TENCENT_SMS_REGION: ${{ secrets.TENCENT_SMS_REGION || 'ap-guangzhou' }}
       # 微信登录凭证（小程序 code2session / 开放平台扫码占位——两套凭证严格区分）
       WECHAT_MINI_PROGRAM_APP_ID: ${{ secrets.WECHAT_MINI_PROGRAM_APP_ID || secrets.WECHAT_APP_ID }}
       WECHAT_MINI_PROGRAM_APP_SECRET: ${{ secrets.WECHAT_MINI_PROGRAM_APP_SECRET || secrets.WECHAT_APP_SECRET }}
@@ -473,6 +483,15 @@ jobs:
             printf 'export SMTP_PASSWORD=%q\n' "${SMTP_PASSWORD:-}"
             printf 'export SMTP_FROM=%q\n' "${SMTP_FROM:-}"
             printf 'export SMTP_FROM_NAME=%q\n' "${SMTP_FROM_NAME:-和润天下}"
+            printf 'export TENCENT_SMS_SECRET_ID=%q\n' "${TENCENT_SMS_SECRET_ID:-}"
+            printf 'export TENCENT_SMS_SECRET_KEY=%q\n' "${TENCENT_SMS_SECRET_KEY:-}"
+            printf 'export TENCENT_SMS_SDK_APP_ID=%q\n' "${TENCENT_SMS_SDK_APP_ID:-}"
+            printf 'export TENCENT_SMS_SIGN_NAME=%q\n' "${TENCENT_SMS_SIGN_NAME:-}"
+            printf 'export TENCENT_SMS_TEMPLATE_REGISTER=%q\n' "${TENCENT_SMS_TEMPLATE_REGISTER:-}"
+            printf 'export TENCENT_SMS_TEMPLATE_LOGIN=%q\n' "${TENCENT_SMS_TEMPLATE_LOGIN:-}"
+            printf 'export TENCENT_SMS_TEMPLATE_PASSWORD=%q\n' "${TENCENT_SMS_TEMPLATE_PASSWORD:-}"
+            printf 'export TENCENT_SMS_TEMPLATE_BIND_PHONE=%q\n' "${TENCENT_SMS_TEMPLATE_BIND_PHONE:-}"
+            printf 'export TENCENT_SMS_REGION=%q\n' "${TENCENT_SMS_REGION:-ap-guangzhou}"
             printf 'export WECHAT_MINI_PROGRAM_APP_ID=%q\n' "${WECHAT_MINI_PROGRAM_APP_ID:-}"
             printf 'export WECHAT_MINI_PROGRAM_APP_SECRET=%q\n' "${WECHAT_MINI_PROGRAM_APP_SECRET:-}"
             printf 'export WECHAT_OPEN_PLATFORM_APP_ID=%q\n' "${WECHAT_OPEN_PLATFORM_APP_ID:-}"

@@ -43,15 +43,16 @@ func NewTencentSMSProvider(cfg config.SMSConfig) *TencentSMSProvider {
 	}
 }
 
-// Send 发送验证码短信。code 与 minutes 分别填充已审核模板的前两个变量
-// （模板形如「您的验证码为 {1}，{2} 分钟内有效」）。
-func (p *TencentSMSProvider) Send(to, code string, minutes int) error {
+// Send 发送验证码短信：按用途选择已审核模板。
+// 登录模板为双参数（{1}=验证码、{2}=有效分钟数），其余用途模板为单参数（{1}=验证码）。
+func (p *TencentSMSProvider) Send(to, code string, minutes int, purpose CodePurpose) error {
+	tplID, params := p.templateFor(purpose, code, minutes)
 	payload := map[string]any{
 		"PhoneNumberSet":   []string{phoneE164(to)},
 		"SmsSdkAppId":      p.cfg.SdkAppID,
 		"SignName":         p.cfg.SignName,
-		"TemplateId":       p.cfg.TemplateID,
-		"TemplateParamSet": []string{code, strconv.Itoa(minutes)},
+		"TemplateId":       tplID,
+		"TemplateParamSet": params,
 	}
 	var resp smsAPIResponse
 	if err := p.doAction(context.Background(), "SendSms", payload, &resp); err != nil {
@@ -68,7 +69,23 @@ func (p *TencentSMSProvider) Send(to, code string, minutes int) error {
 	return nil
 }
 
-// ValidateReady 校验签名与模板均已审核通过（启动自检用，失败不阻断发送）。
+// templateFor 按用途返回已审核模板 ID 与模板参数（与控制台审核通过的模板一一对应）：
+// 注册/密码重置/修改密码/绑定手机号/修改账号模板为单参数（{1}=验证码）；
+// 登录模板为双参数（{1}=验证码，{2}=有效分钟数）。
+func (p *TencentSMSProvider) templateFor(purpose CodePurpose, code string, minutes int) (string, []string) {
+	switch purpose {
+	case CodePurposeRegister:
+		return p.cfg.TplRegister, []string{code}
+	case CodePurposeResetPassword, CodePurposeChangePassword:
+		return p.cfg.TplPassword, []string{code}
+	case CodePurposeBind, CodePurposeAccountChange:
+		return p.cfg.TplBindPhone, []string{code}
+	default: // CodePurposeLogin
+		return p.cfg.TplLogin, []string{code, strconv.Itoa(minutes)}
+	}
+}
+
+// ValidateReady 校验签名与全部用途模板均已审核通过（启动自检用，失败不阻断发送）。
 func (p *TencentSMSProvider) ValidateReady(ctx context.Context) error {
 	// 签名审核状态
 	var signResp smsAPIResponse
@@ -86,21 +103,29 @@ func (p *TencentSMSProvider) ValidateReady(ctx context.Context) error {
 		return fmt.Errorf("短信签名「%s」未审核通过或不存在", p.cfg.SignName)
 	}
 
-	// 模板审核状态
-	tplID, err := strconv.ParseInt(p.cfg.TemplateID, 10, 64)
-	if err != nil {
-		return fmt.Errorf("短信模板 ID 非法: %s", p.cfg.TemplateID)
+	// 模板审核状态：四个用途模板一次查询，全部通过才算就绪
+	tplIDs := make([]int64, 0, 4)
+	for _, id := range []string{p.cfg.TplRegister, p.cfg.TplLogin, p.cfg.TplPassword, p.cfg.TplBindPhone} {
+		v, err := strconv.ParseInt(id, 10, 64)
+		if err != nil {
+			return fmt.Errorf("短信模板 ID 非法: %s", id)
+		}
+		tplIDs = append(tplIDs, v)
 	}
 	var tplResp smsAPIResponse
-	if err := p.doAction(ctx, "DescribeSmsTemplateList", map[string]any{"International": 0, "TemplateIdSet": []int64{tplID}}, &tplResp); err != nil {
+	if err := p.doAction(ctx, "DescribeSmsTemplateList", map[string]any{"International": 0, "TemplateIdSet": tplIDs}, &tplResp); err != nil {
 		return fmt.Errorf("查询短信模板失败: %w", err)
 	}
-	if len(tplResp.Response.DescribeTemplateStatusSet) == 0 {
-		return fmt.Errorf("短信模板 ID %s 不存在", p.cfg.TemplateID)
-	}
+	approved := make(map[int64]bool, len(tplResp.Response.DescribeTemplateStatusSet))
 	for _, t := range tplResp.Response.DescribeTemplateStatusSet {
 		if t.StatusCode != 0 {
 			return fmt.Errorf("短信模板「%s」未审核通过（%s）", t.TemplateName, t.ReviewReply)
+		}
+		approved[t.TemplateID] = true
+	}
+	for _, id := range tplIDs {
+		if !approved[id] {
+			return fmt.Errorf("短信模板 ID %d 不存在", id)
 		}
 	}
 	return nil

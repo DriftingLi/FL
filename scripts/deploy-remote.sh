@@ -164,6 +164,20 @@ write_env_file() {
         printf 'SMTP_FROM='
         env_val "${SMTP_FROM:-}"; echo
         echo "SMTP_FROM_NAME=${SMTP_FROM_NAME:-和润天下}"
+        # 腾讯云短信（手机验证码通道；SecretId/SecretKey 为云 API 密钥，非控制台 AppKey）
+        printf 'TENCENT_SMS_SECRET_ID='
+        env_val "${TENCENT_SMS_SECRET_ID:-}"; echo
+        printf 'TENCENT_SMS_SECRET_KEY='
+        env_val "${TENCENT_SMS_SECRET_KEY:-}"; echo
+        printf 'TENCENT_SMS_SDK_APP_ID='
+        env_val "${TENCENT_SMS_SDK_APP_ID:-}"; echo
+        printf 'TENCENT_SMS_SIGN_NAME='
+        env_val "${TENCENT_SMS_SIGN_NAME:-}"; echo
+        echo "TENCENT_SMS_TEMPLATE_REGISTER=${TENCENT_SMS_TEMPLATE_REGISTER:-}"
+        echo "TENCENT_SMS_TEMPLATE_LOGIN=${TENCENT_SMS_TEMPLATE_LOGIN:-}"
+        echo "TENCENT_SMS_TEMPLATE_PASSWORD=${TENCENT_SMS_TEMPLATE_PASSWORD:-}"
+        echo "TENCENT_SMS_TEMPLATE_BIND_PHONE=${TENCENT_SMS_TEMPLATE_BIND_PHONE:-}"
+        echo "TENCENT_SMS_REGION=${TENCENT_SMS_REGION:-ap-guangzhou}"
         # 微信登录凭证（小程序 / 开放平台严格区分）
         printf 'WECHAT_MINI_PROGRAM_APP_ID='
         env_val "${WECHAT_MINI_PROGRAM_APP_ID:-}"; echo
@@ -368,7 +382,7 @@ create_backup() {
         echo "--- 备份 .env ---"
         if [ -f "$DEPLOY_PATH/.env" ]; then
             # 仅保存非敏感信息
-            grep -v -E '(SECRET_KEY|JWT_SECRET_KEY|PASSWORD|API_KEY|R2_SECRET|R2_ACCESS_KEY)' "$DEPLOY_PATH/.env" 2>/dev/null || true
+            grep -v -E '(SECRET_KEY|JWT_SECRET_KEY|PASSWORD|API_KEY|R2_SECRET|R2_ACCESS_KEY|TENCENT_SMS_SECRET_ID)' "$DEPLOY_PATH/.env" 2>/dev/null || true
         fi
         echo ""
         if [ -f "$DB_BACKUP_FILE" ]; then

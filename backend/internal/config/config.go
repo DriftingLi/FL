@@ -68,18 +68,24 @@ type SMTPConfig struct {
 }
 
 // SMSConfig 腾讯云短信配置（手机验证码注册/登录）。
+// SecretID/SecretKey 为云 API 密钥（cam/capi），不是短信控制台应用详情页的 AppKey。
+// 模板按用途拆分，各对应一个已审核模板：登录模板双参数（验证码+分钟数），其余单参数。
 type SMSConfig struct {
-	SecretID   string // TENCENT_SMS_SECRET_ID 腾讯云 API 密钥 SecretId
-	SecretKey  string // TENCENT_SMS_SECRET_KEY 腾讯云 API 密钥 SecretKey
-	SdkAppID   string // TENCENT_SMS_SDK_APP_ID 短信应用 SdkAppId
-	SignName   string // TENCENT_SMS_SIGN_NAME 已审核通过的短信签名（如 和润天下）
-	TemplateID string // TENCENT_SMS_TEMPLATE_ID 已审核通过的验证码模板 ID
-	Region     string // TENCENT_SMS_REGION 接入地域，默认 ap-guangzhou
+	SecretID     string // TENCENT_SMS_SECRET_ID 腾讯云 API 密钥 SecretId
+	SecretKey    string // TENCENT_SMS_SECRET_KEY 腾讯云 API 密钥 SecretKey
+	SdkAppID     string // TENCENT_SMS_SDK_APP_ID 短信应用 SdkAppId
+	SignName     string // TENCENT_SMS_SIGN_NAME 已审核通过的短信签名
+	Region       string // TENCENT_SMS_REGION 接入地域，默认 ap-guangzhou
+	TplRegister  string // TENCENT_SMS_TEMPLATE_REGISTER 注册验证码模板（{1}=验证码）
+	TplLogin     string // TENCENT_SMS_TEMPLATE_LOGIN 登录验证码模板（{1}=验证码 {2}=有效分钟数）
+	TplPassword  string // TENCENT_SMS_TEMPLATE_PASSWORD 密码重置/修改密码模板（{1}=验证码）
+	TplBindPhone string // TENCENT_SMS_TEMPLATE_BIND_PHONE 绑定/修改手机号、修改账号模板（{1}=验证码）
 }
 
 // Configured 返回短信通道是否已完整配置（生产发送必需）。
 func (c SMSConfig) Configured() bool {
-	return c.SecretID != "" && c.SecretKey != "" && c.SdkAppID != "" && c.SignName != "" && c.TemplateID != ""
+	return c.SecretID != "" && c.SecretKey != "" && c.SdkAppID != "" && c.SignName != "" &&
+		c.TplRegister != "" && c.TplLogin != "" && c.TplPassword != "" && c.TplBindPhone != ""
 }
 
 // WechatAppConfig 一组微信应用凭证（AppID 为公开标识，AppSecret 必须仅存服务端）。
@@ -234,7 +240,10 @@ func setDefaults() {
 	viper.SetDefault("tencent_sms_secret_key", "")
 	viper.SetDefault("tencent_sms_sdk_app_id", "")
 	viper.SetDefault("tencent_sms_sign_name", "")
-	viper.SetDefault("tencent_sms_template_id", "")
+	viper.SetDefault("tencent_sms_template_register", "")
+	viper.SetDefault("tencent_sms_template_login", "")
+	viper.SetDefault("tencent_sms_template_password", "")
+	viper.SetDefault("tencent_sms_template_bind_phone", "")
 	viper.SetDefault("tencent_sms_region", "ap-guangzhou")
 	viper.SetDefault("wechat_mini_program_app_id", "")
 	viper.SetDefault("wechat_mini_program_app_secret", "")
@@ -341,12 +350,15 @@ func Load() (*Config, error) {
 			FromName: viper.GetString("smtp_from_name"),
 		},
 		SMS: SMSConfig{
-			SecretID:   viper.GetString("tencent_sms_secret_id"),
-			SecretKey:  viper.GetString("tencent_sms_secret_key"),
-			SdkAppID:   viper.GetString("tencent_sms_sdk_app_id"),
-			SignName:   viper.GetString("tencent_sms_sign_name"),
-			TemplateID: viper.GetString("tencent_sms_template_id"),
-			Region:     viper.GetString("tencent_sms_region"),
+			SecretID:     viper.GetString("tencent_sms_secret_id"),
+			SecretKey:    viper.GetString("tencent_sms_secret_key"),
+			SdkAppID:     viper.GetString("tencent_sms_sdk_app_id"),
+			SignName:     viper.GetString("tencent_sms_sign_name"),
+			Region:       viper.GetString("tencent_sms_region"),
+			TplRegister:  viper.GetString("tencent_sms_template_register"),
+			TplLogin:     viper.GetString("tencent_sms_template_login"),
+			TplPassword:  viper.GetString("tencent_sms_template_password"),
+			TplBindPhone: viper.GetString("tencent_sms_template_bind_phone"),
 		},
 		EmailCodeTTL: time.Duration(positiveInt("email_code_ttl_minutes", 5)) * time.Minute,
 		Wechat: WechatConfig{
