@@ -7,9 +7,7 @@ package service
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/tls"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -246,12 +244,6 @@ func generateEmailCode() (string, error) {
 		b[i] = digits[n.Int64()]
 	}
 	return string(b), nil
-}
-
-// emailPlaceholderPhone 为邮箱注册账号生成唯一的 phone 占位值（phone 列 NOT NULL）。
-func emailPlaceholderPhone(email string) string {
-	sum := sha256.Sum256([]byte(email))
-	return PlaceholderPhonePrefix + hex.EncodeToString(sum[:])[:32]
 }
 
 // =====================================================
