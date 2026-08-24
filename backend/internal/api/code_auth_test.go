@@ -103,7 +103,9 @@ func (c *fakeChannel) Render(purpose service.CodePurpose, code string, ttl time.
 	return "title", "code=" + code
 }
 
-func (c *fakeChannel) Send(target, title, body, _ string, _ time.Duration) error { return nil }
+func (c *fakeChannel) Send(target, title, body, _ string, _ time.Duration, _ service.CodePurpose) error {
+	return nil
+}
 
 func (c *fakeChannel) ApplyTarget(user *model.HrwaiUser, target string) {
 	switch c.column {
