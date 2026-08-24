@@ -7,7 +7,7 @@ export const featuredCategoryLabels: Record<string, string> = {
   company: '公司动态',
   industry: '行业新闻',
   product: '产品资讯',
-  news: '资讯'
+  news: '政策法规'
 }
 
 /** 内容精选分类选项（管理端表单下拉用） */
@@ -15,12 +15,12 @@ export const featuredCategoryOptions = [
   { value: 'company', label: '公司动态' },
   { value: 'industry', label: '行业新闻' },
   { value: 'product', label: '产品资讯' },
-  { value: 'news', label: '资讯' }
+  { value: 'news', label: '政策法规' }
 ]
 
 /** 获取分类中文标签 */
 export function categoryLabel(category: string): string {
-  return featuredCategoryLabels[category] || '资讯'
+  return featuredCategoryLabels[category] || '政策法规'
 }
 
 /** 精选内容项（wire key 与后端 typed DTO 一致：主键为 content_id） */

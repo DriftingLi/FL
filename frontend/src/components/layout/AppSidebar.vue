@@ -65,6 +65,20 @@
           </router-link>
         </template>
 
+        <!-- 外链 -->
+        <a
+          v-else-if="item.externalUrl"
+          :href="item.externalUrl"
+          target="_blank"
+          rel="noopener"
+          class="nav-item"
+        >
+          <div class="nav-item-icon">
+            <el-icon><component :is="item.icon" /></el-icon>
+          </div>
+          <span v-if="!effectiveCollapsed" class="nav-item-label">{{ item.label }}</span>
+        </a>
+
         <!-- 无子项的顶级导航 -->
         <router-link
           v-else-if="item.routeName"
