@@ -30,7 +30,7 @@ var featuredCategoryLabels = map[string]string{
 	"company":  "公司动态",
 	"industry": "行业新闻",
 	"product":  "产品资讯",
-	"policy":   "政策法规",
+	"news":     "政策法规",
 }
 
 // CategoryLabel 返回分类的中文标签。
@@ -38,11 +38,8 @@ func (s *FeaturedService) CategoryLabel(category string) string {
 	return featuredCategoryLabel(category)
 }
 
-// IsValidCategory 校验分类是否合法（兼容旧前端 news 别名）。
+// IsValidCategory 校验分类是否合法。
 func (s *FeaturedService) IsValidCategory(category string) bool {
-	if category == "news" {
-		return true
-	}
 	_, ok := featuredCategoryLabels[category]
 	return ok
 }
@@ -54,10 +51,6 @@ func (s *FeaturedService) GetPublicList(page, pageSize int, category string, sor
 		sorted = "view_count DESC, published_at DESC, content_id DESC"
 	} else {
 		sorted = "published_at DESC, content_id DESC"
-	}
-	// 兼容旧前端：news 视为 policy
-	if category == "news" {
-		category = "policy"
 	}
 	items, total, page, pageSize := paging.Query[model.FeaturedContent](s.db, page, pageSize, 10, sorted, func(q *gorm.DB) *gorm.DB {
 		q = q.Where("status = ?", 1)
@@ -132,9 +125,6 @@ func (s *FeaturedService) GetPublicDetail(id int, countView bool) (*FeaturedCont
 
 // AdminList 管理端列表（含草稿）。
 func (s *FeaturedService) AdminList(page, pageSize int, category, status string) FeaturedContentPageResult {
-	if category == "news" {
-		category = "policy"
-	}
 	items, total, page, pageSize := paging.Query[model.FeaturedContent](s.db, page, pageSize, 10, "created_at DESC, content_id DESC", func(q *gorm.DB) *gorm.DB {
 		if category != "" {
 			q = q.Where("category = ?", category)
@@ -170,9 +160,6 @@ func (s *FeaturedService) AdminDetail(id int) (*FeaturedContentAdminDetailDTO, e
 func (s *FeaturedService) Create(in FeaturedContentInput) (*FeaturedContentAdminDetailDTO, error) {
 	if in.Title == "" {
 		return nil, errors.New("标题不能为空")
-	}
-	if in.Category == "news" {
-		in.Category = "policy"
 	}
 	if in.Category == "" || !s.IsValidCategory(in.Category) {
 		return nil, errors.New("分类无效")
@@ -223,9 +210,6 @@ func (s *FeaturedService) Update(id int, in FeaturedContentUpdateInput) (*Featur
 	}
 	if in.Category != nil {
 		cat := *in.Category
-		if cat == "news" {
-			cat = "policy"
-		}
 		if cat != "" {
 			if !s.IsValidCategory(cat) {
 				return nil, errors.New("分类无效")
