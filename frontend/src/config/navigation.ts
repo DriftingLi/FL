@@ -32,6 +32,8 @@ export interface NavItem {
   routeParams?: Record<string, string | number>
   icon?: Component
   children?: NavItem[]
+  /** 外链地址（用于内容精选等跨子域跳转） */
+  externalUrl?: string
   // exact=true 时仅精确匹配 route.name 才高亮。
   // name 匹配天然精确，因此该标记保留以兼容既有语义，但不再参与前缀判断。
   exact?: boolean
@@ -48,6 +50,7 @@ const studentNav: NavItem[] = [
   { key: 'wrong-questions', label: '错题本', routeName: 'WrongQuestions', icon: CircleCloseFilled },
   { key: 'ai-assistant', label: 'AI助手', routeName: 'AIAssistant', icon: MagicStick },
   { key: 'valuation', label: '残值评估', routeName: 'ValuationHome', icon: PriceTag },
+  { key: 'featured', label: '内容精选', icon: Document, externalUrl: 'https://www.hrwai.com/news' },
   { key: 'profile', label: '个人资料', routeName: 'StudentProfile', icon: User }
 ]
 

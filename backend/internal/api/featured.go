@@ -44,13 +44,14 @@ func RegisterFeaturedRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Fea
 
 // GetPublicList 精选内容列表
 // @Summary 精选内容列表（公开）
-// @Description 仅已发布内容，支持按分类过滤
+// @Description 仅已发布内容，支持按分类与排序（latest 按时间/hot 按浏览量）过滤
 // @Tags 学员端-精选内容
 // @Accept json
 // @Produce json
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
 // @Param category query string false "分类"
+// @Param sort query string false "排序 latest|hot" default(latest)
 // @Success 200 {object} response.R "success"
 // @Router /featured-contents [get]
 func (h *FeaturedHandler) GetPublicList(c *gin.Context) {
@@ -60,10 +61,11 @@ func (h *FeaturedHandler) GetPublicList(c *gin.Context) {
 				Page:     atoiDefault(c.Query("page"), 1),
 				PageSize: atoiDefault(c.Query("page_size"), 10),
 				Category: c.Query("category"),
+				Sort:     c.Query("sort"),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *featuredListReq) (*service.FeaturedContentPageResult, error) {
-			result := h.svc.GetPublicList(req.Page, req.PageSize, req.Category)
+			result := h.svc.GetPublicList(req.Page, req.PageSize, req.Category, req.Sort)
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *featuredListReq, resp *service.FeaturedContentPageResult, _ error) {
@@ -261,6 +263,7 @@ type featuredListReq struct {
 	Page     int
 	PageSize int
 	Category string
+	Sort     string
 }
 
 // adminFeaturedListReq 管理端内容精选列表查询参数。
