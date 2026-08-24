@@ -6,7 +6,11 @@
       :mobile-open="mobileOpen"
       :class="{ 'sidebar-mobile-open': mobileOpen }"
       @toggle-collapse="handleToggleCollapse"
-    />
+    >
+      <template #top="{ collapsed: topCollapsed }">
+        <slot name="top" :collapsed="topCollapsed" />
+      </template>
+    </AppSidebar>
 
     <transition name="fade">
       <div v-if="mobileOpen" class="sidebar-overlay" @click="mobileOpen = false"></div>

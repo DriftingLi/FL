@@ -54,14 +54,15 @@ func (h *TutorHandler) ListCourses(c *gin.Context) {
 	Endpoint[tutorCourseListReq, service.CoursePageResult]{
 		Parse: func(c *gin.Context) (*tutorCourseListReq, error) {
 			return &tutorCourseListReq{
-				Page:        atoiDefault(c.Query("page"), 1),
-				PageSize:    atoiDefault(c.Query("page_size"), 10),
-				SpecialtyID: queryIDPtr(c, "specialty_id"),
-				LevelID:     queryIDPtr(c, "level_id"),
+				Page:         atoiDefault(c.Query("page"), 1),
+				PageSize:     atoiDefault(c.Query("page_size"), 10),
+				CredentialID: queryIDPtr(c, "credential_id"),
+				SpecialtyID:  queryIDPtr(c, "specialty_id"),
+				LevelID:      queryIDPtr(c, "level_id"),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *tutorCourseListReq) (*service.CoursePageResult, error) {
-			result := h.svc.GetCourses(req.Page, req.PageSize, req.SpecialtyID, req.LevelID)
+			result := h.svc.GetCourses(req.Page, req.PageSize, req.CredentialID, req.SpecialtyID, req.LevelID)
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *tutorCourseListReq, resp *service.CoursePageResult, _ error) {
@@ -249,8 +250,9 @@ type batchDeleteFilesReq struct {
 
 // tutorCourseListReq 导师课程列表查询参数。
 type tutorCourseListReq struct {
-	Page        int
-	PageSize    int
-	SpecialtyID *int
-	LevelID     *int
+	Page         int
+	PageSize     int
+	CredentialID *int
+	SpecialtyID  *int
+	LevelID      *int
 }

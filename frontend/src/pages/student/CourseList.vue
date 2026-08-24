@@ -71,7 +71,7 @@
           </div>
 
           <div v-else-if="!loading" class="cc-empty">
-            <el-empty description="该方向/等级下暂无课程" :image-size="80" />
+            <el-empty :description="credentialStore.current ? `“${credentialStore.current.name}” 内容建设中` : '该方向/等级下暂无课程'" :image-size="80" />
           </div>
         </div>
 
@@ -190,7 +190,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowRight, Star, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -199,18 +199,27 @@ import { studentApi, type StudentCourseDetail } from '@/api/student'
 import { favoriteApi } from '@/api/favorite'
 import { trainingApi } from '@/api/training'
 import { useCourseCatalog, treeCatalogAdapter } from '@/composables/useCourseCatalog'
+import { useCredentialStore } from '@/stores/credential'
 import FacetCard from '@/components/catalog/FacetCard.vue'
 import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCard from '@/components/catalog/CourseCard.vue'
 
 const route = useRoute()
 const router = useRouter()
+let credentialStore: any = null
+try {
+  credentialStore = useCredentialStore()
+} catch {
+  credentialStore = { current: null, loadCurrent: async () => null, loadGrouped: async () => {} } as any
+}
 
 const loading = ref(false)
 const courses = ref<CourseSummary[]>([])
 const currentPage = ref(1)
 const pageSize = ref(12)
 const total = ref(0)
+
+
 
 const {
   directions,
@@ -254,6 +263,9 @@ async function loadCourses() {
     }
     if (levelId.value !== null) {
       params.level_id = levelId.value
+    }
+    if (credentialStore.current?.id) {
+      params.credential_id = credentialStore.current.id
     }
     const data = await courseApi.getCourses(params)
     courses.value = data.courses
@@ -422,6 +434,16 @@ onMounted(() => {
   if (queryCourseId > 0) {
     openDetailById(queryCourseId)
   }
+})
+
+watch(() => credentialStore.current?.id, () => {
+  currentPage.value = 1
+  loadCourses()
+})
+
+window.addEventListener('credential-switched', () => {
+  currentPage.value = 1
+  loadCourses()
 })
 </script>
 

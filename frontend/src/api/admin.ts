@@ -156,6 +156,7 @@ export interface AdminCoursesQuery {
   page?: number
   page_size?: number
   keyword?: string
+  credential_id?: number
   specialty_id?: number
   level_id?: number
 }
@@ -167,6 +168,7 @@ export interface CoursePayload {
   duration?: number
   status?: number
   // ===== 培训目录扩展（LH-27/28，字段与后端 applyCourseTrainingFields 对齐）=====
+  credential_id?: number | null
   specialty_id?: number | null
   level_id?: number | null
   theory_hours?: number

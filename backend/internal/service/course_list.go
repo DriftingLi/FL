@@ -20,6 +20,7 @@ type CourseListOptions struct {
 	Keyword          string
 	SpecialtyID      *int
 	LevelID          *int
+	CredentialID     *int
 	WithStudentCount bool
 	DefaultPageSize  int
 }
@@ -40,6 +41,9 @@ func ListCourses(db *gorm.DB, page, pageSize int, opts CourseListOptions) Course
 		}
 		if opts.LevelID != nil {
 			q = q.Where("level_id = ?", *opts.LevelID)
+		}
+		if opts.CredentialID != nil {
+			q = q.Where("credential_id = ?", *opts.CredentialID)
 		}
 		return q
 	})

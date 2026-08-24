@@ -1,4 +1,5 @@
 import { unwrappedRequest } from './request'
+import { useCredentialStore } from '@/stores/credential'
 import type { Question } from '@/types/question'
 
 export interface QuestionsQuery {
@@ -10,6 +11,7 @@ export interface QuestionsQuery {
   created_by?: number
   /** 按题库标签筛选（LH-28） */
   tag_id?: number
+  credential_id?: number
 }
 
 export interface QuestionPayload {
@@ -23,6 +25,7 @@ export interface QuestionPayload {
   scoring_criteria?: string
   score?: number
   status?: string
+  credential_id?: number
   /** 题库标签（LH-28，创建/更新时全量替换） */
   tag_ids?: number[]
 }
@@ -42,6 +45,7 @@ export interface QuestionBankStats {
 
 export const questionBankApi = {
   getQuestions(params: QuestionsQuery) {
+    try { const cred = useCredentialStore().current?.id; if (cred && !(params as any).credential_id) (params as any).credential_id = cred } catch {}
     return unwrappedRequest.get<{ questions: Question[]; total: number }>('/question-bank/questions', { params })
   },
 

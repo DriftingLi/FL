@@ -189,7 +189,7 @@ func (s *FavoriteService) Remove(userID int, favoriteID int64) error {
 }
 
 // List 我的收藏列表（targetType 可选过滤；目标已删除的条目跳过）。
-func (s *FavoriteService) List(userID int, targetType string, page, pageSize int) (*FavoritePageResult, error) {
+func (s *FavoriteService) List(userID int, targetType string, page, pageSize int, credentialID ...*int) (*FavoritePageResult, error) {
 	targetType = strings.TrimSpace(targetType)
 	rows, total, page, pageSize := paging.QueryWithMax[model.Favorite](s.db, page, pageSize, 20, 100,
 		"created_at DESC, favorite_id DESC",
@@ -197,6 +197,16 @@ func (s *FavoriteService) List(userID int, targetType string, page, pageSize int
 			q = q.Where("user_id = ?", userID)
 			if targetType != "" {
 				q = q.Where("target_type = ?", targetType)
+			}
+			if len(credentialID) > 0 && credentialID[0] != nil && (targetType == FavoriteTargetCourse || targetType == FavoriteTargetQuestion) {
+				if targetType == FavoriteTargetCourse {
+					q = q.Where("target_id IN (SELECT course_id FROM course WHERE credential_id = ?)", *credentialID[0])
+				} else {
+					q = q.Where("target_id IN (SELECT id FROM question WHERE credential_id = ?)", *credentialID[0])
+				}
+			} else if len(credentialID) > 0 && credentialID[0] != nil && targetType == "" {
+				// 混合类型时，仅过滤 course/question 分区，其余类型保持
+				q = q.Where("(target_type NOT IN (?, ?) OR (target_type = ? AND target_id IN (SELECT course_id FROM course WHERE credential_id = ?)) OR (target_type = ? AND target_id IN (SELECT id FROM question WHERE credential_id = ?)))", FavoriteTargetCourse, FavoriteTargetQuestion, FavoriteTargetCourse, *credentialID[0], FavoriteTargetQuestion, *credentialID[0])
 			}
 			return q
 		})

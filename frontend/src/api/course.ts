@@ -1,6 +1,7 @@
 // 已迁移模块：走 unwrappedRequest（拦截器解包信封，成功直接返回业务数据 Promise<T>，
 // 业务失败抛错并统一 toast，调用方不再自检 res.code）
 import { unwrappedRequest } from './request'
+import { useCredentialStore } from '@/stores/credential'
 
 export interface UpdateProgressPayload {
   progress?: number
@@ -25,6 +26,8 @@ export interface CourseSummary {
   chapter_count?: number
   status?: number
   // ===== 培训目录扩展（LH-27/28）=====
+  credential_id?: number | null
+  credential?: { id: number; code: string; name: string; category: string; level: number | null }
   specialty_id?: number | null
   level_id?: number | null
   theory_hours?: number
@@ -111,7 +114,8 @@ export interface ChapterDetail {
 }
 
 export const courseApi = {
-  getCourses(params: { page?: number; page_size?: number; keyword?: string; specialty_id?: number; level_id?: number }) {
+  getCourses(params: { page?: number; page_size?: number; keyword?: string; credential_id?: number; specialty_id?: number; level_id?: number }) {
+    try { const cred = useCredentialStore().current?.id; if (cred && !params.credential_id) (params as any).credential_id = cred } catch {}
     return unwrappedRequest.get<{ courses: CourseSummary[]; total: number }>('/courses', { params })
   },
 

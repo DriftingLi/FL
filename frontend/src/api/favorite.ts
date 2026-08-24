@@ -1,4 +1,5 @@
 import { unwrappedRequest } from './request'
+import { useCredentialStore } from '@/stores/credential'
 
 /** 收藏对象类型（与后端 ADR-0018 多态收藏一致） */
 export type FavoriteTargetType = 'course' | 'chapter' | 'question' | 'featured' | 'topic'
@@ -28,7 +29,11 @@ export interface FavoriteCheckData {
 }
 
 export const favoriteApi = {
-  list(params: { target_type?: FavoriteTargetType; page?: number; page_size?: number }) {
+  list(params: { target_type?: FavoriteTargetType; page?: number; page_size?: number; credential_id?: number }) {
+    try {
+      const cred = useCredentialStore().current?.id
+      if (cred && !(params as any).credential_id) (params as any).credential_id = cred
+    } catch {}
     return unwrappedRequest.get<FavoriteListData>('/favorites', { params })
   },
 

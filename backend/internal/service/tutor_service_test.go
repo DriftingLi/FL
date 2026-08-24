@@ -46,7 +46,7 @@ func TestTutorCourseListHidesUnmounted(t *testing.T) {
 	_, _ = seedCatalogCourse(t, db)
 	seedUnmountedCourse(t, db)
 
-	list := svc.GetCourses(1, 10, nil, nil)
+	list := svc.GetCourses(1, 10, nil, nil, nil)
 	if list.Total != 2 { // 主课程 + 前置课程（均挂载）；未挂载课程不可见
 		t.Fatalf("total = %d, want 2（未挂载课程应隐藏）", list.Total)
 	}
@@ -64,7 +64,7 @@ func TestTutorCourseListBatchFills(t *testing.T) {
 	course, _ := seedCatalogCourse(t, db)
 	seedStudyRecords(t, db, course.CourseID, 3)
 
-	list := svc.GetCourses(1, 10, nil, nil)
+	list := svc.GetCourses(1, 10, nil, nil, nil)
 	for _, c := range list.Courses {
 		if c.CourseID != course.CourseID {
 			continue
@@ -115,7 +115,7 @@ func TestTutorCourseListNoNPlusOne(t *testing.T) {
 		_ = db.Callback().Query().Before("gorm:query").Remove("t4:nplus1")
 	}()
 
-	svc.GetCourses(1, 10, nil, nil)
+	svc.GetCourses(1, 10, nil, nil, nil)
 	// 2（分页 count+find）+ 1（证书模板）+ 3（章节数/前置课程/学员数批量）= 6
 	if queryCount > 6 {
 		t.Fatalf("列表查询数为 %d，超过常数级上限 6（存在 N+1）", queryCount)
