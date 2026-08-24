@@ -78,7 +78,7 @@ type fakeSMSProvider struct {
 	sent []string
 }
 
-func (f *fakeSMSProvider) Send(to, code string, _ int) error {
+func (f *fakeSMSProvider) Send(to, code string, _ int, _ CodePurpose) error {
 	f.sent = append(f.sent, to+"|"+code)
 	return nil
 }
