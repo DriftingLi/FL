@@ -37,8 +37,8 @@ func NewPracticeModeService(db *gorm.DB, ai *AIService, logger *zap.Logger) *Pra
 
 // GetFreeQuestions 随机练习抽题：从 published 题库按条件随机抽取 count 题。
 // count <= 0 时返回全部符合条件的题目（按 id 升序，不打乱）。
-func (s *PracticeModeService) GetFreeQuestions(qType string, count int) ([]QuestionDTO, error) {
-	selected, err := sampleQuestions(s.db, qType, count)
+func (s *PracticeModeService) GetFreeQuestions(qType string, count int, credentialID ...*int) ([]QuestionDTO, error) {
+	selected, err := sampleQuestions(s.db, qType, count, credentialID...)
 	if err != nil {
 		return nil, errors.New("查询题目失败")
 	}
@@ -55,7 +55,7 @@ func (s *PracticeModeService) GetFreeQuestions(qType string, count int) ([]Quest
 // StartTagPractice 标签练习开始/续练：首次进入按标签抽题并持久化题目顺序，
 // 再次进入复用已保存顺序与游标（断点续练）；已完成则重新抽题。
 // mode = "tag:<tagID>"，count <= 0 表示该标签全部题目。
-func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int) (*PracticeStartResultDTO, error) {
+func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, credentialID ...*int) (*PracticeStartResultDTO, error) {
 	if tagID <= 0 {
 		return nil, errors.New("请指定题库标签")
 	}
@@ -67,9 +67,12 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int) (*Pr
 		return nil, errors.New("题库标签不存在或已停用")
 	}
 	var all []model.Question
-	if err := s.db.Model(&model.Question{}).
-		Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?) AND status = ?", tagID, "published").
-		Order("id ASC").
+	qAll := s.db.Model(&model.Question{}).
+		Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?) AND status = ?", tagID, "published")
+	if len(credentialID) > 0 && credentialID[0] != nil {
+		qAll = qAll.Where("credential_id = ?", *credentialID[0])
+	}
+	if err := qAll.Order("id ASC").
 		Find(&all).Error; err != nil {
 		return nil, errors.New("查询题目失败")
 	}
@@ -152,9 +155,13 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int) (*Pr
 
 // StartSequential 顺序练习：加载全部 published 题目（按 id 升序），
 // 复用已有 practice_progress 游标续练；一次性返回全部题目，前端从游标处开始作答。
-func (s *PracticeModeService) StartSequential(studentID int) (*PracticeStartResultDTO, error) {
+func (s *PracticeModeService) StartSequential(studentID int, credentialID ...*int) (*PracticeStartResultDTO, error) {
 	var questions []model.Question
-	if err := s.db.Where("status = ?", "published").Order("id ASC").Find(&questions).Error; err != nil {
+	q := s.db.Where("status = ?", "published")
+	if len(credentialID) > 0 && credentialID[0] != nil {
+		q = q.Where("credential_id = ?", *credentialID[0])
+	}
+	if err := q.Order("id ASC").Find(&questions).Error; err != nil {
 		return nil, errors.New("查询题目失败")
 	}
 	if len(questions) == 0 {

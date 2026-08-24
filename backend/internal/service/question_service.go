@@ -23,8 +23,11 @@ var (
 
 // sampleQuestions 统一抽题函数：从 published 题库按条件随机抽取 count 题。
 // qType 为空表示不限题型。
-func sampleQuestions(db *gorm.DB, qType string, count int) ([]model.Question, error) {
+func sampleQuestions(db *gorm.DB, qType string, count int, credentialID ...*int) ([]model.Question, error) {
 	q := db.Model(&model.Question{}).Where("status = ?", "published")
+	if len(credentialID) > 0 && credentialID[0] != nil {
+		q = q.Where("credential_id = ?", *credentialID[0])
+	}
 	if qType != "" {
 		q = q.Where("type = ?", qType)
 	}
