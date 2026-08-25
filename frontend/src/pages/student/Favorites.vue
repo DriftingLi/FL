@@ -7,6 +7,7 @@
     <el-tabs v-model="activeType" @tab-change="handleTabChange">
       <el-tab-pane label="全部" name="all" />
       <el-tab-pane label="课程" name="course" />
+      <el-tab-pane label="题目" name="question" />
       <el-tab-pane label="帖子" name="topic" />
     </el-tabs>
 

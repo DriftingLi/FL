@@ -157,9 +157,14 @@ function itemTo(item: NavItem) {
 
 function isRouteActive(item: NavItem): boolean {
   if (!item.routeName) return false
-  // 以路由 name 精确匹配（name 唯一，天然无父级前缀误报）。
-  // exact 标记保留并与 name 匹配语义一致（始终精确）。
-  return route.name === item.routeName
+  if (route.name !== item.routeName) return false
+  // 章节列表等同名路由需比对 params，避免全部高亮
+  if (item.routeParams) {
+    for (const [k, v] of Object.entries(item.routeParams)) {
+      if (String(route.params[k] ?? '') !== String(v)) return false
+    }
+  }
+  return true
 }
 
 async function handleUserCommand(command: string) {
@@ -357,6 +362,7 @@ async function handleUserCommand(command: string) {
   white-space: nowrap;
   position: relative;
   cursor: pointer;
+  overflow: hidden;
 }
 
 .nav-item:hover {
@@ -407,6 +413,11 @@ async function handleUserCommand(command: string) {
 .nav-item-label {
   font-size: var(--text-sm);
   font-weight: var(--font-normal);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 底部功能区 */

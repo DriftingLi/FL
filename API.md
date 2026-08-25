@@ -694,34 +694,47 @@ Query：`page`（默认 1）、`page_size`（默认 10）、`category` ∈ `comp
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
-| GET | `/api/ai-assistant/models` | 无 | 可用模型列表（管理员绑定 AI 助手功能的配置） |
-| POST | `/api/ai-assistant/chat` | 可选 JWT | 流式对话（SSE；登录可保存会话） |
+| GET | `/api/ai-assistant/modes` | 无 | 双模式可用模型（普通/专家分别绑定，隐藏底层 model） |
+| GET | `/api/ai-assistant/models` | 无 | 可用模型列表（兼容旧前端，聚合双模式） |
+| POST | `/api/ai-assistant/chat` | 可选 JWT | 流式对话（SSE；登录可保存会话，支持 mode 普通/专家） |
 | GET | `/api/ai-assistant/sessions` | JWT+hrwai_user | 会话列表 |
 | POST | `/api/ai-assistant/sessions` | JWT+hrwai_user | 创建会话 |
 | PATCH | `/api/ai-assistant/sessions/:id/title` | JWT+hrwai_user | 重命名会话 |
 | DELETE | `/api/ai-assistant/sessions/:id` | JWT+hrwai_user | 删除会话 |
 | GET | `/api/ai-assistant/sessions/:id/messages` | JWT+hrwai_user | 会话消息列表 |
-| GET | `/api/ai-assistant/user-models` | JWT+hrwai_user | 用户自定义模型列表（api_key 脱敏） |
+| GET | `/api/ai-assistant/user-models` | JWT+hrwai_user | 用户自定义模型列表（api_key 脱敏，遗留兼容） |
 | POST | `/api/ai-assistant/user-models` | JWT+hrwai_user | 保存自定义模型 |
 | DELETE | `/api/ai-assistant/user-models/:id` | JWT+hrwai_user | 删除自定义模型 |
 
-**GET /api/ai-assistant/models**
+**GET /api/ai-assistant/modes**（新）
 
 响应 200：
 
 ```json
-{ "code": 200, "message": "success", "data": { "models": [ { "id": 1, "name": "DeepSeek V3", "model": "deepseek-chat", "base_url": "https://api.deepseek.com" } ] } }
+{ "code": 200, "message": "success", "data": { "normal": { "id": 1, "name": "DeepSeek 普通", "model": "deepseek-chat", "base_url": "https://api.deepseek.com" }, "expert": { "id": 2, "name": "DeepSeek 专家", "model": "deepseek-reasoner", "base_url": "https://api.deepseek.com" } } }
+```
+
+`normal`/`expert` 为 null 表示该模式未绑定，前端对应禁用。管理端在 “AI 配置” 的 “AI助手模式绑定” 分别单绑定。
+
+**GET /api/ai-assistant/models**（兼容旧）
+
+响应 200：
+
+```json
+{ "code": 200, "message": "success", "data": [ { "id": 1, "name": "DeepSeek V3", "model": "deepseek-chat", "base_url": "https://api.deepseek.com" } ] }
 ```
 
 **POST /api/ai-assistant/chat**（SSE 流式，非 JSON 信封）
 
-请求体：
+请求体（新推荐 `mode`，隐藏底层模型）：
 
 ```json
-{ "session_id": 1, "model_source": "admin", "config_id": 1, "user_model_id": 0, "custom_api_key": "", "custom_base_url": "", "custom_model": "", "messages": [ { "role": "user", "content": "叉车液压系统常见故障？" } ] }
+{ "session_id": 1, "mode": "normal", "messages": [ { "role": "user", "content": "叉车液压系统常见故障？" } ] }
 ```
 
-`model_source`：`admin`（用 `config_id` 指定管理员配置）| `user`（用 `user_model_id`）| `custom`（临时传 `custom_*`）。`session_id` 可选（登录用户指定会话；不传且已登录则新建）。
+兼容旧：`{ "session_id": 1, "model_source": "admin", "config_id": 1, "messages": [...] }`
+
+`mode`：`normal`（普通模式，绑定 `ai_assistant_normal`）| `expert`（专家模式，绑定 `ai_assistant_expert`）；`model_source` 仍支持 `admin|user|custom` 作回退。`session_id` 可选（登录用户指定会话；不传且已登录则新建）。
 
 响应为 SSE 事件流（Content-Type: text/event-stream）：
 

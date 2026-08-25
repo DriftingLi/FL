@@ -68,6 +68,26 @@
                 }
             }
         },
+        "/ai-assistant/modes": {
+            "get": {
+                "description": "返回普通/专家分别绑定的可用模型（隐藏底层 model 细节，前端仅暴露模式）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-AI助手"
+                ],
+                "summary": "AI 双模式模型（公开）",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/ai-assistant/sessions": {
             "get": {
                 "security": [
@@ -5070,7 +5090,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "分页查询错题，支持按题型/错误次数过滤",
+                "description": "分页查询错题，支持按题型/错误次数/收藏过滤与时间排序",
                 "consumes": [
                     "application/json"
                 ],
@@ -5106,6 +5126,19 @@
                         "type": "integer",
                         "description": "最小错误次数",
                         "name": "min_wrong_count",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "仅看收藏",
+                        "name": "favorited",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "default": "time_desc",
+                        "description": "排序 time_desc/time_asc",
+                        "name": "sort",
                         "in": "query"
                     }
                 ],
