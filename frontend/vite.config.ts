@@ -107,6 +107,7 @@ export default defineConfig({
           if (id.includes('/pdfjs-dist/')) return 'pdfjs'
           if (id.includes('/vditor/')) return 'vditor'
           if (id.includes('/marked') || id.includes('highlight.js')) return 'markdown'
+          if (id.includes('markstream-vue') || id.includes('markstream-core') || id.includes('stream-markdown-parser')) return 'markdown-stream'
           if (id.includes('/dayjs/')) return 'dayjs'
           if (id.includes('/vuedraggable/') || id.includes('/sortablejs/')) return 'draggable'
           if (id.includes('/vue') || id.includes('/pinia') || id.includes('/axios') || id.includes('/@vue/')) {

@@ -139,7 +139,15 @@
             </div>
             <div class="message-content">
               <div v-if="msg.role === 'user'" class="message-text">{{ msg.content }}</div>
-              <div v-else class="message-text markdown-body" v-html="renderMarkdown(msg.content)"></div>
+              <div v-else class="message-text markstream-vue">
+                <MarkdownRender
+                  mode="chat"
+                  :content="msg.content"
+                  :final="true"
+                  html-policy="escape"
+                  :fade="false"
+                />
+              </div>
             </div>
           </div>
 
@@ -149,7 +157,15 @@
               <el-icon :size="18"><ChatDotRound /></el-icon>
             </div>
             <div class="message-content">
-              <div v-if="store.streamingContent" class="message-text markdown-body" v-html="renderMarkdown(store.streamingContent)"></div>
+              <div v-if="store.streamingContent" class="message-text markstream-vue">
+                <MarkdownRender
+                  mode="chat"
+                  :content="store.streamingContent"
+                  :final="!store.streaming"
+                  html-policy="escape"
+                  :fade="false"
+                />
+              </div>
               <div v-else class="message-loading">
                 <span class="loading-dot"></span>
                 <span class="loading-dot"></span>
@@ -213,7 +229,8 @@ import {
   Promotion,
   VideoPause
 } from '@element-plus/icons-vue'
-import { marked } from 'marked'
+import MarkdownRender from 'markstream-vue'
+import 'markstream-vue/index.css'
 import { useAIAssistantStore } from '@/stores/aiAssistant'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
@@ -222,7 +239,6 @@ import { formatShortDateTime } from '@/utils/format'
 import ModelSelector from '@/components/ai-assistant/ModelSelector.vue'
 import UserModelDialog from '@/components/ai-assistant/UserModelDialog.vue'
 import CustomModelDialog from '@/components/ai-assistant/CustomModelDialog.vue'
-import '@/assets/styles/markdown.css'
 
 const store = useAIAssistantStore()
 const authStore = useAuthStore()
@@ -308,21 +324,6 @@ async function commitRename(sessionId: number) {
     }
   } finally {
     renamingLock = false
-  }
-}
-
-// 配置 marked
-marked.setOptions({
-  breaks: true,
-  gfm: true
-})
-
-function renderMarkdown(content: string): string {
-  if (!content) return ''
-  try {
-    return marked.parse(content) as string
-  } catch {
-    return content
   }
 }
 
@@ -793,53 +794,6 @@ onMounted(() => {
 .message-item.user .message-text {
   background: var(--color-brand-600, #0284c7);
   color: white;
-}
-
-/* markdown 样式 */
-.message-item.assistant .markdown-body :deep(h1),
-.message-item.assistant .markdown-body :deep(h2),
-.message-item.assistant .markdown-body :deep(h3) {
-  margin: 16px 0 8px;
-  font-weight: 600;
-}
-
-.message-item.assistant .markdown-body :deep(h1) { font-size: 18px; }
-.message-item.assistant .markdown-body :deep(h2) { font-size: 16px; }
-.message-item.assistant .markdown-body :deep(h3) { font-size: 15px; }
-
-.message-item.assistant .markdown-body :deep(p) {
-  margin: 8px 0;
-}
-
-.message-item.assistant .markdown-body :deep(ul),
-.message-item.assistant .markdown-body :deep(ol) {
-  margin: 8px 0;
-  padding-left: 20px;
-}
-
-.message-item.assistant .markdown-body :deep(li) {
-  margin: 4px 0;
-}
-
-.message-item.assistant .markdown-body :deep(code) {
-  background: var(--color-bg-page, #f8fafc);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 13px;
-  font-family: var(--font-mono, monospace);
-}
-
-.message-item.assistant .markdown-body :deep(pre) {
-  background: var(--color-bg-page, #f8fafc);
-  padding: 12px;
-  border-radius: 8px;
-  overflow-x: auto;
-  margin: 8px 0;
-}
-
-.message-item.assistant .markdown-body :deep(pre code) {
-  background: transparent;
-  padding: 0;
 }
 
 /* ===== 加载动画 ===== */
