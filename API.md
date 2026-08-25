@@ -670,16 +670,16 @@ multipart/form-data：`file`。响应 200（Vditor 约定结构）。
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
-| GET | `/api/featured-contents` | 无 | 内容精选列表（仅已发布；分页+分类过滤） |
+| GET | `/api/featured-contents` | 无 | 内容精选列表（仅已发布；分页+分类+排序过滤，支持最新/热点） |
 | GET | `/api/featured-content/:id` | 无 | 内容详情（含相关资讯/上下一篇） |
 | POST | `/api/featured-content/:id/view` | 无 | 浏览计数 +1 |
 
-**GET /api/featured-contents?page=1&page_size=10&category=**
+**GET /api/featured-contents?page=1&page_size=10&category=&sort=latest**
 
-响应 200：
+Query：`page`（默认 1）、`page_size`（默认 10）、`category` ∈ `company`（公司动态）/`industry`（行业新闻）/`product`（产品资讯）/`news`（政策法规）、`sort` ∈ `latest`（按发布时间，默认）/`hot`（按浏览量热点排序）。响应 200：
 
 ```json
-{ "code": 200, "message": "success", "data": { "items": [ { "content_id": 1, "title": "叉车维保小知识", "category": "news", "category_label": "行业资讯", "summary": "摘要", "cover_image": "/static/uploads/...", "source": "官网", "status": "published", "sort_order": 1, "view_count": 120, "published_at": "...", "created_at": "...", "updated_at": "..." } ], "page": 1, "pages": 1, "total": 1 } }
+{ "code": 200, "message": "success", "data": { "items": [ { "content_id": 1, "title": "叉车维保小知识", "category": "news", "category_label": "政策法规", "summary": "摘要", "cover_image": "/static/uploads/...", "source": "官网", "status": 1, "sort_order": 1, "view_count": 120, "published_at": "...", "created_at": "...", "updated_at": "..." } ], "page": 1, "pages": 1, "total": 1 } }
 ```
 
 **GET /api/featured-content/:id**
