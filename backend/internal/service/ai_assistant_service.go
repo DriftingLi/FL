@@ -73,15 +73,31 @@ type AIChatMessageDTO struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// AIAssistantMode AI 助手模式（隐藏底层模型，对用户仅暴露双模式）。
+type AIAssistantMode string
+
+const (
+	ModeNormal AIAssistantMode = "normal"
+	ModeExpert AIAssistantMode = "expert"
+)
+
+// AIAssistantModeModels 双模式可用模型（按普通/专家分别返回，null 表示未绑定）。
+type AIAssistantModeModels struct {
+	Normal *ModelOption `json:"normal"`
+	Expert *ModelOption `json:"expert"`
+}
+
 // StreamChatReq 流式对话请求。
+// 新前端：Mode=normal|expert（隐藏底层模型，推荐）；兼容旧前端：ModelSource=admin|user|custom + ConfigID
 type StreamChatReq struct {
-	SessionID     int    `json:"session_id"`     // 可选，登录用户指定会话
-	ModelSource   string `json:"model_source"`   // "admin" | "user" | "custom"
-	ConfigID      int    `json:"config_id"`      // ModelSource="admin" 时引用管理员配置
-	UserModelID   int    `json:"user_model_id"`  // ModelSource="user" 时引用用户自定义模型
-	CustomAPIKey  string `json:"custom_api_key"` // ModelSource="custom" 时临时输入
-	CustomBaseURL string `json:"custom_base_url"`
-	CustomModel   string `json:"custom_model"`
+	SessionID     int             `json:"session_id"`     // 可选，登录用户指定会话
+	Mode          AIAssistantMode `json:"mode"`           // 新：normal | expert
+	ModelSource   string          `json:"model_source"`   // 兼容旧： "admin" | "user" | "custom"
+	ConfigID      int             `json:"config_id"`      // 兼容旧：ModelSource="admin" 时引用管理员配置
+	UserModelID   int             `json:"user_model_id"`  // 兼容旧：ModelSource="user" 时引用用户自定义模型
+	CustomAPIKey  string          `json:"custom_api_key"` // 兼容旧：ModelSource="custom" 时临时输入
+	CustomBaseURL string          `json:"custom_base_url"`
+	CustomModel   string          `json:"custom_model"`
 	Messages      []struct {
 		Role    string `json:"role"`
 		Content string `json:"content"`
@@ -102,18 +118,71 @@ func NewAIAssistantService(db *gorm.DB, aiConfigSvc *AIConfigService, secretKey 
 }
 
 // ListPublicModels 返回管理员绑定到 AI 助手功能的可用配置列表（不含 api_key）。
-// 仅返回 ai_feature_bindings 中 feature_key='ai_assistant' 绑定且 is_active=true 的配置。
-// 若管理员未绑定任何配置，返回空列表（前端将提示用户选择自定义模型）。
+// 兼容旧前端：优先返回 normal/expert 双绑定的配置；若未配置则回退到遗留 ai_assistant 多绑定。
 func (s *AIAssistantService) ListPublicModels(ctx context.Context) ([]ModelOption, error) {
+	modes, err := s.ListAssistantModes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ModelOption, 0, 2)
+	if modes.Normal != nil {
+		out = append(out, *modes.Normal)
+	}
+	if modes.Expert != nil {
+		out = append(out, *modes.Expert)
+	}
+	if len(out) > 0 {
+		return out, nil
+	}
+	// 回退：旧 ai_assistant 多绑定
 	cfgs, err := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistant)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]ModelOption, 0, len(cfgs))
 	for _, c := range cfgs {
 		out = append(out, ModelOption{ID: c.ID, Name: c.Name, Model: c.Model, BaseURL: c.BaseURL})
 	}
 	return out, nil
+}
+
+// ListAssistantModes 返回双模式（普通/专家）分别绑定的配置（不含 api_key），新前端专用。
+func (s *AIAssistantService) ListAssistantModes(ctx context.Context) (AIAssistantModeModels, error) {
+	var res AIAssistantModeModels
+	for _, pair := range []struct {
+		key    string
+		target **ModelOption
+	}{
+		{FeatureAIAssistantNormal, &res.Normal},
+		{FeatureAIAssistantExpert, &res.Expert},
+	} {
+		cfgs, err := s.aiConfigSvc.ListConfigsForFeature(ctx, pair.key)
+		if err != nil {
+			return res, err
+		}
+		if len(cfgs) > 0 {
+			c := cfgs[0]
+			*pair.target = &ModelOption{ID: c.ID, Name: c.Name, Model: c.Model, BaseURL: c.BaseURL}
+		}
+	}
+	// 若双模式均未绑定，回退到旧 ai_assistant：第一条作 normal，第二条作 expert
+	if res.Normal == nil && res.Expert == nil {
+		cfgs, err := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistant)
+		if err != nil {
+			return res, err
+		}
+		if len(cfgs) > 0 {
+			c := cfgs[0]
+			res.Normal = &ModelOption{ID: c.ID, Name: c.Name, Model: c.Model, BaseURL: c.BaseURL}
+		}
+		if len(cfgs) > 1 {
+			c := cfgs[1]
+			res.Expert = &ModelOption{ID: c.ID, Name: c.Name, Model: c.Model, BaseURL: c.BaseURL}
+		} else if len(cfgs) == 1 {
+			// 单条时 expert 复用同一配置，避免前端无可用
+			res.Expert = res.Normal
+		}
+	}
+	return res, nil
 }
 
 // ListUserModels 返回登录用户的自定义模型列表（api_key 脱敏）。
@@ -434,19 +503,44 @@ func (s *AIAssistantService) GetSessionMessages(ctx context.Context, userID, ses
 	return out, nil
 }
 
-// resolveModelConfig 根据 ModelSource 解析模型配置（与 AIService 消费同一 AISettings 形状）。
+// resolveModelConfig 根据 Mode 或 ModelSource 解析模型配置（与 AIService 消费同一 AISettings 形状）。
 func (s *AIAssistantService) resolveModelConfig(ctx context.Context, userID int, req StreamChatReq) (AISettings, error) {
-	switch req.ModelSource {
-	case "admin":
-		// 校验该配置是否被管理员绑定到 AI 助手功能（防止用户绕过前端传任意 config_id）
-		boundCfgs, err := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistant)
+	// 新路径：Mode 双模式（隐藏底层模型）
+	if req.Mode == ModeNormal || req.Mode == ModeExpert {
+		featureKey := FeatureAIAssistantNormal
+		if req.Mode == ModeExpert {
+			featureKey = FeatureAIAssistantExpert
+		}
+		cfgs, err := s.aiConfigSvc.ListConfigsForFeature(ctx, featureKey)
 		if err != nil {
 			return AISettings{}, fmt.Errorf("校验可用模型失败: %w", err)
 		}
+		if len(cfgs) == 0 {
+			// 回退：若新双绑定未配置，尝试旧 ai_assistant（兼容存量部署）
+			fallback, _ := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistant)
+			if len(fallback) > 0 {
+				c := fallback[0]
+				if req.Mode == ModeExpert && len(fallback) > 1 {
+					c = fallback[1]
+				}
+				return AISettings{APIKey: c.APIKey, BaseURL: c.BaseURL, Model: c.Model, Source: "binding:" + c.Name}, nil
+			}
+			return AISettings{}, errors.New("该模式未绑定模型，请联系管理员配置")
+		}
+		cfg := cfgs[0]
+		return AISettings{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Source: "binding:" + cfg.Name}, nil
+	}
+	switch req.ModelSource {
+	case "admin":
+		// 校验该配置是否被管理员绑定到 AI 助手功能（兼容旧前端：同时校验新双绑定的两个 Feature）
+		boundCfgsNormal, _ := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistantNormal)
+		boundCfgsExpert, _ := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistantExpert)
+		boundCfgsLegacy, _ := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistant)
+		allBound := append(append(boundCfgsNormal, boundCfgsExpert...), boundCfgsLegacy...)
 		var cfg *model.AIConfig
-		for i := range boundCfgs {
-			if boundCfgs[i].ID == req.ConfigID {
-				cfg = &boundCfgs[i]
+		for i := range allBound {
+			if allBound[i].ID == req.ConfigID {
+				cfg = &allBound[i]
 				break
 			}
 		}

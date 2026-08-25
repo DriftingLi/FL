@@ -12,11 +12,6 @@
         </a>
 
         <div class="topbar-actions">
-          <ModelSelector
-            @manage="userModelDialogVisible = true"
-            @custom="customModelDialogVisible = true"
-          />
-
           <!-- 未登录：显示登录按钮 -->
           <el-button v-if="!isLoggedIn" type="primary" size="default" @click="goLogin">
             登录 HRWAI 账号
@@ -139,7 +134,15 @@
             </div>
             <div class="message-content">
               <div v-if="msg.role === 'user'" class="message-text">{{ msg.content }}</div>
-              <div v-else class="message-text markdown-body" v-html="renderMarkdown(msg.content)"></div>
+              <div v-else class="message-text markstream-vue">
+                <MarkdownRender
+                  mode="chat"
+                  :content="msg.content"
+                  :final="true"
+                  html-policy="escape"
+                  :fade="false"
+                />
+              </div>
             </div>
           </div>
 
@@ -149,7 +152,15 @@
               <el-icon :size="18"><ChatDotRound /></el-icon>
             </div>
             <div class="message-content">
-              <div v-if="store.streamingContent" class="message-text markdown-body" v-html="renderMarkdown(store.streamingContent)"></div>
+              <div v-if="store.streamingContent" class="message-text markstream-vue">
+                <MarkdownRender
+                  mode="chat"
+                  :content="store.streamingContent"
+                  :final="!store.streaming"
+                  html-policy="escape"
+                  :fade="false"
+                />
+              </div>
               <div v-else class="message-loading">
                 <span class="loading-dot"></span>
                 <span class="loading-dot"></span>
@@ -159,43 +170,49 @@
           </div>
         </div>
 
-        <!-- 输入区 -->
+        <!-- 输入区（拉高，模式选择左下，发送右下） -->
         <div class="chat-input-area">
-          <div class="input-wrap">
+          <div class="input-wrap input-wrap--raised">
             <el-input
               v-model="inputText"
               type="textarea"
-              :rows="2"
-              :autosize="{ minRows: 1, maxRows: 6 }"
+              :rows="4"
+              :autosize="{ minRows: 3, maxRows: 8 }"
               placeholder="输入您的问题...（Enter 发送，Shift+Enter 换行）"
               resize="none"
               @keydown.enter="handleEnter"
               :disabled="store.streaming"
             />
-            <div class="input-actions">
-              <el-button
-                v-if="!store.streaming"
-                type="primary"
-                :icon="Promotion"
-                :disabled="!inputText.trim() || !store.selectedModel"
-                @click="handleSend"
-              >
-                发送
-              </el-button>
-              <el-button v-else type="danger" :icon="VideoPause" @click="store.stopStreaming">
-                停止
-              </el-button>
+            <div class="input-footer">
+              <div class="mode-selector">
+                <el-radio-group v-model="selectedMode" size="small" :disabled="store.streaming">
+                  <el-radio-button value="normal" :disabled="!store.modeModels.normal">普通模式</el-radio-button>
+                  <el-radio-button value="expert" :disabled="!store.modeModels.expert">专家模式</el-radio-button>
+                </el-radio-group>
+              </div>
+              <div class="input-actions">
+                <el-button
+                  v-if="!store.streaming"
+                  type="primary"
+                  :icon="Promotion"
+                  :disabled="!inputText.trim() || isModeUnavailable"
+                  @click="handleSend"
+                >
+                  发送
+                </el-button>
+                <el-button v-else type="danger" :icon="VideoPause" @click="store.stopStreaming">
+                  停止
+                </el-button>
+              </div>
             </div>
           </div>
-          <div v-if="!store.selectedModel" class="model-warning">
-            请先选择模型
+          <div v-if="isModeUnavailable" class="model-warning">
+            当前模式未配置，请联系管理员在“AI 配置”中绑定
           </div>
         </div>
       </main>
     </div>
 
-    <UserModelDialog v-model="userModelDialogVisible" />
-    <CustomModelDialog v-model="customModelDialogVisible" />
   </div>
 </template>
 
@@ -213,16 +230,13 @@ import {
   Promotion,
   VideoPause
 } from '@element-plus/icons-vue'
-import { marked } from 'marked'
+import MarkdownRender from 'markstream-vue'
+import 'markstream-vue/index.css'
 import { useAIAssistantStore } from '@/stores/aiAssistant'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import { buildSubdomainUrl } from '@/utils/subdomain'
 import { formatShortDateTime } from '@/utils/format'
-import ModelSelector from '@/components/ai-assistant/ModelSelector.vue'
-import UserModelDialog from '@/components/ai-assistant/UserModelDialog.vue'
-import CustomModelDialog from '@/components/ai-assistant/CustomModelDialog.vue'
-import '@/assets/styles/markdown.css'
 
 const store = useAIAssistantStore()
 const authStore = useAuthStore()
@@ -238,8 +252,16 @@ const displayName = computed(() => {
 const inputText = ref('')
 const messageListRef = ref<HTMLElement>()
 
-const userModelDialogVisible = ref(false)
-const customModelDialogVisible = ref(false)
+const selectedMode = computed({
+  get: () => store.selectedMode,
+  set: (v: 'normal' | 'expert') => store.selectMode(v)
+})
+const isModeUnavailable = computed(() => {
+  const m = store.selectedMode
+  if (m === 'normal') return !store.modeModels.normal
+  if (m === 'expert') return !store.modeModels.expert
+  return !store.modeModels.normal && !store.modeModels.expert
+})
 
 // 使用学员端登录页登录，登录成功后回到 AI 助手
 function goLogin() {
@@ -311,21 +333,6 @@ async function commitRename(sessionId: number) {
   }
 }
 
-// 配置 marked
-marked.setOptions({
-  breaks: true,
-  gfm: true
-})
-
-function renderMarkdown(content: string): string {
-  if (!content) return ''
-  try {
-    return marked.parse(content) as string
-  } catch {
-    return content
-  }
-}
-
 async function scrollToBottom() {
   await nextTick()
   if (messageListRef.value) {
@@ -342,8 +349,8 @@ function handleEnter(e: KeyboardEvent) {
 async function handleSend() {
   const text = inputText.value.trim()
   if (!text) return
-  if (!store.selectedModel) {
-    ElMessage.warning('请先选择模型')
+  if (isModeUnavailable.value) {
+    ElMessage.warning('当前模式未配置，请联系管理员')
     return
   }
   if (store.streaming) return
@@ -363,7 +370,8 @@ function useSuggestion(text: string) {
 }
 
 async function handleNewSession() {
-  await store.createSession('新会话', store.selectedModel?.label)
+  const label = store.selectedMode === 'expert' ? '专家模式' : '普通模式'
+  await store.createSession('新会话', label)
 }
 
 async function handleDeleteSession(id: number) {
@@ -386,7 +394,6 @@ async function handleUserCommand(cmd: string) {
     store.messages = []
     store.currentSessionId = null
     store.sessions = []
-    store.userModels = []
     ElMessage.success('已退出登录')
   }
 }
@@ -795,53 +802,6 @@ onMounted(() => {
   color: white;
 }
 
-/* markdown 样式 */
-.message-item.assistant .markdown-body :deep(h1),
-.message-item.assistant .markdown-body :deep(h2),
-.message-item.assistant .markdown-body :deep(h3) {
-  margin: 16px 0 8px;
-  font-weight: 600;
-}
-
-.message-item.assistant .markdown-body :deep(h1) { font-size: 18px; }
-.message-item.assistant .markdown-body :deep(h2) { font-size: 16px; }
-.message-item.assistant .markdown-body :deep(h3) { font-size: 15px; }
-
-.message-item.assistant .markdown-body :deep(p) {
-  margin: 8px 0;
-}
-
-.message-item.assistant .markdown-body :deep(ul),
-.message-item.assistant .markdown-body :deep(ol) {
-  margin: 8px 0;
-  padding-left: 20px;
-}
-
-.message-item.assistant .markdown-body :deep(li) {
-  margin: 4px 0;
-}
-
-.message-item.assistant .markdown-body :deep(code) {
-  background: var(--color-bg-page, #f8fafc);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 13px;
-  font-family: var(--font-mono, monospace);
-}
-
-.message-item.assistant .markdown-body :deep(pre) {
-  background: var(--color-bg-page, #f8fafc);
-  padding: 12px;
-  border-radius: 8px;
-  overflow-x: auto;
-  margin: 8px 0;
-}
-
-.message-item.assistant .markdown-body :deep(pre code) {
-  background: transparent;
-  padding: 0;
-}
-
 /* ===== 加载动画 ===== */
 .message-loading {
   display: flex;
@@ -885,6 +845,18 @@ onMounted(() => {
   transition: border-color 0.15s ease;
 }
 
+.input-wrap--raised {
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 132px;
+  padding: 12px;
+  gap: 12px;
+}
+
+.input-wrap--raised :deep(.el-textarea) {
+  flex: 1;
+}
+
 .input-wrap:focus-within {
   border-color: var(--color-brand-400, #38bdf8);
 }
@@ -896,6 +868,19 @@ onMounted(() => {
   box-shadow: none !important;
   font-size: 14px;
   line-height: 1.6;
+}
+
+.input-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mode-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .input-actions {

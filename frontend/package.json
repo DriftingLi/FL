@@ -19,6 +19,7 @@
     "highlight.js": "^11.11.1",
     "marked": "^18.0.0",
     "marked-highlight": "^2.2.4",
+    "markstream-vue": "^2.0.4",
     "pdfjs-dist": "^4.4.168",
     "pinia": "^2.1.7",
     "vditor": "^3.11.2",
