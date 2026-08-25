@@ -35,8 +35,14 @@ func NewWrongQuestionService(db *gorm.DB, ai *AIService, logger *zap.Logger) *Wr
 }
 
 // GetWrongQuestions 错题列表。
-func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, qType string, minWrongCount *int) map[string]any {
-	items, total, page, pageSize := paging.Query[model.WrongQuestion](s.db, page, pageSize, 20, "wrong_question.last_wrong_at DESC", func(q *gorm.DB) *gorm.DB {
+// sort: "time_asc" 按最近错误时间升序，其余按降序（默认）；
+// favorited: 仅返回已收藏的错题（JOIN favorite，user_id 与 student_id 同源）。
+func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, qType string, minWrongCount *int, favorited bool, sort string) map[string]any {
+	orderBy := "wrong_question.last_wrong_at DESC"
+	if sort == "time_asc" {
+		orderBy = "wrong_question.last_wrong_at ASC"
+	}
+	items, total, page, pageSize := paging.Query[model.WrongQuestion](s.db, page, pageSize, 20, orderBy, func(q *gorm.DB) *gorm.DB {
 		q = q.Where("student_id = ? AND is_removed = ?", studentID, false)
 		if qType != "" {
 			q = q.Joins("JOIN question ON question.id = wrong_question.question_id")
@@ -44,6 +50,9 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 		}
 		if minWrongCount != nil {
 			q = q.Where("wrong_question.wrong_count >= ?", *minWrongCount)
+		}
+		if favorited {
+			q = q.Joins("JOIN favorite ON favorite.user_id = wrong_question.student_id AND favorite.target_type = ? AND favorite.target_id = wrong_question.question_id", FavoriteTargetQuestion)
 		}
 		return q
 	})
@@ -53,11 +62,14 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 		questionIDs = append(questionIDs, items[i].QuestionID)
 	}
 	questions := loadQuestionsByIDs(s.db, questionIDs)
+	favoriteIDs := s.loadFavoriteIDs(studentID, questionIDs)
 
 	result := make([]map[string]any, 0, len(items))
 	for i := range items {
 		wq := &items[i]
 		item := wrongQuestionToDict(wq)
+		item["favorited"] = favoriteIDs[wq.QuestionID] > 0
+		item["favorite_id"] = favoriteIDs[wq.QuestionID]
 		if q, ok := questions[wq.QuestionID]; ok {
 			item["question"] = newQuestionDTO(q, true)
 		}
@@ -69,6 +81,20 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 		"page_size": pageSize,
 		"items":     result,
 	}
+}
+
+// loadFavoriteIDs 批量查询题目收藏 ID（question_id → favorite_id，未收藏为 0）。
+func (s *WrongQuestionService) loadFavoriteIDs(studentID int, questionIDs []int) map[int]int64 {
+	result := make(map[int]int64, len(questionIDs))
+	if len(questionIDs) == 0 {
+		return result
+	}
+	var rows []model.Favorite
+	s.db.Where("user_id = ? AND target_type = ? AND target_id IN ?", studentID, FavoriteTargetQuestion, questionIDs).Find(&rows)
+	for i := range rows {
+		result[rows[i].TargetID] = rows[i].FavoriteID
+	}
+	return result
 }
 
 // RedoWrongQuestion 重做错题：与练习/模拟考试共享同一判分管线（gradeOne）与解析五模块装配。

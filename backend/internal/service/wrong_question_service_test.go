@@ -3,6 +3,7 @@ package service
 
 import (
 	"testing"
+	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -35,7 +36,7 @@ func seedWrongQuestion(t *testing.T, db *gorm.DB, studentID, questionID, wrongCo
 
 func TestGetWrongQuestions_Empty(t *testing.T) {
 	svc, _ := newWrongQuestionSvc(t)
-	result := svc.GetWrongQuestions(1, 1, 20, "", nil)
+	result := svc.GetWrongQuestions(1, 1, 20, "", nil, false, "")
 	if result["total"].(int64) != 0 {
 		t.Fatalf("空库总数应为 0, got %v", result["total"])
 	}
@@ -47,7 +48,7 @@ func TestGetWrongQuestions_WithData(t *testing.T) {
 	seedWrongQuestion(t, db, 1, 1, 3)
 	seedWrongQuestion(t, db, 1, 2, 1)
 
-	result := svc.GetWrongQuestions(1, 1, 20, "", nil)
+	result := svc.GetWrongQuestions(1, 1, 20, "", nil, false, "")
 	if result["total"].(int64) != 2 {
 		t.Fatalf("总数应为 2, got %v", result["total"])
 	}
@@ -55,12 +56,84 @@ func TestGetWrongQuestions_WithData(t *testing.T) {
 
 func TestGetWrongQuestions_DefaultPaging(t *testing.T) {
 	svc, _ := newWrongQuestionSvc(t)
-	result := svc.GetWrongQuestions(1, 0, 0, "", nil)
+	result := svc.GetWrongQuestions(1, 0, 0, "", nil, false, "")
 	if result["page"].(int) != 1 {
 		t.Fatalf("默认页码应为 1, got %v", result["page"])
 	}
 	if result["page_size"].(int) != 20 {
 		t.Fatalf("默认页大小应为 20, got %v", result["page_size"])
+	}
+}
+
+func TestGetWrongQuestions_FavoritedFilter(t *testing.T) {
+	svc, db := newWrongQuestionSvc(t)
+	testutil.SeedQuestion(t, db, "single_choice", "错题1", "A")
+	testutil.SeedQuestion(t, db, "single_choice", "错题2", "B")
+	seedWrongQuestion(t, db, 1, 1, 3)
+	seedWrongQuestion(t, db, 1, 2, 1)
+	if err := db.Create(&model.Favorite{UserID: 1, TargetType: "question", TargetID: 1, CreatedAt: testutil.Now()}).Error; err != nil {
+		t.Fatalf("插入收藏失败: %v", err)
+	}
+
+	result := svc.GetWrongQuestions(1, 1, 20, "", nil, true, "")
+	if result["total"].(int64) != 1 {
+		t.Fatalf("收藏过滤后总数应为 1, got %v", result["total"])
+	}
+	items := result["items"].([]map[string]any)
+	if len(items) != 1 || items[0]["question_id"].(int) != 1 {
+		t.Fatalf("收藏过滤后应仅剩题目 1, got %v", items)
+	}
+}
+
+func TestGetWrongQuestions_SortAsc(t *testing.T) {
+	svc, db := newWrongQuestionSvc(t)
+	testutil.SeedQuestion(t, db, "single_choice", "早错题", "A")
+	testutil.SeedQuestion(t, db, "single_choice", "晚错题", "B")
+	now := testutil.Now()
+	early := model.WrongQuestion{StudentID: 1, QuestionID: 1, WrongCount: 1, LastWrongAt: now.Add(-2 * time.Hour), CreatedAt: now}
+	late := model.WrongQuestion{StudentID: 1, QuestionID: 2, WrongCount: 1, LastWrongAt: now, CreatedAt: now}
+	if err := db.Create(&early).Error; err != nil {
+		t.Fatalf("插入错题失败: %v", err)
+	}
+	if err := db.Create(&late).Error; err != nil {
+		t.Fatalf("插入错题失败: %v", err)
+	}
+
+	result := svc.GetWrongQuestions(1, 1, 20, "", nil, false, "time_asc")
+	items := result["items"].([]map[string]any)
+	if len(items) != 2 || items[0]["question_id"].(int) != 1 {
+		t.Fatalf("升序时首项应为较早错误的题目 1, got %v", items)
+	}
+
+	result = svc.GetWrongQuestions(1, 1, 20, "", nil, false, "")
+	items = result["items"].([]map[string]any)
+	if len(items) != 2 || items[0]["question_id"].(int) != 2 {
+		t.Fatalf("默认降序时首项应为最近错误的题目 2, got %v", items)
+	}
+}
+
+func TestGetWrongQuestions_FavoritedField(t *testing.T) {
+	svc, db := newWrongQuestionSvc(t)
+	testutil.SeedQuestion(t, db, "single_choice", "错题1", "A")
+	testutil.SeedQuestion(t, db, "single_choice", "错题2", "B")
+	seedWrongQuestion(t, db, 1, 1, 3)
+	seedWrongQuestion(t, db, 1, 2, 1)
+	fav := model.Favorite{UserID: 1, TargetType: "question", TargetID: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&fav).Error; err != nil {
+		t.Fatalf("插入收藏失败: %v", err)
+	}
+
+	result := svc.GetWrongQuestions(1, 1, 20, "", nil, false, "")
+	items := result["items"].([]map[string]any)
+	byQID := make(map[int]map[string]any, len(items))
+	for _, item := range items {
+		byQID[item["question_id"].(int)] = item
+	}
+	if !byQID[1]["favorited"].(bool) || byQID[1]["favorite_id"].(int64) != fav.FavoriteID {
+		t.Fatalf("题目 1 应回填已收藏状态, got %v", byQID[1])
+	}
+	if byQID[2]["favorited"].(bool) || byQID[2]["favorite_id"].(int64) != 0 {
+		t.Fatalf("题目 2 应回填未收藏状态, got %v", byQID[2])
 	}
 }
 
