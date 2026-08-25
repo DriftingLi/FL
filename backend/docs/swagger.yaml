@@ -874,6 +874,19 @@ paths:
       summary: AI 可用模型（公开）
       tags:
       - 学员端-AI助手
+  /ai-assistant/modes:
+    get:
+      description: 返回普通/专家分别绑定的可用模型（隐藏底层 model 细节，前端仅暴露模式）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: AI 双模式模型（公开）
+      tags:
+      - 学员端-AI助手
   /ai-assistant/sessions:
     get:
       consumes:
@@ -3986,7 +3999,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: 分页查询错题，支持按题型/错误次数过滤
+      description: 分页查询错题，支持按题型/错误次数/收藏过滤与时间排序
       parameters:
       - default: 1
         description: 页码
@@ -4006,6 +4019,15 @@ paths:
         in: query
         name: min_wrong_count
         type: integer
+      - description: 仅看收藏
+        in: query
+        name: favorited
+        type: boolean
+      - default: time_desc
+        description: 排序 time_desc/time_asc
+        in: query
+        name: sort
+        type: string
       produces:
       - application/json
       responses:
