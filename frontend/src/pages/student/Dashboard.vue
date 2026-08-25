@@ -86,11 +86,13 @@ const userName = computed(() => displayNameOf(authStore.userInfo) || '同学')
 const activeCourses = ref<QuickCardItem[]>([])
 
 // 继续学习（最后学习时间最新的课程，ADR-0017）
+// 若无 last_chapter_id（仅报名未学或历史数据缺失），回退至课程详情页以便开始学习
 const continueLearning = ref<StudentCourseItem | null>(null)
 const continueLearningPath = computed(() => {
   const cl = continueLearning.value
-  if (!cl?.last_chapter_id) return ''
-  return `/training/course/${cl.course_id}/chapter/${cl.last_chapter_id}`
+  if (!cl) return ''
+  if (cl.last_chapter_id) return `/training/course/${cl.course_id}/chapter/${cl.last_chapter_id}`
+  return `/training/courses?course_id=${cl.course_id}`
 })
 
 // 最近学习
@@ -139,7 +141,9 @@ async function loadCourses() {
           title: c.course_name || '未命名课程',
           subtitle: c.last_chapter_title || '',
           badge: `${Math.round(c.progress ?? 0)}%`,
-          path: c.last_chapter_id ? `/training/course/${c.course_id}/chapter/${c.last_chapter_id}` : ''
+          path: c.last_chapter_id
+            ? `/training/course/${c.course_id}/chapter/${c.last_chapter_id}`
+            : `/training/courses?course_id=${c.course_id}`
         }))
     }
   } catch (error) {

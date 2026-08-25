@@ -50,7 +50,7 @@ const studentNav: NavItem[] = [
   { key: 'wrong-questions', label: '错题本', routeName: 'WrongQuestions', icon: CircleCloseFilled },
   { key: 'ai-assistant', label: 'AI助手', routeName: 'AIAssistant', icon: MagicStick },
   { key: 'valuation', label: '残值评估', routeName: 'ValuationHome', icon: PriceTag },
-  { key: 'featured', label: '内容精选', icon: Document, externalUrl: 'https://www.hrwai.com/news' },
+  { key: 'featured', label: '内容精选', icon: Document, externalUrl: 'https://www.gccsmile.com/news' },
   { key: 'profile', label: '个人资料', routeName: 'StudentProfile', icon: User }
 ]
 
