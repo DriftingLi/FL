@@ -123,6 +123,9 @@
       <el-card v-if="currentQuestion" class="question-card">
         <div class="question-header">
           <el-tag size="small">{{ typeMap[currentQuestion.type] || '题目' }}</el-tag>
+          <el-icon class="fav-star" :class="{ active: favorited }" @click="toggleFavorite">
+            <StarFilled v-if="favorited" /><Star v-else />
+          </el-icon>
         </div>
         <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="q-image" />
         <p class="q-content">{{ currentQuestion.content }}</p>
@@ -187,9 +190,10 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { Sort, MagicStick, Filter, Document, CollectionTag } from '@element-plus/icons-vue'
+import { Sort, MagicStick, Filter, Document, CollectionTag, Star, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
+import { favoriteApi } from '@/api/favorite'
 import { practiceModeApi } from '@/api/practiceMode'
 import { mockExamApi } from '@/api/mockExam'
 import { trainingApi } from '@/api/training'
@@ -338,11 +342,41 @@ async function startFree() {
 const questionStartTime = ref<number>(Date.now())
 const lastDuration = ref<number | undefined>(undefined)
 const knowledgeTags = ref<any[]>([])
+const favorited = ref(false)
+const favoriteId = ref(0)
 
-watch(currentQuestion, () => {
+watch(currentQuestion, async (q) => {
   questionStartTime.value = Date.now()
   lastDuration.value = undefined
+  favorited.value = false
+  favoriteId.value = 0
+  if (!q) return
+  try {
+    const res = await favoriteApi.check({ target_type: 'question', target_id: q.id })
+    favorited.value = !!res?.favorited
+    favoriteId.value = res?.favorite_id || 0
+  } catch {
+    // 查询失败降级为未收藏
+  }
 })
+
+async function toggleFavorite() {
+  const q = currentQuestion.value
+  if (!q) return
+  try {
+    if (favorited.value) {
+      await favoriteApi.remove(favoriteId.value)
+      favorited.value = false
+      favoriteId.value = 0
+    } else {
+      const res = await favoriteApi.add({ target_type: 'question', target_id: q.id })
+      favorited.value = true
+      favoriteId.value = res?.favorite_id || 0
+    }
+  } catch {
+    /* 错误已由拦截器提示 */
+  }
+}
 
 watch(() => (lastResult.value as any)?.question_id, async (qid: number) => {
   if (!qid) { knowledgeTags.value = []; return }
@@ -439,6 +473,9 @@ async function loadCardData() {
 .progress-stats { margin-left: 12px; color: #909399; font-size: 13px; }
 .question-card { margin-bottom: 15px; }
 .question-header { display: flex; gap: 8px; align-items: center; margin-bottom: 15px; }
+.fav-star { cursor: pointer; font-size: 18px; color: #c0c4cc; }
+.fav-star:hover { color: #e6a23c; }
+.fav-star.active { color: #e6a23c; }
 .q-image { max-width: 100%; max-height: 250px; border-radius: 8px; margin-bottom: 10px; }
 .q-content { font-size: 16px; line-height: 1.8; margin-bottom: 15px; white-space: pre-wrap; }
 .q-feedback { margin-top: 15px; }

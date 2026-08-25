@@ -49,11 +49,13 @@ type listWrongQuestionsReq struct {
 	PageSize      int
 	QType         string
 	MinWrongCount *int
+	Favorited     bool
+	Sort          string
 }
 
 // List 错题列表
 // @Summary 错题列表
-// @Description 分页查询错题，支持按题型/错误次数过滤
+// @Description 分页查询错题，支持按题型/错误次数/收藏过滤与时间排序
 // @Tags 学员端-错题本
 // @Accept json
 // @Produce json
@@ -62,6 +64,8 @@ type listWrongQuestionsReq struct {
 // @Param page_size query int false "每页条数" default(20)
 // @Param type query string false "题型"
 // @Param min_wrong_count query int false "最小错误次数"
+// @Param favorited query bool false "仅看收藏"
+// @Param sort query string false "排序 time_desc/time_asc" default(time_desc)
 // @Success 200 {object} response.R "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /wrong-questions [get]
@@ -76,10 +80,12 @@ func (h *WrongQuestionHandler) List(c *gin.Context) {
 				PageSize:      atoiDefault(c.Query("page_size"), 20),
 				QType:         c.Query("type"),
 				MinWrongCount: queryIntPtr(c, "min_wrong_count"),
+				Favorited:     c.Query("favorited") == "true",
+				Sort:          c.Query("sort"),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listWrongQuestionsReq) (*map[string]any, error) {
-			result := h.svc.GetWrongQuestions(req.StudentID, req.Page, req.PageSize, req.QType, req.MinWrongCount)
+			result := h.svc.GetWrongQuestions(req.StudentID, req.Page, req.PageSize, req.QType, req.MinWrongCount, req.Favorited, req.Sort)
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *listWrongQuestionsReq, resp *map[string]any, _ error) {

@@ -5,6 +5,9 @@ export interface WrongQuestionsQuery {
   page_size?: number
   practice_type?: string
   type?: string
+  sort?: string
+  favorited?: boolean
+  min_wrong_count?: number
 }
 
 /** 错题项 */
@@ -12,6 +15,8 @@ export interface WrongQuestionItem {
   id: number
   question_id: number
   wrong_count?: number
+  favorited?: boolean
+  favorite_id?: number
   question?: {
     type?: string
     content?: string
