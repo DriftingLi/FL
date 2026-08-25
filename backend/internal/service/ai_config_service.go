@@ -20,15 +20,19 @@ import (
 const (
 	FeatureGradeShortAnswer       = "grade_short_answer"
 	FeatureGenerateChapterContent = "generate_chapter_content"
-	FeatureAIAssistant            = "ai_assistant"
+	FeatureAIAssistant            = "ai_assistant" // 遗留：多绑定，已由 normal/expert 双绑定替代，仅作兼容回退
+	FeatureAIAssistantNormal      = "ai_assistant_normal"
+	FeatureAIAssistantExpert      = "ai_assistant_expert"
 	FeatureQuestionExplanation    = "ai_question_analysis"
 )
 
 // AllAIFeatures 全部 AI 功能键列表（用于绑定列表的全量展示）。
+// AI 助手已由 multi 的 ai_assistant 拆为双绑定的 normal/expert 单绑定，其它功能保持单绑定。
 var AllAIFeatures = []string{
 	FeatureGradeShortAnswer,
 	FeatureGenerateChapterContent,
-	FeatureAIAssistant,
+	FeatureAIAssistantNormal,
+	FeatureAIAssistantExpert,
 	FeatureQuestionExplanation,
 }
 
@@ -36,15 +40,16 @@ var AllAIFeatures = []string{
 var FeatureLabel = map[string]string{
 	FeatureGradeShortAnswer:       "简答题 AI 评分",
 	FeatureGenerateChapterContent: "课程内容生成",
-	FeatureAIAssistant:            "AI 助手对话",
+	FeatureAIAssistantNormal:      "AI 助手 · 普通模式",
+	FeatureAIAssistantExpert:      "AI 助手 · 专家模式",
 	FeatureQuestionExplanation:    "题目 AI 解析",
+	// 遗留兼容
+	FeatureAIAssistant: "AI 助手对话",
 }
 
 // multiBindFeatures 允许多绑定的功能集合（一个 feature_key 可绑定多个 config_id）。
-// AI 助手允许多绑定以向用户提供可选模型列表；其它功能保留单绑定语义。
-var multiBindFeatures = map[string]bool{
-	FeatureAIAssistant: true,
-}
+// 双绑定改造后不再有 multi 功能，全部为单绑定（normal/expert 各自单绑定）。
+var multiBindFeatures = map[string]bool{}
 
 // isMultiBindFeature 判断指定功能是否允许多绑定。
 func isMultiBindFeature(key string) bool {
@@ -517,6 +522,10 @@ func isValidFeature(key string) bool {
 		if f == key {
 			return true
 		}
+	}
+	// 遗留兼容：ai_assistant 仍视为有效以便旧数据回退/迁移
+	if key == FeatureAIAssistant {
+		return true
 	}
 	return false
 }

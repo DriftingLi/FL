@@ -36,6 +36,7 @@ func RegisterAIAssistantRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.
 
 	// 公开路由：列出管理员配置的可用模型（未登录可访问）
 	g.GET("/models", h.ListPublicModels)
+	g.GET("/modes", h.ListAssistantModes)
 	// 流式对话：可选认证（未登录可临时对话，登录则可保存会话）
 	g.POST("/chat", middleware.OptionalAuth(rd.Session), h.StreamChat)
 
@@ -71,6 +72,32 @@ func (h *AIAssistantHandler) ListPublicModels(c *gin.Context) {
 			return &models, nil
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *[]service.ModelOption, err error) {
+			if err != nil {
+				response.ServerError(c, err.Error())
+				return
+			}
+			response.Success(c, resp)
+		},
+	}.Handle(c)
+}
+
+// ListAssistantModes 双模式可用模型（新）
+// @Summary AI 双模式模型（公开）
+// @Description 返回普通/专家分别绑定的可用模型（隐藏底层 model 细节，前端仅暴露模式）
+// @Tags 学员端-AI助手
+// @Produce json
+// @Success 200 {object} response.R "success"
+// @Router /ai-assistant/modes [get]
+func (h *AIAssistantHandler) ListAssistantModes(c *gin.Context) {
+	Endpoint[struct{}, service.AIAssistantModeModels]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*service.AIAssistantModeModels, error) {
+			modes, err := h.svc.ListAssistantModes(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return &modes, nil
+		},
+		Render: func(c *gin.Context, _ *struct{}, resp *service.AIAssistantModeModels, err error) {
 			if err != nil {
 				response.ServerError(c, err.Error())
 				return
