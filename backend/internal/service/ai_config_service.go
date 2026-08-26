@@ -22,6 +22,11 @@ const (
 	FeatureGenerateChapterContent = "generate_chapter_content"
 	FeatureAIAssistant            = "ai_assistant"
 	FeatureQuestionExplanation    = "ai_question_analysis"
+	FeatureFaultConsult           = "fault_consult"
+	FeatureFaultCodeQuery         = "fault_code_query"
+	FeatureMaintenanceKnowledge   = "maintenance_knowledge"
+	FeatureDrawingRecognition     = "drawing_recognition"
+	FeatureExerciseSolving        = "exercise_solving"
 )
 
 // AllAIFeatures 全部 AI 功能键列表（用于绑定列表的全量展示）。
@@ -30,6 +35,11 @@ var AllAIFeatures = []string{
 	FeatureGenerateChapterContent,
 	FeatureAIAssistant,
 	FeatureQuestionExplanation,
+	FeatureFaultConsult,
+	FeatureFaultCodeQuery,
+	FeatureMaintenanceKnowledge,
+	FeatureDrawingRecognition,
+	FeatureExerciseSolving,
 }
 
 // FeatureLabel 功能键对应的中文名称。
@@ -38,6 +48,11 @@ var FeatureLabel = map[string]string{
 	FeatureGenerateChapterContent: "课程内容生成",
 	FeatureAIAssistant:            "AI 助手对话",
 	FeatureQuestionExplanation:    "题目 AI 解析",
+	FeatureFaultConsult:           "故障咨询",
+	FeatureFaultCodeQuery:         "故障代码查询",
+	FeatureMaintenanceKnowledge:   "维保知识",
+	FeatureDrawingRecognition:     "图纸识别",
+	FeatureExerciseSolving:        "习题解答",
 }
 
 // multiBindFeatures 允许多绑定的功能集合（一个 feature_key 可绑定多个 config_id）。

@@ -51,6 +51,7 @@ export interface ChatSession {
   id: number
   title: string
   model_name: string
+  feature_key?: string
   created_at: string
   updated_at: string
 }
@@ -59,6 +60,7 @@ export interface ChatMessage {
   id: number
   role: 'user' | 'assistant' | 'system'
   content: string
+  images?: string[]
   created_at: string
 }
 
@@ -66,13 +68,14 @@ export type ModelSource = 'admin' | 'user' | 'custom'
 
 export interface StreamChatReq {
   session_id?: number
+  feature_key?: string
   model_source: ModelSource
   config_id?: number
   user_model_id?: number
   custom_api_key?: string
   custom_base_url?: string
   custom_model?: string
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>
+  messages: Array<{ role: 'user' | 'assistant'; content: string; images?: string[] }>
 }
 
 // ===== API 方法 =====
@@ -98,14 +101,48 @@ export const aiAssistantApi = {
     return client.delete(`/user-models/${id}`)
   },
 
-  /** GET /api/ai-assistant/sessions — 需登录，列出当前用户的会话 */
-  listSessions() {
-    return client.get<ChatSession[]>('/sessions')
+  /** GET /api/ai-assistant/sessions — 需登录，列出当前用户的会话（feature_key 过滤） */
+  listSessions(featureKey?: string) {
+    return client.get<ChatSession[]>('/sessions', {
+      params: featureKey ? { feature_key: featureKey } : undefined
+    })
   },
 
   /** POST /api/ai-assistant/sessions — 需登录，创建会话 */
-  createSession(data: { title?: string; model_name?: string }) {
+  createSession(data: { title?: string; model_name?: string; feature_key?: string }) {
     return client.post<ChatSession>('/sessions', data)
+  },
+
+  /** POST /api/ai-assistant/upload-image — 可选登录，上传对话图片 */
+  async uploadImage(file: File): Promise<string> {
+    const formData = new FormData()
+    formData.append('file', file)
+    const token = getToken()
+    const headers: Record<string, string> = {}
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+    const resp = await fetch(API_BASE_URL + '/upload-image', {
+      method: 'POST',
+      headers,
+      body: formData
+    })
+    if (!resp.ok) {
+      let message = `上传失败（HTTP ${resp.status}）`
+      try {
+        const body = await resp.json()
+        if (body?.message) message = body.message
+      } catch {
+        // 非 JSON 响应，保留默认消息
+      }
+      throw new Error(message)
+    }
+    const body = await resp.json()
+    const url = body?.data?.url
+    if (!url) {
+      throw new Error('上传返回数据异常')
+    }
+    return url as string
   },
 
   /** DELETE /api/ai-assistant/sessions/:id — 需登录，删除会话 */

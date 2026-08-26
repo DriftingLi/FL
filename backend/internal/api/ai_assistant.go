@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -38,6 +39,8 @@ func RegisterAIAssistantRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.
 	g.GET("/models", h.ListPublicModels)
 	// 流式对话：可选认证（未登录可临时对话，登录则可保存会话）
 	g.POST("/chat", middleware.OptionalAuth(rd.Session), h.StreamChat)
+	// 对话图片上传：可选认证（与 chat 一致，游客可上传）
+	g.POST("/upload-image", middleware.OptionalAuth(rd.Session), h.UploadImage)
 
 	// 需登录路由：会话管理 + 用户自定义模型管理（HRWAI 账号鉴权）
 	authed := g.Group("")
@@ -225,7 +228,7 @@ func (h *AIAssistantHandler) ListSessions(c *gin.Context) {
 			return &aiUserIDReq{UserID: uid}, nil
 		},
 		Invoke: func(ctx context.Context, req *aiUserIDReq) (*[]service.AIChatSessionDTO, error) {
-			sessions, err := h.svc.ListSessions(c.Request.Context(), req.UserID)
+			sessions, err := h.svc.ListSessions(c.Request.Context(), req.UserID, c.Query("feature_key"))
 			if err != nil {
 				return nil, err
 			}
@@ -260,14 +263,15 @@ func (h *AIAssistantHandler) CreateSession(c *gin.Context) {
 				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
 			}
 			var body struct {
-				Title     string `json:"title"`
-				ModelName string `json:"model_name"`
+				Title      string `json:"title"`
+				ModelName  string `json:"model_name"`
+				FeatureKey string `json:"feature_key"`
 			}
 			_ = c.ShouldBindJSON(&body)
-			return &aiSessionCreateReq{UserID: uid, Title: body.Title, ModelName: body.ModelName}, nil
+			return &aiSessionCreateReq{UserID: uid, Title: body.Title, ModelName: body.ModelName, FeatureKey: body.FeatureKey}, nil
 		},
 		Invoke: func(ctx context.Context, req *aiSessionCreateReq) (*service.AIChatSessionDTO, error) {
-			return h.svc.CreateSession(c.Request.Context(), req.UserID, req.Title, req.ModelName)
+			return h.svc.CreateSession(c.Request.Context(), req.UserID, req.Title, req.ModelName, req.FeatureKey)
 		},
 		Render: func(c *gin.Context, _ *aiSessionCreateReq, resp *service.AIChatSessionDTO, err error) {
 			if err != nil {
@@ -426,7 +430,7 @@ func (h *AIAssistantHandler) GetSessionMessages(c *gin.Context) {
 // @Tags 学员端-AI助手
 // @Accept json
 // @Produce text/event-stream
-// @Param body body object true "消息" example({"messages":[{"role":"user","content":"你好"}]})
+// @Param body body object true "消息" example({"feature_key":"fault_consult","messages":[{"role":"user","content":"你好"}]})
 // @Success 200 {string} string "SSE stream"
 // @Failure 400 {object} response.R "参数错误"
 // @Router /ai-assistant/chat [post]
@@ -439,6 +443,12 @@ func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 		return
 	}
 	if len(req.Messages) == 0 {
+		response.BadRequest(c, "消息不能为空")
+		return
+	}
+	// 最后一条用户消息须有文本或图片（支持纯图片提问）
+	last := req.Messages[len(req.Messages)-1]
+	if last.Role != "user" || (strings.TrimSpace(last.Content) == "" && len(last.Images) == 0) {
 		response.BadRequest(c, "消息不能为空")
 		return
 	}
@@ -468,6 +478,30 @@ func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 	sendEvent("done", nil)
 }
 
+// UploadImage 上传对话图片
+// @Summary 上传 AI 对话图片
+// @Description 可选认证；校验格式/大小后保存，返回可访问 URL（随消息提交）
+// @Tags 学员端-AI助手
+// @Accept multipart/form-data
+// @Produce json
+// @Param file formData file true "图片文件"
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Router /ai-assistant/upload-image [post]
+func (h *AIAssistantHandler) UploadImage(c *gin.Context) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		response.BadRequest(c, "未找到上传文件")
+		return
+	}
+	url, err := h.svc.UploadImage(c.Request.Context(), file)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "图片上传成功", gin.H{"url": url})
+}
+
 // ===== typed request structs =====
 
 // aiUserIDReq 仅带登录用户 ID 的请求。
@@ -489,9 +523,10 @@ type aiUserModelSaveReq struct {
 
 // aiSessionCreateReq 创建会话请求。
 type aiSessionCreateReq struct {
-	UserID    int
-	Title     string
-	ModelName string
+	UserID     int
+	Title      string
+	ModelName  string
+	FeatureKey string
 }
 
 // aiSessionRenameReq 重命名会话请求。
