@@ -100,6 +100,20 @@
             <el-button type="primary" @click="$router.push({ name: 'MockExam' })">进入模拟考试</el-button>
           </el-card>
         </el-col>
+
+        <!-- 真题练习 -->
+        <el-col :xs="24" :sm="12" :md="8">
+          <el-card shadow="hover" class="practice-card card-real-exam">
+            <div class="card-head">
+              <el-icon :size="28" color="#409eff"><Document /></el-icon>
+              <h3>真题练习</h3>
+            </div>
+            <div class="card-stat">
+              <span class="stat-label">历年真题套卷（占位）</span>
+            </div>
+            <el-button type="primary" plain @click="$router.push({ name: 'RealExamPapers' })">进入真题练习</el-button>
+          </el-card>
+        </el-col>
       </el-row>
     </div>
 
@@ -466,6 +480,7 @@ async function loadCardData() {
 .card-special { border-top: 3px solid #e6a23c; }
 .card-tag { border-top: 3px solid #7952b3; }
 .card-mock { border-top: 3px solid #909399; }
+.card-real-exam { border-top: 3px solid #409eff; }
 
 .practice-area { margin-top: 10px; }
 .practice-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px 15px; background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
