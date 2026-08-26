@@ -37,6 +37,8 @@ export interface CourseSummary {
   prerequisite_course_ids?: number[]
   sort_order?: number
   created_at?: string
+  is_hot?: boolean
+  is_featured?: boolean
   /** 学习人数（详情元数据，导师端列表展示用） */
   student_count?: number
 }
@@ -114,7 +116,7 @@ export interface ChapterDetail {
 }
 
 export const courseApi = {
-  getCourses(params: { page?: number; page_size?: number; keyword?: string; credential_id?: number; specialty_id?: number; level_id?: number }) {
+  getCourses(params: { page?: number; page_size?: number; keyword?: string; credential_id?: number; specialty_id?: number; level_id?: number; filter?: 'hot' | 'featured' | 'all' }) {
     try { const cred = useCredentialStore().current?.id; if (cred && !params.credential_id) (params as any).credential_id = cred } catch {}
     return unwrappedRequest.get<{ courses: CourseSummary[]; total: number }>('/courses', { params })
   },

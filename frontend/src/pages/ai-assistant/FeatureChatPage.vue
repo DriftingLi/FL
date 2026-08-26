@@ -256,7 +256,7 @@ const displayName = computed(() => {
   return info?.username || 'HRWAI 用户'
 })
 
-// 按完整路由路径匹配配置（路由 slug 是连字符缩写，与 feature key 下划线全名不同）
+// 按完整路由路径匹配配置（路由 slug 是连字符缩写，与 feature key 下划线全名不同，见 #332）
 const feature = computed(() => getAIFeatureByRoute(route.path))
 const supportsImage = computed(() => feature.value?.supportsImage === true)
 const maxImages = computed(() => feature.value?.maxImages ?? 4)

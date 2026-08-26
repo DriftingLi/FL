@@ -40,6 +40,8 @@ type CourseDTO struct {
 	CredentialID          *int                    `json:"credential_id"`
 	Description           string                  `json:"description"`
 	Duration              int                     `json:"duration"`
+	IsFeatured            bool                    `json:"is_featured"`
+	IsHot                 bool                    `json:"is_hot"`
 	Level                 *LevelBriefDTO          `json:"level,omitempty"`
 	LevelID               *int                    `json:"level_id"`
 	Name                  string                  `json:"name"`
@@ -238,11 +240,15 @@ func NewCourseService(db *gorm.DB, slideRenderer *SlideRenderer, logger *zap.Log
 	return &CourseService{db: db, slideRenderer: slideRenderer, logger: logger}
 }
 
-// GetCourses 课程列表（可额外按专业方向/课程等级/目标证件过滤）。
+// GetCourses 课程列表（可额外按专业方向/课程等级/目标证件过滤；filter=hot|featured|all，热门默认）。
 // 未挂专业方向/等级/证件的课程不展示（与目录树口径统一，见挂载不变式）。
-func (s *CourseService) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int) CoursePageResult {
+func (s *CourseService) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int, filter ...string) CoursePageResult {
+	f := ""
+	if len(filter) > 0 {
+		f = filter[0]
+	}
 	return ListCourses(s.db, page, pageSize, CourseListOptions{
-		OnlyMounted: true, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID, DefaultPageSize: 12,
+		OnlyMounted: true, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID, Filter: f, DefaultPageSize: 12,
 	})
 }
 
@@ -572,6 +578,8 @@ func courseToDTO(c *model.Course) CourseDTO {
 		CertificateTemplateID: c.CertificateTemplateID,
 		SortOrder:             c.SortOrder,
 		Status:                c.Status,
+		IsHot:                 c.IsHot,
+		IsFeatured:            c.IsFeatured,
 		CreatedAt:             formatISO(c.CreatedAt),
 	}
 }
@@ -842,6 +850,12 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 			return errors.New("课程排序值不能为负数")
 		}
 		course.SortOrder = *in.SortOrder
+	}
+	if in.IsHot != nil {
+		course.IsHot = *in.IsHot
+	}
+	if in.IsFeatured != nil {
+		course.IsFeatured = *in.IsFeatured
 	}
 	return nil
 }

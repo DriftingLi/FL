@@ -159,6 +159,7 @@ export interface AdminCoursesQuery {
   credential_id?: number
   specialty_id?: number
   level_id?: number
+  filter?: 'hot' | 'featured' | 'all'
 }
 
 export interface CoursePayload {
@@ -176,6 +177,8 @@ export interface CoursePayload {
   prerequisite_course_ids?: number[]
   certificate_template_id?: number | null
   sort_order?: number
+  is_hot?: boolean
+  is_featured?: boolean
 }
 
 export interface ChapterPayload {

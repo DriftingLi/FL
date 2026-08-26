@@ -93,6 +93,17 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/student/WrongQuestions.vue')
       },
       {
+        path: 'real-exam',
+        name: 'RealExamPapers',
+        component: () => import('@/pages/student/RealExamPapers.vue')
+      },
+      // PROTOTYPE — throwaway route for 真题练习占位三变体对比 (__prototype 命名即标记)，验证后移除
+      {
+        path: '__prototype/real-exam',
+        name: 'RealExamPrototype',
+        component: () => import('@/pages/student/__prototype__/RealExamPrototype.vue')
+      },
+      {
         path: 'profile',
         name: 'StudentProfile',
         component: () => import('@/pages/student/Profile.vue')
@@ -214,6 +225,15 @@ const routes: RouteRecordRaw[] = [
     name: 'ValuationForgotPassword',
     component: () => import('@/pages/auth/ForgotPassword.vue'),
     meta: { requiresAuth: false, isValuationAuthPage: true, authPage: true }
+  },
+
+  // ========== 原型预览（独立页面，无需登录/后端） ==========
+  // PROTOTYPE — throwaway standalone preview for 真题练习占位三变体；kept outside TrainingLayout so it bypasses auth/credential guards
+  {
+    path: '/prototype/real-exam',
+    name: 'RealExamPrototypeStandalone',
+    component: () => import('@/pages/student/__prototype__/RealExamPrototype.vue'),
+    meta: { requiresAuth: false }
   },
 
   // ========== AI 助手模块（training 子域名，可选登录；登录后可保存历史会话） ==========

@@ -63,5 +63,13 @@ type HistoryItemDTO struct {
 	Question     *QuestionDTO `json:"question,omitempty"`
 }
 
+// PracticePracticeStatsDTO 刷题练习聚合统计（Ticket #329，独立于 stats_aggregate 的 PracticeStatsDTO）。
+// 返回三字段均含重做（question_practice_record 落库即计数），与 /stats 不共享 shape。
+type PracticePracticeStatsDTO struct {
+	TodayCount int64 `json:"today_count"`
+	TotalCount int64 `json:"total_count"`
+	TotalDays  int64 `json:"total_days"`
+}
+
 // boolPtr 从 bool 构造指针（SubmitResultDTO.AIFallback 等可选布尔字段用）。
 func boolPtr(v bool) *bool { return &v }

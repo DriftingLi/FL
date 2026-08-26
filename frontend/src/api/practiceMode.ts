@@ -8,13 +8,20 @@ export interface PracticeProgressData extends PracticeProgress {
   practice_mode?: string
 }
 
-/** 练习统计 */
+/** 练习统计（旧 /stats 聚合） */
 export interface PracticeStats {
   total?: number
   completed?: number
   in_progress?: number
   total_count?: number
   correct_count?: number
+}
+
+/** 刷题数据展示聚合（新 /practice-stats，与后端 PracticePracticeStatsDTO 对齐，含重做，Asia/Shanghai 口径） */
+export interface PracticePracticeStats {
+  today_count: number
+  total_count: number
+  total_days: number
 }
 
 /** 练习历史分页结果（与后端 HistoryResultDTO 对齐） */
@@ -76,6 +83,12 @@ export const practiceModeApi = {
   // 练习统计
   getStats() {
     return unwrappedRequest.get<PracticeStats>('/practice-mode/stats')
+  },
+  // 刷题数据展示（顶部 3 宫格，自动注入 credential_id，与 /stats 独立）
+  getPracticeStats(params?: { credential_id?: number }) {
+    const p = (params || {}) as Record<string, unknown>
+    try { const cred = useCredentialStore().current?.id; if (cred && !p.credential_id) p.credential_id = cred } catch {}
+    return unwrappedRequest.get<PracticePracticeStats>('/practice-mode/practice-stats', { params: p })
   },
   // 练习历史
   getHistory(params: { page?: number; page_size?: number }) {

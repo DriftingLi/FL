@@ -40,36 +40,99 @@ export interface NavItem {
 }
 
 const studentNav: NavItem[] = [
-  { key: 'dashboard', label: '仪表盘', routeName: 'StudentDashboard', icon: HomeFilled, exact: true },
-  { key: 'courses', label: '课程中心', routeName: 'CourseList', icon: Notebook },
-  { key: 'search', label: '全局搜索', routeName: 'StudentSearch', icon: Search },
-  { key: 'materials', label: '学习资料', routeName: 'StudentMaterials', icon: Files },
-  { key: 'forum', label: '学员论坛', routeName: 'ForumPage', icon: ChatDotRound },
-  { key: 'favorites', label: '我的收藏', routeName: 'StudentFavorites', icon: Star },
-  { key: 'question-bank', label: '题库练习', routeName: 'QuestionBank', icon: EditPen },
-  { key: 'wrong-questions', label: '错题本', routeName: 'WrongQuestions', icon: CircleCloseFilled },
-  { key: 'ai-assistant', label: 'AI助手', routeName: 'AIAssistant', icon: MagicStick },
-  { key: 'valuation', label: '残值评估', routeName: 'ValuationHome', icon: PriceTag },
-  { key: 'featured', label: '内容精选', icon: Document, externalUrl: 'https://www.gccsmile.com/news' },
-  { key: 'profile', label: '个人资料', routeName: 'StudentProfile', icon: User }
+  {
+    key: 'learning',
+    label: '学习中心',
+    icon: HomeFilled,
+    children: [
+      { key: 'dashboard', label: '仪表盘', routeName: 'StudentDashboard', icon: HomeFilled, exact: true },
+      { key: 'courses', label: '课程中心', routeName: 'CourseList', icon: Notebook },
+      { key: 'materials', label: '学习资料', routeName: 'StudentMaterials', icon: Files },
+      { key: 'search', label: '全局搜索', routeName: 'StudentSearch', icon: Search }
+    ]
+  },
+  {
+    key: 'exam',
+    label: '题库与考试',
+    icon: EditPen,
+    children: [
+      {
+        key: 'question-bank',
+        label: '题库练习',
+        routeName: 'QuestionBank',
+        icon: EditPen,
+        children: [{ key: 'real-exam', label: '真题练习', routeName: 'RealExamPapers', icon: Document }]
+      },
+      { key: 'mock-exam', label: '模拟考试', routeName: 'MockExam', icon: Document },
+      { key: 'wrong-questions', label: '错题本', routeName: 'WrongQuestions', icon: CircleCloseFilled }
+    ]
+  },
+  {
+    key: 'interactive',
+    label: '互动与工具',
+    icon: ChatDotRound,
+    children: [
+      { key: 'forum', label: '学员论坛', routeName: 'ForumPage', icon: ChatDotRound },
+      { key: 'ai-assistant', label: 'AI助手', routeName: 'AIAssistant', icon: MagicStick },
+      { key: 'valuation', label: '残值评估', routeName: 'ValuationHome', icon: PriceTag },
+      { key: 'featured', label: '内容精选', icon: Document, externalUrl: 'https://www.gccsmile.com/news' }
+    ]
+  },
+  {
+    key: 'personal',
+    label: '个人',
+    icon: User,
+    children: [
+      { key: 'favorites', label: '我的收藏', routeName: 'StudentFavorites', icon: Star },
+      { key: 'profile', label: '个人资料', routeName: 'StudentProfile', icon: User }
+    ]
+  }
 ]
 
 const adminNav: NavItem[] = [
-  { key: 'dashboard', label: '仪表盘', routeName: 'AdminDashboard', icon: DataAnalysis },
-  { key: 'hrwai-users', label: '用户管理', routeName: 'HrwaiUserManage', icon: User },
-  { key: 'profile-review', label: '资料审核', routeName: 'ProfileReview', icon: CircleCheck },
-  { key: 'forum-manage', label: '论坛管理', routeName: 'ForumManage', icon: ChatDotRound },
-  { key: 'tutors', label: '导师管理', routeName: 'TutorManage', icon: UserFilled },
-  { key: 'course-catalog', label: '课程管理', routeName: 'CourseCatalog', icon: FolderOpened },
-  { key: 'credentials', label: '证件管理', routeName: 'CredentialManage', icon: CollectionTag },
-  { key: 'question-review', label: '题库审核', routeName: 'QuestionReview', icon: EditPen },
-  { key: 'question-tags', label: '题库标签', routeName: 'QuestionTags', icon: CollectionTag },
-  { key: 'statistics', label: '统计分析', routeName: 'Statistics', icon: TrendCharts },
-  { key: 'audit-logs', label: '审计日志', routeName: 'AuditLogs', icon: Memo },
-  { key: 'valuation-config', label: '残值配置', routeName: 'ValuationConfigManage', icon: PriceTag },
-  { key: 'ai-settings', label: 'AI 配置', routeName: 'AISettings', icon: Setting },
-  { key: 'content-generate', label: '内容生成', routeName: 'ContentGenerate', icon: MagicStick },
-  { key: 'featured-content', label: '内容精选', routeName: 'AdminFeaturedContentList', icon: Document }
+  {
+    key: 'overview',
+    label: '总览',
+    icon: DataAnalysis,
+    children: [
+      { key: 'dashboard', label: '仪表盘', routeName: 'AdminDashboard', icon: DataAnalysis },
+      { key: 'statistics', label: '统计分析', routeName: 'Statistics', icon: TrendCharts }
+    ]
+  },
+  {
+    key: 'user-content',
+    label: '用户与内容',
+    icon: User,
+    children: [
+      { key: 'hrwai-users', label: '用户管理', routeName: 'HrwaiUserManage', icon: User },
+      { key: 'profile-review', label: '资料审核', routeName: 'ProfileReview', icon: CircleCheck },
+      { key: 'tutors', label: '导师管理', routeName: 'TutorManage', icon: UserFilled },
+      { key: 'forum-manage', label: '论坛管理', routeName: 'ForumManage', icon: ChatDotRound }
+    ]
+  },
+  {
+    key: 'teaching',
+    label: '教学管理',
+    icon: FolderOpened,
+    children: [
+      { key: 'course-catalog', label: '课程管理', routeName: 'CourseCatalog', icon: FolderOpened },
+      { key: 'credentials', label: '证件管理', routeName: 'CredentialManage', icon: CollectionTag },
+      { key: 'question-review', label: '题库审核', routeName: 'QuestionReview', icon: EditPen },
+      { key: 'question-tags', label: '题库标签', routeName: 'QuestionTags', icon: CollectionTag }
+    ]
+  },
+  {
+    key: 'system',
+    label: '系统',
+    icon: Setting,
+    children: [
+      { key: 'audit-logs', label: '审计日志', routeName: 'AuditLogs', icon: Memo },
+      { key: 'valuation-config', label: '残值配置', routeName: 'ValuationConfigManage', icon: PriceTag },
+      { key: 'ai-settings', label: 'AI 配置', routeName: 'AISettings', icon: Setting },
+      { key: 'content-generate', label: '内容生成', routeName: 'ContentGenerate', icon: MagicStick },
+      { key: 'featured-content', label: '内容精选', routeName: 'AdminFeaturedContentList', icon: Document }
+    ]
+  }
 ]
 
 const tutorNav: NavItem[] = [

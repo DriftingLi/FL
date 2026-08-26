@@ -72,10 +72,17 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, rd RouterDeps, adminSvc *service.A
 	g.GET("/statistics", h.GetStatistics)
 }
 
-// ListCourses 课程列表 GET /api/admin/courses
+// ListCourses 课程列表 GET /api/admin/courses（filter=hot|featured|all，缺省 all）
 func (h *AdminHandler) ListCourses(c *gin.Context) {
 	Endpoint[adminCourseListReq, service.CoursePageResult]{
 		Parse: func(c *gin.Context) (*adminCourseListReq, error) {
+			f := c.Query("filter")
+			if f != "" && f != "hot" && f != "featured" && f != "all" {
+				return nil, badRequest("filter 仅支持 hot|featured|all")
+			}
+			if f == "" {
+				f = "all"
+			}
 			return &adminCourseListReq{
 				Page:         atoiDefault(c.Query("page"), 1),
 				PageSize:     atoiDefault(c.Query("page_size"), 10),
@@ -83,10 +90,11 @@ func (h *AdminHandler) ListCourses(c *gin.Context) {
 				CredentialID: queryIDPtr(c, "credential_id"),
 				SpecialtyID:  queryIDPtr(c, "specialty_id"),
 				LevelID:      queryIDPtr(c, "level_id"),
+				Filter:       f,
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *adminCourseListReq) (*service.CoursePageResult, error) {
-			result := h.courseSvc.GetCourses(req.Page, req.PageSize, req.Keyword, req.CredentialID, req.SpecialtyID, req.LevelID)
+			result := h.courseSvc.GetCourses(req.Page, req.PageSize, req.Keyword, req.CredentialID, req.SpecialtyID, req.LevelID, req.Filter)
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *adminCourseListReq, resp *service.CoursePageResult, _ error) {
@@ -753,6 +761,7 @@ type adminCourseListReq struct {
 	CredentialID *int
 	SpecialtyID  *int
 	LevelID      *int
+	Filter       string
 }
 
 // hrwaiUserListReq HRWAI 用户列表查询参数。

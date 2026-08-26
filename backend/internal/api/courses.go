@@ -39,7 +39,7 @@ func RegisterCoursesRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Cour
 
 // ListCourses 课程列表
 // @Summary 课程列表
-// @Description 公开访问，支持按专业方向 specialty_id / 等级 level_id / 目标证件 credential_id 过滤，分页返回
+// @Description 公开访问，支持按专业方向 specialty_id / 等级 level_id / 目标证件 credential_id / 热门精品 filter=hot|featured|all 过滤，分页返回
 // @Tags 学员端-课程
 // @Accept json
 // @Produce json
@@ -48,21 +48,30 @@ func RegisterCoursesRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Cour
 // @Param specialty_id query int false "专业方向ID"
 // @Param level_id query int false "等级ID"
 // @Param credential_id query int false "目标证件ID"
+// @Param filter query string false "热门/精品筛选 hot|featured|all" default(all)
 // @Success 200 {object} response.R{data=service.CoursePageResult} "success"
 // @Router /courses [get]
 func (h *CourseHandler) ListCourses(c *gin.Context) {
 	Endpoint[courseListReq, service.CoursePageResult]{
 		Parse: func(c *gin.Context) (*courseListReq, error) {
+			f := c.Query("filter")
+			if f != "" && f != "hot" && f != "featured" && f != "all" {
+				return nil, badRequest("filter 仅支持 hot|featured|all")
+			}
+			if f == "" {
+				f = "all"
+			}
 			return &courseListReq{
 				Page:         atoiDefault(c.Query("page"), 1),
 				PageSize:     atoiDefault(c.Query("page_size"), 12),
 				CredentialID: queryIDPtr(c, "credential_id"),
 				SpecialtyID:  queryIDPtr(c, "specialty_id"),
 				LevelID:      queryIDPtr(c, "level_id"),
+				Filter:       f,
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *courseListReq) (*service.CoursePageResult, error) {
-			result := h.svc.GetCourses(req.Page, req.PageSize, req.CredentialID, req.SpecialtyID, req.LevelID)
+			result := h.svc.GetCourses(req.Page, req.PageSize, req.CredentialID, req.SpecialtyID, req.LevelID, req.Filter)
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *courseListReq, resp *service.CoursePageResult, _ error) {
@@ -309,4 +318,5 @@ type courseListReq struct {
 	CredentialID *int
 	SpecialtyID  *int
 	LevelID      *int
+	Filter       string
 }
