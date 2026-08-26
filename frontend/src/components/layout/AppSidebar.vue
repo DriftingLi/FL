@@ -42,27 +42,125 @@
       <template v-for="item in menuItems" :key="item.key">
         <!-- 有子项的分组 -->
         <template v-if="item.children && item.children.length">
-          <div v-if="!effectiveCollapsed" class="nav-group-label">
+          <div
+            v-if="!effectiveCollapsed"
+            class="nav-group-label"
+            :class="{ 'is-active': isGroupActive(item), 'is-accordion': mobileOpen }"
+            @click="onGroupToggle(item.key)"
+          >
             <el-icon v-if="item.icon" class="nav-group-icon"><component :is="item.icon" /></el-icon>
             <span>{{ item.label }}</span>
+            <el-icon v-if="mobileOpen" class="nav-group-arrow" :class="{ expanded: isGroupExpanded(item.key) }"><ArrowDown /></el-icon>
           </div>
-          <el-tooltip v-else :content="item.label" placement="right" :show-after="300">
-            <div class="nav-group-icon-only">
+          <el-tooltip v-else placement="right" :show-after="300">
+            <template #content>
+              <div class="nav-group-tooltip-title">{{ item.label }}</div>
+              <div
+                v-for="leaf in flattenLeaves(item)"
+                :key="leaf.key"
+                class="nav-group-tooltip-item"
+                :class="{ active: isRouteActive(leaf) }"
+              >
+                {{ leaf.label }}
+              </div>
+            </template>
+            <div class="nav-group-icon-only" :class="{ 'is-active': isGroupActive(item) }">
               <el-icon><component :is="item.icon" /></el-icon>
             </div>
           </el-tooltip>
-          <router-link
-            v-for="child in item.children"
-            :key="child.key"
-            :to="itemTo(child)"
-            class="nav-item"
-            :class="{ active: isRouteActive(child) }"
-          >
-            <div class="nav-item-icon">
-              <el-icon><component :is="child.icon" /></el-icon>
-            </div>
-            <span v-if="!effectiveCollapsed" class="nav-item-label">{{ child.label }}</span>
-          </router-link>
+          <div v-show="isGroupExpanded(item.key) || effectiveCollapsed" class="nav-group-children">
+            <template v-for="child in item.children" :key="child.key">
+              <!-- 二级嵌套：child 自身还有 children（如 题库练习 ┬ 真题练习） -->
+              <template v-if="child.children && child.children.length">
+                <a
+                  v-if="child.externalUrl"
+                  :href="child.externalUrl"
+                  target="_blank"
+                  rel="noopener"
+                  class="nav-item"
+                >
+                  <div class="nav-item-icon">
+                    <el-icon><component :is="child.icon" /></el-icon>
+                  </div>
+                  <span v-if="!effectiveCollapsed" class="nav-item-label">{{ child.label }}</span>
+                </a>
+                <router-link
+                  v-else-if="child.routeName"
+                  :to="itemTo(child)"
+                  class="nav-item"
+                  :class="{ active: isRouteActive(child) || isGroupActive(child) }"
+                >
+                  <div class="nav-item-icon">
+                    <el-icon><component :is="child.icon" /></el-icon>
+                  </div>
+                  <span v-if="!effectiveCollapsed" class="nav-item-label">{{ child.label }}</span>
+                </router-link>
+                <div v-else class="nav-group-label nav-sub-group-label" :class="{ 'is-active': isGroupActive(child) }">
+                  <span>{{ child.label }}</span>
+                </div>
+                <template v-for="sub in child.children" :key="sub.key">
+                  <a
+                    v-if="sub.externalUrl"
+                    :href="sub.externalUrl"
+                    target="_blank"
+                    rel="noopener"
+                    class="nav-item nav-sub-item"
+                  >
+                    <div class="nav-item-icon">
+                      <el-icon><component :is="sub.icon" /></el-icon>
+                    </div>
+                    <span v-if="!effectiveCollapsed" class="nav-item-label">{{ sub.label }}</span>
+                  </a>
+                  <router-link
+                    v-else
+                    :to="itemTo(sub)"
+                    class="nav-item nav-sub-item"
+                    :class="{ active: isRouteActive(sub) }"
+                  >
+                    <div class="nav-item-icon">
+                      <el-icon><component :is="sub.icon" /></el-icon>
+                    </div>
+                    <span v-if="!effectiveCollapsed" class="nav-item-label">{{ sub.label }}</span>
+                  </router-link>
+                </template>
+              </template>
+              <!-- 叶子 child -->
+              <a
+                v-else-if="child.externalUrl"
+                :href="child.externalUrl"
+                target="_blank"
+                rel="noopener"
+                class="nav-item"
+              >
+                <div class="nav-item-icon">
+                  <el-icon><component :is="child.icon" /></el-icon>
+                </div>
+                <span v-if="!effectiveCollapsed" class="nav-item-label">{{ child.label }}</span>
+              </a>
+              <router-link
+                v-else-if="child.routeName"
+                :to="itemTo(child)"
+                class="nav-item"
+                :class="{ active: isRouteActive(child) }"
+              >
+                <div class="nav-item-icon">
+                  <el-icon><component :is="child.icon" /></el-icon>
+                </div>
+                <span v-if="!effectiveCollapsed" class="nav-item-label">{{ child.label }}</span>
+              </router-link>
+              <a
+                v-else
+                :href="'#'"
+                class="nav-item"
+                @click.prevent
+              >
+                <div class="nav-item-icon">
+                  <el-icon><component :is="child.icon" /></el-icon>
+                </div>
+                <span v-if="!effectiveCollapsed" class="nav-item-label">{{ child.label }}</span>
+              </a>
+            </template>
+          </div>
         </template>
 
         <!-- 外链 -->
@@ -113,7 +211,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { Expand, Fold, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
@@ -137,6 +235,61 @@ const effectiveCollapsed = computed(() => props.collapsed && !props.mobileOpen)
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+
+// 移动端 accordion：记录每个分组是否展开，默认全部展开
+const expandedMap = reactive<Record<string, boolean>>({})
+
+watch(
+  () => props.menuItems,
+  (items) => {
+    for (const item of items) {
+      if (item.children?.length && expandedMap[item.key] === undefined) {
+        expandedMap[item.key] = true
+      }
+    }
+  },
+  { immediate: true, deep: false }
+)
+
+function isGroupExpanded(key: string): boolean {
+  return expandedMap[key] !== false
+}
+
+function onGroupToggle(key: string): void {
+  if (!props.mobileOpen) return
+  expandedMap[key] = !isGroupExpanded(key)
+}
+
+function flattenLeaves(item: NavItem): NavItem[] {
+  const result: NavItem[] = []
+  const walk = (node: NavItem) => {
+    for (const child of node.children || []) {
+      if (child.routeName || child.externalUrl) result.push(child)
+      if (child.children?.length) {
+        for (const sub of child.children) {
+          if (sub.routeName || sub.externalUrl) result.push(sub)
+        }
+      }
+    }
+  }
+  walk(item)
+  return result
+}
+
+function isGroupActive(item: NavItem): boolean {
+  if (!item.children?.length) return false
+  for (const child of item.children) {
+    if (child.children?.length) {
+      if (isRouteActive(child)) return true
+      for (const sub of child.children) {
+        if (isRouteActive(sub)) return true
+      }
+    } else if (isRouteActive(child)) {
+      return true
+    }
+  }
+  return false
+}
 
 const roleLabel = computed(() => {
   const role = authStore.userInfo?.role
@@ -331,6 +484,29 @@ async function handleUserCommand(command: string) {
   gap: 6px;
 }
 
+.nav-group-label.is-active {
+  color: var(--color-primary-600);
+}
+
+.nav-group-label.is-active .nav-group-icon {
+  color: var(--color-primary-600);
+}
+
+.nav-group-label.is-accordion {
+  cursor: pointer;
+  user-select: none;
+}
+
+.nav-group-arrow {
+  margin-left: auto;
+  font-size: 12px;
+  transition: transform var(--duration-fast) var(--ease-default);
+}
+
+.nav-group-arrow.expanded {
+  transform: rotate(180deg);
+}
+
 .nav-group-icon {
   font-size: 14px;
   color: var(--color-text-muted);
@@ -346,8 +522,57 @@ async function handleUserCommand(command: string) {
   cursor: default;
 }
 
+.nav-group-icon-only.is-active {
+  color: var(--color-primary-600);
+  background: var(--color-primary-50);
+  border-radius: var(--radius-md);
+}
+
 .nav-group-icon-only .el-icon {
   font-size: 16px;
+}
+
+.nav-group-children {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.nav-sub-group-label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--color-text-muted);
+  padding: var(--space-2) var(--space-3) var(--space-1) calc(var(--space-3) + 12px);
+  white-space: nowrap;
+}
+
+.nav-sub-group-label.is-active {
+  color: var(--color-primary-600);
+}
+
+.nav-sub-item {
+  padding-left: calc(var(--space-3) + 12px);
+}
+
+.app-sidebar.collapsed .nav-sub-item {
+  padding-left: var(--space-2);
+}
+
+.nav-group-tooltip-title {
+  font-weight: var(--font-semibold);
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.nav-group-tooltip-item {
+  font-size: 12px;
+  line-height: 1.7;
+  opacity: 0.9;
+}
+
+.nav-group-tooltip-item.active {
+  font-weight: var(--font-semibold);
+  opacity: 1;
 }
 
 .nav-item {
