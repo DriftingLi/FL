@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"path/filepath"
@@ -146,6 +147,22 @@ func (s *FileStore) ValidateImage(filename string, size int64) (bool, string) {
 		return false, fmt.Sprintf("图片大小超出限制，最大允许%dMB", maxFileSizes["image"]/(1024*1024))
 	}
 	return true, ""
+}
+
+// Read 按 URL 读回文件内容（本地/对象存储统一），返回内容与从扩展名推断的 MIME 类型。
+func (s *FileStore) Read(fileURL string) ([]byte, string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	reader, err := s.storage.Get(ctx, fileURL)
+	if err != nil {
+		return nil, "", err
+	}
+	defer reader.Close()
+	content, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, "", err
+	}
+	return content, mimeTypeFromExt(fileExtension(fileURL)), nil
 }
 
 // ===== 章节文件校验（package-private：仅导师文件上传路径使用）=====

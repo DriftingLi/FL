@@ -53,6 +53,11 @@ var FeatureLabel = map[string]string{
 	FeatureAIAssistantNormal:      "AI 助手 · 普通模式",
 	FeatureAIAssistantExpert:      "AI 助手 · 专家模式",
 	FeatureQuestionExplanation:    "题目 AI 解析",
+	FeatureFaultConsult:           "故障咨询",
+	FeatureFaultCodeQuery:         "故障代码查询",
+	FeatureMaintenanceKnowledge:   "维保知识",
+	FeatureDrawingRecognition:     "图纸识别",
+	FeatureExerciseSolving:        "习题解答",
 	// 遗留兼容
 	FeatureAIAssistant:            "AI 助手对话",
 	FeatureFaultConsult:           "故障咨询",

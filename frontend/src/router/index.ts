@@ -244,6 +244,13 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/ai-assistant/AIAssistantPage.vue'),
     meta: { requiresAuth: false }
   },
+  // 专项功能页（故障咨询/故障代码查询/维保知识/图纸识别/习题解答）
+  {
+    path: '/ai-assistant/:featureKey(fault-consult|fault-code|maintenance|drawing|exercise)',
+    name: 'AIAssistantFeature',
+    component: () => import('@/pages/ai-assistant/FeatureChatPage.vue'),
+    meta: { requiresAuth: false }
+  },
 
   // ========== 管理员后台 ==========
   {

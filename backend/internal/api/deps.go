@@ -130,7 +130,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		WrongQuestionSvc:     service.NewWrongQuestionService(db, aiSvc, logger),
 		TrainingCatalogSvc:   service.NewTrainingCatalogService(db, logger),
 		AuditSvc:             service.NewAuditService(db),
-		AIAssistantSvc:       service.NewAIAssistantService(db, aiConfigSvc, cfg.SecretKey, logger),
+		AIAssistantSvc:       service.NewAIAssistantService(db, aiConfigSvc, fileSvc, cfg.SecretKey, logger),
 		QuestionCommentSvc:   service.NewQuestionCommentService(db, logger),
 		QuestionNoteSvc:      service.NewQuestionNoteService(db, logger),
 		QuestionKnowledgeSvc: service.NewQuestionKnowledgeService(db),

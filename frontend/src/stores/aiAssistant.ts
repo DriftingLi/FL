@@ -1,4 +1,4 @@
-// AI 助手模块 Pinia store（双模式：普通/专家，隐藏底层模型）
+// AI 助手模块 Pinia store（双模式：普通/专家，隐藏底层模型；专项功能：管理端单绑定模型）
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Ref } from 'vue'
@@ -12,12 +12,15 @@ import {
 import { useAuthStore } from '@/stores/auth'
 
 export const useAIAssistantStore = defineStore('aiAssistant', () => {
-  // ===== 双模式模型（普通/专家） =====
+  // ===== 功能上下文 =====
+  // 'ai_assistant'=通用 AI 助手（双模式 normal/expert）；其余为专项功能（管理端单绑定模型）
+  const featureKey: Ref<string> = ref('ai_assistant')
+  const isFeatureMode = computed(() => featureKey.value !== 'ai_assistant')
+
+  // ===== 双模式模型（普通/专家，仅通用助手使用） =====
   const modeModels: Ref<AIAssistantModeModels> = ref({ normal: null, expert: null })
   const selectedMode: Ref<AIMode> = ref('normal')
   const modelsLoading = ref(false)
-
-
 
   // ===== 会话管理 =====
   const sessions: Ref<ChatSession[]> = ref([])
@@ -71,7 +74,9 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     }
     sessionsLoading.value = true
     try {
-      sessions.value = await aiAssistantApi.listSessions()
+      sessions.value = await aiAssistantApi.listSessions(
+        isFeatureMode.value ? featureKey.value : undefined
+      )
     } catch {
       // 错误已由拦截器提示
     } finally {
@@ -81,7 +86,11 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
 
   async function createSession(title?: string, modelName?: string) {
     if (!isLoggedIn.value) return null
-    const session = await aiAssistantApi.createSession({ title, model_name: modelName })
+    const session = await aiAssistantApi.createSession({
+      title,
+      model_name: modelName,
+      feature_key: isFeatureMode.value ? featureKey.value : undefined
+    })
     sessions.value.unshift(session)
     currentSessionId.value = session.id
     messages.value = []
@@ -119,21 +128,27 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
   }
 
   // ===== 流式对话 =====
-  async function sendMessage(content: string) {
-    if (!content.trim() || streaming.value) return
-    // 校验模式可用性
-    const modeAvailable = selectedMode.value === 'normal' ? !!modeModels.value.normal : !!modeModels.value.expert
-    if (!modeAvailable) throw new Error('当前模式未绑定模型，请联系管理员配置')
+  async function sendMessage(content: string, images?: string[]) {
+    if ((!content.trim() && !(images && images.length > 0)) || streaming.value) return
+    // 专项功能模式：模型由后端按功能绑定解析；通用模式校验双模式可用性
+    if (!isFeatureMode.value) {
+      const modeAvailable = selectedMode.value === 'normal' ? !!modeModels.value.normal : !!modeModels.value.expert
+      if (!modeAvailable) throw new Error('当前模式未绑定模型，请联系管理员配置')
+    }
 
-    const historyMessages = messages.value
-      .filter(m => m.role === 'user' || m.role === 'assistant')
-      .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
-    historyMessages.push({ role: 'user', content })
+    const reqImages = images && images.length > 0 ? images : undefined
+    // 拼装消息历史（仅传当前会话已有消息 + 新消息）；历史消息仅文本（后端只取末条图片）
+    const historyMessages: Array<{ role: 'user' | 'assistant'; content: string; images?: string[] }> =
+      messages.value
+        .filter(m => m.role === 'user' || m.role === 'assistant')
+        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+    historyMessages.push({ role: 'user', content, images: reqImages })
 
     const userMsg: ChatMessage = {
       id: Date.now(),
       role: 'user',
       content,
+      images: reqImages,
       created_at: new Date().toISOString()
     }
     messages.value.push(userMsg)
@@ -144,10 +159,13 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
 
     const req: any = {
       session_id: isLoggedIn.value ? currentSessionId.value ?? undefined : undefined,
-      mode: selectedMode.value,
-      // 兼容旧后端：同时带 model_source/config_id
+      // 专项功能：feature_key（后端按绑定解析模型）；通用助手：mode + 兼容 config_id
+      feature_key: isFeatureMode.value ? featureKey.value : undefined,
+      mode: isFeatureMode.value ? undefined : selectedMode.value,
       model_source: 'admin',
-      config_id: (selectedMode.value === 'expert' ? modeModels.value.expert?.id : modeModels.value.normal?.id) ?? undefined,
+      config_id: isFeatureMode.value
+        ? undefined
+        : (selectedMode.value === 'expert' ? modeModels.value.expert?.id : modeModels.value.normal?.id) ?? undefined,
       messages: historyMessages
     }
 
@@ -218,9 +236,29 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     }
   }
 
-  // ===== 初始化 =====
+  // ===== 图片上传（多模态对话）=====
+  async function uploadImage(file: File): Promise<string> {
+    return aiAssistantApi.uploadImage(file)
+  }
+
+  // ===== 初始化（通用 AI 助手页） =====
   async function init() {
+    // 从功能页返回时重置功能上下文
+    featureKey.value = 'ai_assistant'
     await loadAssistantModes()
+    if (isLoggedIn.value) {
+      await loadSessions()
+    }
+  }
+
+  // ===== 专项功能初始化 =====
+  // 切换功能上下文：重置会话/消息后按功能加载会话（模型由后端绑定解析，无需加载模式列表）
+  async function initFeature(key: string) {
+    if (featureKey.value === key && sessions.value.length > 0) return
+    featureKey.value = key
+    sessions.value = []
+    messages.value = []
+    currentSessionId.value = null
     if (isLoggedIn.value) {
       await loadSessions()
     }
@@ -228,6 +266,8 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
 
   return {
     // state
+    featureKey,
+    isFeatureMode,
     modeModels,
     selectedMode,
     modelsLoading,
@@ -241,6 +281,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     isLoggedIn,
     // actions
     init,
+    initFeature,
     loadAssistantModes,
     selectMode,
     loadSessions,
@@ -249,6 +290,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     renameSession,
     selectSession,
     sendMessage,
-    stopStreaming
+    stopStreaming,
+    uploadImage
   }
 })
