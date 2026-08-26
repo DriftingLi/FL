@@ -468,12 +468,13 @@ func (AIFeatureBinding) TableName() string { return "ai_feature_bindings" }
 
 // AIChatSession AI 助手会话（归属 valuation_users）。
 type AIChatSession struct {
-	ID        int       `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	UserID    int       `gorm:"column:user_id" json:"user_id"`
-	Title     string    `gorm:"column:title" json:"title"`
-	ModelName string    `gorm:"column:model_name" json:"model_name"`
-	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
+	ID         int       `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	UserID     int       `gorm:"column:user_id" json:"user_id"`
+	Title      string    `gorm:"column:title" json:"title"`
+	ModelName  string    `gorm:"column:model_name" json:"model_name"`
+	FeatureKey string    `gorm:"column:feature_key" json:"feature_key"` // 所属功能（旧数据为 ai_assistant）
+	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt  time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (AIChatSession) TableName() string { return "ai_chat_sessions" }
@@ -484,6 +485,7 @@ type AIChatMessage struct {
 	SessionID int       `gorm:"column:session_id" json:"session_id"`
 	Role      string    `gorm:"column:role" json:"role"` // 'user' | 'assistant' | 'system'
 	Content   string    `gorm:"column:content" json:"content"`
+	Images    string    `gorm:"column:images" json:"-"` // JSON 数组字符串，用户消息附带的图片 URL
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 

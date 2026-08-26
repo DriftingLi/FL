@@ -19,7 +19,7 @@ func TestAIDualStackSharedConfigFromBinding(t *testing.T) {
 	}
 	secretKey := "test-master-key"
 	aiConfigSvc := NewAIConfigService(db, secretKey, zap.NewNop())
-	assistant := NewAIAssistantService(db, aiConfigSvc, secretKey, zap.NewNop())
+	assistant := NewAIAssistantService(db, aiConfigSvc, NewFileStore("", nil, zap.NewNop()), secretKey, zap.NewNop())
 	aiSvc := NewAIService(db, aiConfigSvc, zap.NewNop())
 
 	const (
@@ -71,7 +71,7 @@ func TestAIAssistantResolveModelConfig_Sources(t *testing.T) {
 	}
 	secretKey := "test-master-key"
 	aiConfigSvc := NewAIConfigService(db, secretKey, zap.NewNop())
-	assistant := NewAIAssistantService(db, aiConfigSvc, secretKey, zap.NewNop())
+	assistant := NewAIAssistantService(db, aiConfigSvc, NewFileStore("", nil, zap.NewNop()), secretKey, zap.NewNop())
 
 	// user 来源：解密后的 API Key 与 DB 字段一一映射
 	encKey, err := security.EncryptSecret("sk-user-secret", secretKey)

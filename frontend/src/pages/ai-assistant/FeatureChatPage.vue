@@ -1,5 +1,5 @@
 <template>
-  <div class="ai-assistant-page">
+  <div class="feature-chat-page">
     <!-- 顶部栏 -->
     <header class="topbar">
       <div class="topbar-container">
@@ -7,11 +7,13 @@
           <img src="/images/HRWAIlogo.jpg" alt="和润天下" class="logo-img" />
           <div class="logo-text-wrap">
             <span class="logo-text">和润天下</span>
-            <span class="logo-sub">AI 叉车助手 · HRWAI</span>
+            <span class="logo-sub">AI 叉车助手 · {{ feature?.title }}</span>
           </div>
         </a>
 
         <div class="topbar-actions">
+          <router-link to="/ai-assistant" class="back-link">返回 AI 助手</router-link>
+
           <!-- 未登录：显示登录按钮 -->
           <el-button v-if="!isLoggedIn" type="primary" size="default" @click="goLogin">
             登录 HRWAI 账号
@@ -54,37 +56,16 @@
             v-for="s in store.sessions"
             :key="s.id"
             class="session-item"
-            :class="{ active: store.currentSessionId === s.id, editing: editingSessionId === s.id }"
-            @click="handleSelectSession(s.id)"
+            :class="{ active: store.currentSessionId === s.id }"
+            @click="store.selectSession(s.id)"
           >
             <div class="session-info">
-              <!-- 编辑模式 -->
-              <el-input
-                v-if="editingSessionId === s.id"
-                v-model="editingTitle"
-                size="small"
-                :ref="(el: any) => { if (el) editInputRef = el }"
-                placeholder="输入新标题"
-                maxlength="100"
-                @click.stop
-                @keydown.enter.prevent="commitRename(s.id)"
-                @keydown.esc.prevent="cancelRename"
-                @blur="commitRename(s.id)"
-              />
-              <!-- 展示模式 -->
-              <template v-else>
-                <span class="session-title" @dblclick.stop="startRename(s)">{{ s.title || '新会话' }}</span>
-                <span class="session-time">{{ formatShortDateTime(s.updated_at) }}</span>
-              </template>
+              <span class="session-title">{{ s.title || '新会话' }}</span>
+              <span class="session-time">{{ formatShortDateTime(s.updated_at) }}</span>
             </div>
-            <div v-if="editingSessionId !== s.id" class="session-actions">
-              <button class="session-rename" title="重命名" @click.stop="startRename(s)">
-                <el-icon :size="14"><Edit /></el-icon>
-              </button>
-              <button class="session-delete" title="删除" @click.stop="handleDeleteSession(s.id)">
-                <el-icon :size="14"><Delete /></el-icon>
-              </button>
-            </div>
+            <button class="session-delete" title="删除" @click.stop="handleDeleteSession(s.id)">
+              <el-icon :size="14"><Delete /></el-icon>
+            </button>
           </div>
         </div>
       </aside>
@@ -96,41 +77,40 @@
           <!-- 空状态 -->
           <div v-if="store.messages.length === 0 && !store.streaming" class="welcome-area">
             <div class="welcome-icon">
-              <el-icon :size="36"><ChatDotRound /></el-icon>
+              <el-icon :size="36"><component :is="feature?.icon" /></el-icon>
             </div>
-            <h2 class="welcome-title">叉车维修 AI 助手</h2>
-            <p class="welcome-desc">
-              我是您的叉车维修专家助手，可以帮您解答叉车选购、维保周期、故障诊断、操作规范等问题。
-            </p>
+            <h2 class="welcome-title">{{ feature?.title }}</h2>
+            <p class="welcome-desc">{{ feature?.welcome }}</p>
+
+            <!-- 预设选项 -->
+            <div v-if="feature?.quickOptions?.length" class="quick-options-area">
+              <div v-for="group in feature.quickOptions" :key="group.label" class="quick-option-group">
+                <span class="quick-option-label">{{ group.label }}</span>
+                <div class="quick-option-chips">
+                  <button
+                    v-for="opt in group.options"
+                    :key="opt"
+                    class="quick-option-chip"
+                    :class="{ active: selectedOptions[group.label] === opt }"
+                    @click="toggleOption(group.label, opt)"
+                  >
+                    {{ opt }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 预设提示词 -->
             <div class="suggestion-grid">
-              <div class="suggestion-card" @click="useSuggestion('叉车日常检查项目有哪些？')">
-                叉车日常检查项目有哪些？
-              </div>
-              <div class="suggestion-card" @click="useSuggestion('电动叉车电池续航下降怎么排查？')">
-                电动叉车电池续航下降怎么排查？
-              </div>
-              <div class="suggestion-card" @click="useSuggestion('液压系统压力不足的常见原因？')">
-                液压系统压力不足的常见原因？
-              </div>
-              <div class="suggestion-card" @click="useSuggestion('叉车季度保养项目有哪些？')">
-                叉车季度保养项目有哪些？
-              </div>
-            </div>
-
-            <!-- 专项功能入口 -->
-            <div class="feature-entry-grid">
               <div
-                v-for="f in aiFeatures"
-                :key="f.key"
-                class="feature-entry-card"
-                @click="router.push(f.routePath)"
+                v-for="s in feature?.suggestions || []"
+                :key="s"
+                class="suggestion-card"
+                @click="useSuggestion(s)"
               >
-                <el-icon :size="20" class="feature-entry-icon"><component :is="f.icon" /></el-icon>
-                <span class="feature-entry-title">{{ f.title }}</span>
-                <span class="feature-entry-desc">{{ f.entryDesc }}</span>
+                {{ s }}
               </div>
             </div>
-
             <div v-if="!isLoggedIn" class="guest-hint">
               您当前以游客身份使用，<a href="javascript:void(0)" @click="goLogin">登录</a> 后可保存对话历史
             </div>
@@ -148,16 +128,23 @@
               <el-icon v-else :size="18"><ChatDotRound /></el-icon>
             </div>
             <div class="message-content">
-              <div v-if="msg.role === 'user'" class="message-text">{{ msg.content }}</div>
-              <div v-else class="message-text markstream-vue">
-                <MarkdownRender
-                  mode="chat"
-                  :content="msg.content"
-                  :final="true"
-                  html-policy="escape"
-                  :fade="false"
-                />
-              </div>
+              <!-- 用户消息：图片缩略图 + 文本 -->
+              <template v-if="msg.role === 'user'">
+                <div v-if="msg.images?.length" class="message-images">
+                  <el-image
+                    v-for="(img, i) in msg.images"
+                    :key="i"
+                    :src="img"
+                    :preview-src-list="msg.images"
+                    :initial-index="i"
+                    fit="cover"
+                    class="message-image-thumb"
+                    preview-teleported
+                  />
+                </div>
+                <div v-if="msg.content" class="message-text">{{ msg.content }}</div>
+              </template>
+              <div v-else class="message-text markdown-body" v-html="renderMarkdown(msg.content)"></div>
             </div>
           </div>
 
@@ -167,15 +154,7 @@
               <el-icon :size="18"><ChatDotRound /></el-icon>
             </div>
             <div class="message-content">
-              <div v-if="store.streamingContent" class="message-text markstream-vue">
-                <MarkdownRender
-                  mode="chat"
-                  :content="store.streamingContent"
-                  :final="!store.streaming"
-                  html-policy="escape"
-                  :fade="false"
-                />
-              </div>
+              <div v-if="store.streamingContent" class="message-text markdown-body" v-html="renderMarkdown(store.streamingContent)"></div>
               <div v-else class="message-loading">
                 <span class="loading-dot"></span>
                 <span class="loading-dot"></span>
@@ -185,78 +164,90 @@
           </div>
         </div>
 
-        <!-- 输入区（拉高，模式选择左下，发送右下） -->
+        <!-- 输入区 -->
         <div class="chat-input-area">
-          <div class="input-wrap input-wrap--raised">
+          <!-- 待发送图片 -->
+          <div v-if="pendingImages.length" class="pending-images">
+            <div v-for="(p, i) in pendingImages" :key="p.url" class="pending-image-item">
+              <img :src="p.previewUrl" class="pending-image-thumb" alt="待发送图片" />
+              <button class="pending-image-remove" title="移除" @click="removePendingImage(i)">
+                <el-icon :size="12"><Close /></el-icon>
+              </button>
+              <div v-if="p.uploading" class="pending-image-mask">上传中</div>
+            </div>
+          </div>
+          <div class="input-wrap" :class="{ 'has-image': supportsImage }">
+            <el-upload
+              v-if="supportsImage"
+              :show-file-list="false"
+              :auto-upload="false"
+              accept="image/png,image/jpeg,image/gif,image/webp,image/bmp,image/svg+xml"
+              :disabled="store.streaming"
+              multiple
+              @change="handleImageSelect"
+            >
+              <el-button :icon="Picture" circle :disabled="store.streaming || pendingImages.length >= maxImages" title="上传图片" />
+            </el-upload>
             <el-input
               v-model="inputText"
               type="textarea"
-              :rows="4"
-              :autosize="{ minRows: 3, maxRows: 8 }"
-              placeholder="输入您的问题...（Enter 发送，Shift+Enter 换行）"
+              :rows="2"
+              :autosize="{ minRows: 1, maxRows: 6 }"
+              :placeholder="supportsImage ? '输入问题或上传图纸/习题图片...（Enter 发送，Shift+Enter 换行）' : '输入您的问题...（Enter 发送，Shift+Enter 换行）'"
               resize="none"
               @keydown.enter="handleEnter"
               :disabled="store.streaming"
             />
-            <div class="input-footer">
-              <div class="mode-selector">
-                <el-radio-group v-model="selectedMode" size="small" :disabled="store.streaming">
-                  <el-radio-button value="normal" :disabled="!store.modeModels.normal">普通模式</el-radio-button>
-                  <el-radio-button value="expert" :disabled="!store.modeModels.expert">专家模式</el-radio-button>
-                </el-radio-group>
-              </div>
-              <div class="input-actions">
-                <el-button
-                  v-if="!store.streaming"
-                  type="primary"
-                  :icon="Promotion"
-                  :disabled="!inputText.trim() || isModeUnavailable"
-                  @click="handleSend"
-                >
-                  发送
-                </el-button>
-                <el-button v-else type="danger" :icon="VideoPause" @click="store.stopStreaming">
-                  停止
-                </el-button>
-              </div>
+            <div class="input-actions">
+              <el-button
+                v-if="!store.streaming"
+                type="primary"
+                :icon="Promotion"
+                :disabled="!canSend"
+                @click="handleSend"
+              >
+                发送
+              </el-button>
+              <el-button v-else type="danger" :icon="VideoPause" @click="store.stopStreaming">
+                停止
+              </el-button>
             </div>
-          </div>
-          <div v-if="isModeUnavailable" class="model-warning">
-            当前模式未配置，请联系管理员在“AI 配置”中绑定
           </div>
         </div>
       </main>
     </div>
-
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadFile } from 'element-plus'
 import {
   Plus,
   Delete,
-  Edit,
   ArrowDown,
   User,
   ChatDotRound,
   Promotion,
-  VideoPause
+  VideoPause,
+  Picture,
+  Close
 } from '@element-plus/icons-vue'
-import MarkdownRender from 'markstream-vue'
-import 'markstream-vue/index.css'
+import { marked } from 'marked'
 import { useAIAssistantStore } from '@/stores/aiAssistant'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import { buildSubdomainUrl } from '@/utils/subdomain'
 import { formatShortDateTime } from '@/utils/format'
-import { AI_FEATURES } from '@/config/aiFeatures'
+import { getAIFeature } from '@/config/aiFeatures'
+import '@/assets/styles/markdown.css'
 
 const store = useAIAssistantStore()
 const authStore = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 
 const homeUrl = buildSubdomainUrl('main', '/')
 const isLoggedIn = computed(() => store.isLoggedIn)
@@ -265,89 +256,61 @@ const displayName = computed(() => {
   return info?.username || 'HRWAI 用户'
 })
 
+const feature = computed(() => getAIFeature(route.params.featureKey as string))
+const supportsImage = computed(() => feature.value?.supportsImage === true)
+const maxImages = computed(() => feature.value?.maxImages ?? 4)
+
 const inputText = ref('')
 const messageListRef = ref<HTMLElement>()
 
-const selectedMode = computed({
-  get: () => store.selectedMode,
-  set: (v: 'normal' | 'expert') => store.selectMode(v)
-})
-const isModeUnavailable = computed(() => {
-  const m = store.selectedMode
-  if (m === 'normal') return !store.modeModels.normal
-  if (m === 'expert') return !store.modeModels.expert
-  return !store.modeModels.normal && !store.modeModels.expert
-})
+interface PendingImage {
+  url: string          // 上传成功后的服务器 URL
+  previewUrl: string   // 本地 blob 预览
+  uploading: boolean
+}
+const pendingImages = ref<PendingImage[]>([])
 
-const aiFeatures = AI_FEATURES
+const canSend = computed(() =>
+  (!inputText.value.trim() && pendingImages.value.length === 0)
+    ? false
+    : !pendingImages.value.some(p => p.uploading)
+)
 
-// 使用学员端登录页登录，登录成功后回到 AI 助手
+const selectedOptions = ref<Record<string, string>>({})
+
 function goLogin() {
-  router.push({ path: '/login', query: { redirect: '/ai-assistant' } })
+  router.push({ path: '/login', query: { redirect: route.fullPath } })
 }
 
-// 会话重命名状态
-const editingSessionId = ref<number | null>(null)
-const editingTitle = ref('')
-const editInputRef = ref<any>(null)
-let renamingLock = false // 防止 blur + enter 重复触发
-
-// 选中会话：若正在编辑当前会话则不切换
-function handleSelectSession(id: number) {
-  if (editingSessionId.value === id) return
-  store.selectSession(id)
-}
-
-// 进入重命名模式
-async function startRename(s: { id: number; title: string }) {
-  editingSessionId.value = s.id
-  editingTitle.value = s.title || ''
-  renamingLock = false
-  await nextTick()
-  // 自动聚焦 + 选中文字
-  const input = editInputRef.value?.input || editInputRef.value?.textarea
-  if (input) {
-    input.focus()
-    setTimeout(() => input.select?.(), 0)
+function toggleOption(label: string, opt: string) {
+  if (selectedOptions.value[label] === opt) {
+    delete selectedOptions.value[label]
+  } else {
+    selectedOptions.value[label] = opt
   }
 }
 
-function cancelRename() {
-  editingSessionId.value = null
-  editingTitle.value = ''
-  renamingLock = false
+// 组装消息内容：预设选项作为前缀注入
+function buildContent(text: string): string {
+  const groups = feature.value?.quickOptions || []
+  const tags = groups
+    .map(g => (selectedOptions.value[g.label] ? `[${g.label}：${selectedOptions.value[g.label]}]` : ''))
+    .filter(Boolean)
+  if (tags.length === 0) return text
+  return tags.join(' ') + '\n\n' + text
 }
 
-// 提交重命名
-async function commitRename(sessionId: number) {
-  if (renamingLock) return
-  renamingLock = true
+marked.setOptions({
+  breaks: true,
+  gfm: true
+})
+
+function renderMarkdown(content: string): string {
+  if (!content) return ''
   try {
-    if (editingSessionId.value !== sessionId) {
-      // 已被取消或切换到其他会话
-      return
-    }
-    const newTitle = editingTitle.value.trim()
-    if (!newTitle) {
-      cancelRename()
-      return
-    }
-    const session = store.sessions.find(s => s.id === sessionId)
-    if (session && session.title === newTitle) {
-      // 未变更，直接退出编辑
-      cancelRename()
-      return
-    }
-    try {
-      await store.renameSession(sessionId, newTitle)
-      ElMessage.success('已更新会话标题')
-    } catch {
-      /* 错误已由拦截器提示 */
-    } finally {
-      cancelRename()
-    }
-  } finally {
-    renamingLock = false
+    return marked.parse(content) as string
+  } catch {
+    return content
   }
 }
 
@@ -366,16 +329,18 @@ function handleEnter(e: KeyboardEvent) {
 
 async function handleSend() {
   const text = inputText.value.trim()
-  if (!text) return
-  if (isModeUnavailable.value) {
-    ElMessage.warning('当前模式未配置，请联系管理员')
+  const images = pendingImages.value.map(p => p.url)
+  if (!text && images.length === 0) return
+  if (pendingImages.value.some(p => p.uploading)) {
+    ElMessage.warning('图片上传中，请稍候')
     return
   }
   if (store.streaming) return
 
   inputText.value = ''
+  pendingImages.value = []
   try {
-    await store.sendMessage(text)
+    await store.sendMessage(buildContent(text), images.length > 0 ? images : undefined)
     await scrollToBottom()
   } catch (e: any) {
     // 错误已由 store 处理
@@ -387,9 +352,38 @@ function useSuggestion(text: string) {
   handleSend()
 }
 
+// 图片选择：立即上传，本地 blob 先行预览
+async function handleImageSelect(file: UploadFile) {
+  const raw = file.raw
+  if (!raw) return
+  if (pendingImages.value.length >= maxImages.value) {
+    ElMessage.warning(`最多上传 ${maxImages.value} 张图片`)
+    return
+  }
+  const previewUrl = URL.createObjectURL(raw)
+  const pending: PendingImage = { url: '', previewUrl, uploading: true }
+  pendingImages.value.push(pending)
+  try {
+    pending.url = await store.uploadImage(raw)
+  } catch (e: any) {
+    ElMessage.error(e?.message || '图片上传失败')
+    pendingImages.value = pendingImages.value.filter(p => p !== pending)
+    URL.revokeObjectURL(previewUrl)
+  } finally {
+    pending.uploading = false
+  }
+}
+
+function removePendingImage(index: number) {
+  const removed = pendingImages.value[index]
+  if (removed) {
+    URL.revokeObjectURL(removed.previewUrl)
+  }
+  pendingImages.value.splice(index, 1)
+}
+
 async function handleNewSession() {
-  const label = store.selectedMode === 'expert' ? '专家模式' : '普通模式'
-  await store.createSession('新会话', label)
+  await store.createSession('新会话')
 }
 
 async function handleDeleteSession(id: number) {
@@ -421,12 +415,16 @@ watch(() => store.messages.length, () => scrollToBottom())
 watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
 
 onMounted(() => {
-  store.init()
+  if (feature.value) {
+    store.initFeature(feature.value.key)
+  } else {
+    router.replace('/ai-assistant')
+  }
 })
 </script>
 
 <style scoped>
-.ai-assistant-page {
+.feature-chat-page {
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -631,47 +629,16 @@ onMounted(() => {
   border-radius: 4px;
   opacity: 0;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
-.session-rename {
-  border: none;
-  background: transparent;
-  color: var(--color-text-tertiary, #94a3b8);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  opacity: 0;
-  transition: all 0.15s ease;
-}
-
-.session-actions {
-  display: flex;
-  gap: 2px;
-  opacity: 1;
-}
-
-.session-item:hover .session-rename,
 .session-item:hover .session-delete {
   opacity: 1;
-}
-
-.session-rename:hover {
-  color: var(--color-brand-600, #0284c7);
-  background: var(--color-brand-50, #f0f9ff);
 }
 
 .session-delete:hover {
   color: #ef4444;
   background: #fef2f2;
-}
-
-.session-item.editing {
-  background: var(--color-brand-50, #f0f9ff);
-  cursor: default;
-}
-
-.session-item.editing .session-info {
-  gap: 4px;
 }
 
 /* ===== 对话主区 ===== */
@@ -695,7 +662,7 @@ onMounted(() => {
 /* ===== 欢迎区 ===== */
 .welcome-area {
   text-align: center;
-  padding: 48px 24px;
+  padding: 40px 24px;
 }
 
 .welcome-icon {
@@ -721,10 +688,64 @@ onMounted(() => {
   font-size: 14px;
   color: var(--color-text-tertiary, #94a3b8);
   line-height: 1.6;
-  max-width: 500px;
-  margin: 0 auto 32px;
+  max-width: 560px;
+  margin: 0 auto 24px;
 }
 
+/* ===== 预设选项 ===== */
+.quick-options-area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.quick-option-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.quick-option-label {
+  font-size: 13px;
+  color: var(--color-text-secondary, #475569);
+  font-weight: 600;
+}
+
+.quick-option-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.quick-option-chip {
+  padding: 4px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-light, #e2e8f0);
+  background: var(--color-surface, #fff);
+  color: var(--color-text-secondary, #475569);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.quick-option-chip:hover {
+  border-color: var(--color-brand-400, #38bdf8);
+  color: var(--color-brand-600, #0284c7);
+}
+
+.quick-option-chip.active {
+  border-color: var(--color-brand-600, #0284c7);
+  background: var(--color-brand-50, #f0f9ff);
+  color: var(--color-brand-600, #0284c7);
+  font-weight: 600;
+}
+
+/* ===== 预设提示词 ===== */
 .suggestion-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -757,52 +778,6 @@ onMounted(() => {
   margin-top: 32px;
   font-size: 13px;
   color: var(--color-text-tertiary, #94a3b8);
-}
-
-/* ===== 专项功能入口 ===== */
-.feature-entry-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 12px;
-  max-width: 760px;
-  margin: 20px auto 0;
-}
-
-.feature-entry-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 16px 10px;
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border-light, #e2e8f0);
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.feature-entry-card:hover {
-  border-color: var(--color-brand-400, #38bdf8);
-  background: var(--color-brand-50, #f0f9ff);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.1);
-}
-
-.feature-entry-icon {
-  color: var(--color-brand-600, #0284c7);
-}
-
-.feature-entry-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-primary, #0f172a);
-}
-
-.feature-entry-desc {
-  font-size: 11px;
-  color: var(--color-text-tertiary, #94a3b8);
-  text-align: center;
-  line-height: 1.4;
 }
 
 .guest-hint a {
@@ -866,6 +841,70 @@ onMounted(() => {
   color: white;
 }
 
+/* 用户消息图片 */
+.message-images {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.message-image-thumb {
+  width: 120px;
+  height: 120px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-light, #e2e8f0);
+  cursor: pointer;
+}
+
+/* markdown 样式 */
+.message-item.assistant .markdown-body :deep(h1),
+.message-item.assistant .markdown-body :deep(h2),
+.message-item.assistant .markdown-body :deep(h3) {
+  margin: 16px 0 8px;
+  font-weight: 600;
+}
+
+.message-item.assistant .markdown-body :deep(h1) { font-size: 18px; }
+.message-item.assistant .markdown-body :deep(h2) { font-size: 16px; }
+.message-item.assistant .markdown-body :deep(h3) { font-size: 15px; }
+
+.message-item.assistant .markdown-body :deep(p) {
+  margin: 8px 0;
+}
+
+.message-item.assistant .markdown-body :deep(ul),
+.message-item.assistant .markdown-body :deep(ol) {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.message-item.assistant .markdown-body :deep(li) {
+  margin: 4px 0;
+}
+
+.message-item.assistant .markdown-body :deep(code) {
+  background: var(--color-bg-page, #f8fafc);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: var(--font-mono, monospace);
+}
+
+.message-item.assistant .markdown-body :deep(pre) {
+  background: var(--color-bg-page, #f8fafc);
+  padding: 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.message-item.assistant .markdown-body :deep(pre code) {
+  background: transparent;
+  padding: 0;
+}
+
 /* ===== 加载动画 ===== */
 .message-loading {
   display: flex;
@@ -898,6 +937,60 @@ onMounted(() => {
   width: 100%;
 }
 
+.pending-images {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.pending-image-item {
+  position: relative;
+  width: 64px;
+  height: 64px;
+}
+
+.pending-image-thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-light, #e2e8f0);
+}
+
+.pending-image-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(15, 23, 42, 0.7);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.pending-image-remove:hover {
+  background: #ef4444;
+}
+
+.pending-image-mask {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.5);
+  color: #fff;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .input-wrap {
   background: var(--color-surface, #fff);
   border: 1px solid var(--color-border-light, #e2e8f0);
@@ -909,16 +1002,8 @@ onMounted(() => {
   transition: border-color 0.15s ease;
 }
 
-.input-wrap--raised {
-  flex-direction: column;
-  align-items: stretch;
-  min-height: 132px;
-  padding: 12px;
-  gap: 12px;
-}
-
-.input-wrap--raised :deep(.el-textarea) {
-  flex: 1;
+.input-wrap.has-image {
+  align-items: flex-end;
 }
 
 .input-wrap:focus-within {
@@ -934,28 +1019,8 @@ onMounted(() => {
   line-height: 1.6;
 }
 
-.input-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.mode-selector {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .input-actions {
   flex-shrink: 0;
-}
-
-.model-warning {
-  text-align: center;
-  font-size: 12px;
-  color: var(--color-text-tertiary, #f59e0b);
-  margin-top: 8px;
 }
 
 /* ===== 响应式 ===== */
@@ -995,10 +1060,6 @@ onMounted(() => {
 
   .suggestion-grid {
     grid-template-columns: 1fr;
-  }
-
-  .feature-entry-grid {
-    grid-template-columns: repeat(2, 1fr);
   }
 
   .chat-input-area {
