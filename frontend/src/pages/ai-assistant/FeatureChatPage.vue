@@ -241,7 +241,7 @@ import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import { buildSubdomainUrl } from '@/utils/subdomain'
 import { formatShortDateTime } from '@/utils/format'
-import { getAIFeature } from '@/config/aiFeatures'
+import { getAIFeatureByRoute } from '@/config/aiFeatures'
 import '@/assets/styles/markdown.css'
 
 const store = useAIAssistantStore()
@@ -256,7 +256,8 @@ const displayName = computed(() => {
   return info?.username || 'HRWAI 用户'
 })
 
-const feature = computed(() => getAIFeature(route.params.featureKey as string))
+// 按完整路由路径匹配配置（路由 slug 是连字符缩写，与 feature key 下划线全名不同）
+const feature = computed(() => getAIFeatureByRoute(route.path))
 const supportsImage = computed(() => feature.value?.supportsImage === true)
 const maxImages = computed(() => feature.value?.maxImages ?? 4)
 
