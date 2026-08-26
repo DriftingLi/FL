@@ -119,10 +119,6 @@ export const AI_FEATURES: AIFeatureConfig[] = [
   }
 ]
 
-export function getAIFeature(key: string): AIFeatureConfig | undefined {
-  return AI_FEATURES.find(f => f.key === key)
-}
-
 export function getAIFeatureByRoute(path: string): AIFeatureConfig | undefined {
   return AI_FEATURES.find(f => f.routePath === path)
 }
