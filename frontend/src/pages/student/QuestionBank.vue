@@ -100,40 +100,7 @@
           </el-card>
         </el-col>
 
-        <!-- 模拟考试 -->
-        <el-col :xs="24" :sm="12" :md="8">
-          <el-card shadow="hover" class="practice-card card-mock">
-            <div class="card-head">
-              <el-icon :size="28" color="#909399"><Document /></el-icon>
-              <h3>模拟考试</h3>
-            </div>
-            <div class="card-stat">
-              <template v-if="latestMockScore !== null">
-                <span class="stat-num">{{ latestMockScore }}</span>
-                <span class="stat-label">最近一次得分</span>
-              </template>
-              <template v-else>
-                <span class="stat-num">—</span>
-                <span class="stat-label">暂无考试记录</span>
-              </template>
-            </div>
-            <el-button type="primary" @click="$router.push({ name: 'MockExam' })">进入模拟考试</el-button>
-          </el-card>
-        </el-col>
 
-        <!-- 真题练习 -->
-        <el-col :xs="24" :sm="12" :md="8">
-          <el-card shadow="hover" class="practice-card card-real-exam">
-            <div class="card-head">
-              <el-icon :size="28" color="#409eff"><Document /></el-icon>
-              <h3>真题练习</h3>
-            </div>
-            <div class="card-stat">
-              <span class="stat-label">历年真题套卷（占位）</span>
-            </div>
-            <el-button type="primary" plain @click="$router.push({ name: 'RealExamPapers' })">进入真题练习</el-button>
-          </el-card>
-        </el-col>
       </el-row>
     </div>
 
@@ -224,12 +191,11 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
-import { Sort, MagicStick, Filter, Document, CollectionTag, Star, StarFilled } from '@element-plus/icons-vue'
+import { Sort, MagicStick, Filter, CollectionTag, Star, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
 import { favoriteApi } from '@/api/favorite'
 import { practiceModeApi } from '@/api/practiceMode'
-import { mockExamApi } from '@/api/mockExam'
 import { trainingApi } from '@/api/training'
 import type { QuestionTag } from '@/api/training'
 import { typeMap, questionTypeOptions, randomCountOptions } from '@/constants/question'
@@ -266,7 +232,6 @@ const currentTagName = computed(() => {
 const seqProgress = ref<PracticeProgress>({ completed: 0, total: 0, current_index: 0 })
 const tagProgress = ref<PracticeProgress>({ completed: 0, total: 0, current_index: 0 })
 const totalQuestions = ref(0)
-const latestMockScore = ref<number | null>(null)
 
 const credentialStore = useCredentialStore()
 const practiceStats = ref({ today_count: 0, total_count: 0, total_days: 0 })
@@ -496,18 +461,13 @@ async function loadTags() {
 
 async function loadCardData() {
   try {
-    const [statsRes, progRes, histRes, practiceRes] = await Promise.all([
+    const [statsRes, progRes, practiceRes] = await Promise.all([
       questionBankApi.getStats().catch(() => null as any),
       practiceModeApi.getSequentialProgress().catch(() => null as any),
-      mockExamApi.getMockExamHistory({ page: 1, page_size: 1 }).catch(() => null as any),
       practiceModeApi.getPracticeStats().catch(() => null as any)
     ])
     if (statsRes) totalQuestions.value = (statsRes.total as number) || 0
     if (progRes) seqProgress.value = progRes
-    const exams = (histRes as any)?.exams || []
-    if (exams.length > 0 && exams[0].score != null) {
-      latestMockScore.value = Number(exams[0].score)
-    }
     if (practiceRes) {
       practiceStats.value = {
         today_count: Number((practiceRes as any)?.today_count ?? 0),
@@ -519,7 +479,7 @@ async function loadCardData() {
   } catch (e) {
     // 静默失败，卡片展示降级为默认值
   }
-  // 若第 4 并发失败时 fallback 仍走独立 loader（避免悬在 skeleton）
+  // 若第 3 并发失败时 fallback 仍走独立 loader（避免悬在 skeleton）
   if (practiceStatsLoading.value) {
     try { await loadPracticeStats() } catch {}
   }
@@ -551,8 +511,6 @@ async function loadCardData() {
 .card-random { border-top: 3px solid #67c23a; }
 .card-special { border-top: 3px solid #e6a23c; }
 .card-tag { border-top: 3px solid #7952b3; }
-.card-mock { border-top: 3px solid #909399; }
-.card-real-exam { border-top: 3px solid #409eff; }
 
 .practice-area { margin-top: 10px; }
 .practice-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px 15px; background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }

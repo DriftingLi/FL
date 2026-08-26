@@ -327,6 +327,44 @@ const docTemplate = `{
                 }
             }
         },
+        "/ai-assistant/upload-image": {
+            "post": {
+                "description": "可选认证；校验格式/大小后保存，返回可访问 URL（随消息提交）",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-AI助手"
+                ],
+                "summary": "上传 AI 对话图片",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "图片文件",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/ai-assistant/user-models": {
             "get": {
                 "security": [
@@ -1854,7 +1892,7 @@ const docTemplate = `{
         },
         "/courses": {
             "get": {
-                "description": "公开访问，支持按专业方向 specialty_id / 等级 level_id / 目标证件 credential_id 过滤，分页返回",
+                "description": "公开访问，支持按专业方向 specialty_id / 等级 level_id / 目标证件 credential_id / 热门精品 filter=hot|featured|all 过滤，分页返回",
                 "consumes": [
                     "application/json"
                 ],
@@ -1896,6 +1934,13 @@ const docTemplate = `{
                         "type": "integer",
                         "description": "目标证件ID",
                         "name": "credential_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "default": "all",
+                        "description": "热门/精品筛选 hot|featured|all",
+                        "name": "filter",
                         "in": "query"
                     }
                 ],
@@ -4090,6 +4135,61 @@ const docTemplate = `{
                 }
             }
         },
+        "/practice-mode/practice-stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "按当前证件分区聚合：今日做题/累计做题/累计做题天数；含重做，均按 question_practice_record；今日按 Asia/Shanghai 自然日，累计天数按自然日去重",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-练习"
+                ],
+                "summary": "刷题数据展示",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "目标证件ID",
+                        "name": "credential_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.PracticePracticeStatsDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/practice-mode/progress": {
             "get": {
                 "security": [
@@ -5632,6 +5732,12 @@ const docTemplate = `{
                 "duration": {
                     "type": "integer"
                 },
+                "is_featured": {
+                    "type": "boolean"
+                },
+                "is_hot": {
+                    "type": "boolean"
+                },
                 "level": {
                     "$ref": "#/definitions/service.LevelBriefDTO"
                 },
@@ -6161,6 +6267,20 @@ const docTemplate = `{
                 },
                 "total_score": {
                     "type": "number"
+                }
+            }
+        },
+        "service.PracticePracticeStatsDTO": {
+            "type": "object",
+            "properties": {
+                "today_count": {
+                    "type": "integer"
+                },
+                "total_count": {
+                    "type": "integer"
+                },
+                "total_days": {
+                    "type": "integer"
                 }
             }
         },
