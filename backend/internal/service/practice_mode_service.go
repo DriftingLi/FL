@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/pkg/paging"
 )
@@ -23,6 +25,7 @@ type PracticeModeService struct {
 	explainer *QuestionExplanation
 
 	logger *zap.Logger
+	clk    clock.Clock
 }
 
 // NewPracticeModeService 创建题库练习服务，ai 可为 nil（简答题与解析降级）。
@@ -32,6 +35,28 @@ func NewPracticeModeService(db *gorm.DB, ai *AIService, logger *zap.Logger) *Pra
 		grader:    shortAnswerGraderOf(ai),
 		explainer: NewQuestionExplanation(db, ai, logger),
 		logger:    logger,
+		clk:       clock.Real(),
+	}
+}
+
+// NewPracticeModeServiceWithClock 注入式构造（测试用 Clock 定格，生产仍用 Real）。
+func NewPracticeModeServiceWithClock(db *gorm.DB, ai *AIService, logger *zap.Logger, clk clock.Clock) *PracticeModeService {
+	if clk == nil {
+		clk = clock.Real()
+	}
+	return &PracticeModeService{
+		db:        db,
+		grader:    shortAnswerGraderOf(ai),
+		explainer: NewQuestionExplanation(db, ai, logger),
+		logger:    logger,
+		clk:       clk,
+	}
+}
+
+// SetClock 覆写时钟（测试用，参考 CheckInService 的 clk 注入形态）。
+func (s *PracticeModeService) SetClock(clk clock.Clock) {
+	if clk != nil {
+		s.clk = clk
 	}
 }
 
@@ -398,6 +423,63 @@ func practiceMaxScore(q *model.Question) float64 {
 		return 10
 	}
 	return questionMaxScore("practice", q.Type)
+}
+
+// GetPracticeStats 刷题聚合统计（Ticket #329，独立于 /stats）：
+// today_count 按 Asia/Shanghai 自然日 00:00~次日 00:00 区间过滤，
+// total_count 为全量（含重做，question_practice_record 事实源），
+// total_days 为 distinct 自然日去重（Go 侧按 Asia/Shanghai day string 去重，兼容 postgres/sqlite 双驱动，
+// 语义等价于 COUNT(DISTINCT DATE(created_at AT TIME ZONE 'Asia/Shanghai'))）。
+// 均按 student_id 过滤，credentialID 非空时 JOIN question 按 credential_id 分区（复用 sampleQuestions 的 JOIN 模式）。
+// 索引说明：现有 idx_qpr_student(student_id) + idx_qpr_created(created_at) 已覆盖范围扫描；
+// JOIN 分区路径依赖 question.credential_id 索引（question 表相关索引）与 question_practice_record.question_id；
+// 高并发可追加复合索引 (student_id, created_at) 或 (student_id, question_id, created_at)，本期仅注释说明，无新增 migration。
+func (s *PracticeModeService) GetPracticeStats(studentID int, credentialID *int) (*PracticePracticeStatsDTO, error) {
+	clk := s.clk
+	if clk == nil {
+		clk = clock.Real()
+	}
+	loc := clock.Location()
+	nowInLoc := clk.Now().In(loc)
+	todayStart := time.Date(nowInLoc.Year(), nowInLoc.Month(), nowInLoc.Day(), 0, 0, 0, 0, loc)
+	tomorrow := todayStart.AddDate(0, 0, 1)
+
+	base := func() *gorm.DB {
+		q := s.db.Model(&model.QuestionPracticeRecord{}).Where("question_practice_record.student_id = ?", studentID)
+		if credentialID != nil {
+			q = q.Joins("JOIN question ON question.id = question_practice_record.question_id").Where("question.credential_id = ?", *credentialID)
+		}
+		return q
+	}
+
+	var totalCount int64
+	if err := base().Count(&totalCount).Error; err != nil {
+		return nil, err
+	}
+
+	var todayCount int64
+	if err := base().Where("question_practice_record.created_at >= ? AND question_practice_record.created_at < ?", todayStart, tomorrow).Count(&todayCount).Error; err != nil {
+		return nil, err
+	}
+
+	var timestamps []time.Time
+	pluckQ := s.db.Model(&model.QuestionPracticeRecord{}).Where("question_practice_record.student_id = ?", studentID)
+	if credentialID != nil {
+		pluckQ = pluckQ.Joins("JOIN question ON question.id = question_practice_record.question_id").Where("question.credential_id = ?", *credentialID)
+	}
+	if err := pluckQ.Pluck("question_practice_record.created_at", &timestamps).Error; err != nil {
+		return nil, err
+	}
+	daySet := make(map[string]struct{}, len(timestamps))
+	for _, t := range timestamps {
+		daySet[t.In(loc).Format("2006-01-02")] = struct{}{}
+	}
+
+	return &PracticePracticeStatsDTO{
+		TodayCount: todayCount,
+		TotalCount: totalCount,
+		TotalDays:  int64(len(daySet)),
+	}, nil
 }
 
 // GetStats 学员练习统计（经统计聚合 module，一次 GROUP BY 按题型聚合；by_type 正确率为加性新增 key）。

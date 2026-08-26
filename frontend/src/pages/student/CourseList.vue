@@ -1,8 +1,13 @@
 <template>
   <div class="course-center">
+    <el-tabs v-model="activeTab" class="cc-tabs" @tab-change="handleTabChange">
+      <el-tab-pane label="热门" name="hot" />
+      <el-tab-pane label="精品" name="featured" />
+      <el-tab-pane label="所有" name="all" />
+    </el-tabs>
     <div class="course-layout">
       <aside class="cc-sidebar">
-        <FacetCard title="专业方向">
+        <FacetCard v-if="activeTab === 'all'" title="专业方向">
           <FacetItem
             :active="specialtyId === null"
             name="全部课程"
@@ -19,7 +24,7 @@
           />
         </FacetCard>
 
-        <FacetCard title="课程等级">
+        <FacetCard v-if="activeTab === 'all'" title="课程等级">
           <FacetItem
             :active="levelId === null"
             name="全部等级"
@@ -53,6 +58,10 @@
                 <span v-if="levelNameOf(course.level_id)" class="cc-cover-level">
                   {{ levelNameOf(course.level_id) }}
                 </span>
+                <div v-if="course.is_hot || course.is_featured" class="cc-cover-badges">
+                  <span v-if="course.is_hot" class="cc-cover-badge cc-cover-badge--hot">热门</span>
+                  <span v-if="course.is_featured" class="cc-cover-badge cc-cover-badge--featured">精品</span>
+                </div>
               </template>
               <template #meta>
                 <div class="cc-meta">
@@ -218,6 +227,7 @@ const courses = ref<CourseSummary[]>([])
 const currentPage = ref(1)
 const pageSize = ref(12)
 const total = ref(0)
+const activeTab = ref<'hot' | 'featured' | 'all'>('hot')
 
 
 
@@ -251,18 +261,26 @@ function formatDuration(minutes: number) {
   return mins > 0 ? `${hours}小时${mins}分钟` : `${hours}小时`
 }
 
+function handleTabChange() {
+  currentPage.value = 1
+  loadCourses()
+}
+
 async function loadCourses() {
   loading.value = true
   try {
     const params: Record<string, any> = {
       page: currentPage.value,
-      page_size: pageSize.value
+      page_size: pageSize.value,
+      filter: activeTab.value
     }
-    if (specialtyId.value !== null) {
-      params.specialty_id = specialtyId.value
-    }
-    if (levelId.value !== null) {
-      params.level_id = levelId.value
+    if (activeTab.value === 'all') {
+      if (specialtyId.value !== null) {
+        params.specialty_id = specialtyId.value
+      }
+      if (levelId.value !== null) {
+        params.level_id = levelId.value
+      }
     }
     if (credentialStore.current?.id) {
       params.credential_id = credentialStore.current.id
@@ -491,6 +509,34 @@ window.addEventListener('credential-switched', () => {
   color: #fff;
   font-size: 12px;
   font-weight: 600;
+}
+
+.cc-cover-badges {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: flex;
+  gap: 4px;
+}
+
+.cc-cover-badge {
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.cc-cover-badge--hot {
+  background: #f56c6c;
+}
+
+.cc-cover-badge--featured {
+  background: #e6a23c;
+}
+
+.cc-tabs {
+  margin-bottom: var(--space-2);
 }
 
 .cc-meta {

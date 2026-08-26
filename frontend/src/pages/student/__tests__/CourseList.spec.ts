@@ -87,6 +87,14 @@ describe('CourseList 左右分栏课程中心', () => {
     const wrapper = mountPage()
     await flushPromises()
 
+    // Spec #326 Q10：顶部 Tab 顺序 热门/精品/所有（所有最右），默认热门时隐藏 FacetCard
+    expect(wrapper.find('.cc-tabs').exists()).toBe(true)
+    expect(wrapper.findAll('.cc-filter-card').length).toBe(0)
+
+    // 切到「所有」后展示双卡片导航
+    ;(wrapper.vm as any).activeTab = 'all'
+    await flushPromises()
+
     const navNames = wrapper.findAll('.cc-nav-name').map(n => n.text())
     expect(navNames).toContain('全部课程')
     expect(navNames).toContain('维修')
@@ -112,13 +120,16 @@ describe('CourseList 左右分栏课程中心', () => {
     const wrapper = mountPage()
     await flushPromises()
 
-    // 第二张侧栏卡片（课程等级）中第 2 项 = 「入门」
+    // 切到「所有」以展示 FacetCard，再点击等级「入门」
+    ;(wrapper.vm as any).activeTab = 'all'
+    await flushPromises()
     await wrapper.findAll('.cc-filter-card')[1].findAll('.cc-nav-item')[1].trigger('click')
     await flushPromises()
 
     expect(courseApi.getCourses).toHaveBeenLastCalledWith({
       page: 1,
       page_size: 12,
+      filter: 'all',
       level_id: 1
     })
   })
@@ -127,12 +138,15 @@ describe('CourseList 左右分栏课程中心', () => {
     const wrapper = mountPage()
     await flushPromises()
 
+    ;(wrapper.vm as any).activeTab = 'all'
+    await flushPromises()
     await wrapper.findAll('.cc-filter-card')[0].findAll('.cc-nav-item')[1].trigger('click')
     await flushPromises()
 
     expect(courseApi.getCourses).toHaveBeenLastCalledWith({
       page: 1,
       page_size: 12,
+      filter: 'all',
       specialty_id: 2
     })
   })

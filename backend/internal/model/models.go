@@ -126,9 +126,11 @@ type Course struct {
 	// CertificateTemplateID 关联证书模板（有效期取模板 validity_days）。
 	CertificateTemplateID *int `gorm:"column:certificate_template_id" json:"certificate_template_id,omitempty"`
 	// SortOrder 课程排序值（所属专业方向+课程等级层级内生效，越小越靠前）。
-	SortOrder int       `gorm:"column:sort_order;default:0" json:"sort_order"`
-	Status    int16     `gorm:"column:status;default:1" json:"status"`
-	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+	SortOrder  int       `gorm:"column:sort_order;default:0" json:"sort_order"`
+	Status     int16     `gorm:"column:status;default:1" json:"status"`
+	IsHot      bool      `gorm:"column:is_hot;default:false" json:"is_hot"`
+	IsFeatured bool      `gorm:"column:is_featured;default:false" json:"is_featured"`
+	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (Course) TableName() string { return "course" }

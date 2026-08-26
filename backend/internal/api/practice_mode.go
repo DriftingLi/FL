@@ -36,6 +36,7 @@ func RegisterPracticeModeRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service
 	g.GET("/progress", h.GetProgress)
 	g.POST("/submit", h.SubmitAnswer)
 	g.GET("/stats", h.GetStats)
+	g.GET("/practice-stats", h.GetPracticeStats)
 	g.GET("/history", h.GetHistory)
 }
 
@@ -351,6 +352,43 @@ func (h *PracticeModeHandler) SubmitAnswer(c *gin.Context) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)
+}
+
+// GetPracticeStats 刷题数据展示
+// @Summary 刷题数据展示
+// @Description 按当前证件分区聚合：今日做题/累计做题/累计做题天数；含重做，均按 question_practice_record；今日按 Asia/Shanghai 自然日，累计天数按自然日去重
+// @Tags 学员端-练习
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param credential_id query int false "目标证件ID" minimum(1)
+// @Success 200 {object} response.R{data=service.PracticePracticeStatsDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /practice-mode/practice-stats [get]
+func (h *PracticeModeHandler) GetPracticeStats(c *gin.Context) {
+	Endpoint[practiceStatsReq, service.PracticePracticeStatsDTO]{
+		Parse: func(c *gin.Context) (*practiceStatsReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			studentID, _ := uid.(int)
+			return &practiceStatsReq{StudentID: studentID, CredentialID: queryIDPtr(c, "credential_id")}, nil
+		},
+		Invoke: func(ctx context.Context, req *practiceStatsReq) (*service.PracticePracticeStatsDTO, error) {
+			return h.svc.GetPracticeStats(req.StudentID, req.CredentialID)
+		},
+		Render: func(c *gin.Context, _ *practiceStatsReq, resp *service.PracticePracticeStatsDTO, err error) {
+			if err != nil {
+				response.ServerError(c, "查询失败")
+				return
+			}
+			response.Success(c, resp)
+		},
+	}.Handle(c)
+}
+
+// practiceStatsReq 刷题数据展示请求（学员 ID + 可选证件分区）。
+type practiceStatsReq struct {
+	StudentID    int
+	CredentialID *int
 }
 
 // GetStats 练习统计

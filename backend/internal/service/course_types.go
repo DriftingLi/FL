@@ -19,6 +19,8 @@ type CourseInput struct {
 	TheoryHours           *int    `json:"theory_hours"`
 	PracticeHours         *int    `json:"practice_hours"`
 	PrerequisiteCourseIDs []int   `json:"prerequisite_course_ids"`
+	IsHot                 *bool   `json:"is_hot"`
+	IsFeatured            *bool   `json:"is_featured"`
 }
 
 // ChapterInput 章节创建/编辑请求体。

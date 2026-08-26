@@ -5,6 +5,26 @@
       <h2>题库练习</h2>
       <p class="entry-sub">选择练习方式，开始刷题</p>
 
+      <div class="practice-stats-bar">
+        <div v-if="practiceStatsLoading" class="stats-grid">
+          <el-skeleton v-for="i in 3" :key="i" :rows="1" animated style="width: 100%" />
+        </div>
+        <div v-else class="stats-grid">
+          <div class="stats-item">
+            <span class="stats-num">{{ practiceStats.today_count }}</span>
+            <span class="stats-label">今日做题</span>
+          </div>
+          <div class="stats-item">
+            <span class="stats-num">{{ practiceStats.total_count }}</span>
+            <span class="stats-label">累计做题</span>
+          </div>
+          <div class="stats-item">
+            <span class="stats-num">{{ practiceStats.total_days }}</span>
+            <span class="stats-label">累计做题天数</span>
+          </div>
+        </div>
+      </div>
+
       <el-row :gutter="20" class="card-grid">
         <!-- 顺序练习 -->
         <el-col :xs="24" :sm="12" :md="8">
@@ -203,7 +223,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { Sort, MagicStick, Filter, Document, CollectionTag, Star, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
@@ -226,6 +246,7 @@ import KnowledgeCard from '@/components/practice/KnowledgeCard.vue'
 import CommentCard from '@/components/practice/CommentCard.vue'
 import NoteCard from '@/components/practice/NoteCard.vue'
 import { questionInteractionApi } from '@/api/questionInteraction'
+import { useCredentialStore } from '@/stores/credential'
 
 // null = 入口；'sequential' | 'free' | 'tag' = 刷题中
 
@@ -246,6 +267,30 @@ const seqProgress = ref<PracticeProgress>({ completed: 0, total: 0, current_inde
 const tagProgress = ref<PracticeProgress>({ completed: 0, total: 0, current_index: 0 })
 const totalQuestions = ref(0)
 const latestMockScore = ref<number | null>(null)
+
+const credentialStore = useCredentialStore()
+const practiceStats = ref({ today_count: 0, total_count: 0, total_days: 0 })
+const practiceStatsLoading = ref(true)
+
+async function loadPracticeStats() {
+  practiceStatsLoading.value = true
+  try {
+    const data = await practiceModeApi.getPracticeStats() as any
+    practiceStats.value = {
+      today_count: Number(data?.today_count ?? 0),
+      total_count: Number(data?.total_count ?? 0),
+      total_days: Number(data?.total_days ?? 0)
+    }
+  } catch {
+    practiceStats.value = { today_count: 0, total_count: 0, total_days: 0 }
+  } finally {
+    practiceStatsLoading.value = false
+  }
+}
+
+function onCredentialSwitched() {
+  loadPracticeStats()
+}
 
 // 选择标签时查询该标签的练习进度（断点续练展示）
 watch(tagPracticeId, async (id) => {
@@ -403,6 +448,7 @@ watch(() => (lastResult.value as any)?.question_id, async (qid: number) => {
 async function handleSubmit() {
   lastDuration.value = (Date.now() - questionStartTime.value) / 1000
   await submitAnswer()
+  loadPracticeStats()
 }
 
 async function startTagPractice() {
@@ -417,12 +463,22 @@ async function confirmQuit() {
     // 退出时保存当前游标和答题状态并返回入口，随后刷新卡片进度展示
     await quit()
     loadCardData()
+    loadPracticeStats()
   } catch (e) {}
 }
 
 onMounted(() => {
   loadCardData()
   loadTags()
+  window.addEventListener('credential-switched', onCredentialSwitched)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('credential-switched', onCredentialSwitched)
+})
+
+watch(() => credentialStore.current?.id, () => {
+  loadCardData()
 })
 
 async function loadTags() {
@@ -440,21 +496,32 @@ async function loadTags() {
 
 async function loadCardData() {
   try {
-    const [statsRes, progRes, histRes] = await Promise.all([
-      questionBankApi.getStats(),
-      practiceModeApi.getSequentialProgress(),
-      mockExamApi.getMockExamHistory({ page: 1, page_size: 1 })
+    const [statsRes, progRes, histRes, practiceRes] = await Promise.all([
+      questionBankApi.getStats().catch(() => null as any),
+      practiceModeApi.getSequentialProgress().catch(() => null as any),
+      mockExamApi.getMockExamHistory({ page: 1, page_size: 1 }).catch(() => null as any),
+      practiceModeApi.getPracticeStats().catch(() => null as any)
     ])
-    totalQuestions.value = (statsRes.total as number) || 0
-    if (progRes) {
-      seqProgress.value = progRes
-    }
-    const exams = histRes.exams || []
+    if (statsRes) totalQuestions.value = (statsRes.total as number) || 0
+    if (progRes) seqProgress.value = progRes
+    const exams = (histRes as any)?.exams || []
     if (exams.length > 0 && exams[0].score != null) {
       latestMockScore.value = Number(exams[0].score)
     }
+    if (practiceRes) {
+      practiceStats.value = {
+        today_count: Number((practiceRes as any)?.today_count ?? 0),
+        total_count: Number((practiceRes as any)?.total_count ?? 0),
+        total_days: Number((practiceRes as any)?.total_days ?? 0)
+      }
+      practiceStatsLoading.value = false
+    }
   } catch (e) {
     // 静默失败，卡片展示降级为默认值
+  }
+  // 若第 4 并发失败时 fallback 仍走独立 loader（避免悬在 skeleton）
+  if (practiceStatsLoading.value) {
+    try { await loadPracticeStats() } catch {}
   }
 }
 </script>
@@ -463,6 +530,11 @@ async function loadCardData() {
 .question-bank { max-width: 1200px; margin: 0 auto; }
 .question-bank h2 { margin-bottom: 6px; color: #303133; }
 .entry-sub { color: #909399; font-size: 14px; margin-bottom: 24px; }
+.practice-stats-bar { margin-bottom: 20px; background: var(--color-bg-card); border: 1px solid var(--color-border-light); border-radius: var(--radius-lg); padding: var(--space-4); }
+.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); }
+.stats-item { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px 0; }
+.stats-num { font-size: 28px; font-weight: var(--font-bold); color: var(--color-primary-600); line-height: 1.1; }
+.stats-label { font-size: var(--text-xs); color: var(--color-text-tertiary); margin-top: 6px; }
 
 .card-grid { margin-bottom: 20px; }
 .practice-card { display: flex; flex-direction: column; align-items: center; text-align: center; min-height: 220px; transition: transform 0.3s; margin-bottom: 20px; }

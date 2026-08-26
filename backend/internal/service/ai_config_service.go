@@ -58,13 +58,8 @@ var FeatureLabel = map[string]string{
 	FeatureMaintenanceKnowledge:   "维保知识",
 	FeatureDrawingRecognition:     "图纸识别",
 	FeatureExerciseSolving:        "习题解答",
-	// 遗留兼容
-	FeatureAIAssistant:            "AI 助手对话",
-	FeatureFaultConsult:           "故障咨询",
-	FeatureFaultCodeQuery:         "故障代码查询",
-	FeatureMaintenanceKnowledge:   "维保知识",
-	FeatureDrawingRecognition:     "图纸识别",
-	FeatureExerciseSolving:        "习题解答",
+	// 遗留兼容（与主列保持对齐，避免 key 重复覆盖）
+	FeatureAIAssistant: "AI 助手对话",
 }
 
 // multiBindFeatures 允许多绑定的功能集合（一个 feature_key 可绑定多个 config_id）。

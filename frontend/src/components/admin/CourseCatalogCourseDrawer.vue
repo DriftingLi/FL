@@ -36,7 +36,9 @@ const drawerForm = reactive<Record<string, any>>({
   duration: 0,
   certificate_template_id: null,
   prerequisite_course_ids: [],
-  description: ''
+  description: '',
+  is_hot: false,
+  is_featured: false
 })
 
 const courseRules = {
@@ -62,7 +64,9 @@ function open(course: AdminCourseItem | null) {
       duration: 0,
       certificate_template_id: null,
       prerequisite_course_ids: [],
-      description: ''
+      description: '',
+      is_hot: false,
+      is_featured: false
     })
     return
   }
@@ -78,7 +82,9 @@ function open(course: AdminCourseItem | null) {
     duration: course.duration || 0,
     certificate_template_id: course.certificate_template_id,
     prerequisite_course_ids: course.prerequisite_course_ids || [],
-    description: course.description || ''
+    description: course.description || '',
+    is_hot: !!(course as any).is_hot,
+    is_featured: !!(course as any).is_featured
   })
   void loadDrawerDetail()
 }
@@ -98,7 +104,9 @@ async function loadDrawerDetail() {
         duration: detail.duration ?? 0,
         certificate_template_id: detail.certificate_template_id ?? null,
         prerequisite_course_ids: detail.prerequisite_course_ids || [],
-        description: detail.description ?? ''
+        description: detail.description ?? '',
+        is_hot: !!(detail as any).is_hot,
+        is_featured: !!(detail as any).is_featured
       })
       drawerChapters.value = detail.chapters || []
     }
@@ -122,7 +130,9 @@ async function submitCourse() {
       duration: drawerForm.duration,
       certificate_template_id: drawerForm.certificate_template_id ?? 0,
       prerequisite_course_ids: drawerForm.prerequisite_course_ids,
-      description: drawerForm.description
+      description: drawerForm.description,
+      is_hot: drawerForm.is_hot,
+      is_featured: drawerForm.is_featured
     }
     if (drawerForm.course_id) {
       await adminApi.updateCourse(drawerForm.course_id, payload)
@@ -281,6 +291,12 @@ defineExpose({ open })
           <el-radio :value="1">上架</el-radio>
           <el-radio :value="0">下架</el-radio>
         </el-radio-group>
+      </el-form-item>
+      <el-form-item label="热门">
+        <el-checkbox v-model="drawerForm.is_hot">热门</el-checkbox>
+      </el-form-item>
+      <el-form-item label="精品">
+        <el-checkbox v-model="drawerForm.is_featured">精品</el-checkbox>
       </el-form-item>
     </el-form>
 

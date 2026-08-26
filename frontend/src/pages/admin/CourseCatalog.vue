@@ -79,6 +79,11 @@
           <el-option label="已上架" :value="1" />
           <el-option label="未上架" :value="0" />
         </el-select>
+        <el-select v-model="filterHotFeatured" placeholder="热门/精品" clearable style="width: 140px" @change="currentPage = 1">
+          <el-option label="热门" value="hot" />
+          <el-option label="精品" value="featured" />
+          <el-option label="全部" value="all" />
+        </el-select>
         <el-button type="primary" @click="openDrawer()">新增课程</el-button>
       </div>
 
@@ -113,6 +118,16 @@
         <el-table-column label="证书" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="cc-cell-dim">{{ certificateNameOf(row.certificate_template_id) || '—' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="热门" width="90" align="center">
+          <template #default="{ row }">
+            <el-switch :model-value="!!row.is_hot" @change="(v: boolean) => toggleHot(row, v)" />
+          </template>
+        </el-table-column>
+        <el-table-column label="精品" width="90" align="center">
+          <template #default="{ row }">
+            <el-switch :model-value="!!row.is_featured" @change="(v: boolean) => toggleFeatured(row, v)" />
           </template>
         </el-table-column>
         <el-table-column label="状态" width="90">
@@ -250,6 +265,7 @@ const {
 const mountedCourses = computed(() => allCourses.value.filter(c => !isUnmounted(c)))
 
 const filterStatus = ref<number | null>(null)
+const filterHotFeatured = ref<string | null>(null)
 const keyword = ref('')
 const credentialId = ref<number | null>(null)
 const currentPage = ref(1)
@@ -273,6 +289,8 @@ const filteredCourses = computed(() => {
       return false
     }
     if (filterStatus.value !== null && c.status !== filterStatus.value) return false
+    if (filterHotFeatured.value === 'hot' && !c.is_hot) return false
+    if (filterHotFeatured.value === 'featured' && !c.is_featured) return false
     if (k && !c.name.toLowerCase().includes(k)) return false
     return true
   })
@@ -415,6 +433,26 @@ const courseOptions = computed(() =>
     name: `${specialtyNameOf(c.specialty_id) || '?'}/${levelNameOf(c.level_id) || '?'} · ${c.name}`
   }))
 )
+
+async function toggleHot(row: AdminCourseItem, val: boolean) {
+  try {
+    await adminApi.updateCourse(row.course_id, { is_hot: val })
+    row.is_hot = val
+    ElMessage.success(val ? '已设为热门' : '已取消热门')
+  } catch (error) {
+    console.error('切换热门失败:', error)
+  }
+}
+
+async function toggleFeatured(row: AdminCourseItem, val: boolean) {
+  try {
+    await adminApi.updateCourse(row.course_id, { is_featured: val })
+    row.is_featured = val
+    ElMessage.success(val ? '已设为精品' : '已取消精品')
+  } catch (error) {
+    console.error('切换精品失败:', error)
+  }
+}
 
 async function toggleStatus(row: AdminCourseItem) {
   if (isUnmounted(row)) {

@@ -24,10 +24,14 @@ func NewAdminCourseService(db *gorm.DB, fileSvc *FileStore, logger *zap.Logger) 
 	return &AdminCourseService{db: db, fileSvc: fileSvc, logger: logger}
 }
 
-// GetCourses 管理端课程列表。
-func (s *AdminCourseService) GetCourses(page, pageSize int, keyword string, credentialID, specialtyID, levelID *int) CoursePageResult {
+// GetCourses 管理端课程列表。filter 支持 hot|featured|all（缺省 all）。
+func (s *AdminCourseService) GetCourses(page, pageSize int, keyword string, credentialID, specialtyID, levelID *int, filter ...string) CoursePageResult {
+	f := ""
+	if len(filter) > 0 {
+		f = filter[0]
+	}
 	return ListCourses(s.db, page, pageSize, CourseListOptions{
-		Keyword: keyword, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID, DefaultPageSize: 10,
+		Keyword: keyword, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID, Filter: f, DefaultPageSize: 10,
 	})
 }
 
