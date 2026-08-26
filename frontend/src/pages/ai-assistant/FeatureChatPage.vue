@@ -406,7 +406,6 @@ async function handleUserCommand(cmd: string) {
     store.messages = []
     store.currentSessionId = null
     store.sessions = []
-    store.userModels = []
     ElMessage.success('已退出登录')
   }
 }

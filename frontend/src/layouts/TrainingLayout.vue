@@ -1,7 +1,7 @@
 <template>
   <SidebarLayout :menu-items="currentMenuItems">
     <template #top="{ collapsed }">
-      <CredentialSwitcher :collapsed="collapsed" />
+      <CredentialSwitcher v-if="!chapterCourseId" :collapsed="collapsed" />
     </template>
   </SidebarLayout>
 </template>

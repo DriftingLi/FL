@@ -65,10 +65,19 @@ export interface ChatMessage {
 }
 
 export type ModelSource = 'admin' | 'user' | 'custom'
+export type AIMode = 'normal' | 'expert'
+
+export interface AIAssistantModeModels {
+  normal: AdminModelOption | null
+  expert: AdminModelOption | null
+}
 
 export interface StreamChatReq {
   session_id?: number
+  // 专项功能键（fault_consult 等，管理端单绑定模型）
   feature_key?: string
+  // 新双模式（推荐）：normal | expert，隐藏底层模型
+  mode?: AIMode
   model_source: ModelSource
   config_id?: number
   user_model_id?: number
@@ -81,7 +90,12 @@ export interface StreamChatReq {
 // ===== API 方法 =====
 
 export const aiAssistantApi = {
-  /** GET /api/ai-assistant/models — 公开，列出管理员配置的可用模型 */
+  /** GET /api/ai-assistant/modes — 公开，返回普通/专家分别绑定的模型（新） */
+  listAssistantModes() {
+    return client.get<AIAssistantModeModels>('/modes')
+  },
+
+  /** GET /api/ai-assistant/models — 公开，列出管理员配置的可用模型（兼容旧） */
   listAdminModels() {
     return client.get<AdminModelOption[]>('/models')
   },
