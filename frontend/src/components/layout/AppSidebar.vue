@@ -44,13 +44,13 @@
         <template v-if="item.children && item.children.length">
           <div
             v-if="!effectiveCollapsed"
-            class="nav-group-label"
-            :class="{ 'is-active': isGroupActive(item), 'is-accordion': mobileOpen }"
+            class="nav-group-label is-accordion"
+            :class="{ 'is-active': isGroupActive(item) }"
             @click="onGroupToggle(item.key)"
           >
             <el-icon v-if="item.icon" class="nav-group-icon"><component :is="item.icon" /></el-icon>
             <span>{{ item.label }}</span>
-            <el-icon v-if="mobileOpen" class="nav-group-arrow" :class="{ expanded: isGroupExpanded(item.key) }"><ArrowDown /></el-icon>
+            <el-icon class="nav-group-arrow" :class="{ expanded: isGroupExpanded(item.key) }"><ArrowDown /></el-icon>
           </div>
           <el-tooltip v-else placement="right" :show-after="300">
             <template #content>
@@ -68,7 +68,7 @@
               <el-icon><component :is="item.icon" /></el-icon>
             </div>
           </el-tooltip>
-          <div v-show="isGroupExpanded(item.key) || effectiveCollapsed" class="nav-group-children">
+          <div v-show="isGroupExpanded(item.key)" class="nav-group-children">
             <template v-for="child in item.children" :key="child.key">
               <!-- 二级嵌套：child 自身还有 children（如 题库练习 ┬ 真题练习） -->
               <template v-if="child.children && child.children.length">
@@ -236,7 +236,7 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
-// 移动端 accordion：记录每个分组是否展开，默认全部展开
+// 侧栏分组折叠：默认全部展开，点击分组标题即可折叠/展开（桌面与移动端一致）
 const expandedMap = reactive<Record<string, boolean>>({})
 
 watch(
@@ -256,7 +256,6 @@ function isGroupExpanded(key: string): boolean {
 }
 
 function onGroupToggle(key: string): void {
-  if (!props.mobileOpen) return
   expandedMap[key] = !isGroupExpanded(key)
 }
 
@@ -495,6 +494,10 @@ async function handleUserCommand(command: string) {
 .nav-group-label.is-accordion {
   cursor: pointer;
   user-select: none;
+}
+
+.nav-group-label.is-accordion:hover {
+  color: var(--color-primary-600);
 }
 
 .nav-group-arrow {

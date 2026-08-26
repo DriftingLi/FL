@@ -151,6 +151,10 @@ definitions:
         type: string
       duration:
         type: integer
+      is_featured:
+        type: boolean
+      is_hot:
+        type: boolean
       level:
         $ref: '#/definitions/service.LevelBriefDTO'
       level_id:
@@ -501,6 +505,15 @@ definitions:
         type: integer
       total_score:
         type: number
+    type: object
+  service.PracticePracticeStatsDTO:
+    properties:
+      today_count:
+        type: integer
+      total_count:
+        type: integer
+      total_days:
+        type: integer
     type: object
   service.PracticeStartResultDTO:
     properties:
@@ -1031,6 +1044,31 @@ paths:
       security:
       - BearerAuth: []
       summary: 重命名会话
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/upload-image:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 可选认证；校验格式/大小后保存，返回可访问 URL（随消息提交）
+      parameters:
+      - description: 图片文件
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 上传 AI 对话图片
       tags:
       - 学员端-AI助手
   /ai-assistant/user-models:
@@ -1995,7 +2033,8 @@ paths:
     get:
       consumes:
       - application/json
-      description: 公开访问，支持按专业方向 specialty_id / 等级 level_id / 目标证件 credential_id 过滤，分页返回
+      description: 公开访问，支持按专业方向 specialty_id / 等级 level_id / 目标证件 credential_id /
+        热门精品 filter=hot|featured|all 过滤，分页返回
       parameters:
       - default: 1
         description: 页码
@@ -2019,6 +2058,11 @@ paths:
         in: query
         name: credential_id
         type: integer
+      - default: all
+        description: 热门/精品筛选 hot|featured|all
+        in: query
+        name: filter
+        type: string
       produces:
       - application/json
       responses:
@@ -3390,6 +3434,39 @@ paths:
       security:
       - BearerAuth: []
       summary: 练习历史
+      tags:
+      - 学员端-练习
+  /practice-mode/practice-stats:
+    get:
+      consumes:
+      - application/json
+      description: 按当前证件分区聚合：今日做题/累计做题/累计做题天数；含重做，均按 question_practice_record；今日按
+        Asia/Shanghai 自然日，累计天数按自然日去重
+      parameters:
+      - description: 目标证件ID
+        in: query
+        minimum: 1
+        name: credential_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.PracticePracticeStatsDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 刷题数据展示
       tags:
       - 学员端-练习
   /practice-mode/progress:
