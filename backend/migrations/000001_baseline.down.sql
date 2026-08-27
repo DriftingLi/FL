@@ -1,5 +1,6 @@
--- 000001_init_baseline.down.sql
+-- 000001_baseline.down.sql
 -- 回滚合并 baseline：按依赖反向顺序 DROP 全部最终态表（被引用多的表后删）。
+-- 逻辑压缩版：与 up 文件最终态一一对应，含原 000002~000015 引入的全部新表。
 
 DROP TABLE IF EXISTS hrwai_users CASCADE;
 DROP TABLE IF EXISTS course CASCADE;
@@ -9,13 +10,19 @@ DROP TABLE IF EXISTS question_tag CASCADE;
 DROP TABLE IF EXISTS certificate_template CASCADE;
 DROP TABLE IF EXISTS course_level CASCADE;
 DROP TABLE IF EXISTS specialty CASCADE;
+DROP TABLE IF EXISTS credential CASCADE;
 DROP TABLE IF EXISTS forum_replies CASCADE;
+DROP TABLE IF EXISTS forum_reply_like CASCADE;
+DROP TABLE IF EXISTS forum_checkin CASCADE;
+DROP TABLE IF EXISTS forum_topic_like CASCADE;
+DROP TABLE IF EXISTS forum_report CASCADE;
+DROP TABLE IF EXISTS favorite CASCADE;
+DROP TABLE IF EXISTS question_comment CASCADE;
+DROP TABLE IF EXISTS question_note CASCADE;
 DROP TABLE IF EXISTS forum_topics CASCADE;
 DROP TABLE IF EXISTS ai_chat_sessions CASCADE;
 DROP TABLE IF EXISTS ai_configs CASCADE;
 DROP TABLE IF EXISTS battery_evaluations CASCADE;
-DROP TABLE IF EXISTS exam_participant CASCADE;
-DROP TABLE IF EXISTS exam_session CASCADE;
 DROP TABLE IF EXISTS question_tag_relation CASCADE;
 DROP TABLE IF EXISTS course_prerequisite CASCADE;
 DROP TABLE IF EXISTS audit_logs CASCADE;
@@ -47,7 +54,6 @@ DROP TABLE IF EXISTS async_task CASCADE;
 DROP TABLE IF EXISTS mock_exam CASCADE;
 DROP TABLE IF EXISTS wrong_question CASCADE;
 DROP TABLE IF EXISTS question_practice_record CASCADE;
-DROP TABLE IF EXISTS exam_answer CASCADE;
 DROP TABLE IF EXISTS ai_generation_log CASCADE;
 DROP TABLE IF EXISTS study_record CASCADE;
 DROP TABLE IF EXISTS chapter_file CASCADE;
