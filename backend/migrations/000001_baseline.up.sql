@@ -1,8 +1,66 @@
 -- ============================================================
--- 叉车维修培训系统 PostgreSQL 迁移（单 baseline，重建友好）
--- 覆盖：培训/题库/考试/练习/论坛/通知/审计/认证/精选内容/残值评估
--- 重建数据库时从零执行本文件即可得到目标态，无历史升级痕迹。
+-- 叉车维修培训系统 PostgreSQL 迁移（单 baseline，逻辑压缩版）
+-- 覆盖：培训/题库/练习/论坛/通知/审计/认证/精选内容/残值评估/目标证件
+-- 历史 15 组迁移已按最终态合并：后续 ALTER 并入建表、已下线的定级考试
+-- 三表（exam_session/exam_participant/exam_answer）不再生成、空库场景下
+-- 无意义的存量回填 UPDATE 一并省去。重建数据库从零执行本文件即得最终态。
 -- ============================================================
+
+-- 目标证件（target credential）顶层分区：持证目标
+-- 须最先创建：hrwai_users/course/question 的 credential 外键均指向本表
+CREATE TABLE credential (
+    id          INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    code        VARCHAR(50)  NOT NULL UNIQUE,
+    name        VARCHAR(100) NOT NULL,
+    description TEXT         NOT NULL DEFAULT '',
+    category    VARCHAR(30)  NOT NULL CHECK (category IN ('special_operation', 'skill_level')),
+    level       INT          CHECK (level IS NULL OR (level BETWEEN 1 AND 5)),
+    sort_order  INT          NOT NULL DEFAULT 0,
+    status      SMALLINT     NOT NULL DEFAULT 1,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_credential_status   ON credential (status);
+CREATE INDEX idx_credential_category ON credential (category);
+CREATE INDEX idx_credential_sort     ON credential (sort_order);
+COMMENT ON TABLE credential IS '目标证件表（学员报考的外部持证目标，与证书模板区分）';
+COMMENT ON COLUMN credential.code     IS '证件编码（唯一，如 forklift_n1）';
+COMMENT ON COLUMN credential.category IS '类别：special_operation 特种作业上岗证 / skill_level 职业技能等级';
+COMMENT ON COLUMN credential.level    IS '等级：仅 skill_level 类填 1-5（5 初级→1 高级），特种作业为 NULL';
+COMMENT ON COLUMN credential.status   IS '状态：1-启用，0-停用';
+
+-- 种子数据：8 个目标证件
+INSERT INTO credential (code, name, description, category, level, sort_order, status) VALUES
+    ('forklift_n1', '叉车司机N1证', '场内专用机动车辆作业-叉车司机N1', 'special_operation', NULL, 1, 1)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO credential (code, name, description, category, level, sort_order, status) VALUES
+    ('low_voltage_electrician', '低压电工证', '特种作业-低压电工（占位，内容建设中）', 'special_operation', NULL, 2, 1)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO credential (code, name, description, category, level, sort_order, status) VALUES
+    ('welder', '焊工证', '特种作业-熔化焊接与热切割作业（占位，内容建设中）', 'special_operation', NULL, 3, 1)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO credential (code, name, description, category, level, sort_order, status) VALUES
+    ('maintenance_L5', '工程机械维修工（叉车维修方向）五级', '职业技能等级 五级/初级工（占位，内容建设中）', 'skill_level', 5, 4, 1)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO credential (code, name, description, category, level, sort_order, status) VALUES
+    ('maintenance_L4', '工程机械维修工（叉车维修方向）四级', '职业技能等级 四级/中级工', 'skill_level', 4, 5, 1)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO credential (code, name, description, category, level, sort_order, status) VALUES
+    ('maintenance_L3', '工程机械维修工（叉车维修方向）三级', '职业技能等级 三级/高级工', 'skill_level', 3, 6, 1)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO credential (code, name, description, category, level, sort_order, status) VALUES
+    ('maintenance_L2', '工程机械维修工（叉车维修方向）二级', '职业技能等级 二级/技师', 'skill_level', 2, 7, 1)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO credential (code, name, description, category, level, sort_order, status) VALUES
+    ('maintenance_L1', '工程机械维修工（叉车维修方向）一级', '职业技能等级 一级/高级技师', 'skill_level', 1, 8, 1)
+ON CONFLICT (code) DO NOTHING;
 
 CREATE TABLE hrwai_users (
     id              SERIAL         PRIMARY KEY,
@@ -11,11 +69,14 @@ CREATE TABLE hrwai_users (
     username        VARCHAR(100)   NOT NULL UNIQUE,
     password        VARCHAR(255)   NOT NULL,
     avatar_url      TEXT           NOT NULL DEFAULT '',
-    phone           VARCHAR(50)    NOT NULL UNIQUE,
+    -- phone 不设全局 UNIQUE：空串表示未绑定手机号，允许多行并存；
+    -- 唯一性由下方部分唯一索引（仅非空手机号）保证
+    phone           VARCHAR(50)    NOT NULL DEFAULT '',
     email           VARCHAR(255)   NOT NULL DEFAULT '',
     company         VARCHAR(255)   NOT NULL DEFAULT '',
     wechat_openid   VARCHAR(128)   NOT NULL DEFAULT '',
     wechat_unionid  VARCHAR(128)   NOT NULL DEFAULT '',
+    current_credential_id INT      REFERENCES credential(id) ON DELETE SET NULL,
     status          SMALLINT       NOT NULL DEFAULT 1,
     created_at      TIMESTAMPTZ    NOT NULL DEFAULT NOW()
 );
@@ -25,12 +86,18 @@ CREATE UNIQUE INDEX idx_hrwai_users_email_unique
 CREATE UNIQUE INDEX idx_hrwai_users_wechat_openid_unique
     ON hrwai_users (wechat_openid)
     WHERE wechat_openid <> '';
+CREATE UNIQUE INDEX idx_hrwai_users_phone_unique
+    ON hrwai_users (phone)
+    WHERE phone <> '';
+CREATE INDEX idx_hrwai_users_current_credential ON hrwai_users (current_credential_id);
 COMMENT ON TABLE  hrwai_users IS '统一用户表（学员/残值评估/AI 助手共用账号，admin/tutor 独立表）';
 COMMENT ON COLUMN hrwai_users.uid      IS '雪花 ID（应用层生成），对外展示的唯一标识';
 COMMENT ON COLUMN hrwai_users.account  IS '登录账号（注册时随机生成，设置页可改，配合密码登录）';
 COMMENT ON COLUMN hrwai_users.username IS '昵称（注册时必填，保持唯一）';
 COMMENT ON COLUMN hrwai_users.password IS '密码（BCrypt加密）';
 COMMENT ON COLUMN hrwai_users.status   IS '状态：1-正常，0-禁用';
+COMMENT ON COLUMN hrwai_users.phone    IS '手机号（空串表示未绑定，非手机号注册时为空）';
+COMMENT ON COLUMN hrwai_users.current_credential_id IS '当前目标证件（单选上下文，NULL 表示未预筛选）';
 
 CREATE TABLE admin (
     admin_id    INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -144,6 +211,9 @@ CREATE TABLE course (
     theory_hours INT          NOT NULL DEFAULT 0,
     practice_hours INT        NOT NULL DEFAULT 0,
     certificate_template_id INT REFERENCES certificate_template(id) ON DELETE SET NULL,
+    credential_id INT         REFERENCES credential(id) ON DELETE SET NULL,
+    is_hot      BOOLEAN      NOT NULL DEFAULT FALSE,
+    is_featured BOOLEAN      NOT NULL DEFAULT FALSE,
     sort_order  INT          NOT NULL DEFAULT 0,
     status      SMALLINT     NOT NULL DEFAULT 1,
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
@@ -152,14 +222,20 @@ CREATE INDEX idx_course_status   ON course (status);
 CREATE INDEX idx_course_specialty ON course (specialty_id);
 CREATE INDEX idx_course_level     ON course (level_id);
 CREATE INDEX idx_course_cert_template ON course (certificate_template_id);
+CREATE INDEX idx_course_credential ON course (credential_id);
 CREATE INDEX idx_course_status_specialty_level ON course (status, specialty_id, level_id);
 CREATE INDEX idx_course_specialty_level_sort ON course (specialty_id, level_id, sort_order);
+CREATE INDEX idx_course_is_hot ON course (is_hot) WHERE is_hot = TRUE;
+CREATE INDEX idx_course_is_featured ON course (is_featured) WHERE is_featured = TRUE;
 COMMENT ON TABLE  course IS '课程表';
 COMMENT ON COLUMN course.specialty_id IS '专业方向（目录一级节点）';
 COMMENT ON COLUMN course.level_id IS '课程等级（入门/进阶/专项/认证）';
 COMMENT ON COLUMN course.theory_hours IS '理论学时';
 COMMENT ON COLUMN course.practice_hours IS '实操学时';
 COMMENT ON COLUMN course.certificate_template_id IS '关联证书模板（有效期取模板 validity_days）';
+COMMENT ON COLUMN course.credential_id IS '所属目标证件（单归属分区）';
+COMMENT ON COLUMN course.is_hot IS '是否热门（运营精选）';
+COMMENT ON COLUMN course.is_featured IS '是否精品（运营精选）';
 COMMENT ON COLUMN course.sort_order IS '课程排序值（所属专业方向+课程等级层级内生效，越小越靠前）';
 COMMENT ON COLUMN course.status   IS '状态：1-上架，0-下架';
 
@@ -193,6 +269,10 @@ CREATE TABLE chapter_file (
 CREATE INDEX idx_chapter_file_chapter ON chapter_file (chapter_id);
 COMMENT ON TABLE chapter_file IS '章节文件表';
 
+-- 学习位置与章节完成状态（移动端 continue-learning 数据源，ADR-0017）：
+--   章节级记录（chapter_id IS NOT NULL）+ video_position：该章节最后播放位置（秒）；
+--   课程级记录（chapter_id IS NULL）+ last_chapter_id / last_studied_at：最后学习章节与时间戳。
+--   章节完成仍以 progress >= 100 为单一事实源。
 CREATE TABLE study_record (
     record_id      INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     student_id     INT          NOT NULL REFERENCES hrwai_users(id) ON DELETE CASCADE,
@@ -200,6 +280,9 @@ CREATE TABLE study_record (
     chapter_id     INT,
     study_duration INT          NOT NULL DEFAULT 0,
     progress       NUMERIC(5,2) NOT NULL DEFAULT 0.00,
+    video_position INT          NOT NULL DEFAULT 0,
+    last_chapter_id INT,
+    last_studied_at TIMESTAMPTZ,
     study_date     TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_study_record_student_course_chapter ON study_record (student_id, course_id, chapter_id);
@@ -228,12 +311,14 @@ CREATE TABLE question (
     options             JSONB,
     answer              VARCHAR(255) NOT NULL,
     explanation         TEXT,
+    ai_explanation      TEXT         NOT NULL DEFAULT '',
     image_url           VARCHAR(500),
     reference_answer    TEXT,
     scoring_criteria    TEXT,
     score               INT          NOT NULL DEFAULT 0,
     status              VARCHAR(20)  NOT NULL DEFAULT 'draft',
     reject_reason       TEXT,
+    credential_id       INT          REFERENCES credential(id) ON DELETE SET NULL,
     created_by          INT,
     created_by_type     VARCHAR(20)  NOT NULL DEFAULT 'tutor',
     created_at          TIMESTAMPTZ  NOT NULL DEFAULT now(),
@@ -241,65 +326,14 @@ CREATE TABLE question (
 );
 CREATE INDEX idx_question_type             ON question (type);
 CREATE INDEX idx_question_status           ON question (status);
+CREATE INDEX idx_question_credential       ON question (credential_id);
 COMMENT ON TABLE  question IS '题目表';
 COMMENT ON COLUMN question.type IS '题型：single_choice/multi_choice/true_false/fault_image/short_answer';
 COMMENT ON COLUMN question.status IS '状态：draft/pending/published';
 COMMENT ON COLUMN question.reject_reason IS '驳回理由（管理员驳回时填写，导师修改重提后清空）';
+COMMENT ON COLUMN question.credential_id IS '所属目标证件（单归属分区）';
 
-CREATE TABLE exam_session (
-    id              INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    name            VARCHAR(200) NOT NULL,
-    start_time      TIMESTAMPTZ  NOT NULL,
-    end_time        TIMESTAMPTZ  NOT NULL,
-    duration        INT          NOT NULL,
-    status          VARCHAR(20)  NOT NULL DEFAULT 'upcoming',
-    created_by      INT,
-    question_config JSONB,
-    total_score     INT          NOT NULL DEFAULT 0,
-    pass_score      INT          NOT NULL DEFAULT 60,
-    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
-);
-CREATE INDEX idx_exam_session_status ON exam_session (status);
-COMMENT ON TABLE exam_session IS '考试场次表';
-
-CREATE TABLE exam_participant (
-    id               INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    exam_session_id  INT          NOT NULL REFERENCES exam_session(id) ON DELETE CASCADE,
-    student_id       INT          NOT NULL REFERENCES hrwai_users(id) ON DELETE CASCADE,
-    status           VARCHAR(20)  NOT NULL DEFAULT 'not_started',
-    start_time       TIMESTAMPTZ,
-    submit_time      TIMESTAMPTZ,
-    remaining_time   INT          NOT NULL DEFAULT 0,
-    score            NUMERIC(5,2),
-    objective_score  NUMERIC(5,2),
-    subjective_score NUMERIC(5,2),
-    is_passed        BOOLEAN      NOT NULL DEFAULT FALSE,
-    answers_snapshot JSONB,
-    question_ids     JSONB,
-    created_at       TIMESTAMPTZ  NOT NULL DEFAULT now()
-);
-CREATE UNIQUE INDEX idx_exam_participant_session_student ON exam_participant (exam_session_id, student_id);
-CREATE INDEX idx_exam_participant_student                ON exam_participant (student_id);
-COMMENT ON TABLE exam_participant IS '考试参与记录表';
-
-CREATE TABLE exam_answer (
-    id                  INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    exam_participant_id INT          NOT NULL REFERENCES exam_participant(id) ON DELETE CASCADE,
-    question_id         INT          NOT NULL REFERENCES question(id) ON DELETE CASCADE,
-    user_answer         TEXT,
-    is_correct          BOOLEAN,
-    score               NUMERIC(5,2) NOT NULL DEFAULT 0,
-    grader_id           INT,
-    graded_at           TIMESTAMPTZ,
-    grading_comment     TEXT,
-    ai_score            NUMERIC(5,2),
-    ai_comment          TEXT,
-    ai_graded_at        TIMESTAMPTZ
-);
-CREATE INDEX idx_exam_answer_participant ON exam_answer (exam_participant_id);
-CREATE INDEX idx_exam_answer_question    ON exam_answer (question_id);
-COMMENT ON TABLE exam_answer IS '考试答题记录表';
+-- 定级考试三表（exam_session/exam_participant/exam_answer）已下线，不再生成
 
 CREATE TABLE question_practice_record (
     id            INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -322,6 +356,8 @@ CREATE TABLE wrong_question (
     wrong_count    INT          NOT NULL DEFAULT 1,
     last_wrong_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
     is_removed     BOOLEAN      NOT NULL DEFAULT FALSE,
+    -- 错题重做标记：重做做对后置 TRUE，批量移出（spec 修复）
+    is_redone      BOOLEAN      NOT NULL DEFAULT FALSE,
     created_at     TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX idx_wrong_question_student_question ON wrong_question (student_id, question_id);
@@ -500,6 +536,8 @@ CREATE TABLE evaluations (
     confidence_low              DECIMAL(12,2),
     confidence_high             DECIMAL(12,2),
     user_id                     INTEGER,
+    -- 未来价值曲线锚点（ADR-0012 §8，评估时点锁定，加性契约）
+    decay_anchor                DOUBLE PRECISION NOT NULL DEFAULT 0,
     suggestions                 JSONB,
     lambda_electric             DOUBLE PRECISION,
     lambda_combustion           DOUBLE PRECISION,
@@ -3153,20 +3191,23 @@ COMMENT ON TABLE ai_configs IS 'AI 服务配置表（多套命名配置）';
 COMMENT ON TABLE ai_feature_bindings IS 'AI 功能-配置绑定表（支持单绑定和多绑定功能）';
 
 CREATE TABLE ai_chat_sessions (
-    id          SERIAL         PRIMARY KEY,
-    user_id     INTEGER        NOT NULL,  -- 关联 hrwai_users.id
-    title       VARCHAR(200)   NOT NULL DEFAULT '新会话',
-    model_name  VARCHAR(100),             -- 本次会话使用的模型名
-    created_at  TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ    NOT NULL DEFAULT NOW()
+    id           SERIAL         PRIMARY KEY,
+    user_id      INTEGER        NOT NULL,  -- 关联 hrwai_users.id
+    title        VARCHAR(200)   NOT NULL DEFAULT '新会话',
+    model_name   VARCHAR(100),             -- 本次会话使用的模型名
+    feature_key  VARCHAR(50)    NOT NULL DEFAULT 'ai_assistant',  -- 功能会话分区（AI 助手功能化扩展）
+    created_at   TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ    NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_ai_chat_sessions_user ON ai_chat_sessions (user_id, created_at DESC);
+CREATE INDEX idx_ai_chat_sessions_user_feature ON ai_chat_sessions (user_id, feature_key);
 
 CREATE TABLE ai_chat_messages (
     id          SERIAL         PRIMARY KEY,
     session_id  INTEGER        NOT NULL REFERENCES ai_chat_sessions(id) ON DELETE CASCADE,
     role        VARCHAR(20)    NOT NULL,  -- 'user' | 'assistant' | 'system'
     content     TEXT           NOT NULL,
+    images      TEXT,                     -- 用户消息附带图片 URL（JSON 数组字符串）
     created_at  TIMESTAMPTZ    NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_ai_chat_messages_session ON ai_chat_messages (session_id, created_at);
@@ -3188,7 +3229,6 @@ CREATE INDEX idx_ai_user_models_user ON ai_user_models (user_id);
 COMMENT ON COLUMN ai_chat_sessions.user_id IS 'AI 助手会话归属 hrwai_users.id';
 COMMENT ON COLUMN ai_user_models.user_id IS '用户自定义模型归属 hrwai_users.id';
 COMMENT ON COLUMN study_record.student_id IS '学习记录归属 hrwai_users.id';
-COMMENT ON COLUMN exam_participant.student_id IS '考试参与记录归属 hrwai_users.id';
 COMMENT ON COLUMN question_practice_record.student_id IS '题库练习归属 hrwai_users.id';
 COMMENT ON COLUMN wrong_question.student_id IS '错题记录归属 hrwai_users.id';
 COMMENT ON COLUMN mock_exam.student_id IS '模拟考试归属 hrwai_users.id';
@@ -3206,6 +3246,8 @@ CREATE TABLE forum_topics (
     images        JSONB         NOT NULL DEFAULT '[]'::jsonb,
     view_count    INTEGER       NOT NULL DEFAULT 0,
     reply_count   INTEGER       NOT NULL DEFAULT 0,
+    -- 点赞反范式化计数（由应用层在 forum_topic_like 变更时维护）
+    likes_count   INTEGER       NOT NULL DEFAULT 0,
     last_reply_at TIMESTAMPTZ,
     created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
@@ -3218,15 +3260,19 @@ CREATE INDEX idx_forum_topics_created
     ON forum_topics (created_at DESC);
 CREATE INDEX idx_forum_topics_user
     ON forum_topics (user_id);
+CREATE INDEX idx_forum_topics_likes_count ON forum_topics (likes_count);
+CREATE INDEX idx_forum_topics_hot_sort ON forum_topics (likes_count DESC, reply_count DESC, view_count DESC, id DESC);
 
 CREATE TABLE forum_replies (
-    id         BIGSERIAL   PRIMARY KEY,
-    topic_id   BIGINT      NOT NULL REFERENCES forum_topics(id) ON DELETE CASCADE,
-    user_id    INTEGER     NOT NULL REFERENCES hrwai_users(id) ON DELETE CASCADE,
-    parent_id  BIGINT      REFERENCES forum_replies(id) ON DELETE CASCADE,
-    content    TEXT        NOT NULL,
-    images     JSONB       NOT NULL DEFAULT '[]'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id           BIGSERIAL   PRIMARY KEY,
+    topic_id     BIGINT      NOT NULL REFERENCES forum_topics(id) ON DELETE CASCADE,
+    user_id      INTEGER     NOT NULL REFERENCES hrwai_users(id) ON DELETE CASCADE,
+    parent_id    BIGINT      REFERENCES forum_replies(id) ON DELETE CASCADE,
+    content      TEXT        NOT NULL,
+    images       JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    -- 点赞反范式化计数（由应用层在 forum_reply_like 变更时维护）
+    likes_count  INTEGER     NOT NULL DEFAULT 0,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 COMMENT ON COLUMN forum_replies.images IS '回复图片 URL 数组（images/forum/ 子目录，最多 3 张）';
 
@@ -3234,6 +3280,7 @@ CREATE INDEX idx_forum_replies_topic
     ON forum_replies (topic_id, created_at ASC);
 CREATE INDEX idx_forum_replies_user
     ON forum_replies (user_id);
+CREATE INDEX idx_forum_replies_likes_count ON forum_replies (likes_count);
 CREATE INDEX idx_forum_replies_parent ON forum_replies (parent_id);
 
 CREATE TABLE profile_change_requests (
@@ -3263,6 +3310,10 @@ CREATE TABLE notifications (
     title      VARCHAR(255) NOT NULL,
     content    TEXT        NOT NULL DEFAULT '',
     link       VARCHAR(500) NOT NULL DEFAULT '',
+    -- 通知结构化 payload（ADR-0009 / Ticket #228，JSONB 标记，加性契约）：
+    -- 业务事件通知携带结构化标记（如 {"review_status":"approved"|"rejected"}），
+    -- 前端据此做确定性判定，不依赖标题文案
+    payload    JSONB,
     is_read    BOOLEAN     NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     read_at    TIMESTAMPTZ
@@ -3353,8 +3404,84 @@ INSERT INTO question_tag (code, name, description, sort_order, status) VALUES
 ('emergency', '应急', '应急处置与突发情况应对相关考点', 7, 1)
 ON CONFLICT (code) DO NOTHING;
 
+-- ==========================================
+-- 论坛互动与通用收藏（ADR-0018：移动端 P1 通用能力）
+-- 全局搜索与学习资料聚合为纯查询（无新表）
+-- ==========================================
+CREATE TABLE IF NOT EXISTS forum_topic_like (
+    id BIGSERIAL PRIMARY KEY,
+    topic_id BIGINT NOT NULL,
+    user_id INT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_forum_topic_like UNIQUE (topic_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_forum_topic_like_user ON forum_topic_like (user_id);
 
+CREATE TABLE IF NOT EXISTS favorite (
+    favorite_id BIGSERIAL PRIMARY KEY,
+    user_id INT NOT NULL,
+    target_type VARCHAR(20) NOT NULL,
+    target_id INT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_favorite_target UNIQUE (user_id, target_type, target_id)
+);
+CREATE INDEX IF NOT EXISTS idx_favorite_user ON favorite (user_id);
 
+CREATE TABLE IF NOT EXISTS forum_report (
+    id BIGSERIAL PRIMARY KEY,
+    reporter_id INT NOT NULL,
+    topic_id BIGINT,
+    reply_id BIGINT,
+    reason VARCHAR(500) NOT NULL,
+    status SMALLINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_forum_report_status ON forum_report (status);
 
+-- ==========================================
+-- 论坛每日打卡与评论点赞（spec #268 / tickets #269）
+-- forum_checkin：每日打卡记录，PK(user_id, check_date) 保证自然日幂等
+-- ==========================================
+CREATE TABLE IF NOT EXISTS forum_checkin (
+    user_id INT NOT NULL,
+    check_date DATE NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT pk_forum_checkin PRIMARY KEY (user_id, check_date)
+);
+CREATE INDEX IF NOT EXISTS idx_forum_checkin_date ON forum_checkin (check_date);
+CREATE INDEX IF NOT EXISTS idx_forum_checkin_user_date ON forum_checkin (user_id, check_date);
 
+-- forum_reply_like：评论点赞，与 forum_topic_like 同构
+CREATE TABLE IF NOT EXISTS forum_reply_like (
+    id BIGSERIAL PRIMARY KEY,
+    reply_id BIGINT NOT NULL REFERENCES forum_replies(id) ON DELETE CASCADE,
+    user_id INT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_forum_reply_like UNIQUE (reply_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_forum_reply_like_user ON forum_reply_like (user_id);
+CREATE INDEX IF NOT EXISTS idx_forum_reply_like_reply ON forum_reply_like (reply_id);
+
+-- ==========================================
+-- 题目评论与笔记（spec #284，ticket #290）
+-- ==========================================
+CREATE TABLE IF NOT EXISTS question_comment (
+    id BIGSERIAL PRIMARY KEY,
+    question_id INT NOT NULL REFERENCES question(id) ON DELETE CASCADE,
+    user_id INT NOT NULL REFERENCES hrwai_users(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_question_comment_qid ON question_comment (question_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_question_comment_user ON question_comment (user_id);
+
+CREATE TABLE IF NOT EXISTS question_note (
+    id SERIAL PRIMARY KEY,
+    question_id INT NOT NULL REFERENCES question(id) ON DELETE CASCADE,
+    user_id INT NOT NULL REFERENCES hrwai_users(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (question_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_question_note_user ON question_note (user_id);
 

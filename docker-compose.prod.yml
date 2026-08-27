@@ -17,18 +17,11 @@ services:
       POSTGRES_USER: ${DB_USER:-forklift}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       TZ: Asia/Shanghai
-    # Docker 19.03 的默认 seccomp 配置不包含 clone3() 等系统调用，
-    # 导致 PostgreSQL 15 报 "could not write to file postmaster.pid: Operation not permitted"
-    # pve-02(production)仍为 Docker 19.03，需保留此项；Docker 24+ 可移除
-    # pve-01(testing)通过 LXC 运行 Docker 24+，此项无害但非必需
-    security_opt:
-      - seccomp:unconfined
     # 仅内网可访问，不对外暴露端口（仅 backend 容器通过 Docker 网络访问）
     expose:
       - "5432"
     volumes:
-      # 支持 bind mount 覆盖：测试环境(Docker 19.03)用 bind mount 绕过 named volume 权限 bug
-      # 默认 named volume（production），测试环境设置 PG_VOLUME=./data/pgdata
+      # 默认 named volume；可经 PG_VOLUME 环境变量覆盖为 bind mount 路径
       - ${PG_VOLUME:-pgdata-prod}:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-forklift} -d forklift_training"]
@@ -75,7 +68,7 @@ services:
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     volumes:
-      # 测试环境用 bind mount: REDIS_VOLUME=./data/redis
+      # 默认 named volume；可经 REDIS_VOLUME 环境变量覆盖为 bind mount 路径
       - ${REDIS_VOLUME:-redisdata-prod}:/data
     healthcheck:
       # 密码为空时 redis-cli ping；非空时 redis-cli -a <password> ping
@@ -219,14 +212,14 @@ services:
       TZ: Asia/Shanghai
     # 端口映射到宿主机回环，供 host 模式的 frontend nginx 反代访问
     # PVE 环境：frontend 用 network_mode: host，需通过 127.0.0.1:${BACKEND_HOST_PORT} 访问 backend
-    # 默认 8080；测试环境(pve-01)8080 被 cadvisor 占用，通过环境变量改用 18080
+    # 默认 8080；testing 环境经 BACKEND_HOST_PORT 环境变量固定为 18080
     ports:
       - "127.0.0.1:${BACKEND_HOST_PORT:-8080}:8080"
     volumes:
-      # 测试环境用 bind mount: UPLOADS_VOLUME=./data/uploads, REPORTS_VOLUME=./data/reports
+      # 默认 named volume；可经 UPLOADS_VOLUME/REPORTS_VOLUME 环境变量覆盖为 bind mount 路径
       - ${UPLOADS_VOLUME:-uploads-data}:/data/uploads
       - ${REPORTS_VOLUME:-reports-data}:/data/reports
-      # 日志卷：应用内 lumberjack 轮转持久化（测试环境 bind mount: LOGS_VOLUME=./data/logs）
+      # 日志卷：应用内 lumberjack 轮转持久化（可经 LOGS_VOLUME 覆盖为 bind mount 路径）
       - ${LOGS_VOLUME:-logs-data}:/data/logs
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health/live"]
@@ -271,7 +264,7 @@ services:
       disable: true
     environment:
       DOMAIN: ${DOMAIN:-localhost}
-      # backend 宿主机映射端口（默认 8080；测试环境用 18080 避免与 cadvisor 冲突）
+      # backend 宿主机映射端口（默认 8080；testing 环境固定 18080）
       BACKEND_HOST_PORT: ${BACKEND_HOST_PORT:-8080}
       # 官网门户（hrwai-portal）宿主机监听端口（默认 3000）
       PORTAL_HOST_PORT: ${PORTAL_HOST_PORT:-3000}
