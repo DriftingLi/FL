@@ -263,6 +263,11 @@ services:
     # 说明：镜像 master 以 root 运行以绑定 80/443（host 网络模式下 --cap-add 对非 root 不生效），
     #       worker 由 nginx.conf 的 user nginx; 自动降权
     network_mode: host
+    # PVE 宿主机 AppArmor 的 docker-default profile 会拒绝 nginx master 创建
+    # socketpair（worker 进程无法与 master 通信，日志报 "socketpair() failed
+    # (13: Permission denied)"，对外 80/443 无响应），必须解除 AppArmor 限制
+    security_opt:
+      - apparmor=unconfined
     # 禁用镜像内置 healthcheck（原 healthcheck 访问 127.0.0.1:8080/api/health，
     # 但 host 网络模式下容器内 wget 行为异常导致误报 unhealthy，实际服务正常）
     healthcheck:
