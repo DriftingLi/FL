@@ -17,6 +17,11 @@ services:
       POSTGRES_USER: ${DB_USER:-forklift}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       TZ: Asia/Shanghai
+    # PVE 宿主机 AppArmor 的 docker-default profile 会拒绝容器内创建
+    # Unix socket（postgres 报 "could not create any Unix-domain sockets"
+    # 循环重启），直接跑在 PVE 宿主机 Docker 上时必须解除 AppArmor 限制
+    security_opt:
+      - apparmor=unconfined
     # 仅内网可访问，不对外暴露端口（仅 backend 容器通过 Docker 网络访问）
     expose:
       - "5432"
