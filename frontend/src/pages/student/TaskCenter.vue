@@ -30,7 +30,7 @@
           <span class="group-count">{{ group.tasks.length }}项</span>
         </div>
         <div class="task-list">
-          <div v-for="task in group.tasks" :key="task.id" class="task-card" :class="task.status">
+          <div v-for="task in group.tasks" :key="task.code" class="task-card" :class="task.status">
             <div class="task-left">
               <div class="task-icon" :class="task.status">
                 <el-icon v-if="task.status === 'claimed'"><CircleCheckFilled /></el-icon>
@@ -52,7 +52,8 @@
                 v-if="task.status === 'claimable'"
                 size="small"
                 type="primary"
-                @click="handleClaim(task.id)"
+                :loading="loading"
+                @click="handleClaim(task.code)"
               >
                 领取
               </el-button>
@@ -71,21 +72,33 @@ import { computed, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { CircleCheckFilled, Trophy, List } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
-import { loadTasks, saveTasks, loadPoints, savePoints, groupLabelMap, groupDescMap } from '@/utils/taskCenter'
-import type { TaskItem, TaskGroup } from '@/utils/taskCenter'
+import { pointsApi, type PointsTaskItem } from '@/api/points'
+import { groupLabelMap, groupDescMap } from '@/utils/taskCenter'
+import type { TaskGroup } from '@/utils/taskCenter'
+import { loadTasks as loadLocalTasks, loadPoints as loadLocalPoints } from '@/utils/taskCenter'
 
 const authStore = useAuthStore()
 
-const tasks = ref<TaskItem[]>([])
+const tasks = ref<PointsTaskItem[]>([])
 const points = ref({ balance: 0, totalEarned: 0 })
+const loading = ref(false)
 
-function userId() {
-  return authStore.userInfo?.user_id
-}
-
-function refresh() {
-  tasks.value = loadTasks(userId())
-  points.value = loadPoints(userId())
+async function refresh() {
+  loading.value = true
+  try {
+    const [bal, ts] = await Promise.all([pointsApi.getBalance(), pointsApi.getTasks()])
+    points.value = { balance: bal.balance, totalEarned: bal.total_earned }
+    tasks.value = ts.tasks || []
+  } catch {
+    // 静默回退占位（无后端时）
+    const uid = authStore.userInfo?.user_id
+    const localTasks = loadLocalTasks(uid) as unknown as PointsTaskItem[]
+    const localPoints = loadLocalPoints(uid)
+    tasks.value = localTasks
+    points.value = localPoints
+  } finally {
+    loading.value = false
+  }
 }
 
 const todayEarnable = computed(() =>
@@ -102,19 +115,24 @@ const grouped = computed(() => {
   }))
 })
 
-function persist() {
-  saveTasks(tasks.value, userId())
-  savePoints(points.value, userId())
-}
-
-function handleClaim(id: number) {
-  const task = tasks.value.find((t) => t.id === id)
+async function handleClaim(code: string) {
+  const task = tasks.value.find((t) => t.code === code)
   if (!task || task.status !== 'claimable') return
-  task.status = 'claimed'
-  points.value.balance += task.points
-  points.value.totalEarned += task.points
-  persist()
-  ElMessage.success(`已领取 +${task.points} 积分`)
+  try {
+    const res = await pointsApi.claim(code)
+    task.status = 'claimed'
+    points.value.balance = res.balance
+    points.value.totalEarned = res.total_earned
+    ElMessage.success(`已领取 +${task.points} 积分`)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    if (msg.includes('已领取') || msg.includes('今日已领取')) {
+      task.status = 'claimed'
+      ElMessage.warning(msg)
+    } else {
+      ElMessage.error(msg || '领取失败')
+    }
+  }
 }
 
 onMounted(() => {

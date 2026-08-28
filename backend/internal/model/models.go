@@ -714,7 +714,7 @@ type PointsTaskClaim struct {
 	UserID    int       `gorm:"column:user_id" json:"user_id"`
 	TaskCode  string    `gorm:"column:task_code" json:"task_code"`
 	ClaimDate *string   `gorm:"column:claim_date" json:"claim_date,omitempty"` // YYYY-MM-DD，Asia/Shanghai
-	RefID     string    `gorm:"column:ref_id" json:"ref_id"`
+	RefID     *string   `gorm:"column:ref_id" json:"ref_id,omitempty"`
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
