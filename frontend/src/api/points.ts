@@ -49,4 +49,10 @@ export const pointsApi = {
   claim(code: string) {
     return unwrappedRequest.post<{ balance: number; total_earned: number; task_status: string }>(`/points/tasks/${code}/claim`)
   },
+  redeemCourse(courseId: number) {
+    return unwrappedRequest.post<{ balance: number; total_earned: number; sku: string; ref_id: string }>(`/points/shop/course/${courseId}/redeem`)
+  },
+  redeemShop(sku: string) {
+    return unwrappedRequest.post<{ balance: number; total_earned: number; sku: string; ref_id: string }>(`/points/shop/${sku}/redeem`)
+  },
 }

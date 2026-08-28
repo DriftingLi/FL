@@ -39,6 +39,7 @@ export interface CourseSummary {
   created_at?: string
   is_hot?: boolean
   is_featured?: boolean
+  points_price?: number | null
   /** 学习人数（详情元数据，导师端列表展示用） */
   student_count?: number
 }

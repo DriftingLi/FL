@@ -334,3 +334,131 @@ func (s *PointsService) Claim(ctx context.Context, userID int, taskCode string) 
 	}
 	return &PointsClaimResult{Balance: balance, TotalEarned: totalEarned, TaskStatus: "claimed"}, nil
 }
+
+// RedeemResult 兑换结果
+type RedeemResult struct {
+	Balance     int `json:"balance"`
+	TotalEarned int `json:"total_earned"`
+	SKU       string `json:"sku"`
+	RefID     string `json:"ref_id"`
+}
+
+// RedeemCourse 兑换课程（课程级整锁）
+func (s *PointsService) RedeemCourse(ctx context.Context, userID, courseID int) (*RedeemResult, error) {
+	var course model.Course
+	if err := s.db.First(&course, courseID).Error; err != nil {
+		return nil, errors.New("课程不存在")
+	}
+	if course.PointsPrice == nil || *course.PointsPrice <= 0 {
+		return nil, errors.New("该课程无需兑换")
+	}
+	price := *course.PointsPrice
+	sku := fmt.Sprintf("course:%d", courseID)
+	refID := fmt.Sprintf("%d", courseID)
+	lockKey := fmt.Sprintf("shop:course:%d:%d", userID, courseID)
+	if ok, err := cache.SetNX(ctx, lockKey, "1", 5*time.Second); err == nil && ok {
+		defer func() { _ = cache.Del(ctx, lockKey) }()
+	}
+	// 已拥有校验
+	var entCnt int64
+	_ = s.db.Model(&model.UserEntitlement{}).Where("user_id = ? AND sku = ? AND ref_id = ?", userID, sku, refID).Count(&entCnt).Error
+	if entCnt > 0 {
+		return nil, errors.New("已兑换")
+	}
+	// 余额校验
+	var user model.HrwaiUser
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, err
+	}
+	if user.PointsBalance < price {
+		return nil, errors.New("积分不足")
+	}
+	var balance, totalEarned int
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		ent := model.UserEntitlement{UserID: userID, SKU: sku, RefID: refID}
+		if err := tx.Create(&ent).Error; err != nil {
+			if isDuplicateError(err) {
+				return errors.New("已兑换")
+			}
+			return err
+		}
+		ledger := model.PointsLedger{UserID: userID, Delta: -price, Reason: "redeem_course", RefType: "course", RefID: refID}
+		if err := tx.Create(&ledger).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.HrwaiUser{}).Where("id = ? AND points_balance >= ?", userID, price).UpdateColumn("points_balance", gorm.Expr("points_balance - ?", price)).Error; err != nil {
+			return err
+		}
+		// 截断到 0 的兜底（若并发导致负数，CASE 钳 0）
+		_ = tx.Exec("UPDATE hrwai_users SET points_balance = GREATEST(points_balance, 0) WHERE id = ?", userID).Error
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	bal, _ := s.GetBalance(userID)
+	if bal != nil {
+		balance = bal.Balance
+		totalEarned = bal.TotalEarned
+	}
+	return &RedeemResult{Balance: balance, TotalEarned: totalEarned, SKU: sku, RefID: refID}, nil
+}
+
+// RedeemShop 兑换商城物品（真题等）
+func (s *PointsService) RedeemShop(ctx context.Context, userID int, sku string) (*RedeemResult, error) {
+	var item model.PointsShopItem
+	if err := s.db.Where("sku = ? AND enabled = true", sku).First(&item).Error; err != nil {
+		return nil, errors.New("商品不存在或已下架")
+	}
+	lockKey := fmt.Sprintf("shop:sku:%d:%s", userID, sku)
+	if ok, err := cache.SetNX(ctx, lockKey, "1", 5*time.Second); err == nil && ok {
+		defer func() { _ = cache.Del(ctx, lockKey) }()
+	}
+	var entCnt int64
+	_ = s.db.Model(&model.UserEntitlement{}).Where("user_id = ? AND sku = ? AND ref_id = ?", userID, sku, sku).Count(&entCnt).Error
+	if entCnt > 0 {
+		return nil, errors.New("已兑换")
+	}
+	var user model.HrwaiUser
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, err
+	}
+	if user.PointsBalance < item.Price {
+		return nil, errors.New("积分不足")
+	}
+	var balance, totalEarned int
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		ent := model.UserEntitlement{UserID: userID, SKU: sku, RefID: sku}
+		if err := tx.Create(&ent).Error; err != nil {
+			if isDuplicateError(err) {
+				return errors.New("已兑换")
+			}
+			return err
+		}
+		ledger := model.PointsLedger{UserID: userID, Delta: -item.Price, Reason: "redeem_" + sku, RefType: "shop", RefID: sku}
+		if err := tx.Create(&ledger).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", userID).UpdateColumn("points_balance", gorm.Expr("points_balance - ?", item.Price)).Error; err != nil {
+			return err
+		}
+		_ = tx.Exec("UPDATE hrwai_users SET points_balance = GREATEST(points_balance, 0) WHERE id = ?", userID).Error
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	bal, _ := s.GetBalance(userID)
+	if bal != nil {
+		balance = bal.Balance
+		totalEarned = bal.TotalEarned
+	}
+	return &RedeemResult{Balance: balance, TotalEarned: totalEarned, SKU: sku, RefID: sku}, nil
+}
+
+// HasEntitlement 校验是否已兑换
+func (s *PointsService) HasEntitlement(userID int, sku, refID string) bool {
+	var cnt int64
+	_ = s.db.Model(&model.UserEntitlement{}).Where("user_id = ? AND sku = ? AND ref_id = ?", userID, sku, refID).Count(&cnt).Error
+	return cnt > 0
+}

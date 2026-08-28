@@ -43,9 +43,10 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useCredentialStore } from '@/stores/credential'
 import { levelTagType } from '@/constants/level'
+import { pointsApi } from '@/api/points'
 
 type Difficulty = '入门' | '进阶' | '专项' | '认证'
 
@@ -97,9 +98,28 @@ const grouped = computed(() => {
 
 const selectedId = ref<number | null>(null)
 
-function handleSelect(id: number) {
+async function handleSelect(id: number) {
   selectedId.value = id
-  ElMessage.info('功能建设中')
+  try {
+    await ElMessageBox.confirm('该套真题需 300 积分解锁，确认兑换？', '积分兑换', {
+      confirmButtonText: '确认兑换',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  try {
+    await pointsApi.redeemShop('unlock_real_paper')
+    ElMessage.success('兑换成功，已解锁真题')
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    if (msg.includes('已兑换')) {
+      ElMessage.success('已解锁，直接进入')
+    } else {
+      ElMessage.error(msg || '兑换失败')
+    }
+  }
 }
 </script>
 
