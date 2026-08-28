@@ -115,7 +115,8 @@ type AuthCookieConfig struct {
 }
 
 // StorageConfig 文件存储配置。
-// Driver 为 "local" 时使用本地磁盘（UploadFolder），为 "r2" 时使用 Cloudflare R2。
+// Driver 为 "local" 时使用本地磁盘（UploadFolder），为 "r2" 时使用对象存储
+// （S3 兼容：缺失 R2Endpoint 时指向 Cloudflare R2，配置时指向自建 RGW 等）。
 type StorageConfig struct {
 	Driver            string // STORAGE_DRIVER，默认 "local"
 	R2AccountID       string // R2_ACCOUNT_ID
@@ -123,6 +124,7 @@ type StorageConfig struct {
 	R2SecretAccessKey string // R2_SECRET_ACCESS_KEY
 	R2Bucket          string // R2_BUCKET
 	R2PublicDomain    string // R2_PUBLIC_DOMAIN，如 https://cdn.example.com
+	R2Endpoint        string // R2_ENDPOINT，空用 R2 默认 endpoint；自建 S3（RGW）时配置
 }
 
 // DefaultPasswordsConfig 默认账号密码配置，生产环境必须覆盖开发默认值。
@@ -301,6 +303,7 @@ func Load() (*Config, error) {
 			R2SecretAccessKey: viper.GetString("r2_secret_access_key"),
 			R2Bucket:          viper.GetString("r2_bucket"),
 			R2PublicDomain:    viper.GetString("r2_public_domain"),
+			R2Endpoint:        viper.GetString("r2_endpoint"),
 		},
 		AIAPIKey:  viper.GetString("ai_api_key"),
 		AIBaseURL: viper.GetString("ai_base_url"),
@@ -435,8 +438,9 @@ func (c *Config) Validate() error {
 		missing = append(missing, "REDIS_ADDR")
 	}
 	// R2 对象存储校验：driver=r2 时必填 R2 凭证
+	// （自建 RGW 时 R2_ACCOUNT_ID 可给占位，endpoint 由 R2_ENDPOINT 指定）
 	if c.Storage.Driver == "r2" {
-		if c.Storage.R2AccountID == "" {
+		if c.Storage.R2Endpoint == "" && c.Storage.R2AccountID == "" {
 			missing = append(missing, "R2_ACCOUNT_ID")
 		}
 		if c.Storage.R2AccessKeyID == "" {
