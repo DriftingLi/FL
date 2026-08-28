@@ -45,6 +45,7 @@ type CourseDTO struct {
 	Level                 *LevelBriefDTO          `json:"level,omitempty"`
 	LevelID               *int                    `json:"level_id"`
 	Name                  string                  `json:"name"`
+	PointsPrice           *int                    `json:"points_price,omitempty"`
 	PracticeHours         int                     `json:"practice_hours"`
 	PrerequisiteCourseIDs *[]int                  `json:"prerequisite_course_ids,omitempty"`
 	Prerequisites         *[]CourseBriefDTO       `json:"prerequisites,omitempty"`
@@ -580,6 +581,7 @@ func courseToDTO(c *model.Course) CourseDTO {
 		Status:                c.Status,
 		IsHot:                 c.IsHot,
 		IsFeatured:            c.IsFeatured,
+		PointsPrice:           c.PointsPrice,
 		CreatedAt:             formatISO(c.CreatedAt),
 	}
 }

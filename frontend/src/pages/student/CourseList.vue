@@ -69,6 +69,9 @@
                   <span v-if="course.theory_hours || course.practice_hours" class="cc-meta-item">
                     理论{{ course.theory_hours || 0 }}学时 · 实操{{ course.practice_hours || 0 }}学时
                   </span>
+                  <el-tag v-if="course.points_price" size="small" type="warning" effect="plain">
+                    {{ course.points_price }} 积分解锁
+                  </el-tag>
                 </div>
                 <div class="cc-cert" v-if="course.certificate_name">
                   <el-tag size="small" type="success" effect="plain">
@@ -126,6 +129,10 @@
             </el-tag>
           </div>
           <p class="detail-desc">{{ detailCourse.description || '暂无简介' }}</p>
+          <div v-if="detailCourse?.points_price" class="detail-redeem">
+            <el-tag type="warning" effect="plain">{{ detailCourse.points_price }} 积分解锁</el-tag>
+            <el-button size="small" type="warning" @click="handleRedeem">兑换解锁</el-button>
+          </div>
 
           <el-descriptions :column="2" border size="small" class="detail-descriptions">
             <el-descriptions-item label="理论学时">{{ detailCourse.theory_hours ?? '-' }} 学时</el-descriptions-item>
@@ -202,11 +209,12 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowRight, Star, StarFilled } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { courseApi, type CourseDetail, type CourseSummary } from '@/api/course'
 import { studentApi, type StudentCourseDetail } from '@/api/student'
 import { favoriteApi } from '@/api/favorite'
 import { trainingApi } from '@/api/training'
+import { pointsApi } from '@/api/points'
 import { useCourseCatalog, treeCatalogAdapter } from '@/composables/useCourseCatalog'
 import { useCredentialStore } from '@/stores/credential'
 import FacetCard from '@/components/catalog/FacetCard.vue'
@@ -435,8 +443,36 @@ async function openDetailById(courseId: number) {
   }
 }
 
+async function handleRedeem() {
+  if (!detailCourse.value?.course_id) return
+  const price = detailCourse.value.points_price
+  if (!price) return
+  try {
+    await ElMessageBox.confirm(`该课程需 ${price} 积分解锁，确认兑换？`, '积分兑换', {
+      confirmButtonText: '确认兑换',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  try {
+    await pointsApi.redeemCourse(detailCourse.value.course_id)
+    ElMessage.success('兑换成功，已解锁')
+    // 刷新详情以更新 points_price 仍显示但已可进入
+    detailCourse.value.points_price = null as unknown as number
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    ElMessage.error(msg || '兑换失败')
+  }
+}
+
 function goToChapter(ch: { chapter_id: number }) {
   if (!detailCourse.value) return
+  if (detailCourse.value.points_price) {
+    ElMessage.warning('该课程需积分解锁，请先兑换')
+    return
+  }
   detailVisible.value = false
   router.push({
     name: 'ChapterView',
