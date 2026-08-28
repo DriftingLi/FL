@@ -30,18 +30,24 @@
         <el-radio-button value="all">全部</el-radio-button>
         <el-radio-button value="my-topics">我的帖子</el-radio-button>
         <el-radio-button value="my-replies">我的回复</el-radio-button>
+        <el-radio-button value="history">浏览记录</el-radio-button>
       </el-radio-group>
-      <el-radio-group v-if="mode !== 'my-replies'" v-model="topicSort" size="small" class="topic-sort" @change="handleSortChange">
+      <el-radio-group v-if="mode !== 'my-replies' && mode !== 'history'" v-model="topicSort" size="small" class="topic-sort" @change="handleSortChange">
         <el-radio-button value="latest">最新</el-radio-button>
         <el-radio-button value="hot">热门</el-radio-button>
       </el-radio-group>
-      <el-button v-if="mode !== 'my-replies'" size="small" :icon="topicOrder==='asc'? ArrowUp : ArrowDown" @click="toggleTopicOrder">{{ topicOrder==='asc' ? '正序' : '逆序' }}</el-button>
+      <el-button v-if="mode !== 'my-replies' && mode !== 'history'" size="small" :icon="topicOrder==='asc'? ArrowUp : ArrowDown" @click="toggleTopicOrder">{{ topicOrder==='asc' ? '正序' : '逆序' }}</el-button>
     </div>
 
     <CheckInDialog v-model="checkInDialogVisible" :initial-tab="checkInTab" @checked="onCheckInChecked" />
 
+    <!-- 浏览记录（卡片分组，选型 b） -->
+    <div v-if="mode === 'history'">
+      <ForumHistoryPanel :items="historyItems" @select="handleHistorySelect" @remove="handleHistoryRemove" @clear="handleHistoryClear" />
+    </div>
+
     <!-- 我的回复列表（条目带主题标题回填，点击跳对应帖子） -->
-    <div v-if="mode === 'my-replies'" v-loading="loading" class="topic-list">
+    <div v-else-if="mode === 'my-replies'" v-loading="loading" class="topic-list">
       <template v-if="myReplies.length > 0">
         <div v-for="reply in myReplies" :key="reply.id" class="topic-item" @click="goDetail(reply.topic_id)">
           <div class="topic-main">
@@ -105,7 +111,7 @@
       <el-empty v-else-if="!loading" description="还没有帖子，来发第一帖吧" />
     </div>
 
-    <div class="pagination-wrapper" v-if="total > pageSize">
+    <div class="pagination-wrapper" v-if="mode !== 'history' && total > pageSize">
       <el-pagination
         v-model:current-page="currentPage"
         :page-size="pageSize"
@@ -156,8 +162,13 @@ import { forumApi, type ForumTopicItem, type MyReplyItem } from '@/api/forum'
 import { formatRelativeTime } from '@/utils/format'
 import ForumImageUploader from '@/components/student/ForumImageUploader.vue'
 import CheckInDialog from '@/components/student/CheckInDialog.vue'
+import ForumHistoryPanel from '@/components/student/ForumHistoryPanel.vue'
+import { loadHistory, removeHistoryItem, clearHistory } from '@/utils/forumHistory'
+import type { ForumHistoryItem } from '@/utils/forumHistory'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -166,16 +177,43 @@ const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
 
-// 列表模式：全部 / 我的帖子 / 我的回复（ADR-0018）
-type ForumMode = 'all' | 'my-topics' | 'my-replies'
+// 列表模式：全部 / 我的帖子 / 我的回复 / 浏览记录
+type ForumMode = 'all' | 'my-topics' | 'my-replies' | 'history'
 const mode = ref<ForumMode>('all')
 const myReplies = ref<MyReplyItem[]>([])
 const topicSort = ref<'latest' | 'hot'>('latest')
 const topicOrder = ref<'asc' | 'desc'>('desc')
+const historyItems = ref<ForumHistoryItem[]>([])
 
 function handleModeChange() {
   currentPage.value = 1
-  loadTopics()
+  if (mode.value === 'history') {
+    loadHistoryItems()
+  } else {
+    loadTopics()
+  }
+}
+
+function loadHistoryItems() {
+  historyItems.value = loadHistory(authStore.userInfo?.user_id)
+}
+
+function handleHistorySelect(id: number) {
+  const found = historyItems.value.find((h) => h.id === id)
+  if (found?.deleted) {
+    ElMessage.warning('原帖已删除')
+    return
+  }
+  goDetail(id)
+}
+
+function handleHistoryRemove(id: number) {
+  historyItems.value = removeHistoryItem(id, authStore.userInfo?.user_id)
+}
+
+function handleHistoryClear() {
+  historyItems.value = clearHistory(authStore.userInfo?.user_id)
+  ElMessage.success('已清空浏览记录')
 }
 
 function handleSortChange() {
