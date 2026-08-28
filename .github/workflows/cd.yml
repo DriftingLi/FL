@@ -267,8 +267,10 @@ jobs:
       IMAGE_LIBREOFFICE: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-libreoffice
       # 镜像加速代理（ghcr pull-through 缓存，如 127.0.0.1:5000；留空则直连 ghcr.io）
       # 在仓库级 Variables 设置 REGISTRY_PROXY=127.0.0.1:5000，所有环境统一生效
-      # （当前生产也部署在 lxc201，代理同样可用；若未来生产迁到独立服务器，请改用环境级变量单独配置）
+      # 多节点共享缓存：REGISTRY_PROXY 指向缓存节点内网地址（如 172.17.1.41:5000），
+      # 缓存节点自身经 REGISTRY_PROXY_BIND 监听内网；其余节点直接内网拉取
       REGISTRY_PROXY: ${{ vars.REGISTRY_PROXY || '' }}
+      REGISTRY_PROXY_BIND: ${{ vars.REGISTRY_PROXY_BIND || '127.0.0.1' }}
       # 旧版本镜像保留数量（部署后清理更早版本；可在仓库级 Variables 中覆盖）
       KEEP_IMAGES: ${{ vars.KEEP_IMAGES || '3' }}
       # SSL 证书内容（从 GitHub Secrets 注入，部署时写入服务器固定路径）
@@ -470,6 +472,7 @@ jobs:
             printf 'export GITHUB_TOKEN=%q\n' "${GITHUB_TOKEN:-}"
             printf 'export REGISTRY=%q\n' "${REGISTRY:-ghcr.io}"
             printf 'export REGISTRY_PROXY=%q\n' "${REGISTRY_PROXY:-}"
+            printf 'export REGISTRY_PROXY_BIND=%q\n' "${REGISTRY_PROXY_BIND:-127.0.0.1}"
             printf 'export KEEP_IMAGES=%q\n' "${KEEP_IMAGES:-3}"
             printf 'export DATABASE_URL=%q\n' "${DATABASE_URL:-}"
             printf 'export DB_USER=%q\n' "${DB_USER:-forklift}"

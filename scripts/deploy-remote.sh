@@ -60,6 +60,9 @@ GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 # 镜像加速代理（ghcr.io pull-through 缓存，如 127.0.0.1:5000）
 # 设置后镜像地址自动改写为 ${REGISTRY_PROXY}/<org>/<image>，由本地代理缓存加速拉取
 REGISTRY_PROXY="${REGISTRY_PROXY:-}"
+# registry 缓存容器监听绑定（默认回环；多节点共享缓存时设为内网 IP，
+# 如 REGISTRY_PROXY=172.17.1.41:5000 + REGISTRY_PROXY_BIND=172.17.1.41）
+REGISTRY_PROXY_BIND="${REGISTRY_PROXY_BIND:-127.0.0.1}"
 if [ -n "$REGISTRY_PROXY" ]; then
     REGISTRY_PROXY="${REGISTRY_PROXY%/}"
     # 保存原始镜像名（代理不可用时回退直连 / 清理镜像时覆盖新旧两种路径）
@@ -512,7 +515,7 @@ start_registry_proxy() {
             -e "REGISTRY_PROXY_PASSWORD=$(cat "$GHCR_PULL_TOKEN_FILE")")
     fi
     docker run -d --name ghcr-proxy --restart unless-stopped \
-        -p 127.0.0.1:5000:5000 \
+        -p "${REGISTRY_PROXY_BIND:-127.0.0.1}:5000:5000" \
         "${proxy_env[@]}" \
         "${proxy_mount[@]}" \
         registry:2 >/dev/null 2>&1 || true
@@ -527,10 +530,20 @@ start_registry_proxy() {
 ensure_registry_proxy() {
     [ -z "$REGISTRY_PROXY" ] && return 0
 
-    log_info ">>> 检查镜像加速代理: ${REGISTRY_PROXY} ..."
+    log_info ">>> 检查镜像加速代理: ${REGISTRY_PROXY} (bind=${REGISTRY_PROXY_BIND}) ..."
 
-    # 仅当代理是本机回环地址时，自动创建/启动 registry:2 缓存容器
-    if [ "$REGISTRY_PROXY" = "127.0.0.1:5000" ]; then
+    # 判断代理是否指向宿主机自身（回环或本机任一内网 IP）：
+    #   是 → 本机负责创建/启动缓存容器；否 → 远端共享代理（如其他 PVE 节点的缓存）
+    PROXY_HOST="${REGISTRY_PROXY%%:*}"
+    IS_LOCAL_PROXY=""
+    if [ "$PROXY_HOST" = "127.0.0.1" ] || [ "$PROXY_HOST" = "localhost" ]; then
+        IS_LOCAL_PROXY=1
+    elif ip -4 addr show 2>/dev/null | grep -q "inet ${PROXY_HOST}/"; then
+        IS_LOCAL_PROXY=1
+    fi
+
+    # 仅当代理是本机地址时，自动创建/启动 registry 缓存容器
+    if [ -n "$IS_LOCAL_PROXY" ]; then
         # 缓存卷只增不减（pull-through 无自动回收），超阈值即清空重建，
         # 否则长时间积累会撑满磁盘（曾导致 testing 部署失败：磁盘 0GB < 2GB）
         CACHE_DIR="/var/lib/docker/volumes/ghcr-cache/_data"
