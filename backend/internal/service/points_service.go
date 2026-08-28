@@ -337,10 +337,10 @@ func (s *PointsService) Claim(ctx context.Context, userID int, taskCode string) 
 
 // RedeemResult 兑换结果
 type RedeemResult struct {
-	Balance     int `json:"balance"`
-	TotalEarned int `json:"total_earned"`
-	SKU       string `json:"sku"`
-	RefID     string `json:"ref_id"`
+	Balance     int    `json:"balance"`
+	TotalEarned int    `json:"total_earned"`
+	SKU         string `json:"sku"`
+	RefID       string `json:"ref_id"`
 }
 
 // RedeemCourse 兑换课程（课程级整锁）
