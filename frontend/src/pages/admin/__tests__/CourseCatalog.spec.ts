@@ -134,4 +134,24 @@ describe('CourseCatalog 左树右表', () => {
     expect(unmountedItem).toBeTruthy()
     expect(unmountedItem!.find('.cc-nav-count').text()).toBe('1')
   })
+
+  it('先筛选再清除筛选（el-select 清空置 undefined）列表恢复全量，不为空', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const statusSelect = wrapper
+      .findAllComponents({ name: 'ElSelect' })
+      .find(s => s.props('placeholder') === '状态')
+    expect(statusSelect).toBeTruthy()
+
+    // 筛选下架（status=0）：只剩 2 门
+    await statusSelect!.vm.$emit('update:modelValue', 0)
+    await flushPromises()
+    expect(wrapper.findAll('.el-table__row').length).toBe(2)
+
+    // 清除筛选：el-select clearable 置 undefined（valueOnClear 默认），应恢复 3 门
+    await statusSelect!.vm.$emit('update:modelValue', undefined)
+    await flushPromises()
+    expect(wrapper.findAll('.el-table__row').length).toBe(3)
+  })
 })

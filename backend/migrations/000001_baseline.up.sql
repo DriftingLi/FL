@@ -3105,6 +3105,11 @@ SELECT setval(pg_get_serial_sequence('question', 'id'), COALESCE(MAX(id), 1), tr
 SELECT setval(pg_get_serial_sequence('course', 'course_id'), COALESCE(MAX(course_id), 1), true) FROM course;
 SELECT setval(pg_get_serial_sequence('chapter', 'chapter_id'), COALESCE(MAX(chapter_id), 1), true) FROM chapter;
 
+-- 种子课程/题目归属：当前题库与课程仅覆盖叉车N1域，全部绑定叉车司机N1证
+-- （压缩自原 000012 上线时的存量回填；WHERE ... IS NULL 保证幂等）
+UPDATE course SET credential_id = (SELECT id FROM credential WHERE code = 'forklift_n1') WHERE credential_id IS NULL;
+UPDATE question SET credential_id = (SELECT id FROM credential WHERE code = 'forklift_n1') WHERE credential_id IS NULL;
+
 
 --   SELECT type, level, count(*) FROM question
 --   SELECT kp.name, q.level, count(*) FROM question q
@@ -3403,6 +3408,44 @@ INSERT INTO question_tag (code, name, description, sort_order, status) VALUES
 ('fault_diagnosis', '故障诊断', '故障现象识别与诊断排除相关考点', 6, 1),
 ('emergency', '应急', '应急处置与突发情况应对相关考点', 7, 1)
 ON CONFLICT (code) DO NOTHING;
+
+-- 种子题目-标签关联：按题干/解析关键词绑定考点标签（一题可多标签，未命中不绑定）
+-- regulation 含作业规范：安全操作/行驶/装卸等规程类考点也归入
+INSERT INTO question_tag_relation (question_id, tag_id)
+SELECT q.id, t.id FROM question q JOIN question_tag t ON t.code = 'regulation'
+WHERE q.content ~ '法规|规范|规程|标准|制度|年检|监管|持证|证件|取证|报考|体检|培训|学时|合格|作业|行驶|停放|停车|装卸|起步|倒车|会车|堆码|码放|托盘|视线|盲区|劳保|车速|速度|安全距离|水温|人行道|电梯|指挥|熄火|空挡|通道|制止|违规|保养|维护|预热'
+   OR q.explanation ~ '法规|规范|规程|标准|制度|年检|监管|持证|证件|取证|报考|体检|培训学时|标准作业|保养|日常保养'
+ON CONFLICT (question_id, tag_id) DO NOTHING;
+INSERT INTO question_tag_relation (question_id, tag_id)
+SELECT q.id, t.id FROM question q JOIN question_tag t ON t.code = 'structure'
+WHERE q.content ~ '结构|组成|平衡重|门架|货叉|护顶架|护额架|车体|底盘|转向桥|转向拉杆|轮胎|链条|零部件|型号|分类|技术参数|轴距'
+   OR q.explanation ~ '结构|组成|平衡重|门架|货叉|护顶架|护额架|底盘|转向桥|转向拉杆|链条|型号|分类|技术参数'
+ON CONFLICT (question_id, tag_id) DO NOTHING;
+INSERT INTO question_tag_relation (question_id, tag_id)
+SELECT q.id, t.id FROM question q JOIN question_tag t ON t.code = 'hydraulic'
+WHERE q.content ~ '液压|油泵|油缸|溢流阀|安全阀|油管|油位|门架升降|起升无力|工作装置'
+   OR q.explanation ~ '液压|油泵|油缸|溢流阀|安全阀|油管|油位|液压油|起升无力'
+ON CONFLICT (question_id, tag_id) DO NOTHING;
+INSERT INTO question_tag_relation (question_id, tag_id)
+SELECT q.id, t.id FROM question q JOIN question_tag t ON t.code = 'electrical'
+WHERE q.content ~ '电瓶|蓄电池|电气|电路|充电|熔断丝|灯光|电源|电机|接线|警示灯|照明|示宽灯'
+   OR q.explanation ~ '电瓶|蓄电池|电气|电路|充电|熔断丝|电源|电机|接线柱|警示灯|照明灯|示宽灯'
+ON CONFLICT (question_id, tag_id) DO NOTHING;
+INSERT INTO question_tag_relation (question_id, tag_id)
+SELECT q.id, t.id FROM question q JOIN question_tag t ON t.code = 'brake'
+WHERE q.content ~ '制动|刹车|制动液|手刹|脚刹|制动距离|制动失灵'
+   OR q.explanation ~ '制动|刹车|制动液|手刹|脚刹|制动距离|制动踏板'
+ON CONFLICT (question_id, tag_id) DO NOTHING;
+INSERT INTO question_tag_relation (question_id, tag_id)
+SELECT q.id, t.id FROM question q JOIN question_tag t ON t.code = 'fault_diagnosis'
+WHERE q.content ~ '故障|诊断|排除|失灵|异常|断电|抖动|漏油|变质|异响|排气|冒烟|滤清器'
+   OR q.explanation ~ '故障|诊断|排除|失灵|异常|断电原因|漏油|变质判断|排气|冒烟|滤清器'
+ON CONFLICT (question_id, tag_id) DO NOTHING;
+INSERT INTO question_tag_relation (question_id, tag_id)
+SELECT q.id, t.id FROM question q JOIN question_tag t ON t.code = 'emergency'
+WHERE q.content ~ '应急|突发|事故|侧翻|紧急|处置|急救|报警|明火|烟火|危险作业|伤人'
+   OR q.explanation ~ '应急|突发|事故|侧翻|紧急|处置|急救|120|明火|烟火|危险作业|保护现场'
+ON CONFLICT (question_id, tag_id) DO NOTHING;
 
 -- ==========================================
 -- 论坛互动与通用收藏（ADR-0018：移动端 P1 通用能力）
