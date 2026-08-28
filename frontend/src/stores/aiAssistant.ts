@@ -169,15 +169,23 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
       messages: historyMessages
     }
 
+    let lastUsage: { points_cost: number; total_tokens: number; balance: number } | null = null
     abortController = aiAssistantApi.streamChat(req, {
       onChunk: (chunk) => {
         streamingContent.value += chunk
       },
+      onUsage: (data) => {
+        lastUsage = data
+      },
       onDone: () => {
+        let finalContent = streamingContent.value
+        if (lastUsage) {
+          finalContent += `\n\n— 本轮消耗 ${lastUsage.points_cost} 分 · ${(lastUsage.total_tokens / 1000).toFixed(1)}k tokens · 余额 ${lastUsage.balance}`
+        }
         const assistantMsg: ChatMessage = {
           id: assistantMsgId,
           role: 'assistant',
-          content: streamingContent.value,
+          content: finalContent,
           created_at: new Date().toISOString()
         }
         messages.value.push(assistantMsg)

@@ -197,9 +197,17 @@ func (s *PointsService) GetTasks(userID int) (*PointsTasksResult, error) {
 			}
 		case "daily_browse":
 			total = 3
-			// 无后端浏览历史，首版直接可领（前端已记录历史），或 1/3 占位
-			status = "claimable"
-			progress = 3
+			var browseCnt int64
+			_ = s.db.Raw("SELECT COUNT(*) FROM forum_topic_views v JOIN forum_topics t ON t.id = v.topic_id WHERE v.user_id = ? AND v.view_date = ? AND t.user_id != ?", userID, today, userID).Scan(&browseCnt).Error
+			progress = int(browseCnt)
+			if progress > 3 {
+				progress = 3
+			}
+			if browseCnt >= 3 {
+				status = "claimable"
+			} else {
+				status = "todo"
+			}
 		case "newbie_profile_basic":
 			hasAvatar := user.AvatarURL != ""
 			hasName := user.Username != "" && user.Username != user.Account
@@ -461,4 +469,107 @@ func (s *PointsService) HasEntitlement(userID int, sku, refID string) bool {
 	var cnt int64
 	_ = s.db.Model(&model.UserEntitlement{}).Where("user_id = ? AND sku = ? AND ref_id = ?", userID, sku, refID).Count(&cnt).Error
 	return cnt > 0
+}
+
+// DeductAI AI 按 tokens 扣费（后计量），tokens<=0 时按 content 长度估算
+func (s *PointsService) DeductAI(ctx context.Context, userID int, requestID string, tokens int, content string) (int, int, error) {
+	if tokens <= 0 {
+		// 兜底：len/4 估算
+		tokens = (len(content) + 3) / 4
+		if tokens < 100 {
+			tokens = 100
+		}
+	}
+	points := (tokens + 999) / 1000 * 10
+	if points < 5 {
+		points = 5
+	}
+	if points > 100 {
+		points = 100
+	}
+	lockKey := fmt.Sprintf("ai:tokens:%d:%s", userID, requestID)
+	if ok, err := cache.SetNX(ctx, lockKey, "1", 60*time.Second); err == nil && ok {
+		defer func() { _ = cache.Del(ctx, lockKey) }()
+	}
+	// 幂等：同一 requestId 已扣过则直接返回
+	var cnt int64
+	_ = s.db.Model(&model.PointsLedger{}).Where("user_id = ? AND ref_id = ? AND reason = ?", userID, requestID, "ai_tokens").Count(&cnt).Error
+	if cnt > 0 {
+		bal, _ := s.GetBalance(userID)
+		if bal != nil {
+			return points, bal.Balance, nil
+		}
+		return points, 0, nil
+	}
+	var user model.HrwaiUser
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return 0, 0, err
+	}
+	if user.PointsBalance < points {
+		// 余额不足，按截断到 0 处理？AI 场景直接拒绝
+		return 0, user.PointsBalance, errors.New("积分不足")
+	}
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		ledger := model.PointsLedger{UserID: userID, Delta: -points, Reason: "ai_tokens", RefType: "ai_chat", RefID: requestID}
+		if err := tx.Create(&ledger).Error; err != nil {
+			if isDuplicateError(err) {
+				return nil
+			}
+			return err
+		}
+		if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", userID).UpdateColumn("points_balance", gorm.Expr("points_balance - ?", points)).Error; err != nil {
+			return err
+		}
+		_ = tx.Exec("UPDATE hrwai_users SET points_balance = GREATEST(points_balance, 0) WHERE id = ?", userID).Error
+		return nil
+	})
+	if err != nil {
+		return 0, 0, err
+	}
+	bal, _ := s.GetBalance(userID)
+	if bal != nil {
+		return points, bal.Balance, nil
+	}
+	return points, 0, nil
+}
+
+// AdminPenalty 管理员扣罚（自定义 1-500，截断到 0）
+func (s *PointsService) AdminPenalty(ctx context.Context, adminID, userID, delta int, reason string) (int, error) {
+	if delta <= 0 || delta > 500 {
+		return 0, errors.New("扣罚分值需在 1-500 之间")
+	}
+	if reason == "" {
+		return 0, errors.New("扣罚事由不能为空")
+	}
+	lockKey := fmt.Sprintf("points:penalty:%d", userID)
+	if ok, err := cache.SetNX(ctx, lockKey, "1", 5*time.Second); err == nil && ok {
+		defer func() { _ = cache.Del(ctx, lockKey) }()
+	}
+	var user model.HrwaiUser
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return 0, errors.New("用户不存在")
+	}
+	actualDeduct := delta
+	if user.PointsBalance < delta {
+		actualDeduct = user.PointsBalance
+	}
+	if actualDeduct <= 0 {
+		return 0, nil
+	}
+	requestID := fmt.Sprintf("penalty-%d-%d", userID, time.Now().UnixNano())
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		ledger := model.PointsLedger{UserID: userID, Delta: -actualDeduct, Reason: "admin_penalty", RefType: "admin", RefID: requestID}
+		if err := tx.Create(&ledger).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", userID).UpdateColumn("points_balance", gorm.Expr("GREATEST(points_balance - ?, 0)", actualDeduct)).Error; err != nil {
+			return err
+		}
+		// 站内信与审计由 handler 层触发（此处仅落账）
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return actualDeduct, nil
 }

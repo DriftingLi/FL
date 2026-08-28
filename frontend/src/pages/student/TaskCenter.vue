@@ -19,7 +19,6 @@
         <span class="summary-label">累计获得</span>
         <span class="summary-value small">{{ points.totalEarned }}</span>
       </div>
-      <div class="summary-hint">做任务 → 领取 → 前端累加</div>
     </div>
 
     <div class="group-stack">
@@ -52,7 +51,7 @@
                 v-if="task.status === 'claimable'"
                 size="small"
                 type="primary"
-                :loading="loading"
+                :loading="claimingCode === task.code"
                 @click="handleClaim(task.code)"
               >
                 领取
@@ -82,6 +81,7 @@ const authStore = useAuthStore()
 const tasks = ref<PointsTaskItem[]>([])
 const points = ref({ balance: 0, totalEarned: 0 })
 const loading = ref(false)
+const claimingCode = ref<string | null>(null)
 
 async function refresh() {
   loading.value = true
@@ -118,20 +118,30 @@ const grouped = computed(() => {
 async function handleClaim(code: string) {
   const task = tasks.value.find((t) => t.code === code)
   if (!task || task.status !== 'claimable') return
+  claimingCode.value = code
   try {
     const res = await pointsApi.claim(code)
     task.status = 'claimed'
+    task.progress = task.total
     points.value.balance = res.balance
     points.value.totalEarned = res.total_earned
+    // 强制刷新以确保与服务端一致
+    tasks.value = [...tasks.value]
     ElMessage.success(`已领取 +${task.points} 积分`)
+    // 后台静默刷新，确保幂等状态持久
+    refresh().catch(() => {})
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     if (msg.includes('已领取') || msg.includes('今日已领取')) {
       task.status = 'claimed'
+      task.progress = task.total
+      tasks.value = [...tasks.value]
       ElMessage.warning(msg)
     } else {
       ElMessage.error(msg || '领取失败')
     }
+  } finally {
+    claimingCode.value = null
   }
 }
 
@@ -193,11 +203,6 @@ onMounted(() => {
   width: 1px;
   height: 32px;
   background: #ebeef5;
-}
-.summary-hint {
-  margin-left: auto;
-  font-size: 12px;
-  color: #c0c4cc;
 }
 .group-stack {
   display: flex;

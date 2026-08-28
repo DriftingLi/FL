@@ -5,9 +5,11 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -19,19 +21,20 @@ import (
 
 // AIAssistantHandler AI 助手模块 Handler。
 type AIAssistantHandler struct {
-	svc *service.AIAssistantService
+	svc       *service.AIAssistantService
+	pointsSvc *service.PointsService
 }
 
 // NewAIAssistantHandler 构造 AIAssistantHandler。
-func NewAIAssistantHandler(svc *service.AIAssistantService) *AIAssistantHandler {
-	return &AIAssistantHandler{svc: svc}
+func NewAIAssistantHandler(svc *service.AIAssistantService, pointsSvc *service.PointsService) *AIAssistantHandler {
+	return &AIAssistantHandler{svc: svc, pointsSvc: pointsSvc}
 }
 
 // RegisterAIAssistantRoutes 注册 /api/ai-assistant 路由。
 // 公开路由：GET /models、POST /chat（可选认证）。
 // 登录路由：sessions CRUD、user-models CRUD（强制 middleware.JWTAuth + role=hrwai_user）。
-func RegisterAIAssistantRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.AIAssistantService) {
-	h := NewAIAssistantHandler(svc)
+func RegisterAIAssistantRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.AIAssistantService, pointsSvc *service.PointsService) {
+	h := NewAIAssistantHandler(svc, pointsSvc)
 
 	g := rg.Group("/ai-assistant")
 
@@ -480,6 +483,22 @@ func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 		return
 	}
 
+	// 积分预检：已登录用户需余额 >=5 否则阻断
+	if userID > 0 && h.pointsSvc != nil {
+		if bal, err := h.pointsSvc.GetBalance(userID); err == nil && bal.Balance < 5 {
+			c.Writer.Header().Set("Content-Type", "text/event-stream")
+			c.Writer.Header().Set("Cache-Control", "no-cache")
+			c.Writer.Header().Set("Connection", "keep-alive")
+			c.Writer.Header().Set("X-Accel-Buffering", "no")
+			c.Writer.WriteHeader(http.StatusOK)
+			payload, _ := json.Marshal(map[string]string{"message": "积分不足，请先去任务中心完成任务"})
+			_, _ = c.Writer.WriteString("event: error\n")
+			_, _ = c.Writer.WriteString("data: " + string(payload) + "\n\n")
+			c.Writer.Flush()
+			return
+		}
+	}
+
 	// 设置 SSE 响应头
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
 	c.Writer.Header().Set("Cache-Control", "no-cache")
@@ -494,13 +513,37 @@ func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 		c.Writer.Flush()
 	}
 
-	_, err := h.svc.StreamChat(c.Request.Context(), userID, req, func(content string) {
+	fullContent, err := h.svc.StreamChat(c.Request.Context(), userID, req, func(content string) {
 		sendEvent("message", map[string]string{"content": content})
 	})
 
 	if err != nil {
 		sendEvent("error", map[string]string{"message": err.Error()})
 		return
+	}
+	// 后计量扣费：已登录用户按 tokens 扣分，末尾附消耗
+	if userID > 0 && h.pointsSvc != nil && fullContent != "" {
+		requestID := fmt.Sprintf("ai-%d-%d", userID, time.Now().UnixNano())
+		// 估算 tokens：prompt+completion，简化为 content 长度/4 + 最后用户消息长度/4
+		promptLen := 0
+		if len(req.Messages) > 0 {
+			promptLen = len(req.Messages[len(req.Messages)-1].Content)
+		}
+		tokens := (len(fullContent) + promptLen + 3) / 4
+		if tokens < 10 {
+			tokens = 100
+		}
+		if points, balance, err := h.pointsSvc.DeductAI(c.Request.Context(), userID, requestID, tokens, fullContent); err == nil {
+			sendEvent("usage", map[string]any{
+				"points_cost":       points,
+				"total_tokens":      tokens,
+				"balance":           balance,
+				"prompt_tokens":     (promptLen + 3) / 4,
+				"completion_tokens": (len(fullContent) + 3) / 4,
+			})
+		} else if err.Error() == "积分不足" {
+			sendEvent("error", map[string]string{"message": "积分不足"})
+		}
 	}
 	sendEvent("done", nil)
 }

@@ -572,6 +572,16 @@ type ForumReplyLike struct {
 
 func (ForumReplyLike) TableName() string { return "forum_reply_like" }
 
+// ForumTopicView 用户帖子浏览去重（每日每帖一次，排除自帖，用于 daily_browse）
+type ForumTopicView struct {
+	UserID   int       `gorm:"column:user_id;primaryKey" json:"user_id"`
+	TopicID  int64     `gorm:"column:topic_id;primaryKey" json:"topic_id"`
+	ViewedAt time.Time `gorm:"column:viewed_at" json:"viewed_at"`
+	ViewDate string    `gorm:"column:view_date;primaryKey;type:date" json:"view_date"`
+}
+
+func (ForumTopicView) TableName() string { return "forum_topic_views" }
+
 // Favorite 通用收藏：target_type + target_id 多态定位
 // （course/chapter/question/featured/topic，ADR-0018；user+type+id 唯一）。
 type Favorite struct {
