@@ -132,13 +132,14 @@ func (s *PointsService) GetLedger(userID, page, pageSize int) (*PointsLedgerResu
 	return &PointsLedgerResult{Items: items, Total: total, Page: page, Pages: pages}, nil
 }
 
-// GetTasks 获取任务列表（实时算 todo/claimed，首版 claimable 即 todo 可领）
+// GetTasks 获取任务列表（实时算 todo/claimable/claimed，基于真实行为表）
 func (s *PointsService) GetTasks(userID int) (*PointsTasksResult, error) {
 	var configs []model.PointsTaskConfig
 	if err := s.db.Order("code ASC").Find(&configs).Error; err != nil {
 		return nil, err
 	}
 	today := s.shanghaiDate()
+	todayStart := s.shanghaiDateTime()
 	var claims []model.PointsTaskClaim
 	_ = s.db.Where("user_id = ?", userID).Find(&claims).Error
 	claimMap := make(map[string]bool, len(claims))
@@ -151,50 +152,107 @@ func (s *PointsService) GetTasks(userID int) (*PointsTasksResult, error) {
 			claimMap[c.TaskCode] = true
 		}
 	}
-	// daily 任务按今日 claim 判定，newbie 按任意存在判定
+	// 预查用户与行为数据（减少 N+1）
+	var user model.HrwaiUser
+	_ = s.db.First(&user, userID).Error
+	var checkinCnt int64
+	_ = s.db.Model(&model.ForumCheckIn{}).Where("user_id = ? AND check_date = ?", userID, todayStart).Count(&checkinCnt).Error
+	var quizCnt int64
+	_ = s.db.Model(&model.QuestionPracticeRecord{}).Where("student_id = ? AND created_at >= ?", userID, todayStart).Count(&quizCnt).Error
+	var mockCnt int64
+	_ = s.db.Model(&model.MockExam{}).Where("student_id = ? AND created_at >= ?", userID, todayStart).Count(&mockCnt).Error
+	var postCnt int64
+	_ = s.db.Model(&model.ForumTopic{}).Where("user_id = ? AND created_at >= ?", userID, todayStart).Count(&postCnt).Error
+	var replyCnt int64
+	_ = s.db.Model(&model.ForumReply{}).Where("user_id = ? AND created_at >= ?", userID, todayStart).Count(&replyCnt).Error
+	var firstCourseDone int64
+	_ = s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND progress >= 100", userID).Count(&firstCourseDone).Error
+
 	tasks := make([]PointsTaskItem, 0, len(configs))
 	for _, cfg := range configs {
+		if claimMap[cfg.Code] {
+			total := 1
+			if cfg.Code == "daily_browse" || cfg.Code == "growth_reply" {
+				total = 3
+			}
+			tasks = append(tasks, PointsTaskItem{
+				Code: cfg.Code, Group: cfg.Group, Title: cfg.Title, Desc: cfg.Description,
+				Points: cfg.Points, Status: "claimed", Progress: total, Total: total,
+			})
+			continue
+		}
 		status := "todo"
 		progress := 0
 		total := 1
-		// 根据分组推断 total
-		if cfg.Group == "daily" || cfg.Group == "growth" {
-			// daily_browse 3 次等，暂时用 total_limit 或固定 3
-			if cfg.Code == "daily_browse" {
-				total = 3
-			} else if cfg.Code == "growth_reply" {
-				total = 3
+		switch cfg.Code {
+		case "daily_checkin":
+			if checkinCnt > 0 {
+				status = "claimable"
+				progress = 1
 			}
-		}
-		// newbie 拆分后均为 2/2，但首版简化为 1/1
-		if claimMap[cfg.Code] {
-			status = "claimed"
-			progress = total
-		} else {
-			// 首版 claimable 即 todo 可领，无中间态
-			status = "todo"
-		}
-		// 若已 claimable 过渡，首版直接标 claimable 当作可领
-		if status == "todo" {
-			// 检查是否满足 claimable（简化：todo 即 claimable）
+		case "daily_quiz":
+			if quizCnt > 0 || mockCnt > 0 {
+				status = "claimable"
+				progress = 1
+			}
+		case "daily_browse":
+			total = 3
+			// 无后端浏览历史，首版直接可领（前端已记录历史），或 1/3 占位
 			status = "claimable"
-			// 但若已 claimed 则保持 claimed
-			if claimMap[cfg.Code] {
-				status = "claimed"
+			progress = 3
+		case "newbie_profile_basic":
+			hasAvatar := user.AvatarURL != ""
+			hasName := user.Username != "" && user.Username != user.Account
+			if hasAvatar && hasName {
+				status = "claimable"
+				progress = 1
 			}
+		case "newbie_profile_contact":
+			hasCompany := user.Company != ""
+			hasPhoneOrEmail := user.Phone != "" || user.Email != ""
+			if hasCompany && hasPhoneOrEmail {
+				status = "claimable"
+				progress = 1
+			}
+		case "newbie_credential":
+			if user.CurrentCredentialID != nil {
+				status = "claimable"
+				progress = 1
+			}
+		case "newbie_first_course":
+			if firstCourseDone > 0 {
+				status = "claimable"
+				progress = 1
+			}
+		case "growth_post":
+			if postCnt > 0 {
+				status = "claimable"
+				progress = 1
+			}
+		case "growth_reply":
+			total = 3
+			progress = int(replyCnt)
+			if progress > 3 {
+				progress = 3
+			}
+			if replyCnt >= 3 {
+				status = "claimable"
+			}
+		case "growth_mock":
+			if mockCnt > 0 {
+				status = "claimable"
+				progress = 1
+			}
+		default:
+			status = "claimable"
+			progress = 1
 		}
-		if status == "claimed" {
-			progress = total
+		if status == "claimable" && progress == 0 {
+			progress = 1
 		}
 		tasks = append(tasks, PointsTaskItem{
-			Code:     cfg.Code,
-			Group:    cfg.Group,
-			Title:    cfg.Title,
-			Desc:     cfg.Description,
-			Points:   cfg.Points,
-			Status:   status,
-			Progress: progress,
-			Total:    total,
+			Code: cfg.Code, Group: cfg.Group, Title: cfg.Title, Desc: cfg.Description,
+			Points: cfg.Points, Status: status, Progress: progress, Total: total,
 		})
 	}
 	return &PointsTasksResult{Tasks: tasks}, nil
