@@ -3105,6 +3105,11 @@ SELECT setval(pg_get_serial_sequence('question', 'id'), COALESCE(MAX(id), 1), tr
 SELECT setval(pg_get_serial_sequence('course', 'course_id'), COALESCE(MAX(course_id), 1), true) FROM course;
 SELECT setval(pg_get_serial_sequence('chapter', 'chapter_id'), COALESCE(MAX(chapter_id), 1), true) FROM chapter;
 
+-- 种子课程/题目归属：当前题库与课程仅覆盖叉车N1域，全部绑定叉车司机N1证
+-- （压缩自原 000012 上线时的存量回填；WHERE ... IS NULL 保证幂等）
+UPDATE course SET credential_id = (SELECT id FROM credential WHERE code = 'forklift_n1') WHERE credential_id IS NULL;
+UPDATE question SET credential_id = (SELECT id FROM credential WHERE code = 'forklift_n1') WHERE credential_id IS NULL;
+
 
 --   SELECT type, level, count(*) FROM question
 --   SELECT kp.name, q.level, count(*) FROM question q
