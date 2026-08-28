@@ -2,7 +2,7 @@
 // 路径前缀：/api/ai-assistant/*
 // 认证：统一 HRWAI 账号体系，token 走 utils/storage.ts 单点
 // SSE 流式对话使用 fetch + ReadableStream 消费，不通过 axios
-import { createHttpClient, createDefaultUnauthorizedPolicy } from './client'
+import { createHttpClient, createDefaultUnauthorizedPolicy, getValidAccessToken } from './client'
 import { getToken, removeToken, removeUserInfo } from '@/utils/storage'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/api$/, '') + '/api/ai-assistant'
@@ -131,8 +131,9 @@ export const aiAssistantApi = {
   async uploadImage(file: File): Promise<string> {
     const formData = new FormData()
     formData.append('file', file)
-    const token = getToken()
+    // fetch 不经 client 拦截器，无 401→自动刷新；发起前换取新鲜 token（过期则静默刷新）
     const headers: Record<string, string> = {}
+    const token = await getValidAccessToken()
     if (token) {
       headers.Authorization = `Bearer ${token}`
     }
