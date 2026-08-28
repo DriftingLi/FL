@@ -19,7 +19,8 @@ import {
   Memo,
   CircleCheck,
   FolderOpened,
-  CollectionTag
+  CollectionTag,
+  Trophy
 } from '@element-plus/icons-vue'
 // 注：MagicStick 仍用于管理员"内容生成"菜单项
 
@@ -74,7 +75,6 @@ const studentNav: NavItem[] = [
     children: [
       { key: 'forum', label: '学员论坛', routeName: 'ForumPage', icon: ChatDotRound },
       { key: 'ai-assistant', label: 'AI助手', routeName: 'AIAssistant', icon: MagicStick },
-      { key: 'valuation', label: '残值评估', routeName: 'ValuationHome', icon: PriceTag },
       { key: 'featured', label: '内容精选', icon: Document, externalUrl: 'https://www.gccsmile.com/news' }
     ]
   },
@@ -83,6 +83,7 @@ const studentNav: NavItem[] = [
     label: '个人',
     icon: User,
     children: [
+      { key: 'task-center', label: '任务中心', routeName: 'TaskCenter', icon: Trophy },
       { key: 'favorites', label: '我的收藏', routeName: 'StudentFavorites', icon: Star },
       { key: 'profile', label: '个人资料', routeName: 'StudentProfile', icon: User }
     ]

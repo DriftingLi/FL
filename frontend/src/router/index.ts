@@ -103,6 +103,23 @@ const routes: RouteRecordRaw[] = [
         name: 'RealExamPrototype',
         component: () => import('@/pages/student/__prototype__/RealExamPrototype.vue')
       },
+      // PROTOTYPE — throwaway route for 论坛浏览记录三变体
+      {
+        path: '__prototype/forum-history',
+        name: 'ForumHistoryPrototype',
+        component: () => import('@/pages/student/__prototype__/forum-history/ForumHistoryPrototype.vue')
+      },
+      // PROTOTYPE — throwaway route for 任务中心+积分占位三变体
+      {
+        path: '__prototype/task-center',
+        name: 'TaskCenterPrototype',
+        component: () => import('@/pages/student/__prototype__/task-center/TaskCenterPrototype.vue')
+      },
+      {
+        path: 'task-center',
+        name: 'TaskCenter',
+        component: () => import('@/pages/student/TaskCenter.vue')
+      },
       {
         path: 'profile',
         name: 'StudentProfile',
@@ -233,6 +250,20 @@ const routes: RouteRecordRaw[] = [
     path: '/prototype/real-exam',
     name: 'RealExamPrototypeStandalone',
     component: () => import('@/pages/student/__prototype__/RealExamPrototype.vue'),
+    meta: { requiresAuth: false }
+  },
+  // PROTOTYPE — standalone for 论坛浏览记录
+  {
+    path: '/prototype/forum-history',
+    name: 'ForumHistoryPrototypeStandalone',
+    component: () => import('@/pages/student/__prototype__/forum-history/ForumHistoryPrototype.vue'),
+    meta: { requiresAuth: false }
+  },
+  // PROTOTYPE — standalone for 任务中心+积分占位
+  {
+    path: '/prototype/task-center',
+    name: 'TaskCenterPrototypeStandalone',
+    component: () => import('@/pages/student/__prototype__/task-center/TaskCenterPrototype.vue'),
     meta: { requiresAuth: false }
   },
 

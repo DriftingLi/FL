@@ -200,9 +200,12 @@ import { favoriteApi } from '@/api/favorite'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import { formatLocaleDateTime } from '@/utils/format'
 import { resolveFileUrl } from '@/utils/fileUrl'
+import { pushHistory, toHistoryItem } from '@/utils/forumHistory'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -242,6 +245,13 @@ async function loadDetail() {
     const res = await forumApi.getTopic(topicId, replySort.value, replyOrder.value)
     topic.value = res.topic
     replies.value = res.replies || []
+    if (res.topic) {
+      try {
+        pushHistory(toHistoryItem(res.topic), authStore.userInfo?.user_id)
+      } catch {
+        // ignore storage errors
+      }
+    }
   } catch (e) {
     console.error('加载帖子详情失败:', e)
     /* 错误已由拦截器提示 */
