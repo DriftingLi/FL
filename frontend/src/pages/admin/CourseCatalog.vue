@@ -276,10 +276,18 @@ function credentialNameOf(id?: number | null) {
   return credentials.value.find(c => c.id === id)?.name || ''
 }
 
+// el-select clearable 清除后值为 undefined（valueOnClear 默认）/'' 而非 null，
+// 须归一化判断，否则「先筛选再清除」会把全表过滤为空
+function filterActive(v: unknown): boolean {
+  return v !== null && v !== undefined && v !== ''
+}
+
 const filteredCourses = computed(() => {
   const k = keyword.value.trim().toLowerCase()
+  const cred = credentialId.value
+  const status = filterStatus.value
   return allCourses.value.filter(c => {
-    if (credentialId.value !== null && (c as any).credential_id !== credentialId.value) return false
+    if (filterActive(cred) && (c as any).credential_id !== cred) return false
     if (specialtyId.value === UNMOUNTED_SPECIALTY_ID) {
       if (!isUnmounted(c)) return false
     } else if (specialtyId.value !== null && c.specialty_id !== specialtyId.value) {
@@ -288,7 +296,7 @@ const filteredCourses = computed(() => {
     if (specialtyId.value !== UNMOUNTED_SPECIALTY_ID && levelId.value !== null && c.level_id !== levelId.value) {
       return false
     }
-    if (filterStatus.value !== null && c.status !== filterStatus.value) return false
+    if (filterActive(status) && c.status !== status) return false
     if (filterHotFeatured.value === 'hot' && !c.is_hot) return false
     if (filterHotFeatured.value === 'featured' && !c.is_featured) return false
     if (k && !c.name.toLowerCase().includes(k)) return false
