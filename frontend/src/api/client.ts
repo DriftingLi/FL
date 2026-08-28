@@ -45,6 +45,33 @@ function tryRefreshTokens(): Promise<boolean> {
   return refreshPromise
 }
 
+/** 解析 JWT 载荷并判断 access 是否已过期（解析失败视为过期，走刷新） */
+function isAccessTokenExpired(token: string): boolean {
+  try {
+    const payload = token.split('.')[1]
+    const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
+    return typeof json.exp !== 'number' || json.exp * 1000 <= Date.now()
+  } catch {
+    return true
+  }
+}
+
+/**
+ * 获取当前有效的 access token：
+ *  本地未过期 → 直接返回；已过期/缺失且存在 refresh → 静默刷新后返回新 token；
+ *  刷新失败或未登录 → null。
+ * 供绕过 client 拦截器的裸请求（featured 上传 / AI 助手 fetch 等）在发起前
+ * 换取新鲜 token，避免 401 后因不经过拦截器而无法自动续期。
+ */
+export async function getValidAccessToken(): Promise<string | null> {
+  const token = getToken()
+  if (token && !isAccessTokenExpired(token)) {
+    return token
+  }
+  const refreshed = await tryRefreshTokens()
+  return refreshed ? getToken() : null
+}
+
 /** 后端通用 JSON 响应格式（code = HTTP 状态码，统一信封，见 ADR-0005） */
 export interface ApiResponse<T = any> {
   code: number
