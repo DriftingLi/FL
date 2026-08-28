@@ -106,6 +106,9 @@ services:
     image: ${LIBREOFFICE_IMAGE:-forklift-libreoffice:latest}
     container_name: forklift-libreoffice-prod
     restart: unless-stopped
+    # profile "full"：默认不启用（testing 部署无需 500MB 大镜像，提速）；
+    # production 部署时 COMPOSE_PROFILES=full 才会拉起本服务
+    profiles: ["full"]
     expose:
       - "8000"
     networks:
@@ -140,8 +143,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      libreoffice:
-        condition: service_started
+      # libreoffice 依赖已移除：服务 profile 化后未启用时会报
+      # "depends on disabled profile service"；sidecar 是独立 HTTP 服务，
+      # 后端按需调用（转换失败不影响主流程），启动顺序无强依赖。
+      # production 经 COMPOSE_PROFILES=full 启用 libreoffice。
     environment:
       APP_ENV: production
       PORT: "8080"

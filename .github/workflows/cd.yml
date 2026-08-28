@@ -354,10 +354,19 @@ jobs:
       SSH_JUMP_HOST: ${{ secrets.SSH_JUMP_HOST || '' }}
       # Volume 路径：两环境均在 PVE 宿主机直接运行 Docker 26+，named volume 正常工作
       # 留空 → deploy-remote.sh 默认使用 named volume（pgdata-prod / redisdata-prod 等）
-      PG_VOLUME: ''
-      REDIS_VOLUME: ''
-      UPLOADS_VOLUME: ''
-      REPORTS_VOLUME: ''
+      # Ceph 化后可在 environment secret 配置（如 PG_VOLUME=/srv/ceph/pgdata 指向 RBD 挂载点）
+      PG_VOLUME: ${{ secrets.PG_VOLUME || '' }}
+      REDIS_VOLUME: ${{ secrets.REDIS_VOLUME || '' }}
+      UPLOADS_VOLUME: ${{ secrets.UPLOADS_VOLUME || '' }}
+      REPORTS_VOLUME: ${{ secrets.REPORTS_VOLUME || '' }}
+      # ===== testing 加速参数（按环境注入）=====
+      # testing 跳过部署期 pg_dump 备份（回滚保障由 RBD 快照+每日备份承担）
+      SKIP_BACKUP: ${{ (inputs.environment || 'production') == 'testing' && 'true' || 'false' }}
+      # testing 不启用 libreoffice profile（省 500MB 镜像传输）；production 必须 full
+      COMPOSE_PROFILES: ${{ (inputs.environment || 'production') == 'production' && 'full' || '' }}
+      # testing 缩短健康检查轮询与 compose --wait 超时，快速通过即停容器
+      HEALTH_CHECK_RETRIES: ${{ (inputs.environment || 'production') == 'testing' && '8' || '20' }}
+      UP_WAIT_TIMEOUT: ${{ (inputs.environment || 'production') == 'testing' && '30' || '60' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -414,27 +423,25 @@ jobs:
           fi
 
       # --------------------------------------------------------
-      # Step 2.2: 上传部署脚本和配置
+      # Step 2.2: 上传部署脚本和配置（tar 打包单次传输，替代多次 scp 往返）
       # --------------------------------------------------------
       - name: 上传部署脚本和配置
         run: |
-          # 主部署文件：脚本 + compose
-          scp -o ConnectTimeout=15 -o ServerAliveInterval=30 \
-            scripts/deploy-remote.sh docker-compose.prod.yml \
-            "target:$DEPLOY_PATH/"
-
-          # nginx-host.conf 必须放在 $DEPLOY_PATH/frontend/ 下（compose volume 挂载路径）
-          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
-            "target" \
-            "mkdir -p $DEPLOY_PATH/frontend"
+          # 打包：deploy-remote.sh / compose / nginx-host.conf
+          tar czf /tmp/deploy-files.tar.gz \
+            scripts/deploy-remote.sh \
+            docker-compose.prod.yml \
+            frontend/nginx-host.conf
 
           scp -o ConnectTimeout=15 -o ServerAliveInterval=30 \
-            frontend/nginx-host.conf \
-            "target:$DEPLOY_PATH/frontend/nginx-host.conf"
+            /tmp/deploy-files.tar.gz \
+            "target:/tmp/deploy-files.tar.gz"
 
           ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
             "target" \
-            "chmod +x $DEPLOY_PATH/deploy-remote.sh"
+            "mkdir -p $DEPLOY_PATH/frontend && cd $DEPLOY_PATH && \
+             tar xzf /tmp/deploy-files.tar.gz && rm -f /tmp/deploy-files.tar.gz && \
+             chmod +x scripts/deploy-remote.sh"
 
       # --------------------------------------------------------
       # Step 2.3: 生成环境变量文件并执行远程部署
@@ -520,6 +527,10 @@ jobs:
             printf 'export REDIS_VOLUME=%q\n' "${REDIS_VOLUME:-}"
             printf 'export UPLOADS_VOLUME=%q\n' "${UPLOADS_VOLUME:-}"
             printf 'export REPORTS_VOLUME=%q\n' "${REPORTS_VOLUME:-}"
+            printf 'export SKIP_BACKUP=%q\n' "${SKIP_BACKUP:-false}"
+            printf 'export COMPOSE_PROFILES=%q\n' "${COMPOSE_PROFILES:-}"
+            printf 'export HEALTH_CHECK_RETRIES=%q\n' "${HEALTH_CHECK_RETRIES:-20}"
+            printf 'export UP_WAIT_TIMEOUT=%q\n' "${UP_WAIT_TIMEOUT:-60}"
           } > /tmp/deploy-env.sh
 
           echo "环境变量文件已生成（$(wc -l < /tmp/deploy-env.sh) 行）"
@@ -530,10 +541,10 @@ jobs:
             /tmp/deploy-env.sh \
             "target:/tmp/deploy-env.sh"
 
-          # 执行远程部署
+          # 执行远程部署（脚本在 $DEPLOY_PATH/scripts/ 下，tar 打包上传）
           ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
             "target" \
-            "set -e; source /tmp/deploy-env.sh; shred -u /tmp/deploy-env.sh 2>/dev/null || rm -f /tmp/deploy-env.sh; cd \"\$DEPLOY_PATH\" && bash deploy-remote.sh"
+            "set -e; source /tmp/deploy-env.sh; shred -u /tmp/deploy-env.sh 2>/dev/null || rm -f /tmp/deploy-env.sh; cd \"\$DEPLOY_PATH\" && bash scripts/deploy-remote.sh"
 
       # --------------------------------------------------------
       # Step 2.4: 测试环境部署成功后停止容器（避免空转占用资源）
@@ -577,3 +588,29 @@ jobs:
           echo "- 后端 API: ${{ vars.API_URL || '未配置' }}" >> $GITHUB_STEP_SUMMARY
           echo "- 前端: ${{ vars.FRONTEND_URL || '未配置' }}" >> $GITHUB_STEP_SUMMARY
         shell: bash
+
+  # ============================================================
+  # Stage 7: 生产发布（testing 验证通过后，链式触发 production 部署）
+  # master 合并后先部署 testing；测试通过 → 本 job 触发 production，
+  # 保证生产部署的就是测试验证过的代码
+  # ============================================================
+  promote:
+    needs: notify
+    if: success() && inputs.environment == 'testing' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 触发生产部署
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo ">>> testing 验证通过，触发 production 部署（ref=${{ inputs.ref || github.sha }}）"
+          gh workflow run cd.yml \
+            --ref master \
+            -f ref="${{ inputs.ref || github.sha }}" \
+            -f environment=production
+          echo "✅ 已触发 production 部署"

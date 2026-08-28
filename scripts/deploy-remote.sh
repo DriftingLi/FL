@@ -88,8 +88,20 @@ REGISTRY_MIRROR="${REGISTRY_MIRROR:-ghcr.nju.edu.cn}"
 HEALTH_CHECK_RETRIES="${HEALTH_CHECK_RETRIES:-20}"
 HEALTH_CHECK_INTERVAL="${HEALTH_CHECK_INTERVAL:-6}"
 
+# 跳过部署期备份（测试环境专用加速开关：回滚保障由 RBD 快照 + 每日离线备份承担，
+# 不再在每次部署关键路径上做 pg_dump；production 保持 false）
+SKIP_BACKUP="${SKIP_BACKUP:-false}"
+
 # compose up --wait 超时（秒）：容器就绪等待上限，超时后由 health_check() 轮询兜底
 UP_WAIT_TIMEOUT="${UP_WAIT_TIMEOUT:-60}"
+
+# compose profile 参数：production 用 COMPOSE_PROFILES=full 启用 libreoffice sidecar；
+# 留空（testing）则跳过 500MB 大镜像服务。转成 CLI --profile（部分 compose 版本
+# 不识别 COMPOSE_PROFILES 环境变量）
+COMPOSE_PROFILE_ARGS=""
+if [ -n "${COMPOSE_PROFILES:-}" ]; then
+    COMPOSE_PROFILE_ARGS="--profile ${COMPOSE_PROFILES}"
+fi
 
 # 后台备份 join 超时（秒）：迁移前等待备份完成的上限
 BACKUP_WAIT_TIMEOUT="${BACKUP_WAIT_TIMEOUT:-120}"
@@ -888,7 +900,7 @@ restart_services() {
     # - --wait：compose v2 原生等待全部服务 healthy/running（事件驱动，替代固定 sleep + 轮询）
     # - --wait-timeout 超时后 up 返回非 0，由下方 health_check() HTTP 轮询兜底确认
     # 注：host 网络模式 frontend 无 healthcheck（compose 中 disable），--wait 按 running 处理
-    if ! docker compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout "${UP_WAIT_TIMEOUT:-60}" --remove-orphans 2>&1 | tail -10; then
+    if ! docker compose -f "$COMPOSE_FILE" ${COMPOSE_PROFILE_ARGS} up -d --wait --wait-timeout "${UP_WAIT_TIMEOUT:-60}" --remove-orphans 2>&1 | tail -10; then
         log_warn "compose --wait 超时或失败，由后续健康检查兜底确认"
     fi
 
@@ -1137,9 +1149,12 @@ main() {
             # 证书内容来自 GitHub Secrets SSL_FULLCHAIN/SSL_PRIVKEY，写入 $SSL_CERT_DIR）
             write_ssl_certs
             # 备份与后续无依赖步骤（登录/镜像拉取）并行执行，迁移前 join——
-            # 隐藏备份耗时（pg_dump + 异地同步），同时保证备份先于任何 DB 写操作完成
-            create_backup &
-            BACKUP_PID=$!
+            # 隐藏备份耗时（pg_dump + 异地同步），同时保证备份先于任何 DB 写操作完成。
+            # SKIP_BACKUP=true（testing 加速）：跳过备份，回滚保障由 RBD 快照+每日备份承担
+            if [ "${SKIP_BACKUP}" != "true" ]; then
+                create_backup &
+                BACKUP_PID=$!
+            fi
             login_registry
             ensure_registry_proxy
             pull_images
@@ -1149,7 +1164,9 @@ main() {
             wait_postgres
 
             # 迁移前 join 后台备份（回滚保障：备份必先于 fix_dirty/迁移落盘）
-            wait_backup "$BACKUP_PID"
+            if [ "${SKIP_BACKUP}" != "true" ] && [ -n "${BACKUP_PID:-}" ]; then
+                wait_backup "$BACKUP_PID"
+            fi
 
             # 迁移兼容性预检：若镜像迁移版本落后数据库，启动后会崩溃循环
             if ! preflight_migration_check "${IMAGE_BACKEND}:${IMAGE_TAG}"; then
