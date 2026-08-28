@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
@@ -231,6 +232,12 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order st
 	_ = s.db.Model(&model.ForumTopic{}).Where("id = ?", topicID).
 		UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error
 	row.ViewCount++
+
+	// 记录去重浏览（用于 daily_browse 积分，排除自帖，同一帖每日一次）
+	if viewerID != 0 && viewerID != int(row.UserID) {
+		viewDate := time.Now().In(clock.Location()).Format("2006-01-02")
+		_ = s.db.Exec("INSERT INTO forum_topic_views (user_id, topic_id, view_date) VALUES (?,?,?) ON CONFLICT (user_id, topic_id, view_date) DO NOTHING", viewerID, topicID, viewDate).Error
+	}
 
 	// 回复列表（含被回复人展示名）
 	var replies []struct {

@@ -197,9 +197,17 @@ func (s *PointsService) GetTasks(userID int) (*PointsTasksResult, error) {
 			}
 		case "daily_browse":
 			total = 3
-			// 无后端浏览历史，首版直接可领（前端已记录历史），或 1/3 占位
-			status = "claimable"
-			progress = 3
+			var browseCnt int64
+			_ = s.db.Raw("SELECT COUNT(*) FROM forum_topic_views v JOIN forum_topics t ON t.id = v.topic_id WHERE v.user_id = ? AND v.view_date = ? AND t.user_id != ?", userID, today, userID).Scan(&browseCnt).Error
+			progress = int(browseCnt)
+			if progress > 3 {
+				progress = 3
+			}
+			if browseCnt >= 3 {
+				status = "claimable"
+			} else {
+				status = "todo"
+			}
 		case "newbie_profile_basic":
 			hasAvatar := user.AvatarURL != ""
 			hasName := user.Username != "" && user.Username != user.Account
