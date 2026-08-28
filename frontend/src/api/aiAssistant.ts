@@ -189,6 +189,7 @@ export const aiAssistantApi = {
       onChunk?: (content: string) => void
       onDone?: () => void
       onError?: (message: string) => void
+      onUsage?: (data: { points_cost: number; total_tokens: number; balance: number; prompt_tokens?: number; completion_tokens?: number }) => void
     }
   ): AbortController {
     const controller = new AbortController()
@@ -233,6 +234,8 @@ export const aiAssistantApi = {
               if (evt.event === 'message') {
                 const content = (evt.data as { content?: string })?.content || ''
                 if (content) handlers.onChunk?.(content)
+              } else if (evt.event === 'usage') {
+                handlers.onUsage?.(evt.data as { points_cost: number; total_tokens: number; balance: number })
               } else if (evt.event === 'error') {
                 const msg = (evt.data as { message?: string })?.message || '生成失败'
                 handlers.onError?.(msg)
