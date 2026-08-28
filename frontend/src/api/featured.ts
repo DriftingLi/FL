@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { unwrappedRequest } from './request'
-import { useAuthStore } from '@/stores/auth'
+import { getValidAccessToken } from './client'
 
 /** 内容精选分类标签映射 */
 export const featuredCategoryLabels: Record<string, string> = {
@@ -103,9 +103,11 @@ export const adminFeaturedApi = {
   async uploadImage(file: File) {
     const fd = new FormData()
     fd.append('file', file)
-    const authStore = useAuthStore()
+    // 原生 axios 绕过全局拦截器（Vditor code=0 约定），无法依赖 401→自动刷新；
+    // 发起前显式换取新鲜 access token（本地过期则静默刷新），避免登录 2h 后上传持续 401
     const headers: Record<string, string> = {}
-    if (authStore.token) headers.Authorization = `Bearer ${authStore.token}`
+    const token = await getValidAccessToken()
+    if (token) headers.Authorization = `Bearer ${token}`
     const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
     const res = await axios.post(`${baseURL}/admin/featured-content/upload-image`, fd, { headers })
     // 直接返回后端原始 Vditor 格式数据
