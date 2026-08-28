@@ -241,8 +241,10 @@ write_env_file() {
         echo "REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-10}"
         echo "REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-fl:}"
 
-        echo "# Cloudflare R2 对象存储（留空 STORAGE_DRIVER 或设为 local 则回退到本地磁盘）"
+        echo "# S3 兼容对象存储（STORAGE_DRIVER=r2；R2_ENDPOINT 空=Cloudflare R2，非空=自建 RGW）"
         echo "STORAGE_DRIVER=${STORAGE_DRIVER:-local}"
+        printf 'R2_ENDPOINT='
+        env_val "${R2_ENDPOINT:-}"; echo
         printf 'R2_ACCOUNT_ID='
         env_val "${R2_ACCOUNT_ID:-}"; echo
         printf 'R2_ACCESS_KEY_ID='

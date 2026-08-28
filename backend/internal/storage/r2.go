@@ -16,25 +16,29 @@ import (
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
-// R2Storage Cloudflare R2 对象存储（S3 兼容 API）。
+// R2Storage S3 兼容对象存储。
 //
 // 文件上传到指定 bucket，返回 "https://<publicDomain>/<key>" 形式的公开访问 URL。
-// 前提：bucket 已在 Cloudflare 控制台绑定自定义域名并开启公开访问。
+// 前提：bucket 已开启公开访问（Cloudflare R2 自定义域名；自建 RGW 用 bucket policy）。
+// 默认 endpoint 为 Cloudflare R2；传入 endpoint 时可接自建 S3（如 Ceph RGW）。
 type R2Storage struct {
 	client       *s3.Client
 	bucket       string
 	publicDomain string
 }
 
-// NewR2Storage 创建 R2 存储实例。
+// NewR2Storage 创建对象存储实例。
 //
 // 参数：
-//   - accountID: Cloudflare 账号 ID，用于拼装 S3 endpoint
-//   - accessKeyID / secretAccessKey: R2 API Token 凭证
-//   - bucket: R2 bucket 名称
-//   - publicDomain: 绑定的自定义域名（如 https://cdn.example.com），尾部斜杠会被去除
-func NewR2Storage(ctx context.Context, accountID, accessKeyID, secretAccessKey, bucket, publicDomain string) (*R2Storage, error) {
-	endpoint := fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID)
+//   - endpoint: 自定义 S3 endpoint（自建 RGW 等）；空则使用 Cloudflare R2 默认
+//   - accountID: Cloudflare 账号 ID（endpoint 空时用于拼装 R2 endpoint）
+//   - accessKeyID / secretAccessKey: S3/R2 凭证
+//   - bucket: bucket 名称
+//   - publicDomain: 绑定的公开域名（如 https://cdn.example.com），尾部斜杠会被去除
+func NewR2Storage(ctx context.Context, endpoint, accountID, accessKeyID, secretAccessKey, bucket, publicDomain string) (*R2Storage, error) {
+	if endpoint == "" {
+		endpoint = fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID)
+	}
 	publicDomain = strings.TrimSuffix(publicDomain, "/")
 
 	cfg, err := awscfg.LoadDefaultConfig(ctx,

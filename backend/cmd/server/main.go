@@ -282,6 +282,7 @@ func createStorage(cfg *config.Config) (storage.Storage, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		return storage.NewR2Storage(ctx,
+			cfg.Storage.R2Endpoint,
 			cfg.Storage.R2AccountID,
 			cfg.Storage.R2AccessKeyID,
 			cfg.Storage.R2SecretAccessKey,
