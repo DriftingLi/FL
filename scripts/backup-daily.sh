@@ -10,7 +10,7 @@ set -euo pipefail
 . /etc/forklift-backup.env
 
 BKT=forklift-backups
-EP="${RGW_ENDPOINT:-http://127.0.0.1:8088}"
+EP="${RGW_ENDPOINT:-http://172.17.1.42:8088}"
 BKDIR=/var/backups/forklift
 KEEP_DAYS="${KEEP_DAYS:-14}"
 TS=$(date +%Y%m%d_%H%M%S)
