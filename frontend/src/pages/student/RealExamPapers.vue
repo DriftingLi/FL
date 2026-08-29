@@ -12,7 +12,7 @@
     </div>
 
     <div v-if="filteredPapers.length === 0" class="empty-wrap">
-      <el-empty :description="emptyDescription" />
+      <UiEmptyState :description="emptyDescription" />
     </div>
     <div v-else class="variant-c-timeline">
       <div v-for="[year, list] in grouped" :key="year" class="timeline-year">
@@ -47,6 +47,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useCredentialStore } from '@/stores/credential'
 import { levelTagType } from '@/constants/level'
 import { pointsApi } from '@/api/points'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 type Difficulty = '入门' | '进阶' | '专项' | '认证'
 

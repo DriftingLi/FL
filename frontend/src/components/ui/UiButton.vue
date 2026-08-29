@@ -7,7 +7,8 @@
  */
 const props = withDefaults(
   defineProps<{
-    variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+    /** secondary 为默认值；ghost 走 EP 的 plain 样式 */
+    variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning'
     size?: 'small' | 'default' | 'large'
     loading?: boolean
     block?: boolean
@@ -17,11 +18,13 @@ const props = withDefaults(
   { variant: 'secondary', size: 'default', loading: false, block: false }
 )
 
-const EP_TYPE: Record<string, 'primary' | 'default' | 'danger'> = {
+const EP_TYPE: Record<string, 'primary' | 'default' | 'danger' | 'success' | 'warning'> = {
   primary: 'primary',
   secondary: 'default',
   ghost: 'default',
-  danger: 'danger'
+  danger: 'danger',
+  success: 'success',
+  warning: 'warning'
 }
 </script>
 

@@ -67,7 +67,7 @@
               <span v-if="item.summary" class="result-summary">{{ item.summary }}</span>
             </div>
           </template>
-          <el-empty v-else-if="!loading" description="无匹配结果" />
+          <UiEmptyState v-else-if="!loading" description="无匹配结果" />
 
           <div class="pagination-wrapper" v-if="pageResult.total > pageSize">
             <el-pagination
@@ -89,6 +89,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Search } from '@element-plus/icons-vue'
 import { searchApi, type SearchAllResult, type SearchPageResult, type SearchItem, type SearchType } from '@/api/search'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 const router = useRouter()
 
@@ -200,7 +201,7 @@ function resetSearch() {
 
 .page-header h2 {
   font-size: 22px;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .search-bar {
@@ -214,7 +215,7 @@ function resetSearch() {
 }
 
 .search-results {
-  background: #fff;
+  background: var(--color-bg-card);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   min-height: 200px;
@@ -223,7 +224,7 @@ function resetSearch() {
 
 .result-section {
   padding: 14px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .result-section:last-child {
@@ -240,17 +241,17 @@ function resetSearch() {
 .section-title {
   font-size: 15px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .section-count {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 
 .section-empty {
   font-size: 13px;
-  color: #c0c4cc;
+  color: var(--color-text-disabled);
   padding: 4px 0;
 }
 
@@ -268,12 +269,12 @@ function resetSearch() {
 }
 
 .result-item.clickable:hover {
-  background: #f7f9fc;
+  background: var(--color-bg-page);
 }
 
 .result-title {
   font-size: 14px;
-  color: #303133;
+  color: var(--color-text-primary);
   flex-shrink: 0;
   max-width: 50%;
   overflow: hidden;
@@ -283,7 +284,7 @@ function resetSearch() {
 
 .result-summary {
   font-size: 13px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

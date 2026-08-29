@@ -80,7 +80,7 @@
       </el-card>
       <el-pagination v-model:current-page="page" :page-size="pageSize" :total="total" layout="prev, pager, next" @current-change="loadData" />
     </div>
-    <el-empty v-else description="暂无错题" />
+    <UiEmptyState v-else description="暂无错题" />
   </div>
 </template>
 
@@ -100,6 +100,7 @@ import KnowledgeCard from '@/components/practice/KnowledgeCard.vue'
 import CommentCard from '@/components/practice/CommentCard.vue'
 import NoteCard from '@/components/practice/NoteCard.vue'
 import { questionInteractionApi } from '@/api/questionInteraction'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 interface WrongItem {
   id: number
@@ -317,13 +318,13 @@ async function handleExport(){
 .filter-bar { display: flex; gap: 10px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
 .action-bar { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
 .sort-icon { margin-right: 4px; }
-.fav-star { cursor: pointer; font-size: 18px; color: #c0c4cc; }
-.fav-star:hover { color: #e6a23c; }
-.fav-star.active { color: #e6a23c; }
+.fav-star { cursor: pointer; font-size: 18px; color: var(--color-text-disabled); }
+.fav-star:hover { color: var(--color-warning); }
+.fav-star.active { color: var(--color-warning); }
 .wrong-item { margin-bottom: 12px; }
 .wrong-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .header-left { display:flex; align-items:center; gap:8px; }
-.wrong-count { color: #f56c6c; font-size: 13px; }
+.wrong-count { color: var(--color-danger); font-size: 13px; }
 .wrong-content { font-size: 15px; line-height: 1.6; margin-bottom: 10px; }
 .redo-area { margin-top: 10px; }
 .redo-actions { margin-top: 8px; display:flex; gap:8px; }

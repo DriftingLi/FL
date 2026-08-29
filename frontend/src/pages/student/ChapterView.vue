@@ -1,10 +1,24 @@
 <template>
-  <div class="chapter-view-page" v-loading="loading">
-    <template v-if="chapterNotFound">
-      <el-empty description="章节不存在或已删除">
-        <el-button type="primary" @click="goBackToCourse">返回课程</el-button>
-      </el-empty>
-    </template>
+  <div class="chapter-view-page">
+    <!-- 加载：骨架屏（替代原整页 v-loading，避免整块变灰） -->
+    <UiSkeleton v-if="loading" variant="list" :count="3" />
+
+    <!-- 404：有明确去向，给「返回课程」而不是重试 -->
+    <UiEmptyState
+      v-else-if="chapterNotFound"
+      title="章节不存在或已删除"
+      action-text="返回课程"
+      @action="goBackToCourse"
+    />
+
+    <!-- 其他异常：可重试 -->
+    <UiErrorState
+      v-else-if="loadError"
+      title="章节加载失败"
+      description="网络或服务端异常，可重试"
+      :retrying="retrying"
+      @retry="retryLoadChapter"
+    />
 
     <template v-else-if="chapterDetail">
       <div class="chapter-header">
@@ -84,7 +98,11 @@
           </el-tab-pane>
         </el-tabs>
 
-        <el-empty v-if="!chapterDetail.content && chapterFiles.length === 0" description="该章节暂无内容" />
+        <UiEmptyState
+          v-if="!chapterDetail.content && chapterFiles.length === 0"
+          description="该章节暂无内容"
+          size="sm"
+        />
       </div>
 
       <ChapterDiscussion v-if="chapterDetail.chapter_id" :chapter-id="chapterDetail.chapter_id" />
@@ -138,6 +156,9 @@ import { useStudyTracker } from '@/composables/useStudyTracker'
 import '@/assets/styles/markdown.css'
 import VideoPlayer from '@/components/student/VideoPlayer.vue'
 import DocumentViewer from '@/components/student/DocumentViewer.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import PptViewer from '@/components/student/PptViewer.vue'
 import ImageViewer from '@/components/student/ImageViewer.vue'
 import ChapterDiscussion from '@/components/student/ChapterDiscussion.vue'
@@ -165,7 +186,10 @@ interface ChapterItem {
 }
 
 const loading = ref(false)
+// 三态：notFound（404，有明确去向）/ loadError（其他异常，可重试）/ 内容
 const chapterNotFound = ref(false)
+const loadError = ref(false)
+const retrying = ref(false)
 const chapterDetail = ref<ChapterDetail | null>(null)
 const courseName = ref('')
 const chapters = ref<ChapterItem[]>([])
@@ -237,10 +261,10 @@ const chapterFiles = computed(() => {
 
 const TYPE_ORDER = ['video', 'document', 'ppt', 'image']
 const TYPE_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
-  video: { label: '视频', icon: VideoCamera, color: '#f56c6c' },
-  document: { label: '文档', icon: Document, color: '#409eff' },
-  ppt: { label: 'PPT', icon: Document, color: '#e6a23c' },
-  image: { label: '图片', icon: Picture, color: '#67c23a' }
+  video: { label: '视频', icon: VideoCamera, color: 'var(--color-danger)' },
+  document: { label: '文档', icon: Document, color: 'var(--color-primary-500)' },
+  ppt: { label: 'PPT', icon: Document, color: 'var(--color-warning)' },
+  image: { label: '图片', icon: Picture, color: 'var(--color-success)' }
 }
 
 const fileGroups = computed(() => {
@@ -258,7 +282,7 @@ const fileGroups = computed(() => {
       type,
       label: TYPE_CONFIG[type]?.label || type,
       icon: TYPE_CONFIG[type]?.icon || Document,
-      color: TYPE_CONFIG[type]?.color || '#909399',
+      color: TYPE_CONFIG[type]?.color || 'var(--color-text-tertiary)',
       files: groups[type]
     }))
 })
@@ -300,6 +324,7 @@ const getNextChapterTitle = computed(() => {
 async function loadChapterDetail() {
   loading.value = true
   chapterNotFound.value = false
+  loadError.value = false
   // 切换章节前先上报当前章节的增量时长，再停表（先报增量再停表）
   await studyTracker.reportIncremental(false)
   studyTracker.stop()
@@ -319,11 +344,18 @@ async function loadChapterDetail() {
       chapterNotFound.value = true
     } else {
       console.error('加载章节详情失败:', error)
-      /* 错误已由拦截器提示 */
+      loadError.value = true
+      /* 错误已由拦截器提示，这里只负责渲染可重试的错误态 */
     }
   } finally {
     loading.value = false
+    retrying.value = false
   }
+}
+
+async function retryLoadChapter() {
+  retrying.value = true
+  await loadChapterDetail()
 }
 
 async function loadCourseInfo() {
@@ -446,12 +478,12 @@ onBeforeUnmount(() => {
 .chapter-title {
   font-size: 22px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
   margin: 0;
 }
 
 .chapter-content-area {
-  background: #fff;
+  background: var(--color-bg-card);
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
@@ -461,7 +493,7 @@ onBeforeUnmount(() => {
 
 .content-text {
   line-height: 1.8;
-  color: #303133;
+  color: var(--color-text-primary);
   font-size: 15px;
   margin-bottom: 20px;
 }
@@ -475,7 +507,7 @@ onBeforeUnmount(() => {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: #fff;
+  background: var(--color-bg-card);
   padding-top: 8px;
 }
 
@@ -522,7 +554,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: center;
   padding: 16px 0;
-  border-top: 1px solid #ebeef5;
+  border-top: 1px solid var(--color-border-light);
 }
 
 .nav-prev,
@@ -553,12 +585,12 @@ onBeforeUnmount(() => {
 
 .nav-label {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 
 .nav-title {
   font-size: 14px;
-  color: #303133;
+  color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

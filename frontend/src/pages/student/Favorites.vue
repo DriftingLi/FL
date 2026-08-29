@@ -47,7 +47,7 @@
           </div>
         </div>
       </template>
-      <el-empty v-else-if="!loading" description="暂无收藏" />
+      <UiEmptyState v-else-if="!loading" description="暂无收藏" />
     </div>
 
     <div class="pagination-wrapper" v-if="total > pageSize">
@@ -69,6 +69,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { favoriteApi, type FavoriteItem, type FavoriteTargetType } from '@/api/favorite'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { formatLocaleDateTime } from '@/utils/format'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 const router = useRouter()
 
@@ -180,11 +181,11 @@ onMounted(loadFavorites)
 
 .page-header h2 {
   font-size: 22px;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .favorite-list {
-  background: #fff;
+  background: var(--color-bg-card);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   min-height: 200px;
@@ -195,7 +196,7 @@ onMounted(loadFavorites)
   align-items: center;
   gap: 14px;
   padding: 14px 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .favorite-item:last-child {
@@ -208,7 +209,7 @@ onMounted(loadFavorites)
 }
 
 .favorite-item.clickable:hover {
-  background: #f7f9fc;
+  background: var(--color-bg-page);
 }
 
 .item-cover {
@@ -223,8 +224,8 @@ onMounted(loadFavorites)
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--el-color-primary-light-9, #ecf5ff);
-  color: var(--el-color-primary, #409eff);
+  background: var(--el-color-primary-light-9, var(--color-primary-50));
+  color: var(--el-color-primary, var(--color-primary-500));
   font-size: 20px;
   font-weight: 600;
 }
@@ -247,7 +248,7 @@ onMounted(loadFavorites)
 .item-title {
   font-size: 15px;
   font-weight: 500;
-  color: #303133;
+  color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -255,7 +256,7 @@ onMounted(loadFavorites)
 
 .item-time {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 
 .item-actions {

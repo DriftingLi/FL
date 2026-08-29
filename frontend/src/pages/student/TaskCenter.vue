@@ -165,7 +165,7 @@ onMounted(() => {
 .task-title {
   font-size: 24px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
   margin: 0;
 }
 .points-summary {
@@ -173,7 +173,7 @@ onMounted(() => {
   align-items: center;
   gap: 16px;
   padding: 14px 16px;
-  background: #fff;
+  background: var(--color-bg-card);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   margin-bottom: 16px;
@@ -187,13 +187,13 @@ onMounted(() => {
 }
 .summary-label {
   font-size: 11px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   letter-spacing: 0.04em;
 }
 .summary-value {
   font-size: 20px;
   font-weight: 800;
-  color: #303133;
+  color: var(--color-text-primary);
   font-family: var(--font-display, system-ui);
 }
 .summary-value.small {
@@ -202,7 +202,7 @@ onMounted(() => {
 .summary-divider {
   width: 1px;
   height: 32px;
-  background: #ebeef5;
+  background: var(--color-border-light);
 }
 .group-stack {
   display: flex;
@@ -218,18 +218,18 @@ onMounted(() => {
 .group-title {
   font-size: 15px;
   font-weight: 700;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 .group-desc {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 .group-count {
   margin-left: auto;
   font-size: 12px;
-  color: #909399;
-  background: #f5f7fa;
-  border: 1px solid #ebeef5;
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border-light);
   padding: 2px 8px;
   border-radius: 9999px;
 }
@@ -244,18 +244,18 @@ onMounted(() => {
   justify-content: space-between;
   gap: 12px;
   padding: 14px 16px;
-  background: #fff;
-  border: 1px solid #ebeef5;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
   transition: border-color 150ms ease;
 }
 .task-card:hover {
-  border-color: #dcdfe6;
+  border-color: var(--color-border-dark);
 }
 .task-card.claimed {
   opacity: 0.7;
-  background: #fafafa;
+  background: var(--color-bg-page);
 }
 .task-left {
   display: flex;
@@ -275,19 +275,19 @@ onMounted(() => {
   font-size: 18px;
 }
 .task-icon.todo {
-  background: #f5f7fa;
-  color: #909399;
-  border: 1px solid #ebeef5;
+  background: var(--color-bg-page);
+  color: var(--color-text-tertiary);
+  border: 1px solid var(--color-border-light);
 }
 .task-icon.claimable {
-  background: #fef3c7;
-  color: #d97706;
-  border: 1px solid #fde68a;
+  background: var(--color-warning-light);
+  color: var(--color-warning-strong);
+  border: 1px solid var(--color-warning-light);
 }
 .task-icon.claimed {
-  background: #dcfce7;
-  color: #16a34a;
-  border: 1px solid #bbf7d0;
+  background: var(--color-success-light);
+  color: var(--color-success-strong);
+  border: 1px solid var(--color-success-light);
 }
 .task-info {
   flex: 1;
@@ -296,12 +296,12 @@ onMounted(() => {
 .task-title-text {
   font-size: 14px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
   margin-bottom: 2px;
 }
 .task-desc {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   line-height: 1.4;
 }
 .task-progress {
@@ -316,7 +316,7 @@ onMounted(() => {
 }
 .progress-text {
   font-size: 11px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   font-family: monospace;
 }
 .task-right {
@@ -328,7 +328,7 @@ onMounted(() => {
 .task-points {
   font-size: 14px;
   font-weight: 700;
-  color: #d97706;
+  color: var(--color-warning-strong);
   min-width: 36px;
   text-align: right;
 }

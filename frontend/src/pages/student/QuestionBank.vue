@@ -1,107 +1,136 @@
 <template>
   <div class="question-bank">
-    <!-- ===== 入口：5 卡片 ===== -->
-    <div v-if="!mode" class="entry">
-      <h2>题库练习</h2>
-      <p class="entry-sub">选择练习方式，开始刷题</p>
+    <!-- ===== 入口 ===== -->
+    <div v-if="!mode" class="flex flex-col gap-6">
+      <UiSectionHeader title="题库练习" subtitle="选择练习方式，开始刷题" />
 
-      <div class="practice-stats-bar">
-        <div v-if="practiceStatsLoading" class="stats-grid">
-          <el-skeleton v-for="i in 3" :key="i" :rows="1" animated style="width: 100%" />
-        </div>
-        <div v-else class="stats-grid">
-          <div class="stats-item">
-            <span class="stats-num">{{ practiceStats.today_count }}</span>
-            <span class="stats-label">今日做题</span>
-          </div>
-          <div class="stats-item">
-            <span class="stats-num">{{ practiceStats.total_count }}</span>
-            <span class="stats-label">累计做题</span>
-          </div>
-          <div class="stats-item">
-            <span class="stats-num">{{ practiceStats.total_days }}</span>
-            <span class="stats-label">累计做题天数</span>
-          </div>
-        </div>
+      <!-- 练习统计 -->
+      <div class="grid gap-4 sm:grid-cols-3">
+        <UiStatCard
+          label="今日做题"
+          :value="practiceStats.today_count"
+          :loading="practiceStatsLoading"
+          tone="brand"
+        />
+        <UiStatCard
+          label="累计做题"
+          :value="practiceStats.total_count"
+          :loading="practiceStatsLoading"
+          tone="ok"
+        />
+        <UiStatCard
+          label="累计做题天数"
+          :value="practiceStats.total_days"
+          unit="天"
+          :loading="practiceStatsLoading"
+          tone="warn"
+        />
       </div>
 
-      <el-row :gutter="20" class="card-grid">
+      <!-- 4 种练习方式 -->
+      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <!-- 顺序练习 -->
-        <el-col :xs="24" :sm="12" :md="8">
-          <el-card shadow="hover" class="practice-card card-sequential">
-            <div class="card-head">
-              <el-icon :size="28" color="#409eff"><Sort /></el-icon>
-              <h3>顺序练习</h3>
-            </div>
-            <div class="card-stat">
-              <span class="stat-num">{{ seqProgress.completed }}/{{ seqProgress.total || totalQuestions }}</span>
-              <span class="stat-label">已练习/总题数</span>
-            </div>
-            <el-button type="primary" @click="startSequential">
-              {{ seqProgress.completed > 0 ? '继续练习' : '开始练习' }}
-            </el-button>
-          </el-card>
-        </el-col>
+        <UiCard variant="raised" class="stagger-in" :style="stagger(0)">
+          <div class="flex items-center gap-2">
+            <span class="grid h-9 w-9 place-items-center rounded-ctl bg-ui-50 text-ui-600">
+              <el-icon :size="20"><Sort /></el-icon>
+            </span>
+            <h3 class="font-heading text-base font-semibold text-ink">顺序练习</h3>
+          </div>
+          <p class="mt-3 text-sm text-ink-3">
+            {{ seqProgress.completed }}/{{ seqProgress.total || totalQuestions }} 已练习
+          </p>
+          <UiButton
+            variant="primary"
+            block
+            class="mt-4"
+            @click="startSequential"
+          >
+            {{ seqProgress.completed > 0 ? '继续练习' : '开始练习' }}
+          </UiButton>
+        </UiCard>
 
         <!-- 随机练习 -->
-        <el-col :xs="24" :sm="12" :md="8">
-          <el-card shadow="hover" class="practice-card card-random">
-            <div class="card-head">
-              <el-icon :size="28" color="#67c23a"><MagicStick /></el-icon>
-              <h3>随机练习</h3>
-            </div>
-            <div class="card-select">
-              <span class="select-label">每次题量</span>
-              <el-select v-model="randomCount" size="small" style="width: 110px">
-                <el-option v-for="o in randomCountOptions" :key="o.value" :label="o.label" :value="o.value" />
-              </el-select>
-            </div>
-            <el-button type="success" :loading="loading" @click="startFree()">开始练习</el-button>
-          </el-card>
-        </el-col>
+        <UiCard variant="raised" class="stagger-in" :style="stagger(1)">
+          <div class="flex items-center gap-2">
+            <span class="grid h-9 w-9 place-items-center rounded-ctl bg-ok-soft text-ok">
+              <el-icon :size="20"><MagicStick /></el-icon>
+            </span>
+            <h3 class="font-heading text-base font-semibold text-ink">随机练习</h3>
+          </div>
+          <div class="mt-3 flex items-center justify-between gap-2">
+            <span class="text-sm text-ink-3">每次题量</span>
+            <el-select v-model="randomCount" size="small" class="w-[110px]">
+              <el-option v-for="o in randomCountOptions" :key="o.value" :label="o.label" :value="o.value" />
+            </el-select>
+          </div>
+          <UiButton variant="success" block class="mt-4" :loading="loading" @click="startFree()">
+            开始练习
+          </UiButton>
+        </UiCard>
 
         <!-- 专项练习 -->
-        <el-col :xs="24" :sm="12" :md="8">
-          <el-card shadow="hover" class="practice-card card-special">
-            <div class="card-head">
-              <el-icon :size="28" color="#e6a23c"><Filter /></el-icon>
-              <h3>专项练习</h3>
-            </div>
-            <div class="card-select">
-              <span class="select-label">题型</span>
-              <el-select v-model="specialType" size="small" placeholder="选择题型" style="width: 130px">
-                <el-option v-for="o in questionTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
-              </el-select>
-            </div>
-            <el-button type="warning" :loading="loading" :disabled="!specialType" @click="startFree()">开始练习</el-button>
-          </el-card>
-        </el-col>
+        <UiCard variant="raised" class="stagger-in" :style="stagger(2)">
+          <div class="flex items-center gap-2">
+            <span class="grid h-9 w-9 place-items-center rounded-ctl bg-warn-soft text-warn">
+              <el-icon :size="20"><Filter /></el-icon>
+            </span>
+            <h3 class="font-heading text-base font-semibold text-ink">专项练习</h3>
+          </div>
+          <div class="mt-3 flex items-center justify-between gap-2">
+            <span class="text-sm text-ink-3">题型</span>
+            <el-select v-model="specialType" size="small" placeholder="选择题型" class="w-[130px]">
+              <el-option v-for="o in questionTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
+            </el-select>
+          </div>
+          <UiButton
+            variant="warning"
+            block
+            class="mt-4"
+            :loading="loading"
+            :disabled="!specialType"
+            @click="startFree()"
+          >
+            开始练习
+          </UiButton>
+        </UiCard>
 
         <!-- 标签练习 -->
-        <el-col :xs="24" :sm="12" :md="8">
-          <el-card shadow="hover" class="practice-card card-tag">
-            <div class="card-head">
-              <el-icon :size="28" color="#7952b3"><CollectionTag /></el-icon>
-              <h3>标签练习</h3>
-            </div>
-            <div class="card-select">
-              <span class="select-label">考点标签</span>
-              <el-select v-model="tagPracticeId" size="small" filterable placeholder="选择标签" style="width: 130px" :loading="tagsLoading">
-                <el-option v-for="t in tags" :key="t.id" :label="`${t.name}（${t.question_count ?? 0}题）`" :value="t.id" />
-              </el-select>
-            </div>
-            <div v-if="tagPracticeId && tagProgress.total > 0" class="card-stat">
-              <span class="stat-num">{{ tagProgress.completed }}/{{ tagProgress.total }}</span>
-              <span class="stat-label">已练习/总题数</span>
-            </div>
-            <el-button type="primary" plain :loading="loading" :disabled="!tagPracticeId" @click="startTagPractice">
-              {{ tagProgress.completed > 0 ? '继续练习' : '开始练习' }}
-            </el-button>
-          </el-card>
-        </el-col>
-
-
-      </el-row>
+        <UiCard variant="raised" class="stagger-in" :style="stagger(3)">
+          <div class="flex items-center gap-2">
+            <span class="grid h-9 w-9 place-items-center rounded-ctl bg-ui-accent-400/10 text-ui-accent-600">
+              <el-icon :size="20"><CollectionTag /></el-icon>
+            </span>
+            <h3 class="font-heading text-base font-semibold text-ink">标签练习</h3>
+          </div>
+          <div class="mt-3 flex items-center justify-between gap-2">
+            <span class="text-sm text-ink-3">考点标签</span>
+            <el-select
+              v-model="tagPracticeId"
+              size="small"
+              filterable
+              placeholder="选择标签"
+              class="w-[130px]"
+              :loading="tagsLoading"
+            >
+              <el-option v-for="t in tags" :key="t.id" :label="`${t.name}（${t.question_count ?? 0}题）`" :value="t.id" />
+            </el-select>
+          </div>
+          <p v-if="tagPracticeId && tagProgress.total > 0" class="mt-2 text-xs text-ink-3">
+            {{ tagProgress.completed }}/{{ tagProgress.total }} 已练习
+          </p>
+          <UiButton
+            variant="primary"
+            block
+            class="mt-4"
+            :loading="loading"
+            :disabled="!tagPracticeId"
+            @click="startTagPractice"
+          >
+            {{ tagProgress.completed > 0 ? '继续练习' : '开始练习' }}
+          </UiButton>
+        </UiCard>
+      </div>
     </div>
 
     <!-- ===== 刷题中 ===== -->
@@ -198,6 +227,13 @@ import { favoriteApi } from '@/api/favorite'
 import { practiceModeApi } from '@/api/practiceMode'
 import { trainingApi } from '@/api/training'
 import type { QuestionTag } from '@/api/training'
+import { useStagger } from '@/composables/useStagger'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiCard from '@/components/ui/UiCard.vue'
+import UiSectionHeader from '@/components/ui/UiSectionHeader.vue'
+import UiStatCard from '@/components/ui/UiStatCard.vue'
+
+const stagger = useStagger()
 import { typeMap, questionTypeOptions, randomCountOptions } from '@/constants/question'
 import type { PracticeProgress, QuestionType } from '@/types/question'
 import {
@@ -488,42 +524,18 @@ async function loadCardData() {
 
 <style scoped>
 .question-bank { max-width: 1200px; margin: 0 auto; }
-.question-bank h2 { margin-bottom: 6px; color: #303133; }
-.entry-sub { color: #909399; font-size: 14px; margin-bottom: 24px; }
-.practice-stats-bar { margin-bottom: 20px; background: var(--color-bg-card); border: 1px solid var(--color-border-light); border-radius: var(--radius-lg); padding: var(--space-4); }
-.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); }
-.stats-item { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px 0; }
-.stats-num { font-size: 28px; font-weight: var(--font-bold); color: var(--color-primary-600); line-height: 1.1; }
-.stats-label { font-size: var(--text-xs); color: var(--color-text-tertiary); margin-top: 6px; }
-
-.card-grid { margin-bottom: 20px; }
-.practice-card { display: flex; flex-direction: column; align-items: center; text-align: center; min-height: 220px; transition: transform 0.3s; margin-bottom: 20px; }
-.practice-card:hover { transform: translateY(-5px); }
-.practice-card :deep(.el-card__body) { display: flex; flex-direction: column; align-items: center; justify-content: space-between; width: 100%; height: 100%; min-height: 188px; padding: 24px; box-sizing: border-box; }
-.card-head { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 14px; }
-.card-head h3 { margin: 0; color: #303133; }
-.card-stat { display: flex; flex-direction: column; align-items: center; margin-bottom: 14px; }
-.stat-num { font-size: 24px; font-weight: bold; color: #409eff; }
-.stat-label { font-size: 12px; color: #909399; margin-top: 4px; }
-.card-select { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
-.select-label { font-size: 13px; color: #606266; white-space: nowrap; }
-.card-sequential { border-top: 3px solid #409eff; }
-.card-random { border-top: 3px solid #67c23a; }
-.card-special { border-top: 3px solid #e6a23c; }
-.card-tag { border-top: 3px solid #7952b3; }
-
 .practice-area { margin-top: 10px; }
-.practice-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px 15px; background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-.progress-text { font-size: 15px; color: #303133; }
-.progress-stats { margin-left: 12px; color: #909399; font-size: 13px; }
+.practice-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px 15px; background: var(--color-bg-card); border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.progress-text { font-size: 15px; color: var(--color-text-primary); }
+.progress-stats { margin-left: 12px; color: var(--color-text-tertiary); font-size: 13px; }
 .question-card { margin-bottom: 15px; }
 .question-header { display: flex; gap: 8px; align-items: center; margin-bottom: 15px; }
-.fav-star { cursor: pointer; font-size: 18px; color: #c0c4cc; }
-.fav-star:hover { color: #e6a23c; }
-.fav-star.active { color: #e6a23c; }
+.fav-star { cursor: pointer; font-size: 18px; color: var(--color-text-disabled); }
+.fav-star:hover { color: var(--color-warning); }
+.fav-star.active { color: var(--color-warning); }
 .q-image { max-width: 100%; max-height: 250px; border-radius: 8px; margin-bottom: 10px; }
 .q-content { font-size: 16px; line-height: 1.8; margin-bottom: 15px; white-space: pre-wrap; }
 .q-feedback { margin-top: 15px; }
-.feedback-explanation { margin-top: 6px; color: #606266; }
+.feedback-explanation { margin-top: 6px; color: var(--color-text-secondary); }
 .q-actions { display: flex; justify-content: center; margin-top: 20px; }
 </style>

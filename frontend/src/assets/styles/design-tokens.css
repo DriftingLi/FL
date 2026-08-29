@@ -46,6 +46,12 @@
   --color-info: #6B7280;
   --color-info-light: #F3F4F6;
 
+  /* 深字色：与 -light 浅底配对使用，保证浅底上的对比度达标 */
+  --color-success-strong: #047857;
+  --color-warning-strong: #B45309;
+  --color-danger-strong: #B91C1C;
+  --color-info-strong: #374151;
+
   --color-text-primary: #0F172A;
   --color-text-secondary: #475569;
   --color-text-tertiary: #64748B;

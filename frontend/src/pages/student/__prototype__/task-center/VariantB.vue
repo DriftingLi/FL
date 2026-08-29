@@ -83,8 +83,8 @@ const grouped = computed(() => {
 
 <style scoped>
 .points-dashboard {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #334155 100%);
-  color: #f8fafc;
+  background: linear-gradient(135deg, var(--color-text-primary) 0%, var(--color-bg-sidebar-hover) 55%, var(--color-border-darker) 100%);
+  color: var(--color-bg-page);
   border-radius: var(--radius-lg);
   padding: 18px 20px;
   display: flex;
@@ -153,7 +153,7 @@ const grouped = computed(() => {
 .dashboard-actions :deep(.el-button) {
   --el-button-bg-color: rgba(255,255,255,0.12);
   --el-button-border-color: rgba(255,255,255,0.2);
-  --el-button-text-color: #f8fafc;
+  --el-button-text-color: var(--color-bg-page);
 }
 .compact-groups {
   display: flex;
@@ -191,7 +191,7 @@ const grouped = computed(() => {
 }
 .compact-row.claimed {
   opacity: 0.6;
-  background: #fafafa;
+  background: var(--color-bg-page);
 }
 .row-title {
   flex: 1;
@@ -212,7 +212,7 @@ const grouped = computed(() => {
 .row-points {
   font-size: 13px;
   font-weight: 700;
-  color: #d97706;
+  color: var(--color-warning-strong);
   min-width: 36px;
   text-align: right;
 }

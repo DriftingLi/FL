@@ -43,7 +43,7 @@
           </div>
         </div>
       </template>
-      <el-empty v-else-if="!loading" description="暂无学习资料" />
+      <UiEmptyState v-else-if="!loading" description="暂无学习资料" />
     </div>
 
     <div class="pagination-wrapper" v-if="total > pageSize">
@@ -65,6 +65,7 @@ import { materialApi, type MaterialItem } from '@/api/material'
 import { courseApi, type CourseSummary } from '@/api/course'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { formatLocaleDateTime } from '@/utils/format'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 const loading = ref(false)
 const materials = ref<MaterialItem[]>([])
@@ -75,10 +76,10 @@ const courseFilter = ref<number | undefined>(undefined)
 const courses = ref<CourseSummary[]>([])
 
 const TYPE_CONFIG: Record<string, { label: string; icon: any; color: string; bg: string }> = {
-  document: { label: '文档', icon: Document, color: '#409eff', bg: '#ecf5ff' },
-  video: { label: '视频', icon: VideoCamera, color: '#f56c6c', bg: '#fef0f0' },
-  ppt: { label: 'PPT', icon: Document, color: '#e6a23c', bg: '#fdf6ec' },
-  image: { label: '图片', icon: Picture, color: '#67c23a', bg: '#f0f9eb' }
+  document: { label: '文档', icon: Document, color: 'var(--color-primary-500)', bg: 'var(--color-primary-50)' },
+  video: { label: '视频', icon: VideoCamera, color: 'var(--color-danger)', bg: 'var(--color-danger-light)' },
+  ppt: { label: 'PPT', icon: Document, color: 'var(--color-warning)', bg: 'var(--color-warning-light)' },
+  image: { label: '图片', icon: Picture, color: 'var(--color-success)', bg: 'var(--color-success-light)' }
 }
 
 function typeConfig(contentType?: string) {
@@ -149,7 +150,7 @@ onMounted(() => {
 
 .page-header h2 {
   font-size: 22px;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .filter-bar {
@@ -157,7 +158,7 @@ onMounted(() => {
 }
 
 .material-list {
-  background: #fff;
+  background: var(--color-bg-card);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   min-height: 200px;
@@ -168,7 +169,7 @@ onMounted(() => {
   align-items: center;
   gap: 14px;
   padding: 14px 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .material-item:last-child {
@@ -196,7 +197,7 @@ onMounted(() => {
 .item-name {
   font-size: 15px;
   font-weight: 500;
-  color: #303133;
+  color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -204,7 +205,7 @@ onMounted(() => {
 
 .item-meta {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -219,7 +220,7 @@ onMounted(() => {
 
 .item-info {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   white-space: nowrap;
 }
 

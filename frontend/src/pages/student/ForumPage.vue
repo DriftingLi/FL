@@ -62,7 +62,7 @@
           </div>
         </div>
       </template>
-      <el-empty v-else-if="!loading" description="暂无回复" />
+      <UiEmptyState v-else-if="!loading" description="暂无回复" />
     </div>
 
     <div v-else v-loading="loading" class="topic-list">
@@ -108,7 +108,7 @@
           </div>
         </div>
       </template>
-      <el-empty v-else-if="!loading" description="还没有帖子，来发第一帖吧" />
+      <UiEmptyState v-else-if="!loading" description="还没有帖子，来发第一帖吧" />
     </div>
 
     <div class="pagination-wrapper" v-if="mode !== 'history' && total > pageSize">
@@ -166,6 +166,7 @@ import ForumHistoryPanel from '@/components/student/ForumHistoryPanel.vue'
 import { loadHistory, removeHistoryItem, clearHistory } from '@/utils/forumHistory'
 import type { ForumHistoryItem } from '@/utils/forumHistory'
 import { useAuthStore } from '@/stores/auth'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -365,7 +366,7 @@ onMounted(() => {
 .forum-title {
   font-size: 24px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
   margin: 0 0 6px;
 }
 
@@ -382,7 +383,7 @@ onMounted(() => {
 }
 
 .topic-list {
-  background: #fff;
+  background: var(--color-bg-card);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   min-height: 300px;
@@ -392,13 +393,13 @@ onMounted(() => {
   display: flex;
   gap: 14px;
   padding: 18px 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border-light);
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .topic-item:hover {
-  background: #f7f9fc;
+  background: var(--color-bg-page);
 }
 
 .topic-item:last-child {
@@ -420,7 +421,7 @@ onMounted(() => {
 .topic-title {
   font-size: 16px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -428,7 +429,7 @@ onMounted(() => {
 }
 
 .topic-excerpt {
-  color: #606266;
+  color: var(--color-text-secondary);
   font-size: 13px;
   margin: 6px 0 8px;
   display: -webkit-box;
@@ -442,11 +443,11 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 
 .meta-divider {
-  color: #dcdfe6;
+  color: var(--color-border-dark);
 }
 
 .meta-right {
@@ -465,7 +466,7 @@ onMounted(() => {
   align-items: center;
   gap: 2px;
   margin-right: 10px;
-  color: #e6a23c;
+  color: var(--color-warning);
 }
 
 .like-mark {
@@ -473,7 +474,7 @@ onMounted(() => {
   align-items: center;
   gap: 2px;
   margin-left: 10px;
-  color: #f56c6c;
+  color: var(--color-danger);
 }
 
 .like-mark .heart {
@@ -482,14 +483,14 @@ onMounted(() => {
 }
 
 .like-mark .heart.liked {
-  color: #f56c6c;
+  color: var(--color-danger);
 }
 
 .checkin-card {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #fff;
+  background: var(--color-bg-card);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   padding: 14px 16px;
@@ -502,16 +503,16 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .checkin-icon {
   font-size: 16px;
-  color: #409eff;
+  color: var(--color-primary-500);
 }
 
 .checkin-sub {
-  color: #909399;
+  color: var(--color-text-tertiary);
   font-size: 12px;
   margin-left: 6px;
 }

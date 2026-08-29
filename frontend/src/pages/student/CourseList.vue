@@ -43,12 +43,27 @@
       </aside>
 
       <main class="cc-main">
-        <div class="cc-content" v-loading="loading">
-          <div v-if="courses.length > 0" class="cc-grid">
-            <CourseCard
-              v-for="course in courses"
-              :key="course.course_id"
-              :name="course.name"
+        <div class="cc-content">
+          <!-- 加载：骨架屏（替代原全容器 v-loading，避免整块变灰遮挡已有内容） -->
+          <UiSkeleton v-if="loading" variant="card" :count="6" />
+
+          <!-- 错误：带重试 -->
+          <UiErrorState
+            v-else-if="loadError"
+            title="课程加载失败"
+            description="网络或服务端异常，可重试"
+            :retrying="retrying"
+            @retry="retryLoad"
+          />
+
+          <template v-else>
+            <div v-if="courses.length > 0" class="cc-grid">
+              <CourseCard
+                v-for="(course, i) in courses"
+                :key="course.course_id"
+                class="stagger-in"
+                :style="stagger(i)"
+                :name="course.name"
               :description="course.description"
               :cover-image="course.cover_image"
               :specialty-id="course.specialty_id"
@@ -82,9 +97,16 @@
             </CourseCard>
           </div>
 
-          <div v-else-if="!loading" class="cc-empty">
-            <el-empty :description="credentialStore.current ? `“${credentialStore.current.name}” 内容建设中` : '该方向/等级下暂无课程'" :image-size="80" />
-          </div>
+          <UiEmptyState
+              v-else
+              size="sm"
+              :description="
+                credentialStore.current
+                  ? `“${credentialStore.current.name}” 内容建设中`
+                  : '该方向/等级下暂无课程'
+              "
+            />
+          </template>
         </div>
 
         <div class="cc-pagination" v-if="total > pageSize">
@@ -189,7 +211,7 @@
                 <el-icon class="chapter-arrow"><ArrowRight /></el-icon>
               </div>
             </div>
-            <el-empty v-else description="该课程暂无章节内容" :image-size="60" />
+            <UiEmptyState v-else description="该课程暂无章节内容" size="sm" />
           </div>
         </template>
       </div>
@@ -216,10 +238,16 @@ import { favoriteApi } from '@/api/favorite'
 import { trainingApi } from '@/api/training'
 import { pointsApi } from '@/api/points'
 import { useCourseCatalog, treeCatalogAdapter } from '@/composables/useCourseCatalog'
+import { useStagger } from '@/composables/useStagger'
 import { useCredentialStore } from '@/stores/credential'
 import FacetCard from '@/components/catalog/FacetCard.vue'
 import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCard from '@/components/catalog/CourseCard.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+
+const stagger = useStagger()
 
 const route = useRoute()
 const router = useRouter()
@@ -231,6 +259,9 @@ try {
 }
 
 const loading = ref(false)
+// 首屏三态：骨架 / 错误（可重试）/ 内容
+const loadError = ref(false)
+const retrying = ref(false)
 const courses = ref<CourseSummary[]>([])
 const currentPage = ref(1)
 const pageSize = ref(12)
@@ -276,6 +307,7 @@ function handleTabChange() {
 
 async function loadCourses() {
   loading.value = true
+  loadError.value = false
   try {
     const params: Record<string, any> = {
       page: currentPage.value,
@@ -298,10 +330,17 @@ async function loadCourses() {
     total.value = data.total
   } catch (error) {
     console.error('加载课程失败:', error)
-    /* 错误已由拦截器提示 */
+    loadError.value = true
+    /* 错误已由拦截器提示，这里只负责渲染可重试的错误态 */
   } finally {
     loading.value = false
+    retrying.value = false
   }
+}
+
+async function retryLoad() {
+  retrying.value = true
+  await loadCourses()
 }
 
 function handlePageChange() {
@@ -542,7 +581,7 @@ window.addEventListener('credential-switched', () => {
   padding: 2px 10px;
   border-radius: var(--radius-full);
   background: rgba(0, 0, 0, 0.4);
-  color: #fff;
+  color: var(--color-bg-card);
   font-size: 12px;
   font-weight: 600;
 }
@@ -558,17 +597,17 @@ window.addEventListener('credential-switched', () => {
 .cc-cover-badge {
   padding: 2px 8px;
   border-radius: var(--radius-full);
-  color: #fff;
+  color: var(--color-bg-card);
   font-size: 11px;
   font-weight: 600;
 }
 
 .cc-cover-badge--hot {
-  background: #f56c6c;
+  background: var(--color-danger);
 }
 
 .cc-cover-badge--featured {
-  background: #e6a23c;
+  background: var(--color-warning);
 }
 
 .cc-tabs {
@@ -683,7 +722,7 @@ window.addEventListener('credential-switched', () => {
 .detail-header-title {
   font-size: 18px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .detail-progress {
@@ -699,7 +738,7 @@ window.addEventListener('credential-switched', () => {
 
 .progress-text {
   font-size: 13px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   white-space: nowrap;
 }
 
