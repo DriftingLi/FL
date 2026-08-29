@@ -142,7 +142,7 @@ const grouped = computed(() => {
 .history-card.is-deleted {
   opacity: 0.6;
   cursor: default;
-  background: #fafafa;
+  background: var(--color-bg-page);
 }
 .card-top {
   display: flex;
@@ -192,6 +192,6 @@ const grouped = computed(() => {
   gap: 2px;
 }
 .meta-stat.img {
-  color: #e6a23c;
+  color: var(--color-warning);
 }
 </style>

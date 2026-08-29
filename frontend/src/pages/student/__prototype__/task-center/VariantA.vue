@@ -116,7 +116,7 @@ const grouped = computed(() => {
 }
 .task-card.claimed {
   opacity: 0.7;
-  background: #fafafa;
+  background: var(--color-bg-page);
 }
 .task-left {
   display: flex;
@@ -141,14 +141,14 @@ const grouped = computed(() => {
   border: 1px solid var(--color-border-light);
 }
 .task-icon.claimable {
-  background: #fef3c7;
-  color: #d97706;
-  border: 1px solid #fde68a;
+  background: var(--color-warning-light);
+  color: var(--color-warning-strong);
+  border: 1px solid var(--color-warning-light);
 }
 .task-icon.claimed {
-  background: #dcfce7;
-  color: #16a34a;
-  border: 1px solid #bbf7d0;
+  background: var(--color-success-light);
+  color: var(--color-success-strong);
+  border: 1px solid var(--color-success-light);
 }
 .task-info {
   flex: 1;
@@ -189,7 +189,7 @@ const grouped = computed(() => {
 .task-points {
   font-size: 14px;
   font-weight: 700;
-  color: #d97706;
+  color: var(--color-warning-strong);
   min-width: 36px;
   text-align: right;
 }

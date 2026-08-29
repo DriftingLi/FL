@@ -1,10 +1,23 @@
 <template>
-  <div class="forum-detail-page" v-loading="loading">
+  <div class="forum-detail-page">
     <div class="back-bar">
       <el-button text :icon="ArrowLeft" @click="goBack">返回列表</el-button>
     </div>
 
-    <template v-if="topic">
+    <UiErrorState
+      v-if="loadError"
+      title="帖子加载失败"
+      description="网络或服务端异常，可重试"
+      :retrying="retrying"
+      @retry="retryLoad"
+    />
+
+    <template v-else-if="loading">
+      <UiSkeleton variant="card" :count="1" />
+      <UiSkeleton variant="list" :count="4" />
+    </template>
+
+    <template v-else-if="topic">
       <div class="topic-card">
         <div class="topic-header">
           <el-avatar :size="46" :src="topic.author.avatar_url || undefined" class="author-avatar">
@@ -83,7 +96,12 @@
           </div>
         </div>
         <template v-if="replies.length > 0">
-          <div v-for="reply in replies" :key="reply.id" class="reply-item">
+          <div
+            v-for="(reply, i) in replies"
+            :key="reply.id"
+            class="reply-item stagger-in"
+            :style="staggerStyle(i)"
+          >
             <el-avatar :size="38" :src="reply.author.avatar_url || undefined" class="author-avatar">
               {{ authorLetter(reply.author) }}
             </el-avatar>
@@ -136,7 +154,7 @@
             </div>
           </div>
         </template>
-        <el-empty v-else description="暂无回复，来说两句吧" :image-size="80" />
+        <UiEmptyState v-else description="暂无回复，来说两句吧" />
       </div>
 
       <!-- 举报对话框（帖子/回复共用，ADR-0018） -->
@@ -202,13 +220,21 @@ import { formatLocaleDateTime } from '@/utils/format'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { pushHistory, toHistoryItem } from '@/utils/forumHistory'
 import { useAuthStore } from '@/stores/auth'
+import { useStagger } from '@/composables/useStagger'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
 const loading = ref(false)
+const loadError = ref(false)
+const retrying = ref(false)
 const submitting = ref(false)
+
+const staggerStyle = useStagger()
 const topic = ref<ForumTopicItem | null>(null)
 const replies = ref<ForumReplyItem[]>([])
 const replyContent = ref('')
@@ -240,6 +266,7 @@ function authorLetter(author: ForumTopicItem['author']) {
 
 async function loadDetail() {
   loading.value = true
+  loadError.value = false
   try {
     const topicId = Number(route.params.topicId)
     const res = await forumApi.getTopic(topicId, replySort.value, replyOrder.value)
@@ -254,9 +281,21 @@ async function loadDetail() {
     }
   } catch (e) {
     console.error('加载帖子详情失败:', e)
-    /* 错误已由拦截器提示 */
+    loadError.value = true
+    topic.value = null
+    replies.value = []
   } finally {
     loading.value = false
+  }
+}
+
+async function retryLoad() {
+  if (retrying.value) return
+  retrying.value = true
+  try {
+    await loadDetail()
+  } finally {
+    retrying.value = false
   }
 }
 
@@ -530,7 +569,7 @@ onBeforeUnmount(() => {
 .topic-card,
 .replies-card,
 .reply-editor {
-  background: #fff;
+  background: var(--color-bg-card);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   padding: 20px;
@@ -552,13 +591,13 @@ onBeforeUnmount(() => {
 .author-name {
   font-size: 14px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .topic-time,
 .reply-time {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 
 .delete-btn {
@@ -580,12 +619,12 @@ onBeforeUnmount(() => {
 .topic-title {
   font-size: 20px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
   margin: 0;
 }
 
 .topic-content {
-  color: #303133;
+  color: var(--color-text-primary);
   font-size: 15px;
   line-height: 1.8;
   white-space: pre-wrap;
@@ -598,7 +637,7 @@ onBeforeUnmount(() => {
   gap: 6px;
   margin-top: 16px;
   font-size: 13px;
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 
 .topic-actions {
@@ -610,7 +649,7 @@ onBeforeUnmount(() => {
 
 .like-count {
   font-size: 12px;
-  color: #f56c6c;
+  color: var(--color-danger);
   min-width: 16px;
   text-align: left;
 }
@@ -625,11 +664,11 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 2px;
   margin-left: 12px;
-  color: #f56c6c;
+  color: var(--color-danger);
 }
 
 .like-stat .heart.liked {
-  color: #f56c6c;
+  color: var(--color-danger);
 }
 
 .reply-icon {
@@ -646,7 +685,7 @@ onBeforeUnmount(() => {
 .replies-title {
   font-size: 16px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
   margin: 0;
 }
 
@@ -654,7 +693,7 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 12px;
   padding: 16px 0;
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid var(--color-bg-page);
 }
 
 .reply-item:last-child {
@@ -684,7 +723,7 @@ onBeforeUnmount(() => {
 }
 
 .reply-content {
-  color: #303133;
+  color: var(--color-text-primary);
   font-size: 14px;
   line-height: 1.7;
   white-space: pre-wrap;
@@ -693,8 +732,8 @@ onBeforeUnmount(() => {
 
 .reply-quote {
   font-size: 12px;
-  color: #909399;
-  background: #f5f7fa;
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-page);
   border-radius: 6px;
   padding: 2px 8px;
   margin-bottom: 4px;
@@ -706,15 +745,15 @@ onBeforeUnmount(() => {
 }
 
 .reply-box {
-  border: 1px solid #dcdfe6;
+  border: 1px solid var(--color-border-dark);
   border-radius: 8px;
-  background: #fff;
+  background: var(--color-bg-card);
   padding: 8px;
   transition: border-color 0.2s;
 }
 
 .reply-box:focus-within {
-  border-color: #409eff;
+  border-color: var(--color-primary-500);
 }
 
 .reply-images-bar {
@@ -730,7 +769,7 @@ onBeforeUnmount(() => {
   height: 48px;
   border-radius: 6px;
   overflow: hidden;
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--color-border-light);
   flex-shrink: 0;
 }
 
@@ -751,7 +790,7 @@ onBeforeUnmount(() => {
   border: none;
   border-radius: 0 0 0 6px;
   background: rgba(0, 0, 0, 0.55);
-  color: #fff;
+  color: var(--color-bg-card);
   cursor: pointer;
   padding: 0;
   font-size: 10px;

@@ -75,7 +75,7 @@ function authorLetter(name: string) {
   border-radius: var(--radius-lg);
 }
 .topic-list {
-  background: #fff;
+  background: var(--color-bg-card);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   overflow: hidden;
@@ -84,13 +84,13 @@ function authorLetter(name: string) {
   display: flex;
   gap: 14px;
   padding: 18px 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border-light);
   cursor: pointer;
   transition: background 0.2s;
   align-items: center;
 }
 .topic-item:hover {
-  background: #f7f9fc;
+  background: var(--color-bg-page);
 }
 .topic-item:last-child {
   border-bottom: none;
@@ -98,7 +98,7 @@ function authorLetter(name: string) {
 .topic-item.is-deleted {
   opacity: 0.6;
   cursor: default;
-  background: #fafafa;
+  background: var(--color-bg-page);
 }
 .topic-author {
   flex-shrink: 0;
@@ -115,18 +115,18 @@ function authorLetter(name: string) {
 .topic-title {
   font-size: 16px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .topic-title.deleted {
-  color: #909399;
+  color: var(--color-text-tertiary);
   text-decoration: line-through;
 }
 .topic-excerpt {
-  color: #606266;
+  color: var(--color-text-secondary);
   font-size: 13px;
   margin: 6px 0 8px;
   display: -webkit-box;
@@ -139,10 +139,10 @@ function authorLetter(name: string) {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 .meta-divider {
-  color: #dcdfe6;
+  color: var(--color-border-dark);
 }
 .meta-right {
   margin-left: auto;
@@ -158,7 +158,7 @@ function authorLetter(name: string) {
   align-items: center;
   gap: 2px;
   margin-right: 10px;
-  color: #e6a23c;
+  color: var(--color-warning);
 }
 .remove-btn {
   flex-shrink: 0;

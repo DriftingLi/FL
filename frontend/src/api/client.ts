@@ -5,9 +5,45 @@
 // 信封解包（ADR-0005）：拦截器成功（code ∈ 成功码集合）直接返回业务负载 data（Promise<T>），
 // 业务失败抛错并统一 toast。responseType 为 blob/arraybuffer 时直接放行二进制数据。
 import axios from 'axios'
-import type { AxiosRequestConfig, AxiosInstance } from 'axios'
+import type { AxiosError, AxiosRequestConfig, AxiosInstance } from 'axios'
 import { ElMessage } from 'element-plus'
 import { getToken, getRefreshToken, setToken, setRefreshToken } from '@/utils/storage'
+
+/**
+ * 错误的语义分类，供上层决定「能否重试」「渲染哪种错误态」。
+ *
+ * 只作为字段挂在 reject 出去的 Error 上，**不改变现有 toast 逻辑与 reject 的值本身**，
+ * 因此对所有既有调用方完全向后兼容。
+ */
+export type ApiErrorKind =
+  | 'network'
+  | 'timeout'
+  | 'server'
+  | 'auth'
+  | 'forbidden'
+  | 'notfound'
+  | 'business'
+
+function classifyError(err: AxiosError): ApiErrorKind {
+  if (
+    err.code === 'ECONNABORTED' ||
+    /timeout\s+of\s+\d+\s+ms\s+exceeded/i.test(err.message || '')
+  ) {
+    return 'timeout'
+  }
+  const status = err.response?.status
+  if (status === 401) return 'auth'
+  if (status === 403) return 'forbidden'
+  if (status === 404) return 'notfound'
+  if (status && status >= 500) return 'server'
+  if (status && status >= 400) return 'business'
+  return 'network'
+}
+
+function attachKind(err: unknown): void {
+  const e = err as AxiosError & { kind?: ApiErrorKind }
+  e.kind = classifyError(e)
+}
 
 // ===== 双令牌静默刷新（ADR-0012）：模块级共享的单飞行，三端实例并发去重 =====
 // 401 时统一用 refresh token 换新 access + 新 refresh，再重试原请求；
@@ -217,6 +253,7 @@ export function createHttpClient<O extends HttpClientOptions>(opts: O): Unwrappe
           if (!isSilent(err.config)) {
             ElMessage.error('登录已过期，请重新登录')
           }
+          attachKind(err)
           return Promise.reject(err)
         }
         if (!isSilent(err.config)) {
@@ -243,6 +280,7 @@ export function createHttpClient<O extends HttpClientOptions>(opts: O): Unwrappe
       } else if (!isSilent(err.config)) {
         ElMessage.error('网络连接失败，请检查后端服务是否启动')
       }
+      attachKind(err)
       return Promise.reject(err)
     }
   )

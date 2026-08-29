@@ -140,7 +140,7 @@ onMounted(()=>{ authStore.refreshUserInfo() })
 .profile-page { max-width: 560px; margin: 0 auto; padding: 16px; }
 .profile-list { display: flex; flex-direction: column; gap: 12px; }
 .profile-group {
-  background: #fff;
+  background: var(--color-bg-card);
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
@@ -151,19 +151,19 @@ onMounted(()=>{ authStore.refreshUserInfo() })
   justify-content: space-between;
   padding: 16px 16px;
   cursor: pointer;
-  border-bottom: 1px solid #f2f3f5;
+  border-bottom: 1px solid var(--color-bg-page);
   transition: background 0.15s;
 }
 .profile-row:last-child { border-bottom: none; }
-.profile-row:hover { background: #fafafa; }
-.profile-row:active { background: #f5f5f5; }
-.row-label { font-size: 14px; color: #303133; }
-.row-value { display: flex; align-items: center; gap: 8px; color: #909399; font-size: 14px; }
+.profile-row:hover { background: var(--color-bg-page); }
+.profile-row:active { background: var(--color-bg-page); }
+.row-label { font-size: 14px; color: var(--color-text-primary); }
+.row-value { display: flex; align-items: center; gap: 8px; color: var(--color-text-tertiary); font-size: 14px; }
 .value-text { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.row-avatar { flex-shrink: 0; background: var(--gradient-brand, #409eff); color: #fff; }
-.arrow { font-size: 14px; color: #c0c4cc; }
-.danger-group .danger-row .row-label { color: #f56c6c; }
-.logout-row { background: #fff; border-radius: 12px; display: flex; justify-content: center; padding: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-.logout-btn { color: #fff; font-size: 15px; width: 100%; padding: 14px; }
-.logout-btn :deep(span) { color: #fff; }
+.row-avatar { flex-shrink: 0; background: var(--gradient-brand, var(--color-primary-500)); color: var(--color-bg-card); }
+.arrow { font-size: 14px; color: var(--color-text-disabled); }
+.danger-group .danger-row .row-label { color: var(--color-danger); }
+.logout-row { background: var(--color-bg-card); border-radius: 12px; display: flex; justify-content: center; padding: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.logout-btn { color: var(--color-bg-card); font-size: 15px; width: 100%; padding: 14px; }
+.logout-btn :deep(span) { color: var(--color-bg-card); }
 </style>

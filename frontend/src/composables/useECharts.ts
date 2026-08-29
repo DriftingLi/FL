@@ -1,5 +1,7 @@
 import { onMounted, onUnmounted, type Ref } from 'vue'
-import * as echarts from 'echarts'
+// 按需引入（方案 11.9）：注册清单见 @/utils/echarts
+import echarts from '@/utils/echarts'
+import type { ECharts, EChartsCoreOption } from '@/utils/echarts'
 
 /**
  * ECharts 组合式封装
@@ -15,9 +17,9 @@ import * as echarts from 'echarts'
 export function useECharts(chartRef: Ref<HTMLElement | null>) {
   // 不使用 ref 包裹：Vue 响应式代理会破坏 ECharts 内部状态，
   // 导致 "cartesian2d cannot be found for series.line" 等错误
-  let chartInstance: echarts.ECharts | null = null
+  let chartInstance: ECharts | null = null
   // 缓存的 option：当 init 被调用但 DOM 尺寸为 0 时，缓存 option 等 DOM 就绪后应用
-  let pendingOption: echarts.EChartsCoreOption | null = null
+  let pendingOption: EChartsCoreOption | null = null
   // 缓存 setOption 的 notMerge 标记（随 option 一并应用）
   let pendingNotMerge = false
   // 延迟初始化的 raf id（用于取消）
@@ -28,7 +30,7 @@ export function useECharts(chartRef: Ref<HTMLElement | null>) {
   // ResizeObserver 实例
   let resizeObserver: ResizeObserver | null = null
 
-  function init(option: echarts.EChartsCoreOption, notMerge = false) {
+  function init(option: EChartsCoreOption, notMerge = false) {
     if (!chartRef.value) return
     // 缓存 option，供延迟初始化或 ResizeObserver 触发时使用
     pendingOption = option

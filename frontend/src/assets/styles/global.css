@@ -18,6 +18,22 @@ a {
   color: inherit;
 }
 
+/*
+ * 键盘焦点环（方案 11.8）。
+ * 用 :focus-visible 而非 :focus，鼠标点击不会触发，只有键盘 Tab 才显示。
+ * 只加不覆盖：EP 组件自带的 focus 样式不受影响，这里补的是原生元素与自研组件的缺口。
+ */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role='button']:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+}
+
 html {
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
@@ -53,10 +69,47 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--color-text-tertiary);
 }
 
-@keyframes fadeInUp {
+/*
+ * 无障碍：尊重 prefers-reduced-motion，压平所有动效。
+ *
+ * 此处的 !important 是刻意为之：需要压过业务组件自己的动画声明。
+ * 注意层间 !important 的排序是反的（越早的层越优先），base 层的 !important
+ * 会压过 utilities 层 —— 这正是本规则想要的语义：用户的减弱动效偏好始终最高优先。
+ * 除本块外，base 层内不得再使用 !important。
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    /* 必须一并归零：stagger 用了 animation-fill-mode: both，
+       只压时长不压延迟的话，元素会在延迟期间保持 from 态（不可见）。 */
+    animation-delay: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* 压时长只让位移「瞬间完成」，元素仍然真的动了一下。
+     对前庭敏感用户来说那一下也是负担，故显式钉死终态、不产生任何位移。 */
+  .stagger-in {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .ui-card-interactive:hover,
+  .ui-card-interactive:active {
+    transform: none !important;
+  }
+}
+
+/* 列表错峰进场（方案 11.5）：配合 composables/useStagger 挂的 --i 使用。
+   索引超过 8 后不再累加，避免长列表末尾延迟拖尾。 */
+@keyframes staggerIn {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -64,44 +117,20 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.stagger-in {
+  animation: staggerIn var(--duration-normal) var(--ease-default) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
-}
-
-.animate-fade-in-up {
-  animation: fadeInUp var(--duration-slow) var(--ease-out) both;
-}
-
-.animate-fade-in {
-  animation: fadeIn var(--duration-normal) var(--ease-default) both;
-}
-
-/* 无障碍：尊重 prefers-reduced-motion，禁用所有入场动画 */
-@media (prefers-reduced-motion: reduce) {
-  .animate-fade-in-up,
-  .animate-fade-in {
-    animation: none !important;
-  }
-  .hero-tagline,
-  .hero-title,
-  .hero-subtitle,
-  .hero-cta {
-    opacity: 1 !important;
-    animation: none !important;
-  }
-}
-
+/*
+ * 移动端断点下的 EP 组件尺寸覆盖。
+ *
+ * 本块保留 !important：EP 的 Drawer / Dialog / MessageBox 尺寸走的是
+ * **内联 style**（width / --el-dialog-width 由 prop 直接写到元素上），
+ * 而层优先级无法压过内联样式，只有 !important 能生效。
+ * 与 element-overrides.css 里那些「仅用于压 EP 选择器特异性」的 !important 不同，
+ * 后者已因 EP 下沉到 vendor 层而清除 —— 请勿照搬清理本块。
+ */
 @media screen and (max-width: 768px) {
   html {
     font-size: 14px;
@@ -114,6 +143,11 @@ h1, h2, h3, h4, h5, h6 {
   .el-button {
     min-height: 44px;
     min-width: 44px;
+  }
+
+  /* 自研可点卡片：语义钩子由 UiCard 的 interactive 变体挂载 */
+  .ui-card-interactive {
+    min-height: 44px;
   }
 
   .el-input__inner {

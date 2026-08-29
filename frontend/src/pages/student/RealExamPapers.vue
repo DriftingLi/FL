@@ -12,7 +12,7 @@
     </div>
 
     <div v-if="filteredPapers.length === 0" class="empty-wrap">
-      <el-empty :description="emptyDescription" />
+      <UiEmptyState :description="emptyDescription" />
     </div>
     <div v-else class="variant-c-timeline">
       <div v-for="[year, list] in grouped" :key="year" class="timeline-year">
@@ -23,10 +23,11 @@
         </div>
         <div class="timeline-cards">
           <div
-            v-for="p in list"
+            v-for="(p, i) in list"
             :key="p.id"
-            class="timeline-card"
+            class="timeline-card stagger-in"
             :class="{ 'is-selected': selectedId === p.id }"
+            :style="staggerStyle(i)"
             @click="handleSelect(p.id)"
           >
             <div class="timeline-card-title">{{ p.title }}</div>
@@ -47,6 +48,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useCredentialStore } from '@/stores/credential'
 import { levelTagType } from '@/constants/level'
 import { pointsApi } from '@/api/points'
+import { useStagger } from '@/composables/useStagger'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 type Difficulty = '入门' | '进阶' | '专项' | '认证'
 
@@ -63,6 +66,8 @@ interface Paper {
 }
 
 const credentialStore = useCredentialStore()
+
+const staggerStyle = useStagger(12)
 
 const papers = ref<Paper[]>([
   { id: 101, year: 2024, title: '2024年叉车司机N1真题（A卷）', question_count: 100, duration_minutes: 90, credential_id: 1, credential_name: '叉车司机N1证', source: '应急管理局', difficulty: '进阶' },

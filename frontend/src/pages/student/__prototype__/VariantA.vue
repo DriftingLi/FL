@@ -44,10 +44,10 @@ defineProps<{
 defineEmits<{ select: [id: number] }>()
 
 const difficultyBorder: Record<Difficulty, string> = {
-  入门: '#67c23a',
-  进阶: '#409eff',
-  专项: '#e6a23c',
-  认证: '#f56c6c'
+  入门: 'var(--color-success)',
+  进阶: 'var(--color-primary-500)',
+  专项: 'var(--color-warning)',
+  认证: 'var(--color-danger)'
 }
 </script>
 

@@ -1,5 +1,12 @@
 <template>
-  <aside class="app-sidebar" :class="{ collapsed: effectiveCollapsed }">
+  <aside
+    class="app-sidebar"
+    :class="{
+      collapsed: effectiveCollapsed,
+      'is-dark': props.theme === 'dark',
+      'is-compact': props.density === 'compact'
+    }"
+  >
     <!-- 用户信息区（含退出登录下拉菜单） -->
     <el-dropdown
       class="sidebar-user-dropdown"
@@ -219,11 +226,26 @@ import { useAuthStore } from '@/stores/auth'
 import type { NavItem } from '@/config/navigation'
 import NotificationPanel from '@/components/layout/NotificationPanel.vue'
 
-const props = defineProps<{
-  menuItems: NavItem[]
-  collapsed: boolean
-  mobileOpen?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    menuItems: NavItem[]
+    collapsed: boolean
+    mobileOpen?: boolean
+    /**
+     * 侧栏配色。
+     * - `light`：浅底，**默认值 = 改造前行为**，tutor / admin 保持原样
+     * - `dark`：石墨青暗底（#0C1210），学员端传入
+     */
+    theme?: 'light' | 'dark'
+    /**
+     * 纵向密度。
+     * - `default`：**默认值 = 改造前行为**
+     * - `compact`：收紧导航项与用户信息区的纵向间距
+     */
+    density?: 'default' | 'compact'
+  }>(),
+  { theme: 'light', density: 'default' }
+)
 
 defineEmits<{
   'toggle-collapse': []
@@ -702,5 +724,102 @@ async function handleUserCommand(command: string) {
 
 .footer-btn-label {
   font-size: var(--text-sm);
+}
+
+/* ---------------------------------------------------------------------------
+ * 主题（theme）与密度（density）变体
+ *
+ * 刻意采用「追加覆盖」而非改写上面的规则：现有声明一行不动，
+ * 因此 light + default 分支与改造前逐像素一致（tutor / admin 零 diff）。
+ * 变体选择器多一个类，特异性天然高于上面的单类规则，无需 !important。
+ * ------------------------------------------------------------------------- */
+
+/* dark：石墨青暗底 */
+.app-sidebar.is-dark {
+  background: #0c1210;
+  border-right-color: rgba(255, 255, 255, 0.08);
+}
+
+.app-sidebar.is-dark .sidebar-user:hover,
+.app-sidebar.is-dark .sidebar-user:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.app-sidebar.is-dark .user-name {
+  color: #f1f5f9;
+}
+
+.app-sidebar.is-dark .user-dropdown-arrow {
+  color: rgba(241, 245, 249, 0.5);
+}
+
+/* 角色徽章：tutor / admin 的绿 / 紫在暗底上对比度仍够，只调学员（品牌）色 */
+.app-sidebar.is-dark .role-badge.student {
+  background: rgba(45, 212, 191, 0.16);
+  color: var(--color-primary-300);
+}
+
+.app-sidebar.is-dark .sidebar-divider {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.app-sidebar.is-dark .nav-group-label,
+.app-sidebar.is-dark .nav-group-icon,
+.app-sidebar.is-dark .nav-group-icon-only,
+.app-sidebar.is-dark .nav-sub-group-label {
+  color: rgba(148, 163, 184, 0.85);
+}
+
+.app-sidebar.is-dark .nav-group-label.is-active,
+.app-sidebar.is-dark .nav-group-label.is-active .nav-group-icon,
+.app-sidebar.is-dark .nav-group-label.is-accordion:hover,
+.app-sidebar.is-dark .nav-sub-group-label.is-active {
+  color: var(--color-primary-300);
+}
+
+.app-sidebar.is-dark .nav-group-icon-only.is-active {
+  color: var(--color-primary-300);
+  background: rgba(45, 212, 191, 0.14);
+}
+
+.app-sidebar.is-dark .nav-item {
+  color: rgba(241, 245, 249, 0.72);
+}
+
+.app-sidebar.is-dark .nav-item:hover {
+  color: var(--color-primary-300);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.app-sidebar.is-dark .nav-item.active {
+  color: var(--color-primary-300);
+  background: rgba(45, 212, 191, 0.14);
+}
+
+/* 激活指示条在暗底上要更亮才看得见 */
+.app-sidebar.is-dark .nav-item.active::before {
+  background: var(--color-primary-400);
+}
+
+.app-sidebar.is-dark .footer-btn {
+  color: rgba(148, 163, 184, 0.85);
+}
+
+.app-sidebar.is-dark .footer-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f1f5f9;
+}
+
+/* compact：收紧纵向间距 */
+.app-sidebar.is-compact .sidebar-user {
+  padding: var(--space-3) var(--space-4) var(--space-2);
+}
+
+.app-sidebar.is-compact .nav-group-label {
+  padding: var(--space-2) var(--space-3) var(--space-1);
+}
+
+.app-sidebar.is-compact .nav-item {
+  padding: 6px var(--space-3);
 }
 </style>

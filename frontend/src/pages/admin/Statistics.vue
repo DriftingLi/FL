@@ -112,7 +112,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted, nextTick } from 'vue'
-import * as echarts from 'echarts'
+// 按需引入（方案 11.9）：与 useECharts 共用 @/utils/echarts 的注册清单
+import echarts from '@/utils/echarts'
 import { ElMessage } from 'element-plus'
 import { adminApi } from '@/api/admin'
 import { downloadExport, type ExportKind } from '@/api/export'

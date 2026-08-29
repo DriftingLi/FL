@@ -120,14 +120,14 @@ function groupTagType(group: TaskGroup) {
   color: var(--color-text-muted);
 }
 .timeline-node.claimable {
-  background: #fef3c7;
-  color: #d97706;
-  box-shadow: 0 0 0 2px #fde68a;
+  background: var(--color-warning-light);
+  color: var(--color-warning-strong);
+  box-shadow: 0 0 0 2px var(--color-warning-light);
 }
 .timeline-node.claimed {
-  background: #dcfce7;
-  color: #16a34a;
-  box-shadow: 0 0 0 2px #bbf7d0;
+  background: var(--color-success-light);
+  color: var(--color-success-strong);
+  box-shadow: 0 0 0 2px var(--color-success-light);
 }
 .timeline-card {
   flex: 1;
@@ -139,7 +139,7 @@ function groupTagType(group: TaskGroup) {
 }
 .timeline-row.claimed .timeline-card {
   opacity: 0.65;
-  background: #fafafa;
+  background: var(--color-bg-page);
 }
 .card-top {
   display: flex;
@@ -150,7 +150,7 @@ function groupTagType(group: TaskGroup) {
 .card-points {
   font-size: 13px;
   font-weight: 700;
-  color: #d97706;
+  color: var(--color-warning-strong);
 }
 .card-title {
   font-size: 14px;

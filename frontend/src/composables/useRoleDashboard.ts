@@ -113,6 +113,7 @@ export function useRoleDashboard(options: RoleDashboardOptions) {
       yAxis.minInterval = 1
     }
 
+    // ECharts 在 canvas 绘制，无法消费 CSS 变量：此处字面量需与 --color-primary-500 同步
     const series =
       options.seriesType === 'bar'
         ? [
@@ -121,7 +122,7 @@ export function useRoleDashboard(options: RoleDashboardOptions) {
               data,
               barWidth: '40%',
               itemStyle: {
-                color: '#0EA5E9',
+                color: '#0D9488',
                 borderRadius: [4, 4, 0, 0]
               }
             }
@@ -133,8 +134,8 @@ export function useRoleDashboard(options: RoleDashboardOptions) {
               smooth: true,
               symbol: 'circle',
               symbolSize: 6,
-              lineStyle: { color: '#0EA5E9', width: 2.5 },
-              itemStyle: { color: '#0EA5E9', borderWidth: 2, borderColor: '#fff' },
+              lineStyle: { color: '#0D9488', width: 2.5 },
+              itemStyle: { color: '#0D9488', borderWidth: 2, borderColor: '#fff' },
               areaStyle: {
                 color: {
                   type: 'linear',
@@ -143,8 +144,8 @@ export function useRoleDashboard(options: RoleDashboardOptions) {
                   x2: 0,
                   y2: 1,
                   colorStops: [
-                    { offset: 0, color: 'rgba(14, 165, 233, 0.15)' },
-                    { offset: 1, color: 'rgba(14, 165, 233, 0.01)' }
+                    { offset: 0, color: 'rgba(13, 148, 136, 0.15)' },
+                    { offset: 1, color: 'rgba(13, 148, 136, 0.01)' }
                   ]
                 }
               }

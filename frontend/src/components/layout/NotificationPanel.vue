@@ -1,150 +1,61 @@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { Bell } from '@element-plus/icons-vue'
+import NotificationPanelBody from './NotificationPanelBody.vue'
+
+/**
+ * 通知入口。
+ *
+ * - `popover`（**默认值 = 改造前行为**）：铃铛按钮 + 点击弹出浮层，tutor / admin 保持原样
+ * - `panel`：直接渲染成内嵌卡片，不弹浮层，用于学员端 Dashboard 右栏
+ */
+const props = withDefaults(
+  defineProps<{
+    variant?: 'popover' | 'panel'
+  }>(),
+  { variant: 'popover' }
+)
+
+const unreadCount = ref(0)
+const bodyRef = ref<InstanceType<typeof NotificationPanelBody> | null>(null)
+
+// 浮层每次展开都要重新拉取（内部还有 30s 轮询，这里只补展开时机）
+function onPopoverShow() {
+  bodyRef.value?.refresh()
+}
+</script>
+
 <template>
+  <!-- panel：内嵌卡片，无触发按钮 -->
+  <div v-if="props.variant === 'panel'" class="notification-panel-card">
+    <NotificationPanelBody v-model:unread-count="unreadCount" />
+  </div>
+
+  <!-- popover：铃铛 + 浮层 -->
   <el-popover
+    v-else
     placement="bottom-end"
     :width="360"
     trigger="click"
     popper-class="notification-popper"
-    @show="refresh"
+    @show="onPopoverShow"
   >
     <template #reference>
       <button class="icon-btn notification-btn" title="通知">
-        <el-badge :value="unreadCount" :hidden="unreadCount === 0" :max="99" class="notification-badge">
+        <el-badge
+          :value="unreadCount"
+          :hidden="unreadCount === 0"
+          :max="99"
+          class="notification-badge"
+        >
           <el-icon><Bell /></el-icon>
         </el-badge>
       </button>
     </template>
 
-    <div class="notification-panel">
-      <div class="notification-header">
-        <span class="notification-title">通知</span>
-        <el-button
-          v-if="unreadCount > 0"
-          link
-          type="primary"
-          size="small"
-          @click="handleMarkAllRead"
-        >
-          全部已读
-        </el-button>
-      </div>
-
-      <div v-if="loading" class="notification-state">加载中...</div>
-      <div v-else-if="items.length === 0" class="notification-state">暂无通知</div>
-      <div v-else class="notification-list">
-        <div
-          v-for="item in items"
-          :key="item.id"
-          class="notification-item"
-          :class="{ unread: !item.is_read }"
-          @click="handleClick(item)"
-        >
-          <span v-if="!item.is_read" class="notification-dot"></span>
-          <div class="notification-main">
-            <div class="notification-item-title">{{ item.title }}</div>
-            <div class="notification-item-content">{{ item.content }}</div>
-            <div class="notification-item-time">{{ formatTime(item.created_at) }}</div>
-          </div>
-        </div>
-      </div>
-      <div v-if="total > items.length" class="notification-footer">
-        共 {{ total }} 条通知
-      </div>
-    </div>
+    <NotificationPanelBody ref="bodyRef" v-model:unread-count="unreadCount" />
   </el-popover>
 </template>
-
-<script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { Bell } from '@element-plus/icons-vue'
-import { notificationApi, type NotificationItem } from '@/api/notification'
-import { useNotificationAction } from '@/composables/useNotificationAction'
-import { useAuthStore } from '@/stores/auth'
-import { formatTime } from '@/utils/format'
-
-const router = useRouter()
-const authStore = useAuthStore()
-const items = ref<NotificationItem[]>([])
-const unreadCount = ref(0)
-const total = ref(0)
-const loading = ref(false)
-let timer: number | undefined
-
-// 通知动作判定 module：审核通过判定（仅依赖结构化 payload）+ 60s 节流 + refreshUserInfo 同步
-const { isProfileApproved, requestThrottledSync, syncIfUnreadApproved } = useNotificationAction({
-  refreshUserInfo: () => authStore.refreshUserInfo()
-})
-
-async function refresh() {
-  loading.value = true
-  try {
-    const data = await notificationApi.list({ page: 1, page_size: 10 })
-    if (data) {
-      items.value = data.items || []
-      total.value = data.total || 0
-      unreadCount.value = data.unread_count || 0
-      // 未读审核通过通知 → 同步最新昵称/头像
-      await syncIfUnreadApproved(items.value)
-    }
-  } catch (e) {
-    // 静默失败，保留旧数据
-  } finally {
-    loading.value = false
-  }
-}
-
-async function refreshUnread() {
-  try {
-    const data = await notificationApi.unreadCount()
-    if (data) {
-      unreadCount.value = data.count || 0
-      if (unreadCount.value > 0) {
-        // 60s 节流同步用户资料（默认窗口，与现状 lastUserSync 一致）
-        await requestThrottledSync()
-      }
-    }
-  } catch (e) {
-    // 静默失败
-  }
-}
-
-async function handleClick(item: NotificationItem) {
-  if (!item.is_read) {
-    item.is_read = true
-    unreadCount.value = Math.max(0, unreadCount.value - 1)
-    notificationApi.markRead(item.id).catch(() => {})
-  }
-  if (isProfileApproved(item)) {
-    await authStore.refreshUserInfo().catch(() => {})
-  }
-  if (item.link) {
-    router.push(item.link)
-  }
-}
-
-async function handleMarkAllRead() {
-  try {
-    await notificationApi.markAllRead()
-    items.value.forEach(item => {
-      item.is_read = true
-    })
-    unreadCount.value = 0
-  } catch (e) {
-    // 静默失败
-  }
-}
-
-onMounted(() => {
-  refresh()
-  timer = window.setInterval(refreshUnread, 30000)
-})
-
-onUnmounted(() => {
-  if (timer) {
-    window.clearInterval(timer)
-  }
-})
-</script>
 
 <style scoped>
 .icon-btn {
@@ -164,7 +75,7 @@ onUnmounted(() => {
 
 .icon-btn:hover {
   background: var(--color-bg-page, #f8fafc);
-  color: var(--color-primary-600, #1d4ed8);
+  color: var(--color-primary-600);
 }
 
 .notification-btn {
@@ -175,93 +86,13 @@ onUnmounted(() => {
   display: flex;
 }
 
-.notification-panel {
+/* panel 变体：内嵌卡片外观 */
+.notification-panel-card {
   display: flex;
   flex-direction: column;
-  max-height: 420px;
-}
-
-.notification-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--color-border-light, #E2E8F0);
-}
-
-.notification-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text-primary, #1E293B);
-}
-
-.notification-state {
-  padding: 32px 0;
-  text-align: center;
-  color: var(--color-text-tertiary, #94A3B8);
-  font-size: 13px;
-}
-
-.notification-list {
-  overflow-y: auto;
-  max-height: 320px;
-}
-
-.notification-item {
-  display: flex;
-  gap: 8px;
-  padding: 10px 4px;
-  border-bottom: 1px solid var(--color-border-light, #F1F5F9);
-  cursor: pointer;
-  transition: background var(--duration-fast, 0.2s);
-}
-
-.notification-item:hover {
-  background: var(--color-bg-page, #F8FAFC);
-}
-
-.notification-dot {
-  width: 8px;
-  height: 8px;
-  margin-top: 6px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: var(--color-primary-500, #2563EB);
-}
-
-.notification-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.notification-item-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-primary, #1E293B);
-}
-
-.notification-item.unread .notification-item-title {
-  color: var(--color-primary-600, #1D4ED8);
-}
-
-.notification-item-content {
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--color-text-secondary, #475569);
-  line-height: 1.5;
-  word-break: break-all;
-}
-
-.notification-item-time {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--color-text-tertiary, #94A3B8);
-}
-
-.notification-footer {
-  padding-top: 8px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--color-text-tertiary, #94A3B8);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-card);
+  padding: var(--space-4);
 }
 </style>

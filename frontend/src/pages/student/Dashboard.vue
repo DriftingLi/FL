@@ -1,70 +1,140 @@
 <template>
-  <div class="student-dashboard">
-    <!-- Welcome Banner -->
-    <div class="welcome-banner">
-      <div class="banner-content">
-        <h1 class="banner-title">欢迎回来，{{ userName }}！</h1>
-        <p class="banner-subtitle">继续学习，向叉车维修专家迈进</p>
+  <div class="flex flex-col gap-6">
+    <!-- 首屏骨架 -->
+    <template v-if="pageLoading">
+      <div class="h-32 rounded-card border border-line bg-panel" />
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="h-64 rounded-card border border-line bg-panel" />
+        <div class="h-64 rounded-card border border-line bg-panel" />
       </div>
-      <div class="banner-actions">
-        <router-link
-          v-if="continueLearning"
-          :to="continueLearningPath"
-          class="banner-action banner-action-primary"
-        >
-          继续学习：{{ continueLearning.last_chapter_title || continueLearning.course_name }}
-          <el-icon><ArrowRight /></el-icon>
-        </router-link>
-        <router-link to="/training/courses" class="banner-action">
-          浏览全部课程
-          <el-icon><ArrowRight /></el-icon>
-        </router-link>
-      </div>
-    </div>
+      <UiSkeleton variant="chart" />
+    </template>
 
-    <!-- 快捷卡片 -->
-    <div class="quick-cards">
-      <QuickCard
-        title="进行中的课程"
-        :items="activeCourses"
-        :max-items="5"
-        more-link="/training/courses"
-        empty-text="暂无进行中的课程"
-      />
+    <!-- 整页错误态：拦截器已 toast，这里只给可操作的重试入口 -->
+    <UiErrorState
+      v-else-if="pageError"
+      title="页面加载失败"
+      description="网络或服务端异常，可重试"
+      :retrying="retrying"
+      @retry="handleRetry"
+    />
 
-      <QuickCard
-        title="最近学习"
-        :items="recentLearning"
-        :max-items="5"
-        empty-text="暂无学习记录"
-      />
-    </div>
+    <template v-else>
+      <!-- Welcome Banner -->
+      <section
+        class="rounded-card border border-ui-100 bg-gradient-to-br from-ui-50 to-panel p-6 sm:p-8"
+      >
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div class="min-w-0">
+            <h1 class="font-heading text-2xl font-bold text-ink">
+              欢迎回来，{{ userName }}！
+            </h1>
+            <p class="mt-1 text-sm text-ink-2">继续学习，向叉车维修专家迈进</p>
+          </div>
 
-    <!-- 学习统计 -->
-    <div class="stats-section">
-      <div class="stats-header">
-        <div class="stats-title-group">
-          <h2 class="stats-title">学习统计</h2>
-          <span v-if="summary" class="stats-summary">{{ summary }}</span>
+          <div class="flex flex-wrap items-center gap-2">
+            <router-link
+              v-if="continueLearning"
+              :to="continueLearningPath"
+              class="inline-flex items-center gap-1 rounded-ctl bg-ui-500 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-ui-600"
+            >
+              继续学习：{{ continueLearning.last_chapter_title || continueLearning.course_name }}
+              <el-icon><ArrowRight /></el-icon>
+            </router-link>
+            <router-link
+              to="/training/courses"
+              class="inline-flex items-center gap-1 rounded-ctl border border-line-strong bg-panel px-4 py-2 text-sm text-ink-2 transition-colors duration-150 hover:border-ui-300 hover:text-ui-600"
+            >
+              浏览全部课程
+              <el-icon><ArrowRight /></el-icon>
+            </router-link>
+          </div>
         </div>
-        <div class="time-range-tabs">
-          <button
-            v-for="tab in timeTabs"
-            :key="tab.value"
-            class="time-tab"
-            :class="{ active: currentTab === tab.value }"
-            @click="currentTab = tab.value"
-          >
-            {{ tab.label }}
-          </button>
+      </section>
+
+      <!-- 概览指标（数值滚动进场；reduced-motion 下 UiCountTo 直出终值） -->
+      <div class="grid gap-4 sm:grid-cols-3">
+        <UiStatCard
+          label="学习时长"
+          :value="overviewStats.minutes"
+          unit="分钟"
+          icon="Clock"
+          tone="brand"
+          :loading="statsLoading"
+          count-to
+        />
+        <UiStatCard
+          label="活跃天数"
+          :value="overviewStats.activeDays"
+          unit="天"
+          icon="Calendar"
+          tone="ok"
+          :loading="statsLoading"
+          count-to
+        />
+        <UiStatCard
+          label="日均学习"
+          :value="overviewStats.perDay"
+          unit="分钟/天"
+          icon="TrendCharts"
+          tone="warn"
+          :loading="statsLoading"
+          count-to
+        />
+      </div>
+
+      <!-- 快捷卡片 -->
+      <div class="grid gap-4 md:grid-cols-2">
+        <QuickCard
+          class="stagger-in"
+          :style="stagger(0)"
+          title="进行中的课程"
+          :items="activeCourses"
+          :max-items="5"
+          more-link="/training/courses"
+          empty-text="暂无进行中的课程"
+          variant="elevated"
+        />
+        <QuickCard
+          class="stagger-in"
+          :style="stagger(1)"
+          title="最近学习"
+          :items="recentLearning"
+          :max-items="5"
+          empty-text="暂无学习记录"
+          variant="elevated"
+        />
+      </div>
+
+      <!-- 学习统计 -->
+      <section class="rounded-card border border-line bg-panel p-5">
+        <UiSectionHeader title="学习统计" :subtitle="summary || undefined">
+          <template #actions>
+            <div class="flex items-center gap-1 rounded-ctl bg-canvas p-1">
+              <button
+                v-for="tab in timeTabs"
+                :key="tab.value"
+                class="rounded-ctl px-3 py-1 text-xs transition-colors duration-150"
+                :class="
+                  currentTab === tab.value
+                    ? 'bg-panel text-ui-700 shadow-card'
+                    : 'text-ink-3 hover:text-ink-2'
+                "
+                @click="currentTab = tab.value"
+              >
+                {{ tab.label }}
+              </button>
+            </div>
+          </template>
+        </UiSectionHeader>
+
+        <div>
+          <UiSkeleton v-if="statsLoading" variant="chart" />
+          <UiEmptyState v-else-if="statsEmpty" description="暂无学习记录" size="sm" />
+          <div v-show="!statsLoading && !statsEmpty" ref="chartRef" class="h-[260px] w-full"></div>
         </div>
-      </div>
-      <div class="chart-container">
-        <div v-if="statsLoading" class="chart-empty">加载中…</div>
-        <div v-else-if="statsEmpty" class="chart-empty">暂无学习记录</div>
-        <div v-show="!statsLoading && !statsEmpty" ref="chartRef" class="chart-area"></div>
-      </div>
-    </div>
+      </section>
+    </template>
   </div>
 </template>
 
@@ -74,13 +144,26 @@ import { ArrowRight } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import QuickCard from '@/components/dashboard/QuickCard.vue'
 import type { QuickCardItem } from '@/components/dashboard/QuickCard.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiStatCard from '@/components/ui/UiStatCard.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiSectionHeader from '@/components/ui/UiSectionHeader.vue'
+import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import { useRoleDashboard } from '@/composables/useRoleDashboard'
+import { useStagger } from '@/composables/useStagger'
 import { studentApi, type StudyRecordItem, type StudentCourseItem } from '@/api/student'
 import { displayNameOf } from '@/types/user'
 
 const authStore = useAuthStore()
 
 const userName = computed(() => displayNameOf(authStore.userInfo) || '同学')
+
+// 首屏三态：骨架 / 错误 / 内容
+const pageLoading = ref(true)
+const pageError = ref(false)
+const retrying = ref(false)
+
+const stagger = useStagger()
 
 // 进行中的课程
 const activeCourses = ref<QuickCardItem[]>([])
@@ -103,6 +186,7 @@ const {
   chartRef,
   timeTabs,
   currentTab,
+  stats,
   statsLoading,
   statsEmpty,
   summary,
@@ -123,6 +207,18 @@ const {
     { label: '近7天', value: '7d', days: 7 },
     { label: '近30天', value: '30d', days: 30 }
   ]
+})
+
+/** 顶部概览三指标：时长 / 活跃天数 / 日均。跟随 statsLoading 一起进骨架 */
+const overviewStats = computed(() => {
+  const s = stats.value
+  if (!s) return { minutes: 0, activeDays: 0, perDay: 0 }
+  const activeDays = s.active_days || 0
+  return {
+    minutes: s.total || 0,
+    activeDays,
+    perDay: activeDays > 0 ? Math.round((s.total || 0) / activeDays) : 0
+  }
 })
 
 async function loadCourses() {
@@ -148,7 +244,8 @@ async function loadCourses() {
     }
   } catch (error) {
     console.error('加载课程失败:', error)
-    /* 错误已由拦截器提示 */
+    // 向上抛，交给 loadAll 决定渲染错误态（拦截器已 toast，这里不重复提示）
+    throw error
   }
 }
 
@@ -176,205 +273,30 @@ async function loadRecentLearning() {
     }
   } catch (error) {
     console.error('加载最近学习失败:', error)
-    /* 错误已由拦截器提示 */
+    throw error
   }
 }
 
-onMounted(async () => {
-  await Promise.all([loadCourses(), loadRecentLearning(), loadStudyStats()])
-  await nextTick()
-  renderStudyChart()
-})
+async function loadAll() {
+  pageError.value = false
+  pageLoading.value = true
+  try {
+    // 三路并行：课程 / 最近学习 / 统计
+    await Promise.all([loadCourses(), loadRecentLearning(), loadStudyStats()])
+    await nextTick()
+    renderStudyChart()
+  } catch {
+    pageError.value = true
+  } finally {
+    pageLoading.value = false
+    retrying.value = false
+  }
+}
+
+async function handleRetry() {
+  retrying.value = true
+  await loadAll()
+}
+
+onMounted(loadAll)
 </script>
-
-<style scoped>
-.student-dashboard {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-}
-
-/* Welcome Banner */
-.welcome-banner {
-  background: var(--color-primary-50);
-  border: 1px solid var(--color-primary-100);
-  border-radius: var(--radius-xl);
-  padding: var(--space-6) var(--space-8);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--color-text-primary);
-}
-
-.banner-title {
-  font-family: var(--font-display);
-  font-size: var(--text-2xl);
-  font-weight: var(--font-bold);
-  margin-bottom: var(--space-1);
-  color: var(--color-text-primary);
-}
-
-.banner-subtitle {
-  font-size: var(--text-base);
-  color: var(--color-text-secondary);
-}
-
-.banner-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-.banner-action {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-5);
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-primary-200);
-  border-radius: var(--radius-lg);
-  color: var(--color-primary-600);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  text-decoration: none;
-  transition: all var(--duration-fast);
-  white-space: nowrap;
-}
-
-.banner-action-primary {
-  background: var(--color-primary-500);
-  border-color: var(--color-primary-600);
-  color: white;
-}
-
-.banner-action:hover {
-  border-color: var(--color-primary-400);
-}
-
-.banner-action-primary:hover {
-  background: var(--color-primary-600);
-  color: white;
-}
-
-/* 快捷卡片 */
-.quick-cards {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-4);
-}
-
-/* 学习统计 */
-.stats-section {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--color-border-light);
-  box-shadow: var(--shadow-xs);
-  overflow: hidden;
-}
-
-.stats-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-border-light);
-}
-
-.stats-title-group {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-.stats-summary {
-  font-size: var(--text-xs);
-  color: var(--color-text-secondary);
-  font-weight: var(--font-regular);
-}
-
-.chart-empty {
-  width: 100%;
-  height: 260px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-secondary);
-  font-size: var(--text-sm);
-}
-
-.stats-title {
-  font-size: var(--text-base);
-  font-weight: var(--font-semibold);
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
-.time-range-tabs {
-  display: flex;
-  gap: var(--space-1);
-  background: var(--color-bg-page);
-  border-radius: var(--radius-md);
-  padding: 2px;
-}
-
-.time-tab {
-  padding: var(--space-1) var(--space-3);
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: var(--text-xs);
-  font-weight: var(--font-medium);
-  color: var(--color-text-secondary);
-  background: transparent;
-  cursor: pointer;
-  transition: all var(--duration-fast);
-  font-family: var(--font-body);
-}
-
-.time-tab.active {
-  background: var(--color-bg-card);
-  color: var(--color-primary-600);
-  box-shadow: var(--shadow-xs);
-}
-
-.time-tab:hover:not(.active) {
-  color: var(--color-text-primary);
-}
-
-.chart-container {
-  padding: var(--space-4) var(--space-5);
-}
-
-.chart-area {
-  width: 100%;
-  height: 260px;
-}
-
-@media screen and (max-width: 1024px) {
-  .quick-cards {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .chart-area {
-    height: 220px;
-  }
-}
-
-@media screen and (max-width: 768px) {
-  .welcome-banner {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-4);
-    padding: var(--space-5) var(--space-6);
-  }
-
-  .quick-cards {
-    grid-template-columns: 1fr;
-  }
-
-  .banner-title {
-    font-size: var(--text-xl);
-  }
-}
-</style>

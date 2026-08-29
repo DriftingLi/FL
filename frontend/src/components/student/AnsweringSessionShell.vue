@@ -16,7 +16,7 @@
             <el-tag>{{ (typeMap as Record<string, string>)[currentQ.type] }}</el-tag>
             <span>第 {{ currentIndex + 1 }}/{{ questions.length }} 题<span v-if="showScore">（{{ currentQ.score }}分）</span></span>
           </div>
-          <img v-if="currentQ.image_url" :src="currentQ.image_url" class="q-image" />
+          <img v-if="currentQ.image_url" :src="currentQ.image_url" class="q-image" loading="lazy" decoding="async" />
           <p class="q-content">{{ currentQ.content }}</p>
           <QuestionOptionPicker
             v-if="currentQ.type !== 'short_answer'"

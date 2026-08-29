@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
+import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 import fs from 'node:fs'
 
@@ -58,7 +59,7 @@ function vditorStaticPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [vue(), vditorStaticPlugin()],
+  plugins: [vue(), tailwindcss(), vditorStaticPlugin()],
   test: {
     environment: 'happy-dom',
     globals: true

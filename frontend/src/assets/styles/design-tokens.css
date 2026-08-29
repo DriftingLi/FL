@@ -1,25 +1,41 @@
+/*
+ * 全局设计 token —— 培训域
+ *
+ * 品牌主色：石墨青 Graphite Teal（#0D9488 系）
+ * 强调色：晴空蓝 Sky（#0EA5E9 系），用于渐变右端与次要强调
+ *
+ * ── 命名空间边界（改动前必读）───────────────────────────────
+ *   --color-primary-*   培训域品牌色，全局生效（本文件定义）
+ *   --color-brand-*     残值评估域品牌色，仅在 .valuation-root 内定义（valuation-tokens.css）
+ *
+ *   两者刻意不同名。残值模块靠 DOM 作用域遮蔽换色，若把 --color-brand-* 提升为全局
+ *   变量，会击穿两处依赖「变量未定义 → 走 fallback」的写法：
+ *     1. layouts/ValuationLayout.vue —— 根元素不带 .valuation-root，topbar 在作用域外
+ *     2. pages/ai-assistant/*.vue    —— var(--color-brand-500, #0EA5E9) 兜底链
+ *   结果：残值页头变青、页面主体仍蓝，同屏割裂。故禁止全局定义 --color-brand-*。
+ */
 :root {
-  /* 主色 - Sky 蓝绿 */
-  --color-primary-50: #F0F9FF;
-  --color-primary-100: #E0F2FE;
-  --color-primary-200: #BAE6FD;
-  --color-primary-300: #7DD3FC;
-  --color-primary-400: #38BDF8;
-  --color-primary-500: #0EA5E9;
-  --color-primary-600: #0284C7;
-  --color-primary-700: #0369A1;
-  --color-primary-800: #075985;
-  --color-primary-900: #0C4A6E;
+  /* ===== 品牌主色 - 石墨青 Graphite Teal ===== */
+  --color-primary-50: #F0FDFA;
+  --color-primary-100: #CCFBF1;
+  --color-primary-200: #99F6E4;
+  --color-primary-300: #5EEAD4;
+  --color-primary-400: #2DD4BF;
+  --color-primary-500: #0D9488;
+  --color-primary-600: #0F766E;
+  --color-primary-700: #115E59;
+  --color-primary-800: #134E4A;
+  --color-primary-900: #042F2E;
 
-  /* 强调色 - Teal 青 */
-  --color-accent-50: #F0FDFA;
-  --color-accent-100: #CCFBF1;
-  --color-accent-200: #99F6E4;
-  --color-accent-300: #5EEAD4;
-  --color-accent-400: #2DD4BF;
-  --color-accent-500: #14B8A6;
-  --color-accent-600: #0D9488;
-  --color-accent-700: #0F766E;
+  /* ===== 强调色 - 晴空蓝 Sky ===== */
+  --color-accent-50: #F0F9FF;
+  --color-accent-100: #E0F2FE;
+  --color-accent-200: #BAE6FD;
+  --color-accent-300: #7DD3FC;
+  --color-accent-400: #38BDF8;
+  --color-accent-500: #0EA5E9;
+  --color-accent-600: #0284C7;
+  --color-accent-700: #0369A1;
 
   --color-success: #10B981;
   --color-success-light: #D1FAE5;
@@ -29,6 +45,12 @@
   --color-danger-light: #FEE2E2;
   --color-info: #6B7280;
   --color-info-light: #F3F4F6;
+
+  /* 深字色：与 -light 浅底配对使用，保证浅底上的对比度达标 */
+  --color-success-strong: #047857;
+  --color-warning-strong: #B45309;
+  --color-danger-strong: #B91C1C;
+  --color-info-strong: #374151;
 
   --color-text-primary: #0F172A;
   --color-text-secondary: #475569;
@@ -40,32 +62,17 @@
 
   --color-bg-page: #F8FAFC;
   --color-bg-card: #FFFFFF;
-  --color-bg-elevated: #FFFFFF;
   --color-bg-sidebar: #0F172A;
   --color-bg-sidebar-hover: #1E293B;
-  --color-bg-sidebar-active: rgba(14, 165, 233, 0.15);
+  --color-bg-sidebar-active: rgba(13, 148, 136, 0.15);
 
   --color-border: #E2E8F0;
   --color-border-light: #F1F5F9;
   --color-border-dark: #CBD5E1;
   --color-border-darker: #334155;
 
-  /* 官网专用表面 */
-  --surface-dark: #0F172A;
-  --surface-dark-alt: #1E293B;
-  --surface-card-alt: #F8FAFC;
-
-  /* 渐变 */
-  --gradient-brand: linear-gradient(135deg, #0EA5E9 0%, #14B8A6 100%);
-  --gradient-hero: linear-gradient(135deg, #0F172A 0%, #075985 50%, #0284C7 100%);
-  --gradient-accent: linear-gradient(135deg, #0D9488 0%, #14B8A6 100%);
-  --gradient-card: linear-gradient(180deg, rgba(14, 165, 233, 0.04) 0%, rgba(255, 255, 255, 0) 100%);
-  --gradient-sidebar: linear-gradient(180deg, #0F172A 0%, #1E293B 100%);
-
-  /* 官网专用渐变 */
-  --gradient-hero-overlay: linear-gradient(135deg, rgba(14, 165, 233, 0.85) 0%, rgba(20, 184, 166, 0.75) 100%);
-  --gradient-dark-section: linear-gradient(180deg, #0F172A 0%, #1E293B 100%);
-  --gradient-cta-banner: linear-gradient(135deg, #0EA5E9 0%, #14B8A6 60%, #0D9488 100%);
+  /* ===== 渐变 ===== */
+  --gradient-brand: linear-gradient(135deg, #0D9488 0%, #0EA5E9 100%);
 
   --font-display: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-body: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
@@ -78,8 +85,6 @@
   --text-xl: 20px;
   --text-2xl: 24px;
   --text-3xl: 30px;
-  --text-4xl: 36px;
-  --text-5xl: 48px;
 
   --font-normal: 400;
   --font-medium: 500;
@@ -87,9 +92,7 @@
   --font-bold: 700;
 
   --leading-tight: 1.25;
-  --leading-snug: 1.375;
   --leading-normal: 1.5;
-  --leading-relaxed: 1.75;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -101,30 +104,25 @@
   --space-10: 40px;
   --space-12: 48px;
   --space-16: 64px;
-  --space-20: 80px;
   --space-24: 96px;
-  --space-32: 128px;
 
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-xl: 16px;
-  --radius-2xl: 20px;
   --radius-full: 9999px;
 
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  --shadow-inner: inset 0 2px 4px rgba(0, 0, 0, 0.06);
-  --shadow-glow: 0 0 20px rgba(37, 99, 235, 0.3);
 
   --duration-fast: 150ms;
   --duration-normal: 250ms;
   --duration-slow: 350ms;
+  /* 点击反馈（hover / :active）专用：比 fast 更短，按下去要"跟手" */
+  --duration-tap: 120ms;
   --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --ease-out: cubic-bezier(0, 0, 0.2, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
@@ -138,22 +136,4 @@
 
   --sidebar-width: 240px;
   --sidebar-collapsed-width: 64px;
-  --header-height: 72px;
-
-  --container-sm: 640px;
-  --container-md: 768px;
-  --container-lg: 1024px;
-  --container-xl: 1280px;
-  --container-2xl: 1400px;
-  --container-page: 1280px;
-  --container-narrow: 960px;
-
-  --navbar-bg: rgba(255, 255, 255, 0.92);
-  --navbar-border: rgba(226, 232, 240, 0.8);
-  --footer-bg: #F1F5F9;
-  --ticker-border: #E2E8F0;
-
-  /* 官网 section 间距 */
-  --section-padding: 6rem;
-  --section-padding-mobile: 3rem;
 }

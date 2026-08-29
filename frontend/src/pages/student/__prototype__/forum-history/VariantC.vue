@@ -96,7 +96,7 @@ defineEmits<{ select: [id: number]; remove: [id: number]; clear: [] }>()
 }
 .compact-row.is-deleted {
   opacity: 0.55;
-  background: #fafafa;
+  background: var(--color-bg-page);
 }
 .row-index {
   font-size: 12px;
@@ -138,7 +138,7 @@ defineEmits<{ select: [id: number]; remove: [id: number]; clear: [] }>()
   color: var(--color-text-muted);
 }
 .img-text {
-  color: #e6a23c;
+  color: var(--color-warning);
 }
 .row-actions {
   display: flex;
