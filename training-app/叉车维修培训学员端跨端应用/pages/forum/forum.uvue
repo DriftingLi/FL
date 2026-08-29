@@ -27,7 +27,7 @@
                 <text class="tab-text">招聘</text>
             </view>
             <view class="tab-item" :class="{ active: currentTab === 'hot' }" @click="onSwitchTab('hot')">
-                <text class="tab-text">热门</text>
+                <text class="tab-text">知识问答</text>
             </view>
             <view class="tab-icon-btn" @click="onPersonalActivity">
                 <image v-if="avatarUrl.length > 0" class="tab-avatar" :src="avatarUrl" mode="aspectFill" />
@@ -42,8 +42,8 @@
                 <text class="res-search-placeholder">写下你此刻的想法</text>
             </view>
         </view>
-        <!-- 排序栏（广场/招聘/热门 Tab 显示） -->
-        <view v-if="currentTab !== 'resource'" class="sort-bar">
+        <!-- 排序栏（广场 Tab 显示） -->
+        <view v-if="currentTab === 'square'" class="sort-bar">
             <view class="sort-left">
                 <view class="sort-chip" :class="{ active: sortField === 'latest' }"
                     @click="onSortFieldChange('latest')">
@@ -63,10 +63,28 @@
             </view>
         </view>
 
+        <!-- 招聘子Tab：公告 / 职位 -->
+        <view v-if="currentTab === 'recruit'" class="recruit-sub-bar">
+            <view class="recruit-sub-item" @click="onRecruitSubChange('notice')">
+                <text class="recruit-sub-text" :class="{ active: recruitSubTab === 'notice' }">公告</text>
+            </view>
+            <view class="recruit-sub-item" @click="onRecruitSubChange('job')">
+                <text class="recruit-sub-text" :class="{ active: recruitSubTab === 'job' }">职位</text>
+            </view>
+        </view>
+
+        <!-- 知识问答：发一个问题 -->
+        <view v-if="currentTab === 'hot'" class="ask-bar" @click="onCreate">
+            <text class="ask-bar-text">发一个问题</text>
+            <view class="ask-bar-btn">
+                <text class="ask-bar-btn-icon">+</text>
+            </view>
+        </view>
+
         <!-- 广场/短视频/备考经验 Tab 内容 -->
-        <scroll-view v-if="currentTab == 'square'" class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+        <scroll-view v-if="currentTab == 'square' || (currentTab == 'recruit' && recruitSubTab == 'job') || currentTab == 'hot'" class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
             <!-- 打卡活动卡片 -->
-            <view class="checkin-card" @click="onCheckInClick">
+            <view v-if="currentTab === 'square'" class="checkin-card" @click="onCheckInClick">
                 <view class="checkin-card-left">
                     <text class="checkin-card-title">8月学习打卡</text>
                     <text class="checkin-card-date">2026.08.01</text>
@@ -133,6 +151,14 @@
             </view>
         </scroll-view>
 
+        <!-- 招聘公告 Tab 内容 -->
+        <scroll-view v-if="currentTab == 'recruit' && recruitSubTab == 'notice'" class="content-scroll" scroll-y="true">
+            <view class="empty-tip">
+                <text class="empty-icon">📢</text>
+                <text class="empty-text">暂无公告</text>
+            </view>
+        </scroll-view>
+
         <!-- 资源 Tab 内容（内联） -->
         <scroll-view v-if="currentTab === 'resource'" class="content-scroll" scroll-y="true">
 
@@ -181,7 +207,7 @@
         </scroll-view>
 
         <!-- 悬浮发帖按钮（非资源Tab时显示） -->
-        <view v-if="currentTab !== 'resource'" class="fab-btn" @click="onCreate">
+        <view v-if="currentTab === 'square'" class="fab-btn" @click="onCreate">
             <text class="fab-icon">+</text>
         </view>
     </view>
@@ -223,6 +249,7 @@
     const unreadCount = ref<number>(0)
     const sortField = ref<string>('latest') // latest | hot
     const sortOrder = ref<string>('desc')   // desc | asc
+    const recruitSubTab = ref<string>('job') // notice | job（招聘子Tab）
 
     // ---- 打卡相关 ----
     const checkinPlayers = ref<number>(0)
@@ -330,6 +357,14 @@
         if (sortOrder.value === order) return
         sortOrder.value = order
         loadTopics(true)
+    }
+
+    function onRecruitSubChange(sub : string) : void {
+        if (recruitSubTab.value === sub) return
+        recruitSubTab.value = sub
+        if (sub === 'job') {
+            loadTopics(true)
+        }
     }
 
     async function loadTopics(reset : boolean = false) : Promise<void> {
@@ -980,5 +1015,60 @@
         font-size: 28rpx;
         font-weight: 500;
         color: #333333;
+    }
+
+    /* ===== 招聘子Tab（公告/职位） ===== */
+    .recruit-sub-bar {
+        margin: 16rpx 24rpx;
+        padding: 8rpx;
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        display: flex;
+        flex-direction: row;
+    }
+    .recruit-sub-item {
+        flex: 1;
+        height: 64rpx;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .recruit-sub-text {
+        font-size: 28rpx;
+        color: #333333;
+    }
+    .recruit-sub-text.active {
+        color: #2979ff;
+        font-weight: 600;
+    }
+
+    /* ===== 知识问答：发一个问题 ===== */
+    .ask-bar {
+        margin: 16rpx 24rpx;
+        padding: 20rpx 24rpx;
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .ask-bar-text {
+        font-size: 28rpx;
+        color: #8a9bb0;
+    }
+    .ask-bar-btn {
+        width: 52rpx;
+        height: 52rpx;
+        border-radius: 26rpx;
+        background-color: #2979ff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .ask-bar-btn-icon {
+        color: #ffffff;
+        font-size: 36rpx;
+        line-height: 36rpx;
     }
 </style>
