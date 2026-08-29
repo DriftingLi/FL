@@ -29,6 +29,16 @@ export interface NavItem {
   label: string
   /** 目标路由的 name（见 src/router/index.ts 各路由的 name 字段），而非硬编码路径。 */
   routeName?: string
+  /**
+   * 除 `routeName` 外，还应让本项高亮的路由 name。
+   *
+   * 用于「列表页 → 详情页」这类**详情页没有独立导航项**的场景：
+   * ForumPage → ForumDetail、CourseList → ChapterView、
+   * TutorCourses → TutorChapterManage / TutorChapterEdit、
+   * TutorQuestionManage → TutorQuestionCreate。
+   * 不配的话，进入详情后侧栏整条（含父分组）都不高亮。
+   */
+  activeRouteNames?: string[]
   /** 目标路由需要的动态参数（如章节页 ChapterView 需要 courseId/chapterId）。 */
   routeParams?: Record<string, string | number>
   icon?: Component
@@ -40,6 +50,39 @@ export interface NavItem {
   exact?: boolean
 }
 
+type RouteParamsLike = Record<string, string | string[] | undefined>
+
+/**
+ * 判断当前路由是否命中某个导航项。
+ *
+ * 抽成纯函数的原因：侧栏高亮出过两次线上问题（一次双高亮、一次详情页不高亮），
+ * 而 `isRouteActive` 原先是 `AppSidebar.vue` 里的私有函数，无法单测覆盖。
+ *
+ * 匹配规则：
+ * 1. `routeName` 精确相等，或命中 `activeRouteNames` 中任一名字；
+ * 2. 若声明了 `routeParams`，需再逐个比对 params —— 避免同名路由（如不同课程的
+ *    章节页）被一起点亮。
+ */
+export function isNavRouteActive(
+  item: NavItem,
+  routeName: unknown,
+  routeParams?: RouteParamsLike
+): boolean {
+  if (!item.routeName) return false
+
+  const names = [item.routeName, ...(item.activeRouteNames ?? [])]
+  if (!names.includes(String(routeName ?? ''))) return false
+
+  if (item.routeParams) {
+    for (const [k, v] of Object.entries(item.routeParams)) {
+      const actual = routeParams?.[k]
+      const actualValue = Array.isArray(actual) ? actual[0] : actual
+      if (String(actualValue ?? '') !== String(v)) return false
+    }
+  }
+  return true
+}
+
 const studentNav: NavItem[] = [
   {
     key: 'learning',
@@ -47,7 +90,13 @@ const studentNav: NavItem[] = [
     icon: HomeFilled,
     children: [
       { key: 'dashboard', label: '仪表盘', routeName: 'StudentDashboard', icon: HomeFilled, exact: true },
-      { key: 'courses', label: '课程中心', routeName: 'CourseList', icon: Notebook },
+      {
+        key: 'courses',
+        label: '课程中心',
+        routeName: 'CourseList',
+        activeRouteNames: ['ChapterView'],
+        icon: Notebook
+      },
       { key: 'materials', label: '学习资料', routeName: 'StudentMaterials', icon: Files },
       { key: 'search', label: '全局搜索', routeName: 'StudentSearch', icon: Search }
     ]
@@ -73,8 +122,22 @@ const studentNav: NavItem[] = [
     label: '互动与工具',
     icon: ChatDotRound,
     children: [
-      { key: 'forum', label: '学员论坛', routeName: 'ForumPage', icon: ChatDotRound },
-      { key: 'ai-assistant', label: 'AI助手', routeName: 'AIAssistant', icon: MagicStick },
+      {
+        key: 'forum',
+        label: '学员论坛',
+        routeName: 'ForumPage',
+        activeRouteNames: ['ForumDetail'],
+        icon: ChatDotRound
+      },
+      {
+        key: 'ai-assistant',
+        label: 'AI助手',
+        routeName: 'AIAssistant',
+        // 专项功能页（故障咨询/故障代码/维保知识/图纸识别/习题解答）是 AIAssistant 的
+        // 兄弟路由（router 里未嵌套），由 AIAssistantPage 的卡片 router.push 进入
+        activeRouteNames: ['AIAssistantFeature'],
+        icon: MagicStick
+      },
       { key: 'featured', label: '内容精选', icon: Document, externalUrl: 'https://www.gccsmile.com/news' }
     ]
   },
@@ -138,8 +201,22 @@ const adminNav: NavItem[] = [
 
 const tutorNav: NavItem[] = [
   { key: 'dashboard', label: '仪表盘', routeName: 'TutorDashboard', icon: HomeFilled, exact: true },
-  { key: 'courses', label: '我的课程', routeName: 'TutorCourses', icon: Notebook },
-  { key: 'question-manage', label: '题库管理', routeName: 'TutorQuestionManage', icon: EditPen }
+  {
+    key: 'courses',
+    label: '我的课程',
+    routeName: 'TutorCourses',
+    // 章节列表与章节编辑都在「我的课程」之下，两级都没有独立导航项
+    activeRouteNames: ['TutorChapterManage', 'TutorChapterEdit'],
+    icon: Notebook
+  },
+  {
+    key: 'question-manage',
+    label: '题库管理',
+    routeName: 'TutorQuestionManage',
+    // 新增题目 / 编辑题目共用 TutorQuestionCreate（带 query.id 即编辑）
+    activeRouteNames: ['TutorQuestionCreate'],
+    icon: EditPen
+  }
 ]
 
 export const roleNavigation: Record<string, NavItem[]> = {
