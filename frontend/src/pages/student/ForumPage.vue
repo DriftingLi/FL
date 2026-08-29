@@ -25,6 +25,13 @@
       </div>
     </div>
 
+    <!-- 类别分流（#364）：讨论 / 问答。与下面的 mode 轴正交——category 管"看哪类"，mode 管"看谁的"。
+         只在浏览态显示：我的帖子/我的回复/浏览记录是个人视图，天然跨类别（后端 my-topics 也无 category 维度）。 -->
+    <el-radio-group v-if="mode === 'all'" v-model="categoryTab" class="forum-category">
+      <el-radio-button value="discussion">讨论</el-radio-button>
+      <el-radio-button value="question">问答</el-radio-button>
+    </el-radio-group>
+
     <div class="forum-toolbar">
       <el-radio-group v-model="mode" class="forum-mode" @change="handleModeChange">
         <el-radio-button value="all">全部</el-radio-button>
@@ -135,7 +142,7 @@
           </div>
         </div>
       </template>
-      <UiEmptyState v-else description="还没有帖子，来发第一帖吧" />
+      <UiEmptyState v-else :description="emptyDescription" />
     </div>
 
     <div class="pagination-wrapper" v-if="mode !== 'history' && total > pageSize">
@@ -181,11 +188,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { EditPen, View, ChatDotRound, Picture, Calendar, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
-import { forumApi, type ForumTopicItem, type MyReplyItem } from '@/api/forum'
+import { forumApi, forumTabQuery, type ForumCategory, type ForumTopicItem, type MyReplyItem } from '@/api/forum'
 import { formatRelativeTime } from '@/utils/format'
 import ForumImageUploader from '@/components/student/ForumImageUploader.vue'
 import CheckInDialog from '@/components/student/CheckInDialog.vue'
@@ -208,7 +215,6 @@ const staggerStyle = useStagger()
 const submitting = ref(false)
 const topics = ref<ForumTopicItem[]>([])
 const total = ref(0)
-const currentPage = ref(1)
 const pageSize = ref(10)
 
 // 列表模式：全部 / 我的帖子 / 我的回复 / 浏览记录
@@ -218,6 +224,39 @@ const myReplies = ref<MyReplyItem[]>([])
 const topicSort = ref<'latest' | 'hot'>('latest')
 const topicOrder = ref<'asc' | 'desc'>('desc')
 const historyItems = ref<ForumHistoryItem[]>([])
+
+// ===== 类别分流（#364）=====
+// category 判"看哪一类帖"，mode 判"看谁的帖"，两个轴正交。
+const categoryTab = ref<ForumCategory>('discussion')
+
+// 分页与滚动位置按类别各存一份：切走再切回来仍停在原来的位置。
+// currentPage 做成"按当前 Tab 读写的可写 computed"，这样既有代码里的
+// `currentPage.value = 1` 一行都不用改，也不存在两处状态手工同步漏一处的风险。
+const pageByCategory = ref<Record<ForumCategory, number>>({ discussion: 1, question: 1 })
+const scrollByCategory: Record<ForumCategory, number> = { discussion: 0, question: 0 }
+
+const currentPage = computed({
+  get: () => pageByCategory.value[categoryTab.value],
+  set: (v: number) => {
+    pageByCategory.value[categoryTab.value] = v
+  }
+})
+
+// 问答 Tab 的空态不能复用讨论的「还没有帖子」——用户在问答区看到这句话会以为功能坏了。
+// 文案只陈述现状、不承诺动作：提问入口属 #365，本票还发不出问答帖，
+// 写「来发第一个提问吧」会指向一个不存在的按钮。个人视图（mode 非 all）沿用原文案。
+const emptyDescription = computed(() =>
+  mode.value === 'all' && categoryTab.value === 'question'
+    ? '问答区还没有提问'
+    : '还没有帖子，来发第一帖吧'
+)
+
+watch(categoryTab, async (next, prev) => {
+  scrollByCategory[prev] = window.scrollY
+  await loadTopics()
+  await nextTick()
+  window.scrollTo?.({ top: scrollByCategory[next] })
+})
 
 function handleModeChange() {
   currentPage.value = 1
@@ -286,7 +325,15 @@ async function loadTopics() {
       topics.value = res.topics || []
       total.value = res.total || 0
     } else {
-      const res = await forumApi.listTopics({ scope: 'general', sort: topicSort.value, order: topicOrder.value, ...params })
+      // 查询参数交给 forumTabQuery 统一翻译（与端共用同一份映射）。
+      // 关键是讨论 Tab 必须带 category=discussion：后端 scope=general 的定义就是
+      // chapter_id IS NULL，而问答帖的 chapter_id 同为 NULL，漏 category 会让问答帖整片灌进讨论列表。
+      const res = await forumApi.listTopics({
+        ...forumTabQuery(categoryTab.value),
+        sort: topicSort.value,
+        order: topicOrder.value,
+        ...params
+      })
       topics.value = res.topics || []
       total.value = res.total || 0
     }
@@ -325,11 +372,19 @@ async function submitTopic() {
   }
   submitting.value = true
   try {
-    await forumApi.createTopic({ chapter_id: null, title, content, images: createForm.value.images })
+    // 显式带 category：本对话框只发讨论帖，不依赖服务端把空值归一成 discussion。
+    await forumApi.createTopic({ category: 'discussion', chapter_id: null, title, content, images: createForm.value.images })
     ElMessage.success('发布成功')
     createDialogVisible.value = false
+    // 停在问答 Tab 时新发的讨论帖会被该 Tab 的 category 过滤掉，用户会看到「发布成功」
+    // 但列表里什么都没有；切回讨论 Tab（watch 会负责重新拉取）让它立刻可见。
+    if (mode.value === 'all' && categoryTab.value !== 'discussion') {
+      pageByCategory.value.discussion = 1
+      categoryTab.value = 'discussion'
+      return
+    }
     currentPage.value = 1
-    loadTopics()
+    await loadTopics()
   } catch (e) {
     console.error('发布失败:', e)
     /* 错误已由拦截器提示 */
@@ -415,6 +470,10 @@ onMounted(() => {
   font-weight: 600;
   color: var(--color-text-primary);
   margin: 0 0 6px;
+}
+
+.forum-category {
+  margin-bottom: 12px;
 }
 
 .forum-toolbar {

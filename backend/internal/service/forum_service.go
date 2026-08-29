@@ -27,6 +27,30 @@ const (
 	ForumScopeChapter = "chapter" // 指定章节讨论区
 )
 
+// 论坛帖子类别常量（#364）。
+//
+// 类别判"帖子意图"，scope/chapter_id 判"内容坐标"，两者正交但有一格非法：
+// discussion+NULL=综合讨论区、discussion+N=章节讨论区、question+NULL=全局问答、
+// question+N=非法。不预留第三个值——求职信息是常驻实体，不在论坛内。
+const (
+	ForumCategoryDiscussion = "discussion" // 讨论帖（存量帖子的默认值）
+	ForumCategoryQuestion   = "question"   // 问答帖（可被采纳，走积分直记）
+)
+
+// normalizeForumCategory 校验并归一帖子类别：空串归一为 discussion（向后兼容，移动端不传）。
+// 非空且不在值域内返回错误。归一后再落到模型上，避免依赖数据库 DEFAULT
+// （GORM 对带 default tag 的零值字段会跳过 INSERT，内存对象拿不到回填值）。
+func normalizeForumCategory(category string) (string, error) {
+	switch category = strings.TrimSpace(category); category {
+	case "":
+		return ForumCategoryDiscussion, nil
+	case ForumCategoryDiscussion, ForumCategoryQuestion:
+		return category, nil
+	default:
+		return "", fmt.Errorf("帖子类别无效: %s", category)
+	}
+}
+
 // 论坛发图限制。
 const (
 	ForumTopicMaxImages = 9 // 主题最多图片数
@@ -49,6 +73,7 @@ func (a ForumAuthor) DisplayName() string {
 type ForumTopicDTO struct {
 	ID           int64       `json:"id"`
 	ChapterID    *int        `json:"chapter_id"`
+	Category     string      `json:"category"` // discussion | question（#364）
 	ChapterTitle string      `json:"chapter_title"`
 	Title        string      `json:"title"`
 	Content      string      `json:"content"`
@@ -100,6 +125,7 @@ func NewForumService(db *gorm.DB, fileSvc *FileStore, notificationSvc *Notificat
 type topicRow struct {
 	ID           int64
 	ChapterID    *int
+	Category     string
 	ChapterTitle string
 	Title        string
 	Content      string
@@ -123,6 +149,7 @@ func (r topicRow) toDTO(viewerID int) ForumTopicDTO {
 	return ForumTopicDTO{
 		ID:           r.ID,
 		ChapterID:    r.ChapterID,
+		Category:     r.Category,
 		ChapterTitle: r.ChapterTitle,
 		Title:        r.Title,
 		Content:      r.Content,
@@ -147,9 +174,47 @@ type ForumTopicPageResult struct {
 	Total  int64           `json:"total"`
 }
 
+// parseForumCategoryArg 解析**列表查询**的 category 参数。
+//
+// 注意与 normalizeForumCategory（发帖路径）语义相反，不要合并成一函数：
+// 列表里空串 = 不过滤（移动端与既有页面向后兼容，两类都看得到）；
+// 发帖里空串 = 归一为 discussion。若把两者写成一套，移动端不传参数就会只看到讨论帖。
+func parseForumCategoryArg(category string) (string, error) {
+	switch category = strings.TrimSpace(category); category {
+	case "":
+		return "", nil
+	case ForumCategoryDiscussion, ForumCategoryQuestion:
+		return category, nil
+	default:
+		return "", fmt.Errorf("帖子类别无效: %s", category)
+	}
+}
+
+// TopicListInput 主题列表查询条件。
+//
+// 用 struct 而非位置参数：本方法有 scope/keyword/sort/order/category 五个 string，
+// 位置传错（如把 category 落进 keyword）编译通过且语义全错。
+type TopicListInput struct {
+	Scope     string // all（默认）/ general / chapter
+	Category  string // 空或 all = 不过滤；discussion / question = 按类别分流
+	ChapterID int
+	Page      int
+	PageSize  int
+	Keyword   string
+	Sort      string // latest（默认）/ hot
+	Order     string // desc（默认）/ asc
+}
+
 // ListTopics 分页查询主题。
 // scope: all（默认）/ general（综合讨论区）/ chapter（需配合 chapterID）；sort: latest（默认，时间）/ hot（热度：点赞数→回复数→浏览数）；order: desc（默认）/ asc（正序）。
-func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, keyword, sort, order string) (*ForumTopicPageResult, error) {
+func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, error) {
+	scope := in.Scope
+	chapterID, page, pageSize := in.ChapterID, in.Page, in.PageSize
+	keyword, sort, order := in.Keyword, in.Sort, in.Order
+	category, err := parseForumCategoryArg(in.Category)
+	if err != nil {
+		return nil, err
+	}
 	if scope == "" {
 		scope = ForumScopeAll
 	}
@@ -176,7 +241,7 @@ func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, k
 		orderClause,
 		func(q *gorm.DB) *gorm.DB {
 			q = q.Table("forum_topics AS t").
-				Select("t.id, t.chapter_id, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.last_reply_at, t.created_at, " +
+				Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.last_reply_at, t.created_at, " +
 					"u.id AS user_id, u.username, u.avatar_url, " +
 					"COALESCE(ch.title, '') AS chapter_title").
 				Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
@@ -186,6 +251,12 @@ func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, k
 				q = q.Where("t.chapter_id IS NULL")
 			case ForumScopeChapter:
 				q = q.Where("t.chapter_id = ?", chapterID)
+			}
+			// 类别过滤必须与上面的 scope 共存在同一条 WHERE 里：
+			// scope=general 的定义就是 chapter_id IS NULL，而问答帖的 chapter_id 恒为 NULL，
+			// 漏掉这条会把全部问答帖灌进讨论 Tab（不要在应用层事后过滤）。
+			if category != "" {
+				q = q.Where("t.category = ?", category)
 			}
 			if keyword = strings.TrimSpace(keyword); keyword != "" {
 				like := "%" + keyword + "%"
@@ -214,7 +285,7 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order st
 	}
 	var row topicRow
 	err := s.db.Table("forum_topics AS t").
-		Select("t.id, t.chapter_id, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.last_reply_at, t.created_at, "+
+		Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.last_reply_at, t.created_at, "+
 			"u.id AS user_id, u.username, u.avatar_url, "+
 			"COALESCE(ch.title, '') AS chapter_title").
 		Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
@@ -306,9 +377,24 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order st
 	}, nil
 }
 
+// CreateTopicInput 发帖条件。Category 为空归一为 discussion（移动端旧契约不传）。
+type CreateTopicInput struct {
+	UserID    int
+	ChapterID *int
+	Category  string
+	Title     string
+	Content   string
+	Images    []string
+}
+
 // CreateTopic 发帖。chapterID 为 nil/0 表示发到综合讨论区。
 // images 为主题图片 URL 列表（最多 ForumTopicMaxImages 张，仅接受本站 images/forum/ 前缀）。
-func (s *ForumService) CreateTopic(userID int, chapterID *int, title, content string, images []string) (*ForumTopicDTO, error) {
+func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) {
+	category, err := normalizeForumCategory(in.Category)
+	if err != nil {
+		return nil, err
+	}
+	userID, chapterID, title, content, images := in.UserID, in.ChapterID, in.Title, in.Content, in.Images
 	title = strings.TrimSpace(title)
 	content = strings.TrimSpace(content)
 	if utf8.RuneCountInString(title) < 1 || utf8.RuneCountInString(title) > 100 {
@@ -319,6 +405,13 @@ func (s *ForumService) CreateTopic(userID int, chapterID *int, title, content st
 	}
 	if err := validateForumImages(images, ForumTopicMaxImages); err != nil {
 		return nil, err
+	}
+
+	// 非法组合在进库前拒绝：问答帖一律不属于任何章节。
+	// 数据库层有同名 CHECK 作生产兜底（见迁移 000004），此处是能被契约测试守住的行为层。
+	// 注意只判 >0：chapter_id 传 0 或不传按既有语义归一为综合区，不得在此收紧。
+	if category == ForumCategoryQuestion && chapterID != nil && *chapterID > 0 {
+		return nil, errors.New("问答帖不属于任何章节，不能指定 chapter_id")
 	}
 
 	var cid *int
@@ -336,6 +429,9 @@ func (s *ForumService) CreateTopic(userID int, chapterID *int, title, content st
 	now := beijingNow()
 	topic := model.ForumTopic{
 		ChapterID: cid,
+		// 显式写入归一后的非空类别，不依赖数据库 DEFAULT：
+		// GORM 对带 default tag 的零值字段会跳过 INSERT，那样内存对象（下面的 DTO）会拿到空串。
+		Category:  category,
 		UserID:    userID,
 		Title:     title,
 		Content:   content,
@@ -354,6 +450,7 @@ func (s *ForumService) CreateTopic(userID int, chapterID *int, title, content st
 	return &ForumTopicDTO{
 		ID:        topic.ID,
 		ChapterID: topic.ChapterID,
+		Category:  topic.Category,
 		Title:     topic.Title,
 		Content:   topic.Content,
 		Images:    images,
@@ -971,7 +1068,7 @@ func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResu
 		"COALESCE(t.last_reply_at, t.created_at) DESC, t.id DESC",
 		func(q *gorm.DB) *gorm.DB {
 			return q.Table("forum_topics AS t").
-				Select("t.id, t.chapter_id, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.last_reply_at, t.created_at, "+
+				Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.last_reply_at, t.created_at, "+
 					"u.id AS user_id, u.username, u.avatar_url, COALESCE(ch.title, '') AS chapter_title").
 				Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
 				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").

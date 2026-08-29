@@ -118,12 +118,13 @@ func (h *ForumHandler) UploadImage(c *gin.Context) {
 
 // ListTopics 帖子列表
 // @Summary 帖子列表
-// @Description 支持 scope=all|general|chapter，按 chapter_id/keyword/sort=latest|hot 过滤
+// @Description 支持 scope=all|general|chapter，按 category=all|discussion|question、chapter_id/keyword/sort=latest|hot 过滤
 // @Tags 学员端-论坛
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param scope query string false "范围 all|general|chapter"
+// @Param category query string false "类别 discussion|question，省略表示不过滤（向后兼容）"
 // @Param chapter_id query int false "章节ID"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
@@ -131,6 +132,7 @@ func (h *ForumHandler) UploadImage(c *gin.Context) {
 // @Param sort query string false "排序 latest|hot"
 // @Param order query string false "排序方向 asc|desc"
 // @Success 200 {object} response.R{data=service.ForumTopicPageResult} "success"
+// @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /forum/topics [get]
 func (h *ForumHandler) ListTopics(c *gin.Context) {
@@ -138,6 +140,7 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 		Parse: func(c *gin.Context) (*listTopicsReq, error) {
 			return &listTopicsReq{
 				Scope:     c.Query("scope"),
+				Category:  c.Query("category"),
 				ChapterID: atoiDefault(c.Query("chapter_id"), 0),
 				Page:      atoiDefault(c.Query("page"), 1),
 				PageSize:  atoiDefault(c.Query("page_size"), 10),
@@ -147,7 +150,16 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listTopicsReq) (*service.ForumTopicPageResult, error) {
-			return h.svc.ListTopics(req.Scope, req.ChapterID, req.Page, req.PageSize, req.Keyword, req.Sort, req.Order)
+			return h.svc.ListTopics(service.TopicListInput{
+				Scope:     req.Scope,
+				Category:  req.Category,
+				ChapterID: req.ChapterID,
+				Page:      req.Page,
+				PageSize:  req.PageSize,
+				Keyword:   req.Keyword,
+				Sort:      req.Sort,
+				Order:     req.Order,
+			})
 		},
 		Render: func(c *gin.Context, _ *listTopicsReq, resp *service.ForumTopicPageResult, err error) {
 			if err != nil {
@@ -161,14 +173,14 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 
 // CreateTopic 发帖
 // @Summary 发帖
-// @Description chapter_id 为空表示综合讨论区；images 最多 9 张 URL
+// @Description chapter_id 为空表示综合讨论区；category=question 时不得带 chapter_id；images 最多 9 张 URL
 // @Tags 学员端-论坛
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param body body object true "帖子" example({"title":"标题","content":"内容","images":[]})
+// @Param body body object true "帖子" example({"title":"标题","content":"内容","category":"discussion","images":[]})
 // @Success 201 {object} response.R{data=service.ForumTopicDTO} "success"
-// @Failure 400 {object} response.R "参数错误"
+// @Failure 400 {object} response.R "参数错误（含类别非法、问答帖带章节）"
 // @Failure 401 {object} response.R "未认证"
 // @Router /forum/topics [post]
 func (h *ForumHandler) CreateTopic(c *gin.Context) {
@@ -178,6 +190,7 @@ func (h *ForumHandler) CreateTopic(c *gin.Context) {
 			userID, _ := uid.(int)
 			var body struct {
 				ChapterID *int     `json:"chapter_id"`
+				Category  string   `json:"category"`
 				Title     string   `json:"title"`
 				Content   string   `json:"content"`
 				Images    []string `json:"images"`
@@ -185,10 +198,17 @@ func (h *ForumHandler) CreateTopic(c *gin.Context) {
 			if err := c.ShouldBindJSON(&body); err != nil {
 				return nil, badRequest("请求参数错误")
 			}
-			return &createTopicReq{UserID: userID, ChapterID: body.ChapterID, Title: body.Title, Content: body.Content, Images: body.Images}, nil
+			return &createTopicReq{UserID: userID, ChapterID: body.ChapterID, Category: body.Category, Title: body.Title, Content: body.Content, Images: body.Images}, nil
 		},
 		Invoke: func(ctx context.Context, req *createTopicReq) (*service.ForumTopicDTO, error) {
-			return h.svc.CreateTopic(req.UserID, req.ChapterID, req.Title, req.Content, req.Images)
+			return h.svc.CreateTopic(service.CreateTopicInput{
+				UserID:    req.UserID,
+				ChapterID: req.ChapterID,
+				Category:  req.Category,
+				Title:     req.Title,
+				Content:   req.Content,
+				Images:    req.Images,
+			})
 		},
 		Render: func(c *gin.Context, _ *createTopicReq, resp *service.ForumTopicDTO, err error) {
 			if err != nil {
@@ -457,6 +477,7 @@ func (h *ForumHandler) AdminDeleteReply(c *gin.Context) {
 // listTopicsReq 主题列表请求（查询参数）。
 type listTopicsReq struct {
 	Scope     string
+	Category  string
 	ChapterID int
 	Page      int
 	PageSize  int
@@ -469,6 +490,7 @@ type listTopicsReq struct {
 type createTopicReq struct {
 	UserID    int
 	ChapterID *int
+	Category  string
 	Title     string
 	Content   string
 	Images    []string

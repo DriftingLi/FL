@@ -511,10 +511,26 @@ func (AIUserModel) TableName() string { return "ai_user_models" }
 
 // ===== 24. 论坛模块 =====
 
-// ForumTopic 论坛主题（chapter_id 为 NULL 表示综合讨论区，非 NULL 表示章节讨论区）。
+// ForumTopic 论坛主题。
+//
+// 两个正交维度中，chapter_id 只服务讨论帖：
+//   - category=discussion + chapter_id IS NULL = 综合讨论区
+//   - category=discussion + chapter_id 非空    = 章节讨论区
+//   - category=question   + chapter_id IS NULL = 全局问答
+//   - category=question   + chapter_id 非空    = 非法组合
+//
+// ⚠️ 判类别看 category，判区域看 chapter_id，两者不可互相替代：scope=general 的定义
+// 就是 chapter_id IS NULL，而问答帖的 chapter_id 同样为 NULL，故列表查询必须让
+// category 与 scope 共存在同一条 WHERE 里，否则问答帖会整片灌进讨论 Tab。
+//
+// ⚠️ 上述非法组合在数据库层由 CHECK 兜底，但这些约束**只存在于迁移 SQL（000004）**：
+// 测试库由 AutoMigrate 建表、不执行 migrations/，因此两条 CHECK（值域 chk_forum_topics_category
+// 与非法组合 chk_forum_topics_question_no_chapter）契约测试都覆盖不到，别误以为测试守住了它们。
+// 行为层由 service 的校验守住：非法类别 400、问答帖带 chapter_id>0 返回 400。
 type ForumTopic struct {
 	ID          int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	ChapterID   *int       `gorm:"column:chapter_id" json:"chapter_id,omitempty"`
+	Category    string     `gorm:"column:category;not null;default:discussion" json:"category"` // 'discussion' | 'question'
 	UserID      int        `gorm:"column:user_id" json:"user_id"`
 	Title       string     `gorm:"column:title" json:"title"`
 	Content     string     `gorm:"column:content" json:"content"`
