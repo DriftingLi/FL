@@ -28,13 +28,6 @@
         <h3>历史记录</h3>
         <el-table :data="history" stripe>
           <el-table-column prop="score" label="得分" width="80" />
-          <el-table-column prop="status" label="状态" width="100">
-            <template #default="{ row }">
-              <el-tag :type="row.status === 'submitted' ? 'success' : 'warning'" size="small">
-                {{ row.status === 'submitted' ? '已完成' : '进行中' }}
-              </el-tag>
-            </template>
-          </el-table-column>
           <el-table-column prop="created_at" label="时间" width="180">
             <template #default="{ row }">{{ formatDateTime(row.created_at, '') }}</template>
           </el-table-column>
