@@ -280,6 +280,7 @@ const flow = useAuthFlow<LoginMode>({
     }
     if (currentRole === 'hrwai_user') return authApi.login(payload)
     if (currentRole === 'tutor') return authApi.tutorLogin(payload)
+    if (currentRole === 'recruiter') return authApi.recruiterLogin(payload)
     return authApi.adminLogin(payload)
   },
   afterSuccess: async (_m, userInfo) => {
@@ -330,7 +331,8 @@ const subtitleMap: Record<SubdomainType, string> = {
   training: '登录您的HRWAI账户',
   valuation: '登录您的HRWAI账户',
   tutor: '登录导师工作台',
-  admin: '登录管理后台'
+  admin: '登录管理后台',
+  recruit: '登录企业招聘端'
 }
 const subtitleByRole = computed(() => subtitleMap[subdomain])
 

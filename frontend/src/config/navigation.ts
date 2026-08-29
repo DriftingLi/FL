@@ -148,7 +148,8 @@ const studentNav: NavItem[] = [
     children: [
       { key: 'task-center', label: '任务中心', routeName: 'TaskCenter', icon: Trophy },
       { key: 'favorites', label: '我的收藏', routeName: 'StudentFavorites', icon: Star },
-      { key: 'profile', label: '个人资料', routeName: 'StudentProfile', icon: User }
+      { key: 'profile', label: '个人资料', routeName: 'StudentProfile', icon: User },
+      { key: 'resume', label: '我的简历', routeName: 'StudentResume', icon: Document }
     ]
   }
 ]

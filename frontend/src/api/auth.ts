@@ -23,6 +23,10 @@ export const authApi = {
     return unwrappedRequest.post<UserProfile>('/auth/tutor-login', data)
   },
 
+  recruiterLogin(data: LoginPayload) {
+    return unwrappedRequest.post<UserProfile>('/auth/recruiter-login', data)
+  },
+
   logout() {
     // 双令牌（ADR-0012）：撤销请求体携带的 refresh token（登出后 refresh 失效）
     const refresh_token = getRefreshToken() || ''

@@ -53,6 +53,16 @@
         </div>
       </div>
 
+      <div class="profile-group">
+        <div class="profile-row" @click="openResume">
+          <span class="row-label">我的简历</span>
+          <span class="row-value">
+            <span class="value-text">{{ resumeVisibilityText }}</span>
+            <el-icon class="arrow"><ArrowRight /></el-icon>
+          </span>
+        </div>
+      </div>
+
       <div class="profile-group danger-group">
         <div class="profile-row danger-row" @click="openDelete">
           <span class="row-label">注销帐号</span>
@@ -83,6 +93,7 @@ import { ArrowRight } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
+import { resumeApi } from '@/api/resume'
 import AvatarEditDialog from '@/components/profile/AvatarEditDialog.vue'
 import NicknameEditDialog from '@/components/profile/NicknameEditDialog.vue'
 import CompanyEditDialog from '@/components/profile/CompanyEditDialog.vue'
@@ -115,6 +126,9 @@ const passwordRef = ref<InstanceType<typeof PasswordEditDialog> | null>(null)
 const accountRef = ref<InstanceType<typeof AccountEditDialog> | null>(null)
 const deleteRef = ref<InstanceType<typeof DeleteAccountDialog> | null>(null)
 
+const resumeVisibility = ref<string>('hidden')
+const resumeVisibilityText = computed(() => resumeVisibility.value === 'open' ? '已公开' : '未公开')
+
 function openAvatar(){ avatarRef.value?.open() }
 function openNickname(){ nicknameRef.value?.open() }
 function openCompany(){ companyRef.value?.open() }
@@ -123,6 +137,7 @@ function openEmail(){ emailRef.value?.open() }
 function openPassword(){ passwordRef.value?.open() }
 function openAccount(){ accountRef.value?.open() }
 function openDelete(){ deleteRef.value?.open() }
+function openResume(){ router.push({ name: 'StudentResume' }) }
 
 async function handleLogout(){
   try {
@@ -133,7 +148,13 @@ async function handleLogout(){
   router.push('/login')
 }
 
-onMounted(()=>{ authStore.refreshUserInfo() })
+onMounted(async ()=>{
+  authStore.refreshUserInfo()
+  try {
+    const data = await resumeApi.get()
+    if (data && (data as any).visibility) resumeVisibility.value = (data as any).visibility
+  } catch {}
+})
 </script>
 
 <style scoped>

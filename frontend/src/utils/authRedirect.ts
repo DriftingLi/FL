@@ -20,11 +20,11 @@ export interface PathAuthEntry {
 // 「路径前缀 → 允许身份」单点表：getTargetSubdomainForPath 从 subdomain 派生，
 // isSafeRedirect 从 role 派生。两函数必须共享本表以保持前缀数据单一来源。
 export const PATH_AUTH_ENTRIES: PathAuthEntry[] = [
-  { prefix: '/recruit', role: 'recruiter', subdomain: 'recruit' },
   { prefix: '/training/tutor', role: 'tutor', subdomain: 'tutor' },
   { prefix: '/ai-assistant', role: 'hrwai_user', subdomain: 'training' },
   { prefix: '/valuation', role: 'hrwai_user', subdomain: 'valuation' },
   { prefix: '/training', role: 'hrwai_user', subdomain: 'training' },
+  { prefix: '/recruit', role: 'recruiter', subdomain: 'recruit' },
   { prefix: '/admin', role: 'admin', subdomain: 'admin' }
 ]
 

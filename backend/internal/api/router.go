@@ -143,6 +143,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 	RegisterFavoriteRoutes(api, rd, deps.FavoriteSvc)
 	RegisterSearchRoutes(api, rd, deps.SearchSvc)
 	RegisterMaterialRoutes(api, rd, deps.MaterialSvc)
+	RegisterJobCardRoutes(api, rd, deps.JobCardSvc, deps.FileSvc)
 
 	return r
 }
