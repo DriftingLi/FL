@@ -66,10 +66,31 @@ h1, h2, h3, h4, h5, h6 {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    /* 必须一并归零：stagger 用了 animation-fill-mode: both，
+       只压时长不压延迟的话，元素会在延迟期间保持 from 态（不可见）。 */
+    animation-delay: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* 列表错峰进场（方案 11.5）：配合 composables/useStagger 挂的 --i 使用。
+   索引超过 8 后不再累加，避免长列表末尾延迟拖尾。 */
+@keyframes staggerIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stagger-in {
+  animation: staggerIn var(--duration-normal) var(--ease-default) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
 }
 
 /*
