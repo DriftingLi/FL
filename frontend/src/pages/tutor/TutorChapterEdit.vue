@@ -33,9 +33,11 @@
       </UiPageHeader>
 
       <UiCard class="mb-6">
+        <!-- ⚠️ 下划线必须用 \ 转义成 \_ ：Tailwind 任意变体里裸 _ 会被解析成空格，
+             .el-tabs__header 会被拆成 `.el-tabs header` 后代选择器而选不中目标（构建期无报错）。 -->
         <el-tabs
           v-model="activeTab"
-          class="[&_.el-tabs__header]:sticky [&_.el-tabs__header]:top-0 [&_.el-tabs__header]:z-[2] [&_.el-tabs__header]:mb-4 [&_.el-tabs__header]:bg-panel"
+          class="[&_.el-tabs\_\_header]:sticky [&_.el-tabs\_\_header]:top-0 [&_.el-tabs\_\_header]:z-[2] [&_.el-tabs\_\_header]:mb-4 [&_.el-tabs\_\_header]:bg-panel"
         >
           <!-- 图文 Tab（始终显示，可编辑） -->
           <el-tab-pane label="图文" name="content">
