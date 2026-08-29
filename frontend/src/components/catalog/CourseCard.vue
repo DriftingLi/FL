@@ -73,9 +73,19 @@ function coverClass() {
   transition: all var(--duration-normal) var(--ease-default);
 }
 
+/* hover 反馈统一到 --duration-tap（120ms）：
+   原先 .cc-card 用的是 `transition: all 250ms`，位移显得拖沓；
+   且 all 会把 cover 图片缩放等无关属性一并纳入，这里收窄到实际会变的两项。 */
 .cc-card:hover {
   box-shadow: var(--shadow-lg);
   transform: translateY(-4px);
+  transition:
+    box-shadow var(--duration-tap) var(--ease-default),
+    transform var(--duration-tap) var(--ease-default);
+}
+
+.cc-card:active {
+  transform: translateY(-1px) scale(0.995);
 }
 
 /* compact：列表态，取消上浮、收紧尺寸（上面的 grid 规则保持零改动） */

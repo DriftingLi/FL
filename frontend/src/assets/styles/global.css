@@ -18,6 +18,22 @@ a {
   color: inherit;
 }
 
+/*
+ * 键盘焦点环（方案 11.8）。
+ * 用 :focus-visible 而非 :focus，鼠标点击不会触发，只有键盘 Tab 才显示。
+ * 只加不覆盖：EP 组件自带的 focus 样式不受影响，这里补的是原生元素与自研组件的缺口。
+ */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role='button']:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+}
+
 html {
   font-size: 16px;
   -webkit-text-size-adjust: 100%;

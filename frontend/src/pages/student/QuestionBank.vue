@@ -157,7 +157,7 @@
             <StarFilled v-if="favorited" /><Star v-else />
           </el-icon>
         </div>
-        <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="q-image" />
+        <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="q-image" loading="lazy" decoding="async" />
         <p class="q-content">{{ currentQuestion.content }}</p>
 
         <QuestionOptionPicker
