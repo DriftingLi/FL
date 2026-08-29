@@ -1,38 +1,39 @@
 # 叉车维修培训与残值评估系统
 
-面向叉车维修培训与叉车残值评估的全栈系统。架构、领域词汇与评审记录见下方文件：
+面向叉车维修培训与叉车残值评估的全栈系统。
 
 - **领域词汇表**：`CONTEXT.md`（repo 根）
-- **架构决策记录（ADRs）**：`docs/adr/`
-- **AI/agent 工作约定**：`docs/agents/`
+- **架构决策记录（ADRs）**：`docs/adr/`（改认证/会话/判分/论坛等敏感区域前先读相关 ADR）
 
-## Agent skills
+## 主要目录
 
-### Issue tracker
+- `backend/`：Go + gin + pgx + golang-migrate 后端（module `forklift-training`），业务在 `internal/`（api/service/model/middleware 等）
+- `frontend/`：Vue 3 + Vite + Element Plus 管理端
+- `training-app/叉车维修培训学员端跨端应用/`：uni-app x 学员端（见下节）
+- `nginx/`、`docker-compose.prod.yml`、`deploy.sh`：部署配置
+- `scripts/`：服务器初始化与远程部署脚本
 
-Issues 存放在 GitHub Issues（使用 `gh` CLI）。See `docs/agents/issue-tracker.md`.
+## 工作约定
 
-### Triage labels
-
-五个 canonical triage roles，label 与 role 同名（`needs-triage` 等）。See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context：root `CONTEXT.md` + `docs/adr/`。See `docs/agents/domain.md`.
-
-### Security scan
-
-AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
+- **Issue tracker**：Issues 存放在 GitHub Issues（使用 `gh` CLI）。
+- **Triage labels**：五个 canonical triage roles，label 与 role 同名（`needs-triage` 等）。
+- **响应信封**：后端 API 统一响应信封（ADR-0005），前端/training-app 均按信封解包。
 
 ## 前端 UI 约定
 
 页面保持整洁：不要写冗余的小标题、装饰性提示与说明性 hint 文本，有的话就清理，仅保留必要的功能性提示。删除 hint 时同步删除对应的 CSS class 与 scoped style，避免残留死代码。
 
+## training-app（uni-app x 学员端）
+
+- 位置：`training-app/叉车维修培训学员端跨端应用/`。`.uvue` 页面 + `.uts` 逻辑，`api/*.uts` 封装后端 REST，另有 `stores/`、`pages/`、`components/`、`constants/`。
+- 无 npm 构建脚本（package.json 仅元信息），编译走 uni-app x 工具链/HBuilderX，不要尝试 `npm run build`。
+- 跨端约束：只能用 uni-app x 支持的语法与 API，勿引入 DOM / Web 专有能力；文件命名用小驼峰（如 `aiAssistant.uts`）。
+
 ## 测试与检查流程
 
 改动后**必须**跑完对应栈的检查，全绿才能提交：
 
-- **后端（`backend/`）**：Go 工具链在 `~/go/bin`（`export PATH=/home/root86155/go/bin:$PATH`）
+- **后端（`backend/`）**：Go 工具链在 WSL 的 `~/go/bin`（`export PATH=/home/root86155/go/bin:$PATH`，Windows Git Bash 下无 go）；也可用 `backend/Makefile`（`make test` / `make lint`）
   - `gofmt -l .`（应无输出）
   - `go vet ./...`
   - `golangci-lint run ./...`（errcheck 等静态检查）
@@ -42,7 +43,7 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
   - `npm run type-check`（vue-tsc）
   - `npm test`（vitest）
 - **部署配置**：改 `docker-compose*.yml` / `deploy.sh` 后可用 `docker compose -f docker-compose.prod.yml config -q` 做语法校验
-- **安全检测**：改动触及认证/授权/密钥/DB 连接/AI 生成代码时，跑 `python -m deepsec shield scan backend frontend/src`，确认无新增 critical/high（已知误报见 `docs/agents/security-scan.md`）。
+- **安全检测**：改动触及认证/授权/密钥/DB 连接/AI 生成代码时，跑 `python -m deepsec shield scan backend frontend/src`，确认无新增 critical/high。
 
 ## 发布流程（push / PR / merge）
 

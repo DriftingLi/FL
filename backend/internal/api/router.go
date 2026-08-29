@@ -124,6 +124,8 @@ func NewRouter(deps *Deps) *gin.Engine {
 	RegisterFavoriteRoutes(api, rd, deps.FavoriteSvc)
 	RegisterSearchRoutes(api, rd, deps.SearchSvc)
 	RegisterMaterialRoutes(api, rd, deps.MaterialSvc)
+	// 题目互动：评论 + 笔记 + 考点标签
+	RegisterQuestionInteractionRoutes(api, rd, deps.QuestionInteractionSvc)
 
 	return r
 }

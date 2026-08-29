@@ -63,8 +63,9 @@ type Deps struct {
 	MockExamSvc        *service.MockExamService
 	TutorSvc           *service.TutorService
 	WrongQuestionSvc   *service.WrongQuestionService
-	TrainingCatalogSvc *service.TrainingCatalogService
-	AIAssistantSvc     *service.AIAssistantService
+	TrainingCatalogSvc    *service.TrainingCatalogService
+	AIAssistantSvc        *service.AIAssistantService
+	QuestionInteractionSvc *service.QuestionInteractionService
 }
 
 // NewDeps 构建全部 service 单实例。进程启动早期由 main 调用一次。
@@ -125,8 +126,9 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		TutorSvc:           service.NewTutorService(db, cfg.UploadFolder, fileSvc, slideRenderer, logger),
 		WrongQuestionSvc:   service.NewWrongQuestionService(db, logger),
 		TrainingCatalogSvc: service.NewTrainingCatalogService(db, logger),
-		AuditSvc:           service.NewAuditService(db),
-		AIAssistantSvc:     service.NewAIAssistantService(db, aiConfigSvc, cfg.SecretKey, logger),
+		AuditSvc:            service.NewAuditService(db),
+		AIAssistantSvc:      service.NewAIAssistantService(db, aiConfigSvc, cfg.SecretKey, logger),
+		QuestionInteractionSvc: service.NewQuestionInteractionService(db, logger),
 	}
 	d.AuthH = NewAuthHandler(d.Session, authSvc, fileSvc, st, reviewSvc, logger)
 	return d

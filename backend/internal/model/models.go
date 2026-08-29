@@ -658,3 +658,30 @@ type AuditLog struct {
 }
 
 func (AuditLog) TableName() string { return "audit_logs" }
+
+// ===== 28. 题目互动（评论 + 笔记） =====
+
+// QuestionComment 题目评论（学员互助讨论）。
+type QuestionComment struct {
+	ID         int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	QuestionID int       `gorm:"column:question_id" json:"question_id"`
+	UserID     int       `gorm:"column:user_id" json:"user_id"`
+	Content    string    `gorm:"column:content" json:"content"`
+	Status     int16     `gorm:"column:status;default:1" json:"status"`
+	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt  time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (QuestionComment) TableName() string { return "question_comment" }
+
+// QuestionNote 学员个人笔记（按 question+user 唯一，私有）。
+type QuestionNote struct {
+	ID         int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	QuestionID int       `gorm:"column:question_id" json:"question_id"`
+	UserID     int       `gorm:"column:user_id" json:"user_id"`
+	Content    string    `gorm:"column:content" json:"content"`
+	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt  time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (QuestionNote) TableName() string { return "question_note" }

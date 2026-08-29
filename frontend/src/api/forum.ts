@@ -43,19 +43,22 @@ export interface ForumListParams {
   page?: number
   page_size?: number
   keyword?: string
+  sort?: string
+  order?: string
 }
 
 export const forumApi = {
   listTopics(params: ForumListParams) {
-    return unwrappedRequest.get<{ topics: ForumTopicItem[]; total: number }>('/forum/topics', { params })
+    const merged = { sort: 'latest', order: 'desc', ...params }
+    return unwrappedRequest.get<{ topics: ForumTopicItem[]; total: number }>('/forum/topics', { params: merged })
   },
 
   createTopic(data: { chapter_id?: number | null; title: string; content: string; images?: string[] }) {
     return unwrappedRequest.post<ForumTopicItem>('/forum/topics', data)
   },
 
-  getTopic(id: number) {
-    return unwrappedRequest.get<{ topic: ForumTopicItem; replies: ForumReplyItem[] }>(`/forum/topics/${id}`)
+  getTopic(id: number, params: { sort?: string; order?: string } = { sort: 'latest', order: 'asc' }) {
+    return unwrappedRequest.get<{ topic: ForumTopicItem; replies: ForumReplyItem[] }>(`/forum/topics/${id}`, { params })
   },
 
   replyTopic(id: number, content: string, parentReplyId?: number | null, images?: string[]) {

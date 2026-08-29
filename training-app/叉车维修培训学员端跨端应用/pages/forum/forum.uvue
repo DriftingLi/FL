@@ -255,7 +255,7 @@
         try { profile.value = await getProfileApi() } catch (e) { uni.__f__('error','at pages/forum/forum.uvue:255','[forum] loadProfile failed:', e) }
     }
     function onPointsTodetail() : void {
-        uni.reLaunch({
+        uni.navigateTo({
             url: "/pages/points/points-detail"
         })
     }

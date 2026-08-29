@@ -265,6 +265,13 @@
             }
         },
         {
+            "path": "pages/points/task-center",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "任务中心"
+            }
+        },
+        {
             "path": "pages/resources/my-purchases",
             "style": {
                 "navigationStyle": "custom",
