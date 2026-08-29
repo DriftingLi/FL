@@ -1,270 +1,270 @@
 /**
  * 认证状态管理（基于 Vue 3 响应式单例，无需 pinia）
- * - token / user 持久化到 uni.setStorageSync
+ * - token / user / refresh_token 持久化到 uni.setStorageSync
  * - 启动时调用 validateToken() 校验
  * - 401 由 request 层自动清空并跳转登录页
- */
-import { ref, computed } from 'vue'
-import { loginApi, phoneLoginApi, emailLoginApi, mpWechatLoginApi, logoutApi, getUserInfoApi } from '../api/auth'
+ * - token 过期时通过 refresh_token 自动刷新（回调注册，避免循环依赖）
+ **/
+import { ref } from 'vue'
+import { loginApi, phoneLoginApi, emailLoginApi, mpWechatLoginApi, logoutApi, getUserInfoApi, refreshTokenApi } from '../api/auth'
+import { registerRefreshTokenHandler } from '../api/request'
 import { setStorage, setStorageJSON, getStorage, getStorageJSON, removeStorage } from '../utils/storage'
-import { STORAGE_KEY_TOKEN, STORAGE_KEY_USER } from '../constants/app'
+import { STORAGE_KEY_TOKEN, STORAGE_KEY_REFRESH_TOKEN, STORAGE_KEY_USER, STORAGE_KEY_LOGIN_PROVIDER } from '../constants/app'
 import type { LoginParams, CodeLoginParams, UserInfo, AuthStore, UpdateProfileParams, WechatLoginResult } from '../types/index'
 
-// 全局响应式状态（模块级单例，多次调用 useAuthStore 共享同一份状态）
 const token = ref<string>('')
 const user = ref<UserInfo | null>(null)
 const isInitializing = ref<boolean>(true)
+const isLoggedIn = ref<boolean>(false)
+const displayName = ref<string>('同学')
+const loginProvider = ref<string>('')
 
-const isLoggedIn = computed<boolean>(() : boolean => {
-	return token.value.length > 0 && user.value != null
-})
+// 派生状态：token / user 变化时调用，同步 isLoggedIn 与 displayName
+// 说明：uni-app x 的 .uts 纯逻辑模块不支持 computed()（需组件响应式作用域），改用 ref + 手动同步
+function syncDerived() : void {
+    isLoggedIn.value = token.value.length > 0 && user.value != null
+    if (user.value == null) {
+        displayName.value = '同学'
+        return
+    }
+    const u = user.value as UserInfo
+    if (u.name != null && u.name.length > 0) {
+        displayName.value = u.name
+    } else if (u.username != null && u.username.length > 0) {
+        displayName.value = u.username
+    } else {
+        displayName.value = '同学'
+    }
+}
 
-const displayName = computed<string>(() : string => {
-	if (user.value == null) return '同学'
-	const u = user.value as UserInfo
-	if (u.name != null && u.name.length > 0) return u.name
-	if (u.username != null && u.username.length > 0) return u.username
-	return '同学'
-})
+function setAuthData(t : string, u : UserInfo, refreshToken : string = '', provider : string = '') : void {
+    token.value = t
+    user.value = u
+    setStorage(STORAGE_KEY_TOKEN, t)
+    setStorageJSON(STORAGE_KEY_USER, u)
+    syncDerived()
+    if (refreshToken.length > 0) {
+        setStorage(STORAGE_KEY_REFRESH_TOKEN, refreshToken)
+    }
+    if (provider.length > 0) {
+        loginProvider.value = provider
+        setStorage(STORAGE_KEY_LOGIN_PROVIDER, provider)
+    }
+}
 
-function setAuthData(t : string, u : UserInfo) : void {
-	token.value = t
-	user.value = u
-	setStorage(STORAGE_KEY_TOKEN, t)
-	setStorageJSON(STORAGE_KEY_USER, u)
+function getRefreshToken() : string {
+    return getStorage(STORAGE_KEY_REFRESH_TOKEN)
 }
 
 function clearAuthData() : void {
-	token.value = ''
-	user.value = null
-	removeStorage(STORAGE_KEY_TOKEN)
-	removeStorage(STORAGE_KEY_USER)
+    token.value = ''
+    user.value = null
+    loginProvider.value = ''
+    removeStorage(STORAGE_KEY_TOKEN)
+    removeStorage(STORAGE_KEY_REFRESH_TOKEN)
+    removeStorage(STORAGE_KEY_USER)
+    removeStorage(STORAGE_KEY_LOGIN_PROVIDER)
+    syncDerived()
 }
 
 function restoreFromStorage() : boolean {
-	const t = getStorage(STORAGE_KEY_TOKEN)
-	if (t.length == 0) {
-		return false
-	}
-	const uObj = getStorageJSON(STORAGE_KEY_USER)
-	if (uObj == null) {
-		return false
-	}
-	// Android 端无法用 as 把 UTSJSONObject 强转为 type 字面量（Kotlin data class），
-	// 必须逐字段手动构造 UserInfo
-	const user_id = uObj['user_id'] as number
-	const username = uObj['username'] as string
-	const name = uObj['name'] as string
-	const role = uObj['role'] as string
-	const u : UserInfo = {
-		user_id: user_id,
-		username: username,
-		name: name,
-		role: role,
-	} as UserInfo
-	const avatar = uObj['avatar']
-	if (avatar != null) {
-		u.avatar = avatar as string
-	}
-	token.value = t
-	user.value = u
-	return true
+    const t = getStorage(STORAGE_KEY_TOKEN)
+    if (t.length == 0) {
+        return false
+    }
+    const uObj = getStorageJSON(STORAGE_KEY_USER)
+    if (uObj == null) {
+        return false
+    }
+    const user_id = uObj['user_id'] as number
+    const username = uObj['username'] as string
+    const name = uObj['name'] as string
+    const role = uObj['role'] as string
+    const u : UserInfo = {
+        user_id: user_id,
+        username: username,
+        name: name,
+        role: role,
+    } as UserInfo
+    const avatar_url = uObj['avatar_url']
+    if (avatar_url != null) {
+        u.avatar_url = avatar_url as string
+    }
+    token.value = t
+    user.value = u
+    loginProvider.value = getStorage(STORAGE_KEY_LOGIN_PROVIDER)
+    syncDerived()
+    return true
 }
 
 async function validateToken() : Promise<void> {
-	isInitializing.value = true
-	const restored = restoreFromStorage()
-	if (!restored) {
-		clearAuthData()
-		isInitializing.value = false
-		return
-	}
-
-	try {
-		const u = await getUserInfoApi()
-		if (u != null && u.user_id > 0) {
-			user.value = u
-			setStorageJSON(STORAGE_KEY_USER, u)
-		} else {
-			clearAuthData()
-		}
-	} catch (e) {
-		// 区分 401（token 过期）和网络错误（弱网/超时）：
-		// - 401：request 层 handleUnauthorized() 已清空 storage 并跳转登录页，
-		//        此处同步清空内存状态
-		// - 网络错误：storage 中 token 仍在，保留现有登录态，避免弱网误登出
-		const stillHasToken = getStorage(STORAGE_KEY_TOKEN).length > 0
-		if (stillHasToken) {
-			console.warn('[auth] validateToken network error, keeping existing auth:', e)
-		} else {
-			// token 已被 request 层清空（401），同步清空内存状态
-			clearAuthData()
-		}
-	} finally {
-		isInitializing.value = false
-	}
+    isInitializing.value = true
+    const restored = restoreFromStorage()
+    if (!restored) {
+        clearAuthData()
+        isInitializing.value = false
+        return
+    }
+    try {
+        const u = await getUserInfoApi()
+        if (u != null && u.user_id > 0) {
+            user.value = u
+            setStorageJSON(STORAGE_KEY_USER, u)
+            syncDerived()
+        } else {
+            clearAuthData()
+        }
+    } catch (e) {
+        const stillHasToken = getStorage(STORAGE_KEY_TOKEN).length > 0
+        if (stillHasToken) {
+            console.warn('[auth] validateToken network error, keeping existing auth:', e)
+        } else {
+            clearAuthData()
+        }
+    } finally {
+        isInitializing.value = false
+    }
 }
 
 async function login(params : LoginParams) : Promise<void> {
-	console.log('[auth] login start, username=', params.username)
-	try {
-		const result = await loginApi(params)
-		console.log('[auth] login result=', result)
-		if (result == null) {
-			throw new Error('登录响应为空')
-		}
-		setAuthData(result.token, result.user)
-	} catch (e) {
-		// 打印完整异常对象，避免 message 为空时丢失诊断信息
-		console.error('[auth] login exception:', e)
-		// UTS 中 catch 的 e 可能是任何 Throwable（含 Java NullPointerException 等），
-		// 不能直接用 as Error 强转（会再抛 ClassCastException），用 instanceof 判断
-		let msg = '登录失败（响应解析错误）'
-		if (e instanceof Error) {
-			const errObj = e as Error
-			const m = errObj.message
-			if (m != null && m.length > 0) {
-				msg = m
-			}
-		}
-		throw new Error(msg)
-	}
+    console.log('[auth] login start, username=', params.username)
+    try {
+        const result = await loginApi(params)
+        console.log('[auth] login result=', result)
+        if (result == null) {
+            throw new Error('登录响应为空')
+        }
+        setAuthData(result.token, result.user, result.refresh_token, 'password')
+    } catch (e) {
+        console.error('[auth] login exception:', e)
+        const msg = errMsg(e, '登录失败（响应解析错误）')
+        throw new Error(msg)
+    }
 }
 
-/** 邮箱/手机号验证码登录 */
 async function loginByCode(params : CodeLoginParams) : Promise<void> {
-	try {
-		const result = params.channel == 'email'
-			? await emailLoginApi(params.target, params.code)
-			: await phoneLoginApi(params.target, params.code)
-		if (result == null) {
-			throw new Error('登录响应为空')
-		}
-		setAuthData(result.token, result.user)
-	} catch (e) {
-		console.error('[auth] loginByCode exception:', e)
-		let msg = '登录失败（响应解析错误）'
-		if (e instanceof Error) {
-			const errObj = e as Error
-			const m = errObj.message
-			if (m != null && m.length > 0) {
-				msg = m
-			}
-		}
-		throw new Error(msg)
-	}
+    try {
+        const result = params.channel == 'email'
+            ? await emailLoginApi(params.target, params.code)
+            : await phoneLoginApi(params.target, params.code)
+        if (result == null) {
+            throw new Error('登录响应为空')
+        }
+        setAuthData(result.token, result.user, result.refresh_token, params.channel)
+    } catch (e) {
+        console.error('[auth] loginByCode exception:', e)
+        const msg = errMsg(e, '登录失败（响应解析错误）')
+        throw new Error(msg)
+    }
 }
 
-/**
- * 小程序微信一键登录
- * 1. 调用 uni.login({provider: 'weixin'}) 拿到临时登录凭证 code
- * 2. POST /auth/wx-login { code } 给后端换 openid/unionid 并拿到 token + userInfo
- * 3. 老用户（isNew!=true）静默登录；新用户（isNew=true）后端已自动以 openid 为唯一键建账户
- * @returns WechatLoginResult（含 isNew 字段，前端用于弹"已为您自动注册"提示）
- * @note 必须在小程序环境下调用，非小程序调用 uni.login 会失败（已在调用处 try/catch）
- */
 async function loginByWechat() : Promise<WechatLoginResult> {
-	// 1. 拉起微信授权拿到 code
-	const loginRes = await new Promise<UTSJSONObject>((resolve, reject) => {
-		uni.login({
-			provider: 'weixin',
-			success: (res) => resolve(res as UTSJSONObject),
-			fail: (err) => reject(err),
-		})
-	})
-	const code = loginRes['code'] as string
-	if (code == null || code.length == 0) {
-		throw new Error('微信授权失败：未获取到 code')
-	}
-	console.log('[auth] wechat login code obtained, len=', code.length)
-
-	// 2. 调后端接口换 token + userInfo（含 isNew 透传）
-	try {
-		const result = await mpWechatLoginApi(code)
-		if (result == null) {
-			throw new Error('登录响应为空')
-		}
-		setAuthData(result.token, result.user)
-		return result
-	} catch (e) {
-		console.error('[auth] loginByWechat exception:', e)
-		let msg = '微信登录失败（响应解析错误）'
-		if (e instanceof Error) {
-			const errObj = e as Error
-			const m = errObj.message
-			if (m != null && m.length > 0) {
-				msg = m
-			}
-		}
-		throw new Error(msg)
-	}
+    const loginRes = await new Promise<UTSJSONObject>((resolve, reject) => {
+        uni.login({
+            provider: 'weixin',
+            success: (res) => resolve(res as UTSJSONObject),
+            fail: (err) => reject(err),
+        })
+    })
+    const code = loginRes['code'] as string
+    if (code == null || code.length == 0) {
+        throw new Error('微信授权失败：未获取到 code')
+    }
+    console.log('[auth] wechat login code obtained, len=', code.length)
+    try {
+        const result = await mpWechatLoginApi(code)
+        if (result == null) {
+            throw new Error('登录响应为空')
+        }
+        setAuthData(result.token, result.user, result.refresh_token, 'wechat')
+        return result
+    } catch (e) {
+        console.error('[auth] loginByWechat exception:', e)
+        const msg = errMsg(e, '微信登录失败（响应解析错误）')
+        throw new Error(msg)
+    }
 }
 
 async function logout() : Promise<void> {
-	// 1. 先带 token 通知后端写黑名单（静默，失败不提示）
-	//    必须在 clearAuthData 之前调用，否则请求头没有 Authorization 会被后端 401，
-	//    进而触发 handleUnauthorized 弹"登录已过期"提示
-	const savedToken = token.value
-	if (savedToken.length > 0) {
-		try {
-			await logoutApi()
-		} catch (e) {
-			// 后端不可用/超时都不影响本地退出
-			console.warn('[auth] logout backend failed (ignored):', e)
-		}
-	}
-
-	// 2. 清空本地登录态并跳转登录页
-	clearAuthData()
-	uni.reLaunch({ url: '/pages/login/login' })
+    const savedToken = token.value
+    if (savedToken.length > 0) {
+        try {
+            await logoutApi()
+        } catch (e) {
+            console.warn('[auth] logout backend failed (ignored):', e)
+        }
+    }
+    clearAuthData()
+    uni.reLaunch({ url: '/pages/login/login' })
 }
 
-/**
- * 更新本地用户信息（昵称/头像），并持久化到 storage
- * @note 用于个人资料更新成功后同步本地状态，无需重新登录
- */
 function updateUser(patch : UpdateProfileParams) : void {
-	const current = user.value
-	if (current == null) {
-		console.warn('[auth] updateUser skipped: no current user')
-		return
-	}
-	// 基于当前用户复制一份再覆盖（UTS type 字面量编译为 Kotlin data class，需手动构造）
-	const updated : UserInfo = {
-		user_id: current.user_id,
-		username: current.username,
-		name: current.name,
-		role: current.role,
-	} as UserInfo
-	// 保留原 avatar（仅在非空时赋值，避免 undefined 引发问题）
-	const currentAvatar = current.avatar
-	if (currentAvatar != null && currentAvatar.length > 0) {
-		updated.avatar = currentAvatar
-	}
-	const nickname = patch.nickname
-	if (nickname != null && nickname.length > 0) {
-		updated.name = nickname
-	}
-	user.value = updated
-	setStorageJSON(STORAGE_KEY_USER, updated)
+    const current = user.value
+    if (current == null) {
+        console.warn('[auth] updateUser skipped: no current user')
+        return
+    }
+    const updated : UserInfo = {
+        user_id: current.user_id,
+        username: current.username,
+        name: current.name,
+        role: current.role,
+    } as UserInfo
+    const currentavatar_url = current.avatar_url
+    if (currentavatar_url != null && currentavatar_url.length > 0) {
+        updated.avatar_url = currentavatar_url
+    }
+    const nickname = patch.nickname
+    if (nickname != null && nickname.length > 0) {
+        updated.name = nickname
+    }
+    user.value = updated
+    setStorageJSON(STORAGE_KEY_USER, updated)
+    syncDerived()
 }
 
-/** 认证 store composable（单例模式，所有页面共享同一份状态） */
+async function tryRefreshToken() : Promise<boolean> {
+    const rt = getRefreshToken()
+    if (rt.length == 0) return false
+    try {
+        const result = await refreshTokenApi(rt)
+        if (result != null && result.token.length > 0) {
+            setAuthData(result.token, user.value!, result.refresh_token)
+            return true
+        }
+    } catch (e) {
+        console.warn('[auth] tryRefreshToken failed:', e)
+    }
+    return false
+}
+
+let _refreshRegistered = false
+
 export function useAuthStore() : AuthStore {
-	return {
-		token,
-		user,
-		isInitializing,
-		isLoggedIn,
-		displayName,
-		setAuthData: (t : string, u : UserInfo) : void => setAuthData(t, u),
-		clearAuthData: () : void => clearAuthData(),
-		restoreFromStorage: () : boolean => restoreFromStorage(),
-		validateToken: () : Promise<void> => validateToken(),
-		login: (params : LoginParams) : Promise<void> => login(params),
-		loginByCode: (params : CodeLoginParams) : Promise<void> => loginByCode(params),
-		loginByWechat: () : Promise<WechatLoginResult> => loginByWechat(),
-		logout: () : Promise<void> => logout(),
-		updateUser: (patch : UpdateProfileParams) : void => updateUser(patch),
-	} as AuthStore
+    // 惰性注册 token 刷新回调（首次调用 useAuthStore 时执行一次），避免在 .uts 模块顶层执行 async 副作用
+    if (!_refreshRegistered) {
+        _refreshRegistered = true
+        registerRefreshTokenHandler(() : Promise<boolean> => {
+            return tryRefreshToken()
+        })
+    }
+    return {
+        token,
+        user,
+        isInitializing,
+        isLoggedIn,
+        displayName,
+        loginProvider,
+        getRefreshToken: () : string => getRefreshToken(),
+        tryRefreshToken: () : Promise<boolean> => tryRefreshToken(),
+        setAuthData: (t : string, u : UserInfo, rt : string = '') : void => setAuthData(t, u, rt),
+        clearAuthData: () : void => clearAuthData(),
+        restoreFromStorage: () : boolean => restoreFromStorage(),
+        validateToken: () : Promise<void> => validateToken(),
+        login: (params : LoginParams) : Promise<void> => login(params),
+        loginByCode: (params : CodeLoginParams) : Promise<void> => loginByCode(params),
+        loginByWechat: () : Promise<WechatLoginResult> => loginByWechat(),
+        logout: () : Promise<void> => logout(),
+        updateUser: (patch : UpdateProfileParams) : void => updateUser(patch),
+    } as AuthStore
 }

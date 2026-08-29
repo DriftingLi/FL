@@ -1,0 +1,192 @@
+<template>
+    <scroll-view scroll-y class="setup-page">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <text class="title">完善个人资料</text>
+            <text class="subtitle">选择头像和昵称，让同学们认识你</text>
+        </view>
+        <view class="section">
+            <text class="section-label">头像</text>
+            <!-- 微信登录：用 chooseAvatar 选微信头像 -->
+            <button v-if="isWechat" class="avatar-btn-wechat" open-type="chooseAvatar" @chooseavatar="onChooseAvatar">
+                <image v-if="avatarUrl.length > 0" class="avatar-img" :src="avatarUrl" mode="aspectFill" />
+                <view v-else class="avatar-placeholder">
+                    <text class="avatar-icon">💚</text>
+                    <text class="avatar-hint">选择微信头像</text>
+                </view>
+            </button>
+            <!-- 其他登录：用相册/拍照 -->
+            <view v-else class="avatar-wrap" @click="onChooseImage">
+                <image v-if="avatarUrl.length > 0" class="avatar-img" :src="avatarUrl" mode="aspectFill" />
+                <view v-else class="avatar-placeholder">
+                    <text class="avatar-icon">📷</text>
+                    <text class="avatar-hint">点击选择头像</text>
+                </view>
+            </view>
+        </view>
+        <view class="section">
+            <text class="section-label">昵称</text>
+            <view class="input-wrap">
+                <input class="nickname-input" type="nickname" :value="nickName" @input="onNicknameInput" placeholder="请输入昵称" maxlength="30" />
+            </view>
+            <text class="input-hint">点击后键盘上方可一键填充微信昵称</text>
+        </view>
+        <view class="submit-area">
+            <view class="btn-submit" @click="onSubmit">
+                <text class="btn-submit-text">{{ submitting ? '提交中...' : '完成' }}</text>
+            </view>
+            <text class="skip-hint" @click="onSkip">稍后完善</text>
+        </view>
+    </scroll-view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { useAuthStore } from '../../stores/auth'
+    import { uploadAvatarApi, updateProfileApi } from '../../api/auth'
+
+    const auth = useAuthStore()
+    const statusBarHeight = useStatusBarHeight()
+    const avatarUrl = ref<string>('')
+    const avatarFilePath = ref<string>('')
+    const nickName = ref<string>('')
+    const submitting = ref<boolean>(false)
+
+    const canSubmit = computed<boolean>(() : boolean => {
+        return avatarUrl.value.length > 0 && nickName.value.trim().length > 0
+    })
+
+    /** 是否微信登录（决定用 chooseAvatar 还是 chooseImage） */
+    const isWechat = computed<boolean>(() : boolean => {
+        return auth.loginProvider.value == 'wechat'
+    })
+
+    /** 微信头像选择回调（button open-type="chooseAvatar"） */
+    function onChooseAvatar(e : any) : void {
+        console.log('[profile-setup] onChooseAvatar e:', JSON.stringify(e))
+        const detail = e.detail
+        if (detail == null) {
+            console.log('[profile-setup] detail is null')
+            return
+        }
+        const url = detail.avatarUrl
+        console.log('[profile-setup] url:', url)
+        if (url != null && (url as string).length > 0) {
+            avatarUrl.value = url as string
+            avatarFilePath.value = url as string
+            console.log('[profile-setup] avatar set:', avatarUrl.value)
+        }
+    }
+
+    /** 相册/拍照选择头像 */
+    function onChooseImage() : void {
+        uni.chooseImage({
+            count: 1,
+            sizeType: ['compressed'],
+            sourceType: ['album', 'camera'],
+            success: (res) => {
+                const paths = res.tempFilePaths
+                if (paths.length > 0) {
+                    avatarUrl.value = paths[0]
+                    avatarFilePath.value = paths[0]
+                }
+            },
+            fail: (err) => {
+                console.log('[profile-setup] chooseImage canceled/failed:', err)
+            }
+        })
+    }
+
+    function onNicknameInput(e : any) : void {
+        const detail = e.detail
+        if (detail == null) return
+        const val = detail.value
+        nickName.value = val != null ? (val as string) : ''
+    }
+
+    async function onSubmit() : Promise<void> {
+        console.log('[profile-setup] onSubmit clicked, avatar=', avatarUrl.value, 'nick=', nickName.value)
+        if (submitting.value) return
+        if (avatarUrl.value.length == 0) {
+            uni.showToast({ title: '请选择头像', icon: 'none' })
+            return
+        }
+        if (nickName.value.trim().length == 0) {
+            uni.showToast({ title: '请输入昵称', icon: 'none' })
+            return
+        }
+        submitting.value = true
+        uni.showLoading({ title: '保存中...', mask: true })
+        try {
+            if (avatarFilePath.value.length > 0) {
+                await uploadAvatarApi(avatarFilePath.value)
+            }
+        } catch (e) {
+            console.error('[profile-setup] upload avatar failed:', e)
+            let msg = '头像上传失败'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) { msg = m }
+            }
+            uni.hideLoading()
+            uni.showToast({ title: msg, icon: 'none' })
+            submitting.value = false
+            return
+        }
+        try {
+            const trimmed = nickName.value.trim()
+            if (trimmed.length > 0) {
+                await updateProfileApi({ nickname: trimmed })
+            }
+        } catch (e) {
+            console.error('[profile-setup] update nickname failed:', e)
+            let msg = '昵称保存失败'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) { msg = m }
+            }
+            uni.hideLoading()
+            uni.showToast({ title: msg, icon: 'none' })
+            submitting.value = false
+            return
+        }
+        uni.hideLoading()
+        uni.showToast({ title: '资料已提交，审核通过后生效', icon: 'none', duration: 2000 })
+        auth.updateUser({ nickname: nickName.value.trim() })
+        setTimeout(() => {
+            uni.reLaunch({ url: '/pages/guide/choose-cert' })
+        }, 1500)
+    }
+
+    function onSkip() : void {
+        uni.reLaunch({ url: '/pages/guide/choose-cert' })
+    }
+</script>
+
+<style>
+    .setup-page { flex: 1; background-color: #ffffff; }
+    .status-bar { background-color: #ffffff; }
+    .header { align-items: center; padding: 80rpx 0 60rpx 0; }
+    .title { font-size: 44rpx; font-weight: bold; color: #333333; }
+    .subtitle { font-size: 28rpx; color: #999999; margin-top: 16rpx; }
+    .section { padding: 0 56rpx; margin-bottom: 48rpx; }
+    .section-label { font-size: 28rpx; color: #666666; margin-bottom: 20rpx; }
+    .avatar-wrap { align-items: center; }
+    .avatar-btn-wechat { width: 200rpx; height: 200rpx; border-radius: 100rpx; overflow: hidden; background-color: #F5F6FA; border: 2rpx dashed #07C160; padding: 0; margin: 0 auto; }
+    .avatar-img { width: 200rpx; height: 200rpx; border-radius: 100rpx; }
+    .avatar-placeholder { width: 200rpx; height: 200rpx; border-radius: 100rpx; background-color: #F5F6FA; border: 2rpx dashed #C8CDD8; align-items: center; justify-content: center; }
+    .avatar-btn-wechat .avatar-placeholder { border-color: #07C160; }
+    .avatar-icon { font-size: 60rpx; }
+    .avatar-hint { font-size: 22rpx; color: #999999; margin-top: 8rpx; }
+    .input-wrap { background-color: #F5F6FA; border-radius: 16rpx; height: 96rpx; padding: 0 28rpx; flex-direction: row; align-items: center; }
+    .nickname-input { flex: 1; height: 96rpx; font-size: 30rpx; color: #333333; border: none; background-color: transparent; }
+    .input-hint { font-size: 22rpx; color: #BBBBBB; margin-top: 12rpx; }
+    .submit-area { padding: 40rpx 56rpx; align-items: center; }
+    .btn-submit { width: 100%; height: 96rpx; border-radius: 48rpx; background-color: #2979ff; align-items: center; justify-content: center; }
+    .btn-submit-text { font-size: 34rpx; font-weight: bold; color: #ffffff; }
+    .btn-disabled { opacity: 0.5; }
+    .skip-hint { font-size: 26rpx; color: #999999; margin-top: 32rpx; text-decoration: underline; }
+</style>

@@ -1,0 +1,376 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">文章详情</text>
+            <view class="header-right">
+                <view class="fav-btn" @click="onToggleFavorite">
+                    <text class="fav-icon">{{ isFavorited ? '⭐' : '☆' }}</text>
+                </view>
+            </view>
+        </view>
+
+        <scroll-view class="content-scroll" scroll-y="true">
+            <view v-if="loading" class="loading-wrap">
+                <text class="loading-text">加载中...</text>
+            </view>
+            <view v-else-if="detail != null" class="article-wrap">
+                <!-- 标题 -->
+                <text class="article-title">{{ detail!.title }}</text>
+                <!-- 元信息 -->
+                <view class="article-meta">
+                    <text v-if="detail!.category_label.length > 0" class="meta-category">{{ detail!.category_label }}</text>
+                    <text v-if="detail!.source.length > 0" class="meta-text">{{ detail!.source }}</text>
+                    <text v-if="detail!.published_at.length > 0" class="meta-text">{{ formatDateStr(detail!.published_at) }}</text>
+                    <text class="meta-text">{{ detail!.view_count }} 阅读</text>
+                </view>
+                <!-- 封面图 -->
+                <view v-if="detail!.cover_image.length > 0" class="cover-wrap">
+                    <image class="cover-img" :src="detail!.cover_image" mode="widthFix"></image>
+                </view>
+                <!-- 正文 Markdown 渲染 -->
+                <view class="article-body">
+                    <view v-for="(block, idx) in contentBlocks" :key="idx" class="md-block">
+                        <text v-if="block.type == 'heading'" class="md-heading" :style="{ fontSize: getHeadingSize(block.level) }">{{ block.text }}</text>
+                        <text v-else-if="block.type == 'paragraph'" class="md-paragraph">{{ block.text }}</text>
+                        <text v-else-if="block.type == 'code'" class="md-code">{{ block.text }}</text>
+                        <view v-else-if="block.type == 'list'" class="md-list">
+                            <text v-for="(item, itemIdx) in block.items" :key="itemIdx" class="md-list-item">· {{ item }}</text>
+                        </view>
+                        <text v-else-if="block.type == 'quote'" class="md-quote">{{ block.text }}</text>
+                        <view v-else-if="block.type == 'divider'" class="md-divider"></view>
+                        <image v-else-if="block.type == 'image'" class="md-image" :src="block.text" mode="widthFix"></image>
+                    </view>
+                </view>
+                <!-- 上下篇导航 -->
+                <view v-if="detail!.prev != null || detail!.next != null" class="nav-section">
+                    <view v-if="detail!.prev != null" class="nav-item" @click="onNavClick(detail!.prev!)">
+                        <text class="nav-label">上一篇</text>
+                        <text class="nav-title">{{ detail!.prev!.title }}</text>
+                    </view>
+                    <view v-if="detail!.next != null" class="nav-item" @click="onNavClick(detail!.next!)">
+                        <text class="nav-label">下一篇</text>
+                        <text class="nav-title">{{ detail!.next!.title }}</text>
+                    </view>
+                </view>
+            </view>
+            <view v-else class="empty-wrap">
+                <text class="empty-text">内容不存在</text>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onLoad, onShow } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
+    import { getFeaturedContentDetailApi, viewFeaturedContentApi } from '../../api/featured'
+    import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../api/favorite'
+    import { parseMarkdown } from '../../utils/markdown'
+    import type { FeaturedContentDetail, FeaturedContentItem, MarkdownBlock } from '../../types/index'
+    import { formatDateStr } from '../../utils/format'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const contentId = ref<number>(0)
+    const detail = ref<FeaturedContentDetail | null>(null)
+    const loading = ref<boolean>(true)
+    const isFavorited = ref<boolean>(false)
+    const favoriteId = ref<number>(0)
+
+    const contentBlocks = computed<MarkdownBlock[]>(() : MarkdownBlock[] => {
+        if (detail.value == null || detail.value!.content.length == 0) return []
+        return parseMarkdown(detail.value!.content)
+    })
+
+    function getHeadingSize(level : number) : string {
+        if (level == 1) return '38rpx'
+        if (level == 2) return '34rpx'
+        if (level == 3) return '30rpx'
+        return '28rpx'
+    }
+
+    async function loadDetail() : Promise<void> {
+        if (contentId.value <= 0) return
+        loading.value = true
+        try {
+            const result = await getFeaturedContentDetailApi(contentId.value)
+            detail.value = result
+            // 增加阅读量（静默）
+            viewFeaturedContentApi(contentId.value).catch(() : void => {})
+            // 检查收藏状态（静默）
+            checkFavoriteApi('featured', contentId.value).then((res) : void => {
+                isFavorited.value = res.favorited
+                favoriteId.value = res.favorite_id
+            }).catch(() : void => {})
+        } catch (e) {
+            uni.__f__('error','at pages/featured/featured-detail.uvue:117','[featured-detail] load failed:', e)
+        } finally {
+            loading.value = false
+        }
+    }
+
+    async function onToggleFavorite() : Promise<void> {
+        if (isFavorited.value) {
+            // 取消收藏
+            if (favoriteId.value <= 0) return
+            try {
+                await removeFavoriteApi(favoriteId.value)
+                isFavorited.value = false
+                favoriteId.value = 0
+                uni.showToast({ title: '已取消收藏', icon: 'success' })
+            } catch (e) {
+                uni.showToast({ title: '操作失败', icon: 'none' })
+            }
+        } else {
+            // 添加收藏
+            try {
+                const result = await addFavoriteApi('featured', contentId.value)
+                isFavorited.value = true
+                favoriteId.value = result.favorite_id
+                uni.showToast({ title: '收藏成功', icon: 'success' })
+            } catch (e) {
+                uni.showToast({ title: '操作失败', icon: 'none' })
+            }
+        }
+    }
+
+    function onNavClick(item : FeaturedContentItem) : void {
+        // 跳转到另一篇文章（用 replace 模式）
+        contentId.value = item.content_id
+        detail.value = null
+        loadDetail()
+    }
+
+    function onBack() : void {
+        goBack()
+    }
+
+    onLoad((options) : void => {
+        const id = options?.id
+        if (id != null) {
+            contentId.value = parseInt(id as string)
+        }
+        loadDetail()
+    })
+</script>
+
+<style>
+    .container {
+        flex: 1;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        width: 80rpx;
+        align-items: center;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #ffffff;
+    }
+
+    .header-title {
+        flex: 1;
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+        text-align: center;
+    }
+
+    .header-right {
+        width: 80rpx;
+        align-items: flex-end;
+        justify-content: center;
+    }
+
+    .fav-btn {
+        padding: 8rpx;
+    }
+
+    .fav-icon {
+        font-size: 40rpx;
+    }
+
+    .content-scroll {
+        flex: 1;
+    }
+
+    .loading-wrap {
+        align-items: center;
+        padding: 120rpx 0;
+    }
+
+    .loading-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .article-wrap {
+        background-color: #ffffff;
+        padding: 32rpx;
+    }
+
+    .article-title {
+        font-size: 38rpx;
+        font-weight: bold;
+        color: #333333;
+        lines: 3;
+        text-overflow: ellipsis;
+        margin-bottom: 16rpx;
+    }
+
+    .article-meta {
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 24rpx;
+        padding-bottom: 20rpx;
+        border-bottom-width: 1rpx;
+        border-bottom-color: #f0f0f0;
+    }
+
+    .meta-category {
+        font-size: 22rpx;
+        color: #2979ff;
+        background-color: #e8f0fe;
+        padding: 4rpx 14rpx;
+        border-radius: 8rpx;
+        margin-right: 16rpx;
+    }
+
+    .meta-text {
+        font-size: 24rpx;
+        color: #999999;
+        margin-right: 16rpx;
+    }
+
+    .cover-wrap {
+        margin-bottom: 24rpx;
+    }
+
+    .cover-img {
+        width: 100%;
+        border-radius: 12rpx;
+    }
+
+    .article-body {
+        margin-top: 16rpx;
+    }
+
+    .md-block {
+        margin-bottom: 16rpx;
+    }
+
+    .md-heading {
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 12rpx;
+        margin-top: 8rpx;
+    }
+
+    .md-paragraph {
+        font-size: 28rpx;
+        color: #555555;
+        line-height: 44rpx;
+    }
+
+    .md-code {
+        font-size: 24rpx;
+        color: #333333;
+        background-color: #f5f5f5;
+        padding: 16rpx 20rpx;
+        border-radius: 8rpx;
+        font-family: monospace;
+    }
+
+    .md-list {
+        flex-direction: column;
+        padding-left: 12rpx;
+    }
+
+    .md-list-item {
+        font-size: 28rpx;
+        color: #555555;
+        line-height: 44rpx;
+    }
+
+    .md-quote {
+        font-size: 26rpx;
+        color: #888888;
+        border-left-width: 6rpx;
+        border-left-color: #2979ff;
+        padding-left: 20rpx;
+        margin: 8rpx 0;
+        line-height: 40rpx;
+    }
+
+    .md-divider {
+        height: 2rpx;
+        background-color: #eeeeee;
+        margin: 20rpx 0;
+    }
+
+    .md-image {
+        width: 100%;
+        border-radius: 8rpx;
+        margin: 8rpx 0;
+    }
+
+    /* 上下篇导航 */
+    .nav-section {
+        margin-top: 40rpx;
+        padding-top: 24rpx;
+        border-top-width: 1rpx;
+        border-top-color: #f0f0f0;
+    }
+
+    .nav-item {
+        padding: 20rpx 0;
+        border-bottom-width: 1rpx;
+        border-bottom-color: #f0f0f0;
+    }
+
+    .nav-label {
+        font-size: 22rpx;
+        color: #999999;
+        margin-bottom: 6rpx;
+    }
+
+    .nav-title {
+        font-size: 28rpx;
+        color: #2979ff;
+        lines: 1;
+        text-overflow: ellipsis;
+    }
+
+    .empty-wrap {
+        align-items: center;
+        padding: 160rpx 0;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+</style>

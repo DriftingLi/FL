@@ -176,10 +176,8 @@
 	import { ref, computed } from 'vue'
 	import { useAuthStore } from '../../stores/auth'
 	import {
-		getPublicModelsApi,
-		getUserModelsApi,
-	} from '../../api/ai-assistant'
-	import {
+		getAiModelsApi,
+		getAiUserModelsApi,
 		loadAiChatSettings,
 		saveAiChatSettings,
 	} from '../../api/aiAssistant'
@@ -297,10 +295,10 @@
 	}
 
 	const functionItems : AIFunctionItem[] = [
-		{ key: 'fault-code', title: '故障代码查询', icon: '🔧', prompt: '帮我查询叉车故障代码含义' },
-		{ key: 'drawing', title: '图纸识别', icon: '📐', prompt: '请识别这张叉车图纸' },
-		{ key: 'exercise', title: '习题解答', icon: '📝', prompt: '请解答这道叉车维修题目' },
-		{ key: 'knowledge', title: '维保知识', icon: '📚', prompt: '请介绍叉车维保相关知识' },
+		{ key: 'fault-code', title: '故障代码查询', icon: '', prompt: '帮我查询叉车故障代码含义' },
+		{ key: 'drawing', title: '图纸识别', icon: '', prompt: '请识别这张叉车图纸' },
+		{ key: 'exercise', title: '习题解答', icon: '', prompt: '请解答这道叉车维修题目' },
+		{ key: 'knowledge', title: '维保知识', icon: '', prompt: '请介绍叉车维保相关知识' },
 	]
 
 	const quickPrompts : string[] = [
@@ -355,7 +353,7 @@
 	// 数据加载
 	async function loadModels() : Promise<void> {
 		try {
-			models.value = await getPublicModelsApi()
+			models.value = await getAiModelsApi()
 		} catch (e) {
 			console.error('loadModels failed:', e)
 			models.value = [] as AiModel[]
@@ -363,7 +361,7 @@
 		// 登录用户同时加载自定义模型
 		if (auth.isLoggedIn.value) {
 			try {
-				userModels.value = await getUserModelsApi()
+				userModels.value = await getAiUserModelsApi()
 			} catch (e) {
 				console.error('loadUserModels failed:', e)
 				userModels.value = [] as AiUserModel[]

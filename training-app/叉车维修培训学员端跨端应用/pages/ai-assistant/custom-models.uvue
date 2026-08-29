@@ -75,7 +75,7 @@
 	import { onShow } from '@dcloudio/uni-app'
 	import { useStatusBarHeight } from '../../utils/system'
 	import { goBack } from '../../utils/navigation'
-	import { getUserModelsApi, saveUserModelApi, deleteUserModelApi } from '../../api/ai-assistant'
+	import { getAiUserModelsApi, saveAiUserModelApi, deleteAiUserModelApi } from '../../api/aiAssistant'
 	import type { AiUserModel } from '../../types/index'
 	import { STORAGE_KEY_AI_SELECTED_USER_MODEL } from '../../constants/app'
 
@@ -97,7 +97,7 @@
 
 	async function loadModels() : Promise<void> {
 		try {
-			userModels.value = await getUserModelsApi()
+			userModels.value = await getAiUserModelsApi()
 		} catch (e) {
 			console.error('[custom-models] load failed:', e)
 			userModels.value = []
@@ -170,7 +170,7 @@
 			if (editingId.value > 0) {
 				payload['id'] = editingId.value
 			}
-			await saveUserModelApi(payload)
+			await saveAiUserModelApi(payload)
 			uni.showToast({ title: editingId.value > 0 ? '更新成功' : '添加成功', icon: 'success' })
 			closeForm()
 			await loadModels()
@@ -185,7 +185,7 @@
 	 *  避免 Kotlin 局部函数前向引用解析失败（UTS error18）。 */
 	async function doDelete(id : number) : Promise<void> {
 		try {
-			await deleteUserModelApi(id)
+			await deleteAiUserModelApi(id)
 			uni.showToast({ title: '删除成功', icon: 'success' })
 			await loadModels()
 		} catch (e) {

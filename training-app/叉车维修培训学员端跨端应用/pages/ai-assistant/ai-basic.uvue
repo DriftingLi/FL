@@ -137,8 +137,8 @@
 	import { onLoad, onShow } from '@dcloudio/uni-app'
 	import { ref } from 'vue'
 	import { useAuthStore } from '../../stores/auth'
-	import { getPublicModelsApi } from '../../api/ai-assistant'
 	import {
+		getAiModelsApi,
 		loadAiChatSettings,
 		saveAiChatSettings,
 	} from '../../api/aiAssistant'
@@ -224,7 +224,7 @@
 	// 数据加载
 	async function loadModels() : Promise<void> {
 		try {
-			const list = await getPublicModelsApi()
+			const list = await getAiModelsApi()
 			models.value = list
 			// 基础版只走平台模型：优先采用'对话设置'中保存的 admin 选择，其次默认第一个
 			const saved = loadAiChatSettings()

@@ -1,0 +1,290 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">考情资讯</text>
+            <view class="header-right"></view>
+        </view>
+        <scroll-view class="tab-bar" direction="horizontal" :show-scrollbar="false">
+            <view class="tab-track">
+                <view v-for="(tab, idx) in mainTabs" :key="idx" class="tab-item"
+                    :class="{ active: activeMainTab === idx }" @click="onMainTabChange(idx)">
+                    <text class="tab-text" :class="{ 'tab-text-active': activeMainTab === idx }" lines="1">{{ tab }}</text>
+                    <view v-if="activeMainTab === idx" class="tab-underline"></view>
+                </view>
+            </view>
+        </scroll-view>
+        <view class="filter-bar">
+            <view v-for="(tag, idx) in filterTags" :key="idx" class="filter-tag"
+                :class="{ 'filter-tag-active': activeFilter === idx }" @click="onFilterChange(idx)">
+                <text class="filter-tag-text"
+                    :class="{ 'filter-tag-text-active': activeFilter === idx }">{{ tag }}</text>
+            </view>
+        </view>
+        <scroll-view class="content-scroll" direction="vertical" @scrolltolower="onLoadMore">
+            <view v-if="items.length == 0 && !loading" class="empty-tip">
+                <text class="empty-text">暂无资讯</text>
+            </view>
+            <view class="news-list">
+                <view v-for="(item, idx) in items" :key="idx" class="news-item" @click="onItemClick(item)">
+                    <view class="news-dot"></view>
+                    <text class="news-title">{{ item.title }}</text>
+                </view>
+            </view>
+            <view v-if="loading" class="loading-more">
+                <text class="loading-text">加载中...</text>
+            </view>
+            <view v-if="noMore && items.length > 0" class="loading-more">
+                <text class="loading-text">没有更多了</text>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
+    function onBack() : void {
+        goBack()
+    }
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const mainTabs : string[] = ['招聘信息', '新闻资讯', '考试动态', '相关问题', '报名入口', '成绩查询', '岗位表']
+    const activeMainTab = ref<number>(1)
+
+    const filterTags : string[] = ['最新资讯', '热点关注', '政策法规', '全部']
+    const activeFilter = ref<number>(0)
+
+    type NewsItem = {
+        id : number
+        title : string
+        category : string
+    }
+
+    const items = ref<NewsItem[]>([])
+    const page = ref<number>(1)
+    const loading = ref<boolean>(false)
+    const noMore = ref<boolean>(false)
+
+    async function loadItems(reset : boolean = false) : Promise<void> {
+        if (loading.value) return
+        if (reset) {
+            page.value = 1
+            noMore.value = false
+        }
+        if (noMore.value && !reset) return
+
+        loading.value = true
+        try {
+            const mockItems : NewsItem[] = [
+                { id: 1, title: '国务院安委会办公室应急管理部关于开展2026年', category: 'policy' },
+                { id: 2, title: '2026年特种设备作业人员考试安排通知', category: 'exam' },
+                { id: 3, title: '叉车司机职业技能等级认定新规解读', category: 'hot' },
+                { id: 4, title: '应急管理部发布叉车安全操作规范（2026修订版）', category: 'policy' },
+                { id: 5, title: '全国叉车维修技能竞赛报名入口已开放', category: 'latest' },
+            ]
+            if (reset) {
+                items.value = mockItems
+            } else {
+                items.value = items.value.concat(mockItems)
+            }
+            noMore.value = true
+        } catch (e) {
+            console.error('[exam-info] load failed:', e)
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function onMainTabChange(idx : number) : void {
+        activeMainTab.value = idx
+        loadItems(true)
+    }
+
+    function onFilterChange(idx : number) : void {
+        activeFilter.value = idx
+        loadItems(true)
+    }
+
+    function onLoadMore() : void {
+        loadItems(false)
+    }
+
+    function onItemClick(item : NewsItem) : void {
+        uni.showToast({ title: '详情开发中', icon: 'none' })
+    }
+
+    onLoad(() => {
+        loadItems(true)
+    })
+</script>
+
+<style>
+    .container {
+        flex: 1;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #ffffff;
+    }
+
+    .header {
+        background-color: #ffffff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        width: 80rpx;
+        align-items: center;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #333333;
+    }
+
+    .header-title {
+        flex: 1;
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #333333;
+        text-align: center;
+    }
+
+    .header-right {
+        width: 80rpx;
+    }
+
+    .tab-bar {
+        height: 80rpx;
+        background-color: #ffffff;
+        border-bottom: 1rpx solid #f0f0f0;
+    }
+
+    .tab-track {
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-items: center;
+    }
+
+    .tab-item {
+        width: 140rpx;
+        padding: 0 16rpx;
+        align-items: center;
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .tab-text {
+        font-size: 28rpx;
+        color: #666666;
+    }
+
+    .tab-text-active {
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    .tab-underline {
+        width: 40rpx;
+        height: 6rpx;
+        border-radius: 3rpx;
+        background-color: #2979ff;
+        margin-top: 8rpx;
+    }
+
+    .filter-bar {
+        flex-direction: row;
+        background-color: #ffffff;
+        padding: 16rpx 24rpx 20rpx;
+        flex-wrap: wrap;
+    }
+
+    .filter-tag {
+        padding: 10rpx 28rpx;
+        border-radius: 28rpx;
+        background-color: #f5f5f5;
+        margin-right: 16rpx;
+        margin-bottom: 8rpx;
+    }
+
+    .filter-tag-active {
+        background-color: #2979ff;
+    }
+
+    .filter-tag-text {
+        font-size: 24rpx;
+        color: #666666;
+    }
+
+    .filter-tag-text-active {
+        color: #ffffff;
+        font-weight: 500;
+    }
+
+    .content-scroll {
+        flex: 1;
+        height: 0;
+        background-color: #ffffff;
+    }
+
+    .news-list {
+        flex-direction: column;
+        padding: 8rpx 0;
+    }
+
+    .news-item {
+        flex-direction: row;
+        align-items: center;
+        padding: 28rpx 32rpx;
+        border-bottom: 1rpx solid #f5f5f5;
+    }
+
+    .news-dot {
+        width: 12rpx;
+        height: 12rpx;
+        border-radius: 6rpx;
+        background-color: #2979ff;
+        margin-right: 20rpx;
+        flex-shrink: 0;
+    }
+
+    .news-title {
+        flex: 1;
+        font-size: 28rpx;
+        color: #333333;
+        lines: 2;
+        text-overflow: ellipsis;
+    }
+
+    .empty-tip {
+        align-items: center;
+        padding: 120rpx 0;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .loading-more {
+        align-items: center;
+        padding: 24rpx 0;
+    }
+
+    .loading-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
+</style>

@@ -1,0 +1,121 @@
+/**
+ * 学习资料 API（ADR-0018）
+ * - 资料 = 已发布课程下章节挂载的课件附件（chapter_file 聚合视图）
+ *
+ * 接口：
+ *   GET  /api/materials                      资料列表（可按课程过滤）
+ *   GET  /api/materials/:id                  资料详情（含课程/章节回填）
+ *   GET  /api/materials/:id/download         下载地址
+ *   GET  /api/student/materials              学员可访问资料（同列表别名）
+ */
+import { get } from './request'
+import type { MaterialItem, MaterialListResult, MaterialDownloadInfo } from '../types/index'
+
+function toNumber(v : any | null, defaultVal : number = 0) : number {
+	if (v == null) return defaultVal
+	const s = `${v}`
+	const n = parseFloat(s)
+	if (isNaN(n)) return defaultVal
+	return n
+}
+
+function toStr(v : any | null, defaultVal : string = '') : string {
+	if (v == null) return defaultVal
+	return `${v}`
+}
+
+function buildMaterialItem(obj : UTSJSONObject) : MaterialItem {
+	return {
+		file_id: toNumber(obj['file_id'], toNumber(obj['id'])),
+		chapter_id: toNumber(obj['chapter_id']),
+		chapter_title: toStr(obj['chapter_title']),
+		course_id: toNumber(obj['course_id']),
+		course_name: toStr(obj['course_name']),
+		file_name: toStr(obj['file_name']),
+		file_url: toStr(obj['file_url']),
+		content_type: toStr(obj['content_type']),
+		file_size: toNumber(obj['file_size']),
+		created_at: toStr(obj['created_at']),
+	} as MaterialItem
+}
+
+/**
+ * 资料列表
+ * @param courseId 可选，按课程过滤
+ * @param page 页码
+ * @param pageSize 每页条数
+ */
+export function getMaterialsApi(courseId : number = 0, page : number = 1, pageSize : number = 20) : Promise<MaterialListResult> {
+	const params : UTSJSONObject = {
+		page: page.toString(),
+		page_size: pageSize.toString(),
+	} as UTSJSONObject
+	if (courseId > 0) {
+		params['course_id'] = courseId.toString()
+	}
+	return get('/materials', params).then((data : UTSJSONObject) : MaterialListResult => {
+		const materials : MaterialItem[] = []
+		const listRaw = data['materials']
+		if (listRaw != null) {
+			const arr = listRaw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				materials.push(buildMaterialItem(arr[i]))
+			}
+		}
+		return {
+			materials: materials,
+			total: toNumber(data['total']),
+			page: toNumber(data['page'], 1),
+			pages: toNumber(data['pages']),
+		} as MaterialListResult
+	})
+}
+
+/**
+ * 资料详情
+ * @param materialId 资料 ID（file_id）
+ */
+export function getMaterialDetailApi(materialId : number) : Promise<MaterialItem> {
+	return get('/materials/' + materialId.toString()).then((data : UTSJSONObject) : MaterialItem => {
+		return buildMaterialItem(data)
+	})
+}
+
+/**
+ * 获取下载地址
+ * @param materialId 资料 ID
+ */
+export function getMaterialDownloadApi(materialId : number) : Promise<MaterialDownloadInfo> {
+	return get('/materials/' + materialId.toString() + '/download').then((data : UTSJSONObject) : MaterialDownloadInfo => {
+		return {
+			file_url: toStr(data['file_url']),
+			file_name: toStr(data['file_name']),
+		} as MaterialDownloadInfo
+	})
+}
+
+/**
+ * 学员可访问资料（同列表，别名端点）
+ */
+export function getStudentMaterialsApi(page : number = 1, pageSize : number = 20) : Promise<MaterialListResult> {
+	const params : UTSJSONObject = {
+		page: page.toString(),
+		page_size: pageSize.toString(),
+	} as UTSJSONObject
+	return get('/student/materials', params).then((data : UTSJSONObject) : MaterialListResult => {
+		const materials : MaterialItem[] = []
+		const listRaw = data['materials']
+		if (listRaw != null) {
+			const arr = listRaw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				materials.push(buildMaterialItem(arr[i]))
+			}
+		}
+		return {
+			materials: materials,
+			total: toNumber(data['total']),
+			page: toNumber(data['page'], 1),
+			pages: toNumber(data['pages']),
+		} as MaterialListResult
+	})
+}

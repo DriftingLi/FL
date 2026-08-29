@@ -13,22 +13,10 @@
  *   buildXxx 函数负责字段映射转换
  */
 import { get, post } from './request'
-import type { CourseListResult, CourseDetail, CourseItem, ChapterItem, ChapterDetail, ChapterFile, SpecialtyItem, LevelItem, CourseCategory } from '../types/index'
+import { toNumber, toStr } from './helpers'
+import type { CourseListResult, CourseDetail, CourseItem, ChapterItem, ChapterDetail, ChapterFile, SpecialtyItem, LevelItem, CourseCategory, TagItem, CoursePrereq } from '../types/index'
 
-/** 安全转换为 number */
-function toNumber(v : any | null, defaultVal : number = 0) : number {
-	if (v == null) return defaultVal
-	const s = `${v}`
-	const n = parseFloat(s)
-	if (isNaN(n)) return defaultVal
-	return n
-}
 
-/** 安全转换为 string */
-function toStr(v : any | null, defaultVal : string = '') : string {
-	if (v == null) return defaultVal
-	return `${v}`
-}
 
 /**
  * 从 UTSJSONObject 构造 CourseItem
@@ -96,9 +84,20 @@ function buildChapterDetail(obj : UTSJSONObject) : ChapterDetail {
 }
 
 /**
+ * 从 UTSJSONObject 构造 CoursePrereq
+ */
+function buildCoursePrereq(obj : UTSJSONObject) : CoursePrereq {
+	return {
+		course_id: toNumber(obj['course_id']),
+		name: toStr(obj['name']),
+	} as CoursePrereq
+}
+
+/**
  * 从 UTSJSONObject 构造 CourseDetail
- * @note 后端返回 { course_info: {...}, chapters: [...], progress: 33.0 }
- *       前端类型用 { course_id, title, chapters, progress_pct }
+ * @note 后端返回 { course_info: {...}, chapters: [...], progress: 33.0, is_enrolled, completed_chapters }
+ *       course_info 内嵌 specialty: {name}, level: {name}, certificate_template: {name, validity_days},
+ *       prerequisites: [{course_id, name}], theory_hours, practice_hours
  */
 function buildCourseDetail(obj : UTSJSONObject) : CourseDetail {
 	const chapters : ChapterItem[] = []
@@ -120,18 +119,60 @@ function buildCourseDetail(obj : UTSJSONObject) : CourseDetail {
 	let courseDuration : number = 0
 	let courseSpecialtyId : number = 0
 	let courseLevelId : number = 0
+	let specialtyName : string = ''
+	let levelName : string = ''
+	let theoryHours : number = 0
+	let practiceHours : number = 0
+	let certificateName : string = ''
+	let certificateValidityDays : number = 0
+	let prerequisites : CoursePrereq[] = []
+
 	if (courseInfo != null) {
 		const infoObj = courseInfo as UTSJSONObject
 		courseId = toNumber(infoObj['course_id'])
-		courseTitle = toStr(infoObj['name'])            // 后端 name → 前端 title
+		courseTitle = toStr(infoObj['name'])
 		courseDesc = toStr(infoObj['description'])
 		courseCategory = toStr(infoObj['category'])
-		courseCover = toStr(infoObj['cover_image'])     // 后端 cover_image → 前端 cover_url
+		courseCover = toStr(infoObj['cover_image'])
 		courseDuration = toNumber(infoObj['duration'])
 		courseSpecialtyId = toNumber(infoObj['specialty_id'])
 		courseLevelId = toNumber(infoObj['level_id'])
+		theoryHours = toNumber(infoObj['theory_hours'])
+		practiceHours = toNumber(infoObj['practice_hours'])
+
+		// 嵌套 specialty 对象
+		const specialtyRaw = infoObj['specialty']
+		if (specialtyRaw != null) {
+			const specObj = specialtyRaw as UTSJSONObject
+			specialtyName = toStr(specObj['name'])
+			if (courseSpecialtyId == 0) courseSpecialtyId = toNumber(specObj['specialty_id'])
+		}
+
+		// 嵌套 level 对象
+		const levelRaw = infoObj['level']
+		if (levelRaw != null) {
+			const lvObj = levelRaw as UTSJSONObject
+			levelName = toStr(lvObj['name'])
+			if (courseLevelId == 0) courseLevelId = toNumber(lvObj['level_id'])
+		}
+
+		// 嵌套 certificate_template 对象
+		const certRaw = infoObj['certificate_template']
+		if (certRaw != null) {
+			const certObj = certRaw as UTSJSONObject
+			certificateName = toStr(certObj['name'])
+			certificateValidityDays = toNumber(certObj['validity_days'])
+		}
+
+		// 前置课程列表
+		const prereqRaw = infoObj['prerequisites']
+		if (prereqRaw != null) {
+			const prereqArr = prereqRaw as Array<UTSJSONObject>
+			for (let i = 0; i < prereqArr.length; i++) {
+				prerequisites.push(buildCoursePrereq(prereqArr[i]))
+			}
+		}
 	} else {
-		// 兼容：某些接口可能直接返回顶层字段
 		courseId = toNumber(obj['course_id'])
 		courseTitle = toStr(obj['name'])
 		courseDesc = toStr(obj['description'])
@@ -144,6 +185,10 @@ function buildCourseDetail(obj : UTSJSONObject) : CourseDetail {
 
 	// 后端 progress → 前端 progress_pct
 	const progressPct = toNumber(obj['progress'])
+	// 是否已报名
+	const isEnrolled = obj['is_enrolled'] == true
+	// 已完成章节数
+	const completedChapters = toNumber(obj['completed_chapters'])
 
 	const detail : CourseDetail = {
 		course_id: courseId,
@@ -156,6 +201,15 @@ function buildCourseDetail(obj : UTSJSONObject) : CourseDetail {
 		progress_pct: progressPct,
 		specialty_id: courseSpecialtyId,
 		level_id: courseLevelId,
+		specialty_name: specialtyName,
+		level_name: levelName,
+		theory_hours: theoryHours,
+		practice_hours: practiceHours,
+		certificate_name: certificateName,
+		certificate_validity_days: certificateValidityDays,
+		is_enrolled: isEnrolled,
+		completed_chapters: completedChapters,
+		prerequisites: prerequisites,
 	} as CourseDetail
 	return detail
 }
@@ -243,6 +297,15 @@ function getMockCourseDetail(courseId : number) : CourseDetail {
 		progress_pct: 33,
 		specialty_id: 1,
 		level_id: 1,
+		specialty_name: '操作',
+		level_name: '入门',
+		theory_hours: 16,
+		practice_hours: 8,
+		certificate_name: '叉车维修技能培训合格证书',
+		certificate_validity_days: 365,
+		is_enrolled: true,
+		completed_chapters: 1,
+		prerequisites: [] as CoursePrereq[],
 	} as CourseDetail
 }
 
@@ -294,28 +357,6 @@ export function getCourseListApi(page : number = 1, pageSize : number = 12, spec
 }
 
 /**
- * 专业方向列表（公开，仅启用项）
- * @deprecated 仅管理端可用；学员端请使用 getCatalogTreeSpecialties
- */
-export function getSpecialtiesApi() : Promise<SpecialtyItem[]> {
-	return get('/specialties').then((data : UTSJSONObject) : SpecialtyItem[] => {
-		console.log('[getSpecialtiesApi] raw data:', JSON.stringify(data))
-		const items : SpecialtyItem[] = []
-		const raw = data['specialties']
-		if (raw != null) {
-			const arr = raw as Array<UTSJSONObject>
-			for (let i = 0; i < arr.length; i++) {
-				items.push(buildSpecialtyItem(arr[i]))
-			}
-		}
-		return items
-	}).catch((e) : SpecialtyItem[] => {
-		console.warn('[getSpecialtiesApi] network failed, using mock data:', e)
-		return getMockSpecialties()
-	})
-}
-
-/**
  * 从课程目录树提取专业方向（学员端公开接口）
  * 后端无独立的学员端 /specialties 端点，通过 /catalog/tree 获取后提取
  */
@@ -339,24 +380,6 @@ export function getCatalogTreeSpecialties() : Promise<SpecialtyItem[]> {
 	}).catch((e) : SpecialtyItem[] => {
 		console.warn('[getCatalogTreeSpecialties] failed, using mock data:', e)
 		return getMockSpecialties()
-	})
-}
-
-/**
- * 课程分类列表（兼容旧接口，内部复用专业方向）
- * @deprecated 请使用 getSpecialtiesApi
- */
-export function getCourseCategoriesApi() : Promise<CourseCategory[]> {
-	return getSpecialtiesApi().then((specs : SpecialtyItem[]) : CourseCategory[] => {
-		const items : CourseCategory[] = []
-		for (let i = 0; i < specs.length; i++) {
-			items.push({
-				id: specs[i].specialty_id,
-				name: specs[i].name,
-				value: specs[i].specialty_id.toString(),
-			} as CourseCategory)
-		}
-		return items
 	})
 }
 
@@ -420,14 +443,6 @@ export function getChapterDetailApi(courseId : number, chapterId : number) : Pro
 }
 
 /**
- * 章节幻灯片
- * @param chapterId 章节 ID（全局唯一）
- */
-export function getChapterSlidesApi(chapterId : number) : Promise<UTSJSONObject> {
-	return get('/chapter/' + chapterId + '/slides')
-}
-
-/**
  * 更新学习进度
  * @param courseId 课程 ID
  * @param chapterId 当前学习章节 ID
@@ -439,4 +454,44 @@ export function updateCourseProgressApi(courseId : number, chapterId : number, d
 		duration: duration,
 	} as UTSJSONObject
 	return post('/course/' + courseId + '/progress', payload)
+}
+
+// ========== 标签 ==========
+
+/** 从 UTSJSONObject 构造 TagItem */
+function buildTagItem(obj : UTSJSONObject) : TagItem {
+	return {
+		id: toNumber(obj['id']),
+		code: toStr(obj['code']),
+		name: toStr(obj['name']),
+		description: toStr(obj['description']),
+		sort_order: toNumber(obj['sort_order']),
+		status: toNumber(obj['status']),
+		question_count: toNumber(obj['question_count']),
+	} as TagItem
+}
+
+/** 题库标签列表（仅启用项，含已发布题目数） */
+export function getTagsApi() : Promise<TagItem[]> {
+	return get('/tags').then((data : UTSJSONObject) : TagItem[] => {
+		const items : TagItem[] = []
+		// data 可能是数组或 { tags: [...] }
+		let listRaw = data['tags']
+		if (listRaw == null) {
+			listRaw = data['list']
+		}
+		if (listRaw != null) {
+			const arr = listRaw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				items.push(buildTagItem(arr[i]))
+			}
+		} else {
+			// 可能直接是数组
+			const arr = data as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				items.push(buildTagItem(arr[i]))
+			}
+		}
+		return items
+	})
 }

@@ -139,6 +139,7 @@
 	import { ref } from 'vue'
 	import { onShow } from '@dcloudio/uni-app'
 	import { useStatusBarHeight } from '../../utils/system'
+	import { goBack } from '../../utils/navigation'
 	import {
 		getAiModelsApi,
 		getAiUserModelsApi,
@@ -168,13 +169,7 @@
 	}
 
 	function onBack() : void {
-		// 页面栈只有一层时 navigateBack 会失败，回退到 AI 助手页
-		const pages = getCurrentPages()
-		if (pages != null && pages.length > 1) {
-			uni.navigateBack({})
-		} else {
-			uni.reLaunch({ url: '/pages/ai-assistant/ai-assistant' })
-		}
+		goBack()
 	}
 
 	function onNameInput(e : InputEvent) : void {
@@ -316,12 +311,7 @@
 			saveAiChatSettings(settings.value)
 			uni.showToast({ title: '已保存', icon: 'success' })
 			setTimeout(() => {
-				const pages = getCurrentPages()
-				if (pages != null && pages.length > 1) {
-					uni.navigateBack({})
-				} else {
-					uni.reLaunch({ url: '/pages/ai-assistant/ai-assistant' })
-				}
+				goBack()
 			}, 500)
 		} finally {
 			saving.value = false

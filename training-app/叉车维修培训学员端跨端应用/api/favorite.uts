@@ -1,0 +1,96 @@
+/**
+ * 收藏模块 API（ADR-0018）
+ * - 多态收藏：target_type ∈ course / chapter / question / featured / topic
+ * - user + type + id 唯一（幂等）
+ *
+ * 接口：
+ *   GET  /api/favorites                    我的收藏列表（快照回填）
+ *   POST /api/favorites                    添加收藏（幂等）
+ *   DELETE /api/favorites/:id              取消收藏（仅本人）
+ *   GET  /api/favorites/check              检查是否已收藏
+ */
+import { get, post, del } from './request'
+import { toNumber, toStr } from './helpers'
+import type { FavoriteItem, FavoriteListResult, FavoriteCheckResult } from '../types/index'
+
+
+
+/** 从 UTSJSONObject 构造 FavoriteItem */
+function buildFavoriteItem(obj : UTSJSONObject) : FavoriteItem {
+	return {
+		favorite_id: toNumber(obj['favorite_id'], toNumber(obj['id'])),
+		target_type: toStr(obj['target_type']),
+		target_id: toNumber(obj['target_id']),
+		title: toStr(obj['title']),
+		cover: toStr(obj['cover']),
+		created_at: toStr(obj['created_at']),
+	} as FavoriteItem
+}
+
+/**
+ * 我的收藏列表
+ */
+export function getFavoritesApi(targetType : string = '', page : number = 1, pageSize : number = 20) : Promise<FavoriteListResult> {
+	const params : UTSJSONObject = {
+		page: page.toString(),
+		page_size: pageSize.toString(),
+	} as UTSJSONObject
+	if (targetType.length > 0) {
+		params['target_type'] = targetType
+	}
+	return get('/favorites', params).then((data : UTSJSONObject) : FavoriteListResult => {
+		const items : FavoriteItem[] = []
+		// 后端返回字段为 favorites（非 items）
+		const listRaw = data['favorites']
+		if (listRaw != null) {
+			const arr = listRaw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				items.push(buildFavoriteItem(arr[i]))
+			}
+		}
+		return {
+			items: items,
+			total: toNumber(data['total']),
+			page: toNumber(data['page'], 1),
+			page_size: toNumber(data['page_size'], 20),
+		} as FavoriteListResult
+	})
+}
+
+/**
+ * 添加收藏（幂等）
+ */
+export function addFavoriteApi(targetType : string, targetId : number) : Promise<FavoriteItem> {
+	const payload : UTSJSONObject = {
+		target_type: targetType,
+		target_id: targetId,
+	} as UTSJSONObject
+	return post('/favorites', payload).then((data : UTSJSONObject) : FavoriteItem => {
+		return buildFavoriteItem(data)
+	})
+}
+
+/**
+ * 取消收藏
+ */
+export function removeFavoriteApi(favoriteId : number) : Promise<void> {
+	return del('/favorites/' + favoriteId.toString()).then(() : void => {
+		// 无返回数据
+	})
+}
+
+/**
+ * 检查是否已收藏
+ */
+export function checkFavoriteApi(targetType : string, targetId : number) : Promise<FavoriteCheckResult> {
+	const params : UTSJSONObject = {
+		target_type: targetType,
+		target_id: targetId.toString(),
+	} as UTSJSONObject
+	return get('/favorites/check', params).then((data : UTSJSONObject) : FavoriteCheckResult => {
+		return {
+			favorited: data['favorited'] == true,
+			favorite_id: toNumber(data['favorite_id']),
+		} as FavoriteCheckResult
+	})
+}

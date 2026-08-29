@@ -9,6 +9,31 @@
             <view class="header-right"></view>
         </view>
 
+        <!-- 统计卡片 -->
+        <view class="stats-card">
+            <view class="stats-row">
+                <view class="stats-item">
+                    <text class="stats-num">{{ total }}</text>
+                    <text class="stats-label">总模考</text>
+                </view>
+                <view class="stats-divider"></view>
+                <view class="stats-item">
+                    <text class="stats-num">{{ passedCount }}</text>
+                    <text class="stats-label">通过</text>
+                </view>
+                <view class="stats-divider"></view>
+                <view class="stats-item">
+                    <text class="stats-num">{{ formatAccuracy(passRate) }}</text>
+                    <text class="stats-label">通过率</text>
+                </view>
+                <view class="stats-divider"></view>
+                <view class="stats-item">
+                    <text class="stats-num">{{ formatAccuracy(avgScore) }}</text>
+                    <text class="stats-label">平均分</text>
+                </view>
+            </view>
+        </view>
+
         <!-- 汇总 -->
         <view class="summary">
             <text class="summary-text">共 {{ total }} 次模考</text>
@@ -38,7 +63,7 @@
                             <text class="record-stat">{{ item.correct_count }}/{{ item.total_questions }} 题</text>
                             <text class="record-time">{{ formatUsedTime(item.used_time) }}</text>
                         </view>
-                        <text class="record-date">{{ formatDate(item.completed_at.length > 0 ? item.completed_at : item.created_at) }}</text>
+                        <text class="record-date">{{ formatDateTimeStr(item.completed_at.length > 0 ? item.completed_at : item.created_at) }}</text>
                     </view>
                     <view class="record-action">
                         <text class="record-action-text">{{ item.status == 'in_progress' ? '继续' : '查看' }}</text>
@@ -60,8 +85,10 @@
     import { ref, computed } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
     import { getMockExamHistoryApi } from '../../api/mockExam'
     import type { MockExamHistoryItem } from '../../types/index'
+    import { formatDateTimeStr } from '../../utils/format'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -82,6 +109,34 @@
         return cnt
     })
 
+    /** 通过率 */
+    const passRate = computed<number>(() : number => {
+        if (records.value.length == 0) return 0
+        return (passedCount.value / records.value.length) * 100
+    })
+
+    /** 平均分（基于已加载记录计算，score/max_score） */
+    const avgScore = computed<number>(() : number => {
+        if (records.value.length == 0) return 0
+        let sum = 0
+        let cnt = 0
+        for (let i = 0; i < records.value.length; i++) {
+            const item = records.value[i]
+            if (item.total_score > 0 && item.score > 0) {
+                sum += (item.score / item.total_score) * 100
+                cnt++
+            }
+        }
+        if (cnt == 0) return 0
+        return sum / cnt
+    })
+
+    /** 格式化百分比 */
+    function formatAccuracy(val : number) : string {
+        if (val == Math.floor(val)) return '' + Math.floor(val) + '%'
+        return val.toFixed(1) + '%'
+    }
+
     /** 格式化分数 */
     function formatScore(score : number) : string {
         if (score == Math.floor(score)) {
@@ -100,11 +155,6 @@
     }
 
     /** 格式化日期 */
-    function formatDate(dateStr : string) : string {
-        if (dateStr.length < 10) return dateStr
-        return dateStr.substring(0, 16)
-    }
-
     /** 状态样式 */
     function getStatusClass(item : MockExamHistoryItem) : string {
         if (item.status == 'in_progress') return 'status-progress'
@@ -140,7 +190,7 @@
                 page.value = page.value + 1
             }
         } catch (e) {
-            console.error('[mock-exam-records] load failed:', e)
+            uni.__f__('error','at pages/profile/mock-exam-records.uvue:197','[mock-exam-records] load failed:', e)
             uni.showToast({ title: '加载模考历史失败', icon: 'none' })
         } finally {
             loading.value = false
@@ -173,7 +223,7 @@
     }
 
     function onBack() : void {
-        uni.navigateBack()
+        goBack()
     }
 
     onShow(() => {
@@ -240,6 +290,44 @@
         font-size: 24rpx;
         color: #4caf50;
         margin-left: 16rpx;
+    }
+
+    /* 统计卡片 */
+    .stats-card {
+        background-color: #ffffff;
+        margin: 0 24rpx 16rpx;
+        border-radius: 16rpx;
+        padding: 24rpx 0;
+    }
+
+    .stats-row {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-around;
+    }
+
+    .stats-item {
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .stats-num {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #2979ff;
+        margin-bottom: 6rpx;
+    }
+
+    .stats-label {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .stats-divider {
+        width: 1rpx;
+        height: 48rpx;
+        background-color: #eeeeee;
     }
 
     /* 列表 */

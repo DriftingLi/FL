@@ -176,11 +176,11 @@
 	.page {
 		display: flex;
 		flex-direction: column;
-		background-color: #f5f6f8;
+		background: linear-gradient(180deg, #CFE9FB 1%, #D0EBFD 16%, #F5F5F5 100%);
 	}
 
 	.status-bar {
-		background-color: #ffffff;
+		background-color: transparent;
 	}
 
 	.header {
@@ -188,8 +188,8 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 16rpx 24rpx;
-		background-color: #ffffff;
-		border-bottom: 1rpx solid #f0f0f0;
+		background-color: transparent;
+		border-bottom: 1rpx solid transparent;
 	}
 
 	.header-left,

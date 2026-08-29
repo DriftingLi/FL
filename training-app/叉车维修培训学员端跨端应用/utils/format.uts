@@ -86,20 +86,28 @@ export function formatMinutes(minutes : number) : string {
 }
 
 /**
- * 数字千分位
- */
-export function formatNumber(n : number) : string {
-	if (n == null || isNaN(n)) return '0'
-	const parts = n.toString().split('.')
-	parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-	return parts.join('.')
-}
-
-/**
  * 取日期字符串中的 MM-DD（用于柱状图 X 轴标签）
  * 输入示例: "2026-07-21" → "07-21"
  */
 export function shortDate(dateStr : string) : string {
 	if (dateStr == null || dateStr.length < 10) return dateStr
 	return dateStr.substring(5, 10)
+}
+
+/**
+ * ISO 日期字符串 → YYYY-MM-DD（后端 created_at 等字符串字段的截取格式化）
+ * 过短/空字符串原样返回
+ */
+export function formatDateStr(dateStr : string) : string {
+	if (dateStr == null || dateStr.length < 10) return dateStr
+	return dateStr.substring(0, 10)
+}
+
+/**
+ * ISO 日期字符串 → YYYY-MM-DD HH:mm（'T' 替换为空格）
+ * 过短/空字符串原样返回
+ */
+export function formatDateTimeStr(dateStr : string) : string {
+	if (dateStr == null || dateStr.length < 16) return dateStr
+	return dateStr.substring(0, 16).replace('T', ' ')
 }

@@ -26,6 +26,13 @@
             }
         },
         {
+            "path": "pages/profile-setup/profile-setup",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "完善资料"
+            }
+        },
+        {
             "path": "pages/guide/choose-cert",
             "style": {
                 "navigationStyle": "custom",
@@ -44,7 +51,7 @@
             "path": "pages/courses/courses",
             "style": {
                 "navigationStyle": "custom",
-                "navigationBarTitleText": "课程中心"
+                "navigationBarTitleText": "课程"
             }
         },
         {
@@ -132,6 +139,13 @@
             }
         },
         {
+            "path": "pages/profile/personal-activity",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "个人动态"
+            }
+        },
+        {
             "path": "pages/profile/mock-exam-records",
             "style": {
                 "navigationStyle": "custom",
@@ -143,6 +157,13 @@
             "style": {
                 "navigationStyle": "custom",
                 "navigationBarTitleText": "错题本"
+            }
+        },
+        {
+            "path": "pages/profile/favorites",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "我的收藏"
             }
         },
         {
@@ -188,6 +209,20 @@
             }
         },
         {
+            "path": "pages/forum/check-in",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "签到"
+            }
+        },
+        {
+            "path": "pages/notifications/notifications",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "消息通知"
+            }
+        },
+        {
             "path": "pages/ai-assistant/ai-assistant",
             "style": {
                 "navigationStyle": "custom",
@@ -220,6 +255,70 @@
             "style": {
                 "navigationStyle": "custom",
                 "navigationBarTitleText": "自定义模型"
+            }
+        },
+        {
+            "path": "pages/points/points-detail",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "积分明细"
+            }
+        },
+        {
+            "path": "pages/resources/my-purchases",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "我的已购"
+            }
+        },
+        {
+            "path": "pages/resources/my-uploads",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "我的上传"
+            }
+        },
+        {
+            "path": "pages/resources/upload-resource",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "上传资源"
+            }
+        },
+        {
+            "path": "pages/exam-info/exam-info",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "考情资讯"
+            }
+        },
+        {
+            "path": "pages/mall/mall",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "课程商城"
+            }
+        },
+        {
+            "path": "pages/search/search",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "搜索"
+            }
+        },
+        {
+            "path": "pages/featured/featured-list",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "精选内容",
+                "enablePullDownRefresh": false
+            }
+        },
+        {
+            "path": "pages/featured/featured-detail",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "文章详情"
             }
         }
     ],

@@ -1,0 +1,318 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">签到</text>
+            <view class="header-right"></view>
+        </view>
+
+        <scroll-view class="content-scroll" scroll-y="true">
+            <view class="checkin-banner">
+                <view class="banner-left">
+                    <text class="banner-title">8月学习打卡</text>
+                    <text class="banner-desc">已连续签到 {{ consecutiveDays }} 天，每天到一次学习 {{ pointsPerDay }} 个积分</text>
+                </view>
+                <view class="banner-btn" @click="onCheckIn">
+                    <text class="banner-btn-text">{{ todayChecked ? '已打卡' : '开始打卡' }}</text>
+                </view>
+            </view>
+
+            <view class="month-bar">
+                <view class="month-arrow" @click="onPrevMonth">
+                    <text class="arrow-text">‹</text>
+                </view>
+                <text class="month-text">{{ displayYear }}年{{ displayMonth }}月</text>
+                <view class="month-arrow" @click="onNextMonth">
+                    <text class="arrow-text">›</text>
+                </view>
+            </view>
+
+            <view class="week-header">
+                <text v-for="(day, idx) in weekDays" :key="idx" class="week-item">{{ day }}</text>
+            </view>
+
+            <view class="calendar-grid">
+                <view v-for="(cell, idx) in calendarCells" :key="idx" class="calendar-cell">
+                    <view v-if="cell.isEmpty" class="cell-empty"></view>
+                    <view v-else class="cell-day" :class="getCellClass(cell)">
+                        <text class="cell-num" :class="getCellNumClass(cell)">{{ cell.day }}</text>
+                        <!-- 过去已签到 / 今日已签到：蓝色圆圈 + 白色对勾 -->
+                        <view v-if="cell.checked" class="cell-check-done">
+                            <text class="cell-check-done-text">✓</text>
+                        </view>
+                        <!-- 过去未签到：灰色对勾 -->
+                        <view v-else-if="!cell.isFuture && !cell.isToday" class="cell-missed-check">
+                            <text class="cell-missed-check-text">✓</text>
+                        </view>
+                        <!-- 今日未签到 / 未来日期：蓝色圆圈 + 金币图标 -->
+                        <view v-else class="cell-coin">
+                            <view class="coin-icon">
+                                <text class="coin-text">$</text>
+                            </view>
+                        </view>
+                    </view>
+                </view>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
+    import { checkInApi, getCheckInCalendarApi } from '../../api/forum'
+    import type { CheckInCalendarDay } from '../../types/index'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const weekDays : string[] = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+
+    const displayYear = ref<number>(new Date().getFullYear())
+    const displayMonth = ref<number>(new Date().getMonth() + 1)
+    const consecutiveDays = ref<number>(0)
+    const totalPoints = ref<number>(0)
+    const pointsPerDay = ref<number>(7)
+    const calendarDays = ref<CheckInCalendarDay[]>([])
+    const todayChecked = ref<boolean>(false)
+
+    type CalendarCell = {
+        day : number
+        date : string
+        checked : boolean
+        isToday : boolean
+        isFuture : boolean
+        isEmpty : boolean
+    }
+
+    const calendarCells = computed<CalendarCell[]>(() : CalendarCell[] => {
+        const cells : CalendarCell[] = []
+        const year = displayYear.value
+        const month = displayMonth.value
+        const firstDay = new Date(year, month - 1, 1).getDay()
+        const blankCount = firstDay == 0 ? 6 : firstDay - 1
+        for (let i = 0; i < blankCount; i++) {
+            cells.push({ day: 0, date: '', checked: false, isToday: false, isFuture: false, isEmpty: true } as CalendarCell)
+        }
+        const daysInMonth = new Date(year, month, 0).getDate()
+        const today = new Date()
+        const todayStr = today.getFullYear() + '-' + padZero(today.getMonth() + 1) + '-' + padZero(today.getDate())
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = year + '-' + padZero(month) + '-' + padZero(d)
+            const isToday = dateStr == todayStr
+            const isFuture = new Date(year, month - 1, d) > today
+            let checked = false
+            // 遍历 API 返回的签到记录，兼容多种日期格式
+            for (let j = 0; j < calendarDays.value.length; j++) {
+                const apiDate = calendarDays.value[j].date
+                // 精确匹配 YYYY-MM-DD
+                if (apiDate == dateStr) {
+                    checked = calendarDays.value[j].checked
+                    break
+                }
+                // 兼容 YYYY-M-D（无前导零）
+                const shortDate = year + '-' + (month) + '-' + d
+                if (apiDate == shortDate) {
+                    checked = calendarDays.value[j].checked
+                    break
+                }
+                // 兼容只匹配日期中的日（如 "13" 或 "-13"）
+                if (apiDate.length <= 2 && apiDate == '' + d) {
+                    checked = calendarDays.value[j].checked
+                    break
+                }
+                if (apiDate.length > 2 && apiDate.endsWith('-' + d) && apiDate.endsWith(padZero(month) + '-' + d)) {
+                    checked = calendarDays.value[j].checked
+                    break
+                }
+            }
+            cells.push({ day: d, date: dateStr, checked: checked, isToday: isToday, isFuture: isFuture, isEmpty: false } as CalendarCell)
+        }
+        // 打印调试：列出所有 checked 的日期
+        const checkedDays : string[] = []
+        for (let i = 0; i < cells.length; i++) {
+            if (cells[i].checked) {
+                checkedDays.push(cells[i].date)
+            }
+        }
+        console.log('[calendarCells] checked days:', checkedDays.join(', '))
+        return cells
+    })
+
+    function padZero(n : number) : string {
+        if (n < 10) return '0' + n
+        return '' + n
+    }
+
+    function getCellClass(cell : CalendarCell) : string {
+        if (cell.isToday) return 'cell-today'
+        if (cell.checked) return 'cell-checked'
+        if (cell.isFuture) return 'cell-future'
+        return 'cell-missed'
+    }
+
+    function getCellNumClass(cell : CalendarCell) : string {
+        if (cell.isToday) return 'num-today'
+        if (cell.checked) return 'num-checked'
+        if (cell.isFuture) return 'num-future'
+        return ''
+    }
+
+    async function loadCalendar() : Promise<void> {
+        try {
+            const result = await getCheckInCalendarApi(displayYear.value, displayMonth.value)
+            console.log('[check-in] API result:', JSON.stringify(result))
+            consecutiveDays.value = result.consecutive_days
+            totalPoints.value = result.total_points
+            pointsPerDay.value = result.points_per_day
+            calendarDays.value = result.days
+            console.log('[check-in] days count:', result.days.length, 'consecutive:', result.consecutive_days)
+            // 从 days 数组中查找今日签到状态
+            const today = new Date()
+            const todayStr = today.getFullYear() + '-' + padZero(today.getMonth() + 1) + '-' + padZero(today.getDate())
+            todayChecked.value = false
+            for (let i = 0; i < result.days.length; i++) {
+                if (result.days[i].date == todayStr && result.days[i].checked) {
+                    todayChecked.value = true
+                    break
+                }
+            }
+        } catch (e) {
+            console.error('[check-in] loadCalendar failed, using mock:', e)
+            loadMockCalendar()
+        }
+    }
+
+    /** mock 日历数据（后端接口未就绪时回退） */
+    function loadMockCalendar() : void {
+        const year = displayYear.value
+        const month = displayMonth.value
+        const daysInMonth = new Date(year, month, 0).getDate()
+        const today = new Date()
+        const todayDate = today.getDate()
+        const mockDays : CheckInCalendarDay[] = []
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = year + '-' + padZero(month) + '-' + padZero(d)
+            // 过去日期随机标记部分已签到，今天及未来未签到
+            const isPast = d < todayDate
+            const checked = isPast && (d % 3 == 0 || d == 13 || d == 21)
+            mockDays.push({ date: dateStr, checked: checked, points: checked ? 7 : 0 } as CheckInCalendarDay)
+        }
+        calendarDays.value = mockDays
+        consecutiveDays.value = 2
+        totalPoints.value = 49
+        pointsPerDay.value = 7
+        // 检查今日
+        const todayStr = today.getFullYear() + '-' + padZero(today.getMonth() + 1) + '-' + padZero(today.getDate())
+        todayChecked.value = false
+        for (let i = 0; i < mockDays.length; i++) {
+            if (mockDays[i].date == todayStr && mockDays[i].checked) {
+                todayChecked.value = true
+                break
+            }
+        }
+    }
+
+    async function onCheckIn() : Promise<void> {
+        if (todayChecked.value) {
+            uni.showToast({ title: '你已经打卡过了', icon: 'none' })
+            return
+        }
+        try {
+            const result = await checkInApi()
+            todayChecked.value = true
+            consecutiveDays.value = result.consecutive_days
+            totalPoints.value = result.total_points
+            uni.showToast({ title: '打卡成功 +' + result.points_earned + '积分', icon: 'success' })
+            loadCalendar()
+        } catch (e) {
+            console.error('[check-in] checkIn failed:', e)
+        }
+    }
+
+    function onPrevMonth() : void {
+        if (displayMonth.value == 1) {
+            displayMonth.value = 12
+            displayYear.value = displayYear.value - 1
+        } else {
+            displayMonth.value = displayMonth.value - 1
+        }
+        loadCalendar()
+    }
+
+    function onNextMonth() : void {
+        const now = new Date()
+        if (displayYear.value == now.getFullYear() && displayMonth.value >= now.getMonth() + 1) return
+        if (displayYear.value > now.getFullYear()) return
+        if (displayMonth.value == 12) {
+            displayMonth.value = 1
+            displayYear.value = displayYear.value + 1
+        } else {
+            displayMonth.value = displayMonth.value + 1
+        }
+        loadCalendar()
+    }
+
+    function onBack() : void {
+        goBack()
+    }
+
+    onLoad(() => {
+        loadCalendar()
+    })
+</script>
+
+<style>
+    .container { display: flex; background-color: #f5f5f5; flex-direction: column; }
+    .status-bar { background-color: #2979ff; }
+    .header { background-color: #2979ff; padding: 16rpx 32rpx; flex-direction: row; align-items: center; justify-content: space-between; }
+    .header-left { width: 80rpx; align-items: center; }
+    .back-icon { font-size: 48rpx; color: #ffffff; }
+    .header-title { flex: 1; font-size: 36rpx; font-weight: bold; color: #ffffff; text-align: center; }
+    .header-right { width: 80rpx; }
+    .content-scroll { flex: 1; height: 0; }
+    .checkin-banner { margin: 24rpx; padding: 32rpx; border-radius: 20rpx; background-color: #2979ff; flex-direction: row; align-items: center; justify-content: space-between; }
+    .banner-left { flex: 1; flex-direction: column; margin-right: 24rpx; }
+    .banner-title { font-size: 34rpx; font-weight: bold; color: #ffffff; margin-bottom: 12rpx; }
+    .banner-desc { font-size: 22rpx; color: rgba(255, 255, 255, 0.85); lines: 2; }
+    .banner-btn { background-color: #ffffff; padding: 16rpx 32rpx; border-radius: 32rpx; flex-shrink: 0; }
+    .banner-btn-text { font-size: 28rpx; font-weight: bold; color: #2979ff; }
+    .month-bar { flex-direction: row; align-items: center; justify-content: center; padding: 20rpx 0; }
+    .month-arrow { width: 64rpx; height: 64rpx; align-items: center; justify-content: center; }
+    .arrow-text { font-size: 40rpx; color: #333333; font-weight: bold; }
+    .month-text { font-size: 32rpx; font-weight: bold; color: #333333; margin-left: 24rpx; margin-right: 24rpx; }
+    .week-header { flex-direction: row; padding: 12rpx 24rpx; }
+    .week-item { flex: 1; text-align: center; font-size: 24rpx; color: #999999; }
+    .calendar-grid { flex-direction: row; flex-wrap: wrap; padding: 0 16rpx; }
+    .calendar-cell { width: 14.28%; align-items: center; padding: 8rpx 0; }
+    .cell-empty { width: 88rpx; height: 88rpx; }
+    .cell-day { width: 88rpx; height: 88rpx; border-radius: 44rpx; align-items: center; justify-content: center; flex-direction: column; }
+    /* 今日 */
+    .cell-today { background-color: #2979ff; }
+    /* 过去已签到：蓝色背景（与今日一致） */
+    .cell-checked { background-color: #2979ff; }
+    /* 过去未签到：浅灰背景 */
+    .cell-missed { background-color: #f0f0f0; }
+    /* 未来日期：蓝色背景 */
+    .cell-future { background-color: #2979ff; }
+    .cell-num { font-size: 28rpx; color: #333333; line-height: 32rpx; }
+    .num-today { color: #ffffff; font-weight: bold; }
+    .num-checked { color: #ffffff; }
+    .num-future { color: #ffffff; }
+    /* 已签到：蓝色圆圈 + 白色对勾（通用：今日+历史） */
+    .cell-check-done { width: 28rpx; height: 28rpx; border-radius: 14rpx; background-color: #ffffff; align-items: center; justify-content: center; margin-top: 2rpx; }
+    .cell-check-done-text { font-size: 16rpx; color: #2979ff; line-height: 18rpx; font-weight: bold; }
+    /* 过去未签到：灰色圆圈 + 灰色对勾 */
+    .cell-missed-check { width: 28rpx; height: 28rpx; border-radius: 14rpx; background-color: #d0d0d0; align-items: center; justify-content: center; margin-top: 2rpx; }
+    .cell-missed-check-text { font-size: 16rpx; color: #ffffff; line-height: 18rpx; }
+    /* 未来/今日未签到：金币图标 */
+    .cell-coin { margin-top: 2rpx; align-items: center; justify-content: center; }
+    .coin-icon { width: 32rpx; height: 32rpx; border-radius: 16rpx; background-color: #FFD700; align-items: center; justify-content: center; }
+    .coin-text { font-size: 18rpx; color: #ffffff; font-weight: bold; line-height: 20rpx; }
+</style>

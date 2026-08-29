@@ -1,0 +1,57 @@
+/**
+ * API 层共享辅助函数
+ * @note 各 api/*.uts 曾各自复制这些实现，统一收敛到此处
+ */
+
+/** 安全转换为 number（null / 非数字返回 defaultVal） */
+export function toNumber(v : any | null, defaultVal : number = 0) : number {
+    if (v == null) return defaultVal
+    const s = `${v}`
+    const n = parseFloat(s)
+    if (isNaN(n)) return defaultVal
+    return n
+}
+
+/** 安全转换为 string */
+export function toStr(v : any | null, defaultVal : string = '') : string {
+    if (v == null) return defaultVal
+    return `${v}`
+}
+
+/**
+ * 安全转换为 boolean（兼容 boolean / "true" / "1" / 1 / "false" / "0" / 0）
+ * @note null 或无法识别的值返回 defaultVal；显式 false/0/"false" 恒为 false
+ */
+export function toBool(v : any | null, defaultVal : boolean = false) : boolean {
+    if (v == null) return defaultVal
+    const s = `${v}`.toLowerCase()
+    if (s == 'true' || s == '1') return true
+    if (s == 'false' || s == '0') return false
+    return defaultVal
+}
+
+/**
+ * 从 Error 提取可展示的 message（空/非 Error 时回退 fallback）
+ */
+export function errMsg(e : any | null, fallback : string) : string {
+    if (e instanceof Error) {
+        const m = (e as Error).message
+        if (m != null && m.length > 0) return m
+    }
+    return fallback
+}
+
+/**
+ * 从 data 中取出列表数组（后端信封 data 为裸数组时由 request 层包装为 { list: [...] }）
+ */
+export function toList(data : UTSJSONObject) : Array<UTSJSONObject> {
+    const items : Array<UTSJSONObject> = []
+    const raw = data['list']
+    if (raw != null) {
+        const arr = raw as Array<UTSJSONObject>
+        for (let i = 0; i < arr.length; i++) {
+            items.push(arr[i])
+        }
+    }
+    return items
+}

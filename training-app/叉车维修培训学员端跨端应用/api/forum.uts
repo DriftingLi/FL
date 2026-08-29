@@ -14,44 +14,15 @@
  * 回复对象：{ id, content, created_at, author: { user_id, username, name, nickname, avatar_url } }
  */
 import { get, post, del, uploadFile } from './request'
-import type { ForumTopic, ForumTopicListResult, ForumTopicDetail, ForumReply } from '../types/index'
+import { toNumber, toStr, toBool, errMsg } from './helpers'
+import type { ForumTopic, ForumTopicListResult, ForumTopicDetail, ForumReply, CheckInResult, CheckInCalendarResult, CheckInCalendarDay, LikeTopicResult, MyRepliesResult } from '../types/index'
 
-/** 安全转换为 number */
-function toNumber(v : any | null, defaultVal : number = 0) : number {
-    if (v == null) return defaultVal
-    const s = `${v}`
-    const n = parseFloat(s)
-    if (isNaN(n)) return defaultVal
-    return n
-}
-
-/** 安全转换为 string */
-function toStr(v : any | null, defaultVal : string = '') : string {
-	if (v == null) return defaultVal
-	return `${v}`
-}
-
-/** 安全转换为 boolean（兼容 boolean / "true" / "1" / 1，避免使用 typeof） */
-function toBool(v : any | null, defaultVal : boolean = false) : boolean {
-	if (v == null) return defaultVal
-	const s = `${v}`.toLowerCase()
-	if (s == 'true') return true
-	if (s == '1') return true
-	return defaultVal
-}
-
-/** 从 author 嵌套对象提取作者名（优先 name，其次 nickname，最后 username） */
+/** 从 author 嵌套对象提取作者名（优先 nickname，其次 username） */
 function extractAuthorName(obj : UTSJSONObject) : string {
     const authorRaw = obj['author']
     if (authorRaw != null) {
         const authorObj = authorRaw as UTSJSONObject
-        // 优先 name（非空）
-        // const name = authorObj['name']
-        // if (name != null) {
-        //     const s = toStr(name)
-        //     if (s.length > 0) return s
-        // }
-        // 其次 nickname（非空）
+        // 优先 nickname（非空）
         const nickname = authorObj['nickname']
         if (nickname != null) {
             const s = toStr(nickname)
@@ -115,26 +86,38 @@ function extractImages(obj : UTSJSONObject) : string[] {
  *  topic_id 后端未必返回，由调用方传入
  */
 function buildReply(obj : UTSJSONObject, fallbackTopicId : number = 0) : ForumReply {
-	const reply : ForumReply = {
-		id: toNumber(obj['id']),
-		topic_id: toNumber(obj['topic_id'], fallbackTopicId),
-		topic_title: toStr(obj['topic_title']),
-		content: toStr(obj['content']),
-		images: extractImages(obj),
-		author_id: extractAuthorId(obj),
-		author_name: extractAuthorName(obj),
-		author_avatar: extractAuthorAvatar(obj),
-		created_at: toStr(obj['created_at']),
-		can_delete: toBool(obj['can_delete']),
-	} as ForumReply
-	return reply
+    let likedVal = toBool(obj['liked'])
+    if (!likedVal) likedVal = toBool(obj['liked_by_me'])
+    if (!likedVal) likedVal = toBool(obj['likedByMe'])
+    const likesCnt = toNumber(obj['likes_count'], -1) >= 0 ? toNumber(obj['likes_count']) : toNumber(obj['like_count'], 0)
+    return {
+        id: toNumber(obj['id']),
+        topic_id: toNumber(obj['topic_id'], fallbackTopicId),
+        topic_title: toStr(obj['topic_title']),
+        content: toStr(obj['content']),
+        images: extractImages(obj),
+        author_id: extractAuthorId(obj),
+        author_name: extractAuthorName(obj),
+        author_avatar: extractAuthorAvatar(obj),
+        created_at: toStr(obj['created_at']),
+        can_delete: toBool(obj['can_delete']),
+        likes_count: likesCnt,
+        liked: likedVal,
+    } as ForumReply
 }
 
 /** 构造 ForumTopic（列表项）
  *  后端字段：view_count / reply_count（非 views_count / replies_count）
+ *  点赞字段兼容 liked / liked_by_me（后端 GetTopic 用 liked_by_me，历史用 liked）
  */
 function buildTopic(obj : UTSJSONObject) : ForumTopic {
-    const topic : ForumTopic = {
+    let likedVal = toBool(obj['liked'])
+    if (!likedVal) likedVal = toBool(obj['liked_by_me'])
+    // 兼容 liked / likedByMe 驼峰
+    if (!likedVal) likedVal = toBool(obj['likedByMe'])
+    const likesCnt = toNumber(obj['likes_count'], -1) >= 0 ? toNumber(obj['likes_count']) : toNumber(obj['like_count'])
+    const favVal = toBool(obj['favorited'])
+    return {
         id: toNumber(obj['id']),
         title: toStr(obj['title']),
         content: toStr(obj['content']),
@@ -142,13 +125,14 @@ function buildTopic(obj : UTSJSONObject) : ForumTopic {
         author_id: extractAuthorId(obj),
         author_name: extractAuthorName(obj),
         author_avatar: extractAuthorAvatar(obj),
-        replies_count: toNumber(obj['reply_count']),
-        views_count: toNumber(obj['view_count']),
-        like_count: toNumber(obj['like_count']),
-        liked: toBool(obj['liked']),
+        replies_count: toNumber(obj['reply_count'], toNumber(obj['replies_count'])),
+        views_count: toNumber(obj['view_count'], toNumber(obj['views_count'])),
+        likes_count: likesCnt,
+        liked: likedVal,
+        favorited: favVal,
         created_at: toStr(obj['created_at']),
+        scope: toStr(obj['scope'], 'general'),
     } as ForumTopic
-    return topic
 }
 
 /** 构造 ForumTopicListResult
@@ -197,6 +181,11 @@ function buildTopicDetail(obj : UTSJSONObject) : ForumTopicDetail {
         }
     }
 
+    let likedVal = toBool(topicObj['liked'])
+    if (!likedVal) likedVal = toBool(topicObj['liked_by_me'])
+    if (!likedVal) likedVal = toBool(topicObj['likedByMe'])
+    const likesCnt = toNumber(topicObj['likes_count'], -1) >= 0 ? toNumber(topicObj['likes_count']) : toNumber(topicObj['like_count'])
+    const favVal = toBool(topicObj['favorited'])
     const detail : ForumTopicDetail = {
         id: topicId,
         title: toStr(topicObj['title']),
@@ -205,26 +194,32 @@ function buildTopicDetail(obj : UTSJSONObject) : ForumTopicDetail {
         author_id: extractAuthorId(topicObj),
         author_name: extractAuthorName(topicObj),
         author_avatar: extractAuthorAvatar(topicObj),
-        replies_count: toNumber(topicObj['reply_count']),
-        views_count: toNumber(topicObj['view_count']),
-        like_count: toNumber(topicObj['like_count']),
-        liked: toBool(topicObj['liked']),
-		created_at: toStr(topicObj['created_at']),
-		can_delete: toBool(topicObj['can_delete']),
-		replies: replies,
-	} as ForumTopicDetail
-	return detail
+        replies_count: toNumber(topicObj['reply_count'], toNumber(topicObj['replies_count'])),
+        views_count: toNumber(topicObj['view_count'], toNumber(topicObj['views_count'])),
+        likes_count: likesCnt,
+        liked: likedVal,
+        favorited: favVal,
+        created_at: toStr(topicObj['created_at']),
+        can_delete: toBool(topicObj['can_delete']),
+        replies: replies,
+        scope: toStr(topicObj['scope'], 'general'),
+    } as ForumTopicDetail
+    return detail
 }
 
 /**
  * 获取帖子列表
  * @param page 页码，默认 1
  * @param pageSize 每页条数，默认 10
- * @param scope 范围，默认 general
+ * @param scope 范围，默认 general（对应 https://training.gccsmile.com/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10）
+ * @param sort 排序字段，默认 latest
+ * @param order 排序方向，默认 desc
  */
-export function getForumTopicsApi(page : number = 1, pageSize : number = 10, scope : string = 'general') : Promise<ForumTopicListResult> {
+export function getForumTopicsApi(page : number = 1, pageSize : number = 10, scope : string = 'general', sort : string = 'latest', order : string = 'desc') : Promise<ForumTopicListResult> {
     const params : UTSJSONObject = {
         scope: scope,
+        sort: sort,
+        order: order,
         page: page.toString(),
         page_size: pageSize.toString(),
     } as UTSJSONObject
@@ -233,14 +228,7 @@ export function getForumTopicsApi(page : number = 1, pageSize : number = 10, sco
         return buildTopicListResult(data)
     }).catch((e : any | null) : ForumTopicListResult => {
         console.error('[getForumTopicsApi] failed:', e)
-        let msg = '获取帖子列表失败'
-        if (e instanceof Error) {
-            const err = e as Error
-            const m = err.message
-            if (m != null && m.length > 0) {
-                msg = m
-            }
-        }
+        const msg = errMsg(e, '获取帖子列表失败')
         throw new Error(msg)
     })
 }
@@ -248,22 +236,21 @@ export function getForumTopicsApi(page : number = 1, pageSize : number = 10, sco
 /**
  * 获取帖子详情
  * @param topicId 帖子 ID
+ * @param sort 排序字段，默认 latest（对应 https://training.gccsmile.com/api/forum/topics/2?sort=latest&order=asc）
+ * @param order 排序方向，默认 asc
  */
-export function getForumTopicDetailApi(topicId : number) : Promise<ForumTopicDetail> {
-    const url = '/forum/topics/' + topicId
-    return get(url).then((data : UTSJSONObject) : ForumTopicDetail => {
+export function getForumTopicDetailApi(topicId : number, sort : string = 'latest', order : string = 'asc') : Promise<ForumTopicDetail> {
+    const url = '/forum/topics/' + topicId.toString()
+    const params : UTSJSONObject = {
+        sort: sort,
+        order: order,
+    } as UTSJSONObject
+    return get(url, params).then((data : UTSJSONObject) : ForumTopicDetail => {
         console.log('[getForumTopicDetailApi] raw data:', JSON.stringify(data))
         return buildTopicDetail(data)
     }).catch((e : any | null) : ForumTopicDetail => {
         console.error('[getForumTopicDetailApi] failed:', e)
-        let msg = '获取帖子详情失败'
-        if (e instanceof Error) {
-            const err = e as Error
-            const m = err.message
-            if (m != null && m.length > 0) {
-                msg = m
-            }
-        }
+        const msg = errMsg(e, '获取帖子详情失败')
         throw new Error(msg)
     })
 }
@@ -283,14 +270,7 @@ export function uploadForumImageApi(filePath : string) : Promise<string> {
         return toStr(url)
     }).catch((e : any | null) : string => {
         console.error('[uploadForumImageApi] failed:', e)
-        let msg = '上传图片失败'
-        if (e instanceof Error) {
-            const err = e as Error
-            const m = err.message
-            if (m != null && m.length > 0) {
-                msg = m
-            }
-        }
+        const msg = errMsg(e, '上传图片失败')
         throw new Error(msg)
     })
 }
@@ -300,26 +280,49 @@ export function uploadForumImageApi(filePath : string) : Promise<string> {
  * @param title 标题（1-100 字）
  * @param content 内容（1-10000 字）
  * @param images 图片 URL 数组（最多 9 张，先经 uploadForumImageApi 上传获取）
+ * @param scope 帖子分类（general / resource / video / exam）
  */
-export function createForumTopicApi(title : string, content : string, images : string[] = []) : Promise<ForumTopic> {
+export function createForumTopicApi(title : string, content : string, images : string[] = [], scope : string = 'general') : Promise<ForumTopic> {
     const payload : UTSJSONObject = {
         title: title,
         content: content,
         images: images,
+        scope: scope,
     } as UTSJSONObject
     return post('/forum/topics', payload).then((data : UTSJSONObject) : ForumTopic => {
         console.log('[createForumTopicApi] raw data:', JSON.stringify(data))
         return buildTopic(data)
     }).catch((e : any | null) : ForumTopic => {
         console.error('[createForumTopicApi] failed:', e)
-        let msg = '发布帖子失败'
-        if (e instanceof Error) {
-            const err = e as Error
-            const m = err.message
-            if (m != null && m.length > 0) {
-                msg = m
-            }
-        }
+        const msg = errMsg(e, '发布帖子失败')
+        throw new Error(msg)
+    })
+}
+
+/**
+ * 编辑帖子
+ * @param topicId 帖子 ID
+ * @param title 标题（1-100 字）
+ * @param content 内容（1-10000 字）
+ * @param images 图片 URL 数组（最多 9 张）
+ * @param scope 帖子分类（可选）
+ */
+export function updateForumTopicApi(topicId : number, title : string, content : string, images : string[] = [], scope : string = '') : Promise<ForumTopic> {
+    const url = '/forum/topics/' + topicId.toString()
+    const payload : UTSJSONObject = {
+        title: title,
+        content: content,
+        images: images,
+    } as UTSJSONObject
+    if (scope.length > 0) {
+        payload['scope'] = scope
+    }
+    return put(url, payload).then((data : UTSJSONObject) : ForumTopic => {
+        console.log('[updateForumTopicApi] raw data:', JSON.stringify(data))
+        return buildTopic(data)
+    }).catch((e : any | null) : ForumTopic => {
+        console.error('[updateForumTopicApi] failed:', e)
+        const msg = errMsg(e, '编辑帖子失败')
         throw new Error(msg)
     })
 }
@@ -341,14 +344,7 @@ export function replyForumTopicApi(topicId : number, content : string, images : 
         return buildReply(data, topicId)
     }).catch((e : any | null) : ForumReply => {
         console.error('[replyForumTopicApi] failed:', e)
-        let msg = '回复失败'
-        if (e instanceof Error) {
-            const err = e as Error
-            const m = err.message
-            if (m != null && m.length > 0) {
-                msg = m
-            }
-        }
+        const msg = errMsg(e, '回复失败')
         throw new Error(msg)
     })
 }
@@ -377,13 +373,13 @@ export function deleteForumReplyApi(replyId : number) : Promise<UTSJSONObject> {
  * 点赞帖子
  * @param topicId 帖子 ID
  */
-export function likeTopicApi(topicId : number) : Promise<{liked : boolean, like_count : number}> {
+export function likeTopicApi(topicId : number) : Promise<LikeTopicResult> {
     const url = '/forum/topics/' + topicId + '/like'
-    return post(url).then((data : UTSJSONObject) : {liked : boolean, like_count : number} => {
+    return post(url).then((data : UTSJSONObject) : LikeTopicResult => {
         return {
             liked: toBool(data['liked']),
-            like_count: toNumber(data['like_count']),
-        }
+            likes_count: toNumber(data['likes_count']),
+        } as LikeTopicResult
     })
 }
 
@@ -391,13 +387,43 @@ export function likeTopicApi(topicId : number) : Promise<{liked : boolean, like_
  * 取消点赞帖子
  * @param topicId 帖子 ID
  */
-export function unlikeTopicApi(topicId : number) : Promise<{liked : boolean, like_count : number}> {
+export function unlikeTopicApi(topicId : number) : Promise<LikeTopicResult> {
     const url = '/forum/topics/' + topicId + '/like'
-    return del(url).then((data : UTSJSONObject) : {liked : boolean, like_count : number} => {
+    return del(url).then((data : UTSJSONObject) : LikeTopicResult => {
         return {
             liked: toBool(data['liked']),
-            like_count: toNumber(data['like_count']),
-        }
+            likes_count: toNumber(data['likes_count']),
+        } as LikeTopicResult
+    })
+}
+
+/**
+ * 点赞回复
+ * @param replyId 回复 ID
+ * 对应 POST /forum/replies/{id}/like（若后端暂未实现，调用将 404，前端已做受控提示）
+ */
+export function likeReplyApi(replyId : number) : Promise<LikeTopicResult> {
+    const url = '/forum/replies/' + replyId + '/like'
+    return post(url).then((data : UTSJSONObject) : LikeTopicResult => {
+        return {
+            liked: toBool(data['liked'], true),
+            likes_count: toNumber(data['likes_count']),
+        } as LikeTopicResult
+    })
+}
+
+/**
+ * 取消点赞回复
+ * @param replyId 回复 ID
+ * 对应 DELETE /forum/replies/{id}/like
+ */
+export function unlikeReplyApi(replyId : number) : Promise<LikeTopicResult> {
+    const url = '/forum/replies/' + replyId + '/like'
+    return del(url).then((data : UTSJSONObject) : LikeTopicResult => {
+        return {
+            liked: toBool(data['liked']),
+            likes_count: toNumber(data['likes_count']),
+        } as LikeTopicResult
     })
 }
 
@@ -447,12 +473,12 @@ export function getMyTopicsApi(page : number = 1, pageSize : number = 10) : Prom
  * @param page 页码
  * @param pageSize 每页条数
  */
-export function getMyRepliesApi(page : number = 1, pageSize : number = 10) : Promise<{items : ForumReply[], total : number, page : number, page_size : number}> {
+export function getMyRepliesApi(page : number = 1, pageSize : number = 10) : Promise<MyRepliesResult> {
     const params : UTSJSONObject = {
         page: page.toString(),
         page_size: pageSize.toString(),
     } as UTSJSONObject
-    return get('/forum/my-replies', params).then((data : UTSJSONObject) : {items : ForumReply[], total : number, page : number, page_size : number} => {
+    return get('/forum/my-replies', params).then((data : UTSJSONObject) : MyRepliesResult => {
         const items : ForumReply[] = []
         const repliesRaw = data['replies']
         if (repliesRaw != null) {
@@ -466,6 +492,218 @@ export function getMyRepliesApi(page : number = 1, pageSize : number = 10) : Pro
             total: toNumber(data['total']),
             page: toNumber(data['page']),
             page_size: toNumber(data['pages']),
+        } as MyRepliesResult
+    })
+}
+
+// ===== 个人动态模块 API =====
+
+/**
+ * 获取我点赞的帖子列表
+ * @param page 页码
+ * @param pageSize 每页条数
+ * @note 后端暂未提供独立接口，复用 getMyTopicsApi；待后端实现 /forum/my-liked-topics 后替换
+ */
+export function getMyLikedTopicsApi(page : number = 1, pageSize : number = 10) : Promise<ForumTopicListResult> {
+    const params : UTSJSONObject = {
+        page: page.toString(),
+        page_size: pageSize.toString(),
+    } as UTSJSONObject
+    return get('/forum/my-liked-topics', params).then((data : UTSJSONObject) : ForumTopicListResult => {
+        return buildTopicListResult(data)
+    }).catch((e : any | null) : ForumTopicListResult => {
+        // 后端未实现时降级为空列表
+        return { items: [], total: 0, page: page, page_size: pageSize } as ForumTopicListResult
+    })
+}
+
+/**
+ * 获取我围观的帖子列表（浏览过但未互动的帖子）
+ * @param page 页码
+ * @param pageSize 每页条数
+ * @note 后端暂未提供独立接口，复用 getMyTopicsApi；待后端实现 /forum/my-observed 后替换
+ */
+export function getMyObservedTopicsApi(page : number = 1, pageSize : number = 10) : Promise<ForumTopicListResult> {
+    const params : UTSJSONObject = {
+        page: page.toString(),
+        page_size: pageSize.toString(),
+    } as UTSJSONObject
+    return get('/forum/my-observed', params).then((data : UTSJSONObject) : ForumTopicListResult => {
+        return buildTopicListResult(data)
+    }).catch((e : any | null) : ForumTopicListResult => {
+        // 后端未实现时降级为空列表
+        return { items: [], total: 0, page: page, page_size: pageSize } as ForumTopicListResult
+    })
+}
+
+/**
+ * 获取我的浏览记录
+ * @param page 页码
+ * @param pageSize 每页条数
+ * @note 后端暂未提供独立接口；待后端实现 /forum/my-view-history 后替换
+ */
+export function getMyViewHistoryApi(page : number = 1, pageSize : number = 10) : Promise<ForumTopicListResult> {
+    const params : UTSJSONObject = {
+        page: page.toString(),
+        page_size: pageSize.toString(),
+    } as UTSJSONObject
+    return get('/forum/my-view-history', params).then((data : UTSJSONObject) : ForumTopicListResult => {
+        return buildTopicListResult(data)
+    }).catch((e : any | null) : ForumTopicListResult => {
+        // 后端未实现时降级为空列表
+        return { items: [], total: 0, page: page, page_size: pageSize } as ForumTopicListResult
+    })
+}
+
+// ===== 打卡模块 API =====
+
+/**
+ * 构造 CheckInResult（从 UTSJSONObject）
+ */
+function buildCheckInResult(obj : UTSJSONObject) : CheckInResult {
+    return {
+        checked_in: toBool(obj['checked_in']),
+        consecutive_days: toNumber(obj['consecutive_days']),
+        points_earned: toNumber(obj['points_earned']),
+        total_points: toNumber(obj['total_points']),
+    } as CheckInResult
+}
+
+/**
+ * 构造 CheckInCalendarDay（从 UTSJSONObject）
+ */
+function buildCheckInCalendarDay(obj : UTSJSONObject) : CheckInCalendarDay {
+    // 兼容多种字段名：date / day / check_date
+    let dateStr = toStr(obj['date'])
+    if (dateStr.length == 0) {
+        dateStr = toStr(obj['day'])
+    }
+    if (dateStr.length == 0) {
+        dateStr = toStr(obj['check_date'])
+    }
+    // 兼容多种字段名：checked / is_checked / signed / check_in
+    let isChecked = toBool(obj['checked'])
+    if (!isChecked) {
+        isChecked = toBool(obj['is_checked'])
+    }
+    if (!isChecked) {
+        isChecked = toBool(obj['signed'])
+    }
+    if (!isChecked) {
+        isChecked = toBool(obj['check_in'])
+    }
+    return {
+        date: dateStr,
+        checked: isChecked,
+        points: toNumber(obj['points']),
+    } as CheckInCalendarDay
+}
+
+/**
+ * 构造 CheckInCalendarResult（从 UTSJSONObject）
+ */
+function buildCheckInCalendarResult(obj : UTSJSONObject) : CheckInCalendarResult {
+    console.log('[buildCheckInCalendarResult] obj keys:', Object.keys(obj).join(','))
+    const days : CheckInCalendarDay[] = []
+
+    // ===== 核心：处理 API 返回的 dates 字符串数组 =====
+    // API 格式：{ dates: ["2026-08-21","2026-08-22"], streak: 2, total: 2, today_checked: true }
+    // 需要转换为：CheckInCalendarDay[] 格式
+    const checkedDates : string[] = []
+    const datesRaw = obj['dates']
+    if (datesRaw != null) {
+        const datesArray = datesRaw as Array<string>
+        for (let i = 0; i < datesArray.length; i++) {
+            checkedDates.push(toStr(datesArray[i]))
         }
+    }
+
+    // 根据年月生成当月所有日期，标记哪些已签到
+    const year = toNumber(obj['year'])
+    const month = toNumber(obj['month'])
+    if (year > 0 && month > 0) {
+        const daysInMonth = new Date(year, month, 0).getDate()
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = year + '-' + (month < 10 ? '0' + month : '' + month) + '-' + (d < 10 ? '0' + d : '' + d)
+            let isChecked = false
+            for (let j = 0; j < checkedDates.length; j++) {
+                if (checkedDates[j] == dateStr) {
+                    isChecked = true
+                    break
+                }
+            }
+            days.push({ date: dateStr, checked: isChecked, points: isChecked ? 7 : 0 } as CheckInCalendarDay)
+        }
+    } else {
+        // 没有 year/month 时，仅用 dates 数组构建
+        for (let i = 0; i < checkedDates.length; i++) {
+            days.push({ date: checkedDates[i], checked: true, points: 7 } as CheckInCalendarDay)
+        }
+    }
+
+    // ===== 字段映射：streak → consecutive_days, total → total_points =====
+    let consecutive = toNumber(obj['streak'])
+    if (consecutive == 0) {
+        consecutive = toNumber(obj['consecutive_days'])
+    }
+    let points = toNumber(obj['total'])
+    if (points == 0) {
+        points = toNumber(obj['total_points'])
+    }
+    let perDay = toNumber(obj['points_per_day'])
+    if (perDay == 0) {
+        perDay = 7
+    }
+
+    console.log('[buildCheckInCalendarResult] checkedDates:', checkedDates.join(','), 'days count:', days.length, 'streak:', consecutive)
+
+    return {
+        year: year > 0 ? year : new Date().getFullYear(),
+        month: month > 0 ? month : new Date().getMonth() + 1,
+        consecutive_days: consecutive,
+        total_points: points,
+        points_per_day: perDay,
+        days: days,
+    } as CheckInCalendarResult
+}
+
+/**
+ * 每日打卡
+ * POST /forum/check-in
+ * @returns 打卡结果（连续天数、获得积分、累计积分）
+ */
+export function checkInApi() : Promise<CheckInResult> {
+    return post('/forum/check-in').then((data : UTSJSONObject) : CheckInResult => {
+        console.log('[checkInApi] raw data:', JSON.stringify(data))
+        return buildCheckInResult(data)
+    }).catch((e : any | null) : CheckInResult => {
+        console.error('[checkInApi] failed:', e)
+        const msg = errMsg(e, '打卡失败')
+        throw new Error(msg)
+    })
+}
+
+/**
+ * 获取打卡日历
+ * GET /forum/check-in/calendar
+ * @param year 年份（可选，默认当前年）
+ * @param month 月份（可选，默认当前月）
+ * @returns 日历数据（连续签到天数、积分、每日签到状态）
+ */
+export function getCheckInCalendarApi(year : number = 0, month : number = 0) : Promise<CheckInCalendarResult> {
+    const params : UTSJSONObject = {}
+    if (year > 0) {
+        params['year'] = year.toString()
+    }
+    if (month > 0) {
+        params['month'] = month.toString()
+    }
+    return get('/forum/check-in/calendar', params).then((data : UTSJSONObject) : CheckInCalendarResult => {
+        console.log('[getCheckInCalendarApi] raw data:', JSON.stringify(data))
+        return buildCheckInCalendarResult(data)
+    }).catch((e : any | null) : CheckInCalendarResult => {
+        console.error('[getCheckInCalendarApi] failed:', e)
+        const msg = errMsg(e, '获取打卡日历失败')
+        throw new Error(msg)
     })
 }

@@ -1,0 +1,95 @@
+/**
+ * 全局搜索 API（ADR-0018）
+ *
+ * 接口：GET /search（公开访问，无需登录）
+ *   keyword  必填，模糊匹配 course/question/content/topic
+ *   type     可选，course | question | content | topic
+ *   page     可选，默认 1
+ *   page_size 可选，默认 20
+ *
+ *   缺省返回各分区 top 5 + 总数；指定 type 时按分页返回
+ */
+import { get } from './request'
+import { toNumber, toStr } from './helpers'
+import type { SearchItem, SearchCategoryResult, SearchResult, SearchPagedResult } from '../types/index'
+
+
+
+function buildSearchItem(obj : UTSJSONObject) : SearchItem {
+	return {
+		type: toStr(obj['type']),
+		id: toNumber(obj['id']),
+		title: toStr(obj['title']),
+		cover: toStr(obj['cover']),
+		summary: toStr(obj['summary']),
+	} as SearchItem
+}
+
+function buildSearchCategoryResult(obj : UTSJSONObject | null) : SearchCategoryResult {
+	if (obj == null) {
+		return { items: [] as SearchItem[], total: 0 } as SearchCategoryResult
+	}
+	const items : SearchItem[] = []
+	const itemsRaw = obj['items']
+	if (itemsRaw != null) {
+		const arr = itemsRaw as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			items.push(buildSearchItem(arr[i]))
+		}
+	}
+	return {
+		items: items,
+		total: toNumber(obj['total']),
+	} as SearchCategoryResult
+}
+
+/**
+ * 全局搜索（全部分区，缺省各分区 top 5）
+ * @param keyword 搜索关键词（必填）
+ */
+export function searchAllApi(keyword : string) : Promise<SearchResult> {
+	const params : UTSJSONObject = { keyword: keyword } as UTSJSONObject
+	return get('/search', params).then((data : UTSJSONObject) : SearchResult => {
+		return {
+			keyword: toStr(data['keyword'], keyword),
+			courses: buildSearchCategoryResult(data['courses'] as UTSJSONObject | null),
+			questions: buildSearchCategoryResult(data['questions'] as UTSJSONObject | null),
+			contents: buildSearchCategoryResult(data['contents'] as UTSJSONObject | null),
+			topics: buildSearchCategoryResult(data['topics'] as UTSJSONObject | null),
+		} as SearchResult
+	})
+}
+
+/**
+ * 指定类型搜索（分页）
+ * @param keyword 搜索关键词
+ * @param type 类型：course / question / content / topic
+ * @param page 页码
+ * @param pageSize 每页条数
+ */
+export function searchByTypeApi(keyword : string, type : string, page : number = 1, pageSize : number = 20) : Promise<SearchPagedResult> {
+	const params : UTSJSONObject = {
+		keyword: keyword,
+		type: type,
+		page: page.toString(),
+		page_size: pageSize.toString(),
+	} as UTSJSONObject
+	return get('/search', params).then((data : UTSJSONObject) : SearchPagedResult => {
+		const items : SearchItem[] = []
+		const itemsRaw = data['items']
+		if (itemsRaw != null) {
+			const arr = itemsRaw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				items.push(buildSearchItem(arr[i]))
+			}
+		}
+		return {
+			keyword: toStr(data['keyword'], keyword),
+			type: toStr(data['type'], type),
+			total: toNumber(data['total']),
+			page: toNumber(data['page'], 1),
+			pages: toNumber(data['pages']),
+			items: items,
+		} as SearchPagedResult
+	})
+}

@@ -120,6 +120,7 @@
 <script setup lang="uts">
   import { ref, computed } from 'vue'
   import { useStatusBarHeight } from '../../utils/system'
+  import { goBack } from '../../utils/navigation'
   import { useAuthStore } from '../../stores/auth'
   import { updateProfileApi, uploadAvatarApi, changePasswordSendCodeApi, changePasswordApi, profileSendCodeApi, profileBindPhoneApi } from '../../api/auth'
 
@@ -171,7 +172,7 @@
   })
 
   function onBack() : void {
-    uni.navigateBack()
+    goBack()
   }
 
   /** 上传头像 */

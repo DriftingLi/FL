@@ -1,7 +1,7 @@
 /**
  * 全局类型定义
  */
-import { Ref, ComputedRef } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
 
 /** 后端通用 JSON 响应格式 */
 export type ApiResponse<T> = {
@@ -15,15 +15,13 @@ export type ApiResponse<T> = {
  * @note UTS 中联合字面量类型（如 'student' | 'tutor' | 'admin'）编译到 Kotlin 后
  *       无法用 as 从 string 强转（会抛 ClassCastException），因此 role 统一用 string 类型
  */
-export type UserRole = string
-
 /** 用户信息 */
 export type UserInfo = {
     user_id : number
     username : string
     name : string
     role : string
-    avatar ?: string
+    avatar_url : string
 }
 
 /** 登录参数 */
@@ -43,6 +41,16 @@ export type CodeLoginParams = {
 export type LoginResult = {
     token : string
     user : UserInfo
+    refresh_token : string
+}
+
+/**
+ * 刷新令牌响应数据（POST /auth/refresh）
+ * @note UTS 不支持内联匿名对象类型（如 Promise<{...}>），必须用具名 type
+ */
+export type RefreshTokenResult = {
+    token : string
+    refresh_token : string
 }
 
 /**
@@ -71,13 +79,6 @@ export type EmailRegisterParams = {
 }
 
 /** 忘记密码重置参数（验证码制，POST /auth/{email|phone}/reset-password） */
-export type ResetPasswordParams = {
-    target : string     // 手机号或邮箱
-    channel : string    // phone / email
-    code : string       // 验证码（purpose=reset_password 下发）
-    password : string   // 新密码
-}
-
 /**
  * 更新个人资料参数（昵称）
  * @note 后端 PUT /auth/profile 仅支持 nickname 字段，走资料审核流（提交→审核→生效）
@@ -109,11 +110,6 @@ export type UploadAvatarResult = {
 }
 
 /** 学习统计单日数据 */
-export type StudyStatsItem = {
-    date : string       // YYYY-MM-DD
-    minutes : number    // 学习分钟数
-}
-
 /** 学习统计响应 */
 export type StudyStats = {
     days : number
@@ -179,9 +175,13 @@ export type AuthStore = {
     token : Ref<string>
     user : Ref<UserInfo | null>
     isInitializing : Ref<boolean>
-    isLoggedIn : ComputedRef<boolean>
-    displayName : ComputedRef<string>
-    setAuthData : (t : string, u : UserInfo) => void
+    isLoggedIn : Ref<boolean>
+    displayName : Ref<string>
+    /** 登录来源：wechat / phone / email / password */
+    loginProvider : Ref<string>
+    getRefreshToken : () => string
+    tryRefreshToken : () => Promise<boolean>
+    setAuthData : (t : string, u : UserInfo, rt : string) => void
     clearAuthData : () => void
     restoreFromStorage : () => boolean
     validateToken : () => Promise<void>
@@ -214,19 +214,7 @@ export type ExamQuestion = {
 }
 
 /** 考核提交参数 */
-export type ExamSubmitParams = {
-    course_id : number
-    answers : UTSJSONObject   // { 题号: 答案 }
-}
-
 /** 考核结果 */
-export type ExamResult = {
-    score : number
-    total_score : number
-    passed : boolean
-    details : UTSJSONObject[]
-}
-
 /** 模拟考试开始参数 */
 export type MockExamStartParams = {
     count : number
@@ -333,9 +321,12 @@ export type ForumTopic = {
     author_avatar : string
     replies_count : number
     views_count : number
-    like_count : number
+    likes_count : number
     liked : boolean
+    favorited : boolean
     created_at : string
+    /** 帖子分类：general / resource / video / exam */
+    scope : string
 }
 
 /** 帖子列表响应 */
@@ -348,36 +339,58 @@ export type ForumTopicListResult = {
 
 /** 帖子回复 */
 export type ForumReply = {
-	id : number
-	topic_id : number
-	topic_title : string
-	content : string
-	images : string[]
-	author_id : number
-	author_name : string
-	author_avatar : string
-	created_at : string
-	/** 是否可删除（后端返回，贴主本人为 true） */
-	can_delete : boolean
+    id : number
+    topic_id : number
+    topic_title : string
+    content : string
+    images : string[]
+    author_id : number
+    author_name : string
+    author_avatar : string
+    created_at : string
+    /** 是否可删除（后端返回，贴主本人为 true） */
+    can_delete : boolean
+    likes_count : number
+    liked : boolean
 }
 
 /** 帖子详情（含回复列表） */
 export type ForumTopicDetail = {
-	id : number
-	title : string
-	content : string
-	images : string[]
-	author_id : number
-	author_name : string
-	author_avatar : string
-	replies_count : number
-	views_count : number
-	like_count : number
-	liked : boolean
-	created_at : string
-	/** 是否可删除（后端返回，贴主本人为 true） */
-	can_delete : boolean
-	replies : ForumReply[]
+    id : number
+    title : string
+    content : string
+    images : string[]
+    author_id : number
+    author_name : string
+    author_avatar : string
+    replies_count : number
+    views_count : number
+    likes_count : number
+    liked : boolean
+    favorited : boolean
+    created_at : string
+    /** 是否可删除（后端返回，贴主本人为 true） */
+    can_delete : boolean
+    replies : ForumReply[]
+    /** 帖子分类：general / resource / video / exam */
+    scope : string
+}
+
+/**
+ * 帖子点赞/取消点赞响应（POST/DELETE /forum/topics/:id/like）
+ * @note UTS 不支持内联匿名对象类型，必须用具名 type
+ */
+export type LikeTopicResult = {
+    liked : boolean
+    likes_count : number
+}
+
+/** 我的回复列表响应（GET /forum/my-replies） */
+export type MyRepliesResult = {
+    items : ForumReply[]
+    total : number
+    page : number
+    page_size : number
 }
 
 // ===== 课程模块类型 =====
@@ -474,6 +487,30 @@ export type CourseDetail = {
     specialty_id : number
     /** 课程等级 ID（0 表示未设置） */
     level_id : number
+    /** 专业方向名称 */
+    specialty_name : string
+    /** 课程等级名称 */
+    level_name : string
+    /** 理论学时 */
+    theory_hours : number
+    /** 实操学时 */
+    practice_hours : number
+    /** 关联证书名称 */
+    certificate_name : string
+    /** 证书有效期（天） */
+    certificate_validity_days : number
+    /** 是否已报名 */
+    is_enrolled : boolean
+    /** 已完成章节数 */
+    completed_chapters : number
+    /** 前置课程列表 */
+    prerequisites : CoursePrereq[]
+}
+
+/** 前置课程 */
+export type CoursePrereq = {
+    course_id : number
+    name : string
 }
 
 // ===== 等级考试模块类型 =====
@@ -573,21 +610,7 @@ export type SubmitAnswerResult = {
 }
 
 /** 题库课程分类 */
-export type QuestionCategory = {
-    code : string          // 分类编码，如 CATEGORY_01
-    name : string          // 分类名称
-    question_count : number // 题目数量
-}
-
 /** 知识点 */
-export type KnowledgePoint = {
-    id : number
-    name : string
-    parent_id : number
-    category : string
-    question_count : number
-}
-
 /** 练习统计 */
 export type PracticeStats = {
     total_practiced : number   // 总练习题数
@@ -707,4 +730,293 @@ export type AIFunctionItem = {
     title : string
     icon : string
     prompt : string
+}
+
+// ===== 通知模块类型 =====
+
+/** 通知项 */
+export type NotificationItem = {
+    id : number
+    type : string       // system | profile_review | forum_reply | forum_report | forum_topic_deleted | forum_reply_deleted
+    title : string
+    content : string
+    link : string       // 跳转路径，如 /training/forum/:topic_id；帖子已删除时为空
+    payload : UTSJSONObject
+    is_read : boolean
+    read_at : string
+    created_at : string
+}
+
+/** 通知列表响应 */
+export type NotificationListResult = {
+    items : NotificationItem[]
+    total : number
+    page : number
+    page_size : number
+    unread_count : number
+}
+
+// ===== 打卡模块类型 =====
+
+/** 打卡结果（POST /forum/check-in 返回） */
+export type CheckInResult = {
+    checked_in : boolean       // 是否打卡成功
+    consecutive_days : number  // 连续签到天数
+    points_earned : number     // 本次获得积分
+    total_points : number      // 累计积分
+}
+
+/** 打卡日历单日状态 */
+export type CheckInCalendarDay = {
+    date : string              // YYYY-MM-DD
+    checked : boolean          // 是否已签到
+    points : number            // 该日获得积分（0 表示未签）
+}
+
+/** 打卡日历响应（GET /forum/check-in/calendar） */
+export type CheckInCalendarResult = {
+    year : number
+    month : number
+    consecutive_days : number  // 连续签到天数
+    total_points : number      // 累计积分
+    points_per_day : number    // 每日签到积分
+    days : CheckInCalendarDay[] // 当月每日签到状态
+}
+
+/** 打卡排行榜条目（GET /forum/check-in/rank） */
+// ========== 学员课程（GET /student/courses） ==========
+/** 学员课程条目 */
+export type StudentCourse = {
+    course_id : number
+    course_name : string
+    cover : string
+    specialty_id : number
+    level_id : number
+    progress : number               // 0-100
+    completed_chapters : number
+    total_chapters : number
+    study_duration : number         // 分钟
+    last_chapter_id : number
+    last_chapter_title : string
+    last_position : number          // 秒
+    last_studied_at : string
+}
+
+/** 学员课程列表结果 */
+export type StudentCourseListResult = {
+    courses : StudentCourse[]
+    continue_learning : StudentCourse | null
+}
+
+/** 学员单课程章节进度 */
+export type StudentCourseChapterProgress = {
+    chapter_id : number
+    title : string
+    progress : number               // 0-100
+    video_position : number         // 秒
+    completed : boolean
+}
+
+/** 学员单课程学习详情（GET /student/courses/:course_id） */
+export type StudentCourseDetail = StudentCourse & {
+    chapters : StudentCourseChapterProgress[]
+}
+
+// ========== 内容精选（GET /featured-contents） ==========
+/** 精选内容条目 */
+export type FeaturedContentItem = {
+    content_id : number
+    title : string
+    category : string
+    category_label : string
+    summary : string
+    cover_image : string
+    source : string
+    status : string
+    sort_order : number
+    view_count : number
+    published_at : string
+    created_at : string
+}
+
+/** 精选内容列表结果 */
+export type FeaturedContentListResult = {
+    items : FeaturedContentItem[]
+    total : number
+    page : number
+    pages : number
+}
+
+/** 精选内容详情 */
+export type FeaturedContentDetail = FeaturedContentItem & {
+    content : string
+    related : FeaturedContentItem[]
+    prev : FeaturedContentItem | null
+    next : FeaturedContentItem | null
+}
+
+// ========== 收藏（GET /favorites） ==========
+/** 收藏条目 */
+export type FavoriteItem = {
+    favorite_id : number
+    target_type : string            // course / chapter / question / featured / topic
+    target_id : number
+    title : string
+    cover : string
+    created_at : string
+}
+
+/** 收藏列表结果 */
+export type FavoriteListResult = {
+    items : FavoriteItem[]
+    total : number
+    page : number
+    page_size : number
+}
+
+/** 收藏检查结果 */
+export type FavoriteCheckResult = {
+    favorited : boolean
+    favorite_id : number
+}
+
+// ========== 全局搜索（GET /search） ==========
+/** 搜索结果条目 */
+export type SearchItem = {
+    type : string                   // course / question / content / topic
+    id : number
+    title : string
+    cover : string
+    summary : string
+}
+
+/** 搜索分类结果 */
+export type SearchCategoryResult = {
+    items : SearchItem[]
+    total : number
+}
+
+/** 全部搜索结果 */
+export type SearchResult = {
+    keyword : string
+    courses : SearchCategoryResult
+    questions : SearchCategoryResult
+    contents : SearchCategoryResult
+    topics : SearchCategoryResult
+}
+
+/** 指定类型搜索分页结果 */
+export type SearchPagedResult = {
+    keyword : string
+    type : string
+    total : number
+    page : number
+    pages : number
+    items : SearchItem[]
+}
+
+// ========== 学习资料（GET /materials） ==========
+/** 学习资料条目 */
+export type MaterialItem = {
+    file_id : number
+    chapter_id : number
+    chapter_title : string
+    course_id : number
+    course_name : string
+    file_name : string
+    file_url : string
+    content_type : string
+    file_size : number
+    created_at : string
+}
+
+/** 学习资料列表结果 */
+export type MaterialListResult = {
+    materials : MaterialItem[]
+    total : number
+    page : number
+    pages : number
+}
+
+/** 学习资料下载信息 */
+export type MaterialDownloadInfo = {
+    file_url : string
+    file_name : string
+}
+
+// ========== 标签（GET /tags） ==========
+/** 题库标签条目 */
+export type TagItem = {
+    id : number
+    code : string
+    name : string
+    description : string
+    sort_order : number
+    status : number
+    question_count : number
+}
+
+// ========== 题目互动（评论 / 笔记 / 考点） ==========
+
+/** 题目评论 */
+export type QuestionComment = {
+    id : number
+    question_id : number
+    user_id : number
+    username : string
+    avatar_url : string
+    content : string
+    created_at : string
+    can_delete : boolean
+}
+
+/** 评论列表结果 */
+export type CommentListResult = {
+    items : QuestionComment[]
+    total : number
+}
+
+/** 个人笔记 */
+export type QuestionNote = {
+    id : number | null
+    question_id : number
+    content : string
+    updated_at : string
+}
+
+/** 考点标签 */
+export type KnowledgeTag = {
+    id : number
+    code : string
+    name : string
+}
+
+// ========== 证件模块（GET/PUT /me/credential） ==========
+
+/** 证件项（后端返回的实际字段） */
+export type CredentialItem = {
+    id : number                // 证件数字 ID
+    code : string              // 证件编码，如 forklift_n1、low_voltage_electrician
+    name : string              // 证件名称，如 叉车司机N1证
+    category : string          // 分类：special_operation / skill_level
+    description : string       // 证件描述
+    level : number | null      // 等级（仅技能等级证，如 5=五级，1=一级）
+    sort_order : number        // 排序权重
+    status : number            // 状态：1=启用
+    created_at : string        // 创建时间
+    updated_at : string        // 更新时间
+}
+
+/** 证件分组（前端展示用，按 category 分组） */
+export type CredentialGroup = {
+    group_name : string       // 分组标题
+    icon : string             // 分组图标 emoji
+    category : string         // 分类标识
+    items : CredentialItem[]  // 该分组下的证件列表
+}
+
+/** 证件切换结果（PATCH /me/credential） */
+export type CredentialSwitchResult = {
+    success : boolean
+    credential : CredentialItem | null  // 切换后的当前证件
 }

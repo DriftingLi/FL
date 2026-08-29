@@ -2,8 +2,9 @@
  * 认证相关 API
  */
 import { get, post, put, uploadFile } from './request'
+import { toStr } from './helpers'
 import type { RequestOptions } from './request'
-import type { LoginParams, LoginResult, RegisterParams, EmailRegisterParams, UserInfo, UpdateProfileParams, UploadAvatarResult, ProfileChangeRequest, WechatLoginResult } from '../types/index'
+import type { LoginParams, LoginResult, RegisterParams, EmailRegisterParams, UserInfo, UpdateProfileParams, UploadAvatarResult, ProfileChangeRequest, WechatLoginResult, RefreshTokenResult } from '../types/index'
 
 /**
  * 从 UTSJSONObject 构造 UserInfo
@@ -25,9 +26,15 @@ function buildUserInfo(obj : UTSJSONObject) : UserInfo {
 			name: name,
 			role: role,
 		} as UserInfo
-		const avatar = obj['avatar']
-		if (avatar != null) {
-			user.avatar = avatar as string
+		// 兼容两种后端字段名：/auth/me 返回 avatar_url，/auth/wx-login 返回 avatar
+		const avatarUrlRaw = obj['avatar_url']
+		if (avatarUrlRaw != null && (avatarUrlRaw as string).length > 0) {
+			user.avatar_url = avatarUrlRaw as string
+		} else {
+			const avatarRaw = obj['avatar']
+			if (avatarRaw != null && (avatarRaw as string).length > 0) {
+				user.avatar_url = avatarRaw as string
+			}
 		}
 		return user
 	} catch (e) {
@@ -46,20 +53,6 @@ function buildUserInfo(obj : UTSJSONObject) : UserInfo {
 	}
 }
 
-/** 静态 mock 用户数据（网络不可用时回退） */
-function getMockLoginResult() : LoginResult {
-	const mockUser : UserInfo = {
-		user_id: 1,
-		username: 'student',
-		name: '学员同学',
-		role: 'student',
-	} as UserInfo
-	return {
-		token: 'static-mock-token-student',
-		user: mockUser,
-	}
-}
-
 /** 学员登录（用户名或手机号 + 密码） */
 export function loginApi(params : LoginParams) : Promise<LoginResult> {
 	// Android 端 uni.request 的 data 必须是 UTSJSONObject，不接受 type 字面量（编译为 Kotlin data class）
@@ -69,15 +62,14 @@ export function loginApi(params : LoginParams) : Promise<LoginResult> {
 	} as UTSJSONObject
 	return post('/auth/login', payload).then((data : UTSJSONObject) : LoginResult => {
 		console.log('[loginApi] data keys:', JSON.stringify(data))
-		// 后端 /auth/login 返回的 data 是平铺结构：
-		//   { token, user_id, username, name, role }
-		// 没有嵌套的 user 对象，直接用 data 构造 UserInfo
 		try {
 			const token = data['token'] as string
+			const refreshToken = toStr(data['refresh_token'], '')
 			const user = buildUserInfo(data)
 			const result : LoginResult = {
 				token: token,
 				user: user,
+				refresh_token: refreshToken,
 			}
 			return result
 		} catch (e) {
@@ -94,12 +86,6 @@ export function loginApi(params : LoginParams) : Promise<LoginResult> {
 			throw new Error(msg)
 		}
 	}).catch((e) : LoginResult => {
-		// 仅当输入为内置测试账号时，网络不可用才回退到 mock 数据
-        // if (params.username == 'student' && params.password == 'student123') {
-        // 	console.warn('[loginApi] network failed, using mock data:', e)
-        // 	return getMockLoginResult()
-        // }
-		// 其他账号：网络正常时由后端校验；网络失败则直接报错，禁止随意登录
 		console.error('[loginApi] login failed:', e)
 		let msg = '登录失败，请检查网络后重试'
 		if (e instanceof Error) {
@@ -134,12 +120,9 @@ export function registerApi(params : RegisterParams) : Promise<LoginResult> {
 	} as UTSJSONObject
 	return post('/auth/phone/register', payload).then((data : UTSJSONObject) : LoginResult => {
 		const token = data['token'] as string
+		const refreshToken = toStr(data['refresh_token'], '')
 		const user = buildUserInfo(data)
-		const result : LoginResult = {
-			token: token,
-			user: user,
-		}
-		return result
+		return { token: token, user: user, refresh_token: refreshToken } as LoginResult
 	})
 }
 
@@ -164,12 +147,9 @@ export function emailRegisterApi(params : EmailRegisterParams) : Promise<LoginRe
 	}
 	return post('/auth/email/register', payload).then((data : UTSJSONObject) : LoginResult => {
 		const token = data['token'] as string
+		const refreshToken = toStr(data['refresh_token'], '')
 		const user = buildUserInfo(data)
-		const result : LoginResult = {
-			token: token,
-			user: user,
-		}
-		return result
+		return { token: token, user: user, refresh_token: refreshToken } as LoginResult
 	})
 }
 
@@ -231,12 +211,9 @@ export function phoneLoginApi(phone : string, code : string) : Promise<LoginResu
 	} as UTSJSONObject
 	return post('/auth/phone/login', payload).then((data : UTSJSONObject) : LoginResult => {
 		const token = data['token'] as string
+		const refreshToken = toStr(data['refresh_token'], '')
 		const user = buildUserInfo(data)
-		const result : LoginResult = {
-			token: token,
-			user: user,
-		}
-		return result
+		return { token: token, user: user, refresh_token: refreshToken } as LoginResult
 	})
 }
 
@@ -248,12 +225,9 @@ export function emailLoginApi(email : string, code : string) : Promise<LoginResu
 	} as UTSJSONObject
 	return post('/auth/email/login', payload).then((data : UTSJSONObject) : LoginResult => {
 		const token = data['token'] as string
+		const refreshToken = toStr(data['refresh_token'], '')
 		const user = buildUserInfo(data)
-		const result : LoginResult = {
-			token: token,
-			user: user,
-		}
-		return result
+		return { token: token, user: user, refresh_token: refreshToken } as LoginResult
 	})
 }
 
@@ -263,6 +237,20 @@ export function logoutApi() : Promise<UTSJSONObject> {
 	return post('/auth/logout', null, { url: '/auth/logout', silent: true } as RequestOptions)
 }
 
+
+/** 刷新双令牌 POST /auth/refresh */
+export function refreshTokenApi(refreshToken : string) : Promise<RefreshTokenResult> {
+	const payload : UTSJSONObject = {
+		refresh_token: refreshToken,
+	} as UTSJSONObject
+	return post('/auth/refresh', payload).then((data : UTSJSONObject) : RefreshTokenResult => {
+		const result : RefreshTokenResult = {
+			token: data['token'] as string,
+			refresh_token: data['refresh_token'] as string,
+		} as RefreshTokenResult
+		return result
+	})
+}
 /** 获取当前用户信息 */
 export function getUserInfoApi() : Promise<UserInfo> {
 	return get('/auth/me').then((data : UTSJSONObject) : UserInfo => {
@@ -303,15 +291,15 @@ function buildReviewRequest(obj : UTSJSONObject) : ProfileChangeRequest {
 	if (uidRaw != null) {
 		user_id = uidRaw as number
 	}
-	const username = safeStr(obj['username'], '')
-	const avatar_url = safeStr(obj['avatar_url'], '')
-	const field_type = safeStr(obj['field_type'], '')
-	const old_value = safeStr(obj['old_value'], '')
-	const new_value = safeStr(obj['new_value'], '')
-	let status = safeStr(obj['status'], 'pending')
+	const username = toStr(obj['username'], '')
+	const avatar_url = toStr(obj['avatar_url'], '')
+	const field_type = toStr(obj['field_type'], '')
+	const old_value = toStr(obj['old_value'], '')
+	const new_value = toStr(obj['new_value'], '')
+	let status = toStr(obj['status'], 'pending')
 	status = status.length > 0 ? status : 'pending'
-	const reject_reason = safeStr(obj['reject_reason'], '')
-	const created_at = safeStr(obj['created_at'], '')
+	const reject_reason = toStr(obj['reject_reason'], '')
+	const created_at = toStr(obj['created_at'], '')
 
 	const req : ProfileChangeRequest = {
 		id: id,
@@ -328,11 +316,6 @@ function buildReviewRequest(obj : UTSJSONObject) : ProfileChangeRequest {
 	return req
 }
 
-/** 安全取字符串：null/缺省返回默认值，避免 UTS 强转异常 */
-function safeStr(v : any | null, defaultVal : string) : string {
-	if (v == null) return defaultVal
-	return `${v}`
-}
 
 /**
  * 上传头像（multipart/form-data） POST /auth/avatar
@@ -344,27 +327,6 @@ export function uploadAvatarApi(filePath : string) : Promise<UploadAvatarResult>
 		const result : UploadAvatarResult = {
 			request: buildReviewRequest(data)
 		} as UploadAvatarResult
-		return result
-	})
-}
-
-/** 微信扫码登录：获取登录二维码（后端框架占位） POST /auth/wechat/qrcode */
-export function wechatQrcodeApi() : Promise<UTSJSONObject> {
-	return post('/auth/wechat/qrcode')
-}
-
-/** 微信扫码登录（后端框架占位） POST /auth/wechat/login */
-export function wechatLoginApi(code : string) : Promise<LoginResult> {
-	const payload : UTSJSONObject = {
-		code: code
-	} as UTSJSONObject
-	return post('/auth/wechat/login', payload).then((data : UTSJSONObject) : LoginResult => {
-		const token = data['token'] as string
-		const user = buildUserInfo(data)
-		const result : LoginResult = {
-			token: token,
-			user: user,
-		}
 		return result
 	})
 }
@@ -384,10 +346,12 @@ export function mpWechatLoginApi(code : string) : Promise<WechatLoginResult> {
 	} as UTSJSONObject
 	return post('/auth/wx-login', payload).then((data : UTSJSONObject) : WechatLoginResult => {
 		const token = data['token'] as string
+		const refreshToken = toStr(data['refresh_token'], '')
 		const user = buildUserInfo(data)
 		const result : WechatLoginResult = {
 			token: token,
 			user: user,
+			refresh_token: refreshToken,
 		} as WechatLoginResult
 		// 透传后端的 isNew 标记：新用户（openid 首次绑定）后端会以 openid 自动建账户并 isNew=true
 		const isNewRaw = data['isNew']
@@ -409,15 +373,6 @@ export function profileSendCodeApi(target : string, channel : string) : Promise<
 		payload['phone'] = target
 	}
 	return post('/auth/profile/send-code', payload)
-}
-
-/** 绑定/修改邮箱（验证码确认） POST /auth/profile/email */
-export function profileBindEmailApi(email : string, code : string) : Promise<UTSJSONObject> {
-	const payload : UTSJSONObject = {
-		email: email,
-		code: code
-	} as UTSJSONObject
-	return post('/auth/profile/email', payload)
 }
 
 /** 绑定/修改手机号（验证码确认） POST /auth/profile/phone */
@@ -447,27 +402,3 @@ export function changePasswordApi(phone : string, code : string, newPassword : s
 	return post('/auth/profile/password', payload)
 }
 
-/** 修改账号：发送短信验证码 POST /auth/account/send-code */
-export function changeAccountSendCodeApi(phone : string) : Promise<UTSJSONObject> {
-	const payload : UTSJSONObject = {
-		phone: phone
-	} as UTSJSONObject
-	return post('/auth/account/send-code', payload)
-}
-
-/** 修改账号（短信验证码确认，响应携带新 token） PUT /auth/account */
-export function changeAccountApi(newUsername : string, code : string) : Promise<LoginResult> {
-	const payload : UTSJSONObject = {
-		username: newUsername,
-		code: code
-	} as UTSJSONObject
-	return put('/auth/account', payload).then((data : UTSJSONObject) : LoginResult => {
-		const token = data['token'] as string
-		const user = buildUserInfo(data)
-		const result : LoginResult = {
-			token: token,
-			user: user,
-		}
-		return result
-	})
-}

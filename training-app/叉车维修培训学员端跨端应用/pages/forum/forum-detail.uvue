@@ -10,8 +10,11 @@
                 <!-- <view class="header-right" v-if="canDelete" @click="onDelete"> -->
                 <text class="header-action-danger">删除</text>
             </view>
-            <view class="header-right" v-else>
-                <text class="header-action" @click="onReportTopic">举报</text>
+            <view class="header-right" v-if="canEdit && !canDelete" @click="onEditTopic">
+                <text class="header-action">编辑</text>
+            </view>
+            <view class="header-right" v-if="!canDelete && !canEdit" @click="onReportTopic">
+                <text class="header-action">举报</text>
             </view>
         </view>
 
@@ -32,14 +35,18 @@
                     </view>
                     <view class="author-info">
                         <text class="author-name">{{ topic.author_name.length > 0 ? topic.author_name : '匿名学员' }}</text>
-                        <text class="post-time">{{ formatDateTime(topic.created_at) }}</text>
+                        <text class="post-time">{{ formatDateTimeStr(topic.created_at) }}</text>
                     </view>
                     <view class="topic-stats">
-                        <view class="stat-like" @click="onToggleLike">
-                            <text class="stat-like-icon">{{ topic.liked ? '❤️' : '🤍' }}</text>
-                            <text class="stat-like-count">{{ topic.like_count > 0 ? topic.like_count : '' }}</text>
+                        <view :class="topic.liked ? 'stat-like stat-like-liked' : 'stat-like'" @click="onToggleLike">
+                            <text :class="topic.liked ? 'stat-like-icon stat-like-icon-liked' : 'stat-like-icon'">{{ topic.liked ? '♥' : '♡' }}</text>
+                            <text :class="topic.liked ? 'stat-like-count stat-like-count-liked' : 'stat-like-count'">{{ topic.likes_count }}</text>
                         </view>
-                        <text class="stat-text">👁 {{ topic.views_count }}</text>
+                        <view :class="topic.favorited ? 'stat-like stat-like-favorited' : 'stat-like'" @click="onToggleFavorite">
+                            <text :class="topic.favorited ? 'stat-like-icon stat-like-icon-favorited' : 'stat-like-icon'">{{ topic.favorited ? '★' : '☆' }}</text>
+                            <text :class="topic.favorited ? 'stat-like-count stat-like-count-favorited' : 'stat-like-count'">收藏</text>
+                        </view>
+                        <text class="stat-text"> {{ topic.views_count }}</text>
                     </view>
                     <view v-if="canDelete" class="topic-delete" @click="onDelete">
                         <text class="topic-delete-text">删除</text>
@@ -60,6 +67,20 @@
             <view v-if="topic != null" class="replies-section">
                 <view class="replies-header">
                     <text class="replies-title">全部回复（{{ replies.length }}）</text>
+                    <view class="replies-sort-bar">
+                        <view class="reply-sort-chip" :class="{ active: replySortField === 'latest' }" @click="onReplySortFieldChange('latest')">
+                            <text class="reply-sort-text" :class="{ active: replySortField === 'latest' }">最新</text>
+                        </view>
+                        <view class="reply-sort-chip" :class="{ active: replySortField === 'hot' }" @click="onReplySortFieldChange('hot')">
+                            <text class="reply-sort-text" :class="{ active: replySortField === 'hot' }">热门</text>
+                        </view>
+                        <view class="reply-sort-chip" :class="{ active: replySortOrder === 'desc' }" @click="onReplySortOrderChange('desc')">
+                            <text class="reply-sort-text" :class="{ active: replySortOrder === 'desc' }">逆序</text>
+                        </view>
+                        <view class="reply-sort-chip" :class="{ active: replySortOrder === 'asc' }" @click="onReplySortOrderChange('asc')">
+                            <text class="reply-sort-text" :class="{ active: replySortOrder === 'asc' }">正序</text>
+                        </view>
+                    </view>
                 </view>
 
                 <view v-if="replies.length == 0" class="empty-replies">
@@ -76,7 +97,7 @@
                         <view class="reply-info">
                             <text
                                 class="reply-author">{{ reply.author_name.length > 0 ? reply.author_name : '匿名学员' }}</text>
-                            <text class="reply-time">{{ formatDateTime(reply.created_at) }}</text>
+                            <text class="reply-time">{{ formatDateTimeStr(reply.created_at) }}</text>
                         </view>
                         <view v-if="canDeleteReply(reply)" class="reply-delete" @click="onDeleteReply(reply.id)">
                             <text class="reply-delete-text">删除</text>
@@ -92,13 +113,26 @@
                             <image class="img-thumb" :src="img" mode="aspectFill" />
                         </view>
                     </view>
+                    <view class="reply-action-row">
+                        <text class="reply-action-time">{{ formatDateTimeStr(reply.created_at) }}</text>
+                        <view class="reply-action-right">
+                            <view :class="isReplyLiked(reply) ? 'reply-like reply-like-liked' : 'reply-like'" @click="onToggleReplyLike(reply)">
+                                <text :class="isReplyLiked(reply) ? 'reply-like-icon reply-like-icon-liked' : 'reply-like-icon'">{{ isReplyLiked(reply) ? '♥' : '♡' }}</text>
+                                <text :class="isReplyLiked(reply) ? 'reply-like-count reply-like-count-liked' : 'reply-like-count'">{{ getReplyLikesCount(reply) }}</text>
+                            </view>
+                            <view class="reply-action-btn" @click="onReplyToUser(reply)">
+                                <text class="reply-action-text"> 回复</text>
+                            </view>
+                        </view>
+                    </view>
                 </view>
             </view>
         </scroll-view>
 
         <!-- 底部回复输入栏 -->
         <view v-if="topic != null" class="reply-bar">
-            <view v-for="(img, idx) in replyPreviewImages" :key="idx" class="reply-preview" @click="onPreviewReplyImage(idx)">
+            <view v-for="(img, idx) in replyPreviewImages" :key="idx" class="reply-preview"
+                @click="onPreviewReplyImage(idx)">
                 <image class="reply-preview-img" :src="img" mode="aspectFill" />
                 <view class="reply-preview-remove" @click.stop="onRemoveReplyImage(idx)">
                     <text class="reply-preview-remove-text">×</text>
@@ -118,13 +152,15 @@
         <view v-if="showReportModal" class="report-modal-mask" @click="onCloseReport">
             <view class="report-modal" @click.stop>
                 <text class="report-modal-title">{{ reportTargetType === 'topic' ? '举报帖子' : '举报回复' }}</text>
-                <textarea class="report-textarea" placeholder="请输入举报原因（1-500字）" maxlength="500" v-model="reportReason" />
+                <textarea class="report-textarea" placeholder="请输入举报原因（1-500字）" maxlength="500"
+                    v-model="reportReason" />
                 <text class="report-counter">{{ reportReason.length }}/500</text>
                 <view class="report-actions">
                     <view class="report-cancel" @click="onCloseReport">
                         <text class="report-cancel-text">取消</text>
                     </view>
-                    <view class="report-confirm" :class="{ disabled: reportReason.length < 1 || submittingReport }" @click="onSubmitReport">
+                    <view class="report-confirm" :class="{ disabled: reportReason.length < 1 || submittingReport }"
+                        @click="onSubmitReport">
                         <text class="report-confirm-text">{{ submittingReport ? '提交中...' : '提交' }}</text>
                     </view>
                 </view>
@@ -147,10 +183,14 @@
         uploadForumImageApi,
         likeTopicApi,
         unlikeTopicApi,
+        likeReplyApi,
+        unlikeReplyApi,
         reportTopicApi,
         reportReplyApi,
     } from '../../api/forum'
-    import { resolveFileUrl } from '../../utils/format'
+    import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../api/favorite'
+    import { formatDateTimeStr, resolveFileUrl } from '../../utils/format'
+    import { getStorageJSON, setStorageJSON } from '../../utils/storage'
     import type { ForumTopicDetail, ForumReply } from '../../types/index'
 
     const statusBarHeight = useStatusBarHeight()
@@ -159,6 +199,8 @@
 
     const topicId = ref<number>(0)
     const topic = ref<ForumTopicDetail | null>(null)
+    const replySortField = ref<string>('latest') // latest | hot
+    const replySortOrder = ref<string>('asc')    // asc | desc
     /**
      * 帖子图片列表（computed 包装：模板中直接访问 topic.value 的链式属性时，
      * Kotlin 因 value 是可并发修改的 mutable property 无法 smart cast，转由 computed 取值）
@@ -190,6 +232,53 @@
         return urls
     })
     const uploadingReplyImage = ref<boolean>(false)
+    const topicFavoriteId = ref<number>(0)
+    // 回复点赞本地态：key 为 reply.id 字符串，value 为 { liked: boolean, likes_count: number }，持久化到本地存储防止刷新丢失（后端暂未在 GetTopic 下发 replies[].liked/likes_count）
+    const replyLikeState = ref<UTSJSONObject>({} as UTSJSONObject)
+
+    function replyLikeStorageKey() : string {
+        return 'forum_reply_like_' + topicId.value.toString()
+    }
+
+    function persistReplyLikeState() : void {
+        try {
+            if (topicId.value > 0) setStorageJSON(replyLikeStorageKey(), replyLikeState.value as object)
+        } catch (e) { uni.__f__('warn','at pages/forum/forum-detail.uvue:246','[forum-detail] persistReplyLikeState failed:', e) }
+    }
+
+    function restoreReplyLikeState() : void {
+        if (topicId.value <= 0) return
+        try {
+            const saved = getStorageJSON(replyLikeStorageKey())
+            if (saved != null) {
+                // 合并到当前态（保留内存中更新的优先）
+                const merged : UTSJSONObject = {} as UTSJSONObject
+                for (const k in saved) merged[k] = saved[k]
+                for (const k in replyLikeState.value) merged[k] = replyLikeState.value[k]
+                replyLikeState.value = merged
+            }
+        } catch (e) { uni.__f__('warn','at pages/forum/forum-detail.uvue:260','[forum-detail] restoreReplyLikeState failed:', e) }
+    }
+
+    function hydrateReplyLikesFromReplies() : void {
+        restoreReplyLikeState()
+        // 若后端已下发 liked/likes_count（未来实现），以后端为权威回填到本地态，避免刷新后样式因后端 0 被覆盖则仅在本地无记录时写入
+        for (let i = 0; i < replies.value.length; i++) {
+            const r = replies.value[i]
+            const hasBackend = (r.liked == true) || (r.likes_count > 0)
+            if (!hasBackend) continue
+            const key = r.id.toString()
+            const existing = replyLikeState.value[key] as UTSJSONObject | null
+            if (existing == null) {
+                const next : UTSJSONObject = {} as UTSJSONObject
+                for (const k in replyLikeState.value) next[k] = replyLikeState.value[k]
+                next[key] = { liked: r.liked, likes_count: r.likes_count } as unknown as UTSJSONObject
+                replyLikeState.value = next
+            }
+        }
+        // 首次回填后即持久化，保证刷新后数据不丢
+        persistReplyLikeState()
+    }
 
     // 举报相关状态
     const showReportModal = ref<boolean>(false)
@@ -210,6 +299,13 @@
         const t = topic.value
         if (t == null) return false
         if (t.can_delete) return true
+        return t.author_id == currentUserId.value && currentUserId.value > 0
+    })
+
+    /** 是否可编辑帖子（作者本人） */
+    const canEdit = computed<boolean>(() : boolean => {
+        const t = topic.value
+        if (t == null) return false
         return t.author_id == currentUserId.value && currentUserId.value > 0
     })
 
@@ -242,21 +338,55 @@
     }
 
     /** 格式化时间 YYYY-MM-DD HH:mm */
-    function formatDateTime(dateStr : string) : string {
-        if (dateStr.length < 16) return dateStr
-        return dateStr.substring(0, 16).replace('T', ' ')
+    // ===== 收藏（声明在 loadDetail 之前，避免 Kotlin 局部函数前向引用） =====
+    async function loadTopicFavorite() : Promise<void> {
+        const t = topic.value
+        if (t == null || t.id <= 0) return
+        try {
+            const result = await checkFavoriteApi('topic', t.id)
+            t.favorited = result.favorited
+            topicFavoriteId.value = result.favorite_id
+        } catch (e) {
+            uni.__f__('warn','at pages/forum/forum-detail.uvue:355','[forum-detail] loadTopicFavorite failed:', e)
+        }
+    }
+
+    async function onToggleFavorite() : Promise<void> {
+        const t = topic.value
+        if (t == null) return
+        const wasFavorited = t.favorited
+        // 乐观更新
+        t.favorited = !wasFavorited
+        try {
+            if (wasFavorited) {
+                await removeFavoriteApi(topicFavoriteId.value)
+                topicFavoriteId.value = 0
+            } else {
+                const result = await addFavoriteApi('topic', t.id)
+                topicFavoriteId.value = result.favorite_id
+            }
+        } catch (e) {
+            // 回滚
+            t.favorited = wasFavorited
+            uni.__f__('error','at pages/forum/forum-detail.uvue:376','[forum-detail] toggleFavorite failed:', e)
+            uni.showToast({ title: '操作失败', icon: 'none' })
+        }
     }
 
     async function loadDetail() : Promise<void> {
         if (topicId.value == 0) return
         loading.value = true
         try {
-            const data = await getForumTopicDetailApi(topicId.value)
+            const data = await getForumTopicDetailApi(topicId.value, replySortField.value, replySortOrder.value)
             topic.value = data
             replies.value = data.replies
-            console.log('[forum-detail] DIAG can_delete=', data.can_delete, 'author_id=', data.author_id, 'currentUserId=', currentUserId.value, 'user=', JSON.stringify(authStore.user.value), 'canDelete=', canDelete.value)
+            uni.__f__('log','at pages/forum/forum-detail.uvue:388','[forum-detail] DIAG can_delete=', data.can_delete, 'author_id=', data.author_id, 'currentUserId=', currentUserId.value, 'user=', JSON.stringify(authStore.user.value), 'canDelete=', canDelete.value)
+            // 回填回复点赞态（后端暂未下发时靠本地存储恢复，避免刷新后数据/样式丢失）
+            hydrateReplyLikesFromReplies()
+            // 刷新收藏状态（获取 favorite_id 供取消收藏使用）
+            loadTopicFavorite()
         } catch (e) {
-            console.error('[forum-detail] load failed:', e)
+            uni.__f__('error','at pages/forum/forum-detail.uvue:394','[forum-detail] load failed:', e)
             uni.showToast({ title: '加载帖子失败', icon: 'none' })
         } finally {
             loading.value = false
@@ -283,7 +413,7 @@
             }
             uni.showToast({ title: '回复成功', icon: 'success' })
         } catch (e) {
-            console.error('[forum-detail] reply failed:', e)
+            uni.__f__('error','at pages/forum/forum-detail.uvue:421','[forum-detail] reply failed:', e)
             uni.showToast({ title: '回复失败', icon: 'none' })
         } finally {
             submitting.value = false
@@ -300,7 +430,7 @@
                 goBack()
             }, 1000)
         } catch (e) {
-            console.error('[forum-detail] delete topic failed:', e)
+            uni.__f__('error','at pages/forum/forum-detail.uvue:438','[forum-detail] delete topic failed:', e)
             uni.showToast({ title: '删除失败', icon: 'none' })
         } finally {
             uni.hideLoading()
@@ -340,7 +470,7 @@
             }
             uni.showToast({ title: '已删除', icon: 'success' })
         } catch (e) {
-            console.error('[forum-detail] delete reply failed:', e)
+            uni.__f__('error','at pages/forum/forum-detail.uvue:478','[forum-detail] delete reply failed:', e)
             uni.showToast({ title: '删除失败', icon: 'none' })
         } finally {
             uni.hideLoading()
@@ -395,7 +525,7 @@
                 const url = await uploadForumImageApi(paths[i])
                 replyImages.value.push(url)
             } catch (e) {
-                console.error('[forum-detail] upload reply image failed:', e)
+                uni.__f__('error','at pages/forum/forum-detail.uvue:533','[forum-detail] upload reply image failed:', e)
                 failed = failed + 1
             }
         }
@@ -424,7 +554,7 @@
                 uploadReplyImages(paths)
             },
             fail: (err) => {
-                console.log('[forum-detail] chooseImage canceled/failed:', err)
+                uni.__f__('log','at pages/forum/forum-detail.uvue:562','[forum-detail] chooseImage canceled/failed:', err)
             },
         })
     }
@@ -443,30 +573,109 @@
         onPreviewImages(replyImages.value, index)
     }
 
+    // ===== 回复点赞本地态 helpers（后端 GET /forum/topics/{id} 暂未返回 replies[].liked/likes_count，靠本地态 + POST/DELETE /forum/replies/{id}/like 同步） =====
+    function getReplyLikeRecord(replyId : number) : UTSJSONObject | null {
+        const key = replyId.toString()
+        const v = replyLikeState.value[key]
+        if (v == null) return null
+        return v as UTSJSONObject
+    }
+
+    function isReplyLiked(reply : ForumReply) : boolean {
+        const rec = getReplyLikeRecord(reply.id)
+        if (rec != null) return rec['liked'] == true
+        // 兼容后端未来在 reply 上直接返回 liked / liked_by_me
+        const raw = reply as unknown as UTSJSONObject
+        if (raw['liked'] == true) return true
+        if (raw['liked_by_me'] == true) return true
+        return false
+    }
+
+    function getReplyLikesCount(reply : ForumReply) : number {
+        const rec = getReplyLikeRecord(reply.id)
+        if (rec != null) {
+            const n = rec['likes_count'] as number
+            if (n != null) return n as number
+        }
+        const raw = reply as unknown as UTSJSONObject
+        const v1 = raw['likes_count'] as number
+        if (v1 != null && (v1 as number) >= 0) return v1 as number
+        const v2 = raw['like_count'] as number
+        if (v2 != null && (v2 as number) >= 0) return v2 as number
+        return 0
+    }
+
+    function setReplyLikeState(replyId : number, liked : boolean, likesCount : number) : void {
+        const key = replyId.toString()
+        const next : UTSJSONObject = {} as UTSJSONObject
+        for (const k in replyLikeState.value) {
+            next[k] = replyLikeState.value[k]
+        }
+        next[key] = { liked: liked, likes_count: likesCount } as unknown as UTSJSONObject
+        replyLikeState.value = next
+        persistReplyLikeState()
+    }
+
+    async function onToggleReplyLike(reply : ForumReply) : Promise<void> {
+        const wasLiked = isReplyLiked(reply)
+        const oldCount = getReplyLikesCount(reply)
+        const nextLiked = !wasLiked
+        const nextCount = wasLiked ? Math.max(0, oldCount - 1) : oldCount + 1
+        setReplyLikeState(reply.id, nextLiked, nextCount)
+        try {
+            if (wasLiked) {
+                const result = await unlikeReplyApi(reply.id)
+                setReplyLikeState(reply.id, result.liked, result.likes_count)
+            } else {
+                const result = await likeReplyApi(reply.id)
+                setReplyLikeState(reply.id, result.liked, result.likes_count)
+            }
+        } catch (e) {
+            setReplyLikeState(reply.id, wasLiked, oldCount)
+            uni.__f__('error','at pages/forum/forum-detail.uvue:640','[forum-detail] toggle reply like failed:', e)
+            let msg = '操作失败'
+            if (e instanceof Error) {
+                const m = (e as Error).message
+                if (m != null && m.length > 0) msg = m
+            }
+            // 后端若尚未实现该接口会 404，提示更友好
+            if (msg.indexOf('404') >= 0 || msg.indexOf('不存在') >= 0) {
+                msg = '点赞回复功能后端暂未实现'
+            }
+            uni.showToast({ title: msg, icon: 'none' })
+        }
+    }
+
     // ===== 点赞 =====
     async function onToggleLike() : Promise<void> {
         const t = topic.value
         if (t == null) return
         const wasLiked = t.liked
-        const oldCount = t.like_count
+        const oldCount = t.likes_count
         t.liked = !wasLiked
-        t.like_count = wasLiked ? oldCount - 1 : oldCount + 1
-        if (t.like_count < 0) t.like_count = 0
+        t.likes_count = wasLiked ? oldCount - 1 : oldCount + 1
+        if (t.likes_count < 0) t.likes_count = 0
         try {
             if (wasLiked) {
                 const result = await unlikeTopicApi(t.id)
                 t.liked = result.liked
-                t.like_count = result.like_count
+                t.likes_count = result.likes_count
             } else {
                 const result = await likeTopicApi(t.id)
                 t.liked = result.liked
-                t.like_count = result.like_count
+                t.likes_count = result.likes_count
             }
         } catch (e) {
             t.liked = wasLiked
-            t.like_count = oldCount
-            console.error('[forum-detail] toggle like failed:', e)
+            t.likes_count = oldCount
+            uni.__f__('error','at pages/forum/forum-detail.uvue:676','[forum-detail] toggle like failed:', e)
         }
+    }
+
+    // ===== 回复某条回复 =====
+    function onReplyToUser(reply : ForumReply) : void {
+        const name = reply.author_name.length > 0 ? reply.author_name : '匿名学员'
+        replyContent.value = '@' + name + ' '
     }
 
     // ===== 举报 =====
@@ -507,7 +716,7 @@
             uni.showToast({ title: '举报已提交，感谢反馈', icon: 'success' })
             onCloseReport()
         } catch (e) {
-            console.error('[forum-detail] report failed:', e)
+            uni.__f__('error','at pages/forum/forum-detail.uvue:724','[forum-detail] report failed:', e)
             let msg = '举报失败'
             if (e instanceof Error) {
                 const errObj = e as Error
@@ -518,6 +727,26 @@
         } finally {
             submittingReport.value = false
         }
+    }
+
+    // ===== 编辑帖子 =====
+    function onEditTopic() : void {
+        const t = topic.value
+        if (t == null) return
+        uni.navigateTo({ url: '/pages/forum/forum-create?id=' + t.id })
+    }
+
+    // ===== 回复排序 =====
+    function onReplySortFieldChange(field : string) : void {
+        if (replySortField.value === field) return
+        replySortField.value = field
+        loadDetail()
+    }
+
+    function onReplySortOrderChange(order : string) : void {
+        if (replySortOrder.value === order) return
+        replySortOrder.value = order
+        loadDetail()
     }
 
     function onBack() : void {
@@ -672,17 +901,50 @@
     .stat-like {
         flex-direction: row;
         align-items: center;
-        margin-right: 20rpx;
+        margin-right: 16rpx;
+        padding: 8rpx 16rpx;
+        border-radius: 24rpx;
+        background-color: #f5f5f5;
+        border: 1px solid #eeeeee;
+    }
+
+    .stat-like-liked {
+        background-color: #f44336;
+        border: 1px solid #f44336;
+    }
+
+    .stat-like-favorited {
+        background-color: #ff8f00;
+        border: 1px solid #ff8f00;
     }
 
     .stat-like-icon {
         font-size: 28rpx;
         margin-right: 6rpx;
+        color: #999999;
+    }
+
+    .stat-like-icon-liked {
+        color: #ffffff;
+    }
+
+    .stat-like-icon-favorited {
+        color: #ffffff;
     }
 
     .stat-like-count {
         font-size: 24rpx;
         color: #999999;
+    }
+
+    .stat-like-count-liked {
+        color: #ffffff;
+        font-weight: bold;
+    }
+
+    .stat-like-count-favorited {
+        color: #ffffff;
+        font-weight: bold;
     }
 
     .stat-text {
@@ -752,12 +1014,44 @@
         padding-bottom: 24rpx;
         border-bottom: 1rpx solid #f0f0f0;
         margin-bottom: 16rpx;
+        flex-direction: column;
     }
 
     .replies-title {
         font-size: 30rpx;
         font-weight: bold;
         color: #333333;
+        margin-bottom: 16rpx;
+    }
+
+    .replies-sort-bar {
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .reply-sort-chip {
+        padding: 6rpx 20rpx;
+        border-radius: 20rpx;
+        background-color: #f5f5f5;
+        border: 1rpx solid #e0e0e0;
+        margin-right: 12rpx;
+        margin-bottom: 4rpx;
+    }
+
+    .reply-sort-chip.active {
+        background-color: #e8f0fe;
+        border: 1rpx solid #2979ff;
+    }
+
+    .reply-sort-text {
+        font-size: 22rpx;
+        color: #666666;
+    }
+
+    .reply-sort-text.active {
+        color: #2979ff;
+        font-weight: bold;
     }
 
     .empty-replies {
@@ -921,6 +1215,7 @@
         font-size: 28rpx;
         color: #ffffff;
     }
+
     /* 举报弹窗 */
     .report-modal-mask {
         position: fixed;
@@ -1013,5 +1308,68 @@
     .reply-more-text {
         font-size: 24rpx;
         color: #999999;
+    }
+
+    /* 回复操作行 */
+    .reply-action-row {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding-left: 72rpx;
+        margin-top: 12rpx;
+    }
+
+    .reply-action-time {
+        font-size: 22rpx;
+        color: #cccccc;
+    }
+
+    .reply-action-btn {
+        padding: 6rpx 16rpx;
+    }
+
+    .reply-action-text {
+        font-size: 24rpx;
+        color: #2979ff;
+    }
+
+    .reply-action-right {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .reply-like {
+        flex-direction: row;
+        align-items: center;
+        padding: 6rpx 16rpx;
+        border-radius: 24rpx;
+        background-color: #f5f5f5;
+        border: 1px solid #eeeeee;
+        margin-right: 12rpx;
+    }
+
+    .reply-like-liked {
+        background-color: #f44336;
+        border: 1px solid #f44336;
+    }
+
+    .reply-like-icon {
+        font-size: 26rpx;
+        color: #999999;
+        margin-right: 6rpx;
+    }
+
+    .reply-like-icon-liked {
+        color: #ffffff;
+    }
+
+    .reply-like-count {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .reply-like-count-liked {
+        color: #ffffff;
+        font-weight: bold;
     }
 </style>

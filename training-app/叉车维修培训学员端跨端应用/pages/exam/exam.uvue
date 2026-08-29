@@ -75,7 +75,7 @@
                                 <text class="exam-tag"
                                     :class="record.is_passed ? 'passed' : getHistoryStatusClass(record.status)">
                                     {{ getHistoryStatusName(record) }}</text>
-                                <text class="exam-time">{{ formatDate(record.submit_time) }}</text>
+                                <text class="exam-time">{{ formatDateStr(record.submit_time) }}</text>
                             </view>
                             <text class="exam-desc">{{ formatScore(record.score) }} / {{ record.objective_score }}
                                 分</text>
@@ -100,8 +100,10 @@
     import { ref } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
     import { getAvailableLevelExamsApi, getLevelExamHistoryApi } from '../../api/levelExam'
     import type { LevelExamSession, LevelExamHistoryItem } from '../../types/index'
+    import { formatDateStr } from '../../utils/format'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -157,12 +159,6 @@
         if (s.length == 0 || e.length == 0) return ''
         return s + ' ~ ' + e.substring(e.length - 5)
     }
-    /** 格式化日期：YYYY-MM-DD */
-    function formatDate(iso : string) : string {
-        if (iso.length < 10) return iso
-        return iso.substring(0, 10)
-    }
-
     /** 格式化分数（整数显示整数，小数显示 1 位） */
     function formatScore(score : number) : string {
         if (score == Math.floor(score)) {
@@ -176,9 +172,9 @@
         try {
             const list = await getAvailableLevelExamsApi()
             availableExams.value = list
-            console.log('[exam] available level exams:', list.length)
+            uni.__f__('log','at pages/exam/exam.uvue:180','[exam] available level exams:', list.length)
         } catch (e) {
-            console.error('[exam] load available level exams failed:', e)
+            uni.__f__('error','at pages/exam/exam.uvue:182','[exam] load available level exams failed:', e)
         } finally {
             levelLoading.value = false
         }
@@ -206,7 +202,7 @@
                 historyPage.value = historyPage.value + 1
             }
         } catch (e) {
-            console.error('[exam] load level history failed:', e)
+            uni.__f__('error','at pages/exam/exam.uvue:210','[exam] load level history failed:', e)
         } finally {
             historyLoading.value = false
         }
@@ -233,7 +229,7 @@
     }
 
     function onBack() : void {
-        uni.navigateBack()
+        goBack()
     }
     /** 进入等级考试（新考试或继续） */
     function onEnterExam(exam : LevelExamSession) : void {

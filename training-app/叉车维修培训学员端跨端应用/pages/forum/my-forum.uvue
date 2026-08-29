@@ -23,21 +23,28 @@
             <!-- 我的帖子 -->
             <view v-if="currentTab === 'topics'">
                 <view v-if="topics.length === 0 && !loading" class="empty-tip">
-                    <text class="empty-icon">📝</text>
+                    <text class="empty-icon"></text>
                     <text class="empty-text">还没有发过帖子</text>
                 </view>
 
                 <view class="topic-list">
-                    <view v-for="(item, idx) in topics" :key="idx" class="topic-card" @click="onTopicClick(item.id)">
-                        <text class="topic-title">{{ item.title }}</text>
-                        <text class="topic-content-preview">{{ getContentPreview(item.content) }}</text>
+                    <view v-for="(item, idx) in topics" :key="idx" class="topic-card">
+                        <view class="topic-card-main" @click="onTopicClick(item.id)">
+                            <text class="topic-title">{{ item.title }}</text>
+                            <text class="topic-content-preview">{{ getContentPreview(item.content) }}</text>
+                        </view>
                         <view class="topic-footer">
                             <view class="topic-meta">
-                                <text class="meta-like-icon">{{ item.liked ? '❤️' : '🤍' }} {{ item.like_count > 0 ? item.like_count : '' }}</text>
-                                <text class="meta-item">💬 {{ item.replies_count }}</text>
-                                <text class="meta-item">👁 {{ item.views_count }}</text>
+                                <text class="meta-like-icon">{{ item.liked ? '❤️' : '' }} {{ item.like_count > 0 ? item.like_count : '' }}</text>
+                                <text class="meta-item"> {{ item.replies_count }}</text>
+                                <text class="meta-item"> {{ item.views_count }}</text>
                             </view>
-                            <text class="meta-time">{{ formatDate(item.created_at) }}</text>
+                            <view class="topic-footer-right">
+                                <view class="topic-edit-btn" @click.stop="onEditTopic(item.id)">
+                                    <text class="topic-edit-text">编辑</text>
+                                </view>
+                                <text class="meta-time">{{ formatDateStr(item.created_at) }}</text>
+                            </view>
                         </view>
                     </view>
                 </view>
@@ -46,16 +53,16 @@
             <!-- 我的回复 -->
             <view v-if="currentTab === 'replies'">
                 <view v-if="replies.length === 0 && !loading" class="empty-tip">
-                    <text class="empty-icon">💬</text>
+                    <text class="empty-icon"></text>
                     <text class="empty-text">还没有回复过帖子</text>
                 </view>
 
                 <view class="reply-list">
                     <view v-for="(item, idx) in replies" :key="idx" class="reply-card" @click="onTopicClick(item.topic_id)">
-                        <text class="reply-topic-title">📌 {{ item.topic_title }}</text>
+                        <text class="reply-topic-title"> {{ item.topic_title }}</text>
                         <text class="reply-content">{{ item.content }}</text>
                         <view class="reply-footer">
-                            <text class="reply-time">{{ formatDate(item.created_at) }}</text>
+                            <text class="reply-time">{{ formatDateStr(item.created_at) }}</text>
                         </view>
                     </view>
                 </view>
@@ -78,6 +85,7 @@
     import { goBack } from '../../utils/navigation'
     import { getMyTopicsApi, getMyRepliesApi } from '../../api/forum'
     import type { ForumTopic, ForumReply } from '../../types/index'
+    import { formatDateStr } from '../../utils/format'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -95,11 +103,6 @@
         const single = content.replace('\n', ' ')
         if (single.length <= 80) return single
         return single.substring(0, 80) + '...'
-    }
-
-    function formatDate(dateStr : string) : string {
-        if (dateStr.length < 10) return dateStr
-        return dateStr.substring(0, 10)
     }
 
     function onSwitchTab(tab : string) : void {
@@ -145,7 +148,7 @@
                 page.value = page.value + 1
             }
         } catch (e) {
-            console.error('[my-forum] load failed:', e)
+            uni.__f__('error','at pages/forum/my-forum.uvue:155','[my-forum] load failed:', e)
             uni.showToast({ title: '加载失败', icon: 'none' })
         } finally {
             loading.value = false
@@ -158,6 +161,10 @@
 
     function onTopicClick(topicId : number) : void {
         uni.navigateTo({ url: '/pages/forum/forum-detail?id=' + topicId })
+    }
+
+    function onEditTopic(topicId : number) : void {
+        uni.navigateTo({ url: '/pages/forum/forum-create?id=' + topicId })
     }
 
     function onBack() : void {
@@ -259,6 +266,11 @@
         flex-direction: column;
     }
 
+    .topic-card-main {
+        flex-direction: column;
+        margin-bottom: 12rpx;
+    }
+
     .topic-title {
         font-size: 32rpx;
         font-weight: bold;
@@ -302,6 +314,24 @@
     .meta-time {
         font-size: 22rpx;
         color: #cccccc;
+    }
+
+    .topic-footer-right {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .topic-edit-btn {
+        padding: 6rpx 20rpx;
+        border-radius: 24rpx;
+        background-color: #f0f5ff;
+        border: 1rpx solid #d0e0ff;
+        margin-right: 16rpx;
+    }
+
+    .topic-edit-text {
+        font-size: 22rpx;
+        color: #2979ff;
     }
 
     /* 回复列表 */

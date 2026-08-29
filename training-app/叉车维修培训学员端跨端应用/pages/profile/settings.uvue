@@ -97,6 +97,7 @@
 <script setup lang="uts">
     import { ref, onMounted } from 'vue'
     import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
     import { useAuthStore } from '../../stores/auth'
     import { STORAGE_KEY_TOKEN, STORAGE_KEY_USER } from '../../constants/app'
 
@@ -132,7 +133,7 @@
     }
 
     function onBack() : void {
-        uni.navigateBack()
+        goBack()
     }
 
     function onNavigate(type : string) : void {

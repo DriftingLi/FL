@@ -62,13 +62,7 @@
 
             <!-- ===== 微信一键登录 ===== -->
             <template v-else-if="mode == 'wechat'">
-                <view class="wx-intro">
-                    <!--      <view class="wx-icon-box">
-                        <text class="wx-icon-text">💚</text>
-                    </view> -->
-                    <!--  <text class="wx-title">使用 微信 一键登录</text>
-                    <text class="wx-desc">授权后即可快速进入培训系统</text> -->
-                </view>
+                <view class="wx-intro"></view>
             </template>
 
             <!-- ===== 邮箱验证码登录 ===== -->
@@ -102,11 +96,21 @@
                     <text class="hint-text">{{ codeHint }}</text>
                 </view>
             </template>
-            <button class="btn-login" :class="{ 'btn-login-disabled': loading, 'btn-wechat': mode == 'wechat' }"
-                :disabled="loading" @click="onSubmit">
-                {{ btnText }}
-            </button>
-            <!-- 协议勾选（手机号/邮箱/微信方式展示） -->
+
+            <!-- 协议勾选 + 注册引导（手机号/邮箱/微信方式展示） -->
+
+
+            <!-- 角色选择：学习者 / 招聘者 -->
+            <view class="form-item role-selector">
+                <view class="role-btn" :class="{ 'role-btn-active': roleType == 'student' }"
+                    @click="switchRole('student')">
+                    <text class="role-btn-text" :class="{ 'role-btn-text-active': roleType == 'student' }">学习者</text>
+                </view>
+                <view class="role-btn" :class="{ 'role-btn-active': roleType == 'recruiter' }"
+                    @click="switchRole('recruiter')">
+                    <text class="role-btn-text" :class="{ 'role-btn-text-active': roleType == 'recruiter' }">招聘者</text>
+                </view>
+            </view>
             <view class="form-item agree-row" v-if="mode != 'password'" @click="toggleAgree">
                 <view class="checkbox" :class="{ 'checkbox-checked': agreed }">
                     <text v-if="agreed" class="check-mark">✓</text>
@@ -115,10 +119,17 @@
                 <text class="agree-link" @click.stop="showAgreement('用户协议')">《用户协议》</text>
                 <text class="agree-text">和</text>
                 <text class="agree-link" @click.stop="showAgreement('用户隐私')">《用户隐私》</text>
+                <text class="agree-text">若手机号未注册，</text>
+                <text class="agree-link" @click.stop="goRegister">立即注册</text>
             </view>
+            <!-- 登录按钮 -->
+            <button class="btn-login" :class="{ 'btn-login-disabled': loading, 'btn-wechat': mode == 'wechat' }"
+                :disabled="loading" @click="onSubmit">
+                {{ btnText }}
+            </button>
 
-            <!-- 注册引导 + 忘记密码（账号密码模式展示） -->
-            <view class="form-item register-row">
+            <!-- 注册引导 + 忘记密码（仅账号密码模式展示） -->
+            <view class="form-item register-row" v-if="mode == 'password'">
                 <text class="register-text">若手机号未注册，</text>
                 <text class="register-link" @click="goRegister">即刻注册</text>
                 <text class="register-sep">·</text>
@@ -159,12 +170,15 @@
     import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
     import { ref, computed } from 'vue'
     import { useAuthStore } from '../../stores/auth'
-    import { sendCodeApi, phoneLoginApi, emailLoginApi, loginApi, getCaptchaApi } from '../../api/auth'
+    import { sendCodeApi, getCaptchaApi } from '../../api/auth'
 
     const auth = useAuthStore()
 
     // 登录方式：password（账号密码，默认） | phone（手机验证码） | wechat（微信一键） | email（邮箱验证码）
     const mode = ref<string>('phone')
+
+    // 用户角色：student（学员）| recruiter（招聘者）
+    const roleType = ref<string>('student')
 
     // 手机号 + 验证码
     const phone = ref<string>('')
@@ -253,6 +267,10 @@
         loadCaptcha()
     }
 
+    function switchRole(role : string) : void {
+        roleType.value = role
+    }
+
     function toggleAgree() : void {
         agreed.value = !agreed.value
     }
@@ -275,7 +293,7 @@
     function validatePhoneNum(p : string) : string {
         if (p.length != 11) return '请输入 11 位手机号'
         if (!p.startsWith('1')) return '手机号格式不正确'
-        if (!/^d{11}$/.test(p)) return '手机号必须为数字'
+        // if (!/^d{11}$/.test(p)) return '手机号必须为数字'
         return ''
     }
 
@@ -310,7 +328,6 @@
         try {
             await sendCodeApi(target, channel, 'login', captchaId.value, captchaValue.value)
             // 发送成功后刷新图形验证码（答案用后即焚，防止重放）
-            // loadCaptcha()
             wrongAttempts.value = 0
             uni.hideLoading()
             uni.showToast({ title: '验证码已发送，请查收', icon: 'none' })
@@ -363,7 +380,9 @@
     }
 
     /**
-     * 微信登录成功后跳转：后端 isNew=true 时先弹"已为您自动注册"提示，再走原路径
+     * 微信登录成功后跳转：
+     * - 新用户（isNew=true）→ 选择证书页面
+     * - 老用户 → 直接进入首页
      */
     function afterLoginSuccess(isNew : boolean) : void {
         if (isNew) {
@@ -374,7 +393,7 @@
         } else {
             uni.showToast({ title: '登录成功', icon: 'success', duration: 1000 })
             setTimeout(() => {
-                uni.reLaunch({ url: '/pages/guide/choose-cert' })
+                uni.reLaunch({ url: '/pages/dashboard/dashboard' })
             }, 500)
         }
     }
@@ -530,133 +549,6 @@
         height: 200rpx;
     }
 
-    /* 叉车 logo（坐标系 0-200rpx） */
-    .mast-l {
-        position: absolute;
-        left: 104rpx;
-        top: 30rpx;
-        width: 12rpx;
-        height: 106rpx;
-        border-radius: 6rpx;
-        background-color: #16A34A;
-    }
-
-    .mast-r {
-        position: absolute;
-        left: 122rpx;
-        top: 30rpx;
-        width: 12rpx;
-        height: 106rpx;
-        border-radius: 6rpx;
-        background-color: #22C55E;
-    }
-
-    .fork-v {
-        position: absolute;
-        left: 104rpx;
-        top: 88rpx;
-        width: 12rpx;
-        height: 50rpx;
-        background-color: #15803D;
-    }
-
-    .fork-h {
-        position: absolute;
-        left: 104rpx;
-        top: 132rpx;
-        width: 72rpx;
-        height: 12rpx;
-        border-radius: 6rpx;
-        background-color: #15803D;
-    }
-
-    .f-body {
-        position: absolute;
-        left: 16rpx;
-        top: 66rpx;
-        width: 82rpx;
-        height: 42rpx;
-        border-radius: 12rpx;
-        background-color: #22C55E;
-    }
-
-    .f-cab {
-        position: absolute;
-        left: 34rpx;
-        top: 30rpx;
-        width: 48rpx;
-        height: 44rpx;
-        border-radius: 12rpx;
-        background-color: #16A34A;
-    }
-
-    .f-window {
-        position: absolute;
-        left: 44rpx;
-        top: 40rpx;
-        width: 26rpx;
-        height: 26rpx;
-        border-radius: 8rpx;
-        background-color: rgba(255, 255, 255, 0.45);
-    }
-
-    .f-wheel {
-        position: absolute;
-        width: 30rpx;
-        height: 30rpx;
-        border-radius: 50%;
-        background-color: #14532D;
-    }
-
-    .f-wheel-back {
-        left: 28rpx;
-        top: 106rpx;
-    }
-
-    .f-wheel-front {
-        left: 68rpx;
-        top: 106rpx;
-    }
-
-    .f-hub {
-        position: absolute;
-        width: 12rpx;
-        height: 12rpx;
-        border-radius: 50%;
-        background-color: #86EFAC;
-    }
-
-    .f-hub-back {
-        left: 37rpx;
-        top: 115rpx;
-    }
-
-    .f-hub-front {
-        left: 77rpx;
-        top: 115rpx;
-    }
-
-    /* 扳手（叉车右侧） */
-    .f-wrench-ring {
-        position: absolute;
-        left: 148rpx;
-        top: 26rpx;
-        width: 26rpx;
-        height: 26rpx;
-        border-radius: 50%;
-        border: 5rpx solid #16A34A;
-    }
-
-    .f-wrench-handle {
-        position: absolute;
-        left: 154rpx;
-        top: 44rpx;
-        width: 12rpx;
-        height: 20rpx;
-        border-radius: 6rpx;
-        background-color: #16A34A;
-    }
-
     .app-title {
         margin-top: 28rpx;
         font-size: 44rpx;
@@ -770,35 +662,10 @@
         padding: 60rpx 0 40rpx 0;
     }
 
-    .wx-icon-box {
-        width: 140rpx;
-        height: 140rpx;
-        border-radius: 50%;
-        background-color: #E8F8EE;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 28rpx;
-    }
-
-    .wx-icon-text {
-        font-size: 72rpx;
-    }
-
-    .wx-title {
-        font-size: 32rpx;
-        font-weight: bold;
-        color: #333333;
-        margin-bottom: 12rpx;
-    }
-
-    .wx-desc {
-        font-size: 24rpx;
-        color: #999999;
-    }
-
     /* 协议行 */
     .agree-row {
         flex-direction: row;
+        flex-wrap: wrap;
         align-items: center;
         margin-top: 8rpx;
     }
@@ -852,9 +719,41 @@
         color: #C8CDD8;
     }
 
+    /* 角色选择：学习者 / 招聘者 */
+    .role-selector {
+        flex-direction: row;
+        justify-content: center;
+        align-items: center;
+        margin-top: 20rpx;
+        margin-bottom: 20rpx;
+    }
+
+    .role-btn {
+        padding: 14rpx 44rpx;
+        margin: 0 12rpx;
+        border-radius: 48rpx;
+        border: 2rpx solid #E0E2EA;
+        background-color: #ffffff;
+    }
+
+    .role-btn-active {
+        border-color: #2979ff;
+        background-color: #E8F3FF;
+    }
+
+    .role-btn-text {
+        font-size: 28rpx;
+        color: #666666;
+    }
+
+    .role-btn-text-active {
+        color: #2979ff;
+        font-weight: bold;
+    }
+
     /* 登录按钮 */
     .btn-login {
-        margin-top: 16rpx;
+        margin-top: 24rpx;
         width: 100%;
         height: 96rpx;
         line-height: 96rpx;

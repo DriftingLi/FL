@@ -5,21 +5,35 @@
             <view class="header-left" @click="onBack">
                 <text class="back-icon" @click="onBack">‹</text>
             </view>
-            <text class="header-title">发布新帖</text>
+            <text class="header-title">{{ isEdit ? '编辑帖子' : '发布新帖' }}</text>
             <view class="header-right"></view>
         </view>
 
         <scroll-view class="content-scroll" scroll-y="true">
             <view class="form-section">
+                <!-- 分类选择 -->
+                <view class="form-item">
+                    <text class="form-label">分类</text>
+                    <view class="category-row">
+                        <view v-for="(cat, idx) in categories" :key="idx" class="category-chip"
+                            :class="{ active: selectedCategory === cat.value }" @click="onSelectCategory(cat.value)">
+                            <text class="category-chip-text"
+                                :class="{ active: selectedCategory === cat.value }">{{ cat.label }}</text>
+                        </view>
+                    </view>
+                </view>
+
                 <view class="form-item">
                     <text class="form-label">标题</text>
-                    <input class="form-input" type="text" placeholder="请输入标题（1-100 字）" maxlength="100" v-model="title" />
+                    <input class="form-input" type="text" placeholder="请输入标题（1-100 字）" maxlength="100"
+                        v-model="title" />
                     <text class="form-counter">{{ title.length }}/100</text>
                 </view>
 
                 <view class="form-item">
                     <text class="form-label">内容</text>
-                    <textarea class="form-textarea" placeholder="请输入内容（1-10000 字）" maxlength="10000" v-model="content" />
+                    <textarea class="form-textarea" placeholder="请输入内容（1-10000 字）" maxlength="10000"
+                        v-model="content" />
                     <text class="form-counter">{{ content.length }}/10000</text>
                 </view>
 
@@ -27,29 +41,24 @@
                     <text class="form-label">图片</text>
                     <view class="img-grid">
                         <view v-for="(img, idx) in images" :key="idx" class="img-cell">
-                            <image class="img-thumb" :src="imgSrc(img)" mode="aspectFill" @click="onPreviewImage(idx)" />
+                            <image class="img-thumb" :src="imgSrc(img)" mode="aspectFill"
+                                @click="onPreviewImage(idx)" />
                             <view class="img-remove" @click.stop="onRemoveImage(idx)">
                                 <text class="img-remove-text">×</text>
                             </view>
                         </view>
                         <view v-if="images.length < 9" class="img-add" @click="onAddImage">
                             <text class="img-add-icon">{{ uploadingImage ? '…' : '＋' }}</text>
-                            <text class="img-add-text">{{ uploadingImage ? '上传中' : images.length + '/9' }}</text>
+                            <text class="img-add-text">{{ uploadingImage ? '上传中' : images.length + '/9'
+                            }}</text>
                         </view>
                     </view>
                 </view>
             </view>
 
-            <view class="tips-section">
-                <text class="tips-title">发帖须知</text>
-                <text class="tips-text">• 请遵守社区规范，文明发言</text>
-                <text class="tips-text">• 禁止发布与叉车维修培训无关的内容</text>
-                <text class="tips-text">• 禁止发布广告、灌水等不良信息</text>
-            </view>
-
             <view class="submit-section">
-                <view class="submit-btn" @click="onSubmit">
-                    <text class="submit-btn-text" @click="onSubmit">发布</text>
+                <view class="submit-btn" :class="{ disabled: !canSubmit }" @click="onSubmit">
+                    <text class="submit-btn-text">{{ submitLabel }}</text>
                 </view>
             </view>
         </scroll-view>
@@ -58,39 +67,87 @@
 
 <script setup lang="uts">
     import { ref, computed } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
-    import { createForumTopicApi, uploadForumImageApi } from '../../api/forum'
+    import { createForumTopicApi, updateForumTopicApi, uploadForumImageApi, getForumTopicDetailApi } from '../../api/forum'
     import { resolveFileUrl } from '../../utils/format'
+    import { useAuthStore } from '../../stores/auth'
+    import type { ForumTopicDetail } from '../../types/index'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
+    const authStore = useAuthStore()
 
+    // ===== 分类选项 =====
+    type CategoryOption = { label : string, value : string }
+    const categories : CategoryOption[] = [
+        { label: '广场', value: 'general' },
+        { label: '资源', value: 'resource' },
+        { label: '短视频', value: 'video' },
+        { label: '备考经验', value: 'exam' },
+    ]
+
+    // ===== 表单状态 =====
+    const isEdit = ref<boolean>(false)
+    const editTopicId = ref<number>(0)
     const title = ref<string>('')
     const content = ref<string>('')
     const images = ref<string[]>([])
+    const selectedCategory = ref<string>('general')
     const submitting = ref<boolean>(false)
     const uploadingImage = ref<boolean>(false)
+    const loadingDetail = ref<boolean>(false)
 
-    /** 模板用：补全图片 URL（UTS 模板内直接调用导入函数有解析限制，走本地包装） */
+    /** 模板用：补全图片 URL */
     function imgSrc(url : string) : string {
         return resolveFileUrl(url)
     }
+
+    /** 提交按钮文案 */
+    const submitLabel = computed<string>(() : string => {
+        if (submitting.value) return isEdit.value ? '保存中...' : '发布中...'
+        return isEdit.value ? '保存修改' : '发布'
+    })
 
     /** 是否可提交 */
     const canSubmit = computed<boolean>(() : boolean => {
         if (submitting.value) return false
         if (uploadingImage.value) return false
+        if (loadingDetail.value) return false
         if (title.value.trim().length == 0) return false
         if (content.value.trim().length == 0) return false
         return true
     })
 
-    /** 提交发帖 */
+    // ===== 分类选择 =====
+    function onSelectCategory(value : string) : void {
+        selectedCategory.value = value
+    }
+
+    // ===== 加载帖子数据（编辑模式） =====
+    async function loadTopicForEdit(topicId : number) : Promise<void> {
+        loadingDetail.value = true
+        uni.showLoading({ title: '加载中...' })
+        try {
+            const data = await getForumTopicDetailApi(topicId)
+            title.value = data.title
+            content.value = data.content
+            images.value = data.images.slice()
+            selectedCategory.value = data.scope.length > 0 ? data.scope : 'general'
+        } catch (e) {
+            console.error('[forum-create] loadTopicForEdit failed:', e)
+            uni.showToast({ title: '加载帖子失败', icon: 'none' })
+            setTimeout(() => { goBack() }, 1000)
+        } finally {
+            loadingDetail.value = false
+            uni.hideLoading()
+        }
+    }
+
+    // ===== 提交 =====
     async function onSubmit() : Promise<void> {
-        // 提交中防抖
-        if (submitting.value) return
-        // 校验未通过时给出明确提示，避免用户以为按钮"点不到"
+        if (!canSubmit.value) return
         if (title.value.trim().length == 0) {
             uni.showToast({ title: '请输入标题', icon: 'none' })
             return
@@ -101,16 +158,19 @@
         }
 
         submitting.value = true
-        uni.showLoading({ title: '发布中...' })
+        uni.showLoading({ title: isEdit.value ? '保存中...' : '发布中...' })
         try {
-            await createForumTopicApi(title.value.trim(), content.value.trim(), images.value)
-            uni.showToast({ title: '发布成功', icon: 'success' })
-            setTimeout(() => {
-                goBack()
-            }, 1000)
+            if (isEdit.value) {
+                await updateForumTopicApi(editTopicId.value, title.value.trim(), content.value.trim(), images.value, selectedCategory.value)
+                uni.showToast({ title: '修改成功', icon: 'success' })
+            } else {
+                await createForumTopicApi(title.value.trim(), content.value.trim(), images.value, selectedCategory.value)
+                uni.showToast({ title: '发布成功', icon: 'success' })
+            }
+            setTimeout(() => { goBack() }, 1000)
         } catch (e) {
             console.error('[forum-create] submit failed:', e)
-            let msg = '发布失败'
+            let msg = isEdit.value ? '修改失败' : '发布失败'
             if (e instanceof Error) {
                 const errObj = e as Error
                 const m = errObj.message
@@ -125,7 +185,7 @@
         }
     }
 
-    /** 逐张上传图片，成功后把返回 URL 加入数组（声明在 onAddImage 之前，避免 Kotlin 局部函数前向引用） */
+    // ===== 图片上传 =====
     async function uploadImages(paths : string[]) : Promise<void> {
         uploadingImage.value = true
         uni.showLoading({ title: '上传图片中...' })
@@ -147,7 +207,6 @@
         }
     }
 
-    /** 选择图片：批量选择并上传（最多 9 张） */
     function onAddImage() : void {
         if (uploadingImage.value) return
         const remaining = 9 - images.value.length
@@ -170,7 +229,6 @@
         })
     }
 
-    /** 删除已上传图片 */
     function onRemoveImage(index : number) : void {
         const next : string[] = []
         for (let i = 0; i < images.value.length; i++) {
@@ -179,7 +237,6 @@
         images.value = next
     }
 
-    /** 预览已上传图片 */
     function onPreviewImage(index : number) : void {
         const urls : string[] = []
         for (let i = 0; i < images.value.length; i++) {
@@ -192,7 +249,6 @@
     }
 
     function onBack() : void {
-        // 有内容时提示确认
         if (title.value.length > 0 || content.value.length > 0) {
             uni.showModal({
                 title: '提示',
@@ -207,6 +263,24 @@
             goBack()
         }
     }
+
+    // ===== 初始化：根据 URL 参数决定新建/编辑模式 =====
+    onLoad((options : UTSJSONObject) => {
+        const id = options['id']
+        if (id != null) {
+            const parsedId = parseInt(`${id}`)
+            if (parsedId > 0) {
+                isEdit.value = true
+                editTopicId.value = parsedId
+                loadTopicForEdit(parsedId)
+            }
+        }
+        // 从 URL 参数接收默认分类
+        const scope = options['scope']
+        if (scope != null && scope != '') {
+            selectedCategory.value = `${scope}`
+        }
+    })
 </script>
 
 <style>
@@ -249,11 +323,6 @@
     .header-right {
         width: 80rpx;
         align-items: center;
-    }
-
-    .header-action {
-        font-size: 28rpx;
-        color: #ffffff;
     }
 
     .content-scroll {
@@ -308,6 +377,37 @@
         color: #999999;
         text-align: right;
         margin-top: 8rpx;
+    }
+
+    /* 分类选择 */
+    .category-row {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 16rpx;
+    }
+
+    .category-chip {
+        padding: 12rpx 28rpx;
+        border-radius: 32rpx;
+        background-color: #f5f5f5;
+        border: 1rpx solid #e0e0e0;
+        margin-right: 16rpx;
+        margin-bottom: 8rpx;
+    }
+
+    .category-chip.active {
+        background-color: #e8f0fe;
+        border: 1rpx solid #2979ff;
+    }
+
+    .category-chip-text {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    .category-chip-text.active {
+        color: #2979ff;
+        font-weight: bold;
     }
 
     /* 图片选择区 */
@@ -374,29 +474,6 @@
         margin-top: 8rpx;
     }
 
-    /* 发帖须知 */
-    .tips-section {
-        background-color: #ffffff;
-        margin: 0 24rpx 24rpx;
-        border-radius: 16rpx;
-        padding: 32rpx;
-        border: 1px solid #eeeeee;
-        flex-direction: column;
-    }
-
-    .tips-title {
-        font-size: 28rpx;
-        font-weight: bold;
-        color: #333333;
-        margin-bottom: 16rpx;
-    }
-
-    .tips-text {
-        font-size: 24rpx;
-        color: #999999;
-        line-height: 1.8;
-    }
-
     /* 发布按钮区 */
     .submit-section {
         padding: 24rpx 24rpx 64rpx;
@@ -410,6 +487,10 @@
         background-color: #2979ff;
         align-items: center;
         justify-content: center;
+    }
+
+    .submit-btn.disabled {
+        background-color: #cccccc;
     }
 
     .submit-btn-text {

@@ -6,7 +6,8 @@
  *       { student_info: {...}, study_stats: {...}, course_progress: [...] }
  */
 import { get } from './request'
-import type { StudentProfile, StudyRecordsResult, StudyStats, CourseProgressItem, StudyRecord } from '../types/index'
+import { toNumber, toStr, toBool } from './helpers'
+import type { StudentProfile, StudyRecordsResult, StudyStats, CourseProgressItem, StudyRecord, StudentCourse, StudentCourseListResult, StudentCourseDetail, StudentCourseChapterProgress } from '../types/index'
 
 /**
  * 安全转换为 number
@@ -14,25 +15,8 @@ import type { StudentProfile, StudyRecordsResult, StudyStats, CourseProgressItem
  *       且 Android 端 JSON 整数解析为 Int，直接 as number（Double）会抛 ClassCastException，
  *       需先判 null，再用模板字符串 + parseFloat 安全转换
  */
-function toNumber(v : any | null, defaultVal : number = 0) : number {
-	if (v == null) {
-		return defaultVal
-	}
-	const s = `${v}`
-	const n = parseFloat(s)
-	if (isNaN(n)) {
-		return defaultVal
-	}
-	return n
-}
 
-/** 安全转换为 string */
-function toStr(v : any | null, defaultVal : string = '') : string {
-	if (v == null) {
-		return defaultVal
-	}
-	return `${v}`
-}
+
 
 /** 从 UTSJSONObject 构造 CourseProgressItem */
 function buildCourseProgressItem(obj : UTSJSONObject) : CourseProgressItem {
@@ -265,5 +249,87 @@ export function getRecordsApi(page : number, pageSize : number, startDate : stri
 	}).catch((e) : StudyRecordsResult => {
 		console.warn('[getRecordsApi] network failed, using mock data:', e)
 		return getMockRecords()
+	})
+}
+
+// ========== 我的课程（ADR-0017） ==========
+
+/** 从 UTSJSONObject 构造 StudentCourse */
+function buildStudentCourse(obj : UTSJSONObject) : StudentCourse {
+	const course : StudentCourse = {
+		course_id: toNumber(obj['course_id']),
+		course_name: toStr(obj['course_name']),
+		cover: toStr(obj['cover']),
+		specialty_id: toNumber(obj['specialty_id']),
+		level_id: toNumber(obj['level_id']),
+		progress: toNumber(obj['progress']),
+		completed_chapters: toNumber(obj['completed_chapters']),
+		total_chapters: toNumber(obj['total_chapters']),
+		study_duration: toNumber(obj['study_duration']),
+		last_chapter_id: toNumber(obj['last_chapter_id']),
+		last_chapter_title: toStr(obj['last_chapter_title']),
+		last_position: toNumber(obj['last_position']),
+		last_studied_at: toStr(obj['last_studied_at']),
+	} as StudentCourse
+	return course
+}
+
+/** 从 UTSJSONObject 构造 StudentCourseChapterProgress */
+function buildChapterProgress(obj : UTSJSONObject) : StudentCourseChapterProgress {
+	return {
+		chapter_id: toNumber(obj['chapter_id']),
+		title: toStr(obj['title']),
+		progress: toNumber(obj['progress']),
+		video_position: toNumber(obj['video_position']),
+		completed: toBool(obj['completed']),
+	} as StudentCourseChapterProgress
+}
+
+/**
+ * 我的课程列表（含最后学习位置与 continue_learning）
+ * GET /api/student/courses
+ */
+export function getStudentCoursesApi() : Promise<StudentCourseListResult> {
+	return get('/student/courses').then((data : UTSJSONObject) : StudentCourseListResult => {
+		const courses : StudentCourse[] = []
+		const coursesRaw = data['courses']
+		if (coursesRaw != null) {
+			const arr = coursesRaw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				courses.push(buildStudentCourse(arr[i]))
+			}
+		}
+		let continueLearning : StudentCourse | null = null
+		const clRaw = data['continue_learning']
+		if (clRaw != null) {
+			continueLearning = buildStudentCourse(clRaw as UTSJSONObject)
+		}
+		return {
+			courses: courses,
+			continue_learning: continueLearning,
+		} as StudentCourseListResult
+	})
+}
+
+/**
+ * 单课程学习详情（每章进度/播放位置/完成状态）
+ * GET /api/student/courses/:course_id
+ */
+export function getStudentCourseDetailApi(courseId : number) : Promise<StudentCourseDetail> {
+	return get('/student/courses/' + courseId.toString()).then((data : UTSJSONObject) : StudentCourseDetail => {
+		const base = buildStudentCourse(data)
+		const chapters : StudentCourseChapterProgress[] = []
+		const chaptersRaw = data['chapters']
+		if (chaptersRaw != null) {
+			const arr = chaptersRaw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				chapters.push(buildChapterProgress(arr[i]))
+			}
+		}
+		const detail : StudentCourseDetail = {
+			...base,
+			chapters: chapters,
+		} as StudentCourseDetail
+		return detail
 	})
 }

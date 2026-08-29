@@ -1,0 +1,88 @@
+/**
+ * 通知 API
+ * @note 后端响应已由 request 层自动解包 data 字段
+ *
+ * 接口：
+ *   GET  /api/notifications           通知列表（分页，含 unread_count）
+ *   GET  /api/notifications/unread-count  未读数 { count }
+ *   POST /api/notifications/:id/read  单条已读
+ *   POST /api/notifications/read-all  全部已读
+ */
+import { get, post } from './request'
+import { toNumber, toStr, toBool } from './helpers'
+import type { NotificationItem, NotificationListResult } from '../types/index'
+
+
+
+
+/** 构造 NotificationItem */
+function buildNotificationItem(obj : UTSJSONObject) : NotificationItem {
+    return {
+        id: toNumber(obj['id']),
+        type: toStr(obj['type']),
+        title: toStr(obj['title']),
+        content: toStr(obj['content']),
+        link: toStr(obj['link']),
+        payload: (obj['payload'] ?? {}) as UTSJSONObject,
+        is_read: toBool(obj['is_read']),
+        read_at: toStr(obj['read_at']),
+        created_at: toStr(obj['created_at']),
+    } as NotificationItem
+}
+
+/**
+ * 获取通知列表
+ * @param page 页码，默认 1
+ * @param pageSize 每页条数，默认 10
+ */
+export function getNotificationsApi(page : number = 1, pageSize : number = 10) : Promise<NotificationListResult> {
+    const params : UTSJSONObject = {
+        page: page.toString(),
+        page_size: pageSize.toString(),
+    } as UTSJSONObject
+    return get('/notifications', params).then((data : UTSJSONObject) : NotificationListResult => {
+        const items : NotificationItem[] = []
+        const rawItems = data['items']
+        if (rawItems != null) {
+            const arr = rawItems as Array<UTSJSONObject>
+            for (let i = 0; i < arr.length; i++) {
+                items.push(buildNotificationItem(arr[i]))
+            }
+        }
+        return {
+            items: items,
+            total: toNumber(data['total']),
+            page: toNumber(data['page']),
+            page_size: toNumber(data['page_size']),
+            unread_count: toNumber(data['unread_count']),
+        } as NotificationListResult
+    })
+}
+
+/**
+ * 获取未读通知数
+ */
+export function getUnreadCountApi() : Promise<number> {
+    return get('/notifications/unread-count').then((data : UTSJSONObject) : number => {
+        return toNumber(data['count'])
+    })
+}
+
+/**
+ * 标记单条通知已读
+ * @param id 通知 ID
+ */
+export function markNotificationReadApi(id : number) : Promise<void> {
+    return post(`/notifications/${id}/read`).then(() : void => {
+        // 无返回数据
+    })
+}
+
+/**
+ * 标记全部通知已读
+ */
+export function markAllReadApi() : Promise<void> {
+    return post('/notifications/read-all').then(() : void => {
+        // 无返回数据
+    })
+}

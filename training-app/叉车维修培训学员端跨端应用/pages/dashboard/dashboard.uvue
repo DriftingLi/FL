@@ -4,24 +4,164 @@
 
         <!-- 顶部导航栏 -->
         <view class="nav-bar">
-            <view class="nav-left" @click="goChooseCert">
+            <view class="nav-left" @click="onCertTap">
                 <text class="nav-title">{{ currentCert }}</text>
                 <text class="nav-arrow">▾</text>
             </view>
-            <view class="nav-right" @click="onCartClick">
-                <text class="nav-cart-icon">🛒</text>
+            <view class="nav-right">
+                <view class="nav-icon-btn" @click="onNotificationClick">
+                    <text class="nav-icon-text"></text>
+                    <view v-if="unreadCount > 0" class="unread-badge">
+                        <text class="unread-badge-text">{{ unreadCount > 99 ? '99+' : unreadCount.toString() }}</text>
+                    </view>
+                </view>
+                <view class="nav-icon-btn" @click="onCartClick">
+                    <text class="nav-icon-text"></text>
+                </view>
+            </view>
+        </view>
+
+        <!-- 证件下拉选择器（选择学习阶段风格） -->
+        <view v-if="showCertDropdown" class="cert-dropdown-mask" @click="onCloseCertDropdown">
+            <view class="cert-dropdown" @click.stop>
+                <!-- 标题栏 -->
+                <view class="cert-dropdown-header">
+                    <text class="cert-dropdown-title">选择学习阶段</text>
+                    <view class="cert-dropdown-close" @click="onCloseCertDropdown">
+                        <text class="cert-dropdown-close-icon">✕</text>
+                    </view>
+                </view>
+                <scroll-view scroll-y class="cert-dropdown-scroll">
+                    <view v-for="(group, gIdx) in credentialGroups" :key="gIdx" class="cert-dropdown-section">
+                        <!-- 分组标题 -->
+                        <view class="cert-dropdown-section-header">
+                            <view class="cert-dropdown-section-icon-wrap"
+                                :style="{ backgroundColor: group.category === 'skill_level' ? '#E8F5E9' : '#FFF3E0' }">
+                                <text class="cert-dropdown-section-icon">{{ group.icon }}</text>
+                            </view>
+                            <text class="cert-dropdown-section-title">{{ group.group_name }}</text>
+                        </view>
+                        <!-- 胶囊标签 -->
+                        <view class="cert-dropdown-chips">
+                            <view v-for="(item, idx) in group.items" :key="idx" class="cert-dropdown-chip"
+                                :class="{ 'cert-dropdown-chip--active': currentCredentialId === item.id }"
+                                @click="onSelectCredential(item)">
+                                <!-- 单行（特种作业证） -->
+                                <view v-if="item.level == null" class="cert-dropdown-chip-single">
+                                    <text class="cert-dropdown-chip-text"
+                                        :class="{ 'cert-dropdown-chip-text--active': currentCredentialId === item.id }">{{ item.name }}</text>
+                                </view>
+                                <!-- 双行（技能等级证） -->
+                                <view v-else class="cert-dropdown-chip-double">
+                                    <text class="cert-dropdown-chip-level"
+                                        :class="{ 'cert-dropdown-chip-text--active': currentCredentialId === item.id }">{{ levelNames[item.level!] }}</text>
+                                    <!-- <text class="cert-dropdown-chip-desc"
+                                        :class="{ 'cert-dropdown-chip-desc--active': currentCredentialId === item.id }">{{ item.name }}</text> -->
+                                </view>
+                            </view>
+                        </view>
+                    </view>
+
+                    <!-- 热门考证 -->
+                    <view class="cert-dropdown-section">
+                        <view class="cert-dropdown-hot-header">
+                            <text class="cert-dropdown-hot-title">热门考证</text>
+                            <view class="cert-dropdown-hot-line"></view>
+                        </view>
+                        <view class="cert-dropdown-hot-grid">
+                            <view v-for="(item, idx) in hotCertList" :key="idx" class="cert-dropdown-hot-card">
+                                <view class="cert-dropdown-hot-card-header">
+                                    <text class="cert-dropdown-hot-card-star">⭐</text>
+                                    <text class="cert-dropdown-hot-card-title">{{ item.title }}</text>
+                                </view>
+                                <text class="cert-dropdown-hot-card-desc">{{ item.desc }}</text>
+                            </view>
+                        </view>
+                    </view>
+
+                    <!-- 热门考证详情说明 -->
+                    <view class="cert-dropdown-section">
+                        <view v-for="(item, idx) in hotCertDetails" :key="idx" class="cert-dropdown-detail-item">
+                            <view class="cert-dropdown-detail-title-row">
+                                <text class="cert-dropdown-detail-bullet">✦</text>
+                                <text class="cert-dropdown-detail-title">{{ item.title }}</text>
+                            </view>
+                            <text class="cert-dropdown-detail-content">{{ item.content }}</text>
+                        </view>
+                    </view>
+
+                    <!-- 底部留白 -->
+                    <view style="height: 48rpx;"></view>
+                </scroll-view>
             </view>
         </view>
 
         <scroll-view class="content-scroll" scroll-y="true">
-            <!-- Banner 占位 -->
-            <view class="banner-placeholder"></view>
+            <!-- Banner 横幅 -->
+            <view class="banner" @click="onBannerClick">
+                <view class="banner-bg" :style="{ backgroundColor: bannerList[currentBanner].bgColor }">
+                    <view class="banner-content">
+                        <text class="banner-title">{{ bannerList[currentBanner].title }}</text>
+                        <text class="banner-subtitle">{{ bannerList[currentBanner].subtitle }}</text>
+                        <view class="banner-cta">
+                            <text class="banner-cta-text">{{ bannerList[currentBanner].ctaText }}</text>
+                        </view>
+                    </view>
+                    <view class="banner-decoration">
+                        <text class="banner-icon">️</text>
+                    </view>
+                </view>
+                <view class="banner-tags">
+                    <text class="banner-tag">线上入门</text>
+                    <text class="banner-tag-dot">·</text>
+                    <text class="banner-tag">理论精讲</text>
+                    <text class="banner-tag-dot">·</text>
+                    <text class="banner-tag">线上考试</text>
+                </view>
+            </view>
 
-            <!-- 功能入口（4+2 布局） -->
+            <!-- 功能入口网格 -->
             <view class="menu-grid">
                 <view v-for="(item, idx) in menuItems" :key="idx" class="menu-item" @click="onMenuClick(item)">
-                    <view class="menu-icon-box" :style="{ backgroundColor: item.color }"></view>
+                    <view class="menu-icon-box" :style="{ backgroundColor: item.color }">
+                        <text class="menu-icon-text">{{ item.icon }}</text>
+                    </view>
                     <text class="menu-label">{{ item.title }}</text>
+                </view>
+            </view>
+
+            <!-- 继续学习 -->
+            <view v-if="continueLearning != null" class="continue-section">
+                <view class="section-header">
+                    <text class="section-title">继续学习</text>
+                    <text class="section-more" @click="onContinueLearning">查看全部</text>
+                </view>
+                <view class="continue-card" @click="onContinueLearning">
+                    <view class="continue-info">
+                        <text class="continue-course-name">{{ continueLearning!.course_name }}</text>
+                        <text class="continue-chapter">上次学到：{{ continueLearning!.last_chapter_title }}</text>
+                        <view class="continue-progress-bar">
+                            <view class="continue-progress-fill" :style="{ width: continueLearning!.progress + '%' }">
+                            </view>
+                        </view>
+                        <text class="continue-progress-text">已完成 {{ continueLearning!.progress }}%</text>
+                    </view>
+                    <text class="continue-arrow">›</text>
+                </view>
+            </view>
+
+            <!-- 新闻资讯板块 -->
+            <view class="news-section">
+                <view class="section-header">
+                    <text class="section-title">新闻资讯</text>
+                    <text class="section-more" @click="onMoreNews">更多</text>
+                </view>
+                <view class="news-list">
+                    <view v-for="(news, idx) in newsList" :key="idx" class="news-item" @click="onNewsClick(news)">
+                        <text class="news-icon">+</text>
+                        <text class="news-title" :style="{ flex: 1 }">{{ news.title }}</text>
+                        <text class="news-date" v-if="news.published_at">{{ news.published_at }}</text>
+                    </view>
                 </view>
             </view>
 
@@ -49,11 +189,25 @@
             </view>
 
             <!-- 课程卡片列表 -->
-            <!-- <view class="course-list">
-                <view class="empty-tip">
-                    <text class="empty-text">暂无推荐课程</text>
+            <view class="course-list">
+                <view v-for="(course, idx) in courseList" :key="idx" class="course-card" @click="onCourseClick(course)">
+                    <view class="course-header">
+                        <view v-if="course.isHot" class="course-tag-hot">
+                            <text class="course-tag-hot-text">热销</text>
+                        </view>
+                        <text class="course-title">{{ course.title }}</text>
+                    </view>
+                    <view class="course-tags">
+                        <view v-for="(tag, tagIdx) in course.tags" :key="tagIdx" class="course-tag-sm">
+                            <text class="course-tag-sm-text">{{ tag }}</text>
+                        </view>
+                    </view>
+                    <view class="course-footer">
+                        <text class="course-price">¥ {{ course.price }}</text>
+                        <text class="course-sales">{{ course.sales }}+人购买</text>
+                    </view>
                 </view>
-            </view> -->
+            </view>
         </scroll-view>
 
         <!-- 筛选底部弹窗 -->
@@ -107,13 +261,211 @@
 
 <script setup lang="uts">
     import { ref } from 'vue'
+    import { onShow, onHide } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { UNAVAILABLE_TOAST } from '../../constants/app'
+    import { getStudentCoursesApi } from '../../api/student'
+    import { getFeaturedContentsApi } from '../../api/featured'
+    import { getUnreadCountApi } from '../../api/notification'
+    import { getCurrentCredentialApi, getAllCredentialsApi, switchCredentialApi } from '../../api/credential'
+    import type { StudentCourse, FeaturedContentItem, CredentialItem, CredentialGroup } from '../../types/index'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
-    // ---- 证书选择（跳转 choose-cert 页面复用同一格式） ----
+    // ---- 通知未读数 ----
+    const unreadCount = ref<number>(0)
+    let unreadTimer : any | null = null
+
+    async function loadUnreadCount() : Promise<void> {
+        try {
+            const count = await getUnreadCountApi()
+            unreadCount.value = count
+        } catch (e) {
+            // 静默失败
+        }
+    }
+
+    function startUnreadPolling() : void {
+        stopUnreadPolling()
+        loadUnreadCount()
+        unreadTimer = setInterval(() => {
+            loadUnreadCount()
+        }, 30000)
+    }
+
+    function stopUnreadPolling() : void {
+        if (unreadTimer != null) {
+            clearInterval(unreadTimer)
+            unreadTimer = null
+        }
+    }
+
+    function onNotificationClick() : void {
+        uni.navigateTo({ url: '/pages/notifications/notifications' })
+    }
+
+    // ---- 证件切换（下拉选择器） ----
+    const currentCert = ref<string>('加载中...')
+    const showCertDropdown = ref<boolean>(false)
+    const credentialGroups = ref<CredentialGroup[]>([])
+    const currentCredentialId = ref<number>(0)
+    const isSwitching = ref<boolean>(false)
+
+    // 等级数字转中文
+    const levelNames : Record<number, string> = {
+        5: '五级',
+        4: '四级',
+        3: '三级',
+        2: '二级',
+        1: '一级',
+    }
+
+    /** 加载证件数据 */
+    async function loadCredentials() : Promise<void> {
+        try {
+            // 并发加载当前证件 + 全部证件列表
+            const [current, groups] = await Promise.all([
+                getCurrentCredentialApi(),
+                getAllCredentialsApi(),
+            ])
+            credentialGroups.value = groups
+
+            if (current != null) {
+                // API 返回了当前证件
+                currentCredentialId.value = current!.id
+                currentCert.value = current!.name
+                // 同步到本地存储
+                uni.setStorageSync('selected_cert', current!.code)
+            } else {
+                // API 返回 null，尝试从本地存储恢复
+                const savedCertCode = uni.getStorageSync('selected_cert') as string
+                if (savedCertCode.length > 0) {
+                    for (let g = 0; g < groups.length; g++) {
+                        for (let i = 0; i < groups[g].items.length; i++) {
+                            if (groups[g].items[i].code == savedCertCode) {
+                                currentCredentialId.value = groups[g].items[i].id
+                                currentCert.value = groups[g].items[i].name
+                                return
+                            }
+                        }
+                    }
+                }
+                currentCert.value = '选择证件'
+            }
+        } catch (e) {
+            console.warn('[dashboard] loadCredentials failed:', e)
+            // 回退到本地存储
+            const savedCertCode = uni.getStorageSync('selected_cert') as string
+            if (savedCertCode.length > 0) {
+                // 从 mock 列表中按 code 查找
+                const groups = await getAllCredentialsApi()
+                credentialGroups.value = groups
+                for (let g = 0; g < groups.length; g++) {
+                    for (let i = 0; i < groups[g].items.length; i++) {
+                        if (groups[g].items[i].code == savedCertCode) {
+                            currentCredentialId.value = groups[g].items[i].id
+                            currentCert.value = groups[g].items[i].name
+                            return
+                        }
+                    }
+                }
+            }
+            currentCert.value = '选择证件'
+        }
+    }
+
+    /** 点击证件名称，展开下拉列表 */
+    function onCertTap() : void {
+        if (credentialGroups.value.length == 0) {
+            uni.showToast({ title: '证件数据加载中', icon: 'none' })
+            return
+        }
+        showCertDropdown.value = !showCertDropdown.value
+    }
+
+    /** 选择证件 */
+    async function onSelectCredential(item : CredentialItem) : Promise<void> {
+        if (isSwitching.value) return
+        if (item.id === currentCredentialId.value) {
+            showCertDropdown.value = false
+            return
+        }
+
+        // 乐观更新：立即更新 UI，不等后端返回
+        const prevId = currentCredentialId.value
+        const prevName = currentCert.value
+        currentCredentialId.value = item.id
+        currentCert.value = item.name
+        showCertDropdown.value = false
+
+        isSwitching.value = true
+        try {
+            const result = await switchCredentialApi(item.id)
+            if (result.success && result.credential != null) {
+                // 后端返回了有效结果，用后端数据覆盖
+                currentCredentialId.value = result.credential!.id
+                currentCert.value = result.credential!.name
+                // 同步本地存储（存 code，兼容 choose-cert 页面）
+                uni.setStorageSync('selected_cert', result.credential!.code)
+                uni.showToast({ title: '已切换至 ' + result.credential!.name, icon: 'none' })
+            } else {
+                // 后端没返回有效数据，但乐观更新已生效，仅同步本地存储
+                uni.setStorageSync('selected_cert', item.code)
+                uni.showToast({ title: '已切换至 ' + item.name, icon: 'none' })
+            }
+        } catch (e) {
+            console.warn('[dashboard] switchCredential failed:', e)
+            // 回滚到之前的证件
+            currentCredentialId.value = prevId
+            currentCert.value = prevName
+            let msg = '切换失败，请重试'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) {
+                    msg = m
+                }
+            }
+            uni.showToast({ title: msg, icon: 'none' })
+        } finally {
+            isSwitching.value = false
+        }
+    }
+
+    /** 关闭下拉列表 */
+    function onCloseCertDropdown() : void {
+        showCertDropdown.value = false
+    }
+
+    // ---- 热门考证（静态数据） ----
+    type HotCertItem = {
+        title : string
+        desc : string
+    }
+
+    const hotCertList : HotCertItem[] = [
+        { title: '入门组合', desc: '工程机械维修工（初级）+ 叉车N1证' },
+        { title: '电动叉车维修优选', desc: '工程机械维修工+N1司机证+低压电工证' },
+    ]
+
+    type HotCertDetail = {
+        title : string
+        content : string
+    }
+
+    const hotCertDetails : HotCertDetail[] = [
+        {
+            title: '1、工程机械机械维修工（初级）',
+            content: '叉车证N1代表叉车车辆维修，N1是场内专用机动车辆作业叉车司机上岗证，N1是场内专用机动车辆叉车司机资格证，在早期，叉车证N1可以驾驶任何吨位的叉车。'
+        },
+        {
+            title: '2、叉车N1证',
+            content: '叉车证N1代表叉车车辆维修，N1是场内专用机动车辆作业叉车司机上岗证，N1是场内专用机动车辆叉车司机资格证，在早期，叉车证N1可以驾驶任何吨位的叉车。'
+        }
+    ]
+
+    /** 本地证书名映射（回退用） */
     const certNameMap : Record<string, string> = {
         'low_voltage': '低压电工证',
         'welder': '焊工证',
@@ -128,23 +480,37 @@
         'combo_cert': '配套取证'
     }
 
-    const savedCertKey = uni.getStorageSync('selected_cert') as string
-    const currentCert = ref(savedCertKey.length > 0 && certNameMap[savedCertKey] != null
-        ? certNameMap[savedCertKey]!
-        : '叉车司机N1证')
+    // 页面显示时刷新数据
+    onShow(() => {
+        loadCredentials()
+        loadMyCourses()
+        loadFeaturedContents()
+        startUnreadPolling()
+    })
 
+    onHide(() => {
+        stopUnreadPolling()
+    })
 
-    function goChooseCert() : void {
-        uni.navigateTo({ url: '/pages/guide/choose-cert' })
+    // ---- Banner 数据 ----
+    type BannerItem = {
+        id : number
+        title : string
+        subtitle : string
+        ctaText : string
+        bgColor : string
     }
 
-    // 页面显示时刷新证书（从 choose-cert 返回后）
-    const onShow = () : void => {
-        const key = uni.getStorageSync('selected_cert') as string
-        if (key.length > 0 && certNameMap[key] != null) {
-            currentCert.value = certNameMap[key]!
+    const bannerList : BannerItem[] = [
+        {
+            id: 1,
+            title: '叉车维修培训',
+            subtitle: '掌握维修技巧，保障作业安全',
+            ctaText: '立即报名',
+            bgColor: '#1E88E5'
         }
-    }
+    ]
+    const currentBanner = ref<number>(0)
 
     // ---- 功能入口 ----
     type MenuItem = {
@@ -157,21 +523,70 @@
     }
 
     const menuItems : MenuItem[] = [
-        { key: 'course-mall', title: '课程商城', icon: '', color: '#b0c4de', path: '/pages/courses/courses', available: true },
-        { key: 'question-bank', title: '题库练习', icon: '✏️', color: '#ff9900', path: '/pages/practice/practice', available: true },
-        { key: 'material-course', title: '资料课程', icon: '', color: '#b0c4de', path: '', available: false },
-        { key: 'exam-info', title: '考情资讯', icon: '', color: '#b0c4de', path: '', available: false },
-
+        { key: 'course-mall', title: '课程商城', icon: '', color: '#FF6B35', path: '/pages/mall/mall', available: true },
+        { key: 'question-bank', title: '题库练习', icon: '', color: '#4ECDC4', path: '/pages/practice/practice', available: true },
+        { key: 'exam-center', title: '考试中心', icon: '', color: '#2979ff', path: '/pages/exam/exam', available: true },
+        { key: 'material-course', title: '资料下载', icon: '', color: '#45B7D1', path: '', available: false },
+        { key: 'exam-info', title: '考情资讯', icon: '', color: '#96CEB4', path: '/pages/exam-info/exam-info', available: true },
     ]
 
+    // ---- 继续学习 ----
+    const continueLearning = ref<StudentCourse | null>(null)
+    const myCourses = ref<StudentCourse[]>([])
+
+    async function loadMyCourses() : Promise<void> {
+        try {
+            const result = await getStudentCoursesApi()
+            myCourses.value = result.courses
+            continueLearning.value = result.continue_learning
+        } catch (e) {
+            console.warn('[dashboard] loadMyCourses failed:', e)
+        }
+    }
+
     // ---- 内容 Tab ----
-    const contentTabs : string[] = ['精品活动', '精品课程']
-    // const contentTabs : string[] = ['推荐课程', '精品活动', '精品课程']
+    const contentTabs : string[] = ['热门课程', '精品课程']
     const activeTab = ref<number>(0)
 
     // ---- 筛选标签 ----
-    const filterTags : string[] = ['笔试', '实操技能', '综合评审']
+    const filterTags : string[] = ['全部', '实操技能', '综合评审']
     const activeFilter = ref<number>(0)
+
+    // ---- 课程静态数据 ----
+    type CourseItem = {
+        id : number
+        title : string
+        tags : string[]
+        price : number
+        sales : number
+        isHot : boolean
+    }
+
+    const courseList : CourseItem[] = [
+        { id: 1, title: '2026年叉车基础理论课程', tags: ['直播报课', '电子资料'], price: 39, sales: 999, isHot: true },
+        { id: 2, title: '叉车实操技能强化班', tags: ['实操教学', '在线答疑'], price: 128, sales: 567, isHot: true },
+        { id: 3, title: '叉车安全规范专题课', tags: ['法规解读', '案例分析'], price: 0, sales: 1234, isHot: false },
+        { id: 4, title: '叉车维修高级进阶课', tags: ['直播回放', '电子资料'], price: 199, sales: 234, isHot: false },
+    ]
+
+    // ---- 精选内容（从 API 加载） ----
+    const newsList = ref<FeaturedContentItem[]>([])
+
+    async function loadFeaturedContents() : Promise<void> {
+        try {
+            const result = await getFeaturedContentsApi(1, 5)
+            newsList.value = result.items
+        } catch (e) {
+            console.warn('[dashboard] loadFeaturedContents failed:', e)
+        }
+    }
+
+    function onContinueLearning() : void {
+        const cl = continueLearning.value
+        if (cl != null) {
+            uni.navigateTo({ url: '/pages/courses/course-detail?id=' + cl.course_id.toString() })
+        }
+    }
 
     function onMenuClick(item : MenuItem) : void {
         if (!item.available || item.path.length == 0) {
@@ -216,17 +631,38 @@
     function onCartClick() : void {
         uni.showToast({ title: '购物车功能开发中', icon: 'none' })
     }
+
+    // ---- Banner 点击 ----
+    function onBannerClick() : void {
+        uni.showToast({ title: '报名功能开发中', icon: 'none' })
+    }
+
+    // ---- 新闻点击 ----
+    function onNewsClick(news : FeaturedContentItem) : void {
+        uni.navigateTo({
+            url: '/pages/featured/featured-detail?id=' + news.content_id.toString()
+        })
+    }
+
+    function onMoreNews() : void {
+        uni.navigateTo({ url: '/pages/featured/featured-list' })
+    }
+
+    // ---- 课程点击 ----
+    function onCourseClick(course : CourseItem) : void {
+        uni.navigateTo({ url: `/pages/courses/course-detail?id=${course.id}` })
+    }
 </script>
 
 <style>
     .container {
         flex: 1;
-        background-color: #f5f5f5;
+        background: linear-gradient(180deg, #CFE9FB 1%, #D0EBFD 16%, #F5F5F5 100%);
         flex-direction: column;
     }
 
     .status-bar {
-        background-color: #ffffff;
+        background-color: transparent;
     }
 
     .content-scroll {
@@ -235,7 +671,7 @@
 
     /* 顶部导航栏 */
     .nav-bar {
-        background-color: #ffffff;
+        background-color: transparent;
         flex-direction: row;
         justify-content: space-between;
         align-items: center;
@@ -260,22 +696,117 @@
     }
 
     .nav-right {
+        flex-direction: row;
+        align-items: center;
+        gap: 16rpx;
+    }
+
+    .nav-icon-btn {
+        position: relative;
         width: 64rpx;
         height: 64rpx;
         align-items: center;
         justify-content: center;
     }
 
-    .nav-cart-icon {
+    .nav-icon-text {
         font-size: 44rpx;
     }
 
-    /* Banner 占位 */
-    .banner-placeholder {
-        height: 240rpx;
+    .unread-badge {
+        position: absolute;
+        top: -4rpx;
+        right: -4rpx;
+        background-color: #ff3b30;
+        border-radius: 20rpx;
+        min-width: 32rpx;
+        height: 32rpx;
+        padding: 0 8rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .unread-badge-text {
+        font-size: 20rpx;
+        color: #ffffff;
+        font-weight: 600;
+    }
+
+    /* Banner 横幅 */
+    .banner {
         margin: 24rpx;
         border-radius: 16rpx;
-        background-color: #e8f4fd;
+        overflow: hidden;
+    }
+
+    .banner-bg {
+        height: 280rpx;
+        padding: 32rpx;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .banner-content {
+        flex: 1;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .banner-title {
+        font-size: 40rpx;
+        font-weight: bold;
+        color: #FFFFFF;
+        margin-bottom: 12rpx;
+    }
+
+    .banner-subtitle {
+        font-size: 26rpx;
+        color: rgba(255, 255, 255, 0.9);
+        margin-bottom: 24rpx;
+    }
+
+    .banner-cta {
+        background-color: #FFFFFF;
+        padding: 16rpx 40rpx;
+        border-radius: 32rpx;
+        align-self: flex-start;
+    }
+
+    .banner-cta-text {
+        font-size: 28rpx;
+        font-weight: 600;
+        color: #1E88E5;
+    }
+
+    .banner-decoration {
+        width: 160rpx;
+        height: 160rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .banner-icon {
+        font-size: 120rpx;
+    }
+
+    .banner-tags {
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        padding: 16rpx 0;
+        background-color: #FFFFFF;
+    }
+
+    .banner-tag {
+        font-size: 22rpx;
+        color: #666666;
+    }
+
+    .banner-tag-dot {
+        font-size: 22rpx;
+        color: #CCCCCC;
+        margin: 0 8rpx;
     }
 
     /* 功能入口网格 */
@@ -286,7 +817,7 @@
     }
 
     .menu-item {
-        width: 25%;
+        width: 20%;
         padding: 20rpx 0;
         flex-direction: column;
         align-items: center;
@@ -295,13 +826,77 @@
     .menu-icon-box {
         width: 80rpx;
         height: 80rpx;
-        border-radius: 8rpx;
-        margin-bottom: 12rpx;
+        border-radius: 16rpx;
+        margin-bottom: 8rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .menu-icon-text {
+        font-size: 40rpx;
     }
 
     .menu-label {
-        font-size: 24rpx;
+        font-size: 22rpx;
         color: #333333;
+    }
+
+    /* 新闻资讯板块 */
+    .news-section {
+        margin: 24rpx;
+        background-color: #FFFFFF;
+        border-radius: 16rpx;
+        padding: 24rpx;
+    }
+
+    .section-header {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20rpx;
+    }
+
+    .section-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .section-more {
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    .news-list {
+        flex-direction: column;
+    }
+
+    .news-item {
+        flex-direction: row;
+        align-items: center;
+        padding: 20rpx 0;
+        border-bottom-width: 1rpx;
+        border-bottom-color: #F0F0F0;
+    }
+
+    .news-icon {
+        font-size: 32rpx;
+        color: #FF6B35;
+        margin-right: 16rpx;
+        font-weight: bold;
+    }
+
+    .news-date {
+        font-size: 22rpx;
+        color: #cccccc;
+        margin-left: 16rpx;
+    }
+
+    .news-title {
+        font-size: 28rpx;
+        color: #333333;
+        lines: 1;
+        text-overflow: ellipsis;
     }
 
     /* 内容 Tab */
@@ -383,16 +978,77 @@
 
     /* 课程卡片 */
     .course-list {
-        padding: 0 24rpx;
+        padding: 0 24rpx 24rpx;
     }
 
-    .empty-tip {
+    .course-card {
+        background-color: #FFFFFF;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        margin-bottom: 20rpx;
+    }
+
+    .course-header {
+        flex-direction: row;
         align-items: center;
-        padding: 60rpx 0;
+        margin-bottom: 16rpx;
     }
 
-    .empty-text {
-        font-size: 28rpx;
+    .course-tag-hot {
+        background-color: #FF6B35;
+        padding: 4rpx 12rpx;
+        border-radius: 8rpx;
+        margin-right: 12rpx;
+    }
+
+    .course-tag-hot-text {
+        font-size: 22rpx;
+        color: #FFFFFF;
+        font-weight: 600;
+    }
+
+    .course-title {
+        font-size: 30rpx;
+        font-weight: 600;
+        color: #333333;
+        flex: 1;
+        lines: 1;
+        text-overflow: ellipsis;
+    }
+
+    .course-tags {
+        flex-direction: row;
+        flex-wrap: wrap;
+        margin-bottom: 16rpx;
+    }
+
+    .course-tag-sm {
+        background-color: #F5F7FA;
+        padding: 8rpx 16rpx;
+        border-radius: 8rpx;
+        margin-right: 12rpx;
+        margin-bottom: 8rpx;
+    }
+
+    .course-tag-sm-text {
+        font-size: 22rpx;
+        color: #666666;
+    }
+
+    .course-footer {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .course-price {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #FF4D4F;
+    }
+
+    .course-sales {
+        font-size: 24rpx;
         color: #999999;
     }
 
@@ -515,5 +1171,299 @@
         font-size: 30rpx;
         font-weight: 600;
         color: #FFFFFF;
+    }
+
+    /* ===== 继续学习 ===== */
+    .continue-section {
+        margin: 0 24rpx 24rpx 24rpx;
+    }
+
+    .continue-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .continue-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .continue-course-name {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 8rpx;
+    }
+
+    .continue-chapter {
+        font-size: 24rpx;
+        color: #999999;
+        margin-bottom: 16rpx;
+    }
+
+    .continue-progress-bar {
+        height: 8rpx;
+        background-color: #eeeeee;
+        border-radius: 4rpx;
+        margin-bottom: 8rpx;
+    }
+
+    .continue-progress-fill {
+        height: 8rpx;
+        background-color: #2979ff;
+        border-radius: 4rpx;
+    }
+
+    .continue-progress-text {
+        font-size: 22rpx;
+        color: #2979ff;
+    }
+
+    .continue-arrow {
+        font-size: 40rpx;
+        color: #cccccc;
+        margin-left: 16rpx;
+    }
+
+    /* ===== 证件下拉选择器（选择学习阶段风格） ===== */
+    .cert-dropdown-mask {
+        position: fixed;
+        left: 0;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 300;
+        background-color: rgba(0, 0, 0, 0.4);
+        justify-content: flex-start;
+    }
+
+    .cert-dropdown {
+        background-color: #F5F7FA;
+        border-bottom-left-radius: 28rpx;
+        border-bottom-right-radius: 28rpx;
+        max-height: 75vh;
+        box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.15);
+    }
+
+    .cert-dropdown-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding: 28rpx 32rpx;
+        background-color: #FFFFFF;
+        border-bottom-left-radius: 28rpx;
+        border-bottom-right-radius: 28rpx;
+    }
+
+    .cert-dropdown-title {
+        font-size: 34rpx;
+        font-weight: 600;
+        color: #222222;
+    }
+
+    .cert-dropdown-close {
+        width: 48rpx;
+        height: 48rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .cert-dropdown-close-icon {
+        font-size: 32rpx;
+        color: #999999;
+    }
+
+    .cert-dropdown-scroll {
+        max-height: calc(75vh - 100rpx);
+    }
+
+    /* ---- 分组区块 ---- */
+    .cert-dropdown-section {
+        margin: 16rpx 24rpx 0;
+        padding: 24rpx;
+        background-color: #FFFFFF;
+        border-radius: 16rpx;
+    }
+
+    .cert-dropdown-section-header {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 20rpx;
+    }
+
+    .cert-dropdown-section-icon-wrap {
+        width: 48rpx;
+        height: 48rpx;
+        border-radius: 12rpx;
+        align-items: center;
+        justify-content: center;
+        margin-right: 12rpx;
+    }
+
+    .cert-dropdown-section-icon {
+        font-size: 28rpx;
+    }
+
+    .cert-dropdown-section-title {
+        font-size: 28rpx;
+        font-weight: 600;
+        color: #222222;
+        flex: 1;
+    }
+
+    /* ---- 胶囊标签 ---- */
+    .cert-dropdown-chips {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 16rpx;
+    }
+
+    .cert-dropdown-chip {
+        padding: 18rpx 28rpx;
+        background-color: #F5F7FA;
+        border-radius: 40rpx;
+        border-width: 2rpx;
+        border-color: transparent;
+    }
+
+    .cert-dropdown-chip--active {
+        background-color: #EBF5FF;
+        border-color: #2979FF;
+    }
+
+    /* 单行（特种作业证） */
+    .cert-dropdown-chip-single {
+        align-items: center;
+        justify-content: center;
+    }
+
+    .cert-dropdown-chip-text {
+        font-size: 28rpx;
+        color: #444444;
+    }
+
+    .cert-dropdown-chip-text--active {
+        color: #2979FF;
+        font-weight: 600;
+    }
+
+    /* 双行（技能等级证） */
+    .cert-dropdown-chip-double {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-width: 100rpx;
+    }
+
+    .cert-dropdown-chip-level {
+        font-size: 28rpx;
+        font-weight: 600;
+        color: #444444;
+        margin-bottom: 2rpx;
+    }
+
+    .cert-dropdown-chip-desc {
+        font-size: 22rpx;
+        color: #888888;
+    }
+
+    .cert-dropdown-chip-desc--active {
+        color: #79AEFF;
+    }
+
+    /* ---- 热门考证标题 ---- */
+    .cert-dropdown-hot-header {
+        flex-direction: column;
+        align-items: flex-start;
+        margin-bottom: 20rpx;
+    }
+
+    .cert-dropdown-hot-title {
+        font-size: 30rpx;
+        font-weight: 600;
+        color: #222222;
+    }
+
+    .cert-dropdown-hot-line {
+        width: 56rpx;
+        height: 6rpx;
+        border-radius: 3rpx;
+        background-color: #2979FF;
+        margin-top: 8rpx;
+    }
+
+    /* ---- 热门考证卡片 ---- */
+    .cert-dropdown-hot-grid {
+        flex-direction: row;
+        gap: 16rpx;
+    }
+
+    .cert-dropdown-hot-card {
+        flex: 1;
+        padding: 20rpx 16rpx;
+        background: linear-gradient(135deg, #2979FF 0%, #1565C0 100%);
+        border-radius: 12rpx;
+    }
+
+    .cert-dropdown-hot-card-header {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 8rpx;
+    }
+
+    .cert-dropdown-hot-card-star {
+        font-size: 24rpx;
+        margin-right: 6rpx;
+    }
+
+    .cert-dropdown-hot-card-title {
+        flex: 1;
+        font-size: 26rpx;
+        font-weight: 600;
+        color: #FFFFFF;
+    }
+
+    .cert-dropdown-hot-card-desc {
+        font-size: 20rpx;
+        color: rgba(255, 255, 255, 0.85);
+        lines: 2;
+        text-overflow: ellipsis;
+    }
+
+    /* ---- 热门考证详情说明 ---- */
+    .cert-dropdown-detail-item {
+        margin-bottom: 20rpx;
+    }
+
+    .cert-dropdown-detail-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .cert-dropdown-detail-title-row {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 8rpx;
+    }
+
+    .cert-dropdown-detail-bullet {
+        font-size: 24rpx;
+        color: #2979FF;
+        margin-right: 8rpx;
+    }
+
+    .cert-dropdown-detail-title {
+        font-size: 26rpx;
+        font-weight: 600;
+        color: #222222;
+    }
+
+    .cert-dropdown-detail-content {
+        font-size: 22rpx;
+        color: #666666;
+        line-height: 36rpx;
+        padding-left: 32rpx;
     }
 </style>

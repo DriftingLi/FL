@@ -9,6 +9,7 @@
  *       uni.request 不支持增量流式回调，这里整包接收后解析 delta 文本。
  */
 import { get, post, del, patch } from './request'
+import { toNumber, toStr } from './helpers'
 import { API_BASE_URL, AI_REQUEST_TIMEOUT } from '../config/env'
 import { STORAGE_KEY_TOKEN } from '../constants/app'
 import { getStorage } from '../utils/storage'
@@ -21,18 +22,7 @@ import type {
 	AiChatSettings,
 } from '../types/index'
 
-function toNumber(v : any | null, defaultVal : number = 0) : number {
-	if (v == null) return defaultVal
-	const s = `${v}`
-	const n = parseFloat(s)
-	if (isNaN(n)) return defaultVal
-	return n
-}
 
-function toStr(v : any | null, defaultVal : string = '') : string {
-	if (v == null) return defaultVal
-	return `${v}`
-}
 
 function buildAiModel(obj : UTSJSONObject) : AiModel {
 	return {
@@ -152,8 +142,11 @@ export function getAiSessionsApi() : Promise<AiSession[]> {
 }
 
 /** 创建会话 */
-export function createAiSessionApi(title : string = '新对话') : Promise<AiSession> {
+export function createAiSessionApi(title : string = '新对话', modelName : string = '') : Promise<AiSession> {
 	const payload : UTSJSONObject = { title: title }
+	if (modelName.length > 0) {
+		payload['model_name'] = modelName
+	}
 	return post('/ai-assistant/sessions', payload).then((data : UTSJSONObject) : AiSession => {
 		const s = data['session']
 		if (s != null) return buildSession(s as UTSJSONObject)
@@ -164,12 +157,6 @@ export function createAiSessionApi(title : string = '新对话') : Promise<AiSes
 /** 删除会话 */
 export function deleteAiSessionApi(id : number) : Promise<void> {
 	return del('/ai-assistant/sessions/' + id).then((_d : UTSJSONObject) : void => { })
-}
-
-/** 重命名会话 */
-export function renameAiSessionApi(id : number, title : string) : Promise<void> {
-	const payload : UTSJSONObject = { title: title }
-	return patch('/ai-assistant/sessions/' + id + '/title', payload).then((_d : UTSJSONObject) : void => { })
 }
 
 /** 会话消息 */
@@ -237,229 +224,147 @@ function extractDeltaText(obj : UTSJSONObject) : string {
 	return ''
 }
 
-export function parseSseContent(raw : string) : string {
-	if (raw.length == 0) return ''
-	// 若不是 SSE，可能是 JSON
-	const trimmed = raw.trim()
-	if (trimmed.startsWith('{') && trimmed.indexOf('event:') < 0 && trimmed.indexOf('data:') < 0) {
-		try {
-			const obj = JSON.parse(trimmed) as UTSJSONObject
-			const code = obj['code']
-			if (code != null) {
-				const codeNum = toNumber(code, 200)
-				if (codeNum != 200 && codeNum != 201) {
-					throw new Error(toStr(obj['message'], '请求失败'))
-				}
-			}
-			const d = obj['data']
-			if (d != null) {
-				const ds = toStr(d)
-				if (ds.length > 0 && ds.indexOf('[object') < 0 && !ds.startsWith('{')) {
-					return ds
-				}
-				try {
-					const dObj = d as UTSJSONObject
-					const c = dObj['content']
-					if (c != null) return toStr(c)
-					const a = dObj['answer']
-					if (a != null) return toStr(a)
-				} catch (_e) { }
-			}
-			const content = obj['content']
-			if (content != null) return toStr(content)
-		} catch (e) {
-			if (e instanceof Error) {
-				throw e
-			}
-		}
-	}
+// ─── 回调式流式对话（兼容后端 message/error/done 事件） ───────────────
 
-	let result = ''
-	let errMsg = ''
-	const lines = raw.split('\n')
+/** 流式对话回调 */
+export type StreamChatCallbacks = {
+	onMessage ?: (chunk : string) => void
+	onError ?: (msg : string) => void
+	onDone ?: () => void
+}
+
+/** 触发 onError（若存在） */
+function emitStreamError(callbacks : StreamChatCallbacks, msg : string) : void {
+	console.error('[streamChat] error:', msg)
+	if (callbacks.onError != null) {
+		callbacks.onError(msg)
+	}
+}
+
+/** 简单解析 SSE 文本（兼容后端 message / error / done 事件） */
+function parseStreamSSE(text : string, callbacks : StreamChatCallbacks) : void {
+	const lines = text.split('\n')
+	let event = ''
+	let data = ''
 	for (let i = 0; i < lines.length; i++) {
-		let line = lines[i]
-		if (line.endsWith('\r')) {
-			line = line.substring(0, line.length - 1)
+		const line = lines[i].trim()
+		if (line.startsWith('event:')) {
+			event = line.substring(6).trim()
+		} else if (line.startsWith('data:')) {
+			data = line.substring(5).trim()
+		} else if (line.length == 0) {
+			if (event.length > 0) {
+				handleStreamSSEEvent(event, data, callbacks)
+			}
+			event = ''
+			data = ''
 		}
-		if (!line.startsWith('data:')) continue
-		let payload = line.substring(5).trim()
-		if (payload.length == 0 || payload == '[DONE]') continue
+	}
+	if (event.length > 0) {
+		handleStreamSSEEvent(event, data, callbacks)
+	}
+}
+
+function handleStreamSSEEvent(event : string, data : string, callbacks : StreamChatCallbacks) : void {
+	if (event == 'message') {
 		try {
-			const obj = JSON.parse(payload) as UTSJSONObject
-			// error 字段
-			const err = obj['error']
-			if (err != null) {
-				const es = toStr(err)
-				if (es.length > 0 && es.indexOf('[object') < 0 && !es.startsWith('{')) {
-					errMsg = es
-				} else {
-					try {
-						const errObj = err as UTSJSONObject
-						errMsg = toStr(errObj['message'], toStr(errObj['msg'], '对话失败'))
-					} catch (_e) {
-						errMsg = '对话失败'
-					}
-				}
-				continue
+			const obj = JSON.parse(data) as UTSJSONObject
+			const chunk = obj['content'] as string
+			if (chunk != null && chunk.length > 0 && callbacks.onMessage != null) {
+				callbacks.onMessage(chunk)
 			}
-			const piece = extractDeltaText(obj)
-			if (piece.length > 0) {
-				result += piece
-				continue
+		} catch (e) {
+			console.error('[streamChat] parse message error:', e)
+		}
+	} else if (event == 'error') {
+		let msg = '对话出错'
+		try {
+			const obj = JSON.parse(data) as UTSJSONObject
+			const m = obj['message']
+			if (m != null) {
+				msg = m as string
 			}
-			// 纯错误 message 行
-			const msg = obj['message']
-			if (msg != null && obj['content'] == null && obj['delta'] == null && obj['choices'] == null) {
-				const t = toStr(msg)
-				if (t.length > 0 && result.length == 0) {
-					errMsg = t
-				}
-			}
-		} catch (_e) {
-			// 非 JSON data 行，忽略
+		} catch (e) {}
+		emitStreamError(callbacks, msg)
+	} else if (event == 'done') {
+		if (callbacks.onDone != null) {
+			callbacks.onDone()
 		}
 	}
-	if (result.length == 0 && errMsg.length > 0) {
-		throw new Error(errMsg)
-	}
-	return result
 }
 
 /**
- * 流式对话（整包接收 SSE 后解析）
- * @returns 助手回复文本；session_id 若后端在响应头/正文返回则无法可靠提取，由调用方自行维护
+ * 流式对话（SSE，回调式）
+ * @param params 请求体（UTSJSONObject）
+ * @returns 请求对象（支持 abort 时返回之，否则返回 null）
  */
-export function chatAiApi(
-	messages : AiChatMessage[],
-	settings : AiChatSettings,
-	sessionId : number = 0,
-) : Promise<string> {
-	return new Promise<string>((resolve, reject) => {
-		const url = API_BASE_URL + '/ai-assistant/chat'
-		const header : UTSJSONObject = {}
-		header['Content-Type'] = 'application/json'
-		header['Accept'] = 'text/event-stream'
-		const token = getStorage(STORAGE_KEY_TOKEN)
-		if (token.length > 0) {
-			header['Authorization'] = `Bearer ${token}`
-		}
+export function streamChatApi(params : UTSJSONObject, callbacks : StreamChatCallbacks) : any | null {
+	const token = getStorage(STORAGE_KEY_TOKEN)
+	const url = API_BASE_URL + '/ai-assistant/chat'
 
-		// 构造 messages 数组（避免直接传 Proxy）
-		const msgArr : UTSJSONObject[] = []
-		for (let i = 0; i < messages.length; i++) {
-			const m = messages[i]
-			const item : UTSJSONObject = {
-				role: m.role,
-				content: m.content,
-			}
-			msgArr.push(item)
-		}
+	const header : UTSJSONObject = {
+		'Content-Type': 'application/json',
+		'Accept': 'text/event-stream',
+	}
+	if (token.length > 0) {
+		header['Authorization'] = `Bearer ${token}`
+	}
 
-		const body : UTSJSONObject = {
-			messages: msgArr,
-			model_source: settings.model_source.length > 0 ? settings.model_source : 'admin',
-		}
-		if (sessionId > 0) {
-			body['session_id'] = sessionId
-		}
-		if (settings.model_source == 'custom') {
-			if (settings.model_id > 0) {
-				body['model_id'] = settings.model_id
+	const task = uni.request({
+		url: url,
+		method: 'POST',
+		data: params,
+		header: header,
+		timeout: AI_REQUEST_TIMEOUT,
+		success: (res) => {
+			const statusCode = res.statusCode
+			if (statusCode == 401) {
+				emitStreamError(callbacks, '登录已过期，请重新登录')
+				return
 			}
-			if (settings.base_url.length > 0) {
-				body['base_url'] = settings.base_url
-			}
-			if (settings.model.length > 0) {
-				body['model'] = settings.model
-			}
-			if (settings.api_key.length > 0) {
-				body['api_key'] = settings.api_key
-			}
-		} else {
-			if (settings.model_id > 0) {
-				body['model_id'] = settings.model_id
-			}
-			if (settings.model.length > 0) {
-				body['model'] = settings.model
-			}
-		}
-
-		console.log('[chatAiApi] >>> POST', url)
-		uni.request({
-			url: url,
-			method: 'POST',
-			data: body,
-			header: header,
-			timeout: AI_REQUEST_TIMEOUT,
-			// 部分端需要 text 才能拿到 SSE 原文
-			// #ifdef H5
-			// #endif
-			success: (res) => {
-				console.log('[chatAiApi] <<< status=', res.statusCode)
-				const statusCode = res.statusCode
-				if (statusCode == 401) {
-					reject(new Error('登录已过期，请重新登录'))
-					return
-				}
-				if (statusCode < 200 || statusCode >= 300) {
-					// 尝试解析错误
-					try {
-						const bodyObj = res.data as UTSJSONObject
-						const msg = toStr(bodyObj['message'], `请求失败 (${statusCode})`)
-						reject(new Error(msg))
-					} catch (_e) {
-						reject(new Error(`请求失败 (${statusCode})`))
-					}
-					return
-				}
-				const dataAny = res.data
-				if (dataAny == null) {
-					reject(new Error('空响应'))
-					return
-				}
-				// SSE 原文一般为 string；若被解析成对象则 stringify
-				let raw = ''
+			if (statusCode < 200 || statusCode >= 300) {
+				let msg = `请求失败 (${statusCode})`
 				try {
-					const asObj = dataAny as UTSJSONObject
-					// 对象形态：业务 JSON 或已解析结构
-					if (asObj != null && (asObj['code'] != null || asObj['data'] != null || asObj['content'] != null || asObj['choices'] != null)) {
-						raw = JSON.stringify(dataAny)
-					} else {
-						raw = `${dataAny}`
-					}
-				} catch (_e) {
-					raw = `${dataAny}`
-				}
-				if (raw.length == 0) {
-					raw = `${dataAny}`
-				}
-				try {
-					const text = parseSseContent(raw)
-					if (text.length == 0) {
-						reject(new Error('未收到有效回复，请检查模型配置'))
-						return
-					}
-					resolve(text)
-				} catch (e) {
-					if (e instanceof Error) {
-						reject(e)
-					} else {
-						reject(new Error('解析回复失败'))
-					}
-				}
-			},
-			fail: (err) => {
-				console.error('[chatAiApi] fail', err.errMsg)
-				const errMsg = err.errMsg ?? ''
-				if (errMsg.indexOf('timeout') >= 0) {
-					reject(new Error('请求超时，请稍后重试'))
+					const bodyObj = res.data as UTSJSONObject
+					const bm = bodyObj['message']
+					if (bm != null) msg = bm as string
+				} catch (e) {}
+				emitStreamError(callbacks, msg)
+				return
+			}
+			let raw = ''
+			try {
+				const asObj = res.data as UTSJSONObject
+				if (asObj != null && (asObj['content'] != null || asObj['message'] != null ||
+						asObj['choices'] != null || asObj['data'] != null)) {
+					raw = JSON.stringify(res.data)
 				} else {
-					reject(new Error(errMsg.length > 0 ? errMsg : '网络连接失败'))
+					raw = `${res.data}`
 				}
-			},
-		})
+			} catch (e) {
+				raw = `${res.data}`
+			}
+			if (raw.length == 0) {
+				raw = `${res.data}`
+			}
+			parseStreamSSE(raw, callbacks)
+		},
+		fail: (err) => {
+			console.error('[streamChat] fail:', err.errMsg)
+			let msg = '网络请求失败'
+			const errMsg = err.errMsg ?? ''
+			if (errMsg.indexOf('timeout') >= 0) {
+				msg = '请求超时，请稍后重试'
+			} else if (errMsg.length > 0) {
+				msg = errMsg
+			}
+			emitStreamError(callbacks, msg)
+		},
 	})
+	if (task != null) {
+		return task
+	}
+	return null
 }
 
 /** 默认对话设置 */
