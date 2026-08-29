@@ -32,7 +32,7 @@
       <main class="main-content" :class="{ 'content-narrow': props.contentWidth === 'narrow' }">
         <!-- 内层 router-view + transition：
              App.vue 已用 matched[0]?.path 做 key 锁住外层布局不重挂，
-             这里用 fullPath 做 key 让同布局下的子页面也能走 200ms 淡入淡出。
+             这里用 fullPath 做 key 让同布局下的子页面也能走 180ms 淡入淡出。
              不用 keep-alive，避免课程章节页/考试页等带副作用的状态被缓存。 -->
         <router-view v-slot="{ Component: Inner, route: r }">
           <transition name="inner-fade" mode="out-in">
@@ -181,15 +181,23 @@ watch(() => route.path, () => {
   opacity: 0;
 }
 
-/* 内层子页面过渡：同布局内切换路由时给中间区域一个 200ms 淡入淡出，避免闪一下 */
+/* 内层子页面过渡：同布局内切换路由时给中间区域一个 180ms 淡入淡出 + 6px 上移。
+   比纯 opacity 多一点方向感，进出方向一致（都是向上）所以 out-in 模式下不会打架。 */
 .inner-fade-enter-active,
 .inner-fade-leave-active {
-  transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    opacity 180ms var(--ease-default),
+    transform 180ms var(--ease-default);
 }
 
-.inner-fade-enter-from,
+.inner-fade-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
 .inner-fade-leave-to {
   opacity: 0;
+  transform: translateY(-6px);
 }
 
 @media screen and (max-width: 768px) {

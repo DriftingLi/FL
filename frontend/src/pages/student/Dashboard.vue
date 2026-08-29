@@ -52,6 +52,37 @@
         </div>
       </section>
 
+      <!-- 概览指标（数值滚动进场；reduced-motion 下 UiCountTo 直出终值） -->
+      <div class="grid gap-4 sm:grid-cols-3">
+        <UiStatCard
+          label="学习时长"
+          :value="overviewStats.minutes"
+          unit="分钟"
+          icon="Clock"
+          tone="brand"
+          :loading="statsLoading"
+          count-to
+        />
+        <UiStatCard
+          label="活跃天数"
+          :value="overviewStats.activeDays"
+          unit="天"
+          icon="Calendar"
+          tone="ok"
+          :loading="statsLoading"
+          count-to
+        />
+        <UiStatCard
+          label="日均学习"
+          :value="overviewStats.perDay"
+          unit="分钟/天"
+          icon="TrendCharts"
+          tone="warn"
+          :loading="statsLoading"
+          count-to
+        />
+      </div>
+
       <!-- 快捷卡片 -->
       <div class="grid gap-4 md:grid-cols-2">
         <QuickCard
@@ -114,6 +145,7 @@ import { useAuthStore } from '@/stores/auth'
 import QuickCard from '@/components/dashboard/QuickCard.vue'
 import type { QuickCardItem } from '@/components/dashboard/QuickCard.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiStatCard from '@/components/ui/UiStatCard.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSectionHeader from '@/components/ui/UiSectionHeader.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
@@ -154,6 +186,7 @@ const {
   chartRef,
   timeTabs,
   currentTab,
+  stats,
   statsLoading,
   statsEmpty,
   summary,
@@ -174,6 +207,18 @@ const {
     { label: '近7天', value: '7d', days: 7 },
     { label: '近30天', value: '30d', days: 30 }
   ]
+})
+
+/** 顶部概览三指标：时长 / 活跃天数 / 日均。跟随 statsLoading 一起进骨架 */
+const overviewStats = computed(() => {
+  const s = stats.value
+  if (!s) return { minutes: 0, activeDays: 0, perDay: 0 }
+  const activeDays = s.active_days || 0
+  return {
+    minutes: s.total || 0,
+    activeDays,
+    perDay: activeDays > 0 ? Math.round((s.total || 0) / activeDays) : 0
+  }
 })
 
 async function loadCourses() {

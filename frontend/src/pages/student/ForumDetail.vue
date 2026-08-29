@@ -1,10 +1,23 @@
 <template>
-  <div class="forum-detail-page" v-loading="loading">
+  <div class="forum-detail-page">
     <div class="back-bar">
       <el-button text :icon="ArrowLeft" @click="goBack">返回列表</el-button>
     </div>
 
-    <template v-if="topic">
+    <UiErrorState
+      v-if="loadError"
+      title="帖子加载失败"
+      description="网络或服务端异常，可重试"
+      :retrying="retrying"
+      @retry="retryLoad"
+    />
+
+    <template v-else-if="loading">
+      <UiSkeleton variant="card" :count="1" />
+      <UiSkeleton variant="list" :count="4" />
+    </template>
+
+    <template v-else-if="topic">
       <div class="topic-card">
         <div class="topic-header">
           <el-avatar :size="46" :src="topic.author.avatar_url || undefined" class="author-avatar">
@@ -83,7 +96,12 @@
           </div>
         </div>
         <template v-if="replies.length > 0">
-          <div v-for="reply in replies" :key="reply.id" class="reply-item">
+          <div
+            v-for="(reply, i) in replies"
+            :key="reply.id"
+            class="reply-item stagger-in"
+            :style="staggerStyle(i)"
+          >
             <el-avatar :size="38" :src="reply.author.avatar_url || undefined" class="author-avatar">
               {{ authorLetter(reply.author) }}
             </el-avatar>
@@ -202,14 +220,21 @@ import { formatLocaleDateTime } from '@/utils/format'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { pushHistory, toHistoryItem } from '@/utils/forumHistory'
 import { useAuthStore } from '@/stores/auth'
+import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
 const loading = ref(false)
+const loadError = ref(false)
+const retrying = ref(false)
 const submitting = ref(false)
+
+const staggerStyle = useStagger()
 const topic = ref<ForumTopicItem | null>(null)
 const replies = ref<ForumReplyItem[]>([])
 const replyContent = ref('')
@@ -241,6 +266,7 @@ function authorLetter(author: ForumTopicItem['author']) {
 
 async function loadDetail() {
   loading.value = true
+  loadError.value = false
   try {
     const topicId = Number(route.params.topicId)
     const res = await forumApi.getTopic(topicId, replySort.value, replyOrder.value)
@@ -255,9 +281,21 @@ async function loadDetail() {
     }
   } catch (e) {
     console.error('加载帖子详情失败:', e)
-    /* 错误已由拦截器提示 */
+    loadError.value = true
+    topic.value = null
+    replies.value = []
   } finally {
     loading.value = false
+  }
+}
+
+async function retryLoad() {
+  if (retrying.value) return
+  retrying.value = true
+  try {
+    await loadDetail()
+  } finally {
+    retrying.value = false
   }
 }
 

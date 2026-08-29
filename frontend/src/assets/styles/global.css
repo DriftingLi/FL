@@ -89,6 +89,19 @@ h1, h2, h3, h4, h5, h6 {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+
+  /* 压时长只让位移「瞬间完成」，元素仍然真的动了一下。
+     对前庭敏感用户来说那一下也是负担，故显式钉死终态、不产生任何位移。 */
+  .stagger-in {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .ui-card-interactive:hover,
+  .ui-card-interactive:active {
+    transform: none !important;
+  }
 }
 
 /* 列表错峰进场（方案 11.5）：配合 composables/useStagger 挂的 --i 使用。
@@ -130,6 +143,11 @@ h1, h2, h3, h4, h5, h6 {
   .el-button {
     min-height: 44px;
     min-width: 44px;
+  }
+
+  /* 自研可点卡片：语义钩子由 UiCard 的 interactive 变体挂载 */
+  .ui-card-interactive {
+    min-height: 44px;
   }
 
   .el-input__inner {

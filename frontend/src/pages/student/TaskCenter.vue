@@ -21,8 +21,15 @@
       </div>
     </div>
 
-    <div class="group-stack">
-      <div v-for="group in grouped" :key="group.key" class="group-section">
+    <UiSkeleton v-if="loading" variant="card" :count="6" />
+
+    <div v-else class="group-stack">
+      <div
+        v-for="(group, gi) in grouped"
+        :key="group.key"
+        class="group-section stagger-in"
+        :style="staggerStyle(gi)"
+      >
         <div class="group-head">
           <span class="group-title">{{ group.label }}</span>
           <span class="group-desc">{{ group.desc }}</span>
@@ -40,7 +47,12 @@
                 <div class="task-title-text">{{ task.title }}</div>
                 <div class="task-desc">{{ task.desc }}</div>
                 <div v-if="task.total && task.total > 1" class="task-progress">
-                  <el-progress :percentage="Math.round(((task.progress || 0) / task.total) * 100)" :stroke-width="6" :show-text="false" class="progress-bar" />
+                  <UiProgress
+                    :value="Math.round(((task.progress || 0) / task.total) * 100)"
+                    size="sm"
+                    tone="brand"
+                    class="progress-bar"
+                  />
                   <span class="progress-text">{{ task.progress }}/{{ task.total }}</span>
                 </div>
               </div>
@@ -75,8 +87,13 @@ import { pointsApi, type PointsTaskItem } from '@/api/points'
 import { groupLabelMap, groupDescMap } from '@/utils/taskCenter'
 import type { TaskGroup } from '@/utils/taskCenter'
 import { loadTasks as loadLocalTasks, loadPoints as loadLocalPoints } from '@/utils/taskCenter'
+import { useStagger } from '@/composables/useStagger'
+import UiProgress from '@/components/ui/UiProgress.vue'
+import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
 const authStore = useAuthStore()
+
+const staggerStyle = useStagger(6)
 
 const tasks = ref<PointsTaskItem[]>([])
 const points = ref({ balance: 0, totalEarned: 0 })

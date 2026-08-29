@@ -23,8 +23,23 @@
       <el-button type="success" :disabled="wrongList.length===0" @click="handleExport">导出错题</el-button>
     </div>
 
-    <div v-if="wrongList.length > 0">
-      <el-card v-for="item in wrongList" :key="item.id" class="wrong-item">
+    <UiErrorState
+      v-if="loadError"
+      title="错题加载失败"
+      description="网络或服务端异常，可重试"
+      :retrying="retrying"
+      @retry="retryLoad"
+    />
+
+    <UiSkeleton v-else-if="loading" variant="card" :count="4" />
+
+    <div v-else-if="wrongList.length > 0">
+      <el-card
+        v-for="(item, i) in wrongList"
+        :key="item.id"
+        class="wrong-item stagger-in"
+        :style="staggerStyle(i)"
+      >
         <div class="wrong-header">
           <div class="header-left">
             <el-checkbox :model-value="selectedIds.has(item.question_id)" @change="(val:boolean)=>toggleSelect(item.question_id, val)" />
@@ -100,7 +115,10 @@ import KnowledgeCard from '@/components/practice/KnowledgeCard.vue'
 import CommentCard from '@/components/practice/CommentCard.vue'
 import NoteCard from '@/components/practice/NoteCard.vue'
 import { questionInteractionApi } from '@/api/questionInteraction'
+import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
 interface WrongItem {
   id: number
@@ -120,6 +138,11 @@ const wrongList = ref<WrongItem[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+const loading = ref(false)
+const loadError = ref(false)
+const retrying = ref(false)
+
+const staggerStyle = useStagger()
 const filterType = ref('')
 const sortOrder = ref<'desc' | 'asc'>('desc')
 const filterFavorited = ref(false)
@@ -186,6 +209,8 @@ async function toggleFavorite(item: WrongItem) {
 }
 
 async function loadData() {
+  loading.value = true
+  loadError.value = false
   try {
     const res = await wrongQuestionApi.getWrongQuestions({
       page: page.value,
@@ -202,7 +227,24 @@ async function loadData() {
     const n = new Set<number>()
     selectedIds.value.forEach(id=>{ if(ids.has(id)) n.add(id) })
     selectedIds.value = n
-  } catch (e) {}
+  } catch (e) {
+    loadError.value = true
+    wrongList.value = []
+    total.value = 0
+    selectedIds.value = new Set<number>()
+  } finally {
+    loading.value = false
+  }
+}
+
+async function retryLoad() {
+  if (retrying.value) return
+  retrying.value = true
+  try {
+    await loadData()
+  } finally {
+    retrying.value = false
+  }
 }
 
 function startRedo(item: WrongItem) {

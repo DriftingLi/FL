@@ -185,9 +185,10 @@
           </el-descriptions>
 
           <div v-if="courseLearning?.is_enrolled" class="detail-progress">
-            <el-progress
-              :percentage="Math.round(courseLearning.progress ?? 0)"
-              :stroke-width="10"
+            <UiProgress
+              :value="Math.round(courseLearning.progress ?? 0)"
+              size="lg"
+              tone="brand"
               class="progress-bar"
             />
             <span class="progress-text">
@@ -245,6 +246,7 @@ import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCard from '@/components/catalog/CourseCard.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiProgress from '@/components/ui/UiProgress.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
 const stagger = useStagger()

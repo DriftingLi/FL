@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import UiCountTo from './UiCountTo.vue'
+
 /**
  * 统计卡：自写。Dashboard 与各类概览页的指标块。
  *
@@ -15,9 +18,21 @@ const props = withDefaults(
     icon?: string
     tone?: 'brand' | 'ok' | 'warn' | 'bad' | 'neutral'
     loading?: boolean
+    /**
+     * 数值滚动进场。仅当 value 是数字时生效 —— 字符串（如「3/12」）无法插值。
+     * 默认关闭：静态数字在密集列表里反而更稳。
+     */
+    countTo?: boolean
   }>(),
-  { tone: 'brand', loading: false }
+  { tone: 'brand', loading: false, countTo: false }
 )
+
+/** 只有数字才走 UiCountTo；非数字与关闭时行为与改造前一致 */
+const numericValue = computed(() => {
+  if (!props.countTo) return null
+  return typeof props.value === 'number' && Number.isFinite(props.value) ? props.value : null
+})
+
 
 const TONE: Record<string, string> = {
   brand: 'bg-ui-50 text-ui-600',
@@ -36,8 +51,9 @@ const TONE: Record<string, string> = {
 
         <div v-if="props.loading" class="mt-2 h-7 w-16 animate-pulse rounded-ctl bg-canvas" />
         <p v-else class="mt-1 flex items-baseline gap-1">
-          <span class="font-heading text-2xl font-semibold tabular-nums text-ink">
-            {{ props.value ?? '—' }}
+          <span class="font-heading text-2xl font-semibold text-ink">
+            <UiCountTo v-if="numericValue !== null" :to="numericValue" />
+            <span v-else class="tabular-nums">{{ props.value ?? '—' }}</span>
           </span>
           <span v-if="props.unit" class="text-xs text-ink-3">{{ props.unit }}</span>
         </p>

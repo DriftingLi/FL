@@ -27,8 +27,10 @@ const PADDING: Record<string, string> = {
 const VARIANT: Record<string, string> = {
   flat: 'shadow-card',
   raised: 'shadow-raised',
+  // ui-card-interactive 是语义钩子：global.css 的移动端 44px 触控规则靠它选中可点卡片，
+  // 纯原子类组合无法被外部规则稳定命中。时长对齐 --duration-tap（120ms）。
   interactive:
-    'shadow-card cursor-pointer transition-[box-shadow,transform] duration-150 ease-[var(--ease-default)] hover:-translate-y-px hover:shadow-raised active:translate-y-0'
+    'ui-card-interactive shadow-card cursor-pointer transition-[box-shadow,transform] duration-[120ms] ease-[var(--ease-default)] hover:-translate-y-px hover:shadow-raised active:translate-y-0'
 }
 </script>
 

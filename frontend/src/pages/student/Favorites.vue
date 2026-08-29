@@ -11,13 +11,24 @@
       <el-tab-pane label="帖子" name="topic" />
     </el-tabs>
 
-    <div v-loading="loading" class="favorite-list">
-      <template v-if="favorites.length > 0">
+    <div class="favorite-list">
+      <UiErrorState
+        v-if="loadError"
+        title="收藏加载失败"
+        description="网络或服务端异常，可重试"
+        :retrying="retrying"
+        @retry="retryLoad"
+      />
+
+      <UiSkeleton v-else-if="loading" variant="list" :count="5" />
+
+      <template v-else-if="favorites.length > 0">
         <div
-          v-for="item in favorites"
+          v-for="(item, i) in favorites"
           :key="item.favorite_id"
-          class="favorite-item"
+          class="favorite-item stagger-in"
           :class="{ clickable: !!itemPath(item) }"
+          :style="staggerStyle(i)"
           @click="goItem(item)"
         >
           <el-image
@@ -47,7 +58,7 @@
           </div>
         </div>
       </template>
-      <UiEmptyState v-else-if="!loading" description="暂无收藏" />
+      <UiEmptyState v-else description="暂无收藏" />
     </div>
 
     <div class="pagination-wrapper" v-if="total > pageSize">
@@ -69,16 +80,23 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { favoriteApi, type FavoriteItem, type FavoriteTargetType } from '@/api/favorite'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { formatLocaleDateTime } from '@/utils/format'
+import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
 const router = useRouter()
 
 const loading = ref(false)
+const loadError = ref(false)
+const retrying = ref(false)
 const favorites = ref<FavoriteItem[]>([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const activeType = ref<'all' | FavoriteTargetType>('all')
+
+const staggerStyle = useStagger()
 
 const TYPE_LABELS: Record<string, string> = {
   course: '课程',
@@ -130,6 +148,7 @@ function handleTabChange() {
 
 async function loadFavorites() {
   loading.value = true
+  loadError.value = false
   try {
     const res = await favoriteApi.list({
       target_type: activeType.value === 'all' ? undefined : activeType.value,
@@ -140,9 +159,21 @@ async function loadFavorites() {
     total.value = res.total || 0
   } catch (e) {
     console.error('加载收藏失败:', e)
-    /* 错误已由拦截器提示 */
+    loadError.value = true
+    favorites.value = []
+    total.value = 0
   } finally {
     loading.value = false
+  }
+}
+
+async function retryLoad() {
+  if (retrying.value) return
+  retrying.value = true
+  try {
+    await loadFavorites()
+  } finally {
+    retrying.value = false
   }
 }
 
@@ -205,11 +236,18 @@ onMounted(loadFavorites)
 
 .favorite-item.clickable {
   cursor: pointer;
-  transition: background 0.2s;
+  transition:
+    background var(--duration-tap) var(--ease-default),
+    transform var(--duration-tap) var(--ease-default);
 }
 
 .favorite-item.clickable:hover {
   background: var(--color-bg-page);
+}
+
+.favorite-item.clickable:active {
+  background: var(--color-border-light);
+  transform: scale(0.995);
 }
 
 .item-cover {
