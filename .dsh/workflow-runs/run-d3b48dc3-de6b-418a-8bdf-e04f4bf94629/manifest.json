@@ -1,0 +1,16 @@
+{
+  "name": "ai-module-verification",
+  "description": "Parallel 4-dimension adversarial review of the just-completed uni-app x AI assistant module refactoring (type-safety, backend contract, dead-code/duplication, template bindings), returning structured findings for parent synthesis.",
+  "phases": [
+    "review"
+  ],
+  "readOnly": true,
+  "plannedAgents": 4,
+  "maxAgents": 4,
+  "maxConcurrency": 4,
+  "tokenBudget": 200000,
+  "patterns": [
+    "adversarial-verification",
+    "fan-out-and-synthesize"
+  ]
+}

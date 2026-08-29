@@ -1,0 +1,186 @@
+{
+  "taskId": "task-4",
+  "name": "template-binding-consistency",
+  "status": "completed",
+  "finalText": "I have all the information needed. Let me analyze both files for template binding consistency.\n\nThe `useAiChat` provides: `statusBarHeight, sessions, currentSession, messages, inputText, thinking, scrollIntoViewId, sidebarLeft, sidebarRight, scrollToBottom, loadSessions, loadSession, startNewChat, onDeleteSession, toggleSidebarLeft, toggleSidebarRight, sendInput`.\n\nNote that both pages also destructure `currentSession`? No — `ai-basic` and `ai-assistant` don't destructure those. Let me verify each template identifier.\n\nLet me now compile the binding analysis for both files.\n\n**ai-basic.uvue** template identifiers:\n- `statusBarHeight` → destructured ✓ (line 158)\n- `toggleSidebarLeft` → destructured ✓ (line 170)\n- `goPro` → defined (line 253) ✓\n- `toggleSidebarRight` → destructured ✓ (line 171)\n- `scrollIntoViewId` → destructured ✓ (line 163)\n- `messages` → destructured ✓ (line 160)\n- `thinking` → destructured ✓ (line 162)\n- `quickPrompts` → defined (line 213) ✓\n- `sendText` → defined (line 207) ✓\n- `inputText` → destructured ✓ (line 161)\n- `onSend` → defined (line 198) ✓\n- `sidebarLeft` → destructured ✓ (line 164)\n- `startNewChat` → destructured ✓ (line 168)\n- `sessions` → destructured ✓ (line 159)\n- `loadSession` → destructured ✓ (line 167)\n- `onDeleteSession` → destructured ✓ (line 169)\n- `sidebarRight` → destructured ✓ (line 165)\n- `goSettings` → defined (line 290) ✓\n- `goManageModels` → defined (line 295) ✓\n- `goProfile` → defined (line 300) ✓\n- `payVisible` → defined (line 176) ✓\n- `closePay` → defined (line 268) ✓\n- `payPlan` → defined (line 177) ✓\n- `payPlan = 'month'` / `= 'year'` → assignment to ref, `payPlan` defined ✓\n- `PRO_PRICE_MONTH` / `PRO_PRICE_YEAR` → imported ✓ (lines 149-150)\n- `confirmPay` → defined (line 273) ✓\n- `TabBar` → imported ✓ (line 152)\n\nCritical point ②: `toggleSidebarLeft` invoked via `@click=\"toggleSidebarLeft\"` — that's the destructured method from `useAiChat`, and `useAiChat` returns `toggleSidebarLeft` (line 200). ✓ Defined.\n\nPoint ③: check for references to removed identifiers: `toggleSidebar` (nospace, not used — only `toggleSidebarLeft`), `sendInput` 无参 — here `sendInput` is called in `onSend` with args `('基础版', buildBody)` ✓ proper call. `deepThinking` — not referenced anywhere in `ai-basic`. ✓ No dangling refs.\n\nPoint ④ (ai-assistant.uvue): `chooseImage`, `startVoice`, `goManageModels`, `goSettings`, `goProfile`, `confirmCustomModel`, `selectModel`, `selectUserModelById`, `onFunctionClick` — all defined in the script. Let me confirm each template usage.\n\n**ai-assistant.uvue** template identifiers:\n- `toggleSidebarLeft` → destructured (line 205) ✓\n- `goBasic` → defined (line 374) ✓\n- `toggleSidebarRight` → destructured (line 206) ✓\n- `scrollIntoViewId` → destructured (line 198) ✓\n- `functionItems` → defined (line 294) ✓\n- `onFunctionClick` → defined (line 380) ✓\n- `quickPrompts` → defined (line 301) ✓\n- `sendText` → defined (line 289) ✓\n- `messages` → destructured (line 195) ✓\n- `thinking` → destructured (line 196) ✓\n- `inputText` → destructured (line 196... wait line 196 is thinking). Let me recheck: line 196 `thinking`, line 197... actually destructuring: statusBarHeight(193), sessions(194), messages(195), inputText(196), thinking(197), scrollIntoViewId(198), sidebarLeft(199), sidebarRight(200). ✓\n- `showModelPicker` → defined (line 211) ✓\n- `currentModelName` → defined computed (line 243) ✓\n- `onSend` → defined (line 276) ✓\n- `chooseImage` → defined (line 456) ✓ (called in template `@click=\"chooseImage\"` without args — note the default param `promptText: string = ''`, works)\n- `startVoice` → defined (line 474) ✓\n- `sidebarLeft` / `sidebarRight` → destructured ✓\n- `startNewChat`, `sessions`, `loadSession`, `onDeleteSession` → destructured ✓\n- `goSettings` (line 488), `goManageModels` (line 418), `goProfile` (line 483) → defined ✓\n- `allModels` → computed (line 225) ✓\n- `currentModelId`, `currentModelSource` → defined (refs lines 223-224) ✓\n- `selectModel` → defined (line 388) ✓\n- `showCustomForm` → defined (line 214) ✓\n- `closeCustomForm` → defined (line 423) ✓\n- `customModel`, `customBaseUrl`, `customApiKey` → defined ✓\n- `onCustomModelInput`, `onCustomBaseUrlInput`, `onCustomApiKeyInput` → defined (lines 427, 430, 433) ✓\n- `confirmCustomModel` → defined (line 437) ✓\n- `selectUserModelById` → defined (line 401) ✓ (referenced in onShow, not template)\n- `TabBar` → imported (line 187) ✓\n\nPoint ② specifically: `toggleSidebarLeft` fixed in both files (binds to useAiChat's method). ✓\n\nPoint ③: No references to `toggleSidebar` (bare), `sendInput` 无参, or `deepThinking` in either file. ✓\n\nAll bindings resolve. Let me check whether `sendInput` is referenced in templates — it's not referenced in either template directly (only in script). Point ③ mentions \"sendInput 无参\" — the concern is whether `sendInput` is called without args anywhere. In `onSend`, it's called with `('基础版', buildBody)` correctly. ✓\n\nLet me verify `v-model` identifiers: `ai-basic` uses `v-model=\"inputText\"` (line 52) → inputText destructured ✓. `ai-assistant` uses `v-model=\"inputText\"` (line 70) → ✓. Custom form uses `:value` + `@input` rather than v-model — those handlers defined ✓.\n\nNow compile the structured output.",
+  "structured": {
+    "bindings": [
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "@click=toggleSidebarLeft / toggleSidebarRight",
+        "defined": true,
+        "note": "解构自 useAiChat return（line 170/171），useAiChat 已暴露该方法（composable line 200/201）✅"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": ":style statusBarHeight",
+        "defined": true,
+        "note": "解构自 useAiChat（line 158）✅"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": ":scroll-into-view scrollIntoViewId",
+        "defined": true,
+        "note": "解构自 useAiChat（line 163）✅"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "v-if/v-for messages/thinking/sessions/sidebarLeft/sidebarRight/inputText",
+        "defined": true,
+        "note": "均解构自 useAiChat ✅"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "v-model=inputText",
+        "defined": true,
+        "note": "解构自 useAiChat 的 inputText ref ✅"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "@click=goPro/goSettings/goManageModels/goProfile",
+        "defined": true,
+        "note": "页面函数 (253/290/295/300) ✅"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "@click=sendText / @click=startNewChat / loadSession / onDeleteSession",
+        "defined": true,
+        "note": "sendText 页面函数(207)，其余解构自 useAiChat ✅"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "@confirm/@click=onSend; sendInput 调用",
+        "defined": true,
+        "note": "onSend(198) 内部 sendInput('基础版', buildBody) 带参数，正确匹配 useAiChat 的 sendInput(tag,buildBody) ✅"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "payVisible/payPlan/closePay/confirmPay/PRO_PRICE_MONTH/PRO_PRICE_YEAR",
+        "defined": true,
+        "note": "本地 ref/fn(176-177,268,273) 与 import(149-150) ✅"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "TabBar 组件",
+        "defined": true,
+        "note": "import(152) ✅"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "quickPrompts / p / idx",
+        "defined": true,
+        "note": "quickPrompts(213)，v-for 作用域变量(p,idx)本地 ✅"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": ":style statusBarHeight / :scroll-into-view scrollIntoViewId",
+        "defined": true,
+        "note": "解构自 useAiChat（193/198）✅"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "v-if/v-for messages/thinking/sessions/sidebarLeft/sidebarRight/inputText",
+        "defined": true,
+        "note": "均解构自 useAiChat ✅"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "@click=toggleSidebarLeft / toggleSidebarRight",
+        "defined": true,
+        "note": "解构自 useAiChat（205/206）✅"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "@click=goBasic/goSettings/goManageModels/goProfile/startNewChat/loadSession/onDeleteSession",
+        "defined": true,
+        "note": "页面函数与 useAiChat 解构，均在 ✅"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "@click=chooseImage (无参)",
+        "defined": true,
+        "note": "chooseImage(456) 声明默认参数 promptText=''，模板无参调用合法 ✅"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "@click=startVoice",
+        "defined": true,
+        "note": "startVoice(474) ✅"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "@click=onFunctionClick / v-for functionItems",
+        "defined": true,
+        "note": "onFunctionClick(380)、functionItems(294) ✅"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "@click=showModelPicker=true / currentModelName / showModelPicker",
+        "defined": true,
+        "note": "ref(211)、computed(243) ✅"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "v-if/v-for allModels/currentModelId/currentModelSource/selectModel",
+        "defined": true,
+        "note": "allModels(225)、refs(223/224)、selectModel(388) ✅"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "showCustomForm/closeCustomForm/customModel/customBaseUrl/customApiKey/onCustomModelInput/onCustomBaseUrlInput/onCustomApiKeyInput/confirmCustomModel",
+        "defined": true,
+        "note": "refs(214-217) 与 fn(423/427/430/433/437) 均定义 ✅"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "selectUserModelById(仅 onShow 引用,非模板)",
+        "defined": true,
+        "note": "selectUserModelById(401) 存在 ✅"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "v-model=inputText",
+        "defined": true,
+        "note": "解构自 useAiChat 的 inputText ref ✅"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "TabBar 组件",
+        "defined": true,
+        "note": "import(187) ✅"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "quickPrompts / functionItems 内 p/item/idx/s 等 v-for 变量",
+        "defined": true,
+        "note": "作用域变量本地 ✅"
+      }
+    ],
+    "risks": [
+      "两页均从 useAiChat() 解构并返回多 ref/方法，但都未在模板中引用 currentSession 与 scrollToBottom，属未使用解构噪声，非缺失绑定的功能风险（仅为代码洁癖问题）。",
+      "ai-assistant.uvue 模板 @click=\"chooseImage\" 无参调用，依赖 chooseImage 声明的默认参数 promptText='' 才不报错；若未来有人去掉该默认值会产生模板绑定未定义/签名不匹配风险。",
+      "ai-assistant.uvue 右侧菜单的 startNewChat 仅清空本地会话不回退到专业版，与 ai-basic 侧菜单语义不同，属行为差异非绑定缺失。"
+    ],
+    "verdict": "pass"
+  },
+  "childId": "b877bbb4-0f27-4203-9034-23b5c4c6ec4a",
+  "stopReason": "completed",
+  "startedAt": 1786757063674,
+  "endedAt": 1786757150425,
+  "tokenUsage": 129014,
+  "usage": {
+    "inputTokens": 22879,
+    "outputTokens": 3607,
+    "cacheReadTokens": 102528,
+    "totalTokens": 129014
+  },
+  "provider": "spawn",
+  "subagentProvider": "spawn",
+  "requestedTier": "balanced",
+  "tierOutcome": "balanced-parent",
+  "providerSource": "default",
+  "initialProvider": "spawn",
+  "finalProvider": "spawn",
+  "artifacts": [],
+  "origin": "executed"
+}

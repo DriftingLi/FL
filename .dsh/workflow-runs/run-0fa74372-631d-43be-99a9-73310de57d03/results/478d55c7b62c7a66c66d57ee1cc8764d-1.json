@@ -1,0 +1,432 @@
+{
+  "taskId": "task-4",
+  "name": "template-binding-consistency",
+  "status": "completed",
+  "finalText": "The grep confirms:\n- `sendInput` is only referenced in script (correctly with args `sendInput('基础版', buildBody)` and `sendInput(currentModelName.value, buildBody)`), never in templates with no args.\n- No `deepThinking` references.\n- No bare `toggleSidebar` (only `toggleSidebarLeft`/`toggleSidebarRight` which are properly defined and destructured).\n\nBoth files are fully consistent. All bindings resolve, and the required functions in ai-assistant.uvue are all still present.",
+  "structured": {
+    "bindings": [
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "statusBarHeight (@click/:style)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "toggleSidebarLeft (@click)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "toggleSidebarRight (@click)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "scrollIntoViewId (:scroll-into-view)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "messages (v-if/v-for)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "thinking (v-if)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "quickPrompts (v-for)",
+        "defined": true,
+        "note": "page const line 213"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "sendText (@click)",
+        "defined": true,
+        "note": "page function line 207"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "inputText (v-model)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "onSend (@confirm/@click)",
+        "defined": true,
+        "note": "page function line 198; calls sendInput with args"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "sidebarLeft (v-if, @click assignment)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "startNewChat (@click)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "sessions (v-for/v-if)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "loadSession (@click)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "onDeleteSession (@click.stop)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "sidebarRight (v-if, @click assignment)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "goPro (@click)",
+        "defined": true,
+        "note": "page function line 253"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "goSettings (@click)",
+        "defined": true,
+        "note": "page function line 290"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "goManageModels (@click)",
+        "defined": true,
+        "note": "page function line 295"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "goProfile (@click)",
+        "defined": true,
+        "note": "page function line 300"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "payVisible (v-if)",
+        "defined": true,
+        "note": "page ref line 176"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "closePay (@click)",
+        "defined": true,
+        "note": "page function line 268"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "payPlan (:class/@click assignment)",
+        "defined": true,
+        "note": "page ref line 177"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "PRO_PRICE_MONTH ({{ }})",
+        "defined": true,
+        "note": "imported line 149"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "PRO_PRICE_YEAR ({{ }})",
+        "defined": true,
+        "note": "imported line 150"
+      },
+      {
+        "file": "ai-basic.uvue",
+        "templateRef": "confirmPay (@click)",
+        "defined": true,
+        "note": "page function line 273"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "statusBarHeight (:style)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "toggleSidebarLeft (@click)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "toggleSidebarRight (@click)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "scrollIntoViewId (:scroll-into-view)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "functionItems (v-for)",
+        "defined": true,
+        "note": "page const line 294"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "onFunctionClick (@click)",
+        "defined": true,
+        "note": "page function line 380; item④ required, present"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "quickPrompts (v-for)",
+        "defined": true,
+        "note": "page const line 301"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "sendText (@click)",
+        "defined": true,
+        "note": "page function line 289"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "messages (v-if/v-for)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "thinking (v-if)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "showModelPicker (v-if/@click)",
+        "defined": true,
+        "note": "page ref line 211"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "currentModelName ({{ }})",
+        "defined": true,
+        "note": "page computed line 243"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "chooseImage (@click)",
+        "defined": true,
+        "note": "page function line 456; item④ required, present"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "inputText (v-model)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "onSend (@confirm/@click)",
+        "defined": true,
+        "note": "page function line 276; calls sendInput with args"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "startVoice (@click)",
+        "defined": true,
+        "note": "page function line 474; item④ required, present"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "sidebarLeft (v-if, @click assignment)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "startNewChat (@click)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "sessions (v-for/v-if)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "loadSession (@click)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "onDeleteSession (@click.stop)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "sidebarRight (v-if, @click assignment)",
+        "defined": true,
+        "note": "destructured from useAiChat"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "goBasic (@click)",
+        "defined": true,
+        "note": "page function line 374"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "goSettings (@click)",
+        "defined": true,
+        "note": "page function line 488; item④ required, present"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "goManageModels (@click)",
+        "defined": true,
+        "note": "page function line 418; item④ required, present"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "goProfile (@click)",
+        "defined": true,
+        "note": "page function line 483; item④ required, present"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "allModels (v-for/v-if)",
+        "defined": true,
+        "note": "page computed line 225"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "currentModelId (:class)",
+        "defined": true,
+        "note": "page ref line 223"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "currentModelSource (:class)",
+        "defined": true,
+        "note": "page ref line 224"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "selectModel (@click)",
+        "defined": true,
+        "note": "page function line 388; item④ required, present"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "showCustomForm (v-if, @click assignment)",
+        "defined": true,
+        "note": "page ref line 214"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "closeCustomForm (@click)",
+        "defined": true,
+        "note": "page function line 423"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "customModel (v-model/:value/@input)",
+        "defined": true,
+        "note": "page ref line 215"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "onCustomModelInput (@input)",
+        "defined": true,
+        "note": "page function line 427"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "customBaseUrl (v-model/:value/@input)",
+        "defined": true,
+        "note": "page ref line 216"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "onCustomBaseUrlInput (@input)",
+        "defined": true,
+        "note": "page function line 430"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "customApiKey (v-model/:value/@input)",
+        "defined": true,
+        "note": "page ref line 217"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "onCustomApiKeyInput (@input)",
+        "defined": true,
+        "note": "page function line 433"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "confirmCustomModel (@click)",
+        "defined": true,
+        "note": "page function line 437; item④ required, present"
+      },
+      {
+        "file": "ai-assistant.uvue",
+        "templateRef": "selectUserModelById (internal call onShow)",
+        "defined": true,
+        "note": "page function line 401; item④ required, present"
+      }
+    ],
+    "risks": [
+      "useAiChat 解构的 scrollToBottom/currentSession/doStreamChat 未在页面解构，但两页模板均未引用，无影响",
+      "输入框使用 :value + @input 而非 v-model（ai-assistant.uvue 自定义表单），绑定一致正确",
+      "unpackage/dist 编译产物中的 useAiChat.js 可能滞后于 .uts 源，建议重新编译后再真机验证"
+    ],
+    "verdict": "通过。两文件模板绑定与 script 顶层完全一致：全部 @click/@confirm/v-model/v-for/:style 标识符均可解析，无缺失绑定（defined=false 项为零）。toggleSidebarLeft/onSend 均正确定义；未引用任何已删标识符（toggleSidebar、无参 sendInput、deepThinking 均不存在于模板）；ai-assistant.uvue 中 chooseImage/startVoice/goManageModels/goSettings/goProfile/confirmCustomModel/selectModel/selectUserModelById/onFunctionClick 九个函数全部仍存在且被正确绑定。"
+  },
+  "childId": "fb57b720-2194-4db8-b60b-04826b5d55e1",
+  "stopReason": "completed",
+  "startedAt": 1786756637827,
+  "endedAt": 1786756766826,
+  "tokenUsage": 135571,
+  "usage": {
+    "inputTokens": 25201,
+    "outputTokens": 5282,
+    "cacheReadTokens": 105088,
+    "totalTokens": 135571
+  },
+  "provider": "spawn",
+  "subagentProvider": "spawn",
+  "requestedTier": "balanced",
+  "tierOutcome": "balanced-parent",
+  "providerSource": "default",
+  "initialProvider": "spawn",
+  "finalProvider": "spawn",
+  "artifacts": [],
+  "origin": "executed"
+}

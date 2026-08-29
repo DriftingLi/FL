@@ -1,0 +1,28 @@
+{
+  "format": "dsh.workflow",
+  "version": 1,
+  "workflowApiVersion": 1,
+  "minDshVersion": "0.0.1-rc.2",
+  "manifest": {
+    "name": "ai-module-verification",
+    "description": "Parallel 4-dimension adversarial review of the just-completed uni-app x AI assistant module refactoring (type-safety, backend contract, dead-code/duplication, template bindings), returning structured findings for parent synthesis.",
+    "phases": [
+      "review"
+    ],
+    "readOnly": true,
+    "plannedAgents": 4,
+    "maxAgents": 4,
+    "maxConcurrency": 4,
+    "tokenBudget": 200000,
+    "patterns": [
+      "adversarial-verification",
+      "fan-out-and-synthesize"
+    ]
+  },
+  "source": "async function run(wf, args) {\n  const found = await wf.phase(\"review\", async () => {\n    return await wf.parallel([\n      async () => await wf.runAgent({\n        name: \"type-safety-audit\",\n        prompt: String(args.typeSafetyPrompt),\n        readOnly: true,\n        modelHint: \"balanced\",\n        outputSchema: {\n          type: \"object\",\n          properties: {\n            issues: { type: \"array\", items: { type: \"object\", properties: {\n              severity: { type: \"string\", enum: [\"critical\",\"high\",\"medium\",\"low\"] },\n              file: { type: \"string\" }, lineRef: { type: \"string\" },\n              description: { type: \"string\" }, suggestion: { type: \"string\" }\n            }, required: [\"severity\",\"file\",\"description\"] } },\n            overallRisk: { type: \"string\" }\n          },\n          required: [\"issues\",\"overallRisk\"]\n        }\n      }),\n      async () => await wf.runAgent({\n        name: \"contract-alignment\",\n        prompt: String(args.contractPrompt),\n        readOnly: true,\n        modelHint: \"balanced\",\n        outputSchema: {\n          type: \"object\",\n          properties: {\n            mismatches: { type: \"array\", items: { type: \"object\", properties: {\n              severity: { type: \"string\", enum: [\"critical\",\"high\",\"medium\",\"low\"] },\n              frontend: { type: \"string\" }, backend: { type: \"string\" },\n              description: { type: \"string\" }, fixHint: { type: \"string\" }\n            }, required: [\"severity\",\"frontend\",\"backend\",\"description\"] } },\n            verdict: { type: \"string\" }\n          },\n          required: [\"mismatches\",\"verdict\"]\n        }\n      }),\n      async () => await wf.runAgent({\n        name: \"duplication-and-deadcode\",\n        prompt: String(args.dupPrompt),\n        readOnly: true,\n        modelHint: \"balanced\",\n        outputSchema: {\n          type: \"object\",\n          properties: {\n            deadCode: { type: \"array\", items: { type: \"object\", properties: { file: { type: \"string\" }, what: { type: \"string\" }, lineRef: { type: \"string\" } }, required: [\"file\",\"what\"] } },\n            duplicationLeft: { type: \"array\", items: { type: \"object\", properties: { file: { type: \"string\" }, what: { type: \"string\" } }, required: [\"file\",\"what\"] } },\n            unusedImports: { type: \"array\", items: { type: \"string\" } },\n            summary: { type: \"string\" }\n          },\n          required: [\"deadCode\",\"duplicationLeft\",\"unusedImports\",\"summary\"]\n        }\n      }),\n      async () => await wf.runAgent({\n        name: \"template-binding-consistency\",\n        prompt: String(args.templatePrompt),\n        readOnly: true,\n        modelHint: \"balanced\",\n        outputSchema: {\n          type: \"object\",\n          properties: {\n            bindings: { type: \"array\", items: { type: \"object\", properties: { file: { type: \"string\" }, templateRef: { type: \"string\" }, defined: { type: \"boolean\" }, note: { type: \"string\" } }, required: [\"file\",\"templateRef\",\"defined\"] } },\n            risks: { type: \"array\", items: { type: \"string\" } },\n            verdict: { type: \"string\" }\n          },\n          required: [\"bindings\",\"risks\",\"verdict\"]\n        }\n      })\n    ], { concurrency: 4 });\n  });\n  return found;\n}\n",
+  "provenance": {
+    "createdAt": "2026-08-15T01:24:18.972Z",
+    "dshVersion": "0.0.1-rc.2",
+    "pluginVersion": "0.1.2"
+  }
+}

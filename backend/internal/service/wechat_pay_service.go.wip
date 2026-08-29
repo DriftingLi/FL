@@ -1,0 +1,359 @@
+// Package service 实现业务服务层。
+// 本文件：微信支付（APIv3）——Native（PC 扫码）+ JSAPI（小程序/公众号）下单与支付结果回调。
+// 依赖官方 SDK github.com/wechatpay-apiv3/wechatpay-go（v0.2.x）。
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"math/rand"
+	"net/http"
+	"sync"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/wechatpay-apiv3/wechatpay-go/core"
+	"github.com/wechatpay-apiv3/wechatpay-go/core/auth/verifiers"
+	"github.com/wechatpay-apiv3/wechatpay-go/core/downloader"
+	"github.com/wechatpay-apiv3/wechatpay-go/core/notify"
+	"github.com/wechatpay-apiv3/wechatpay-go/core/option"
+	"github.com/wechatpay-apiv3/wechatpay-go/services/payments"
+	"github.com/wechatpay-apiv3/wechatpay-go/services/payments/jsapi"
+	"github.com/wechatpay-apiv3/wechatpay-go/services/payments/native"
+	"github.com/wechatpay-apiv3/wechatpay-go/utils"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+
+	"forklift-training/internal/config"
+	"forklift-training/internal/model"
+)
+
+// WechatPayService 微信支付服务（Native / JSAPI 双场景）。
+// SDK 客户端懒加载：配置未就绪时构造不报错，下单/回调时明确报错。
+type WechatPayService struct {
+	cfg    config.WechatPayConfig
+	db     *gorm.DB
+	logger *zap.Logger
+
+	once     sync.Once
+	client   *core.Client
+	notifier notify.Handler // 回调处理器（懒加载）：平台证书/微信支付公钥两种实现均满足 notify.Handler
+	initErr  error
+}
+
+// NewWechatPayService 构造微信支付服务（SDK 懒加载，未配置不报错）。
+func NewWechatPayService(cfg config.WechatPayConfig, db *gorm.DB, logger *zap.Logger) *WechatPayService {
+	return &WechatPayService{cfg: cfg, db: db, logger: logger}
+}
+
+// Configured 返回微信支付配置是否完整。
+func (s *WechatPayService) Configured() bool { return s.cfg.Configured() }
+
+// ensureSDK 懒加载微信支付客户端与回调处理器（并发安全）。
+func (s *WechatPayService) ensureSDK() error {
+	s.once.Do(func() {
+		if !s.cfg.Configured() {
+			s.initErr = errors.New("微信支付尚未配置，请在环境变量中配置 WECHAT_PAY_* 后使用")
+			return
+		}
+		mchPrivateKey, err := utils.LoadPrivateKeyWithPath(s.cfg.MchPrivateKeyPath)
+		if err != nil {
+			s.initErr = fmt.Errorf("加载商户API私钥失败: %w", err)
+			return
+		}
+		ctx := context.Background()
+		var opts []core.ClientOption
+		if s.cfg.WechatPayPublicKeyID != "" && s.cfg.WechatPayPublicKeyPath != "" {
+			// 新版验签方式：微信支付公钥（推荐，免平台证书下载）
+			pubKey, err := utils.LoadPublicKeyWithPath(s.cfg.WechatPayPublicKeyPath)
+			if err != nil {
+				s.initErr = fmt.Errorf("加载微信支付公钥失败: %w", err)
+				return
+			}
+			opts = append(opts, option.WithWechatPayPublicKeyAuthCipher(
+				s.cfg.MchID, s.cfg.MchCertSerialNo, mchPrivateKey,
+				s.cfg.WechatPayPublicKeyID, pubKey))
+		} else {
+			// 回退：自动下载平台证书并缓存
+			opts = append(opts, option.WithWechatPayAutoAuthCipher(
+				s.cfg.MchID, s.cfg.MchCertSerialNo, mchPrivateKey, s.cfg.APIv3Key))
+		}
+		s.client, s.initErr = core.NewClient(ctx, opts...)
+		if s.initErr != nil {
+			return
+		}
+		// 回调验签：公钥模式优先，否则平台证书访问器
+		if s.cfg.WechatPayPublicKeyID != "" && s.cfg.WechatPayPublicKeyPath != "" {
+			pubKey, err := utils.LoadPublicKeyWithPath(s.cfg.WechatPayPublicKeyPath)
+			if err != nil {
+				s.initErr = fmt.Errorf("加载微信支付公钥失败: %w", err)
+				return
+			}
+			h, err := notify.NewWechatPayNotifyHandler(s.cfg.APIv3Key,
+				verifiers.NewSHA256WithRSAVerifierWithPublicKey(pubKey))
+			if err != nil {
+				s.initErr = err
+				return
+			}
+			s.notifier = h
+			return
+		}
+		if err := downloader.DownloadCertificates(ctx, s.client, s.cfg.MchID, s.cfg.APIv3Key); err != nil {
+			s.initErr = fmt.Errorf("下载平台证书失败: %w", err)
+			return
+		}
+		h, err := notify.NewRSANotifyHandler(s.cfg.APIv3Key,
+			verifiers.NewSHA256WithRSAVerifier(downloader.GetCertificateVisitor(s.cfg.MchID)))
+		if err != nil {
+			s.initErr = err
+			return
+		}
+		s.notifier = h
+	})
+	return s.initErr
+}
+
+// ===== 下单请求与结果 =====
+
+// CreatePayOrderRequest 创建支付订单请求（Native 与 JSAPI 共用）。
+type CreatePayOrderRequest struct {
+	// UserID 下单学员（从 JWT 取，服务端信任）。
+	UserID int
+	// Subject 商品描述（展示给用户）。
+	Subject string
+	// Amount 订单金额（单位：分）。
+	Amount int64
+	// OutTradeNo 商户订单号；为空则自动生成（FL + 时间戳 + 随机数）。
+	OutTradeNo string
+	// OpenID 微信用户 openid（JSAPI 必填；Native 忽略）。
+	OpenID string
+}
+
+// NativeOrderResult Native 下单结果：code_url 供前端渲染二维码。
+type NativeOrderResult struct {
+	OutTradeNo string `json:"out_trade_no"`
+	CodeURL    string `json:"code_url"`
+}
+
+// JSAPIOrderResult JSAPI 下单结果：prepay 参数供前端 wx.requestPayment 拉起支付。
+type JSAPIOrderResult struct {
+	OutTradeNo string `json:"out_trade_no"`
+	AppID      string `json:"app_id"`
+	TimeStamp  string `json:"time_stamp"`
+	NonceStr   string `json:"nonce_str"`
+	Package    string `json:"package"`
+	SignType   string `json:"sign_type"`
+	PaySign    string `json:"pay_sign"`
+}
+
+// ===== Native 下单 =====
+
+// CreateNativeOrder 创建 Native 支付订单：落库 pay_orders（created）→ 调微信下单 → 返回二维码链接。
+func (s *WechatPayService) CreateNativeOrder(ctx context.Context, req *CreatePayOrderRequest) (*NativeOrderResult, error) {
+	if err := s.ensureSDK(); err != nil {
+		return nil, err
+	}
+	if req.Subject == "" || req.Amount <= 0 {
+		return nil, errors.New("商品描述与金额必填（金额单位分）")
+	}
+	outTradeNo := req.OutTradeNo
+	if outTradeNo == "" {
+		outTradeNo = generateOutTradeNo()
+	}
+	order := &model.PayOrder{
+		UserID:     req.UserID,
+		OutTradeNo: outTradeNo,
+		PayType:    model.PayTypeNative,
+		Subject:    req.Subject,
+		Amount:     req.Amount,
+		Status:     model.PayOrderStatusCreated,
+	}
+	if err := s.db.Create(order).Error; err != nil {
+		return nil, fmt.Errorf("创建支付订单失败: %w", err)
+	}
+
+	svc := native.NativeApiService{Client: s.client}
+	resp, _, err := svc.Prepay(ctx, native.PrepayRequest{
+		Appid:       core.String(s.cfg.AppID),
+		Mchid:       core.String(s.cfg.MchID),
+		Description: core.String(req.Subject),
+		OutTradeNo:  core.String(outTradeNo),
+		NotifyUrl:   core.String(s.cfg.NotifyURL),
+		Amount: &payments.Amount{
+			Total:    core.Int64(req.Amount),
+			Currency: core.String("CNY"),
+		},
+	})
+	if err != nil {
+		s.logger.Warn("Native 下单失败", zap.String("out_trade_no", outTradeNo), zap.Error(err))
+		_ = s.db.Delete(&model.PayOrder{}, "out_trade_no = ?", outTradeNo)
+		return nil, fmt.Errorf("微信下单失败: %w", err)
+	}
+	if resp == nil || resp.CodeUrl == nil || *resp.CodeUrl == "" {
+		_ = s.db.Delete(&model.PayOrder{}, "out_trade_no = ?", outTradeNo)
+		return nil, errors.New("微信下单未返回二维码链接")
+	}
+	s.logger.Info("Native 下单成功", zap.String("out_trade_no", outTradeNo), zap.Int64("amount", req.Amount))
+	return &NativeOrderResult{OutTradeNo: outTradeNo, CodeURL: *resp.CodeUrl}, nil
+}
+
+// ===== JSAPI 下单 =====
+
+// CreateJSAPIOrder 创建 JSAPI 支付订单：落库 → 调微信下单 → 返回 wx.requestPayment 所需参数。
+func (s *WechatPayService) CreateJSAPIOrder(ctx context.Context, req *CreatePayOrderRequest) (*JSAPIOrderResult, error) {
+	if err := s.ensureSDK(); err != nil {
+		return nil, err
+	}
+	if req.Subject == "" || req.Amount <= 0 {
+		return nil, errors.New("商品描述与金额必填（金额单位分）")
+	}
+	if req.OpenID == "" {
+		return nil, errors.New("JSAPI 支付缺少 openid")
+	}
+	outTradeNo := req.OutTradeNo
+	if outTradeNo == "" {
+		outTradeNo = generateOutTradeNo()
+	}
+	order := &model.PayOrder{
+		UserID:     req.UserID,
+		OutTradeNo: outTradeNo,
+		PayType:    model.PayTypeJSAPI,
+		Subject:    req.Subject,
+		Amount:     req.Amount,
+		Status:     model.PayOrderStatusCreated,
+	}
+	if err := s.db.Create(order).Error; err != nil {
+		return nil, fmt.Errorf("创建支付订单失败: %w", err)
+	}
+
+	svc := jsapi.JsapiApiService{Client: s.client}
+	resp, _, err := svc.PrepayWithRequestPayment(ctx, jsapi.PrepayRequest{
+		Appid:       core.String(s.cfg.AppID),
+		Mchid:       core.String(s.cfg.MchID),
+		Description: core.String(req.Subject),
+		OutTradeNo:  core.String(outTradeNo),
+		NotifyUrl:   core.String(s.cfg.NotifyURL),
+		Amount:      &payments.Amount{Total: core.Int64(req.Amount), Currency: core.String("CNY")},
+		Payer:       &payments.Payer{Openid: core.String(req.OpenID)},
+	})
+	if err != nil {
+		s.logger.Warn("JSAPI 下单失败", zap.String("out_trade_no", outTradeNo), zap.Error(err))
+		_ = s.db.Delete(&model.PayOrder{}, "out_trade_no = ?", outTradeNo)
+		return nil, fmt.Errorf("微信下单失败: %w", err)
+	}
+	if resp == nil || resp.PrepayId == nil {
+		_ = s.db.Delete(&model.PayOrder{}, "out_trade_no = ?", outTradeNo)
+		return nil, errors.New("微信下单未返回 prepay_id")
+	}
+	result := &JSAPIOrderResult{
+		OutTradeNo: outTradeNo,
+		AppID:      s.cfg.AppID,
+		TimeStamp:  derefStr(resp.TimeStamp),
+		NonceStr:   derefStr(resp.NonceStr),
+		Package:    "prepay_id=" + *resp.PrepayId,
+		SignType:   derefStr(resp.SignType),
+		PaySign:    derefStr(resp.PaySign),
+	}
+	s.logger.Info("JSAPI 下单成功", zap.String("out_trade_no", outTradeNo), zap.Int64("amount", req.Amount))
+	return result, nil
+}
+
+// ===== 支付结果回调 =====
+
+// HandleNotify 处理微信支付结果回调：验签 + AES 解密 → 幂等更新订单状态。
+// 微信要求响应体固定为 {"code":"SUCCESS"|"FAIL","message":"..."}，不走统一响应信封。
+func (s *WechatPayService) HandleNotify(c *gin.Context) {
+	if err := s.ensureSDK(); err != nil {
+		s.logger.Warn("回调处理失败：SDK 未就绪", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "FAIL", "message": "支付配置未就绪"})
+		return
+	}
+
+	transaction := new(payments.Transaction)
+	_, err := s.notifier.ParseNotifyRequest(c.Request.Context(), c.Request, transaction)
+	if err != nil {
+		s.logger.Warn("回调验签/解密失败", zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{"code": "FAIL", "message": "验签失败"})
+		return
+	}
+
+	outTradeNo := derefStr(transaction.OutTradeNo)
+	if outTradeNo == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "FAIL", "message": "缺少商户订单号"})
+		return
+	}
+	raw, _ := json.Marshal(transaction)
+	if err := s.markPaid(c.Request.Context(), transaction, outTradeNo, raw); err != nil {
+		s.logger.Warn("回调入账失败", zap.String("out_trade_no", outTradeNo), zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "FAIL", "message": "入账失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": "SUCCESS", "message": "成功"})
+}
+
+// markPaid 幂等入账：仅当交易成功（SUCCESS）时更新订单为 paid。
+// 金额必须与本地订单一致（防伪造回调）；重复回调（已 paid 且同单号）直接成功。
+func (s *WechatPayService) markPaid(ctx context.Context, tx *payments.Transaction, outTradeNo string, raw []byte) error {
+	if tx.TradeState == nil || *tx.TradeState != "SUCCESS" {
+		s.logger.Info("非成功交易回调，忽略", zap.String("out_trade_no", outTradeNo),
+			zap.String("trade_state", derefStr(tx.TradeState)))
+		return nil
+	}
+
+	var order model.PayOrder
+	if err := s.db.WithContext(ctx).Where("out_trade_no = ?", outTradeNo).First(&order).Error; err != nil {
+		return fmt.Errorf("订单不存在: %w", err)
+	}
+	if order.Status == model.PayOrderStatusPaid {
+		// 幂等：已入账的重复回调
+		return nil
+	}
+	// 金额对账：微信实付金额（分）必须等于本地订单金额
+	if tx.Amount == nil || tx.Amount.PayerTotal == nil || *tx.Amount.PayerTotal != order.Amount {
+		return fmt.Errorf("回调金额与订单不一致: 本地=%d 微信=%d", order.Amount, derefInt64(tx.Amount.PayerTotal))
+	}
+	now := time.Now()
+	return s.db.WithContext(ctx).Model(&model.PayOrder{}).
+		Where("out_trade_no = ? AND status = ?", outTradeNo, model.PayOrderStatusCreated).
+		Updates(map[string]any{
+			"transaction_id": derefStr(tx.TransactionId),
+			"status":         model.PayOrderStatusPaid,
+			"notify_raw":     model.JSONB(raw),
+			"paid_at":        now,
+			"updated_at":     now,
+		}).Error
+}
+
+// ===== 订单查询 =====
+
+// GetOrder 按商户订单号查询订单（本人校验）。
+func (s *WechatPayService) GetOrder(ctx context.Context, userID int, outTradeNo string) (*model.PayOrder, error) {
+	var order model.PayOrder
+	if err := s.db.WithContext(ctx).
+		Where("out_trade_no = ? AND user_id = ?", outTradeNo, userID).
+		First(&order).Error; err != nil {
+		return nil, err
+	}
+	return &order, nil
+}
+
+// generateOutTradeNo 生成商户订单号：FL + 毫秒时间戳 + 4 位随机数（<=32 位，唯一由 DB 约束兜底）。
+func generateOutTradeNo() string {
+	return fmt.Sprintf("FL%d%04d", time.Now().UnixMilli(), rand.Intn(10000))
+}
+
+func derefStr(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
+func derefInt64(p *int64) int64 {
+	if p == nil {
+		return 0
+	}
+	return *p
+}

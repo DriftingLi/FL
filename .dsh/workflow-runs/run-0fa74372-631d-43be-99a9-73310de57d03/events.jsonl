@@ -1,0 +1,16 @@
+{"seq":0,"time":1786756633578,"type":"workflow-started","data":{"runId":"run-0fa74372-631d-43be-99a9-73310de57d03","workflow":"ai-module-verification"}}
+{"seq":1,"time":1786756637790,"type":"phase-started","data":{"name":"review"}}
+{"seq":2,"time":1786756637925,"type":"agent-started","data":{"taskId":"task-1","name":"type-safety-audit","phase":"review","childId":"d1848ae1-8eed-4701-8ad3-0ecb13bcbc86","provider":"spawn"}}
+{"seq":3,"time":1786756637942,"type":"agent-started","data":{"taskId":"task-2","name":"contract-alignment","phase":"review","childId":"4215a588-7653-4247-9da4-53a06ac66cb7","provider":"spawn"}}
+{"seq":4,"time":1786756637953,"type":"agent-started","data":{"taskId":"task-3","name":"duplication-and-deadcode","phase":"review","childId":"9af0a562-a7c6-4de9-b003-78df366ace83","provider":"spawn"}}
+{"seq":5,"time":1786756637965,"type":"agent-started","data":{"taskId":"task-4","name":"template-binding-consistency","phase":"review","childId":"fb57b720-2194-4db8-b60b-04826b5d55e1","provider":"spawn"}}
+{"seq":6,"time":1786756766840,"type":"agent-completed","data":{"taskId":"task-4","outcome":"completed","childId":"fb57b720-2194-4db8-b60b-04826b5d55e1"}}
+{"seq":7,"time":1786756847538,"type":"agent-completed","data":{"taskId":"task-1","outcome":"completed","childId":"d1848ae1-8eed-4701-8ad3-0ecb13bcbc86"}}
+{"seq":8,"time":1786756967299,"type":"agent-completed","data":{"taskId":"task-2","outcome":"completed","childId":"4215a588-7653-4247-9da4-53a06ac66cb7"}}
+{"seq":9,"time":1786757018233,"type":"agent-completed","data":{"taskId":"task-3","outcome":"completed","childId":"9af0a562-a7c6-4de9-b003-78df366ace83"}}
+{"seq":10,"time":1786757018253,"type":"phase-completed","data":{"name":"review"}}
+{"seq":11,"time":1786757018266,"type":"phase-started","data":{"name":"synthesize"}}
+{"seq":12,"time":1786757018283,"type":"synthesis-started","data":{"rubric":"合并四维度审查：类型/编译安全、后端契约、死代码/重复/未用 import、模板绑定对应。产出按严重度排序的综合审查，标注准确文件与行号，含技术栈约束（无本地编译、需 HBuilderX 验证、后端不可改）与 overall 结论 + actionable 优先级。"}}
+{"seq":13,"time":1786757018305,"type":"agent-completed","data":{"taskId":"task-5","outcome":"failed","error":"workflow token budget exceeded before agent start"}}
+{"seq":14,"time":1786757018317,"type":"phase-completed","data":{"name":"synthesize"}}
+{"seq":15,"time":1786757018340,"type":"workflow-failed","data":{"error":"restricted workflow failed: wf.synthesize failed: workflow token budget exceeded before agent start"}}

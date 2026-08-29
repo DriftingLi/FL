@@ -1,0 +1,129 @@
+{
+  "image": "E:\\FL\\.dsh-vision-toolkit\\tmp\\pasted-images\\023fa6ee28c8b8cc41c4\\e056eb90-93d8-4b1d-8ee1-3046edb438f7-image.png",
+  "provider": "openai",
+  "result": {
+    "summary": "The image is a welcome landing page with a blue-to-green gradient background. At the top center is a white rounded rectangle logo depicting a green forklift with a wrench handle. Below the logo in large white Chinese characters is the main title '叉车维修培训系统' and underneath it the subtitle '专业维修技能成长平台'. At the bottom center is a cute cartoon robot mascot with a blue and white body, blue eyes, and a small green antenna, also featuring a 'C' logo on its chest.",
+    "ocr": {
+      "full_text": "欢迎页\n叉车维修培训系统\n专业维修技能成长平台",
+      "lines": [
+        {
+          "text": "欢迎页",
+          "language": "zh"
+        },
+        {
+          "text": "叉车维修培训系统",
+          "language": "zh"
+        },
+        {
+          "text": "专业维修技能成长平台",
+          "language": "zh"
+        }
+      ]
+    },
+    "layout": {
+      "regions": [
+        {
+          "type": "header",
+          "reading_order": 1,
+          "text": "欢迎页"
+        },
+        {
+          "type": "icon",
+          "reading_order": 2,
+          "text": ""
+        },
+        {
+          "type": "title",
+          "reading_order": 3,
+          "text": "叉车维修培训系统"
+        },
+        {
+          "type": "subtitle",
+          "reading_order": 4,
+          "text": "专业维修技能成长平台"
+        },
+        {
+          "type": "mascot",
+          "reading_order": 5,
+          "text": "cartoon robot"
+        }
+      ]
+    },
+    "semantics": {
+      "scene": "welcome landing page for a professional training system",
+      "intent": "to introduce the forklift maintenance training platform to users",
+      "entities": [
+        {
+          "name": "叉车维修培训系统",
+          "type": "system name",
+          "evidence": "main title text below logo"
+        },
+        {
+          "name": "专业维修技能成长平台",
+          "type": "platform tagline",
+          "evidence": "subtitle text below main title"
+        },
+        {
+          "name": "robot mascot",
+          "type": "character illustration",
+          "evidence": "bottom center illustration"
+        },
+        {
+          "name": "forklift icon",
+          "type": "logo",
+          "evidence": "top center white rounded rectangle"
+        }
+      ],
+      "relations": [
+        {
+          "subject": "forklift maintenance system",
+          "predicate": "is labeled by",
+          "object": "叉车维修培训系统"
+        },
+        {
+          "subject": "platform",
+          "predicate": "is described as",
+          "object": "专业维修技能成长平台"
+        }
+      ]
+    },
+    "visual": {
+      "dominant_colors": [
+        "blue",
+        "green"
+      ],
+      "style": "modern minimalist digital interface with smooth gradient background",
+      "notes": [
+        "top-center forklift and wrench logo in white rounded square",
+        "large centered Chinese text blocks",
+        "bottom cute rounded robot character with blue eyes and antenna"
+      ]
+    },
+    "uncertainty": []
+  },
+  "meta": {
+    "generatedAt": "2026-08-17T06:01:16.121Z",
+    "model": "grok-4.5",
+    "conversationId": null,
+    "durationSeconds": 40.167,
+    "usage": {
+      "prompt_tokens": 1138,
+      "completion_tokens": 3247,
+      "total_tokens": 4385,
+      "prompt_tokens_details": {
+        "cached_tokens": 192
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 2567
+      }
+    },
+    "attempts": [
+      {
+        "provider": "openai",
+        "ok": true,
+        "durationSeconds": 40.183
+      }
+    ],
+    "warnings": []
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "taskId": "task-2",
+  "name": "contract-alignment",
+  "status": "completed",
+  "finalText": "I now have complete verified information. Let me compose the concise contract review.\n\nKey verifications for each point:\n\n**① data 裸数组 → request.uts `{list:[...]}` → `data['list']`:**\n- Backend: `response.Success(c, models)` where models is `[]ModelOption`/`[]UserModelDTO`/`[]AIChatSessionDTO`/`[]AIChatMessageDTO` → `data` is bare array. ✓\n- request.uts: `data as UTSJSONObject` throws ClassCastException on Android (arrays) → catch → wraps `{list: data}`. ✓\n- aiAssistant.uts `extractArray(data, 'models')`: reads `data['models']` first (null for bare array) → `data['items']` → `data['list']`. Since wrapped as `{list: [...]}`, it reads `list`. ✓ Chain consistent. But note: for bare-array responses the `data[key]` access is `data['models']`=null, then items=null, then list reads correct value. OK.\n\n**② StreamChatReq fields vs ai-assistant.uvue buildBody:**\n- Backend StreamChatReq: session_id, model_source, config_id, user_model_id, custom_api_key, custom_base_url, custom_model, messages.\n- buildBody: session_id, model_source, messages + branch: admin→config_id, user→user_model_id, custom→custom_api_key/custom_base_url/custom_model. ✓ Matches.\n\n**② createSessionApi → CreateSession:**\n- Frontend sends `{title, model_name}`. Backend CreateSession binds `json:\"title\"` and `json:\"model_name\"`. ✓ Matches.\n- createSessionApi expects `data['session']` else uses data directly. Backend returns `response.Success(c, session)` where session is `AIChatSessionDTO` (bare object in data). So `data['session']` is null → `buildSession(data)` where data is wrapper? Wait — data here is a bare object (session DTO) cast as UTSJSONObject. `buildSession` reads id/title/model_source/model_id/created_at/updated_at. But AIChatSessionDTO has `model_name` not `model_source`/`model_id`. buildSession reads model_source and model_id (missing → '') but also doesn't read model_name. So title/id/created_at work; session's model display name lost. Minor.\n\nActually `buildSession` in ai-assistant.js reads `model_source` and `model_id` but NOT `model_name`. The DTO provides `model_name`. So session model name not preserved. Minor fidelity note.\n\n**③ SSE events:**\n- Backend: message `{\"content\"}`, error `{\"message\"}`, done (nil data). ✓\n- ai-assistant.uts parseSSE handles event:message → content, error → message, done. ✓ Matches.\n- ai-assistant.uvue StreamChatCallbacks onMessage/onError/onDone. ✓\n\n**④ SaveUserModel api_key 必填遗留:**\n- Backend SaveUserModel requires `req.APIKey != \"\"` always (line 93), even for update. Frontend custom-models.uvue on edit (editingId>0) only sends api_key if non-empty; editing form leaves api_key blank (startEdit sets formApiKey=''). So updating WITHOUT re-entering api_key → backend rejects `name/api_key/base_url/model 均为必填`. This is the mismatch requiring backend cooperation to make api_key optional on update. ✓ Confirmed.\n\nNow let me also verify point ①'s detail about `data['list']` when the response is a bare array — the aiAssistant `extractArray` accesses `data['models']`, but for the wrapped `{list: data}` there's no 'models', falls to 'list'. Correct. But for models list specifically backend returns bare array → wrapped to list → extractArray reads 'list'. ✓. Good.\n\nNow compose structured_output.",
+  "structured": {
+    "verdict": "契约整体一致，仅一处需后端配合的遗留缺陷（SaveUserModel 更新时 api_key 强制必填）及一处轻微弱化（session DTO 的 model_name 未回填到前端 Session 对象）。",
+    "mismatches": [
+      {
+        "severity": "medium",
+        "frontend": "custom-models.uvue 编辑时留空 api_key（startEdit 置空 formApiKey，onSave 仅在非空时写入 api_key）；saveUserModelApi 按后端需求 POST /ai-assistant/user-models",
+        "backend": "SaveUserModel handler 强制 req.APIKey 非空（line 93），且 service 未区分新建/更新，更新时必填校验导致编辑保存失败",
+        "description": "④ SaveUserModel api_key 必填遗留：前端编辑模型时不留 api_key，后端更新分支仍强制 APIKey 必填，更新不传入则返回 400。需要后端将 api_key 改为更新时可省略（保留原值）。",
+        "fixHint": "后端配合：SaveUserModel 中 req.ID>0 时不再强制 APIKey（或提供只更新 name/base_url/model 的分支）。"
+      },
+      {
+        "severity": "low",
+        "frontend": "ai-assistant.uts buildSession 读取 id/title/model_source/model_id/created_at/updated_at，未读 model_name",
+        "backend": "CreateSession 返回 AIChatSessionDTO{id,title,model_name,created_at,updated_at}，不含 model_source/model_id",
+        "description": "② createSessionApi 链路其余字段匹配；但会话 DTO 返回 model_name，前端 buildSession 未映射，model_source/model_id 取不到置空，会话的模型名在返回对象中丢失（不影响创建功能，仅信息弱化）。",
+        "fixHint": "前端 buildSession 增加对 model_name 的读取映射。"
+      }
+    ]
+  },
+  "childId": "a761572d-1b01-4346-a652-aba430ad54b3",
+  "stopReason": "completed",
+  "startedAt": 1786757063658,
+  "endedAt": 1786757270543,
+  "tokenUsage": 232894,
+  "usage": {
+    "inputTokens": 31101,
+    "outputTokens": 3137,
+    "cacheReadTokens": 198656,
+    "totalTokens": 232894
+  },
+  "provider": "spawn",
+  "subagentProvider": "spawn",
+  "requestedTier": "balanced",
+  "tierOutcome": "balanced-parent",
+  "providerSource": "default",
+  "initialProvider": "spawn",
+  "finalProvider": "spawn",
+  "artifacts": [],
+  "origin": "executed"
+}

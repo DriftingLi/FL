@@ -1,0 +1,51 @@
+{
+  "taskId": "task-2",
+  "name": "contract-alignment",
+  "status": "completed",
+  "finalText": "The ai-settings custom save path always requires api_key when model_source=='custom', so it sends api_key. This path is consistent with backend's api_key-required rule. So the api_key-required mismatch is specifically in `custom-models.uvue` edit flow (line 159-161), where api_key can be omitted on edit.\n\nNow I have a complete picture. Let me also confirm that `createSessionApi` in the task statement matches: task says `createSessionApi('新会话', sessionTag)` → backend `CreateSession{'title','model_name'}`. Confirmed at useAiChat.ts line 150 and ai-assistant.uts line 51.\n\nLet me verify there isn't a discrepancy about `saveAiUserModelApi` return handling on backend — backend `SaveUserModel` returns `Success(c, nil)` (data=null), so `data['model']` is null, `buildUserModel(data)` where data is `{}` (request resolves `{}` when data null). That's fine (empty model object), callers use returned fields minimally. In ai-settings, `saved.id` would be 0 and `saved.name` empty. That's a subtle issue: on save the returned object has no id, so `settings.value.model_id = 0`. But that's an edge detail, not a strict contract mismatch — the backend doesn't return the created DTO. Worth a low note but not in the 4 review dimensions directly. I'll keep focused.\n\nNow let me compile findings.\n\nLet me reconsider severity of ① H5 unwrap issue more carefully. On H5 `data as UTSJSONObject` where data is an array — in TS/JS UTS compilation, `as` is erased. So `data` stays a JS Array. `dataObj` = the array. Falls through to `resolve(dataObj)`. Then `extractArray(data, 'sessions')`: `data['sessions']` = undefined → null; `data['items']` = undefined; `data['list']` = undefined. Returns `[]`. So sessions list empty on H5. This is a real cross-end bug IF H5 is a supported target. The presence of `api/*.uts` for cross-end and `unpackage/dist/dev/mp-weixin` suggests mp-weixin is primary. But the design comment is all about Android. I'll rate this medium (behavioral divergence on non-Android/non-Weixin platforms), with the caveat it's inherent to `request.uts` (shared infra) and primarily a latent robustness issue for the AI chain.\n\nNow, let me write the structured output.\n\nReview dimensions summary:\n1. ① Bare-array data → {list} wrap chain: **Aligned** on Android (works via `list` fallback in extractArray). Caveat (medium): on H5/non-Android, `Array as UTSJSONObject` doesn't throw in JS, so the `{list:...}` wrap never happens and `extractArray` returns `[]`, dropping data. Latent cross-end risk.\n2. ② StreamChatReq field mapping + createSessionApi title/model_name: **Aligned**, correct.\n3. ③ SSE message/error/done ↔ parseSSE: **Aligned**, correct.\n4. ④ SaveUserModel api_key 必填遗留: **Mismatch (high)** — backend requires api_key on update; frontend custom-models edit flow omits api_key when left blank → backend rejects with BadRequest. Requires backend change (acknowledged, not to be bypassed frontend).\n\nLet me formulate the structured_output.",
+  "structured": {
+    "mismatches": [
+      {
+        "severity": "high",
+        "frontend": "pages/ai-assistant/custom-models.uvue (onSave, lines 147-164)",
+        "backend": "internal/api/ai_assistant.go SaveUserModel (line 93-96) 必填校验 name/api_key/base_url/model",
+        "description": "④ SaveUserModel api_key 必填遗留：后端对创建/更新统一校验 api_key 非空（req.APIKey == \"\" 即 BadRequest）。前端 custom-models.uvue 编辑模式（editingId>0）不强制输入 api_key（仅创建时要求），当用户留空时 payload 不含 api_key，后端返回 'name/api_key/base_url/model 均为必填'，导致「编辑但不改 key」功能失败。团队已确认这是需后端配合的遗留问题，前端不得绕过后端校验。",
+        "fixHint": "后端将 SaveUserModelReq.APIKey 改为可选（编辑时留空表示保留原 key）：当 req.ID>0 且 req.APIKey 为空时，Updates 中仅 name/base_url/model 而跳过 api_key 字段（或先查原记录复用）。此为纯后端改动（当前被禁止），仅记录异议。"
+      },
+      {
+        "severity": "medium",
+        "frontend": "api/request.uts (wrap {list:data} 逻辑, lines 156-168) + api/aiAssistant.uts extractArray(lines 79-91)",
+        "backend": "internal/api/ai_assistant.go ListSessions/ListPublicModels/ListUserModels/GetSessionMessages 的 response.Success 输出裸数组 data",
+        "description": "① 裸数组→{list} 链路在 Android 端成立（数组 as UTSJSONObject 抛 ClassCastException 被捕，包装为 {list:[...]}，extractArray 走 list 兜底命中）。但在 H5/非 Android（JS 运行时，as 被擦除不抛异常）裸数组不会被包装，extractArray 查 sessions/items/list 均得 null 返回 []，导致会话/模型/消息列表被静默清空。属跨端行为分歧，且该逻辑位于共享 request.uts/aiAssistant.uts，影响整个 AI 列表链路。",
+        "fixHint": "前端在 request.uts 解包时加数组检测（如 Array.isArray(data) || 用 typeof/构造器判断后再包装），或在 extractArray 中当 data 本身是数组时直接返回该数组，避免依赖抛异常兜底，保证跨端一致。"
+      },
+      {
+        "severity": "low",
+        "frontend": "api/aiAssistant.uts saveAiUserModelApi(lines 126-135); pages/ai-assistant/ai-settings.uvue (onSave, line 253 saved.id/saved.name)",
+        "backend": "internal/api/ai_assistant.go SaveUserModel 返回 response.Success(c, nil)（data=null），不返回创建后的实体",
+        "description": "后端 SaveUserModel 成功仅返回 data=null。前端 ai-settings 通过 saveAiUserModelApi 返回体读取 saved.id/saved.name 回填 model_id/model_name，此时均为 0/''，需依赖本地表单兜底覆盖；custom-models 保存后走 loadModels 刷新，无影响。非阻断，属返回契约偏薄，谨记录。"
+      }
+    ],
+    "verdict": "逐项核对结果：① 裸数组→{list} 链路 Android 端成立（extractArray 经 list 兜底命中），但 H5/非 Android 因 as 不抛异常导致裸数组不包装、列表被静默清空，列为 medium 跨端风险；② StreamChatReq 请求体（session_id/model_source/config_id/user_model_id/custom_api_key/custom_base_url/custom_model/messages）与 buildBody 各 model_source 分支字段名逐一对齐，且 createSessionApi('新会话', sessionTag) 发送 {title, model_name} 与后端 CreateSession 结构一致，确认无误；③ SSE 后端 message/error/done 事件格式与前端 parseSSE 完全匹配，确认无误；④ SaveUserModel api_key 必填遗留为真实异议（high）：后端更新时强校验 api_key，与前端编辑模式「留空即不改 key」冲突，需后端配合放开该必填（当前后端禁止改动，仅记录）。总体契约核心对齐，除 ④ 为明确待后端处理的遗留外无阻断性失配。"
+  },
+  "childId": "4215a588-7653-4247-9da4-53a06ac66cb7",
+  "stopReason": "completed",
+  "startedAt": 1786756637810,
+  "endedAt": 1786756967291,
+  "tokenUsage": 467302,
+  "usage": {
+    "inputTokens": 54455,
+    "outputTokens": 5935,
+    "cacheReadTokens": 406912,
+    "totalTokens": 467302
+  },
+  "provider": "spawn",
+  "subagentProvider": "spawn",
+  "requestedTier": "deep",
+  "tierOutcome": "applied",
+  "providerSource": "default",
+  "initialProvider": "spawn",
+  "finalProvider": "spawn",
+  "artifacts": [],
+  "origin": "executed"
+}

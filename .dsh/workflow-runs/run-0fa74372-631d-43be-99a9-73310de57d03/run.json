@@ -1,0 +1,733 @@
+{
+  "runId": "run-0fa74372-631d-43be-99a9-73310de57d03",
+  "workflow": "ai-module-verification",
+  "displayName": "ai-module-verification",
+  "status": "failed",
+  "source": "inline",
+  "execution": "capability-generated",
+  "startedAt": 1786756633556,
+  "totalSpawned": 5,
+  "activeAgents": 0,
+  "eventCount": 16,
+  "artifacts": [],
+  "process": {
+    "runId": "run-0fa74372-631d-43be-99a9-73310de57d03",
+    "workflowName": "ai-module-verification",
+    "status": "failed",
+    "startedAt": "2026-08-15T01:17:13.556Z",
+    "updatedAt": "2026-08-15T01:23:38.391Z",
+    "items": [
+      {
+        "id": "phase:1",
+        "title": "review",
+        "kind": "phase",
+        "status": "completed",
+        "startedAt": "2026-08-15T01:17:17.790Z",
+        "endedAt": "2026-08-15T01:23:38.253Z"
+      },
+      {
+        "id": "phase:2",
+        "title": "synthesize",
+        "kind": "phase",
+        "status": "completed",
+        "startedAt": "2026-08-15T01:23:38.266Z",
+        "endedAt": "2026-08-15T01:23:38.317Z"
+      },
+      {
+        "id": "task-1",
+        "title": "type-safety-audit",
+        "kind": "agent",
+        "status": "completed",
+        "phaseId": "phase:1",
+        "agentId": "task-1",
+        "childAgentId": "d1848ae1-8eed-4701-8ad3-0ecb13bcbc86",
+        "summary": "I now have all the relevant code. Let me analyze each of the four verification points.\n\n**Point ①: `script setup` top-level destructuring of refs — template auto-unwrapping in uni-app x**\n\nIn ai-basic.uvue and ai-assistant.uvue, both do:\n```\nconst { statusBarHeight, sessions, messages, inputText, thinking, ... } = useAiChat()\n```\nThen use these in the template — e.g. `:style=\"{ paddingTop: statusBarHeight + 'px' }\"`, `v-if=\"messages.length == 0\"`, `v-for=\"(msg, idx) in messages\"`, `v-model=\"inputText\"`, `sessions.length`, `sidebarLeft = false` in click handlers.\n\nIn standard web Vue, destructured refs must use `.value`. In uni-app x's `<script setup lang=\"uts\">`, the template compiler auto-unwraps top-level refs and also auto-unwraps refs exposed from `setup()` returns. But the key question: does destructuring `const { messages } = useAiChat()` produce a top-level binding that the template compiler recognizes and unwraps automatically?\n\nIn uni-app x, the `<script setup lang=\"uts\">` compiles to Vue or native. Important nuance: uni-app x's `setup` script binding analysis (based on Vue SFC compiler) recognizes variables declared directly in `<script setup>` scope. When you destructure `const { messages } = useAiChat()`, the resulting `messages` is a `Ref`. The template compiler in Vue will auto-unwrap refs in template expressions. This destructuring pattern with `const { messages } = useAiChat()` — where useAiChat is a plain function returning an object of refs — is standard Vue composition API. Vue's template ref unwrapping applies to refs that are top-level bindings. A destructured ref is a top-level binding, and Vue auto-unwraps it. This works in standard Vue.\n\nHowever for uni-app x specifically: uni-app x compiles `<script setup>` for native platforms. There is documented behavior that uni-app x supports refs and auto-unwrapping in templates. The concern flagged is whether this destructuring works. In uni-app x, destructuring refs from a composable in setup and using them in template — this does generally work because the compiler unwraps `RefLike` top-level bindings. Since `useAiChat()` returns refs directly (e.g. `messages` is `Ref<AiSessionMessage[]>`), `messages` is a `Ref` and template access `messages.length` unwraps.\n\nBut there's a subtle risk: For uni-app x, there is a known limitation where methods and reactive state returned from composables used via `toRefs`/spread can have issues with strict typing on native. However destructuring refs is the standard recommended pattern and works.\n\nThere is also `currentModelName` used directly in template (`{{ currentModelName }}`) as a computed ref — same unwrapping mechanism.\n\nAlso note: in `onLoad`, code uses `statusBarHeight.value = ...` — this is correct since manual `.value` in script.\n\nOne real concern: `sendInput` is used in template? No — `sendInput` is called inside `onSend()`, not template. `toggleSidebarLeft`, etc. are used in template `@click`. Functions returned from composable are not refs, so no unwrap issue.\n\nLet me consider whether the destructuring overwrites reactivity. Since these refs are created inside the composable and returned, destructuring preserves the same ref objects. Setting via `.value` works. Good.\n\n**Point ②: `ChatBodyBuilder` passed into async `doStreamChat` — closure capture/type**\n\n`sendInput(sessionTag, buildBody)` sync, then calls `doStreamChat(sessionTag, buildBody)`. Inside `doStreamChat` (async), `buildBody` is a parameter of type `ChatBodyBuilder`. Closure captures the local `buildBody` in ai-basic.uvue / ai-assistant.uvue.\n\nKey issue: the `buildBody` closures reference page-scope reactive refs: `currentModelId.value`, `currentModelSource.value`, `customApiKey.value`, `customBaseUrl.value`, `customModel.value`. Since these are refs (object references), the closure captures the ref object, so reading `.value` at call time reads current value. This is correct behavior.\n\nType: `ChatBodyBuilder = (history, sessionID) => UTSJSONObject`. The `buildBody` in pages constructs `UTSJSONObject` literal objects. Assigning a function whose signature matches to a `ChatBodyBuilder` typed variable is fine.\n\nPotential issue in ai-assistant.uvue buildBody: `model_source: currentModelSource.value` where `currentModelSource` is `ref<'admin' | 'user' | 'custom'>`. Assigning a union literal type into `UTSJSONObject` field — UTSJSONObject accepts any value, and the field assignment `params['config_id'] = currentModelId.value` etc. Should be fine in uts.\n\nThere's a type concern: `ChatBodyBuilder` parameter `history : { role : string; content : string }[]`. The closure in the pages declares the same param type. Good, matches.\n\nAnother subtle point: the return object construction `const params : UTSJSONObject = { session_id: sessionID, ... }`. `messages: history` where history is `{role;content}[]`. Assigning array of object literals into UTSJSONObject — UTSJSONObject field can hold any JSON value, arrays are allowed. OK.\n\n**Point ③: request.uts array wrapping impact on getAiModelsApi/getAiSessionsApi**\n\nIn request.uts success handler lines 156-168: it does `data as UTSJSONObject`, catches if ClassCastException (when data is an array on Android), wraps as `{ list: data }`. \n\nNow look at `extractArray(data, key)` in aiAssistant.uts:\n```\nconst raw = data[key]  // e.g. data['models']\nif (raw != null) return raw as Array<UTSJSONObject>\nconst items = data['items']; if (items != null) ...\nconst list = data['list']; if (list != null) return list as Array<UTSJSONObject>\nreturn []\n```\n\nWhen data is wrapped `{ list: [...] }`, `data['models']` is null, `data['items']` is null, then `data['list']` returns the array. Good — so the `list` fallback handles the array wrapping. \n\nFor getAiModelsApi (GET /ai-assistant/models): if backend returns `data` as an array and Android throws, wrapped to `{list:[...]}`, extractArray finds `list`. Standalone array: `data['models']` on a wrapped `{list}` returns undefined → falls through to `list` → returns array. Works.\n\nFor getAiSessionsApi (GET /ai-assistant/sessions): extractArray(data, 'sessions'). If backend `data` is object `{sessions:[...]}` → `data['sessions']` returns. If data is wrapped array `{list:[...]}` → falls to `list`. Works.\n\nSo the array-wrapping is handled by the `list` fallback in extractArray. However there IS an important risk: **the wrapping happens in request.uts where `data as UTSJSONObject` throws, but on platforms where it does NOT throw (or on the array it doesn't throw on web/H5)**, `data` stays as an array typed as UTSJSONObject. Then `body['data']` in request.uts? No — body is `res.data as UTSJSONObject`, and `const data = body['data']`. If `body['data']` is actually an array and the `as UTSJSONObject` cast doesn't throw on that platform, then `data` would be assigned the array reference without wrapping, and `dataObj = data as UTSJSONObject` resolves an array as if it's UTSJSONObject. Then `extractArray(data, 'models')` does `data['models']` — accessing `.models` on an array returns undefined → falls through to `items`/`list` (undefined) → returns `[]`. So on platforms where the cast does NOT throw, when backend returns a bare array, extractArray returns empty → models/sessions list empty. This is only a problem on H5/release apps where UTSJSONObject `as` array doesn't throw.\n\nActually wait — reassessing. The `try { dataObj = data as UTSJSONObject }` wraps only if it throws. On native Android Kotlin, casting an Array to a Map-ish UTSJSONObject throws ClassCastException → wrapped. On Web (JS), `as` is a no-op type assertion, no throw → data (an array) flows through unwrapped. Then extractArray returns empty because `.models` on an array is undefined. So **on H5, bare-array responses from models/sessions would be lost**. This is a real cross-platform inconsistency worth flagging. The `list` key fallback only triggers when wrapping happened (Android). On H5, the array is not wrapped, so `list` key not present → empty.\n\nThis is a notable risk for the getAiModelsApi/getAiSessionsApi on H5. Severity medium.\n\nAlso there's a separate finding in extractArray: it depends on key names `models`/`sessions`. This depends on the backend contract. Not a compile risk per se.\n\n**Point ④: ai-assistant.uvue manual AIModelOption construction**\n\nLines 225-242, `allModels` computed. In the first loop: `const item : AIModelOption = { id: m.id, name: m.name, model: m.model, source: m.source, description: m.description }`. The type `AIModelOption` has `source?: string`, `description?: string`, `base_url?: string`. AiModel has all required fields. That assignment is valid as object litteral→type.\n\nSecond loop: `const item : AIModelOption = { id: m.id, name: m.name, model: m.model, source: 'user', base_url: m.base_url }`. AiUserModel has base_url. Valid.\n\nNow potential risk: assigning ref-based values. In computed, `models.value[i]` etc. fine.\n\nThe interesting thing: `AIModelOption` declared with optional `source`/`description`/`base_url`/`api_key`. In uni-app x / uts, using optional properties in a `type` literal is fine. But assigning to `AIModelOption` an object that doesn't have the optional fields present is fine.\n\nOne concern: uni-app x may have issues with `computed<AIModelOption[]>(() : AIModelOption[] => {...})` returning an array of object literals with optional fields — uts's UTSJSONObject-related stricter handling. Direct object literal assignment to a typed interface is standard and works.\n\nNow selectModel(m: AIModelOption) reads `m.id`. Fine.\n\nLet me also double-check point ① more carefully regarding the `sendInput('基础版', buildBody)` call and the closure usage in the async doStreamChat. In `doStreamChat`, `buildBody(history, sessionID)` is called inside async function. The `buildBody` closure reads refs at call time. Since doStreamChat runs (partially) after `await createSessionApi`, the currentModelId/currentModelSource/currentModelName values are read at buildBody invocation — which is after any awaits in doStreamChat but before streamChatApi. Because closures capture ref objects, not values, they read freshest value. Fine.\n\nBut note a specific edge: sessionID in buildBody — `serviceID` is `currentSession.value?.id ?? 0`. In first-send case, session is created and `sessionID = s.id`. Correct.\n\nNow **the biggest point ② compile risk**: passing the page-defined arrow function `buildBody` typed as `ChatBodyBuilder` to `sendInput`, then `doStreamChat`. The type signature matches. But in ai-basic.uvue, the arrow function is annotated `: ChatBodyBuilder` and assigned an arrow. uni-app x supports function-typed annotations.\n\nLet me also verify point ① ref unwrapping in templates specifically for `:class=\"{ disabled: inputText.length == 0 }\"` where inputText is a destructured ref. Vue/uni-app-x unwraps refs in template. `inputText.length` → unwrapped string `.length`. OK.\n\nAnd `v-model=\"inputText\"` — Vue's v-model on a ref unwraps. OK.\n\nOne more: `sidebarLeft.value = false` in template `@click=\"sidebarLeft = false\"` — Vue auto-unwraps on assignment in template. OK.\n\nNow, are there compile risk issues with `currentModelName` and `currentModelId`? `currentModelName` used in template `{{ currentModelName }}` and in onSend passed as `sendInput(currentModelName.value, buildBody)` — proper.\n\nLet me also consider a subtle uni-app x restriction: **In uni-app x, can you return a type alias `ChatBodyBuilder` and import it as `import type { ChatBodyBuilder }`?** Yes, type-only imports work.\n\nNow, an actual documented uni-app x limitation relevant to point ①: uni-app x historically did **not** support destructuring refs from `setup()` for template use in the same way as web Vue due to its compiler compiling to native (Kotlin/Swift) and how it tracks \"Vue refs\" in templates. Actually the officially recommended pattern in uni-app x docs is exactly `const { x, y } = useFoo()` for composables. So it's supported.\n\nLet me consider whether these pages actually are `lang=\"uts\"` compiled for native. Yes uni-app x. \n\nLet me now also check the `sendInput` return — it's `void` (returns `doStreamChat` implicitly? no, it's sync and doesn't return). Actually sendInput calls `doStreamChat(...)` without await and function returns void. Fine.\n\nLet me now think about a risk in point ②-4: in ai-basic buildBody, uses `currentModelId.value` which is a ref defined in the page. The closure created in `<script setup>` context captures the ref binding. Fine.\n\nLet me also flag: `messages` array mutation in doStreamChat — `assistantMsg.content += chunk` while streaming. The `assistantMsg` object is pushed into `messages.value`. Since it's the same object reference and `messages` is reactive ref array, mutating `assistantMsg.content` — does vue/uni-app-x reactivity track nested property mutation of an object pushed into a ref array? For `ref` wrapping an array of plain objects, `arr.value.push(obj)` then `obj.content = ...` — Vue 3 reactivity IS deep via ref deep conversion, so nested mutation is reactive. uni-app-x also does deep reactive on ref. So the streaming text updates the template. Good.\n\nNow let me identify real issues to report. Let me also check whether there's a mismatch: `chatBodyBuilder` history param — in doStreamChat, `history` built as `{role,content}[]`. Matches.\n\nLet me check the biggest concrete compile risks:\n\n1. **ai-assistant.uvue buildBody union literal `currentModelSource.value` typed `'admin'|'user'|'custom'` assigned to `model_source` field in UTSJSONObject object literal.** UTSJSONObject object-literal syntax requires the object to be constructed; `model_source: currentModelSource.value` where value is a union of string literals. In uts, `UTSJSONObject = { [key: string]: any | null }`. Value any is fine. No compile error.\n\n2. In ai-basic buildBody line 191 `config_id: currentModelId.value` where currentModelId is `ref<number>`. Fine.\n\n3. **A subtle real uts issue**: In `UTSJSONObject` object literal `{ session_id: sessionID, ... }`, in uts, the object-literal must be assignable to UTSJSONObject. UTSJSONObject is `Map<string, any>` behind the scenes on native. Object literal with mixed-type values assignable. Works — the codebase already uses this pattern extensively.\n\n4. The `ChatBodyBuilder` type alias includes `UTSJSONObject` return — fine.\n\nNow, cross-checking point ③ for **getAiSessionsApi** particularly: session responses are always objects `{sessions:[...]}` (not bare arrays typically), so no issue there. Models GET could return bare array. The list-fallback covers Android; H5 gap noted.\n\nAlso there is a subtle bug in extractArray: it checks `raw != null` for `data[key]`, then returns `raw as Array<UTSJSONObject>` without verifying that `raw` actually is an array. If backend returns `{models: {...single object}}` it'd cast to Array and `arr.length` undefined → `for` loop over undefined → risk. But that's a robustness note not compile.\n\nLet me also flag the `sendInput`/`doStreamChat` not `await`ing streamChatApi — streamChatApi returns a task (any|null) but doStreamChat ignores it, and is not awaited. Since doStreamChat is async and returns Promise, and sendInput calls it without await, there's no unhandled rejection issue because streamChatApi uses callbacks, not promises. Fine.\n\nNow let me write up the issues. Let me also confirm one compile concern for **point ①**: Actually there's an important note: In uni-app x, **template ref unwrapping worked differently in early versions**. But destructuring is the documented composable pattern. I'll mark point ① as confirmed/low-risk with note of HBuilderX verification for native unwrapping of `currentModelName`/`currentModelId` computed usage.\n\nLet me also double-check: does `useAiChat()` destructuring include `currentModelId`? No — that's page-local. Good.\n\nOne more: In ai-assistant.uvue `onShow`, `selectUserModelById` cast `JSON.parse(...) as UTSJSONObject` — not part of the flagged scope.\n\nLet me finalize the issues list with severities.\n\n**Issue 1 (medium, point ③):** request.uts array-wrapping is platform-dependent — only wraps when `as UTSJSONObject` throws (native Android). On H5/Web/App where the cast is a no-op or doesn't throw, a bare-array `data` flows through unwrapped, so `extractArray(data, key)` returns `[]` and models/sessions silently come back empty. Suggest detecting array before cast in request.uts (e.g. check `Array.isArray(data)` in uts via `data is Array` or a runtime width check) so wrapping applies on all platforms.\n\n**Issue 2 (medium, point ③):** extractArray relies on `data[key]` for `models`/`sessions` key then falls to `list` only. Since only Android triggers `{list}` wrapping, and other keys (`items`) are in the fallback, the behavior differs per platform / per endpoint. Recommend a single contract.\n\nActually issue 2 is more of a design note; I'll fold.\n\n**Issue 3 (medium, point ② + ④):** potential uts strictness on union literal `currentModelSource.value` ('admin'|'user'|'custom') into `UTSJSONObject` field — likely fine but flag as verified-by-HBuilderX uncertainty. Actually low risk.\n\n**Issue 4 (point ①):** Confirm destructured refs unwrap in templates in uni-app x native. This is the documented supported pattern; low risk, but note native template unwrapping should be verified in HBuilderX for both pages, particularly `v-model=\"inputText\"` and computed `currentModelName`.\n\nLet me reconsider if there's a genuinely higher-severity issue.\n\nLooking again at ai-basic at line 203: `sendInput('基础版', buildBody)`. But `buildBody` reads `currentModelId.value` which is only set after models load. If user hits a quick prompt before models load, currentModelId is 0 → config_id 0. The `onSend` guard checks `models.value.length == 0` → shows toast. So buildBody reached only when models loaded. Fine.\n\nPoint ② also: is there a risk that `buildBody` closure reference in doStreamChat crosses reactive boundary in uts compilation such that reading refs works? It works because refs are objects.\n\nAnother compile-level concern for **point ④**: `computed<AIModelOption[]>(() : AIModelOption[] => {...})`. In uni-app x, generic computed with explicit return-type annotation is supported. The object literal construction with optional fields — uni-app x has had issues with `type`-literal optional members causing \"缺少属性\" when constructing in some older versions, but with optional fields marked `?` it's allowed. Actually the constructed objects don't include `api_key` (optional) — fine.\n\nLet me now also verify there are no import issues: ai-basic imports `ChatBodyBuilder` type from composables — yes present. ai-assistant imports `AIModelOption, AIFunctionItem` from types — present.\n\nLet me confirm the `LoginResult`/`useAuthStore` not relevant.\n\nI think severity distribution:\n- point ①: low risk, comment; maybe note the `currentModelName`/`currentModelId` computed usage.\n- point ②: low risk. But one genuine compile/behavior risk: closure capture of refs is fine, but `buildBody` param annotation duplicates the ChatBodyBuilder signature — if they diverged, compile catches. No issue.\n- point ③: medium — platform-dependent array wrapping causes empty lists on H5 for bare-array `data`.\n- point ④: low.\n\nLet me also flag one potential uts compile issue in **point ④**: the `AIModelOption` type is defined in `types/index.uts` with optional members. uni-app x `computed<AIModelOption[]>` returning an array where each element is an object literal — should compile.\n\nActually, I want to reconsider a more concrete compile risk: **`import type { ChatBodyBuilder }`** combined with `export type ChatBodyBuilder = (...) => UTSJSONObject`. In uts, a function type alias referencing `UTSJSONObject` global type — fine.\n\nLet me also verify there isn't a problem where `sendInput` is declared in composable returning object, and pages destructure it as a plain function (not ref). Then `sendInput('基础版', buildBody)` on the destructured function — works.\n\nNow, an important uni-app x specifics for point ①: uni-app x does **support** destructuring refs from a composable and template auto-unwraps them, because the setup script's exposed bindings include `messages` as a `Ref` and the render template unwraps top-level `Ref`/`Computed` bindings on all platforms. This is standard and recommended. I'll state it holds.\n\nLet me finalize and produce issues.\n\nLet me also mention a nuance for point ③ that's worth flagging as high: if `data` is a bare array and wrapping doesn't happen, `extractArray` reads `data['models']` on an Array. In uts native, `Array['models']` — indexing an Array with a string key could throw or return undefined; wrapped in extractArray it returns undefined (no throw) → falls to list → empty. On H5 empty. So it's a silent data-loss bug on H5, not a crash. Medium.\n\nLet me finalize. I'll produce the structured_output now.\n\nLet me determine line references:\n- request.uts: lines 156-168 (dataObj wrap logic). Specifically 162 `dataObj = data as UTSJSONObject` and 165 `wrapped`.\n- aiAssistant.uts: extractArray lines 79-91, getAiModelsApi 94-105, getAiSessionsApi 143-152.\n- ai-basic.uvue / ai-assistant.uvue: destructuring lines 157-173; buildBody lines 187-195 / 257-273; allModels 225-242.\n\nLet me write issues.\n\noverallRisk: I'll say \"medium\" — mostly low-risk patterns but the platform-dependent array wrapping is a genuine cross-platform correctness gap (H5 silent empty lists), and several items need HBuilderX runtime verification on native.I have all the code needed. Let me analyze the four verification points and produce the risk review.\n\n**Analysis summary:**\n\n- **① Setup destructuring + template auto-unwrap:** Both pages use `const { statusBarHeight, sessions, messages, inputText, thinking, ... } = useAiChat()` then reference these bare (no `.value`) in templates (`:style=\"{ paddingTop: statusBarHeight + 'px' }\"`, `v-if=\"messages.length == 0\"`, `v-model=\"inputText\"`, `v-for` over `sessions`/`messages`, and `sidebarLeft = false` in `@click`). These are genuine top-level `Ref` bindings of the same objects created inside the composable, so they are unwrapped in templates. uni-app x's `<script setup>` exposes setup bindings and auto-unwraps top-level `Ref`/`Computed` on both web and native. The `statusBarHeight.value = ...` in `onLoad` uses explicit `.value` correctly. A small caveat: destructuring the **same** ref objects (not `.value` copies) retains reactivity; setting spreads/methods from the returned object all reference the original refs — correct.\n\n- **② ChatBodyBuilder into async doStreamChat:** `buildBody` is a `ChatBodyBuilder`-typed arrow capturing page refs (`currentModelId.value`, `currentModelSource.value`, `customApiKey.value`, etc.). Because those are ref objects (captured by reference, not value), reading `.value` at `buildBody(history, sessionID)` invocation time in `doStreamChat` yields the freshest values — no stale-capture. Function signature matches the alias exactly (`(history: {role,content}[], sessionID: number) => UTSJSONObject`). Assigning the union literal `.value` (`'admin'|'user'|'custom'`) and numbers into `UTSJSONObject` fields is value-`any`, so no compile error. Low risk.\n\n- **③ request.uts array wrapping vs getAiModelsApi/getAiSessionsApi:** The wrap (`{ list: data }`) only triggers when `data as UTSJSONObject` **throws** — which happens on native Android (Kotlin ClassCastException) but is a no-op on H5/Web (JS type assertion). `extractArray` falls back to `data['list']`, so the wrap IS handled when it occurs. But on H5 a bare-array `data` flows through unwrapped; `extractArray` then reads `data['models']/['items']/['list']` on an Array → all undefined → returns `[]`, so public-models / session lists silently come back empty on H5 only. Real cross-platform correctness gap.\n\n- **④ Manual AIModelOption construction (allModels computed):** Both loops assign valid `AIModelOption` object literals (platform uses `{id,name,model,source,description}`; user uses `{id,name,model,source:'user',base_url}`). All referenced `AiModel`/`AiUserModel` fields exist; all optional AIModelOption members are omitted safely. `computed<AIModelOption[]>` with explicit return annotation compiles. Low risk — verify in HBuilderX that optional-field object literals into a `computed` generic are accepted on native.\n\nLet me record the issues.",
+        "origin": "executed",
+        "startedAt": "2026-08-15T01:17:17.805Z",
+        "endedAt": "2026-08-15T01:20:47.531Z"
+      },
+      {
+        "id": "task-2",
+        "title": "contract-alignment",
+        "kind": "agent",
+        "status": "completed",
+        "phaseId": "phase:1",
+        "agentId": "task-2",
+        "childAgentId": "4215a588-7653-4247-9da4-53a06ac66cb7",
+        "summary": "The ai-settings custom save path always requires api_key when model_source=='custom', so it sends api_key. This path is consistent with backend's api_key-required rule. So the api_key-required mismatch is specifically in `custom-models.uvue` edit flow (line 159-161), where api_key can be omitted on edit.\n\nNow I have a complete picture. Let me also confirm that `createSessionApi` in the task statement matches: task says `createSessionApi('新会话', sessionTag)` → backend `CreateSession{'title','model_name'}`. Confirmed at useAiChat.ts line 150 and ai-assistant.uts line 51.\n\nLet me verify there isn't a discrepancy about `saveAiUserModelApi` return handling on backend — backend `SaveUserModel` returns `Success(c, nil)` (data=null), so `data['model']` is null, `buildUserModel(data)` where data is `{}` (request resolves `{}` when data null). That's fine (empty model object), callers use returned fields minimally. In ai-settings, `saved.id` would be 0 and `saved.name` empty. That's a subtle issue: on save the returned object has no id, so `settings.value.model_id = 0`. But that's an edge detail, not a strict contract mismatch — the backend doesn't return the created DTO. Worth a low note but not in the 4 review dimensions directly. I'll keep focused.\n\nNow let me compile findings.\n\nLet me reconsider severity of ① H5 unwrap issue more carefully. On H5 `data as UTSJSONObject` where data is an array — in TS/JS UTS compilation, `as` is erased. So `data` stays a JS Array. `dataObj` = the array. Falls through to `resolve(dataObj)`. Then `extractArray(data, 'sessions')`: `data['sessions']` = undefined → null; `data['items']` = undefined; `data['list']` = undefined. Returns `[]`. So sessions list empty on H5. This is a real cross-end bug IF H5 is a supported target. The presence of `api/*.uts` for cross-end and `unpackage/dist/dev/mp-weixin` suggests mp-weixin is primary. But the design comment is all about Android. I'll rate this medium (behavioral divergence on non-Android/non-Weixin platforms), with the caveat it's inherent to `request.uts` (shared infra) and primarily a latent robustness issue for the AI chain.\n\nNow, let me write the structured output.\n\nReview dimensions summary:\n1. ① Bare-array data → {list} wrap chain: **Aligned** on Android (works via `list` fallback in extractArray). Caveat (medium): on H5/non-Android, `Array as UTSJSONObject` doesn't throw in JS, so the `{list:...}` wrap never happens and `extractArray` returns `[]`, dropping data. Latent cross-end risk.\n2. ② StreamChatReq field mapping + createSessionApi title/model_name: **Aligned**, correct.\n3. ③ SSE message/error/done ↔ parseSSE: **Aligned**, correct.\n4. ④ SaveUserModel api_key 必填遗留: **Mismatch (high)** — backend requires api_key on update; frontend custom-models edit flow omits api_key when left blank → backend rejects with BadRequest. Requires backend change (acknowledged, not to be bypassed frontend).\n\nLet me formulate the structured_output.",
+        "origin": "executed",
+        "startedAt": "2026-08-15T01:17:17.810Z",
+        "endedAt": "2026-08-15T01:22:47.291Z"
+      },
+      {
+        "id": "task-3",
+        "title": "duplication-and-deadcode",
+        "kind": "agent",
+        "status": "completed",
+        "phaseId": "phase:1",
+        "agentId": "task-3",
+        "childAgentId": "9af0a562-a7c6-4de9-b003-78df366ace83",
+        "summary": "Only one composable. Let me check useStatusBarHeight usages vs statusBarHeight defined in useAiChat to check for duplication. useAiChat defines its own `statusBarHeight` ref (default 20), while pages ai-settings/custom-models/version-select use `useStatusBarHeight()` from utils/system. But the two chat pages (ai-basic/ai-assistant) use the useAiChat-internal `statusBarHeight`. This is a mild duplication: useAiChat re-implements statusBarHeight inline (line 27 default 20) instead of reusing `useStatusBarHeight()` util. Let me confirm ai-basic/ai-assistant don't also import useStatusBarHeight. They don't — they use the composable's. Let me verify whether useAiChat could reuse the util.\n\nThis is a real, minor duplication finding: `useAiChat.uts` line 27 `const statusBarHeight = ref<number>(20)` duplicates the `useStatusBarHeight()` helper from `utils/system.uts`. Both chat pages override it in onLoad with `uni.getSystemInfoSync().statusBarHeight`. The util exists precisely for this purpose.\n\nNow let me finalize my findings. Let me also double-check that there is no leftover in pages that redefines statusBarHeight locally. In ai-basic: destructured (line 158) and assigned in onLoad (line 222). Good, using composable's.\n\nLet me now compile a complete, per-file report. Let me also verify there's not a dead `model-selector`/`tool-icon` etc unused in ai-assistant — used in template (model-bar/model-selector line 60-61, tool-icon lines 68,72). All used.\n\nLet me also verify the `welcome-panel` logic and the quickPrompts in ai-assistant - used. Good.\n\nI have all the info. Let me write the final report.\n\nLet me also confirm there are no unused destructured items: in ai-assistant, is `sessions` referenced directly in script anywhere or only template? Only template. But destructuring + template usage is normal; not dead.\n\nOne more: in ai-basic, is `sendInput` used (yes, onSend line 203). \n\nNow, summarizing the duplication finding for `sendText`: both ai-basic (line 207-210) and ai-assistant (line 289-292) have near-identical `sendText` that sets inputText and calls onSend. This could be considered duplication but is page-specific enough. I'll list it as minor duplicationLeft.\n\nAlso `onSave`-like logic, `onDeleteUserModel` in ai-settings and `onDelete` in custom-models and `onDeleteSession` — different functions, not dupes.\n\nLet me also note the goPro/goBasic and pay dialog: ai-basic has mock pay dialog (payVisible, openPay, closePay, confirmPay) and version-select also has identical pay dialog (openPay/closePay/confirmPay + same template). That's a duplication but pre-existing, out of scope for the chat refactor. I could list as duplicationLeft though it's cross-page.\n\nLet me finalize. Compose the structured output.\n\nSummary of findings per the user's 4 items:\n\n① **No leftover duplicate/dead functions in pages**: Both ai-basic and ai-assistant correctly destructure loadSessions/loadSession/startNewChat/onDeleteSession/toggleSidebarLeft/toggleSidebarRight/sendInput from useAiChat. No local re-definitions remain. `scrollToBottom` is correctly internal to useAiChat (not needed by pages). All destructured methods are actually used in templates/script. ✓ Clean.\n\n② **Unused CSS / comment blocks**:\n- ai-assistant.uvue line 92 uses `class=\"empty-tip\"` but that class is NOT defined in its <style> (only ai-basic defines it). Missing style (minor gap).\n- ai-assistant.uvue line 100 comment `<!-- 右侧菜单抽屉（占位） -->` is stale — the right drawer is now fully functional (has menu items). Misleading leftover comment.\n- Duplicate/unused: In ai-basic line 13 there's a stray blank line in nav-center (cosmetic). Also note duplicate nav-title indentation issues (cosmetic).\n- No fully-unused CSS class rules found beyond the missing `.empty-tip` in ai-assistant.\n\n③ **Unused imports / AiSessionMessage**: Neither chat page imports `AiSessionMessage`. It's used only inside useAiChat (messages type). Correct. No unused imports in either chat page (all imports used).\n\n④ **custom-models.uvue / ai-settings.uvue affected**: Not affected by the composable refactor. Neither imports useAiChat nor defines chat/session logic. ai-settings still routes through the older `api/aiAssistant` module (pre-existing divergence), while chat pages use `api/ai-assistant` wrapper — this is the legacy api the composable replaced at page level but not at settings level; not a regression.\n\nAdditional minor duplication:\n- `useAiChat.uts` line 27 re-implements `statusBarHeight = ref(20)` instead of reusing `useStatusBarHeight()` from utils/system (which ai-settings/custom-models/version-select use). Mild duplication.\n- `sendText` duplicated between ai-basic and ai-assistant (both: set inputText + onSend). Thin.\n\nNow reporting via structured_output.",
+        "origin": "executed",
+        "startedAt": "2026-08-15T01:17:17.821Z",
+        "endedAt": "2026-08-15T01:23:38.223Z"
+      },
+      {
+        "id": "task-4",
+        "title": "template-binding-consistency",
+        "kind": "agent",
+        "status": "completed",
+        "phaseId": "phase:1",
+        "agentId": "task-4",
+        "childAgentId": "fb57b720-2194-4db8-b60b-04826b5d55e1",
+        "summary": "The grep confirms:\n- `sendInput` is only referenced in script (correctly with args `sendInput('基础版', buildBody)` and `sendInput(currentModelName.value, buildBody)`), never in templates with no args.\n- No `deepThinking` references.\n- No bare `toggleSidebar` (only `toggleSidebarLeft`/`toggleSidebarRight` which are properly defined and destructured).\n\nBoth files are fully consistent. All bindings resolve, and the required functions in ai-assistant.uvue are all still present.",
+        "origin": "executed",
+        "startedAt": "2026-08-15T01:17:17.827Z",
+        "endedAt": "2026-08-15T01:19:26.826Z"
+      },
+      {
+        "id": "task-5",
+        "title": "synthesis",
+        "kind": "agent",
+        "status": "failed",
+        "phaseId": "phase:2",
+        "agentId": "task-5",
+        "origin": "executed",
+        "startedAt": "2026-08-15T01:23:38.304Z",
+        "endedAt": "2026-08-15T01:23:38.316Z"
+      },
+      {
+        "id": "step:12",
+        "title": "synthesis",
+        "kind": "step",
+        "status": "running",
+        "startedAt": "2026-08-15T01:23:38.283Z"
+      }
+    ],
+    "counts": {
+      "pending": 0,
+      "running": 1,
+      "completed": 6,
+      "failed": 1,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    "progress": {
+      "spawnedAgents": 5,
+      "finishedAgents": 5,
+      "activeAgents": 0,
+      "failedAgents": 1,
+      "stoppedAgents": 0,
+      "replayedAgents": 0
+    }
+  },
+  "error": "restricted workflow failed: wf.synthesize failed: workflow token budget exceeded before agent start",
+  "endedAt": 1786757018388,
+  "cost": {
+    "wallClockDurationMs": 384832,
+    "agentsStarted": 5,
+    "agentsCompleted": 5,
+    "cacheHits": 0,
+    "tokenUsage": 1189815,
+    "peakConcurrency": 4
+  },
+  "outcome": {
+    "runId": "run-0fa74372-631d-43be-99a9-73310de57d03",
+    "status": "failed",
+    "summary": "restricted workflow failed: wf.synthesize failed: workflow token budget exceeded before agent start",
+    "results": [
+      {
+        "taskId": "task-1",
+        "name": "type-safety-audit",
+        "status": "completed",
+        "summary": "I now have all the relevant code. Let me analyze each of the four verification points.\n\n**Point ①: `script setup` top-level destructuring of refs — template auto-unwrapping in uni-app x**\n\nIn ai-basic.uvue and ai-assistant.uvue, both do:\n```\nconst { statusBarHeight, sessions, messages, inputText, thinking, ... } = useAiChat()\n```\nThen use these in the template — e.g. `:style=\"{ paddingTop: statusBarHeight + 'px' }\"`, `v-if=\"messages.length == 0\"`, `v-for=\"(msg, idx) in messages\"`, `v-model=\"inputText\"`, `sessions.length`, `sidebarLeft = false` in click handlers.\n\nIn standard web Vue, destructured refs must use `.value`. In uni-app x's `<script setup lang=\"uts\">`, the template compiler auto-unwraps top-level refs and also auto-unwraps refs exposed from `setup()` returns. But the key question: does destructuring `const { messages } = useAiChat()` produce a top-level binding that the template compiler recognizes and unwraps automatically?\n\nIn uni-app x, the `<script setup lang=\"uts\">` compiles to Vue or native. Important nuance: uni-app x's `setup` script binding analysis (based on Vue SFC compiler) recognizes variables declared directly in `<script setup>` scope. When you destructure `const { messages } = useAiChat()`, the resulting `messages` is a `Ref`. The template compiler in Vue will auto-unwrap refs in template expressions. This destructuring pattern with `const { messages } = useAiChat()` — where useAiChat is a plain function returning an object of refs — is standard Vue composition API. Vue's template ref unwrapping applies to refs that are top-level bindings. A destructured ref is a top-level binding, and Vue auto-unwraps it. This works in standard Vue.\n\nHowever for uni-app x specifically: uni-app x compiles `<script setup>` for native platforms. There is documented behavior that uni-app x supports refs and auto-unwrapping in templates. The concern flagged is whether this destructuring works. In uni-app x, destructuring refs from a composable in setup and using them in template — this does generally work because the compiler unwraps `RefLike` top-level bindings. Since `useAiChat()` returns refs directly (e.g. `messages` is `Ref<AiSessionMessage[]>`), `messages` is a `Ref` and template access `messages.length` unwraps.\n\nBut there's a subtle risk: For uni-app x, there is a known limitation where methods and reactive state returned from composables used via `toRefs`/spread can have issues with strict typing on native. However destructuring refs is the standard recommended pattern and works.\n\nThere is also `currentModelName` used directly in template (`{{ currentModelName }}`) as a computed ref — same unwrapping mechanism.\n\nAlso note: in `onLoad`, code uses `statusBarHeight.value = ...` — this is correct since manual `.value` in script.\n\nOne real concern: `sendInput` is used in template? No — `sendInput` is called inside `onSend()`, not template. `toggleSidebarLeft`, etc. are used in template `@click`. Functions returned from composable are not refs, so no unwrap issue.\n\nLet me consider whether the destructuring overwrites reactivity. Since these refs are created inside the composable and returned, destructuring preserves the same ref objects. Setting via `.value` works. Good.\n\n**Point ②: `ChatBodyBuilder` passed into async `doStreamChat` — closure capture/type**\n\n`sendInput(sessionTag, buildBody)` sync, then calls `doStreamChat(sessionTag, buildBody)`. Inside `doStreamChat` (async), `buildBody` is a parameter of type `ChatBodyBuilder`. Closure captures the local `buildBody` in ai-basic.uvue / ai-assistant.uvue.\n\nKey issue: the `buildBody` closures reference page-scope reactive refs: `currentModelId.value`, `currentModelSource.value`, `customApiKey.value`, `customBaseUrl.value`, `customModel.value`. Since these are refs (object references), the closure captures the ref object, so reading `.value` at call time reads current value. This is correct behavior.\n\nType: `ChatBodyBuilder = (history, sessionID) => UTSJSONObject`. The `buildBody` in pages constructs `UTSJSONObject` literal objects. Assigning a function whose signature matches to a `ChatBodyBuilder` typed variable is fine.\n\nPotential issue in ai-assistant.uvue buildBody: `model_source: currentModelSource.value` where `currentModelSource` is `ref<'admin' | 'user' | 'custom'>`. Assigning a union literal type into `UTSJSONObject` field — UTSJSONObject accepts any value, and the field assignment `params['config_id'] = currentModelId.value` etc. Should be fine in uts.\n\nThere's a type concern: `ChatBodyBuilder` parameter `history : { role : string; content : string }[]`. The closure in the pages declares the same param type. Good, matches.\n\nAnother subtle point: the return object construction `const params : UTSJSONObject = { session_id: sessionID, ... }`. `messages: history` where history is `{role;content}[]`. Assigning array of object literals into UTSJSONObject — UTSJSONObject field can hold any JSON value, arrays are allowed. OK.\n\n**Point ③: request.uts array wrapping impact on getAiModelsApi/getAiSessionsApi**\n\nIn request.uts success handler lines 156-168: it does `data as UTSJSONObject`, catches if ClassCastException (when data is an array on Android), wraps as `{ list: data }`. \n\nNow look at `extractArray(data, key)` in aiAssistant.uts:\n```\nconst raw = data[key]  // e.g. data['models']\nif (raw != null) return raw as Array<UTSJSONObject>\nconst items = data['items']; if (items != null) ...\nconst list = data['list']; if (list != null) return list as Array<UTSJSONObject>\nreturn []\n```\n\nWhen data is wrapped `{ list: [...] }`, `data['models']` is null, `data['items']` is null, then `data['list']` returns the array. Good — so the `list` fallback handles the array wrapping. \n\nFor getAiModelsApi (GET /ai-assistant/models): if backend returns `data` as an array and Android throws, wrapped to `{list:[...]}`, extractArray finds `list`. Standalone array: `data['models']` on a wrapped `{list}` returns undefined → falls through to `list` → returns array. Works.\n\nFor getAiSessionsApi (GET /ai-assistant/sessions): extractArray(data, 'sessions'). If backend `data` is object `{sessions:[...]}` → `data['sessions']` returns. If data is wrapped array `{list:[...]}` → falls to `list`. Works.\n\nSo the array-wrapping is handled by the `list` fallback in extractArray. However there IS an important risk: **the wrapping happens in request.uts where `data as UTSJSONObject` throws, but on platforms where it does NOT throw (or on the array it doesn't throw on web/H5)**, `data` stays as an array typed as UTSJSONObject. Then `body['data']` in request.uts? No — body is `res.data as UTSJSONObject`, and `const data = body['data']`. If `body['data']` is actually an array and the `as UTSJSONObject` cast doesn't throw on that platform, then `data` would be assigned the array reference without wrapping, and `dataObj = data as UTSJSONObject` resolves an array as if it's UTSJSONObject. Then `extractArray(data, 'models')` does `data['models']` — accessing `.models` on an array returns undefined → falls through to `items`/`list` (undefined) → returns `[]`. So on platforms where the cast does NOT throw, when backend returns a bare array, extractArray returns empty → models/sessions list empty. This is only a problem on H5/release apps where UTSJSONObject `as` array doesn't throw.\n\nActually wait — reassessing. The `try { dataObj = data as UTSJSONObject }` wraps only if it throws. On native Android Kotlin, casting an Array to a Map-ish UTSJSONObject throws ClassCastException → wrapped. On Web (JS), `as` is a no-op type assertion, no throw → data (an array) flows through unwrapped. Then extractArray returns empty because `.models` on an array is undefined. So **on H5, bare-array responses from models/sessions would be lost**. This is a real cross-platform inconsistency worth flagging. The `list` key fallback only triggers when wrapping happened (Android). On H5, the array is not wrapped, so `list` key not present → empty.\n\nThis is a notable risk for the getAiModelsApi/getAiSessionsApi on H5. Severity medium.\n\nAlso there's a separate finding in extractArray: it depends on key names `models`/`sessions`. This depends on the backend contract. Not a compile risk per se.\n\n**Point ④: ai-assistant.uvue manual AIModelOption construction**\n\nLines 225-242, `allModels` computed. In the first loop: `const item : AIModelOption = { id: m.id, name: m.name, model: m.model, source: m.source, description: m.description }`. The type `AIModelOption` has `source?: string`, `description?: string`, `base_url?: string`. AiModel has all required fields. That assignment is valid as object litteral→type.\n\nSecond loop: `const item : AIModelOption = { id: m.id, name: m.name, model: m.model, source: 'user', base_url: m.base_url }`. AiUserModel has base_url. Valid.\n\nNow potential risk: assigning ref-based values. In computed, `models.value[i]` etc. fine.\n\nThe interesting thing: `AIModelOption` declared with optional `source`/`description`/`base_url`/`api_key`. In uni-app x / uts, using optional properties in a `type` literal is fine. But assigning to `AIModelOption` an object that doesn't have the optional fields present is fine.\n\nOne concern: uni-app x may have issues with `computed<AIModelOption[]>(() : AIModelOption[] => {...})` returning an array of object literals with optional fields — uts's UTSJSONObject-related stricter handling. Direct object literal assignment to a typed interface is standard and works.\n\nNow selectModel(m: AIModelOption) reads `m.id`. Fine.\n\nLet me also double-check point ① more carefully regarding the `sendInput('基础版', buildBody)` call and the closure usage in the async doStreamChat. In `doStreamChat`, `buildBody(history, sessionID)` is called inside async function. The `buildBody` closure reads refs at call time. Since doStreamChat runs (partially) after `await createSessionApi`, the currentModelId/currentModelSource/currentModelName values are read at buildBody invocation — which is after any awaits in doStreamChat but before streamChatApi. Because closures capture ref objects, not values, they read freshest value. Fine.\n\nBut note a specific edge: sessionID in buildBody — `serviceID` is `currentSession.value?.id ?? 0`. In first-send case, session is created and `sessionID = s.id`. Correct.\n\nNow **the biggest point ② compile risk**: passing the page-defined arrow function `buildBody` typed as `ChatBodyBuilder` to `sendInput`, then `doStreamChat`. The type signature matches. But in ai-basic.uvue, the arrow function is annotated `: ChatBodyBuilder` and assigned an arrow. uni-app x supports function-typed annotations.\n\nLet me also verify point ① ref unwrapping in templates specifically for `:class=\"{ disabled: inputText.length == 0 }\"` where inputText is a destructured ref. Vue/uni-app-x unwraps refs in template. `inputText.length` → unwrapped string `.length`. OK.\n\nAnd `v-model=\"inputText\"` — Vue's v-model on a ref unwraps. OK.\n\nOne more: `sidebarLeft.value = false` in template `@click=\"sidebarLeft = false\"` — Vue auto-unwraps on assignment in template. OK.\n\nNow, are there compile risk issues with `currentModelName` and `currentModelId`? `currentModelName` used in template `{{ currentModelName }}` and in onSend passed as `sendInput(currentModelName.value, buildBody)` — proper.\n\nLet me also consider a subtle uni-app x restriction: **In uni-app x, can you return a type alias `ChatBodyBuilder` and import it as `import type { ChatBodyBuilder }`?** Yes, type-only imports work.\n\nNow, an actual documented uni-app x limitation relevant to point ①: uni-app x historically did **not** support destructuring refs from `setup()` for template use in the same way as web Vue due to its compiler compiling to native (Kotlin/Swift) and how it tracks \"Vue refs\" in templates. Actually the officially recommended pattern in uni-app x docs is exactly `const { x, y } = useFoo()` for composables. So it's supported.\n\nLet me consider whether these pages actually are `lang=\"uts\"` compiled for native. Yes uni-app x. \n\nLet me now also check the `sendInput` return — it's `void` (returns `doStreamChat` implicitly? no, it's sync and doesn't return). Actually sendInput calls `doStreamChat(...)` without await and function returns void. Fine.\n\nLet me now think about a risk in point ②-4: in ai-basic buildBody, uses `currentModelId.value` which is a ref defined in the page. The closure created in `<script setup>` context captures the ref binding. Fine.\n\nLet me also flag: `messages` array mutation in doStreamChat — `assistantMsg.content += chunk` while streaming. The `assistantMsg` object is pushed into `messages.value`. Since it's the same object reference and `messages` is reactive ref array, mutating `assistantMsg.content` — does vue/uni-app-x reactivity track nested property mutation of an object pushed into a ref array? For `ref` wrapping an array of plain objects, `arr.value.push(obj)` then `obj.content = ...` — Vue 3 reactivity IS deep via ref deep conversion, so nested mutation is reactive. uni-app-x also does deep reactive on ref. So the streaming text updates the template. Good.\n\nNow let me identify real issues to report. Let me also check whether there's a mismatch: `chatBodyBuilder` history param — in doStreamChat, `history` built as `{role,content}[]`. Matches.\n\nLet me check the biggest concrete compile risks:\n\n1. **ai-assistant.uvue buildBody union literal `currentModelSource.value` typed `'admin'|'user'|'custom'` assigned to `model_source` field in UTSJSONObject object literal.** UTSJSONObject object-literal syntax requires the object to be constructed; `model_source: currentModelSource.value` where value is a union of string literals. In uts, `UTSJSONObject = { [key: string]: any | null }`. Value any is fine. No compile error.\n\n2. In ai-basic buildBody line 191 `config_id: currentModelId.value` where currentModelId is `ref<number>`. Fine.\n\n3. **A subtle real uts issue**: In `UTSJSONObject` object literal `{ session_id: sessionID, ... }`, in uts, the object-literal must be assignable to UTSJSONObject. UTSJSONObject is `Map<string, any>` behind the scenes on native. Object literal with mixed-type values assignable. Works — the codebase already uses this pattern extensively.\n\n4. The `ChatBodyBuilder` type alias includes `UTSJSONObject` return — fine.\n\nNow, cross-checking point ③ for **getAiSessionsApi** particularly: session responses are always objects `{sessions:[...]}` (not bare arrays typically), so no issue there. Models GET could return bare array. The list-fallback covers Android; H5 gap noted.\n\nAlso there is a subtle bug in extractArray: it checks `raw != null` for `data[key]`, then returns `raw as Array<UTSJSONObject>` without verifying that `raw` actually is an array. If backend returns `{models: {...single object}}` it'd cast to Array and `arr.length` undefined → `for` loop over undefined → risk. But that's a robustness note not compile.\n\nLet me also flag the `sendInput`/`doStreamChat` not `await`ing streamChatApi — streamChatApi returns a task (any|null) but doStreamChat ignores it, and is not awaited. Since doStreamChat is async and returns Promise, and sendInput calls it without await, there's no unhandled rejection issue because streamChatApi uses callbacks, not promises. Fine.\n\nNow let me write up the issues. Let me also confirm one compile concern for **point ①**: Actually there's an important note: In uni-app x, **template ref unwrapping worked differently in early versions**. But destructuring is the documented composable pattern. I'll mark point ① as confirmed/low-risk with note of HBuilderX verification for native unwrapping of `currentModelName`/`currentModelId` computed usage.\n\nLet me also double-check: does `useAiChat()` destructuring include `currentModelId`? No — that's page-local. Good.\n\nOne more: In ai-assistant.uvue `onShow`, `selectUserModelById` cast `JSON.parse(...) as UTSJSONObject` — not part of the flagged scope.\n\nLet me finalize the issues list with severities.\n\n**Issue 1 (medium, point ③):** request.uts array-wrapping is platform-dependent — only wraps when `as UTSJSONObject` throws (native Android). On H5/Web/App where the cast is a no-op or doesn't throw, a bare-array `data` flows through unwrapped, so `extractArray(data, key)` returns `[]` and models/sessions silently come back empty. Suggest detecting array before cast in request.uts (e.g. check `Array.isArray(data)` in uts via `data is Array` or a runtime width check) so wrapping applies on all platforms.\n\n**Issue 2 (medium, point ③):** extractArray relies on `data[key]` for `models`/`sessions` key then falls to `list` only. Since only Android triggers `{list}` wrapping, and other keys (`items`) are in the fallback, the behavior differs per platform / per endpoint. Recommend a single contract.\n\nActually issue 2 is more of a design note; I'll fold.\n\n**Issue 3 (medium, point ② + ④):** potential uts strictness on union literal `currentModelSource.value` ('admin'|'user'|'custom') into `UTSJSONObject` field — likely fine but flag as verified-by-HBuilderX uncertainty. Actually low risk.\n\n**Issue 4 (point ①):** Confirm destructured refs unwrap in templates in uni-app x native. This is the documented supported pattern; low risk, but note native template unwrapping should be verified in HBuilderX for both pages, particularly `v-model=\"inputText\"` and computed `currentModelName`.\n\nLet me reconsider if there's a genuinely higher-severity issue.\n\nLooking again at ai-basic at line 203: `sendInput('基础版', buildBody)`. But `buildBody` reads `currentModelId.value` which is only set after models load. If user hits a quick prompt before models load, currentModelId is 0 → config_id 0. The `onSend` guard checks `models.value.length == 0` → shows toast. So buildBody reached only when models loaded. Fine.\n\nPoint ② also: is there a risk that `buildBody` closure reference in doStreamChat crosses reactive boundary in uts compilation such that reading refs works? It works because refs are objects.\n\nAnother compile-level concern for **point ④**: `computed<AIModelOption[]>(() : AIModelOption[] => {...})`. In uni-app x, generic computed with explicit return-type annotation is supported. The object literal construction with optional fields — uni-app x has had issues with `type`-literal optional members causing \"缺少属性\" when constructing in some older versions, but with optional fields marked `?` it's allowed. Actually the constructed objects don't include `api_key` (optional) — fine.\n\nLet me now also verify there are no import issues: ai-basic imports `ChatBodyBuilder` type from composables — yes present. ai-assistant imports `AIModelOption, AIFunctionItem` from types — present.\n\nLet me confirm the `LoginResult`/`useAuthStore` not relevant.\n\nI think severity distribution:\n- point ①: low risk, comment; maybe note the `currentModelName`/`currentModelId` computed usage.\n- point ②: low risk. But one genuine compile/behavior risk: closure capture of refs is fine, but `buildBody` param annotation duplicates the ChatBodyBuilder signature — if they diverged, compile catches. No issue.\n- point ③: medium — platform-dependent array wrapping causes empty lists on H5 for bare-array `data`.\n- point ④: low.\n\nLet me also flag one potential uts compile issue in **point ④**: the `AIModelOption` type is defined in `types/index.uts` with optional members. uni-app x `computed<AIModelOption[]>` returning an array where each element is an object literal — should compile.\n\nActually, I want to reconsider a more concrete compile risk: **`import type { ChatBodyBuilder }`** combined with `export type ChatBodyBuilder = (...) => UTSJSONObject`. In uts, a function type alias referencing `UTSJSONObject` global type — fine.\n\nLet me also verify there isn't a problem where `sendInput` is declared in composable returning object, and pages destructure it as a plain function (not ref). Then `sendInput('基础版', buildBody)` on the destructured function — works.\n\nNow, an important uni-app x specifics for point ①: uni-app x does **support** destructuring refs from a composable and template auto-unwraps them, because the setup script's exposed bindings include `messages` as a `Ref` and the render template unwraps top-level `Ref`/`Computed` bindings on all platforms. This is standard and recommended. I'll state it holds.\n\nLet me finalize and produce issues.\n\nLet me also mention a nuance for point ③ that's worth flagging as high: if `data` is a bare array and wrapping doesn't happen, `extractArray` reads `data['models']` on an Array. In uts native, `Array['models']` — indexing an Array with a string key could throw or return undefined; wrapped in extractArray it returns undefined (no throw) → falls to list → empty. On H5 empty. So it's a silent data-loss bug on H5, not a crash. Medium.\n\nLet me finalize. I'll produce the structured_output now.\n\nLet me determine line references:\n- request.uts: lines 156-168 (dataObj wrap logic). Specifically 162 `dataObj = data as UTSJSONObject` and 165 `wrapped`.\n- aiAssistant.uts: extractArray lines 79-91, getAiModelsApi 94-105, getAiSessionsApi 143-152.\n- ai-basic.uvue / ai-assistant.uvue: destructuring lines 157-173; buildBody lines 187-195 / 257-273; allModels 225-242.\n\nLet me write issues.\n\noverallRisk: I'll say \"medium\" — mostly low-risk patterns but the platform-dependent array wrapping is a genuine cross-platform correctness gap (H5 silent empty lists), and several items need HBuilderX runtime verification on native.I have all the code needed. Let me analyze the four verification points and produce the risk review.\n\n**Analysis summary:**\n\n- **① Setup destructuring + template auto-unwrap:** Both pages use `const { statusBarHeight, sessions, messages, inputText, thinking, ... } = useAiChat()` then reference these bare (no `.value`) in templates (`:style=\"{ paddingTop: statusBarHeight + 'px' }\"`, `v-if=\"messages.length == 0\"`, `v-model=\"inputText\"`, `v-for` over `sessions`/`messages`, and `sidebarLeft = false` in `@click`). These are genuine top-level `Ref` bindings of the same objects created inside the composable, so they are unwrapped in templates. uni-app x's `<script setup>` exposes setup bindings and auto-unwraps top-level `Ref`/`Computed` on both web and native. The `statusBarHeight.value = ...` in `onLoad` uses explicit `.value` correctly. A small caveat: destructuring the **same** ref objects (not `.value` copies) retains reactivity; setting spreads/methods from the returned object all reference the original refs — correct.\n\n- **② ChatBodyBuilder into async doStreamChat:** `buildBody` is a `ChatBodyBuilder`-typed arrow capturing page refs (`currentModelId.value`, `currentModelSource.value`, `customApiKey.value`, etc.). Because those are ref objects (captured by reference, not value), reading `.value` at `buildBody(history, sessionID)` invocation time in `doStreamChat` yields the freshest values — no stale-capture. Function signature matches the alias exactly (`(history: {role,content}[], sessionID: number) => UTSJSONObject`). Assigning the union literal `.value` (`'admin'|'user'|'custom'`) and numbers into `UTSJSONObject` fields is value-`any`, so no compile error. Low risk.\n\n- **③ request.uts array wrapping vs getAiModelsApi/getAiSessionsApi:** The wrap (`{ list: data }`) only triggers when `data as UTSJSONObject` **throws** — which happens on native Android (Kotlin ClassCastException) but is a no-op on H5/Web (JS type assertion). `extractArray` falls back to `data['list']`, so the wrap IS handled when it occurs. But on H5 a bare-array `data` flows through unwrapped; `extractArray` then reads `data['models']/['items']/['list']` on an Array → all undefined → returns `[]`, so public-models / session lists silently come back empty on H5 only. Real cross-platform correctness gap.\n\n- **④ Manual AIModelOption construction (allModels computed):** Both loops assign valid `AIModelOption` object literals (platform uses `{id,name,model,source,description}`; user uses `{id,name,model,source:'user',base_url}`). All referenced `AiModel`/`AiUserModel` fields exist; all optional AIModelOption members are omitted safely. `computed<AIModelOption[]>` with explicit return annotation compiles. Low risk — verify in HBuilderX that optional-field object literals into a `computed` generic are accepted on native.\n\nLet me record the issues.",
+        "structured": {
+          "issues": [
+            {
+              "severity": "medium",
+              "file": "api/request.uts",
+              "lineRef": "156-168 (dataObj/data as UTSJSONObject wrap)",
+              "description": "数组包装是平台相关的：仅当 `data as UTSJSONObject` 抛 ClassCastException（Android/Kotlin）才会走 `{ list: data }` 包装分支；在 H5/Web（JS 中 as 是无操作类型断言、不抛异常），裸数组 `data` 会原样透传、不包装。随后 aiAssistant.uts 的 extractArray 用 `data['models']/['items']/['list']` 在一个 Array 上取值，全部为 undefined，最终返回 `[]`。因此当后端 models/sessions 接口 data 为「裸数组」时，H5 端 getAiModelsApi/getAiSessionsApi 会静默返回空列表（数据丢失），而 Android 端因被包装成 {list} 却能命中 extractArray 的 list 兜底而正常。属跨端行为不一致的隐性 bug。",
+              "suggestion": "不要在 as 转换失败时才包装，改为在 uts 层先做平台无关的数组判定（如用 `data is Array<UTSJSONObject>` 或判断 `data` 是否具备 length 数组特征）再统一包装为 `{ list: data }`，保证 Web 与 Android 四端一致。同时建议收紧后端契约，models/sessions 统一返回对象形态（如 {models:[...]} / {sessions:[...]}），避免裸数组歧义。"
+            },
+            {
+              "severity": "low",
+              "file": "api/aiAssistant.uts",
+              "lineRef": "79-91 (extractArray)",
+              "description": "extractArray 依赖 key 判定（models/sessions）后再回退到 items/list。当前 request.uts 的数组包装只有 Android 端会触发，故 list 兜底只在原生端生效，H5 端裸数组不会被包成 {list}。结果同一接口在不同端取到的 key 路径不同（可能 models 键、可能 list 键），解析稳定性依赖平台，属脆弱设计；另 `data[key] as Array` 未校验 raw 确为数组，若后端 data 为单个对象且含同名字段，`arr.length` 为 undefined 会跳过循环导致空结果。",
+              "suggestion": "统一各 GET 列表接口的 data 形状，并在 extractArray 中明确判空 + `val is Array` 类型守卫后再 cast，避免依赖平台触发包装间接决定取哪个 key。"
+            },
+            {
+              "severity": "low",
+              "file": "pages/ai-assistant/ai-basic.uvue",
+              "lineRef": "157-173 (useAiChat 顶层解构)",
+              "description": "`const { statusBarHeight, sessions, messages, inputText, thinking, ... } = useAiChat()` 解构出的都是 Ref 引用，模板中裸用（无 .value）依赖 setup 顶层 binding 的自动解包。按 uni-app x 文档这是官方推荐的 composable 解构写法，Web 与原生端均会解包顶层 ref，但考虑到全部跨 4 端（H5/App-nvue/Android/iOS）编译，实测确认解构后的 Ref 在原生模板的自动解包（尤其 v-model 回写、v-for 遍历与 computed currentModelName 在专业版页的绑定）完全成立是应当的。",
+              "suggestion": "本用例风险低、不建议改结构；在 HBuilderX 对 H5 端与 App 原生端各跑一次编译+页面验证 v-model、列表渲染、:class 解包，确认 4 端一致后再合入。此为需 HBuilderX 实测项。"
+            },
+            {
+              "severity": "low",
+              "file": "pages/ai-assistant/ai-assistant.uvue",
+              "lineRef": "257-273 (buildBody) 与 225-242 (allModels)",
+              "description": "(a) buildBody 中 `model_source: currentModelSource.value` 为联合字面量类型 'admin'|'user'|'custom' 写入 UTSJSONObject 字段（any），并动态 `params['config_id'/'user_model_id'/'custom_*'] = ...`，在 uts 中 UTSJSONObject 字段值类型宽泛，预期编过。(b) allModels computed 手工构造 AIModelOption 对象（平台项含 source/description、用户项含 source:'user'/base_url），字段均来自 AiModel/AiUserModel，可选成员均被安全省略。两者按静态类型判定均成立、风险低，但 uts 对「带可选成员的对象字面量作为 computed 泛型元素」在原生端是否严格放行仍需 HBuilderX 实测。",
+              "suggestion": "保持现状即可；建议在 HBuilderX 分别对 admin / user / custom 三种 model_source 分支跑一次 App 端编译，确认联合字面量赋入 UTSJSONObject 与可选成员对象字面量无编译告警（尤其 Android 端）。此为需 HBuilderX 实测项。"
+            },
+            {
+              "severity": "low",
+              "file": "composables/useAiChat.uts",
+              "lineRef": "131-183 (doStreamChat) 159 (buildBody 调用)",
+              "description": "ChatBodyBuilder（形参 history: {role,content}[], sessionID: number => UTSJSONObject）传入同步 sendInput 再进入 async doStreamChat，闭包按引用捕获页面级 ref（currentModelId/currentModelSource/customApiKey/...），在 await createSessionApi 之后调用 buildBody 时读 .value 得到的是调用时刻的最新值，无旧值闭包问题；两个页面传入的箭头函数签名与别名完全一致。静态/类型面无编译风险。附加说明：doStreamChat 未 await streamChatApi（其为回调式，非 Promise），且 sendInput 未 await doStreamChat，均无未处理 reject；assistantMsg 经 ref 深层响应式，顶层解构的 messages 能实时渲染流式追加。",
+              "suggestion": "无需修改。可选加固：在 sendInput / doStreamChat 前对 buildBody 一次哨兵调用（如 params['messages'] 长度校验）以尽早暴露签名漂移；彻底起见仍建议在 HBuilderX 实测闭包在原生端捕获 ref 后返回 UTSJSONObject 的行为。"
+            }
+          ],
+          "overallRisk": "medium"
+        },
+        "artifacts": [],
+        "usage": {
+          "inputTokens": 38902,
+          "outputTokens": 8391,
+          "cacheReadTokens": 146944,
+          "totalTokens": 194237
+        }
+      },
+      {
+        "taskId": "task-2",
+        "name": "contract-alignment",
+        "status": "completed",
+        "summary": "The ai-settings custom save path always requires api_key when model_source=='custom', so it sends api_key. This path is consistent with backend's api_key-required rule. So the api_key-required mismatch is specifically in `custom-models.uvue` edit flow (line 159-161), where api_key can be omitted on edit.\n\nNow I have a complete picture. Let me also confirm that `createSessionApi` in the task statement matches: task says `createSessionApi('新会话', sessionTag)` → backend `CreateSession{'title','model_name'}`. Confirmed at useAiChat.ts line 150 and ai-assistant.uts line 51.\n\nLet me verify there isn't a discrepancy about `saveAiUserModelApi` return handling on backend — backend `SaveUserModel` returns `Success(c, nil)` (data=null), so `data['model']` is null, `buildUserModel(data)` where data is `{}` (request resolves `{}` when data null). That's fine (empty model object), callers use returned fields minimally. In ai-settings, `saved.id` would be 0 and `saved.name` empty. That's a subtle issue: on save the returned object has no id, so `settings.value.model_id = 0`. But that's an edge detail, not a strict contract mismatch — the backend doesn't return the created DTO. Worth a low note but not in the 4 review dimensions directly. I'll keep focused.\n\nNow let me compile findings.\n\nLet me reconsider severity of ① H5 unwrap issue more carefully. On H5 `data as UTSJSONObject` where data is an array — in TS/JS UTS compilation, `as` is erased. So `data` stays a JS Array. `dataObj` = the array. Falls through to `resolve(dataObj)`. Then `extractArray(data, 'sessions')`: `data['sessions']` = undefined → null; `data['items']` = undefined; `data['list']` = undefined. Returns `[]`. So sessions list empty on H5. This is a real cross-end bug IF H5 is a supported target. The presence of `api/*.uts` for cross-end and `unpackage/dist/dev/mp-weixin` suggests mp-weixin is primary. But the design comment is all about Android. I'll rate this medium (behavioral divergence on non-Android/non-Weixin platforms), with the caveat it's inherent to `request.uts` (shared infra) and primarily a latent robustness issue for the AI chain.\n\nNow, let me write the structured output.\n\nReview dimensions summary:\n1. ① Bare-array data → {list} wrap chain: **Aligned** on Android (works via `list` fallback in extractArray). Caveat (medium): on H5/non-Android, `Array as UTSJSONObject` doesn't throw in JS, so the `{list:...}` wrap never happens and `extractArray` returns `[]`, dropping data. Latent cross-end risk.\n2. ② StreamChatReq field mapping + createSessionApi title/model_name: **Aligned**, correct.\n3. ③ SSE message/error/done ↔ parseSSE: **Aligned**, correct.\n4. ④ SaveUserModel api_key 必填遗留: **Mismatch (high)** — backend requires api_key on update; frontend custom-models edit flow omits api_key when left blank → backend rejects with BadRequest. Requires backend change (acknowledged, not to be bypassed frontend).\n\nLet me formulate the structured_output.",
+        "structured": {
+          "mismatches": [
+            {
+              "severity": "high",
+              "frontend": "pages/ai-assistant/custom-models.uvue (onSave, lines 147-164)",
+              "backend": "internal/api/ai_assistant.go SaveUserModel (line 93-96) 必填校验 name/api_key/base_url/model",
+              "description": "④ SaveUserModel api_key 必填遗留：后端对创建/更新统一校验 api_key 非空（req.APIKey == \"\" 即 BadRequest）。前端 custom-models.uvue 编辑模式（editingId>0）不强制输入 api_key（仅创建时要求），当用户留空时 payload 不含 api_key，后端返回 'name/api_key/base_url/model 均为必填'，导致「编辑但不改 key」功能失败。团队已确认这是需后端配合的遗留问题，前端不得绕过后端校验。",
+              "fixHint": "后端将 SaveUserModelReq.APIKey 改为可选（编辑时留空表示保留原 key）：当 req.ID>0 且 req.APIKey 为空时，Updates 中仅 name/base_url/model 而跳过 api_key 字段（或先查原记录复用）。此为纯后端改动（当前被禁止），仅记录异议。"
+            },
+            {
+              "severity": "medium",
+              "frontend": "api/request.uts (wrap {list:data} 逻辑, lines 156-168) + api/aiAssistant.uts extractArray(lines 79-91)",
+              "backend": "internal/api/ai_assistant.go ListSessions/ListPublicModels/ListUserModels/GetSessionMessages 的 response.Success 输出裸数组 data",
+              "description": "① 裸数组→{list} 链路在 Android 端成立（数组 as UTSJSONObject 抛 ClassCastException 被捕，包装为 {list:[...]}，extractArray 走 list 兜底命中）。但在 H5/非 Android（JS 运行时，as 被擦除不抛异常）裸数组不会被包装，extractArray 查 sessions/items/list 均得 null 返回 []，导致会话/模型/消息列表被静默清空。属跨端行为分歧，且该逻辑位于共享 request.uts/aiAssistant.uts，影响整个 AI 列表链路。",
+              "fixHint": "前端在 request.uts 解包时加数组检测（如 Array.isArray(data) || 用 typeof/构造器判断后再包装），或在 extractArray 中当 data 本身是数组时直接返回该数组，避免依赖抛异常兜底，保证跨端一致。"
+            },
+            {
+              "severity": "low",
+              "frontend": "api/aiAssistant.uts saveAiUserModelApi(lines 126-135); pages/ai-assistant/ai-settings.uvue (onSave, line 253 saved.id/saved.name)",
+              "backend": "internal/api/ai_assistant.go SaveUserModel 返回 response.Success(c, nil)（data=null），不返回创建后的实体",
+              "description": "后端 SaveUserModel 成功仅返回 data=null。前端 ai-settings 通过 saveAiUserModelApi 返回体读取 saved.id/saved.name 回填 model_id/model_name，此时均为 0/''，需依赖本地表单兜底覆盖；custom-models 保存后走 loadModels 刷新，无影响。非阻断，属返回契约偏薄，谨记录。"
+            }
+          ],
+          "verdict": "逐项核对结果：① 裸数组→{list} 链路 Android 端成立（extractArray 经 list 兜底命中），但 H5/非 Android 因 as 不抛异常导致裸数组不包装、列表被静默清空，列为 medium 跨端风险；② StreamChatReq 请求体（session_id/model_source/config_id/user_model_id/custom_api_key/custom_base_url/custom_model/messages）与 buildBody 各 model_source 分支字段名逐一对齐，且 createSessionApi('新会话', sessionTag) 发送 {title, model_name} 与后端 CreateSession 结构一致，确认无误；③ SSE 后端 message/error/done 事件格式与前端 parseSSE 完全匹配，确认无误；④ SaveUserModel api_key 必填遗留为真实异议（high）：后端更新时强校验 api_key，与前端编辑模式「留空即不改 key」冲突，需后端配合放开该必填（当前后端禁止改动，仅记录）。总体契约核心对齐，除 ④ 为明确待后端处理的遗留外无阻断性失配。"
+        },
+        "artifacts": [],
+        "usage": {
+          "inputTokens": 54455,
+          "outputTokens": 5935,
+          "cacheReadTokens": 406912,
+          "totalTokens": 467302
+        }
+      },
+      {
+        "taskId": "task-3",
+        "name": "duplication-and-deadcode",
+        "status": "completed",
+        "summary": "Only one composable. Let me check useStatusBarHeight usages vs statusBarHeight defined in useAiChat to check for duplication. useAiChat defines its own `statusBarHeight` ref (default 20), while pages ai-settings/custom-models/version-select use `useStatusBarHeight()` from utils/system. But the two chat pages (ai-basic/ai-assistant) use the useAiChat-internal `statusBarHeight`. This is a mild duplication: useAiChat re-implements statusBarHeight inline (line 27 default 20) instead of reusing `useStatusBarHeight()` util. Let me confirm ai-basic/ai-assistant don't also import useStatusBarHeight. They don't — they use the composable's. Let me verify whether useAiChat could reuse the util.\n\nThis is a real, minor duplication finding: `useAiChat.uts` line 27 `const statusBarHeight = ref<number>(20)` duplicates the `useStatusBarHeight()` helper from `utils/system.uts`. Both chat pages override it in onLoad with `uni.getSystemInfoSync().statusBarHeight`. The util exists precisely for this purpose.\n\nNow let me finalize my findings. Let me also double-check that there is no leftover in pages that redefines statusBarHeight locally. In ai-basic: destructured (line 158) and assigned in onLoad (line 222). Good, using composable's.\n\nLet me now compile a complete, per-file report. Let me also verify there's not a dead `model-selector`/`tool-icon` etc unused in ai-assistant — used in template (model-bar/model-selector line 60-61, tool-icon lines 68,72). All used.\n\nLet me also verify the `welcome-panel` logic and the quickPrompts in ai-assistant - used. Good.\n\nI have all the info. Let me write the final report.\n\nLet me also confirm there are no unused destructured items: in ai-assistant, is `sessions` referenced directly in script anywhere or only template? Only template. But destructuring + template usage is normal; not dead.\n\nOne more: in ai-basic, is `sendInput` used (yes, onSend line 203). \n\nNow, summarizing the duplication finding for `sendText`: both ai-basic (line 207-210) and ai-assistant (line 289-292) have near-identical `sendText` that sets inputText and calls onSend. This could be considered duplication but is page-specific enough. I'll list it as minor duplicationLeft.\n\nAlso `onSave`-like logic, `onDeleteUserModel` in ai-settings and `onDelete` in custom-models and `onDeleteSession` — different functions, not dupes.\n\nLet me also note the goPro/goBasic and pay dialog: ai-basic has mock pay dialog (payVisible, openPay, closePay, confirmPay) and version-select also has identical pay dialog (openPay/closePay/confirmPay + same template). That's a duplication but pre-existing, out of scope for the chat refactor. I could list as duplicationLeft though it's cross-page.\n\nLet me finalize. Compose the structured output.\n\nSummary of findings per the user's 4 items:\n\n① **No leftover duplicate/dead functions in pages**: Both ai-basic and ai-assistant correctly destructure loadSessions/loadSession/startNewChat/onDeleteSession/toggleSidebarLeft/toggleSidebarRight/sendInput from useAiChat. No local re-definitions remain. `scrollToBottom` is correctly internal to useAiChat (not needed by pages). All destructured methods are actually used in templates/script. ✓ Clean.\n\n② **Unused CSS / comment blocks**:\n- ai-assistant.uvue line 92 uses `class=\"empty-tip\"` but that class is NOT defined in its <style> (only ai-basic defines it). Missing style (minor gap).\n- ai-assistant.uvue line 100 comment `<!-- 右侧菜单抽屉（占位） -->` is stale — the right drawer is now fully functional (has menu items). Misleading leftover comment.\n- Duplicate/unused: In ai-basic line 13 there's a stray blank line in nav-center (cosmetic). Also note duplicate nav-title indentation issues (cosmetic).\n- No fully-unused CSS class rules found beyond the missing `.empty-tip` in ai-assistant.\n\n③ **Unused imports / AiSessionMessage**: Neither chat page imports `AiSessionMessage`. It's used only inside useAiChat (messages type). Correct. No unused imports in either chat page (all imports used).\n\n④ **custom-models.uvue / ai-settings.uvue affected**: Not affected by the composable refactor. Neither imports useAiChat nor defines chat/session logic. ai-settings still routes through the older `api/aiAssistant` module (pre-existing divergence), while chat pages use `api/ai-assistant` wrapper — this is the legacy api the composable replaced at page level but not at settings level; not a regression.\n\nAdditional minor duplication:\n- `useAiChat.uts` line 27 re-implements `statusBarHeight = ref(20)` instead of reusing `useStatusBarHeight()` from utils/system (which ai-settings/custom-models/version-select use). Mild duplication.\n- `sendText` duplicated between ai-basic and ai-assistant (both: set inputText + onSend). Thin.\n\nNow reporting via structured_output.",
+        "structured": {
+          "deadCode": [
+            {
+              "file": "pages/ai-assistant/ai-assistant.uvue",
+              "what": "模板 L92 使用 class=\"empty-tip\"（暂无历史对话），但其 <style> 中没有 .empty-tip 规则（仅 .picker-empty 存在），该 class 在页面内是孤儿/未定义样式；ai-basic 里同名 class 才有定义",
+              "lineRef": "L92"
+            },
+            {
+              "file": "pages/ai-assistant/ai-assistant.uvue",
+              "what": "过时注释块：<!-- 右侧菜单抽屉（占位）-->（L100），但右侧抽屉实际已实现完整功能菜单（新对话/切基础版/设置/自定义模型/个人中心），注释与事实不符，属残留误导性描述",
+              "lineRef": "L100"
+            },
+            {
+              "file": "composables/useAiChat.uts",
+              "what": "statusBarHeight 重复实现在 composable 内：L27 const statusBarHeight = ref(20)，未复用 utils/system 的 useStatusBarHeight()（ai-settings/custom-models/version-select 已用该工厂），两页在 onLoad 又各自 getSystemInfoSync 覆盖，存在两条路径维护同一状态量",
+              "lineRef": "L27"
+            }
+          ],
+          "duplicationLeft": [
+            {
+              "file": "pages/ai-assistant/ai-basic.uvue",
+              "what": "sendText()（L207-210）与 ai-assistant.uvue 的 sendText()（L289-292）逻辑相同：填充 inputText 后调用各自 onSend。是页面私有薄包装，未收敛（符合当前 buildBody 回调差异设计，主体无重复，此属轻微横向重复）"
+            },
+            {
+              "file": "pages/ai-assistant/ai-basic.uvue",
+              "what": "mock 付费弹窗（payVisible/openPay/closePay/confirmPay + pay-* 模板/CSS）与 version-select.uvue 的付费弹窗几乎完全重复（同一套 plan/确认/取消结构与样式），可抽公共组件收敛"
+            },
+            {
+              "file": "pages/ai-assistant/ai-assistant.uvue",
+              "what": "右侧抽屉模板段（drawer-right + 功能菜单）与 ai-basic.uvue 的右侧抽屉高度相似（header/close/菜单项），主体已由 useAiChat 收敛状态，模板仍两份相近"
+            }
+          ],
+          "unusedImports": [],
+          "summary": "只读死代码/重复核查（根 E:\\\\FL\\\\training-app\\\\叉车维修培训学员端跨端应用，聚焦 ai-basic/ai-assistant/useAiChat）：\n\n① 会话/消息/滚动/侧栏/发送逻辑收敛到 composables/useAiChat.uts 后，ai-basic.uvue 与 ai-assistant.uvue 均已正确从 useAiChat 解构 loadSessions/loadSession/startNewChat/onDeleteSession/toggleSidebarLeft/toggleSidebarRight/sendInput（及相关状态），页面内未再残留同名重复/死函数；scrollToBottom 已完全内聚到 composable 内部，页面无需也不再用。所有解构项在模板或脚本均被真实引用，无未使用的解构。\n\n② 未引用 CSS/注释块：\n- ai-assistant.uvue L92 的 class=\"empty-tip\" 在自身 <style> 中无对应规则（仅有 .picker-empty），属孤儿/未定义类（ai-basic 才定义了 .empty-tip）；建议补规则或改用已有类。\n- ai-assistant.uvue L100 的注释「右侧菜单抽屉（占位）」已过时，右侧抽屉实际上已实现完整功能菜单，注释与行为不符，建议删除。\n其余两页 CSS 类与模板全部匹配，未发现整段未使用的 CSS 规则、未引用 import 或整段死注释。\n\n③ 未使用 import / AiSessionMessage：两个聊天页均未直接 import AiSessionMessage（页面 import 为 AiModel/AiUserModel/AIModelOption/AIFunctionItem），它仅被 useAiChat 内部用作 messages 类型——符合收敛预期，无死 import；两页所有 import（含 ref/computed、api、utils、TabBar、client-plugin 无关）均被使用。没有需要清除的未使用 import。\n\n④ custom-models.uvue / ai-settings.uvue 不受本次收敛影响：二者都未 import useAiChat，也不含会话/聊天/滚动/侧栏逻辑，是独立模型/设置页；无需改动。仅提示：ai-settings.uvue 仍走旧的 api/aiAssistant 模块（L133），而聊天两页与 custom-models 走新的 api/ai-assistant 封装——这是收敛前已存在的 API 层分叉，非本次引入的回归。\n\n附带轻微重复（可选优化，不影响收敛正确性）：useAiChat.uts L27 内联实现 statusBarHeight=ref(20) 未复用 utils/system.useStatusBarHeight()；两页 sendText() 逻辑近似；ai-basic 与 version-select 的 mock 付费弹窗几乎整段重复。"
+        },
+        "artifacts": [],
+        "usage": {
+          "inputTokens": 43814,
+          "outputTokens": 7643,
+          "cacheReadTokens": 341248,
+          "totalTokens": 392705
+        }
+      },
+      {
+        "taskId": "task-4",
+        "name": "template-binding-consistency",
+        "status": "completed",
+        "summary": "The grep confirms:\n- `sendInput` is only referenced in script (correctly with args `sendInput('基础版', buildBody)` and `sendInput(currentModelName.value, buildBody)`), never in templates with no args.\n- No `deepThinking` references.\n- No bare `toggleSidebar` (only `toggleSidebarLeft`/`toggleSidebarRight` which are properly defined and destructured).\n\nBoth files are fully consistent. All bindings resolve, and the required functions in ai-assistant.uvue are all still present.",
+        "structured": {
+          "bindings": [
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "statusBarHeight (@click/:style)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "toggleSidebarLeft (@click)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "toggleSidebarRight (@click)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "scrollIntoViewId (:scroll-into-view)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "messages (v-if/v-for)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "thinking (v-if)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "quickPrompts (v-for)",
+              "defined": true,
+              "note": "page const line 213"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "sendText (@click)",
+              "defined": true,
+              "note": "page function line 207"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "inputText (v-model)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "onSend (@confirm/@click)",
+              "defined": true,
+              "note": "page function line 198; calls sendInput with args"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "sidebarLeft (v-if, @click assignment)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "startNewChat (@click)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "sessions (v-for/v-if)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "loadSession (@click)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "onDeleteSession (@click.stop)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "sidebarRight (v-if, @click assignment)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "goPro (@click)",
+              "defined": true,
+              "note": "page function line 253"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "goSettings (@click)",
+              "defined": true,
+              "note": "page function line 290"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "goManageModels (@click)",
+              "defined": true,
+              "note": "page function line 295"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "goProfile (@click)",
+              "defined": true,
+              "note": "page function line 300"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "payVisible (v-if)",
+              "defined": true,
+              "note": "page ref line 176"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "closePay (@click)",
+              "defined": true,
+              "note": "page function line 268"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "payPlan (:class/@click assignment)",
+              "defined": true,
+              "note": "page ref line 177"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "PRO_PRICE_MONTH ({{ }})",
+              "defined": true,
+              "note": "imported line 149"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "PRO_PRICE_YEAR ({{ }})",
+              "defined": true,
+              "note": "imported line 150"
+            },
+            {
+              "file": "ai-basic.uvue",
+              "templateRef": "confirmPay (@click)",
+              "defined": true,
+              "note": "page function line 273"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "statusBarHeight (:style)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "toggleSidebarLeft (@click)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "toggleSidebarRight (@click)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "scrollIntoViewId (:scroll-into-view)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "functionItems (v-for)",
+              "defined": true,
+              "note": "page const line 294"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "onFunctionClick (@click)",
+              "defined": true,
+              "note": "page function line 380; item④ required, present"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "quickPrompts (v-for)",
+              "defined": true,
+              "note": "page const line 301"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "sendText (@click)",
+              "defined": true,
+              "note": "page function line 289"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "messages (v-if/v-for)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "thinking (v-if)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "showModelPicker (v-if/@click)",
+              "defined": true,
+              "note": "page ref line 211"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "currentModelName ({{ }})",
+              "defined": true,
+              "note": "page computed line 243"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "chooseImage (@click)",
+              "defined": true,
+              "note": "page function line 456; item④ required, present"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "inputText (v-model)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "onSend (@confirm/@click)",
+              "defined": true,
+              "note": "page function line 276; calls sendInput with args"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "startVoice (@click)",
+              "defined": true,
+              "note": "page function line 474; item④ required, present"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "sidebarLeft (v-if, @click assignment)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "startNewChat (@click)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "sessions (v-for/v-if)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "loadSession (@click)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "onDeleteSession (@click.stop)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "sidebarRight (v-if, @click assignment)",
+              "defined": true,
+              "note": "destructured from useAiChat"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "goBasic (@click)",
+              "defined": true,
+              "note": "page function line 374"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "goSettings (@click)",
+              "defined": true,
+              "note": "page function line 488; item④ required, present"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "goManageModels (@click)",
+              "defined": true,
+              "note": "page function line 418; item④ required, present"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "goProfile (@click)",
+              "defined": true,
+              "note": "page function line 483; item④ required, present"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "allModels (v-for/v-if)",
+              "defined": true,
+              "note": "page computed line 225"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "currentModelId (:class)",
+              "defined": true,
+              "note": "page ref line 223"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "currentModelSource (:class)",
+              "defined": true,
+              "note": "page ref line 224"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "selectModel (@click)",
+              "defined": true,
+              "note": "page function line 388; item④ required, present"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "showCustomForm (v-if, @click assignment)",
+              "defined": true,
+              "note": "page ref line 214"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "closeCustomForm (@click)",
+              "defined": true,
+              "note": "page function line 423"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "customModel (v-model/:value/@input)",
+              "defined": true,
+              "note": "page ref line 215"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "onCustomModelInput (@input)",
+              "defined": true,
+              "note": "page function line 427"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "customBaseUrl (v-model/:value/@input)",
+              "defined": true,
+              "note": "page ref line 216"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "onCustomBaseUrlInput (@input)",
+              "defined": true,
+              "note": "page function line 430"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "customApiKey (v-model/:value/@input)",
+              "defined": true,
+              "note": "page ref line 217"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "onCustomApiKeyInput (@input)",
+              "defined": true,
+              "note": "page function line 433"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "confirmCustomModel (@click)",
+              "defined": true,
+              "note": "page function line 437; item④ required, present"
+            },
+            {
+              "file": "ai-assistant.uvue",
+              "templateRef": "selectUserModelById (internal call onShow)",
+              "defined": true,
+              "note": "page function line 401; item④ required, present"
+            }
+          ],
+          "risks": [
+            "useAiChat 解构的 scrollToBottom/currentSession/doStreamChat 未在页面解构，但两页模板均未引用，无影响",
+            "输入框使用 :value + @input 而非 v-model（ai-assistant.uvue 自定义表单），绑定一致正确",
+            "unpackage/dist 编译产物中的 useAiChat.js 可能滞后于 .uts 源，建议重新编译后再真机验证"
+          ],
+          "verdict": "通过。两文件模板绑定与 script 顶层完全一致：全部 @click/@confirm/v-model/v-for/:style 标识符均可解析，无缺失绑定（defined=false 项为零）。toggleSidebarLeft/onSend 均正确定义；未引用任何已删标识符（toggleSidebar、无参 sendInput、deepThinking 均不存在于模板）；ai-assistant.uvue 中 chooseImage/startVoice/goManageModels/goSettings/goProfile/confirmCustomModel/selectModel/selectUserModelById/onFunctionClick 九个函数全部仍存在且被正确绑定。"
+        },
+        "artifacts": [],
+        "usage": {
+          "inputTokens": 25201,
+          "outputTokens": 5282,
+          "cacheReadTokens": 105088,
+          "totalTokens": 135571
+        }
+      },
+      {
+        "taskId": "task-5",
+        "name": "synthesis",
+        "status": "failed",
+        "summary": "",
+        "artifacts": []
+      }
+    ],
+    "artifacts": [],
+    "coverage": [
+      "type-safety-audit",
+      "contract-alignment",
+      "duplication-and-deadcode",
+      "template-binding-consistency"
+    ],
+    "unresolved": [
+      "synthesis"
+    ],
+    "errors": [
+      {
+        "taskId": "task-5",
+        "name": "synthesis",
+        "message": "workflow token budget exceeded before agent start"
+      },
+      {
+        "message": "restricted workflow failed: wf.synthesize failed: workflow token budget exceeded before agent start"
+      }
+    ],
+    "usage": {
+      "inputTokens": 162372,
+      "outputTokens": 27251,
+      "cacheReadTokens": 1000192,
+      "totalTokens": 1189815,
+      "totalSpawned": 5
+    }
+  }
+}
