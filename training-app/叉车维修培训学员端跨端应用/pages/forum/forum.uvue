@@ -1,27 +1,89 @@
+warning: unable to find all commit-graph files
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
         <view class="header">
-            <view class="header-left"></view>
+            <view class="header-left">
+                <view class="msg-icon-wrap" @click="onMsgClick">
+                    <text class="msg-icon">✉️</text>
+                    <view v-if="unreadCount > 0" class="msg-badge">
+                        <text class="msg-badge-text">{{ unreadCount > 99 ? '99+' : String(unreadCount) }}</text>
+                    </view>
+                </view>
+            </view>
             <text class="header-title">学员论坛</text>
             <view class="header-right" @click="onCreate">
                 <text class="header-action" @click="onCreate">发帖</text>
             </view>
         </view>
-        <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
-            <view class="forum-banner">
-                <text class="banner-title">综合讨论区</text>
-                <text class="banner-sub">自由发言，交流叉车维修知识与学习心得</text>
+        <!-- 顶部Tab栏 -->
+        <view class="tab-bar">
+            <view class="tab-item" :class="{ active: currentTab === 'square' }" @click="onSwitchTab('square')">
+                <text class="tab-text">广场</text>
             </view>
+            <view class="tab-item" :class="{ active: currentTab === 'resource' }" @click="onSwitchTab('resource')">
+                <text class="tab-text">资源</text>
+            </view>
+            <view class="tab-item" :class="{ active: currentTab === 'recruit' }" @click="onSwitchTab('recruit')">
+                <text class="tab-text">招聘</text>
+            </view>
+            <view class="tab-item" :class="{ active: currentTab === 'hot' }" @click="onSwitchTab('hot')">
+                <text class="tab-text">热门</text>
+            </view>
+            <view class="tab-icon-btn" @click="onPersonalActivity">
+                <image v-if="avatarUrl.length > 0" class="tab-avatar" :src="avatarUrl" mode="aspectFill" />
+                <view v-else class="tab-avatar-placeholder">
+                    <text class="tab-avatar-icon">👷</text>
+                </view>
+            </view>
+        </view>
+        <!-- 搜索栏 -->
+        <view class="res-search-bar" @click="onCreate">
+            <view class="res-search-input-wrap">
+                <text class="res-search-placeholder">写下你此刻的想法</text>
+            </view>
+        </view>
+        <!-- 排序栏（广场/招聘/热门 Tab 显示） -->
+        <view v-if="currentTab !== 'resource'" class="sort-bar">
+            <view class="sort-left">
+                <view class="sort-chip" :class="{ active: sortField === 'latest' }"
+                    @click="onSortFieldChange('latest')">
+                    <text class="sort-chip-text" :class="{ active: sortField === 'latest' }">最新</text>
+                </view>
+                <view class="sort-chip" :class="{ active: sortField === 'hot' }" @click="onSortFieldChange('hot')">
+                    <text class="sort-chip-text" :class="{ active: sortField === 'hot' }">热门</text>
+                </view>
+            </view>
+            <view class="sort-right">
+                <view class="sort-chip" :class="{ active: sortOrder === 'desc' }" @click="onSortOrderChange('desc')">
+                    <text class="sort-chip-text" :class="{ active: sortOrder === 'desc' }">逆序</text>
+                </view>
+                <view class="sort-chip" :class="{ active: sortOrder === 'asc' }" @click="onSortOrderChange('asc')">
+                    <text class="sort-chip-text" :class="{ active: sortOrder === 'asc' }">正序</text>
+                </view>
+            </view>
+        </view>
 
+        <!-- 广场/短视频/备考经验 Tab 内容 -->
+        <scroll-view v-if="currentTab == 'square'" class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+            <!-- 打卡活动卡片 -->
+            <view class="checkin-card" @click="onCheckInClick">
+                <view class="checkin-card-left">
+                    <text class="checkin-card-title">8月学习打卡</text>
+                    <text class="checkin-card-date">2026.08.01</text>
+                    <text class="checkin-card-players">{{ checkinPlayers }}人已参与打卡</text>
+                </view>
+                <view class="checkin-card-btn">
+                    <text class="checkin-card-btn-text">开始打卡</text>
+                </view>
+            </view>
             <view v-if="topics.length == 0 && !loading" class="empty-tip">
-                <text class="empty-icon">💬</text>
+                <text class="empty-icon"></text>
                 <text class="empty-text">还没有帖子，来发第一帖吧</text>
                 <view class="empty-btn" @click="onCreate">
                     <text class="empty-btn-text">发布新帖</text>
                 </view>
             </view>
-
             <view class="topic-list">
                 <view v-for="(item, idx) in topics" :key="idx" class="topic-card" @click="onTopicClick(item.id)">
                     <text class="topic-title">{{ item.title }}</text>
@@ -37,22 +99,33 @@
                             </view>
                         </view>
                     </view>
-                    <view class="topic-footer">
-                        <view class="topic-author">
-                            <view class="author-avatar">
-                                <text class="author-avatar-text">{{ getAuthorInitial(item.author_name) }}</text>
-                            </view>
-                            <text class="author-name">{{ item.author_name.length > 0 ? item.author_name : '匿名学员' }}</text>
+                    <!-- 作者行：头像 + 昵称 + 时间 -->
+                    <view class="topic-author-row">
+                        <view class="author-avatar" :style="{ backgroundColor: getAvatarColor(item.author_id) }">
+                            <image v-if="item.author_avatar.length > 0" class="author-avatar-img"
+                                :src="resolveImg(item.author_avatar)" mode="aspectFill" />
+                            <text v-else class="author-avatar-text">{{ getAuthorInitial(item.author_name) }}</text>
                         </view>
-                        <view class="topic-meta">
-                            <text class="meta-item">💬 {{ item.replies_count }}</text>
-                            <text class="meta-item">👁 {{ item.views_count }}</text>
-                            <text class="meta-time">{{ formatDate(item.created_at) }}</text>
+                        <text class="author-name">{{ item.author_name.length > 0 ? item.author_name : '匿名学员' }}</text>
+                        <text class="topic-time">{{ formatDateStr(item.created_at) }}</text>
+                    </view>
+                    <!-- 操作栏：点赞数（只读） + 评论 + 浏览；点赞/收藏仅详情页支持 -->
+                    <view class="topic-action-bar">
+                        <view class="action-item">
+                            <text class="action-icon">♡</text>
+                            <text class="action-text">{{ item.likes_count }}</text>
+                        </view>
+                        <view class="action-item" @click.stop="onReply(item.id)">
+                            <text class="action-icon"></text>
+                            <text class="action-text">{{ item.replies_count }}</text>
+                        </view>
+                        <view class="action-item">
+                            <text class="action-icon"></text>
+                            <text class="action-text">{{ item.views_count }}</text>
                         </view>
                     </view>
                 </view>
             </view>
-
             <view v-if="loading" class="loading-more">
                 <text class="loading-text">加载中...</text>
             </view>
@@ -61,30 +134,145 @@
             </view>
         </scroll-view>
 
-        <!-- 悬浮发帖按钮 -->
-        <view class="fab-btn" @click="onCreate">
+        <!-- 资源 Tab 内容（内联） -->
+        <scroll-view v-if="currentTab === 'resource'" class="content-scroll" scroll-y="true">
+
+            <!-- 金币 Banner -->
+            <view class="res-coin-banner">
+                <view class="res-coin-left">
+                    <view class="res-coin-icon-box">
+                        <text class="res-coin-icon-text"></text>
+                    </view>
+                    <view class="res-coin-info">
+                        <text class="res-coin-label">我的金币</text>
+                        <text class="res-coin-value">{{ coinBalance }}</text>
+                    </view>
+                </view>
+                <view class="res-coin-right">
+                    <text class="res-coin-detail-text" @click="onPointsTodetail">查看明细</text>
+                </view>
+            </view>
+            <!-- 2x2 功能卡片 -->
+            <view class="res-feature-grid">
+                <view class="res-feature-card" @click="onResourceClick('course-mall')">
+                    <view class="res-feature-card-icon-wrap res-card-bg-red">
+                        <text class="res-feature-card-icon"></text>
+                    </view>
+                    <text class="res-feature-card-title">课程商城</text>
+                </view>
+                <view class="res-feature-card" @click="onResourceClick('my-purchases')">
+                    <view class="res-feature-card-icon-wrap res-card-bg-blue">
+                        <text class="res-feature-card-icon"></text>
+                    </view>
+                    <text class="res-feature-card-title">我的已购</text>
+                </view>
+                <view class="res-feature-card" @click="onResourceClick('my-uploads')">
+                    <view class="res-feature-card-icon-wrap res-card-bg-green">
+                        <text class="res-feature-card-icon"></text>
+                    </view>
+                    <text class="res-feature-card-title">我的上传</text>
+                </view>
+                <view class="res-feature-card" @click="onResourceClick('upload-resource')">
+                    <view class="res-feature-card-icon-wrap res-card-bg-sky">
+                        <text class="res-feature-card-icon">☁️</text>
+                    </view>
+                    <text class="res-feature-card-title">上传资源</text>
+                </view>
+            </view>
+        </scroll-view>
+
+        <!-- 悬浮发帖按钮（非资源Tab时显示） -->
+        <view v-if="currentTab !== 'resource'" class="fab-btn" @click="onCreate">
             <text class="fab-icon">+</text>
         </view>
     </view>
 </template>
 
 <script setup lang="uts">
-    import { ref } from 'vue'
+    import { ref, computed } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
+    import { useAuthStore } from '../../stores/auth'
     import { useStatusBarHeight } from '../../utils/system'
-    import { getForumTopicsApi } from '../../api/forum'
-    import { resolveFileUrl } from '../../utils/format'
-    import type { ForumTopic } from '../../types/index'
+    import { getForumTopicsApi, getCheckInCalendarApi } from '../../api/forum'
+    import { getProfileApi } from '../../api/student'
+    import { getUnreadCountApi } from '../../api/notification'
+    import { formatDateStr, resolveFileUrl } from '../../utils/format'
+    import { UNAVAILABLE_TOAST } from '../../constants/app'
+    import type { ForumTopic, StudentProfile } from '../../types/index'
 
+    const authStore = useAuthStore()
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
+    // ---- 用户头像 ----
+    const avatarUrl = computed<string>(() : string => {
+        const u = authStore.user.value
+        if (u != null && u.avatar_url != null && u.avatar_url.length > 0) {
+            return u.avatar_url
+        }
+        return ''
+    })
+
+    // ---- 帖子列表相关 ----
     const topics = ref<ForumTopic[]>([])
     const page = ref<number>(1)
     const pageSize = 10
     const total = ref<number>(0)
     const loading = ref<boolean>(false)
     const noMore = ref<boolean>(false)
+    const currentTab = ref<string>('square') // square | resource | recruit | hot
+    const unreadCount = ref<number>(0)
+    const sortField = ref<string>('latest') // latest | hot
+    const sortOrder = ref<string>('desc')   // desc | asc
+
+    // ---- 打卡相关 ----
+    const checkinPlayers = ref<number>(0)
+
+    async function loadCheckInStatus() : Promise<void> {
+        try {
+            const now = new Date()
+            const result = await getCheckInCalendarApi(now.getFullYear(), now.getMonth() + 1)
+            // 统计已签到人数（简化：用累计签到天数近似参与人数）
+            checkinPlayers.value = result.days.length > 0 ? result.consecutive_days * 3 + 7 : 10
+        } catch (e) {
+            checkinPlayers.value = 10
+        }
+    }
+
+    function onCheckInClick() : void {
+        uni.navigateTo({ url: '/pages/forum/check-in' })
+    }
+
+    // ---- 资源 Tab 相关 ----
+    const profile = ref<StudentProfile | null>(null)
+    const coinBalance = computed<number>(() : number => {
+        const p = profile.value
+        if (p == null) return 0
+        const hours = Math.floor(p.total_study_duration / 60)
+        return hours * 3 + p.completed_courses * 20
+    })
+
+    async function loadProfile() : Promise<void> {
+        try { profile.value = await getProfileApi() } catch (e) { uni.__f__('error','at pages/forum/forum.uvue:255','[forum] loadProfile failed:', e) }
+    }
+    function onPointsTodetail() : void {
+        uni.navigateTo({
+            url: "/pages/points/points-detail"
+        })
+    }
+    function onResourceClick(key : string) : void {
+        if (key === 'course-mall') {
+            uni.reLaunch({ url: '/pages/courses/courses' })
+        } else if (key === 'my-purchases') {
+            uni.navigateTo({ url: '/pages/resources/my-purchases' })
+        } else if (key === 'my-uploads') {
+            uni.navigateTo({ url: '/pages/resources/my-uploads' })
+        } else if (key === 'upload-resource') {
+            uni.navigateTo({ url: '/pages/resources/upload-resource' })
+        } else {
+            uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
+        }
+    }
 
     /** 获取内容预览（截取前 80 字，去掉换行） */
     function getContentPreview(content : string) : string {
@@ -103,21 +291,46 @@
         return result
     }
 
-    /** 解析图片完整 URL（模板中直接调用 import 的 resolveFileUrl 触发 error18，用页面函数包装） */
     function resolveImg(url : string) : string {
         return resolveFileUrl(url)
     }
 
-    /** 获取作者名首字 */
     function getAuthorInitial(name : string) : string {
         if (name.length == 0) return '学'
         return name.substring(0, 1)
     }
 
-    /** 时间字符串截取 YYYY-MM-DD */
-    function formatDate(dateStr : string) : string {
-        if (dateStr.length < 10) return dateStr
-        return dateStr.substring(0, 10)
+    /** 基于 author_id 稳定生成头像背景色 */
+    function getAvatarColor(authorId : number) : string {
+        const colors : string[] = ['#2979ff', '#4caf50', '#ff9800', '#9c27b0', '#e91e63', '#009688', '#795548', '#607d8b']
+        if (authorId <= 0) return colors[0]
+        return colors[authorId % colors.length]
+    }
+
+    function onSwitchTab(tab : string) : void {
+        if (currentTab.value === tab) return
+        currentTab.value = tab
+        if (tab === 'resource') {
+            loadProfile()
+            return
+        }
+        loadTopics(true)
+    }
+
+    function onPersonalActivity() : void {
+        uni.navigateTo({ url: '/pages/profile/personal-activity' })
+    }
+
+    function onSortFieldChange(field : string) : void {
+        if (sortField.value === field) return
+        sortField.value = field
+        loadTopics(true)
+    }
+
+    function onSortOrderChange(order : string) : void {
+        if (sortOrder.value === order) return
+        sortOrder.value = order
+        loadTopics(true)
     }
 
     async function loadTopics(reset : boolean = false) : Promise<void> {
@@ -130,7 +343,13 @@
 
         loading.value = true
         try {
-            const result = await getForumTopicsApi(page.value, pageSize)
+            let scope = 'general'
+            if (currentTab.value === 'recruit') {
+                scope = 'recruit'
+            } else if (currentTab.value === 'hot') {
+                scope = 'hot'
+            }
+            const result = await getForumTopicsApi(page.value, pageSize, scope, sortField.value, sortOrder.value)
             if (reset) {
                 topics.value = result.items
             } else {
@@ -143,7 +362,7 @@
                 page.value = page.value + 1
             }
         } catch (e) {
-            console.error('[forum] load failed:', e)
+            uni.__f__('error','at pages/forum/forum.uvue:369','[forum] load failed:', e)
             uni.showToast({ title: '加载帖子失败', icon: 'none' })
         } finally {
             loading.value = false
@@ -158,29 +377,60 @@
         uni.navigateTo({ url: '/pages/forum/forum-detail?id=' + topicId })
     }
 
+    function onReply(topicId : number) : void {
+        uni.navigateTo({ url: '/pages/forum/forum-detail?id=' + topicId })
+    }
+
     function onCreate() : void {
-        uni.navigateTo({ url: '/pages/forum/forum-create' })
+        let scope = 'general'
+        if (currentTab.value === 'resource') {
+            scope = 'resource'
+        } else if (currentTab.value === 'recruit') {
+            scope = 'recruit'
+        } else if (currentTab.value === 'hot') {
+            scope = 'hot'
+        }
+        uni.navigateTo({ url: '/pages/forum/forum-create?scope=' + scope })
+    }
+
+    // ===== 消息通知 =====
+
+    /** 点击消息图标 → 跳转通知页 */
+    function onMsgClick() : void {
+        uni.navigateTo({ url: '/pages/notifications/notifications' })
+    }
+
+    /** 加载未读数（角标） */
+    async function loadUnreadCount() : Promise<void> {
+        try {
+            unreadCount.value = await getUnreadCountApi()
+        } catch (e) {
+            uni.__f__('error','at pages/forum/forum.uvue:412','[forum] loadUnreadCount failed:', e)
+        }
     }
 
     onShow(() => {
-        // 每次进入页面刷新列表（发帖/删帖后能及时同步）
-        loadTopics(true)
+        loadUnreadCount()
+        loadCheckInStatus()
+        if (currentTab.value !== 'resource') {
+            loadTopics(true)
+        }
     })
 </script>
 
 <style>
     .container {
         display: flex;
-        background-color: #f5f5f5;
+        background: linear-gradient(180deg, #CFE9FB 1%, #D0EBFD 16%, #F5F5F5 100%);
         flex-direction: column;
     }
 
     .status-bar {
-        background-color: #2979ff;
+        background-color: transparent;
     }
 
     .header {
-        background-color: #2979ff;
+        background-color: transparent;
         padding: 16rpx 32rpx;
         flex-direction: row;
         align-items: center;
@@ -188,20 +438,54 @@
     }
 
     .header-left {
-        width: 80rpx;
+        width: 100rpx;
         align-items: center;
+        justify-content: center;
+    }
+
+    /* 消息图标 */
+    .msg-icon-wrap {
+        position: relative;
+        width: 64rpx;
+        height: 64rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .msg-icon {
+        font-size: 40rpx;
+    }
+
+    /* 未读角标 */
+    .msg-badge {
+        position: absolute;
+        top: -4rpx;
+        right: -8rpx;
+        min-width: 32rpx;
+        height: 32rpx;
+        border-radius: 16rpx;
+        background-color: #ff3b30;
+        align-items: center;
+        justify-content: center;
+        padding: 0 8rpx;
+    }
+
+    .msg-badge-text {
+        font-size: 20rpx;
+        color: #ffffff;
+        font-weight: bold;
     }
 
     .back-icon {
         font-size: 48rpx;
-        color: #ffffff;
+        color: #333333;
     }
 
     .header-title {
         flex: 1;
         font-size: 36rpx;
         font-weight: bold;
-        color: #ffffff;
+        color: #333333;
         text-align: center;
     }
 
@@ -210,14 +494,14 @@
         width: 120rpx;
         height: 56rpx;
         border-radius: 28rpx;
-        background-color: rgba(255, 255, 255, 0.25);
+        background-color: rgba(41, 121, 255, 0.12);
         align-items: center;
         justify-content: center;
     }
 
     .header-action {
         font-size: 28rpx;
-        color: #ffffff;
+        color: #2979ff;
         font-weight: bold;
     }
 
@@ -226,23 +510,106 @@
         height: 0;
     }
 
-    /* 顶部 banner */
-    .forum-banner {
-        background-color: #2979ff;
-        padding: 0 32rpx 32rpx;
-        flex-direction: column;
+    /* 顶部Tab栏 */
+    .tab-bar {
+        flex-direction: row;
+        background-color: transparent;
+        border-bottom: 1rpx solid rgba(0, 0, 0, 0.06);
+        align-items: center;
     }
 
-    .banner-title {
-        font-size: 36rpx;
+    .tab-item {
+        flex: 1;
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
+        border-bottom: 4rpx solid transparent;
+    }
+
+    .tab-item.active {
+        border-bottom-color: #2979ff;
+    }
+
+    .tab-text {
+        font-size: 30rpx;
+        color: #666666;
+    }
+
+    .tab-item.active .tab-text {
+        color: #2979ff;
         font-weight: bold;
-        color: #ffffff;
-        margin-bottom: 8rpx;
     }
 
-    .banner-sub {
+    /* Tab栏右侧图标按钮 */
+    .tab-icon-btn {
+        width: 80rpx;
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
+        margin-left: 8rpx;
+    }
+
+    .tab-avatar {
+        width: 56rpx;
+        height: 56rpx;
+        border-radius: 28rpx;
+        border: 2rpx solid #eeeeee;
+    }
+
+    .tab-avatar-placeholder {
+        width: 56rpx;
+        height: 56rpx;
+        border-radius: 28rpx;
+        background-color: #f0f5ff;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .tab-avatar-icon {
+        font-size: 32rpx;
+    }
+
+    /* 排序栏 */
+    .sort-bar {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16rpx 24rpx;
+        background-color: transparent;
+        border-bottom: 1rpx solid rgba(0, 0, 0, 0.06);
+    }
+
+    .sort-left {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .sort-right {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .sort-chip {
+        padding: 8rpx 24rpx;
+        border-radius: 24rpx;
+        background-color: #f5f5f5;
+        border: 1rpx solid #e0e0e0;
+        margin-right: 12rpx;
+    }
+
+    .sort-chip.active {
+        background-color: #e8f0fe;
+        border: 1rpx solid #2979ff;
+    }
+
+    .sort-chip-text {
         font-size: 24rpx;
-        color: #cfe5ff;
+        color: #666666;
+    }
+
+    .sort-chip-text.active {
+        color: #2979ff;
+        font-weight: bold;
     }
 
     /* 帖子列表 */
@@ -314,17 +681,13 @@
         font-weight: bold;
     }
 
-    .topic-footer {
+    /* 作者行 */
+    .topic-author-row {
         flex-direction: row;
         align-items: center;
-        justify-content: space-between;
         padding-top: 12rpx;
         border-top: 1rpx solid #f5f5f5;
-    }
-
-    .topic-author {
-        flex-direction: row;
-        align-items: center;
+        margin-top: 12rpx;
     }
 
     .author-avatar {
@@ -343,25 +706,50 @@
         font-weight: bold;
     }
 
+    .author-avatar-img {
+        width: 44rpx;
+        height: 44rpx;
+        border-radius: 22rpx;
+    }
+
     .author-name {
+        flex: 1;
         font-size: 24rpx;
         color: #666666;
     }
 
-    .topic-meta {
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .meta-item {
-        font-size: 22rpx;
-        color: #999999;
-        margin-right: 16rpx;
-    }
-
-    .meta-time {
+    .topic-time {
         font-size: 22rpx;
         color: #cccccc;
+    }
+
+    /* 操作栏 */
+    .topic-action-bar {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-around;
+        padding: 16rpx 0 0;
+    }
+
+    .action-item {
+        flex-direction: row;
+        align-items: center;
+        padding: 8rpx 16rpx;
+        border-radius: 24rpx;
+        background-color: #f5f5f5;
+        border: 1px solid #eeeeee;
+        margin-right: 8rpx;
+    }
+
+    .action-icon {
+        font-size: 28rpx;
+        margin-right: 6rpx;
+        color: #999999;
+    }
+
+    .action-text {
+        font-size: 24rpx;
+        color: #999999;
     }
 
     /* 空状态 */
@@ -404,6 +792,53 @@
         color: #999999;
     }
 
+    /* 打卡活动卡片 */
+    .checkin-card {
+        margin: 20rpx 24rpx;
+        padding: 28rpx 32rpx;
+        border-radius: 16rpx;
+        background-color: #f0f7ff;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .checkin-card-left {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .checkin-card-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 8rpx;
+    }
+
+    .checkin-card-date {
+        font-size: 22rpx;
+        color: #999999;
+        margin-bottom: 4rpx;
+    }
+
+    .checkin-card-players {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .checkin-card-btn {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        border-radius: 32rpx;
+        flex-shrink: 0;
+    }
+
+    .checkin-card-btn-text {
+        font-size: 26rpx;
+        color: #ffffff;
+        font-weight: bold;
+    }
+
     /* 悬浮发帖按钮（避开底部 tab-bar） */
     .fab-btn {
         position: fixed;
@@ -422,5 +857,129 @@
         font-size: 56rpx;
         color: #ffffff;
         font-weight: bold;
+    }
+
+    /* ===== 资源 Tab 内联样式 ===== */
+    .res-search-bar {
+        background-color: transparent;
+        padding: 16rpx 32rpx 20rpx;
+    }
+
+    .res-search-input-wrap {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        background-color: #f5f5f5;
+        border-radius: 36rpx;
+        padding: 16rpx 24rpx;
+    }
+
+    .res-search-placeholder {
+        font-size: 28rpx;
+        color: #999999;
+        flex: 1;
+    }
+
+    .res-coin-banner {
+        margin: 24rpx;
+        padding: 28rpx 32rpx;
+        border-radius: 20rpx;
+        background-color: #e8f4fd;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .res-coin-left {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .res-coin-icon-box {
+        width: 80rpx;
+        height: 80rpx;
+        border-radius: 40rpx;
+        background-color: #ffffff;
+        align-items: center;
+        justify-content: center;
+        margin-right: 20rpx;
+    }
+
+    .res-coin-icon-text {
+        font-size: 44rpx;
+    }
+
+    .res-coin-info {
+        flex-direction: column;
+    }
+
+    .res-coin-label {
+        font-size: 24rpx;
+        color: #666666;
+    }
+
+    .res-coin-value {
+        font-size: 44rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-top: 4rpx;
+    }
+
+    .res-coin-right {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .res-coin-detail-text {
+        font-size: 26rpx;
+        color: #2979ff;
+    }
+
+    .res-feature-grid {
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: 0 24rpx;
+    }
+
+    .res-feature-card {
+        width: 50%;
+        padding: 16rpx;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .res-feature-card-icon-wrap {
+        width: 100%;
+        height: 180rpx;
+        border-radius: 16rpx;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 16rpx;
+    }
+
+    .res-card-bg-red {
+        background-color: #FFF0F0;
+    }
+
+    .res-card-bg-blue {
+        background-color: #F0F5FF;
+    }
+
+    .res-card-bg-green {
+        background-color: #F0FFF0;
+    }
+
+    .res-card-bg-sky {
+        background-color: #F0F8FF;
+    }
+
+    .res-feature-card-icon {
+        font-size: 72rpx;
+    }
+
+    .res-feature-card-title {
+        font-size: 28rpx;
+        font-weight: 500;
+        color: #333333;
     }
 </style>

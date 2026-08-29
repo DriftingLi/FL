@@ -1,3 +1,4 @@
+warning: unable to find all commit-graph files
 /**
  * 页面导航工具
  * 由于本应用大量使用 reLaunch 切换页面（tab-bar / 首页宫格），
@@ -13,7 +14,11 @@
 export function goBack(fallback: string = '/pages/dashboard/dashboard'): void {
 	const pages = getCurrentPages()
 	if (pages != null && pages.length > 1) {
-		uni.navigateBack({})
+		uni.navigateBack({
+			fail: () => {
+				uni.reLaunch({ url: fallback })
+			}
+		})
 	} else {
 		uni.reLaunch({ url: fallback })
 	}
