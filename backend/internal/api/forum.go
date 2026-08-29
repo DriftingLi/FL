@@ -69,6 +69,9 @@ func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumS
 	// ===== 评论点赞（spec #268）=====
 	g.POST("/replies/:id/like", h.LikeReply)
 	g.DELETE("/replies/:id/like", h.UnlikeReply)
+	// ===== 采纳（#366）=====
+	g.POST("/topics/:id/accept", h.AcceptTopic)
+	g.DELETE("/topics/:id/accept", h.CancelAccept)
 
 	// ===== 管理员论坛管理 =====
 	adminG := rg.Group("/admin/forum", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
@@ -849,4 +852,73 @@ func (h *ForumHandler) UnlikeReply(c *gin.Context) {
 		return
 	}
 	response.SuccessWithMsg(c, "已取消点赞", gin.H{"likes_count": count, "liked": false})
+}
+
+// AcceptTopic 采纳回答（#366）
+// @Summary 采纳回答
+// @Description 仅楼主可采纳；首次采纳给答主+40/楼主+5（每帖只发一次分），更换不发分，楼主采纳自己零分
+// @Tags 学员端-论坛
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "主题ID"
+// @Param body body object true "采纳" example({"reply_id":123})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "无权限"
+// @Router /forum/topics/{id}/accept [post]
+func (h *ForumHandler) AcceptTopic(c *gin.Context) {
+	topicID, err := pathInt64(c, "id", "主题 ID 无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	var body struct {
+		ReplyID int64 `json:"reply_id"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || body.ReplyID <= 0 {
+		response.BadRequest(c, "reply_id 不能为空且需大于 0")
+		return
+	}
+	topic, err := h.svc.AcceptReply(middleware.CurrentUserID(c), topicID, body.ReplyID)
+	if err != nil {
+		if errors.Is(err, service.ErrNotTopicOwner) {
+			response.Forbidden(c, err.Error())
+			return
+		}
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "已采纳", topic)
+}
+
+// CancelAccept 取消采纳（#366）
+// @Summary 取消采纳
+// @Description 仅楼主可取消；状态回到未解决，已发分不回滚
+// @Tags 学员端-论坛
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "主题ID"
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "无权限"
+// @Router /forum/topics/{id}/accept [delete]
+func (h *ForumHandler) CancelAccept(c *gin.Context) {
+	topicID, err := pathInt64(c, "id", "主题 ID 无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	topic, err := h.svc.CancelAccept(middleware.CurrentUserID(c), topicID)
+	if err != nil {
+		if errors.Is(err, service.ErrNotTopicOwner) {
+			response.Forbidden(c, err.Error())
+			return
+		}
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "已取消采纳", topic)
 }

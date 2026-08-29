@@ -51,6 +51,17 @@ func normalizeForumCategory(category string) (string, error) {
 	}
 }
 
+// 采纳积分常量（#366）：每帖只发一次分，走流水直记（非任务制）。
+const (
+	AcceptBonusPoints   = 40               // 答主采纳奖励
+	AcceptActionPoints  = 5                // 楼主采纳行为奖励
+	ReasonAcceptedBonus = "accepted_bonus" // 流水原因：被采纳奖励
+	ReasonAcceptAction  = "accept_action"  // 流水原因：采纳行为奖励
+)
+
+// ErrNotTopicOwner 只有楼主可采纳/取消/更换。
+var ErrNotTopicOwner = errors.New("只有楼主可以执行此操作")
+
 // 论坛发图限制。
 const (
 	ForumTopicMaxImages = 9 // 主题最多图片数
@@ -71,21 +82,23 @@ func (a ForumAuthor) DisplayName() string {
 
 // ForumTopicDTO 论坛主题列表/详情对象。
 type ForumTopicDTO struct {
-	ID           int64       `json:"id"`
-	ChapterID    *int        `json:"chapter_id"`
-	Category     string      `json:"category"` // discussion | question（#364）
-	ChapterTitle string      `json:"chapter_title"`
-	Title        string      `json:"title"`
-	Content      string      `json:"content"`
-	Images       []string    `json:"images"`
-	ViewCount    int         `json:"view_count"`
-	ReplyCount   int         `json:"reply_count"`
-	LastReplyAt  *string     `json:"last_reply_at"`
-	CreatedAt    string      `json:"created_at"`
-	Author       ForumAuthor `json:"author"`
-	CanDelete    bool        `json:"can_delete"`
-	LikesCount   int64       `json:"likes_count"`
-	LikedByMe    bool        `json:"liked_by_me"`
+	ID              int64       `json:"id"`
+	ChapterID       *int        `json:"chapter_id"`
+	Category        string      `json:"category"` // discussion | question（#364）
+	ChapterTitle    string      `json:"chapter_title"`
+	Title           string      `json:"title"`
+	Content         string      `json:"content"`
+	Images          []string    `json:"images"`
+	ViewCount       int         `json:"view_count"`
+	ReplyCount      int         `json:"reply_count"`
+	LastReplyAt     *string     `json:"last_reply_at"`
+	CreatedAt       string      `json:"created_at"`
+	Author          ForumAuthor `json:"author"`
+	CanDelete       bool        `json:"can_delete"`
+	LikesCount      int64       `json:"likes_count"`
+	LikedByMe       bool        `json:"liked_by_me"`
+	AcceptedReplyID *int64      `json:"accepted_reply_id,omitempty"`
+	SolvedAt        *string     `json:"solved_at,omitempty"`
 }
 
 // ForumReplyDTO 论坛回复对象。
@@ -101,6 +114,7 @@ type ForumReplyDTO struct {
 	CanDelete  bool        `json:"can_delete"`
 	LikesCount int64       `json:"likes_count"`
 	LikedByMe  bool        `json:"liked_by_me"`
+	IsAccepted bool        `json:"is_accepted"`
 }
 
 // ForumService 论坛服务。
@@ -123,21 +137,23 @@ func NewForumService(db *gorm.DB, fileSvc *FileStore, notificationSvc *Notificat
 
 // topicRow 列表查询的扫描结构。
 type topicRow struct {
-	ID           int64
-	ChapterID    *int
-	Category     string
-	ChapterTitle string
-	Title        string
-	Content      string
-	Images       string
-	ViewCount    int
-	ReplyCount   int
-	LikesCount   int64
-	LastReplyAt  *time.Time
-	CreatedAt    time.Time
-	UserID       int
-	Username     string
-	AvatarURL    string
+	ID              int64
+	ChapterID       *int
+	Category        string
+	ChapterTitle    string
+	Title           string
+	Content         string
+	Images          string
+	ViewCount       int
+	ReplyCount      int
+	LikesCount      int64
+	AcceptedReplyID *int64
+	SolvedAt        *time.Time
+	LastReplyAt     *time.Time
+	CreatedAt       time.Time
+	UserID          int
+	Username        string
+	AvatarURL       string
 }
 
 func (r topicRow) toDTO(viewerID int) ForumTopicDTO {
@@ -146,19 +162,26 @@ func (r topicRow) toDTO(viewerID int) ForumTopicDTO {
 		s := formatISO(*r.LastReplyAt)
 		lastReplyAt = &s
 	}
+	var solvedAt *string
+	if r.SolvedAt != nil {
+		s := formatISO(*r.SolvedAt)
+		solvedAt = &s
+	}
 	return ForumTopicDTO{
-		ID:           r.ID,
-		ChapterID:    r.ChapterID,
-		Category:     r.Category,
-		ChapterTitle: r.ChapterTitle,
-		Title:        r.Title,
-		Content:      r.Content,
-		Images:       parseImageURLs(r.Images),
-		ViewCount:    r.ViewCount,
-		ReplyCount:   r.ReplyCount,
-		LikesCount:   r.LikesCount,
-		LastReplyAt:  lastReplyAt,
-		CreatedAt:    formatISO(r.CreatedAt),
+		ID:              r.ID,
+		ChapterID:       r.ChapterID,
+		Category:        r.Category,
+		ChapterTitle:    r.ChapterTitle,
+		Title:           r.Title,
+		Content:         r.Content,
+		Images:          parseImageURLs(r.Images),
+		ViewCount:       r.ViewCount,
+		ReplyCount:      r.ReplyCount,
+		LikesCount:      r.LikesCount,
+		AcceptedReplyID: r.AcceptedReplyID,
+		SolvedAt:        solvedAt,
+		LastReplyAt:     lastReplyAt,
+		CreatedAt:       formatISO(r.CreatedAt),
 		Author: ForumAuthor{
 			UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL,
 		},
@@ -241,7 +264,7 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 		orderClause,
 		func(q *gorm.DB) *gorm.DB {
 			q = q.Table("forum_topics AS t").
-				Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.last_reply_at, t.created_at, " +
+				Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.created_at, " +
 					"u.id AS user_id, u.username, u.avatar_url, " +
 					"COALESCE(ch.title, '') AS chapter_title").
 				Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
@@ -285,7 +308,7 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order st
 	}
 	var row topicRow
 	err := s.db.Table("forum_topics AS t").
-		Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.last_reply_at, t.created_at, "+
+		Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.created_at, "+
 			"u.id AS user_id, u.username, u.avatar_url, "+
 			"COALESCE(ch.title, '') AS chapter_title").
 		Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
@@ -354,6 +377,7 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order st
 
 	replyDTOs := make([]ForumReplyDTO, 0, len(replies))
 	for _, r := range replies {
+		isAcc := row.AcceptedReplyID != nil && *row.AcceptedReplyID == r.ID
 		replyDTOs = append(replyDTOs, ForumReplyDTO{
 			ID: r.ID, TopicID: r.TopicID, ParentID: r.ParentID, ParentName: r.ParentName,
 			Content: r.Content, Images: parseImageURLs(r.Images), CreatedAt: formatISO(r.CreatedAt),
@@ -362,6 +386,7 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order st
 			},
 			CanDelete:  r.UserID == viewerID,
 			LikesCount: r.LikesCount,
+			IsAccepted: isAcc,
 		})
 	}
 	// 批量回填当前用户是否已赞（计数已由 likes_count 列提供，单一 helper 收敛）
@@ -1068,7 +1093,7 @@ func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResu
 		"COALESCE(t.last_reply_at, t.created_at) DESC, t.id DESC",
 		func(q *gorm.DB) *gorm.DB {
 			return q.Table("forum_topics AS t").
-				Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.last_reply_at, t.created_at, "+
+				Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.created_at, "+
 					"u.id AS user_id, u.username, u.avatar_url, COALESCE(ch.title, '') AS chapter_title").
 				Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
 				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").
@@ -1198,4 +1223,175 @@ func (s *ForumService) replyLikesCount(replyID int64) int64 {
 	var n int64
 	_ = s.db.Model(&model.ForumReply{}).Select("likes_count").Where("id = ?", replyID).Scan(&n).Error
 	return n
+}
+
+// ===== 采纳状态机与积分直记（#366）=====
+
+// AcceptResult 采纳操作结果（复用主题 DTO，便于直接回显状态）。
+type AcceptResult struct {
+	Topic *ForumTopicDTO `json:"topic"`
+}
+
+// AcceptReply 楼主采纳一条回复。
+//
+// 幂等：重复提交同一 replyID 不再发分；并发采纳靠 CAS 保证只发一次分；
+// 更换采纳对象时只改状态不新增流水；取消后重采同样只发一次（以流水是否存在判定）。
+func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTopicDTO, error) {
+	var topic model.ForumTopic
+	if err := s.db.First(&topic, topicID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("主题不存在")
+		}
+		return nil, err
+	}
+	if topic.UserID != userID {
+		return nil, ErrNotTopicOwner
+	}
+	if topic.Category != ForumCategoryQuestion {
+		return nil, errors.New("只有问答帖可采纳回答")
+	}
+	var reply model.ForumReply
+	if err := s.db.First(&reply, replyID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("回复不存在")
+		}
+		return nil, err
+	}
+	if reply.TopicID != topicID {
+		return nil, errors.New("回复不属于该主题")
+	}
+	// 同一回复重复采纳：幂等直接返回当前状态
+	if topic.AcceptedReplyID != nil && *topic.AcceptedReplyID == replyID {
+		return s.fetchTopicDTO(topicID, userID)
+	}
+	// 已有采纳，视为更换：只改状态不发分
+	if topic.AcceptedReplyID != nil {
+		now := beijingNow()
+		if err := s.db.Model(&model.ForumTopic{}).Where("id = ?", topicID).Updates(map[string]any{
+			"accepted_reply_id": replyID,
+			"solved_at":         now,
+			"updated_at":        now,
+		}).Error; err != nil {
+			return nil, err
+		}
+		return s.fetchTopicDTO(topicID, userID)
+	}
+	// 首次采纳：CAS + 积分直记（同一事务）
+	isSelf := reply.UserID == userID
+	now := beijingNow()
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// CAS：仅当仍未采纳时才写入状态
+		res := tx.Model(&model.ForumTopic{}).Where("id = ? AND accepted_reply_id IS NULL", topicID).Updates(map[string]any{
+			"accepted_reply_id": replyID,
+			"solved_at":         now,
+			"updated_at":        now,
+		})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			// 并发抢采：已由先胜者写入，放弃发分
+			return nil
+		}
+		// 已采纳过是否已发过分（取消后重采场景）：以流水是否存在判定，每帖只发一次
+		var cnt int64
+		if err := tx.Model(&model.PointsLedger{}).Where("ref_type = ? AND ref_id = ? AND reason = ?", "forum_topic", fmt.Sprintf("%d", topicID), ReasonAcceptedBonus).Count(&cnt).Error; err != nil {
+			return err
+		}
+		if cnt > 0 {
+			// 已发过分（取消后重采），只保留状态迁移
+			return nil
+		}
+		if isSelf {
+			// 楼主采纳自己：状态已迁移，发分为 0
+			return nil
+		}
+		// 写入两条流水
+		ledgerBonus := model.PointsLedger{
+			UserID:    reply.UserID,
+			Delta:     AcceptBonusPoints,
+			Reason:    ReasonAcceptedBonus,
+			RefType:   "forum_topic",
+			RefID:     fmt.Sprintf("%d", topicID),
+			CreatedAt: now,
+		}
+		if err := tx.Create(&ledgerBonus).Error; err != nil {
+			return err
+		}
+		ledgerAction := model.PointsLedger{
+			UserID:    userID,
+			Delta:     AcceptActionPoints,
+			Reason:    ReasonAcceptAction,
+			RefType:   "forum_topic",
+			RefID:     fmt.Sprintf("%d", topicID),
+			CreatedAt: now,
+		}
+		if err := tx.Create(&ledgerAction).Error; err != nil {
+			return err
+		}
+		// 更新余额投影（原子递增，无封底需求，扣罚场景才钳 0）
+		if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", reply.UserID).UpdateColumn("points_balance", gorm.Expr("points_balance + ?", AcceptBonusPoints)).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", userID).UpdateColumn("points_balance", gorm.Expr("points_balance + ?", AcceptActionPoints)).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.fetchTopicDTO(topicID, userID)
+}
+
+// CancelAccept 楼主取消采纳（状态回到未解决，已发分不回滚）。
+func (s *ForumService) CancelAccept(userID int, topicID int64) (*ForumTopicDTO, error) {
+	var topic model.ForumTopic
+	if err := s.db.First(&topic, topicID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("主题不存在")
+		}
+		return nil, err
+	}
+	if topic.UserID != userID {
+		return nil, ErrNotTopicOwner
+	}
+	if topic.Category != ForumCategoryQuestion {
+		return nil, errors.New("只有问答帖可取消采纳")
+	}
+	if topic.AcceptedReplyID == nil {
+		return s.fetchTopicDTO(topicID, userID)
+	}
+	now := beijingNow()
+	if err := s.db.Model(&model.ForumTopic{}).Where("id = ?", topicID).Updates(map[string]any{
+		"accepted_reply_id": nil,
+		"solved_at":         nil,
+		"updated_at":        now,
+	}).Error; err != nil {
+		return nil, err
+	}
+	return s.fetchTopicDTO(topicID, userID)
+}
+
+// fetchTopicDTO 查询主题 DTO（用于采纳后回显，复用 topicRow 装配，不累浏览量）。
+func (s *ForumService) fetchTopicDTO(topicID int64, viewerID int) (*ForumTopicDTO, error) {
+	var row topicRow
+	err := s.db.Table("forum_topics AS t").
+		Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.created_at, "+
+			"u.id AS user_id, u.username, u.avatar_url, "+
+			"COALESCE(ch.title, '') AS chapter_title").
+		Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
+		Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").
+		Where("t.id = ?", topicID).
+		Scan(&row).Error
+	if err != nil {
+		return nil, err
+	}
+	if row.ID == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	dto := row.toDTO(viewerID)
+	// 点赞回填保持与详情一致（尽力而为）
+	s.enrichTopicLikedByMe([]*ForumTopicDTO{&dto}, viewerID)
+	return &dto, nil
 }
