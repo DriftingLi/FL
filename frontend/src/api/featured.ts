@@ -1,13 +1,13 @@
 import axios from 'axios'
 import { unwrappedRequest } from './request'
-import { useAuthStore } from '@/stores/auth'
+import { getValidAccessToken } from './client'
 
 /** 内容精选分类标签映射 */
 export const featuredCategoryLabels: Record<string, string> = {
   company: '公司动态',
   industry: '行业新闻',
   product: '产品资讯',
-  news: '资讯'
+  news: '政策法规'
 }
 
 /** 内容精选分类选项（管理端表单下拉用） */
@@ -15,12 +15,12 @@ export const featuredCategoryOptions = [
   { value: 'company', label: '公司动态' },
   { value: 'industry', label: '行业新闻' },
   { value: 'product', label: '产品资讯' },
-  { value: 'news', label: '资讯' }
+  { value: 'news', label: '政策法规' }
 ]
 
 /** 获取分类中文标签 */
 export function categoryLabel(category: string): string {
-  return featuredCategoryLabels[category] || '资讯'
+  return featuredCategoryLabels[category] || '政策法规'
 }
 
 /** 精选内容项（wire key 与后端 typed DTO 一致：主键为 content_id） */
@@ -103,9 +103,11 @@ export const adminFeaturedApi = {
   async uploadImage(file: File) {
     const fd = new FormData()
     fd.append('file', file)
-    const authStore = useAuthStore()
+    // 原生 axios 绕过全局拦截器（Vditor code=0 约定），无法依赖 401→自动刷新；
+    // 发起前显式换取新鲜 access token（本地过期则静默刷新），避免登录 2h 后上传持续 401
     const headers: Record<string, string> = {}
-    if (authStore.token) headers.Authorization = `Bearer ${authStore.token}`
+    const token = await getValidAccessToken()
+    if (token) headers.Authorization = `Bearer ${token}`
     const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
     const res = await axios.post(`${baseURL}/admin/featured-content/upload-image`, fd, { headers })
     // 直接返回后端原始 Vditor 格式数据

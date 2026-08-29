@@ -45,7 +45,18 @@ type notificationListReq struct {
 	PageSize int
 }
 
-// List 分页查询通知（含未读数）GET /api/notifications?page=&page_size=
+// List 通知列表
+// @Summary 通知列表
+// @Description 分页查询通知（含未读数）
+// @Tags 学员端-通知
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(10)
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /notifications [get]
 func (h *NotificationHandler) List(c *gin.Context) {
 	Endpoint[notificationListReq, service.NotificationListPageResult]{
 		Parse: func(c *gin.Context) (*notificationListReq, error) {
@@ -68,7 +79,16 @@ func (h *NotificationHandler) List(c *gin.Context) {
 	}.Handle(c)
 }
 
-// UnreadCount 未读数 GET /api/notifications/unread-count
+// UnreadCount 未读通知数
+// @Summary 未读通知数
+// @Description 查询未读通知数量
+// @Tags 学员端-通知
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /notifications/unread-count [get]
 func (h *NotificationHandler) UnreadCount(c *gin.Context) {
 	Endpoint[notificationUserIDReq, int64]{
 		Parse: func(c *gin.Context) (*notificationUserIDReq, error) {
@@ -102,7 +122,18 @@ type notificationUserIDReq struct {
 	UserID int
 }
 
-// MarkRead 单条标记已读 POST /api/notifications/:id/read
+// MarkRead 标记单条已读
+// @Summary 标记单条已读
+// @Description 标记指定通知为已读
+// @Tags 学员端-通知
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "通知ID"
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /notifications/{id}/read [post]
 func (h *NotificationHandler) MarkRead(c *gin.Context) {
 	Endpoint[markReadReq, struct{}]{
 		Parse: func(c *gin.Context) (*markReadReq, error) {
@@ -128,7 +159,16 @@ func (h *NotificationHandler) MarkRead(c *gin.Context) {
 	}.Handle(c)
 }
 
-// MarkAllRead 全部标记已读 POST /api/notifications/read-all
+// MarkAllRead 全部标记已读
+// @Summary 全部标记已读
+// @Description 全部通知标记为已读
+// @Tags 学员端-通知
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /notifications/read-all [post]
 func (h *NotificationHandler) MarkAllRead(c *gin.Context) {
 	Endpoint[notificationUserIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*notificationUserIDReq, error) {

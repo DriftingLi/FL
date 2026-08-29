@@ -1,6 +1,6 @@
 // Package service 判分 module 表格测试（Ticket #231 C1）。
 // 锁定判分编排现状行为：题目集 + flow + AI adapter → 分数 / IsCorrect / 错题入库 / 降级标记。
-// 期望值为独立字面量，重构四流走 module 后仍须全绿。
+// 期望值为独立字面量，重构后仍须全绿。
 package service
 
 import (
@@ -18,37 +18,32 @@ type fakeGrader struct {
 	called           int
 	gotStudentAnswer string
 	gotMaxScore      float64
-	gotUserID        *int
 }
 
-func (f *fakeGrader) GradeShortAnswer(_, _, _, studentAnswer string, maxScore float64, userID *int) *AIGradeResult {
+func (f *fakeGrader) GradeShortAnswer(_, _, _, studentAnswer string, maxScore float64) *AIGradeResult {
 	f.called++
 	f.gotStudentAnswer = studentAnswer
 	f.gotMaxScore = maxScore
-	f.gotUserID = userID
 	return f.res
 }
 
-// maxScoreByFlowOf 按流返回满分 resolver（与四流各自分值表单点对接）。
+// maxScoreByFlowOf 按流返回满分 resolver（与各流分值表单点对接）。
 func maxScoreByFlowOf(flow string) func(q *model.Question) float64 {
 	switch flow {
 	case "mock_exam":
 		return mockExamMaxScore
-	default: // level_exam
-		return func(q *model.Question) float64 {
-			return questionMaxScore("level_exam", q.Type)
-		}
+	default: // practice（原 level_exam，已正名）
+		return practiceMaxScore
 	}
 }
 
 func TestGradingEngineGradeSet(t *testing.T) {
-	// 分值表（product 设定，勿动）：mock 简答 10、level 简答 5、单选均 3。
+	// 分值表（product 设定，勿动）：mock 简答 10、practice 简答默认 10（题目自定义分优先）、单选均 3。
 	type gradeCase struct {
 		name       string
 		flow       string
 		qType      string
 		answer     any
-		userID     *int
 		aiRes      *AIGradeResult // nil 表示 adapter 返回 nil（无 AI 分）
 		wantResult GradeResult
 		wantWrong  bool // 是否应落入错题库
@@ -58,7 +53,7 @@ func TestGradingEngineGradeSet(t *testing.T) {
 	cases := []gradeCase{
 		{
 			name:       "客观题-单选答对",
-			flow:       "level_exam",
+			flow:       "practice",
 			qType:      "single_choice",
 			answer:     "A",
 			wantResult: GradeResult{IsCorrect: boolPtr(true), Earned: 3, MaxScore: 3},
@@ -66,7 +61,7 @@ func TestGradingEngineGradeSet(t *testing.T) {
 		},
 		{
 			name:       "客观题-单选答错入错题库",
-			flow:       "level_exam",
+			flow:       "practice",
 			qType:      "single_choice",
 			answer:     "B",
 			wantResult: GradeResult{IsCorrect: boolPtr(false), Earned: 0, MaxScore: 3},
@@ -74,28 +69,28 @@ func TestGradingEngineGradeSet(t *testing.T) {
 		},
 		{
 			name:   "短答-AI评分成功及格",
-			flow:   "level_exam",
+			flow:   "practice",
 			qType:  "short_answer",
 			answer: "我的作答",
-			aiRes:  &AIGradeResult{Score: 4, Comment: "回答到位"},
+			aiRes:  &AIGradeResult{Score: 8, Comment: "回答到位"},
 			wantResult: GradeResult{
 				IsCorrect:   nil,
 				Earned:      0,
-				MaxScore:    5,
-				ShortAnswer: &ShortAnswerGrade{Score: 4, Comment: "回答到位", Fallback: false, Passed: true},
+				MaxScore:    10,
+				ShortAnswer: &ShortAnswerGrade{Score: 8, Comment: "回答到位", Fallback: false, Passed: true},
 			},
 			wantAICall: true,
 		},
 		{
 			name:   "短答-AI评分不及格",
-			flow:   "level_exam",
+			flow:   "practice",
 			qType:  "short_answer",
 			answer: "答非所问",
 			aiRes:  &AIGradeResult{Score: 2, Comment: "偏题"},
 			wantResult: GradeResult{
 				IsCorrect:   nil,
 				Earned:      0,
-				MaxScore:    5,
+				MaxScore:    10,
 				ShortAnswer: &ShortAnswerGrade{Score: 2, Comment: "偏题", Fallback: false, Passed: false},
 			},
 			wantAICall: true,
@@ -121,21 +116,21 @@ func TestGradingEngineGradeSet(t *testing.T) {
 		},
 		{
 			name:   "短答-AI不可用-adapter返回nil",
-			flow:   "level_exam",
+			flow:   "practice",
 			qType:  "short_answer",
 			answer: "作答",
 			aiRes:  nil,
 			wantResult: GradeResult{
 				IsCorrect:   nil,
 				Earned:      0,
-				MaxScore:    5,
+				MaxScore:    10,
 				ShortAnswer: nil,
 			},
 			wantAICall: true,
 		},
 		{
 			name:       "客观题-多选部分对",
-			flow:       "level_exam",
+			flow:       "practice",
 			qType:      "multi_choice",
 			answer:     []string{"A"},
 			wantResult: GradeResult{IsCorrect: boolPtr(false), Earned: 1, MaxScore: 4},
@@ -155,7 +150,6 @@ func TestGradingEngineGradeSet(t *testing.T) {
 			flow := gradingFlow{
 				ai:       shortAnswerGraderOf(nil), // 非短答不触发；短答用 fake 覆盖
 				maxScore: maxScoreByFlowOf(tc.flow),
-				aiUserID: tc.userID,
 			}
 			if tc.qType == "short_answer" {
 				flow.ai = g
@@ -216,21 +210,11 @@ func TestGradingEngineGradeSet(t *testing.T) {
 // TestGradeShortAnswerNilAdapter 短答 AI adapter 为 nil 时返回 nil（调用方降级）。
 func TestGradeShortAnswerNilAdapter(t *testing.T) {
 	q := &model.Question{Type: "short_answer", Content: "c", ReferenceAnswer: "ra", ScoringCriteria: "sc"}
-	if got := gradeShortAnswer(nil, q, "作答", 5, nil); got != nil {
+	if got := gradeShortAnswer(nil, q, "作答", 5); got != nil {
 		t.Fatalf("nil adapter 应返回 nil, got %+v", got)
 	}
-	if got := gradeShortAnswer(nil, q, "", 5, nil); got != nil {
+	if got := gradeShortAnswer(nil, q, "", 5); got != nil {
 		t.Fatalf("nil adapter 应返回 nil, got %+v", got)
-	}
-}
-
-// TestHasFallbackComment 降级前缀判定单点（读侧还原 ai_fallback）。
-func TestHasFallbackComment(t *testing.T) {
-	if !hasFallbackComment("[AI评分降级] 暂不可用") {
-		t.Error("带降级前缀应判定为 true")
-	}
-	if hasFallbackComment("回答到位") {
-		t.Error("无前缀应判定为 false")
 	}
 }
 

@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useCredentialStore } from '@/stores/credential'
 import {
   getSubdomain,
   buildCrossDomainAuthUrl,
@@ -87,19 +88,48 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/student/MockExam.vue')
       },
       {
-        path: 'level-exam',
-        name: 'LevelExam',
-        component: () => import('@/pages/student/LevelExam.vue')
-      },
-      {
         path: 'wrong-questions',
         name: 'WrongQuestions',
         component: () => import('@/pages/student/WrongQuestions.vue')
       },
       {
+        path: 'real-exam',
+        name: 'RealExamPapers',
+        component: () => import('@/pages/student/RealExamPapers.vue')
+      },
+      // PROTOTYPE — throwaway route for 真题练习占位三变体对比 (__prototype 命名即标记)，验证后移除
+      {
+        path: '__prototype/real-exam',
+        name: 'RealExamPrototype',
+        component: () => import('@/pages/student/__prototype__/RealExamPrototype.vue')
+      },
+      // PROTOTYPE — throwaway route for 论坛浏览记录三变体
+      {
+        path: '__prototype/forum-history',
+        name: 'ForumHistoryPrototype',
+        component: () => import('@/pages/student/__prototype__/forum-history/ForumHistoryPrototype.vue')
+      },
+      // PROTOTYPE — throwaway route for 任务中心+积分占位三变体
+      {
+        path: '__prototype/task-center',
+        name: 'TaskCenterPrototype',
+        component: () => import('@/pages/student/__prototype__/task-center/TaskCenterPrototype.vue')
+      },
+      {
+        path: 'task-center',
+        name: 'TaskCenter',
+        component: () => import('@/pages/student/TaskCenter.vue')
+      },
+      {
         path: 'profile',
         name: 'StudentProfile',
         component: () => import('@/pages/student/Profile.vue')
+      },
+      {
+        path: 'onboarding/credential',
+        name: 'CredentialOnboarding',
+        component: () => import('@/pages/onboarding/CredentialOnboarding.vue'),
+        meta: { requiresAuth: true, role: 'hrwai_user' }
       }
     ]
   },
@@ -140,11 +170,7 @@ const routes: RouteRecordRaw[] = [
         name: 'TutorQuestionCreate',
         component: () => import('@/pages/tutor/QuestionCreate.vue')
       },
-      {
-        path: 'grading',
-        name: 'TutorGrading',
-        component: () => import('@/pages/tutor/GradingPage.vue')
-      }
+
     ]
   },
 
@@ -218,12 +244,42 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false, isValuationAuthPage: true, authPage: true }
   },
 
+  // ========== 原型预览（独立页面，无需登录/后端） ==========
+  // PROTOTYPE — throwaway standalone preview for 真题练习占位三变体；kept outside TrainingLayout so it bypasses auth/credential guards
+  {
+    path: '/prototype/real-exam',
+    name: 'RealExamPrototypeStandalone',
+    component: () => import('@/pages/student/__prototype__/RealExamPrototype.vue'),
+    meta: { requiresAuth: false }
+  },
+  // PROTOTYPE — standalone for 论坛浏览记录
+  {
+    path: '/prototype/forum-history',
+    name: 'ForumHistoryPrototypeStandalone',
+    component: () => import('@/pages/student/__prototype__/forum-history/ForumHistoryPrototype.vue'),
+    meta: { requiresAuth: false }
+  },
+  // PROTOTYPE — standalone for 任务中心+积分占位
+  {
+    path: '/prototype/task-center',
+    name: 'TaskCenterPrototypeStandalone',
+    component: () => import('@/pages/student/__prototype__/task-center/TaskCenterPrototype.vue'),
+    meta: { requiresAuth: false }
+  },
+
   // ========== AI 助手模块（training 子域名，可选登录；登录后可保存历史会话） ==========
   // 官网门户重构后（ADR-0001），AI 助手归属学员工作区：由 www 迁至 training 子域名
   {
     path: '/ai-assistant',
     name: 'AIAssistant',
     component: () => import('@/pages/ai-assistant/AIAssistantPage.vue'),
+    meta: { requiresAuth: false }
+  },
+  // 专项功能页（故障咨询/故障代码查询/维保知识/图纸识别/习题解答）
+  {
+    path: '/ai-assistant/:featureKey(fault-consult|fault-code|maintenance|drawing|exercise)',
+    name: 'AIAssistantFeature',
+    component: () => import('@/pages/ai-assistant/FeatureChatPage.vue'),
     meta: { requiresAuth: false }
   },
 
@@ -263,6 +319,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/admin/CourseCatalog.vue')
       },
       {
+        path: 'credentials',
+        name: 'CredentialManage',
+        component: () => import('@/pages/admin/Credentials.vue')
+      },
+      {
         path: 'question-tags',
         name: 'QuestionTags',
         component: () => import('@/pages/admin/QuestionTags.vue')
@@ -296,11 +357,6 @@ const routes: RouteRecordRaw[] = [
         path: 'featured-content/edit/:id?',
         name: 'AdminFeaturedContentEdit',
         component: () => import('@/pages/admin/FeaturedContentEdit.vue')
-      },
-      {
-        path: 'exam-sessions',
-        name: 'ExamSessionManage',
-        component: () => import('@/pages/admin/ExamSessionManage.vue')
       },
       {
         path: 'tutors',
@@ -501,6 +557,32 @@ router.beforeEach(async (to, _from, next) => {
       next('/training')
     }
     return
+  }
+
+  // ===== 目标证件预筛选（ADR-0020）=====
+  // 强制拦截：hrwai_user 且 current_credential_id 为空时，training 工作区内除 onboarding 外均重定向至 onboarding
+  if (userRole === 'hrwai_user' && !isIpDirectMode()) {
+    const targetSubdomain = getTargetSubdomainForPath(to.path)
+    const isTrainingPath = targetSubdomain === 'training' || to.path.startsWith('/training')
+    const isOnboarding = to.name === 'CredentialOnboarding'
+    if (isTrainingPath) {
+      try {
+        const credStore = useCredentialStore()
+        if (!credStore.initialized) {
+          await credStore.loadCurrent()
+        }
+        if (credStore.current === null && !isOnboarding) {
+          next({ name: 'CredentialOnboarding' })
+          return
+        }
+        if (credStore.current !== null && isOnboarding) {
+          next('/training')
+          return
+        }
+      } catch {
+        // 网络异常时放行，避免卡死登录
+      }
+    }
   }
 
   next()

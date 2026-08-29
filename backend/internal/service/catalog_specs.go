@@ -194,3 +194,89 @@ func questionTagCatalogSpec() CatalogEntitySpec[model.QuestionTag, QuestionTagIn
 		ToDict:  tagDict,
 	}
 }
+
+func credentialCatalogSpec() CatalogEntitySpec[model.Credential, CredentialInput, CredentialDict] {
+	return CatalogEntitySpec[model.Credential, CredentialInput, CredentialDict]{
+		Table:       "credential",
+		IDColumn:    "id",
+		OrderBy:     "sort_order ASC, id ASC",
+		CodeErr:     "证件编码不能为空",
+		NameErr:     "证件名称不能为空",
+		DupMsg:      "证件编码已存在",
+		NotFoundMsg: "证件不存在",
+		Sortable:    true,
+		Code:        func(in *CredentialInput) string { return in.Code },
+		ModelCode:   func(m *model.Credential) string { return m.Code },
+		Name:        func(in *CredentialInput) string { return in.Name },
+		SortOrder:   func(in *CredentialInput) *int { return in.SortOrder },
+		Status:      func(in *CredentialInput) *int16 { return in.Status },
+		Validate: func(in *CredentialInput) error {
+			if in.Category != "" && in.Category != "special_operation" && in.Category != "skill_level" {
+				return errors.New("证件类别无效")
+			}
+			if in.Level != nil {
+				if *in.Level < 1 || *in.Level > 5 {
+					return errors.New("技能等级须为1-5")
+				}
+			}
+			if in.Category == "special_operation" && in.Level != nil {
+				return errors.New("上岗证无需等级")
+			}
+			if in.Category == "skill_level" && in.Level == nil {
+				return errors.New("技能等级不能为空")
+			}
+			return nil
+		},
+		EmptyModel: func() any { return &model.Credential{} },
+		NewModel: func(in *CredentialInput, sortOrder int) model.Credential {
+			now := beijingNow()
+			m := model.Credential{
+				Code:        in.Code,
+				Name:        in.Name,
+				Category:    in.Category,
+				Description: inputString(in.Description),
+				SortOrder:   sortOrder,
+				Status:      inputInt16(in.Status, 1),
+				CreatedAt:   now,
+				UpdatedAt:   now,
+			}
+			if in.Level != nil {
+				lv := *in.Level
+				m.Level = &lv
+			} else if in.Category == "skill_level" {
+				// 已在 Validate 拦截，此分支不达
+				m.Level = nil
+			}
+			return m
+		},
+		ApplyUpdate: func(m *model.Credential, in *CredentialInput) {
+			if in.Description != nil {
+				m.Description = *in.Description
+			}
+			if in.Category != "" {
+				m.Category = in.Category
+				if m.Category == "special_operation" {
+					m.Level = nil
+				}
+			}
+			if in.Level != nil {
+				if m.Category == "special_operation" {
+					m.Level = nil
+				} else {
+					lv := *in.Level
+					m.Level = &lv
+				}
+			}
+			if in.SortOrder != nil {
+				m.SortOrder = *in.SortOrder
+			}
+			if in.Status != nil {
+				m.Status = *in.Status
+			}
+			m.UpdatedAt = beijingNow()
+		},
+		SetCode: func(m *model.Credential, code string) { m.Code = code },
+		SetName: func(m *model.Credential, name string) { m.Name = name },
+		ToDict:  credentialDict,
+	}
+}

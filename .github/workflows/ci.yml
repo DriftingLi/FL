@@ -181,27 +181,28 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: backend/go.sum
 
-      - name: Go 依赖漏洞扫描（仅报告，不阻断）
+      - name: Go 依赖漏洞扫描
         if: needs.changes.outputs.backend == 'true'
-        continue-on-error: true
         run: |
           cd backend
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./... || echo "发现漏洞，详细信息请查看日志"
+          # 固定版本安装，避免 @latest 随上游变动导致 CI 结果漂移
+          go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
+          govulncheck ./...
 
       - name: npm 依赖漏洞扫描
         if: needs.changes.outputs.frontend == 'true'
         working-directory: frontend
-        run: |
-          npm audit --audit-level=high || echo "发现高危漏洞，请检查并修复"
+        run: npm audit --audit-level=high
 
-      - name: Dockerfile 安全分析（仅报告，不阻断）
-        uses: aquasecurity/trivy-action@master
-        continue-on-error: true
+      - name: Dockerfile 安全分析
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           scan-ref: backend/Dockerfile
-          exit-code: 0
+          # 高危配置问题才阻断，与 npm audit --audit-level=high 对齐
+          severity: HIGH,CRITICAL
+          exit-code: 1
+          version: v0.74.0
 
   # ============================================================
   # Stage 6: 数据库迁移校验
@@ -255,9 +256,11 @@ jobs:
   # CI 全部通过后,主动调用 CD workflow 的 workflow_dispatch 触发部署
   # ============================================================
   ci-summary:
-    # 注：security-scan 为参考性质，不阻断流水线
-    needs: [backend-lint, backend-test, frontend-check, migration-check]
-    if: always() && github.event_name == 'push'
+    needs: [backend-lint, backend-test, frontend-check, security-scan, migration-check]
+    # 仅 master 合并（push）后触发 CD：非 master 分支/PR 只跑 CI 不部署，
+    # 避免每次 push 都等待 testing 部署（合并前门禁由此前的 required_deployments
+    # testing 改为合并后统一部署 testing → production 验证）
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     # 触发 CD workflow_dispatch 需要 actions:write 权限
     permissions:
@@ -289,6 +292,7 @@ jobs:
           check "${{ needs.backend-test.result }}" "backend-test"
           check "${{ needs.frontend-check.result }}" "frontend-check"
           check "${{ needs.migration-check.result }}" "migration-check"
+          check "${{ needs.security-scan.result }}" "security-scan"
 
           if [ -n "$FAILED" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -310,17 +314,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # master → production(pve-02 生产), 其他分支 → testing(pve-01 测试)
-          if [ "${{ github.ref }}" = "refs/heads/master" ]; then
-            ENV="production"
-          else
-            ENV="testing"
-          fi
-          echo ">>> 触发 CD workflow,ref=${{ github.sha }},environment=${ENV}"
+          # master 合并后：先部署 testing 验证，testing 成功后由 CD 的 promote job
+          # 再触发 production（见 cd.yml），保证生产部署的是测试通过的代码
+          echo ">>> 触发 CD workflow (testing),ref=${{ github.sha }}"
           gh workflow run cd.yml \
-            --ref "${{ github.ref_name }}" \
+            --ref master \
             -f ref="${{ github.sha }}" \
-            -f environment="${ENV}"
-          echo "✅ CD workflow 已触发 (env: ${ENV})"
+            -f environment=testing
+          echo "✅ CD workflow 已触发 (env: testing)"
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**已触发 CD 部署 (commit: \`${{ github.sha }}\`, env: ${ENV})**" >> $GITHUB_STEP_SUMMARY
+          echo "**已触发 CD 部署 (commit: \`${{ github.sha }}\`, env: testing)**" >> $GITHUB_STEP_SUMMARY

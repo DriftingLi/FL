@@ -1,0 +1,128 @@
+/*
+ * 全局样式唯一入口 —— 用 @layer 固定优先级顺序
+ *
+ * 层序（后者压前者；层优先级高于选择器特异性，也高于源码顺序）：
+ *   reset      全局重置 global.css（最低，见下方第 3 条）
+ *   vendor     Element Plus 原始样式
+ *   theme      Tailwind 设计变量
+ *   base       设计 token / EP 覆盖
+ *   utilities  Tailwind 原子类（最高，业务样式用它压过 vendor 与 base）
+ *
+ * 两个刻意的选择（改动前必读）：
+ *
+ * 1. 不引入 tailwindcss/preflight。
+ *    本项目已有 global.css 的 `*{margin:0;padding:0;box-sizing:border-box}` 与
+ *    一百多个 scoped 样式。preflight 的 `h1{font-size:inherit}`、`img{display:block}`、
+ *    `button{background:transparent}` 等重置会直接破坏既有外观。
+ *    缺的排版规范由期 2 的 components/ui 层按需补齐，而不是全量 preflight。
+ *
+ * 2. EP 放进 vendor（最低层）。
+ *    层优先级天然高于选择器特异性，因此 element-overrides.css 里原先用来压 EP
+ *    特异性的 20 处 !important 全部失去必要性，已清除。
+ *    ⚠️ 层间 !important 的排序是反的：base 层的 !important 会压过 utilities 层的
+ *    !important。所以 base 层内除「无障碍 prefers-reduced-motion」外不得再用
+ *    !important，否则 Tailwind 的 `!` 前缀工具类会失效。
+ *
+ * 3. 通用重置只能放 reset 层，不能放 base。
+ *    「层优先级压过选择器特异性」是双向的：它能让低特异性的 `*` 选择器反过来盖掉
+ *    高特异性的 `.el-*` 规则。曾把 global.css 放进 base，导致
+ *    `* { padding: 0 }` 清零了全部 Element Plus 组件的内边距（详见下方 import 处注释）。
+ *    任何含通配选择器 `*` 的样式表都必须待在 vendor 之下。
+ */
+
+@layer reset, vendor, theme, base, components, utilities;
+
+/*
+ * ⚠️ global.css 必须落在 reset 层（低于 vendor），绝不能放进 base。
+ *
+ * 它开头的 `* { margin: 0; padding: 0; box-sizing: border-box }` 特异性为 0，
+ * 放在 base 层时会因「层优先级压过选择器特异性」而盖掉 vendor 层里所有 Element Plus
+ * 规则（.el-dialog__body{padding:20px} 等），表现为 tab / 下拉框 / 复选框 / 对话框 /
+ * 表格大规模样式异常、文字溢出、弹出位置错误。
+ * 放进 reset 层后，EP 靠特异性重新获胜，而 Tailwind 的 p-* 工具类仍在 utilities 层
+ * 高于 reset，两端都正确。
+ */
+@import "./global.css" layer(reset);
+@import "element-plus/dist/index.css" layer(vendor);
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "./design-tokens.css" layer(base);
+@import "./element-overrides.css" layer(base);
+@import "./valuation-tokens.css" layer(base);
+
+/* 原子类扫描范围：frontend/src（相对于本文件 ../../ ） */
+@source "../../";
+
+/*
+ * 把 design-tokens.css 的 token 桥接成 Tailwind 原子类。
+ *
+ * ⚠️ 命名约束（改动前必读）：
+ * 1. @theme 的键不能与源变量同名，否则 --x: var(--x) 构成自引用循环、值失效。
+ *    本项目 token 恰好占用了 Tailwind 的 --radius-* / --shadow-* / --text-* / --font-*
+ *    命名空间，所以这里一律用**语义别名**绕开（--radius-card / --shadow-card /
+ *    --font-sans 等），绝不写 --radius-lg: var(--radius-lg)。
+ * 2. 品牌色必须用 ui-* 命名空间，不能叫 brand-*。
+ *    --color-brand-* 已被 valuation-tokens.css 在 .valuation-root 内用作残值域品牌色，
+ *    且 ValuationLayout 有 var(--color-brand-500, #0EA5E9) 的兜底写法；
+ *    在 :root 上定义 --color-brand-* 会击穿它，导致残值页头变青、主体仍蓝。
+ *    同理不能用 teal-*（valuation-tokens 也定义了 --color-teal-*）。
+ * 3. 原子类引用链是 .bg-ui-500 → var(--color-ui-500) → var(--color-primary-500)，
+ *    因此残值域内若遮蔽了 --color-primary-*，原子类会自动跟随，无需额外处理。
+ */
+@theme {
+  /* 品牌主色（石墨青）→ bg-ui-500 / text-ui-600 / border-ui-200 … */
+  --color-ui-50: var(--color-primary-50);
+  --color-ui-100: var(--color-primary-100);
+  --color-ui-200: var(--color-primary-200);
+  --color-ui-300: var(--color-primary-300);
+  --color-ui-400: var(--color-primary-400);
+  --color-ui-500: var(--color-primary-500);
+  --color-ui-600: var(--color-primary-600);
+  --color-ui-700: var(--color-primary-700);
+  --color-ui-800: var(--color-primary-800);
+  --color-ui-900: var(--color-primary-900);
+
+  /* 强调色（晴空蓝）：渐变右端、次要强调 */
+  --color-ui-accent-400: var(--color-accent-400);
+  --color-ui-accent-500: var(--color-accent-500);
+  --color-ui-accent-600: var(--color-accent-600);
+
+  /* 字体：font-sans / font-heading / font-code */
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-display), var(--font-body);
+  --font-code: var(--font-mono);
+
+  /* 圆角：rounded-card / rounded-ctl / rounded-pill */
+  --radius-card: var(--radius-lg);
+  --radius-ctl: var(--radius-md);
+  --radius-pill: var(--radius-full);
+
+  /* 阴影：shadow-card / shadow-raised */
+  --shadow-card: var(--shadow-xs);
+  --shadow-raised: var(--shadow-md);
+
+  /*
+   * 表面与文字色。
+   * 命名空间同样要避开残值域已占用的 bg-* / surface / border / text，
+   * 故用 canvas（页面底）/ panel（卡片）/ line（描边）/ ink（文字）。
+   */
+  --color-canvas: var(--color-bg-page);
+  --color-panel: var(--color-bg-card);
+  --color-line: var(--color-border-light);
+  --color-line-strong: var(--color-border);
+  --color-ink: var(--color-text-primary);
+  --color-ink-2: var(--color-text-secondary);
+  --color-ink-3: var(--color-text-tertiary);
+  --color-ink-muted: var(--color-text-muted);
+
+  /*
+   * 语义色。同样要避开残值域占用的 success / warning / danger 三个名，
+   * 故用 ok / warn / bad；-soft 为浅底，与深字色配对使用保证对比度。
+   */
+  --color-ok: var(--color-success);
+  --color-ok-soft: var(--color-success-light);
+  --color-warn: var(--color-warning);
+  --color-warn-soft: var(--color-warning-light);
+  --color-bad: var(--color-danger);
+  --color-bad-soft: var(--color-danger-light);
+}

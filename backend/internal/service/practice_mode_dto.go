@@ -24,6 +24,7 @@ type ProgressResultDTO struct {
 // IsCorrect 为 *bool：简答题经 AI 判定前为 nil（JSON null），判定后与客观题一样为 true/false。
 // 简答题追加 reference_answer / scoring_criteria / max_score；
 // AI 评分成功追加 ai_score / ai_comment，降级时追加 ai_fallback。
+// 解析增强（spec #284）：全站正确率 accuracy_rate（样本<5 时不返回）与易错项 common_wrong（仅选择题，样本<5 或无错题时不返回）。
 type SubmitResultDTO struct {
 	IsCorrect       *bool    `json:"is_correct"`
 	CorrectAnswer   string   `json:"correct_answer"`
@@ -36,6 +37,10 @@ type SubmitResultDTO struct {
 	AIScore         *float64 `json:"ai_score,omitempty"`
 	AIComment       string   `json:"ai_comment,omitempty"`
 	AIFallback      *bool    `json:"ai_fallback,omitempty"`
+	AccuracyRate    *float64 `json:"accuracy_rate,omitempty"`
+	CommonWrong     *string  `json:"common_wrong,omitempty"`
+	TotalAttempts   int      `json:"total_attempts,omitempty"`
+	AIExplanation   string   `json:"ai_explanation,omitempty"`
 }
 
 // HistoryResultDTO 练习历史分页结果（旧 GetHistory map 输出）。
@@ -56,6 +61,14 @@ type HistoryItemDTO struct {
 	UserAnswer   string       `json:"user_answer"`
 	CreatedAt    string       `json:"created_at"`
 	Question     *QuestionDTO `json:"question,omitempty"`
+}
+
+// PracticePracticeStatsDTO 刷题练习聚合统计（Ticket #329，独立于 stats_aggregate 的 PracticeStatsDTO）。
+// 返回三字段均含重做（question_practice_record 落库即计数），与 /stats 不共享 shape。
+type PracticePracticeStatsDTO struct {
+	TodayCount int64 `json:"today_count"`
+	TotalCount int64 `json:"total_count"`
+	TotalDays  int64 `json:"total_days"`
 }
 
 // boolPtr 从 bool 构造指针（SubmitResultDTO.AIFallback 等可选布尔字段用）。

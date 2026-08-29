@@ -19,6 +19,7 @@
     "highlight.js": "^11.11.1",
     "marked": "^18.0.0",
     "marked-highlight": "^2.2.4",
+    "markstream-vue": "^2.0.4",
     "pdfjs-dist": "^4.4.168",
     "pinia": "^2.1.7",
     "vditor": "^3.11.2",
@@ -27,10 +28,12 @@
     "vuedraggable": "^4.1.0"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^22.10.5",
     "@vitejs/plugin-vue": "^5.0.3",
     "@vue/test-utils": "^2.4.11",
     "happy-dom": "^20.11.1",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.7.3",
     "vite": "^6.0.5",
     "vitest": "^4.1.10",

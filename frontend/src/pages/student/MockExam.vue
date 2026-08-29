@@ -157,13 +157,13 @@ function resetExam() {
 .exam-start h2, .exam-result h2 { margin-bottom: 20px; }
 .history-card { margin-top: 20px; }
 .score-display { text-align: center; margin: 20px 0; }
-.score-circle { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; width: 150px; height: 150px; border-radius: 50%; border: 6px solid #f56c6c; margin-bottom: 10px; }
-.score-circle.passed { border-color: #67c23a; }
+.score-circle { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; width: 150px; height: 150px; border-radius: 50%; border: 6px solid var(--color-danger); margin-bottom: 10px; }
+.score-circle.passed { border-color: var(--color-success); }
 .score-num { font-size: 36px; font-weight: bold; }
-.score-total { font-size: 14px; color: #909399; }
+.score-total { font-size: 14px; color: var(--color-text-tertiary); }
 .detail-card { margin-top: 15px; }
 .detail-item { padding: 10px; margin-bottom: 8px; border-radius: 8px; }
-.detail-item.correct { background: #f0f9eb; }
-.detail-item.wrong { background: #fef0f0; }
-.explanation { color: #909399; font-size: 13px; }
+.detail-item.correct { background: var(--color-success-light); }
+.detail-item.wrong { background: var(--color-danger-light); }
+.explanation { color: var(--color-text-tertiary); font-size: 13px; }
 </style>

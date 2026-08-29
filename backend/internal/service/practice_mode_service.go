@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/pkg/paging"
 )
@@ -17,20 +19,51 @@ import (
 // PracticeModeService 题库练习模式服务。
 type PracticeModeService struct {
 	db *gorm.DB
-	ai *AIService
+	// grader 短答 AI 判分 adapter（nil 时简答降级，与错题重做口径一致）。
+	grader ShortAnswerGrader
+	// explainer AI 解析 module（缓存/生成/降级策略单点，spec #295）。
+	explainer *QuestionExplanation
 
 	logger *zap.Logger
+	clk    clock.Clock
 }
 
-// NewPracticeModeService 创建题库练习服务，ai 可为 nil（简答题降级）。
+// NewPracticeModeService 创建题库练习服务，ai 可为 nil（简答题与解析降级）。
 func NewPracticeModeService(db *gorm.DB, ai *AIService, logger *zap.Logger) *PracticeModeService {
-	return &PracticeModeService{db: db, ai: ai, logger: logger}
+	return &PracticeModeService{
+		db:        db,
+		grader:    shortAnswerGraderOf(ai),
+		explainer: NewQuestionExplanation(db, ai, logger),
+		logger:    logger,
+		clk:       clock.Real(),
+	}
+}
+
+// NewPracticeModeServiceWithClock 注入式构造（测试用 Clock 定格，生产仍用 Real）。
+func NewPracticeModeServiceWithClock(db *gorm.DB, ai *AIService, logger *zap.Logger, clk clock.Clock) *PracticeModeService {
+	if clk == nil {
+		clk = clock.Real()
+	}
+	return &PracticeModeService{
+		db:        db,
+		grader:    shortAnswerGraderOf(ai),
+		explainer: NewQuestionExplanation(db, ai, logger),
+		logger:    logger,
+		clk:       clk,
+	}
+}
+
+// SetClock 覆写时钟（测试用，参考 CheckInService 的 clk 注入形态）。
+func (s *PracticeModeService) SetClock(clk clock.Clock) {
+	if clk != nil {
+		s.clk = clk
+	}
 }
 
 // GetFreeQuestions 随机练习抽题：从 published 题库按条件随机抽取 count 题。
 // count <= 0 时返回全部符合条件的题目（按 id 升序，不打乱）。
-func (s *PracticeModeService) GetFreeQuestions(qType string, count int) ([]QuestionDTO, error) {
-	selected, err := sampleQuestions(s.db, qType, count)
+func (s *PracticeModeService) GetFreeQuestions(qType string, count int, credentialID ...*int) ([]QuestionDTO, error) {
+	selected, err := sampleQuestions(s.db, qType, count, credentialID...)
 	if err != nil {
 		return nil, errors.New("查询题目失败")
 	}
@@ -47,7 +80,7 @@ func (s *PracticeModeService) GetFreeQuestions(qType string, count int) ([]Quest
 // StartTagPractice 标签练习开始/续练：首次进入按标签抽题并持久化题目顺序，
 // 再次进入复用已保存顺序与游标（断点续练）；已完成则重新抽题。
 // mode = "tag:<tagID>"，count <= 0 表示该标签全部题目。
-func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int) (*PracticeStartResultDTO, error) {
+func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, credentialID ...*int) (*PracticeStartResultDTO, error) {
 	if tagID <= 0 {
 		return nil, errors.New("请指定题库标签")
 	}
@@ -59,9 +92,12 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int) (*Pr
 		return nil, errors.New("题库标签不存在或已停用")
 	}
 	var all []model.Question
-	if err := s.db.Model(&model.Question{}).
-		Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?) AND status = ?", tagID, "published").
-		Order("id ASC").
+	qAll := s.db.Model(&model.Question{}).
+		Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?) AND status = ?", tagID, "published")
+	if len(credentialID) > 0 && credentialID[0] != nil {
+		qAll = qAll.Where("credential_id = ?", *credentialID[0])
+	}
+	if err := qAll.Order("id ASC").
 		Find(&all).Error; err != nil {
 		return nil, errors.New("查询题目失败")
 	}
@@ -144,9 +180,13 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int) (*Pr
 
 // StartSequential 顺序练习：加载全部 published 题目（按 id 升序），
 // 复用已有 practice_progress 游标续练；一次性返回全部题目，前端从游标处开始作答。
-func (s *PracticeModeService) StartSequential(studentID int) (*PracticeStartResultDTO, error) {
+func (s *PracticeModeService) StartSequential(studentID int, credentialID ...*int) (*PracticeStartResultDTO, error) {
 	var questions []model.Question
-	if err := s.db.Where("status = ?", "published").Order("id ASC").Find(&questions).Error; err != nil {
+	q := s.db.Where("status = ?", "published")
+	if len(credentialID) > 0 && credentialID[0] != nil {
+		q = q.Where("credential_id = ?", *credentialID[0])
+	}
+	if err := q.Order("id ASC").Find(&questions).Error; err != nil {
 		return nil, errors.New("查询题目失败")
 	}
 	if len(questions) == 0 {
@@ -267,8 +307,30 @@ func (s *PracticeModeService) GetProgress(studentID int, practiceMode string) *P
 	if stateMap == nil {
 		stateMap = map[string]any{}
 	}
+	completed := 0
+	for _, v := range stateMap {
+		if v == nil {
+			continue
+		}
+		switch val := v.(type) {
+		case string:
+			if val != "" {
+				completed++
+			}
+		case []any:
+			if len(val) > 0 {
+				completed++
+			}
+		case []string:
+			if len(val) > 0 {
+				completed++
+			}
+		default:
+			completed++
+		}
+	}
 	return &ProgressResultDTO{
-		Completed:    prog.CurrentIndex,
+		Completed:    completed,
 		Total:        prog.Total,
 		CurrentIndex: prog.CurrentIndex,
 		AnswersState: stateMap,
@@ -294,7 +356,7 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 
 	engine := newGradingEngine(s.db)
 	flow := gradingFlow{
-		ai:       shortAnswerGraderOf(s.ai),
+		ai:       s.grader,
 		maxScore: practiceMaxScore,
 	}
 	gr := engine.gradeOne(flow, &q, userAnswer, studentID)
@@ -318,6 +380,20 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 		QuestionID:    questionID,
 		UserAnswer:    userAnswer,
 	}
+	finalizeSubmitResult(s.db, s.explainer, result, gr, &rec, &q)
+	return result, nil
+}
+
+// finalizeSubmitResult 练习提交/错题重做共享的结果装配尾段（spec #295/#300 装配单点）：
+// 全站统计回填 → AI 解析（QuestionExplanation module 单点）→ 简答分支
+// （AI 及格覆写 IsCorrect 并二次 Save 同步练习记录，降级时 AIFallback 同写）。
+func finalizeSubmitResult(db *gorm.DB, explainer *QuestionExplanation, result *SubmitResultDTO, gr GradeResult, rec *model.QuestionPracticeRecord, q *model.Question) {
+	if stats := questionStats(db, q.ID, q.Type); stats != nil {
+		result.AccuracyRate = stats.accuracyRate
+		result.CommonWrong = stats.commonWrong
+		result.TotalAttempts = stats.total
+	}
+	result.AIExplanation = explainer.GetOrGenerate(q)
 	if q.Type == "short_answer" {
 		result.ReferenceAnswer = q.ReferenceAnswer
 		result.ScoringCriteria = q.ScoringCriteria
@@ -328,18 +404,17 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 			if sg.Fallback {
 				result.AIFallback = boolPtr(true)
 			} else {
-				// 练习流保留 IsCorrect 重写语义：AI 及格即覆盖 IsCorrect 并落库。
+				// 练习流保留 IsCorrect 重写语义：AI 及格即覆盖并同步练习记录。
 				result.IsCorrect = boolPtr(sg.Passed)
 				rec.IsCorrect = sg.Passed
-				s.db.Save(&rec)
+				db.Save(rec)
 			}
 		}
 	}
-	return result, nil
 }
 
-// practiceMaxScore 练习流单题满分解析：客观题按定级分值表，简答题按题目自定义分（默认 10）。
-// 与 SubmitAnswer 既有语义一致（客观走 level_exam 分值表、简答走 q.Score）。
+// practiceMaxScore 练习流单题满分解析：客观题按练习分值表（原定级表，已正名 practice），简答题按题目自定义分（默认 10）。
+// 与 SubmitAnswer 既有语义一致（客观走 practice 分值表、简答走 q.Score）。
 func practiceMaxScore(q *model.Question) float64 {
 	if q.Type == "short_answer" {
 		if q.Score > 0 {
@@ -347,7 +422,64 @@ func practiceMaxScore(q *model.Question) float64 {
 		}
 		return 10
 	}
-	return questionMaxScore("level_exam", q.Type)
+	return questionMaxScore("practice", q.Type)
+}
+
+// GetPracticeStats 刷题聚合统计（Ticket #329，独立于 /stats）：
+// today_count 按 Asia/Shanghai 自然日 00:00~次日 00:00 区间过滤，
+// total_count 为全量（含重做，question_practice_record 事实源），
+// total_days 为 distinct 自然日去重（Go 侧按 Asia/Shanghai day string 去重，兼容 postgres/sqlite 双驱动，
+// 语义等价于 COUNT(DISTINCT DATE(created_at AT TIME ZONE 'Asia/Shanghai'))）。
+// 均按 student_id 过滤，credentialID 非空时 JOIN question 按 credential_id 分区（复用 sampleQuestions 的 JOIN 模式）。
+// 索引说明：现有 idx_qpr_student(student_id) + idx_qpr_created(created_at) 已覆盖范围扫描；
+// JOIN 分区路径依赖 question.credential_id 索引（question 表相关索引）与 question_practice_record.question_id；
+// 高并发可追加复合索引 (student_id, created_at) 或 (student_id, question_id, created_at)，本期仅注释说明，无新增 migration。
+func (s *PracticeModeService) GetPracticeStats(studentID int, credentialID *int) (*PracticePracticeStatsDTO, error) {
+	clk := s.clk
+	if clk == nil {
+		clk = clock.Real()
+	}
+	loc := clock.Location()
+	nowInLoc := clk.Now().In(loc)
+	todayStart := time.Date(nowInLoc.Year(), nowInLoc.Month(), nowInLoc.Day(), 0, 0, 0, 0, loc)
+	tomorrow := todayStart.AddDate(0, 0, 1)
+
+	base := func() *gorm.DB {
+		q := s.db.Model(&model.QuestionPracticeRecord{}).Where("question_practice_record.student_id = ?", studentID)
+		if credentialID != nil {
+			q = q.Joins("JOIN question ON question.id = question_practice_record.question_id").Where("question.credential_id = ?", *credentialID)
+		}
+		return q
+	}
+
+	var totalCount int64
+	if err := base().Count(&totalCount).Error; err != nil {
+		return nil, err
+	}
+
+	var todayCount int64
+	if err := base().Where("question_practice_record.created_at >= ? AND question_practice_record.created_at < ?", todayStart, tomorrow).Count(&todayCount).Error; err != nil {
+		return nil, err
+	}
+
+	var timestamps []time.Time
+	pluckQ := s.db.Model(&model.QuestionPracticeRecord{}).Where("question_practice_record.student_id = ?", studentID)
+	if credentialID != nil {
+		pluckQ = pluckQ.Joins("JOIN question ON question.id = question_practice_record.question_id").Where("question.credential_id = ?", *credentialID)
+	}
+	if err := pluckQ.Pluck("question_practice_record.created_at", &timestamps).Error; err != nil {
+		return nil, err
+	}
+	daySet := make(map[string]struct{}, len(timestamps))
+	for _, t := range timestamps {
+		daySet[t.In(loc).Format("2006-01-02")] = struct{}{}
+	}
+
+	return &PracticePracticeStatsDTO{
+		TodayCount: todayCount,
+		TotalCount: totalCount,
+		TotalDays:  int64(len(daySet)),
+	}, nil
 }
 
 // GetStats 学员练习统计（经统计聚合 module，一次 GROUP BY 按题型聚合；by_type 正确率为加性新增 key）。
@@ -382,6 +514,46 @@ func (s *PracticeModeService) GetStats(studentID int) *PracticeStatsDTO {
 		Accuracy: accuracy,
 		ByType:   byType,
 	}
+}
+
+type questionStatResult struct {
+	total        int
+	accuracyRate *float64
+	commonWrong  *string
+}
+
+// questionStats 单题全站统计（练习/错题重做共享唯一实现）：总数、样本≥5 时的正确率
+// 与易错项（易错项仅统计选择题，简答早退）。
+func questionStats(db *gorm.DB, questionID int, qType string) *questionStatResult {
+	var total int64
+	db.Model(&model.QuestionPracticeRecord{}).Where("question_id = ?", questionID).Count(&total)
+	res := &questionStatResult{total: int(total)}
+	if total < 5 {
+		return res
+	}
+	var correct int64
+	db.Model(&model.QuestionPracticeRecord{}).Where("question_id = ? AND is_correct = ?", questionID, true).Count(&correct)
+	acc := roundFloat1(float64(correct) / float64(total) * 100)
+	res.accuracyRate = &acc
+	if qType == "short_answer" {
+		return res
+	}
+	type aggRow struct {
+		UserAnswer string `gorm:"column:user_answer"`
+		Cnt        int64  `gorm:"column:cnt"`
+	}
+	var row aggRow
+	err := db.Model(&model.QuestionPracticeRecord{}).
+		Select("user_answer, COUNT(*) as cnt").
+		Where("question_id = ? AND is_correct = ?", questionID, false).
+		Group("user_answer").
+		Order("cnt DESC").
+		Limit(1).
+		Scan(&row).Error
+	if err == nil && row.Cnt > 0 {
+		res.commonWrong = &row.UserAnswer
+	}
+	return res
 }
 
 // GetHistory 练习历史分页。

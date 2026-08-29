@@ -37,9 +37,10 @@ EXPOSE 8000
 
 USER app
 
-# 健康检查
+# 健康检查（用 IPv4 回环：busybox wget 解析 localhost 可能优先 ::1，
+# 而 gunicorn 仅监听 IPv4，导致误报 unhealthy）
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -qO- http://localhost:8000/health || exit 1
+    CMD wget -qO- http://127.0.0.1:8000/health || exit 1
 
 # 用 gunicorn 启动(单进程,LibreOffice 不支持并发)
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "180", "app:app"]

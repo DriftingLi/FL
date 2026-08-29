@@ -9,6 +9,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+
+	_ "forklift-training/docs"
 
 	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
@@ -60,6 +64,17 @@ func NewRouter(deps *Deps) *gin.Engine {
 	// 图形验证码（人机验证）：无需鉴权
 	RegisterCaptchaRoutes(r, deps.CaptchaSvc)
 
+	// Swagger 文档（gin-swagger，C 方案：SWAGGER_ENABLED + BasicAuth）
+	// dev 默认开启、prod 默认关闭；开启且配置 User/Pass 时走 BasicAuth
+	if cfg.Swagger.Enabled {
+		if cfg.Swagger.User != "" && cfg.Swagger.Pass != "" {
+			swaggerAuth := gin.BasicAuth(gin.Accounts{cfg.Swagger.User: cfg.Swagger.Pass})
+			r.GET("/swagger/*any", swaggerAuth, ginSwagger.WrapHandler(swaggerFiles.Handler))
+		} else {
+			r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+		}
+	}
+
 	// 静态资源：等价 static_folder + VOLUME_MOUNT_PATH 行为
 	// /static/uploads/* 优先从 VOLUME_MOUNT_PATH/uploads 提供，否则本地 UploadFolder
 	// /static/*         其他静态资源从本地 static/ 目录提供
@@ -84,9 +99,10 @@ func NewRouter(deps *Deps) *gin.Engine {
 		auth.POST("/refresh", authH.Refresh)
 		auth.POST("/logout", authH.Logout)
 		auth.GET("/me", middleware.JWTAuth(deps.Session), authH.Me)
-		// 个人资料：昵称 / 头像
+		// 个人资料：昵称 / 头像 / 单位 / 注销
 		auth.PUT("/profile", middleware.JWTAuth(deps.Session), authH.UpdateProfile)
 		auth.POST("/avatar", middleware.JWTAuth(deps.Session), authH.UploadAvatar)
+		auth.DELETE("/account", middleware.JWTAuth(deps.Session), authH.DeleteAccount)
 	}
 
 	// 邮箱验证码注册/登录（发码需过图形验证码）
@@ -98,28 +114,28 @@ func NewRouter(deps *Deps) *gin.Engine {
 	// 个人信息页：手机号/邮箱绑定修改
 	RegisterProfileBindRoutes(api, rd, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
 
-	// 注册全部 12 个业务蓝图：
+	// 注册业务蓝图（定级考试与阅卷已下线，见 spec #284）：
 	//   auth/courses/student/question-bank/
-	//   level-exam/grading/tutor/wrong-questions/mock-exam/admin
-	//   practice-mode（题库练习模式：自由刷题/知识点专项，对应 question_practice_record）
+	//   tutor/wrong-questions/mock-exam/admin/practice-mode
 	RegisterCoursesRoutes(api, rd, deps.CourseSvc)
 	RegisterStudentRoutes(api, rd, deps.StudentSvc)
 	RegisterQuestionBankRoutes(api, rd, deps.QuestionBankSvc, deps.FileSvc)
 	RegisterPracticeModeRoutes(api, rd, deps.PracticeModeSvc)
-	RegisterLevelExamRoutes(api, rd, deps.LevelExamSvc)
-	RegisterGradingRoutes(api, rd, deps.GradingSvc)
 	RegisterAdminRoutes(api, rd, deps.AdminSvc, deps.AdminCourseSvc, deps.AuthSvc, deps.AIConfigSvc, deps.ContentGenSvc)
 	RegisterTutorRoutes(api, rd, deps.TutorSvc, deps.FileSvc)
 	RegisterWrongQuestionRoutes(api, rd, deps.WrongQuestionSvc)
 	RegisterMockExamRoutes(api, rd, deps.MockExamSvc)
 	RegisterFeaturedRoutes(api, rd, deps.FeaturedSvc, deps.FileSvc)
-	RegisterAIAssistantRoutes(api, rd, deps.AIAssistantSvc)
-	RegisterForumRoutes(api, rd, deps.ForumSvc, deps.ForumImageSvc)
+	RegisterAIAssistantRoutes(api, rd, deps.AIAssistantSvc, deps.PointsSvc)
+	RegisterForumRoutes(api, rd, deps.ForumSvc, deps.CheckInSvc, deps.ForumImageSvc)
+	RegisterAdminPointsRoutes(api, rd, deps.PointsSvc, deps.NotificationSvc)
+	RegisterPointsRoutes(api, rd, deps.PointsSvc)
 	RegisterProfileReviewRoutes(api, rd, deps.ReviewSvc)
 	RegisterNotificationRoutes(api, rd, deps.NotificationSvc)
 	RegisterAuditRoutes(api, rd, deps.AuditSvc)
 	RegisterExportRoutes(api, rd, deps.ExportSvc)
 	RegisterTrainingCatalogRoutes(api, rd, deps.TrainingCatalogSvc)
+	RegisterQuestionInteractionRoutes(api, rd, deps.QuestionCommentSvc, deps.QuestionNoteSvc, deps.QuestionKnowledgeSvc)
 	// 移动端 P1 通用能力（ADR-0018）：通用收藏 / 全局搜索 / 学习资料聚合
 	RegisterFavoriteRoutes(api, rd, deps.FavoriteSvc)
 	RegisterSearchRoutes(api, rd, deps.SearchSvc)

@@ -4,10 +4,13 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"go.uber.org/zap"
 	"io"
+	"mime/multipart"
 	"strings"
 	"time"
 
@@ -36,6 +39,93 @@ const forkliftExpertSystemPrompt = `你是一名资深的叉车维修专家，�
 4. 不确定时坦诚告知，不编造数据
 5. 涉及维修必须由专业人员执行的，明确提示联系专业维修人员`
 
+// faultConsultSystemPrompt 故障咨询系统提示词。
+const faultConsultSystemPrompt = `你是一名资深的叉车故障诊断专家，拥有 20 年以上一线维修经验。
+你熟悉林德、丰田、杭叉、合力、永恒力、TCM 等主流品牌叉车的常见故障模式。
+
+回答要求：
+1. 用中文回答，专业、实用、可操作
+2. 按"可能原因 → 排查步骤 → 处理方法"的结构组织回答
+3. 按可能性从高到低排列原因，说明判断依据
+4. 排查步骤具体到工具、测量位置、判断标准
+5. 涉及安全的操作（制动、液压、电气高压部件）必须明确警示
+6. 需要专业设备或资质的维修，明确提示联系专业维修人员
+7. 信息不足时先列出需要确认的关键信息，再给出初步判断
+8. 不确定时坦诚告知，不编造数据`
+
+// faultCodeQuerySystemPrompt 故障代码查询系统提示词。
+const faultCodeQuerySystemPrompt = `你是一名叉车故障代码专家，精通国内外主流品牌（林德、丰田、杭叉、合力、永恒力、TCM 等）叉车自诊断系统的故障代码体系。
+
+回答要求：
+1. 用中文回答，按"代码含义 → 严重程度 → 可能原因 → 处理建议"结构组织
+2. 严重程度分为：紧急（立即停机）、重要（尽快处理）、一般（可短时继续作业）
+3. 不同品牌的代码编号可能相同但含义不同；用户未提供品牌时，先询问品牌与车型，同时给出常见品牌下的典型含义参考
+4. 处理建议具体到操作步骤与所需工具
+5. 明确提示：最终诊断应以对应品牌官方维修手册为准
+6. 不确定时坦诚告知，不编造代码含义`
+
+// maintenanceKnowledgeSystemPrompt 维保知识系统提示词。
+const maintenanceKnowledgeSystemPrompt = `你是一名叉车维保专家，熟悉各品牌电动叉车、内燃叉车的保养体系与行业标准。
+
+回答要求：
+1. 用中文回答，按"保养周期 → 保养项目 → 执行标准 → 注意事项"结构组织
+2. 区分日常检查（班前班后）、周检、月度、季度、年度保养的项目差异
+3. 给出可量化的标准（如液压油型号、轮胎磨损限度、电瓶电解液比重范围）
+4. 电动叉车重点说明电瓶充放电与维护规范，内燃叉车说明机油滤芯与排放要求
+5. 涉及安全的操作必须明确警示
+6. 不确定时坦诚告知，不编造数据`
+
+// drawingRecognitionSystemPrompt 图纸识别系统提示词。
+const drawingRecognitionSystemPrompt = `你是一名叉车图纸分析专家，擅长识读叉车领域的机械结构图、装配图、电路原理图、液压原理图与气动回路图。
+
+回答要求：
+1. 用中文回答，先整体描述图纸类型与表达内容，再分项解读
+2. 机械图纸：识别主要部件名称、装配关系、配合公差与关键尺寸
+3. 电路图纸：识别电器元件符号、供电回路、控制逻辑与保护装置
+4. 液压图纸：识别泵、阀、缸等元件，说明油路走向与工作原理
+5. 图纸不清晰或无法辨认的部分，明确说明，不猜测编造
+6. 结尾给出需要用户补充确认的信息（如图纸版本、部件编号）`
+
+// exerciseSolvingSystemPrompt 习题解答系统提示词。
+const exerciseSolvingSystemPrompt = `你是一名叉车维修培训教员，负责解答叉车操作、维保、安全规范相关的培训习题与考试题目。
+
+回答要求：
+1. 用中文回答，先给出最终答案，再给出解析
+2. 解析按步骤推理，说明每一步的依据（法规、原理、操作规范）
+3. 说明题目考查的知识点，便于举一反三
+4. 若题目信息不完整或有歧义，列出需要补充的条件并按最常见理解作答
+5. 涉及安全规范的题目，注明依据的标准或规范名称
+6. 不确定时坦诚告知，不编造答案`
+
+// featureChatKeys 专项功能键集合（模型由管理端单绑定解析，用户无需选模型）。
+var featureChatKeys = map[string]bool{
+	FeatureFaultConsult:         true,
+	FeatureFaultCodeQuery:       true,
+	FeatureMaintenanceKnowledge: true,
+	FeatureDrawingRecognition:   true,
+	FeatureExerciseSolving:      true,
+}
+
+// featureSystemPrompt 返回功能对应的系统提示词；未注册的功能回退到通用叉车专家提示词。
+func featureSystemPrompt(featureKey string) string {
+	switch featureKey {
+	case FeatureFaultConsult:
+		return faultConsultSystemPrompt
+	case FeatureFaultCodeQuery:
+		return faultCodeQuerySystemPrompt
+	case FeatureMaintenanceKnowledge:
+		return maintenanceKnowledgeSystemPrompt
+	case FeatureDrawingRecognition:
+		return drawingRecognitionSystemPrompt
+	case FeatureExerciseSolving:
+		return exerciseSolvingSystemPrompt
+	}
+	return forkliftExpertSystemPrompt
+}
+
+// aiImageDirPrefix AI 助手图片存储子目录（URL/对象 key 前缀）。
+const aiImageDirPrefix = "images/ai-assistant"
+
 // UserModelDTO 用户自定义模型展示对象（api_key 脱敏）。
 type UserModelDTO struct {
 	ID        int       `json:"id"`
@@ -58,11 +148,12 @@ type SaveUserModelReq struct {
 
 // AIChatSessionDTO 会话展示对象。
 type AIChatSessionDTO struct {
-	ID        int       `json:"id"`
-	Title     string    `json:"title"`
-	ModelName string    `json:"model_name"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID         int       `json:"id"`
+	Title      string    `json:"title"`
+	ModelName  string    `json:"model_name"`
+	FeatureKey string    `json:"feature_key"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // AIChatMessageDTO 消息展示对象。
@@ -70,21 +161,41 @@ type AIChatMessageDTO struct {
 	ID        int       `json:"id"`
 	Role      string    `json:"role"`
 	Content   string    `json:"content"`
+	Images    []string  `json:"images"` // 用户消息附带的图片 URL
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// AIAssistantMode AI 助手模式（隐藏底层模型，对用户仅暴露双模式）。
+type AIAssistantMode string
+
+const (
+	ModeNormal AIAssistantMode = "normal"
+	ModeExpert AIAssistantMode = "expert"
+)
+
+// AIAssistantModeModels 双模式可用模型（按普通/专家分别返回，null 表示未绑定）。
+type AIAssistantModeModels struct {
+	Normal *ModelOption `json:"normal"`
+	Expert *ModelOption `json:"expert"`
+}
+
 // StreamChatReq 流式对话请求。
+// 专项功能：FeatureKey=fault_consult 等（管理端单绑定模型）；
+// 通用助手：Mode=normal|expert（隐藏底层模型，推荐）；兼容旧前端：ModelSource=admin|user|custom + ConfigID
 type StreamChatReq struct {
-	SessionID     int    `json:"session_id"`     // 可选，登录用户指定会话
-	ModelSource   string `json:"model_source"`   // "admin" | "user" | "custom"
-	ConfigID      int    `json:"config_id"`      // ModelSource="admin" 时引用管理员配置
-	UserModelID   int    `json:"user_model_id"`  // ModelSource="user" 时引用用户自定义模型
-	CustomAPIKey  string `json:"custom_api_key"` // ModelSource="custom" 时临时输入
-	CustomBaseURL string `json:"custom_base_url"`
-	CustomModel   string `json:"custom_model"`
+	SessionID     int             `json:"session_id"`     // 可选，登录用户指定会话
+	FeatureKey    string          `json:"feature_key"`    // 专项功能键（空/"ai_assistant"=通用对话；专项功能走单绑定模型）
+	Mode          AIAssistantMode `json:"mode"`           // 通用助手：normal | expert
+	ModelSource   string          `json:"model_source"`   // 兼容旧： "admin" | "user" | "custom"
+	ConfigID      int             `json:"config_id"`      // 兼容旧：ModelSource="admin" 时引用管理员配置
+	UserModelID   int             `json:"user_model_id"`  // 兼容旧：ModelSource="user" 时引用用户自定义模型
+	CustomAPIKey  string          `json:"custom_api_key"` // 兼容旧：ModelSource="custom" 时临时输入
+	CustomBaseURL string          `json:"custom_base_url"`
+	CustomModel   string          `json:"custom_model"`
 	Messages      []struct {
-		Role    string `json:"role"`
-		Content string `json:"content"`
+		Role    string   `json:"role"`
+		Content string   `json:"content"`
+		Images  []string `json:"images"` // 用户消息附带的图片 URL（仅最后一条用户消息生效）
 	} `json:"messages"`
 }
 
@@ -92,28 +203,82 @@ type StreamChatReq struct {
 type AIAssistantService struct {
 	db          *gorm.DB
 	aiConfigSvc *AIConfigService
-	secretKey   string // 用于加密用户自定义 API Key 的主密钥（SECRET_KEY）
+	fileSvc     *FileStore // 图片上传/读取（多模态对话）
+	secretKey   string     // 用于加密用户自定义 API Key 的主密钥（SECRET_KEY）
 	logger      *zap.Logger
 }
 
 // NewAIAssistantService 构造 AIAssistantService。
-func NewAIAssistantService(db *gorm.DB, aiConfigSvc *AIConfigService, secretKey string, logger *zap.Logger) *AIAssistantService {
-	return &AIAssistantService{db: db, aiConfigSvc: aiConfigSvc, secretKey: secretKey, logger: logger}
+func NewAIAssistantService(db *gorm.DB, aiConfigSvc *AIConfigService, fileSvc *FileStore, secretKey string, logger *zap.Logger) *AIAssistantService {
+	return &AIAssistantService{db: db, aiConfigSvc: aiConfigSvc, fileSvc: fileSvc, secretKey: secretKey, logger: logger}
 }
 
 // ListPublicModels 返回管理员绑定到 AI 助手功能的可用配置列表（不含 api_key）。
-// 仅返回 ai_feature_bindings 中 feature_key='ai_assistant' 绑定且 is_active=true 的配置。
-// 若管理员未绑定任何配置，返回空列表（前端将提示用户选择自定义模型）。
+// 兼容旧前端：优先返回 normal/expert 双绑定的配置；若未配置则回退到遗留 ai_assistant 多绑定。
 func (s *AIAssistantService) ListPublicModels(ctx context.Context) ([]ModelOption, error) {
+	modes, err := s.ListAssistantModes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ModelOption, 0, 2)
+	if modes.Normal != nil {
+		out = append(out, *modes.Normal)
+	}
+	if modes.Expert != nil {
+		out = append(out, *modes.Expert)
+	}
+	if len(out) > 0 {
+		return out, nil
+	}
+	// 回退：旧 ai_assistant 多绑定
 	cfgs, err := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistant)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]ModelOption, 0, len(cfgs))
 	for _, c := range cfgs {
 		out = append(out, ModelOption{ID: c.ID, Name: c.Name, Model: c.Model, BaseURL: c.BaseURL})
 	}
 	return out, nil
+}
+
+// ListAssistantModes 返回双模式（普通/专家）分别绑定的配置（不含 api_key），新前端专用。
+func (s *AIAssistantService) ListAssistantModes(ctx context.Context) (AIAssistantModeModels, error) {
+	var res AIAssistantModeModels
+	for _, pair := range []struct {
+		key    string
+		target **ModelOption
+	}{
+		{FeatureAIAssistantNormal, &res.Normal},
+		{FeatureAIAssistantExpert, &res.Expert},
+	} {
+		cfgs, err := s.aiConfigSvc.ListConfigsForFeature(ctx, pair.key)
+		if err != nil {
+			return res, err
+		}
+		if len(cfgs) > 0 {
+			c := cfgs[0]
+			*pair.target = &ModelOption{ID: c.ID, Name: c.Name, Model: c.Model, BaseURL: c.BaseURL}
+		}
+	}
+	// 若双模式均未绑定，回退到旧 ai_assistant：第一条作 normal，第二条作 expert
+	if res.Normal == nil && res.Expert == nil {
+		cfgs, err := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistant)
+		if err != nil {
+			return res, err
+		}
+		if len(cfgs) > 0 {
+			c := cfgs[0]
+			res.Normal = &ModelOption{ID: c.ID, Name: c.Name, Model: c.Model, BaseURL: c.BaseURL}
+		}
+		if len(cfgs) > 1 {
+			c := cfgs[1]
+			res.Expert = &ModelOption{ID: c.ID, Name: c.Name, Model: c.Model, BaseURL: c.BaseURL}
+		} else if len(cfgs) == 1 {
+			// 单条时 expert 复用同一配置，避免前端无可用
+			res.Expert = res.Normal
+		}
+	}
+	return res, nil
 }
 
 // ListUserModels 返回登录用户的自定义模型列表（api_key 脱敏）。
@@ -197,17 +362,20 @@ func (s *AIAssistantService) DeleteUserModel(ctx context.Context, userID, modelI
 	return nil
 }
 
-// CreateSession 创建会话（需登录）。
-func (s *AIAssistantService) CreateSession(ctx context.Context, userID int, title, modelName string) (*AIChatSessionDTO, error) {
+// CreateSession 创建会话（需登录）。featureKey 为空时归入通用 AI 助手。
+func (s *AIAssistantService) CreateSession(ctx context.Context, userID int, title, modelName, featureKey string) (*AIChatSessionDTO, error) {
 	if title == "" {
 		title = "新会话"
 	}
-	row := model.AIChatSession{UserID: userID, Title: title, ModelName: modelName}
+	if featureKey == "" {
+		featureKey = FeatureAIAssistant
+	}
+	row := model.AIChatSession{UserID: userID, Title: title, ModelName: modelName, FeatureKey: featureKey}
 	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
 		return nil, err
 	}
 	return &AIChatSessionDTO{
-		ID: row.ID, Title: row.Title, ModelName: row.ModelName,
+		ID: row.ID, Title: row.Title, ModelName: row.ModelName, FeatureKey: row.FeatureKey,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}, nil
 }
@@ -393,17 +561,21 @@ func (s *AIAssistantService) DeleteSession(ctx context.Context, userID, sessionI
 	return s.db.WithContext(ctx).Delete(&model.AIChatSession{}, sessionID).Error
 }
 
-// ListSessions 返回登录用户的会话列表（按创建时间倒序）。
-func (s *AIAssistantService) ListSessions(ctx context.Context, userID int) ([]AIChatSessionDTO, error) {
+// ListSessions 返回登录用户指定功能的会话列表（按创建时间倒序）。
+// featureKey 为空时归入通用 AI 助手。
+func (s *AIAssistantService) ListSessions(ctx context.Context, userID int, featureKey string) ([]AIChatSessionDTO, error) {
+	if featureKey == "" {
+		featureKey = FeatureAIAssistant
+	}
 	var rows []model.AIChatSession
-	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).
+	if err := s.db.WithContext(ctx).Where("user_id = ? AND feature_key = ?", userID, featureKey).
 		Order("created_at DESC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	out := make([]AIChatSessionDTO, len(rows))
 	for i, r := range rows {
 		out[i] = AIChatSessionDTO{
-			ID: r.ID, Title: r.Title, ModelName: r.ModelName,
+			ID: r.ID, Title: r.Title, ModelName: r.ModelName, FeatureKey: r.FeatureKey,
 			CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 		}
 	}
@@ -427,26 +599,65 @@ func (s *AIAssistantService) GetSessionMessages(ctx context.Context, userID, ses
 	}
 	out := make([]AIChatMessageDTO, len(rows))
 	for i, r := range rows {
+		var imgs []string
+		if r.Images != "" {
+			// 解析失败按无图处理，不阻断消息列表
+			_ = json.Unmarshal([]byte(r.Images), &imgs)
+		}
 		out[i] = AIChatMessageDTO{
-			ID: r.ID, Role: r.Role, Content: r.Content, CreatedAt: r.CreatedAt,
+			ID: r.ID, Role: r.Role, Content: r.Content, Images: imgs, CreatedAt: r.CreatedAt,
 		}
 	}
 	return out, nil
 }
 
-// resolveModelConfig 根据 ModelSource 解析模型配置（与 AIService 消费同一 AISettings 形状）。
+// resolveModelConfig 解析模型配置（与 AIService 消费同一 AISettings 形状）。
+// 优先级：专项功能（FeatureKey，管理端单绑定）→ Mode 双模式（normal/expert）→ 兼容旧 ModelSource。
 func (s *AIAssistantService) resolveModelConfig(ctx context.Context, userID int, req StreamChatReq) (AISettings, error) {
-	switch req.ModelSource {
-	case "admin":
-		// 校验该配置是否被管理员绑定到 AI 助手功能（防止用户绕过前端传任意 config_id）
-		boundCfgs, err := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistant)
+	// 专项功能：由管理端单绑定解析，忽略请求中的模型来源字段（防绕过）
+	if featureChatKeys[req.FeatureKey] {
+		mc := s.aiConfigSvc.ResolveConfig(ctx, req.FeatureKey)
+		if mc.APIKey == "" {
+			return AISettings{}, errors.New("管理员未配置该功能的模型，请联系管理员")
+		}
+		return mc, nil
+	}
+	// 通用助手：Mode 双模式（隐藏底层模型）
+	if req.Mode == ModeNormal || req.Mode == ModeExpert {
+		featureKey := FeatureAIAssistantNormal
+		if req.Mode == ModeExpert {
+			featureKey = FeatureAIAssistantExpert
+		}
+		cfgs, err := s.aiConfigSvc.ListConfigsForFeature(ctx, featureKey)
 		if err != nil {
 			return AISettings{}, fmt.Errorf("校验可用模型失败: %w", err)
 		}
+		if len(cfgs) == 0 {
+			// 回退：若新双绑定未配置，尝试旧 ai_assistant（兼容存量部署）
+			fallback, _ := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistant)
+			if len(fallback) > 0 {
+				c := fallback[0]
+				if req.Mode == ModeExpert && len(fallback) > 1 {
+					c = fallback[1]
+				}
+				return AISettings{APIKey: c.APIKey, BaseURL: c.BaseURL, Model: c.Model, Source: "binding:" + c.Name}, nil
+			}
+			return AISettings{}, errors.New("该模式未绑定模型，请联系管理员配置")
+		}
+		cfg := cfgs[0]
+		return AISettings{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Source: "binding:" + cfg.Name}, nil
+	}
+	switch req.ModelSource {
+	case "admin":
+		// 校验该配置是否被管理员绑定到 AI 助手功能（兼容旧前端：同时校验新双绑定的两个 Feature）
+		boundCfgsNormal, _ := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistantNormal)
+		boundCfgsExpert, _ := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistantExpert)
+		boundCfgsLegacy, _ := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistant)
+		allBound := append(append(boundCfgsNormal, boundCfgsExpert...), boundCfgsLegacy...)
 		var cfg *model.AIConfig
-		for i := range boundCfgs {
-			if boundCfgs[i].ID == req.ConfigID {
-				cfg = &boundCfgs[i]
+		for i := range allBound {
+			if allBound[i].ID == req.ConfigID {
+				cfg = &allBound[i]
 				break
 			}
 		}
@@ -498,13 +709,29 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 		return "", fmt.Errorf("构建模型失败: %w", err)
 	}
 
-	// 拼装消息：系统提示词 + 历史消息
+	// 拼装消息：功能系统提示词 + 历史消息
 	msgs := []*schema.Message{
-		schema.SystemMessage(forkliftExpertSystemPrompt),
+		schema.SystemMessage(featureSystemPrompt(req.FeatureKey)),
 	}
-	for _, m := range req.Messages {
+	// 仅最后一条用户消息附带图片（多模态）；历史图片不重发（控制 token，规避多图限制）
+	lastUserIdx := -1
+	for i := len(req.Messages) - 1; i >= 0; i-- {
+		if req.Messages[i].Role == "user" {
+			lastUserIdx = i
+			break
+		}
+	}
+	for i, m := range req.Messages {
 		switch m.Role {
 		case "user":
+			if i == lastUserIdx && len(m.Images) > 0 {
+				userMsg, err := s.buildImageUserMessage(ctx, m.Content, m.Images)
+				if err != nil {
+					return "", err
+				}
+				msgs = append(msgs, userMsg)
+				continue
+			}
 			msgs = append(msgs, schema.UserMessage(m.Content))
 		case "assistant":
 			msgs = append(msgs, &schema.Message{Role: schema.Assistant, Content: m.Content})
@@ -538,16 +765,25 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 	// 持久化（仅登录用户且指定了 SessionID）
 	if userID > 0 && req.SessionID > 0 {
 		var lastUserMsg string
+		var lastUserImages []string
 		for i := len(req.Messages) - 1; i >= 0; i-- {
 			if req.Messages[i].Role == "user" {
 				lastUserMsg = req.Messages[i].Content
+				lastUserImages = req.Messages[i].Images
 				break
 			}
 		}
-		if lastUserMsg != "" {
+		if lastUserMsg != "" || len(lastUserImages) > 0 {
+			// 纯图片消息（无文本）也允许持久化
+			imagesJSON := ""
+			if len(lastUserImages) > 0 {
+				if b, err := json.Marshal(lastUserImages); err == nil {
+					imagesJSON = string(b)
+				}
+			}
 			now := time.Now()
 			if err := s.db.WithContext(ctx).Create(&model.AIChatMessage{
-				SessionID: req.SessionID, Role: "user", Content: lastUserMsg,
+				SessionID: req.SessionID, Role: "user", Content: lastUserMsg, Images: imagesJSON,
 			}).Error; err != nil {
 				return fullContent.String(), fmt.Errorf("保存用户消息失败: %w", err)
 			}
@@ -580,4 +816,84 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 	}
 
 	return fullContent.String(), nil
+}
+
+// buildImageUserMessage 构建带图片的多模态用户消息。
+// 仅接受本站 images/ai-assistant/ 前缀的 URL（防 SSRF）；单张读取失败时跳过并在文本中注明，不中断对话。
+func (s *AIAssistantService) buildImageUserMessage(ctx context.Context, content string, images []string) (*schema.Message, error) {
+	parts := make([]schema.MessageInputPart, 0, len(images)+2)
+	if content != "" {
+		parts = append(parts, schema.MessageInputPart{Type: schema.ChatMessagePartTypeText, Text: content})
+	}
+	var loadFails []string
+	for _, u := range images {
+		if !isAIImageURL(u) {
+			loadFails = append(loadFails, u)
+			continue
+		}
+		data, mime, err := s.fileSvc.Read(u)
+		if err != nil || len(data) == 0 {
+			s.logger.Warn("读取图片失败，跳过", zap.String("url", u), zap.Error(err))
+			loadFails = append(loadFails, u)
+			continue
+		}
+		b64 := base64.StdEncoding.EncodeToString(data)
+		parts = append(parts, schema.MessageInputPart{
+			Type: schema.ChatMessagePartTypeImageURL,
+			Image: &schema.MessageInputImage{
+				MessagePartCommon: schema.MessagePartCommon{
+					Base64Data: &b64,
+					MIMEType:   mime,
+				},
+			},
+		})
+	}
+	if len(loadFails) > 0 {
+		parts = append(parts, schema.MessageInputPart{
+			Type: schema.ChatMessagePartTypeText,
+			Text: "[部分图片加载失败: " + strings.Join(loadFails, ", ") + "]",
+		})
+	}
+	if len(parts) == 0 {
+		return nil, errors.New("消息内容为空")
+	}
+	return &schema.Message{Role: schema.User, UserInputMultiContent: parts}, nil
+}
+
+// UploadImage 上传 AI 助手对话图片：校验格式/大小后保存到 images/ai-assistant/ 子目录，返回可访问 URL。
+func (s *AIAssistantService) UploadImage(ctx context.Context, fileHeader *multipart.FileHeader) (string, error) {
+	if fileHeader.Filename == "" {
+		return "", errors.New("未选择文件")
+	}
+	if ok, msg := s.fileSvc.ValidateImage(fileHeader.Filename, fileHeader.Size); !ok {
+		return "", errors.New(msg)
+	}
+	src, err := fileHeader.Open()
+	if err != nil {
+		return "", errors.New("图片上传失败")
+	}
+	defer src.Close()
+	content, err := io.ReadAll(src)
+	if err != nil {
+		return "", errors.New("图片上传失败")
+	}
+	url, err := s.fileSvc.Save(content, fileHeader.Filename, aiImageDirPrefix)
+	if err != nil {
+		return "", errors.New("图片上传失败: " + err.Error())
+	}
+	return url, nil
+}
+
+// isAIImageURL 判断 URL 是否指向本站 images/ai-assistant/ 子目录。
+// local：/static/uploads/images/ai-assistant/xxx；R2：https://<域名>/images/ai-assistant/xxx。
+func isAIImageURL(u string) bool {
+	u = strings.TrimSpace(u)
+	if u == "" {
+		return false
+	}
+	if strings.HasPrefix(u, "/static/uploads/images/ai-assistant/") {
+		return true
+	}
+	idx := strings.Index(u, "/images/ai-assistant/")
+	return idx > 0 && (strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://"))
 }

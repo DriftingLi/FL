@@ -1,11 +1,8 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
-import './assets/styles/design-tokens.css'
-import 'element-plus/dist/index.css'
-import './assets/styles/element-overrides.css'
-import './assets/styles/global.css'
-import './assets/styles/valuation-tokens.css'
+// 样式统一由 tailwind.css 按 @layer 顺序引入（vendor → theme → base → utilities）
+import './assets/styles/tailwind.css'
 
 import App from './App.vue'
 import router from './router'

@@ -1,7 +1,7 @@
-// Package service 保存会话进度 module：练习/模拟考试/定级考试共享的
+// Package service 保存会话进度 module：练习/模拟考试共享的
 // 「保存会话进度快照」语义 —— 守卫裁定（本人+在途校验策略由调用方声明）、
 // 答案快照 JSONB 三态归一、快照写回（load → 改 JSONB → db.Save）。
-// 存储形态保持三张存量表不变（practice_progress / mock_exam / exam_participant），
+// 存储形态保持存量表不变（practice_progress / mock_exam），
 // 守卫统一为最严口径：提交后/已结束的会话不再接受进度保存（提交晚到静默忽略）。
 package service
 
@@ -15,11 +15,11 @@ import (
 )
 
 // SessionProgressSpec 声明单一「保存会话进度」流的持久化与守卫裁定策略。
-// 三个流只注入此 spec（表/字段 + 在途校验策略），共享 saveSessionProgress 的
+// 两个流只注入此 spec（表/字段 + 在途校验策略），共享 saveSessionProgress 的
 // 唯一写回实现：load → guard 守卫裁定 → 快照 JSONB 三态归一 → db.Save。
 //
 // 在途校验策略由调用方声明：
-//   - mock/level：校验 status == "in_progress"（提交后/已结束拒绝保存）；
+//   - mock：校验 status == "in_progress"（提交后/已结束拒绝保存）；
 //   - practice：practice_progress 无 status 字段（schema 冻结 ADR-0010），
 //     经 (student_id, practice_mode) 定位即天然归属本人，且无终端状态，恒视为在途。
 type SessionProgressSpec[T any] struct {
@@ -35,9 +35,9 @@ type SessionProgressSpec[T any] struct {
 }
 
 // saveSessionProgress 快照写回唯一实现：load → guard 守卫裁定 → 答案快照 JSONB
-// 三态归一 → db.Save。提交晚到的保存经 guard 拒绝且不落库（静默忽略），三流行为一致。
+// 三态归一 → db.Save。提交晚到的保存经 guard 拒绝且不落库（静默忽略），两流行为一致。
 // 深模块形态：单一入口 + spec 三回调，把守卫裁定、JSONB 归一、回写实现集中于此，
-// 三个流（练习/模拟/定级）只注入表/字段 + 在途校验策略，语义只实现一次。
+// 两个流（练习/模拟）只注入表/字段 + 在途校验策略，语义只实现一次。
 func saveSessionProgress[T any](db *gorm.DB, spec SessionProgressSpec[T], answers map[string]any, remainingTime int) error {
 	rec, err := spec.load(db)
 	if err != nil {

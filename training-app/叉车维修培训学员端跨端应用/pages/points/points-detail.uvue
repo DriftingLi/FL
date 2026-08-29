@@ -142,7 +142,7 @@
     }
 
     function onEarnPoints() : void {
-        uni.showToast({ title: '赚更多积分功能开发中', icon: 'none' })
+        uni.navigateTo({ url: '/pages/points/task-center' })
     }
 
     onShow(() => {

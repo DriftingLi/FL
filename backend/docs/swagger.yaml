@@ -1,0 +1,4272 @@
+basePath: /api
+definitions:
+  api.GenerateCaptchaDTO:
+    properties:
+      id:
+        type: string
+      image:
+        type: string
+    type: object
+  response.R:
+    properties:
+      code:
+        type: integer
+      data: {}
+      message:
+        type: string
+    type: object
+  service.CertificateTemplateDTO:
+    properties:
+      code:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      template_url:
+        type: string
+      validity_days:
+        type: integer
+    type: object
+  service.ChapterDTO:
+    properties:
+      chapter_id:
+        type: integer
+      content:
+        type: string
+      content_type:
+        type: string
+      course_id:
+        type: integer
+      created_at:
+        type: string
+      description:
+        type: string
+      duration:
+        type: integer
+      file_url:
+        type: string
+      files:
+        items:
+          $ref: '#/definitions/service.ChapterFileDTO'
+        type: array
+      order_num:
+        type: integer
+      title:
+        type: string
+    type: object
+  service.ChapterDetailDTO:
+    properties:
+      chapter_id:
+        type: integer
+      content:
+        type: string
+      content_type:
+        type: string
+      course_id:
+        type: integer
+      created_at:
+        type: string
+      description:
+        type: string
+      duration:
+        type: integer
+      file_url:
+        type: string
+      files:
+        items:
+          $ref: '#/definitions/service.ChapterFileDTO'
+        type: array
+      next_chapter_id:
+        type: integer
+      order_num:
+        type: integer
+      previous_chapter_id:
+        type: integer
+      study_status:
+        type: string
+      title:
+        type: string
+    type: object
+  service.ChapterFileDTO:
+    properties:
+      chapter_id:
+        type: integer
+      content_type:
+        type: string
+      created_at:
+        type: string
+      file_id:
+        type: integer
+      file_name:
+        type: string
+      file_size:
+        type: integer
+      file_url:
+        type: string
+    type: object
+  service.ChapterSlidesDTO:
+    properties:
+      chapter_id:
+        type: integer
+      slides:
+        items:
+          type: string
+        type: array
+    type: object
+  service.CourseBriefDTO:
+    properties:
+      course_id:
+        type: integer
+      name:
+        type: string
+    type: object
+  service.CourseDTO:
+    properties:
+      certificate_name:
+        type: string
+      certificate_template:
+        $ref: '#/definitions/service.CertificateTemplateDTO'
+      certificate_template_id:
+        type: integer
+      chapter_count:
+        type: integer
+      chapters:
+        items:
+          $ref: '#/definitions/service.ChapterDTO'
+        type: array
+      course_id:
+        type: integer
+      cover_image:
+        type: string
+      created_at:
+        type: string
+      credential:
+        $ref: '#/definitions/service.CredentialBriefDTO'
+      credential_id:
+        type: integer
+      description:
+        type: string
+      duration:
+        type: integer
+      is_featured:
+        type: boolean
+      is_hot:
+        type: boolean
+      level:
+        $ref: '#/definitions/service.LevelBriefDTO'
+      level_id:
+        type: integer
+      name:
+        type: string
+      practice_hours:
+        type: integer
+      prerequisite_course_ids:
+        items:
+          type: integer
+        type: array
+      prerequisites:
+        items:
+          $ref: '#/definitions/service.CourseBriefDTO'
+        type: array
+      sort_order:
+        type: integer
+      specialty:
+        $ref: '#/definitions/service.SpecialtyBriefDTO'
+      specialty_id:
+        type: integer
+      status:
+        type: integer
+      student_count:
+        type: integer
+      theory_hours:
+        type: integer
+    type: object
+  service.CourseDetailDTO:
+    properties:
+      chapters:
+        items:
+          $ref: '#/definitions/service.ChapterDTO'
+        type: array
+      completed_chapters:
+        type: integer
+      course_info:
+        $ref: '#/definitions/service.CourseDTO'
+      is_enrolled:
+        type: boolean
+      last_chapter_id:
+        type: integer
+      last_position:
+        type: integer
+      last_studied_at:
+        type: string
+      progress:
+        type: number
+    type: object
+  service.CoursePageResult:
+    properties:
+      courses:
+        items:
+          $ref: '#/definitions/service.CourseDTO'
+        type: array
+      page:
+        type: integer
+      pages:
+        type: integer
+      total:
+        type: integer
+    type: object
+  service.CourseProgressDTO:
+    properties:
+      course_id:
+        type: integer
+      course_name:
+        type: string
+      progress:
+        type: number
+      study_date:
+        type: string
+      study_duration:
+        type: integer
+      total_chapters:
+        type: integer
+    type: object
+  service.CredentialBriefDTO:
+    properties:
+      category:
+        type: string
+      code:
+        type: string
+      id:
+        type: integer
+      level:
+        type: integer
+      name:
+        type: string
+    type: object
+  service.ForumAuthor:
+    properties:
+      avatar_url:
+        type: string
+      user_id:
+        type: integer
+      username:
+        type: string
+    type: object
+  service.ForumReplyDTO:
+    properties:
+      author:
+        $ref: '#/definitions/service.ForumAuthor'
+      can_delete:
+        type: boolean
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      images:
+        items:
+          type: string
+        type: array
+      liked_by_me:
+        type: boolean
+      likes_count:
+        type: integer
+      parent_id:
+        type: integer
+      parent_name:
+        description: 被回复人的展示名
+        type: string
+      topic_id:
+        type: integer
+    type: object
+  service.ForumTopicDTO:
+    properties:
+      author:
+        $ref: '#/definitions/service.ForumAuthor'
+      can_delete:
+        type: boolean
+      chapter_id:
+        type: integer
+      chapter_title:
+        type: string
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      images:
+        items:
+          type: string
+        type: array
+      last_reply_at:
+        type: string
+      liked_by_me:
+        type: boolean
+      likes_count:
+        type: integer
+      reply_count:
+        type: integer
+      title:
+        type: string
+      view_count:
+        type: integer
+    type: object
+  service.ForumTopicPageResult:
+    properties:
+      page:
+        type: integer
+      pages:
+        type: integer
+      topics:
+        items:
+          $ref: '#/definitions/service.ForumTopicDTO'
+        type: array
+      total:
+        type: integer
+    type: object
+  service.HistoryItemDTO:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_correct:
+        type: boolean
+      practice_type:
+        type: string
+      question:
+        $ref: '#/definitions/service.QuestionDTO'
+      question_id:
+        type: integer
+      student_id:
+        type: integer
+      user_answer:
+        type: string
+    type: object
+  service.HistoryResultDTO:
+    properties:
+      page:
+        type: integer
+      page_size:
+        type: integer
+      records:
+        items:
+          $ref: '#/definitions/service.HistoryItemDTO'
+        type: array
+      total:
+        type: integer
+    type: object
+  service.LevelBriefDTO:
+    properties:
+      code:
+        type: string
+      level_id:
+        type: integer
+      name:
+        type: string
+    type: object
+  service.MockExamAnswerDetailDTO:
+    properties:
+      ai_comment:
+        type: string
+      ai_fallback:
+        type: boolean
+      ai_score:
+        description: AI 评分字段仅在短答 AI 评分成功时出现。
+        type: number
+      content:
+        type: string
+      correct_answer:
+        type: string
+      explanation:
+        type: string
+      is_correct:
+        type: boolean
+      max_score:
+        type: number
+      options: {}
+      question_id:
+        type: integer
+      score:
+        type: number
+      type:
+        type: string
+      user_answer: {}
+    type: object
+  service.MockExamHistoryDTO:
+    properties:
+      exams:
+        items:
+          $ref: '#/definitions/service.MockExamHistoryItemDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
+  service.MockExamHistoryItemDTO:
+    properties:
+      answers: {}
+      created_at:
+        type: string
+      duration:
+        type: integer
+      id:
+        type: integer
+      question_ids: {}
+      remaining_time:
+        type: integer
+      result: {}
+      score:
+        type: number
+      start_time:
+        type: string
+      status:
+        type: string
+      student_id:
+        type: integer
+      submit_time:
+        type: string
+    type: object
+  service.MockExamResultDTO:
+    properties:
+      accuracy:
+        type: number
+      correct_count:
+        type: integer
+      details:
+        items:
+          $ref: '#/definitions/service.MockExamAnswerDetailDTO'
+        type: array
+      max_score:
+        type: number
+      mock_exam_id:
+        type: integer
+      submit_time:
+        type: string
+      total_questions:
+        type: integer
+      total_score:
+        type: number
+    type: object
+  service.MockExamResumeDTO:
+    properties:
+      answers: {}
+      duration:
+        type: integer
+      mock_exam_id:
+        type: integer
+      questions:
+        items:
+          $ref: '#/definitions/service.QuestionDTO'
+        type: array
+      remaining_time:
+        type: integer
+      start_time:
+        type: string
+    type: object
+  service.MockExamStartDTO:
+    properties:
+      duration:
+        type: integer
+      mock_exam_id:
+        type: integer
+      questions:
+        items:
+          $ref: '#/definitions/service.QuestionDTO'
+        type: array
+      remaining_time:
+        type: integer
+      total_questions:
+        type: integer
+      total_score:
+        type: integer
+    type: object
+  service.MockExamSubmitDTO:
+    properties:
+      accuracy:
+        type: number
+      correct_count:
+        type: integer
+      details:
+        items:
+          $ref: '#/definitions/service.MockExamAnswerDetailDTO'
+        type: array
+      max_score:
+        type: number
+      total_questions:
+        type: integer
+      total_score:
+        type: number
+    type: object
+  service.PracticePracticeStatsDTO:
+    properties:
+      today_count:
+        type: integer
+      total_count:
+        type: integer
+      total_days:
+        type: integer
+    type: object
+  service.PracticeStartResultDTO:
+    properties:
+      completed:
+        type: integer
+      current_index:
+        type: integer
+      questions:
+        items:
+          $ref: '#/definitions/service.QuestionDTO'
+        type: array
+      total:
+        type: integer
+    type: object
+  service.PracticeStatsDTO:
+    properties:
+      accuracy:
+        type: number
+      by_type:
+        additionalProperties:
+          $ref: '#/definitions/service.PracticeTypeStat'
+        type: object
+      correct:
+        type: integer
+      total:
+        type: integer
+      wrong:
+        type: integer
+    type: object
+  service.PracticeTypeStat:
+    properties:
+      accuracy:
+        type: number
+      correct:
+        type: integer
+      total:
+        type: integer
+    type: object
+  service.ProgressResultDTO:
+    properties:
+      answers_state:
+        additionalProperties: {}
+        type: object
+      completed:
+        type: integer
+      current_index:
+        type: integer
+      total:
+        type: integer
+    type: object
+  service.QuestionDTO:
+    properties:
+      answer:
+        description: 学员侧（includeAnswer=false）省略以下四个字段。
+        type: string
+      content:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: integer
+      created_by_type:
+        type: string
+      explanation:
+        type: string
+      id:
+        type: integer
+      image_url:
+        type: string
+      options: {}
+      reference_answer:
+        type: string
+      reject_reason:
+        type: string
+      score:
+        type: integer
+      scoring_criteria:
+        type: string
+      status:
+        type: string
+      tags:
+        description: Tags 题库管理面附加（未设置时省略；设置后保留 null/[] 形态与历史一致）。
+      type:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  service.SpecialtyBriefDTO:
+    properties:
+      code:
+        type: string
+      name:
+        type: string
+      specialty_id:
+        type: integer
+    type: object
+  service.StudentCourseChapterDTO:
+    properties:
+      chapter_id:
+        type: integer
+      completed:
+        type: boolean
+      progress:
+        type: number
+      title:
+        type: string
+      video_position:
+        type: integer
+    type: object
+  service.StudentCourseDTO:
+    properties:
+      completed_chapters:
+        type: integer
+      course_id:
+        type: integer
+      course_name:
+        type: string
+      cover:
+        type: string
+      last_chapter_id:
+        type: integer
+      last_chapter_title:
+        type: string
+      last_position:
+        type: integer
+      last_studied_at:
+        type: string
+      level_id:
+        type: integer
+      progress:
+        type: number
+      specialty_id:
+        type: integer
+      study_duration:
+        type: integer
+      total_chapters:
+        type: integer
+    type: object
+  service.StudentCourseDetailDTO:
+    properties:
+      chapters:
+        items:
+          $ref: '#/definitions/service.StudentCourseChapterDTO'
+        type: array
+      completed_chapters:
+        type: integer
+      course_id:
+        type: integer
+      course_name:
+        type: string
+      cover:
+        type: string
+      last_chapter_id:
+        type: integer
+      last_chapter_title:
+        type: string
+      last_position:
+        type: integer
+      last_studied_at:
+        type: string
+      level_id:
+        type: integer
+      progress:
+        type: number
+      specialty_id:
+        type: integer
+      study_duration:
+        type: integer
+      total_chapters:
+        type: integer
+    type: object
+  service.StudentCoursesDTO:
+    properties:
+      continue_learning:
+        $ref: '#/definitions/service.StudentCourseDTO'
+      courses:
+        items:
+          $ref: '#/definitions/service.StudentCourseDTO'
+        type: array
+    type: object
+  service.StudentDTO:
+    properties:
+      account:
+        type: string
+      avatar_url:
+        type: string
+      created_at:
+        type: string
+      status:
+        type: integer
+      student_id:
+        type: integer
+      uid:
+        example: "0"
+        type: string
+      username:
+        type: string
+    type: object
+  service.StudentProfileDTO:
+    properties:
+      course_progress:
+        items:
+          $ref: '#/definitions/service.CourseProgressDTO'
+        type: array
+      student_info:
+        $ref: '#/definitions/service.StudentDTO'
+      study_stats:
+        $ref: '#/definitions/service.StudyStatsDTO'
+    type: object
+  service.StudyDailyStatsDTO:
+    properties:
+      active_days:
+        type: integer
+      data:
+        items:
+          type: integer
+        type: array
+      days:
+        type: integer
+      labels:
+        items:
+          type: string
+        type: array
+      total_minutes:
+        type: integer
+    type: object
+  service.StudyProgressDTO:
+    properties:
+      completed_chapters:
+        type: integer
+      progress:
+        type: number
+      record_id:
+        type: integer
+      study_duration:
+        type: integer
+    type: object
+  service.StudyRecordDTO:
+    properties:
+      chapter_id:
+        type: integer
+      chapter_title:
+        type: string
+      course_id:
+        type: integer
+      course_name:
+        type: string
+      progress:
+        type: number
+      record_id:
+        type: integer
+      student_id:
+        type: integer
+      study_date:
+        type: string
+      study_duration:
+        type: integer
+    type: object
+  service.StudyRecordPageResult:
+    properties:
+      page:
+        type: integer
+      pages:
+        type: integer
+      records:
+        items:
+          $ref: '#/definitions/service.StudyRecordDTO'
+        type: array
+      total:
+        type: integer
+    type: object
+  service.StudyStatsDTO:
+    properties:
+      completed_courses:
+        type: integer
+      latest_study_time:
+        type: string
+      learning_courses:
+        type: integer
+      total_courses:
+        type: integer
+      total_study_duration:
+        type: integer
+    type: object
+  service.SubmitResultDTO:
+    properties:
+      accuracy_rate:
+        type: number
+      ai_comment:
+        type: string
+      ai_explanation:
+        type: string
+      ai_fallback:
+        type: boolean
+      ai_score:
+        type: number
+      common_wrong:
+        type: string
+      correct_answer:
+        type: string
+      explanation:
+        type: string
+      is_correct:
+        type: boolean
+      max_score:
+        type: integer
+      question_id:
+        type: integer
+      reference_answer:
+        type: string
+      scoring_criteria:
+        type: string
+      total_attempts:
+        type: integer
+      user_answer: {}
+    type: object
+  service.WrongQuestionStatsDTO:
+    properties:
+      by_type:
+        additionalProperties:
+          format: int64
+          type: integer
+        type: object
+      total:
+        type: integer
+    type: object
+info:
+  contact: {}
+  description: '学员端与公开端点：认证/验证码/微信登录/学员学习中心/课程/练习/考试/收藏/搜索/资料/论坛/通知/精选/AI助手/培训目录；鉴权：`Authorization:
+    Bearer <access JWT>`（access 2h，`POST /api/auth/refresh` 换新双令牌）。响应统一 `{code,message,data}`（见
+    ADR-0005）。不含导师端、管理端与残值评估模块。'
+  title: 叉车维修培训系统-学员端 API
+  version: "1.0"
+paths:
+  /ai-assistant/chat:
+    post:
+      consumes:
+      - application/json
+      description: 可选认证的 SSE 流式响应，不走统一 JSON 信封；事件 message/error/done
+      parameters:
+      - description: 消息
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE stream
+          schema:
+            type: string
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: AI 流式对话（SSE）
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/models:
+    get:
+      description: 列出管理员配置的 is_active=true 模型
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: AI 可用模型（公开）
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/modes:
+    get:
+      description: 返回普通/专家分别绑定的可用模型（隐藏底层 model 细节，前端仅暴露模式）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: AI 双模式模型（公开）
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/sessions:
+    get:
+      consumes:
+      - application/json
+      description: 列出登录用户的会话
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: AI 会话列表
+      tags:
+      - 学员端-AI助手
+    post:
+      consumes:
+      - application/json
+      description: 创建新会话
+      parameters:
+      - description: 标题/模型
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 创建 AI 会话
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/sessions/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除会话及其消息
+      parameters:
+      - description: 会话ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除会话
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/sessions/{id}/messages:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定会话的消息列表
+      parameters:
+      - description: 会话ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 会话消息列表
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/sessions/{id}/title:
+    patch:
+      consumes:
+      - application/json
+      description: 修改会话标题，非空最多 100 字符
+      parameters:
+      - description: 会话ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 标题
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 重命名会话
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/upload-image:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 可选认证；校验格式/大小后保存，返回可访问 URL（随消息提交）
+      parameters:
+      - description: 图片文件
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 上传 AI 对话图片
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/user-models:
+    get:
+      consumes:
+      - application/json
+      description: 列出登录用户自定义模型（api_key 脱敏）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 用户自定义模型
+      tags:
+      - 学员端-AI助手
+    post:
+      consumes:
+      - application/json
+      description: 创建或更新用户自定义模型
+      parameters:
+      - description: 模型
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 保存用户自定义模型
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/user-models/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定用户模型
+      parameters:
+      - description: 模型ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除用户自定义模型
+      tags:
+      - 学员端-AI助手
+  /auth/account:
+    delete:
+      consumes:
+      - application/json
+      description: 硬删除当前学员及关联数据，论坛内容匿名化
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 注销帐号
+      tags:
+      - 学员端-个人资料
+    put:
+      consumes:
+      - application/json
+      description: 短信验证码确认，格式 4~20 位字母/数字/下划线
+      parameters:
+      - description: account/code
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 修改登录账号
+      tags:
+      - 学员端-个人资料
+  /auth/account/send-code:
+    post:
+      consumes:
+      - application/json
+      description: 向已绑定手机发送修改账号验证码
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 发送修改登录账号验证码
+      tags:
+      - 学员端-个人资料
+  /auth/avatar:
+    post:
+      consumes:
+      - multipart/form-data
+      description: multipart 上传，自动压缩为 WebP 后存入 storage 并提交审核
+      parameters:
+      - description: 头像图片
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 上传头像
+      tags:
+      - 学员端-个人资料
+  /auth/email/login:
+    post:
+      consumes:
+      - application/json
+      description: 校验验证码后登录，签发双令牌
+      parameters:
+      - description: 登录
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 验证码登录
+      tags:
+      - 学员端-认证
+  /auth/email/register:
+    post:
+      consumes:
+      - application/json
+      description: 校验验证码后注册，成功签发双令牌并写 Cookie
+      parameters:
+      - description: 注册
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 验证码注册并自动登录
+      tags:
+      - 学员端-认证
+  /auth/email/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: 校验验证码后重置密码，不自动登录
+      parameters:
+      - description: 重置
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 忘记密码重置
+      tags:
+      - 学员端-认证
+  /auth/email/send-code:
+    post:
+      consumes:
+      - application/json
+      description: 开启人机验证时需先校验图形验证码；邮箱字段 email，手机字段 phone，purpose 为 register/login/reset_password
+      parameters:
+      - description: 发码
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 发送验证码
+      tags:
+      - 学员端-认证
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: 账号密码登录（hrwai_user），成功写入登录 Cookie 并返回双令牌
+      parameters:
+      - description: 登录
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 学员登录
+      tags:
+      - 学员端-认证
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: 撤销 refresh_token 并清除登录 Cookie；不依赖 JWTAuth，access 过期亦可登出
+      parameters:
+      - description: refresh_token
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 登出
+      tags:
+      - 学员端-认证
+  /auth/me:
+    get:
+      consumes:
+      - application/json
+      description: 基于 JWT 获取当前用户档案（响应形状由契约测试锁定）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 当前用户信息
+      tags:
+      - 学员端-认证
+  /auth/phone/login:
+    post:
+      consumes:
+      - application/json
+      description: 校验验证码后登录，签发双令牌
+      parameters:
+      - description: 登录
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 验证码登录
+      tags:
+      - 学员端-认证
+  /auth/phone/register:
+    post:
+      consumes:
+      - application/json
+      description: 校验验证码后注册，成功签发双令牌并写 Cookie
+      parameters:
+      - description: 注册
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 验证码注册并自动登录
+      tags:
+      - 学员端-认证
+  /auth/phone/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: 校验验证码后重置密码，不自动登录
+      parameters:
+      - description: 重置
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 忘记密码重置
+      tags:
+      - 学员端-认证
+  /auth/phone/send-code:
+    post:
+      consumes:
+      - application/json
+      description: 开启人机验证时需先校验图形验证码；邮箱字段 email，手机字段 phone，purpose 为 register/login/reset_password
+      parameters:
+      - description: 发码
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 发送验证码
+      tags:
+      - 学员端-认证
+  /auth/profile:
+    put:
+      consumes:
+      - application/json
+      description: nickname 走资料审核；company 立即生效
+      parameters:
+      - description: 资料
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 提交昵称修改审核或直接更新单位
+      tags:
+      - 学员端-个人资料
+  /auth/profile/email:
+    post:
+      consumes:
+      - application/json
+      description: 验证码校验后绑定邮箱
+      parameters:
+      - description: 邮箱
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 绑定/修改邮箱
+      tags:
+      - 学员端-个人资料
+  /auth/profile/password:
+    post:
+      consumes:
+      - application/json
+      description: 短信验证码校验后设置/修改密码
+      parameters:
+      - description: code/password
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 修改密码
+      tags:
+      - 学员端-个人资料
+  /auth/profile/password/send-code:
+    post:
+      consumes:
+      - application/json
+      description: 向已绑定手机发送修改密码验证码
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 发送修改密码验证码
+      tags:
+      - 学员端-个人资料
+  /auth/profile/phone:
+    post:
+      consumes:
+      - application/json
+      description: 验证码校验后绑定手机号
+      parameters:
+      - description: 手机
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 绑定/修改手机号
+      tags:
+      - 学员端-个人资料
+  /auth/profile/send-code:
+    post:
+      consumes:
+      - application/json
+      description: 按 channel(email/phone) 发送绑定验证码
+      parameters:
+      - description: channel/target
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 发送绑定验证码
+      tags:
+      - 学员端-个人资料
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: 轮换签发新 access/refresh，旧 refresh 入黑名单；失败统一 401
+      parameters:
+      - description: refresh_token
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 刷新双令牌
+      tags:
+      - 学员端-认证
+  /auth/wechat/login:
+    post:
+      consumes:
+      - application/json
+      description: 扫码登录占位，未配置授权时明确报错
+      parameters:
+      - description: code
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 未配置
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 微信扫码登录（占位）
+      tags:
+      - 学员端-认证
+  /auth/wechat/qrcode:
+    post:
+      consumes:
+      - application/json
+      description: 占位实现，未配置授权时返回提示
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 获取微信扫码信息
+      tags:
+      - 学员端-认证
+  /auth/wx-login:
+    post:
+      consumes:
+      - application/json
+      description: uni.login code → code2session 换 openid → 查/建用户 → 签发双令牌，平铺返回 token
+        等
+      parameters:
+      - description: code
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 微信小程序登录
+      tags:
+      - 学员端-认证
+  /captcha:
+    get:
+      description: 生成 id 与 base64 图片，用于人机验证
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/api.GenerateCaptchaDTO'
+              type: object
+        "500":
+          description: 失败
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 图形验证码
+      tags:
+      - 学员端-认证
+  /catalog/tree:
+    get:
+      description: 学员端课程目录树
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 培训目录树（公开）
+      tags:
+      - 学员端-培训目录
+  /chapter/{chapter_id}/slides:
+    get:
+      consumes:
+      - application/json
+      description: 公开访问，返回章节 PPT 转图片后的 slides
+      parameters:
+      - description: 章节ID
+        in: path
+        name: chapter_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ChapterSlidesDTO'
+              type: object
+        "404":
+          description: 章节不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 章节幻灯片
+      tags:
+      - 学员端-课程
+  /chapter/{chapter_id}/slides/regenerate:
+    post:
+      consumes:
+      - application/json
+      description: 需登录，触发章节 PPT 重新转 slides（异步）
+      parameters:
+      - description: 章节ID
+        in: path
+        name: chapter_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ChapterSlidesDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 章节不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 重新生成幻灯片
+      tags:
+      - 学员端-课程
+  /course/{course_id}:
+    get:
+      consumes:
+      - application/json
+      description: 需登录，返回课程信息 + 章节 + 学员维度进度/是否已选/完成章节/最后位置（ADR-0017）；未登录时 last_* 为空
+      parameters:
+      - description: 课程ID
+        in: path
+        name: course_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.CourseDetailDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 课程不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 课程详情（含学习进度）
+      tags:
+      - 学员端-课程
+  /course/{course_id}/chapter/{chapter_id}:
+    get:
+      consumes:
+      - application/json
+      description: 需登录，返回章节详情 + 相邻章节 + 学习状态
+      parameters:
+      - description: 课程ID
+        in: path
+        name: course_id
+        required: true
+        type: integer
+      - description: 章节ID
+        in: path
+        name: chapter_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ChapterDetailDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 章节不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 章节详情
+      tags:
+      - 学员端-课程
+  /course/{course_id}/progress:
+    post:
+      consumes:
+      - application/json
+      description: 需登录，上报章节学习时长/播放位置/完成态（ADR-0017）；body 支持 chapter_id/duration/duration_seconds/video_position/completed
+      parameters:
+      - description: 课程ID
+        in: path
+        name: course_id
+        required: true
+        type: integer
+      - description: 进度
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.StudyProgressDTO'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 上报学习进度
+      tags:
+      - 学员端-课程
+  /courses:
+    get:
+      consumes:
+      - application/json
+      description: 公开访问，支持按专业方向 specialty_id / 等级 level_id / 目标证件 credential_id /
+        热门精品 filter=hot|featured|all 过滤，分页返回
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 12
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 专业方向ID
+        in: query
+        name: specialty_id
+        type: integer
+      - description: 等级ID
+        in: query
+        name: level_id
+        type: integer
+      - description: 目标证件ID
+        in: query
+        name: credential_id
+        type: integer
+      - default: all
+        description: 热门/精品筛选 hot|featured|all
+        in: query
+        name: filter
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.CoursePageResult'
+              type: object
+      summary: 课程列表
+      tags:
+      - 学员端-课程
+  /favorites:
+    get:
+      consumes:
+      - application/json
+      description: 分页查询收藏，快照回填；支持按 target_type 过滤
+      parameters:
+      - description: 目标类型 course/chapter/question/featured/topic
+        in: query
+        name: target_type
+        type: string
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 我的收藏列表
+      tags:
+      - 学员端-收藏
+    post:
+      consumes:
+      - application/json
+      description: 幂等收藏（user+type+id 唯一）
+      parameters:
+      - description: 目标
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 收藏
+      tags:
+      - 学员端-收藏
+  /favorites/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 仅本人可取消
+      parameters:
+      - description: 收藏ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 取消收藏
+      tags:
+      - 学员端-收藏
+  /favorites/check:
+    get:
+      consumes:
+      - application/json
+      description: 查询单目标是否已收藏
+      parameters:
+      - description: 目标类型
+        in: query
+        name: target_type
+        required: true
+        type: string
+      - description: 目标ID
+        in: query
+        name: target_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 是否已收藏
+      tags:
+      - 学员端-收藏
+  /featured-content/{id}:
+    get:
+      consumes:
+      - application/json
+      description: 含相关资讯与上下篇；no_view=1 时不计 view_count
+      parameters:
+      - description: 内容ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 1 不计数
+        in: query
+        name: no_view
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 精选内容详情（公开）
+      tags:
+      - 学员端-精选内容
+  /featured-content/{id}/view:
+    post:
+      consumes:
+      - application/json
+      description: 客户端 hydration 后计数
+      parameters:
+      - description: 内容ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 增加精选阅读量
+      tags:
+      - 学员端-精选内容
+  /featured-contents:
+    get:
+      consumes:
+      - application/json
+      description: 仅已发布内容，支持按分类与排序（latest 按时间/hot 按浏览量）过滤
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 分类
+        in: query
+        name: category
+        type: string
+      - default: latest
+        description: 排序 latest|hot
+        in: query
+        name: sort
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 精选内容列表（公开）
+      tags:
+      - 学员端-精选内容
+  /forum/check-in:
+    post:
+      consumes:
+      - application/json
+      description: Asia/Shanghai 每日一次，返回连击/排名
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 已打卡
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 每日打卡
+      tags:
+      - 学员端-论坛
+  /forum/check-in/calendar:
+    get:
+      consumes:
+      - application/json
+      description: 按年月查询打卡日历
+      parameters:
+      - description: 年份
+        in: query
+        name: year
+        type: integer
+      - description: 月份 1-12
+        in: query
+        name: month
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 打卡日历
+      tags:
+      - 学员端-论坛
+  /forum/check-in/rank:
+    get:
+      consumes:
+      - application/json
+      description: 分页查询打卡排行榜
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 打卡排行榜
+      tags:
+      - 学员端-论坛
+  /forum/my-replies:
+    get:
+      consumes:
+      - application/json
+      description: 分页查询本人回复
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 我的回复
+      tags:
+      - 学员端-论坛
+  /forum/my-topics:
+    get:
+      consumes:
+      - application/json
+      description: 分页查询本人帖子
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 我的帖子
+      tags:
+      - 学员端-论坛
+  /forum/replies/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 仅本人可删
+      parameters:
+      - description: 回复ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除自己的回复
+      tags:
+      - 学员端-论坛
+  /forum/replies/{id}/like:
+    delete:
+      consumes:
+      - application/json
+      description: 幂等
+      parameters:
+      - description: 回复ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 取消点赞回复
+      tags:
+      - 学员端-论坛
+    post:
+      consumes:
+      - application/json
+      description: 幂等
+      parameters:
+      - description: 回复ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 点赞回复
+      tags:
+      - 学员端-论坛
+  /forum/replies/{id}/report:
+    post:
+      consumes:
+      - application/json
+      description: 提交举报，等待审核
+      parameters:
+      - description: 回复ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 原因
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 举报回复
+      tags:
+      - 学员端-论坛
+  /forum/topics:
+    get:
+      consumes:
+      - application/json
+      description: 支持 scope=all|general|chapter，按 chapter_id/keyword/sort=latest|hot
+        过滤
+      parameters:
+      - description: 范围 all|general|chapter
+        in: query
+        name: scope
+        type: string
+      - description: 章节ID
+        in: query
+        name: chapter_id
+        type: integer
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 关键词
+        in: query
+        name: keyword
+        type: string
+      - description: 排序 latest|hot
+        in: query
+        name: sort
+        type: string
+      - description: 排序方向 asc|desc
+        in: query
+        name: order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ForumTopicPageResult'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 帖子列表
+      tags:
+      - 学员端-论坛
+    post:
+      consumes:
+      - application/json
+      description: chapter_id 为空表示综合讨论区；images 最多 9 张 URL
+      parameters:
+      - description: 帖子
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ForumTopicDTO'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 发帖
+      tags:
+      - 学员端-论坛
+  /forum/topics/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 仅本人可删
+      parameters:
+      - description: 主题ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除自己的帖子
+      tags:
+      - 学员端-论坛
+    get:
+      consumes:
+      - application/json
+      description: 含回复，sort=time|hot 控制回复排序
+      parameters:
+      - description: 主题ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 排序 time|hot|latest
+        in: query
+        name: sort
+        type: string
+      - description: 排序方向 asc|desc
+        in: query
+        name: order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 帖子详情
+      tags:
+      - 学员端-论坛
+  /forum/topics/{id}/like:
+    delete:
+      consumes:
+      - application/json
+      description: 幂等
+      parameters:
+      - description: 主题ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 取消点赞帖子
+      tags:
+      - 学员端-论坛
+    post:
+      consumes:
+      - application/json
+      description: 幂等
+      parameters:
+      - description: 主题ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 点赞帖子
+      tags:
+      - 学员端-论坛
+  /forum/topics/{id}/replies:
+    post:
+      consumes:
+      - application/json
+      description: 支持 parent_reply_id 回复他人回复；images 最多 3 张
+      parameters:
+      - description: 主题ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 回复
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ForumReplyDTO'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 回复帖子
+      tags:
+      - 学员端-论坛
+  /forum/topics/{id}/report:
+    post:
+      consumes:
+      - application/json
+      description: 提交举报，等待审核
+      parameters:
+      - description: 主题ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 原因
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 举报帖子
+      tags:
+      - 学员端-论坛
+  /forum/upload-image:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 图文分离，先传图后随发帖/回复提交 URL；支持论坛图片
+      parameters:
+      - description: 图片文件
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 上传论坛图片
+      tags:
+      - 学员端-论坛
+  /levels:
+    get:
+      description: 仅启用项
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 课程等级（公开）
+      tags:
+      - 学员端-培训目录
+  /materials:
+    get:
+      consumes:
+      - application/json
+      description: 基于 chapter_file 的聚合视图，支持按 course_id 过滤；与 /student/materials 同数据
+      parameters:
+      - description: 课程ID
+        in: query
+        name: course_id
+        type: integer
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 学习资料列表
+      tags:
+      - 学员端-资料
+  /materials/{id}:
+    get:
+      consumes:
+      - application/json
+      description: 查询单个资料详情
+      parameters:
+      - description: 资料ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 资料详情
+      tags:
+      - 学员端-资料
+  /materials/{id}/download:
+    get:
+      consumes:
+      - application/json
+      description: 返回 file_url/file_name 直链（静态资源）
+      parameters:
+      - description: 资料ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 资料下载地址
+      tags:
+      - 学员端-资料
+  /mock-exam/{mock_exam_id}/result:
+    get:
+      consumes:
+      - application/json
+      description: 查询已交卷模拟考试的结果与解析
+      parameters:
+      - description: 模拟考试ID
+        in: path
+        name: mock_exam_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.MockExamResultDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 模拟考试结果
+      tags:
+      - 学员端-模拟考试
+  /mock-exam/{mock_exam_id}/resume:
+    get:
+      consumes:
+      - application/json
+      description: 恢复未交卷的模拟考试，返回题目与进度
+      parameters:
+      - description: 模拟考试ID
+        in: path
+        name: mock_exam_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.MockExamResumeDTO'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 恢复模拟考试
+      tags:
+      - 学员端-模拟考试
+  /mock-exam/{mock_exam_id}/save:
+    post:
+      consumes:
+      - application/json
+      description: 保存作答与剩余时间
+      parameters:
+      - description: 模拟考试ID
+        in: path
+        name: mock_exam_id
+        required: true
+        type: integer
+      - description: 作答
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 保存模拟考试进度
+      tags:
+      - 学员端-模拟考试
+  /mock-exam/{mock_exam_id}/submit:
+    post:
+      consumes:
+      - application/json
+      description: 交卷并触发判分
+      parameters:
+      - description: 模拟考试ID
+        in: path
+        name: mock_exam_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.MockExamSubmitDTO'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 模拟考试交卷
+      tags:
+      - 学员端-模拟考试
+  /mock-exam/history:
+    get:
+      consumes:
+      - application/json
+      description: 分页查询模拟考试历史记录
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.MockExamHistoryDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 模拟考试历史
+      tags:
+      - 学员端-模拟考试
+  /mock-exam/start:
+    post:
+      consumes:
+      - application/json
+      description: 创建模拟考试会话，count 题量、duration 时长（默认 90 分钟）
+      parameters:
+      - description: 参数
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.MockExamStartDTO'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 开始模拟考试
+      tags:
+      - 学员端-模拟考试
+  /notifications:
+    get:
+      consumes:
+      - application/json
+      description: 分页查询通知（含未读数）
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 通知列表
+      tags:
+      - 学员端-通知
+  /notifications/{id}/read:
+    post:
+      consumes:
+      - application/json
+      description: 标记指定通知为已读
+      parameters:
+      - description: 通知ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 标记单条已读
+      tags:
+      - 学员端-通知
+  /notifications/read-all:
+    post:
+      consumes:
+      - application/json
+      description: 全部通知标记为已读
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 全部标记已读
+      tags:
+      - 学员端-通知
+  /notifications/unread-count:
+    get:
+      consumes:
+      - application/json
+      description: 查询未读通知数量
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 未读通知数
+      tags:
+      - 学员端-通知
+  /practice-mode/free:
+    get:
+      consumes:
+      - application/json
+      description: 按题型随机抽题，count 控制题量（默认 20）
+      parameters:
+      - default: 20
+        description: 题量
+        in: query
+        name: count
+        type: integer
+      - description: 题型 single_choice 等
+        in: query
+        name: type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/service.QuestionDTO'
+                  type: array
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 随机练习抽题
+      tags:
+      - 学员端-练习
+  /practice-mode/history:
+    get:
+      consumes:
+      - application/json
+      description: 分页查询练习历史，支持按题型/日期过滤
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 题型
+        in: query
+        name: type
+        type: string
+      - description: 开始日期 YYYY-MM-DD
+        in: query
+        name: start_date
+        type: string
+      - description: 结束日期 YYYY-MM-DD
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.HistoryResultDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 练习历史
+      tags:
+      - 学员端-练习
+  /practice-mode/practice-stats:
+    get:
+      consumes:
+      - application/json
+      description: 按当前证件分区聚合：今日做题/累计做题/累计做题天数；含重做，均按 question_practice_record；今日按
+        Asia/Shanghai 自然日，累计天数按自然日去重
+      parameters:
+      - description: 目标证件ID
+        in: query
+        minimum: 1
+        name: credential_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.PracticePracticeStatsDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 刷题数据展示
+      tags:
+      - 学员端-练习
+  /practice-mode/progress:
+    get:
+      consumes:
+      - application/json
+      description: 按 mode 查询断点续练进度；mode 为空默认为 sequential
+      parameters:
+      - default: sequential
+        description: 练习模式
+        in: query
+        name: mode
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ProgressResultDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 查询练习进度
+      tags:
+      - 学员端-练习
+    post:
+      consumes:
+      - application/json
+      description: 支持顺序/标签等练习的断点续练
+      parameters:
+      - description: 进度
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 保存练习游标与答题状态
+      tags:
+      - 学员端-练习
+  /practice-mode/sequential:
+    get:
+      consumes:
+      - application/json
+      description: 返回当前批次题目 + 进度
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.PracticeStartResultDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 顺序练习开始/续练
+      tags:
+      - 学员端-练习
+  /practice-mode/sequential-progress:
+    get:
+      consumes:
+      - application/json
+      description: 用于卡片展示的进度快照
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ProgressResultDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 顺序练习进度
+      tags:
+      - 学员端-练习
+  /practice-mode/stats:
+    get:
+      consumes:
+      - application/json
+      description: 汇总练习正确率/已练题量等
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.PracticeStatsDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 练习统计
+      tags:
+      - 学员端-练习
+  /practice-mode/submit:
+    post:
+      consumes:
+      - application/json
+      description: 提交单题答案并即时判分
+      parameters:
+      - description: 答题
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.SubmitResultDTO'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 提交练习答案
+      tags:
+      - 学员端-练习
+  /practice-mode/tag:
+    get:
+      consumes:
+      - application/json
+      description: 按标签 ID 开始/续练专项练习；count=0 表示全部
+      parameters:
+      - description: 题库标签ID
+        in: query
+        name: tag_id
+        required: true
+        type: integer
+      - default: 0
+        description: 题量 0=全部
+        in: query
+        name: count
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.PracticeStartResultDTO'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 标签专项练习
+      tags:
+      - 学员端-练习
+  /questions/{question_id}/comments:
+    get:
+      consumes:
+      - application/json
+      description: 分页查询题目评论，含作者昵称/头像
+      parameters:
+      - description: 题目ID
+        in: path
+        name: question_id
+        required: true
+        type: integer
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 题目评论列表
+      tags:
+      - 学员端-题目互动
+    post:
+      consumes:
+      - application/json
+      description: 学员发表题目评论，直发不审核
+      parameters:
+      - description: 题目ID
+        in: path
+        name: question_id
+        required: true
+        type: integer
+      - description: 内容
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 发表评论
+      tags:
+      - 学员端-题目互动
+  /questions/{question_id}/knowledge:
+    get:
+      description: 只读返回题目挂载的题库标签，无标签返回空数组
+      parameters:
+      - description: 题目ID
+        in: path
+        name: question_id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 考点标签
+      tags:
+      - 学员端-题目互动
+  /questions/{question_id}/note:
+    delete:
+      parameters:
+      - description: 题目ID
+        in: path
+        name: question_id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除笔记
+      tags:
+      - 学员端-题目互动
+    get:
+      parameters:
+      - description: 题目ID
+        in: path
+        name: question_id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 获取笔记
+      tags:
+      - 学员端-题目互动
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 题目ID
+        in: path
+        name: question_id
+        required: true
+        type: integer
+      - description: 笔记
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 保存笔记
+      tags:
+      - 学员端-题目互动
+  /questions/comments/{comment_id}:
+    delete:
+      parameters:
+      - description: 评论ID
+        in: path
+        name: comment_id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除评论
+      tags:
+      - 学员端-题目互动
+  /search:
+    get:
+      consumes:
+      - application/json
+      description: 公开访问，keyword 模糊匹配 course/question/content/topic，type 可选过滤
+      parameters:
+      - description: 关键词
+        in: query
+        name: keyword
+        required: true
+        type: string
+      - description: 类型 course|question|content|topic
+        in: query
+        name: type
+        type: string
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 全局搜索
+      tags:
+      - 学员端-搜索
+  /student/courses:
+    get:
+      consumes:
+      - application/json
+      description: 学员已产生学习记录的课程列表（按最后学习时间倒序）+ continue_learning 置顶；包含封面/方向/等级/完成章节/最后位置（ADR-0017）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.StudentCoursesDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 我的课程
+      tags:
+      - 学员端-学习中心
+  /student/courses/{course_id}:
+    get:
+      consumes:
+      - application/json
+      description: 指定课程的学习详情，包含每章进度/播放位置/完成状态（progress>=100 为完成）
+      parameters:
+      - description: 课程ID
+        in: path
+        name: course_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.StudentCourseDetailDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 课程不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 单课程学习详情
+      tags:
+      - 学员端-学习中心
+  /student/profile:
+    get:
+      consumes:
+      - application/json
+      description: 学员基本信息 + 学习统计 + 课程进度（角色 hrwai_user）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.StudentProfileDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 学员不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 学员档案
+      tags:
+      - 学员端-学习中心
+  /student/records:
+    get:
+      consumes:
+      - application/json
+      description: 按学员维度分页查询学习记录，支持按日期过滤
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 开始日期 YYYY-MM-DD
+        in: query
+        name: start_date
+        type: string
+      - description: 结束日期 YYYY-MM-DD
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.StudyRecordPageResult'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 学习记录分页
+      tags:
+      - 学员端-学习中心
+  /student/study-stats:
+    get:
+      consumes:
+      - application/json
+      description: 按天聚合学习时长，用于仪表盘图表；days 仅支持 7 或 30，其他回退 7
+      parameters:
+      - default: 7
+        description: 统计天数
+        enum:
+        - 7
+        - 30
+        in: query
+        name: days
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.StudyDailyStatsDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 学习统计（按天）
+      tags:
+      - 学员端-学习中心
+  /tags:
+    get:
+      description: 仅启用项
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 题库标签（公开）
+      tags:
+      - 学员端-培训目录
+  /wrong-questions:
+    get:
+      consumes:
+      - application/json
+      description: 分页查询错题，支持按题型/错误次数/收藏过滤与时间排序
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 题型
+        in: query
+        name: type
+        type: string
+      - description: 最小错误次数
+        in: query
+        name: min_wrong_count
+        type: integer
+      - description: 仅看收藏
+        in: query
+        name: favorited
+        type: boolean
+      - default: time_desc
+        description: 排序 time_desc/time_asc
+        in: query
+        name: sort
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 错题列表
+      tags:
+      - 学员端-错题本
+  /wrong-questions/{question_id}/redo:
+    post:
+      consumes:
+      - application/json
+      description: 提交错题重做答案并判分
+      parameters:
+      - description: 题目ID
+        in: path
+        name: question_id
+        required: true
+        type: integer
+      - description: 答案
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.SubmitResultDTO'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 重做错题
+      tags:
+      - 学员端-错题本
+  /wrong-questions/{question_id}/remove:
+    post:
+      consumes:
+      - application/json
+      description: 将指定题目移出错题本
+      parameters:
+      - description: 题目ID
+        in: path
+        name: question_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 移出错题本
+      tags:
+      - 学员端-错题本
+  /wrong-questions/batch-remove:
+    post:
+      consumes:
+      - application/json
+      description: 批量将错题移出（is_removed=true）
+      parameters:
+      - description: 题目IDs
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 批量移出
+      tags:
+      - 学员端-错题本
+  /wrong-questions/export:
+    get:
+      description: 导出为纯文本附件（text/plain）
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: 错题文本
+          schema:
+            type: string
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 导出错题本
+      tags:
+      - 学员端-错题本
+  /wrong-questions/stats:
+    get:
+      consumes:
+      - application/json
+      description: 汇总错题数量/题型分布等
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.WrongQuestionStatsDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 错题统计
+      tags:
+      - 学员端-错题本
+securityDefinitions:
+  BearerAuth:
+    description: Bearer <access JWT>，示例：Bearer eyJhbGciOi...
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

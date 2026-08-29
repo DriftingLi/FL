@@ -1,5 +1,12 @@
 <template>
-  <aside class="app-sidebar" :class="{ collapsed: effectiveCollapsed }">
+  <aside
+    class="app-sidebar"
+    :class="{
+      collapsed: effectiveCollapsed,
+      'is-dark': props.theme === 'dark',
+      'is-compact': props.density === 'compact'
+    }"
+  >
     <!-- 用户信息区（含退出登录下拉菜单） -->
     <el-dropdown
       class="sidebar-user-dropdown"
@@ -32,6 +39,8 @@
       </template>
     </el-dropdown>
 
+    <slot name="top" :collapsed="effectiveCollapsed" />
+
     <!-- 分隔线 -->
     <div class="sidebar-divider"></div>
 
@@ -40,28 +49,140 @@
       <template v-for="item in menuItems" :key="item.key">
         <!-- 有子项的分组 -->
         <template v-if="item.children && item.children.length">
-          <div v-if="!effectiveCollapsed" class="nav-group-label">
+          <div
+            v-if="!effectiveCollapsed"
+            class="nav-group-label is-accordion"
+            :class="{ 'is-active': isGroupActive(item) }"
+            @click="onGroupToggle(item.key)"
+          >
             <el-icon v-if="item.icon" class="nav-group-icon"><component :is="item.icon" /></el-icon>
             <span>{{ item.label }}</span>
+            <el-icon class="nav-group-arrow" :class="{ expanded: isGroupExpanded(item.key) }"><ArrowDown /></el-icon>
           </div>
-          <el-tooltip v-else :content="item.label" placement="right" :show-after="300">
-            <div class="nav-group-icon-only">
+          <el-tooltip v-else placement="right" :show-after="300">
+            <template #content>
+              <div class="nav-group-tooltip-title">{{ item.label }}</div>
+              <div
+                v-for="leaf in flattenLeaves(item)"
+                :key="leaf.key"
+                class="nav-group-tooltip-item"
+                :class="{ active: isRouteActive(leaf) }"
+              >
+                {{ leaf.label }}
+              </div>
+            </template>
+            <div class="nav-group-icon-only" :class="{ 'is-active': isGroupActive(item) }">
               <el-icon><component :is="item.icon" /></el-icon>
             </div>
           </el-tooltip>
-          <router-link
-            v-for="child in item.children"
-            :key="child.key"
-            :to="itemTo(child)"
-            class="nav-item"
-            :class="{ active: isRouteActive(child) }"
-          >
-            <div class="nav-item-icon">
-              <el-icon><component :is="child.icon" /></el-icon>
-            </div>
-            <span v-if="!effectiveCollapsed" class="nav-item-label">{{ child.label }}</span>
-          </router-link>
+          <div v-show="isGroupExpanded(item.key)" class="nav-group-children">
+            <template v-for="child in item.children" :key="child.key">
+              <!-- 二级嵌套：child 自身还有 children（如 题库练习 ┬ 真题练习） -->
+              <template v-if="child.children && child.children.length">
+                <a
+                  v-if="child.externalUrl"
+                  :href="child.externalUrl"
+                  target="_blank"
+                  rel="noopener"
+                  class="nav-item"
+                >
+                  <div class="nav-item-icon">
+                    <el-icon><component :is="child.icon" /></el-icon>
+                  </div>
+                  <span v-if="!effectiveCollapsed" class="nav-item-label">{{ child.label }}</span>
+                </a>
+                <router-link
+                  v-else-if="child.routeName"
+                  :to="itemTo(child)"
+                  class="nav-item"
+                  :class="{ active: isRouteActive(child) }"
+                >
+                  <div class="nav-item-icon">
+                    <el-icon><component :is="child.icon" /></el-icon>
+                  </div>
+                  <span v-if="!effectiveCollapsed" class="nav-item-label">{{ child.label }}</span>
+                </router-link>
+                <div v-else class="nav-group-label nav-sub-group-label" :class="{ 'is-active': isGroupActive(child) }">
+                  <span>{{ child.label }}</span>
+                </div>
+                <template v-for="sub in child.children" :key="sub.key">
+                  <a
+                    v-if="sub.externalUrl"
+                    :href="sub.externalUrl"
+                    target="_blank"
+                    rel="noopener"
+                    class="nav-item nav-sub-item"
+                  >
+                    <div class="nav-item-icon">
+                      <el-icon><component :is="sub.icon" /></el-icon>
+                    </div>
+                    <span v-if="!effectiveCollapsed" class="nav-item-label">{{ sub.label }}</span>
+                  </a>
+                  <router-link
+                    v-else
+                    :to="itemTo(sub)"
+                    class="nav-item nav-sub-item"
+                    :class="{ active: isRouteActive(sub) }"
+                  >
+                    <div class="nav-item-icon">
+                      <el-icon><component :is="sub.icon" /></el-icon>
+                    </div>
+                    <span v-if="!effectiveCollapsed" class="nav-item-label">{{ sub.label }}</span>
+                  </router-link>
+                </template>
+              </template>
+              <!-- 叶子 child -->
+              <a
+                v-else-if="child.externalUrl"
+                :href="child.externalUrl"
+                target="_blank"
+                rel="noopener"
+                class="nav-item"
+              >
+                <div class="nav-item-icon">
+                  <el-icon><component :is="child.icon" /></el-icon>
+                </div>
+                <span v-if="!effectiveCollapsed" class="nav-item-label">{{ child.label }}</span>
+              </a>
+              <router-link
+                v-else-if="child.routeName"
+                :to="itemTo(child)"
+                class="nav-item"
+                :class="{ active: isRouteActive(child) }"
+              >
+                <div class="nav-item-icon">
+                  <el-icon><component :is="child.icon" /></el-icon>
+                </div>
+                <span v-if="!effectiveCollapsed" class="nav-item-label">{{ child.label }}</span>
+              </router-link>
+              <a
+                v-else
+                :href="'#'"
+                class="nav-item"
+                @click.prevent
+              >
+                <div class="nav-item-icon">
+                  <el-icon><component :is="child.icon" /></el-icon>
+                </div>
+                <span v-if="!effectiveCollapsed" class="nav-item-label">{{ child.label }}</span>
+              </a>
+            </template>
+          </div>
         </template>
+
+        <!-- 外链 -->
+        <a
+          v-else-if="item.externalUrl"
+          :href="item.externalUrl"
+          target="_blank"
+          rel="noopener"
+          class="nav-item"
+        >
+          <div class="nav-item-icon">
+            <el-icon><component :is="item.icon" /></el-icon>
+          </div>
+          <span v-if="!effectiveCollapsed" class="nav-item-label">{{ item.label }}</span>
+        </a>
 
         <!-- 无子项的顶级导航 -->
         <router-link
@@ -97,7 +218,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { Expand, Fold, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
@@ -105,11 +226,26 @@ import { useAuthStore } from '@/stores/auth'
 import type { NavItem } from '@/config/navigation'
 import NotificationPanel from '@/components/layout/NotificationPanel.vue'
 
-const props = defineProps<{
-  menuItems: NavItem[]
-  collapsed: boolean
-  mobileOpen?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    menuItems: NavItem[]
+    collapsed: boolean
+    mobileOpen?: boolean
+    /**
+     * 侧栏配色。
+     * - `light`：浅底，**默认值 = 改造前行为**，tutor / admin 保持原样
+     * - `dark`：石墨青暗底（#0C1210），学员端传入
+     */
+    theme?: 'light' | 'dark'
+    /**
+     * 纵向密度。
+     * - `default`：**默认值 = 改造前行为**
+     * - `compact`：收紧导航项与用户信息区的纵向间距
+     */
+    density?: 'default' | 'compact'
+  }>(),
+  { theme: 'light', density: 'default' }
+)
 
 defineEmits<{
   'toggle-collapse': []
@@ -121,6 +257,60 @@ const effectiveCollapsed = computed(() => props.collapsed && !props.mobileOpen)
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+
+// 侧栏分组折叠：默认全部展开，点击分组标题即可折叠/展开（桌面与移动端一致）
+const expandedMap = reactive<Record<string, boolean>>({})
+
+watch(
+  () => props.menuItems,
+  (items) => {
+    for (const item of items) {
+      if (item.children?.length && expandedMap[item.key] === undefined) {
+        expandedMap[item.key] = true
+      }
+    }
+  },
+  { immediate: true, deep: false }
+)
+
+function isGroupExpanded(key: string): boolean {
+  return expandedMap[key] !== false
+}
+
+function onGroupToggle(key: string): void {
+  expandedMap[key] = !isGroupExpanded(key)
+}
+
+function flattenLeaves(item: NavItem): NavItem[] {
+  const result: NavItem[] = []
+  const walk = (node: NavItem) => {
+    for (const child of node.children || []) {
+      if (child.routeName || child.externalUrl) result.push(child)
+      if (child.children?.length) {
+        for (const sub of child.children) {
+          if (sub.routeName || sub.externalUrl) result.push(sub)
+        }
+      }
+    }
+  }
+  walk(item)
+  return result
+}
+
+function isGroupActive(item: NavItem): boolean {
+  if (!item.children?.length) return false
+  for (const child of item.children) {
+    if (child.children?.length) {
+      if (isRouteActive(child)) return true
+      for (const sub of child.children) {
+        if (isRouteActive(sub)) return true
+      }
+    } else if (isRouteActive(child)) {
+      return true
+    }
+  }
+  return false
+}
 
 const roleLabel = computed(() => {
   const role = authStore.userInfo?.role
@@ -141,9 +331,14 @@ function itemTo(item: NavItem) {
 
 function isRouteActive(item: NavItem): boolean {
   if (!item.routeName) return false
-  // 以路由 name 精确匹配（name 唯一，天然无父级前缀误报）。
-  // exact 标记保留并与 name 匹配语义一致（始终精确）。
-  return route.name === item.routeName
+  if (route.name !== item.routeName) return false
+  // 章节列表等同名路由需比对 params，避免全部高亮
+  if (item.routeParams) {
+    for (const [k, v] of Object.entries(item.routeParams)) {
+      if (String(route.params[k] ?? '') !== String(v)) return false
+    }
+  }
+  return true
 }
 
 async function handleUserCommand(command: string) {
@@ -310,6 +505,33 @@ async function handleUserCommand(command: string) {
   gap: 6px;
 }
 
+.nav-group-label.is-active {
+  color: var(--color-primary-600);
+}
+
+.nav-group-label.is-active .nav-group-icon {
+  color: var(--color-primary-600);
+}
+
+.nav-group-label.is-accordion {
+  cursor: pointer;
+  user-select: none;
+}
+
+.nav-group-label.is-accordion:hover {
+  color: var(--color-primary-600);
+}
+
+.nav-group-arrow {
+  margin-left: auto;
+  font-size: 12px;
+  transition: transform var(--duration-fast) var(--ease-default);
+}
+
+.nav-group-arrow.expanded {
+  transform: rotate(180deg);
+}
+
 .nav-group-icon {
   font-size: 14px;
   color: var(--color-text-muted);
@@ -325,8 +547,57 @@ async function handleUserCommand(command: string) {
   cursor: default;
 }
 
+.nav-group-icon-only.is-active {
+  color: var(--color-primary-600);
+  background: var(--color-primary-50);
+  border-radius: var(--radius-md);
+}
+
 .nav-group-icon-only .el-icon {
   font-size: 16px;
+}
+
+.nav-group-children {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.nav-sub-group-label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--color-text-muted);
+  padding: var(--space-2) var(--space-3) var(--space-1) calc(var(--space-3) + 12px);
+  white-space: nowrap;
+}
+
+.nav-sub-group-label.is-active {
+  color: var(--color-primary-600);
+}
+
+.nav-sub-item {
+  padding-left: calc(var(--space-3) + 12px);
+}
+
+.app-sidebar.collapsed .nav-sub-item {
+  padding-left: var(--space-2);
+}
+
+.nav-group-tooltip-title {
+  font-weight: var(--font-semibold);
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.nav-group-tooltip-item {
+  font-size: 12px;
+  line-height: 1.7;
+  opacity: 0.9;
+}
+
+.nav-group-tooltip-item.active {
+  font-weight: var(--font-semibold);
+  opacity: 1;
 }
 
 .nav-item {
@@ -341,6 +612,7 @@ async function handleUserCommand(command: string) {
   white-space: nowrap;
   position: relative;
   cursor: pointer;
+  overflow: hidden;
 }
 
 .nav-item:hover {
@@ -391,6 +663,11 @@ async function handleUserCommand(command: string) {
 .nav-item-label {
   font-size: var(--text-sm);
   font-weight: var(--font-normal);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 底部功能区 */
@@ -447,5 +724,102 @@ async function handleUserCommand(command: string) {
 
 .footer-btn-label {
   font-size: var(--text-sm);
+}
+
+/* ---------------------------------------------------------------------------
+ * 主题（theme）与密度（density）变体
+ *
+ * 刻意采用「追加覆盖」而非改写上面的规则：现有声明一行不动，
+ * 因此 light + default 分支与改造前逐像素一致（tutor / admin 零 diff）。
+ * 变体选择器多一个类，特异性天然高于上面的单类规则，无需 !important。
+ * ------------------------------------------------------------------------- */
+
+/* dark：石墨青暗底 */
+.app-sidebar.is-dark {
+  background: #0c1210;
+  border-right-color: rgba(255, 255, 255, 0.08);
+}
+
+.app-sidebar.is-dark .sidebar-user:hover,
+.app-sidebar.is-dark .sidebar-user:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.app-sidebar.is-dark .user-name {
+  color: #f1f5f9;
+}
+
+.app-sidebar.is-dark .user-dropdown-arrow {
+  color: rgba(241, 245, 249, 0.5);
+}
+
+/* 角色徽章：tutor / admin 的绿 / 紫在暗底上对比度仍够，只调学员（品牌）色 */
+.app-sidebar.is-dark .role-badge.student {
+  background: rgba(45, 212, 191, 0.16);
+  color: var(--color-primary-300);
+}
+
+.app-sidebar.is-dark .sidebar-divider {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.app-sidebar.is-dark .nav-group-label,
+.app-sidebar.is-dark .nav-group-icon,
+.app-sidebar.is-dark .nav-group-icon-only,
+.app-sidebar.is-dark .nav-sub-group-label {
+  color: rgba(148, 163, 184, 0.85);
+}
+
+.app-sidebar.is-dark .nav-group-label.is-active,
+.app-sidebar.is-dark .nav-group-label.is-active .nav-group-icon,
+.app-sidebar.is-dark .nav-group-label.is-accordion:hover,
+.app-sidebar.is-dark .nav-sub-group-label.is-active {
+  color: var(--color-primary-300);
+}
+
+.app-sidebar.is-dark .nav-group-icon-only.is-active {
+  color: var(--color-primary-300);
+  background: rgba(45, 212, 191, 0.14);
+}
+
+.app-sidebar.is-dark .nav-item {
+  color: rgba(241, 245, 249, 0.72);
+}
+
+.app-sidebar.is-dark .nav-item:hover {
+  color: var(--color-primary-300);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.app-sidebar.is-dark .nav-item.active {
+  color: var(--color-primary-300);
+  background: rgba(45, 212, 191, 0.14);
+}
+
+/* 激活指示条在暗底上要更亮才看得见 */
+.app-sidebar.is-dark .nav-item.active::before {
+  background: var(--color-primary-400);
+}
+
+.app-sidebar.is-dark .footer-btn {
+  color: rgba(148, 163, 184, 0.85);
+}
+
+.app-sidebar.is-dark .footer-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f1f5f9;
+}
+
+/* compact：收紧纵向间距 */
+.app-sidebar.is-compact .sidebar-user {
+  padding: var(--space-3) var(--space-4) var(--space-2);
+}
+
+.app-sidebar.is-compact .nav-group-label {
+  padding: var(--space-2) var(--space-3) var(--space-1);
+}
+
+.app-sidebar.is-compact .nav-item {
+  padding: 6px var(--space-3);
 }
 </style>

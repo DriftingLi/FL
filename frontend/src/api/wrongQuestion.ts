@@ -5,6 +5,9 @@ export interface WrongQuestionsQuery {
   page_size?: number
   practice_type?: string
   type?: string
+  sort?: string
+  favorited?: boolean
+  min_wrong_count?: number
 }
 
 /** 错题项 */
@@ -12,6 +15,8 @@ export interface WrongQuestionItem {
   id: number
   question_id: number
   wrong_count?: number
+  favorited?: boolean
+  favorite_id?: number
   question?: {
     type?: string
     content?: string
@@ -19,9 +24,23 @@ export interface WrongQuestionItem {
   }
 }
 
-/** 重做判定结果 */
+/** 重做判定结果（对齐后端 SubmitResultDTO：is_correct 简答 AI 判定前为 null） */
 export interface RedoResult {
-  is_correct?: boolean
+  is_correct?: boolean | null
+  correct_answer?: string
+  explanation?: string
+  question_id?: number
+  user_answer?: unknown
+  reference_answer?: string
+  scoring_criteria?: string
+  max_score?: number
+  ai_score?: number
+  ai_comment?: string
+  ai_fallback?: boolean
+  accuracy_rate?: number
+  common_wrong?: string
+  total_attempts?: number
+  ai_explanation?: string
 }
 
 export const wrongQuestionApi = {
@@ -35,6 +54,10 @@ export const wrongQuestionApi = {
 
   removeWrongQuestion(questionId: number) {
     return unwrappedRequest.post<null>(`/wrong-questions/${questionId}/remove`)
+  },
+
+  batchRemoveWrongQuestions(questionIds: number[]) {
+    return unwrappedRequest.post<null>('/wrong-questions/batch-remove', { question_ids: questionIds })
   },
 
   getWrongQuestionStats() {

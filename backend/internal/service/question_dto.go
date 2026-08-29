@@ -58,10 +58,11 @@ func newQuestionDTO(q *model.Question, includeAnswer bool) QuestionDTO {
 	return d
 }
 
-// 各答题流题型分值（单点定义）：分值差异是产品设定（mock 简答/识图与定级不同），勿对齐。
+// 各答题流题型分值（单点定义）：分值差异是产品设定（practice 与 mock 的简答/识图不同），勿对齐。
+// 「practice」即原「level_exam」表——定级考试下线后该行作为练习客观题满分事实源存活，已正名。
 var questionScoreByFlow = map[string]map[string]float64{
-	"level_exam": {"single_choice": 3, "multi_choice": 4, "true_false": 2, "fault_image": 6, "short_answer": 5},
-	"mock_exam":  {"single_choice": 3, "multi_choice": 4, "true_false": 2, "fault_image": 4, "short_answer": 10},
+	"practice":  {"single_choice": 3, "multi_choice": 4, "true_false": 2, "fault_image": 6, "short_answer": 5},
+	"mock_exam": {"single_choice": 3, "multi_choice": 4, "true_false": 2, "fault_image": 4, "short_answer": 10},
 }
 
 // questionMaxScore 按流取题型满分；未知流/题型返回 0。

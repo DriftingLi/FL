@@ -35,6 +35,8 @@ export interface ForumReplyItem {
     avatar_url: string
   }
   can_delete?: boolean
+  likes_count?: number
+  liked_by_me?: boolean
 }
 
 export interface ForumListParams {
@@ -43,6 +45,8 @@ export interface ForumListParams {
   page?: number
   page_size?: number
   keyword?: string
+  sort?: 'latest' | 'hot'
+  order?: 'asc' | 'desc'
 }
 
 export const forumApi = {
@@ -54,8 +58,11 @@ export const forumApi = {
     return unwrappedRequest.post<ForumTopicItem>('/forum/topics', data)
   },
 
-  getTopic(id: number) {
-    return unwrappedRequest.get<{ topic: ForumTopicItem; replies: ForumReplyItem[] }>(`/forum/topics/${id}`)
+  getTopic(id: number, sort?: 'latest' | 'hot' | 'time', order?: 'asc' | 'desc') {
+    const params: Record<string, string> = {}
+    if (sort) params.sort = sort
+    if (order) params.order = order
+    return unwrappedRequest.get<{ topic: ForumTopicItem; replies: ForumReplyItem[] }>(`/forum/topics/${id}`, { params: Object.keys(params).length ? params : undefined })
   },
 
   replyTopic(id: number, content: string, parentReplyId?: number | null, images?: string[]) {
@@ -115,6 +122,35 @@ export const forumApi = {
   /** 我的回复（带主题标题回填） */
   getMyReplies(params: { page?: number; page_size?: number }) {
     return unwrappedRequest.get<MyRepliesData>('/forum/my-replies', { params })
+  },
+
+  // ===== 打卡（spec #268）=====
+
+  /** 打卡（幂等） */
+  checkIn() {
+    return unwrappedRequest.post<{ checked: boolean; streak: number; total: number; today_checked: boolean }>('/forum/check-in')
+  },
+
+  /** 日历（按月） */
+  getCheckInCalendar(params: { year: number; month: number }) {
+    return unwrappedRequest.get<{ dates: string[]; streak: number; total: number; today_checked: boolean }>('/forum/check-in/calendar', { params })
+  },
+
+  /** 排行榜（累计总榜） */
+  getCheckInRank(params: { page?: number; page_size?: number }) {
+    return unwrappedRequest.get<{ items: CheckInRankItem[]; total: number; page: number; pages: number; me: CheckInRankMe | null }>('/forum/check-in/rank', { params })
+  },
+
+  // ===== 评论点赞（spec #268）=====
+
+  /** 点赞评论（幂等） */
+  likeReply(id: number) {
+    return unwrappedRequest.post<{ likes_count: number; liked: boolean }>(`/forum/replies/${id}/like`)
+  },
+
+  /** 取消点赞评论（幂等） */
+  unlikeReply(id: number) {
+    return unwrappedRequest.delete<{ likes_count: number; liked: boolean }>(`/forum/replies/${id}/like`)
   }
 }
 
@@ -213,6 +249,23 @@ export const adminForumApi = {
   handleReport(id: number, status: number) {
     return unwrappedRequest.put<null>(`/admin/forum/reports/${id}`, { status })
   }
+}
+
+/** 打卡排行榜条目 */
+export interface CheckInRankItem {
+  rank: number
+  user: { user_id: number; username: string; avatar_url: string }
+  total: number
+  streak: number
+  today_checked: boolean
+}
+
+/** 当前用户排名（不在前 N 页时置顶） */
+export interface CheckInRankMe {
+  rank: number
+  total: number
+  streak: number
+  today_checked: boolean
 }
 
 /** 管理端举报条目（与后端 ForumReportDTO 对齐） */

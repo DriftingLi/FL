@@ -36,11 +36,16 @@ type CourseDTO struct {
 	CoverImage            string                  `json:"cover_image"`
 	CourseID              int                     `json:"course_id"`
 	CreatedAt             string                  `json:"created_at"`
+	Credential            *CredentialBriefDTO     `json:"credential,omitempty"`
+	CredentialID          *int                    `json:"credential_id"`
 	Description           string                  `json:"description"`
 	Duration              int                     `json:"duration"`
+	IsFeatured            bool                    `json:"is_featured"`
+	IsHot                 bool                    `json:"is_hot"`
 	Level                 *LevelBriefDTO          `json:"level,omitempty"`
 	LevelID               *int                    `json:"level_id"`
 	Name                  string                  `json:"name"`
+	PointsPrice           *int                    `json:"points_price,omitempty"`
 	PracticeHours         int                     `json:"practice_hours"`
 	PrerequisiteCourseIDs *[]int                  `json:"prerequisite_course_ids,omitempty"`
 	Prerequisites         *[]CourseBriefDTO       `json:"prerequisites,omitempty"`
@@ -51,6 +56,15 @@ type CourseDTO struct {
 	StudentCount          *int64                  `json:"student_count,omitempty"`
 	TheoryHours           int                     `json:"theory_hours"`
 	Chapters              *[]ChapterDTO           `json:"chapters,omitempty"`
+}
+
+// CredentialBriefDTO 目标证件简述（课程详情元数据）。
+type CredentialBriefDTO struct {
+	Category string `json:"category"`
+	Code     string `json:"code"`
+	ID       int    `json:"id"`
+	Level    *int   `json:"level"`
+	Name     string `json:"name"`
 }
 
 // SpecialtyBriefDTO 专业方向简述（详情元数据）。
@@ -227,11 +241,15 @@ func NewCourseService(db *gorm.DB, slideRenderer *SlideRenderer, logger *zap.Log
 	return &CourseService{db: db, slideRenderer: slideRenderer, logger: logger}
 }
 
-// GetCourses 课程列表（可额外按专业方向/课程等级过滤）。
-// 未挂专业方向/等级的课程不展示（与目录树口径统一，见挂载不变式）。
-func (s *CourseService) GetCourses(page, pageSize int, specialtyID, levelID *int) CoursePageResult {
+// GetCourses 课程列表（可额外按专业方向/课程等级/目标证件过滤；filter=hot|featured|all，热门默认）。
+// 未挂专业方向/等级/证件的课程不展示（与目录树口径统一，见挂载不变式）。
+func (s *CourseService) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int, filter ...string) CoursePageResult {
+	f := ""
+	if len(filter) > 0 {
+		f = filter[0]
+	}
 	return ListCourses(s.db, page, pageSize, CourseListOptions{
-		OnlyMounted: true, SpecialtyID: specialtyID, LevelID: levelID, DefaultPageSize: 12,
+		OnlyMounted: true, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID, Filter: f, DefaultPageSize: 12,
 	})
 }
 
@@ -553,6 +571,7 @@ func courseToDTO(c *model.Course) CourseDTO {
 		Description:           c.Description,
 		CoverImage:            c.CoverImage,
 		Duration:              c.Duration,
+		CredentialID:          c.CredentialID,
 		SpecialtyID:           c.SpecialtyID,
 		LevelID:               c.LevelID,
 		TheoryHours:           c.TheoryHours,
@@ -560,6 +579,9 @@ func courseToDTO(c *model.Course) CourseDTO {
 		CertificateTemplateID: c.CertificateTemplateID,
 		SortOrder:             c.SortOrder,
 		Status:                c.Status,
+		IsHot:                 c.IsHot,
+		IsFeatured:            c.IsFeatured,
+		PointsPrice:           c.PointsPrice,
 		CreatedAt:             formatISO(c.CreatedAt),
 	}
 }
@@ -738,9 +760,27 @@ func chapterDetailShared(db *gorm.DB, chapter *model.Chapter, fillStudyStatus bo
 
 // ===== 培训目录扩展辅助（课程等级/学时/前置课程/证书模板） =====
 
-// applyCourseTrainingFields 应用课程培训扩展字段（专业方向/等级/学时/证书模板，typed）。
-// specialty_id / level_id / certificate_template_id 传 0 表示清空（置 NULL）。
+// applyCourseTrainingFields 应用课程培训扩展字段（目标证件/专业方向/等级/学时/证书模板，typed）。
+// credential_id / specialty_id / level_id / certificate_template_id 传 0 表示清空（置 NULL）。
 func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInput) error {
+	if in.CredentialID != nil {
+		id := *in.CredentialID
+		if id < 0 {
+			return errors.New("所属证件ID无效")
+		}
+		if id == 0 {
+			course.CredentialID = nil
+		} else {
+			var count int64
+			if err := db.Model(&model.Credential{}).Where("id = ?", id).Count(&count).Error; err != nil {
+				return err
+			}
+			if count == 0 {
+				return errors.New("所属证件不存在")
+			}
+			course.CredentialID = ptrInt(id)
+		}
+	}
 	if in.SpecialtyID != nil {
 		id := *in.SpecialtyID
 		if id < 0 {
@@ -812,6 +852,12 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 			return errors.New("课程排序值不能为负数")
 		}
 		course.SortOrder = *in.SortOrder
+	}
+	if in.IsHot != nil {
+		course.IsHot = *in.IsHot
+	}
+	if in.IsFeatured != nil {
+		course.IsFeatured = *in.IsFeatured
 	}
 	return nil
 }
@@ -910,8 +956,20 @@ func checkPrerequisiteCycle(db *gorm.DB, courseID int, prereqIDs []int) error {
 }
 
 // fillCourseMeta 填充课程详情的扩展元数据：
-// specialty / level / certificate_template / prerequisites（前置课程列表）。
+// credential / specialty / level / certificate_template / prerequisites（前置课程列表）。
 func fillCourseMeta(db *gorm.DB, course *model.Course, dto *CourseDTO) {
+	if course.CredentialID != nil {
+		var cred model.Credential
+		if err := db.First(&cred, *course.CredentialID).Error; err == nil {
+			dto.Credential = &CredentialBriefDTO{
+				ID:       cred.ID,
+				Code:     cred.Code,
+				Name:     cred.Name,
+				Category: cred.Category,
+				Level:    cred.Level,
+			}
+		}
+	}
 	if course.SpecialtyID != nil {
 		var spec model.Specialty
 		if err := db.First(&spec, *course.SpecialtyID).Error; err == nil {

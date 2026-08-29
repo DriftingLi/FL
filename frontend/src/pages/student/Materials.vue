@@ -22,9 +22,24 @@
       </el-select>
     </div>
 
-    <div v-loading="loading" class="material-list">
-      <template v-if="materials.length > 0">
-        <div v-for="item in materials" :key="item.file_id" class="material-item">
+    <div class="material-list">
+      <UiErrorState
+        v-if="loadError"
+        title="资料加载失败"
+        description="网络或服务端异常，可重试"
+        :retrying="retrying"
+        @retry="retryLoad"
+      />
+
+      <UiSkeleton v-else-if="loading" variant="list" :count="5" />
+
+      <template v-else-if="materials.length > 0">
+        <div
+          v-for="(item, i) in materials"
+          :key="item.file_id"
+          class="material-item stagger-in"
+          :style="staggerStyle(i)"
+        >
           <div class="item-icon" :style="{ background: typeConfig(item.content_type).bg, color: typeConfig(item.content_type).color }">
             <el-icon :size="20"><component :is="typeConfig(item.content_type).icon" /></el-icon>
           </div>
@@ -43,7 +58,7 @@
           </div>
         </div>
       </template>
-      <el-empty v-else-if="!loading" description="暂无学习资料" />
+      <UiEmptyState v-else description="暂无学习资料" />
     </div>
 
     <div class="pagination-wrapper" v-if="total > pageSize">
@@ -65,8 +80,14 @@ import { materialApi, type MaterialItem } from '@/api/material'
 import { courseApi, type CourseSummary } from '@/api/course'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { formatLocaleDateTime } from '@/utils/format'
+import { useStagger } from '@/composables/useStagger'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
 const loading = ref(false)
+const loadError = ref(false)
+const retrying = ref(false)
 const materials = ref<MaterialItem[]>([])
 const total = ref(0)
 const currentPage = ref(1)
@@ -74,11 +95,13 @@ const pageSize = ref(20)
 const courseFilter = ref<number | undefined>(undefined)
 const courses = ref<CourseSummary[]>([])
 
+const staggerStyle = useStagger()
+
 const TYPE_CONFIG: Record<string, { label: string; icon: any; color: string; bg: string }> = {
-  document: { label: '文档', icon: Document, color: '#409eff', bg: '#ecf5ff' },
-  video: { label: '视频', icon: VideoCamera, color: '#f56c6c', bg: '#fef0f0' },
-  ppt: { label: 'PPT', icon: Document, color: '#e6a23c', bg: '#fdf6ec' },
-  image: { label: '图片', icon: Picture, color: '#67c23a', bg: '#f0f9eb' }
+  document: { label: '文档', icon: Document, color: 'var(--color-primary-500)', bg: 'var(--color-primary-50)' },
+  video: { label: '视频', icon: VideoCamera, color: 'var(--color-danger)', bg: 'var(--color-danger-light)' },
+  ppt: { label: 'PPT', icon: Document, color: 'var(--color-warning)', bg: 'var(--color-warning-light)' },
+  image: { label: '图片', icon: Picture, color: 'var(--color-success)', bg: 'var(--color-success-light)' }
 }
 
 function typeConfig(contentType?: string) {
@@ -100,6 +123,7 @@ function handleFilterChange() {
 
 async function loadMaterials() {
   loading.value = true
+  loadError.value = false
   try {
     const res = await materialApi.list({
       course_id: courseFilter.value,
@@ -110,9 +134,21 @@ async function loadMaterials() {
     total.value = res.total || 0
   } catch (e) {
     console.error('加载学习资料失败:', e)
-    /* 错误已由拦截器提示 */
+    loadError.value = true
+    materials.value = []
+    total.value = 0
   } finally {
     loading.value = false
+  }
+}
+
+async function retryLoad() {
+  if (retrying.value) return
+  retrying.value = true
+  try {
+    await loadMaterials()
+  } finally {
+    retrying.value = false
   }
 }
 
@@ -149,7 +185,7 @@ onMounted(() => {
 
 .page-header h2 {
   font-size: 22px;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .filter-bar {
@@ -157,7 +193,7 @@ onMounted(() => {
 }
 
 .material-list {
-  background: #fff;
+  background: var(--color-bg-card);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   min-height: 200px;
@@ -168,7 +204,7 @@ onMounted(() => {
   align-items: center;
   gap: 14px;
   padding: 14px 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .material-item:last-child {
@@ -196,7 +232,7 @@ onMounted(() => {
 .item-name {
   font-size: 15px;
   font-weight: 500;
-  color: #303133;
+  color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -204,7 +240,7 @@ onMounted(() => {
 
 .item-meta {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -219,7 +255,7 @@ onMounted(() => {
 
 .item-info {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   white-space: nowrap;
 }
 

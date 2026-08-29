@@ -34,7 +34,14 @@ func RegisterCaptchaRoutes(r *gin.Engine, svc *captcha.Service) {
 	r.GET("/api/captcha", h.Generate)
 }
 
-// Generate 生成图形验证码 GET /api/captcha。
+// Generate 生成图形验证码
+// @Summary 图形验证码
+// @Description 生成 id 与 base64 图片，用于人机验证
+// @Tags 学员端-认证
+// @Produce json
+// @Success 200 {object} response.R{data=GenerateCaptchaDTO} "success"
+// @Failure 500 {object} response.R "失败"
+// @Router /captcha [get]
 func (h *CaptchaHandler) Generate(c *gin.Context) {
 	Endpoint[struct{}, GenerateCaptchaDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*GenerateCaptchaDTO, error) {

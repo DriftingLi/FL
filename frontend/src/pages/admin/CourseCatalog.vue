@@ -72,14 +72,27 @@
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
+        <el-select v-model="credentialId" placeholder="全部证件" clearable style="width: 160px" @change="currentPage = 1">
+          <el-option v-for="c in credentials" :key="c.id" :label="c.name" :value="c.id" />
+        </el-select>
         <el-select v-model="filterStatus" placeholder="状态" clearable style="width: 120px" @change="currentPage = 1">
           <el-option label="已上架" :value="1" />
           <el-option label="未上架" :value="0" />
+        </el-select>
+        <el-select v-model="filterHotFeatured" placeholder="热门/精品" clearable style="width: 140px" @change="currentPage = 1">
+          <el-option label="热门" value="hot" />
+          <el-option label="精品" value="featured" />
+          <el-option label="全部" value="all" />
         </el-select>
         <el-button type="primary" @click="openDrawer()">新增课程</el-button>
       </div>
 
       <el-table :data="pagedCourses" v-loading="loading" style="width: 100%">
+        <el-table-column label="证件" width="140">
+          <template #default="{ row }">
+            <el-tag size="small" effect="plain">{{ credentialNameOf((row as any).credential_id) || '—' }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="课程名称" min-width="220" show-overflow-tooltip>
           <template #default="{ row }">
             <el-tag v-if="row.status === 0" type="info" size="small">草稿</el-tag>
@@ -105,6 +118,16 @@
         <el-table-column label="证书" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="cc-cell-dim">{{ certificateNameOf(row.certificate_template_id) || '—' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="热门" width="90" align="center">
+          <template #default="{ row }">
+            <el-switch :model-value="!!row.is_hot" @change="(v: boolean) => toggleHot(row, v)" />
+          </template>
+        </el-table-column>
+        <el-table-column label="精品" width="90" align="center">
+          <template #default="{ row }">
+            <el-switch :model-value="!!row.is_featured" @change="(v: boolean) => toggleFeatured(row, v)" />
           </template>
         </el-table-column>
         <el-table-column label="状态" width="90">
@@ -156,6 +179,7 @@
       :directions="directions"
       :levels="levels"
       :certificate-templates="certificateTemplates"
+      :credentials="credentials"
       :course-options="courseOptions"
       :default-specialty-id="specialtyId"
       :submitting="submitting"
@@ -176,6 +200,7 @@ import { ref, computed, onMounted } from 'vue'
 import { Search, ArrowDown, CaretTop, CaretBottom } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { trainingApi, type CatalogDirectionNode, type CatalogLevel, type CertificateTemplate } from '@/api/training'
+import { credentialApi, type CredentialDict } from '@/api/credential'
 import { adminApi, type AdminCourseItem } from '@/api/admin'
 import { levelTagType } from '@/constants/level'
 import { useCourseCatalog, UNMOUNTED_SPECIALTY_ID } from '@/composables/useCourseCatalog'
@@ -190,6 +215,7 @@ const submitting = ref(false)
 // ===== 数据源：管理端课程列表（客户端过滤/分页，课程规模小） =====
 const allCourses = ref<AdminCourseItem[]>([])
 const certificateTemplates = ref<CertificateTemplate[]>([])
+const credentials = ref<CredentialDict[]>([])
 
 function isUnmounted(c: AdminCourseItem): boolean {
   return c.specialty_id === null || c.specialty_id === undefined || c.level_id === null || c.level_id === undefined
@@ -239,13 +265,29 @@ const {
 const mountedCourses = computed(() => allCourses.value.filter(c => !isUnmounted(c)))
 
 const filterStatus = ref<number | null>(null)
+const filterHotFeatured = ref<string | null>(null)
 const keyword = ref('')
+const credentialId = ref<number | null>(null)
 const currentPage = ref(1)
 const pageSize = ref(10)
 
+function credentialNameOf(id?: number | null) {
+  if (!id) return ''
+  return credentials.value.find(c => c.id === id)?.name || ''
+}
+
+// el-select clearable 清除后值为 undefined（valueOnClear 默认）/'' 而非 null，
+// 须归一化判断，否则「先筛选再清除」会把全表过滤为空
+function filterActive(v: unknown): boolean {
+  return v !== null && v !== undefined && v !== ''
+}
+
 const filteredCourses = computed(() => {
   const k = keyword.value.trim().toLowerCase()
+  const cred = credentialId.value
+  const status = filterStatus.value
   return allCourses.value.filter(c => {
+    if (filterActive(cred) && (c as any).credential_id !== cred) return false
     if (specialtyId.value === UNMOUNTED_SPECIALTY_ID) {
       if (!isUnmounted(c)) return false
     } else if (specialtyId.value !== null && c.specialty_id !== specialtyId.value) {
@@ -254,7 +296,9 @@ const filteredCourses = computed(() => {
     if (specialtyId.value !== UNMOUNTED_SPECIALTY_ID && levelId.value !== null && c.level_id !== levelId.value) {
       return false
     }
-    if (filterStatus.value !== null && c.status !== filterStatus.value) return false
+    if (filterActive(status) && c.status !== status) return false
+    if (filterHotFeatured.value === 'hot' && !c.is_hot) return false
+    if (filterHotFeatured.value === 'featured' && !c.is_featured) return false
     if (k && !c.name.toLowerCase().includes(k)) return false
     return true
   })
@@ -382,12 +426,41 @@ async function loadCertificateTemplates() {
   }
 }
 
+async function loadCredentials() {
+  try {
+    const data = await credentialApi.listAdminCredentials()
+    credentials.value = data.credentials || []
+  } catch (error) {
+    console.error('加载证件失败:', error)
+  }
+}
+
 const courseOptions = computed(() =>
   mountedCourses.value.map(c => ({
     course_id: c.course_id,
     name: `${specialtyNameOf(c.specialty_id) || '?'}/${levelNameOf(c.level_id) || '?'} · ${c.name}`
   }))
 )
+
+async function toggleHot(row: AdminCourseItem, val: boolean) {
+  try {
+    await adminApi.updateCourse(row.course_id, { is_hot: val })
+    row.is_hot = val
+    ElMessage.success(val ? '已设为热门' : '已取消热门')
+  } catch (error) {
+    console.error('切换热门失败:', error)
+  }
+}
+
+async function toggleFeatured(row: AdminCourseItem, val: boolean) {
+  try {
+    await adminApi.updateCourse(row.course_id, { is_featured: val })
+    row.is_featured = val
+    ElMessage.success(val ? '已设为精品' : '已取消精品')
+  } catch (error) {
+    console.error('切换精品失败:', error)
+  }
+}
 
 async function toggleStatus(row: AdminCourseItem) {
   if (isUnmounted(row)) {
@@ -445,6 +518,7 @@ async function handleDeleteCourse(row: AdminCourseItem) {
 onMounted(() => {
   refreshCatalog()
   loadCertificateTemplates()
+  loadCredentials()
 })
 </script>
 

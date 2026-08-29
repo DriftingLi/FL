@@ -75,12 +75,23 @@ func (s *ForumImageService) Upload(ctx context.Context, fileHeader *multipart.Fi
 
 // CleanupOrphans 清理论坛悬空图片：List(images/forum/) 与全量引用集差集，
 // 仅删除文件名时间戳超过 ForumImageOrphanTTL 且未被任何主题/回复引用的文件。
-// 返回清理的文件数（尽力而为，存储错误不中断）。
-func (s *ForumImageService) CleanupOrphans(_ context.Context) int {
+// 返回清理的文件数（尽力而为，存储错误不中断）；ctx 取消语义贯穿到存储调用，优雅退出时及时让路。
+func (s *ForumImageService) CleanupOrphans(ctx context.Context) int {
 	if s.fileSvc == nil {
 		return 0
 	}
-	stored := s.fileSvc.List(ForumImageDirPrefix)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	// context 贯穿到存储 List 调用；失败则中止本轮清理，避免在存储不可用时误删
+	stored, err := s.fileSvc.ListWithContext(ctx, ForumImageDirPrefix)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("[forum_image] List 失败", zap.Error(err))
+		}
+		// 若是取消导致，直接返回；否则本轮不清理，避免误判
+		return 0
+	}
 	if len(stored) == 0 {
 		return 0
 	}
@@ -89,29 +100,55 @@ func (s *ForumImageService) CleanupOrphans(_ context.Context) int {
 	cleaned := 0
 	cutoff := time.Now().Add(-ForumImageOrphanTTL)
 	for _, u := range stored {
-		if referenced[u] {
+		// 优雅退出：检查取消
+		select {
+		case <-ctx.Done():
+			return cleaned
+		default:
+		}
+		key := forumImageKey(u)
+		if key == "" {
 			continue
 		}
-		if !isForumImageURL(u) {
+		if referenced[key] {
 			continue
 		}
 		if ms, ok := forumFileTimestamp(u); ok && time.UnixMilli(ms).Before(cutoff) {
-			if err := s.fileSvc.Delete(u); err == nil {
+			if err := s.fileSvc.DeleteWithContext(ctx, u); err == nil {
 				cleaned++
+			} else if ctx.Err() != nil {
+				// 取消导致失败，立即返回
+				return cleaned
 			}
 		}
 	}
 	return cleaned
 }
 
-// collectReferencedImages 收集全部主题与回复引用的图片 URL 集合。
+// forumImageKey 提取 images/forum/ 后的对象 key（兼容 local 与 R2 两种 URL 形态）
+// 例：/static/uploads/images/forum/a_1.webp → images/forum/a_1.webp
+//
+//	https://cdn.example.com/images/forum/a_1.webp → images/forum/a_1.webp
+func forumImageKey(u string) string {
+	idx := strings.Index(u, "images/forum/")
+	if idx < 0 {
+		return ""
+	}
+	return u[idx:]
+}
+
+// collectReferencedImages 收集全部主题与回复引用的图片 key 集合（归一化为 images/forum/...）。
 func (s *ForumImageService) collectReferencedImages() map[string]bool {
 	ref := map[string]bool{}
 	var rawList []string
 	if err := s.db.Model(&model.ForumTopic{}).Pluck("images", &rawList).Error; err == nil {
 		for _, raw := range rawList {
 			for _, u := range parseImageURLs(raw) {
-				ref[u] = true
+				if key := forumImageKey(u); key != "" {
+					ref[key] = true
+				} else if u != "" {
+					ref[u] = true
+				}
 			}
 		}
 	}
@@ -119,7 +156,11 @@ func (s *ForumImageService) collectReferencedImages() map[string]bool {
 	if err := s.db.Model(&model.ForumReply{}).Pluck("images", &rawList).Error; err == nil {
 		for _, raw := range rawList {
 			for _, u := range parseImageURLs(raw) {
-				ref[u] = true
+				if key := forumImageKey(u); key != "" {
+					ref[key] = true
+				} else if u != "" {
+					ref[u] = true
+				}
 			}
 		}
 	}

@@ -37,7 +37,19 @@ func RegisterMaterialRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Mat
 	g.GET("/student/materials", h.List)
 }
 
-// List 资料列表 GET /api/materials
+// List 资料列表
+// @Summary 学习资料列表
+// @Description 基于 chapter_file 的聚合视图，支持按 course_id 过滤；与 /student/materials 同数据
+// @Tags 学员端-资料
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param course_id query int false "课程ID"
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /materials [get]
 func (h *MaterialHandler) List(c *gin.Context) {
 	resp, err := h.svc.ListMaterials(
 		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20),
@@ -49,7 +61,18 @@ func (h *MaterialHandler) List(c *gin.Context) {
 	response.Success(c, resp)
 }
 
-// Get 资料详情 GET /api/materials/:id
+// Get 资料详情
+// @Summary 资料详情
+// @Description 查询单个资料详情
+// @Tags 学员端-资料
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "资料ID"
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "不存在"
+// @Router /materials/{id} [get]
 func (h *MaterialHandler) Get(c *gin.Context) {
 	id, err := pathInt(c, "id", "资料 ID 无效")
 	if err != nil {
@@ -64,7 +87,18 @@ func (h *MaterialHandler) Get(c *gin.Context) {
 	response.Success(c, resp)
 }
 
-// Download 下载地址 GET /api/materials/:id/download
+// Download 资料下载地址
+// @Summary 资料下载地址
+// @Description 返回 file_url/file_name 直链（静态资源）
+// @Tags 学员端-资料
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "资料ID"
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "不存在"
+// @Router /materials/{id}/download [get]
 func (h *MaterialHandler) Download(c *gin.Context) {
 	id, err := pathInt(c, "id", "资料 ID 无效")
 	if err != nil {

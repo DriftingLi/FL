@@ -39,6 +39,7 @@ type Config struct {
 	RateLimit RateLimitConfig
 	// CaptchaEnabled 图形验证码开关（生产默认开启、其他默认关闭；显式 true/false 可覆盖）。
 	CaptchaEnabled   bool
+	Swagger          SwaggerConfig
 	DefaultPasswords DefaultPasswordsConfig
 	// SMTP 邮件发送配置（邮箱验证码注册/登录）。
 	SMTP SMTPConfig
@@ -46,7 +47,9 @@ type Config struct {
 	SMS SMSConfig
 	// EmailCodeTTL 邮箱验证码有效期（EMAIL_CODE_TTL_MINUTES，默认 5 分钟）。
 	EmailCodeTTL time.Duration
-	// Wechat 微信开放平台配置（扫码登录，授权信息待接入）。
+	// Wechat 微信登录凭证配置——小程序与开放平台严格区分：
+	//   - MiniProgram 小程序凭证（code2session 登录，wx-login 消费）
+	//   - OpenPlatform 开放平台网页应用凭证（扫码登录，占位待接入）
 	Wechat WechatConfig
 	// AuthCookie 登录态 Cookie 配置（父域名共享登录）。
 	AuthCookie AuthCookieConfig
@@ -65,24 +68,42 @@ type SMTPConfig struct {
 }
 
 // SMSConfig 腾讯云短信配置（手机验证码注册/登录）。
+// SecretID/SecretKey 为云 API 密钥（cam/capi），不是短信控制台应用详情页的 AppKey。
+// 模板按用途拆分，各对应一个已审核模板：登录模板双参数（验证码+分钟数），其余单参数。
 type SMSConfig struct {
-	SecretID   string // TENCENT_SMS_SECRET_ID 腾讯云 API 密钥 SecretId
-	SecretKey  string // TENCENT_SMS_SECRET_KEY 腾讯云 API 密钥 SecretKey
-	SdkAppID   string // TENCENT_SMS_SDK_APP_ID 短信应用 SdkAppId
-	SignName   string // TENCENT_SMS_SIGN_NAME 已审核通过的短信签名（如 和润天下）
-	TemplateID string // TENCENT_SMS_TEMPLATE_ID 已审核通过的验证码模板 ID
-	Region     string // TENCENT_SMS_REGION 接入地域，默认 ap-guangzhou
+	SecretID     string // TENCENT_SMS_SECRET_ID 腾讯云 API 密钥 SecretId
+	SecretKey    string // TENCENT_SMS_SECRET_KEY 腾讯云 API 密钥 SecretKey
+	SdkAppID     string // TENCENT_SMS_SDK_APP_ID 短信应用 SdkAppId
+	SignName     string // TENCENT_SMS_SIGN_NAME 已审核通过的短信签名
+	Region       string // TENCENT_SMS_REGION 接入地域，默认 ap-guangzhou
+	TplRegister  string // TENCENT_SMS_TEMPLATE_REGISTER 注册验证码模板（{1}=验证码）
+	TplLogin     string // TENCENT_SMS_TEMPLATE_LOGIN 登录验证码模板（{1}=验证码 {2}=有效分钟数）
+	TplPassword  string // TENCENT_SMS_TEMPLATE_PASSWORD 密码重置/修改密码模板（{1}=验证码）
+	TplBindPhone string // TENCENT_SMS_TEMPLATE_BIND_PHONE 绑定/修改手机号、修改账号模板（{1}=验证码）
 }
 
 // Configured 返回短信通道是否已完整配置（生产发送必需）。
 func (c SMSConfig) Configured() bool {
-	return c.SecretID != "" && c.SecretKey != "" && c.SdkAppID != "" && c.SignName != "" && c.TemplateID != ""
+	return c.SecretID != "" && c.SecretKey != "" && c.SdkAppID != "" && c.SignName != "" &&
+		c.TplRegister != "" && c.TplLogin != "" && c.TplPassword != "" && c.TplBindPhone != ""
 }
 
-// WechatConfig 微信开放平台配置（扫码登录框架占位，授权信息待接入）。
+// WechatAppConfig 一组微信应用凭证（AppID 为公开标识，AppSecret 必须仅存服务端）。
+type WechatAppConfig struct {
+	AppID     string // AppID，如 wx 開頭的小程序 ID
+	AppSecret string // AppSecret
+}
+
+// Configured 返回该组凭证是否已配置。
+func (c WechatAppConfig) Configured() bool {
+	return c.AppID != "" && c.AppSecret != ""
+}
+
+// WechatConfig 微信登录凭证——小程序与开放平台网页应用两套独立凭证，
+// 不可混用：code2session 只认小程序凭证，扫码登录只认开放平台网页应用凭证。
 type WechatConfig struct {
-	AppID     string // WECHAT_APP_ID
-	AppSecret string // WECHAT_APP_SECRET
+	MiniProgram  WechatAppConfig // WECHAT_MINI_PROGRAM_APP_ID / WECHAT_MINI_PROGRAM_APP_SECRET
+	OpenPlatform WechatAppConfig // WECHAT_OPEN_PLATFORM_APP_ID / WECHAT_OPEN_PLATFORM_APP_SECRET（扫码登录占位）
 }
 
 // AuthCookieConfig 登录态 Cookie 配置。
@@ -94,7 +115,8 @@ type AuthCookieConfig struct {
 }
 
 // StorageConfig 文件存储配置。
-// Driver 为 "local" 时使用本地磁盘（UploadFolder），为 "r2" 时使用 Cloudflare R2。
+// Driver 为 "local" 时使用本地磁盘（UploadFolder），为 "r2" 时使用对象存储
+// （S3 兼容：缺失 R2Endpoint 时指向 Cloudflare R2，配置时指向自建 RGW 等）。
 type StorageConfig struct {
 	Driver            string // STORAGE_DRIVER，默认 "local"
 	R2AccountID       string // R2_ACCOUNT_ID
@@ -102,6 +124,7 @@ type StorageConfig struct {
 	R2SecretAccessKey string // R2_SECRET_ACCESS_KEY
 	R2Bucket          string // R2_BUCKET
 	R2PublicDomain    string // R2_PUBLIC_DOMAIN，如 https://cdn.example.com
+	R2Endpoint        string // R2_ENDPOINT，空用 R2 默认 endpoint；自建 S3（RGW）时配置
 }
 
 // DefaultPasswordsConfig 默认账号密码配置，生产环境必须覆盖开发默认值。
@@ -154,6 +177,15 @@ type LogConfig struct {
 	Compress   bool   // LOG_COMPRESS，轮转压缩归档，默认 true
 }
 
+// SwaggerConfig Swagger 文档与 BasicAuth 配置（C 方案）。
+// Enabled 由 SWAGGER_ENABLED 控制（未显式设置时 dev 默认 true、prod 默认 false）；
+// User/Pass 由 SWAGGER_USER/PASS 注入，Enabled=true 且两者非空时 /swagger/*any 走 BasicAuth。
+type SwaggerConfig struct {
+	Enabled bool   // SWAGGER_ENABLED
+	User    string // SWAGGER_USER
+	Pass    string // SWAGGER_PASS
+}
+
 // setDefaults 集中定义全部配置默认值。
 func setDefaults() {
 	viper.SetDefault("app_env", "development")
@@ -185,14 +217,14 @@ func setDefaults() {
 	viper.SetDefault("redis_addr", "localhost:6379")
 	viper.SetDefault("redis_password", "")
 	viper.SetDefault("redis_db", 0)
-	viper.SetDefault("redis_pool_size", 10)
-	viper.SetDefault("redis_min_idle_conns", 3)
+	viper.SetDefault("redis_pool_size", 20)
+	viper.SetDefault("redis_min_idle_conns", 5)
 	viper.SetDefault("redis_max_retries", 3)
 	viper.SetDefault("redis_key_prefix", "fl:")
-	viper.SetDefault("redis_dial_timeout", "5s")
-	viper.SetDefault("redis_read_timeout", "3s")
-	viper.SetDefault("redis_write_timeout", "3s")
-	viper.SetDefault("redis_pool_timeout", "4s")
+	viper.SetDefault("redis_dial_timeout", "2s")
+	viper.SetDefault("redis_read_timeout", "2s")
+	viper.SetDefault("redis_write_timeout", "2s")
+	viper.SetDefault("redis_pool_timeout", "3s")
 	viper.SetDefault("redis_idle_timeout", "5m")
 	viper.SetDefault("rate_limit_rps", 20.0)
 	viper.SetDefault("rate_limit_burst", 40)
@@ -210,10 +242,15 @@ func setDefaults() {
 	viper.SetDefault("tencent_sms_secret_key", "")
 	viper.SetDefault("tencent_sms_sdk_app_id", "")
 	viper.SetDefault("tencent_sms_sign_name", "")
-	viper.SetDefault("tencent_sms_template_id", "")
+	viper.SetDefault("tencent_sms_template_register", "")
+	viper.SetDefault("tencent_sms_template_login", "")
+	viper.SetDefault("tencent_sms_template_password", "")
+	viper.SetDefault("tencent_sms_template_bind_phone", "")
 	viper.SetDefault("tencent_sms_region", "ap-guangzhou")
-	viper.SetDefault("wechat_app_id", "")
-	viper.SetDefault("wechat_app_secret", "")
+	viper.SetDefault("wechat_mini_program_app_id", "")
+	viper.SetDefault("wechat_mini_program_app_secret", "")
+	viper.SetDefault("wechat_open_platform_app_id", "")
+	viper.SetDefault("wechat_open_platform_app_secret", "")
 	viper.SetDefault("auth_cookie_name", "hrwai_token")
 	viper.SetDefault("auth_cookie_domain", "localhost")
 	viper.SetDefault("log_level", "info")
@@ -223,6 +260,8 @@ func setDefaults() {
 	viper.SetDefault("log_max_backups", 7)
 	viper.SetDefault("log_max_age_days", 30)
 	viper.SetDefault("log_compress", true)
+	viper.SetDefault("swagger_user", "")
+	viper.SetDefault("swagger_pass", "")
 }
 
 // Load 从环境变量加载配置。非 production 环境会自动加载 .env 文件。
@@ -240,6 +279,7 @@ func Load() (*Config, error) {
 	rateLimitEnabled := envBoolOr("rate_limit_enabled", appEnv == "production")
 	authCookieSecure := envBoolOr("auth_cookie_secure", appEnv == "production")
 	captchaEnabled := envBoolOr("captcha_enabled", appEnv == "production")
+	swaggerEnabled := envBoolOr("swagger_enabled", appEnv != "production")
 
 	cfg := &Config{
 		AppEnv:                appEnv,
@@ -263,6 +303,7 @@ func Load() (*Config, error) {
 			R2SecretAccessKey: viper.GetString("r2_secret_access_key"),
 			R2Bucket:          viper.GetString("r2_bucket"),
 			R2PublicDomain:    viper.GetString("r2_public_domain"),
+			R2Endpoint:        viper.GetString("r2_endpoint"),
 		},
 		AIAPIKey:  viper.GetString("ai_api_key"),
 		AIBaseURL: viper.GetString("ai_base_url"),
@@ -277,14 +318,14 @@ func Load() (*Config, error) {
 			Addr:         viper.GetString("redis_addr"),
 			Password:     viper.GetString("redis_password"),
 			DB:           nonNegInt("redis_db", 0),
-			PoolSize:     positiveInt("redis_pool_size", 10),
-			MinIdleConns: positiveInt("redis_min_idle_conns", 3),
+			PoolSize:     positiveInt("redis_pool_size", 20),
+			MinIdleConns: positiveInt("redis_min_idle_conns", 5),
 			MaxRetries:   positiveInt("redis_max_retries", 3),
 			Prefix:       viper.GetString("redis_key_prefix"),
-			DialTimeout:  positiveDuration("redis_dial_timeout", 5*time.Second),
-			ReadTimeout:  positiveDuration("redis_read_timeout", 3*time.Second),
-			WriteTimeout: positiveDuration("redis_write_timeout", 3*time.Second),
-			PoolTimeout:  positiveDuration("redis_pool_timeout", 4*time.Second),
+			DialTimeout:  positiveDuration("redis_dial_timeout", 2*time.Second),
+			ReadTimeout:  positiveDuration("redis_read_timeout", 2*time.Second),
+			WriteTimeout: positiveDuration("redis_write_timeout", 2*time.Second),
+			PoolTimeout:  positiveDuration("redis_pool_timeout", 3*time.Second),
 			IdleTimeout:  positiveDuration("redis_idle_timeout", 5*time.Minute),
 		},
 		RateLimit: RateLimitConfig{
@@ -293,6 +334,11 @@ func Load() (*Config, error) {
 			Burst:   positiveInt("rate_limit_burst", 40),
 		},
 		CaptchaEnabled: captchaEnabled,
+		Swagger: SwaggerConfig{
+			Enabled: swaggerEnabled,
+			User:    viper.GetString("swagger_user"),
+			Pass:    viper.GetString("swagger_pass"),
+		},
 		DefaultPasswords: DefaultPasswordsConfig{
 			Admin:   viper.GetString("admin_default_password"),
 			Tutor:   viper.GetString("tutor_default_password"),
@@ -307,17 +353,20 @@ func Load() (*Config, error) {
 			FromName: viper.GetString("smtp_from_name"),
 		},
 		SMS: SMSConfig{
-			SecretID:   viper.GetString("tencent_sms_secret_id"),
-			SecretKey:  viper.GetString("tencent_sms_secret_key"),
-			SdkAppID:   viper.GetString("tencent_sms_sdk_app_id"),
-			SignName:   viper.GetString("tencent_sms_sign_name"),
-			TemplateID: viper.GetString("tencent_sms_template_id"),
-			Region:     viper.GetString("tencent_sms_region"),
+			SecretID:     viper.GetString("tencent_sms_secret_id"),
+			SecretKey:    viper.GetString("tencent_sms_secret_key"),
+			SdkAppID:     viper.GetString("tencent_sms_sdk_app_id"),
+			SignName:     viper.GetString("tencent_sms_sign_name"),
+			Region:       viper.GetString("tencent_sms_region"),
+			TplRegister:  viper.GetString("tencent_sms_template_register"),
+			TplLogin:     viper.GetString("tencent_sms_template_login"),
+			TplPassword:  viper.GetString("tencent_sms_template_password"),
+			TplBindPhone: viper.GetString("tencent_sms_template_bind_phone"),
 		},
 		EmailCodeTTL: time.Duration(positiveInt("email_code_ttl_minutes", 5)) * time.Minute,
 		Wechat: WechatConfig{
-			AppID:     viper.GetString("wechat_app_id"),
-			AppSecret: viper.GetString("wechat_app_secret"),
+			MiniProgram:  wechatAppConfig("wechat_mini_program_app_id", "wechat_mini_program_app_secret", "wechat_app_id", "wechat_app_secret"),
+			OpenPlatform: wechatAppConfig("wechat_open_platform_app_id", "wechat_open_platform_app_secret"),
 		},
 		AuthCookie: AuthCookieConfig{
 			Name:   viper.GetString("auth_cookie_name"),
@@ -389,8 +438,9 @@ func (c *Config) Validate() error {
 		missing = append(missing, "REDIS_ADDR")
 	}
 	// R2 对象存储校验：driver=r2 时必填 R2 凭证
+	// （自建 RGW 时 R2_ACCOUNT_ID 可给占位，endpoint 由 R2_ENDPOINT 指定）
 	if c.Storage.Driver == "r2" {
-		if c.Storage.R2AccountID == "" {
+		if c.Storage.R2Endpoint == "" && c.Storage.R2AccountID == "" {
 			missing = append(missing, "R2_ACCOUNT_ID")
 		}
 		if c.Storage.R2AccessKeyID == "" {
@@ -490,6 +540,25 @@ func positiveDuration(key string, def time.Duration) time.Duration {
 		return v
 	}
 	return def
+}
+
+// wechatAppConfig 读取一组微信凭证；legacy 键对仅作向后兼容回退
+// （旧 WECHAT_APP_ID/WECHAT_APP_SECRET 实际是小程序凭证，未区分前缀，已废弃）。
+func wechatAppConfig(idKey, secretKey string, legacyKeys ...string) WechatAppConfig {
+	c := WechatAppConfig{
+		AppID:     viper.GetString(idKey),
+		AppSecret: viper.GetString(secretKey),
+	}
+	if c.Configured() {
+		return c
+	}
+	for i := 0; i+1 < len(legacyKeys); i += 2 {
+		id, secret := viper.GetString(legacyKeys[i]), viper.GetString(legacyKeys[i+1])
+		if id != "" && secret != "" {
+			return WechatAppConfig{AppID: id, AppSecret: secret}
+		}
+	}
+	return c
 }
 
 func splitOrigins(s string) []string {

@@ -8,8 +8,20 @@ const props = withDefaults(
     description?: string
     coverImage?: string
     specialtyId?: number | null
+    /**
+     * 卡片形态。
+     * - `grid`：**默认值 = 改造前行为**，网格卡，hover 上浮
+     * - `compact`：列表态，封面更矮、内边距收紧、取消 hover 上浮
+     */
+    variant?: 'grid' | 'compact'
+    /**
+     * 封面比例。
+     * - `4:3`：**默认值 = 改造前行为**，沿用固定高度 120px
+     * - `16:9`：改用 aspect-ratio，封面更扁
+     */
+    coverRatio?: '4:3' | '16:9'
   }>(),
-  { description: '', coverImage: '', specialtyId: null }
+  { description: '', coverImage: '', specialtyId: null, variant: 'grid', coverRatio: '4:3' }
 )
 
 defineEmits<{ click: [] }>()
@@ -33,8 +45,8 @@ function coverClass() {
 </script>
 
 <template>
-  <div class="cc-card" @click="$emit('click')">
-    <div class="cc-cover" :class="coverClass()">
+  <div class="cc-card" :class="{ 'is-compact': props.variant === 'compact' }" @click="$emit('click')">
+    <div class="cc-cover" :class="[coverClass(), { 'is-wide': props.coverRatio === '16:9' }]">
       <img v-if="coverImage && !imgFailed" v-lazy="coverImage" :alt="name" @error="onImgError" />
       <div v-else class="cc-cover-placeholder">
         <span>{{ name.charAt(0) }}</span>
@@ -61,9 +73,39 @@ function coverClass() {
   transition: all var(--duration-normal) var(--ease-default);
 }
 
+/* hover 反馈统一到 --duration-tap（120ms）：
+   原先 .cc-card 用的是 `transition: all 250ms`，位移显得拖沓；
+   且 all 会把 cover 图片缩放等无关属性一并纳入，这里收窄到实际会变的两项。 */
 .cc-card:hover {
   box-shadow: var(--shadow-lg);
   transform: translateY(-4px);
+  transition:
+    box-shadow var(--duration-tap) var(--ease-default),
+    transform var(--duration-tap) var(--ease-default);
+}
+
+.cc-card:active {
+  transform: translateY(-1px) scale(0.995);
+}
+
+/* compact：列表态，取消上浮、收紧尺寸（上面的 grid 规则保持零改动） */
+.cc-card.is-compact:hover {
+  box-shadow: var(--shadow-sm);
+  transform: none;
+}
+
+.cc-card.is-compact .cc-cover {
+  height: 84px;
+}
+
+.cc-card.is-compact .cc-body {
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+/* 16:9 封面 */
+.cc-cover.is-wide {
+  height: auto;
+  aspect-ratio: 16 / 9;
 }
 
 .cc-cover {

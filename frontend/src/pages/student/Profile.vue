@@ -1,343 +1,169 @@
 <template>
   <div class="profile-page">
-    <div class="page-header">
-      <h2>个人资料</h2>
+    <div class="profile-list">
+      <div class="profile-group">
+        <div class="profile-row" @click="openAvatar">
+          <span class="row-label">修改头像</span>
+          <span class="row-value">
+            <el-avatar :size="32" :src="avatarUrl || undefined" class="row-avatar">{{ letter }}</el-avatar>
+            <el-icon class="arrow"><ArrowRight /></el-icon>
+          </span>
+        </div>
+        <div class="profile-row" @click="openNickname">
+          <span class="row-label">修改昵称</span>
+          <span class="row-value">
+            <span class="value-text">{{ userInfo.username || '未设置' }}</span>
+            <el-icon class="arrow"><ArrowRight /></el-icon>
+          </span>
+        </div>
+        <div class="profile-row" @click="openCompany">
+          <span class="row-label">单位</span>
+          <span class="row-value">
+            <span class="value-text">{{ userInfo.company || '未填写' }}</span>
+            <el-icon class="arrow"><ArrowRight /></el-icon>
+          </span>
+        </div>
+        <div class="profile-row" @click="openAccount">
+          <span class="row-label">我的帐号</span>
+          <span class="row-value">
+            <span class="value-text">{{ userInfo.account || '未生成' }}</span>
+            <el-icon class="arrow"><ArrowRight /></el-icon>
+          </span>
+        </div>
+      </div>
+
+      <div class="profile-group">
+        <div class="profile-row" @click="openPassword">
+          <span class="row-label">修改密码</span>
+          <span class="row-value"><el-icon class="arrow"><ArrowRight /></el-icon></span>
+        </div>
+        <div class="profile-row" @click="openPhone">
+          <span class="row-label">更换手机号</span>
+          <span class="row-value">
+            <span class="value-text">{{ maskedPhone }}</span>
+            <el-icon class="arrow"><ArrowRight /></el-icon>
+          </span>
+        </div>
+        <div class="profile-row" @click="openEmail">
+          <span class="row-label">更换邮箱</span>
+          <span class="row-value">
+            <span class="value-text">{{ userInfo.email || '未绑定' }}</span>
+            <el-icon class="arrow"><ArrowRight /></el-icon>
+          </span>
+        </div>
+      </div>
+
+      <div class="profile-group danger-group">
+        <div class="profile-row danger-row" @click="openDelete">
+          <span class="row-label">注销帐号</span>
+          <span class="row-value"><el-icon class="arrow"><ArrowRight /></el-icon></span>
+        </div>
+      </div>
+
+      <div class="logout-row">
+        <el-button type="primary" class="logout-btn" @click="handleLogout">退出当前账号</el-button>
+      </div>
     </div>
 
-    <el-card class="profile-card">
-      <template #header>
-        <span class="card-title">基本信息</span>
-      </template>
-      <el-descriptions :column="1" border>
-        <el-descriptions-item label="UID">
-          <span>{{ userInfo.uid || '未生成' }}</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="账号">
-          <div class="cell-row">
-            <span>{{ userInfo.account || '未生成' }}</span>
-            <el-button link type="primary" size="small" @click="openAccountDialog">设置账号</el-button>
-          </div>
-        </el-descriptions-item>
-        <el-descriptions-item label="昵称">
-          <div class="cell-row">
-            <span>{{ userInfo.username || '未设置' }}</span>
-            <el-button link type="primary" size="small" @click="openProfileDialog">修改昵称/头像</el-button>
-          </div>
-        </el-descriptions-item>
-        <el-descriptions-item label="单位">{{ userInfo.company || '未填写' }}</el-descriptions-item>
-      </el-descriptions>
-    </el-card>
-
-    <el-card class="profile-card">
-      <template #header>
-        <span class="card-title">联系方式（修改需验证码验证）</span>
-      </template>
-      <el-descriptions :column="1" border>
-        <el-descriptions-item label="手机号">
-          <div class="cell-row">
-            <span>{{ userInfo.phone || '未绑定' }}</span>
-            <el-button link type="primary" size="small" @click="openBind('phone')">
-              {{ userInfo.phone ? '修改' : '绑定' }}
-            </el-button>
-          </div>
-        </el-descriptions-item>
-        <el-descriptions-item label="邮箱">
-          <div class="cell-row">
-            <span>{{ userInfo.email || '未绑定' }}</span>
-            <el-button link type="primary" size="small" @click="openBind('email')">
-              {{ userInfo.email ? '修改' : '绑定' }}
-            </el-button>
-          </div>
-        </el-descriptions-item>
-      </el-descriptions>
-    </el-card>
-
-    <el-card class="profile-card">
-      <template #header>
-        <span class="card-title">账号密码</span>
-      </template>
-      <el-descriptions :column="1" border>
-        <el-descriptions-item label="登录密码">
-          <div class="cell-row">
-            <span>{{ userInfo.has_password ? '已设置，可使用「账号密码登录」' : '尚未设置' }}</span>
-            <el-tag size="small" :type="userInfo.has_password ? 'success' : 'warning'">
-              {{ userInfo.has_password ? '已设置' : '未设置' }}
-            </el-tag>
-            <el-button link type="primary" size="small" @click="passwordDialog.open()">
-              {{ userInfo.has_password ? '修改密码' : '设置密码' }}
-            </el-button>
-          </div>
-        </el-descriptions-item>
-      </el-descriptions>
-    </el-card>
-
-    <ProfileEditDialog ref="profileDialogRef" />
-
-    <!-- 绑定/修改手机号或邮箱 -->
-    <el-dialog v-model="bindVisible" :title="bindTitle" width="440px">
-      <el-form label-width="0">
-        <el-form-item>
-          <el-input
-            v-model="bindTarget"
-            :placeholder="bindChannel === 'email' ? '请输入新邮箱' : '请输入新手机号'"
-            maxlength="50"
-          />
-        </el-form-item>
-        <el-form-item>
-          <div class="code-row">
-            <el-input v-model="bindCode" placeholder="6位验证码" maxlength="6" @keyup.enter="bindDialog.submit" />
-            <el-button :disabled="bindCountdown > 0 || bindSending" @click="handleSendBindCode">
-              {{ bindSending ? '发送中...' : bindCountdown > 0 ? bindCountdown + 's 后重发' : '获取验证码' }}
-            </el-button>
-          </div>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="bindVisible = false">取消</el-button>
-        <el-button type="primary" :loading="bindSubmitting" @click="bindDialog.submit">确认修改</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 设置/修改密码（短信验证码确认） -->
-    <el-dialog v-model="passwordVisible" :title="userInfo.has_password ? '修改密码' : '设置密码'" width="440px">
-      <el-form label-width="0">
-        <el-form-item>
-          <div class="code-row">
-            <el-input v-model="passwordCode" placeholder="短信验证码" maxlength="6" @keyup.enter="passwordDialog.submit" />
-            <el-button :disabled="passwordCountdown > 0 || passwordSending" @click="handleSendPasswordCode">
-              {{ passwordSending ? '发送中...' : passwordCountdown > 0 ? passwordCountdown + 's 后重发' : '获取验证码' }}
-            </el-button>
-          </div>
-        </el-form-item>
-        <el-form-item>
-          <el-input
-            v-model="password"
-            type="password"
-            show-password
-            placeholder="新密码（6-20位）"
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-input
-            v-model="confirmPassword"
-            type="password"
-            show-password
-            placeholder="确认新密码"
-            @keyup.enter="passwordDialog.submit"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="passwordVisible = false">取消</el-button>
-        <el-button type="primary" :loading="passwordSubmitting" @click="passwordDialog.submit">保存</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 设置账号（短信验证码确认） -->
-    <el-dialog v-model="accountVisible" title="设置账号" width="440px">
-      <el-form label-width="0">
-        <el-form-item>
-          <el-input
-            v-model="newAccount"
-            placeholder="新账号（4-20位字母/数字/下划线）"
-            maxlength="20"
-          />
-        </el-form-item>
-        <el-form-item>
-          <div class="code-row">
-            <el-input v-model="accountCode" placeholder="短信验证码" maxlength="6" @keyup.enter="accountDialog.submit" />
-            <el-button :disabled="accountCountdown > 0 || accountSending" @click="handleSendAccountCode">
-              {{ accountSending ? '发送中...' : accountCountdown > 0 ? accountCountdown + 's 后重发' : '获取验证码' }}
-            </el-button>
-          </div>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="accountVisible = false">取消</el-button>
-        <el-button type="primary" :loading="accountSubmitting" @click="accountDialog.submit">确认修改</el-button>
-      </template>
-    </el-dialog>
+    <AvatarEditDialog ref="avatarRef" />
+    <NicknameEditDialog ref="nicknameRef" />
+    <CompanyEditDialog ref="companyRef" />
+    <PhoneEditDialog ref="phoneRef" />
+    <EmailEditDialog ref="emailRef" />
+    <PasswordEditDialog ref="passwordRef" />
+    <AccountEditDialog ref="accountRef" />
+    <DeleteAccountDialog ref="deleteRef" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
+import { ArrowRight } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
-import { isValidAccount } from '@/utils/validate'
-import { useSendCode } from '@/composables/useSendCode'
-import { useVerifyDialog } from '@/composables/useVerifyDialog'
-import ProfileEditDialog from '@/components/layout/ProfileEditDialog.vue'
+import AvatarEditDialog from '@/components/profile/AvatarEditDialog.vue'
+import NicknameEditDialog from '@/components/profile/NicknameEditDialog.vue'
+import CompanyEditDialog from '@/components/profile/CompanyEditDialog.vue'
+import PhoneEditDialog from '@/components/profile/PhoneEditDialog.vue'
+import EmailEditDialog from '@/components/profile/EmailEditDialog.vue'
+import PasswordEditDialog from '@/components/profile/PasswordEditDialog.vue'
+import AccountEditDialog from '@/components/profile/AccountEditDialog.vue'
+import DeleteAccountDialog from '@/components/profile/DeleteAccountDialog.vue'
 
 const authStore = useAuthStore()
-const profileDialogRef = ref<InstanceType<typeof ProfileEditDialog> | null>(null)
+const router = useRouter()
 
-const userInfo = computed(() => authStore.userInfo || {})
+const userInfo = computed(() => (authStore.userInfo as any) || {})
 
-// ---- 绑定/修改手机号或邮箱（useSendCode 负责发送+倒计时，useVerifyDialog 负责对话框状态机）----
-const bindChannel = ref<'phone' | 'email'>('phone')
-const {
-  remaining: bindCountdown,
-  send: sendBindCode
-} = useSendCode({
-  purpose: 'bind',
-  sendCode: (channel, target) => authApi.sendProfileCode({ channel, target })
+const avatarUrl = computed(() => userInfo.value.avatar_url || '')
+const letter = computed(() => (userInfo.value.username || '?').charAt(0).toUpperCase())
+const maskedPhone = computed(() => {
+  const p = userInfo.value.phone
+  if (!p) return '未绑定'
+  if (p.length < 7) return p
+  return p.slice(0, 3) + '******' + p.slice(-2)
 })
-const bindDialog = useVerifyDialog({
-  sendCode: (target, channel) => sendBindCode(target, channel),
-  submitAsync: (target, code) =>
-    bindChannel.value === 'email'
-      ? authApi.updateProfileEmail({ email: target, code })
-      : authApi.updateProfilePhone({ phone: target, code }),
-  onSuccess: async () => {
-    ElMessage.success('修改成功')
-    await authStore.refreshUserInfo()
-  }
-})
-const bindVisible = bindDialog.visible
-const bindTarget = bindDialog.target
-const bindCode = bindDialog.code
-const bindSending = bindDialog.sending
-const bindSubmitting = bindDialog.submitting
-const bindTitle = computed(() => (bindChannel.value === 'email' ? '修改邮箱' : '修改手机号'))
 
-// ---- 设置/修改密码（短信验证码确认）----
-const {
-  remaining: passwordCountdown,
-  send: sendPasswordCode
-} = useSendCode({
-  purpose: 'change_password',
-  sendCode: () => authApi.sendChangePasswordCode()
-})
-const password = ref('')
-const confirmPassword = ref('')
-const passwordDialog = useVerifyDialog({
-  sendCode: (target, channel) => sendPasswordCode(target, channel),
-  submitAsync: async (_target, code) => {
-    if (password.value.length < 6 || password.value.length > 20) {
-      ElMessage.warning('密码长度需为6-20位')
-      throw new Error('password-length-invalid')
-    }
-    if (password.value !== confirmPassword.value) {
-      ElMessage.warning('两次输入的密码不一致')
-      throw new Error('password-mismatch')
-    }
-    await authApi.updateProfilePassword({ code, password: password.value })
-  },
-  onSuccess: async () => {
-    ElMessage.success('密码设置成功')
-    password.value = ''
-    confirmPassword.value = ''
-    // 刷新用户信息以更新 has_password 状态
-    await authStore.refreshUserInfo()
-  }
-})
-const passwordVisible = passwordDialog.visible
-const passwordCode = passwordDialog.code
-const passwordSending = passwordDialog.sending
-const passwordSubmitting = passwordDialog.submitting
+const avatarRef = ref<InstanceType<typeof AvatarEditDialog> | null>(null)
+const nicknameRef = ref<InstanceType<typeof NicknameEditDialog> | null>(null)
+const companyRef = ref<InstanceType<typeof CompanyEditDialog> | null>(null)
+const phoneRef = ref<InstanceType<typeof PhoneEditDialog> | null>(null)
+const emailRef = ref<InstanceType<typeof EmailEditDialog> | null>(null)
+const passwordRef = ref<InstanceType<typeof PasswordEditDialog> | null>(null)
+const accountRef = ref<InstanceType<typeof AccountEditDialog> | null>(null)
+const deleteRef = ref<InstanceType<typeof DeleteAccountDialog> | null>(null)
 
-// ---- 设置账号（短信验证码确认）----
-const {
-  remaining: accountCountdown,
-  send: sendAccountCode
-} = useSendCode({
-  purpose: 'account_change',
-  sendCode: () => authApi.sendAccountChangeCode()
-})
-const accountDialog = useVerifyDialog({
-  sendCode: (target, channel) => sendAccountCode(target, channel),
-  submitAsync: async (target, code) => {
-    if (!isValidAccount(target)) {
-      ElMessage.warning('账号需为4-20位字母、数字或下划线')
-      throw new Error('account-invalid')
-    }
-    // 响应携带新签发的 token：替换本地登录态（JWT claim 随新账号同步）
-    const result = await authApi.updateAccount({ account: target, code })
-    if (result?.token) {
-      authStore.setAuthData(result)
-    }
-  },
-  onSuccess: async () => {
-    ElMessage.success('账号修改成功')
-    await authStore.refreshUserInfo()
-  }
-})
-const accountVisible = accountDialog.visible
-const newAccount = accountDialog.target
-const accountCode = accountDialog.code
-const accountSending = accountDialog.sending
-const accountSubmitting = accountDialog.submitting
+function openAvatar(){ avatarRef.value?.open() }
+function openNickname(){ nicknameRef.value?.open() }
+function openCompany(){ companyRef.value?.open() }
+function openPhone(){ phoneRef.value?.open() }
+function openEmail(){ emailRef.value?.open() }
+function openPassword(){ passwordRef.value?.open() }
+function openAccount(){ accountRef.value?.open() }
+function openDelete(){ deleteRef.value?.open() }
 
-function openProfileDialog() {
-  profileDialogRef.value?.open()
+async function handleLogout(){
+  try {
+    await ElMessageBox.confirm('确定要退出当前账号吗？', '提示', { type: 'warning' })
+  } catch { return }
+  try { await authApi.logout() } catch {}
+  authStore.clearAuthData()
+  router.push('/login')
 }
 
-function openAccountDialog() {
-  accountDialog.open()
-}
-
-function openBind(channel: 'phone' | 'email') {
-  bindChannel.value = channel
-  bindDialog.open()
-}
-
-async function handleSendBindCode() {
-  await bindDialog.send(bindTarget.value, bindChannel.value)
-}
-
-async function handleSendPasswordCode() {
-  await passwordDialog.send('', 'phone')
-}
-
-async function handleSendAccountCode() {
-  await accountDialog.send('', 'phone')
-}
-
-onMounted(() => {
-  authStore.refreshUserInfo()
-})
+onMounted(()=>{ authStore.refreshUserInfo() })
 </script>
 
 <style scoped>
-.profile-page {
-  padding: 20px;
+.profile-page { max-width: 560px; margin: 0 auto; padding: 16px; }
+.profile-list { display: flex; flex-direction: column; gap: 12px; }
+.profile-group {
+  background: var(--color-bg-card);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
-
-.page-header {
-  margin-bottom: 20px;
-}
-
-.page-header h2 {
-  font-size: 22px;
-  color: #303133;
-}
-
-.profile-card {
-  margin-bottom: 16px;
-}
-
-.card-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.cell-row {
+.profile-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  padding: 16px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-bg-page);
+  transition: background 0.15s;
 }
-
-.code-row {
-  display: flex;
-  gap: 10px;
-  width: 100%;
-}
-
-.code-row .el-input {
-  flex: 1;
-}
+.profile-row:last-child { border-bottom: none; }
+.profile-row:hover { background: var(--color-bg-page); }
+.profile-row:active { background: var(--color-bg-page); }
+.row-label { font-size: 14px; color: var(--color-text-primary); }
+.row-value { display: flex; align-items: center; gap: 8px; color: var(--color-text-tertiary); font-size: 14px; }
+.value-text { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-avatar { flex-shrink: 0; background: var(--gradient-brand, var(--color-primary-500)); color: var(--color-bg-card); }
+.arrow { font-size: 14px; color: var(--color-text-disabled); }
+.danger-group .danger-row .row-label { color: var(--color-danger); }
+.logout-row { background: var(--color-bg-card); border-radius: 12px; display: flex; justify-content: center; padding: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.logout-btn { color: var(--color-bg-card); font-size: 15px; width: 100%; padding: 14px; }
+.logout-btn :deep(span) { color: var(--color-bg-card); }
 </style>

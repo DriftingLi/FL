@@ -156,8 +156,10 @@ export interface AdminCoursesQuery {
   page?: number
   page_size?: number
   keyword?: string
+  credential_id?: number
   specialty_id?: number
   level_id?: number
+  filter?: 'hot' | 'featured' | 'all'
 }
 
 export interface CoursePayload {
@@ -167,6 +169,7 @@ export interface CoursePayload {
   duration?: number
   status?: number
   // ===== 培训目录扩展（LH-27/28，字段与后端 applyCourseTrainingFields 对齐）=====
+  credential_id?: number | null
   specialty_id?: number | null
   level_id?: number | null
   theory_hours?: number
@@ -174,6 +177,8 @@ export interface CoursePayload {
   prerequisite_course_ids?: number[]
   certificate_template_id?: number | null
   sort_order?: number
+  is_hot?: boolean
+  is_featured?: boolean
 }
 
 export interface ChapterPayload {

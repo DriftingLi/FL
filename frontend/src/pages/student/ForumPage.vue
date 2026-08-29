@@ -7,16 +7,65 @@
       </el-button>
     </div>
 
-    <el-radio-group v-model="mode" class="forum-mode" @change="handleModeChange">
-      <el-radio-button value="all">全部</el-radio-button>
-      <el-radio-button value="my-topics">我的帖子</el-radio-button>
-      <el-radio-button value="my-replies">我的回复</el-radio-button>
-    </el-radio-group>
+    <!-- 每日打卡卡片（spec #268 A1） -->
+    <div class="checkin-card" @click="openCheckIn('calendar')">
+      <div class="checkin-left">
+        <el-icon class="checkin-icon"><Calendar /></el-icon>
+        <span class="checkin-text">
+          <template v-if="checkInTodayChecked">今日已打卡</template>
+          <template v-else>今日未打卡</template>
+          <span v-if="checkInTotal > 0" class="checkin-sub">｜已连续 {{ checkInStreak }} 天｜累计 {{ checkInTotal }} 天</span>
+        </span>
+      </div>
+      <div class="checkin-right" @click.stop>
+        <el-button type="primary" size="small" :loading="checkInChecking" :disabled="checkInTodayChecked" @click="doCheckIn">
+          {{ checkInTodayChecked ? '今日已打卡' : '立即打卡' }}
+        </el-button>
+        <el-button text size="small" @click="openCheckIn('rank')">排行榜</el-button>
+      </div>
+    </div>
+
+    <div class="forum-toolbar">
+      <el-radio-group v-model="mode" class="forum-mode" @change="handleModeChange">
+        <el-radio-button value="all">全部</el-radio-button>
+        <el-radio-button value="my-topics">我的帖子</el-radio-button>
+        <el-radio-button value="my-replies">我的回复</el-radio-button>
+        <el-radio-button value="history">浏览记录</el-radio-button>
+      </el-radio-group>
+      <el-radio-group v-if="mode !== 'my-replies' && mode !== 'history'" v-model="topicSort" size="small" class="topic-sort" @change="handleSortChange">
+        <el-radio-button value="latest">最新</el-radio-button>
+        <el-radio-button value="hot">热门</el-radio-button>
+      </el-radio-group>
+      <el-button v-if="mode !== 'my-replies' && mode !== 'history'" size="small" :icon="topicOrder==='asc'? ArrowUp : ArrowDown" @click="toggleTopicOrder">{{ topicOrder==='asc' ? '正序' : '逆序' }}</el-button>
+    </div>
+
+    <CheckInDialog v-model="checkInDialogVisible" :initial-tab="checkInTab" @checked="onCheckInChecked" />
+
+    <!-- 浏览记录（卡片分组，选型 b） -->
+    <div v-if="mode === 'history'">
+      <ForumHistoryPanel :items="historyItems" @select="handleHistorySelect" @remove="handleHistoryRemove" @clear="handleHistoryClear" />
+    </div>
 
     <!-- 我的回复列表（条目带主题标题回填，点击跳对应帖子） -->
-    <div v-if="mode === 'my-replies'" v-loading="loading" class="topic-list">
-      <template v-if="myReplies.length > 0">
-        <div v-for="reply in myReplies" :key="reply.id" class="topic-item" @click="goDetail(reply.topic_id)">
+    <div v-else-if="mode === 'my-replies'" class="topic-list">
+      <UiErrorState
+        v-if="loadError"
+        title="回复加载失败"
+        description="网络或服务端异常，可重试"
+        :retrying="retrying"
+        @retry="retryLoad"
+      />
+
+      <UiSkeleton v-else-if="loading" variant="list" :count="5" />
+
+      <template v-else-if="myReplies.length > 0">
+        <div
+          v-for="(reply, i) in myReplies"
+          :key="reply.id"
+          class="topic-item stagger-in"
+          :style="staggerStyle(i)"
+          @click="goDetail(reply.topic_id)"
+        >
           <div class="topic-main">
             <div class="topic-title-row">
               <el-tag size="small" type="info">回复</el-tag>
@@ -29,15 +78,26 @@
           </div>
         </div>
       </template>
-      <el-empty v-else-if="!loading" description="暂无回复" />
+      <UiEmptyState v-else description="暂无回复" />
     </div>
 
-    <div v-else v-loading="loading" class="topic-list">
-      <template v-if="topics.length > 0">
+    <div v-else class="topic-list">
+      <UiErrorState
+        v-if="loadError"
+        title="帖子加载失败"
+        description="网络或服务端异常，可重试"
+        :retrying="retrying"
+        @retry="retryLoad"
+      />
+
+      <UiSkeleton v-else-if="loading" variant="list" :count="5" />
+
+      <template v-else-if="topics.length > 0">
         <div
-          v-for="topic in topics"
+          v-for="(topic, i) in topics"
           :key="topic.id"
-          class="topic-item"
+          class="topic-item stagger-in"
+          :style="staggerStyle(i)"
           @click="goDetail(topic.id)"
         >
           <div class="topic-author">
@@ -64,6 +124,10 @@
                 </span>
                 <el-icon><View /></el-icon>
                 {{ topic.view_count }}
+                <span class="like-mark">
+                  <span class="heart" :class="{ liked: topic.liked_by_me }">{{ topic.liked_by_me ? '♥' : '♡' }}</span>
+                  {{ topic.likes_count || 0 }}
+                </span>
                 <el-icon class="reply-icon"><ChatDotRound /></el-icon>
                 {{ topic.reply_count }}
               </span>
@@ -71,10 +135,10 @@
           </div>
         </div>
       </template>
-      <el-empty v-else-if="!loading" description="还没有帖子，来发第一帖吧" />
+      <UiEmptyState v-else description="还没有帖子，来发第一帖吧" />
     </div>
 
-    <div class="pagination-wrapper" v-if="total > pageSize">
+    <div class="pagination-wrapper" v-if="mode !== 'history' && total > pageSize">
       <el-pagination
         v-model:current-page="currentPage"
         :page-size="pageSize"
@@ -120,27 +184,81 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { EditPen, View, ChatDotRound, Picture } from '@element-plus/icons-vue'
+import { EditPen, View, ChatDotRound, Picture, Calendar, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem, type MyReplyItem } from '@/api/forum'
 import { formatRelativeTime } from '@/utils/format'
 import ForumImageUploader from '@/components/student/ForumImageUploader.vue'
+import CheckInDialog from '@/components/student/CheckInDialog.vue'
+import ForumHistoryPanel from '@/components/student/ForumHistoryPanel.vue'
+import { loadHistory, removeHistoryItem, clearHistory } from '@/utils/forumHistory'
+import type { ForumHistoryItem } from '@/utils/forumHistory'
+import { useAuthStore } from '@/stores/auth'
+import { useStagger } from '@/composables/useStagger'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 const loading = ref(false)
+const loadError = ref(false)
+const retrying = ref(false)
+const staggerStyle = useStagger()
 const submitting = ref(false)
 const topics = ref<ForumTopicItem[]>([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
 
-// 列表模式：全部 / 我的帖子 / 我的回复（ADR-0018）
-type ForumMode = 'all' | 'my-topics' | 'my-replies'
+// 列表模式：全部 / 我的帖子 / 我的回复 / 浏览记录
+type ForumMode = 'all' | 'my-topics' | 'my-replies' | 'history'
 const mode = ref<ForumMode>('all')
 const myReplies = ref<MyReplyItem[]>([])
+const topicSort = ref<'latest' | 'hot'>('latest')
+const topicOrder = ref<'asc' | 'desc'>('desc')
+const historyItems = ref<ForumHistoryItem[]>([])
 
 function handleModeChange() {
   currentPage.value = 1
+  if (mode.value === 'history') {
+    loadHistoryItems()
+  } else {
+    loadTopics()
+  }
+}
+
+function loadHistoryItems() {
+  historyItems.value = loadHistory(authStore.userInfo?.user_id)
+}
+
+function handleHistorySelect(id: number) {
+  const found = historyItems.value.find((h) => h.id === id)
+  if (found?.deleted) {
+    ElMessage.warning('原帖已删除')
+    return
+  }
+  goDetail(id)
+}
+
+function handleHistoryRemove(id: number) {
+  historyItems.value = removeHistoryItem(id, authStore.userInfo?.user_id)
+}
+
+function handleHistoryClear() {
+  historyItems.value = clearHistory(authStore.userInfo?.user_id)
+  ElMessage.success('已清空浏览记录')
+}
+
+function handleSortChange() {
+  currentPage.value = 1
+  // 切换排序维度时重置为降序（最新/最热优先）
+  topicOrder.value = 'desc'
+  loadTopics()
+}
+
+function toggleTopicOrder(){
+  topicOrder.value = topicOrder.value === 'asc' ? 'desc' : 'asc'
   loadTopics()
 }
 const createDialogVisible = ref(false)
@@ -156,6 +274,7 @@ function authorLetter(author: ForumTopicItem['author']) {
 
 async function loadTopics() {
   loading.value = true
+  loadError.value = false
   try {
     const params = { page: currentPage.value, page_size: pageSize.value }
     if (mode.value === 'my-replies') {
@@ -167,15 +286,28 @@ async function loadTopics() {
       topics.value = res.topics || []
       total.value = res.total || 0
     } else {
-      const res = await forumApi.listTopics({ scope: 'general', ...params })
+      const res = await forumApi.listTopics({ scope: 'general', sort: topicSort.value, order: topicOrder.value, ...params })
       topics.value = res.topics || []
       total.value = res.total || 0
     }
   } catch (e) {
     console.error('加载论坛列表失败:', e)
-    /* 错误已由拦截器提示 */
+    loadError.value = true
+    topics.value = []
+    myReplies.value = []
+    total.value = 0
   } finally {
     loading.value = false
+  }
+}
+
+async function retryLoad() {
+  if (retrying.value) return
+  retrying.value = true
+  try {
+    await loadTopics()
+  } finally {
+    retrying.value = false
   }
 }
 
@@ -210,7 +342,57 @@ function goDetail(id: number) {
   router.push({ name: 'ForumDetail', params: { topicId: String(id) } })
 }
 
-onMounted(loadTopics)
+// ===== 打卡（spec #268 A1-A5）=====
+const checkInStreak = ref(0)
+const checkInTotal = ref(0)
+const checkInTodayChecked = ref(false)
+const checkInChecking = ref(false)
+const checkInDialogVisible = ref(false)
+const checkInTab = ref<'calendar' | 'rank'>('calendar')
+
+async function loadCheckInStatus() {
+  try {
+    const now = new Date()
+    const res = await forumApi.getCheckInCalendar({ year: now.getFullYear(), month: now.getMonth() + 1 })
+    checkInStreak.value = res.streak
+    checkInTotal.value = res.total
+    checkInTodayChecked.value = res.today_checked
+  } catch (e) {
+    console.error('加载打卡状态失败:', e)
+  }
+}
+
+function openCheckIn(tab: 'calendar' | 'rank') {
+  checkInTab.value = tab
+  checkInDialogVisible.value = true
+}
+
+async function doCheckIn() {
+  if (checkInTodayChecked.value) return
+  checkInChecking.value = true
+  try {
+    const res = await forumApi.checkIn()
+    ElMessage.success(`打卡成功，已连续 ${res.streak} 天`)
+    checkInStreak.value = res.streak
+    checkInTotal.value = res.total
+    checkInTodayChecked.value = res.today_checked
+  } catch (e) {
+    console.error('打卡失败:', e)
+  } finally {
+    checkInChecking.value = false
+  }
+}
+
+function onCheckInChecked(data: { streak: number; total: number; today_checked: boolean }) {
+  checkInStreak.value = data.streak
+  checkInTotal.value = data.total
+  checkInTodayChecked.value = data.today_checked
+}
+
+onMounted(() => {
+  loadTopics()
+  loadCheckInStatus()
+})
 </script>
 
 <style scoped>
@@ -231,16 +413,24 @@ onMounted(loadTopics)
 .forum-title {
   font-size: 24px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
   margin: 0 0 6px;
 }
 
-.forum-mode {
+.forum-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 12px;
+  gap: 12px;
+}
+
+.forum-mode {
+  margin-bottom: 0;
 }
 
 .topic-list {
-  background: #fff;
+  background: var(--color-bg-card);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   min-height: 300px;
@@ -250,13 +440,20 @@ onMounted(loadTopics)
   display: flex;
   gap: 14px;
   padding: 18px 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border-light);
   cursor: pointer;
-  transition: background 0.2s;
+  transition:
+    background var(--duration-tap) var(--ease-default),
+    transform var(--duration-tap) var(--ease-default);
 }
 
 .topic-item:hover {
-  background: #f7f9fc;
+  background: var(--color-bg-page);
+}
+
+.topic-item:active {
+  background: var(--color-border-light);
+  transform: scale(0.995);
 }
 
 .topic-item:last-child {
@@ -278,7 +475,7 @@ onMounted(loadTopics)
 .topic-title {
   font-size: 16px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -286,7 +483,7 @@ onMounted(loadTopics)
 }
 
 .topic-excerpt {
-  color: #606266;
+  color: var(--color-text-secondary);
   font-size: 13px;
   margin: 6px 0 8px;
   display: -webkit-box;
@@ -300,11 +497,11 @@ onMounted(loadTopics)
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 
 .meta-divider {
-  color: #dcdfe6;
+  color: var(--color-border-dark);
 }
 
 .meta-right {
@@ -323,7 +520,61 @@ onMounted(loadTopics)
   align-items: center;
   gap: 2px;
   margin-right: 10px;
-  color: #e6a23c;
+  color: var(--color-warning);
+}
+
+.like-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 10px;
+  color: var(--color-danger);
+}
+
+.like-mark .heart {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.like-mark .heart.liked {
+  color: var(--color-danger);
+}
+
+.checkin-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--color-bg-card);
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+
+.checkin-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.checkin-icon {
+  font-size: 16px;
+  color: var(--color-primary-500);
+}
+
+.checkin-sub {
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+  margin-left: 6px;
+}
+
+.checkin-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .pagination-wrapper {

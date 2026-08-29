@@ -173,3 +173,5 @@ training-app/*-backup-*/
 
 # ===== 可视化产物（本地生成，不入库）=====
 viz/
+.secret/
+# Swagger BasicAuth 凭据目录（C 方案，严禁入库）

@@ -29,17 +29,46 @@
         <el-tab-pane label="帖子" name="topic" />
       </el-tabs>
 
-      <div v-loading="loading" class="search-results">
-        <!-- 全部模式：四分区 -->
-        <template v-if="activeType === 'all' && allResult">
-          <div v-for="section in sections" :key="section.key" class="result-section">
-            <div class="section-header">
-              <span class="section-title">{{ section.label }}</span>
-              <span class="section-count">{{ section.data.total }} 条</span>
+      <div class="search-results">
+        <UiErrorState
+          v-if="loadError"
+          title="搜索失败"
+          description="网络或服务端异常，可重试"
+          :retrying="retrying"
+          @retry="retryLoad"
+        />
+
+        <UiSkeleton v-else-if="loading" variant="list" :count="6" />
+
+        <template v-else>
+          <!-- 全部模式：四分区 -->
+          <template v-if="activeType === 'all' && allResult">
+            <div v-for="section in sections" :key="section.key" class="result-section">
+              <div class="section-header">
+                <span class="section-title">{{ section.label }}</span>
+                <span class="section-count">{{ section.data.total }} 条</span>
+              </div>
+              <template v-if="section.data.items.length > 0">
+                <div
+                  v-for="item in section.data.items"
+                  :key="`${item.type}-${item.id}`"
+                  class="result-item"
+                  :class="{ clickable: !!itemPath(item) }"
+                  @click="goItem(item)"
+                >
+                  <span class="result-title">{{ item.title }}</span>
+                  <span v-if="item.summary" class="result-summary">{{ item.summary }}</span>
+                </div>
+              </template>
+              <div v-else class="section-empty">无匹配结果</div>
             </div>
-            <template v-if="section.data.items.length > 0">
+          </template>
+
+          <!-- 指定类型模式：分页列表 -->
+          <template v-else-if="pageResult">
+            <template v-if="pageResult.items.length > 0">
               <div
-                v-for="item in section.data.items"
+                v-for="item in pageResult.items"
                 :key="`${item.type}-${item.id}`"
                 class="result-item"
                 :class="{ clickable: !!itemPath(item) }"
@@ -49,35 +78,18 @@
                 <span v-if="item.summary" class="result-summary">{{ item.summary }}</span>
               </div>
             </template>
-            <div v-else class="section-empty">无匹配结果</div>
-          </div>
-        </template>
+            <UiEmptyState v-else description="无匹配结果" />
 
-        <!-- 指定类型模式：分页列表 -->
-        <template v-else-if="pageResult">
-          <template v-if="pageResult.items.length > 0">
-            <div
-              v-for="item in pageResult.items"
-              :key="`${item.type}-${item.id}`"
-              class="result-item"
-              :class="{ clickable: !!itemPath(item) }"
-              @click="goItem(item)"
-            >
-              <span class="result-title">{{ item.title }}</span>
-              <span v-if="item.summary" class="result-summary">{{ item.summary }}</span>
+            <div class="pagination-wrapper" v-if="pageResult.total > pageSize">
+              <el-pagination
+                v-model:current-page="currentPage"
+                :page-size="pageSize"
+                :total="pageResult.total"
+                layout="total, prev, pager, next"
+                @current-change="loadPageResult"
+              />
             </div>
           </template>
-          <el-empty v-else-if="!loading" description="无匹配结果" />
-
-          <div class="pagination-wrapper" v-if="pageResult.total > pageSize">
-            <el-pagination
-              v-model:current-page="currentPage"
-              :page-size="pageSize"
-              :total="pageResult.total"
-              layout="total, prev, pager, next"
-              @current-change="loadPageResult"
-            />
-          </div>
         </template>
       </div>
     </template>
@@ -89,12 +101,17 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Search } from '@element-plus/icons-vue'
 import { searchApi, type SearchAllResult, type SearchPageResult, type SearchItem, type SearchType } from '@/api/search'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
 const router = useRouter()
 
 const keyword = ref('')
 const searched = ref(false)
 const loading = ref(false)
+const loadError = ref(false)
+const retrying = ref(false)
 const activeType = ref<'all' | SearchType>('all')
 const currentPage = ref(1)
 const pageSize = ref(20)
@@ -138,13 +155,16 @@ async function doSearch() {
   activeType.value = 'all'
   currentPage.value = 1
   loading.value = true
+  loadError.value = false
   try {
     // type 缺省时后端返回各分区聚合（SearchAllResult）
     allResult.value = (await searchApi.search({ keyword: kw })) as SearchAllResult
     pageResult.value = null
   } catch (e) {
     console.error('搜索失败:', e)
-    /* 错误已由拦截器提示 */
+    loadError.value = true
+    allResult.value = null
+    pageResult.value = null
   } finally {
     loading.value = false
   }
@@ -163,6 +183,7 @@ async function loadPageResult() {
   const kw = keyword.value.trim()
   if (!kw || activeType.value === 'all') return
   loading.value = true
+  loadError.value = false
   try {
     const res = await searchApi.search({
       keyword: kw,
@@ -174,9 +195,25 @@ async function loadPageResult() {
     allResult.value = null
   } catch (e) {
     console.error('搜索失败:', e)
-    /* 错误已由拦截器提示 */
+    loadError.value = true
+    pageResult.value = null
   } finally {
     loading.value = false
+  }
+}
+
+/** 重试：回到触发失败的那次查询（聚合搜索 / 指定类型分页） */
+async function retryLoad() {
+  if (retrying.value) return
+  retrying.value = true
+  try {
+    if (activeType.value === 'all') {
+      await doSearch()
+    } else {
+      await loadPageResult()
+    }
+  } finally {
+    retrying.value = false
   }
 }
 
@@ -200,7 +237,7 @@ function resetSearch() {
 
 .page-header h2 {
   font-size: 22px;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .search-bar {
@@ -214,7 +251,7 @@ function resetSearch() {
 }
 
 .search-results {
-  background: #fff;
+  background: var(--color-bg-card);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   min-height: 200px;
@@ -223,7 +260,7 @@ function resetSearch() {
 
 .result-section {
   padding: 14px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .result-section:last-child {
@@ -240,17 +277,17 @@ function resetSearch() {
 .section-title {
   font-size: 15px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .section-count {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 
 .section-empty {
   font-size: 13px;
-  color: #c0c4cc;
+  color: var(--color-text-disabled);
   padding: 4px 0;
 }
 
@@ -268,12 +305,12 @@ function resetSearch() {
 }
 
 .result-item.clickable:hover {
-  background: #f7f9fc;
+  background: var(--color-bg-page);
 }
 
 .result-title {
   font-size: 14px;
-  color: #303133;
+  color: var(--color-text-primary);
   flex-shrink: 0;
   max-width: 50%;
   overflow: hidden;
@@ -283,7 +320,7 @@ function resetSearch() {
 
 .result-summary {
   font-size: 13px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

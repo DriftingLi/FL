@@ -42,7 +42,18 @@ func RegisterFeaturedRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Fea
 	g.POST("/featured-content/upload-image", h.UploadImage)
 }
 
-// GetPublicList 内容精选列表（仅已发布）GET /api/featured-contents
+// GetPublicList 精选内容列表
+// @Summary 精选内容列表（公开）
+// @Description 仅已发布内容，支持按分类与排序（latest 按时间/hot 按浏览量）过滤
+// @Tags 学员端-精选内容
+// @Accept json
+// @Produce json
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(10)
+// @Param category query string false "分类"
+// @Param sort query string false "排序 latest|hot" default(latest)
+// @Success 200 {object} response.R "success"
+// @Router /featured-contents [get]
 func (h *FeaturedHandler) GetPublicList(c *gin.Context) {
 	Endpoint[featuredListReq, service.FeaturedContentPageResult]{
 		Parse: func(c *gin.Context) (*featuredListReq, error) {
@@ -50,10 +61,11 @@ func (h *FeaturedHandler) GetPublicList(c *gin.Context) {
 				Page:     atoiDefault(c.Query("page"), 1),
 				PageSize: atoiDefault(c.Query("page_size"), 10),
 				Category: c.Query("category"),
+				Sort:     c.Query("sort"),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *featuredListReq) (*service.FeaturedContentPageResult, error) {
-			result := h.svc.GetPublicList(req.Page, req.PageSize, req.Category)
+			result := h.svc.GetPublicList(req.Page, req.PageSize, req.Category, req.Sort)
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *featuredListReq, resp *service.FeaturedContentPageResult, _ error) {
@@ -62,8 +74,17 @@ func (h *FeaturedHandler) GetPublicList(c *gin.Context) {
 	}.Handle(c)
 }
 
-// GetPublicDetail 内容精选详情（含相关资讯 + 上/下一篇）GET /api/featured-content/:id
-// 带 no_view=1 时不改变 view_count（SSR/爬虫路径）；不带参数保持既有计数行为。
+// GetPublicDetail 精选内容详情
+// @Summary 精选内容详情（公开）
+// @Description 含相关资讯与上下篇；no_view=1 时不计 view_count
+// @Tags 学员端-精选内容
+// @Accept json
+// @Produce json
+// @Param id path int true "内容ID"
+// @Param no_view query string false "1 不计数"
+// @Success 200 {object} response.R "success"
+// @Failure 404 {object} response.R "不存在"
+// @Router /featured-content/{id} [get]
 func (h *FeaturedHandler) GetPublicDetail(c *gin.Context) {
 	Endpoint[featuredDetailReq, service.FeaturedContentDetailDTO]{
 		Parse: func(c *gin.Context) (*featuredDetailReq, error) {
@@ -86,7 +107,16 @@ func (h *FeaturedHandler) GetPublicDetail(c *gin.Context) {
 	}.Handle(c)
 }
 
-// IncrementViewCount 客户端阅读量计数（真实浏览器 hydration 后调用）POST /api/featured-content/:id/view
+// IncrementViewCount 精选阅读量
+// @Summary 增加精选阅读量
+// @Description 客户端 hydration 后计数
+// @Tags 学员端-精选内容
+// @Accept json
+// @Produce json
+// @Param id path int true "内容ID"
+// @Success 200 {object} response.R "success"
+// @Failure 404 {object} response.R "不存在"
+// @Router /featured-content/{id}/view [post]
 func (h *FeaturedHandler) IncrementViewCount(c *gin.Context) {
 	Endpoint[featuredIDReq, viewCountResp]{
 		Parse: func(c *gin.Context) (*featuredIDReq, error) {
@@ -233,6 +263,7 @@ type featuredListReq struct {
 	Page     int
 	PageSize int
 	Category string
+	Sort     string
 }
 
 // adminFeaturedListReq 管理端内容精选列表查询参数。

@@ -75,35 +75,6 @@ func TestMockSaveProgressLateAfterSubmit(t *testing.T) {
 	}
 }
 
-// TestLevelSaveAnswerLateAfterSubmit 定级考试晚到保存同样静默忽略（现状语义锁定）。
-func TestLevelSaveAnswerLateAfterSubmit(t *testing.T) {
-	svc, db, participantID, studentID, _ := examSubmitFixture(t, []string{"single_choice"})
-
-	// 交卷
-	if _, err := svc.SubmitExam(participantID, studentID, false); err != nil {
-		t.Fatalf("交卷失败: %v", err)
-	}
-	var before model.ExamParticipant
-	if err := db.First(&before, participantID).Error; err != nil {
-		t.Fatal(err)
-	}
-
-	err := svc.SaveAnswer(participantID, studentID, map[string]any{"1": "B"}, 1)
-	if err == nil {
-		t.Fatal("提交后的晚到保存应被守卫拒绝")
-	}
-	var after model.ExamParticipant
-	if err := db.First(&after, participantID).Error; err != nil {
-		t.Fatal(err)
-	}
-	if string(after.AnswersSnapshot) != string(before.AnswersSnapshot) {
-		t.Fatalf("晚到保存不得改写快照: before=%s after=%s", before.AnswersSnapshot, after.AnswersSnapshot)
-	}
-	if after.RemainingTime != before.RemainingTime {
-		t.Fatalf("晚到保存不得改写 remaining_time: before=%d after=%d", before.RemainingTime, after.RemainingTime)
-	}
-}
-
 // TestMockSaveProgressOwnership 守卫分支：他人会话拒绝、本人+进行中通过。
 func TestMockSaveProgressOwnership(t *testing.T) {
 	svc, db, mockExamID, studentID := seedMockInProgress(t)

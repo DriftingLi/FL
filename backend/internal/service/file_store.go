@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"path/filepath"
@@ -102,6 +103,17 @@ func (s *FileStore) DeleteFiles(urls []string) {
 	}
 }
 
+// DeleteWithContext 按 URL 删除文件，ctx 取消时及时返回。
+func (s *FileStore) DeleteWithContext(ctx context.Context, url string) error {
+	if url == "" {
+		return nil
+	}
+	// 继承 caller ctx，叠加超时以避免永久阻塞
+	ctx2, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	return s.storage.Delete(ctx2, url)
+}
+
 // List 按 key 前缀列出文件 URL（如 "images/forum"、"slides/12"）。
 func (s *FileStore) List(prefix string) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -112,6 +124,13 @@ func (s *FileStore) List(prefix string) []string {
 		return nil
 	}
 	return urls
+}
+
+// ListWithContext 按 key 前缀列出文件 URL，ctx 取消语义贯穿到 storage 调用。
+func (s *FileStore) ListWithContext(ctx context.Context, prefix string) ([]string, error) {
+	ctx2, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	return s.storage.List(ctx2, prefix)
 }
 
 // ValidateImage 校验图片文件格式与大小。
@@ -128,6 +147,22 @@ func (s *FileStore) ValidateImage(filename string, size int64) (bool, string) {
 		return false, fmt.Sprintf("图片大小超出限制，最大允许%dMB", maxFileSizes["image"]/(1024*1024))
 	}
 	return true, ""
+}
+
+// Read 按 URL 读回文件内容（本地/对象存储统一），返回内容与从扩展名推断的 MIME 类型。
+func (s *FileStore) Read(fileURL string) ([]byte, string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	reader, err := s.storage.Get(ctx, fileURL)
+	if err != nil {
+		return nil, "", err
+	}
+	defer reader.Close()
+	content, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, "", err
+	}
+	return content, mimeTypeFromExt(fileExtension(fileURL)), nil
 }
 
 // ===== 章节文件校验（package-private：仅导师文件上传路径使用）=====

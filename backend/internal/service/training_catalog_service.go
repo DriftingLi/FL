@@ -272,6 +272,83 @@ func (s *TrainingCatalogService) DeleteQuestionTag(id int) error {
 	return catalogDelete(s.db, questionTagCatalogSpec(), id)
 }
 
+// ===== 目标证件 =====
+
+// ListCredentials 目标证件列表（activeOnly=true 仅启用项）。
+func (s *TrainingCatalogService) ListCredentials(activeOnly bool) []CredentialDict {
+	return catalogList(s.db, credentialCatalogSpec(), activeOnly)
+}
+
+// CreateCredential 创建目标证件。
+func (s *TrainingCatalogService) CreateCredential(in CredentialInput) (CredentialDict, error) {
+	return catalogCreate(s.db, credentialCatalogSpec(), &in)
+}
+
+// UpdateCredential 更新目标证件。
+func (s *TrainingCatalogService) UpdateCredential(id int, in CredentialInput) (CredentialDict, error) {
+	return catalogUpdate(s.db, credentialCatalogSpec(), id, &in)
+}
+
+// DeleteCredential 删除目标证件（已关联课程/题目置空 credential_id，不级联删除）。
+func (s *TrainingCatalogService) DeleteCredential(id int) error {
+	return catalogDelete(s.db, credentialCatalogSpec(), id)
+}
+
+// SwapCredentialSort 交换两个目标证件的排序位置。
+func (s *TrainingCatalogService) SwapCredentialSort(a, b int) error {
+	return catalogSwap(s.db, credentialCatalogSpec(), a, b)
+}
+
+// GetCurrentCredential 获取学员当前目标证件（未设置时返回 nil）。
+func (s *TrainingCatalogService) GetCurrentCredential(userID int) (*CredentialDict, error) {
+	var u model.HrwaiUser
+	if err := s.db.Select("current_credential_id").First(&u, userID).Error; err != nil {
+		return nil, errors.New("用户不存在")
+	}
+	if u.CurrentCredentialID == nil {
+		return nil, nil
+	}
+	var c model.Credential
+	if err := s.db.First(&c, *u.CurrentCredentialID).Error; err != nil {
+		return nil, nil
+	}
+	d := credentialDict(&c)
+	return &d, nil
+}
+
+// SetCurrentCredential 设置学员当前目标证件（校验证件存在且启用）。
+func (s *TrainingCatalogService) SetCurrentCredential(userID int, credentialID int) (*CredentialDict, error) {
+	var c model.Credential
+	if err := s.db.First(&c, credentialID).Error; err != nil {
+		return nil, errors.New("证件不存在")
+	}
+	if c.Status != 1 {
+		return nil, errors.New("证件已停用")
+	}
+	if err := s.db.Model(&model.HrwaiUser{}).Where("id = ?", userID).Update("current_credential_id", credentialID).Error; err != nil {
+		return nil, err
+	}
+	d := credentialDict(&c)
+	return &d, nil
+}
+
+// ListGroupedCredentials 分组返回启用证件（特种作业/技能等级各一组，按 sort_order）。
+func (s *TrainingCatalogService) ListGroupedCredentials() map[string][]CredentialDict {
+	list := s.ListCredentials(true)
+	grouped := map[string][]CredentialDict{
+		"special_operation": {},
+		"skill_level":       {},
+	}
+	for _, d := range list {
+		if d.Category == "skill_level" {
+			grouped["skill_level"] = append(grouped["skill_level"], d)
+		} else {
+			grouped["special_operation"] = append(grouped["special_operation"], d)
+		}
+	}
+	return grouped
+}
+
 // ===== 题目-标签关联 =====
 
 // SetQuestionTags 全量替换题目标签关联。
@@ -509,6 +586,21 @@ func tagDict(t *model.QuestionTag) QuestionTagDict {
 		SortOrder:   t.SortOrder,
 		Status:      t.Status,
 		UpdatedAt:   formatISO(t.UpdatedAt),
+	}
+}
+
+func credentialDict(c *model.Credential) CredentialDict {
+	return CredentialDict{
+		Category:    c.Category,
+		Code:        c.Code,
+		CreatedAt:   formatISO(c.CreatedAt),
+		Description: c.Description,
+		ID:          c.ID,
+		Level:       c.Level,
+		Name:        c.Name,
+		SortOrder:   c.SortOrder,
+		Status:      c.Status,
+		UpdatedAt:   formatISO(c.UpdatedAt),
 	}
 }
 

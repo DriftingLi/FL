@@ -2,6 +2,8 @@
 
 本文档为叉车维修培训系统 + 残值评估子系统 + AI 助手的 HTTP 接口总清单（路径 / 方法 / 鉴权 / 请求格式 / 返回格式）。
 
+> **在线交互文档（gin-swagger，C 方案）**：开发/测试环境 `GET /swagger/index.html`（需 BasicAuth `SWAGGER_USER`/`SWAGGER_PASS`，见 `.secret/swagger-credentials.pem` 与 GitHub Secrets）；生产默认关闭（`SWAGGER_ENABLED=false`）。本清单保留作离线对照，以 Swagger UI 为准。
+
 > **准确性基准**：本清单以 `backend/internal/api` 实际注册的路由与 `backend/internal/service` 的 typed DTO 契约为准（2026-08-19，6c0dfec）。与历史文档的差异（已下线端点等）见文末「变更记录」。
 
 ## 0. 通用约定
@@ -99,22 +101,32 @@
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
-| PUT | `/api/auth/profile` | JWT | 修改昵称（走资料审核流：提交 → 审核 → 生效） |
+| PUT | `/api/auth/profile` | JWT | 修改昵称或单位（昵称走资料审核流，单位立即生效） |
 | POST | `/api/auth/avatar` | JWT | 上传头像（multipart，字段名 `file`；同样走资料审核流） |
+| DELETE | `/api/auth/account` | JWT | 注销当前账号（硬删除，论坛内容匿名化） |
 
 **PUT /api/auth/profile**
 
-请求体：`{ "nickname": "新昵称" }`
+请求体：`{ "nickname": "新昵称" }` 或 `{ "company": "新单位" }`
 
-响应 200（返回待审核的资料修改请求）：
+- `nickname`：走资料审核流（提交 → 审核 → 生效），响应为待审核请求
+- `company`：立即生效，无需审核
+
+响应 200（昵称走审核流，单位立即生效）：
 
 ```json
 { "code": 200, "message": "修改申请已提交，等待审核", "data": { "id": 1, "user_id": 1, "username": "13800000001", "avatar_url": "", "field_type": "nickname", "old_value": "旧昵称", "new_value": "新昵称", "status": "pending", "reject_reason": "", "created_at": "2026-08-16 10:00:00" } }
 ```
 
+单位更新成功响应：`{ "code": 200, "message": "单位更新成功", "data": {} }`
+
 **POST /api/auth/avatar**
 
 multipart/form-data：`file`（图片）。响应 200：`data` 为头像修改审核请求（同上结构，`field_type: "avatar"`）。
+
+**DELETE /api/auth/account**
+
+注销当前学员账号，硬删除用户及关联数据（练习记录、错题、收藏、模拟考试、学习位置、打卡、站内信、评论与笔记），论坛帖子/回复匿名化为“已注销用户”，并清理登录态。需本地二次确认（输入账号），无需短信验证码。响应 200：`{ "code": 200, "message": "帐号已注销", "data": null }`
 
 ### 2.3 邮箱验证码 `/api/auth/email`
 
@@ -166,13 +178,13 @@ multipart/form-data：`file`（图片）。响应 200：`data` 为头像修改�
 
 **POST /api/auth/wx-login**
 
-请求体：`{ "code": "uni.login 临时凭证" }`。后端以 code 调微信 code2session 换 openid：已绑定用户直接登录；未注册自动建号（account 取 `wx_`+openid 前 12 位，昵称「微信学员」+openid 后 6 位）并绑定 openid。响应 200，data 为登录结果平铺结构（契约见 `docs/docs/reference/微信小程序登录-文档说明.md`，AppID `wxbf0604c40fbe65f0`）：
+请求体：`{ "code": "uni.login 临时凭证" }`。后端以 code 调微信 code2session 换 openid：已绑定用户直接登录；未注册自动建号（account 取 `wx_`+openid 前 12 位，昵称「微信学员」+openid 后 6 位）并绑定 openid。响应 200，data 为登录结果平铺结构（契约见 `docs/docs/reference/微信小程序登录-文档说明.md`，AppID 通过环境变量 `WECHAT_MINI_PROGRAM_APP_ID`（GitHub Secrets 同名）配置，勿硬编码；小程序凭证与开放平台扫码凭证（`WECHAT_OPEN_PLATFORM_*`）严格区分）：
 
 ```json
 { "code": 200, "message": "登录成功", "data": { "token": "jwt", "refresh_token": "jwt", "user_id": 1, "account": "wx_oABC_123456", "username": "微信学员123456", "name": "微信学员123456", "role": "hrwai_user", "avatar": "", "isNew": true } }
 ```
 
-`isNew` 仅新用户为 true（前端据此提示已自动注册）。错误分支均 400：缺 code、未配置 AppID/Secret、code 失效（40029）、频率限制（45011）、高风险拦截（40226）。小程序凭证经环境变量 `WECHAT_APP_ID` / `WECHAT_APP_SECRET` 配置。
+`isNew` 仅新用户为 true（前端据此提示已自动注册）。错误分支均 400：缺 code、未配置 AppID/Secret、code 失效（40029）、频率限制（45011）、高风险拦截（40226）。小程序凭证经环境变量 `WECHAT_MINI_PROGRAM_APP_ID` / `WECHAT_MINI_PROGRAM_APP_SECRET` 配置。
 
 ### 2.6 微信扫码登录 `/api/auth/wechat`（框架占位）
 
@@ -476,8 +488,12 @@ Query：`tag_id`（必填）、`count`（0=全部）。
 `user_answer`：客观题为字符串（多选为逗号拼接或数组），简答题为文本。响应 200：
 
 ```json
-{ "code": 200, "message": "success", "data": { "is_correct": true, "correct_answer": "A", "explanation": "解析", "question_id": 1, "user_answer": "A" } }
+{ "code": 200, "message": "success", "data": { "is_correct": true, "correct_answer": "A", "explanation": "解析", "question_id": 1, "user_answer": "A", "accuracy_rate": 85.5, "common_wrong": "B", "total_attempts": 120, "ai_explanation": "本题考查..." } }
 ```
+
+- `accuracy_rate`：全站正确率（基于 `question_practice_record` 聚合，样本 `<5` 时不返回，前端显示“—”）
+- `common_wrong`：易错项（全体答错样本中最多的选项；多选按选项组合聚合；简答题不返回）
+- `ai_explanation`：AI 解析（按需生成并缓存到题目，未配置 AI 时降级为静态 `explanation`）
 
 简答题追加 `reference_answer`/`scoring_criteria`/`max_score`，AI 评分后追加 `ai_score`/`ai_comment`（降级时 `ai_fallback: true`）；未判定前 `is_correct` 为 null。
 
@@ -497,85 +513,37 @@ Query：`tag_id`（必填）、`count`（0=全部）。
 { "code": 200, "message": "success", "data": { "total": 10, "page": 1, "page_size": 20, "records": [ { "id": 1, "student_id": 1, "question_id": 1, "is_correct": true, "practice_type": "free", "user_answer": "A", "created_at": "...", "question": { "id": 1, "content": "...", "type": "single_choice", "options": [...], "score": 3, "status": "published", "image_url": "", "created_by": 1, "created_by_type": "admin", "reject_reason": "", "created_at": "...", "updated_at": "..." } } ] } }
 ```
 
----
-
-## 7. 等级考试 `/api/level-exam`
-
-### 7.1 场次管理
-
-| 方法 | 路径 | 鉴权 | 说明 |
-|---|---|---|---|
-| GET | `/api/level-exam/sessions` | JWT | 场次列表（分页；可按状态过滤、选择是否带学员参与信息） |
-| POST | `/api/level-exam/sessions` | JWT+admin | 创建场次 |
-| GET | `/api/level-exam/sessions/:session_id` | JWT | 场次详情 |
-| PUT | `/api/level-exam/sessions/:session_id` | JWT+admin | 更新场次 |
-| PUT | `/api/level-exam/sessions/:session_id/status` | JWT+admin | 更新场次状态（upcoming/ongoing/finished） |
-| DELETE | `/api/level-exam/sessions/:session_id` | JWT+admin | 删除场次 |
-
-**GET /api/level-exam/sessions?page=1&page_size=10&status=&include_participants=**
-
-响应 200：
-
-```json
-{ "code": 200, "message": "success", "data": { "total": 1, "page": 1, "page_size": 10, "sessions": [ { "id": 1, "name": "2026年8月定级考试", "start_time": "2026-08-20 09:00:00", "end_time": "2026-08-20 11:00:00", "duration": 90, "status": "upcoming", "created_by": 1, "question_config": { "single_choice": 20, "multi_choice": 10, "true_false": 10, "short_answer": 2, "fault_image": 2 }, "total_score": 100, "pass_score": 60, "created_at": "...", "updated_at": "..." } ] } }
-```
-
-**POST /api/level-exam/sessions**
-
-请求体：`{ "name": "2026年8月定级考试", "start_time": "2026-08-20 09:00:00", "end_time": "2026-08-20 11:00:00" }`
-
-响应 200：data 为场次详情（同 sessions 元素）。
-
-### 7.2 学员考试流程（role=hrwai_user）
+### 6a. 题目互动 `/api/questions`（role=hrwai_user）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/level-exam/available` | 可参加的考试（含个人参与状态） |
-| GET | `/api/level-exam/history` | 考试历史（分页） |
-| POST | `/api/level-exam/sessions/:session_id/enter` | 进入考试（抽题，返回题目与剩余时间） |
-| POST | `/api/level-exam/participants/:participant_id/save` | 保存作答 |
-| POST | `/api/level-exam/participants/:participant_id/submit` | 交卷（支持超时交卷） |
-| GET | `/api/level-exam/participants/:participant_id/result` | 考试成绩（含逐题明细） |
+| GET | `/api/questions/:question_id/comments` | 题目评论列表（分页） |
+| POST | `/api/questions/:question_id/comments` | 发表评论 |
+| DELETE | `/api/questions/comments/:comment_id` | 删除本人评论 |
+| GET | `/api/questions/:question_id/knowledge` | 题目考点（题库标签只读，无标签返回空数组） |
+| GET | `/api/questions/:question_id/note` | 获取本人笔记 |
+| PUT | `/api/questions/:question_id/note` | 保存笔记（每人每题一条，覆盖更新） |
+| DELETE | `/api/questions/:question_id/note` | 删除笔记 |
 
-**GET /api/level-exam/available**
+**GET /api/questions/:question_id/comments?page=1&page_size=10**
 
-响应 200（data 为数组）：
+响应 200：`{ "code": 200, "message": "success", "data": { "items": [ { "id": 1, "question_id": 1, "user_id": 2, "content": "这题易错", "created_at": "..." } ], "total": 1, "page": 1, "page_size": 10 } }`
 
-```json
-{ "code": 200, "message": "success", "data": [ { "id": 1, "name": "2026年8月定级考试", "start_time": "...", "end_time": "...", "duration": 90, "status": "ongoing", "created_by": 1, "question_config": { ... }, "total_score": 100, "pass_score": 60, "created_at": "...", "updated_at": "...", "has_participated": true, "participant_status": "in_progress", "participant_id": 3, "can_enter": true } ] }
-```
+前端展示最新 3 条 + 总数，“查看所有评论”弹窗分页；直发不预审，本人可删。
 
-**GET /api/level-exam/history?page=1&page_size=10**
+**GET /api/questions/:question_id/knowledge**
 
-响应 200：data 为 `{ total, page, page_size, records: [ { id, exam_session_id, session_name, student_id, status, start_time, submit_time, remaining_time, answers_snapshot, question_ids, created_at, score, objective_score, subjective_score, is_passed } ] }`
+响应 200：`{ "code": 200, "message": "success", "data": [ { "id": 1, "code": "hydraulic", "name": "液压系统", "description": "...", "sort_order": 0, "status": 1 } ] }`（无标签返回 `[]`，前端显示“暂无”）
 
-**POST /api/level-exam/sessions/:session_id/enter**
+**PUT /api/questions/:question_id/note**
 
-请求体：`{}`。响应 200：
+请求体：`{ "content": "我的笔记内容" }`。每人每题仅一条，重复保存即覆盖。响应 200：`{ "code": 200, "message": "success", "data": { "id": 1, "question_id": 1, "user_id": 2, "content": "...", "updated_at": "..." } }`
 
-```json
-{ "code": 200, "message": "success", "data": { "participant_id": 3, "session": { "id": 1, "name": "..." }, "questions": [ { "id": 1, "content": "...", "options": [ { "key": "A", "text": "..." } ], "type": "single_choice", "score": 3 } ], "answers": { "1": "A" }, "remaining_time": 5400, "start_time": "2026-08-16 10:00:00" } }
-```
-
-**POST /api/level-exam/participants/:participant_id/save**
-
-请求体：`{ "answers": { "1": "A" }, "remaining_time": 5000 }`
-
-**POST /api/level-exam/participants/:participant_id/submit**
-
-请求体：`{ "answers": { "1": "A" }, "is_timeout": false, "remaining_time": 4500 }`（超时自动交卷时 `is_timeout: true`）
-
-**GET /api/level-exam/participants/:participant_id/result**
-
-响应 200：
-
-```json
-{ "code": 200, "message": "success", "data": { "participant": { "id": 3, "exam_session_id": 1, "student_id": 1, "status": "submitted", "start_time": "...", "submit_time": "...", "remaining_time": 0, "answers_snapshot": { "1": "A" }, "question_ids": [1, 2], "created_at": "...", "score": 85, "objective_score": 60, "subjective_score": 25, "is_passed": true }, "answers": [ { "id": 10, "exam_participant_id": 3, "question_id": 1, "user_answer": "A", "score": 3, "grading_comment": "", "ai_comment": "", "is_correct": true, "grader_id": null, "graded_at": null, "ai_score": null, "ai_graded_at": null, "question": { "id": 1, "content": "...", "options": [...], "type": "single_choice", "score": 3 } } ] } }
-```
+错题重做 `POST /api/wrong-questions/:question_id/redo` 同步返回上述 `accuracy_rate`/`common_wrong`/`ai_explanation` 等增强字段。
 
 ---
 
-## 8. 模拟考试 `/api/mock-exam`（role=hrwai_user）
+## 7. 模拟考试 `/api/mock-exam`（role=hrwai_user）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -626,45 +594,11 @@ Query：`tag_id`（必填）、`count`（0=全部）。
 
 ---
 
-## 9. 阅卷评分 `/api/grading`（role=tutor/admin）
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/api/grading/participants` | 阅卷列表（可 ?session_id= 过滤） |
-| GET | `/api/grading/participants/:participant_id` | 阅卷详情 |
-| POST | `/api/grading/participants/:participant_id/confirm-objective` | 确认客观题成绩 |
-| POST | `/api/grading/:answer_id/grade` | 人工评分（简答题） |
-| POST | `/api/grading/:answer_id/regrade` | 重新评分 |
-| POST | `/api/grading/:answer_id/confirm-ai` | 确认 AI 评分 |
-| POST | `/api/grading/:answer_id/ai-grade` | 触发 AI 评分 |
-| GET | `/api/grading/stats` | 阅卷统计（按天，?session_id= 可选） |
-
-**GET /api/grading/participants**
-
-响应 200（data 为数组）：
-
-```json
-{ "code": 200, "message": "success", "data": [ { "id": 3, "exam_session_id": 1, "student_id": 1, "status": "submitted", "start_time": "...", "submit_time": "...", "remaining_time": 0, "answers_snapshot": {}, "question_ids": [1, 2], "created_at": "...", "score": 0, "objective_score": 60, "subjective_score": 0, "is_passed": false, "session_name": "2026年8月定级考试", "student_name": "张三", "pass_score": 60, "ungraded_count": 2, "objective_ungraded": 0, "subjective_ungraded": 2, "total_answers": 32, "grading_status": "pending" } ] }
-```
-
-**GET /api/grading/participants/:participant_id**
-
-响应 200：data 为阅卷详情（participant 字段 + `answers`: [LevelExamAnswerDTO]）。
-
-**POST /api/grading/participants/:participant_id/confirm-objective**：请求体 `{}`
-
-**POST /api/grading/:answer_id/grade**：请求体 `{ "score": 4, "comment": "要点齐全" }`
-
-**POST /api/grading/:answer_id/ai-grade**：请求体 `{}`。响应 200：data 为 `{ "score": 4, "comment": "...", "fallback": false }`（AI 不可用时 fallback: true）
-
----
-
-## 10. 讲师端 `/api/tutor`（role=tutor）
+## 8. 讲师端 `/api/tutor`（role=tutor）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/tutor/courses` | 讲师课程列表（分页；可按方向/等级过滤） |
-| GET | `/api/tutor/grading-stats` | 讲师阅卷统计（按天分组，days=7|30） |
 | GET | `/api/tutor/course/:course_id/chapters` | 课程章节列表（含文件） |
 | GET | `/api/tutor/chapter/:chapter_id` | 章节详情（含上下章 ID + 文件列表） |
 | POST | `/api/tutor/chapter/:chapter_id/upload` | 上传章节文件（课件/视频等） |
@@ -703,11 +637,12 @@ multipart/form-data：`file`。响应 200（Vditor 约定结构）。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/wrong-questions` | 错题列表（分页+过滤） |
-| POST | `/api/wrong-questions/:question_id/redo` | 重做错题（提交答案判分） |
+| GET | `/api/wrong-questions` | 错题列表（分页+过滤；`is_redone` 标记已重做） |
+| POST | `/api/wrong-questions/:question_id/redo` | 重做错题（提交答案判分；做对标记 `is_redone` 而非移出） |
 | POST | `/api/wrong-questions/:question_id/remove` | 移出错题本 |
+| POST | `/api/wrong-questions/batch-remove` | 批量移出（`{question_ids:[]}`） |
 | GET | `/api/wrong-questions/stats` | 错题统计 |
-| GET | `/api/wrong-questions/export` | 导出错题本（纯文本附件） |
+| GET | `/api/wrong-questions/export` | 导出错题本（纯文本附件；空列表不可导出，前端支持全选/单选导出） |
 
 **GET /api/wrong-questions?page=1&page_size=20&type=&min_wrong_count=**
 
@@ -735,16 +670,16 @@ multipart/form-data：`file`。响应 200（Vditor 约定结构）。
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
-| GET | `/api/featured-contents` | 无 | 内容精选列表（仅已发布；分页+分类过滤） |
+| GET | `/api/featured-contents` | 无 | 内容精选列表（仅已发布；分页+分类+排序过滤，支持最新/热点） |
 | GET | `/api/featured-content/:id` | 无 | 内容详情（含相关资讯/上下一篇） |
 | POST | `/api/featured-content/:id/view` | 无 | 浏览计数 +1 |
 
-**GET /api/featured-contents?page=1&page_size=10&category=**
+**GET /api/featured-contents?page=1&page_size=10&category=&sort=latest**
 
-响应 200：
+Query：`page`（默认 1）、`page_size`（默认 10）、`category` ∈ `company`（公司动态）/`industry`（行业新闻）/`product`（产品资讯）/`news`（政策法规）、`sort` ∈ `latest`（按发布时间，默认）/`hot`（按浏览量热点排序）。响应 200：
 
 ```json
-{ "code": 200, "message": "success", "data": { "items": [ { "content_id": 1, "title": "叉车维保小知识", "category": "news", "category_label": "行业资讯", "summary": "摘要", "cover_image": "/static/uploads/...", "source": "官网", "status": "published", "sort_order": 1, "view_count": 120, "published_at": "...", "created_at": "...", "updated_at": "..." } ], "page": 1, "pages": 1, "total": 1 } }
+{ "code": 200, "message": "success", "data": { "items": [ { "content_id": 1, "title": "叉车维保小知识", "category": "news", "category_label": "政策法规", "summary": "摘要", "cover_image": "/static/uploads/...", "source": "官网", "status": 1, "sort_order": 1, "view_count": 120, "published_at": "...", "created_at": "...", "updated_at": "..." } ], "page": 1, "pages": 1, "total": 1 } }
 ```
 
 **GET /api/featured-content/:id**
@@ -759,34 +694,47 @@ multipart/form-data：`file`。响应 200（Vditor 约定结构）。
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
-| GET | `/api/ai-assistant/models` | 无 | 可用模型列表（管理员绑定 AI 助手功能的配置） |
-| POST | `/api/ai-assistant/chat` | 可选 JWT | 流式对话（SSE；登录可保存会话） |
+| GET | `/api/ai-assistant/modes` | 无 | 双模式可用模型（普通/专家分别绑定，隐藏底层 model） |
+| GET | `/api/ai-assistant/models` | 无 | 可用模型列表（兼容旧前端，聚合双模式） |
+| POST | `/api/ai-assistant/chat` | 可选 JWT | 流式对话（SSE；登录可保存会话，支持 mode 普通/专家） |
 | GET | `/api/ai-assistant/sessions` | JWT+hrwai_user | 会话列表 |
 | POST | `/api/ai-assistant/sessions` | JWT+hrwai_user | 创建会话 |
 | PATCH | `/api/ai-assistant/sessions/:id/title` | JWT+hrwai_user | 重命名会话 |
 | DELETE | `/api/ai-assistant/sessions/:id` | JWT+hrwai_user | 删除会话 |
 | GET | `/api/ai-assistant/sessions/:id/messages` | JWT+hrwai_user | 会话消息列表 |
-| GET | `/api/ai-assistant/user-models` | JWT+hrwai_user | 用户自定义模型列表（api_key 脱敏） |
+| GET | `/api/ai-assistant/user-models` | JWT+hrwai_user | 用户自定义模型列表（api_key 脱敏，遗留兼容） |
 | POST | `/api/ai-assistant/user-models` | JWT+hrwai_user | 保存自定义模型 |
 | DELETE | `/api/ai-assistant/user-models/:id` | JWT+hrwai_user | 删除自定义模型 |
 
-**GET /api/ai-assistant/models**
+**GET /api/ai-assistant/modes**（新）
 
 响应 200：
 
 ```json
-{ "code": 200, "message": "success", "data": { "models": [ { "id": 1, "name": "DeepSeek V3", "model": "deepseek-chat", "base_url": "https://api.deepseek.com" } ] } }
+{ "code": 200, "message": "success", "data": { "normal": { "id": 1, "name": "DeepSeek 普通", "model": "deepseek-chat", "base_url": "https://api.deepseek.com" }, "expert": { "id": 2, "name": "DeepSeek 专家", "model": "deepseek-reasoner", "base_url": "https://api.deepseek.com" } } }
+```
+
+`normal`/`expert` 为 null 表示该模式未绑定，前端对应禁用。管理端在 “AI 配置” 的 “AI助手模式绑定” 分别单绑定。
+
+**GET /api/ai-assistant/models**（兼容旧）
+
+响应 200：
+
+```json
+{ "code": 200, "message": "success", "data": [ { "id": 1, "name": "DeepSeek V3", "model": "deepseek-chat", "base_url": "https://api.deepseek.com" } ] }
 ```
 
 **POST /api/ai-assistant/chat**（SSE 流式，非 JSON 信封）
 
-请求体：
+请求体（新推荐 `mode`，隐藏底层模型）：
 
 ```json
-{ "session_id": 1, "model_source": "admin", "config_id": 1, "user_model_id": 0, "custom_api_key": "", "custom_base_url": "", "custom_model": "", "messages": [ { "role": "user", "content": "叉车液压系统常见故障？" } ] }
+{ "session_id": 1, "mode": "normal", "messages": [ { "role": "user", "content": "叉车液压系统常见故障？" } ] }
 ```
 
-`model_source`：`admin`（用 `config_id` 指定管理员配置）| `user`（用 `user_model_id`）| `custom`（临时传 `custom_*`）。`session_id` 可选（登录用户指定会话；不传且已登录则新建）。
+兼容旧：`{ "session_id": 1, "model_source": "admin", "config_id": 1, "messages": [...] }`
+
+`mode`：`normal`（普通模式，绑定 `ai_assistant_normal`）| `expert`（专家模式，绑定 `ai_assistant_expert`）；`model_source` 仍支持 `admin|user|custom` 作回退。`session_id` 可选（登录用户指定会话；不传且已登录则新建）。
 
 响应为 SSE 事件流（Content-Type: text/event-stream）：
 
@@ -838,9 +786,9 @@ data: null
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | `/api/forum/upload-image` | 上传论坛图片（图文分离，先传图后随发帖/回复提交 URL） |
-| GET | `/api/forum/topics` | 帖子列表（scope=all|general|chapter；keyword 搜索；分页） |
+| GET | `/api/forum/topics` | 帖子列表（scope=all|general|chapter；keyword 搜索；分页；`sort=latest|hot` `order=asc|desc`） |
 | POST | `/api/forum/topics` | 发帖（images 最多 9 张） |
-| GET | `/api/forum/topics/:id` | 帖子详情（含回复） |
+| GET | `/api/forum/topics/:id` | 帖子详情（含回复；`sort=latest|hot|time` `order=asc|desc`） |
 | POST | `/api/forum/topics/:id/replies` | 回复（images 最多 3 张；支持回复楼层） |
 | DELETE | `/api/forum/topics/:id` | 删除自己的帖子 |
 | DELETE | `/api/forum/replies/:id` | 删除自己的回复 |

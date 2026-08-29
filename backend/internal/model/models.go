@@ -65,15 +65,18 @@ type HrwaiUser struct {
 	Username  string `gorm:"column:username;uniqueIndex" json:"username"`
 	Password  string `gorm:"column:password" json:"-"`
 	AvatarURL string `gorm:"column:avatar_url" json:"avatar_url"`
-	Phone     string `gorm:"column:phone;uniqueIndex" json:"phone"`
+	Phone     string `gorm:"column:phone" json:"phone"`
 	Email     string `gorm:"column:email" json:"email,omitempty"`
 	Company   string `gorm:"column:company" json:"company,omitempty"`
 	// WechatOpenID 微信开放平台 openid（微信扫码登录绑定用，框架字段）。
 	WechatOpenID string `gorm:"column:wechat_openid" json:"wechat_openid,omitempty"`
 	// WechatUnionID 微信开放平台 unionid（多应用互通，框架字段）。
-	WechatUnionID string    `gorm:"column:wechat_unionid" json:"wechat_unionid,omitempty"`
-	Status        int16     `gorm:"column:status;default:1" json:"status"`
-	CreatedAt     time.Time `gorm:"column:created_at" json:"created_at"`
+	WechatUnionID string `gorm:"column:wechat_unionid" json:"wechat_unionid,omitempty"`
+	// CurrentCredentialID 当前目标证件（单选上下文，NULL 表示未预筛选）。
+	CurrentCredentialID *int      `gorm:"column:current_credential_id" json:"current_credential_id,omitempty"`
+	PointsBalance       int       `gorm:"column:points_balance;default:0" json:"points_balance"`
+	Status              int16     `gorm:"column:status;default:1" json:"status"`
+	CreatedAt           time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (HrwaiUser) TableName() string { return "hrwai_users" }
@@ -111,6 +114,8 @@ type Course struct {
 	Description string `gorm:"column:description" json:"description"`
 	CoverImage  string `gorm:"column:cover_image" json:"cover_image"`
 	Duration    int    `gorm:"column:duration;default:0" json:"duration"`
+	// CredentialID 所属目标证件（顶层分区，单归属）。
+	CredentialID *int `gorm:"column:credential_id" json:"credential_id,omitempty"`
 	// SpecialtyID 专业方向（目录一级节点）。
 	SpecialtyID *int `gorm:"column:specialty_id" json:"specialty_id,omitempty"`
 	// LevelID 课程等级（入门/进阶/专项/认证）。
@@ -122,9 +127,12 @@ type Course struct {
 	// CertificateTemplateID 关联证书模板（有效期取模板 validity_days）。
 	CertificateTemplateID *int `gorm:"column:certificate_template_id" json:"certificate_template_id,omitempty"`
 	// SortOrder 课程排序值（所属专业方向+课程等级层级内生效，越小越靠前）。
-	SortOrder int       `gorm:"column:sort_order;default:0" json:"sort_order"`
-	Status    int16     `gorm:"column:status;default:1" json:"status"`
-	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+	SortOrder   int       `gorm:"column:sort_order;default:0" json:"sort_order"`
+	Status      int16     `gorm:"column:status;default:1" json:"status"`
+	IsHot       bool      `gorm:"column:is_hot;default:false" json:"is_hot"`
+	IsFeatured  bool      `gorm:"column:is_featured;default:false" json:"is_featured"`
+	PointsPrice *int      `gorm:"column:points_price" json:"points_price,omitempty"`
+	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (Course) TableName() string { return "course" }
@@ -156,6 +164,26 @@ type CourseLevel struct {
 }
 
 func (CourseLevel) TableName() string { return "course_level" }
+
+// ===== 4.6.1 目标证件（target credential） =====
+
+// Credential 目标证件，学员报考的外部持证目标（与证书模板区分）。
+// category: special_operation 特种作业上岗证 / skill_level 职业技能等级；
+// level: 仅 skill_level 类填 1-5（5 初级→1 高级），特种作业为 NULL。
+type Credential struct {
+	ID          int       `gorm:"column:id;primaryKey" json:"id"`
+	Code        string    `gorm:"column:code;uniqueIndex" json:"code"`
+	Name        string    `gorm:"column:name" json:"name"`
+	Description string    `gorm:"column:description" json:"description"`
+	Category    string    `gorm:"column:category" json:"category"`
+	Level       *int      `gorm:"column:level" json:"level,omitempty"`
+	SortOrder   int       `gorm:"column:sort_order;default:0" json:"sort_order"`
+	Status      int16     `gorm:"column:status;default:1" json:"status"`
+	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (Credential) TableName() string { return "credential" }
 
 // ===== 4.7 证书模板 =====
 
@@ -253,22 +281,25 @@ func (AIGenerationLog) TableName() string { return "ai_generation_log" }
 // ===== 11. 题目 =====
 
 type Question struct {
-	ID              int       `gorm:"column:id;primaryKey" json:"id"`
-	Type            string    `gorm:"column:type" json:"type"`
-	Content         string    `gorm:"column:content" json:"content"`
-	Options         JSONB     `gorm:"column:options;type:jsonb" json:"options,omitempty"`
-	Answer          string    `gorm:"column:answer" json:"answer"`
-	Explanation     string    `gorm:"column:explanation" json:"explanation"`
-	ImageURL        string    `gorm:"column:image_url" json:"image_url"`
-	ReferenceAnswer string    `gorm:"column:reference_answer" json:"reference_answer"`
-	ScoringCriteria string    `gorm:"column:scoring_criteria" json:"scoring_criteria"`
-	Score           int       `gorm:"column:score;default:0" json:"score"`
-	Status          string    `gorm:"column:status;default:draft" json:"status"`
-	RejectReason    string    `gorm:"column:reject_reason" json:"reject_reason"`
-	CreatedBy       *int      `gorm:"column:created_by" json:"created_by,omitempty"`
-	CreatedByType   string    `gorm:"column:created_by_type;default:tutor" json:"created_by_type"`
-	CreatedAt       time.Time `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt       time.Time `gorm:"column:updated_at" json:"updated_at"`
+	ID              int    `gorm:"column:id;primaryKey" json:"id"`
+	Type            string `gorm:"column:type" json:"type"`
+	Content         string `gorm:"column:content" json:"content"`
+	Options         JSONB  `gorm:"column:options;type:jsonb" json:"options,omitempty"`
+	Answer          string `gorm:"column:answer" json:"answer"`
+	Explanation     string `gorm:"column:explanation" json:"explanation"`
+	AIExplanation   string `gorm:"column:ai_explanation" json:"ai_explanation,omitempty"`
+	ImageURL        string `gorm:"column:image_url" json:"image_url"`
+	ReferenceAnswer string `gorm:"column:reference_answer" json:"reference_answer"`
+	ScoringCriteria string `gorm:"column:scoring_criteria" json:"scoring_criteria"`
+	Score           int    `gorm:"column:score;default:0" json:"score"`
+	// CredentialID 所属目标证件（顶层分区，单归属）。
+	CredentialID  *int      `gorm:"column:credential_id" json:"credential_id,omitempty"`
+	Status        string    `gorm:"column:status;default:draft" json:"status"`
+	RejectReason  string    `gorm:"column:reject_reason" json:"reject_reason"`
+	CreatedBy     *int      `gorm:"column:created_by" json:"created_by,omitempty"`
+	CreatedByType string    `gorm:"column:created_by_type;default:tutor" json:"created_by_type"`
+	CreatedAt     time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt     time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (Question) TableName() string { return "question" }
@@ -298,65 +329,6 @@ type QuestionTagRelation struct {
 
 func (QuestionTagRelation) TableName() string { return "question_tag_relation" }
 
-// ===== 12. 考试场次 =====
-
-type ExamSession struct {
-	ID             int       `gorm:"column:id;primaryKey" json:"id"`
-	Name           string    `gorm:"column:name" json:"name"`
-	StartTime      time.Time `gorm:"column:start_time" json:"start_time"`
-	EndTime        time.Time `gorm:"column:end_time" json:"end_time"`
-	Duration       int       `gorm:"column:duration" json:"duration"`
-	Status         string    `gorm:"column:status;default:upcoming" json:"status"`
-	CreatedBy      *int      `gorm:"column:created_by" json:"created_by,omitempty"`
-	QuestionConfig JSONB     `gorm:"column:question_config;type:jsonb" json:"question_config,omitempty"`
-	TotalScore     int       `gorm:"column:total_score;default:0" json:"total_score"`
-	PassScore      int       `gorm:"column:pass_score;default:60" json:"pass_score"`
-	CreatedAt      time.Time `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt      time.Time `gorm:"column:updated_at" json:"updated_at"`
-}
-
-func (ExamSession) TableName() string { return "exam_session" }
-
-// ===== 13. 考试参与记录 =====
-
-type ExamParticipant struct {
-	ID              int        `gorm:"column:id;primaryKey" json:"id"`
-	ExamSessionID   int        `gorm:"column:exam_session_id" json:"exam_session_id"`
-	StudentID       int        `gorm:"column:student_id" json:"student_id"`
-	Status          string     `gorm:"column:status;default:not_started" json:"status"`
-	StartTime       *time.Time `gorm:"column:start_time" json:"start_time,omitempty"`
-	SubmitTime      *time.Time `gorm:"column:submit_time" json:"submit_time,omitempty"`
-	RemainingTime   int        `gorm:"column:remaining_time;default:0" json:"remaining_time"`
-	Score           *float64   `gorm:"column:score;type:numeric(5,2)" json:"score,omitempty"`
-	ObjectiveScore  *float64   `gorm:"column:objective_score;type:numeric(5,2)" json:"objective_score,omitempty"`
-	SubjectiveScore *float64   `gorm:"column:subjective_score;type:numeric(5,2)" json:"subjective_score,omitempty"`
-	IsPassed        bool       `gorm:"column:is_passed;default:false" json:"is_passed"`
-	AnswersSnapshot JSONB      `gorm:"column:answers_snapshot;type:jsonb" json:"answers_snapshot,omitempty"`
-	QuestionIDs     JSONB      `gorm:"column:question_ids;type:jsonb" json:"question_ids,omitempty"`
-	CreatedAt       time.Time  `gorm:"column:created_at" json:"created_at"`
-}
-
-func (ExamParticipant) TableName() string { return "exam_participant" }
-
-// ===== 14. 考试答题记录 =====
-
-type ExamAnswer struct {
-	ID                int        `gorm:"column:id;primaryKey" json:"id"`
-	ExamParticipantID int        `gorm:"column:exam_participant_id" json:"exam_participant_id"`
-	QuestionID        int        `gorm:"column:question_id" json:"question_id"`
-	UserAnswer        string     `gorm:"column:user_answer" json:"user_answer"`
-	IsCorrect         *bool      `gorm:"column:is_correct" json:"is_correct,omitempty"`
-	Score             float64    `gorm:"column:score;type:numeric(5,2);default:0" json:"score"`
-	GraderID          *int       `gorm:"column:grader_id" json:"grader_id,omitempty"`
-	GradedAt          *time.Time `gorm:"column:graded_at" json:"graded_at,omitempty"`
-	GradingComment    string     `gorm:"column:grading_comment" json:"grading_comment"`
-	AIScore           *float64   `gorm:"column:ai_score;type:numeric(5,2)" json:"ai_score,omitempty"`
-	AIComment         string     `gorm:"column:ai_comment" json:"ai_comment"`
-	AIGradedAt        *time.Time `gorm:"column:ai_graded_at" json:"ai_graded_at,omitempty"`
-}
-
-func (ExamAnswer) TableName() string { return "exam_answer" }
-
 // ===== 15. 题库练习记录 =====
 
 type QuestionPracticeRecord struct {
@@ -380,6 +352,7 @@ type WrongQuestion struct {
 	WrongCount  int       `gorm:"column:wrong_count;default:1" json:"wrong_count"`
 	LastWrongAt time.Time `gorm:"column:last_wrong_at" json:"last_wrong_at"`
 	IsRemoved   bool      `gorm:"column:is_removed;default:false" json:"is_removed"`
+	IsRedone    bool      `gorm:"column:is_redone;default:false" json:"is_redone"`
 	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
@@ -499,12 +472,13 @@ func (AIFeatureBinding) TableName() string { return "ai_feature_bindings" }
 
 // AIChatSession AI 助手会话（归属 valuation_users）。
 type AIChatSession struct {
-	ID        int       `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	UserID    int       `gorm:"column:user_id" json:"user_id"`
-	Title     string    `gorm:"column:title" json:"title"`
-	ModelName string    `gorm:"column:model_name" json:"model_name"`
-	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
+	ID         int       `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	UserID     int       `gorm:"column:user_id" json:"user_id"`
+	Title      string    `gorm:"column:title" json:"title"`
+	ModelName  string    `gorm:"column:model_name" json:"model_name"`
+	FeatureKey string    `gorm:"column:feature_key" json:"feature_key"` // 所属功能（旧数据为 ai_assistant）
+	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt  time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (AIChatSession) TableName() string { return "ai_chat_sessions" }
@@ -515,6 +489,7 @@ type AIChatMessage struct {
 	SessionID int       `gorm:"column:session_id" json:"session_id"`
 	Role      string    `gorm:"column:role" json:"role"` // 'user' | 'assistant' | 'system'
 	Content   string    `gorm:"column:content" json:"content"`
+	Images    string    `gorm:"column:images" json:"-"` // JSON 数组字符串，用户消息附带的图片 URL
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
@@ -546,6 +521,7 @@ type ForumTopic struct {
 	Images      JSONB      `gorm:"column:images;type:jsonb" json:"images"`
 	ViewCount   int        `gorm:"column:view_count;default:0" json:"view_count"`
 	ReplyCount  int        `gorm:"column:reply_count;default:0" json:"reply_count"`
+	LikesCount  int        `gorm:"column:likes_count;default:0" json:"likes_count"`
 	LastReplyAt *time.Time `gorm:"column:last_reply_at" json:"last_reply_at"`
 	CreatedAt   time.Time  `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt   time.Time  `gorm:"column:updated_at" json:"updated_at"`
@@ -555,13 +531,14 @@ func (ForumTopic) TableName() string { return "forum_topics" }
 
 // ForumReply 论坛回复。
 type ForumReply struct {
-	ID        int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	TopicID   int64     `gorm:"column:topic_id" json:"topic_id"`
-	UserID    int       `gorm:"column:user_id" json:"user_id"`
-	ParentID  *int64    `gorm:"column:parent_id" json:"parent_id,omitempty"`
-	Content   string    `gorm:"column:content" json:"content"`
-	Images    JSONB     `gorm:"column:images;type:jsonb" json:"images"`
-	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+	ID         int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	TopicID    int64     `gorm:"column:topic_id" json:"topic_id"`
+	UserID     int       `gorm:"column:user_id" json:"user_id"`
+	ParentID   *int64    `gorm:"column:parent_id" json:"parent_id,omitempty"`
+	Content    string    `gorm:"column:content" json:"content"`
+	Images     JSONB     `gorm:"column:images;type:jsonb" json:"images"`
+	LikesCount int       `gorm:"column:likes_count;default:0" json:"likes_count"`
+	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (ForumReply) TableName() string { return "forum_replies" }
@@ -575,6 +552,35 @@ type ForumTopicLike struct {
 }
 
 func (ForumTopicLike) TableName() string { return "forum_topic_like" }
+
+// ForumCheckIn 每日打卡记录（user_id + check_date 唯一，Asia/Shanghai 自然日，spec #268）。
+type ForumCheckIn struct {
+	UserID    int       `gorm:"column:user_id;primaryKey" json:"user_id"`
+	CheckDate time.Time `gorm:"column:check_date;primaryKey;type:date" json:"check_date"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (ForumCheckIn) TableName() string { return "forum_checkin" }
+
+// ForumReplyLike 评论点赞（reply_id+user_id 唯一，与 ForumTopicLike 同构，spec #268）。
+type ForumReplyLike struct {
+	ID        int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	ReplyID   int64     `gorm:"column:reply_id" json:"reply_id"`
+	UserID    int       `gorm:"column:user_id" json:"user_id"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (ForumReplyLike) TableName() string { return "forum_reply_like" }
+
+// ForumTopicView 用户帖子浏览去重（每日每帖一次，排除自帖，用于 daily_browse）
+type ForumTopicView struct {
+	UserID   int       `gorm:"column:user_id;primaryKey" json:"user_id"`
+	TopicID  int64     `gorm:"column:topic_id;primaryKey" json:"topic_id"`
+	ViewedAt time.Time `gorm:"column:viewed_at" json:"viewed_at"`
+	ViewDate string    `gorm:"column:view_date;primaryKey;type:date" json:"view_date"`
+}
+
+func (ForumTopicView) TableName() string { return "forum_topic_views" }
 
 // Favorite 通用收藏：target_type + target_id 多态定位
 // （course/chapter/question/featured/topic，ADR-0018；user+type+id 唯一）。
@@ -600,6 +606,29 @@ type ForumReport struct {
 }
 
 func (ForumReport) TableName() string { return "forum_report" }
+
+// ===== 24.5 题目评论（刷题解析） =====
+
+type QuestionComment struct {
+	ID         int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	QuestionID int       `gorm:"column:question_id" json:"question_id"`
+	UserID     int       `gorm:"column:user_id" json:"user_id"`
+	Content    string    `gorm:"column:content" json:"content"`
+	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (QuestionComment) TableName() string { return "question_comment" }
+
+// QuestionNote 题目笔记（每人每题一条，私有）。
+type QuestionNote struct {
+	ID         int       `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	QuestionID int       `gorm:"column:question_id" json:"question_id"`
+	UserID     int       `gorm:"column:user_id" json:"user_id"`
+	Content    string    `gorm:"column:content" json:"content"`
+	UpdatedAt  time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (QuestionNote) TableName() string { return "question_note" }
 
 // ===== 25. 资料修改审核 =====
 
@@ -658,3 +687,78 @@ type AuditLog struct {
 }
 
 func (AuditLog) TableName() string { return "audit_logs" }
+
+// ===== 28. 积分系统 =====
+
+// PointsLedger 积分账本（不可变流水，delta>0 赚取、<0 消耗）。
+type PointsLedger struct {
+	ID        int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	UserID    int        `gorm:"column:user_id" json:"user_id"`
+	Delta     int        `gorm:"column:delta" json:"delta"`
+	Reason    string     `gorm:"column:reason" json:"reason"`
+	RefType   string     `gorm:"column:ref_type" json:"ref_type"`
+	RefID     string     `gorm:"column:ref_id" json:"ref_id"`
+	CreatedAt time.Time  `gorm:"column:created_at" json:"created_at"`
+	ExpiresAt *time.Time `gorm:"column:expires_at" json:"expires_at,omitempty"`
+}
+
+func (PointsLedger) TableName() string { return "points_ledger" }
+
+// PointsTaskConfig 积分任务配置（10 任务种子）。
+type PointsTaskConfig struct {
+	Code        string `gorm:"column:code;primaryKey" json:"code"`
+	Title       string `gorm:"column:title" json:"title"`
+	Group       string `gorm:"column:group" json:"group"`
+	Points      int    `gorm:"column:points" json:"points"`
+	DailyLimit  int    `gorm:"column:daily_limit" json:"daily_limit"`
+	TotalLimit  *int   `gorm:"column:total_limit" json:"total_limit,omitempty"`
+	EventType   string `gorm:"column:event_type" json:"event_type"`
+	Description string `gorm:"column:description" json:"description"`
+}
+
+func (PointsTaskConfig) TableName() string { return "points_task_config" }
+
+// PointsTaskClaim 任务领取幂等占坑。
+type PointsTaskClaim struct {
+	ID        int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	UserID    int       `gorm:"column:user_id" json:"user_id"`
+	TaskCode  string    `gorm:"column:task_code" json:"task_code"`
+	ClaimDate *string   `gorm:"column:claim_date" json:"claim_date,omitempty"` // YYYY-MM-DD，Asia/Shanghai
+	RefID     *string   `gorm:"column:ref_id" json:"ref_id,omitempty"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (PointsTaskClaim) TableName() string { return "points_task_claim" }
+
+// PointsUserProgress 用户任务进度快照。
+type PointsUserProgress struct {
+	UserID    int       `gorm:"column:user_id;primaryKey" json:"user_id"`
+	TaskCode  string    `gorm:"column:task_code;primaryKey" json:"task_code"`
+	Progress  int       `gorm:"column:progress" json:"progress"`
+	Total     int       `gorm:"column:total" json:"total"`
+	Status    string    `gorm:"column:status" json:"status"` // todo/claimable/claimed
+	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (PointsUserProgress) TableName() string { return "points_user_progress" }
+
+// PointsShopItem 积分商城（真题等，课程兑换走 course.points_price）。
+type PointsShopItem struct {
+	SKU     string `gorm:"column:sku;primaryKey" json:"sku"`
+	Title   string `gorm:"column:title" json:"title"`
+	Price   int    `gorm:"column:price" json:"price"`
+	Stock   *int   `gorm:"column:stock" json:"stock,omitempty"`
+	Enabled bool   `gorm:"column:enabled" json:"enabled"`
+}
+
+func (PointsShopItem) TableName() string { return "points_shop_item" }
+
+// UserEntitlement 用户权益（课程/真题解锁）。
+type UserEntitlement struct {
+	UserID    int       `gorm:"column:user_id;primaryKey" json:"user_id"`
+	SKU       string    `gorm:"column:sku;primaryKey" json:"sku"`
+	RefID     string    `gorm:"column:ref_id;primaryKey" json:"ref_id"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (UserEntitlement) TableName() string { return "user_entitlement" }

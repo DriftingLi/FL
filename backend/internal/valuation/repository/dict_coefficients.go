@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/errgroup"
 )
 
 // scanCoefficient 扫描一行系数配置（description 可空 + updated_at 格式化）。
@@ -57,20 +58,54 @@ type AlgorithmParameters struct {
 // 各类子查询各自已缓存（ListCoefficientConfigs/ListBrands/ListConditionRatings/
 // ListRegionCoefficients 均走 listCached），本方法不再包一层聚合缓存——消除嵌套复读
 // 与失效契约漏覆盖（ADR-0013 候选 2）。
+// 4 路查询并行执行（errgroup），单次聚合延迟由串行 4*RTT 降为 1*RTT（缓存命中时）。
 func (r *DictionaryRepository) ListAlgorithmParameters(ctx context.Context) (AlgorithmParameters, error) {
-	var ap AlgorithmParameters
-	var e error
-	if ap.Coefficients, e = r.ListCoefficientConfigs(ctx); e != nil {
-		return ap, fmt.Errorf("查询算法系数失败: %w", e)
+	g, gCtx := errgroup.WithContext(ctx)
+	var coeffs []CoefficientConfig
+	var brands []Brand
+	var conditions []ConditionRating
+	var regions []RegionCoefficient
+
+	g.Go(func() error {
+		var err error
+		coeffs, err = r.ListCoefficientConfigs(gCtx)
+		if err != nil {
+			return fmt.Errorf("查询算法系数失败: %w", err)
+		}
+		return nil
+	})
+	g.Go(func() error {
+		var err error
+		brands, err = r.ListBrands(gCtx)
+		if err != nil {
+			return fmt.Errorf("查询品牌系数失败: %w", err)
+		}
+		return nil
+	})
+	g.Go(func() error {
+		var err error
+		conditions, err = r.ListConditionRatings(gCtx)
+		if err != nil {
+			return fmt.Errorf("查询车况系数失败: %w", err)
+		}
+		return nil
+	})
+	g.Go(func() error {
+		var err error
+		regions, err = r.ListRegionCoefficients(gCtx, "")
+		if err != nil {
+			return fmt.Errorf("查询区域系数失败: %w", err)
+		}
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		return AlgorithmParameters{}, err
 	}
-	if ap.Brands, e = r.ListBrands(ctx); e != nil {
-		return ap, fmt.Errorf("查询品牌系数失败: %w", e)
-	}
-	if ap.ConditionRatings, e = r.ListConditionRatings(ctx); e != nil {
-		return ap, fmt.Errorf("查询车况系数失败: %w", e)
-	}
-	if ap.RegionCoefficients, e = r.ListRegionCoefficients(ctx, ""); e != nil {
-		return ap, fmt.Errorf("查询区域系数失败: %w", e)
-	}
-	return ap, nil
+	return AlgorithmParameters{
+		Coefficients:       coeffs,
+		Brands:             brands,
+		ConditionRatings:   conditions,
+		RegionCoefficients: regions,
+	}, nil
 }

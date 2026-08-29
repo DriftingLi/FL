@@ -27,46 +27,13 @@ func NewTutorService(db *gorm.DB, uploadFolder string, fileStore *FileStore, sli
 	return &TutorService{db: db, uploadFolder: uploadFolder, fileStore: fileStore, slideRenderer: slideRenderer, logger: logger}
 }
 
-// GetCourses 导师课程列表（与学员端同口径：已上架 + 已挂载方向/等级，ADR-0012 §2），
+// GetCourses 导师课程列表（与学员端同口径：已上架 + 已挂载方向/等级/证件，ADR-0012 §2），
 // 附学习学员数；实现收敛到课程列表 module（ListCourses）。
-func (s *TutorService) GetCourses(page, pageSize int, specialtyID, levelID *int) CoursePageResult {
+func (s *TutorService) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int) CoursePageResult {
 	return ListCourses(s.db, page, pageSize, CourseListOptions{
-		OnlyMounted: true, SpecialtyID: specialtyID, LevelID: levelID,
+		OnlyMounted: true, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID,
 		WithStudentCount: true, DefaultPageSize: 10,
 	})
-}
-
-// GetGradingStats 阅卷统计（按天分组），用于导师仪表盘图表。
-// 统计当前导师 grader_id 命中的 exam_answer 行数（即导师本人批阅题数）。
-// days 仅允许 7 或 30，其他值统一回退为 7。
-func (s *TutorService) GetGradingStats(tutorID, days int) *GradingStatsDTO {
-	// 按天聚合当前导师已批阅题数（起点由 BuildDailySeries/dailySeriesStart 统一钳制与推导）
-	start := dailySeriesStart(days)
-	type dailyRow struct {
-		Day   string
-		Count int64
-	}
-	var rows []dailyRow
-	s.db.Model(&model.ExamAnswer{}).
-		Select("TO_CHAR(graded_at, 'YYYY-MM-DD') as day, COUNT(*) as count").
-		Where("grader_id = ? AND graded_at IS NOT NULL AND graded_at >= ?", tutorID, start).
-		Group("day").
-		Order("day ASC").
-		Scan(&rows)
-
-	countByDay := make(map[string]int64, len(rows))
-	for _, r := range rows {
-		countByDay[r.Day] = r.Count
-	}
-
-	series := BuildDailySeries(days, countByDay)
-	return &GradingStatsDTO{
-		Days:       series.Days,
-		Labels:     series.Labels,
-		Data:       series.Data,
-		TotalCount: series.Total,
-		ActiveDays: series.ActiveDays,
-	}
 }
 
 // GetCourseChapters 导师章节列表（含文件）。

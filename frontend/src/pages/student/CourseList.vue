@@ -1,8 +1,13 @@
 <template>
   <div class="course-center">
+    <el-tabs v-model="activeTab" class="cc-tabs" @tab-change="handleTabChange">
+      <el-tab-pane label="热门" name="hot" />
+      <el-tab-pane label="精品" name="featured" />
+      <el-tab-pane label="所有" name="all" />
+    </el-tabs>
     <div class="course-layout">
       <aside class="cc-sidebar">
-        <FacetCard title="专业方向">
+        <FacetCard v-if="activeTab === 'all'" title="专业方向">
           <FacetItem
             :active="specialtyId === null"
             name="全部课程"
@@ -19,7 +24,7 @@
           />
         </FacetCard>
 
-        <FacetCard title="课程等级">
+        <FacetCard v-if="activeTab === 'all'" title="课程等级">
           <FacetItem
             :active="levelId === null"
             name="全部等级"
@@ -38,12 +43,27 @@
       </aside>
 
       <main class="cc-main">
-        <div class="cc-content" v-loading="loading">
-          <div v-if="courses.length > 0" class="cc-grid">
-            <CourseCard
-              v-for="course in courses"
-              :key="course.course_id"
-              :name="course.name"
+        <div class="cc-content">
+          <!-- 加载：骨架屏（替代原全容器 v-loading，避免整块变灰遮挡已有内容） -->
+          <UiSkeleton v-if="loading" variant="card" :count="6" />
+
+          <!-- 错误：带重试 -->
+          <UiErrorState
+            v-else-if="loadError"
+            title="课程加载失败"
+            description="网络或服务端异常，可重试"
+            :retrying="retrying"
+            @retry="retryLoad"
+          />
+
+          <template v-else>
+            <div v-if="courses.length > 0" class="cc-grid">
+              <CourseCard
+                v-for="(course, i) in courses"
+                :key="course.course_id"
+                class="stagger-in"
+                :style="stagger(i)"
+                :name="course.name"
               :description="course.description"
               :cover-image="course.cover_image"
               :specialty-id="course.specialty_id"
@@ -53,6 +73,10 @@
                 <span v-if="levelNameOf(course.level_id)" class="cc-cover-level">
                   {{ levelNameOf(course.level_id) }}
                 </span>
+                <div v-if="course.is_hot || course.is_featured" class="cc-cover-badges">
+                  <span v-if="course.is_hot" class="cc-cover-badge cc-cover-badge--hot">热门</span>
+                  <span v-if="course.is_featured" class="cc-cover-badge cc-cover-badge--featured">精品</span>
+                </div>
               </template>
               <template #meta>
                 <div class="cc-meta">
@@ -60,6 +84,9 @@
                   <span v-if="course.theory_hours || course.practice_hours" class="cc-meta-item">
                     理论{{ course.theory_hours || 0 }}学时 · 实操{{ course.practice_hours || 0 }}学时
                   </span>
+                  <el-tag v-if="course.points_price" size="small" type="warning" effect="plain">
+                    {{ course.points_price }} 积分解锁
+                  </el-tag>
                 </div>
                 <div class="cc-cert" v-if="course.certificate_name">
                   <el-tag size="small" type="success" effect="plain">
@@ -70,9 +97,16 @@
             </CourseCard>
           </div>
 
-          <div v-else-if="!loading" class="cc-empty">
-            <el-empty description="该方向/等级下暂无课程" :image-size="80" />
-          </div>
+          <UiEmptyState
+              v-else
+              size="sm"
+              :description="
+                credentialStore.current
+                  ? `“${credentialStore.current.name}” 内容建设中`
+                  : '该方向/等级下暂无课程'
+              "
+            />
+          </template>
         </div>
 
         <div class="cc-pagination" v-if="total > pageSize">
@@ -117,6 +151,10 @@
             </el-tag>
           </div>
           <p class="detail-desc">{{ detailCourse.description || '暂无简介' }}</p>
+          <div v-if="detailCourse?.points_price" class="detail-redeem">
+            <el-tag type="warning" effect="plain">{{ detailCourse.points_price }} 积分解锁</el-tag>
+            <el-button size="small" type="warning" @click="handleRedeem">兑换解锁</el-button>
+          </div>
 
           <el-descriptions :column="2" border size="small" class="detail-descriptions">
             <el-descriptions-item label="理论学时">{{ detailCourse.theory_hours ?? '-' }} 学时</el-descriptions-item>
@@ -147,9 +185,10 @@
           </el-descriptions>
 
           <div v-if="courseLearning?.is_enrolled" class="detail-progress">
-            <el-progress
-              :percentage="Math.round(courseLearning.progress ?? 0)"
-              :stroke-width="10"
+            <UiProgress
+              :value="Math.round(courseLearning.progress ?? 0)"
+              size="lg"
+              tone="brand"
               class="progress-bar"
             />
             <span class="progress-text">
@@ -173,7 +212,7 @@
                 <el-icon class="chapter-arrow"><ArrowRight /></el-icon>
               </div>
             </div>
-            <el-empty v-else description="该课程暂无章节内容" :image-size="60" />
+            <UiEmptyState v-else description="该课程暂无章节内容" size="sm" />
           </div>
         </template>
       </div>
@@ -190,27 +229,48 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowRight, Star, StarFilled } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { courseApi, type CourseDetail, type CourseSummary } from '@/api/course'
 import { studentApi, type StudentCourseDetail } from '@/api/student'
 import { favoriteApi } from '@/api/favorite'
 import { trainingApi } from '@/api/training'
+import { pointsApi } from '@/api/points'
 import { useCourseCatalog, treeCatalogAdapter } from '@/composables/useCourseCatalog'
+import { useStagger } from '@/composables/useStagger'
+import { useCredentialStore } from '@/stores/credential'
 import FacetCard from '@/components/catalog/FacetCard.vue'
 import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCard from '@/components/catalog/CourseCard.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiProgress from '@/components/ui/UiProgress.vue'
+import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+
+const stagger = useStagger()
 
 const route = useRoute()
 const router = useRouter()
+let credentialStore: any = null
+try {
+  credentialStore = useCredentialStore()
+} catch {
+  credentialStore = { current: null, loadCurrent: async () => null, loadGrouped: async () => {} } as any
+}
 
 const loading = ref(false)
+// 首屏三态：骨架 / 错误（可重试）/ 内容
+const loadError = ref(false)
+const retrying = ref(false)
 const courses = ref<CourseSummary[]>([])
 const currentPage = ref(1)
 const pageSize = ref(12)
 const total = ref(0)
+const activeTab = ref<'hot' | 'featured' | 'all'>('hot')
+
+
 
 const {
   directions,
@@ -242,28 +302,47 @@ function formatDuration(minutes: number) {
   return mins > 0 ? `${hours}小时${mins}分钟` : `${hours}小时`
 }
 
+function handleTabChange() {
+  currentPage.value = 1
+  loadCourses()
+}
+
 async function loadCourses() {
   loading.value = true
+  loadError.value = false
   try {
     const params: Record<string, any> = {
       page: currentPage.value,
-      page_size: pageSize.value
+      page_size: pageSize.value,
+      filter: activeTab.value
     }
-    if (specialtyId.value !== null) {
-      params.specialty_id = specialtyId.value
+    if (activeTab.value === 'all') {
+      if (specialtyId.value !== null) {
+        params.specialty_id = specialtyId.value
+      }
+      if (levelId.value !== null) {
+        params.level_id = levelId.value
+      }
     }
-    if (levelId.value !== null) {
-      params.level_id = levelId.value
+    if (credentialStore.current?.id) {
+      params.credential_id = credentialStore.current.id
     }
     const data = await courseApi.getCourses(params)
     courses.value = data.courses
     total.value = data.total
   } catch (error) {
     console.error('加载课程失败:', error)
-    /* 错误已由拦截器提示 */
+    loadError.value = true
+    /* 错误已由拦截器提示，这里只负责渲染可重试的错误态 */
   } finally {
     loading.value = false
+    retrying.value = false
   }
+}
+
+async function retryLoad() {
+  retrying.value = true
+  await loadCourses()
 }
 
 function handlePageChange() {
@@ -405,8 +484,36 @@ async function openDetailById(courseId: number) {
   }
 }
 
+async function handleRedeem() {
+  if (!detailCourse.value?.course_id) return
+  const price = detailCourse.value.points_price
+  if (!price) return
+  try {
+    await ElMessageBox.confirm(`该课程需 ${price} 积分解锁，确认兑换？`, '积分兑换', {
+      confirmButtonText: '确认兑换',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  try {
+    await pointsApi.redeemCourse(detailCourse.value.course_id)
+    ElMessage.success('兑换成功，已解锁')
+    // 刷新详情以更新 points_price 仍显示但已可进入
+    detailCourse.value.points_price = null as unknown as number
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    ElMessage.error(msg || '兑换失败')
+  }
+}
+
 function goToChapter(ch: { chapter_id: number }) {
   if (!detailCourse.value) return
+  if (detailCourse.value.points_price) {
+    ElMessage.warning('该课程需积分解锁，请先兑换')
+    return
+  }
   detailVisible.value = false
   router.push({
     name: 'ChapterView',
@@ -422,6 +529,16 @@ onMounted(() => {
   if (queryCourseId > 0) {
     openDetailById(queryCourseId)
   }
+})
+
+watch(() => credentialStore.current?.id, () => {
+  currentPage.value = 1
+  loadCourses()
+})
+
+window.addEventListener('credential-switched', () => {
+  currentPage.value = 1
+  loadCourses()
 })
 </script>
 
@@ -466,9 +583,37 @@ onMounted(() => {
   padding: 2px 10px;
   border-radius: var(--radius-full);
   background: rgba(0, 0, 0, 0.4);
-  color: #fff;
+  color: var(--color-bg-card);
   font-size: 12px;
   font-weight: 600;
+}
+
+.cc-cover-badges {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: flex;
+  gap: 4px;
+}
+
+.cc-cover-badge {
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  color: var(--color-bg-card);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.cc-cover-badge--hot {
+  background: var(--color-danger);
+}
+
+.cc-cover-badge--featured {
+  background: var(--color-warning);
+}
+
+.cc-tabs {
+  margin-bottom: var(--space-2);
 }
 
 .cc-meta {
@@ -579,7 +724,7 @@ onMounted(() => {
 .detail-header-title {
   font-size: 18px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .detail-progress {
@@ -595,7 +740,7 @@ onMounted(() => {
 
 .progress-text {
   font-size: 13px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   white-space: nowrap;
 }
 

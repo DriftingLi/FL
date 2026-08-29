@@ -36,11 +36,24 @@ func RegisterFavoriteRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Fav
 	g.GET("/check", h.Check)
 }
 
-// List 我的收藏 GET /api/favorites
+// List 我的收藏
+// @Summary 我的收藏列表
+// @Description 分页查询收藏，快照回填；支持按 target_type 过滤
+// @Tags 学员端-收藏
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param target_type query string false "目标类型 course/chapter/question/featured/topic"
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /favorites [get]
 func (h *FavoriteHandler) List(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
+	credID := queryIDPtr(c, "credential_id")
 	resp, err := h.svc.List(userID, c.Query("target_type"),
-		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20))
+		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20), credID)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -48,7 +61,18 @@ func (h *FavoriteHandler) List(c *gin.Context) {
 	response.Success(c, resp)
 }
 
-// Add 收藏 POST /api/favorites
+// Add 收藏
+// @Summary 收藏
+// @Description 幂等收藏（user+type+id 唯一）
+// @Tags 学员端-收藏
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "目标" example({"target_type":"course","target_id":1})
+// @Success 201 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /favorites [post]
 func (h *FavoriteHandler) Add(c *gin.Context) {
 	var body struct {
 		TargetType string `json:"target_type"`
@@ -66,7 +90,18 @@ func (h *FavoriteHandler) Add(c *gin.Context) {
 	response.Created(c, "收藏成功", resp)
 }
 
-// Remove 取消收藏 DELETE /api/favorites/:id
+// Remove 取消收藏
+// @Summary 取消收藏
+// @Description 仅本人可取消
+// @Tags 学员端-收藏
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "收藏ID"
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /favorites/{id} [delete]
 func (h *FavoriteHandler) Remove(c *gin.Context) {
 	id, err := pathInt64(c, "id", "收藏 ID 无效")
 	if err != nil {
@@ -80,7 +115,19 @@ func (h *FavoriteHandler) Remove(c *gin.Context) {
 	response.SuccessWithMsg(c, "已取消收藏", nil)
 }
 
-// Check 收藏状态 GET /api/favorites/check
+// Check 是否已收藏
+// @Summary 是否已收藏
+// @Description 查询单目标是否已收藏
+// @Tags 学员端-收藏
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param target_type query string true "目标类型"
+// @Param target_id query int true "目标ID"
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /favorites/check [get]
 func (h *FavoriteHandler) Check(c *gin.Context) {
 	var query struct {
 		TargetType string `form:"target_type"`

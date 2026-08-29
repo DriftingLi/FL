@@ -2,6 +2,9 @@
   <div class="tutor-courses-page">
     <div class="page-header">
       <h2>我的课程</h2>
+      <el-select v-model="credentialId" placeholder="全部证件" clearable style="width: 180px" @change="loadCourses">
+        <el-option v-for="c in credentials" :key="c.id" :label="c.name" :value="c.id" />
+      </el-select>
     </div>
 
     <div class="course-layout">
@@ -73,6 +76,7 @@
                 >
                   {{ specialtyNameOf(course.specialty_id) }}
                 </el-tag>
+                <el-tag v-if="(course as any).credential_id" size="small" effect="plain">{{ credentials.find(c => c.id === (course as any).credential_id)?.name || '' }}</el-tag>
               </div>
             </template>
             <template #meta>
@@ -106,6 +110,7 @@ import { useRouter } from 'vue-router'
 import { ArrowRight } from '@element-plus/icons-vue'
 import { tutorApi, type TutorCourse } from '@/api/tutor'
 import { trainingApi } from '@/api/training'
+import { credentialApi, type CredentialDict } from '@/api/credential'
 import { levelTagType } from '@/constants/level'
 import { useCourseCatalog, treeCatalogAdapter } from '@/composables/useCourseCatalog'
 import FacetCard from '@/components/catalog/FacetCard.vue'
@@ -113,6 +118,8 @@ import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCard from '@/components/catalog/CourseCard.vue'
 
 const router = useRouter()
+const credentials = ref<CredentialDict[]>([])
+const credentialId = ref<number | null>(null)
 const loading = ref(false)
 const courses = ref<TutorCourse[]>([])
 const currentPage = ref(1)
@@ -141,6 +148,13 @@ const {
   }
 })
 
+async function loadCredentials() {
+  try {
+    const data = await credentialApi.listCredentials()
+    credentials.value = data.credentials || []
+  } catch {}
+}
+
 async function loadCourses() {
   loading.value = true
   try {
@@ -148,6 +162,7 @@ async function loadCourses() {
       page: currentPage.value,
       page_size: pageSize.value
     }
+    if (credentialId.value !== null) (params as any).credential_id = credentialId.value
     if (specialtyId.value !== null) params.specialty_id = specialtyId.value
     if (levelId.value !== null) params.level_id = levelId.value
     const res = await tutorApi.getCourses(params)
@@ -167,6 +182,7 @@ function goToChapters(courseId: number) {
 onMounted(() => {
   fetchCatalog()
   loadCourses()
+  loadCredentials()
 })
 </script>
 

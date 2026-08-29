@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
@@ -19,7 +18,7 @@ const testJWTSecret = "test-secret-key-for-unit-test"
 func newAuthSvc(t *testing.T) (*AuthService, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewAuthService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}), "admin123", "tutor123", "student123", zap.NewNop()), db
+	return NewAuthService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}), NewForumCounter(), "admin123", "tutor123", "student123", zap.NewNop()), db
 }
 
 // --- HashPassword / VerifyPassword ---
@@ -59,33 +58,6 @@ func TestVerifyPassword_Wrong(t *testing.T) {
 func TestVerifyPassword_EmptyHash(t *testing.T) {
 	if VerifyPassword("any", "") {
 		t.Fatal("空哈希应校验失败")
-	}
-}
-
-// --- GenerateToken ---
-
-func TestAuthService_GenerateToken(t *testing.T) {
-	svc, _ := newAuthSvc(t)
-	token, err := svc.GenerateToken(42, "alice", "student")
-	if err != nil {
-		t.Fatalf("GenerateToken 失败: %v", err)
-	}
-	if token == "" {
-		t.Fatal("token 不应为空")
-	}
-	// 解析验证 claims
-	claims := &security.Claims{}
-	parsed, err := jwt.ParseWithClaims(token, claims, func(tk *jwt.Token) (interface{}, error) {
-		return []byte(testJWTSecret), nil
-	})
-	if err != nil || !parsed.Valid {
-		t.Fatalf("token 解析失败: %v", err)
-	}
-	if claims.UserID != 42 || claims.Account != "alice" || claims.Role != "student" {
-		t.Fatalf("claims 不匹配: %+v", claims)
-	}
-	if claims.ExpiresAt == nil {
-		t.Fatal("ExpiresAt 不应为空")
 	}
 }
 

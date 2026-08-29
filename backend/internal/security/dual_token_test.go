@@ -2,6 +2,7 @@ package security
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -59,27 +60,23 @@ func TestValidateRefresh_RejectsAccess(t *testing.T) {
 	}
 }
 
-// TestRefreshRotation_OldReplayRejected 轮换：刷新后旧 refresh 立即失效（重放被拒）。
+// TestRefreshRotation_OldReplayRejected 轮换：RotateRefresh 原子编排校验/抢占/签发，
+// 旧 refresh 立即失效（重放被拒）。
 func TestRefreshRotation_OldReplayRejected(t *testing.T) {
-	store := newInmemoryBlacklistStore()
-	sess := newTestDualSession(store)
+	sess := newTestDualSession(newInmemoryBlacklistStore())
 	_, oldRefresh, _ := sess.IssuePair(7, "user7", "hrwai_user")
 
-	// 模拟刷新端点轮换：校验旧 refresh 有效 → 签发新对 → 吊销旧 refresh
-	if _, err := sess.ValidateRefresh(oldRefresh); err != nil {
-		t.Fatalf("旧 refresh 应有效: %v", err)
+	newAccess, newRefresh, err := sess.RotateRefresh(context.Background(), oldRefresh)
+	if err != nil {
+		t.Fatalf("轮换应成功: %v", err)
 	}
-	if _, _, err := sess.IssuePair(7, "user7", "hrwai_user"); err != nil {
-		t.Fatalf("签发新对失败: %v", err)
-	}
-	if err := sess.RevokeRefresh(context.Background(), oldRefresh); err != nil {
-		t.Fatalf("吊销旧 refresh 失败: %v", err)
+	if newAccess == "" || newRefresh == "" || newRefresh == oldRefresh {
+		t.Fatalf("轮换应返回新双令牌: access=%q refresh==old=%v", newAccess, newRefresh == oldRefresh)
 	}
 
-	// 已被吊销的旧 refresh 在刷新端点的黑名单检查中被拒
-	revoked, _ := sess.IsRevoked(context.Background(), oldRefresh)
-	if !revoked {
-		t.Error("轮换后旧 refresh 应命中黑名单（防重放）")
+	// 已被轮换消费的旧 refresh 重放被拒
+	if _, _, err := sess.RotateRefresh(context.Background(), oldRefresh); !errors.Is(err, ErrInvalidRefresh) {
+		t.Errorf("轮换后旧 refresh 重放应返回 ErrInvalidRefresh（防重放）, got %v", err)
 	}
 }
 
@@ -108,14 +105,13 @@ func TestRevokeRefresh_OnlyRefresh(t *testing.T) {
 
 // TestLogout_RevokesRefresh 登出撤销 refresh：随后的刷新请求被拒。
 func TestLogout_RevokesRefresh(t *testing.T) {
-	store := newInmemoryBlacklistStore()
-	sess := newTestDualSession(store)
+	sess := newTestDualSession(newInmemoryBlacklistStore())
 	_, refresh, _ := sess.IssuePair(5, "user5", "hrwai_user")
 
 	if err := sess.RevokeRefresh(context.Background(), refresh); err != nil {
 		t.Fatalf("登出吊销 refresh 失败: %v", err)
 	}
-	if revoked, _ := sess.IsRevoked(context.Background(), refresh); !revoked {
-		t.Error("登出后 refresh 应被吊销")
+	if _, _, err := sess.RotateRefresh(context.Background(), refresh); !errors.Is(err, ErrInvalidRefresh) {
+		t.Errorf("登出后旧 refresh 刷新应被拒, got %v", err)
 	}
 }

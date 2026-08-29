@@ -60,6 +60,9 @@ GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 # 镜像加速代理（ghcr.io pull-through 缓存，如 127.0.0.1:5000）
 # 设置后镜像地址自动改写为 ${REGISTRY_PROXY}/<org>/<image>，由本地代理缓存加速拉取
 REGISTRY_PROXY="${REGISTRY_PROXY:-}"
+# registry 缓存容器监听绑定（默认回环；多节点共享缓存时设为内网 IP，
+# 如 REGISTRY_PROXY=172.17.1.41:5000 + REGISTRY_PROXY_BIND=172.17.1.41）
+REGISTRY_PROXY_BIND="${REGISTRY_PROXY_BIND:-127.0.0.1}"
 if [ -n "$REGISTRY_PROXY" ]; then
     REGISTRY_PROXY="${REGISTRY_PROXY%/}"
     # 保存原始镜像名（代理不可用时回退直连 / 清理镜像时覆盖新旧两种路径）
@@ -88,8 +91,20 @@ REGISTRY_MIRROR="${REGISTRY_MIRROR:-ghcr.nju.edu.cn}"
 HEALTH_CHECK_RETRIES="${HEALTH_CHECK_RETRIES:-20}"
 HEALTH_CHECK_INTERVAL="${HEALTH_CHECK_INTERVAL:-6}"
 
+# 跳过部署期备份（测试环境专用加速开关：回滚保障由 RBD 快照 + 每日离线备份承担，
+# 不再在每次部署关键路径上做 pg_dump；production 保持 false）
+SKIP_BACKUP="${SKIP_BACKUP:-false}"
+
 # compose up --wait 超时（秒）：容器就绪等待上限，超时后由 health_check() 轮询兜底
 UP_WAIT_TIMEOUT="${UP_WAIT_TIMEOUT:-60}"
+
+# compose profile 参数：production 用 COMPOSE_PROFILES=full 启用 libreoffice sidecar；
+# 留空（testing）则跳过 500MB 大镜像服务。转成 CLI --profile（部分 compose 版本
+# 不识别 COMPOSE_PROFILES 环境变量）
+COMPOSE_PROFILE_ARGS=""
+if [ -n "${COMPOSE_PROFILES:-}" ]; then
+    COMPOSE_PROFILE_ARGS="--profile ${COMPOSE_PROFILES}"
+fi
 
 # 后台备份 join 超时（秒）：迁移前等待备份完成的上限
 BACKUP_WAIT_TIMEOUT="${BACKUP_WAIT_TIMEOUT:-120}"
@@ -164,6 +179,29 @@ write_env_file() {
         printf 'SMTP_FROM='
         env_val "${SMTP_FROM:-}"; echo
         echo "SMTP_FROM_NAME=${SMTP_FROM_NAME:-和润天下}"
+        # 腾讯云短信（手机验证码通道；SecretId/SecretKey 为云 API 密钥，非控制台 AppKey）
+        printf 'TENCENT_SMS_SECRET_ID='
+        env_val "${TENCENT_SMS_SECRET_ID:-}"; echo
+        printf 'TENCENT_SMS_SECRET_KEY='
+        env_val "${TENCENT_SMS_SECRET_KEY:-}"; echo
+        printf 'TENCENT_SMS_SDK_APP_ID='
+        env_val "${TENCENT_SMS_SDK_APP_ID:-}"; echo
+        printf 'TENCENT_SMS_SIGN_NAME='
+        env_val "${TENCENT_SMS_SIGN_NAME:-}"; echo
+        echo "TENCENT_SMS_TEMPLATE_REGISTER=${TENCENT_SMS_TEMPLATE_REGISTER:-}"
+        echo "TENCENT_SMS_TEMPLATE_LOGIN=${TENCENT_SMS_TEMPLATE_LOGIN:-}"
+        echo "TENCENT_SMS_TEMPLATE_PASSWORD=${TENCENT_SMS_TEMPLATE_PASSWORD:-}"
+        echo "TENCENT_SMS_TEMPLATE_BIND_PHONE=${TENCENT_SMS_TEMPLATE_BIND_PHONE:-}"
+        echo "TENCENT_SMS_REGION=${TENCENT_SMS_REGION:-ap-guangzhou}"
+        # 微信登录凭证（小程序 / 开放平台严格区分）
+        printf 'WECHAT_MINI_PROGRAM_APP_ID='
+        env_val "${WECHAT_MINI_PROGRAM_APP_ID:-}"; echo
+        printf 'WECHAT_MINI_PROGRAM_APP_SECRET='
+        env_val "${WECHAT_MINI_PROGRAM_APP_SECRET:-}"; echo
+        printf 'WECHAT_OPEN_PLATFORM_APP_ID='
+        env_val "${WECHAT_OPEN_PLATFORM_APP_ID:-}"; echo
+        printf 'WECHAT_OPEN_PLATFORM_APP_SECRET='
+        env_val "${WECHAT_OPEN_PLATFORM_APP_SECRET:-}"; echo
 
         printf 'SECRET_KEY='
         env_val "${SECRET_KEY:-}"; echo
@@ -206,8 +244,10 @@ write_env_file() {
         echo "REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-10}"
         echo "REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-fl:}"
 
-        echo "# Cloudflare R2 对象存储（留空 STORAGE_DRIVER 或设为 local 则回退到本地磁盘）"
+        echo "# S3 兼容对象存储（STORAGE_DRIVER=r2；R2_ENDPOINT 空=Cloudflare R2，非空=自建 RGW）"
         echo "STORAGE_DRIVER=${STORAGE_DRIVER:-local}"
+        printf 'R2_ENDPOINT='
+        env_val "${R2_ENDPOINT:-}"; echo
         printf 'R2_ACCOUNT_ID='
         env_val "${R2_ACCOUNT_ID:-}"; echo
         printf 'R2_ACCESS_KEY_ID='
@@ -359,7 +399,7 @@ create_backup() {
         echo "--- 备份 .env ---"
         if [ -f "$DEPLOY_PATH/.env" ]; then
             # 仅保存非敏感信息
-            grep -v -E '(SECRET_KEY|JWT_SECRET_KEY|PASSWORD|API_KEY|R2_SECRET|R2_ACCESS_KEY)' "$DEPLOY_PATH/.env" 2>/dev/null || true
+            grep -v -E '(SECRET_KEY|JWT_SECRET_KEY|PASSWORD|API_KEY|R2_SECRET|R2_ACCESS_KEY|TENCENT_SMS_SECRET_ID)' "$DEPLOY_PATH/.env" 2>/dev/null || true
         fi
         echo ""
         if [ -f "$DB_BACKUP_FILE" ]; then
@@ -475,7 +515,7 @@ start_registry_proxy() {
             -e "REGISTRY_PROXY_PASSWORD=$(cat "$GHCR_PULL_TOKEN_FILE")")
     fi
     docker run -d --name ghcr-proxy --restart unless-stopped \
-        -p 127.0.0.1:5000:5000 \
+        -p "${REGISTRY_PROXY_BIND:-127.0.0.1}:5000:5000" \
         "${proxy_env[@]}" \
         "${proxy_mount[@]}" \
         registry:2 >/dev/null 2>&1 || true
@@ -490,10 +530,20 @@ start_registry_proxy() {
 ensure_registry_proxy() {
     [ -z "$REGISTRY_PROXY" ] && return 0
 
-    log_info ">>> 检查镜像加速代理: ${REGISTRY_PROXY} ..."
+    log_info ">>> 检查镜像加速代理: ${REGISTRY_PROXY} (bind=${REGISTRY_PROXY_BIND}) ..."
 
-    # 仅当代理是本机回环地址时，自动创建/启动 registry:2 缓存容器
-    if [ "$REGISTRY_PROXY" = "127.0.0.1:5000" ]; then
+    # 判断代理是否指向宿主机自身（回环或本机任一内网 IP）：
+    #   是 → 本机负责创建/启动缓存容器；否 → 远端共享代理（如其他 PVE 节点的缓存）
+    PROXY_HOST="${REGISTRY_PROXY%%:*}"
+    IS_LOCAL_PROXY=""
+    if [ "$PROXY_HOST" = "127.0.0.1" ] || [ "$PROXY_HOST" = "localhost" ]; then
+        IS_LOCAL_PROXY=1
+    elif ip -4 addr show 2>/dev/null | grep -q "inet ${PROXY_HOST}/"; then
+        IS_LOCAL_PROXY=1
+    fi
+
+    # 仅当代理是本机地址时，自动创建/启动 registry 缓存容器
+    if [ -n "$IS_LOCAL_PROXY" ]; then
         # 缓存卷只增不减（pull-through 无自动回收），超阈值即清空重建，
         # 否则长时间积累会撑满磁盘（曾导致 testing 部署失败：磁盘 0GB < 2GB）
         CACHE_DIR="/var/lib/docker/volumes/ghcr-cache/_data"
@@ -865,7 +915,7 @@ restart_services() {
     # - --wait：compose v2 原生等待全部服务 healthy/running（事件驱动，替代固定 sleep + 轮询）
     # - --wait-timeout 超时后 up 返回非 0，由下方 health_check() HTTP 轮询兜底确认
     # 注：host 网络模式 frontend 无 healthcheck（compose 中 disable），--wait 按 running 处理
-    if ! docker compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout "${UP_WAIT_TIMEOUT:-60}" --remove-orphans 2>&1 | tail -10; then
+    if ! docker compose -f "$COMPOSE_FILE" ${COMPOSE_PROFILE_ARGS} up -d --wait --wait-timeout "${UP_WAIT_TIMEOUT:-60}" --remove-orphans 2>&1 | tail -10; then
         log_warn "compose --wait 超时或失败，由后续健康检查兜底确认"
     fi
 
@@ -1114,9 +1164,12 @@ main() {
             # 证书内容来自 GitHub Secrets SSL_FULLCHAIN/SSL_PRIVKEY，写入 $SSL_CERT_DIR）
             write_ssl_certs
             # 备份与后续无依赖步骤（登录/镜像拉取）并行执行，迁移前 join——
-            # 隐藏备份耗时（pg_dump + 异地同步），同时保证备份先于任何 DB 写操作完成
-            create_backup &
-            BACKUP_PID=$!
+            # 隐藏备份耗时（pg_dump + 异地同步），同时保证备份先于任何 DB 写操作完成。
+            # SKIP_BACKUP=true（testing 加速）：跳过备份，回滚保障由 RBD 快照+每日备份承担
+            if [ "${SKIP_BACKUP}" != "true" ]; then
+                create_backup &
+                BACKUP_PID=$!
+            fi
             login_registry
             ensure_registry_proxy
             pull_images
@@ -1126,7 +1179,9 @@ main() {
             wait_postgres
 
             # 迁移前 join 后台备份（回滚保障：备份必先于 fix_dirty/迁移落盘）
-            wait_backup "$BACKUP_PID"
+            if [ "${SKIP_BACKUP}" != "true" ] && [ -n "${BACKUP_PID:-}" ]; then
+                wait_backup "$BACKUP_PID"
+            fi
 
             # 迁移兼容性预检：若镜像迁移版本落后数据库，启动后会崩溃循环
             if ! preflight_migration_check "${IMAGE_BACKEND}:${IMAGE_TAG}"; then

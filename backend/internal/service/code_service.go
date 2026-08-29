@@ -7,9 +7,7 @@ package service
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/tls"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -64,8 +62,8 @@ type CodeChannel interface {
 	// Render 生成发送文案（邮箱通道 title 为邮件主题，短信通道忽略 title）。
 	Render(purpose CodePurpose, code string, ttl time.Duration) (title, body string)
 	// Send 发送验证码。title/body 为 Render 生成的文案（邮件通道使用）；
-	// code/ttl 供模板类通道（短信）填充模板参数。
-	Send(target, title, body, code string, ttl time.Duration) error
+	// code/ttl/purpose 供模板类通道（短信）按用途选择模板填充参数。
+	Send(target, title, body, code string, ttl time.Duration, purpose CodePurpose) error
 	// ApplyTarget 把 target 写入新注册用户（邮箱注册需生成 phone 占位值）。
 	ApplyTarget(user *model.HrwaiUser, target string)
 	// BindColumn 绑定/修改时写入的用户表字段（"email" / "phone"）。
@@ -174,10 +172,10 @@ func (s LogMailSender) Send(to, subject, body string) error {
 	return nil
 }
 
-// SMSProvider 短信发送接口。Send 接收目标手机号、验证码与有效期（分钟），
-// 由实现方按已审核模板填充 TemplateParamSet 后发送。
+// SMSProvider 短信发送接口。Send 接收目标手机号、验证码、有效期（分钟）与用途，
+// 由实现方按用途选择已审核模板填充 TemplateParamSet 后发送。
 type SMSProvider interface {
-	Send(to, code string, minutes int) error
+	Send(to, code string, minutes int, purpose CodePurpose) error
 }
 
 // LogSMSProvider 开发环境降级实现：验证码写入服务日志。
@@ -186,8 +184,8 @@ type LogSMSProvider struct {
 }
 
 // Send 将验证码短信写入日志（开发环境降级）。
-func (s LogSMSProvider) Send(to, code string, minutes int) error {
-	s.logger.Info("短信发送（开发环境降级为日志）", zap.String("to", to), zap.String("code", code), zap.Int("minutes", minutes))
+func (s LogSMSProvider) Send(to, code string, minutes int, purpose CodePurpose) error {
+	s.logger.Info("短信发送（开发环境降级为日志）", zap.String("to", to), zap.String("code", code), zap.Int("minutes", minutes), zap.String("purpose", string(purpose)))
 	return nil
 }
 
@@ -246,12 +244,6 @@ func generateEmailCode() (string, error) {
 		b[i] = digits[n.Int64()]
 	}
 	return string(b), nil
-}
-
-// emailPlaceholderPhone 为邮箱注册账号生成唯一的 phone 占位值（phone 列 NOT NULL）。
-func emailPlaceholderPhone(email string) string {
-	sum := sha256.Sum256([]byte(email))
-	return PlaceholderPhonePrefix + hex.EncodeToString(sum[:])[:32]
 }
 
 // =====================================================
@@ -342,8 +334,8 @@ func (c *EmailChannel) Render(purpose CodePurpose, code string, ttl time.Duratio
 	return title, body
 }
 
-// Send 发送验证码邮件（code/ttl 已由 Render 拼入 body，此处忽略）。
-func (c *EmailChannel) Send(target, title, body string, _ string, _ time.Duration) error {
+// Send 发送验证码邮件（code/ttl/purpose 已由 Render 拼入 body，此处忽略）。
+func (c *EmailChannel) Send(target, title, body string, _ string, _ time.Duration, _ CodePurpose) error {
 	if err := c.mailer.Send(target, title, body); err != nil {
 		c.logger.Error("验证码邮件发送失败", zap.String("email", target), zap.Error(err))
 		return errors.New("验证码发送失败，请稍后再试")
@@ -351,10 +343,10 @@ func (c *EmailChannel) Send(target, title, body string, _ string, _ time.Duratio
 	return nil
 }
 
-// ApplyTarget 写入邮箱并生成 phone 占位值。
+// ApplyTarget 写入邮箱，手机号置空（非手机号注册时为空）。
 func (c *EmailChannel) ApplyTarget(user *model.HrwaiUser, target string) {
 	user.Email = target
-	user.Phone = emailPlaceholderPhone(target)
+	user.Phone = ""
 }
 
 // BindColumn 绑定写入 email 字段。
@@ -434,49 +426,15 @@ func (c *SmsChannel) FindUser(ctx context.Context, db *gorm.DB, target string) (
 	return &user, nil
 }
 
-// Render 生成短信内容（title 忽略）。
-func (c *SmsChannel) Render(purpose CodePurpose, code string, ttl time.Duration) (string, string) {
-	op := "注册"
-	switch purpose {
-	case CodePurposeLogin:
-		op = "登录"
-	case CodePurposeBind:
-		op = "绑定/修改手机号"
-	case CodePurposeAccountChange:
-		op = "修改登录账号"
-	case CodePurposeResetPassword:
-		op = "找回密码"
-	case CodePurposeChangePassword:
-		op = "修改密码"
-	}
-	var content string
-	if purpose == CodePurposeBind {
-		content = fmt.Sprintf(
-			"【和润天下】您正在绑定/修改手机号，验证码为：%s，%d 分钟内有效，请勿泄露给他人。",
-			code, int(ttl.Minutes()),
-		)
-	} else if purpose == CodePurposeAccountChange {
-		content = fmt.Sprintf(
-			"【和润天下】您正在修改登录账号，验证码为：%s，%d 分钟内有效，请勿泄露给他人。",
-			code, int(ttl.Minutes()),
-		)
-	} else if purpose == CodePurposeChangePassword {
-		content = fmt.Sprintf(
-			"【和润天下】您正在修改登录密码，验证码为：%s，%d 分钟内有效，请勿泄露给他人。",
-			code, int(ttl.Minutes()),
-		)
-	} else {
-		content = fmt.Sprintf(
-			"【和润天下】您的%s验证码为：%s，%d 分钟内有效，请勿泄露给他人。",
-			op, code, int(ttl.Minutes()),
-		)
-	}
-	return "", content
+// Render 短信文案由腾讯云已审核模板渲染（发送器按用途选模板），
+// 本通道不生成 title/body，返回空值。
+func (c *SmsChannel) Render(_ CodePurpose, _ string, _ time.Duration) (string, string) {
+	return "", ""
 }
 
-// Send 发送验证码短信（title/body 不使用，短信走已审核模板 + code/ttl 参数）。
-func (c *SmsChannel) Send(target string, _, _ string, code string, ttl time.Duration) error {
-	if err := c.sms.Send(target, code, int(ttl.Minutes())); err != nil {
+// Send 发送验证码短信（title/body 不使用，短信按用途走已审核模板 + code/ttl 参数）。
+func (c *SmsChannel) Send(target string, _, _ string, code string, ttl time.Duration, purpose CodePurpose) error {
+	if err := c.sms.Send(target, code, int(ttl.Minutes()), purpose); err != nil {
 		c.logger.Error("验证码短信发送失败", zap.String("phone", target), zap.Error(err))
 		return errors.New("验证码发送失败，请稍后再试")
 	}
@@ -590,7 +548,7 @@ func (s *VerifyCodeService) send(ctx context.Context, ch CodeChannel, purpose Co
 	}
 
 	title, body := ch.Render(purpose, code, s.codeTTL)
-	return ch.Send(target, title, body, code, s.codeTTL)
+	return ch.Send(target, title, body, code, s.codeTTL, purpose)
 }
 
 // Verify 校验验证码并限制错误次数（最多 5 次），成功后删除验证码。
@@ -824,7 +782,8 @@ func (s *VerifyCodeService) currentUserPhone(ctx context.Context, userID int) (s
 	if err := s.db.WithContext(ctx).Select("phone").First(&user, userID).Error; err != nil {
 		return "", errors.New("用户不存在")
 	}
-	// 显式拒绝邮箱注册的占位手机号（IsPlaceholderPhone 单点），不依赖 IsValidPhone 巧合兜底
+	// 显式拒绝占位手机号（IsPlaceholderPhone 单点：email_ / wxp_ / deleted__sentinel），
+	// 不依赖 IsValidPhone 巧合兜底
 	if IsPlaceholderPhone(user.Phone) || !IsValidPhone(user.Phone) {
 		return "", errors.New("请先绑定手机号")
 	}

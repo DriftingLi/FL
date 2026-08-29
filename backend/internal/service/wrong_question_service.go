@@ -16,18 +16,33 @@ import (
 // WrongQuestionService 错题本服务。
 type WrongQuestionService struct {
 	db *gorm.DB
+	// grader 短答 AI 判分 adapter（nil 时简答重做降级，与练习流口径一致）。
+	grader ShortAnswerGrader
+	// explainer AI 解析 module（与练习提交共用同一 get-or-generate 入口，spec #295/#300）。
+	explainer *QuestionExplanation
 
 	logger *zap.Logger
 }
 
-// NewWrongQuestionService 创建错题本服务实例。
-func NewWrongQuestionService(db *gorm.DB, logger *zap.Logger) *WrongQuestionService {
-	return &WrongQuestionService{db: db, logger: logger}
+// NewWrongQuestionService 创建错题本服务实例。ai 可为 nil（简答判分与解析降级）。
+func NewWrongQuestionService(db *gorm.DB, ai *AIService, logger *zap.Logger) *WrongQuestionService {
+	return &WrongQuestionService{
+		db:        db,
+		grader:    shortAnswerGraderOf(ai),
+		explainer: NewQuestionExplanation(db, ai, logger),
+		logger:    logger,
+	}
 }
 
 // GetWrongQuestions 错题列表。
-func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, qType string, minWrongCount *int) map[string]any {
-	items, total, page, pageSize := paging.Query[model.WrongQuestion](s.db, page, pageSize, 20, "wrong_question.last_wrong_at DESC", func(q *gorm.DB) *gorm.DB {
+// sort: "time_asc" 按最近错误时间升序，其余按降序（默认）；
+// favorited: 仅返回已收藏的错题（JOIN favorite，user_id 与 student_id 同源）。
+func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, qType string, minWrongCount *int, favorited bool, sort string) map[string]any {
+	orderBy := "wrong_question.last_wrong_at DESC"
+	if sort == "time_asc" {
+		orderBy = "wrong_question.last_wrong_at ASC"
+	}
+	items, total, page, pageSize := paging.Query[model.WrongQuestion](s.db, page, pageSize, 20, orderBy, func(q *gorm.DB) *gorm.DB {
 		q = q.Where("student_id = ? AND is_removed = ?", studentID, false)
 		if qType != "" {
 			q = q.Joins("JOIN question ON question.id = wrong_question.question_id")
@@ -35,6 +50,9 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 		}
 		if minWrongCount != nil {
 			q = q.Where("wrong_question.wrong_count >= ?", *minWrongCount)
+		}
+		if favorited {
+			q = q.Joins("JOIN favorite ON favorite.user_id = wrong_question.student_id AND favorite.target_type = ? AND favorite.target_id = wrong_question.question_id", FavoriteTargetQuestion)
 		}
 		return q
 	})
@@ -44,11 +62,14 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 		questionIDs = append(questionIDs, items[i].QuestionID)
 	}
 	questions := loadQuestionsByIDs(s.db, questionIDs)
+	favoriteIDs := s.loadFavoriteIDs(studentID, questionIDs)
 
 	result := make([]map[string]any, 0, len(items))
 	for i := range items {
 		wq := &items[i]
 		item := wrongQuestionToDict(wq)
+		item["favorited"] = favoriteIDs[wq.QuestionID] > 0
+		item["favorite_id"] = favoriteIDs[wq.QuestionID]
 		if q, ok := questions[wq.QuestionID]; ok {
 			item["question"] = newQuestionDTO(q, true)
 		}
@@ -62,8 +83,23 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 	}
 }
 
-// RedoWrongQuestion 重做错题。
-func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, userAnswer interface{}) (map[string]any, error) {
+// loadFavoriteIDs 批量查询题目收藏 ID（question_id → favorite_id，未收藏为 0）。
+func (s *WrongQuestionService) loadFavoriteIDs(studentID int, questionIDs []int) map[int]int64 {
+	result := make(map[int]int64, len(questionIDs))
+	if len(questionIDs) == 0 {
+		return result
+	}
+	var rows []model.Favorite
+	s.db.Where("user_id = ? AND target_type = ? AND target_id IN ?", studentID, FavoriteTargetQuestion, questionIDs).Find(&rows)
+	for i := range rows {
+		result[rows[i].TargetID] = rows[i].FavoriteID
+	}
+	return result
+}
+
+// RedoWrongQuestion 重做错题：与练习/模拟考试共享同一判分管线（gradeOne）与解析五模块装配。
+// 单题即时重做形态（无会话生命周期）；结果落 question_practice_record，正确率/易错项统计含重做。
+func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, userAnswer interface{}) (*SubmitResultDTO, error) {
 	var wq model.WrongQuestion
 	if err := s.db.Where("student_id = ? AND question_id = ? AND is_removed = ?", studentID, questionID, false).First(&wq).Error; err != nil {
 		return nil, errors.New("错题记录不存在")
@@ -73,25 +109,39 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 		return nil, errors.New("题目不存在")
 	}
 
-	isCorrect, _ := gradeQuestion(&question, userAnswer, 0)
-	if isCorrect != nil && *isCorrect {
-		wq.IsRemoved = true
-	} else if isCorrect != nil && !*isCorrect {
-		wq.WrongCount++
-		wq.LastWrongAt = beijingNow()
-	}
-	s.db.Save(&wq)
+	engine := newGradingEngine(s.db)
+	flow := gradingFlow{ai: s.grader, maxScore: practiceMaxScore}
+	gr := engine.gradeOne(flow, &question, userAnswer, studentID)
 
-	result := map[string]any{
-		"correct_answer": question.Answer,
-		"explanation":    question.Explanation,
-		"is_removed":     wq.IsRemoved,
+	// 重做结果与练习同口径落练习记录（统计事实源单一）。
+	rec := model.QuestionPracticeRecord{
+		StudentID:    studentID,
+		QuestionID:   questionID,
+		IsCorrect:    gr.IsCorrect != nil && *gr.IsCorrect,
+		PracticeType: "redo",
+		UserAnswer:   stringifyAnswer(userAnswer),
+		CreatedAt:    beijingNow(),
 	}
-	if isCorrect == nil {
-		result["is_correct"] = nil
-	} else {
-		result["is_correct"] = *isCorrect
+	if err := s.db.Create(&rec).Error; err != nil {
+		return nil, err
 	}
+
+	// 错题本状态机：判错路径 gradeOne 已入库计数；此处仅按重做结果维护 is_redone 标记
+	// （定向更新，避免覆盖 addToWrongQuestions 刚写入的计数）。
+	if gr.IsCorrect != nil {
+		if err := s.db.Model(&model.WrongQuestion{}).Where("id = ?", wq.ID).Update("is_redone", *gr.IsCorrect).Error; err != nil {
+			return nil, err
+		}
+	}
+
+	result := &SubmitResultDTO{
+		IsCorrect:     gr.IsCorrect,
+		CorrectAnswer: question.Answer,
+		Explanation:   question.Explanation,
+		QuestionID:    questionID,
+		UserAnswer:    userAnswer,
+	}
+	finalizeSubmitResult(s.db, s.explainer, result, gr, &rec, &question)
 	return result, nil
 }
 
@@ -229,8 +279,18 @@ func wrongQuestionToDict(wq *model.WrongQuestion) map[string]any {
 		"wrong_count":   wq.WrongCount,
 		"last_wrong_at": formatISO(wq.LastWrongAt),
 		"is_removed":    wq.IsRemoved,
+		"is_redone":     wq.IsRedone,
 		"created_at":    formatISO(wq.CreatedAt),
 	}
+}
+
+// BatchRemoveWrongQuestions 批量移出错题本
+func (s *WrongQuestionService) BatchRemoveWrongQuestions(studentID int, questionIDs []int) (int, error) {
+	if len(questionIDs) == 0 {
+		return 0, errors.New("请选择要移除的题目")
+	}
+	res := s.db.Model(&model.WrongQuestion{}).Where("student_id = ? AND question_id IN ? AND is_removed = ?", studentID, questionIDs, false).Update("is_removed", true)
+	return int(res.RowsAffected), res.Error
 }
 
 func mapOr(key string, m map[string]any, def any) any {

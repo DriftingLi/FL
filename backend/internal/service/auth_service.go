@@ -7,6 +7,8 @@ import (
 	"errors"
 	"time"
 
+	"forklift-training/internal/clock"
+
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -20,6 +22,7 @@ type AuthService struct {
 	db        *gorm.DB
 	session   *security.Session
 	reviewSvc *ProfileReviewService
+	forumCnt  ForumCounter // 论坛计数唯一写入口（注销回扣点赞数用，spec #297）
 
 	defaultAdminPwd   string
 	defaultTutorPwd   string
@@ -28,11 +31,13 @@ type AuthService struct {
 	logger *zap.Logger
 }
 
-// NewAuthService 创建认证服务。sess 为装配根创建的唯一会话实例（签发/校验同实例）。
-func NewAuthService(db *gorm.DB, sess *security.Session, adminPwd, tutorPwd, studentPwd string, logger *zap.Logger) *AuthService {
+// NewAuthService 创建认证服务。sess 为装配根创建的唯一会话实例（签发/校验同实例）；
+// forumCnt 与 ForumService 共享同一计数器实例（构造注入，注销同事务回扣 likes_count）。
+func NewAuthService(db *gorm.DB, sess *security.Session, forumCnt ForumCounter, adminPwd, tutorPwd, studentPwd string, logger *zap.Logger) *AuthService {
 	return &AuthService{
 		db:                db,
 		session:           sess,
+		forumCnt:          forumCnt,
 		defaultAdminPwd:   adminPwd,
 		defaultTutorPwd:   tutorPwd,
 		defaultStudentPwd: studentPwd,
@@ -108,7 +113,9 @@ type ProfileDTO struct {
 // ptr 构造 T 的指针（ProfileDTO 指针字段表达键缺失/存在两态）。
 func ptr[T any](v T) *T { return &v }
 
-// MaskedPhone 隐藏邮箱注册的占位手机号（email_ 前缀），/auth/me 源头过滤不下发客户端。
+// MaskedPhone 隐藏占位手机号（邮箱注册 email_ / 微信建号 wxp_ / 注销哨兵 deleted__sentinel，
+// IsPlaceholderPhone 单点判定），/auth/me 源头过滤不下发客户端——修复微信建号用户
+// /auth/me 泄漏 wxp_ 串的问题。
 func MaskedPhone(phone string) string {
 	if IsPlaceholderPhone(phone) {
 		return ""
@@ -128,11 +135,6 @@ func HashPassword(password string) (string, error) {
 // VerifyPassword 校验密码。
 func VerifyPassword(password, hashed string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password)) == nil
-}
-
-// GenerateToken 签发 access token（委托会话模块，双令牌会话 ADR-0012）。
-func (s *AuthService) GenerateToken(userID int, account, role string) (string, error) {
-	return s.session.Issue(userID, account, role)
 }
 
 // LoginResult 登录返回结构（双令牌：access token + refresh token）。
@@ -368,11 +370,118 @@ func (s *AuthService) EnsureDefaultUsers() error {
 	return nil
 }
 
-// beijingNow 返回当前北京时间。
-func beijingNow() time.Time {
-	loc, _ := time.LoadLocation("Asia/Shanghai")
-	if loc == nil {
-		loc = time.FixedZone("CST", 8*3600)
+// UpdateCompany 更新学员单位信息，立即生效不走审核。
+func (s *AuthService) UpdateCompany(userID int, company string) error {
+	if len(company) > 50 {
+		return errors.New("单位名称不能超过 50 个字符")
 	}
-	return time.Now().In(loc)
+	return s.db.Model(&model.HrwaiUser{}).Where("id = ?", userID).Update("company", company).Error
 }
+
+// DeleteAccount 硬删除学员账号并级联清理相关数据，论坛内容匿名化。
+func (s *AuthService) DeleteAccount(userID int) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var user model.HrwaiUser
+		if err := tx.First(&user, userID).Error; err != nil {
+			return errors.New("用户不存在")
+		}
+		// 确保匿名占位用户存在
+		var sentinel model.HrwaiUser
+		if err := tx.Where("account = ?", "__deleted_user").First(&sentinel).Error; err != nil {
+			sentinel = model.HrwaiUser{
+				UID:       NextUID(),
+				Account:   "__deleted_user",
+				Username:  "已注销用户",
+				Password:  "",
+				Phone:     "deleted__sentinel",
+				Status:    0,
+				CreatedAt: beijingNow(),
+			}
+			if err := tx.Create(&sentinel).Error; err != nil {
+				return err
+			}
+		}
+		// 论坛内容匿名化：重分配给占位用户，避免 CASCADE 删除
+		if err := tx.Model(&model.ForumTopic{}).Where("user_id = ?", userID).Update("user_id", sentinel.ID).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.ForumReply{}).Where("user_id = ?", userID).Update("user_id", sentinel.ID).Error; err != nil {
+			return err
+		}
+		// 显式清理无外键或需额外处理的关联数据（有 CASCADE 的表亦显式删除以确保无残留）
+		tx.Where("user_id = ?", userID).Delete(&model.Favorite{})
+		// 点赞回扣（spec #297）：先按主题/回复聚合该用户点赞行数，同事务删除后按行数
+		// 回扣对应计数列——DELETE 行数与受影响主题集合一一对应，注销不再污染计数。
+		if err := s.refundLikesOnDelete(tx, userID); err != nil {
+			return err
+		}
+		tx.Where("reporter_id = ?", userID).Delete(&model.ForumReport{})
+		// 有 CASCADE 的表显式删除以兼容测试内存库
+		tx.Where("student_id = ?", userID).Delete(&model.QuestionPracticeRecord{})
+		tx.Where("student_id = ?", userID).Delete(&model.WrongQuestion{})
+		tx.Where("student_id = ?", userID).Delete(&model.MockExam{})
+		tx.Where("student_id = ?", userID).Delete(&model.PracticeProgress{})
+		tx.Where("student_id = ?", userID).Delete(&model.StudyRecord{})
+		tx.Where("user_id = ?", userID).Delete(&model.ForumCheckIn{})
+		tx.Where("user_id = ?", userID).Delete(&model.Notification{})
+		tx.Where("user_id = ?", userID).Delete(&model.ProfileChangeRequest{})
+		tx.Where("user_id = ?", userID).Delete(&model.AIChatSession{})
+		tx.Where("user_id = ?", userID).Delete(&model.AIUserModel{})
+		tx.Where("user_id = ?", userID).Delete(&model.QuestionComment{})
+		tx.Where("user_id = ?", userID).Delete(&model.QuestionNote{})
+		// 删除用户本体（剩余 CASCADE 关联自动清理）
+		if err := tx.Delete(&model.HrwaiUser{}, userID).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+// refundLikesOnDelete 注销事务内的点赞回扣：先查后删（先按主题/回复聚合该用户点赞行数，
+// 再 DELETE），同事务内经 ForumCounter 按行数回扣对应计数列，保证 DELETE 行数与
+// 受影响主题/回复集合一一对应（spec #297）。
+func (s *AuthService) refundLikesOnDelete(tx *gorm.DB, userID int) error {
+	var topicLikes []struct {
+		TopicID int64
+		Cnt     int
+	}
+	if err := tx.Model(&model.ForumTopicLike{}).
+		Select("topic_id, COUNT(*) AS cnt").
+		Where("user_id = ?", userID).
+		Group("topic_id").
+		Scan(&topicLikes).Error; err != nil {
+		return err
+	}
+	if err := tx.Where("user_id = ?", userID).Delete(&model.ForumTopicLike{}).Error; err != nil {
+		return err
+	}
+	for _, agg := range topicLikes {
+		if err := s.forumCnt.AdjustLikes(tx, agg.TopicID, -agg.Cnt); err != nil {
+			return err
+		}
+	}
+
+	var replyLikes []struct {
+		ReplyID int64
+		Cnt     int
+	}
+	if err := tx.Model(&model.ForumReplyLike{}).
+		Select("reply_id, COUNT(*) AS cnt").
+		Where("user_id = ?", userID).
+		Group("reply_id").
+		Scan(&replyLikes).Error; err != nil {
+		return err
+	}
+	if err := tx.Where("user_id = ?", userID).Delete(&model.ForumReplyLike{}).Error; err != nil {
+		return err
+	}
+	for _, agg := range replyLikes {
+		if err := s.forumCnt.AdjustReplyLikes(tx, agg.ReplyID, -agg.Cnt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// beijingNow 返回当前北京时间。时区政策已单点归位 internal/clock 包（spec #296），此函数仅作遗留调用方的一行委托。
+func beijingNow() time.Time { return clock.Now() }

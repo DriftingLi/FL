@@ -90,6 +90,33 @@ type QuestionTagDict struct {
 	UpdatedAt     string `json:"updated_at"`
 }
 
+// CredentialInput 目标证件创建/更新入参。
+// 更新语义：Code/Name/Category 为空表示不改动；Level/SortOrder/Status 为 nil 表示不改动（Level 传 0 表示清空，仅 skill_level 传 1-5 有效语义在 Validate 中收敛）。
+type CredentialInput struct {
+	Code        string  `json:"code"`
+	Name        string  `json:"name"`
+	Category    string  `json:"category"`
+	Level       *int    `json:"level"`
+	Description *string `json:"description"`
+	SortOrder   *int    `json:"sort_order"`
+	Status      *int16  `json:"status"`
+}
+
+// CredentialDict 目标证件字典（列表/创建/更新返回）。
+// 字段声明顺序按 JSON 键字母序，保证契约字节级不变。
+type CredentialDict struct {
+	Category    string `json:"category"`
+	Code        string `json:"code"`
+	CreatedAt   string `json:"created_at"`
+	Description string `json:"description"`
+	ID          int    `json:"id"`
+	Level       *int   `json:"level"`
+	Name        string `json:"name"`
+	SortOrder   int    `json:"sort_order"`
+	Status      int16  `json:"status"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
 // QuestionTagRef 题目-标签关联摘要（id/code/name/sort_order/status，无时间戳等扩展字段）。
 type QuestionTagRef struct {
 	Code      string `json:"code"`

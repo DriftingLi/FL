@@ -5,24 +5,65 @@
       <el-button type="primary" :icon="Plus" @click="openCreateDialog">新建配置</el-button>
     </div>
 
-    <!-- 功能绑定区 -->
+    <!-- AI助手双模式绑定（单绑×2，与其它功能分开） -->
     <div class="card">
-      <div class="card-title">功能绑定</div>
-      <el-table :data="bindings" border stripe style="width: 100%">
+      <div class="card-title">AI助手模式绑定</div>
+      <div class="dual-bind-grid">
+        <div class="dual-bind-item">
+          <div class="dual-label">普通模式</div>
+          <el-select
+            :model-value="normalBinding?.config_id || 0"
+            placeholder="请选择配置"
+            style="width: 100%"
+            @update:model-value="(val: number) => handleAssistantBind('ai_assistant_normal', val)"
+          >
+            <el-option :value="0" label="未绑定" />
+            <el-option
+              v-for="cfg in configs"
+              :key="cfg.id"
+              :value="cfg.id"
+              :label="`${cfg.name}（${cfg.model}）`"
+              :disabled="!cfg.is_active"
+            />
+          </el-select>
+        </div>
+        <div class="dual-bind-item">
+          <div class="dual-label">专家模式</div>
+          <el-select
+            :model-value="expertBinding?.config_id || 0"
+            placeholder="请选择配置"
+            style="width: 100%"
+            @update:model-value="(val: number) => handleAssistantBind('ai_assistant_expert', val)"
+          >
+            <el-option :value="0" label="未绑定" />
+            <el-option
+              v-for="cfg in configs"
+              :key="cfg.id"
+              :value="cfg.id"
+              :label="`${cfg.name}（${cfg.model}）`"
+              :disabled="!cfg.is_active"
+            />
+          </el-select>
+        </div>
+      </div>
+      <div class="dual-hint">普通/专家分别单绑定，不向用户暴露模型名；未绑定时该模式不可用</div>
+    </div>
+
+    <!-- 其他功能绑定 -->
+    <div class="card">
+      <div class="card-title">其他功能绑定</div>
+      <el-table :data="otherBindings" border stripe style="width: 100%">
         <el-table-column label="功能" min-width="160">
           <template #default="{ row }">
             <div class="feature-cell">
               <span class="feature-label">{{ row.feature_label }}</span>
-              <el-tag v-if="row.is_multi" type="warning" size="small">多绑定</el-tag>
-              <el-tag v-else type="info" size="small">单绑定</el-tag>
+              <el-tag type="info" size="small">单绑定</el-tag>
             </div>
           </template>
         </el-table-column>
         <el-table-column label="绑定的配置" min-width="380">
           <template #default="{ row }">
-            <!-- 单绑定功能：下拉选择 -->
             <el-select
-              v-if="!row.is_multi"
               :model-value="row.config_id || 0"
               placeholder="请选择配置"
               style="width: 100%"
@@ -37,43 +78,6 @@
                 :disabled="!cfg.is_active"
               />
             </el-select>
-
-            <!-- 多绑定功能：已绑定列表 + 添加按钮 -->
-            <div v-else class="multi-bind-area">
-              <div v-if="row.bound_configs && row.bound_configs.length > 0" class="bound-list">
-                <div
-                  v-for="bc in row.bound_configs"
-                  :key="bc.config_id"
-                  class="bound-item"
-                >
-                  <span class="bound-name">{{ bc.config_name }}</span>
-                  <span class="bound-model">{{ bc.model }}</span>
-                  <el-button
-                    type="danger"
-                    size="small"
-                    :icon="Close"
-                    circle
-                    @click="handleUnbind(row.feature_key, bc.config_id)"
-                  />
-                </div>
-              </div>
-              <div v-else class="empty-bound">暂未绑定任何配置</div>
-              <el-select
-                v-model="row._pending_config_id"
-                placeholder="选择配置后点击添加"
-                style="width: 240px; margin-top: 8px"
-                @change="(val: number) => handleAddBinding(row.feature_key, val)"
-              >
-                <el-option :value="0" label="请选择..." disabled />
-                <el-option
-                  v-for="cfg in availableConfigsForFeature(row)"
-                  :key="cfg.id"
-                  :value="cfg.id"
-                  :label="`${cfg.name}（${cfg.model}）`"
-                  :disabled="!cfg.is_active"
-                />
-              </el-select>
-            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -177,7 +181,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormItemRule } from 'element-plus'
-import { Plus, ArrowDown, Close } from '@element-plus/icons-vue'
+import { Plus, ArrowDown } from '@element-plus/icons-vue'
 import { adminApi, type AIConfig, type FeatureBinding } from '@/api/admin'
 
 const configs = ref<AIConfig[]>([])
@@ -228,54 +232,22 @@ async function loadConfigs() {
 async function loadBindings() {
   try {
     const data = await adminApi.listFeatureBindings()
-    if (data) {
-      // 为多绑定行附加 _pending_config_id 字段（用于"待添加"下拉框）
-      bindings.value = data.map((b) => ({
-        ...b,
-        _pending_config_id: 0
-      }))
-    }
+    if (data) bindings.value = data
   } catch (e) {
     console.error('加载功能绑定失败:', e)
   }
 }
 
-// 多绑定功能：返回该功能可添加的配置列表（已绑定的排除）
-function availableConfigsForFeature(row: FeatureBinding): AIConfig[] {
-  const boundIds = (row.bound_configs || []).map((bc) => bc.config_id)
-  return configs.value.filter((c) => !boundIds.includes(c.id))
-}
+const normalBinding = computed(() => bindings.value.find(b => b.feature_key === 'ai_assistant_normal'))
+const expertBinding = computed(() => bindings.value.find(b => b.feature_key === 'ai_assistant_expert'))
+const otherBindings = computed(() => bindings.value.filter(b => !['ai_assistant_normal', 'ai_assistant_expert', 'ai_assistant'].includes(b.feature_key)))
 
-// 多绑定功能：添加一条绑定
-async function handleAddBinding(featureKey: string, configId: number) {
-  if (!configId) return
+async function handleAssistantBind(featureKey: string, configId: number) {
   try {
     await adminApi.setFeatureBinding(featureKey, configId)
-    ElMessage.success('绑定已添加')
+    ElMessage.success('绑定已更新')
     await loadBindings()
   } catch {
-    // 拦截器已统一 toast 业务失败信息
-    await loadBindings()
-  }
-}
-
-// 多绑定功能：解除单条绑定
-async function handleUnbind(featureKey: string, configId: number) {
-  try {
-    await ElMessageBox.confirm('确定解除该配置的绑定？', '提示', {
-      type: 'warning',
-      confirmButtonText: '确定',
-      cancelButtonText: '取消'
-    })
-  } catch {
-    return
-  }
-  try {
-    await adminApi.unbindFeatureConfig(featureKey, configId)
-    ElMessage.success('已解除绑定')
-    await loadBindings()
-  } catch {
-    // 拦截器已统一 toast 业务失败信息
     await loadBindings()
   }
 }
@@ -461,48 +433,29 @@ onMounted(() => {
   gap: 8px;
 }
 
-.multi-bind-area {
+.dual-bind-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.dual-bind-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 }
 
-.bound-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.bound-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  background: #f5f7fa;
-  border-radius: 6px;
-  border: 1px solid #ebeef5;
-}
-
-.bound-name {
+.dual-label {
+  font-size: 13px;
   font-weight: 500;
   color: #303133;
-  flex: 1;
-  min-width: 0;
 }
 
-.bound-model {
+.dual-hint {
+  margin-top: 12px;
   font-size: 12px;
   color: #909399;
-  font-family: 'Courier New', monospace;
-  background: #ecf5ff;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.empty-bound {
-  color: #909399;
-  font-size: 13px;
-  padding: 4px 0;
+  line-height: 1.5;
 }
 
 @media screen and (max-width: 768px) {
@@ -525,6 +478,10 @@ onMounted(() => {
 
   .el-table {
     overflow-x: auto;
+  }
+
+  .dual-bind-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

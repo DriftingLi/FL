@@ -1,5 +1,16 @@
 <template>
-  <SidebarLayout :menu-items="currentMenuItems" />
+  <!-- 学员端：石墨青暗底侧栏 + 紧凑密度 + 内容限宽居中。
+       AdminLayout / TutorLayout 不传这些 prop，走默认值（=改造前行为），零 diff。 -->
+  <SidebarLayout
+    :menu-items="currentMenuItems"
+    sidebar-theme="dark"
+    sidebar-density="compact"
+    content-width="narrow"
+  >
+    <template #top="{ collapsed }">
+      <CredentialSwitcher v-if="!chapterCourseId" :collapsed="collapsed" theme="dark" />
+    </template>
+  </SidebarLayout>
 </template>
 
 <script setup lang="ts">
@@ -7,6 +18,7 @@ import { computed, h, watch } from 'vue'
 import type { Component } from 'vue'
 import { useRoute } from 'vue-router'
 import SidebarLayout from './SidebarLayout.vue'
+import CredentialSwitcher from '@/components/credential/CredentialSwitcher.vue'
 import { roleNavigation } from '@/config/navigation'
 import { useCourseStore } from '@/stores/course'
 import type { NavItem } from '@/config/navigation'

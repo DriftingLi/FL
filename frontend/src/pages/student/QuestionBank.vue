@@ -1,106 +1,136 @@
 <template>
   <div class="question-bank">
-    <!-- ===== 入口：5 卡片 ===== -->
-    <div v-if="!mode" class="entry">
-      <h2>题库练习</h2>
-      <p class="entry-sub">选择练习方式，开始刷题</p>
+    <!-- ===== 入口 ===== -->
+    <div v-if="!mode" class="flex flex-col gap-6">
+      <UiSectionHeader title="题库练习" subtitle="选择练习方式，开始刷题" />
 
-      <el-row :gutter="20" class="card-grid">
+      <!-- 练习统计 -->
+      <div class="grid gap-4 sm:grid-cols-3">
+        <UiStatCard
+          label="今日做题"
+          :value="practiceStats.today_count"
+          :loading="practiceStatsLoading"
+          tone="brand"
+        />
+        <UiStatCard
+          label="累计做题"
+          :value="practiceStats.total_count"
+          :loading="practiceStatsLoading"
+          tone="ok"
+        />
+        <UiStatCard
+          label="累计做题天数"
+          :value="practiceStats.total_days"
+          unit="天"
+          :loading="practiceStatsLoading"
+          tone="warn"
+        />
+      </div>
+
+      <!-- 4 种练习方式 -->
+      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <!-- 顺序练习 -->
-        <el-col :xs="24" :sm="12" :md="8">
-          <el-card shadow="hover" class="practice-card card-sequential">
-            <div class="card-head">
-              <el-icon :size="28" color="#409eff"><Sort /></el-icon>
-              <h3>顺序练习</h3>
-            </div>
-            <div class="card-stat">
-              <span class="stat-num">{{ seqProgress.completed }}/{{ seqProgress.total || totalQuestions }}</span>
-              <span class="stat-label">已练习/总题数</span>
-            </div>
-            <el-button type="primary" @click="startSequential">
-              {{ seqProgress.completed > 0 ? '继续练习' : '开始练习' }}
-            </el-button>
-          </el-card>
-        </el-col>
+        <UiCard variant="raised" class="stagger-in" :style="stagger(0)">
+          <div class="flex items-center gap-2">
+            <span class="grid h-9 w-9 place-items-center rounded-ctl bg-ui-50 text-ui-600">
+              <el-icon :size="20"><Sort /></el-icon>
+            </span>
+            <h3 class="font-heading text-base font-semibold text-ink">顺序练习</h3>
+          </div>
+          <p class="mt-3 text-sm text-ink-3">
+            {{ seqProgress.completed }}/{{ seqProgress.total || totalQuestions }} 已练习
+          </p>
+          <UiButton
+            variant="primary"
+            block
+            class="mt-4"
+            @click="startSequential"
+          >
+            {{ seqProgress.completed > 0 ? '继续练习' : '开始练习' }}
+          </UiButton>
+        </UiCard>
 
         <!-- 随机练习 -->
-        <el-col :xs="24" :sm="12" :md="8">
-          <el-card shadow="hover" class="practice-card card-random">
-            <div class="card-head">
-              <el-icon :size="28" color="#67c23a"><MagicStick /></el-icon>
-              <h3>随机练习</h3>
-            </div>
-            <div class="card-select">
-              <span class="select-label">每次题量</span>
-              <el-select v-model="randomCount" size="small" style="width: 110px">
-                <el-option v-for="o in randomCountOptions" :key="o.value" :label="o.label" :value="o.value" />
-              </el-select>
-            </div>
-            <el-button type="success" :loading="loading" @click="startFree()">开始练习</el-button>
-          </el-card>
-        </el-col>
+        <UiCard variant="raised" class="stagger-in" :style="stagger(1)">
+          <div class="flex items-center gap-2">
+            <span class="grid h-9 w-9 place-items-center rounded-ctl bg-ok-soft text-ok">
+              <el-icon :size="20"><MagicStick /></el-icon>
+            </span>
+            <h3 class="font-heading text-base font-semibold text-ink">随机练习</h3>
+          </div>
+          <div class="mt-3 flex items-center justify-between gap-2">
+            <span class="text-sm text-ink-3">每次题量</span>
+            <el-select v-model="randomCount" size="small" class="w-[110px]">
+              <el-option v-for="o in randomCountOptions" :key="o.value" :label="o.label" :value="o.value" />
+            </el-select>
+          </div>
+          <UiButton variant="success" block class="mt-4" :loading="loading" @click="startFree()">
+            开始练习
+          </UiButton>
+        </UiCard>
 
         <!-- 专项练习 -->
-        <el-col :xs="24" :sm="12" :md="8">
-          <el-card shadow="hover" class="practice-card card-special">
-            <div class="card-head">
-              <el-icon :size="28" color="#e6a23c"><Filter /></el-icon>
-              <h3>专项练习</h3>
-            </div>
-            <div class="card-select">
-              <span class="select-label">题型</span>
-              <el-select v-model="specialType" size="small" placeholder="选择题型" style="width: 130px">
-                <el-option v-for="o in questionTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
-              </el-select>
-            </div>
-            <el-button type="warning" :loading="loading" :disabled="!specialType" @click="startFree()">开始练习</el-button>
-          </el-card>
-        </el-col>
+        <UiCard variant="raised" class="stagger-in" :style="stagger(2)">
+          <div class="flex items-center gap-2">
+            <span class="grid h-9 w-9 place-items-center rounded-ctl bg-warn-soft text-warn">
+              <el-icon :size="20"><Filter /></el-icon>
+            </span>
+            <h3 class="font-heading text-base font-semibold text-ink">专项练习</h3>
+          </div>
+          <div class="mt-3 flex items-center justify-between gap-2">
+            <span class="text-sm text-ink-3">题型</span>
+            <el-select v-model="specialType" size="small" placeholder="选择题型" class="w-[130px]">
+              <el-option v-for="o in questionTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
+            </el-select>
+          </div>
+          <UiButton
+            variant="warning"
+            block
+            class="mt-4"
+            :loading="loading"
+            :disabled="!specialType"
+            @click="startFree()"
+          >
+            开始练习
+          </UiButton>
+        </UiCard>
 
         <!-- 标签练习 -->
-        <el-col :xs="24" :sm="12" :md="8">
-          <el-card shadow="hover" class="practice-card card-tag">
-            <div class="card-head">
-              <el-icon :size="28" color="#7952b3"><CollectionTag /></el-icon>
-              <h3>标签练习</h3>
-            </div>
-            <div class="card-select">
-              <span class="select-label">考点标签</span>
-              <el-select v-model="tagPracticeId" size="small" filterable placeholder="选择标签" style="width: 130px" :loading="tagsLoading">
-                <el-option v-for="t in tags" :key="t.id" :label="`${t.name}（${t.question_count ?? 0}题）`" :value="t.id" />
-              </el-select>
-            </div>
-            <div v-if="tagPracticeId && tagProgress.total > 0" class="card-stat">
-              <span class="stat-num">{{ tagProgress.completed }}/{{ tagProgress.total }}</span>
-              <span class="stat-label">已练习/总题数</span>
-            </div>
-            <el-button type="primary" plain :loading="loading" :disabled="!tagPracticeId" @click="startTagPractice">
-              {{ tagProgress.completed > 0 ? '继续练习' : '开始练习' }}
-            </el-button>
-          </el-card>
-        </el-col>
-
-        <!-- 模拟考试 -->
-        <el-col :xs="24" :sm="12" :md="8">
-          <el-card shadow="hover" class="practice-card card-mock">
-            <div class="card-head">
-              <el-icon :size="28" color="#909399"><Document /></el-icon>
-              <h3>模拟考试</h3>
-            </div>
-            <div class="card-stat">
-              <template v-if="latestMockScore !== null">
-                <span class="stat-num">{{ latestMockScore }}</span>
-                <span class="stat-label">最近一次得分</span>
-              </template>
-              <template v-else>
-                <span class="stat-num">—</span>
-                <span class="stat-label">暂无考试记录</span>
-              </template>
-            </div>
-            <el-button type="primary" @click="$router.push({ name: 'MockExam' })">进入模拟考试</el-button>
-          </el-card>
-        </el-col>
-      </el-row>
+        <UiCard variant="raised" class="stagger-in" :style="stagger(3)">
+          <div class="flex items-center gap-2">
+            <span class="grid h-9 w-9 place-items-center rounded-ctl bg-ui-accent-400/10 text-ui-accent-600">
+              <el-icon :size="20"><CollectionTag /></el-icon>
+            </span>
+            <h3 class="font-heading text-base font-semibold text-ink">标签练习</h3>
+          </div>
+          <div class="mt-3 flex items-center justify-between gap-2">
+            <span class="text-sm text-ink-3">考点标签</span>
+            <el-select
+              v-model="tagPracticeId"
+              size="small"
+              filterable
+              placeholder="选择标签"
+              class="w-[130px]"
+              :loading="tagsLoading"
+            >
+              <el-option v-for="t in tags" :key="t.id" :label="`${t.name}（${t.question_count ?? 0}题）`" :value="t.id" />
+            </el-select>
+          </div>
+          <p v-if="tagPracticeId && tagProgress.total > 0" class="mt-2 text-xs text-ink-3">
+            {{ tagProgress.completed }}/{{ tagProgress.total }} 已练习
+          </p>
+          <UiButton
+            variant="primary"
+            block
+            class="mt-4"
+            :loading="loading"
+            :disabled="!tagPracticeId"
+            @click="startTagPractice"
+          >
+            {{ tagProgress.completed > 0 ? '继续练习' : '开始练习' }}
+          </UiButton>
+        </UiCard>
+      </div>
     </div>
 
     <!-- ===== 刷题中 ===== -->
@@ -123,8 +153,11 @@
       <el-card v-if="currentQuestion" class="question-card">
         <div class="question-header">
           <el-tag size="small">{{ typeMap[currentQuestion.type] || '题目' }}</el-tag>
+          <el-icon class="fav-star" :class="{ active: favorited }" @click="toggleFavorite">
+            <StarFilled v-if="favorited" /><Star v-else />
+          </el-icon>
         </div>
-        <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="q-image" />
+        <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="q-image" loading="lazy" decoding="async" />
         <p class="q-content">{{ currentQuestion.content }}</p>
 
         <QuestionOptionPicker
@@ -139,28 +172,41 @@
         />
         <el-input v-else v-model="textAnswer" type="textarea" :rows="4" placeholder="请输入答案" :disabled="submitted" />
 
-        <div class="q-feedback" v-if="submitted && lastResult">
+        <div v-if="submitted && lastResult" class="result-area">
+          <AnswerResultCard
+            :correct-answer="lastResult.correct_answer"
+            :user-answer="lastResult.user_answer"
+            :is-correct="!!lastResult.is_correct"
+            :duration-seconds="lastDuration"
+            :accuracy-rate="lastResult.accuracy_rate"
+            :common-wrong="lastResult.common_wrong"
+            :question-type="currentQuestion.type"
+          />
+          <AIExplanationCard :ai-explanation="(lastResult as any).ai_explanation" :fallback-explanation="lastResult.explanation" />
           <el-alert
+            v-if="lastResult.ai_score !== undefined && lastResult.ai_score !== null"
             :title="lastResult.is_correct ? '回答正确' : '回答错误'"
             :type="lastResult.is_correct ? 'success' : 'error'"
             :closable="false"
             show-icon
           >
-            <template v-if="!lastResult.is_correct">
-              <div>正确答案：{{ lastResult.correct_answer }}</div>
-            </template>
-            <div v-if="lastResult.explanation" class="feedback-explanation">
-              解析：{{ lastResult.explanation }}
-            </div>
-            <div v-if="lastResult.ai_score !== undefined && lastResult.ai_score !== null">
-              AI 评分：{{ lastResult.ai_score }} 分 · {{ lastResult.ai_comment || '' }}
-            </div>
+            <div>AI 评分：{{ lastResult.ai_score }} 分 · {{ lastResult.ai_comment || '' }}</div>
           </el-alert>
+          <el-alert
+            v-else
+            :title="lastResult.is_correct ? '回答正确' : '回答错误'"
+            :type="lastResult.is_correct ? 'success' : 'error'"
+            :closable="false"
+            show-icon
+          />
+          <KnowledgeCard :tags="knowledgeTags" />
+          <CommentCard :question-id="currentQuestion.id" />
+          <NoteCard :question-id="currentQuestion.id" />
         </div>
 
         <div class="q-actions">
           <el-button v-if="currentIdx > 0" @click="prevQuestion">上一题</el-button>
-          <el-button v-if="!submitted" type="primary" :disabled="!canSubmit" @click="submitAnswer">
+          <el-button v-if="!submitted" type="primary" :disabled="!canSubmit" @click="handleSubmit">
             提交答案
           </el-button>
           <el-button v-if="currentIdx < questions.length - 1" type="primary" @click="nextQuestion">
@@ -173,14 +219,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
-import { Sort, MagicStick, Filter, Document, CollectionTag } from '@element-plus/icons-vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { Sort, MagicStick, Filter, CollectionTag, Star, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
+import { favoriteApi } from '@/api/favorite'
 import { practiceModeApi } from '@/api/practiceMode'
-import { mockExamApi } from '@/api/mockExam'
 import { trainingApi } from '@/api/training'
 import type { QuestionTag } from '@/api/training'
+import { useStagger } from '@/composables/useStagger'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiCard from '@/components/ui/UiCard.vue'
+import UiSectionHeader from '@/components/ui/UiSectionHeader.vue'
+import UiStatCard from '@/components/ui/UiStatCard.vue'
+
+const stagger = useStagger()
 import { typeMap, questionTypeOptions, randomCountOptions } from '@/constants/question'
 import type { PracticeProgress, QuestionType } from '@/types/question'
 import {
@@ -189,6 +242,13 @@ import {
   type PracticeStartData
 } from '@/composables/usePracticeSession'
 import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
+import AnswerResultCard from '@/components/practice/AnswerResultCard.vue'
+import AIExplanationCard from '@/components/practice/AIExplanationCard.vue'
+import KnowledgeCard from '@/components/practice/KnowledgeCard.vue'
+import CommentCard from '@/components/practice/CommentCard.vue'
+import NoteCard from '@/components/practice/NoteCard.vue'
+import { questionInteractionApi } from '@/api/questionInteraction'
+import { useCredentialStore } from '@/stores/credential'
 
 // null = 入口；'sequential' | 'free' | 'tag' = 刷题中
 
@@ -208,7 +268,30 @@ const currentTagName = computed(() => {
 const seqProgress = ref<PracticeProgress>({ completed: 0, total: 0, current_index: 0 })
 const tagProgress = ref<PracticeProgress>({ completed: 0, total: 0, current_index: 0 })
 const totalQuestions = ref(0)
-const latestMockScore = ref<number | null>(null)
+
+const credentialStore = useCredentialStore()
+const practiceStats = ref({ today_count: 0, total_count: 0, total_days: 0 })
+const practiceStatsLoading = ref(true)
+
+async function loadPracticeStats() {
+  practiceStatsLoading.value = true
+  try {
+    const data = await practiceModeApi.getPracticeStats() as any
+    practiceStats.value = {
+      today_count: Number(data?.today_count ?? 0),
+      total_count: Number(data?.total_count ?? 0),
+      total_days: Number(data?.total_days ?? 0)
+    }
+  } catch {
+    practiceStats.value = { today_count: 0, total_count: 0, total_days: 0 }
+  } finally {
+    practiceStatsLoading.value = false
+  }
+}
+
+function onCredentialSwitched() {
+  loadPracticeStats()
+}
 
 // 选择标签时查询该标签的练习进度（断点续练展示）
 watch(tagPracticeId, async (id) => {
@@ -316,6 +399,59 @@ async function startFree() {
   if (!ok) ElMessage.warning('暂无符合条件的题目')
 }
 
+const questionStartTime = ref<number>(Date.now())
+const lastDuration = ref<number | undefined>(undefined)
+const knowledgeTags = ref<any[]>([])
+const favorited = ref(false)
+const favoriteId = ref(0)
+
+watch(currentQuestion, async (q) => {
+  questionStartTime.value = Date.now()
+  lastDuration.value = undefined
+  favorited.value = false
+  favoriteId.value = 0
+  if (!q) return
+  try {
+    const res = await favoriteApi.check({ target_type: 'question', target_id: q.id })
+    favorited.value = !!res?.favorited
+    favoriteId.value = res?.favorite_id || 0
+  } catch {
+    // 查询失败降级为未收藏
+  }
+})
+
+async function toggleFavorite() {
+  const q = currentQuestion.value
+  if (!q) return
+  try {
+    if (favorited.value) {
+      await favoriteApi.remove(favoriteId.value)
+      favorited.value = false
+      favoriteId.value = 0
+    } else {
+      const res = await favoriteApi.add({ target_type: 'question', target_id: q.id })
+      favorited.value = true
+      favoriteId.value = res?.favorite_id || 0
+    }
+  } catch {
+    /* 错误已由拦截器提示 */
+  }
+}
+
+watch(() => (lastResult.value as any)?.question_id, async (qid: number) => {
+  if (!qid) { knowledgeTags.value = []; return }
+  try {
+    const tags = await questionInteractionApi.listKnowledge(qid)
+    knowledgeTags.value = (tags as any) || []
+  } catch { knowledgeTags.value = [] }
+})
+
+async function handleSubmit() {
+  lastDuration.value = (Date.now() - questionStartTime.value) / 1000
+  await submitAnswer()
+  loadPracticeStats()
+}
+
 async function startTagPractice() {
   if (!tagPracticeId.value) return
   const ok = await start('tag')
@@ -328,12 +464,22 @@ async function confirmQuit() {
     // 退出时保存当前游标和答题状态并返回入口，随后刷新卡片进度展示
     await quit()
     loadCardData()
+    loadPracticeStats()
   } catch (e) {}
 }
 
 onMounted(() => {
   loadCardData()
   loadTags()
+  window.addEventListener('credential-switched', onCredentialSwitched)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('credential-switched', onCredentialSwitched)
+})
+
+watch(() => credentialStore.current?.id, () => {
+  loadCardData()
 })
 
 async function loadTags() {
@@ -351,56 +497,45 @@ async function loadTags() {
 
 async function loadCardData() {
   try {
-    const [statsRes, progRes, histRes] = await Promise.all([
-      questionBankApi.getStats(),
-      practiceModeApi.getSequentialProgress(),
-      mockExamApi.getMockExamHistory({ page: 1, page_size: 1 })
+    const [statsRes, progRes, practiceRes] = await Promise.all([
+      questionBankApi.getStats().catch(() => null as any),
+      practiceModeApi.getSequentialProgress().catch(() => null as any),
+      practiceModeApi.getPracticeStats().catch(() => null as any)
     ])
-    totalQuestions.value = (statsRes.total as number) || 0
-    if (progRes) {
-      seqProgress.value = progRes
-    }
-    const exams = histRes.exams || []
-    if (exams.length > 0 && exams[0].score != null) {
-      latestMockScore.value = Number(exams[0].score)
+    if (statsRes) totalQuestions.value = (statsRes.total as number) || 0
+    if (progRes) seqProgress.value = progRes
+    if (practiceRes) {
+      practiceStats.value = {
+        today_count: Number((practiceRes as any)?.today_count ?? 0),
+        total_count: Number((practiceRes as any)?.total_count ?? 0),
+        total_days: Number((practiceRes as any)?.total_days ?? 0)
+      }
+      practiceStatsLoading.value = false
     }
   } catch (e) {
     // 静默失败，卡片展示降级为默认值
+  }
+  // 若第 3 并发失败时 fallback 仍走独立 loader（避免悬在 skeleton）
+  if (practiceStatsLoading.value) {
+    try { await loadPracticeStats() } catch {}
   }
 }
 </script>
 
 <style scoped>
 .question-bank { max-width: 1200px; margin: 0 auto; }
-.question-bank h2 { margin-bottom: 6px; color: #303133; }
-.entry-sub { color: #909399; font-size: 14px; margin-bottom: 24px; }
-
-.card-grid { margin-bottom: 20px; }
-.practice-card { display: flex; flex-direction: column; align-items: center; text-align: center; min-height: 220px; transition: transform 0.3s; margin-bottom: 20px; }
-.practice-card:hover { transform: translateY(-5px); }
-.practice-card :deep(.el-card__body) { display: flex; flex-direction: column; align-items: center; justify-content: space-between; width: 100%; height: 100%; min-height: 188px; padding: 24px; box-sizing: border-box; }
-.card-head { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 14px; }
-.card-head h3 { margin: 0; color: #303133; }
-.card-stat { display: flex; flex-direction: column; align-items: center; margin-bottom: 14px; }
-.stat-num { font-size: 24px; font-weight: bold; color: #409eff; }
-.stat-label { font-size: 12px; color: #909399; margin-top: 4px; }
-.card-select { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
-.select-label { font-size: 13px; color: #606266; white-space: nowrap; }
-.card-sequential { border-top: 3px solid #409eff; }
-.card-random { border-top: 3px solid #67c23a; }
-.card-special { border-top: 3px solid #e6a23c; }
-.card-tag { border-top: 3px solid #7952b3; }
-.card-mock { border-top: 3px solid #909399; }
-
 .practice-area { margin-top: 10px; }
-.practice-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px 15px; background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-.progress-text { font-size: 15px; color: #303133; }
-.progress-stats { margin-left: 12px; color: #909399; font-size: 13px; }
+.practice-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px 15px; background: var(--color-bg-card); border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.progress-text { font-size: 15px; color: var(--color-text-primary); }
+.progress-stats { margin-left: 12px; color: var(--color-text-tertiary); font-size: 13px; }
 .question-card { margin-bottom: 15px; }
 .question-header { display: flex; gap: 8px; align-items: center; margin-bottom: 15px; }
+.fav-star { cursor: pointer; font-size: 18px; color: var(--color-text-disabled); }
+.fav-star:hover { color: var(--color-warning); }
+.fav-star.active { color: var(--color-warning); }
 .q-image { max-width: 100%; max-height: 250px; border-radius: 8px; margin-bottom: 10px; }
 .q-content { font-size: 16px; line-height: 1.8; margin-bottom: 15px; white-space: pre-wrap; }
 .q-feedback { margin-top: 15px; }
-.feedback-explanation { margin-top: 6px; color: #606266; }
+.feedback-explanation { margin-top: 6px; color: var(--color-text-secondary); }
 .q-actions { display: flex; justify-content: center; margin-top: 20px; }
 </style>

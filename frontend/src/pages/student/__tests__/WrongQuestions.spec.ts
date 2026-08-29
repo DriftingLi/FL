@@ -22,8 +22,8 @@ import WrongQuestions from '../WrongQuestions.vue'
 
 beforeEach(() => {
   vi.mocked(wrongQuestionApi.getWrongQuestions).mockResolvedValue({
-    items: [],
-    total: 0
+    items: [{ id: 1, question_id: 101, wrong_count: 2, question: { type: 'single_choice', content: '测试题目', options: { A: '选项A' } } }],
+    total: 1
   })
   vi.mocked(wrongQuestionApi.exportWrongQuestions).mockResolvedValue(
     new Blob(['题目一\n题目二\n'], { type: 'text/plain; charset=utf-8' })

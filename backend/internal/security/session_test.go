@@ -42,13 +42,24 @@ func (s *inmemoryBlacklistStore) Set(_ context.Context, key, value string, _ tim
 	return nil
 }
 
+// PutIfAbsent 原子抢占（SETNX 语义）：加锁保证并发双刷恰一成功。
+func (s *inmemoryBlacklistStore) PutIfAbsent(_ context.Context, key, value string, _ time.Duration) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.m[key]; ok {
+		return false, nil
+	}
+	s.m[key] = value
+	return true, nil
+}
+
 const testSecret = "test-jwt-secret"
 
 func newTestSession(blacklist BlacklistStore) *Session {
 	if blacklist == nil {
 		blacklist = newInmemoryBlacklistStore()
 	}
-	return NewSessionWithBlacklist(testSecret, time.Hour, CookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: false}, blacklist)
+	return NewSessionWithBlacklistAndRefresh(testSecret, time.Hour, time.Hour, CookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: false}, blacklist)
 }
 
 func TestIssueVerify_RoundTrip(t *testing.T) {
@@ -57,7 +68,7 @@ func TestIssueVerify_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("签发失败: %v", err)
 	}
-	claims, err := sess.Verify(token)
+	claims, err := sess.verify(token)
 	if err != nil {
 		t.Fatalf("校验失败: %v", err)
 	}
@@ -70,7 +81,7 @@ func TestVerify_RejectsWrongSecret(t *testing.T) {
 	sess := newTestSession(nil)
 	other := NewSession("different-secret", time.Hour, CookieConfig{})
 	token, _ := other.Issue(1, "u", "hrwai_user")
-	if _, err := sess.Verify(token); err == nil {
+	if _, err := sess.verify(token); err == nil {
 		t.Error("错误密钥应校验失败")
 	}
 }
@@ -81,7 +92,7 @@ func TestVerify_RejectsAlgNone(t *testing.T) {
 	claims := jwt.MapClaims{"user_id": 1, "username": "u", "role": "hrwai_user"}
 	token := jwt.NewWithClaims(jwt.SigningMethodNone, claims)
 	raw, _ := token.SignedString(jwt.UnsafeAllowNoneSignatureType)
-	if _, err := sess.Verify(raw); err == nil {
+	if _, err := sess.verify(raw); err == nil {
 		t.Error("alg=none 应被拒绝")
 	}
 }
@@ -95,25 +106,30 @@ func TestVerify_RejectsExpired(t *testing.T) {
 		},
 	}
 	token, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(testSecret))
-	if _, err := sess.Verify(token); err == nil {
+	if _, err := sess.verify(token); err == nil {
 		t.Error("过期 token 应校验失败")
 	}
 }
 
-func TestRevoke_ThenIsRevoked(t *testing.T) {
-	store := newInmemoryBlacklistStore()
-	sess := newTestSession(store)
+// blacklisted 同包断言辅助：token 是否已命中黑名单（黑名单读取不再暴露为 Session
+// 公开面，轮换/吊销语义由 RotateRefresh / RevokeRefresh 表达，测试直接查存储）。
+func blacklisted(t *testing.T, sess *Session, token string) bool {
+	t.Helper()
+	_, err := sess.blacklist.Get(context.Background(), sess.blacklistKey(token))
+	return err == nil
+}
+
+func TestRevoke_ThenBlacklisted(t *testing.T) {
+	sess := newTestSession(newInmemoryBlacklistStore())
 	token, _ := sess.Issue(7, "user7", "hrwai_user")
 
-	revoked, _ := sess.IsRevoked(context.Background(), token)
-	if revoked {
+	if blacklisted(t, sess, token) {
 		t.Fatal("未吊销的 token 不应命中黑名单")
 	}
-	if err := sess.Revoke(context.Background(), token); err != nil {
+	if err := sess.revoke(context.Background(), token); err != nil {
 		t.Fatalf("吊销失败: %v", err)
 	}
-	revoked, _ = sess.IsRevoked(context.Background(), token)
-	if !revoked {
+	if !blacklisted(t, sess, token) {
 		t.Fatal("吊销后的 token 应命中黑名单")
 	}
 }
@@ -121,7 +137,7 @@ func TestRevoke_ThenIsRevoked(t *testing.T) {
 func TestRevoke_InvalidTokenIsNoop(t *testing.T) {
 	store := newInmemoryBlacklistStore()
 	sess := newTestSession(store)
-	if err := sess.Revoke(context.Background(), "not-a-token"); err != nil {
+	if err := sess.revoke(context.Background(), "not-a-token"); err != nil {
 		t.Fatalf("无效 token 吊销应静默成功: %v", err)
 	}
 	if len(store.m) != 0 {
@@ -130,16 +146,13 @@ func TestRevoke_InvalidTokenIsNoop(t *testing.T) {
 }
 
 func TestRevoke_TwoTokensIndependent(t *testing.T) {
-	store := newInmemoryBlacklistStore()
-	sess := newTestSession(store)
+	sess := newTestSession(newInmemoryBlacklistStore())
 	tokenA, _ := sess.Issue(1, "a", "hrwai_user")
 	tokenB, _ := sess.Issue(2, "b", "hrwai_user")
 
-	_ = sess.Revoke(context.Background(), tokenA)
-	revokedA, _ := sess.IsRevoked(context.Background(), tokenA)
-	revokedB, _ := sess.IsRevoked(context.Background(), tokenB)
-	if !revokedA || revokedB {
-		t.Errorf("吊销应互不影响: A=%v B=%v", revokedA, revokedB)
+	_ = sess.revoke(context.Background(), tokenA)
+	if !blacklisted(t, sess, tokenA) || blacklisted(t, sess, tokenB) {
+		t.Errorf("吊销应互不影响: A=%v B=%v", blacklisted(t, sess, tokenA), blacklisted(t, sess, tokenB))
 	}
 }
 
@@ -154,18 +167,22 @@ func (errBlacklistStore) Set(context.Context, string, string, time.Duration) err
 	return errors.New("redis down")
 }
 
+func (errBlacklistStore) PutIfAbsent(context.Context, string, string, time.Duration) (bool, error) {
+	return false, errors.New("redis down")
+}
+
 // TestRevoke_StoreErrorPropagatesGracefully 存储故障时行为与既有语义一致：
-// Revoke 返回错误（调用方忽略，登出不阻塞）；IsRevoked 读异常放行（不阻断登录）。
+// revoke/RevokeRefresh 返回错误（登出调用方忽略，不阻塞）。
 func TestRevoke_StoreErrorPropagatesGracefully(t *testing.T) {
 	sess := newTestSession(errBlacklistStore{})
 	token, _ := sess.Issue(7, "user7", "hrwai_user")
 
-	if err := sess.Revoke(context.Background(), token); err == nil {
-		t.Error("黑名单写入失败时 Revoke 应返回错误")
+	if err := sess.revoke(context.Background(), token); err == nil {
+		t.Error("黑名单写入失败时 revoke 应返回错误")
 	}
-	revoked, err := sess.IsRevoked(context.Background(), token)
-	if err != nil || revoked {
-		t.Errorf("存储异常时 IsRevoked 应放行: revoked=%v err=%v", revoked, err)
+	_, rt, _ := sess.IssuePair(7, "user7", "hrwai_user")
+	if err := sess.RevokeRefresh(context.Background(), rt); err == nil {
+		t.Error("黑名单写入失败时 RevokeRefresh 应返回错误")
 	}
 }
 
@@ -195,6 +212,17 @@ func (r *recordingBlacklistStore) Set(_ context.Context, key, _ string, ttl time
 	return nil
 }
 
+// PutIfAbsent 原子抢占并记录写入的 TTL（与 Set 同一记录面）。
+func (r *recordingBlacklistStore) PutIfAbsent(_ context.Context, key, _ string, ttl time.Duration) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.items[key]; ok {
+		return false, nil
+	}
+	r.items[key] = ttl
+	return true, nil
+}
+
 // TestRevoke_BlacklistKeyFormatAndTTL 黑名单 key 格式与 TTL 语义保持不变：
 // key = jwt:blacklist:<sha256 hex>，TTL = token 剩余有效期。
 func TestRevoke_BlacklistKeyFormatAndTTL(t *testing.T) {
@@ -202,7 +230,7 @@ func TestRevoke_BlacklistKeyFormatAndTTL(t *testing.T) {
 	sess := newTestSession(store)
 	token, _ := sess.Issue(7, "user7", "hrwai_user")
 
-	if err := sess.Revoke(context.Background(), token); err != nil {
+	if err := sess.revoke(context.Background(), token); err != nil {
 		t.Fatalf("吊销失败: %v", err)
 	}
 	if len(store.items) != 1 {
@@ -273,5 +301,107 @@ func TestClearCookie_MaxAgeMinusOne(t *testing.T) {
 	ck := w.Result().Cookies()[0]
 	if ck.MaxAge != -1 || ck.Value != "" {
 		t.Errorf("清除 cookie 应 MaxAge=-1 且值为空: %+v", ck)
+	}
+}
+
+// TestRotateRefresh_RotatesAndRejectsReplay 轮换语义：签发新对 + 旧 refresh 原子吊销，
+// 重放与 access 传入均拒绝（ErrInvalidRefresh 可判定）。
+func TestRotateRefresh_RotatesAndRejectsReplay(t *testing.T) {
+	store := newInmemoryBlacklistStore()
+	sess := newTestSession(store)
+	_, rt, _ := sess.IssuePair(7, "user7", "hrwai_user")
+
+	access2, rt2, err := sess.RotateRefresh(context.Background(), rt)
+	if err != nil {
+		t.Fatalf("首次轮换应成功: %v", err)
+	}
+	if access2 == "" || rt2 == "" {
+		t.Fatal("轮换应返回新双令牌")
+	}
+	if rt2 == rt {
+		t.Error("轮换后 refresh 必须变更（jti 随机）")
+	}
+
+	// 旧 refresh 重放：已被抢占即吊销
+	if _, _, err := sess.RotateRefresh(context.Background(), rt); !errors.Is(err, ErrInvalidRefresh) {
+		t.Errorf("旧 refresh 重放应返回 ErrInvalidRefresh, got %v", err)
+	}
+
+	// 新 refresh 可继续轮换（链式续期）
+	if _, _, err := sess.RotateRefresh(context.Background(), rt2); err != nil {
+		t.Errorf("新 refresh 应可继续轮换: %v", err)
+	}
+
+	// access token 传入刷新被类型分流拒绝
+	access, _, _ := sess.IssuePair(8, "user8", "hrwai_user")
+	if _, _, err := sess.RotateRefresh(context.Background(), access); !errors.Is(err, ErrInvalidRefresh) {
+		t.Errorf("access 传入刷新应返回 ErrInvalidRefresh, got %v", err)
+	}
+
+	if len(store.m) != 2 {
+		t.Errorf("应恰好留下两条黑名单记录（两次成功轮换）, 实际 %d 条", len(store.m))
+	}
+}
+
+// TestRotateRefresh_ConcurrentExactlyOnce 并发双刷：goroutine 两路同时 RotateRefresh 同一
+// refresh_token，恰一成功一失败——PutIfAbsent 原子抢占修复 check-then-act 竞态。
+func TestRotateRefresh_ConcurrentExactlyOnce(t *testing.T) {
+	sess := newTestSession(newInmemoryBlacklistStore())
+	_, rt, _ := sess.IssuePair(9, "user9", "hrwai_user")
+
+	const racers = 16
+	var wg sync.WaitGroup
+	errCh := make(chan error, racers)
+	for i := 0; i < racers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _, err := sess.RotateRefresh(context.Background(), rt)
+			errCh <- err
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+
+	success := 0
+	for err := range errCh {
+		switch {
+		case err == nil:
+			success++
+		case !errors.Is(err, ErrInvalidRefresh):
+			t.Fatalf("失败方应统一为 ErrInvalidRefresh, got %v", err)
+		}
+	}
+	if success != 1 {
+		t.Fatalf("并发双刷同一 refresh 应恰一成功, 实际 %d", success)
+	}
+}
+
+// TestRotateRefresh_BlacklistKeyFormatAndTTL 轮换抢占写入的 key/TTL 与登出吊销同口径：
+// key = jwt:blacklist:<sha256 hex>，TTL = 旧 refresh 剩余有效期。
+func TestRotateRefresh_BlacklistKeyFormatAndTTL(t *testing.T) {
+	store := newRecordingBlacklistStore()
+	sess := newTestSession(store)
+	_, rt, _ := sess.IssuePair(7, "user7", "hrwai_user")
+
+	if _, _, err := sess.RotateRefresh(context.Background(), rt); err != nil {
+		t.Fatalf("轮换失败: %v", err)
+	}
+	if len(store.items) != 1 {
+		t.Fatalf("应写入 1 条黑名单，实际 %d 条", len(store.items))
+	}
+	var key string
+	var ttl time.Duration
+	for k, v := range store.items {
+		key, ttl = k, v
+	}
+	if !strings.HasPrefix(key, "jwt:blacklist:") {
+		t.Errorf("黑名单 key 应以 jwt:blacklist: 开头: %q", key)
+	}
+	if len(key) != len("jwt:blacklist:")+sha256.Size*2 {
+		t.Errorf("黑名单 key 应为 sha256 十六进制: %q", key)
+	}
+	if ttl <= 55*time.Minute || ttl > time.Hour {
+		t.Errorf("TTL 应约等于旧 refresh 剩余有效期 1h, got %v", ttl)
 	}
 }

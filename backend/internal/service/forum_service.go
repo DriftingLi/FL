@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
@@ -73,6 +74,8 @@ type ForumReplyDTO struct {
 	CreatedAt  string      `json:"created_at"`
 	Author     ForumAuthor `json:"author"`
 	CanDelete  bool        `json:"can_delete"`
+	LikesCount int64       `json:"likes_count"`
+	LikedByMe  bool        `json:"liked_by_me"`
 }
 
 // ForumService 论坛服务。
@@ -80,15 +83,17 @@ type ForumService struct {
 	db              *gorm.DB
 	fileSvc         *FileStore
 	notificationSvc *NotificationService
+	counters        ForumCounter // 计数列唯一写入口（spec #297）
 
 	logger *zap.Logger
 }
 
 // NewForumService 构造论坛服务。
 // fileSvc 用于删除帖子/回复时清理图片存储（可 nil，nil 时跳过清理）；
-// notificationSvc 用于论坛事件站内信（回复/举报处理/管理端删帖，见各触发点）。
-func NewForumService(db *gorm.DB, fileSvc *FileStore, notificationSvc *NotificationService, logger *zap.Logger) *ForumService {
-	return &ForumService{db: db, fileSvc: fileSvc, notificationSvc: notificationSvc, logger: logger}
+// notificationSvc 用于论坛事件站内信（回复/举报处理/管理端删帖，见各触发点）；
+// counters 为 likes_count / reply_count 唯一写入口（与 AuthService 共享同一实例）。
+func NewForumService(db *gorm.DB, fileSvc *FileStore, notificationSvc *NotificationService, counters ForumCounter, logger *zap.Logger) *ForumService {
+	return &ForumService{db: db, fileSvc: fileSvc, notificationSvc: notificationSvc, counters: counters, logger: logger}
 }
 
 // topicRow 列表查询的扫描结构。
@@ -101,6 +106,7 @@ type topicRow struct {
 	Images       string
 	ViewCount    int
 	ReplyCount   int
+	LikesCount   int64
 	LastReplyAt  *time.Time
 	CreatedAt    time.Time
 	UserID       int
@@ -123,6 +129,7 @@ func (r topicRow) toDTO(viewerID int) ForumTopicDTO {
 		Images:       parseImageURLs(r.Images),
 		ViewCount:    r.ViewCount,
 		ReplyCount:   r.ReplyCount,
+		LikesCount:   r.LikesCount,
 		LastReplyAt:  lastReplyAt,
 		CreatedAt:    formatISO(r.CreatedAt),
 		Author: ForumAuthor{
@@ -141,20 +148,35 @@ type ForumTopicPageResult struct {
 }
 
 // ListTopics 分页查询主题。
-// scope: all（默认）/ general（综合讨论区）/ chapter（需配合 chapterID）。
-func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, keyword string) (*ForumTopicPageResult, error) {
+// scope: all（默认）/ general（综合讨论区）/ chapter（需配合 chapterID）；sort: latest（默认，时间）/ hot（热度：点赞数→回复数→浏览数）；order: desc（默认）/ asc（正序）。
+func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, keyword, sort, order string) (*ForumTopicPageResult, error) {
 	if scope == "" {
 		scope = ForumScopeAll
 	}
 	if scope == ForumScopeChapter && chapterID <= 0 {
 		return nil, errors.New("查询章节讨论区需要有效的 chapter_id")
 	}
+	if sort != "hot" {
+		sort = "latest"
+	}
+	dir := "DESC"
+	if order == "asc" {
+		dir = "ASC"
+	}
+	// 统一 sort 别名：time 作为 latest 的别名（兼容详情页旧值）
+	if sort == "time" {
+		sort = "latest"
+	}
+	orderClause := "COALESCE(t.last_reply_at, t.created_at) " + dir + ", t.id " + dir
+	if sort == "hot" {
+		orderClause = "t.likes_count " + dir + ", t.reply_count " + dir + ", t.view_count " + dir + ", t.id " + dir
+	}
 
 	rows, total, page, pageSize := paging.QueryWithScan[topicRow](s.db, page, pageSize, 10, 100,
-		"COALESCE(t.last_reply_at, t.created_at) DESC, t.id DESC",
+		orderClause,
 		func(q *gorm.DB) *gorm.DB {
 			q = q.Table("forum_topics AS t").
-				Select("t.id, t.chapter_id, t.title, t.content, t.images, t.view_count, t.reply_count, t.last_reply_at, t.created_at, " +
+				Select("t.id, t.chapter_id, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.last_reply_at, t.created_at, " +
 					"u.id AS user_id, u.username, u.avatar_url, " +
 					"COALESCE(ch.title, '') AS chapter_title").
 				Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
@@ -185,10 +207,14 @@ func (s *ForumService) ListTopics(scope string, chapterID, page, pageSize int, k
 }
 
 // GetTopic 主题详情（含回复，回复带被回复人信息），并累加浏览量。
-func (s *ForumService) GetTopic(topicID int64, viewerID int) (map[string]any, error) {
+// replySort: time/latest（默认，时间）/ hot（热度：点赞数→时间）；order: asc/desc（默认 asc 对 time，desc 对 hot；显式传入时统一覆盖）
+func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order string) (map[string]any, error) {
+	if replySort == "latest" {
+		replySort = "time"
+	}
 	var row topicRow
 	err := s.db.Table("forum_topics AS t").
-		Select("t.id, t.chapter_id, t.title, t.content, t.images, t.view_count, t.reply_count, t.last_reply_at, t.created_at, "+
+		Select("t.id, t.chapter_id, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.last_reply_at, t.created_at, "+
 			"u.id AS user_id, u.username, u.avatar_url, "+
 			"COALESCE(ch.title, '') AS chapter_title").
 		Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
@@ -207,6 +233,12 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int) (map[string]any, er
 		UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error
 	row.ViewCount++
 
+	// 记录去重浏览（用于 daily_browse 积分，排除自帖，同一帖每日一次）
+	if viewerID != 0 && viewerID != int(row.UserID) {
+		viewDate := time.Now().In(clock.Location()).Format("2006-01-02")
+		_ = s.db.Exec("INSERT INTO forum_topic_views (user_id, topic_id, view_date) VALUES (?,?,?) ON CONFLICT (user_id, topic_id, view_date) DO NOTHING", viewerID, topicID, viewDate).Error
+	}
+
 	// 回复列表（含被回复人展示名）
 	var replies []struct {
 		ID         int64
@@ -214,21 +246,37 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int) (map[string]any, er
 		ParentID   *int64
 		Content    string
 		Images     string
+		LikesCount int64
 		CreatedAt  time.Time
 		UserID     int
 		Username   string
 		AvatarURL  string
 		ParentName string
 	}
+	dir := "ASC"
+	if order == "desc" {
+		dir = "DESC"
+	} else if order == "" {
+		// 默认：time/latest 按正序（先发先排），hot 按热度倒序
+		if replySort == "hot" {
+			dir = "DESC"
+		} else {
+			dir = "ASC"
+		}
+	}
+	replyOrder := "r.created_at " + dir + ", r.id " + dir
+	if replySort == "hot" {
+		replyOrder = "r.likes_count " + dir + ", r.created_at ASC, r.id ASC"
+	}
 	if err := s.db.Table("forum_replies AS r").
-		Select("r.id, r.topic_id, r.parent_id, r.content, r.images, r.created_at, "+
+		Select("r.id, r.topic_id, r.parent_id, r.content, r.images, r.likes_count, r.created_at, "+
 			"u.id AS user_id, u.username, u.avatar_url, "+
 			"COALESCE(pu.username, '') AS parent_name").
 		Joins("JOIN hrwai_users AS u ON u.id = r.user_id").
 		Joins("LEFT JOIN forum_replies AS pr ON pr.id = r.parent_id").
 		Joins("LEFT JOIN hrwai_users AS pu ON pu.id = pr.user_id").
 		Where("r.topic_id = ?", topicID).
-		Order("r.created_at ASC, r.id ASC").
+		Order(replyOrder).
 		Scan(&replies).Error; err != nil {
 		return nil, err
 	}
@@ -241,14 +289,16 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int) (map[string]any, er
 			Author: ForumAuthor{
 				UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL,
 			},
-			CanDelete: r.UserID == viewerID,
+			CanDelete:  r.UserID == viewerID,
+			LikesCount: r.LikesCount,
 		})
 	}
+	// 批量回填当前用户是否已赞（计数已由 likes_count 列提供，单一 helper 收敛）
+	s.enrichReplyLikedByMe(replyDTOs, viewerID)
 
-	// 点赞状态（ADR-0018）：详情返回计数与当前用户是否已赞。
+	// 点赞状态（ADR-0018）：详情返回计数已由列提供，仅需回填是否已赞。
 	topicDTO := row.toDTO(viewerID)
-	topicDTO.LikesCount = s.topicLikesCount(topicID)
-	topicDTO.LikedByMe = viewerID > 0 && s.hasLiked(viewerID, topicID)
+	s.enrichTopicLikedByMe([]*ForumTopicDTO{&topicDTO}, viewerID)
 
 	return map[string]any{
 		"topic":   topicDTO,
@@ -580,22 +630,18 @@ func (s *ForumService) deleteImages(urls []string) {
 }
 
 // deleteReplyByID 删除回复并回扣主题回复数、刷新最后回复时间。
+// 回扣量取回复子树大小 N（parent_id 链，含自身）：外键 ON DELETE CASCADE 会连带删除全部下级回复，
+// 固定 -1 会让楼中楼场景计数虚高（spec #297 级联少减修复）。
 func (s *ForumService) deleteReplyByID(replyID, topicID int64) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
+		n, err := countReplySubtree(tx, replyID)
+		if err != nil {
+			return err
+		}
 		if err := tx.Delete(&model.ForumReply{}, replyID).Error; err != nil {
 			return err
 		}
-		// 回扣回复数（下限 0，避免并发下负数）
-		var topic model.ForumTopic
-		if err := tx.First(&topic, topicID).Error; err != nil {
-			return err
-		}
-		newCount := topic.ReplyCount - 1
-		if newCount < 0 {
-			newCount = 0
-		}
-		if err := tx.Model(&model.ForumTopic{}).Where("id = ?", topicID).
-			UpdateColumn("reply_count", newCount).Error; err != nil {
+		if err := s.counters.AdjustReplyCounts(tx, topicID, -int(n)); err != nil {
 			return err
 		}
 		var last model.ForumReply
@@ -610,6 +656,18 @@ func (s *ForumService) deleteReplyByID(replyID, topicID int64) error {
 		return tx.Model(&model.ForumTopic{}).Where("id = ?", topicID).
 			Update("last_reply_at", lastAt).Error
 	})
+}
+
+// countReplySubtree 统计回复子树大小（parent_id 链，含自身），递归 CTE 双方言兼容（PG/SQLite）。
+func countReplySubtree(exec *gorm.DB, replyID int64) (int64, error) {
+	var n int64
+	err := exec.Raw(`WITH RECURSIVE subtree AS (
+    SELECT id FROM forum_replies WHERE id = ?
+    UNION ALL
+    SELECT r.id FROM forum_replies r JOIN subtree st ON r.parent_id = st.id
+)
+SELECT COUNT(*) FROM subtree`, replyID).Scan(&n).Error
+	return n, err
 }
 
 // ===== 图片工具 =====
@@ -655,7 +713,7 @@ func marshalImageURLs(urls []string) model.JSONB {
 
 // ===== 论坛互动（ADR-0018：点赞 / 举报 / 我的帖子 / 我的回复）=====
 
-// LikeTopic 点赞主题（幂等：重复点赞不报错、不重复计数）。
+// LikeTopic 点赞主题（幂等：重复点赞不报错、不重复计数；事务内同步维护 likes_count）。
 func (s *ForumService) LikeTopic(userID int, topicID int64) (int64, error) {
 	var cnt int64
 	if err := s.db.Model(&model.ForumTopic{}).Where("id = ?", topicID).Count(&cnt).Error; err != nil {
@@ -664,42 +722,111 @@ func (s *ForumService) LikeTopic(userID int, topicID int64) (int64, error) {
 	if cnt == 0 {
 		return 0, errors.New("主题不存在")
 	}
-	var existing model.ForumTopicLike
-	if err := s.db.Where("topic_id = ? AND user_id = ?", topicID, userID).
-		Limit(1).Find(&existing).Error; err != nil {
-		return 0, err
-	}
-	if existing.ID == 0 {
-		if err := s.db.Create(&model.ForumTopicLike{
-			TopicID: topicID, UserID: userID, CreatedAt: beijingNow(),
-		}).Error; err != nil {
-			return 0, err
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		var existing model.ForumTopicLike
+		if err := tx.Where("topic_id = ? AND user_id = ?", topicID, userID).Limit(1).Find(&existing).Error; err != nil {
+			return err
 		}
-	}
-	return s.topicLikesCount(topicID), nil
-}
-
-// UnlikeTopic 取消点赞（幂等：未点赞时直接返回当前计数）。
-func (s *ForumService) UnlikeTopic(userID int, topicID int64) (int64, error) {
-	if err := s.db.Where("topic_id = ? AND user_id = ?", topicID, userID).
-		Delete(&model.ForumTopicLike{}).Error; err != nil {
+		if existing.ID != 0 {
+			return nil
+		}
+		if err := tx.Create(&model.ForumTopicLike{TopicID: topicID, UserID: userID, CreatedAt: beijingNow()}).Error; err != nil {
+			if isDuplicateError(err) {
+				return nil
+			}
+			return err
+		}
+		return s.counters.AdjustLikes(tx, topicID, 1)
+	})
+	if err != nil {
 		return 0, err
 	}
 	return s.topicLikesCount(topicID), nil
 }
 
-// topicLikesCount 主题点赞数。
+// UnlikeTopic 取消点赞（幂等：未点赞时直接返回当前计数；事务内同步维护 likes_count）。
+func (s *ForumService) UnlikeTopic(userID int, topicID int64) (int64, error) {
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		res := tx.Where("topic_id = ? AND user_id = ?", topicID, userID).Delete(&model.ForumTopicLike{})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected > 0 {
+			return s.counters.AdjustLikes(tx, topicID, -1)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return s.topicLikesCount(topicID), nil
+}
+
+// topicLikesCount 主题点赞数（读侧只认 likes_count 列为事实源，ADR-0018）。
 func (s *ForumService) topicLikesCount(topicID int64) int64 {
 	var n int64
-	s.db.Model(&model.ForumTopicLike{}).Where("topic_id = ?", topicID).Count(&n)
+	_ = s.db.Model(&model.ForumTopic{}).Select("likes_count").Where("id = ?", topicID).Scan(&n).Error
 	return n
 }
 
-// hasLiked 当前用户是否已点赞。
-func (s *ForumService) hasLiked(userID int, topicID int64) bool {
-	var n int64
-	s.db.Model(&model.ForumTopicLike{}).Where("topic_id = ? AND user_id = ?", topicID, userID).Count(&n)
-	return n > 0
+// enrichTopicLikedByMe 批量回填主题是否已赞（计数已由 likes_count 列提供，LikedByMe 单一 helper 收敛）。
+func (s *ForumService) enrichTopicLikedByMe(topics []*ForumTopicDTO, viewerID int) {
+	if len(topics) == 0 || viewerID <= 0 {
+		return
+	}
+	ids := make([]int64, 0, len(topics))
+	for _, t := range topics {
+		if t != nil {
+			ids = append(ids, t.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	var liked []int64
+	if err := s.db.Model(&model.ForumTopicLike{}).Where("user_id = ? AND topic_id IN ?", viewerID, ids).Pluck("topic_id", &liked).Error; err != nil {
+		return
+	}
+	lm := make(map[int64]bool, len(liked))
+	for _, id := range liked {
+		lm[id] = true
+	}
+	for _, t := range topics {
+		if t != nil {
+			t.LikedByMe = lm[t.ID]
+		}
+	}
+}
+
+// toDTORefs 将 ForumTopicDTO 值切片转为指针切片，供 enrich helpers 修改原切片元素。
+func toDTORefs(items []ForumTopicDTO) []*ForumTopicDTO {
+	refs := make([]*ForumTopicDTO, len(items))
+	for i := range items {
+		refs[i] = &items[i]
+	}
+	return refs
+}
+
+// enrichReplyLikedByMe 批量回填回复是否已赞（计数已由 likes_count 列提供）。
+func (s *ForumService) enrichReplyLikedByMe(replies []ForumReplyDTO, viewerID int) {
+	if len(replies) == 0 || viewerID <= 0 {
+		return
+	}
+	ids := make([]int64, 0, len(replies))
+	for _, r := range replies {
+		ids = append(ids, r.ID)
+	}
+	var liked []int64
+	if err := s.db.Model(&model.ForumReplyLike{}).Where("user_id = ? AND reply_id IN ?", viewerID, ids).Pluck("reply_id", &liked).Error; err != nil {
+		return
+	}
+	lm := make(map[int64]bool, len(liked))
+	for _, id := range liked {
+		lm[id] = true
+	}
+	for i := range replies {
+		replies[i].LikedByMe = lm[replies[i].ID]
+	}
 }
 
 // CreateReport 举报主题或回复（topicID/replyID 二选一，由调用方保证）。
@@ -844,7 +971,7 @@ func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResu
 		"COALESCE(t.last_reply_at, t.created_at) DESC, t.id DESC",
 		func(q *gorm.DB) *gorm.DB {
 			return q.Table("forum_topics AS t").
-				Select("t.id, t.chapter_id, t.title, t.content, t.images, t.view_count, t.reply_count, t.last_reply_at, t.created_at, "+
+				Select("t.id, t.chapter_id, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.last_reply_at, t.created_at, "+
 					"u.id AS user_id, u.username, u.avatar_url, COALESCE(ch.title, '') AS chapter_title").
 				Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
 				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").
@@ -854,6 +981,8 @@ func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResu
 	for _, r := range rows {
 		items = append(items, r.toDTO(userID))
 	}
+	// 点赞计数已由 likes_count 列提供，仅需回填是否已赞（单一 helper 收敛）
+	s.enrichTopicLikedByMe(toDTORefs(items), userID)
 	return &ForumTopicPageResult{
 		Page: page, Pages: response.PageCount(total, pageSize),
 		Topics: items, Total: total,
@@ -916,4 +1045,60 @@ func (s *ForumService) MyReplies(userID, page, pageSize int) (*MyReplyPageResult
 		Page: page, Pages: response.PageCount(total, pageSize),
 		Total: total, Replies: items,
 	}, nil
+}
+
+// LikeReply 点赞评论（幂等；事务内同步维护 likes_count）。
+func (s *ForumService) LikeReply(userID int, replyID int64) (int64, error) {
+	var cnt int64
+	if err := s.db.Model(&model.ForumReply{}).Where("id = ?", replyID).Count(&cnt).Error; err != nil {
+		return 0, err
+	}
+	if cnt == 0 {
+		return 0, errors.New("回复不存在")
+	}
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		var existing model.ForumReplyLike
+		if err := tx.Where("reply_id = ? AND user_id = ?", replyID, userID).Limit(1).Find(&existing).Error; err != nil {
+			return err
+		}
+		if existing.ID != 0 {
+			return nil
+		}
+		if err := tx.Create(&model.ForumReplyLike{ReplyID: replyID, UserID: userID, CreatedAt: beijingNow()}).Error; err != nil {
+			if isDuplicateError(err) {
+				return nil
+			}
+			return err
+		}
+		return s.counters.AdjustReplyLikes(tx, replyID, 1)
+	})
+	if err != nil {
+		return 0, err
+	}
+	return s.replyLikesCount(replyID), nil
+}
+
+// UnlikeReply 取消点赞评论（幂等；事务内同步维护 likes_count）。
+func (s *ForumService) UnlikeReply(userID int, replyID int64) (int64, error) {
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		res := tx.Where("reply_id = ? AND user_id = ?", replyID, userID).Delete(&model.ForumReplyLike{})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected > 0 {
+			return s.counters.AdjustReplyLikes(tx, replyID, -1)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return s.replyLikesCount(replyID), nil
+}
+
+// replyLikesCount 回复点赞数（读侧只认 likes_count 列为事实源）。
+func (s *ForumService) replyLikesCount(replyID int64) int64 {
+	var n int64
+	_ = s.db.Model(&model.ForumReply{}).Select("likes_count").Where("id = ?", replyID).Scan(&n).Error
+	return n
 }

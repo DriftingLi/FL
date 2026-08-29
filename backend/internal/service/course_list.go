@@ -15,11 +15,14 @@ import (
 
 // CourseListOptions 列表差异点：学员端仅已挂载+上架并附证书名；
 // 管理端全量可搜索；导师端与学员端同口径并附学习学员数（ADR-0012 §2 导师可见性口径）。
+// Filter：hot|featured|all（缺省 all），映射 is_hot / is_featured 双 bool（可叠加，见 Spec #326 Q9-Q12）。
 type CourseListOptions struct {
 	OnlyMounted      bool
 	Keyword          string
 	SpecialtyID      *int
 	LevelID          *int
+	CredentialID     *int
+	Filter           string
 	WithStudentCount bool
 	DefaultPageSize  int
 }
@@ -40,6 +43,14 @@ func ListCourses(db *gorm.DB, page, pageSize int, opts CourseListOptions) Course
 		}
 		if opts.LevelID != nil {
 			q = q.Where("level_id = ?", *opts.LevelID)
+		}
+		if opts.CredentialID != nil {
+			q = q.Where("credential_id = ?", *opts.CredentialID)
+		}
+		if opts.Filter == "hot" {
+			q = q.Where("is_hot = ?", true)
+		} else if opts.Filter == "featured" {
+			q = q.Where("is_featured = ?", true)
 		}
 		return q
 	})

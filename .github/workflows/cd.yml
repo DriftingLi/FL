@@ -267,8 +267,10 @@ jobs:
       IMAGE_LIBREOFFICE: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-libreoffice
       # 镜像加速代理（ghcr pull-through 缓存，如 127.0.0.1:5000；留空则直连 ghcr.io）
       # 在仓库级 Variables 设置 REGISTRY_PROXY=127.0.0.1:5000，所有环境统一生效
-      # （当前生产也部署在 lxc201，代理同样可用；若未来生产迁到独立服务器，请改用环境级变量单独配置）
+      # 多节点共享缓存：REGISTRY_PROXY 指向缓存节点内网地址（如 172.17.1.41:5000），
+      # 缓存节点自身经 REGISTRY_PROXY_BIND 监听内网；其余节点直接内网拉取
       REGISTRY_PROXY: ${{ vars.REGISTRY_PROXY || '' }}
+      REGISTRY_PROXY_BIND: ${{ vars.REGISTRY_PROXY_BIND || '127.0.0.1' }}
       # 旧版本镜像保留数量（部署后清理更早版本；可在仓库级 Variables 中覆盖）
       KEEP_IMAGES: ${{ vars.KEEP_IMAGES || '3' }}
       # SSL 证书内容（从 GitHub Secrets 注入，部署时写入服务器固定路径）
@@ -297,6 +299,21 @@ jobs:
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
       SMTP_FROM: ${{ secrets.SMTP_FROM }}
       SMTP_FROM_NAME: ${{ secrets.SMTP_FROM_NAME || '和润天下' }}
+      # 腾讯云短信（手机验证码通道；SecretId/SecretKey 为云 API 密钥 cam/capi，非控制台 AppKey）
+      TENCENT_SMS_SECRET_ID: ${{ secrets.TENCENT_SMS_SECRET_ID }}
+      TENCENT_SMS_SECRET_KEY: ${{ secrets.TENCENT_SMS_SECRET_KEY }}
+      TENCENT_SMS_SDK_APP_ID: ${{ secrets.TENCENT_SMS_SDK_APP_ID }}
+      TENCENT_SMS_SIGN_NAME: ${{ secrets.TENCENT_SMS_SIGN_NAME }}
+      TENCENT_SMS_TEMPLATE_REGISTER: ${{ secrets.TENCENT_SMS_TEMPLATE_REGISTER }}
+      TENCENT_SMS_TEMPLATE_LOGIN: ${{ secrets.TENCENT_SMS_TEMPLATE_LOGIN }}
+      TENCENT_SMS_TEMPLATE_PASSWORD: ${{ secrets.TENCENT_SMS_TEMPLATE_PASSWORD }}
+      TENCENT_SMS_TEMPLATE_BIND_PHONE: ${{ secrets.TENCENT_SMS_TEMPLATE_BIND_PHONE }}
+      TENCENT_SMS_REGION: ${{ secrets.TENCENT_SMS_REGION || 'ap-guangzhou' }}
+      # 微信登录凭证（小程序 code2session / 开放平台扫码占位——两套凭证严格区分）
+      WECHAT_MINI_PROGRAM_APP_ID: ${{ secrets.WECHAT_MINI_PROGRAM_APP_ID || secrets.WECHAT_APP_ID }}
+      WECHAT_MINI_PROGRAM_APP_SECRET: ${{ secrets.WECHAT_MINI_PROGRAM_APP_SECRET || secrets.WECHAT_APP_SECRET }}
+      WECHAT_OPEN_PLATFORM_APP_ID: ${{ secrets.WECHAT_OPEN_PLATFORM_APP_ID }}
+      WECHAT_OPEN_PLATFORM_APP_SECRET: ${{ secrets.WECHAT_OPEN_PLATFORM_APP_SECRET }}
       # 默认账号
       ADMIN_DEFAULT_PASSWORD: ${{ secrets.ADMIN_DEFAULT_PASSWORD }}
       TUTOR_DEFAULT_PASSWORD: ${{ secrets.TUTOR_DEFAULT_PASSWORD }}
@@ -308,38 +325,51 @@ jobs:
       # Redis 缓存
       REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD || '' }}
       REDIS_DB: ${{ secrets.REDIS_DB || '0' }}
-      REDIS_POOL_SIZE: ${{ secrets.REDIS_POOL_SIZE || '10' }}
+      REDIS_POOL_SIZE: ${{ secrets.REDIS_POOL_SIZE || '20' }}
       REDIS_KEY_PREFIX: ${{ secrets.REDIS_KEY_PREFIX || 'fl:' }}
       # Cloudflare R2 对象存储（留空则回退到本地磁盘 STORAGE_DRIVER=local）
       STORAGE_DRIVER: ${{ secrets.STORAGE_DRIVER || 'local' }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT || '' }}
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_BUCKET: ${{ secrets.R2_BUCKET }}
       R2_PUBLIC_DOMAIN: ${{ secrets.R2_PUBLIC_DOMAIN }}
-      # backend 宿主机映射端口（production 默认 8080；testing 用 18080 避免与 cadvisor 冲突）
+      # Swagger 文档（C 方案：旗标 + BasicAuth；prod 默认 false，线上临时开启需同时注入 USER/PASS）
+      SWAGGER_ENABLED: ${{ secrets.SWAGGER_ENABLED || vars.SWAGGER_ENABLED || 'false' }}
+      SWAGGER_USER: ${{ secrets.SWAGGER_USER }}
+      SWAGGER_PASS: ${{ secrets.SWAGGER_PASS }}
+      # backend 宿主机映射端口（production 默认 8080；testing 固定 18080）
       BACKEND_HOST_PORT: ${{ secrets.BACKEND_HOST_PORT || '8080' }}
       # 异地备份（production: pve-02 → pve-01；testing: 留空跳过）
       BACKUP_REMOTE_HOST: ${{ secrets.BACKUP_REMOTE_HOST }}
       BACKUP_REMOTE_DIR: ${{ secrets.BACKUP_REMOTE_DIR || '/opt/forklift-backups' }}
       BACKUP_REMOTE_KEY: ${{ secrets.BACKUP_REMOTE_KEY || '/root/.ssh/pve01-sync' }}
-      # SSH 连接（公网 IP）
+      # SSH 连接（公网 IP 直连 PVE 宿主机）
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT || '2222' }}
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-      # SSH 跳板配置（production 和 testing 均已迁移到 LXC,使用 ProxyJump）
-      # production: SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(172.17.1.201)
-      # testing: SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(172.17.1.200)
-      #         pve-02 与 LXC 同网段路由可达,无需 pve-01 中转
+      # SSH 跳板配置：两环境均直连 PVE 宿主机，无跳板（SSH_JUMP_HOST 已删除，留空走直连分支）
+      # production: 183.36.195.104:2222 → pve-02 宿主机
+      # testing:    183.36.195.104:2201 → pve-01 宿主机（ISP 侧端口映射）
+      # ProxyJump 代码分支保留，供未来需要跳板时经 SSH_JUMP_HOST 重新启用
       SSH_JUMP_HOST: ${{ secrets.SSH_JUMP_HOST || '' }}
-      # Volume 路径：testing 已迁移到 LXC + Docker 24+,named volume 正常工作
-      # 旧 Docker 19.03 的 named volume 权限 bug 已通过 Docker 升级解决,无需 bind mount
+      # Volume 路径：两环境均在 PVE 宿主机直接运行 Docker 26+，named volume 正常工作
       # 留空 → deploy-remote.sh 默认使用 named volume（pgdata-prod / redisdata-prod 等）
-      PG_VOLUME: ''
-      REDIS_VOLUME: ''
-      UPLOADS_VOLUME: ''
-      REPORTS_VOLUME: ''
+      # Ceph 化后可在 environment secret 配置（如 PG_VOLUME=/srv/ceph/pgdata 指向 RBD 挂载点）
+      PG_VOLUME: ${{ secrets.PG_VOLUME || '' }}
+      REDIS_VOLUME: ${{ secrets.REDIS_VOLUME || '' }}
+      UPLOADS_VOLUME: ${{ secrets.UPLOADS_VOLUME || '' }}
+      REPORTS_VOLUME: ${{ secrets.REPORTS_VOLUME || '' }}
+      # ===== testing 加速参数（按环境注入）=====
+      # testing 跳过部署期 pg_dump 备份（回滚保障由 RBD 快照+每日备份承担）
+      SKIP_BACKUP: ${{ (inputs.environment || 'production') == 'testing' && 'true' || 'false' }}
+      # testing 不启用 libreoffice profile（省 500MB 镜像传输）；production 必须 full
+      COMPOSE_PROFILES: ${{ (inputs.environment || 'production') == 'production' && 'full' || '' }}
+      # testing 缩短健康检查轮询与 compose --wait 超时，快速通过即停容器
+      HEALTH_CHECK_RETRIES: ${{ (inputs.environment || 'production') == 'testing' && '8' || '20' }}
+      UP_WAIT_TIMEOUT: ${{ (inputs.environment || 'production') == 'testing' && '30' || '60' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -347,10 +377,10 @@ jobs:
 
       # --------------------------------------------------------
       # Step 2.1: 配置 SSH
-      #   production/testing: 两层 ProxyJump (pve-02 → LXC)
-      #           SSH_HOST=pve-02公网(跳板), SSH_JUMP_HOST=LXC内网IP(目标)
-      #           pve-02 与 LXC 同网段(172.17.1.0/24)路由可达
-      #   若某环境未配置 SSH_JUMP_HOST，则直连 (SSH_HOST:SSH_PORT)
+      #   production/testing: 公网直连 PVE 宿主机 (SSH_HOST:SSH_PORT)
+      #           production=pve-02(183.36.195.104:2222)
+      #           testing=pve-01(183.36.195.104:2201, ISP 侧端口映射)
+      #   若配置了 SSH_JUMP_HOST，则走 ProxyJump 跳板模式（当前两环境均未使用）
       # --------------------------------------------------------
       - name: 配置 SSH
         run: |
@@ -361,7 +391,7 @@ jobs:
             -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
           if [ -n "$SSH_JUMP_HOST" ]; then
-            # 有跳板环境（production/testing）: 两层 ProxyJump (pve-02 → LXC)
+            # 有跳板环境: ProxyJump (SSH_HOST 公网 → SSH_JUMP_HOST 目标)
             cat > ~/.ssh/config << EOF
           Host jump
               HostName $SSH_HOST
@@ -396,27 +426,25 @@ jobs:
           fi
 
       # --------------------------------------------------------
-      # Step 2.2: 上传部署脚本和配置
+      # Step 2.2: 上传部署脚本和配置（tar 打包单次传输，替代多次 scp 往返）
       # --------------------------------------------------------
       - name: 上传部署脚本和配置
         run: |
-          # 主部署文件：脚本 + compose
-          scp -o ConnectTimeout=15 -o ServerAliveInterval=30 \
-            scripts/deploy-remote.sh docker-compose.prod.yml \
-            "target:$DEPLOY_PATH/"
-
-          # nginx-host.conf 必须放在 $DEPLOY_PATH/frontend/ 下（compose volume 挂载路径）
-          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
-            "target" \
-            "mkdir -p $DEPLOY_PATH/frontend"
+          # 打包：deploy-remote.sh / compose / nginx-host.conf
+          tar czf /tmp/deploy-files.tar.gz \
+            scripts/deploy-remote.sh \
+            docker-compose.prod.yml \
+            frontend/nginx-host.conf
 
           scp -o ConnectTimeout=15 -o ServerAliveInterval=30 \
-            frontend/nginx-host.conf \
-            "target:$DEPLOY_PATH/frontend/nginx-host.conf"
+            /tmp/deploy-files.tar.gz \
+            "target:/tmp/deploy-files.tar.gz"
 
           ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
             "target" \
-            "chmod +x $DEPLOY_PATH/deploy-remote.sh"
+            "mkdir -p $DEPLOY_PATH/frontend && cd $DEPLOY_PATH && \
+             tar xzf /tmp/deploy-files.tar.gz && rm -f /tmp/deploy-files.tar.gz && \
+             chmod +x scripts/deploy-remote.sh"
 
       # --------------------------------------------------------
       # Step 2.3: 生成环境变量文件并执行远程部署
@@ -444,6 +472,7 @@ jobs:
             printf 'export GITHUB_TOKEN=%q\n' "${GITHUB_TOKEN:-}"
             printf 'export REGISTRY=%q\n' "${REGISTRY:-ghcr.io}"
             printf 'export REGISTRY_PROXY=%q\n' "${REGISTRY_PROXY:-}"
+            printf 'export REGISTRY_PROXY_BIND=%q\n' "${REGISTRY_PROXY_BIND:-127.0.0.1}"
             printf 'export KEEP_IMAGES=%q\n' "${KEEP_IMAGES:-3}"
             printf 'export DATABASE_URL=%q\n' "${DATABASE_URL:-}"
             printf 'export DB_USER=%q\n' "${DB_USER:-forklift}"
@@ -464,20 +493,37 @@ jobs:
             printf 'export SMTP_PASSWORD=%q\n' "${SMTP_PASSWORD:-}"
             printf 'export SMTP_FROM=%q\n' "${SMTP_FROM:-}"
             printf 'export SMTP_FROM_NAME=%q\n' "${SMTP_FROM_NAME:-和润天下}"
+            printf 'export TENCENT_SMS_SECRET_ID=%q\n' "${TENCENT_SMS_SECRET_ID:-}"
+            printf 'export TENCENT_SMS_SECRET_KEY=%q\n' "${TENCENT_SMS_SECRET_KEY:-}"
+            printf 'export TENCENT_SMS_SDK_APP_ID=%q\n' "${TENCENT_SMS_SDK_APP_ID:-}"
+            printf 'export TENCENT_SMS_SIGN_NAME=%q\n' "${TENCENT_SMS_SIGN_NAME:-}"
+            printf 'export TENCENT_SMS_TEMPLATE_REGISTER=%q\n' "${TENCENT_SMS_TEMPLATE_REGISTER:-}"
+            printf 'export TENCENT_SMS_TEMPLATE_LOGIN=%q\n' "${TENCENT_SMS_TEMPLATE_LOGIN:-}"
+            printf 'export TENCENT_SMS_TEMPLATE_PASSWORD=%q\n' "${TENCENT_SMS_TEMPLATE_PASSWORD:-}"
+            printf 'export TENCENT_SMS_TEMPLATE_BIND_PHONE=%q\n' "${TENCENT_SMS_TEMPLATE_BIND_PHONE:-}"
+            printf 'export TENCENT_SMS_REGION=%q\n' "${TENCENT_SMS_REGION:-ap-guangzhou}"
+            printf 'export WECHAT_MINI_PROGRAM_APP_ID=%q\n' "${WECHAT_MINI_PROGRAM_APP_ID:-}"
+            printf 'export WECHAT_MINI_PROGRAM_APP_SECRET=%q\n' "${WECHAT_MINI_PROGRAM_APP_SECRET:-}"
+            printf 'export WECHAT_OPEN_PLATFORM_APP_ID=%q\n' "${WECHAT_OPEN_PLATFORM_APP_ID:-}"
+            printf 'export WECHAT_OPEN_PLATFORM_APP_SECRET=%q\n' "${WECHAT_OPEN_PLATFORM_APP_SECRET:-}"
             printf 'export CORS_ORIGINS=%q\n' "${CORS_ORIGINS:-}"
             printf 'export COMPOSE_FILE=%q\n' "${COMPOSE_FILE:-docker-compose.prod.yml}"
             printf 'export DEPLOY_PATH=%q\n' "${DEPLOY_PATH:-/opt/forklift-training}"
             printf 'export SKIP_MIGRATION=%q\n' "${SKIP_MIGRATION:-false}"
             printf 'export REDIS_PASSWORD=%q\n' "${REDIS_PASSWORD:-}"
             printf 'export REDIS_DB=%q\n' "${REDIS_DB:-0}"
-            printf 'export REDIS_POOL_SIZE=%q\n' "${REDIS_POOL_SIZE:-10}"
+            printf 'export REDIS_POOL_SIZE=%q\n' "${REDIS_POOL_SIZE:-20}"
             printf 'export REDIS_KEY_PREFIX=%q\n' "${REDIS_KEY_PREFIX:-fl:}"
             printf 'export STORAGE_DRIVER=%q\n' "${STORAGE_DRIVER:-local}"
+            printf 'export R2_ENDPOINT=%q\n' "${R2_ENDPOINT:-}"
             printf 'export R2_ACCOUNT_ID=%q\n' "${R2_ACCOUNT_ID:-}"
             printf 'export R2_ACCESS_KEY_ID=%q\n' "${R2_ACCESS_KEY_ID:-}"
             printf 'export R2_SECRET_ACCESS_KEY=%q\n' "${R2_SECRET_ACCESS_KEY:-}"
             printf 'export R2_BUCKET=%q\n' "${R2_BUCKET:-}"
             printf 'export R2_PUBLIC_DOMAIN=%q\n' "${R2_PUBLIC_DOMAIN:-}"
+            printf 'export SWAGGER_ENABLED=%q\n' "${SWAGGER_ENABLED:-false}"
+            printf 'export SWAGGER_USER=%q\n' "${SWAGGER_USER:-}"
+            printf 'export SWAGGER_PASS=%q\n' "${SWAGGER_PASS:-}"
             printf 'export BACKUP_REMOTE_HOST=%q\n' "${BACKUP_REMOTE_HOST:-}"
             printf 'export BACKUP_REMOTE_DIR=%q\n' "${BACKUP_REMOTE_DIR:-}"
             printf 'export BACKUP_REMOTE_KEY=%q\n' "${BACKUP_REMOTE_KEY:-}"
@@ -486,6 +532,10 @@ jobs:
             printf 'export REDIS_VOLUME=%q\n' "${REDIS_VOLUME:-}"
             printf 'export UPLOADS_VOLUME=%q\n' "${UPLOADS_VOLUME:-}"
             printf 'export REPORTS_VOLUME=%q\n' "${REPORTS_VOLUME:-}"
+            printf 'export SKIP_BACKUP=%q\n' "${SKIP_BACKUP:-false}"
+            printf 'export COMPOSE_PROFILES=%q\n' "${COMPOSE_PROFILES:-}"
+            printf 'export HEALTH_CHECK_RETRIES=%q\n' "${HEALTH_CHECK_RETRIES:-20}"
+            printf 'export UP_WAIT_TIMEOUT=%q\n' "${UP_WAIT_TIMEOUT:-60}"
           } > /tmp/deploy-env.sh
 
           echo "环境变量文件已生成（$(wc -l < /tmp/deploy-env.sh) 行）"
@@ -496,10 +546,10 @@ jobs:
             /tmp/deploy-env.sh \
             "target:/tmp/deploy-env.sh"
 
-          # 执行远程部署
+          # 执行远程部署（脚本在 $DEPLOY_PATH/scripts/ 下，tar 打包上传）
           ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
             "target" \
-            "set -e; source /tmp/deploy-env.sh; shred -u /tmp/deploy-env.sh 2>/dev/null || rm -f /tmp/deploy-env.sh; cd \"\$DEPLOY_PATH\" && bash deploy-remote.sh"
+            "set -e; source /tmp/deploy-env.sh; shred -u /tmp/deploy-env.sh 2>/dev/null || rm -f /tmp/deploy-env.sh; cd \"\$DEPLOY_PATH\" && bash scripts/deploy-remote.sh"
 
       # --------------------------------------------------------
       # Step 2.4: 测试环境部署成功后停止容器（避免空转占用资源）
@@ -543,3 +593,29 @@ jobs:
           echo "- 后端 API: ${{ vars.API_URL || '未配置' }}" >> $GITHUB_STEP_SUMMARY
           echo "- 前端: ${{ vars.FRONTEND_URL || '未配置' }}" >> $GITHUB_STEP_SUMMARY
         shell: bash
+
+  # ============================================================
+  # Stage 7: 生产发布（testing 验证通过后，链式触发 production 部署）
+  # master 合并后先部署 testing；测试通过 → 本 job 触发 production，
+  # 保证生产部署的就是测试验证过的代码
+  # ============================================================
+  promote:
+    needs: notify
+    if: success() && inputs.environment == 'testing' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 触发生产部署
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo ">>> testing 验证通过，触发 production 部署（ref=${{ inputs.ref || github.sha }}）"
+          gh workflow run cd.yml \
+            --ref master \
+            -f ref="${{ inputs.ref || github.sha }}" \
+            -f environment=production
+          echo "✅ 已触发 production 部署"

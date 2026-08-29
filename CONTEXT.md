@@ -15,7 +15,7 @@
 - **验证码通道（channel）**：邮箱（SMTP，开发降级日志）与短信（腾讯云 SMS SendSms，开发降级日志）是同一验证码状态机两侧的 adapter。
 - **会话（session）**：签发（issue）/ 校验（verify）/ 吊销（revoke）JWT 的生命周期。双令牌（ADR-0016）：access 2h（中间件仅收 access）+ refresh 7 天轮换；黑名单（`jwt:blacklist:`）只管理 refresh——刷新轮换即作废旧 refresh（防重放），登出撤销 refresh；access 生命周期短，不入黑名单、自然过期。
 - **登录态 Cookie**：父域名 httpOnly Cookie（hrwai_token），子域名间共享登录；Bearer 头优先于 Cookie。生产已启用 HTTPS（PR #254），Cookie 通道恢复、仅携带 access（不自动续期，见 ADR-0016）；HTTP 时期的历史约束见 ADR-0003（已解决）。
-- **微信小程序登录（wx-login）**：小程序端 uni.login 临时 code 换 openid 登录（POST /api/auth/wx-login，code2session）；openid 已绑定直接登录，未注册自动建号绑定（account 取 `wx_`+openid 前 12 位，昵称「微信学员」+openid 后 6 位），复用统一登录骨架签发双令牌。凭证经 `WECHAT_APP_ID`/`WECHAT_APP_SECRET` 配置；微信扫码登录（开放平台）仍为占位。契约见 `docs/docs/reference/微信小程序登录-文档说明.md`。
+- **微信小程序登录（wx-login）**：小程序端 uni.login 临时 code 换 openid 登录（POST /api/auth/wx-login，code2session）；openid 已绑定直接登录，未注册自动建号绑定（account 取 `wx_`+openid 前 12 位，昵称「微信学员」+openid 后 6 位，账号前缀冲突时追加后段或序号重试，唯一约束冲突与其它错误分类处理），复用统一登录骨架签发双令牌。凭证经 `WECHAT_MINI_PROGRAM_APP_ID`/`WECHAT_MINI_PROGRAM_APP_SECRET` 配置（GitHub Secrets 同名；与网页端扫码登录的开放平台凭证 `WECHAT_OPEN_PLATFORM_*` 严格区分，两套 AppID/AppSecret 不可混用）。契约见 `docs/docs/reference/微信小程序登录-文档说明.md`。
 - **认证页（auth page）**：登录/注册/找回密码三页共用认证页外壳（AuthPageShell，白底极简 + 主次分离——密码为主入口，邮箱/手机/微信收纳为「或使用以下方式登录」图标按钮；tutor/admin 仅密码入口）。三页提交流程共用 useAuthFlow 状态机；redirect 回跳白名单（isSafeRedirect）与「路径前缀→身份」表单点（authRedirect），见 ADR-0014。
 - **资料审核（profile review）**：昵称/头像修改走提交→审核（通过/驳回）流程，审核结果以站内信通知。
 
@@ -27,25 +27,32 @@
 
 ## 培训领域
 
-- **课程目录（course catalog）**：专业方向 → 课程等级 → 课程 的三层组织视图（虚拟树，实时由 specialty/course_level/course 计算，无物理 catalog 表）。未挂方向/等级的课程不出现在学员端目录与列表（口径统一）。
-- **专业方向（specialty）**：课程目录一级维度，全局共享（操作/维修/安全/电池等），管理员维护。
-- **课程等级（course level）**：课程目录二级维度，**全局共享**（不归属方向，入门/进阶/专项/认证），任意方向的课程可挂任意等级。
-- **课程（course）/ 章节（chapter）**：PPT/视频/图文混排内容；PPT 经 LibreOffice sidecar 转 WebP。课程挂专业方向 + 课程等级（创建/编辑必填），可关联证书模板与前置课程。
-- **收藏（favorite）**：多态收藏（target_type+target_id：course/chapter/question/featured/topic；user+type+id 唯一幂等），列表实时回填目标快照、目标删除即条目消失，见 ADR-0018。
-- **全局搜索（search）**：course/question/content/topic 四类 LOWER LIKE 聚合（type 缺省各分区 top5），可见性与业务口径一致（挂载不变式/published/已发布），见 ADR-0018。
+- **目标证件（target credential）**：学员报考的外部持证目标（`credential`，`code` 唯一），与"证书模板（培训合格证书）"严格区分。两类：特种作业上岗证（`special_operation`：叉车司机N1/低压电工/焊工等）与职业技能等级（`skill_level`：工程机械维修工·叉车维修方向 L5-L1，每级为独立证件）；每证件拥有独立的课程库与题库（`course.credential_id` / `question.credential_id` 单归属，V1 1:N，预留 M:N 扩展）。
+  _Avoid_: 证书、证件（泛称）、考证目标
+- **当前证件（current credential）**：学员在 `hrwai_users.current_credential_id` 上的单选上下文，侧栏顶部 `CredentialSwitcher` 展示与切换；切换即全局过滤器（课程/题库/练习/模考/错题/搜索/收藏的 course/question 分区按当前证件过滤，论坛/AI 不过滤）。
+- **预筛选（prescreening）**：首次注册/登录时 `current_credential_id IS NULL` 的强制拦截流，需在 onboarding 选定目标证件后方可进入 training 工作区；存量用户下一跳同样拦截一次。
+  _Avoid_: 首选证件、初始化选择
+- **占位证件（placeholder credential）**：已建档但课程/题库为 0 的目标证件，可被选为当前证件，视图呈空状态"内容建设中"。
+- **课程目录（course catalog）**：目标证件内的 `专业方向 → 课程等级 → 课程` 三层组织视图（虚拟树，实时由 credential/specialty/course_level/course 计算，无物理 catalog 表）。未挂方向/等级的课程不出现在学员端目录与列表（口径统一）；课程必归属一个目标证件（`credential_id` 必填）。
+- **专业方向（specialty）**：课程目录二级维度（证件内），全局共享（操作/维修/安全/电池等），管理员维护。
+- **课程等级（course level）**：课程目录三级维度，**全局共享**（不归属方向，入门/进阶/专项/认证），任意方向的课程可挂任意等级。
+- **课程（course）/ 章节（chapter）**：PPT/视频/图文混排内容；PPT 经 LibreOffice sidecar 转 WebP。课程必挂目标证件 + 专业方向 + 课程等级（创建/编辑必填），可关联证书模板与前置课程。
+- **收藏（favorite）**：多态收藏（target_type+target_id：course/chapter/question/featured/topic；user+type+id 唯一幂等），列表实时回填目标快照、目标删除即条目消失，见 ADR-0018；其中 course/question 分区按当前证件过滤。
+- **全局搜索（search）**：course/question/content/topic 四类 LOWER LIKE 聚合（type 缺省各分区 top5），可见性与业务口径一致（挂载不变式/published/已发布），见 ADR-0018；course/question 分区按当前证件过滤。
 - **学习资料（material）**：已发布课程下章节附件（chapter_file）的聚合视图，不建独立资料库；file_url 为静态直链，见 ADR-0018。
 - **学习位置（learning position）**：学员在某课程的最后学习状态——最后章节（last_chapter_id）、章节播放位置（video_position，秒）、最后学习时间戳（last_studied_at），挂在 study_record 双轨记录上（课程级承载 last_*、章节级承载位置）；章节完成以 progress≥100 为单一事实源（时长自动完成与显式 completed 收敛于此），见 ADR-0017。
-- **证书模板（certificate template）**：课程可选关联的培训合格证书，含有效期（天）；课程挂靠后学员完成学习可获证。
+- **证书模板（certificate template）**：课程可选关联的培训合格证书（结业证），含有效期（天）；课程挂靠后学员完成学习可获证。与"目标证件"语义严格区分。
 - **前置课程（course prerequisite）**：课程间的依赖关系（A 完成才能学 B），防自指防成环；编辑回填 prerequisite_course_ids 避免误清空。
-- **考试（exam）/ 模拟考试（mock exam）/ 定级考试（原等级考试，level exam）**：自动判分 + AI 评分；题目类型满分规则由判分规则表定义。定级考试为考试中心功能名，与目录维度「课程等级」无关。
-- **练习（practice）/ 错题本（wrong question book）**：顺序/随机/专项/标签练习；错题按题收录。
-- **答题会话（answering session）**：学员在一次练习/模拟考试/定级考试/错题重做中逐题作答的状态与推进节奏（选项选择、对/错模板、倒计时、自动交卷、断点续传）；练习/考试/错题重做共享同一交互形态。会话 module 为守卫（本人+进行中）、题目顺序重建、答案三态初始化（null/[]/absent）的唯一实现（ADR-0010）。**场次状态推进语义**：GET 读路径不写库，展示用基于时间的生效状态（effStatus）；upcoming→ongoing 只在学员进入考试（进入即开始）与管理端手动开始时落库。
-- **判分（grading）**：客观题判题唯一实现（gradeQuestion，含多选部分给分）；简答题及格线 = 满分 × 0.6；分值表按流（定级/模拟）单点定义，模拟考试分值（识图 4 分、简答 10 分）与定级考试不同属产品设定。
+- **模拟考试（mock exam）**：自动判分 + AI 评分的自主模拟测验；题目类型满分规则由判分规则表定义（识图 4 分、简答 10 分）。定级考试（考试中心）已下线，模拟考试为唯一考试形态；按当前证件的题库抽题。
+- **练习（practice）/ 错题本（wrong question book）**：顺序/随机/专项/标签练习；错题按题收录。刷题解析包含结果卡（正确/用时/正确率/易错项）、AI 解析（按需生成并缓存，未配置时降级静态解析）、评论、考点（题库标签）与笔记（每人每题一条私有备忘）五模块，练习与错题重做共用同一提交管线与装配；重做结果同口径落 question_practice_record（正确率/易错项统计含重做），错题重做为单题即时形态、无会话生命周期；均按当前证件的题库过滤。
+- **答题会话（answering session）**：学员在一次练习/模拟考试/错题重做中逐题作答的状态与推进节奏（选项选择、对/错模板、倒计时、自动交卷、断点续传）；练习/模拟考试/错题重做共享同一交互形态。会话 module 为守卫（本人+进行中）、题目顺序重建、答案三态初始化（null/[]/absent）的唯一实现（ADR-0010）。
+- **判分（grading）**：客观题判题唯一实现（gradeQuestion，含多选部分给分）；简答题及格线 = 满分 × 0.6。分值表两行单点定义：practice（练习/错题重做共用，客观题满分来源；原「level_exam」行已正名——定级考试下线后该行作为练习满分事实源存活）与 mock_exam（模拟考试）；简答题满分取题目自定义分，缺省 10。
 - **题库标签（question tag）**：题目分类维度（法规/结构/液压/电气/制动/故障诊断/应急等），创建需唯一编码；题目可多标签，标签练习按标签抽题。
 - **标签练习（tag practice）**：按题库标签抽题的练习模式（原「章节练习」已退役并入）。
 - **AI 助手**：大模型流式对话（DeepSeek 默认，可配置 OpenAI 兼容模型）。归属 training 子域名（学员工作区功能），由主域名迁入。
-- **论坛（forum）**：综合讨论区 + 章节讨论区；发帖/回复（可回复别人的回复）。**图文分离**——主题与回复可携带 `images` 图片 URL 数组（JSONB），正文保持纯文本，不做 markdown 渲染。 互动（ADR-0018）：主题点赞（forum_topic_like，幂等）、举报（forum_report，待处理/已处理二态，管理端处置沿用删帖/删回复流）、我的帖子/我的回复。
-- **论坛图片（forum image）**：先经 `POST /api/forum/upload-image` 上传到 `images/forum/` 子目录拿 URL，随发帖/回复提交；删除主题/回复时图片存储一并清理；上传后未发帖的**悬空图片**由进程内定时任务（每 6 小时）扫描差集、回收超过 24h 未被引用的文件。
+- **论坛（forum）**：综合讨论区 + 章节讨论区；发帖/回复（可回复别人的回复）。**图文分离**——主题与回复可携带 `images` 图片 URL 数组（JSONB），正文保持纯文本，不做 markdown 渲染。 互动（ADR-0018）：主题点赞（forum_topic_like，幂等，计数经 `likes_count` 反范式列维护，热度排序走索引）、举报（forum_report，待处理/已处理二态，管理端处置沿用删帖/删回复流）、我的帖子/我的回复。
+- **论坛图片（forum image）**：先经 `POST /api/forum/upload-image` 上传到 `images/forum/` 子目录拿 URL，随发帖/回复提交；删除主题/回复时图片存储一并清理；上传后未发帖的**悬空图片**由进程内定时任务（每 6 小时，通用守护 runner 托管，panic 恢复 + jitter 错峰 + 注入式 ticker + context 取消贯穿存储）扫描差集、回收超过 24h 未被引用的文件。
+- **每日打卡（check-in）**：学员按 `Asia/Shanghai` 自然日签到，独立 `CheckInService` 模块承载（与论坛帖子/回复解耦，共享 `ForumAuthor` 展示名 seam，路由 `/api/forum/check-in/*` 契约不变）。能力四件套：签到（幂等 `forum_checkin` PK(user_id, check_date)）、日历（按年月查 `check_date BETWEEN`，`Asia/Shanghai` 口径）、连击（streak，从今日/昨日连续往前计数）、排行榜（累计总榜 `total DESC, last_date ASC`，`streak/todayChecked` 经批量聚合回填，`Me` 名次合并查询）。日历与连击跨时区一致性由 `Asia/Shanghai` 统一承载。
 
 ## 残值评估（valuation）
 
@@ -61,6 +68,6 @@
 
 - **官网门户（portal）**：独立 Nuxt 4 仓库承载的 www 子域名站点，SSR 混合渲染（首页预渲染、内容页 SWR/ISR），面向访客与搜索引擎爬虫；只读消费后端公开 API，与培训/评估等 Vue SPA 工作区解耦。
 - **官网首页（homepage）**：门户 `/` 页面，固定区块结构（Hero/公司介绍/创始人/核心服务/合作模式/服务保障/内容精选轮播/CTA），构建时预渲染。
-- **精选内容（featured content）**：官网内容板块，管理端（Vue SPA manage 子域名）维护，门户只读消费公开 API；分类四态：公司动态/行业新闻/产品资讯/资讯。
-- **精选内容归档页（news archive）**：`/news`（全部）+ `/news/[category]`（四类）分页列表页，是每条已发布内容的可发现入口（首页轮播只展示前 6 条）。
-- **阅读量（view count）**：文章被真实浏览器访问的次数。详情接口带 `no_view=1` 时不计入（SSR/爬虫路径），由 hydration 后客户端计数端点累加——与「详情请求次数」语义区分。
+- **精选内容（featured content）**：官网内容板块，管理端（Vue SPA manage 子域名）维护，门户只读消费公开 API；分类四态：公司动态/行业新闻/产品资讯/政策法规。
+- **精选内容归档页（news archive）**：`/news`（全部）+ `/news/[category]`（四类）分页列表页，是每条已发布内容的可发现入口（首页轮播只展示前 6 条）；支持排序：最新资讯（按 `published_at`）/ 热点资讯（按 `view_count`）。
+- **阅读量（view count）**：文章被真实浏览器访问的次数。门户侧详情接口带 `no_view=1` 时不计入（SSR/爬虫路径），由 hydration 后客户端计数端点累加——与「详情请求次数」语义区分；论坛侧当前为详情请求即计数（`GET /api/forum/topics/:id` 每次 +1，未做防刷），与门户侧口径差异已在 spec #279 中追溯，未来若将浏览量提为热度主序需评估防刷复用。

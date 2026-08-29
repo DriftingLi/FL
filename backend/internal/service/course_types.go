@@ -12,12 +12,15 @@ type CourseInput struct {
 	Duration              *int    `json:"duration"`
 	Status                *int16  `json:"status"`
 	SortOrder             *int    `json:"sort_order"`
+	CredentialID          *int    `json:"credential_id"`
 	SpecialtyID           *int    `json:"specialty_id"`
 	LevelID               *int    `json:"level_id"`
 	CertificateTemplateID *int    `json:"certificate_template_id"`
 	TheoryHours           *int    `json:"theory_hours"`
 	PracticeHours         *int    `json:"practice_hours"`
 	PrerequisiteCourseIDs []int   `json:"prerequisite_course_ids"`
+	IsHot                 *bool   `json:"is_hot"`
+	IsFeatured            *bool   `json:"is_featured"`
 }
 
 // ChapterInput 章节创建/编辑请求体。

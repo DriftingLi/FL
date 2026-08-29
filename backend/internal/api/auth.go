@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"github.com/gin-gonic/gin"
@@ -32,7 +33,16 @@ func NewAuthHandler(sess *security.Session, authSvc *service.AuthService, fileSv
 	}
 }
 
-// Login 学员登录 POST /api/auth/login
+// Login 学员登录
+// @Summary 学员登录
+// @Description 账号密码登录（hrwai_user），成功写入登录 Cookie 并返回双令牌
+// @Tags 学员端-认证
+// @Accept json
+// @Produce json
+// @Param body body object true "登录" example({"username":"13800000001","password":"123456"})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Router /auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	Endpoint[loginReq, service.LoginResult]{
 		Parse: func(c *gin.Context) (*loginReq, error) {
@@ -120,11 +130,15 @@ type loginReq struct {
 	Role     string `json:"role"`
 }
 
-// Logout 登出 POST /api/auth/logout
-// 双令牌会话（ADR-0012）：撤销请求体携带的 refresh token（写黑名单至其自然过期）并清除登录
-// Cookie；access 短生命周期自然过期，不入黑名单。本 handler 不依赖 JWTAuth——access 过期时
-// 亦能撤销 refresh，保证登出语义可靠。
-// 无 service 调用、纯会话操作，保留为薄适配（ADR-0009 一次性适配例外）。
+// Logout 登出
+// @Summary 登出
+// @Description 撤销 refresh_token 并清除登录 Cookie；不依赖 JWTAuth，access 过期亦可登出
+// @Tags 学员端-认证
+// @Accept json
+// @Produce json
+// @Param body body object false "refresh_token" example({"refresh_token":"eyJhbGciOi..."})
+// @Success 200 {object} response.R "success"
+// @Router /auth/logout [post]
 func (h *AuthHandler) Logout(c *gin.Context) {
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
@@ -137,10 +151,16 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	response.SuccessWithMsg(c, "已登出", nil)
 }
 
-// Refresh 刷新双令牌 POST /api/auth/refresh
-// 请求体带 refresh token：校验类型/黑名单/有效期 → 签发新 access + 新 refresh（轮换），
-// 旧 refresh 立即入黑名单防重放；失败统一返回 401（不区分原因，防枚举）。
-// 本端点不经过 JWTAuth（用 refresh token 自身鉴权）。
+// Refresh 刷新双令牌
+// @Summary 刷新双令牌
+// @Description 轮换签发新 access/refresh，旧 refresh 入黑名单；失败统一 401
+// @Tags 学员端-认证
+// @Accept json
+// @Produce json
+// @Param body body object true "refresh_token" example({"refresh_token":"eyJhbGciOi..."})
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /auth/refresh [post]
 func (h *AuthHandler) Refresh(c *gin.Context) {
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
@@ -149,23 +169,16 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		response.Unauthorized(c, "登录已过期，请重新登录")
 		return
 	}
-	rt := req.RefreshToken
-	claims, err := h.session.ValidateRefresh(rt)
+	// 原子轮换（ADR-0016）：校验/抢占/吊销/签发收敛在会话模块单点，并发双刷恰一成功
+	access, refresh, err := h.session.RotateRefresh(c.Request.Context(), req.RefreshToken)
 	if err != nil {
-		response.Unauthorized(c, "登录已过期，请重新登录")
-		return
-	}
-	if revoked, _ := h.session.IsRevoked(c.Request.Context(), rt); revoked {
-		response.Unauthorized(c, "登录已过期，请重新登录")
-		return
-	}
-	access, refresh, err := h.session.IssuePair(claims.UserID, claims.Account, claims.Role)
-	if err != nil {
+		if errors.Is(err, security.ErrInvalidRefresh) {
+			response.Unauthorized(c, "登录已过期，请重新登录")
+			return
+		}
 		response.ServerError(c, "服务器内部错误")
 		return
 	}
-	// 轮换：旧 refresh 立即入黑名单（防重放）
-	_ = h.session.RevokeRefresh(c.Request.Context(), rt)
 	response.Success(c, map[string]string{"token": access, "refresh_token": refresh})
 }
 
@@ -176,8 +189,16 @@ type meReq struct {
 	Account string
 }
 
-// Me 获取当前用户 GET /api/auth/me
-// 资料组装收编在 AuthService.GetProfile（响应形状由契约测试锁定）。
+// Me 获取当前用户
+// @Summary 当前用户信息
+// @Description 基于 JWT 获取当前用户档案（响应形状由契约测试锁定）
+// @Tags 学员端-认证
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /auth/me [get]
 func (h *AuthHandler) Me(c *gin.Context) {
 	Endpoint[meReq, service.ProfileDTO]{
 		Parse: func(c *gin.Context) (*meReq, error) {
@@ -196,7 +217,18 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	}.Handle(c)
 }
 
-// UpdateProfile 提交个人资料（昵称）修改审核 POST /api/auth/profile
+// UpdateProfile 提交个人资料修改
+// @Summary 提交昵称修改审核或直接更新单位
+// @Description nickname 走资料审核；company 立即生效
+// @Tags 学员端-个人资料
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "资料" example({"nickname":"新昵称","company":"新单位"})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /auth/profile [put]
 func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 	Endpoint[updateProfileReq, service.ProfileChangeRequestDTO]{
 		Parse: func(c *gin.Context) (*updateProfileReq, error) {
@@ -208,9 +240,22 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return &updateProfileReq{UID: uid, Nickname: req.Nickname}, nil
+			if req.Nickname == "" && req.Company == nil {
+				return nil, badRequest("参数错误")
+			}
+			return &updateProfileReq{UID: uid, Nickname: req.Nickname, Company: req.Company}, nil
 		},
 		Invoke: func(ctx context.Context, req *updateProfileReq) (*service.ProfileChangeRequestDTO, error) {
+			// 单位立即生效
+			if req.Company != nil {
+				if err := h.authSvc.UpdateCompany(req.UID, *req.Company); err != nil {
+					return nil, err
+				}
+				// 若同时带昵称，继续走审核流
+				if req.Nickname == "" {
+					return &service.ProfileChangeRequestDTO{}, nil
+				}
+			}
 			return h.reviewSvc.CreateRequest(req.UID, service.ProfileFieldNickname, req.Nickname)
 		},
 		Render: func(c *gin.Context, _ *updateProfileReq, resp *service.ProfileChangeRequestDTO, err error) {
@@ -223,6 +268,10 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 				response.BadRequest(c, err.Error())
 				return
 			}
+			if resp != nil && resp.ID == 0 {
+				response.SuccessWithMsg(c, "单位更新成功", resp)
+				return
+			}
 			response.SuccessWithMsg(c, "昵称修改已提交，审核通过后生效", resp)
 		},
 	}.Handle(c)
@@ -230,12 +279,47 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 
 // updateProfileReq 更新个人资料请求。
 type updateProfileReq struct {
-	UID      int
-	Nickname string
+	UID      int     `json:"uid"`
+	Nickname string  `json:"nickname"`
+	Company  *string `json:"company"`
 }
 
-// UploadAvatar 上传头像并提交审核 POST /api/auth/avatar（multipart，图片自动压缩为 WebP 后存入 local/R2）
-// multipart + 多步文件处理，保留为薄适配（ADR-0009 一次性适配例外）。
+// DeleteAccount 注销当前学员账号（硬删除）
+// @Summary 注销帐号
+// @Description 硬删除当前学员及关联数据，论坛内容匿名化
+// @Tags 学员端-个人资料
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /auth/account [delete]
+func (h *AuthHandler) DeleteAccount(c *gin.Context) {
+	uid := middleware.CurrentUserID(c)
+	if uid <= 0 {
+		response.Unauthorized(c, "请先登录")
+		return
+	}
+	if err := h.authSvc.DeleteAccount(uid); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	h.session.ClearCookie(c.Writer)
+	response.SuccessWithMsg(c, "帐号已注销", nil)
+}
+
+// UploadAvatar 上传头像
+// @Summary 上传头像
+// @Description multipart 上传，自动压缩为 WebP 后存入 storage 并提交审核
+// @Tags 学员端-个人资料
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param file formData file true "头像图片"
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /auth/avatar [post]
 func (h *AuthHandler) UploadAvatar(c *gin.Context) {
 	userID, _ := c.Get(string(middleware.CtxUserID))
 	uid, _ := userID.(int)

@@ -104,7 +104,7 @@ func TestStudentCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 		t.Fatalf("关联证书失败: %v", err)
 	}
 
-	list := svc.GetCourses(1, 10, nil, nil)
+	list := svc.GetCourses(1, 10, nil, nil, nil)
 	items := list.Courses
 	var item CourseDTO
 	for _, c := range items {
@@ -142,7 +142,7 @@ func TestStudentCourseListOmitsUnmountedCourses(t *testing.T) {
 		t.Fatalf("创建未挂载课程失败: %v", err)
 	}
 
-	items := svc.GetCourses(1, 10, nil, nil).Courses
+	items := svc.GetCourses(1, 10, nil, nil, nil).Courses
 	for _, c := range items {
 		if c.CourseID == unmounted.CourseID {
 			t.Fatal("未挂方向/等级的课程不应出现在学生端列表")
@@ -180,7 +180,7 @@ func TestAdminCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 	svc := NewAdminCourseService(db, nil, zap.NewNop())
 	course, prereq := seedCatalogCourse(t, db)
 
-	list := svc.GetCourses(1, 10, "", nil, nil)
+	list := svc.GetCourses(1, 10, "", nil, nil, nil)
 	items := list.Courses
 	if len(items) != 2 {
 		t.Fatalf("应返回 2 门课程, got %d", len(items))
@@ -213,7 +213,7 @@ func TestTutorCourseListHasChapterCount(t *testing.T) {
 	svc := NewTutorService(db, "", nil, nil, zap.NewNop())
 	course, _ := seedCatalogCourse(t, db)
 
-	list := svc.GetCourses(1, 10, nil, nil)
+	list := svc.GetCourses(1, 10, nil, nil, nil)
 	items := list.Courses
 	var item CourseDTO
 	for _, c := range items {

@@ -24,8 +24,9 @@ func NewTrainingCatalogHandler(svc *service.TrainingCatalogService) *TrainingCat
 }
 
 // RegisterTrainingCatalogRoutes 注册培训目录蓝图：
-//   - /api/admin/*：专业方向 / 课程等级 / 证书模板 / 题库标签 CRUD 与题目打标（管理端）
-//   - /api/catalog/*、/api/levels、/api/tags：学员端查询
+//   - /api/admin/*：专业方向 / 课程等级 / 证书模板 / 题库标签 / 目标证件 CRUD 与题目打标（管理端）
+//   - /api/catalog/*、/api/levels、/api/tags、/api/credentials：学员端查询
+//   - /api/me/credential：当前证件读写（需登录）
 func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.TrainingCatalogService) {
 	h := NewTrainingCatalogHandler(svc)
 
@@ -33,6 +34,11 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *serv
 	rg.GET("/catalog/tree", h.GetCatalogTree)
 	rg.GET("/levels", h.ListPublicLevels)
 	rg.GET("/tags", h.ListPublicTags)
+	rg.GET("/credentials", h.ListPublicCredentials)
+	rg.GET("/credentials/grouped", h.ListGroupedCredentials)
+	// 当前证件（需登录，hrwai_user / admin / tutor 均可查询，切换仅 hrwai_user）
+	rg.GET("/me/credential", middleware.JWTAuth(rd.Session), h.GetCurrentCredential)
+	rg.PATCH("/me/credential", middleware.JWTAuth(rd.Session), h.SetCurrentCredential)
 
 	// ===== 管理端 CRUD =====
 	g := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
@@ -64,11 +70,24 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *serv
 	g.PUT("/question-tag/:id", h.UpdateQuestionTag)
 	g.DELETE("/question-tag/:id", h.DeleteQuestionTag)
 
+	// ---- 目标证件 ----
+	g.GET("/credentials", h.ListCredentials)
+	g.POST("/credential", h.CreateCredential)
+	g.PUT("/credential/:id", h.UpdateCredential)
+	g.PUT("/credential/:id/sort", h.SwapCredentialSort)
+	g.DELETE("/credential/:id", h.DeleteCredential)
+
 	// ---- 题目打标 ----
 	g.PUT("/question/:question_id/tags", h.SetQuestionTags)
 }
 
-// GetCatalogTree 课程目录树（学员端）GET /api/catalog/tree
+// GetCatalogTree 培训目录树
+// @Summary 培训目录树（公开）
+// @Description 学员端课程目录树
+// @Tags 学员端-培训目录
+// @Produce json
+// @Success 200 {object} response.R "success"
+// @Router /catalog/tree [get]
 func (h *TrainingCatalogHandler) GetCatalogTree(c *gin.Context) {
 	Endpoint[struct{}, service.CatalogTreeDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.CatalogTreeDTO, error) {
@@ -80,7 +99,13 @@ func (h *TrainingCatalogHandler) GetCatalogTree(c *gin.Context) {
 	}.Handle(c)
 }
 
-// ListPublicLevels 课程等级列表（仅启用项）GET /api/levels
+// ListPublicLevels 课程等级列表
+// @Summary 课程等级（公开）
+// @Description 仅启用项
+// @Tags 学员端-培训目录
+// @Produce json
+// @Success 200 {object} response.R "success"
+// @Router /levels [get]
 func (h *TrainingCatalogHandler) ListPublicLevels(c *gin.Context) {
 	Endpoint[struct{}, []service.LevelDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.LevelDict, error) {
@@ -93,7 +118,13 @@ func (h *TrainingCatalogHandler) ListPublicLevels(c *gin.Context) {
 	}.Handle(c)
 }
 
-// ListPublicTags 题库标签列表（仅启用项）GET /api/tags
+// ListPublicTags 题库标签列表
+// @Summary 题库标签（公开）
+// @Description 仅启用项
+// @Tags 学员端-培训目录
+// @Produce json
+// @Success 200 {object} response.R "success"
+// @Router /tags [get]
 func (h *TrainingCatalogHandler) ListPublicTags(c *gin.Context) {
 	Endpoint[struct{}, []service.QuestionTagDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.QuestionTagDict, error) {
@@ -662,4 +693,223 @@ func (h *TrainingCatalogHandler) SetQuestionTags(c *gin.Context) {
 			response.SuccessWithMsg(c, "题目标签已更新", map[string]any{"tag_ids": req.TagIDs})
 		},
 	}.Handle(c)
+}
+
+// ===== 目标证件 =====
+
+// ListPublicCredentials 目标证件列表（公开，仅启用项）GET /api/credentials
+func (h *TrainingCatalogHandler) ListPublicCredentials(c *gin.Context) {
+	Endpoint[struct{}, []service.CredentialDict]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.CredentialDict, error) {
+			result := h.svc.ListCredentials(true)
+			return &result, nil
+		},
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.CredentialDict, _ error) {
+			response.Success(c, gin.H{"credentials": deref(resp)})
+		},
+	}.Handle(c)
+}
+
+// ListGroupedCredentials 分组目标证件（公开）GET /api/credentials/grouped
+func (h *TrainingCatalogHandler) ListGroupedCredentials(c *gin.Context) {
+	Endpoint[struct{}, map[string][]service.CredentialDict]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*map[string][]service.CredentialDict, error) {
+			result := h.svc.ListGroupedCredentials()
+			return &result, nil
+		},
+		Render: func(c *gin.Context, _ *struct{}, resp *map[string][]service.CredentialDict, _ error) {
+			response.Success(c, deref(resp))
+		},
+	}.Handle(c)
+}
+
+// ListCredentials 目标证件列表（管理端，含停用）GET /api/admin/credentials
+func (h *TrainingCatalogHandler) ListCredentials(c *gin.Context) {
+	Endpoint[struct{}, []service.CredentialDict]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.CredentialDict, error) {
+			result := h.svc.ListCredentials(false)
+			return &result, nil
+		},
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.CredentialDict, _ error) {
+			response.Success(c, gin.H{"credentials": deref(resp)})
+		},
+	}.Handle(c)
+}
+
+// CreateCredential 创建目标证件 POST /api/admin/credential
+func (h *TrainingCatalogHandler) CreateCredential(c *gin.Context) {
+	Endpoint[service.CredentialInput, service.CredentialDict]{
+		Parse: func(c *gin.Context) (*service.CredentialInput, error) {
+			var in service.CredentialInput
+			if err := c.ShouldBindJSON(&in); err != nil {
+				return nil, badRequest("请求数据无效")
+			}
+			return &in, nil
+		},
+		Invoke: func(ctx context.Context, in *service.CredentialInput) (*service.CredentialDict, error) {
+			result, err := h.svc.CreateCredential(*in)
+			if err != nil {
+				return nil, err
+			}
+			return &result, nil
+		},
+		Render: func(c *gin.Context, _ *service.CredentialInput, resp *service.CredentialDict, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.Created(c, "证件创建成功", deref(resp))
+		},
+	}.Handle(c)
+}
+
+// credentialUpdateReq 更新请求
+type credentialUpdateReq struct {
+	ID int
+	In service.CredentialInput
+}
+
+// UpdateCredential 更新目标证件 PUT /api/admin/credential/:id
+func (h *TrainingCatalogHandler) UpdateCredential(c *gin.Context) {
+	Endpoint[credentialUpdateReq, service.CredentialDict]{
+		Parse: func(c *gin.Context) (*credentialUpdateReq, error) {
+			id, err := strconv.Atoi(c.Param("id"))
+			if err != nil {
+				return nil, badRequest("证件ID无效")
+			}
+			var in service.CredentialInput
+			if err := c.ShouldBindJSON(&in); err != nil {
+				return nil, badRequest("请求数据无效")
+			}
+			return &credentialUpdateReq{ID: id, In: in}, nil
+		},
+		Invoke: func(ctx context.Context, req *credentialUpdateReq) (*service.CredentialDict, error) {
+			result, err := h.svc.UpdateCredential(req.ID, req.In)
+			if err != nil {
+				return nil, err
+			}
+			return &result, nil
+		},
+		Render: func(c *gin.Context, _ *credentialUpdateReq, resp *service.CredentialDict, err error) {
+			if err != nil {
+				response.NotFound(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "证件更新成功", deref(resp))
+		},
+	}.Handle(c)
+}
+
+// credentialIDReq ID 路径参数
+type credentialIDReq struct {
+	ID int
+}
+
+// DeleteCredential 删除目标证件 DELETE /api/admin/credential/:id
+func (h *TrainingCatalogHandler) DeleteCredential(c *gin.Context) {
+	Endpoint[credentialIDReq, struct{}]{
+		Parse: func(c *gin.Context) (*credentialIDReq, error) {
+			id, err := strconv.Atoi(c.Param("id"))
+			if err != nil {
+				return nil, badRequest("证件ID无效")
+			}
+			return &credentialIDReq{ID: id}, nil
+		},
+		Invoke: func(ctx context.Context, req *credentialIDReq) (*struct{}, error) {
+			if err := h.svc.DeleteCredential(req.ID); err != nil {
+				return nil, err
+			}
+			return &struct{}{}, nil
+		},
+		Render: func(c *gin.Context, _ *credentialIDReq, _ *struct{}, err error) {
+			if err != nil {
+				response.NotFound(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "证件删除成功", nil)
+		},
+	}.Handle(c)
+}
+
+// swapCredentialSortReq 交换排序请求
+type swapCredentialSortReq struct {
+	ID       int
+	SwapWith int
+}
+
+// SwapCredentialSort 交换目标证件排序 PUT /api/admin/credential/:id/sort
+func (h *TrainingCatalogHandler) SwapCredentialSort(c *gin.Context) {
+	Endpoint[swapCredentialSortReq, struct{}]{
+		Parse: func(c *gin.Context) (*swapCredentialSortReq, error) {
+			id, err := strconv.Atoi(c.Param("id"))
+			if err != nil {
+				return nil, badRequest("证件ID无效")
+			}
+			var body struct {
+				SwapWith int `json:"swap_with"`
+			}
+			if err := c.ShouldBindJSON(&body); err != nil || body.SwapWith <= 0 {
+				return nil, badRequest("swap_with 参数无效")
+			}
+			return &swapCredentialSortReq{ID: id, SwapWith: body.SwapWith}, nil
+		},
+		Invoke: func(ctx context.Context, req *swapCredentialSortReq) (*struct{}, error) {
+			if err := h.svc.SwapCredentialSort(req.ID, req.SwapWith); err != nil {
+				return nil, err
+			}
+			return &struct{}{}, nil
+		},
+		Render: func(c *gin.Context, _ *swapCredentialSortReq, _ *struct{}, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "排序已交换", nil)
+		},
+	}.Handle(c)
+}
+
+// GetCurrentCredential 获取当前证件 GET /api/me/credential
+func (h *TrainingCatalogHandler) GetCurrentCredential(c *gin.Context) {
+	uid := middleware.CurrentUserID(c)
+	if uid <= 0 {
+		response.Unauthorized(c, "请先登录")
+		return
+	}
+	dict, err := h.svc.GetCurrentCredential(uid)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	if dict == nil {
+		response.Success(c, gin.H{"credential": nil})
+		return
+	}
+	response.Success(c, gin.H{"credential": dict})
+}
+
+// SetCurrentCredential 设置当前证件 PATCH /api/me/credential
+func (h *TrainingCatalogHandler) SetCurrentCredential(c *gin.Context) {
+	uid := middleware.CurrentUserID(c)
+	if uid <= 0 {
+		response.Unauthorized(c, "请先登录")
+		return
+	}
+	if role := middleware.CurrentRole(c); role != "" && role != service.HrwaiRole {
+		response.Forbidden(c, "仅学员可切换证件")
+		return
+	}
+	var req struct {
+		CredentialID int `json:"credential_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.CredentialID <= 0 {
+		response.BadRequest(c, "证件ID无效")
+		return
+	}
+	dict, err := h.svc.SetCurrentCredential(uid, req.CredentialID)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "当前证件已切换", gin.H{"credential": dict})
 }

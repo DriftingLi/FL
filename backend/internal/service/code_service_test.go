@@ -78,7 +78,7 @@ type fakeSMSProvider struct {
 	sent []string
 }
 
-func (f *fakeSMSProvider) Send(to, code string, _ int) error {
+func (f *fakeSMSProvider) Send(to, code string, _ int, _ CodePurpose) error {
 	f.sent = append(f.sent, to+"|"+code)
 	return nil
 }
@@ -87,7 +87,7 @@ func (f *fakeSMSProvider) Send(to, code string, _ int) error {
 func newCodeTestSvc(t *testing.T) (*VerifyCodeService, *memCodeStore) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	authSvc := NewAuthService(db, security.NewSession("test-secret", time.Hour, security.CookieConfig{}), "a", "t", "s", zap.NewNop())
+	authSvc := NewAuthService(db, security.NewSession("test-secret", time.Hour, security.CookieConfig{}), NewForumCounter(), "a", "t", "s", zap.NewNop())
 	store := newMemCodeStore()
 	svc := NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
 	return svc, store

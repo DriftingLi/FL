@@ -1,12 +1,11 @@
-// Package service 答题会话 module：练习/模拟考试/定级考试共享的会话语义
-// ——守卫（本人+进行中）、题目顺序重建、答题状态三态初始化、场次状态展示。
-// 存储形态保持三张存量表不变（practice_progress / mock_exam / exam_participant）。
+// Package service 答题会话 module：练习/模拟考试共享的会话语义
+// ——守卫（本人+进行中）、题目顺序重建、答题状态三态初始化。
+// 存储形态保持存量表不变（practice_progress / mock_exam）。
 package service
 
 import (
 	"encoding/json"
 	"errors"
-	"time"
 
 	"gorm.io/gorm"
 
@@ -62,26 +61,4 @@ func initAnswersState(raw json.RawMessage) json.RawMessage {
 		return json.RawMessage("{}")
 	}
 	return raw
-}
-
-// effectiveExamStatus 场次生效状态（读路径展示用，不落库）：
-// 已到开始时间按 ongoing 展示，已过结束时间按 finished 展示，finished 状态恒定。
-func effectiveExamStatus(status string, startTime, endTime, now time.Time) string {
-	eff := status
-	if eff == "upcoming" && now.After(startTime) {
-		eff = "ongoing"
-	}
-	if eff != "finished" && now.After(endTime) {
-		eff = "finished"
-	}
-	return eff
-}
-
-// advanceExamStatus 写路径状态推进：upcoming 且已过开始时间 → ongoing。
-// 返回 (新状态, 是否推进)。仅由进入考试等写操作调用。
-func advanceExamStatus(status string, startTime, now time.Time) (string, bool) {
-	if status == "upcoming" && now.After(startTime) {
-		return "ongoing", true
-	}
-	return status, false
 }
