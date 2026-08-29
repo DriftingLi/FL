@@ -68,6 +68,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/student/ForumPage.vue')
       },
       {
+        path: 'forum/ask',
+        name: 'ForumAsk',
+        component: () => import('@/pages/student/ForumAskPage.vue')
+      },
+      {
         path: 'forum/:topicId',
         name: 'ForumDetail',
         component: () => import('@/pages/student/ForumDetail.vue')

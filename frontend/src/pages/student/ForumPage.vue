@@ -2,7 +2,10 @@
   <div class="forum-page">
     <div class="forum-header">
       <h1 class="forum-title">学员论坛</h1>
-      <el-button type="primary" size="large" :icon="EditPen" @click="openCreateDialog">
+      <el-button v-if="mode === 'all' && categoryTab === 'question'" type="primary" size="large" :icon="EditPen" @click="goAsk">
+        我要提问
+      </el-button>
+      <el-button v-else type="primary" size="large" :icon="EditPen" @click="openCreateDialog">
         发布新帖
       </el-button>
     </div>
@@ -142,7 +145,7 @@
           </div>
         </div>
       </template>
-      <UiEmptyState v-else :description="emptyDescription" />
+      <UiEmptyState v-else :description="emptyDescription" :action-text="mode === 'all' && categoryTab === 'question' ? '我要提问' : undefined" @action="goAsk" />
     </div>
 
     <div class="pagination-wrapper" v-if="mode !== 'history' && total > pageSize">
@@ -189,7 +192,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { EditPen, View, ChatDotRound, Picture, Calendar, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
 import { forumApi, forumTabQuery, type ForumCategory, type ForumTopicItem, type MyReplyItem } from '@/api/forum'
@@ -206,6 +209,7 @@ import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 
 const loading = ref(false)
@@ -242,12 +246,10 @@ const currentPage = computed({
   }
 })
 
-// 问答 Tab 的空态不能复用讨论的「还没有帖子」——用户在问答区看到这句话会以为功能坏了。
-// 文案只陈述现状、不承诺动作：提问入口属 #365，本票还发不出问答帖，
-// 写「来发第一个提问吧」会指向一个不存在的按钮。个人视图（mode 非 all）沿用原文案。
+// 问答 Tab 空态升级为引导（#365 提问入口就位后）：指向“我要提问”
 const emptyDescription = computed(() =>
   mode.value === 'all' && categoryTab.value === 'question'
-    ? '问答区还没有提问'
+    ? '还没有人提问，来发第一个提问吧'
     : '还没有帖子，来发第一帖吧'
 )
 
@@ -397,6 +399,10 @@ function goDetail(id: number) {
   router.push({ name: 'ForumDetail', params: { topicId: String(id) } })
 }
 
+function goAsk() {
+  router.push({ name: 'ForumAsk' })
+}
+
 // ===== 打卡（spec #268 A1-A5）=====
 const checkInStreak = ref(0)
 const checkInTotal = ref(0)
@@ -445,9 +451,23 @@ function onCheckInChecked(data: { streak: number; total: number; today_checked: 
 }
 
 onMounted(() => {
+  if (route.query.tab === 'question') {
+    categoryTab.value = 'question'
+  }
   loadTopics()
   loadCheckInStatus()
 })
+
+watch(
+  () => route.query.tab,
+  (tab) => {
+    if (tab === 'question' && categoryTab.value !== 'question') {
+      categoryTab.value = 'question'
+    } else if (tab === 'discussion' && categoryTab.value !== 'discussion') {
+      categoryTab.value = 'discussion'
+    }
+  }
+)
 </script>
 
 <style scoped>
