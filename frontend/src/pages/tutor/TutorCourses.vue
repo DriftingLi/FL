@@ -1,15 +1,24 @@
 <template>
-  <div class="tutor-courses-page">
-    <div class="page-header">
-      <h2>我的课程</h2>
-      <el-select v-model="credentialId" placeholder="全部证件" clearable style="width: 180px" @change="loadCourses">
-        <el-option v-for="c in credentials" :key="c.id" :label="c.name" :value="c.id" />
-      </el-select>
-    </div>
+  <div>
+    <UiPageHeader
+      title="我的课程"
+      :subtitle="total > 0 ? `共 ${total} 门课程` : undefined"
+    >
+      <template #actions>
+        <UiSelect
+          v-model="credentialId"
+          :options="credentialOptions"
+          placeholder="全部证件"
+          clearable
+          class="!w-[180px]"
+          @change="onCredentialChange"
+        />
+      </template>
+    </UiPageHeader>
 
-    <div class="course-layout">
-      <!-- 左栏：双卡片（专业方向 / 课程等级），与学员端课程中心共享筛选 module -->
-      <aside class="cc-sidebar">
+    <!-- 左栏：双卡片（专业方向 / 课程等级），与学员端课程中心共享筛选 module -->
+    <div class="flex items-start gap-5 max-[900px]:flex-col max-[900px]:items-stretch">
+      <aside class="flex w-[200px] shrink-0 flex-col gap-3 max-[900px]:w-full">
         <FacetCard title="专业方向">
           <FacetItem
             :active="specialtyId === null"
@@ -46,85 +55,121 @@
       </aside>
 
       <!-- 右栏：课程网格 -->
-      <main class="cc-main">
-        <div v-loading="loading" class="course-grid">
-          <el-empty v-if="!loading && courses.length === 0" description="该方向/等级下暂无课程" />
+      <main class="min-w-0 flex-1">
+        <UiErrorState
+          v-if="loadError"
+          title="课程加载失败"
+          description="网络或服务端异常，可重试"
+          :retrying="retrying"
+          @retry="handleRetry"
+        />
 
-          <CourseCard
-            v-for="course in courses"
-            :key="course.course_id"
-            :name="course.name"
-            :description="course.description"
-            :cover-image="course.cover_image"
-            :specialty-id="course.specialty_id"
-            @click="goToChapters(course.course_id)"
-          >
-            <template #tags>
-              <div class="card-tags">
-                <el-tag
-                  v-if="levelNameOf(course.level_id)"
-                  :type="levelTagType(levelNameOf(course.level_id))"
-                  size="small"
-                >
-                  {{ levelNameOf(course.level_id) }}
-                </el-tag>
-                <el-tag
-                  v-if="specialtyNameOf(course.specialty_id)"
-                  type="primary"
-                  effect="plain"
-                  size="small"
-                >
-                  {{ specialtyNameOf(course.specialty_id) }}
-                </el-tag>
-                <el-tag v-if="(course as any).credential_id" size="small" effect="plain">{{ credentials.find(c => c.id === (course as any).credential_id)?.name || '' }}</el-tag>
-              </div>
-            </template>
-            <template #meta>
-              <div class="card-footer">
-                <span>{{ course.chapter_count || 0 }} 个章节</span>
-                <el-button type="primary" size="small">
-                  管理章节 <el-icon><ArrowRight /></el-icon>
-                </el-button>
-              </div>
-            </template>
-          </CourseCard>
-        </div>
+        <UiSkeleton v-else-if="loading" variant="card" :count="6" />
 
-        <div v-if="total > pageSize" class="pagination-wrapper">
-          <el-pagination
-            v-model:current-page="currentPage"
-            :page-size="pageSize"
-            :total="total"
-            layout="prev, pager, next"
-            @current-change="loadCourses"
-          />
-        </div>
+        <UiEmptyState
+          v-else-if="courses.length === 0"
+          title="暂无课程"
+          description="当前筛选条件下没有课程，试试切换专业方向或课程等级。"
+          action-text="重置筛选"
+          @action="resetFilters"
+        />
+
+        <template v-else>
+          <div class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+            <CourseCard
+              v-for="course in courses"
+              :key="course.course_id"
+              :name="course.name"
+              :description="course.description"
+              :cover-image="course.cover_image"
+              :specialty-id="course.specialty_id"
+              @click="goToChapters(course.course_id)"
+            >
+              <template #tags>
+                <div class="mb-1 flex flex-wrap gap-1.5">
+                  <UiTag v-if="levelNameOf(course.level_id)" :tone="LEVEL_TONE[levelTagType(levelNameOf(course.level_id))]">
+                    {{ levelNameOf(course.level_id) }}
+                  </UiTag>
+                  <UiTag v-if="specialtyNameOf(course.specialty_id)" tone="brand">
+                    {{ specialtyNameOf(course.specialty_id) }}
+                  </UiTag>
+                  <UiTag v-if="credentialNameOf(course.credential_id)" tone="neutral">
+                    {{ credentialNameOf(course.credential_id) }}
+                  </UiTag>
+                </div>
+              </template>
+              <template #meta>
+                <div class="flex items-center justify-between text-xs text-ink-3">
+                  <span>{{ course.chapter_count || 0 }} 个章节</span>
+                  <UiButton size="small">
+                    管理章节 <el-icon><ArrowRight /></el-icon>
+                  </UiButton>
+                </div>
+              </template>
+            </CourseCard>
+          </div>
+
+          <div v-if="total > pageSize" class="mt-5 flex justify-center">
+            <el-pagination
+              v-model:current-page="currentPage"
+              :page-size="pageSize"
+              :total="total"
+              layout="prev, pager, next"
+              @current-change="loadCourses"
+            />
+          </div>
+        </template>
       </main>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRight } from '@element-plus/icons-vue'
 import { tutorApi, type TutorCourse } from '@/api/tutor'
 import { trainingApi } from '@/api/training'
 import { credentialApi, type CredentialDict } from '@/api/credential'
-import { levelTagType } from '@/constants/level'
+import { levelTagType, type LevelTagType } from '@/constants/level'
 import { useCourseCatalog, treeCatalogAdapter } from '@/composables/useCourseCatalog'
 import FacetCard from '@/components/catalog/FacetCard.vue'
 import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCard from '@/components/catalog/CourseCard.vue'
+import UiPageHeader from '@/components/ui/UiPageHeader.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+
+/** 导师端课程行：后端额外返回 credential_id，TutorCourse 尚未收录 */
+type TutorCourseRow = TutorCourse & { credential_id?: number }
 
 const router = useRouter()
 const credentials = ref<CredentialDict[]>([])
-const credentialId = ref<number | null>(null)
+const credentialId = ref<number | string | undefined>(undefined)
 const loading = ref(false)
-const courses = ref<TutorCourse[]>([])
+const loadError = ref(false)
+const retrying = ref(false)
+const courses = ref<TutorCourseRow[]>([])
 const currentPage = ref(1)
 const pageSize = ref(12)
 const total = ref(0)
+
+const credentialOptions = computed(() =>
+  credentials.value.map((c) => ({ label: c.name, value: c.id as number | string }))
+)
+
+/** el-tag type → UiTag tone。等级配色沿用学员端/管理端既有约定，不做改动。 */
+const LEVEL_TONE: Record<LevelTagType, 'brand' | 'success' | 'warning' | 'danger' | 'neutral'> = {
+  success: 'success',
+  primary: 'brand',
+  warning: 'warning',
+  danger: 'danger',
+  info: 'neutral'
+}
 
 const {
   directions,
@@ -148,6 +193,11 @@ const {
   }
 })
 
+function credentialNameOf(id?: number): string {
+  if (!id) return ''
+  return credentials.value.find((c) => c.id === id)?.name || ''
+}
+
 async function loadCredentials() {
   try {
     const data = await credentialApi.listCredentials()
@@ -157,22 +207,49 @@ async function loadCredentials() {
 
 async function loadCourses() {
   loading.value = true
+  loadError.value = false
   try {
-    const params: Record<string, unknown> = {
+    const params: Record<string, string | number> = {
       page: currentPage.value,
       page_size: pageSize.value
     }
-    if (credentialId.value !== null) (params as any).credential_id = credentialId.value
+    const cid = credentialId.value
+    if (cid !== undefined && cid !== null && cid !== '') params.credential_id = Number(cid)
     if (specialtyId.value !== null) params.specialty_id = specialtyId.value
     if (levelId.value !== null) params.level_id = levelId.value
     const res = await tutorApi.getCourses(params)
     courses.value = res.courses
     total.value = res.total
   } catch (e) {
+    loadError.value = true
     console.error('Failed to load courses:', e)
   } finally {
     loading.value = false
   }
+}
+
+async function handleRetry() {
+  retrying.value = true
+  try {
+    await loadCourses()
+  } finally {
+    retrying.value = false
+  }
+}
+
+/** 重置筛选：直接写 ref 而非调 selectDirection/selectLevel，避免每次选择都触发一次 onSelect → loadCourses */
+function resetFilters() {
+  specialtyId.value = null
+  levelId.value = null
+  credentialId.value = undefined
+  currentPage.value = 1
+  loadCourses()
+}
+
+/** 证件下拉变化：UiSelect 未声明 change，监听器经 attrs 透传到内部 el-select */
+function onCredentialChange() {
+  currentPage.value = 1
+  loadCourses()
 }
 
 function goToChapters(courseId: number) {
@@ -185,79 +262,3 @@ onMounted(() => {
   loadCredentials()
 })
 </script>
-
-<style scoped>
-.tutor-courses-page {
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.page-header {
-  margin-bottom: 20px;
-}
-
-.page-header h2 {
-  font-size: 22px;
-  color: #303133;
-  margin-bottom: 8px;
-}
-
-.course-layout {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-5);
-}
-
-/* ===== 左栏 ===== */
-.cc-sidebar {
-  width: 200px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-/* ===== 右栏 ===== */
-.cc-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.course-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: var(--space-4);
-}
-
-.card-tags {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-bottom: var(--space-1);
-}
-
-.card-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: var(--text-xs);
-  color: var(--color-text-tertiary);
-}
-
-.pagination-wrapper {
-  display: flex;
-  justify-content: center;
-  margin-top: var(--space-5);
-}
-
-@media (max-width: 900px) {
-  .course-layout {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .cc-sidebar {
-    width: 100%;
-  }
-}
-</style>
