@@ -223,7 +223,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { Expand, Fold, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
-import type { NavItem } from '@/config/navigation'
+import { isNavRouteActive, type NavItem } from '@/config/navigation'
 import NotificationPanel from '@/components/layout/NotificationPanel.vue'
 
 const props = withDefaults(
@@ -329,16 +329,9 @@ function itemTo(item: NavItem) {
   return { name: item.routeName, params: item.routeParams || {} }
 }
 
+/** 匹配逻辑抽到 config/navigation.ts 的 isNavRouteActive（纯函数，可单测） */
 function isRouteActive(item: NavItem): boolean {
-  if (!item.routeName) return false
-  if (route.name !== item.routeName) return false
-  // 章节列表等同名路由需比对 params，避免全部高亮
-  if (item.routeParams) {
-    for (const [k, v] of Object.entries(item.routeParams)) {
-      if (String(route.params[k] ?? '') !== String(v)) return false
-    }
-  }
-  return true
+  return isNavRouteActive(item, route.name, route.params as Record<string, string | string[] | undefined>)
 }
 
 async function handleUserCommand(command: string) {
