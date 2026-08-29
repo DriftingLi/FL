@@ -4,6 +4,8 @@
       :menu-items="menuItems"
       :collapsed="collapsed"
       :mobile-open="mobileOpen"
+      :theme="props.sidebarTheme"
+      :density="props.sidebarDensity"
       :class="{ 'sidebar-mobile-open': mobileOpen }"
       @toggle-collapse="handleToggleCollapse"
     >
@@ -27,7 +29,7 @@
     </button>
 
     <div class="main-container" :class="{ 'main-collapsed': collapsed }">
-      <main class="main-content">
+      <main class="main-content" :class="{ 'content-narrow': props.contentWidth === 'narrow' }">
         <!-- 内层 router-view + transition：
              App.vue 已用 matched[0]?.path 做 key 锁住外层布局不重挂，
              这里用 fullPath 做 key 让同布局下的子页面也能走 200ms 淡入淡出。
@@ -49,12 +51,23 @@ import { Operation } from '@element-plus/icons-vue'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import type { NavItem } from '@/config/navigation'
 
-withDefaults(defineProps<{
-  menuItems: NavItem[]
-  showFooter?: boolean
-}>(), {
-  showFooter: false
-})
+const props = withDefaults(
+  defineProps<{
+    menuItems: NavItem[]
+    showFooter?: boolean
+    /**
+     * 内容区宽度。
+     * - `full`：**默认值 = 改造前行为**，内容铺满可用宽度
+     * - `narrow`：内容限宽 1280px 居中，宽屏下避免行过长
+     */
+    contentWidth?: 'full' | 'narrow'
+    /** 透传给 AppSidebar，不传则沿用其默认值 `light` */
+    sidebarTheme?: 'light' | 'dark'
+    /** 透传给 AppSidebar，不传则沿用其默认值 `default` */
+    sidebarDensity?: 'default' | 'compact'
+  }>(),
+  { showFooter: false, contentWidth: 'full' }
+)
 
 const route = useRoute()
 
@@ -104,6 +117,20 @@ watch(() => route.path, () => {
   background: var(--color-bg-page);
   padding: var(--space-6);
   flex: 1;
+}
+
+/* narrow：内容限宽 1280px 居中。
+   router-view + transition(mode="out-in") 同一时刻只渲染一个页面根元素，
+   因此 > * 精确命中页面根节点，无需额外包一层 wrapper。 */
+.main-content.content-narrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.main-content.content-narrow > * {
+  width: 100%;
+  max-width: 1280px;
 }
 
 .sidebar-overlay {

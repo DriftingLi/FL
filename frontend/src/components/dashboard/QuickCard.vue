@@ -1,5 +1,5 @@
 <template>
-  <div class="quick-card">
+  <div class="quick-card" :class="{ 'is-elevated': props.variant === 'elevated' }">
     <div class="card-header">
       <h3 class="card-title">{{ title }}</h3>
       <router-link v-if="moreLink" :to="moreLink" class="card-more">
@@ -43,16 +43,22 @@ export interface QuickCardItem {
   path?: string
 }
 
-withDefaults(defineProps<{
-  title: string
-  items: QuickCardItem[]
-  moreLink?: string
-  maxItems?: number
-  emptyText?: string
-}>(), {
-  maxItems: 5,
-  emptyText: '暂无数据'
-})
+const props = withDefaults(
+  defineProps<{
+    title: string
+    items: QuickCardItem[]
+    moreLink?: string
+    maxItems?: number
+    emptyText?: string
+    /**
+     * 卡片外观。
+     * - `plain`：**默认值 = 改造前行为**
+     * - `elevated`：投影更重，hover 轻微上浮
+     */
+    variant?: 'plain' | 'elevated'
+  }>(),
+  { maxItems: 5, emptyText: '暂无数据', variant: 'plain' }
+)
 </script>
 
 <style scoped>
@@ -67,6 +73,20 @@ withDefaults(defineProps<{
 
 .quick-card:hover {
   box-shadow: var(--shadow-sm);
+}
+
+/* elevated：投影更重 + hover 轻微上浮。
+   单独的 transition 声明放在变体里，上面的 plain 规则保持零改动。 */
+.quick-card.is-elevated {
+  box-shadow: var(--shadow-sm);
+  transition:
+    box-shadow var(--duration-normal) var(--ease-default),
+    transform var(--duration-normal) var(--ease-default);
+}
+
+.quick-card.is-elevated:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
 }
 
 .card-header {
