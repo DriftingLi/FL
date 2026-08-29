@@ -72,6 +72,8 @@ master 有仓库 ruleset「protect」保护（直接 push 会被拒，`push decl
 2. **建分支推送**：若提交已在本地 master 上，`git branch feat/xxx` 后 `git reset --hard origin/master` 还原本地 master；然后 `git push -u origin feat/xxx`。
 3. **CI 自动跑**：push 事件触发全量 CI；ci-summary 通过后**自动触发 CD 部署 testing**（非 master 分支 → testing 环境）。
 4. **创建 PR**：`gh pr create --base master --head feat/xxx --title "..." --body "..."`。
-5. **等门禁**：`gh run watch <id> --exit-status` 等 CI 全绿（纯前端改动时 backend job 跳过属正常）；**必须等 CD testing 部署成功**（ruleset 的 `required_deployments: testing` 是 merge 前置条件），用 `gh run list --workflow cd.yml` 找到对应 commit 的 run 并 watch。
+5. **等门禁**：`gh run watch <id> --exit-status` 等 CI 全绿（纯前端改动时 backend-lint / backend-test / migration-check 三个 job 跳过属正常）。
+
+   **不需要等 testing 部署再 merge**：`ci.yml` 的 `ci-summary` 带 `if: github.event_name == 'push' && github.ref == 'refs/heads/master'` —— 只有 master 的 push 才触发 CD，非 master 分支与 PR 只跑 CI 不部署（ruleset 的 `required_deployments: testing` 已改为合并后统一部署）。所以 PR 的 `mergeStateStatus` 变成 `CLEAN` 即可 merge。
 6. **Squash merge**：`gh pr merge <n> --squash --delete-branch`。若报 "requirements have not been met"，用 `gh pr view <n> --json statusCheckRollup` 排查，确认 testing 部署完成后重试。
 7. **收尾**：`git fetch --prune` → `git checkout master && git pull --ff-only` → 删除本地 feat 分支（若 gh 未自动删）。
