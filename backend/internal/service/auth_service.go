@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"time"
 
 	"forklift-training/internal/clock"
@@ -88,6 +89,16 @@ func (s *AuthService) GetProfile(userID int, role, account string) *ProfileDTO {
 			dto.Name = ptr(a.Name)
 			dto.Username = ptr(a.Username)
 		}
+	case RecruiterRole:
+		var r model.RecruiterUser
+		if err := s.db.First(&r, userID).Error; err == nil {
+			dto.Account = r.Username
+			dto.Username = ptr(r.Username)
+			dto.Name = ptr(r.ContactName)
+			dto.Company = ptr(r.CompanyName)
+			dto.Email = ptr(r.ContactEmail)
+			dto.Phone = ptr(r.ContactPhone)
+		}
 	}
 	return dto
 }
@@ -150,6 +161,9 @@ type LoginResult struct {
 
 // HrwaiRole 统一 HRWAI 账号角色名(替代原 "student" 和 "valuation_user")。
 const HrwaiRole = "hrwai_user"
+
+// RecruiterRole 企业招聘者角色名（第四角色，独立表 recruiter_users，邀约制）。
+const RecruiterRole = "recruiter"
 
 // loginCredentials 登录骨架按角色差异点：查表结果（密码/禁用语义）。
 // status 为 nil 表示该角色无禁用语义（admin 表无 status 字段）。
@@ -295,6 +309,122 @@ func (s *AuthService) TutorRegister(username, password, name string) (map[string
 		"username": tutor.Username,
 		"name":     tutor.Name,
 	}, nil
+}
+
+// RecruiterLogin 企业招聘者登录（第四角色，邀约制独立表）。
+func (s *AuthService) RecruiterLogin(username, password string) (*LoginResult, error) {
+	var r model.RecruiterUser
+	if err := s.db.Where("username = ?", username).First(&r).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("招聘者账号或密码错误")
+		}
+		return nil, err
+	}
+	status := r.Status
+	return s.verifyAndIssue(password, loginCredentials{
+		id: r.ID, account: r.Username, username: r.Username,
+		password: r.Password, status: &status,
+	}, RecruiterRole, "招聘者账号或密码错误")
+}
+
+// RecruiterCreateInput 管理员创建招聘者账号的输入（企业信息全部必填）。
+type RecruiterCreateInput struct {
+	Username      string `json:"username"`
+	Password      string `json:"password"`
+	CompanyName   string `json:"company_name"`
+	CreditCode    string `json:"credit_code"`
+	BusinessScope string `json:"business_scope"`
+	ContactName   string `json:"contact_name"`
+	ContactPhone  string `json:"contact_phone"`
+	ContactEmail  string `json:"contact_email"`
+}
+
+// ValidateRecruiterInput 校验企业信息字段全部必填（缺任一项 400）。
+func ValidateRecruiterInput(in RecruiterCreateInput) error {
+	if strings.TrimSpace(in.Username) == "" {
+		return errors.New("账号不能为空")
+	}
+	if strings.TrimSpace(in.Password) == "" {
+		return errors.New("密码不能为空")
+	}
+	if len(in.Password) < 6 || len(in.Password) > 20 {
+		return errors.New("密码长度需为 6-20 位")
+	}
+	if strings.TrimSpace(in.CompanyName) == "" {
+		return errors.New("企业名称不能为空")
+	}
+	if strings.TrimSpace(in.CreditCode) == "" {
+		return errors.New("统一社会信用代码不能为空")
+	}
+	if strings.TrimSpace(in.BusinessScope) == "" {
+		return errors.New("主营不能为空")
+	}
+	if strings.TrimSpace(in.ContactName) == "" {
+		return errors.New("对外联系人姓名不能为空")
+	}
+	if strings.TrimSpace(in.ContactPhone) == "" {
+		return errors.New("联系电话不能为空")
+	}
+	if strings.TrimSpace(in.ContactEmail) == "" {
+		return errors.New("联系邮箱不能为空")
+	}
+	return nil
+}
+
+// CreateRecruiter 管理员创建招聘者账号（邀约制，企业字段全部必填）。
+func (s *AuthService) CreateRecruiter(in RecruiterCreateInput) (*model.RecruiterUser, error) {
+	if err := ValidateRecruiterInput(in); err != nil {
+		return nil, err
+	}
+	in.Username = strings.TrimSpace(in.Username)
+	in.CompanyName = strings.TrimSpace(in.CompanyName)
+	in.CreditCode = strings.TrimSpace(in.CreditCode)
+	in.BusinessScope = strings.TrimSpace(in.BusinessScope)
+	in.ContactName = strings.TrimSpace(in.ContactName)
+	in.ContactPhone = strings.TrimSpace(in.ContactPhone)
+	in.ContactEmail = strings.TrimSpace(in.ContactEmail)
+	var count int64
+	s.db.Model(&model.RecruiterUser{}).Where("username = ?", in.Username).Count(&count)
+	if count > 0 {
+		return nil, errors.New("用户名已被注册")
+	}
+	hashed, err := HashPassword(in.Password)
+	if err != nil {
+		return nil, err
+	}
+	rec := model.RecruiterUser{
+		Username:      in.Username,
+		Password:      hashed,
+		CompanyName:   in.CompanyName,
+		CreditCode:    in.CreditCode,
+		BusinessScope: in.BusinessScope,
+		ContactName:   in.ContactName,
+		ContactPhone:  in.ContactPhone,
+		ContactEmail:  in.ContactEmail,
+		Status:        1,
+		CreatedAt:     beijingNow(),
+		UpdatedAt:     beijingNow(),
+	}
+	if err := s.db.Create(&rec).Error; err != nil {
+		return nil, err
+	}
+	return &rec, nil
+}
+
+// ToggleRecruiterStatus 切换招聘者启用/禁用状态（禁用后登录被 verifyAndIssue 拦截）。
+func (s *AuthService) ToggleRecruiterStatus(id int) (int16, error) {
+	var r model.RecruiterUser
+	if err := s.db.First(&r, id).Error; err != nil {
+		return 0, errors.New("招聘者不存在")
+	}
+	next := int16(1)
+	if r.Status == 1 {
+		next = 0
+	}
+	if err := s.db.Model(&model.RecruiterUser{}).Where("id = ?", id).Update("status", next).Error; err != nil {
+		return 0, err
+	}
+	return next, nil
 }
 
 // EnsureDefaultUsers 确保默认账号存在（admin/tutor/student），密码由环境变量配置。

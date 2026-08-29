@@ -39,6 +39,8 @@ func allModels() []interface{} {
 	return []interface{}{
 		&model.Credential{},
 		&model.HrwaiUser{},
+		&model.RecruiterUser{},
+		&model.JobCard{},
 		&model.Notification{},
 		&model.AuditLog{},
 		&model.ProfileChangeRequest{},
@@ -66,11 +68,24 @@ func allModels() []interface{} {
 		&model.ForumTopicLike{},
 		&model.ForumReplyLike{},
 		&model.ForumCheckIn{},
+		&model.ForumTopicView{},
 		&model.Favorite{},
 		&model.ForumReport{},
 		&model.AIGenerationLog{},
 		&model.AsyncTask{},
 		&model.FeaturedContent{},
+		&model.SystemSetting{},
+		&model.AIConfig{},
+		&model.AIFeatureBinding{},
+		&model.AIChatSession{},
+		&model.AIChatMessage{},
+		&model.AIUserModel{},
+		&model.PointsLedger{},
+		&model.PointsTaskConfig{},
+		&model.PointsTaskClaim{},
+		&model.PointsUserProgress{},
+		&model.PointsShopItem{},
+		&model.UserEntitlement{},
 	}
 }
 
@@ -158,4 +173,26 @@ func SeedCourse(t *testing.T, db *gorm.DB, name string) *model.Course {
 		t.Fatalf("插入测试课程失败: %v", err)
 	}
 	return c
+}
+
+// SeedRecruiter 插入一个测试企业招聘者（邀约制，独立表）。
+func SeedRecruiter(t *testing.T, db *gorm.DB, username, hashedPassword string) *model.RecruiterUser {
+	t.Helper()
+	r := &model.RecruiterUser{
+		Username:      username,
+		Password:      hashedPassword,
+		CompanyName:   "测试企业-" + username,
+		CreditCode:    "91310000MA" + username,
+		BusinessScope: "叉车租赁与维修",
+		ContactName:   "联系人-" + username,
+		ContactPhone:  "1380000" + "1234",
+		ContactEmail:  username + "@example.com",
+		Status:        1,
+		CreatedAt:     Now(),
+		UpdatedAt:     Now(),
+	}
+	if err := db.Create(r).Error; err != nil {
+		t.Fatalf("插入测试招聘者失败: %v", err)
+	}
+	return r
 }

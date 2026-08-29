@@ -6,7 +6,7 @@
 import type { SubdomainType } from '@/utils/subdomain'
 
 // 系统允许的角色（身份）
-export type AllowedRole = 'admin' | 'tutor' | 'hrwai_user'
+export type AllowedRole = 'admin' | 'tutor' | 'hrwai_user' | 'recruiter'
 
 export interface PathAuthEntry {
   /** 路径前缀（表按前缀长度降序，长前缀优先匹配） */
@@ -20,6 +20,7 @@ export interface PathAuthEntry {
 // 「路径前缀 → 允许身份」单点表：getTargetSubdomainForPath 从 subdomain 派生，
 // isSafeRedirect 从 role 派生。两函数必须共享本表以保持前缀数据单一来源。
 export const PATH_AUTH_ENTRIES: PathAuthEntry[] = [
+  { prefix: '/recruit', role: 'recruiter', subdomain: 'recruit' },
   { prefix: '/training/tutor', role: 'tutor', subdomain: 'tutor' },
   { prefix: '/ai-assistant', role: 'hrwai_user', subdomain: 'training' },
   { prefix: '/valuation', role: 'hrwai_user', subdomain: 'valuation' },
@@ -46,5 +47,6 @@ export function resolveWorkspaceForRole(role: string | undefined): string {
   if (role === 'admin') return '/admin/dashboard'
   if (role === 'tutor') return '/training/tutor'
   if (role === 'hrwai_user') return '/training'
+  if (role === 'recruiter') return '/recruit'
   return '/'
 }
