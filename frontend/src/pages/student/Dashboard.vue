@@ -291,7 +291,7 @@ onMounted(async () => {
 .stats-summary {
   font-size: var(--text-xs);
   color: var(--color-text-secondary);
-  font-weight: var(--font-regular);
+  font-weight: var(--font-normal);
 }
 
 .chart-empty {

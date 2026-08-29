@@ -170,7 +170,7 @@ onMounted(async () => {
 .credential-card.active {
   border-color: var(--color-primary-500);
   background: var(--color-primary-50);
-  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.15);
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.15);
 }
 .card-name {
   font-size: var(--text-sm);

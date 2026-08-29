@@ -532,8 +532,8 @@ onMounted(() => {
 }
 
 .back-link:hover {
-  border-color: var(--color-brand-500, #0ea5e9);
-  color: var(--color-brand-600, #0284c7);
+  border-color: var(--color-primary-500);
+  color: var(--color-primary-600);
 }
 
 /* ===== 主体布局 ===== */
@@ -596,7 +596,7 @@ onMounted(() => {
 }
 
 .session-item.active {
-  background: var(--color-brand-50, #f0f9ff);
+  background: var(--color-primary-50);
 }
 
 .session-info {
@@ -735,14 +735,14 @@ onMounted(() => {
 }
 
 .quick-option-chip:hover {
-  border-color: var(--color-brand-400, #38bdf8);
-  color: var(--color-brand-600, #0284c7);
+  border-color: var(--color-primary-400);
+  color: var(--color-primary-600);
 }
 
 .quick-option-chip.active {
-  border-color: var(--color-brand-600, #0284c7);
-  background: var(--color-brand-50, #f0f9ff);
-  color: var(--color-brand-600, #0284c7);
+  border-color: var(--color-primary-600);
+  background: var(--color-primary-50);
+  color: var(--color-primary-600);
   font-weight: 600;
 }
 
@@ -768,11 +768,11 @@ onMounted(() => {
 }
 
 .suggestion-card:hover {
-  border-color: var(--color-brand-400, #38bdf8);
-  background: var(--color-brand-50, #f0f9ff);
-  color: var(--color-brand-600, #0284c7);
+  border-color: var(--color-primary-400);
+  background: var(--color-primary-50);
+  color: var(--color-primary-600);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.1);
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.1);
 }
 
 .guest-hint {
@@ -782,7 +782,7 @@ onMounted(() => {
 }
 
 .guest-hint a {
-  color: var(--color-brand-600, #0284c7);
+  color: var(--color-primary-600);
   font-weight: 600;
   text-decoration: none;
 }
@@ -810,12 +810,12 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: var(--color-brand-100, #e0f2fe);
-  color: var(--color-brand-600, #0284c7);
+  background: var(--color-primary-100);
+  color: var(--color-primary-600);
 }
 
 .message-item.user .message-avatar {
-  background: var(--color-brand-600, #0284c7);
+  background: var(--color-primary-600);
   color: white;
 }
 
@@ -838,7 +838,7 @@ onMounted(() => {
 }
 
 .message-item.user .message-text {
-  background: var(--color-brand-600, #0284c7);
+  background: var(--color-primary-600);
   color: white;
 }
 
@@ -917,7 +917,7 @@ onMounted(() => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--color-brand-400, #38bdf8);
+  background: var(--color-primary-400);
   animation: dot-bounce 1.4s infinite ease-in-out;
 }
 
@@ -1008,7 +1008,7 @@ onMounted(() => {
 }
 
 .input-wrap:focus-within {
-  border-color: var(--color-brand-400, #38bdf8);
+  border-color: var(--color-primary-400);
 }
 
 .input-wrap :deep(.el-textarea__inner) {

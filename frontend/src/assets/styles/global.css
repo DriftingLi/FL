@@ -53,55 +53,34 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--color-text-tertiary);
 }
 
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
-}
-
-.animate-fade-in-up {
-  animation: fadeInUp var(--duration-slow) var(--ease-out) both;
-}
-
-.animate-fade-in {
-  animation: fadeIn var(--duration-normal) var(--ease-default) both;
-}
-
-/* 无障碍：尊重 prefers-reduced-motion，禁用所有入场动画 */
+/*
+ * 无障碍：尊重 prefers-reduced-motion，压平所有动效。
+ *
+ * 此处的 !important 是刻意为之：需要压过业务组件自己的动画声明。
+ * 注意层间 !important 的排序是反的（越早的层越优先），base 层的 !important
+ * 会压过 utilities 层 —— 这正是本规则想要的语义：用户的减弱动效偏好始终最高优先。
+ * 除本块外，base 层内不得再使用 !important。
+ */
 @media (prefers-reduced-motion: reduce) {
-  .animate-fade-in-up,
-  .animate-fade-in {
-    animation: none !important;
-  }
-  .hero-tagline,
-  .hero-title,
-  .hero-subtitle,
-  .hero-cta {
-    opacity: 1 !important;
-    animation: none !important;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
+/*
+ * 移动端断点下的 EP 组件尺寸覆盖。
+ *
+ * 本块保留 !important：EP 的 Drawer / Dialog / MessageBox 尺寸走的是
+ * **内联 style**（width / --el-dialog-width 由 prop 直接写到元素上），
+ * 而层优先级无法压过内联样式，只有 !important 能生效。
+ * 与 element-overrides.css 里那些「仅用于压 EP 选择器特异性」的 !important 不同，
+ * 后者已因 EP 下沉到 vendor 层而清除 —— 请勿照搬清理本块。
+ */
 @media screen and (max-width: 768px) {
   html {
     font-size: 14px;
