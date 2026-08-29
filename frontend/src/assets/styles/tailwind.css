@@ -2,9 +2,10 @@
  * 全局样式唯一入口 —— 用 @layer 固定优先级顺序
  *
  * 层序（后者压前者；层优先级高于选择器特异性，也高于源码顺序）：
- *   vendor     Element Plus 原始样式（最低，便于被覆盖）
+ *   reset      全局重置 global.css（最低，见下方第 3 条）
+ *   vendor     Element Plus 原始样式
  *   theme      Tailwind 设计变量
- *   base       设计 token / EP 覆盖 / 全局重置
+ *   base       设计 token / EP 覆盖
  *   utilities  Tailwind 原子类（最高，业务样式用它压过 vendor 与 base）
  *
  * 两个刻意的选择（改动前必读）：
@@ -21,16 +22,32 @@
  *    ⚠️ 层间 !important 的排序是反的：base 层的 !important 会压过 utilities 层的
  *    !important。所以 base 层内除「无障碍 prefers-reduced-motion」外不得再用
  *    !important，否则 Tailwind 的 `!` 前缀工具类会失效。
+ *
+ * 3. 通用重置只能放 reset 层，不能放 base。
+ *    「层优先级压过选择器特异性」是双向的：它能让低特异性的 `*` 选择器反过来盖掉
+ *    高特异性的 `.el-*` 规则。曾把 global.css 放进 base，导致
+ *    `* { padding: 0 }` 清零了全部 Element Plus 组件的内边距（详见下方 import 处注释）。
+ *    任何含通配选择器 `*` 的样式表都必须待在 vendor 之下。
  */
 
-@layer vendor, theme, base, components, utilities;
+@layer reset, vendor, theme, base, components, utilities;
 
+/*
+ * ⚠️ global.css 必须落在 reset 层（低于 vendor），绝不能放进 base。
+ *
+ * 它开头的 `* { margin: 0; padding: 0; box-sizing: border-box }` 特异性为 0，
+ * 放在 base 层时会因「层优先级压过选择器特异性」而盖掉 vendor 层里所有 Element Plus
+ * 规则（.el-dialog__body{padding:20px} 等），表现为 tab / 下拉框 / 复选框 / 对话框 /
+ * 表格大规模样式异常、文字溢出、弹出位置错误。
+ * 放进 reset 层后，EP 靠特异性重新获胜，而 Tailwind 的 p-* 工具类仍在 utilities 层
+ * 高于 reset，两端都正确。
+ */
+@import "./global.css" layer(reset);
 @import "element-plus/dist/index.css" layer(vendor);
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "./design-tokens.css" layer(base);
 @import "./element-overrides.css" layer(base);
-@import "./global.css" layer(base);
 @import "./valuation-tokens.css" layer(base);
 
 /* 原子类扫描范围：frontend/src（相对于本文件 ../../ ） */

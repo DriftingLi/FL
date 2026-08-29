@@ -95,7 +95,7 @@
                   v-else-if="child.routeName"
                   :to="itemTo(child)"
                   class="nav-item"
-                  :class="{ active: isRouteActive(child) || isGroupActive(child) }"
+                  :class="{ active: isRouteActive(child) }"
                 >
                   <div class="nav-item-icon">
                     <el-icon><component :is="child.icon" /></el-icon>
