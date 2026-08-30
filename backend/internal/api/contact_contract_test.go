@@ -281,9 +281,7 @@ func TestContactContract_FullFlow(t *testing.T) {
 	// 9. 日限：单个企业每日 20 条
 	// 将已有申请的 created_at 改为昨天，避免影响今天计数
 	yesterday := time.Now().AddDate(0, 0, -1)
-	if err := db.Model(&model.ContactRequest{}).Where("recruiter_id = ?", recruiterBID).Update("created_at", yesterday).Error; err != nil {
-		// ignore if no rows
-	}
+	_ = db.Model(&model.ContactRequest{}).Where("recruiter_id = ?", recruiterBID).Update("created_at", yesterday).Error
 	// 用 recruiterB 连续创建 20 条（对不同学员）
 	for i := 0; i < 20; i++ {
 		tmpStu := testutil.SeedStudent(t, db, "stuDaily"+strconv.Itoa(i), pwd)
