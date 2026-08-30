@@ -829,3 +829,13 @@ type JobCard struct {
 }
 
 func (JobCard) TableName() string { return "job_cards" }
+
+// ===== 29.1 招聘端简历浏览审计（L2 留痕）
+type RecruitResumeView struct {
+	ID           int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	RecruiterID  int       `gorm:"column:recruiter_id" json:"recruiter_id"`
+	ResumeUserID int       `gorm:"column:resume_user_id" json:"resume_user_id"`
+	ViewedAt     time.Time `gorm:"column:viewed_at" json:"viewed_at"`
+}
+
+func (RecruitResumeView) TableName() string { return "recruit_resume_views" }
