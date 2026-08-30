@@ -6,6 +6,7 @@ package service
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/cloudwego/eino/schema"
@@ -160,19 +161,30 @@ func TestResolveHotCacheInvalidation(t *testing.T) {
 }
 
 // fakeStreamingTransport 流式槽位 fake（端口注入范本验证）。
+// 互斥保护：StreamChat 的异步命名 goroutine 也可能进入槽位（CI -race 下验证）。
 type fakeStreamingTransport struct {
+	mu      sync.Mutex
 	content string
 	gotMsgs []*schema.Message
 	chunks  []string
 }
 
 func (f *fakeStreamingTransport) StreamComplete(_ context.Context, _ AISettings, msgs []*schema.Message, onChunk func(string)) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.gotMsgs = msgs
 	if onChunk != nil {
 		onChunk(f.content)
 		f.chunks = append(f.chunks, f.content)
 	}
 	return f.content, nil
+}
+
+// snapshot 读取 fake 记录（与后台 goroutine 同步）。
+func (f *fakeStreamingTransport) snapshot() ([]*schema.Message, []string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.gotMsgs, f.chunks
 }
 
 // fakeBlockingTransport 阻塞槽位 fake。
@@ -186,12 +198,14 @@ func (f *fakeBlockingTransport) CallModel(_ []openai.ChatCompletionMessage, _ in
 
 // TestStreamingSlotInjectedEndToEnd 对话端到端（fake 流式槽位）：
 // prompt 组装（功能系统提示词在首位）与持久化真语义不回归。
+// 会话标题用非占位符：阻断异步命名 goroutine 走真实生成路径（其仅做一次 DB 读即退出）。
 func TestStreamingSlotInjectedEndToEnd(t *testing.T) {
 	_, assistant, _, db := newAIStack(t)
 	ctx := context.Background()
-	assistant.streamer = &fakeStreamingTransport{content: "模拟回复"}
+	fake := &fakeStreamingTransport{content: "模拟回复"}
+	assistant.streamer = fake
 
-	session, err := assistant.CreateSession(ctx, 7, "新会话", "", FeatureFaultConsult)
+	session, err := assistant.CreateSession(ctx, 7, "已命名会话", "", FeatureFaultConsult)
 	if err != nil {
 		t.Fatalf("CreateSession 失败: %v", err)
 	}
@@ -214,10 +228,10 @@ func TestStreamingSlotInjectedEndToEnd(t *testing.T) {
 	}
 
 	// prompt 组装：首位为通用专家系统提示词（FeatureKey 为空），末位为用户消息
-	if _, ok := assistant.streamer.(*fakeStreamingTransport); !ok {
-		t.Fatal("流式槽位应为注入的 fake")
+	gotMsgs, gotChunks := fake.snapshot()
+	if len(gotChunks) != 1 {
+		t.Fatalf("槽位应仅被主对话调用一次, got %d", len(gotChunks))
 	}
-	gotMsgs := assistant.streamer.(*fakeStreamingTransport).gotMsgs
 	if len(gotMsgs) != 2 || gotMsgs[0].Role != schema.System || gotMsgs[0].Content != forkliftExpertSystemPrompt {
 		t.Fatalf("系统提示词组装异常: %+v", gotMsgs)
 	}
