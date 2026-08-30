@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"go.uber.org/zap"
@@ -398,6 +399,84 @@ func (s *PointsService) RedeemCourse(ctx context.Context, userID, courseID int) 
 			return err
 		}
 		// 截断到 0 的兜底（若并发导致负数，CASE 钳 0）
+		_ = tx.Exec("UPDATE hrwai_users SET points_balance = GREATEST(points_balance, 0) WHERE id = ?", userID).Error
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	bal, _ := s.GetBalance(userID)
+	if bal != nil {
+		balance = bal.Balance
+		totalEarned = bal.TotalEarned
+	}
+	return &RedeemResult{Balance: balance, TotalEarned: totalEarned, SKU: sku, RefID: refID}, nil
+}
+
+// realPaperUnlockSKU 商城里真题解锁项的 SKU（价格单点：管理员调整该项即调整全部卷价）。
+const realPaperUnlockSKU = "unlock_real_paper"
+
+// realPaperPriceFallback 商城项缺失时的兜底单价。
+const realPaperPriceFallback = 300
+
+// RealPaperSKU 真题卷权益 sku（real_paper:<paperID>，ref_id=<paperID>，按套粒度）。
+func RealPaperSKU(paperID int) string { return fmt.Sprintf("real_paper:%d", paperID) }
+
+// realPaperPrice 读取真题解锁单价（商城项缺失/停用时回退兜底价）。
+func (s *PointsService) realPaperPrice() int {
+	var item model.PointsShopItem
+	if err := s.db.Where("sku = ? AND enabled = true", realPaperUnlockSKU).First(&item).Error; err != nil {
+		return realPaperPriceFallback
+	}
+	if item.Price <= 0 {
+		return realPaperPriceFallback
+	}
+	return item.Price
+}
+
+// RedeemRealPaper 兑换单套真题卷（卷级整锁，语义同 RedeemCourse）。
+func (s *PointsService) RedeemRealPaper(ctx context.Context, userID, paperID int) (*RedeemResult, error) {
+	var paper model.RealExamPaper
+	if err := s.db.Where("paper_id = ? AND status = 1", paperID).First(&paper).Error; err != nil {
+		return nil, errors.New("真题卷不存在或已下架")
+	}
+	price := s.realPaperPrice()
+	sku := RealPaperSKU(paperID)
+	refID := strconv.Itoa(paperID)
+	lockKey := fmt.Sprintf("shop:real_paper:%d:%d", userID, paperID)
+	if ok, err := cache.SetNX(ctx, lockKey, "1", 5*time.Second); err == nil && ok {
+		defer func() { _ = cache.Del(ctx, lockKey) }()
+	}
+	// 已拥有校验
+	var entCnt int64
+	_ = s.db.Model(&model.UserEntitlement{}).Where("user_id = ? AND sku = ? AND ref_id = ?", userID, sku, refID).Count(&entCnt).Error
+	if entCnt > 0 {
+		return nil, errors.New("已兑换")
+	}
+	// 余额校验
+	var user model.HrwaiUser
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, err
+	}
+	if user.PointsBalance < price {
+		return nil, errors.New("积分不足")
+	}
+	var balance, totalEarned int
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		ent := model.UserEntitlement{UserID: userID, SKU: sku, RefID: refID}
+		if err := tx.Create(&ent).Error; err != nil {
+			if isDuplicateError(err) {
+				return errors.New("已兑换")
+			}
+			return err
+		}
+		ledger := model.PointsLedger{UserID: userID, Delta: -price, Reason: "redeem_real_paper", RefType: "real_exam_paper", RefID: refID}
+		if err := tx.Create(&ledger).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.HrwaiUser{}).Where("id = ? AND points_balance >= ?", userID, price).UpdateColumn("points_balance", gorm.Expr("points_balance - ?", price)).Error; err != nil {
+			return err
+		}
 		_ = tx.Exec("UPDATE hrwai_users SET points_balance = GREATEST(points_balance, 0) WHERE id = ?", userID).Error
 		return nil
 	})

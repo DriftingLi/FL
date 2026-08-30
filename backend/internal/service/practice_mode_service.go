@@ -84,16 +84,20 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, cred
 	if tagID <= 0 {
 		return nil, errors.New("请指定题库标签")
 	}
-	var tagCount int64
-	if err := s.db.Model(&model.QuestionTag{}).Where("id = ? AND status = ?", tagID, 1).Count(&tagCount).Error; err != nil {
+	var tag model.QuestionTag
+	if err := s.db.Where("id = ? AND status = ?", tagID, 1).Limit(1).Find(&tag).Error; err != nil {
 		return nil, errors.New("查询标签失败")
 	}
-	if tagCount == 0 {
+	if tag.ID == 0 {
 		return nil, errors.New("题库标签不存在或已停用")
+	}
+	if tag.IsSourceTag {
+		return nil, errors.New("该标签不支持专项练习")
 	}
 	var all []model.Question
 	qAll := s.db.Model(&model.Question{}).
-		Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?) AND status = ?", tagID, "published")
+		Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?) AND status = ?", tagID, "published").
+		Where(excludeSourceTagsSQL)
 	if len(credentialID) > 0 && credentialID[0] != nil {
 		qAll = qAll.Where("credential_id = ?", *credentialID[0])
 	}
@@ -182,7 +186,7 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, cred
 // 复用已有 practice_progress 游标续练；一次性返回全部题目，前端从游标处开始作答。
 func (s *PracticeModeService) StartSequential(studentID int, credentialID ...*int) (*PracticeStartResultDTO, error) {
 	var questions []model.Question
-	q := s.db.Where("status = ?", "published")
+	q := s.db.Where("status = ?", "published").Where(excludeSourceTagsSQL)
 	if len(credentialID) > 0 && credentialID[0] != nil {
 		q = q.Where("credential_id = ?", *credentialID[0])
 	}
