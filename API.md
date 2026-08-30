@@ -10,7 +10,7 @@
 
 - 基础路径：`/api`；静态资源：`/static/*`
 - 鉴权方式：`Authorization: Bearer <access JWT>`（access 2h 过期，用 `POST /api/auth/refresh` 以 refresh token 换新双令牌，见 ADR-0016）；部分接口同时写入登录 Cookie（HttpOnly，仅携带 access）
-- 角色：`admin`（管理员）/ `tutor`（讲师）/ `hrwai_user`（学员/普通用户）
+- 角色：`admin`（管理员）/ `tutor`（讲师）/ `hrwai_user`（学员/普通用户）/ `recruiter`（企业招聘者，独立表 `recruiter_users`，host-only `recruiter_token`）
 - 响应统一包裹 `{ "code": number, "message": string, "data": any }`（AI 流式对话与文件下载除外，见各节）
 - 响应码：`200` 成功 / `201` 创建成功 / `400` 参数或业务错误 / `401` 未认证 / `403` 无权限 / `404` 不存在 / `500` 服务器错误；错误时 `data` 为 `null`
 - 分页约定：query 参数 `page`（默认 1）、`page_size`（默认见各端点）；返回体含 `total`，部分含 `pages`/`page`/`page_size`
@@ -1110,6 +1110,81 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 
 ---
 
+## 16.8 问答与简历、招聘（#364-#375，ADR-0022）
+
+### 16.8.1 论坛类别与问答筛选
+
+论坛新增 `category`（`discussion` | `question`，空串归一 `discussion`）与问答筛选 `solved`（`all` | `solved` 已解决 | `unsolved` 求助，仅对 `question` 有意义）；`question` 帖一律 `chapter_id=NULL`（带 `chapter_id>0` 返回 400，`CHECK` 兜底）。
+
+| 方法 | 路径 | 鉴权 | 说明 |
+|---|---|---|---|
+| GET | `/api/forum/topics?category=&solved=&scope=&chapter_id=&keyword=&sort=&order=&page=&page_size=` | JWT+hrwai_user | 帖子列表（`scope=all|general|chapter` 与 `category` 必须共存在同一条 WHERE，否则问答帖灌进讨论 Tab） |
+| POST | `/api/forum/topics` | JWT+hrwai_user | 发帖（`{title, content, category, chapter_id?, images[]}`，`category=question` 时不得带 `chapter_id>0`） |
+| GET | `/api/forum/topics/:id` | JWT+hrwai_user | 详情（含 `accepted_reply_id`/`solved_at`/`reward_issued` 与每条回复 `is_accepted`） |
+| POST | `/api/forum/topics/:id/accept` | JWT+hrwai_user（仅楼主） | 采纳回答 `{reply_id}`（首次采纳才发分，见积分） |
+| DELETE | `/api/forum/topics/:id/accept` | JWT+hrwai_user（仅楼主） | 取消采纳（已发分不回滚） |
+
+`GET /api/forum/topics` 响应与既有同形，元素新增 `category`/`accepted_reply_id`/`solved_at`/`reward_issued`；`solved` 非法返回 400。
+
+### 16.8.2 学员侧简历卡 `/api/resume`（role=hrwai_user）
+
+常驻实体 `job_cards`（`user_id` 主键，`visibility` 默认 `hidden`）。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/resume` | 我的简历（未建时 404） |
+| PUT | `/api/resume` | 整页保存（`real_name`/`contact_phone`/`wechat`/`region`/`expected_specialty_id`/`expected_regions[]`/`salary_min/max`/`salary_negotiable`/`available_in`/`job_nature`/`experience_years`/`self_intro`/`resume_experiences[]`/`resume_certifications[]`/`resume_file_url`/`photos[]`） |
+| PUT | `/api/resume/visibility` | 切换公开 `{visibility: hidden|open}` |
+| POST | `/api/resume/pdf` | 上传 PDF 简历（`file`，仅 PDF ≤50MB） |
+| POST | `/api/resume/image` | 上传工作照（`file`，图片 ≤20MB，≤6 张） |
+| GET | `/api/resume/view-stats` | 近 7 天查看过我的企业数 `{count}`（按企业去重，不含企业名） |
+
+### 16.8.3 招聘端 `/api/recruit`（role=recruiter，`recruit.` 子域 + `recruiter_token` host-only）
+
+三层漏斗：L1 未登录 401/403 无公开列表；L2 脱敏卡（唯一脱敏路径）；L3 交换后明文。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/auth/recruiter-login` | 企业招聘者登录（`{username, password}` → `role=recruiter`，写 `recruiter_token` host-only） |
+| GET | `/api/recruit/me` | 当前招聘者信息 |
+| GET | `/api/recruit/resumes?region=&specialty_id=&credential_id=&salary_min=&salary_max=&experience_years=&available_in=&page=&page_size=` | 脱敏简历列表（仅 `visibility=open`，默认 `updated_at DESC`，无缓存；读取后审计入 `recruit_resume_views`） |
+| GET | `/api/recruit/resumes/:id` | 脱敏详情（与列表同一脱敏路径；`hidden` 时 404；同样审计） |
+| POST | `/api/recruit/contact-requests` | 发起交换申请 `{student_user_id, message(1-200)}`（`pending` 唯一、30 天冷却、日限 20） |
+| GET | `/api/recruit/contact-requests` | 我的申请列表（`pending/approved/rejected/expired/revoked`） |
+| GET | `/api/recruit/resumes/:id/contact` | 明文联系方式与 PDF（仅 `approved` 且未 `revoked`/`expired` 时可用，实时校验，无缓存；L2 脱敏口径在授权后仍保持） |
+
+脱敏边界（字段级负向断言）：响应体不含 `contact_phone`/`wechat`/`resume_file_url`/`image_urls`/`未打码 real_name`/`region 精确值`；`real_name` 返回打码值（`real_name`/`real_name_masked`），`resume_certifications` 已去 `image_urls`。
+
+### 16.8.4 联系方式交换学员侧 `/api/resume/contact-requests`（role=hrwai_user）
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/resume/contact-requests` | 收到的申请列表（含 `company_name`/`contact_name`/`message`，不含企业电话） |
+| POST | `/api/resume/contact-requests/:id/approve` | 同意（状态 `approved`，招聘方收邮件） |
+| POST | `/api/resume/contact-requests/:id/reject` | 拒绝（`rejected`，30 天冷却） |
+| POST | `/api/resume/contact-requests/:id/revoke` | 撤回已同意（`revoked`，实时生效） |
+
+`contact_requests` 状态机：`pending` 14 天后 `expired`（`daemon.Runner` 托管，`interval` 1h，`jitter` 错峰，`panic` 恢复，`context` 贯穿）、`approved` 永久有效直至 `revoked`。学员注销时 `ON DELETE CASCADE` 一并失效。
+
+### 16.8.5 管理端巡检（role=admin）
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/admin/recruiters` | 创建企业招聘者（邀约制，企业信息全必填） |
+| PUT | `/api/admin/recruiters/:id/status` | 切换启用/禁用（禁用后登录 400） |
+| GET | `/api/admin/recruiters` | 列表（简易） |
+| GET | `/api/admin/points/ledger?reason=&user_id=&page=&page_size=` | 全量流水按原因筛选（`accepted_bonus`/`accept_action`/`rollback` 等，可定位 `ref_id=topic_id`） |
+| GET | `/api/admin/inspection/deleted-after-accepted` | 巡检计数 `{count}`（楼主删除已解决帖累加） |
+| GET | `/api/admin/recruit/views?recruiter_id=&student_user_id=&page=&page_size=` | 查看招聘查看留痕 |
+| GET | `/api/admin/recruit/requests?recruiter_id=&student_user_id=&status=&page=&page_size=` | 查看交换申请记录 |
+| DELETE | `/api/admin/forum/topics/:id` | 管理员删帖（若曾发分则按 `rollback` 对冲扣减，封底 0，幂等） |
+| DELETE | `/api/admin/forum/replies/:id` | 管理员删回复（若为被采纳回答则同上回收） |
+| PUT | `/api/admin/forum/reports/:id` | 处理举报（`{status:1}` 标记已处理） |
+
+积分流水 `reason` 取值：`accepted_bonus`（答主 +40）、`accept_action`（楼主 +5）、`rollback`（违规回收，对冲）、`admin_penalty` 等既有值；学员侧 `GET /api/points/ledger` 按人返回，管理端 `GET /api/admin/points/ledger` 可按 `reason` 全局筛选。
+
+---
+
 ## 17. 残值评估子模块 `/api/valuation`
 
 > 独立连接池（pgx）+ 独立响应格式（同样 `{code, message, data}` 信封）；鉴权分三档：公开 / 可选认证（登录则记录 user_id）/ hrwai_user JWT / admin JWT。
@@ -1244,3 +1319,5 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 - **修正**：`/api/valuation/battery/evaluations` 为可选认证（非强制 JWT）；AI 会话列表返回 `{sessions: []}`；论坛列表返回 `{topics: []}`
 - 全部端点补充请求格式（path/query/body）与返回格式（JSON 示例）
 - **新增（ADR-0018）**：论坛互动（like/report/my-topics/my-replies + 管理端举报）、通用收藏 `/api/favorites`、全局搜索 `/api/search`、学习资料 `/api/materials`
+- **新增（ADR-0022，#364-#376）**：论坛类别 `category` + 问答筛选 `solved` + 采纳 `accept`、学员侧简历 `/api/resume`（含 `view-stats`）、招聘端 `/api/recruit/*`（脱敏列表/详情、`/contact-requests`、`/resumes/:id/contact` 明文）、学员侧交换 `/api/resume/contact-requests/*`、管理端 `recruiters`/`points/ledger`/`inspection`/`recruit/views|requests` 巡检；积分流水 `reason` 新增 `accepted_bonus`/`accept_action`/`rollback`；`recruit.` 子域复用 catch-all（DNS + SAN 为主要运维工作，无新增 server block）
+- **未覆盖**：uni-app `training-app` 端契约漂移（ADR-0019）本次未覆盖，继续挂账
