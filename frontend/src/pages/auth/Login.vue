@@ -336,16 +336,16 @@ const subtitleMap: Record<SubdomainType, string> = {
 }
 const subtitleByRole = computed(() => subtitleMap[subdomain])
 
-// badcge 角色色：学员=蓝/导师=青/管理=紫
+// badge 角色色：学员=蓝/导师=青/管理=紫/企业=蓝（复用学员色，避免新增视觉分支）
 const badgeTone = computed<'student' | 'tutor' | 'admin'>(
   () => (currentRole === 'tutor' ? 'tutor' : currentRole === 'admin' ? 'admin' : 'student')
 )
 const roleLabel = computed(() =>
-  currentRole === 'tutor' ? '导师端' : currentRole === 'admin' ? '管理端' : '学员端'
+  currentRole === 'tutor' ? '导师端' : currentRole === 'admin' ? '管理端' : currentRole === 'recruiter' ? '企业端' : '学员端'
 )
 
 const usernamePlaceholder = computed(() =>
-  currentRole === 'tutor' || currentRole === 'admin' ? '账号' : '账号或手机号'
+  currentRole === 'tutor' || currentRole === 'admin' || currentRole === 'recruiter' ? '账号' : '账号或手机号'
 )
 
 // 非学员角色不显示 alt 方式与分隔线（tutor/admin 仅密码登录）

@@ -220,8 +220,20 @@ const tutorNav: NavItem[] = [
   }
 ]
 
+const recruiterNav: NavItem[] = [
+  { key: 'dashboard', label: '首页', routeName: 'RecruitDashboard', icon: HomeFilled, exact: true },
+  {
+    key: 'resumes',
+    label: '简历库',
+    routeName: 'RecruitResumes',
+    activeRouteNames: ['RecruitResumeDetail'],
+    icon: Document
+  }
+]
+
 export const roleNavigation: Record<string, NavItem[]> = {
   student: studentNav,
   admin: adminNav,
-  tutor: tutorNav
+  tutor: tutorNav,
+  recruiter: recruiterNav
 }
