@@ -3,7 +3,6 @@
 package service
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -100,6 +99,7 @@ func (s *RealExamService) ListPapers(userID, credentialID int) []RealExamPaperDT
 }
 
 // StartPaperPractice 按卷练习开始/续练：固定卷序（不随机），断点续练复用 practice_progress。
+// 装配形态（#385）：续练协商（同集沿用卷序与游标/集合变化刷新复位）走 ResumeSet 单点。
 func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*PracticeStartResultDTO, error) {
 	var paper model.RealExamPaper
 	if err := s.db.Where("paper_id = ? AND status = 1", paperID).First(&paper).Error; err != nil {
@@ -120,44 +120,13 @@ func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*PracticeS
 		byID[all[i].ID] = all[i]
 	}
 
-	mode := fmt.Sprintf("paper:%d", paperID)
-	var prog model.PracticeProgress
-	if err := s.db.Where("student_id = ? AND practice_mode = ?", studentID, mode).Limit(1).Find(&prog).Error; err != nil {
+	ids, startIdx, err := ResumeSet(s.db, studentID, ResumeSetSpec{
+		Mode:       fmt.Sprintf("paper:%d", paperID),
+		FreshIDs:   allIDs,
+		ReuseSaved: true,
+	})
+	if err != nil {
 		return nil, err
-	}
-
-	// 卷序固定：集合未变则沿用保存顺序与游标；变化则按卷序刷新（游标截断保护）。
-	ids := allIDs
-	startIdx := 0
-	if prog.ID != 0 && prog.CurrentIndex < prog.Total {
-		var saved []int
-		if err := json.Unmarshal(prog.QuestionIDs, &saved); err == nil && len(saved) > 0 && sameIDSet(saved, allIDs) {
-			ids = saved
-			startIdx = prog.CurrentIndex
-		}
-	}
-	idsJSON, _ := json.Marshal(ids)
-	if prog.ID == 0 {
-		prog = model.PracticeProgress{
-			StudentID:    studentID,
-			PracticeMode: mode,
-			QuestionIDs:  model.JSONB(idsJSON),
-			CurrentIndex: 0,
-			Total:        len(ids),
-			AnswersState: model.JSONB("{}"),
-			UpdatedAt:    beijingNow(),
-		}
-		if err := s.db.Create(&prog).Error; err != nil {
-			return nil, err
-		}
-	} else {
-		updates := map[string]any{"question_ids": model.JSONB(idsJSON), "total": len(ids), "updated_at": beijingNow()}
-		if startIdx == 0 {
-			updates["current_index"] = 0
-		}
-		if err := s.db.Model(&prog).Updates(updates).Error; err != nil {
-			return nil, err
-		}
 	}
 
 	out := make([]QuestionDTO, 0, len(ids))

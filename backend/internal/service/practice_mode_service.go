@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
 	"time"
 
 	"go.uber.org/zap"
@@ -80,6 +79,7 @@ func (s *PracticeModeService) GetFreeQuestions(qType string, count int, credenti
 // StartTagPractice 标签练习开始/续练：首次进入按标签抽题并持久化题目顺序，
 // 再次进入复用已保存顺序与游标（断点续练）；已完成则重新抽题。
 // mode = "tag:<tagID>"，count <= 0 表示该标签全部题目。
+// 装配形态（#385）：抽题走池单点（sampleQuestionsByOpts），续练协商走 ResumeSet 单点。
 func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, credentialID ...*int) (*PracticeStartResultDTO, error) {
 	if tagID <= 0 {
 		return nil, errors.New("请指定题库标签")
@@ -94,78 +94,30 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, cred
 	if tag.IsSourceTag {
 		return nil, errors.New("该标签不支持专项练习")
 	}
-	var all []model.Question
-	qAll := s.db.Model(&model.Question{}).
-		Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?) AND status = ?", tagID, "published").
-		Where(excludeSourceTagsSQL)
-	if len(credentialID) > 0 && credentialID[0] != nil {
-		qAll = qAll.Where("credential_id = ?", *credentialID[0])
-	}
-	if err := qAll.Order("id ASC").
-		Find(&all).Error; err != nil {
+	all, err := sampleQuestionsByOpts(s.db, sampleQuestionsOpts{tagID: tagID, cred: credOf(credentialID)})
+	if err != nil {
 		return nil, errors.New("查询题目失败")
 	}
 	if len(all) == 0 {
 		return nil, errors.New("该标签下暂无已发布题目")
 	}
 	allIDs := make([]int, len(all))
-	for i := range all {
-		allIDs[i] = all[i].ID
-	}
 	byID := make(map[int]model.Question, len(all))
 	for i := range all {
+		allIDs[i] = all[i].ID
 		byID[all[i].ID] = all[i]
 	}
 
-	mode := fmt.Sprintf("tag:%d", tagID)
-	var prog model.PracticeProgress
-	if err := s.db.Where("student_id = ? AND practice_mode = ?", studentID, mode).Limit(1).Find(&prog).Error; err != nil {
+	ids, startIdx, err := ResumeSet(s.db, studentID, ResumeSetSpec{
+		Mode:       fmt.Sprintf("tag:%d", tagID),
+		FreshIDs:   allIDs,
+		ReuseSaved: true,
+		Sample: func(ids []int) []int {
+			return shuffleTruncate(ids, count)
+		},
+	})
+	if err != nil {
 		return nil, err
-	}
-
-	ids := allIDs
-	startIdx := 0
-	if prog.ID != 0 && prog.CurrentIndex < prog.Total {
-		// 续练：解析已保存的题目顺序（顺序固定，游标位置才有效）
-		var saved []int
-		if err := json.Unmarshal(prog.QuestionIDs, &saved); err == nil && len(saved) > 0 {
-			// 题目集合未变则沿用保存顺序；已变则按新集合刷新（游标截断保护）
-			if sameIDSet(saved, allIDs) {
-				ids = saved
-				startIdx = prog.CurrentIndex
-			}
-		}
-	}
-	if startIdx == 0 && (prog.ID == 0 || prog.CurrentIndex >= prog.Total) {
-		// 首次进入或已完成：随机抽题并固定顺序
-		if count > 0 && len(ids) > count {
-			rand.Shuffle(len(ids), func(i, j int) { ids[i], ids[j] = ids[j], ids[i] })
-			ids = ids[:count]
-		}
-	}
-	idsJSON, _ := json.Marshal(ids)
-	if prog.ID == 0 {
-		prog = model.PracticeProgress{
-			StudentID:    studentID,
-			PracticeMode: mode,
-			QuestionIDs:  model.JSONB(idsJSON),
-			CurrentIndex: 0,
-			Total:        len(ids),
-			AnswersState: model.JSONB("{}"),
-			UpdatedAt:    beijingNow(),
-		}
-		if err := s.db.Create(&prog).Error; err != nil {
-			return nil, err
-		}
-	} else {
-		updates := map[string]any{"question_ids": model.JSONB(idsJSON), "updated_at": beijingNow()}
-		if startIdx == 0 {
-			updates["current_index"] = 0
-		}
-		updates["total"] = len(ids)
-		if err := s.db.Model(&prog).Updates(updates).Error; err != nil {
-			return nil, err
-		}
 	}
 
 	out := make([]QuestionDTO, 0, len(ids))
@@ -184,13 +136,10 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, cred
 
 // StartSequential 顺序练习：加载全部 published 题目（按 id 升序），
 // 复用已有 practice_progress 游标续练；一次性返回全部题目，前端从游标处开始作答。
+// 装配形态（#385）：抽题走池单点（sampleQuestionsByOpts），续练协商走 ResumeSet 单点。
 func (s *PracticeModeService) StartSequential(studentID int, credentialID ...*int) (*PracticeStartResultDTO, error) {
-	var questions []model.Question
-	q := s.db.Where("status = ?", "published").Where(excludeSourceTagsSQL)
-	if len(credentialID) > 0 && credentialID[0] != nil {
-		q = q.Where("credential_id = ?", *credentialID[0])
-	}
-	if err := q.Order("id ASC").Find(&questions).Error; err != nil {
+	questions, err := sampleQuestionsByOpts(s.db, sampleQuestionsOpts{cred: credOf(credentialID)})
+	if err != nil {
 		return nil, errors.New("查询题目失败")
 	}
 	if len(questions) == 0 {
@@ -200,36 +149,14 @@ func (s *PracticeModeService) StartSequential(studentID int, credentialID ...*in
 	for i, q := range questions {
 		ids[i] = q.ID
 	}
-	idsJSON, _ := json.Marshal(ids)
 
-	// upsert 进度：使用 Limit(1).Find() 避免首次进入练习时 GORM logger 误报 record not found
-	var prog model.PracticeProgress
-	err := s.db.Where("student_id = ? AND practice_mode = ?", studentID, "sequential").Limit(1).Find(&prog).Error
+	ids, startIdx, err := ResumeSet(s.db, studentID, ResumeSetSpec{
+		Mode:                "sequential",
+		FreshIDs:            ids,
+		KeepCursorOnRefresh: true,
+	})
 	if err != nil {
 		return nil, err
-	}
-	if prog.ID == 0 {
-		prog = model.PracticeProgress{
-			StudentID:    studentID,
-			PracticeMode: "sequential",
-			QuestionIDs:  model.JSONB(idsJSON),
-			CurrentIndex: 0,
-			Total:        len(ids),
-			AnswersState: model.JSONB("{}"),
-			UpdatedAt:    beijingNow(),
-		}
-		if err := s.db.Create(&prog).Error; err != nil {
-			return nil, err
-		}
-	} else {
-		// 题库变化时刷新列表，但保留游标（不超过新总数）
-		prog.QuestionIDs = model.JSONB(idsJSON)
-		prog.Total = len(ids)
-		if prog.CurrentIndex >= prog.Total {
-			prog.CurrentIndex = 0
-		}
-		prog.UpdatedAt = beijingNow()
-		s.db.Save(&prog)
 	}
 
 	// 一次性返回全部题目，前端从游标处开始作答
@@ -239,55 +166,24 @@ func (s *PracticeModeService) StartSequential(studentID int, credentialID ...*in
 	}
 	return &PracticeStartResultDTO{
 		Questions:    all,
-		CurrentIndex: prog.CurrentIndex,
-		Total:        prog.Total,
-		Completed:    prog.CurrentIndex,
+		CurrentIndex: startIdx,
+		Total:        len(ids),
+		Completed:    startIdx,
 	}, nil
 }
 
 // SaveProgress 保存练习游标和答题状态。upsert 语义：记录不存在则创建。
 // practiceMode 为空时默认 "sequential"；total > 0 时同步更新 total；
 // answersState 经三态初始化（nil/空/显式 null → {}，#142）。
-// 守卫口径对齐（session_progress.go）：practice_progress 无 status 字段（schema 冻结
+// 装配形态（#385）：写回走 SaveSet 单点（ids=nil——进度保存不触碰已存题目顺序）。
+// 守卫口径（session_progress.go）：practice_progress 无 status 字段（schema 冻结
 // ADR-0010），经 (student_id, practice_mode) 定位即天然归属本人，且无终端状态，
-// 恒视为在途——故无需在途校验；JSONB 归一复用共享实现 initAnswersState。
+// 恒视为在途——故无需在途校验。
 func (s *PracticeModeService) SaveProgress(studentID, index int, practiceMode string, total int, answersState json.RawMessage) error {
 	if practiceMode == "" {
 		practiceMode = "sequential"
 	}
-	answersState = initAnswersState(answersState)
-	var prog model.PracticeProgress
-	err := s.db.Where("student_id = ? AND practice_mode = ?", studentID, practiceMode).Limit(1).Find(&prog).Error
-	if err != nil {
-		return err
-	}
-	if prog.ID == 0 {
-		prog = model.PracticeProgress{
-			StudentID:    studentID,
-			PracticeMode: practiceMode,
-			QuestionIDs:  model.JSONB([]byte("[]")),
-			CurrentIndex: index,
-			Total:        total,
-			AnswersState: model.JSONB(answersState),
-			UpdatedAt:    beijingNow(),
-		}
-		if err := s.db.Create(&prog).Error; err != nil {
-			return err
-		}
-	} else {
-		updates := map[string]any{
-			"current_index": index,
-			"answers_state": model.JSONB(answersState),
-			"updated_at":    beijingNow(),
-		}
-		if total > 0 {
-			updates["total"] = total
-		}
-		if err := s.db.Model(&prog).Updates(updates).Error; err != nil {
-			return err
-		}
-	}
-	return nil
+	return SaveSet(s.db, studentID, practiceMode, nil, index, total, initAnswersState(answersState))
 }
 
 // GetProgress 查询任意模式的练习进度（卡片展示/断点续练用）。
