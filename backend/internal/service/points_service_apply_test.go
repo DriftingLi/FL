@@ -200,19 +200,20 @@ func TestDeductAIStableRequestIdempotent(t *testing.T) {
 	svc, db := newPointsSvc(t)
 	uid := seedUserWithBalance(t, db, 100)
 
-	points1, bal1, err := svc.DeductAI(context.Background(), uid, "req-stable-1", 1000, "")
+	// prompt=0 + completion=4000 字符 → 估算 1000 tokens → 10 积分
+	res1, err := svc.DeductAI(context.Background(), uid, "req-stable-1", 0, 4000)
 	if err != nil {
 		t.Fatalf("首次扣费失败: %v", err)
 	}
-	if bal1 != 100-points1 {
-		t.Fatalf("首次扣费后余额不符: bal=%d", bal1)
+	if res1.Balance != 100-res1.Points {
+		t.Fatalf("首次扣费后余额不符: bal=%d", res1.Balance)
 	}
-	points2, bal2, err := svc.DeductAI(context.Background(), uid, "req-stable-1", 1000, "")
+	res2, err := svc.DeductAI(context.Background(), uid, "req-stable-1", 0, 4000)
 	if err != nil {
 		t.Fatalf("同键重复扣费不应报错: %v", err)
 	}
-	if points2 != points1 || bal2 != bal1 {
-		t.Fatalf("同键重复扣费应幂等返回: p1=%d p2=%d bal1=%d bal2=%d", points1, points2, bal1, bal2)
+	if res2.Points != res1.Points || res2.Balance != res1.Balance {
+		t.Fatalf("同键重复扣费应幂等返回: p1=%d p2=%d bal1=%d bal2=%d", res1.Points, res2.Points, res1.Balance, res2.Balance)
 	}
 	if got := ledgerCount(t, db, "user_id = ? AND reason = ?", uid, "ai_tokens"); got != 1 {
 		t.Fatalf("ai_tokens 流水应恰一行, got %d", got)

@@ -155,7 +155,7 @@ func ApplyTx(tx *gorm.DB, e PointsEntry) (bool, error) {
 			return false, res.Error
 		}
 		if res.RowsAffected == 0 {
-			return false, errors.New("积分不足")
+			return false, ErrInsufficientPoints
 		}
 		// 截断到 0 的兜底（并发窗口残余，维持既有兜底语义）
 		_ = tx.Exec("UPDATE hrwai_users SET points_balance = GREATEST(points_balance, 0) WHERE id = ?", e.UserID).Error
@@ -471,7 +471,7 @@ func (s *PointsService) redeem(ctx context.Context, userID int, o redeemOpts) (*
 		return nil, err
 	}
 	if user.PointsBalance < o.price {
-		return nil, errors.New("积分不足")
+		return nil, ErrInsufficientPoints
 	}
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		ent := model.UserEntitlement{UserID: userID, SKU: o.sku, RefID: o.refID}
@@ -583,22 +583,66 @@ func (s *PointsService) HasEntitlement(userID int, sku, refID string) bool {
 	return cnt > 0
 }
 
-// DeductAI AI 按 tokens 扣费（后计量），tokens<=0 时按 content 长度估算
-func (s *PointsService) DeductAI(ctx context.Context, userID int, requestID string, tokens int, content string) (int, int, error) {
-	if tokens <= 0 {
-		// 兜底：len/4 估算
-		tokens = (len(content) + 3) / 4
-		if tokens < 100 {
-			tokens = 100
-		}
+// ErrInsufficientPoints 积分余额不足（哨兵错误，ADR-0023）：调用方一律 errors.Is 判定，
+// 禁止再做「积分不足」字符串匹配（守卫扣减/兑换预检/AI 扣费同源）。
+var ErrInsufficientPoints = errors.New("积分不足")
+
+// aiMinPoints AI 对话扣费下限：余额预检门槛与扣费下限同源单点（调用侧不得另立常量）。
+const aiMinPoints = 5
+
+// AITokensResult AI 对话扣费结果（usage 事件的数据面，JSON 字段即事件负载）。
+type AITokensResult struct {
+	Points           int `json:"points_cost"`
+	TotalTokens      int `json:"total_tokens"`
+	Balance          int `json:"balance"`
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+}
+
+// estimateAITokens 按字符长度估算 tokens（口径单点）：total = ceil((prompt+completion)/4)，
+// 合计 <10 时兜底 100；prompt/completion 各自 ceil(len/4)。调用侧不得重复估算。
+func estimateAITokens(promptChars, completionChars int) (total, prompt, completion int) {
+	prompt = (promptChars + 3) / 4
+	completion = (completionChars + 3) / 4
+	total = (promptChars + completionChars + 3) / 4
+	if total < 10 {
+		total = 100
 	}
+	return total, prompt, completion
+}
+
+// aiPointsForTokens tokens → 积分：ceil(tokens/1000)×10，下限 aiMinPoints 上限 100。
+func aiPointsForTokens(tokens int) int {
 	points := (tokens + 999) / 1000 * 10
-	if points < 5 {
-		points = 5
+	if points < aiMinPoints {
+		points = aiMinPoints
 	}
 	if points > 100 {
 		points = 100
 	}
+	return points
+}
+
+// AIPreflight AI 对话余额预检：余额低于下限返回 ErrInsufficientPoints（阻断对话）。
+// 余额查询失败时放行——后计量模式下真正的闸门在末端扣费，与既有 fail-open 语义一致。
+func (s *PointsService) AIPreflight(userID int) error {
+	bal, err := s.GetBalance(userID)
+	if err != nil || bal == nil {
+		return nil
+	}
+	if bal.Balance < aiMinPoints {
+		return ErrInsufficientPoints
+	}
+	return nil
+}
+
+// DeductAI AI 按 tokens 后计量扣费（ADR-0023）。调用方只传事实（prompt/completion
+// 字符长度 + 稳定 requestID），tokens 估算、分桶换算、上下限与幂等全部内聚在积分域：
+// 估算见 estimateAITokens，积分换算见 aiPointsForTokens；幂等键 ai_tokens:{requestID}，
+// 同请求重试/重放只扣一次。成功返回 usage 事件所需的完整数据面。
+func (s *PointsService) DeductAI(ctx context.Context, userID int, requestID string, promptChars, completionChars int) (*AITokensResult, error) {
+	total, prompt, completion := estimateAITokens(promptChars, completionChars)
+	points := aiPointsForTokens(total)
 	lockKey := fmt.Sprintf("ai:tokens:%d:%s", userID, requestID)
 	if ok, err := cache.SetNX(ctx, lockKey, "1", 60*time.Second); err == nil && ok {
 		defer func() { _ = cache.Del(ctx, lockKey) }()
@@ -607,19 +651,15 @@ func (s *PointsService) DeductAI(ctx context.Context, userID int, requestID stri
 	var cnt int64
 	_ = s.db.Model(&model.PointsLedger{}).Where("user_id = ? AND ref_id = ? AND reason = ?", userID, requestID, "ai_tokens").Count(&cnt).Error
 	if cnt > 0 {
-		bal, _ := s.GetBalance(userID)
-		if bal != nil {
-			return points, bal.Balance, nil
-		}
-		return points, 0, nil
+		return s.aiTokensResult(points, total, prompt, completion, userID), nil
 	}
 	var user model.HrwaiUser
 	if err := s.db.First(&user, userID).Error; err != nil {
-		return 0, 0, err
+		return nil, err
 	}
 	if user.PointsBalance < points {
-		// 余额不足，按截断到 0 处理？AI 场景直接拒绝
-		return 0, user.PointsBalance, errors.New("积分不足")
+		// 余额不足（预检后的并发窗口或直连路径）：AI 场景直接拒绝
+		return nil, ErrInsufficientPoints
 	}
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		// 幂等键 ai_tokens:{requestID}（ADR-0023）：由调用方传稳定请求标识
@@ -634,13 +674,18 @@ func (s *PointsService) DeductAI(ctx context.Context, userID int, requestID stri
 		return err
 	})
 	if err != nil {
-		return 0, 0, err
+		return nil, err
 	}
-	bal, _ := s.GetBalance(userID)
-	if bal != nil {
-		return points, bal.Balance, nil
+	return s.aiTokensResult(points, total, prompt, completion, userID), nil
+}
+
+// aiTokensResult 组装扣费结果（余额实时读取，读取失败时余额置 0 维持既有语义）。
+func (s *PointsService) aiTokensResult(points, total, prompt, completion, userID int) *AITokensResult {
+	res := &AITokensResult{Points: points, TotalTokens: total, PromptTokens: prompt, CompletionTokens: completion}
+	if bal, _ := s.GetBalance(userID); bal != nil {
+		res.Balance = bal.Balance
 	}
-	return points, 0, nil
+	return res
 }
 
 // AdminPenalty 管理员扣罚（自定义 1-500，截断到 0）
