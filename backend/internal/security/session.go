@@ -78,12 +78,14 @@ func (RedisBlacklistStore) PutIfAbsent(ctx context.Context, key, value string, t
 
 // Session 会话模块：签发（issue）/ 校验（verify）/ 吊销（revoke）JWT，
 // 并负责 Bearer/Cookie 令牌提取与登录态 Cookie 写清除。
+// 招牌隔离（#370）：学员侧 hrwai_token 父域共享，招聘者 recruiter_token host-only。
 type Session struct {
-	jwtSecret     string
-	jwtExpiry     time.Duration
-	refreshExpiry time.Duration
-	cookie        CookieConfig
-	blacklist     BlacklistStore
+	jwtSecret       string
+	jwtExpiry       time.Duration
+	refreshExpiry   time.Duration
+	cookie          CookieConfig // hrwai / admin / tutor 共享的父域 cookie
+	recruiterCookie CookieConfig // recruiter 独立 host-only cookie
+	blacklist       BlacklistStore
 }
 
 // NewSession 构造会话模块（默认 Redis 黑名单存储；refresh 默认 7 天）。
@@ -93,22 +95,51 @@ func NewSession(jwtSecret string, jwtExpiry time.Duration, cookie CookieConfig) 
 
 // NewSessionWithBlacklistAndRefresh 构造会话模块：黑名单存储与 refresh 有效期均可注入（测试用）。
 func NewSessionWithBlacklistAndRefresh(jwtSecret string, jwtExpiry, refreshExpiry time.Duration, cookie CookieConfig, blacklist BlacklistStore) *Session {
-	return &Session{
+	s := &Session{
 		jwtSecret:     jwtSecret,
 		jwtExpiry:     jwtExpiry,
 		refreshExpiry: refreshExpiry,
 		cookie:        cookie,
 		blacklist:     blacklist,
 	}
+	s.recruiterCookie = CookieConfig{Name: "recruiter_token", Domain: "", Secure: cookie.Secure}
+	if s.recruiterCookie.Name == "" {
+		s.recruiterCookie.Name = "recruiter_token"
+	}
+	return s
+}
+
+// NewSessionWithRecruiterCookie 构造会话模块：显式指定招聘者 cookie（测试可注入 host-only 配置）。
+func NewSessionWithRecruiterCookie(jwtSecret string, jwtExpiry, refreshExpiry time.Duration, cookie, recruiterCookie CookieConfig, blacklist BlacklistStore) *Session {
+	if recruiterCookie.Name == "" {
+		recruiterCookie.Name = "recruiter_token"
+	}
+	return &Session{
+		jwtSecret:       jwtSecret,
+		jwtExpiry:       jwtExpiry,
+		refreshExpiry:   refreshExpiry,
+		cookie:          cookie,
+		recruiterCookie: recruiterCookie,
+		blacklist:       blacklist,
+	}
 }
 
 // SessionFromConfig 从应用配置构造会话模块（黑名单固定为 Redis 存储，refresh 用配置值）。
 func SessionFromConfig(cfg *config.Config) *Session {
-	return NewSessionWithBlacklistAndRefresh(cfg.JWTSecretKey, cfg.JWTExpiry(), cfg.JWTRefreshExpiry(), CookieConfig{
+	hrwaiCookie := CookieConfig{
 		Name:   cfg.AuthCookie.Name,
 		Domain: cfg.AuthCookie.Domain,
 		Secure: cfg.AuthCookie.Secure,
-	}, RedisBlacklistStore{})
+	}
+	recruiterCookie := CookieConfig{
+		Name:   cfg.RecruiterCookie.Name,
+		Domain: cfg.RecruiterCookie.Domain,
+		Secure: cfg.RecruiterCookie.Secure,
+	}
+	if recruiterCookie.Name == "" {
+		recruiterCookie.Name = "recruiter_token"
+	}
+	return NewSessionWithRecruiterCookie(cfg.JWTSecretKey, cfg.JWTExpiry(), cfg.JWTRefreshExpiry(), hrwaiCookie, recruiterCookie, RedisBlacklistStore{})
 }
 
 // Issue 签发 access token（双令牌会话：短生命周期、只供鉴权中间件，ADR-0012）。
@@ -285,6 +316,70 @@ func (s *Session) ClearCookie(w http.ResponseWriter) {
 		Secure:   s.cookie.Secure,
 		SameSite: http.SameSiteLaxMode,
 	})
+}
+
+// RecruiterCookieName 返回招聘者登录态 Cookie 名称（host-only 隔离）。
+func (s *Session) RecruiterCookieName() string {
+	if s.recruiterCookie.Name != "" {
+		return s.recruiterCookie.Name
+	}
+	return "recruiter_token"
+}
+
+// CookieNames 返回所有登录态 Cookie 名称（按优先级：hrwai 优先，recruiter 次之），
+// 中间件读取时依次尝试以兼容双 cookie 场景。
+func (s *Session) CookieNames() []string {
+	names := []string{s.cookie.Name}
+	if rc := s.RecruiterCookieName(); rc != "" && rc != s.cookie.Name {
+		names = append(names, rc)
+	}
+	return names
+}
+
+// SetRecruiterCookie 将招聘者 JWT 写入 host-only httpOnly Cookie（不设 Domain，浏览器仅对当前 host 发送）。
+func (s *Session) SetRecruiterCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     s.RecruiterCookieName(),
+		Value:    token,
+		Path:     "/",
+		Domain:   s.recruiterCookie.Domain,
+		MaxAge:   int(s.jwtExpiry.Seconds()),
+		HttpOnly: true,
+		Secure:   s.recruiterCookie.Secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// ClearRecruiterCookie 清除招聘者登录 Cookie。
+func (s *Session) ClearRecruiterCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     s.RecruiterCookieName(),
+		Value:    "",
+		Path:     "/",
+		Domain:   s.recruiterCookie.Domain,
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   s.recruiterCookie.Secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// SetCookieForRole 按角色写 Cookie：recruiter 走 host-only 独立 cookie，其余走 hrwai 父域 cookie。
+func (s *Session) SetCookieForRole(w http.ResponseWriter, token, role string) {
+	if role == "recruiter" {
+		s.SetRecruiterCookie(w, token)
+		return
+	}
+	s.SetCookie(w, token)
+}
+
+// ClearCookieForRole 按角色清除 Cookie。
+func (s *Session) ClearCookieForRole(w http.ResponseWriter, role string) {
+	if role == "recruiter" {
+		s.ClearRecruiterCookie(w)
+		return
+	}
+	s.ClearCookie(w)
 }
 
 // randomJWTID 生成随机 jti（防重放/保证每次签发唯一；crypto/rand 失败时退化为时间戳）。

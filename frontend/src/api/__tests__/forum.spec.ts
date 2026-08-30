@@ -6,7 +6,7 @@ vi.mock('@/api/request', () => ({
 }))
 
 import { unwrappedRequest } from '@/api/request'
-import { forumApi, adminForumApi } from '../forum'
+import { forumApi, adminForumApi, forumTabQuery } from '../forum'
 
 const mockGet = vi.mocked(unwrappedRequest.get)
 const mockPost = vi.mocked(unwrappedRequest.post)
@@ -71,5 +71,22 @@ describe('adminForumApi 举报管理', () => {
     mockPut.mockResolvedValue(null)
     await adminForumApi.handleReport(3, 1)
     expect(mockPut).toHaveBeenCalledWith('/admin/forum/reports/3', { status: 1 })
+  })
+})
+
+// #364：Tab → 查询参数的映射。两端（学员 / 管理）共用这一份，
+// 锁的是"综合讨论区不再混入问答帖"这条规则本身——它一旦回退，
+// 管理员会在综合区看到问答帖，且没法单独审问答区。
+describe('forumTabQuery 类别映射', () => {
+  it('全部帖子：不带 scope 也不带 category（服务端默认 all）', () => {
+    expect(forumTabQuery('all')).toEqual({})
+  })
+
+  it('讨论：scope=general 且必须带 category=discussion', () => {
+    expect(forumTabQuery('discussion')).toEqual({ scope: 'general', category: 'discussion' })
+  })
+
+  it('问答：按 category=question 分流，不带 scope（问答帖本就无章节归属）', () => {
+    expect(forumTabQuery('question')).toEqual({ category: 'question' })
   })
 })

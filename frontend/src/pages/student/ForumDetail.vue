@@ -63,11 +63,17 @@
         </div>
         <div class="topic-body">
           <div class="topic-title-row">
-            <el-tag v-if="topic.chapter_id" size="small" type="warning">
+            <el-tag v-if="topic.category === 'question'" size="small" type="success">问答</el-tag>
+            <el-tag v-else-if="topic.chapter_id" size="small" type="warning">
               {{ topic.chapter_title || '章节讨论' }}
             </el-tag>
             <el-tag v-else size="small" type="info">综合</el-tag>
+            <el-tag v-if="topic.category === 'question' && (topic.accepted_reply_id || topic.solved_at)" size="small" type="success" effect="dark">✓ 已解决</el-tag>
+            <el-tag v-else-if="topic.category === 'question'" size="small" type="info" effect="plain">求助</el-tag>
             <h1 class="topic-title">{{ topic.title }}</h1>
+          </div>
+          <div v-if="topic.category === 'question' && isTopicOwner && topic.accepted_reply_id" class="accept-actions">
+            <el-button size="small" @click="handleCancelAccept">取消采纳</el-button>
           </div>
           <div class="topic-content">{{ topic.content }}</div>
           <ForumImageGallery :images="topic.images" />
@@ -95,11 +101,13 @@
             <el-button size="small" :icon="replyOrder==='asc'? ArrowUp : ArrowDown" @click="toggleReplyOrder">{{ replyOrder==='asc' ? '正序' : '逆序' }}</el-button>
           </div>
         </div>
-        <template v-if="replies.length > 0">
+        <template v-if="sortedReplies.length > 0">
           <div
-            v-for="(reply, i) in replies"
+            v-for="(reply, i) in sortedReplies"
             :key="reply.id"
+            :id="`reply-${reply.id}`"
             class="reply-item stagger-in"
+            :class="{ 'is-accepted': reply.is_accepted }"
             :style="staggerStyle(i)"
           >
             <el-avatar :size="38" :src="reply.author.avatar_url || undefined" class="author-avatar">
@@ -108,6 +116,8 @@
             <div class="reply-main">
               <div class="reply-meta">
                 <span class="author-name">{{ displayName(reply.author) }}</span>
+                <el-tag v-if="topic && reply.author.user_id === topic.author.user_id" size="small" type="info" effect="plain" class="owner-tag">楼主</el-tag>
+                <el-tag v-if="reply.is_accepted" size="small" type="success" effect="dark" class="accepted-inline">✓ 已采纳</el-tag>
                 <span class="reply-time">{{ formatLocaleDateTime(reply.created_at, '') }}</span>
                 <el-button
                   class="reply-btn"
@@ -149,8 +159,17 @@
               <div v-if="reply.parent_id && reply.parent_name" class="reply-quote">
                 回复 @{{ reply.parent_name }}
               </div>
+              <div v-if="reply.is_accepted" class="accepted-badge">
+                <el-tag size="small" type="success" effect="dark">✓ 已采纳答案</el-tag>
+              </div>
               <div class="reply-content">{{ reply.content }}</div>
               <ForumImageGallery :images="reply.images" />
+              <div v-if="topic && topic.category === 'question' && isTopicOwner && !reply.is_accepted" class="reply-accept-row">
+                <el-button size="small" type="success" plain @click="handleAccept(reply.id)">采纳此回答</el-button>
+              </div>
+              <div v-else-if="topic && topic.category === 'question' && isTopicOwner && reply.is_accepted" class="reply-accept-row">
+                <el-button size="small" @click="handleCancelAccept">取消采纳</el-button>
+              </div>
             </div>
           </div>
         </template>
@@ -209,7 +228,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, View, ChatDotRound, Star, StarFilled, Paperclip, Promotion, Close, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
@@ -264,6 +283,28 @@ function authorLetter(author: ForumTopicItem['author']) {
   return (displayName(author) || '?').charAt(0).toUpperCase()
 }
 
+const isTopicOwner = computed(() => !!topic.value && topic.value.author.user_id === authStore.userInfo?.user_id)
+
+const sortedReplies = computed(() => {
+  if (!replies.value.length) return []
+  const idx = replies.value.findIndex((r) => r.is_accepted)
+  if (idx <= 0) return replies.value
+  const copy = [...replies.value]
+  const [acc] = copy.splice(idx, 1)
+  copy.unshift(acc)
+  return copy
+})
+
+function scrollToHash() {
+  const hash = route.hash || window.location.hash
+  if (!hash || !hash.startsWith('#reply-')) return
+  const id = hash.slice(1)
+  nextTick(() => {
+    const el = document.getElementById(id)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
+}
+
 async function loadDetail() {
   loading.value = true
   loadError.value = false
@@ -279,6 +320,8 @@ async function loadDetail() {
         // ignore storage errors
       }
     }
+    await nextTick()
+    scrollToHash()
   } catch (e) {
     console.error('加载帖子详情失败:', e)
     loadError.value = true
@@ -286,6 +329,55 @@ async function loadDetail() {
     replies.value = []
   } finally {
     loading.value = false
+  }
+}
+
+async function handleAccept(replyId: number) {
+  if (!topic.value) return
+  const isReplace = !!topic.value.accepted_reply_id
+  const alreadyIssued = !!topic.value.reward_issued || isReplace
+  const msg = alreadyIssued
+    ? '该帖采纳奖励已发放，更换只会改变显示，不再产生积分。确认更换采纳？'
+    : '确认采纳？+40 分将发放给该答主'
+  const title = alreadyIssued ? '更换采纳' : '采纳回答'
+  try {
+    await ElMessageBox.confirm(msg, title, { type: alreadyIssued ? 'warning' : 'info', confirmButtonText: '确认', cancelButtonText: '取消' })
+  } catch {
+    return
+  }
+  try {
+    const updated = await forumApi.acceptReply(topic.value.id, replyId)
+    ElMessage.success('已采纳')
+    if (updated) {
+      topic.value = { ...topic.value, ...updated } as ForumTopicItem
+      const newAccepted = (updated as ForumTopicItem).accepted_reply_id
+      replies.value = replies.value.map((r) => ({ ...r, is_accepted: newAccepted != null && r.id === newAccepted }))
+    } else {
+      await loadDetail()
+    }
+  } catch (e) {
+    console.error('采纳失败:', e)
+  }
+}
+
+async function handleCancelAccept() {
+  if (!topic.value) return
+  try {
+    await ElMessageBox.confirm('确认取消采纳？已发放积分不会收回。', '取消采纳', { type: 'warning' })
+  } catch {
+    return
+  }
+  try {
+    const updated = await forumApi.cancelAccept(topic.value.id)
+    ElMessage.success('已取消采纳')
+    if (updated) {
+      topic.value = { ...topic.value, ...updated } as ForumTopicItem
+      replies.value = replies.value.map((r) => ({ ...r, is_accepted: false }))
+    } else {
+      await loadDetail()
+    }
+  } catch (e) {
+    console.error('取消采纳失败:', e)
   }
 }
 
@@ -390,8 +482,12 @@ function startReplyTo(reply: ForumReplyItem) {
 }
 
 async function removeTopic() {
+  const isSolved = topic.value?.accepted_reply_id != null
+  const msg = isSolved
+    ? '该帖已解决且已被采纳，删除后已采纳的答案将一并被删除，且计数将计入巡检，是否确认删除？'
+    : '确定删除这个帖子吗？删除后无法恢复。'
   try {
-    await ElMessageBox.confirm('确定删除这个帖子吗？删除后无法恢复。', '删除帖子', { type: 'warning' })
+    await ElMessageBox.confirm(msg, '删除帖子', { type: 'warning' })
   } catch {
     return
   }
@@ -544,6 +640,11 @@ async function submitReport() {
   }
 }
 
+watch(
+  () => route.hash,
+  () => scrollToHash()
+)
+
 onMounted(() => {
   loadDetail()
   loadFavoriteState()
@@ -694,6 +795,38 @@ onBeforeUnmount(() => {
   gap: 12px;
   padding: 16px 0;
   border-bottom: 1px solid var(--color-bg-page);
+}
+
+.reply-item.is-accepted {
+  border: 2px solid #67c23a;
+  background: var(--color-success-50, #f0fdf4);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 6px -12px;
+}
+
+.reply-item.is-accepted .accepted-badge {
+  margin: 6px 0;
+}
+
+.owner-tag {
+  margin-left: 6px;
+}
+
+.accepted-inline {
+  margin-left: 6px;
+}
+
+.accept-actions {
+  margin-bottom: 12px;
+}
+
+.accepted-badge {
+  margin: 6px 0;
+}
+
+.reply-accept-row {
+  margin-top: 8px;
 }
 
 .reply-item:last-child {

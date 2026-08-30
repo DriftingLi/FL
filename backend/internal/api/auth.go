@@ -123,6 +123,33 @@ func (h *AuthHandler) TutorLogin(c *gin.Context) {
 	}.Handle(c)
 }
 
+// RecruiterLogin 企业招聘者登录 POST /api/auth/recruiter-login（第四角色，host-only cookie 隔离）
+func (h *AuthHandler) RecruiterLogin(c *gin.Context) {
+	Endpoint[loginReq, service.LoginResult]{
+		Parse: func(c *gin.Context) (*loginReq, error) {
+			req, err := bindJSON[loginReq](c)
+			if err != nil {
+				return nil, err
+			}
+			if req.Username == "" || req.Password == "" {
+				return nil, badRequest("用户名和密码不能为空")
+			}
+			return req, nil
+		},
+		Invoke: func(ctx context.Context, req *loginReq) (*service.LoginResult, error) {
+			return h.authSvc.RecruiterLogin(req.Username, req.Password)
+		},
+		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			setRecruiterCookie(c, h.session, resp.Token)
+			response.SuccessWithMsg(c, "招聘者登录成功", resp)
+		},
+	}.Handle(c)
+}
+
 // loginReq 登录请求体（三种角色共用字段）。
 type loginReq struct {
 	Username string `json:"username"`

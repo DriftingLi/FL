@@ -53,6 +53,8 @@ type Config struct {
 	Wechat WechatConfig
 	// AuthCookie 登录态 Cookie 配置（父域名共享登录）。
 	AuthCookie AuthCookieConfig
+	// RecruiterCookie 企业招聘者登录态 Cookie（host-only，不共享父域）。
+	RecruiterCookie RecruiterCookieConfig
 	// Log 统一系统运行日志配置（zap）。
 	Log LogConfig
 }
@@ -112,6 +114,14 @@ type AuthCookieConfig struct {
 	Name   string // AUTH_COOKIE_NAME，默认 hrwai_token
 	Domain string // AUTH_COOKIE_DOMAIN，默认 localhost
 	Secure bool   // AUTH_COOKIE_SECURE，生产默认 true（HTTPS 才发送）
+}
+
+// RecruiterCookieConfig 招聘者登录态 Cookie 配置（host-only 隔离，不共享父域）。
+// 与学员侧 hrwai_token 完全独立，Domain 为空表示 host-only。
+type RecruiterCookieConfig struct {
+	Name   string // RECRUITER_COOKIE_NAME，默认 recruiter_token
+	Domain string // RECRUITER_COOKIE_DOMAIN，默认 ""（host-only）
+	Secure bool   // RECRUITER_COOKIE_SECURE，生产默认 true
 }
 
 // StorageConfig 文件存储配置。
@@ -198,7 +208,7 @@ func setDefaults() {
 	viper.SetDefault("database_url", "")
 	viper.SetDefault("cors_origins", "http://localhost:5173,http://localhost:5174,"+
 		"http://training.localhost:5173,http://valuation.localhost:5173,"+
-		"http://mentor.localhost:5173,http://manage.localhost:5173")
+		"http://mentor.localhost:5173,http://manage.localhost:5173,http://recruit.localhost:5173")
 	viper.SetDefault("upload_folder", "")
 	viper.SetDefault("volume_mount_path", "")
 	viper.SetDefault("libreoffice_sidecar_url", "")
@@ -253,6 +263,8 @@ func setDefaults() {
 	viper.SetDefault("wechat_open_platform_app_secret", "")
 	viper.SetDefault("auth_cookie_name", "hrwai_token")
 	viper.SetDefault("auth_cookie_domain", "localhost")
+	viper.SetDefault("recruiter_cookie_name", "recruiter_token")
+	viper.SetDefault("recruiter_cookie_domain", "")
 	viper.SetDefault("log_level", "info")
 	viper.SetDefault("log_format", "console")
 	viper.SetDefault("log_dir", "")
@@ -372,6 +384,11 @@ func Load() (*Config, error) {
 			Name:   viper.GetString("auth_cookie_name"),
 			Domain: viper.GetString("auth_cookie_domain"),
 			Secure: authCookieSecure,
+		},
+		RecruiterCookie: RecruiterCookieConfig{
+			Name:   viper.GetString("recruiter_cookie_name"),
+			Domain: viper.GetString("recruiter_cookie_domain"),
+			Secure: envBoolOr("recruiter_cookie_secure", appEnv == "production"),
 		},
 		Log: LogConfig{
 			Level:      viper.GetString("log_level"),

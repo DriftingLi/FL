@@ -111,7 +111,7 @@ func OptionalAuth(sess *security.Session) gin.HandlerFunc {
 // 双令牌会话（ADR-0012）：access 短生命周期不入黑名单，refresh 传入鉴权端点被 VerifyAccess 拒绝；
 // 登出撤销的是 refresh（由 /logout 处理器处理），access 自然过期。
 func resolveClaims(c *gin.Context, sess *security.Session) bool {
-	tokenStr := sess.ExtractToken(c.GetHeader("Authorization"), authCookieValue(c, sess.CookieName()))
+	tokenStr := sess.ExtractToken(c.GetHeader("Authorization"), authCookieValue(c, sess))
 	if tokenStr == "" {
 		return false
 	}
@@ -124,13 +124,16 @@ func resolveClaims(c *gin.Context, sess *security.Session) bool {
 	return false
 }
 
-// authCookieValue 读取父域名登录 Cookie（不存在时返回空串）。
-func authCookieValue(c *gin.Context, cookieName string) string {
-	tk, err := c.Cookie(cookieName)
-	if err != nil {
-		return ""
+// authCookieValue 读取登录 Cookie（依次尝试 hrwai_token 与 recruiter_token，不存在时返回空串）。
+// 兼容保持单参调用：旧签名 authCookieValue(c, name) 已收敛为按 Session CookieNames 遍历，
+// 保留同名 helper 供测试或外部调用时走多 cookie 逻辑。
+func authCookieValue(c *gin.Context, sess *security.Session) string {
+	for _, name := range sess.CookieNames() {
+		if tk, err := c.Cookie(name); err == nil && tk != "" {
+			return tk
+		}
 	}
-	return tk
+	return ""
 }
 
 // RoleRequired 角色校验中间件。

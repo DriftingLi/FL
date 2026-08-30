@@ -94,6 +94,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 		auth.POST("/login", authH.Login)
 		auth.POST("/admin-login", authH.AdminLogin)
 		auth.POST("/tutor-login", authH.TutorLogin)
+		auth.POST("/recruiter-login", authH.RecruiterLogin)
 		// 双令牌会话（ADR-0012）：/refresh 用 refresh token 自身鉴权（不经过 JWTAuth）；
 		// /logout 撤销请求体 refresh token，不依赖 JWTAuth（access 过期时也能撤销 refresh / 登出）。
 		auth.POST("/refresh", authH.Refresh)
@@ -122,6 +123,8 @@ func NewRouter(deps *Deps) *gin.Engine {
 	RegisterQuestionBankRoutes(api, rd, deps.QuestionBankSvc, deps.FileSvc)
 	RegisterPracticeModeRoutes(api, rd, deps.PracticeModeSvc)
 	RegisterAdminRoutes(api, rd, deps.AdminSvc, deps.AdminCourseSvc, deps.AuthSvc, deps.AIConfigSvc, deps.ContentGenSvc)
+	RegisterAdminRecruiterRoutes(api, rd, deps.AuthSvc)
+	RegisterRecruitRoutes(api, rd, deps.RecruitSvc)
 	RegisterTutorRoutes(api, rd, deps.TutorSvc, deps.FileSvc)
 	RegisterWrongQuestionRoutes(api, rd, deps.WrongQuestionSvc)
 	RegisterMockExamRoutes(api, rd, deps.MockExamSvc)
@@ -141,6 +144,10 @@ func NewRouter(deps *Deps) *gin.Engine {
 	RegisterFavoriteRoutes(api, rd, deps.FavoriteSvc)
 	RegisterSearchRoutes(api, rd, deps.SearchSvc)
 	RegisterMaterialRoutes(api, rd, deps.MaterialSvc)
+	RegisterJobCardRoutes(api, rd, deps.JobCardSvc, deps.FileSvc)
+	RegisterResumeViewRoutes(api, rd, deps.RecruitSvc)
+	RegisterContactRoutes(api, rd, deps.ContactSvc)
+	RegisterAdminInspectionRoutes(api, rd, deps.DB)
 
 	return r
 }

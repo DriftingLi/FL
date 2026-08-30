@@ -68,6 +68,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/student/ForumPage.vue')
       },
       {
+        path: 'forum/ask',
+        name: 'ForumAsk',
+        component: () => import('@/pages/student/ForumAskPage.vue')
+      },
+      {
         path: 'forum/:topicId',
         name: 'ForumDetail',
         component: () => import('@/pages/student/ForumDetail.vue')
@@ -112,6 +117,11 @@ const routes: RouteRecordRaw[] = [
         path: 'profile',
         name: 'StudentProfile',
         component: () => import('@/pages/student/Profile.vue')
+      },
+      {
+        path: 'resume',
+        name: 'StudentResume',
+        component: () => import('@/pages/student/ResumePage.vue')
       },
       {
         path: 'onboarding/credential',
@@ -309,6 +319,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/admin/AuditLogs.vue')
       },
       {
+        path: 'inspection',
+        name: 'AdminInspection',
+        component: () => import('@/pages/admin/Inspection.vue')
+      },
+      {
         path: 'content-generate',
         name: 'ContentGenerate',
         component: () => import('@/pages/admin/ContentGenerate.vue')
@@ -341,6 +356,35 @@ const routes: RouteRecordRaw[] = [
     ]
   },
 
+  // ========== 企业招聘端 ==========
+  {
+    path: '/recruit',
+    component: () => import('@/layouts/RecruitLayout.vue'),
+    meta: { requiresAuth: true, role: 'recruiter' },
+    children: [
+      {
+        path: '',
+        name: 'RecruitDashboard',
+        component: () => import('@/pages/recruit/Dashboard.vue')
+      },
+      {
+        path: 'resumes',
+        name: 'RecruitResumes',
+        component: () => import('@/pages/recruit/Resumes.vue')
+      },
+      {
+        path: 'resumes/:id',
+        name: 'RecruitResumeDetail',
+        component: () => import('@/pages/recruit/ResumeDetail.vue')
+      },
+      {
+        path: 'requests',
+        name: 'RecruitRequests',
+        component: () => import('@/pages/recruit/MyRequests.vue')
+      }
+    ]
+  },
+
   // ========== 根路径兜底（IP 直连模式） ==========
   // 官网已重构为独立 Nuxt 仓库（ADR-0001），Vue SPA 不再承载 '/'；
   // IP 直连模式下根路径按角色进入默认工作区
@@ -350,6 +394,7 @@ const routes: RouteRecordRaw[] = [
       // valuation 子域根路径 → 估值首页（公开，无需登录）；
       // 原逻辑会跳 /login，守卫再把 valuation 子域的登录页转成 /valuation/login
       if (getSubdomain() === 'valuation') return '/valuation'
+      if (getSubdomain() === 'recruit') return '/recruit'
       const authStore = useAuthStore()
       const workspace = resolveWorkspaceForRole(authStore.userInfo?.role)
       // 未知角色 resolveWorkspaceForRole 返回 '/'，根路径按原逻辑回登录页
@@ -417,8 +462,8 @@ router.beforeEach(async (to, _from, next) => {
   const isLoginPath = isAuthPage && !isValuationPath
 
   // ===== 子域名边界检查 =====
-  // 五类子域名：main（公共）、training（学员培训+AI助手）、valuation（残值评估）、
-  // tutor（导师工作区）、admin（管理员后台）
+  // 六类子域名：main（公共）、training（学员培训+AI助手）、valuation（残值评估）、
+  // tutor（导师工作区）、admin（管理员后台）、recruit（企业招聘）
   // 跨子域名访问会触发整页跳转（不同 origin，token 不共享）
   // IP 直连模式下跳过子域名边界检查（无 DNS 子域名环境，通过路径直接访问所有工作区）
   const currentSubdomain = getSubdomain()

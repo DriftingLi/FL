@@ -11,12 +11,13 @@ describe('PATH_AUTH_ENTRIES 单点表（路径前缀 → 允许身份）', () =>
     expect(prefixes).toEqual(expectedDesc)
   })
 
-  it('内含全部五条路径前缀规约', () => {
+  it('内含全部六条路径前缀规约', () => {
     expect(PATH_AUTH_ENTRIES.map(e => e.prefix)).toEqual([
       '/training/tutor',
       '/ai-assistant',
       '/valuation',
       '/training',
+      '/recruit',
       '/admin'
     ])
   })
@@ -24,6 +25,7 @@ describe('PATH_AUTH_ENTRIES 单点表（路径前缀 → 允许身份）', () =>
   it('身份规约与票约定稿一致', () => {
     const byPrefix = Object.fromEntries(PATH_AUTH_ENTRIES.map(e => [e.prefix, e.role]))
     expect(byPrefix).toEqual({
+      '/recruit': 'recruiter',
       '/training/tutor': 'tutor',
       '/admin': 'admin',
       '/training': 'hrwai_user',
@@ -75,7 +77,14 @@ describe('isSafeRedirect（同身份工作台内回跳白名单）', () => {
     ['hrwai_user', '/ai-assistant', true],
     ['hrwai_user', '/ai-assistant/chat', true],
     ['hrwai_user', '/admin/dashboard', false],
+    ['hrwai_user', '/recruit', false],
     ['hrwai_user', '/foo', false],
+    // ===== recruiter：仅 /recruit 前缀 =====
+    ['recruiter', '/recruit', true],
+    ['recruiter', '/recruit/resumes', true],
+    ['recruiter', '/training', false],
+    ['recruiter', '/admin', false],
+    ['recruiter', '/valuation', false],
     // ===== 未知/空角色：一律不放行 =====
     ['manager', '/admin/dashboard', false],
     ['manager', '/training/courses', false],
@@ -101,6 +110,10 @@ describe('resolveWorkspaceForRole（角色 → 默认工作区单点）', () => 
     expect(resolveWorkspaceForRole('hrwai_user')).toBe('/training')
   })
 
+  it('recruiter → /recruit', () => {
+    expect(resolveWorkspaceForRole('recruiter')).toBe('/recruit')
+  })
+
   it('未知/空角色 → /', () => {
     expect(resolveWorkspaceForRole('manager')).toBe('/')
     expect(resolveWorkspaceForRole('')).toBe('/')
@@ -122,6 +135,9 @@ describe('getTargetSubdomainForPath（子域名归属，与旧行为一致）', 
     // 残值评估（含历史/报告/电池）
     ['/valuation', 'valuation'],
     ['/valuation/history', 'valuation'],
+    // 企业招聘
+    ['/recruit', 'recruit'],
+    ['/recruit/resumes', 'recruit'],
     // AI 助手归 training 子域名
     ['/ai-assistant', 'training'],
     ['/ai-assistant/chat', 'training'],

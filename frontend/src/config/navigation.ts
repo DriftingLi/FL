@@ -148,7 +148,8 @@ const studentNav: NavItem[] = [
     children: [
       { key: 'task-center', label: '任务中心', routeName: 'TaskCenter', icon: Trophy },
       { key: 'favorites', label: '我的收藏', routeName: 'StudentFavorites', icon: Star },
-      { key: 'profile', label: '个人资料', routeName: 'StudentProfile', icon: User }
+      { key: 'profile', label: '个人资料', routeName: 'StudentProfile', icon: User },
+      { key: 'resume', label: '我的简历', routeName: 'StudentResume', icon: Document }
     ]
   }
 ]
@@ -191,6 +192,7 @@ const adminNav: NavItem[] = [
     icon: Setting,
     children: [
       { key: 'audit-logs', label: '审计日志', routeName: 'AuditLogs', icon: Memo },
+      { key: 'inspection', label: '巡检视图', routeName: 'AdminInspection', icon: DataAnalysis },
       { key: 'valuation-config', label: '残值配置', routeName: 'ValuationConfigManage', icon: PriceTag },
       { key: 'ai-settings', label: 'AI 配置', routeName: 'AISettings', icon: Setting },
       { key: 'content-generate', label: '内容生成', routeName: 'ContentGenerate', icon: MagicStick },
@@ -219,8 +221,21 @@ const tutorNav: NavItem[] = [
   }
 ]
 
+const recruiterNav: NavItem[] = [
+  { key: 'dashboard', label: '首页', routeName: 'RecruitDashboard', icon: HomeFilled, exact: true },
+  {
+    key: 'resumes',
+    label: '简历库',
+    routeName: 'RecruitResumes',
+    activeRouteNames: ['RecruitResumeDetail'],
+    icon: Document
+  },
+  { key: 'requests', label: '我的申请', routeName: 'RecruitRequests', icon: Document }
+]
+
 export const roleNavigation: Record<string, NavItem[]> = {
   student: studentNav,
   admin: adminNav,
-  tutor: tutorNav
+  tutor: tutorNav,
+  recruiter: recruiterNav
 }

@@ -70,6 +70,9 @@ type Deps struct {
 	QuestionNoteSvc      *service.QuestionNoteService
 	QuestionKnowledgeSvc *service.QuestionKnowledgeService
 	PointsSvc            *service.PointsService
+	JobCardSvc           *service.JobCardService
+	RecruitSvc           *service.RecruitService
+	ContactSvc           *service.ContactService
 }
 
 // NewDeps 构建全部 service 单实例。进程启动早期由 main 调用一次。
@@ -140,6 +143,9 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		QuestionNoteSvc:      service.NewQuestionNoteService(db, logger),
 		QuestionKnowledgeSvc: service.NewQuestionKnowledgeService(db),
 		PointsSvc:            pointsSvc,
+		JobCardSvc:           service.NewJobCardService(db, fileSvc, logger),
+		RecruitSvc:           service.NewRecruitService(db, logger),
+		ContactSvc:           service.NewContactService(db, logger, notificationSvc, nil),
 	}
 	d.AuthH = NewAuthHandler(d.Session, authSvc, fileSvc, st, reviewSvc, logger)
 	return d
