@@ -1279,6 +1279,7 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 	// 首次采纳：CAS + 积分直记（同一事务）
 	isSelf := reply.UserID == userID
 	now := beijingNow()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, clock.Location())
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		// CAS：仅当仍未采纳时才写入状态
 		res := tx.Model(&model.ForumTopic{}).Where("id = ? AND accepted_reply_id IS NULL", topicID).Updates(map[string]any{
@@ -1306,35 +1307,66 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 			// 楼主采纳自己：状态已迁移，发分为 0
 			return nil
 		}
-		// 写入两条流水
-		ledgerBonus := model.PointsLedger{
-			UserID:    reply.UserID,
-			Delta:     AcceptBonusPoints,
-			Reason:    ReasonAcceptedBonus,
-			RefType:   "forum_topic",
-			RefID:     fmt.Sprintf("%d", topicID),
-			CreatedAt: now,
-		}
-		if err := tx.Create(&ledgerBonus).Error; err != nil {
+		// ===== 乙档防刷：日封顶 + 配对衰减（零新表，事务内算完） =====
+		var dailyAnsCnt int64
+		if err := tx.Model(&model.PointsLedger{}).Where("user_id = ? AND reason = ? AND created_at >= ?", reply.UserID, ReasonAcceptedBonus, todayStart).Count(&dailyAnsCnt).Error; err != nil {
 			return err
 		}
-		ledgerAction := model.PointsLedger{
-			UserID:    userID,
-			Delta:     AcceptActionPoints,
-			Reason:    ReasonAcceptAction,
-			RefType:   "forum_topic",
-			RefID:     fmt.Sprintf("%d", topicID),
-			CreatedAt: now,
-		}
-		if err := tx.Create(&ledgerAction).Error; err != nil {
+		var dailyAskerCnt int64
+		if err := tx.Model(&model.PointsLedger{}).Where("user_id = ? AND reason = ? AND created_at >= ?", userID, ReasonAcceptAction, todayStart).Count(&dailyAskerCnt).Error; err != nil {
 			return err
 		}
-		// 更新余额投影（原子递增，无封底需求，扣罚场景才钳 0）
-		if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", reply.UserID).UpdateColumn("points_balance", gorm.Expr("points_balance + ?", AcceptBonusPoints)).Error; err != nil {
+		var pairCnt int64
+		if err := tx.Raw("SELECT COUNT(*) FROM forum_topics WHERE user_id = ? AND accepted_reply_id IN (SELECT id FROM forum_replies WHERE user_id = ?)", userID, reply.UserID).Scan(&pairCnt).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", userID).UpdateColumn("points_balance", gorm.Expr("points_balance + ?", AcceptActionPoints)).Error; err != nil {
-			return err
+		bonusDelta := AcceptBonusPoints
+		actionDelta := AcceptActionPoints
+		if pairCnt >= 6 {
+			bonusDelta = 0
+		} else if pairCnt >= 4 {
+			bonusDelta = bonusDelta / 2
+		}
+		if dailyAnsCnt >= 3 {
+			bonusDelta = 0
+		}
+		if dailyAskerCnt >= 5 {
+			actionDelta = 0
+		}
+		if bonusDelta == 0 && actionDelta == 0 {
+			return nil
+		}
+		if bonusDelta > 0 {
+			ledgerBonus := model.PointsLedger{
+				UserID:    reply.UserID,
+				Delta:     bonusDelta,
+				Reason:    ReasonAcceptedBonus,
+				RefType:   "forum_topic",
+				RefID:     fmt.Sprintf("%d", topicID),
+				CreatedAt: now,
+			}
+			if err := tx.Create(&ledgerBonus).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", reply.UserID).UpdateColumn("points_balance", gorm.Expr("points_balance + ?", bonusDelta)).Error; err != nil {
+				return err
+			}
+		}
+		if actionDelta > 0 {
+			ledgerAction := model.PointsLedger{
+				UserID:    userID,
+				Delta:     actionDelta,
+				Reason:    ReasonAcceptAction,
+				RefType:   "forum_topic",
+				RefID:     fmt.Sprintf("%d", topicID),
+				CreatedAt: now,
+			}
+			if err := tx.Create(&ledgerAction).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", userID).UpdateColumn("points_balance", gorm.Expr("points_balance + ?", actionDelta)).Error; err != nil {
+				return err
+			}
 		}
 		return nil
 	})
