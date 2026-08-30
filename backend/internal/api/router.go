@@ -128,6 +128,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 	RegisterTutorRoutes(api, rd, deps.TutorSvc, deps.FileSvc)
 	RegisterWrongQuestionRoutes(api, rd, deps.WrongQuestionSvc)
 	RegisterMockExamRoutes(api, rd, deps.MockExamSvc)
+	RegisterRealExamRoutes(api, rd, deps.RealExamSvc, deps.PointsSvc)
 	RegisterFeaturedRoutes(api, rd, deps.FeaturedSvc, deps.FileSvc)
 	RegisterAIAssistantRoutes(api, rd, deps.AIAssistantSvc, deps.PointsSvc)
 	RegisterForumRoutes(api, rd, deps.ForumSvc, deps.CheckInSvc, deps.ForumImageSvc)

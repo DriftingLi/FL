@@ -201,6 +201,42 @@ func sumSkips(plan *QuestionPlan, reason string) int {
 	return n
 }
 
+// papersPlan 真题卷建卷计划（干跑即可产出，需 DB）。
+func (r *reportBuilder) papersPlan(plan *QuestionPlan, minQuestions int) {
+	r.h2("真题卷建卷计划")
+	perFile := map[*SourceFile]int{}
+	var files []*SourceFile
+	for _, pr := range plan.PaperRefs {
+		if perFile[pr.Source] == 0 {
+			files = append(files, pr.Source)
+		}
+		perFile[pr.Source]++
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
+	if len(files) == 0 {
+		fmt.Fprintln(&r.b, "无真题源文件命中题目。")
+		return
+	}
+	fmt.Fprintf(&r.b, "真题源文件 %d 个（最少 %d 题建卷）：\n\n", len(files), minQuestions)
+	fmt.Fprintln(&r.b, "| 文件 | 卷内题数 | 处置 |")
+	fmt.Fprintln(&r.b, "|---|---|---|")
+	for _, f := range files {
+		n := perFile[f]
+		action := "建卷"
+		if n < minQuestions {
+			action = "跳过（碎片）"
+		}
+		fmt.Fprintf(&r.b, "| `%s/%s` | %d | %s |\n", f.Category, f.Name, n, action)
+	}
+}
+
+// paperApply 真题卷写入结果（仅 -write）。
+func (r *reportBuilder) paperApply(res PaperApplyResult) {
+	r.h2("真题卷写入结果")
+	fmt.Fprintf(&r.b, "- 新建卷 %d、更新卷 %d（碎片跳过 %d）；卷题关联 %d 条、题次合计 %d。\n",
+		res.Created, res.Updated, res.Skipped, res.Relations, res.TotalCount)
+}
+
 // courses 课程分组结果。
 func (r *reportBuilder) courses(plans []CoursePlan, articles []Article) {
 	r.h2("课程建设计划")

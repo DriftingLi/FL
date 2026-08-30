@@ -335,6 +335,7 @@ type QuestionTag struct {
 	Description string    `gorm:"column:description" json:"description"`
 	SortOrder   int       `gorm:"column:sort_order;default:0" json:"sort_order"`
 	Status      int16     `gorm:"column:status;default:1" json:"status"`
+	IsSourceTag bool      `gorm:"column:is_source_tag;default:false" json:"is_source_tag"`
 	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt   time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
@@ -393,10 +394,38 @@ type MockExam struct {
 	Score         *float64   `gorm:"column:score;type:numeric(5,2)" json:"score,omitempty"`
 	Status        string     `gorm:"column:status;default:not_started" json:"status"`
 	Result        JSONB      `gorm:"column:result;type:jsonb" json:"result,omitempty"`
+	PaperID       *int       `gorm:"column:paper_id" json:"paper_id,omitempty"`
 	CreatedAt     time.Time  `gorm:"column:created_at" json:"created_at"`
 }
 
 func (MockExam) TableName() string { return "mock_exam" }
+
+// RealExamPaper 真题套卷（导入工具按真题源文件生成，credential 单归属分区）。
+type RealExamPaper struct {
+	PaperID         int       `gorm:"column:paper_id;primaryKey" json:"paper_id"`
+	CredentialID    int       `gorm:"column:credential_id" json:"credential_id"`
+	Title           string    `gorm:"column:title" json:"title"`
+	Year            *int      `gorm:"column:year" json:"year,omitempty"`
+	Source          *string   `gorm:"column:source" json:"source,omitempty"`
+	DurationMinutes int       `gorm:"column:duration_minutes;default:90" json:"duration_minutes"`
+	LevelID         *int      `gorm:"column:level_id" json:"level_id,omitempty"`
+	SourceRef       string    `gorm:"column:source_ref" json:"source_ref"`
+	QuestionCount   int       `gorm:"column:question_count;default:0" json:"question_count"`
+	Status          int16     `gorm:"column:status;default:1" json:"status"`
+	CreatedAt       time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt       time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (RealExamPaper) TableName() string { return "real_exam_paper" }
+
+// RealExamPaperQuestion 真题卷-题目关联（order_num 维持卷内题序）。
+type RealExamPaperQuestion struct {
+	PaperID    int `gorm:"column:paper_id;primaryKey" json:"paper_id"`
+	QuestionID int `gorm:"column:question_id;primaryKey" json:"question_id"`
+	OrderNum   int `gorm:"column:order_num;default:0" json:"order_num"`
+}
+
+func (RealExamPaperQuestion) TableName() string { return "real_exam_paper_question" }
 
 // ===== 18.5 练习进度（顺序练习断点续练） =====
 

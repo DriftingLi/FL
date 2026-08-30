@@ -63,6 +63,8 @@ func allModels() []interface{} {
 		&model.PracticeProgress{},
 		&model.WrongQuestion{},
 		&model.MockExam{},
+		&model.RealExamPaper{},
+		&model.RealExamPaperQuestion{},
 		&model.ForumTopic{},
 		&model.ForumReply{},
 		&model.ForumTopicLike{},

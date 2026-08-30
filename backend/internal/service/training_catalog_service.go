@@ -211,12 +211,32 @@ func (s *TrainingCatalogService) DeleteCertificateTemplate(id int) error {
 	return catalogDelete(s.db, certificateCatalogSpec(), id)
 }
 
-// ListQuestionTags 题库标签列表（activeOnly=true 仅启用项）。
+// ListQuestionTags 题库标签列表（activeOnly=true 仅启用项；includeSourceTags=false 时
+// 过滤来源标记标签——专项练习侧不应出现「真题」等 source 标签，管理端传 true 保留可见）。
 // 附带 question_count：学员端统计已发布题目数，管理端统计全部题目数。
-func (s *TrainingCatalogService) ListQuestionTags(activeOnly bool) []QuestionTagDict {
+func (s *TrainingCatalogService) ListQuestionTags(activeOnly, includeSourceTags bool) []QuestionTagDict {
 	list := catalogList(s.db, questionTagCatalogSpec(), activeOnly)
 	if len(list) == 0 {
 		return list
+	}
+	if !includeSourceTags {
+		var sourceIDs []int
+		if err := s.db.Model(&model.QuestionTag{}).Where("is_source_tag = ?", true).Pluck("id", &sourceIDs).Error; err == nil && len(sourceIDs) > 0 {
+			excluded := make(map[int]bool, len(sourceIDs))
+			for _, id := range sourceIDs {
+				excluded[id] = true
+			}
+			filtered := list[:0]
+			for _, d := range list {
+				if !excluded[d.ID] {
+					filtered = append(filtered, d)
+				}
+			}
+			list = filtered
+			if len(list) == 0 {
+				return list
+			}
+		}
 	}
 
 	ids := make([]int, 0, len(list))

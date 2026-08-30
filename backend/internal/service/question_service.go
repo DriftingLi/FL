@@ -21,10 +21,14 @@ var (
 	validQuestionStatus = []string{"draft", "pending", "published"}
 )
 
+// excludeSourceTagsSQL 排除来源标记标签（is_source_tag，如真题）题目的公共过滤片段：
+// 这类题目只能经真题卷作答，不进顺序/随机/专项练习与模拟考抽题池（ADR-0022）。
+const excludeSourceTagsSQL = "NOT EXISTS (SELECT 1 FROM question_tag_relation qtr JOIN question_tag qt ON qt.id = qtr.tag_id WHERE qtr.question_id = question.id AND qt.is_source_tag)"
+
 // sampleQuestions 统一抽题函数：从 published 题库按条件随机抽取 count 题。
-// qType 为空表示不限题型。
+// qType 为空表示不限题型。始终排除来源标记标签的题目。
 func sampleQuestions(db *gorm.DB, qType string, count int, credentialID ...*int) ([]model.Question, error) {
-	q := db.Model(&model.Question{}).Where("status = ?", "published")
+	q := db.Model(&model.Question{}).Where("status = ?", "published").Where(excludeSourceTagsSQL)
 	if len(credentialID) > 0 && credentialID[0] != nil {
 		q = q.Where("credential_id = ?", *credentialID[0])
 	}
