@@ -192,6 +192,7 @@ const adminNav: NavItem[] = [
     icon: Setting,
     children: [
       { key: 'audit-logs', label: '审计日志', routeName: 'AuditLogs', icon: Memo },
+      { key: 'inspection', label: '巡检视图', routeName: 'AdminInspection', icon: DataAnalysis },
       { key: 'valuation-config', label: '残值配置', routeName: 'ValuationConfigManage', icon: PriceTag },
       { key: 'ai-settings', label: 'AI 配置', routeName: 'AISettings', icon: Setting },
       { key: 'content-generate', label: '内容生成', routeName: 'ContentGenerate', icon: MagicStick },
@@ -228,7 +229,8 @@ const recruiterNav: NavItem[] = [
     routeName: 'RecruitResumes',
     activeRouteNames: ['RecruitResumeDetail'],
     icon: Document
-  }
+  },
+  { key: 'requests', label: '我的申请', routeName: 'RecruitRequests', icon: Document }
 ]
 
 export const roleNavigation: Record<string, NavItem[]> = {

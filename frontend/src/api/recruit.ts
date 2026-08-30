@@ -45,5 +45,14 @@ export const recruitApi = {
   },
   getResume(id: number | string) {
     return unwrappedRequest.get<RecruitResumeItem>(`/recruit/resumes/${id}`)
+  },
+  createContactRequest(data: { student_user_id: number; message: string }) {
+    return unwrappedRequest.post<any>('/recruit/contact-requests', data)
+  },
+  listMyRequests(params?: { page?: number; page_size?: number }) {
+    return unwrappedRequest.get<{ items: any[]; total: number }>('/recruit/contact-requests', { params })
+  },
+  getContact(studentUserId: number | string) {
+    return unwrappedRequest.get<{ real_name: string; contact_phone: string; wechat: string; resume_file_url: string }>(`/recruit/resumes/${studentUserId}/contact`)
   }
 }

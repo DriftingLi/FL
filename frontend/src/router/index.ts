@@ -313,6 +313,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/admin/AuditLogs.vue')
       },
       {
+        path: 'inspection',
+        name: 'AdminInspection',
+        component: () => import('@/pages/admin/Inspection.vue')
+      },
+      {
         path: 'content-generate',
         name: 'ContentGenerate',
         component: () => import('@/pages/admin/ContentGenerate.vue')
@@ -365,6 +370,11 @@ const routes: RouteRecordRaw[] = [
         path: 'resumes/:id',
         name: 'RecruitResumeDetail',
         component: () => import('@/pages/recruit/ResumeDetail.vue')
+      },
+      {
+        path: 'requests',
+        name: 'RecruitRequests',
+        component: () => import('@/pages/recruit/MyRequests.vue')
       }
     ]
   },

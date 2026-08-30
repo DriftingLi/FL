@@ -35,9 +35,23 @@
         </div>
       </div>
       <div class="mt-6">
-        <el-button type="primary" disabled>申请交换联系方式</el-button>
-        <p class="mt-2 text-xs text-ink-3">联系方式交换将在下一票开放，本票为禁用态占位。</p>
+        <el-button type="primary" :loading="contactLoading" @click="showDialog = true">申请交换联系方式</el-button>
+        <el-button v-if="contact" size="small" class="ml-2" @click="loadContact">刷新联系方式</el-button>
+        <p v-if="contactError" class="mt-2 text-xs text-red-500">{{ contactError }}</p>
+        <div v-if="contact" class="mt-3 rounded border border-line bg-panel p-3 text-sm">
+          <div><span class="text-ink-3">姓名：</span>{{ contact.real_name }}</div>
+          <div><span class="text-ink-3">电话：</span>{{ contact.contact_phone }}</div>
+          <div><span class="text-ink-3">微信：</span>{{ contact.wechat }}</div>
+          <div v-if="contact.resume_file_url"><span class="text-ink-3">PDF：</span><a :href="contact.resume_file_url" target="_blank" class="text-ui-600">查看 PDF</a></div>
+        </div>
       </div>
+      <el-dialog v-model="showDialog" title="申请交换联系方式" width="420px">
+        <el-input v-model="message" type="textarea" :rows="3" maxlength="200" show-word-limit placeholder="请填写申请附言（1-200字）" />
+        <template #footer>
+          <el-button @click="showDialog = false">取消</el-button>
+          <el-button type="primary" :loading="submitting" @click="submitRequest">提交申请</el-button>
+        </template>
+      </el-dialog>
     </div>
   </div>
 </template>
@@ -45,12 +59,19 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { recruitApi, type RecruitResumeItem } from '@/api/recruit'
 
 const route = useRoute()
 const loading = ref(false)
 const error = ref('')
 const data = ref<RecruitResumeItem | null>(null)
+const showDialog = ref(false)
+const message = ref('')
+const submitting = ref(false)
+const contact = ref<any>(null)
+const contactLoading = ref(false)
+const contactError = ref('')
 
 async function load() {
   loading.value = true
@@ -59,8 +80,8 @@ async function load() {
     const id = String(route.params.id)
     const res = await recruitApi.getResume(id)
     data.value = res as any || null
+    loadContact()
   } catch (e: any) {
-    // 404 等
     if (e?.response?.status === 404 || String(e?.message || '').includes('不存在')) {
       data.value = null
       error.value = ''
@@ -69,6 +90,49 @@ async function load() {
     }
   } finally {
     loading.value = false
+  }
+}
+
+async function loadContact() {
+  if (!data.value) return
+  contactLoading.value = true
+  contactError.value = ''
+  try {
+    const res = await recruitApi.getContact(data.value.user_id)
+    contact.value = res as any
+  } catch (e: any) {
+    contact.value = null
+    // 403 等表示无授权，不显示错误
+    if (e?.response?.status === 403 || String(e?.message || '').includes('无有效授权')) {
+      contactError.value = ''
+    } else {
+      contactError.value = e?.message || ''
+    }
+  } finally {
+    contactLoading.value = false
+  }
+}
+
+async function submitRequest() {
+  if (!message.value.trim()) {
+    ElMessage.warning('附言不能为空')
+    return
+  }
+  if (message.value.length > 200) {
+    ElMessage.warning('附言不能超过200字')
+    return
+  }
+  if (!data.value) return
+  submitting.value = true
+  try {
+    await recruitApi.createContactRequest({ student_user_id: data.value.user_id, message: message.value })
+    ElMessage.success('申请已提交，等待学员处理')
+    showDialog.value = false
+    message.value = ''
+  } catch (e: any) {
+    ElMessage.error(e?.message || '提交失败')
+  } finally {
+    submitting.value = false
   }
 }
 

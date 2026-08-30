@@ -482,8 +482,12 @@ function startReplyTo(reply: ForumReplyItem) {
 }
 
 async function removeTopic() {
+  const isSolved = topic.value?.accepted_reply_id != null
+  const msg = isSolved
+    ? '该帖已解决且已被采纳，删除后已采纳的答案将一并被删除，且计数将计入巡检，是否确认删除？'
+    : '确定删除这个帖子吗？删除后无法恢复。'
   try {
-    await ElMessageBox.confirm('确定删除这个帖子吗？删除后无法恢复。', '删除帖子', { type: 'warning' })
+    await ElMessageBox.confirm(msg, '删除帖子', { type: 'warning' })
   } catch {
     return
   }

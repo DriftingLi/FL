@@ -11,6 +11,21 @@
       <div v-if="viewCount > 0" class="view-stats rounded-card border border-line bg-ui-50 px-4 py-3 mb-4 text-sm text-ink">
         近 7 天 {{ viewCount }} 家企业查看过你的简历
       </div>
+      <div v-if="contactRequests.length > 0" class="rounded-card border border-line bg-panel p-4 mb-4">
+        <div class="text-sm font-semibold text-ink mb-2">收到的简历查看申请</div>
+        <div v-for="req in contactRequests" :key="req.id" class="border-t border-line py-2 flex items-center justify-between gap-2">
+          <div class="text-sm text-ink">
+            <div>{{ req.company_name }} · {{ req.contact_name }}</div>
+            <div class="text-xs text-ink-3">附言：{{ req.message }}</div>
+            <div class="text-xs text-ink-3">{{ req.status }} · {{ req.created_at }}</div>
+          </div>
+          <div class="flex gap-1">
+            <el-button v-if="req.status === 'pending'" size="small" type="primary" @click="approveReq(req.id)">同意</el-button>
+            <el-button v-if="req.status === 'pending'" size="small" @click="rejectReq(req.id)">拒绝</el-button>
+            <el-button v-if="req.status === 'approved'" size="small" type="danger" @click="revokeReq(req.id)">撤回</el-button>
+          </div>
+        </div>
+      </div>
       <el-form label-width="96px" @submit.prevent>
         <el-form-item label="真实姓名">
           <el-input v-model="form.real_name" maxlength="20" placeholder="填写真实姓名" />
@@ -302,7 +317,28 @@ async function save() {
   }
 }
 
-onMounted(load)
+const contactRequests = ref<any[]>([])
+const contactLoading = ref(false)
+
+async function loadContactRequests() {
+  contactLoading.value = true
+  try {
+    const res: any = await resumeApi.listContactRequests({ page: 1, page_size: 20 })
+    contactRequests.value = res?.items || []
+  } catch {}
+  contactLoading.value = false
+}
+async function approveReq(id: number) {
+  try { await resumeApi.approveContactRequest(id); ElMessage.success('已同意'); loadContactRequests() } catch (e: any) { ElMessage.error(e?.message || '操作失败') }
+}
+async function rejectReq(id: number) {
+  try { await resumeApi.rejectContactRequest(id); ElMessage.success('已拒绝'); loadContactRequests() } catch (e: any) { ElMessage.error(e?.message || '操作失败') }
+}
+async function revokeReq(id: number) {
+  try { await resumeApi.revokeContactRequest(id); ElMessage.success('已撤回'); loadContactRequests() } catch (e: any) { ElMessage.error(e?.message || '操作失败') }
+}
+
+onMounted(() => { load(); loadContactRequests() })
 </script>
 
 <style scoped>

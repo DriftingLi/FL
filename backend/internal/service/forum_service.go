@@ -57,6 +57,7 @@ const (
 	AcceptActionPoints  = 5                // 楼主采纳行为奖励
 	ReasonAcceptedBonus = "accepted_bonus" // 流水原因：被采纳奖励
 	ReasonAcceptAction  = "accept_action"  // 流水原因：采纳行为奖励
+	ReasonRollback      = "rollback"       // 流水原因：违规回收（#376）
 )
 
 // ErrNotTopicOwner 只有楼主可采纳/取消/更换。
@@ -639,10 +640,15 @@ func (s *ForumService) DeleteTopic(userID int, topicID int64) error {
 	if topic.UserID != userID {
 		return errors.New("只能删除自己发布的主题")
 	}
+	// 巡检计数：楼主删除自己已解决的帖子时累加（不回滚积分，仅计数）
+	if topic.AcceptedReplyID != nil {
+		_ = s.incrementDeletedAfterAccepted()
+	}
 	return s.deleteTopicWithImages(topicID)
 }
 
 // AdminDeleteTopic 管理员删除任意主题（不校验作者）。图片一并清理；站内信通知作者。
+// 若该帖曾产生采纳分（accepted_bonus），则按 rollback 原因写对冲流水并扣减余额（封底 0，幂等）。
 func (s *ForumService) AdminDeleteTopic(topicID int64) error {
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
@@ -651,9 +657,37 @@ func (s *ForumService) AdminDeleteTopic(topicID int64) error {
 		}
 		return err
 	}
-	if err := s.deleteTopicWithImages(topicID); err != nil {
+	// 先收集图片（需在删除前读取）
+	urls := []string{}
+	// 复用 deleteTopicWithImages 的图片收集逻辑，但在此处先做以便事务外清理
+	var rawTopic model.ForumTopic
+	_ = s.db.First(&rawTopic, topicID).Error
+	if rawTopic.ID != 0 {
+		urls = append(urls, parseImageURLs(string(rawTopic.Images))...)
+		var replyImages []string
+		_ = s.db.Model(&model.ForumReply{}).Where("topic_id = ?", topicID).Pluck("images", &replyImages).Error
+		for _, raw := range replyImages {
+			urls = append(urls, parseImageURLs(raw)...)
+		}
+	}
+	// 事务内：删帖 + 违规回收（复用封底 0 语义）
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(&model.ForumTopic{}, topicID).Error; err != nil {
+			return err
+		}
+		// 违规回收：若曾发放过 accepted_bonus 且未回滚，则扣回
+		if topic.AcceptedReplyID != nil {
+			if err := s.rollbackAcceptedBonusTx(tx, topicID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
 		return err
 	}
+	// 清理文件（事务外，尽力而为）
+	s.deleteImages(urls)
 	// 通知作者（尽力而为：内容已删，通知失败不回滚，仅记日志）
 	if err := s.notificationSvc.Create(topic.UserID, "forum_topic_deleted",
 		"你的帖子已被删除",
@@ -687,6 +721,70 @@ func (s *ForumService) deleteTopicWithImages(topicID int64) error {
 	return nil
 }
 
+// incrementDeletedAfterAccepted 楼主删除已解决帖的巡检计数 +1（存于 system_settings）。
+func (s *ForumService) incrementDeletedAfterAccepted() error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var setting model.SystemSetting
+		err := tx.Where("key = ?", "deleted_after_accepted").First(&setting).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			setting = model.SystemSetting{Key: "deleted_after_accepted", Value: "1", Description: "删除已解决帖计数", UpdatedAt: clock.Now()}
+			return tx.Create(&setting).Error
+		}
+		if err != nil {
+			return err
+		}
+		// value 存为字符串整数
+		v, _ := strconv.Atoi(setting.Value)
+		v++
+		return tx.Model(&model.SystemSetting{}).Where("key = ?", "deleted_after_accepted").Updates(map[string]any{"value": strconv.Itoa(v), "updated_at": clock.Now()}).Error
+	})
+}
+
+// rollbackAcceptedBonusTx 在事务内执行违规回收：若该帖曾发放 accepted_bonus 且未回滚，则创建 rollback 流水并扣减答主余额（封底 0，幂等）。
+func (s *ForumService) rollbackAcceptedBonusTx(tx *gorm.DB, topicID int64) error {
+	// 幂等：已存在 rollback 则跳过
+	var existed int64
+	if err := tx.Model(&model.PointsLedger{}).Where("reason = ? AND ref_type = ? AND ref_id = ?", ReasonRollback, "forum_topic", fmt.Sprintf("%d", topicID)).Count(&existed).Error; err != nil {
+		return err
+	}
+	if existed > 0 {
+		return nil
+	}
+	// 查找原发放流水（取最近一条）
+	var orig model.PointsLedger
+	if err := tx.Where("reason = ? AND ref_type = ? AND ref_id = ?", ReasonAcceptedBonus, "forum_topic", fmt.Sprintf("%d", topicID)).Order("created_at DESC").First(&orig).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+	if orig.Delta <= 0 {
+		return nil
+	}
+	// 扣减余额（封底 0）
+	var user model.HrwaiUser
+	if err := tx.First(&user, orig.UserID).Error; err != nil {
+		return err
+	}
+	deduct := orig.Delta
+	if user.PointsBalance < deduct {
+		deduct = user.PointsBalance
+	}
+	if deduct <= 0 {
+		// 余额为 0，仍需写一条 0 分流水以保证幂等标记？此处按 0 分不写，保持幂等由 existed 保证，下次仍会尝试；但余额 0 时无需扣减，直接写一条 0 分 rollback 以标记已处理
+		ledger := model.PointsLedger{UserID: orig.UserID, Delta: 0, Reason: ReasonRollback, RefType: "forum_topic", RefID: fmt.Sprintf("%d", topicID), CreatedAt: clock.Now()}
+		return tx.Create(&ledger).Error
+	}
+	ledger := model.PointsLedger{UserID: orig.UserID, Delta: -deduct, Reason: ReasonRollback, RefType: "forum_topic", RefID: fmt.Sprintf("%d", topicID), CreatedAt: clock.Now()}
+	if err := tx.Create(&ledger).Error; err != nil {
+		return err
+	}
+	if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", orig.UserID).UpdateColumn("points_balance", gorm.Expr("CASE WHEN points_balance >= ? THEN points_balance - ? ELSE 0 END", deduct, deduct)).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
 // DeleteReply 删除回复（仅作者本人；其下级回复随外键级联删除）。
 // 本回复与全部下级回复（parent_id 链条）的图片一并清理。
 func (s *ForumService) DeleteReply(userID int, replyID int64) error {
@@ -712,10 +810,18 @@ func (s *ForumService) AdminDeleteReply(replyID int64) error {
 		}
 		return err
 	}
-	topicTitle := ""
 	var topic model.ForumTopic
-	if err := s.db.Select("title").First(&topic, reply.TopicID).Error; err == nil {
-		topicTitle = topic.Title
+	if err := s.db.First(&topic, reply.TopicID).Error; err != nil {
+		topic.Title = ""
+	}
+	topicTitle := topic.Title
+	// 若该回复是被采纳的回答，则违规回收（幂等，复用同一 rollback 键）
+	needsRollback := topic.AcceptedReplyID != nil && *topic.AcceptedReplyID == replyID
+	if needsRollback {
+		// 在事务外先尝试回收（幂等），失败仅记日志，不阻断删回复
+		_ = s.db.Transaction(func(tx *gorm.DB) error {
+			return s.rollbackAcceptedBonusTx(tx, topic.ID)
+		})
 	}
 	if err := s.deleteReplyWithImages(replyID, reply.TopicID); err != nil {
 		return err

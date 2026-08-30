@@ -87,6 +87,7 @@ func allModels() []interface{} {
 		&model.PointsShopItem{},
 		&model.UserEntitlement{},
 		&model.RecruitResumeView{},
+		&model.ContactRequest{},
 	}
 }
 

@@ -560,6 +560,7 @@ func (s *AuthService) DeleteAccount(userID int) error {
 		tx.Where("user_id = ?", userID).Delete(&model.QuestionComment{})
 		tx.Where("user_id = ?", userID).Delete(&model.QuestionNote{})
 		tx.Where("user_id = ?", userID).Delete(&model.JobCard{})
+		tx.Where("student_user_id = ?", userID).Delete(&model.ContactRequest{})
 		// 删除用户本体（剩余 CASCADE 关联自动清理）
 		if err := tx.Delete(&model.HrwaiUser{}, userID).Error; err != nil {
 			return err

@@ -29,5 +29,17 @@ export const resumeApi = {
   updateVisibility(visibility: 'hidden' | 'open') { return unwrappedRequest.put<ResumeData>('/resume/visibility', { visibility }) },
   uploadPdf(formData: FormData) { return unwrappedRequest.post<{ url: string }>('/resume/pdf', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }) },
   uploadImage(formData: FormData) { return unwrappedRequest.post<{ url: string }>('/resume/image', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }) },
-  getViewStats() { return unwrappedRequest.get<{ count: number }>('/resume/view-stats') }
+  getViewStats() { return unwrappedRequest.get<{ count: number }>('/resume/view-stats') },
+  listContactRequests(params?: { page?: number; page_size?: number }) {
+    return unwrappedRequest.get<{ items: any[]; total: number }>('/resume/contact-requests', { params })
+  },
+  approveContactRequest(id: number | string) {
+    return unwrappedRequest.post<any>(`/resume/contact-requests/${id}/approve`)
+  },
+  rejectContactRequest(id: number | string) {
+    return unwrappedRequest.post<any>(`/resume/contact-requests/${id}/reject`)
+  },
+  revokeContactRequest(id: number | string) {
+    return unwrappedRequest.post<any>(`/resume/contact-requests/${id}/revoke`)
+  }
 }

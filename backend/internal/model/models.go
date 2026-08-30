@@ -839,3 +839,18 @@ type RecruitResumeView struct {
 }
 
 func (RecruitResumeView) TableName() string { return "recruit_resume_views" }
+
+// ===== 29.2 联系方式交换申请（L3 闭环，#375）
+type ContactRequest struct {
+	ID            int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	RecruiterID   int        `gorm:"column:recruiter_id;index" json:"recruiter_id"`
+	StudentUserID int        `gorm:"column:student_user_id;index" json:"student_user_id"`
+	Message       string     `gorm:"column:message" json:"message"`
+	Status        string     `gorm:"column:status;default:pending" json:"status"` // pending/approved/rejected/expired/revoked
+	CreatedAt     time.Time  `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt     time.Time  `gorm:"column:updated_at" json:"updated_at"`
+	DecidedAt     *time.Time `gorm:"column:decided_at" json:"decided_at,omitempty"`
+	ExpiresAt     time.Time  `gorm:"column:expires_at" json:"expires_at"`
+}
+
+func (ContactRequest) TableName() string { return "contact_requests" }
