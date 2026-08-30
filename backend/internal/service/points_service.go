@@ -87,6 +87,87 @@ func (s *PointsService) shanghaiDateTime() time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, clock.Location())
 }
 
+// ErrPointsProcessed 幂等占坑冲突（ADR-0023）：幂等键已存在，事件已处理过。
+// 调用方据此把「二次提交」映射为各自的既有语义（已兑换/已领取/跳过回收等），整笔事务回滚。
+var ErrPointsProcessed = errors.New("积分事件已处理")
+
+// PointsEntry 单笔积分簿记的参数面（ADR-0023 事务内簿记核心 applyTx 的唯一入参）。
+type PointsEntry struct {
+	UserID  int
+	Delta   int    // 增减分：>0 赚取，<0 消耗/扣罚（0 不写流水——points_ledger CHECK (delta <> 0)）
+	Reason  string // 流水原因：task_code / ai_tokens / redeem_* / admin_penalty / rollback / accepted_bonus ...
+	RefType string
+	RefID   string
+	// IdemKey 可选幂等占坑键（points_entry_idem 主键）。非空时占坑冲突返回
+	// ErrPointsProcessed（占坑行即「已处理」标记）；键不可得的路径如实留空（ADR-0023 §5）。
+	IdemKey string
+	// FloorZero 封底 0：扣减量按事务内余额截断、余额钳 0（管理员罚分/违规回收语义）；
+	// false（兑换/AI 扣费）走守卫扣减，余额不足报「积分不足」。
+	FloorZero bool
+}
+
+// ApplyTx 事务内簿记核心（ADR-0023）：占坑（可选）→ 流水 → 余额增减。
+// 封底 0 单一写法（GREATEST 钳 0）；非封底扣减一律带 `points_balance >= ?` 守卫并校验
+// RowsAffected（并发双花窗口在此收口）。返回 applied=false 表示占坑冲突（事件已处理，
+// 本笔簿记跳过）；调用方在事务闭包里把 ErrPointsProcessed 映射为各自语义。
+func ApplyTx(tx *gorm.DB, e PointsEntry) (bool, error) {
+	if e.IdemKey != "" {
+		if err := tx.Create(&model.PointsEntryIdem{IdemKey: e.IdemKey}).Error; err != nil {
+			if isDuplicateError(err) {
+				return false, ErrPointsProcessed
+			}
+			return false, err
+		}
+	}
+	delta := e.Delta
+	if delta < 0 && e.FloorZero {
+		// 封底 0：扣减量按事务内余额截断；余额为 0 时无流水可写（占坑行即标记）
+		var user model.HrwaiUser
+		if err := tx.Select("points_balance").First(&user, e.UserID).Error; err != nil {
+			return false, err
+		}
+		if user.PointsBalance <= 0 {
+			return true, nil
+		}
+		if user.PointsBalance < -delta {
+			delta = -user.PointsBalance
+		}
+	}
+	if delta != 0 {
+		ledger := model.PointsLedger{UserID: e.UserID, Delta: delta, Reason: e.Reason, RefType: e.RefType, RefID: e.RefID}
+		if err := tx.Create(&ledger).Error; err != nil {
+			return false, err
+		}
+	}
+	switch {
+	case delta < 0 && e.FloorZero:
+		// 封底 0 单一写法：CASE 钳 0（扣减量已按余额截断，残余并发窗口由钳位兜底；
+		// CASE 形态 PG/SQLite 双方言可用）
+		if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", e.UserID).
+			UpdateColumn("points_balance", gorm.Expr("CASE WHEN points_balance >= ? THEN points_balance - ? ELSE 0 END", -delta, -delta)).Error; err != nil {
+			return false, err
+		}
+	case delta < 0:
+		// 守卫扣减：余额不足（并发双花）0 行受影响 → 报错整笔回滚
+		res := tx.Model(&model.HrwaiUser{}).Where("id = ? AND points_balance >= ?", e.UserID, -delta).
+			UpdateColumn("points_balance", gorm.Expr("points_balance - ?", -delta))
+		if res.Error != nil {
+			return false, res.Error
+		}
+		if res.RowsAffected == 0 {
+			return false, errors.New("积分不足")
+		}
+		// 截断到 0 的兜底（并发窗口残余，维持既有兜底语义）
+		_ = tx.Exec("UPDATE hrwai_users SET points_balance = GREATEST(points_balance, 0) WHERE id = ?", e.UserID).Error
+	case delta > 0:
+		if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", e.UserID).
+			UpdateColumn("points_balance", gorm.Expr("points_balance + ?", delta)).Error; err != nil {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
 // GetBalance 获取余额与累计
 func (s *PointsService) GetBalance(userID int) (*PointsBalanceResult, error) {
 	var user model.HrwaiUser
@@ -319,16 +400,13 @@ func (s *PointsService) Claim(ctx context.Context, userID int, taskCode string) 
 			}
 			return err
 		}
-		// 2. 账本
-		ledger := model.PointsLedger{UserID: userID, Delta: cfg.Points, Reason: taskCode, RefType: "task", RefID: taskCode}
-		if err := tx.Create(&ledger).Error; err != nil {
+		// 2. 簿记核心（流水 + 余额）：占坑由 points_task_claim 承载，无通用幂等键
+		if _, err := ApplyTx(tx, PointsEntry{
+			UserID: userID, Delta: cfg.Points, Reason: taskCode, RefType: "task", RefID: taskCode,
+		}); err != nil {
 			return err
 		}
-		// 3. 余额原子更新
-		if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", userID).UpdateColumn("points_balance", gorm.Expr("points_balance + ?", cfg.Points)).Error; err != nil {
-			return err
-		}
-		// 4. 进度快照（可选）
+		// 3. 进度快照（可选）
 		_ = tx.Exec("INSERT INTO points_user_progress (user_id, task_code, progress, total, status, updated_at) VALUES (?,?,?,?,?,NOW()) ON CONFLICT (user_id, task_code) DO UPDATE SET progress=EXCLUDED.progress, status=EXCLUDED.status, updated_at=NOW()", userID, taskCode, 1, 1, "claimed").Error
 		return nil
 	})
@@ -352,7 +430,70 @@ type RedeemResult struct {
 	RefID       string `json:"ref_id"`
 }
 
-// RedeemCourse 兑换课程（课程级整锁）
+// redeemOpts 兑换三胞胎（Course / RealPaper / Shop）的参数化差异面（ADR-0023）：
+// 仅锁键 / sku / 权益 ref / 价格 / 流水 reason+refType 不同，簿记与并发守卫收敛于 redeem 单点。
+type redeemOpts struct {
+	lockKey string
+	sku     string
+	refID   string
+	price   int
+	reason  string
+	refType string
+}
+
+// redeem 兑换唯一实现：锁 → 已拥有校验 → 余额预检 → 事务{权益 + 簿记核心}。
+// 幂等键 redeem:{sku}（ADR-0023）：占坑冲突映射为「已兑换」，整笔事务回滚；
+// 余额扣减经 ApplyTx 守卫（`points_balance >= ?` + RowsAffected 校验），并发双花不击穿余额。
+func (s *PointsService) redeem(ctx context.Context, userID int, o redeemOpts) (*RedeemResult, error) {
+	if ok, err := cache.SetNX(ctx, o.lockKey, "1", 5*time.Second); err == nil && ok {
+		defer func() { _ = cache.Del(ctx, o.lockKey) }()
+	}
+	// 已拥有校验
+	var entCnt int64
+	_ = s.db.Model(&model.UserEntitlement{}).Where("user_id = ? AND sku = ? AND ref_id = ?", userID, o.sku, o.refID).Count(&entCnt).Error
+	if entCnt > 0 {
+		return nil, errors.New("已兑换")
+	}
+	// 余额预检
+	var user model.HrwaiUser
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, err
+	}
+	if user.PointsBalance < o.price {
+		return nil, errors.New("积分不足")
+	}
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		ent := model.UserEntitlement{UserID: userID, SKU: o.sku, RefID: o.refID}
+		if err := tx.Create(&ent).Error; err != nil {
+			if isDuplicateError(err) {
+				return errors.New("已兑换")
+			}
+			return err
+		}
+		if _, err := ApplyTx(tx, PointsEntry{
+			UserID: userID, Delta: -o.price, Reason: o.reason, RefType: o.refType, RefID: o.refID,
+			IdemKey: "redeem:" + o.sku,
+		}); err != nil {
+			return err
+		}
+		return nil
+	})
+	if errors.Is(err, ErrPointsProcessed) {
+		return nil, errors.New("已兑换")
+	}
+	if err != nil {
+		return nil, err
+	}
+	bal, _ := s.GetBalance(userID)
+	res := &RedeemResult{SKU: o.sku, RefID: o.refID}
+	if bal != nil {
+		res.Balance = bal.Balance
+		res.TotalEarned = bal.TotalEarned
+	}
+	return res, nil
+}
+
+// RedeemCourse 兑换课程（课程级整锁）。
 func (s *PointsService) RedeemCourse(ctx context.Context, userID, courseID int) (*RedeemResult, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
@@ -361,56 +502,14 @@ func (s *PointsService) RedeemCourse(ctx context.Context, userID, courseID int) 
 	if course.PointsPrice == nil || *course.PointsPrice <= 0 {
 		return nil, errors.New("该课程无需兑换")
 	}
-	price := *course.PointsPrice
-	sku := fmt.Sprintf("course:%d", courseID)
-	refID := fmt.Sprintf("%d", courseID)
-	lockKey := fmt.Sprintf("shop:course:%d:%d", userID, courseID)
-	if ok, err := cache.SetNX(ctx, lockKey, "1", 5*time.Second); err == nil && ok {
-		defer func() { _ = cache.Del(ctx, lockKey) }()
-	}
-	// 已拥有校验
-	var entCnt int64
-	_ = s.db.Model(&model.UserEntitlement{}).Where("user_id = ? AND sku = ? AND ref_id = ?", userID, sku, refID).Count(&entCnt).Error
-	if entCnt > 0 {
-		return nil, errors.New("已兑换")
-	}
-	// 余额校验
-	var user model.HrwaiUser
-	if err := s.db.First(&user, userID).Error; err != nil {
-		return nil, err
-	}
-	if user.PointsBalance < price {
-		return nil, errors.New("积分不足")
-	}
-	var balance, totalEarned int
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		ent := model.UserEntitlement{UserID: userID, SKU: sku, RefID: refID}
-		if err := tx.Create(&ent).Error; err != nil {
-			if isDuplicateError(err) {
-				return errors.New("已兑换")
-			}
-			return err
-		}
-		ledger := model.PointsLedger{UserID: userID, Delta: -price, Reason: "redeem_course", RefType: "course", RefID: refID}
-		if err := tx.Create(&ledger).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&model.HrwaiUser{}).Where("id = ? AND points_balance >= ?", userID, price).UpdateColumn("points_balance", gorm.Expr("points_balance - ?", price)).Error; err != nil {
-			return err
-		}
-		// 截断到 0 的兜底（若并发导致负数，CASE 钳 0）
-		_ = tx.Exec("UPDATE hrwai_users SET points_balance = GREATEST(points_balance, 0) WHERE id = ?", userID).Error
-		return nil
+	return s.redeem(ctx, userID, redeemOpts{
+		lockKey: fmt.Sprintf("shop:course:%d:%d", userID, courseID),
+		sku:     fmt.Sprintf("course:%d", courseID),
+		refID:   fmt.Sprintf("%d", courseID),
+		price:   *course.PointsPrice,
+		reason:  "redeem_course",
+		refType: "course",
 	})
-	if err != nil {
-		return nil, err
-	}
-	bal, _ := s.GetBalance(userID)
-	if bal != nil {
-		balance = bal.Balance
-		totalEarned = bal.TotalEarned
-	}
-	return &RedeemResult{Balance: balance, TotalEarned: totalEarned, SKU: sku, RefID: refID}, nil
 }
 
 // realPaperUnlockSKU 商城里真题解锁项的 SKU（价格单点：管理员调整该项即调整全部卷价）。
@@ -440,107 +539,30 @@ func (s *PointsService) RedeemRealPaper(ctx context.Context, userID, paperID int
 	if err := s.db.Where("paper_id = ? AND status = 1", paperID).First(&paper).Error; err != nil {
 		return nil, errors.New("真题卷不存在或已下架")
 	}
-	price := s.realPaperPrice()
-	sku := RealPaperSKU(paperID)
-	refID := strconv.Itoa(paperID)
-	lockKey := fmt.Sprintf("shop:real_paper:%d:%d", userID, paperID)
-	if ok, err := cache.SetNX(ctx, lockKey, "1", 5*time.Second); err == nil && ok {
-		defer func() { _ = cache.Del(ctx, lockKey) }()
-	}
-	// 已拥有校验
-	var entCnt int64
-	_ = s.db.Model(&model.UserEntitlement{}).Where("user_id = ? AND sku = ? AND ref_id = ?", userID, sku, refID).Count(&entCnt).Error
-	if entCnt > 0 {
-		return nil, errors.New("已兑换")
-	}
-	// 余额校验
-	var user model.HrwaiUser
-	if err := s.db.First(&user, userID).Error; err != nil {
-		return nil, err
-	}
-	if user.PointsBalance < price {
-		return nil, errors.New("积分不足")
-	}
-	var balance, totalEarned int
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		ent := model.UserEntitlement{UserID: userID, SKU: sku, RefID: refID}
-		if err := tx.Create(&ent).Error; err != nil {
-			if isDuplicateError(err) {
-				return errors.New("已兑换")
-			}
-			return err
-		}
-		ledger := model.PointsLedger{UserID: userID, Delta: -price, Reason: "redeem_real_paper", RefType: "real_exam_paper", RefID: refID}
-		if err := tx.Create(&ledger).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&model.HrwaiUser{}).Where("id = ? AND points_balance >= ?", userID, price).UpdateColumn("points_balance", gorm.Expr("points_balance - ?", price)).Error; err != nil {
-			return err
-		}
-		_ = tx.Exec("UPDATE hrwai_users SET points_balance = GREATEST(points_balance, 0) WHERE id = ?", userID).Error
-		return nil
+	return s.redeem(ctx, userID, redeemOpts{
+		lockKey: fmt.Sprintf("shop:real_paper:%d:%d", userID, paperID),
+		sku:     RealPaperSKU(paperID),
+		refID:   strconv.Itoa(paperID),
+		price:   s.realPaperPrice(),
+		reason:  "redeem_real_paper",
+		refType: "real_exam_paper",
 	})
-	if err != nil {
-		return nil, err
-	}
-	bal, _ := s.GetBalance(userID)
-	if bal != nil {
-		balance = bal.Balance
-		totalEarned = bal.TotalEarned
-	}
-	return &RedeemResult{Balance: balance, TotalEarned: totalEarned, SKU: sku, RefID: refID}, nil
 }
 
-// RedeemShop 兑换商城物品（真题等）
+// RedeemShop 兑换商城物品（真题等）。
 func (s *PointsService) RedeemShop(ctx context.Context, userID int, sku string) (*RedeemResult, error) {
 	var item model.PointsShopItem
 	if err := s.db.Where("sku = ? AND enabled = true", sku).First(&item).Error; err != nil {
 		return nil, errors.New("商品不存在或已下架")
 	}
-	lockKey := fmt.Sprintf("shop:sku:%d:%s", userID, sku)
-	if ok, err := cache.SetNX(ctx, lockKey, "1", 5*time.Second); err == nil && ok {
-		defer func() { _ = cache.Del(ctx, lockKey) }()
-	}
-	var entCnt int64
-	_ = s.db.Model(&model.UserEntitlement{}).Where("user_id = ? AND sku = ? AND ref_id = ?", userID, sku, sku).Count(&entCnt).Error
-	if entCnt > 0 {
-		return nil, errors.New("已兑换")
-	}
-	var user model.HrwaiUser
-	if err := s.db.First(&user, userID).Error; err != nil {
-		return nil, err
-	}
-	if user.PointsBalance < item.Price {
-		return nil, errors.New("积分不足")
-	}
-	var balance, totalEarned int
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		ent := model.UserEntitlement{UserID: userID, SKU: sku, RefID: sku}
-		if err := tx.Create(&ent).Error; err != nil {
-			if isDuplicateError(err) {
-				return errors.New("已兑换")
-			}
-			return err
-		}
-		ledger := model.PointsLedger{UserID: userID, Delta: -item.Price, Reason: "redeem_" + sku, RefType: "shop", RefID: sku}
-		if err := tx.Create(&ledger).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", userID).UpdateColumn("points_balance", gorm.Expr("points_balance - ?", item.Price)).Error; err != nil {
-			return err
-		}
-		_ = tx.Exec("UPDATE hrwai_users SET points_balance = GREATEST(points_balance, 0) WHERE id = ?", userID).Error
-		return nil
+	return s.redeem(ctx, userID, redeemOpts{
+		lockKey: fmt.Sprintf("shop:sku:%d:%s", userID, sku),
+		sku:     sku,
+		refID:   sku,
+		price:   item.Price,
+		reason:  "redeem_" + sku,
+		refType: "shop",
 	})
-	if err != nil {
-		return nil, err
-	}
-	bal, _ := s.GetBalance(userID)
-	if bal != nil {
-		balance = bal.Balance
-		totalEarned = bal.TotalEarned
-	}
-	return &RedeemResult{Balance: balance, TotalEarned: totalEarned, SKU: sku, RefID: sku}, nil
 }
 
 // HasEntitlement 校验是否已兑换
@@ -589,18 +611,16 @@ func (s *PointsService) DeductAI(ctx context.Context, userID int, requestID stri
 		return 0, user.PointsBalance, errors.New("积分不足")
 	}
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		ledger := model.PointsLedger{UserID: userID, Delta: -points, Reason: "ai_tokens", RefType: "ai_chat", RefID: requestID}
-		if err := tx.Create(&ledger).Error; err != nil {
-			if isDuplicateError(err) {
-				return nil
-			}
-			return err
+		// 幂等键 ai_tokens:{requestID}（ADR-0023）：由调用方传稳定请求标识
+		_, err := ApplyTx(tx, PointsEntry{
+			UserID: userID, Delta: -points, Reason: "ai_tokens", RefType: "ai_chat", RefID: requestID,
+			IdemKey: "ai_tokens:" + requestID,
+		})
+		if errors.Is(err, ErrPointsProcessed) {
+			// 并发窗口同键已扣：与既有 isDuplicateError 分支语义一致，视为成功
+			return nil
 		}
-		if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", userID).UpdateColumn("points_balance", gorm.Expr("points_balance - ?", points)).Error; err != nil {
-			return err
-		}
-		_ = tx.Exec("UPDATE hrwai_users SET points_balance = GREATEST(points_balance, 0) WHERE id = ?", userID).Error
-		return nil
+		return err
 	})
 	if err != nil {
 		return 0, 0, err
@@ -637,15 +657,13 @@ func (s *PointsService) AdminPenalty(ctx context.Context, adminID, userID, delta
 	}
 	requestID := fmt.Sprintf("penalty-%d-%d", userID, time.Now().UnixNano())
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		ledger := model.PointsLedger{UserID: userID, Delta: -actualDeduct, Reason: "admin_penalty", RefType: "admin", RefID: requestID}
-		if err := tx.Create(&ledger).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", userID).UpdateColumn("points_balance", gorm.Expr("GREATEST(points_balance - ?, 0)", actualDeduct)).Error; err != nil {
-			return err
-		}
+		// 不传幂等键（ADR-0023 §5）：有意重复罚分合法；封底 0，扣减量按余额截断
 		// 站内信与审计由 handler 层触发（此处仅落账）
-		return nil
+		_, err := ApplyTx(tx, PointsEntry{
+			UserID: userID, Delta: -actualDeduct, Reason: "admin_penalty", RefType: "admin", RefID: requestID,
+			FloorZero: true,
+		})
+		return err
 	})
 	if err != nil {
 		return 0, err

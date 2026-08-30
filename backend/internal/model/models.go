@@ -831,6 +831,16 @@ type UserEntitlement struct {
 
 func (UserEntitlement) TableName() string { return "user_entitlement" }
 
+// PointsEntryIdem 通用积分簿记幂等占坑（ADR-0023）：占坑行即「已处理」标记。
+// 「一事件一分」与回收 settle 传确定性键（accepted_bonus:{topicID} / rollback:{topicID} /
+// redeem:{ref} / ai_tokens:{requestID} 等），主键冲突 = 事件已处理。
+type PointsEntryIdem struct {
+	IdemKey   string    `gorm:"column:idem_key;primaryKey;size:128" json:"idem_key"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (PointsEntryIdem) TableName() string { return "points_entry_idem" }
+
 // ===== 29. 简历卡
 type JobCard struct {
 	UserID                 int       `gorm:"column:user_id;primaryKey" json:"user_id"`

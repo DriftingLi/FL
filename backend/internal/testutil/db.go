@@ -3,6 +3,7 @@
 package testutil
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -28,6 +29,30 @@ func NewMemoryDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("打开内存数据库失败: %v", err)
 	}
+	if err := db.AutoMigrate(allModels()...); err != nil {
+		t.Fatalf("AutoMigrate 失败: %v", err)
+	}
+	return db
+}
+
+// NewFileDB 返回一个临时文件 SQLite 数据库（AutoMigrate 全部表）。
+// 与 NewMemoryDB 的差异：:memory: 每连接独立库、无法多连接并发，文件库支持
+// goroutine 并发读写（busy_timeout 串行化写冲突），供并发场景测试使用。
+// 测试结束自动关闭连接池并随 TempDir 清理。
+func NewFileDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	dsn := filepath.Join(t.TempDir(), "test.db") + "?_pragma=busy_timeout(10000)"
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("打开文件数据库失败: %v", err)
+	}
+	t.Cleanup(func() {
+		if sqlDB, err := db.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+	})
 	if err := db.AutoMigrate(allModels()...); err != nil {
 		t.Fatalf("AutoMigrate 失败: %v", err)
 	}
@@ -88,6 +113,7 @@ func allModels() []interface{} {
 		&model.PointsUserProgress{},
 		&model.PointsShopItem{},
 		&model.UserEntitlement{},
+		&model.PointsEntryIdem{},
 		&model.RecruitResumeView{},
 		&model.ContactRequest{},
 	}

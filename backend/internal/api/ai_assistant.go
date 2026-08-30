@@ -523,7 +523,12 @@ func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 	}
 	// 后计量扣费：已登录用户按 tokens 扣分，末尾附消耗
 	if userID > 0 && h.pointsSvc != nil && fullContent != "" {
-		requestID := fmt.Sprintf("ai-%d-%d", userID, time.Now().UnixNano())
+		// 稳定幂等键（ADR-0023 §5）：取 RequestID 中间件注入的请求标识，
+		// 同一请求的重试/重放映射同一键；中间件未覆盖时回退现场生成（仅丧失重试幂等）。
+		requestID := c.GetString(string(middleware.CtxRequestID))
+		if requestID == "" {
+			requestID = fmt.Sprintf("ai-%d-%d", userID, time.Now().UnixNano())
+		}
 		// 估算 tokens：prompt+completion，简化为 content 长度/4 + 最后用户消息长度/4
 		promptLen := 0
 		if len(req.Messages) > 0 {
