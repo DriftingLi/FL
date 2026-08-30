@@ -87,10 +87,17 @@ func TestEvalCacheContract_KeyShapes(t *testing.T) {
 	if evalGetUserKey(7, 42) == evalGetUserKey(8, 42) {
 		t.Error("不同用户的 per-user 详情 key 不应相同（跨用户串缓存）")
 	}
-	if evalListKey("", 7, 20, 0) == evalListKey("", 8, 20, 0) {
+	if evalListKey("", "", 7, 20, 0) == evalListKey("", "", 8, 20, 0) {
 		t.Error("不同用户的列表 key 不应相同（跨用户串缓存）")
 	}
-	if evalCountKey("", 7) == evalCountKey("", 8) {
+	// vehicle_type 参与查询结果，必须进 key（否则不同车型筛选共享同一缓存条目）
+	if evalListKey("", "电动平衡重", 7, 20, 0) == evalListKey("", "内燃叉车", 7, 20, 0) {
+		t.Error("不同 vehicle_type 的列表 key 不应相同（筛选结果串缓存）")
+	}
+	if evalCountKey("", "电动平衡重", 7) == evalCountKey("", "内燃叉车", 7) {
+		t.Error("不同 vehicle_type 的统计 key 不应相同（筛选结果串缓存）")
+	}
+	if evalCountKey("", "", 7) == evalCountKey("", "", 8) {
 		t.Error("不同用户的统计 key 不应相同（跨用户串缓存）")
 	}
 }

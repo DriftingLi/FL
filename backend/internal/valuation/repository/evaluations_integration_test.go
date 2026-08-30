@@ -12,6 +12,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"forklift-training/internal/valuation/model"
+
 	migratedb "forklift-training/internal/migrate"
 )
 
@@ -81,6 +83,87 @@ func TestEvaluationsRepository_LockedSuggestionsMapping(t *testing.T) {
 	}
 }
 
+// TestEvaluationsRepository_VehicleTypeFilter 历史列表车型过滤（#400）：
+// vehicle_type 参与查询、与 brand 组合（AND 口径）；无该参数时行为不变（返回全部）。
+func TestEvaluationsRepository_VehicleTypeFilter(t *testing.T) {
+	pool := integrationPool(t)
+	ctx := context.Background()
+
+	if _, err := pool.Exec(ctx, `TRUNCATE evaluations RESTART IDENTITY CASCADE`); err != nil {
+		t.Fatalf("清空表失败: %v", err)
+	}
+
+	repo := NewEvaluationRepository(pool)
+	mkParams := func(brand, vt string) *CreateEvaluationParams {
+		p := cacheRegressionParams()
+		p.Brand = brand
+		p.VehicleType = vt
+		p.UserID = 0
+		return p
+	}
+	// 三条：杭叉/电动平衡重、杭叉/内燃叉车、合力/电动平衡重
+	for _, pair := range [][2]string{{"杭叉", "电动平衡重"}, {"杭叉", "内燃叉车"}, {"合力", "电动平衡重"}} {
+		if _, err := repo.CreateEvaluation(ctx, mkParams(pair[0], pair[1])); err != nil {
+			t.Fatalf("插入失败: %v", err)
+		}
+	}
+
+	// 仅车型过滤
+	list, err := repo.ListEvaluations(ctx, "", "电动平衡重", 0, 10, 0)
+	if err != nil {
+		t.Fatalf("车型筛选查询失败: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("电动平衡重应命中 2 条, got %d", len(list))
+	}
+	for _, d := range list {
+		if d.VehicleType != "电动平衡重" {
+			t.Errorf("车型筛选结果泄漏其他车型: %q", d.VehicleType)
+		}
+	}
+
+	// 车型 + 品牌组合（AND 口径，可组合）
+	combined, err := repo.ListEvaluations(ctx, "杭叉", "电动平衡重", 0, 10, 0)
+	if err != nil {
+		t.Fatalf("组合筛选查询失败: %v", err)
+	}
+	if len(combined) != 1 || combined[0].Brand != "杭叉" || combined[0].VehicleType != "电动平衡重" {
+		t.Errorf("组合筛选应命中 1 条杭叉/电动平衡重, got %+v", combined)
+	}
+
+	// 统计与列表同口径
+	total, err := repo.CountEvaluations(ctx, "杭叉", "电动平衡重", 0)
+	if err != nil {
+		t.Fatalf("组合统计失败: %v", err)
+	}
+	if total != 1 {
+		t.Errorf("组合统计应 1, got %d", total)
+	}
+	totalVT, err := repo.CountEvaluations(ctx, "", "内燃叉车", 0)
+	if err != nil {
+		t.Fatalf("车型统计失败: %v", err)
+	}
+	if totalVT != 1 {
+		t.Errorf("内燃叉车统计应 1, got %d", totalVT)
+	}
+
+	// 无该参数时行为不变：返回全部 3 条
+	all, err := repo.ListEvaluations(ctx, "", "", 0, 10, 0)
+	if err != nil {
+		t.Fatalf("无参数查询失败: %v", err)
+	}
+	if len(all) != 3 {
+		t.Errorf("无参数应返回全部 3 条, got %d", len(all))
+	}
+	totalAll, err := repo.CountEvaluations(ctx, "", "", 0)
+	if err != nil {
+		t.Fatalf("无参数统计失败: %v", err)
+	}
+	if totalAll != 3 {
+		t.Errorf("无参数统计应 3, got %d", totalAll)
+	}
+}
+
 // TestEvaluationsRepository_BackfillIdempotent 回填 SQL 幂等：
 // 已回填记录不再被覆盖，未回填记录可写。
 func TestEvaluationsRepository_BackfillIdempotent(t *testing.T) {
@@ -128,7 +211,7 @@ func TestEvaluationsRepository_BackfillIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("二次列出失败: %v", err)
 	}
-	byID := map[int64]EvaluationBackfillRow{}
+	byID := map[int64]model.EvaluationDetail{}
 	for _, r := range rows2 {
 		byID[r.ID] = r
 	}

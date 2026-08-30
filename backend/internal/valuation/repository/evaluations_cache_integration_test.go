@@ -80,14 +80,14 @@ func TestEvaluationsCache_CreateInvalidatesListAndCount(t *testing.T) {
 	}
 
 	// 预热列表与统计（此时 1 条）
-	list, err := repo.ListEvaluations(ctx, "", 42, 10, 0)
+	list, err := repo.ListEvaluations(ctx, "", "", 42, 10, 0)
 	if err != nil {
 		t.Fatalf("预热列表失败: %v", err)
 	}
 	if len(list) != 1 {
 		t.Fatalf("预热列表应 1 条, got %d", len(list))
 	}
-	total, err := repo.CountEvaluations(ctx, "", 42)
+	total, err := repo.CountEvaluations(ctx, "", "", 42)
 	if err != nil {
 		t.Fatalf("预热统计失败: %v", err)
 	}
@@ -99,14 +99,14 @@ func TestEvaluationsCache_CreateInvalidatesListAndCount(t *testing.T) {
 	if _, err := repo.CreateEvaluation(ctx, cacheRegressionParams()); err != nil {
 		t.Fatalf("二次插入失败: %v", err)
 	}
-	list2, err := repo.ListEvaluations(ctx, "", 42, 10, 0)
+	list2, err := repo.ListEvaluations(ctx, "", "", 42, 10, 0)
 	if err != nil {
 		t.Fatalf("二次列表失败: %v", err)
 	}
 	if len(list2) != 2 {
 		t.Errorf("新建后列表应立见 2 条, got %d", len(list2))
 	}
-	total2, err := repo.CountEvaluations(ctx, "", 42)
+	total2, err := repo.CountEvaluations(ctx, "", "", 42)
 	if err != nil {
 		t.Fatalf("二次统计失败: %v", err)
 	}

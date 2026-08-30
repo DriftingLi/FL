@@ -3,8 +3,6 @@ import client from './client'
 import type {
   CreateBatteryRequest,
   BatteryEvaluationDetail,
-  BatteryEvaluationListItem,
-  BatteryListResponse,
   CreateBatteryResponse,
   BatteryReportResponse
 } from '@/types/valuation/battery'
@@ -13,15 +11,6 @@ import type {
 export function createBatteryEvaluation(req: CreateBatteryRequest): Promise<CreateBatteryResponse> {
   // 拦截器已解包信封，直接返回业务负载
   return client.post<CreateBatteryResponse>('/battery/evaluations', req)
-}
-
-/** 列表查询（支持 ?battery_type=lfp&page=1&page_size=20） */
-export function listBatteryEvaluations(params: {
-  battery_type?: string
-  page?: number
-  page_size?: number
-}): Promise<BatteryListResponse> {
-  return client.get<BatteryListResponse>('/battery/evaluations', { params })
 }
 
 /** 详情查询（含 cycle_features 数组） */
@@ -41,6 +30,3 @@ export function downloadBatteryReportBlob(id: number): Promise<Blob> {
     responseType: 'blob'
   })
 }
-
-// 静态导出，方便列表类型推导
-export type { BatteryEvaluationListItem }

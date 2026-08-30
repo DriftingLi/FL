@@ -82,13 +82,13 @@ func evalGetUserKey(userID int, id int64) string {
 	return cacheKey(cachePrefixEvalGetUser, strconv.Itoa(userID), strconv.FormatInt(id, 10))
 }
 
-// evalListKey 历史列表读 key（brand/userID/limit/offset 参与查询结果，必须进 key）。
-func evalListKey(brand string, userID, limit, offset int) string {
-	return cacheKey(cachePrefixEvalList, brand, "u"+strconv.Itoa(userID),
+// evalListKey 历史列表读 key（brand/vehicleType/userID/limit/offset 参与查询结果，必须进 key）。
+func evalListKey(brand, vehicleType string, userID, limit, offset int) string {
+	return cacheKey(cachePrefixEvalList, brand, vehicleType, "u"+strconv.Itoa(userID),
 		strconv.Itoa(limit), strconv.Itoa(offset))
 }
 
 // evalCountKey 历史统计读 key。
-func evalCountKey(brand string, userID int) string {
-	return cacheKey(cachePrefixEvalCount, brand, "u"+strconv.Itoa(userID))
+func evalCountKey(brand, vehicleType string, userID int) string {
+	return cacheKey(cachePrefixEvalCount, brand, vehicleType, "u"+strconv.Itoa(userID))
 }

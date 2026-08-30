@@ -290,6 +290,15 @@ type memEvalStore struct {
 	mu      sync.Mutex
 	nextID  int64
 	records map[int64]model.EvaluationDetail
+	// lastFilter 最近一次 List/Count 收到的过滤参数（handler 透传断言用）。
+	lastFilter evalListFilter
+}
+
+// evalListFilter 列表/统计过滤参数快照。
+type evalListFilter struct {
+	Brand       string
+	VehicleType string
+	UserID      int
 }
 
 func newMemEvalStore() *memEvalStore {
@@ -330,15 +339,17 @@ func (m *memEvalStore) GetEvaluationByUser(ctx context.Context, id int64, _ int)
 	return m.GetEvaluation(ctx, id)
 }
 
-func (m *memEvalStore) CountEvaluations(context.Context, string, int) (int, error) {
+func (m *memEvalStore) CountEvaluations(_ context.Context, brand, vehicleType string, userID int) (int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.lastFilter = evalListFilter{Brand: brand, VehicleType: vehicleType, UserID: userID}
 	return len(m.records), nil
 }
 
-func (m *memEvalStore) ListEvaluations(context.Context, string, int, int, int) ([]model.EvaluationDetail, error) {
+func (m *memEvalStore) ListEvaluations(_ context.Context, brand, vehicleType string, userID, limit, offset int) ([]model.EvaluationDetail, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.lastFilter = evalListFilter{Brand: brand, VehicleType: vehicleType, UserID: userID}
 	out := make([]model.EvaluationDetail, 0, len(m.records))
 	for _, d := range m.records {
 		out = append(out, d)
