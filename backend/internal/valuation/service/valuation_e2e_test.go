@@ -266,14 +266,14 @@ func TestEvaluateSnapshotFailureFallback(t *testing.T) {
 // 建议回填（ADR-0004）：幂等性
 // =====================================================
 
-// memBackfillStore 内存回填存储。
+// memBackfillStore 内存回填存储（与生产仓储同形：返回完整评估详情）。
 type memBackfillStore struct {
-	rows    []repository.EvaluationBackfillRow
+	rows    []model.EvaluationDetail
 	updates map[int64][]string
 }
 
-func (m *memBackfillStore) ListEvaluationsForBackfill(context.Context) ([]repository.EvaluationBackfillRow, error) {
-	out := make([]repository.EvaluationBackfillRow, len(m.rows))
+func (m *memBackfillStore) ListEvaluationsForBackfill(context.Context) ([]model.EvaluationDetail, error) {
+	out := make([]model.EvaluationDetail, len(m.rows))
 	copy(out, m.rows)
 	for i := range out {
 		if s, ok := m.updates[out[i].ID]; ok {
@@ -293,7 +293,7 @@ func (m *memBackfillStore) UpdateEvaluationSuggestions(_ context.Context, id int
 func TestBackfillEvaluationSuggestions_Idempotent(t *testing.T) {
 	dict := newFullMemDictReader()
 	store := &memBackfillStore{
-		rows: []repository.EvaluationBackfillRow{
+		rows: []model.EvaluationDetail{
 			{ID: 1, KCondition: 1.0, KHours: 1.0, KBrand: 1.0, KTime: 0.8, KMarket: 1.0, OriginalPrice: 100000, EstimatedValue: 60000},
 			{ID: 2, KCondition: 0.9, KHours: 1.1, KBrand: 1.0, KTime: 0.7, KMarket: 1.0, OriginalPrice: 80000, EstimatedValue: 40000, Suggestions: []string{"已锁定"}},
 			{ID: 3, KCondition: 1.0, KHours: 1.0, KBrand: 1.0, KTime: 0.8, KMarket: 1.0, OriginalPrice: 100000, EstimatedValue: 60000},
@@ -330,7 +330,7 @@ func TestBackfillEvaluationSuggestions_Idempotent(t *testing.T) {
 // 回填是离线运维命令，宁可失败暴露问题也不静默跳过）。
 func TestBackfillEvaluationSuggestions_SnapshotFailure(t *testing.T) {
 	dict := &failSnapshotDict{DictionaryReader: newFullMemDictReader()}
-	store := &memBackfillStore{rows: []repository.EvaluationBackfillRow{
+	store := &memBackfillStore{rows: []model.EvaluationDetail{
 		{ID: 1, KCondition: 1.0, KHours: 1.0, KBrand: 1.0, KTime: 0.8, KMarket: 1.0, OriginalPrice: 100000, EstimatedValue: 60000},
 	}, updates: map[int64][]string{}}
 

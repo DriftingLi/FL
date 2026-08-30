@@ -72,11 +72,6 @@ function goBack() {
   router.push({ name: 'ValuationHome' })
 }
 
-function formatValue(v: number): string {
-  // 后端 estimated_value 以元存储，列头为"残值（万元）"，需除以 10000
-  return (v / 10000).toFixed(2)
-}
-
 function formatRate(estimated: number, original: number): string {
   if (!original || original <= 0) return '-'
   return ((estimated / original) * 100).toFixed(1) + '%'
@@ -166,7 +161,7 @@ onMounted(load)
         </el-table-column>
         <el-table-column label="残值（万元）" width="130" align="right">
           <template #default="{ row }">
-            <span class="value-cell">{{ formatValue(row.estimated_value) }}</span>
+            <span class="value-cell">{{ formatWan(row.estimated_value) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="残值率" width="110" align="right">

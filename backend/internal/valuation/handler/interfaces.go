@@ -14,8 +14,8 @@ import (
 type EvaluationStore interface {
 	GetEvaluation(ctx context.Context, id int64) (*model.EvaluationDetail, error)
 	GetEvaluationByUser(ctx context.Context, id int64, userID int) (*model.EvaluationDetail, error)
-	CountEvaluations(ctx context.Context, brand string, userID int) (int, error)
-	ListEvaluations(ctx context.Context, brand string, userID int, limit, offset int) ([]model.EvaluationDetail, error)
+	CountEvaluations(ctx context.Context, brand, vehicleType string, userID int) (int, error)
+	ListEvaluations(ctx context.Context, brand, vehicleType string, userID int, limit, offset int) ([]model.EvaluationDetail, error)
 	UpdateEvaluationReportPath(ctx context.Context, id int64, path string) error
 }
 
