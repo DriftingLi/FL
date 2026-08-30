@@ -111,15 +111,14 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 		return 0, fmt.Errorf("插入评估记录失败: %w", err)
 	}
 	// 失效列表与统计缓存（新建记录会改变 list 与 count 结果）
-	_ = cache.InvalidatePattern(ctx, "eval:count:*")
-	_ = cache.InvalidatePattern(ctx, "eval:list:*")
+	invalidateEvalWrite(ctx, evalWriteCreate)
 	return id, nil
 }
 
 // GetEvaluation 按 ID 查询评估详情（不按用户过滤）
 // 用于公开的报告生成/下载场景（report.go），鉴权详情请用 GetEvaluationByUser
 func (r *EvaluationRepository) GetEvaluation(ctx context.Context, id int64) (*model.EvaluationDetail, error) {
-	cacheKey := cache.SafeKey("eval", "get", fmt.Sprintf("%d", id))
+	cacheKey := evalGetKey(id)
 	var result model.EvaluationDetail
 	err := cache.GetOrSetJSON(ctx, cacheKey, 10*time.Minute, &result, func() (any, error) {
 		return r.scanEvaluationByID(ctx, id, 0, false)
@@ -134,7 +133,7 @@ func (r *EvaluationRepository) GetEvaluation(ctx context.Context, id int64) (*mo
 // 用于登录用户查看自己的历史详情；不属于该用户的记录返回 pgx.ErrNoRows
 func (r *EvaluationRepository) GetEvaluationByUser(ctx context.Context, id int64, userID int) (*model.EvaluationDetail, error) {
 	// 详情缓存 key 带上 userID，避免跨用户串缓存
-	cacheKey := cache.SafeKey("eval", "get", "user", fmt.Sprintf("%d", userID), fmt.Sprintf("%d", id))
+	cacheKey := evalGetUserKey(userID, id)
 	var result model.EvaluationDetail
 	err := cache.GetOrSetJSON(ctx, cacheKey, 10*time.Minute, &result, func() (any, error) {
 		return r.scanEvaluationByID(ctx, id, userID, true)
@@ -211,7 +210,7 @@ func (r *EvaluationRepository) scanEvaluationByID(ctx context.Context, id int64,
 // ListEvaluations 分页查询评估列表
 // brand 为空时不过滤；userID>0 时仅返回该用户的记录，userID=0 时返回全部（公开统计场景）
 func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string, userID int, limit, offset int) ([]model.EvaluationDetail, error) {
-	cacheKey := cache.SafeKey("eval", "list", brand, fmt.Sprintf("u%d", userID), fmt.Sprintf("%d", limit), fmt.Sprintf("%d", offset))
+	cacheKey := evalListKey(brand, userID, limit, offset)
 	var result []model.EvaluationDetail
 	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLStats, &result, func() (any, error) {
 		// 动态拼装 WHERE：brand / user_id 均为可选过滤
@@ -290,7 +289,7 @@ func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string
 // CountEvaluations 统计评估记录总数
 // brand 为空时不过滤；userID>0 时仅统计该用户的记录，userID=0 时统计全部（公开统计场景）
 func (r *EvaluationRepository) CountEvaluations(ctx context.Context, brand string, userID int) (int, error) {
-	cacheKey := cache.SafeKey("eval", "count", brand, fmt.Sprintf("u%d", userID))
+	cacheKey := evalCountKey(brand, userID)
 	var result int
 	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLStats, &result, func() (any, error) {
 		where := make([]string, 0, 2)
@@ -359,8 +358,8 @@ func (r *EvaluationRepository) UpdateEvaluationReportPath(ctx context.Context, i
 	if err != nil {
 		return err
 	}
-	// 失效该条记录的详情缓存
-	_ = cache.Del(ctx, cache.SafeKey("eval", "get", fmt.Sprintf("%d", id)))
+	// 失效详情缓存（pattern 失效同时覆盖公开与 per-user 两种读 key 形状）
+	invalidateEvalWrite(ctx, evalWriteReportPath)
 	return nil
 }
 
@@ -432,6 +431,7 @@ func (r *EvaluationRepository) UpdateEvaluationSuggestions(ctx context.Context, 
 	if err != nil {
 		return fmt.Errorf("回填建议失败 (id=%d): %w", id, err)
 	}
-	_ = cache.Del(ctx, cache.SafeKey("eval", "get", fmt.Sprintf("%d", id)))
+	// 失效详情缓存（pattern 失效同时覆盖公开与 per-user 两种读 key 形状）
+	invalidateEvalWrite(ctx, evalWriteSuggestions)
 	return nil
 }
