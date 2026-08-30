@@ -422,6 +422,17 @@ func (s *PointsService) Claim(ctx context.Context, userID int, taskCode string) 
 	return &PointsClaimResult{Balance: balance, TotalEarned: totalEarned, TaskStatus: "claimed"}, nil
 }
 
+// SettleRewardTx 事务内「一事件一分」直记落账（ADR-0023 forum 收编通道）：
+// 占坑冲突（同键已处理）视为已处理静默跳过、事务继续——「每帖只发一次」由调用方
+// 状态 CAS + 占坑双保险；封底/守卫语义由 PointsEntry 声明，其余错误上抛整笔回滚。
+func (s *PointsService) SettleRewardTx(tx *gorm.DB, e PointsEntry) error {
+	_, err := ApplyTx(tx, e)
+	if errors.Is(err, ErrPointsProcessed) {
+		return nil
+	}
+	return err
+}
+
 // RedeemResult 兑换结果
 type RedeemResult struct {
 	Balance     int    `json:"balance"`
