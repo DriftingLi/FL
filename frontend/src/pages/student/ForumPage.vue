@@ -173,32 +173,10 @@
     </div>
 
     <el-dialog v-model="createDialogVisible" title="发布新帖" width="640px">
-      <el-form label-width="70px">
-        <el-form-item label="标题" required>
-          <el-input
-            v-model="createForm.title"
-            maxlength="100"
-            show-word-limit
-            placeholder="请输入标题（1-100 字）"
-          />
-        </el-form-item>
-        <el-form-item label="内容" required>
-          <el-input
-            v-model="createForm.content"
-            type="textarea"
-            :rows="8"
-            maxlength="10000"
-            show-word-limit
-            placeholder="请输入内容（1-10000 字）"
-          />
-        </el-form-item>
-        <el-form-item label="图片">
-          <ForumImageUploader v-model="createForm.images" :max="9" />
-        </el-form-item>
-      </el-form>
+      <ForumPostForm ref="postForm" category="discussion" @success="onTopicCreated" />
       <template #footer>
         <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitTopic">发布</el-button>
+        <el-button type="primary" :loading="postForm?.submitting" @click="postForm?.submit()">发布</el-button>
       </template>
     </el-dialog>
   </div>
@@ -211,13 +189,15 @@ import { ElMessage } from 'element-plus'
 import { EditPen, View, ChatDotRound, Picture, Calendar, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
 import { forumApi, forumTabQuery, type ForumCategory, type ForumTopicItem, type MyReplyItem } from '@/api/forum'
 import { formatRelativeTime } from '@/utils/format'
-import ForumImageUploader from '@/components/student/ForumImageUploader.vue'
+import { displayName, authorLetter } from '@/utils/forumDisplay'
+import ForumPostForm from '@/components/student/ForumPostForm.vue'
 import CheckInDialog from '@/components/student/CheckInDialog.vue'
 import ForumHistoryPanel from '@/components/student/ForumHistoryPanel.vue'
 import { loadHistory, removeHistoryItem, clearHistory } from '@/utils/forumHistory'
 import type { ForumHistoryItem } from '@/utils/forumHistory'
 import { useAuthStore } from '@/stores/auth'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import { useForumSort } from '@/composables/useForumSort'
 import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
@@ -228,15 +208,15 @@ const route = useRoute()
 const authStore = useAuthStore()
 
 const staggerStyle = useStagger()
-const submitting = ref(false)
 const topics = ref<ForumTopicItem[]>([])
 const myReplies = ref<MyReplyItem[]>([])
 
 // 列表模式：全部 / 我的帖子 / 我的回复 / 浏览记录
 type ForumMode = 'all' | 'my-topics' | 'my-replies' | 'history'
 const mode = ref<ForumMode>('all')
-const topicSort = ref<'latest' | 'hot'>('latest')
-const topicOrder = ref<'asc' | 'desc'>('desc')
+
+// 排序双轴收编（#389）：切维度回默认降序（最新/最热优先）
+const { sort: topicSort, order: topicOrder, flipOrder, resetOrder } = useForumSort('desc')
 const historyItems = ref<ForumHistoryItem[]>([])
 
 // ===== 类别分流（#364）=====
@@ -317,24 +297,18 @@ function handleHistoryClear() {
 function handleSortChange() {
   currentPage.value = 1
   // 切换排序维度时重置为降序（最新/最热优先）
-  topicOrder.value = 'desc'
+  resetOrder()
   loadTopics()
 }
 
 function toggleTopicOrder(){
-  topicOrder.value = topicOrder.value === 'asc' ? 'desc' : 'asc'
+  flipOrder()
   loadTopics()
 }
+
 const createDialogVisible = ref(false)
-const createForm = ref<{ title: string; content: string; images: string[] }>({ title: '', content: '', images: [] })
-
-function displayName(author: ForumTopicItem['author']) {
-  return author.username
-}
-
-function authorLetter(author: ForumTopicItem['author']) {
-  return (displayName(author) || '?').charAt(0).toUpperCase()
-}
+// 发帖表单体（#389）：字段/校验/提交在 ForumPostForm，本页只留壳与发布后刷新
+const postForm = ref<InstanceType<typeof ForumPostForm> | null>(null)
 
 // 三态 + 分页收编（#388）：页码由按类别分片的 currentPage（可写 computed）持有，经 pageRef 注入
 const {
@@ -379,38 +353,22 @@ async function loadTopicsOnce() {
 }
 
 function openCreateDialog() {
-  createForm.value = { title: '', content: '', images: [] }
+  postForm.value?.reset()
   createDialogVisible.value = true
 }
 
-async function submitTopic() {
-  const title = createForm.value.title.trim()
-  const content = createForm.value.content.trim()
-  if (!title || !content) {
-    ElMessage.warning('请填写标题和内容')
+// 发布成功（表单体 #389）：关壳 + 列表刷新语义留在本页
+async function onTopicCreated() {
+  createDialogVisible.value = false
+  // 停在问答 Tab 时新发的讨论帖会被该 Tab 的 category 过滤掉，用户会看到「发布成功」
+  // 但列表里什么都没有；切回讨论 Tab（watch 会负责重新拉取）让它立刻可见。
+  if (mode.value === 'all' && categoryTab.value !== 'discussion') {
+    pageByCategory.value.discussion = 1
+    categoryTab.value = 'discussion'
     return
   }
-  submitting.value = true
-  try {
-    // 显式带 category：本对话框只发讨论帖，不依赖服务端把空值归一成 discussion。
-    await forumApi.createTopic({ category: 'discussion', chapter_id: null, title, content, images: createForm.value.images })
-    ElMessage.success('发布成功')
-    createDialogVisible.value = false
-    // 停在问答 Tab 时新发的讨论帖会被该 Tab 的 category 过滤掉，用户会看到「发布成功」
-    // 但列表里什么都没有；切回讨论 Tab（watch 会负责重新拉取）让它立刻可见。
-    if (mode.value === 'all' && categoryTab.value !== 'discussion') {
-      pageByCategory.value.discussion = 1
-      categoryTab.value = 'discussion'
-      return
-    }
-    currentPage.value = 1
-    await loadTopics()
-  } catch (e) {
-    console.error('发布失败:', e)
-    /* 错误已由拦截器提示 */
-  } finally {
-    submitting.value = false
-  }
+  currentPage.value = 1
+  await loadTopics()
 }
 
 function goDetail(id: number) {

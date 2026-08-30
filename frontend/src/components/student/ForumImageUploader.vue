@@ -42,11 +42,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { Loading, Picture, Close } from '@element-plus/icons-vue'
-import { forumApi } from '@/api/forum'
 import { resolveFileUrl } from '@/utils/fileUrl'
+import { useForumImageUpload } from '@/composables/useForumImageUpload'
 
 const props = withDefaults(defineProps<{
   /** 已上传成功的图片 URL 数组（v-model） */
@@ -59,8 +58,14 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits(['update:modelValue'])
 
+// 上传校验与状态机进 useForumImageUpload（#389 单点）：URL 列表经可写 computed 受控回写父级
+const urls = computed({
+  get: () => props.modelValue,
+  set: v => emit('update:modelValue', v)
+})
+const { uploading, uploadFiles, removeImage, handlePaste } = useForumImageUpload(() => props.max, { urls })
+
 const accept = 'image/*'
-const uploading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 
 function triggerSelect() {
@@ -72,69 +77,9 @@ function handleSelect(event: Event) {
   const target = event.target as HTMLInputElement
   const files = Array.from(target.files ?? [])
   if (files.length > 0) {
-    uploadFiles(files)
+    void uploadFiles(files)
   }
   target.value = ''
-}
-
-// 批量上传文件（选择 + 粘贴共用）
-async function uploadFiles(files: File[]) {
-  const remaining = props.max - props.modelValue.length
-  if (remaining <= 0) {
-    ElMessage.warning(`最多上传 ${props.max} 张图片`)
-    return
-  }
-  const toUpload = files.filter(f => f.type.startsWith('image/')).slice(0, remaining)
-  if (toUpload.length === 0) return
-
-  uploading.value = true
-  try {
-    for (const file of toUpload) {
-      if (file.size > 20 * 1024 * 1024) {
-        ElMessage.error(`"${file.name}" 超过 20MB，已跳过`)
-        continue
-      }
-      const formData = new FormData()
-      formData.append('file', file)
-      try {
-        const res = await forumApi.uploadImage(formData)
-        if (res?.url) {
-          if (props.modelValue.length >= props.max) break
-          emit('update:modelValue', [...props.modelValue, res.url])
-        } else {
-          ElMessage.error(`"${file.name}" 上传失败`)
-        }
-      } catch {
-        /* 错误已由拦截器提示 */
-      }
-    }
-  } finally {
-    uploading.value = false
-  }
-}
-
-function removeImage(index: number) {
-  const next = [...props.modelValue]
-  next.splice(index, 1)
-  emit('update:modelValue', next)
-}
-
-// 粘贴检测：页面内粘贴图片时自动上传（焦点在输入框/弹窗内时触发）
-function handlePaste(event: ClipboardEvent) {
-  const items = event.clipboardData?.items
-  if (!items) return
-  if (props.modelValue.length >= props.max) return
-  const files: File[] = []
-  for (const item of items) {
-    if (item.kind === 'file' && item.type.startsWith('image/')) {
-      const file = item.getAsFile()
-      if (file) files.push(file)
-    }
-  }
-  if (files.length > 0) {
-    event.preventDefault()
-    uploadFiles(files)
-  }
 }
 
 onMounted(() => {
