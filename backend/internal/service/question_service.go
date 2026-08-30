@@ -28,22 +28,62 @@ const excludeSourceTagsSQL = "NOT EXISTS (SELECT 1 FROM question_tag_relation qt
 // sampleQuestions 统一抽题函数：从 published 题库按条件随机抽取 count 题。
 // qType 为空表示不限题型。始终排除来源标记标签的题目。
 func sampleQuestions(db *gorm.DB, qType string, count int, credentialID ...*int) ([]model.Question, error) {
+	return sampleQuestionsByOpts(db, sampleQuestionsOpts{qType: qType, count: count, cred: credOf(credentialID), shuffle: true})
+}
+
+// sampleQuestionsOpts 抽题参数面（#385）：题库池口径（published + 排真题 + 证件分区）
+// 之上叠加 全量/抽样、洗牌/排序 两个正交开关。
+type sampleQuestionsOpts struct {
+	qType   string // 题型过滤（空 = 不限）
+	tagID   int    // >0：限定标签（专项练习）
+	count   int    // >0 且 shuffle：抽样截断数
+	shuffle bool   // true：洗牌后按 count 截断（随机抽样）；false：按 id 升序全量
+	cred    *int   // 非 nil：按当前证件分区
+}
+
+// sampleQuestionsByOpts 抽题池统一实现（#385 单点）：收编随机练习、标签专项、
+// 顺序练习与模拟考抽题的池过滤三元组（published + excludeSourceTagsSQL + 证件分区）。
+// shuffle=false 时按 id 升序返回全量（顺序练习/标签专项的固定顺序来源）；
+// shuffle=true 时洗牌、count>0 且超额则截断（随机练习/模拟考的抽样语义）。
+func sampleQuestionsByOpts(db *gorm.DB, o sampleQuestionsOpts) ([]model.Question, error) {
 	q := db.Model(&model.Question{}).Where("status = ?", "published").Where(excludeSourceTagsSQL)
-	if len(credentialID) > 0 && credentialID[0] != nil {
-		q = q.Where("credential_id = ?", *credentialID[0])
+	if o.tagID > 0 {
+		q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", o.tagID)
 	}
-	if qType != "" {
-		q = q.Where("type = ?", qType)
+	if o.cred != nil {
+		q = q.Where("credential_id = ?", *o.cred)
+	}
+	if o.qType != "" {
+		q = q.Where("type = ?", o.qType)
+	}
+	if !o.shuffle {
+		q = q.Order("id ASC")
 	}
 	var all []model.Question
 	if err := q.Find(&all).Error; err != nil {
 		return nil, err
 	}
-	if count > 0 && len(all) > count {
-		rand.Shuffle(len(all), func(i, j int) { all[i], all[j] = all[j], all[i] })
-		all = all[:count]
+	if o.shuffle {
+		all = shuffleTruncate(all, o.count)
 	}
 	return all, nil
+}
+
+// credOf 变参证件分区取首元素（无参/nil → 不分区）。
+func credOf(credentialID []*int) *int {
+	if len(credentialID) > 0 {
+		return credentialID[0]
+	}
+	return nil
+}
+
+// shuffleTruncate 洗牌截断（抽样固定顺序）：count<=0 或题量不足时原样返回。
+func shuffleTruncate[T any](items []T, count int) []T {
+	if count > 0 && len(items) > count {
+		rand.Shuffle(len(items), func(i, j int) { items[i], items[j] = items[j], items[i] })
+		items = items[:count]
+	}
+	return items
 }
 
 // gradeQuestion 评分（判题唯一实现）。

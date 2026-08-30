@@ -125,6 +125,9 @@ type ForumService struct {
 	fileSvc         *FileStore
 	notificationSvc *NotificationService
 	counters        ForumCounter // 计数列唯一写入口（spec #297）
+	// points 积分簿记通道（ADR-0023 forum 收编）：采纳奖励与违规回收经其事务内
+	// 导出方法落账，forum 内不再直写积分流水/余额；依赖方向 forum→points 单向无环。
+	points *PointsService
 
 	logger *zap.Logger
 }
@@ -132,9 +135,10 @@ type ForumService struct {
 // NewForumService 构造论坛服务。
 // fileSvc 用于删除帖子/回复时清理图片存储（可 nil，nil 时跳过清理）；
 // notificationSvc 用于论坛事件站内信（回复/举报处理/管理端删帖，见各触发点）；
-// counters 为 likes_count / reply_count 唯一写入口（与 AuthService 共享同一实例）。
-func NewForumService(db *gorm.DB, fileSvc *FileStore, notificationSvc *NotificationService, counters ForumCounter, logger *zap.Logger) *ForumService {
-	return &ForumService{db: db, fileSvc: fileSvc, notificationSvc: notificationSvc, counters: counters, logger: logger}
+// counters 为 likes_count / reply_count 唯一写入口（与 AuthService 共享同一实例）；
+// points 为积分簿记通道（采纳奖励/违规回收经其事务内导出方法落账，ADR-0023）。
+func NewForumService(db *gorm.DB, fileSvc *FileStore, notificationSvc *NotificationService, counters ForumCounter, points *PointsService, logger *zap.Logger) *ForumService {
+	return &ForumService{db: db, fileSvc: fileSvc, notificationSvc: notificationSvc, counters: counters, points: points, logger: logger}
 }
 
 // topicRow 列表查询的扫描结构。
@@ -740,9 +744,12 @@ func (s *ForumService) incrementDeletedAfterAccepted() error {
 	})
 }
 
-// rollbackAcceptedBonusTx 在事务内执行违规回收：若该帖曾发放 accepted_bonus 且未回滚，则创建 rollback 流水并扣减答主余额（封底 0，幂等）。
+// rollbackAcceptedBonusTx 在事务内执行违规回收：若该帖曾发放 accepted_bonus 且未回滚，则按
+// rollback 原因对冲扣减答主余额（封底 0，幂等）。簿记经 PointsService 事务内通道（ADR-0023）：
+// 占坑键 rollback:{topicID} 即「已处理」标记；余额不足按余额截断、余额为 0 时仅落占坑行
+// （不再写 Delta:0 流水——points_ledger CHECK (delta <> 0)，#384 缺陷修复）。
 func (s *ForumService) rollbackAcceptedBonusTx(tx *gorm.DB, topicID int64) error {
-	// 幂等：已存在 rollback 则跳过
+	// 幂等：已存在 rollback 流水（存量数据标记）则跳过；占坑行接管后续幂等
 	var existed int64
 	if err := tx.Model(&model.PointsLedger{}).Where("reason = ? AND ref_type = ? AND ref_id = ?", ReasonRollback, "forum_topic", fmt.Sprintf("%d", topicID)).Count(&existed).Error; err != nil {
 		return err
@@ -761,28 +768,12 @@ func (s *ForumService) rollbackAcceptedBonusTx(tx *gorm.DB, topicID int64) error
 	if orig.Delta <= 0 {
 		return nil
 	}
-	// 扣减余额（封底 0）
-	var user model.HrwaiUser
-	if err := tx.First(&user, orig.UserID).Error; err != nil {
-		return err
-	}
-	deduct := orig.Delta
-	if user.PointsBalance < deduct {
-		deduct = user.PointsBalance
-	}
-	if deduct <= 0 {
-		// 余额为 0，仍需写一条 0 分流水以保证幂等标记？此处按 0 分不写，保持幂等由 existed 保证，下次仍会尝试；但余额 0 时无需扣减，直接写一条 0 分 rollback 以标记已处理
-		ledger := model.PointsLedger{UserID: orig.UserID, Delta: 0, Reason: ReasonRollback, RefType: "forum_topic", RefID: fmt.Sprintf("%d", topicID), CreatedAt: clock.Now()}
-		return tx.Create(&ledger).Error
-	}
-	ledger := model.PointsLedger{UserID: orig.UserID, Delta: -deduct, Reason: ReasonRollback, RefType: "forum_topic", RefID: fmt.Sprintf("%d", topicID), CreatedAt: clock.Now()}
-	if err := tx.Create(&ledger).Error; err != nil {
-		return err
-	}
-	if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", orig.UserID).UpdateColumn("points_balance", gorm.Expr("CASE WHEN points_balance >= ? THEN points_balance - ? ELSE 0 END", deduct, deduct)).Error; err != nil {
-		return err
-	}
-	return nil
+	return s.points.SettleRewardTx(tx, PointsEntry{
+		UserID: orig.UserID, Delta: -orig.Delta, Reason: ReasonRollback,
+		RefType: "forum_topic", RefID: fmt.Sprintf("%d", topicID),
+		IdemKey:   "rollback:" + fmt.Sprintf("%d", topicID),
+		FloorZero: true,
+	})
 }
 
 // DeleteReply 删除回复（仅作者本人；其下级回复随外键级联删除）。
@@ -1475,34 +1466,22 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 			return nil
 		}
 		if bonusDelta > 0 {
-			ledgerBonus := model.PointsLedger{
-				UserID:    reply.UserID,
-				Delta:     bonusDelta,
-				Reason:    ReasonAcceptedBonus,
-				RefType:   "forum_topic",
-				RefID:     fmt.Sprintf("%d", topicID),
-				CreatedAt: now,
-			}
-			if err := tx.Create(&ledgerBonus).Error; err != nil {
-				return err
-			}
-			if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", reply.UserID).UpdateColumn("points_balance", gorm.Expr("points_balance + ?", bonusDelta)).Error; err != nil {
+			// 簿记经 PointsService 事务内通道（ADR-0023）：占坑键 accepted_bonus:{topicID}
+			// 与状态 CAS 双保险「每帖只发一次」
+			if err := s.points.SettleRewardTx(tx, PointsEntry{
+				UserID: reply.UserID, Delta: bonusDelta, Reason: ReasonAcceptedBonus,
+				RefType: "forum_topic", RefID: fmt.Sprintf("%d", topicID),
+				IdemKey: "accepted_bonus:" + fmt.Sprintf("%d", topicID),
+			}); err != nil {
 				return err
 			}
 		}
 		if actionDelta > 0 {
-			ledgerAction := model.PointsLedger{
-				UserID:    userID,
-				Delta:     actionDelta,
-				Reason:    ReasonAcceptAction,
-				RefType:   "forum_topic",
-				RefID:     fmt.Sprintf("%d", topicID),
-				CreatedAt: now,
-			}
-			if err := tx.Create(&ledgerAction).Error; err != nil {
-				return err
-			}
-			if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", userID).UpdateColumn("points_balance", gorm.Expr("points_balance + ?", actionDelta)).Error; err != nil {
+			if err := s.points.SettleRewardTx(tx, PointsEntry{
+				UserID: userID, Delta: actionDelta, Reason: ReasonAcceptAction,
+				RefType: "forum_topic", RefID: fmt.Sprintf("%d", topicID),
+				IdemKey: "accept_action:" + fmt.Sprintf("%d", topicID),
+			}); err != nil {
 				return err
 			}
 		}
