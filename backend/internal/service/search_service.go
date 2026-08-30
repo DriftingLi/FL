@@ -71,7 +71,7 @@ type SearchPageDTO struct {
 
 // searchSection 单类型搜索：top limit 条 + 总数。
 func (s *SearchService) searchSection(searchType, keyword string, limit int, credentialID ...*int) (SearchSectionDTO, error) {
-	items, total, err := s.searchItems(searchType, keyword, 1, limit)
+	items, total, err := s.searchItems(searchType, keyword, 1, limit, credentialID...)
 	if err != nil {
 		return SearchSectionDTO{}, err
 	}
