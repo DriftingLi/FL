@@ -35,6 +35,15 @@
       <el-radio-button value="question">问答</el-radio-button>
     </el-radio-group>
 
+    <!-- 求助/已解决筛选（#367）：仅问答 Tab 的唯一筛选轴，不加章节筛选 -->
+    <div v-if="mode === 'all' && categoryTab === 'question'" class="solved-filter">
+      <el-radio-group v-model="solvedFilter" size="small" @change="handleSolvedChange">
+        <el-radio-button value="all">全部</el-radio-button>
+        <el-radio-button value="unsolved">求助</el-radio-button>
+        <el-radio-button value="solved">已解决</el-radio-button>
+      </el-radio-group>
+    </div>
+
     <div class="forum-toolbar">
       <el-radio-group v-model="mode" class="forum-mode" @change="handleModeChange">
         <el-radio-button value="all">全部</el-radio-button>
@@ -117,9 +126,15 @@
           </div>
           <div class="topic-main">
             <div class="topic-title-row">
-              <el-tag v-if="topic.chapter_id" size="small" type="warning" class="chapter-tag">
+              <template v-if="topic.category === 'question'">
+                <el-tag size="small" type="success">问答</el-tag>
+                <el-tag v-if="topic.accepted_reply_id" size="small" type="success" effect="dark">已解决</el-tag>
+                <el-tag v-else size="small" type="info" effect="plain">待解决</el-tag>
+              </template>
+              <el-tag v-else-if="topic.chapter_id" size="small" type="warning" class="chapter-tag">
                 {{ topic.chapter_title || '章节讨论' }}
               </el-tag>
+              <el-tag v-else size="small" type="info">综合</el-tag>
               <h3 class="topic-title">{{ topic.title }}</h3>
             </div>
             <p class="topic-excerpt">{{ topic.content }}</p>
@@ -233,6 +248,15 @@ const historyItems = ref<ForumHistoryItem[]>([])
 // category 判"看哪一类帖"，mode 判"看谁的帖"，两个轴正交。
 const categoryTab = ref<ForumCategory>('discussion')
 
+// ===== 求助/已解决筛选（#367）：仅问答 Tab 的唯一筛选轴 =====
+type SolvedFilter = 'all' | 'solved' | 'unsolved'
+const solvedFilter = ref<SolvedFilter>('all')
+
+function handleSolvedChange() {
+  currentPage.value = 1
+  loadTopics()
+}
+
 // 分页与滚动位置按类别各存一份：切走再切回来仍停在原来的位置。
 // currentPage 做成"按当前 Tab 读写的可写 computed"，这样既有代码里的
 // `currentPage.value = 1` 一行都不用改，也不存在两处状态手工同步漏一处的风险。
@@ -255,6 +279,10 @@ const emptyDescription = computed(() =>
 
 watch(categoryTab, async (next, prev) => {
   scrollByCategory[prev] = window.scrollY
+  // 切换类别时重置 solved 筛选为全部，避免讨论筛漏到问答
+  if (next !== 'question' && solvedFilter.value !== 'all') {
+    solvedFilter.value = 'all'
+  }
   await loadTopics()
   await nextTick()
   window.scrollTo?.({ top: scrollByCategory[next] })
@@ -330,12 +358,17 @@ async function loadTopics() {
       // 查询参数交给 forumTabQuery 统一翻译（与端共用同一份映射）。
       // 关键是讨论 Tab 必须带 category=discussion：后端 scope=general 的定义就是
       // chapter_id IS NULL，而问答帖的 chapter_id 同为 NULL，漏 category 会让问答帖整片灌进讨论列表。
-      const res = await forumApi.listTopics({
+      const query = {
         ...forumTabQuery(categoryTab.value),
         sort: topicSort.value,
         order: topicOrder.value,
         ...params
-      })
+      } as Record<string, unknown>
+      // 已解决/求助仅对问答生效（#367 单一筛选轴）
+      if (categoryTab.value === 'question' && solvedFilter.value !== 'all') {
+        ;(query as { solved?: string }).solved = solvedFilter.value
+      }
+      const res = await forumApi.listTopics(query as Parameters<typeof forumApi.listTopics>[0])
       topics.value = res.topics || []
       total.value = res.total || 0
     }
@@ -494,6 +527,20 @@ watch(
 
 .forum-category {
   margin-bottom: 12px;
+}
+
+.solved-filter {
+  margin-bottom: 12px;
+}
+
+.solved-tag {
+  font-weight: 600;
+}
+
+.unsolved-tag {
+  background: var(--color-bg-page);
+  border-color: var(--color-border-dark);
+  color: var(--color-text-secondary);
 }
 
 .forum-toolbar {

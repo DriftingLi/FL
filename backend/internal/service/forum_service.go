@@ -99,6 +99,7 @@ type ForumTopicDTO struct {
 	LikedByMe       bool        `json:"liked_by_me"`
 	AcceptedReplyID *int64      `json:"accepted_reply_id,omitempty"`
 	SolvedAt        *string     `json:"solved_at,omitempty"`
+	RewardIssued    bool        `json:"reward_issued"`
 }
 
 // ForumReplyDTO 论坛回复对象。
@@ -213,6 +214,21 @@ func parseForumCategoryArg(category string) (string, error) {
 	}
 }
 
+// parseSolvedArg 解析列表查询的 solved 参数（#367）。
+// 空或 all = 不过滤；solved = 已解决（accepted_reply_id 非空）；unsolved = 求助（accepted_reply_id 为空）。
+func parseSolvedArg(solved string) (string, error) {
+	switch v := strings.TrimSpace(strings.ToLower(solved)); v {
+	case "", "all":
+		return "", nil
+	case "solved":
+		return "solved", nil
+	case "unsolved":
+		return "unsolved", nil
+	default:
+		return "", fmt.Errorf("solved 参数无效: %s", solved)
+	}
+}
+
 // TopicListInput 主题列表查询条件。
 //
 // 用 struct 而非位置参数：本方法有 scope/keyword/sort/order/category 五个 string，
@@ -220,6 +236,7 @@ func parseForumCategoryArg(category string) (string, error) {
 type TopicListInput struct {
 	Scope     string // all（默认）/ general / chapter
 	Category  string // 空或 all = 不过滤；discussion / question = 按类别分流
+	Solved    string // 空或 all = 不过滤；solved / unsolved（#367，仅问答帖有意义）
 	ChapterID int
 	Page      int
 	PageSize  int
@@ -235,6 +252,10 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 	chapterID, page, pageSize := in.ChapterID, in.Page, in.PageSize
 	keyword, sort, order := in.Keyword, in.Sort, in.Order
 	category, err := parseForumCategoryArg(in.Category)
+	if err != nil {
+		return nil, err
+	}
+	solved, err := parseSolvedArg(in.Solved)
 	if err != nil {
 		return nil, err
 	}
@@ -281,6 +302,11 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 			if category != "" {
 				q = q.Where("t.category = ?", category)
 			}
+			if solved == "solved" {
+				q = q.Where("t.accepted_reply_id IS NOT NULL")
+			} else if solved == "unsolved" {
+				q = q.Where("t.accepted_reply_id IS NULL")
+			}
 			if keyword = strings.TrimSpace(keyword); keyword != "" {
 				like := "%" + keyword + "%"
 				q = q.Where("(t.title ILIKE ? OR t.content ILIKE ?)", like, like)
@@ -292,6 +318,8 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 	for _, r := range rows {
 		items = append(items, r.toDTO(0))
 	}
+	// 批量回填 reward_issued（#367 二次确认分支所需）：仅对问答帖且已发放过的主题标记。
+	s.enrichRewardIssued(items)
 	return &ForumTopicPageResult{
 		Page:   page,
 		Pages:  response.PageCount(total, pageSize),
@@ -395,6 +423,9 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order st
 	// 点赞状态（ADR-0018）：详情返回计数已由列提供，仅需回填是否已赞。
 	topicDTO := row.toDTO(viewerID)
 	s.enrichTopicLikedByMe([]*ForumTopicDTO{&topicDTO}, viewerID)
+	if s.hasRewardIssued(topicID) {
+		topicDTO.RewardIssued = true
+	}
 
 	return map[string]any{
 		"topic":   topicDTO,
@@ -1105,6 +1136,7 @@ func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResu
 	}
 	// 点赞计数已由 likes_count 列提供，仅需回填是否已赞（单一 helper 收敛）
 	s.enrichTopicLikedByMe(toDTORefs(items), userID)
+	s.enrichRewardIssued(items)
 	return &ForumTopicPageResult{
 		Page: page, Pages: response.PageCount(total, pageSize),
 		Topics: items, Total: total,
@@ -1368,6 +1400,20 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 				return err
 			}
 		}
+		// 站内信：答主/楼主（#369），payload 带实际分值，link 锚到回答
+		if bonusDelta > 0 || actionDelta > 0 {
+			link := fmt.Sprintf("/training/forum/%d#reply-%d", topicID, replyID)
+			if bonusDelta > 0 {
+				if err := s.notificationSvc.CreateWithTx(tx, reply.UserID, NotifTypeForumAcceptAnswerer, "你的回答被采纳", fmt.Sprintf("你在问答「%s」中的回答被采纳，+%d 分已到账", topic.Title, bonusDelta), link, forumAcceptPayload(topicID, replyID, bonusDelta, ReasonAcceptedBonus), now); err != nil {
+					return err
+				}
+			}
+			if actionDelta > 0 {
+				if err := s.notificationSvc.CreateWithTx(tx, userID, NotifTypeForumAcceptOwner, "你采纳了答案", fmt.Sprintf("你在问答「%s」中采纳了回答，+%d 分已到账", topic.Title, actionDelta), link, forumAcceptPayload(topicID, replyID, actionDelta, ReasonAcceptAction), now); err != nil {
+					return err
+				}
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -1425,5 +1471,57 @@ func (s *ForumService) fetchTopicDTO(topicID int64, viewerID int) (*ForumTopicDT
 	dto := row.toDTO(viewerID)
 	// 点赞回填保持与详情一致（尽力而为）
 	s.enrichTopicLikedByMe([]*ForumTopicDTO{&dto}, viewerID)
+	if s.hasRewardIssued(topicID) {
+		dto.RewardIssued = true
+	}
 	return &dto, nil
+}
+
+// enrichRewardIssued 批量回填 reward_issued（#367 二次确认分支）。
+// 仅查询 question 类帖且 reason=accepted_bonus 的流水，避免无谓扫描。
+func (s *ForumService) enrichRewardIssued(items []ForumTopicDTO) {
+	if len(items) == 0 {
+		return
+	}
+	ids := make([]string, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
+	for _, t := range items {
+		if t.Category != ForumCategoryQuestion {
+			continue
+		}
+		sid := fmt.Sprintf("%d", t.ID)
+		if _, ok := seen[sid]; !ok {
+			seen[sid] = struct{}{}
+			ids = append(ids, sid)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	var issued []string
+	if err := s.db.Model(&model.PointsLedger{}).
+		Where("ref_type = ? AND reason = ? AND ref_id IN ?", "forum_topic", ReasonAcceptedBonus, ids).
+		Distinct("ref_id").Pluck("ref_id", &issued).Error; err != nil {
+		return
+	}
+	m := make(map[string]bool, len(issued))
+	for _, id := range issued {
+		m[id] = true
+	}
+	for i := range items {
+		if m[fmt.Sprintf("%d", items[i].ID)] {
+			items[i].RewardIssued = true
+		}
+	}
+}
+
+// hasRewardIssued 单条查询：该帖是否已产生过 accepted_bonus 流水。
+func (s *ForumService) hasRewardIssued(topicID int64) bool {
+	var cnt int64
+	if err := s.db.Model(&model.PointsLedger{}).
+		Where("ref_type = ? AND reason = ? AND ref_id = ?", "forum_topic", ReasonAcceptedBonus, fmt.Sprintf("%d", topicID)).
+		Count(&cnt).Error; err != nil {
+		return false
+	}
+	return cnt > 0
 }

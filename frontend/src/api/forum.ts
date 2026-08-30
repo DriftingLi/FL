@@ -30,6 +30,9 @@ export interface ForumTopicItem {
   can_delete?: boolean
   likes_count?: number
   liked_by_me?: boolean
+  accepted_reply_id?: number | null
+  solved_at?: string | null
+  reward_issued?: boolean
 }
 
 export interface ForumReplyItem {
@@ -48,12 +51,15 @@ export interface ForumReplyItem {
   can_delete?: boolean
   likes_count?: number
   liked_by_me?: boolean
+  is_accepted?: boolean
 }
 
 export interface ForumListParams {
   scope?: 'all' | 'general' | 'chapter'
   /** 类别分流；省略或 'all' 表示两类都看（移动端旧契约即如此） */
   category?: ForumCategory
+  /** 解决状态（#367，仅问答有意义） */
+  solved?: 'all' | 'solved' | 'unsolved'
   chapter_id?: number
   page?: number
   page_size?: number
@@ -187,6 +193,18 @@ export const forumApi = {
   /** 取消点赞评论（幂等） */
   unlikeReply(id: number) {
     return unwrappedRequest.delete<{ likes_count: number; liked: boolean }>(`/forum/replies/${id}/like`)
+  },
+
+  // ===== 采纳（#366/#367）=====
+
+  /** 采纳回答（仅楼主，幂等，首次加分） */
+  acceptReply(topicId: number, replyId: number) {
+    return unwrappedRequest.post<ForumTopicItem>(`/forum/topics/${topicId}/accept`, { reply_id: replyId })
+  },
+
+  /** 取消采纳（仅楼主，状态回到未解决，已发分不回滚） */
+  cancelAccept(topicId: number) {
+    return unwrappedRequest.delete<ForumTopicItem>(`/forum/topics/${topicId}/accept`)
   }
 }
 
@@ -254,6 +272,7 @@ export interface AdminForumListParams {
   scope?: 'all' | 'general' | 'chapter'
   /** 类别维度（#364）；省略表示两类都看 */
   category?: ForumCategory
+  solved?: 'all' | 'solved' | 'unsolved'
   chapter_id?: number
   page?: number
   page_size?: number
