@@ -47,11 +47,14 @@ type AIService struct {
 	model       string
 	mu          sync.Mutex // 保护 client 重建并发安全
 	logger      *zap.Logger
+	blocking    AIBlockingTransport // 阻塞传输槽位（nil 时自实装；测试可注入 fake）
 }
 
 // NewAIService 创建 AI 服务。aiConfigSvc 用于按功能查找绑定配置。
 func NewAIService(db *gorm.DB, aiConfigSvc *AIConfigService, logger *zap.Logger) *AIService {
-	return &AIService{db: db, aiConfigSvc: aiConfigSvc, logger: logger}
+	svc := &AIService{db: db, aiConfigSvc: aiConfigSvc, logger: logger}
+	svc.blocking = svc
+	return svc
 }
 
 // AIGradeResult 简答题 AI 评分结果。
@@ -72,7 +75,7 @@ func (s *AIService) GradeShortAnswer(questionContent, referenceAnswer, scoringCr
 	userPrompt := fmt.Sprintf("【题目】%s\n\n【参考答案】%s\n\n【评分标准】%s\n\n【满分】%g分\n\n【学员答案】%s\n\n请根据以上信息对学员答案进行评分，返回JSON格式。",
 		questionContent, orDefault(referenceAnswer, "无"), orDefault(scoringCriteria, "无"), maxScore, studentAnswer)
 
-	content, err := s.callModel([]openai.ChatCompletionMessage{
+	content, err := s.blockingSlot().CallModel([]openai.ChatCompletionMessage{
 		{Role: openai.ChatMessageRoleSystem, Content: gradingSystemPrompt},
 		{Role: openai.ChatMessageRoleUser, Content: userPrompt},
 	}, 1000, 0.3, FeatureGradeShortAnswer)
@@ -100,7 +103,7 @@ const questionExplainSystemPrompt = `你是一名叉车维修培训专家，请�
 // GenerateQuestionExplanation 为题目生成 AI 解析。
 func (s *AIService) GenerateQuestionExplanation(questionContent, answer, explanation string) (string, error) {
 	userPrompt := fmt.Sprintf("【题目】%s\n\n【正确答案】%s\n\n【参考解析】%s\n\n请生成本题的 AI 解析。", questionContent, orDefault(answer, "无"), orDefault(explanation, "无"))
-	content, err := s.callModel([]openai.ChatCompletionMessage{
+	content, err := s.blockingSlot().CallModel([]openai.ChatCompletionMessage{
 		{Role: openai.ChatMessageRoleSystem, Content: questionExplainSystemPrompt},
 		{Role: openai.ChatMessageRoleUser, Content: userPrompt},
 	}, 800, 0.5, FeatureQuestionExplanation)
@@ -116,7 +119,7 @@ func (s *AIService) GenerateChapterContent(courseName, courseCategory, courseDes
 	userPrompt := fmt.Sprintf("【课程名称】%s\n【课程分类】%s\n【课程简介】%s\n【章节标题】%s\n\n请根据以上信息生成该章节的培训内容（Markdown 格式）。",
 		courseName, orDefault(courseCategory, "无"), orDefault(courseDescription, "无"), chapterTitle)
 
-	content, err := s.callModel([]openai.ChatCompletionMessage{
+	content, err := s.blockingSlot().CallModel([]openai.ChatCompletionMessage{
 		{Role: openai.ChatMessageRoleSystem, Content: chapterContentSystemPrompt},
 		{Role: openai.ChatMessageRoleUser, Content: userPrompt},
 	}, 2000, 0.5, FeatureGenerateChapterContent)
@@ -150,20 +153,16 @@ func (s *AIService) ensureClient(ctx context.Context, featureKey string) error {
 	if cur.APIKey == "" {
 		return fmt.Errorf("AI 功能 %q 未绑定配置，请在管理员后台 AI 配置页面绑定", featureKey)
 	}
-	cfg := openai.DefaultConfig(cur.APIKey)
-	if cur.BaseURL != "" {
-		cfg.BaseURL = cur.BaseURL
-	}
-	s.client = openai.NewClientWithConfig(cfg)
+	s.client = newOpenAIClient(cur.APIKey, cur.BaseURL)
 	s.clientSig = sig
 	s.apiKey, s.baseURL, s.model = cur.APIKey, cur.BaseURL, cur.Model
 	s.logger.Info("AI client 已重建", zap.String("base_url", cur.BaseURL), zap.String("model", cur.Model), zap.String("source", cur.Source), zap.String("feature", featureKey))
 	return nil
 }
 
-// callModel 调用模型，重试 2 次。
+// CallModel 阻塞式传输端口实现（AIBlockingTransport 槽位）：调用模型，重试 2 次。
 // featureKey 用于按功能解析绑定的 AI 配置。
-func (s *AIService) callModel(messages []openai.ChatCompletionMessage, maxTokens int, temperature float32, featureKey string) (string, error) {
+func (s *AIService) CallModel(messages []openai.ChatCompletionMessage, maxTokens int, temperature float32, featureKey string) (string, error) {
 	ctx, cancel := withTimeout(120 * time.Second)
 	defer cancel()
 
