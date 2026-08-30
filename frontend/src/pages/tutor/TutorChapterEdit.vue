@@ -237,13 +237,11 @@ import UiTag from '@/components/ui/UiTag.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 
 const route = useRoute()
 const router = useRouter()
 
-const loading = ref(false)
-const loadError = ref(false)
-const retrying = ref(false)
 const chapterNotFound = ref(false)
 const chapterDetail = ref<TutorChapterDetail | null>(null)
 const courseName = ref('')
@@ -424,42 +422,32 @@ async function handleDeleteFile(file: ChapterFile) {
 }
 
 // 数据加载
-async function loadChapterDetail() {
-  loading.value = true
-  chapterNotFound.value = false
-  loadError.value = false
-  try {
-    const chapterId = Number(route.params.chapterId)
-    const res = await tutorApi.getChapterDetail(chapterId)
-    chapterDetail.value = res
-    editContent.value = res.content || ''
-    originalContent.value = res.content || ''
-    // 默认 tab：图文优先，否则第一个媒体 tab
-    activeTab.value = 'content'
-    selectedFileId.value = null
-    // 顺便加载课程信息拿课程名 + 章节列表（用于上下章标题）
-    await loadCourseInfo()
-  } catch (e: unknown) {
-    const status = (e as { response?: { status?: number } })?.response?.status
-    if (status === 404) {
-      chapterNotFound.value = true
-    } else {
-      loadError.value = true
+// 三态收编 useAsyncPage（#401，详情页无分页）：404 归 chapterNotFound 自行渲染，其余异常上抛进 loadError；
+// 错误详情由拦截器统一 toast
+const { loading, loadError, retrying, retry: handleRetry, run: loadChapterDetail } = useAsyncPage(
+  async () => {
+    chapterNotFound.value = false
+    try {
+      const chapterId = Number(route.params.chapterId)
+      const res = await tutorApi.getChapterDetail(chapterId)
+      chapterDetail.value = res
+      editContent.value = res.content || ''
+      originalContent.value = res.content || ''
+      // 默认 tab：图文优先，否则第一个媒体 tab
+      activeTab.value = 'content'
+      selectedFileId.value = null
+      // 顺便加载课程信息拿课程名 + 章节列表（用于上下章标题）
+      await loadCourseInfo()
+    } catch (e: unknown) {
+      const status = (e as { response?: { status?: number } })?.response?.status
+      if (status === 404) {
+        chapterNotFound.value = true
+      } else {
+        throw e
+      }
     }
-    console.error('Failed to load chapter detail:', e)
-  } finally {
-    loading.value = false
   }
-}
-
-async function handleRetry() {
-  retrying.value = true
-  try {
-    await loadChapterDetail()
-  } finally {
-    retrying.value = false
-  }
-}
+)
 
 async function loadCourseInfo() {
   try {

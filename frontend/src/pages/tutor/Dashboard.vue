@@ -61,6 +61,7 @@ import type { QuickCardItem } from '@/components/dashboard/QuickCard.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import { tutorApi } from '@/api/tutor'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import { displayNameOf } from '@/types/user'
 
 const authStore = useAuthStore()
@@ -68,39 +69,25 @@ const authStore = useAuthStore()
 const userName = computed(() => displayNameOf(authStore.userInfo) || '导师')
 
 const myCourses = ref<QuickCardItem[]>([])
-const pageLoading = ref(true)
-const pageError = ref('')
-const retrying = ref(false)
 
-async function loadData() {
-  pageError.value = ''
-  try {
-    const courseRes = await tutorApi.getCourses({ page: 1, page_size: 100 })
-    if (courseRes) {
-      const courses = Array.isArray(courseRes) ? courseRes : (courseRes.courses || [])
-      myCourses.value = courses.map((c) => ({
-        title: c.name || '未命名课程',
-        subtitle: `${c.student_count ?? 0} 名学员`,
-        path: c.course_id ? `/training/tutor/course/${c.course_id}/chapters` : ''
-      }))
-    }
-  } catch (error) {
-    // 拦截器已统一 toast，这里只保留一个可操作的重试入口，避免静默失败后页面空白
-    pageError.value = error instanceof Error ? error.message : '加载导师数据失败'
-  } finally {
-    pageLoading.value = false
+// 三态收编 useAsyncPage（#401）：拦截器已 toast，pageError 降级 boolean；retry 防重入由 composable 提供
+const {
+  loading: pageLoading,
+  loadError: pageError,
+  retrying,
+  retry: handleRetry,
+  run: loadData
+} = useAsyncPage(async () => {
+  const courseRes = await tutorApi.getCourses({ page: 1, page_size: 100 })
+  if (courseRes) {
+    const courses = Array.isArray(courseRes) ? courseRes : (courseRes.courses || [])
+    myCourses.value = courses.map((c) => ({
+      title: c.name || '未命名课程',
+      subtitle: `${c.student_count ?? 0} 名学员`,
+      path: c.course_id ? `/training/tutor/course/${c.course_id}/chapters` : ''
+    }))
   }
-}
-
-async function handleRetry() {
-  retrying.value = true
-  pageLoading.value = true
-  try {
-    await loadData()
-  } finally {
-    retrying.value = false
-  }
-}
+})
 
 onMounted(loadData)
 </script>
