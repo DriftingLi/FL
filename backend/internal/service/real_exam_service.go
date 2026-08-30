@@ -4,7 +4,6 @@ package service
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 
 	"go.uber.org/zap"
@@ -121,7 +120,7 @@ func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*PracticeS
 	}
 
 	ids, startIdx, err := ResumeSet(s.db, studentID, ResumeSetSpec{
-		Mode:       fmt.Sprintf("paper:%d", paperID),
+		Mode:       string(PracticeModePaper(paperID)),
 		FreshIDs:   allIDs,
 		ReuseSaved: true,
 	})

@@ -111,6 +111,9 @@ type MockExamHistoryItemDTO struct {
 	Result        any      `json:"result"`
 	CreatedAt     string   `json:"created_at"`
 	Score         *float64 `json:"score"`
+	// PaperID 真题卷来源（#386）：按卷开考时写入 mock_exam.paper_id，随机模考为 nil
+	// （omitempty——既有消费者对随机模考的响应零差异，向后兼容）。
+	PaperID *int `json:"paper_id,omitempty"`
 }
 
 // MockExamHistoryDTO 历史列表信封。
@@ -414,5 +417,6 @@ func mockExamToDTO(m *model.MockExam) MockExamHistoryItemDTO {
 		Result:        result,
 		CreatedAt:     formatISO(m.CreatedAt),
 		Score:         m.Score,
+		PaperID:       m.PaperID,
 	}
 }

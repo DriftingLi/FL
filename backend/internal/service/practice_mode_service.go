@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -14,6 +16,38 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/pkg/paging"
 )
+
+// PracticeMode 练习模式封闭类型（#386）：合法集 = sequential | tag:<id> | paper:<id>。
+// 进度读写入口对未知 mode 返回 400，消灭 typo 静默孤儿进度行。
+type PracticeMode string
+
+// PracticeModeSequential 顺序练习模式。
+const PracticeModeSequential PracticeMode = "sequential"
+
+// PracticeModeTag 标签专项练习模式（tag:<tagID>）。
+func PracticeModeTag(tagID int) PracticeMode { return PracticeMode(fmt.Sprintf("tag:%d", tagID)) }
+
+// PracticeModePaper 按卷练习模式（paper:<paperID>）。
+func PracticeModePaper(paperID int) PracticeMode {
+	return PracticeMode(fmt.Sprintf("paper:%d", paperID))
+}
+
+// ParsePracticeMode 校验字符串是否落在封闭集内；合法返回归一后的模式，非法返回 false。
+func ParsePracticeMode(s string) (PracticeMode, bool) {
+	switch {
+	case s == string(PracticeModeSequential):
+		return PracticeModeSequential, true
+	case strings.HasPrefix(s, "tag:"):
+		if id, err := strconv.Atoi(strings.TrimPrefix(s, "tag:")); err == nil && id > 0 {
+			return PracticeModeTag(id), true
+		}
+	case strings.HasPrefix(s, "paper:"):
+		if id, err := strconv.Atoi(strings.TrimPrefix(s, "paper:")); err == nil && id > 0 {
+			return PracticeModePaper(id), true
+		}
+	}
+	return "", false
+}
 
 // PracticeModeService 题库练习模式服务。
 type PracticeModeService struct {
@@ -109,7 +143,7 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, cred
 	}
 
 	ids, startIdx, err := ResumeSet(s.db, studentID, ResumeSetSpec{
-		Mode:       fmt.Sprintf("tag:%d", tagID),
+		Mode:       string(PracticeModeTag(tagID)),
 		FreshIDs:   allIDs,
 		ReuseSaved: true,
 		Sample: func(ids []int) []int {
