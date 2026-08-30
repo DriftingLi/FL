@@ -127,9 +127,8 @@
           <div class="topic-main">
             <div class="topic-title-row">
               <template v-if="topic.category === 'question'">
-                <el-tag size="small" type="success">问答</el-tag>
-                <el-tag v-if="topic.accepted_reply_id" size="small" type="success" effect="dark">已解决</el-tag>
-                <el-tag v-else size="small" type="info" effect="plain">待解决</el-tag>
+                <el-tag v-if="topic.accepted_reply_id || topic.solved_at" size="small" type="success" effect="dark" class="solved-tag">✓ 已解决</el-tag>
+                <el-tag v-else size="small" type="info" effect="plain" class="unsolved-tag">求助</el-tag>
               </template>
               <el-tag v-else-if="topic.chapter_id" size="small" type="warning" class="chapter-tag">
                 {{ topic.chapter_title || '章节讨论' }}
