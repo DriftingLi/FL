@@ -150,6 +150,7 @@ import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSectionHeader from '@/components/ui/UiSectionHeader.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import { useRoleDashboard } from '@/composables/useRoleDashboard'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
 import { studentApi, type StudyRecordItem, type StudentCourseItem } from '@/api/student'
 import { displayNameOf } from '@/types/user'
@@ -158,11 +159,8 @@ const authStore = useAuthStore()
 
 const userName = computed(() => displayNameOf(authStore.userInfo) || '同学')
 
-// 首屏三态：骨架 / 错误 / 内容
-const pageLoading = ref(true)
-const pageError = ref(false)
-const retrying = ref(false)
-
+// 首屏三态收编（#388，详情聚合页无分页）：pageLoading 初始为 true 的语义由
+// 首次 onMounted 装载即触发保持（骨架在首个 tick 内不被穿透）
 const stagger = useStagger()
 
 // 进行中的课程
@@ -277,26 +275,14 @@ async function loadRecentLearning() {
   }
 }
 
-async function loadAll() {
-  pageError.value = false
-  pageLoading.value = true
-  try {
+const { loading: pageLoading, loadError: pageError, retrying, retry: handleRetry, run: loadAll } = useAsyncPage(
+  async () => {
     // 三路并行：课程 / 最近学习 / 统计
     await Promise.all([loadCourses(), loadRecentLearning(), loadStudyStats()])
     await nextTick()
     renderStudyChart()
-  } catch {
-    pageError.value = true
-  } finally {
-    pageLoading.value = false
-    retrying.value = false
   }
-}
-
-async function handleRetry() {
-  retrying.value = true
-  await loadAll()
-}
+)
 
 onMounted(loadAll)
 </script>

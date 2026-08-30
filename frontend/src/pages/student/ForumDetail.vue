@@ -239,6 +239,7 @@ import { formatLocaleDateTime } from '@/utils/format'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { pushHistory, toHistoryItem } from '@/utils/forumHistory'
 import { useAuthStore } from '@/stores/auth'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
@@ -248,9 +249,6 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
-const loading = ref(false)
-const loadError = ref(false)
-const retrying = ref(false)
 const submitting = ref(false)
 
 const staggerStyle = useStagger()
@@ -263,6 +261,9 @@ const replyFileInput = ref<HTMLInputElement | null>(null)
 const canSubmitReply = computed(() => replyContent.value.trim().length > 0 || replyImages.value.length > 0)
 const replySort = ref<'latest' | 'hot'>('latest')
 const replyOrder = ref<'asc' | 'desc'>('asc')
+
+// 三态收编（#388，详情页无分页）：loader 抛错即错误态
+const { loading, loadError, retrying, retry: retryLoad, run: loadDetail } = useAsyncPage(loadDetailOnce)
 
 function handleReplySortChange() {
   // 热门默认逆序，最新默认正序
@@ -305,31 +306,20 @@ function scrollToHash() {
   })
 }
 
-async function loadDetail() {
-  loading.value = true
-  loadError.value = false
-  try {
-    const topicId = Number(route.params.topicId)
-    const res = await forumApi.getTopic(topicId, replySort.value, replyOrder.value)
-    topic.value = res.topic
-    replies.value = res.replies || []
-    if (res.topic) {
-      try {
-        pushHistory(toHistoryItem(res.topic), authStore.userInfo?.user_id)
-      } catch {
-        // ignore storage errors
-      }
+async function loadDetailOnce() {
+  const topicId = Number(route.params.topicId)
+  const res = await forumApi.getTopic(topicId, replySort.value, replyOrder.value)
+  topic.value = res.topic
+  replies.value = res.replies || []
+  if (res.topic) {
+    try {
+      pushHistory(toHistoryItem(res.topic), authStore.userInfo?.user_id)
+    } catch {
+      // ignore storage errors
     }
-    await nextTick()
-    scrollToHash()
-  } catch (e) {
-    console.error('加载帖子详情失败:', e)
-    loadError.value = true
-    topic.value = null
-    replies.value = []
-  } finally {
-    loading.value = false
   }
+  await nextTick()
+  scrollToHash()
 }
 
 async function handleAccept(replyId: number) {
@@ -378,16 +368,6 @@ async function handleCancelAccept() {
     }
   } catch (e) {
     console.error('取消采纳失败:', e)
-  }
-}
-
-async function retryLoad() {
-  if (retrying.value) return
-  retrying.value = true
-  try {
-    await loadDetail()
-  } finally {
-    retrying.value = false
   }
 }
 

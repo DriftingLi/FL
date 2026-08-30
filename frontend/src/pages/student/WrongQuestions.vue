@@ -93,7 +93,7 @@
           <el-button type="danger" size="small" @click="removeWrong(item.question_id)">移出</el-button>
         </div>
       </el-card>
-      <el-pagination v-model:current-page="page" :page-size="pageSize" :total="total" layout="prev, pager, next" @current-change="loadData" />
+      <el-pagination v-model:current-page="page" :page-size="pageSize" :total="total" layout="prev, pager, next" @current-change="handlePageChange" />
     </div>
     <UiEmptyState v-else description="暂无错题" />
   </div>
@@ -115,6 +115,7 @@ import KnowledgeCard from '@/components/practice/KnowledgeCard.vue'
 import CommentCard from '@/components/practice/CommentCard.vue'
 import NoteCard from '@/components/practice/NoteCard.vue'
 import { questionInteractionApi } from '@/api/questionInteraction'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
 import { useCredentialRefetch } from '@/composables/useCredentialRefetch'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
@@ -136,12 +137,35 @@ interface WrongItem {
 }
 
 const wrongList = ref<WrongItem[]>([])
-const total = ref(0)
-const page = ref(1)
-const pageSize = ref(20)
-const loading = ref(false)
-const loadError = ref(false)
-const retrying = ref(false)
+
+// 三态 + 分页三件套收编（#388）
+const {
+  loading,
+  loadError,
+  retrying,
+  retry: retryLoad,
+  page,
+  pageSize,
+  total,
+  run: loadData,
+  handlePageChange
+} = useAsyncPage(async () => {
+  const res = await wrongQuestionApi.getWrongQuestions({
+    page: page.value,
+    page_size: pageSize.value,
+    type: filterType.value || undefined,
+    sort: sortOrder.value,
+    favorited: filterFavorited.value || undefined,
+    min_wrong_count: filterMultiWrong.value ? 2 : undefined
+  })
+  wrongList.value = res?.items || []
+  total.value = res?.total || 0
+  // 清理不在当前页的选择
+  const ids = new Set(wrongList.value.map(i => i.question_id))
+  const n = new Set<number>()
+  selectedIds.value.forEach(id => { if (ids.has(id)) n.add(id) })
+  selectedIds.value = n
+})
 
 const staggerStyle = useStagger()
 const filterType = ref('')
@@ -212,45 +236,6 @@ async function toggleFavorite(item: WrongItem) {
     }
   } catch {
     /* 错误已由拦截器提示 */
-  }
-}
-
-async function loadData() {
-  loading.value = true
-  loadError.value = false
-  try {
-    const res = await wrongQuestionApi.getWrongQuestions({
-      page: page.value,
-      page_size: pageSize.value,
-      type: filterType.value || undefined,
-      sort: sortOrder.value,
-      favorited: filterFavorited.value || undefined,
-      min_wrong_count: filterMultiWrong.value ? 2 : undefined
-    })
-    wrongList.value = res?.items || []
-    total.value = res?.total || 0
-    // 清理不在当前页的选择
-    const ids = new Set(wrongList.value.map(i=>i.question_id))
-    const n = new Set<number>()
-    selectedIds.value.forEach(id=>{ if(ids.has(id)) n.add(id) })
-    selectedIds.value = n
-  } catch (e) {
-    loadError.value = true
-    wrongList.value = []
-    total.value = 0
-    selectedIds.value = new Set<number>()
-  } finally {
-    loading.value = false
-  }
-}
-
-async function retryLoad() {
-  if (retrying.value) return
-  retrying.value = true
-  try {
-    await loadData()
-  } finally {
-    retrying.value = false
   }
 }
 

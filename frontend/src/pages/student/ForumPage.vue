@@ -168,7 +168,7 @@
         :page-size="pageSize"
         :total="total"
         layout="total, prev, pager, next"
-        @current-change="loadTopics"
+        @current-change="handlePageChange"
       />
     </div>
 
@@ -217,6 +217,7 @@ import ForumHistoryPanel from '@/components/student/ForumHistoryPanel.vue'
 import { loadHistory, removeHistoryItem, clearHistory } from '@/utils/forumHistory'
 import type { ForumHistoryItem } from '@/utils/forumHistory'
 import { useAuthStore } from '@/stores/auth'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
@@ -226,19 +227,14 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 
-const loading = ref(false)
-const loadError = ref(false)
-const retrying = ref(false)
 const staggerStyle = useStagger()
 const submitting = ref(false)
 const topics = ref<ForumTopicItem[]>([])
-const total = ref(0)
-const pageSize = ref(10)
+const myReplies = ref<MyReplyItem[]>([])
 
 // 列表模式：全部 / 我的帖子 / 我的回复 / 浏览记录
 type ForumMode = 'all' | 'my-topics' | 'my-replies' | 'history'
 const mode = ref<ForumMode>('all')
-const myReplies = ref<MyReplyItem[]>([])
 const topicSort = ref<'latest' | 'hot'>('latest')
 const topicOrder = ref<'asc' | 'desc'>('desc')
 const historyItems = ref<ForumHistoryItem[]>([])
@@ -340,55 +336,45 @@ function authorLetter(author: ForumTopicItem['author']) {
   return (displayName(author) || '?').charAt(0).toUpperCase()
 }
 
-async function loadTopics() {
-  loading.value = true
-  loadError.value = false
-  try {
-    const params = { page: currentPage.value, page_size: pageSize.value }
-    if (mode.value === 'my-replies') {
-      const res = await forumApi.getMyReplies(params)
-      myReplies.value = res.replies || []
-      total.value = res.total || 0
-    } else if (mode.value === 'my-topics') {
-      const res = await forumApi.getMyTopics(params)
-      topics.value = res.topics || []
-      total.value = res.total || 0
-    } else {
-      // 查询参数交给 forumTabQuery 统一翻译（与端共用同一份映射）。
-      // 关键是讨论 Tab 必须带 category=discussion：后端 scope=general 的定义就是
-      // chapter_id IS NULL，而问答帖的 chapter_id 同为 NULL，漏 category 会让问答帖整片灌进讨论列表。
-      const query = {
-        ...forumTabQuery(categoryTab.value),
-        sort: topicSort.value,
-        order: topicOrder.value,
-        ...params
-      } as Record<string, unknown>
-      // 已解决/求助仅对问答生效（#367 单一筛选轴）
-      if (categoryTab.value === 'question' && solvedFilter.value !== 'all') {
-        ;(query as { solved?: string }).solved = solvedFilter.value
-      }
-      const res = await forumApi.listTopics(query as Parameters<typeof forumApi.listTopics>[0])
-      topics.value = res.topics || []
-      total.value = res.total || 0
-    }
-  } catch (e) {
-    console.error('加载论坛列表失败:', e)
-    loadError.value = true
-    topics.value = []
-    myReplies.value = []
-    total.value = 0
-  } finally {
-    loading.value = false
-  }
-}
+// 三态 + 分页收编（#388）：页码由按类别分片的 currentPage（可写 computed）持有，经 pageRef 注入
+const {
+  loading,
+  loadError,
+  retrying,
+  retry: retryLoad,
+  pageSize,
+  total,
+  run: loadTopics,
+  handlePageChange
+} = useAsyncPage(loadTopicsOnce, { pageRef: currentPage, defaultPageSize: 10 })
 
-async function retryLoad() {
-  if (retrying.value) return
-  retrying.value = true
-  try {
-    await loadTopics()
-  } finally {
-    retrying.value = false
+async function loadTopicsOnce() {
+  const params = { page: currentPage.value, page_size: pageSize.value }
+  if (mode.value === 'my-replies') {
+    const res = await forumApi.getMyReplies(params)
+    myReplies.value = res.replies || []
+    total.value = res.total || 0
+  } else if (mode.value === 'my-topics') {
+    const res = await forumApi.getMyTopics(params)
+    topics.value = res.topics || []
+    total.value = res.total || 0
+  } else {
+    // 查询参数交给 forumTabQuery 统一翻译（与端共用同一份映射）。
+    // 关键是讨论 Tab 必须带 category=discussion：后端 scope=general 的定义就是
+    // chapter_id IS NULL，而问答帖的 chapter_id 同为 NULL，漏 category 会让问答帖整片灌进讨论列表。
+    const query = {
+      ...forumTabQuery(categoryTab.value),
+      sort: topicSort.value,
+      order: topicOrder.value,
+      ...params
+    } as Record<string, unknown>
+    // 已解决/求助仅对问答生效（#367 单一筛选轴）
+    if (categoryTab.value === 'question' && solvedFilter.value !== 'all') {
+      ;(query as { solved?: string }).solved = solvedFilter.value
+    }
+    const res = await forumApi.listTopics(query as Parameters<typeof forumApi.listTopics>[0])
+    topics.value = res.topics || []
+    total.value = res.total || 0
   }
 }
 

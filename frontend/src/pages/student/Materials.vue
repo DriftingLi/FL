@@ -67,7 +67,7 @@
         :page-size="pageSize"
         :total="total"
         layout="total, prev, pager, next"
-        @current-change="loadMaterials"
+        @current-change="handlePageChange"
       />
     </div>
   </div>
@@ -80,20 +80,36 @@ import { materialApi, type MaterialItem } from '@/api/material'
 import { courseApi, type CourseSummary } from '@/api/course'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { formatLocaleDateTime } from '@/utils/format'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
-const loading = ref(false)
-const loadError = ref(false)
-const retrying = ref(false)
 const materials = ref<MaterialItem[]>([])
-const total = ref(0)
-const currentPage = ref(1)
-const pageSize = ref(20)
 const courseFilter = ref<number | undefined>(undefined)
 const courses = ref<CourseSummary[]>([])
+
+// 三态 + 分页三件套收编（#388）
+const {
+  loading,
+  loadError,
+  retrying,
+  retry: retryLoad,
+  page: currentPage,
+  pageSize,
+  total,
+  run: loadMaterials,
+  handlePageChange
+} = useAsyncPage(async () => {
+  const res = await materialApi.list({
+    course_id: courseFilter.value,
+    page: currentPage.value,
+    page_size: pageSize.value
+  })
+  materials.value = res.materials || []
+  total.value = res.total || 0
+})
 
 const staggerStyle = useStagger()
 
@@ -119,37 +135,6 @@ function formatSize(bytes?: number): string {
 function handleFilterChange() {
   currentPage.value = 1
   loadMaterials()
-}
-
-async function loadMaterials() {
-  loading.value = true
-  loadError.value = false
-  try {
-    const res = await materialApi.list({
-      course_id: courseFilter.value,
-      page: currentPage.value,
-      page_size: pageSize.value
-    })
-    materials.value = res.materials || []
-    total.value = res.total || 0
-  } catch (e) {
-    console.error('加载学习资料失败:', e)
-    loadError.value = true
-    materials.value = []
-    total.value = 0
-  } finally {
-    loading.value = false
-  }
-}
-
-async function retryLoad() {
-  if (retrying.value) return
-  retrying.value = true
-  try {
-    await loadMaterials()
-  } finally {
-    retrying.value = false
-  }
 }
 
 async function loadCourses() {

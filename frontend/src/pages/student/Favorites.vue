@@ -67,7 +67,7 @@
         :page-size="pageSize"
         :total="total"
         layout="total, prev, pager, next"
-        @current-change="loadFavorites"
+        @current-change="handlePageChange"
       />
     </div>
   </div>
@@ -80,6 +80,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { favoriteApi, type FavoriteItem, type FavoriteTargetType } from '@/api/favorite'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { formatLocaleDateTime } from '@/utils/format'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
@@ -87,14 +88,29 @@ import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
 const router = useRouter()
 
-const loading = ref(false)
-const loadError = ref(false)
-const retrying = ref(false)
 const favorites = ref<FavoriteItem[]>([])
-const total = ref(0)
-const currentPage = ref(1)
-const pageSize = ref(20)
 const activeType = ref<'all' | FavoriteTargetType>('all')
+
+// 三态 + 分页三件套收编（#388）
+const {
+  loading,
+  loadError,
+  retrying,
+  retry: retryLoad,
+  page: currentPage,
+  pageSize,
+  total,
+  run: loadFavorites,
+  handlePageChange
+} = useAsyncPage(async () => {
+  const res = await favoriteApi.list({
+    target_type: activeType.value === 'all' ? undefined : activeType.value,
+    page: currentPage.value,
+    page_size: pageSize.value
+  })
+  favorites.value = res.favorites || []
+  total.value = res.total || 0
+})
 
 const staggerStyle = useStagger()
 
@@ -144,37 +160,6 @@ function goItem(item: FavoriteItem) {
 function handleTabChange() {
   currentPage.value = 1
   loadFavorites()
-}
-
-async function loadFavorites() {
-  loading.value = true
-  loadError.value = false
-  try {
-    const res = await favoriteApi.list({
-      target_type: activeType.value === 'all' ? undefined : activeType.value,
-      page: currentPage.value,
-      page_size: pageSize.value
-    })
-    favorites.value = res.favorites || []
-    total.value = res.total || 0
-  } catch (e) {
-    console.error('加载收藏失败:', e)
-    loadError.value = true
-    favorites.value = []
-    total.value = 0
-  } finally {
-    loading.value = false
-  }
-}
-
-async function retryLoad() {
-  if (retrying.value) return
-  retrying.value = true
-  try {
-    await loadFavorites()
-  } finally {
-    retrying.value = false
-  }
 }
 
 async function removeFavorite(item: FavoriteItem) {
