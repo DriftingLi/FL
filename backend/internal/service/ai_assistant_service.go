@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/schema"
 	"gorm.io/gorm"
 
@@ -206,6 +205,7 @@ type AIAssistantService struct {
 	fileSvc     *FileStore // 图片上传/读取（多模态对话）
 	secretKey   string     // 用于加密用户自定义 API Key 的主密钥（SECRET_KEY）
 	logger      *zap.Logger
+	streamer    AIStreamingTransport // 流式传输槽位（nil 时自实装；测试可注入 fake）
 }
 
 // NewAIAssistantService 构造 AIAssistantService。
@@ -242,41 +242,18 @@ func (s *AIAssistantService) ListPublicModels(ctx context.Context) ([]ModelOptio
 }
 
 // ListAssistantModes 返回双模式（普通/专家）分别绑定的配置（不含 api_key），新前端专用。
+// 降级阶梯在 AIConfigService.ResolveAssistantPair 单点。
 func (s *AIAssistantService) ListAssistantModes(ctx context.Context) (AIAssistantModeModels, error) {
 	var res AIAssistantModeModels
-	for _, pair := range []struct {
-		key    string
-		target **ModelOption
-	}{
-		{FeatureAIAssistantNormal, &res.Normal},
-		{FeatureAIAssistantExpert, &res.Expert},
-	} {
-		cfgs, err := s.aiConfigSvc.ListConfigsForFeature(ctx, pair.key)
-		if err != nil {
-			return res, err
-		}
-		if len(cfgs) > 0 {
-			c := cfgs[0]
-			*pair.target = &ModelOption{ID: c.ID, Name: c.Name, Model: c.Model, BaseURL: c.BaseURL}
-		}
+	normal, expert, err := s.aiConfigSvc.ResolveAssistantPair(ctx)
+	if err != nil {
+		return res, err
 	}
-	// 若双模式均未绑定，回退到旧 ai_assistant：第一条作 normal，第二条作 expert
-	if res.Normal == nil && res.Expert == nil {
-		cfgs, err := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistant)
-		if err != nil {
-			return res, err
-		}
-		if len(cfgs) > 0 {
-			c := cfgs[0]
-			res.Normal = &ModelOption{ID: c.ID, Name: c.Name, Model: c.Model, BaseURL: c.BaseURL}
-		}
-		if len(cfgs) > 1 {
-			c := cfgs[1]
-			res.Expert = &ModelOption{ID: c.ID, Name: c.Name, Model: c.Model, BaseURL: c.BaseURL}
-		} else if len(cfgs) == 1 {
-			// 单条时 expert 复用同一配置，避免前端无可用
-			res.Expert = res.Normal
-		}
+	if normal != nil {
+		res.Normal = &ModelOption{ID: normal.ID, Name: normal.Name, Model: normal.Model, BaseURL: normal.BaseURL}
+	}
+	if expert != nil {
+		res.Expert = &ModelOption{ID: expert.ID, Name: expert.Name, Model: expert.Model, BaseURL: expert.BaseURL}
 	}
 	return res, nil
 }
@@ -463,17 +440,9 @@ func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, user
 	s.logger.Info("自动命名完成", zap.Int("session_id", sessionID), zap.String("title", title))
 }
 
-// generateTitleWithModel 调用同模型根据用户首条消息生成简短标题。
+// generateTitleWithModel 调用同模型根据用户首条消息生成简短标题
+// （client 构建/超时/收集循环全部在流式槽位单点）。
 func (s *AIAssistantService) generateTitleWithModel(ctx context.Context, mc AISettings, userMessage string) (string, error) {
-	chatModel, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
-		APIKey:  mc.APIKey,
-		BaseURL: mc.BaseURL,
-		Model:   mc.Model,
-	})
-	if err != nil {
-		return "", err
-	}
-
 	const titlePrompt = `请根据用户的问题，生成一个简短的中文会话标题。
 要求：
 1. 不超过 20 个字
@@ -488,27 +457,7 @@ func (s *AIAssistantService) generateTitleWithModel(ctx context.Context, mc AISe
 		schema.SystemMessage("你是一个会话标题生成助手，根据用户消息生成简短的中文标题。"),
 		schema.UserMessage(fmt.Sprintf(titlePrompt, userMessage)),
 	}
-
-	reader, err := chatModel.Stream(ctx, msgs)
-	if err != nil {
-		return "", err
-	}
-	defer reader.Close()
-
-	var sb strings.Builder
-	for {
-		msg, err := reader.Recv()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return sb.String(), err
-		}
-		if msg.Content != "" {
-			sb.WriteString(msg.Content)
-		}
-	}
-	return sb.String(), nil
+	return s.streamingSlot().StreamComplete(ctx, mc, msgs, nil)
 }
 
 // titleTrimRunes 需要从标题首尾去除的字符集合（使用 map 保证唯一性，避免 SA1024）。
@@ -622,29 +571,19 @@ func (s *AIAssistantService) resolveModelConfig(ctx context.Context, userID int,
 		}
 		return mc, nil
 	}
-	// 通用助手：Mode 双模式（隐藏底层模型）
+	// 通用助手：Mode 双模式（隐藏底层模型）——降级阶梯在 ResolveAssistantPair 单点
 	if req.Mode == ModeNormal || req.Mode == ModeExpert {
-		featureKey := FeatureAIAssistantNormal
-		if req.Mode == ModeExpert {
-			featureKey = FeatureAIAssistantExpert
-		}
-		cfgs, err := s.aiConfigSvc.ListConfigsForFeature(ctx, featureKey)
+		normal, expert, err := s.aiConfigSvc.ResolveAssistantPair(ctx)
 		if err != nil {
 			return AISettings{}, fmt.Errorf("校验可用模型失败: %w", err)
 		}
-		if len(cfgs) == 0 {
-			// 回退：若新双绑定未配置，尝试旧 ai_assistant（兼容存量部署）
-			fallback, _ := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistant)
-			if len(fallback) > 0 {
-				c := fallback[0]
-				if req.Mode == ModeExpert && len(fallback) > 1 {
-					c = fallback[1]
-				}
-				return AISettings{APIKey: c.APIKey, BaseURL: c.BaseURL, Model: c.Model, Source: "binding:" + c.Name}, nil
-			}
+		cfg := normal
+		if req.Mode == ModeExpert {
+			cfg = expert
+		}
+		if cfg == nil {
 			return AISettings{}, errors.New("该模式未绑定模型，请联系管理员配置")
 		}
-		cfg := cfgs[0]
 		return AISettings{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Source: "binding:" + cfg.Name}, nil
 	}
 	switch req.ModelSource {
@@ -693,20 +632,11 @@ func (s *AIAssistantService) resolveModelConfig(ctx context.Context, userID int,
 
 // StreamChat 流式对话。
 // onChunk 回调用于推送增量内容；返回完整回复内容。
+// 传输（建 client/超时/Recv 收集）在流式槽位 StreamComplete 单点；此处留 prompt 组装与持久化真语义。
 func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req StreamChatReq, onChunk func(content string)) (string, error) {
 	mc, err := s.resolveModelConfig(ctx, userID, req)
 	if err != nil {
 		return "", err
-	}
-
-	// 构建 eino ChatModel（每次新建，避免配置变化后旧实例残留）
-	chatModel, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
-		APIKey:  mc.APIKey,
-		BaseURL: mc.BaseURL,
-		Model:   mc.Model,
-	})
-	if err != nil {
-		return "", fmt.Errorf("构建模型失败: %w", err)
 	}
 
 	// 拼装消息：功能系统提示词 + 历史消息
@@ -738,28 +668,9 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 		}
 	}
 
-	// 流式调用
-	reader, err := chatModel.Stream(ctx, msgs)
+	fullContent, err := s.streamingSlot().StreamComplete(ctx, mc, msgs, onChunk)
 	if err != nil {
-		return "", fmt.Errorf("调用模型失败: %w", err)
-	}
-	defer reader.Close()
-
-	var fullContent strings.Builder
-	for {
-		msg, err := reader.Recv()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return fullContent.String(), fmt.Errorf("流式接收失败: %w", err)
-		}
-		if msg.Content != "" {
-			fullContent.WriteString(msg.Content)
-			if onChunk != nil {
-				onChunk(msg.Content)
-			}
-		}
+		return fullContent, err
 	}
 
 	// 持久化（仅登录用户且指定了 SessionID）
@@ -785,17 +696,17 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 			if err := s.db.WithContext(ctx).Create(&model.AIChatMessage{
 				SessionID: req.SessionID, Role: "user", Content: lastUserMsg, Images: imagesJSON,
 			}).Error; err != nil {
-				return fullContent.String(), fmt.Errorf("保存用户消息失败: %w", err)
+				return fullContent, fmt.Errorf("保存用户消息失败: %w", err)
 			}
 			if err := s.db.WithContext(ctx).Create(&model.AIChatMessage{
-				SessionID: req.SessionID, Role: "assistant", Content: fullContent.String(),
+				SessionID: req.SessionID, Role: "assistant", Content: fullContent,
 			}).Error; err != nil {
-				return fullContent.String(), fmt.Errorf("保存助手消息失败: %w", err)
+				return fullContent, fmt.Errorf("保存助手消息失败: %w", err)
 			}
 			if err := s.db.WithContext(ctx).Model(&model.AIChatSession{}).
 				Where("id = ?", req.SessionID).
 				Updates(map[string]any{"updated_at": now}).Error; err != nil {
-				return fullContent.String(), fmt.Errorf("更新会话时间失败: %w", err)
+				return fullContent, fmt.Errorf("更新会话时间失败: %w", err)
 			}
 
 			// 异步生成会话标题：仅当标题为占位符"新会话"时（首次对话）
@@ -815,7 +726,7 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 		}
 	}
 
-	return fullContent.String(), nil
+	return fullContent, nil
 }
 
 // buildImageUserMessage 构建带图片的多模态用户消息。
