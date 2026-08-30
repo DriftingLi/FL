@@ -11,14 +11,33 @@
     </div>
     <div v-else-if="!data" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">未找到该简历</div>
     <div v-else class="rounded-card border border-line bg-panel p-6">
-      <h1 class="text-lg font-bold text-ink">{{ data.real_name || '学员简历' }}</h1>
-      <p class="mt-1 text-sm text-ink-3">用户 ID：{{ data.user_id }}</p>
-      <div class="mt-4 grid gap-2 text-sm">
-        <div><span class="text-ink-3">地区：</span><span class="text-ink">{{ data.region || '-' }}</span></div>
-        <div><span class="text-ink-3">期望岗位：</span><span class="text-ink">{{ data.expected_specialty_extra || '-' }}</span></div>
-        <div><span class="text-ink-3">工作经验：</span><span class="text-ink">{{ data.experience_years ?? '-' }} 年</span></div>
+      <h1 class="text-lg font-bold text-ink">{{ data.real_name || data.real_name_masked || '学员简历' }}</h1>
+      <p class="mt-1 text-sm text-ink-3">用户 ID：{{ data.user_id }} · 更新于 {{ data.updated_at }}</p>
+      <div class="mt-4 grid gap-3 text-sm">
+        <div class="flex gap-2"><span class="w-20 shrink-0 text-ink-3">期望岗位</span><span class="text-ink">{{ data.expected_specialty_extra || '-' }}</span></div>
+        <div class="flex gap-2"><span class="w-20 shrink-0 text-ink-3">意向地区</span><span class="text-ink">{{ (data.expected_regions as any)?.join('、') || '-' }}</span></div>
+        <div class="flex gap-2"><span class="w-20 shrink-0 text-ink-3">薪资</span><span class="text-ink">{{ data.salary_negotiable ? '面议' : `${data.salary_min ?? '-'} - ${data.salary_max ?? '-'}` }}</span></div>
+        <div class="flex gap-2"><span class="w-20 shrink-0 text-ink-3">经验</span><span class="text-ink">{{ data.experience_years }} 年</span></div>
+        <div class="flex gap-2"><span class="w-20 shrink-0 text-ink-3">到岗时间</span><span class="text-ink">{{ data.available_in || '-' }}</span></div>
+        <div class="flex gap-2"><span class="w-20 shrink-0 text-ink-3">用工性质</span><span class="text-ink">{{ data.job_nature || '-' }}</span></div>
+        <div class="flex gap-2"><span class="w-20 shrink-0 text-ink-3">自我介绍</span><span class="text-ink">{{ data.self_intro || '-' }}</span></div>
+        <div class="flex gap-2"><span class="w-20 shrink-0 text-ink-3">工作经历</span>
+          <ul v-if="data.resume_experiences && data.resume_experiences.length" class="flex-1 list-disc pl-4">
+            <li v-for="(exp, i) in data.resume_experiences" :key="i" class="text-ink">{{ exp.company }} · {{ exp.role }}（{{ exp.start_month }} ~ {{ exp.end_month }}） - {{ exp.desc }}</li>
+          </ul>
+          <span v-else class="text-ink">-</span>
+        </div>
+        <div class="flex gap-2"><span class="w-20 shrink-0 text-ink-3">持证</span>
+          <div v-if="data.resume_certifications && data.resume_certifications.length" class="flex flex-wrap gap-1">
+            <span v-for="(c, i) in data.resume_certifications" :key="i" class="rounded bg-ui-50 px-1.5 py-0.5 text-xs text-ink-3">{{ c.credential_id ? `证件#${c.credential_id} ${c.cert_no || ''}` : (c.cert_no || '持证') }}</span>
+          </div>
+          <span v-else class="text-ink">-</span>
+        </div>
       </div>
-      <p class="mt-4 text-xs text-ink-3">详细简历信息将随后续工单逐步开放。</p>
+      <div class="mt-6">
+        <el-button type="primary" disabled>申请交换联系方式</el-button>
+        <p class="mt-2 text-xs text-ink-3">联系方式交换将在下一票开放，本票为禁用态占位。</p>
+      </div>
     </div>
   </div>
 </template>
@@ -37,15 +56,17 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const res = await recruitApi.listResumes({ page: 1, page_size: 100 })
     const id = String(route.params.id)
-    data.value = (res?.items || []).find((i) => String(i.user_id) === id) || null
-    if (!data.value) {
-      // 若列表为空或未命中，视为未找到（占位后端当前返回空列表）
-      data.value = null
-    }
+    const res = await recruitApi.getResume(id)
+    data.value = res as any || null
   } catch (e: any) {
-    error.value = e?.message || '加载失败'
+    // 404 等
+    if (e?.response?.status === 404 || String(e?.message || '').includes('不存在')) {
+      data.value = null
+      error.value = ''
+    } else {
+      error.value = e?.message || '加载失败'
+    }
   } finally {
     loading.value = false
   }

@@ -124,7 +124,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 	RegisterPracticeModeRoutes(api, rd, deps.PracticeModeSvc)
 	RegisterAdminRoutes(api, rd, deps.AdminSvc, deps.AdminCourseSvc, deps.AuthSvc, deps.AIConfigSvc, deps.ContentGenSvc)
 	RegisterAdminRecruiterRoutes(api, rd, deps.AuthSvc)
-	RegisterRecruitRoutes(api, rd)
+	RegisterRecruitRoutes(api, rd, deps.RecruitSvc)
 	RegisterTutorRoutes(api, rd, deps.TutorSvc, deps.FileSvc)
 	RegisterWrongQuestionRoutes(api, rd, deps.WrongQuestionSvc)
 	RegisterMockExamRoutes(api, rd, deps.MockExamSvc)

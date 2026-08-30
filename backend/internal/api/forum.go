@@ -144,6 +144,7 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 			return &listTopicsReq{
 				Scope:     c.Query("scope"),
 				Category:  c.Query("category"),
+				Solved:    c.Query("solved"),
 				ChapterID: atoiDefault(c.Query("chapter_id"), 0),
 				Page:      atoiDefault(c.Query("page"), 1),
 				PageSize:  atoiDefault(c.Query("page_size"), 10),
@@ -156,6 +157,7 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 			return h.svc.ListTopics(service.TopicListInput{
 				Scope:     req.Scope,
 				Category:  req.Category,
+				Solved:    req.Solved,
 				ChapterID: req.ChapterID,
 				Page:      req.Page,
 				PageSize:  req.PageSize,
@@ -481,6 +483,7 @@ func (h *ForumHandler) AdminDeleteReply(c *gin.Context) {
 type listTopicsReq struct {
 	Scope     string
 	Category  string
+	Solved    string
 	ChapterID int
 	Page      int
 	PageSize  int

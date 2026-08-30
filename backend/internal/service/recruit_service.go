@@ -7,6 +7,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -139,17 +140,18 @@ func desensitize(m *model.JobCard) RecruitResumeCard {
 // applyFilters 在查询上叠加筛选轴（visibility=open 已由调用方保证）。
 func (s *RecruitService) applyFilters(q *gorm.DB, p RecruitListParams) *gorm.DB {
 	if v := strings.TrimSpace(p.Region); v != "" {
-		// expected_regions JSON 数组包含该地区串（LIKE 兼容 pg 与 sqlite 内存库）
-		q = q.Where("expected_regions LIKE ?", "%"+v+"%")
+		// expected_regions JSON 数组包含该地区串（CAST 兼容 pg 与 sqlite 内存库：sqlite 上 JSONB 为 BLOB，LIKE 需 CAST）
+		q = q.Where("CAST(expected_regions AS TEXT) LIKE ?", "%"+v+"%")
 	}
 	if p.SpecialtyID != nil && *p.SpecialtyID > 0 {
 		q = q.Where("expected_specialty_id = ?", *p.SpecialtyID)
 	}
 	if p.CredentialID != nil && *p.CredentialID > 0 {
-		// 持证 JSON 中包含该 credential_id（LIKE 兼容）
-		pat := fmt.Sprintf("%%%d%%", *p.CredentialID)
-		// 需包含 credential_id 键，防止纯数字误匹配
-		q = q.Where("resume_certifications LIKE ? AND resume_certifications LIKE ?", "%credential_id%", pat)
+		// 持证 JSON 中包含该 credential_id（CAST 兼容，精确匹配 "credential_id":<id> 避免数字误匹配日期等）
+		idStr := strconv.Itoa(*p.CredentialID)
+		pat1 := fmt.Sprintf("%%\"credential_id\":%s%%", idStr)
+		pat2 := fmt.Sprintf("%%\"credential_id\": %s%%", idStr)
+		q = q.Where("(CAST(resume_certifications AS TEXT) LIKE ? OR CAST(resume_certifications AS TEXT) LIKE ?)", pat1, pat2)
 	}
 	if p.SalaryMin != nil {
 		// 候选期望不低于招聘方给出的下限视为匹配；面议视为通过
