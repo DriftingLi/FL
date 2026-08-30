@@ -1,5 +1,4 @@
 import { unwrappedRequest } from './request'
-import { useCredentialStore } from '@/stores/credential'
 import type { PracticeProgress, Question, SubmitResult } from '@/types/question'
 
 /** 练习进度（断点续练用，含答题状态；与后端 ProgressResultDTO 对齐） */
@@ -44,16 +43,14 @@ export interface PracticeHistoryItem {
   question?: Question
 }
 
-// 题库练习模式接口，对应后端 /api/practice-mode
+// 题库练习模式接口，对应后端 /api/practice-mode（credential_id 由主 client 拦截器默认注入，#387）
 export const practiceModeApi = {
   // 随机练习：随机抽 count 题（可按题型筛选）
   getFreeQuestions(params?: { count?: number; type?: string }) {
-    try { const cred = useCredentialStore().current?.id; if (cred) { const p = arguments[0] as any; if (p && !p.credential_id) p.credential_id = cred } } catch {}
     return unwrappedRequest.get<Question[]>('/practice-mode/free', { params })
   },
   // 标签练习：开始/续练（返回当前批次题目 + 进度，mode 为 tag:<tagID>）
   startTagPractice(params: { tag_id: number; count?: number }) {
-    try { const cred = useCredentialStore().current?.id; if (cred) { const p = arguments[0] as any; if (p && !p.credential_id) p.credential_id = cred } } catch {}
     return unwrappedRequest.get<{ questions?: Question[]; current_index?: number; total?: number }>(
       '/practice-mode/tag',
       { params }
@@ -61,7 +58,6 @@ export const practiceModeApi = {
   },
   // 顺序练习：开始/续练，返回当前批次题目 + 进度
   startSequential() {
-    try { const cred = useCredentialStore().current?.id; if (cred) { const p = arguments[0] as any; if (p && !p.credential_id) p.credential_id = cred } } catch {}
     return unwrappedRequest.get<{ questions?: Question[]; progress?: PracticeProgressData }>('/practice-mode/sequential')
   },
   // 顺序练习进度（卡片展示用）
@@ -84,11 +80,9 @@ export const practiceModeApi = {
   getStats() {
     return unwrappedRequest.get<PracticeStats>('/practice-mode/stats')
   },
-  // 刷题数据展示（顶部 3 宫格，自动注入 credential_id，与 /stats 独立）
+  // 刷题数据展示（顶部 3 宫格，credential_id 由主 client 拦截器默认注入，与 /stats 独立）
   getPracticeStats(params?: { credential_id?: number }) {
-    const p = (params || {}) as Record<string, unknown>
-    try { const cred = useCredentialStore().current?.id; if (cred && !p.credential_id) p.credential_id = cred } catch {}
-    return unwrappedRequest.get<PracticePracticeStats>('/practice-mode/practice-stats', { params: p })
+    return unwrappedRequest.get<PracticePracticeStats>('/practice-mode/practice-stats', { params: params || {} })
   },
   // 练习历史
   getHistory(params: { page?: number; page_size?: number }) {

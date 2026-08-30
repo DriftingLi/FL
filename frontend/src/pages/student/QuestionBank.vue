@@ -219,7 +219,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { Sort, MagicStick, Filter, CollectionTag, Star, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
@@ -248,7 +248,7 @@ import KnowledgeCard from '@/components/practice/KnowledgeCard.vue'
 import CommentCard from '@/components/practice/CommentCard.vue'
 import NoteCard from '@/components/practice/NoteCard.vue'
 import { questionInteractionApi } from '@/api/questionInteraction'
-import { useCredentialStore } from '@/stores/credential'
+import { useCredentialRefetch } from '@/composables/useCredentialRefetch'
 
 // null = 入口；'sequential' | 'free' | 'tag' = 刷题中
 
@@ -269,7 +269,6 @@ const seqProgress = ref<PracticeProgress>({ completed: 0, total: 0, current_inde
 const tagProgress = ref<PracticeProgress>({ completed: 0, total: 0, current_index: 0 })
 const totalQuestions = ref(0)
 
-const credentialStore = useCredentialStore()
 const practiceStats = ref({ today_count: 0, total_count: 0, total_days: 0 })
 const practiceStatsLoading = ref(true)
 
@@ -287,10 +286,6 @@ async function loadPracticeStats() {
   } finally {
     practiceStatsLoading.value = false
   }
-}
-
-function onCredentialSwitched() {
-  loadPracticeStats()
 }
 
 // 选择标签时查询该标签的练习进度（断点续练展示）
@@ -471,14 +466,11 @@ async function confirmQuit() {
 onMounted(() => {
   loadCardData()
   loadTags()
-  window.addEventListener('credential-switched', onCredentialSwitched)
 })
 
-onBeforeUnmount(() => {
-  window.removeEventListener('credential-switched', onCredentialSwitched)
-})
-
-watch(() => credentialStore.current?.id, () => {
+// 证件切换即重拉（单点：watch store.current.id，见 useCredentialRefetch；
+// loadCardData 已含 getPracticeStats，覆盖原事件通知里的 loadPracticeStats）
+useCredentialRefetch(() => {
   loadCardData()
 })
 

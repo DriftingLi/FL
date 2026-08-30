@@ -51,6 +51,7 @@ type listWrongQuestionsReq struct {
 	MinWrongCount *int
 	Favorited     bool
 	Sort          string
+	CredentialID  *int
 }
 
 // List 错题列表
@@ -66,6 +67,7 @@ type listWrongQuestionsReq struct {
 // @Param min_wrong_count query int false "最小错误次数"
 // @Param favorited query bool false "仅看收藏"
 // @Param sort query string false "排序 time_desc/time_asc" default(time_desc)
+// @Param credential_id query int false "目标证件ID（按题目所属证件分区）"
 // @Success 200 {object} response.R "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /wrong-questions [get]
@@ -82,10 +84,11 @@ func (h *WrongQuestionHandler) List(c *gin.Context) {
 				MinWrongCount: queryIntPtr(c, "min_wrong_count"),
 				Favorited:     c.Query("favorited") == "true",
 				Sort:          c.Query("sort"),
+				CredentialID:  queryIDPtr(c, "credential_id"),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listWrongQuestionsReq) (*map[string]any, error) {
-			result := h.svc.GetWrongQuestions(req.StudentID, req.Page, req.PageSize, req.QType, req.MinWrongCount, req.Favorited, req.Sort)
+			result := h.svc.GetWrongQuestions(req.StudentID, req.Page, req.PageSize, req.QType, req.MinWrongCount, req.Favorited, req.Sort, req.CredentialID)
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *listWrongQuestionsReq, resp *map[string]any, _ error) {

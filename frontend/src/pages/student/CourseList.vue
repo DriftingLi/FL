@@ -229,7 +229,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowRight, Star, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -240,6 +240,7 @@ import { trainingApi } from '@/api/training'
 import { pointsApi } from '@/api/points'
 import { useCourseCatalog, treeCatalogAdapter } from '@/composables/useCourseCatalog'
 import { useStagger } from '@/composables/useStagger'
+import { useCredentialRefetch } from '@/composables/useCredentialRefetch'
 import { useCredentialStore } from '@/stores/credential'
 import FacetCard from '@/components/catalog/FacetCard.vue'
 import FacetItem from '@/components/catalog/FacetItem.vue'
@@ -324,9 +325,7 @@ async function loadCourses() {
         params.level_id = levelId.value
       }
     }
-    if (credentialStore.current?.id) {
-      params.credential_id = credentialStore.current.id
-    }
+    // credential_id 由主 client 请求拦截器默认注入（#387）
     const data = await courseApi.getCourses(params)
     courses.value = data.courses
     total.value = data.total
@@ -531,12 +530,8 @@ onMounted(() => {
   }
 })
 
-watch(() => credentialStore.current?.id, () => {
-  currentPage.value = 1
-  loadCourses()
-})
-
-window.addEventListener('credential-switched', () => {
+// 证件切换即重拉（单点：watch store.current.id，见 useCredentialRefetch）
+useCredentialRefetch(() => {
   currentPage.value = 1
   loadCourses()
 })

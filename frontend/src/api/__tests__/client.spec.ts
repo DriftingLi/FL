@@ -1,4 +1,4 @@
-// HTTP 客户端工厂（client.ts）单测：信封解包 / 业务失败抛错 + toast / 401 分发。
+// HTTP 客户端工厂（client.ts）单测：信封解包 / 业务失败抛错 + toast / 401 分发 / 证件过滤注入。
 // seam：axios adapter 层（mock adapter 模拟后端响应），不经过真实网络。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import axios, { AxiosError } from 'axios'
@@ -7,8 +7,22 @@ vi.mock('element-plus', () => ({
   ElMessage: { error: vi.fn(), success: vi.fn(), warning: vi.fn() }
 }))
 
+// 隔离 localStorage 环境差异（getToken 直读 localStorage）：证件注入相关用例只关心 params 改写，
+// 无 token 也能走到注入分支
+vi.mock('@/utils/storage', () => ({
+  getToken: vi.fn(() => null),
+  getRefreshToken: vi.fn(() => null),
+  setToken: vi.fn(),
+  setRefreshToken: vi.fn()
+}))
+
+vi.mock('@/stores/credential', () => ({
+  useCredentialStore: vi.fn(() => ({ current: { id: 7, name: '叉车司机N1证' } }))
+}))
+
 import { ElMessage } from 'element-plus'
 import { createHttpClient, createDefaultUnauthorizedPolicy } from '../client'
+import { useCredentialStore } from '@/stores/credential'
 
 type Respond = (config: { url?: string; headers?: Record<string, unknown> }) => { status: number; body: unknown }
 
@@ -132,5 +146,73 @@ describe('createDefaultUnauthorizedPolicy 统一 401 策略', () => {
 
     expect(clearAuth).toHaveBeenCalledTimes(1)
     // router 为延迟动态引入（异步），此处只验证策略已触发清态
+  })
+})
+
+describe('证件过滤默认注入（#387）', () => {
+  // 经 respond 捕获 adapter 收到的最终请求 config（拦截器已改写 params）
+  let captured: { url?: string; params?: Record<string, unknown> } | null = null
+
+  function makeInjectClient() {
+    return createHttpClient({
+      baseURL: '/api',
+      onUnauthorized: vi.fn(),
+      injectCredentialId: true
+    })
+  }
+
+  beforeEach(() => {
+    captured = null
+    vi.mocked(useCredentialStore).mockClear()
+    vi.mocked(useCredentialStore).mockReturnValue({ current: { id: 7, name: '叉车司机N1证' } } as never)
+    respond = config => {
+      captured = config
+      return { status: 200, body: { code: 200, message: 'ok', data: [] } }
+    }
+  })
+
+  it('params 存在且未显式传 credential_id 时默认注入当前证件', async () => {
+    const client = makeInjectClient()
+    await client.get('/courses', { params: { page: 1 } })
+    expect(captured?.params).toEqual({ page: 1, credential_id: 7 })
+  })
+
+  it('显式传入 credential_id 时不覆盖', async () => {
+    const client = makeInjectClient()
+    await client.get('/courses', { params: { credential_id: 9 } })
+    expect(captured?.params).toEqual({ credential_id: 9 })
+  })
+
+  it('无 params / params 非普通对象时不注入', async () => {
+    const client = makeInjectClient()
+
+    await client.get('/practice-mode/sequential')
+    expect(captured?.params).toBeUndefined()
+
+    const search = new URLSearchParams({ mode: 'sequential' })
+    await client.get('/x', { params: search })
+    expect((search as unknown as Record<string, unknown>).credential_id).toBeUndefined()
+  })
+
+  it('当前证件为空时不注入', async () => {
+    vi.mocked(useCredentialStore).mockReturnValue({ current: null } as never)
+    const client = makeInjectClient()
+    await client.get('/courses', { params: { page: 1 } })
+    expect(captured?.params).toEqual({ page: 1 })
+  })
+
+  it.each(['/forum/topics', '/auth/me', '/me/credential', '/admin/courses', '/tutor/courses', '/recruit/resumes'])(
+    '豁免前缀 %s 不注入 credential_id',
+    async url => {
+      const client = makeInjectClient()
+      await client.get(url, { params: { page: 1 } })
+      expect(captured?.params).toEqual({ page: 1 })
+    }
+  )
+
+  it('未开启 injectCredentialId 的实例（估值/AI 客户端）不注入', async () => {
+    const client = makeClient()
+    await client.get('/somewhere', { params: { page: 1 } })
+    expect(captured?.params).toEqual({ page: 1 })
   })
 })

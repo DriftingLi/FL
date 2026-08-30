@@ -1,5 +1,4 @@
 import { unwrappedRequest } from './request'
-import { useCredentialStore } from '@/stores/credential'
 
 /** 搜索类型（与后端 ADR-0018 一致；featured 在学员端称资讯） */
 export type SearchType = 'course' | 'question' | 'content' | 'topic'
@@ -41,10 +40,7 @@ export interface SearchPageResult {
 export const searchApi = {
   /** type 缺省返回各分区聚合，指定类型返回分页结果 */
   search(params: { keyword: string; type?: SearchType; page?: number; page_size?: number; credential_id?: number }) {
-    try {
-      const cred = useCredentialStore().current?.id
-      if (cred && !(params as any).credential_id) (params as any).credential_id = cred
-    } catch {}
+    // credential_id 由主 client 请求拦截器默认注入（#387）
     return unwrappedRequest.get<SearchAllResult | SearchPageResult>('/search', { params })
   }
 }

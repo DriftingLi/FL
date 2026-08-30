@@ -55,11 +55,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useCredentialStore } from '@/stores/credential'
 import { realExamApi, type RealExamPaper } from '@/api/realExam'
+import { useCredentialRefetch } from '@/composables/useCredentialRefetch'
 import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
@@ -89,8 +90,10 @@ async function loadPapers() {
   }
 }
 
-// 证件切换即重拉（列表按 current_credential 分区）
-watch(() => credentialStore.current?.id, loadPapers, { immediate: true })
+// 首屏加载 + 证件切换即重拉（单点：watch store.current.id，见 useCredentialRefetch；
+// 列表按 current_credential 分区）
+onMounted(loadPapers)
+useCredentialRefetch(loadPapers)
 
 const grouped = computed(() => {
   const map = new Map<string, RealExamPaper[]>()
