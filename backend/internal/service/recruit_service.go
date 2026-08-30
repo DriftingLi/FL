@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 )
 
@@ -215,23 +216,52 @@ func (s *RecruitService) Get(userID int) (*RecruitResumeCard, error) {
 }
 
 // LogView 写入浏览审计（best-effort，失败仅日志）。
+// 粒度为同一招聘方对同一学员每日一次（Asia/Shanghai 自然日），避免翻页刷量。
 func (s *RecruitService) LogView(recruiterID, resumeUserID int) {
 	if recruiterID <= 0 || resumeUserID <= 0 {
+		return
+	}
+	now := clock.Now()
+	// 当日 0 点（Shanghai）
+	loc := clock.Location()
+	y, m, d := now.In(loc).Date()
+	dayStart := time.Date(y, m, d, 0, 0, 0, 0, loc)
+	// 已存在当日记录则跳过（幂等，避免刷量）
+	var cnt int64
+	if err := s.db.Model(&model.RecruitResumeView{}).
+		Where("recruiter_id = ? AND resume_user_id = ? AND viewed_at >= ?", recruiterID, resumeUserID, dayStart).
+		Count(&cnt).Error; err == nil && cnt > 0 {
 		return
 	}
 	rec := model.RecruitResumeView{
 		RecruiterID:  recruiterID,
 		ResumeUserID: resumeUserID,
-		ViewedAt:     time.Now(),
+		ViewedAt:     now,
 	}
 	if err := s.db.Create(&rec).Error; err != nil && s.logger != nil {
 		s.logger.Warn("recruit view audit 写入失败", zap.Error(err), zap.Int("recruiter", recruiterID), zap.Int("resume", resumeUserID))
 	}
 }
 
-// LogViews 批量留痕（列表场景，每项一条）。
+// LogViews 批量留痕（列表场景，每项一条，同样受每日一次约束）。
 func (s *RecruitService) LogViews(recruiterID int, resumeUserIDs []int) {
 	for _, id := range resumeUserIDs {
 		s.LogView(recruiterID, id)
 	}
+}
+
+// StudentViewStats 学员侧聚合：近 7 天查看过我的企业数（按企业去重计数），不返回企业名。
+func (s *RecruitService) StudentViewStats(studentUserID int) (int64, error) {
+	if studentUserID <= 0 {
+		return 0, nil
+	}
+	since := clock.Now().AddDate(0, 0, -7)
+	var cnt int64
+	// 按企业去重计数，7 天窗口需走索引 (resume_user_id, viewed_at)
+	if err := s.db.Model(&model.RecruitResumeView{}).
+		Where("resume_user_id = ? AND viewed_at >= ?", studentUserID, since).
+		Distinct("recruiter_id").Count(&cnt).Error; err != nil {
+		return 0, err
+	}
+	return cnt, nil
 }

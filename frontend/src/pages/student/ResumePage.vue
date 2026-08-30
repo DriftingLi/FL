@@ -8,6 +8,9 @@
           <el-switch v-model="form.visibilityOpen" @change="toggleVisibility" />
         </div>
       </div>
+      <div v-if="viewCount > 0" class="view-stats rounded-card border border-line bg-ui-50 px-4 py-3 mb-4 text-sm text-ink">
+        近 7 天 {{ viewCount }} 家企业查看过你的简历
+      </div>
       <el-form label-width="96px" @submit.prevent>
         <el-form-item label="真实姓名">
           <el-input v-model="form.real_name" maxlength="20" placeholder="填写真实姓名" />
@@ -151,6 +154,7 @@ const form = reactive<any>({
 const specialties = ref<any[]>([])
 const credentials = ref<any[]>([])
 const regionOptions = ref<string[]>([])
+const viewCount = ref(0)
 
 function goBack() {
   router.push({ name: 'StudentProfile' })
@@ -262,6 +266,10 @@ async function load() {
   try {
     const res: any = await unwrappedRequest.get('/credentials')
     if (res?.credentials) credentials.value = res.credentials
+  } catch {}
+  try {
+    const stats: any = await resumeApi.getViewStats()
+    viewCount.value = stats?.count || 0
   } catch {}
 }
 
