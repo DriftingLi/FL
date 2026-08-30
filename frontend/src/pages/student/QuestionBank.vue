@@ -224,7 +224,7 @@ import { Sort, MagicStick, Filter, CollectionTag, Star, StarFilled } from '@elem
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
 import { favoriteApi } from '@/api/favorite'
-import { practiceModeApi } from '@/api/practiceMode'
+import { practiceModeApi, type PracticeModeKey } from '@/api/practiceMode'
 import { trainingApi } from '@/api/training'
 import type { QuestionTag } from '@/api/training'
 import { useStagger } from '@/composables/useStagger'
@@ -300,16 +300,16 @@ watch(tagPracticeId, async (id) => {
   }
 })
 
-// 进度 key 语义：顺序练习 'sequential'；专项练习 'free:<type>'；标签练习 'tag:<tagID>'；随机练习（free 且无题型）'' 不保存
-function getPracticeModeKey(currentMode: PracticeMode): string {
+// 进度 key 语义（#390 与后端封闭校验对齐）：顺序练习 'sequential'；标签练习 'tag:<tagID>'；
+// 专项（free:<type>）与随机不在后端封闭集（sequential/tag:<id>/paper:<id>，未知 400）——一律不落进度
+function getPracticeModeKey(currentMode: PracticeMode): PracticeModeKey | '' {
   if (currentMode === 'sequential') return 'sequential'
-  if (currentMode === 'free' && specialType.value) return `free:${specialType.value}`
   if (currentMode === 'tag' && tagPracticeId.value) return `tag:${tagPracticeId.value}`
   return ''
 }
 
 // 查询断点续练起始位置和持久化答题状态（answers_state 三态这里归一为 null）
-async function resolveProgress(modeKey: string, total: number): Promise<{ startIndex: number; answersState: Record<string, unknown> | null }> {
+async function resolveProgress(modeKey: PracticeModeKey | '', total: number): Promise<{ startIndex: number; answersState: Record<string, unknown> | null }> {
   if (!modeKey) return { startIndex: 0, answersState: null }
   try {
     const progRes = await practiceModeApi.getProgress(modeKey)
@@ -345,19 +345,17 @@ const {
       if (!qs.length) return null
       return { questions: qs, ...(await resolveProgress(`tag:${tagPracticeId.value}`, qs.length)) }
     }
-    // free：专项（选了题型）或随机
+    // free：专项（选了题型）或随机 —— 两者均不在后端进度封闭集（#390），不查询/不落续练进度
     const params: Record<string, unknown> = {}
-    let modeKey = ''
     if (specialType.value) {
       params.type = specialType.value
       params.count = 0
-      modeKey = `free:${specialType.value}`
     } else {
       params.count = randomCount.value
     }
     const qs = (await practiceModeApi.getFreeQuestions(params)) || []
     if (!qs.length) return null
-    return { questions: qs, ...(await resolveProgress(modeKey, qs.length)) }
+    return { questions: qs, ...(await resolveProgress('', qs.length)) }
   },
   submit: async (payload) => {
     try {

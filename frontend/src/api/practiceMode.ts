@@ -44,6 +44,12 @@ export interface PracticeHistoryItem {
 }
 
 // 题库练习模式接口，对应后端 /api/practice-mode（credential_id 由主 client 拦截器默认注入，#387）
+//
+// 练习模式标识白名单（#390，与后端 ParsePracticeMode 封闭校验对齐 #386）：
+// 顺序 'sequential' / 标签 'tag:<tagID>' / 按卷 'paper:<paperID>'；未知 mode 后端 400。
+// 专项（free:<type>）与随机不在封闭集，不落进度（见 QuestionBank getPracticeModeKey）。
+export type PracticeModeKey = 'sequential' | `tag:${number}` | `paper:${number}`
+
 export const practiceModeApi = {
   // 随机练习：随机抽 count 题（可按题型筛选）
   getFreeQuestions(params?: { count?: number; type?: string }) {
@@ -64,12 +70,12 @@ export const practiceModeApi = {
   getSequentialProgress() {
     return unwrappedRequest.get<PracticeProgress>('/practice-mode/sequential-progress')
   },
-  // 保存练习游标和答题状态（顺序/专项/标签练习）
-  saveProgress(index: number, mode: string = 'sequential', total: number = 0, answersState: Record<string, unknown> = {}) {
+  // 保存练习游标和答题状态（顺序/标签/按卷练习）
+  saveProgress(index: number, mode: PracticeModeKey = 'sequential', total: number = 0, answersState: Record<string, unknown> = {}) {
     return unwrappedRequest.post<null>('/practice-mode/progress', { index, practice_mode: mode, total, answers_state: answersState })
   },
   // 查询任意模式的练习进度和答题状态（断点续练用）
-  getProgress(mode: string = 'sequential') {
+  getProgress(mode: PracticeModeKey = 'sequential') {
     return unwrappedRequest.get<PracticeProgressData>('/practice-mode/progress', { params: { mode } })
   },
   // 提交单题答案并判定

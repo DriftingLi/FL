@@ -35,6 +35,11 @@
           <el-table-column prop="created_at" label="时间" width="180">
             <template #default="{ row }">{{ formatDateTime(row.created_at, '') }}</template>
           </el-table-column>
+          <el-table-column label="来源" min-width="90">
+            <template #default="{ row }">
+              <el-tag v-if="row.paper_id" size="small" type="warning" effect="plain">真题卷</el-tag>
+            </template>
+          </el-table-column>
         </el-table>
       </el-card>
     </div>
