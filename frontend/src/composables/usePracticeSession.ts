@@ -16,8 +16,8 @@ import {
   useQuestionAnswer
 } from './useQuestionAnswer'
 
-/** 练习模式：顺序 / 自由（随机或专项）/ 标签 */
-export type PracticeMode = 'sequential' | 'free' | 'tag'
+/** 练习模式：顺序 / 自由（随机或专项）/ 标签 / 真题卷（mode 键 paper:<paperID>） */
+export type PracticeMode = 'sequential' | 'free' | 'tag' | 'paper'
 
 /** 进入/续练某模式时 adapter 返回的数据（questions + 断点进度） */
 export interface PracticeStartData {

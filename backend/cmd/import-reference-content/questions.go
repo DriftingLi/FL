@@ -64,6 +64,15 @@ type QuestionPlan struct {
 	ExistingDD []ExistingDedupAction // 存量内部重复
 	Skips      []SkipNote            // 校验跳过明细
 	Stats      map[string]*CategoryStat
+	PaperRefs  []PaperQuestionRef // 真题源文件的题目引用（按解析遭遇顺序）
+}
+
+// PaperQuestionRef 真题卷-题目引用：题目要么是去重命中的存量行，要么落在
+// plan.Inserts 的某个下标（写入后才有真实 id）。仅真题源文件记录。
+type PaperQuestionRef struct {
+	Source     *SourceFile
+	ExistingID int // >0：去重命中的存量题 id
+	InsertIdx  int // >=0：plan.Inserts 下标
 }
 
 // credKey 去重键：证件内按归一化题干哈希。
@@ -142,6 +151,9 @@ func BuildQuestionPlan(parsed []ParsedQuestion, skips []SkipNote, existing []Exi
 			if betterExplanation(q.Explanation, best.Explanation) {
 				plan.Enriches = append(plan.Enriches, EnrichAction{Existing: best, NewExpl: q.Explanation, Source: q.Source, Line: q.Line})
 			}
+			if q.Source.RealExam {
+				plan.PaperRefs = append(plan.PaperRefs, PaperQuestionRef{Source: q.Source, ExistingID: best.ID, InsertIdx: -1})
+			}
 			continue
 		}
 		if idx, ok := importedIdx[kk]; ok {
@@ -149,10 +161,17 @@ func BuildQuestionPlan(parsed []ParsedQuestion, skips []SkipNote, existing []Exi
 			if betterExplanation(q.Explanation, plan.Inserts[idx].Explanation) {
 				plan.Inserts[idx] = *q
 			}
+			if q.Source.RealExam {
+				plan.PaperRefs = append(plan.PaperRefs, PaperQuestionRef{Source: q.Source, InsertIdx: idx})
+			}
 			continue
 		}
-		importedIdx[kk] = len(plan.Inserts)
+		insertIdx := len(plan.Inserts)
+		importedIdx[kk] = insertIdx
 		plan.Inserts = append(plan.Inserts, *q)
+		if q.Source.RealExam {
+			plan.PaperRefs = append(plan.PaperRefs, PaperQuestionRef{Source: q.Source, InsertIdx: insertIdx})
+		}
 		plan.Stats[q.Source.Category].Valid++
 	}
 
@@ -230,6 +249,8 @@ type QuestionApplyResult struct {
 	Enriched        int
 	RemovedExisting int
 	KeptReferenced  int
+	// FileQuestions 真题源文件 → 卷内题目 id（按解析遭遇顺序），供 papers 阶段建卷。
+	FileQuestions map[*SourceFile][]int
 }
 
 // dbtx 事务内外的 SQL 执行面（*pgxpool.Pool 与 pgx.Tx 均满足）。
@@ -252,6 +273,7 @@ func ApplyQuestionPlan(ctx context.Context, pool *pgxpool.Pool, plan *QuestionPl
 	if err != nil {
 		return res, err
 	}
+	insertIDs := make([]int, len(plan.Inserts))
 	for i := range plan.Inserts {
 		q := &plan.Inserts[i]
 		credID, ok := credIDs[credentialFor(q.Source)]
@@ -276,6 +298,7 @@ func ApplyQuestionPlan(ctx context.Context, pool *pgxpool.Pool, plan *QuestionPl
 			return res, fmt.Errorf("插入题目失败（%s#%d）: %w", q.Source.Name, q.Line, err)
 		}
 		res.Inserted++
+		insertIDs[i] = newID
 		if q.Source.RealExam {
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO question_tag_relation (question_id, tag_id)
@@ -311,6 +334,20 @@ func ApplyQuestionPlan(ctx context.Context, pool *pgxpool.Pool, plan *QuestionPl
 		}
 		res.RemovedExisting += int(ct.RowsAffected())
 	}
+	// 解析真题引用：去重命中的存量题与新插入题统一为真实 id，按遭遇顺序归卷。
+	for _, pr := range plan.PaperRefs {
+		qid := pr.ExistingID
+		if qid == 0 {
+			if pr.InsertIdx < 0 || pr.InsertIdx >= len(insertIDs) {
+				return res, fmt.Errorf("真题引用下标越界: %d", pr.InsertIdx)
+			}
+			qid = insertIDs[pr.InsertIdx]
+		}
+		if res.FileQuestions == nil {
+			res.FileQuestions = map[*SourceFile][]int{}
+		}
+		res.FileQuestions[pr.Source] = append(res.FileQuestions[pr.Source], qid)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return res, fmt.Errorf("提交事务失败: %w", err)
 	}
@@ -321,9 +358,9 @@ func ApplyQuestionPlan(ctx context.Context, pool *pgxpool.Pool, plan *QuestionPl
 func ensureRealExamTag(ctx context.Context, tx dbtx) (int, error) {
 	var id int
 	err := tx.QueryRow(ctx, `
-		INSERT INTO question_tag (code, name, description, sort_order, status)
-		VALUES ($1, '真题', '来源于历年真题/考场原卷的题目（导入管线自动标记）', 8, 1)
-		ON CONFLICT (code) DO UPDATE SET updated_at = now()
+		INSERT INTO question_tag (code, name, description, sort_order, status, is_source_tag)
+		VALUES ($1, '真题', '来源于历年真题/考场原卷的题目（导入管线自动标记）', 8, 1, TRUE)
+		ON CONFLICT (code) DO UPDATE SET is_source_tag = TRUE, updated_at = now()
 		RETURNING id`, realExamTagCode).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("创建真题标签失败: %w", err)

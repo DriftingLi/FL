@@ -2,8 +2,8 @@
   <div class="mock-exam">
     <div v-if="!inExam && !examFinished" class="exam-start">
       <el-card>
-        <h2>模拟考试</h2>
-        <el-form :model="examForm" label-width="100px">
+        <h2>{{ paperMode ? `真题考试：${paperTitle}` : '模拟考试' }}</h2>
+        <el-form v-if="!paperMode" :model="examForm" label-width="100px">
           <el-form-item label="题目数量">
             <el-select v-model="examForm.count">
               <el-option label="20 题" :value="20" />
@@ -22,6 +22,10 @@
             <el-button type="primary" size="large" @click="startExam" :loading="loading">开始考试</el-button>
           </el-form-item>
         </el-form>
+        <div v-else class="paper-exam-entry">
+          <p class="paper-exam-hint">整卷限时作答，交卷后出成绩与逐题解析。</p>
+          <el-button type="primary" size="large" @click="startExam" :loading="loading">开始考试</el-button>
+        </div>
       </el-card>
 
       <el-card class="history-card" v-if="history.length > 0">
@@ -74,10 +78,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { mockExamApi, type MockExamHistoryItem } from '@/api/mockExam'
+import { realExamApi } from '@/api/realExam'
 import { formatDateTime } from '@/utils/format'
 import { useExamSession } from '@/composables/useExamSession'
+
+const route = useRoute()
+const router = useRouter()
+
+// ?paper=<id>：真题卷整卷考试（固定题集 + 卷时长），之后 save/submit/result 走同一 mock-exam 链路
+const paperMode = computed(() => !!route.query.paper)
+const paperId = computed(() => Number(route.query.paper) || 0)
+const paperTitle = computed(() => (route.query.title as string) || '')
 
 const loading = ref(false)
 const examFinished = ref(false)
@@ -89,6 +103,11 @@ const history = ref<MockExamHistoryItem[]>([])
 // 答题会话编排（进入/续时/断点续传/交卷顺序约束收敛进 useExamSession）
 const { inExam, currentIdx, remainingTime, questions, answers, shellRef, start, saveProgress, submit, reset } = useExamSession({
   enter: async () => {
+    if (paperMode.value) {
+      const res = await realExamApi.startExam(paperId.value)
+      mockExamId.value = res.mock_exam_id
+      return { questions: res.questions, remaining_time: res.remaining_time }
+    }
     const res = await mockExamApi.startMockExam({
       question_count: examForm.value.count,
       duration_minutes: examForm.value.duration
@@ -114,6 +133,14 @@ onMounted(async () => {
     const res = await mockExamApi.getMockExamHistory({ page: 1, page_size: 5 })
     history.value = res.exams || []
   } catch (e) {}
+  // 真题卷入口：进页即开考（未兑换/失败由拦截器提示后返回列表）
+  if (paperMode.value) {
+    try {
+      await startExam()
+    } catch {
+      router.push({ name: 'RealExamPapers' })
+    }
+  }
 })
 
 async function startExam() {
@@ -142,6 +169,9 @@ function resetExam() {
   examResult.value = {}
   mockExamId.value = null
   reset()
+  if (paperMode.value) {
+    router.push({ name: 'RealExamPapers' })
+  }
 }
 </script>
 
@@ -159,4 +189,6 @@ function resetExam() {
 .detail-item.correct { background: var(--color-success-light); }
 .detail-item.wrong { background: var(--color-danger-light); }
 .explanation { color: var(--color-text-tertiary); font-size: 13px; }
+.paper-exam-entry { text-align: center; }
+.paper-exam-hint { color: var(--color-text-tertiary); font-size: 13px; margin: 0 0 16px; }
 </style>

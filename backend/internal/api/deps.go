@@ -61,6 +61,7 @@ type Deps struct {
 	QuestionBankSvc      *service.QuestionBankService
 	PracticeModeSvc      *service.PracticeModeService
 	MockExamSvc          *service.MockExamService
+	RealExamSvc          *service.RealExamService
 	TutorSvc             *service.TutorService
 	WrongQuestionSvc     *service.WrongQuestionService
 	TrainingCatalogSvc   *service.TrainingCatalogService
@@ -93,6 +94,8 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	aiConfigSvc := service.NewAIConfigService(db, cfg.SecretKey, logger)
 	aiSvc := service.NewAIService(db, aiConfigSvc, logger)
 	contentGenSvc := service.NewContentGenerateService(db, aiSvc, logger)
+	// 积分服务唯一实例：积分端点与真题卷权益校验共用
+	pointsSvc := service.NewPointsService(db, logger, clock.Real())
 
 	d := &Deps{
 		Cfg:                  cfg,
@@ -127,6 +130,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		QuestionBankSvc:      service.NewQuestionBankService(db, fileSvc, logger),
 		PracticeModeSvc:      service.NewPracticeModeService(db, aiSvc, logger),
 		MockExamSvc:          service.NewMockExamService(db, aiSvc, logger),
+		RealExamSvc:          service.NewRealExamService(db, pointsSvc, logger),
 		TutorSvc:             service.NewTutorService(db, cfg.UploadFolder, fileSvc, slideRenderer, logger),
 		WrongQuestionSvc:     service.NewWrongQuestionService(db, aiSvc, logger),
 		TrainingCatalogSvc:   service.NewTrainingCatalogService(db, logger),
@@ -135,7 +139,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		QuestionCommentSvc:   service.NewQuestionCommentService(db, logger),
 		QuestionNoteSvc:      service.NewQuestionNoteService(db, logger),
 		QuestionKnowledgeSvc: service.NewQuestionKnowledgeService(db),
-		PointsSvc:            service.NewPointsService(db, logger, clock.Real()),
+		PointsSvc:            pointsSvc,
 	}
 	d.AuthH = NewAuthHandler(d.Session, authSvc, fileSvc, st, reviewSvc, logger)
 	return d

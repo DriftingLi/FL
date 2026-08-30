@@ -98,6 +98,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/student/RealExamPapers.vue')
       },
       {
+        // 真题卷按卷练习（不进侧栏，从真题列表进入）
+        path: 'real-exam/practice/:paperId',
+        name: 'RealExamPractice',
+        component: () => import('@/pages/student/RealExamPractice.vue')
+      },
+      {
         path: 'task-center',
         name: 'TaskCenter',
         component: () => import('@/pages/student/TaskCenter.vue')

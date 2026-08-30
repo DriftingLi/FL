@@ -61,6 +61,8 @@ func allModels() []interface{} {
 		&model.PracticeProgress{},
 		&model.WrongQuestion{},
 		&model.MockExam{},
+		&model.RealExamPaper{},
+		&model.RealExamPaperQuestion{},
 		&model.ForumTopic{},
 		&model.ForumReply{},
 		&model.ForumTopicLike{},
@@ -71,6 +73,9 @@ func allModels() []interface{} {
 		&model.AIGenerationLog{},
 		&model.AsyncTask{},
 		&model.FeaturedContent{},
+		&model.PointsShopItem{},
+		&model.PointsLedger{},
+		&model.UserEntitlement{},
 	}
 }
 

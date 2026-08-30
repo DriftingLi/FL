@@ -36,6 +36,7 @@ func main() {
 		write     = flag.Bool("write", false, "实际写入数据库（默认干跑）")
 		reportPth = flag.String("report", "", "报告输出文件路径（默认仅 stdout）")
 		dsnFlag   = flag.String("dsn", "", "PostgreSQL DSN（默认读 DATABASE_URL）")
+		minPaperQ = flag.Int("min-paper-questions", 3, "真题卷最少题数，低于该值的碎片预览文件不建卷")
 	)
 	flag.Parse()
 
@@ -127,6 +128,7 @@ func main() {
 		}
 		plan := BuildQuestionPlan(parsed, skips, existing, credIDs)
 		rep.merge(plan, len(existing), credIDs)
+		rep.papersPlan(plan, *minPaperQ)
 		if *write {
 			res, err := ApplyQuestionPlan(ctx, pool, plan, credIDs)
 			if err != nil {
@@ -134,6 +136,12 @@ func main() {
 				os.Exit(1)
 			}
 			rep.questionApply(res)
+			paperRes, err := ApplyPapers(ctx, pool, res.FileQuestions, credIDs, *minPaperQ)
+			if err != nil {
+				logger.Error("真题卷写入失败", zap.Error(err))
+				os.Exit(1)
+			}
+			rep.paperApply(paperRes)
 		}
 	}
 	if pool != nil && *write && (*mode == "courses" || *mode == "all") {
