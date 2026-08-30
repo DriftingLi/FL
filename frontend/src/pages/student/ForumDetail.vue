@@ -237,8 +237,13 @@ import { favoriteApi } from '@/api/favorite'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import { formatLocaleDateTime } from '@/utils/format'
 import { resolveFileUrl } from '@/utils/fileUrl'
+import { displayName, authorLetter } from '@/utils/forumDisplay'
 import { pushHistory, toHistoryItem } from '@/utils/forumHistory'
 import { useAuthStore } from '@/stores/auth'
+import { useAsyncPage } from '@/composables/useAsyncPage'
+import { useForumImageUpload } from '@/composables/useForumImageUpload'
+import { useForumSort } from '@/composables/useForumSort'
+import { useLike } from '@/composables/useLike'
 import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
@@ -248,21 +253,25 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
-const loading = ref(false)
-const loadError = ref(false)
-const retrying = ref(false)
 const submitting = ref(false)
 
 const staggerStyle = useStagger()
 const topic = ref<ForumTopicItem | null>(null)
 const replies = ref<ForumReplyItem[]>([])
 const replyContent = ref('')
-const replyImages = ref<string[]>([])
 const replyingTo = ref<{ id: number; username: string } | null>(null)
 const replyFileInput = ref<HTMLInputElement | null>(null)
 const canSubmitReply = computed(() => replyContent.value.trim().length > 0 || replyImages.value.length > 0)
-const replySort = ref<'latest' | 'hot'>('latest')
-const replyOrder = ref<'asc' | 'desc'>('asc')
+
+// 回复图片上传（#389：上限/20MB/FormData/粘贴收编进 useForumImageUpload，UI 形态留在本页）
+const { urls: replyImages, uploadFiles: uploadReplyFiles, removeImage: removeReplyImage, handlePaste } =
+  useForumImageUpload(3)
+
+// 排序双轴收编（#389）：详情回复口径为「热门逆序、最新正序」，切维度时按此映射
+const { sort: replySort, order: replyOrder, flipOrder: flipReplyOrder } = useForumSort('asc')
+
+// 三态收编（#388，详情页无分页）：loader 抛错即错误态
+const { loading, loadError, retrying, retry: retryLoad, run: loadDetail } = useAsyncPage(loadDetailOnce)
 
 function handleReplySortChange() {
   // 热门默认逆序，最新默认正序
@@ -271,16 +280,8 @@ function handleReplySortChange() {
 }
 
 function toggleReplyOrder(){
-  replyOrder.value = replyOrder.value === 'asc' ? 'desc' : 'asc'
+  flipReplyOrder()
   loadDetail()
-}
-
-function displayName(author: ForumTopicItem['author']) {
-  return author.username
-}
-
-function authorLetter(author: ForumTopicItem['author']) {
-  return (displayName(author) || '?').charAt(0).toUpperCase()
 }
 
 const isTopicOwner = computed(() => !!topic.value && topic.value.author.user_id === authStore.userInfo?.user_id)
@@ -305,31 +306,20 @@ function scrollToHash() {
   })
 }
 
-async function loadDetail() {
-  loading.value = true
-  loadError.value = false
-  try {
-    const topicId = Number(route.params.topicId)
-    const res = await forumApi.getTopic(topicId, replySort.value, replyOrder.value)
-    topic.value = res.topic
-    replies.value = res.replies || []
-    if (res.topic) {
-      try {
-        pushHistory(toHistoryItem(res.topic), authStore.userInfo?.user_id)
-      } catch {
-        // ignore storage errors
-      }
+async function loadDetailOnce() {
+  const topicId = Number(route.params.topicId)
+  const res = await forumApi.getTopic(topicId, replySort.value, replyOrder.value)
+  topic.value = res.topic
+  replies.value = res.replies || []
+  if (res.topic) {
+    try {
+      pushHistory(toHistoryItem(res.topic), authStore.userInfo?.user_id)
+    } catch {
+      // ignore storage errors
     }
-    await nextTick()
-    scrollToHash()
-  } catch (e) {
-    console.error('加载帖子详情失败:', e)
-    loadError.value = true
-    topic.value = null
-    replies.value = []
-  } finally {
-    loading.value = false
   }
+  await nextTick()
+  scrollToHash()
 }
 
 async function handleAccept(replyId: number) {
@@ -381,16 +371,6 @@ async function handleCancelAccept() {
   }
 }
 
-async function retryLoad() {
-  if (retrying.value) return
-  retrying.value = true
-  try {
-    await loadDetail()
-  } finally {
-    retrying.value = false
-  }
-}
-
 async function submitReply() {
   const content = replyContent.value.trim()
   if (!content && replyImages.value.length === 0) {
@@ -421,60 +401,8 @@ function triggerReplyFile() {
 function handleReplyFileSelect(event: Event) {
   const target = event.target as HTMLInputElement
   const files = Array.from(target.files ?? [])
-  if (files.length > 0) uploadReplyFiles(files)
+  if (files.length > 0) void uploadReplyFiles(files)
   target.value = ''
-}
-
-async function uploadReplyFiles(files: File[]) {
-  const remaining = 3 - replyImages.value.length
-  if (remaining <= 0) {
-    ElMessage.warning('最多上传 3 张图片')
-    return
-  }
-  const toUpload = files.filter(f => f.type.startsWith('image/')).slice(0, remaining)
-  if (toUpload.length === 0) return
-  for (const file of toUpload) {
-    if (file.size > 20 * 1024 * 1024) {
-      ElMessage.error(`"${file.name}" 超过 20MB，已跳过`)
-      continue
-    }
-    const formData = new FormData()
-    formData.append('file', file)
-    try {
-      const res = await forumApi.uploadImage(formData)
-      if (res?.url) {
-        if (replyImages.value.length >= 3) break
-        replyImages.value = [...replyImages.value, res.url]
-      } else {
-        ElMessage.error(`"${file.name}" 上传失败`)
-      }
-    } catch {
-      /* 错误已由拦截器提示 */
-    }
-  }
-}
-
-function removeReplyImage(index: number) {
-  const next = [...replyImages.value]
-  next.splice(index, 1)
-  replyImages.value = next
-}
-
-function handlePaste(event: ClipboardEvent) {
-  const items = event.clipboardData?.items
-  if (!items) return
-  if (replyImages.value.length >= 3) return
-  const files: File[] = []
-  for (const item of items) {
-    if (item.kind === 'file' && item.type.startsWith('image/')) {
-      const file = item.getAsFile()
-      if (file) files.push(file)
-    }
-  }
-  if (files.length > 0) {
-    event.preventDefault()
-    uploadReplyFiles(files)
-  }
 }
 
 function startReplyTo(reply: ForumReplyItem) {
@@ -527,6 +455,10 @@ function goBack() {
 
 // ===== 互动（ADR-0018）：收藏 / 点赞 / 举报 =====
 
+// 点赞乐观更新 + 失败回滚（#389 单点）：帖与回复各注入一组端点，时序同源
+const { toggle: toggleTopicLikeOnce } = useLike(forumApi.likeTopic, forumApi.unlikeTopic)
+const { toggle: toggleReplyLikeOnce } = useLike(forumApi.likeReply, forumApi.unlikeReply)
+
 // 收藏帖子
 const topicFavorited = ref(false)
 const topicFavoriteId = ref<number>(0)
@@ -565,42 +497,11 @@ async function toggleFavorite() {
 
 async function toggleTopicLike() {
   if (!topic.value) return
-  const topicId = Number(route.params.topicId)
-  const prevLiked = !!topic.value.liked_by_me
-  const prevCount = topic.value.likes_count || 0
-  // 乐观更新
-  topic.value.liked_by_me = !prevLiked
-  topic.value.likes_count = prevLiked ? Math.max(0, prevCount - 1) : prevCount + 1
-  try {
-    const res = prevLiked ? await forumApi.unlikeTopic(topicId) : await forumApi.likeTopic(topicId)
-    if (topic.value) {
-      topic.value.likes_count = res.likes_count
-      topic.value.liked_by_me = res.liked
-    }
-  } catch (e) {
-    // 回滚
-    if (topic.value) {
-      topic.value.liked_by_me = prevLiked
-      topic.value.likes_count = prevCount
-    }
-    console.error('点赞操作失败:', e)
-  }
+  await toggleTopicLikeOnce(topic.value)
 }
 
 async function toggleReplyLike(reply: ForumReplyItem) {
-  const prevLiked = !!reply.liked_by_me
-  const prevCount = reply.likes_count || 0
-  reply.liked_by_me = !prevLiked
-  reply.likes_count = prevLiked ? Math.max(0, prevCount - 1) : prevCount + 1
-  try {
-    const res = prevLiked ? await forumApi.unlikeReply(reply.id) : await forumApi.likeReply(reply.id)
-    reply.likes_count = res.likes_count
-    reply.liked_by_me = res.liked
-  } catch (e) {
-    reply.liked_by_me = prevLiked
-    reply.likes_count = prevCount
-    console.error('评论点赞失败:', e)
-  }
+  await toggleReplyLikeOnce(reply)
 }
 
 // 举报（帖子/回复共用对话框）

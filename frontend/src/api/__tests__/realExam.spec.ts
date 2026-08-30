@@ -1,12 +1,9 @@
 // realExam.ts 契约测试：真题套卷端点路径与参数（ADR-0022）。
+// credential_id 注入已下沉主 client 拦截器（#387），api 层只保证 params 占位存在。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/api/request', () => ({
   unwrappedRequest: { get: vi.fn(), post: vi.fn(), delete: vi.fn() }
-}))
-
-vi.mock('@/stores/credential', () => ({
-  useCredentialStore: () => ({ current: { id: 7, name: '叉车司机N1证' } })
 }))
 
 import { unwrappedRequest } from '@/api/request'
@@ -21,10 +18,10 @@ beforeEach(() => {
 })
 
 describe('realExamApi', () => {
-  it('listPapers：GET /real-exam/papers，自动注入当前证件 credential_id', async () => {
+  it('listPapers：GET /real-exam/papers，params 占位由拦截器注入 credential_id', async () => {
     mockGet.mockResolvedValue([])
     await realExamApi.listPapers()
-    expect(mockGet).toHaveBeenCalledWith('/real-exam/papers', { params: { credential_id: 7 } })
+    expect(mockGet).toHaveBeenCalledWith('/real-exam/papers', { params: {} })
   })
 
   it('startPractice：GET /real-exam/papers/:id/practice', async () => {

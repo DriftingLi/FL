@@ -8,6 +8,7 @@ import axios from 'axios'
 import type { AxiosError, AxiosRequestConfig, AxiosInstance } from 'axios'
 import { ElMessage } from 'element-plus'
 import { getToken, getRefreshToken, setToken, setRefreshToken } from '@/utils/storage'
+import { useCredentialStore } from '@/stores/credential'
 
 /**
  * 错误的语义分类，供上层决定「能否重试」「渲染哪种错误态」。
@@ -147,6 +148,60 @@ export interface HttpClientOptions {
   successCodes?: number[]
   /** 401 处理策略：由各模块提供（清登录态 + 按模块决定跳转）；可用 createDefaultUnauthorizedPolicy 收敛 */
   onUnauthorized: () => void
+  /**
+   * 证件过滤默认注入（#387，学员端主体系专用）：params 为普通对象且未显式传
+   * credential_id 时，注入当前证件 id。估值/AI 助手两套 client 不开启。
+   */
+  injectCredentialId?: boolean
+  /** 注入豁免前缀（仅 injectCredentialId 生效时读取；缺省 = 不做证件过滤的模块） */
+  credentialExemptPrefixes?: string[]
+}
+
+/**
+ * 证件过滤注入豁免前缀（#387）。口径：全局过滤器只覆盖课程/题库/练习/模考/错题/搜索/收藏
+ * （CONTEXT.md「当前证件」），论坛与认证不过滤；凭证上下文自身（/credentials、/me）不注入；
+ * admin/tutor/recruit 三端控制台共享主 client 但 credential_id 语义各不相同，一律不带。
+ */
+const DEFAULT_CREDENTIAL_EXEMPT_PREFIXES = [
+  '/auth',
+  '/captcha',
+  '/credentials',
+  '/me',
+  '/forum',
+  '/admin',
+  '/tutor',
+  '/recruit'
+]
+
+/** 豁免判定：url 与前缀按路径段对齐（/me 不误伤 /materials 这类前缀重叠） */
+function isCredentialExempt(url: string, prefixes: string[]): boolean {
+  return prefixes.some(p => url === p || url.startsWith(`${p}/`))
+}
+
+/**
+ * 证件过滤默认注入（#387 单点实现，替代 api 模块内 9 处复制）：
+ * params 为普通对象且未显式传 credential_id 时注入当前证件 id。
+ * Pinia store 在拦截器回调内惰性获取（避免模块级循环依赖），
+ * Pinia 未激活的环境（如直连工厂的单测）静默跳过。
+ */
+function injectCredentialId(config: AxiosRequestConfig, exemptPrefixes: string[]): void {
+  if (isCredentialExempt(config.url || '', exemptPrefixes)) return
+  const params = config.params as unknown
+  if (
+    !params ||
+    typeof params !== 'object' ||
+    Array.isArray(params) ||
+    Object.prototype.toString.call(params) !== '[object Object]'
+  ) {
+    return
+  }
+  if ('credential_id' in (params as Record<string, unknown>)) return
+  try {
+    const cred = useCredentialStore().current?.id
+    if (cred) (params as Record<string, unknown>).credential_id = cred
+  } catch {
+    // Pinia 未激活：跳过注入（与既有 try/catch 注入的容错口径一致）
+  }
 }
 
 /** X-Silent 请求头：静默模式不弹错误提示（如轮询类请求） */
@@ -184,6 +239,7 @@ export function createDefaultUnauthorizedPolicy(opts: UnauthorizedPolicyOptions)
 /** 创建共享客户端实例（Bearer 附加 / 解包 / 401 分发单点实现） */
 export function createHttpClient<O extends HttpClientOptions>(opts: O): UnwrappedRequest {
   const successCodes = opts.successCodes ?? [200, 201]
+  const exemptPrefixes = opts.credentialExemptPrefixes ?? DEFAULT_CREDENTIAL_EXEMPT_PREFIXES
 
   const client = axios.create({
     baseURL: opts.baseURL,
@@ -199,6 +255,9 @@ export function createHttpClient<O extends HttpClientOptions>(opts: O): Unwrappe
       const token = getToken()
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
+      }
+      if (opts.injectCredentialId) {
+        injectCredentialId(config, exemptPrefixes)
       }
       return config
     },

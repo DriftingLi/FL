@@ -36,17 +36,23 @@ func NewWrongQuestionService(db *gorm.DB, ai *AIService, logger *zap.Logger) *Wr
 
 // GetWrongQuestions 错题列表。
 // sort: "time_asc" 按最近错误时间升序，其余按降序（默认）；
-// favorited: 仅返回已收藏的错题（JOIN favorite，user_id 与 student_id 同源）。
-func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, qType string, minWrongCount *int, favorited bool, sort string) map[string]any {
+// favorited: 仅返回已收藏的错题（JOIN favorite，user_id 与 student_id 同源）；
+// credentialID: 按题目所属证件分区（与课程/题库同口径，#387；nil 表示不过滤）。
+func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, qType string, minWrongCount *int, favorited bool, sort string, credentialID *int) map[string]any {
 	orderBy := "wrong_question.last_wrong_at DESC"
 	if sort == "time_asc" {
 		orderBy = "wrong_question.last_wrong_at ASC"
 	}
 	items, total, page, pageSize := paging.Query[model.WrongQuestion](s.db, page, pageSize, 20, orderBy, func(q *gorm.DB) *gorm.DB {
 		q = q.Where("student_id = ? AND is_removed = ?", studentID, false)
-		if qType != "" {
+		if qType != "" || credentialID != nil {
 			q = q.Joins("JOIN question ON question.id = wrong_question.question_id")
+		}
+		if qType != "" {
 			q = q.Where("question.type = ?", qType)
+		}
+		if credentialID != nil {
+			q = q.Where("question.credential_id = ?", *credentialID)
 		}
 		if minWrongCount != nil {
 			q = q.Where("wrong_question.wrong_count >= ?", *minWrongCount)

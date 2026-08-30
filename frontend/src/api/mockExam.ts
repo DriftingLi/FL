@@ -21,13 +21,14 @@ export interface MockExamHistoryQuery {
   page_size?: number
 }
 
-/** 模拟考历史记录项 */
+/** 模拟考历史记录项（paper_id 为真题卷来源，omitempty，按卷考试才有 —— #390 契约） */
 export interface MockExamHistoryItem {
   id: number
   score?: number | null
   total_score?: number
   status?: string
   finished_at?: string
+  paper_id?: number
 }
 
 /** 模拟考结果 */

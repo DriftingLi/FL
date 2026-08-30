@@ -1,5 +1,4 @@
 import { unwrappedRequest } from './request'
-import { useCredentialStore } from '@/stores/credential'
 import type { Question } from '@/types/question'
 
 /** 真题套卷列表项（与后端 RealExamPaperDTO 对齐） */
@@ -42,11 +41,9 @@ export interface RealExamRedeemResult {
 
 // 真题套卷接口，对应后端 /api/real-exam
 export const realExamApi = {
-  // 套卷列表：按当前证件分区，附兑换状态与单价
+  // 套卷列表：按当前证件分区（credential_id 由主 client 拦截器默认注入，#387），附兑换状态与单价
   listPapers() {
-    const params: Record<string, unknown> = {}
-    try { const cred = useCredentialStore().current?.id; if (cred) params.credential_id = cred } catch {}
-    return unwrappedRequest.get<RealExamPaper[]>('/real-exam/papers', { params })
+    return unwrappedRequest.get<RealExamPaper[]>('/real-exam/papers', { params: {} })
   },
   // 按卷练习开始/续练（未兑换时后端拒绝）
   startPractice(paperId: number) {
