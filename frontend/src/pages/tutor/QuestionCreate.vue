@@ -165,6 +165,7 @@ import UiInput from '@/components/ui/UiInput.vue'
 import UiSelect, { type UiSelectOption } from '@/components/ui/UiSelect.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 
 const route = useRoute()
 const router = useRouter()
@@ -183,14 +184,24 @@ const TYPE_OPTIONS: UiSelectOption[] = [
   { label: '简答题', value: 'short_answer' }
 ]
 
-const pageLoading = ref(false)
-const pageError = ref(false)
-const retrying = ref(false)
 const submitting = ref(false)
 const tags = ref<{ id: number; name: string }[]>([])
 const credentials = ref<CredentialDict[]>([])
 const multiAnswer = ref<string[]>([])
 const imageUploading = ref(false)
+
+// 三态收编 useAsyncPage（#401）：错误详情由拦截器统一 toast；编辑态题目加载失败必须阻断渲染，
+// 避免以空表单呈现、保存时把原题内容整体覆盖掉
+const {
+  loading: pageLoading,
+  loadError: pageError,
+  retrying,
+  retry: handleRetry,
+  run: loadPage
+} = useAsyncPage(async () => {
+  await loadDicts()
+  if (isEdit.value) await loadQuestion()
+})
 
 const form = ref<{
   type: string
@@ -248,30 +259,6 @@ async function loadQuestion() {
   }
   if (res.type === 'multi_choice' && res.answer) {
     multiAnswer.value = res.answer.split(',')
-  }
-}
-
-async function loadPage() {
-  pageLoading.value = true
-  pageError.value = false
-  try {
-    await loadDicts()
-    if (isEdit.value) await loadQuestion()
-  } catch (e) {
-    pageError.value = true
-    console.error('Failed to load question:', e)
-    /* 错误已由拦截器提示 */
-  } finally {
-    pageLoading.value = false
-  }
-}
-
-async function handleRetry() {
-  retrying.value = true
-  try {
-    await loadPage()
-  } finally {
-    retrying.value = false
   }
 }
 

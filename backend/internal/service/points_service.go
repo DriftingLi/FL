@@ -25,6 +25,7 @@ type PointsBalanceResult struct {
 // PointsLedgerItem 流水条目
 type PointsLedgerItem struct {
 	ID        int64     `json:"id"`
+	UserID    int       `json:"user_id"`
 	Delta     int       `json:"delta"`
 	Reason    string    `json:"reason"`
 	RefType   string    `json:"ref_type"`
@@ -179,16 +180,27 @@ func (s *PointsService) GetBalance(userID int) (*PointsBalanceResult, error) {
 	return &PointsBalanceResult{Balance: user.PointsBalance, TotalEarned: int(totalEarned)}, nil
 }
 
-// GetLedger 流水分页
-func (s *PointsService) GetLedger(userID, page, pageSize int) (*PointsLedgerResult, error) {
+// GetLedger 流水分页。userID=0 不过滤用户（admin 巡检全量视角）；reason 可选筛选
+// （空=不过滤，变参保持既有调用方零 diff，同 AdminCourseService.GetCourses 的 filter 惯例）。
+func (s *PointsService) GetLedger(userID, page, pageSize int, reason ...string) (*PointsLedgerResult, error) {
 	if page <= 0 {
 		page = 1
 	}
 	if pageSize <= 0 || pageSize > 100 {
 		pageSize = 20
 	}
+	// count 与 find 各自独立装配（gorm 复用同一链有条件残留风险），过滤条件单一出处
+	build := func(q *gorm.DB) *gorm.DB {
+		if userID > 0 {
+			q = q.Where("user_id = ?", userID)
+		}
+		if len(reason) > 0 && reason[0] != "" {
+			q = q.Where("reason = ?", reason[0])
+		}
+		return q
+	}
 	var total int64
-	if err := s.db.Model(&model.PointsLedger{}).Where("user_id = ?", userID).Count(&total).Error; err != nil {
+	if err := build(s.db.Model(&model.PointsLedger{})).Count(&total).Error; err != nil {
 		return nil, err
 	}
 	pages := response.PageCount(total, pageSize)
@@ -197,13 +209,14 @@ func (s *PointsService) GetLedger(userID, page, pageSize int) (*PointsLedgerResu
 	}
 	offset := (page - 1) * pageSize
 	var rows []model.PointsLedger
-	if err := s.db.Where("user_id = ?", userID).Order("created_at DESC").Limit(pageSize).Offset(offset).Find(&rows).Error; err != nil {
+	if err := build(s.db.Model(&model.PointsLedger{})).Order("created_at DESC").Limit(pageSize).Offset(offset).Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	items := make([]PointsLedgerItem, 0, len(rows))
 	for _, r := range rows {
 		items = append(items, PointsLedgerItem{
 			ID:        r.ID,
+			UserID:    r.UserID,
 			Delta:     r.Delta,
 			Reason:    r.Reason,
 			RefType:   r.RefType,

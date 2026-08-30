@@ -102,7 +102,7 @@
           :page-size="pageSize"
           :total="total"
           layout="prev, pager, next"
-          @current-change="loadData"
+          @current-change="handlePageChange"
         />
       </div>
     </template>
@@ -164,6 +164,7 @@ import UiTag from '@/components/ui/UiTag.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 
 const router = useRouter()
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
@@ -176,16 +177,29 @@ const statusTone: Record<string, 'neutral' | 'warning' | 'success'> = {
 
 const credentials = ref<CredentialDict[]>([])
 const credentialId = ref<number | null>(null)
-const loading = ref(false)
-const loadError = ref('')
-const retrying = ref(false)
 const questions = ref<Question[]>([])
-const total = ref(0)
-const page = ref(1)
-const pageSize = ref(20)
 const filters = ref({ type: '', status: '', keyword: '' })
 const detailVisible = ref(false)
 const currentQuestion = ref<(Question & { reject_reason?: string }) | null>(null)
+
+// 三态 + 分页三件套收编 useAsyncPage（#401）：错误详情由拦截器统一 toast，loadError 降级 boolean
+const {
+  loading,
+  loadError,
+  retrying,
+  retry: handleRetry,
+  page,
+  pageSize,
+  total,
+  run: loadData,
+  handlePageChange
+} = useAsyncPage(async () => {
+  const params: any = { page: page.value, page_size: pageSize.value, ...filters.value }
+  if (credentialId.value) params.credential_id = credentialId.value
+  const res = await questionBankApi.getQuestions(params)
+  questions.value = res?.questions || []
+  total.value = res?.total || 0
+})
 
 const hasFilters = computed(
   () =>
@@ -206,32 +220,6 @@ async function loadCredentials() {
     credentials.value = data.credentials || []
   } catch {
     // 证件字典加载失败不阻断列表：最多是「证件」列回显为 —
-  }
-}
-
-async function loadData() {
-  loading.value = true
-  loadError.value = ''
-  try {
-    const params: any = { page: page.value, page_size: pageSize.value, ...filters.value }
-    if (credentialId.value) params.credential_id = credentialId.value
-    const res = await questionBankApi.getQuestions(params)
-    questions.value = res?.questions || []
-    total.value = res?.total || 0
-  } catch (error) {
-    // 拦截器已统一 toast，这里只负责把页面从「空白」变成「可重试」
-    loadError.value = error instanceof Error ? error.message : '加载题目失败'
-  } finally {
-    loading.value = false
-  }
-}
-
-async function handleRetry() {
-  retrying.value = true
-  try {
-    await loadData()
-  } finally {
-    retrying.value = false
   }
 }
 

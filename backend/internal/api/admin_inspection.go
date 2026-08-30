@@ -9,11 +9,13 @@ import (
 
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
+	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
 
 // RegisterAdminInspectionRoutes 注册管理端巡检相关路由（#376）。
-func RegisterAdminInspectionRoutes(rg *gin.RouterGroup, rd RouterDeps, db *gorm.DB) {
+// pointsSvc 按需注入：积分流水查询归位 service 层（#401），handler 不再裸查 PointsLedger。
+func RegisterAdminInspectionRoutes(rg *gin.RouterGroup, rd RouterDeps, db *gorm.DB, pointsSvc *service.PointsService) {
 	g := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
 	// 巡检计数：删除已解决帖计数
 	g.GET("/inspection/deleted-after-accepted", func(c *gin.Context) {
@@ -25,35 +27,19 @@ func RegisterAdminInspectionRoutes(rg *gin.RouterGroup, rd RouterDeps, db *gorm.
 		v, _ := strconv.Atoi(setting.Value)
 		response.Success(c, gin.H{"count": v})
 	})
-	// 问答积分流水按原因筛选（admin 全量）
+	// 问答积分流水按原因筛选（admin 全量；查询归位 PointsService.GetLedger，#401）
 	g.GET("/points/ledger", func(c *gin.Context) {
 		reason := c.Query("reason")
-		userIDStr := c.Query("user_id")
+		// user_id 非法/缺省 → 0 = 不过滤用户
+		userID := atoiDefault(c.Query("user_id"), 0)
 		page := atoiDefault(c.Query("page"), 1)
 		pageSize := atoiDefault(c.Query("page_size"), 20)
-		if pageSize > 100 {
-			pageSize = 100
-		}
-		q := db.Model(&model.PointsLedger{})
-		if reason != "" {
-			q = q.Where("reason = ?", reason)
-		}
-		if userIDStr != "" {
-			if uid, err := strconv.Atoi(userIDStr); err == nil && uid > 0 {
-				q = q.Where("user_id = ?", uid)
-			}
-		}
-		var total int64
-		if err := q.Count(&total).Error; err != nil {
+		res, err := pointsSvc.GetLedger(userID, page, pageSize, reason)
+		if err != nil {
 			response.ServerError(c, err.Error())
 			return
 		}
-		var rows []model.PointsLedger
-		if err := q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
-			response.ServerError(c, err.Error())
-			return
-		}
-		response.Success(c, gin.H{"items": rows, "total": total, "page": page, "page_size": pageSize})
+		response.Success(c, res)
 	})
 	// 招聘企业账号的查看与申请记录（滥用收口靠禁用位）
 	g.GET("/recruit/views", func(c *gin.Context) {

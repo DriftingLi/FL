@@ -111,11 +111,11 @@
 
           <div v-if="total > pageSize" class="mt-5 flex justify-center">
             <el-pagination
-              v-model:current-page="currentPage"
+              v-model:current-page="page"
               :page-size="pageSize"
               :total="total"
               layout="prev, pager, next"
-              @current-change="loadCourses"
+              @current-change="handlePageChange"
             />
           </div>
         </template>
@@ -133,6 +133,7 @@ import { trainingApi } from '@/api/training'
 import { credentialApi, type CredentialDict } from '@/api/credential'
 import { levelTagType, type LevelTagType } from '@/constants/level'
 import { useCourseCatalog, treeCatalogAdapter } from '@/composables/useCourseCatalog'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import FacetCard from '@/components/catalog/FacetCard.vue'
 import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCard from '@/components/catalog/CourseCard.vue'
@@ -150,13 +151,35 @@ type TutorCourseRow = TutorCourse & { credential_id?: number }
 const router = useRouter()
 const credentials = ref<CredentialDict[]>([])
 const credentialId = ref<number | string | undefined>(undefined)
-const loading = ref(false)
-const loadError = ref(false)
-const retrying = ref(false)
 const courses = ref<TutorCourseRow[]>([])
-const currentPage = ref(1)
-const pageSize = ref(12)
-const total = ref(0)
+
+// 三态 + 分页三件套收编 useAsyncPage（#401）：错误详情由拦截器统一 toast，retry 防重入由 composable 提供
+const {
+  loading,
+  loadError,
+  retrying,
+  retry: handleRetry,
+  page,
+  pageSize,
+  total,
+  run: loadCourses,
+  handlePageChange
+} = useAsyncPage(
+  async () => {
+    const params: Record<string, string | number> = {
+      page: page.value,
+      page_size: pageSize.value
+    }
+    const cid = credentialId.value
+    if (cid !== undefined && cid !== null && cid !== '') params.credential_id = Number(cid)
+    if (specialtyId.value !== null) params.specialty_id = specialtyId.value
+    if (levelId.value !== null) params.level_id = levelId.value
+    const res = await tutorApi.getCourses(params)
+    courses.value = res.courses
+    total.value = res.total
+  },
+  { defaultPageSize: 12 }
+)
 
 const credentialOptions = computed(() =>
   credentials.value.map((c) => ({ label: c.name, value: c.id as number | string }))
@@ -188,7 +211,7 @@ const {
 } = useCourseCatalog({
   adapter: treeCatalogAdapter(() => trainingApi.getCatalogTree()),
   onSelect: () => {
-    currentPage.value = 1
+    page.value = 1
     loadCourses()
   }
 })
@@ -205,50 +228,18 @@ async function loadCredentials() {
   } catch {}
 }
 
-async function loadCourses() {
-  loading.value = true
-  loadError.value = false
-  try {
-    const params: Record<string, string | number> = {
-      page: currentPage.value,
-      page_size: pageSize.value
-    }
-    const cid = credentialId.value
-    if (cid !== undefined && cid !== null && cid !== '') params.credential_id = Number(cid)
-    if (specialtyId.value !== null) params.specialty_id = specialtyId.value
-    if (levelId.value !== null) params.level_id = levelId.value
-    const res = await tutorApi.getCourses(params)
-    courses.value = res.courses
-    total.value = res.total
-  } catch (e) {
-    loadError.value = true
-    console.error('Failed to load courses:', e)
-  } finally {
-    loading.value = false
-  }
-}
-
-async function handleRetry() {
-  retrying.value = true
-  try {
-    await loadCourses()
-  } finally {
-    retrying.value = false
-  }
-}
-
 /** 重置筛选：直接写 ref 而非调 selectDirection/selectLevel，避免每次选择都触发一次 onSelect → loadCourses */
 function resetFilters() {
   specialtyId.value = null
   levelId.value = null
   credentialId.value = undefined
-  currentPage.value = 1
+  page.value = 1
   loadCourses()
 }
 
 /** 证件下拉变化：UiSelect 未声明 change，监听器经 attrs 透传到内部 el-select */
 function onCredentialChange() {
-  currentPage.value = 1
+  page.value = 1
   loadCourses()
 }
 

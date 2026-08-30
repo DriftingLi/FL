@@ -80,6 +80,7 @@ import UiPageHeader from '@/components/ui/UiPageHeader.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 
 type ChapterRow = TutorChapter & { content_type?: string; files?: unknown[] }
 type ContentTone = 'brand' | 'success' | 'warning' | 'danger' | 'neutral'
@@ -87,11 +88,18 @@ type ContentTone = 'brand' | 'success' | 'warning' | 'danger' | 'neutral'
 const route = useRoute()
 const router = useRouter()
 
-const loading = ref(false)
-const loadError = ref(false)
-const retrying = ref(false)
 const courseInfo = ref<TutorCourse | null>(null)
 const chapters = ref<ChapterRow[]>([])
+
+// 三态收编 useAsyncPage（#401）：错误详情由拦截器统一 toast，retry 防重入由 composable 提供
+const { loading, loadError, retrying, retry: handleRetry, run: loadChapters } = useAsyncPage(
+  async () => {
+    const courseId = Number(route.params.id)
+    const res = await tutorApi.getCourseChapters(courseId)
+    courseInfo.value = res.course ?? null
+    chapters.value = res.chapters || []
+  }
+)
 
 const pageTitle = computed(() =>
   courseInfo.value?.name ? `${courseInfo.value.name} · 章节管理` : '章节管理'
@@ -124,32 +132,6 @@ function contentTypeLabel(contentType: string): string {
 
 function getFileCount(chapter: { files?: unknown[] }): number {
   return (chapter.files || []).length
-}
-
-async function loadChapters() {
-  loading.value = true
-  loadError.value = false
-  try {
-    const courseId = Number(route.params.id)
-    const res = await tutorApi.getCourseChapters(courseId)
-    courseInfo.value = res.course ?? null
-    chapters.value = res.chapters || []
-  } catch (e) {
-    loadError.value = true
-    console.error('Failed to load chapters:', e)
-    /* 错误已由拦截器提示 */
-  } finally {
-    loading.value = false
-  }
-}
-
-async function handleRetry() {
-  retrying.value = true
-  try {
-    await loadChapters()
-  } finally {
-    retrying.value = false
-  }
 }
 
 function goBack() {
