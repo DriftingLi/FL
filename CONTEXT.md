@@ -38,7 +38,7 @@
 - **课程等级（course level）**：课程目录三级维度，**全局共享**（不归属方向，入门/进阶/专项/认证），任意方向的课程可挂任意等级。
 - **课程（course）/ 章节（chapter）**：PPT/视频/图文混排内容；PPT 经 LibreOffice sidecar 转 WebP。课程必挂目标证件 + 专业方向 + 课程等级（创建/编辑必填），可关联证书模板与前置课程。
 - **收藏（favorite）**：多态收藏（target_type+target_id：course/chapter/question/featured/topic；user+type+id 唯一幂等），列表实时回填目标快照、目标删除即条目消失，见 ADR-0018；其中 course/question 分区按当前证件过滤。
-- **全局搜索（search）**：course/question/content/topic 四类 LOWER LIKE 聚合（type 缺省各分区 top5），可见性与业务口径一致（挂载不变式/published/已发布），见 ADR-0018；course/question 分区按当前证件过滤。
+- **全局搜索（search）**：course/question/content/topic 四类 LOWER LIKE 聚合（type 缺省各分区 top5），可见性与业务口径一致（挂载不变式/published/已发布），见 ADR-0018；course/question 分区按当前证件过滤，question 分区另走题库池口径（排除真题题）。
 - **学习资料（material）**：已发布课程下章节附件（chapter_file）的聚合视图，不建独立资料库；file_url 为静态直链，见 ADR-0018。
 - **学习位置（learning position）**：学员在某课程的最后学习状态——最后章节（last_chapter_id）、章节播放位置（video_position，秒）、最后学习时间戳（last_studied_at），挂在 study_record 双轨记录上（课程级承载 last_*、章节级承载位置）；章节完成以 progress≥100 为单一事实源（时长自动完成与显式 completed 收敛于此），见 ADR-0017。
 - **证书模板（certificate template）**：课程可选关联的培训合格证书（结业证），含有效期（天）；课程挂靠后学员完成学习可获证。与"目标证件"语义严格区分。
@@ -48,6 +48,7 @@
 - **答题会话（answering session）**：学员在一次练习/模拟考试/错题重做中逐题作答的状态与推进节奏（选项选择、对/错模板、倒计时、自动交卷、断点续传）；练习/模拟考试/错题重做共享同一交互形态。会话 module 为守卫（本人+进行中）、题目顺序重建、答案三态初始化（null/[]/absent）的唯一实现（ADR-0010）。
 - **判分（grading）**：客观题判题唯一实现（gradeQuestion，含多选部分给分）；简答题及格线 = 满分 × 0.6。分值表两行单点定义：practice（练习/错题重做共用，客观题满分来源；原「level_exam」行已正名——定级考试下线后该行作为练习满分事实源存活）与 mock_exam（模拟考试）；简答题满分取题目自定义分，缺省 10。
 - **题库标签（question tag）**：题目分类维度（法规/结构/液压/电气/制动/故障诊断/应急等），创建需唯一编码；题目可多标签，标签练习按标签抽题。
+- **题库池（question pool）**：学员端可作答题目的统一来源口径——已发布（published）+ 排除来源标记标签题（`is_source_tag`，真题题）+ 当前证件分区。顺序/随机/专项练习、模拟考抽题与全局搜索的 question 分区同走池口径；「真题题只经真题卷出现」的按套解锁门禁由池承载，搜索不豁免（可搜到真题题干与解析即变相免费刷）；去重折叠进公共池的未打标真题题仍在池内（正常题库题）。
 - **标签练习（tag practice）**：按题库标签抽题的练习模式（原「章节练习」已退役并入）。
 - **AI 助手**：大模型流式对话（DeepSeek 默认，可配置 OpenAI 兼容模型）。归属 training 子域名（学员工作区功能），由主域名迁入。
 - **论坛（forum）**：含类别 `category`（`discussion` | `question`）与采纳状态（`accepted_reply_id`/`solved_at`，问答帖仅楼主可采纳一条回答，被采纳回复恒置顶）的图文分离论坛。**图文分离**——主题与回复可携带 `images` 图片 URL 数组（JSONB），正文保持纯文本，不做 markdown 渲染。坐标与意图双维度：`discussion`+NULL=综合讨论区、`discussion`+N=章节讨论区（均为现状）、`question`+NULL=全局问答（新增）、`question`+N=非法（`CHECK (category <> 'question' OR chapter_id IS NULL)` 兜底 + service 400）。**判类别看 `category`，判区域看 `chapter_id`，两者不可互相替代**——`scope=general` 的定义是 `chapter_id IS NULL`，而问答帖的 `chapter_id` 同样为 NULL，故列表查询必须让 `category` 与 `scope` 共存在同一条 WHERE 里，否则问答帖会整片灌进讨论 Tab（管理端综合区同理）。互动（ADR-0018）：主题点赞（forum_topic_like，幂等，计数经 `likes_count` 反范式列维护，热度排序走索引）、举报（forum_report，待处理/已处理二态，管理端处置沿用删帖/删回复流）、我的帖子/我的回复；问答筛选 `solved`（all/solved/unsolved，仅对 question 有意义）与列表 `reward_issued` 标记。问答帖一律 `chapter_id=NULL`，提问不选章节，章节页不产生问答。
