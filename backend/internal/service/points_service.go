@@ -236,7 +236,7 @@ func (s *PointsService) GetBalance(userID int) (*PointsBalanceResult, error) {
 
 // GetLedger 流水分页。userID=0 不过滤用户（admin 巡检全量视角）；reason 可选筛选
 // （空=不过滤，变参保持既有调用方零 diff，同 AdminCourseService.GetCourses 的 filter 惯例）。
-func (s *PointsService) GetLedger(userID, page, pageSize int, reason ...string) (*PointsLedgerResult, error) {
+func (s *PointsService) GetLedger(userID, page, pageSize int, reason string, refType ...string) (*PointsLedgerResult, error) {
 	if page <= 0 {
 		page = 1
 	}
@@ -248,8 +248,12 @@ func (s *PointsService) GetLedger(userID, page, pageSize int, reason ...string) 
 		if userID > 0 {
 			q = q.Where("user_id = ?", userID)
 		}
-		if len(reason) > 0 && reason[0] != "" {
-			q = q.Where("reason = ?", reason[0])
+		if reason != "" {
+			q = q.Where("reason = ?", reason)
+		}
+		// #411：按业务域（ref_type）过滤——问答域一行锁死，不维护原因白名单。
+		if len(refType) > 0 && refType[0] != "" {
+			q = q.Where("ref_type = ?", refType[0])
 		}
 		return q
 	}
