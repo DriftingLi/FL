@@ -340,6 +340,15 @@ export const adminApi = {
     return unwrappedRequest.put<{ status: number }>(`/admin/recruiters/${id}/status`)
   },
 
+  // #417：编辑企业信息与重置密码（响应与错误信息不回显口令字段）
+  editRecruiter(id: number, data: Partial<AddRecruiterPayload>) {
+    return unwrappedRequest.put<AdminRecruiter>(`/admin/recruiters/${id}`, data)
+  },
+
+  resetRecruiterPassword(id: number, password: string) {
+    return unwrappedRequest.put<null>(`/admin/recruiters/${id}/password`, { password })
+  },
+
   getStatistics() {
     return unwrappedRequest.get<AdminStatistics>('/admin/statistics')
   },

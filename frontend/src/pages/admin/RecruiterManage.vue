@@ -34,10 +34,20 @@ style="width: 280px"
 <el-table-column prop="created_at" label="创建时间" width="180" align="center">
 <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
 </el-table-column>
-<el-table-column label="操作" width="100" fixed="right" align="center">
+<el-table-column label="操作" width="110" fixed="right" align="center">
 <template #default="{ row }">
-<el-button v-if="row.status === 1" type="danger" link size="small" @click="handleToggle(row)">禁用</el-button>
-<el-button v-else type="success" link size="small" @click="handleToggle(row)">启用</el-button>
+<el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
+<el-button type="primary" link size="small">
+操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+</el-button>
+<template #dropdown>
+<el-dropdown-menu>
+<el-dropdown-item command="edit">编辑企业信息</el-dropdown-item>
+<el-dropdown-item command="resetPwd">重置密码</el-dropdown-item>
+<el-dropdown-item command="toggle">{{ row.status === 1 ? '禁用' : '启用' }}</el-dropdown-item>
+</el-dropdown-menu>
+</template>
+</el-dropdown>
 </template>
 </el-table-column>
 </el-table>
@@ -85,12 +95,54 @@ layout="total, sizes, prev, pager, next"
 <el-button type="primary" :loading="submitting" @click="handleSubmit">确认创建</el-button>
 </template>
 </el-dialog>
+
+<el-dialog v-model="editDialogVisible" title="编辑企业信息" width="520px" destroy-on-close>
+<el-form ref="editFormRef" :model="editForm" :rules="formRules" label-width="110px">
+<el-form-item label="企业名称" prop="company_name">
+<el-input v-model="editForm.company_name" placeholder="请输入企业名称" />
+</el-form-item>
+<el-form-item label="统一社会信用代码" prop="credit_code">
+<el-input v-model="editForm.credit_code" placeholder="请输入统一社会信用代码" />
+</el-form-item>
+<el-form-item label="经营范围" prop="business_scope">
+<el-input v-model="editForm.business_scope" placeholder="请输入经营范围" />
+</el-form-item>
+<el-form-item label="联系人" prop="contact_name">
+<el-input v-model="editForm.contact_name" placeholder="请输入联系人" />
+</el-form-item>
+<el-form-item label="联系电话" prop="contact_phone">
+<el-input v-model="editForm.contact_phone" placeholder="请输入联系电话" />
+</el-form-item>
+<el-form-item label="联系邮箱" prop="contact_email">
+<el-input v-model="editForm.contact_email" placeholder="请输入联系邮箱" />
+</el-form-item>
+</el-form>
+<template #footer>
+<el-button @click="editDialogVisible = false">取消</el-button>
+<el-button type="primary" :loading="editing" @click="handleEditSubmit">保存修改</el-button>
+</template>
+</el-dialog>
+
+<el-dialog v-model="pwdDialogVisible" title="重置密码" width="440px" destroy-on-close>
+<el-form ref="pwdFormRef" :model="pwdForm" :rules="pwdRules" label-width="90px">
+<el-form-item label="招聘者">
+<span>{{ pwdForm.username }}</span>
+</el-form-item>
+<el-form-item label="新密码" prop="password">
+<el-input v-model="pwdForm.password" type="password" placeholder="请输入新密码（6-20位）" maxlength="20" show-password />
+</el-form-item>
+</el-form>
+<template #footer>
+<el-button @click="pwdDialogVisible = false">取消</el-button>
+<el-button type="primary" :loading="pwdSubmitting" @click="handleResetPwd">确认重置</el-button>
+</template>
+</el-dialog>
 </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { Plus, Search } from '@element-plus/icons-vue'
+import { Plus, Search, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { adminApi, type AdminRecruiter } from '@/api/admin'
@@ -118,6 +170,84 @@ const formRules: FormRules = {
   contact_name: [required('联系人不能为空')],
   contact_phone: [required('联系电话不能为空')],
   contact_email: [required('联系邮箱不能为空')],
+}
+
+const editDialogVisible = ref(false)
+const editing = ref(false)
+const editFormRef = ref<FormInstance>()
+const editForm = reactive({ id: 0, company_name: '', credit_code: '', business_scope: '', contact_name: '', contact_phone: '', contact_email: '' })
+
+const pwdDialogVisible = ref(false)
+const pwdSubmitting = ref(false)
+const pwdFormRef = ref<FormInstance>()
+const pwdForm = reactive({ id: 0, username: '', password: '' })
+const pwdRules: FormRules = {
+  password: [
+    { required: true, message: '新密码不能为空', trigger: 'blur' },
+    { min: 6, max: 20, message: '密码长度需为 6-20 位', trigger: 'blur' },
+  ],
+}
+
+function openEditDialog(row: AdminRecruiter) {
+  editForm.id = row.id
+  editForm.company_name = row.company_name
+  editForm.credit_code = row.credit_code
+  editForm.business_scope = row.business_scope
+  editForm.contact_name = row.contact_name
+  editForm.contact_phone = row.contact_phone
+  editForm.contact_email = row.contact_email
+  editDialogVisible.value = true
+}
+
+function openResetPwdDialog(row: AdminRecruiter) {
+  pwdForm.id = row.id
+  pwdForm.username = row.username
+  pwdForm.password = ''
+  pwdDialogVisible.value = true
+}
+
+async function handleEditSubmit() {
+  if (!editFormRef.value) return
+  await editFormRef.value.validate()
+  editing.value = true
+  try {
+    await adminApi.editRecruiter(editForm.id, {
+      company_name: editForm.company_name,
+      credit_code: editForm.credit_code,
+      business_scope: editForm.business_scope,
+      contact_name: editForm.contact_name,
+      contact_phone: editForm.contact_phone,
+      contact_email: editForm.contact_email,
+    })
+    ElMessage.success('企业信息已更新')
+    editDialogVisible.value = false
+    load()
+  } catch {
+    /* 错误已由拦截器提示 */
+  } finally {
+    editing.value = false
+  }
+}
+
+async function handleResetPwd() {
+  if (!pwdFormRef.value) return
+  await pwdFormRef.value.validate()
+  pwdSubmitting.value = true
+  try {
+    await adminApi.resetRecruiterPassword(pwdForm.id, pwdForm.password)
+    ElMessage.success('密码已重置')
+    pwdDialogVisible.value = false
+  } catch {
+    /* 错误已由拦截器提示 */
+  } finally {
+    pwdSubmitting.value = false
+  }
+}
+
+function handleAction(cmd: string, row: AdminRecruiter) {
+  if (cmd === 'edit') openEditDialog(row)
+  else if (cmd === 'resetPwd') openResetPwdDialog(row)
+  else if (cmd === 'toggle') handleToggle(row)
 }
 
 async function handleToggle(row: AdminRecruiter) {
