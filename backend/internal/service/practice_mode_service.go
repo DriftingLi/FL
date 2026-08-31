@@ -142,7 +142,7 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, cred
 		byID[all[i].ID] = all[i]
 	}
 
-	ids, startIdx, err := ResumeSet(s.db, studentID, ResumeSetSpec{
+	ids, startIdx, err := ResumeSet(s.db, studentID, nil, ResumeSetSpec{
 		Mode:       string(PracticeModeTag(tagID)),
 		FreshIDs:   allIDs,
 		ReuseSaved: true,
@@ -184,7 +184,7 @@ func (s *PracticeModeService) StartSequential(studentID int, credentialID ...*in
 		ids[i] = q.ID
 	}
 
-	ids, startIdx, err := ResumeSet(s.db, studentID, ResumeSetSpec{
+	ids, startIdx, err := ResumeSet(s.db, studentID, credOf(credentialID), ResumeSetSpec{
 		Mode:                "sequential",
 		FreshIDs:            ids,
 		KeepCursorOnRefresh: true,
@@ -213,11 +213,16 @@ func (s *PracticeModeService) StartSequential(studentID int, credentialID ...*in
 // 守卫口径（session_progress.go）：practice_progress 无 status 字段（schema 冻结
 // ADR-0010），经 (student_id, practice_mode) 定位即天然归属本人，且无终端状态，
 // 恒视为在途——故无需在途校验。
-func (s *PracticeModeService) SaveProgress(studentID, index int, practiceMode string, total int, answersState json.RawMessage) error {
+func (s *PracticeModeService) SaveProgress(studentID, index int, practiceMode string, total int, answersState json.RawMessage, credentialID ...*int) error {
 	if practiceMode == "" {
 		practiceMode = "sequential"
 	}
-	return SaveSet(s.db, studentID, practiceMode, nil, index, total, initAnswersState(answersState))
+	// #414：顺序练习进度按证件分桶（其余模式保持 NULL 兼容）
+	var cred *int
+	if practiceMode == "sequential" && len(credentialID) > 0 {
+		cred = credentialID[0]
+	}
+	return SaveSet(s.db, studentID, practiceMode, cred, nil, index, total, initAnswersState(answersState))
 }
 
 // GetProgress 查询任意模式的练习进度（卡片展示/断点续练用）。
@@ -229,8 +234,14 @@ func (s *PracticeModeService) GetProgress(studentID int, practiceMode string, cr
 	// #413 实时池总数：与抽题共用同一池过滤（已发布 + 排真题 + 证件分区）；
 	// 标签模式再叠加标签过滤，其余模式（真题卷等）不适用池口径。
 	poolTotal := int(s.poolTotalForMode(practiceMode, credentialID))
+	// #414：顺序练习按证件分区定位进度（其余模式 NULL 兼容）
+	var cred *int
+	if practiceMode == "sequential" && len(credentialID) > 0 {
+		cred = credentialID[0]
+	}
 	var prog model.PracticeProgress
-	if err := s.db.Where("student_id = ? AND practice_mode = ?", studentID, practiceMode).Limit(1).Find(&prog).Error; err != nil {
+	clause, args := credentialClause(cred)
+	if err := s.db.Where("student_id = ? AND practice_mode = ? AND "+clause, append([]any{studentID, practiceMode}, args...)...).Limit(1).Find(&prog).Error; err != nil {
 		return &ProgressResultDTO{PoolTotal: poolTotal}
 	}
 	if prog.ID == 0 {

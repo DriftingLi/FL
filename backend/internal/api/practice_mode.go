@@ -215,6 +215,7 @@ type practiceSaveProgressReq struct {
 	PracticeMode string
 	Total        int
 	AnswersState json.RawMessage
+	CredentialID *int
 }
 
 // SaveProgress 保存练习进度
@@ -239,6 +240,7 @@ func (h *PracticeModeHandler) SaveProgress(c *gin.Context) {
 				PracticeMode string          `json:"practice_mode"`
 				Total        int             `json:"total"`
 				AnswersState json.RawMessage `json:"answers_state"`
+				CredentialID *int            `json:"credential_id"`
 			}
 			if err := c.ShouldBindJSON(&req); err != nil {
 				return nil, badRequest("请求数据无效")
@@ -256,10 +258,11 @@ func (h *PracticeModeHandler) SaveProgress(c *gin.Context) {
 				PracticeMode: req.PracticeMode,
 				Total:        req.Total,
 				AnswersState: req.AnswersState,
+				CredentialID: req.CredentialID,
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *practiceSaveProgressReq) (*struct{}, error) {
-			if err := h.svc.SaveProgress(req.StudentID, req.Index, req.PracticeMode, req.Total, req.AnswersState); err != nil {
+			if err := h.svc.SaveProgress(req.StudentID, req.Index, req.PracticeMode, req.Total, req.AnswersState, req.CredentialID); err != nil {
 				return nil, err
 			}
 			return nil, nil

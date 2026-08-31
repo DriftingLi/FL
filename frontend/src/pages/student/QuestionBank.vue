@@ -37,13 +37,16 @@
             </span>
             <h3 class="font-heading text-base font-semibold text-ink">顺序练习</h3>
           </div>
-          <p class="mt-3 text-sm text-ink-3">
+          <!-- #414：占位证件（池内无题）呈「内容建设中」空态而不是 0/0 -->
+          <p v-if="seqPoolEmpty" class="mt-3 text-sm text-ink-3">内容建设中</p>
+          <p v-else class="mt-3 text-sm text-ink-3">
             {{ seqProgress.completed }}/{{ seqDenominator }} 已练习
           </p>
           <UiButton
             variant="primary"
             block
             class="mt-4"
+            :disabled="seqPoolEmpty"
             @click="startSequential"
           >
             {{ seqProgress.completed > 0 ? '继续练习' : '开始练习' }}
@@ -271,6 +274,9 @@ const totalQuestions = ref(0)
 
 // #413 卡片分母口径：实时池总数（pool_total）优先；无进度时退回题库统计的池总数。
 const seqDenominator = computed(() => (seqProgress.value.pool_total ?? seqProgress.value.total) || totalQuestions.value)
+
+// #414 占位证件空态：池内无题（pool_total 为 0 且无历史进度）→ 「内容建设中」
+const seqPoolEmpty = computed(() => seqDenominator.value === 0)
 
 const practiceStats = ref({ today_count: 0, total_count: 0, total_days: 0 })
 const practiceStatsLoading = ref(true)
