@@ -1,9 +1,9 @@
 <template>
-  <div class="comment-card">
-    <div class="card-header">
-      <span class="card-title">评论</span>
-      <el-button v-if="total>3" link type="primary" size="small" @click="dialogVisible=true">查看所有评论</el-button>
-    </div>
+  <UiCard class="comment-card" padding="base">
+    <template #header><span class="card-title">评论</span></template>
+    <template #actions>
+      <UiButton v-if="total>3" variant="primary" link size="small" @click="dialogVisible=true">查看所有评论</UiButton>
+    </template>
     <div v-if="comments.length===0" class="empty">暂无评论</div>
     <div v-else class="list">
       <div v-for="c in displayComments" :key="c.id" class="comment-item">
@@ -15,12 +15,12 @@
           </div>
           <span class="content">{{ c.content }}</span>
         </div>
-        <el-button v-if="c.user_id===currentUserId" link type="danger" size="small" @click="handleDelete(c.id)">删除</el-button>
+        <UiButton v-if="c.user_id===currentUserId" variant="danger" link size="small" @click="handleDelete(c.id)">删除</UiButton>
       </div>
     </div>
     <div class="input-row">
       <el-input v-model="input" placeholder="写下你的评论" size="small" style="flex:1" @keyup.enter="handleSubmit" />
-      <el-button type="primary" size="small" :loading="submitting" @click="handleSubmit">发布</el-button>
+      <UiButton variant="primary" size="small" :loading="submitting" @click="handleSubmit">发布</UiButton>
     </div>
 
     <el-dialog v-model="dialogVisible" title="所有评论" width="520px">
@@ -33,17 +33,19 @@
           </div>
           <span class="content">{{ c.content }}</span>
         </div>
-        <el-button v-if="c.user_id===currentUserId" link type="danger" size="small" @click="handleDelete(c.id)">删除</el-button>
+        <UiButton v-if="c.user_id===currentUserId" variant="danger" link size="small" @click="handleDelete(c.id)">删除</UiButton>
       </div>
       <div v-if="comments.length===0" class="empty">暂无评论</div>
     </el-dialog>
-  </div>
+  </UiCard>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { questionInteractionApi } from '@/api/questionInteraction'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 
 const props = defineProps<{ questionId: number }>()
 const authStore = useAuthStore()
@@ -86,16 +88,16 @@ onMounted(load)
 </script>
 
 <style scoped>
-.comment-card { border:1px solid #ebeef5; border-radius:8px; padding:16px; background:#fff; margin-bottom:12px; }
-.card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
-.card-title { font-weight:600; color:#303133; }
-.empty { color:#909399; font-size:13px; }
+/* 容器样式（描边/圆角/内距/底色）与卡片页眉布局已由 UiCard 承担，此处只留外边距 */
+.comment-card { margin-bottom:12px; }
+.card-title { font-weight: var(--font-semibold); color: var(--color-text-primary); }
+.empty { color: var(--color-text-tertiary); font-size:13px; }
 .list { display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
-.comment-item { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; padding:8px 0; border-bottom:1px solid #f2f3f5; }
+.comment-item { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; padding:8px 0; border-bottom:1px solid var(--color-border-light); }
 .comment-main { flex:1; display:flex; flex-direction:column; gap:4px; }
 .comment-author { display:flex; align-items:center; gap:6px; }
-.username { font-size:12px; color:#303133; font-weight:500; }
-.comment-item .content { flex:1; font-size:13px; color:#606266; word-break:break-word; }
+.username { font-size:12px; color: var(--color-text-primary); font-weight: var(--font-medium); }
+.comment-item .content { flex:1; font-size:13px; color: var(--color-text-secondary); word-break:break-word; }
 .input-row { display:flex; gap:8px; margin-top:8px; }
-.time { font-size:11px; color:#c0c4cc; margin-left:4px; }
+.time { font-size:11px; color: var(--color-text-disabled); margin-left:4px; }
 </style>

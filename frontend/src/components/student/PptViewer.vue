@@ -7,14 +7,14 @@
 
     <div v-else-if="loadError" class="ppt-error">
       <el-empty description="幻灯片加载失败">
-        <el-button type="primary" @click="loadSlides">重试</el-button>
-        <el-button @click="downloadFile">下载PPT</el-button>
+        <UiButton variant="primary" @click="loadSlides">重试</UiButton>
+        <UiButton @click="downloadFile">下载PPT</UiButton>
       </el-empty>
     </div>
 
     <div v-else-if="slides.length === 0" class="ppt-empty">
       <el-empty description="暂无幻灯片预览">
-        <el-button type="primary" @click="downloadFile">下载PPT文件</el-button>
+        <UiButton variant="primary" @click="downloadFile">下载PPT文件</UiButton>
       </el-empty>
     </div>
 
@@ -23,13 +23,13 @@
         <span class="slide-title">{{ fileName }}</span>
         <div class="ppt-actions">
           <el-tooltip content="重新生成幻灯片" placement="bottom">
-            <el-button :icon="Refresh" circle size="small" :loading="regenerating" @click="regenerateSlides" />
+            <UiButton :icon="Refresh" circle size="small" :loading="regenerating" @click="regenerateSlides"/>
           </el-tooltip>
           <el-tooltip content="全屏演示" placement="bottom">
-            <el-button :icon="Rank" circle size="small" @click="toggleFullscreen" />
+            <UiButton :icon="Rank" circle size="small" @click="toggleFullscreen"/>
           </el-tooltip>
           <el-tooltip content="下载" placement="bottom">
-            <el-button :icon="Download" circle size="small" @click="downloadFile" />
+            <UiButton :icon="Download" circle size="small" @click="downloadFile"/>
           </el-tooltip>
         </div>
       </div>
@@ -55,9 +55,9 @@
 
       <div class="ppt-footer">
         <div class="slide-nav">
-          <el-button :icon="ArrowLeft" circle @click="prevSlide" :disabled="currentSlideIndex <= 0" />
+          <UiButton :icon="ArrowLeft" circle @click="prevSlide" :disabled="currentSlideIndex <= 0"/>
           <span class="slide-counter">{{ currentSlideIndex + 1 }} / {{ slides.length }}</span>
-          <el-button :icon="ArrowRight" circle @click="nextSlide" :disabled="currentSlideIndex >= slides.length - 1" />
+          <UiButton :icon="ArrowRight" circle @click="nextSlide" :disabled="currentSlideIndex >= slides.length - 1"/>
         </div>
       </div>
 
@@ -85,6 +85,7 @@ import { ArrowLeft, ArrowRight, Download, Rank, Loading, Refresh } from '@elemen
 import { ElMessage } from 'element-plus'
 import { courseApi } from '@/api/course'
 import { resolveFileUrl } from '@/utils/fileUrl'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const props = defineProps({
   src: { type: String, required: true },
@@ -267,14 +268,14 @@ onBeforeUnmount(() => {
   height: 600px;
   display: flex;
   flex-direction: column;
-  background: #1a1a2e;
+  background: var(--color-viewer-bg);
   border-radius: 8px;
   overflow: hidden;
   position: relative;
 }
 
 .ppt-viewer:fullscreen {
-  background: #0d0d1a;
+  background: var(--color-viewer-well);
 }
 
 .ppt-header {
@@ -282,13 +283,13 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   padding: 8px 16px;
-  background: #16213e;
+  background: var(--color-viewer-bar);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   flex-shrink: 0;
 }
 
 .slide-title {
-  color: #ccc;
+  color: var(--color-viewer-text);
   font-size: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -304,7 +305,7 @@ onBeforeUnmount(() => {
 .ppt-actions .el-button {
   --el-button-bg-color: transparent;
   --el-button-border-color: transparent;
-  --el-button-text-color: #ccc;
+  --el-button-text-color: var(--color-viewer-text);
   --el-button-hover-bg-color: rgba(255, 255, 255, 0.1);
   --el-button-hover-border-color: transparent;
   --el-button-hover-text-color: #fff;
@@ -338,7 +339,7 @@ onBeforeUnmount(() => {
 
 .slide-fade-enter-active,
 .slide-fade-leave-active {
-  transition: opacity 0.25s ease;
+  transition: opacity var(--duration-normal) var(--ease-default);
 }
 
 .slide-fade-enter-from,
@@ -362,14 +363,14 @@ onBeforeUnmount(() => {
 .slide-nav .el-button {
   --el-button-bg-color: rgba(255, 255, 255, 0.1);
   --el-button-border-color: rgba(255, 255, 255, 0.2);
-  --el-button-text-color: #ccc;
+  --el-button-text-color: var(--color-viewer-text);
   --el-button-hover-bg-color: rgba(255, 255, 255, 0.2);
   --el-button-hover-border-color: rgba(255, 255, 255, 0.3);
   --el-button-hover-text-color: #fff;
 }
 
 .slide-counter {
-  color: #ccc;
+  color: var(--color-viewer-text);
   font-size: 14px;
   min-width: 60px;
   text-align: center;
@@ -378,7 +379,7 @@ onBeforeUnmount(() => {
 
 .thumbnail-strip {
   flex-shrink: 0;
-  background: #16213e;
+  background: var(--color-viewer-bar);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding: 8px 0;
   overflow-x: auto;
@@ -398,7 +399,7 @@ onBeforeUnmount(() => {
   border: 2px solid transparent;
   border-radius: 4px;
   overflow: hidden;
-  transition: border-color 0.2s, transform 0.2s;
+  transition: border-color var(--duration-base) var(--ease-default), transform var(--duration-base) var(--ease-default);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -407,12 +408,12 @@ onBeforeUnmount(() => {
 }
 
 .thumbnail-item:hover {
-  border-color: #666;
+  border-color: var(--color-viewer-line);
   transform: translateY(-2px);
 }
 
 .thumbnail-item.active {
-  border-color: #409eff;
+  border-color: var(--color-primary-500);
 }
 
 .thumbnail-image {
@@ -424,7 +425,7 @@ onBeforeUnmount(() => {
 }
 
 .thumbnail-num {
-  color: #aaa;
+  color: var(--color-viewer-text-muted);
   font-size: 10px;
 }
 
@@ -439,7 +440,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: #ccc;
+  color: var(--color-viewer-text);
   z-index: 10;
 }
 

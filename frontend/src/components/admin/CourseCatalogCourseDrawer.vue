@@ -7,6 +7,7 @@ import { adminApi, type AdminCourseItem, type ChapterPayload } from '@/api/admin
 import type { CatalogDirectionNode, CatalogLevel, CertificateTemplate } from '@/api/training'
 
 import type { CredentialDict } from '@/api/credential'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const props = defineProps<{
   directions: CatalogDirectionNode[]
@@ -303,7 +304,7 @@ defineExpose({ open })
     <div class="cc-chapters" v-if="drawerForm.course_id">
       <div class="cc-chapters-head">
         章节管理
-        <el-button size="small" type="primary" plain @click="openChapterDialog()">新增章节</el-button>
+        <UiButton variant="primary" plain size="small" @click="openChapterDialog()">新增章节</UiButton>
       </div>
       <div v-for="(ch, i) in drawerChapters" :key="ch.chapter_id" class="cc-chapter-row">
         <span class="cc-chapter-idx">{{ i + 1 }}</span>
@@ -321,8 +322,8 @@ defineExpose({ open })
     </div>
 
     <template #footer>
-      <el-button @click="drawerVisible = false">取消</el-button>
-      <el-button type="primary" :loading="submitting" @click="submitCourse">保存</el-button>
+      <UiButton @click="drawerVisible = false">取消</UiButton>
+      <UiButton variant="primary" :loading="submitting" @click="submitCourse">保存</UiButton>
     </template>
   </el-drawer>
 
@@ -337,8 +338,8 @@ defineExpose({ open })
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="chapterDialogVisible = false">取消</el-button>
-      <el-button type="primary" :loading="submitting" @click="submitChapter">保存</el-button>
+      <UiButton @click="chapterDialogVisible = false">取消</UiButton>
+      <UiButton variant="primary" :loading="submitting" @click="submitChapter">保存</UiButton>
     </template>
   </el-dialog>
 </template>

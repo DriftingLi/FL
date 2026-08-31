@@ -1,12 +1,12 @@
 <template>
-  <div class="course-center">
-    <el-tabs v-model="activeTab" class="cc-tabs" @tab-change="handleTabChange">
+  <div class="flex flex-col gap-6">
+    <el-tabs v-model="activeTab" class="cc-tabs mb-2" @tab-change="handleTabChange">
       <el-tab-pane label="热门" name="hot" />
       <el-tab-pane label="精品" name="featured" />
       <el-tab-pane label="所有" name="all" />
     </el-tabs>
-    <div class="course-layout">
-      <aside class="cc-sidebar">
+    <div class="flex items-start gap-5 max-[900px]:flex-col max-[900px]:items-stretch">
+      <aside class="flex w-[200px] shrink-0 flex-col gap-3 max-[900px]:w-full">
         <FacetCard v-if="activeTab === 'all'" title="专业方向">
           <FacetItem
             :active="specialtyId === null"
@@ -42,7 +42,7 @@
         </FacetCard>
       </aside>
 
-      <main class="cc-main">
+      <main class="min-w-0 flex-1">
         <div class="cc-content">
           <!-- 加载：骨架屏（替代原全容器 v-loading，避免整块变灰遮挡已有内容） -->
           <UiSkeleton v-if="loading" variant="card" :count="6" />
@@ -57,7 +57,7 @@
           />
 
           <template v-else>
-            <div v-if="courses.length > 0" class="cc-grid">
+            <div v-if="courses.length > 0" class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4 max-[560px]:grid-cols-1">
               <CourseCard
                 v-for="(course, i) in courses"
                 :key="course.course_id"
@@ -70,16 +70,16 @@
               @click="openDetail(course)"
             >
               <template #cover>
-                <span v-if="levelNameOf(course.level_id)" class="cc-cover-level">
+                <span v-if="levelNameOf(course.level_id)" class="cc-cover-level absolute left-2 top-2 rounded-pill bg-black/40 px-2.5 py-0.5 text-xs font-semibold text-panel">
                   {{ levelNameOf(course.level_id) }}
                 </span>
-                <div v-if="course.is_hot || course.is_featured" class="cc-cover-badges">
-                  <span v-if="course.is_hot" class="cc-cover-badge cc-cover-badge--hot">热门</span>
-                  <span v-if="course.is_featured" class="cc-cover-badge cc-cover-badge--featured">精品</span>
+                <div v-if="course.is_hot || course.is_featured" class="cc-cover-badges absolute right-2 top-2 flex gap-1">
+                  <span v-if="course.is_hot" class="cc-cover-badge rounded-pill bg-bad px-2 py-0.5 text-[11px] font-semibold text-panel">热门</span>
+                  <span v-if="course.is_featured" class="cc-cover-badge rounded-pill bg-warn px-2 py-0.5 text-[11px] font-semibold text-panel">精品</span>
                 </div>
               </template>
               <template #meta>
-                <div class="cc-meta">
+                <div class="cc-meta mb-2 flex flex-wrap gap-3 text-xs text-ink-3">
                   <span class="cc-meta-item">{{ course.chapter_count ?? 0 }} 章节</span>
                   <span v-if="course.theory_hours || course.practice_hours" class="cc-meta-item">
                     理论{{ course.theory_hours || 0 }}学时 · 实操{{ course.practice_hours || 0 }}学时
@@ -88,7 +88,7 @@
                     {{ course.points_price }} 积分解锁
                   </el-tag>
                 </div>
-                <div class="cc-cert" v-if="course.certificate_name">
+                <div class="cc-cert flex" v-if="course.certificate_name">
                   <el-tag size="small" type="success" effect="plain">
                     {{ course.certificate_name }}
                   </el-tag>
@@ -109,7 +109,7 @@
           </template>
         </div>
 
-        <div class="cc-pagination" v-if="total > pageSize">
+        <div class="cc-pagination mt-5 flex justify-center" v-if="total > pageSize">
           <el-pagination
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
@@ -131,32 +131,26 @@
       destroy-on-close
     >
       <template #header>
-        <div class="detail-header">
-          <span class="detail-header-title">{{ detailCourse?.name || '课程详情' }}</span>
-          <el-button
-            v-if="detailCourse"
-            :icon="courseFavorited ? StarFilled : Star"
-            :type="courseFavorited ? 'warning' : 'default'"
-            circle
-            @click="toggleCourseFavorite"
-          />
+        <div class="detail-header flex items-center justify-between gap-3 pr-6">
+          <span class="detail-header-title text-lg font-semibold text-ink">{{ detailCourse?.name || '课程详情' }}</span>
+          <UiButton v-if="detailCourse" :icon="courseFavorited ? StarFilled : Star" :type="courseFavorited ? 'warning' : 'default'" circle @click="toggleCourseFavorite"/>
         </div>
       </template>
       <div v-loading="detailLoading">
         <template v-if="detailCourse">
-          <div class="detail-brief">
+          <div class="detail-brief mb-3 flex flex-wrap gap-2">
             <el-tag v-if="detailCourse.level?.name" type="warning">{{ detailCourse.level.name }}</el-tag>
             <el-tag v-if="detailCourse.specialty?.name" type="primary" effect="plain">
               {{ detailCourse.specialty.name }}
             </el-tag>
           </div>
-          <p class="detail-desc">{{ detailCourse.description || '暂无简介' }}</p>
+          <p class="detail-desc mb-4 text-sm text-ink-2">{{ detailCourse.description || '暂无简介' }}</p>
           <div v-if="detailCourse?.points_price" class="detail-redeem">
             <el-tag type="warning" effect="plain">{{ detailCourse.points_price }} 积分解锁</el-tag>
-            <el-button size="small" type="warning" @click="handleRedeem">兑换解锁</el-button>
+            <UiButton variant="warning" size="small" @click="handleRedeem">兑换解锁</UiButton>
           </div>
 
-          <el-descriptions :column="2" border size="small" class="detail-descriptions">
+          <el-descriptions :column="2" border size="small" class="detail-descriptions mb-4">
             <el-descriptions-item label="理论学时">{{ detailCourse.theory_hours ?? '-' }} 学时</el-descriptions-item>
             <el-descriptions-item label="实操学时">{{ detailCourse.practice_hours ?? '-' }} 学时</el-descriptions-item>
             <el-descriptions-item label="章节数">{{ detailCourse.chapter_count ?? detailChapters.length }}</el-descriptions-item>
@@ -164,7 +158,7 @@
             <el-descriptions-item label="关联证书">
               <template v-if="detailCourse.certificate_template">
                 {{ detailCourse.certificate_template.name }}
-                <span v-if="detailCourse.certificate_template.validity_days" class="cert-valid">
+                <span v-if="detailCourse.certificate_template.validity_days" class="cert-valid text-xs text-ink-3">
                   （有效期 {{ detailCourse.certificate_template.validity_days }} 天）
                 </span>
               </template>
@@ -177,39 +171,39 @@
                   :key="p.course_id"
                   size="small"
                   type="info"
-                  class="prereq-tag"
+                  class="prereq-tag mr-1 my-0.5"
                 >{{ p.name }}</el-tag>
               </template>
               <span v-else>—</span>
             </el-descriptions-item>
           </el-descriptions>
 
-          <div v-if="courseLearning?.is_enrolled" class="detail-progress">
+          <div v-if="courseLearning?.is_enrolled" class="detail-progress mt-3.5 mb-1 flex items-center gap-3">
             <UiProgress
               :value="Math.round(courseLearning.progress ?? 0)"
               size="lg"
               tone="brand"
-              class="progress-bar"
+              class="progress-bar flex-1"
             />
-            <span class="progress-text">
+            <span class="progress-text whitespace-nowrap text-[13px] text-ink-3">
               已完成 {{ courseLearning.completed_chapters ?? 0 }}/{{ courseLearning.total_chapters ?? detailChapters.length }} 章
             </span>
           </div>
 
-          <div class="chapter-section">
-            <h4>章节内容（{{ detailChapters.length }}）</h4>
-            <div v-if="detailChapters.length > 0" class="chapter-list">
+          <div class="chapter-section mt-5">
+            <h4 class="mb-3 text-base font-semibold text-ink">章节内容（{{ detailChapters.length }}）</h4>
+            <div v-if="detailChapters.length > 0" class="chapter-list overflow-hidden rounded-card border border-line">
               <div
                 v-for="(ch, i) in detailChapters"
                 :key="ch.chapter_id"
-                class="chapter-row"
+                class="chapter-row flex cursor-pointer items-center gap-3 border-b border-line px-4 py-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas last:border-b-0"
                 @click="goToChapter(ch)"
               >
-                <span class="chapter-index">{{ i + 1 }}</span>
-                <span class="chapter-title">{{ ch.title }}</span>
+                <span class="chapter-index flex size-6 shrink-0 items-center justify-center rounded-[6px] bg-ui-100 text-xs font-semibold text-ui-600">{{ i + 1 }}</span>
+                <span class="chapter-title flex-1 text-sm text-ink">{{ ch.title }}</span>
                 <el-tag v-if="chapterCompleted(ch.chapter_id)" size="small" type="success" effect="plain">已完成</el-tag>
-                <span v-if="ch.duration" class="chapter-duration">{{ ch.duration }}分钟</span>
-                <el-icon class="chapter-arrow"><ArrowRight /></el-icon>
+                <span v-if="ch.duration" class="chapter-duration text-xs text-ink-3">{{ ch.duration }}分钟</span>
+                <el-icon class="chapter-arrow text-ink-3"><ArrowRight /></el-icon>
               </div>
             </div>
             <UiEmptyState v-else description="该课程暂无章节内容" size="sm" />
@@ -217,12 +211,8 @@
         </template>
       </div>
       <template #footer>
-        <el-button @click="detailVisible = false">关闭</el-button>
-        <el-button
-          v-if="detailChapters.length > 0"
-          type="primary"
-          @click="goToChapter(continueChapter ?? detailChapters[0])"
-        >{{ continueChapter ? `继续学习：${continueChapterTitle}` : '开始学习' }}</el-button>
+        <UiButton @click="detailVisible = false">关闭</UiButton>
+        <UiButton variant="primary" v-if="detailChapters.length > 0" @click="goToChapter(continueChapter ?? detailChapters[0])">{{ continueChapter ? `继续学习：${continueChapterTitle}` : '开始学习' }}</UiButton>
       </template>
     </el-dialog>
   </div>
@@ -250,6 +240,7 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiProgress from '@/components/ui/UiProgress.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const stagger = useStagger()
 
@@ -519,236 +510,10 @@ useCredentialRefetch(() => {
 </script>
 
 <style scoped>
-.course-center {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-}
-
-.course-layout {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-5);
-}
-
-/* ===== 左栏 ===== */
-.cc-sidebar {
-  width: 200px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-/* ===== 右栏 ===== */
-.cc-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.cc-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: var(--space-4);
-}
-
-.cc-cover-level {
-  position: absolute;
-  top: var(--space-2);
-  left: var(--space-2);
-  padding: 2px 10px;
-  border-radius: var(--radius-full);
-  background: rgba(0, 0, 0, 0.4);
-  color: var(--color-bg-card);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.cc-cover-badges {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
-  display: flex;
-  gap: 4px;
-}
-
-.cc-cover-badge {
-  padding: 2px 8px;
-  border-radius: var(--radius-full);
-  color: var(--color-bg-card);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.cc-cover-badge--hot {
-  background: var(--color-danger);
-}
-
-.cc-cover-badge--featured {
-  background: var(--color-warning);
-}
-
-.cc-tabs {
-  margin-bottom: var(--space-2);
-}
-
-.cc-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  font-size: var(--text-xs);
-  color: var(--color-text-tertiary);
-  margin-bottom: var(--space-2);
-}
-
-.cc-cert {
-  display: flex;
-}
-
-.cc-empty {
-  padding: 60px 0;
-}
-
-.cc-pagination {
-  display: flex;
-  justify-content: center;
-  margin-top: var(--space-5);
-}
-
-/* ===== 详情弹窗 ===== */
-.cert-valid {
-  color: var(--color-text-tertiary);
-  font-size: 12px;
-}
-
-.prereq-tag {
-  margin: 2px 4px 2px 0;
-}
-
-.chapter-section {
-  margin-top: var(--space-5);
-}
-
-.chapter-section h4 {
-  font-size: var(--text-base);
-  font-weight: var(--font-semibold);
-  color: var(--color-text-primary);
-  margin-bottom: var(--space-3);
-}
-
-.chapter-list {
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-}
-
-.chapter-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--color-border-light);
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-default);
-}
-
-.chapter-row:last-child {
-  border-bottom: none;
-}
-
-.chapter-row:hover {
-  background: var(--color-bg-muted);
-}
-
-.chapter-index {
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-primary-100);
-  color: var(--color-primary-600);
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.chapter-title {
-  flex: 1;
-  font-size: var(--text-sm);
-  color: var(--color-text-primary);
-}
-
-.chapter-duration {
-  font-size: var(--text-xs);
-  color: var(--color-text-tertiary);
-}
-
-.chapter-arrow {
-  color: var(--color-text-tertiary);
-}
-
-.detail-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding-right: 24px;
-}
-
-.detail-header-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.detail-progress {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 14px 0 4px;
-}
-
-.progress-bar {
-  flex: 1;
-}
-
-.progress-text {
-  font-size: 13px;
-  color: var(--color-text-tertiary);
-  white-space: nowrap;
-}
-
-.detail-brief {
-  display: flex;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-  flex-wrap: wrap;
-}
-
-.detail-desc {
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
-  margin-bottom: var(--space-4);
-}
-
-.detail-descriptions {
-  margin-bottom: var(--space-4);
-}
-
-@media (max-width: 900px) {
-  .course-layout {
-    flex-direction: column;
-    /* 纵向后子元素需横向拉伸，否则 .cc-main 宽度=内容宽度导致整页横向溢出 */
-    align-items: stretch;
-  }
-
-  .cc-sidebar {
-    width: 100%;
-  }
-}
-
+/*
+ * 仅保留 :deep 的 EP 覆盖（R1 允许）：el-descriptions 内部 table 在窄屏下改块级，
+ * 无法用原子类表达，必须 scoped + :deep。
+ */
 @media screen and (max-width: 768px) {
   .detail-descriptions :deep(.el-descriptions__body .el-descriptions__table) {
     display: block;

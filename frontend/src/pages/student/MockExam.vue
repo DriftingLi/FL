@@ -1,5 +1,5 @@
 <template>
-  <div class="mock-exam">
+  <div class="mx-auto max-w-[1200px]">
     <div v-if="!inExam && !examFinished" class="exam-start">
       <el-card>
         <h2>{{ paperMode ? `真题考试：${paperTitle}` : '模拟考试' }}</h2>
@@ -19,16 +19,16 @@
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" size="large" @click="startExam" :loading="loading">开始考试</el-button>
+            <UiButton variant="primary" size="large" @click="startExam" :loading="loading">开始考试</UiButton>
           </el-form-item>
         </el-form>
-        <div v-else class="paper-exam-entry">
-          <p class="paper-exam-hint">整卷限时作答，交卷后出成绩与逐题解析。</p>
-          <el-button type="primary" size="large" @click="startExam" :loading="loading">开始考试</el-button>
+        <div v-else class="text-center">
+          <p class="m-0 mb-4 text-[13px] text-ink-3">整卷限时作答，交卷后出成绩与逐题解析。</p>
+          <UiButton variant="primary" size="large" @click="startExam" :loading="loading">开始考试</UiButton>
         </div>
       </el-card>
 
-      <el-card class="history-card" v-if="history.length > 0">
+      <el-card class="mt-5" v-if="history.length > 0">
         <h3>历史记录</h3>
         <el-table :data="history" stripe>
           <el-table-column prop="score" label="得分" width="80" />
@@ -59,23 +59,23 @@
     <div v-if="examFinished" class="exam-result">
       <el-card>
         <h2>考试结果</h2>
-        <div class="score-display">
-          <div class="score-circle" :class="{ passed: examResult.accuracy >= 60 }">
-            <span class="score-num">{{ examResult.total_score }}</span>
-            <span class="score-total">/{{ examResult.max_score }}</span>
+        <div class="my-5 text-center">
+          <div class="score-circle mb-2.5 inline-flex size-[150px] flex-col items-center justify-center rounded-full border-[6px] border-bad" :class="examResult.accuracy >= 60 ? 'border-ok' : ''">
+            <span class="text-4xl font-bold">{{ examResult.total_score }}</span>
+            <span class="text-sm text-ink-3">/{{ examResult.max_score }}</span>
           </div>
           <p>正确率：{{ examResult.accuracy }}%</p>
           <p>正确：{{ examResult.correct_count }}/{{ examResult.total_questions }}题</p>
         </div>
-        <el-button type="primary" @click="resetExam">返回</el-button>
+        <UiButton variant="primary" @click="resetExam">返回</UiButton>
       </el-card>
 
-      <el-card v-if="examResult.details" class="detail-card">
+      <el-card v-if="examResult.details" class="mt-[15px]">
         <h3>答题详情</h3>
-        <div v-for="(d, idx) in examResult.details" :key="idx" class="detail-item" :class="{ correct: d.is_correct, wrong: !d.is_correct }">
+        <div v-for="(d, idx) in examResult.details" :key="idx" class="detail-item mb-2 rounded-[8px] p-2.5" :class="d.is_correct ? 'bg-ok-soft' : 'bg-bad-soft'">
           <p><strong>第{{ idx + 1 }}题：</strong>{{ d.content }}</p>
           <p>你的答案：{{ d.user_answer || '未作答' }} | 正确答案：{{ d.correct_answer }}</p>
-          <p v-if="d.explanation" class="explanation">解析：{{ d.explanation }}</p>
+          <p v-if="d.explanation" class="text-[13px] text-ink-3">解析：{{ d.explanation }}</p>
         </div>
       </el-card>
     </div>
@@ -89,6 +89,7 @@ import { mockExamApi, type MockExamHistoryItem } from '@/api/mockExam'
 import { realExamApi } from '@/api/realExam'
 import { formatDateTime } from '@/utils/format'
 import { useExamSession } from '@/composables/useExamSession'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -180,20 +181,3 @@ function resetExam() {
 }
 </script>
 
-<style scoped>
-.mock-exam { max-width: 1200px; margin: 0 auto; }
-.exam-start h2, .exam-result h2 { margin-bottom: 20px; }
-.history-card { margin-top: 20px; }
-.score-display { text-align: center; margin: 20px 0; }
-.score-circle { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; width: 150px; height: 150px; border-radius: 50%; border: 6px solid var(--color-danger); margin-bottom: 10px; }
-.score-circle.passed { border-color: var(--color-success); }
-.score-num { font-size: 36px; font-weight: bold; }
-.score-total { font-size: 14px; color: var(--color-text-tertiary); }
-.detail-card { margin-top: 15px; }
-.detail-item { padding: 10px; margin-bottom: 8px; border-radius: 8px; }
-.detail-item.correct { background: var(--color-success-light); }
-.detail-item.wrong { background: var(--color-danger-light); }
-.explanation { color: var(--color-text-tertiary); font-size: 13px; }
-.paper-exam-entry { text-align: center; }
-.paper-exam-hint { color: var(--color-text-tertiary); font-size: 13px; margin: 0 0 16px; }
-</style>

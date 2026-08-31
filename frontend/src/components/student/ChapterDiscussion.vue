@@ -5,7 +5,7 @@
         <h3 class="discussion-title">章节讨论</h3>
         <p class="discussion-subtitle">针对本章内容提问或交流</p>
       </div>
-      <el-button type="primary" size="small" :icon="EditPen" @click="openCreate">发新帖</el-button>
+      <UiButton variant="primary" size="small" :icon="EditPen" @click="openCreate">发新帖</UiButton>
     </div>
 
     <div v-loading="listLoading" class="discussion-list">
@@ -43,10 +43,10 @@
                     <span class="reply-author">{{ displayName(reply.author) }}</span>
                     <span class="reply-time">{{ formatRelativeTime(reply.created_at) }}</span>
                     <div class="reply-actions">
-                      <el-button type="primary" size="small" @click="startReplyTo(reply)">回复</el-button>
-                      <el-button v-if="reply.can_delete" text type="danger" size="small" @click="removeReply(reply.id)">
+                      <UiButton variant="primary" size="small" @click="startReplyTo(reply)">回复</UiButton>
+                      <UiButton variant="danger" text v-if="reply.can_delete" size="small" @click="removeReply(reply.id)">
                         删除
-                      </el-button>
+                      </UiButton>
                     </div>
                   </div>
                   <div v-if="reply.parent_id && reply.parent_name" class="reply-quote">
@@ -71,15 +71,15 @@
                   maxlength="5000"
                   placeholder="写下你的回复…"
                 />
-                <el-button type="primary" :loading="replying" @click="submitReply(topic.id)">发表</el-button>
+                <UiButton variant="primary" :loading="replying" @click="submitReply(topic.id)">发表</UiButton>
               </div>
               <ForumImageUploader v-model="replyImages" :max="3" />
             </div>
 
             <div class="detail-actions">
-              <el-button v-if="expandedTopic?.can_delete" text type="danger" size="small" @click="removeTopic(topic.id)">
+              <UiButton variant="danger" text v-if="expandedTopic?.can_delete" size="small" @click="removeTopic(topic.id)">
                 删除本帖
-              </el-button>
+              </UiButton>
             </div>
           </div>
         </div>
@@ -107,8 +107,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="createVisible = false">取消</el-button>
-        <el-button type="primary" :loading="creating" @click="submitCreate">发布</el-button>
+        <UiButton @click="createVisible = false">取消</UiButton>
+        <UiButton variant="primary" :loading="creating" @click="submitCreate">发布</UiButton>
       </template>
     </el-dialog>
   </div>
@@ -123,6 +123,7 @@ import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumImageUploader from '@/components/student/ForumImageUploader.vue'
 import { formatRelativeTime } from '@/utils/format'
 import { displayName, authorLetter } from '@/utils/forumDisplay'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const props = defineProps<{
   chapterId: number
@@ -309,18 +310,18 @@ watch(() => props.chapterId, () => {
 .discussion-title {
   font-size: 17px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
   margin: 0 0 4px;
 }
 
 .discussion-subtitle {
   font-size: 13px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   margin: 0;
 }
 
 .discussion-item {
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--color-bg-page);
   border-radius: 10px;
   margin-bottom: 12px;
   overflow: hidden;
@@ -333,11 +334,11 @@ watch(() => props.chapterId, () => {
 .discussion-item-main {
   padding: 12px 14px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--duration-base) var(--ease-default);
 }
 
 .discussion-item-main:hover {
-  background: #f7f9fc;
+  background: var(--color-bg-page);
 }
 
 .discussion-title-row {
@@ -350,7 +351,7 @@ watch(() => props.chapterId, () => {
 .discussion-item-title {
   font-size: 14px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -359,7 +360,7 @@ watch(() => props.chapterId, () => {
 
 .discussion-count {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   flex-shrink: 0;
 }
 
@@ -369,11 +370,11 @@ watch(() => props.chapterId, () => {
   gap: 8px;
   margin-top: 8px;
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 
 .discussion-author {
-  color: #606266;
+  color: var(--color-text-secondary);
 }
 
 .expand-icon {
@@ -381,15 +382,15 @@ watch(() => props.chapterId, () => {
 }
 
 .discussion-detail {
-  border-top: 1px solid #f0f0f0;
-  background: #fafbfc;
+  border-top: 1px solid var(--color-bg-page);
+  background: var(--color-bg-page);
   padding: 14px;
 }
 
 .detail-content {
   font-size: 14px;
   line-height: 1.7;
-  color: #303133;
+  color: var(--color-text-primary);
   white-space: pre-wrap;
   word-break: break-word;
   margin-bottom: 14px;
@@ -403,7 +404,7 @@ watch(() => props.chapterId, () => {
 
 .detail-reply {
   padding: 12px 0;
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid var(--color-bg-page);
 }
 
 .detail-reply:last-child {
@@ -419,12 +420,12 @@ watch(() => props.chapterId, () => {
 .reply-author {
   font-size: 13px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .reply-time {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 
 .reply-actions {
@@ -434,8 +435,8 @@ watch(() => props.chapterId, () => {
 .reply-quote {
   display: inline-block;
   font-size: 12px;
-  color: #909399;
-  background: #f5f7fa;
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-page);
   border-radius: 6px;
   padding: 2px 8px;
   margin: 6px 0 2px;
@@ -444,7 +445,7 @@ watch(() => props.chapterId, () => {
 .reply-content {
   font-size: 13px;
   line-height: 1.6;
-  color: #303133;
+  color: var(--color-text-primary);
   white-space: pre-wrap;
   word-break: break-word;
 }

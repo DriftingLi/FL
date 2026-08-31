@@ -13,7 +13,7 @@
     </div>
     <div v-else class="spreadsheet-download">
       <el-empty description="该表格文件暂不支持在线预览">
-        <el-button type="primary" @click="downloadFile">下载文件</el-button>
+        <UiButton variant="primary" @click="downloadFile">下载文件</UiButton>
       </el-empty>
     </div>
   </div>
@@ -22,6 +22,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const props = defineProps({
   src: { type: String, required: true },

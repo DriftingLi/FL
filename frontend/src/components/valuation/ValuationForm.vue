@@ -864,7 +864,7 @@ function onConditionSelect(rating: ConditionRating) {
   margin-bottom: 6px;
   color: var(--color-text-secondary, #475569);
   font-family: var(--font-text, 'Noto Sans SC', sans-serif);
-  transition: color 200ms ease;
+  transition: color var(--duration-base) var(--ease-default);
 }
 /* 锁定态：label 同步变灰 */
 .field:has(.form-control:disabled) .field-label {
@@ -883,7 +883,7 @@ function onConditionSelect(rating: ConditionRating) {
   color: var(--color-text-primary, #0F172A);
   background: var(--color-bg-card, #FFFFFF);
   outline: none;
-  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+  transition: border-color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default), background var(--duration-fast) var(--ease-default);
   -webkit-appearance: none;
   appearance: none;
 }
@@ -926,7 +926,7 @@ function onConditionSelect(rating: ConditionRating) {
   justify-content: center;
   color: var(--color-text-muted, #94A3B8);
   pointer-events: none;
-  transition: color 150ms ease, opacity 150ms ease;
+  transition: color var(--duration-fast) var(--ease-default), opacity var(--duration-fast) var(--ease-default);
 }
 .select-wrap:hover:not(.is-disabled) .select-icon {
   color: var(--color-brand-500, #0EA5E9);
@@ -952,7 +952,7 @@ function onConditionSelect(rating: ConditionRating) {
   border: none;
   background: var(--color-border, #E2E8F0);
   cursor: pointer;
-  transition: background 200ms ease, box-shadow 200ms ease;
+  transition: background var(--duration-base) var(--ease-default), box-shadow var(--duration-base) var(--ease-default);
   flex-shrink: 0;
   padding: 0;
   outline: none;
@@ -978,7 +978,7 @@ function onConditionSelect(rating: ConditionRating) {
   background: #FFFFFF;
   border-radius: 50%;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform var(--duration-base) var(--ease-default);
   pointer-events: none;
 }
 .toggle-switch.is-on .toggle-thumb {
@@ -989,7 +989,7 @@ function onConditionSelect(rating: ConditionRating) {
   font-family: var(--font-text, 'Noto Sans SC', sans-serif);
   color: var(--color-text-muted, #94A3B8);
   font-weight: 500;
-  transition: color 200ms ease;
+  transition: color var(--duration-base) var(--ease-default);
 }
 .toggle-state.is-on {
   color: var(--color-text-primary, #0F172A);
@@ -1016,7 +1016,7 @@ function onConditionSelect(rating: ConditionRating) {
   background: var(--color-bg-card, #FFFFFF);
   cursor: pointer;
   text-align: center;
-  transition: all 200ms ease;
+  transition: all var(--duration-base) var(--ease-default);
   font-family: var(--font-text, 'Noto Sans SC', sans-serif);
   outline: none;
 }
@@ -1088,7 +1088,7 @@ function onConditionSelect(rating: ConditionRating) {
   font-size: 14px;
   font-family: var(--font-text, 'Noto Sans SC', sans-serif);
   cursor: pointer;
-  transition: all 200ms ease;
+  transition: all var(--duration-base) var(--ease-default);
   outline: none;
   white-space: nowrap;
 }

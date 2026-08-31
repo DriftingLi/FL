@@ -2,8 +2,8 @@
   <div class="video-player-wrapper" ref="wrapperRef">
     <div v-if="error" class="video-error">
       <el-empty :description="errorMessage">
-        <el-button type="primary" @click="retryLoad">重试</el-button>
-        <el-button @click="downloadVideo">下载视频</el-button>
+        <UiButton variant="primary" @click="retryLoad">重试</UiButton>
+        <UiButton @click="downloadVideo">下载视频</UiButton>
       </el-empty>
     </div>
 
@@ -31,9 +31,9 @@
 
       <div class="video-controls-overlay">
         <el-dropdown trigger="click" @command="changeSpeed">
-          <el-button size="small" class="control-btn">
+          <UiButton size="small" class="control-btn">
             {{ currentSpeed }}x
-          </el-button>
+          </UiButton>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item
@@ -49,20 +49,15 @@
         </el-dropdown>
 
         <el-tooltip content="画中画" placement="top">
-          <el-button
-            size="small"
-            class="control-btn"
-            @click="togglePiP"
-            :disabled="!pipSupported"
-          >
+          <UiButton size="small" class="control-btn" @click="togglePiP" :disabled="!pipSupported">
             <el-icon><Monitor /></el-icon>
-          </el-button>
+          </UiButton>
         </el-tooltip>
 
         <el-tooltip content="下载" placement="top">
-          <el-button size="small" class="control-btn" @click="downloadVideo">
+          <UiButton size="small" class="control-btn" @click="downloadVideo">
             <el-icon><Download /></el-icon>
-          </el-button>
+          </UiButton>
         </el-tooltip>
       </div>
     </div>
@@ -73,6 +68,7 @@
 import { ref, computed, onBeforeUnmount } from 'vue'
 import { Download, Loading, Monitor } from '@element-plus/icons-vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const props = defineProps({
   src: { type: String, required: true },
@@ -252,7 +248,7 @@ onBeforeUnmount(() => {
   gap: 4px;
   z-index: 6;
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity var(--duration-normal) var(--ease-default);
 }
 
 .video-container:hover .video-controls-overlay {

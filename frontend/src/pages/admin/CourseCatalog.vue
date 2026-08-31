@@ -4,9 +4,9 @@
     <aside class="cc-sidebar">
       <!-- 卡片 1：管理动作 -->
       <div class="cc-card cc-actions-card">
-        <el-button size="small" type="primary" plain @click="openDirectionDialog()">新增方向</el-button>
-        <el-button size="small" plain @click="openLevelDialog()">新增等级</el-button>
-        <el-button size="small" plain @click="openCertificateDialog()">证书模板</el-button>
+        <UiButton variant="primary" plain size="small" @click="openDirectionDialog()">新增方向</UiButton>
+        <UiButton variant="ghost" size="small" @click="openLevelDialog()">新增等级</UiButton>
+        <UiButton variant="ghost" size="small" @click="openCertificateDialog()">证书模板</UiButton>
       </div>
       <!-- 卡片 2：专业方向 -->
       <FacetCard title="专业方向">
@@ -84,7 +84,7 @@
           <el-option label="精品" value="featured" />
           <el-option label="全部" value="all" />
         </el-select>
-        <el-button type="primary" @click="openDrawer()">新增课程</el-button>
+        <UiButton variant="primary" @click="openDrawer()">新增课程</UiButton>
       </div>
 
       <el-table :data="pagedCourses" v-loading="loading" style="width: 100%">
@@ -140,9 +140,9 @@
         <el-table-column label="操作" width="90" fixed="right" align="center">
           <template #default="{ row }">
             <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
-              <el-button type="primary" link size="small">
+              <UiButton variant="primary" link size="small">
                 操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
-              </el-button>
+              </UiButton>
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="edit">编辑</el-dropdown-item>
@@ -208,6 +208,7 @@ import FacetCard from '@/components/catalog/FacetCard.vue'
 import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCatalogCourseDrawer from '@/components/admin/CourseCatalogCourseDrawer.vue'
 import CourseCatalogDialogs from '@/components/admin/CourseCatalogDialogs.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const loading = ref(false)
 const submitting = ref(false)

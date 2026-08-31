@@ -28,6 +28,7 @@ import {
 import type { CoefficientConfig } from '@/types/valuation/evaluation'
 import { useCrudTable, type FieldDef } from '@/composables/useCrudTable'
 import { useDirtyDraft } from '@/composables/useDirtyDraft'
+import UiButton from '@/components/ui/UiButton.vue'
 
 // ========== Tab 1: 原价表 ==========
 const ORIGINAL_PRICE_FIELDS: FieldDef[] = [
@@ -364,7 +365,7 @@ function onRefresh() {
     <div class="app-container">
       <PageHeader title="残值评估配置" subtitle="valuation config">
         <template #actions>
-          <el-button :icon="Refresh" @click="onRefresh">刷新当前</el-button>
+          <UiButton :icon="Refresh" @click="onRefresh">刷新当前</UiButton>
         </template>
       </PageHeader>
 
@@ -373,7 +374,7 @@ function onRefresh() {
         <el-tab-pane label="原价表" name="originalPrices">
           <div class="tab-toolbar">
             <span class="tab-tip">维护叉车基准原价记录（学生端表单级联查询依赖此表）</span>
-            <el-button type="primary" :icon="Plus" @click="openCreate">新增</el-button>
+            <UiButton variant="primary" :icon="Plus" @click="openCreate">新增</UiButton>
           </div>
           <div class="filter-bar">
             <el-input
@@ -404,7 +405,7 @@ function onRefresh() {
               size="small"
               style="width: 160px"
             />
-            <el-button :icon="RefreshLeft" size="small" @click="resetOriginalPriceFilter">重置筛选</el-button>
+            <UiButton :icon="RefreshLeft" size="small" @click="resetOriginalPriceFilter">重置筛选</UiButton>
           </div>
           <el-table
             v-loading="originalPriceLoading"
@@ -429,9 +430,9 @@ function onRefresh() {
             <el-table-column label="操作" width="90" fixed="right" align="center">
               <template #default="{ row }">
                 <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
-                  <el-button type="primary" link size="small">
+                  <UiButton variant="primary" link size="small">
                     操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
-                  </el-button>
+                  </UiButton>
                   <template #dropdown>
                     <el-dropdown-menu>
                       <el-dropdown-item command="edit">编辑</el-dropdown-item>
@@ -464,17 +465,10 @@ function onRefresh() {
               <div class="section-toolbar">
                 <span class="section-tip">影响时间衰减、使用强度、置信区间等核心计算</span>
                 <div class="section-actions">
-                  <el-button :icon="RefreshLeft" size="small" @click="resetCoefficients">重置</el-button>
-                  <el-button
-                    type="primary"
-                    :icon="Check"
-                    size="small"
-                    :loading="savingCoefficients"
-                    :disabled="!isCoefficientsDirty()"
-                    @click="saveCoefficients"
-                  >
+                  <UiButton :icon="RefreshLeft" size="small" @click="resetCoefficients">重置</UiButton>
+                  <UiButton variant="primary" :icon="Check" size="small" :loading="savingCoefficients" :disabled="!isCoefficientsDirty()" @click="saveCoefficients">
                     保存本节
-                  </el-button>
+                  </UiButton>
                 </div>
               </div>
               <el-table :data="globalCoefficientsDraft" stripe border style="width: 100%" empty-text="暂无参数">
@@ -506,17 +500,10 @@ function onRefresh() {
               <div class="section-toolbar">
                 <span class="section-tip">Kb = k_brand，直接作为品牌系数参与 Kt_adj 计算</span>
                 <div class="section-actions">
-                  <el-button :icon="RefreshLeft" size="small" @click="resetBrands">重置</el-button>
-                  <el-button
-                    type="primary"
-                    :icon="Check"
-                    size="small"
-                    :loading="savingBrands"
-                    :disabled="!isBrandsDirty()"
-                    @click="saveBrands"
-                  >
+                  <UiButton :icon="RefreshLeft" size="small" @click="resetBrands">重置</UiButton>
+                  <UiButton variant="primary" :icon="Check" size="small" :loading="savingBrands" :disabled="!isBrandsDirty()" @click="saveBrands">
                     保存本节
-                  </el-button>
+                  </UiButton>
                 </div>
               </div>
               <el-table :data="brandsDraft" stripe border style="width: 100%" empty-text="暂无品牌">
@@ -552,17 +539,10 @@ function onRefresh() {
               <div class="section-toolbar">
                 <span class="section-tip">Kc = base_coefficient，按车况评级 A~E 给出基础调整系数</span>
                 <div class="section-actions">
-                  <el-button :icon="RefreshLeft" size="small" @click="resetConditionRatings">重置</el-button>
-                  <el-button
-                    type="primary"
-                    :icon="Check"
-                    size="small"
-                    :loading="savingConditionRatings"
-                    :disabled="!isConditionRatingsDirty()"
-                    @click="saveConditionRatings"
-                  >
+                  <UiButton :icon="RefreshLeft" size="small" @click="resetConditionRatings">重置</UiButton>
+                  <UiButton variant="primary" :icon="Check" size="small" :loading="savingConditionRatings" :disabled="!isConditionRatingsDirty()" @click="saveConditionRatings">
                     保存本节
-                  </el-button>
+                  </UiButton>
                 </div>
               </div>
               <el-table :data="conditionRatingsDraft" stripe border style="width: 100%" empty-text="暂无车况评级">
@@ -600,17 +580,10 @@ function onRefresh() {
                   Kc 修正项：油漆/保养为加性叠加（base + bonus），证件为乘性扣减（×(1-pct)），缺双证时复合放大
                 </span>
                 <div class="section-actions">
-                  <el-button :icon="RefreshLeft" size="small" @click="resetKcModifiers">重置</el-button>
-                  <el-button
-                    type="primary"
-                    :icon="Check"
-                    size="small"
-                    :loading="savingKcModifiers"
-                    :disabled="!isKcModifiersDirty()"
-                    @click="saveKcModifiers"
-                  >
+                  <UiButton :icon="RefreshLeft" size="small" @click="resetKcModifiers">重置</UiButton>
+                  <UiButton variant="primary" :icon="Check" size="small" :loading="savingKcModifiers" :disabled="!isKcModifiersDirty()" @click="saveKcModifiers">
                     保存本节
-                  </el-button>
+                  </UiButton>
                 </div>
               </div>
               <el-table :data="kcModifiersDraft" stripe border style="width: 100%" empty-text="暂无车况修正项">
@@ -642,18 +615,11 @@ function onRefresh() {
               <div class="section-toolbar">
                 <span class="section-tip">Km = coefficient，按省市区域调整市场系数</span>
                 <div class="section-actions">
-                  <el-button type="success" :icon="Plus" size="small" @click="openCreateRegion">新增区域</el-button>
-                  <el-button :icon="RefreshLeft" size="small" @click="resetRegionCoefficients">重置</el-button>
-                  <el-button
-                    type="primary"
-                    :icon="Check"
-                    size="small"
-                    :loading="savingRegionCoefficients"
-                    :disabled="!isRegionCoefficientsDirty()"
-                    @click="saveRegionCoefficients"
-                  >
+                  <UiButton variant="success" :icon="Plus" size="small" @click="openCreateRegion">新增区域</UiButton>
+                  <UiButton :icon="RefreshLeft" size="small" @click="resetRegionCoefficients">重置</UiButton>
+                  <UiButton variant="primary" :icon="Check" size="small" :loading="savingRegionCoefficients" :disabled="!isRegionCoefficientsDirty()" @click="saveRegionCoefficients">
                     保存本节
-                  </el-button>
+                  </UiButton>
                 </div>
               </div>
               <el-table :data="regionCoefficientsDraft" stripe border style="width: 100%" empty-text="暂无区域系数">
@@ -712,10 +678,10 @@ function onRefresh() {
           </el-form-item>
         </el-form>
         <template #footer>
-          <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="submitting" @click="handleSubmit">
+          <UiButton @click="dialogVisible = false">取消</UiButton>
+          <UiButton variant="primary" :loading="submitting" @click="handleSubmit">
             {{ editingRow ? '保存' : '创建' }}
-          </el-button>
+          </UiButton>
         </template>
       </el-dialog>
 
@@ -745,10 +711,10 @@ function onRefresh() {
           </el-form-item>
         </el-form>
         <template #footer>
-          <el-button @click="regionCreateDialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="creatingRegion" @click="handleCreateRegion">
+          <UiButton @click="regionCreateDialogVisible = false">取消</UiButton>
+          <UiButton variant="primary" :loading="creatingRegion" @click="handleCreateRegion">
             创建
-          </el-button>
+          </UiButton>
         </template>
       </el-dialog>
     </div>
@@ -792,7 +758,7 @@ function onRefresh() {
   font-weight: var(--fw-medium);
 }
 .dirty-dot {
-  color: var(--color-accent, #3e6ae1);
+  color: var(--color-accent-500);
   font-size: 10px;
   line-height: 1;
 }

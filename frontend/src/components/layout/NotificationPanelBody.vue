@@ -5,6 +5,7 @@ import { notificationApi, type NotificationItem } from '@/api/notification'
 import { useNotificationAction } from '@/composables/useNotificationAction'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/format'
+import UiButton from '@/components/ui/UiButton.vue'
 
 /**
  * 通知列表体：数据与交互都在这，供 NotificationPanel 的 popover / panel
@@ -103,15 +104,9 @@ defineExpose({ refresh })
   <div class="notification-panel">
     <div class="notification-header">
       <span class="notification-title">通知</span>
-      <el-button
-        v-if="unreadCount > 0"
-        link
-        type="primary"
-        size="small"
-        @click="handleMarkAllRead"
-      >
+      <UiButton variant="primary" v-if="unreadCount > 0" link size="small" @click="handleMarkAllRead">
         全部已读
-      </el-button>
+      </UiButton>
     </div>
 
     <div v-if="loading" class="notification-state">加载中...</div>
@@ -177,7 +172,7 @@ defineExpose({ refresh })
   padding: 10px 4px;
   border-bottom: 1px solid var(--color-border-light, #f1f5f9);
   cursor: pointer;
-  transition: background var(--duration-fast, 0.2s);
+  transition: background var(--duration-fast, 0.2s) var(--ease-default);
 }
 
 .notification-item:hover {

@@ -1,42 +1,42 @@
 <template>
-  <div class="forum-page">
-    <div class="forum-header">
-      <h1 class="forum-title">学员论坛</h1>
-      <el-button v-if="mode === 'all' && categoryTab === 'question'" type="primary" size="large" :icon="EditPen" @click="goAsk">
+  <div class="mx-auto max-w-[960px] px-4 pb-10">
+    <div class="forum-header mb-4 flex items-start justify-between gap-4 max-md:flex-col">
+      <h1 class="m-0 mb-1.5 text-2xl font-semibold text-ink">学员论坛</h1>
+      <UiButton variant="primary" v-if="mode === 'all' && categoryTab === 'question'" size="large" :icon="EditPen" @click="goAsk">
         我要提问
-      </el-button>
-      <el-button v-else type="primary" size="large" :icon="EditPen" @click="openCreateDialog">
+      </UiButton>
+      <UiButton variant="primary" v-else size="large" :icon="EditPen" @click="openCreateDialog">
         发布新帖
-      </el-button>
+      </UiButton>
     </div>
 
     <!-- 每日打卡卡片（spec #268 A1） -->
-    <div class="checkin-card" @click="openCheckIn('calendar')">
-      <div class="checkin-left">
-        <el-icon class="checkin-icon"><Calendar /></el-icon>
-        <span class="checkin-text">
+    <UiCard variant="interactive" padding="base" class="mb-3 flex items-center justify-between gap-3" @click="openCheckIn('calendar')">
+      <div class="flex items-center gap-2 text-[13px] text-ink">
+        <el-icon class="text-base text-ui-500"><Calendar /></el-icon>
+        <span>
           <template v-if="checkInTodayChecked">今日已打卡</template>
           <template v-else>今日未打卡</template>
-          <span v-if="checkInTotal > 0" class="checkin-sub">｜已连续 {{ checkInStreak }} 天｜累计 {{ checkInTotal }} 天</span>
+          <span v-if="checkInTotal > 0" class="ml-1.5 text-xs text-ink-3">｜已连续 {{ checkInStreak }} 天｜累计 {{ checkInTotal }} 天</span>
         </span>
       </div>
-      <div class="checkin-right" @click.stop>
-        <el-button type="primary" size="small" :loading="checkInChecking" :disabled="checkInTodayChecked" @click="doCheckIn">
+      <div class="flex items-center gap-1" @click.stop>
+        <UiButton variant="primary" size="small" :loading="checkInChecking" :disabled="checkInTodayChecked" @click="doCheckIn">
           {{ checkInTodayChecked ? '今日已打卡' : '立即打卡' }}
-        </el-button>
-        <el-button text size="small" @click="openCheckIn('rank')">排行榜</el-button>
+        </UiButton>
+        <UiButton variant="text" size="small" @click="openCheckIn('rank')">排行榜</UiButton>
       </div>
-    </div>
+    </UiCard>
 
     <!-- 类别分流（#364）：讨论 / 问答。与下面的 mode 轴正交——category 管"看哪类"，mode 管"看谁的"。
          只在浏览态显示：我的帖子/我的回复/浏览记录是个人视图，天然跨类别（后端 my-topics 也无 category 维度）。 -->
-    <el-radio-group v-if="mode === 'all'" v-model="categoryTab" class="forum-category">
+    <el-radio-group v-if="mode === 'all'" v-model="categoryTab" class="forum-category mb-3">
       <el-radio-button value="discussion">讨论</el-radio-button>
       <el-radio-button value="question">问答</el-radio-button>
     </el-radio-group>
 
     <!-- 求助/已解决筛选（#367）：仅问答 Tab 的唯一筛选轴，不加章节筛选 -->
-    <div v-if="mode === 'all' && categoryTab === 'question'" class="solved-filter">
+    <div v-if="mode === 'all' && categoryTab === 'question'" class="solved-filter mb-3">
       <el-radio-group v-model="solvedFilter" size="small" @change="handleSolvedChange">
         <el-radio-button value="all">全部</el-radio-button>
         <el-radio-button value="unsolved">求助</el-radio-button>
@@ -44,18 +44,18 @@
       </el-radio-group>
     </div>
 
-    <div class="forum-toolbar">
+    <div class="mb-3 flex items-center justify-between gap-3">
       <el-radio-group v-model="mode" class="forum-mode" @change="handleModeChange">
         <el-radio-button value="all">全部</el-radio-button>
         <el-radio-button value="my-topics">我的帖子</el-radio-button>
         <el-radio-button value="my-replies">我的回复</el-radio-button>
         <el-radio-button value="history">浏览记录</el-radio-button>
       </el-radio-group>
-      <el-radio-group v-if="mode !== 'my-replies' && mode !== 'history'" v-model="topicSort" size="small" class="topic-sort" @change="handleSortChange">
+      <el-radio-group v-if="mode !== 'my-replies' && mode !== 'history'" v-model="topicSort" size="small" @change="handleSortChange">
         <el-radio-button value="latest">最新</el-radio-button>
         <el-radio-button value="hot">热门</el-radio-button>
       </el-radio-group>
-      <el-button v-if="mode !== 'my-replies' && mode !== 'history'" size="small" :icon="topicOrder==='asc'? ArrowUp : ArrowDown" @click="toggleTopicOrder">{{ topicOrder==='asc' ? '正序' : '逆序' }}</el-button>
+      <UiButton v-if="mode !== 'my-replies' && mode !== 'history'" size="small" :icon="topicOrder==='asc'? ArrowUp : ArrowDown" @click="toggleTopicOrder">{{ topicOrder==='asc' ? '正序' : '逆序' }}</UiButton>
     </div>
 
     <CheckInDialog v-model="checkInDialogVisible" :initial-tab="checkInTab" @checked="onCheckInChecked" />
@@ -66,7 +66,7 @@
     </div>
 
     <!-- 我的回复列表（条目带主题标题回填，点击跳对应帖子） -->
-    <div v-else-if="mode === 'my-replies'" class="topic-list">
+    <div v-else-if="mode === 'my-replies'" class="min-h-[300px] rounded-card bg-panel shadow-card">
       <UiErrorState
         v-if="loadError"
         title="回复加载失败"
@@ -81,17 +81,17 @@
         <div
           v-for="(reply, i) in myReplies"
           :key="reply.id"
-          class="topic-item stagger-in"
+          class="stagger-in flex cursor-pointer gap-3.5 border-b border-line px-5 py-[18px] transition-[background,transform] duration-[var(--duration-tap)] ease-[var(--ease-default)] hover:bg-canvas active:scale-[0.995] active:bg-line last:border-b-0 max-md:px-3.5 max-md:py-3.5"
           :style="staggerStyle(i)"
           @click="goDetail(reply.topic_id)"
         >
-          <div class="topic-main">
-            <div class="topic-title-row">
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-2">
               <el-tag size="small" type="info">回复</el-tag>
-              <h3 class="topic-title">{{ reply.topic_title || '原帖已删除' }}</h3>
+              <h3 class="m-0 truncate text-base font-semibold text-ink">{{ reply.topic_title || '原帖已删除' }}</h3>
             </div>
-            <p class="topic-excerpt">{{ reply.content }}</p>
-            <div class="topic-meta">
+            <p class="mt-1.5 mb-2 line-clamp-2 text-[13px] text-ink-2">{{ reply.content }}</p>
+            <div class="flex items-center gap-1.5 text-xs text-ink-3">
               <span>{{ formatRelativeTime(reply.created_at) }}</span>
             </div>
           </div>
@@ -100,7 +100,7 @@
       <UiEmptyState v-else description="暂无回复" />
     </div>
 
-    <div v-else class="topic-list">
+    <div v-else class="min-h-[300px] rounded-card bg-panel shadow-card">
       <UiErrorState
         v-if="loadError"
         title="帖子加载失败"
@@ -115,44 +115,44 @@
         <div
           v-for="(topic, i) in topics"
           :key="topic.id"
-          class="topic-item stagger-in"
+          class="stagger-in flex cursor-pointer gap-3.5 border-b border-line px-5 py-[18px] transition-[background,transform] duration-[var(--duration-tap)] ease-[var(--ease-default)] hover:bg-canvas active:scale-[0.995] active:bg-line last:border-b-0 max-md:px-3.5 max-md:py-3.5"
           :style="staggerStyle(i)"
           @click="goDetail(topic.id)"
         >
-          <div class="topic-author">
-            <el-avatar :size="42" :src="topic.author.avatar_url || undefined" class="author-avatar">
+          <div>
+            <el-avatar :size="42" :src="topic.author.avatar_url || undefined">
               {{ authorLetter(topic.author) }}
             </el-avatar>
           </div>
-          <div class="topic-main">
-            <div class="topic-title-row">
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-2">
               <template v-if="topic.category === 'question'">
-                <el-tag v-if="topic.accepted_reply_id || topic.solved_at" size="small" type="success" effect="dark" class="solved-tag">✓ 已解决</el-tag>
-                <el-tag v-else size="small" type="info" effect="plain" class="unsolved-tag">求助</el-tag>
+                <el-tag v-if="topic.accepted_reply_id || topic.solved_at" size="small" type="success" effect="dark" class="font-semibold">✓ 已解决</el-tag>
+                <el-tag v-else size="small" type="info" effect="plain" class="bg-canvas text-ink-2 border-[var(--color-border-dark)]">求助</el-tag>
               </template>
-              <el-tag v-else-if="topic.chapter_id" size="small" type="warning" class="chapter-tag">
+              <el-tag v-else-if="topic.chapter_id" size="small" type="warning">
                 {{ topic.chapter_title || '章节讨论' }}
               </el-tag>
               <el-tag v-else size="small" type="info">综合</el-tag>
-              <h3 class="topic-title">{{ topic.title }}</h3>
+              <h3 class="m-0 truncate text-base font-semibold text-ink">{{ topic.title }}</h3>
             </div>
-            <p class="topic-excerpt">{{ topic.content }}</p>
-            <div class="topic-meta">
-              <span class="author-name">{{ displayName(topic.author) }}</span>
-              <span class="meta-divider">·</span>
+            <p class="mt-1.5 mb-2 line-clamp-2 text-[13px] text-ink-2">{{ topic.content }}</p>
+            <div class="flex items-center gap-1.5 text-xs text-ink-3">
+              <span>{{ displayName(topic.author) }}</span>
+              <span class="text-[var(--color-border-dark)]">·</span>
               <span>{{ formatRelativeTime(topic.created_at) }}</span>
-              <span class="meta-right">
-                <span v-if="topic.images && topic.images.length > 0" class="img-mark">
+              <span class="ml-auto flex items-center gap-1">
+                <span v-if="topic.images && topic.images.length > 0" class="mr-2.5 inline-flex items-center gap-0.5 text-warn">
                   <el-icon><Picture /></el-icon>
                   {{ topic.images.length }}
                 </span>
                 <el-icon><View /></el-icon>
                 {{ topic.view_count }}
-                <span class="like-mark">
-                  <span class="heart" :class="{ liked: topic.liked_by_me }">{{ topic.liked_by_me ? '♥' : '♡' }}</span>
+                <span class="ml-2.5 inline-flex items-center gap-0.5 text-bad">
+                  <span class="text-xs leading-none">{{ topic.liked_by_me ? '♥' : '♡' }}</span>
                   {{ topic.likes_count || 0 }}
                 </span>
-                <el-icon class="reply-icon"><ChatDotRound /></el-icon>
+                <el-icon class="ml-2.5"><ChatDotRound /></el-icon>
                 {{ topic.reply_count }}
               </span>
             </div>
@@ -162,7 +162,7 @@
       <UiEmptyState v-else :description="emptyDescription" :action-text="mode === 'all' && categoryTab === 'question' ? '我要提问' : undefined" @action="goAsk" />
     </div>
 
-    <div class="pagination-wrapper" v-if="mode !== 'history' && total > pageSize">
+    <div class="mt-5 flex justify-center" v-if="mode !== 'history' && total > pageSize">
       <el-pagination
         v-model:current-page="currentPage"
         :page-size="pageSize"
@@ -175,8 +175,8 @@
     <el-dialog v-model="createDialogVisible" title="发布新帖" width="640px">
       <ForumPostForm ref="postForm" category="discussion" @success="onTopicCreated" />
       <template #footer>
-        <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="postForm?.submitting" @click="postForm?.submit()">发布</el-button>
+        <UiButton @click="createDialogVisible = false">取消</UiButton>
+        <UiButton variant="primary" :loading="postForm?.submitting" @click="postForm?.submit()">发布</UiButton>
       </template>
     </el-dialog>
   </div>
@@ -202,6 +202,8 @@ import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -445,220 +447,3 @@ watch(
   }
 )
 </script>
-
-<style scoped>
-.forum-page {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 0 16px 40px;
-}
-
-.forum-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.forum-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0 0 6px;
-}
-
-.forum-category {
-  margin-bottom: 12px;
-}
-
-.solved-filter {
-  margin-bottom: 12px;
-}
-
-.solved-tag {
-  font-weight: 600;
-}
-
-.unsolved-tag {
-  background: var(--color-bg-page);
-  border-color: var(--color-border-dark);
-  color: var(--color-text-secondary);
-}
-
-.forum-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  gap: 12px;
-}
-
-.forum-mode {
-  margin-bottom: 0;
-}
-
-.topic-list {
-  background: var(--color-bg-card);
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  min-height: 300px;
-}
-
-.topic-item {
-  display: flex;
-  gap: 14px;
-  padding: 18px 20px;
-  border-bottom: 1px solid var(--color-border-light);
-  cursor: pointer;
-  transition:
-    background var(--duration-tap) var(--ease-default),
-    transform var(--duration-tap) var(--ease-default);
-}
-
-.topic-item:hover {
-  background: var(--color-bg-page);
-}
-
-.topic-item:active {
-  background: var(--color-border-light);
-  transform: scale(0.995);
-}
-
-.topic-item:last-child {
-  border-bottom: none;
-}
-
-.topic-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.topic-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.topic-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.topic-excerpt {
-  color: var(--color-text-secondary);
-  font-size: 13px;
-  margin: 6px 0 8px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.topic-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-}
-
-.meta-divider {
-  color: var(--color-border-dark);
-}
-
-.meta-right {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.reply-icon {
-  margin-left: 10px;
-}
-
-.img-mark {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-right: 10px;
-  color: var(--color-warning);
-}
-
-.like-mark {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: 10px;
-  color: var(--color-danger);
-}
-
-.like-mark .heart {
-  font-size: 12px;
-  line-height: 1;
-}
-
-.like-mark .heart.liked {
-  color: var(--color-danger);
-}
-
-.checkin-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: var(--color-bg-card);
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  padding: 14px 16px;
-  margin-bottom: 12px;
-  cursor: pointer;
-}
-
-.checkin-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--color-text-primary);
-}
-
-.checkin-icon {
-  font-size: 16px;
-  color: var(--color-primary-500);
-}
-
-.checkin-sub {
-  color: var(--color-text-tertiary);
-  font-size: 12px;
-  margin-left: 6px;
-}
-
-.checkin-right {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.pagination-wrapper {
-  display: flex;
-  justify-content: center;
-  margin-top: 20px;
-}
-
-@media screen and (max-width: 768px) {
-  .forum-header {
-    flex-direction: column;
-  }
-
-  .topic-item {
-    padding: 14px;
-  }
-}
-</style>

@@ -9,9 +9,9 @@
             累计打卡 <span class="num">{{ calendar.total }}</span> 天
           </div>
           <div class="month-nav">
-            <el-button text size="small" @click="prevMonth">‹</el-button>
+            <UiButton variant="text" size="small" @click="prevMonth">‹</UiButton>
             <span class="month-label">{{ calendarYear }}年{{ calendarMonth }}月</span>
-            <el-button text size="small" @click="nextMonth">›</el-button>
+            <UiButton variant="text" size="small" @click="nextMonth">›</UiButton>
           </div>
         </div>
 
@@ -36,9 +36,9 @@
         </div>
 
         <div class="calendar-action">
-          <el-button type="primary" :loading="checking" :disabled="calendar.today_checked" @click="doCheckIn">
+          <UiButton variant="primary" :loading="checking" :disabled="calendar.today_checked" @click="doCheckIn">
             {{ calendar.today_checked ? '今日已打卡' : '立即打卡' }}
-          </el-button>
+          </UiButton>
         </div>
       </el-tab-pane>
 
@@ -85,6 +85,7 @@
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { forumApi, type CheckInRankItem, type CheckInRankMe } from '@/api/forum'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const visible = defineModel<boolean>({ default: false })
 const props = withDefaults(defineProps<{ initialTab?: 'calendar' | 'rank' }>(), { initialTab: 'calendar' })
@@ -248,17 +249,17 @@ defineExpose({ loadCalendar, loadRank })
 
 .streak-info {
   font-size: 13px;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .streak-info .num {
   font-weight: 600;
-  color: #409eff;
+  color: var(--color-primary-500);
 }
 
 .divider {
   margin: 0 6px;
-  color: #dcdfe6;
+  color: var(--color-border);
 }
 
 .month-nav {
@@ -269,13 +270,13 @@ defineExpose({ loadCalendar, loadRank })
 
 .month-label {
   font-size: 13px;
-  color: #606266;
+  color: var(--color-text-secondary);
   min-width: 80px;
   text-align: center;
 }
 
 .calendar-grid {
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--color-border-light);
   border-radius: 8px;
   overflow: hidden;
   margin-bottom: 16px;
@@ -284,13 +285,13 @@ defineExpose({ loadCalendar, loadRank })
 .weekday-row {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  background: #f5f7fa;
+  background: var(--color-bg-page);
 }
 
 .weekday {
   text-align: center;
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   padding: 6px 0;
 }
 
@@ -302,10 +303,10 @@ defineExpose({ loadCalendar, loadRank })
 .day-cell {
   text-align: center;
   font-size: 13px;
-  color: #303133;
+  color: var(--color-text-primary);
   padding: 10px 0;
-  border-right: 1px solid #f5f7fa;
-  border-bottom: 1px solid #f5f7fa;
+  border-right: 1px solid var(--color-bg-page);
+  border-bottom: 1px solid var(--color-bg-page);
   position: relative;
 }
 
@@ -314,22 +315,22 @@ defineExpose({ loadCalendar, loadRank })
 }
 
 .day-cell.other-month {
-  color: #c0c4cc;
-  background: #fafafa;
+  color: var(--color-text-disabled);
+  background: var(--color-bg-page);
 }
 
 .day-cell.today {
-  background: #ecf5ff;
+  background: var(--color-primary-50);
   font-weight: 600;
 }
 
 .day-cell.checked {
-  background: #409eff;
+  background: var(--color-primary-500);
   color: #fff;
 }
 
 .day-cell.checked.today {
-  background: #337ecc;
+  background: var(--color-primary-600);
 }
 
 .calendar-action {
@@ -338,24 +339,24 @@ defineExpose({ loadCalendar, loadRank })
 }
 
 .my-rank-card {
-  background: #f0f7ff;
-  border: 1px solid #d9ecff;
+  background: var(--color-primary-50);
+  border: 1px solid var(--color-primary-100);
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 13px;
-  color: #303133;
+  color: var(--color-text-primary);
   margin-bottom: 12px;
   text-align: center;
 }
 
 .my-rank-card .rank-num {
   font-weight: 700;
-  color: #409eff;
+  color: var(--color-primary-500);
 }
 
 .my-rank-card .num {
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .rank-user {
@@ -366,7 +367,7 @@ defineExpose({ loadCalendar, loadRank })
 
 .rank-name {
   font-size: 13px;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .today-tag {

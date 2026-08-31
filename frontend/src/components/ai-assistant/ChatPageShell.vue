@@ -15,9 +15,9 @@
           <router-link v-if="backLinkTo" :to="backLinkTo" class="back-link">{{ backLinkText }}</router-link>
 
           <!-- 未登录：显示登录按钮 -->
-          <el-button v-if="!store.isLoggedIn" type="primary" size="default" @click="goLogin">
+          <UiButton variant="primary" v-if="!store.isLoggedIn" size="default" @click="goLogin">
             登录 HRWAI 账号
-          </el-button>
+          </UiButton>
 
           <!-- 已登录：显示用户名 + 退出 -->
           <template v-else>
@@ -46,7 +46,7 @@
       <aside v-if="store.isLoggedIn" class="session-sidebar">
         <div class="sidebar-header">
           <span class="sidebar-title">会话历史</span>
-          <el-button type="primary" size="small" :icon="Plus" @click="emit('new-session')">新建</el-button>
+          <UiButton variant="primary" size="small" :icon="Plus" @click="emit('new-session')">新建</UiButton>
         </div>
         <div v-loading="store.sessionsLoading" class="session-list">
           <div v-if="store.sessions.length === 0 && !store.sessionsLoading" class="empty-sessions">
@@ -198,33 +198,21 @@
                 <slot name="input-footer-left" />
               </div>
               <div class="input-actions">
-                <el-button
-                  v-if="!store.streaming"
-                  type="primary"
-                  :icon="Promotion"
-                  :disabled="!canSend"
-                  @click="emit('send')"
-                >
+                <UiButton variant="primary" v-if="!store.streaming" :icon="Promotion" :disabled="!canSend" @click="emit('send')">
                   发送
-                </el-button>
-                <el-button v-else type="danger" :icon="VideoPause" @click="store.stopStreaming">
+                </UiButton>
+                <UiButton variant="danger" v-else :icon="VideoPause" @click="store.stopStreaming">
                   停止
-                </el-button>
+                </UiButton>
               </div>
             </div>
             <div v-else class="input-actions">
-              <el-button
-                v-if="!store.streaming"
-                type="primary"
-                :icon="Promotion"
-                :disabled="!canSend"
-                @click="emit('send')"
-              >
+              <UiButton variant="primary" v-if="!store.streaming" :icon="Promotion" :disabled="!canSend" @click="emit('send')">
                 发送
-              </el-button>
-              <el-button v-else type="danger" :icon="VideoPause" @click="store.stopStreaming">
+              </UiButton>
+              <UiButton variant="danger" v-else :icon="VideoPause" @click="store.stopStreaming">
                 停止
-              </el-button>
+              </UiButton>
             </div>
           </div>
           <slot name="input-extra" />
@@ -259,6 +247,7 @@ import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import { buildSubdomainUrl } from '@/utils/subdomain'
 import { formatShortDateTime } from '@/utils/format'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -504,7 +493,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   color: var(--color-text-primary, #0f172a);
   padding: 6px 12px;
   border-radius: 8px;
-  transition: background 0.15s ease;
+  transition: background var(--duration-fast) var(--ease-default);
 }
 
 .user-trigger:hover {
@@ -516,7 +505,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   font-weight: 500;
   color: var(--color-primary-600, #2563eb);
   text-decoration: none;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--duration-fast) var(--ease-default);
 }
 
 .profile-link:hover {
@@ -531,7 +520,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   padding: 6px 12px;
   border: 1px solid var(--color-border-dark, #cbd5e1);
   border-radius: 8px;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) var(--ease-default);
 }
 
 .back-link:hover {
@@ -590,7 +579,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   padding: 10px 12px;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background var(--duration-fast) var(--ease-default);
   margin-bottom: 4px;
 }
 
@@ -632,7 +621,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   padding: 4px;
   border-radius: 4px;
   opacity: 0;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) var(--ease-default);
   flex-shrink: 0;
 }
 
@@ -644,7 +633,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   padding: 4px;
   border-radius: 4px;
   opacity: 0;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) var(--ease-default);
 }
 
 .session-actions {
@@ -746,7 +735,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   color: var(--color-text-secondary, #475569);
   cursor: pointer;
   text-align: left;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) var(--ease-default);
 }
 
 .suggestion-card:hover {
@@ -881,7 +870,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   display: flex;
   gap: 8px;
   align-items: center;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--duration-fast) var(--ease-default);
 }
 
 .input-wrap.has-image {

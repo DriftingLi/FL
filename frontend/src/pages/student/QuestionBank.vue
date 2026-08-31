@@ -1,5 +1,5 @@
 <template>
-  <div class="question-bank">
+  <div class="mx-auto max-w-[1200px]">
     <!-- ===== 入口 ===== -->
     <div v-if="!mode" class="flex flex-col gap-6">
       <UiSectionHeader title="题库练习" subtitle="选择练习方式，开始刷题" />
@@ -134,11 +134,11 @@
     </div>
 
     <!-- ===== 刷题中 ===== -->
-    <div v-if="mode" class="practice-area">
-      <div class="practice-toolbar">
-        <div class="progress-text">
+    <div v-if="mode" class="mt-2.5">
+      <div class="mb-[15px] flex items-center justify-between rounded-[8px] bg-panel px-[15px] py-2.5 shadow-[0_2px_4px_rgba(0,0,0,0.1)]">
+        <div class="text-[15px] text-ink">
           第 {{ currentIdx + 1 }}/{{ questions.length }} 题
-          <span class="progress-stats">已答对 {{ correctCount }} · 已答错 {{ wrongCount }}</span>
+          <span class="ml-3 text-[13px] text-ink-3">已答对 {{ correctCount }} · 已答错 {{ wrongCount }}</span>
           <el-tag v-if="mode === 'sequential'" size="small" type="primary" style="margin-left: 10px">顺序练习</el-tag>
           <el-tag v-else-if="mode === 'tag'" size="small" style="margin-left: 10px">
             标签：{{ currentTagName }}
@@ -147,18 +147,18 @@
             {{ typeMap[specialType] }}
           </el-tag>
         </div>
-        <el-button size="small" @click="confirmQuit">退出练习</el-button>
+        <UiButton size="small" @click="confirmQuit">退出练习</UiButton>
       </div>
 
-      <el-card v-if="currentQuestion" class="question-card">
-        <div class="question-header">
+      <el-card v-if="currentQuestion" class="mb-[15px]">
+        <div class="mb-[15px] flex items-center gap-2">
           <el-tag size="small">{{ typeMap[currentQuestion.type] || '题目' }}</el-tag>
-          <el-icon class="fav-star" :class="{ active: favorited }" @click="toggleFavorite">
+          <el-icon class="fav-star cursor-pointer text-lg text-ink-muted hover:text-warn" :class="favorited ? 'text-warn' : ''" @click="toggleFavorite">
             <StarFilled v-if="favorited" /><Star v-else />
           </el-icon>
         </div>
-        <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="q-image" loading="lazy" decoding="async" />
-        <p class="q-content">{{ currentQuestion.content }}</p>
+        <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="mb-2.5 max-h-[250px] max-w-full rounded-[8px]" loading="lazy" decoding="async" />
+        <p class="mb-[15px] whitespace-pre-wrap text-base leading-[1.8]">{{ currentQuestion.content }}</p>
 
         <QuestionOptionPicker
           v-if="currentQuestion.type !== 'short_answer'"
@@ -204,14 +204,14 @@
           <NoteCard :question-id="currentQuestion.id" />
         </div>
 
-        <div class="q-actions">
-          <el-button v-if="currentIdx > 0" @click="prevQuestion">上一题</el-button>
-          <el-button v-if="!submitted" type="primary" :disabled="!canSubmit" @click="handleSubmit">
+        <div class="mt-5 flex justify-center">
+          <UiButton v-if="currentIdx > 0" @click="prevQuestion">上一题</UiButton>
+          <UiButton variant="primary" v-if="!submitted" :disabled="!canSubmit" @click="handleSubmit">
             提交答案
-          </el-button>
-          <el-button v-if="currentIdx < questions.length - 1" type="primary" @click="nextQuestion">
+          </UiButton>
+          <UiButton variant="primary" v-if="currentIdx < questions.length - 1" @click="nextQuestion">
             下一题
-          </el-button>
+          </UiButton>
         </div>
       </el-card>
     </div>
@@ -512,20 +512,3 @@ async function loadCardData() {
 }
 </script>
 
-<style scoped>
-.question-bank { max-width: 1200px; margin: 0 auto; }
-.practice-area { margin-top: 10px; }
-.practice-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px 15px; background: var(--color-bg-card); border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-.progress-text { font-size: 15px; color: var(--color-text-primary); }
-.progress-stats { margin-left: 12px; color: var(--color-text-tertiary); font-size: 13px; }
-.question-card { margin-bottom: 15px; }
-.question-header { display: flex; gap: 8px; align-items: center; margin-bottom: 15px; }
-.fav-star { cursor: pointer; font-size: 18px; color: var(--color-text-disabled); }
-.fav-star:hover { color: var(--color-warning); }
-.fav-star.active { color: var(--color-warning); }
-.q-image { max-width: 100%; max-height: 250px; border-radius: 8px; margin-bottom: 10px; }
-.q-content { font-size: 16px; line-height: 1.8; margin-bottom: 15px; white-space: pre-wrap; }
-.q-feedback { margin-top: 15px; }
-.feedback-explanation { margin-top: 6px; color: var(--color-text-secondary); }
-.q-actions { display: flex; justify-content: center; margin-top: 20px; }
-</style>

@@ -4,7 +4,7 @@
       <template #header>
         <div class="card-header">
           <span class="card-title">论坛管理</span>
-          <el-button :icon="Refresh" circle @click="activeMainTab === 'reports' ? loadReports() : loadList()" />
+          <UiButton :icon="Refresh" circle @click="activeMainTab === 'reports' ? loadReports() : loadList()"/>
         </div>
       </template>
 
@@ -49,15 +49,9 @@
           </el-table-column>
           <el-table-column label="操作" width="100" fixed="right" align="center">
             <template #default="{ row }">
-              <el-button
-                v-if="row.status === 0"
-                type="primary"
-                size="small"
-                link
-                @click="handleReport(row)"
-              >
+              <UiButton variant="primary" v-if="row.status === 0" size="small" link @click="handleReport(row)">
                 标记已处理
-              </el-button>
+              </UiButton>
               <span v-else class="report-done">—</span>
             </template>
           </el-table-column>
@@ -124,14 +118,9 @@
                         回复 @{{ reply.parent_name }}
                       </span>
                       <span class="reply-time">{{ formatLocaleDateTime(reply.created_at) }}</span>
-                      <el-button
-                        class="reply-delete"
-                        type="danger"
-                        size="small"
-                        @click="deleteReply(reply)"
-                      >
+                      <UiButton variant="danger" class="reply-delete" size="small" @click="deleteReply(reply)">
                         删除回复
-                      </el-button>
+                      </UiButton>
                     </div>
                     <div class="reply-content">{{ reply.content }}</div>
                     <ForumImageGallery :images="reply.images" />
@@ -166,7 +155,7 @@
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button type="danger" size="small" @click="deleteTopic(row)">删除</el-button>
+            <UiButton variant="danger" size="small" @click="deleteTopic(row)">删除</UiButton>
           </template>
         </el-table-column>
       </el-table>
@@ -199,6 +188,7 @@ import {
 } from '@/api/forum'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import { formatLocaleDateTime } from '@/utils/format'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const loading = ref(false)
 const topics = ref<AdminForumTopic[]>([])
@@ -382,7 +372,7 @@ onMounted(loadList)
 }
 
 .report-done {
-  color: #c0c4cc;
+  color: var(--color-text-disabled);
 }
 
 .filter-bar {
@@ -413,12 +403,12 @@ onMounted(loadList)
 .topic-content {
   margin-bottom: 14px;
   padding-bottom: 14px;
-  border-bottom: 1px solid #ebeef5;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .topic-content-text {
   font-size: 14px;
-  color: #303133;
+  color: var(--color-text-primary);
   line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
@@ -431,7 +421,7 @@ onMounted(loadList)
 }
 
 .reply-item {
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-bg-page);
   padding-bottom: 10px;
 }
 
@@ -448,20 +438,20 @@ onMounted(loadList)
 
 .reply-author {
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .reply-quote {
   font-size: 12px;
-  color: #909399;
-  background: #f5f7fa;
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-page);
   border-radius: 6px;
   padding: 1px 6px;
 }
 
 .reply-time {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 
 .reply-delete {
@@ -470,14 +460,14 @@ onMounted(loadList)
 
 .reply-content {
   margin-top: 4px;
-  color: #303133;
+  color: var(--color-text-primary);
   font-size: 13px;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .reply-loading {
-  color: #909399;
+  color: var(--color-text-tertiary);
   font-size: 13px;
 }
 

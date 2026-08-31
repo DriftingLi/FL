@@ -240,7 +240,7 @@ function goMain() {
   align-items: center;
   justify-content: center;
   color: #64748b;
-  transition: all 0.15s;
+  transition: all var(--duration-fast) var(--ease-default);
 }
 
 .alt:hover .ic {
@@ -354,7 +354,7 @@ function goMain() {
   border-radius: 12px;
   padding: 4px 14px;
   box-shadow: 0 0 0 1px #e2e8f0 inset;
-  transition: all 0.2s ease;
+  transition: all var(--duration-base) var(--ease-default);
   background: #f8fafc;
 }
 
@@ -387,7 +387,7 @@ function goMain() {
   color: #2563eb;
   text-decoration: none;
   margin-left: 4px;
-  transition: color 0.15s ease;
+  transition: color var(--duration-fast) var(--ease-default);
 }
 
 .footer-link:hover {

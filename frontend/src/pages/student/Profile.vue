@@ -1,77 +1,77 @@
 <template>
-  <div class="profile-page">
-    <div class="profile-list">
-      <div class="profile-group">
-        <div class="profile-row" @click="openAvatar">
-          <span class="row-label">修改头像</span>
-          <span class="row-value">
-            <el-avatar :size="32" :src="avatarUrl || undefined" class="row-avatar">{{ letter }}</el-avatar>
-            <el-icon class="arrow"><ArrowRight /></el-icon>
+  <div class="mx-auto max-w-[560px] p-4">
+    <div class="flex flex-col gap-3">
+      <div class="overflow-hidden rounded-card bg-panel shadow-card">
+        <div class="flex cursor-pointer items-center justify-between border-b border-line px-4 py-4 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas active:bg-canvas last:border-b-0" @click="openAvatar">
+          <span class="text-sm text-ink">修改头像</span>
+          <span class="flex items-center gap-2 text-sm text-ink-3">
+            <el-avatar :size="32" :src="avatarUrl || undefined" class="shrink-0 bg-[image:var(--gradient-brand)] text-panel">{{ letter }}</el-avatar>
+            <el-icon class="text-sm text-ink-muted"><ArrowRight /></el-icon>
           </span>
         </div>
-        <div class="profile-row" @click="openNickname">
-          <span class="row-label">修改昵称</span>
-          <span class="row-value">
-            <span class="value-text">{{ userInfo.username || '未设置' }}</span>
-            <el-icon class="arrow"><ArrowRight /></el-icon>
+        <div class="flex cursor-pointer items-center justify-between border-b border-line px-4 py-4 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas active:bg-canvas last:border-b-0" @click="openNickname">
+          <span class="text-sm text-ink">修改昵称</span>
+          <span class="flex items-center gap-2 text-sm text-ink-3">
+            <span class="max-w-[180px] truncate">{{ userInfo.username || '未设置' }}</span>
+            <el-icon class="text-sm text-ink-muted"><ArrowRight /></el-icon>
           </span>
         </div>
-        <div class="profile-row" @click="openCompany">
-          <span class="row-label">单位</span>
-          <span class="row-value">
-            <span class="value-text">{{ userInfo.company || '未填写' }}</span>
-            <el-icon class="arrow"><ArrowRight /></el-icon>
+        <div class="flex cursor-pointer items-center justify-between border-b border-line px-4 py-4 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas active:bg-canvas last:border-b-0" @click="openCompany">
+          <span class="text-sm text-ink">单位</span>
+          <span class="flex items-center gap-2 text-sm text-ink-3">
+            <span class="max-w-[180px] truncate">{{ userInfo.company || '未填写' }}</span>
+            <el-icon class="text-sm text-ink-muted"><ArrowRight /></el-icon>
           </span>
         </div>
-        <div class="profile-row" @click="openAccount">
-          <span class="row-label">我的帐号</span>
-          <span class="row-value">
-            <span class="value-text">{{ userInfo.account || '未生成' }}</span>
-            <el-icon class="arrow"><ArrowRight /></el-icon>
-          </span>
-        </div>
-      </div>
-
-      <div class="profile-group">
-        <div class="profile-row" @click="openPassword">
-          <span class="row-label">修改密码</span>
-          <span class="row-value"><el-icon class="arrow"><ArrowRight /></el-icon></span>
-        </div>
-        <div class="profile-row" @click="openPhone">
-          <span class="row-label">更换手机号</span>
-          <span class="row-value">
-            <span class="value-text">{{ maskedPhone }}</span>
-            <el-icon class="arrow"><ArrowRight /></el-icon>
-          </span>
-        </div>
-        <div class="profile-row" @click="openEmail">
-          <span class="row-label">更换邮箱</span>
-          <span class="row-value">
-            <span class="value-text">{{ userInfo.email || '未绑定' }}</span>
-            <el-icon class="arrow"><ArrowRight /></el-icon>
+        <div class="flex cursor-pointer items-center justify-between border-b border-line px-4 py-4 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas active:bg-canvas last:border-b-0" @click="openAccount">
+          <span class="text-sm text-ink">我的帐号</span>
+          <span class="flex items-center gap-2 text-sm text-ink-3">
+            <span class="max-w-[180px] truncate">{{ userInfo.account || '未生成' }}</span>
+            <el-icon class="text-sm text-ink-muted"><ArrowRight /></el-icon>
           </span>
         </div>
       </div>
 
-      <div class="profile-group">
-        <div class="profile-row" @click="openResume">
-          <span class="row-label">我的简历</span>
-          <span class="row-value">
-            <span class="value-text">{{ resumeVisibilityText }}</span>
-            <el-icon class="arrow"><ArrowRight /></el-icon>
+      <div class="overflow-hidden rounded-card bg-panel shadow-card">
+        <div class="flex cursor-pointer items-center justify-between border-b border-line px-4 py-4 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas active:bg-canvas last:border-b-0" @click="openPassword">
+          <span class="text-sm text-ink">修改密码</span>
+          <span class="flex items-center gap-2 text-sm text-ink-3"><el-icon class="text-sm text-ink-muted"><ArrowRight /></el-icon></span>
+        </div>
+        <div class="flex cursor-pointer items-center justify-between border-b border-line px-4 py-4 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas active:bg-canvas last:border-b-0" @click="openPhone">
+          <span class="text-sm text-ink">更换手机号</span>
+          <span class="flex items-center gap-2 text-sm text-ink-3">
+            <span class="max-w-[180px] truncate">{{ maskedPhone }}</span>
+            <el-icon class="text-sm text-ink-muted"><ArrowRight /></el-icon>
+          </span>
+        </div>
+        <div class="flex cursor-pointer items-center justify-between border-b border-line px-4 py-4 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas active:bg-canvas last:border-b-0" @click="openEmail">
+          <span class="text-sm text-ink">更换邮箱</span>
+          <span class="flex items-center gap-2 text-sm text-ink-3">
+            <span class="max-w-[180px] truncate">{{ userInfo.email || '未绑定' }}</span>
+            <el-icon class="text-sm text-ink-muted"><ArrowRight /></el-icon>
+          </span>
+        </div>
+      </div>
+
+      <div class="overflow-hidden rounded-card bg-panel shadow-card">
+        <div class="flex cursor-pointer items-center justify-between border-b border-line px-4 py-4 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas active:bg-canvas last:border-b-0" @click="openResume">
+          <span class="text-sm text-ink">我的简历</span>
+          <span class="flex items-center gap-2 text-sm text-ink-3">
+            <span class="max-w-[180px] truncate">{{ resumeVisibilityText }}</span>
+            <el-icon class="text-sm text-ink-muted"><ArrowRight /></el-icon>
           </span>
         </div>
       </div>
 
       <div class="profile-group danger-group">
         <div class="profile-row danger-row" @click="openDelete">
-          <span class="row-label">注销帐号</span>
-          <span class="row-value"><el-icon class="arrow"><ArrowRight /></el-icon></span>
+          <span class="text-sm text-ink">注销帐号</span>
+          <span class="flex items-center gap-2 text-sm text-ink-3"><el-icon class="text-sm text-ink-muted"><ArrowRight /></el-icon></span>
         </div>
       </div>
 
-      <div class="logout-row">
-        <el-button type="primary" class="logout-btn" @click="handleLogout">退出当前账号</el-button>
+      <div class="logout-row flex justify-center rounded-card bg-panel p-1 shadow-card">
+        <UiButton variant="primary" class="w-full p-3.5 text-[15px]" @click="handleLogout">退出当前账号</UiButton>
       </div>
     </div>
 
@@ -102,6 +102,7 @@ import EmailEditDialog from '@/components/profile/EmailEditDialog.vue'
 import PasswordEditDialog from '@/components/profile/PasswordEditDialog.vue'
 import AccountEditDialog from '@/components/profile/AccountEditDialog.vue'
 import DeleteAccountDialog from '@/components/profile/DeleteAccountDialog.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -158,33 +159,8 @@ onMounted(async ()=>{
 </script>
 
 <style scoped>
-.profile-page { max-width: 560px; margin: 0 auto; padding: 16px; }
-.profile-list { display: flex; flex-direction: column; gap: 12px; }
-.profile-group {
-  background: var(--color-bg-card);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+/* 嵌套后代覆盖（R1 例外）：红色分组内的行标签标红 */
+.danger-group .danger-row .row-label {
+  color: var(--color-danger);
 }
-.profile-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 16px;
-  cursor: pointer;
-  border-bottom: 1px solid var(--color-bg-page);
-  transition: background 0.15s;
-}
-.profile-row:last-child { border-bottom: none; }
-.profile-row:hover { background: var(--color-bg-page); }
-.profile-row:active { background: var(--color-bg-page); }
-.row-label { font-size: 14px; color: var(--color-text-primary); }
-.row-value { display: flex; align-items: center; gap: 8px; color: var(--color-text-tertiary); font-size: 14px; }
-.value-text { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.row-avatar { flex-shrink: 0; background: var(--gradient-brand, var(--color-primary-500)); color: var(--color-bg-card); }
-.arrow { font-size: 14px; color: var(--color-text-disabled); }
-.danger-group .danger-row .row-label { color: var(--color-danger); }
-.logout-row { background: var(--color-bg-card); border-radius: 12px; display: flex; justify-content: center; padding: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-.logout-btn { color: var(--color-bg-card); font-size: 15px; width: 100%; padding: 14px; }
-.logout-btn :deep(span) { color: var(--color-bg-card); }
 </style>

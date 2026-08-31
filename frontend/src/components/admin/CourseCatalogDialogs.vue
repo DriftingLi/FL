@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { trainingApi, type CatalogDirectionNode, type CatalogLevel, type CertificateTemplate } from '@/api/training'
+import UiButton from '@/components/ui/UiButton.vue'
 
 defineProps<{
   certificateTemplates: CertificateTemplate[]
@@ -181,8 +182,8 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="directionDialogVisible = false">取消</el-button>
-      <el-button type="primary" :loading="submitting" @click="submitDirection">保存</el-button>
+      <UiButton @click="directionDialogVisible = false">取消</UiButton>
+      <UiButton variant="primary" :loading="submitting" @click="submitDirection">保存</UiButton>
     </template>
   </el-dialog>
 
@@ -197,17 +198,17 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="levelDialogVisible = false">取消</el-button>
-      <el-button type="primary" :loading="submitting" @click="submitLevel">保存</el-button>
+      <UiButton @click="levelDialogVisible = false">取消</UiButton>
+      <UiButton variant="primary" :loading="submitting" @click="submitLevel">保存</UiButton>
     </template>
   </el-dialog>
 
   <!-- 证书模板管理 -->
   <el-dialog v-model="certificateDialogVisible" title="证书模板管理" width="720px" destroy-on-close>
     <div class="certificate-header">
-      <el-button type="primary" size="small" @click="openCertificateForm()">
+      <UiButton variant="primary" size="small" @click="openCertificateForm()">
         <el-icon><Plus /></el-icon> 新增模板
-      </el-button>
+      </UiButton>
     </div>
     <el-table :data="certificateTemplates" stripe border size="small" v-loading="certificateLoading">
       <el-table-column prop="id" label="ID" width="60" align="center" />
@@ -221,10 +222,10 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
       <el-table-column prop="description" label="说明" min-width="160" show-overflow-tooltip />
       <el-table-column label="操作" width="120" align="center">
         <template #default="{ row }">
-          <el-button link size="small" @click="openCertificateForm(row)">编辑</el-button>
+          <UiButton link size="small" @click="openCertificateForm(row)">编辑</UiButton>
           <el-popconfirm title="确定删除该模板？" @confirm="handleDeleteCertificate(row)">
             <template #reference>
-              <el-button link size="small" type="danger">删除</el-button>
+              <UiButton variant="danger" link size="small">删除</UiButton>
             </template>
           </el-popconfirm>
         </template>
@@ -232,7 +233,7 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
     </el-table>
     <el-empty v-if="!certificateLoading && certificateTemplates.length === 0" description="暂无证书模板" />
     <template #footer>
-      <el-button @click="certificateDialogVisible = false">关闭</el-button>
+      <UiButton @click="certificateDialogVisible = false">关闭</UiButton>
     </template>
   </el-dialog>
 
@@ -252,8 +253,8 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="certificateFormVisible = false">取消</el-button>
-      <el-button type="primary" :loading="submitting" @click="submitCertificate">保存</el-button>
+      <UiButton @click="certificateFormVisible = false">取消</UiButton>
+      <UiButton variant="primary" :loading="submitting" @click="submitCertificate">保存</UiButton>
     </template>
   </el-dialog>
 </template>

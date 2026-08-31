@@ -2,25 +2,25 @@
   <div class="image-viewer" ref="containerRef">
     <div class="image-toolbar">
       <el-tooltip content="缩小" placement="bottom">
-        <el-button :icon="ZoomOut" circle size="small" @click="zoomOut" :disabled="scale <= 0.1" />
+        <UiButton :icon="ZoomOut" circle size="small" @click="zoomOut" :disabled="scale <= 0.1"/>
       </el-tooltip>
       <span class="zoom-text">{{ Math.round(scale * 100) }}%</span>
       <el-tooltip content="放大" placement="bottom">
-        <el-button :icon="ZoomIn" circle size="small" @click="zoomIn" :disabled="scale >= 5" />
+        <UiButton :icon="ZoomIn" circle size="small" @click="zoomIn" :disabled="scale >= 5"/>
       </el-tooltip>
       <el-divider direction="vertical" />
       <el-tooltip content="适合窗口" placement="bottom">
-        <el-button :icon="FullScreen" circle size="small" @click="fitToWindow" />
+        <UiButton :icon="FullScreen" circle size="small" @click="fitToWindow"/>
       </el-tooltip>
       <el-tooltip content="原始大小" placement="bottom">
-        <el-button :icon="RefreshRight" circle size="small" @click="resetZoom" />
+        <UiButton :icon="RefreshRight" circle size="small" @click="resetZoom"/>
       </el-tooltip>
       <el-divider direction="vertical" />
       <el-tooltip content="全屏" placement="bottom">
-        <el-button :icon="Rank" circle size="small" @click="toggleFullscreen" />
+        <UiButton :icon="Rank" circle size="small" @click="toggleFullscreen"/>
       </el-tooltip>
       <el-tooltip content="下载" placement="bottom">
-        <el-button :icon="Download" circle size="small" @click="downloadFile" />
+        <UiButton :icon="Download" circle size="small" @click="downloadFile"/>
       </el-tooltip>
     </div>
 
@@ -47,7 +47,7 @@
       />
       <div v-if="imgError" class="image-error">
         <el-empty :description="imgErrorMessage">
-          <el-button type="primary" @click="retryLoad">重试</el-button>
+          <UiButton variant="primary" @click="retryLoad">重试</UiButton>
         </el-empty>
       </div>
     </div>
@@ -58,6 +58,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ZoomIn, ZoomOut, FullScreen, Download, RefreshRight, Rank } from '@element-plus/icons-vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const props = defineProps({
   src: { type: String, required: true },
@@ -90,7 +91,7 @@ const initialPinchScale = ref(1)
 const imageStyle = computed(() => ({
   transform: `translate(${panX.value}px, ${panY.value}px) scale(${scale.value})`,
   cursor: isDragging.value ? 'grabbing' : scale.value > 1 ? 'grab' : 'default',
-  transition: isDragging.value ? 'none' : 'transform 0.2s ease',
+  transition: isDragging.value ? 'none' : 'transform var(--duration-base) var(--ease-default)',
   transformOrigin: 'center center'
 }))
 
@@ -258,7 +259,7 @@ onBeforeUnmount(() => {
   min-height: 500px;
   display: flex;
   flex-direction: column;
-  background: #1a1a2e;
+  background: var(--color-viewer-bg);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -268,7 +269,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 4px;
   padding: 8px 12px;
-  background: #16213e;
+  background: var(--color-viewer-bar);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   flex-shrink: 0;
 }
@@ -276,14 +277,14 @@ onBeforeUnmount(() => {
 .image-toolbar .el-button {
   --el-button-bg-color: transparent;
   --el-button-border-color: transparent;
-  --el-button-text-color: #ccc;
+  --el-button-text-color: var(--color-viewer-text);
   --el-button-hover-bg-color: rgba(255, 255, 255, 0.1);
   --el-button-hover-border-color: transparent;
   --el-button-hover-text-color: #fff;
 }
 
 .zoom-text {
-  color: #ccc;
+  color: var(--color-viewer-text);
   font-size: 13px;
   min-width: 48px;
   text-align: center;

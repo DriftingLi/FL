@@ -1,5 +1,5 @@
 <template>
-  <div class="chapter-view-page">
+  <div class="mx-auto max-w-[900px] px-5 pb-10 max-md:px-3 max-md:pb-[30px]">
     <!-- 加载：骨架屏（替代原整页 v-loading，避免整块变灰） -->
     <UiSkeleton v-if="loading" variant="list" :count="3" />
 
@@ -21,9 +21,9 @@
     />
 
     <template v-else-if="chapterDetail">
-      <div class="chapter-header">
-        <div class="header-left">
-          <h1 class="chapter-title">{{ chapterDetail.title }}</h1>
+      <div class="chapter-header mb-5">
+        <div class="header-left flex flex-wrap items-center gap-2.5">
+          <h1 class="chapter-title m-0 text-[22px] font-semibold text-ink max-md:text-lg">{{ chapterDetail.title }}</h1>
           <el-tag
             v-if="chapterDetail.study_status === 'completed'"
             type="success"
@@ -31,25 +31,20 @@
           >
             已完成
           </el-tag>
-          <el-button
-            v-else
-            size="small"
-            :loading="markingCompleted"
-            @click="markCompleted"
-          >
+          <UiButton v-else size="small" :loading="markingCompleted" @click="markCompleted">
             标记完成
-          </el-button>
+          </UiButton>
         </div>
       </div>
 
-      <div class="chapter-content-area">
-        <el-tabs v-if="chapterDetail.content || chapterFiles.length > 0" v-model="activeTab" class="content-tabs">
+      <div class="chapter-content-area mb-5 min-h-[300px] rounded-card bg-panel p-6 shadow-card max-md:p-4">
+        <el-tabs v-if="chapterDetail.content || chapterFiles.length > 0" v-model="activeTab" class="content-tabs min-h-[400px]">
           <el-tab-pane
             v-if="chapterDetail.content"
             label="图文"
             name="content"
           >
-            <div class="content-text markdown-body" v-html="renderedContent"></div>
+            <div class="content-text mb-5 text-[15px] leading-[1.8] text-ink markdown-body" v-html="renderedContent"></div>
           </el-tab-pane>
 
           <el-tab-pane
@@ -58,18 +53,18 @@
             :name="group.type"
           >
             <template #label>
-              <span class="tab-label">
+              <span class="tab-label inline-flex items-center gap-1.5">
                 <el-icon :size="16" :style="{ color: group.color }">
                   <component :is="group.icon" />
                 </el-icon>
                 {{ group.label }}
-                <el-tag size="small" type="info" class="tab-count">{{ group.files.length }}</el-tag>
+                <el-tag size="small" type="info" class="tab-count ml-0.5 scale-[0.85]">{{ group.files.length }}</el-tag>
               </span>
             </template>
 
-            <div class="section-content">
+            <div class="section-content w-full">
               <template v-if="group.type === 'video'">
-                <div v-for="(file, idx) in group.files" :key="file.file_id" class="media-item">
+                <div v-for="(file, idx) in group.files" :key="file.file_id" class="media-item mb-5 last:mb-0">
                   <VideoPlayer
                     :src="file.file_url"
                     :initial-position="idx === 0 ? chapterVideoPosition : 0"
@@ -78,18 +73,18 @@
                 </div>
               </template>
               <template v-else-if="group.type === 'document'">
-                <div v-for="file in group.files" :key="file.file_id" class="media-item">
+                <div v-for="file in group.files" :key="file.file_id" class="media-item mb-5 last:mb-0">
                   <DocumentViewer :src="file.file_url" :fileName="file.file_name" />
                 </div>
               </template>
               <template v-else-if="group.type === 'ppt'">
-                <div v-for="file in group.files" :key="file.file_id" class="media-item">
+                <div v-for="file in group.files" :key="file.file_id" class="media-item mb-5 last:mb-0">
                   <PptViewer :src="file.file_url" :fileName="file.file_name" :chapterId="chapterDetail.chapter_id" />
                 </div>
               </template>
               <template v-else-if="group.type === 'image'">
-                <div class="image-gallery">
-                  <div v-for="file in group.files" :key="file.file_id" class="gallery-item">
+                <div class="image-gallery grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 max-md:grid-cols-1">
+                  <div v-for="file in group.files" :key="file.file_id" class="gallery-item overflow-hidden rounded-[8px]">
                     <ImageViewer :src="file.file_url" :fileName="file.file_name" />
                   </div>
                 </div>
@@ -107,34 +102,26 @@
 
       <ChapterDiscussion v-if="chapterDetail.chapter_id" :chapter-id="chapterDetail.chapter_id" />
 
-      <div class="chapter-navigation">
-        <div class="nav-prev">
-          <el-button
-            :disabled="!chapterDetail.previous_chapter_id"
-            @click="navigateToChapter(chapterDetail.previous_chapter_id ?? 0)"
-            text
-          >
+      <div class="chapter-navigation flex items-center justify-between border-t border-line py-4">
+        <div class="nav-prev max-w-[45%]">
+          <UiButton variant="text" :disabled="!chapterDetail.previous_chapter_id" @click="navigateToChapter(chapterDetail.previous_chapter_id ?? 0)">
             <el-icon><ArrowLeft /></el-icon>
-            <div class="nav-btn-content" v-if="chapterDetail.previous_chapter_id">
-              <span class="nav-label">上一章节</span>
-              <span class="nav-title">{{ getPrevChapterTitle }}</span>
+            <div class="nav-btn-content flex flex-col gap-0.5" v-if="chapterDetail.previous_chapter_id">
+              <span class="nav-label text-xs text-ink-3">上一章节</span>
+              <span class="nav-title max-w-[200px] truncate text-sm text-ink max-md:max-w-[120px]">{{ getPrevChapterTitle }}</span>
             </div>
-            <span v-else class="nav-label">没有上一章节</span>
-          </el-button>
+            <span v-else class="nav-label text-xs text-ink-3">没有上一章节</span>
+          </UiButton>
         </div>
-        <div class="nav-next">
-          <el-button
-            :disabled="!chapterDetail.next_chapter_id"
-            @click="navigateToChapter(chapterDetail.next_chapter_id ?? 0)"
-            text
-          >
-            <div class="nav-btn-content" v-if="chapterDetail.next_chapter_id">
-              <span class="nav-label">下一章节</span>
-              <span class="nav-title">{{ getNextChapterTitle }}</span>
+        <div class="nav-next max-w-[45%]">
+          <UiButton variant="text" :disabled="!chapterDetail.next_chapter_id" @click="navigateToChapter(chapterDetail.next_chapter_id ?? 0)">
+            <div class="nav-btn-content flex flex-col items-end gap-0.5" v-if="chapterDetail.next_chapter_id">
+              <span class="nav-label text-xs text-ink-3">下一章节</span>
+              <span class="nav-title max-w-[200px] truncate text-sm text-ink max-md:max-w-[120px]">{{ getNextChapterTitle }}</span>
             </div>
-            <span v-else class="nav-label">没有下一章节</span>
+            <span v-else class="nav-label text-xs text-ink-3">没有下一章节</span>
             <el-icon><ArrowRight /></el-icon>
-          </el-button>
+          </UiButton>
         </div>
       </div>
     </template>
@@ -163,6 +150,7 @@ import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import PptViewer from '@/components/student/PptViewer.vue'
 import ImageViewer from '@/components/student/ImageViewer.vue'
 import ChapterDiscussion from '@/components/student/ChapterDiscussion.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 marked.use(
   markedHighlight({
@@ -446,50 +434,12 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.chapter-view-page {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 0 20px 40px;
-}
-
-.chapter-header {
-  margin-bottom: 20px;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.chapter-title {
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
-.chapter-content-area {
-  background: var(--color-bg-card);
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  min-height: 300px;
-  margin-bottom: 20px;
-}
-
-.content-text {
-  line-height: 1.8;
-  color: var(--color-text-primary);
-  font-size: 15px;
-  margin-bottom: 20px;
-}
-
-.content-tabs {
-  min-height: 400px;
-}
-
+/*
+ * 仅保留 :deep 的 EP 内部覆盖（R1 允许，无法用原子类表达）：
+ * - 内容 Tab 头：滚动吸顶 + 吸顶时面板色底（防止透出下层内容）
+ * - 上一章/下一章按钮：导航按钮需要更大的可点击区（padding 12/16，高度自适应）
+ * - 分隔线高度 1px（EP 默认 2px）
+ */
 .content-tabs :deep(.el-tabs__header) {
   margin-bottom: 20px;
   position: sticky;
@@ -501,53 +451,6 @@ onBeforeUnmount(() => {
 
 .content-tabs :deep(.el-tabs__nav-wrap)::after {
   height: 1px;
-}
-
-.tab-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.tab-count {
-  margin-left: 2px;
-  transform: scale(0.85);
-}
-
-.section-content {
-  width: 100%;
-}
-
-.media-item {
-  margin-bottom: 20px;
-}
-
-.media-item:last-child {
-  margin-bottom: 0;
-}
-
-.image-gallery {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-}
-
-.gallery-item {
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.chapter-navigation {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 0;
-  border-top: 1px solid var(--color-border-light);
-}
-
-.nav-prev,
-.nav-next {
-  max-width: 45%;
 }
 
 .nav-prev :deep(.el-button),
@@ -563,51 +466,5 @@ onBeforeUnmount(() => {
 .nav-next :deep(.el-button) {
   text-align: right;
   margin-left: auto;
-}
-
-.nav-btn-content {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.nav-label {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-}
-
-.nav-title {
-  font-size: 14px;
-  color: var(--color-text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 200px;
-}
-
-.nav-next .nav-btn-content {
-  align-items: flex-end;
-}
-
-@media screen and (max-width: 768px) {
-  .chapter-view-page {
-    padding: 0 12px 30px;
-  }
-
-  .chapter-title {
-    font-size: 18px;
-  }
-
-  .chapter-content-area {
-    padding: 16px;
-  }
-
-  .image-gallery {
-    grid-template-columns: 1fr;
-  }
-
-  .nav-title {
-    max-width: 120px;
-  }
 }
 </style>

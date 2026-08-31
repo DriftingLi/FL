@@ -41,22 +41,16 @@
             </el-checkbox>
           </el-checkbox-group>
           <div class="select-actions">
-            <el-button type="primary" size="small" class="select-all-btn" @click="selectAll">全选</el-button>
-            <el-button text size="small" @click="selectNone">取消全选</el-button>
+            <UiButton variant="primary" size="small" class="select-all-btn" @click="selectAll">全选</UiButton>
+            <UiButton variant="text" size="small" @click="selectNone">取消全选</UiButton>
           </div>
         </el-form-item>
 
         <el-form-item>
-          <el-button
-            type="primary"
-            size="large"
-            :loading="generating || isTaskRunning"
-            :disabled="!selectedCourseId || selectedChapterIds.length === 0 || isTaskRunning"
-            @click="handleGenerate"
-          >
+          <UiButton variant="primary" size="large" :loading="generating || isTaskRunning" :disabled="!selectedCourseId || selectedChapterIds.length === 0 || isTaskRunning" @click="handleGenerate">
             <el-icon><MagicStick /></el-icon>
             {{ isTaskRunning ? '生成中...' : '开始生成' }}
-          </el-button>
+          </UiButton>
           <span v-if="isTaskRunning" class="generating-tip">
             <el-icon class="is-loading"><Loading /></el-icon>
             正在生成，请勿重复提交
@@ -65,7 +59,7 @@
       </el-form>
     </div>
 
-    <div v-if="generateTask" class="progress-card">
+    <UiCard v-if="generateTask" padding="lg" class="progress-card">
       <h3>生成进度</h3>
       <el-progress
         :percentage="progressPercent"
@@ -105,19 +99,13 @@
           <el-tag :type="item.status === 'success' ? 'success' : 'danger'" size="small">
             {{ item.status === 'success' ? '生成成功' : '生成失败' }}
           </el-tag>
-          <el-button
-            v-if="item.status === 'success' && item.content"
-            text
-            type="primary"
-            size="small"
-            @click="previewChapter(item)"
-          >
+          <UiButton variant="primary" text v-if="item.status === 'success' && item.content" size="small" @click="previewChapter(item)">
             预览
-          </el-button>
+          </UiButton>
           <span v-if="item.error" class="error-msg">{{ item.error }}</span>
         </div>
       </div>
-    </div>
+    </UiCard>
 
     <el-dialog
       v-model="previewVisible"
@@ -127,7 +115,7 @@
     >
       <div class="preview-content markdown-body" v-html="renderedPreview"></div>
       <template #footer>
-        <el-button @click="previewVisible = false">关闭</el-button>
+        <UiButton @click="previewVisible = false">关闭</UiButton>
       </template>
     </el-dialog>
   </div>
@@ -140,6 +128,8 @@ import { ElMessage } from 'element-plus'
 import { marked } from 'marked'
 import { adminApi } from '@/api/admin'
 import '@/assets/styles/markdown.css'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 
 interface GenerateCourse {
   course_id: number
@@ -322,16 +312,20 @@ loadCourses()
 
 .page-header h2 {
   font-size: 22px;
-  color: #303133;
+  color: var(--color-text-primary);
   margin-bottom: 8px;
 }
 
-.generate-card,
-.progress-card {
-  background: #fff;
+/* .progress-card 容器（底色/圆角/内距/投影）已由 UiCard 承担，从共用规则中拆出 */
+.generate-card {
+  background: var(--color-text-inverse);
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  margin-bottom: 20px;
+}
+
+.progress-card {
   margin-bottom: 20px;
 }
 
@@ -341,7 +335,7 @@ loadCourses()
 
 /* 全选按钮：白色字体 + primary 背景 */
 .select-all-btn {
-  color: #fff !important;
+  color: var(--color-text-inverse) !important;
 }
 
 .generating-tip {
@@ -350,21 +344,21 @@ loadCourses()
   gap: 4px;
   margin-left: 12px;
   font-size: 13px;
-  color: #409eff;
+  color: var(--color-primary-500);
 }
 
 .progress-count {
   font-weight: 500;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .progress-status.pending {
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 
 .progress-card h3 {
   font-size: 16px;
-  color: #303133;
+  color: var(--color-text-primary);
   margin-bottom: 16px;
 }
 
@@ -374,7 +368,7 @@ loadCourses()
   align-items: center;
   margin-bottom: 16px;
   font-size: 14px;
-  color: #606266;
+  color: var(--color-text-secondary);
 }
 
 .progress-status {
@@ -384,15 +378,15 @@ loadCourses()
 }
 
 .progress-status.processing {
-  color: #409eff;
+  color: var(--color-primary-500);
 }
 
 .progress-status.completed {
-  color: #67c23a;
+  color: var(--color-success);
 }
 
 .progress-status.failed {
-  color: #f56c6c;
+  color: var(--color-danger);
 }
 
 .result-list {
@@ -408,16 +402,16 @@ loadCourses()
   gap: 8px;
   padding: 10px 12px;
   border-radius: 6px;
-  background: #f5f7fa;
+  background: var(--color-bg-page);
   flex-wrap: wrap;
 }
 
 .result-item.result-success {
-  background: #f0f9eb;
+  background: var(--color-success-light);
 }
 
 .result-item.result-failed {
-  background: #fef0f0;
+  background: var(--color-danger-light);
 }
 
 .status-icon {
@@ -425,30 +419,30 @@ loadCourses()
 }
 
 .status-icon.success {
-  color: #67c23a;
+  color: var(--color-success);
 }
 
 .status-icon.failed {
-  color: #f56c6c;
+  color: var(--color-danger);
 }
 
 .chapter-title {
   flex: 1;
   font-size: 14px;
-  color: #303133;
+  color: var(--color-text-primary);
   min-width: 100px;
 }
 
 .error-msg {
   font-size: 12px;
-  color: #f56c6c;
+  color: var(--color-danger);
 }
 
 .preview-content {
   max-height: 500px;
   overflow-y: auto;
   padding: 16px;
-  background: #fafafa;
+  background: var(--color-bg-page);
   border-radius: 8px;
 }
 
@@ -457,8 +451,7 @@ loadCourses()
     padding: 12px;
   }
 
-  .generate-card,
-  .progress-card {
+  .generate-card {
     padding: 16px;
   }
 

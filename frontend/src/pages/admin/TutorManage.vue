@@ -2,9 +2,9 @@
   <div class="tutor-manage-page">
     <div class="page-header">
       <h2>导师管理</h2>
-      <el-button type="primary" @click="openAddDialog">
+      <UiButton variant="primary" @click="openAddDialog">
         <el-icon><Plus /></el-icon> 新增导师
-      </el-button>
+      </UiButton>
     </div>
 
     <div class="filter-bar">
@@ -20,7 +20,7 @@
           <el-icon><Search /></el-icon>
         </template>
       </el-input>
-      <el-button type="primary" @click="search">搜索</el-button>
+      <UiButton variant="primary" @click="search">搜索</UiButton>
     </div>
 
     <el-table :data="list" v-loading="loading" stripe border style="width: 100%">
@@ -42,9 +42,9 @@
       <el-table-column label="操作" width="90" fixed="right" align="center">
         <template #default="{ row }">
           <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
-            <el-button type="primary" link size="small">
+            <UiButton variant="primary" link size="small">
               操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
-            </el-button>
+            </UiButton>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="resetPwd">重置密码</el-dropdown-item>
@@ -87,8 +87,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">确认添加</el-button>
+        <UiButton @click="dialogVisible = false">取消</UiButton>
+        <UiButton variant="primary" :loading="submitting" @click="handleSubmit">确认添加</UiButton>
       </template>
     </el-dialog>
 
@@ -108,8 +108,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="pwdDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="pwdSubmitting" @click="handleResetPwd">确认重置</el-button>
+        <UiButton @click="pwdDialogVisible = false">取消</UiButton>
+        <UiButton variant="primary" :loading="pwdSubmitting" @click="handleResetPwd">确认重置</UiButton>
       </template>
     </el-dialog>
   </div>
@@ -124,6 +124,7 @@ import { adminApi, type AdminTutor } from '@/api/admin'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { formatDateTime } from '@/utils/format'
 import { usernameRules, passwordRules, nameRules } from '@/utils/validate'
+import UiButton from '@/components/ui/UiButton.vue'
 
 type TutorRow = AdminTutor
 
@@ -271,7 +272,7 @@ onMounted(() => {
 
 .page-header h2 {
   font-size: 22px;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .filter-bar {

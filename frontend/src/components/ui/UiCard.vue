@@ -12,7 +12,7 @@ const props = withDefaults(
   defineProps<{
     /** flat 描边卡片；raised 带投影；interactive 可点击，带 hover / tap 反馈 */
     variant?: 'flat' | 'raised' | 'interactive'
-    padding?: 'none' | 'sm' | 'md' | 'lg'
+    padding?: 'none' | 'sm' | 'base' | 'md' | 'lg'
   }>(),
   { variant: 'flat', padding: 'md' }
 )
@@ -20,6 +20,9 @@ const props = withDefaults(
 const PADDING: Record<string, string> = {
   none: '',
   sm: 'p-3',
+  // 16px：存量卡片最常用的一档（components/practice 四个卡片都是 16px），
+  // 夹在 sm(12) 与 md(20) 之间，缺它会导致收敛时被迫改间距。默认值仍是 md。
+  base: 'p-4',
   md: 'p-5',
   lg: 'p-6'
 }

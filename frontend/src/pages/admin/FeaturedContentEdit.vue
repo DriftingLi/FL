@@ -2,7 +2,7 @@
   <div class="featured-edit-page">
     <div class="page-header">
       <h2>{{ isEdit ? '编辑内容' : '新建内容' }}</h2>
-      <el-button @click="goBack">返回列表</el-button>
+      <UiButton @click="goBack">返回列表</UiButton>
     </div>
 
     <div class="edit-card" v-loading="loading">
@@ -60,7 +60,7 @@
             </div>
           </el-upload>
           <div class="cover-actions" v-if="form.cover_image">
-            <el-button link type="danger" @click="form.cover_image = ''">移除封面</el-button>
+            <UiButton variant="danger" link @click="form.cover_image = ''">移除封面</UiButton>
           </div>
         </el-form-item>
 
@@ -86,10 +86,10 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button type="primary" :loading="saving" @click="handleSave">
+          <UiButton variant="primary" :loading="saving" @click="handleSave">
             {{ form.status === 1 ? '保存并发布' : '保存草稿' }}
-          </el-button>
-          <el-button @click="goBack">取消</el-button>
+          </UiButton>
+          <UiButton @click="goBack">取消</UiButton>
         </el-form-item>
       </el-form>
     </div>
@@ -105,6 +105,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import MarkdownEditor from '@/components/tutor/MarkdownEditor.vue'
 import { adminFeaturedApi, featuredCategoryOptions } from '@/api/featured'
 import { resolveFileUrl } from '@/utils/fileUrl'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -259,11 +260,11 @@ onMounted(() => {
   margin: 0;
   font-size: 22px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--color-text-primary);
 }
 
 .edit-card {
-  background: #fff;
+  background: var(--color-text-inverse);
   border-radius: 12px;
   padding: 32px 40px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
@@ -273,15 +274,15 @@ onMounted(() => {
   display: inline-block;
   width: 280px;
   height: 158px;
-  border: 1px dashed #d9d9d9;
+  border: 1px dashed var(--color-border-dark);
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition: border-color var(--duration-base) var(--ease-default);
 }
 
 .cover-uploader:hover {
-  border-color: var(--el-color-primary, #409eff);
+  border-color: var(--el-color-primary, var(--color-primary-500));
 }
 
 .cover-preview {
@@ -299,9 +300,9 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: #94a3b8;
+  color: var(--color-text-muted);
   font-size: 13px;
-  background: #f8fafc;
+  background: var(--color-bg-page);
 }
 
 .cover-placeholder .el-icon {

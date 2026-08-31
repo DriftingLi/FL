@@ -59,8 +59,8 @@
         </el-option-group>
       </el-select>
       <template #footer>
-        <el-button @click="switcherVisible = false">取消</el-button>
-        <el-button type="primary" :loading="switching" @click="switcherVisible = false">确定</el-button>
+        <UiButton @click="switcherVisible = false">取消</UiButton>
+        <UiButton variant="primary" :loading="switching" @click="switcherVisible = false">确定</UiButton>
       </template>
     </el-dialog>
   </div>
@@ -72,6 +72,7 @@ import { useCredentialStore } from '@/stores/credential'
 import type { CredentialDict } from '@/api/credential'
 import { Notebook } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const props = withDefaults(
   defineProps<{

@@ -2,7 +2,7 @@
   <div class="flex flex-col gap-4">
     <div class="flex items-center justify-between">
       <h1 class="text-xl font-bold text-ink">简历库</h1>
-      <el-button size="small" :loading="loading" @click="load">刷新</el-button>
+      <UiButton size="small" :loading="loading" @click="load">刷新</UiButton>
     </div>
 
     <div class="rounded-card border border-line bg-panel p-4 flex flex-wrap gap-2">
@@ -31,7 +31,7 @@
     <div v-if="loading" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">加载中...</div>
     <div v-else-if="error" class="rounded-card border border-line bg-panel p-8 text-center">
       <p class="text-sm text-ink-2">{{ error }}</p>
-      <el-button class="mt-3" size="small" @click="load">重试</el-button>
+      <UiButton class="mt-3" size="small" @click="load">重试</UiButton>
     </div>
     <div v-else-if="items.length === 0" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">
       暂无公开简历
@@ -78,6 +78,7 @@
 import { ref, reactive, onMounted, watch } from 'vue'
 import { recruitApi, type RecruitResumeItem } from '@/api/recruit'
 import { unwrappedRequest } from '@/api/request'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const loading = ref(false)
 const error = ref('')

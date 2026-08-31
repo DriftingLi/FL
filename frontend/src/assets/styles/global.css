@@ -37,6 +37,9 @@ textarea:focus-visible,
 html {
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
+  /* 期 7：兜底防横向滚动（个别页面遗漏的溢出由这里吞掉，而不是出现横向滚动条）。
+     注意放 html 而非 body：body 上的 overflow-x 会破坏部分 sticky 定位。 */
+  overflow-x: hidden;
 }
 
 h1, h2, h3, h4, h5, h6 {

@@ -18,6 +18,24 @@
       <div v-if="mobileOpen" class="sidebar-overlay" @click="mobileOpen = false"></div>
     </transition>
 
+    <!-- 明暗模式切换（三态：跟随系统 / 浅色 / 深色）。放内容区右上角固定位，
+         全站（学员/导师/管理端）共用本布局，一处改动全局生效。 -->
+    <button
+      class="theme-toggle"
+      :aria-label="themeLabel"
+      :title="themeLabel"
+      @click="themeStore.cycle()"
+    >
+      <el-icon v-if="themeStore.resolved === 'dark'" :size="18"><Moon /></el-icon>
+      <svg v-else-if="themeStore.mode === 'system'" class="theme-half-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3a9 9 0 0 0 0 18V3Z" fill="currentColor" opacity="0.9"/>
+        <path d="M12 6a6 6 0 0 0 0 12 8 8 0 0 1 0-12Z" fill="var(--color-bg-page)"/>
+        <path d="M12 3a9 9 0 0 1 9 9 9 9 0 0 1-9 9V3Z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M16.8 6.2l1.4-1.4M21 12h2M16.8 17.8l1.4 1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <el-icon v-else :size="18"><Sunny /></el-icon>
+    </button>
+
     <!-- 移动端浮动菜单按钮（替代原顶栏的 mobile-toggle） -->
     <button
       v-if="!mobileOpen"
@@ -45,11 +63,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Operation } from '@element-plus/icons-vue'
+import { Operation, Moon, Sunny } from '@element-plus/icons-vue'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
+import { useThemeStore } from '@/stores/theme'
 import type { NavItem } from '@/config/navigation'
+
+const themeStore = useThemeStore()
+
+/** 按钮提示：显示当前态与点击后的下一态 */
+const themeLabel = computed(() => {
+  if (themeStore.mode === 'system') return '跟随系统（点击切换为浅色）'
+  return themeStore.resolved === 'dark' ? '深色模式（点击切换为跟随系统）' : '浅色模式（点击切换为深色）'
+})
 
 const props = withDefaults(
   defineProps<{
@@ -61,12 +88,12 @@ const props = withDefaults(
      * - `narrow`：内容限宽 1280px 居中，宽屏下避免行过长
      */
     contentWidth?: 'full' | 'narrow'
-    /** 透传给 AppSidebar，不传则沿用其默认值 `light` */
+    /** 透传给 AppSidebar，不传则沿用其默认值 `dark`（2026-08-31 起统一三端恒深石墨青侧栏） */
     sidebarTheme?: 'light' | 'dark'
     /** 透传给 AppSidebar，不传则沿用其默认值 `default` */
     sidebarDensity?: 'default' | 'compact'
   }>(),
-  { showFooter: false, contentWidth: 'full' }
+  { showFooter: false, contentWidth: 'full', sidebarTheme: 'dark' }
 )
 
 const route = useRoute()
@@ -160,7 +187,7 @@ watch(() => route.path, () => {
   cursor: pointer;
   color: var(--color-text-primary);
   z-index: var(--z-sticky);
-  transition: background var(--duration-fast), box-shadow var(--duration-fast);
+  transition: background var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default);
 }
 
 .mobile-fab:hover {
@@ -169,6 +196,42 @@ watch(() => route.path, () => {
 
 .mobile-fab:active {
   box-shadow: 0 2px 6px rgba(15, 23, 42, 0.16);
+}
+
+/* 明暗模式切换：内容区右上角固定，与左侧移动端菜单按钮不冲突 */
+.theme-toggle {
+  position: fixed;
+  top: var(--space-4);
+  right: var(--space-4);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  color: var(--color-text-primary);
+  z-index: var(--z-sticky);
+  transition:
+    background var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default),
+    transform var(--duration-tap) var(--ease-default);
+}
+
+.theme-toggle:hover {
+  background: var(--color-bg-page);
+}
+
+.theme-toggle:active {
+  transform: scale(0.94);
+}
+
+.theme-half-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .fade-enter-active,
@@ -219,6 +282,12 @@ watch(() => route.path, () => {
 
   .mobile-fab {
     display: flex;
+  }
+
+  /* 移动端加大触控目标 */
+  .theme-toggle {
+    width: 44px;
+    height: 44px;
   }
 
   .main-content {
