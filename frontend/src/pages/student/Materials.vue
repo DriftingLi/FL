@@ -1,16 +1,16 @@
 <template>
-  <div class="materials-page">
-    <div class="page-header">
-      <h2>学习资料</h2>
+  <div class="mx-auto max-w-[960px] p-5">
+    <div class="mb-3">
+      <h2 class="text-[22px] text-ink">学习资料</h2>
     </div>
 
-    <div class="filter-bar">
+    <div class="mb-4">
       <el-select
         v-model="courseFilter"
         placeholder="全部课程"
         clearable
         filterable
-        style="width: 280px"
+        class="w-[280px]"
         @change="handleFilterChange"
       >
         <el-option
@@ -22,7 +22,7 @@
       </el-select>
     </div>
 
-    <div class="material-list">
+    <div class="min-h-[200px] rounded-card bg-panel shadow-card">
       <UiErrorState
         v-if="loadError"
         title="资料加载失败"
@@ -37,20 +37,23 @@
         <div
           v-for="(item, i) in materials"
           :key="item.file_id"
-          class="material-item stagger-in"
+          class="stagger-in flex items-center gap-3.5 border-b border-line px-5 py-3.5 last:border-b-0"
           :style="staggerStyle(i)"
         >
-          <div class="item-icon" :style="{ background: typeConfig(item.content_type).bg, color: typeConfig(item.content_type).color }">
+          <div
+            class="flex size-11 shrink-0 items-center justify-center rounded-[8px]"
+            :style="{ background: typeConfig(item.content_type).bg, color: typeConfig(item.content_type).color }"
+          >
             <el-icon :size="20"><component :is="typeConfig(item.content_type).icon" /></el-icon>
           </div>
-          <div class="item-main">
-            <span class="item-name">{{ item.file_name }}</span>
-            <span class="item-meta">
+          <div class="flex min-w-0 flex-1 flex-col gap-1">
+            <span class="truncate text-[15px] font-medium text-ink">{{ item.file_name }}</span>
+            <span class="truncate text-xs text-ink-3">
               {{ item.course_name }}<template v-if="item.chapter_title"> · {{ item.chapter_title }}</template>
             </span>
           </div>
-          <div class="item-side">
-            <span class="item-info">{{ formatSize(item.file_size) }} · {{ formatLocaleDateTime(item.created_at || '') }}</span>
+          <div class="flex shrink-0 items-center gap-3">
+            <span class="whitespace-nowrap text-xs text-ink-3">{{ formatSize(item.file_size) }} · {{ formatLocaleDateTime(item.created_at || '') }}</span>
             <UiButton variant="primary" link size="small" @click="download(item)">
               <el-icon><Download /></el-icon>
               下载
@@ -61,7 +64,7 @@
       <UiEmptyState v-else description="暂无学习资料" />
     </div>
 
-    <div class="pagination-wrapper" v-if="total > pageSize">
+    <div class="mt-4 flex justify-center" v-if="total > pageSize">
       <el-pagination
         v-model:current-page="currentPage"
         :page-size="pageSize"
@@ -157,97 +160,3 @@ onMounted(() => {
   loadMaterials()
 })
 </script>
-
-<style scoped>
-.materials-page {
-  padding: 20px;
-  max-width: 960px;
-  margin: 0 auto;
-}
-
-.page-header {
-  margin-bottom: 12px;
-}
-
-.page-header h2 {
-  font-size: 22px;
-  color: var(--color-text-primary);
-}
-
-.filter-bar {
-  margin-bottom: 16px;
-}
-
-.material-list {
-  background: var(--color-bg-card);
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  min-height: 200px;
-}
-
-.material-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--color-border-light);
-}
-
-.material-item:last-child {
-  border-bottom: none;
-}
-
-.item-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.item-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.item-name {
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--color-text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.item-meta {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.item-side {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.item-info {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-  white-space: nowrap;
-}
-
-.pagination-wrapper {
-  display: flex;
-  justify-content: center;
-  margin-top: 16px;
-}
-</style>
