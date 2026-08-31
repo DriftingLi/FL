@@ -88,12 +88,12 @@ const props = withDefaults(
      * - `narrow`：内容限宽 1280px 居中，宽屏下避免行过长
      */
     contentWidth?: 'full' | 'narrow'
-    /** 透传给 AppSidebar，不传则沿用其默认值 `light` */
+    /** 透传给 AppSidebar，不传则沿用其默认值 `dark`（2026-08-31 起统一三端恒深石墨青侧栏） */
     sidebarTheme?: 'light' | 'dark'
     /** 透传给 AppSidebar，不传则沿用其默认值 `default` */
     sidebarDensity?: 'default' | 'compact'
   }>(),
-  { showFooter: false, contentWidth: 'full' }
+  { showFooter: false, contentWidth: 'full', sidebarTheme: 'dark' }
 )
 
 const route = useRoute()
