@@ -388,3 +388,57 @@
     font-size: var(--fs-xl);
   }
 }
+
+/*
+ * ===== 深色模式（期 5）=====
+ *
+ * 残值域全部样式走 .valuation-root 内的变量，因此深色适配只需翻这一组值：
+ * - 品牌主色（brand-500~700 蓝绿）在深底上成立，保持；-50/-100 浅蓝底翻深，
+ *   -200 在深色下既作「深底上的浅蓝文字」又作浅底，折中取中间亮度
+ * - surface/bg/border/text 五组翻成 slate 深色阶（与培训域 [data-theme=dark] 同体系）
+ * - 功能色 -light 浅底翻成深底（作为状态背景仍可辨识）
+ * - 渐变：--gradient-hero 原本就是深色系保持；--gradient-card 的白色渐变翻深
+ */
+html[data-theme="dark"] .valuation-root {
+  /* 品牌浅阶翻深（深底上作为浅底/描边仍可辨识） */
+  --color-brand-50: #0C2947;
+  --color-brand-100: #0E3555;
+  --color-brand-200: #1D4E75;
+  --color-brand-300: #2A6FA6;
+  /* brand-400 以上（#38BDF8 起）深底可读，保持 */
+
+  /* accent 别名同步 */
+  --color-accent-soft: #0E3555;
+  --color-accent-light: rgba(56, 189, 248, 0.16);
+  --color-accent-subtle: rgba(56, 189, 248, 0.09);
+
+  /* 表面与背景 */
+  --color-bg: #0B1120;
+  --color-bg-secondary: #111827;
+  --color-surface: #0F172A;
+  --color-bg-elevated: #111827;
+  --color-bg-muted: #1E293B;
+  --color-bg-page: #0B1120;
+
+  /* 边框 */
+  --color-border: #1E293B;
+  --color-border-light: #16202E;
+  --color-border-strong: #334155;
+  --color-border-darker: #475569;
+
+  /* 文字 */
+  --color-text: #F1F5F9;
+  --color-text-primary: #F1F5F9;
+  --color-text-secondary: #CBD5E1;
+  --color-text-tertiary: #94A3B8;
+  --color-text-muted: #64748B;
+
+  /* 功能色浅底翻深底 */
+  --color-success-light: #064E3B;
+  --color-danger-light: #7F1D1D;
+  --color-warning-light: #78350F;
+
+  /* 渐变：card 的白色渐变翻深，hero 深色系保持 */
+  --gradient-card: linear-gradient(180deg, rgba(56, 189, 248, 0.10) 0%, rgba(15, 23, 42, 0) 100%);
+}
+
