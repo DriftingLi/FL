@@ -212,12 +212,12 @@ onMounted(load)
 
 .user-name {
   font-size: 14px;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .user-username {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 
 .value-cell,
@@ -228,17 +228,17 @@ onMounted(load)
 }
 
 .old-value {
-  color: #909399;
+  color: var(--color-text-tertiary);
   text-decoration: line-through;
 }
 
 .new-value {
-  color: #303133;
+  color: var(--color-text-primary);
   font-weight: 500;
 }
 
 .arrow {
-  color: #c0c4cc;
+  color: var(--color-text-disabled);
 }
 
 .pagination-wrapper {

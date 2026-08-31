@@ -107,7 +107,7 @@ onMounted(() => {
 
 .page-header h2 {
   font-size: 22px;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .filter-bar {
@@ -120,10 +120,10 @@ onMounted(() => {
 .audit-detail {
   margin: 0;
   padding: 12px;
-  background: #f8fafc;
+  background: var(--color-bg-page);
   border-radius: 6px;
   font-size: 12px;
-  color: #475569;
+  color: var(--color-text-secondary);
 }
 
 .pagination {

@@ -189,7 +189,7 @@ onMounted(() => {
   margin: 0;
   font-size: 22px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--color-text-primary);
 }
 
 .filter-bar {
@@ -206,7 +206,7 @@ onMounted(() => {
 }
 
 .empty-text {
-  color: #cbd5e1;
+  color: var(--color-text-disabled);
 }
 
 :deep(.el-table) {

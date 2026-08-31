@@ -792,7 +792,7 @@ function onRefresh() {
   font-weight: var(--fw-medium);
 }
 .dirty-dot {
-  color: var(--color-accent, #3e6ae1);
+  color: var(--color-accent-500);
   font-size: 10px;
   line-height: 1;
 }

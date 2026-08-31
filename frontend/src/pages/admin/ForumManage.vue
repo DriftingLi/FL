@@ -382,7 +382,7 @@ onMounted(loadList)
 }
 
 .report-done {
-  color: #c0c4cc;
+  color: var(--color-text-disabled);
 }
 
 .filter-bar {
@@ -413,12 +413,12 @@ onMounted(loadList)
 .topic-content {
   margin-bottom: 14px;
   padding-bottom: 14px;
-  border-bottom: 1px solid #ebeef5;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .topic-content-text {
   font-size: 14px;
-  color: #303133;
+  color: var(--color-text-primary);
   line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
@@ -431,7 +431,7 @@ onMounted(loadList)
 }
 
 .reply-item {
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-bg-page);
   padding-bottom: 10px;
 }
 
@@ -448,20 +448,20 @@ onMounted(loadList)
 
 .reply-author {
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .reply-quote {
   font-size: 12px;
-  color: #909399;
-  background: #f5f7fa;
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-page);
   border-radius: 6px;
   padding: 1px 6px;
 }
 
 .reply-time {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 
 .reply-delete {
@@ -470,14 +470,14 @@ onMounted(loadList)
 
 .reply-content {
   margin-top: 4px;
-  color: #303133;
+  color: var(--color-text-primary);
   font-size: 13px;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .reply-loading {
-  color: #909399;
+  color: var(--color-text-tertiary);
   font-size: 13px;
 }
 

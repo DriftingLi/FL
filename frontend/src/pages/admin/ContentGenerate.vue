@@ -322,13 +322,13 @@ loadCourses()
 
 .page-header h2 {
   font-size: 22px;
-  color: #303133;
+  color: var(--color-text-primary);
   margin-bottom: 8px;
 }
 
 .generate-card,
 .progress-card {
-  background: #fff;
+  background: var(--color-text-inverse);
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
@@ -341,7 +341,7 @@ loadCourses()
 
 /* 全选按钮：白色字体 + primary 背景 */
 .select-all-btn {
-  color: #fff !important;
+  color: var(--color-text-inverse) !important;
 }
 
 .generating-tip {
@@ -350,21 +350,21 @@ loadCourses()
   gap: 4px;
   margin-left: 12px;
   font-size: 13px;
-  color: #409eff;
+  color: var(--color-primary-500);
 }
 
 .progress-count {
   font-weight: 500;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .progress-status.pending {
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 
 .progress-card h3 {
   font-size: 16px;
-  color: #303133;
+  color: var(--color-text-primary);
   margin-bottom: 16px;
 }
 
@@ -374,7 +374,7 @@ loadCourses()
   align-items: center;
   margin-bottom: 16px;
   font-size: 14px;
-  color: #606266;
+  color: var(--color-text-secondary);
 }
 
 .progress-status {
@@ -384,15 +384,15 @@ loadCourses()
 }
 
 .progress-status.processing {
-  color: #409eff;
+  color: var(--color-primary-500);
 }
 
 .progress-status.completed {
-  color: #67c23a;
+  color: var(--color-success);
 }
 
 .progress-status.failed {
-  color: #f56c6c;
+  color: var(--color-danger);
 }
 
 .result-list {
@@ -408,16 +408,16 @@ loadCourses()
   gap: 8px;
   padding: 10px 12px;
   border-radius: 6px;
-  background: #f5f7fa;
+  background: var(--color-bg-page);
   flex-wrap: wrap;
 }
 
 .result-item.result-success {
-  background: #f0f9eb;
+  background: var(--color-success-light);
 }
 
 .result-item.result-failed {
-  background: #fef0f0;
+  background: var(--color-danger-light);
 }
 
 .status-icon {
@@ -425,30 +425,30 @@ loadCourses()
 }
 
 .status-icon.success {
-  color: #67c23a;
+  color: var(--color-success);
 }
 
 .status-icon.failed {
-  color: #f56c6c;
+  color: var(--color-danger);
 }
 
 .chapter-title {
   flex: 1;
   font-size: 14px;
-  color: #303133;
+  color: var(--color-text-primary);
   min-width: 100px;
 }
 
 .error-msg {
   font-size: 12px;
-  color: #f56c6c;
+  color: var(--color-danger);
 }
 
 .preview-content {
   max-height: 500px;
   overflow-y: auto;
   padding: 16px;
-  background: #fafafa;
+  background: var(--color-bg-page);
   border-radius: 8px;
 }
 
