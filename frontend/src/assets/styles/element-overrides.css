@@ -77,6 +77,14 @@
 /* 合并自原文件两处 .el-button：radius-lg / font-semibold 为原生效值（后者覆盖前者） */
 .el-button {
   --el-button-border-radius: var(--radius-lg);
+  /*
+   * 焦点环颜色。EP 默认是 --el-color-primary-light-5（#5EEAD4），对白底对比度仅 1.48:1，
+   * 远低于 WCAG 非文本对比度 3:1 的下限，等于「有环但看不清」。
+   * 换成主色 #0D9488 为 3.74:1，同时与 global.css 里原生元素的焦点环同色，消除两套环并存。
+   * 覆盖会一并作用于 success / danger 等类型按钮 —— 焦点环统一用主色是正确的：
+   * 跟随按钮语义色会让「绿按钮配绿环」再次跌破对比度要求。
+   */
+  --el-button-outline-color: var(--color-primary-500);
   font-weight: var(--font-semibold);
   transition: all var(--duration-fast) var(--ease-default);
 }
@@ -103,6 +111,11 @@
 
 .el-button:active {
   transform: translateY(0);
+}
+
+/* 焦点环 offset 对齐 global.css 中原生元素规则的 2px（EP 默认 1px，贴边不易辨认） */
+.el-button:focus-visible {
+  outline-offset: 2px;
 }
 
 .el-card {

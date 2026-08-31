@@ -177,7 +177,7 @@ defineExpose({ refresh })
   padding: 10px 4px;
   border-bottom: 1px solid var(--color-border-light, #f1f5f9);
   cursor: pointer;
-  transition: background var(--duration-fast, 0.2s);
+  transition: background var(--duration-fast, 0.2s) var(--ease-default);
 }
 
 .notification-item:hover {

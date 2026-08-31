@@ -69,7 +69,7 @@ function onPopoverShow() {
   background: transparent;
   color: var(--color-text-secondary, #475569);
   cursor: pointer;
-  transition: background var(--duration-fast, 0.2s);
+  transition: background var(--duration-fast, 0.2s) var(--ease-default);
   flex-shrink: 0;
 }
 

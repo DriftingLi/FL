@@ -46,7 +46,7 @@ function optionClass(key: string): Record<string, boolean> {
 
 <style scoped>
 .q-options { display: flex; flex-direction: column; gap: 8px; }
-.q-option { display: flex; align-items: center; padding: 10px 15px; border: 1px solid #dcdfe6; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+.q-option { display: flex; align-items: center; padding: 10px 15px; border: 1px solid #dcdfe6; border-radius: 8px; cursor: pointer; transition: all var(--duration-base) var(--ease-default); }
 .q-option:hover { border-color: #409eff; }
 .q-option.selected { border-color: #409eff; background: #ecf5ff; }
 .q-option.opt-correct { border-color: #67c23a; background: #f0f9eb; }

@@ -338,7 +338,7 @@ onBeforeUnmount(() => {
 
 .slide-fade-enter-active,
 .slide-fade-leave-active {
-  transition: opacity 0.25s ease;
+  transition: opacity var(--duration-normal) var(--ease-default);
 }
 
 .slide-fade-enter-from,
@@ -398,7 +398,7 @@ onBeforeUnmount(() => {
   border: 2px solid transparent;
   border-radius: 4px;
   overflow: hidden;
-  transition: border-color 0.2s, transform 0.2s;
+  transition: border-color var(--duration-base) var(--ease-default), transform var(--duration-base) var(--ease-default);
   display: flex;
   flex-direction: column;
   align-items: center;

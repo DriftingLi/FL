@@ -160,7 +160,7 @@ onBeforeUnmount(() => {
   background: #fafbfc;
   color: #606266;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-base) var(--ease-default);
 }
 
 .upload-btn:hover {

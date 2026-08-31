@@ -160,7 +160,7 @@ onMounted(async () => {
   border-radius: var(--radius-md);
   padding: 14px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-fast) var(--ease-default);
   background: white;
 }
 .credential-card:hover {

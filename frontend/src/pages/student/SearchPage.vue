@@ -273,7 +273,7 @@ function resetSearch() {
 
 .result-item.clickable {
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--duration-base) var(--ease-default);
 }
 
 .result-item.clickable:hover {

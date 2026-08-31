@@ -504,7 +504,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   color: var(--color-text-primary, #0f172a);
   padding: 6px 12px;
   border-radius: 8px;
-  transition: background 0.15s ease;
+  transition: background var(--duration-fast) var(--ease-default);
 }
 
 .user-trigger:hover {
@@ -516,7 +516,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   font-weight: 500;
   color: var(--color-primary-600, #2563eb);
   text-decoration: none;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--duration-fast) var(--ease-default);
 }
 
 .profile-link:hover {
@@ -531,7 +531,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   padding: 6px 12px;
   border: 1px solid var(--color-border-dark, #cbd5e1);
   border-radius: 8px;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) var(--ease-default);
 }
 
 .back-link:hover {
@@ -590,7 +590,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   padding: 10px 12px;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background var(--duration-fast) var(--ease-default);
   margin-bottom: 4px;
 }
 
@@ -632,7 +632,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   padding: 4px;
   border-radius: 4px;
   opacity: 0;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) var(--ease-default);
   flex-shrink: 0;
 }
 
@@ -644,7 +644,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   padding: 4px;
   border-radius: 4px;
   opacity: 0;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) var(--ease-default);
 }
 
 .session-actions {
@@ -746,7 +746,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   color: var(--color-text-secondary, #475569);
   cursor: pointer;
   text-align: left;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) var(--ease-default);
 }
 
 .suggestion-card:hover {
@@ -881,7 +881,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   display: flex;
   gap: 8px;
   align-items: center;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--duration-fast) var(--ease-default);
 }
 
 .input-wrap.has-image {

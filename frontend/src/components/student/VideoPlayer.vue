@@ -252,7 +252,7 @@ onBeforeUnmount(() => {
   gap: 4px;
   z-index: 6;
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity var(--duration-normal) var(--ease-default);
 }
 
 .video-container:hover .video-controls-overlay {
