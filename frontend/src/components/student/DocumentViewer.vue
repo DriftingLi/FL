@@ -170,7 +170,7 @@ watch(resolvedSrc, (newVal) => {
   height: 600px;
   display: flex;
   flex-direction: column;
-  background: #525659;
+  background: var(--color-viewer-bg);
   border-radius: 8px;
   overflow: hidden;
   position: relative;
@@ -181,8 +181,8 @@ watch(resolvedSrc, (newVal) => {
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background: #3c3f41;
-  border-bottom: 1px solid #555;
+  background: var(--color-viewer-bar);
+  border-bottom: 1px solid var(--color-viewer-line);
   flex-shrink: 0;
   gap: 8px;
 }
@@ -196,12 +196,12 @@ watch(resolvedSrc, (newVal) => {
 }
 
 .toolbar-icon {
-  color: #409eff;
+  color: var(--color-primary-500);
   flex-shrink: 0;
 }
 
 .file-name {
-  color: #ddd;
+  color: var(--color-viewer-text);
   font-size: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -218,7 +218,7 @@ watch(resolvedSrc, (newVal) => {
 .doc-toolbar .el-button {
   --el-button-bg-color: transparent;
   --el-button-border-color: transparent;
-  --el-button-text-color: #ccc;
+  --el-button-text-color: var(--color-viewer-text);
   --el-button-hover-bg-color: rgba(255, 255, 255, 0.1);
   --el-button-hover-border-color: transparent;
   --el-button-hover-text-color: #fff;
@@ -249,7 +249,7 @@ watch(resolvedSrc, (newVal) => {
   justify-content: center;
   gap: 12px;
   background: rgba(82, 86, 89, 0.9);
-  color: #ccc;
+  color: var(--color-viewer-text);
   z-index: 10;
 }
 
@@ -271,7 +271,7 @@ watch(resolvedSrc, (newVal) => {
 .unsupported-tip {
   margin-top: 12px;
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   text-align: center;
   padding: 0 20px;
 }

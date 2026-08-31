@@ -258,7 +258,7 @@ onBeforeUnmount(() => {
   min-height: 500px;
   display: flex;
   flex-direction: column;
-  background: #1a1a2e;
+  background: var(--color-viewer-bg);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -268,7 +268,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 4px;
   padding: 8px 12px;
-  background: #16213e;
+  background: var(--color-viewer-bar);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   flex-shrink: 0;
 }
@@ -276,14 +276,14 @@ onBeforeUnmount(() => {
 .image-toolbar .el-button {
   --el-button-bg-color: transparent;
   --el-button-border-color: transparent;
-  --el-button-text-color: #ccc;
+  --el-button-text-color: var(--color-viewer-text);
   --el-button-hover-bg-color: rgba(255, 255, 255, 0.1);
   --el-button-hover-border-color: transparent;
   --el-button-hover-text-color: #fff;
 }
 
 .zoom-text {
-  color: #ccc;
+  color: var(--color-viewer-text);
   font-size: 13px;
   min-width: 48px;
   text-align: center;
