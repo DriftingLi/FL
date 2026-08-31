@@ -17,7 +17,7 @@
           <el-icon><Search /></el-icon>
         </template>
       </el-input>
-      <el-button type="primary" size="large" :loading="loading" @click="doSearch">搜索</el-button>
+      <UiButton variant="primary" size="large" :loading="loading" @click="doSearch">搜索</UiButton>
     </div>
 
     <template v-if="searched">
@@ -105,6 +105,7 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const router = useRouter()
 

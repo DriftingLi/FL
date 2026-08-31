@@ -17,10 +17,20 @@ const props = withDefaults(
     size?: 'small' | 'default' | 'large'
     loading?: boolean
     block?: boolean
-    /** 全局注册的图标组件名 */
-    icon?: string
+    /**
+     * 图标：既接受全局注册名（字符串），也接受组件引用（`:icon="Plus"`）。
+     * 存量 el-button 两种写法都在用，故类型放宽 —— 两者都能直接喂给 `<component :is>`。
+     */
+    icon?: string | object
+    /** 圆形图标按钮（EP 的 circle），仅图标、无文字时用 */
+    circle?: boolean
+    /**
+     * 链接态（EP 的 link）：无边框无背景、保留 variant 的色调。
+     * 与 variant 组合使用：`<UiButton variant="primary" link>下载</UiButton>`。
+     */
+    link?: boolean
   }>(),
-  { variant: 'secondary', size: 'default', loading: false, block: false }
+  { variant: 'secondary', size: 'default', loading: false, block: false, circle: false, link: false }
 )
 
 const EP_TYPE: Record<string, 'primary' | 'default' | 'danger' | 'success' | 'warning'> = {
@@ -41,6 +51,8 @@ const EP_TYPE: Record<string, 'primary' | 'default' | 'danger' | 'success' | 'wa
     :loading="props.loading"
     :plain="props.variant === 'ghost'"
     :text="props.variant === 'text'"
+    :link="props.link"
+    :circle="props.circle"
     :class="props.block ? 'w-full' : undefined"
   >
     <el-icon v-if="props.icon">

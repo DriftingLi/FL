@@ -1,7 +1,7 @@
 <template>
   <div class="ask-page">
     <div class="back-bar">
-      <el-button text :icon="ArrowLeft" @click="goBack">返回问答</el-button>
+      <UiButton variant="text" :icon="ArrowLeft" @click="goBack">返回问答</UiButton>
     </div>
 
     <div class="ask-card">
@@ -20,7 +20,7 @@
       />
 
       <div class="ask-actions">
-        <el-button type="primary" :loading="postForm?.submitting" :disabled="!postForm?.canSubmit" @click="postForm?.submit()">发布提问</el-button>
+        <UiButton variant="primary" :loading="postForm?.submitting" :disabled="!postForm?.canSubmit" @click="postForm?.submit()">发布提问</UiButton>
         <el-button @click="goBack">取消</el-button>
       </div>
     </div>
@@ -32,6 +32,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import ForumPostForm from '@/components/student/ForumPostForm.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 // 表单体（#389）：字段/校验/提交在 ForumPostForm（category=question），本页只留整页壳与跳转
 const router = useRouter()

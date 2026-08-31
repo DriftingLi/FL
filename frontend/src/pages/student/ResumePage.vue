@@ -2,7 +2,7 @@
   <div class="resume-page">
     <div class="resume-card">
       <div class="resume-head">
-        <el-button text @click="goBack">返回</el-button>
+        <UiButton variant="text" @click="goBack">返回</UiButton>
         <div class="head-actions">
           <span class="vis-label">公开给招聘方</span>
           <el-switch v-model="form.visibilityOpen" @change="toggleVisibility" />
@@ -20,9 +20,9 @@
             <div class="text-xs text-ink-3">{{ req.status }} · {{ req.created_at }}</div>
           </div>
           <div class="flex gap-1">
-            <el-button v-if="req.status === 'pending'" size="small" type="primary" @click="approveReq(req.id)">同意</el-button>
+            <UiButton variant="primary" v-if="req.status === 'pending'" size="small" @click="approveReq(req.id)">同意</UiButton>
             <el-button v-if="req.status === 'pending'" size="small" @click="rejectReq(req.id)">拒绝</el-button>
-            <el-button v-if="req.status === 'approved'" size="small" type="danger" @click="revokeReq(req.id)">撤回</el-button>
+            <UiButton variant="danger" v-if="req.status === 'approved'" size="small" @click="revokeReq(req.id)">撤回</UiButton>
           </div>
         </div>
       </div>
@@ -86,7 +86,7 @@
               <el-input v-model="exp.start_month" placeholder="开始年月" class="row-input" />
               <el-input v-model="exp.end_month" placeholder="结束年月" class="row-input" />
               <el-input v-model="exp.desc" placeholder="描述" class="row-input" />
-              <el-button text type="danger" @click="removeExp(idx)">删除</el-button>
+              <UiButton variant="text" @click="removeExp(idx)" class="text-bad">删除</UiButton>
             </div>
             <el-button text type="primary" @click="addExp">新增经历</el-button>
           </div>
@@ -99,7 +99,7 @@
               </el-select>
               <el-input v-model="cert.cert_no" placeholder="证书编号" class="row-input" />
               <el-input v-model="cert.expire_date" placeholder="有效期" class="row-input" />
-              <el-button text type="danger" @click="removeCert(idx)">删除</el-button>
+              <UiButton variant="text" @click="removeCert(idx)" class="text-bad">删除</UiButton>
             </div>
             <el-button text type="primary" @click="addCert">新增持证</el-button>
           </div>
@@ -119,13 +119,13 @@
             <div class="photo-list">
               <span v-for="(p, i) in form.photos" :key="i" class="photo-item">
                 <span class="photo-url">{{ p }}</span>
-                <el-button text type="danger" @click="removePhoto(i)">删除</el-button>
+                <UiButton variant="text" @click="removePhoto(i)" class="text-bad">删除</UiButton>
               </span>
             </div>
           </div>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+          <UiButton variant="primary" :loading="saving" @click="save">保存</UiButton>
           <el-button @click="goBack">取消</el-button>
         </el-form-item>
       </el-form>
@@ -139,6 +139,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { resumeApi } from '@/api/resume'
 import { unwrappedRequest } from '@/api/request'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const router = useRouter()
 const saving = ref(false)

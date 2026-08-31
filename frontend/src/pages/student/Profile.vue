@@ -71,7 +71,7 @@
       </div>
 
       <div class="logout-row">
-        <el-button type="primary" class="logout-btn" @click="handleLogout">退出当前账号</el-button>
+        <UiButton variant="primary" class="logout-btn" @click="handleLogout">退出当前账号</UiButton>
       </div>
     </div>
 
@@ -102,6 +102,7 @@ import EmailEditDialog from '@/components/profile/EmailEditDialog.vue'
 import PasswordEditDialog from '@/components/profile/PasswordEditDialog.vue'
 import AccountEditDialog from '@/components/profile/AccountEditDialog.vue'
 import DeleteAccountDialog from '@/components/profile/DeleteAccountDialog.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const authStore = useAuthStore()
 const router = useRouter()

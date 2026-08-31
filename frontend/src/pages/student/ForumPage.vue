@@ -2,12 +2,12 @@
   <div class="forum-page">
     <div class="forum-header">
       <h1 class="forum-title">学员论坛</h1>
-      <el-button v-if="mode === 'all' && categoryTab === 'question'" type="primary" size="large" :icon="EditPen" @click="goAsk">
+      <UiButton variant="primary" v-if="mode === 'all' && categoryTab === 'question'" size="large" :icon="EditPen" @click="goAsk">
         我要提问
-      </el-button>
-      <el-button v-else type="primary" size="large" :icon="EditPen" @click="openCreateDialog">
+      </UiButton>
+      <UiButton variant="primary" v-else size="large" :icon="EditPen" @click="openCreateDialog">
         发布新帖
-      </el-button>
+      </UiButton>
     </div>
 
     <!-- 每日打卡卡片（spec #268 A1） -->
@@ -21,10 +21,10 @@
         </span>
       </div>
       <div class="checkin-right" @click.stop>
-        <el-button type="primary" size="small" :loading="checkInChecking" :disabled="checkInTodayChecked" @click="doCheckIn">
+        <UiButton variant="primary" size="small" :loading="checkInChecking" :disabled="checkInTodayChecked" @click="doCheckIn">
           {{ checkInTodayChecked ? '今日已打卡' : '立即打卡' }}
-        </el-button>
-        <el-button text size="small" @click="openCheckIn('rank')">排行榜</el-button>
+        </UiButton>
+        <UiButton variant="text" size="small" @click="openCheckIn('rank')">排行榜</UiButton>
       </div>
     </div>
 
@@ -176,7 +176,7 @@
       <ForumPostForm ref="postForm" category="discussion" @success="onTopicCreated" />
       <template #footer>
         <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="postForm?.submitting" @click="postForm?.submit()">发布</el-button>
+        <UiButton variant="primary" :loading="postForm?.submitting" @click="postForm?.submit()">发布</UiButton>
       </template>
     </el-dialog>
   </div>
@@ -202,6 +202,7 @@ import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const router = useRouter()
 const route = useRoute()

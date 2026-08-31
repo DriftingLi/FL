@@ -38,7 +38,7 @@
             <div class="timeline-card-actions">
               <template v-if="p.entitled">
                 <el-button size="small" type="primary" plain @click="startPractice(p)">开始练习</el-button>
-                <el-button size="small" type="primary" @click="startExam(p)">模拟考试</el-button>
+                <UiButton variant="primary" size="small" @click="startExam(p)">模拟考试</UiButton>
               </template>
               <template v-else>
                 <span class="meta-text">{{ p.price }} 积分/套</span>
@@ -63,6 +63,7 @@ import { realExamApi, type RealExamPaper } from '@/api/realExam'
 import { useCredentialRefetch } from '@/composables/useCredentialRefetch'
 import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const router = useRouter()
 const credentialStore = useCredentialStore()

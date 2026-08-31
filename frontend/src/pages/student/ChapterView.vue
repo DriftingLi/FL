@@ -109,32 +109,24 @@
 
       <div class="chapter-navigation">
         <div class="nav-prev">
-          <el-button
-            :disabled="!chapterDetail.previous_chapter_id"
-            @click="navigateToChapter(chapterDetail.previous_chapter_id ?? 0)"
-            text
-          >
+          <UiButton variant="text" :disabled="!chapterDetail.previous_chapter_id" @click="navigateToChapter(chapterDetail.previous_chapter_id ?? 0)">
             <el-icon><ArrowLeft /></el-icon>
             <div class="nav-btn-content" v-if="chapterDetail.previous_chapter_id">
               <span class="nav-label">上一章节</span>
               <span class="nav-title">{{ getPrevChapterTitle }}</span>
             </div>
             <span v-else class="nav-label">没有上一章节</span>
-          </el-button>
+          </UiButton>
         </div>
         <div class="nav-next">
-          <el-button
-            :disabled="!chapterDetail.next_chapter_id"
-            @click="navigateToChapter(chapterDetail.next_chapter_id ?? 0)"
-            text
-          >
+          <UiButton variant="text" :disabled="!chapterDetail.next_chapter_id" @click="navigateToChapter(chapterDetail.next_chapter_id ?? 0)">
             <div class="nav-btn-content" v-if="chapterDetail.next_chapter_id">
               <span class="nav-label">下一章节</span>
               <span class="nav-title">{{ getNextChapterTitle }}</span>
             </div>
             <span v-else class="nav-label">没有下一章节</span>
             <el-icon><ArrowRight /></el-icon>
-          </el-button>
+          </UiButton>
         </div>
       </div>
     </template>
@@ -163,6 +155,7 @@ import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import PptViewer from '@/components/student/PptViewer.vue'
 import ImageViewer from '@/components/student/ImageViewer.vue'
 import ChapterDiscussion from '@/components/student/ChapterDiscussion.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 marked.use(
   markedHighlight({
