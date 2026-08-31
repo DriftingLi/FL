@@ -134,4 +134,8 @@
   --color-warn-soft: var(--color-warning-light);
   --color-bad: var(--color-danger);
   --color-bad-soft: var(--color-danger-light);
+  /* -strong 深字色：与 -soft 浅底配对使用（如 text-warn-strong on bg-warn-soft） */
+  --color-ok-strong: var(--color-success-strong);
+  --color-warn-strong: var(--color-warning-strong);
+  --color-bad-strong: var(--color-danger-strong);
 }
