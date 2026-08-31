@@ -248,6 +248,38 @@ export interface AdminTutor {
   created_at?: string
 }
 
+// ===== 企业招聘者管理（#416，邀约制） =====
+
+export interface AdminRecruiter {
+  id: number
+  username: string
+  company_name: string
+  credit_code: string
+  business_scope: string
+  contact_name: string
+  contact_phone: string
+  contact_email: string
+  status: number
+  created_at?: string
+}
+
+export interface AdminRecruitersQuery {
+  page?: number
+  page_size?: number
+  keyword?: string
+}
+
+export interface AddRecruiterPayload {
+  username: string
+  password: string
+  company_name: string
+  credit_code: string
+  business_scope: string
+  contact_name: string
+  contact_phone: string
+  contact_email: string
+}
+
 export const adminApi = {
   // ===== HRWAI 用户管理(统一) =====
   getHrwaiUsers(params: AdminHrwaiUsersQuery) {
@@ -293,6 +325,28 @@ export const adminApi = {
 
   toggleTutorStatus(id: number) {
     return unwrappedRequest.put<AdminTutor>(`/admin/tutor/${id}/status`)
+  },
+
+  // ===== 企业招聘者管理（#416） =====
+  getRecruiters(params: AdminRecruitersQuery) {
+    return unwrappedRequest.get<{ items: AdminRecruiter[]; total: number }>('/admin/recruiters', { params })
+  },
+
+  addRecruiter(data: AddRecruiterPayload) {
+    return unwrappedRequest.post<AdminRecruiter>('/admin/recruiters', data)
+  },
+
+  toggleRecruiterStatus(id: number) {
+    return unwrappedRequest.put<{ status: number }>(`/admin/recruiters/${id}/status`)
+  },
+
+  // #417：编辑企业信息与重置密码（响应与错误信息不回显口令字段）
+  editRecruiter(id: number, data: Partial<AddRecruiterPayload>) {
+    return unwrappedRequest.put<AdminRecruiter>(`/admin/recruiters/${id}`, data)
+  },
+
+  resetRecruiterPassword(id: number, password: string) {
+    return unwrappedRequest.put<null>(`/admin/recruiters/${id}/password`, { password })
   },
 
   getStatistics() {

@@ -28,6 +28,10 @@ func legacyQuestionDict(q *model.Question, includeAnswer bool) map[string]any {
 		"created_at":      formatISO(q.CreatedAt),
 		"updated_at":      formatISO(q.UpdatedAt),
 	}
+	// #412：credential_id 随新 DTO 一起入契约（omitempty：nil 省略，与 DTO 字节一致）。
+	if q.CredentialID != nil {
+		d["credential_id"] = q.CredentialID
+	}
 	if includeAnswer {
 		d["answer"] = q.Answer
 		d["explanation"] = q.Explanation
@@ -42,6 +46,7 @@ func sampleQuestionForShape() *model.Question {
 		{"A": "选项A"}, {"B": "选项B"}, {"C": "选项C"},
 	})
 	createdBy := 7
+	credID := 3
 	return &model.Question{
 		ID:              42,
 		Type:            "multi_choice",
@@ -53,6 +58,7 @@ func sampleQuestionForShape() *model.Question {
 		Score:           4,
 		CreatedBy:       &createdBy,
 		CreatedByType:   "tutor",
+		CredentialID:    &credID,
 		Answer:          "A,B",
 		Explanation:     "解析",
 		ReferenceAnswer: "参考答案",

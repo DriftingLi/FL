@@ -30,11 +30,13 @@ func RegisterAdminInspectionRoutes(rg *gin.RouterGroup, rd RouterDeps, db *gorm.
 	// 问答积分流水按原因筛选（admin 全量；查询归位 PointsService.GetLedger，#401）
 	g.GET("/points/ledger", func(c *gin.Context) {
 		reason := c.Query("reason")
+		// #411：按业务域（ref_type）过滤；不传 = 跨域全量（管理员知情切换）
+		refType := c.Query("ref_type")
 		// user_id 非法/缺省 → 0 = 不过滤用户
 		userID := atoiDefault(c.Query("user_id"), 0)
 		page := atoiDefault(c.Query("page"), 1)
 		pageSize := atoiDefault(c.Query("page_size"), 20)
-		res, err := pointsSvc.GetLedger(userID, page, pageSize, reason)
+		res, err := pointsSvc.GetLedger(userID, page, pageSize, reason, refType)
 		if err != nil {
 			response.ServerError(c, err.Error())
 			return

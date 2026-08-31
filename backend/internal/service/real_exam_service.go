@@ -119,7 +119,7 @@ func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*PracticeS
 		byID[all[i].ID] = all[i]
 	}
 
-	ids, startIdx, err := ResumeSet(s.db, studentID, ResumeSetSpec{
+	ids, startIdx, err := ResumeSet(s.db, studentID, nil, ResumeSetSpec{
 		Mode:       string(PracticeModePaper(paperID)),
 		FreshIDs:   allIDs,
 		ReuseSaved: true,

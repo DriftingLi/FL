@@ -24,7 +24,9 @@ export interface ResumeData {
   updated_at: string
 }
 export const resumeApi = {
-  get() { return unwrappedRequest.get<ResumeData>('/resume') },
+  // #415：简历拉取走静默通道（X-Silent）——「未建即 404」是契约内空态，页面自行分类呈现，
+  // 不再触发请求壳的统一 404 报错提示；个人资料页同样静音（只取数据展示）。
+  get() { return unwrappedRequest.get<ResumeData>('/resume', { headers: { 'X-Silent': '1' } }) },
   save(data: any) { return unwrappedRequest.put<ResumeData>('/resume', data) },
   updateVisibility(visibility: 'hidden' | 'open') { return unwrappedRequest.put<ResumeData>('/resume/visibility', { visibility }) },
   uploadPdf(formData: FormData) { return unwrappedRequest.post<{ url: string }>('/resume/pdf', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }) },

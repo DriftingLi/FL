@@ -427,6 +427,132 @@ func (s *AuthService) ToggleRecruiterStatus(id int) (int16, error) {
 	return next, nil
 }
 
+// RecruiterListItem 招聘者列表项（管理面白名单：不含任何凭据字段，口令哈希永不出管理面）。
+type RecruiterListItem struct {
+	ID            int       `json:"id"`
+	Username      string    `json:"username"`
+	CompanyName   string    `json:"company_name"`
+	CreditCode    string    `json:"credit_code"`
+	BusinessScope string    `json:"business_scope"`
+	ContactName   string    `json:"contact_name"`
+	ContactPhone  string    `json:"contact_phone"`
+	ContactEmail  string    `json:"contact_email"`
+	Status        int16     `json:"status"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+// RecruiterListResult 招聘者分页列表。
+type RecruiterListResult struct {
+	Total int64               `json:"total"`
+	Page  int                 `json:"page"`
+	Items []RecruiterListItem `json:"items"`
+}
+
+// ListRecruiters 招聘者列表（分页 + 关键字过滤企业名/账号；#416 真实现替换硬编码空数组桩）。
+// 响应只含白名单字段（无 Password 等凭据）。
+func (s *AuthService) ListRecruiters(page, pageSize int, keyword string) (*RecruiterListResult, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 || pageSize > 100 {
+		pageSize = 20
+	}
+	q := s.db.Model(&model.RecruiterUser{})
+	if keyword != "" {
+		kw := "%" + keyword + "%"
+		q = q.Where("username LIKE ? OR company_name LIKE ?", kw, kw)
+	}
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, err
+	}
+	var rows []model.RecruiterUser
+	if err := q.Order("created_at DESC").Limit(pageSize).Offset((page - 1) * pageSize).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	items := make([]RecruiterListItem, 0, len(rows))
+	for _, r := range rows {
+		items = append(items, RecruiterListItem{
+			ID:            r.ID,
+			Username:      r.Username,
+			CompanyName:   r.CompanyName,
+			CreditCode:    r.CreditCode,
+			BusinessScope: r.BusinessScope,
+			ContactName:   r.ContactName,
+			ContactPhone:  r.ContactPhone,
+			ContactEmail:  r.ContactEmail,
+			Status:        r.Status,
+			CreatedAt:     r.CreatedAt,
+		})
+	}
+	return &RecruiterListResult{Total: total, Page: page, Items: items}, nil
+}
+
+// RecruiterEditInput 编辑招聘者企业信息的输入（#417）：不涉及账号归属与角色，密码走独立端点。
+type RecruiterEditInput struct {
+	CompanyName   string `json:"company_name"`
+	CreditCode    string `json:"credit_code"`
+	BusinessScope string `json:"business_scope"`
+	ContactName   string `json:"contact_name"`
+	ContactPhone  string `json:"contact_phone"`
+	ContactEmail  string `json:"contact_email"`
+}
+
+// EditRecruiter 编辑招聘者企业信息与联系人（#417）：与创建同源校验（必填判定单点），
+// 不允许改动账号归属与角色；启停仍走 ToggleRecruiterStatus 独立端点。
+func (s *AuthService) EditRecruiter(id int, in RecruiterEditInput) (*model.RecruiterUser, error) {
+	// 必填校验复用 ValidateRecruiterInput 的字段集（账号/密码位忽略，企业字段逐条同源）
+	if err := ValidateRecruiterInput(RecruiterCreateInput{
+		Username:      "keep",
+		Password:      "keep123",
+		CompanyName:   in.CompanyName,
+		CreditCode:    in.CreditCode,
+		BusinessScope: in.BusinessScope,
+		ContactName:   in.ContactName,
+		ContactPhone:  in.ContactPhone,
+		ContactEmail:  in.ContactEmail,
+	}); err != nil {
+		return nil, err
+	}
+	var r model.RecruiterUser
+	if err := s.db.First(&r, id).Error; err != nil {
+		return nil, errors.New("招聘者不存在")
+	}
+	updates := map[string]any{
+		"company_name":   strings.TrimSpace(in.CompanyName),
+		"credit_code":    strings.TrimSpace(in.CreditCode),
+		"business_scope": strings.TrimSpace(in.BusinessScope),
+		"contact_name":   strings.TrimSpace(in.ContactName),
+		"contact_phone":  strings.TrimSpace(in.ContactPhone),
+		"contact_email":  strings.TrimSpace(in.ContactEmail),
+		"updated_at":     beijingNow(),
+	}
+	if err := s.db.Model(&model.RecruiterUser{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+		return nil, err
+	}
+	if err := s.db.First(&r, id).Error; err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+// ResetRecruiterPassword 重置招聘者口令（#417）：旧口令立即失效，响应不回显任何口令字段。
+func (s *AuthService) ResetRecruiterPassword(id int, password string) error {
+	if len(password) < 6 || len(password) > 20 {
+		return errors.New("密码长度需为 6-20 位")
+	}
+	var cnt int64
+	s.db.Model(&model.RecruiterUser{}).Where("id = ?", id).Count(&cnt)
+	if cnt == 0 {
+		return errors.New("招聘者不存在")
+	}
+	hashed, err := HashPassword(password)
+	if err != nil {
+		return err
+	}
+	return s.db.Model(&model.RecruiterUser{}).Where("id = ?", id).Update("password", hashed).Error
+}
+
 // EnsureDefaultUsers 确保默认账号存在（admin/tutor/student），密码由环境变量配置。
 // 已存在的账号会被跳过（不会重置密码）。
 func (s *AuthService) EnsureDefaultUsers() error {

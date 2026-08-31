@@ -23,15 +23,17 @@ func TestPracticeStartResultDTOShapeLock(t *testing.T) {
 
 func TestProgressResultDTOShapeLock(t *testing.T) {
 	// 旧 GetProgress/GetSequentialProgress 的 map 输出顶层 key：
-	// {completed, total, current_index, answers_state}
+	// {completed, total, current_index, answers_state}；#413 有意扩展 pool_total
+	//（实时池总数，学员侧形状零 diff——新增字段对既有调用方不变）。
 	d := ProgressResultDTO{
 		Completed:    2,
 		Total:        10,
 		CurrentIndex: 2,
+		PoolTotal:    120,
 		AnswersState: map[string]any{"a": true},
 	}
 	assertShapeLock(t, d,
-		"completed", "total", "current_index", "answers_state",
+		"completed", "total", "current_index", "pool_total", "answers_state",
 	)
 }
 

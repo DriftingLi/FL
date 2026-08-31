@@ -206,7 +206,7 @@ func TestListQuestions_Pagination(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		testutil.SeedQuestion(t, db, "single_choice", "题目前5", "A")
 	}
-	result := svc.ListQuestions(1, 2, "", "", "", nil)
+	result := svc.ListQuestions(1, 2, "", "", "", nil, nil)
 	if result["total"].(int64) != 5 {
 		t.Fatalf("总数应为 5, got %v", result["total"])
 	}
@@ -223,7 +223,7 @@ func TestListQuestions_FilterByType(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
 	testutil.SeedQuestion(t, db, "single_choice", "单选题", "A")
 	testutil.SeedQuestion(t, db, "true_false", "判断题", "true")
-	result := svc.ListQuestions(1, 20, "true_false", "", "", nil)
+	result := svc.ListQuestions(1, 20, "true_false", "", "", nil, nil)
 	if result["total"].(int64) != 1 {
 		t.Fatalf("判断题应 1 条, got %v", result["total"])
 	}
@@ -231,7 +231,7 @@ func TestListQuestions_FilterByType(t *testing.T) {
 
 func TestListQuestions_DefaultPage(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	result := svc.ListQuestions(0, 0, "", "", "", nil)
+	result := svc.ListQuestions(0, 0, "", "", "", nil, nil)
 	if result["page"].(int) != 1 {
 		t.Fatalf("默认页码应为 1, got %v", result["page"])
 	}
@@ -346,7 +346,7 @@ func TestBatchImport_WithErrors(t *testing.T) {
 
 func TestGetStats_Empty(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	result := svc.GetStats()
+	result := svc.GetStats(nil)
 	if result.Total != 0 {
 		t.Fatalf("空库总数应为 0, got %v", result.Total)
 	}
@@ -357,7 +357,7 @@ func TestGetStats_WithData(t *testing.T) {
 	testutil.SeedQuestion(t, db, "single_choice", "q1", "A")
 	testutil.SeedQuestion(t, db, "single_choice", "q2", "A")
 	testutil.SeedQuestion(t, db, "true_false", "q3", "true")
-	result := svc.GetStats()
+	result := svc.GetStats(nil)
 	if result.Total != 3 {
 		t.Fatalf("总数应为 3, got %v", result.Total)
 	}

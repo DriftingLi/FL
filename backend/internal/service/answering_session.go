@@ -85,9 +85,11 @@ type ResumeSetSpec struct {
 //   - 顺序练习（KeepCursorOnRefresh）：恒用现集合，游标未越界则保留、越界复位 0；
 //   - 其余为新开始：现集合 + 游标 0；Sample 非 nil 且属「新开始」（无进度或已练完，
 //     标签练习既有条件）时抽样固定顺序。
-func ResumeSet(db *gorm.DB, studentID int, spec ResumeSetSpec) (ids []int, startIdx int, err error) {
+func ResumeSet(db *gorm.DB, studentID int, credentialID *int, spec ResumeSetSpec) (ids []int, startIdx int, err error) {
 	var prog model.PracticeProgress
-	if err := db.Where("student_id = ? AND practice_mode = ?", studentID, spec.Mode).Limit(1).Find(&prog).Error; err != nil {
+	// #414：证件分区定位（nil → IS NULL，Postgres 不接受 IS 参数占位符）
+	clause, args := credentialClause(credentialID)
+	if err := db.Where("student_id = ? AND practice_mode = ? AND "+clause, append([]any{studentID, spec.Mode}, args...)...).Limit(1).Find(&prog).Error; err != nil {
 		return nil, 0, err
 	}
 	ids = spec.FreshIDs
@@ -110,7 +112,7 @@ func ResumeSet(db *gorm.DB, studentID int, spec ResumeSetSpec) (ids []int, start
 		// 新开始（首次进入或已练完）：抽样并固定顺序
 		ids = spec.Sample(ids)
 	}
-	if err := SaveSet(db, studentID, spec.Mode, ids, startIdx, len(ids), nil); err != nil {
+	if err := SaveSet(db, studentID, spec.Mode, credentialID, ids, startIdx, len(ids), nil); err != nil {
 		return nil, 0, err
 	}
 	return ids, startIdx, nil
@@ -122,9 +124,10 @@ func ResumeSet(db *gorm.DB, studentID int, spec ResumeSetSpec) (ids []int, start
 //     记录不存在则建空顺序行，total > 0 时同步 total；
 //   - answers 非 nil：写答案快照（进度保存流经三态归一后传入；开始流传 nil，
 //     创建时落初始化空对象）。
-func SaveSet(db *gorm.DB, studentID int, mode string, ids []int, startIdx, total int, answers json.RawMessage) error {
+func SaveSet(db *gorm.DB, studentID int, mode string, credentialID *int, ids []int, startIdx, total int, answers json.RawMessage) error {
 	var prog model.PracticeProgress
-	if err := db.Where("student_id = ? AND practice_mode = ?", studentID, mode).Limit(1).Find(&prog).Error; err != nil {
+	clause, args := credentialClause(credentialID)
+	if err := db.Where("student_id = ? AND practice_mode = ? AND "+clause, append([]any{studentID, mode}, args...)...).Limit(1).Find(&prog).Error; err != nil {
 		return err
 	}
 	if prog.ID == 0 {
@@ -137,6 +140,7 @@ func SaveSet(db *gorm.DB, studentID int, mode string, ids []int, startIdx, total
 		prog = model.PracticeProgress{
 			StudentID:    studentID,
 			PracticeMode: mode,
+			CredentialID: credentialID,
 			QuestionIDs:  model.JSONB(marshalIDs(ids)),
 			CurrentIndex: startIdx,
 			Total:        total,
@@ -156,6 +160,14 @@ func SaveSet(db *gorm.DB, studentID int, mode string, ids []int, startIdx, total
 		updates["answers_state"] = model.JSONB(answers)
 	}
 	return db.Model(&prog).Updates(updates).Error
+}
+
+// credentialClause 证件分区 WHERE 片段（#414）：nil → `credential_id IS NULL`（PG 不支持 IS 参数占位）。
+func credentialClause(credentialID *int) (string, []any) {
+	if credentialID == nil {
+		return "credential_id IS NULL", nil
+	}
+	return "credential_id = ?", []any{*credentialID}
 }
 
 // marshalIDs 题目顺序序列化（失败落空数组——顺序仅是缓存态，空数组等价重新协商）。

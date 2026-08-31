@@ -798,7 +798,7 @@ func TestQuestionBank_Tags(t *testing.T) {
 	}
 
 	// 按标签过滤
-	byTag := qsvc.ListQuestions(1, 20, "", "", "", ptrInt(tag2.ID))
+	byTag := qsvc.ListQuestions(1, 20, "", "", "", ptrInt(tag2.ID), nil)
 	if byTag["total"].(int64) != 1 {
 		t.Fatalf("按标签过滤应 1 条, got %v", byTag["total"])
 	}
