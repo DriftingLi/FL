@@ -32,6 +32,12 @@
       </div>
       <template #dropdown>
         <el-dropdown-menu>
+          <el-dropdown-item command="theme">
+            <el-icon><Moon /></el-icon>
+            <template v-if="themeStore.mode === 'dark'">深色模式（点击切换）</template>
+            <template v-else-if="themeStore.mode === 'light'">浅色模式（点击切换）</template>
+            <template v-else>跟随系统（点击切换）</template>
+          </el-dropdown-item>
           <el-dropdown-item command="logout">
             <el-icon><SwitchButton /></el-icon>退出登录
           </el-dropdown-item>
@@ -221,8 +227,9 @@
 import { computed, reactive, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
-import { Expand, Fold, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
+import { Expand, Fold, ArrowDown, SwitchButton, Moon } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
 import { isNavRouteActive, type NavItem } from '@/config/navigation'
 import NotificationPanel from '@/components/layout/NotificationPanel.vue'
 
@@ -256,6 +263,7 @@ const effectiveCollapsed = computed(() => props.collapsed && !props.mobileOpen)
 
 const route = useRoute()
 const router = useRouter()
+const themeStore = useThemeStore()
 const authStore = useAuthStore()
 
 // 侧栏分组折叠：默认全部展开，点击分组标题即可折叠/展开（桌面与移动端一致）
@@ -336,6 +344,10 @@ function isRouteActive(item: NavItem): boolean {
 }
 
 async function handleUserCommand(command: string) {
+  if (command === 'theme') {
+    themeStore.cycle()
+    return
+  }
   if (command === 'logout') {
     try {
       await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
