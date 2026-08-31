@@ -1,7 +1,7 @@
 <template>
-  <div class="favorites-page">
-    <div class="page-header">
-      <h2>我的收藏</h2>
+  <div class="p-5">
+    <div class="mb-3">
+      <h2 class="text-[22px] text-ink">我的收藏</h2>
     </div>
 
     <el-tabs v-model="activeType" @tab-change="handleTabChange">
@@ -11,7 +11,7 @@
       <el-tab-pane label="帖子" name="topic" />
     </el-tabs>
 
-    <div class="favorite-list">
+    <div class="min-h-[200px] rounded-card bg-panel shadow-card">
       <UiErrorState
         v-if="loadError"
         title="收藏加载失败"
@@ -26,8 +26,12 @@
         <div
           v-for="(item, i) in favorites"
           :key="item.favorite_id"
-          class="favorite-item stagger-in"
-          :class="{ clickable: !!itemPath(item) }"
+          class="stagger-in flex items-center gap-3.5 border-b border-line px-5 py-3.5 last:border-b-0"
+          :class="
+            itemPath(item)
+              ? 'cursor-pointer transition-[background,transform] duration-[var(--duration-tap)] ease-[var(--ease-default)] hover:bg-canvas active:scale-[0.995] active:bg-line'
+              : ''
+          "
           :style="staggerStyle(i)"
           @click="goItem(item)"
         >
@@ -35,25 +39,29 @@
             v-if="item.cover"
             :src="resolveFileUrl(item.cover)"
             fit="cover"
-            class="item-cover"
+            class="h-12 w-16 shrink-0 rounded-[6px] object-cover"
           >
             <template #error>
-              <div class="item-cover item-cover-fallback">{{ typeLabel(item.target_type).charAt(0) }}</div>
+              <div class="flex h-12 w-16 shrink-0 items-center justify-center rounded-[6px] bg-ui-50 text-xl font-semibold text-ui-500">
+                {{ typeLabel(item.target_type).charAt(0) }}
+              </div>
             </template>
           </el-image>
-          <div v-else class="item-cover item-cover-fallback">{{ typeLabel(item.target_type).charAt(0) }}</div>
+          <div v-else class="flex h-12 w-16 shrink-0 items-center justify-center rounded-[6px] bg-ui-50 text-xl font-semibold text-ui-500">
+            {{ typeLabel(item.target_type).charAt(0) }}
+          </div>
 
-          <div class="item-main">
-            <div class="item-title-row">
+          <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+            <div class="flex min-w-0 items-center gap-2">
               <el-tag size="small" :type="typeTagColor(item.target_type)" effect="plain">
                 {{ typeLabel(item.target_type) }}
               </el-tag>
-              <span class="item-title">{{ item.title || `${typeLabel(item.target_type)} #${item.target_id}` }}</span>
+              <span class="truncate text-[15px] font-medium text-ink">{{ item.title || `${typeLabel(item.target_type)} #${item.target_id}` }}</span>
             </div>
-            <span v-if="item.created_at" class="item-time">{{ formatLocaleDateTime(item.created_at) }}</span>
+            <span v-if="item.created_at" class="text-xs text-ink-3">{{ formatLocaleDateTime(item.created_at) }}</span>
           </div>
 
-          <div class="item-actions" @click.stop>
+          <div class="shrink-0" @click.stop>
             <UiButton variant="text" size="small" @click="removeFavorite(item)" class="text-bad">移除</UiButton>
           </div>
         </div>
@@ -61,7 +69,7 @@
       <UiEmptyState v-else description="暂无收藏" />
     </div>
 
-    <div class="pagination-wrapper" v-if="total > pageSize">
+    <div class="mt-4 flex justify-center" v-if="total > pageSize">
       <el-pagination
         v-model:current-page="currentPage"
         :page-size="pageSize"
@@ -186,110 +194,3 @@ async function removeFavorite(item: FavoriteItem) {
 
 onMounted(loadFavorites)
 </script>
-
-<style scoped>
-.favorites-page {
-  padding: 20px;
-}
-
-.page-header {
-  margin-bottom: 12px;
-}
-
-.page-header h2 {
-  font-size: 22px;
-  color: var(--color-text-primary);
-}
-
-.favorite-list {
-  background: var(--color-bg-card);
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  min-height: 200px;
-}
-
-.favorite-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--color-border-light);
-}
-
-.favorite-item:last-child {
-  border-bottom: none;
-}
-
-.favorite-item.clickable {
-  cursor: pointer;
-  transition:
-    background var(--duration-tap) var(--ease-default),
-    transform var(--duration-tap) var(--ease-default);
-}
-
-.favorite-item.clickable:hover {
-  background: var(--color-bg-page);
-}
-
-.favorite-item.clickable:active {
-  background: var(--color-border-light);
-  transform: scale(0.995);
-}
-
-.item-cover {
-  width: 64px;
-  height: 48px;
-  border-radius: 6px;
-  flex-shrink: 0;
-  object-fit: cover;
-}
-
-.item-cover-fallback {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--el-color-primary-light-9, var(--color-primary-50));
-  color: var(--el-color-primary, var(--color-primary-500));
-  font-size: 20px;
-  font-weight: 600;
-}
-
-.item-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.item-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.item-title {
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--color-text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.item-time {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-}
-
-.item-actions {
-  flex-shrink: 0;
-}
-
-.pagination-wrapper {
-  display: flex;
-  justify-content: center;
-  margin-top: 16px;
-}
-</style>
