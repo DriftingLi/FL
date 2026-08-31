@@ -7,10 +7,10 @@
       </div>
       <div class="toolbar-right">
         <el-tooltip v-if="canPreview" content="在新窗口打开" placement="bottom">
-          <el-button :icon="FullScreen" circle size="small" @click="openInNewTab" />
+          <UiButton :icon="FullScreen" circle size="small" @click="openInNewTab"/>
         </el-tooltip>
         <el-tooltip content="下载" placement="bottom">
-          <el-button :icon="Download" circle size="small" @click="downloadFile" />
+          <UiButton :icon="Download" circle size="small" @click="downloadFile"/>
         </el-tooltip>
       </div>
     </div>
@@ -34,18 +34,18 @@
       <!-- 非 PDF 文档：浏览器无法内嵌预览，提供下载/新窗口打开 -->
       <div v-if="!canPreview" class="doc-unsupported">
         <el-empty :description="unsupportedMessage">
-          <el-button type="primary" @click="downloadFile">
+          <UiButton variant="primary" @click="downloadFile">
             <el-icon><Download /></el-icon> 下载文档
-          </el-button>
-          <el-button @click="openInNewTab">在新窗口打开</el-button>
+          </UiButton>
+          <UiButton @click="openInNewTab">在新窗口打开</UiButton>
         </el-empty>
         <p class="unsupported-tip" v-if="unsupportedTip">{{ unsupportedTip }}</p>
       </div>
 
       <div v-if="loadError" class="doc-error">
         <el-empty :description="errorMessage">
-          <el-button type="primary" @click="downloadFile">下载文档</el-button>
-          <el-button @click="openInNewTab">在新窗口打开</el-button>
+          <UiButton variant="primary" @click="downloadFile">下载文档</UiButton>
+          <UiButton @click="openInNewTab">在新窗口打开</UiButton>
         </el-empty>
       </div>
     </div>
@@ -56,6 +56,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { Document, Download, FullScreen, Loading } from '@element-plus/icons-vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const props = defineProps({
   src: { type: String, required: true },

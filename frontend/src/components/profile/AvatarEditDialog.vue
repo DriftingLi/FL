@@ -11,14 +11,14 @@
         :http-request="handleAvatarUpload"
         :disabled="avatarPending"
       >
-        <el-button size="small" :loading="avatarUploading" :disabled="avatarPending">
+        <UiButton size="small" :loading="avatarUploading" :disabled="avatarPending">
           {{ avatarPending ? '头像审核中' : '上传新头像' }}
-        </el-button>
+        </UiButton>
       </el-upload>
       <p class="hint">管理员审核通过后生效</p>
     </div>
     <template #footer>
-      <el-button @click="visible = false">关闭</el-button>
+      <UiButton @click="visible = false">关闭</UiButton>
     </template>
   </el-dialog>
 </template>
@@ -28,6 +28,7 @@ import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const authStore = useAuthStore()
 const visible = ref(false)

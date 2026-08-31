@@ -55,27 +55,15 @@
         <span class="card-title">数据导出</span>
       </template>
       <div class="export-actions">
-        <el-button
-          type="primary"
-          :loading="exporting === 'students'"
-          @click="handleExport('students')"
-        >
+        <UiButton variant="primary" :loading="exporting === 'students'" @click="handleExport('students')">
           学员名单
-        </el-button>
-        <el-button
-          type="warning"
-          :loading="exporting === 'questions'"
-          @click="handleExport('questions')"
-        >
+        </UiButton>
+        <UiButton variant="warning" :loading="exporting === 'questions'" @click="handleExport('questions')">
           题库
-        </el-button>
-        <el-button
-          type="info"
-          :loading="exporting === 'evaluations'"
-          @click="handleExport('evaluations')"
-        >
+        </UiButton>
+        <UiButton variant="info" :loading="exporting === 'evaluations'" @click="handleExport('evaluations')">
           评估记录
-        </el-button>
+        </UiButton>
       </div>
     </el-card>
 
@@ -118,6 +106,7 @@ import { ElMessage } from 'element-plus'
 import { adminApi } from '@/api/admin'
 import { downloadExport, type ExportKind } from '@/api/export'
 import { useECharts } from '@/composables/useECharts'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const overview = ref<any>({})
 const courseStats = ref<{ name: string; study_count: number; total_duration: number; avg_progress: number }[]>([])

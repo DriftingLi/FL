@@ -51,9 +51,9 @@
       </template>
 
       <div class="actions">
-        <el-button type="primary" size="large" :loading="submitting" :disabled="!selectedId" @click="handleConfirm">
+        <UiButton variant="primary" size="large" :loading="submitting" :disabled="!selectedId" @click="handleConfirm">
           确定进入
-        </el-button>
+        </UiButton>
       </div>
     </div>
   </div>
@@ -65,6 +65,7 @@ import { useRouter } from 'vue-router'
 import { CircleCheckFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useCredentialStore } from '@/stores/credential'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const router = useRouter()
 const credentialStore = useCredentialStore()

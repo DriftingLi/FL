@@ -13,7 +13,7 @@ const props = withDefaults(
      * text 与 danger 等色调可叠加：`<UiButton variant="text" class="text-bad">删除</UiButton>`
      * —— 原子类在 utilities 层，天然压过 vendor 层的 .el-button--danger.is-text，无需 !important。
      */
-    variant?: 'primary' | 'secondary' | 'ghost' | 'text' | 'danger' | 'success' | 'warning'
+    variant?: 'primary' | 'secondary' | 'ghost' | 'text' | 'danger' | 'success' | 'warning' | 'info'
     size?: 'small' | 'default' | 'large'
     loading?: boolean
     block?: boolean
@@ -56,14 +56,15 @@ const props = withDefaults(
   }
 )
 
-const EP_TYPE: Record<string, 'primary' | 'default' | 'danger' | 'success' | 'warning'> = {
+const EP_TYPE: Record<string, 'primary' | 'default' | 'danger' | 'success' | 'warning' | 'info'> = {
   primary: 'primary',
   secondary: 'default',
   ghost: 'default',
   text: 'default',
   danger: 'danger',
   success: 'success',
-  warning: 'warning'
+  warning: 'warning',
+  info: 'info'
 }
 </script>
 

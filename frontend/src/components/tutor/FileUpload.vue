@@ -40,22 +40,12 @@
         <span class="summary-text">
           已上传 {{ successCount }}/{{ fileList.length }} 个文件
         </span>
-        <el-button
-          v-if="fileList.some(f => f.status === 'pending')"
-          type="primary"
-          size="small"
-          :loading="isUploading"
-          @click="startUploadAll"
-        >
+        <UiButton variant="primary" v-if="fileList.some(f => f.status === 'pending')" size="small" :loading="isUploading" @click="startUploadAll">
           {{ isUploading ? '上传中...' : '全部上传' }}
-        </el-button>
-        <el-button
-          v-if="fileList.length > 0"
-          size="small"
-          @click="clearAll"
-        >
+        </UiButton>
+        <UiButton v-if="fileList.length > 0" size="small" @click="clearAll">
           清空列表
-        </el-button>
+        </UiButton>
       </div>
 
       <div class="file-list">
@@ -107,24 +97,12 @@
           </div>
 
           <div class="file-actions">
-            <el-button
-              v-if="file.status === 'error'"
-              size="small"
-              type="warning"
-              circle
-              @click.stop="retryFile(file)"
-            >
+            <UiButton variant="warning" v-if="file.status === 'error'" size="small" circle @click.stop="retryFile(file)">
               <el-icon><RefreshRight /></el-icon>
-            </el-button>
-            <el-button
-              size="small"
-              type="danger"
-              circle
-              plain
-              @click.stop="removeFile(file)"
-            >
+            </UiButton>
+            <UiButton variant="danger" plain size="small" circle @click.stop="removeFile(file)">
               <el-icon><Delete /></el-icon>
-            </el-button>
+            </UiButton>
           </div>
         </div>
       </div>
@@ -145,6 +123,7 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { tutorApi } from '@/api/tutor'
+import UiButton from '@/components/ui/UiButton.vue'
 
 interface FileItem {
   uid: number

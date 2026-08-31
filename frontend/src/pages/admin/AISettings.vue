@@ -2,11 +2,11 @@
   <div class="ai-settings-page">
     <div class="page-header">
       <h2>AI 配置</h2>
-      <el-button type="primary" :icon="Plus" @click="openCreateDialog">新建配置</el-button>
+      <UiButton variant="primary" :icon="Plus" @click="openCreateDialog">新建配置</UiButton>
     </div>
 
     <!-- AI助手双模式绑定（单绑×2，与其它功能分开） -->
-    <div class="card">
+    <UiCard padding="lg" class="card">
       <div class="card-title">AI助手模式绑定</div>
       <div class="dual-bind-grid">
         <div class="dual-bind-item">
@@ -47,10 +47,10 @@
         </div>
       </div>
       <div class="dual-hint">普通/专家分别单绑定，不向用户暴露模型名；未绑定时该模式不可用</div>
-    </div>
+    </UiCard>
 
     <!-- 其他功能绑定 -->
-    <div class="card">
+    <UiCard padding="lg" class="card">
       <div class="card-title">其他功能绑定</div>
       <el-table :data="otherBindings" border stripe style="width: 100%">
         <el-table-column label="功能" min-width="160">
@@ -81,10 +81,10 @@
           </template>
         </el-table-column>
       </el-table>
-    </div>
+    </UiCard>
 
     <!-- 配置列表 -->
-    <div class="card">
+    <UiCard padding="lg" class="card">
       <div class="card-title">配置列表</div>
       <el-table :data="configs" border stripe style="width: 100%">
         <el-table-column prop="name" label="名称" min-width="120" />
@@ -109,9 +109,9 @@
         <el-table-column label="操作" width="100" fixed="right" align="center">
           <template #default="{ row }">
             <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
-              <el-button type="primary" size="small">
+              <UiButton variant="primary" size="small">
                 操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
-              </el-button>
+              </UiButton>
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="test">测试</el-dropdown-item>
@@ -123,7 +123,7 @@
           </template>
         </el-table-column>
       </el-table>
-    </div>
+    </UiCard>
 
     <!-- 新建/编辑对话框 -->
     <el-dialog
@@ -171,8 +171,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="handleSave">保存</el-button>
+        <UiButton @click="dialogVisible = false">取消</UiButton>
+        <UiButton variant="primary" :loading="saving" @click="handleSave">保存</UiButton>
       </template>
     </el-dialog>
   </div>
@@ -183,6 +183,8 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormItemRule } from 'element-plus'
 import { Plus, ArrowDown } from '@element-plus/icons-vue'
 import { adminApi, type AIConfig, type FeatureBinding } from '@/api/admin'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 
 const configs = ref<AIConfig[]>([])
 const bindings = ref<FeatureBinding[]>([])
@@ -402,10 +404,7 @@ onMounted(() => {
 }
 
 .card {
-  background: var(--color-text-inverse);
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  /* 容器（底色/圆角/内距/投影）已由 UiCard 承担，此处只留外边距 */
   margin-bottom: 20px;
 }
 
@@ -463,9 +462,6 @@ onMounted(() => {
     padding: 12px;
   }
 
-  .card {
-    padding: 16px;
-  }
 
   .page-header {
     flex-wrap: wrap;

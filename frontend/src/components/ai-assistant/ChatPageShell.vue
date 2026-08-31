@@ -15,9 +15,9 @@
           <router-link v-if="backLinkTo" :to="backLinkTo" class="back-link">{{ backLinkText }}</router-link>
 
           <!-- 未登录：显示登录按钮 -->
-          <el-button v-if="!store.isLoggedIn" type="primary" size="default" @click="goLogin">
+          <UiButton variant="primary" v-if="!store.isLoggedIn" size="default" @click="goLogin">
             登录 HRWAI 账号
-          </el-button>
+          </UiButton>
 
           <!-- 已登录：显示用户名 + 退出 -->
           <template v-else>
@@ -46,7 +46,7 @@
       <aside v-if="store.isLoggedIn" class="session-sidebar">
         <div class="sidebar-header">
           <span class="sidebar-title">会话历史</span>
-          <el-button type="primary" size="small" :icon="Plus" @click="emit('new-session')">新建</el-button>
+          <UiButton variant="primary" size="small" :icon="Plus" @click="emit('new-session')">新建</UiButton>
         </div>
         <div v-loading="store.sessionsLoading" class="session-list">
           <div v-if="store.sessions.length === 0 && !store.sessionsLoading" class="empty-sessions">
@@ -198,33 +198,21 @@
                 <slot name="input-footer-left" />
               </div>
               <div class="input-actions">
-                <el-button
-                  v-if="!store.streaming"
-                  type="primary"
-                  :icon="Promotion"
-                  :disabled="!canSend"
-                  @click="emit('send')"
-                >
+                <UiButton variant="primary" v-if="!store.streaming" :icon="Promotion" :disabled="!canSend" @click="emit('send')">
                   发送
-                </el-button>
-                <el-button v-else type="danger" :icon="VideoPause" @click="store.stopStreaming">
+                </UiButton>
+                <UiButton variant="danger" v-else :icon="VideoPause" @click="store.stopStreaming">
                   停止
-                </el-button>
+                </UiButton>
               </div>
             </div>
             <div v-else class="input-actions">
-              <el-button
-                v-if="!store.streaming"
-                type="primary"
-                :icon="Promotion"
-                :disabled="!canSend"
-                @click="emit('send')"
-              >
+              <UiButton variant="primary" v-if="!store.streaming" :icon="Promotion" :disabled="!canSend" @click="emit('send')">
                 发送
-              </el-button>
-              <el-button v-else type="danger" :icon="VideoPause" @click="store.stopStreaming">
+              </UiButton>
+              <UiButton variant="danger" v-else :icon="VideoPause" @click="store.stopStreaming">
                 停止
-              </el-button>
+              </UiButton>
             </div>
           </div>
           <slot name="input-extra" />
@@ -259,6 +247,7 @@ import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import { buildSubdomainUrl } from '@/utils/subdomain'
 import { formatShortDateTime } from '@/utils/format'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const props = withDefaults(
   defineProps<{

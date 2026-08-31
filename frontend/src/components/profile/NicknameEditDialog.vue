@@ -3,8 +3,8 @@
     <el-input v-model="nickname" maxlength="30" show-word-limit placeholder="昵称（1-30字）" :disabled="nicknamePending" />
     <p v-if="nicknamePending" class="hint">昵称审核中，请等待管理员审核</p>
     <template #footer>
-      <el-button @click="visible = false">取消</el-button>
-      <el-button type="primary" :loading="saving" :disabled="nicknamePending" @click="save">提交审核</el-button>
+      <UiButton @click="visible = false">取消</UiButton>
+      <UiButton variant="primary" :loading="saving" :disabled="nicknamePending" @click="save">提交审核</UiButton>
     </template>
   </el-dialog>
 </template>
@@ -14,6 +14,7 @@ import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const authStore = useAuthStore()
 const visible = ref(false)

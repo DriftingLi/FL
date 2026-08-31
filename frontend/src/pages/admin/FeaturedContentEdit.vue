@@ -2,7 +2,7 @@
   <div class="featured-edit-page">
     <div class="page-header">
       <h2>{{ isEdit ? '编辑内容' : '新建内容' }}</h2>
-      <el-button @click="goBack">返回列表</el-button>
+      <UiButton @click="goBack">返回列表</UiButton>
     </div>
 
     <div class="edit-card" v-loading="loading">
@@ -60,7 +60,7 @@
             </div>
           </el-upload>
           <div class="cover-actions" v-if="form.cover_image">
-            <el-button link type="danger" @click="form.cover_image = ''">移除封面</el-button>
+            <UiButton variant="danger" link @click="form.cover_image = ''">移除封面</UiButton>
           </div>
         </el-form-item>
 
@@ -86,10 +86,10 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button type="primary" :loading="saving" @click="handleSave">
+          <UiButton variant="primary" :loading="saving" @click="handleSave">
             {{ form.status === 1 ? '保存并发布' : '保存草稿' }}
-          </el-button>
-          <el-button @click="goBack">取消</el-button>
+          </UiButton>
+          <UiButton @click="goBack">取消</UiButton>
         </el-form-item>
       </el-form>
     </div>
@@ -105,6 +105,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import MarkdownEditor from '@/components/tutor/MarkdownEditor.vue'
 import { adminFeaturedApi, featuredCategoryOptions } from '@/api/featured'
 import { resolveFileUrl } from '@/utils/fileUrl'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const route = useRoute()
 const router = useRouter()

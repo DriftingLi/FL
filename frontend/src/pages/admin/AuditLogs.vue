@@ -17,7 +17,7 @@
           style="width: 220px"
           @keyup.enter="load(1)"
         />
-        <el-button type="primary" @click="load(1)">查询</el-button>
+        <UiButton variant="primary" @click="load(1)">查询</UiButton>
       </div>
 
       <el-table :data="items" stripe border style="width: 100%">
@@ -63,6 +63,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { adminApi, type AuditLogItem } from '@/api/admin'
 import { formatTime } from '@/utils/format'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const items = ref<AuditLogItem[]>([])
 const total = ref(0)

@@ -7,14 +7,14 @@
 
     <div v-else-if="loadError" class="ppt-error">
       <el-empty description="幻灯片加载失败">
-        <el-button type="primary" @click="loadSlides">重试</el-button>
-        <el-button @click="downloadFile">下载PPT</el-button>
+        <UiButton variant="primary" @click="loadSlides">重试</UiButton>
+        <UiButton @click="downloadFile">下载PPT</UiButton>
       </el-empty>
     </div>
 
     <div v-else-if="slides.length === 0" class="ppt-empty">
       <el-empty description="暂无幻灯片预览">
-        <el-button type="primary" @click="downloadFile">下载PPT文件</el-button>
+        <UiButton variant="primary" @click="downloadFile">下载PPT文件</UiButton>
       </el-empty>
     </div>
 
@@ -23,13 +23,13 @@
         <span class="slide-title">{{ fileName }}</span>
         <div class="ppt-actions">
           <el-tooltip content="重新生成幻灯片" placement="bottom">
-            <el-button :icon="Refresh" circle size="small" :loading="regenerating" @click="regenerateSlides" />
+            <UiButton :icon="Refresh" circle size="small" :loading="regenerating" @click="regenerateSlides"/>
           </el-tooltip>
           <el-tooltip content="全屏演示" placement="bottom">
-            <el-button :icon="Rank" circle size="small" @click="toggleFullscreen" />
+            <UiButton :icon="Rank" circle size="small" @click="toggleFullscreen"/>
           </el-tooltip>
           <el-tooltip content="下载" placement="bottom">
-            <el-button :icon="Download" circle size="small" @click="downloadFile" />
+            <UiButton :icon="Download" circle size="small" @click="downloadFile"/>
           </el-tooltip>
         </div>
       </div>
@@ -55,9 +55,9 @@
 
       <div class="ppt-footer">
         <div class="slide-nav">
-          <el-button :icon="ArrowLeft" circle @click="prevSlide" :disabled="currentSlideIndex <= 0" />
+          <UiButton :icon="ArrowLeft" circle @click="prevSlide" :disabled="currentSlideIndex <= 0"/>
           <span class="slide-counter">{{ currentSlideIndex + 1 }} / {{ slides.length }}</span>
-          <el-button :icon="ArrowRight" circle @click="nextSlide" :disabled="currentSlideIndex >= slides.length - 1" />
+          <UiButton :icon="ArrowRight" circle @click="nextSlide" :disabled="currentSlideIndex >= slides.length - 1"/>
         </div>
       </div>
 
@@ -85,6 +85,7 @@ import { ArrowLeft, ArrowRight, Download, Rank, Loading, Refresh } from '@elemen
 import { ElMessage } from 'element-plus'
 import { courseApi } from '@/api/course'
 import { resolveFileUrl } from '@/utils/fileUrl'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const props = defineProps({
   src: { type: String, required: true },

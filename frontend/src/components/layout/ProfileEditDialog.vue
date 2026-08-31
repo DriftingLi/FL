@@ -12,9 +12,9 @@
             :http-request="handleAvatarUpload"
             :disabled="avatarPending"
           >
-            <el-button size="small" :loading="avatarUploading" :disabled="avatarPending">
+            <UiButton size="small" :loading="avatarUploading" :disabled="avatarPending">
               {{ avatarPending ? '头像审核中' : '上传新头像' }}
-            </el-button>
+            </UiButton>
           </el-upload>
           <p class="hint">管理员审核通过后生效</p>
         </div>
@@ -33,14 +33,9 @@
         />
         <div class="nickname-actions">
           <el-tag v-if="nicknamePending" type="warning" size="small">昵称审核中</el-tag>
-          <el-button
-            v-else
-            type="primary"
-            :loading="savingNickname"
-            @click="saveNickname"
-          >
+          <UiButton variant="primary" v-else :loading="savingNickname" @click="saveNickname">
             保存昵称
-          </el-button>
+          </UiButton>
         </div>
       </div>
     </div>
@@ -52,6 +47,7 @@ import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const authStore = useAuthStore()
 

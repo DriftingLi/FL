@@ -6,8 +6,8 @@
       <el-input v-model="input" placeholder="请输入账号" />
     </div>
     <template #footer>
-      <el-button @click="visible=false">取消</el-button>
-      <el-button type="danger" :disabled="input.trim()!==account" :loading="loading" @click="confirm">确认注销</el-button>
+      <UiButton @click="visible=false">取消</UiButton>
+      <UiButton variant="danger" :disabled="input.trim()!==account" :loading="loading" @click="confirm">确认注销</UiButton>
     </template>
   </el-dialog>
 </template>
@@ -18,6 +18,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const authStore = useAuthStore()
 const router = useRouter()

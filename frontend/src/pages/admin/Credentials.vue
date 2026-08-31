@@ -2,9 +2,9 @@
   <div class="credentials-page">
     <div class="page-header">
       <h2>证件管理</h2>
-      <el-button type="primary" @click="openDialog()">
+      <UiButton variant="primary" @click="openDialog()">
         <el-icon><Plus /></el-icon> 新增证件
-      </el-button>
+      </UiButton>
     </div>
 
     <el-card shadow="never">
@@ -39,10 +39,10 @@
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="openDialog(row)">编辑</el-button>
+            <UiButton variant="primary" link size="small" @click="openDialog(row)">编辑</UiButton>
             <el-popconfirm title="确定删除？" @confirm="handleDelete(row)">
               <template #reference>
-                <el-button link type="danger" size="small">删除</el-button>
+                <UiButton variant="danger" link size="small">删除</UiButton>
               </template>
             </el-popconfirm>
           </template>
@@ -84,8 +84,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
+        <UiButton @click="dialogVisible = false">取消</UiButton>
+        <UiButton variant="primary" :loading="submitting" @click="handleSubmit">保存</UiButton>
       </template>
     </el-dialog>
   </div>
@@ -96,6 +96,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { credentialApi, type CredentialDict, type CredentialPayload } from '@/api/credential'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const loading = ref(false)
 const list = ref<CredentialDict[]>([])
