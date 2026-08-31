@@ -173,7 +173,7 @@ onMounted(async ()=>{
   padding: 16px 16px;
   cursor: pointer;
   border-bottom: 1px solid var(--color-bg-page);
-  transition: background 0.15s;
+  transition: background var(--duration-fast) var(--ease-default);
 }
 .profile-row:last-child { border-bottom: none; }
 .profile-row:hover { background: var(--color-bg-page); }

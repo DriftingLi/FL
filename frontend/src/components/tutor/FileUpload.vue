@@ -429,7 +429,7 @@ defineExpose({
   border-radius: 8px;
   padding: 30px 20px;
   text-align: center;
-  transition: border-color 0.3s, background-color 0.3s;
+  transition: border-color var(--duration-normal) var(--ease-default), background-color var(--duration-normal) var(--ease-default);
   cursor: pointer;
 }
 
@@ -495,7 +495,7 @@ defineExpose({
   padding: 12px;
   border: 1px solid #ebeef5;
   border-radius: 6px;
-  transition: border-color 0.3s, background-color 0.3s;
+  transition: border-color var(--duration-normal) var(--ease-default), background-color var(--duration-normal) var(--ease-default);
 }
 
 .file-item.is-error {

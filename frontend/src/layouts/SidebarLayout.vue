@@ -160,7 +160,7 @@ watch(() => route.path, () => {
   cursor: pointer;
   color: var(--color-text-primary);
   z-index: var(--z-sticky);
-  transition: background var(--duration-fast), box-shadow var(--duration-fast);
+  transition: background var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default);
 }
 
 .mobile-fab:hover {

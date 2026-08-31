@@ -232,7 +232,7 @@ onMounted(() => {
   color: var(--color-text-secondary, #475569);
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) var(--ease-default);
 }
 
 .quick-option-chip:hover {

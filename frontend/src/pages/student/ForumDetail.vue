@@ -783,7 +783,7 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   background: var(--color-bg-card);
   padding: 8px;
-  transition: border-color 0.2s;
+  transition: border-color var(--duration-base) var(--ease-default);
 }
 
 .reply-box:focus-within {

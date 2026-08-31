@@ -260,7 +260,7 @@ onMounted(() => {
   border: 1px solid var(--color-border-light);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  transition: border-color 150ms ease;
+  transition: border-color var(--duration-fast) var(--ease-default);
 }
 .task-card:hover {
   border-color: var(--color-border-dark);

@@ -221,7 +221,7 @@ async function redeem(p: RealExamPaper) {
   background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
-  transition: border-color 150ms var(--ease-default), box-shadow 150ms var(--ease-default);
+  transition: border-color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default);
 }
 .timeline-card:hover {
   border-color: var(--color-border);

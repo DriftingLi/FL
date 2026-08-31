@@ -112,7 +112,7 @@ const props = withDefaults(
   font-weight: var(--font-medium);
   color: var(--color-primary-500);
   text-decoration: none;
-  transition: color var(--duration-fast);
+  transition: color var(--duration-fast) var(--ease-default);
 }
 
 .card-more:hover {
@@ -139,7 +139,7 @@ const props = withDefaults(
   padding: var(--space-3) var(--space-2);
   border-radius: var(--radius-md);
   text-decoration: none;
-  transition: background var(--duration-fast);
+  transition: background var(--duration-fast) var(--ease-default);
   cursor: pointer;
 }
 
@@ -188,7 +188,7 @@ const props = withDefaults(
   color: var(--color-text-muted);
   flex-shrink: 0;
   opacity: 0;
-  transition: opacity var(--duration-fast);
+  transition: opacity var(--duration-fast) var(--ease-default);
 }
 
 .card-list-item:hover .item-arrow {

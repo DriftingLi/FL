@@ -139,7 +139,7 @@ const grouped = computed(() => {
   border: 1px solid #ebeef5;
   border-radius: 12px;
   cursor: pointer;
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+  transition: border-color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 }
 .history-card:hover {

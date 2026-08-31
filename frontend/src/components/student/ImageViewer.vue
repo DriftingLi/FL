@@ -90,7 +90,7 @@ const initialPinchScale = ref(1)
 const imageStyle = computed(() => ({
   transform: `translate(${panX.value}px, ${panY.value}px) scale(${scale.value})`,
   cursor: isDragging.value ? 'grabbing' : scale.value > 1 ? 'grab' : 'default',
-  transition: isDragging.value ? 'none' : 'transform 0.2s ease',
+  transition: isDragging.value ? 'none' : 'transform var(--duration-base) var(--ease-default)',
   transformOrigin: 'center center'
 }))
 

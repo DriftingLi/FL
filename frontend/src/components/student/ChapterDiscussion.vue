@@ -333,7 +333,7 @@ watch(() => props.chapterId, () => {
 .discussion-item-main {
   padding: 12px 14px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--duration-base) var(--ease-default);
 }
 
 .discussion-item-main:hover {
