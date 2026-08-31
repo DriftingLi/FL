@@ -152,6 +152,7 @@ import hljs from 'highlight.js'
 import { courseApi, type ChapterDetail } from '@/api/course'
 import { studentApi, type StudentChapterProgress } from '@/api/student'
 import { useCourseStore } from '@/stores/course'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStudyTracker } from '@/composables/useStudyTracker'
 import '@/assets/styles/markdown.css'
 import VideoPlayer from '@/components/student/VideoPlayer.vue'
@@ -185,15 +186,39 @@ interface ChapterItem {
   title: string
 }
 
-const loading = ref(false)
 // 三态：notFound（404，有明确去向）/ loadError（其他异常，可重试）/ 内容
 const chapterNotFound = ref(false)
-const loadError = ref(false)
-const retrying = ref(false)
 const chapterDetail = ref<ChapterDetail | null>(null)
 const courseName = ref('')
 const chapters = ref<ChapterItem[]>([])
 const activeTab = ref('')
+
+// 三态收编（#388，详情页无分页）：404 归 chapterNotFound 自行渲染，其余异常上抛进 loadError
+const { loading, loadError, retrying, retry: retryLoadChapter, run: loadChapterDetail } = useAsyncPage(
+  async () => {
+    chapterNotFound.value = false
+    // 切换章节前先上报当前章节的增量时长，再停表（先报增量再停表）
+    await studyTracker.reportIncremental(false)
+    studyTracker.stop()
+    try {
+      // 拦截器已解包信封；章节不存在由后端 404 触发 catch 分支
+      const detail = await courseApi.getChapterDetail(Number(courseId.value), Number(chapterId.value))
+      chapterDetail.value = detail
+      // 断点续播位置（学习状态缓存；无记录为 0）
+      chapterVideoPosition.value = chapterStateMap.value.get(detail.chapter_id)?.video_position || 0
+      latestVideoPosition = chapterVideoPosition.value
+      // 章节加载成功后启动学习计时
+      studyTracker.begin()
+    } catch (error) {
+      const err = error as { response?: { status?: number } }
+      if (err?.response?.status === 404) {
+        chapterNotFound.value = true
+      } else {
+        throw error
+      }
+    }
+  }
+)
 
 // 学习状态（ADR-0017）：每课程加载一次（切章不重复请求），
 // 提供 video_position（断点续播）与 completed（标记完成态）
@@ -320,43 +345,6 @@ const getNextChapterTitle = computed(() => {
   const next = chapters.value.find(c => c.chapter_id === detail.next_chapter_id)
   return next ? next.title : ''
 })
-
-async function loadChapterDetail() {
-  loading.value = true
-  chapterNotFound.value = false
-  loadError.value = false
-  // 切换章节前先上报当前章节的增量时长，再停表（先报增量再停表）
-  await studyTracker.reportIncremental(false)
-  studyTracker.stop()
-
-  try {
-    // 拦截器已解包信封；章节不存在由后端 404 触发 catch 分支
-    const detail = await courseApi.getChapterDetail(Number(courseId.value), Number(chapterId.value))
-    chapterDetail.value = detail
-    // 断点续播位置（学习状态缓存；无记录为 0）
-    chapterVideoPosition.value = chapterStateMap.value.get(detail.chapter_id)?.video_position || 0
-    latestVideoPosition = chapterVideoPosition.value
-    // 章节加载成功后启动学习计时
-    studyTracker.begin()
-  } catch (error) {
-    const err = error as { response?: { status?: number } }
-    if (err?.response?.status === 404) {
-      chapterNotFound.value = true
-    } else {
-      console.error('加载章节详情失败:', error)
-      loadError.value = true
-      /* 错误已由拦截器提示，这里只负责渲染可重试的错误态 */
-    }
-  } finally {
-    loading.value = false
-    retrying.value = false
-  }
-}
-
-async function retryLoadChapter() {
-  retrying.value = true
-  await loadChapterDetail()
-}
 
 async function loadCourseInfo() {
   // 复用侧栏章节模式已加载的课程数据，避免重复请求；未命中时由 store 发起请求

@@ -229,7 +229,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowRight, Star, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -238,8 +238,10 @@ import { studentApi, type StudentCourseDetail } from '@/api/student'
 import { favoriteApi } from '@/api/favorite'
 import { trainingApi } from '@/api/training'
 import { pointsApi } from '@/api/points'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useCourseCatalog, treeCatalogAdapter } from '@/composables/useCourseCatalog'
 import { useStagger } from '@/composables/useStagger'
+import { useCredentialRefetch } from '@/composables/useCredentialRefetch'
 import { useCredentialStore } from '@/stores/credential'
 import FacetCard from '@/components/catalog/FacetCard.vue'
 import FacetItem from '@/components/catalog/FacetItem.vue'
@@ -260,17 +262,43 @@ try {
   credentialStore = { current: null, loadCurrent: async () => null, loadGrouped: async () => {} } as any
 }
 
-const loading = ref(false)
-// 首屏三态：骨架 / 错误（可重试）/ 内容
-const loadError = ref(false)
-const retrying = ref(false)
 const courses = ref<CourseSummary[]>([])
-const currentPage = ref(1)
-const pageSize = ref(12)
-const total = ref(0)
 const activeTab = ref<'hot' | 'featured' | 'all'>('hot')
 
-
+// 三态 + 分页三件套收编（#388）：loader 只负责拉数据与写响应
+const {
+  loading,
+  loadError,
+  retrying,
+  retry: retryLoad,
+  page: currentPage,
+  pageSize,
+  total,
+  run: loadCourses,
+  handlePageChange,
+  handleSizeChange
+} = useAsyncPage(
+  async () => {
+    const params: Record<string, any> = {
+      page: currentPage.value,
+      page_size: pageSize.value,
+      filter: activeTab.value
+    }
+    if (activeTab.value === 'all') {
+      if (specialtyId.value !== null) {
+        params.specialty_id = specialtyId.value
+      }
+      if (levelId.value !== null) {
+        params.level_id = levelId.value
+      }
+    }
+    // credential_id 由主 client 请求拦截器默认注入（#387）
+    const data = await courseApi.getCourses(params)
+    courses.value = data.courses
+    total.value = data.total
+  },
+  { defaultPageSize: 12 }
+)
 
 const {
   directions,
@@ -292,7 +320,6 @@ const {
     loadCourses()
   }
 })
-
 function formatDuration(minutes: number) {
   if (minutes < 60) {
     return `${minutes}分钟`
@@ -303,53 +330,6 @@ function formatDuration(minutes: number) {
 }
 
 function handleTabChange() {
-  currentPage.value = 1
-  loadCourses()
-}
-
-async function loadCourses() {
-  loading.value = true
-  loadError.value = false
-  try {
-    const params: Record<string, any> = {
-      page: currentPage.value,
-      page_size: pageSize.value,
-      filter: activeTab.value
-    }
-    if (activeTab.value === 'all') {
-      if (specialtyId.value !== null) {
-        params.specialty_id = specialtyId.value
-      }
-      if (levelId.value !== null) {
-        params.level_id = levelId.value
-      }
-    }
-    if (credentialStore.current?.id) {
-      params.credential_id = credentialStore.current.id
-    }
-    const data = await courseApi.getCourses(params)
-    courses.value = data.courses
-    total.value = data.total
-  } catch (error) {
-    console.error('加载课程失败:', error)
-    loadError.value = true
-    /* 错误已由拦截器提示，这里只负责渲染可重试的错误态 */
-  } finally {
-    loading.value = false
-    retrying.value = false
-  }
-}
-
-async function retryLoad() {
-  retrying.value = true
-  await loadCourses()
-}
-
-function handlePageChange() {
-  loadCourses()
-}
-
-function handleSizeChange() {
   currentPage.value = 1
   loadCourses()
 }
@@ -531,12 +511,8 @@ onMounted(() => {
   }
 })
 
-watch(() => credentialStore.current?.id, () => {
-  currentPage.value = 1
-  loadCourses()
-})
-
-window.addEventListener('credential-switched', () => {
+// 证件切换即重拉（单点：watch store.current.id，见 useCredentialRefetch）
+useCredentialRefetch(() => {
   currentPage.value = 1
   loadCourses()
 })

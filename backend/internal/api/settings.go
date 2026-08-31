@@ -3,11 +3,11 @@ package api
 
 import (
 	"context"
+	"errors"
 	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sashabaranov/go-openai"
+	"gorm.io/gorm"
 
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -167,32 +167,18 @@ func (h *AIConfigHandler) DeleteConfig(c *gin.Context) {
 }
 
 // TestConfig 测试指定配置的连通性 POST /api/admin/ai-configs/:id/test
+// 建client/超时纪律在 AIConfigService.TestConfig 单点，handler 不再内联。
 func (h *AIConfigHandler) TestConfig(c *gin.Context) {
 	cfgID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		response.BadRequest(c, "无效的 id")
 		return
 	}
-	row, err := h.svc.GetConfigByID(c.Request.Context(), cfgID)
-	if err != nil {
-		response.BadRequest(c, "配置不存在")
-		return
-	}
-	oc := openai.DefaultConfig(row.APIKey)
-	if row.BaseURL != "" {
-		oc.BaseURL = row.BaseURL
-	}
-	client := openai.NewClientWithConfig(oc)
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
-	defer cancel()
-	_, err = client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-		Model: row.Model,
-		Messages: []openai.ChatCompletionMessage{
-			{Role: openai.ChatMessageRoleUser, Content: "请回复 'OK'"},
-		},
-		MaxTokens: 10,
-	})
-	if err != nil {
+	if err := h.svc.TestConfig(c.Request.Context(), cfgID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.BadRequest(c, "配置不存在")
+			return
+		}
 		response.BadRequest(c, "连接失败: "+err.Error())
 		return
 	}

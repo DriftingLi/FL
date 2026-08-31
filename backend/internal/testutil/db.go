@@ -3,6 +3,7 @@
 package testutil
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -34,11 +35,37 @@ func NewMemoryDB(t *testing.T) *gorm.DB {
 	return db
 }
 
+// NewFileDB 返回一个临时文件 SQLite 数据库（AutoMigrate 全部表）。
+// 与 NewMemoryDB 的差异：:memory: 每连接独立库、无法多连接并发，文件库支持
+// goroutine 并发读写（busy_timeout 串行化写冲突），供并发场景测试使用。
+// 测试结束自动关闭连接池并随 TempDir 清理。
+func NewFileDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	dsn := filepath.Join(t.TempDir(), "test.db") + "?_pragma=busy_timeout(10000)"
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("打开文件数据库失败: %v", err)
+	}
+	t.Cleanup(func() {
+		if sqlDB, err := db.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+	})
+	if err := db.AutoMigrate(allModels()...); err != nil {
+		t.Fatalf("AutoMigrate 失败: %v", err)
+	}
+	return db
+}
+
 // allModels 返回全部模型，按外键依赖顺序排列。
 func allModels() []interface{} {
 	return []interface{}{
 		&model.Credential{},
 		&model.HrwaiUser{},
+		&model.RecruiterUser{},
+		&model.JobCard{},
 		&model.Notification{},
 		&model.AuditLog{},
 		&model.ProfileChangeRequest{},
@@ -61,16 +88,34 @@ func allModels() []interface{} {
 		&model.PracticeProgress{},
 		&model.WrongQuestion{},
 		&model.MockExam{},
+		&model.RealExamPaper{},
+		&model.RealExamPaperQuestion{},
 		&model.ForumTopic{},
 		&model.ForumReply{},
 		&model.ForumTopicLike{},
 		&model.ForumReplyLike{},
 		&model.ForumCheckIn{},
+		&model.ForumTopicView{},
 		&model.Favorite{},
 		&model.ForumReport{},
 		&model.AIGenerationLog{},
 		&model.AsyncTask{},
 		&model.FeaturedContent{},
+		&model.SystemSetting{},
+		&model.AIConfig{},
+		&model.AIFeatureBinding{},
+		&model.AIChatSession{},
+		&model.AIChatMessage{},
+		&model.AIUserModel{},
+		&model.PointsLedger{},
+		&model.PointsTaskConfig{},
+		&model.PointsTaskClaim{},
+		&model.PointsUserProgress{},
+		&model.PointsShopItem{},
+		&model.UserEntitlement{},
+		&model.PointsEntryIdem{},
+		&model.RecruitResumeView{},
+		&model.ContactRequest{},
 	}
 }
 
@@ -158,4 +203,26 @@ func SeedCourse(t *testing.T, db *gorm.DB, name string) *model.Course {
 		t.Fatalf("插入测试课程失败: %v", err)
 	}
 	return c
+}
+
+// SeedRecruiter 插入一个测试企业招聘者（邀约制，独立表）。
+func SeedRecruiter(t *testing.T, db *gorm.DB, username, hashedPassword string) *model.RecruiterUser {
+	t.Helper()
+	r := &model.RecruiterUser{
+		Username:      username,
+		Password:      hashedPassword,
+		CompanyName:   "测试企业-" + username,
+		CreditCode:    "91310000MA" + username,
+		BusinessScope: "叉车租赁与维修",
+		ContactName:   "联系人-" + username,
+		ContactPhone:  "1380000" + "1234",
+		ContactEmail:  username + "@example.com",
+		Status:        1,
+		CreatedAt:     Now(),
+		UpdatedAt:     Now(),
+	}
+	if err := db.Create(r).Error; err != nil {
+		t.Fatalf("插入测试招聘者失败: %v", err)
+	}
+	return r
 }

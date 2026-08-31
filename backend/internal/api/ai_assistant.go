@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -454,6 +455,15 @@ func (h *AIAssistantHandler) GetSessionMessages(c *gin.Context) {
 	}.Handle(c)
 }
 
+// writeSSEHeaders SSE 响应头（唯一写点：预检阻断分支与主路径共用，禁用 nginx 缓冲）。
+func writeSSEHeaders(c *gin.Context) {
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Writer.Header().Set("X-Accel-Buffering", "no")
+	c.Writer.WriteHeader(http.StatusOK)
+}
+
 // StreamChat 流式对话
 // @Summary AI 流式对话（SSE）
 // @Description 可选认证的 SSE 流式响应，不走统一 JSON 信封；事件 message/error/done
@@ -483,34 +493,21 @@ func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 		return
 	}
 
-	// 积分预检：已登录用户需余额 >=5 否则阻断
-	if userID > 0 && h.pointsSvc != nil {
-		if bal, err := h.pointsSvc.GetBalance(userID); err == nil && bal.Balance < 5 {
-			c.Writer.Header().Set("Content-Type", "text/event-stream")
-			c.Writer.Header().Set("Cache-Control", "no-cache")
-			c.Writer.Header().Set("Connection", "keep-alive")
-			c.Writer.Header().Set("X-Accel-Buffering", "no")
-			c.Writer.WriteHeader(http.StatusOK)
-			payload, _ := json.Marshal(map[string]string{"message": "积分不足，请先去任务中心完成任务"})
-			_, _ = c.Writer.WriteString("event: error\n")
-			_, _ = c.Writer.WriteString("data: " + string(payload) + "\n\n")
-			c.Writer.Flush()
-			return
-		}
-	}
-
-	// 设置 SSE 响应头
-	c.Writer.Header().Set("Content-Type", "text/event-stream")
-	c.Writer.Header().Set("Cache-Control", "no-cache")
-	c.Writer.Header().Set("Connection", "keep-alive")
-	c.Writer.Header().Set("X-Accel-Buffering", "no") // 禁用 nginx 缓冲
-	c.Writer.WriteHeader(http.StatusOK)
+	writeSSEHeaders(c)
 
 	sendEvent := func(event string, data any) {
 		payload, _ := json.Marshal(data)
 		_, _ = c.Writer.WriteString("event: " + event + "\n")
 		_, _ = c.Writer.WriteString("data: " + string(payload) + "\n\n")
 		c.Writer.Flush()
+	}
+
+	// 积分预检：已登录用户余额不足下限即阻断（预检与下限常量单点在积分域 AIPreflight）
+	if userID > 0 && h.pointsSvc != nil {
+		if err := h.pointsSvc.AIPreflight(userID); err != nil {
+			sendEvent("error", map[string]string{"message": "积分不足，请先去任务中心完成任务"})
+			return
+		}
 	}
 
 	fullContent, err := h.svc.StreamChat(c.Request.Context(), userID, req, func(content string) {
@@ -521,27 +518,22 @@ func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 		sendEvent("error", map[string]string{"message": err.Error()})
 		return
 	}
-	// 后计量扣费：已登录用户按 tokens 扣分，末尾附消耗
+	// 后计量扣费：已登录用户按 tokens 扣分，末尾附消耗（估算与换算内聚在积分域）
 	if userID > 0 && h.pointsSvc != nil && fullContent != "" {
-		requestID := fmt.Sprintf("ai-%d-%d", userID, time.Now().UnixNano())
-		// 估算 tokens：prompt+completion，简化为 content 长度/4 + 最后用户消息长度/4
-		promptLen := 0
+		// 稳定幂等键（ADR-0023 §5）：取 RequestID 中间件注入的请求标识，
+		// 同一请求的重试/重放映射同一键；中间件未覆盖时回退现场生成（仅丧失重试幂等）。
+		requestID := c.GetString(string(middleware.CtxRequestID))
+		if requestID == "" {
+			requestID = fmt.Sprintf("ai-%d-%d", userID, time.Now().UnixNano())
+		}
+		// handler 只传长度事实，tokens 估算与积分换算全部在积分域
+		promptChars := 0
 		if len(req.Messages) > 0 {
-			promptLen = len(req.Messages[len(req.Messages)-1].Content)
+			promptChars = len(req.Messages[len(req.Messages)-1].Content)
 		}
-		tokens := (len(fullContent) + promptLen + 3) / 4
-		if tokens < 10 {
-			tokens = 100
-		}
-		if points, balance, err := h.pointsSvc.DeductAI(c.Request.Context(), userID, requestID, tokens, fullContent); err == nil {
-			sendEvent("usage", map[string]any{
-				"points_cost":       points,
-				"total_tokens":      tokens,
-				"balance":           balance,
-				"prompt_tokens":     (promptLen + 3) / 4,
-				"completion_tokens": (len(fullContent) + 3) / 4,
-			})
-		} else if err.Error() == "积分不足" {
+		if res, err := h.pointsSvc.DeductAI(c.Request.Context(), userID, requestID, promptChars, len(fullContent)); err == nil {
+			sendEvent("usage", res)
+		} else if errors.Is(err, service.ErrInsufficientPoints) {
 			sendEvent("error", map[string]string{"message": "积分不足"})
 		}
 	}

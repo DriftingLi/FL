@@ -80,13 +80,13 @@
             </template>
             <UiEmptyState v-else description="无匹配结果" />
 
-            <div class="pagination-wrapper" v-if="pageResult.total > pageSize">
+            <div class="pagination-wrapper" v-if="total > pageSize">
               <el-pagination
                 v-model:current-page="currentPage"
                 :page-size="pageSize"
-                :total="pageResult.total"
+                :total="total"
                 layout="total, prev, pager, next"
-                @current-change="loadPageResult"
+                @current-change="handlePageChange"
               />
             </div>
           </template>
@@ -101,6 +101,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Search } from '@element-plus/icons-vue'
 import { searchApi, type SearchAllResult, type SearchPageResult, type SearchItem, type SearchType } from '@/api/search'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
@@ -109,15 +110,41 @@ const router = useRouter()
 
 const keyword = ref('')
 const searched = ref(false)
-const loading = ref(false)
-const loadError = ref(false)
-const retrying = ref(false)
 const activeType = ref<'all' | SearchType>('all')
-const currentPage = ref(1)
-const pageSize = ref(20)
-
 const allResult = ref<SearchAllResult | null>(null)
 const pageResult = ref<SearchPageResult | null>(null)
+
+// 三态 + 分页三件套收编（#388）：loader 按 activeType 分流（聚合 / 指定类型分页），
+// retry 因此天然回到触发失败的那次查询
+const {
+  loading,
+  loadError,
+  retrying,
+  retry: retryLoad,
+  page: currentPage,
+  pageSize,
+  total,
+  run: runSearch,
+  handlePageChange
+} = useAsyncPage(async () => {
+  const kw = keyword.value.trim()
+  if (!kw) return
+  if (activeType.value === 'all') {
+    // type 缺省时后端返回各分区聚合（SearchAllResult）
+    allResult.value = (await searchApi.search({ keyword: kw })) as SearchAllResult
+    pageResult.value = null
+  } else {
+    const res = (await searchApi.search({
+      keyword: kw,
+      type: activeType.value,
+      page: currentPage.value,
+      page_size: pageSize.value
+    })) as SearchPageResult
+    pageResult.value = res
+    allResult.value = null
+    total.value = res.total || 0
+  }
+})
 
 const sections = computed(() => {
   const r = allResult.value
@@ -148,73 +175,18 @@ function goItem(item: SearchItem) {
   }
 }
 
+/** 新搜索入口：回到聚合视图并重置页码，装载交给 runSearch（按 activeType 分流） */
 async function doSearch() {
-  const kw = keyword.value.trim()
-  if (!kw) return
+  if (!keyword.value.trim()) return
   searched.value = true
   activeType.value = 'all'
   currentPage.value = 1
-  loading.value = true
-  loadError.value = false
-  try {
-    // type 缺省时后端返回各分区聚合（SearchAllResult）
-    allResult.value = (await searchApi.search({ keyword: kw })) as SearchAllResult
-    pageResult.value = null
-  } catch (e) {
-    console.error('搜索失败:', e)
-    loadError.value = true
-    allResult.value = null
-    pageResult.value = null
-  } finally {
-    loading.value = false
-  }
+  await runSearch()
 }
 
 function handleTabChange() {
   currentPage.value = 1
-  if (activeType.value === 'all') {
-    doSearch()
-  } else {
-    loadPageResult()
-  }
-}
-
-async function loadPageResult() {
-  const kw = keyword.value.trim()
-  if (!kw || activeType.value === 'all') return
-  loading.value = true
-  loadError.value = false
-  try {
-    const res = await searchApi.search({
-      keyword: kw,
-      type: activeType.value,
-      page: currentPage.value,
-      page_size: pageSize.value
-    })
-    pageResult.value = res as SearchPageResult
-    allResult.value = null
-  } catch (e) {
-    console.error('搜索失败:', e)
-    loadError.value = true
-    pageResult.value = null
-  } finally {
-    loading.value = false
-  }
-}
-
-/** 重试：回到触发失败的那次查询（聚合搜索 / 指定类型分页） */
-async function retryLoad() {
-  if (retrying.value) return
-  retrying.value = true
-  try {
-    if (activeType.value === 'all') {
-      await doSearch()
-    } else {
-      await loadPageResult()
-    }
-  } finally {
-    retrying.value = false
-  }
+  void runSearch()
 }
 
 function resetSearch() {

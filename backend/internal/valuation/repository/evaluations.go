@@ -111,15 +111,14 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 		return 0, fmt.Errorf("插入评估记录失败: %w", err)
 	}
 	// 失效列表与统计缓存（新建记录会改变 list 与 count 结果）
-	_ = cache.InvalidatePattern(ctx, "eval:count:*")
-	_ = cache.InvalidatePattern(ctx, "eval:list:*")
+	invalidateEvalWrite(ctx, evalWriteCreate)
 	return id, nil
 }
 
 // GetEvaluation 按 ID 查询评估详情（不按用户过滤）
 // 用于公开的报告生成/下载场景（report.go），鉴权详情请用 GetEvaluationByUser
 func (r *EvaluationRepository) GetEvaluation(ctx context.Context, id int64) (*model.EvaluationDetail, error) {
-	cacheKey := cache.SafeKey("eval", "get", fmt.Sprintf("%d", id))
+	cacheKey := evalGetKey(id)
 	var result model.EvaluationDetail
 	err := cache.GetOrSetJSON(ctx, cacheKey, 10*time.Minute, &result, func() (any, error) {
 		return r.scanEvaluationByID(ctx, id, 0, false)
@@ -134,7 +133,7 @@ func (r *EvaluationRepository) GetEvaluation(ctx context.Context, id int64) (*mo
 // 用于登录用户查看自己的历史详情；不属于该用户的记录返回 pgx.ErrNoRows
 func (r *EvaluationRepository) GetEvaluationByUser(ctx context.Context, id int64, userID int) (*model.EvaluationDetail, error) {
 	// 详情缓存 key 带上 userID，避免跨用户串缓存
-	cacheKey := cache.SafeKey("eval", "get", "user", fmt.Sprintf("%d", userID), fmt.Sprintf("%d", id))
+	cacheKey := evalGetUserKey(userID, id)
 	var result model.EvaluationDetail
 	err := cache.GetOrSetJSON(ctx, cacheKey, 10*time.Minute, &result, func() (any, error) {
 		return r.scanEvaluationByID(ctx, id, userID, true)
@@ -145,9 +144,21 @@ func (r *EvaluationRepository) GetEvaluationByUser(ctx context.Context, id int64
 	return &result, nil
 }
 
-// scanEvaluationByID 执行单行查询并扫描为 EvaluationDetail。
-// enforceOwner=true 时追加 user_id = $userID 过滤；=false 时仅按 id 查询（公开场景）
-func (r *EvaluationRepository) scanEvaluationByID(ctx context.Context, id int64, userID int, enforceOwner bool) (model.EvaluationDetail, error) {
+// evaluationDetailColumns 评估详情读共用列清单（scanEvaluationDetailRow 的扫描顺序与此对齐）。
+const evaluationDetailColumns = `id, brand, vehicle_type, series, tonnage,
+		config_type, mast_type, mast_height_mm,
+		factory_year, sale_year, usage_hours, original_paint,
+		province, city,
+		has_license_plate, has_registration_certificate, has_maintenance_records,
+		condition_rating,
+		original_price, k_time, k_hours, k_brand, k_condition, k_market,
+		estimated_value, confidence_low, confidence_high, report_pdf_path,
+		suggestions, lambda_electric, lambda_combustion, decay_anchor,
+		created_at, updated_at`
+
+// scanEvaluationDetailRow 按 evaluationDetailColumns 顺序扫描一行完整列为 EvaluationDetail
+// （详情/列表/回填读路径共用；pgx.Rows 满足 pgx.Row 接口，单行与多行扫描同源）。
+func scanEvaluationDetailRow(row pgx.Row) (model.EvaluationDetail, error) {
 	var (
 		d               model.EvaluationDetail
 		reportPath      *string
@@ -155,34 +166,6 @@ func (r *EvaluationRepository) scanEvaluationByID(ctx context.Context, id int64,
 		createdAt       time.Time
 		updatedAt       time.Time
 	)
-	var row pgx.Row
-	if enforceOwner {
-		row = r.pool.QueryRow(ctx, `
-			SELECT id, brand, vehicle_type, series, tonnage,
-			       config_type, mast_type, mast_height_mm,
-			       factory_year, sale_year, usage_hours, original_paint,
-			       province, city,
-			       has_license_plate, has_registration_certificate, has_maintenance_records,
-			       condition_rating,
-			       original_price, k_time, k_hours, k_brand, k_condition, k_market,
-			       estimated_value, confidence_low, confidence_high, report_pdf_path,
-			       suggestions, lambda_electric, lambda_combustion, decay_anchor,
-			       created_at, updated_at
-			FROM evaluations WHERE id = $1 AND user_id = $2`, id, userID)
-	} else {
-		row = r.pool.QueryRow(ctx, `
-			SELECT id, brand, vehicle_type, series, tonnage,
-			       config_type, mast_type, mast_height_mm,
-			       factory_year, sale_year, usage_hours, original_paint,
-			       province, city,
-			       has_license_plate, has_registration_certificate, has_maintenance_records,
-			       condition_rating,
-			       original_price, k_time, k_hours, k_brand, k_condition, k_market,
-			       estimated_value, confidence_low, confidence_high, report_pdf_path,
-			       suggestions, lambda_electric, lambda_combustion, decay_anchor,
-			       created_at, updated_at
-			FROM evaluations WHERE id = $1`, id)
-	}
 	if err := row.Scan(
 		&d.ID, &d.Brand, &d.VehicleType, &d.Series, &d.Tonnage,
 		&d.ConfigType, &d.MastType, &d.MastHeightMM,
@@ -208,19 +191,38 @@ func (r *EvaluationRepository) scanEvaluationByID(ctx context.Context, id int64,
 	return d, nil
 }
 
+// scanEvaluationByID 执行单行查询并扫描为 EvaluationDetail。
+// enforceOwner=true 时追加 user_id = $userID 过滤；=false 时仅按 id 查询（公开场景）
+func (r *EvaluationRepository) scanEvaluationByID(ctx context.Context, id int64, userID int, enforceOwner bool) (model.EvaluationDetail, error) {
+	var row pgx.Row
+	if enforceOwner {
+		row = r.pool.QueryRow(ctx,
+			`SELECT `+evaluationDetailColumns+` FROM evaluations WHERE id = $1 AND user_id = $2`, id, userID)
+	} else {
+		row = r.pool.QueryRow(ctx,
+			`SELECT `+evaluationDetailColumns+` FROM evaluations WHERE id = $1`, id)
+	}
+	return scanEvaluationDetailRow(row)
+}
+
 // ListEvaluations 分页查询评估列表
-// brand 为空时不过滤；userID>0 时仅返回该用户的记录，userID=0 时返回全部（公开统计场景）
-func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string, userID int, limit, offset int) ([]model.EvaluationDetail, error) {
-	cacheKey := cache.SafeKey("eval", "list", brand, fmt.Sprintf("u%d", userID), fmt.Sprintf("%d", limit), fmt.Sprintf("%d", offset))
+// brand/vehicleType 为空时不过滤；userID>0 时仅返回该用户的记录，userID=0 时返回全部（公开统计场景）
+func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand, vehicleType string, userID int, limit, offset int) ([]model.EvaluationDetail, error) {
+	cacheKey := evalListKey(brand, vehicleType, userID, limit, offset)
 	var result []model.EvaluationDetail
 	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLStats, &result, func() (any, error) {
-		// 动态拼装 WHERE：brand / user_id 均为可选过滤
-		where := make([]string, 0, 2)
-		args := make([]any, 0, 3)
+		// 动态拼装 WHERE：brand / vehicle_type / user_id 均为可选过滤
+		where := make([]string, 0, 3)
+		args := make([]any, 0, 4)
 		argIdx := 1
 		if brand != "" {
 			where = append(where, fmt.Sprintf("brand = $%d", argIdx))
 			args = append(args, brand)
+			argIdx++
+		}
+		if vehicleType != "" {
+			where = append(where, fmt.Sprintf("vehicle_type = $%d", argIdx))
+			args = append(args, vehicleType)
 			argIdx++
 		}
 		if userID > 0 {
@@ -234,16 +236,7 @@ func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string
 		}
 		args = append(args, limit, offset)
 		query := fmt.Sprintf(`
-			SELECT id, brand, vehicle_type, series, tonnage,
-			       config_type, mast_type, mast_height_mm,
-			       factory_year, sale_year, usage_hours, original_paint,
-			       province, city,
-			       has_license_plate, has_registration_certificate, has_maintenance_records,
-			       condition_rating,
-			       original_price, k_time, k_hours, k_brand, k_condition, k_market,
-			       estimated_value, confidence_low, confidence_high, report_pdf_path,
-			       suggestions, lambda_electric, lambda_combustion, decay_anchor,
-			       created_at, updated_at
+			SELECT `+evaluationDetailColumns+`
 			FROM evaluations %s
 			ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, whereClause, argIdx, argIdx+1)
 		rows, err := r.pool.Query(ctx, query, args...)
@@ -253,33 +246,10 @@ func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string
 		defer rows.Close()
 		out := make([]model.EvaluationDetail, 0, limit)
 		for rows.Next() {
-			var d model.EvaluationDetail
-			var reportPath *string
-			var suggestionsJSON *[]string
-			var createdAt time.Time
-			var updatedAt time.Time
-			if err := rows.Scan(
-				&d.ID, &d.Brand, &d.VehicleType, &d.Series, &d.Tonnage,
-				&d.ConfigType, &d.MastType, &d.MastHeightMM,
-				&d.FactoryYear, &d.SaleYear, &d.UsageHours, &d.OriginalPaint,
-				&d.Province, &d.City,
-				&d.HasLicensePlate, &d.HasRegistrationCertificate, &d.HasMaintenanceRecords,
-				&d.ConditionRating,
-				&d.OriginalPrice, &d.KTime, &d.KHours, &d.KBrand, &d.KCondition, &d.KMarket,
-				&d.EstimatedValue, &d.ConfidenceLow, &d.ConfidenceHigh, &reportPath,
-				&suggestionsJSON, &d.LambdaElectric, &d.LambdaCombustion,
-				&createdAt, &updatedAt,
-			); err != nil {
-				return nil, err
+			d, scanErr := scanEvaluationDetailRow(rows)
+			if scanErr != nil {
+				return nil, scanErr
 			}
-			if reportPath != nil {
-				d.ReportPdfPath = *reportPath
-			}
-			if suggestionsJSON != nil {
-				d.Suggestions = *suggestionsJSON
-			}
-			d.CreatedAt = createdAt.Format("2006-01-02T15:04:05Z07:00")
-			d.UpdatedAt = updatedAt.Format("2006-01-02T15:04:05Z07:00")
 			out = append(out, d)
 		}
 		return out, rows.Err()
@@ -288,17 +258,22 @@ func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand string
 }
 
 // CountEvaluations 统计评估记录总数
-// brand 为空时不过滤；userID>0 时仅统计该用户的记录，userID=0 时统计全部（公开统计场景）
-func (r *EvaluationRepository) CountEvaluations(ctx context.Context, brand string, userID int) (int, error) {
-	cacheKey := cache.SafeKey("eval", "count", brand, fmt.Sprintf("u%d", userID))
+// brand/vehicleType 为空时不过滤；userID>0 时仅统计该用户的记录，userID=0 时统计全部（公开统计场景）
+func (r *EvaluationRepository) CountEvaluations(ctx context.Context, brand, vehicleType string, userID int) (int, error) {
+	cacheKey := evalCountKey(brand, vehicleType, userID)
 	var result int
 	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLStats, &result, func() (any, error) {
-		where := make([]string, 0, 2)
-		args := make([]any, 0, 2)
+		where := make([]string, 0, 3)
+		args := make([]any, 0, 3)
 		argIdx := 1
 		if brand != "" {
 			where = append(where, fmt.Sprintf("brand = $%d", argIdx))
 			args = append(args, brand)
+			argIdx++
+		}
+		if vehicleType != "" {
+			where = append(where, fmt.Sprintf("vehicle_type = $%d", argIdx))
+			args = append(args, vehicleType)
 			argIdx++
 		}
 		if userID > 0 {
@@ -359,8 +334,8 @@ func (r *EvaluationRepository) UpdateEvaluationReportPath(ctx context.Context, i
 	if err != nil {
 		return err
 	}
-	// 失效该条记录的详情缓存
-	_ = cache.Del(ctx, cache.SafeKey("eval", "get", fmt.Sprintf("%d", id)))
+	// 失效详情缓存（pattern 失效同时覆盖公开与 per-user 两种读 key 形状）
+	invalidateEvalWrite(ctx, evalWriteReportPath)
 	return nil
 }
 
@@ -372,54 +347,23 @@ func (r *EvaluationRepository) EvaluationExists(ctx context.Context, id int64) (
 	return exists, err
 }
 
-// EvaluationBackfillRow 历史评估回填所需的字段（建议输入 + 当前建议态）。
-type EvaluationBackfillRow struct {
-	ID                         int64
-	KCondition                 float64
-	HasLicensePlate            bool
-	HasRegistrationCertificate bool
-	OriginalPaint              bool
-	HasMaintenanceRecords      bool
-	KHours                     float64
-	KBrand                     float64
-	KTime                      float64
-	KMarket                    float64
-	OriginalPrice              float64
-	EstimatedValue             float64
-	// Suggestions 当前已锁定的建议（nil 表示未回填，回填跳过已有建议保证幂等）
-	Suggestions []string
-}
-
-// ListEvaluationsForBackfill 列出全部评估记录的建议回填输入（幂等回填使用）。
-func (r *EvaluationRepository) ListEvaluationsForBackfill(ctx context.Context) ([]EvaluationBackfillRow, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT id, k_condition, has_license_plate, has_registration_certificate,
-		       original_paint, has_maintenance_records,
-		       k_hours, k_brand, k_time, k_market,
-		       original_price, estimated_value, suggestions
-		FROM evaluations ORDER BY id ASC`)
+// ListEvaluationsForBackfill 列出全部评估记录的完整详情（幂等建议回填使用）。
+// 返回完整详情而非窄投影：建议输入与 PDF 重建同源走 FromDetail 单一映射，
+// 不再维护第三份 SuggestionsInput 字段拷贝（#400）。
+func (r *EvaluationRepository) ListEvaluationsForBackfill(ctx context.Context) ([]model.EvaluationDetail, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT `+evaluationDetailColumns+` FROM evaluations ORDER BY id ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("查询回填记录失败: %w", err)
 	}
 	defer rows.Close()
-	out := make([]EvaluationBackfillRow, 0, 16)
+	out := make([]model.EvaluationDetail, 0, 16)
 	for rows.Next() {
-		var row EvaluationBackfillRow
-		var suggestionsJSON []byte
-		if err := rows.Scan(
-			&row.ID, &row.KCondition, &row.HasLicensePlate, &row.HasRegistrationCertificate,
-			&row.OriginalPaint, &row.HasMaintenanceRecords,
-			&row.KHours, &row.KBrand, &row.KTime, &row.KMarket,
-			&row.OriginalPrice, &row.EstimatedValue, &suggestionsJSON,
-		); err != nil {
-			return nil, err
+		d, scanErr := scanEvaluationDetailRow(rows)
+		if scanErr != nil {
+			return nil, scanErr
 		}
-		if len(suggestionsJSON) > 0 {
-			if err := json.Unmarshal(suggestionsJSON, &row.Suggestions); err != nil {
-				return nil, fmt.Errorf("解析建议 JSON 失败 (id=%d): %w", row.ID, err)
-			}
-		}
-		out = append(out, row)
+		out = append(out, d)
 	}
 	return out, rows.Err()
 }
@@ -432,6 +376,7 @@ func (r *EvaluationRepository) UpdateEvaluationSuggestions(ctx context.Context, 
 	if err != nil {
 		return fmt.Errorf("回填建议失败 (id=%d): %w", id, err)
 	}
-	_ = cache.Del(ctx, cache.SafeKey("eval", "get", fmt.Sprintf("%d", id)))
+	// 失效详情缓存（pattern 失效同时覆盖公开与 per-user 两种读 key 形状）
+	invalidateEvalWrite(ctx, evalWriteSuggestions)
 	return nil
 }

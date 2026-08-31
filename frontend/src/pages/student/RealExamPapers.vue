@@ -6,34 +6,46 @@
         <p class="real-exam-sub">
           当前证件：<strong>{{ currentCredentialName || '—' }}</strong>
           <span class="real-exam-sub-sep">·</span>
-          已展示 {{ filteredPapers.length }} / {{ papers.length }} 套
+          共 {{ papers.length }} 套
         </p>
       </div>
     </div>
 
-    <div v-if="filteredPapers.length === 0" class="empty-wrap">
+    <div v-if="loading" class="empty-wrap">
+      <el-skeleton :rows="4" animated />
+    </div>
+    <div v-else-if="papers.length === 0" class="empty-wrap">
       <UiEmptyState :description="emptyDescription" />
     </div>
     <div v-else class="variant-c-timeline">
       <div v-for="[year, list] in grouped" :key="year" class="timeline-year">
         <div class="timeline-year-head">
           <span class="timeline-dot"></span>
-          <span class="timeline-year-label">{{ year }}年</span>
+          <span class="timeline-year-label">{{ year }}</span>
           <span class="timeline-year-count">{{ list.length }}套</span>
         </div>
         <div class="timeline-cards">
           <div
             v-for="(p, i) in list"
-            :key="p.id"
+            :key="p.paper_id"
             class="timeline-card stagger-in"
-            :class="{ 'is-selected': selectedId === p.id }"
             :style="staggerStyle(i)"
-            @click="handleSelect(p.id)"
           >
             <div class="timeline-card-title">{{ p.title }}</div>
             <div class="timeline-card-meta">
-              <el-tag size="small" :type="levelTagType(p.difficulty)">{{ p.difficulty }}</el-tag>
-              <span class="meta-text">{{ p.source }} · {{ p.question_count }}题 · {{ p.duration_minutes }}分钟</span>
+              <span class="meta-text">{{ p.source || '真题' }} · {{ p.question_count }}题 · {{ p.duration_minutes }}分钟</span>
+            </div>
+            <div class="timeline-card-actions">
+              <template v-if="p.entitled">
+                <el-button size="small" type="primary" plain @click="startPractice(p)">开始练习</el-button>
+                <el-button size="small" type="primary" @click="startExam(p)">模拟考试</el-button>
+              </template>
+              <template v-else>
+                <span class="meta-text">{{ p.price }} 积分/套</span>
+                <el-button size="small" type="warning" plain :loading="redeemingId === p.paper_id" @click="redeem(p)">
+                  积分解锁
+                </el-button>
+              </template>
             </div>
           </div>
         </div>
@@ -43,70 +55,67 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useCredentialStore } from '@/stores/credential'
-import { levelTagType } from '@/constants/level'
-import { pointsApi } from '@/api/points'
+import { realExamApi, type RealExamPaper } from '@/api/realExam'
+import { useCredentialRefetch } from '@/composables/useCredentialRefetch'
 import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
-type Difficulty = '入门' | '进阶' | '专项' | '认证'
-
-interface Paper {
-  id: number
-  year: number
-  title: string
-  question_count: number
-  duration_minutes: number
-  credential_id: number
-  credential_name: string
-  source: string
-  difficulty: Difficulty
-}
-
+const router = useRouter()
 const credentialStore = useCredentialStore()
 
 const staggerStyle = useStagger(12)
 
-const papers = ref<Paper[]>([
-  { id: 101, year: 2024, title: '2024年叉车司机N1真题（A卷）', question_count: 100, duration_minutes: 90, credential_id: 1, credential_name: '叉车司机N1证', source: '应急管理局', difficulty: '进阶' },
-  { id: 102, year: 2024, title: '2024年叉车司机N1真题（B卷）', question_count: 100, duration_minutes: 90, credential_id: 1, credential_name: '叉车司机N1证', source: '应急管理局', difficulty: '进阶' },
-  { id: 103, year: 2023, title: '2023年叉车司机N1真题', question_count: 80, duration_minutes: 60, credential_id: 1, credential_name: '叉车司机N1证', source: '应急管理局·浙江', difficulty: '入门' },
-  { id: 104, year: 2023, title: '2023年叉车司机N1专项卷·液压与制动', question_count: 60, duration_minutes: 60, credential_id: 1, credential_name: '叉车司机N1证', source: '省特检院', difficulty: '专项' },
-  { id: 105, year: 2022, title: '2022年叉车司机N1真题', question_count: 80, duration_minutes: 60, credential_id: 1, credential_name: '叉车司机N1证', source: '应急管理局', difficulty: '入门' },
-  { id: 201, year: 2024, title: '2024年低压电工真题', question_count: 90, duration_minutes: 90, credential_id: 2, credential_name: '低压电工证', source: '应急管理局', difficulty: '进阶' },
-  { id: 401, year: 2024, title: '2024年维修工五级真题·叉车维修方向', question_count: 120, duration_minutes: 120, credential_id: 4, credential_name: '工程机械维修工·五级', source: '人社部', difficulty: '认证' },
-  { id: 402, year: 2023, title: '2023年维修工五级真题', question_count: 100, duration_minutes: 90, credential_id: 4, credential_name: '工程机械维修工·五级', source: '人社部·华东片区', difficulty: '专项' }
-])
+const papers = ref<RealExamPaper[]>([])
+const loading = ref(true)
+const redeemingId = ref<number | null>(null)
 
 const currentCredentialName = computed(() => credentialStore.current?.name || '')
-
-const filteredPapers = computed(() => {
-  const cid = credentialStore.current?.id
-  if (!cid) return []
-  return papers.value.filter(p => p.credential_id === cid)
-})
 
 const emptyDescription = computed(() =>
   currentCredentialName.value ? `${currentCredentialName.value} 真题建设中，敬请期待` : '真题建设中，敬请期待'
 )
 
-const grouped = computed(() => {
-  const map = new Map<number, Paper[]>()
-  for (const p of filteredPapers.value) {
-    if (!map.has(p.year)) map.set(p.year, [])
-    map.get(p.year)!.push(p)
+async function loadPapers() {
+  loading.value = true
+  try {
+    papers.value = (await realExamApi.listPapers()) || []
+  } catch {
+    papers.value = []
+  } finally {
+    loading.value = false
   }
-  return [...map.entries()].sort((a, b) => b[0] - a[0])
+}
+
+// 首屏加载 + 证件切换即重拉（单点：watch store.current.id，见 useCredentialRefetch；
+// 列表按 current_credential 分区）
+onMounted(loadPapers)
+useCredentialRefetch(loadPapers)
+
+const grouped = computed(() => {
+  const map = new Map<string, RealExamPaper[]>()
+  for (const p of papers.value) {
+    const key = p.year ? `${p.year}` : '年份未知'
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(p)
+  }
+  return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]))
 })
 
-const selectedId = ref<number | null>(null)
+function startPractice(p: RealExamPaper) {
+  router.push({ name: 'RealExamPractice', params: { paperId: p.paper_id }, query: { title: p.title } })
+}
 
-async function handleSelect(id: number) {
-  selectedId.value = id
+function startExam(p: RealExamPaper) {
+  router.push({ name: 'MockExam', query: { paper: p.paper_id, title: p.title } })
+}
+
+async function redeem(p: RealExamPaper) {
   try {
-    await ElMessageBox.confirm('该套真题需 300 积分解锁，确认兑换？', '积分兑换', {
+    await ElMessageBox.confirm(`该套真题需 ${p.price} 积分解锁，确认兑换？`, '积分兑换', {
       confirmButtonText: '确认兑换',
       cancelButtonText: '取消',
       type: 'warning'
@@ -114,16 +123,21 @@ async function handleSelect(id: number) {
   } catch {
     return
   }
+  redeemingId.value = p.paper_id
   try {
-    await pointsApi.redeemShop('unlock_real_paper')
-    ElMessage.success('兑换成功，已解锁真题')
+    await realExamApi.redeemPaper(p.paper_id)
+    ElMessage.success('兑换成功，已解锁本卷')
+    await loadPapers()
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     if (msg.includes('已兑换')) {
-      ElMessage.success('已解锁，直接进入')
+      ElMessage.success('已解锁本卷')
+      await loadPapers()
     } else {
       ElMessage.error(msg || '兑换失败')
     }
+  } finally {
+    redeemingId.value = null
   }
 }
 </script>
@@ -207,15 +221,10 @@ async function handleSelect(id: number) {
   background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
-  cursor: pointer;
   transition: border-color 150ms var(--ease-default), box-shadow 150ms var(--ease-default);
 }
 .timeline-card:hover {
   border-color: var(--color-border);
-}
-.timeline-card.is-selected {
-  border-color: var(--color-primary-200);
-  box-shadow: 0 0 0 2px var(--color-primary-100);
 }
 .timeline-card-title {
   font-size: 14px;
@@ -232,5 +241,13 @@ async function handleSelect(id: number) {
 .meta-text {
   font-size: 12px;
   color: var(--color-text-tertiary);
+}
+.timeline-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--color-border-light);
 }
 </style>

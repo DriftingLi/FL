@@ -44,7 +44,7 @@ func newForumTestSvc(t *testing.T) (*ForumService, *gorm.DB, *memForumStorage) {
 	db := testutil.NewMemoryDB(t)
 	st := &memForumStorage{}
 	fileSvc := NewFileStore("", st, zap.NewNop())
-	svc := NewForumService(db, fileSvc, NewNotificationService(db, zap.NewNop()), NewForumCounter(), zap.NewNop())
+	svc := NewForumService(db, fileSvc, NewNotificationService(db, zap.NewNop()), NewForumCounter(), NewPointsService(db, zap.NewNop(), nil), zap.NewNop())
 	return svc, db, st
 }
 
@@ -79,7 +79,7 @@ func TestForum_CreateTopic_WithImages(t *testing.T) {
 	user := seedForumUser(t, db, "a")
 	images := forumURLs(2)
 
-	topic, err := svc.CreateTopic(user.ID, nil, "测试标题", "测试内容", images)
+	topic, err := svc.CreateTopic(CreateTopicInput{UserID: user.ID, Title: "测试标题", Content: "测试内容", Images: images})
 	if err != nil {
 		t.Fatalf("发帖失败: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestForum_CreateTopic_WithImages(t *testing.T) {
 func TestForum_CreateTopic_ImageLimit(t *testing.T) {
 	svc, db, _ := newForumTestSvc(t)
 	user := seedForumUser(t, db, "b")
-	if _, err := svc.CreateTopic(user.ID, nil, "标题", "内容", forumURLs(10)); err == nil {
+	if _, err := svc.CreateTopic(CreateTopicInput{UserID: user.ID, Title: "标题", Content: "内容", Images: forumURLs(10)}); err == nil {
 		t.Fatal("主题图片超过 9 张应报错")
 	}
 }
@@ -109,7 +109,7 @@ func TestForum_CreateTopic_ImageLimit(t *testing.T) {
 func TestForum_CreateTopic_RejectExternalImageURL(t *testing.T) {
 	svc, db, _ := newForumTestSvc(t)
 	user := seedForumUser(t, db, "c")
-	if _, err := svc.CreateTopic(user.ID, nil, "标题", "内容", []string{"https://evil.com/x.png"}); err == nil {
+	if _, err := svc.CreateTopic(CreateTopicInput{UserID: user.ID, Title: "标题", Content: "内容", Images: []string{"https://evil.com/x.png"}}); err == nil {
 		t.Fatal("外部图片 URL 应被拒绝")
 	}
 }
@@ -118,7 +118,7 @@ func TestForum_CreateTopic_RejectExternalImageURL(t *testing.T) {
 func TestForum_Reply_ImageLimit(t *testing.T) {
 	svc, db, _ := newForumTestSvc(t)
 	user := seedForumUser(t, db, "d")
-	topic, err := svc.CreateTopic(user.ID, nil, "标题", "内容", nil)
+	topic, err := svc.CreateTopic(CreateTopicInput{UserID: user.ID, Title: "标题", Content: "内容"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestForum_Reply_ImageLimit(t *testing.T) {
 func TestForum_DeleteTopic_CleansImages(t *testing.T) {
 	svc, db, st := newForumTestSvc(t)
 	user := seedForumUser(t, db, "e")
-	topic, err := svc.CreateTopic(user.ID, nil, "标题", "内容", forumURLs(1))
+	topic, err := svc.CreateTopic(CreateTopicInput{UserID: user.ID, Title: "标题", Content: "内容", Images: forumURLs(1)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestForum_DeleteTopic_CleansImages(t *testing.T) {
 func TestForum_DeleteReply_CleansSubReplyImages(t *testing.T) {
 	svc, db, st := newForumTestSvc(t)
 	user := seedForumUser(t, db, "f")
-	topic, err := svc.CreateTopic(user.ID, nil, "标题", "内容", nil)
+	topic, err := svc.CreateTopic(CreateTopicInput{UserID: user.ID, Title: "标题", Content: "内容"})
 	if err != nil {
 		t.Fatal(err)
 	}

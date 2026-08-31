@@ -22,11 +22,6 @@ export function getEvaluationDetail(id: number): Promise<EvaluationDetailRespons
   return client.get<EvaluationDetailResponse>(`/evaluations/${id}`)
 }
 
-/** 兼容别名：与详情接口同构 */
-export function getEvaluation(id: number): Promise<EvaluationDetail> {
-  return getEvaluationDetail(id)
-}
-
 /** 评估历史列表（分页） */
 export function listEvaluations(query: PageQuery): Promise<PageResult<EvaluationDetail>> {
   return client.get<PageResult<EvaluationDetail>>('/evaluations', {

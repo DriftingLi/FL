@@ -6,7 +6,7 @@
 import type { SubdomainType } from '@/utils/subdomain'
 
 // 系统允许的角色（身份）
-export type AllowedRole = 'admin' | 'tutor' | 'hrwai_user'
+export type AllowedRole = 'admin' | 'tutor' | 'hrwai_user' | 'recruiter'
 
 export interface PathAuthEntry {
   /** 路径前缀（表按前缀长度降序，长前缀优先匹配） */
@@ -24,6 +24,7 @@ export const PATH_AUTH_ENTRIES: PathAuthEntry[] = [
   { prefix: '/ai-assistant', role: 'hrwai_user', subdomain: 'training' },
   { prefix: '/valuation', role: 'hrwai_user', subdomain: 'valuation' },
   { prefix: '/training', role: 'hrwai_user', subdomain: 'training' },
+  { prefix: '/recruit', role: 'recruiter', subdomain: 'recruit' },
   { prefix: '/admin', role: 'admin', subdomain: 'admin' }
 ]
 
@@ -46,5 +47,6 @@ export function resolveWorkspaceForRole(role: string | undefined): string {
   if (role === 'admin') return '/admin/dashboard'
   if (role === 'tutor') return '/training/tutor'
   if (role === 'hrwai_user') return '/training'
+  if (role === 'recruiter') return '/recruit'
   return '/'
 }

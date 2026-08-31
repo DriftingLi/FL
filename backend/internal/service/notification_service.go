@@ -89,12 +89,33 @@ func (s *NotificationService) ProfileReviewNotification(req *model.ProfileChange
 	return "profile_review", title, content, payload
 }
 
+// 论坛采纳通知类型（#369）。
+const (
+	NotifTypeForumAcceptAnswerer = "forum_accept_answerer" // 答主：你的回答被采纳 +40
+	NotifTypeForumAcceptOwner    = "forum_accept_owner"    // 楼主：你采纳了答案 +5
+)
+
 // forumTopicPayload 构造论坛事件通知结构化标记（{"topic_id": N}），
 // 供前端/移动端确定性定位帖子（不依赖 link 文案解析）。
 func forumTopicPayload(topicID int64) model.JSONB {
 	b, err := json.Marshal(struct {
 		TopicID int64 `json:"topic_id"`
 	}{TopicID: topicID})
+	if err != nil {
+		return nil
+	}
+	return model.JSONB(b)
+}
+
+// forumAcceptPayload 构造采纳事件结构化标记（topic_id + reply_id + points + reason），
+// 加性扩展 forumTopicPayload，不依赖标题文案判定（#369）。
+func forumAcceptPayload(topicID, replyID int64, points int, reason string) model.JSONB {
+	b, err := json.Marshal(struct {
+		TopicID int64  `json:"topic_id"`
+		ReplyID int64  `json:"reply_id"`
+		Points  int    `json:"points"`
+		Reason  string `json:"reason"`
+	}{TopicID: topicID, ReplyID: replyID, Points: points, Reason: reason})
 	if err != nil {
 		return nil
 	}

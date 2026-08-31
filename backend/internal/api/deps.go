@@ -61,6 +61,7 @@ type Deps struct {
 	QuestionBankSvc      *service.QuestionBankService
 	PracticeModeSvc      *service.PracticeModeService
 	MockExamSvc          *service.MockExamService
+	RealExamSvc          *service.RealExamService
 	TutorSvc             *service.TutorService
 	WrongQuestionSvc     *service.WrongQuestionService
 	TrainingCatalogSvc   *service.TrainingCatalogService
@@ -69,6 +70,9 @@ type Deps struct {
 	QuestionNoteSvc      *service.QuestionNoteService
 	QuestionKnowledgeSvc *service.QuestionKnowledgeService
 	PointsSvc            *service.PointsService
+	JobCardSvc           *service.JobCardService
+	RecruitSvc           *service.RecruitService
+	ContactSvc           *service.ContactService
 }
 
 // NewDeps 构建全部 service 单实例。进程启动早期由 main 调用一次。
@@ -93,6 +97,8 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	aiConfigSvc := service.NewAIConfigService(db, cfg.SecretKey, logger)
 	aiSvc := service.NewAIService(db, aiConfigSvc, logger)
 	contentGenSvc := service.NewContentGenerateService(db, aiSvc, logger)
+	// 积分服务唯一实例：积分端点与真题卷权益校验共用
+	pointsSvc := service.NewPointsService(db, logger, clock.Real())
 
 	d := &Deps{
 		Cfg:                  cfg,
@@ -115,7 +121,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		CourseSvc:            service.NewCourseService(db, slideRenderer, logger),
 		AdminSvc:             service.NewAdminService(db, logger),
 		AdminCourseSvc:       service.NewAdminCourseService(db, fileSvc, logger),
-		ForumSvc:             service.NewForumService(db, fileSvc, notificationSvc, forumCnt, logger),
+		ForumSvc:             service.NewForumService(db, fileSvc, notificationSvc, forumCnt, pointsSvc, logger),
 		CheckInSvc:           service.NewCheckInService(db, logger, clock.Real()),
 		ForumImageSvc:        service.NewForumImageService(db, fileSvc, logger),
 		FeaturedSvc:          service.NewFeaturedService(db, fileSvc, logger),
@@ -127,6 +133,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		QuestionBankSvc:      service.NewQuestionBankService(db, fileSvc, logger),
 		PracticeModeSvc:      service.NewPracticeModeService(db, aiSvc, logger),
 		MockExamSvc:          service.NewMockExamService(db, aiSvc, logger),
+		RealExamSvc:          service.NewRealExamService(db, pointsSvc, logger),
 		TutorSvc:             service.NewTutorService(db, cfg.UploadFolder, fileSvc, slideRenderer, logger),
 		WrongQuestionSvc:     service.NewWrongQuestionService(db, aiSvc, logger),
 		TrainingCatalogSvc:   service.NewTrainingCatalogService(db, logger),
@@ -135,7 +142,10 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		QuestionCommentSvc:   service.NewQuestionCommentService(db, logger),
 		QuestionNoteSvc:      service.NewQuestionNoteService(db, logger),
 		QuestionKnowledgeSvc: service.NewQuestionKnowledgeService(db),
-		PointsSvc:            service.NewPointsService(db, logger, clock.Real()),
+		PointsSvc:            pointsSvc,
+		JobCardSvc:           service.NewJobCardService(db, fileSvc, logger),
+		RecruitSvc:           service.NewRecruitService(db, logger),
+		ContactSvc:           service.NewContactService(db, logger, notificationSvc, nil),
 	}
 	d.AuthH = NewAuthHandler(d.Session, authSvc, fileSvc, st, reviewSvc, logger)
 	return d

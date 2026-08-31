@@ -13,7 +13,10 @@ const unwrappedRequest = createHttpClient({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   withCredentials: true, // 携带父域名 Cookie，子域名间共享登录态
   successCodes: [200, 201],
-  onUnauthorized
+  onUnauthorized,
+  // 证件过滤下沉（#387）：主 client 请求拦截器默认注入当前证件 credential_id，
+  // 豁免清单（论坛/认证/凭证上下文/admin/tutor/recruit）见 client.ts
+  injectCredentialId: true
 })
 
 export { unwrappedRequest }

@@ -1,8 +1,19 @@
 import { unwrappedRequest } from './request'
 
+/** 论坛帖子类别（#364）：判"帖子意图"的唯一依据，与判区域的 chapter_id 正交。 */
+export type ForumCategory = 'discussion' | 'question'
+
+/**
+ * 论坛列表 Tab（#364）。学员端的「讨论 / 问答」与管理端的
+ * 「全部帖子 / 综合讨论区 / 问答区」本质是同一片内容的三种切法，
+ * 因此两端共用这一份映射，避免"讨论 Tab 必须带 category"这条规则各写一遍。
+ */
+export type ForumTab = 'all' | ForumCategory
+
 export interface ForumTopicItem {
   id: number
   chapter_id?: number | null
+  category?: ForumCategory
   chapter_title?: string
   title: string
   content: string
@@ -19,6 +30,9 @@ export interface ForumTopicItem {
   can_delete?: boolean
   likes_count?: number
   liked_by_me?: boolean
+  accepted_reply_id?: number | null
+  solved_at?: string | null
+  reward_issued?: boolean
 }
 
 export interface ForumReplyItem {
@@ -37,10 +51,15 @@ export interface ForumReplyItem {
   can_delete?: boolean
   likes_count?: number
   liked_by_me?: boolean
+  is_accepted?: boolean
 }
 
 export interface ForumListParams {
   scope?: 'all' | 'general' | 'chapter'
+  /** 类别分流；省略或 'all' 表示两类都看（移动端旧契约即如此） */
+  category?: ForumCategory
+  /** 解决状态（#367，仅问答有意义） */
+  solved?: 'all' | 'solved' | 'unsolved'
   chapter_id?: number
   page?: number
   page_size?: number
@@ -49,12 +68,35 @@ export interface ForumListParams {
   order?: 'asc' | 'desc'
 }
 
+/**
+ * 论坛列表 Tab → 查询参数（#364）。
+ *
+ * 学员端与管理端共用这一份映射：学员端的「讨论」与管理端的「综合讨论区」本就是同一片内容
+ * （非章节 + 讨论类别），规则写两处迟早会各改各的。
+ *
+ * ⚠️ 两个轴不可互相替代：scope 判**区域**（chapter_id IS NULL），category 判**类别**。
+ * 讨论 Tab 必须同时带 category —— 问答帖的 chapter_id 也是 NULL，漏掉它问答帖会整片灌进讨论列表。
+ */
+export function forumTabQuery(tab: ForumTab): Pick<ForumListParams, 'scope' | 'category'> {
+  switch (tab) {
+    case 'discussion':
+      // 讨论 Tab 沿用既有口径：只看综合区、不合并章节讨论。
+      return { scope: 'general', category: 'discussion' }
+    case 'question':
+      // 问答帖按设计无章节归属，没有区域维度可筛，故不带 scope。
+      return { category: 'question' }
+    default:
+      // 全部：两个参数都不带，与改动前逐条一致（服务端默认 scope=all、不过滤类别）。
+      return {}
+  }
+}
+
 export const forumApi = {
   listTopics(params: ForumListParams) {
     return unwrappedRequest.get<{ topics: ForumTopicItem[]; total: number }>('/forum/topics', { params })
   },
 
-  createTopic(data: { chapter_id?: number | null; title: string; content: string; images?: string[] }) {
+  createTopic(data: { chapter_id?: number | null; category?: ForumCategory; title: string; content: string; images?: string[] }) {
     return unwrappedRequest.post<ForumTopicItem>('/forum/topics', data)
   },
 
@@ -151,6 +193,18 @@ export const forumApi = {
   /** 取消点赞评论（幂等） */
   unlikeReply(id: number) {
     return unwrappedRequest.delete<{ likes_count: number; liked: boolean }>(`/forum/replies/${id}/like`)
+  },
+
+  // ===== 采纳（#366/#367）=====
+
+  /** 采纳回答（仅楼主，幂等，首次加分） */
+  acceptReply(topicId: number, replyId: number) {
+    return unwrappedRequest.post<ForumTopicItem>(`/forum/topics/${topicId}/accept`, { reply_id: replyId })
+  },
+
+  /** 取消采纳（仅楼主，状态回到未解决，已发分不回滚） */
+  cancelAccept(topicId: number) {
+    return unwrappedRequest.delete<ForumTopicItem>(`/forum/topics/${topicId}/accept`)
   }
 }
 
@@ -183,6 +237,7 @@ export interface MyRepliesData {
 export interface AdminForumTopic {
   id: number
   chapter_id?: number | null
+  category?: ForumCategory
   chapter_title?: string
   title: string
   content: string
@@ -215,6 +270,9 @@ export interface AdminForumReply {
 
 export interface AdminForumListParams {
   scope?: 'all' | 'general' | 'chapter'
+  /** 类别维度（#364）；省略表示两类都看 */
+  category?: ForumCategory
+  solved?: 'all' | 'solved' | 'unsolved'
   chapter_id?: number
   page?: number
   page_size?: number

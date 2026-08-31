@@ -1,7 +1,8 @@
 // Package service 实现业务服务层。
 // 本文件：全局搜索（ADR-0018）—— course/question/content/topic 多表 LIKE 聚合。
 // 关键词匹配用 LOWER(col) LIKE LOWER(?)（Postgres/SQLite 双兼容）；
-// 课程限已发布+挂载（挂载不变式）、题目限已发布、精选限已发布、帖子全量（删除即物理删除）。
+// 课程限已发布+挂载（挂载不变式）、题目限已发布且走题库池口径（排真题题，#386）、
+// 精选限已发布、帖子全量（删除即物理删除）。
 package service
 
 import (
@@ -70,7 +71,7 @@ type SearchPageDTO struct {
 
 // searchSection 单类型搜索：top limit 条 + 总数。
 func (s *SearchService) searchSection(searchType, keyword string, limit int, credentialID ...*int) (SearchSectionDTO, error) {
-	items, total, err := s.searchItems(searchType, keyword, 1, limit)
+	items, total, err := s.searchItems(searchType, keyword, 1, limit, credentialID...)
 	if err != nil {
 		return SearchSectionDTO{}, err
 	}
@@ -113,7 +114,10 @@ func (s *SearchService) searchItems(searchType, keyword string, page, pageSize i
 	case SearchTypeQuestion:
 		var cnt int64
 		q := s.db.Model(&model.Question{}).
-			Where("status = ? AND LOWER(content) LIKE ?", "published", like)
+			Where("status = ? AND LOWER(content) LIKE ?", "published", like).
+			// 题库池口径（#386，同练习/模考抽题）：来源标记标签的真题题退出搜索，
+			// 「真题题只经真题卷出现」的按套解锁门禁不因搜索豁免
+			Where(excludeSourceTagsSQL)
 		if len(credentialID) > 0 && credentialID[0] != nil {
 			q = q.Where("credential_id = ?", *credentialID[0])
 		}

@@ -1,10 +1,11 @@
 // 子域名解析工具：通过 window.location.hostname 判断当前访问的子域名类型。
-// 五类子域名约定：
+// 六类子域名约定：
 //   - 主域名（www.example.com / localhost）：官网门户（独立 Nuxt 仓库承载，见 CONTEXT.md「门户与内容」）
 //   - training.主域名：学员培训 + AI 助手 + 学员登录
 //   - valuation.主域名：残值评估（含历史）+ HRWAI 账号登录
 //   - mentor.主域名：导师登录与工作区
 //   - manage.主域名：管理员登录与后台（hostname 前缀为 manage，内部类型仍为 admin）
+//   - recruit.主域名：企业招聘者登录与工作区
 //
 // 注意：不使用根域名（example.com），主站统一走 www 子域名。
 // 根域名的请求由 nginx 301 重定向到 www.根域名。
@@ -15,14 +16,15 @@
 import { getToken } from '@/utils/storage'
 import { findPathEntry, resolveWorkspaceForRole } from './authRedirect'
 
-export type SubdomainType = 'main' | 'training' | 'valuation' | 'tutor' | 'admin'
+export type SubdomainType = 'main' | 'training' | 'valuation' | 'tutor' | 'admin' | 'recruit'
 
 // 子域名前缀到类型的映射（用于构建跨子域名 URL）
 const SUBDOMAIN_PREFIX_MAP: Record<Exclude<SubdomainType, 'main'>, string> = {
   training: 'training',
   valuation: 'valuation',
   tutor: 'mentor', // 导师子域名前缀为 mentor
-  admin: 'manage' // 管理员子域名前缀为 manage（内部类型 admin 保持不变）
+  admin: 'manage', // 管理员子域名前缀为 manage（内部类型 admin 保持不变）
+  recruit: 'recruit'
 }
 
 // 解析当前 hostname 对应的子域名类型
@@ -31,6 +33,7 @@ export function getSubdomain(): SubdomainType {
   const host = window.location.hostname.toLowerCase()
   if (host.startsWith('mentor.')) return 'tutor'
   if (host.startsWith('manage.')) return 'admin'
+  if (host.startsWith('recruit.')) return 'recruit'
   if (host.startsWith('training.')) return 'training'
   if (host.startsWith('valuation.')) return 'valuation'
   return 'main'
@@ -136,15 +139,17 @@ export function buildCrossDomainAuthUrl(target: SubdomainType, path: string): st
 export function getDefaultWorkspaceBySubdomain(): string {
   const sub = getSubdomain()
   if (sub === 'valuation') return '/valuation'
+  if (sub === 'recruit') return '/recruit'
   return resolveWorkspaceForRole(getRoleForSubdomain())
 }
 
 // 获取当前子域名对应的登录角色
 // training 和 valuation 子域名统一走 HRWAI 账号登录体系
-export function getRoleForSubdomain(): 'hrwai_user' | 'tutor' | 'admin' {
+export function getRoleForSubdomain(): 'hrwai_user' | 'tutor' | 'admin' | 'recruiter' {
   const sub = getSubdomain()
   if (sub === 'tutor') return 'tutor'
   if (sub === 'admin') return 'admin'
+  if (sub === 'recruit') return 'recruiter'
   // training / valuation / 其他 → 统一 hrwai_user
   return 'hrwai_user'
 }

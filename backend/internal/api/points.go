@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 
 	"github.com/gin-gonic/gin"
 
@@ -124,11 +125,11 @@ func (h *PointsHandler) RedeemCourse(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *service.RedeemResult, err error) {
 			if err != nil {
-				if err.Error() == "已兑换" {
+				if errors.Is(err, service.ErrInsufficientPoints) {
 					response.BadRequest(c, err.Error())
 					return
 				}
-				if err.Error() == "积分不足" {
+				if err.Error() == "已兑换" {
 					response.BadRequest(c, err.Error())
 					return
 				}
@@ -157,7 +158,7 @@ func (h *PointsHandler) RedeemShop(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *service.RedeemResult, err error) {
 			if err != nil {
-				if err.Error() == "已兑换" || err.Error() == "积分不足" {
+				if errors.Is(err, service.ErrInsufficientPoints) || err.Error() == "已兑换" {
 					response.BadRequest(c, err.Error())
 					return
 				}

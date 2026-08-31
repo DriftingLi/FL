@@ -63,11 +63,17 @@
         </div>
         <div class="topic-body">
           <div class="topic-title-row">
-            <el-tag v-if="topic.chapter_id" size="small" type="warning">
+            <el-tag v-if="topic.category === 'question'" size="small" type="success">问答</el-tag>
+            <el-tag v-else-if="topic.chapter_id" size="small" type="warning">
               {{ topic.chapter_title || '章节讨论' }}
             </el-tag>
             <el-tag v-else size="small" type="info">综合</el-tag>
+            <el-tag v-if="topic.category === 'question' && (topic.accepted_reply_id || topic.solved_at)" size="small" type="success" effect="dark">✓ 已解决</el-tag>
+            <el-tag v-else-if="topic.category === 'question'" size="small" type="info" effect="plain">求助</el-tag>
             <h1 class="topic-title">{{ topic.title }}</h1>
+          </div>
+          <div v-if="topic.category === 'question' && isTopicOwner && topic.accepted_reply_id" class="accept-actions">
+            <el-button size="small" @click="handleCancelAccept">取消采纳</el-button>
           </div>
           <div class="topic-content">{{ topic.content }}</div>
           <ForumImageGallery :images="topic.images" />
@@ -95,11 +101,13 @@
             <el-button size="small" :icon="replyOrder==='asc'? ArrowUp : ArrowDown" @click="toggleReplyOrder">{{ replyOrder==='asc' ? '正序' : '逆序' }}</el-button>
           </div>
         </div>
-        <template v-if="replies.length > 0">
+        <template v-if="sortedReplies.length > 0">
           <div
-            v-for="(reply, i) in replies"
+            v-for="(reply, i) in sortedReplies"
             :key="reply.id"
+            :id="`reply-${reply.id}`"
             class="reply-item stagger-in"
+            :class="{ 'is-accepted': reply.is_accepted }"
             :style="staggerStyle(i)"
           >
             <el-avatar :size="38" :src="reply.author.avatar_url || undefined" class="author-avatar">
@@ -108,6 +116,8 @@
             <div class="reply-main">
               <div class="reply-meta">
                 <span class="author-name">{{ displayName(reply.author) }}</span>
+                <el-tag v-if="topic && reply.author.user_id === topic.author.user_id" size="small" type="info" effect="plain" class="owner-tag">楼主</el-tag>
+                <el-tag v-if="reply.is_accepted" size="small" type="success" effect="dark" class="accepted-inline">✓ 已采纳</el-tag>
                 <span class="reply-time">{{ formatLocaleDateTime(reply.created_at, '') }}</span>
                 <el-button
                   class="reply-btn"
@@ -149,8 +159,17 @@
               <div v-if="reply.parent_id && reply.parent_name" class="reply-quote">
                 回复 @{{ reply.parent_name }}
               </div>
+              <div v-if="reply.is_accepted" class="accepted-badge">
+                <el-tag size="small" type="success" effect="dark">✓ 已采纳答案</el-tag>
+              </div>
               <div class="reply-content">{{ reply.content }}</div>
               <ForumImageGallery :images="reply.images" />
+              <div v-if="topic && topic.category === 'question' && isTopicOwner && !reply.is_accepted" class="reply-accept-row">
+                <el-button size="small" type="success" plain @click="handleAccept(reply.id)">采纳此回答</el-button>
+              </div>
+              <div v-else-if="topic && topic.category === 'question' && isTopicOwner && reply.is_accepted" class="reply-accept-row">
+                <el-button size="small" @click="handleCancelAccept">取消采纳</el-button>
+              </div>
             </div>
           </div>
         </template>
@@ -209,7 +228,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, View, ChatDotRound, Star, StarFilled, Paperclip, Promotion, Close, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
@@ -218,8 +237,13 @@ import { favoriteApi } from '@/api/favorite'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import { formatLocaleDateTime } from '@/utils/format'
 import { resolveFileUrl } from '@/utils/fileUrl'
+import { displayName, authorLetter } from '@/utils/forumDisplay'
 import { pushHistory, toHistoryItem } from '@/utils/forumHistory'
 import { useAuthStore } from '@/stores/auth'
+import { useAsyncPage } from '@/composables/useAsyncPage'
+import { useForumImageUpload } from '@/composables/useForumImageUpload'
+import { useForumSort } from '@/composables/useForumSort'
+import { useLike } from '@/composables/useLike'
 import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
@@ -229,21 +253,25 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
-const loading = ref(false)
-const loadError = ref(false)
-const retrying = ref(false)
 const submitting = ref(false)
 
 const staggerStyle = useStagger()
 const topic = ref<ForumTopicItem | null>(null)
 const replies = ref<ForumReplyItem[]>([])
 const replyContent = ref('')
-const replyImages = ref<string[]>([])
 const replyingTo = ref<{ id: number; username: string } | null>(null)
 const replyFileInput = ref<HTMLInputElement | null>(null)
 const canSubmitReply = computed(() => replyContent.value.trim().length > 0 || replyImages.value.length > 0)
-const replySort = ref<'latest' | 'hot'>('latest')
-const replyOrder = ref<'asc' | 'desc'>('asc')
+
+// 回复图片上传（#389：上限/20MB/FormData/粘贴收编进 useForumImageUpload，UI 形态留在本页）
+const { urls: replyImages, uploadFiles: uploadReplyFiles, removeImage: removeReplyImage, handlePaste } =
+  useForumImageUpload(3)
+
+// 排序双轴收编（#389）：详情回复口径为「热门逆序、最新正序」，切维度时按此映射
+const { sort: replySort, order: replyOrder, flipOrder: flipReplyOrder } = useForumSort('asc')
+
+// 三态收编（#388，详情页无分页）：loader 抛错即错误态
+const { loading, loadError, retrying, retry: retryLoad, run: loadDetail } = useAsyncPage(loadDetailOnce)
 
 function handleReplySortChange() {
   // 热门默认逆序，最新默认正序
@@ -252,50 +280,94 @@ function handleReplySortChange() {
 }
 
 function toggleReplyOrder(){
-  replyOrder.value = replyOrder.value === 'asc' ? 'desc' : 'asc'
+  flipReplyOrder()
   loadDetail()
 }
 
-function displayName(author: ForumTopicItem['author']) {
-  return author.username
+const isTopicOwner = computed(() => !!topic.value && topic.value.author.user_id === authStore.userInfo?.user_id)
+
+const sortedReplies = computed(() => {
+  if (!replies.value.length) return []
+  const idx = replies.value.findIndex((r) => r.is_accepted)
+  if (idx <= 0) return replies.value
+  const copy = [...replies.value]
+  const [acc] = copy.splice(idx, 1)
+  copy.unshift(acc)
+  return copy
+})
+
+function scrollToHash() {
+  const hash = route.hash || window.location.hash
+  if (!hash || !hash.startsWith('#reply-')) return
+  const id = hash.slice(1)
+  nextTick(() => {
+    const el = document.getElementById(id)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
 }
 
-function authorLetter(author: ForumTopicItem['author']) {
-  return (displayName(author) || '?').charAt(0).toUpperCase()
+async function loadDetailOnce() {
+  const topicId = Number(route.params.topicId)
+  const res = await forumApi.getTopic(topicId, replySort.value, replyOrder.value)
+  topic.value = res.topic
+  replies.value = res.replies || []
+  if (res.topic) {
+    try {
+      pushHistory(toHistoryItem(res.topic), authStore.userInfo?.user_id)
+    } catch {
+      // ignore storage errors
+    }
+  }
+  await nextTick()
+  scrollToHash()
 }
 
-async function loadDetail() {
-  loading.value = true
-  loadError.value = false
+async function handleAccept(replyId: number) {
+  if (!topic.value) return
+  const isReplace = !!topic.value.accepted_reply_id
+  const alreadyIssued = !!topic.value.reward_issued || isReplace
+  const msg = alreadyIssued
+    ? '该帖采纳奖励已发放，更换只会改变显示，不再产生积分。确认更换采纳？'
+    : '确认采纳？+40 分将发放给该答主'
+  const title = alreadyIssued ? '更换采纳' : '采纳回答'
   try {
-    const topicId = Number(route.params.topicId)
-    const res = await forumApi.getTopic(topicId, replySort.value, replyOrder.value)
-    topic.value = res.topic
-    replies.value = res.replies || []
-    if (res.topic) {
-      try {
-        pushHistory(toHistoryItem(res.topic), authStore.userInfo?.user_id)
-      } catch {
-        // ignore storage errors
-      }
+    await ElMessageBox.confirm(msg, title, { type: alreadyIssued ? 'warning' : 'info', confirmButtonText: '确认', cancelButtonText: '取消' })
+  } catch {
+    return
+  }
+  try {
+    const updated = await forumApi.acceptReply(topic.value.id, replyId)
+    ElMessage.success('已采纳')
+    if (updated) {
+      topic.value = { ...topic.value, ...updated } as ForumTopicItem
+      const newAccepted = (updated as ForumTopicItem).accepted_reply_id
+      replies.value = replies.value.map((r) => ({ ...r, is_accepted: newAccepted != null && r.id === newAccepted }))
+    } else {
+      await loadDetail()
     }
   } catch (e) {
-    console.error('加载帖子详情失败:', e)
-    loadError.value = true
-    topic.value = null
-    replies.value = []
-  } finally {
-    loading.value = false
+    console.error('采纳失败:', e)
   }
 }
 
-async function retryLoad() {
-  if (retrying.value) return
-  retrying.value = true
+async function handleCancelAccept() {
+  if (!topic.value) return
   try {
-    await loadDetail()
-  } finally {
-    retrying.value = false
+    await ElMessageBox.confirm('确认取消采纳？已发放积分不会收回。', '取消采纳', { type: 'warning' })
+  } catch {
+    return
+  }
+  try {
+    const updated = await forumApi.cancelAccept(topic.value.id)
+    ElMessage.success('已取消采纳')
+    if (updated) {
+      topic.value = { ...topic.value, ...updated } as ForumTopicItem
+      replies.value = replies.value.map((r) => ({ ...r, is_accepted: false }))
+    } else {
+      await loadDetail()
+    }
+  } catch (e) {
+    console.error('取消采纳失败:', e)
   }
 }
 
@@ -329,60 +401,8 @@ function triggerReplyFile() {
 function handleReplyFileSelect(event: Event) {
   const target = event.target as HTMLInputElement
   const files = Array.from(target.files ?? [])
-  if (files.length > 0) uploadReplyFiles(files)
+  if (files.length > 0) void uploadReplyFiles(files)
   target.value = ''
-}
-
-async function uploadReplyFiles(files: File[]) {
-  const remaining = 3 - replyImages.value.length
-  if (remaining <= 0) {
-    ElMessage.warning('最多上传 3 张图片')
-    return
-  }
-  const toUpload = files.filter(f => f.type.startsWith('image/')).slice(0, remaining)
-  if (toUpload.length === 0) return
-  for (const file of toUpload) {
-    if (file.size > 20 * 1024 * 1024) {
-      ElMessage.error(`"${file.name}" 超过 20MB，已跳过`)
-      continue
-    }
-    const formData = new FormData()
-    formData.append('file', file)
-    try {
-      const res = await forumApi.uploadImage(formData)
-      if (res?.url) {
-        if (replyImages.value.length >= 3) break
-        replyImages.value = [...replyImages.value, res.url]
-      } else {
-        ElMessage.error(`"${file.name}" 上传失败`)
-      }
-    } catch {
-      /* 错误已由拦截器提示 */
-    }
-  }
-}
-
-function removeReplyImage(index: number) {
-  const next = [...replyImages.value]
-  next.splice(index, 1)
-  replyImages.value = next
-}
-
-function handlePaste(event: ClipboardEvent) {
-  const items = event.clipboardData?.items
-  if (!items) return
-  if (replyImages.value.length >= 3) return
-  const files: File[] = []
-  for (const item of items) {
-    if (item.kind === 'file' && item.type.startsWith('image/')) {
-      const file = item.getAsFile()
-      if (file) files.push(file)
-    }
-  }
-  if (files.length > 0) {
-    event.preventDefault()
-    uploadReplyFiles(files)
-  }
 }
 
 function startReplyTo(reply: ForumReplyItem) {
@@ -390,8 +410,12 @@ function startReplyTo(reply: ForumReplyItem) {
 }
 
 async function removeTopic() {
+  const isSolved = topic.value?.accepted_reply_id != null
+  const msg = isSolved
+    ? '该帖已解决且已被采纳，删除后已采纳的答案将一并被删除，且计数将计入巡检，是否确认删除？'
+    : '确定删除这个帖子吗？删除后无法恢复。'
   try {
-    await ElMessageBox.confirm('确定删除这个帖子吗？删除后无法恢复。', '删除帖子', { type: 'warning' })
+    await ElMessageBox.confirm(msg, '删除帖子', { type: 'warning' })
   } catch {
     return
   }
@@ -431,6 +455,10 @@ function goBack() {
 
 // ===== 互动（ADR-0018）：收藏 / 点赞 / 举报 =====
 
+// 点赞乐观更新 + 失败回滚（#389 单点）：帖与回复各注入一组端点，时序同源
+const { toggle: toggleTopicLikeOnce } = useLike(forumApi.likeTopic, forumApi.unlikeTopic)
+const { toggle: toggleReplyLikeOnce } = useLike(forumApi.likeReply, forumApi.unlikeReply)
+
 // 收藏帖子
 const topicFavorited = ref(false)
 const topicFavoriteId = ref<number>(0)
@@ -469,42 +497,11 @@ async function toggleFavorite() {
 
 async function toggleTopicLike() {
   if (!topic.value) return
-  const topicId = Number(route.params.topicId)
-  const prevLiked = !!topic.value.liked_by_me
-  const prevCount = topic.value.likes_count || 0
-  // 乐观更新
-  topic.value.liked_by_me = !prevLiked
-  topic.value.likes_count = prevLiked ? Math.max(0, prevCount - 1) : prevCount + 1
-  try {
-    const res = prevLiked ? await forumApi.unlikeTopic(topicId) : await forumApi.likeTopic(topicId)
-    if (topic.value) {
-      topic.value.likes_count = res.likes_count
-      topic.value.liked_by_me = res.liked
-    }
-  } catch (e) {
-    // 回滚
-    if (topic.value) {
-      topic.value.liked_by_me = prevLiked
-      topic.value.likes_count = prevCount
-    }
-    console.error('点赞操作失败:', e)
-  }
+  await toggleTopicLikeOnce(topic.value)
 }
 
 async function toggleReplyLike(reply: ForumReplyItem) {
-  const prevLiked = !!reply.liked_by_me
-  const prevCount = reply.likes_count || 0
-  reply.liked_by_me = !prevLiked
-  reply.likes_count = prevLiked ? Math.max(0, prevCount - 1) : prevCount + 1
-  try {
-    const res = prevLiked ? await forumApi.unlikeReply(reply.id) : await forumApi.likeReply(reply.id)
-    reply.likes_count = res.likes_count
-    reply.liked_by_me = res.liked
-  } catch (e) {
-    reply.liked_by_me = prevLiked
-    reply.likes_count = prevCount
-    console.error('评论点赞失败:', e)
-  }
+  await toggleReplyLikeOnce(reply)
 }
 
 // 举报（帖子/回复共用对话框）
@@ -543,6 +540,11 @@ async function submitReport() {
     reportSubmitting.value = false
   }
 }
+
+watch(
+  () => route.hash,
+  () => scrollToHash()
+)
 
 onMounted(() => {
   loadDetail()
@@ -694,6 +696,38 @@ onBeforeUnmount(() => {
   gap: 12px;
   padding: 16px 0;
   border-bottom: 1px solid var(--color-bg-page);
+}
+
+.reply-item.is-accepted {
+  border: 2px solid #67c23a;
+  background: var(--color-success-50, #f0fdf4);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 6px -12px;
+}
+
+.reply-item.is-accepted .accepted-badge {
+  margin: 6px 0;
+}
+
+.owner-tag {
+  margin-left: 6px;
+}
+
+.accepted-inline {
+  margin-left: 6px;
+}
+
+.accept-actions {
+  margin-bottom: 12px;
+}
+
+.accepted-badge {
+  margin: 6px 0;
+}
+
+.reply-accept-row {
+  margin-top: 8px;
 }
 
 .reply-item:last-child {

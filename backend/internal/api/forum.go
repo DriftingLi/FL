@@ -69,6 +69,9 @@ func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumS
 	// ===== 评论点赞（spec #268）=====
 	g.POST("/replies/:id/like", h.LikeReply)
 	g.DELETE("/replies/:id/like", h.UnlikeReply)
+	// ===== 采纳（#366）=====
+	g.POST("/topics/:id/accept", h.AcceptTopic)
+	g.DELETE("/topics/:id/accept", h.CancelAccept)
 
 	// ===== 管理员论坛管理 =====
 	adminG := rg.Group("/admin/forum", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
@@ -118,12 +121,13 @@ func (h *ForumHandler) UploadImage(c *gin.Context) {
 
 // ListTopics 帖子列表
 // @Summary 帖子列表
-// @Description 支持 scope=all|general|chapter，按 chapter_id/keyword/sort=latest|hot 过滤
+// @Description 支持 scope=all|general|chapter，按 category=all|discussion|question、chapter_id/keyword/sort=latest|hot 过滤
 // @Tags 学员端-论坛
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param scope query string false "范围 all|general|chapter"
+// @Param category query string false "类别 discussion|question，省略表示不过滤（向后兼容）"
 // @Param chapter_id query int false "章节ID"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
@@ -131,6 +135,7 @@ func (h *ForumHandler) UploadImage(c *gin.Context) {
 // @Param sort query string false "排序 latest|hot"
 // @Param order query string false "排序方向 asc|desc"
 // @Success 200 {object} response.R{data=service.ForumTopicPageResult} "success"
+// @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /forum/topics [get]
 func (h *ForumHandler) ListTopics(c *gin.Context) {
@@ -138,6 +143,8 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 		Parse: func(c *gin.Context) (*listTopicsReq, error) {
 			return &listTopicsReq{
 				Scope:     c.Query("scope"),
+				Category:  c.Query("category"),
+				Solved:    c.Query("solved"),
 				ChapterID: atoiDefault(c.Query("chapter_id"), 0),
 				Page:      atoiDefault(c.Query("page"), 1),
 				PageSize:  atoiDefault(c.Query("page_size"), 10),
@@ -147,7 +154,17 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listTopicsReq) (*service.ForumTopicPageResult, error) {
-			return h.svc.ListTopics(req.Scope, req.ChapterID, req.Page, req.PageSize, req.Keyword, req.Sort, req.Order)
+			return h.svc.ListTopics(service.TopicListInput{
+				Scope:     req.Scope,
+				Category:  req.Category,
+				Solved:    req.Solved,
+				ChapterID: req.ChapterID,
+				Page:      req.Page,
+				PageSize:  req.PageSize,
+				Keyword:   req.Keyword,
+				Sort:      req.Sort,
+				Order:     req.Order,
+			})
 		},
 		Render: func(c *gin.Context, _ *listTopicsReq, resp *service.ForumTopicPageResult, err error) {
 			if err != nil {
@@ -161,14 +178,14 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 
 // CreateTopic 发帖
 // @Summary 发帖
-// @Description chapter_id 为空表示综合讨论区；images 最多 9 张 URL
+// @Description chapter_id 为空表示综合讨论区；category=question 时不得带 chapter_id；images 最多 9 张 URL
 // @Tags 学员端-论坛
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param body body object true "帖子" example({"title":"标题","content":"内容","images":[]})
+// @Param body body object true "帖子" example({"title":"标题","content":"内容","category":"discussion","images":[]})
 // @Success 201 {object} response.R{data=service.ForumTopicDTO} "success"
-// @Failure 400 {object} response.R "参数错误"
+// @Failure 400 {object} response.R "参数错误（含类别非法、问答帖带章节）"
 // @Failure 401 {object} response.R "未认证"
 // @Router /forum/topics [post]
 func (h *ForumHandler) CreateTopic(c *gin.Context) {
@@ -178,6 +195,7 @@ func (h *ForumHandler) CreateTopic(c *gin.Context) {
 			userID, _ := uid.(int)
 			var body struct {
 				ChapterID *int     `json:"chapter_id"`
+				Category  string   `json:"category"`
 				Title     string   `json:"title"`
 				Content   string   `json:"content"`
 				Images    []string `json:"images"`
@@ -185,10 +203,17 @@ func (h *ForumHandler) CreateTopic(c *gin.Context) {
 			if err := c.ShouldBindJSON(&body); err != nil {
 				return nil, badRequest("请求参数错误")
 			}
-			return &createTopicReq{UserID: userID, ChapterID: body.ChapterID, Title: body.Title, Content: body.Content, Images: body.Images}, nil
+			return &createTopicReq{UserID: userID, ChapterID: body.ChapterID, Category: body.Category, Title: body.Title, Content: body.Content, Images: body.Images}, nil
 		},
 		Invoke: func(ctx context.Context, req *createTopicReq) (*service.ForumTopicDTO, error) {
-			return h.svc.CreateTopic(req.UserID, req.ChapterID, req.Title, req.Content, req.Images)
+			return h.svc.CreateTopic(service.CreateTopicInput{
+				UserID:    req.UserID,
+				ChapterID: req.ChapterID,
+				Category:  req.Category,
+				Title:     req.Title,
+				Content:   req.Content,
+				Images:    req.Images,
+			})
 		},
 		Render: func(c *gin.Context, _ *createTopicReq, resp *service.ForumTopicDTO, err error) {
 			if err != nil {
@@ -457,6 +482,8 @@ func (h *ForumHandler) AdminDeleteReply(c *gin.Context) {
 // listTopicsReq 主题列表请求（查询参数）。
 type listTopicsReq struct {
 	Scope     string
+	Category  string
+	Solved    string
 	ChapterID int
 	Page      int
 	PageSize  int
@@ -469,6 +496,7 @@ type listTopicsReq struct {
 type createTopicReq struct {
 	UserID    int
 	ChapterID *int
+	Category  string
 	Title     string
 	Content   string
 	Images    []string
@@ -827,4 +855,73 @@ func (h *ForumHandler) UnlikeReply(c *gin.Context) {
 		return
 	}
 	response.SuccessWithMsg(c, "已取消点赞", gin.H{"likes_count": count, "liked": false})
+}
+
+// AcceptTopic 采纳回答（#366）
+// @Summary 采纳回答
+// @Description 仅楼主可采纳；首次采纳给答主+40/楼主+5（每帖只发一次分），更换不发分，楼主采纳自己零分
+// @Tags 学员端-论坛
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "主题ID"
+// @Param body body object true "采纳" example({"reply_id":123})
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "无权限"
+// @Router /forum/topics/{id}/accept [post]
+func (h *ForumHandler) AcceptTopic(c *gin.Context) {
+	topicID, err := pathInt64(c, "id", "主题 ID 无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	var body struct {
+		ReplyID int64 `json:"reply_id"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || body.ReplyID <= 0 {
+		response.BadRequest(c, "reply_id 不能为空且需大于 0")
+		return
+	}
+	topic, err := h.svc.AcceptReply(middleware.CurrentUserID(c), topicID, body.ReplyID)
+	if err != nil {
+		if errors.Is(err, service.ErrNotTopicOwner) {
+			response.Forbidden(c, err.Error())
+			return
+		}
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "已采纳", topic)
+}
+
+// CancelAccept 取消采纳（#366）
+// @Summary 取消采纳
+// @Description 仅楼主可取消；状态回到未解决，已发分不回滚
+// @Tags 学员端-论坛
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "主题ID"
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "无权限"
+// @Router /forum/topics/{id}/accept [delete]
+func (h *ForumHandler) CancelAccept(c *gin.Context) {
+	topicID, err := pathInt64(c, "id", "主题 ID 无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	topic, err := h.svc.CancelAccept(middleware.CurrentUserID(c), topicID)
+	if err != nil {
+		if errors.Is(err, service.ErrNotTopicOwner) {
+			response.Forbidden(c, err.Error())
+			return
+		}
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "已取消采纳", topic)
 }

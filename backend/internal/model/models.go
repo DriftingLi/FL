@@ -106,6 +106,27 @@ type Tutor struct {
 
 func (Tutor) TableName() string { return "tutor" }
 
+// ===== 3.5 企业招聘者（第四角色，邀约制独立表） =====
+
+// RecruiterUser 企业招聘者账号，独立于 hrwai_users / admin / tutor。
+// 邀约制：仅管理员创建，企业信息字段全部必填；支持禁用位。
+type RecruiterUser struct {
+	ID            int       `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	Username      string    `gorm:"column:username;uniqueIndex" json:"username"`
+	Password      string    `gorm:"column:password" json:"-"`
+	CompanyName   string    `gorm:"column:company_name" json:"company_name"`
+	CreditCode    string    `gorm:"column:credit_code" json:"credit_code"`
+	BusinessScope string    `gorm:"column:business_scope" json:"business_scope"`
+	ContactName   string    `gorm:"column:contact_name" json:"contact_name"`
+	ContactPhone  string    `gorm:"column:contact_phone" json:"contact_phone"`
+	ContactEmail  string    `gorm:"column:contact_email" json:"contact_email"`
+	Status        int16     `gorm:"column:status;default:1" json:"status"`
+	CreatedAt     time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt     time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (RecruiterUser) TableName() string { return "recruiter_users" }
+
 // ===== 4. 课程 =====
 
 type Course struct {
@@ -314,6 +335,7 @@ type QuestionTag struct {
 	Description string    `gorm:"column:description" json:"description"`
 	SortOrder   int       `gorm:"column:sort_order;default:0" json:"sort_order"`
 	Status      int16     `gorm:"column:status;default:1" json:"status"`
+	IsSourceTag bool      `gorm:"column:is_source_tag;default:false" json:"is_source_tag"`
 	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt   time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
@@ -372,10 +394,38 @@ type MockExam struct {
 	Score         *float64   `gorm:"column:score;type:numeric(5,2)" json:"score,omitempty"`
 	Status        string     `gorm:"column:status;default:not_started" json:"status"`
 	Result        JSONB      `gorm:"column:result;type:jsonb" json:"result,omitempty"`
+	PaperID       *int       `gorm:"column:paper_id" json:"paper_id,omitempty"`
 	CreatedAt     time.Time  `gorm:"column:created_at" json:"created_at"`
 }
 
 func (MockExam) TableName() string { return "mock_exam" }
+
+// RealExamPaper 真题套卷（导入工具按真题源文件生成，credential 单归属分区）。
+type RealExamPaper struct {
+	PaperID         int       `gorm:"column:paper_id;primaryKey" json:"paper_id"`
+	CredentialID    int       `gorm:"column:credential_id" json:"credential_id"`
+	Title           string    `gorm:"column:title" json:"title"`
+	Year            *int      `gorm:"column:year" json:"year,omitempty"`
+	Source          *string   `gorm:"column:source" json:"source,omitempty"`
+	DurationMinutes int       `gorm:"column:duration_minutes;default:90" json:"duration_minutes"`
+	LevelID         *int      `gorm:"column:level_id" json:"level_id,omitempty"`
+	SourceRef       string    `gorm:"column:source_ref" json:"source_ref"`
+	QuestionCount   int       `gorm:"column:question_count;default:0" json:"question_count"`
+	Status          int16     `gorm:"column:status;default:1" json:"status"`
+	CreatedAt       time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt       time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (RealExamPaper) TableName() string { return "real_exam_paper" }
+
+// RealExamPaperQuestion 真题卷-题目关联（order_num 维持卷内题序）。
+type RealExamPaperQuestion struct {
+	PaperID    int `gorm:"column:paper_id;primaryKey" json:"paper_id"`
+	QuestionID int `gorm:"column:question_id;primaryKey" json:"question_id"`
+	OrderNum   int `gorm:"column:order_num;default:0" json:"order_num"`
+}
+
+func (RealExamPaperQuestion) TableName() string { return "real_exam_paper_question" }
 
 // ===== 18.5 练习进度（顺序练习断点续练） =====
 
@@ -511,20 +561,38 @@ func (AIUserModel) TableName() string { return "ai_user_models" }
 
 // ===== 24. 论坛模块 =====
 
-// ForumTopic 论坛主题（chapter_id 为 NULL 表示综合讨论区，非 NULL 表示章节讨论区）。
+// ForumTopic 论坛主题。
+//
+// 两个正交维度中，chapter_id 只服务讨论帖：
+//   - category=discussion + chapter_id IS NULL = 综合讨论区
+//   - category=discussion + chapter_id 非空    = 章节讨论区
+//   - category=question   + chapter_id IS NULL = 全局问答
+//   - category=question   + chapter_id 非空    = 非法组合
+//
+// ⚠️ 判类别看 category，判区域看 chapter_id，两者不可互相替代：scope=general 的定义
+// 就是 chapter_id IS NULL，而问答帖的 chapter_id 同样为 NULL，故列表查询必须让
+// category 与 scope 共存在同一条 WHERE 里，否则问答帖会整片灌进讨论 Tab。
+//
+// ⚠️ 上述非法组合在数据库层由 CHECK 兜底，但这些约束**只存在于迁移 SQL（000004）**：
+// 测试库由 AutoMigrate 建表、不执行 migrations/，因此两条 CHECK（值域 chk_forum_topics_category
+// 与非法组合 chk_forum_topics_question_no_chapter）契约测试都覆盖不到，别误以为测试守住了它们。
+// 行为层由 service 的校验守住：非法类别 400、问答帖带 chapter_id>0 返回 400。
 type ForumTopic struct {
-	ID          int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	ChapterID   *int       `gorm:"column:chapter_id" json:"chapter_id,omitempty"`
-	UserID      int        `gorm:"column:user_id" json:"user_id"`
-	Title       string     `gorm:"column:title" json:"title"`
-	Content     string     `gorm:"column:content" json:"content"`
-	Images      JSONB      `gorm:"column:images;type:jsonb" json:"images"`
-	ViewCount   int        `gorm:"column:view_count;default:0" json:"view_count"`
-	ReplyCount  int        `gorm:"column:reply_count;default:0" json:"reply_count"`
-	LikesCount  int        `gorm:"column:likes_count;default:0" json:"likes_count"`
-	LastReplyAt *time.Time `gorm:"column:last_reply_at" json:"last_reply_at"`
-	CreatedAt   time.Time  `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt   time.Time  `gorm:"column:updated_at" json:"updated_at"`
+	ID              int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	ChapterID       *int       `gorm:"column:chapter_id" json:"chapter_id,omitempty"`
+	Category        string     `gorm:"column:category;not null;default:discussion" json:"category"` // 'discussion' | 'question'
+	UserID          int        `gorm:"column:user_id" json:"user_id"`
+	Title           string     `gorm:"column:title" json:"title"`
+	Content         string     `gorm:"column:content" json:"content"`
+	Images          JSONB      `gorm:"column:images;type:jsonb" json:"images"`
+	ViewCount       int        `gorm:"column:view_count;default:0" json:"view_count"`
+	ReplyCount      int        `gorm:"column:reply_count;default:0" json:"reply_count"`
+	LikesCount      int        `gorm:"column:likes_count;default:0" json:"likes_count"`
+	AcceptedReplyID *int64     `gorm:"column:accepted_reply_id" json:"accepted_reply_id,omitempty"`
+	SolvedAt        *time.Time `gorm:"column:solved_at" json:"solved_at,omitempty"`
+	LastReplyAt     *time.Time `gorm:"column:last_reply_at" json:"last_reply_at"`
+	CreatedAt       time.Time  `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt       time.Time  `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (ForumTopic) TableName() string { return "forum_topics" }
@@ -762,3 +830,66 @@ type UserEntitlement struct {
 }
 
 func (UserEntitlement) TableName() string { return "user_entitlement" }
+
+// PointsEntryIdem 通用积分簿记幂等占坑（ADR-0023）：占坑行即「已处理」标记。
+// 「一事件一分」与回收 settle 传确定性键（accepted_bonus:{topicID} / rollback:{topicID} /
+// redeem:{ref} / ai_tokens:{requestID} 等），主键冲突 = 事件已处理。
+type PointsEntryIdem struct {
+	IdemKey   string    `gorm:"column:idem_key;primaryKey;size:128" json:"idem_key"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (PointsEntryIdem) TableName() string { return "points_entry_idem" }
+
+// ===== 29. 简历卡
+type JobCard struct {
+	UserID                 int       `gorm:"column:user_id;primaryKey" json:"user_id"`
+	RealName               string    `gorm:"column:real_name;default:''" json:"real_name"`
+	ContactPhone           string    `gorm:"column:contact_phone;default:''" json:"contact_phone"`
+	Wechat                 string    `gorm:"column:wechat;default:''" json:"wechat"`
+	Region                 string    `gorm:"column:region;default:''" json:"region"`
+	ExpectedSpecialtyID    *int      `gorm:"column:expected_specialty_id" json:"expected_specialty_id,omitempty"`
+	ExpectedSpecialtyExtra string    `gorm:"column:expected_specialty_extra;default:''" json:"expected_specialty_extra"`
+	ExpectedRegions        JSONB     `gorm:"column:expected_regions;type:jsonb;default:'[]'" json:"expected_regions"`
+	SalaryMin              *int      `gorm:"column:salary_min" json:"salary_min,omitempty"`
+	SalaryMax              *int      `gorm:"column:salary_max" json:"salary_max,omitempty"`
+	SalaryNegotiable       bool      `gorm:"column:salary_negotiable;default:false" json:"salary_negotiable"`
+	AvailableIn            string    `gorm:"column:available_in;default:''" json:"available_in"`
+	JobNature              string    `gorm:"column:job_nature;default:''" json:"job_nature"`
+	ExperienceYears        int       `gorm:"column:experience_years;default:0" json:"experience_years"`
+	SelfIntro              string    `gorm:"column:self_intro;default:''" json:"self_intro"`
+	ResumeExperiences      JSONB     `gorm:"column:resume_experiences;type:jsonb;default:'[]'" json:"resume_experiences"`
+	ResumeCertifications   JSONB     `gorm:"column:resume_certifications;type:jsonb;default:'[]'" json:"resume_certifications"`
+	ResumeFileURL          string    `gorm:"column:resume_file_url;default:''" json:"resume_file_url"`
+	Photos                 JSONB     `gorm:"column:photos;type:jsonb;default:'[]'" json:"photos"`
+	Visibility             string    `gorm:"column:visibility;default:hidden" json:"visibility"`
+	CreatedAt              time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt              time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (JobCard) TableName() string { return "job_cards" }
+
+// ===== 29.1 招聘端简历浏览审计（L2 留痕）
+type RecruitResumeView struct {
+	ID           int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	RecruiterID  int       `gorm:"column:recruiter_id" json:"recruiter_id"`
+	ResumeUserID int       `gorm:"column:resume_user_id" json:"resume_user_id"`
+	ViewedAt     time.Time `gorm:"column:viewed_at" json:"viewed_at"`
+}
+
+func (RecruitResumeView) TableName() string { return "recruit_resume_views" }
+
+// ===== 29.2 联系方式交换申请（L3 闭环，#375）
+type ContactRequest struct {
+	ID            int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	RecruiterID   int        `gorm:"column:recruiter_id;index" json:"recruiter_id"`
+	StudentUserID int        `gorm:"column:student_user_id;index" json:"student_user_id"`
+	Message       string     `gorm:"column:message" json:"message"`
+	Status        string     `gorm:"column:status;default:pending" json:"status"` // pending/approved/rejected/expired/revoked
+	CreatedAt     time.Time  `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt     time.Time  `gorm:"column:updated_at" json:"updated_at"`
+	DecidedAt     *time.Time `gorm:"column:decided_at" json:"decided_at,omitempty"`
+	ExpiresAt     time.Time  `gorm:"column:expires_at" json:"expires_at"`
+}
+
+func (ContactRequest) TableName() string { return "contact_requests" }

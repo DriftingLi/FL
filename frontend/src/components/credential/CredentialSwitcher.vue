@@ -110,8 +110,7 @@ function handleChange(val: number) {
     .then(() => {
       ElMessage.success('已切换证件')
       switcherVisible.value = false
-      // 触发全局刷新：后续步骤由课程/题库监听 store 变化重拉
-      window.dispatchEvent(new CustomEvent('credential-switched', { detail: { id: val } }))
+      // 全局刷新由各页面经 useCredentialRefetch watch store 变化完成（#387 单点）
     })
     .catch((e: any) => {
       ElMessage.error(e?.message || '切换失败')

@@ -3,6 +3,7 @@ package service
 
 import (
 	"errors"
+	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -13,6 +14,18 @@ import (
 
 // mockExamDefaultCount 模拟考试默认题量（取消等级后：固定题量随机抽）。
 const mockExamDefaultCount = 40
+
+// 模拟考试状态取值（与 mock_exam.status 列一一对应，禁止散写字面量）。
+const (
+	mockExamStatusInProgress = "in_progress"
+	mockExamStatusSubmitted  = "submitted"
+)
+
+// mockExamAbandonTTL 未完成记录的保留时长。
+// 用户点「开始考试」即刻建记录（status=in_progress），但可能直接关页面不交卷，
+// 这类记录既没有成绩也没有保留价值。超过本期限的未完成记录视为废弃，
+// 在下次开始考试时清理，避免 mock_exam 表无限堆积、并污染历史列表。
+const mockExamAbandonTTL = 24 * time.Hour
 
 // MockExamService 模拟考试服务。
 type MockExamService struct {
@@ -98,6 +111,9 @@ type MockExamHistoryItemDTO struct {
 	Result        any      `json:"result"`
 	CreatedAt     string   `json:"created_at"`
 	Score         *float64 `json:"score"`
+	// PaperID 真题卷来源（#386）：按卷开考时写入 mock_exam.paper_id，随机模考为 nil
+	// （omitempty——既有消费者对随机模考的响应零差异，向后兼容）。
+	PaperID *int `json:"paper_id,omitempty"`
 }
 
 // MockExamHistoryDTO 历史列表信封。
@@ -125,6 +141,16 @@ func (s *MockExamService) Start(studentID, count, duration int) (*MockExamStartD
 		return nil, errors.New("题库暂无可用的题目")
 	}
 
+	// 开新考试前先清掉该学生超过 mockExamAbandonTTL 仍未交卷的旧记录。
+	// 失败不阻断主流程：清理只是数据卫生，用户此刻要的是「开始考试」。
+	if err := s.db.
+		Where("student_id = ? AND status <> ? AND created_at < ?",
+			studentID, mockExamStatusSubmitted, beijingNow().Add(-mockExamAbandonTTL)).
+		Delete(&model.MockExam{}).Error; err != nil {
+		s.logger.Warn("清理废弃模拟考试记录失败",
+			zap.Int("student_id", studentID), zap.Error(err))
+	}
+
 	questionIDs := make([]int, len(selected))
 	totalScore := 0
 	for i, q := range selected {
@@ -140,7 +166,7 @@ func (s *MockExamService) Start(studentID, count, duration int) (*MockExamStartD
 		QuestionIDs:   model.JSONB(idsJSON),
 		Answers:       model.JSONB(emptyJSON),
 		Duration:      duration,
-		Status:        "in_progress",
+		Status:        mockExamStatusInProgress,
 		StartTime:     &startTime,
 		RemainingTime: duration * 60,
 	}
@@ -283,7 +309,7 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 		details = append(details, detail)
 	}
 
-	mock.Status = "submitted"
+	mock.Status = mockExamStatusSubmitted
 	submitTime := beijingNow()
 	mock.SubmitTime = &submitTime
 	mock.Score = floatPtr(totalScore)
@@ -332,9 +358,11 @@ func (s *MockExamService) GetResult(mockExamID, studentID int) (*MockExamResultD
 }
 
 // GetHistory 历史列表。
+// 只返回已交卷（submitted）的记录：未完成的废弃尝试没有成绩，展示出来只会让用户
+// 困惑（"我明明没考过，为什么有历史记录"）。废弃记录由 Start 中的清理逻辑兜底。
 func (s *MockExamService) GetHistory(studentID, page, pageSize int) *MockExamHistoryDTO {
 	exams, total, page, pageSize := paging.Query[model.MockExam](s.db, page, pageSize, 10, "created_at DESC", func(q *gorm.DB) *gorm.DB {
-		return q.Where("student_id = ?", studentID)
+		return q.Where("student_id = ? AND status = ?", studentID, mockExamStatusSubmitted)
 	})
 	items := make([]MockExamHistoryItemDTO, 0, len(exams))
 	for i := range exams {
@@ -389,5 +417,6 @@ func mockExamToDTO(m *model.MockExam) MockExamHistoryItemDTO {
 		Result:        result,
 		CreatedAt:     formatISO(m.CreatedAt),
 		Score:         m.Score,
+		PaperID:       m.PaperID,
 	}
 }

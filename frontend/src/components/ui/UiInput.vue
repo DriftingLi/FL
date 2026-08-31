@@ -12,8 +12,12 @@ withDefaults(
     size?: 'small' | 'default' | 'large'
     disabled?: boolean
     clearable?: boolean
+    /** textarea / password 等；默认 text，与 el-input 自身默认值一致 */
+    type?: 'text' | 'textarea' | 'password'
+    /** 仅 type="textarea" 生效。不传时 el-input 取自身默认值 2 */
+    rows?: number
   }>(),
-  { size: 'default', disabled: false, clearable: false }
+  { size: 'default', disabled: false, clearable: false, type: 'text' }
 )
 </script>
 
@@ -24,5 +28,7 @@ withDefaults(
     :size="size"
     :disabled="disabled"
     :clearable="clearable"
+    :type="type"
+    :rows="rows"
   />
 </template>

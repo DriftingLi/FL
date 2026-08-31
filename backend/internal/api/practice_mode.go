@@ -210,14 +210,14 @@ type practiceSaveProgressReq struct {
 
 // SaveProgress 保存练习进度
 // @Summary 保存练习游标与答题状态
-// @Description 支持顺序/标签等练习的断点续练
+// @Description 支持顺序/标签/按卷练习的断点续练；未知 practice_mode 返回 400（#386）
 // @Tags 学员端-练习
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param body body object true "进度" example({"index":5,"practice_mode":"sequential","total":20,"answers_state":{}})
 // @Success 200 {object} response.R "success"
-// @Failure 400 {object} response.R "参数错误"
+// @Failure 400 {object} response.R "参数错误（含未知练习模式）"
 // @Failure 401 {object} response.R "未认证"
 // @Router /practice-mode/progress [post]
 func (h *PracticeModeHandler) SaveProgress(c *gin.Context) {
@@ -233,6 +233,13 @@ func (h *PracticeModeHandler) SaveProgress(c *gin.Context) {
 			}
 			if err := c.ShouldBindJSON(&req); err != nil {
 				return nil, badRequest("请求数据无效")
+			}
+			if req.PracticeMode == "" {
+				req.PracticeMode = string(service.PracticeModeSequential)
+			}
+			// 练习模式封闭校验（#386）：未知 mode 拒绝，消灭 typo 静默孤儿进度行
+			if _, ok := service.ParsePracticeMode(req.PracticeMode); !ok {
+				return nil, badRequest("练习模式无效")
 			}
 			return &practiceSaveProgressReq{
 				StudentID:    studentID,
@@ -266,13 +273,14 @@ type getProgressReq struct {
 
 // GetProgress 查询练习进度
 // @Summary 查询练习进度
-// @Description 按 mode 查询断点续练进度；mode 为空默认为 sequential
+// @Description 按 mode 查询断点续练进度；mode 为空默认为 sequential，未知 mode 返回 400（#386）
 // @Tags 学员端-练习
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param mode query string false "练习模式" default(sequential)
 // @Success 200 {object} response.R{data=service.ProgressResultDTO} "success"
+// @Failure 400 {object} response.R "参数错误（含未知练习模式）"
 // @Failure 401 {object} response.R "未认证"
 // @Router /practice-mode/progress [get]
 func (h *PracticeModeHandler) GetProgress(c *gin.Context) {
@@ -282,14 +290,22 @@ func (h *PracticeModeHandler) GetProgress(c *gin.Context) {
 			studentID, _ := uid.(int)
 			mode := c.Query("mode")
 			if mode == "" {
-				mode = "sequential"
+				mode = string(service.PracticeModeSequential)
+			}
+			// 练习模式封闭校验（#386）：未知 mode 拒绝
+			if _, ok := service.ParsePracticeMode(mode); !ok {
+				return nil, badRequest("练习模式无效")
 			}
 			return &getProgressReq{StudentID: studentID, Mode: mode}, nil
 		},
 		Invoke: func(ctx context.Context, req *getProgressReq) (*service.ProgressResultDTO, error) {
 			return h.svc.GetProgress(req.StudentID, req.Mode), nil
 		},
-		Render: func(c *gin.Context, _ *getProgressReq, resp *service.ProgressResultDTO, _ error) {
+		Render: func(c *gin.Context, _ *getProgressReq, resp *service.ProgressResultDTO, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
 			response.Success(c, resp)
 		},
 	}.Handle(c)

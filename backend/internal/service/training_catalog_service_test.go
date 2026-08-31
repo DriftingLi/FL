@@ -239,7 +239,7 @@ func TestQuestionTagCRUD(t *testing.T) {
 	if updated.Name != "液压系统" {
 		t.Fatalf("更新结果不匹配: %+v", updated)
 	}
-	active := svc.ListQuestionTags(true)
+	active := svc.ListQuestionTags(true, true)
 	if len(active) != 1 {
 		t.Fatal("应看到 1 条标签")
 	}
@@ -310,7 +310,7 @@ func TestListQuestionTags_QuestionCount(t *testing.T) {
 	// 另一个无题目标签
 	empty, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "brake", Name: "制动"})
 
-	studentTags := svc.ListQuestionTags(true)
+	studentTags := svc.ListQuestionTags(true, false)
 	byID := map[int]QuestionTagDict{}
 	for _, d := range studentTags {
 		byID[d.ID] = d
@@ -322,7 +322,7 @@ func TestListQuestionTags_QuestionCount(t *testing.T) {
 		t.Fatalf("无题目标签应为 0, got %v", byID[empty.ID].QuestionCount)
 	}
 
-	adminTags := svc.ListQuestionTags(false)
+	adminTags := svc.ListQuestionTags(false, true)
 	byID2 := map[int]QuestionTagDict{}
 	for _, d := range adminTags {
 		byID2[d.ID] = d

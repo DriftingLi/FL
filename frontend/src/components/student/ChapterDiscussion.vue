@@ -122,6 +122,7 @@ import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumImageUploader from '@/components/student/ForumImageUploader.vue'
 import { formatRelativeTime } from '@/utils/format'
+import { displayName, authorLetter } from '@/utils/forumDisplay'
 
 const props = defineProps<{
   chapterId: number
@@ -141,14 +142,6 @@ const replyImages = ref<string[]>([])
 const replyingTo = ref<{ id: number; username: string } | null>(null)
 const createVisible = ref(false)
 const createForm = ref<{ title: string; content: string; images: string[] }>({ title: '', content: '', images: [] })
-
-function displayName(author: ForumTopicItem['author']) {
-  return author.username
-}
-
-function authorLetter(author: ForumTopicItem['author']) {
-  return (displayName(author) || '?').charAt(0).toUpperCase()
-}
 
 async function loadTopics() {
   if (!props.chapterId) return

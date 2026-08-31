@@ -95,21 +95,22 @@ func (h *EvaluationHandler) Get(c *gin.Context) {
 	response.Success(c, detail)
 }
 
-// List 处理 GET /api/valuation/evaluations?page=1&page_size=20&brand=合力
-// 分页查询评估历史（可按品牌筛选），仅返回当前登录用户的记录
+// List 处理 GET /api/valuation/evaluations?page=1&page_size=20&brand=合力&vehicle_type=电动平衡重
+// 分页查询评估历史（可按品牌/车型筛选），仅返回当前登录用户的记录
 func (h *EvaluationHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	page, pageSize = paging.ClampMax(page, pageSize, 20, 100)
 	offset := (page - 1) * pageSize
 
-	// 品牌筛选参数（为空时不过滤）
+	// 品牌/车型筛选参数（为空时不过滤）
 	brand := c.Query("brand")
+	vehicleType := c.Query("vehicle_type")
 	// 仅查询当前登录用户的记录（List 在鉴权组，userID 必然 >0）
 	userID := middleware.CurrentUserID(c)
 
 	// 1. 查询总数
-	total, err := h.evalRepo.CountEvaluations(c.Request.Context(), brand, userID)
+	total, err := h.evalRepo.CountEvaluations(c.Request.Context(), brand, vehicleType, userID)
 	if err != nil {
 		h.logger.Error("统计评估记录失败", zap.Error(err))
 		response.ServerError(c, "查询评估列表失败")
@@ -117,7 +118,7 @@ func (h *EvaluationHandler) List(c *gin.Context) {
 	}
 
 	// 2. 查询当前页列表
-	list, err := h.evalRepo.ListEvaluations(c.Request.Context(), brand, userID, pageSize, offset)
+	list, err := h.evalRepo.ListEvaluations(c.Request.Context(), brand, vehicleType, userID, pageSize, offset)
 	if err != nil {
 		h.logger.Error("查询评估列表失败", zap.Error(err))
 		response.ServerError(c, "查询评估列表失败")
@@ -141,7 +142,7 @@ func (h *EvaluationHandler) List(c *gin.Context) {
 // Stats 处理 GET /api/valuation/evaluations/stats
 // 返回累计评估次数（公开统计全部记录，userID=0 不过滤）
 func (h *EvaluationHandler) Stats(c *gin.Context) {
-	total, err := h.evalRepo.CountEvaluations(c.Request.Context(), "", 0)
+	total, err := h.evalRepo.CountEvaluations(c.Request.Context(), "", "", 0)
 	if err != nil {
 		h.logger.Error("统计评估次数失败", zap.Error(err))
 		response.ServerError(c, "查询统计数据失败")

@@ -77,9 +77,10 @@
       <!-- ===== 帖子管理（原有内容）===== -->
       <template v-else>
       <div class="filter-bar">
-        <el-tabs v-model="activeScope" @tab-change="handleScopeChange">
+        <el-tabs v-model="activeTab" @tab-change="handleTabChange">
           <el-tab-pane label="全部帖子" name="all" />
-          <el-tab-pane label="综合讨论区" name="general" />
+          <el-tab-pane label="综合讨论区" name="discussion" />
+          <el-tab-pane label="问答区" name="question" />
         </el-tabs>
         <el-input
           v-model="keyword"
@@ -146,7 +147,8 @@
         <el-table-column label="标题" min-width="240">
           <template #default="{ row }">
             <div class="title-cell">
-              <el-tag v-if="row.chapter_id" size="small" type="warning">
+              <el-tag v-if="row.category === 'question'" size="small" type="success">问答</el-tag>
+              <el-tag v-else-if="row.chapter_id" size="small" type="warning">
                 {{ row.chapter_title || '章节讨论' }}
               </el-tag>
               <el-tag v-else size="small" type="info">综合</el-tag>
@@ -189,6 +191,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import {
   adminForumApi,
+  forumTabQuery,
+  type ForumTab,
   type AdminForumTopic,
   type AdminForumReply,
   type AdminForumReportItem
@@ -201,7 +205,10 @@ const topics = ref<AdminForumTopic[]>([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
-const activeScope = ref<'all' | 'general'>('all')
+// 管理端筛选轴：all=全部帖子、discussion=综合讨论区、question=问答区。
+// 三个值都交给 forumTabQuery 翻译成查询参数——"综合讨论区必须带 category=discussion"
+// 这条规则只在 api 层写一遍，学员端与管理端共用同一份映射。
+const activeTab = ref<ForumTab>('all')
 const keyword = ref('')
 const expandedRows = ref<number[]>([])
 const replyMap = ref<Record<number, AdminForumReply[]>>({})
@@ -269,7 +276,7 @@ async function loadList() {
   loading.value = true
   try {
     const res = await adminForumApi.listTopics({
-      scope: activeScope.value,
+      ...forumTabQuery(activeTab.value),
       page: currentPage.value,
       page_size: pageSize.value,
       keyword: keyword.value || undefined
@@ -284,7 +291,7 @@ async function loadList() {
   }
 }
 
-function handleScopeChange() {
+function handleTabChange() {
   currentPage.value = 1
   loadList()
 }

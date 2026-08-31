@@ -11,3 +11,8 @@ import (
 func setAuthCookie(c *gin.Context, sess *security.Session, token string) {
 	sess.SetCookie(c.Writer, token)
 }
+
+// setRecruiterCookie 将招聘者 JWT 写入 host-only Cookie（不设 Domain）。
+func setRecruiterCookie(c *gin.Context, sess *security.Session, token string) {
+	sess.SetRecruiterCookie(c.Writer, token)
+}

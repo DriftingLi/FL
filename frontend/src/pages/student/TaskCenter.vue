@@ -21,7 +21,15 @@
       </div>
     </div>
 
-    <UiSkeleton v-if="loading" variant="card" :count="6" />
+    <UiErrorState
+      v-if="loadError"
+      title="任务加载失败"
+      description="网络或服务端异常，可重试"
+      :retrying="retrying"
+      @retry="retryLoad"
+    />
+
+    <UiSkeleton v-else-if="loading" variant="card" :count="6" />
 
     <div v-else class="group-stack">
       <div
@@ -82,41 +90,28 @@
 import { computed, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { CircleCheckFilled, Trophy, List } from '@element-plus/icons-vue'
-import { useAuthStore } from '@/stores/auth'
 import { pointsApi, type PointsTaskItem } from '@/api/points'
 import { groupLabelMap, groupDescMap } from '@/utils/taskCenter'
 import type { TaskGroup } from '@/utils/taskCenter'
-import { loadTasks as loadLocalTasks, loadPoints as loadLocalPoints } from '@/utils/taskCenter'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
 import UiProgress from '@/components/ui/UiProgress.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
-
-const authStore = useAuthStore()
 
 const staggerStyle = useStagger(6)
 
 const tasks = ref<PointsTaskItem[]>([])
 const points = ref({ balance: 0, totalEarned: 0 })
-const loading = ref(false)
 const claimingCode = ref<string | null>(null)
 
-async function refresh() {
-  loading.value = true
-  try {
-    const [bal, ts] = await Promise.all([pointsApi.getBalance(), pointsApi.getTasks()])
-    points.value = { balance: bal.balance, totalEarned: bal.total_earned }
-    tasks.value = ts.tasks || []
-  } catch {
-    // 静默回退占位（无后端时）
-    const uid = authStore.userInfo?.user_id
-    const localTasks = loadLocalTasks(uid) as unknown as PointsTaskItem[]
-    const localPoints = loadLocalPoints(uid)
-    tasks.value = localTasks
-    points.value = localPoints
-  } finally {
-    loading.value = false
-  }
-}
+// 三态收编（#388）：加载失败进错误态可重试（原「静默回退本地占位」退役，
+// 占位数据不再是后端异常的正确呈现）
+const { loading, loadError, retrying, retry: retryLoad, run: refresh } = useAsyncPage(async () => {
+  const [bal, ts] = await Promise.all([pointsApi.getBalance(), pointsApi.getTasks()])
+  points.value = { balance: bal.balance, totalEarned: bal.total_earned }
+  tasks.value = ts.tasks || []
+})
 
 const todayEarnable = computed(() =>
   tasks.value.filter((t) => t.status !== 'claimed').reduce((sum, t) => sum + t.points, 0),
@@ -146,7 +141,7 @@ async function handleClaim(code: string) {
     tasks.value = [...tasks.value]
     ElMessage.success(`已领取 +${task.points} 积分`)
     // 后台静默刷新，确保幂等状态持久
-    refresh().catch(() => {})
+    void refresh()
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     if (msg.includes('已领取') || msg.includes('今日已领取')) {

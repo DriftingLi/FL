@@ -109,7 +109,7 @@ func TestDeleteAccount_RefundsForumLikeCounts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	forumSvc := NewForumService(db, nil, NewNotificationService(db, zap.NewNop()), NewForumCounter(), zap.NewNop())
+	forumSvc := NewForumService(db, nil, NewNotificationService(db, zap.NewNop()), NewForumCounter(), NewPointsService(db, zap.NewNop(), nil), zap.NewNop())
 	if _, err := forumSvc.LikeTopic(liker.ID, topic.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func TestDeleteNestedReply_DecrementsReplyCountBySubtreeSize(t *testing.T) {
 	svc, db, _ := newForumTestSvc(t)
 	user := seedForumUser(t, db, "nest")
 
-	topic, err := svc.CreateTopic(user.ID, nil, "标题", "内容", nil)
+	topic, err := svc.CreateTopic(CreateTopicInput{UserID: user.ID, Title: "标题", Content: "内容"})
 	if err != nil {
 		t.Fatal(err)
 	}

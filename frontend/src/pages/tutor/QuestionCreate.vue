@@ -1,98 +1,152 @@
 <template>
-  <div class="question-create">
-    <h2>{{ isEdit ? '编辑题目' : '新增题目' }}</h2>
-    <el-form :model="form" label-width="100px" style="max-width: 700px">
-      <el-form-item label="题型" required>
-        <el-select v-model="form.type" :disabled="isEdit" @change="onTypeChange">
-          <el-option label="单选题" value="single_choice" />
-          <el-option label="多选题" value="multi_choice" />
-          <el-option label="判断题" value="true_false" />
-          <el-option label="故障识图" value="fault_image" />
-          <el-option label="简答题" value="short_answer" />
-        </el-select>
-      </el-form-item>
-      <el-form-item label="所属证件" required>
-        <el-select v-model="form.credential_id" placeholder="必选" style="width: 100%">
-          <el-option-group label="特种作业">
-            <el-option v-for="c in credentials.filter(x => x.category === 'special_operation')" :key="c.id" :label="c.name" :value="c.id" />
-          </el-option-group>
-          <el-option-group label="技能等级">
-            <el-option v-for="c in credentials.filter(x => x.category === 'skill_level')" :key="c.id" :label="c.name" :value="c.id" />
-          </el-option-group>
-        </el-select>
-      </el-form-item>
-      <el-form-item label="考点标签">
-        <el-select v-model="form.tag_ids" multiple filterable collapse-tags placeholder="选择标签（可多选）">
-          <el-option v-for="t in tags" :key="t.id" :label="t.name" :value="t.id" />
-        </el-select>
-      </el-form-item>
-      <el-form-item label="题干" required>
-        <el-input v-model="form.content" type="textarea" :rows="3" placeholder="请输入题干" />
-      </el-form-item>
-      <el-form-item v-if="form.type === 'fault_image'" label="图片">
-        <div class="image-upload-area">
-          <el-upload
-            class="image-uploader"
-            :show-file-list="false"
-            :before-upload="beforeImageUpload"
-            :http-request="handleImageUpload"
-            accept=".png,.jpg,.jpeg,.gif,.webp,.bmp"
+  <div>
+    <UiPageHeader
+      :title="isEdit ? '编辑题目' : '新增题目'"
+      :subtitle="isEdit ? '修改后需重新提交审核' : '创建后进入待审核状态'"
+      back
+      @back="router.back()"
+    />
+
+    <!-- 编辑态下题目本体加载失败必须阻断渲染：
+         否则会以空表单呈现，保存时把原题内容整体覆盖掉 -->
+    <UiErrorState
+      v-if="pageError"
+      title="题目加载失败"
+      description="未能读取该题目内容，重试成功前不会渲染表单，避免误覆盖原题。"
+      :retrying="retrying"
+      @retry="handleRetry"
+    />
+
+    <UiSkeleton v-else-if="pageLoading" variant="text" :rows="10" />
+
+    <UiCard v-else padding="lg">
+      <el-form :model="form" label-width="100px" class="max-w-[700px]">
+        <el-form-item label="题型" required>
+          <UiSelect
+            v-model="form.type"
+            :options="TYPE_OPTIONS"
+            :disabled="isEdit"
+            @change="onTypeChange"
+          />
+        </el-form-item>
+
+        <el-form-item label="所属证件" required>
+          <el-select v-model="form.credential_id" placeholder="必选" class="w-full">
+            <el-option-group label="特种作业">
+              <el-option
+                v-for="c in credentials.filter((x) => x.category === 'special_operation')"
+                :key="c.id"
+                :label="c.name"
+                :value="c.id"
+              />
+            </el-option-group>
+            <el-option-group label="技能等级">
+              <el-option
+                v-for="c in credentials.filter((x) => x.category === 'skill_level')"
+                :key="c.id"
+                :label="c.name"
+                :value="c.id"
+              />
+            </el-option-group>
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="考点标签">
+          <el-select
+            v-model="form.tag_ids"
+            multiple
+            filterable
+            collapse-tags
+            placeholder="选择标签（可多选）"
+            class="w-full"
           >
-            <img v-if="form.image_url" :src="form.image_url" class="image-preview" />
-            <div v-else class="upload-placeholder">
-              <el-icon :size="28"><Plus /></el-icon>
-              <span>点击上传图片</span>
+            <el-option v-for="t in tags" :key="t.id" :label="t.name" :value="t.id" />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="题干" required>
+          <UiInput v-model="form.content" type="textarea" :rows="3" placeholder="请输入题干" />
+        </el-form-item>
+
+        <el-form-item v-if="form.type === 'fault_image'" label="图片">
+          <div v-loading="imageUploading" class="w-full">
+            <el-upload
+              class="[&_.el-upload]:flex [&_.el-upload]:cursor-pointer [&_.el-upload]:overflow-hidden [&_.el-upload]:rounded-card [&_.el-upload]:border [&_.el-upload]:border-dashed [&_.el-upload]:border-line-strong [&_.el-upload]:transition-colors [&_.el-upload:hover]:border-ui-500"
+              :show-file-list="false"
+              :before-upload="beforeImageUpload"
+              :http-request="handleImageUpload"
+              accept=".png,.jpg,.jpeg,.gif,.webp,.bmp"
+            >
+              <img v-if="form.image_url" :src="form.image_url" class="block w-[300px] max-h-[200px] object-contain" />
+              <div v-else class="flex h-40 w-[300px] flex-col items-center justify-center gap-2 text-[13px] text-ink-3">
+                <el-icon :size="28"><Plus /></el-icon>
+                <span>点击上传图片</span>
+              </div>
+            </el-upload>
+
+            <div v-if="form.image_url" class="mt-2">
+              <UiButton variant="danger" size="small" @click="removeImage">删除图片</UiButton>
             </div>
-          </el-upload>
-          <div v-if="form.image_url" class="image-actions">
-            <el-button type="danger" size="small" @click="removeImage">删除图片</el-button>
+
+            <p class="mt-1.5 text-xs text-ink-3">支持格式：PNG、JPG、JPEG、GIF、WebP、BMP，最大5MB</p>
+
+            <el-divider>或手动输入URL</el-divider>
+            <UiInput v-model="form.image_url" placeholder="输入图片URL地址" clearable />
           </div>
-          <div class="image-upload-tip">
-            支持格式：PNG、JPG、JPEG、GIF、WebP、BMP，最大5MB
+        </el-form-item>
+
+        <el-form-item v-if="hasOptions" label="选项" required>
+          <div v-for="key in optionKeys" :key="key" class="mb-2 flex items-center gap-2.5 [&_.el-input]:flex-1">
+            <span class="w-6 text-center font-bold">{{ key }}</span>
+            <UiInput v-model="form.options![key]" :placeholder="`选项${key}内容`" />
           </div>
-          <el-divider>或手动输入URL</el-divider>
-          <el-input v-model="form.image_url" placeholder="输入图片URL地址" clearable />
-        </div>
-      </el-form-item>
-      <el-form-item v-if="hasOptions" label="选项" required>
-        <div v-for="key in optionKeys" :key="key" class="option-row">
-          <span class="opt-key">{{ key }}</span>
-          <el-input v-model="form.options![key]" :placeholder="`选项${key}内容`" />
-        </div>
-      </el-form-item>
-      <el-form-item v-if="form.type === 'true_false'" label="正确答案" required>
-        <el-radio-group v-model="form.answer">
-          <el-radio value="对">对</el-radio>
-          <el-radio value="错">错</el-radio>
-        </el-radio-group>
-      </el-form-item>
-      <el-form-item v-else-if="form.type === 'single_choice' || form.type === 'fault_image'" label="正确答案" required>
-        <el-radio-group v-model="form.answer">
-          <el-radio v-for="key in optionKeys" :key="key" :value="key">{{ key }}</el-radio>
-        </el-radio-group>
-      </el-form-item>
-      <el-form-item v-else-if="form.type === 'multi_choice'" label="正确答案" required>
-        <el-checkbox-group v-model="multiAnswer">
-          <el-checkbox v-for="key in optionKeys" :key="key" :value="key" :label="key">{{ key }}</el-checkbox>
-        </el-checkbox-group>
-      </el-form-item>
-      <el-form-item v-if="form.type === 'short_answer'" label="参考答案">
-        <el-input v-model="form.reference_answer" type="textarea" :rows="3" placeholder="请输入参考答案" />
-      </el-form-item>
-      <el-form-item v-if="form.type === 'short_answer'" label="评分标准">
-        <el-input v-model="form.scoring_criteria" type="textarea" :rows="2" placeholder="请输入评分标准" />
-      </el-form-item>
-      <el-form-item label="分值">
-        <el-input-number v-model="form.score" :min="1" :max="50" />
-      </el-form-item>
-      <el-form-item label="解析">
-        <el-input v-model="form.explanation" type="textarea" :rows="2" placeholder="请输入解析" />
-      </el-form-item>
-      <el-form-item>
-        <el-button type="primary" @click="submitForm" :loading="submitting">{{ isEdit ? '更新' : '创建' }}</el-button>
-        <el-button @click="$router.back()">取消</el-button>
-      </el-form-item>
-    </el-form>
+        </el-form-item>
+
+        <el-form-item v-if="form.type === 'true_false'" label="正确答案" required>
+          <el-radio-group v-model="form.answer">
+            <el-radio value="对">对</el-radio>
+            <el-radio value="错">错</el-radio>
+          </el-radio-group>
+        </el-form-item>
+
+        <el-form-item v-else-if="form.type === 'single_choice' || form.type === 'fault_image'" label="正确答案" required>
+          <el-radio-group v-model="form.answer">
+            <el-radio v-for="key in optionKeys" :key="key" :value="key">{{ key }}</el-radio>
+          </el-radio-group>
+        </el-form-item>
+
+        <el-form-item v-else-if="form.type === 'multi_choice'" label="正确答案" required>
+          <el-checkbox-group v-model="multiAnswer">
+            <el-checkbox v-for="key in optionKeys" :key="key" :value="key" :label="key">{{ key }}</el-checkbox>
+          </el-checkbox-group>
+        </el-form-item>
+
+        <el-form-item v-if="form.type === 'short_answer'" label="参考答案">
+          <UiInput v-model="form.reference_answer" type="textarea" :rows="3" placeholder="请输入参考答案" />
+        </el-form-item>
+
+        <el-form-item v-if="form.type === 'short_answer'" label="评分标准">
+          <UiInput v-model="form.scoring_criteria" type="textarea" :rows="2" placeholder="请输入评分标准" />
+        </el-form-item>
+
+        <el-form-item label="分值">
+          <el-input-number v-model="form.score" :min="1" :max="50" />
+        </el-form-item>
+
+        <el-form-item label="解析">
+          <UiInput v-model="form.explanation" type="textarea" :rows="2" placeholder="请输入解析" />
+        </el-form-item>
+
+        <el-form-item>
+          <div class="flex gap-3">
+            <UiButton variant="primary" :loading="submitting" @click="submitForm">
+              {{ isEdit ? '更新' : '创建' }}
+            </UiButton>
+            <UiButton @click="router.back()">取消</UiButton>
+          </div>
+        </el-form-item>
+      </el-form>
+    </UiCard>
   </div>
 </template>
 
@@ -104,19 +158,50 @@ import { ElMessage } from 'element-plus'
 import { questionBankApi, type QuestionPayload } from '@/api/questionBank'
 import { credentialApi, type CredentialDict } from '@/api/credential'
 import { trainingApi } from '@/api/training'
+import UiPageHeader from '@/components/ui/UiPageHeader.vue'
+import UiCard from '@/components/ui/UiCard.vue'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect, { type UiSelectOption } from '@/components/ui/UiSelect.vue'
+import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 
 const route = useRoute()
 const router = useRouter()
 
 const isEdit = computed(() => !!route.query.id)
-const hasOptions = computed(() => ['single_choice', 'multi_choice', 'fault_image'].includes(form.value.type))
+const hasOptions = computed(() =>
+  ['single_choice', 'multi_choice', 'fault_image'].includes(form.value.type)
+)
 const optionKeys = ['A', 'B', 'C', 'D'] as const
+
+const TYPE_OPTIONS: UiSelectOption[] = [
+  { label: '单选题', value: 'single_choice' },
+  { label: '多选题', value: 'multi_choice' },
+  { label: '判断题', value: 'true_false' },
+  { label: '故障识图', value: 'fault_image' },
+  { label: '简答题', value: 'short_answer' }
+]
 
 const submitting = ref(false)
 const tags = ref<{ id: number; name: string }[]>([])
 const credentials = ref<CredentialDict[]>([])
 const multiAnswer = ref<string[]>([])
 const imageUploading = ref(false)
+
+// 三态收编 useAsyncPage（#401）：错误详情由拦截器统一 toast；编辑态题目加载失败必须阻断渲染，
+// 避免以空表单呈现、保存时把原题内容整体覆盖掉
+const {
+  loading: pageLoading,
+  loadError: pageError,
+  retrying,
+  retry: handleRetry,
+  run: loadPage
+} = useAsyncPage(async () => {
+  await loadDicts()
+  if (isEdit.value) await loadQuestion()
+})
 
 const form = ref<{
   type: string
@@ -146,35 +231,36 @@ const form = ref<{
   status: 'pending'
 })
 
-onMounted(async () => {
+async function loadDicts() {
+  // 字典拉取失败不阻断：证件/标签缺失只影响可选项，表单仍可用
   try {
-    const [tagData, credData] = await Promise.all([trainingApi.getTags(), credentialApi.listCredentials()])
+    const [tagData, credData] = await Promise.all([
+      trainingApi.getTags(),
+      credentialApi.listCredentials()
+    ])
     tags.value = tagData.tags || []
     credentials.value = credData.credentials || []
-  } catch (e) {}
-  try {
-    const credOnly = await credentialApi.listCredentials()
-    if (!credentials.value.length) credentials.value = credOnly.credentials || []
-  } catch {}
-
-  if (isEdit.value) {
-    try {
-      const res = await questionBankApi.getQuestion(Number(route.query.id))
-      const q = res
-      form.value = {
-        ...form.value,
-        ...q,
-        options: (q.options as { A: string; B: string; C: string; D: string } | undefined) ?? form.value.options,
-        tag_ids: (q as unknown as Record<string, unknown>).tag_ids as number[] | undefined ?? form.value.tag_ids
-      }
-      if (q.type === 'multi_choice' && q.answer) {
-        multiAnswer.value = q.answer.split(',')
-      }
-    } catch {
-      /* 错误已由拦截器提示 */
-    }
+  } catch (e) {
+    console.error('Failed to load dicts:', e)
   }
-})
+}
+
+async function loadQuestion() {
+  const res = await questionBankApi.getQuestion(Number(route.query.id))
+  form.value = {
+    ...form.value,
+    ...res,
+    options:
+      (res.options as { A: string; B: string; C: string; D: string } | undefined) ??
+      form.value.options,
+    tag_ids:
+      ((res as unknown as Record<string, unknown>).tag_ids as number[] | undefined) ??
+      form.value.tag_ids
+  }
+  if (res.type === 'multi_choice' && res.answer) {
+    multiAnswer.value = res.answer.split(',')
+  }
+}
 
 function onTypeChange() {
   if (form.value.type === 'true_false') {
@@ -247,48 +333,8 @@ async function submitForm() {
     submitting.value = false
   }
 }
+
+onMounted(() => {
+  loadPage()
+})
 </script>
-
-<style scoped>
-.question-create h2 { margin-bottom: 20px; }
-.option-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-.opt-key { width: 24px; font-weight: bold; text-align: center; }
-.option-row .el-input { flex: 1; }
-
-.image-upload-area { width: 100%; }
-.image-uploader :deep(.el-upload) {
-  border: 1px dashed #dcdfe6;
-  border-radius: 8px;
-  cursor: pointer;
-  overflow: hidden;
-  transition: border-color 0.3s;
-}
-.image-uploader :deep(.el-upload:hover) {
-  border-color: #409eff;
-}
-.image-preview {
-  width: 300px;
-  max-height: 200px;
-  object-fit: contain;
-  display: block;
-}
-.upload-placeholder {
-  width: 300px;
-  height: 160px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: #909399;
-  font-size: 13px;
-}
-.image-actions {
-  margin-top: 8px;
-}
-.image-upload-tip {
-  color: #909399;
-  font-size: 12px;
-  margin-top: 6px;
-}
-</style>
