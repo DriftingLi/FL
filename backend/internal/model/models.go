@@ -794,7 +794,7 @@ type PointsTaskClaim struct {
 	ID        int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	UserID    int       `gorm:"column:user_id" json:"user_id"`
 	TaskCode  string    `gorm:"column:task_code" json:"task_code"`
-	ClaimDate *string   `gorm:"column:claim_date" json:"claim_date,omitempty"` // YYYY-MM-DD，Asia/Shanghai
+	ClaimDate *string   `gorm:"column:claim_date;type:date" json:"claim_date,omitempty"` // YYYY-MM-DD，Asia/Shanghai（#409：对齐同域邻居 ForumCheckIn 的日期类型标注）
 	RefID     *string   `gorm:"column:ref_id" json:"ref_id,omitempty"`
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
