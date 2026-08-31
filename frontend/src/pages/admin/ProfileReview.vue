@@ -4,7 +4,7 @@
       <template #header>
         <div class="card-header">
           <span class="card-title">资料审核（昵称 / 头像）</span>
-          <el-button :icon="Refresh" circle @click="load" />
+          <UiButton :icon="Refresh" circle @click="load"/>
         </div>
       </template>
 
@@ -60,9 +60,9 @@
           <template #default="{ row }">
             <template v-if="row.status === 'pending'">
               <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
-                <el-button type="primary" link size="small">
+                <UiButton variant="primary" link size="small">
                   操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
-                </el-button>
+                </UiButton>
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item command="approve">通过</el-dropdown-item>
@@ -99,8 +99,8 @@
         placeholder="请输入驳回原因（选填）"
       />
       <template #footer>
-        <el-button @click="rejectDialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="submitting" @click="reject">确认驳回</el-button>
+        <UiButton @click="rejectDialogVisible = false">取消</UiButton>
+        <UiButton variant="danger" :loading="submitting" @click="reject">确认驳回</UiButton>
       </template>
     </el-dialog>
   </div>
@@ -113,6 +113,7 @@ import { Refresh, ArrowRight, ArrowDown } from '@element-plus/icons-vue'
 import { adminApi, type ProfileChangeRequest } from '@/api/admin'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { formatLocaleDateTime } from '@/utils/format'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const submitting = ref(false)
 const activeStatus = ref<'pending' | 'approved' | 'rejected'>('pending')
@@ -212,12 +213,12 @@ onMounted(load)
 
 .user-name {
   font-size: 14px;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .user-username {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 
 .value-cell,
@@ -228,17 +229,17 @@ onMounted(load)
 }
 
 .old-value {
-  color: #909399;
+  color: var(--color-text-tertiary);
   text-decoration: line-through;
 }
 
 .new-value {
-  color: #303133;
+  color: var(--color-text-primary);
   font-weight: 500;
 }
 
 .arrow {
-  color: #c0c4cc;
+  color: var(--color-text-disabled);
 }
 
 .pagination-wrapper {

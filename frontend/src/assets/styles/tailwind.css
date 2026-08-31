@@ -44,6 +44,7 @@
  */
 @import "./global.css" layer(reset);
 @import "element-plus/dist/index.css" layer(vendor);
+@import "element-plus/theme-chalk/dark/css-vars.css" layer(vendor);
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "./design-tokens.css" layer(base);
@@ -52,6 +53,14 @@
 
 /* 原子类扫描范围：frontend/src（相对于本文件 ../../ ） */
 @source "../../";
+
+/*
+ * 深色模式变体（期 6）。v4 用 @custom-variant 注册，没有 darkMode 配置项。
+ * 触发条件与 design-tokens.css / element-overrides.css 的覆盖块一致：<html data-theme="dark">。
+ * 注意：theme store 同时会给 <html> 加 .dark 类 —— 那是给 EP 官方暗色表用的
+ * （element-plus/theme-chalk/dark/css-vars.css 挂在 .dark 选择器下），两者缺一不可。
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /*
  * 把 design-tokens.css 的 token 桥接成 Tailwind 原子类。
@@ -125,4 +134,8 @@
   --color-warn-soft: var(--color-warning-light);
   --color-bad: var(--color-danger);
   --color-bad-soft: var(--color-danger-light);
+  /* -strong 深字色：与 -soft 浅底配对使用（如 text-warn-strong on bg-warn-soft） */
+  --color-ok-strong: var(--color-success-strong);
+  --color-warn-strong: var(--color-warning-strong);
+  --color-bad-strong: var(--color-danger-strong);
 }

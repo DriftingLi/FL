@@ -1,15 +1,16 @@
 <template>
-  <div class="search-page">
-    <div class="page-header">
-      <h2>全局搜索</h2>
+  <div class="mx-auto max-w-[960px] p-5">
+    <div class="mb-4">
+      <h2 class="text-[22px] text-ink">全局搜索</h2>
     </div>
 
-    <div class="search-bar">
+    <div class="mb-5 flex gap-3">
       <el-input
         v-model="keyword"
         size="large"
         placeholder="搜索课程 / 题目 / 资讯 / 帖子"
         clearable
+        class="flex-1"
         @keyup.enter="doSearch"
         @clear="resetSearch"
       >
@@ -17,7 +18,7 @@
           <el-icon><Search /></el-icon>
         </template>
       </el-input>
-      <el-button type="primary" size="large" :loading="loading" @click="doSearch">搜索</el-button>
+      <UiButton variant="primary" size="large" :loading="loading" @click="doSearch">搜索</UiButton>
     </div>
 
     <template v-if="searched">
@@ -29,7 +30,7 @@
         <el-tab-pane label="帖子" name="topic" />
       </el-tabs>
 
-      <div class="search-results">
+      <div class="min-h-[200px] rounded-card bg-panel px-5 pb-4 shadow-card">
         <UiErrorState
           v-if="loadError"
           title="搜索失败"
@@ -43,24 +44,32 @@
         <template v-else>
           <!-- 全部模式：四分区 -->
           <template v-if="activeType === 'all' && allResult">
-            <div v-for="section in sections" :key="section.key" class="result-section">
-              <div class="section-header">
-                <span class="section-title">{{ section.label }}</span>
-                <span class="section-count">{{ section.data.total }} 条</span>
+            <div
+              v-for="section in sections"
+              :key="section.key"
+              class="border-b border-line py-3.5 last:border-b-0"
+            >
+              <div class="mb-2 flex items-baseline gap-2.5">
+                <span class="text-[15px] font-semibold text-ink">{{ section.label }}</span>
+                <span class="text-xs text-ink-3">{{ section.data.total }} 条</span>
               </div>
               <template v-if="section.data.items.length > 0">
                 <div
                   v-for="item in section.data.items"
                   :key="`${item.type}-${item.id}`"
-                  class="result-item"
-                  :class="{ clickable: !!itemPath(item) }"
+                  class="flex items-baseline gap-2.5 rounded-[6px] px-2.5 py-2"
+                  :class="
+                    itemPath(item)
+                      ? 'cursor-pointer transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] hover:bg-canvas'
+                      : ''
+                  "
                   @click="goItem(item)"
                 >
-                  <span class="result-title">{{ item.title }}</span>
-                  <span v-if="item.summary" class="result-summary">{{ item.summary }}</span>
+                  <span class="max-w-[50%] shrink-0 truncate text-sm text-ink">{{ item.title }}</span>
+                  <span v-if="item.summary" class="truncate text-[13px] text-ink-3">{{ item.summary }}</span>
                 </div>
               </template>
-              <div v-else class="section-empty">无匹配结果</div>
+              <div v-else class="py-1 text-[13px] text-ink-muted">无匹配结果</div>
             </div>
           </template>
 
@@ -70,17 +79,21 @@
               <div
                 v-for="item in pageResult.items"
                 :key="`${item.type}-${item.id}`"
-                class="result-item"
-                :class="{ clickable: !!itemPath(item) }"
+                class="flex items-baseline gap-2.5 rounded-[6px] px-2.5 py-2"
+                :class="
+                  itemPath(item)
+                    ? 'cursor-pointer transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] hover:bg-canvas'
+                    : ''
+                "
                 @click="goItem(item)"
               >
-                <span class="result-title">{{ item.title }}</span>
-                <span v-if="item.summary" class="result-summary">{{ item.summary }}</span>
+                <span class="max-w-[50%] shrink-0 truncate text-sm text-ink">{{ item.title }}</span>
+                <span v-if="item.summary" class="truncate text-[13px] text-ink-3">{{ item.summary }}</span>
               </div>
             </template>
             <UiEmptyState v-else description="无匹配结果" />
 
-            <div class="pagination-wrapper" v-if="total > pageSize">
+            <div class="mt-4 flex justify-center" v-if="total > pageSize">
               <el-pagination
                 v-model:current-page="currentPage"
                 :page-size="pageSize"
@@ -105,6 +118,7 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const router = useRouter()
 
@@ -195,112 +209,3 @@ function resetSearch() {
   pageResult.value = null
 }
 </script>
-
-<style scoped>
-.search-page {
-  padding: 20px;
-  max-width: 960px;
-  margin: 0 auto;
-}
-
-.page-header {
-  margin-bottom: 16px;
-}
-
-.page-header h2 {
-  font-size: 22px;
-  color: var(--color-text-primary);
-}
-
-.search-bar {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.search-bar .el-input {
-  flex: 1;
-}
-
-.search-results {
-  background: var(--color-bg-card);
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  min-height: 200px;
-  padding: 0 20px 16px;
-}
-
-.result-section {
-  padding: 14px 0;
-  border-bottom: 1px solid var(--color-border-light);
-}
-
-.result-section:last-child {
-  border-bottom: none;
-}
-
-.section-header {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.section-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.section-count {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-}
-
-.section-empty {
-  font-size: 13px;
-  color: var(--color-text-disabled);
-  padding: 4px 0;
-}
-
-.result-item {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 6px;
-}
-
-.result-item.clickable {
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.result-item.clickable:hover {
-  background: var(--color-bg-page);
-}
-
-.result-title {
-  font-size: 14px;
-  color: var(--color-text-primary);
-  flex-shrink: 0;
-  max-width: 50%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.result-summary {
-  font-size: 13px;
-  color: var(--color-text-tertiary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pagination-wrapper {
-  display: flex;
-  justify-content: center;
-  margin-top: 16px;
-}
-</style>

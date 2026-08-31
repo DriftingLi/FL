@@ -1,99 +1,100 @@
 <template>
-<div class="flex flex-col gap-6 p-4">
-<h1 class="text-xl font-bold text-ink">巡检视图</h1>
-<div class="rounded-card border border-line bg-panel p-4">
-<div class="text-sm text-ink-3">删除已解决帖计数</div>
-<div class="mt-1 text-2xl font-bold text-ink">{{ deletedCount }}</div>
-</div>
+  <div class="flex flex-col gap-6 p-4">
+    <h1 class="text-xl font-bold text-ink">巡检视图</h1>
+    <div class="rounded-card border border-line bg-panel p-4">
+      <div class="text-sm text-ink-3">删除已解决帖计数</div>
+      <div class="mt-1 text-2xl font-bold text-ink">{{ deletedCount }}</div>
+      <div class="mt-1 text-xs text-ink-3">楼主删除自己已解决的帖子时累加，不自动惩罚、不回滚积分</div>
+    </div>
+    <div class="rounded-card border border-line bg-panel p-4">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-sm font-semibold text-ink">问答积分流水</span>
+        <el-select v-model="domain" class="!w-44">
+          <el-option label="问答域" value="forum_topic" />
+          <el-option label="跨业务域全量" value="" />
+        </el-select>
+        <el-select v-model="reason" placeholder="按原因筛选" clearable class="!w-40" @change="loadLedger">
+          <el-option label="答主被采纳" value="accepted_bonus" />
+          <el-option label="楼主采纳" value="accept_action" />
+          <el-option label="违规回收" value="rollback" />
+        </el-select>
+        <el-input v-model="userId" placeholder="按用户ID过滤" clearable class="!w-40" @change="loadLedger" />
+        <UiButton size="small" @click="loadLedger">刷新</UiButton>
+      </div>
+      <div v-if="ledgerLoading" class="text-sm text-ink-3">加载中...</div>
+      <div v-else-if="ledger.length === 0" class="text-sm text-ink-3">暂无数据</div>
+      <div v-else class="grid gap-2">
+        <div v-for="item in ledger" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
+          <div>用户 {{ item.user_id }} · {{ item.reason }} · {{ item.delta }} 分 · {{ refLabel(item.ref_type) }} {{ item.ref_id }}</div>
+          <div class="text-ink-3">{{ item.created_at }}</div>
+        </div>
+      </div>
+      <div class="mt-3 flex justify-end">
+        <el-pagination
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          :total="total"
+          :page-sizes="[10, 20, 50]"
+          layout="total, sizes, prev, pager, next"
+          @current-change="loadLedger"
+          @size-change="loadLedger"
+        />
+      </div>
+    </div>
 
-<div class="rounded-card border border-line bg-panel p-4">
-<div class="flex items-center gap-2 mb-3">
-<span class="text-sm font-semibold text-ink">问答积分流水</span>
-<el-select v-model="domain" class="!w-44">
-<el-option label="问答域" value="forum_topic" />
-<el-option label="跨业务域全量" value="" />
-</el-select>
-<el-select v-model="reason" placeholder="按原因筛选" clearable class="!w-40" @change="loadLedger">
-<el-option label="答主被采纳" value="accepted_bonus" />
-<el-option label="楼主采纳" value="accept_action" />
-<el-option label="违规回收" value="rollback" />
-</el-select>
-<el-input v-model="userId" placeholder="按用户ID过滤" clearable class="!w-40" @change="loadLedger" />
-<el-button size="small" @click="loadLedger">刷新</el-button>
-</div>
-<div v-if="ledgerLoading" class="text-sm text-ink-3">加载中...</div>
-<div v-else-if="ledger.length === 0" class="text-sm text-ink-3">暂无数据</div>
-<div v-else class="grid gap-2">
-<div v-for="item in ledger" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
-<div>用户 {{ item.user_id }} · {{ item.reason }} · {{ item.delta }} 分 · {{ refLabel(item.ref_type) }} {{ item.ref_id }}</div>
-<div class="text-ink-3">{{ item.created_at }}</div>
-</div>
-</div>
-<div class="mt-3 flex justify-end">
-<el-pagination
-v-model:current-page="page"
-v-model:page-size="pageSize"
-:total="total"
-:page-sizes="[10, 20, 50]"
-layout="total, sizes, prev, pager, next"
-@current-change="loadLedger"
-@size-change="loadLedger"
-/>
-</div>
-</div>
+    <div class="rounded-card border border-line bg-panel p-4">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-sm font-semibold text-ink">简历查看留痕</span>
+        <UiButton size="small" @click="loadViews">刷新</UiButton>
+      </div>
+      <div v-if="viewsLoading" class="text-sm text-ink-3">加载中...</div>
+      <div v-else-if="views.length === 0" class="text-sm text-ink-3">暂无数据</div>
+      <div v-else class="grid gap-2">
+        <div v-for="item in views" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
+          <div>招聘方 {{ item.recruiter_id }} · 学员 {{ item.resume_user_id }} · {{ item.viewed_at }}</div>
+        </div>
+      </div>
+      <div class="mt-3 flex justify-end">
+        <el-pagination
+          v-model:current-page="viewsPage"
+          :page-size="20"
+          :total="viewsTotal"
+          layout="total, prev, pager, next"
+          @current-change="loadViews"
+        />
+      </div>
+    </div>
 
-<div class="rounded-card border border-line bg-panel p-4">
-<div class="flex items-center gap-2 mb-3">
-<span class="text-sm font-semibold text-ink">简历查看留痕</span>
-<el-button size="small" @click="loadViews">刷新</el-button>
-</div>
-<div v-if="viewsLoading" class="text-sm text-ink-3">加载中...</div>
-<div v-else-if="views.length === 0" class="text-sm text-ink-3">暂无数据</div>
-<div v-else class="grid gap-2">
-<div v-for="item in views" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
-<div>招聘方 {{ item.recruiter_id }} · 学员 {{ item.resume_user_id }} · {{ item.viewed_at }}</div>
-</div>
-</div>
-<div class="mt-3 flex justify-end">
-<el-pagination
-v-model:current-page="viewsPage"
-:page-size="20"
-:total="viewsTotal"
-layout="total, prev, pager, next"
-@current-change="loadViews"
-/>
-</div>
-</div>
-
-<div class="rounded-card border border-line bg-panel p-4">
-<div class="flex items-center gap-2 mb-3">
-<span class="text-sm font-semibold text-ink">联系方式申请记录</span>
-<el-button size="small" @click="loadRequests">刷新</el-button>
-</div>
-<div v-if="requestsLoading" class="text-sm text-ink-3">加载中...</div>
-<div v-else-if="requests.length === 0" class="text-sm text-ink-3">暂无数据</div>
-<div v-else class="grid gap-2">
-<div v-for="item in requests" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
-<div>招聘方 {{ item.recruiter_id }} · 学员 {{ item.student_user_id }} · {{ requestStatusLabel(item.status) }}</div>
-<div class="text-ink-3">{{ item.created_at }}</div>
-</div>
-</div>
-<div class="mt-3 flex justify-end">
-<el-pagination
-v-model:current-page="requestsPage"
-:page-size="20"
-:total="requestsTotal"
-layout="total, prev, pager, next"
-@current-change="loadRequests"
-/>
-</div>
-</div>
-</div>
+    <div class="rounded-card border border-line bg-panel p-4">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-sm font-semibold text-ink">联系方式申请记录</span>
+        <UiButton size="small" @click="loadRequests">刷新</UiButton>
+      </div>
+      <div v-if="requestsLoading" class="text-sm text-ink-3">加载中...</div>
+      <div v-else-if="requests.length === 0" class="text-sm text-ink-3">暂无数据</div>
+      <div v-else class="grid gap-2">
+        <div v-for="item in requests" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
+          <div>招聘方 {{ item.recruiter_id }} · 学员 {{ item.student_user_id }} · {{ requestStatusLabel(item.status) }}</div>
+          <div class="text-ink-3">{{ item.created_at }}</div>
+        </div>
+      </div>
+      <div class="mt-3 flex justify-end">
+        <el-pagination
+          v-model:current-page="requestsPage"
+          :page-size="20"
+          :total="requestsTotal"
+          layout="total, prev, pager, next"
+          @current-change="loadRequests"
+        />
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { unwrappedRequest } from '@/api/request'
+import UiButton from '@/components/ui/UiButton.vue'
 
 // #411：默认锁定问答域（forum_topic），显式切换才跨域全量——卡片标题与内容同域。
 const domain = ref<'forum_topic' | ''>('forum_topic')

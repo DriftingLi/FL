@@ -21,21 +21,13 @@
         <el-option label="草稿" value="draft" />
       </el-select>
       <el-input v-model="filters.keyword" placeholder="搜索题目" clearable style="width: 200px" @keyup.enter="loadData" />
-      <el-button type="primary" @click="loadData">查询</el-button>
-      <el-button
-        v-if="selectedIds.length > 0"
-        type="success"
-        @click="batchPublish"
-      >
+      <UiButton variant="primary" @click="loadData">查询</UiButton>
+      <UiButton variant="success" v-if="selectedIds.length > 0" @click="batchPublish">
         批量发布 ({{ selectedIds.length }})
-      </el-button>
-      <el-button
-        v-if="selectedIds.length > 0"
-        type="danger"
-        @click="batchReject"
-      >
+      </UiButton>
+      <UiButton variant="danger" v-if="selectedIds.length > 0" @click="batchReject">
         批量驳回 ({{ selectedIds.length }})
-      </el-button>
+      </UiButton>
     </div>
 
     <el-table :data="questions" stripe v-loading="loading" @selection-change="handleSelection">
@@ -53,9 +45,9 @@
       <el-table-column label="操作" width="90" fixed="right" align="center">
         <template #default="{ row }">
           <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
-            <el-button type="primary" link size="small">
+            <UiButton variant="primary" link size="small">
               操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
-            </el-button>
+            </UiButton>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="view">查看</el-dropdown-item>
@@ -105,9 +97,9 @@
         />
       </div>
       <template #footer v-if="currentQuestion && currentQuestion.status === 'pending'">
-        <el-button @click="detailVisible = false">关闭</el-button>
-        <el-button type="danger" @click="rejectFromDetail">驳回</el-button>
-        <el-button type="success" @click="publishFromDetail">发布</el-button>
+        <UiButton @click="detailVisible = false">关闭</UiButton>
+        <UiButton variant="danger" @click="rejectFromDetail">驳回</UiButton>
+        <UiButton variant="success" @click="publishFromDetail">发布</UiButton>
       </template>
     </el-dialog>
 
@@ -126,8 +118,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="cancelReject">取消</el-button>
-        <el-button type="danger" :loading="rejecting" @click="confirmReject">确认驳回</el-button>
+        <UiButton @click="cancelReject">取消</UiButton>
+        <UiButton variant="danger" :loading="rejecting" @click="confirmReject">确认驳回</UiButton>
       </template>
     </el-dialog>
   </div>
@@ -140,6 +132,7 @@ import { ArrowDown } from '@element-plus/icons-vue'
 import { questionBankApi } from '@/api/questionBank'
 import type { Question } from '@/types/question'
 import { typeMap } from '@/constants/question'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
 const statusType: Record<string, string> = { draft: 'info', pending: 'warning', published: 'success' }

@@ -80,9 +80,9 @@
         <el-table-column label="操作" width="90" fixed="right" align="center">
           <template #default="{ row }">
             <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
-              <el-button type="primary" link size="small">
+              <UiButton variant="primary" link size="small">
                 操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
-              </el-button>
+              </UiButton>
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="view">查看</el-dropdown-item>

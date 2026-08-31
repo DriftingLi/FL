@@ -7,10 +7,10 @@
       </div>
       <div class="toolbar-right">
         <el-tooltip v-if="canPreview" content="在新窗口打开" placement="bottom">
-          <el-button :icon="FullScreen" circle size="small" @click="openInNewTab" />
+          <UiButton :icon="FullScreen" circle size="small" @click="openInNewTab"/>
         </el-tooltip>
         <el-tooltip content="下载" placement="bottom">
-          <el-button :icon="Download" circle size="small" @click="downloadFile" />
+          <UiButton :icon="Download" circle size="small" @click="downloadFile"/>
         </el-tooltip>
       </div>
     </div>
@@ -34,18 +34,18 @@
       <!-- 非 PDF 文档：浏览器无法内嵌预览，提供下载/新窗口打开 -->
       <div v-if="!canPreview" class="doc-unsupported">
         <el-empty :description="unsupportedMessage">
-          <el-button type="primary" @click="downloadFile">
+          <UiButton variant="primary" @click="downloadFile">
             <el-icon><Download /></el-icon> 下载文档
-          </el-button>
-          <el-button @click="openInNewTab">在新窗口打开</el-button>
+          </UiButton>
+          <UiButton @click="openInNewTab">在新窗口打开</UiButton>
         </el-empty>
         <p class="unsupported-tip" v-if="unsupportedTip">{{ unsupportedTip }}</p>
       </div>
 
       <div v-if="loadError" class="doc-error">
         <el-empty :description="errorMessage">
-          <el-button type="primary" @click="downloadFile">下载文档</el-button>
-          <el-button @click="openInNewTab">在新窗口打开</el-button>
+          <UiButton variant="primary" @click="downloadFile">下载文档</UiButton>
+          <UiButton @click="openInNewTab">在新窗口打开</UiButton>
         </el-empty>
       </div>
     </div>
@@ -56,6 +56,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { Document, Download, FullScreen, Loading } from '@element-plus/icons-vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const props = defineProps({
   src: { type: String, required: true },
@@ -170,7 +171,7 @@ watch(resolvedSrc, (newVal) => {
   height: 600px;
   display: flex;
   flex-direction: column;
-  background: #525659;
+  background: var(--color-viewer-bg);
   border-radius: 8px;
   overflow: hidden;
   position: relative;
@@ -181,8 +182,8 @@ watch(resolvedSrc, (newVal) => {
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background: #3c3f41;
-  border-bottom: 1px solid #555;
+  background: var(--color-viewer-bar);
+  border-bottom: 1px solid var(--color-viewer-line);
   flex-shrink: 0;
   gap: 8px;
 }
@@ -196,12 +197,12 @@ watch(resolvedSrc, (newVal) => {
 }
 
 .toolbar-icon {
-  color: #409eff;
+  color: var(--color-primary-500);
   flex-shrink: 0;
 }
 
 .file-name {
-  color: #ddd;
+  color: var(--color-viewer-text);
   font-size: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -218,7 +219,7 @@ watch(resolvedSrc, (newVal) => {
 .doc-toolbar .el-button {
   --el-button-bg-color: transparent;
   --el-button-border-color: transparent;
-  --el-button-text-color: #ccc;
+  --el-button-text-color: var(--color-viewer-text);
   --el-button-hover-bg-color: rgba(255, 255, 255, 0.1);
   --el-button-hover-border-color: transparent;
   --el-button-hover-text-color: #fff;
@@ -249,7 +250,7 @@ watch(resolvedSrc, (newVal) => {
   justify-content: center;
   gap: 12px;
   background: rgba(82, 86, 89, 0.9);
-  color: #ccc;
+  color: var(--color-viewer-text);
   z-index: 10;
 }
 
@@ -271,7 +272,7 @@ watch(resolvedSrc, (newVal) => {
 .unsupported-tip {
   margin-top: 12px;
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   text-align: center;
   padding: 0 20px;
 }

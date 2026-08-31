@@ -7,28 +7,34 @@
   --el-color-primary-light-9: var(--color-primary-50);
   --el-color-primary-dark-2: var(--color-primary-600);
 
-  --el-color-success: #10B981;
+  /*
+   * EP 语义色阶（success/warning/danger/info 各 7 档）。项目 token 只有
+   * 「主色 + light + strong」三档，凑不满 EP 的完整阶梯，故浅色模式仍用显式值；
+   * 与项目语义 token 同值的主色档直接引用，保证单点维护。
+   * 深色模式在下方 [data-theme="dark"] 整体覆盖。
+   */
+  --el-color-success: var(--color-success);
   --el-color-success-light-3: #6EE7B7;
   --el-color-success-light-5: #A7F3D0;
   --el-color-success-light-7: #D1FAE5;
   --el-color-success-light-9: #ECFDF5;
   --el-color-success-dark-2: #059669;
 
-  --el-color-warning: #F59E0B;
+  --el-color-warning: var(--color-warning);
   --el-color-warning-light-3: #FCD34D;
   --el-color-warning-light-5: #FDE68A;
   --el-color-warning-light-7: #FEF3C7;
   --el-color-warning-light-9: #FFFBEB;
   --el-color-warning-dark-2: #D97706;
 
-  --el-color-danger: #EF4444;
+  --el-color-danger: var(--color-danger);
   --el-color-danger-light-3: #FCA5A5;
   --el-color-danger-light-5: #FECACA;
   --el-color-danger-light-7: #FEE2E2;
   --el-color-danger-light-9: #FEF2F2;
   --el-color-danger-dark-2: #DC2626;
 
-  --el-color-info: #6B7280;
+  --el-color-info: var(--color-info);
   --el-color-info-light-3: #9CA3AF;
   --el-color-info-light-5: #D1D5DB;
   --el-color-info-light-7: #E5E7EB;
@@ -47,23 +53,23 @@
 
   --el-bg-color: var(--color-bg-card);
   --el-bg-color-page: var(--color-bg-page);
-  --el-bg-color-overlay: #FFFFFF;
+  --el-bg-color-overlay: var(--color-bg-card);
 
   --el-text-color-primary: var(--color-text-primary);
   --el-text-color-regular: var(--color-text-secondary);
   --el-text-color-secondary: var(--color-text-tertiary);
   --el-text-color-placeholder: var(--color-text-disabled);
-  --el-text-color-disabled: #C0C4CC;
+  --el-text-color-disabled: var(--color-text-disabled);
 
   --el-border-color: var(--color-border);
   --el-border-color-light: var(--color-border-light);
   --el-border-color-lighter: var(--color-border-light);
-  --el-border-color-extra-light: #F8FAFC;
+  --el-border-color-extra-light: var(--color-border-light);
 
-  --el-fill-color: #F1F5F9;
-  --el-fill-color-light: #F8FAFC;
-  --el-fill-color-lighter: #FAFBFD;
-  --el-fill-color-blank: #FFFFFF;
+  --el-fill-color: var(--color-border-light);
+  --el-fill-color-light: var(--color-border-light);
+  --el-fill-color-lighter: var(--color-bg-card);
+  --el-fill-color-blank: var(--color-bg-card);
 
   --el-box-shadow: var(--shadow-sm);
   --el-box-shadow-light: var(--shadow-xs);
@@ -74,9 +80,48 @@
   --el-transition-duration-fast: 0.15s;
 }
 
+/*
+ * 深色模式：EP 语义色阶的深色值。
+ * 浅色模式是「浅底（-light-9）+ 深字（-dark-2）」；深色模式翻转 ——
+ * -light-9 档改深底、-dark-2 档改浅字，保证深底上的对比度。
+ */
+[data-theme="dark"] {
+  --el-color-success-light-3: #34D399;
+  --el-color-success-light-5: #10B981;
+  --el-color-success-light-7: #0A8F6C;
+  --el-color-success-light-9: #06382C;
+  --el-color-success-dark-2: #6EE7B7;
+
+  --el-color-warning-light-3: #FBBF24;
+  --el-color-warning-light-5: #F59E0B;
+  --el-color-warning-light-7: #B7791F;
+  --el-color-warning-light-9: #3A2A05;
+  --el-color-warning-dark-2: #FCD34D;
+
+  --el-color-danger-light-3: #F87171;
+  --el-color-danger-light-5: #EF4444;
+  --el-color-danger-light-7: #B91C1C;
+  --el-color-danger-light-9: #3D1115;
+  --el-color-danger-dark-2: #FCA5A5;
+
+  --el-color-info-light-3: #9CA3AF;
+  --el-color-info-light-5: #6B7280;
+  --el-color-info-light-7: #4B5563;
+  --el-color-info-light-9: #1F2937;
+  --el-color-info-dark-2: #D1D5DB;
+}
+
 /* 合并自原文件两处 .el-button：radius-lg / font-semibold 为原生效值（后者覆盖前者） */
 .el-button {
   --el-button-border-radius: var(--radius-lg);
+  /*
+   * 焦点环颜色。EP 默认是 --el-color-primary-light-5（#5EEAD4），对白底对比度仅 1.48:1，
+   * 远低于 WCAG 非文本对比度 3:1 的下限，等于「有环但看不清」。
+   * 换成主色 #0D9488 为 3.74:1，同时与 global.css 里原生元素的焦点环同色，消除两套环并存。
+   * 覆盖会一并作用于 success / danger 等类型按钮 —— 焦点环统一用主色是正确的：
+   * 跟随按钮语义色会让「绿按钮配绿环」再次跌破对比度要求。
+   */
+  --el-button-outline-color: var(--color-primary-500);
   font-weight: var(--font-semibold);
   transition: all var(--duration-fast) var(--ease-default);
 }
@@ -105,6 +150,11 @@
   transform: translateY(0);
 }
 
+/* 焦点环 offset 对齐 global.css 中原生元素规则的 2px（EP 默认 1px，贴边不易辨认） */
+.el-button:focus-visible {
+  outline-offset: 2px;
+}
+
 .el-card {
   --el-card-border-radius: var(--radius-lg);
   border: 1px solid var(--color-border-light);
@@ -131,8 +181,8 @@
 
 .el-table {
   --el-table-border-color: var(--color-border-light);
-  --el-table-header-bg-color: #F8FAFC;
-  --el-table-row-hover-bg-color: #F1F5F9;
+  --el-table-header-bg-color: var(--color-bg-page);
+  --el-table-row-hover-bg-color: var(--color-border-light);
 }
 
 .el-pagination {
@@ -153,7 +203,7 @@
 }
 
 .el-dropdown__popper {
-  --el-dropdown-menuItem-hover-fill: #F1F5F9;
+  --el-dropdown-menuItem-hover-fill: var(--color-border-light);
   --el-dropdown-menuItem-hover-color: var(--color-text-primary);
 }
 
@@ -177,7 +227,7 @@
 }
 
 .el-dropdown-menu__item:hover {
-  background-color: #F1F5F9;
+  background-color: var(--color-border-light);
   color: var(--color-text-primary);
 }
 

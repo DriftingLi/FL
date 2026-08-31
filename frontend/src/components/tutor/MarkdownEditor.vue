@@ -234,7 +234,7 @@ defineExpose({
   font-size: 14px;
   color: #606266;
   border-bottom: 2px solid transparent;
-  transition: all 0.2s;
+  transition: all var(--duration-base) var(--ease-default);
   font-family: inherit;
 }
 

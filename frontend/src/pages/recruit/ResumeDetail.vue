@@ -7,7 +7,7 @@
     <div v-if="loading" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">加载中...</div>
     <div v-else-if="error" class="rounded-card border border-line bg-panel p-8 text-center">
       <p class="text-sm text-ink-2">{{ error }}</p>
-      <el-button class="mt-3" size="small" @click="load">重试</el-button>
+      <UiButton class="mt-3" size="small" @click="load">重试</UiButton>
     </div>
     <div v-else-if="!data" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">未找到该简历</div>
     <div v-else class="rounded-card border border-line bg-panel p-6">
@@ -35,8 +35,8 @@
         </div>
       </div>
       <div class="mt-6">
-        <el-button type="primary" :loading="contactLoading" @click="showDialog = true">申请交换联系方式</el-button>
-        <el-button v-if="contact" size="small" class="ml-2" @click="loadContact">刷新联系方式</el-button>
+        <UiButton variant="primary" :loading="contactLoading" @click="showDialog = true">申请交换联系方式</UiButton>
+        <UiButton v-if="contact" size="small" class="ml-2" @click="loadContact">刷新联系方式</UiButton>
         <p v-if="contactError" class="mt-2 text-xs text-red-500">{{ contactError }}</p>
         <div v-if="contact" class="mt-3 rounded border border-line bg-panel p-3 text-sm">
           <div><span class="text-ink-3">姓名：</span>{{ contact.real_name }}</div>
@@ -48,8 +48,8 @@
       <el-dialog v-model="showDialog" title="申请交换联系方式" width="420px">
         <el-input v-model="message" type="textarea" :rows="3" maxlength="200" show-word-limit placeholder="请填写申请附言（1-200字）" />
         <template #footer>
-          <el-button @click="showDialog = false">取消</el-button>
-          <el-button type="primary" :loading="submitting" @click="submitRequest">提交申请</el-button>
+          <UiButton @click="showDialog = false">取消</UiButton>
+          <UiButton variant="primary" :loading="submitting" @click="submitRequest">提交申请</UiButton>
         </template>
       </el-dialog>
     </div>
@@ -61,6 +61,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { recruitApi, type RecruitResumeItem } from '@/api/recruit'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const route = useRoute()
 const loading = ref(false)

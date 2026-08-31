@@ -75,7 +75,7 @@
         />
 
         <template v-else>
-          <div class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+          <div class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4 max-[560px]:grid-cols-1">
             <CourseCard
               v-for="course in courses"
               :key="course.course_id"

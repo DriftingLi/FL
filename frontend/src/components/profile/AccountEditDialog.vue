@@ -7,13 +7,13 @@
       <el-form-item>
         <div class="code-row">
           <el-input v-model="code" placeholder="短信验证码" maxlength="6" @keyup.enter="submit" />
-          <el-button :disabled="countdown>0||sending" @click="sendCode">{{ sending?'发送中...':countdown>0?countdown+'s 后重发':'获取验证码'}}</el-button>
+          <UiButton :disabled="countdown>0||sending" @click="sendCode">{{ sending?'发送中...':countdown>0?countdown+'s 后重发':'获取验证码'}}</UiButton>
         </div>
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="visible=false">取消</el-button>
-      <el-button type="primary" :loading="submitting" @click="submit">确认修改</el-button>
+      <UiButton @click="visible=false">取消</UiButton>
+      <UiButton variant="primary" :loading="submitting" @click="submit">确认修改</UiButton>
     </template>
   </el-dialog>
 </template>
@@ -26,6 +26,7 @@ import { authApi } from '@/api/auth'
 import { useSendCode } from '@/composables/useSendCode'
 import { useVerifyDialog } from '@/composables/useVerifyDialog'
 import { isValidAccount } from '@/utils/validate'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const authStore = useAuthStore()
 const visible = ref(false)

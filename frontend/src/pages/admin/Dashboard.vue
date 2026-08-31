@@ -84,17 +84,17 @@ function checkMobile() {
 }
 
 const statItems = ref([
-  { label: '学员总数', value: '0', icon: User, color: '#2563EB', bgColor: '#EFF6FF' },
-  { label: '今日活跃学员', value: '0', icon: UserFilled, color: '#10B981', bgColor: '#ECFDF5' },
-  { label: '课程总数', value: '0', icon: Notebook, color: '#F59E0B', bgColor: '#FFFBEB' },
-  { label: '总学习时长', value: '0', icon: Timer, color: '#8B5CF6', bgColor: '#F5F3FF' }
+  { label: '学员总数', value: '0', icon: User, color: 'var(--color-primary-600)', bgColor: 'var(--color-primary-50)' },
+  { label: '今日活跃学员', value: '0', icon: UserFilled, color: 'var(--color-success)', bgColor: 'var(--color-success-light)' },
+  { label: '课程总数', value: '0', icon: Notebook, color: 'var(--color-warning)', bgColor: 'var(--color-warning-light)' },
+  { label: '总学习时长', value: '0', icon: Timer, color: 'var(--color-violet-500)', bgColor: 'var(--color-violet-50)' }
 ])
 
 const quickActions = [
-  { label: '用户管理', path: '/admin/hrwai-users', icon: User, color: '#2563EB', bgColor: '#EFF6FF' },
-  { label: '课程管理', path: '/admin/course-catalog', icon: Notebook, color: '#10B981', bgColor: '#ECFDF5' },
-  { label: '统计分析', path: '/admin/statistics', icon: TrendCharts, color: '#F59E0B', bgColor: '#FFFBEB' },
-  { label: '内容生成', path: '/admin/content-generate', icon: MagicStick, color: '#8B5CF6', bgColor: '#F5F3FF' }
+  { label: '用户管理', path: '/admin/hrwai-users', icon: User, color: 'var(--color-primary-600)', bgColor: 'var(--color-primary-50)' },
+  { label: '课程管理', path: '/admin/course-catalog', icon: Notebook, color: 'var(--color-success)', bgColor: 'var(--color-success-light)' },
+  { label: '统计分析', path: '/admin/statistics', icon: TrendCharts, color: 'var(--color-warning)', bgColor: 'var(--color-warning-light)' },
+  { label: '内容生成', path: '/admin/content-generate', icon: MagicStick, color: 'var(--color-violet-500)', bgColor: 'var(--color-violet-50)' }
 ]
 
 function formatDuration(minutes: number) {
@@ -284,8 +284,8 @@ onUnmounted(() => {
 
 /* Welcome Banner */
 .welcome-banner {
-  background: #F5F3FF;
-  border: 1px solid #DDD6FE;
+  background: var(--color-violet-50);
+  border: 1px solid var(--color-violet-200);
   border-radius: var(--radius-xl);
   padding: var(--space-6) var(--space-8);
   color: var(--color-text-primary);

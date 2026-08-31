@@ -14,6 +14,18 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <title>和润天下人工智能科技有限公司</title>
+  <script>
+    /* 主题防闪（期 6）：在 CSS/JS 加载前按持久化偏好（默认跟随系统）设好 <html> 状态。
+       dataset.theme 驱动项目 token 与 Tailwind dark: 变体；.dark 类驱动 EP 暗色表。 */
+    ;(function () {
+      try {
+        var m = localStorage.getItem('hrwai-theme-mode') || 'system'
+        var dark = m === 'dark' || (m === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+        document.documentElement.classList.toggle('dark', dark)
+      } catch (e) {}
+    })()
+  </script>
 </head>
 <body>
   <div id="app"></div>

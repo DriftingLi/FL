@@ -57,7 +57,7 @@ const rate = computed(() => {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  background: linear-gradient(180deg, #F0F9FF 0%, #FFFFFF 60%, #F0FDFA 100%);
+  background: linear-gradient(180deg, var(--color-brand-50) 0%, var(--color-surface) 60%, #F0FDFA 100%);
   border-color: var(--color-brand-200, #BAE6FD);
 }
 .result-card-head {

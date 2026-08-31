@@ -51,9 +51,9 @@
       </template>
 
       <div class="actions">
-        <el-button type="primary" size="large" :loading="submitting" :disabled="!selectedId" @click="handleConfirm">
+        <UiButton variant="primary" size="large" :loading="submitting" :disabled="!selectedId" @click="handleConfirm">
           确定进入
-        </el-button>
+        </UiButton>
       </div>
     </div>
   </div>
@@ -65,6 +65,7 @@ import { useRouter } from 'vue-router'
 import { CircleCheckFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useCredentialStore } from '@/stores/credential'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const router = useRouter()
 const credentialStore = useCredentialStore()
@@ -155,12 +156,19 @@ onMounted(async () => {
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 12px;
 }
+
+/* 期 7：窄屏单列，避免 240px 最小列宽撑出横向滚动 */
+@media (max-width: 560px) {
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .credential-card {
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-md);
   padding: 14px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-fast) var(--ease-default);
   background: white;
 }
 .credential-card:hover {

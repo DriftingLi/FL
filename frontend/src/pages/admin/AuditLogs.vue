@@ -17,7 +17,7 @@
           style="width: 220px"
           @keyup.enter="load(1)"
         />
-        <el-button type="primary" @click="load(1)">查询</el-button>
+        <UiButton variant="primary" @click="load(1)">查询</UiButton>
       </div>
 
       <el-table :data="items" stripe border style="width: 100%">
@@ -63,6 +63,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { adminApi, type AuditLogItem } from '@/api/admin'
 import { formatTime } from '@/utils/format'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const items = ref<AuditLogItem[]>([])
 const total = ref(0)
@@ -107,7 +108,7 @@ onMounted(() => {
 
 .page-header h2 {
   font-size: 22px;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .filter-bar {
@@ -120,10 +121,10 @@ onMounted(() => {
 .audit-detail {
   margin: 0;
   padding: 12px;
-  background: #f8fafc;
+  background: var(--color-bg-page);
   border-radius: 6px;
   font-size: 12px;
-  color: #475569;
+  color: var(--color-text-secondary);
 }
 
 .pagination {

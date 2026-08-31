@@ -1,22 +1,26 @@
 <template>
-  <div class="real-exam-practice">
-    <div class="practice-toolbar">
-      <div class="progress-text">
-        <span class="paper-title">{{ paperTitle }}</span>
-        <span class="progress-stats">第 {{ currentIdx + 1 }}/{{ questions.length }} 题 · 已答对 {{ correctCount }} · 已答错 {{ wrongCount }}</span>
+  <div class="mx-auto max-w-[1200px]">
+    <div class="practice-toolbar mb-3.5 flex flex-wrap items-center justify-between gap-3">
+      <div class="progress-text text-[13px] text-ink-3">
+        <span class="paper-title mr-3 font-semibold text-ink">{{ paperTitle }}</span>
+        <span class="progress-stats ml-1">第 {{ currentIdx + 1 }}/{{ questions.length }} 题 · 已答对 {{ correctCount }} · 已答错 {{ wrongCount }}</span>
       </div>
-      <el-button size="small" @click="confirmQuit">退出练习</el-button>
+      <UiButton size="small" @click="confirmQuit">退出练习</UiButton>
     </div>
 
     <el-card v-if="currentQuestion" v-loading="loading" class="question-card">
-      <div class="question-header">
+      <div class="question-header mb-3 flex items-center justify-between">
         <el-tag size="small">{{ typeMap[currentQuestion.type] || '题目' }}</el-tag>
-        <el-icon class="fav-star" :class="{ active: favorited }" @click="toggleFavorite">
+        <el-icon
+          class="fav-star cursor-pointer text-lg"
+          :class="favorited ? 'text-warn' : 'text-ink-muted'"
+          @click="toggleFavorite"
+        >
           <StarFilled v-if="favorited" /><Star v-else />
         </el-icon>
       </div>
-      <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="q-image" loading="lazy" decoding="async" />
-      <p class="q-content">{{ currentQuestion.content }}</p>
+      <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="q-image mb-2.5 max-w-full rounded-[8px]" loading="lazy" decoding="async" />
+      <p class="q-content m-0 mb-4 whitespace-pre-wrap text-[15px] leading-[1.7] text-ink">{{ currentQuestion.content }}</p>
 
       <QuestionOptionPicker
         v-if="currentQuestion.type !== 'short_answer'"
@@ -30,7 +34,7 @@
       />
       <el-input v-else v-model="textAnswer" type="textarea" :rows="4" placeholder="请输入答案" :disabled="submitted" />
 
-      <div v-if="submitted && lastResult" class="result-area">
+      <div v-if="submitted && lastResult" class="result-area mt-4 flex flex-col gap-3">
         <AnswerResultCard
           :correct-answer="lastResult.correct_answer"
           :user-answer="lastResult.user_answer"
@@ -52,15 +56,15 @@
         <NoteCard :question-id="currentQuestion.id" />
       </div>
 
-      <div class="q-actions">
-        <el-button v-if="currentIdx > 0" @click="prevQuestion">上一题</el-button>
-        <el-button v-if="!submitted" type="primary" :disabled="!canSubmit" @click="handleSubmit">
+      <div class="q-actions mt-[18px] flex justify-end gap-2">
+        <UiButton v-if="currentIdx > 0" @click="prevQuestion">上一题</UiButton>
+        <UiButton variant="primary" v-if="!submitted" :disabled="!canSubmit" @click="handleSubmit">
           提交答案
-        </el-button>
-        <el-button v-if="currentIdx < questions.length - 1" type="primary" @click="nextQuestion">
+        </UiButton>
+        <UiButton variant="primary" v-if="currentIdx < questions.length - 1" @click="nextQuestion">
           下一题
-        </el-button>
-        <el-button v-else type="primary" @click="confirmQuit">完成练习</el-button>
+        </UiButton>
+        <UiButton variant="primary" v-else @click="confirmQuit">完成练习</UiButton>
       </div>
     </el-card>
   </div>
@@ -86,6 +90,7 @@ import AIExplanationCard from '@/components/practice/AIExplanationCard.vue'
 import KnowledgeCard from '@/components/practice/KnowledgeCard.vue'
 import CommentCard from '@/components/practice/CommentCard.vue'
 import NoteCard from '@/components/practice/NoteCard.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -220,69 +225,8 @@ start('paper')
 </script>
 
 <style scoped>
-.real-exam-practice {
-  max-width: 1200px;
-  margin: 0 auto;
-}
-.practice-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-}
-.progress-text {
-  font-size: 13px;
-  color: var(--color-text-tertiary);
-}
-.paper-title {
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin-right: 12px;
-}
-.progress-stats {
-  margin-left: 4px;
-}
+/* el-card 内部 body 内距是 EP 内部结构覆盖（R1 允许 :deep） */
 .question-card :deep(.el-card__body) {
   padding: 20px;
-}
-.question-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-.fav-star {
-  cursor: pointer;
-  font-size: 18px;
-  color: var(--color-text-muted);
-}
-.fav-star.active {
-  color: var(--color-warning);
-}
-.q-image {
-  max-width: 100%;
-  border-radius: 8px;
-  margin-bottom: 10px;
-}
-.q-content {
-  font-size: 15px;
-  line-height: 1.7;
-  color: var(--color-text-primary);
-  margin: 0 0 16px;
-  white-space: pre-wrap;
-}
-.result-area {
-  margin-top: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.q-actions {
-  margin-top: 18px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
 }
 </style>

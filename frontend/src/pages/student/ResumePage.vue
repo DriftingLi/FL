@@ -1,10 +1,10 @@
 <template>
-  <div class="resume-page">
-    <div class="resume-card">
-      <div class="resume-head">
-        <el-button text @click="goBack">返回</el-button>
-        <div class="head-actions">
-          <span class="vis-label">公开给招聘方</span>
+  <div class="mx-auto max-w-[560px] p-4">
+    <UiCard padding="lg" class="resume-card">
+      <div class="mb-4 flex items-center justify-between">
+        <UiButton variant="text" @click="goBack">返回</UiButton>
+        <div class="flex items-center gap-2">
+          <span class="text-[13px] text-ink-2">公开给招聘方</span>
           <el-switch v-model="form.visibilityOpen" @change="toggleVisibility" />
         </div>
       </div>
@@ -20,9 +20,9 @@
             <div class="text-xs text-ink-3">{{ req.status }} · {{ req.created_at }}</div>
           </div>
           <div class="flex gap-1">
-            <el-button v-if="req.status === 'pending'" size="small" type="primary" @click="approveReq(req.id)">同意</el-button>
-            <el-button v-if="req.status === 'pending'" size="small" @click="rejectReq(req.id)">拒绝</el-button>
-            <el-button v-if="req.status === 'approved'" size="small" type="danger" @click="revokeReq(req.id)">撤回</el-button>
+            <UiButton variant="primary" v-if="req.status === 'pending'" size="small" @click="approveReq(req.id)">同意</UiButton>
+            <UiButton v-if="req.status === 'pending'" size="small" @click="rejectReq(req.id)">拒绝</UiButton>
+            <UiButton variant="danger" v-if="req.status === 'approved'" size="small" @click="revokeReq(req.id)">撤回</UiButton>
           </div>
         </div>
       </div>
@@ -65,11 +65,11 @@
           </el-select>
         </el-form-item>
         <el-form-item label="期望薪资">
-          <div class="salary-row">
+          <div class="flex items-center gap-2">
             <el-input-number v-model="form.salary_min" :min="0" placeholder="最低" controls-position="right" />
-            <span class="salary-sep">-</span>
+            <span class="text-ink-3">-</span>
             <el-input-number v-model="form.salary_max" :min="0" placeholder="最高" controls-position="right" />
-            <el-checkbox v-model="form.salary_negotiable" label="面议" class="salary-check" />
+            <el-checkbox v-model="form.salary_negotiable" label="面议" class="ml-2" />
           </div>
         </el-form-item>
         <el-form-item label="到岗时间">
@@ -94,57 +94,57 @@
           <el-input v-model="form.self_intro" type="textarea" :rows="4" maxlength="1000" show-word-limit placeholder="简要介绍" />
         </el-form-item>
         <el-form-item label="工作经历">
-          <div class="array-block">
-            <div v-for="(exp, idx) in form.resume_experiences" :key="idx" class="array-row">
-              <el-input v-model="exp.company" placeholder="单位" class="row-input" />
-              <el-input v-model="exp.role" placeholder="岗位" class="row-input" />
-              <el-input v-model="exp.start_month" placeholder="开始年月" class="row-input" />
-              <el-input v-model="exp.end_month" placeholder="结束年月" class="row-input" />
-              <el-input v-model="exp.desc" placeholder="描述" class="row-input" />
-              <el-button text type="danger" @click="removeExp(idx)">删除</el-button>
+          <div class="flex w-full flex-col gap-2">
+            <div v-for="(exp, idx) in form.resume_experiences" :key="idx" class="flex flex-wrap items-center gap-2">
+              <el-input v-model="exp.company" placeholder="单位" class="min-w-[120px] flex-1" />
+              <el-input v-model="exp.role" placeholder="岗位" class="min-w-[120px] flex-1" />
+              <el-input v-model="exp.start_month" placeholder="开始年月" class="min-w-[120px] flex-1" />
+              <el-input v-model="exp.end_month" placeholder="结束年月" class="min-w-[120px] flex-1" />
+              <el-input v-model="exp.desc" placeholder="描述" class="min-w-[120px] flex-1" />
+              <UiButton variant="text" @click="removeExp(idx)" class="text-bad">删除</UiButton>
             </div>
-            <el-button text type="primary" @click="addExp">新增经历</el-button>
+            <UiButton variant="primary" text @click="addExp">新增经历</UiButton>
           </div>
         </el-form-item>
         <el-form-item label="持证信息">
-          <div class="array-block">
-            <div v-for="(cert, idx) in form.resume_certifications" :key="idx" class="array-row">
-              <el-select v-model="cert.credential_id" clearable placeholder="证件" class="row-input">
+          <div class="flex w-full flex-col gap-2">
+            <div v-for="(cert, idx) in form.resume_certifications" :key="idx" class="flex flex-wrap items-center gap-2">
+              <el-select v-model="cert.credential_id" clearable placeholder="证件" class="min-w-[120px] flex-1">
                 <el-option v-for="c in credentials" :key="c.id" :label="c.name" :value="c.id" />
               </el-select>
-              <el-input v-model="cert.cert_no" placeholder="证书编号" class="row-input" />
-              <el-input v-model="cert.expire_date" placeholder="有效期" class="row-input" />
-              <el-button text type="danger" @click="removeCert(idx)">删除</el-button>
+              <el-input v-model="cert.cert_no" placeholder="证书编号" class="min-w-[120px] flex-1" />
+              <el-input v-model="cert.expire_date" placeholder="有效期" class="min-w-[120px] flex-1" />
+              <UiButton variant="text" @click="removeCert(idx)" class="text-bad">删除</UiButton>
             </div>
-            <el-button text type="primary" @click="addCert">新增持证</el-button>
+            <UiButton variant="primary" text @click="addCert">新增持证</UiButton>
           </div>
         </el-form-item>
         <el-form-item label="PDF简历">
-          <div class="upload-block">
-            <el-button @click="triggerPdf">选择 PDF</el-button>
-            <span v-if="form.resume_file_url" class="upload-name">{{ form.resume_file_url }}</span>
+          <div class="flex flex-wrap items-center gap-2">
+            <UiButton @click="triggerPdf">选择 PDF</UiButton>
+            <span v-if="form.resume_file_url" class="max-w-[200px] truncate text-xs text-ink-2">{{ form.resume_file_url }}</span>
             <input ref="pdfInput" type="file" accept=".pdf" hidden @change="onPdfChange" />
           </div>
         </el-form-item>
         <el-form-item label="工作照">
-          <div class="upload-block">
-            <el-button @click="triggerPhoto">选择图片</el-button>
-            <span class="photo-count">{{ form.photos.length }}/6</span>
+          <div class="flex flex-wrap items-center gap-2">
+            <UiButton @click="triggerPhoto">选择图片</UiButton>
+            <span class="text-xs text-ink-3">{{ form.photos.length }}/6</span>
             <input ref="photoInput" type="file" accept="image/*" hidden @change="onPhotoChange" />
-            <div class="photo-list">
-              <span v-for="(p, i) in form.photos" :key="i" class="photo-item">
-                <span class="photo-url">{{ p }}</span>
-                <el-button text type="danger" @click="removePhoto(i)">删除</el-button>
+            <div class="mt-2 flex w-full flex-col gap-1">
+              <span v-for="(p, i) in form.photos" :key="i" class="flex items-center gap-2 text-xs">
+                <span class="max-w-[200px] truncate text-ink-2">{{ p }}</span>
+                <UiButton variant="text" @click="removePhoto(i)" class="text-bad">删除</UiButton>
               </span>
             </div>
           </div>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="saving" @click="save">保存</el-button>
-          <el-button @click="goBack">取消</el-button>
+          <UiButton variant="primary" :loading="saving" @click="save">保存</UiButton>
+          <UiButton @click="goBack">取消</UiButton>
         </el-form-item>
       </el-form>
-    </div>
+    </UiCard>
   </div>
 </template>
 
@@ -156,6 +156,8 @@ import { resumeApi } from '@/api/resume'
 import { unwrappedRequest } from '@/api/request'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 
 const router = useRouter()
 const saving = ref(false)
@@ -371,33 +373,3 @@ async function revokeReq(id: number) {
 onMounted(() => { load(); loadContactRequests() })
 </script>
 
-<style scoped>
-.resume-page { max-width: 560px; margin: 0 auto; padding: 16px; }
-.resume-card {
-  background: var(--color-bg-card);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-  padding: 24px;
-}
-.resume-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-.head-actions { display: flex; align-items: center; gap: 8px; }
-.vis-label { font-size: 13px; color: var(--color-text-secondary); }
-.salary-row { display: flex; align-items: center; gap: 8px; }
-.salary-sep { color: var(--color-text-tertiary); }
-.salary-check { margin-left: 8px; }
-.array-block { display: flex; flex-direction: column; gap: 8px; width: 100%; }
-.array-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.row-input { flex: 1; min-width: 120px; }
-.upload-block { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.upload-name { font-size: 12px; color: var(--color-text-secondary); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.photo-count { font-size: 12px; color: var(--color-text-tertiary); }
-.photo-list { display: flex; flex-direction: column; gap: 4px; width: 100%; margin-top: 8px; }
-.photo-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
-.photo-url { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-secondary); }
-</style>

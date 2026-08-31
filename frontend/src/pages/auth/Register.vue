@@ -74,14 +74,9 @@
               maxlength="6"
               @keyup.enter="handleRegister"
             />
-            <el-button
-              :disabled="countdown > 0 || codeSending"
-              size="large"
-              class="code-btn"
-              @click="handleSendCode"
-            >
+            <UiButton :disabled="countdown > 0 || codeSending" size="large" class="code-btn" @click="handleSendCode">
               {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
-            </el-button>
+            </UiButton>
           </div>
         </el-form-item>
 
@@ -122,15 +117,9 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button
-            type="primary"
-            :loading="flow.loading"
-            class="auth-btn"
-            size="large"
-            @click="handleRegister"
-          >
+          <UiButton variant="primary" :loading="flow.loading" class="auth-btn" size="large" @click="handleRegister">
             {{ flow.loading ? '注册中...' : '注 册' }}
-          </el-button>
+          </UiButton>
         </el-form-item>
       </el-form>
     </template>
@@ -198,14 +187,9 @@
               maxlength="6"
               @keyup.enter="handleRegister"
             />
-            <el-button
-              :disabled="countdown > 0 || codeSending"
-              size="large"
-              class="code-btn"
-              @click="handleSendCode"
-            >
+            <UiButton :disabled="countdown > 0 || codeSending" size="large" class="code-btn" @click="handleSendCode">
               {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
-            </el-button>
+            </UiButton>
           </div>
         </el-form-item>
 
@@ -246,15 +230,9 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button
-            type="primary"
-            :loading="flow.loading"
-            class="auth-btn"
-            size="large"
-            @click="handleRegister"
-          >
+          <UiButton variant="primary" :loading="flow.loading" class="auth-btn" size="large" @click="handleRegister">
             {{ flow.loading ? '注册中...' : '注 册' }}
-          </el-button>
+          </UiButton>
         </el-form-item>
       </el-form>
     </template>
@@ -290,6 +268,7 @@ import {
   emailCodeRules,
   confirmPasswordRule
 } from '@/utils/validate'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()

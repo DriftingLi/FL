@@ -135,7 +135,7 @@ onMounted(() => {
   border: 1px solid var(--color-border-light, #e2e8f0);
   border-radius: 10px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) var(--ease-default);
 }
 
 .feature-entry-card:hover {

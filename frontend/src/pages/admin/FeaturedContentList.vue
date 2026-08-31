@@ -2,9 +2,9 @@
   <div class="featured-list-page">
     <div class="page-header">
       <h2>内容精选管理</h2>
-      <el-button type="primary" @click="goCreate">
+      <UiButton variant="primary" @click="goCreate">
         <el-icon><Plus /></el-icon> 新建内容
-      </el-button>
+      </UiButton>
     </div>
 
     <div class="filter-bar">
@@ -32,8 +32,8 @@
         <el-option label="草稿" :value="0" />
         <el-option label="已发布" :value="1" />
       </el-select>
-      <el-button type="primary" @click="handleFilterChange">查询</el-button>
-      <el-button @click="resetFilter">重置</el-button>
+      <UiButton variant="primary" @click="handleFilterChange">查询</UiButton>
+      <UiButton @click="resetFilter">重置</UiButton>
     </div>
 
     <el-table :data="list" v-loading="loading" stripe border style="width: 100%">
@@ -61,9 +61,9 @@
       <el-table-column label="操作" width="90" fixed="right" align="center">
         <template #default="{ row }">
           <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
-            <el-button type="primary" link size="small">
+            <UiButton variant="primary" link size="small">
               操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
-            </el-button>
+            </UiButton>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="edit">编辑</el-dropdown-item>
@@ -98,6 +98,7 @@ import { ElMessage } from 'element-plus'
 import { adminFeaturedApi, featuredCategoryOptions, categoryLabel, type FeaturedContent } from '@/api/featured'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { formatDateTime } from '@/utils/format'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const router = useRouter()
 
@@ -189,7 +190,7 @@ onMounted(() => {
   margin: 0;
   font-size: 22px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--color-text-primary);
 }
 
 .filter-bar {
@@ -206,7 +207,7 @@ onMounted(() => {
 }
 
 .empty-text {
-  color: #cbd5e1;
+  color: var(--color-text-disabled);
 }
 
 :deep(.el-table) {
