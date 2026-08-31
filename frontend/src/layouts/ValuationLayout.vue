@@ -12,6 +12,25 @@
         </router-link>
 
         <div class="user-zone">
+          <!-- 明暗模式切换（三态：跟随系统 / 浅色 / 深色）。残值域独立布局，
+               不走 SidebarLayout，故在此补同一枚按钮，图标语义与全局一致。 -->
+          <button
+            type="button"
+            class="theme-toggle"
+            :aria-label="themeLabel"
+            :title="themeLabel"
+            @click="themeStore.cycle()"
+          >
+            <el-icon v-if="themeStore.resolved === 'dark'" :size="18"><Moon /></el-icon>
+            <svg v-else-if="themeStore.mode === 'system'" class="theme-half-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3a9 9 0 0 0 0 18V3Z" fill="currentColor" opacity="0.9"/>
+              <path d="M12 6a6 6 0 0 0 0 12 8 8 0 0 1 0-12Z" fill="var(--color-surface, #FFFFFF)"/>
+              <path d="M12 3a9 9 0 0 1 9 9 9 9 0 0 1-9 9V3Z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M16.8 6.2l1.4-1.4M21 12h2M16.8 17.8l1.4 1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <el-icon v-else :size="18"><Sunny /></el-icon>
+          </button>
+
           <!-- 未登录：显示登录/注册入口 -->
           <template v-if="!authStore.isLoggedIn">
             <router-link to="/valuation/register" class="btn-entry btn-register">注册</router-link>
@@ -45,11 +64,21 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Moon, Sunny } from '@element-plus/icons-vue'
 import ValuationFooter from '@/components/valuation/ValuationFooter.vue'
 import { buildSubdomainUrl } from '@/utils/subdomain'
 import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
 import { authApi } from '@/api/auth'
 import { displayNameOf } from '@/types/user'
+
+const themeStore = useThemeStore()
+
+/** 按钮提示：显示当前态与点击后的下一态（与 SidebarLayout 的全局按钮一致） */
+const themeLabel = computed(() => {
+  if (themeStore.mode === 'system') return '跟随系统（点击切换为浅色）'
+  return themeStore.resolved === 'dark' ? '深色模式（点击切换为跟随系统）' : '浅色模式（点击切换为深色）'
+})
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -142,6 +171,38 @@ async function handleLogout() {
   align-items: center;
   gap: var(--space-3, 12px);
   flex-shrink: 0;
+}
+
+/* 明暗模式切换：透明图标钮，hover 淡蓝底（颜色走残值域 token，深色自动跟随） */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: var(--radius-full, 9999px);
+  background: transparent;
+  color: var(--color-text-tertiary, #64748B);
+  cursor: pointer;
+  padding: 0;
+  transition:
+    color var(--t-fast, 0.15s) var(--ease),
+    background var(--t-fast, 0.15s) var(--ease);
+}
+
+.theme-toggle:hover {
+  color: var(--color-accent, #0EA5E9);
+  background: var(--color-accent-subtle, rgba(14, 165, 233, 0.04));
+}
+
+.theme-toggle:active {
+  transform: scale(0.94);
+}
+
+.theme-half-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .btn-entry {

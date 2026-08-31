@@ -733,9 +733,9 @@ async function handleUserCommand(command: string) {
  * 变体选择器多一个类，特异性天然高于上面的单类规则，无需 !important。
  * ------------------------------------------------------------------------- */
 
-/* dark：石墨青暗底 */
+/* dark：石墨青暗底（走 --color-bg-sidebar token，深色模式下自动翻更深 #0B1120） */
 .app-sidebar.is-dark {
-  background: #0c1210;
+  background: var(--color-bg-sidebar);
   border-right-color: rgba(255, 255, 255, 0.08);
 }
 
