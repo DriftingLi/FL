@@ -142,7 +142,7 @@ defineExpose({ begin })
 .exam-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px 15px; background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 .exam-title { font-size: 16px; font-weight: bold; }
 .timer { font-size: 20px; font-weight: bold; display: flex; align-items: center; gap: 8px; }
-.timer.warning { color: #f56c6c; }
+.timer.warning { color: var(--color-danger); }
 .question-card { margin-bottom: 15px; }
 .question-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
 .q-image { max-width: 100%; max-height: 250px; border-radius: 8px; margin-bottom: 10px; }
@@ -150,7 +150,7 @@ defineExpose({ begin })
 .nav-buttons { display: flex; justify-content: center; gap: 15px; margin: 15px 0; }
 .answer-card h4 { margin-bottom: 10px; }
 .card-grid { display: flex; flex-wrap: wrap; gap: 5px; }
-.card-item { width: 32px; height: 32px; line-height: 32px; text-align: center; border: 1px solid #dcdfe6; border-radius: 4px; cursor: pointer; font-size: 12px; }
-.card-item.current { border-color: #409eff; background: #409eff; color: #fff; }
-.card-item.answered { border-color: #67c23a; background: #f0f9eb; }
+.card-item { width: 32px; height: 32px; line-height: 32px; text-align: center; border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; font-size: 12px; }
+.card-item.current { border-color: var(--color-primary-500); background: var(--color-primary-500); color: #fff; }
+.card-item.answered { border-color: var(--color-success); background: var(--color-success-light); }
 </style>

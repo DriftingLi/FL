@@ -112,7 +112,7 @@ onBeforeUnmount(() => {
   height: 48px;
   border-radius: 6px;
   overflow: hidden;
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--color-border-light);
   flex-shrink: 0;
 }
 
@@ -155,18 +155,18 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 4px;
   padding: 5px 10px;
-  border: 1px dashed #c0c4cc;
+  border: 1px dashed var(--color-text-disabled);
   border-radius: 6px;
-  background: #fafbfc;
-  color: #606266;
+  background: var(--color-bg-page);
+  color: var(--color-text-secondary);
   cursor: pointer;
   transition: all var(--duration-base) var(--ease-default);
 }
 
 .upload-btn:hover {
-  border-color: #409eff;
-  color: #409eff;
-  background: #ecf5ff;
+  border-color: var(--color-primary-500);
+  color: var(--color-primary-500);
+  background: var(--color-primary-50);
 }
 
 .upload-btn:disabled {
@@ -180,7 +180,7 @@ onBeforeUnmount(() => {
 
 .btn-count {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 
 .spinning {

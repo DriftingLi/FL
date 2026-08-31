@@ -111,20 +111,20 @@ const grouped = computed(() => {
   width: 8px;
   height: 8px;
   border-radius: 9999px;
-  background: var(--color-primary-500, #409eff);
-  box-shadow: 0 0 0 4px var(--color-primary-100, #ecf5ff);
+  background: var(--color-primary-500, var(--color-primary-500));
+  box-shadow: 0 0 0 4px var(--color-primary-100, var(--color-primary-50));
   flex-shrink: 0;
 }
 .group-label {
   font-size: 15px;
   font-weight: 700;
-  color: var(--color-text-primary, #303133);
+  color: var(--color-text-primary, var(--color-text-primary));
 }
 .group-count {
   font-size: 12px;
-  color: var(--color-text-muted, #909399);
-  background: var(--color-bg-page, #f5f7fa);
-  border: 1px solid var(--color-border-light, #ebeef5);
+  color: var(--color-text-muted, var(--color-text-tertiary));
+  background: var(--color-bg-page, var(--color-bg-page));
+  border: 1px solid var(--color-border-light, var(--color-border-light));
   padding: 2px 8px;
   border-radius: 9999px;
 }
@@ -136,19 +136,19 @@ const grouped = computed(() => {
 .history-card {
   padding: 14px;
   background: #fff;
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--color-border-light);
   border-radius: 12px;
   cursor: pointer;
   transition: border-color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 }
 .history-card:hover {
-  border-color: #dcdfe6;
+  border-color: var(--color-border);
 }
 .history-card.is-deleted {
   opacity: 0.6;
   cursor: default;
-  background: #fafafa;
+  background: var(--color-bg-page);
 }
 .card-top {
   display: flex;
@@ -159,7 +159,7 @@ const grouped = computed(() => {
 .card-title {
   font-size: 14px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
   line-height: 1.4;
   margin-bottom: 6px;
   display: -webkit-box;
@@ -168,12 +168,12 @@ const grouped = computed(() => {
   overflow: hidden;
 }
 .card-title.deleted {
-  color: #909399;
+  color: var(--color-text-tertiary);
   text-decoration: line-through;
 }
 .card-excerpt {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   line-height: 1.6;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -183,14 +183,14 @@ const grouped = computed(() => {
 }
 .card-meta {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
 }
 .dot {
-  color: #c0c4cc;
+  color: var(--color-text-disabled);
 }
 .meta-stat {
   display: inline-flex;
@@ -198,7 +198,7 @@ const grouped = computed(() => {
   gap: 2px;
 }
 .meta-stat.img {
-  color: #e6a23c;
+  color: var(--color-warning);
 }
 .panel-footer {
   display: flex;
@@ -208,6 +208,6 @@ const grouped = computed(() => {
 }
 .footer-hint {
   font-size: 12px;
-  color: #c0c4cc;
+  color: var(--color-text-disabled);
 }
 </style>

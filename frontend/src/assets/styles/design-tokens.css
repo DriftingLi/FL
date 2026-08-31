@@ -66,6 +66,21 @@
   --color-bg-sidebar-hover: #1E293B;
   --color-bg-sidebar-active: rgba(13, 148, 136, 0.15);
 
+  /*
+   * 沉浸式查看器（图片 / PPT / 视频 / 文档）的深色铬件。
+   * 期 1 收编自 components/student 四个 Viewer 组件的零散深色 hex；
+   * 原 DocumentViewer 用灰色系（#525659/#3c3f41）、其余用深蓝系（#1a1a2e/#16213e），
+   * 收编后统一为品牌深蓝系，四个查看器视觉归一。
+   * 文字/描边取自现有中性色阶（与 --color-text-secondary / muted / border 同值），
+   * 保证深底上的对比度与全站一致。
+   */
+  --color-viewer-bg: #1A1A2E;         /* 外层底（原 ImageViewer/PptViewer 外框）*/
+  --color-viewer-bar: #16213E;        /* 工具栏 / 页眉（含 DocumentViewer 原灰色系）*/
+  --color-viewer-well: #0D0D1A;       /* 最深区域（原 PptViewer 缩略图栏）*/
+  --color-viewer-text: #E2E8F0;       /* 深底上的主要文字（统一原 #ddd / #ccc）*/
+  --color-viewer-text-muted: #94A3B8; /* 深底上的次要文字（原 #aaa）*/
+  --color-viewer-line: #475569;       /* 深底上的描边（统一原 #555 / #666）*/
+
   --color-border: #E2E8F0;
   --color-border-light: #F1F5F9;
   --color-border-dark: #CBD5E1;
