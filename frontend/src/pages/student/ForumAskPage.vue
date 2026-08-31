@@ -1,11 +1,11 @@
 <template>
-  <div class="ask-page">
-    <div class="back-bar">
+  <div class="mx-auto max-w-[760px] px-4 pb-10">
+    <div class="mb-3">
       <UiButton variant="text" :icon="ArrowLeft" @click="goBack">返回问答</UiButton>
     </div>
 
     <UiCard padding="lg">
-      <h1 class="ask-title">我要提问</h1>
+      <h1 class="m-0 mb-5 text-xl font-semibold text-ink">我要提问</h1>
 
       <ForumPostForm
         ref="postForm"
@@ -19,7 +19,7 @@
         @success="goBack"
       />
 
-      <div class="ask-actions">
+      <div class="flex">
         <UiButton variant="primary" :loading="postForm?.submitting" :disabled="!postForm?.canSubmit" @click="postForm?.submit()">发布提问</UiButton>
         <UiButton @click="goBack">取消</UiButton>
       </div>
@@ -45,25 +45,3 @@ function goBack() {
 }
 </script>
 
-<style scoped>
-.ask-page {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 0 16px 40px;
-}
-
-.back-bar {
-  margin-bottom: 12px;
-}
-
-.ask-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0 0 20px;
-}
-
-.ask-actions {
-  display: flex;
-}
-</style>
