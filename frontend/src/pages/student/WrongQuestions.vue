@@ -1,7 +1,7 @@
 <template>
-  <div class="wrong-questions">
+  <div class="mx-auto max-w-[900px]">
     <h2>错题本</h2>
-    <div class="filter-bar">
+    <div class="mb-3 flex flex-wrap items-center gap-2.5">
       <el-select v-model="filterType" placeholder="题型筛选" clearable style="width: 150px">
         <el-option label="单选题" value="single_choice" />
         <el-option label="多选题" value="multi_choice" />
@@ -10,14 +10,14 @@
         <el-option label="简答题" value="short_answer" />
       </el-select>
       <UiButton @click="toggleSort">
-        <el-icon class="sort-icon"><SortDown v-if="sortOrder === 'desc'" /><SortUp v-else /></el-icon>
+        <el-icon class="mr-1"><SortDown v-if="sortOrder === 'desc'" /><SortUp v-else /></el-icon>
         {{ sortOrder === 'desc' ? '最新错误在前' : '最早错误在前' }}
       </UiButton>
       <el-checkbox v-model="filterFavorited">收藏</el-checkbox>
       <el-checkbox v-model="filterMultiWrong">错多次</el-checkbox>
       <UiButton @click="resetFilters">重置筛选</UiButton>
     </div>
-    <div class="action-bar">
+    <div class="mb-5 flex flex-wrap items-center gap-2.5">
       <el-checkbox :model-value="isAllSelected" :indeterminate="isIndeterminate" @change="toggleSelectAll" :disabled="wrongList.length===0">全选</el-checkbox>
       <UiButton variant="danger" :disabled="selectedIds.size===0" @click="handleBatchRemove">批量移出</UiButton>
       <UiButton variant="success" :disabled="wrongList.length===0" @click="handleExport">导出错题</UiButton>
@@ -37,22 +37,22 @@
       <el-card
         v-for="(item, i) in wrongList"
         :key="item.id"
-        class="wrong-item stagger-in"
+        class="stagger-in mb-3"
         :style="staggerStyle(i)"
       >
-        <div class="wrong-header">
-          <div class="header-left">
+        <div class="mb-2 flex items-center justify-between">
+          <div class="flex items-center gap-2">
             <el-checkbox :model-value="selectedIds.has(item.question_id)" @change="(val:boolean)=>toggleSelect(item.question_id, val)" />
             <el-tag size="small">{{ item.question?.type ? (typeMap as Record<string, string>)[item.question.type] : '' }}</el-tag>
             <el-tag v-if="item.is_redone" type="success" size="small">已重做</el-tag>
-            <el-icon class="fav-star" :class="{ active: item.favorited }" @click="toggleFavorite(item)">
+            <el-icon class="fav-star cursor-pointer text-lg text-ink-muted hover:text-warn" :class="item.favorited ? 'text-warn' : ''" @click="toggleFavorite(item)">
               <StarFilled v-if="item.favorited" /><Star v-else />
             </el-icon>
           </div>
-          <span class="wrong-count">错误 {{ item.wrong_count }} 次</span>
+          <span class="text-[13px] text-bad">错误 {{ item.wrong_count }} 次</span>
         </div>
-        <p class="wrong-content">{{ item.question?.content }}</p>
-        <div v-if="redoingId === item.id" class="redo-area">
+        <p class="mb-2.5 text-[15px] leading-[1.6]">{{ item.question?.content }}</p>
+        <div v-if="redoingId === item.id" class="mt-2.5">
           <template v-if="redoResults[item.id]">
             <AnswerResultCard
               :correct-answer="redoResults[item.id].correct_answer || ''"
@@ -67,7 +67,7 @@
             <KnowledgeCard :tags="wrongKnowledge[item.id] || []" />
             <CommentCard :question-id="item.question_id" />
             <NoteCard :question-id="item.question_id" />
-            <div class="redo-actions">
+            <div class="mt-2 flex gap-2">
               <UiButton size="small" @click="redoingId = null">关闭</UiButton>
               <UiButton variant="primary" size="small" @click="redoingId = null">完成</UiButton>
             </div>
@@ -82,13 +82,13 @@
               @select="key => toggleRedoOption(key, item.question?.type ?? 'single_choice')"
             />
             <el-input v-else v-model="redoTextAnswer" type="textarea" :rows="3" placeholder="请输入答案" />
-            <div class="redo-actions">
+            <div class="mt-2 flex gap-2">
               <UiButton variant="primary" size="small" @click="submitRedo(item)">提交</UiButton>
               <UiButton size="small" @click="redoingId = null">取消</UiButton>
             </div>
           </template>
         </div>
-        <div v-else class="wrong-actions">
+        <div v-else class="flex gap-2">
           <UiButton variant="primary" size="small" @click="startRedo(item)">重做</UiButton>
           <UiButton variant="danger" size="small" @click="removeWrong(item.question_id)">移出</UiButton>
         </div>
@@ -347,21 +347,3 @@ async function handleExport(){
 }
 </script>
 
-<style scoped>
-.wrong-questions { max-width: 900px; margin: 0 auto; }
-.wrong-questions h2 { margin-bottom: 20px; }
-.filter-bar { display: flex; gap: 10px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
-.action-bar { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
-.sort-icon { margin-right: 4px; }
-.fav-star { cursor: pointer; font-size: 18px; color: var(--color-text-disabled); }
-.fav-star:hover { color: var(--color-warning); }
-.fav-star.active { color: var(--color-warning); }
-.wrong-item { margin-bottom: 12px; }
-.wrong-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.header-left { display:flex; align-items:center; gap:8px; }
-.wrong-count { color: var(--color-danger); font-size: 13px; }
-.wrong-content { font-size: 15px; line-height: 1.6; margin-bottom: 10px; }
-.redo-area { margin-top: 10px; }
-.redo-actions { margin-top: 8px; display:flex; gap:8px; }
-.wrong-actions { display: flex; gap: 8px; }
-</style>
