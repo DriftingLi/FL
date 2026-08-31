@@ -325,7 +325,7 @@ onMounted(() => {
 
 .page-header h2 {
   font-size: 22px;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .tags-layout {
@@ -346,35 +346,35 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid var(--color-bg-page);
   cursor: pointer;
   border-radius: 6px;
-  transition: background 0.2s;
+  transition: background var(--duration-base) var(--ease-default);
 }
 
 .tag-row:hover {
-  background: #f5f7fa;
+  background: var(--color-bg-page);
 }
 
 .tag-row.active {
-  background: #ecf5ff;
+  background: var(--color-primary-50);
 }
 
 .tag-name {
   flex: 1;
   font-size: 14px;
-  color: #303133;
+  color: var(--color-text-primary);
   font-weight: 500;
 }
 
 .tag-count {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
 }
 
 .tag-actions {
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity var(--duration-base) var(--ease-default);
 }
 
 .tag-row:hover .tag-actions {
@@ -395,7 +395,7 @@ onMounted(() => {
 
 .no-tag {
   font-size: 12px;
-  color: #c0c4cc;
+  color: var(--color-text-disabled);
 }
 
 .pagination-wrapper {

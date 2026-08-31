@@ -150,8 +150,8 @@ function formatDuration(minutes: number) {
 }
 
 function getProgressColor(progress: number) {
-  if (progress >= 100) return '#67c23a'
-  if (progress >= 60) return '#409eff'
+  if (progress >= 100) return 'var(--color-success)'
+  if (progress >= 60) return 'var(--color-primary-500)'
   if (progress >= 30) return '#e6a23c'
   return '#f56c6c'
 }
@@ -298,7 +298,7 @@ onMounted(() => {
 
 .page-header h2 {
   font-size: 22px;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .stat-cards {
@@ -320,14 +320,14 @@ onMounted(() => {
   line-height: 1.3;
 }
 
-.stat-value.blue { color: #409eff; }
-.stat-value.green { color: #67c23a; }
-.stat-value.orange { color: #e6a23c; }
-.stat-value.gray { color: #909399; }
+.stat-value.blue { color: var(--color-primary-500); }
+.stat-value.green { color: var(--color-success); }
+.stat-value.orange { color: var(--color-warning); }
+.stat-value.gray { color: var(--color-text-tertiary); }
 
 .stat-label {
   font-size: 13px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   margin-top: 6px;
 }
 
@@ -347,7 +347,7 @@ onMounted(() => {
 .card-title {
   font-size: 16px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .chart-container {

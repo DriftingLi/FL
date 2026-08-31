@@ -398,11 +398,11 @@ onMounted(() => {
 
 .page-header h2 {
   font-size: 22px;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .card {
-  background: #fff;
+  background: var(--color-text-inverse);
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
@@ -411,7 +411,7 @@ onMounted(() => {
 
 .card-title {
   font-size: 16px;
-  color: #303133;
+  color: var(--color-text-primary);
   font-weight: 500;
   margin-bottom: 16px;
 }
@@ -424,7 +424,7 @@ onMounted(() => {
 
 .feature-label {
   font-weight: 500;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .feature-cell {
@@ -448,13 +448,13 @@ onMounted(() => {
 .dual-label {
   font-size: 13px;
   font-weight: 500;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .dual-hint {
   margin-top: 12px;
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
   line-height: 1.5;
 }
 

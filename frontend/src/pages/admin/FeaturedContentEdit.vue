@@ -259,11 +259,11 @@ onMounted(() => {
   margin: 0;
   font-size: 22px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--color-text-primary);
 }
 
 .edit-card {
-  background: #fff;
+  background: var(--color-text-inverse);
   border-radius: 12px;
   padding: 32px 40px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
@@ -273,15 +273,15 @@ onMounted(() => {
   display: inline-block;
   width: 280px;
   height: 158px;
-  border: 1px dashed #d9d9d9;
+  border: 1px dashed var(--color-border-dark);
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition: border-color var(--duration-base) var(--ease-default);
 }
 
 .cover-uploader:hover {
-  border-color: var(--el-color-primary, #409eff);
+  border-color: var(--el-color-primary, var(--color-primary-500));
 }
 
 .cover-preview {
@@ -299,9 +299,9 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: #94a3b8;
+  color: var(--color-text-muted);
   font-size: 13px;
-  background: #f8fafc;
+  background: var(--color-bg-page);
 }
 
 .cover-placeholder .el-icon {

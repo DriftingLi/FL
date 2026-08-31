@@ -271,7 +271,7 @@ onMounted(() => {
 
 .page-header h2 {
   font-size: 22px;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .filter-bar {

@@ -52,6 +52,16 @@
   --color-danger-strong: #B91C1C;
   --color-info-strong: #374151;
 
+  /*
+   * 辅助分类色 - 紫罗兰。管理端统计卡/快捷入口的第 4 分类色（蓝/绿/琥珀/紫并列），
+   * 承担区分度职责，故不能并入 accent（天蓝与 primary 青绿同系，会撞色）。
+   * 期 2 收编自 pages/admin 的 #8B5CF6/#F5F3FF/#DDD6FE。
+   * 注意：ECharts canvas 无法解析 CSS 变量，canvas 场景仍需写 hex（见 Dashboard.vue brandColors）。
+   */
+  --color-violet-50: #F5F3FF;
+  --color-violet-200: #DDD6FE;
+  --color-violet-500: #8B5CF6;
+
   --color-text-primary: #0F172A;
   --color-text-secondary: #475569;
   --color-text-tertiary: #64748B;
