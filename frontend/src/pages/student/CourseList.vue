@@ -57,7 +57,7 @@
           />
 
           <template v-else>
-            <div v-if="courses.length > 0" class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+            <div v-if="courses.length > 0" class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4 max-[560px]:grid-cols-1">
               <CourseCard
                 v-for="(course, i) in courses"
                 :key="course.course_id"

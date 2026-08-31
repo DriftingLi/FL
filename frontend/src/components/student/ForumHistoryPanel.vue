@@ -137,6 +137,13 @@ const grouped = computed(() => {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 12px;
 }
+
+/* 期 7：窄屏单列，避免 280px 最小列宽撑出横向滚动 */
+@media (max-width: 560px) {
+  .group-grid {
+    grid-template-columns: 1fr;
+  }
+}
 /*
  * 卡片容器已交给 UiCard 的 interactive 变体：描边 / 圆角 / 内距 / 底色 / 悬浮反馈
  * 由它承担，且自带 role="button" + tabindex="0" —— 这个可点卡片此前键盘完全无法聚焦。
