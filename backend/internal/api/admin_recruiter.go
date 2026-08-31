@@ -100,7 +100,15 @@ func (h *AdminRecruiterHandler) ToggleStatus(c *gin.Context) {
 	}.Handle(c)
 }
 
-// List 招聘者列表 GET /api/admin/recruiters（简易列表，返回空或已创建的招聘者）
+// List 招聘者列表 GET /api/admin/recruiters（#416：分页 + 关键字过滤，字段白名单无凭据）。
 func (h *AdminRecruiterHandler) List(c *gin.Context) {
-	response.Success(c, map[string]any{"items": []any{}, "total": 0})
+	page := atoiDefault(c.Query("page"), 1)
+	pageSize := atoiDefault(c.Query("page_size"), 20)
+	keyword := c.Query("keyword")
+	resp, err := h.authSvc.ListRecruiters(page, pageSize, keyword)
+	if err != nil {
+		response.ServerError(c, err.Error())
+		return
+	}
+	response.Success(c, resp)
 }

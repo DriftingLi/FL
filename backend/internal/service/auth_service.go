@@ -427,6 +427,67 @@ func (s *AuthService) ToggleRecruiterStatus(id int) (int16, error) {
 	return next, nil
 }
 
+// RecruiterListItem 招聘者列表项（管理面白名单：不含任何凭据字段，口令哈希永不出管理面）。
+type RecruiterListItem struct {
+	ID            int       `json:"id"`
+	Username      string    `json:"username"`
+	CompanyName   string    `json:"company_name"`
+	CreditCode    string    `json:"credit_code"`
+	BusinessScope string    `json:"business_scope"`
+	ContactName   string    `json:"contact_name"`
+	ContactPhone  string    `json:"contact_phone"`
+	ContactEmail  string    `json:"contact_email"`
+	Status        int16     `json:"status"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+// RecruiterListResult 招聘者分页列表。
+type RecruiterListResult struct {
+	Total int64               `json:"total"`
+	Page  int                 `json:"page"`
+	Items []RecruiterListItem `json:"items"`
+}
+
+// ListRecruiters 招聘者列表（分页 + 关键字过滤企业名/账号；#416 真实现替换硬编码空数组桩）。
+// 响应只含白名单字段（无 Password 等凭据）。
+func (s *AuthService) ListRecruiters(page, pageSize int, keyword string) (*RecruiterListResult, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 || pageSize > 100 {
+		pageSize = 20
+	}
+	q := s.db.Model(&model.RecruiterUser{})
+	if keyword != "" {
+		kw := "%" + keyword + "%"
+		q = q.Where("username LIKE ? OR company_name LIKE ?", kw, kw)
+	}
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, err
+	}
+	var rows []model.RecruiterUser
+	if err := q.Order("created_at DESC").Limit(pageSize).Offset((page - 1) * pageSize).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	items := make([]RecruiterListItem, 0, len(rows))
+	for _, r := range rows {
+		items = append(items, RecruiterListItem{
+			ID:            r.ID,
+			Username:      r.Username,
+			CompanyName:   r.CompanyName,
+			CreditCode:    r.CreditCode,
+			BusinessScope: r.BusinessScope,
+			ContactName:   r.ContactName,
+			ContactPhone:  r.ContactPhone,
+			ContactEmail:  r.ContactEmail,
+			Status:        r.Status,
+			CreatedAt:     r.CreatedAt,
+		})
+	}
+	return &RecruiterListResult{Total: total, Page: page, Items: items}, nil
+}
+
 // EnsureDefaultUsers 确保默认账号存在（admin/tutor/student），密码由环境变量配置。
 // 已存在的账号会被跳过（不会重置密码）。
 func (s *AuthService) EnsureDefaultUsers() error {

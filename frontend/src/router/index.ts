@@ -344,6 +344,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/admin/TutorManage.vue')
       },
       {
+        path: 'recruiters',
+        name: 'RecruiterManage',
+        component: () => import('@/pages/admin/RecruiterManage.vue')
+      },
+      {
         path: 'valuation-config',
         name: 'ValuationConfigManage',
         component: () => import('@/pages/admin/ValuationConfigManage.vue')
