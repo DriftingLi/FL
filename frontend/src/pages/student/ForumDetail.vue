@@ -1,6 +1,6 @@
 <template>
-  <div class="forum-detail-page">
-    <div class="back-bar">
+  <div class="mx-auto max-w-[900px] px-4 pb-10">
+    <div class="back-bar mb-3">
       <UiButton variant="text" :icon="ArrowLeft" @click="goBack">返回列表</UiButton>
     </div>
 
@@ -18,33 +18,33 @@
     </template>
 
     <template v-else-if="topic">
-      <div class="topic-card">
-        <div class="topic-header">
-          <el-avatar :size="46" :src="topic.author.avatar_url || undefined" class="author-avatar">
+      <div class="topic-card mb-4 rounded-card bg-panel p-5 shadow-card">
+        <div class="topic-header flex items-center gap-3">
+          <el-avatar :size="46" :src="topic.author.avatar_url || undefined">
             {{ authorLetter(topic.author) }}
           </el-avatar>
-          <div class="topic-author-info">
-            <span class="author-name">{{ displayName(topic.author) }}</span>
-            <span class="topic-time">{{ formatLocaleDateTime(topic.created_at, '') }}</span>
+          <div class="topic-author-info flex flex-col gap-0.5">
+            <span class="author-name text-sm font-semibold text-ink">{{ displayName(topic.author) }}</span>
+            <span class="topic-time text-xs text-ink-3">{{ formatLocaleDateTime(topic.created_at, '') }}</span>
           </div>
-          <div class="topic-actions">
+          <div class="topic-actions ml-auto flex items-center gap-1">
             <el-tooltip :content="topic?.liked_by_me ? '取消点赞' : '点赞'" placement="top">
               <UiButton :type="topic?.liked_by_me ? 'danger' : 'default'" circle size="small" @click="toggleTopicLike">
-                <span class="heart-btn">{{ topic?.liked_by_me ? '♥' : '♡' }}</span>
+                <span class="heart-btn text-sm leading-none">{{ topic?.liked_by_me ? '♥' : '♡' }}</span>
               </UiButton>
             </el-tooltip>
-            <span v-if="topic" class="like-count">{{ topic.likes_count || 0 }}</span>
+            <span v-if="topic" class="like-count min-w-4 text-left text-xs text-bad">{{ topic.likes_count || 0 }}</span>
             <el-tooltip :content="topicFavorited ? '取消收藏' : '收藏'" placement="top">
               <UiButton :icon="topicFavorited ? StarFilled : Star" :type="topicFavorited ? 'warning' : 'default'" circle size="small" @click="toggleFavorite"/>
             </el-tooltip>
             <UiButton variant="text" size="small" @click="openReport('topic')">举报</UiButton>
-            <UiButton variant="text" v-if="topic.can_delete" class="delete-btn text-bad" size="small" @click="removeTopic">
+            <UiButton variant="text" v-if="topic.can_delete" class="delete-btn ml-auto text-bad" size="small" @click="removeTopic">
               删除
             </UiButton>
           </div>
         </div>
-        <div class="topic-body">
-          <div class="topic-title-row">
+        <div class="topic-body mt-4">
+          <div class="topic-title-row mb-3 flex flex-wrap items-center gap-2">
             <el-tag v-if="topic.category === 'question'" size="small" type="success">问答</el-tag>
             <el-tag v-else-if="topic.chapter_id" size="small" type="warning">
               {{ topic.chapter_title || '章节讨论' }}
@@ -52,30 +52,30 @@
             <el-tag v-else size="small" type="info">综合</el-tag>
             <el-tag v-if="topic.category === 'question' && (topic.accepted_reply_id || topic.solved_at)" size="small" type="success" effect="dark">✓ 已解决</el-tag>
             <el-tag v-else-if="topic.category === 'question'" size="small" type="info" effect="plain">求助</el-tag>
-            <h1 class="topic-title">{{ topic.title }}</h1>
+            <h1 class="topic-title m-0 text-xl font-semibold text-ink">{{ topic.title }}</h1>
           </div>
-          <div v-if="topic.category === 'question' && isTopicOwner && topic.accepted_reply_id" class="accept-actions">
+          <div v-if="topic.category === 'question' && isTopicOwner && topic.accepted_reply_id" class="accept-actions mb-3">
             <UiButton size="small" @click="handleCancelAccept">取消采纳</UiButton>
           </div>
-          <div class="topic-content">{{ topic.content }}</div>
+          <div class="topic-content whitespace-pre-wrap break-words text-[15px] leading-[1.8] text-ink">{{ topic.content }}</div>
           <ForumImageGallery :images="topic.images" />
-          <div class="topic-stats">
+          <div class="topic-stats mt-4 flex items-center gap-1.5 text-[13px] text-ink-3">
             <el-icon><View /></el-icon>
             {{ topic.view_count }} 次浏览
-            <span class="like-stat">
-              <span class="heart" :class="{ liked: topic.liked_by_me }">{{ topic.liked_by_me ? '♥' : '♡' }}</span>
+            <span class="like-stat ml-3 inline-flex items-center gap-0.5 text-bad">
+              <span class="heart text-xs leading-none">{{ topic.liked_by_me ? '♥' : '♡' }}</span>
               {{ topic.likes_count || 0 }} 点赞
             </span>
-            <el-icon class="reply-icon"><ChatDotRound /></el-icon>
+            <el-icon class="reply-icon ml-3"><ChatDotRound /></el-icon>
             {{ topic.reply_count }} 条回复
           </div>
         </div>
       </div>
 
-      <div class="replies-card">
-        <div class="replies-header">
-          <h3 class="replies-title">全部回复（{{ replies.length }}）</h3>
-          <div style="display:flex; gap:8px; align-items:center;">
+      <div class="replies-card mb-4 rounded-card bg-panel p-5 shadow-card">
+        <div class="replies-header mb-2 flex items-center justify-between">
+          <h3 class="replies-title m-0 text-base font-semibold text-ink">全部回复（{{ replies.length }}）</h3>
+          <div class="flex items-center gap-2">
             <el-radio-group v-model="replySort" size="small" @change="handleReplySortChange">
               <el-radio-button value="latest">最新</el-radio-button>
               <el-radio-button value="hot">热门</el-radio-button>
@@ -88,19 +88,23 @@
             v-for="(reply, i) in sortedReplies"
             :key="reply.id"
             :id="`reply-${reply.id}`"
-            class="reply-item stagger-in"
-            :class="{ 'is-accepted': reply.is_accepted }"
+            class="reply-item stagger-in flex gap-3 border-b border-line py-4 last:border-b-0"
+            :class="
+              reply.is_accepted
+                ? 'is-accepted my-1.5 -mx-3 rounded-[8px] border-2 border-ok bg-ok-soft p-3'
+                : ''
+            "
             :style="staggerStyle(i)"
           >
-            <el-avatar :size="38" :src="reply.author.avatar_url || undefined" class="author-avatar">
+            <el-avatar :size="38" :src="reply.author.avatar_url || undefined">
               {{ authorLetter(reply.author) }}
             </el-avatar>
-            <div class="reply-main">
-              <div class="reply-meta">
-                <span class="author-name">{{ displayName(reply.author) }}</span>
-                <el-tag v-if="topic && reply.author.user_id === topic.author.user_id" size="small" type="info" effect="plain" class="owner-tag">楼主</el-tag>
-                <el-tag v-if="reply.is_accepted" size="small" type="success" effect="dark" class="accepted-inline">✓ 已采纳</el-tag>
-                <span class="reply-time">{{ formatLocaleDateTime(reply.created_at, '') }}</span>
+            <div class="reply-main min-w-0 flex-1">
+              <div class="reply-meta mb-1.5 flex flex-wrap items-center gap-2">
+                <span class="author-name text-sm font-semibold text-ink">{{ displayName(reply.author) }}</span>
+                <el-tag v-if="topic && reply.author.user_id === topic.author.user_id" size="small" type="info" effect="plain" class="owner-tag ml-1.5">楼主</el-tag>
+                <el-tag v-if="reply.is_accepted" size="small" type="success" effect="dark" class="accepted-inline ml-1.5">✓ 已采纳</el-tag>
+                <span class="reply-time text-xs text-ink-3">{{ formatLocaleDateTime(reply.created_at, '') }}</span>
                 <UiButton variant="primary" class="reply-btn" size="small" @click="startReplyTo(reply)">
                   回复
                 </UiButton>
@@ -108,25 +112,25 @@
                   举报
                 </UiButton>
                 <UiButton variant="text" class="like-btn" :type="reply.liked_by_me ? 'danger' : 'default'" size="small" @click="toggleReplyLike(reply)">
-                  <span class="heart">{{ reply.liked_by_me ? '♥' : '♡' }}</span>
-                  <span v-if="(reply.likes_count || 0) > 0" class="like-count-inline">{{ reply.likes_count }}</span>
+                  <span class="heart text-[13px] leading-none">{{ reply.liked_by_me ? '♥' : '♡' }}</span>
+                  <span v-if="(reply.likes_count || 0) > 0" class="like-count-inline ml-0.5 text-xs">{{ reply.likes_count }}</span>
                 </UiButton>
-                <UiButton variant="text" v-if="reply.can_delete" class="delete-btn text-bad" size="small" @click="removeReply(reply.id)">
+                <UiButton variant="text" v-if="reply.can_delete" class="delete-btn ml-auto text-bad" size="small" @click="removeReply(reply.id)">
                   删除
                 </UiButton>
               </div>
-              <div v-if="reply.parent_id && reply.parent_name" class="reply-quote">
+              <div v-if="reply.parent_id && reply.parent_name" class="reply-quote mb-1 inline-block rounded-[6px] bg-canvas px-2 py-0.5 text-xs text-ink-3">
                 回复 @{{ reply.parent_name }}
               </div>
-              <div v-if="reply.is_accepted" class="accepted-badge">
+              <div v-if="reply.is_accepted" class="accepted-badge my-1.5">
                 <el-tag size="small" type="success" effect="dark">✓ 已采纳答案</el-tag>
               </div>
-              <div class="reply-content">{{ reply.content }}</div>
+              <div class="reply-content whitespace-pre-wrap break-words text-sm leading-[1.7] text-ink">{{ reply.content }}</div>
               <ForumImageGallery :images="reply.images" />
-              <div v-if="topic && topic.category === 'question' && isTopicOwner && !reply.is_accepted" class="reply-accept-row">
+              <div v-if="topic && topic.category === 'question' && isTopicOwner && !reply.is_accepted" class="reply-accept-row mt-2">
                 <UiButton variant="success" plain size="small" @click="handleAccept(reply.id)">采纳此回答</UiButton>
               </div>
-              <div v-else-if="topic && topic.category === 'question' && isTopicOwner && reply.is_accepted" class="reply-accept-row">
+              <div v-else-if="topic && topic.category === 'question' && isTopicOwner && reply.is_accepted" class="reply-accept-row mt-2">
                 <UiButton size="small" @click="handleCancelAccept">取消采纳</UiButton>
               </div>
             </div>
@@ -151,17 +155,17 @@
         </template>
       </el-dialog>
 
-      <div class="reply-editor">
-        <div v-if="replyingTo" class="replying-bar">
+      <div class="reply-editor mb-4 rounded-card bg-panel p-5 shadow-card">
+        <div v-if="replyingTo" class="replying-bar mb-2.5">
           <el-tag closable type="info" size="small" @close="replyingTo = null">
             回复 @{{ replyingTo.username }}
           </el-tag>
         </div>
-        <div class="reply-box">
-          <div v-if="replyImages.length > 0" class="reply-images-bar">
-            <div v-for="(url, index) in replyImages" :key="url + index" class="reply-thumb">
-              <el-image :src="resolveFileUrl(url)" fit="cover" class="reply-thumb-img" />
-              <button type="button" class="reply-thumb-remove" @click="removeReplyImage(index)">
+        <div class="reply-box rounded-[8px] border border-[var(--color-border-dark)] bg-panel p-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] focus-within:border-ui-500">
+          <div v-if="replyImages.length > 0" class="reply-images-bar mb-2 flex flex-wrap gap-1.5">
+            <div v-for="(url, index) in replyImages" :key="url + index" class="reply-thumb relative size-12 shrink-0 overflow-hidden rounded-[6px] border border-line">
+              <el-image :src="resolveFileUrl(url)" fit="cover" class="reply-thumb-img h-full w-full" />
+              <button type="button" class="reply-thumb-remove absolute right-0 top-0 flex size-4 items-center justify-center rounded-bl-[6px] border-0 bg-black/55 p-0 text-[10px] text-panel hover:bg-bad/90" @click="removeReplyImage(index)">
                 <el-icon><Close /></el-icon>
               </button>
             </div>
@@ -175,12 +179,12 @@
             placeholder="写下你的回复…"
             class="reply-textarea"
           />
-          <div class="reply-box-footer">
+          <div class="reply-box-footer mt-1.5 flex items-center justify-between">
             <UiButton variant="text" :icon="Paperclip" circle size="small" :disabled="replyImages.length >= 3" title="添加图片" @click="triggerReplyFile"/>
             <UiButton variant="primary" :icon="Promotion" circle size="small" :loading="submitting" :disabled="!canSubmitReply" title="发表回复" @click="submitReply"/>
           </div>
         </div>
-        <input ref="replyFileInput" type="file" accept="image/*" multiple style="display: none" @change="handleReplyFileSelect" />
+        <input ref="replyFileInput" type="file" accept="image/*" multiple class="hidden" @change="handleReplyFileSelect" />
       </div>
     </template>
   </div>
@@ -518,293 +522,14 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.forum-detail-page {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 0 16px 40px;
-}
-
-.back-bar {
-  margin-bottom: 12px;
-}
-
-.topic-card,
-.replies-card,
-.reply-editor {
-  background: var(--color-bg-card);
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  padding: 20px;
-  margin-bottom: 16px;
-}
-
-.topic-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.topic-author-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.author-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.topic-time,
-.reply-time {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-}
-
-.delete-btn {
-  margin-left: auto;
-}
-
-.topic-body {
-  margin-top: 16px;
-}
-
-.topic-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-}
-
-.topic-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
-.topic-content {
-  color: var(--color-text-primary);
-  font-size: 15px;
-  line-height: 1.8;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.topic-stats {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 16px;
-  font-size: 13px;
-  color: var(--color-text-tertiary);
-}
-
-.topic-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-}
-
-.like-count {
-  font-size: 12px;
-  color: var(--color-danger);
-  min-width: 16px;
-  text-align: left;
-}
-
-.heart-btn {
-  font-size: 14px;
-  line-height: 1;
-}
-
-.like-stat {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: 12px;
-  color: var(--color-danger);
-}
-
-.like-stat .heart.liked {
-  color: var(--color-danger);
-}
-
-.reply-icon {
-  margin-left: 12px;
-}
-
-.replies-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.replies-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
-.reply-item {
-  display: flex;
-  gap: 12px;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--color-bg-page);
-}
-
-.reply-item.is-accepted {
-  border: 2px solid #67c23a;
-  background: var(--color-success-50, #f0fdf4);
-  border-radius: 8px;
-  padding: 12px;
-  margin: 6px -12px;
-}
-
-.reply-item.is-accepted .accepted-badge {
-  margin: 6px 0;
-}
-
-.owner-tag {
-  margin-left: 6px;
-}
-
-.accepted-inline {
-  margin-left: 6px;
-}
-
-.accept-actions {
-  margin-bottom: 12px;
-}
-
-.accepted-badge {
-  margin: 6px 0;
-}
-
-.reply-accept-row {
-  margin-top: 8px;
-}
-
-.reply-item:last-child {
-  border-bottom: none;
-}
-
-.reply-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.reply-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
-.like-btn .heart {
-  font-size: 13px;
-  line-height: 1;
-}
-
-.like-count-inline {
-  font-size: 12px;
-  margin-left: 2px;
-}
-
-.reply-content {
-  color: var(--color-text-primary);
-  font-size: 14px;
-  line-height: 1.7;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.reply-quote {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-  background: var(--color-bg-page);
-  border-radius: 6px;
-  padding: 2px 8px;
-  margin-bottom: 4px;
-  display: inline-block;
-}
-
-.replying-bar {
-  margin-bottom: 10px;
-}
-
-.reply-box {
-  border: 1px solid var(--color-border-dark);
-  border-radius: 8px;
-  background: var(--color-bg-card);
-  padding: 8px;
-  transition: border-color var(--duration-base) var(--ease-default);
-}
-
-.reply-box:focus-within {
-  border-color: var(--color-primary-500);
-}
-
-.reply-images-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.reply-thumb {
-  position: relative;
-  width: 48px;
-  height: 48px;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid var(--color-border-light);
-  flex-shrink: 0;
-}
-
-.reply-thumb-img {
-  width: 100%;
-  height: 100%;
-}
-
-.reply-thumb-remove {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 16px;
-  height: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 0 0 0 6px;
-  background: rgba(0, 0, 0, 0.55);
-  color: var(--color-bg-card);
-  cursor: pointer;
-  padding: 0;
-  font-size: 10px;
-}
-
-.reply-thumb-remove:hover {
-  background: rgba(245, 108, 108, 0.9);
-}
-
+/*
+ * 仅保留 :deep 的 EP 内部覆盖（R1 允许）：回复文本框去边框/阴影（无边框模式），
+ * 让边框交给外层 .reply-box 的 focus-within 原子类呈现。
+ */
 .reply-textarea :deep(.el-textarea__inner) {
   border: none !important;
   box-shadow: none !important;
   padding: 4px 0;
   resize: none;
-}
-
-.reply-box-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 6px;
 }
 </style>
