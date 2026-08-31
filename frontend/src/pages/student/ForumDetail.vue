@@ -29,24 +29,13 @@
           </div>
           <div class="topic-actions">
             <el-tooltip :content="topic?.liked_by_me ? '取消点赞' : '点赞'" placement="top">
-              <el-button
-                :type="topic?.liked_by_me ? 'danger' : 'default'"
-                circle
-                size="small"
-                @click="toggleTopicLike"
-              >
+              <UiButton :type="topic?.liked_by_me ? 'danger' : 'default'" circle size="small" @click="toggleTopicLike">
                 <span class="heart-btn">{{ topic?.liked_by_me ? '♥' : '♡' }}</span>
-              </el-button>
+              </UiButton>
             </el-tooltip>
             <span v-if="topic" class="like-count">{{ topic.likes_count || 0 }}</span>
             <el-tooltip :content="topicFavorited ? '取消收藏' : '收藏'" placement="top">
-              <el-button
-                :icon="topicFavorited ? StarFilled : Star"
-                :type="topicFavorited ? 'warning' : 'default'"
-                circle
-                size="small"
-                @click="toggleFavorite"
-              />
+              <UiButton :icon="topicFavorited ? StarFilled : Star" :type="topicFavorited ? 'warning' : 'default'" circle size="small" @click="toggleFavorite"/>
             </el-tooltip>
             <UiButton variant="text" size="small" @click="openReport('topic')">举报</UiButton>
             <UiButton variant="text" v-if="topic.can_delete" class="delete-btn text-bad" size="small" @click="removeTopic">
@@ -66,7 +55,7 @@
             <h1 class="topic-title">{{ topic.title }}</h1>
           </div>
           <div v-if="topic.category === 'question' && isTopicOwner && topic.accepted_reply_id" class="accept-actions">
-            <el-button size="small" @click="handleCancelAccept">取消采纳</el-button>
+            <UiButton size="small" @click="handleCancelAccept">取消采纳</UiButton>
           </div>
           <div class="topic-content">{{ topic.content }}</div>
           <ForumImageGallery :images="topic.images" />
@@ -91,7 +80,7 @@
               <el-radio-button value="latest">最新</el-radio-button>
               <el-radio-button value="hot">热门</el-radio-button>
             </el-radio-group>
-            <el-button size="small" :icon="replyOrder==='asc'? ArrowUp : ArrowDown" @click="toggleReplyOrder">{{ replyOrder==='asc' ? '正序' : '逆序' }}</el-button>
+            <UiButton size="small" :icon="replyOrder==='asc'? ArrowUp : ArrowDown" @click="toggleReplyOrder">{{ replyOrder==='asc' ? '正序' : '逆序' }}</UiButton>
           </div>
         </div>
         <template v-if="sortedReplies.length > 0">
@@ -135,10 +124,10 @@
               <div class="reply-content">{{ reply.content }}</div>
               <ForumImageGallery :images="reply.images" />
               <div v-if="topic && topic.category === 'question' && isTopicOwner && !reply.is_accepted" class="reply-accept-row">
-                <el-button size="small" type="success" plain @click="handleAccept(reply.id)">采纳此回答</el-button>
+                <UiButton variant="success" plain size="small" @click="handleAccept(reply.id)">采纳此回答</UiButton>
               </div>
               <div v-else-if="topic && topic.category === 'question' && isTopicOwner && reply.is_accepted" class="reply-accept-row">
-                <el-button size="small" @click="handleCancelAccept">取消采纳</el-button>
+                <UiButton size="small" @click="handleCancelAccept">取消采纳</UiButton>
               </div>
             </div>
           </div>
@@ -157,7 +146,7 @@
           placeholder="请填写举报理由（1-500 字）"
         />
         <template #footer>
-          <el-button @click="reportVisible = false">取消</el-button>
+          <UiButton @click="reportVisible = false">取消</UiButton>
           <UiButton variant="primary" :loading="reportSubmitting" @click="submitReport">提交</UiButton>
         </template>
       </el-dialog>

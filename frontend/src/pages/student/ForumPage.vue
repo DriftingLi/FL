@@ -11,7 +11,7 @@
     </div>
 
     <!-- 每日打卡卡片（spec #268 A1） -->
-    <div class="checkin-card" @click="openCheckIn('calendar')">
+    <UiCard variant="interactive" padding="base" class="checkin-card" @click="openCheckIn('calendar')">
       <div class="checkin-left">
         <el-icon class="checkin-icon"><Calendar /></el-icon>
         <span class="checkin-text">
@@ -26,7 +26,7 @@
         </UiButton>
         <UiButton variant="text" size="small" @click="openCheckIn('rank')">排行榜</UiButton>
       </div>
-    </div>
+    </UiCard>
 
     <!-- 类别分流（#364）：讨论 / 问答。与下面的 mode 轴正交——category 管"看哪类"，mode 管"看谁的"。
          只在浏览态显示：我的帖子/我的回复/浏览记录是个人视图，天然跨类别（后端 my-topics 也无 category 维度）。 -->
@@ -55,7 +55,7 @@
         <el-radio-button value="latest">最新</el-radio-button>
         <el-radio-button value="hot">热门</el-radio-button>
       </el-radio-group>
-      <el-button v-if="mode !== 'my-replies' && mode !== 'history'" size="small" :icon="topicOrder==='asc'? ArrowUp : ArrowDown" @click="toggleTopicOrder">{{ topicOrder==='asc' ? '正序' : '逆序' }}</el-button>
+      <UiButton v-if="mode !== 'my-replies' && mode !== 'history'" size="small" :icon="topicOrder==='asc'? ArrowUp : ArrowDown" @click="toggleTopicOrder">{{ topicOrder==='asc' ? '正序' : '逆序' }}</UiButton>
     </div>
 
     <CheckInDialog v-model="checkInDialogVisible" :initial-tab="checkInTab" @checked="onCheckInChecked" />
@@ -175,7 +175,7 @@
     <el-dialog v-model="createDialogVisible" title="发布新帖" width="640px">
       <ForumPostForm ref="postForm" category="discussion" @success="onTopicCreated" />
       <template #footer>
-        <el-button @click="createDialogVisible = false">取消</el-button>
+        <UiButton @click="createDialogVisible = false">取消</UiButton>
         <UiButton variant="primary" :loading="postForm?.submitting" @click="postForm?.submit()">发布</UiButton>
       </template>
     </el-dialog>
@@ -203,6 +203,7 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -610,16 +611,15 @@ watch(
   color: var(--color-danger);
 }
 
+/*
+ * 容器（描边 / 圆角 / 内距 / 底色 / 投影 / 光标）已由 UiCard 的 interactive 变体承担，
+ * 且它自带 role="button" + tabindex="0" —— 这个可点卡片此前键盘无法聚焦。
+ */
 .checkin-card {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--color-bg-card);
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  padding: 14px 16px;
   margin-bottom: 12px;
-  cursor: pointer;
 }
 
 .checkin-left {

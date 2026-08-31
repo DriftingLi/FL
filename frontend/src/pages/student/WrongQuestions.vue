@@ -9,13 +9,13 @@
         <el-option label="故障识图" value="fault_image" />
         <el-option label="简答题" value="short_answer" />
       </el-select>
-      <el-button @click="toggleSort">
+      <UiButton @click="toggleSort">
         <el-icon class="sort-icon"><SortDown v-if="sortOrder === 'desc'" /><SortUp v-else /></el-icon>
         {{ sortOrder === 'desc' ? '最新错误在前' : '最早错误在前' }}
-      </el-button>
+      </UiButton>
       <el-checkbox v-model="filterFavorited">收藏</el-checkbox>
       <el-checkbox v-model="filterMultiWrong">错多次</el-checkbox>
-      <el-button @click="resetFilters">重置筛选</el-button>
+      <UiButton @click="resetFilters">重置筛选</UiButton>
     </div>
     <div class="action-bar">
       <el-checkbox :model-value="isAllSelected" :indeterminate="isIndeterminate" @change="toggleSelectAll" :disabled="wrongList.length===0">全选</el-checkbox>
@@ -68,7 +68,7 @@
             <CommentCard :question-id="item.question_id" />
             <NoteCard :question-id="item.question_id" />
             <div class="redo-actions">
-              <el-button size="small" @click="redoingId = null">关闭</el-button>
+              <UiButton size="small" @click="redoingId = null">关闭</UiButton>
               <UiButton variant="primary" size="small" @click="redoingId = null">完成</UiButton>
             </div>
           </template>
@@ -84,7 +84,7 @@
             <el-input v-else v-model="redoTextAnswer" type="textarea" :rows="3" placeholder="请输入答案" />
             <div class="redo-actions">
               <UiButton variant="primary" size="small" @click="submitRedo(item)">提交</UiButton>
-              <el-button size="small" @click="redoingId = null">取消</el-button>
+              <UiButton size="small" @click="redoingId = null">取消</UiButton>
             </div>
           </template>
         </div>

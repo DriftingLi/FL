@@ -4,7 +4,7 @@
       <UiButton variant="text" :icon="ArrowLeft" @click="goBack">返回问答</UiButton>
     </div>
 
-    <div class="ask-card">
+    <UiCard padding="lg">
       <h1 class="ask-title">我要提问</h1>
 
       <ForumPostForm
@@ -21,9 +21,9 @@
 
       <div class="ask-actions">
         <UiButton variant="primary" :loading="postForm?.submitting" :disabled="!postForm?.canSubmit" @click="postForm?.submit()">发布提问</UiButton>
-        <el-button @click="goBack">取消</el-button>
+        <UiButton @click="goBack">取消</UiButton>
       </div>
-    </div>
+    </UiCard>
   </div>
 </template>
 
@@ -33,6 +33,7 @@ import { useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import ForumPostForm from '@/components/student/ForumPostForm.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 
 // 表单体（#389）：字段/校验/提交在 ForumPostForm（category=question），本页只留整页壳与跳转
 const router = useRouter()
@@ -53,13 +54,6 @@ function goBack() {
 
 .back-bar {
   margin-bottom: 12px;
-}
-
-.ask-card {
-  background: var(--color-bg-card);
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  padding: 24px;
 }
 
 .ask-title {

@@ -44,7 +44,7 @@
           <span class="group-count">{{ group.tasks.length }}项</span>
         </div>
         <div class="task-list">
-          <div v-for="task in group.tasks" :key="task.code" class="task-card" :class="task.status">
+          <UiCard v-for="task in group.tasks" :key="task.code" class="task-card" :class="task.status" padding="base">
             <div class="task-left">
               <div class="task-icon" :class="task.status">
                 <el-icon v-if="task.status === 'claimed'"><CircleCheckFilled /></el-icon>
@@ -70,10 +70,10 @@
               <UiButton variant="primary" v-if="task.status === 'claimable'" size="small" :loading="claimingCode === task.code" @click="handleClaim(task.code)">
                 领取
               </UiButton>
-              <el-button v-else-if="task.status === 'todo'" size="small" plain disabled>去完成</el-button>
+              <UiButton variant="ghost" v-else-if="task.status === 'todo'" size="small" disabled>去完成</UiButton>
               <el-tag v-else type="success" size="small" effect="plain">已领取</el-tag>
             </div>
-          </div>
+          </UiCard>
         </div>
       </div>
     </div>
@@ -93,6 +93,7 @@ import UiProgress from '@/components/ui/UiProgress.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 
 const staggerStyle = useStagger(6)
 
@@ -245,17 +246,12 @@ onMounted(() => {
   flex-direction: column;
   gap: 10px;
 }
+/* 容器（描边 / 圆角 / 内距 / 底色 / 投影）已由 UiCard 承担，此处只留卡片内部的横向布局 */
 .task-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px;
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border-light);
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  transition: border-color var(--duration-fast) var(--ease-default);
 }
 .task-card:hover {
   border-color: var(--color-border-dark);

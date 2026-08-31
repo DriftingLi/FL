@@ -133,13 +133,7 @@
       <template #header>
         <div class="detail-header">
           <span class="detail-header-title">{{ detailCourse?.name || '课程详情' }}</span>
-          <el-button
-            v-if="detailCourse"
-            :icon="courseFavorited ? StarFilled : Star"
-            :type="courseFavorited ? 'warning' : 'default'"
-            circle
-            @click="toggleCourseFavorite"
-          />
+          <UiButton v-if="detailCourse" :icon="courseFavorited ? StarFilled : Star" :type="courseFavorited ? 'warning' : 'default'" circle @click="toggleCourseFavorite"/>
         </div>
       </template>
       <div v-loading="detailLoading">
@@ -217,7 +211,7 @@
         </template>
       </div>
       <template #footer>
-        <el-button @click="detailVisible = false">关闭</el-button>
+        <UiButton @click="detailVisible = false">关闭</UiButton>
         <UiButton variant="primary" v-if="detailChapters.length > 0" @click="goToChapter(continueChapter ?? detailChapters[0])">{{ continueChapter ? `继续学习：${continueChapterTitle}` : '开始学习' }}</UiButton>
       </template>
     </el-dialog>
