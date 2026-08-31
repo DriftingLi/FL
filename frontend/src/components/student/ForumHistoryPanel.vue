@@ -11,9 +11,11 @@
           <span class="group-count">{{ group.items.length }}条</span>
         </div>
         <div class="group-grid">
-          <div
+          <UiCard
             v-for="item in group.items"
             :key="item.id"
+            variant="interactive"
+            padding="sm"
             class="history-card"
             :class="{ 'is-deleted': item.deleted }"
             @click="!item.deleted && $emit('select', item.id)"
@@ -22,7 +24,7 @@
               <el-tag size="small" :type="item.deleted ? 'danger' : 'info'" effect="plain">
                 {{ item.deleted ? '已删除' : formatRelativeTime(item.viewedAt) }}
               </el-tag>
-              <el-button size="small" text type="danger" @click.stop="$emit('remove', item.id)">移除</el-button>
+              <UiButton size="small" variant="danger" text @click.stop="$emit('remove', item.id)">移除</UiButton>
             </div>
             <div class="card-title" :class="{ deleted: item.deleted }">{{ item.title }}</div>
             <div class="card-excerpt">{{ item.excerpt }}</div>
@@ -33,11 +35,11 @@
               <span class="meta-stat"><el-icon><ChatDotRound /></el-icon>{{ item.reply_count }}</span>
               <span v-if="item.images_count" class="meta-stat img"><el-icon><Picture /></el-icon>{{ item.images_count }}</span>
             </div>
-          </div>
+          </UiCard>
         </div>
       </div>
       <div class="panel-footer">
-        <el-button size="small" type="danger" plain @click="$emit('clear')">清空浏览记录</el-button>
+        <UiButton size="small" variant="danger" plain @click="$emit('clear')">清空浏览记录</UiButton>
         <span class="footer-hint">最多保留 {{ maxHistory }} 条 · 重复浏览自动置顶</span>
       </div>
     </div>
@@ -48,6 +50,8 @@
 import { computed } from 'vue'
 import { View, ChatDotRound, Picture } from '@element-plus/icons-vue'
 import { formatRelativeTime } from '@/utils/format'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 import { getMaxHistory } from '@/utils/forumHistory'
 import type { ForumHistoryItem } from '@/utils/forumHistory'
 
@@ -133,18 +137,11 @@ const grouped = computed(() => {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 12px;
 }
-.history-card {
-  padding: 14px;
-  background: #fff;
-  border: 1px solid var(--color-border-light);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: border-color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-}
-.history-card:hover {
-  border-color: var(--color-border);
-}
+/*
+ * 卡片容器已交给 UiCard 的 interactive 变体：描边 / 圆角 / 内距 / 底色 / 悬浮反馈
+ * 由它承担，且自带 role="button" + tabindex="0" —— 这个可点卡片此前键盘完全无法聚焦。
+ * 此处只保留「已删除」态的覆盖（scoped 样式不在任何 @layer 中，天然压过 utilities 层）。
+ */
 .history-card.is-deleted {
   opacity: 0.6;
   cursor: default;

@@ -5,7 +5,7 @@
         <span class="paper-title">{{ paperTitle }}</span>
         <span class="progress-stats">第 {{ currentIdx + 1 }}/{{ questions.length }} 题 · 已答对 {{ correctCount }} · 已答错 {{ wrongCount }}</span>
       </div>
-      <el-button size="small" @click="confirmQuit">退出练习</el-button>
+      <UiButton size="small" @click="confirmQuit">退出练习</UiButton>
     </div>
 
     <el-card v-if="currentQuestion" v-loading="loading" class="question-card">
@@ -53,7 +53,7 @@
       </div>
 
       <div class="q-actions">
-        <el-button v-if="currentIdx > 0" @click="prevQuestion">上一题</el-button>
+        <UiButton v-if="currentIdx > 0" @click="prevQuestion">上一题</UiButton>
         <UiButton variant="primary" v-if="!submitted" :disabled="!canSubmit" @click="handleSubmit">
           提交答案
         </UiButton>

@@ -29,8 +29,31 @@ const props = withDefaults(
      * 与 variant 组合使用：`<UiButton variant="primary" link>下载</UiButton>`。
      */
     link?: boolean
+    /**
+     * 朴素态（EP 的 plain）：淡底 + 描边，保留 variant 的色调。
+     *
+     * 与 `ghost` 变体的区别：ghost 是 **变体值**（plain + 默认色，无法指定色调），
+     * 而本 prop 是**修饰开关**，可与任意 variant 组合 —— 存量里有 `plain type="primary"`、
+     * `plain type="warning"` 这类写法，只有布尔修饰能表达。
+     */
+    plain?: boolean
+    /**
+     * 文字态（EP 的 text）：无边框无背景，保留 variant 的色调。
+     * 与 `link` 同属修饰开关，可与任意 variant 组合；存量有 `text type="primary"` 写法。
+     * 单独使用时直接写 `variant="text"` 更简洁（等价于 text + 默认色）。
+     */
+    text?: boolean
   }>(),
-  { variant: 'secondary', size: 'default', loading: false, block: false, circle: false, link: false }
+  {
+    variant: 'secondary',
+    size: 'default',
+    loading: false,
+    block: false,
+    circle: false,
+    link: false,
+    plain: false,
+    text: false
+  }
 )
 
 const EP_TYPE: Record<string, 'primary' | 'default' | 'danger' | 'success' | 'warning'> = {
@@ -49,8 +72,8 @@ const EP_TYPE: Record<string, 'primary' | 'default' | 'danger' | 'success' | 'wa
     :type="EP_TYPE[props.variant]"
     :size="props.size"
     :loading="props.loading"
-    :plain="props.variant === 'ghost'"
-    :text="props.variant === 'text'"
+    :plain="props.variant === 'ghost' || props.plain"
+    :text="props.variant === 'text' || props.text"
     :link="props.link"
     :circle="props.circle"
     :class="props.block ? 'w-full' : undefined"

@@ -31,14 +31,9 @@
           >
             已完成
           </el-tag>
-          <el-button
-            v-else
-            size="small"
-            :loading="markingCompleted"
-            @click="markCompleted"
-          >
+          <UiButton v-else size="small" :loading="markingCompleted" @click="markCompleted">
             标记完成
-          </el-button>
+          </UiButton>
         </div>
       </div>
 

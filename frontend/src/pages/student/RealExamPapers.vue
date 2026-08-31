@@ -25,11 +25,12 @@
           <span class="timeline-year-count">{{ list.length }}套</span>
         </div>
         <div class="timeline-cards">
-          <div
+          <UiCard
             v-for="(p, i) in list"
             :key="p.paper_id"
             class="timeline-card stagger-in"
             :style="staggerStyle(i)"
+            padding="sm"
           >
             <div class="timeline-card-title">{{ p.title }}</div>
             <div class="timeline-card-meta">
@@ -37,17 +38,17 @@
             </div>
             <div class="timeline-card-actions">
               <template v-if="p.entitled">
-                <el-button size="small" type="primary" plain @click="startPractice(p)">开始练习</el-button>
+                <UiButton variant="primary" plain size="small" @click="startPractice(p)">开始练习</UiButton>
                 <UiButton variant="primary" size="small" @click="startExam(p)">模拟考试</UiButton>
               </template>
               <template v-else>
                 <span class="meta-text">{{ p.price }} 积分/套</span>
-                <el-button size="small" type="warning" plain :loading="redeemingId === p.paper_id" @click="redeem(p)">
+                <UiButton variant="warning" plain size="small" :loading="redeemingId === p.paper_id" @click="redeem(p)">
                   积分解锁
-                </el-button>
+                </UiButton>
               </template>
             </div>
-          </div>
+          </UiCard>
         </div>
       </div>
     </div>
@@ -64,6 +65,7 @@ import { useCredentialRefetch } from '@/composables/useCredentialRefetch'
 import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 
 const router = useRouter()
 const credentialStore = useCredentialStore()
@@ -217,11 +219,8 @@ async function redeem(p: RealExamPaper) {
   flex-direction: column;
   gap: 10px;
 }
+/* 容器（描边 / 圆角 / 内距 / 底色）已由 UiCard 承担，此处只留悬浮反馈 */
 .timeline-card {
-  padding: 12px 14px;
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
   transition: border-color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default);
 }
 .timeline-card:hover {

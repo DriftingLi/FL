@@ -147,7 +147,7 @@
             {{ typeMap[specialType] }}
           </el-tag>
         </div>
-        <el-button size="small" @click="confirmQuit">退出练习</el-button>
+        <UiButton size="small" @click="confirmQuit">退出练习</UiButton>
       </div>
 
       <el-card v-if="currentQuestion" class="question-card">
@@ -205,7 +205,7 @@
         </div>
 
         <div class="q-actions">
-          <el-button v-if="currentIdx > 0" @click="prevQuestion">上一题</el-button>
+          <UiButton v-if="currentIdx > 0" @click="prevQuestion">上一题</UiButton>
           <UiButton variant="primary" v-if="!submitted" :disabled="!canSubmit" @click="handleSubmit">
             提交答案
           </UiButton>

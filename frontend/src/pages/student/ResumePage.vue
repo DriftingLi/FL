@@ -1,6 +1,6 @@
 <template>
   <div class="resume-page">
-    <div class="resume-card">
+    <UiCard padding="lg" class="resume-card">
       <div class="resume-head">
         <UiButton variant="text" @click="goBack">返回</UiButton>
         <div class="head-actions">
@@ -21,7 +21,7 @@
           </div>
           <div class="flex gap-1">
             <UiButton variant="primary" v-if="req.status === 'pending'" size="small" @click="approveReq(req.id)">同意</UiButton>
-            <el-button v-if="req.status === 'pending'" size="small" @click="rejectReq(req.id)">拒绝</el-button>
+            <UiButton v-if="req.status === 'pending'" size="small" @click="rejectReq(req.id)">拒绝</UiButton>
             <UiButton variant="danger" v-if="req.status === 'approved'" size="small" @click="revokeReq(req.id)">撤回</UiButton>
           </div>
         </div>
@@ -88,7 +88,7 @@
               <el-input v-model="exp.desc" placeholder="描述" class="row-input" />
               <UiButton variant="text" @click="removeExp(idx)" class="text-bad">删除</UiButton>
             </div>
-            <el-button text type="primary" @click="addExp">新增经历</el-button>
+            <UiButton variant="primary" text @click="addExp">新增经历</UiButton>
           </div>
         </el-form-item>
         <el-form-item label="持证信息">
@@ -101,19 +101,19 @@
               <el-input v-model="cert.expire_date" placeholder="有效期" class="row-input" />
               <UiButton variant="text" @click="removeCert(idx)" class="text-bad">删除</UiButton>
             </div>
-            <el-button text type="primary" @click="addCert">新增持证</el-button>
+            <UiButton variant="primary" text @click="addCert">新增持证</UiButton>
           </div>
         </el-form-item>
         <el-form-item label="PDF简历">
           <div class="upload-block">
-            <el-button @click="triggerPdf">选择 PDF</el-button>
+            <UiButton @click="triggerPdf">选择 PDF</UiButton>
             <span v-if="form.resume_file_url" class="upload-name">{{ form.resume_file_url }}</span>
             <input ref="pdfInput" type="file" accept=".pdf" hidden @change="onPdfChange" />
           </div>
         </el-form-item>
         <el-form-item label="工作照">
           <div class="upload-block">
-            <el-button @click="triggerPhoto">选择图片</el-button>
+            <UiButton @click="triggerPhoto">选择图片</UiButton>
             <span class="photo-count">{{ form.photos.length }}/6</span>
             <input ref="photoInput" type="file" accept="image/*" hidden @change="onPhotoChange" />
             <div class="photo-list">
@@ -126,10 +126,10 @@
         </el-form-item>
         <el-form-item>
           <UiButton variant="primary" :loading="saving" @click="save">保存</UiButton>
-          <el-button @click="goBack">取消</el-button>
+          <UiButton @click="goBack">取消</UiButton>
         </el-form-item>
       </el-form>
-    </div>
+    </UiCard>
   </div>
 </template>
 
@@ -140,6 +140,7 @@ import { ElMessage } from 'element-plus'
 import { resumeApi } from '@/api/resume'
 import { unwrappedRequest } from '@/api/request'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 
 const router = useRouter()
 const saving = ref(false)
@@ -344,12 +345,9 @@ onMounted(() => { load(); loadContactRequests() })
 
 <style scoped>
 .resume-page { max-width: 560px; margin: 0 auto; padding: 16px; }
+/* 容器（描边 / 圆角 / 内距 / 底色 / 投影）已由 UiCard 承担，只留裁切（列表需要圆角内切边） */
 .resume-card {
-  background: var(--color-bg-card);
-  border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-  padding: 24px;
 }
 .resume-head {
   display: flex;
