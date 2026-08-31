@@ -42,8 +42,9 @@ func RegisterPracticeModeRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service
 
 // freeQuestionsReq 随机练习抽题请求（type + count）。
 type freeQuestionsReq struct {
-	QType string
-	Count int
+	QType        string
+	Count        int
+	CredentialID *int
 }
 
 // GetFreeQuestions 随机练习抽题
@@ -62,12 +63,13 @@ func (h *PracticeModeHandler) GetFreeQuestions(c *gin.Context) {
 	Endpoint[freeQuestionsReq, []service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*freeQuestionsReq, error) {
 			return &freeQuestionsReq{
-				QType: c.Query("type"),
-				Count: atoiDefault(c.Query("count"), 20),
+				QType:        c.Query("type"),
+				Count:        atoiDefault(c.Query("count"), 20),
+				CredentialID: queryIDPtr(c, "credential_id"),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *freeQuestionsReq) (*[]service.QuestionDTO, error) {
-			result, err := h.svc.GetFreeQuestions(req.QType, req.Count)
+			result, err := h.svc.GetFreeQuestions(req.QType, req.Count, req.CredentialID)
 			if err != nil {
 				return nil, err
 			}
@@ -85,9 +87,10 @@ func (h *PracticeModeHandler) GetFreeQuestions(c *gin.Context) {
 
 // tagPracticeReq 标签练习请求（tag_id 区分缺失/非法 + count）。
 type tagPracticeReq struct {
-	StudentID int
-	TagID     int
-	Count     int
+	StudentID    int
+	TagID        int
+	Count        int
+	CredentialID *int
 }
 
 // StartTagPractice 标签专项练习
@@ -117,10 +120,10 @@ func (h *PracticeModeHandler) StartTagPractice(c *gin.Context) {
 			count := atoiDefault(c.Query("count"), 0) // 0=全部
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
-			return &tagPracticeReq{StudentID: studentID, TagID: tagID, Count: count}, nil
+			return &tagPracticeReq{StudentID: studentID, TagID: tagID, Count: count, CredentialID: queryIDPtr(c, "credential_id")}, nil
 		},
 		Invoke: func(ctx context.Context, req *tagPracticeReq) (*service.PracticeStartResultDTO, error) {
-			return h.svc.StartTagPractice(req.StudentID, req.TagID, req.Count)
+			return h.svc.StartTagPractice(req.StudentID, req.TagID, req.Count, req.CredentialID)
 		},
 		Render: func(c *gin.Context, _ *tagPracticeReq, resp *service.PracticeStartResultDTO, err error) {
 			if err != nil {
@@ -144,24 +147,29 @@ func (h *PracticeModeHandler) StartTagPractice(c *gin.Context) {
 // @Router /practice-mode/sequential [get]
 func (h *PracticeModeHandler) StartSequential(c *gin.Context) {
 	Endpoint[struct {
-		StudentID int
+		StudentID    int
+		CredentialID *int
 	}, service.PracticeStartResultDTO]{
 		Parse: func(c *gin.Context) (*struct {
-			StudentID int
+			StudentID    int
+			CredentialID *int
 		}, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
 			return &struct {
-				StudentID int
-			}{StudentID: studentID}, nil
+				StudentID    int
+				CredentialID *int
+			}{StudentID: studentID, CredentialID: queryIDPtr(c, "credential_id")}, nil
 		},
 		Invoke: func(ctx context.Context, req *struct {
-			StudentID int
+			StudentID    int
+			CredentialID *int
 		}) (*service.PracticeStartResultDTO, error) {
-			return h.svc.StartSequential(req.StudentID)
+			return h.svc.StartSequential(req.StudentID, req.CredentialID)
 		},
 		Render: func(c *gin.Context, _ *struct {
-			StudentID int
+			StudentID    int
+			CredentialID *int
 		}, resp *service.PracticeStartResultDTO, err error) {
 			if err != nil {
 				response.NotFound(c, err.Error())
@@ -191,7 +199,8 @@ func (h *PracticeModeHandler) GetSequentialProgress(c *gin.Context) {
 	Endpoint[studentIDReq, service.ProgressResultDTO]{
 		Parse: h.parseStudentID,
 		Invoke: func(ctx context.Context, req *studentIDReq) (*service.ProgressResultDTO, error) {
-			return h.svc.GetSequentialProgress(req.StudentID), nil
+			// #413：透传证件参数，进度返回体附带实时池总数。
+			return h.svc.GetSequentialProgress(req.StudentID, queryIDPtr(c, "credential_id")), nil
 		},
 		Render: func(c *gin.Context, _ *studentIDReq, resp *service.ProgressResultDTO, _ error) {
 			response.Success(c, resp)
@@ -267,8 +276,9 @@ func (h *PracticeModeHandler) SaveProgress(c *gin.Context) {
 
 // getProgressReq 查询练习进度请求（学员 ID + mode，默认 sequential）。
 type getProgressReq struct {
-	StudentID int
-	Mode      string
+	StudentID    int
+	Mode         string
+	CredentialID *int
 }
 
 // GetProgress 查询练习进度
@@ -296,10 +306,10 @@ func (h *PracticeModeHandler) GetProgress(c *gin.Context) {
 			if _, ok := service.ParsePracticeMode(mode); !ok {
 				return nil, badRequest("练习模式无效")
 			}
-			return &getProgressReq{StudentID: studentID, Mode: mode}, nil
+			return &getProgressReq{StudentID: studentID, Mode: mode, CredentialID: queryIDPtr(c, "credential_id")}, nil
 		},
 		Invoke: func(ctx context.Context, req *getProgressReq) (*service.ProgressResultDTO, error) {
-			return h.svc.GetProgress(req.StudentID, req.Mode), nil
+			return h.svc.GetProgress(req.StudentID, req.Mode, req.CredentialID), nil
 		},
 		Render: func(c *gin.Context, _ *getProgressReq, resp *service.ProgressResultDTO, err error) {
 			if err != nil {

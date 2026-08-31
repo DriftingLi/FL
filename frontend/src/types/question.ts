@@ -39,8 +39,11 @@ export interface Question {
 
 export interface PracticeProgress {
   completed: number
+  // total：上次会话数组长度（断点续练游标语义）；
+  // pool_total：当前证件题库池实时总数（#413，卡片分母用）。
   total: number
   current_index: number
+  pool_total?: number
 }
 
 export interface SubmitResult {

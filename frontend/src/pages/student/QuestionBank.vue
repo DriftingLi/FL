@@ -38,7 +38,7 @@
             <h3 class="font-heading text-base font-semibold text-ink">顺序练习</h3>
           </div>
           <p class="mt-3 text-sm text-ink-3">
-            {{ seqProgress.completed }}/{{ seqProgress.total || totalQuestions }} 已练习
+            {{ seqProgress.completed }}/{{ seqDenominator }} 已练习
           </p>
           <UiButton
             variant="primary"
@@ -268,6 +268,9 @@ const currentTagName = computed(() => {
 const seqProgress = ref<PracticeProgress>({ completed: 0, total: 0, current_index: 0 })
 const tagProgress = ref<PracticeProgress>({ completed: 0, total: 0, current_index: 0 })
 const totalQuestions = ref(0)
+
+// #413 卡片分母口径：实时池总数（pool_total）优先；无进度时退回题库统计的池总数。
+const seqDenominator = computed(() => (seqProgress.value.pool_total ?? seqProgress.value.total) || totalQuestions.value)
 
 const practiceStats = ref({ today_count: 0, total_count: 0, total_days: 0 })
 const practiceStatsLoading = ref(true)

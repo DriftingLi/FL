@@ -45,8 +45,11 @@ type sampleQuestionsOpts struct {
 // 顺序练习与模拟考抽题的池过滤三元组（published + excludeSourceTagsSQL + 证件分区）。
 // shuffle=false 时按 id 升序返回全量（顺序练习/标签专项的固定顺序来源）；
 // shuffle=true 时洗牌、count>0 且超额则截断（随机练习/模拟考的抽样语义）。
-func sampleQuestionsByOpts(db *gorm.DB, o sampleQuestionsOpts) ([]model.Question, error) {
-	q := db.Model(&model.Question{}).Where("status = ?", "published").Where(excludeSourceTagsSQL)
+// poolFilter 题库池过滤三元组的唯一出处（已发布 + 排除来源标记标签 + 证件分区，可叠加题型/标签）。
+// sampleQuestionsByOpts（抽题）与 countPoolByOpts（计数）共用，保证同参下「计数 == 抽题数量」
+// 的一致性断言成立（#413 池计数单点，口径定义见 CONTEXT.md「题库池」）。
+func poolFilter(q *gorm.DB, o sampleQuestionsOpts) *gorm.DB {
+	q = q.Where("status = ?", "published").Where(excludeSourceTagsSQL)
 	if o.tagID > 0 {
 		q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", o.tagID)
 	}
@@ -56,6 +59,20 @@ func sampleQuestionsByOpts(db *gorm.DB, o sampleQuestionsOpts) ([]model.Question
 	if o.qType != "" {
 		q = q.Where("type = ?", o.qType)
 	}
+	return q
+}
+
+// countPoolByOpts 池计数单点（#413）：与抽题共用 poolFilter，语义即「当前证件题库池数量」。
+func countPoolByOpts(db *gorm.DB, o sampleQuestionsOpts) (int64, error) {
+	var total int64
+	if err := poolFilter(db.Model(&model.Question{}), o).Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func sampleQuestionsByOpts(db *gorm.DB, o sampleQuestionsOpts) ([]model.Question, error) {
+	q := poolFilter(db.Model(&model.Question{}), o)
 	if !o.shuffle {
 		q = q.Order("id ASC")
 	}
@@ -587,9 +604,13 @@ func (s *QuestionBankService) BatchImport(items []any, createdBy *int) map[strin
 }
 
 // GetStats 题库统计（经统计聚合 module，一次 GROUP BY + 维度零填充）。
-func (s *QuestionBankService) GetStats() *QuestionBankStatsDTO {
-	var total int64
-	s.db.Model(&model.Question{}).Count(&total)
+// Total 为题库池数量（#413）：已发布 + 排除来源标记标签 + 可选证件分区，非全表计数；
+// 学员端顺序练习卡片分母的唯一消费方。by_type / by_status 保留全局口径。
+func (s *QuestionBankService) GetStats(credentialID *int) *QuestionBankStatsDTO {
+	total, err := countPoolByOpts(s.db, sampleQuestionsOpts{cred: credentialID})
+	if err != nil {
+		total = 0
+	}
 	byType := groupByCount(s.db.Model(&model.Question{}), "type")
 	byStatus := groupByCount(s.db.Model(&model.Question{}), "status")
 	// 保留旧语义：by_type / by_status 对合法维度零填充（未出现的维度以 0 呈现）。

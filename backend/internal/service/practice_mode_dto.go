@@ -14,9 +14,12 @@ type PracticeStartResultDTO struct {
 
 // ProgressResultDTO 任意模式练习进度（旧 GetProgress/GetSequentialProgress map 输出）。
 type ProgressResultDTO struct {
-	Completed    int            `json:"completed"`
-	Total        int            `json:"total"`
-	CurrentIndex int            `json:"current_index"`
+	Completed    int `json:"completed"`
+	Total        int `json:"total"`
+	CurrentIndex int `json:"current_index"`
+	// PoolTotal 实时题库池总数（#413）：当前证件分区口径，与开始练习返回的题目数一致；
+	// Total 语义退回「上次会话数组长度」，仅供断点续练游标使用（字段名不变，新增字段零 diff）。
+	PoolTotal    int            `json:"pool_total"`
 	AnswersState map[string]any `json:"answers_state"`
 }
 

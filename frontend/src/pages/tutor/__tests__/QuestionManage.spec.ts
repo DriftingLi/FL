@@ -23,7 +23,7 @@ function mountPage() {
 
 beforeEach(() => {
   vi.mocked(credentialApi.listCredentials).mockResolvedValue({
-    credentials: [{ id: 3, name: '叉车司机N1证' }],
+    credentials: [{ id: 3, code: 'forklift_n1', name: '叉车司机N1证', description: '', category: 'special_operation', level: null, sort_order: 1, status: 1, created_at: '', updated_at: '' }],
   })
   vi.mocked(questionBankApi.getQuestions).mockResolvedValue({
     total: 1,

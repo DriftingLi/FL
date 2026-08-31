@@ -391,7 +391,8 @@ func (h *QuestionBankHandler) RejectQuestion(c *gin.Context) {
 func (h *QuestionBankHandler) GetStats(c *gin.Context) {
 	Endpoint[struct{}, service.QuestionBankStatsDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.QuestionBankStatsDTO, error) {
-			return h.svc.GetStats(), nil
+			// #413：总数按当前证件题库池口径（拦截器已注入 credential_id；缺省 = 不分区）。
+			return h.svc.GetStats(queryIDPtr(c, "credential_id")), nil
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *service.QuestionBankStatsDTO, _ error) {
 			response.Success(c, resp)
