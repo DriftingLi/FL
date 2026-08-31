@@ -54,6 +54,8 @@ type listQuestionsReq struct {
 	Keyword      string
 	TagID        *int
 	CredentialID *int
+	// Sort 排序口径（#412）：缺省 = 现状（最新提交优先）；讲师端显式传 id_asc。
+	Sort string
 }
 
 // ListQuestions 题目列表分页 GET /api/question-bank/questions
@@ -68,10 +70,11 @@ func (h *QuestionBankHandler) ListQuestions(c *gin.Context) {
 				Keyword:      c.Query("keyword"),
 				TagID:        queryIDPtr(c, "tag_id"),
 				CredentialID: queryIDPtr(c, "credential_id"),
+				Sort:         c.Query("sort"),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listQuestionsReq) (*map[string]any, error) {
-			result := h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID, req.CredentialID)
+			result := h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID, req.CredentialID, req.Sort)
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *listQuestionsReq, resp *map[string]any, _ error) {

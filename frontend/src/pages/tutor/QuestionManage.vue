@@ -56,13 +56,13 @@
     <UiSkeleton v-else-if="loading" variant="table" :count="8" />
 
     <template v-else-if="questions.length > 0">
-      <el-table :data="questions" stripe>
+      <el-table :data="questions" stripe row-key="id">
         <el-table-column prop="id" label="ID" width="60" />
         <el-table-column prop="type" label="题型" width="100">
           <template #default="{ row }">{{ (typeMap as Record<string, string>)[row.type] }}</template>
         </el-table-column>
         <el-table-column label="证件" width="140">
-          <template #default="{ row }">{{ credentials.find(c => c.id === (row as any).credential_id)?.name || '—' }}</template>
+          <template #default="{ row }">{{ credentials.find(c => c.id === row.credential_id)?.name || '—' }}</template>
         </el-table-column>
         <el-table-column prop="content" label="题干" show-overflow-tooltip />
         <el-table-column label="状态" width="120">
@@ -194,7 +194,8 @@ const {
   run: loadData,
   handlePageChange
 } = useAsyncPage(async () => {
-  const params: any = { page: page.value, page_size: pageSize.value, ...filters.value }
+  // #412：讲师端显式请求按 ID 升序，翻页时 ID 单调推进（默认「最新提交优先」保留给其它调用方）。
+  const params: any = { page: page.value, page_size: pageSize.value, sort: 'id_asc', ...filters.value }
   if (credentialId.value) params.credential_id = credentialId.value
   const res = await questionBankApi.getQuestions(params)
   questions.value = res?.questions || []

@@ -24,6 +24,8 @@ export interface Question {
   score: number
   created_by: number | null
   created_by_type: string
+  // #412：题目归属的目标证件（契约已含，讲师端题库管理用证件列区分分区）。
+  credential_id?: number | null
   created_at: string
   updated_at: string
   // 学员侧（练习/考试/错题重做）不返回以下字段
