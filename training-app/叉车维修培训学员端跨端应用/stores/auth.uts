@@ -90,6 +90,31 @@ function restoreFromStorage() : boolean {
     if (avatar_url != null) {
         u.avatar_url = avatar_url as string
     }
+    // 扩展可选字段（buildUserInfo 落地时一并写入缓存）
+    const account = uObj['account']
+    if (account != null) {
+        u.account = account as string
+    }
+    const phone = uObj['phone']
+    if (phone != null) {
+        u.phone = phone as string
+    }
+    const email = uObj['email']
+    if (email != null) {
+        u.email = email as string
+    }
+    const company = uObj['company']
+    if (company != null) {
+        u.company = company as string
+    }
+    const has_password = uObj['has_password']
+    if (has_password != null) {
+        u.has_password = has_password as boolean
+    }
+    const has_pending_change = uObj['has_pending_change']
+    if (has_pending_change != null) {
+        u.has_pending_change = has_pending_change as boolean
+    }
     token.value = t
     user.value = u
     loginProvider.value = getStorage(STORAGE_KEY_LOGIN_PROVIDER)
@@ -127,10 +152,8 @@ async function validateToken() : Promise<void> {
 }
 
 async function login(params : LoginParams) : Promise<void> {
-    console.log('[auth] login start, username=', params.username)
     try {
         const result = await loginApi(params)
-        console.log('[auth] login result=', result)
         if (result == null) {
             throw new Error('登录响应为空')
         }
@@ -213,6 +236,31 @@ function updateUser(patch : UpdateProfileParams) : void {
     const currentavatar_url = current.avatar_url
     if (currentavatar_url != null && currentavatar_url.length > 0) {
         updated.avatar_url = currentavatar_url
+    }
+    // 保留扩展可选字段（account/phone/email/company/has_password/pending），避免重建缓存时丢失
+    const curAccount = current.account
+    if (curAccount != null) {
+        updated.account = curAccount
+    }
+    const curPhone = current.phone
+    if (curPhone != null) {
+        updated.phone = curPhone
+    }
+    const curEmail = current.email
+    if (curEmail != null) {
+        updated.email = curEmail
+    }
+    const curCompany = current.company
+    if (curCompany != null) {
+        updated.company = curCompany
+    }
+    const curHasPwd = current.has_password
+    if (curHasPwd != null) {
+        updated.has_password = curHasPwd
+    }
+    const curPending = current.has_pending_change
+    if (curPending != null) {
+        updated.has_pending_change = curPending
     }
     const nickname = patch.nickname
     if (nickname != null && nickname.length > 0) {

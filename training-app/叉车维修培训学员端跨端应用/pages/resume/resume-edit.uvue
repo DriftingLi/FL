@@ -1,0 +1,697 @@
+<template>
+    <view class="page" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <!-- 顶栏：返回 / 标题 / 保存 -->
+        <view class="nav-bar">
+            <view class="nav-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="nav-title">在线简历</text>
+            <view class="nav-right" @click="onSave">
+                <text class="nav-save">保存</text>
+            </view>
+        </view>
+
+        <scroll-view class="body" scroll-y="true">
+            <!-- 完善度 -->
+            <view class="progress-card">
+                <view class="progress-text-row">
+                    <text class="progress-label">简历完善度</text>
+                    <text class="progress-pct">{{ completion }}%</text>
+                </view>
+                <view class="progress-track">
+                    <view class="progress-fill" :style="{ width: completion + '%' }"></view>
+                </view>
+                <text class="progress-tip">完善简历可增加企业推荐机会</text>
+            </view>
+
+            <!-- 基本信息 -->
+            <view class="card">
+                <text class="card-title">基本信息</text>
+                <view class="field-row">
+                    <text class="field-label">姓名<text class="field-req">*</text></text>
+                    <input class="field-input" type="text" :maxlength="20" v-model="name" placeholder="请输入姓名" />
+                </view>
+                <view class="divider"></view>
+                <view class="field-row" @click="onGenderTap">
+                    <text class="field-label">性别</text>
+                    <view class="field-picker">
+                        <text :class="gender.length > 0 ? 'field-value' : 'field-ph'">{{ gender.length > 0 ? gender : '请选择' }}</text>
+                        <text class="field-arrow">›</text>
+                    </view>
+                </view>
+                <view class="divider"></view>
+                <view class="field-row">
+                    <text class="field-label">手机号<text class="field-req">*</text></text>
+                    <input class="field-input" type="number" :maxlength="11" v-model="phone" placeholder="用于企业联系你" />
+                </view>
+                <view class="divider"></view>
+                <view class="field-row">
+                    <text class="field-label">邮箱</text>
+                    <input class="field-input" type="text" :maxlength="50" v-model="email" placeholder="选填" />
+                </view>
+                <view class="divider"></view>
+                <view class="field-row" @click="onYearsTap">
+                    <text class="field-label">工作年限</text>
+                    <view class="field-picker">
+                        <text :class="years.length > 0 ? 'field-value' : 'field-ph'">{{ years.length > 0 ? years : '请选择' }}</text>
+                        <text class="field-arrow">›</text>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 求职期望 -->
+            <view class="card">
+                <text class="card-title">求职期望</text>
+                <view class="field-row">
+                    <text class="field-label">意向岗位<text class="field-req">*</text></text>
+                    <input class="field-input" type="text" :maxlength="30" v-model="jobTitle" placeholder="如：叉车维修技师" />
+                </view>
+                <view class="divider"></view>
+                <view class="field-row">
+                    <text class="field-label">意向城市</text>
+                    <input class="field-input" type="text" :maxlength="20" v-model="jobCity" placeholder="如：杭州" />
+                </view>
+                <view class="divider"></view>
+                <view class="field-row" @click="onSalaryTap">
+                    <text class="field-label">期望薪资</text>
+                    <view class="field-picker">
+                        <text :class="salary.length > 0 ? 'field-value' : 'field-ph'">{{ salary.length > 0 ? salary : '请选择' }}</text>
+                        <text class="field-arrow">›</text>
+                    </view>
+                </view>
+                <view class="divider"></view>
+                <view class="field-row" @click="onJobTypeTap">
+                    <text class="field-label">工作类型</text>
+                    <view class="field-picker">
+                        <text :class="jobType.length > 0 ? 'field-value' : 'field-ph'">{{ jobType.length > 0 ? jobType : '请选择' }}</text>
+                        <text class="field-arrow">›</text>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 教育经历 -->
+            <view class="card">
+                <text class="card-title">教育经历</text>
+                <view v-for="(item, idx) in eduItems" :key="idx" class="sub-card">
+                    <view class="sub-head">
+                        <text class="sub-title">教育 {{ idx + 1 }}</text>
+                        <text class="sub-del" @click="removeEdu(idx)">删除</text>
+                    </view>
+                    <view class="field-row">
+                        <text class="field-label">学校</text>
+                        <input class="field-input" type="text" :maxlength="30" v-model="item.school" placeholder="学校名称" />
+                    </view>
+                    <view class="divider"></view>
+                    <view class="field-row">
+                        <text class="field-label">专业</text>
+                        <input class="field-input" type="text" :maxlength="30" v-model="item.major" placeholder="所学专业" />
+                    </view>
+                    <view class="divider"></view>
+                    <view class="field-row" @click="onDegreeTap(idx)">
+                        <text class="field-label">学历</text>
+                        <view class="field-picker">
+                            <text :class="item.degree.length > 0 ? 'field-value' : 'field-ph'">{{ item.degree.length > 0 ? item.degree : '请选择' }}</text>
+                            <text class="field-arrow">›</text>
+                        </view>
+                    </view>
+                    <view class="divider"></view>
+                    <view class="field-row">
+                        <text class="field-label">时间</text>
+                        <view class="field-range">
+                            <input class="field-range-input" type="text" :maxlength="7" v-model="item.start" placeholder="2020.09" />
+                            <text class="field-range-sep">至</text>
+                            <input class="field-range-input" type="text" :maxlength="7" v-model="item.end" placeholder="2023.06" />
+                        </view>
+                    </view>
+                </view>
+                <view class="add-btn" @click="addEdu">
+                    <text class="add-btn-text">+ 添加教育经历</text>
+                </view>
+            </view>
+
+            <!-- 工作经历 -->
+            <view class="card">
+                <text class="card-title">工作经历</text>
+                <view v-for="(item, idx) in expItems" :key="idx" class="sub-card">
+                    <view class="sub-head">
+                        <text class="sub-title">经历 {{ idx + 1 }}</text>
+                        <text class="sub-del" @click="removeExp(idx)">删除</text>
+                    </view>
+                    <view class="field-row">
+                        <text class="field-label">公司</text>
+                        <input class="field-input" type="text" :maxlength="30" v-model="item.company" placeholder="公司名称" />
+                    </view>
+                    <view class="divider"></view>
+                    <view class="field-row">
+                        <text class="field-label">职位</text>
+                        <input class="field-input" type="text" :maxlength="30" v-model="item.position" placeholder="如：叉车维修工" />
+                    </view>
+                    <view class="divider"></view>
+                    <view class="field-row">
+                        <text class="field-label">时间</text>
+                        <view class="field-range">
+                            <input class="field-range-input" type="text" :maxlength="7" v-model="item.start" placeholder="2023.07" />
+                            <text class="field-range-sep">至</text>
+                            <input class="field-range-input" type="text" :maxlength="7" v-model="item.end" placeholder="至今" />
+                        </view>
+                    </view>
+                    <view class="divider"></view>
+                    <textarea class="area-input" :maxlength="500" v-model="item.desc" placeholder="工作内容：如日常叉车保养、液压系统检修、发动机故障排查…" :auto-height="true"></textarea>
+                </view>
+                <view class="add-btn" @click="addExp">
+                    <text class="add-btn-text">+ 添加工作经历</text>
+                </view>
+            </view>
+
+            <!-- 证书技能 -->
+            <view class="card">
+                <text class="card-title">证书与技能</text>
+                <textarea class="area-input" :maxlength="300" v-model="certs" placeholder="每行一条，如：&#10;叉车作业操作证（N1）&#10;低压电工证&#10;液压/电气系统故障诊断" :auto-height="true"></textarea>
+            </view>
+
+            <!-- 自我介绍 -->
+            <view class="card">
+                <text class="card-title">自我介绍</text>
+                <textarea class="area-input" :maxlength="500" v-model="selfIntro" placeholder="简单介绍你的维修经验、擅长机型、求职意向…" :auto-height="true"></textarea>
+            </view>
+
+            <view class="bottom-space"></view>
+
+            <view class="save-bar">
+                <view class="save-btn" @click="onSave">
+                    <text class="save-btn-text">保存简历</text>
+                </view>
+            </view>
+            <view class="bottom-space"></view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
+    import { setStorage, getStorageJSON } from '../../utils/storage'
+    import { STORAGE_KEY_RESUME } from '../../constants/app'
+    import { toStr } from '../../api/helpers'
+
+    type EduItem = {
+        school : string
+        major : string
+        degree : string
+        start : string
+        end : string
+    }
+
+    type ExpItem = {
+        company : string
+        position : string
+        start : string
+        end : string
+        desc : string
+    }
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    // 基本信息
+    const name = ref<string>('')
+    const gender = ref<string>('')
+    const phone = ref<string>('')
+    const email = ref<string>('')
+    const years = ref<string>('')
+    // 求职期望
+    const jobTitle = ref<string>('')
+    const jobCity = ref<string>('')
+    const salary = ref<string>('')
+    const jobType = ref<string>('')
+    // 多段经历
+    const eduItems = ref<EduItem[]>([])
+    const expItems = ref<ExpItem[]>([])
+    // 文本块
+    const certs = ref<string>('')
+    const selfIntro = ref<string>('')
+
+    /** 完善度：12 项关键内容，任一教育/经历段有内容即计 1 */
+    const completion = computed<number>(() : number => {
+        let filled = 0
+        if (name.value.trim().length > 0) filled += 1
+        if (gender.value.length > 0) filled += 1
+        if (phone.value.length == 11) filled += 1
+        if (email.value.trim().length > 0) filled += 1
+        if (years.value.length > 0) filled += 1
+        if (jobTitle.value.trim().length > 0) filled += 1
+        if (jobCity.value.trim().length > 0) filled += 1
+        if (salary.value.length > 0) filled += 1
+        if (jobType.value.length > 0) filled += 1
+        if (hasEduContent()) filled += 1
+        if (hasExpContent()) filled += 1
+        if (selfIntro.value.trim().length > 0 || certs.value.trim().length > 0) filled += 1
+        return Math.round(filled * 100 / 12)
+    })
+
+    function hasEduContent() : boolean {
+        for (let i = 0; i < eduItems.value.length; i++) {
+            const e = eduItems.value[i]
+            if (e.school.trim().length > 0 || e.major.trim().length > 0) return true
+        }
+        return false
+    }
+
+    function hasExpContent() : boolean {
+        for (let i = 0; i < expItems.value.length; i++) {
+            const e = expItems.value[i]
+            if (e.company.trim().length > 0 || e.position.trim().length > 0) return true
+        }
+        return false
+    }
+
+    // ---- 选项选择 ----
+    function pick(options : string[], onPick : (v : string) => void) : void {
+        uni.showActionSheet({
+            itemList: options,
+            success: (res) => {
+                onPick(options[res.tapIndex])
+            }
+        })
+    }
+
+    const genderOptions : string[] = ['男', '女']
+    const yearsOptions : string[] = ['1年以下', '1-3年', '3-5年', '5-10年', '10年以上']
+    const salaryOptions : string[] = ['3-5K', '5-7K', '7-9K', '9-12K', '12K以上', '面议']
+    const jobTypeOptions : string[] = ['全职', '兼职', '实习']
+    const degreeOptions : string[] = ['初中及以下', '高中/中专/技校', '大专', '本科', '硕士及以上']
+
+    function onGenderTap() : void {
+        pick(genderOptions, (v : string) : void => { gender.value = v })
+    }
+
+    function onYearsTap() : void {
+        pick(yearsOptions, (v : string) : void => { years.value = v })
+    }
+
+    function onSalaryTap() : void {
+        pick(salaryOptions, (v : string) : void => { salary.value = v })
+    }
+
+    function onJobTypeTap() : void {
+        pick(jobTypeOptions, (v : string) : void => { jobType.value = v })
+    }
+
+    function onDegreeTap(idx : number) : void {
+        pick(degreeOptions, (v : string) : void => {
+            if (idx < eduItems.value.length) {
+                eduItems.value[idx].degree = v
+            }
+        })
+    }
+
+    // ---- 多段经历增删 ----
+    function addEdu() : void {
+        eduItems.value.push({ school: '', major: '', degree: '', start: '', end: '' } as EduItem)
+    }
+
+    function removeEdu(idx : number) : void {
+        eduItems.value.splice(idx, 1)
+    }
+
+    function addExp() : void {
+        expItems.value.push({ company: '', position: '', start: '', end: '', desc: '' } as ExpItem)
+    }
+
+    function removeExp(idx : number) : void {
+        expItems.value.splice(idx, 1)
+    }
+
+    // ---- 草稿加载（后端 /resume 接口就绪前本地落地） ----
+    function loadDraft() : void {
+        const saved = getStorageJSON(STORAGE_KEY_RESUME)
+        if (saved == null) return
+        name.value = toStr(saved['name'])
+        gender.value = toStr(saved['gender'])
+        phone.value = toStr(saved['phone'])
+        email.value = toStr(saved['email'])
+        years.value = toStr(saved['years'])
+        jobTitle.value = toStr(saved['job_title'])
+        jobCity.value = toStr(saved['job_city'])
+        salary.value = toStr(saved['salary'])
+        jobType.value = toStr(saved['job_type'])
+        certs.value = toStr(saved['certs'])
+        selfIntro.value = toStr(saved['self_intro'])
+        const eduRaw = saved['edu']
+        if (eduRaw != null) {
+            const arr = eduRaw as Array<UTSJSONObject>
+            for (let i = 0; i < arr.length; i++) {
+                const o = arr[i]
+                eduItems.value.push({
+                    school: toStr(o['school']),
+                    major: toStr(o['major']),
+                    degree: toStr(o['degree']),
+                    start: toStr(o['start']),
+                    end: toStr(o['end']),
+                } as EduItem)
+            }
+        }
+        const expRaw = saved['exp']
+        if (expRaw != null) {
+            const arr = expRaw as Array<UTSJSONObject>
+            for (let i = 0; i < arr.length; i++) {
+                const o = arr[i]
+                expItems.value.push({
+                    company: toStr(o['company']),
+                    position: toStr(o['position']),
+                    start: toStr(o['start']),
+                    end: toStr(o['end']),
+                    desc: toStr(o['desc']),
+                } as ExpItem)
+            }
+        }
+    }
+
+    // ---- 保存 ----
+    function onSave() : void {
+        if (name.value.trim().length == 0) {
+            uni.showToast({ title: '请填写姓名', icon: 'none' })
+            return
+        }
+        if (phone.value.length != 11) {
+            uni.showToast({ title: '请填写 11 位手机号', icon: 'none' })
+            return
+        }
+        if (jobTitle.value.trim().length == 0) {
+            uni.showToast({ title: '请填写意向岗位', icon: 'none' })
+            return
+        }
+        const eduArr : Array<UTSJSONObject> = []
+        for (let i = 0; i < eduItems.value.length; i++) {
+            const e = eduItems.value[i]
+            if (e.school.trim().length == 0 && e.major.trim().length == 0) continue
+            eduArr.push({ school: e.school, major: e.major, degree: e.degree, start: e.start, end: e.end } as UTSJSONObject)
+        }
+        const expArr : Array<UTSJSONObject> = []
+        for (let i = 0; i < expItems.value.length; i++) {
+            const e = expItems.value[i]
+            if (e.company.trim().length == 0 && e.position.trim().length == 0) continue
+            expArr.push({ company: e.company, position: e.position, start: e.start, end: e.end, desc: e.desc } as UTSJSONObject)
+        }
+        const data : UTSJSONObject = {
+            name: name.value.trim(),
+            gender: gender.value,
+            phone: phone.value,
+            email: email.value.trim(),
+            years: years.value,
+            job_title: jobTitle.value.trim(),
+            job_city: jobCity.value.trim(),
+            salary: salary.value,
+            job_type: jobType.value,
+            certs: certs.value,
+            self_intro: selfIntro.value,
+            edu: eduArr,
+            exp: expArr,
+            updated_at: new Date().toISOString(),
+        } as UTSJSONObject
+        setStorage(STORAGE_KEY_RESUME, JSON.stringify(data))
+        uni.showToast({ title: '已保存', icon: 'success', duration: 800 })
+        setTimeout(() => {
+            goBack('/pages/resume/resume')
+        }, 900)
+    }
+
+    function onBack() : void {
+        goBack('/pages/resume/resume')
+    }
+
+    onLoad(() => {
+        loadDraft()
+        if (eduItems.value.length == 0) addEdu()
+        if (expItems.value.length == 0) addExp()
+    })
+</script>
+
+<style>
+    .page {
+        flex: 1;
+        background-color: #f5f6fa;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #ffffff;
+    }
+
+    /* ===== 顶栏 ===== */
+    .nav-bar {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12rpx 32rpx;
+        background-color: #ffffff;
+        border-bottom: 1rpx solid #f0f0f0;
+    }
+
+    .nav-left {
+        width: 100rpx;
+    }
+
+    .back-icon {
+        font-size: 52rpx;
+        color: #333333;
+    }
+
+    .nav-title {
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .nav-right {
+        width: 100rpx;
+        align-items: flex-end;
+    }
+
+    .nav-save {
+        font-size: 30rpx;
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    .body {
+        flex: 1;
+        height: 0;
+        padding: 0 24rpx;
+    }
+
+    /* ===== 完善度 ===== */
+    .progress-card {
+        background-color: #ffffff;
+        border-radius: 20rpx;
+        padding: 28rpx;
+        margin-top: 24rpx;
+    }
+
+    .progress-text-row {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .progress-label {
+        font-size: 28rpx;
+        color: #333333;
+        font-weight: bold;
+    }
+
+    .progress-pct {
+        font-size: 28rpx;
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    .progress-track {
+        margin-top: 20rpx;
+        height: 12rpx;
+        border-radius: 6rpx;
+        background-color: #eef1f6;
+    }
+
+    .progress-fill {
+        height: 12rpx;
+        border-radius: 6rpx;
+        background-color: #2979ff;
+    }
+
+    .progress-tip {
+        margin-top: 12rpx;
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    /* ===== 卡片与字段 ===== */
+    .card {
+        background-color: #ffffff;
+        border-radius: 20rpx;
+        padding: 28rpx;
+        margin-top: 24rpx;
+    }
+
+    .card-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 8rpx;
+    }
+
+    .field-row {
+        flex-direction: row;
+        align-items: center;
+        min-height: 96rpx;
+    }
+
+    .field-label {
+        width: 170rpx;
+        font-size: 28rpx;
+        color: #666666;
+        flex-shrink: 0;
+    }
+
+    .field-req {
+        color: #fa3534;
+        font-size: 26rpx;
+    }
+
+    .field-input {
+        flex: 1;
+        font-size: 28rpx;
+        color: #333333;
+        background-color: transparent;
+        border: none;
+        padding: 0;
+        height: 80rpx;
+    }
+
+    .field-picker {
+        flex: 1;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-end;
+    }
+
+    .field-value {
+        font-size: 28rpx;
+        color: #333333;
+    }
+
+    .field-ph {
+        font-size: 28rpx;
+        color: #bbbbbb;
+    }
+
+    .field-arrow {
+        font-size: 32rpx;
+        color: #cccccc;
+        margin-left: 8rpx;
+    }
+
+    .field-range {
+        flex: 1;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .field-range-input {
+        width: 150rpx;
+        height: 80rpx;
+        font-size: 28rpx;
+        color: #333333;
+        background-color: #f7f8fa;
+        border-radius: 8rpx;
+        padding: 0 16rpx;
+    }
+
+    .field-range-sep {
+        font-size: 26rpx;
+        color: #999999;
+        margin: 0 16rpx;
+    }
+
+    .divider {
+        height: 1rpx;
+        background-color: #f0f2f5;
+    }
+
+    .area-input {
+        width: 100%;
+        min-height: 160rpx;
+        margin-top: 16rpx;
+        padding: 20rpx;
+        font-size: 28rpx;
+        color: #333333;
+        background-color: #f7f8fa;
+        border-radius: 12rpx;
+    }
+
+    /* ===== 多段经历子卡 ===== */
+    .sub-card {
+        background-color: #fafbfd;
+        border: 1rpx solid #eef1f6;
+        border-radius: 16rpx;
+        padding: 8rpx 24rpx;
+        margin-top: 20rpx;
+    }
+
+    .sub-head {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        height: 72rpx;
+    }
+
+    .sub-title {
+        font-size: 26rpx;
+        color: #999999;
+    }
+
+    .sub-del {
+        font-size: 26rpx;
+        color: #fa3534;
+    }
+
+    .add-btn {
+        margin-top: 24rpx;
+        height: 80rpx;
+        border-radius: 40rpx;
+        border: 2rpx dashed #2979ff;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .add-btn-text {
+        font-size: 26rpx;
+        color: #2979ff;
+    }
+
+    /* ===== 保存 ===== */
+    .bottom-space {
+        height: 24rpx;
+    }
+
+    .save-bar {
+        padding: 8rpx 8rpx 0 8rpx;
+    }
+
+    .save-btn {
+        height: 96rpx;
+        border-radius: 48rpx;
+        background-color: #2979ff;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .save-btn-text {
+        font-size: 32rpx;
+        color: #ffffff;
+        font-weight: bold;
+    }
+</style>

@@ -1,5 +1,5 @@
 <template>
-	<view class="register-page">
+	<scroll-view scroll-y class="register-page">
 		<!-- 顶部品牌区 -->
 		<view class="header">
 			<view class="logo-box">
@@ -21,21 +21,21 @@
 				<view class="form-item">
 					<view class="input-wrap">
 						<input class="input-base" type="text" placeholder="请输入昵称" :maxlength="20"
-							:value="form.nickname" @input="onNicknameInput" />
+							:value="form.nickname" @input="onNicknameInput" @confirm="onConfirm" />
 					</view>
 				</view>
 				<view class="form-item">
 					<view class="input-wrap">
 						<text class="input-prefix">+86</text>
 						<input class="input-base" type="number" placeholder="请输入 11 位手机号" :maxlength="11"
-							:value="form.phone" @input="onPhoneInput" />
+							:value="form.phone" @input="onPhoneInput" @confirm="onConfirm" />
 					</view>
 				</view>
 				<view class="form-item code-row">
 					<view class="code-input-wrap">
 						<view class="input-wrap">
 							<input class="input-base" type="number" placeholder="请输入验证码" :maxlength="6"
-								:value="form.code" @input="onCodeInput" />
+								:value="form.code" @input="onCodeInput" @confirm="onConfirm" />
 						</view>
 					</view>
 					<button class="code-btn" :class="{ 'code-btn-disabled': sendingCode || countdown > 0 }" :disabled="sendingCode || countdown > 0" @click="onSendCode">
@@ -47,7 +47,10 @@
 						<input class="input-base captcha-input" type="text" placeholder="图形验证码" :maxlength="4"
 							:value="captchaValue" @input="onCaptchaInput" />
 					</view>
-					<image class="captcha-img" :src="captchaImage" mode="aspectFit" @click="refreshCaptcha" />
+					<view class="captcha-img captcha-fail-box" v-if="captchaFailed" @click="refreshCaptcha">
+						<text class="captcha-fail-text">加载失败 点击重试</text>
+					</view>
+					<image class="captcha-img" v-else :src="captchaImage" mode="aspectFit" @click="refreshCaptcha" />
 				</view>
 				<view class="form-item hint" v-if="codeHint.length > 0">
 					<text class="hint-text">{{ codeHint }}</text>
@@ -59,20 +62,20 @@
 				<view class="form-item">
 					<view class="input-wrap">
 						<input class="input-base" type="text" placeholder="请输入昵称" :maxlength="20"
-							:value="form.nickname" @input="onNicknameInput" />
+							:value="form.nickname" @input="onNicknameInput" @confirm="onConfirm" />
 					</view>
 				</view>
 				<view class="form-item">
 					<view class="input-wrap">
 						<input class="input-base" type="text" placeholder="请输入邮箱" :maxlength="50"
-							:value="form.email" @input="onEmailInput" />
+							:value="form.email" @input="onEmailInput" @confirm="onConfirm" />
 					</view>
 				</view>
 				<view class="form-item code-row">
 					<view class="code-input-wrap">
 						<view class="input-wrap">
 							<input class="input-base" type="number" placeholder="请输入验证码" :maxlength="6"
-								:value="form.code" @input="onCodeInput" />
+								:value="form.code" @input="onCodeInput" @confirm="onConfirm" />
 						</view>
 					</view>
 					<button class="code-btn" :class="{ 'code-btn-disabled': sendingCode || countdown > 0 }" :disabled="sendingCode || countdown > 0" @click="onSendCode">
@@ -84,22 +87,29 @@
 						<input class="input-base captcha-input" type="text" placeholder="图形验证码" :maxlength="4"
 							:value="captchaValue" @input="onCaptchaInput" />
 					</view>
-					<image class="captcha-img" :src="captchaImage" mode="aspectFit" @click="refreshCaptcha" />
+					<view class="captcha-img captcha-fail-box" v-if="captchaFailed" @click="refreshCaptcha">
+						<text class="captcha-fail-text">加载失败 点击重试</text>
+					</view>
+					<image class="captcha-img" v-else :src="captchaImage" mode="aspectFit" @click="refreshCaptcha" />
 				</view>
 				<view class="form-item hint" v-if="codeHint.length > 0">
 					<text class="hint-text">{{ codeHint }}</text>
 				</view>
 			</template>
+
+			<!-- 密码设置（两种方式共用） -->
 			<view class="form-item">
 				<view class="input-wrap">
-					<input class="input-base" :password="true" placeholder="设置密码（至少 6 位）" :maxlength="32"
-						:value="form.password" @input="onPasswordInput" />
+					<input class="input-base" :password="!passwordVisible" placeholder="设置密码（6-20 位）" :maxlength="20"
+						:value="form.password" @input="onPasswordInput" @confirm="onConfirm" />
+					<text class="pwd-toggle" @click="togglePasswordVisible">{{ passwordVisible ? '隐藏' : '显示' }}</text>
 				</view>
 			</view>
 			<view class="form-item">
 				<view class="input-wrap">
-					<input class="input-base" :password="true" placeholder="请再次输入密码" :maxlength="32"
-						:value="form.confirmPassword" @input="onConfirmPasswordInput" />
+					<input class="input-base" :password="!confirmVisible" placeholder="请再次输入密码" :maxlength="20"
+						:value="form.confirmPassword" @input="onConfirmPasswordInput" @confirm="onConfirm" />
+					<text class="pwd-toggle" @click="toggleConfirmVisible">{{ confirmVisible ? '隐藏' : '显示' }}</text>
 				</view>
 			</view>
 
@@ -123,7 +133,7 @@
 				<text class="footer-link" @click="goLogin">返回登录</text>
 			</view>
 		</view>
-	</view>
+	</scroll-view>
 </template>
 
 <script setup lang="uts">
@@ -153,13 +163,14 @@
 		mode.value == 'email' ? '邮箱注册，验证码通过后自动登录' : '手机号注册，验证码通过后自动登录'
 	)
 
-	/** 切换注册方式：重置验证码倒计时并刷新图形验证码（对应用侧验证码规则互不影响） */
+	/** 切换注册方式：清空已收验证码（通道间不通用）、重置倒计时并刷新图形验证码 */
 	function switchMode(m : string) : void {
 		if (m == mode.value) return
 		mode.value = m
 		clearCountdownTimer()
 		countdown.value = 0
 		wrongAttempts.value = 0
+		form.code = ''
 		loadCaptcha()
 	}
 
@@ -175,8 +186,20 @@
 	// 协议勾选
 	const agreed = ref<boolean>(false)
 
+	// 密码明文切换
+	const passwordVisible = ref<boolean>(false)
+	const confirmVisible = ref<boolean>(false)
+
 	function toggleAgree() : void {
 		agreed.value = !agreed.value
+	}
+
+	function togglePasswordVisible() : void {
+		passwordVisible.value = !passwordVisible.value
+	}
+
+	function toggleConfirmVisible() : void {
+		confirmVisible.value = !confirmVisible.value
 	}
 
 	function showAgreement(name : string) : void {
@@ -188,8 +211,9 @@
 	const captchaImage = ref<string>('')
 	const captchaValue = ref<string>('')
 	const captchaLoading = ref<boolean>(false)
+	const captchaFailed = ref<boolean>(false)
 
-	/** 加载图形验证码（进入页面/点击图片刷新） */
+	/** 加载图形验证码（进入页面/点击图片刷新）；失败展示"点击重试"占位 */
 	async function loadCaptcha() : Promise<void> {
 		if (captchaLoading.value) return
 		captchaLoading.value = true
@@ -198,8 +222,10 @@
 			captchaId.value = data['id'] as string
 			captchaImage.value = data['image'] as string
 			captchaValue.value = ''
+			captchaFailed.value = false
 		} catch (e) {
 			console.error('[register] load captcha failed:', e)
+			captchaFailed.value = true
 		} finally {
 			captchaLoading.value = false
 		}
@@ -251,7 +277,7 @@
 	function validateEmail() : string {
 		const t = form.email.trim()
 		if (t.length == 0) return '请输入邮箱'
-		if (t.indexOf('@') <= 0 || t.indexOf('.') <= 0) return '邮箱格式不正确'
+		if (!/^[\w.%+-]+@[\w-]+(\.[\w-]+)+$/.test(t)) return '邮箱格式不正确'
 		return ''
 	}
 
@@ -323,19 +349,18 @@
 			const err = validateEmail()
 			if (err.length > 0) return err
 		} else {
-			const phone : string = form.phone
-			if (phone.length != 11) return '请输入 11 位手机号'
-			if (!phone.startsWith('1')) return '手机号格式不正确'
-			if (!/^\d{11}$/.test(phone)) return '手机号必须为数字'
+			const err = validatePhone()
+			if (err.length > 0) return err
 		}
 		if (code.length == 0) return '请输入验证码'
 		if (code.length != 6) return '请输入 6 位验证码'
-		if (password.length < 6) return '密码至少 6 位'
+		if (password.length < 6 || password.length > 20) return '密码长度需为 6-20 位'
 		if (password != confirmPassword) return '两次输入的密码不一致'
 		return ''
 	}
 
 	async function onSubmit() : Promise<void> {
+		if (loading.value) return
 		const errMsg = validate()
 		if (errMsg.length > 0) {
 			uni.showToast({ title: errMsg, icon: 'none' })
@@ -365,12 +390,13 @@
 				}
 				result = await registerApi(params)
 			}
-			auth.setAuthData(result.token, result.user)
+			// refresh_token 必须一并落地：缺失时 access 过期无法自动续期，会被直接踢回登录页
+			auth.setAuthData(result.token, result.user, result.refresh_token)
 			uni.hideLoading()
-			uni.showToast({ title: '注册成功', icon: 'success', duration: 1500 })
+			uni.showToast({ title: '注册成功', icon: 'success', duration: 1000 })
 			setTimeout(() => {
 				uni.reLaunch({ url: '/pages/guide/choose-cert' })
-			}, 1000)
+			}, 1100)
 		} catch (e) {
 			uni.hideLoading()
 			console.error('[register] failed:', e)
@@ -408,6 +434,10 @@
 		uni.redirectTo({ url: '/pages/login/login' })
 	}
 
+	function onConfirm() : void {
+		onSubmit()
+	}
+
 	function onNicknameInput(e : InputEvent) : void {
 		form.nickname = e.detail.value
 	}
@@ -435,7 +465,6 @@
 	function onCaptchaInput(e : InputEvent) : void {
 		captchaValue.value = e.detail.value
 	}
-
 </script>
 
 <style>
@@ -454,133 +483,6 @@
 		position: relative;
 		width: 140rpx;
 		height: 140rpx;
-	}
-
-	/* 叉车小 logo（坐标系 0-140rpx） */
-	.mast-l {
-		position: absolute;
-		left: 73rpx;
-		top: 22rpx;
-		width: 9rpx;
-		height: 74rpx;
-		border-radius: 4rpx;
-		background-color: #16A34A;
-	}
-
-	.mast-r {
-		position: absolute;
-		left: 86rpx;
-		top: 22rpx;
-		width: 9rpx;
-		height: 74rpx;
-		border-radius: 4rpx;
-		background-color: #22C55E;
-	}
-
-	.fork-v {
-		position: absolute;
-		left: 73rpx;
-		top: 62rpx;
-		width: 9rpx;
-		height: 36rpx;
-		background-color: #15803D;
-	}
-
-	.fork-h {
-		position: absolute;
-		left: 73rpx;
-		top: 93rpx;
-		width: 50rpx;
-		height: 9rpx;
-		border-radius: 4rpx;
-		background-color: #15803D;
-	}
-
-	.f-body {
-		position: absolute;
-		left: 12rpx;
-		top: 46rpx;
-		width: 58rpx;
-		height: 30rpx;
-		border-radius: 8rpx;
-		background-color: #22C55E;
-	}
-
-	.f-cab {
-		position: absolute;
-		left: 24rpx;
-		top: 22rpx;
-		width: 34rpx;
-		height: 30rpx;
-		border-radius: 8rpx;
-		background-color: #16A34A;
-	}
-
-	.f-window {
-		position: absolute;
-		left: 30rpx;
-		top: 28rpx;
-		width: 18rpx;
-		height: 18rpx;
-		border-radius: 6rpx;
-		background-color: rgba(255, 255, 255, 0.45);
-	}
-
-	.f-wheel {
-		position: absolute;
-		width: 22rpx;
-		height: 22rpx;
-		border-radius: 50%;
-		background-color: #14532D;
-	}
-
-	.f-wheel-back {
-		left: 20rpx;
-		top: 74rpx;
-	}
-
-	.f-wheel-front {
-		left: 48rpx;
-		top: 74rpx;
-	}
-
-	.f-hub {
-		position: absolute;
-		width: 9rpx;
-		height: 9rpx;
-		border-radius: 50%;
-		background-color: #86EFAC;
-	}
-
-	.f-hub-back {
-		left: 26rpx;
-		top: 80rpx;
-	}
-
-	.f-hub-front {
-		left: 54rpx;
-		top: 80rpx;
-	}
-
-	/* 扳手（叉车右侧） */
-	.f-wrench-ring {
-		position: absolute;
-		left: 103rpx;
-		top: 18rpx;
-		width: 19rpx;
-		height: 19rpx;
-		border-radius: 50%;
-		border: 4rpx solid #16A34A;
-	}
-
-	.f-wrench-handle {
-		position: absolute;
-		left: 107rpx;
-		top: 31rpx;
-		width: 9rpx;
-		height: 15rpx;
-		border-radius: 4rpx;
-		background-color: #16A34A;
 	}
 
 	.page-title {
@@ -661,6 +563,13 @@
 		color: #333333;
 	}
 
+	/* 密码显隐切换 */
+	.pwd-toggle {
+		font-size: 26rpx;
+		color: #999999;
+		padding-left: 16rpx;
+	}
+
 	/* 验证码行 */
 	.code-row {
 		flex-direction: row;
@@ -711,6 +620,18 @@
 		background-color: #F5F6FA;
 	}
 
+	/* 图形验证码加载失败占位 */
+	.captcha-fail-box {
+		align-items: center;
+		justify-content: center;
+	}
+
+	.captcha-fail-text {
+		font-size: 22rpx;
+		color: #999999;
+		text-align: center;
+	}
+
 	/* 验证码规则提示 */
 	.hint {
 		margin-top: -16rpx;
@@ -725,6 +646,7 @@
 	/* 协议行 */
 	.agree-row {
 		flex-direction: row;
+		flex-wrap: wrap;
 		align-items: center;
 		margin-top: 8rpx;
 	}

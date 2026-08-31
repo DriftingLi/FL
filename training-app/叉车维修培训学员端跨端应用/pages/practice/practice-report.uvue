@@ -1,0 +1,381 @@
+<template>
+    <view class="page" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="nav-bar">
+            <view class="nav-left" @click="onBack">
+                <text class="nav-icon">‹</text>
+            </view>
+            <text class="nav-title">数据报告</text>
+            <view class="nav-right"></view>
+        </view>
+        <scroll-view class="body" scroll-y="true">
+            <!-- 概览卡 -->
+            <view class="overview-card">
+                <view class="overview-item">
+                    <text class="overview-num">{{ overview.today_count }}</text>
+                    <text class="overview-label">今日做题</text>
+                </view>
+                <view class="overview-divider"></view>
+                <view class="overview-item">
+                    <text class="overview-num">{{ overview.total_count }}</text>
+                    <text class="overview-label">累计做题</text>
+                </view>
+                <view class="overview-divider"></view>
+                <view class="overview-item">
+                    <text class="overview-num">{{ overview.total_days }}</text>
+                    <text class="overview-label">累计天数</text>
+                </view>
+            </view>
+
+            <!-- 总正确率 -->
+            <view class="card">
+                <text class="card-title">整体表现</text>
+                <view class="acc-row">
+                    <text class="acc-num">{{ accuracyText }}%</text>
+                    <text class="acc-label">总正确率</text>
+                </view>
+                <view class="acc-track">
+                    <view class="acc-fill" :style="{ width: accuracyText + '%' }"></view>
+                </view>
+                <view class="acc-stats-row">
+                    <text class="acc-stat">答对 {{ correctCount }} 题</text>
+                    <text class="acc-stat acc-stat-wrong">答错 {{ wrongCount }} 题</text>
+                </view>
+            </view>
+
+            <!-- 题型分布 -->
+            <view class="card">
+                <text class="card-title">题型分布</text>
+                <view v-if="typeRows.length == 0 && !loading" class="type-empty">
+                    <text class="type-empty-text">暂无做题记录</text>
+                </view>
+                <view v-for="(row, idx) in typeRows" :key="idx" class="type-row">
+                    <view class="type-head">
+                        <text class="type-name">{{ row.label }}</text>
+                        <text class="type-count">{{ row.total }} 题</text>
+                    </view>
+                    <view class="type-track">
+                        <view class="type-fill" :style="{ width: row.accuracyText + '%' }"></view>
+                    </view>
+                    <text class="type-acc">正确率 {{ row.accuracyText }}%（答对 {{ row.correct }}）</text>
+                </view>
+            </view>
+
+            <!-- mock 提示 -->
+            <view class="tip-card">
+                <text class="tip-text">趋势分析与薄弱知识点推荐即将上线</text>
+            </view>
+
+            <view class="safe-bottom"></view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
+    import { getPracticeOverviewApi, getPracticeReportApi } from '../../api/practice'
+    import { toNumber, toStr } from '../../api/helpers'
+    import type { PracticeOverview } from '../../types/index'
+
+    /** 题型统计行 */
+    type TypeStatRow = {
+        label : string
+        total : number
+        correct : number
+        accuracyText : string
+    }
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const overview = ref<PracticeOverview>({
+        today_count: 0,
+        total_count: 0,
+        total_days: 0,
+    } as PracticeOverview)
+
+    const totalQ = ref<number>(0)
+    const correctCount = ref<number>(0)
+    const wrongCount = ref<number>(0)
+    const accuracyRaw = ref<number>(0)
+    const typeRows = ref<TypeStatRow[]>([])
+    const loading = ref<boolean>(true)
+
+    /** 后端 accuracy 兼容 0-1 与 0-100 两种口径 */
+    const accuracyText = computed<string>(() : string => {
+        let a = accuracyRaw.value
+        if (a <= 1 && a > 0) {
+            a = a * 100
+        }
+        if (totalQ.value == 0) {
+            return '0'
+        }
+        return Math.round(a).toString()
+    })
+
+    function typeName(type : string) : string {
+        if (type == 'single' || type == 'single_choice') return '单选题'
+        if (type == 'multi' || type == 'multiple_choice' || type == 'multi_choice') return '多选题'
+        if (type == 'judge' || type == 'true_false') return '判断题'
+        if (type == 'short' || type == 'short_answer') return '简答题'
+        return '其他'
+    }
+
+    function load() : void {
+        getPracticeOverviewApi().then((res : PracticeOverview) : void => {
+            overview.value = res
+        }).catch(() => {})
+        getPracticeReportApi().then((data : UTSJSONObject) : void => {
+            totalQ.value = toNumber(data['total'])
+            correctCount.value = toNumber(data['correct'])
+            wrongCount.value = toNumber(data['wrong'])
+            accuracyRaw.value = toNumber(data['accuracy'])
+            const rows : TypeStatRow[] = []
+            const byTypeRaw = data['by_type']
+            if (byTypeRaw != null) {
+                const map = byTypeRaw as UTSJSONObject
+                for (const k in map) {
+                    const v = map[k]
+                    if (v == null) continue
+                    const o = v as UTSJSONObject
+                    let acc = toNumber(o['accuracy'])
+                    if (acc <= 1 && acc > 0) {
+                        acc = acc * 100
+                    }
+                    rows.push({
+                        label: typeName(k),
+                        total: toNumber(o['total']),
+                        correct: toNumber(o['correct']),
+                        accuracyText: Math.round(acc).toString(),
+                    } as TypeStatRow)
+                }
+            }
+            rows.sort((a : TypeStatRow, b : TypeStatRow) : number => b.total - a.total)
+            typeRows.value = rows
+            loading.value = false
+        }).catch((e) => {
+            console.error('[practice-report] load failed:', e)
+            loading.value = false
+            uni.showToast({ title: '加载报告失败', icon: 'none' })
+        })
+    }
+
+    function onBack() : void {
+        goBack()
+    }
+
+    onLoad(() => {
+        load()
+    })
+</script>
+
+<style>
+    .page {
+        flex: 1;
+        background-color: #f5f6fa;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #ffffff;
+    }
+
+    .nav-bar {
+        background-color: #ffffff;
+        padding: 16rpx 24rpx;
+        height: 88rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1rpx solid #f0f0f0;
+    }
+
+    .nav-left,
+    .nav-right {
+        width: 72rpx;
+        height: 72rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .nav-icon {
+        font-size: 44rpx;
+        color: #333333;
+    }
+
+    .nav-title {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .body {
+        flex: 1;
+        height: 0;
+        padding: 0 24rpx;
+    }
+
+    /* 概览卡 */
+    .overview-card {
+        margin-top: 24rpx;
+        background: linear-gradient(135deg, #4facfe 0%, #239edd 100%);
+        border-radius: 20rpx;
+        padding: 32rpx 0;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-around;
+    }
+
+    .overview-item {
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .overview-num {
+        font-size: 40rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .overview-label {
+        font-size: 22rpx;
+        color: rgba(255, 255, 255, 0.85);
+        margin-top: 6rpx;
+    }
+
+    .overview-divider {
+        width: 1rpx;
+        height: 52rpx;
+        background-color: rgba(255, 255, 255, 0.3);
+    }
+
+    /* 通用卡片 */
+    .card {
+        margin-top: 24rpx;
+        background-color: #ffffff;
+        border-radius: 20rpx;
+        padding: 28rpx;
+    }
+
+    .card-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 20rpx;
+    }
+
+    /* 整体正确率 */
+    .acc-row {
+        flex-direction: row;
+        align-items: baseline;
+    }
+
+    .acc-num {
+        font-size: 56rpx;
+        font-weight: bold;
+        color: #239edd;
+    }
+
+    .acc-label {
+        font-size: 26rpx;
+        color: #999999;
+        margin-left: 12rpx;
+    }
+
+    .acc-track {
+        margin-top: 16rpx;
+        height: 14rpx;
+        border-radius: 7rpx;
+        background-color: #eef1f6;
+    }
+
+    .acc-fill {
+        height: 14rpx;
+        border-radius: 7rpx;
+        background-color: #239edd;
+    }
+
+    .acc-stats-row {
+        flex-direction: row;
+        margin-top: 16rpx;
+    }
+
+    .acc-stat {
+        font-size: 24rpx;
+        color: #4caf50;
+        margin-right: 32rpx;
+    }
+
+    .acc-stat-wrong {
+        color: #f44336;
+    }
+
+    /* 题型分布 */
+    .type-row {
+        margin-bottom: 24rpx;
+    }
+
+    .type-head {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .type-name {
+        font-size: 26rpx;
+        color: #333333;
+    }
+
+    .type-count {
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    .type-track {
+        margin-top: 10rpx;
+        height: 10rpx;
+        border-radius: 5rpx;
+        background-color: #eef1f6;
+    }
+
+    .type-fill {
+        height: 10rpx;
+        border-radius: 5rpx;
+        background-color: #239edd;
+    }
+
+    .type-acc {
+        margin-top: 8rpx;
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .type-empty {
+        padding: 24rpx 0;
+        align-items: center;
+    }
+
+    .type-empty-text {
+        font-size: 26rpx;
+        color: #cccccc;
+    }
+
+    /* mock 提示 */
+    .tip-card {
+        margin-top: 24rpx;
+        align-items: center;
+    }
+
+    .tip-text {
+        font-size: 22rpx;
+        color: #bbbbbb;
+    }
+
+    .safe-bottom {
+        height: 48rpx;
+    }
+</style>

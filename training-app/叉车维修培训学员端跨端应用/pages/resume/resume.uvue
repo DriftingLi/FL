@@ -1,0 +1,360 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <view class="header-right">
+                <text class="bell-icon" @click="onNotifications">🔔</text>
+            </view>
+        </view>
+        <scroll-view class="content" scroll-y="true">
+            <!-- 用户信息卡 -->
+            <view class="user-card">
+                <view class="user-row">
+                    <image v-if="avatarUrl.length > 0" class="avatar" :src="avatarUrl" mode="aspectFill" />
+                    <view v-else class="avatar avatar-placeholder">
+                        <text class="avatar-icon">👷</text>
+                    </view>
+                    <view class="user-meta">
+                        <text class="user-name">{{ userName }}</text>
+                        <view class="lv-badge">
+                            <text class="lv-badge-text">Lv{{ userLevel }}</text>
+                        </view>
+                    </view>
+                </view>
+                <view class="stats-row">
+                    <view class="stat-card">
+                        <text class="stat-num">{{ noticeFavCount }}</text>
+                        <text class="stat-label">公告收藏</text>
+                    </view>
+                    <view class="stat-card">
+                        <text class="stat-num">{{ jobFavCount }}</text>
+                        <text class="stat-label">职位收藏</text>
+                    </view>
+                    <view class="stat-card">
+                        <text class="stat-num">{{ collectionFavCount }}</text>
+                        <text class="stat-label">合集收藏</text>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 简历填写引导（未填写时展示） -->
+            <view class="resume-guide" v-if="!resumeFilled">
+                <text class="resume-guide-text">去填写简历</text>
+                <view class="resume-guide-btn" @click="onOnlineResume">
+                    <text class="resume-guide-btn-text">去完善</text>
+                </view>
+            </view>
+
+            <!-- 常用功能 -->
+            <text class="section-title">常用功能</text>
+            <view class="func-grid">
+                <view class="func-card" @click="onOnlineResume">
+                    <text class="func-icon">📝</text>
+                    <text class="func-title func-title-online">在线简历</text>
+                    <text class="func-desc">优化增加推荐</text>
+                </view>
+                <view class="func-card" @click="onAttachmentResume">
+                    <text class="func-icon">🗂️</text>
+                    <text class="func-title func-title-attach">附件简历</text>
+                    <text class="func-desc">制作/上传</text>
+                </view>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onLoad, onShow } from '@dcloudio/uni-app'
+    import { useAuthStore } from '../../stores/auth'
+    import { getProfileApi } from '../../api/student'
+    import { getFavoritesApi } from '../../api/favorite'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
+    import { getStorageJSON } from '../../utils/storage'
+    import { toStr } from '../../api/helpers'
+    import { STORAGE_KEY_RESUME } from '../../constants/app'
+    import type { StudentProfile, FavoriteListResult } from '../../types/index'
+
+    const auth = useAuthStore()
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const profile = ref<StudentProfile | null>(null)
+    const noticeFavCount = ref<number>(0)
+    const jobFavCount = ref<number>(0)
+    const collectionFavCount = ref<number>(0)
+    // 在线简历是否已填写（本地草稿判定，后端接口就绪后换服务端状态）
+    const resumeFilled = ref<boolean>(false)
+
+    const userName = computed<string>(() : string => {
+        const u = auth.user.value
+        if (u != null) {
+            if (u.name.length > 0) return u.name
+            if (u.username.length > 0) return u.username
+        }
+        return '同学'
+    })
+
+    const avatarUrl = computed<string>(() : string => {
+        const u = auth.user.value
+        if (u != null && u.avatar_url != null && u.avatar_url.length > 0) {
+            return u.avatar_url
+        }
+        return ''
+    })
+
+    /** 学员等级 Lv：与 profile.uvue 同一推导规则（后端无等级字段） */
+    const userLevel = computed<number>(() : number => {
+        let minutes = 0
+        if (profile.value != null) {
+            minutes = profile.value.total_study_duration
+        }
+        const hours = minutes / 60
+        if (hours < 5) return 1
+        if (hours < 20) return 2
+        if (hours < 50) return 3
+        if (hours < 100) return 4
+        return 5
+    })
+
+    function onBack() : void {
+        goBack()
+    }
+
+    function onNotifications() : void {
+        uni.navigateTo({ url: '/pages/notifications/notifications' })
+    }
+
+    function onOnlineResume() : void {
+        uni.navigateTo({ url: '/pages/resume/resume-edit' })
+    }
+
+    function onAttachmentResume() : void {
+        uni.navigateTo({ url: '/pages/resume/resume-attach' })
+    }
+
+    /** 草稿存在且含姓名 → 视为已填写，隐藏"去完善"引导 */
+    function refreshResumeFilled() : void {
+        const saved = getStorageJSON(STORAGE_KEY_RESUME)
+        if (saved == null) {
+            resumeFilled.value = false
+            return
+        }
+        resumeFilled.value = toStr(saved['name'], '').length > 0
+    }
+
+    onLoad(() => {
+        auth.restoreFromStorage()
+        getProfileApi().then((p : StudentProfile) : void => {
+            profile.value = p
+        }).catch((e) => {
+            console.warn('[resume] load profile failed:', e)
+        })
+        // 公告/职位/合集收藏数：后端多态收藏暂未收录这三类 target_type，返回 total 恒为 0；
+        // 接口就绪后此处无需改动映射
+        getFavoritesApi('notice', 1, 1).then((res : FavoriteListResult) : void => {
+            noticeFavCount.value = res.total
+        }).catch(() => {})
+        getFavoritesApi('job', 1, 1).then((res : FavoriteListResult) : void => {
+            jobFavCount.value = res.total
+        }).catch(() => {})
+        getFavoritesApi('collection', 1, 1).then((res : FavoriteListResult) : void => {
+            collectionFavCount.value = res.total
+        }).catch(() => {})
+    })
+
+    onShow(() => {
+        refreshResumeFilled()
+    })
+</script>
+
+<style>
+    .container {
+        flex: 1;
+        background-color: #f5f6fa;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #f5f6fa;
+    }
+
+    .header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12rpx 32rpx;
+        background-color: #f5f6fa;
+    }
+
+    .header-left {
+        width: 80rpx;
+    }
+
+    .back-icon {
+        font-size: 52rpx;
+        color: #333333;
+    }
+
+    .bell-icon {
+        font-size: 40rpx;
+    }
+
+    .content {
+        flex: 1;
+        height: 0;
+        padding: 0 32rpx;
+    }
+
+    /* ===== 用户信息卡 ===== */
+    .user-card {
+        background-image: linear-gradient(135deg, #e3f0ff, #cfe4ff);
+        border-radius: 24rpx;
+        padding: 32rpx 24rpx 24rpx 24rpx;
+    }
+
+    .user-row {
+        flex-direction: row;
+        align-items: center;
+        padding-left: 8rpx;
+    }
+
+    .avatar {
+        width: 96rpx;
+        height: 96rpx;
+        border-radius: 48rpx;
+        background-color: #ffffff;
+    }
+
+    .avatar-placeholder {
+        align-items: center;
+        justify-content: center;
+    }
+
+    .avatar-icon {
+        font-size: 52rpx;
+    }
+
+    .user-meta {
+        flex-direction: row;
+        align-items: center;
+        margin-left: 20rpx;
+    }
+
+    .user-name {
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .lv-badge {
+        margin-left: 12rpx;
+        padding: 2rpx 12rpx;
+        border-radius: 16rpx;
+        background-color: #2979ff;
+    }
+
+    .lv-badge-text {
+        font-size: 22rpx;
+        color: #ffffff;
+    }
+
+    .stats-row {
+        flex-direction: row;
+        margin-top: 24rpx;
+    }
+
+    .stat-card {
+        flex: 1;
+        margin: 0 8rpx;
+        align-items: center;
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 20rpx 0;
+    }
+
+    .stat-num {
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .stat-label {
+        margin-top: 6rpx;
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    /* ===== 简历填写引导 ===== */
+    .resume-guide {
+        align-items: center;
+        margin-top: 40rpx;
+    }
+
+    .resume-guide-text {
+        font-size: 28rpx;
+        color: #666666;
+    }
+
+    .resume-guide-btn {
+        margin-top: 16rpx;
+        padding: 12rpx 44rpx;
+        border-radius: 36rpx;
+        background-color: #2979ff;
+    }
+
+    .resume-guide-btn-text {
+        font-size: 26rpx;
+        color: #ffffff;
+    }
+
+    /* ===== 常用功能 ===== */
+    .section-title {
+        margin-top: 48rpx;
+        margin-bottom: 20rpx;
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .func-grid {
+        flex-direction: row;
+        justify-content: space-between;
+    }
+
+    .func-card {
+        width: 48%;
+        align-items: center;
+        background-color: #ffffff;
+        border-radius: 20rpx;
+        padding: 32rpx 0;
+    }
+
+    .func-icon {
+        font-size: 56rpx;
+    }
+
+    .func-title {
+        margin-top: 16rpx;
+        font-size: 28rpx;
+        font-weight: bold;
+    }
+
+    .func-title-online {
+        color: #16a34a;
+    }
+
+    .func-title-attach {
+        color: #2979ff;
+    }
+
+    .func-desc {
+        margin-top: 8rpx;
+        font-size: 22rpx;
+        color: #999999;
+    }
+</style>

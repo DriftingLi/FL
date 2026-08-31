@@ -3,14 +3,22 @@
         <!-- 状态栏占位 -->
         <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
 
-        <!-- 顶部导航栏 -->
+        <!-- 顶部导航栏：返回 / 标题 / 搜索 -->
         <view class="nav-bar">
             <view class="nav-left" @click="onBack">
                 <text class="nav-icon">‹</text>
             </view>
             <text class="nav-title">题库练习</text>
-            <view class="nav-right" @click="onMenu">
-                <text class="nav-icon">☰</text>
+            <view class="nav-right" @click="onSearch">
+                <text class="nav-icon">🔍</text>
+            </view>
+        </view>
+
+        <!-- 地区行（mock：后端暂无题目地区维度，仅作本地筛选展示） -->
+        <view class="region-bar">
+            <view class="region-left" @click="onRegionTap">
+                <text class="region-text">{{ region }}</text>
+                <text class="region-arrow">∨</text>
             </view>
         </view>
 
@@ -21,19 +29,9 @@
             :refresher-enabled="true"
             :refresher-triggered="isRefreshing"
             @refresherrefresh="onRefresh"
-            @scrolltolower="onLoadMore"
         >
-            <!-- 筛选栏 -->
-            <view class="filter-row">
-                <view class="filter-dropdown" @click="onFilterClick">
-                    <text class="filter-text">{{ currentFilterLabel }}</text>
-                    <text class="filter-arrow">▼</text>
-                </view>
-                <view class="filter-spacer"></view>
-            </view>
-
             <!-- 培训横幅卡片 -->
-            <view class="banner-card" @click="onBannerClick">
+            <view class="banner-card">
                 <view class="banner-image-area">
                     <view class="banner-forklift">
                         <text class="banner-emoji">🏗️</text>
@@ -53,29 +51,28 @@
                 </view>
             </view>
 
-            <!-- 数据统计栏（蓝色渐变） -->
+            <!-- 数据统计栏（蓝色渐变）：数据源 /practice-mode/practice-stats -->
             <view class="stat-bar">
-                <view class="stat-item" @click="onStatClick('today')">
-                    <text class="stat-num">{{ stats.today_count }}</text>
+                <view class="stat-item">
+                    <text class="stat-num">{{ overview.today_count }}</text>
                     <text class="stat-label">今日做题</text>
                 </view>
                 <view class="stat-divider"></view>
-                <view class="stat-item" @click="onStatClick('total')">
-                    <text class="stat-num">{{ stats.total_practiced }}</text>
+                <view class="stat-item">
+                    <text class="stat-num">{{ overview.total_count }}</text>
                     <text class="stat-label">累计做题</text>
                 </view>
                 <view class="stat-divider"></view>
-                <view class="stat-item" @click="onStatClick('days')">
-                    <text class="stat-num">{{ stats.streak_days }}</text>
+                <view class="stat-item">
+                    <text class="stat-num">{{ overview.total_days }}</text>
                     <text class="stat-label">累计天数</text>
                 </view>
                 <view class="stat-divider"></view>
-                <view class="stat-item" @click="onStatClick('report')">
+                <view class="stat-item" @click="onReportClick">
                     <view class="stat-report-wrap">
                         <text class="stat-report-text">数据报告</text>
                         <text class="stat-report-arrow">›</text>
                     </view>
-                    <text class="stat-label">查看分析</text>
                 </view>
             </view>
 
@@ -85,7 +82,7 @@
                     <view class="feature-icon-wrap feature-color-paper">
                         <text class="feature-icon-text">📄</text>
                     </view>
-                    <text class="feature-name">历年试卷</text>
+                    <text class="feature-name">历年真题</text>
                 </view>
                 <view class="feature-item" @click="onFeatureClick('mock_exam')">
                     <view class="feature-icon-wrap feature-color-mock">
@@ -103,12 +100,12 @@
                     <view class="feature-icon-wrap feature-color-wrong">
                         <text class="feature-icon-text">❌</text>
                     </view>
-                    <text class="feature-name">错题重练</text>
+                    <text class="feature-name">错题本</text>
                 </view>
             </view>
 
-            <!-- 骨架屏加载态 -->
-            <view v-if="listLoading && questionList.length === 0" class="skeleton-list">
+            <!-- 模块练习列表（标签专项） -->
+            <view v-if="listLoading && modules.length == 0" class="skeleton-list">
                 <view v-for="i in 4" :key="i" class="skeleton-item">
                     <view class="skeleton-content">
                         <view class="skeleton-line skeleton-line-title"></view>
@@ -118,8 +115,7 @@
                 </view>
             </view>
 
-            <!-- 错误态 -->
-            <view v-else-if="listError" class="error-state" @click="retryLoad">
+            <view v-else-if="listError.length > 0 && modules.length == 0" class="error-state" @click="loadModules">
                 <text class="error-icon">⚠️</text>
                 <text class="error-text">{{ listError }}</text>
                 <view class="error-btn">
@@ -127,51 +123,22 @@
                 </view>
             </view>
 
-            <!-- 空状态 -->
-            <view v-else-if="!listLoading && questionList.length === 0" class="empty-state">
+            <view v-else-if="modules.length == 0" class="empty-state">
                 <text class="empty-icon">📭</text>
-                <text class="empty-text">暂无题目数据</text>
+                <text class="empty-text">暂无题库标签</text>
             </view>
 
-            <!-- 标签练习 -->
-            <view v-if="tagList.length > 0" class="tags-section">
-                <view class="section-header-bar">
-                    <text class="section-title-bar">标签练习</text>
-                </view>
-                <view class="tags-wrap">
-                    <view v-for="(tag, idx) in tagList" :key="tag.id" class="tag-chip" @click="onTagClick(tag)">
-                        <text class="tag-chip-text">{{ tag.name }}</text>
-                        <text class="tag-chip-count">{{ tag.question_count }}题</text>
+            <view v-else class="module-list">
+                <view v-for="(m, idx) in modules" :key="m.tag_id" class="module-card" @click="onModuleClick(m)">
+                    <view class="module-icon">
+                        <text class="module-icon-text">›</text>
                     </view>
-                </view>
-            </view>
-
-            <!-- 题目列表（独立卡片样式） -->
-            <view v-if="tagList.length === 0 && questionList.length > 0" class="question-list">
-                <view
-                    v-for="(item, idx) in questionList"
-                    :key="item.question_id"
-                    class="question-card"
-                    @click="onQuestionClick(item, idx)"
-                >
-                    <view class="question-info">
-                        <text class="question-title">{{ item.title }}</text>
-                        <view class="question-meta">
-                            <text class="question-status">已完成 {{ item.completedCount }}/{{ item.totalCount }}</text>
-                            <text class="question-status-space"> </text>
-                            <text class="question-status">正确率 {{ item.accuracy }}%</text>
-                        </view>
+                    <view class="module-info">
+                        <text class="module-name">{{ m.name }}</text>
+                        <text class="module-meta">{{ moduleMeta(m) }}</text>
                     </view>
-                    <text class="question-arrow">›</text>
+                    <text class="module-arrow">›</text>
                 </view>
-            </view>
-
-            <!-- 加载更多 -->
-            <view v-if="listLoading && questionList.length > 0" class="load-more">
-                <text class="load-more-text">加载中...</text>
-            </view>
-            <view v-if="listNoMore && questionList.length > 0" class="load-more">
-                <text class="load-more-text">— 没有更多了 —</text>
             </view>
 
             <!-- 底部安全区 -->
@@ -181,214 +148,145 @@
 </template>
 
 <script setup lang="uts">
-    import { ref, computed } from 'vue'
-    import { onShow, onPullDownRefresh } from '@dcloudio/uni-app'
+    import { ref } from 'vue'
+    import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
     import { getTagsApi } from '../../api/course'
     import type { TagItem } from '../../types/index'
-    import { goBack } from '../../utils/navigation'
-    import {
-        getPracticeStatsApi,
-        getQuestionListApi,
-        getQuestionBankStatsApi,
-    } from '../../api/practice'
-    import type { PracticeStats } from '../../types/index'
+    import { getPracticeOverviewApi, getPracticeProgressApi } from '../../api/practice'
+    import type { PracticeOverview } from '../../types/index'
+
+    /** 模块练习行（标签 + 进度快照） */
+    type ModuleRow = {
+        tag_id : number
+        name : string
+        total : number
+        completed : number
+    }
 
     // ===== 系统信息 =====
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
-    // ===== 筛选标签 =====
-    const tabs = ref<{ key: string; label: string; type: string }[]>([
-        { key: 'all', label: '全部', type: '' },
-        { key: 'choice', label: '选择题', type: 'single_choice' },
-        { key: 'judge', label: '判断题', type: 'true_false' },
-        { key: 'safety', label: '安全规范', type: 'safety' },
-    ])
-    const activeTab = ref<string>('all')
+    // ===== 地区筛选（mock：无后端支撑，本地展示态） =====
+    const region = ref<string>('全国')
+    const regionOptions : string[] = ['全国', '北京', '上海', '广东', '浙江', '江苏', '山东', '四川', '湖北', '湖南', '河南']
 
-    const currentFilterLabel = computed<string>(() : string => {
-        for (let i = 0; i < tabs.value.length; i++) {
-            if (tabs.value[i].key == activeTab.value) {
-                return tabs.value[i].label
+    function onRegionTap() : void {
+        uni.showActionSheet({
+            itemList: regionOptions,
+            success: (res) => {
+                region.value = regionOptions[res.tapIndex]
             }
-        }
-        return '全部'
-    })
-
-    // ===== 标签数据 =====
-    const tagList = ref<TagItem[]>([])
-
-    async function loadTags() : Promise<void> {
-        try {
-            tagList.value = await getTagsApi()
-        } catch (e) {
-            console.warn('[practice] loadTags failed:', e)
-        }
-    }
-
-    function onTagClick(tag : TagItem) : void {
-        uni.navigateTo({
-            url: '/pages/practice/practice-do?mode=tag&tag_id=' + tag.id.toString() + '&tag_name=' + encodeURIComponent(tag.name)
         })
     }
 
-    // ===== 统计数据 =====
-    const stats = ref<PracticeStats>({
-        total_practiced: 0,
-        correct_count: 0,
-        accuracy: 0,
+    // ===== 刷题数据统计 =====
+    const overview = ref<PracticeOverview>({
         today_count: 0,
-        streak_days: 0,
-    } as PracticeStats)
+        total_count: 0,
+        total_days: 0,
+    } as PracticeOverview)
 
-    // ===== 题目列表 =====
-    interface QuestionListItem {
-        question_id: number
-        type: string
-        title: string
-        completed: boolean
-        accuracy: number
-        completedCount: number
-        totalCount: number
-    }
-
-    const questionList = ref<QuestionListItem[]>([])
-    const listPage = ref<number>(1)
-    const listPageSize = 20
-    const listTotal = ref<number>(0)
+    // ===== 模块列表 =====
+    const modules = ref<ModuleRow[]>([])
     const listLoading = ref<boolean>(false)
-    const listNoMore = ref<boolean>(false)
     const listError = ref<string>('')
-
-    // ===== 下拉刷新 =====
     const isRefreshing = ref<boolean>(false)
 
-    // ===== 工具函数 =====
-    function getTypeName(type: string): string {
-        if (type === 'single' || type === 'single_choice') return '选择题'
-        if (type === 'multi' || type === 'multiple_choice' || type === 'multi_choice') return '多选题'
-        if (type === 'judge' || type === 'true_false') return '判断题'
-        if (type === 'safety') return '安全规范'
-        return '其他'
-    }
-
-    function getFilterType(): string {
-        for (let i = 0; i < tabs.value.length; i++) {
-            if (tabs.value[i].key == activeTab.value) {
-                return tabs.value[i].type
-            }
-        }
-        return ''
-    }
-
-    // ===== 数据加载 =====
-    async function loadStats(): Promise<void> {
+    async function loadOverview() : Promise<void> {
         try {
-            const data = await getPracticeStatsApi()
-            stats.value = data
+            overview.value = await getPracticeOverviewApi()
         } catch (e) {
-            console.error('[practice] load stats failed:', e)
+            console.error('[practice] load overview failed:', e)
         }
     }
 
-    async function loadQuestions(reset: boolean = false): Promise<void> {
-        if (listLoading.value) return
-        if (reset) {
-            listPage.value = 1
-            listNoMore.value = false
-            listError.value = ''
-        }
-        if (listNoMore.value && !reset) return
+    /**
+     * mock 正确率：后端无"按标签"维度正确率接口（stats 仅按题型），
+     * 用标签 ID 派生的稳定伪值填充 UI，接口就绪后删除本函数并接真实字段。
+     */
+    function mockAccuracy(tagId : number) : number {
+        return 60 + (tagId * 13) % 35
+    }
 
+    /** 模块行副标题：已开始显示完成进度（正确率为 mock），未开始显示总题量 */
+    function moduleMeta(m : ModuleRow) : string {
+        if (m.completed > 0) {
+            return '已完成 ' + m.completed.toString() + '/' + m.total.toString() + ' 正确率 ' + mockAccuracy(m.tag_id).toString() + '%'
+        }
+        if (m.total > 0) {
+            return '共 ' + m.total.toString() + ' 题'
+        }
+        return '暂无题目'
+    }
+
+    /**
+     * 加载标签模块列表：
+     * 1) /tags 拿名称与题量先渲染；
+     * 2) 再逐个查 /practice-mode/progress?mode=tag:<id> 回填"已完成 x/y"。
+     * 正确率后端无标签维度接口（仅按题型 by_type），原型该项暂缺。
+     */
+    async function loadModules() : Promise<void> {
         listLoading.value = true
         listError.value = ''
+        let tags : TagItem[] = []
         try {
-            const filterType = getFilterType()
-            const result = await getQuestionListApi(listPage.value, listPageSize, filterType, '')
-            const rawItems = result['items'] as any[] | null
-            const rawTotal = result['total'] as number
-
-            const newItems: QuestionListItem[] = []
-            if (rawItems != null) {
-                for (let i = 0; i < rawItems.length; i++) {
-                    const raw = rawItems[i] as UTSJSONObject
-                    const item: QuestionListItem = {
-                        question_id: (raw['id'] ?? raw['question_id']) as number ?? 0,
-                        type: (raw['type'] ?? '') as string,
-                        title: (raw['content'] ?? raw['title'] ?? '') as string,
-                        completed: false,
-                        accuracy: 0,
-                        completedCount: 0,
-                        totalCount: 0,
-                    } as QuestionListItem
-                    // 如果后端返回了进度信息
-                    const cc = raw['completed_count']
-                    if (cc != null) item.completedCount = cc as number
-                    const tc = raw['total_count']
-                    if (tc != null) item.totalCount = tc as number
-                    const acc = raw['accuracy']
-                    if (acc != null) item.accuracy = acc as number
-                    newItems.push(item)
-                }
-            }
-
-            if (reset) {
-                questionList.value = newItems
-            } else {
-                questionList.value = questionList.value.concat(newItems)
-            }
-            listTotal.value = rawTotal ?? 0
-
-            if (questionList.value.length >= listTotal.value || newItems.length === 0) {
-                listNoMore.value = true
-            } else {
-                listPage.value = listPage.value + 1
-            }
+            tags = await getTagsApi()
         } catch (e) {
-            console.error('[practice] load questions failed:', e)
+            console.error('[practice] load tags failed:', e)
             listError.value = '加载失败，请点击重试'
-        } finally {
             listLoading.value = false
+            return
         }
+        const rows : ModuleRow[] = []
+        for (let i = 0; i < tags.length; i++) {
+            const t = tags[i]
+            rows.push({ tag_id: t.id, name: t.name, total: t.question_count, completed: 0 } as ModuleRow)
+        }
+        modules.value = rows
+        listLoading.value = false
+
+        // 逐个回填进度（标签数量有限，顺序拉取；单个失败保持默认值不影响整页）
+        for (let i = 0; i < rows.length; i++) {
+            try {
+                const p = await getPracticeProgressApi('tag:' + rows[i].tag_id.toString())
+                if (p.completed > 0 || p.total > 0) {
+                    rows[i].completed = p.completed
+                    if (p.total > 0) {
+                        rows[i].total = p.total
+                    }
+                    modules.value = rows.slice()
+                }
+            } catch (e) {
+                // 无进度记录等场景静默
+            }
+        }
+    }
+
+    function onModuleClick(m : ModuleRow) : void {
+        uni.navigateTo({
+            url: '/pages/practice/practice-do?mode=tag&tag_id=' + m.tag_id.toString() + '&tag_name=' + encodeURIComponent(m.name)
+        })
     }
 
     // ===== 事件处理 =====
-    function onBack(): void {
+    function onBack() : void {
         goBack()
     }
 
-    function onMenu(): void {
-        uni.showToast({ title: '菜单', icon: 'none' })
+    function onSearch() : void {
+        uni.navigateTo({ url: '/pages/search/search' })
     }
 
-    function onFilterClick(): void {
-        const keys = ['all', 'choice', 'judge', 'safety']
-        let currentIdx = 0
-        for (let i = 0; i < keys.length; i++) {
-            if (keys[i] == activeTab.value) {
-                currentIdx = i
-                break
-            }
-        }
-        const nextIdx = (currentIdx + 1) % keys.length
-        activeTab.value = keys[nextIdx]
-        loadQuestions(true)
+    function onReportClick() : void {
+        uni.navigateTo({ url: '/pages/practice/practice-report' })
     }
 
-    function onBannerClick(): void {
-        // 横幅整体点击
-    }
-
-    function onStatClick(statType: string): void {
-        if (statType == 'report') {
-            uni.showToast({ title: '数据报告开发中', icon: 'none' })
-        }
-    }
-
-    function onFeatureClick(feature: string): void {
+    function onFeatureClick(feature : string) : void {
         if (feature == 'past_paper') {
-            uni.showToast({ title: '历年试卷开发中', icon: 'none' })
+            uni.showToast({ title: '历年真题开发中', icon: 'none' })
         } else if (feature == 'mock_exam') {
             uni.navigateTo({ url: '/pages/exam/mock-exam' })
         } else if (feature == 'level_exam') {
@@ -398,36 +296,18 @@
         }
     }
 
-    function onQuestionClick(item: QuestionListItem, index: number): void {
-        const filterType = getFilterType()
-        let url = '/pages/practice/practice-do?mode=free'
-        if (filterType.length > 0) {
-            url = url + '&type=' + filterType
-        }
-        url = url + '&start=' + index.toString()
-        uni.navigateTo({ url: url })
-    }
-
-    async function onRefresh(): Promise<void> {
+    async function onRefresh() : Promise<void> {
         isRefreshing.value = true
-        await Promise.all([loadStats(), loadQuestions(true)])
+        await loadOverview()
+        await loadModules()
         isRefreshing.value = false
-    }
-
-    function onLoadMore(): void {
-        loadQuestions(false)
-    }
-
-    function retryLoad(): void {
-        loadQuestions(true)
     }
 
     // ===== 生命周期 =====
     onShow(() => {
-        loadStats()
-        loadTags()
-        if (questionList.value.length === 0) {
-            loadQuestions(true)
+        loadOverview()
+        if (modules.value.length == 0) {
+            loadModules()
         }
     })
 </script>
@@ -464,7 +344,7 @@
     }
 
     .nav-icon {
-        font-size: 44rpx;
+        font-size: 40rpx;
         color: #333333;
     }
 
@@ -480,36 +360,36 @@
         height: 0;
     }
 
-    /* ===== 筛选栏 ===== */
-    .filter-row {
-        padding: 20rpx 24rpx 12rpx;
+    /* ===== 地区行（mock） ===== */
+    .region-bar {
+        background-color: #ffffff;
+        padding: 8rpx 24rpx 20rpx;
         flex-direction: row;
         align-items: center;
     }
 
-    .filter-dropdown {
+    .region-left {
         flex-direction: row;
         align-items: center;
+        background-color: #f5f6fa;
+        border-radius: 24rpx;
+        padding: 8rpx 20rpx;
     }
 
-    .filter-text {
-        font-size: 28rpx;
+    .region-text {
+        font-size: 26rpx;
         color: #333333;
-        margin-right: 8rpx;
     }
 
-    .filter-arrow {
+    .region-arrow {
         font-size: 20rpx;
         color: #999999;
-    }
-
-    .filter-spacer {
-        flex: 1;
+        margin-left: 8rpx;
     }
 
     /* ===== 培训横幅卡片 ===== */
     .banner-card {
-        margin: 0 24rpx 24rpx 24rpx;
+        margin: 24rpx 24rpx;
         background-color: #ffffff;
         border-radius: 20rpx;
         overflow: hidden;
@@ -562,7 +442,6 @@
         right: 20rpx;
         top: 20rpx;
         flex-direction: column;
-        gap: 8rpx;
     }
 
     .banner-tag {
@@ -572,6 +451,7 @@
         padding: 6rpx 16rpx;
         border-radius: 8rpx;
         text-align: center;
+        margin-bottom: 8rpx;
     }
 
     /* ===== 数据统计栏 ===== */
@@ -676,6 +556,61 @@
         color: #333333;
     }
 
+    /* ===== 模块练习列表 ===== */
+    .module-list {
+        padding: 0 24rpx;
+        flex-direction: column;
+    }
+
+    .module-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 28rpx;
+        margin-bottom: 20rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .module-icon {
+        width: 52rpx;
+        height: 52rpx;
+        border-radius: 26rpx;
+        border: 3rpx solid #2979ff;
+        align-items: center;
+        justify-content: center;
+        margin-right: 20rpx;
+        flex-shrink: 0;
+    }
+
+    .module-icon-text {
+        font-size: 30rpx;
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    .module-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .module-name {
+        font-size: 30rpx;
+        color: #333333;
+        font-weight: 600;
+    }
+
+    .module-meta {
+        font-size: 24rpx;
+        color: #999999;
+        margin-top: 8rpx;
+    }
+
+    .module-arrow {
+        font-size: 36rpx;
+        color: #cccccc;
+        margin-left: 12rpx;
+    }
+
     /* ===== 骨架屏 ===== */
     .skeleton-list {
         margin: 0 24rpx;
@@ -768,113 +703,6 @@
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
-    }
-
-    /* ===== 题目列表（独立卡片样式） ===== */
-    .question-list {
-        padding: 0 24rpx;
-        flex-direction: column;
-    }
-
-    .question-card {
-        background-color: #ffffff;
-        border-radius: 16rpx;
-        padding: 28rpx 28rpx;
-        margin-bottom: 20rpx;
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .question-info {
-        flex: 1;
-        flex-direction: column;
-    }
-
-    .question-title {
-        font-size: 30rpx;
-        color: #333333;
-        font-weight: 600;
-        margin-bottom: 12rpx;
-        lines: 1;
-        text-overflow: ellipsis;
-        overflow: hidden;
-    }
-
-    .question-meta {
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .question-status {
-        font-size: 24rpx;
-        color: #999999;
-    }
-
-    .question-status-space {
-        width: 16rpx;
-    }
-
-    .question-arrow {
-        font-size: 36rpx;
-        color: #cccccc;
-        margin-left: 12rpx;
-    }
-
-    /* ===== 标签练习 ===== */
-    .tags-section {
-        margin: 0 24rpx 24rpx 24rpx;
-        background-color: #ffffff;
-        border-radius: 20rpx;
-        padding: 24rpx;
-    }
-
-    .section-header-bar {
-        flex-direction: row;
-        align-items: center;
-        margin-bottom: 20rpx;
-    }
-
-    .section-title-bar {
-        font-size: 30rpx;
-        font-weight: bold;
-        color: #333333;
-    }
-
-    .tags-wrap {
-        flex-direction: row;
-        flex-wrap: wrap;
-    }
-
-    .tag-chip {
-        background-color: #f0f7ff;
-        border-radius: 20rpx;
-        padding: 12rpx 24rpx;
-        margin-right: 16rpx;
-        margin-bottom: 16rpx;
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .tag-chip-text {
-        font-size: 26rpx;
-        color: #2979ff;
-        margin-right: 8rpx;
-    }
-
-    .tag-chip-count {
-        font-size: 22rpx;
-        color: #999999;
-    }
-
-    /* ===== 加载更多 ===== */
-    .load-more {
-        padding: 24rpx 0;
-        align-items: center;
-    }
-
-    .load-more-text {
-        font-size: 24rpx;
         color: #999999;
     }
 

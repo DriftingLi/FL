@@ -1,7 +1,7 @@
 /**
  * 认证相关 API
  */
-import { get, post, put, uploadFile } from './request'
+import { get, post, put, del, uploadFile } from './request'
 import { toStr } from './helpers'
 import type { RequestOptions } from './request'
 import type { LoginParams, LoginResult, RegisterParams, EmailRegisterParams, UserInfo, UpdateProfileParams, UploadAvatarResult, ProfileChangeRequest, WechatLoginResult, RefreshTokenResult } from '../types/index'
@@ -36,6 +36,29 @@ function buildUserInfo(obj : UTSJSONObject) : UserInfo {
 				user.avatar_url = avatarRaw as string
 			}
 		}
+		// /auth/me ProfileDTO 的扩展字段（登录响应通常不带，缺失即不设置）
+		const accountRaw = obj['account']
+		if (accountRaw != null) {
+			user.account = accountRaw as string
+		}
+		const phoneRaw = obj['phone']
+		if (phoneRaw != null) {
+			user.phone = phoneRaw as string
+		}
+		const emailRaw = obj['email']
+		if (emailRaw != null) {
+			user.email = emailRaw as string
+		}
+		const companyRaw = obj['company']
+		if (companyRaw != null) {
+			user.company = companyRaw as string
+		}
+		const hasPwdRaw = obj['has_password']
+		if (hasPwdRaw != null) {
+			user.has_password = hasPwdRaw as boolean
+		}
+		// pending_profile_change 非空即存在待审核的资料修改（昵称/头像）
+		user.has_pending_change = obj['pending_profile_change'] != null
 		return user
 	} catch (e) {
 		// 打印完整异常对象，便于定位是哪个字段转换失败
@@ -61,7 +84,6 @@ export function loginApi(params : LoginParams) : Promise<LoginResult> {
 		password: params.password
 	} as UTSJSONObject
 	return post('/auth/login', payload).then((data : UTSJSONObject) : LoginResult => {
-		console.log('[loginApi] data keys:', JSON.stringify(data))
 		try {
 			const token = data['token'] as string
 			const refreshToken = toStr(data['refresh_token'], '')
@@ -262,15 +284,18 @@ export function getUserInfoApi() : Promise<UserInfo> {
 }
 
 /**
- * 更新个人资料（昵称） PUT /auth/profile
- * @note 后端仅支持 nickname 字段，且走资料审核流：返回审核请求（pending），不即时生效；
- *       审核通过后由管理员在管理端审核并以站内信通知。
+ * 更新个人资料（昵称审核 / 单位直改） PUT /auth/profile
+ * @note nickname 提交进入审核流（pending）；company 直接生效不审核
  */
 export function updateProfileApi(params : UpdateProfileParams) : Promise<ProfileChangeRequest> {
 	const payload : UTSJSONObject = {} as UTSJSONObject
 	const nickname = params.nickname
 	if (nickname != null && nickname.length > 0) {
 		payload['nickname'] = nickname
+	}
+	const company = params.company
+	if (company != null && company.length > 0) {
+		payload['company'] = company
 	}
 	return put('/auth/profile', payload).then((data : UTSJSONObject) : ProfileChangeRequest => {
 		return buildReviewRequest(data)
@@ -364,14 +389,12 @@ export function mpWechatLoginApi(code : string) : Promise<WechatLoginResult> {
 
 // ========== 账号绑定修改（JWT） POST /auth/profile/* ==========
 
-/** 发送绑定验证码 POST /auth/profile/send-code（channel: email | phone，target 为邮箱或手机号） */
+/** 发送绑定验证码 POST /auth/profile/send-code（后端契约 {channel, target}，channel: email | phone） */
 export function profileSendCodeApi(target : string, channel : string) : Promise<UTSJSONObject> {
-	const payload : UTSJSONObject = {} as UTSJSONObject
-	if (channel == 'email') {
-		payload['email'] = target
-	} else {
-		payload['phone'] = target
-	}
+	const payload : UTSJSONObject = {
+		channel: channel,
+		target: target
+	} as UTSJSONObject
 	return post('/auth/profile/send-code', payload)
 }
 
@@ -384,21 +407,59 @@ export function profileBindPhoneApi(phone : string, code : string) : Promise<UTS
 	return post('/auth/profile/phone', payload)
 }
 
-/** 修改密码：发送短信验证码 POST /auth/profile/password/send-code */
-export function changePasswordSendCodeApi(phone : string) : Promise<UTSJSONObject> {
-	const payload : UTSJSONObject = {
-		phone: phone
-	} as UTSJSONObject
-	return post('/auth/profile/password/send-code', payload)
+/** 修改密码：发送短信验证码 POST /auth/profile/password/send-code（无 body，发往已绑定手机号） */
+export function changePasswordSendCodeApi() : Promise<UTSJSONObject> {
+	return post('/auth/profile/password/send-code', null)
 }
 
-/** 修改密码（短信验证码确认） POST /auth/profile/password */
-export function changePasswordApi(phone : string, code : string, newPassword : string) : Promise<UTSJSONObject> {
+/**
+ * 修改密码（短信验证码确认） POST /auth/profile/password
+ * @note 后端契约为 {code, password}；手机号由 JWT 定位，前端不传
+ */
+export function changePasswordApi(code : string, newPassword : string) : Promise<UTSJSONObject> {
 	const payload : UTSJSONObject = {
-		phone: phone,
 		code: code,
-		newPassword: newPassword
+		password: newPassword
 	} as UTSJSONObject
 	return post('/auth/profile/password', payload)
+}
+
+/** 绑定/修改邮箱（验证码确认） POST /auth/profile/email {email, code} */
+export function profileBindEmailApi(email : string, code : string) : Promise<UTSJSONObject> {
+	const payload : UTSJSONObject = {
+		email: email,
+		code: code
+	} as UTSJSONObject
+	return post('/auth/profile/email', payload)
+}
+
+// ========== 登录账号修改与注销（JWT） /auth/account ==========
+
+/** 发送修改登录账号验证码 POST /auth/account/send-code（无 body，发往已绑定手机号） */
+export function accountSendCodeApi() : Promise<UTSJSONObject> {
+	return post('/auth/account/send-code', null)
+}
+
+/**
+ * 修改登录账号 PUT /auth/account {account, code}
+ * @note 后端成功时重签 JWT（claim 同步新账号，ADR-0012 §5），返回与登录同构的 token + user；
+ *       账号格式：4-20 位字母数字下划线
+ */
+export function updateAccountApi(account : string, code : string) : Promise<LoginResult> {
+	const payload : UTSJSONObject = {
+		account: account,
+		code: code
+	} as UTSJSONObject
+	return put('/auth/account', payload).then((data : UTSJSONObject) : LoginResult => {
+		const token = data['token'] as string
+		const refreshToken = toStr(data['refresh_token'], '')
+		const user = buildUserInfo(data)
+		return { token: token, user: user, refresh_token: refreshToken } as LoginResult
+	})
+}
+
+/** 注销账号 DELETE /auth/account（硬删，不可恢复；成功后本地需 clearAuthData） */
+export function deleteAccountApi() : Promise<UTSJSONObject> {
+	return del('/auth/account')
 }
 

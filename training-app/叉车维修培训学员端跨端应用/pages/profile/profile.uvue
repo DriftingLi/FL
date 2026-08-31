@@ -165,7 +165,6 @@
 
     const avatarUrl = computed<string>(() : string => {
         const u = authStore.user.value
-        console.log("u,", u)
         if (u != null && u.avatar_url != null && u.avatar_url.length > 0) {
             return u.avatar_url
         }

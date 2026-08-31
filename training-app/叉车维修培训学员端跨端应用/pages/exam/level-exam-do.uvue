@@ -34,11 +34,9 @@
 
             <!-- 题号导航条 -->
             <scroll-view class="palette-scroll" scroll-x="true">
-                <view class="palette-list">
-                    <view v-for="(q, idx) in questions" :key="idx" class="palette-chip" :class="getPaletteClass(idx)"
-                        @click="onJumpTo(idx)">
-                        <text class="palette-chip-text" :class="getPaletteTextClass(idx)">{{ idx + 1 }}</text>
-                    </view>
+                <view v-for="(q, idx) in questions" :key="idx" class="palette-chip" :class="getPaletteClass(idx)"
+                    @click="onJumpTo(idx)">
+                    <text class="palette-chip-text" :class="getPaletteTextClass(idx)">{{ idx + 1 }}</text>
                 </view>
             </scroll-view>
 
@@ -620,12 +618,9 @@
     /* 题号导航条 */
     .palette-scroll {
         white-space: nowrap;
-        padding: 16rpx 0;
-    }
-
-    .palette-list {
         flex-direction: row;
-        padding: 0 24rpx;
+        align-items: center;
+        padding: 16rpx 24rpx;
     }
 
     .palette-chip {
@@ -637,6 +632,7 @@
         align-items: center;
         justify-content: center;
         margin-right: 12rpx;
+        flex-shrink: 0;
     }
 
     .palette-chip.palette-current {

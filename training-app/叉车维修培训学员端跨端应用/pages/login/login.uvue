@@ -21,8 +21,9 @@
                 </view>
                 <view class="form-item">
                     <view class="input-wrap">
-                        <input class="input-base" :password="true" placeholder="请输入密码" :maxlength="32" :value="password"
+                        <input class="input-base" :password="!passwordVisible" placeholder="请输入密码" :maxlength="32" :value="password"
                             @input="onPasswordInput" @confirm="onConfirm" />
+                        <text class="pwd-toggle" @click="togglePasswordVisible">{{ passwordVisible ? '隐藏' : '显示' }}</text>
                     </view>
                 </view>
             </template>
@@ -53,7 +54,10 @@
                         <input class="input-base captcha-input" type="text" placeholder="图形验证码" :maxlength="4"
                             :value="captchaValue" @input="onCaptchaInput" />
                     </view>
-                    <image class="captcha-img" :src="captchaImage" mode="aspectFit" @click="refreshCaptcha" />
+                    <view class="captcha-img captcha-fail-box" v-if="captchaFailed" @click="refreshCaptcha">
+                        <text class="captcha-fail-text">加载失败 点击重试</text>
+                    </view>
+                    <image class="captcha-img" v-else :src="captchaImage" mode="aspectFit" @click="refreshCaptcha" />
                 </view>
                 <view class="form-item hint" v-if="codeHint.length > 0">
                     <text class="hint-text">{{ codeHint }}</text>
@@ -90,7 +94,10 @@
                         <input class="input-base captcha-input" type="text" placeholder="图形验证码" :maxlength="4"
                             :value="captchaValue" @input="onCaptchaInput" />
                     </view>
-                    <image class="captcha-img" :src="captchaImage" mode="aspectFit" @click="refreshCaptcha" />
+                    <view class="captcha-img captcha-fail-box" v-if="captchaFailed" @click="refreshCaptcha">
+                        <text class="captcha-fail-text">加载失败 点击重试</text>
+                    </view>
+                    <image class="captcha-img" v-else :src="captchaImage" mode="aspectFit" @click="refreshCaptcha" />
                 </view>
                 <view class="form-item hint" v-if="codeHint.length > 0">
                     <text class="hint-text">{{ codeHint }}</text>
@@ -119,7 +126,7 @@
                 <text class="agree-link" @click.stop="showAgreement('用户协议')">《用户协议》</text>
                 <text class="agree-text">和</text>
                 <text class="agree-link" @click.stop="showAgreement('用户隐私')">《用户隐私》</text>
-                <text class="agree-text">若手机号未注册，</text>
+                <text class="agree-text">{{ mode == 'email' ? '若邮箱未注册，' : '若手机号未注册，' }}</text>
                 <text class="agree-link" @click.stop="goRegister">立即注册</text>
             </view>
             <!-- 登录按钮 -->
@@ -128,35 +135,34 @@
                 {{ btnText }}
             </button>
 
-            <!-- 注册引导 + 忘记密码（仅账号密码模式展示） -->
+            <!-- 记住账号 + 注册引导 + 忘记密码（仅账号密码模式展示） -->
             <view class="form-item register-row" v-if="mode == 'password'">
-                <text class="register-text">若手机号未注册，</text>
-                <text class="register-link" @click="goRegister">即刻注册</text>
-                <text class="register-sep">·</text>
-                <text class="register-link" @click="goForgotPassword">忘记密码</text>
+                <view class="remember-box" @click="toggleRemember">
+                    <view class="checkbox" :class="{ 'checkbox-checked': rememberMe }">
+                        <text v-if="rememberMe" class="check-mark">✓</text>
+                    </view>
+                    <text class="register-text">记住账号</text>
+                </view>
+                <view class="register-links">
+                    <text class="register-text">若手机号未注册，</text>
+                    <text class="register-link" @click="goRegister">即刻注册</text>
+                    <text class="register-sep">·</text>
+                    <text class="register-link" @click="goForgotPassword">忘记密码</text>
+                </view>
             </view>
 
 
         </view>
 
-        <!-- 底部登录方式切换：手机号 / 微信 / 邮箱 -->
+        <!-- 底部登录方式切换：手机号 / 微信（仅小程序端，App 未配微信 SDK） / 邮箱 -->
         <view class="mode-switch">
-            <view class="mode-item" :class="{ 'mode-item-active': mode == 'phone' }" @click="switchMode('phone')">
-                <view class="mode-ic">
-                    <text class="mode-ic-text">📱</text>
-                </view>
-            </view>
-            <view class="mode-item mode-item-wechat" :class="{ 'mode-item-active': mode == 'wechat' }"
-                @click="switchMode('wechat')">
-                <view class="mode-ic">
-                    <text class="mode-ic-text">💚</text>
-                </view>
-            </view>
-            <view class="mode-item" :class="{ 'mode-item-active': mode == 'email' }" @click="switchMode('email')">
-                <view class="mode-ic">
-                    <text class="mode-ic-text">✉️</text>
-                </view>
-            </view>
+            <text class="mode-link" :class="{ 'mode-link-active': mode == 'phone' }" @click="switchMode('phone')">手机验证码</text>
+            <!-- #ifdef MP-WEIXIN -->
+            <text class="mode-sep">|</text>
+            <text class="mode-link" :class="{ 'mode-link-active': mode == 'wechat' }" @click="switchMode('wechat')">微信登录</text>
+            <!-- #endif -->
+            <text class="mode-sep">|</text>
+            <text class="mode-link" :class="{ 'mode-link-active': mode == 'email' }" @click="switchMode('email')">邮箱验证码</text>
         </view>
 
         <!-- 切回账号密码登录的小入口：仅在非密码模式下显示 -->
@@ -171,6 +177,8 @@
     import { ref, computed } from 'vue'
     import { useAuthStore } from '../../stores/auth'
     import { sendCodeApi, getCaptchaApi } from '../../api/auth'
+    import { setStorage, getStorage, removeStorage } from '../../utils/storage'
+    import { STORAGE_KEY_LAST_USERNAME } from '../../constants/app'
 
     const auth = useAuthStore()
 
@@ -186,6 +194,9 @@
     // 账号 + 密码
     const username = ref<string>('')
     const password = ref<string>('')
+    // 密码明文切换 + 记住账号（仅存用户名，密码不落地）
+    const passwordVisible = ref<boolean>(false)
+    const rememberMe = ref<boolean>(false)
     // 邮箱 + 验证码
     const email = ref<string>('')
     const emailCode = ref<string>('')
@@ -198,8 +209,9 @@
     const captchaImage = ref<string>('')
     const captchaValue = ref<string>('')
     const captchaLoading = ref<boolean>(false)
+    const captchaFailed = ref<boolean>(false)
 
-    /** 加载图形验证码（进入页面/切换方式/点击图片刷新） */
+    /** 加载图形验证码（进入页面/切换方式/点击图片刷新）；失败展示"点击重试"占位 */
     async function loadCaptcha() : Promise<void> {
         if (captchaLoading.value) return
         captchaLoading.value = true
@@ -208,8 +220,10 @@
             captchaId.value = data['id'] as string
             captchaImage.value = data['image'] as string
             captchaValue.value = ''
+            captchaFailed.value = false
         } catch (e) {
             console.error('[login] load captcha failed:', e)
+            captchaFailed.value = true
         } finally {
             captchaLoading.value = false
         }
@@ -244,6 +258,11 @@
             uni.reLaunch({ url: '/pages/dashboard/dashboard' })
             return
         }
+        const lastUsername = getStorage(STORAGE_KEY_LAST_USERNAME)
+        if (lastUsername.length > 0) {
+            username.value = lastUsername
+            rememberMe.value = true
+        }
         loadCaptcha()
     })
 
@@ -273,6 +292,18 @@
 
     function toggleAgree() : void {
         agreed.value = !agreed.value
+    }
+
+    function togglePasswordVisible() : void {
+        passwordVisible.value = !passwordVisible.value
+    }
+
+    /** 取消勾选立即清除已记住的账号 */
+    function toggleRemember() : void {
+        rememberMe.value = !rememberMe.value
+        if (!rememberMe.value) {
+            removeStorage(STORAGE_KEY_LAST_USERNAME)
+        }
     }
 
     function showAgreement(name : string) : void {
@@ -442,6 +473,12 @@
                     username: username.value,
                     password: password.value,
                 })
+                const uname = username.value.trim()
+                if (rememberMe.value && uname.length > 0) {
+                    setStorage(STORAGE_KEY_LAST_USERNAME, uname)
+                } else {
+                    removeStorage(STORAGE_KEY_LAST_USERNAME)
+                }
             }
             uni.hideLoading()
             afterLoginSuccess(false)
@@ -595,6 +632,13 @@
         color: #333333;
     }
 
+    /* 密码显隐切换 */
+    .pwd-toggle {
+        font-size: 26rpx;
+        color: #999999;
+        padding-left: 16rpx;
+    }
+
     /* 验证码行：输入框 + 获取验证码按钮 */
     .code-row {
         flex-direction: row;
@@ -643,6 +687,18 @@
         height: 96rpx;
         border-radius: 16rpx;
         background-color: #F5F6FA;
+    }
+
+    /* 图形验证码加载失败占位 */
+    .captcha-fail-box {
+        align-items: center;
+        justify-content: center;
+    }
+
+    .captcha-fail-text {
+        font-size: 22rpx;
+        color: #999999;
+        text-align: center;
     }
 
     /* 验证码规则提示 */
@@ -700,9 +756,23 @@
         color: #2979ff;
     }
 
-    /* 注册引导 */
+    /* 记住账号 + 注册引导（左侧勾选，右侧链接） */
     .register-row {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
         margin-top: -4rpx;
+    }
+
+    .remember-box {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .register-links {
+        flex-direction: row;
+        align-items: center;
     }
 
     .register-text {
@@ -783,30 +853,20 @@
         padding: 60rpx 0 30rpx 0;
     }
 
-    .mode-item {
-        margin: 0 36rpx;
+    .mode-link {
+        font-size: 28rpx;
+        color: #666666;
+        padding: 12rpx 20rpx;
     }
 
-    .mode-ic {
-        width: 88rpx;
-        height: 88rpx;
-        border-radius: 50%;
-        background-color: #F0F1F5;
-        align-items: center;
-        justify-content: center;
+    .mode-link-active {
+        color: #2979ff;
+        font-weight: bold;
     }
 
-    .mode-item-active .mode-ic {
-        background-color: #2BB673;
-    }
-
-    /* 微信图标选中态用微信绿（区别于其他图标） */
-    .mode-item-wechat.mode-item-active .mode-ic {
-        background-color: #07C160;
-    }
-
-    .mode-ic-text {
-        font-size: 40rpx;
+    .mode-sep {
+        font-size: 28rpx;
+        color: #C8CDD8;
     }
 
     /* ===== 切回账号密码登录入口 ===== */

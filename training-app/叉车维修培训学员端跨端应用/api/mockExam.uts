@@ -55,6 +55,11 @@ function buildMockExamInfo(obj : UTSJSONObject) : MockExamInfo {
 		duration: toNumber(obj['duration']),
 		remaining_time: toNumber(obj['remaining_time']),
 	} as MockExamInfo
+	// 续考恢复：后端 resume 会带回已保存的答案（start 响应无此字段）
+	const answersRaw = obj['answers']
+	if (answersRaw != null) {
+		info.answers = answersRaw as UTSJSONObject
+	}
 	return info
 }
 
@@ -179,32 +184,11 @@ function buildMockExamHistoryResult(data : UTSJSONObject) : MockExamHistoryResul
 	return result
 }
 
-/** mock 模拟考试题目（网络不可用时回退） */
-function getMockMockExamInfo(duration : number) : MockExamInfo {
-	const options : QuestionOption[] = [
-		{ key: 'A', text: '降低车速，鸣笛示意' } as QuestionOption,
-		{ key: 'B', text: '加速通过' } as QuestionOption,
-		{ key: 'C', text: '停车检查' } as QuestionOption,
-		{ key: 'D', text: '继续作业' } as QuestionOption,
-	]
-	const questions : ExamQuestion[] = [
-		{ question_id: 1, type: 'single', title: '叉车在厂区内行驶时，遇到行人应如何处理？', options: options, score: 2.5 } as ExamQuestion,
-		{ question_id: 2, type: 'single', title: '叉车作业前，应检查哪些部位？', options: options, score: 2.5 } as ExamQuestion,
-		{ question_id: 3, type: 'single', title: '叉车装卸货物时，货叉应保持什么角度？', options: options, score: 2.5 } as ExamQuestion,
-		{ question_id: 4, type: 'single', title: '叉车夜间作业时，照明要求是什么？', options: options, score: 2.5 } as ExamQuestion,
-	]
-	return {
-		mock_exam_id: 9001,
-		questions: questions,
-		duration: duration,
-		remaining_time: duration * 60,
-	} as MockExamInfo
-}
-
 /**
  * 开始模拟考试
  * @param count 题目数量，默认 0（后端使用默认值 40）
  * @param duration 考试时长（分钟），默认 90
+ * @note 组卷失败直接抛错由页面展示重试；不做假题回退——做完整套假题再交卷必然失败，更伤用户
  */
 export function startMockExamApi(count : number = 0, duration : number = 90) : Promise<MockExamInfo> {
 	const payload : UTSJSONObject = {
@@ -212,12 +196,7 @@ export function startMockExamApi(count : number = 0, duration : number = 90) : P
 		duration: duration
 	} as UTSJSONObject
 	return post('/mock-exam/start', payload).then((data : UTSJSONObject) : MockExamInfo => {
-		console.log('[startMockExamApi] raw data:', JSON.stringify(data))
 		return buildMockExamInfo(data)
-	}).catch((e) : MockExamInfo => {
-		// 网络不可用时回退到 mock 题目，避免用户卡在"正在组卷"loading
-		console.warn('[startMockExamApi] network failed, using mock data:', e)
-		return getMockMockExamInfo(duration)
 	})
 }
 
@@ -243,19 +222,7 @@ export function saveMockExamApi(mockExamId : number, answers : UTSJSONObject, re
 export function resumeMockExamApi(mockExamId : number) : Promise<MockExamInfo> {
 	const url = '/mock-exam/' + mockExamId + '/resume'
 	return get(url).then((data : UTSJSONObject) : MockExamInfo => {
-		console.log('[resumeMockExamApi] raw data:', JSON.stringify(data))
 		return buildMockExamInfo(data)
-	}).catch((e) : MockExamInfo => {
-		console.error('[resumeMockExamApi] failed:', e)
-		let msg = '恢复模拟考试失败'
-		if (e instanceof Error) {
-			const errObj = e as Error
-			const m = errObj.message
-			if (m != null && m.length > 0) {
-				msg = msg + ': ' + m
-			}
-		}
-		throw new Error(msg)
 	})
 }
 
@@ -275,7 +242,6 @@ export function submitMockExamApi(mockExamId : number) : Promise<UTSJSONObject> 
 export function getMockExamResultApi(mockExamId : number) : Promise<MockExamResult> {
 	const url = '/mock-exam/' + mockExamId + '/result'
 	return get(url).then((data : UTSJSONObject) : MockExamResult => {
-		console.log('[getMockExamResultApi] raw data:', JSON.stringify(data))
 		return buildMockExamResult(data)
 	})
 }
@@ -291,7 +257,6 @@ export function getMockExamHistoryApi(page : number = 1, pageSize : number = 10)
 		page_size: pageSize.toString(),
 	} as UTSJSONObject
 	return get('/mock-exam/history', params).then((data : UTSJSONObject) : MockExamHistoryResult => {
-		console.log('[getMockExamHistoryApi] raw data:', JSON.stringify(data))
 		return buildMockExamHistoryResult(data)
 	}).catch((e) : MockExamHistoryResult => {
 		console.warn('[getMockExamHistoryApi] network failed:', e)

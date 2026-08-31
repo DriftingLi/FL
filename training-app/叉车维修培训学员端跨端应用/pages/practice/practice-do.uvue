@@ -502,12 +502,15 @@
     }
 
     function saveProgress() {
+        // 后端 practice_mode 为封闭枚举（sequential | tag:<id> | paper:<id>），随机练习无续练语义，跳过
+        if (mode.value == 'free') return
+        const saveMode = mode.value == 'tag' ? 'tag:' + tagId.value.toString() : mode.value
         const answersState : UTSJSONObject = {} as UTSJSONObject
         for (let i = 0; i < answerStates.value.length; i++) {
             const s = answerStates.value[i]
             answersState[s.question_id.toString()] = s.user_answer
         }
-        savePracticeProgressApi(currentIndex.value + 1, mode.value, questions.value.length, answersState).catch((e) => {
+        savePracticeProgressApi(currentIndex.value + 1, saveMode, questions.value.length, answersState).catch((e) => {
             console.warn('[practice-do] save progress failed:', e)
         })
     }

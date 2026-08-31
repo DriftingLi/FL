@@ -14,6 +14,15 @@ export const STORAGE_KEY_USER = 'auth_user'
 /** 存储 key: 登录来源（wechat / phone / email / password） */
 export const STORAGE_KEY_LOGIN_PROVIDER = 'auth_login_provider'
 
+/** 存储 key: 记住的登录账号（仅用户名，密码不落地） */
+export const STORAGE_KEY_LAST_USERNAME = 'auth_last_username'
+
+/** 存储 key: 在线简历草稿（JSON；后端 /resume 接口就绪前的本地落地） */
+export const STORAGE_KEY_RESUME = 'user_resume_draft'
+
+/** 存储 key: 附件简历（JSON：name/size/time；后端上传接口就绪前的本地落地） */
+export const STORAGE_KEY_RESUME_ATTACH = 'user_resume_attachment'
+
 /**
  * 存储 key: AI 助手——从自定义模型管理页选中的模型（跨页传递，JSON 字符串）
  * 写入于 custom-models.uvue 的 onSelect，消费并清除于 ai-assistant.uvue 的 onShow

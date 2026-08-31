@@ -40,6 +40,7 @@
         <view class="res-search-bar" @click="onCreate">
             <view class="res-search-input-wrap">
                 <text class="res-search-placeholder">写下你此刻的想法</text>
+                <text class="res-search-icon">🔍</text>
             </view>
         </view>
         <!-- 排序栏（广场 Tab 显示） -->
@@ -81,6 +82,19 @@
             </view>
         </view>
 
+        <!-- 知识问答：推荐/最热/最新（推荐为热度 mock，后端暂无推荐算法） -->
+        <view v-if="currentTab === 'hot'" class="qa-filter-bar">
+            <view class="qa-chip" :class="{ active: qaSort === 'recommend' }" @click="onQaSortChange('recommend')">
+                <text class="qa-chip-text" :class="{ active: qaSort === 'recommend' }">推荐</text>
+            </view>
+            <view class="qa-chip" :class="{ active: qaSort === 'hot' }" @click="onQaSortChange('hot')">
+                <text class="qa-chip-text" :class="{ active: qaSort === 'hot' }">最热</text>
+            </view>
+            <view class="qa-chip" :class="{ active: qaSort === 'latest' }" @click="onQaSortChange('latest')">
+                <text class="qa-chip-text" :class="{ active: qaSort === 'latest' }">最新</text>
+            </view>
+        </view>
+
         <!-- 广场/短视频/备考经验 Tab 内容 -->
         <scroll-view v-if="currentTab == 'square' || (currentTab == 'recruit' && recruitSubTab == 'job') || currentTab == 'hot'" class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
             <!-- 打卡活动卡片 -->
@@ -116,6 +130,35 @@
                             </view>
                         </view>
                     </view>
+                    <!-- 知识问答底部：左作者（头像+昵称/日期） 右浏览/评论/点赞，单行布局 -->
+                    <view v-if="currentTab === 'hot'" class="qa-footer">
+                        <view class="qa-author">
+                            <view class="author-avatar" :style="{ backgroundColor: getAvatarColor(item.author_id) }">
+                                <image v-if="item.author_avatar.length > 0" class="author-avatar-img"
+                                    :src="resolveImg(item.author_avatar)" mode="aspectFill" />
+                                <text v-else class="author-avatar-text">{{ getAuthorInitial(item.author_name) }}</text>
+                            </view>
+                            <view class="qa-author-text">
+                                <text class="author-name">{{ item.author_name.length > 0 ? item.author_name : '匿名学员' }}</text>
+                                <text class="qa-date">{{ formatDateStr(item.created_at) }}</text>
+                            </view>
+                        </view>
+                        <view class="qa-stats">
+                            <view class="qa-stat">
+                                <text class="qa-stat-icon">👁</text>
+                                <text class="qa-stat-text">{{ item.views_count }}</text>
+                            </view>
+                            <view class="qa-stat" @click.stop="onReply(item.id)">
+                                <text class="qa-stat-icon">💬</text>
+                                <text class="qa-stat-text">{{ item.replies_count }}</text>
+                            </view>
+                            <view class="qa-stat">
+                                <text class="qa-stat-icon">👍</text>
+                                <text class="qa-stat-text">{{ item.likes_count }}</text>
+                            </view>
+                        </view>
+                    </view>
+                    <template v-else>
                     <!-- 作者行：头像 + 昵称 + 时间 -->
                     <view class="topic-author-row">
                         <view class="author-avatar" :style="{ backgroundColor: getAvatarColor(item.author_id) }">
@@ -129,7 +172,7 @@
                     <!-- 操作栏：点赞数（只读） + 评论 + 浏览；点赞/收藏仅详情页支持 -->
                     <view class="topic-action-bar">
                         <view class="action-item">
-                            <text class="action-icon">♡</text>
+                            <text class="action-icon">👍</text>
                             <text class="action-text">{{ item.likes_count }}</text>
                         </view>
                         <view class="action-item" @click.stop="onReply(item.id)">
@@ -141,6 +184,7 @@
                             <text class="action-text">{{ item.views_count }}</text>
                         </view>
                     </view>
+                    </template>
                 </view>
             </view>
             <view v-if="loading" class="loading-more">
@@ -166,7 +210,7 @@
             <view class="res-coin-banner">
                 <view class="res-coin-left">
                     <view class="res-coin-icon-box">
-                        <text class="res-coin-icon-text"></text>
+                        <text class="res-coin-icon-text">$</text>
                     </view>
                     <view class="res-coin-info">
                         <text class="res-coin-label">我的金币</text>
@@ -183,25 +227,25 @@
                     <view class="res-feature-card-icon-wrap res-card-bg-red">
                         <text class="res-feature-card-icon"></text>
                     </view>
-                    <text class="res-feature-card-title">课程商城</text>
+                    <text class="res-feature-card-title res-title-red">课程商城</text>
                 </view>
                 <view class="res-feature-card" @click="onResourceClick('my-purchases')">
                     <view class="res-feature-card-icon-wrap res-card-bg-blue">
                         <text class="res-feature-card-icon"></text>
                     </view>
-                    <text class="res-feature-card-title">我的已购</text>
+                    <text class="res-feature-card-title res-title-blue">我的已购</text>
                 </view>
                 <view class="res-feature-card" @click="onResourceClick('my-uploads')">
                     <view class="res-feature-card-icon-wrap res-card-bg-green">
                         <text class="res-feature-card-icon"></text>
                     </view>
-                    <text class="res-feature-card-title">我的上传</text>
+                    <text class="res-feature-card-title res-title-green">我的上传</text>
                 </view>
                 <view class="res-feature-card" @click="onResourceClick('upload-resource')">
                     <view class="res-feature-card-icon-wrap res-card-bg-sky">
                         <text class="res-feature-card-icon">☁️</text>
                     </view>
-                    <text class="res-feature-card-title">上传资源</text>
+                    <text class="res-feature-card-title res-title-sky">上传资源</text>
                 </view>
             </view>
         </scroll-view>
@@ -249,6 +293,8 @@
     const unreadCount = ref<number>(0)
     const sortField = ref<string>('latest') // latest | hot
     const sortOrder = ref<string>('desc')   // desc | asc
+    // 知识问答筛选：recommend（mock，暂以热度代替） | hot | latest
+    const qaSort = ref<string>('recommend')
     const recruitSubTab = ref<string>('job') // notice | job（招聘子Tab）
 
     // ---- 打卡相关 ----
@@ -344,12 +390,23 @@
     }
 
     function onPersonalActivity() : void {
+        // 招聘 Tab：头像直达简历页；其他 Tab 保持个人动态
+        if (currentTab.value == 'recruit') {
+            uni.navigateTo({ url: '/pages/resume/resume' })
+            return
+        }
         uni.navigateTo({ url: '/pages/profile/personal-activity' })
     }
 
     function onSortFieldChange(field : string) : void {
         if (sortField.value === field) return
         sortField.value = field
+        loadTopics(true)
+    }
+
+    function onQaSortChange(val : string) : void {
+        if (qaSort.value === val) return
+        qaSort.value = val
         loadTopics(true)
     }
 
@@ -377,13 +434,22 @@
 
         loading.value = true
         try {
+            // 后端 scope 白名单仅 all|general|chapter（旧值 hot/recruit 会被静默当 all），
+            // category 白名单 all|discussion|question
             let scope = 'general'
+            let category = ''
+            let sort = sortField.value
+            let order = sortOrder.value
             if (currentTab.value === 'recruit') {
-                scope = 'recruit'
+                scope = 'all'
             } else if (currentTab.value === 'hot') {
-                scope = 'hot'
+                // 知识问答：只列提问帖；推荐/最热都映射后端 hot（推荐暂无独立算法，mock 占位），最新映射 latest
+                scope = 'all'
+                category = 'question'
+                order = 'desc'
+                sort = qaSort.value == 'latest' ? 'latest' : 'hot'
             }
-            const result = await getForumTopicsApi(page.value, pageSize, scope, sortField.value, sortOrder.value)
+            const result = await getForumTopicsApi(page.value, pageSize, scope, sort, order, category)
             if (reset) {
                 topics.value = result.items
             } else {
@@ -422,7 +488,7 @@
         } else if (currentTab.value === 'recruit') {
             scope = 'recruit'
         } else if (currentTab.value === 'hot') {
-            scope = 'hot'
+            scope = 'question'
         }
         uni.navigateTo({ url: '/pages/forum/forum-create?scope=' + scope })
     }
@@ -570,7 +636,7 @@
     }
 
     .tab-item.active .tab-text {
-        color: #2979ff;
+        color: #1a1a1a;
         font-weight: bold;
     }
 
@@ -770,8 +836,6 @@
         align-items: center;
         padding: 8rpx 16rpx;
         border-radius: 24rpx;
-        background-color: #f5f5f5;
-        border: 1px solid #eeeeee;
         margin-right: 8rpx;
     }
 
@@ -831,7 +895,7 @@
         margin: 20rpx 24rpx;
         padding: 28rpx 32rpx;
         border-radius: 16rpx;
-        background-color: #f0f7ff;
+        background-color: #FFF8E1;
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
@@ -903,9 +967,14 @@
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
-        background-color: #f5f5f5;
+        background-color: #ffffff;
         border-radius: 36rpx;
         padding: 16rpx 24rpx;
+    }
+
+    .res-search-icon {
+        font-size: 28rpx;
+        color: #999999;
     }
 
     .res-search-placeholder {
@@ -918,7 +987,7 @@
         margin: 24rpx;
         padding: 28rpx 32rpx;
         border-radius: 20rpx;
-        background-color: #e8f4fd;
+        background: linear-gradient(90deg, #6FB9F7, #1E88E5);
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
@@ -933,13 +1002,16 @@
         width: 80rpx;
         height: 80rpx;
         border-radius: 40rpx;
-        background-color: #ffffff;
+        background-color: #FFD048;
         align-items: center;
         justify-content: center;
         margin-right: 20rpx;
     }
 
     .res-coin-icon-text {
+        color: #B27B16;
+        font-size: 40rpx;
+        font-weight: bold;
         font-size: 44rpx;
     }
 
@@ -949,13 +1021,13 @@
 
     .res-coin-label {
         font-size: 24rpx;
-        color: #666666;
+        color: rgba(255, 255, 255, 0.9);
     }
 
     .res-coin-value {
         font-size: 44rpx;
         font-weight: bold;
-        color: #333333;
+        color: #ffffff;
         margin-top: 4rpx;
     }
 
@@ -966,7 +1038,7 @@
 
     .res-coin-detail-text {
         font-size: 26rpx;
-        color: #2979ff;
+        color: #ffffff;
     }
 
     .res-feature-grid {
@@ -1016,6 +1088,10 @@
         font-weight: 500;
         color: #333333;
     }
+    .res-title-red { color: #E5484D; }
+    .res-title-blue { color: #2979ff; }
+    .res-title-green { color: #22A45D; }
+    .res-title-sky { color: #2979ff; }
 
     /* ===== 招聘子Tab（公告/职位） ===== */
     .recruit-sub-bar {
@@ -1054,8 +1130,9 @@
         justify-content: space-between;
     }
     .ask-bar-text {
-        font-size: 28rpx;
-        color: #8a9bb0;
+        font-size: 30rpx;
+        color: #1a1a1a;
+        font-weight: 600;
     }
     .ask-bar-btn {
         width: 52rpx;
@@ -1070,5 +1147,80 @@
         color: #ffffff;
         font-size: 36rpx;
         line-height: 36rpx;
+    }
+
+    /* ===== 知识问答：筛选 chips 与卡片 footer ===== */
+    .qa-filter-bar {
+        flex-direction: row;
+        align-items: center;
+        padding: 4rpx 24rpx 16rpx;
+    }
+
+    .qa-chip {
+        padding: 10rpx 32rpx;
+        border-radius: 32rpx;
+        background-color: #f0f1f5;
+        border: 2rpx solid transparent;
+        margin-right: 20rpx;
+    }
+
+    .qa-chip.active {
+        background-color: #e8f3ff;
+        border-color: #2979ff;
+    }
+
+    .qa-chip-text {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    .qa-chip-text.active {
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    .qa-footer {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 8rpx;
+    }
+
+    .qa-author {
+        flex-direction: row;
+        align-items: center;
+        flex: 1;
+    }
+
+    .qa-author-text {
+        flex-direction: column;
+        margin-left: 12rpx;
+    }
+
+    .qa-date {
+        font-size: 22rpx;
+        color: #bbbbbb;
+        margin-top: 4rpx;
+    }
+
+    .qa-stats {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .qa-stat {
+        flex-direction: row;
+        align-items: center;
+        margin-left: 28rpx;
+    }
+
+    .qa-stat-icon {
+        font-size: 26rpx;
+        margin-right: 6rpx;
+    }
+
+    .qa-stat-text {
+        font-size: 24rpx;
+        color: #999999;
     }
 </style>
