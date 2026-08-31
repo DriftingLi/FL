@@ -1,9 +1,11 @@
 <template>
 <div class="flex flex-col gap-6 p-4">
-<h1 class="text-xl font-bold text-ink">{{ deletedCount }}</h1>
+<h1 class="text-xl font-bold text-ink">巡检视图</h1>
 <div class="rounded-card border border-line bg-panel p-4">
 <div class="text-sm text-ink-3">删除已解决帖计数</div>
+<div class="mt-1 text-2xl font-bold text-ink">{{ deletedCount }}</div>
 </div>
+
 <div class="rounded-card border border-line bg-panel p-4">
 <div class="flex items-center gap-2 mb-3">
 <span class="text-sm font-semibold text-ink">问答积分流水</span>
@@ -36,6 +38,53 @@ v-model:page-size="pageSize"
 layout="total, sizes, prev, pager, next"
 @current-change="loadLedger"
 @size-change="loadLedger"
+/>
+</div>
+</div>
+
+<div class="rounded-card border border-line bg-panel p-4">
+<div class="flex items-center gap-2 mb-3">
+<span class="text-sm font-semibold text-ink">简历查看留痕</span>
+<el-button size="small" @click="loadViews">刷新</el-button>
+</div>
+<div v-if="viewsLoading" class="text-sm text-ink-3">加载中...</div>
+<div v-else-if="views.length === 0" class="text-sm text-ink-3">暂无数据</div>
+<div v-else class="grid gap-2">
+<div v-for="item in views" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
+<div>招聘方 {{ item.recruiter_id }} · 学员 {{ item.resume_user_id }} · {{ item.viewed_at }}</div>
+</div>
+</div>
+<div class="mt-3 flex justify-end">
+<el-pagination
+v-model:current-page="viewsPage"
+:page-size="20"
+:total="viewsTotal"
+layout="total, prev, pager, next"
+@current-change="loadViews"
+/>
+</div>
+</div>
+
+<div class="rounded-card border border-line bg-panel p-4">
+<div class="flex items-center gap-2 mb-3">
+<span class="text-sm font-semibold text-ink">联系方式申请记录</span>
+<el-button size="small" @click="loadRequests">刷新</el-button>
+</div>
+<div v-if="requestsLoading" class="text-sm text-ink-3">加载中...</div>
+<div v-else-if="requests.length === 0" class="text-sm text-ink-3">暂无数据</div>
+<div v-else class="grid gap-2">
+<div v-for="item in requests" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
+<div>招聘方 {{ item.recruiter_id }} · 学员 {{ item.student_user_id }} · {{ requestStatusLabel(item.status) }}</div>
+<div class="text-ink-3">{{ item.created_at }}</div>
+</div>
+</div>
+<div class="mt-3 flex justify-end">
+<el-pagination
+v-model:current-page="requestsPage"
+:page-size="20"
+:total="requestsTotal"
+layout="total, prev, pager, next"
+@current-change="loadRequests"
 />
 </div>
 </div>
@@ -103,8 +152,74 @@ async function loadLedger() {
 }
 // 切换域即时重载（#411）：v-model 变更即刷新，不依赖下拉的 change 事件时序。
 watch(domain, () => loadLedger())
+
+// #418：招聘留痕/申请记录区块（只呈现事实字段，不泄漏学员明文联系方式）
+const views = ref<TrailView[]>([])
+const viewsLoading = ref(false)
+const viewsPage = ref(1)
+const viewsTotal = ref(0)
+const requests = ref<TrailRequest[]>([])
+const requestsLoading = ref(false)
+const requestsPage = ref(1)
+const requestsTotal = ref(0)
+
+interface TrailView {
+  id: number
+  recruiter_id: number
+  resume_user_id: number
+  viewed_at: string
+}
+
+interface TrailRequest {
+  id: number
+  recruiter_id: number
+  student_user_id: number
+  status: string
+  created_at: string
+}
+
+// 申请状态文案与学员侧一致（pending/approved/rejected/expired/revoked）
+const requestStatusText: Record<string, string> = {
+  pending: '待同意',
+  approved: '已同意',
+  rejected: '已拒绝',
+  expired: '已过期',
+  revoked: '已撤回',
+}
+function requestStatusLabel(s: string): string {
+  return requestStatusText[s] || s
+}
+
+async function loadViews() {
+  viewsLoading.value = true
+  try {
+    const res: any = await unwrappedRequest.get('/admin/recruit/views', {
+      params: { page: viewsPage.value, page_size: 20 },
+      headers: { 'X-Silent': '1' },
+    })
+    views.value = res?.items || []
+    viewsTotal.value = res?.total ?? 0
+  } catch {}
+  viewsLoading.value = false
+}
+
+async function loadRequests() {
+  requestsLoading.value = true
+  try {
+    const res: any = await unwrappedRequest.get('/admin/recruit/requests', {
+      params: { page: requestsPage.value, page_size: 20 },
+      headers: { 'X-Silent': '1' },
+    })
+    requests.value = res?.items || []
+    requestsTotal.value = res?.total ?? 0
+  } catch {}
+  requestsLoading.value = false
+}
+
 onMounted(() => {
   loadCount()
   loadLedger()
+  loadViews()
+  loadRequests()
 })
 </script>
