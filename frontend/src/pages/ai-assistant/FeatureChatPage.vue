@@ -59,7 +59,7 @@
         multiple
         @change="handleImageSelect"
       >
-        <el-button :icon="Picture" circle :disabled="store.streaming || pendingImages.length >= maxImages" title="上传图片" />
+        <UiButton :icon="Picture" circle :disabled="store.streaming || pendingImages.length >= maxImages" title="上传图片"/>
       </el-upload>
     </template>
   </ChatPageShell>
@@ -76,6 +76,7 @@ import { ChatDotRound, Picture, Close } from '@element-plus/icons-vue'
 import ChatPageShell from '@/components/ai-assistant/ChatPageShell.vue'
 import { useAIAssistantStore } from '@/stores/aiAssistant'
 import { getAIFeatureByRoute } from '@/config/aiFeatures'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const store = useAIAssistantStore()
 const router = useRouter()

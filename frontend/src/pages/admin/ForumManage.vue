@@ -4,7 +4,7 @@
       <template #header>
         <div class="card-header">
           <span class="card-title">论坛管理</span>
-          <el-button :icon="Refresh" circle @click="activeMainTab === 'reports' ? loadReports() : loadList()" />
+          <UiButton :icon="Refresh" circle @click="activeMainTab === 'reports' ? loadReports() : loadList()"/>
         </div>
       </template>
 
@@ -49,15 +49,9 @@
           </el-table-column>
           <el-table-column label="操作" width="100" fixed="right" align="center">
             <template #default="{ row }">
-              <el-button
-                v-if="row.status === 0"
-                type="primary"
-                size="small"
-                link
-                @click="handleReport(row)"
-              >
+              <UiButton variant="primary" v-if="row.status === 0" size="small" link @click="handleReport(row)">
                 标记已处理
-              </el-button>
+              </UiButton>
               <span v-else class="report-done">—</span>
             </template>
           </el-table-column>
@@ -124,14 +118,9 @@
                         回复 @{{ reply.parent_name }}
                       </span>
                       <span class="reply-time">{{ formatLocaleDateTime(reply.created_at) }}</span>
-                      <el-button
-                        class="reply-delete"
-                        type="danger"
-                        size="small"
-                        @click="deleteReply(reply)"
-                      >
+                      <UiButton variant="danger" class="reply-delete" size="small" @click="deleteReply(reply)">
                         删除回复
-                      </el-button>
+                      </UiButton>
                     </div>
                     <div class="reply-content">{{ reply.content }}</div>
                     <ForumImageGallery :images="reply.images" />
@@ -166,7 +155,7 @@
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button type="danger" size="small" @click="deleteTopic(row)">删除</el-button>
+            <UiButton variant="danger" size="small" @click="deleteTopic(row)">删除</UiButton>
           </template>
         </el-table-column>
       </el-table>
@@ -199,6 +188,7 @@ import {
 } from '@/api/forum'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import { formatLocaleDateTime } from '@/utils/format'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const loading = ref(false)
 const topics = ref<AdminForumTopic[]>([])

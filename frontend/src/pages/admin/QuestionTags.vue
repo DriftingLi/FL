@@ -2,9 +2,9 @@
   <div class="question-tags-page">
     <div class="page-header">
       <h2>题库标签管理</h2>
-      <el-button type="primary" @click="openTagDialog()">
+      <UiButton variant="primary" @click="openTagDialog()">
         <el-icon><Plus /></el-icon> 新增标签
-      </el-button>
+      </UiButton>
     </div>
 
     <el-row :gutter="16" class="tags-layout">
@@ -26,10 +26,10 @@
                 <span class="tag-name">{{ tag.name }}</span>
                 <span class="tag-count">{{ tag.question_count ?? 0 }} 题</span>
                 <span class="tag-actions" @click.stop>
-                  <el-button link size="small" @click="openTagDialog(tag)">编辑</el-button>
+                  <UiButton link size="small" @click="openTagDialog(tag)">编辑</UiButton>
                   <el-popconfirm title="删除标签不会删除题目，仅解除关联，确定？" @confirm="handleDeleteTag(tag)">
                     <template #reference>
-                      <el-button link size="small" type="danger">删除</el-button>
+                      <UiButton variant="danger" link size="small">删除</UiButton>
                     </template>
                   </el-popconfirm>
                 </span>
@@ -58,14 +58,10 @@
             <el-select v-model="filterType" placeholder="题型" clearable style="width: 130px" @change="applyQuestionFilters">
               <el-option v-for="o in questionTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
             </el-select>
-            <el-button type="primary" @click="search">查询</el-button>
-            <el-button
-              v-if="selectedIds.length > 0"
-              type="success"
-              @click="openTagAssign(selectedIds)"
-            >
+            <UiButton variant="primary" @click="search">查询</UiButton>
+            <UiButton variant="success" v-if="selectedIds.length > 0" @click="openTagAssign(selectedIds)">
               批量打标 ({{ selectedIds.length }})
-            </el-button>
+            </UiButton>
           </div>
 
           <el-table
@@ -94,7 +90,7 @@
             </el-table-column>
             <el-table-column label="操作" width="80" fixed="right" align="center">
               <template #default="{ row }">
-                <el-button link size="small" type="primary" @click="openTagAssign([row.id])">打标</el-button>
+                <UiButton variant="primary" link size="small" @click="openTagAssign([row.id])">打标</UiButton>
               </template>
             </el-table-column>
           </el-table>
@@ -125,8 +121,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="tagDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="tagSubmitting" @click="submitTag">保存</el-button>
+        <UiButton @click="tagDialogVisible = false">取消</UiButton>
+        <UiButton variant="primary" :loading="tagSubmitting" @click="submitTag">保存</UiButton>
       </template>
     </el-dialog>
 
@@ -147,8 +143,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="tagAssignVisible = false">取消</el-button>
-        <el-button type="primary" :loading="tagSubmitting" @click="submitTagAssign">保存</el-button>
+        <UiButton @click="tagAssignVisible = false">取消</UiButton>
+        <UiButton variant="primary" :loading="tagSubmitting" @click="submitTagAssign">保存</UiButton>
       </template>
     </el-dialog>
   </div>
@@ -163,6 +159,7 @@ import { questionBankApi, type QuestionsQuery } from '@/api/questionBank'
 import { questionTypeOptions, typeMap } from '@/constants/question'
 import { useAdminTable } from '@/composables/useAdminTable'
 import type { Question } from '@/types/question'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const tags = ref<QuestionTag[]>([])
 const tagsLoading = ref(false)

@@ -42,15 +42,9 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button
-            type="primary"
-            :loading="flow.loading"
-            class="auth-btn"
-            size="large"
-            @click="handleLogin"
-          >
+          <UiButton variant="primary" :loading="flow.loading" class="auth-btn" size="large" @click="handleLogin">
             {{ flow.loading ? '登录中...' : '登 录' }}
-          </el-button>
+          </UiButton>
         </el-form-item>
       </el-form>
     </template>
@@ -107,27 +101,16 @@
               maxlength="6"
               @keyup.enter="handleLogin"
             />
-            <el-button
-              :disabled="countdown > 0 || codeSending"
-              size="large"
-              class="code-btn"
-              @click="handleSendCode"
-            >
+            <UiButton :disabled="countdown > 0 || codeSending" size="large" class="code-btn" @click="handleSendCode">
               {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
-            </el-button>
+            </UiButton>
           </div>
         </el-form-item>
 
         <el-form-item>
-          <el-button
-            type="primary"
-            :loading="flow.loading"
-            class="auth-btn"
-            size="large"
-            @click="handleLogin"
-          >
+          <UiButton variant="primary" :loading="flow.loading" class="auth-btn" size="large" @click="handleLogin">
             {{ flow.loading ? '登录中...' : '登 录' }}
-          </el-button>
+          </UiButton>
         </el-form-item>
       </el-form>
     </template>
@@ -185,27 +168,16 @@
               maxlength="6"
               @keyup.enter="handleLogin"
             />
-            <el-button
-              :disabled="countdown > 0 || codeSending"
-              size="large"
-              class="code-btn"
-              @click="handleSendCode"
-            >
+            <UiButton :disabled="countdown > 0 || codeSending" size="large" class="code-btn" @click="handleSendCode">
               {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
-            </el-button>
+            </UiButton>
           </div>
         </el-form-item>
 
         <el-form-item>
-          <el-button
-            type="primary"
-            :loading="flow.loading"
-            class="auth-btn"
-            size="large"
-            @click="handleLogin"
-          >
+          <UiButton variant="primary" :loading="flow.loading" class="auth-btn" size="large" @click="handleLogin">
             {{ flow.loading ? '登录中...' : '登 录' }}
-          </el-button>
+          </UiButton>
         </el-form-item>
       </el-form>
     </template>
@@ -251,6 +223,7 @@ import {
   getDefaultWorkspaceBySubdomain,
   type SubdomainType
 } from '@/utils/subdomain'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const router = useRouter()
 const route = useRoute()

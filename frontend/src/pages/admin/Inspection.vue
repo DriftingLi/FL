@@ -14,7 +14,7 @@
           <el-option label="楼主采纳" value="accept_action" />
           <el-option label="回收" value="rollback" />
         </el-select>
-        <el-button size="small" @click="loadLedger">刷新</el-button>
+        <UiButton size="small" @click="loadLedger">刷新</UiButton>
       </div>
       <div v-if="ledgerLoading" class="text-sm text-ink-3">加载中...</div>
       <div v-else-if="ledger.length === 0" class="text-sm text-ink-3">暂无数据</div>
@@ -31,6 +31,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { unwrappedRequest } from '@/api/request'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const deletedCount = ref(0)
 const reason = ref('')

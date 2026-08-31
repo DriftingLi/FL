@@ -6,7 +6,7 @@
         <el-icon><Timer /></el-icon>
         <span>{{ formatClock(remainingTime) }}</span>
       </div>
-      <el-button type="danger" @click="confirmSubmit">交卷</el-button>
+      <UiButton variant="danger" @click="confirmSubmit">交卷</UiButton>
     </div>
 
     <el-row :gutter="20">
@@ -28,8 +28,8 @@
           <el-input v-else v-model="answers[currentQ.id]" type="textarea" :rows="4" placeholder="请输入答案" />
         </el-card>
         <div class="nav-buttons">
-          <el-button @click="currentIndex--" :disabled="currentIndex === 0">上一题</el-button>
-          <el-button @click="currentIndex++" :disabled="currentIndex === questions.length - 1">下一题</el-button>
+          <UiButton @click="currentIndex--" :disabled="currentIndex === 0">上一题</UiButton>
+          <UiButton @click="currentIndex++" :disabled="currentIndex === questions.length - 1">下一题</UiButton>
         </div>
       </el-col>
       <el-col :xs="24" :md="6">
@@ -56,6 +56,7 @@ import { formatClock } from '@/utils/format'
 import { buildQuestionOptions, isAnswerEmpty, toggleAnswer } from '@/composables/useQuestionAnswer'
 import { useCountdown } from '@/composables/useCountdown'
 import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 // 答题会话壳：考试进行中的工具栏/倒计时/题目卡片/答题卡/交卷交互。
 // 练习/考试共享同一交互形态；持久化与交卷后的流程由页面注入回调。

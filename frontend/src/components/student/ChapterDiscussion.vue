@@ -5,7 +5,7 @@
         <h3 class="discussion-title">章节讨论</h3>
         <p class="discussion-subtitle">针对本章内容提问或交流</p>
       </div>
-      <el-button type="primary" size="small" :icon="EditPen" @click="openCreate">发新帖</el-button>
+      <UiButton variant="primary" size="small" :icon="EditPen" @click="openCreate">发新帖</UiButton>
     </div>
 
     <div v-loading="listLoading" class="discussion-list">
@@ -43,10 +43,10 @@
                     <span class="reply-author">{{ displayName(reply.author) }}</span>
                     <span class="reply-time">{{ formatRelativeTime(reply.created_at) }}</span>
                     <div class="reply-actions">
-                      <el-button type="primary" size="small" @click="startReplyTo(reply)">回复</el-button>
-                      <el-button v-if="reply.can_delete" text type="danger" size="small" @click="removeReply(reply.id)">
+                      <UiButton variant="primary" size="small" @click="startReplyTo(reply)">回复</UiButton>
+                      <UiButton variant="danger" text v-if="reply.can_delete" size="small" @click="removeReply(reply.id)">
                         删除
-                      </el-button>
+                      </UiButton>
                     </div>
                   </div>
                   <div v-if="reply.parent_id && reply.parent_name" class="reply-quote">
@@ -71,15 +71,15 @@
                   maxlength="5000"
                   placeholder="写下你的回复…"
                 />
-                <el-button type="primary" :loading="replying" @click="submitReply(topic.id)">发表</el-button>
+                <UiButton variant="primary" :loading="replying" @click="submitReply(topic.id)">发表</UiButton>
               </div>
               <ForumImageUploader v-model="replyImages" :max="3" />
             </div>
 
             <div class="detail-actions">
-              <el-button v-if="expandedTopic?.can_delete" text type="danger" size="small" @click="removeTopic(topic.id)">
+              <UiButton variant="danger" text v-if="expandedTopic?.can_delete" size="small" @click="removeTopic(topic.id)">
                 删除本帖
-              </el-button>
+              </UiButton>
             </div>
           </div>
         </div>
@@ -107,8 +107,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="createVisible = false">取消</el-button>
-        <el-button type="primary" :loading="creating" @click="submitCreate">发布</el-button>
+        <UiButton @click="createVisible = false">取消</UiButton>
+        <UiButton variant="primary" :loading="creating" @click="submitCreate">发布</UiButton>
       </template>
     </el-dialog>
   </div>
@@ -123,6 +123,7 @@ import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumImageUploader from '@/components/student/ForumImageUploader.vue'
 import { formatRelativeTime } from '@/utils/format'
 import { displayName, authorLetter } from '@/utils/forumDisplay'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const props = defineProps<{
   chapterId: number

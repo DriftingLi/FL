@@ -41,22 +41,16 @@
             </el-checkbox>
           </el-checkbox-group>
           <div class="select-actions">
-            <el-button type="primary" size="small" class="select-all-btn" @click="selectAll">全选</el-button>
-            <el-button text size="small" @click="selectNone">取消全选</el-button>
+            <UiButton variant="primary" size="small" class="select-all-btn" @click="selectAll">全选</UiButton>
+            <UiButton variant="text" size="small" @click="selectNone">取消全选</UiButton>
           </div>
         </el-form-item>
 
         <el-form-item>
-          <el-button
-            type="primary"
-            size="large"
-            :loading="generating || isTaskRunning"
-            :disabled="!selectedCourseId || selectedChapterIds.length === 0 || isTaskRunning"
-            @click="handleGenerate"
-          >
+          <UiButton variant="primary" size="large" :loading="generating || isTaskRunning" :disabled="!selectedCourseId || selectedChapterIds.length === 0 || isTaskRunning" @click="handleGenerate">
             <el-icon><MagicStick /></el-icon>
             {{ isTaskRunning ? '生成中...' : '开始生成' }}
-          </el-button>
+          </UiButton>
           <span v-if="isTaskRunning" class="generating-tip">
             <el-icon class="is-loading"><Loading /></el-icon>
             正在生成，请勿重复提交
@@ -65,7 +59,7 @@
       </el-form>
     </div>
 
-    <div v-if="generateTask" class="progress-card">
+    <UiCard v-if="generateTask" padding="lg" class="progress-card">
       <h3>生成进度</h3>
       <el-progress
         :percentage="progressPercent"
@@ -105,19 +99,13 @@
           <el-tag :type="item.status === 'success' ? 'success' : 'danger'" size="small">
             {{ item.status === 'success' ? '生成成功' : '生成失败' }}
           </el-tag>
-          <el-button
-            v-if="item.status === 'success' && item.content"
-            text
-            type="primary"
-            size="small"
-            @click="previewChapter(item)"
-          >
+          <UiButton variant="primary" text v-if="item.status === 'success' && item.content" size="small" @click="previewChapter(item)">
             预览
-          </el-button>
+          </UiButton>
           <span v-if="item.error" class="error-msg">{{ item.error }}</span>
         </div>
       </div>
-    </div>
+    </UiCard>
 
     <el-dialog
       v-model="previewVisible"
@@ -127,7 +115,7 @@
     >
       <div class="preview-content markdown-body" v-html="renderedPreview"></div>
       <template #footer>
-        <el-button @click="previewVisible = false">关闭</el-button>
+        <UiButton @click="previewVisible = false">关闭</UiButton>
       </template>
     </el-dialog>
   </div>
@@ -140,6 +128,8 @@ import { ElMessage } from 'element-plus'
 import { marked } from 'marked'
 import { adminApi } from '@/api/admin'
 import '@/assets/styles/markdown.css'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 
 interface GenerateCourse {
   course_id: number
@@ -326,12 +316,16 @@ loadCourses()
   margin-bottom: 8px;
 }
 
-.generate-card,
-.progress-card {
+/* .progress-card 容器（底色/圆角/内距/投影）已由 UiCard 承担，从共用规则中拆出 */
+.generate-card {
   background: var(--color-text-inverse);
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  margin-bottom: 20px;
+}
+
+.progress-card {
   margin-bottom: 20px;
 }
 
@@ -457,8 +451,7 @@ loadCourses()
     padding: 12px;
   }
 
-  .generate-card,
-  .progress-card {
+  .generate-card {
     padding: 16px;
   }
 

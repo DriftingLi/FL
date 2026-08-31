@@ -9,9 +9,9 @@
             累计打卡 <span class="num">{{ calendar.total }}</span> 天
           </div>
           <div class="month-nav">
-            <el-button text size="small" @click="prevMonth">‹</el-button>
+            <UiButton variant="text" size="small" @click="prevMonth">‹</UiButton>
             <span class="month-label">{{ calendarYear }}年{{ calendarMonth }}月</span>
-            <el-button text size="small" @click="nextMonth">›</el-button>
+            <UiButton variant="text" size="small" @click="nextMonth">›</UiButton>
           </div>
         </div>
 
@@ -36,9 +36,9 @@
         </div>
 
         <div class="calendar-action">
-          <el-button type="primary" :loading="checking" :disabled="calendar.today_checked" @click="doCheckIn">
+          <UiButton variant="primary" :loading="checking" :disabled="calendar.today_checked" @click="doCheckIn">
             {{ calendar.today_checked ? '今日已打卡' : '立即打卡' }}
-          </el-button>
+          </UiButton>
         </div>
       </el-tab-pane>
 
@@ -85,6 +85,7 @@
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { forumApi, type CheckInRankItem, type CheckInRankMe } from '@/api/forum'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const visible = defineModel<boolean>({ default: false })
 const props = withDefaults(defineProps<{ initialTab?: 'calendar' | 'rank' }>(), { initialTab: 'calendar' })
