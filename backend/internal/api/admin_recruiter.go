@@ -17,6 +17,8 @@ func RegisterAdminRecruiterRoutes(rg *gin.RouterGroup, rd RouterDeps, authSvc *s
 	g := rg.Group("/admin/recruiters", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
 	g.POST("", NewAdminRecruiterHandler(authSvc).Create)
 	g.PUT("/:id/status", NewAdminRecruiterHandler(authSvc).ToggleStatus)
+	g.PUT("/:id", NewAdminRecruiterHandler(authSvc).Edit)
+	g.PUT("/:id/password", NewAdminRecruiterHandler(authSvc).ResetPassword)
 	g.GET("", NewAdminRecruiterHandler(authSvc).List)
 }
 
@@ -100,7 +102,87 @@ func (h *AdminRecruiterHandler) ToggleStatus(c *gin.Context) {
 	}.Handle(c)
 }
 
-// List 招聘者列表 GET /api/admin/recruiters（简易列表，返回空或已创建的招聘者）
+// Edit 编辑招聘者企业信息 PUT /api/admin/recruiters/:id（#417）。
+func (h *AdminRecruiterHandler) Edit(c *gin.Context) {
+	Endpoint[idParam, map[string]any]{
+		Parse: func(c *gin.Context) (*idParam, error) {
+			id, err := pathInt(c, "id", "招聘者ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &idParam{ID: id}, nil
+		},
+		Invoke: func(ctx context.Context, req *idParam) (*map[string]any, error) {
+			var in service.RecruiterEditInput
+			if err := c.ShouldBindJSON(&in); err != nil {
+				return nil, badRequest("请求数据无效")
+			}
+			rec, err := h.authSvc.EditRecruiter(req.ID, in)
+			if err != nil {
+				return nil, err
+			}
+			m := map[string]any{
+				"id":             rec.ID,
+				"company_name":   rec.CompanyName,
+				"credit_code":    rec.CreditCode,
+				"business_scope": rec.BusinessScope,
+				"contact_name":   rec.ContactName,
+				"contact_phone":  rec.ContactPhone,
+				"contact_email":  rec.ContactEmail,
+			}
+			return &m, nil
+		},
+		Render: func(c *gin.Context, _ *idParam, resp *map[string]any, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "招聘者信息已更新", *resp)
+		},
+	}.Handle(c)
+}
+
+// ResetPassword 重置招聘者密码 PUT /api/admin/recruiters/:id/password（#417）。
+func (h *AdminRecruiterHandler) ResetPassword(c *gin.Context) {
+	Endpoint[idParam, struct{}]{
+		Parse: func(c *gin.Context) (*idParam, error) {
+			id, err := pathInt(c, "id", "招聘者ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &idParam{ID: id}, nil
+		},
+		Invoke: func(ctx context.Context, req *idParam) (*struct{}, error) {
+			var body struct {
+				Password string `json:"password"`
+			}
+			if err := c.ShouldBindJSON(&body); err != nil || body.Password == "" {
+				return nil, badRequest("新密码不能为空")
+			}
+			if err := h.authSvc.ResetRecruiterPassword(req.ID, body.Password); err != nil {
+				return nil, err
+			}
+			return nil, nil
+		},
+		Render: func(c *gin.Context, _ *idParam, _ *struct{}, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "密码已重置", map[string]any{})
+		},
+	}.Handle(c)
+}
+
+// List 招聘者列表 GET /api/admin/recruiters（#416：分页 + 关键字过滤，字段白名单无凭据）。
 func (h *AdminRecruiterHandler) List(c *gin.Context) {
-	response.Success(c, map[string]any{"items": []any{}, "total": 0})
+	page := atoiDefault(c.Query("page"), 1)
+	pageSize := atoiDefault(c.Query("page_size"), 20)
+	keyword := c.Query("keyword")
+	resp, err := h.authSvc.ListRecruiters(page, pageSize, keyword)
+	if err != nil {
+		response.ServerError(c, err.Error())
+		return
+	}
+	response.Success(c, resp)
 }

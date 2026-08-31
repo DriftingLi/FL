@@ -20,7 +20,8 @@ import {
   CircleCheck,
   FolderOpened,
   CollectionTag,
-  Trophy
+  Trophy,
+  OfficeBuilding
 } from '@element-plus/icons-vue'
 // 注：MagicStick 仍用于管理员"内容生成"菜单项
 
@@ -172,6 +173,7 @@ const adminNav: NavItem[] = [
       { key: 'hrwai-users', label: '用户管理', routeName: 'HrwaiUserManage', icon: User },
       { key: 'profile-review', label: '资料审核', routeName: 'ProfileReview', icon: CircleCheck },
       { key: 'tutors', label: '导师管理', routeName: 'TutorManage', icon: UserFilled },
+      { key: 'recruiters', label: '招聘者管理', routeName: 'RecruiterManage', icon: OfficeBuilding },
       { key: 'forum-manage', label: '论坛管理', routeName: 'ForumManage', icon: ChatDotRound }
     ]
   },

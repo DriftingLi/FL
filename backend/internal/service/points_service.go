@@ -88,6 +88,60 @@ func (s *PointsService) shanghaiDateTime() time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, clock.Location())
 }
 
+// claimCounts 单用户领取计数：按 task_code 分组一次取「终身计数 + 当日计数」。
+// 当日臂在 SQL 内用 FILTER（claim_date = 今日 或 无标记遗留行）完成，日期参数以文本传入、
+// 由数据库自身做类型转换——Postgres DATE 与 SQLite TEXT 的形态差异不再进入 Go 的比较路径（#409）。
+// 读取错误向上传播，不再静默降级为「没人领过」。遗留 (claim_date IS NULL AND ref_id IS NULL) 行
+// 视为当日已领占坑，维持修复前「有领取标记即 claimed」的可观测口径，不产生额度漂移。
+func (s *PointsService) claimCounts(userID int, today string) (map[string]claimCounts, error) {
+	type claimCountRow struct {
+		TaskCode string
+		Lifetime int64
+		Today    int64
+	}
+	var rows []claimCountRow
+	if err := s.db.Raw(
+		`SELECT task_code, COUNT(*) AS lifetime,
+				COUNT(*) FILTER (WHERE claim_date = ? OR (claim_date IS NULL AND ref_id IS NULL)) AS today
+			FROM points_task_claim
+			WHERE user_id = ?
+			GROUP BY task_code`,
+		today, userID,
+	).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	m := make(map[string]claimCounts, len(rows))
+	for _, r := range rows {
+		m[r.TaskCode] = claimCounts{Lifetime: r.Lifetime, Today: r.Today}
+	}
+	return m, nil
+}
+
+// canClaim 额度判定唯一实现（#410）：输入任务配置与两个计数，输出「本任务当前可否领 / 是否已领完额度」。
+// 终身额度用尽（total_limit 非空且终身计数 ≥ 额度）或当日额度用尽（当日计数 ≥ daily_limit）→ 不可领。
+// 写路径（Claim）与读路径（GetTasks）共用本实现，不各写一套判定。
+func (s *PointsService) canClaim(cfg model.PointsTaskConfig, todayCount, lifetimeCount int64) claimDecision {
+	if cfg.TotalLimit != nil && lifetimeCount >= int64(*cfg.TotalLimit) {
+		return claimDecision{Exhausted: true}
+	}
+	if todayCount >= int64(cfg.DailyLimit) {
+		return claimDecision{Exhausted: true}
+	}
+	return claimDecision{Claimable: true}
+}
+
+// claimCounts 分组取数结果。
+type claimCounts struct {
+	Lifetime int64
+	Today    int64
+}
+
+// claimDecision canClaim 的输出：Claimable=可领；Exhausted=额度已用尽（当日或终身）。
+type claimDecision struct {
+	Claimable bool
+	Exhausted bool
+}
+
 // ErrPointsProcessed 幂等占坑冲突（ADR-0023）：幂等键已存在，事件已处理过。
 // 调用方据此把「二次提交」映射为各自的既有语义（已兑换/已领取/跳过回收等），整笔事务回滚。
 var ErrPointsProcessed = errors.New("积分事件已处理")
@@ -182,7 +236,7 @@ func (s *PointsService) GetBalance(userID int) (*PointsBalanceResult, error) {
 
 // GetLedger 流水分页。userID=0 不过滤用户（admin 巡检全量视角）；reason 可选筛选
 // （空=不过滤，变参保持既有调用方零 diff，同 AdminCourseService.GetCourses 的 filter 惯例）。
-func (s *PointsService) GetLedger(userID, page, pageSize int, reason ...string) (*PointsLedgerResult, error) {
+func (s *PointsService) GetLedger(userID, page, pageSize int, reason string, refType ...string) (*PointsLedgerResult, error) {
 	if page <= 0 {
 		page = 1
 	}
@@ -194,8 +248,12 @@ func (s *PointsService) GetLedger(userID, page, pageSize int, reason ...string) 
 		if userID > 0 {
 			q = q.Where("user_id = ?", userID)
 		}
-		if len(reason) > 0 && reason[0] != "" {
-			q = q.Where("reason = ?", reason[0])
+		if reason != "" {
+			q = q.Where("reason = ?", reason)
+		}
+		// #411：按业务域（ref_type）过滤——问答域一行锁死，不维护原因白名单。
+		if len(refType) > 0 && refType[0] != "" {
+			q = q.Where("ref_type = ?", refType[0])
 		}
 		return q
 	}
@@ -235,37 +293,44 @@ func (s *PointsService) GetTasks(userID int) (*PointsTasksResult, error) {
 	}
 	today := s.shanghaiDate()
 	todayStart := s.shanghaiDateTime()
-	var claims []model.PointsTaskClaim
-	_ = s.db.Where("user_id = ?", userID).Find(&claims).Error
-	claimMap := make(map[string]bool, len(claims))
-	for _, c := range claims {
-		if c.ClaimDate != nil && *c.ClaimDate == today {
-			claimMap[c.TaskCode] = true
-		} else if c.RefID != nil && *c.RefID != "" {
-			claimMap[c.TaskCode] = true
-		} else if c.ClaimDate == nil && c.RefID == nil {
-			claimMap[c.TaskCode] = true
-		}
+	cc, err := s.claimCounts(userID, today)
+	if err != nil {
+		return nil, err
 	}
-	// 预查用户与行为数据（减少 N+1）
+	// 预查用户与行为数据（减少 N+1）；读错误向上传播（#409），不再静默降级为「没人领过」
 	var user model.HrwaiUser
-	_ = s.db.First(&user, userID).Error
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, err
+	}
 	var checkinCnt int64
-	_ = s.db.Model(&model.ForumCheckIn{}).Where("user_id = ? AND check_date = ?", userID, todayStart).Count(&checkinCnt).Error
+	if err := s.db.Model(&model.ForumCheckIn{}).Where("user_id = ? AND check_date = ?", userID, todayStart).Count(&checkinCnt).Error; err != nil {
+		return nil, err
+	}
 	var quizCnt int64
-	_ = s.db.Model(&model.QuestionPracticeRecord{}).Where("student_id = ? AND created_at >= ?", userID, todayStart).Count(&quizCnt).Error
+	if err := s.db.Model(&model.QuestionPracticeRecord{}).Where("student_id = ? AND created_at >= ?", userID, todayStart).Count(&quizCnt).Error; err != nil {
+		return nil, err
+	}
 	var mockCnt int64
-	_ = s.db.Model(&model.MockExam{}).Where("student_id = ? AND created_at >= ?", userID, todayStart).Count(&mockCnt).Error
+	if err := s.db.Model(&model.MockExam{}).Where("student_id = ? AND created_at >= ?", userID, todayStart).Count(&mockCnt).Error; err != nil {
+		return nil, err
+	}
 	var postCnt int64
-	_ = s.db.Model(&model.ForumTopic{}).Where("user_id = ? AND created_at >= ?", userID, todayStart).Count(&postCnt).Error
+	if err := s.db.Model(&model.ForumTopic{}).Where("user_id = ? AND created_at >= ?", userID, todayStart).Count(&postCnt).Error; err != nil {
+		return nil, err
+	}
 	var replyCnt int64
-	_ = s.db.Model(&model.ForumReply{}).Where("user_id = ? AND created_at >= ?", userID, todayStart).Count(&replyCnt).Error
+	if err := s.db.Model(&model.ForumReply{}).Where("user_id = ? AND created_at >= ?", userID, todayStart).Count(&replyCnt).Error; err != nil {
+		return nil, err
+	}
 	var firstCourseDone int64
-	_ = s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND progress >= 100", userID).Count(&firstCourseDone).Error
+	if err := s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND progress >= 100", userID).Count(&firstCourseDone).Error; err != nil {
+		return nil, err
+	}
 
 	tasks := make([]PointsTaskItem, 0, len(configs))
 	for _, cfg := range configs {
-		if claimMap[cfg.Code] {
+		// 额度判定单点（#410）：不可领（当日/终身额度用尽）即视为已领取，不再回落 claimable
+		if !s.canClaim(cfg, cc[cfg.Code].Today, cc[cfg.Code].Lifetime).Claimable {
 			total := 1
 			if cfg.Code == "daily_browse" || cfg.Code == "growth_reply" {
 				total = 3
@@ -367,72 +432,64 @@ func (s *PointsService) Claim(ctx context.Context, userID int, taskCode string) 
 	if err := s.db.Where("code = ?", taskCode).First(&cfg).Error; err != nil {
 		return nil, errors.New("任务不存在")
 	}
-	// Redis 锁
-	lockKey := fmt.Sprintf("points:grant:%d:%s", userID, taskCode)
 	today := s.shanghaiDate()
+	// 读取计数：与 GetTasks 同一分组取数形态，写路径不另写一套「是否已领」判定
+	cc, err := s.claimCounts(userID, today)
+	if err != nil {
+		return nil, err
+	}
+	// 额度判定单点（#410）：写路径与读路径共用 canClaim，语义按配置 daily_limit/total_limit 驱动
+	if !s.canClaim(cfg, cc[taskCode].Today, cc[taskCode].Lifetime).Claimable {
+		if cfg.Group == "newbie" {
+			return nil, errors.New("已领取")
+		}
+		return nil, errors.New("今日已领取")
+	}
+	// Redis 锁（进程内双领护栏；最终裁决仍由唯一索引承担）
+	lockKey := fmt.Sprintf("points:grant:%d:%s", userID, taskCode)
 	if cfg.Group != "newbie" {
 		lockKey += ":" + today
 	} else {
 		lockKey += ":once"
 	}
-	locked := false
 	if ok, err := cache.SetNX(ctx, lockKey, "1", 5*time.Second); err == nil && ok {
-		locked = true
 		defer func() { _ = cache.Del(ctx, lockKey) }()
 	}
-	// 检查是否已领取
-	todayDate := s.shanghaiDate()
-	var exists int64
-	if cfg.Group == "newbie" {
-		once := "once"
-		_ = s.db.Model(&model.PointsTaskClaim{}).Where("user_id = ? AND task_code = ? AND ref_id = ?", userID, taskCode, once).Count(&exists).Error
-		if exists > 0 {
-			return nil, errors.New("已领取")
-		}
-	} else {
-		_ = s.db.Model(&model.PointsTaskClaim{}).Where("user_id = ? AND task_code = ? AND claim_date = ?", userID, taskCode, todayDate).Count(&exists).Error
-		if exists > 0 {
-			return nil, errors.New("今日已领取")
-		}
-	}
-	var balance, totalEarned int
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		// 1. 占坑
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		// 1. 占坑（唯一索引并发裁决；幂等冲突按任务臂映射为对应文案）
 		claim := model.PointsTaskClaim{UserID: userID, TaskCode: taskCode}
 		if cfg.Group == "newbie" {
 			once := "once"
 			claim.RefID = &once
 		} else {
-			claim.ClaimDate = &todayDate
+			claim.ClaimDate = &today
 		}
-		_ = locked // 已在上层处理锁释放
-
 		if err := tx.Create(&claim).Error; err != nil {
 			if isDuplicateError(err) {
-				return errors.New("已领取")
+				if cfg.Group == "newbie" {
+					return errors.New("已领取")
+				}
+				return errors.New("今日已领取")
 			}
 			return err
 		}
-		// 2. 簿记核心（流水 + 余额）：占坑由 points_task_claim 承载，无通用幂等键
+		// 2. 簿记核心（流水 + 余额）：占坑由 points_task_claim 承载，无通用幂等键。
+		//    #408/#410：删除 points_user_progress「只写不读」的进度快照写入，避免第二个「谁已领取」真相源。
 		if _, err := ApplyTx(tx, PointsEntry{
 			UserID: userID, Delta: cfg.Points, Reason: taskCode, RefType: "task", RefID: taskCode,
 		}); err != nil {
 			return err
 		}
-		// 3. 进度快照（可选）
-		_ = tx.Exec("INSERT INTO points_user_progress (user_id, task_code, progress, total, status, updated_at) VALUES (?,?,?,?,?,NOW()) ON CONFLICT (user_id, task_code) DO UPDATE SET progress=EXCLUDED.progress, status=EXCLUDED.status, updated_at=NOW()", userID, taskCode, 1, 1, "claimed").Error
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	// 读余额
-	bal, _ := s.GetBalance(userID)
-	if bal != nil {
-		balance = bal.Balance
-		totalEarned = bal.TotalEarned
+	bal, err := s.GetBalance(userID)
+	if err != nil {
+		return nil, err
 	}
-	return &PointsClaimResult{Balance: balance, TotalEarned: totalEarned, TaskStatus: "claimed"}, nil
+	return &PointsClaimResult{Balance: bal.Balance, TotalEarned: bal.TotalEarned, TaskStatus: "claimed"}, nil
 }
 
 // SettleRewardTx 事务内「一事件一分」直记落账（ADR-0023 forum 收编通道）：

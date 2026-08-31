@@ -55,7 +55,7 @@ func (h *PointsHandler) GetLedger(c *gin.Context) {
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.PointsLedgerResult, error) {
 			page := atoiDefault(c.Query("page"), 1)
 			pageSize := atoiDefault(c.Query("page_size"), 20)
-			return h.svc.GetLedger(middleware.CurrentUserID(c), page, pageSize)
+			return h.svc.GetLedger(middleware.CurrentUserID(c), page, pageSize, "")
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *service.PointsLedgerResult, err error) {
 			if err != nil {

@@ -26,7 +26,22 @@
           </div>
         </div>
       </div>
-      <el-form label-width="96px" @submit.prevent>
+      <!-- #415：未建简历（契约内 404）呈空态引导；真实故障走可重试错误态 -->
+      <UiEmptyState
+        v-if="resumeMissing"
+        title="简历尚未创建"
+        description="完善后可被招聘企业看到"
+        action-text="去完善"
+        @action="resumeMissing = false"
+      />
+      <UiErrorState
+        v-else-if="resumeError"
+        title="简历加载失败"
+        description="网络或服务端异常，可重试"
+        :retrying="false"
+        @retry="load()"
+      />
+      <el-form v-else label-width="96px" @submit.prevent>
         <el-form-item label="真实姓名">
           <el-input v-model="form.real_name" maxlength="20" placeholder="填写真实姓名" />
         </el-form-item>
@@ -139,11 +154,16 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { resumeApi } from '@/api/resume'
 import { unwrappedRequest } from '@/api/request'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 
 const router = useRouter()
 const saving = ref(false)
+// #415：未建简历（契约内 404）与真实故障分离——空态有引导，故障可重试。
+const resumeMissing = ref(false)
+const resumeError = ref(false)
 const pdfInput = ref<HTMLInputElement | null>(null)
 const photoInput = ref<HTMLInputElement | null>(null)
 
@@ -254,6 +274,8 @@ async function toggleVisibility(val: boolean) {
 }
 
 async function load() {
+  resumeMissing.value = false
+  resumeError.value = false
   try {
     const data: any = await resumeApi.get()
     if (!data) return
@@ -275,7 +297,15 @@ async function load() {
     form.resume_file_url = data.resume_file_url || ''
     form.photos = data.photos || []
     form.visibilityOpen = data.visibility === 'open'
-  } catch {}
+  } catch (e) {
+    // #415：契约内空态（404）显式表达「简历尚未创建」；其余故障进可重试错误态。
+    const kind = (e as { kind?: string }).kind
+    if (kind === 'notfound') {
+      resumeMissing.value = true
+    } else {
+      resumeError.value = true
+    }
+  }
   try {
     const res: any = await unwrappedRequest.get('/catalog/tree')
     if (res?.specialties) specialties.value = res.specialties

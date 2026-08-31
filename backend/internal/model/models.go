@@ -430,9 +430,12 @@ func (RealExamPaperQuestion) TableName() string { return "real_exam_paper_questi
 // ===== 18.5 练习进度（顺序练习断点续练） =====
 
 type PracticeProgress struct {
-	ID           int       `gorm:"column:id;primaryKey" json:"id"`
-	StudentID    int       `gorm:"column:student_id" json:"student_id"`
-	PracticeMode string    `gorm:"column:practice_mode" json:"practice_mode"`
+	ID           int    `gorm:"column:id;primaryKey" json:"id"`
+	StudentID    int    `gorm:"column:student_id" json:"student_id"`
+	PracticeMode string `gorm:"column:practice_mode" json:"practice_mode"`
+	// CredentialID 进度归属的证件分区（#414）：仅顺序练习携带（唯一键 (student, mode, credential)），
+	// 标签/按卷练习保持 NULL（partial 唯一索引兜底，NULL 不判重），未预筛选学员亦为 NULL。
+	CredentialID *int      `gorm:"column:credential_id" json:"credential_id,omitempty"`
 	QuestionIDs  JSONB     `gorm:"column:question_ids;type:jsonb" json:"question_ids,omitempty"`
 	CurrentIndex int       `gorm:"column:current_index;default:0" json:"current_index"`
 	Total        int       `gorm:"column:total;default:0" json:"total"`
@@ -791,7 +794,7 @@ type PointsTaskClaim struct {
 	ID        int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	UserID    int       `gorm:"column:user_id" json:"user_id"`
 	TaskCode  string    `gorm:"column:task_code" json:"task_code"`
-	ClaimDate *string   `gorm:"column:claim_date" json:"claim_date,omitempty"` // YYYY-MM-DD，Asia/Shanghai
+	ClaimDate *string   `gorm:"column:claim_date;type:date" json:"claim_date,omitempty"` // YYYY-MM-DD，Asia/Shanghai（#409：对齐同域邻居 ForumCheckIn 的日期类型标注）
 	RefID     *string   `gorm:"column:ref_id" json:"ref_id,omitempty"`
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }

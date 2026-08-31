@@ -63,12 +63,13 @@ export const practiceModeApi = {
     )
   },
   // 顺序练习：开始/续练，返回当前批次题目 + 进度
-  startSequential() {
-    return unwrappedRequest.get<{ questions?: Question[]; progress?: PracticeProgressData }>('/practice-mode/sequential')
+  // #413：传参对象让「证件过滤默认注入」拦截器真正生效（此前不传 params 被跳过）。
+  startSequential(params?: { credential_id?: number }) {
+    return unwrappedRequest.get<{ questions?: Question[]; progress?: PracticeProgressData }>('/practice-mode/sequential', { params: params || {} })
   },
-  // 顺序练习进度（卡片展示用）
-  getSequentialProgress() {
-    return unwrappedRequest.get<PracticeProgress>('/practice-mode/sequential-progress')
+  // 顺序练习进度（卡片展示用；#413 返回体含实时池总数 pool_total）
+  getSequentialProgress(params?: { credential_id?: number }) {
+    return unwrappedRequest.get<PracticeProgress>('/practice-mode/sequential-progress', { params: params || {} })
   },
   // 保存练习游标和答题状态（顺序/标签/按卷练习）
   saveProgress(index: number, mode: PracticeModeKey = 'sequential', total: number = 0, answersState: Record<string, unknown> = {}) {

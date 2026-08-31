@@ -142,7 +142,7 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, cred
 		byID[all[i].ID] = all[i]
 	}
 
-	ids, startIdx, err := ResumeSet(s.db, studentID, ResumeSetSpec{
+	ids, startIdx, err := ResumeSet(s.db, studentID, nil, ResumeSetSpec{
 		Mode:       string(PracticeModeTag(tagID)),
 		FreshIDs:   allIDs,
 		ReuseSaved: true,
@@ -184,7 +184,7 @@ func (s *PracticeModeService) StartSequential(studentID int, credentialID ...*in
 		ids[i] = q.ID
 	}
 
-	ids, startIdx, err := ResumeSet(s.db, studentID, ResumeSetSpec{
+	ids, startIdx, err := ResumeSet(s.db, studentID, credOf(credentialID), ResumeSetSpec{
 		Mode:                "sequential",
 		FreshIDs:            ids,
 		KeepCursorOnRefresh: true,
@@ -213,25 +213,39 @@ func (s *PracticeModeService) StartSequential(studentID int, credentialID ...*in
 // 守卫口径（session_progress.go）：practice_progress 无 status 字段（schema 冻结
 // ADR-0010），经 (student_id, practice_mode) 定位即天然归属本人，且无终端状态，
 // 恒视为在途——故无需在途校验。
-func (s *PracticeModeService) SaveProgress(studentID, index int, practiceMode string, total int, answersState json.RawMessage) error {
+func (s *PracticeModeService) SaveProgress(studentID, index int, practiceMode string, total int, answersState json.RawMessage, credentialID ...*int) error {
 	if practiceMode == "" {
 		practiceMode = "sequential"
 	}
-	return SaveSet(s.db, studentID, practiceMode, nil, index, total, initAnswersState(answersState))
+	// #414：顺序练习进度按证件分桶（其余模式保持 NULL 兼容）
+	var cred *int
+	if practiceMode == "sequential" && len(credentialID) > 0 {
+		cred = credentialID[0]
+	}
+	return SaveSet(s.db, studentID, practiceMode, cred, nil, index, total, initAnswersState(answersState))
 }
 
 // GetProgress 查询任意模式的练习进度（卡片展示/断点续练用）。
 // 使用 Limit(1).Find() 替代 First()，避免首次进入时 GORM logger 误报 record not found
-func (s *PracticeModeService) GetProgress(studentID int, practiceMode string) *ProgressResultDTO {
+func (s *PracticeModeService) GetProgress(studentID int, practiceMode string, credentialID ...*int) *ProgressResultDTO {
 	if practiceMode == "" {
 		practiceMode = "sequential"
 	}
+	// #413 实时池总数：与抽题共用同一池过滤（已发布 + 排真题 + 证件分区）；
+	// 标签模式再叠加标签过滤，其余模式（真题卷等）不适用池口径。
+	poolTotal := int(s.poolTotalForMode(practiceMode, credentialID))
+	// #414：顺序练习按证件分区定位进度（其余模式 NULL 兼容）
+	var cred *int
+	if practiceMode == "sequential" && len(credentialID) > 0 {
+		cred = credentialID[0]
+	}
 	var prog model.PracticeProgress
-	if err := s.db.Where("student_id = ? AND practice_mode = ?", studentID, practiceMode).Limit(1).Find(&prog).Error; err != nil {
-		return emptyProgressResult()
+	clause, args := credentialClause(cred)
+	if err := s.db.Where("student_id = ? AND practice_mode = ? AND "+clause, append([]any{studentID, practiceMode}, args...)...).Limit(1).Find(&prog).Error; err != nil {
+		return &ProgressResultDTO{PoolTotal: poolTotal}
 	}
 	if prog.ID == 0 {
-		return emptyProgressResult()
+		return &ProgressResultDTO{PoolTotal: poolTotal}
 	}
 	// 解析 answers_state JSONB 为 map
 	var stateMap map[string]any
@@ -267,18 +281,43 @@ func (s *PracticeModeService) GetProgress(studentID int, practiceMode string) *P
 		Completed:    completed,
 		Total:        prog.Total,
 		CurrentIndex: prog.CurrentIndex,
+		PoolTotal:    poolTotal,
 		AnswersState: stateMap,
 	}
 }
 
-// emptyProgressResult 无进度记录时的空结果（与旧 map 输出的空态逐字一致）。
-func emptyProgressResult() *ProgressResultDTO {
-	return &ProgressResultDTO{Completed: 0, Total: 0, CurrentIndex: 0, AnswersState: map[string]any{}}
+// poolTotalForMode 按模式取池计数（#413）：sequential → 证件分区池；tag:<id> → 标签 + 证件；
+// 其余模式（paper 等）返回 0——池口径只对顺序/标签练习有意义。
+func (s *PracticeModeService) poolTotalForMode(mode string, credentialID []*int) int64 {
+	o := sampleQuestionsOpts{cred: credOf(credentialID)}
+	if pm, ok := ParsePracticeMode(mode); ok {
+		if tagID, ok := pmTagID(pm); ok {
+			o.tagID = tagID
+		}
+	}
+	total, err := countPoolByOpts(s.db, o)
+	if err != nil {
+		return 0
+	}
+	return total
+}
+
+// pmTagID 从 tag:<id> 模式中提取标签 ID（非法形态返回 false）。
+func pmTagID(pm PracticeMode) (int, bool) {
+	if !strings.HasPrefix(string(pm), "tag:") {
+		return 0, false
+	}
+	id, err := strconv.Atoi(strings.TrimPrefix(string(pm), "tag:"))
+	if err != nil || id <= 0 {
+		return 0, false
+	}
+	return id, true
 }
 
 // GetSequentialProgress 查询顺序练习进度（卡片展示用，向后兼容）。
-func (s *PracticeModeService) GetSequentialProgress(studentID int) *ProgressResultDTO {
-	return s.GetProgress(studentID, "sequential")
+// #413：credentialID 可变参透传——进度返回体附带实时池总数 pool_total。
+func (s *PracticeModeService) GetSequentialProgress(studentID int, credentialID ...*int) *ProgressResultDTO {
+	return s.GetProgress(studentID, "sequential", credentialID...)
 }
 
 // SubmitAnswer 提交答案并判定。判分经 grading_engine.gradeOne 单题入口（错题入库/分值表经 flow 注入）。

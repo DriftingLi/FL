@@ -8,11 +8,13 @@ import (
 // question_dto_shape_test.go 冻结）。字段声明按 key 字母序，与 map 序列化字节序一致。
 type QuestionDTO struct {
 	// 学员侧（includeAnswer=false）省略以下四个字段。
-	Answer          *string `json:"answer,omitempty"`
-	Content         string  `json:"content"`
-	CreatedAt       string  `json:"created_at"`
-	CreatedBy       *int    `json:"created_by"`
-	CreatedByType   string  `json:"created_by_type"`
+	Answer        *string `json:"answer,omitempty"`
+	Content       string  `json:"content"`
+	CreatedAt     string  `json:"created_at"`
+	CreatedBy     *int    `json:"created_by"`
+	CreatedByType string  `json:"created_by_type"`
+	// CredentialID 题目归属的目标证件（#412）：讲师端题库管理用证件列区分分区，学员侧形状不变。
+	CredentialID    *int    `json:"credential_id,omitempty"`
 	Explanation     *string `json:"explanation,omitempty"`
 	ID              int     `json:"id"`
 	ImageURL        string  `json:"image_url"`
@@ -40,6 +42,7 @@ func newQuestionDTO(q *model.Question, includeAnswer bool) QuestionDTO {
 		CreatedAt:     formatISO(q.CreatedAt),
 		CreatedBy:     q.CreatedBy,
 		CreatedByType: q.CreatedByType,
+		CredentialID:  q.CredentialID,
 		ID:            q.ID,
 		ImageURL:      q.ImageURL,
 		Options:       options,

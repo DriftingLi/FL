@@ -94,7 +94,7 @@ import { computed, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { CircleCheckFilled, Trophy, List } from '@element-plus/icons-vue'
 import { pointsApi, type PointsTaskItem } from '@/api/points'
-import { groupLabelMap, groupDescMap } from '@/utils/taskCenter'
+import { groupLabelMap, groupDescMap, claimDupMessage, isClaimExhausted } from '@/utils/taskCenter'
 import type { TaskGroup } from '@/utils/taskCenter'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
@@ -156,12 +156,15 @@ async function handleClaim(code: string) {
     // 后台静默刷新，确保幂等状态持久
     void refresh()
   } catch (e: unknown) {
+    // 幂等错误按「客户端错误分类 + 任务分组」语义分级（#409）：不再匹配后端中文字串。
+    // 领取请求已走静默通道（X-Silent），这里只弹一次提示，拦截器不叠加 toast。
+    const kind = (e as { kind?: string }).kind
     const msg = e instanceof Error ? e.message : String(e)
-    if (msg.includes('已领取') || msg.includes('今日已领取')) {
+    if (isClaimExhausted(task.group, kind, msg)) {
       task.status = 'claimed'
       task.progress = task.total
       tasks.value = [...tasks.value]
-      ElMessage.warning(msg)
+      ElMessage.warning(claimDupMessage(task.group))
     } else {
       ElMessage.error(msg || '领取失败')
     }

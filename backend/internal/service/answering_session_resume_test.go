@@ -20,7 +20,7 @@ func TestResumeSetTagSemantics(t *testing.T) {
 	mode := "tag:7"
 
 	// 首次进入（count 抽样：3 抽 2）：固定顺序、游标 0
-	ids1, idx, err := ResumeSet(db, 1, ResumeSetSpec{
+	ids1, idx, err := ResumeSet(db, 1, nil, ResumeSetSpec{
 		Mode: mode, FreshIDs: []int{11, 22, 33}, ReuseSaved: true,
 		Sample: func(ids []int) []int { return shuffleTruncate(ids, 2) },
 	})
@@ -32,7 +32,7 @@ func TestResumeSetTagSemantics(t *testing.T) {
 	}
 
 	// 同集续练（count=0 全量场景）：沿用已存顺序（顺序协商保持，游标才有效）
-	ids2, idx2, err := ResumeSet(db, 1, ResumeSetSpec{
+	ids2, idx2, err := ResumeSet(db, 1, nil, ResumeSetSpec{
 		Mode: mode, FreshIDs: ids1, ReuseSaved: true,
 		Sample: func(ids []int) []int { return shuffleTruncate(ids, 2) },
 	})
@@ -49,10 +49,10 @@ func TestResumeSetTagSemantics(t *testing.T) {
 	}
 
 	// 推进游标到 1 后续练：游标恢复（FreshIDs=已抽样的同集）
-	if err := SaveSet(db, 1, mode, nil, 1, 0, nil); err != nil {
+	if err := SaveSet(db, 1, mode, nil, nil, 1, 0, nil); err != nil {
 		t.Fatalf("保存进度失败: %v", err)
 	}
-	_, idx3, err := ResumeSet(db, 1, ResumeSetSpec{Mode: mode, FreshIDs: ids1, ReuseSaved: true})
+	_, idx3, err := ResumeSet(db, 1, nil, ResumeSetSpec{Mode: mode, FreshIDs: ids1, ReuseSaved: true})
 	if err != nil {
 		t.Fatalf("续练失败: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestResumeSetTagSemantics(t *testing.T) {
 	}
 
 	// 集合变化（题目下架）：刷新为新集合、游标复位 0、不重抽样（中途变化）
-	ids4, idx4, err := ResumeSet(db, 1, ResumeSetSpec{
+	ids4, idx4, err := ResumeSet(db, 1, nil, ResumeSetSpec{
 		Mode: mode, FreshIDs: []int{11, 44}, ReuseSaved: true,
 		Sample: func(ids []int) []int { return shuffleTruncate(ids, 2) },
 	})
@@ -76,10 +76,10 @@ func TestResumeSetTagSemantics(t *testing.T) {
 	}
 
 	// 练完（游标 == 总数）后重进：重新抽样（新开始）
-	if err := SaveSet(db, 2, mode, nil, 2, 2, nil); err != nil {
+	if err := SaveSet(db, 2, mode, nil, nil, 2, 2, nil); err != nil {
 		t.Fatalf("保存完成进度失败: %v", err)
 	}
-	ids5, idx5, err := ResumeSet(db, 2, ResumeSetSpec{
+	ids5, idx5, err := ResumeSet(db, 2, nil, ResumeSetSpec{
 		Mode: mode, FreshIDs: []int{11, 44}, ReuseSaved: true,
 		Sample: func(ids []int) []int { return shuffleTruncate(ids, 2) },
 	})
@@ -100,7 +100,7 @@ func TestResumeSetSequentialCursorAcrossRefresh(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 
 	// 首次进入：题库 3 题，游标 0
-	ids, idx, err := ResumeSet(db, 1, ResumeSetSpec{Mode: "sequential", FreshIDs: []int{1, 2, 3}, KeepCursorOnRefresh: true})
+	ids, idx, err := ResumeSet(db, 1, nil, ResumeSetSpec{Mode: "sequential", FreshIDs: []int{1, 2, 3}, KeepCursorOnRefresh: true})
 	if err != nil {
 		t.Fatalf("首次进入失败: %v", err)
 	}
@@ -108,11 +108,11 @@ func TestResumeSetSequentialCursorAcrossRefresh(t *testing.T) {
 		t.Fatalf("首次进入应为全量 3 题、游标 0: ids=%v idx=%d", ids, idx)
 	}
 	// 推进游标
-	if err := SaveSet(db, 1, "sequential", nil, 2, 3, nil); err != nil {
+	if err := SaveSet(db, 1, "sequential", nil, nil, 2, 3, nil); err != nil {
 		t.Fatalf("保存进度失败: %v", err)
 	}
 	// 题库扩充到 5 题：游标 2 保留
-	_, idx2, err := ResumeSet(db, 1, ResumeSetSpec{Mode: "sequential", FreshIDs: []int{1, 2, 3, 4, 5}, KeepCursorOnRefresh: true})
+	_, idx2, err := ResumeSet(db, 1, nil, ResumeSetSpec{Mode: "sequential", FreshIDs: []int{1, 2, 3, 4, 5}, KeepCursorOnRefresh: true})
 	if err != nil {
 		t.Fatalf("扩充续练失败: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestResumeSetSequentialCursorAcrossRefresh(t *testing.T) {
 		t.Fatalf("题库扩充应保留未越界游标, got %d", idx2)
 	}
 	// 题库收缩到 2 题：游标 2 越界复位 0
-	ids3, idx3, err := ResumeSet(db, 1, ResumeSetSpec{Mode: "sequential", FreshIDs: []int{1, 2}, KeepCursorOnRefresh: true})
+	ids3, idx3, err := ResumeSet(db, 1, nil, ResumeSetSpec{Mode: "sequential", FreshIDs: []int{1, 2}, KeepCursorOnRefresh: true})
 	if err != nil {
 		t.Fatalf("收缩续练失败: %v", err)
 	}
