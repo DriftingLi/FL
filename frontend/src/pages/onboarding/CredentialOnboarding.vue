@@ -156,6 +156,13 @@ onMounted(async () => {
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 12px;
 }
+
+/* 期 7：窄屏单列，避免 240px 最小列宽撑出横向滚动 */
+@media (max-width: 560px) {
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .credential-card {
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-md);
