@@ -4,6 +4,7 @@
 //   - after claim, task list shows claimed;
 //   - behavior-done + already-claimed does NOT fall back to claimable;
 //   - total_limit=1 newbie task cannot be claimed a second time.
+//
 // Postgres adapter is built by the real SQL migrations (NOT model AutoMigrate) and is skipped
 // when DATABASE_URL is unset; SQLite adapter is always green (regression lock).
 // Also asserts: duplicate claim -> single 400, no second claim row; points_user_progress is

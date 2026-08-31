@@ -314,11 +314,6 @@ func pmTagID(pm PracticeMode) (int, bool) {
 	return id, true
 }
 
-// emptyProgressResult 无进度记录时的空结果（与旧 map 输出的空态逐字一致）。
-func emptyProgressResult() *ProgressResultDTO {
-	return &ProgressResultDTO{Completed: 0, Total: 0, CurrentIndex: 0, AnswersState: map[string]any{}}
-}
-
 // GetSequentialProgress 查询顺序练习进度（卡片展示用，向后兼容）。
 // #413：credentialID 可变参透传——进度返回体附带实时池总数 pool_total。
 func (s *PracticeModeService) GetSequentialProgress(studentID int, credentialID ...*int) *ProgressResultDTO {
