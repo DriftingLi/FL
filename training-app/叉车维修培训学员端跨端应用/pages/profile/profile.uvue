@@ -2,69 +2,129 @@
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
         <scroll-view class="content-scroll" scroll-y>
+            <!-- 顶部用户信息区（简洁） -->
             <view class="header">
-                <view class="header-top">
-                    <view class="user-card" @click="onEditNickname">
-                        <view class="user-avatar" @click.stop="onChangeAvatar">
-                            <image v-if="avatarUrl.length > 0" class="avatar-img" :src="avatarUrl" mode="aspectFill">
-                            </image>
-                            <text v-else class="avatar-icon">👤</text>
-                            <view class="avatar-edit-badge">
-                                <text class="avatar-edit-icon">✎</text>
+                <view class="user-card" @click="onEditNickname">
+                    <view class="user-avatar" @click.stop="onChangeAvatar">
+                        <image v-if="avatarUrl.length > 0" class="avatar-img" :src="avatarUrl" mode="aspectFill">
+                        </image>
+                        <text v-else class="avatar-icon">👤</text>
+                    </view>
+                    <view class="user-info">
+                        <view class="name-row">
+                            <text class="user-name">{{ userName }}</text>
+                            <view class="lv-badge">
+                                <text class="lv-badge-text">Lv{{ userLevel }}</text>
                             </view>
                         </view>
-                        <view class="user-info">
-                            <view class="name-row">
-                                <text class="user-name">{{ userName }}</text>
-                                <view class="lv-badge">
-                                    <text class="lv-badge-text">Lv{{ userLevel }}</text>
-                                </view>
+                        <view class="role-row">
+                            <text class="user-role">{{ rankName }}</text>
+                            <view class="stars-row">
+                                <text v-for="(s, i) in starList" :key="i"
+                                    :class="['star', { 'star-active': i < starCount }]">★</text>
                             </view>
-                            <text class="user-role">叉车学员</text>
                         </view>
-                        <text class="user-arrow">›</text>
-                    </view>
-                    <view class="header-icon" @click="onMenuClick('settings')">
-                        <text class="header-icon-text">⚙️</text>
-                    </view>
-                </view>
-                <view class="rank-row">
-                    <text class="rank-label">段位：</text>
-                    <text class="rank-name">{{ rankName }}</text>
-                    <view class="stars-row">
-                        <text v-for="(s, i) in starList" :key="i"
-                            :class="['star', { 'star-active': i < starCount }]">★</text>
                     </view>
                 </view>
             </view>
+
+            <!-- 签到卡片（醒目） -->
+            <view class="checkin-card" @click="onGoCheckIn">
+                <view class="checkin-left">
+                    <text class="checkin-icon">📅</text>
+                    <view class="checkin-info">
+                        <text class="checkin-title">今日签到</text>
+                        <text class="checkin-desc">已连续签到 {{ consecutiveDays }} 天，每天打卡得 {{ pointsPerDay }} 积分</text>
+                    </view>
+                </view>
+                <view class="checkin-right">
+                    <text class="checkin-btn-text">{{ todayChecked ? '已打卡 ✓' : '去签到 →' }}</text>
+                </view>
+            </view>
+
+            <!-- 学习数据统计 -->
             <view class="stats-row">
-                <view class="stats-item">
+                <view class="stats-card">
                     <text class="stats-num">{{ totalHours }}</text>
                     <text class="stats-label">学习时长</text>
                 </view>
-                <view class="stats-divider"></view>
-                <view class="stats-item">
+                <view class="stats-card">
                     <text class="stats-num">{{ streakDays }}</text>
                     <text class="stats-label">坚持天数</text>
                 </view>
-                <view class="stats-divider"></view>
-                <view class="stats-item">
+                <view class="stats-card">
                     <text class="stats-num">{{ points }}</text>
                     <text class="stats-label">积分</text>
                 </view>
             </view>
-            <view class="grid-section">
-                <view class="grid-header">
-                    <text class="grid-title">我的课程</text>
-                    <text class="grid-count">{{ courseCount }}个</text>
+
+            <!-- 我的课程 -->
+            <view class="course-section" @click="onMenuClick('courses')">
+                <view class="course-left">
+                    <text class="course-icon">📁</text>
+                    <text class="course-title">我的课程</text>
                 </view>
+                <view class="course-right">
+                    <text class="course-count">{{ courseCount }}个</text>
+                    <text class="course-arrow">›</text>
+                </view>
+            </view>
+
+            <!-- 功能宫格 -->
+            <view class="grid-section">
                 <view class="grid-body">
                     <view v-for="(item, idx) in gridItems" :key="idx" class="grid-item" @click="onGridClick(item)">
-                        <view class="grid-icon-wrap" :style="{ backgroundColor: item.color }">
+                        <view class="grid-icon-wrap">
                             <text class="grid-icon">{{ item.icon }}</text>
                         </view>
                         <text class="grid-text">{{ item.title }}</text>
                     </view>
+                </view>
+            </view>
+
+            <!-- 菜单列表 -->
+            <view class="menu-section">
+                <view class="menu-item" @click="onMenuClick('orders')">
+                    <view class="menu-left">
+                        <text class="menu-icon">📋</text>
+                        <text class="menu-text">订单</text>
+                    </view>
+                    <text class="menu-arrow">›</text>
+                </view>
+                <view class="menu-item" @click="onMenuClick('wallet')">
+                    <view class="menu-left">
+                        <text class="menu-icon">💰</text>
+                        <text class="menu-text">我的钱包</text>
+                    </view>
+                    <text class="menu-arrow">›</text>
+                </view>
+                <view class="menu-item" @click="onMenuClick('exam-goal')">
+                    <view class="menu-left">
+                        <text class="menu-icon">🎯</text>
+                        <text class="menu-text">我的考试目标</text>
+                    </view>
+                    <text class="menu-arrow">›</text>
+                </view>
+                <view class="menu-item" @click="onMenuClick('settings')">
+                    <view class="menu-left">
+                        <text class="menu-icon">⚙</text>
+                        <text class="menu-text">设置</text>
+                    </view>
+                    <text class="menu-arrow">›</text>
+                </view>
+                <!-- <view class="menu-item" @click="onMenuClick('notifications')">
+                    <view class="menu-left">
+                        <text class="menu-icon">🔔</text>
+                        <text class="menu-text">通知</text>
+                    </view>
+                    <text class="menu-arrow">›</text>
+                </view> -->
+                <view class="menu-item" @click="onMenuClick('about')">
+                    <view class="menu-left">
+                        <text class="menu-icon">ℹ</text>
+                        <text class="menu-text">关于</text>
+                    </view>
+                    <text class="menu-arrow">›</text>
                 </view>
             </view>
         </scroll-view>
@@ -77,9 +137,10 @@
     import { useAuthStore } from '../../stores/auth'
     import { getProfileApi, getStudyStatsApi } from '../../api/student'
     import { updateProfileApi, uploadAvatarApi } from '../../api/auth'
+    import { getCheckInCalendarApi } from '../../api/forum'
     import { useStatusBarHeight } from '../../utils/system'
     import { UNAVAILABLE_TOAST } from '../../constants/app'
-    import type { StudentProfile, UpdateProfileParams, GridItem } from '../../types/index'
+    import type { StudentProfile, UpdateProfileParams, GridItem, CheckInCalendarDay } from '../../types/index'
 
     const authStore = useAuthStore()
     const statusBarHeight = useStatusBarHeight()
@@ -87,6 +148,11 @@
     const profile = ref<StudentProfile | null>(null)
     const uploadingAvatar = ref<boolean>(false)
     const streakDays = ref<number>(0)
+
+    // 签到相关数据
+    const consecutiveDays = ref<number>(0)
+    const pointsPerDay = ref<number>(7)
+    const todayChecked = ref<boolean>(false)
 
     const userName = computed<string>(() : string => {
         const u = authStore.user.value
@@ -99,8 +165,9 @@
 
     const avatarUrl = computed<string>(() : string => {
         const u = authStore.user.value
-        if (u != null && u.avatar != null && u.avatar.length > 0) {
-            return u.avatar!
+        console.log("u,", u)
+        if (u != null && u.avatar_url != null && u.avatar_url.length > 0) {
+            return u.avatar_url
         }
         return ''
     })
@@ -162,11 +229,11 @@
         return '技师'
     })
 
-    /** 星级：10 颗，点亮数 = Lv * 2（Lv3 点亮 6 颗） */
-    const starList : number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    /** 星级：5 颗，点亮数 = Lv（Lv3 点亮 3 颗） */
+    const starList : number[] = [1, 2, 3, 4, 5]
     const starCount = computed<number>(() : number => {
-        const n = userLevel.value * 2
-        if (n > 10) return 10
+        const n = userLevel.value
+        if (n > 5) return 5
         return n
     })
 
@@ -188,21 +255,24 @@
     })
 
     /**
-     * 功能宫格：available=true 跳转 path，available=false 点击提示"功能开发中"
-     * 仅映射已存在页面（records/wrong-questions/practice-records/mock-exam-records），
-     * 收藏夹/离线下载/学习资料/帮助中心/就业在线 无对应页面，暂为占位
+     * 功能宫格：匹配原型图布局
      */
     const gridItems : GridItem[] = [
-        { key: 'records', title: '学习记录', icon: '📚', color: '#2979ff', path: '/pages/profile/records', available: true },
-        { key: 'wrong-questions', title: '错题集', icon: '❗', color: '#ff5722', path: '/pages/profile/wrong-questions', available: true },
-        { key: 'practice-records', title: '练习记录', icon: '✏️', color: '#ff9900', path: '/pages/profile/practice-records', available: true },
-        { key: 'mock-exam-records', title: '模考历史', icon: '📝', color: '#9c27b0', path: '/pages/profile/mock-exam-records', available: true },
-        { key: 'favorites', title: '收藏夹', icon: '⭐', color: '#ffb800', path: '', available: false },
-        { key: 'offline', title: '离线下载', icon: '⬇️', color: '#00bcd4', path: '', available: false },
-        { key: 'materials', title: '学习资料', icon: '📄', color: '#19be6b', path: '', available: false },
+        { key: 'records', title: '学习记录', icon: '📖', color: '#2979ff', path: '/pages/profile/records', available: true },
+        { key: 'favorites', title: '收藏夹', icon: '⭐', color: '#ffb800', path: '/pages/profile/favorites', available: true },
+        { key: 'wrong-questions', title: '错题集', icon: '❓', color: '#ff5722', path: '/pages/profile/wrong-questions', available: true },
+        { key: 'notebook', title: '笔记本', icon: '📝', color: '#9c27b0', path: '', available: false },
+        { key: 'download', title: '资料下载', icon: '📥', color: '#00bcd4', path: '', available: false },
         { key: 'help', title: '帮助中心', icon: '❓', color: '#607d8b', path: '', available: false },
+        { key: 'study-plan', title: '学习计划', icon: '📋', color: '#ff9900', path: '', available: false },
+        { key: 'materials', title: '学习资料', icon: '📚', color: '#19be6b', path: '', available: false },
         { key: 'jobs', title: '就业在线', icon: '💼', color: '#dd524d', path: '', available: false },
     ]
+
+    function padZero(n : number) : string {
+        if (n < 10) return '0' + n
+        return '' + n
+    }
 
     async function loadProfile() {
         try {
@@ -213,7 +283,7 @@
         }
     }
 
-    /** 近 7 天有学习记录的天数（后端无"坚持天数"字段，用活跃天数近似） */
+    /** 近 7 天有学习记录的天数 */
     async function loadStreak() {
         try {
             const stats = await getStudyStatsApi(7)
@@ -223,12 +293,34 @@
         }
     }
 
-    /** 上传头像：multipart 上传到 /auth/avatar，走资料审核（审核通过后生效）。声明在 onChangeAvatar 之前，避免 Kotlin 局部函数前向引用 */
+    /** 加载签到状态（今日是否已签到、连续天数） */
+    async function loadCheckInStatus() {
+        try {
+            const now = new Date()
+            const year = now.getFullYear()
+            const month = now.getMonth() + 1
+            const result = await getCheckInCalendarApi(year, month)
+            consecutiveDays.value = result.consecutive_days
+            pointsPerDay.value = result.points_per_day
+            // 检查今日是否已签到
+            const todayStr = year + '-' + padZero(month) + '-' + padZero(now.getDate())
+            todayChecked.value = false
+            for (let i = 0; i < result.days.length; i++) {
+                if (result.days[i].date == todayStr && result.days[i].checked) {
+                    todayChecked.value = true
+                    break
+                }
+            }
+        } catch (e) {
+            console.error('[profile] loadCheckInStatus failed:', e)
+        }
+    }
+
+    /** 上传头像 */
     async function uploadAvatar(filePath : string) : Promise<void> {
         uploadingAvatar.value = true
         uni.showLoading({ title: '上传中...' })
         try {
-            // 后端校验图片并入库为 pending 审核请求，审核通过后头像才生效
             await uploadAvatarApi(filePath)
             uni.showToast({ title: '头像已提交，审核通过后生效', icon: 'none' })
         } catch (e) {
@@ -248,7 +340,7 @@
         }
     }
 
-    /** 点击头像，选择图片并上传（提交资料审核，审核通过后生效） */
+    /** 点击头像，选择图片并上传 */
     function onChangeAvatar() : void {
         if (uploadingAvatar.value) return
         uni.chooseImage({
@@ -262,18 +354,16 @@
                 uploadAvatar(filePath)
             },
             fail: (err) => {
-                // 用户取消时不报错
                 console.log('[profile] chooseImage canceled/failed:', err)
             }
         })
     }
 
-    /** 提交昵称修改（走资料审核）。声明在 onEditNickname 之前，避免 Kotlin 局部函数前向引用 */
+    /** 提交昵称修改（走资料审核） */
     async function submitNickname(newName : string) : Promise<void> {
         uni.showLoading({ title: '保存中...' })
         try {
             const patch : UpdateProfileParams = { nickname: newName } as UpdateProfileParams
-            // 后端走资料审核：提交修改请求，审核通过后昵称生效
             await updateProfileApi(patch)
             uni.showToast({ title: '昵称已提交，审核通过后生效', icon: 'none' })
         } catch (e) {
@@ -301,7 +391,6 @@
             editable: true,
             placeholderText: '请输入新昵称',
             content: currentName,
-            // uni.showModal 的 success 回调不可为 async（error17），转由独立异步函数执行
             success: (res) => {
                 if (!res.confirm) return
                 const content = res.content
@@ -316,6 +405,11 @@
         })
     }
 
+    /** 跳转到签到页面（学习打卡） */
+    function onGoCheckIn() : void {
+        uni.navigateTo({ url: '/pages/forum/check-in' })
+    }
+
     function onGridClick(item : GridItem) : void {
         if (item.available && item.path.length > 0) {
             uni.navigateTo({ url: item.path })
@@ -327,84 +421,75 @@
     function onMenuClick(type : string) : void {
         if (type == 'settings') {
             uni.navigateTo({ url: '/pages/profile/settings' })
+        } else if (type == 'courses') {
+            uni.switchTab({ url: '/pages/courses/courses' })
+        } else if (type == 'notifications') {
+            uni.navigateTo({ url: '/pages/notifications/notifications' })
+        } else if (type == 'about') {
+            uni.showToast({ title: '叉车维修培训 v1.0.0', icon: 'none' })
+        } else if (type == 'orders') {
+            uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
+        } else if (type == 'wallet') {
+            uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
+        } else if (type == 'exam-goal') {
+            uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
         }
     }
 
     onShow(() => {
         loadProfile()
         loadStreak()
+        loadCheckInStatus()
     })
 </script>
 
 <style>
     .container {
         flex: 1;
-        background-color: #f5f5f5;
+        background: linear-gradient(180deg, #CFE9FB 1%, #D0EBFD 16%, #F5F5F5 100%);
         flex-direction: column;
     }
 
     .status-bar {
-        background-color: #2979ff;
+        background-color: transparent;
     }
 
     .content-scroll {
         flex: 1;
     }
 
+    /* 顶部用户信息区（简洁） */
     .header {
-        background-color: #2979ff;
-        padding: 32rpx 32rpx 24rpx;
-    }
-
-    .header-top {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
+        background-color: transparent;
+        padding: 24rpx 32rpx 40rpx;
     }
 
     .user-card {
-        flex: 1;
         flex-direction: row;
         align-items: center;
     }
 
     .user-avatar {
-        width: 120rpx;
-        height: 120rpx;
-        border-radius: 60rpx;
-        background-color: #4a9aff;
+        width: 128rpx;
+        height: 128rpx;
+        border-radius: 64rpx;
+        background-color: #f0f0f0;
         align-items: center;
         justify-content: center;
         margin-right: 24rpx;
-        position: relative;
+        overflow: hidden;
+        border: 4rpx solid #ffffff;
+        box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.08);
     }
 
     .avatar-img {
-        width: 120rpx;
-        height: 120rpx;
-        border-radius: 60rpx;
-    }
-
-    .avatar-edit-badge {
-        position: absolute;
-        right: -6rpx;
-        bottom: -6rpx;
-        width: 40rpx;
-        height: 40rpx;
-        border-radius: 20rpx;
-        background-color: #ffffff;
-        align-items: center;
-        justify-content: center;
-        border: 1rpx solid #dddddd;
-    }
-
-    .avatar-edit-icon {
-        font-size: 24rpx;
-        color: #2979ff;
+        width: 128rpx;
+        height: 128rpx;
+        border-radius: 64rpx;
     }
 
     .avatar-icon {
-        font-size: 64rpx;
+        font-size: 60rpx;
     }
 
     .user-info {
@@ -415,21 +500,20 @@
     .name-row {
         flex-direction: row;
         align-items: center;
+        margin-bottom: 8rpx;
     }
 
     .user-name {
-        font-size: 40rpx;
+        font-size: 36rpx;
         font-weight: bold;
-        color: #ffffff;
-        margin-bottom: 8rpx;
+        color: #333333;
     }
 
     .lv-badge {
-        background-color: #ffffff;
-        border-radius: 20rpx;
-        padding: 2rpx 16rpx;
+        background-color: #E8F0FE;
+        border-radius: 16rpx;
+        padding: 4rpx 14rpx;
         margin-left: 16rpx;
-        margin-bottom: 8rpx;
     }
 
     .lv-badge-text {
@@ -438,47 +522,15 @@
         font-weight: bold;
     }
 
-    .user-role {
-        font-size: 26rpx;
-        color: #cfe5ff;
-    }
-
-    .user-arrow {
-        font-size: 40rpx;
-        color: #cfe5ff;
-        margin-left: 12rpx;
-    }
-
-    .header-icon {
-        width: 64rpx;
-        height: 64rpx;
-        border-radius: 32rpx;
-        background-color: rgba(255, 255, 255, 0.2);
-        align-items: center;
-        justify-content: center;
-        margin-left: 24rpx;
-    }
-
-    .header-icon-text {
-        font-size: 36rpx;
-    }
-
-    .rank-row {
+    .role-row {
         flex-direction: row;
         align-items: center;
-        margin-top: 28rpx;
     }
 
-    .rank-label {
-        font-size: 28rpx;
-        color: #ffffff;
-    }
-
-    .rank-name {
-        font-size: 30rpx;
-        color: #ffffff;
-        font-weight: bold;
-        margin-right: 20rpx;
+    .user-role {
+        font-size: 26rpx;
+        color: #666666;
+        margin-right: 12rpx;
     }
 
     .stars-row {
@@ -487,29 +539,82 @@
     }
 
     .star {
-        font-size: 26rpx;
-        color: #e0e0e0;
+        font-size: 24rpx;
+        color: #cccccc;
         margin-right: 2rpx;
     }
 
     .star-active {
-        color: #ffb800;
+        color: #ffd700;
     }
 
-    .stats-row {
+    /* 签到卡片（醒目） */
+    .checkin-card {
         background-color: #ffffff;
-        margin: -16rpx 24rpx 24rpx;
+        margin: 0 24rpx 20rpx;
         border-radius: 16rpx;
-        padding: 32rpx;
+        padding: 28rpx 24rpx;
         flex-direction: row;
-        justify-content: space-around;
-        border: 1px solid #eeeeee;
+        align-items: center;
+        justify-content: space-between;
+        border-left: 8rpx solid #3a8dff;
     }
 
-    .stats-item {
+    .checkin-left {
+        flex: 1;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .checkin-icon {
+        font-size: 48rpx;
+        margin-right: 20rpx;
+    }
+
+    .checkin-info {
         flex: 1;
         flex-direction: column;
+    }
+
+    .checkin-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 6rpx;
+    }
+
+    .checkin-desc {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .checkin-right {
+        margin-left: 16rpx;
+    }
+
+    .checkin-btn-text {
+        font-size: 26rpx;
+        font-weight: bold;
+        color: #3a8dff;
+    }
+
+    /* 学习数据统计卡片 */
+    .stats-row {
+        flex-direction: row;
+        justify-content: space-between;
+        padding: 0 24rpx;
+        margin-bottom: 20rpx;
+    }
+
+    .stats-card {
+        flex: 1;
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx 16rpx;
+        margin: 0 8rpx;
+        flex-direction: column;
         align-items: center;
+        border: 1rpx solid #eeeeee;
     }
 
     .stats-num {
@@ -520,38 +625,59 @@
     }
 
     .stats-label {
-        font-size: 24rpx;
+        font-size: 22rpx;
         color: #999999;
     }
 
-    .stats-divider {
-        width: 1rpx;
-        background-color: #f0f0f0;
-    }
-
-    .grid-section {
+    /* 我的课程入口 */
+    .course-section {
         background-color: #ffffff;
-        margin: 0 24rpx 24rpx;
+        margin: 0 24rpx 20rpx;
         border-radius: 16rpx;
-        padding: 24rpx 16rpx;
-    }
-
-    .grid-header {
+        padding: 28rpx 24rpx;
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
-        padding: 0 8rpx 20rpx;
     }
 
-    .grid-title {
+    .course-left {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .course-icon {
+        font-size: 36rpx;
+        margin-right: 16rpx;
+    }
+
+    .course-title {
         font-size: 30rpx;
         font-weight: bold;
         color: #333333;
     }
 
-    .grid-count {
+    .course-right {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .course-count {
         font-size: 26rpx;
         color: #999999;
+        margin-right: 8rpx;
+    }
+
+    .course-arrow {
+        font-size: 32rpx;
+        color: #cccccc;
+    }
+
+    /* 功能宫格 */
+    .grid-section {
+        background-color: #ffffff;
+        margin: 0 24rpx 20rpx;
+        border-radius: 16rpx;
+        padding: 24rpx 16rpx;
     }
 
     .grid-body {
@@ -563,24 +689,65 @@
         width: 25%;
         flex-direction: column;
         align-items: center;
-        padding: 16rpx 0;
+        padding: 20rpx 0;
     }
 
     .grid-icon-wrap {
-        width: 88rpx;
-        height: 88rpx;
-        border-radius: 24rpx;
+        width: 80rpx;
+        height: 80rpx;
+        border-radius: 20rpx;
+        background-color: #f5f7fa;
         align-items: center;
         justify-content: center;
         margin-bottom: 12rpx;
     }
 
     .grid-icon {
-        font-size: 44rpx;
+        font-size: 40rpx;
     }
 
     .grid-text {
-        font-size: 24rpx;
+        font-size: 22rpx;
         color: #333333;
+    }
+
+    /* 菜单列表 */
+    .menu-section {
+        background-color: #ffffff;
+        margin: 0 24rpx 24rpx;
+        border-radius: 16rpx;
+        overflow: hidden;
+    }
+
+    .menu-item {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding: 28rpx 24rpx;
+        border-bottom: 1rpx solid #f5f5f5;
+    }
+
+    .menu-item:last-child {
+        border-bottom-width: 0;
+    }
+
+    .menu-left {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .menu-icon {
+        font-size: 36rpx;
+        margin-right: 20rpx;
+    }
+
+    .menu-text {
+        font-size: 30rpx;
+        color: #333333;
+    }
+
+    .menu-arrow {
+        font-size: 32rpx;
+        color: #cccccc;
     }
 </style>

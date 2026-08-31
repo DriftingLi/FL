@@ -1,0 +1,657 @@
+<template>
+  <view class="container" :style="{ height: windowHeight + 'px' }">
+    <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+    <view class="header">
+      <view class="header-left" @click="onBack">
+        <text class="back-icon">‹</text>
+      </view>
+      <text class="header-title">个人信息</text>
+      <view class="header-right"></view>
+    </view>
+    <scroll-view class="content-scroll" scroll-y="true">
+      <!-- 账号信息 -->
+      <view class="section">
+        <view class="card">
+          <!-- 修改头像 -->
+          <view class="cell" @click="onEditAvatar">
+            <text class="cell-label">修改头像</text>
+            <view class="cell-avatar-wrap">
+              <image v-if="avatarUrl.length > 0" class="cell-avatar" :src="avatarUrl" mode="aspectFill">
+              </image>
+              <view v-else class="cell-avatar-placeholder">
+                <text class="cell-avatar-icon">👤</text>
+              </view>
+            </view>
+            <text class="cell-arrow">›</text>
+          </view>
+          <!-- 修改昵称 -->
+          <view class="cell" @click="onEditNickname">
+            <text class="cell-label">修改昵称</text>
+            <text class="cell-value">{{ userName }}</text>
+            <text class="cell-arrow">›</text>
+          </view>
+          <!-- 修改密码 -->
+          <view class="cell" @click="onChangePassword">
+            <text class="cell-label">修改密码</text>
+            <text class="cell-arrow">›</text>
+          </view>
+          <!-- 更换手机号 -->
+          <view class="cell cell-border-none" @click="onChangePhone">
+            <text class="cell-label">更换手机号</text>
+            <text class="cell-value">{{ maskedPhone }}</text>
+            <text class="cell-arrow">›</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 账号管理 -->
+      <view class="section">
+        <view class="card">
+          <view class="cell" @click="onDeleteAccount">
+            <text class="cell-label">注销账号</text>
+            <text class="cell-arrow">›</text>
+          </view>
+          <view class="cell cell-border-none" @click="onMyAccount">
+            <text class="cell-label">我的账号</text>
+            <text class="cell-arrow">›</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 退出当前账号 -->
+      <view class="logout-wrap">
+        <view class="logout-btn" @click="onLogout">
+          <text class="logout-text">退出当前账号</text>
+        </view>
+      </view>
+    </scroll-view>
+
+    <!-- 修改密码弹窗 -->
+    <view v-if="showPasswordDialog" class="dialog-mask" @click="showPasswordDialog = false">
+      <view class="dialog" @click.stop>
+        <text class="dialog-title">修改密码</text>
+        <view class="dialog-body">
+          <view class="input-row">
+            <input class="input" type="number" placeholder="短信验证码" maxlength="6" v-model="passwordCode" />
+            <view class="code-btn" :class="{ 'code-btn-disabled': countdown > 0 }" @click="onSendPasswordCode">
+              <text class="code-btn-text">{{ countdown > 0 ? countdown + 's' : '获取验证码' }}</text>
+            </view>
+          </view>
+          <input class="input" type="text" placeholder="新密码（6-20位）" :password="true" v-model="newPassword" />
+          <input class="input" type="text" placeholder="确认新密码" :password="true" v-model="confirmPassword" />
+        </view>
+        <view class="dialog-footer">
+          <view class="dialog-btn" @click="showPasswordDialog = false">
+            <text class="dialog-btn-text">取消</text>
+          </view>
+          <view class="dialog-btn dialog-btn-primary" @click="onSubmitPassword">
+            <text class="dialog-btn-text-primary">确认</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 更换手机号弹窗 -->
+    <view v-if="showPhoneDialog" class="dialog-mask" @click="showPhoneDialog = false">
+      <view class="dialog" @click.stop>
+        <text class="dialog-title">更换手机号</text>
+        <view class="dialog-body">
+          <input class="input" type="number" placeholder="新手机号" maxlength="11" v-model="newPhone" />
+          <view class="input-row">
+            <input class="input" type="number" placeholder="短信验证码" maxlength="6" v-model="phoneCode" />
+            <view class="code-btn" :class="{ 'code-btn-disabled': phoneCountdown > 0 }" @click="onSendPhoneCode">
+              <text class="code-btn-text">{{ phoneCountdown > 0 ? phoneCountdown + 's' : '获取验证码' }}</text>
+            </view>
+          </view>
+        </view>
+        <view class="dialog-footer">
+          <view class="dialog-btn" @click="showPhoneDialog = false">
+            <text class="dialog-btn-text">取消</text>
+          </view>
+          <view class="dialog-btn dialog-btn-primary" @click="onSubmitPhone">
+            <text class="dialog-btn-text-primary">确认</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+  import { ref, computed } from 'vue'
+  import { useStatusBarHeight } from '../../utils/system'
+  import { goBack } from '../../utils/navigation'
+  import { useAuthStore } from '../../stores/auth'
+  import { updateProfileApi, uploadAvatarApi, changePasswordSendCodeApi, changePasswordApi, profileSendCodeApi, profileBindPhoneApi } from '../../api/auth'
+
+  const authStore = useAuthStore()
+  const statusBarHeight = useStatusBarHeight()
+  const windowHeight = uni.getSystemInfoSync().windowHeight
+  const uploadingAvatar = ref<boolean>(false)
+
+  // 密码修改相关
+  const showPasswordDialog = ref<boolean>(false)
+  const passwordCode = ref<string>('')
+  const newPassword = ref<string>('')
+  const confirmPassword = ref<string>('')
+  const countdown = ref<number>(0)
+  let countdownTimer : any = null
+
+  // 手机号修改相关
+  const showPhoneDialog = ref<boolean>(false)
+  const newPhone = ref<string>('')
+  const phoneCode = ref<string>('')
+  const phoneCountdown = ref<number>(0)
+  let phoneCountdownTimer : any = null
+
+  const userName = computed<string>(() : string => {
+    const u = authStore.user.value
+    if (u != null) {
+      if (u.name.length > 0) return u.name
+      if (u.username.length > 0) return u.username
+    }
+    return '同学'
+  })
+
+  const avatarUrl = computed<string>(() : string => {
+    const u = authStore.user.value
+    if (u != null && u.avatar != null && u.avatar.length > 0) {
+      return u.avatar!
+    }
+    return ''
+  })
+
+  /** 手机号脱敏：137****12 */
+  const maskedPhone = computed<string>(() : string => {
+    const u = authStore.user.value
+    if (u != null && u.username.length >= 11) {
+      const phone = u.username
+      return phone.substring(0, 3) + '****' + phone.substring(7)
+    }
+    return u != null ? u.username : '-'
+  })
+
+  function onBack() : void {
+    goBack()
+  }
+
+  /** 上传头像 */
+  async function uploadAvatar(filePath : string) : Promise<void> {
+    uploadingAvatar.value = true
+    uni.showLoading({ title: '上传中...' })
+    try {
+      await uploadAvatarApi(filePath)
+      uni.showToast({ title: '头像已提交，审核通过后生效', icon: 'none' })
+    } catch (e) {
+      console.error('[personal-info] uploadAvatar failed:', e)
+      let msg = '头像上传失败'
+      if (e instanceof Error) {
+        const errObj = e as Error
+        const m = errObj.message
+        if (m != null && m.length > 0) {
+          msg = m
+        }
+      }
+      uni.showToast({ title: msg, icon: 'none' })
+    } finally {
+      uploadingAvatar.value = false
+      uni.hideLoading()
+    }
+  }
+
+  function onEditAvatar() : void {
+    if (uploadingAvatar.value) return
+    uni.chooseImage({
+      count: 1,
+      sizeType: ['compressed'],
+      sourceType: ['album', 'camera'],
+      success: (res) => {
+        const tempFilePaths = res.tempFilePaths
+        if (tempFilePaths.length == 0) return
+        uploadAvatar(tempFilePaths[0])
+      },
+      fail: (err) => {
+        console.log('[personal-info] chooseImage canceled/failed:', err)
+      }
+    })
+  }
+
+  /** 提交昵称修改 */
+  async function submitNickname(newName : string) : Promise<void> {
+    uni.showLoading({ title: '保存中...' })
+    try {
+      const patch : any = { nickname: newName }
+      await updateProfileApi(patch)
+      uni.showToast({ title: '昵称已提交，审核通过后生效', icon: 'none' })
+    } catch (e) {
+      console.error('[personal-info] updateNickname failed:', e)
+      let msg = '修改失败'
+      if (e instanceof Error) {
+        const errObj = e as Error
+        const m = errObj.message
+        if (m != null && m.length > 0) {
+          msg = m
+        }
+      }
+      uni.showToast({ title: msg, icon: 'none' })
+    } finally {
+      uni.hideLoading()
+    }
+  }
+
+  function onEditNickname() : void {
+    const current = authStore.user.value
+    const currentName = current != null ? current.name : ''
+    uni.showModal({
+      title: '修改昵称',
+      editable: true,
+      placeholderText: '请输入新昵称',
+      content: currentName,
+      success: (res) => {
+        if (!res.confirm) return
+        const content = res.content
+        const newName = (content != null ? content : '').trim()
+        if (newName.length == 0) {
+          uni.showToast({ title: '昵称不能为空', icon: 'none' })
+          return
+        }
+        if (newName == currentName) return
+        submitNickname(newName)
+      }
+    })
+  }
+
+  /** 发送修改密码验证码 */
+  async function onSendPasswordCode() : Promise<void> {
+    if (countdown.value > 0) return
+    const u = authStore.user.value
+    if (u == null) return
+    try {
+      await changePasswordSendCodeApi(u.username)
+      uni.showToast({ title: '验证码已发送', icon: 'none' })
+      startCountdown()
+    } catch (e) {
+      uni.showToast({ title: '发送失败，请重试', icon: 'none' })
+    }
+  }
+
+  function startCountdown() : void {
+    countdown.value = 60
+    countdownTimer = setInterval(() => {
+      countdown.value--
+      if (countdown.value <= 0) {
+        if (countdownTimer != null) {
+          clearInterval(countdownTimer)
+          countdownTimer = null
+        }
+      }
+    }, 1000)
+  }
+
+  /** 提交修改密码 */
+  async function onSubmitPassword() : Promise<void> {
+    if (passwordCode.value.length != 6) {
+      uni.showToast({ title: '请输入6位验证码', icon: 'none' })
+      return
+    }
+    if (newPassword.value.length < 6 || newPassword.value.length > 20) {
+      uni.showToast({ title: '密码长度需为6-20位', icon: 'none' })
+      return
+    }
+    if (newPassword.value != confirmPassword.value) {
+      uni.showToast({ title: '两次输入的密码不一致', icon: 'none' })
+      return
+    }
+    const u = authStore.user.value
+    if (u == null) return
+
+    uni.showLoading({ title: '保存中...' })
+    try {
+      await changePasswordApi(u.username, passwordCode.value, newPassword.value)
+      uni.showToast({ title: '密码修改成功', icon: 'success' })
+      showPasswordDialog.value = false
+      passwordCode.value = ''
+      newPassword.value = ''
+      confirmPassword.value = ''
+    } catch (e) {
+      let msg = '修改失败'
+      if (e instanceof Error) {
+        const errObj = e as Error
+        const m = errObj.message
+        if (m != null && m.length > 0) {
+          msg = m
+        }
+      }
+      uni.showToast({ title: msg, icon: 'none' })
+    } finally {
+      uni.hideLoading()
+    }
+  }
+
+  /** 发送更换手机号验证码 */
+  async function onSendPhoneCode() : Promise<void> {
+    if (phoneCountdown.value > 0) return
+    if (newPhone.value.length != 11) {
+      uni.showToast({ title: '请输入11位手机号', icon: 'none' })
+      return
+    }
+    try {
+      await profileSendCodeApi(newPhone.value, 'phone')
+      uni.showToast({ title: '验证码已发送', icon: 'none' })
+      startPhoneCountdown()
+    } catch (e) {
+      uni.showToast({ title: '发送失败，请重试', icon: 'none' })
+    }
+  }
+
+  function startPhoneCountdown() : void {
+    phoneCountdown.value = 60
+    phoneCountdownTimer = setInterval(() => {
+      phoneCountdown.value--
+      if (phoneCountdown.value <= 0) {
+        if (phoneCountdownTimer != null) {
+          clearInterval(phoneCountdownTimer)
+          phoneCountdownTimer = null
+        }
+      }
+    }, 1000)
+  }
+
+  /** 提交更换手机号 */
+  async function onSubmitPhone() : Promise<void> {
+    if (newPhone.value.length != 11) {
+      uni.showToast({ title: '请输入11位手机号', icon: 'none' })
+      return
+    }
+    if (phoneCode.value.length != 6) {
+      uni.showToast({ title: '请输入6位验证码', icon: 'none' })
+      return
+    }
+
+    uni.showLoading({ title: '保存中...' })
+    try {
+      await profileBindPhoneApi(newPhone.value, phoneCode.value)
+      uni.showToast({ title: '手机号修改成功', icon: 'success' })
+      showPhoneDialog.value = false
+      newPhone.value = ''
+      phoneCode.value = ''
+      await authStore.refreshUserInfo()
+    } catch (e) {
+      let msg = '修改失败'
+      if (e instanceof Error) {
+        const errObj = e as Error
+        const m = errObj.message
+        if (m != null && m.length > 0) {
+          msg = m
+        }
+      }
+      uni.showToast({ title: msg, icon: 'none' })
+    } finally {
+      uni.hideLoading()
+    }
+  }
+
+  function onChangePassword() : void {
+    showPasswordDialog.value = true
+  }
+
+  function onChangePhone() : void {
+    showPhoneDialog.value = true
+  }
+
+  function onDeleteAccount() : void {
+    uni.showModal({
+      title: '注销账号',
+      content: '注销后账号将无法恢复，确定要注销吗？',
+      confirmColor: '#ff5252',
+      success: (res) => {
+        if (res.confirm) {
+          uni.showToast({ title: '注销功能开发中', icon: 'none' })
+        }
+      }
+    })
+  }
+
+  function onMyAccount() : void {
+    uni.showToast({ title: '我的账号（开发中）', icon: 'none' })
+  }
+
+  function onLogout() : void {
+    uni.showModal({
+      title: '提示',
+      content: '确认退出当前账号？',
+      success: (res) => {
+        if (res.confirm) {
+          // authStore.logout() 内部已包含 logoutApi 调用，无需重复调用
+          authStore.logout()
+        }
+      }
+    })
+  }
+</script>
+
+<style>
+  .container {
+    display: flex;
+    background-color: #f5f5f5;
+    flex-direction: column;
+  }
+
+  .status-bar {
+    background-color: #ffffff;
+  }
+
+  .header {
+    background-color: #ffffff;
+    padding: 16rpx 32rpx;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1rpx solid #f0f0f0;
+  }
+
+  .header-left {
+    width: 60rpx;
+    align-items: center;
+  }
+
+  .back-icon {
+    font-size: 48rpx;
+    color: #333333;
+  }
+
+  .header-title {
+    font-size: 36rpx;
+    font-weight: bold;
+    color: #333333;
+  }
+
+  .header-right {
+    width: 60rpx;
+  }
+
+  .content-scroll {
+    flex: 1;
+    height: 0;
+  }
+
+  .section {
+    margin-top: 24rpx;
+    padding: 0 32rpx;
+  }
+
+  .card {
+    background-color: #ffffff;
+    border-radius: 16rpx;
+    flex-direction: column;
+  }
+
+  .cell {
+    flex-direction: row;
+    align-items: center;
+    padding: 28rpx 24rpx;
+    border-bottom: 1rpx solid #f5f5f5;
+  }
+
+  .cell-border-none {
+    border-bottom: none;
+  }
+
+  .cell-label {
+    flex: 1;
+    font-size: 30rpx;
+    color: #333333;
+  }
+
+  .cell-value {
+    font-size: 28rpx;
+    color: #999999;
+    margin-right: 8rpx;
+  }
+
+  .cell-arrow {
+    font-size: 40rpx;
+    color: #cccccc;
+  }
+
+  .cell-avatar-wrap {
+    width: 80rpx;
+    height: 80rpx;
+    margin-right: 16rpx;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .cell-avatar {
+    width: 80rpx;
+    height: 80rpx;
+    border-radius: 40rpx;
+  }
+
+  .cell-avatar-placeholder {
+    width: 80rpx;
+    height: 80rpx;
+    border-radius: 40rpx;
+    background-color: #4a9aff;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .cell-avatar-icon {
+    font-size: 44rpx;
+  }
+
+  .logout-wrap {
+    padding: 48rpx 32rpx;
+  }
+
+  .logout-btn {
+    background-color: #ffffff;
+    border-radius: 48rpx;
+    padding: 24rpx 0;
+    align-items: center;
+  }
+
+  .logout-text {
+    font-size: 32rpx;
+    color: #ff5252;
+  }
+
+  /* 弹窗样式 */
+  .dialog-mask {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+  }
+
+  .dialog {
+    width: 600rpx;
+    background-color: #ffffff;
+    border-radius: 24rpx;
+    padding: 40rpx;
+  }
+
+  .dialog-title {
+    font-size: 34rpx;
+    font-weight: bold;
+    color: #333333;
+    text-align: center;
+    margin-bottom: 32rpx;
+  }
+
+  .dialog-body {
+    margin-bottom: 32rpx;
+  }
+
+  .input {
+    height: 88rpx;
+    border: 1rpx solid #eeeeee;
+    border-radius: 12rpx;
+    padding: 0 24rpx;
+    font-size: 28rpx;
+    margin-bottom: 20rpx;
+  }
+
+  .input-row {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .input-row .input {
+    flex: 1;
+    margin-right: 16rpx;
+    margin-bottom: 20rpx;
+  }
+
+  .code-btn {
+    background-color: #2979ff;
+    border-radius: 12rpx;
+    padding: 16rpx 24rpx;
+    margin-bottom: 20rpx;
+  }
+
+  .code-btn-disabled {
+    background-color: #cccccc;
+  }
+
+  .code-btn-text {
+    font-size: 24rpx;
+    color: #ffffff;
+    white-space: nowrap;
+  }
+
+  .dialog-footer {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .dialog-btn {
+    flex: 1;
+    height: 80rpx;
+    border-radius: 12rpx;
+    align-items: center;
+    justify-content: center;
+    background-color: #f5f5f5;
+    margin: 0 8rpx;
+  }
+
+  .dialog-btn-primary {
+    background-color: #2979ff;
+  }
+
+  .dialog-btn-text {
+    font-size: 30rpx;
+    color: #666666;
+  }
+
+  .dialog-btn-text-primary {
+    font-size: 30rpx;
+    color: #ffffff;
+  }
+</style>

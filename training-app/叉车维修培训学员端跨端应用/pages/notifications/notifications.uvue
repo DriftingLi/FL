@@ -1,0 +1,369 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">消息通知</text>
+            <view class="header-right" @click="onMarkAllRead">
+                <text class="header-action">全部已读</text>
+            </view>
+        </view>
+        <!-- 通知列表 -->
+        <scroll-view class="content-scroll" scroll-y="true" :refresher-enabled="true" :refresher-triggered="refreshing"
+            @refresherrefresh="onRefresh" @scrolltolower="onLoadMore">
+            <view v-if="items.length == 0 && !loading" class="empty-tip">
+                <text class="empty-icon"></text>
+                <text class="empty-text">暂无消息通知</text>
+            </view>
+            <view class="notify-list">
+                <view v-for="(item, idx) in items" :key="item.id" class="notify-card" :class="{ 'notify-unread': !item.is_read }" @click="onItemClick(item)">
+                    <!-- 左侧类型图标 -->
+                    <view class="notify-icon-wrap" :style="{ backgroundColor: getTypeColor(item.type) }">
+                        <text class="notify-icon">{{ getTypeIcon(item.type) }}</text>
+                    </view>
+                    <!-- 中间内容 -->
+                    <view class="notify-body">
+                        <view class="notify-top">
+                            <text class="notify-title">{{ item.title }}</text>
+                            <view v-if="!item.is_read" class="notify-dot"></view>
+                        </view>
+                        <text class="notify-content">{{ item.content }}</text>
+                        <text class="notify-time">{{ formatTime(item.created_at) }}</text>
+                    </view>
+                    <!-- 右侧箭头（有 link 时显示） -->
+                    <view v-if="item.link.length > 0" class="notify-arrow">
+                        <text class="notify-arrow-text">›</text>
+                    </view>
+                </view>
+            </view>
+            <view v-if="loading" class="loading-more">
+                <text class="loading-text">加载中...</text>
+            </view>
+            <view v-if="noMore && items.length > 0" class="loading-more">
+                <text class="loading-text">没有更多了</text>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref } from 'vue'
+    import { onShow } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
+    import { getNotificationsApi, markAllReadApi, markNotificationReadApi } from '../../api/notification'
+    import type { NotificationItem } from '../../types/index'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const items = ref<NotificationItem[]>([])
+    const page = ref<number>(1)
+    const pageSize = 20
+    const loading = ref<boolean>(false)
+    const noMore = ref<boolean>(false)
+    const refreshing = ref<boolean>(false)
+
+    function onBack() : void {
+        goBack()
+    }
+
+    /** 下拉刷新 */
+    async function onRefresh() : Promise<void> {
+        refreshing.value = true
+        await loadList(true)
+        refreshing.value = false
+    }
+
+    /** 加载通知列表 */
+    async function loadList(reset : boolean = false) : Promise<void> {
+        if (loading.value) return
+        if (reset) {
+            page.value = 1
+            noMore.value = false
+        }
+        if (noMore.value && !reset) return
+
+        loading.value = true
+        try {
+            const result = await getNotificationsApi(page.value, pageSize)
+            if (reset) {
+                items.value = result.items
+            } else {
+                items.value = items.value.concat(result.items)
+            }
+            if (items.value.length >= result.total || result.items.length == 0) {
+                noMore.value = true
+            } else {
+                page.value = page.value + 1
+            }
+        } catch (e) {
+            console.error('[notifications] load failed:', e)
+            uni.showToast({ title: '加载失败', icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function onLoadMore() : void {
+        loadList(false)
+    }
+
+    /** 点击通知项 */
+    function onItemClick(item : NotificationItem) : void {
+        // 标记已读
+        if (!item.is_read) {
+            item.is_read = true
+            markNotificationReadApi(item.id).catch((e : any | null) => {
+                console.error('[notifications] markRead failed:', e)
+            })
+        }
+        // 有 link 时跳转
+        if (item.link.length > 0) {
+            navigateByLink(item.link, item)
+        }
+    }
+
+    /** 根据 link 跳转 */
+    function navigateByLink(link : string, item : NotificationItem) : void {
+        // 论坛类通知 link 格式 /training/forum/:topic_id → 转换
+        if (link.indexOf('/training/forum/') >= 0) {
+            const topicIdStr = link.substring(link.lastIndexOf('/') + 1)
+            const topicId = parseInt(topicIdStr)
+            if (!isNaN(topicId)) {
+                uni.navigateTo({ url: '/pages/forum/forum-detail?id=' + topicId })
+                return
+            }
+        }
+        // 资料审核通过通知 → 跳转个人资料页
+        if (item.type == 'profile_review') {
+            uni.navigateTo({ url: '/pages/profile/personal-info' })
+            return
+        }
+        // 其他通知：直接使用 link（如有）
+        if (link.length > 0) {
+            uni.navigateTo({ url: link })
+        }
+    }
+
+    /** 全部已读 */
+    function onMarkAllRead() : void {
+        markAllReadApi().then(() : void => {
+            for (let i = 0; i < items.value.length; i++) {
+                items.value[i].is_read = true
+            }
+            uni.showToast({ title: '已全部标记为已读', icon: 'none' })
+        }).catch((e : any | null) => {
+            console.error('[notifications] markAllRead failed:', e)
+        })
+    }
+
+    /** 根据类型返回图标 */
+    function getTypeIcon(type : string) : string {
+        if (type == 'forum_reply') return ''
+        if (type == 'forum_report') return ''
+        if (type == 'forum_topic_deleted') return '️'
+        if (type == 'forum_reply_deleted') return '️'
+        if (type == 'profile_review') return ''
+        return ''
+    }
+
+    /** 根据类型返回背景色 */
+    function getTypeColor(type : string) : string {
+        if (type == 'forum_reply') return '#E8F5E9'
+        if (type == 'forum_report') return '#FFF3E0'
+        if (type == 'forum_topic_deleted') return '#FFEBEE'
+        if (type == 'forum_reply_deleted') return '#FFEBEE'
+        if (type == 'profile_review') return '#E3F2FD'
+        return '#F5F5F5'
+    }
+
+    /** 格式化时间 */
+    function formatTime(dateStr : string) : string {
+        if (dateStr.length >= 16) {
+            return dateStr.substring(0, 16)
+        }
+        return dateStr
+    }
+
+    onShow(() => {
+        loadList(true)
+    })
+</script>
+
+<style>
+    .container {
+        display: flex;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        width: 80rpx;
+        align-items: center;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #ffffff;
+    }
+
+    .header-title {
+        flex: 1;
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+        text-align: center;
+    }
+
+    .header-right {
+        width: 160rpx;
+        align-items: flex-end;
+    }
+
+    .header-action {
+        font-size: 26rpx;
+        color: rgba(255, 255, 255, 0.85);
+    }
+
+    /* 内容区 */
+    .content-scroll {
+        flex: 1;
+        height: 0;
+    }
+
+    /* 空状态 */
+    .empty-tip {
+        align-items: center;
+        padding: 160rpx 0 80rpx;
+        flex-direction: column;
+    }
+
+    .empty-icon {
+        font-size: 80rpx;
+        margin-bottom: 24rpx;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    /* 通知列表 */
+    .notify-list {
+        flex-direction: column;
+        padding: 16rpx 24rpx;
+    }
+
+    .notify-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        margin-bottom: 16rpx;
+        flex-direction: row;
+        align-items: flex-start;
+        border: 1rpx solid #eeeeee;
+    }
+
+    .notify-unread {
+        background-color: #f0f7ff;
+        border-color: #d0e4ff;
+    }
+
+    /* 类型图标 */
+    .notify-icon-wrap {
+        width: 72rpx;
+        height: 72rpx;
+        border-radius: 36rpx;
+        align-items: center;
+        justify-content: center;
+        margin-right: 20rpx;
+        flex-shrink: 0;
+    }
+
+    .notify-icon {
+        font-size: 36rpx;
+    }
+
+    /* 内容区 */
+    .notify-body {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .notify-top {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 8rpx;
+    }
+
+    .notify-title {
+        font-size: 28rpx;
+        color: #333333;
+        font-weight: 500;
+        flex: 1;
+        lines: 1;
+        text-overflow: ellipsis;
+        overflow: hidden;
+    }
+
+    .notify-dot {
+        width: 14rpx;
+        height: 14rpx;
+        border-radius: 7rpx;
+        background-color: #ff3b30;
+        margin-left: 12rpx;
+    }
+
+    .notify-content {
+        font-size: 26rpx;
+        color: #666666;
+        margin-bottom: 8rpx;
+        lines: 2;
+        text-overflow: ellipsis;
+        overflow: hidden;
+    }
+
+    .notify-time {
+        font-size: 22rpx;
+        color: #cccccc;
+    }
+
+    /* 右箭头 */
+    .notify-arrow {
+        width: 40rpx;
+        align-items: center;
+        justify-content: center;
+        margin-left: 8rpx;
+    }
+
+    .notify-arrow-text {
+        font-size: 36rpx;
+        color: #cccccc;
+    }
+
+    /* 加载更多 */
+    .loading-more {
+        align-items: center;
+        padding: 24rpx 0;
+    }
+
+    .loading-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
+</style>

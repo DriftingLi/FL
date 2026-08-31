@@ -1,0 +1,107 @@
+/**
+ * 内容精选 API（公开，无需登录）
+ *
+ * 接口：
+ *   GET  /api/featured-contents               精选列表（分页+分类过滤）
+ *   GET  /api/featured-content/:id             精选详情（含相关/上下篇）
+ *   POST /api/featured-content/:id/view        浏览计数 +1
+ */
+import { get, post } from './request'
+import { toNumber, toStr } from './helpers'
+import type { FeaturedContentItem, FeaturedContentListResult, FeaturedContentDetail } from '../types/index'
+
+
+
+function buildFeaturedItem(obj : UTSJSONObject) : FeaturedContentItem {
+	return {
+		content_id: toNumber(obj['content_id'], toNumber(obj['id'])),
+		title: toStr(obj['title']),
+		category: toStr(obj['category']),
+		category_label: toStr(obj['category_label']),
+		summary: toStr(obj['summary']),
+		cover_image: toStr(obj['cover_image']),
+		source: toStr(obj['source']),
+		status: toStr(obj['status']),
+		sort_order: toNumber(obj['sort_order']),
+		view_count: toNumber(obj['view_count']),
+		published_at: toStr(obj['published_at']),
+		created_at: toStr(obj['created_at']),
+	} as FeaturedContentItem
+}
+
+/**
+ * 精选列表
+ * @param page 页码
+ * @param pageSize 每页条数
+ * @param category 分类过滤（可选）
+ */
+export function getFeaturedContentsApi(page : number = 1, pageSize : number = 10, category : string = '') : Promise<FeaturedContentListResult> {
+	const params : UTSJSONObject = {
+		page: page.toString(),
+		page_size: pageSize.toString(),
+	} as UTSJSONObject
+	if (category.length > 0) {
+		params['category'] = category
+	}
+	return get('/featured-contents', params).then((data : UTSJSONObject) : FeaturedContentListResult => {
+		const items : FeaturedContentItem[] = []
+		const itemsRaw = data['items']
+		if (itemsRaw != null) {
+			const arr = itemsRaw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				items.push(buildFeaturedItem(arr[i]))
+			}
+		}
+		return {
+			items: items,
+			total: toNumber(data['total']),
+			page: toNumber(data['page'], 1),
+			pages: toNumber(data['pages']),
+		} as FeaturedContentListResult
+	})
+}
+
+/**
+ * 精选详情
+ * @param contentId 内容 ID
+ */
+export function getFeaturedContentDetailApi(contentId : number) : Promise<FeaturedContentDetail> {
+	return get('/featured-content/' + contentId.toString()).then((data : UTSJSONObject) : FeaturedContentDetail => {
+		const base = buildFeaturedItem(data)
+		let prev : FeaturedContentItem | null = null
+		let next : FeaturedContentItem | null = null
+		const prevRaw = data['prev']
+		const nextRaw = data['next']
+		if (prevRaw != null) {
+			prev = buildFeaturedItem(prevRaw as UTSJSONObject)
+		}
+		if (nextRaw != null) {
+			next = buildFeaturedItem(nextRaw as UTSJSONObject)
+		}
+		const related : FeaturedContentItem[] = []
+		const relatedRaw = data['related']
+		if (relatedRaw != null) {
+			const arr = relatedRaw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				related.push(buildFeaturedItem(arr[i]))
+			}
+		}
+		return {
+			...base,
+			content: toStr(data['content']),
+			related: related,
+			prev: prev,
+			next: next,
+		} as FeaturedContentDetail
+	})
+}
+
+/**
+ * 浏览计数 +1
+ * @param contentId 内容 ID
+ */
+export function viewFeaturedContentApi(contentId : number) : Promise<void> {
+	return post('/featured-content/' + contentId.toString() + '/view').then(() : void => {
+		// 无返回数据
+	})
+}

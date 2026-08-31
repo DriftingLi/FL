@@ -1,0 +1,717 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+        <!-- 页面标题 -->
+        <view class="page-header">
+            <text class="page-title">个人动态</text>
+            <view class="settings-btn" @click="onSettings">
+                <text class="settings-icon">⚙</text>
+            </view>
+        </view>
+
+        <scroll-view class="content-scroll" scroll-y>
+            <!-- 用户信息卡片 -->
+            <view class="user-card">
+                <view class="user-avatar-wrap">
+                    <image v-if="avatarUrl.length > 0" class="user-avatar" :src="avatarUrl" mode="aspectFill" />
+                    <view v-else class="user-avatar-placeholder">
+                        <text class="avatar-emoji">👤</text>
+                    </view>
+                </view>
+                <view class="user-info">
+                    <view class="user-name-row">
+                        <text class="user-name">{{ displayName }}</text>
+                        <view class="level-badge">
+                            <text class="level-text">Lv{{ userLevel }}</text>
+                        </view>
+                    </view>
+                    <text class="user-ip">IP属地：{{ ipLocation }}</text>
+                </view>
+            </view>
+
+            <!-- Tab 栏 -->
+            <view class="tab-bar">
+                <view class="tab-item" :class="{ active: currentTab === 'posts' }" @click="onSwitchTab('posts')">
+                    <text class="tab-text" :class="{ active: currentTab === 'posts' }">我的帖子</text>
+                </view>
+                <view class="tab-item" :class="{ active: currentTab === 'likes' }" @click="onSwitchTab('likes')">
+                    <text class="tab-text" :class="{ active: currentTab === 'likes' }">赞/收藏</text>
+                </view>
+                <view class="tab-item" :class="{ active: currentTab === 'interact' }" @click="onSwitchTab('interact')">
+                    <text class="tab-text" :class="{ active: currentTab === 'interact' }">互动</text>
+                </view>
+                <view class="tab-item" :class="{ active: currentTab === 'views' }" @click="onSwitchTab('views')">
+                    <text class="tab-text" :class="{ active: currentTab === 'views' }">游览记录</text>
+                </view>
+            </view>
+
+            <!-- 赞/收藏 子 Tab -->
+            <view v-if="currentTab === 'likes'" class="sub-tab-bar">
+                <view class="sub-tab-item" :class="{ active: likesSubTab === 'liked' }" @click="onSwitchLikesSubTab('liked')">
+                    <text class="sub-tab-text" :class="{ active: likesSubTab === 'liked' }">赞</text>
+                </view>
+                <view class="sub-tab-item" :class="{ active: likesSubTab === 'favorited' }" @click="onSwitchLikesSubTab('favorited')">
+                    <text class="sub-tab-text" :class="{ active: likesSubTab === 'favorited' }">收藏</text>
+                </view>
+            </view>
+
+            <!-- 互动 子 Tab -->
+            <view v-if="currentTab === 'interact'" class="sub-tab-bar">
+                <view class="sub-tab-item" :class="{ active: interactSubTab === 'questions' }" @click="onSwitchInteractSubTab('questions')">
+                    <text class="sub-tab-text" :class="{ active: interactSubTab === 'questions' }">我的疑问</text>
+                </view>
+                <view class="sub-tab-item" :class="{ active: interactSubTab === 'replies' }" @click="onSwitchInteractSubTab('replies')">
+                    <text class="sub-tab-text" :class="{ active: interactSubTab === 'replies' }">我的回复</text>
+                </view>
+                <view class="sub-tab-item" :class="{ active: interactSubTab === 'observed' }" @click="onSwitchInteractSubTab('observed')">
+                    <text class="sub-tab-text" :class="{ active: interactSubTab === 'observed' }">我的围观</text>
+                </view>
+            </view>
+
+            <!-- ========= 我的帖子 ========= -->
+            <view v-if="currentTab === 'posts'">
+                <view v-if="topics.length === 0 && !loading" class="empty-state">
+                    <text class="empty-hint">发布一篇帖子，参与互动</text>
+                    <view class="publish-btn" @click="onPublish">
+                        <text class="publish-btn-text">发布帖子</text>
+                    </view>
+                </view>
+                <view class="list-section">
+                    <view v-for="(item, idx) in topics" :key="idx" class="topic-card" @click="onTopicClick(item.id)">
+                        <text class="topic-title">{{ item.title }}</text>
+                        <text class="topic-preview">{{ getContentPreview(item.content) }}</text>
+                        <view class="topic-footer">
+                            <view class="topic-stats">
+                                <text class="stat-text">{{ item.likes_count }} 赞</text>
+                                <text class="stat-text">{{ item.replies_count }} 评论</text>
+                            </view>
+                            <text class="topic-time">{{ formatDateStr(item.created_at) }}</text>
+                        </view>
+                    </view>
+                </view>
+            </view>
+
+            <!-- ========= 赞 / 收藏 ========= -->
+            <view v-if="currentTab === 'likes'">
+                <!-- 赞 -->
+                <view v-if="likesSubTab === 'liked'">
+                    <view v-if="likedTopics.length === 0 && !loading" class="empty-state">
+                        <text class="empty-hint">还没有点赞过帖子</text>
+                    </view>
+                    <view class="list-section">
+                        <view v-for="(item, idx) in likedTopics" :key="idx" class="topic-card" @click="onTopicClick(item.id)">
+                            <text class="topic-title">{{ item.title }}</text>
+                            <text class="topic-preview">{{ getContentPreview(item.content) }}</text>
+                            <view class="topic-footer">
+                                <text class="topic-time">{{ formatDateStr(item.created_at) }}</text>
+                            </view>
+                        </view>
+                    </view>
+                </view>
+                <!-- 收藏 -->
+                <view v-if="likesSubTab === 'favorited'">
+                    <view v-if="favoriteItems.length === 0 && !loading" class="empty-state">
+                        <text class="empty-hint">还没有收藏过内容</text>
+                    </view>
+                    <view class="list-section">
+                        <view v-for="(item, idx) in favoriteItems" :key="idx" class="topic-card" @click="onFavoriteClick(item)">
+                            <text class="topic-title">{{ item.title }}</text>
+                            <view class="topic-footer">
+                                <text class="tag-text">{{ item.target_type }}</text>
+                                <text class="topic-time">{{ formatDateStr(item.created_at) }}</text>
+                            </view>
+                        </view>
+                    </view>
+                </view>
+            </view>
+
+            <!-- ========= 互动 ========= -->
+            <view v-if="currentTab === 'interact'">
+                <!-- 我的疑问 -->
+                <view v-if="interactSubTab === 'questions'">
+                    <view v-if="myQuestions.length === 0 && !loading" class="empty-state">
+                        <text class="empty-hint">还没有提出过疑问</text>
+                    </view>
+                    <view class="list-section">
+                        <view v-for="(item, idx) in myQuestions" :key="idx" class="topic-card" @click="onTopicClick(item.topic_id)">
+                            <text class="topic-title">{{ item.topic_title }}</text>
+                            <text class="topic-preview">{{ getContentPreview(item.content) }}</text>
+                            <view class="topic-footer">
+                                <text class="topic-time">{{ formatDateStr(item.created_at) }}</text>
+                            </view>
+                        </view>
+                    </view>
+                </view>
+                <!-- 我的回复 -->
+                <view v-if="interactSubTab === 'replies'">
+                    <view v-if="myReplies.length === 0 && !loading" class="empty-state">
+                        <text class="empty-hint">还没有回复过帖子</text>
+                    </view>
+                    <view class="list-section">
+                        <view v-for="(item, idx) in myReplies" :key="idx" class="topic-card" @click="onTopicClick(item.topic_id)">
+                            <text class="reply-ref-title">回复了 {{ item.topic_title }}</text>
+                            <text class="topic-preview">{{ getContentPreview(item.content) }}</text>
+                            <view class="topic-footer">
+                                <text class="topic-time">{{ formatDateStr(item.created_at) }}</text>
+                            </view>
+                        </view>
+                    </view>
+                </view>
+                <!-- 我的围观 -->
+                <view v-if="interactSubTab === 'observed'">
+                    <view v-if="observedTopics.length === 0 && !loading" class="empty-state">
+                        <text class="empty-hint">还没有围观过帖子</text>
+                    </view>
+                    <view class="list-section">
+                        <view v-for="(item, idx) in observedTopics" :key="idx" class="topic-card" @click="onTopicClick(item.id)">
+                            <text class="topic-title">{{ item.title }}</text>
+                            <text class="topic-preview">{{ getContentPreview(item.content) }}</text>
+                            <view class="topic-footer">
+                                <text class="topic-time">{{ formatDateStr(item.created_at) }}</text>
+                            </view>
+                        </view>
+                    </view>
+                </view>
+            </view>
+
+            <!-- ========= 浏览记录 ========= -->
+            <view v-if="currentTab === 'views'">
+                <view v-if="viewHistory.length === 0 && !loading" class="empty-state">
+                    <text class="empty-hint">还没有浏览记录</text>
+                </view>
+                <view class="list-section">
+                    <view v-for="(item, idx) in viewHistory" :key="idx" class="topic-card" @click="onTopicClick(item.id)">
+                        <text class="topic-title">{{ item.title }}</text>
+                        <text class="topic-preview">{{ getContentPreview(item.content) }}</text>
+                        <view class="topic-footer">
+                            <text class="topic-time">{{ formatDateStr(item.created_at) }}</text>
+                        </view>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 加载状态 -->
+            <view v-if="loading" class="loading-more">
+                <text class="loading-text">加载中...</text>
+            </view>
+            <view v-if="noMore && hasData" class="loading-more">
+                <text class="loading-text">没有更多了</text>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onShow } from '@dcloudio/uni-app'
+    import { useAuthStore } from '../../stores/auth'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
+    import { getMyTopicsApi, getMyRepliesApi, getMyLikedTopicsApi, getMyObservedTopicsApi, getMyViewHistoryApi } from '../../api/forum'
+    import { getFavoritesApi } from '../../api/favorite'
+    import type { ForumTopic, ForumReply, FavoriteItem } from '../../types/index'
+    import { formatDateStr } from '../../utils/format'
+
+    const authStore = useAuthStore()
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    // ---- 用户信息 ----
+    const displayName = computed<string>(() : string => {
+        const u = authStore.user.value
+        if (u != null) {
+            if (u.name.length > 0) return u.name
+            if (u.username.length > 0) return u.username
+        }
+        return '同学'
+    })
+
+    const avatarUrl = computed<string>(() : string => {
+        const u = authStore.user.value
+        if (u != null && u.avatar_url != null && u.avatar_url.length > 0) {
+            return u.avatar_url
+        }
+        return ''
+    })
+
+    const userLevel = computed<number>(() : number => {
+        return 3
+    })
+
+    const ipLocation = ref<string>('广东')
+
+    // ---- Tab 状态 ----
+    const currentTab = ref<string>('posts') // posts | likes | interact | views
+    const likesSubTab = ref<string>('liked') // liked | favorited
+    const interactSubTab = ref<string>('replies') // questions | replies | observed
+
+    // ---- 数据 ----
+    const topics = ref<ForumTopic[]>([])
+    const likedTopics = ref<ForumTopic[]>([])
+    const favoriteItems = ref<FavoriteItem[]>([])
+    const myReplies = ref<ForumReply[]>([])
+    const myQuestions = ref<ForumReply[]>([])
+    const observedTopics = ref<ForumTopic[]>([])
+    const viewHistory = ref<ForumTopic[]>([])
+
+    const page = ref<number>(1)
+    const pageSize = 10
+    const loading = ref<boolean>(false)
+    const noMore = ref<boolean>(false)
+
+    const hasData = computed<boolean>(() : boolean => {
+        if (currentTab.value === 'posts') return topics.value.length > 0
+        if (currentTab.value === 'likes') {
+            if (likesSubTab.value === 'liked') return likedTopics.value.length > 0
+            return favoriteItems.value.length > 0
+        }
+        if (currentTab.value === 'interact') {
+            if (interactSubTab.value === 'questions') return myQuestions.value.length > 0
+            if (interactSubTab.value === 'replies') return myReplies.value.length > 0
+            return observedTopics.value.length > 0
+        }
+        return viewHistory.value.length > 0
+    })
+
+    // ---- 辅助函数 ----
+    function getContentPreview(content : string) : string {
+        const single = content.replace('\n', ' ')
+        if (single.length <= 80) return single
+        return single.substring(0, 80) + '...'
+    }
+
+    // ---- Tab 切换 ----
+    function onSwitchTab(tab : string) : void {
+        if (currentTab.value === tab) return
+        currentTab.value = tab
+        loadData(true)
+    }
+
+    function onSwitchLikesSubTab(subTab : string) : void {
+        if (likesSubTab.value === subTab) return
+        likesSubTab.value = subTab
+        loadData(true)
+    }
+
+    function onSwitchInteractSubTab(subTab : string) : void {
+        if (interactSubTab.value === subTab) return
+        interactSubTab.value = subTab
+        loadData(true)
+    }
+
+    // ---- 数据加载 ----
+    async function loadData(reset : boolean = false) : Promise<void> {
+        if (loading.value) return
+        if (reset) {
+            page.value = 1
+            noMore.value = false
+        }
+        if (noMore.value && !reset) return
+
+        loading.value = true
+        try {
+            if (currentTab.value === 'posts') {
+                await loadMyTopics(reset)
+            } else if (currentTab.value === 'likes') {
+                if (likesSubTab.value === 'liked') {
+                    await loadLikedTopics(reset)
+                } else {
+                    await loadFavorites(reset)
+                }
+            } else if (currentTab.value === 'interact') {
+                if (interactSubTab.value === 'replies') {
+                    await loadMyReplies(reset)
+                } else if (interactSubTab.value === 'questions') {
+                    await loadMyQuestions(reset)
+                } else {
+                    await loadObservedTopics(reset)
+                }
+            } else if (currentTab.value === 'views') {
+                await loadViewHistory(reset)
+            }
+        } catch (e) {
+            uni.__f__('error','at pages/profile/personal-activity.uvue:338','[personal-activity] load failed:', e)
+            uni.showToast({ title: '加载失败', icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
+    async function loadMyTopics(reset : boolean) : Promise<void> {
+        const result = await getMyTopicsApi(page.value, pageSize)
+        if (reset) {
+            topics.value = result.items
+        } else {
+            topics.value = topics.value.concat(result.items)
+        }
+        checkNoMore(result.items.length, result.total)
+    }
+
+    async function loadLikedTopics(reset : boolean) : Promise<void> {
+        const result = await getMyLikedTopicsApi(page.value, pageSize)
+        if (reset) {
+            likedTopics.value = result.items
+        } else {
+            likedTopics.value = likedTopics.value.concat(result.items)
+        }
+        checkNoMore(result.items.length, result.total)
+    }
+
+    async function loadFavorites(reset : boolean) : Promise<void> {
+        const result = await getFavoritesApi('', page.value, pageSize)
+        if (reset) {
+            favoriteItems.value = result.items
+        } else {
+            favoriteItems.value = favoriteItems.value.concat(result.items)
+        }
+        checkNoMore(result.items.length, result.total)
+    }
+
+    async function loadMyReplies(reset : boolean) : Promise<void> {
+        const result = await getMyRepliesApi(page.value, pageSize)
+        if (reset) {
+            myReplies.value = result.items
+        } else {
+            myReplies.value = myReplies.value.concat(result.items)
+        }
+        checkNoMore(result.items.length, result.total)
+    }
+
+    async function loadMyQuestions(reset : boolean) : Promise<void> {
+        const result = await getMyRepliesApi(page.value, pageSize)
+        if (reset) {
+            myQuestions.value = result.items
+        } else {
+            myQuestions.value = myQuestions.value.concat(result.items)
+        }
+        checkNoMore(result.items.length, result.total)
+    }
+
+    async function loadObservedTopics(reset : boolean) : Promise<void> {
+        const result = await getMyObservedTopicsApi(page.value, pageSize)
+        if (reset) {
+            observedTopics.value = result.items
+        } else {
+            observedTopics.value = observedTopics.value.concat(result.items)
+        }
+        checkNoMore(result.items.length, result.total)
+    }
+
+    async function loadViewHistory(reset : boolean) : Promise<void> {
+        const result = await getMyViewHistoryApi(page.value, pageSize)
+        if (reset) {
+            viewHistory.value = result.items
+        } else {
+            viewHistory.value = viewHistory.value.concat(result.items)
+        }
+        checkNoMore(result.items.length, result.total)
+    }
+
+    function checkNoMore(itemsCount : number, total : number) : void {
+        if (itemsCount === 0 || (page.value * pageSize >= total && total > 0)) {
+            noMore.value = true
+        } else {
+            page.value = page.value + 1
+        }
+    }
+
+    // ---- 事件处理 ----
+    function onSettings() : void {
+        uni.navigateTo({ url: '/pages/profile/settings' })
+    }
+
+    function onPublish() : void {
+        uni.navigateTo({ url: '/pages/forum/forum-create' })
+    }
+
+    function onTopicClick(topicId : number) : void {
+        uni.navigateTo({ url: '/pages/forum/forum-detail?id=' + topicId })
+    }
+
+    function onFavoriteClick(item : FavoriteItem) : void {
+        if (item.target_type === 'topic') {
+            uni.navigateTo({ url: '/pages/forum/forum-detail?id=' + item.target_id })
+        } else if (item.target_type === 'course') {
+            uni.navigateTo({ url: '/pages/courses/course-detail?id=' + item.target_id })
+        } else if (item.target_type === 'featured') {
+            uni.navigateTo({ url: '/pages/featured/featured-detail?id=' + item.target_id })
+        }
+    }
+
+    onShow(() => {
+        loadData(true)
+    })
+</script>
+
+<style>
+    .container {
+        display: flex;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #ffffff;
+    }
+
+    /* 页面标题 */
+    .page-header {
+        background-color: #ffffff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .page-title {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .settings-btn {
+        width: 64rpx;
+        height: 64rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .settings-icon {
+        font-size: 40rpx;
+        color: #666666;
+    }
+
+    .content-scroll {
+        flex: 1;
+        height: 0;
+    }
+
+    /* 用户信息卡片 */
+    .user-card {
+        background-color: #e8f4fd;
+        margin: 20rpx 24rpx;
+        border-radius: 16rpx;
+        padding: 28rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .user-avatar-wrap {
+        margin-right: 24rpx;
+    }
+
+    .user-avatar {
+        width: 96rpx;
+        height: 96rpx;
+        border-radius: 48rpx;
+    }
+
+    .user-avatar-placeholder {
+        width: 96rpx;
+        height: 96rpx;
+        border-radius: 48rpx;
+        background-color: #ffffff;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .avatar-emoji {
+        font-size: 48rpx;
+    }
+
+    .user-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .user-name-row {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 8rpx;
+    }
+
+    .user-name {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-right: 12rpx;
+    }
+
+    .level-badge {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 4rpx 14rpx;
+    }
+
+    .level-text {
+        font-size: 22rpx;
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    .user-ip {
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    /* Tab 栏 */
+    .tab-bar {
+        flex-direction: row;
+        background-color: #ffffff;
+        border-bottom: 1rpx solid #eeeeee;
+    }
+
+    .tab-item {
+        flex: 1;
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
+        border-bottom: 4rpx solid transparent;
+    }
+
+    .tab-item.active {
+        border-bottom-color: #2979ff;
+    }
+
+    .tab-text {
+        font-size: 28rpx;
+        color: #666666;
+    }
+
+    .tab-text.active {
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    /* 子 Tab 栏 */
+    .sub-tab-bar {
+        flex-direction: row;
+        background-color: #ffffff;
+        border-bottom: 1rpx solid #eeeeee;
+        padding: 0 24rpx;
+    }
+
+    .sub-tab-item {
+        padding: 20rpx 32rpx;
+        align-items: center;
+        justify-content: center;
+        border-bottom: 4rpx solid transparent;
+    }
+
+    .sub-tab-item.active {
+        border-bottom-color: #2979ff;
+    }
+
+    .sub-tab-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .sub-tab-text.active {
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    /* 空状态 */
+    .empty-state {
+        align-items: center;
+        padding: 120rpx 0 80rpx;
+    }
+
+    .empty-hint {
+        font-size: 28rpx;
+        color: #999999;
+        margin-bottom: 32rpx;
+    }
+
+    .publish-btn {
+        background-color: #2979ff;
+        padding: 16rpx 48rpx;
+        border-radius: 32rpx;
+    }
+
+    .publish-btn-text {
+        font-size: 28rpx;
+        color: #ffffff;
+        font-weight: bold;
+    }
+
+    /* 列表区域 */
+    .list-section {
+        flex-direction: column;
+        padding: 16rpx 24rpx;
+    }
+
+    .topic-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        margin-bottom: 16rpx;
+        border: 1rpx solid #eeeeee;
+        flex-direction: column;
+    }
+
+    .topic-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        line-height: 1.4;
+        margin-bottom: 12rpx;
+    }
+
+    .topic-preview {
+        font-size: 26rpx;
+        color: #666666;
+        line-height: 1.5;
+        margin-bottom: 12rpx;
+    }
+
+    .reply-ref-title {
+        font-size: 26rpx;
+        color: #2979ff;
+        margin-bottom: 8rpx;
+        font-weight: bold;
+    }
+
+    .topic-footer {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .topic-stats {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .stat-text {
+        font-size: 22rpx;
+        color: #999999;
+        margin-right: 16rpx;
+    }
+
+    .tag-text {
+        font-size: 22rpx;
+        color: #2979ff;
+        background-color: #f0f5ff;
+        padding: 4rpx 12rpx;
+        border-radius: 8rpx;
+    }
+
+    .topic-time {
+        font-size: 22rpx;
+        color: #cccccc;
+    }
+
+    /* 加载更多 */
+    .loading-more {
+        align-items: center;
+        padding: 24rpx 0;
+    }
+
+    .loading-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
+</style>

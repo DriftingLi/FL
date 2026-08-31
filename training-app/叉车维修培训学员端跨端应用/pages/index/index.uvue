@@ -1,504 +1,364 @@
 <template>
-	<view class="welcome-page">
-		<!-- 背景光晕装饰 -->
-		<view class="glow glow-top"></view>
-		<view class="glow glow-bottom"></view>
+    <view class="welcome-page">
+        <!-- 背景光晕装饰 -->
+        <view class="glow glow-top"></view>
+        <view class="glow glow-bottom"></view>
 
-		<!-- 状态栏占位 -->
-		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <!-- 状态栏占位 -->
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
 
-		<!-- 顶部标签 -->
-		<view class="page-tag">
-			<text class="page-tag-text">欢迎页</text>
-		</view>
+        <!-- 顶部标签 -->
+        <view class="page-tag">
+            <text class="page-tag-text">欢迎页</text>
+        </view>
 
-		<!-- 中部品牌区 -->
-		<view class="brand">
-			<view class="logo-box">
-				<view class="forklift">
-					<!-- 门架 -->
-					<view class="mast-l"></view>
-					<view class="mast-r"></view>
-					<!-- 货叉（L 形） -->
-					<view class="fork-v"></view>
-					<view class="fork-h"></view>
-					<!-- 车身 -->
-					<view class="f-body"></view>
-					<view class="f-cab"></view>
-					<view class="f-window"></view>
-					<view class="f-exhaust"></view>
-					<!-- 车轮 -->
-					<view class="f-wheel f-wheel-back"></view>
-					<view class="f-wheel f-wheel-front"></view>
-					<view class="f-hub f-hub-back"></view>
-					<view class="f-hub f-hub-front"></view>
-				</view>
-			</view>
+        <!-- 中部品牌区 -->
+        <view class="brand">
+            <view class="logo-box">
+                <image src="/static/logo.png" mode="aspectFit" style="width: 176rpx; height: 140rpx;"></image>
+            </view>
 
-			<text class="title">叉车维修培训系统</text>
-			<text class="subtitle">专业维修技能成长平台</text>
-		</view>
+            <text class="title">叉车维修培训系统</text>
+            <text class="subtitle">专业维修技能成长平台</text>
+        </view>
 
-		<!-- 底部：吉祥物 + 入口 -->
-		<view class="footer">
-			<view class="mascot">
-				<view class="antenna-stick"></view>
-				<view class="antenna-ball"></view>
-				<view class="m-head">
-					<view class="m-face"></view>
-					<view class="m-ear m-ear-l"></view>
-					<view class="m-ear m-ear-r"></view>
-					<view class="m-eye m-eye-l"></view>
-					<view class="m-eye m-eye-r"></view>
-					<view class="m-eye-glow m-eye-glow-l"></view>
-					<view class="m-eye-glow m-eye-glow-r"></view>
-					<view class="m-mouth"></view>
-				</view>
-				<view class="m-body">
-					<view class="m-chest">
-						<text class="m-chest-text">C</text>
-					</view>
-				</view>
-				<view class="m-arm m-arm-l"></view>
-				<view class="m-arm m-arm-r"></view>
-				<view class="m-leg m-leg-l"></view>
-				<view class="m-leg m-leg-r"></view>
-			</view>
+        <!-- 底部：吉祥物 + 入口 -->
+        <view class="footer">
+            <view class="mascot">
+                <view class="antenna-stick"></view>
+                <view class="antenna-ball"></view>
+                <view class="m-head">
+                    <view class="m-face"></view>
+                    <view class="m-ear m-ear-l"></view>
+                    <view class="m-ear m-ear-r"></view>
+                    <view class="m-eye m-eye-l"></view>
+                    <view class="m-eye m-eye-r"></view>
+                    <view class="m-eye-glow m-eye-glow-l"></view>
+                    <view class="m-eye-glow m-eye-glow-r"></view>
+                    <view class="m-mouth"></view>
+                </view>
+                <view class="m-body">
+                    <view class="m-chest">
+                        <text class="m-chest-text">C</text>
+                    </view>
+                </view>
+                <view class="m-arm m-arm-l"></view>
+                <view class="m-arm m-arm-r"></view>
+                <view class="m-leg m-leg-l"></view>
+                <view class="m-leg m-leg-r"></view>
+            </view>
 
-			<button class="enter-btn" @click="goLogin">进入系统</button>
-		</view>
-	</view>
+            <button class="enter-btn" @click="goLogin">进入系统</button>
+        </view>
+    </view>
 </template>
 
 <script>
-	import { useAuthStore } from '../../stores/auth'
+    import { useAuthStore } from '../../stores/auth'
 
-	export default {
-		data() {
-			return {
-				statusBarHeight: 20
-			}
-		},
-		onLoad() {
-			const sysInfo = uni.getSystemInfoSync()
-			this.statusBarHeight = sysInfo.statusBarHeight
+    export default {
+        data() {
+            return {
+                statusBarHeight: 20
+            }
+        },
+        onLoad() {
+            const sysInfo = uni.getSystemInfoSync()
+            this.statusBarHeight = sysInfo.statusBarHeight
 
-			const auth = useAuthStore()
-			const restored = auth.restoreFromStorage()
-			console.log('[welcome] restored=', restored, 'isLoggedIn=', auth.isLoggedIn.value)
-			if (auth.isLoggedIn.value) {
-				console.log('[welcome] redirect to dashboard')
-				uni.reLaunch({
-					url: '/pages/dashboard/dashboard',
-					fail: (err) => {
-						console.error('[welcome] reLaunch to dashboard failed:', err)
-					}
-				})
-			}
-			// 未登录：停留在欢迎页，点击「进入系统」进入登录页
-		},
-		methods: {
-			goLogin() {
-				uni.navigateTo({
-					url: '/pages/login/login',
-					fail: (err) => {
-						console.error('[welcome] navigateTo login failed:', err)
-					}
-				})
-			}
-		}
-	}
+            const auth = useAuthStore()
+            const restored = auth.restoreFromStorage()
+            console.log('[welcome] restored=', restored, 'isLoggedIn=', auth.isLoggedIn.value)
+            if (auth.isLoggedIn.value) {
+                console.log('[welcome] redirect to dashboard')
+                uni.reLaunch({
+                    url: '/pages/dashboard/dashboard',
+                    fail: (err) => {
+                        console.error('[welcome] reLaunch to dashboard failed:', err)
+                    }
+                })
+            }
+
+            // 未登录：停留在欢迎页，点击「进入系统」进入登录页
+        },
+        methods: {
+            goLogin() {
+                uni.navigateTo({
+                    url: '/pages/login/login',
+                    fail: (err) => {
+                        console.error('[welcome] navigateTo login failed:', err)
+                    }
+                })
+            }
+        }
+    }
 </script>
 
 <style>
-	.welcome-page {
-		flex: 1;
-		flex-direction: column;
-		position: relative;
-		overflow: hidden;
-		background: linear-gradient(180deg, #0066FF 0%, #00CC99 100%);
-	}
+    .welcome-page {
+        flex: 1;
+        flex-direction: column;
+        position: relative;
+        overflow: hidden;
+        background: linear-gradient(180deg, #0066FF 0%, #00CC99 100%);
+    }
 
-	/* 背景光晕装饰 */
-	.glow {
-		position: absolute;
-		border-radius: 50%;
-	}
+    /* 背景光晕装饰 */
+    .glow {
+        position: absolute;
+        border-radius: 50%;
+    }
 
-	.glow-top {
-		width: 360rpx;
-		height: 360rpx;
-		top: -120rpx;
-		right: -110rpx;
-		background-color: rgba(255, 255, 255, 0.14);
-	}
+    .glow-top {
+        width: 360rpx;
+        height: 360rpx;
+        top: -120rpx;
+        right: -110rpx;
+        background-color: rgba(255, 255, 255, 0.14);
+    }
 
-	.glow-bottom {
-		width: 400rpx;
-		height: 400rpx;
-		bottom: -150rpx;
-		left: -130rpx;
-		background-color: rgba(255, 255, 255, 0.10);
-	}
+    .glow-bottom {
+        width: 400rpx;
+        height: 400rpx;
+        bottom: -150rpx;
+        left: -130rpx;
+        background-color: rgba(255, 255, 255, 0.10);
+    }
 
-	.status-bar {
-		background-color: transparent;
-	}
+    .status-bar {
+        background-color: transparent;
+    }
 
-	/* 顶部标签 */
-	.page-tag {
-		align-self: flex-start;
-		margin: 20rpx 0 0 40rpx;
-		padding: 10rpx 28rpx;
-		border-radius: 999rpx;
-		background-color: rgba(255, 255, 255, 0.20);
-		align-items: center;
-		justify-content: center;
-	}
+    /* 顶部标签 */
+    .page-tag {
+        align-self: flex-start;
+        margin: 20rpx 0 0 40rpx;
+        padding: 10rpx 28rpx;
+        border-radius: 999rpx;
+        background-color: rgba(255, 255, 255, 0.20);
+        align-items: center;
+        justify-content: center;
+    }
 
-	.page-tag-text {
-		font-size: 24rpx;
-		color: rgba(255, 255, 255, 0.95);
-		text-align: center;
-	}
+    .page-tag-text {
+        font-size: 24rpx;
+        color: rgba(255, 255, 255, 0.95);
+        text-align: center;
+    }
 
-	/* 中部品牌区 */
-	.brand {
-		flex: 1;
-		align-items: center;
-		justify-content: center;
-		flex-direction: column;
-		padding-top: 40rpx;
-	}
+    /* 中部品牌区 */
+    .brand {
+        flex: 1;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        padding-top: 40rpx;
+    }
 
-	.logo-box {
-		position: relative;
-		width: 176rpx;
-		height: 176rpx;
-		border-radius: 40rpx;
-		background-color: #ffffff;
-		box-shadow: 0 16rpx 40rpx rgba(8, 90, 120, 0.35);
-	}
+    .logo-box {
+        position: relative;
+        width: 176rpx;
+        height: 176rpx;
+        border-radius: 40rpx;
+        background-color: #ffffff;
+        box-shadow: 0 16rpx 40rpx rgba(8, 90, 120, 0.35);
+    }
 
-	/* 纯 view 绘制的叉车 logo（坐标系 0-176rpx） */
-	.forklift {
-		position: absolute;
-		left: 0;
-		top: 0;
-		width: 176rpx;
-		height: 176rpx;
-	}
+    .title {
+        margin-top: 40rpx;
+        font-size: 48rpx;
+        font-weight: bold;
+        color: #ffffff;
+        text-align: center;
+    }
 
-	.mast-l {
-		position: absolute;
-		left: 92rpx;
-		top: 26rpx;
-		width: 10rpx;
-		height: 92rpx;
-		border-radius: 5rpx;
-		background-color: #16A34A;
-	}
+    .subtitle {
+        margin-top: 18rpx;
+        font-size: 27rpx;
+        color: #CCCCCC;
+        text-align: center;
+    }
 
-	.mast-r {
-		position: absolute;
-		left: 108rpx;
-		top: 26rpx;
-		width: 10rpx;
-		height: 92rpx;
-		border-radius: 5rpx;
-		background-color: #22C55E;
-	}
+    /* 底部：吉祥物 + 入口 */
+    .footer {
+        align-items: center;
+        flex-direction: column;
+        padding-bottom: 90rpx;
+    }
 
-	.fork-v {
-		position: absolute;
-		left: 92rpx;
-		top: 78rpx;
-		width: 10rpx;
-		height: 42rpx;
-		background-color: #15803D;
-	}
+    /* 纯 view 绘制的机器人吉祥物（坐标系 0-190rpx 宽 / 0-210rpx 高） */
+    .mascot {
+        position: relative;
+        width: 190rpx;
+        height: 210rpx;
+    }
 
-	.fork-h {
-		position: absolute;
-		left: 92rpx;
-		top: 116rpx;
-		width: 62rpx;
-		height: 10rpx;
-		border-radius: 5rpx;
-		background-color: #15803D;
-	}
+    .antenna-stick {
+        position: absolute;
+        left: 91rpx;
+        top: 6rpx;
+        width: 8rpx;
+        height: 24rpx;
+        border-radius: 4rpx;
+        background-color: #22C55E;
+    }
 
-	.f-body {
-		position: absolute;
-		left: 14rpx;
-		top: 58rpx;
-		width: 72rpx;
-		height: 36rpx;
-		border-radius: 10rpx;
-		background-color: #22C55E;
-	}
+    .antenna-ball {
+        position: absolute;
+        left: 86rpx;
+        top: 0rpx;
+        width: 18rpx;
+        height: 18rpx;
+        border-radius: 50%;
+        background-color: #4ADE80;
+    }
 
-	.f-cab {
-		position: absolute;
-		left: 30rpx;
-		top: 26rpx;
-		width: 42rpx;
-		height: 38rpx;
-		border-radius: 10rpx;
-		background-color: #16A34A;
-	}
+    .m-head {
+        position: absolute;
+        left: 55rpx;
+        top: 30rpx;
+        width: 80rpx;
+        height: 64rpx;
+        border-radius: 32rpx;
+        background-color: #FFFFFF;
+        box-shadow: 0 4rpx 14rpx rgba(8, 90, 120, 0.28);
+    }
 
-	.f-window {
-		position: absolute;
-		left: 38rpx;
-		top: 34rpx;
-		width: 22rpx;
-		height: 22rpx;
-		border-radius: 6rpx;
-		background-color: rgba(255, 255, 255, 0.45);
-	}
+    /* 脸部显示屏（深蓝屏幕，置于白色圆头内底部） */
+    .m-face {
+        position: absolute;
+        left: 63rpx;
+        top: 44rpx;
+        width: 64rpx;
+        height: 40rpx;
+        border-radius: 22rpx;
+        background-color: #1E3A8A;
+    }
 
-	.f-exhaust {
-		position: absolute;
-		left: 18rpx;
-		top: 52rpx;
-		width: 10rpx;
-		height: 10rpx;
-		border-radius: 5rpx;
-		background-color: #4ADE80;
-	}
+    .m-ear {
+        position: absolute;
+        top: 46rpx;
+        width: 12rpx;
+        height: 28rpx;
+        border-radius: 6rpx;
+        background-color: #3B82F6;
+    }
 
-	.f-wheel {
-		position: absolute;
-		width: 26rpx;
-		height: 26rpx;
-		border-radius: 50%;
-		background-color: #14532D;
-	}
+    .m-ear-l {
+        left: 43rpx;
+    }
 
-	.f-wheel-back {
-		left: 24rpx;
-		top: 92rpx;
-	}
+    .m-ear-r {
+        left: 135rpx;
+    }
 
-	.f-wheel-front {
-		left: 60rpx;
-		top: 92rpx;
-	}
+    /* 眼：青色发光圆形 */
+    .m-eye {
+        position: absolute;
+        top: 56rpx;
+        width: 13rpx;
+        height: 13rpx;
+        border-radius: 50%;
+        background-color: #22D3EE;
+        box-shadow: 0 0 10rpx #67E8F9;
+    }
 
-	.f-hub {
-		position: absolute;
-		width: 10rpx;
-		height: 10rpx;
-		border-radius: 50%;
-		background-color: #86EFAC;
-	}
+    .m-eye-l {
+        left: 76rpx;
+    }
 
-	.f-hub-back {
-		left: 32rpx;
-		top: 100rpx;
-	}
+    .m-eye-r {
+        left: 101rpx;
+    }
 
-	.f-hub-front {
-		left: 68rpx;
-		top: 100rpx;
-	}
+    /* 微笑嘴：浅蓝弧 */
+    .m-mouth {
+        position: absolute;
+        left: 85rpx;
+        top: 80rpx;
+        width: 18rpx;
+        height: 8rpx;
+        border-radius: 50% 50% 8rpx 8rpx;
+        background-color: #93C5FD;
+    }
 
-	.title {
-		margin-top: 40rpx;
-		font-size: 48rpx;
-		font-weight: bold;
-		color: #ffffff;
-		text-align: center;
-	}
+    .m-body {
+        position: absolute;
+        left: 62rpx;
+        top: 98rpx;
+        width: 66rpx;
+        height: 66rpx;
+        border-radius: 22rpx;
+        background-color: #FFFFFF;
+        box-shadow: 0 4rpx 14rpx rgba(8, 90, 120, 0.22);
+    }
 
-	.subtitle {
-		margin-top: 18rpx;
-		font-size: 27rpx;
-		color: #CCCCCC;
-		text-align: center;
-	}
+    .m-chest {
+        position: absolute;
+        left: 76rpx;
+        top: 110rpx;
+        width: 38rpx;
+        height: 38rpx;
+        border-radius: 50%;
+        background-color: #FFFFFF;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2rpx 8rpx rgba(8, 90, 120, 0.18);
+    }
 
-	/* 底部：吉祥物 + 入口 */
-	.footer {
-		align-items: center;
-		flex-direction: column;
-		padding-bottom: 90rpx;
-	}
+    .m-chest-text {
+        font-size: 24rpx;
+        font-weight: bold;
+        color: #15803D;
+    }
 
-	/* 纯 view 绘制的机器人吉祥物（坐标系 0-190rpx 宽 / 0-210rpx 高） */
-	.mascot {
-		position: relative;
-		width: 190rpx;
-		height: 210rpx;
-	}
+    .m-arm {
+        position: absolute;
+        top: 104rpx;
+        width: 20rpx;
+        height: 44rpx;
+        border-radius: 10rpx;
+        background-color: #3B82F6;
+    }
 
-	.antenna-stick {
-		position: absolute;
-		left: 91rpx;
-		top: 6rpx;
-		width: 8rpx;
-		height: 24rpx;
-		border-radius: 4rpx;
-		background-color: #22C55E;
-	}
+    .m-arm-l {
+        left: 40rpx;
+    }
 
-	.antenna-ball {
-		position: absolute;
-		left: 86rpx;
-		top: 0rpx;
-		width: 18rpx;
-		height: 18rpx;
-		border-radius: 50%;
-		background-color: #4ADE80;
-	}
+    .m-arm-r {
+        left: 130rpx;
+    }
 
-	.m-head {
-		position: absolute;
-		left: 55rpx;
-		top: 30rpx;
-		width: 80rpx;
-		height: 64rpx;
-		border-radius: 32rpx;
-		background-color: #FFFFFF;
-		box-shadow: 0 4rpx 14rpx rgba(8, 90, 120, 0.28);
-	}
+    .m-leg {
+        position: absolute;
+        top: 164rpx;
+        width: 18rpx;
+        height: 22rpx;
+        border-radius: 9rpx;
+        background-color: #2563EB;
+    }
 
-	/* 脸部显示屏（深蓝屏幕，置于白色圆头内底部） */
-	.m-face {
-		position: absolute;
-		left: 63rpx;
-		top: 44rpx;
-		width: 64rpx;
-		height: 40rpx;
-		border-radius: 22rpx;
-		background-color: #1E3A8A;
-	}
+    .m-leg-l {
+        left: 76rpx;
+    }
 
-	.m-ear {
-		position: absolute;
-		top: 46rpx;
-		width: 12rpx;
-		height: 28rpx;
-		border-radius: 6rpx;
-		background-color: #3B82F6;
-	}
+    .m-leg-r {
+        left: 96rpx;
+    }
 
-	.m-ear-l {
-		left: 43rpx;
-	}
-
-	.m-ear-r {
-		left: 135rpx;
-	}
-
-	/* 眼：青色发光圆形 */
-	.m-eye {
-		position: absolute;
-		top: 56rpx;
-		width: 13rpx;
-		height: 13rpx;
-		border-radius: 50%;
-		background-color: #22D3EE;
-		box-shadow: 0 0 10rpx #67E8F9;
-	}
-
-	.m-eye-l {
-		left: 76rpx;
-	}
-
-	.m-eye-r {
-		left: 101rpx;
-	}
-
-	/* 微笑嘴：浅蓝弧 */
-	.m-mouth {
-		position: absolute;
-		left: 85rpx;
-		top: 80rpx;
-		width: 18rpx;
-		height: 8rpx;
-		border-radius: 50% 50% 8rpx 8rpx;
-		background-color: #93C5FD;
-	}
-
-	.m-body {
-		position: absolute;
-		left: 62rpx;
-		top: 98rpx;
-		width: 66rpx;
-		height: 66rpx;
-		border-radius: 22rpx;
-		background-color: #FFFFFF;
-		box-shadow: 0 4rpx 14rpx rgba(8, 90, 120, 0.22);
-	}
-
-	.m-chest {
-		position: absolute;
-		left: 76rpx;
-		top: 110rpx;
-		width: 38rpx;
-		height: 38rpx;
-		border-radius: 50%;
-		background-color: #FFFFFF;
-		align-items: center;
-		justify-content: center;
-		box-shadow: 0 2rpx 8rpx rgba(8, 90, 120, 0.18);
-	}
-
-	.m-chest-text {
-		font-size: 24rpx;
-		font-weight: bold;
-		color: #15803D;
-	}
-
-	.m-arm {
-		position: absolute;
-		top: 104rpx;
-		width: 20rpx;
-		height: 44rpx;
-		border-radius: 10rpx;
-		background-color: #3B82F6;
-	}
-
-	.m-arm-l {
-		left: 40rpx;
-	}
-
-	.m-arm-r {
-		left: 130rpx;
-	}
-
-	.m-leg {
-		position: absolute;
-		top: 164rpx;
-		width: 18rpx;
-		height: 22rpx;
-		border-radius: 9rpx;
-		background-color: #2563EB;
-	}
-
-	.m-leg-l {
-		left: 76rpx;
-	}
-
-	.m-leg-r {
-		left: 96rpx;
-	}
-
-	/* 进入按钮 */
-	.enter-btn {
-		margin-top: 56rpx;
-		width: 420rpx;
-		height: 92rpx;
-		line-height: 92rpx;
-		border-radius: 999rpx;
-		background-color: #ffffff;
-		color: #1E9FFF;
-		font-size: 32rpx;
-		font-weight: bold;
-		text-align: center;
-		border: none;
-		box-shadow: 0 12rpx 30rpx rgba(8, 90, 120, 0.35);
-	}
+    /* 进入按钮 */
+    .enter-btn {
+        margin-top: 56rpx;
+        width: 420rpx;
+        height: 92rpx;
+        line-height: 92rpx;
+        border-radius: 999rpx;
+        background-color: #ffffff;
+        color: #1E9FFF;
+        font-size: 32rpx;
+        font-weight: bold;
+        text-align: center;
+        border: none;
+        box-shadow: 0 12rpx 30rpx rgba(8, 90, 120, 0.35);
+    }
 </style>

@@ -1,0 +1,106 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">上传资源</text>
+            <view class="header-right"></view>
+        </view>
+        <scroll-view class="content-scroll" scroll-y="true">
+            <view class="form-section">
+                <view class="form-item">
+                    <text class="form-label">资源标题</text>
+                    <input class="form-input" placeholder="请输入资源标题" v-model="title" />
+                </view>
+                <view class="form-item">
+                    <text class="form-label">资源描述</text>
+                    <textarea class="form-textarea" placeholder="请输入资源描述" v-model="description" />
+                </view>
+                <view class="form-item">
+                    <text class="form-label">选择文件</text>
+                    <view class="upload-area" @click="onChooseFile">
+                        <text v-if="fileName.length == 0" class="upload-area-text">点击选择文件</text>
+                        <text v-else class="upload-area-filename">{{ fileName }}</text>
+                    </view>
+                </view>
+                <view class="submit-btn" @click="onSubmit">
+                    <text class="submit-btn-text">提交上传</text>
+                </view>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref } from 'vue'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+    const title = ref<string>('')
+    const description = ref<string>('')
+    const fileName = ref<string>('')
+    const filePath = ref<string>('')
+
+    function onChooseFile() : void {
+        // #ifdef MP-WEIXIN
+        uni.chooseMessageFile({
+            count: 1,
+            type: 'file',
+            success: (res) => {
+                if (res.tempFiles.length > 0) {
+                    fileName.value = res.tempFiles[0].name
+                    filePath.value = res.tempFiles[0].path
+                }
+            }
+        })
+        // #endif
+        // #ifndef MP-WEIXIN
+        uni.chooseImage({
+            count: 1,
+            sourceType: ['album', 'camera'],
+            success: (res) => {
+                if (res.tempFilePaths.length > 0) {
+                    const fp = res.tempFilePaths[0]
+                    // 从路径中提取文件名
+                    const parts = fp.split('/')
+                    fileName.value = parts[parts.length - 1]
+                    filePath.value = fp
+                }
+            }
+        })
+        // #endif
+    }
+
+    function onSubmit() : void {
+        if (title.value.length == 0) { uni.showToast({ title: '请输入资源标题', icon: 'none' }); return }
+        if (filePath.value.length == 0) { uni.showToast({ title: '请选择文件', icon: 'none' }); return }
+        uni.showToast({ title: '上传功能开发中', icon: 'none' })
+    }
+
+    function onBack() : void { goBack() }
+</script>
+
+<style>
+    .container { flex: 1; background-color: #f5f5f5; flex-direction: column; }
+    .status-bar { background-color: #2979ff; }
+    .header { background-color: #2979ff; padding: 16rpx 32rpx; flex-direction: row; align-items: center; justify-content: space-between; }
+    .header-left { width: 80rpx; align-items: center; }
+    .back-icon { font-size: 48rpx; color: #ffffff; }
+    .header-title { flex: 1; font-size: 36rpx; font-weight: bold; color: #ffffff; text-align: center; }
+    .header-right { width: 80rpx; }
+    .content-scroll { flex: 1; }
+    .form-section { padding: 32rpx; }
+    .form-item { background-color: #ffffff; border-radius: 16rpx; padding: 24rpx; margin-bottom: 20rpx; }
+    .form-label { font-size: 28rpx; font-weight: 500; color: #333333; margin-bottom: 16rpx; }
+    .form-input { font-size: 28rpx; color: #333333; padding: 16rpx; background-color: #f5f5f5; border-radius: 8rpx; }
+    .form-textarea { font-size: 28rpx; color: #333333; padding: 16rpx; background-color: #f5f5f5; border-radius: 8rpx; height: 200rpx; }
+    .upload-area { padding: 40rpx; border: 2rpx dashed #cccccc; border-radius: 12rpx; align-items: center; justify-content: center; background-color: #fafafa; }
+    .upload-area-text { font-size: 28rpx; color: #999999; }
+    .upload-area-filename { font-size: 28rpx; color: #2979ff; }
+    .submit-btn { background-color: #2979ff; border-radius: 44rpx; height: 88rpx; align-items: center; justify-content: center; margin-top: 32rpx; }
+    .submit-btn-text { font-size: 32rpx; font-weight: bold; color: #ffffff; }
+</style>

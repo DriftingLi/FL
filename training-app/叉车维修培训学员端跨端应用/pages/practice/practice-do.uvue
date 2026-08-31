@@ -1,12 +1,17 @@
 <template>
-    <view class="container" :style="{ height: windowHeight + 'px' }">
+    <view class="page" :style="{ height: windowHeight + 'px' }">
         <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
+
+        <!-- 顶部导航栏 -->
+        <view class="nav-bar">
+            <view class="nav-left" @click="onBack">
+                <text class="nav-back">‹</text>
             </view>
-            <text class="header-title">{{ modeTitle }}</text>
-            <view class="header-right"></view>
+            <view class="nav-center">
+                <text class="nav-timer">⏱ {{ timerText }}</text>
+                <text class="nav-progress">{{ currentIndex + 1 }}/{{ questions.length }}</text>
+            </view>
+            <view class="nav-right"></view>
         </view>
 
         <!-- 加载中 -->
@@ -21,73 +26,177 @@
 
         <!-- 答题区域 -->
         <scroll-view v-else class="content-scroll" scroll-y="true">
-            <!-- 进度条 -->
-            <view class="progress-section">
-                <view class="progress-bar-wrap">
-                    <view class="progress-bar" :style="{ width: progressPercent + '%' }"></view>
-                </view>
-                <text class="progress-text">{{ currentIndex + 1 }} / {{ questions.length }}</text>
-            </view>
-
-            <!-- 题目卡片 -->
-            <view class="question-card">
-                <view class="question-header">
+            <!-- 题目区域 -->
+            <view class="question-section">
+                <view class="question-type-row">
                     <text class="question-type-tag">{{ getTypeName(currentQuestion.type) }}</text>
-                    <text class="question-index">第 {{ currentIndex + 1 }} 题</text>
                 </view>
                 <text class="question-title">{{ currentQuestion.title }}</text>
+            </view>
 
-                <!-- 选项列表 -->
-                <view class="option-list">
-                    <view v-for="(opt, idx) in currentQuestion.options" :key="idx"
-                        class="option-item"
-                        :class="getOptionClass(opt.key)"
-                        @click="onOptionClick(opt.key)">
-                        <view class="option-key" :class="getOptionKeyClass(opt.key)">
-                            <text class="option-key-text">{{ opt.key }}</text>
+            <!-- 选项列表 -->
+            <view class="option-list">
+                <view v-for="(opt, idx) in currentQuestion.options" :key="idx"
+                    class="option-item"
+                    :class="getOptionClass(opt.key)"
+                    @click="onOptionClick(opt.key)">
+                    <view class="option-key" :class="getOptionKeyClass(opt.key)">
+                        <text v-if="showResult && isCorrectAnswer(opt.key)" class="option-key-icon">✓</text>
+                        <text v-else-if="showResult && isSelected(opt.key) && !isCorrectAnswer(opt.key)" class="option-key-icon">✗</text>
+                        <text v-else class="option-key-text">{{ opt.key }}</text>
+                    </view>
+                    <text class="option-text" :class="getOptionTextClass(opt.key)">{{ opt.text }}</text>
+                </view>
+            </view>
+
+            <!-- 答题结果区域 -->
+            <view v-if="showResult" class="result-section">
+                <!-- 答案对比 -->
+                <view class="result-answer-box">
+                    <text class="result-answer-line">正确答案是 <text class="result-correct-text">{{ lastResult.correct_answer }}</text>，您的答案是 <text :class="lastResult.correct ? 'result-correct-text' : 'result-wrong-text'">{{ lastUserAnswer.length > 0 ? lastUserAnswer : '未作答' }}</text></text>
+                </view>
+
+                <!-- 统计数据行 -->
+                <view class="stats-row">
+                    <view class="stats-item">
+                        <text class="stats-label">做题时长</text>
+                        <text class="stats-value">{{ questionTimeText }}</text>
+                    </view>
+                    <view class="stats-divider"></view>
+                    <view class="stats-item">
+                        <text class="stats-label">全站正确率</text>
+                        <text class="stats-value">{{ siteAccuracy }}%</text>
+                    </view>
+                    <view class="stats-divider"></view>
+                    <view class="stats-item">
+                        <text class="stats-label">难度值</text>
+                        <text class="stats-value">{{ difficultyLevel }}</text>
+                    </view>
+                </view>
+
+                <!-- AI 解析 -->
+                <view class="section-block">
+                    <view class="section-header">
+                        <text class="section-title">AI 解析</text>
+                        <view class="section-action" @click="onShareExplanation">
+                            <text class="section-action-text">分享解析</text>
                         </view>
-                        <text class="option-text">{{ opt.text }}</text>
-                        <text v-if="showResult && isSelected(opt.key)" class="option-mark">
-                            {{ isSelected(opt.key) ? (isCorrectAnswer(opt.key) ? '✓' : '✗') : '' }}
-                        </text>
+                    </view>
+                    <text v-if="lastResult.explanation.length > 0" class="section-content">{{ lastResult.explanation }}</text>
+                    <text v-else class="section-empty">暂无解析</text>
+                </view>
+
+                <!-- 评论 -->
+                <view class="section-block">
+                    <view class="section-header">
+                        <text class="section-title">评论</text>
+                        <view class="section-action" @click="toggleComments">
+                            <text class="section-action-text">{{ showComments ? '收起' : '查看所有评论' }}</text>
+                        </view>
+                    </view>
+                    <view v-if="showComments">
+                        <view v-for="(c, idx) in comments" :key="idx" class="comment-item">
+                            <view class="comment-head">
+                                <text class="comment-author">{{ c.username }}</text>
+                                <text class="comment-time">{{ formatTime(c.created_at) }}</text>
+                                <view v-if="c.can_delete" class="comment-delete" @click="onDeleteComment(c)">
+                                    <text class="comment-delete-text">删除</text>
+                                </view>
+                            </view>
+                            <text class="comment-content">{{ c.content }}</text>
+                        </view>
+                        <view v-if="comments.length == 0" class="section-empty-wrap">
+                            <text class="section-empty-text">暂无评论，快来抢沙发吧~</text>
+                        </view>
+                        <view class="comment-input-bar">
+                            <input class="comment-input" v-model="commentText" placeholder="写下你的评论..." maxlength="500" />
+                            <view class="comment-send-btn" :class="commentText.length > 0 ? 'active' : ''" @click="onSubmitComment">
+                                <text class="comment-send-text">发表</text>
+                            </view>
+                        </view>
                     </view>
                 </view>
 
-                <!-- 答案解析 -->
-                <view v-if="showResult" class="result-section">
-                    <view class="result-header" :class="{ correct: lastResult.correct, wrong: !lastResult.correct }">
-                        <text class="result-label">{{ lastResult.correct ? '回答正确' : '回答错误' }}</text>
+                <!-- 考点 -->
+                <view class="section-block">
+                    <view class="section-header">
+                        <text class="section-title">考点</text>
                     </view>
-                    <view class="result-answer">
-                        <text class="result-answer-label">我的答案：</text>
-                        <text class="result-answer-value" :class="{ 'answer-wrong-text': !lastResult.correct }">{{ lastUserAnswer.length > 0 ? lastUserAnswer : '未作答' }}</text>
+                    <view v-if="knowledgeTags.length > 0" class="tag-row">
+                        <view v-for="tag in knowledgeTags" :key="tag.id" class="knowledge-tag">
+                            <text class="knowledge-tag-text">{{ tag.name }}</text>
+                        </view>
                     </view>
-                    <view class="result-answer">
-                        <text class="result-answer-label">正确答案：</text>
-                        <text class="result-answer-value">{{ lastResult.correct_answer }}</text>
+                    <text v-else class="section-empty">暂无考点信息</text>
+                </view>
+
+                <!-- 笔记 -->
+                <view class="section-block">
+                    <view class="section-header">
+                        <text class="section-title">笔记</text>
+                        <view class="section-action" @click="toggleNote">
+                            <text class="section-action-text">{{ showNote ? '收起' : (noteContent.length > 0 ? '查看笔记' : '添加笔记') }}</text>
+                        </view>
                     </view>
-                    <view v-if="isLocalMatch && !lastResult.correct" class="result-hint">
-                        <text class="result-hint-text">提示：选项内容一致，可能因答案格式差异被判错</text>
-                    </view>
-                    <view v-if="lastResult.explanation.length > 0" class="result-explanation">
-                        <text class="explanation-label">解析：</text>
-                        <text class="explanation-text">{{ lastResult.explanation }}</text>
+                    <view v-if="showNote" class="note-area">
+                        <textarea class="note-textarea" v-model="noteContent" placeholder="记录你的学习心得..." maxlength="2000" @blur="onSaveNote" />
+                        <view v-if="noteContent.length > 0" class="note-actions">
+                            <view class="note-delete-btn" @click="onDeleteNote">
+                                <text class="note-delete-text">删除笔记</text>
+                            </view>
+                            <text class="note-autosave">自动保存</text>
+                        </view>
                     </view>
                 </view>
             </view>
 
-            <!-- 操作按钮 -->
-            <view class="action-bar">
-                <view v-if="!showResult" class="action-btn submit-btn" @click="onSubmit">
-                    <text class="action-btn-text">提交答案</text>
-                </view>
-                <view v-else class="action-btn next-btn" @click="onNext">
-                    <text class="action-btn-text">{{ currentIndex >= questions.length - 1 ? '查看结果' : '下一题' }}</text>
-                </view>
-            </view>
+            <!-- 底部占位 -->
+            <view class="bottom-placeholder"></view>
         </scroll-view>
 
-        <!-- 结果汇总 -->
+        <!-- 底部操作栏 -->
+        <view v-if="questions.length > 0" class="bottom-bar">
+            <view class="bottom-actions">
+                <view class="bottom-icon-btn" @click="onToggleAnswerCard">
+                    <image class="bottom-icon-img" src="/static/icons/answer-card.png" mode="aspectFit" />
+                    <text class="bottom-icon-label">答题卡</text>
+                </view>
+                <view class="bottom-icon-btn" @click="onToggleFavorite">
+                    <image class="bottom-icon-img" :src="isFavorited ? '/static/icons/star-filled.png' : '/static/icons/star.png'" mode="aspectFit" />
+                    <text class="bottom-icon-label">{{ isFavorited ? '已收藏' : '收藏' }}</text>
+                </view>
+                <view v-if="!showResult" class="submit-btn" @click="onSubmit">
+                    <text class="submit-btn-text">提交答案</text>
+                </view>
+                <view v-else class="submit-btn next-btn" @click="onNext">
+                    <text class="submit-btn-text">{{ currentIndex >= questions.length - 1 ? '查看结果' : '下一题' }}</text>
+                </view>
+            </view>
+        </view>
+
+        <!-- 答题卡弹窗 -->
+        <view v-if="showAnswerCard" class="answer-card-mask" @click="onCloseAnswerCard">
+            <view class="answer-card-sheet" @click.stop>
+                <view class="answer-card-header">
+                    <text class="answer-card-title">答题卡</text>
+                </view>
+                <view class="answer-card-grid">
+                    <view v-for="(q, idx) in questions" :key="idx"
+                        class="answer-card-item"
+                        :class="getAnswerCardClass(idx)"
+                        @click="onJumpToQuestion(idx)">
+                        <text class="answer-card-num" :class="getAnswerCardNumClass(idx)">{{ idx + 1 }}</text>
+                    </view>
+                </view>
+                <view class="answer-card-footer">
+                    <view class="submit-paper-btn" @click="onSubmitPaper">
+                        <text class="submit-paper-text">交卷</text>
+                    </view>
+                </view>
+            </view>
+        </view>
+
+        <!-- 结果汇总弹窗 -->
         <view v-if="showSummary" class="summary-mask">
             <view class="summary-box">
                 <text class="summary-title">练习完成</text>
@@ -111,10 +220,10 @@
                 </view>
                 <view class="summary-actions">
                     <view class="summary-btn summary-btn-secondary" @click="onExit">
-                        <text class="summary-btn-text">返回</text>
+                        <text class="summary-btn-secondary-text">返回</text>
                     </view>
                     <view class="summary-btn summary-btn-primary" @click="onRestart">
-                        <text class="summary-btn-text">再练一次</text>
+                        <text class="summary-btn-primary-text">再练一次</text>
                     </view>
                 </view>
             </view>
@@ -130,23 +239,37 @@
     import {
         getFreePracticeApi,
         getSequentialPracticeApi,
-        getCategoryPracticeApi,
-        getKnowledgePointPracticeApi,
+        getTagPracticeApi,
         submitAnswerApi,
         savePracticeProgressApi,
     } from '../../api/practice'
-    import type { Question, SubmitAnswerResult, AnswerState, QuestionOption, SubmitAnswerParams } from '../../types/index'
+    import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../api/favorite'
+    import {
+        getCommentsApi, createCommentApi, deleteCommentApi,
+        getKnowledgeApi,
+        getNoteApi, saveNoteApi, deleteNoteApi,
+    } from '../../api/questionInteraction'
+    import { useAuthStore } from '../../stores/auth'
+    import type { Question, SubmitAnswerResult, AnswerState, QuestionOption, SubmitAnswerParams, FavoriteCheckResult, QuestionComment, KnowledgeTag } from '../../types/index'
+
+    const authStore = useAuthStore()
+
+    /** 当前用户 ID */
+    const currentUserId = computed<number>(() : number => {
+        const u = authStore.user.value
+        if (u != null) return u.user_id
+        return 0
+    })
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     // 页面参数
-    const mode = ref<string>('free')          // free / sequential / category / knowledge_point
-    const practiceCount = ref<number>(20)      // 随机练习题量
-    const categoryCode = ref<string>('')       // 章节练习分类
-    const knowledgePointId = ref<number>(0)    // 知识点练习 ID
-    const knowledgePointName = ref<string>('') // 知识点名称
-    const isContinue = ref<boolean>(false)     // 顺序练习续练
+    const mode = ref<string>('free')
+    const practiceCount = ref<number>(20)
+    const tagId = ref<number>(0)
+    const tagName = ref<string>('')
+    const isContinue = ref<boolean>(false)
 
     // 题目与状态
     const questions = ref<Question[]>([])
@@ -154,8 +277,11 @@
     const loading = ref<boolean>(false)
     const showResult = ref<boolean>(false)
     const showSummary = ref<boolean>(false)
+    const showAnswerCard = ref<boolean>(false)
+    const isFavorited = ref<boolean>(false)
+    const favoriteId = ref<number>(0)
 
-    // 当前选中的答案（单选为字符串，多选为字母拼接）
+    // 答案状态
     const selectedKeys = ref<string[]>([])
     const answerStates = ref<AnswerState[]>([])
     const lastUserAnswer = ref<string>('')
@@ -165,6 +291,29 @@
         explanation: '',
     } as SubmitAnswerResult)
 
+    // 计时器
+    const totalSeconds = ref<number>(0)
+    const questionStartTime = ref<number>(0)
+    const questionElapsed = ref<number>(0)
+    let timerInterval : any = null
+
+    // 评论状态
+    const showComments = ref<boolean>(false)
+    const comments = ref<QuestionComment[]>([])
+    const commentText = ref<string>('')
+
+    // 考点状态
+    const knowledgeTags = ref<KnowledgeTag[]>([])
+
+    // 笔记状态
+    const showNote = ref<boolean>(false)
+    const noteContent = ref<string>('')
+    let noteSaveTimer : any = null
+
+    // 模拟数据（实际应从后端获取）
+    const siteAccuracy = ref<number>(85)
+    const difficultyLevel = ref<string>('C')
+
     const currentQuestion = computed<Question>(() : Question => {
         if (questions.value.length == 0) {
             return { question_id: 0, type: '', title: '', options: [] as QuestionOption[], correct_answer: '', explanation: '' } as Question
@@ -172,17 +321,18 @@
         return questions.value[currentIndex.value]
     })
 
-    const progressPercent = computed<number>(() : number => {
-        if (questions.value.length == 0) return 0
-        return Math.floor((currentIndex.value + 1) * 100 / questions.value.length)
+    const timerText = computed<string>(() : string => {
+        const m = Math.floor(totalSeconds.value / 60)
+        const s = totalSeconds.value % 60
+        const mStr = m < 10 ? '0' + `${m}` : `${m}`
+        const sStr = s < 10 ? '0' + `${s}` : `${s}`
+        return mStr + ':' + sStr
     })
 
-    const modeTitle = computed<string>(() : string => {
-        if (mode.value == 'free') return '随机练习'
-        if (mode.value == 'sequential') return '顺序练习'
-        if (mode.value == 'category') return '章节练习'
-        if (mode.value == 'knowledge_point') return '专项练习'
-        return '题库练习'
+    const questionTimeText = computed<string>(() : string => {
+        const t = questionElapsed.value
+        if (t < 1) return '< 1秒'
+        return `${t}` + '秒'
     })
 
     const correctCount = computed<number>(() : number => {
@@ -214,12 +364,9 @@
         return selectedKeys.value.indexOf(key) >= 0
     }
 
-    /** 将正确答案字符串解析为 key 数组，兼容多种分隔符 */
     function parseAnswerKeys(answer : string) : string[] {
         if (answer.length == 0) return [] as string[]
-        // 判断题答案不拆分
         if (answer == 'true' || answer == 'false') return [answer] as string[]
-        // 尝试按常见分隔符拆分
         let separator = ''
         if (answer.indexOf(',') >= 0) separator = ','
         else if (answer.indexOf('，') >= 0) separator = '，'
@@ -235,7 +382,6 @@
             }
             return keys
         }
-        // 无分隔符，按字符拆分（多选题如 "ABC" → ["A","B","C"]）
         const keys : string[] = []
         for (let i = 0; i < answer.length; i++) {
             keys.push(answer.charAt(i))
@@ -248,24 +394,10 @@
         return keys.indexOf(key) >= 0
     }
 
-    /** 本地比对：用户答案与正确答案的 key 集合是否一致（排序后比较） */
-    const isLocalMatch = computed<boolean>(() : boolean => {
-        if (!showResult.value) return false
-        if (lastResult.value.correct) return false
-        const correctKeys = parseAnswerKeys(lastResult.value.correct_answer)
-        const userKeys = parseAnswerKeys(lastUserAnswer.value)
-        if (correctKeys.length != userKeys.length) return false
-        if (correctKeys.length == 0) return false
-        const sortedCorrect = correctKeys.slice().sort().join('')
-        const sortedUser = userKeys.slice().sort().join('')
-        return sortedCorrect == sortedUser
-    })
-
     function getOptionClass(key : string) : string {
         if (!showResult.value) {
             return isSelected(key) ? 'option-selected' : ''
         }
-        // 已提交，标记对错
         if (isCorrectAnswer(key)) return 'option-correct'
         if (isSelected(key) && !isCorrectAnswer(key)) return 'option-wrong'
         return ''
@@ -280,10 +412,38 @@
         return ''
     }
 
+    function getOptionTextClass(key : string) : string {
+        if (showResult.value && isCorrectAnswer(key)) return 'option-text-correct'
+        if (showResult.value && isSelected(key) && !isCorrectAnswer(key)) return 'option-text-wrong'
+        return ''
+    }
+
+    function getAnswerCardClass(idx : number) : string {
+        if (idx == currentIndex.value) return 'card-item-current'
+        // 检查是否已答题
+        const q = questions.value[idx]
+        for (let i = 0; i < answerStates.value.length; i++) {
+            if (answerStates.value[i].question_id == q.question_id) {
+                return answerStates.value[i].is_correct ? 'card-item-correct' : 'card-item-wrong'
+            }
+        }
+        return 'card-item-default'
+    }
+
+    function getAnswerCardNumClass(idx : number) : string {
+        if (idx == currentIndex.value) return 'card-num-current'
+        const q = questions.value[idx]
+        for (let i = 0; i < answerStates.value.length; i++) {
+            if (answerStates.value[i].question_id == q.question_id) {
+                return 'card-num-answered'
+            }
+        }
+        return 'card-num-default'
+    }
+
     function onOptionClick(key : string) : void {
         if (showResult.value) return
         if (isMultiChoice()) {
-            // 多选：切换选中状态
             const idx = selectedKeys.value.indexOf(key)
             if (idx >= 0) {
                 selectedKeys.value.splice(idx, 1)
@@ -291,25 +451,47 @@
                 selectedKeys.value.push(key)
             }
         } else {
-            // 单选/判断：直接选中
             selectedKeys.value = [key]
         }
+    }
+
+    function startTimer() {
+        if (timerInterval != null) return
+        timerInterval = setInterval(() => {
+            totalSeconds.value = totalSeconds.value + 1
+        }, 1000)
+    }
+
+    function stopTimer() {
+        if (timerInterval != null) {
+            clearInterval(timerInterval)
+            timerInterval = null
+        }
+    }
+
+    function recordQuestionTime() {
+        const now = Date.now()
+        if (questionStartTime.value > 0) {
+            questionElapsed.value = Math.floor((now - questionStartTime.value) / 1000)
+        }
+        questionStartTime.value = now
     }
 
     async function loadQuestions() {
         loading.value = true
         try {
             if (mode.value == 'free') {
-                questions.value = await getFreePracticeApi(practiceCount.value, '', 0)
+                questions.value = await getFreePracticeApi(practiceCount.value)
             } else if (mode.value == 'sequential') {
                 questions.value = await getSequentialPracticeApi()
-            } else if (mode.value == 'category') {
-                questions.value = await getCategoryPracticeApi(categoryCode.value, 0)
-            } else if (mode.value == 'knowledge_point') {
-                questions.value = await getKnowledgePointPracticeApi(knowledgePointId.value, 0, true)
+            } else if (mode.value == 'tag') {
+                questions.value = await getTagPracticeApi(tagId.value, 0)
             }
-            if (questions.value.length == 0) {
-                uni.showToast({ title: '暂无题目', icon: 'none' })
+            if (questions.value.length > 0) {
+                startTimer()
+                recordQuestionTime()
+                checkFavorite()
+                loadKnowledge()
             }
         } catch (e) {
             console.error('[practice-do] load questions failed:', e)
@@ -335,7 +517,6 @@
             uni.showToast({ title: '请选择答案', icon: 'none' })
             return
         }
-        // 拼接答案：多选按字母排序拼接，单选/判断直接取
         let userAnswer = ''
         if (isMultiChoice()) {
             const sorted = selectedKeys.value.slice().sort()
@@ -355,8 +536,8 @@
             const result = await submitAnswerApi(params)
             lastResult.value = result
             showResult.value = true
+            recordQuestionTime()
 
-            // 记录答题状态
             const state : AnswerState = {
                 question_id: qid,
                 user_answer: userAnswer,
@@ -366,7 +547,6 @@
             } as AnswerState
             answerStates.value.push(state)
 
-            // 顺序/章节/知识点练习保存进度
             if (mode.value != 'free') {
                 saveProgress()
             }
@@ -378,8 +558,8 @@
 
     function onNext() : void {
         if (currentIndex.value >= questions.value.length - 1) {
-            // 全部完成，显示汇总
             showSummary.value = true
+            stopTimer()
             return
         }
         currentIndex.value = currentIndex.value + 1
@@ -387,6 +567,259 @@
         showResult.value = false
         lastUserAnswer.value = ''
         lastResult.value = { correct: false, correct_answer: '', explanation: '' } as SubmitAnswerResult
+        // 重置互动状态
+        showComments.value = false
+        comments.value = []
+        commentText.value = ''
+        knowledgeTags.value = []
+        showNote.value = false
+        noteContent.value = ''
+        recordQuestionTime()
+        checkFavorite()
+        loadKnowledge()
+    }
+
+    function onJumpToQuestion(idx : number) : void {
+        if (idx == currentIndex.value) {
+            showAnswerCard.value = false
+            return
+        }
+        currentIndex.value = idx
+        selectedKeys.value = []
+        showResult.value = false
+        lastUserAnswer.value = ''
+        lastResult.value = { correct: false, correct_answer: '', explanation: '' } as SubmitAnswerResult
+        // 恢复已答状态
+        const q = questions.value[idx]
+        for (let i = 0; i < answerStates.value.length; i++) {
+            if (answerStates.value[i].question_id == q.question_id) {
+                const state = answerStates.value[i]
+                lastUserAnswer.value = state.user_answer
+                lastResult.value = {
+                    correct: state.is_correct,
+                    correct_answer: state.correct_answer,
+                    explanation: '',
+                } as SubmitAnswerResult
+                showResult.value = true
+                break
+            }
+        }
+        showAnswerCard.value = false
+        // 重置互动状态
+        showComments.value = false
+        comments.value = []
+        commentText.value = ''
+        knowledgeTags.value = []
+        showNote.value = false
+        noteContent.value = ''
+        recordQuestionTime()
+        checkFavorite()
+        loadKnowledge()
+    }
+
+    function onToggleAnswerCard() : void {
+        showAnswerCard.value = !showAnswerCard.value
+    }
+
+    function onCloseAnswerCard() : void {
+        showAnswerCard.value = false
+    }
+
+    function onToggleFavorite() : void {
+        const qid = currentQuestion.value.question_id
+        if (qid <= 0) return
+        if (isFavorited.value) {
+            // 取消收藏
+            const fid = favoriteId.value
+            if (fid > 0) {
+                removeFavoriteApi(fid).then(() => {
+                    isFavorited.value = false
+                    favoriteId.value = 0
+                    uni.showToast({ title: '已取消收藏', icon: 'none' })
+                }).catch((e : any) => {
+                    console.warn('[practice-do] removeFavorite failed:', e)
+                    uni.showToast({ title: '操作失败', icon: 'none' })
+                })
+            }
+        } else {
+            // 添加收藏
+            addFavoriteApi('question', qid).then((item) => {
+                isFavorited.value = true
+                favoriteId.value = item.favorite_id
+                uni.showToast({ title: '已收藏', icon: 'none' })
+            }).catch((e : any) => {
+                console.warn('[practice-do] addFavorite failed:', e)
+                uni.showToast({ title: '操作失败', icon: 'none' })
+            })
+        }
+    }
+
+    async function checkFavorite() : Promise<void> {
+        const qid = currentQuestion.value.question_id
+        if (qid <= 0) return
+        try {
+            const result = await checkFavoriteApi('question', qid)
+            isFavorited.value = result.favorited
+            favoriteId.value = result.favorite_id
+        } catch (e) {
+            console.warn('[practice-do] checkFavorite failed:', e)
+        }
+    }
+
+    function onShareExplanation() : void {
+        uni.showToast({ title: '分享功能开发中', icon: 'none' })
+    }
+
+    // ========== 评论方法 ==========
+
+    function toggleComments() : void {
+        showComments.value = !showComments.value
+        if (showComments.value && comments.value.length == 0) {
+            loadComments()
+        }
+    }
+
+    async function loadComments() : Promise<void> {
+        const qid = currentQuestion.value.question_id
+        if (qid <= 0) return
+        try {
+            const result = await getCommentsApi(qid)
+            const uid = currentUserId.value
+            // 根据 user_id 设置 can_delete
+            const list = result.items
+            for (let i = 0; i < list.length; i++) {
+                list[i].can_delete = list[i].user_id == uid && uid > 0
+            }
+            comments.value = list
+        } catch (e) {
+            console.warn('[practice-do] loadComments failed:', e)
+        }
+    }
+
+    async function onSubmitComment() : Promise<void> {
+        const text = commentText.value.trim()
+        if (text.length == 0) return
+        const qid = currentQuestion.value.question_id
+        try {
+            const c = await createCommentApi(qid, text)
+            comments.value.push(c)
+            commentText.value = ''
+            uni.showToast({ title: '评论成功', icon: 'none' })
+        } catch (e) {
+            console.error('[practice-do] submitComment failed:', e)
+        }
+    }
+
+    function onDeleteComment(comment : QuestionComment) : void {
+        uni.showModal({
+            title: '提示',
+            content: '确定删除这条评论吗？',
+            success: (res) => {
+                if (res.confirm) {
+                    const commentId = comment.id
+                    deleteCommentApi(commentId).then((_ : UTSJSONObject) => {
+                        comments.value = comments.value.filter((c) => c.id != commentId)
+                        uni.showToast({ title: '已删除', icon: 'none' })
+                    }).catch((e : any) => {
+                        console.warn('[practice-do] deleteComment failed:', e)
+                        uni.showToast({ title: '删除失败', icon: 'none' })
+                    })
+                }
+            }
+        })
+    }
+
+    // ========== 考点方法 ==========
+
+    async function loadKnowledge() : Promise<void> {
+        const qid = currentQuestion.value.question_id
+        if (qid <= 0) return
+        try {
+            knowledgeTags.value = await getKnowledgeApi(qid)
+        } catch (e) {
+            console.warn('[practice-do] loadKnowledge failed:', e)
+        }
+    }
+
+    // ========== 笔记方法 ==========
+
+    function toggleNote() : void {
+        showNote.value = !showNote.value
+        if (showNote.value) {
+            loadNote()
+        }
+    }
+
+    async function loadNote() : Promise<void> {
+        const qid = currentQuestion.value.question_id
+        if (qid <= 0) return
+        try {
+            const note = await getNoteApi(qid)
+            noteContent.value = note.content
+        } catch (e) {
+            console.warn('[practice-do] loadNote failed:', e)
+        }
+    }
+
+    function onSaveNote() : void {
+        const qid = currentQuestion.value.question_id
+        if (qid <= 0) return
+        // 防抖 500ms 保存
+        if (noteSaveTimer != null) clearTimeout(noteSaveTimer)
+        noteSaveTimer = setTimeout(() => {
+            saveNoteApi(qid, noteContent.value).catch((e : any) => {
+                console.warn('[practice-do] saveNote failed:', e)
+            })
+        }, 500)
+    }
+
+    function onDeleteNote() : void {
+        const qid = currentQuestion.value.question_id
+        uni.showModal({
+            title: '提示',
+            content: '确定删除这条笔记吗？',
+            success: (res) => {
+                if (res.confirm) {
+                    deleteNoteApi(qid).then(() => {
+                        noteContent.value = ''
+                        showNote.value = false
+                        uni.showToast({ title: '笔记已删除', icon: 'none' })
+                    }).catch((e : any) => {
+                        console.warn('[practice-do] deleteNote failed:', e)
+                    })
+                }
+            }
+        })
+    }
+
+    // ========== 时间格式化 ==========
+
+    function formatTime(dateStr : string) : string {
+        if (dateStr.length == 0) return ''
+        const d = new Date(dateStr)
+        const m = d.getMonth() + 1
+        const day = d.getDate()
+        const h = d.getHours()
+        const min = d.getMinutes()
+        const mStr = m < 10 ? `0${m}` : `${m}`
+        const dStr = day < 10 ? `0${day}` : `${day}`
+        const hStr = h < 10 ? `0${h}` : `${h}`
+        const minStr = min < 10 ? `0${min}` : `${min}`
+        return `${mStr}-${dStr} ${hStr}:${minStr}`
+    }
+
+    function onSubmitPaper() : void {
+        uni.showModal({
+            title: '提示',
+            content: '确定要交卷吗？',
+            success: (res) => {
+                if (res.confirm) {
+                    showAnswerCard.value = false
+                    showSummary.value = true
+                    stopTimer()
+                }
+            }
+        })
     }
 
     function onBack() : void {
@@ -395,6 +828,7 @@
             content: '确定要退出练习吗？',
             success: (res) => {
                 if (res.confirm) {
+                    stopTimer()
                     goBack()
                 }
             }
@@ -402,6 +836,7 @@
     }
 
     function onExit() : void {
+        stopTimer()
         goBack()
     }
 
@@ -412,6 +847,9 @@
         showSummary.value = false
         answerStates.value = []
         lastResult.value = { correct: false, correct_answer: '', explanation: '' } as SubmitAnswerResult
+        totalSeconds.value = 0
+        questionStartTime.value = 0
+        questionElapsed.value = 0
         loadQuestions()
     }
 
@@ -420,14 +858,12 @@
         if (m != null) mode.value = `${m}`
         const cnt = options['count']
         if (cnt != null) practiceCount.value = parseInt(`${cnt}`)
-        const cat = options['category']
-        if (cat != null) categoryCode.value = `${cat}`
-        const kpId = options['kp_id']
-        if (kpId != null) knowledgePointId.value = parseInt(`${kpId}`)
-        const kpName = options['kp_name']
-        if (kpName != null) {
-            const decoded = decodeURIComponent(`${kpName}`)
-            knowledgePointName.value = decoded ?? ''
+        const tagIdParam = options['tag_id']
+        if (tagIdParam != null) tagId.value = parseInt(`${tagIdParam}`)
+        const tagNameParam = options['tag_name']
+        if (tagNameParam != null) {
+            const decoded = decodeURIComponent(`${tagNameParam}`)
+            tagName.value = decoded ?? ''
         }
         const cont = options['continue']
         if (cont != null) isContinue.value = (`${cont}`) == '1'
@@ -436,152 +872,135 @@
 </script>
 
 <style>
-    .container {
+    .page {
         display: flex;
         background-color: #f5f5f5;
         flex-direction: column;
     }
 
     .status-bar {
-        background-color: #2979ff;
+        background-color: #ffffff;
     }
 
-    .header {
-        background-color: #2979ff;
-        padding: 16rpx 32rpx;
+    /* 导航栏 */
+    .nav-bar {
+        background-color: #ffffff;
+        padding: 16rpx 24rpx;
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
+        border-bottom: 1rpx solid #f0f0f0;
     }
 
-    .header-left {
-        width: 60rpx;
+    .nav-left {
+        width: 80rpx;
+        align-items: flex-start;
+        justify-content: center;
+    }
+
+    .nav-back {
+        font-size: 52rpx;
+        color: #333333;
+        font-weight: 300;
+    }
+
+    .nav-center {
+        flex: 1;
+        flex-direction: row;
         align-items: center;
+        justify-content: center;
+        gap: 24rpx;
     }
 
-    .back-icon {
-        font-size: 48rpx;
-        color: #ffffff;
+    .nav-timer {
+        font-size: 26rpx;
+        color: #999999;
     }
 
-    .header-title {
-        font-size: 36rpx;
-        font-weight: bold;
-        color: #ffffff;
+    .nav-progress {
+        font-size: 28rpx;
+        color: #333333;
+        font-weight: 500;
     }
 
-    .header-right {
-        width: 60rpx;
+    .nav-right {
+        width: 120rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-end;
     }
 
+    /* 内容滚动区 */
     .content-scroll {
         flex: 1;
         height: 0;
     }
 
-    /* 进度条 */
-    .progress-section {
+    /* 题目区域 */
+    .question-section {
+        padding: 32rpx 32rpx 0;
+    }
+
+    .question-type-row {
         flex-direction: row;
-        align-items: center;
-        padding: 24rpx 24rpx 0;
-    }
-
-    .progress-bar-wrap {
-        flex: 1;
-        height: 12rpx;
-        background-color: #e0e0e0;
-        border-radius: 6rpx;
-        overflow: hidden;
-        margin-right: 20rpx;
-    }
-
-    .progress-bar {
-        height: 12rpx;
-        background-color: #2979ff;
-        border-radius: 6rpx;
-    }
-
-    .progress-text {
-        font-size: 24rpx;
-        color: #666666;
-        min-width: 80rpx;
-        text-align: right;
-    }
-
-    /* 题目卡片 */
-    .question-card {
-        background-color: #ffffff;
-        margin: 24rpx;
-        border-radius: 16rpx;
-        padding: 32rpx;
-        border: 1px solid #eeeeee;
-    }
-
-    .question-header {
-        flex-direction: row;
-        align-items: center;
-        margin-bottom: 24rpx;
+        margin-bottom: 16rpx;
     }
 
     .question-type-tag {
-        font-size: 22rpx;
-        color: #ffffff;
-        background-color: #2979ff;
-        padding: 6rpx 16rpx;
-        border-radius: 8rpx;
-        margin-right: 16rpx;
-    }
-
-    .question-index {
         font-size: 24rpx;
-        color: #999999;
+        color: #2979ff;
+        background-color: #e8f0fe;
+        padding: 6rpx 20rpx;
+        border-radius: 8rpx;
+        overflow: hidden;
     }
 
     .question-title {
         font-size: 32rpx;
         color: #333333;
-        line-height: 48rpx;
+        line-height: 52rpx;
         margin-bottom: 32rpx;
     }
 
     /* 选项列表 */
     .option-list {
+        padding: 0 32rpx;
         flex-direction: column;
     }
 
     .option-item {
         flex-direction: row;
         align-items: center;
-        padding: 24rpx;
-        background-color: #f8f9fa;
-        border-radius: 12rpx;
-        margin-bottom: 16rpx;
-        border: 2rpx solid transparent;
+        padding: 28rpx 24rpx;
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        margin-bottom: 20rpx;
+        border: 2rpx solid #f0f0f0;
     }
 
     .option-selected {
-        background-color: #e3f2fd;
+        background-color: #f0f7ff;
         border-color: #2979ff;
     }
 
     .option-correct {
-        background-color: #e8f5e9;
+        background-color: #f0faf0;
         border-color: #4caf50;
     }
 
     .option-wrong {
-        background-color: #ffebee;
+        background-color: #fff5f5;
         border-color: #f44336;
     }
 
     .option-key {
-        width: 56rpx;
-        height: 56rpx;
-        border-radius: 28rpx;
-        background-color: #e0e0e0;
+        width: 60rpx;
+        height: 60rpx;
+        border-radius: 30rpx;
+        background-color: #f0f0f0;
         align-items: center;
         justify-content: center;
-        margin-right: 20rpx;
+        margin-right: 24rpx;
     }
 
     .option-key-selected {
@@ -598,120 +1017,214 @@
 
     .option-key-text {
         font-size: 28rpx;
+        font-weight: 600;
+        color: #666666;
+    }
+
+    .option-key-selected .option-key-text {
+        color: #ffffff;
+    }
+
+    .option-key-icon {
+        font-size: 28rpx;
         font-weight: bold;
         color: #ffffff;
     }
 
     .option-text {
         flex: 1;
+        font-size: 30rpx;
+        color: #333333;
+        line-height: 44rpx;
+    }
+
+    .option-text-correct {
+        color: #4caf50;
+    }
+
+    .option-text-wrong {
+        color: #f44336;
+    }
+
+    /* 答题结果区域 */
+    .result-section {
+        padding: 32rpx;
+        flex-direction: column;
+    }
+
+    .result-answer-box {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 28rpx;
+        margin-bottom: 24rpx;
+        border: 1rpx solid #f0f0f0;
+    }
+
+    .result-answer-line {
         font-size: 28rpx;
         color: #333333;
+        line-height: 44rpx;
     }
 
-    .option-mark {
-        font-size: 32rpx;
-        font-weight: bold;
-        margin-left: 12rpx;
-    }
-
-    /* 答案解析 */
-    .result-section {
-        margin-top: 24rpx;
-        padding: 24rpx;
-        background-color: #f5f5f5;
-        border-radius: 12rpx;
-        flex-direction: column;
-    }
-
-    .result-header {
-        margin-bottom: 16rpx;
-    }
-
-    .result-header.correct .result-label {
+    .result-correct-text {
         color: #4caf50;
-    }
-
-    .result-header.wrong .result-label {
-        color: #f44336;
-    }
-
-    .result-label {
-        font-size: 28rpx;
         font-weight: bold;
     }
 
-    .result-answer {
+    .result-wrong-text {
+        color: #f44336;
+        font-weight: bold;
+    }
+
+    /* 统计数据行 */
+    .stats-row {
         flex-direction: row;
-        margin-bottom: 16rpx;
+        align-items: center;
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx 0;
+        margin-bottom: 24rpx;
+        border: 1rpx solid #f0f0f0;
     }
 
-    .result-answer-label {
-        font-size: 26rpx;
-        color: #666666;
-    }
-
-    .result-answer-value {
-        font-size: 26rpx;
-        font-weight: bold;
-        color: #4caf50;
-    }
-
-    .result-answer-value.answer-wrong-text {
-        color: #f44336;
-    }
-
-    .result-hint {
-        margin-top: 8rpx;
-        margin-bottom: 16rpx;
-        padding: 12rpx 16rpx;
-        background-color: #fff3e0;
-        border-radius: 8rpx;
-    }
-
-    .result-hint-text {
-        font-size: 24rpx;
-        color: #ff9800;
-    }
-
-    .result-explanation {
+    .stats-item {
+        flex: 1;
         flex-direction: column;
+        align-items: center;
+        justify-content: center;
     }
 
-    .explanation-label {
-        font-size: 26rpx;
-        color: #666666;
+    .stats-label {
+        font-size: 22rpx;
+        color: #999999;
         margin-bottom: 8rpx;
     }
 
-    .explanation-text {
-        font-size: 26rpx;
+    .stats-value {
+        font-size: 28rpx;
         color: #333333;
-        line-height: 40rpx;
+        font-weight: 600;
     }
 
-    /* 操作按钮 */
-    .action-bar {
-        padding: 24rpx;
+    .stats-divider {
+        width: 1rpx;
+        height: 48rpx;
+        background-color: #f0f0f0;
     }
 
-    .action-btn {
+    /* 通用区块 */
+    .section-block {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 28rpx;
+        margin-bottom: 20rpx;
+        border: 1rpx solid #f0f0f0;
+        flex-direction: column;
+    }
+
+    .section-header {
+        flex-direction: row;
         align-items: center;
-        padding: 24rpx 0;
-        border-radius: 48rpx;
+        justify-content: space-between;
+        margin-bottom: 16rpx;
+    }
+
+    .section-title {
+        font-size: 30rpx;
+        color: #333333;
+        font-weight: 600;
+    }
+
+    .section-action {
+        padding: 8rpx 16rpx;
+    }
+
+    .section-action-text {
+        font-size: 24rpx;
+        color: #2979ff;
+    }
+
+    .section-content {
+        font-size: 28rpx;
+        color: #666666;
+        line-height: 44rpx;
+    }
+
+    .section-empty {
+        font-size: 26rpx;
+        color: #cccccc;
+    }
+
+    .tag-row {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 12rpx;
+    }
+
+    .knowledge-tag {
+        background-color: #f0f7ff;
+        border-radius: 8rpx;
+        padding: 8rpx 20rpx;
+    }
+
+    .knowledge-tag-text {
+        font-size: 24rpx;
+        color: #2979ff;
+    }
+
+    /* 底部按钮 */
+    .bottom-bar {
+        padding: 16rpx 24rpx;
+        padding-bottom: 32rpx;
+        background-color: #ffffff;
+        border-top: 1rpx solid #f0f0f0;
+    }
+
+    .bottom-actions {
+        flex-direction: row;
+        align-items: center;
+        gap: 16rpx;
+    }
+
+    .bottom-icon-btn {
+        width: 100rpx;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 8rpx 0;
+    }
+
+    .bottom-icon-img {
+        width: 44rpx;
+        height: 44rpx;
+        margin-bottom: 4rpx;
+    }
+
+    .bottom-icon-label {
+        font-size: 20rpx;
+        color: #999999;
     }
 
     .submit-btn {
+        flex: 1;
+        align-items: center;
+        padding: 26rpx 0;
+        border-radius: 48rpx;
         background-color: #2979ff;
     }
 
     .next-btn {
-        background-color: #4caf50;
+        background-color: #2979ff;
     }
 
-    .action-btn-text {
+    .submit-btn-text {
         font-size: 32rpx;
-        font-weight: bold;
+        font-weight: 600;
         color: #ffffff;
+    }
+
+    .bottom-placeholder {
+        height: 120rpx;
     }
 
     /* 加载/空状态 */
@@ -737,6 +1250,116 @@
         color: #999999;
     }
 
+    /* 答题卡弹窗 */
+    .answer-card-mask {
+        position: fixed;
+        left: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        justify-content: flex-end;
+    }
+
+    .answer-card-sheet {
+        background-color: #ffffff;
+        border-radius: 32rpx 32rpx 0 0;
+        padding: 40rpx 32rpx;
+        padding-bottom: 48rpx;
+        flex-direction: column;
+        max-height: 70%;
+    }
+
+    .answer-card-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 40rpx;
+    }
+
+    .answer-card-title {
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .answer-card-grid {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 20rpx;
+        justify-content: flex-start;
+    }
+
+    .answer-card-item {
+        width: 100rpx;
+        height: 100rpx;
+        border-radius: 50rpx;
+        align-items: center;
+        justify-content: center;
+        border: 2rpx solid #e0e0e0;
+        background-color: #ffffff;
+    }
+
+    .card-item-current {
+        border-color: #2979ff;
+        background-color: #ffffff;
+    }
+
+    .card-item-correct {
+        border-color: #2979ff;
+        background-color: #2979ff;
+    }
+
+    .card-item-wrong {
+        border-color: #2979ff;
+        background-color: #2979ff;
+    }
+
+    .card-item-default {
+        border-color: #e0e0e0;
+        background-color: #ffffff;
+    }
+
+    .answer-card-num {
+        font-size: 28rpx;
+        color: #666666;
+    }
+
+    .card-num-current {
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    .card-num-answered {
+        color: #ffffff;
+        font-weight: bold;
+    }
+
+    .card-num-default {
+        color: #666666;
+    }
+
+    .answer-card-footer {
+        margin-top: 40rpx;
+        flex-direction: row;
+        justify-content: center;
+    }
+
+    .submit-paper-btn {
+        background-color: #2979ff;
+        border-radius: 48rpx;
+        padding: 26rpx 0;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+    }
+
+    .submit-paper-text {
+        font-size: 32rpx;
+        font-weight: 600;
+        color: #ffffff;
+    }
+
     /* 结果汇总弹窗 */
     .summary-mask {
         position: fixed;
@@ -744,7 +1367,7 @@
         top: 0;
         right: 0;
         bottom: 0;
-        background-color: rgba(0,0,0,0.6);
+        background-color: rgba(0, 0, 0, 0.6);
         justify-content: center;
         align-items: center;
     }
@@ -817,13 +1440,140 @@
         background-color: #2979ff;
     }
 
-    .summary-btn-text {
+    .summary-btn-primary-text {
         font-size: 28rpx;
         font-weight: bold;
         color: #ffffff;
     }
 
-    .summary-btn-secondary .summary-btn-text {
+    .summary-btn-secondary-text {
+        font-size: 28rpx;
+        font-weight: bold;
         color: #666666;
+    }
+
+    /* ===== 评论区 ===== */
+    .comment-item {
+        padding: 20rpx 0;
+        border-bottom: 1rpx solid #f5f5f5;
+        flex-direction: column;
+    }
+
+    .comment-head {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 12rpx;
+    }
+
+    .comment-author {
+        font-size: 26rpx;
+        color: #333333;
+        font-weight: 500;
+        margin-right: 16rpx;
+    }
+
+    .comment-time {
+        font-size: 22rpx;
+        color: #cccccc;
+        flex: 1;
+    }
+
+    .comment-delete {
+        padding: 6rpx 16rpx;
+        border: 1rpx solid #f44336;
+        border-radius: 8rpx;
+    }
+
+    .comment-delete-text {
+        font-size: 22rpx;
+        color: #f44336;
+    }
+
+    .comment-content {
+        font-size: 28rpx;
+        color: #666666;
+        line-height: 42rpx;
+    }
+
+    .comment-input-bar {
+        flex-direction: row;
+        align-items: center;
+        margin-top: 16rpx;
+    }
+
+    .comment-input {
+        flex: 1;
+        height: 72rpx;
+        background-color: #f5f5f5;
+        border-radius: 36rpx;
+        padding: 0 28rpx;
+        font-size: 26rpx;
+        color: #333333;
+    }
+
+    .comment-send-btn {
+        margin-left: 16rpx;
+        padding: 16rpx 28rpx;
+        border-radius: 36rpx;
+        background-color: #e0e0e0;
+    }
+
+    .comment-send-btn.active {
+        background-color: #2979ff;
+    }
+
+    .comment-send-text {
+        font-size: 26rpx;
+        color: #ffffff;
+        font-weight: 500;
+    }
+
+    /* ===== 笔记区 ===== */
+    .note-area {
+        flex-direction: column;
+    }
+
+    .note-textarea {
+        width: 100%;
+        min-height: 200rpx;
+        background-color: #fafafa;
+        border: 1rpx solid #f0f0f0;
+        border-radius: 12rpx;
+        padding: 20rpx;
+        font-size: 28rpx;
+        color: #333333;
+        line-height: 44rpx;
+    }
+
+    .note-actions {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 12rpx;
+    }
+
+    .note-delete-btn {
+        padding: 8rpx 16rpx;
+    }
+
+    .note-delete-text {
+        font-size: 24rpx;
+        color: #f44336;
+    }
+
+    .note-autosave {
+        font-size: 22rpx;
+        color: #cccccc;
+    }
+
+    /* ===== 通用补充 ===== */
+    .section-empty-wrap {
+        padding: 20rpx 0;
+        align-items: center;
+    }
+
+    .section-empty-text {
+        font-size: 26rpx;
+        color: #cccccc;
     }
 </style>

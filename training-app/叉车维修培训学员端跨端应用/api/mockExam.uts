@@ -4,29 +4,11 @@
  *   id → question_id, content → title, options 是 Map → Array
  */
 import { get, post } from './request'
+import { toNumber, toStr, toBool } from './helpers'
 import type { MockExamStartParams, MockExamInfo, MockExamSaveParams, MockExamResult, MockExamResultDetail, MockExamHistoryItem, MockExamHistoryResult, ExamQuestion, QuestionOption } from '../types/index'
 
-/** 安全转换为 number */
-function toNumber(v : any | null, defaultVal : number = 0) : number {
-	if (v == null) return defaultVal
-	const s = `${v}`
-	const n = parseFloat(s)
-	if (isNaN(n)) return defaultVal
-	return n
-}
 
-/** 安全转换为 string */
-function toStr(v : any | null, defaultVal : string = '') : string {
-	if (v == null) return defaultVal
-	return `${v}`
-}
 
-/** 安全转换为 boolean */
-function toBool(v : any | null, defaultVal : boolean = false) : boolean {
-	if (v == null) return defaultVal
-	const s = `${v}`
-	return s == 'true' || s == '1'
-}
 
 /**
  * 将后端 options Map 转换为前端 Array<{key, text}>

@@ -1,0 +1,689 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+        <!-- 顶部导航栏 -->
+        <view class="header">
+            <view class="header-left" @click="toback()">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">商城</text>
+            <view class="header-right">
+                <navigator class="header-avatar" target="miniProgram" app-id="wx56ce2775c2b3aea8" version="release">
+                    <image class="avatar-icon" src="/static/icons/易拉宝-006 1-1.png"></image>
+                </navigator>
+
+                <text class="header-icon" @click="onCart">🛒</text>
+            </view>
+        </view>
+
+        <!-- 排序栏 -->
+        <view class="sort-bar">
+            <view class="sort-item" :class="{ 'sort-active': activeSort === 0 }" @click="onSortChange(0)">
+                <text class="sort-text" :class="{ 'sort-text-active': activeSort === 0 }">商品</text>
+            </view>
+            <view class="sort-item" :class="{ 'sort-active': activeSort === 1 }" @click="onSortChange(1)">
+                <text class="sort-text" :class="{ 'sort-text-active': activeSort === 1 }">价格</text>
+                <text class="sort-arrow">∨</text>
+            </view>
+            <view class="sort-item" :class="{ 'sort-active': activeSort === 2 }" @click="onSortChange(2)">
+                <text class="sort-text" :class="{ 'sort-text-active': activeSort === 2 }">积分</text>
+                <text class="sort-arrow">∨</text>
+            </view>
+            <view class="sort-item" :class="{ 'sort-active': activeSort === 3 }" @click="onSortChange(3)">
+                <text class="sort-text" :class="{ 'sort-text-active': activeSort === 3 }">销量</text>
+                <text class="sort-arrow">∨</text>
+            </view>
+            <view class="sort-icon-btn" @click="onSearch">
+                <text class="sort-icon">🔍</text>
+            </view>
+            <view class="sort-icon-btn" @click="onCart">
+                <text class="sort-icon">🛒</text>
+            </view>
+        </view>
+
+        <!-- 双栏主体 -->
+        <view class="main-body">
+            <!-- 左侧分类栏 -->
+            <scroll-view class="category-sidebar" scroll-y="true">
+                <view v-for="(cat, idx) in categories" :key="idx" class="category-item"
+                    :class="{ 'category-active': activeCategory === idx, 'category-vip': cat.isVip }"
+                    @click="onCategoryChange(idx)">
+                    <text class="category-text"
+                        :class="{ 'category-text-active': activeCategory === idx, 'category-text-vip': cat.isVip }">{{ cat.name }}</text>
+                </view>
+            </scroll-view>
+
+            <!-- 右侧商品列表 -->
+            <scroll-view class="product-list" scroll-y="true" @scrolltolower="onLoadMore">
+                <!-- 必买清单区域（热门分类时显示） -->
+                <view v-if="activeCategory === 0 && mustBuyList.length > 0" class="must-buy-section">
+                    <text class="section-title">必买清单</text>
+                    <view class="must-buy-grid">
+                        <view v-for="(item, idx) in mustBuyList" :key="idx" class="must-buy-card"
+                            @click="onProductClick(item)">
+                            <view class="must-buy-img-wrap">
+                                <image v-if="item.coverUrl" :src="item.coverUrl" class="must-buy-img"
+                                    mode="aspectFill" />
+                                <view v-else class="must-buy-img-placeholder"></view>
+                            </view>
+                            <text class="must-buy-title">{{ item.title }}</text>
+                        </view>
+                    </view>
+                </view>
+
+                <!-- 商品列表 -->
+                <view v-if="products.length == 0 && !loading" class="empty-tip">
+                    <text class="empty-text">暂无商品</text>
+                </view>
+                <view v-for="(item, idx) in products" :key="idx" class="product-item" @click="onProductClick(item)">
+                    <view class="product-img-wrap">
+                        <image v-if="item.coverUrl" :src="item.coverUrl" class="product-img" mode="aspectFill" />
+                        <view v-else class="product-img-placeholder"></view>
+                    </view>
+                    <view class="product-info">
+                        <text class="product-name">{{ item.title }}</text>
+                        <view class="product-meta-row">
+                            <text v-if="item.price == 0" class="product-price-free">免费</text>
+                            <text v-else class="product-price">¥{{ item.price }}</text>
+                            <text class="product-sales">已有{{ item.enrollCount || 0 }}人参与学习</text>
+                        </view>
+                        <!-- 数量选择器（付费商品） -->
+                        <view v-if="item.price > 0" class="quantity-selector">
+                            <view class="qty-btn" @click.stop="decreaseQty(item)">
+                                <text class="qty-btn-text">-</text>
+                            </view>
+                            <text class="qty-value">{{ item.quantity || 1 }}</text>
+                            <view class="qty-btn" @click.stop="increaseQty(item)">
+                                <text class="qty-btn-text">+</text>
+                            </view>
+                        </view>
+                    </view>
+                </view>
+                <view v-if="loading" class="loading-more">
+                    <text class="loading-text">加载中...</text>
+                </view>
+                <view v-if="noMore && products.length > 0" class="loading-more">
+                    <text class="loading-text">没有更多了</text>
+                </view>
+            </scroll-view>
+        </view>
+
+        <!-- 悬浮按钮组 -->
+        <view class="float-group">
+            <!-- 回到顶部 -->
+            <view class="float-btn" @click="scrollToTop">
+                <text class="float-icon">↑</text>
+            </view>
+            <!-- 展开/收起 -->
+            <view class="float-btn" @click="toggleFloatMenu">
+                <text class="float-icon">{{ showFloatMenu ? '∧' : '∨' }}</text>
+            </view>
+            <!-- 搜索（收起态） -->
+            <view v-if="!showFloatMenu" class="float-btn float-btn-search" @click="onSearch">
+                <text class="float-icon">🔍</text>
+                <text class="float-btn-label">搜索</text>
+            </view>
+            <!-- 展开菜单 -->
+            <view v-if="showFloatMenu" class="float-menu">
+                <view class="float-menu-item" @click="goHome">
+                    <text class="float-menu-icon">🏠</text>
+                    <text class="float-menu-text">首页</text>
+                </view>
+                <view class="float-menu-item" @click="onShare">
+                    <text class="float-menu-icon">🔗</text>
+                    <text class="float-menu-text">分享</text>
+                </view>
+                <view class="float-menu-item" @click="onSearch">
+                    <text class="float-menu-icon">🔍</text>
+                    <text class="float-menu-text">搜索</text>
+                </view>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
+    import { getCourseListApi } from '../../api/course'
+    import type { CourseItem } from '../../types/index'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    // ---- 排序 ----
+    const activeSort = ref<number>(0)
+
+    // ---- 左侧分类 ----
+    type CategoryItem = {
+        name : string
+        id : number
+        isVip : boolean
+    }
+
+    const categories : CategoryItem[] = [
+        { name: '热门', id: 0, isVip: false },
+        { name: '图书系列', id: 1, isVip: false },
+        { name: 'VIP套餐', id: 2, isVip: true },
+    ]
+    const activeCategory = ref<number>(0)
+
+    // ---- 商品列表 ----
+    const products = ref<CourseItem[]>([])
+    const mustBuyList = ref<CourseItem[]>([])
+    const page = ref<number>(1)
+    const pageSize = 12
+    const loading = ref<boolean>(false)
+    const noMore = ref<boolean>(false)
+
+    // ---- 悬浮按钮 ----
+    const showFloatMenu = ref<boolean>(false)
+
+    async function loadProducts(reset : boolean = false) : Promise<void> {
+        if (loading.value) return
+        if (reset) {
+            page.value = 1
+            noMore.value = false
+        }
+        if (noMore.value && !reset) return
+
+        loading.value = true
+        try {
+            const result = await getCourseListApi(page.value, pageSize, 0, 0)
+            if (reset) {
+                products.value = result.items
+            } else {
+                products.value = products.value.concat(result.items)
+            }
+            // 热门分类时加载必买清单
+            if (activeCategory.value === 0 && reset) {
+                mustBuyList.value = result.items.slice(0, 4)
+            }
+            if (products.value.length >= result.total || result.items.length == 0) {
+                noMore.value = true
+            } else {
+                page.value = page.value + 1
+            }
+        } catch (e) {
+            console.error('[mall] load failed:', e)
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function onSortChange(idx : number) : void {
+        activeSort.value = idx
+        loadProducts(true)
+    }
+
+    function onCategoryChange(idx : number) : void {
+        activeCategory.value = idx
+        loadProducts(true)
+    }
+
+    function onLoadMore() : void {
+        loadProducts(false)
+    }
+
+    function onProductClick(item : CourseItem) : void {
+        uni.navigateTo({ url: '/pages/courses/course-detail?id=' + item.course_id })
+    }
+
+    function onSearch() : void {
+        uni.navigateTo({ url: '/pages/search/search' })
+    }
+
+    function onCart() : void {
+        uni.showToast({ title: '购物车开发中', icon: 'none' })
+    }
+
+    function onMore() : void {
+        uni.showToast({ title: '更多选项开发中', icon: 'none' })
+    }
+
+    function goHome() : void {
+        uni.switchTab({ url: '/pages/index/index' })
+    }
+    function toback() : void {
+        goBack()
+    }
+
+    function onShare() : void {
+        uni.showToast({ title: '分享功能开发中', icon: 'none' })
+    }
+
+    function scrollToTop() : void {
+        // 滚动到顶部
+    }
+
+    function toggleFloatMenu() : void {
+        showFloatMenu.value = !showFloatMenu.value
+    }
+
+    function increaseQty(item : CourseItem) : void {
+        if (item.quantity === undefined) {
+            item.quantity = 1
+        }
+        item.quantity = (item.quantity || 0) + 1
+    }
+
+    function decreaseQty(item : CourseItem) : void {
+        if (item.quantity === undefined || item.quantity <= 1) {
+            item.quantity = 1
+        } else {
+            item.quantity = (item.quantity || 1) - 1
+        }
+    }
+
+    onLoad(() => {
+        loadProducts(true)
+    })
+</script>
+
+<style>
+    .container {
+        flex: 1;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #ffffff;
+    }
+
+    /* ===== 顶部导航栏 ===== */
+    .header {
+        background-color: #ffffff;
+        padding: 16rpx 24rpx;
+        height: 88rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1rpx solid #f0f0f0;
+        overflow: visible;
+    }
+
+    .header-left {
+        width: 72rpx;
+        height: 72rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #333333;
+    }
+
+    .header-title {
+        flex: 1;
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #333333;
+        text-align: center;
+    }
+
+    .header-right {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .header-avatar {
+        width: 64rpx;
+        height: 64rpx;
+        margin-right: 150rpx;
+        overflow: hidden;
+    }
+
+    .avatar-icon {
+        width: 64rpx;
+        height: 64rpx;
+        border-radius: 32rpx;
+    }
+
+    .header-icon {
+        font-size: 32rpx;
+        margin-left: 20rpx;
+        color: #666666;
+    }
+
+    /* ===== 排序栏 ===== */
+    .sort-bar {
+        background-color: #ffffff;
+        padding: 16rpx 24rpx;
+        flex-direction: row;
+        align-items: center;
+        border-bottom: 1rpx solid #f0f0f0;
+    }
+
+    .sort-item {
+        flex: 1;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        padding: 8rpx 0;
+    }
+
+    .sort-text {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    .sort-text-active {
+        color: #2979ff;
+        font-weight: 600;
+    }
+
+    .sort-arrow {
+        font-size: 20rpx;
+        color: #cccccc;
+        margin-left: 4rpx;
+    }
+
+    .sort-icon-btn {
+        width: 60rpx;
+        height: 60rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .sort-icon {
+        font-size: 32rpx;
+    }
+
+    /* ===== 双栏主体 ===== */
+    .main-body {
+        flex: 1;
+        flex-direction: row;
+    }
+
+    /* ===== 左侧分类栏 ===== */
+    .category-sidebar {
+        width: 180rpx;
+        background-color: #f8f8f8;
+    }
+
+    .category-item {
+        padding: 28rpx 24rpx;
+        align-items: center;
+        justify-content: center;
+        border-left: 6rpx solid transparent;
+        background-color: #f8f8f8;
+    }
+
+    .category-active {
+        background-color: #ffffff;
+        border-left-color: #2979ff;
+    }
+
+    .category-text {
+        font-size: 26rpx;
+        color: #333333;
+    }
+
+    .category-text-active {
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    /* VIP套餐特殊样式 */
+    .category-vip {
+        background-color: #f8f8f8;
+    }
+
+    .category-vip.category-active {
+        background-color: #ffffff;
+    }
+
+    .category-text-vip {
+        color: #ff4d4f;
+    }
+
+    .category-text-vip.category-text-active {
+        color: #2979ff;
+    }
+
+    /* ===== 右侧商品列表 ===== */
+    .product-list {
+        flex: 1;
+        background-color: #ffffff;
+    }
+
+    /* ===== 必买清单区域 ===== */
+    .must-buy-section {
+        padding: 20rpx;
+        border-bottom: 1rpx solid #f5f5f5;
+    }
+
+    .section-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 20rpx;
+    }
+
+    .must-buy-grid {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: space-between;
+    }
+
+    .must-buy-card {
+        width: 48%;
+        margin-bottom: 20rpx;
+    }
+
+    .must-buy-img-wrap {
+        width: 100%;
+        height: 160rpx;
+        border-radius: 12rpx;
+        background-color: #f5f5f5;
+        overflow: hidden;
+    }
+
+    .must-buy-img {
+        width: 100%;
+        height: 100%;
+    }
+
+    .must-buy-img-placeholder {
+        width: 100%;
+        height: 100%;
+        background-color: #e8e8e8;
+    }
+
+    .must-buy-title {
+        font-size: 24rpx;
+        color: #333333;
+        margin-top: 12rpx;
+        lines: 2;
+        text-overflow: ellipsis;
+    }
+
+    /* ===== 商品卡片 ===== */
+    .product-item {
+        padding: 24rpx;
+        flex-direction: row;
+        border-bottom: 1rpx solid #f5f5f5;
+    }
+
+    .product-img-wrap {
+        width: 140rpx;
+        height: 140rpx;
+        border-radius: 12rpx;
+        background-color: #f5f5f5;
+        overflow: hidden;
+        margin-right: 20rpx;
+        flex-shrink: 0;
+    }
+
+    .product-img {
+        width: 100%;
+        height: 100%;
+    }
+
+    .product-img-placeholder {
+        width: 100%;
+        height: 100%;
+        background-color: #e8e8e8;
+    }
+
+    .product-info {
+        flex: 1;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+
+    .product-name {
+        font-size: 28rpx;
+        color: #333333;
+        font-weight: 500;
+        lines: 2;
+        text-overflow: ellipsis;
+    }
+
+    .product-meta-row {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 12rpx;
+    }
+
+    .product-price {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #ff4d4f;
+    }
+
+    .product-price-free {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #ff4d4f;
+    }
+
+    .product-sales {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    /* ===== 数量选择器 ===== */
+    .quantity-selector {
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-end;
+        margin-top: 16rpx;
+    }
+
+    .qty-btn {
+        width: 48rpx;
+        height: 48rpx;
+        border-radius: 8rpx;
+        border: 1rpx solid #dddddd;
+        align-items: center;
+        justify-content: center;
+        background-color: #ffffff;
+    }
+
+    .qty-btn-text {
+        font-size: 28rpx;
+        color: #666666;
+    }
+
+    .qty-value {
+        font-size: 28rpx;
+        color: #333333;
+        margin-left: 20rpx;
+        margin-right: 20rpx;
+        min-width: 40rpx;
+        text-align: center;
+    }
+
+    /* ===== 空状态 ===== */
+    .empty-tip {
+        align-items: center;
+        padding: 120rpx 0;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    /* ===== 加载更多 ===== */
+    .loading-more {
+        align-items: center;
+        padding: 24rpx 0;
+    }
+
+    .loading-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    /* ===== 悬浮按钮组 ===== */
+    .float-group {
+        position: fixed;
+        right: 24rpx;
+        bottom: 200rpx;
+        flex-direction: column;
+        align-items: center;
+        z-index: 100;
+    }
+
+    .float-btn {
+        width: 80rpx;
+        height: 80rpx;
+        border-radius: 40rpx;
+        background-color: #ffffff;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.15);
+        margin-bottom: 16rpx;
+    }
+
+    .float-btn-search {
+        width: 80rpx;
+        height: 100rpx;
+        border-radius: 40rpx;
+        flex-direction: column;
+        padding-top: 8rpx;
+    }
+
+    .float-icon {
+        font-size: 32rpx;
+        color: #666666;
+    }
+
+    .float-btn-label {
+        font-size: 20rpx;
+        color: #666666;
+        margin-top: 4rpx;
+    }
+
+    .float-menu {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.15);
+        padding: 16rpx 0;
+        margin-bottom: 16rpx;
+    }
+
+    .float-menu-item {
+        flex-direction: row;
+        align-items: center;
+        padding: 16rpx 32rpx;
+    }
+
+    .float-menu-icon {
+        font-size: 32rpx;
+        margin-right: 16rpx;
+    }
+
+    .float-menu-text {
+        font-size: 26rpx;
+        color: #333333;
+    }
+</style>

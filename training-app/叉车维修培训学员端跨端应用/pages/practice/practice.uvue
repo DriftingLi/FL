@@ -1,189 +1,239 @@
 <template>
-    <view class="container" :style="{ height: windowHeight + 'px' }">
+    <view class="page" :style="{ height: windowHeight + 'px' }">
+        <!-- 状态栏占位 -->
         <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
+
+        <!-- 顶部导航栏 -->
+        <view class="nav-bar">
+            <view class="nav-left" @click="onBack">
+                <text class="nav-icon">‹</text>
             </view>
-            <text class="header-title">题库练习</text>
-            <view class="header-right"></view>
+            <text class="nav-title">题库练习</text>
+            <view class="nav-right" @click="onMenu">
+                <text class="nav-icon">☰</text>
+            </view>
         </view>
-        <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMoreHistory">
-            <!-- 练习统计 -->
-            <view class="stats-card">
-                <view class="stat-item">
-                    <text class="stat-num">{{ stats.total_practiced }}</text>
-                    <text class="stat-label">累计练习</text>
+
+        <!-- 主内容滚动区 -->
+        <scroll-view
+            class="scroll-content"
+            scroll-y="true"
+            :refresher-enabled="true"
+            :refresher-triggered="isRefreshing"
+            @refresherrefresh="onRefresh"
+            @scrolltolower="onLoadMore"
+        >
+            <!-- 筛选栏 -->
+            <view class="filter-row">
+                <view class="filter-dropdown" @click="onFilterClick">
+                    <text class="filter-text">{{ currentFilterLabel }}</text>
+                    <text class="filter-arrow">▼</text>
                 </view>
-                <view class="stat-divider"></view>
-                <view class="stat-item">
-                    <text class="stat-num">{{ stats.correct_count }}</text>
-                    <text class="stat-label">答对题数</text>
+                <view class="filter-spacer"></view>
+            </view>
+
+            <!-- 培训横幅卡片 -->
+            <view class="banner-card" @click="onBannerClick">
+                <view class="banner-image-area">
+                    <view class="banner-forklift">
+                        <text class="banner-emoji">🏗️</text>
+                    </view>
+                    <view class="banner-overlay">
+                        <text class="banner-title-cn">叉车维修培训</text>
+                        <text class="banner-title-sub">规范检修 · 安全作业</text>
+                    </view>
+                    <!-- 右侧标签 -->
+                    <view class="banner-tags">
+                        <text class="banner-tag">维修步骤</text>
+                        <text class="banner-tag">安全要点</text>
+                        <text class="banner-tag">实操教学</text>
+                        <text class="banner-tag">案例分析</text>
+                        <text class="banner-tag">考核发证</text>
+                    </view>
                 </view>
-                <view class="stat-divider"></view>
-                <view class="stat-item">
-                    <text class="stat-num">{{ stats.accuracy }}%</text>
-                    <text class="stat-label">正确率</text>
-                </view>
-                <view class="stat-divider"></view>
-                <view class="stat-item">
+            </view>
+
+            <!-- 数据统计栏（蓝色渐变） -->
+            <view class="stat-bar">
+                <view class="stat-item" @click="onStatClick('today')">
                     <text class="stat-num">{{ stats.today_count }}</text>
-                    <text class="stat-label">今日练习</text>
+                    <text class="stat-label">今日做题</text>
+                </view>
+                <view class="stat-divider"></view>
+                <view class="stat-item" @click="onStatClick('total')">
+                    <text class="stat-num">{{ stats.total_practiced }}</text>
+                    <text class="stat-label">累计做题</text>
+                </view>
+                <view class="stat-divider"></view>
+                <view class="stat-item" @click="onStatClick('days')">
+                    <text class="stat-num">{{ stats.streak_days }}</text>
+                    <text class="stat-label">累计天数</text>
+                </view>
+                <view class="stat-divider"></view>
+                <view class="stat-item" @click="onStatClick('report')">
+                    <view class="stat-report-wrap">
+                        <text class="stat-report-text">数据报告</text>
+                        <text class="stat-report-arrow">›</text>
+                    </view>
+                    <text class="stat-label">查看分析</text>
                 </view>
             </view>
 
-            <!-- 练习模式 -->
-            <view class="section">
-                <view class="section-header">
-                    <text class="section-title">练习模式</text>
+            <!-- 功能入口网格 -->
+            <view class="feature-grid">
+                <view class="feature-item" @click="onFeatureClick('past_paper')">
+                    <view class="feature-icon-wrap feature-color-paper">
+                        <text class="feature-icon-text">📄</text>
+                    </view>
+                    <text class="feature-name">历年试卷</text>
                 </view>
-                <view class="mode-grid">
-                    <view class="mode-card" @click="onStartFree">
-                        <view class="mode-icon-wrap mode-color-free">
-                            <text class="mode-icon">🎲</text>
-                        </view>
-                        <text class="mode-name">随机练习</text>
-                        <text class="mode-desc">随机抽题练习</text>
+                <view class="feature-item" @click="onFeatureClick('mock_exam')">
+                    <view class="feature-icon-wrap feature-color-mock">
+                        <text class="feature-icon-text">📋</text>
                     </view>
-                    <view class="mode-card" @click="onStartSequential">
-                        <view class="mode-icon-wrap mode-color-seq">
-                            <text class="mode-icon">📋</text>
-                        </view>
-                        <text class="mode-name">顺序练习</text>
-                        <text class="mode-desc">按顺序逐题练习</text>
+                    <text class="feature-name">套卷模拟</text>
+                </view>
+                <view class="feature-item" @click="onFeatureClick('level_exam')">
+                    <view class="feature-icon-wrap feature-color-level">
+                        <text class="feature-icon-text">🏆</text>
                     </view>
-                    <view class="mode-card" @click="onStartCategory">
-                        <view class="mode-icon-wrap mode-color-cat">
-                            <text class="mode-icon">📂</text>
-                        </view>
-                        <text class="mode-name">章节练习</text>
-                        <text class="mode-desc">按课程分类练习</text>
+                    <text class="feature-name">模考大赛</text>
+                </view>
+                <view class="feature-item" @click="onFeatureClick('wrong_question')">
+                    <view class="feature-icon-wrap feature-color-wrong">
+                        <text class="feature-icon-text">❌</text>
                     </view>
-                    <view class="mode-card" @click="onStartKnowledgePoint">
-                        <view class="mode-icon-wrap mode-color-kp">
-                            <text class="mode-icon">🎯</text>
-                        </view>
-                        <text class="mode-name">专项练习</text>
-                        <text class="mode-desc">按知识点练习</text>
+                    <text class="feature-name">错题重练</text>
+                </view>
+            </view>
+
+            <!-- 骨架屏加载态 -->
+            <view v-if="listLoading && questionList.length === 0" class="skeleton-list">
+                <view v-for="i in 4" :key="i" class="skeleton-item">
+                    <view class="skeleton-content">
+                        <view class="skeleton-line skeleton-line-title"></view>
+                        <view class="skeleton-line skeleton-line-sub"></view>
+                    </view>
+                    <view class="skeleton-arrow"></view>
+                </view>
+            </view>
+
+            <!-- 错误态 -->
+            <view v-else-if="listError" class="error-state" @click="retryLoad">
+                <text class="error-icon">⚠️</text>
+                <text class="error-text">{{ listError }}</text>
+                <view class="error-btn">
+                    <text class="error-btn-text">点击重试</text>
+                </view>
+            </view>
+
+            <!-- 空状态 -->
+            <view v-else-if="!listLoading && questionList.length === 0" class="empty-state">
+                <text class="empty-icon">📭</text>
+                <text class="empty-text">暂无题目数据</text>
+            </view>
+
+            <!-- 标签练习 -->
+            <view v-if="tagList.length > 0" class="tags-section">
+                <view class="section-header-bar">
+                    <text class="section-title-bar">标签练习</text>
+                </view>
+                <view class="tags-wrap">
+                    <view v-for="(tag, idx) in tagList" :key="tag.id" class="tag-chip" @click="onTagClick(tag)">
+                        <text class="tag-chip-text">{{ tag.name }}</text>
+                        <text class="tag-chip-count">{{ tag.question_count }}题</text>
                     </view>
                 </view>
             </view>
 
-            <!-- 顺序练习进度（有进度时显示） -->
-            <view v-if="seqProgress.total > 0" class="section">
-                <view class="section-header">
-                    <text class="section-title">顺序练习进度</text>
-                    <text class="section-more" @click="onContinueSequential">继续练习 →</text>
-                </view>
-                <view class="progress-card" @click="onContinueSequential">
-                    <view class="progress-info">
-                        <text class="progress-text">已练习 {{ seqProgress.index }} / {{ seqProgress.total }} 题</text>
-                        <view class="progress-bar-wrap">
-                            <view class="progress-bar" :style="{ width: seqPercent + '%' }"></view>
+            <!-- 题目列表（独立卡片样式） -->
+            <view v-if="tagList.length === 0 && questionList.length > 0" class="question-list">
+                <view
+                    v-for="(item, idx) in questionList"
+                    :key="item.question_id"
+                    class="question-card"
+                    @click="onQuestionClick(item, idx)"
+                >
+                    <view class="question-info">
+                        <text class="question-title">{{ item.title }}</text>
+                        <view class="question-meta">
+                            <text class="question-status">已完成 {{ item.completedCount }}/{{ item.totalCount }}</text>
+                            <text class="question-status-space"> </text>
+                            <text class="question-status">正确率 {{ item.accuracy }}%</text>
                         </view>
                     </view>
-                    <text class="progress-percent">{{ seqPercent }}%</text>
+                    <text class="question-arrow">›</text>
                 </view>
             </view>
 
-            <!-- 练习历史 -->
-            <view class="section">
-                <view class="section-header">
-                    <text class="section-title">练习历史</text>
-                </view>
-                <view v-if="history.length == 0 && !historyLoading" class="empty-tip">
-                    <text class="empty-text">暂无练习记录</text>
-                </view>
-                <view class="history-list">
-                    <view v-for="(item, idx) in history" :key="idx" class="history-item">
-                        <view class="history-status" :class="{ correct: item.is_correct, wrong: !item.is_correct }">
-                            <text class="history-status-text">{{ item.is_correct ? '✓' : '✗' }}</text>
-                        </view>
-                        <view class="history-info">
-                            <text class="history-title">{{ item.question_title }}</text>
-                            <view class="history-meta">
-                                <text class="history-type">{{ getTypeName(item.type) }}</text>
-                                <text class="history-mode">{{ getModeName(item.practice_type) }}</text>
-                                <text class="history-time">{{ formatDate(item.created_at) }}</text>
-                            </view>
-                        </view>
-                    </view>
-                </view>
-                <view v-if="historyLoading" class="loading-more">
-                    <text class="loading-text">加载中...</text>
-                </view>
-                <view v-if="historyNoMore && history.length > 0" class="loading-more">
-                    <text class="loading-text">没有更多了</text>
-                </view>
+            <!-- 加载更多 -->
+            <view v-if="listLoading && questionList.length > 0" class="load-more">
+                <text class="load-more-text">加载中...</text>
             </view>
+            <view v-if="listNoMore && questionList.length > 0" class="load-more">
+                <text class="load-more-text">— 没有更多了 —</text>
+            </view>
+
+            <!-- 底部安全区 -->
+            <view class="safe-bottom"></view>
         </scroll-view>
-
-        <!-- 章节练习分类选择弹窗 -->
-        <view v-if="showCategoryPicker" class="picker-mask" @click="onCloseCategoryPicker">
-            <view class="picker-box" @click.stop="">
-                <view class="picker-header">
-                    <text class="picker-title">选择课程分类</text>
-                    <text class="picker-close" @click="onCloseCategoryPicker">×</text>
-                </view>
-                <scroll-view class="picker-scroll" scroll-y="true">
-                    <view v-for="(cat, idx) in categoryList" :key="idx" class="picker-item"
-                        @click="onPickCategory(cat)">
-                        <view class="picker-item-info">
-                            <text class="picker-item-name">{{ cat.name }}</text>
-                            <text class="picker-item-count">{{ cat.question_count }}题</text>
-                        </view>
-                        <text class="picker-item-arrow">›</text>
-                    </view>
-                    <view v-if="categoryList.length == 0" class="empty-tip">
-                        <text class="empty-text">暂无分类数据</text>
-                    </view>
-                </scroll-view>
-            </view>
-        </view>
-
-        <!-- 知识点选择弹窗 -->
-        <view v-if="showKpPicker" class="picker-mask" @click="onCloseKpPicker">
-            <view class="picker-box" @click.stop="">
-                <view class="picker-header">
-                    <text class="picker-title">选择知识点</text>
-                    <text class="picker-close" @click="onCloseKpPicker">×</text>
-                </view>
-                <scroll-view class="picker-scroll" scroll-y="true">
-                    <view v-for="(kp, idx) in kpList" :key="idx" class="picker-item"
-                        @click="onPickKnowledgePoint(kp)">
-                        <view class="picker-item-info">
-                            <text class="picker-item-name">{{ kp.name }}</text>
-                            <text class="picker-item-count">{{ kp.question_count }}题</text>
-                        </view>
-                        <text class="picker-item-arrow">›</text>
-                    </view>
-                    <view v-if="kpList.length == 0" class="empty-tip">
-                        <text class="empty-text">暂无知识点数据</text>
-                    </view>
-                </scroll-view>
-            </view>
-        </view>
     </view>
 </template>
 
 <script setup lang="uts">
     import { ref, computed } from 'vue'
-    import { onShow } from '@dcloudio/uni-app'
+    import { onShow, onPullDownRefresh } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
+    import { getTagsApi } from '../../api/course'
+    import type { TagItem } from '../../types/index'
     import { goBack } from '../../utils/navigation'
     import {
         getPracticeStatsApi,
-        getPracticeHistoryApi,
-        getSequentialProgressApi,
-        getCategoriesApi,
-        getKnowledgePointsApi,
+        getQuestionListApi,
+        getQuestionBankStatsApi,
     } from '../../api/practice'
-    import type { PracticeStats, PracticeHistoryItem, PracticeProgress, QuestionCategory, KnowledgePoint } from '../../types/index'
+    import type { PracticeStats } from '../../types/index'
 
+    // ===== 系统信息 =====
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
-    // 统计数据
+    // ===== 筛选标签 =====
+    const tabs = ref<{ key: string; label: string; type: string }[]>([
+        { key: 'all', label: '全部', type: '' },
+        { key: 'choice', label: '选择题', type: 'single_choice' },
+        { key: 'judge', label: '判断题', type: 'true_false' },
+        { key: 'safety', label: '安全规范', type: 'safety' },
+    ])
+    const activeTab = ref<string>('all')
+
+    const currentFilterLabel = computed<string>(() : string => {
+        for (let i = 0; i < tabs.value.length; i++) {
+            if (tabs.value[i].key == activeTab.value) {
+                return tabs.value[i].label
+            }
+        }
+        return '全部'
+    })
+
+    // ===== 标签数据 =====
+    const tagList = ref<TagItem[]>([])
+
+    async function loadTags() : Promise<void> {
+        try {
+            tagList.value = await getTagsApi()
+        } catch (e) {
+            console.warn('[practice] loadTags failed:', e)
+        }
+    }
+
+    function onTagClick(tag : TagItem) : void {
+        uni.navigateTo({
+            url: '/pages/practice/practice-do?mode=tag&tag_id=' + tag.id.toString() + '&tag_name=' + encodeURIComponent(tag.name)
+        })
+    }
+
+    // ===== 统计数据 =====
     const stats = ref<PracticeStats>({
         total_practiced: 0,
         correct_count: 0,
@@ -192,58 +242,48 @@
         streak_days: 0,
     } as PracticeStats)
 
-    // 顺序练习进度
-    const seqProgress = ref<PracticeProgress>({
-        index: 0,
-        practice_mode: 'sequential',
-        total: 0,
-        answers_state: {} as UTSJSONObject,
-    } as PracticeProgress)
+    // ===== 题目列表 =====
+    interface QuestionListItem {
+        question_id: number
+        type: string
+        title: string
+        completed: boolean
+        accuracy: number
+        completedCount: number
+        totalCount: number
+    }
 
-    const seqPercent = computed<number>(() : number => {
-        if (seqProgress.value.total <= 0) return 0
-        return Math.floor(seqProgress.value.index * 100 / seqProgress.value.total)
-    })
+    const questionList = ref<QuestionListItem[]>([])
+    const listPage = ref<number>(1)
+    const listPageSize = 20
+    const listTotal = ref<number>(0)
+    const listLoading = ref<boolean>(false)
+    const listNoMore = ref<boolean>(false)
+    const listError = ref<string>('')
 
-    // 练习历史
-    const history = ref<PracticeHistoryItem[]>([])
-    const historyPage = ref<number>(1)
-    const historyPageSize = 20
-    const historyTotal = ref<number>(0)
-    const historyLoading = ref<boolean>(false)
-    const historyNoMore = ref<boolean>(false)
+    // ===== 下拉刷新 =====
+    const isRefreshing = ref<boolean>(false)
 
-    // 分类/知识点选择弹窗
-    const showCategoryPicker = ref<boolean>(false)
-    const categoryList = ref<QuestionCategory[]>([])
-    const showKpPicker = ref<boolean>(false)
-    const kpList = ref<KnowledgePoint[]>([])
-
-    function getTypeName(type : string) : string {
-        if (type == 'single' || type == 'single_choice') return '单选题'
-        if (type == 'multi' || type == 'multiple_choice' || type == 'multi_choice') return '多选题'
-        if (type == 'judge' || type == 'true_false') return '判断题'
+    // ===== 工具函数 =====
+    function getTypeName(type: string): string {
+        if (type === 'single' || type === 'single_choice') return '选择题'
+        if (type === 'multi' || type === 'multiple_choice' || type === 'multi_choice') return '多选题'
+        if (type === 'judge' || type === 'true_false') return '判断题'
+        if (type === 'safety') return '安全规范'
         return '其他'
     }
 
-    function getModeName(mode : string) : string {
-        if (mode == 'free') return '随机练习'
-        if (mode == 'sequential') return '顺序练习'
-        if (mode == 'category') return '章节练习'
-        if (mode == 'knowledge_point') return '专项练习'
-        return '练习'
+    function getFilterType(): string {
+        for (let i = 0; i < tabs.value.length; i++) {
+            if (tabs.value[i].key == activeTab.value) {
+                return tabs.value[i].type
+            }
+        }
+        return ''
     }
 
-    function formatDate(dateStr : string) : string {
-        if (dateStr.length < 10) return dateStr
-        return dateStr.substring(0, 10)
-    }
-
-    function onBack() : void {
-        goBack()
-    }
-
-    async function loadStats() {
+    // ===== 数据加载 =====
+    async function loadStats(): Promise<void> {
         try {
             const data = await getPracticeStatsApi()
             stats.value = data
@@ -252,199 +292,297 @@
         }
     }
 
-    async function loadSeqProgress() {
-        try {
-            const data = await getSequentialProgressApi()
-            seqProgress.value = data
-        } catch (e) {
-            console.error('[practice] load seq progress failed:', e)
-        }
-    }
-
-    async function loadHistory(reset : boolean = false) {
-        if (historyLoading.value) return
+    async function loadQuestions(reset: boolean = false): Promise<void> {
+        if (listLoading.value) return
         if (reset) {
-            historyPage.value = 1
-            historyNoMore.value = false
+            listPage.value = 1
+            listNoMore.value = false
+            listError.value = ''
         }
-        if (historyNoMore.value && !reset) return
+        if (listNoMore.value && !reset) return
 
-        historyLoading.value = true
+        listLoading.value = true
+        listError.value = ''
         try {
-            const result = await getPracticeHistoryApi(historyPage.value, historyPageSize, '')
-            if (reset) {
-                history.value = result.items
-            } else {
-                history.value = history.value.concat(result.items)
+            const filterType = getFilterType()
+            const result = await getQuestionListApi(listPage.value, listPageSize, filterType, '')
+            const rawItems = result['items'] as any[] | null
+            const rawTotal = result['total'] as number
+
+            const newItems: QuestionListItem[] = []
+            if (rawItems != null) {
+                for (let i = 0; i < rawItems.length; i++) {
+                    const raw = rawItems[i] as UTSJSONObject
+                    const item: QuestionListItem = {
+                        question_id: (raw['id'] ?? raw['question_id']) as number ?? 0,
+                        type: (raw['type'] ?? '') as string,
+                        title: (raw['content'] ?? raw['title'] ?? '') as string,
+                        completed: false,
+                        accuracy: 0,
+                        completedCount: 0,
+                        totalCount: 0,
+                    } as QuestionListItem
+                    // 如果后端返回了进度信息
+                    const cc = raw['completed_count']
+                    if (cc != null) item.completedCount = cc as number
+                    const tc = raw['total_count']
+                    if (tc != null) item.totalCount = tc as number
+                    const acc = raw['accuracy']
+                    if (acc != null) item.accuracy = acc as number
+                    newItems.push(item)
+                }
             }
-            historyTotal.value = result.total
-            if (history.value.length >= result.total || result.items.length == 0) {
-                historyNoMore.value = true
+
+            if (reset) {
+                questionList.value = newItems
             } else {
-                historyPage.value = historyPage.value + 1
+                questionList.value = questionList.value.concat(newItems)
+            }
+            listTotal.value = rawTotal ?? 0
+
+            if (questionList.value.length >= listTotal.value || newItems.length === 0) {
+                listNoMore.value = true
+            } else {
+                listPage.value = listPage.value + 1
             }
         } catch (e) {
-            console.error('[practice] load history failed:', e)
+            console.error('[practice] load questions failed:', e)
+            listError.value = '加载失败，请点击重试'
         } finally {
-            historyLoading.value = false
+            listLoading.value = false
         }
     }
 
-    function onLoadMoreHistory() : void {
-        loadHistory(false)
+    // ===== 事件处理 =====
+    function onBack(): void {
+        goBack()
     }
 
-    // ===== 练习模式入口 =====
-
-    function onStartFree() : void {
-        uni.showActionSheet({
-            itemList: ['10题', '20题', '50题'],
-            success: (res) => {
-                let count = 20
-                if (res.tapIndex == 0) count = 10
-                else if (res.tapIndex == 1) count = 20
-                else if (res.tapIndex == 2) count = 50
-                uni.navigateTo({
-                    url: '/pages/practice/practice-do?mode=free&count=' + count
-                })
-            }
-        })
+    function onMenu(): void {
+        uni.showToast({ title: '菜单', icon: 'none' })
     }
 
-    function onStartSequential() : void {
-        uni.navigateTo({
-            url: '/pages/practice/practice-do?mode=sequential'
-        })
-    }
-
-    function onContinueSequential() : void {
-        uni.navigateTo({
-            url: '/pages/practice/practice-do?mode=sequential&continue=1'
-        })
-    }
-
-    async function onStartCategory() : Promise<void> {
-        if (categoryList.value.length == 0) {
-            uni.showLoading({ title: '加载分类...' })
-            try {
-                const list = await getCategoriesApi()
-                categoryList.value = list
-            } catch (e) {
-                console.error('[practice] load categories failed:', e)
-            } finally {
-                uni.hideLoading()
+    function onFilterClick(): void {
+        const keys = ['all', 'choice', 'judge', 'safety']
+        let currentIdx = 0
+        for (let i = 0; i < keys.length; i++) {
+            if (keys[i] == activeTab.value) {
+                currentIdx = i
+                break
             }
         }
-        if (categoryList.value.length == 0) {
-            uni.showToast({ title: '暂无分类数据', icon: 'none' })
-            return
+        const nextIdx = (currentIdx + 1) % keys.length
+        activeTab.value = keys[nextIdx]
+        loadQuestions(true)
+    }
+
+    function onBannerClick(): void {
+        // 横幅整体点击
+    }
+
+    function onStatClick(statType: string): void {
+        if (statType == 'report') {
+            uni.showToast({ title: '数据报告开发中', icon: 'none' })
         }
-        showCategoryPicker.value = true
     }
 
-    function onCloseCategoryPicker() : void {
-        showCategoryPicker.value = false
-    }
-
-    function onPickCategory(cat : QuestionCategory) : void {
-        showCategoryPicker.value = false
-        uni.navigateTo({
-            url: '/pages/practice/practice-do?mode=category&category=' + cat.code
-        })
-    }
-
-    async function onStartKnowledgePoint() : Promise<void> {
-        if (kpList.value.length == 0) {
-            uni.showLoading({ title: '加载知识点...' })
-            try {
-                const list = await getKnowledgePointsApi()
-                kpList.value = list
-            } catch (e) {
-                console.error('[practice] load knowledge points failed:', e)
-            } finally {
-                uni.hideLoading()
-            }
+    function onFeatureClick(feature: string): void {
+        if (feature == 'past_paper') {
+            uni.showToast({ title: '历年试卷开发中', icon: 'none' })
+        } else if (feature == 'mock_exam') {
+            uni.navigateTo({ url: '/pages/exam/mock-exam' })
+        } else if (feature == 'level_exam') {
+            uni.navigateTo({ url: '/pages/exam/level-exam-do' })
+        } else if (feature == 'wrong_question') {
+            uni.navigateTo({ url: '/pages/profile/wrong-questions' })
         }
-        if (kpList.value.length == 0) {
-            uni.showToast({ title: '暂无知识点数据', icon: 'none' })
-            return
+    }
+
+    function onQuestionClick(item: QuestionListItem, index: number): void {
+        const filterType = getFilterType()
+        let url = '/pages/practice/practice-do?mode=free'
+        if (filterType.length > 0) {
+            url = url + '&type=' + filterType
         }
-        showKpPicker.value = true
+        url = url + '&start=' + index.toString()
+        uni.navigateTo({ url: url })
     }
 
-    function onCloseKpPicker() : void {
-        showKpPicker.value = false
+    async function onRefresh(): Promise<void> {
+        isRefreshing.value = true
+        await Promise.all([loadStats(), loadQuestions(true)])
+        isRefreshing.value = false
     }
 
-    function onPickKnowledgePoint(kp : KnowledgePoint) : void {
-        showKpPicker.value = false
-        uni.navigateTo({
-            url: '/pages/practice/practice-do?mode=knowledge_point&kp_id=' + kp.id + '&kp_name=' + encodeURIComponent(kp.name)
-        })
+    function onLoadMore(): void {
+        loadQuestions(false)
     }
 
+    function retryLoad(): void {
+        loadQuestions(true)
+    }
+
+    // ===== 生命周期 =====
     onShow(() => {
         loadStats()
-        loadSeqProgress()
-        if (history.value.length == 0) {
-            loadHistory(true)
+        loadTags()
+        if (questionList.value.length === 0) {
+            loadQuestions(true)
         }
     })
 </script>
 
 <style>
-    .container {
+    /* ===== 页面基础 ===== */
+    .page {
         display: flex;
-        background-color: #f5f5f5;
         flex-direction: column;
+        background-color: #f5f5f5;
     }
 
     .status-bar {
-        background-color: #2979ff;
+        background-color: #ffffff;
     }
 
-    .header {
-        background-color: #2979ff;
-        padding: 16rpx 32rpx;
+    /* ===== 导航栏 ===== */
+    .nav-bar {
+        background-color: #ffffff;
+        padding: 16rpx 24rpx;
+        height: 88rpx;
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
+        border-bottom: 1rpx solid #f0f0f0;
     }
 
-    .header-left {
-        width: 60rpx;
+    .nav-left,
+    .nav-right {
+        width: 72rpx;
+        height: 72rpx;
         align-items: center;
+        justify-content: center;
     }
 
-    .back-icon {
-        font-size: 48rpx;
-        color: #ffffff;
+    .nav-icon {
+        font-size: 44rpx;
+        color: #333333;
     }
 
-    .header-title {
+    .nav-title {
         font-size: 36rpx;
         font-weight: bold;
-        color: #ffffff;
+        color: #333333;
     }
 
-    .header-right {
-        width: 60rpx;
-    }
-
-    .content-scroll {
+    /* ===== 滚动区 ===== */
+    .scroll-content {
         flex: 1;
         height: 0;
     }
 
-    /* 统计卡片 */
-    .stats-card {
-        margin: 24rpx;
-        background-color: #ffffff;
-        border-radius: 16rpx;
-        padding: 32rpx;
+    /* ===== 筛选栏 ===== */
+    .filter-row {
+        padding: 20rpx 24rpx 12rpx;
         flex-direction: row;
+        align-items: center;
+    }
+
+    .filter-dropdown {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .filter-text {
+        font-size: 28rpx;
+        color: #333333;
+        margin-right: 8rpx;
+    }
+
+    .filter-arrow {
+        font-size: 20rpx;
+        color: #999999;
+    }
+
+    .filter-spacer {
+        flex: 1;
+    }
+
+    /* ===== 培训横幅卡片 ===== */
+    .banner-card {
+        margin: 0 24rpx 24rpx 24rpx;
+        background-color: #ffffff;
+        border-radius: 20rpx;
+        overflow: hidden;
+    }
+
+    .banner-image-area {
+        height: 260rpx;
+        background: linear-gradient(135deg, #e8f4ff 0%, #d0e8ff 100%);
+        flex-direction: row;
+        align-items: center;
+        position: relative;
+    }
+
+    .banner-forklift {
+        width: 180rpx;
+        height: 180rpx;
+        align-items: center;
+        justify-content: center;
+        margin-left: 32rpx;
+    }
+
+    .banner-emoji {
+        font-size: 100rpx;
+    }
+
+    .banner-overlay {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 16rpx 28rpx;
+        background-color: rgba(0, 0, 0, 0.25);
+        flex-direction: column;
+    }
+
+    .banner-title-cn {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #ffffff;
+        margin-bottom: 4rpx;
+    }
+
+    .banner-title-sub {
+        font-size: 22rpx;
+        color: rgba(255, 255, 255, 0.85);
+    }
+
+    .banner-tags {
+        position: absolute;
+        right: 20rpx;
+        top: 20rpx;
+        flex-direction: column;
+        gap: 8rpx;
+    }
+
+    .banner-tag {
+        font-size: 20rpx;
+        color: #ffffff;
+        background-color: rgba(41, 121, 255, 0.7);
+        padding: 6rpx 16rpx;
+        border-radius: 8rpx;
+        text-align: center;
+    }
+
+    /* ===== 数据统计栏 ===== */
+    .stat-bar {
+        margin: 0 24rpx 24rpx 24rpx;
+        background: linear-gradient(135deg, #4facfe 0%, #2979ff 100%);
+        border-radius: 20rpx;
+        padding: 24rpx 0;
+        flex-direction: row;
+        align-items: center;
         justify-content: space-around;
-        border: 1px solid #eeeeee;
     }
 
     .stat-item {
@@ -454,313 +592,178 @@
     }
 
     .stat-num {
-        font-size: 40rpx;
+        font-size: 34rpx;
         font-weight: bold;
-        color: #2979ff;
-        margin-bottom: 8rpx;
+        color: #ffffff;
+        margin-bottom: 4rpx;
     }
 
     .stat-label {
         font-size: 22rpx;
-        color: #999999;
+        color: rgba(255, 255, 255, 0.85);
     }
 
     .stat-divider {
         width: 1rpx;
-        background-color: #f0f0f0;
+        height: 48rpx;
+        background-color: rgba(255, 255, 255, 0.3);
     }
 
-    /* 通用 section */
-    .section {
-        background-color: #ffffff;
-        margin-bottom: 16rpx;
-        padding: 24rpx;
-    }
-
-    .section-header {
+    .stat-report-wrap {
         flex-direction: row;
-        justify-content: space-between;
         align-items: center;
-        margin-bottom: 24rpx;
     }
 
-    .section-title {
-        font-size: 32rpx;
-        font-weight: bold;
-        color: #333333;
-    }
-
-    .section-more {
+    .stat-report-text {
         font-size: 26rpx;
-        color: #2979ff;
-    }
-
-    /* 练习模式网格 */
-    .mode-grid {
-        flex-direction: row;
-        flex-wrap: wrap;
-        justify-content: space-between;
-    }
-
-    .mode-card {
-        width: 340rpx;
-        background-color: #f8f9fa;
-        border-radius: 12rpx;
-        padding: 32rpx 0;
-        flex-direction: column;
-        align-items: center;
-        margin-bottom: 16rpx;
-        border: 1px solid #eeeeee;
-    }
-
-    .mode-icon-wrap {
-        width: 88rpx;
-        height: 88rpx;
-        border-radius: 44rpx;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 16rpx;
-    }
-
-    .mode-color-free {
-        background-color: #e3f2fd;
-    }
-
-    .mode-color-seq {
-        background-color: #f3e5f5;
-    }
-
-    .mode-color-cat {
-        background-color: #e8f5e9;
-    }
-
-    .mode-color-kp {
-        background-color: #fff3e0;
-    }
-
-    .mode-icon {
-        font-size: 44rpx;
-    }
-
-    .mode-name {
-        font-size: 28rpx;
+        color: #ffffff;
         font-weight: bold;
-        color: #333333;
-        margin-bottom: 8rpx;
     }
 
-    .mode-desc {
-        font-size: 22rpx;
-        color: #999999;
+    .stat-report-arrow {
+        font-size: 26rpx;
+        color: #ffffff;
+        margin-left: 4rpx;
     }
 
-    /* 顺序练习进度卡片 */
-    .progress-card {
+    /* ===== 功能入口网格 ===== */
+    .feature-grid {
+        margin: 0 24rpx 24rpx 24rpx;
+        background-color: #ffffff;
+        border-radius: 20rpx;
+        padding: 28rpx 0;
         flex-direction: row;
-        align-items: center;
-        padding: 24rpx;
-        background-color: #f0f7ff;
-        border-radius: 12rpx;
+        justify-content: space-around;
     }
 
-    .progress-info {
+    .feature-item {
         flex: 1;
         flex-direction: column;
+        align-items: center;
     }
 
-    .progress-text {
-        font-size: 26rpx;
-        color: #333333;
+    .feature-icon-wrap {
+        width: 80rpx;
+        height: 80rpx;
+        border-radius: 20rpx;
+        align-items: center;
+        justify-content: center;
         margin-bottom: 12rpx;
     }
 
-    .progress-bar-wrap {
-        height: 12rpx;
-        background-color: #e0e0e0;
-        border-radius: 6rpx;
-        overflow: hidden;
+    .feature-color-paper {
+        background-color: #fff8e1;
     }
 
-    .progress-bar {
-        height: 12rpx;
-        background-color: #2979ff;
-        border-radius: 6rpx;
-    }
-
-    .progress-percent {
-        font-size: 32rpx;
-        font-weight: bold;
-        color: #2979ff;
-        margin-left: 20rpx;
-    }
-
-    /* 练习历史 */
-    .history-list {
-        flex-direction: column;
-    }
-
-    .history-item {
-        flex-direction: row;
-        align-items: center;
-        padding: 20rpx 0;
-        border-bottom: 1rpx solid #f5f5f5;
-    }
-
-    .history-item:last-child {
-        border-bottom: none;
-    }
-
-    .history-status {
-        width: 56rpx;
-        height: 56rpx;
-        border-radius: 28rpx;
-        align-items: center;
-        justify-content: center;
-        margin-right: 20rpx;
-    }
-
-    .history-status.correct {
+    .feature-color-mock {
         background-color: #e8f5e9;
     }
 
-    .history-status.wrong {
-        background-color: #ffebee;
+    .feature-color-level {
+        background-color: #e3f2fd;
     }
 
-    .history-status-text {
-        font-size: 32rpx;
-        font-weight: bold;
+    .feature-color-wrong {
+        background-color: #fce4ec;
     }
 
-    .history-status.correct .history-status-text {
-        color: #4caf50;
+    .feature-icon-text {
+        font-size: 40rpx;
     }
 
-    .history-status.wrong .history-status-text {
-        color: #f44336;
-    }
-
-    .history-info {
-        flex: 1;
-        flex-direction: column;
-    }
-
-    .history-title {
-        font-size: 28rpx;
+    .feature-name {
+        font-size: 24rpx;
         color: #333333;
-        margin-bottom: 8rpx;
-        lines: 1;
-        text-overflow: ellipsis;
     }
 
-    .history-meta {
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .history-type {
-        font-size: 20rpx;
-        color: #ffffff;
-        background-color: #2979ff;
-        padding: 4rpx 12rpx;
-        border-radius: 6rpx;
-        margin-right: 12rpx;
-    }
-
-    .history-mode {
-        font-size: 20rpx;
-        color: #666666;
-        background-color: #f0f0f0;
-        padding: 4rpx 12rpx;
-        border-radius: 6rpx;
-        margin-right: 12rpx;
-    }
-
-    .history-time {
-        font-size: 20rpx;
-        color: #cccccc;
-    }
-
-    /* 弹窗 */
-    .picker-mask {
-        position: fixed;
-        left: 0;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        background-color: rgba(0, 0, 0, 0.5);
-        justify-content: center;
-        align-items: center;
-    }
-
-    .picker-box {
-        width: 600rpx;
-        max-height: 800rpx;
+    /* ===== 骨架屏 ===== */
+    .skeleton-list {
+        margin: 0 24rpx;
         background-color: #ffffff;
-        border-radius: 16rpx;
-        flex-direction: column;
-        overflow: hidden;
+        border-radius: 20rpx;
     }
 
-    .picker-header {
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-        padding: 24rpx 32rpx;
-        border-bottom: 1rpx solid #f0f0f0;
-    }
-
-    .picker-title {
-        font-size: 32rpx;
-        font-weight: bold;
-        color: #333333;
-    }
-
-    .picker-close {
-        font-size: 44rpx;
-        color: #999999;
-        padding: 0 8rpx;
-    }
-
-    .picker-scroll {
-        max-height: 600rpx;
-    }
-
-    .picker-item {
+    .skeleton-item {
+        padding: 24rpx 28rpx;
         flex-direction: row;
         align-items: center;
-        padding: 24rpx 32rpx;
         border-bottom: 1rpx solid #f5f5f5;
     }
 
-    .picker-item:last-child {
-        border-bottom: none;
-    }
-
-    .picker-item-info {
+    .skeleton-content {
         flex: 1;
         flex-direction: column;
     }
 
-    .picker-item-name {
-        font-size: 28rpx;
-        color: #333333;
-        margin-bottom: 4rpx;
+    .skeleton-line {
+        background-color: #f0f0f0;
+        border-radius: 8rpx;
+        margin-bottom: 12rpx;
     }
 
-    .picker-item-count {
-        font-size: 22rpx;
-        color: #999999;
+    .skeleton-line-title {
+        width: 60%;
+        height: 28rpx;
     }
 
-    .picker-item-arrow {
-        font-size: 36rpx;
-        color: #cccccc;
+    .skeleton-line-sub {
+        width: 40%;
+        height: 20rpx;
     }
 
-    .empty-tip {
+    .skeleton-arrow {
+        width: 24rpx;
+        height: 24rpx;
+        background-color: #f0f0f0;
+        border-radius: 4rpx;
+        margin-left: 16rpx;
+    }
+
+    /* ===== 错误态 ===== */
+    .error-state {
+        margin: 0 24rpx;
+        background-color: #ffffff;
+        border-radius: 20rpx;
+        padding: 80rpx 0;
+        flex-direction: column;
         align-items: center;
-        padding: 60rpx 0;
+    }
+
+    .error-icon {
+        font-size: 64rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .error-text {
+        font-size: 28rpx;
+        color: #999999;
+        margin-bottom: 24rpx;
+    }
+
+    .error-btn {
+        background-color: #2979ff;
+        border-radius: 12rpx;
+        padding: 12rpx 40rpx;
+    }
+
+    .error-btn-text {
+        font-size: 26rpx;
+        color: #ffffff;
+    }
+
+    /* ===== 空状态 ===== */
+    .empty-state {
+        margin: 0 24rpx;
+        background-color: #ffffff;
+        border-radius: 20rpx;
+        padding: 80rpx 0;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .empty-icon {
+        font-size: 64rpx;
+        margin-bottom: 16rpx;
     }
 
     .empty-text {
@@ -768,13 +771,115 @@
         color: #999999;
     }
 
-    .loading-more {
-        align-items: center;
-        padding: 24rpx 0;
+    /* ===== 题目列表（独立卡片样式） ===== */
+    .question-list {
+        padding: 0 24rpx;
+        flex-direction: column;
     }
 
-    .loading-text {
+    .question-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 28rpx 28rpx;
+        margin-bottom: 20rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .question-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .question-title {
+        font-size: 30rpx;
+        color: #333333;
+        font-weight: 600;
+        margin-bottom: 12rpx;
+        lines: 1;
+        text-overflow: ellipsis;
+        overflow: hidden;
+    }
+
+    .question-meta {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .question-status {
         font-size: 24rpx;
         color: #999999;
+    }
+
+    .question-status-space {
+        width: 16rpx;
+    }
+
+    .question-arrow {
+        font-size: 36rpx;
+        color: #cccccc;
+        margin-left: 12rpx;
+    }
+
+    /* ===== 标签练习 ===== */
+    .tags-section {
+        margin: 0 24rpx 24rpx 24rpx;
+        background-color: #ffffff;
+        border-radius: 20rpx;
+        padding: 24rpx;
+    }
+
+    .section-header-bar {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 20rpx;
+    }
+
+    .section-title-bar {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .tags-wrap {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .tag-chip {
+        background-color: #f0f7ff;
+        border-radius: 20rpx;
+        padding: 12rpx 24rpx;
+        margin-right: 16rpx;
+        margin-bottom: 16rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .tag-chip-text {
+        font-size: 26rpx;
+        color: #2979ff;
+        margin-right: 8rpx;
+    }
+
+    .tag-chip-count {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    /* ===== 加载更多 ===== */
+    .load-more {
+        padding: 24rpx 0;
+        align-items: center;
+    }
+
+    .load-more-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    /* ===== 底部安全区 ===== */
+    .safe-bottom {
+        height: 34rpx;
     }
 </style>

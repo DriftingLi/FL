@@ -2,89 +2,212 @@
  * HTTP 请求封装
  * 基于 uni.request，跨 4 端通用
  * - 自动注入 Authorization
- * - 统一解包 ApiResponse<T>
- * - 401 自动清空登录态并跳转登录页
+ * - 统一解包 ApiResponse<T>（HTTP 状态码 + 业务 code 双重校验）
+ * - 401 自动用 refresh_token 刷新并重试一次，失败则清空登录态并跳转登录页
  * - X-Silent: 1 头关闭错误 toast
+ * - 调试日志仅开发环境输出（ENABLE_DEBUG_LOG），且不打印请求头（避免泄漏 token）
  */
-import { API_BASE_URL, REQUEST_TIMEOUT } from '../config/env'
+import { API_BASE_URL, REQUEST_TIMEOUT, ENABLE_DEBUG_LOG } from '../config/env'
 import { STORAGE_KEY_TOKEN } from '../constants/app'
 import { getStorage, removeStorage } from '../utils/storage'
-import type { ApiResponse } from '../types/index'
+// 注意：不能在此处 import useAuthStore（会导致循环依赖），改用全局回调
 
 /** 请求方法 */
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
 
 /** 请求配置 */
 export type RequestOptions = {
-	url : string
-	method ?: HttpMethod
-	data ?: any | null
-	header ?: UTSJSONObject | null
-	/** 请求超时，默认使用 REQUEST_TIMEOUT */
-	timeout ?: number
-	/** 是否静默（不弹错误 toast），默认 false */
-	silent ?: boolean
+    url : string
+    method ?: HttpMethod
+    data ?: any | null
+    header ?: UTSJSONObject | null
+    /** 请求超时，默认使用 REQUEST_TIMEOUT */
+    timeout ?: number
+    /** 是否静默（不弹错误 toast），默认 false */
+    silent ?: boolean
 }
 
 /** 默认请求头 */
 function buildHeader(custom : UTSJSONObject | null, silent : boolean) : UTSJSONObject {
-	const header : UTSJSONObject = {}
-	header['Content-Type'] = 'application/json'
+    const header : UTSJSONObject = {}
+    header['Content-Type'] = 'application/json'
 
-	const token = getStorage(STORAGE_KEY_TOKEN)
-	if (token.length > 0) {
-		header['Authorization'] = `Bearer ${token}`
-	}
+    const token = getStorage(STORAGE_KEY_TOKEN)
+    if (token.length > 0) {
+        header['Authorization'] = `Bearer ${token}`
+    }
 
-	if (silent) {
-		header['X-Silent'] = '1'
-	}
+    if (silent) {
+        header['X-Silent'] = '1'
+    }
 
-	if (custom != null) {
-		// 用 for...in 遍历 UTSJSONObject 的字段名（跨端通用，Android 端不支持 Object.keys）
-		for (const k in custom) {
-			header[k] = custom[k]
-		}
-	}
+    if (custom != null) {
+        // 用 for...in 遍历 UTSJSONObject 的字段名（跨端通用，Android 端不支持 Object.keys）
+        for (const k in custom) {
+            header[k] = custom[k]
+        }
+    }
 
-	return header
+    return header
+}
+
+/** 上传请求头（与 buildHeader 同逻辑但不设 Content-Type，multipart boundary 由端侧生成） */
+function buildUploadHeader(silent : boolean) : UTSJSONObject {
+    const header : UTSJSONObject = {}
+    const token = getStorage(STORAGE_KEY_TOKEN)
+    if (token.length > 0) {
+        header['Authorization'] = `Bearer ${token}`
+    }
+    if (silent) {
+        header['X-Silent'] = '1'
+    }
+    return header
 }
 
 /** 拼接完整 URL（相对路径不拼接 baseURL） */
 function resolveURL(url : string) : string {
-	if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/')) {
-		// H5 端使用相对路径 /api 走同源 + 后端 CORS
-		if (url.startsWith('/')) {
-			return API_BASE_URL + url
-		}
-		return url
-	}
-	return API_BASE_URL + '/' + url
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/')) {
+        // H5 端使用相对路径 /api 走同源 + 后端 CORS
+        if (url.startsWith('/')) {
+            return API_BASE_URL + url
+        }
+        return url
+    }
+    return API_BASE_URL + '/' + url
 }
 
 /** 显示错误 toast（受 silent 控制） */
 function showError(msg : string, silent : boolean) {
-	if (silent) return
-	uni.showToast({
-		title: msg.length > 20 ? msg.substring(0, 20) + '...' : msg,
-		icon: 'none',
-		duration: 2500,
-	})
+    if (silent) return
+    uni.showToast({
+        title: msg.length > 20 ? msg.substring(0, 20) + '...' : msg,
+        icon: 'none',
+        duration: 2500,
+    })
 }
+
+/** 防重入标记：避免多个并发 401 触发多次跳转 */
+let isHandlingUnauthorized = false
 
 /** 清空登录态并跳转登录页 */
 function handleUnauthorized() {
-	removeStorage(STORAGE_KEY_TOKEN)
-	removeStorage('auth_user')
-	// 避免在登录页时还跳登录页
-	const pages = getCurrentPages()
-	if (pages.length > 0) {
-		const current = pages[pages.length - 1]
-		const route = current.route
-		if (route != 'pages/login/login') {
-			uni.reLaunch({ url: '/pages/login/login' })
-		}
-	}
+    // 防重入：并发请求同时 401 时只跳一次
+    if (isHandlingUnauthorized) return
+    isHandlingUnauthorized = true
+
+    removeStorage(STORAGE_KEY_TOKEN)
+    removeStorage('auth_user')
+    // 避免在登录页时还跳登录页
+    const pages = getCurrentPages()
+    if (pages.length > 0) {
+        const current = pages[pages.length - 1]
+        const route = current.route
+        if (route != 'pages/login/login') {
+            uni.reLaunch({ url: '/pages/login/login' })
+        }
+    }
+
+    // 延迟重置标记：等 reLaunch 生效后允许后续 401 再次触发（如用户重新登录后再次过期）
+    setTimeout(() => {
+        isHandlingUnauthorized = false
+    }, 2000)
+}
+
+/** 401 终态：清空登录态并 reject（无法恢复或重试仍 401 时走这里） */
+function logoutAndReject(silent : boolean, reject : (e : Error) => void) {
+    handleUnauthorized()
+    showError('登录已过期，请重新登录', silent)
+    reject(new Error('登录已过期，请重新登录'))
+}
+
+/** 全局 token 刷新回调（由 auth store 注册，避免循环依赖） */
+let _refreshTokenHandler : (() => Promise<boolean>) | null = null
+
+/** 注册 token 刷新回调（auth store 初始化时调用） */
+export function registerRefreshTokenHandler(handler : () => Promise<boolean>) : void {
+    _refreshTokenHandler = handler
+}
+
+/** 防重入标记：避免 refresh 和 handleUnauthorized 并发冲突 */
+let isRefreshing = false
+
+/**
+ * 尝试用 refresh_token 自动刷新 access token
+ * @returns true=刷新成功，false=刷新失败
+ */
+async function tryAutoRefresh() : Promise<boolean> {
+    if (isRefreshing) return false
+    if (_refreshTokenHandler == null) return false
+    isRefreshing = true
+    try {
+        const success = await _refreshTokenHandler!()
+        return success
+    } catch (e) {
+        console.warn('[request] tryAutoRefresh failed:', e)
+        return false
+    } finally {
+        setTimeout(() => { isRefreshing = false }, 100)
+    }
+}
+
+/**
+ * 统一信封解析：HTTP 状态码 + 业务 code 双重校验，成功时解包 data 字段
+ * @returns true=已给出最终结果（resolve/reject）；false=HTTP 401，由调用方决定刷新/登出
+ * @note 后端各接口 data 有「对象」与「裸数组」两种形态。Android 端数组无法
+ *       as UTSJSONObject（会抛 ClassCastException），此处捕获后统一包装为
+ *       { list: [...] }，由各 API 层按 list 字段取值。
+ */
+function handleStatus(statusCode : number, body : UTSJSONObject, silent : boolean, fallbackMsg : string, resolve : (v : UTSJSONObject) => void, reject : (e : Error) => void) : boolean {
+    if (statusCode == 401) {
+        return false
+    }
+
+    // HTTP 错误
+    if (statusCode < 200 || statusCode >= 300) {
+        let msg = `请求失败 (${statusCode})`
+        const bodyMsg = body['message']
+        if (bodyMsg != null) {
+            msg = bodyMsg as string
+        }
+        showError(msg, silent)
+        reject(new Error(msg))
+        return true
+    }
+
+    // 业务层错误：code 非 200/201
+    const code = body['code'] as number
+    const message = (body['message'] as string) ?? fallbackMsg
+    if (code != 200 && code != 201) {
+        showError(message, silent)
+        reject(new Error(message))
+        return true
+    }
+
+    // 成功：返回 data 字段
+    const data = body['data']
+    if (data == null) {
+        resolve({})
+        return true
+    }
+    let dataObj : UTSJSONObject
+    try {
+        dataObj = data as UTSJSONObject
+    } catch (e) {
+        // data 为数组：包装为 { list: [...] }
+        dataObj = { list: data } as UTSJSONObject
+    }
+    resolve(dataObj)
+    return true
+}
+
+/** 网络层失败（fail 回调）的统一报错 */
+function networkError(errMsg : string | null, failMsg : string, timeoutMsg : string, silent : boolean, reject : (e : Error) => void) {
+    let msg = failMsg
+    if (errMsg != null && errMsg.indexOf('timeout') >= 0) {
+        msg = timeoutMsg
+    }
+    showError(msg, silent)
+    reject(new Error(errMsg != null && errMsg.length > 0 ? errMsg : msg))
 }
 
 /**
@@ -94,157 +217,122 @@ function handleUnauthorized() {
  *       因此统一返回 UTSJSONObject，由调用方手动构造目标类型
  */
 export function request<T>(options : RequestOptions) : Promise<UTSJSONObject> {
-	return new Promise<UTSJSONObject>((resolve, reject) => {
-		const method = options.method ?? 'GET'
-		const silent = options.silent ?? false
-		const timeout = options.timeout ?? REQUEST_TIMEOUT
-		const fullURL = resolveURL(options.url)
-		const header = buildHeader(options.header, silent)
+    return new Promise<UTSJSONObject>((resolve, reject) => {
+        const method = options.method ?? 'GET'
+        const silent = options.silent ?? false
+        const timeout = options.timeout ?? REQUEST_TIMEOUT
+        const fullURL = resolveURL(options.url)
+        const header = buildHeader(options.header, silent)
 
-		console.log('[request] >>>', method, fullURL)
-		console.log('[request] header:', JSON.stringify(header))
-		console.log('[request] data:', options.data)
+        if (ENABLE_DEBUG_LOG) {
+            console.log('[request] >>>', method, fullURL, 'data:', options.data)
+        }
 
-		uni.request({
-			url: fullURL,
-			method: method,
-			data: options.data,
-			header: header,
-			timeout: timeout,
-			success: (res) => {
-				console.log('[request] <<< success statusCode=', res.statusCode)
-				console.log('[request] <<< data:', res.data)
-				const statusCode = res.statusCode
-				// 响应体可能是 HTML（如 nginx 502 错误页），as UTSJSONObject 会抛 ClassCastException
-				// 用 try/catch 包裹，确保异常时 reject 而非让 Promise 悬挂
-				try {
-					const body = res.data as UTSJSONObject
+        /** 单次请求；401 刷新成功后带新 token 重试一次（isRetry=true 时不再刷新） */
+        const send = (reqHeader : UTSJSONObject, isRetry : boolean) => {
+            uni.request({
+                url: fullURL,
+                method: method,
+                data: options.data,
+                header: reqHeader,
+                timeout: timeout,
+                success: (res) => {
+                    if (ENABLE_DEBUG_LOG) {
+                        console.log('[request] <<<', res.statusCode, fullURL)
+                    }
+                    const statusCode = res.statusCode
+                    // 响应体可能是 HTML（如 nginx 502 错误页），as UTSJSONObject 会抛 ClassCastException
+                    // 用 try/catch 包裹，确保异常时 reject 而非让 Promise 悬挂
+                    let body : UTSJSONObject
+                    try {
+                        body = res.data as UTSJSONObject
+                    } catch (e) {
+                        const msg = `请求失败 (${statusCode})`
+                        showError(msg, silent)
+                        reject(new Error(msg))
+                        return
+                    }
 
-					// HTTP 401：未登录/登录过期
-					if (statusCode == 401) {
-						handleUnauthorized()
-						showError('登录已过期，请重新登录', silent)
-						reject(new Error('登录已过期，请重新登录'))
-						return
-					}
+                    if (handleStatus(statusCode, body, silent, '请求失败', resolve, reject)) return
 
-					// HTTP 其他错误
-					if (statusCode < 200 || statusCode >= 300) {
-						let msg = `请求失败 (${statusCode})`
-						const bodyMsg = body['message']
-						if (bodyMsg != null) {
-							msg = bodyMsg as string
-						}
-						showError(msg, silent)
-						reject(new Error(msg))
-						return
-					}
-
-					// 业务层错误：code 非 200/201
-					const code = body['code'] as number
-					const message = (body['message'] as string) ?? '请求失败'
-					if (code != 200 && code != 201) {
-						showError(message, silent)
-						reject(new Error(message))
-						return
-					}
-
-					// 成功：返回 data 字段。
-					// 说明：后端各接口 data 有「对象」与「裸数组」两种形态。Android 端数组无法
-					// as UTSJSONObject（会抛 ClassCastException），此处捕获后统一包装为
-					// { list: [...] }，由各 API 层按 list 字段取值（与既有 res['list'] 取法一致）。
-					const data = body['data']
-					if (data == null) {
-						resolve({})
-					} else {
-						let dataObj : UTSJSONObject
-						try {
-							dataObj = data as UTSJSONObject
-						} catch (e) {
-							// data 为数组：包装为 { list: [...] }
-							const wrapped : UTSJSONObject = { list: data }
-							dataObj = wrapped
-						}
-						resolve(dataObj)
-					}
-				} catch (e) {
-					// 响应非 JSON（如 nginx 返回的 HTML 502 页面），以 HTTP 状态码报错
-					// 此 reject 会被 loginApi 的 .catch() 捕获，触发 mock 数据回退
-					console.error('[request] parse response failed (non-JSON?):', e)
-					const msg = `请求失败 (${statusCode})`
-					showError(msg, silent)
-					reject(new Error(msg))
-				}
-			},
-			fail: (err) => {
-			console.error('[request] <<< FAIL errMsg=', err.errMsg)
-			console.error('[request] <<< FAIL err=', JSON.stringify(err))
-			// 区分超时与其他网络错误，给出更准确的提示
-			const errMsg = err.errMsg ?? ''
-			let msg = '网络连接失败，请检查网络后重试'
-			if (errMsg.indexOf('timeout') >= 0) {
-				msg = '请求超时，请稍后重试'
-			}
-			showError(msg, silent)
-			reject(new Error(errMsg.length > 0 ? errMsg : msg))
-		},
-		})
-	})
+                    // HTTP 401：刷新接口自身 401、重试后仍 401、或无刷新回调 → 直接登出
+                    if (isRetry || options.url.includes('/auth/refresh') || _refreshTokenHandler == null) {
+                        logoutAndReject(silent, reject)
+                        return
+                    }
+                    // 注意：success 回调非 async，uts 中禁止使用 await，改用 .then 链
+                    tryAutoRefresh().then((refreshed : boolean) => {
+                        // 刷新成功后重新 buildHeader（token 已更新到 storage）
+                        if (refreshed && getStorage(STORAGE_KEY_TOKEN).length > 0) {
+                            send(buildHeader(options.header, silent), true)
+                        } else {
+                            logoutAndReject(silent, reject)
+                        }
+                    })
+                },
+                fail: (err) => {
+                    console.error('[request] <<< FAIL errMsg=', err.errMsg)
+                    networkError(err.errMsg, '网络连接失败，请检查网络后重试', '请求超时，请稍后重试', silent, reject)
+                },
+            })
+        }
+        send(header, false)
+    })
 }
 
 /** GET 请求快捷方法 */
 export function get(url : string, params : UTSJSONObject | null = null, options : RequestOptions | null = null) : Promise<UTSJSONObject> {
-	let finalURL = url
-	if (params != null) {
-		const pairs : string[] = []
-		// 用 for...in 遍历 UTSJSONObject 的字段名（跨端通用，Android 端不支持 Object.keys）
-		for (const k in params) {
-			const v = params[k]
-			pairs.push(`${encodeURIComponent(k)}=${encodeURIComponent(v as string)}`)
-		}
-		if (pairs.length > 0) {
-			finalURL = url + (url.includes('?') ? '&' : '?') + pairs.join('&')
-		}
-	}
-	const opts : RequestOptions = options != null ? options! : { url: finalURL } as RequestOptions
-	opts.url = finalURL
-	opts.method = 'GET'
-	return request<UTSJSONObject>(opts)
+    let finalURL = url
+    if (params != null) {
+        const pairs : string[] = []
+        // 用 for...in 遍历 UTSJSONObject 的字段名（跨端通用，Android 端不支持 Object.keys）
+        for (const k in params) {
+            const v = params[k]
+            pairs.push(`${encodeURIComponent(k)}=${encodeURIComponent(v as string)}`)
+        }
+        if (pairs.length > 0) {
+            finalURL = url + (url.includes('?') ? '&' : '?') + pairs.join('&')
+        }
+    }
+    const opts : RequestOptions = options != null ? options! : { url: finalURL } as RequestOptions
+    opts.url = finalURL
+    opts.method = 'GET'
+    return request<UTSJSONObject>(opts)
 }
 
 /** POST 请求快捷方法 */
 export function post(url : string, data : any | null = null, options : RequestOptions | null = null) : Promise<UTSJSONObject> {
-	const opts : RequestOptions = options != null ? options! : { url: url } as RequestOptions
-	opts.url = url
-	opts.method = 'POST'
-	opts.data = data
-	return request<UTSJSONObject>(opts)
+    const opts : RequestOptions = options != null ? options! : { url: url } as RequestOptions
+    opts.url = url
+    opts.method = 'POST'
+    opts.data = data
+    return request<UTSJSONObject>(opts)
 }
 
 /** PUT 请求快捷方法 */
 export function put(url : string, data : any | null = null, options : RequestOptions | null = null) : Promise<UTSJSONObject> {
-	const opts : RequestOptions = options != null ? options! : { url: url } as RequestOptions
-	opts.url = url
-	opts.method = 'PUT'
-	opts.data = data
-	return request<UTSJSONObject>(opts)
+    const opts : RequestOptions = options != null ? options! : { url: url } as RequestOptions
+    opts.url = url
+    opts.method = 'PUT'
+    opts.data = data
+    return request<UTSJSONObject>(opts)
 }
 
 /** DELETE 请求快捷方法 */
 export function del(url : string, options : RequestOptions | null = null) : Promise<UTSJSONObject> {
-	const opts : RequestOptions = options != null ? options! : { url: url } as RequestOptions
-	opts.url = url
-	opts.method = 'DELETE'
-	return request<UTSJSONObject>(opts)
+    const opts : RequestOptions = options != null ? options! : { url: url } as RequestOptions
+    opts.url = url
+    opts.method = 'DELETE'
+    return request<UTSJSONObject>(opts)
 }
 
 /** PATCH 请求快捷方法 */
 export function patch(url : string, data : any | null = null, options : RequestOptions | null = null) : Promise<UTSJSONObject> {
-	const opts : RequestOptions = options != null ? options! : { url: url } as RequestOptions
-	opts.url = url
-	opts.method = 'PATCH'
-	opts.data = data
-	return request<UTSJSONObject>(opts)
+    const opts : RequestOptions = options != null ? options! : { url: url } as RequestOptions
+    opts.url = url
+    opts.method = 'PATCH'
+    opts.data = data
+    return request<UTSJSONObject>(opts)
 }
 
 /**
@@ -253,101 +341,53 @@ export function patch(url : string, data : any | null = null, options : RequestO
  * @returns 解包后的 data 字段（UTSJSONObject）
  */
 export function uploadFile(url : string, filePath : string, name : string = 'file', formData : UTSJSONObject | null = null, options : RequestOptions | null = null) : Promise<UTSJSONObject> {
-	return new Promise<UTSJSONObject>((resolve, reject) => {
-		const silent = options?.silent ?? false
-		const timeout = options?.timeout ?? REQUEST_TIMEOUT
-		const fullURL = resolveURL(url)
+    return new Promise<UTSJSONObject>((resolve, reject) => {
+        const silent = options?.silent ?? false
+        const timeout = options?.timeout ?? REQUEST_TIMEOUT
+        const fullURL = resolveURL(url)
+        const header = buildUploadHeader(silent)
 
-		// 构造请求头（与 buildHeader 同逻辑，但 uploadFile 需要 token）
-		const header : UTSJSONObject = {}
-		const token = getStorage(STORAGE_KEY_TOKEN)
-		if (token.length > 0) {
-			header['Authorization'] = `Bearer ${token}`
-		}
-		if (silent) {
-			header['X-Silent'] = '1'
-		}
-		// 注意：uploadFile 不要手动设置 Content-Type，由端侧自动生成 multipart boundary
+        if (ENABLE_DEBUG_LOG) {
+            console.log('[uploadFile] >>> POST', fullURL, 'filePath=', filePath)
+        }
 
-		console.log('[uploadFile] >>>', 'POST', fullURL)
-		console.log('[uploadFile] filePath=', filePath)
+        // formData 必须是 UTSJSONObject，null 时传空对象（uni.uploadFile 不接受 undefined）
+        const safeFormData : UTSJSONObject = formData != null ? formData! : ({} as UTSJSONObject)
 
-		// formData 必须是 UTSJSONObject，null 时传空对象（uni.uploadFile 不接受 undefined）
-		const safeFormData : UTSJSONObject = formData != null ? formData! : ({} as UTSJSONObject)
+        uni.uploadFile({
+            url: fullURL,
+            filePath: filePath,
+            name: name,
+            header: header,
+            formData: safeFormData,
+            timeout: timeout,
+            success: (res) => {
+                const statusCode = res.statusCode
+                // res.data 是字符串，需要 JSON.parse
+                let body : UTSJSONObject
+                try {
+                    const parsed = JSON.parse(res.data)
+                    if (parsed == null) {
+                        throw new Error('empty body')
+                    }
+                    body = parsed as UTSJSONObject
+                } catch (e) {
+                    const msg = `上传失败 (${statusCode})`
+                    showError(msg, silent)
+                    reject(new Error(msg))
+                    return
+                }
 
-		uni.uploadFile({
-			url: fullURL,
-			filePath: filePath,
-			name: name,
-			header: header,
-			formData: safeFormData,
-			timeout: timeout,
-			success: (res) => {
-				console.log('[uploadFile] <<< success statusCode=', res.statusCode)
-				console.log('[uploadFile] <<< data=', res.data)
-				const statusCode = res.statusCode
-				try {
-					// res.data 是字符串，需要 JSON.parse
-					const bodyStr = res.data
-					const parsed = JSON.parse(bodyStr)
-					if (parsed == null) {
-						const msg = `上传失败 (${statusCode})`
-						showError(msg, silent)
-						reject(new Error(msg))
-						return
-					}
-					const body = parsed as UTSJSONObject
-
-					if (statusCode == 401) {
-						handleUnauthorized()
-						showError('登录已过期，请重新登录', silent)
-						reject(new Error('登录已过期，请重新登录'))
-						return
-					}
-
-					if (statusCode < 200 || statusCode >= 300) {
-						let msg = `请求失败 (${statusCode})`
-						const bodyMsg = body['message']
-						if (bodyMsg != null) {
-							msg = bodyMsg as string
-						}
-						showError(msg, silent)
-						reject(new Error(msg))
-						return
-					}
-
-					const code = body['code'] as number
-					const message = (body['message'] as string) ?? '上传失败'
-					if (code != 200 && code != 201) {
-						showError(message, silent)
-						reject(new Error(message))
-						return
-					}
-
-					const data = body['data']
-					if (data == null) {
-						resolve({})
-					} else {
-						const dataObj = data as UTSJSONObject
-						resolve(dataObj)
-					}
-				} catch (e) {
-					console.error('[uploadFile] parse response failed:', e)
-					const msg = `上传失败 (${statusCode})`
-					showError(msg, silent)
-					reject(new Error(msg))
-				}
-			},
-			fail: (err) => {
-				console.error('[uploadFile] <<< FAIL errMsg=', err.errMsg)
-				const errMsg = err.errMsg ?? ''
-				let msg = '上传失败，请检查网络后重试'
-				if (errMsg.indexOf('timeout') >= 0) {
-					msg = '上传超时，请稍后重试'
-				}
-				showError(msg, silent)
-				reject(new Error(errMsg.length > 0 ? errMsg : msg))
-			}
-		})
-	})
+                if (statusCode == 401) {
+                    logoutAndReject(silent, reject)
+                    return
+                }
+                handleStatus(statusCode, body, silent, '上传失败', resolve, reject)
+            },
+            fail: (err) => {
+                console.error('[uploadFile] <<< FAIL errMsg=', err.errMsg)
+                networkError(err.errMsg, '上传失败，请检查网络后重试', '上传超时，请稍后重试', silent, reject)
+            }
+        })
+    })
 }

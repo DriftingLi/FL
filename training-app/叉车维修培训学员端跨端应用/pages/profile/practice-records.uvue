@@ -8,6 +8,32 @@
             <text class="header-title">练习记录</text>
             <view class="header-right"></view>
         </view>
+
+        <!-- 练习统计卡片 -->
+        <view class="stats-card">
+            <view class="stats-row">
+                <view class="stats-item">
+                    <text class="stats-num">{{ stats.today_count }}</text>
+                    <text class="stats-label">今日做题</text>
+                </view>
+                <view class="stats-divider"></view>
+                <view class="stats-item">
+                    <text class="stats-num">{{ stats.total_practiced }}</text>
+                    <text class="stats-label">累计做题</text>
+                </view>
+                <view class="stats-divider"></view>
+                <view class="stats-item">
+                    <text class="stats-num">{{ formatAccuracy(stats.accuracy) }}</text>
+                    <text class="stats-label">正确率</text>
+                </view>
+                <view class="stats-divider"></view>
+                <view class="stats-item">
+                    <text class="stats-num">{{ stats.streak_days }}</text>
+                    <text class="stats-label">连续天数</text>
+                </view>
+            </view>
+        </view>
+
         <!-- 题型筛选 -->
         <view class="filter-bar">
             <scroll-view class="filter-scroll" scroll-x="true">
@@ -31,7 +57,7 @@
                 <text class="empty-text">暂无练习记录</text>
             </view>
             <view class="record-list">
-                <view v-for="(item, idx) in records" :key="idx" class="record-card">
+                <view v-for="(item, idx) in records" :key="idx" class="record-card" @click="onRecordClick(item)">
                     <view class="record-status" :class="{ correct: item.is_correct, wrong: !item.is_correct }">
                         <text class="record-status-text">{{ item.is_correct ? '✓' : '✗' }}</text>
                     </view>
@@ -40,7 +66,7 @@
                         <view class="record-meta">
                             <text class="record-tag record-tag-type">{{ getTypeName(item.type) }}</text>
                             <text class="record-tag record-tag-mode">{{ getModeName(item.practice_type) }}</text>
-                            <text class="record-time">{{ formatDate(item.created_at) }}</text>
+                            <text class="record-time">{{ formatDateStr(item.created_at) }}</text>
                         </view>
                     </view>
                 </view>
@@ -59,8 +85,10 @@
     import { ref, computed } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
-    import { getPracticeHistoryApi } from '../../api/practice'
-    import type { PracticeHistoryItem } from '../../types/index'
+    import { goBack } from '../../utils/navigation'
+    import { getPracticeHistoryApi, getPracticeStatsApi } from '../../api/practice'
+    import type { PracticeHistoryItem, PracticeStats } from '../../types/index'
+    import { formatDateStr } from '../../utils/format'
 
     type TypeOption = {
         label : string
@@ -69,6 +97,15 @@
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    // 练习统计
+    const stats = ref<PracticeStats>({
+        total_practiced: 0,
+        correct_count: 0,
+        accuracy: 0,
+        today_count: 0,
+        streak_days: 0,
+    } as PracticeStats)
 
     // 题型筛选：与后端 type 字段对齐
     const typeOptions : TypeOption[] = [
@@ -99,6 +136,21 @@
         return records.value.length - correctCount.value
     })
 
+    /** 格式化正确率 */
+    function formatAccuracy(val : number) : string {
+        if (val == Math.floor(val)) return '' + Math.floor(val) + '%'
+        return val.toFixed(1) + '%'
+    }
+
+    /** 加载练习统计 */
+    async function loadStats() : Promise<void> {
+        try {
+            stats.value = await getPracticeStatsApi()
+        } catch (e) {
+            uni.__f__('error','at pages/profile/practice-records.uvue:149','[practice-records] loadStats failed:', e)
+        }
+    }
+
     /** 题型名称 */
     function getTypeName(type : string) : string {
         if (type == 'single' || type == 'single_choice') return '单选题'
@@ -117,11 +169,6 @@
     }
 
     /** 时间字符串截取 YYYY-MM-DD */
-    function formatDate(dateStr : string) : string {
-        if (dateStr.length < 10) return dateStr
-        return dateStr.substring(0, 10)
-    }
-
     async function loadRecords(reset : boolean = false) {
         if (loading.value) return
         if (reset) {
@@ -145,7 +192,7 @@
                 page.value = page.value + 1
             }
         } catch (e) {
-            console.error('[practice-records] load failed:', e)
+            uni.__f__('error','at pages/profile/practice-records.uvue:199','[practice-records] load failed:', e)
             uni.showToast({ title: '加载练习记录失败', icon: 'none' })
         } finally {
             loading.value = false
@@ -163,10 +210,20 @@
     }
 
     function onBack() : void {
-        uni.navigateBack()
+        goBack()
+    }
+
+    /** 点击记录卡片：跳转到答题页面回顾该题 */
+    function onRecordClick(item : PracticeHistoryItem) : void {
+        if (item.question_id > 0) {
+            uni.navigateTo({
+                url: '/pages/practice/practice-do?mode=review&question_id=' + item.question_id.toString()
+            })
+        }
     }
 
     onShow(() => {
+        loadStats()
         if (records.value.length == 0) {
             loadRecords(true)
         }
@@ -261,6 +318,44 @@
         font-size: 24rpx;
         color: #2979ff;
         margin-left: 16rpx;
+    }
+
+    /* 统计卡片 */
+    .stats-card {
+        background-color: #ffffff;
+        margin: 0 24rpx 16rpx;
+        border-radius: 16rpx;
+        padding: 24rpx 0;
+    }
+
+    .stats-row {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-around;
+    }
+
+    .stats-item {
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .stats-num {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #2979ff;
+        margin-bottom: 6rpx;
+    }
+
+    .stats-label {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .stats-divider {
+        width: 1rpx;
+        height: 48rpx;
+        background-color: #eeeeee;
     }
 
     .record-scroll {

@@ -8,6 +8,27 @@
             <text class="header-title">学习记录</text>
             <view class="header-right"></view>
         </view>
+
+        <!-- 统计卡片 -->
+        <view class="stats-card">
+            <view class="stats-row">
+                <view class="stats-item">
+                    <text class="stats-num">{{ total }}</text>
+                    <text class="stats-label">总记录</text>
+                </view>
+                <view class="stats-divider"></view>
+                <view class="stats-item">
+                    <text class="stats-num">{{ formatMinutes(totalStudyMinutes) }}</text>
+                    <text class="stats-label">学习时长</text>
+                </view>
+                <view class="stats-divider"></view>
+                <view class="stats-item">
+                    <text class="stats-num">{{ uniqueCourseCount }}</text>
+                    <text class="stats-label">涉及课程</text>
+                </view>
+            </view>
+        </view>
+
         <!-- 日期快捷筛选 -->
         <view class="filter-bar">
             <scroll-view class="filter-scroll" scroll-x="true">
@@ -31,7 +52,7 @@
                 <text class="empty-text">暂无学习记录</text>
             </view>
             <view class="record-list">
-                <view v-for="(item, idx) in records" :key="idx" class="record-card">
+                <view v-for="(item, idx) in records" :key="idx" class="record-card" @click="onRecordClick(item)">
                     <view class="record-top">
                         <text class="record-course">{{ item.course_name }}</text>
                         <text class="record-date">{{ item.study_date }}</text>
@@ -56,6 +77,7 @@
     import { ref, computed } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
     import { getRecordsApi } from '../../api/student'
     import type { StudyRecord } from '../../types/index'
 
@@ -81,6 +103,28 @@
     const total = ref<number>(0)
     const loading = ref<boolean>(false)
     const noMore = ref<boolean>(false)
+
+    /** 已加载记录的总学习分钟数 */
+    const totalStudyMinutes = computed<number>(() : number => {
+        let sum = 0
+        for (let i = 0; i < records.value.length; i++) {
+            sum += records.value[i].study_duration
+        }
+        return sum
+    })
+
+    /** 已加载记录涉及的去重课程数 */
+    const uniqueCourseCount = computed<number>(() : number => {
+        const map : UTSJSONObject = {} as UTSJSONObject
+        for (let i = 0; i < records.value.length; i++) {
+            map[records.value[i].course_id.toString()] = true
+        }
+        let cnt = 0
+        for (const k in map) {
+            cnt++
+        }
+        return cnt
+    })
 
     /** 计算 YYYY-MM-DD 的日期字符串 */
     function dateToYMD(d : Date) : string {
@@ -173,7 +217,20 @@
     }
 
     function onBack() : void {
-        uni.navigateBack()
+        goBack()
+    }
+
+    /** 点击记录：跳转到对应课程章节 */
+    function onRecordClick(item : StudyRecord) : void {
+        if (item.course_id > 0 && item.chapter_id > 0) {
+            uni.navigateTo({
+                url: '/pages/courses/chapter-view?course_id=' + item.course_id.toString() + '&chapter_id=' + item.chapter_id.toString()
+            })
+        } else if (item.course_id > 0) {
+            uni.navigateTo({
+                url: '/pages/courses/course-detail?course_id=' + item.course_id.toString()
+            })
+        }
     }
 
     onShow(() => {
@@ -271,6 +328,44 @@
         font-size: 24rpx;
         color: #2979ff;
         margin-left: 16rpx;
+    }
+
+    /* 统计卡片 */
+    .stats-card {
+        background-color: #ffffff;
+        margin: 0 24rpx 16rpx;
+        border-radius: 16rpx;
+        padding: 24rpx 0;
+    }
+
+    .stats-row {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-around;
+    }
+
+    .stats-item {
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .stats-num {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #2979ff;
+        margin-bottom: 6rpx;
+    }
+
+    .stats-label {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .stats-divider {
+        width: 1rpx;
+        height: 48rpx;
+        background-color: #eeeeee;
     }
 
     .record-scroll {

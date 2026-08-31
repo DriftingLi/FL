@@ -3,59 +3,93 @@
 		<!-- 顶部品牌区 -->
 		<view class="header">
 			<view class="logo-box">
-				<view class="mast-l"></view>
-				<view class="mast-r"></view>
-				<view class="fork-v"></view>
-				<view class="fork-h"></view>
-				<view class="f-body"></view>
-				<view class="f-cab"></view>
-				<view class="f-window"></view>
-				<view class="f-wheel f-wheel-back"></view>
-				<view class="f-wheel f-wheel-front"></view>
-				<view class="f-hub f-hub-back"></view>
-				<view class="f-hub f-hub-front"></view>
-				<view class="f-wrench-ring"></view>
-				<view class="f-wrench-handle"></view>
+				<image src="/static/logo.png" mode="aspectFit" style="width: 140rpx; height: 140rpx;"></image>
 			</view>
 			<text class="page-title">注册账号</text>
-			<text class="page-subtitle">手机号注册，验证码通过后自动登录</text>
+			<text class="page-subtitle">{{ subtitle }}</text>
+		</view>
+
+		<!-- 注册方式切换：手机号 / 邮箱 -->
+		<view class="mode-tabs">
+			<view class="mode-tab" :class="{ 'mode-tab-active': mode == 'phone' }" @click="switchMode('phone')">手机号注册</view>
+			<view class="mode-tab" :class="{ 'mode-tab-active': mode == 'email' }" @click="switchMode('email')">邮箱注册</view>
 		</view>
 
 		<view class="form">
-			<view class="form-item">
-				<view class="input-wrap">
-					<input class="input-base" type="text" placeholder="请输入昵称" :maxlength="20"
-						:value="form.nickname" @input="onNicknameInput" />
-				</view>
-			</view>
-			<view class="form-item">
-				<view class="input-wrap">
-					<text class="input-prefix">+86</text>
-					<input class="input-base" type="number" placeholder="请输入 11 位手机号" :maxlength="11"
-						:value="form.phone" @input="onPhoneInput" />
-				</view>
-			</view>
-			<view class="form-item code-row">
-				<view class="code-input-wrap">
+			<!-- ===== 手机号注册（默认） ===== -->
+			<template v-if="mode == 'phone'">
+				<view class="form-item">
 					<view class="input-wrap">
-						<input class="input-base" type="number" placeholder="请输入验证码" :maxlength="6"
-							:value="form.code" @input="onCodeInput" />
+						<input class="input-base" type="text" placeholder="请输入昵称" :maxlength="20"
+							:value="form.nickname" @input="onNicknameInput" />
 					</view>
 				</view>
-				<button class="code-btn" :class="{ 'code-btn-disabled': sendingCode || countdown > 0 }" :disabled="sendingCode || countdown > 0" @click="onSendCode">
-					{{ countdown > 0 ? countdown + 's' : '获取验证码' }}
-				</button>
-			</view>
-			<view class="form-item captcha-row">
-				<view class="input-wrap captcha-input-wrap">
-					<input class="input-base captcha-input" type="text" placeholder="图形验证码" :maxlength="4"
-						:value="captchaValue" @input="onCaptchaInput" />
+				<view class="form-item">
+					<view class="input-wrap">
+						<text class="input-prefix">+86</text>
+						<input class="input-base" type="number" placeholder="请输入 11 位手机号" :maxlength="11"
+							:value="form.phone" @input="onPhoneInput" />
+					</view>
 				</view>
-				<image class="captcha-img" :src="captchaImage" mode="aspectFit" @click="refreshCaptcha" />
-			</view>
-			<view class="form-item hint" v-if="codeHint.length > 0">
-				<text class="hint-text">{{ codeHint }}</text>
-			</view>
+				<view class="form-item code-row">
+					<view class="code-input-wrap">
+						<view class="input-wrap">
+							<input class="input-base" type="number" placeholder="请输入验证码" :maxlength="6"
+								:value="form.code" @input="onCodeInput" />
+						</view>
+					</view>
+					<button class="code-btn" :class="{ 'code-btn-disabled': sendingCode || countdown > 0 }" :disabled="sendingCode || countdown > 0" @click="onSendCode">
+						{{ countdown > 0 ? countdown + 's' : '获取验证码' }}
+					</button>
+				</view>
+				<view class="form-item captcha-row">
+					<view class="input-wrap captcha-input-wrap">
+						<input class="input-base captcha-input" type="text" placeholder="图形验证码" :maxlength="4"
+							:value="captchaValue" @input="onCaptchaInput" />
+					</view>
+					<image class="captcha-img" :src="captchaImage" mode="aspectFit" @click="refreshCaptcha" />
+				</view>
+				<view class="form-item hint" v-if="codeHint.length > 0">
+					<text class="hint-text">{{ codeHint }}</text>
+				</view>
+			</template>
+
+			<!-- ===== 邮箱注册 ===== -->
+			<template v-else>
+				<view class="form-item">
+					<view class="input-wrap">
+						<input class="input-base" type="text" placeholder="请输入昵称" :maxlength="20"
+							:value="form.nickname" @input="onNicknameInput" />
+					</view>
+				</view>
+				<view class="form-item">
+					<view class="input-wrap">
+						<input class="input-base" type="text" placeholder="请输入邮箱" :maxlength="50"
+							:value="form.email" @input="onEmailInput" />
+					</view>
+				</view>
+				<view class="form-item code-row">
+					<view class="code-input-wrap">
+						<view class="input-wrap">
+							<input class="input-base" type="number" placeholder="请输入验证码" :maxlength="6"
+								:value="form.code" @input="onCodeInput" />
+						</view>
+					</view>
+					<button class="code-btn" :class="{ 'code-btn-disabled': sendingCode || countdown > 0 }" :disabled="sendingCode || countdown > 0" @click="onSendCode">
+						{{ countdown > 0 ? countdown + 's' : '获取验证码' }}
+					</button>
+				</view>
+				<view class="form-item captcha-row">
+					<view class="input-wrap captcha-input-wrap">
+						<input class="input-base captcha-input" type="text" placeholder="图形验证码" :maxlength="4"
+							:value="captchaValue" @input="onCaptchaInput" />
+					</view>
+					<image class="captcha-img" :src="captchaImage" mode="aspectFit" @click="refreshCaptcha" />
+				</view>
+				<view class="form-item hint" v-if="codeHint.length > 0">
+					<text class="hint-text">{{ codeHint }}</text>
+				</view>
+			</template>
 			<view class="form-item">
 				<view class="input-wrap">
 					<input class="input-base" :password="true" placeholder="设置密码（至少 6 位）" :maxlength="32"
@@ -96,13 +130,14 @@
 	import { onLoad, onUnload } from '@dcloudio/uni-app'
 	import { reactive, ref, computed } from 'vue'
 	import { useAuthStore } from '../../stores/auth'
-	import { registerApi, sendPhoneCodeApi, getCaptchaApi } from '../../api/auth'
-	import type { RegisterParams } from '../../types/index'
+	import { registerApi, emailRegisterApi, sendPhoneCodeApi, sendCodeApi, getCaptchaApi } from '../../api/auth'
+	import type { RegisterParams, EmailRegisterParams, LoginResult } from '../../types/index'
 
 	// 注册表单数据类型（UTS 必须显式声明，否则 reactive 字段会被推断为 Any?）
 	type RegisterForm = {
 		nickname : string
 		phone : string
+		email : string
 		code : string
 		password : string
 		confirmPassword : string
@@ -110,9 +145,28 @@
 
 	const auth = useAuthStore()
 
+	// 注册方式：phone（手机号注册，默认） | email（邮箱注册）
+	const mode = ref<string>('phone')
+
+	// 页面副标题随注册方式切换
+	const subtitle = computed<string>(() : string =>
+		mode.value == 'email' ? '邮箱注册，验证码通过后自动登录' : '手机号注册，验证码通过后自动登录'
+	)
+
+	/** 切换注册方式：重置验证码倒计时并刷新图形验证码（对应用侧验证码规则互不影响） */
+	function switchMode(m : string) : void {
+		if (m == mode.value) return
+		mode.value = m
+		clearCountdownTimer()
+		countdown.value = 0
+		wrongAttempts.value = 0
+		loadCaptcha()
+	}
+
 	const form = reactive({
 		nickname: '',
 		phone: '',
+		email: '',
 		code: '',
 		password: '',
 		confirmPassword: '',
@@ -194,6 +248,13 @@
 		return ''
 	}
 
+	function validateEmail() : string {
+		const t = form.email.trim()
+		if (t.length == 0) return '请输入邮箱'
+		if (t.indexOf('@') <= 0 || t.indexOf('.') <= 0) return '邮箱格式不正确'
+		return ''
+	}
+
 	function startCountdown() : void {
 		countdown.value = 60
 		clearCountdownTimer()
@@ -209,10 +270,9 @@
 		if (sendingCode.value || countdown.value > 0) return
 		if (captchaId.value.length == 0 || captchaValue.value.length == 0) {
 			uni.showToast({ title: '请先输入图形验证码', icon: 'none' })
-			loadCaptcha()
 			return
 		}
-		const err = validatePhone()
+		const err = mode.value == 'email' ? validateEmail() : validatePhone()
 		if (err.length > 0) {
 			uni.showToast({ title: err, icon: 'none' })
 			return
@@ -220,13 +280,17 @@
 		sendingCode.value = true
 		uni.showLoading({ title: '发送中...', mask: true })
 		try {
-			await sendPhoneCodeApi(form.phone, captchaId.value, captchaValue.value)
+			if (mode.value == 'email') {
+				await sendCodeApi(form.email.trim(), 'email', 'register', captchaId.value, captchaValue.value)
+			} else {
+				await sendPhoneCodeApi(form.phone, captchaId.value, captchaValue.value)
+			}
 			// 发送成功后刷新图形验证码（答案用后即焚，防止重放）
 			loadCaptcha()
 			// 新验证码下发后重置本地连续输错计数（对齐后端错误上限）
 			wrongAttempts.value = 0
 			uni.hideLoading()
-			uni.showToast({ title: '验证码已发送，请查收短信', icon: 'none' })
+			uni.showToast({ title: mode.value == 'email' ? '验证码已发送，请查收邮箱' : '验证码已发送，请查收短信', icon: 'none' })
 			startCountdown()
 		} catch (e) {
 			uni.hideLoading()
@@ -240,6 +304,9 @@
 				}
 			}
 			uni.showToast({ title: msg, icon: 'none' })
+			// 失败后刷新图形验证码：后端校验即消费（无论对错都会删除答案），
+			// 不做刷新会留下已失效的旧图，重试必报"图形验证码错误或已过期"
+			loadCaptcha()
 		} finally {
 			sendingCode.value = false
 		}
@@ -247,15 +314,20 @@
 
 	function validate() : string {
 		const nickname : string = form.nickname
-		const phone : string = form.phone
 		const code : string = form.code
 		const password : string = form.password
 		const confirmPassword : string = form.confirmPassword
 		if (agreed.value == false) return '请先同意用户协议和隐私政策'
 		if (nickname.length == 0) return '请输入昵称'
-		if (phone.length != 11) return '请输入 11 位手机号'
-		if (!phone.startsWith('1')) return '手机号格式不正确'
-		if (!/^\d{11}$/.test(phone)) return '手机号必须为数字'
+		if (mode.value == 'email') {
+			const err = validateEmail()
+			if (err.length > 0) return err
+		} else {
+			const phone : string = form.phone
+			if (phone.length != 11) return '请输入 11 位手机号'
+			if (!phone.startsWith('1')) return '手机号格式不正确'
+			if (!/^\d{11}$/.test(phone)) return '手机号必须为数字'
+		}
 		if (code.length == 0) return '请输入验证码'
 		if (code.length != 6) return '请输入 6 位验证码'
 		if (password.length < 6) return '密码至少 6 位'
@@ -273,21 +345,31 @@
 		loading.value = true
 		uni.showLoading({ title: '注册中...', mask: true })
 
-		const params : RegisterParams = {
-			phone: form.phone,
-			code: form.code,
-			nickname: form.nickname,
-			password: form.password,
-		}
-
 		try {
 			// 验证码通过后自动登录
-			const result = await registerApi(params)
+			let result : LoginResult
+			if (mode.value == 'email') {
+				const params : EmailRegisterParams = {
+					email: form.email.trim(),
+					code: form.code,
+					nickname: form.nickname,
+					password: form.password,
+				}
+				result = await emailRegisterApi(params)
+			} else {
+				const params : RegisterParams = {
+					phone: form.phone,
+					code: form.code,
+					nickname: form.nickname,
+					password: form.password,
+				}
+				result = await registerApi(params)
+			}
 			auth.setAuthData(result.token, result.user)
 			uni.hideLoading()
 			uni.showToast({ title: '注册成功', icon: 'success', duration: 1500 })
 			setTimeout(() => {
-				uni.reLaunch({ url: '/pages/dashboard/dashboard' })
+				uni.reLaunch({ url: '/pages/guide/choose-cert' })
 			}, 1000)
 		} catch (e) {
 			uni.hideLoading()
@@ -332,6 +414,10 @@
 
 	function onPhoneInput(e : InputEvent) : void {
 		form.phone = e.detail.value
+	}
+
+	function onEmailInput(e : InputEvent) : void {
+		form.email = e.detail.value
 	}
 
 	function onCodeInput(e : InputEvent) : void {
@@ -510,6 +596,31 @@
 		font-size: 24rpx;
 		color: #999999;
 		text-align: center;
+	}
+
+	/* ===== 注册方式切换（手机号 / 邮箱） ===== */
+	.mode-tabs {
+		flex-direction: row;
+		justify-content: center;
+		align-items: center;
+		margin: 8rpx 0 40rpx 0;
+	}
+
+	.mode-tab {
+		padding: 14rpx 44rpx;
+		margin: 0 12rpx;
+		font-size: 28rpx;
+		color: #666666;
+		background-color: #F0F1F5;
+		border-radius: 48rpx;
+		border: 2rpx solid transparent;
+	}
+
+	.mode-tab-active {
+		background-color: #E8F3FF;
+		color: #2979ff;
+		border-color: #2979ff;
+		font-weight: bold;
 	}
 
 	/* ===== 表单区 ===== */

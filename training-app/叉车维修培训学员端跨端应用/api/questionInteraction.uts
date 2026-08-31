@@ -1,0 +1,123 @@
+/**
+ * 题目互动模块 API
+ * - 评论列表 / 发表评论 / 删除评论
+ * - 考点标签
+ * - 个人笔记 CRUD
+ */
+import { get, post, put, del } from './request'
+import { toNumber, toStr, toBool } from './helpers'
+import type { QuestionComment, CommentListResult, QuestionNote, KnowledgeTag } from '../types/index'
+
+
+
+
+/** 从 UTSJSONObject 构造 QuestionComment */
+function buildComment(obj : UTSJSONObject) : QuestionComment {
+	return {
+		id: toNumber(obj['id']),
+		question_id: toNumber(obj['question_id']),
+		user_id: toNumber(obj['user_id']),
+		username: toStr(obj['username']),
+		avatar_url: toStr(obj['avatar_url']),
+		content: toStr(obj['content']),
+		created_at: toStr(obj['created_at']),
+		can_delete: toBool(obj['can_delete']),
+	} as QuestionComment
+}
+
+/** 从 UTSJSONObject 构造 QuestionNote */
+function buildNote(obj : UTSJSONObject) : QuestionNote {
+	const rawId = obj['id']
+	return {
+		id: rawId != null ? toNumber(rawId) : null,
+		question_id: toNumber(obj['question_id']),
+		content: toStr(obj['content']),
+		updated_at: toStr(obj['updated_at']),
+	} as QuestionNote
+}
+
+/** 从 UTSJSONObject 构造 KnowledgeTag */
+function buildKnowledgeTag(obj : UTSJSONObject) : KnowledgeTag {
+	return {
+		id: toNumber(obj['id']),
+		code: toStr(obj['code']),
+		name: toStr(obj['name']),
+	} as KnowledgeTag
+}
+
+// ========== 评论 ==========
+
+/** 获取题目评论列表 */
+export function getCommentsApi(questionId : number) : Promise<CommentListResult> {
+	return get(`/questions/${questionId}/comments`).then((data : UTSJSONObject) : CommentListResult => {
+		const items : QuestionComment[] = []
+		// 兼容后端返回 { list: [...] } 或 { items: [...] } 两种形态
+		const listRaw = data['list'] ?? data['items']
+		if (listRaw != null) {
+			const arr = listRaw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				items.push(buildComment(arr[i]))
+			}
+		}
+		return {
+			items: items,
+			total: toNumber(data['total'], items.length),
+		} as CommentListResult
+	})
+}
+
+/** 发表评论 */
+export function createCommentApi(questionId : number, content : string) : Promise<QuestionComment> {
+	const payload : UTSJSONObject = { content: content } as UTSJSONObject
+	return post(`/questions/${questionId}/comments`, payload).then((data : UTSJSONObject) : QuestionComment => {
+		return buildComment(data)
+	})
+}
+
+/**
+ * 删除评论（仅本人可删）
+ * @param commentId 评论 ID
+ */
+export function deleteCommentApi(commentId : number) : Promise<UTSJSONObject> {
+	const url = '/questions/comments/' + commentId
+	return del(url)
+}
+
+// ========== 考点标签 ==========
+
+/** 获取题目考点标签列表 */
+export function getKnowledgeApi(questionId : number) : Promise<KnowledgeTag[]> {
+	return get(`/questions/${questionId}/knowledge`).then((data : UTSJSONObject) : KnowledgeTag[] => {
+		const tags : KnowledgeTag[] = []
+		const listRaw = data['list'] ?? data['items']
+		if (listRaw != null) {
+			const arr = listRaw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				tags.push(buildKnowledgeTag(arr[i]))
+			}
+		}
+		return tags
+	})
+}
+
+// ========== 笔记 ==========
+
+/** 获取个人笔记（无笔记时返回空内容） */
+export function getNoteApi(questionId : number) : Promise<QuestionNote> {
+	return get(`/questions/${questionId}/note`).then((data : UTSJSONObject) : QuestionNote => {
+		return buildNote(data)
+	})
+}
+
+/** 保存笔记（upsert：首次创建，之后更新） */
+export function saveNoteApi(questionId : number, content : string) : Promise<QuestionNote> {
+	const payload : UTSJSONObject = { content: content } as UTSJSONObject
+	return put(`/questions/${questionId}/note`, payload).then((data : UTSJSONObject) : QuestionNote => {
+		return buildNote(data)
+	})
+}
+
+/** 删除笔记 */
+export function deleteNoteApi(questionId : number) : Promise<void> {
+	return del(`/questions/${questionId}/note`).then(() : void => {})
+}

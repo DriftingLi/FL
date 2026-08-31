@@ -1,0 +1,543 @@
+<template>
+	<view class="search-page">
+		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+		<!-- 搜索栏 -->
+		<view class="search-header">
+			<view class="search-input-wrap">
+				<text class="search-icon">🔍</text>
+				<input class="search-input" type="text" v-model="keyword" placeholder="搜索课程、题目、资料、帖子"
+					confirm-type="search" @confirm="onSearch" />
+				<view v-if="keyword.length > 0" class="search-clear" @click="onClear">
+					<text class="search-clear-text">✕</text>
+				</view>
+			</view>
+			<text class="search-cancel" @click="onCancel">取消</text>
+		</view>
+
+		<!-- 类型筛选 -->
+		<view v-if="hasSearched" class="type-tabs">
+			<view v-for="(tab, idx) in typeTabs" :key="idx" class="type-tab"
+				:class="{ 'type-tab--active': activeTypeIdx == idx }" @click="onTypeChange(idx)">
+				<text class="type-tab-text" :class="{ 'type-tab-text--active': activeTypeIdx == idx }">{{ tab.label }}</text>
+			</view>
+		</view>
+
+		<!-- 搜索结果 -->
+		<scroll-view v-if="hasSearched" class="result-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+			<!-- 全部结果（各分区 top 5） -->
+			<view v-if="activeTypeIdx == 0">
+				<view v-if="allResult.courses.items.length > 0" class="result-section">
+					<view class="section-header">
+						<text class="section-title">课程</text>
+						<text class="section-more" @click="onTypeChange(1)">查看全部({{ allResult.courses.total }})</text>
+					</view>
+					<view v-for="(item, idx) in allResult.courses.items" :key="idx" class="result-item"
+						@click="onItemClick(item)">
+						<view class="item-content">
+							<text class="item-title">{{ item.title }}</text>
+							<text class="item-summary" v-if="item.summary.length > 0">{{ item.summary }}</text>
+						</view>
+						<text class="item-arrow">›</text>
+					</view>
+				</view>
+
+				<view v-if="allResult.questions.items.length > 0" class="result-section">
+					<view class="section-header">
+						<text class="section-title">题目</text>
+						<text class="section-more" @click="onTypeChange(2)">查看全部({{ allResult.questions.total }})</text>
+					</view>
+					<view v-for="(item, idx) in allResult.questions.items" :key="idx" class="result-item"
+						@click="onItemClick(item)">
+						<view class="item-content">
+							<text class="item-title">{{ item.title }}</text>
+						</view>
+						<text class="item-arrow">›</text>
+					</view>
+				</view>
+
+				<view v-if="allResult.contents.items.length > 0" class="result-section">
+					<view class="section-header">
+						<text class="section-title">精选内容</text>
+						<text class="section-more" @click="onTypeChange(3)">查看全部({{ allResult.contents.total }})</text>
+					</view>
+					<view v-for="(item, idx) in allResult.contents.items" :key="idx" class="result-item"
+						@click="onItemClick(item)">
+						<view class="item-content">
+							<text class="item-title">{{ item.title }}</text>
+							<text class="item-summary" v-if="item.summary.length > 0">{{ item.summary }}</text>
+						</view>
+						<text class="item-arrow">›</text>
+					</view>
+				</view>
+
+				<view v-if="allResult.topics.items.length > 0" class="result-section">
+					<view class="section-header">
+						<text class="section-title">帖子</text>
+						<text class="section-more" @click="onTypeChange(4)">查看全部({{ allResult.topics.total }})</text>
+					</view>
+					<view v-for="(item, idx) in allResult.topics.items" :key="idx" class="result-item"
+						@click="onItemClick(item)">
+						<view class="item-content">
+							<text class="item-title">{{ item.title }}</text>
+							<text class="item-summary" v-if="item.summary.length > 0">{{ item.summary }}</text>
+						</view>
+						<text class="item-arrow">›</text>
+					</view>
+				</view>
+
+				<view v-if="isAllEmpty" class="empty-wrap">
+					<text class="empty-text">未找到相关内容</text>
+				</view>
+			</view>
+
+			<!-- 指定类型结果（分页） -->
+			<view v-else>
+				<view v-for="(item, idx) in typedResult.items" :key="idx" class="result-item"
+					@click="onItemClick(item)">
+					<view class="item-content">
+						<text class="item-title">{{ item.title }}</text>
+						<text class="item-summary" v-if="item.summary.length > 0">{{ item.summary }}</text>
+					</view>
+					<text class="item-arrow">›</text>
+				</view>
+
+				<view v-if="typedResult.items.length == 0 && !loading" class="empty-wrap">
+					<text class="empty-text">未找到相关内容</text>
+				</view>
+
+				<view v-if="loading" class="loading-wrap">
+					<text class="loading-text">加载中…</text>
+				</view>
+
+				<view v-if="!loading && !hasMore && typedResult.items.length > 0" class="no-more-wrap">
+					<text class="no-more-text">没有更多了</text>
+				</view>
+			</view>
+		</scroll-view>
+
+		<!-- 初始态：搜索历史 -->
+		<view v-if="!hasSearched && searchHistory.length > 0" class="history-section">
+			<view class="history-header">
+				<text class="history-title">搜索历史</text>
+				<text class="history-clear" @click="onClearHistory">清空</text>
+			</view>
+			<view class="history-tags">
+				<view v-for="(kw, idx) in searchHistory" :key="idx" class="history-tag" @click="onHistoryClick(kw)">
+					<text class="history-tag-text">{{ kw }}</text>
+				</view>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { ref, computed } from 'vue'
+	import { useStatusBarHeight } from '../../utils/system'
+	import { searchAllApi, searchByTypeApi } from '../../api/search'
+	import type { SearchItem, SearchCategoryResult, SearchResult, SearchPagedResult } from '../../types/index'
+
+	const statusBarHeight = useStatusBarHeight()
+
+	type TypeTab = { label: string; value: string }
+	const typeTabs: TypeTab[] = [
+		{ label: '全部', value: '' },
+		{ label: '课程', value: 'course' },
+		{ label: '题目', value: 'question' },
+		{ label: '精选', value: 'content' },
+		{ label: '帖子', value: 'topic' },
+	]
+	const activeTypeIdx = ref<number>(0)
+
+	const keyword = ref<string>('')
+	const loading = ref<boolean>(false)
+	const hasSearched = ref<boolean>(false)
+	const page = ref<number>(1)
+	const pageSize = ref<number>(20)
+
+	const emptySection: SearchCategoryResult = { items: [] as SearchItem[], total: 0 } as SearchCategoryResult
+	const allResult = ref<SearchResult>({
+		keyword: '',
+		courses: { ...emptySection },
+		questions: { ...emptySection },
+		contents: { ...emptySection },
+		topics: { ...emptySection },
+	} as SearchResult)
+
+	const typedResult = ref<SearchPagedResult>({
+		keyword: '',
+		type: '',
+		total: 0,
+		page: 1,
+		pages: 0,
+		items: [] as SearchItem[],
+	} as SearchPagedResult)
+
+	const isAllEmpty = computed<boolean>((): boolean => {
+		const r = allResult.value
+		return r.courses.items.length == 0
+			&& r.questions.items.length == 0
+			&& r.contents.items.length == 0
+			&& r.topics.items.length == 0
+	})
+
+	const hasMore = computed<boolean>((): boolean => {
+		return page.value < typedResult.value.pages
+	})
+
+	const HISTORY_KEY = 'search_history'
+	const HISTORY_MAX = 10
+	const searchHistory = ref<string[]>(loadHistory())
+
+	function loadHistory(): string[] {
+		const raw = uni.getStorageSync(HISTORY_KEY) as string
+		if (raw.length == 0) return [] as string[]
+		try {
+			return JSON.parse(raw) as string[]
+		} catch (e) {
+			return [] as string[]
+		}
+	}
+
+	function saveHistory(kw: string): void {
+		if (kw.length == 0) return
+		let list = searchHistory.value.filter((s: string): boolean => s != kw)
+		list.unshift(kw)
+		if (list.length > HISTORY_MAX) {
+			list = list.slice(0, HISTORY_MAX)
+		}
+		searchHistory.value = list
+		uni.setStorageSync(HISTORY_KEY, JSON.stringify(list))
+	}
+
+	async function onSearch(): Promise<void> {
+		const kw = keyword.value.trim()
+		if (kw.length == 0) {
+			uni.showToast({ title: '请输入搜索关键词', icon: 'none' })
+			return
+		}
+		saveHistory(kw)
+		page.value = 1
+		activeTypeIdx.value = 0
+		await doSearch()
+	}
+
+	async function doSearch(): Promise<void> {
+		const kw = keyword.value.trim()
+		const tab = typeTabs[activeTypeIdx.value]
+		loading.value = true
+		hasSearched.value = true
+		try {
+			if (tab.value.length == 0) {
+				const result = await searchAllApi(kw)
+				allResult.value = result
+			} else {
+				const result = await searchByTypeApi(kw, tab.value, page.value, pageSize.value)
+				if (page.value == 1) {
+					typedResult.value = result
+				} else {
+					const prev = typedResult.value.items
+					const merged = prev.concat(result.items)
+					typedResult.value = {
+						keyword: result.keyword,
+						type: result.type,
+						total: result.total,
+						page: result.page,
+						pages: result.pages,
+						items: merged,
+					} as SearchPagedResult
+				}
+			}
+		} catch (e) {
+			console.warn('[search] doSearch failed:', e)
+			uni.showToast({ title: '搜索失败，请重试', icon: 'none' })
+		} finally {
+			loading.value = false
+		}
+	}
+
+	function onLoadMore(): void {
+		if (loading.value) return
+		if (!hasMore.value) return
+		page.value++
+		doSearch()
+	}
+
+	async function onTypeChange(idx: number): Promise<void> {
+		if (activeTypeIdx.value == idx) return
+		activeTypeIdx.value = idx
+		page.value = 1
+		await doSearch()
+	}
+
+	function onClear(): void {
+		keyword.value = ''
+		hasSearched.value = false
+		activeTypeIdx.value = 0
+		page.value = 1
+	}
+
+	function onCancel(): void {
+		const pages = getCurrentPages()
+		if (pages != null && pages.length > 1) {
+			uni.navigateBack({})
+		} else {
+			uni.reLaunch({ url: '/pages/dashboard/dashboard' })
+		}
+	}
+
+	function onItemClick(item: SearchItem): void {
+		const id = item.id.toString()
+		switch (item.type) {
+			case 'course':
+				uni.navigateTo({ url: '/pages/courses/course-detail?id=' + id })
+				break
+			case 'content':
+				uni.showToast({ title: '资料详情开发中', icon: 'none' })
+				break
+			case 'topic':
+				uni.navigateTo({ url: '/pages/forum/forum-detail?id=' + id })
+				break
+			case 'question':
+				uni.showToast({ title: '题目详情开发中', icon: 'none' })
+				break
+			default:
+				uni.showToast({ title: '页面开发中', icon: 'none' })
+				break
+		}
+	}
+
+	function onHistoryClick(kw: string): void {
+		keyword.value = kw
+		onSearch()
+	}
+
+	function onClearHistory(): void {
+		searchHistory.value = [] as string[]
+		uni.removeStorageSync(HISTORY_KEY)
+	}
+</script>
+
+<style>
+	.search-page {
+		flex: 1;
+		background-color: #f5f5f5;
+		flex-direction: column;
+	}
+
+	.status-bar {
+		background-color: #ffffff;
+	}
+
+	.search-header {
+		flex-direction: row;
+		align-items: center;
+		padding: 16rpx 24rpx;
+		background-color: #ffffff;
+	}
+
+	.search-input-wrap {
+		flex: 1;
+		flex-direction: row;
+		align-items: center;
+		background-color: #f5f5f5;
+		border-radius: 32rpx;
+		padding: 16rpx 24rpx;
+	}
+
+	.search-icon {
+		font-size: 28rpx;
+		margin-right: 12rpx;
+	}
+
+	.search-input {
+		flex: 1;
+		font-size: 28rpx;
+		color: #333333;
+	}
+
+	.search-clear {
+		width: 40rpx;
+		height: 40rpx;
+		border-radius: 50%;
+		background-color: #cccccc;
+		align-items: center;
+		justify-content: center;
+		margin-left: 12rpx;
+	}
+
+	.search-clear-text {
+		font-size: 20rpx;
+		color: #ffffff;
+	}
+
+	.search-cancel {
+		font-size: 28rpx;
+		color: #2979ff;
+		margin-left: 20rpx;
+	}
+
+	.type-tabs {
+		flex-direction: row;
+		background-color: #ffffff;
+		padding: 16rpx 24rpx;
+		border-bottom-width: 1rpx;
+		border-bottom-color: #f0f0f0;
+	}
+
+	.type-tab {
+		padding: 12rpx 28rpx;
+		border-radius: 28rpx;
+		margin-right: 16rpx;
+		background-color: #f5f5f5;
+	}
+
+	.type-tab--active {
+		background-color: #e8f0fe;
+	}
+
+	.type-tab-text {
+		font-size: 26rpx;
+		color: #666666;
+	}
+
+	.type-tab-text--active {
+		color: #2979ff;
+		font-weight: 600;
+	}
+
+	.result-scroll {
+		flex: 1;
+	}
+
+	.result-section {
+		background-color: #ffffff;
+		margin: 16rpx 24rpx;
+		border-radius: 16rpx;
+		padding: 24rpx;
+	}
+
+	.section-header {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 16rpx;
+	}
+
+	.section-title {
+		font-size: 30rpx;
+		font-weight: bold;
+		color: #333333;
+	}
+
+	.section-more {
+		font-size: 24rpx;
+		color: #2979ff;
+	}
+
+	.result-item {
+		flex-direction: row;
+		align-items: center;
+		padding: 20rpx 0;
+		border-bottom-width: 1rpx;
+		border-bottom-color: #f5f5f5;
+	}
+
+	.item-content {
+		flex: 1;
+		flex-direction: column;
+	}
+
+	.item-title {
+		font-size: 28rpx;
+		color: #333333;
+		lines: 2;
+		text-overflow: ellipsis;
+	}
+
+	.item-summary {
+		font-size: 24rpx;
+		color: #999999;
+		margin-top: 8rpx;
+		lines: 1;
+		text-overflow: ellipsis;
+	}
+
+	.item-arrow {
+		font-size: 36rpx;
+		color: #cccccc;
+		margin-left: 16rpx;
+	}
+
+	.empty-wrap {
+		padding: 120rpx 0;
+		align-items: center;
+	}
+
+	.empty-text {
+		font-size: 28rpx;
+		color: #999999;
+	}
+
+	.loading-wrap {
+		padding: 40rpx 0;
+		align-items: center;
+	}
+
+	.loading-text {
+		font-size: 26rpx;
+		color: #999999;
+	}
+
+	.no-more-wrap {
+		padding: 40rpx 0;
+		align-items: center;
+	}
+
+	.no-more-text {
+		font-size: 24rpx;
+		color: #cccccc;
+	}
+
+	.history-section {
+		background-color: #ffffff;
+		margin: 16rpx 24rpx;
+		border-radius: 16rpx;
+		padding: 24rpx;
+	}
+
+	.history-header {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 20rpx;
+	}
+
+	.history-title {
+		font-size: 28rpx;
+		font-weight: bold;
+		color: #333333;
+	}
+
+	.history-clear {
+		font-size: 24rpx;
+		color: #999999;
+	}
+
+	.history-tags {
+		flex-direction: row;
+		flex-wrap: wrap;
+		gap: 16rpx;
+	}
+
+	.history-tag {
+		padding: 12rpx 24rpx;
+		background-color: #f5f5f5;
+		border-radius: 24rpx;
+	}
+
+	.history-tag-text {
+		font-size: 26rpx;
+		color: #666666;
+	}
+</style>

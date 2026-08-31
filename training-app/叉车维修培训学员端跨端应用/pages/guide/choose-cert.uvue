@@ -1,0 +1,483 @@
+<template>
+    <view class="page">
+        <!-- 状态栏占位 -->
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+        <!-- 顶部导航栏 -->
+        <view class="nav-bar">
+            <view class="nav-back" @click="goBack">
+                <text class="nav-back-icon">‹</text>
+            </view>
+            <text class="nav-title">选择学习阶段</text>
+            <view class="nav-placeholder"></view>
+        </view>
+
+        <!-- 滚动内容区 -->
+        <scroll-view scroll-y class="scroll-area">
+            <!-- 省份选择 -->
+            <view class="province-bar" @click="onProvinceTap">
+                <text class="province-pin">📍</text>
+                <text class="province-label">报考省份：</text>
+                <text class="province-value">{{ province }}</text>
+            </view>
+
+            <!-- 分组一：特种作业配套上岗证 -->
+            <view class="section">
+                <view class="section-header">
+                    <view class="section-icon icon-special">
+                        <text class="section-icon-text">🔧</text>
+                    </view>
+                    <text class="section-title">特种作业配套上岗证</text>
+                </view>
+                <view class="option-row">
+                    <view v-for="(item, idx) in specialCerts" :key="idx" class="option-chip"
+                        :class="{ 'option-chip--active': selectedCert === item.key }" @click="onSelectCert(item.key)">
+                        <text class="option-text"
+                            :class="{ 'option-text--active': selectedCert === item.key }">{{ item.name }}</text>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 分组二：工程机械维修工（叉车维修方向技能等级证） -->
+            <view class="section">
+                <view class="section-header">
+                    <view class="section-icon icon-engineer">
+                        <text class="section-icon-text">🚜</text>
+                    </view>
+                    <text class="section-title">工程机械维修工
+                        (叉车维修方向技能等级证)</text>
+                </view>
+                <view class="option-row">
+                    <view v-for="(item, idx) in skillLevels" :key="idx" class="option-chip option-chip--skill"
+                        :class="{ 'option-chip--active': selectedCert === item.key }" @click="onSelectCert(item.key)">
+                        <text class="option-text option-text--level"
+                            :class="{ 'option-text--active': selectedCert === item.key }">{{ item.level }}</text>
+                        <text class="option-text option-text--desc"
+                            :class="{ 'option-text--active': selectedCert === item.key }">{{ item.desc }}</text>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 分组三：热门考证 -->
+            <view class="section">
+                <view class="hot-header">
+                    <text class="hot-header-title">热门考证</text>
+                    <view class="hot-header-line"></view>
+                </view>
+                <view class="hot-grid">
+                    <view v-for="(item, idx) in hotItems" :key="idx" class="hot-card">
+                        <view class="hot-card-header">
+                            <text class="hot-card-star">⭐</text>
+                            <text class="hot-card-title">{{ item.title }}</text>
+                        </view>
+                        <text class="hot-card-desc">{{ item.desc }}</text>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 热门考证详情说明 -->
+            <view class="detail-section">
+                <view v-for="(item, idx) in hotDetails" :key="idx" class="detail-item">
+                    <view class="detail-title-row">
+                        <text class="detail-bullet">✦</text>
+                        <text class="detail-title">{{ item.title }}</text>
+                    </view>
+                    <text class="detail-content">{{ item.content }}</text>
+                </view>
+            </view>
+
+            <!-- 底部留白（为固定按钮腾空间） -->
+            <view style="height: 160rpx;"></view>
+        </scroll-view>
+
+        <!-- 底部完成按钮（固定） -->
+        <view class="bottom-bar">
+            <view class="btn-confirm" :class="{ 'btn-confirm--disabled': !selectedCert }" @click="onConfirm">
+                <text class="btn-confirm-text">完成</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref } from 'vue'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
+    import { useAuthStore } from '../../stores/auth'
+    import { setStorage } from '../../utils/storage'
+
+    const statusBarHeight = useStatusBarHeight()
+
+    // 未登录防护
+    const auth = useAuthStore()
+    auth.restoreFromStorage()
+    if (!auth.isLoggedIn.value) {
+        uni.reLaunch({ url: '/pages/login/login' })
+    }
+
+    // ---- 省份 ----
+    const province = ref('全国')
+
+    // ---- 当前选中的证书（单选） ----
+    const selectedCert = ref('')
+
+    // ---- 特种作业配套上岗证 ----
+    const specialCerts = ref([
+        { key: 'low_voltage', name: '低压电工证' },
+        { key: 'welder', name: '焊工证' },
+        { key: 'forklift_n1', name: '叉车司机N1证' }
+    ])
+
+    // ---- 技能等级证（双行：等级 + 说明） ----
+    const skillLevels = ref([
+        { key: 'level_5', level: '五级', desc: '初级' },
+        { key: 'level_4', level: '四级', desc: '中级' },
+        { key: 'level_3', level: '三级', desc: '高级' },
+        { key: 'level_2', level: '二级', desc: '技师' },
+        { key: 'level_1', level: '一级', desc: '高级技师' }
+    ])
+
+    // ---- 热门考证（纯展示） ----
+    const hotItems = ref([
+        { title: '入门组合', desc: '工程机械维修工（初级）+ 叉车N1证' },
+        { title: '电动叉车维修优选', desc: '工程机械维修工+N1司机证+低压电工证' }
+    ])
+
+    // ---- 热门考证详情说明 ----
+    const hotDetails = ref([
+        {
+            title: '1、工程师机械维修工（初级）',
+            content: '叉车证N1代表叉车车辆维修，N1是场内专用机动车辆作业叉车司机上岗证，N1是场内专用机动车辆叉车司机资格证，在早期，叉车证N1可以驾驶任何吨位的叉车。叉车证N1代表叉车车辆维修，N1是场内专用机动车辆作业叉车司机上岗证，N1是场内专用机动车辆叉车司机资格证，在早期，叉车证N1可以驾驶任何吨位的叉车。'
+        },
+        {
+            title: '叉车N1证',
+            content: '叉车证N1代表叉车车辆维修，N1是场内专用机动车辆作业叉车司机上岗证，N1是场内专用机动车辆叉车司机资格证，在早期，叉车证N1可以驾驶任何吨位的叉车'
+        }
+    ])
+
+    // ---- 选中标签（不跳转） ----
+    function onSelectCert(key : string) : void {
+        selectedCert.value = key
+    }
+
+    // ---- 点击完成按钮 → 校验 → 跳首页 ----
+    function onConfirm() : void {
+        if (!selectedCert.value) {
+            uni.showToast({ title: '请先选择一个证书', icon: 'none' })
+            return
+        }
+        setStorage('selected_cert', selectedCert.value)
+        uni.reLaunch({ url: '/pages/dashboard/dashboard' })
+    }
+
+    function onProvinceTap() : void {
+        uni.showActionSheet({
+            itemList: ['全国', '北京', '上海', '广东', '浙江', '江苏', '山东', '四川', '湖北', '湖南', '河南'],
+            success: (res) => {
+                const list = ['全国', '北京', '上海', '广东', '浙江', '江苏', '山东', '四川', '湖北', '湖南', '河南']
+                province.value = list[res.tapIndex]
+            }
+        })
+    }
+</script>
+
+<style>
+    .page {
+        flex: 1;
+        flex-direction: column;
+        background-color: #F5F7FA;
+    }
+
+    .status-bar {
+        background-color: #FFFFFF;
+    }
+
+    /* ---- 顶部导航 ---- */
+    .nav-bar {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        height: 88rpx;
+        padding: 0 24rpx;
+        background-color: #FFFFFF;
+    }
+
+    .nav-back {
+        width: 64rpx;
+        height: 64rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .nav-back-icon {
+        font-size: 52rpx;
+        color: #333333;
+    }
+
+    .nav-title {
+        font-size: 34rpx;
+        font-weight: 600;
+        color: #222222;
+    }
+
+    .nav-placeholder {
+        width: 64rpx;
+        height: 64rpx;
+    }
+
+    /* ---- 省份选择 ---- */
+    .province-bar {
+        flex-direction: row;
+        align-items: center;
+        margin: 20rpx 32rpx 8rpx;
+        padding: 14rpx 24rpx;
+        background-color: #F0F2F5;
+        border-radius: 40rpx;
+        align-self: flex-start;
+    }
+
+    .province-pin {
+        font-size: 28rpx;
+        margin-right: 8rpx;
+    }
+
+    .province-label {
+        font-size: 26rpx;
+        color: #888888;
+    }
+
+    .province-value {
+        font-size: 26rpx;
+        color: #333333;
+        font-weight: 500;
+    }
+
+    /* ---- 滚动区域 ---- */
+    .scroll-area {
+        flex: 1;
+    }
+
+    /* ---- 分组区块 ---- */
+    .section {
+        margin: 16rpx 32rpx 0;
+        padding: 28rpx;
+        background-color: #FFFFFF;
+        border-radius: 20rpx;
+    }
+
+    .section-header {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 24rpx;
+    }
+
+    .section-icon {
+        width: 52rpx;
+        height: 52rpx;
+        border-radius: 12rpx;
+        align-items: center;
+        justify-content: center;
+        margin-right: 14rpx;
+    }
+
+    .icon-special {
+        background-color: #FFF3E0;
+    }
+
+    .icon-engineer {
+        background-color: #E8F5E9;
+    }
+
+    .section-icon-text {
+        font-size: 30rpx;
+    }
+
+    .section-title {
+        flex: 1;
+        font-size: 30rpx;
+        font-weight: 600;
+        color: #222222;
+    }
+
+    /* ---- 热门考证标题 ---- */
+    .hot-header {
+        flex-direction: column;
+        align-items: flex-start;
+        margin-bottom: 24rpx;
+    }
+
+    .hot-header-title {
+        font-size: 32rpx;
+        font-weight: 600;
+        color: #222222;
+    }
+
+    .hot-header-line {
+        width: 60rpx;
+        height: 6rpx;
+        border-radius: 3rpx;
+        background-color: #2979FF;
+        margin-top: 10rpx;
+    }
+
+    /* ---- 选项胶囊 ---- */
+    .option-row {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 18rpx;
+    }
+
+    .option-chip {
+        padding: 20rpx 32rpx;
+        background-color: #F5F7FA;
+        border-radius: 40rpx;
+        border-width: 2rpx;
+        border-color: transparent;
+    }
+
+    .option-chip--active {
+        background-color: #EBF5FF;
+        border-color: #2979FF;
+    }
+
+    .option-text {
+        font-size: 28rpx;
+        color: #444444;
+    }
+
+    .option-text--active {
+        color: #2979FF;
+        font-weight: 600;
+    }
+
+    /* ---- 技能等级证双行标签 ---- */
+    .option-chip--skill {
+        flex-direction: column;
+        align-items: center;
+        padding: 20rpx 28rpx;
+        min-width: 120rpx;
+    }
+
+    .option-text--level {
+        font-size: 28rpx;
+        font-weight: 600;
+        margin-bottom: 4rpx;
+    }
+
+    .option-text--desc {
+        font-size: 22rpx;
+        color: #888888;
+    }
+
+    .option-chip--active .option-text--desc {
+        color: #79AEFF;
+    }
+
+    /* ---- 热门考证卡片（横排两列） ---- */
+    .hot-grid {
+        flex-direction: row;
+        gap: 18rpx;
+    }
+
+    .hot-card {
+        flex: 1;
+        padding: 24rpx 20rpx;
+        background: linear-gradient(135deg, #2979FF 0%, #1565C0 100%);
+        border-radius: 16rpx;
+    }
+
+    .hot-card-header {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 10rpx;
+    }
+
+    .hot-card-star {
+        font-size: 26rpx;
+        margin-right: 8rpx;
+    }
+
+    .hot-card-title {
+        flex: 1;
+        font-size: 28rpx;
+        font-weight: 600;
+        color: #FFFFFF;
+    }
+
+    .hot-card-desc {
+        font-size: 22rpx;
+        color: rgba(255, 255, 255, 0.85);
+        lines: 3;
+        text-overflow: ellipsis;
+    }
+
+    /* ---- 热门考证详情说明 ---- */
+    .detail-section {
+        margin: 16rpx 32rpx 0;
+        padding: 28rpx;
+        background-color: #FFFFFF;
+        border-radius: 20rpx;
+    }
+
+    .detail-item {
+        margin-bottom: 24rpx;
+    }
+
+    .detail-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .detail-title-row {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 12rpx;
+    }
+
+    .detail-bullet {
+        font-size: 26rpx;
+        color: #2979FF;
+        margin-right: 10rpx;
+    }
+
+    .detail-title {
+        font-size: 28rpx;
+        font-weight: 600;
+        color: #222222;
+    }
+
+    .detail-content {
+        font-size: 24rpx;
+        color: #666666;
+        line-height: 40rpx;
+        padding-left: 36rpx;
+    }
+
+    /* ---- 底部完成按钮 ---- */
+    .bottom-bar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 20rpx 32rpx;
+        padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+        background-color: #FFFFFF;
+    }
+
+    .btn-confirm {
+        height: 96rpx;
+        background: linear-gradient(135deg, #2979FF 0%, #1565C0 100%);
+        border-radius: 48rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-confirm--disabled {
+        opacity: 0.5;
+    }
+
+    .btn-confirm-text {
+        font-size: 32rpx;
+        font-weight: 600;
+        color: #FFFFFF;
+    }
+</style>

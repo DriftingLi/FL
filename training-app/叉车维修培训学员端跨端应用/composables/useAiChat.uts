@@ -11,12 +11,12 @@
  */
 import { ref, type Ref } from 'vue'
 import {
-	getSessionsApi,
-	createSessionApi,
-	deleteSessionApi,
-	getSessionMessagesApi,
+	getAiSessionsApi,
+	createAiSessionApi,
+	deleteAiSessionApi,
+	getAiSessionMessagesApi,
 	streamChatApi,
-} from '../api/ai-assistant'
+} from '../api/aiAssistant'
 import type { AiSession, AiSessionMessage, AiChatMessage } from '../types/index'
 
 /** 构造差异化请求体：基础版固定 admin，专业版按 model_source 分支 */
@@ -68,7 +68,7 @@ export function useAiChat() {
 	/** 加载当前用户会话列表 */
 	async function loadSessions() : Promise<void> {
 		try {
-			sessions.value = await getSessionsApi()
+			sessions.value = await getAiSessionsApi()
 		} catch (e) {
 			console.error('loadSessions failed:', e)
 			sessions.value = []
@@ -81,7 +81,7 @@ export function useAiChat() {
 		sidebarLeft.value = false
 		sidebarRight.value = false
 		try {
-			messages.value = await getSessionMessagesApi(session.id)
+			messages.value = await getAiSessionMessagesApi(session.id)
 		} catch (e) {
 			console.error('loadSession failed:', e)
 			messages.value = []
@@ -101,7 +101,7 @@ export function useAiChat() {
 	 *  避免 Kotlin 局部函数前向引用解析失败（UTS error18）。 */
 	async function doDeleteSession(id : number) : Promise<void> {
 		try {
-			await deleteSessionApi(id)
+			await deleteAiSessionApi(id)
 			if (currentSession.value != null && currentSession.value.id == id) {
 				currentSession.value = null
 				messages.value = []
@@ -160,7 +160,7 @@ export function useAiChat() {
 		let sessionID = currentSession.value?.id ?? 0
 		if (sessionID == 0 && history.length == 1) {
 			try {
-				const s = await createSessionApi('新会话', sessionTag)
+				const s = await createAiSessionApi('新会话', sessionTag)
 				currentSession.value = s
 				sessionID = s.id
 				await loadSessions()

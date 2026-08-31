@@ -1,0 +1,330 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">精选内容</text>
+            <view class="header-right"></view>
+        </view>
+
+        <!-- 分类筛选 -->
+        <view class="filter-bar">
+            <scroll-view class="filter-scroll" scroll-x="true">
+                <view class="filter-list">
+                    <view v-for="(cat, idx) in categories" :key="idx"
+                        :class="['filter-chip', { active: currentCategory == cat.value }]"
+                        @click="onCategoryClick(cat.value)">
+                        <text class="filter-chip-text">{{ cat.label }}</text>
+                    </view>
+                </view>
+            </scroll-view>
+        </view>
+
+        <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+            <view v-if="items.length == 0 && !loading" class="empty-tip">
+                <text class="empty-icon">📰</text>
+                <text class="empty-text">暂无内容</text>
+            </view>
+            <view class="article-list">
+                <view v-for="(item, idx) in items" :key="idx" class="article-card" @click="onItemClick(item)">
+                    <view v-if="item.cover_image.length > 0" class="article-cover">
+                        <image class="article-cover-img" :src="item.cover_image" mode="aspectFill"></image>
+                    </view>
+                    <view class="article-body">
+                        <text class="article-title">{{ item.title }}</text>
+                        <text v-if="item.summary.length > 0" class="article-summary">{{ item.summary }}</text>
+                        <view class="article-meta">
+                            <text v-if="item.category_label.length > 0" class="article-category">{{ item.category_label }}</text>
+                            <text v-if="item.source.length > 0" class="article-source">{{ item.source }}</text>
+                            <text v-if="item.published_at.length > 0" class="article-date">{{ formatDateStr(item.published_at) }}</text>
+                            <text class="article-views">{{ item.view_count }} 阅读</text>
+                        </view>
+                    </view>
+                </view>
+            </view>
+            <view v-if="loading" class="loading-more">
+                <text class="loading-text">加载中...</text>
+            </view>
+            <view v-if="noMore && items.length > 0" class="loading-more">
+                <text class="loading-text">没有更多了</text>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref } from 'vue'
+    import { onShow } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
+    import { getFeaturedContentsApi } from '../../api/featured'
+    import type { FeaturedContentItem } from '../../types/index'
+    import { formatDateStr } from '../../utils/format'
+
+    type CategoryOption = {
+        label : string
+        value : string
+    }
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const categories : CategoryOption[] = [
+        { label: '全部', value: '' },
+        { label: '公司动态', value: 'company' },
+        { label: '行业新闻', value: 'industry' },
+        { label: '产品资讯', value: 'product' },
+        { label: '资讯', value: 'news' },
+    ]
+
+    const currentCategory = ref<string>('')
+    const items = ref<FeaturedContentItem[]>([])
+    const page = ref<number>(1)
+    const pageSize = 10
+    const loading = ref<boolean>(false)
+    const noMore = ref<boolean>(false)
+
+    async function loadContents(reset : boolean = false) : Promise<void> {
+        if (loading.value) return
+        if (reset) {
+            page.value = 1
+            noMore.value = false
+        }
+        if (noMore.value && !reset) return
+
+        loading.value = true
+        try {
+            const result = await getFeaturedContentsApi(page.value, pageSize, currentCategory.value)
+            if (reset) {
+                items.value = result.items
+            } else {
+                items.value = items.value.concat(result.items)
+            }
+            if (result.items.length == 0 || items.value.length >= result.total) {
+                noMore.value = true
+            } else {
+                page.value = page.value + 1
+            }
+        } catch (e) {
+            uni.__f__('error','at pages/featured/featured-list.uvue:115','[featured-list] load failed:', e)
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function onCategoryClick(val : string) : void {
+        if (currentCategory.value == val) return
+        currentCategory.value = val
+        loadContents(true)
+    }
+
+    function onLoadMore() : void {
+        loadContents(false)
+    }
+
+    function onItemClick(item : FeaturedContentItem) : void {
+        uni.navigateTo({
+            url: '/pages/featured/featured-detail?id=' + item.content_id.toString()
+        })
+    }
+
+    function onBack() : void {
+        goBack()
+    }
+
+    onShow(() => {
+        loadContents(true)
+    })
+</script>
+
+<style>
+    .container {
+        flex: 1;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        width: 80rpx;
+        align-items: center;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #ffffff;
+    }
+
+    .header-title {
+        flex: 1;
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+        text-align: center;
+    }
+
+    .header-right {
+        width: 80rpx;
+        align-items: center;
+    }
+
+    .filter-bar {
+        background-color: #ffffff;
+        margin: 16rpx 24rpx 0;
+        border-radius: 12rpx;
+        border: 1px solid #eeeeee;
+    }
+
+    .filter-scroll {
+        white-space: nowrap;
+        border-radius: 12rpx;
+    }
+
+    .filter-list {
+        padding: 16rpx;
+        flex-direction: row;
+    }
+
+    .filter-chip {
+        padding: 10rpx 24rpx;
+        border-radius: 32rpx;
+        background-color: #f5f5f5;
+        margin-right: 12rpx;
+    }
+
+    .filter-chip.active {
+        background-color: #2979ff;
+    }
+
+    .filter-chip-text {
+        font-size: 24rpx;
+        color: #666666;
+    }
+
+    .filter-chip.active .filter-chip-text {
+        color: #ffffff;
+    }
+
+    .content-scroll {
+        flex: 1;
+        height: 0;
+    }
+
+    .article-list {
+        flex-direction: column;
+        padding: 16rpx 24rpx 0;
+    }
+
+    .article-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        margin-bottom: 16rpx;
+        border: 1px solid #eeeeee;
+    }
+
+    .article-cover {
+        width: 100%;
+        height: 300rpx;
+        border-radius: 12rpx;
+        overflow: hidden;
+        margin-bottom: 16rpx;
+    }
+
+    .article-cover-img {
+        width: 100%;
+        height: 300rpx;
+    }
+
+    .article-body {
+        flex-direction: column;
+    }
+
+    .article-title {
+        font-size: 32rpx;
+        font-weight: 600;
+        color: #333333;
+        lines: 2;
+        text-overflow: ellipsis;
+        margin-bottom: 10rpx;
+    }
+
+    .article-summary {
+        font-size: 26rpx;
+        color: #666666;
+        lines: 2;
+        text-overflow: ellipsis;
+        margin-bottom: 12rpx;
+    }
+
+    .article-meta {
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .article-category {
+        font-size: 20rpx;
+        color: #2979ff;
+        background-color: #e8f0fe;
+        padding: 4rpx 12rpx;
+        border-radius: 6rpx;
+        margin-right: 12rpx;
+    }
+
+    .article-source {
+        font-size: 22rpx;
+        color: #999999;
+        margin-right: 12rpx;
+    }
+
+    .article-date {
+        font-size: 22rpx;
+        color: #999999;
+        margin-right: 12rpx;
+    }
+
+    .article-views {
+        font-size: 22rpx;
+        color: #bbbbbb;
+    }
+
+    .empty-tip {
+        align-items: center;
+        padding: 160rpx 0;
+        flex-direction: column;
+    }
+
+    .empty-icon {
+        font-size: 80rpx;
+        margin-bottom: 24rpx;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .loading-more {
+        align-items: center;
+        padding: 24rpx 0;
+    }
+
+    .loading-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
+</style>
