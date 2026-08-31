@@ -8,6 +8,7 @@ import App from './App.vue'
 import router from './router'
 import icons from './icons'
 import { useAuthStore } from './stores/auth'
+import { useThemeStore } from './stores/theme'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -20,6 +21,9 @@ app.use(pinia)
 
 // 认证初始化：localStorage 恢复 + /auth/me 校验 + URL auth_token 交接（幂等，路由守卫 await 同一 Promise）
 useAuthStore().initialize()
+
+// 主题初始化：首屏状态已由 index.html 内联脚本设好，这里补上系统主题联动监听与手动切换入口
+useThemeStore()
 
 app.use(router)
 app.use(ElementPlus)
