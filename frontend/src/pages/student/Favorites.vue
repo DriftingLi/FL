@@ -54,7 +54,7 @@
           </div>
 
           <div class="item-actions" @click.stop>
-            <el-button type="danger" text size="small" @click="removeFavorite(item)">移除</el-button>
+            <UiButton variant="text" size="small" @click="removeFavorite(item)" class="text-bad">移除</UiButton>
           </div>
         </div>
       </template>
@@ -85,6 +85,7 @@ import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const router = useRouter()
 

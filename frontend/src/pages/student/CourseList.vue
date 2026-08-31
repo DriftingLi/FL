@@ -153,7 +153,7 @@
           <p class="detail-desc">{{ detailCourse.description || '暂无简介' }}</p>
           <div v-if="detailCourse?.points_price" class="detail-redeem">
             <el-tag type="warning" effect="plain">{{ detailCourse.points_price }} 积分解锁</el-tag>
-            <el-button size="small" type="warning" @click="handleRedeem">兑换解锁</el-button>
+            <UiButton variant="warning" size="small" @click="handleRedeem">兑换解锁</UiButton>
           </div>
 
           <el-descriptions :column="2" border size="small" class="detail-descriptions">
@@ -218,11 +218,7 @@
       </div>
       <template #footer>
         <el-button @click="detailVisible = false">关闭</el-button>
-        <el-button
-          v-if="detailChapters.length > 0"
-          type="primary"
-          @click="goToChapter(continueChapter ?? detailChapters[0])"
-        >{{ continueChapter ? `继续学习：${continueChapterTitle}` : '开始学习' }}</el-button>
+        <UiButton variant="primary" v-if="detailChapters.length > 0" @click="goToChapter(continueChapter ?? detailChapters[0])">{{ continueChapter ? `继续学习：${continueChapterTitle}` : '开始学习' }}</UiButton>
       </template>
     </el-dialog>
   </div>
@@ -250,6 +246,7 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiProgress from '@/components/ui/UiProgress.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const stagger = useStagger()
 

@@ -19,12 +19,12 @@
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" size="large" @click="startExam" :loading="loading">开始考试</el-button>
+            <UiButton variant="primary" size="large" @click="startExam" :loading="loading">开始考试</UiButton>
           </el-form-item>
         </el-form>
         <div v-else class="paper-exam-entry">
           <p class="paper-exam-hint">整卷限时作答，交卷后出成绩与逐题解析。</p>
-          <el-button type="primary" size="large" @click="startExam" :loading="loading">开始考试</el-button>
+          <UiButton variant="primary" size="large" @click="startExam" :loading="loading">开始考试</UiButton>
         </div>
       </el-card>
 
@@ -67,7 +67,7 @@
           <p>正确率：{{ examResult.accuracy }}%</p>
           <p>正确：{{ examResult.correct_count }}/{{ examResult.total_questions }}题</p>
         </div>
-        <el-button type="primary" @click="resetExam">返回</el-button>
+        <UiButton variant="primary" @click="resetExam">返回</UiButton>
       </el-card>
 
       <el-card v-if="examResult.details" class="detail-card">
@@ -89,6 +89,7 @@ import { mockExamApi, type MockExamHistoryItem } from '@/api/mockExam'
 import { realExamApi } from '@/api/realExam'
 import { formatDateTime } from '@/utils/format'
 import { useExamSession } from '@/composables/useExamSession'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const route = useRoute()
 const router = useRouter()

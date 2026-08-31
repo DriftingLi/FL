@@ -206,12 +206,12 @@
 
         <div class="q-actions">
           <el-button v-if="currentIdx > 0" @click="prevQuestion">上一题</el-button>
-          <el-button v-if="!submitted" type="primary" :disabled="!canSubmit" @click="handleSubmit">
+          <UiButton variant="primary" v-if="!submitted" :disabled="!canSubmit" @click="handleSubmit">
             提交答案
-          </el-button>
-          <el-button v-if="currentIdx < questions.length - 1" type="primary" @click="nextQuestion">
+          </UiButton>
+          <UiButton variant="primary" v-if="currentIdx < questions.length - 1" @click="nextQuestion">
             下一题
-          </el-button>
+          </UiButton>
         </div>
       </el-card>
     </div>

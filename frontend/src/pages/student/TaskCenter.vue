@@ -67,15 +67,9 @@
             </div>
             <div class="task-right">
               <span class="task-points">+{{ task.points }}</span>
-              <el-button
-                v-if="task.status === 'claimable'"
-                size="small"
-                type="primary"
-                :loading="claimingCode === task.code"
-                @click="handleClaim(task.code)"
-              >
+              <UiButton variant="primary" v-if="task.status === 'claimable'" size="small" :loading="claimingCode === task.code" @click="handleClaim(task.code)">
                 领取
-              </el-button>
+              </UiButton>
               <el-button v-else-if="task.status === 'todo'" size="small" plain disabled>去完成</el-button>
               <el-tag v-else type="success" size="small" effect="plain">已领取</el-tag>
             </div>
@@ -98,6 +92,7 @@ import { useStagger } from '@/composables/useStagger'
 import UiProgress from '@/components/ui/UiProgress.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const staggerStyle = useStagger(6)
 

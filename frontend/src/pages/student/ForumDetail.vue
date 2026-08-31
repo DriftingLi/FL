@@ -1,7 +1,7 @@
 <template>
   <div class="forum-detail-page">
     <div class="back-bar">
-      <el-button text :icon="ArrowLeft" @click="goBack">返回列表</el-button>
+      <UiButton variant="text" :icon="ArrowLeft" @click="goBack">返回列表</UiButton>
     </div>
 
     <UiErrorState
@@ -48,17 +48,10 @@
                 @click="toggleFavorite"
               />
             </el-tooltip>
-            <el-button text size="small" @click="openReport('topic')">举报</el-button>
-            <el-button
-              v-if="topic.can_delete"
-              class="delete-btn"
-              type="danger"
-              text
-              size="small"
-              @click="removeTopic"
-            >
+            <UiButton variant="text" size="small" @click="openReport('topic')">举报</UiButton>
+            <UiButton variant="text" v-if="topic.can_delete" class="delete-btn text-bad" size="small" @click="removeTopic">
               删除
-            </el-button>
+            </UiButton>
           </div>
         </div>
         <div class="topic-body">
@@ -119,42 +112,19 @@
                 <el-tag v-if="topic && reply.author.user_id === topic.author.user_id" size="small" type="info" effect="plain" class="owner-tag">楼主</el-tag>
                 <el-tag v-if="reply.is_accepted" size="small" type="success" effect="dark" class="accepted-inline">✓ 已采纳</el-tag>
                 <span class="reply-time">{{ formatLocaleDateTime(reply.created_at, '') }}</span>
-                <el-button
-                  class="reply-btn"
-                  type="primary"
-                  size="small"
-                  @click="startReplyTo(reply)"
-                >
+                <UiButton variant="primary" class="reply-btn" size="small" @click="startReplyTo(reply)">
                   回复
-                </el-button>
-                <el-button
-                  class="reply-btn"
-                  text
-                  size="small"
-                  @click="openReport('reply', reply.id)"
-                >
+                </UiButton>
+                <UiButton variant="text" class="reply-btn" size="small" @click="openReport('reply', reply.id)">
                   举报
-                </el-button>
-                <el-button
-                  class="like-btn"
-                  :type="reply.liked_by_me ? 'danger' : 'default'"
-                  text
-                  size="small"
-                  @click="toggleReplyLike(reply)"
-                >
+                </UiButton>
+                <UiButton variant="text" class="like-btn" :type="reply.liked_by_me ? 'danger' : 'default'" size="small" @click="toggleReplyLike(reply)">
                   <span class="heart">{{ reply.liked_by_me ? '♥' : '♡' }}</span>
                   <span v-if="(reply.likes_count || 0) > 0" class="like-count-inline">{{ reply.likes_count }}</span>
-                </el-button>
-                <el-button
-                  v-if="reply.can_delete"
-                  class="delete-btn"
-                  type="danger"
-                  text
-                  size="small"
-                  @click="removeReply(reply.id)"
-                >
+                </UiButton>
+                <UiButton variant="text" v-if="reply.can_delete" class="delete-btn text-bad" size="small" @click="removeReply(reply.id)">
                   删除
-                </el-button>
+                </UiButton>
               </div>
               <div v-if="reply.parent_id && reply.parent_name" class="reply-quote">
                 回复 @{{ reply.parent_name }}
@@ -188,7 +158,7 @@
         />
         <template #footer>
           <el-button @click="reportVisible = false">取消</el-button>
-          <el-button type="primary" :loading="reportSubmitting" @click="submitReport">提交</el-button>
+          <UiButton variant="primary" :loading="reportSubmitting" @click="submitReport">提交</UiButton>
         </template>
       </el-dialog>
 
@@ -217,8 +187,8 @@
             class="reply-textarea"
           />
           <div class="reply-box-footer">
-            <el-button :icon="Paperclip" text circle size="small" :disabled="replyImages.length >= 3" title="添加图片" @click="triggerReplyFile" />
-            <el-button :icon="Promotion" type="primary" circle size="small" :loading="submitting" :disabled="!canSubmitReply" title="发表回复" @click="submitReply" />
+            <UiButton variant="text" :icon="Paperclip" circle size="small" :disabled="replyImages.length >= 3" title="添加图片" @click="triggerReplyFile"/>
+            <UiButton variant="primary" :icon="Promotion" circle size="small" :loading="submitting" :disabled="!canSubmitReply" title="发表回复" @click="submitReply"/>
           </div>
         </div>
         <input ref="replyFileInput" type="file" accept="image/*" multiple style="display: none" @change="handleReplyFileSelect" />
@@ -248,6 +218,7 @@ import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const route = useRoute()
 const router = useRouter()

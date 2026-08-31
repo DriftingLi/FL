@@ -54,13 +54,13 @@
 
       <div class="q-actions">
         <el-button v-if="currentIdx > 0" @click="prevQuestion">上一题</el-button>
-        <el-button v-if="!submitted" type="primary" :disabled="!canSubmit" @click="handleSubmit">
+        <UiButton variant="primary" v-if="!submitted" :disabled="!canSubmit" @click="handleSubmit">
           提交答案
-        </el-button>
-        <el-button v-if="currentIdx < questions.length - 1" type="primary" @click="nextQuestion">
+        </UiButton>
+        <UiButton variant="primary" v-if="currentIdx < questions.length - 1" @click="nextQuestion">
           下一题
-        </el-button>
-        <el-button v-else type="primary" @click="confirmQuit">完成练习</el-button>
+        </UiButton>
+        <UiButton variant="primary" v-else @click="confirmQuit">完成练习</UiButton>
       </div>
     </el-card>
   </div>
@@ -86,6 +86,7 @@ import AIExplanationCard from '@/components/practice/AIExplanationCard.vue'
 import KnowledgeCard from '@/components/practice/KnowledgeCard.vue'
 import CommentCard from '@/components/practice/CommentCard.vue'
 import NoteCard from '@/components/practice/NoteCard.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const route = useRoute()
 const router = useRouter()

@@ -51,10 +51,10 @@
           </div>
           <div class="item-side">
             <span class="item-info">{{ formatSize(item.file_size) }} · {{ formatLocaleDateTime(item.created_at || '') }}</span>
-            <el-button type="primary" link size="small" @click="download(item)">
+            <UiButton variant="primary" link size="small" @click="download(item)">
               <el-icon><Download /></el-icon>
               下载
-            </el-button>
+            </UiButton>
           </div>
         </div>
       </template>
@@ -85,6 +85,7 @@ import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const materials = ref<MaterialItem[]>([])
 const courseFilter = ref<number | undefined>(undefined)

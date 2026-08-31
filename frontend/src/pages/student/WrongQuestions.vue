@@ -19,8 +19,8 @@
     </div>
     <div class="action-bar">
       <el-checkbox :model-value="isAllSelected" :indeterminate="isIndeterminate" @change="toggleSelectAll" :disabled="wrongList.length===0">全选</el-checkbox>
-      <el-button type="danger" :disabled="selectedIds.size===0" @click="handleBatchRemove">批量移出</el-button>
-      <el-button type="success" :disabled="wrongList.length===0" @click="handleExport">导出错题</el-button>
+      <UiButton variant="danger" :disabled="selectedIds.size===0" @click="handleBatchRemove">批量移出</UiButton>
+      <UiButton variant="success" :disabled="wrongList.length===0" @click="handleExport">导出错题</UiButton>
     </div>
 
     <UiErrorState
@@ -69,7 +69,7 @@
             <NoteCard :question-id="item.question_id" />
             <div class="redo-actions">
               <el-button size="small" @click="redoingId = null">关闭</el-button>
-              <el-button type="primary" size="small" @click="redoingId = null">完成</el-button>
+              <UiButton variant="primary" size="small" @click="redoingId = null">完成</UiButton>
             </div>
           </template>
           <template v-else>
@@ -83,14 +83,14 @@
             />
             <el-input v-else v-model="redoTextAnswer" type="textarea" :rows="3" placeholder="请输入答案" />
             <div class="redo-actions">
-              <el-button type="primary" size="small" @click="submitRedo(item)">提交</el-button>
+              <UiButton variant="primary" size="small" @click="submitRedo(item)">提交</UiButton>
               <el-button size="small" @click="redoingId = null">取消</el-button>
             </div>
           </template>
         </div>
         <div v-else class="wrong-actions">
-          <el-button type="primary" size="small" @click="startRedo(item)">重做</el-button>
-          <el-button type="danger" size="small" @click="removeWrong(item.question_id)">移出</el-button>
+          <UiButton variant="primary" size="small" @click="startRedo(item)">重做</UiButton>
+          <UiButton variant="danger" size="small" @click="removeWrong(item.question_id)">移出</UiButton>
         </div>
       </el-card>
       <el-pagination v-model:current-page="page" :page-size="pageSize" :total="total" layout="prev, pager, next" @current-change="handlePageChange" />
@@ -121,6 +121,7 @@ import { useCredentialRefetch } from '@/composables/useCredentialRefetch'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 interface WrongItem {
   id: number
