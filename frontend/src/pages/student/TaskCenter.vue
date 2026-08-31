@@ -1,23 +1,23 @@
 <template>
-  <div class="task-center-page">
-    <div class="task-header">
-      <h1 class="task-title">任务中心</h1>
+  <div class="mx-auto max-w-[960px] px-4 pb-10">
+    <div class="mb-4 flex items-center justify-between">
+      <h1 class="m-0 text-2xl font-semibold text-ink">任务中心</h1>
     </div>
 
-    <div class="points-summary">
-      <div class="summary-item">
-        <span class="summary-label">当前积分</span>
-        <span class="summary-value">{{ points.balance }}</span>
+    <div class="mb-4 flex flex-wrap items-center gap-4 rounded-card border border-line bg-panel px-4 py-3.5 shadow-card">
+      <div class="flex min-w-[90px] flex-col gap-0.5">
+        <span class="text-[11px] tracking-[0.04em] text-ink-3">当前积分</span>
+        <span class="font-heading text-xl font-extrabold text-ink">{{ points.balance }}</span>
       </div>
-      <div class="summary-divider"></div>
-      <div class="summary-item">
-        <span class="summary-label">今日可得</span>
-        <span class="summary-value small">+{{ todayEarnable }}</span>
+      <div class="h-8 w-px bg-line"></div>
+      <div class="flex min-w-[90px] flex-col gap-0.5">
+        <span class="text-[11px] tracking-[0.04em] text-ink-3">今日可得</span>
+        <span class="font-heading text-base font-extrabold text-ink">+{{ todayEarnable }}</span>
       </div>
-      <div class="summary-divider"></div>
-      <div class="summary-item">
-        <span class="summary-label">累计获得</span>
-        <span class="summary-value small">{{ points.totalEarned }}</span>
+      <div class="h-8 w-px bg-line"></div>
+      <div class="flex min-w-[90px] flex-col gap-0.5">
+        <span class="text-[11px] tracking-[0.04em] text-ink-3">累计获得</span>
+        <span class="font-heading text-base font-extrabold text-ink">{{ points.totalEarned }}</span>
       </div>
     </div>
 
@@ -31,42 +31,51 @@
 
     <UiSkeleton v-else-if="loading" variant="card" :count="6" />
 
-    <div v-else class="group-stack">
+    <div v-else class="flex flex-col gap-5">
       <div
         v-for="(group, gi) in grouped"
         :key="group.key"
-        class="group-section stagger-in"
+        class="stagger-in"
         :style="staggerStyle(gi)"
       >
-        <div class="group-head">
-          <span class="group-title">{{ group.label }}</span>
-          <span class="group-desc">{{ group.desc }}</span>
-          <span class="group-count">{{ group.tasks.length }}项</span>
+        <div class="mb-2.5 flex items-center gap-2">
+          <span class="text-[15px] font-bold text-ink">{{ group.label }}</span>
+          <span class="text-xs text-ink-3">{{ group.desc }}</span>
+          <span class="ml-auto rounded-pill border border-line bg-canvas px-2 py-0.5 text-xs text-ink-3">{{ group.tasks.length }}项</span>
         </div>
-        <div class="task-list">
-          <UiCard v-for="task in group.tasks" :key="task.code" class="task-card" :class="task.status" padding="base">
-            <div class="task-left">
-              <div class="task-icon" :class="task.status">
+        <div class="flex flex-col gap-2.5">
+          <UiCard
+            v-for="task in group.tasks"
+            :key="task.code"
+            padding="base"
+            class="flex items-center justify-between gap-3"
+            :class="[task.status, { 'opacity-70 !bg-canvas': task.status === 'claimed' }]"
+          >
+            <div class="flex min-w-0 flex-1 items-start gap-3">
+              <div
+                class="flex size-9 shrink-0 items-center justify-center rounded-full text-lg"
+                :class="iconTone(task.status)"
+              >
                 <el-icon v-if="task.status === 'claimed'"><CircleCheckFilled /></el-icon>
                 <el-icon v-else-if="task.status === 'claimable'"><Trophy /></el-icon>
                 <el-icon v-else><List /></el-icon>
               </div>
-              <div class="task-info">
-                <div class="task-title-text">{{ task.title }}</div>
-                <div class="task-desc">{{ task.desc }}</div>
-                <div v-if="task.total && task.total > 1" class="task-progress">
+              <div class="min-w-0 flex-1">
+                <div class="mb-0.5 text-sm font-semibold text-ink">{{ task.title }}</div>
+                <div class="text-xs leading-[1.4] text-ink-3">{{ task.desc }}</div>
+                <div v-if="task.total && task.total > 1" class="mt-1.5 flex items-center gap-2">
                   <UiProgress
                     :value="Math.round(((task.progress || 0) / task.total) * 100)"
                     size="sm"
                     tone="brand"
-                    class="progress-bar"
+                    class="w-[90px] shrink-0"
                   />
-                  <span class="progress-text">{{ task.progress }}/{{ task.total }}</span>
+                  <span class="font-mono text-[11px] text-ink-3">{{ task.progress }}/{{ task.total }}</span>
                 </div>
               </div>
             </div>
-            <div class="task-right">
-              <span class="task-points">+{{ task.points }}</span>
+            <div class="flex shrink-0 items-center gap-2.5">
+              <span class="min-w-9 text-right text-sm font-bold text-warn-strong">+{{ task.points }}</span>
               <UiButton variant="primary" v-if="task.status === 'claimable'" size="small" :loading="claimingCode === task.code" @click="handleClaim(task.code)">
                 领取
               </UiButton>
@@ -96,6 +105,14 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 
 const staggerStyle = useStagger(6)
+
+/** 任务图标圆底的状态色调（todo 中性 / claimable 琥珀 / claimed 绿） */
+const iconTone = (status: string) =>
+  status === 'todo'
+    ? 'border border-line bg-canvas text-ink-3'
+    : status === 'claimable'
+      ? 'border border-warn-soft bg-warn-soft text-warn-strong'
+      : 'border border-ok-soft bg-ok-soft text-ok-strong'
 
 const tasks = ref<PointsTaskItem[]>([])
 const points = ref({ balance: 0, totalEarned: 0 })
@@ -157,182 +174,3 @@ onMounted(() => {
   refresh()
 })
 </script>
-
-<style scoped>
-.task-center-page {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 0 16px 40px;
-}
-.task-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-.task-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0;
-}
-.points-summary {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 16px;
-  background: var(--color-bg-card);
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-.summary-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 90px;
-}
-.summary-label {
-  font-size: 11px;
-  color: var(--color-text-tertiary);
-  letter-spacing: 0.04em;
-}
-.summary-value {
-  font-size: 20px;
-  font-weight: 800;
-  color: var(--color-text-primary);
-  font-family: var(--font-display, system-ui);
-}
-.summary-value.small {
-  font-size: 16px;
-}
-.summary-divider {
-  width: 1px;
-  height: 32px;
-  background: var(--color-border-light);
-}
-.group-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-.group-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.group-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--color-text-primary);
-}
-.group-desc {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-}
-.group-count {
-  margin-left: auto;
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-  background: var(--color-bg-page);
-  border: 1px solid var(--color-border-light);
-  padding: 2px 8px;
-  border-radius: 9999px;
-}
-.task-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-/* 容器（描边 / 圆角 / 内距 / 底色 / 投影）已由 UiCard 承担，此处只留卡片内部的横向布局 */
-.task-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.task-card:hover {
-  border-color: var(--color-border-dark);
-}
-.task-card.claimed {
-  opacity: 0.7;
-  background: var(--color-bg-page);
-}
-.task-left {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  flex: 1;
-  min-width: 0;
-}
-.task-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 9999px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  font-size: 18px;
-}
-.task-icon.todo {
-  background: var(--color-bg-page);
-  color: var(--color-text-tertiary);
-  border: 1px solid var(--color-border-light);
-}
-.task-icon.claimable {
-  background: var(--color-warning-light);
-  color: var(--color-warning-strong);
-  border: 1px solid var(--color-warning-light);
-}
-.task-icon.claimed {
-  background: var(--color-success-light);
-  color: var(--color-success-strong);
-  border: 1px solid var(--color-success-light);
-}
-.task-info {
-  flex: 1;
-  min-width: 0;
-}
-.task-title-text {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin-bottom: 2px;
-}
-.task-desc {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-  line-height: 1.4;
-}
-.task-progress {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-}
-.progress-bar {
-  width: 90px;
-  flex-shrink: 0;
-}
-.progress-text {
-  font-size: 11px;
-  color: var(--color-text-tertiary);
-  font-family: monospace;
-}
-.task-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-}
-.task-points {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--color-warning-strong);
-  min-width: 36px;
-  text-align: right;
-}
-</style>
