@@ -284,14 +284,14 @@ export function uploadForumImageApi(filePath : string) : Promise<string> {
  * @param title 标题（1-100 字）
  * @param content 内容（1-10000 字）
  * @param images 图片 URL 数组（最多 9 张，先经 uploadForumImageApi 上传获取）
- * @param scope 帖子分类（general / resource / video / exam）
+ * @param category 帖子类别（discussion / question）
  */
-export function createForumTopicApi(title : string, content : string, images : string[] = [], scope : string = 'general') : Promise<ForumTopic> {
+export function createForumTopicApi(title : string, content : string, images : string[] = [], category : string = 'discussion') : Promise<ForumTopic> {
     const payload : UTSJSONObject = {
         title: title,
         content: content,
         images: images,
-        scope: scope,
+        category: category,
     } as UTSJSONObject
     return post('/forum/topics', payload).then((data : UTSJSONObject) : ForumTopic => {
         console.log('[createForumTopicApi] raw data:', JSON.stringify(data))
@@ -309,17 +309,17 @@ export function createForumTopicApi(title : string, content : string, images : s
  * @param title 标题（1-100 字）
  * @param content 内容（1-10000 字）
  * @param images 图片 URL 数组（最多 9 张）
- * @param scope 帖子分类（可选）
+ * @param category 帖子类别（可选）
  */
-export function updateForumTopicApi(topicId : number, title : string, content : string, images : string[] = [], scope : string = '') : Promise<ForumTopic> {
+export function updateForumTopicApi(topicId : number, title : string, content : string, images : string[] = [], category : string = '') : Promise<ForumTopic> {
     const url = '/forum/topics/' + topicId.toString()
     const payload : UTSJSONObject = {
         title: title,
         content: content,
         images: images,
     } as UTSJSONObject
-    if (scope.length > 0) {
-        payload['scope'] = scope
+    if (category.length > 0) {
+        payload['category'] = category
     }
     return put(url, payload).then((data : UTSJSONObject) : ForumTopic => {
         console.log('[updateForumTopicApi] raw data:', JSON.stringify(data))

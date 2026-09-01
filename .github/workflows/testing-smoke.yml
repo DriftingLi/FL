@@ -71,4 +71,4 @@ jobs:
           # 必须显式 --repo：本 job 不 checkout，gh 没有 git 上下文可推断仓库
           gh workflow run cd.yml --repo "$GITHUB_REPOSITORY" \
             --ref "$REF" -f ref="$SHA" -f environment=testing
-          echo "| 补发 | PR #${GITHUB_EVENT_PULL_REQUEST_NUMBER} · commit \`${SHA:0:8}\` → testing |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 补发 | PR #${{ github.event.pull_request.number }} · commit \`${SHA:0:8}\` → testing |" >> "$GITHUB_STEP_SUMMARY"

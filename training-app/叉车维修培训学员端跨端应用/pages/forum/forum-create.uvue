@@ -82,10 +82,8 @@
     // ===== 分类选项 =====
     type CategoryOption = { label : string, value : string }
     const categories : CategoryOption[] = [
-        { label: '广场', value: 'general' },
-        { label: '资源', value: 'resource' },
-        { label: '短视频', value: 'video' },
-        { label: '备考经验', value: 'exam' },
+        { label: '广场', value: 'discussion' },
+        { label: '资源', value: 'discussion' },
         { label: '知识问答', value: 'question' },
     ]
 
@@ -287,7 +285,7 @@
 <style>
     .container {
         display: flex;
-        background-color: #f5f5f5;
+        background: linear-gradient(180deg, #CFE9FB 1%, #D0EBFD 16%, #F5F5F5 100%);
         flex-direction: column;
     }
 
