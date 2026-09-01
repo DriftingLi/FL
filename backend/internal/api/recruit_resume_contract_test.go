@@ -22,8 +22,8 @@ func TestRecruitResumesContract_Full(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := testutil.NewMemoryDB(t)
 
-	spec1 := model.Specialty{Code: "spec_forklift", Name: "叉车维修", Status: 1}
-	spec2 := model.Specialty{Code: "spec_electric", Name: "电工", Status: 1}
+	spec1 := model.Position{Code: "spec_forklift", Name: "叉车维修", Status: 1}
+	spec2 := model.Position{Code: "spec_electric", Name: "电工", Status: 1}
 	if err := db.Create(&spec1).Error; err != nil {
 		t.Fatalf("create spec1: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestRecruitResumesContract_Full(t *testing.T) {
 	ip := func(v int) *int { return &v }
 	card1 := model.JobCard{
 		UserID: stu1.ID, RealName: "张三丰", ContactPhone: "13800000001", Wechat: "zhang_wx", Region: "江苏苏州精确地址123号",
-		ExpectedSpecialtyID: &spec1.SpecialtyID, ExpectedSpecialtyExtra: "叉车维修", ExpectedRegions: model.JSONB([]byte(`["江苏苏州"]`)),
+		ExpectedPositionID: &spec1.PositionID, ExpectedPositionExtra: "叉车维修", ExpectedRegions: model.JSONB([]byte(`["江苏苏州"]`)),
 		SalaryMin: ip(8000), SalaryMax: ip(12000), SalaryNegotiable: false,
 		AvailableIn: "immediate", JobNature: "fulltime", ExperienceYears: 5, SelfIntro: "5年经验自我介绍",
 		ResumeExperiences:    model.JSONB([]byte(`[{"company":"A公司","role":"维修工","start_month":"2020-01","end_month":"2023-01","desc":"修叉车"}]`)),
@@ -59,7 +59,7 @@ func TestRecruitResumesContract_Full(t *testing.T) {
 	}
 	card2 := model.JobCard{
 		UserID: stu2.ID, RealName: "李四", ContactPhone: "13900000002", Wechat: "li_wx", Region: "浙江杭州精确地址",
-		ExpectedSpecialtyID: &spec2.SpecialtyID, ExpectedSpecialtyExtra: "电工", ExpectedRegions: model.JSONB([]byte(`["浙江杭州"]`)),
+		ExpectedPositionID: &spec2.PositionID, ExpectedPositionExtra: "电工", ExpectedRegions: model.JSONB([]byte(`["浙江杭州"]`)),
 		SalaryMin: ip(10000), SalaryMax: ip(15000), SalaryNegotiable: false,
 		AvailableIn: "1w", JobNature: "parttime", ExperienceYears: 2, SelfIntro: "2年电工经验",
 		ResumeExperiences:    model.JSONB([]byte(`[{"company":"B公司","role":"电工","start_month":"2021-01","end_month":"2024-01","desc":"电气"}]`)),
@@ -69,7 +69,7 @@ func TestRecruitResumesContract_Full(t *testing.T) {
 	}
 	cardHidden := model.JobCard{
 		UserID: stu3.ID, RealName: "王五", ContactPhone: "13700000003", Wechat: "wang_wx", Region: "上海精确地址",
-		ExpectedSpecialtyID: &spec1.SpecialtyID, ExpectedSpecialtyExtra: "叉车维修", ExpectedRegions: model.JSONB([]byte(`["上海"]`)),
+		ExpectedPositionID: &spec1.PositionID, ExpectedPositionExtra: "叉车维修", ExpectedRegions: model.JSONB([]byte(`["上海"]`)),
 		SalaryMin: ip(9000), SalaryMax: ip(13000), AvailableIn: "immediate", ExperienceYears: 3, SelfIntro: "隐藏简历",
 		ResumeExperiences: model.JSONB([]byte(`[]`)), ResumeCertifications: model.JSONB([]byte(`[]`)), Visibility: "hidden",
 		CreatedAt: now, UpdatedAt: now,
@@ -238,12 +238,12 @@ func TestRecruitResumesContract_Full(t *testing.T) {
 		t.Fatalf("region 筛选错误 total=%d items=%v", filt.Data.Total, filt.Data.Items)
 	}
 	// specialty_id
-	rec = doWithToken(t, r, recruiterToken, http.MethodGet, "/api/recruit/resumes?specialty_id="+strconv.Itoa(spec1.SpecialtyID), nil)
+	rec = doWithToken(t, r, recruiterToken, http.MethodGet, "/api/recruit/resumes?position_id="+strconv.Itoa(spec1.PositionID), nil)
 	if err := json.Unmarshal(rec.Body.Bytes(), &filt); err != nil {
 		t.Fatalf("parse spec filter: %v", err)
 	}
 	if filt.Data.Total != 1 || filt.Data.Items[0].UserID != stu1.ID {
-		t.Fatalf("specialty 筛选错误 %v", filt.Data)
+		t.Fatalf("position 筛选错误 %v", filt.Data)
 	}
 	// credential_id
 	rec = doWithToken(t, r, recruiterToken, http.MethodGet, "/api/recruit/resumes?credential_id="+strconv.Itoa(cred1.ID), nil)

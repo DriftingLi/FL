@@ -66,11 +66,11 @@ func assertJobApplicationContract(t *testing.T, db *gorm.DB) {
 		t.Fatalf("create card: %v", err)
 	}
 
-	// 种子专业方向 + 职位
-	db.Exec("INSERT INTO specialty (code, name, status) VALUES (?, ?, ?)", "maint", "叉车维修", 1)
+	// 种子岗位 + 职位
+	db.Exec("INSERT INTO positions (code, name, status) VALUES (?, ?, ?)", "maint_tech", "叉车维修技师", 1)
 	var spID int
-	db.Raw("SELECT specialty_id FROM specialty WHERE code = ?", "maint").Scan(&spID)
-	jobBody := map[string]any{"title": "叉车维修技师", "specialty_id": spID, "region": "江苏苏州", "description": "日常维修"}
+	db.Raw("SELECT position_id FROM positions WHERE code = ?", "maint_tech").Scan(&spID)
+	jobBody := map[string]any{"title": "叉车维修技师", "position_id": spID, "region": "江苏苏州", "description": "日常维修"}
 	rec = doWithToken(t, r, recToken, http.MethodPost, "/api/recruit/jobs", jobBody)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create job: %d %s", rec.Code, rec.Body.String())

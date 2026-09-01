@@ -172,6 +172,20 @@ type Specialty struct {
 
 func (Specialty) TableName() string { return "specialty" }
 
+// Position 岗位字典（spec 问题4：岗位与专业方向解绑，管理员配置）。
+// 职位发布与简历「期望岗位」都从该字典选取；与培训域专业方向（specialty）完全解耦。
+type Position struct {
+	PositionID  int       `gorm:"column:position_id;primaryKey" json:"position_id"`
+	Code        string    `gorm:"column:code;uniqueIndex" json:"code"`
+	Name        string    `gorm:"column:name" json:"name"`
+	Description string    `gorm:"column:description" json:"description"`
+	SortOrder   int       `gorm:"column:sort_order;default:0" json:"sort_order"`
+	Status      int16     `gorm:"column:status;default:1" json:"status"`
+	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (Position) TableName() string { return "positions" }
+
 // ===== 4.6 课程等级 =====
 
 type CourseLevel struct {
@@ -846,28 +860,28 @@ func (PointsEntryIdem) TableName() string { return "points_entry_idem" }
 
 // ===== 29. 简历卡
 type JobCard struct {
-	UserID                 int       `gorm:"column:user_id;primaryKey" json:"user_id"`
-	RealName               string    `gorm:"column:real_name;default:''" json:"real_name"`
-	ContactPhone           string    `gorm:"column:contact_phone;default:''" json:"contact_phone"`
-	Wechat                 string    `gorm:"column:wechat;default:''" json:"wechat"`
-	Region                 string    `gorm:"column:region;default:''" json:"region"`
-	ExpectedSpecialtyID    *int      `gorm:"column:expected_specialty_id" json:"expected_specialty_id,omitempty"`
-	ExpectedSpecialtyExtra string    `gorm:"column:expected_specialty_extra;default:''" json:"expected_specialty_extra"`
-	ExpectedRegions        JSONB     `gorm:"column:expected_regions;type:jsonb;default:'[]'" json:"expected_regions"`
-	SalaryMin              *int      `gorm:"column:salary_min" json:"salary_min,omitempty"`
-	SalaryMax              *int      `gorm:"column:salary_max" json:"salary_max,omitempty"`
-	SalaryNegotiable       bool      `gorm:"column:salary_negotiable;default:false" json:"salary_negotiable"`
-	AvailableIn            string    `gorm:"column:available_in;default:''" json:"available_in"`
-	JobNature              string    `gorm:"column:job_nature;default:''" json:"job_nature"`
-	ExperienceYears        int       `gorm:"column:experience_years;default:0" json:"experience_years"`
-	SelfIntro              string    `gorm:"column:self_intro;default:''" json:"self_intro"`
-	ResumeExperiences      JSONB     `gorm:"column:resume_experiences;type:jsonb;default:'[]'" json:"resume_experiences"`
-	ResumeCertifications   JSONB     `gorm:"column:resume_certifications;type:jsonb;default:'[]'" json:"resume_certifications"`
-	ResumeFileURL          string    `gorm:"column:resume_file_url;default:''" json:"resume_file_url"`
-	Photos                 JSONB     `gorm:"column:photos;type:jsonb;default:'[]'" json:"photos"`
-	Visibility             string    `gorm:"column:visibility;default:hidden" json:"visibility"`
-	CreatedAt              time.Time `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt              time.Time `gorm:"column:updated_at" json:"updated_at"`
+	UserID                int       `gorm:"column:user_id;primaryKey" json:"user_id"`
+	RealName              string    `gorm:"column:real_name;default:''" json:"real_name"`
+	ContactPhone          string    `gorm:"column:contact_phone;default:''" json:"contact_phone"`
+	Wechat                string    `gorm:"column:wechat;default:''" json:"wechat"`
+	Region                string    `gorm:"column:region;default:''" json:"region"`
+	ExpectedPositionID    *int      `gorm:"column:expected_position_id" json:"expected_position_id,omitempty"`
+	ExpectedPositionExtra string    `gorm:"column:expected_position_extra;default:''" json:"expected_position_extra"`
+	ExpectedRegions       JSONB     `gorm:"column:expected_regions;type:jsonb;default:'[]'" json:"expected_regions"`
+	SalaryMin             *int      `gorm:"column:salary_min" json:"salary_min,omitempty"`
+	SalaryMax             *int      `gorm:"column:salary_max" json:"salary_max,omitempty"`
+	SalaryNegotiable      bool      `gorm:"column:salary_negotiable;default:false" json:"salary_negotiable"`
+	AvailableIn           string    `gorm:"column:available_in;default:''" json:"available_in"`
+	JobNature             string    `gorm:"column:job_nature;default:''" json:"job_nature"`
+	ExperienceYears       int       `gorm:"column:experience_years;default:0" json:"experience_years"`
+	SelfIntro             string    `gorm:"column:self_intro;default:''" json:"self_intro"`
+	ResumeExperiences     JSONB     `gorm:"column:resume_experiences;type:jsonb;default:'[]'" json:"resume_experiences"`
+	ResumeCertifications  JSONB     `gorm:"column:resume_certifications;type:jsonb;default:'[]'" json:"resume_certifications"`
+	ResumeFileURL         string    `gorm:"column:resume_file_url;default:''" json:"resume_file_url"`
+	Photos                JSONB     `gorm:"column:photos;type:jsonb;default:'[]'" json:"photos"`
+	Visibility            string    `gorm:"column:visibility;default:hidden" json:"visibility"`
+	CreatedAt             time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt             time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (JobCard) TableName() string { return "job_cards" }
@@ -905,10 +919,11 @@ func (ContactRequest) TableName() string { return "contact_requests" }
 // JobPosting 企业发布的职位（先发后审：open/closed 二态，可被管理员强制下架）。
 // 职位名不叫「岗位」——本系统「岗位」已是专业方向的历史别名（术语登记见 CONTEXT.md）。
 type JobPosting struct {
-	ID            int    `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	RecruiterID   int    `gorm:"column:recruiter_id;index" json:"recruiter_id"`
-	Title         string `gorm:"column:title" json:"title"`
-	SpecialtyID   *int   `gorm:"column:specialty_id" json:"specialty_id,omitempty"` // 业务层必填；库层可空（字典项删除置空不级联）
+	ID          int    `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	RecruiterID int    `gorm:"column:recruiter_id;index" json:"recruiter_id"`
+	Title       string `gorm:"column:title" json:"title"`
+	// PositionID 岗位字典（问题4：与专业方向解绑）；业务层必填；库层可空（字典项删除置空不级联）。
+	PositionID    *int   `gorm:"column:position_id" json:"position_id,omitempty"`
 	Region        string `gorm:"column:region;default:''" json:"region"`
 	SalaryMin     *int   `gorm:"column:salary_min" json:"salary_min,omitempty"`
 	SalaryMax     *int   `gorm:"column:salary_max" json:"salary_max,omitempty"`

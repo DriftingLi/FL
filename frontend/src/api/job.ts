@@ -4,8 +4,8 @@ export interface JobPosting {
   id: number
   recruiter_id: number
   title: string
-  specialty_id?: number | null
-  specialty_name?: string
+  position_id?: number | null
+  position_name?: string
   region: string
   salary_min?: number | null
   salary_max?: number | null
@@ -30,7 +30,7 @@ export interface JobListResp {
 
 export interface JobPostingInput {
   title: string
-  specialty_id?: number | null
+  position_id?: number | null
   region?: string
   salary_min?: number | null
   salary_max?: number | null
@@ -84,14 +84,14 @@ export const jobApi = {
   toggleJobStatus(id: number) {
     return unwrappedRequest.post<JobPosting>(`/recruit/jobs/${id}/toggle-status`)
   },
-  listMyJobs(params?: { page?: number; page_size?: number; specialty_id?: number }) {
+  listMyJobs(params?: { page?: number; page_size?: number; position_id?: number }) {
     return unwrappedRequest.get<JobListResp>('/recruit/jobs', { params })
   },
   getMyJob(id: number) {
     return unwrappedRequest.get<JobPosting>(`/recruit/jobs/${id}`)
   },
   // 学员侧
-  listPublicJobs(params?: { page?: number; page_size?: number; specialty_id?: number; region?: string; salary_min?: number; salary_max?: number; experience?: string }) {
+  listPublicJobs(params?: { page?: number; page_size?: number; position_id?: number; region?: string; salary_min?: number; salary_max?: number; experience?: string }) {
     return unwrappedRequest.get<JobListResp>('/jobs', { params })
   },
   getPublicJob(id: number) {

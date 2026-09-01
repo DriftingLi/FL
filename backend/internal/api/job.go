@@ -48,7 +48,7 @@ func RegisterJobRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobPosti
 
 // Create 企业发布职位 POST /api/recruit/jobs
 // @Summary 发布职位
-// @Description 企业发布职位（职位名 + 必填专业方向 + 地区/薪资/经验要求/描述）
+// @Description 企业发布职位（职位名 + 必填岗位 + 地区/薪资/经验要求/描述）
 // @Tags 招聘域-职位
 // @Accept json
 // @Produce json
@@ -171,8 +171,8 @@ func (h *JobHandler) ListMine(c *gin.Context) {
 				MineOnly:      true,
 				IncludeHidden: true,
 			}
-			if v := queryIDPtr(c, "specialty_id"); v != nil {
-				params.SpecialtyID = v
+			if v := queryIDPtr(c, "position_id"); v != nil {
+				params.PositionID = v
 			}
 			return h.svc.List(middleware.CurrentUserID(c), params)
 		},
@@ -211,11 +211,11 @@ func (h *JobHandler) GetMine(c *gin.Context) {
 
 // ListPublic 学员职位广场 GET /api/jobs（只 open 且未强制下架，按新鲜度）
 // @Summary 职位广场
-// @Description 学员浏览职位广场（仅 open 且未强制下架，按新鲜度排序；支持专业方向/地区/薪资/经验筛选）
+// @Description 学员浏览职位广场（仅 open 且未强制下架，按新鲜度排序；支持岗位/地区/薪资/经验筛选）
 // @Tags 招聘域-职位
 // @Produce json
 // @Security BearerAuth
-// @Param specialty_id query int false "专业方向 ID"
+// @Param position_id query int false "岗位 ID"
 // @Param region query string false "地区"
 // @Param salary_min query int false "最低薪资"
 // @Param salary_max query int false "最高薪资"
@@ -232,8 +232,8 @@ func (h *JobHandler) ListPublic(c *gin.Context) {
 				Page:     atoiDefault(c.Query("page"), 1),
 				PageSize: atoiDefault(c.Query("page_size"), 20),
 			}
-			if v := queryIDPtr(c, "specialty_id"); v != nil {
-				params.SpecialtyID = v
+			if v := queryIDPtr(c, "position_id"); v != nil {
+				params.PositionID = v
 			}
 			if v := queryIDPtr(c, "salary_min"); v != nil {
 				params.SalaryMin = v

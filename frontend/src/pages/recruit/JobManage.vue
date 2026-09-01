@@ -30,7 +30,7 @@
               <el-tag v-else :type="item.status === 'open' ? 'success' : 'info'" size="small">{{ item.status === 'open' ? '招聘中' : '已下架' }}</el-tag>
             </div>
             <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
-              <span v-if="item.specialty_name">{{ item.specialty_name }}</span>
+              <span v-if="item.position_name">{{ item.position_name }}</span>
               <span v-if="item.region">{{ item.region }}</span>
               <span v-if="item.salary_text">{{ item.salary_text }}</span>
               <span v-if="item.experience_req">经验：{{ item.experience_req }}</span>
@@ -68,9 +68,9 @@
         <el-form-item label="职位名" required>
           <el-input v-model="form.title" maxlength="100" placeholder="如：叉车维修技师" />
         </el-form-item>
-        <el-form-item label="专业方向" required>
-          <el-select v-model="form.specialty_id" placeholder="选择专业方向" class="!w-full">
-            <el-option v-for="s in specialties" :key="s.specialty_id" :label="s.name" :value="s.specialty_id" />
+        <el-form-item label="岗位" required>
+          <el-select v-model="form.position_id" placeholder="选择岗位" class="!w-full">
+            <el-option v-for="p in positions" :key="p.position_id" :label="p.name" :value="p.position_id" />
           </el-select>
         </el-form-item>
         <el-form-item label="地区">
@@ -103,14 +103,19 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { jobApi, type JobPosting, type JobPostingInput } from '@/api/job'
-import { trainingApi, type CatalogDirection } from '@/api/training'
+import { unwrappedRequest } from '@/api/request'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
+interface PositionItem {
+  position_id: number
+  name: string
+}
+
 const items = ref<JobPosting[]>([])
-const specialties = ref<CatalogDirection[]>([])
+const positions = ref<PositionItem[]>([])
 const dialogVisible = ref(false)
 const editing = ref(false)
 const submitting = ref(false)
@@ -118,7 +123,7 @@ const editingId = ref(0)
 
 const form = reactive<JobPostingInput>({
   title: '',
-  specialty_id: null,
+  position_id: null,
   region: '',
   salary_min: null,
   salary_max: null,
@@ -146,7 +151,7 @@ const {
 function openCreate() {
   editing.value = false
   editingId.value = 0
-  Object.assign(form, { title: '', specialty_id: null, region: '', salary_min: null, salary_max: null, salary_text: '', experience_req: '', description: '' })
+  Object.assign(form, { title: '', position_id: null, region: '', salary_min: null, salary_max: null, salary_text: '', experience_req: '', description: '' })
   dialogVisible.value = true
 }
 
@@ -155,7 +160,7 @@ function openEdit(item: JobPosting) {
   editingId.value = item.id
   Object.assign(form, {
     title: item.title,
-    specialty_id: item.specialty_id ?? null,
+    position_id: item.position_id ?? null,
     region: item.region,
     salary_min: item.salary_min ?? null,
     salary_max: item.salary_max ?? null,
@@ -171,8 +176,8 @@ async function submit() {
     ElMessage.warning('职位名不能为空')
     return
   }
-  if (!form.specialty_id) {
-    ElMessage.warning('请选择专业方向')
+  if (!form.position_id) {
+    ElMessage.warning('请选择岗位')
     return
   }
   submitting.value = true
@@ -205,8 +210,8 @@ async function toggleStatus(item: JobPosting) {
 
 onMounted(async () => {
   try {
-    const tree: any = await trainingApi.getCatalogTree()
-    specialties.value = tree?.specialties || []
+    const res: any = await unwrappedRequest.get('/positions', { headers: { 'X-Silent': '1' } })
+    positions.value = res?.positions || []
   } catch {}
   load()
 })

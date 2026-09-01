@@ -66,10 +66,10 @@ func assertJobPostingContract(t *testing.T, db *gorm.DB) {
 	recAID, recAToken := createRecruiter("jobA")
 	_, recBToken := createRecruiter("jobB")
 
-	// 种子专业方向
-	db.Exec("INSERT INTO specialty (code, name, status) VALUES (?, ?, ?)", "maint", "叉车维修", 1)
+	// 种子岗位
+	db.Exec("INSERT INTO positions (code, name, status) VALUES (?, ?, ?)", "maint_tech", "叉车维修技师", 1)
 	var spID int
-	db.Raw("SELECT specialty_id FROM specialty WHERE code = ?", "maint").Scan(&spID)
+	db.Raw("SELECT position_id FROM positions WHERE code = ?", "maint_tech").Scan(&spID)
 
 	// 1. L1 延伸：无 token 访问职位列表/详情一律被拒
 	rec := doWithoutToken(t, r, http.MethodGet, "/api/jobs")
@@ -85,15 +85,15 @@ func assertJobPostingContract(t *testing.T, db *gorm.DB) {
 	badBody := map[string]any{"title": "叉车维修技师"}
 	rec = doWithToken(t, r, recAToken, http.MethodPost, "/api/recruit/jobs", badBody)
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("missing specialty should 400, got %d body=%s", rec.Code, rec.Body.String())
+		t.Fatalf("missing position should 400, got %d body=%s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "专业方向") {
-		t.Fatalf("missing specialty message should mention 专业方向, got %s", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "岗位") {
+		t.Fatalf("missing position message should mention 岗位, got %s", rec.Body.String())
 	}
 
 	// 3. 正常发布
 	goodBody := map[string]any{
-		"title": "叉车维修技师", "specialty_id": spID, "region": "江苏苏州", "salary_min": 6000, "salary_max": 9000,
+		"title": "叉车维修技师", "position_id": spID, "region": "江苏苏州", "salary_min": 6000, "salary_max": 9000,
 		"salary_text": "6-9K", "experience_req": "2年", "description": "负责叉车日常维修保养",
 	}
 	rec = doWithToken(t, r, recAToken, http.MethodPost, "/api/recruit/jobs", goodBody)
@@ -103,9 +103,9 @@ func assertJobPostingContract(t *testing.T, db *gorm.DB) {
 	var created struct {
 		Code int `json:"code"`
 		Data struct {
-			ID            int    `json:"id"`
-			Status        string `json:"status"`
-			SpecialtyName string `json:"specialty_name"`
+			ID           int    `json:"id"`
+			Status       string `json:"status"`
+			PositionName string `json:"position_name"`
 		} `json:"data"`
 	}
 	_ = json.Unmarshal(rec.Body.Bytes(), &created)
@@ -113,8 +113,8 @@ func assertJobPostingContract(t *testing.T, db *gorm.DB) {
 	if created.Data.Status != "open" {
 		t.Fatalf("new job should be open, got %s", created.Data.Status)
 	}
-	if created.Data.SpecialtyName != "叉车维修" {
-		t.Fatalf("specialty_name should resolve, got %s", created.Data.SpecialtyName)
+	if created.Data.PositionName != "叉车维修技师" {
+		t.Fatalf("specialty_name should resolve, got %s", created.Data.PositionName)
 	}
 
 	// 4. 改别人的职位 → 403
@@ -168,7 +168,7 @@ func assertJobPostingContract(t *testing.T, db *gorm.DB) {
 	// 7. 单企业活跃职位上限 50：预置 50 个 open 后第 51 个被拒
 	_ = recAID
 	jobBody := map[string]any{
-		"title": "批量职位", "specialty_id": spID, "region": "上海", "description": "批量",
+		"title": "批量职位", "position_id": spID, "region": "上海", "description": "批量",
 	}
 	for i := 0; i < 49; i++ {
 		jobBody["title"] = "批量职位" + itoa(i)
@@ -178,7 +178,7 @@ func assertJobPostingContract(t *testing.T, db *gorm.DB) {
 		}
 	}
 	rec = doWithToken(t, r, recAToken, http.MethodPost, "/api/recruit/jobs", map[string]any{
-		"title": "第51个", "specialty_id": spID, "region": "上海", "description": "超限",
+		"title": "第51个", "position_id": spID, "region": "上海", "description": "超限",
 	})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("51st active job should 400, got %d body=%s", rec.Code, rec.Body.String())
@@ -191,7 +191,7 @@ func assertJobPostingContract(t *testing.T, db *gorm.DB) {
 		t.Fatalf("toggle close for limit test: %d", rec.Code)
 	}
 	rec = doWithToken(t, r, recAToken, http.MethodPost, "/api/recruit/jobs", map[string]any{
-		"title": "第51个重发", "specialty_id": spID, "region": "上海", "description": "超限后重发",
+		"title": "第51个重发", "position_id": spID, "region": "上海", "description": "超限后重发",
 	})
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("after closing one should create, got %d body=%s", rec.Code, rec.Body.String())

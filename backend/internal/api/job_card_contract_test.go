@@ -22,7 +22,7 @@ import (
 func TestJobCardContract(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := testutil.NewMemoryDB(t)
-	spec := model.Specialty{Code: "maintenance", Name: "维修", SortOrder: 1, Status: 1}
+	spec := model.Position{Code: "maintenance", Name: "维修", SortOrder: 1, Status: 1}
 	if err := db.Create(&spec).Error; err != nil {
 		t.Fatalf("创建 specialty 失败: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestJobCardContract(t *testing.T) {
 	if rec := do(http.MethodGet, "/api/resume", nil); rec.Code != http.StatusNotFound {
 		t.Fatalf("未创建简历 GET 应 404, 实际 %d body=%s", rec.Code, rec.Body.String())
 	}
-	payload := map[string]any{"real_name": "张三", "contact_phone": "13900001111", "wechat": "zhangsan_wx", "region": "江苏苏州", "expected_specialty_id": spec.SpecialtyID, "expected_regions": []string{"江苏苏州", "浙江杭州"}, "salary_min": 8000, "salary_max": 12000, "experience_years": 5, "self_intro": "5 年叉车维修经验", "resume_experiences": []map[string]any{{"company": "A公司", "role": "维修工", "start_month": "2020-01", "end_month": "2023-01", "desc": "维修叉车"}}, "resume_certifications": []map[string]any{{"credential_id": cred.ID, "cert_no": "CERT123", "expire_date": "2028-01-01", "image_urls": []string{}}}, "photos": []string{"https://example.com/a.jpg"}, "resume_file_url": ""}
+	payload := map[string]any{"real_name": "张三", "contact_phone": "13900001111", "wechat": "zhangsan_wx", "region": "江苏苏州", "expected_position_id": spec.PositionID, "expected_regions": []string{"江苏苏州", "浙江杭州"}, "salary_min": 8000, "salary_max": 12000, "experience_years": 5, "self_intro": "5 年叉车维修经验", "resume_experiences": []map[string]any{{"company": "A公司", "role": "维修工", "start_month": "2020-01", "end_month": "2023-01", "desc": "维修叉车"}}, "resume_certifications": []map[string]any{{"credential_id": cred.ID, "cert_no": "CERT123", "expire_date": "2028-01-01", "image_urls": []string{}}}, "photos": []string{"https://example.com/a.jpg"}, "resume_file_url": ""}
 	rec := do(http.MethodPut, "/api/resume", payload)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("PUT 创建简历应 200, 实际 %d body=%s", rec.Code, rec.Body.String())
@@ -73,10 +73,10 @@ func TestJobCardContract(t *testing.T) {
 	var putResp struct {
 		Code int `json:"code"`
 		Data struct {
-			ContactPhone        string `json:"contact_phone"`
-			Visibility          string `json:"visibility"`
-			ExpectedSpecialtyID *int   `json:"expected_specialty_id"`
-			RealName            string `json:"real_name"`
+			ContactPhone       string `json:"contact_phone"`
+			Visibility         string `json:"visibility"`
+			ExpectedPositionID *int   `json:"expected_position_id"`
+			RealName           string `json:"real_name"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &putResp); err != nil {
@@ -88,8 +88,8 @@ func TestJobCardContract(t *testing.T) {
 	if putResp.Data.Visibility != "hidden" {
 		t.Fatalf("visibility 默认应 hidden, 实际 %q", putResp.Data.Visibility)
 	}
-	if putResp.Data.ExpectedSpecialtyID == nil || *putResp.Data.ExpectedSpecialtyID != spec.SpecialtyID {
-		t.Fatalf("expected_specialty_id 回填错误: %v", putResp.Data.ExpectedSpecialtyID)
+	if putResp.Data.ExpectedPositionID == nil || *putResp.Data.ExpectedPositionID != spec.PositionID {
+		t.Fatalf("expected_position_id 回填错误: %v", putResp.Data.ExpectedPositionID)
 	}
 	rec = do(http.MethodGet, "/api/resume", nil)
 	if rec.Code != http.StatusOK {
@@ -150,7 +150,7 @@ func TestJobCardContract(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("切换 visibility hidden 应 200, 实际 %d body=%s", rec.Code, rec.Body.String())
 	}
-	rec = do(http.MethodPut, "/api/resume", map[string]any{"expected_specialty_id": 99999})
+	rec = do(http.MethodPut, "/api/resume", map[string]any{"expected_position_id": 99999})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("非法 specialty_id 应 400, 实际 %d body=%s", rec.Code, rec.Body.String())
 	}

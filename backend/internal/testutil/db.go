@@ -73,6 +73,7 @@ func allModels() []interface{} {
 		&model.Tutor{},
 		&model.Course{},
 		&model.Specialty{},
+		&model.Position{},
 		&model.CourseLevel{},
 		&model.CertificateTemplate{},
 		&model.CoursePrerequisite{},

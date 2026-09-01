@@ -123,6 +123,7 @@ func (h *AdminRecruiterHandler) Edit(c *gin.Context) {
 			}
 			m := map[string]any{
 				"id":             rec.ID,
+				"username":       rec.Username,
 				"company_name":   rec.CompanyName,
 				"credit_code":    rec.CreditCode,
 				"business_scope": rec.BusinessScope,

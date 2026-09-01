@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"regexp"
 	"strings"
 	"time"
 
@@ -22,7 +23,12 @@ import (
 var (
 	// ErrCreditCodeTaken 统一社会信用代码已被占用（同一企业只能有一个招聘者账号，账号即企业）。
 	ErrCreditCodeTaken = errors.New("该企业已存在招聘者账号")
+	// ErrUsernameTaken 登录账号已被占用。
+	ErrUsernameTaken = errors.New("用户名已被注册")
 )
+
+// recruiterUsernameRe 招聘者用户名格式：4-20 位字母/数字/下划线（与登录表单 usernameRules 一致）。
+var recruiterUsernameRe = regexp.MustCompile("^[a-zA-Z0-9_]{4,20}$")
 
 // AuthService 认证服务，处理学员/管理员/导师的登录、注册与令牌签发。
 type AuthService struct {
@@ -347,8 +353,13 @@ type RecruiterCreateInput struct {
 
 // ValidateRecruiterInput 校验企业信息字段全部必填（缺任一项 400）。
 func ValidateRecruiterInput(in RecruiterCreateInput) error {
-	if strings.TrimSpace(in.Username) == "" {
+	username := strings.TrimSpace(in.Username)
+	if username == "" {
 		return errors.New("账号不能为空")
+	}
+	// 用户名格式：4-20 位字母/数字/下划线（与登录表单 usernameRules 一致，问题6）
+	if !recruiterUsernameRe.MatchString(username) {
+		return errors.New("账号只能包含字母、数字和下划线，长度 4-20 位")
 	}
 	if strings.TrimSpace(in.Password) == "" {
 		return errors.New("密码不能为空")
@@ -502,6 +513,7 @@ func (s *AuthService) ListRecruiters(page, pageSize int, keyword string) (*Recru
 
 // RecruiterEditInput 编辑招聘者企业信息的输入（#417）：不涉及账号归属与角色，密码走独立端点。
 type RecruiterEditInput struct {
+	Username      string `json:"username"`
 	CompanyName   string `json:"company_name"`
 	CreditCode    string `json:"credit_code"`
 	BusinessScope string `json:"business_scope"`
@@ -539,6 +551,18 @@ func (s *AuthService) EditRecruiter(id int, in RecruiterEditInput) (*model.Recru
 			return nil, ErrCreditCodeTaken
 		}
 	}
+	// 问题6：管理员可修改登录用户名（格式 + 唯一校验；空串 = 不改）。
+	newUsername := strings.TrimSpace(in.Username)
+	if newUsername != "" && newUsername != r.Username {
+		if !recruiterUsernameRe.MatchString(newUsername) {
+			return nil, errors.New("账号只能包含字母、数字和下划线，长度 4-20 位")
+		}
+		var nameCnt int64
+		s.db.Model(&model.RecruiterUser{}).Where("username = ? AND id <> ?", newUsername, id).Count(&nameCnt)
+		if nameCnt > 0 {
+			return nil, ErrUsernameTaken
+		}
+	}
 	updates := map[string]any{
 		"company_name":   strings.TrimSpace(in.CompanyName),
 		"credit_code":    strings.TrimSpace(in.CreditCode),
@@ -547,6 +571,9 @@ func (s *AuthService) EditRecruiter(id int, in RecruiterEditInput) (*model.Recru
 		"contact_phone":  strings.TrimSpace(in.ContactPhone),
 		"contact_email":  strings.TrimSpace(in.ContactEmail),
 		"updated_at":     beijingNow(),
+	}
+	if newUsername != "" && newUsername != r.Username {
+		updates["username"] = newUsername
 	}
 	if err := s.db.Model(&model.RecruiterUser{}).Where("id = ?", id).Updates(updates).Error; err != nil {
 		return nil, err
