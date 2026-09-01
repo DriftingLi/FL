@@ -19,7 +19,7 @@ func Now() time.Time {
 	return time.Now()
 }
 
-// NewMemoryDB 返回一个内存中的 sqlite 数据库，已 AutoMigrate 全部 19 张表。
+// NewMemoryDB 返回一个内存中的 sqlite 数据库，已 AutoMigrate 全部 22 张表。
 // 每个测试用例应独立调用以获得隔离的数据库实例。
 func NewMemoryDB(t *testing.T) *gorm.DB {
 	t.Helper()
@@ -116,6 +116,9 @@ func allModels() []interface{} {
 		&model.PointsEntryIdem{},
 		&model.RecruitResumeView{},
 		&model.ContactRequest{},
+		&model.JobPosting{},
+		&model.JobApplication{},
+		&model.JobReport{},
 	}
 }
 

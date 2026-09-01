@@ -175,3 +175,8 @@ training-app/*-backup-*/
 viz/
 .secret/
 # Swagger BasicAuth 凭据目录（C 方案，严禁入库）
+
+# ===== 本地工具缓存 =====
+.commandcode/
+.gocache/
+.glcache/

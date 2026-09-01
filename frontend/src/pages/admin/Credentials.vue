@@ -96,10 +96,16 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { credentialApi, type CredentialDict, type CredentialPayload } from '@/api/credential'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 
-const loading = ref(false)
 const list = ref<CredentialDict[]>([])
+
+// 三态收编 useAsyncPage（#439）：loader 纯装配，错误收敛 loadError（页面无错误态 UI，行为冻结）
+const { loading, run: load } = useAsyncPage(async () => {
+  const data = await credentialApi.listAdminCredentials()
+  list.value = data.credentials || []
+})
 const filterCategory = ref<string>('')
 const keyword = ref('')
 
@@ -113,18 +119,6 @@ const filtered = computed(() => {
     return true
   })
 })
-
-async function load() {
-  loading.value = true
-  try {
-    const data = await credentialApi.listAdminCredentials()
-    list.value = data.credentials || []
-  } catch (e) {
-    console.error(e)
-  } finally {
-    loading.value = false
-  }
-}
 
 const dialogVisible = ref(false)
 const submitting = ref(false)

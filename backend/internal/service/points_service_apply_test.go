@@ -100,7 +100,7 @@ func TestApplyTxRedeemGuard(t *testing.T) {
 		_, err := ApplyTx(tx, PointsEntry{UserID: uid, Delta: -100, Reason: "redeem_x", RefType: "shop", RefID: "x"})
 		return err
 	})
-	if err == nil || err.Error() != "积分不足" {
+	if err == nil || !errors.Is(err, ErrInsufficientPoints) {
 		t.Fatalf("超扣应报「积分不足」, got %v", err)
 	}
 	if got := userBalance(t, db, uid); got != 50 {
@@ -235,7 +235,7 @@ func TestClaimThroughApplyTx(t *testing.T) {
 	if _, err := svc.Claim(ctx, uid, "daily_checkin"); err != nil {
 		t.Fatalf("首次领取失败: %v", err)
 	}
-	if _, err := svc.Claim(ctx, uid, "daily_checkin"); err == nil || err.Error() != "今日已领取" {
+	if _, err := svc.Claim(ctx, uid, "daily_checkin"); err == nil || !errors.Is(err, ErrDailyClaimLimit) {
 		t.Fatalf("重复领取应报「今日已领取」, got %v", err)
 	}
 	if got := userBalance(t, db, uid); got != 5 {

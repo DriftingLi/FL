@@ -166,7 +166,7 @@
           :page-size="pageSize"
           :total="total"
           layout="total, prev, pager, next"
-          @current-change="loadList"
+          @current-change="handlePageChange"
         />
       </div>
       </template>
@@ -188,13 +188,32 @@ import {
 } from '@/api/forum'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import { formatLocaleDateTime } from '@/utils/format'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 
-const loading = ref(false)
 const topics = ref<AdminForumTopic[]>([])
-const total = ref(0)
-const currentPage = ref(1)
-const pageSize = ref(10)
+
+// 帖子列表三态 + 分页收编 useAsyncPage（#439）
+const {
+  loading,
+  total,
+  page: currentPage,
+  pageSize,
+  run: loadList,
+  handlePageChange
+} = useAsyncPage(
+  async () => {
+    const res = await adminForumApi.listTopics({
+      ...forumTabQuery(activeTab.value),
+      page: currentPage.value,
+      page_size: pageSize.value,
+      keyword: keyword.value || undefined
+    })
+    topics.value = res.topics || []
+    total.value = res.total || 0
+  },
+  { defaultPageSize: 10 }
+)
 // 管理端筛选轴：all=全部帖子、discussion=综合讨论区、question=问答区。
 // 三个值都交给 forumTabQuery 翻译成查询参数——"综合讨论区必须带 category=discussion"
 // 这条规则只在 api 层写一遍，学员端与管理端共用同一份映射。
@@ -260,25 +279,6 @@ async function handleReport(row: AdminForumReportItem) {
 
 function displayName(author: AdminForumTopic['author']) {
   return author.username
-}
-
-async function loadList() {
-  loading.value = true
-  try {
-    const res = await adminForumApi.listTopics({
-      ...forumTabQuery(activeTab.value),
-      page: currentPage.value,
-      page_size: pageSize.value,
-      keyword: keyword.value || undefined
-    })
-    topics.value = res.topics || []
-    total.value = res.total || 0
-  } catch (e) {
-    console.error('加载论坛列表失败:', e)
-    /* 错误已由拦截器提示 */
-  } finally {
-    loading.value = false
-  }
 }
 
 function handleTabChange() {

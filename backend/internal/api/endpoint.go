@@ -60,7 +60,8 @@ type Endpoint[Req, Resp any] struct {
 	Parse ParseFunc[Req]
 	// Invoke 调用 service。为 nil 时跳过调用（Resp 保持 nil）。
 	Invoke InvokeFunc[Req, Resp]
-	// Render 渲染响应，全权负责写响应（含 err→状态码/信封）。所有端点均须显式提供。
+	// Render 渲染响应，全权负责写响应（含 err→状态码/信封）。省略时走内置默认信封（ADR-0024 C2）：
+	// 成功 → 200 统一信封；*ParseError → 其状态码；其他错误 → 500。有业务错误映射的端点才需写自定义 Render。
 	Render RenderFunc[Req, Resp]
 }
 
@@ -98,6 +99,20 @@ func (e Endpoint[Req, Resp]) parse(c *gin.Context) (*Req, error) {
 }
 
 func (e Endpoint[Req, Resp]) render(c *gin.Context, req *Req, resp *Resp, err error) {
+	if e.Render == nil {
+		// 默认信封（ADR-0024 C2）：与既有纯样板 Render 逐字等价——成功统一信封、
+		// 解析错误映射其状态码、其余错误 500。仅保留有业务错误映射的端点写自定义 Render。
+		var pe *ParseError
+		switch {
+		case err == nil:
+			response.Success(c, deref(resp))
+		case asParseError(err, &pe):
+			renderStatus(c, pe.Status, pe.Message)
+		default:
+			response.ServerError(c, err.Error())
+		}
+		return
+	}
 	e.Render(c, req, resp, err)
 }
 

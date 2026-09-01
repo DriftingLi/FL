@@ -36,7 +36,7 @@
           :total="total"
           :page-sizes="[10, 20, 50]"
           layout="total, sizes, prev, pager, next"
-          @current-change="loadLedger"
+          @current-change="handlePageChange"
           @size-change="loadLedger"
         />
       </div>
@@ -94,17 +94,32 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { unwrappedRequest } from '@/api/request'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 
 // #411：默认锁定问答域（forum_topic），显式切换才跨域全量——卡片标题与内容同域。
 const domain = ref<'forum_topic' | ''>('forum_topic')
 const reason = ref('')
 const userId = ref('')
-const page = ref(1)
-const pageSize = ref(20)
-const total = ref(0)
 const ledger = ref<LedgerItem[]>([])
-const ledgerLoading = ref(false)
+
+// 流水列表三态 + 分页收编 useAsyncPage（#439）
+const {
+  loading: ledgerLoading,
+  total,
+  page,
+  pageSize,
+  run: loadLedger,
+  handlePageChange
+} = useAsyncPage(async () => {
+  const params: Record<string, any> = { page: page.value, page_size: pageSize.value }
+  if (domain.value) params.ref_type = domain.value
+  if (reason.value) params.reason = reason.value
+  if (userId.value) params.user_id = userId.value
+  const res: any = await unwrappedRequest.get('/admin/points/ledger', { params, headers: { 'X-Silent': '1' } })
+  ledger.value = res?.items || []
+  total.value = res?.total ?? 0
+})
 
 interface LedgerItem {
   id: number
@@ -137,19 +152,6 @@ async function loadCount() {
     const res: any = await unwrappedRequest.get('/admin/inspection/deleted-after-accepted', { headers: { 'X-Silent': '1' } })
     deletedCount.value = res?.count ?? 0
   } catch {}
-}
-async function loadLedger() {
-  ledgerLoading.value = true
-  try {
-    const params: Record<string, any> = { page: page.value, page_size: pageSize.value }
-    if (domain.value) params.ref_type = domain.value
-    if (reason.value) params.reason = reason.value
-    if (userId.value) params.user_id = userId.value
-    const res: any = await unwrappedRequest.get('/admin/points/ledger', { params, headers: { 'X-Silent': '1' } })
-    ledger.value = res?.items || []
-    total.value = res?.total ?? 0
-  } catch {}
-  ledgerLoading.value = false
 }
 // 切换域即时重载（#411）：v-model 变更即刷新，不依赖下拉的 change 事件时序。
 watch(domain, () => loadLedger())

@@ -65,7 +65,7 @@
       :page-size="pageSize"
       :total="total"
       layout="prev, pager, next"
-      @current-change="loadData"
+      @current-change="handlePageChange"
       style="margin-top: 15px"
     />
 
@@ -132,16 +132,29 @@ import { ArrowDown } from '@element-plus/icons-vue'
 import { questionBankApi } from '@/api/questionBank'
 import type { Question } from '@/types/question'
 import { typeMap } from '@/constants/question'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
 const statusType: Record<string, string> = { draft: 'info', pending: 'warning', published: 'success' }
 
-const loading = ref(false)
 const questions = ref<Question[]>([])
-const total = ref(0)
-const page = ref(1)
-const pageSize = ref(20)
+
+// 三态 + 分页收编 useAsyncPage（#439）：loader 纯装配，错误收敛 loadError
+const {
+  loading,
+  total,
+  page,
+  pageSize,
+  run: loadData,
+  handlePageChange
+} = useAsyncPage(async () => {
+  const res = await questionBankApi.getQuestions({ page: page.value, page_size: pageSize.value, ...filters.value })
+  questions.value = res?.questions || []
+  total.value = res?.total || 0
+  // 加载待审核总数（仅当不是 pending 筛选时单独查询）
+  await loadPendingCount()
+})
 const filters = ref({ type: '', status: 'pending', keyword: '' })
 const selectedIds = ref<number[]>([])
 const pendingCount = ref(0)
@@ -171,21 +184,6 @@ function handleAction(cmd: string, row: any) {
     case 'reject':
       rejectSingle(row)
       break
-  }
-}
-
-async function loadData() {
-  loading.value = true
-  try {
-    const res = await questionBankApi.getQuestions({ page: page.value, page_size: pageSize.value, ...filters.value })
-    questions.value = res?.questions || []
-    total.value = res?.total || 0
-    // 加载待审核总数（仅当不是 pending 筛选时单独查询）
-    await loadPendingCount()
-  } catch {
-    /* 错误已由拦截器提示 */
-  } finally {
-    loading.value = false
   }
 }
 

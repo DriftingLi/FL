@@ -71,6 +71,7 @@ describe('导航配置的详情页归属', () => {
     CourseList: ['ChapterView'],
     ForumPage: ['ForumDetail'],
     AIAssistant: ['AIAssistantFeature'],
+    JobPlaza: ['JobDetail'],
     TutorCourses: ['TutorChapterManage', 'TutorChapterEdit'],
     TutorQuestionManage: ['TutorQuestionCreate']
   }

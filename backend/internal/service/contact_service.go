@@ -17,6 +17,14 @@ import (
 	"forklift-training/internal/model"
 )
 
+// 联系方式交换域业务错误哨兵（ADR-0024）：handler 以 errors.Is 映射状态码，不做字符串比对。
+var (
+	// ErrContactNoAuth 无有效授权（无 approved 授权或授权已失效）。
+	ErrContactNoAuth = errors.New("无有效授权")
+	// ErrStudentGone 学员不存在或已注销。
+	ErrStudentGone = errors.New("学员不存在或已注销")
+)
+
 // ContactService 联系方式交换申请服务（L3）。
 type ContactService struct {
 	db              *gorm.DB
@@ -304,14 +312,14 @@ func (s *ContactService) GetContact(recruiterID, studentUserID int) (*JobCardDTO
 	err := s.db.Where("recruiter_id = ? AND student_user_id = ? AND status = ?", recruiterID, studentUserID, "approved").Order("decided_at DESC").First(&req).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("无有效授权")
+			return nil, ErrContactNoAuth
 		}
 		return nil, err
 	}
 	// 学员是否已注销（hrwai_users 不存在则授权一并失效）
 	var stu model.HrwaiUser
 	if err := s.db.First(&stu, studentUserID).Error; err != nil {
-		return nil, errors.New("学员不存在或已注销")
+		return nil, ErrStudentGone
 	}
 	// 读取简历卡（实时，无缓存）
 	var card model.JobCard

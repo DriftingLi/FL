@@ -5,6 +5,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"go.uber.org/zap"
@@ -120,6 +121,72 @@ func forumAcceptPayload(topicID, replyID int64, points int, reason string) model
 		return nil
 	}
 	return model.JSONB(b)
+}
+
+// ForumAcceptEvent 问答采纳事件通知参数（ADR-0024 C3）：站内信域单点构造
+// title/content/link/payload 口径，业务侧一行触发。
+type ForumAcceptEvent struct {
+	// UserID 收件人（答主或楼主）。
+	UserID int
+	// Type 通知类型：NotifTypeForumAcceptAnswerer / NotifTypeForumAcceptOwner。
+	Type string
+	// TopicTitle 问答标题（用于文案）。
+	TopicTitle string
+	// TopicID 主题 ID。
+	TopicID int64
+	// ReplyID 被采纳回复 ID。
+	ReplyID int64
+	// Points 到账分值（与实际入账一致）。
+	Points int
+	// Reason 流水原因（ReasonAcceptedBonus / ReasonAcceptAction）。
+	Reason string
+}
+
+// answererAcceptTitle 答主被采纳标题。
+const answererAcceptTitle = "你的回答被采纳"
+
+// ownerAcceptTitle 楼主采纳动作标题。
+const ownerAcceptTitle = "你采纳了答案"
+
+// NewAnswererAcceptEvent 构造答主被采纳通知事件（+40 分到账，link 锚到回答）。
+func NewAnswererAcceptEvent(userID int, topicTitle string, topicID, replyID int64, points int) ForumAcceptEvent {
+	return ForumAcceptEvent{
+		UserID:     userID,
+		Type:       NotifTypeForumAcceptAnswerer,
+		TopicTitle: topicTitle,
+		TopicID:    topicID,
+		ReplyID:    replyID,
+		Points:     points,
+		Reason:     ReasonAcceptedBonus,
+	}
+}
+
+// NewOwnerAcceptEvent 构造楼主采纳动作通知事件（+5 分到账，link 锚到回答）。
+func NewOwnerAcceptEvent(userID int, topicTitle string, topicID, replyID int64, points int) ForumAcceptEvent {
+	return ForumAcceptEvent{
+		UserID:     userID,
+		Type:       NotifTypeForumAcceptOwner,
+		TopicTitle: topicTitle,
+		TopicID:    topicID,
+		ReplyID:    replyID,
+		Points:     points,
+		Reason:     ReasonAcceptAction,
+	}
+}
+
+// CreateForumAcceptEvent 在指定事务/连接内创建一条问答采纳事件站内信。
+// 与积分入账同事务提交/回滚（ADR-0023）：通知与到账积分一致。
+func (s *NotificationService) CreateForumAcceptEvent(tx GormCreator, ev ForumAcceptEvent, createdAt time.Time) error {
+	link := fmt.Sprintf("/training/forum/%d#reply-%d", ev.TopicID, ev.ReplyID)
+	title := answererAcceptTitle
+	if ev.Type == NotifTypeForumAcceptOwner {
+		title = ownerAcceptTitle
+	}
+	content := fmt.Sprintf("你在问答「%s」中的回答被采纳，+%d 分已到账", ev.TopicTitle, ev.Points)
+	if ev.Type == NotifTypeForumAcceptOwner {
+		content = fmt.Sprintf("你在问答「%s」中采纳了回答，+%d 分已到账", ev.TopicTitle, ev.Points)
+	}
+	return s.CreateWithTx(tx, ev.UserID, ev.Type, title, content, link, forumAcceptPayload(ev.TopicID, ev.ReplyID, ev.Points, ev.Reason), createdAt)
 }
 
 // reviewStatusPayload 构造审核状态结构化标记，如 {"review_status":"approved"}。

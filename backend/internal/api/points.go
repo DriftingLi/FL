@@ -38,13 +38,6 @@ func (h *PointsHandler) GetBalance(c *gin.Context) {
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.PointsBalanceResult, error) {
 			return h.svc.GetBalance(middleware.CurrentUserID(c))
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.PointsBalanceResult, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 
@@ -57,13 +50,6 @@ func (h *PointsHandler) GetLedger(c *gin.Context) {
 			pageSize := atoiDefault(c.Query("page_size"), 20)
 			return h.svc.GetLedger(middleware.CurrentUserID(c), page, pageSize, "")
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.PointsLedgerResult, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 
@@ -72,13 +58,6 @@ func (h *PointsHandler) GetTasks(c *gin.Context) {
 	Endpoint[struct{}, service.PointsTasksResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.PointsTasksResult, error) {
 			return h.svc.GetTasks(middleware.CurrentUserID(c))
-		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.PointsTasksResult, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
 		},
 	}.Handle(c)
 }
@@ -96,11 +75,12 @@ func (h *PointsHandler) Claim(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *service.PointsClaimResult, err error) {
 			if err != nil {
-				if err.Error() == "已领取" || err.Error() == "今日已领取" {
+				// ADR-0024：哨兵映射状态码（已领取类 400、不存在类 404），文案零漂移
+				if errors.Is(err, service.ErrAlreadyClaimed) || errors.Is(err, service.ErrDailyClaimLimit) {
 					response.BadRequest(c, err.Error())
 					return
 				}
-				if err.Error() == "任务不存在" {
+				if errors.Is(err, service.ErrTaskNotFound) {
 					response.NotFound(c, err.Error())
 					return
 				}
@@ -129,11 +109,11 @@ func (h *PointsHandler) RedeemCourse(c *gin.Context) {
 					response.BadRequest(c, err.Error())
 					return
 				}
-				if err.Error() == "已兑换" {
+				if errors.Is(err, service.ErrAlreadyRedeemed) {
 					response.BadRequest(c, err.Error())
 					return
 				}
-				if err.Error() == "课程不存在" || err.Error() == "该课程无需兑换" {
+				if errors.Is(err, service.ErrCourseNotFound) || errors.Is(err, service.ErrCourseNotRedeemable) {
 					response.BadRequest(c, err.Error())
 					return
 				}
@@ -158,7 +138,7 @@ func (h *PointsHandler) RedeemShop(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *service.RedeemResult, err error) {
 			if err != nil {
-				if errors.Is(err, service.ErrInsufficientPoints) || err.Error() == "已兑换" {
+				if errors.Is(err, service.ErrInsufficientPoints) || errors.Is(err, service.ErrAlreadyRedeemed) {
 					response.BadRequest(c, err.Error())
 					return
 				}
