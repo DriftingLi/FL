@@ -63,9 +63,9 @@
         </div>
       </div>
 
-      <div class="profile-group danger-group">
-        <div class="profile-row danger-row" @click="openDelete">
-          <span class="text-sm text-ink">注销帐号</span>
+      <div class="overflow-hidden rounded-card bg-panel shadow-card">
+        <div class="flex cursor-pointer items-center justify-between px-4 py-4 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas active:bg-canvas" @click="openDelete">
+          <span class="text-sm text-danger">注销帐号</span>
           <span class="flex items-center gap-2 text-sm text-ink-3"><el-icon class="text-sm text-ink-muted"><ArrowRight /></el-icon></span>
         </div>
       </div>
@@ -158,9 +158,4 @@ onMounted(async ()=>{
 })
 </script>
 
-<style scoped>
-/* 嵌套后代覆盖（R1 例外）：红色分组内的行标签标红 */
-.danger-group .danger-row .row-label {
-  color: var(--color-danger);
-}
-</style>
+

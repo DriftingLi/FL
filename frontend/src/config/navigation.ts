@@ -194,7 +194,6 @@ const adminNav: NavItem[] = [
       { key: 'positions', label: '岗位管理', routeName: 'PositionManage', icon: CollectionTag },
       { key: 'credentials', label: '证件管理', routeName: 'CredentialManage', icon: CollectionTag },
       { key: 'question-review', label: '题库审核', routeName: 'QuestionReview', icon: EditPen },
-      { key: 'question-tags', label: '题库标签', routeName: 'QuestionTags', icon: CollectionTag }
     ]
   },
   {
@@ -226,10 +225,11 @@ const tutorNav: NavItem[] = [
     key: 'question-manage',
     label: '题库管理',
     routeName: 'TutorQuestionManage',
-    // 新增题目 / 编辑题目共用 TutorQuestionCreate（带 query.id 即编辑）
-    activeRouteNames: ['TutorQuestionCreate'],
+    // 新增题目 / 编辑题目共用 TutorQuestionCreate（带 query.id 即编辑）；标签管理同组
+    activeRouteNames: ['TutorQuestionCreate', 'TutorQuestionTags'],
     icon: EditPen
-  }
+  },
+  { key: 'question-tags', label: '标签管理', routeName: 'TutorQuestionTags', icon: CollectionTag }
 ]
 
 const recruiterNav: NavItem[] = [
