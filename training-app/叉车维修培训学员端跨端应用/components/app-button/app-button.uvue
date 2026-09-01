@@ -1,0 +1,128 @@
+<template>
+    <view class="app-btn" :class="[
+        'app-btn--' + type,
+        'app-btn--' + size,
+        { 'app-btn--disabled': disabled }
+    ]" @click="onClick">
+        <text class="app-btn-text" :class="[
+            'app-btn-text--' + type,
+            'app-btn-text--' + size
+        ]">{{ text }}</text>
+    </view>
+</template>
+
+<script setup lang="uts">
+    const props = withDefaults(defineProps<{
+        text ?: string
+        type ?: string
+        size ?: string
+        disabled ?: boolean
+    }>(), {
+        text: '',
+        type: 'primary',
+        size: 'large',
+        disabled: false
+    })
+
+    const emit = defineEmits(['click'])
+
+    function onClick() : void {
+        if (!props.disabled) {
+            emit('click')
+        }
+    }
+</script>
+
+<style>
+    .app-btn {
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Primary */
+    .app-btn--primary {
+        background-color: $primary-color;
+        border-radius: $radius-pill;
+    }
+
+    /* Secondary */
+    .app-btn--secondary {
+        background-color: transparent;
+        border-width: 2rpx;
+        border-style: solid;
+        border-color: $primary-color;
+        border-radius: $radius-lg;
+    }
+
+    /* Danger */
+    .app-btn--danger {
+        background-color: transparent;
+        border-radius: $radius-pill;
+    }
+
+    /* Ghost */
+    .app-btn--ghost {
+        background-color: transparent;
+        border-radius: $radius-pill;
+    }
+
+    /* Size: large */
+    .app-btn--large {
+        height: 80rpx;
+        padding: 0 48rpx;
+    }
+
+    /* Size: medium */
+    .app-btn--medium {
+        height: 64rpx;
+        padding: 0 32rpx;
+    }
+
+    /* Size: small */
+    .app-btn--small {
+        height: 48rpx;
+        padding: 0 24rpx;
+    }
+
+    /* Disabled */
+    .app-btn--disabled {
+        opacity: 0.5;
+    }
+
+    /* Text: primary */
+    .app-btn-text--primary {
+        color: $text-inverse;
+        font-weight: bold;
+    }
+
+    /* Text: secondary */
+    .app-btn-text--secondary {
+        color: $primary-color;
+    }
+
+    /* Text: danger */
+    .app-btn-text--danger {
+        color: $danger-color;
+    }
+
+    /* Text: ghost */
+    .app-btn-text--ghost {
+        color: $text-secondary;
+    }
+
+    /* Text size: large */
+    .app-btn-text--large {
+        font-size: $font-size-lg;
+    }
+
+    /* Text size: medium */
+    .app-btn-text--medium {
+        font-size: $font-size-md;
+    }
+
+    /* Text size: small */
+    .app-btn-text--small {
+        font-size: $font-size-sm;
+    }
+</style>

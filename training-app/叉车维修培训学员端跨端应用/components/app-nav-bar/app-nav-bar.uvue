@@ -1,0 +1,71 @@
+<template>
+    <view class="nav-bar" :class="{ 'nav-bar--transparent': transparent }">
+        <view class="nav-bar-left" @click="onLeftClick">
+            <text v-if="leftIcon.length > 0" class="nav-bar-icon">{{ leftIcon }}</text>
+            <text v-if="title.length > 0 && !transparent" class="nav-bar-title">{{ title }}</text>
+        </view>
+        <view v-if="rightIcon.length > 0" class="nav-bar-right" @click="onRightClick">
+            <text class="nav-bar-icon">{{ rightIcon }}</text>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    const props = withDefaults(defineProps<{
+        title ?: string
+        leftIcon ?: string
+        rightIcon ?: string
+        transparent ?: boolean
+    }>(), {
+        title: '',
+        leftIcon: '‹',
+        rightIcon: '',
+        transparent: false
+    })
+
+    const emit = defineEmits(['leftClick', 'rightClick'])
+
+    function onLeftClick() : void {
+        emit('leftClick')
+    }
+
+    function onRightClick() : void {
+        emit('rightClick')
+    }
+</script>
+
+<style>
+    .nav-bar {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        height: 88rpx;
+        padding: 0 $spacing-md;
+    }
+
+    .nav-bar--transparent {
+        background-color: transparent;
+    }
+
+    .nav-bar-left {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .nav-bar-right {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .nav-bar-title {
+        font-size: $font-size-xl;
+        font-weight: bold;
+        color: $text-color;
+        margin-left: 16rpx;
+    }
+
+    .nav-bar-icon {
+        font-size: 44rpx;
+        color: $text-color;
+    }
+</style>

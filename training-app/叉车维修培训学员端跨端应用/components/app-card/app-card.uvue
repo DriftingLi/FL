@@ -1,0 +1,25 @@
+<template>
+    <view class="app-card" :style="{ padding: padding, margin: margin, borderRadius: radius, backgroundColor: bgColor }">
+        <slot></slot>
+    </view>
+</template>
+
+<script setup lang="uts">
+    const props = withDefaults(defineProps<{
+        padding ?: string
+        margin ?: string
+        radius ?: string
+        bgColor ?: string
+    }>(), {
+        padding: '24rpx',
+        margin: '24rpx',
+        radius: '16rpx',
+        bgColor: '#ffffff'
+    })
+</script>
+
+<style>
+    .app-card {
+        flex-direction: column;
+    }
+</style>

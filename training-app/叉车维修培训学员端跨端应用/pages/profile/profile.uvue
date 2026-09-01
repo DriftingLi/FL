@@ -265,7 +265,7 @@
         { key: 'help', title: '帮助中心', icon: '❓', color: '#607d8b', path: '', available: false },
         { key: 'study-plan', title: '学习计划', icon: '📋', color: '#ff9900', path: '', available: false },
         { key: 'materials', title: '学习资料', icon: '📚', color: '#19be6b', path: '', available: false },
-        { key: 'jobs', title: '就业在线', icon: '💼', color: '#dd524d', path: '', available: false },
+        { key: 'jobs', title: '就业在线', icon: '💼', color: '#dd524d', path: '/pages/jobs/job-list', available: true },
     ]
 
     function padZero(n : number) : string {
