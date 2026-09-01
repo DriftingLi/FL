@@ -150,6 +150,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 	RegisterJobRoutes(api, rd, deps.JobPostingSvc)
 	RegisterApplicationRoutes(api, rd, deps.JobApplicationSvc)
 	RegisterJobReportRoutes(api, rd, deps.JobReportSvc, deps.JobPostingSvc)
+	RegisterRecruiterApplicationRoutes(api, rd, deps.JobApplicationSvc)
 	RegisterAdminInspectionRoutes(api, rd, deps.DB, deps.PointsSvc)
 
 	return r
