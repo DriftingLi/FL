@@ -65,14 +65,26 @@ import { useRouter } from 'vue-router'
 import { CircleCheckFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useCredentialStore } from '@/stores/credential'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 
 const router = useRouter()
 const credentialStore = useCredentialStore()
 
-const loading = ref(false)
 const submitting = ref(false)
 const selectedId = ref<number | null>(null)
+
+// 三态收编 useAsyncPage（#439）：引导页错误仍由拦截器 toast，loadError 不展示（行为冻结）
+const { loading, run: loadGrouped } = useAsyncPage(async () => {
+  await credentialStore.loadGrouped()
+  // 若已持有 current，则预选
+  if (credentialStore.current?.id) selectedId.value = credentialStore.current.id
+  else {
+    // 尝试加载 current
+    const cur = await credentialStore.loadCurrent().catch(() => null)
+    if (cur?.id) selectedId.value = cur.id
+  }
+})
 
 const grouped = computed(() => credentialStore.grouped)
 
@@ -95,20 +107,8 @@ async function handleConfirm() {
   }
 }
 
-onMounted(async () => {
-  loading.value = true
-  try {
-    await credentialStore.loadGrouped()
-    // 若已持有 current，则预选
-    if (credentialStore.current?.id) selectedId.value = credentialStore.current.id
-    else {
-      // 尝试加载 current
-      const cur = await credentialStore.loadCurrent().catch(() => null)
-      if (cur?.id) selectedId.value = cur.id
-    }
-  } finally {
-    loading.value = false
-  }
+onMounted(() => {
+  loadGrouped()
 })
 </script>
 

@@ -204,14 +204,23 @@ import { credentialApi, type CredentialDict } from '@/api/credential'
 import { adminApi, type AdminCourseItem } from '@/api/admin'
 import { levelTagType } from '@/constants/level'
 import { useCourseCatalog, UNMOUNTED_SPECIALTY_ID } from '@/composables/useCourseCatalog'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import FacetCard from '@/components/catalog/FacetCard.vue'
 import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCatalogCourseDrawer from '@/components/admin/CourseCatalogCourseDrawer.vue'
 import CourseCatalogDialogs from '@/components/admin/CourseCatalogDialogs.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 
-const loading = ref(false)
 const submitting = ref(false)
+
+// 三态收编 useAsyncPage（#439）：refreshCatalog 只负责拉数据，loading 由 composable 驱动
+// （页面无错误态 UI，行为冻结：错误仍由拦截器 toast，v-loading 复用 composable loading）
+const {
+  loading,
+  run: refreshCatalog
+} = useAsyncPage(async () => {
+  await fetchCatalog()
+})
 
 // ===== 数据源：管理端课程列表（客户端过滤/分页，课程规模小） =====
 const allCourses = ref<AdminCourseItem[]>([])
@@ -405,18 +414,6 @@ async function moveCourse(row: AdminCourseItem, delta: -1 | 1) {
 
 // ===== 加载 =====
 // adapter 回填页面级 allCourses（表格/抽屉共用），计数组 items 由同一数据派生
-async function refreshCatalog() {
-  loading.value = true
-  try {
-    await fetchCatalog()
-  } catch (error) {
-    console.error('加载课程失败:', error)
-    /* 错误已由拦截器提示 */
-  } finally {
-    loading.value = false
-  }
-}
-
 async function loadCertificateTemplates() {
   try {
     // trainingApi 已解包信封：成功直接返回业务负载

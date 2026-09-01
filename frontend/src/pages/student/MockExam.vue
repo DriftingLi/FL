@@ -89,6 +89,7 @@ import { mockExamApi, type MockExamHistoryItem } from '@/api/mockExam'
 import { realExamApi } from '@/api/realExam'
 import { formatDateTime } from '@/utils/format'
 import { useExamSession } from '@/composables/useExamSession'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 
 const route = useRoute()
@@ -134,11 +135,14 @@ const { inExam, currentIdx, remainingTime, questions, answers, shellRef, start, 
   }
 })
 
+// 历史记录三态收编 useAsyncPage（#439）：loader 纯装配，失败收敛 loadError（不打断考试主流程）
+const { run: loadHistory } = useAsyncPage(async () => {
+  const res = await mockExamApi.getMockExamHistory({ page: 1, page_size: 5 })
+  history.value = res.exams || []
+})
+
 onMounted(async () => {
-  try {
-    const res = await mockExamApi.getMockExamHistory({ page: 1, page_size: 5 })
-    history.value = res.exams || []
-  } catch (e) {}
+  loadHistory()
   // 真题卷入口：进页即开考（未兑换/失败由拦截器提示后返回列表）
   if (paperMode.value) {
     try {
