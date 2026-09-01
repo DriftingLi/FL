@@ -13,12 +13,12 @@
         <view class="stats-card">
             <view class="stats-row">
                 <view class="stats-item">
-                    <text class="stats-num">{{ total }}</text>
+                    <text class="stats-num">{{ formatCountCompact(total) }}</text>
                     <text class="stats-label">总模考</text>
                 </view>
                 <view class="stats-divider"></view>
                 <view class="stats-item">
-                    <text class="stats-num">{{ passedCount }}</text>
+                    <text class="stats-num">{{ formatCountCompact(passedCount) }}</text>
                     <text class="stats-label">通过</text>
                 </view>
                 <view class="stats-divider"></view>
@@ -36,8 +36,8 @@
 
         <!-- 汇总 -->
         <view class="summary">
-            <text class="summary-text">共 {{ total }} 次模考</text>
-            <text v-if="passedCount > 0" class="summary-passed">通过 {{ passedCount }}</text>
+            <text class="summary-text">共 {{ formatCountCompact(total) }} 次模考</text>
+            <text v-if="passedCount > 0" class="summary-passed">通过 {{ formatCountCompact(passedCount) }}</text>
         </view>
 
         <!-- 历史列表 -->
@@ -60,7 +60,7 @@
                             <text class="record-tag" :class="item.passed ? 'tag-passed' : 'tag-failed'">
                                 {{ item.passed ? '通过' : '未通过' }}
                             </text>
-                            <text class="record-stat">{{ item.correct_count }}/{{ item.total_questions }} 题</text>
+                            <text class="record-stat">{{ formatCountCompact(item.correct_count) }}/{{ formatCountCompact(item.total_questions) }} 题</text>
                             <text class="record-time">{{ formatUsedTime(item.used_time) }}</text>
                         </view>
                         <text class="record-date">{{ formatDateTimeStr(item.completed_at.length > 0 ? item.completed_at : item.created_at) }}</text>
@@ -88,7 +88,7 @@
     import { goBack } from '../../utils/navigation'
     import { getMockExamHistoryApi } from '../../api/mockExam'
     import type { MockExamHistoryItem } from '../../types/index'
-    import { formatDateTimeStr } from '../../utils/format'
+    import { formatDateTimeStr, formatCountCompact } from '../../utils/format'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight

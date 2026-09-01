@@ -14,7 +14,7 @@
                 <view class="stat-item">
                     <text class="stat-label">我的错题</text>
                     <view class="stat-num-row">
-                        <text class="stat-num">{{ stats.total }}</text>
+                        <text class="stat-num">{{ formatCountCompact(stats.total) }}</text>
                         <text class="stat-unit">道</text>
                     </view>
                 </view>
@@ -22,7 +22,7 @@
                 <view class="stat-item">
                     <text class="stat-label">今日错题</text>
                     <view class="stat-num-row">
-                        <text class="stat-num">{{ todayCount }}</text>
+                        <text class="stat-num">{{ formatCountCompact(todayCount) }}</text>
                         <text class="stat-unit">道</text>
                     </view>
                 </view>
@@ -57,7 +57,7 @@
                             <text class="group-icon-text">›</text>
                         </view>
                         <text class="group-name">{{ g.label }}</text>
-                        <text class="group-count">{{ g.count }}道</text>
+                        <text class="group-count">{{ formatCountCompact(g.count) }}道</text>
                         <text class="group-chevron">›</text>
                     </view>
                 </view>
@@ -77,7 +77,7 @@
                     <view v-for="(item, idx) in records" :key="idx" class="record-card">
                         <view class="record-header">
                             <text class="record-type-tag">{{ getTypeName(item.type) }}</text>
-                            <text class="record-wrong-count">错 {{ item.wrong_count }} 次</text>
+                            <text class="record-wrong-count">错 {{ formatCountCompact(item.wrong_count) }} 次</text>
                             <text v-if="item.favorited" class="record-fav-tag">收藏</text>
                             <text class="record-date">{{ formatDateStr(item.created_at) }}</text>
                         </view>
@@ -156,7 +156,7 @@
     } from '../../api/wrongQuestion'
     import type { WrongQuestionQuery } from '../../api/wrongQuestion'
     import type { WrongQuestionItem, WrongQuestionStats } from '../../types/index'
-    import { formatDateStr } from '../../utils/format'
+    import { formatDateStr, formatCountCompact } from '../../utils/format'
 
     /** 题型分组行 */
     type GroupRow = {

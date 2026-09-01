@@ -35,9 +35,9 @@
                         </view>
                         <view class="topic-footer">
                             <view class="topic-meta">
-                                <text class="meta-like-icon">{{ item.liked ? '❤️' : '' }} {{ item.like_count > 0 ? item.like_count : '' }}</text>
-                                <text class="meta-item"> {{ item.replies_count }}</text>
-                                <text class="meta-item"> {{ item.views_count }}</text>
+                                <text class="meta-like-icon">{{ item.liked ? '❤️' : '' }} {{ item.like_count > 0 ? formatCountCompact(item.like_count) : '' }}</text>
+                                <text class="meta-item"> {{ formatCountCompact(item.replies_count) }}</text>
+                                <text class="meta-item"> {{ formatCountCompact(item.views_count) }}</text>
                             </view>
                             <view class="topic-footer-right">
                                 <view class="topic-edit-btn" @click.stop="onEditTopic(item.id)">
@@ -85,7 +85,7 @@
     import { goBack } from '../../utils/navigation'
     import { getMyTopicsApi, getMyRepliesApi } from '../../api/forum'
     import type { ForumTopic, ForumReply } from '../../types/index'
-    import { formatDateStr } from '../../utils/format'
+    import { formatDateStr, formatCountCompact } from '../../utils/format'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight

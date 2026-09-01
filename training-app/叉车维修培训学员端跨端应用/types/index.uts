@@ -336,6 +336,8 @@ export type ForumTopic = {
     created_at : string
     /** 帖子分类：general / resource / video / exam */
     scope : string
+    /** 帖子类别（后端 category）：discussion 普通帖 / question 知识问答 */
+    category : string
 }
 
 /** 帖子列表响应 */
@@ -383,6 +385,8 @@ export type ForumTopicDetail = {
     replies : ForumReply[]
     /** 帖子分类：general / resource / video / exam */
     scope : string
+    /** 帖子类别（后端 category）：discussion / question */
+    category : string
 }
 
 /**

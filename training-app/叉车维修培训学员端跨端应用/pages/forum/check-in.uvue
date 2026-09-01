@@ -37,19 +37,18 @@
 
             <view class="calendar-grid">
                 <view v-for="(cell, idx) in calendarCells" :key="idx" class="calendar-cell">
-                    <view v-if="cell.isEmpty" class="cell-empty"></view>
-                    <view v-else class="cell-day" :class="getCellClass(cell)">
+                    <view class="cell-day" :class="getCellClass(cell)">
                         <text class="cell-num" :class="getCellNumClass(cell)">{{ cell.day }}</text>
-                        <!-- 过去已签到 / 今日已签到：蓝色圆圈 + 白色对勾 -->
-                        <view v-if="cell.checked" class="cell-check-done">
+                        <!-- 当月：已签到 → 蓝色圆圈 + 白色对勾 -->
+                        <view v-if="cell.isCurrentMonth && cell.checked" class="cell-check-done">
                             <text class="cell-check-done-text">✓</text>
                         </view>
-                        <!-- 过去未签到：灰色对勾 -->
-                        <view v-else-if="!cell.isFuture && !cell.isToday" class="cell-missed-check">
+                        <!-- 当月：过去未签到 → 灰色对勾 -->
+                        <view v-else-if="cell.isCurrentMonth && !cell.isFuture && !cell.isToday" class="cell-missed-check">
                             <text class="cell-missed-check-text">✓</text>
                         </view>
-                        <!-- 今日未签到 / 未来日期：蓝色圆圈 + 金币图标 -->
-                        <view v-else class="cell-coin">
+                        <!-- 当月：今日未签到 / 未来日期 → 金币图标 -->
+                        <view v-else-if="cell.isCurrentMonth" class="cell-coin">
                             <view class="coin-icon">
                                 <text class="coin-text">$</text>
                             </view>
@@ -92,40 +91,64 @@
         isToday : boolean
         isFuture : boolean
         isEmpty : boolean
+        isCurrentMonth : boolean
     }
 
     const calendarCells = computed<CalendarCell[]>(() : CalendarCell[] => {
         const cells : CalendarCell[] = []
         const year = displayYear.value
         const month = displayMonth.value
-        const firstDay = new Date(year, month - 1, 1).getDay()
-        const blankCount = firstDay == 0 ? 6 : firstDay - 1
-        for (let i = 0; i < blankCount; i++) {
-            cells.push({ day: 0, date: '', checked: false, isToday: false, isFuture: false, isEmpty: true } as CalendarCell)
-        }
-        const daysInMonth = new Date(year, month, 0).getDate()
         const today = new Date()
         const todayStr = today.getFullYear() + '-' + padZero(today.getMonth() + 1) + '-' + padZero(today.getDate())
+
+        // 当月第一天是周几（0=周日，1=周一 ... 6=周六）
+        const firstDayOfWeek = new Date(year, month - 1, 1).getDay()
+        // 需要补的上月天数（周一开始）
+        const prevMonthFill = firstDayOfWeek == 0 ? 6 : firstDayOfWeek - 1
+
+        // 上月信息
+        const prevMonth = month == 1 ? 12 : month - 1
+        const prevYear = month == 1 ? year - 1 : year
+        const prevDaysInMonth = new Date(prevYear, prevMonth, 0).getDate()
+
+        // 当月天数
+        const daysInMonth = new Date(year, month, 0).getDate()
+
+        // 固定 6 行 = 42 格
+        const totalCells = 42
+
+        // 填充上月补位日期
+        for (let i = 0; i < prevMonthFill; i++) {
+            const day = prevDaysInMonth - prevMonthFill + 1 + i
+            const dateStr = prevYear + '-' + padZero(prevMonth) + '-' + padZero(day)
+            cells.push({
+                day: day,
+                date: dateStr,
+                checked: false,
+                isToday: false,
+                isFuture: false,
+                isEmpty: false,
+                isCurrentMonth: false
+            } as CalendarCell)
+        }
+
+        // 填充当月日期
         for (let d = 1; d <= daysInMonth; d++) {
             const dateStr = year + '-' + padZero(month) + '-' + padZero(d)
             const isToday = dateStr == todayStr
             const isFuture = new Date(year, month - 1, d) > today
             let checked = false
-            // 遍历 API 返回的签到记录，兼容多种日期格式
             for (let j = 0; j < calendarDays.value.length; j++) {
                 const apiDate = calendarDays.value[j].date
-                // 精确匹配 YYYY-MM-DD
                 if (apiDate == dateStr) {
                     checked = calendarDays.value[j].checked
                     break
                 }
-                // 兼容 YYYY-M-D（无前导零）
-                const shortDate = year + '-' + (month) + '-' + d
+                const shortDate = year + '-' + month + '-' + d
                 if (apiDate == shortDate) {
                     checked = calendarDays.value[j].checked
                     break
                 }
-                // 兼容只匹配日期中的日（如 "13" 或 "-13"）
                 if (apiDate.length <= 2 && apiDate == '' + d) {
                     checked = calendarDays.value[j].checked
                     break
@@ -135,16 +158,35 @@
                     break
                 }
             }
-            cells.push({ day: d, date: dateStr, checked: checked, isToday: isToday, isFuture: isFuture, isEmpty: false } as CalendarCell)
+            cells.push({
+                day: d,
+                date: dateStr,
+                checked: checked,
+                isToday: isToday,
+                isFuture: isFuture,
+                isEmpty: false,
+                isCurrentMonth: true
+            } as CalendarCell)
         }
-        // 打印调试：列出所有 checked 的日期
-        const checkedDays : string[] = []
-        for (let i = 0; i < cells.length; i++) {
-            if (cells[i].checked) {
-                checkedDays.push(cells[i].date)
-            }
+
+        // 填充下月补位日期（凑满 42 格）
+        const nextMonth = month == 12 ? 1 : month + 1
+        const nextYear = month == 12 ? year + 1 : year
+        let nextDay = 1
+        while (cells.length < totalCells) {
+            const dateStr = nextYear + '-' + padZero(nextMonth) + '-' + padZero(nextDay)
+            cells.push({
+                day: nextDay,
+                date: dateStr,
+                checked: false,
+                isToday: false,
+                isFuture: true,
+                isEmpty: false,
+                isCurrentMonth: false
+            } as CalendarCell)
+            nextDay++
         }
-        console.log('[calendarCells] checked days:', checkedDays.join(', '))
+
         return cells
     })
 
@@ -154,6 +196,7 @@
     }
 
     function getCellClass(cell : CalendarCell) : string {
+        if (!cell.isCurrentMonth) return 'cell-other-month'
         if (cell.isToday) return 'cell-today'
         if (cell.checked) return 'cell-checked'
         if (cell.isFuture) return 'cell-future'
@@ -161,6 +204,7 @@
     }
 
     function getCellNumClass(cell : CalendarCell) : string {
+        if (!cell.isCurrentMonth) return 'num-other-month'
         if (cell.isToday) return 'num-today'
         if (cell.checked) return 'num-checked'
         if (cell.isFuture) return 'num-future'
@@ -262,9 +306,6 @@
     }
 
     function onNextMonth() : void {
-        const now = new Date()
-        if (displayYear.value == now.getFullYear() && displayMonth.value >= now.getMonth() + 1) return
-        if (displayYear.value > now.getFullYear()) return
         if (displayMonth.value == 12) {
             displayMonth.value = 1
             displayYear.value = displayYear.value + 1
@@ -310,10 +351,11 @@
     .month-text { font-size: 32rpx; font-weight: bold; color: #333333; margin-left: 24rpx; margin-right: 24rpx; }
     .week-header { flex-direction: row; padding: 12rpx 24rpx; }
     .week-item { flex: 1; text-align: center; font-size: 24rpx; color: #999999; }
-    .calendar-grid { flex-direction: row; flex-wrap: wrap; padding: 0 16rpx; }
-    .calendar-cell { width: 14.28%; align-items: center; padding: 8rpx 0; }
-    .cell-empty { width: 88rpx; height: 88rpx; }
+    .calendar-grid { flex-direction: row; flex-wrap: wrap; padding: 0 16rpx; flex: 1; }
+    .calendar-cell { width: 14.28%; align-items: center; padding: 8rpx 0; height: 100rpx; justify-content: center; }
     .cell-day { width: 88rpx; height: 88rpx; border-radius: 44rpx; align-items: center; justify-content: center; flex-direction: column; }
+    /* 上/下月补位日期：透明背景 */
+    .cell-other-month { background-color: transparent; }
     /* 今日 */
     .cell-today { background-color: #2979ff; }
     /* 过去已签到：蓝色背景（与今日一致） */
@@ -323,6 +365,7 @@
     /* 未来日期：蓝色背景 */
     .cell-future { background-color: #2979ff; }
     .cell-num { font-size: 28rpx; color: #333333; line-height: 32rpx; }
+    .num-other-month { color: #cccccc; }
     .num-today { color: #ffffff; font-weight: bold; }
     .num-checked { color: #ffffff; }
     .num-future { color: #ffffff; }

@@ -83,8 +83,8 @@
                         <text class="topic-preview">{{ getContentPreview(item.content) }}</text>
                         <view class="topic-footer">
                             <view class="topic-stats">
-                                <text class="stat-text">{{ item.likes_count }} 赞</text>
-                                <text class="stat-text">{{ item.replies_count }} 评论</text>
+                                <text class="stat-text">{{ formatCountCompact(item.likes_count) }} 赞</text>
+                                <text class="stat-text">{{ formatCountCompact(item.replies_count) }} 评论</text>
                             </view>
                             <text class="topic-time">{{ formatDateStr(item.created_at) }}</text>
                         </view>
@@ -211,7 +211,7 @@
     import { getMyTopicsApi, getMyRepliesApi, getMyLikedTopicsApi, getMyObservedTopicsApi, getMyViewHistoryApi } from '../../api/forum'
     import { getFavoritesApi } from '../../api/favorite'
     import type { ForumTopic, ForumReply, FavoriteItem } from '../../types/index'
-    import { formatDateStr } from '../../utils/format'
+    import { formatDateStr, formatCountCompact } from '../../utils/format'
 
     const authStore = useAuthStore()
     const statusBarHeight = useStatusBarHeight()

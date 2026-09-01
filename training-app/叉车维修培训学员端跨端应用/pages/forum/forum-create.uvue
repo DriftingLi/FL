@@ -1,19 +1,68 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="header">
+        <view :class="['status-bar', { 'status-bar-light': resourceMode }]" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view :class="['header', { 'header-light': resourceMode }]">
             <view class="header-left" @click="onBack">
-                <text class="back-icon" @click="onBack">‹</text>
+                <text class="back-icon" :class="{ 'back-icon-dark': resourceMode }" @click="onBack">‹</text>
             </view>
-            <text class="header-title">{{ isEdit ? '编辑帖子' : '发布新帖' }}</text>
+            <text class="header-title" :class="{ 'header-title-dark': resourceMode }">{{ isEdit ? '编辑帖子' : (resourceMode ? '上传' : '发布新帖') }}</text>
             <view class="header-right"></view>
         </view>
 
         <scroll-view class="content-scroll" scroll-y="true">
-            <view class="form-section">
+            <!-- 资源上传表单 -->
+            <view v-if="resourceMode" class="res-form">
+                <view class="res-card">
+                    <text class="res-label">选择模块<text class="form-req">*</text></text>
+                    <view class="res-chip-row">
+                        <view v-for="(cat, idx) in categories" :key="idx"
+                            :class="['res-chip', { 'res-chip-active': selectedCategory === cat.value }]"
+                            @click="onSelectCategory(cat.value)">
+                            <text :class="['res-chip-text', { 'res-chip-text-active': selectedCategory === cat.value }]">{{ cat.label }}</text>
+                        </view>
+                    </view>
+                </view>
+
+                <view class="res-card">
+                    <text class="res-label">标题<text class="form-req">*</text></text>
+                    <input class="res-input" type="text" placeholder="请输入标题（6-30）" placeholder-style="color:#999999"
+                        maxlength="30" v-model="title" />
+                </view>
+
+                <view class="res-card">
+                    <text class="res-label">云盘地址+提取码<text class="form-req">*</text></text>
+                    <input class="res-input" type="text" placeholder="请输入" placeholder-style="color:#999999"
+                        maxlength="200" v-model="panUrl" />
+                </view>
+
+                <view class="res-card">
+                    <text class="res-label">云盘截图<text class="form-req">*</text></text>
+                    <view class="img-grid">
+                        <view v-for="(img, idx) in images" :key="idx" class="img-cell">
+                            <image class="img-thumb" :src="imgSrc(img)" mode="aspectFill"
+                                @click="onPreviewImage(idx)" />
+                            <view class="img-remove" @click.stop="onRemoveImage(idx)">
+                                <text class="img-remove-text">×</text>
+                            </view>
+                        </view>
+                        <view v-if="images.length < 9" class="res-shot-add" @click="onAddImage">
+                            <text class="res-cam-icon">{{ uploadingImage ? '…' : '📷' }}</text>
+                        </view>
+                    </view>
+                </view>
+
+                <view class="res-card">
+                    <text class="res-label">内容介绍<text class="form-req">*</text></text>
+                    <textarea class="res-textarea" placeholder="请输入内容（6-200）" placeholder-style="color:#999999"
+                        maxlength="200" v-model="content" />
+                </view>
+            </view>
+
+            <!-- 通用发帖表单 -->
+            <view v-else class="form-section">
                 <!-- 分类选择 -->
                 <view class="form-item">
-                    <text class="form-label">分类</text>
+                    <text class="form-label">选择模块<text class="form-req">*</text></text>
                     <view class="category-row">
                         <view v-for="(cat, idx) in categories" :key="idx" class="category-chip"
                             :class="{ active: selectedCategory === cat.value }" @click="onSelectCategory(cat.value)">
@@ -24,14 +73,14 @@
                 </view>
 
                 <view class="form-item">
-                    <text class="form-label">标题</text>
+                    <text class="form-label">标题<text class="form-req">*</text></text>
                     <input class="form-input" type="text" placeholder="请输入标题（1-100 字）" maxlength="100"
                         v-model="title" />
                     <text class="form-counter">{{ title.length }}/100</text>
                 </view>
 
                 <view class="form-item">
-                    <text class="form-label">内容</text>
+                    <text class="form-label">内容<text class="form-req">*</text></text>
                     <textarea class="form-textarea" placeholder="请输入内容（1-10000 字）" maxlength="10000"
                         v-model="content" />
                     <text class="form-counter">{{ content.length }}/10000</text>
@@ -56,12 +105,19 @@
                 </view>
             </view>
 
-            <view class="submit-section">
+            <view v-if="!resourceMode" class="submit-section">
                 <view class="submit-btn" :class="{ disabled: !canSubmit }" @click="onSubmit">
                     <text class="submit-btn-text">{{ submitLabel }}</text>
                 </view>
             </view>
         </scroll-view>
+
+        <!-- 资源模式底部提交栏 -->
+        <view v-if="resourceMode" class="res-bottom">
+            <view class="res-submit-btn" :class="{ 'res-submit-btn-disabled': !canSubmitResource }" @click="onSubmit">
+                <text class="submit-btn-text">{{ submitting ? '提交中...' : '提交需求' }}</text>
+            </view>
+        </view>
     </view>
 </template>
 
@@ -79,14 +135,13 @@
     const windowHeight = uni.getSystemInfoSync().windowHeight
     const authStore = useAuthStore()
 
-    // ===== 分类选项 =====
-    type CategoryOption = { label : string, value : string }
+    // ===== 选择模块（对应交流页四大 Tab）=====
+    type CategoryOption = { label : string, value : string, category : string }
     const categories : CategoryOption[] = [
-        { label: '广场', value: 'general' },
-        { label: '资源', value: 'resource' },
-        { label: '短视频', value: 'video' },
-        { label: '备考经验', value: 'exam' },
-        { label: '知识问答', value: 'question' },
+        { label: '广场', value: 'general', category: 'discussion' },
+        { label: '资源', value: 'resource', category: 'discussion' },
+        { label: '招聘', value: 'recruit', category: 'discussion' },
+        { label: '知识问答', value: 'question', category: 'question' },
     ]
 
     // ===== 表单状态 =====
@@ -94,6 +149,7 @@
     const editTopicId = ref<number>(0)
     const title = ref<string>('')
     const content = ref<string>('')
+    const panUrl = ref<string>('')
     const images = ref<string[]>([])
     const selectedCategory = ref<string>('general')
     const submitting = ref<boolean>(false)
@@ -104,6 +160,11 @@
     function imgSrc(url : string) : string {
         return resolveFileUrl(url)
     }
+
+    /** 资源上传模式：新建且选择模块为「资源」（从资源页「上传资源」进入或手动选中） */
+    const resourceMode = computed<boolean>(() : boolean => {
+        return !isEdit.value && selectedCategory.value == 'resource'
+    })
 
     /** 提交按钮文案 */
     const submitLabel = computed<string>(() : string => {
@@ -121,6 +182,27 @@
         return true
     })
 
+    /** 资源模式是否可提交：标题 6-30、云盘地址、至少 1 张截图、介绍 6-200 */
+    const canSubmitResource = computed<boolean>(() : boolean => {
+        if (submitting.value) return false
+        if (uploadingImage.value) return false
+        const t = title.value.trim()
+        if (t.length < 6 || t.length > 30) return false
+        if (panUrl.value.trim().length == 0) return false
+        if (images.value.length == 0) return false
+        const c = content.value.trim()
+        if (c.length < 6 || c.length > 200) return false
+        return true
+    })
+
+    /** 选中模块对应的后端 category（discussion|question） */
+    function currentCategory() : string {
+        for (let i = 0; i < categories.length; i++) {
+            if (categories[i].value == selectedCategory.value) return categories[i].category
+        }
+        return 'discussion'
+    }
+
     // ===== 分类选择 =====
     function onSelectCategory(value : string) : void {
         selectedCategory.value = value
@@ -135,7 +217,8 @@
             title.value = data.title
             content.value = data.content
             images.value = data.images.slice()
-            selectedCategory.value = data.scope.length > 0 ? data.scope : 'general'
+            // 后端仅有 category（discussion|question）维度；广场/资源/招聘在列表侧由 Tab 区分
+            selectedCategory.value = data.category == 'question' ? 'question' : 'general'
         } catch (e) {
             console.error('[forum-create] loadTopicForEdit failed:', e)
             uni.showToast({ title: '加载帖子失败', icon: 'none' })
@@ -148,6 +231,10 @@
 
     // ===== 提交 =====
     async function onSubmit() : Promise<void> {
+        if (resourceMode.value) {
+            await onSubmitResource()
+            return
+        }
         if (!canSubmit.value) return
         if (title.value.trim().length == 0) {
             uni.showToast({ title: '请输入标题', icon: 'none' })
@@ -162,16 +249,56 @@
         uni.showLoading({ title: isEdit.value ? '保存中...' : '发布中...' })
         try {
             if (isEdit.value) {
-                await updateForumTopicApi(editTopicId.value, title.value.trim(), content.value.trim(), images.value, selectedCategory.value)
+                await updateForumTopicApi(editTopicId.value, title.value.trim(), content.value.trim(), images.value, currentCategory())
                 uni.showToast({ title: '修改成功', icon: 'success' })
             } else {
-                await createForumTopicApi(title.value.trim(), content.value.trim(), images.value, selectedCategory.value)
+                await createForumTopicApi(title.value.trim(), content.value.trim(), images.value, currentCategory())
                 uni.showToast({ title: '发布成功', icon: 'success' })
             }
             setTimeout(() => { goBack() }, 1000)
         } catch (e) {
             console.error('[forum-create] submit failed:', e)
             let msg = isEdit.value ? '修改失败' : '发布失败'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) {
+                    msg = m
+                }
+            }
+            uni.showToast({ title: msg, icon: 'none' })
+        } finally {
+            submitting.value = false
+            uni.hideLoading()
+        }
+    }
+
+    // ===== 资源模式提交：云盘信息与介绍合并进帖子正文 =====
+    async function onSubmitResource() : Promise<void> {
+        if (!canSubmitResource.value) {
+            const t = title.value.trim()
+            if (t.length < 6 || t.length > 30) {
+                uni.showToast({ title: '标题需 6-30 字', icon: 'none' })
+            } else if (panUrl.value.trim().length == 0) {
+                uni.showToast({ title: '请输入云盘地址+提取码', icon: 'none' })
+            } else if (images.value.length == 0) {
+                uni.showToast({ title: '请上传云盘截图', icon: 'none' })
+            } else {
+                uni.showToast({ title: '内容介绍需 6-200 字', icon: 'none' })
+            }
+            return
+        }
+
+        submitting.value = true
+        uni.showLoading({ title: '提交中...' })
+        try {
+            const composed = '云盘地址+提取码：' + panUrl.value.trim() + '\n\n' + content.value.trim()
+            await createForumTopicApi(title.value.trim(), composed, images.value.slice(), 'discussion')
+            uni.showToast({ title: '提交成功', icon: 'success' })
+            setTimeout(() => { goBack() }, 1000)
+        } catch (e) {
+            console.error('[forum-create] submit resource failed:', e)
+            let msg = '提交失败'
             if (e instanceof Error) {
                 const errObj = e as Error
                 const m = errObj.message
@@ -250,7 +377,7 @@
     }
 
     function onBack() : void {
-        if (title.value.length > 0 || content.value.length > 0) {
+        if (title.value.length > 0 || content.value.length > 0 || panUrl.value.length > 0 || images.value.length > 0) {
             uni.showModal({
                 title: '提示',
                 content: '确定放弃编辑吗？已输入的内容将丢失。',
@@ -351,6 +478,12 @@
         font-weight: bold;
         color: #333333;
         margin-bottom: 16rpx;
+    }
+
+    .form-req {
+        font-size: 28rpx;
+        color: #fa3534;
+        margin-left: 4rpx;
     }
 
     .form-input {
@@ -498,5 +631,123 @@
         font-size: 32rpx;
         color: #ffffff;
         font-weight: bold;
+    }
+
+    /* ===== 资源上传模式 ===== */
+    .header-light {
+        background-color: #ffffff;
+    }
+
+    .status-bar-light {
+        background-color: #ffffff;
+    }
+
+    .back-icon-dark {
+        color: #333333;
+    }
+
+    .header-title-dark {
+        color: #333333;
+    }
+
+    .res-form {
+        padding: 24rpx;
+        flex-direction: column;
+    }
+
+    .res-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 32rpx;
+        margin-bottom: 24rpx;
+        flex-direction: column;
+    }
+
+    .res-label {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 24rpx;
+    }
+
+    .res-chip-row {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .res-chip {
+        padding: 12rpx 30rpx;
+        border-radius: 32rpx;
+        background-color: #ffffff;
+        border: 1rpx solid #e0e0e0;
+        margin-right: 16rpx;
+        margin-bottom: 12rpx;
+    }
+
+    .res-chip-active {
+        background-color: #22a7f0;
+        border: 1rpx solid #22a7f0;
+    }
+
+    .res-chip-text {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    .res-chip-text-active {
+        color: #ffffff;
+        font-weight: bold;
+    }
+
+    .res-input {
+        height: 88rpx;
+        background-color: #f8f9fa;
+        border-radius: 12rpx;
+        padding: 0 24rpx;
+        font-size: 30rpx;
+        color: #333333;
+        border: 1rpx solid #ececec;
+    }
+
+    .res-textarea {
+        height: 280rpx;
+        background-color: #f8f9fa;
+        border-radius: 12rpx;
+        padding: 24rpx;
+        font-size: 30rpx;
+        color: #333333;
+        border: 1rpx solid #ececec;
+    }
+
+    .res-shot-add {
+        width: 160rpx;
+        height: 160rpx;
+        border: 2rpx dashed #c0c4cc;
+        border-radius: 12rpx;
+        background-color: #fafbfc;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .res-cam-icon {
+        font-size: 52rpx;
+        color: #909399;
+    }
+
+    .res-bottom {
+        padding: 24rpx 32rpx 64rpx;
+    }
+
+    .res-submit-btn {
+        width: 100%;
+        height: 92rpx;
+        border-radius: 46rpx;
+        background-color: #22a7f0;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .res-submit-btn-disabled {
+        background-color: #9ed4f7;
     }
 </style>

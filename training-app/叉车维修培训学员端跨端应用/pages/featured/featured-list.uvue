@@ -37,7 +37,7 @@
                             <text v-if="item.category_label.length > 0" class="article-category">{{ item.category_label }}</text>
                             <text v-if="item.source.length > 0" class="article-source">{{ item.source }}</text>
                             <text v-if="item.published_at.length > 0" class="article-date">{{ formatDateStr(item.published_at) }}</text>
-                            <text class="article-views">{{ item.view_count }} 阅读</text>
+                            <text class="article-views">{{ formatCountCompact(item.view_count) }} 阅读</text>
                         </view>
                     </view>
                 </view>
@@ -59,7 +59,7 @@
     import { goBack } from '../../utils/navigation'
     import { getFeaturedContentsApi } from '../../api/featured'
     import type { FeaturedContentItem } from '../../types/index'
-    import { formatDateStr } from '../../utils/format'
+    import { formatDateStr, formatCountCompact } from '../../utils/format'
 
     type CategoryOption = {
         label : string

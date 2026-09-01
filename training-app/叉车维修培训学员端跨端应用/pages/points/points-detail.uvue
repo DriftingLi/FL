@@ -12,37 +12,48 @@
         <scroll-view class="content-scroll" scroll-y="true">
             <!-- 积分余额卡片 -->
             <view class="balance-card">
-                <text class="balance-value">{{ pointsBalance }}</text>
-                <view class="balance-right">
-                    <text class="balance-label">积分规则</text>
-                </view>
-            </view>
-
-            <!-- 过期积分提示 -->
-            <view class="expire-tip">
-                <text class="expire-text">本月暂无过期积分，去积分商城挑选心仪商品</text>
-                <text class="expire-arrow">></text>
-            </view>
-
-            <!-- Tab 切换 -->
-            <view class="tab-bar">
-                <view :class="['tab-item', { active: currentTab == 'detail' }]" @click="onTabClick('detail')">
-                    <text class="tab-text">积分明细</text>
-                </view>
-                <view :class="['tab-item', { active: currentTab == 'exchange' }]" @click="onTabClick('exchange')">
-                    <text class="tab-text">兑换记录</text>
-                </view>
-            </view>
-
-            <!-- 筛选条件 -->
-            <view class="filter-bar">
-                <scroll-view class="filter-scroll" scroll-x="true">
-                    <view v-for="(opt, idx) in filterOptions" :key="idx"
-                        :class="['filter-chip', { active: currentFilter == opt.value }]"
-                        @click="onFilterClick(opt.value)">
-                        <text class="filter-chip-text">{{ opt.label }}</text>
+                <view class="balance-top">
+                    <view class="balance-rules-area" @click="onViewRules">
+                        <text class="balance-rules">积分规则</text>
                     </view>
-                </scroll-view>
+                    <text class="balance-value">{{ pointsBalance }}</text>
+                </view>
+
+                <!-- 过期积分提示 -->
+                <view class="expire-tip">
+                    <text class="expire-text">本月暂无过期积分，去积分商城挑选心仪商品</text>
+                    <text class="expire-arrow">›</text>
+                </view>
+            </view>
+
+            <!-- Tab 切换 + 筛选 -->
+            <view class="tab-card">
+                <view class="tab-bar">
+                    <view class="tab-item" @click="onTabClick('income')">
+                        <text :class="['tab-text', { 'tab-text-active': currentTab == 'income' }]">积分收入</text>
+                        <view :class="['tab-underline', { 'tab-underline-active': currentTab == 'income' }]"></view>
+                    </view>
+                    <view class="tab-item" @click="onTabClick('expense')">
+                        <text :class="['tab-text', { 'tab-text-active': currentTab == 'expense' }]">积分支出</text>
+                        <view :class="['tab-underline', { 'tab-underline-active': currentTab == 'expense' }]"></view>
+                    </view>
+                    <view class="tab-item" @click="onTabClick('expire')">
+                        <text :class="['tab-text', { 'tab-text-active': currentTab == 'expire' }]">即将过期</text>
+                        <view :class="['tab-underline', { 'tab-underline-active': currentTab == 'expire' }]"></view>
+                    </view>
+                </view>
+
+                <view class="filter-bar">
+                    <scroll-view class="filter-scroll" scroll-x="true">
+                        <view class="filter-row">
+                            <view v-for="(opt, idx) in filterOptions" :key="idx"
+                                :class="['filter-chip', { 'filter-chip-active': currentFilter == opt.value }]"
+                                @click="onFilterClick(opt.value)">
+                                <text :class="['filter-chip-text', { 'filter-chip-text-active': currentFilter == opt.value }]">{{ opt.label }}</text>
+                            </view>
+                        </view>
+                    </scroll-view>
+                </view>
             </view>
 
             <!-- 积分明细列表 -->
@@ -57,7 +68,7 @@
                             <text class="detail-date">{{ item.date }}</text>
                         </view>
                         <view class="detail-right">
-                            <text class="detail-points">{{ item.points > 0 ? '+' : '' }}{{ item.points }}</text>
+                            <text :class="['detail-points', { 'detail-points-minus': item.points < 0 }]">{{ item.points > 0 ? '+' : '' }}{{ item.points }}</text>
                         </view>
                     </view>
                 </view>
@@ -72,7 +83,9 @@
 
         <!-- 底部按钮 -->
         <view class="bottom-button">
-            <button class="earn-button" @click="onEarnPoints">赚更多积分</button>
+            <view class="earn-button" @click="onEarnPoints">
+                <text class="earn-button-text">赚更多积分</text>
+            </view>
         </view>
     </view>
 </template>
@@ -98,7 +111,7 @@
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     const pointsBalance = ref<number>(42)
-    const currentTab = ref<string>('detail')
+    const currentTab = ref<string>('income')
     const currentFilter = ref<string>('all')
     const pointsList = ref<PointsItem[]>([])
     const page = ref<number>(1)
@@ -139,6 +152,10 @@
         goBack()
     }
 
+    function onViewRules() : void {
+        uni.showToast({ title: '积分规则', icon: 'none' })
+    }
+
     function onEarnPoints() : void {
         uni.navigateTo({ url: '/pages/points/task-center' })
     }
@@ -151,7 +168,7 @@
 <style>
     .container {
         flex: 1;
-        background-color: #f5f5f5;
+        background-color: #f4f5f7;
         flex-direction: column;
     }
 
@@ -165,7 +182,6 @@
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
-        border-bottom: 1rpx solid #f0f0f0;
     }
 
     .header-left {
@@ -193,69 +209,77 @@
     }
 
     .balance-card {
-        margin: 24rpx;
-        padding: 28rpx 32rpx;
+        margin: 24rpx 24rpx 0;
+        padding: 24rpx 24rpx;
         border-radius: 16rpx;
         background-color: #ffffff;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
+        flex-direction: column;
     }
 
-    .balance-value {
-        font-size: 48rpx;
-        font-weight: bold;
+    .balance-top {
+        flex-direction: row;
+        align-items: center;
+        position: relative;
+        padding: 8rpx 0 24rpx;
+    }
+
+    .balance-rules-area {
+        position: absolute;
+        right: 0;
+        top: 0;
+        padding: 8rpx 0;
+    }
+
+    .balance-rules {
+        font-size: 26rpx;
         color: #333333;
     }
 
-    .balance-right {
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .balance-label {
-        font-size: 26rpx;
-        color: #2979ff;
+    .balance-value {
+        flex: 1;
+        font-size: 52rpx;
+        font-weight: bold;
+        color: #333333;
+        text-align: center;
     }
 
     .expire-tip {
-        margin: 0 24rpx 24rpx;
-        padding: 20rpx 24rpx;
+        padding: 22rpx 24rpx;
         border-radius: 12rpx;
-        background-color: #fff8e6;
+        background-color: #fdf6dd;
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
+        margin-bottom: 8rpx;
     }
 
     .expire-text {
         font-size: 24rpx;
-        color: #666666;
+        color: #333333;
         flex: 1;
     }
 
     .expire-arrow {
-        font-size: 24rpx;
-        color: #999999;
+        font-size: 28rpx;
+        color: #666666;
         margin-left: 16rpx;
     }
 
-    .tab-bar {
+    .tab-card {
+        margin: 24rpx 24rpx 0;
+        border-radius: 16rpx;
         background-color: #ffffff;
+        flex-direction: column;
+    }
+
+    .tab-bar {
         flex-direction: row;
-        border-bottom: 1rpx solid #f0f0f0;
+        padding-top: 24rpx;
     }
 
     .tab-item {
         flex: 1;
-        padding: 24rpx 0;
         align-items: center;
-        justify-content: center;
-        border-bottom: 4rpx solid transparent;
-    }
-
-    .tab-item.active {
-        border-bottom-color: #2979ff;
     }
 
     .tab-text {
@@ -263,33 +287,48 @@
         color: #666666;
     }
 
-    .tab-item.active .tab-text {
-        color: #2979ff;
+    .tab-text-active {
+        color: #333333;
         font-weight: bold;
     }
 
+    .tab-underline {
+        width: 56rpx;
+        height: 8rpx;
+        border-radius: 4rpx;
+        margin-top: 12rpx;
+        background-color: transparent;
+    }
+
+    .tab-underline-active {
+        background-color: #22a7f0;
+    }
+
     .filter-bar {
-        background-color: #ffffff;
-        border-bottom: 1rpx solid #f0f0f0;
+        padding: 8rpx 0 0;
     }
 
     .filter-scroll {
-        white-space: nowrap;
+        flex: 1;
+        width: 100%;
+    }
+
+    .filter-row {
         flex-direction: row;
         align-items: center;
         padding: 20rpx 24rpx;
     }
 
     .filter-chip {
-        padding: 12rpx 28rpx;
-        border-radius: 32rpx;
-        background-color: #f5f5f5;
-        margin-right: 16rpx;
+        padding: 10rpx 32rpx;
+        border-radius: 30rpx;
+        border: 2rpx solid transparent;
+        margin-right: 24rpx;
         flex-shrink: 0;
     }
 
-    .filter-chip.active {
-        background-color: #2979ff;
+    .filter-chip-active {
+        border-color: #22a7f0;
     }
 
     .filter-chip-text {
@@ -297,8 +336,8 @@
         color: #666666;
     }
 
-    .filter-chip.active .filter-chip-text {
-        color: #ffffff;
+    .filter-chip-text-active {
+        color: #22a7f0;
     }
 
     .detail-scroll-inner {
@@ -313,7 +352,7 @@
         background-color: #ffffff;
         border-radius: 16rpx;
         padding: 28rpx 24rpx;
-        margin-bottom: 16rpx;
+        margin-bottom: 20rpx;
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
@@ -326,8 +365,9 @@
 
     .detail-action {
         font-size: 30rpx;
+        font-weight: bold;
         color: #333333;
-        margin-bottom: 8rpx;
+        margin-bottom: 12rpx;
     }
 
     .detail-date {
@@ -341,9 +381,13 @@
     }
 
     .detail-points {
-        font-size: 32rpx;
+        font-size: 34rpx;
         font-weight: bold;
-        color: #2979ff;
+        color: #22a7f0;
+    }
+
+    .detail-points-minus {
+        color: #ff8a00;
     }
 
     .empty-tip {
@@ -367,20 +411,21 @@
     }
 
     .bottom-button {
-        padding: 24rpx 32rpx;
-        background-color: #ffffff;
-        border-top: 1rpx solid #f0f0f0;
+        padding: 8rpx 32rpx 24rpx;
     }
 
     .earn-button {
         width: 100%;
         height: 88rpx;
         border-radius: 44rpx;
-        background-color: #2979ff;
-        color: #ffffff;
-        font-size: 32rpx;
-        font-weight: bold;
+        background-color: #22a7f0;
         align-items: center;
         justify-content: center;
+    }
+
+    .earn-button-text {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #ffffff;
     }
 </style>

@@ -132,6 +132,7 @@ function buildTopic(obj : UTSJSONObject) : ForumTopic {
         favorited: favVal,
         created_at: toStr(obj['created_at']),
         scope: toStr(obj['scope'], 'general'),
+        category: toStr(obj['category'], 'discussion'),
     } as ForumTopic
 }
 
@@ -203,6 +204,7 @@ function buildTopicDetail(obj : UTSJSONObject) : ForumTopicDetail {
         can_delete: toBool(topicObj['can_delete']),
         replies: replies,
         scope: toStr(topicObj['scope'], 'general'),
+        category: toStr(topicObj['category'], 'discussion'),
     } as ForumTopicDetail
     return detail
 }
@@ -284,17 +286,17 @@ export function uploadForumImageApi(filePath : string) : Promise<string> {
  * @param title 标题（1-100 字）
  * @param content 内容（1-10000 字）
  * @param images 图片 URL 数组（最多 9 张，先经 uploadForumImageApi 上传获取）
- * @param scope 帖子分类（general / resource / video / exam）
+ * @param category 帖子类别（后端白名单）：discussion 普通帖 / question 知识问答帖
+ * @note 后端 create body 只认 category；旧版发的 scope 键被静默忽略，导致问答帖拿不到 question 类别
  */
-export function createForumTopicApi(title : string, content : string, images : string[] = [], scope : string = 'general') : Promise<ForumTopic> {
+export function createForumTopicApi(title : string, content : string, images : string[] = [], category : string = 'discussion') : Promise<ForumTopic> {
     const payload : UTSJSONObject = {
         title: title,
         content: content,
         images: images,
-        scope: scope,
+        category: category,
     } as UTSJSONObject
     return post('/forum/topics', payload).then((data : UTSJSONObject) : ForumTopic => {
-        console.log('[createForumTopicApi] raw data:', JSON.stringify(data))
         return buildTopic(data)
     }).catch((e : any | null) : ForumTopic => {
         console.error('[createForumTopicApi] failed:', e)

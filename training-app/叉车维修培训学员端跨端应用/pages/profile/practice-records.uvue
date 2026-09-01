@@ -13,12 +13,12 @@
         <view class="stats-card">
             <view class="stats-row">
                 <view class="stats-item">
-                    <text class="stats-num">{{ stats.today_count }}</text>
+                    <text class="stats-num">{{ formatCountCompact(stats.today_count) }}</text>
                     <text class="stats-label">今日做题</text>
                 </view>
                 <view class="stats-divider"></view>
                 <view class="stats-item">
-                    <text class="stats-num">{{ stats.total_practiced }}</text>
+                    <text class="stats-num">{{ formatCountCompact(stats.total_practiced) }}</text>
                     <text class="stats-label">累计做题</text>
                 </view>
                 <view class="stats-divider"></view>
@@ -28,7 +28,7 @@
                 </view>
                 <view class="stats-divider"></view>
                 <view class="stats-item">
-                    <text class="stats-num">{{ stats.streak_days }}</text>
+                    <text class="stats-num">{{ formatCountCompact(stats.streak_days) }}</text>
                     <text class="stats-label">连续天数</text>
                 </view>
             </view>
@@ -46,8 +46,8 @@
         </view>
         <!-- 汇总 -->
         <view class="summary">
-            <text class="summary-text">共 {{ total }} 条记录</text>
-            <text v-if="correctCount > 0 || wrongCount > 0" class="summary-correct">对 {{ correctCount }} · 错 {{ wrongCount }}</text>
+            <text class="summary-text">共 {{ formatCountCompact(total) }} 条记录</text>
+            <text v-if="correctCount > 0 || wrongCount > 0" class="summary-correct">对 {{ formatCountCompact(correctCount) }} · 错 {{ formatCountCompact(wrongCount) }}</text>
         </view>
         <!-- 记录列表 -->
         <scroll-view class="record-scroll" scroll-y="true" @scrolltolower="onLoadMore">
@@ -86,7 +86,7 @@
     import { goBack } from '../../utils/navigation'
     import { getPracticeHistoryApi, getPracticeStatsApi } from '../../api/practice'
     import type { PracticeHistoryItem, PracticeStats } from '../../types/index'
-    import { formatDateStr } from '../../utils/format'
+    import { formatDateStr, formatCountCompact } from '../../utils/format'
 
     type TypeOption = {
         label : string

@@ -54,17 +54,17 @@
             <!-- 数据统计栏（蓝色渐变）：数据源 /practice-mode/practice-stats -->
             <view class="stat-bar">
                 <view class="stat-item">
-                    <text class="stat-num">{{ overview.today_count }}</text>
+                    <text class="stat-num">{{ formatCountCompact(overview.today_count) }}</text>
                     <text class="stat-label">今日做题</text>
                 </view>
                 <view class="stat-divider"></view>
                 <view class="stat-item">
-                    <text class="stat-num">{{ overview.total_count }}</text>
+                    <text class="stat-num">{{ formatCountCompact(overview.total_count) }}</text>
                     <text class="stat-label">累计做题</text>
                 </view>
                 <view class="stat-divider"></view>
                 <view class="stat-item">
-                    <text class="stat-num">{{ overview.total_days }}</text>
+                    <text class="stat-num">{{ formatCountCompact(overview.total_days) }}</text>
                     <text class="stat-label">累计天数</text>
                 </view>
                 <view class="stat-divider"></view>
@@ -152,6 +152,7 @@
     import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
+    import { formatCountCompact } from '../../utils/format'
     import { getTagsApi } from '../../api/course'
     import type { TagItem } from '../../types/index'
     import { getPracticeOverviewApi, getPracticeProgressApi } from '../../api/practice'

@@ -3,7 +3,8 @@
 面向叉车维修培训与叉车残值评估的全栈系统。架构、领域词汇与评审记录见下方文件：
 
 - **领域词汇表**：`CONTEXT.md`（repo 根）
-- **架构决策记录（ADRs）**：`docs/adr/`
+- **架构决策记录（ADRs）**：`docs/adr/`（全局/后端）| `training-app/.../docs/adr/`（移动端专属）
+- **移动端 UI 规范**：`training-app/.../docs/ui-conventions.md`
 - **AI/agent 工作约定**：`docs/agents/`
 
 ## Agent skills

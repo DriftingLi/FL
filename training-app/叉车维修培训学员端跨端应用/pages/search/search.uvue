@@ -30,7 +30,7 @@
 				<view v-if="allResult.courses.items.length > 0" class="result-section">
 					<view class="section-header">
 						<text class="section-title">课程</text>
-						<text class="section-more" @click="onTypeChange(1)">查看全部({{ allResult.courses.total }})</text>
+						<text class="section-more" @click="onTypeChange(1)">查看全部({{ formatCountCompact(allResult.courses.total) }})</text>
 					</view>
 					<view v-for="(item, idx) in allResult.courses.items" :key="idx" class="result-item"
 						@click="onItemClick(item)">
@@ -45,7 +45,7 @@
 				<view v-if="allResult.questions.items.length > 0" class="result-section">
 					<view class="section-header">
 						<text class="section-title">题目</text>
-						<text class="section-more" @click="onTypeChange(2)">查看全部({{ allResult.questions.total }})</text>
+						<text class="section-more" @click="onTypeChange(2)">查看全部({{ formatCountCompact(allResult.questions.total) }})</text>
 					</view>
 					<view v-for="(item, idx) in allResult.questions.items" :key="idx" class="result-item"
 						@click="onItemClick(item)">
@@ -59,7 +59,7 @@
 				<view v-if="allResult.contents.items.length > 0" class="result-section">
 					<view class="section-header">
 						<text class="section-title">精选内容</text>
-						<text class="section-more" @click="onTypeChange(3)">查看全部({{ allResult.contents.total }})</text>
+						<text class="section-more" @click="onTypeChange(3)">查看全部({{ formatCountCompact(allResult.contents.total) }})</text>
 					</view>
 					<view v-for="(item, idx) in allResult.contents.items" :key="idx" class="result-item"
 						@click="onItemClick(item)">
@@ -74,7 +74,7 @@
 				<view v-if="allResult.topics.items.length > 0" class="result-section">
 					<view class="section-header">
 						<text class="section-title">帖子</text>
-						<text class="section-more" @click="onTypeChange(4)">查看全部({{ allResult.topics.total }})</text>
+						<text class="section-more" @click="onTypeChange(4)">查看全部({{ formatCountCompact(allResult.topics.total) }})</text>
 					</view>
 					<view v-for="(item, idx) in allResult.topics.items" :key="idx" class="result-item"
 						@click="onItemClick(item)">
@@ -134,6 +134,7 @@
 <script setup lang="uts">
 	import { ref, computed } from 'vue'
 	import { useStatusBarHeight } from '../../utils/system'
+	import { formatCountCompact } from '../../utils/format'
 	import { searchAllApi, searchByTypeApi } from '../../api/search'
 	import type { SearchItem, SearchCategoryResult, SearchResult, SearchPagedResult } from '../../types/index'
 

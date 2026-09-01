@@ -13,7 +13,7 @@
         <view class="stats-card">
             <view class="stats-row">
                 <view class="stats-item">
-                    <text class="stats-num">{{ total }}</text>
+                    <text class="stats-num">{{ formatCountCompact(total) }}</text>
                     <text class="stats-label">总记录</text>
                 </view>
                 <view class="stats-divider"></view>
@@ -41,7 +41,7 @@
         </view>
         <!-- 汇总 -->
         <view class="summary">
-            <text class="summary-text">共 {{ total }} 条记录</text>
+            <text class="summary-text">共 {{ formatCountCompact(total) }} 条记录</text>
             <text v-if="rangeLabel.length > 0" class="summary-range">{{ rangeLabel }}</text>
         </view>
         <!-- 记录列表 -->
@@ -76,6 +76,7 @@
     import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
+    import { formatCountCompact } from '../../utils/format'
     import { getRecordsApi } from '../../api/student'
     import type { StudyRecord } from '../../types/index'
 

@@ -9,75 +9,62 @@
             <view class="header-right"></view>
         </view>
 
-        <scroll-view class="content-scroll" scroll-y="true">
-            <!-- 积分余额卡片 -->
-            <view class="balance-card">
-                <view class="balance-side">
-                    <text class="balance-rule">积分规则</text>
-                </view>
-                <text class="balance-value">{{ pointsBalance }}</text>
-                <view class="balance-side"></view>
-            </view>
-
-            <!-- 过期积分提示 -->
-            <view class="expire-tip">
-                <text class="expire-text">本月暂无过期积分，去积分商城挑选心仪商品</text>
-                <text class="expire-arrow">></text>
-            </view>
-
-            <!-- 重点任务卡片 -->
-            <view class="task-card">
-                <view class="task-main">
-                    <view class="task-left">
-                        <view class="task-title-row">
-                            <text class="task-title">任务奖励</text>
-                            <view class="task-title-underline"></view>
-                        </view>
-                        <text class="task-desc">在广场发布帖数不少于10字的帖子</text>
+        <view class="page-body">
+            <view class="banner"></view>
+            <scroll-view class="content-scroll" scroll-y="true">
+                <!-- 每日任务卡片 -->
+                <view class="task-card">
+                    <view class="section-title-row">
+                        <text class="section-title">每日任务</text>
+                        <view class="section-title-underline"></view>
                     </view>
-                        <view class="task-button" @click="goForumCreate">
-                            <text class="task-button-text">去发表</text>
-                        </view>
-                </view>
-            </view>
-
-            <!-- 任务列表卡片 -->
-            <view class="task-card">
-                <view v-for="(task, idx) in taskList" :key="idx"
-                    :class="['task-item', { 'task-item-last': idx == taskList.length - 1 }]">
-                    <view class="task-main">
-                        <view class="task-left">
-                            <text class="task-title">{{ task.title }}</text>
-                            <view class="task-desc-row">
+                    <view v-for="(task, idx) in dailyTasks" :key="idx"
+                        :class="['task-item', { 'task-item-last': idx == dailyTasks.length - 1 }]">
+                        <view class="task-main">
+                            <text class="task-icon">{{ task.icon }}</text>
+                            <view class="task-left">
+                                <view class="task-title-row">
+                                    <text class="task-title">{{ task.title }}</text>
+                                    <text v-if="task.total > 0" class="task-progress">（{{ task.done }}/{{ task.total }}）</text>
+                                </view>
                                 <text class="task-desc">{{ task.desc }}</text>
-                                <text class="task-progress">（{{ task.done }}/{{ task.total }}）</text>
                             </view>
-                        </view>
-                        <view class="task-button" @click="onTaskAction(task.action)">
-                            <text class="task-button-text">{{ task.buttonText }}</text>
+                            <view :class="['task-button', { 'task-button-gray': task.status == 'done' }]"
+                                @click="onTaskAction(task)">
+                                <text :class="['task-button-text', { 'task-button-text-gray': task.status == 'done' }]">{{ task.buttonText }}</text>
+                            </view>
                         </view>
                     </view>
                 </view>
-            </view>
 
-            <!-- 知识问答任务卡片 -->
-            <view class="task-card">
-                <view class="task-item task-item-last">
-                    <view class="task-main">
-                        <view class="task-left">
-                            <text class="task-title">{{ qaTask.title }}</text>
-                            <view class="task-desc-row">
-                                <text class="task-desc">{{ qaTask.desc }}</text>
-                                <text class="task-progress">（{{ qaTask.done }}/{{ qaTask.total }}）</text>
+                <!-- 福利任务卡片 -->
+                <view class="task-card">
+                    <view class="section-title-row">
+                        <text class="section-title">福利任务</text>
+                        <view class="section-title-underline"></view>
+                    </view>
+                    <view v-for="(task, idx) in welfareTasks" :key="idx"
+                        :class="['task-item', { 'task-item-last': idx == welfareTasks.length - 1 }]">
+                        <view class="task-main">
+                            <text class="task-icon">{{ task.icon }}</text>
+                            <view class="task-left">
+                                <view class="task-title-row">
+                                    <text class="task-title">{{ task.title }}</text>
+                                    <text v-if="task.total > 0" class="task-progress">（{{ task.done }}/{{ task.total }}）</text>
+                                </view>
+                                <text class="task-desc">{{ task.desc }}</text>
                             </view>
-                        </view>
-                        <view class="task-button" @click="onTaskAction(qaTask.action)">
-                            <text class="task-button-text">{{ qaTask.buttonText }}</text>
+                            <view :class="['task-button', { 'task-button-gray': task.status == 'done' }]"
+                                @click="onTaskAction(task)">
+                                <text :class="['task-button-text', { 'task-button-text-gray': task.status == 'done' }]">{{ task.buttonText }}</text>
+                            </view>
                         </view>
                     </view>
                 </view>
-            </view>
-        </scroll-view>
+
+                <view class="bottom-space"></view>
+            </scroll-view>
+        </view>
     </view>
 </template>
 
@@ -87,38 +74,56 @@
     import { goBack } from '../../utils/navigation'
 
     type TaskItem = {
+        icon : string
         title : string
         desc : string
         done : number
         total : number
         buttonText : string
+        status : string
         action : string
     }
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
-    const pointsBalance = ref<number>(42)
-
-    const taskList = ref<TaskItem[]>([
-        { title: '发布帖子', desc: '在广场发布帖数不少于10字的帖子', done: 0, total: 1, buttonText: '去发表', action: 'create' },
-        { title: '发布评论', desc: '在广场发布不少于10字的评论', done: 0, total: 1, buttonText: '去评论', action: 'comment' },
-        { title: '转发帖子', desc: '转发帖子、文章、招聘等内容，转发字数不少于10字', done: 0, total: 2, buttonText: '去转发', action: 'forward' },
+    const dailyTasks = ref<TaskItem[]>([
+        { icon: '👆', title: '每日登录', desc: '登录小程序获得', done: 1, total: 1, buttonText: '已完成', status: 'done', action: '' },
+        { icon: '📝', title: '每日答题', desc: '完成容易题库练习', done: 0, total: 1, buttonText: '已完成', status: 'done', action: 'practice' },
+        { icon: '📤', title: '发布帖子', desc: '完成一次打卡签到', done: 1, total: 1, buttonText: '已完成', status: 'done', action: 'create' },
+        { icon: '🖥️', title: '游览帖子', desc: '去广场游览3篇帖子，立得任务奖励', done: 1, total: 3, buttonText: '去完成', status: 'todo', action: 'forum' },
+        { icon: '↪️', title: '发表评论', desc: '在广场发布不少于10字的评论', done: 0, total: 3, buttonText: '去完成', status: 'todo', action: 'forum' },
+        { icon: '↪️', title: '转发帖子', desc: '转发帖子、文章、招聘等内容，转发字数不少于10字', done: 0, total: 2, buttonText: '去完成', status: 'todo', action: 'forum' },
+        { icon: '↪️', title: '完成1次模拟考试', desc: '转发帖子、文章、招聘等内容，转发字数不少于10字', done: 0, total: 1, buttonText: '去完成', status: 'todo', action: 'exam' },
     ])
 
-    const qaTask = ref<TaskItem>({ title: '去参与知识问答', desc: '去提问或回复信息，立得任务奖励', done: 0, total: 1, buttonText: '去参与', action: 'qa' })
+    const welfareTasks = ref<TaskItem[]>([
+        { icon: '↪️', title: '完善个人信息', desc: '上传头像并完善昵称', done: 0, total: 0, buttonText: '已领取', status: 'claim', action: '' },
+        { icon: '↪️', title: '选定考试目标证件', desc: '转发帖子、文章、招聘等内容，转发字数不少于10字', done: 0, total: 0, buttonText: '去完成', status: 'todo', action: 'exam-info' },
+        { icon: '↪️', title: '完成首节课程', desc: '观看任意课程首节并完成', done: 0, total: 0, buttonText: '去完成', status: 'todo', action: 'courses' },
+        { icon: '↪️', title: '完成积分兑礼', desc: '去商城兑换好礼', done: 0, total: 0, buttonText: '去完成', status: 'todo', action: 'mall' },
+    ])
 
     function onBack() : void {
         goBack()
     }
 
-    function goForumCreate() : void {
-        uni.navigateTo({ url: '/pages/forum/forum-create' })
-    }
-
-    function onTaskAction(action : string) : void {
-        if (action == 'create') {
+    function onTaskAction(task : TaskItem) : void {
+        if (task.status != 'todo') {
+            return
+        }
+        if (task.action == 'create') {
             uni.navigateTo({ url: '/pages/forum/forum-create' })
+        } else if (task.action == 'practice') {
+            uni.navigateTo({ url: '/pages/practice/practice' })
+        } else if (task.action == 'exam') {
+            uni.navigateTo({ url: '/pages/exam/mock-exam' })
+        } else if (task.action == 'exam-info') {
+            uni.navigateTo({ url: '/pages/exam/exam' })
+        } else if (task.action == 'courses') {
+            uni.navigateTo({ url: '/pages/courses/courses' })
+        } else if (task.action == 'mall') {
+            uni.navigateTo({ url: '/pages/mall/mall' })
         } else {
             uni.navigateTo({ url: '/pages/forum/forum' })
         }
@@ -128,7 +133,7 @@
 <style>
     .container {
         flex: 1;
-        background-color: #f5f5f5;
+        background-color: #f4f5f7;
         flex-direction: column;
     }
 
@@ -142,7 +147,6 @@
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
-        border-bottom: 1rpx solid #f0f0f0;
     }
 
     .header-left {
@@ -165,72 +169,59 @@
         width: 60rpx;
     }
 
+    .page-body {
+        flex: 1;
+        position: relative;
+    }
+
+    .banner {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 780rpx;
+        z-index: 0;
+        background: linear-gradient(180deg, #41adef 0%, #a6e1fd 100%);
+    }
+
     .content-scroll {
         flex: 1;
-    }
-
-    .balance-card {
-        margin: 24rpx 24rpx 0;
-        padding: 28rpx 32rpx;
-        border-radius: 16rpx;
-        background-color: #ffffff;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .balance-side {
-        width: 120rpx;
-        flex-direction: row;
-        justify-content: flex-start;
-    }
-
-    .balance-value {
-        flex: 1;
-        font-size: 48rpx;
-        font-weight: bold;
-        color: #333333;
-        text-align: center;
-    }
-
-    .balance-rule {
-        font-size: 26rpx;
-        color: #2979ff;
-    }
-
-    .expire-tip {
-        margin: 24rpx;
-        padding: 20rpx 24rpx;
-        border-radius: 12rpx;
-        background-color: #fff8e6;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .expire-text {
-        font-size: 24rpx;
-        color: #666666;
-        flex: 1;
-    }
-
-    .expire-arrow {
-        font-size: 24rpx;
-        color: #999999;
-        margin-left: 16rpx;
+        position: relative;
+        z-index: 1;
     }
 
     .task-card {
-        margin: 0 24rpx 24rpx;
+        margin: 30rpx 24rpx 0;
         padding: 8rpx 24rpx;
         border-radius: 16rpx;
         background-color: #ffffff;
         flex-direction: column;
     }
 
+    .section-title-row {
+        flex-direction: column;
+        align-items: center;
+        padding-top: 24rpx;
+        padding-bottom: 8rpx;
+    }
+
+    .section-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .section-title-underline {
+        width: 56rpx;
+        height: 8rpx;
+        border-radius: 4rpx;
+        background-color: #22a7f0;
+        margin-top: 10rpx;
+    }
+
     .task-item {
-        padding: 28rpx 0;
-        border-bottom: 1rpx solid #f0f0f0;
+        padding: 26rpx 0;
+        border-bottom: 1rpx solid #f0f2f5;
     }
 
     .task-item-last {
@@ -240,62 +231,68 @@
     .task-main {
         flex-direction: row;
         align-items: center;
-        justify-content: space-between;
+    }
+
+    .task-icon {
+        width: 84rpx;
+        font-size: 52rpx;
+        text-align: center;
+        margin-right: 4rpx;
     }
 
     .task-left {
         flex: 1;
         flex-direction: column;
-        margin-right: 24rpx;
+        margin-right: 16rpx;
     }
 
     .task-title-row {
-        flex-direction: column;
+        flex-direction: row;
+        align-items: center;
     }
 
     .task-title {
-        font-size: 32rpx;
+        font-size: 30rpx;
         font-weight: bold;
         color: #333333;
     }
 
-    .task-title-underline {
-        width: 64rpx;
-        height: 8rpx;
-        border-radius: 4rpx;
-        background-color: #2979ff;
-        margin-top: 6rpx;
-    }
-
-    .task-desc-row {
-        flex-direction: row;
-        flex-wrap: wrap;
-        margin-top: 10rpx;
+    .task-progress {
+        font-size: 28rpx;
+        color: #22a7f0;
+        margin-left: 8rpx;
     }
 
     .task-desc {
         font-size: 24rpx;
         color: #999999;
         line-height: 36rpx;
-    }
-
-    .task-progress {
-        font-size: 24rpx;
-        color: #2979ff;
-        line-height: 36rpx;
+        margin-top: 8rpx;
     }
 
     .task-button {
-        padding: 0 32rpx;
-        height: 64rpx;
-        border-radius: 32rpx;
-        background-color: #2979ff;
+        padding: 0 30rpx;
+        height: 60rpx;
+        border-radius: 30rpx;
+        background-color: #22a7f0;
         align-items: center;
         justify-content: center;
+    }
+
+    .task-button-gray {
+        background-color: #f0f1f3;
     }
 
     .task-button-text {
         font-size: 26rpx;
         color: #ffffff;
+    }
+
+    .task-button-text-gray {
+        color: #b4b8be;
+    }
+
+    .bottom-space {
+        height: 40rpx;
     }
 </style>
