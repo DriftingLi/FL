@@ -60,7 +60,7 @@ func RegisterContactRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Cont
 		recruiterID := middleware.CurrentUserID(c)
 		dto, err := svc.GetContact(recruiterID, uid)
 		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) || err.Error() == "无有效授权" || err.Error() == "学员不存在或已注销" {
+			if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, service.ErrContactNoAuth) || errors.Is(err, service.ErrStudentGone) {
 				response.Forbidden(c, err.Error())
 				return
 			}

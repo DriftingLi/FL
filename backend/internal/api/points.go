@@ -96,11 +96,12 @@ func (h *PointsHandler) Claim(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *service.PointsClaimResult, err error) {
 			if err != nil {
-				if err.Error() == "已领取" || err.Error() == "今日已领取" {
+				// ADR-0024：哨兵映射状态码（已领取类 400、不存在类 404），文案零漂移
+				if errors.Is(err, service.ErrAlreadyClaimed) || errors.Is(err, service.ErrDailyClaimLimit) {
 					response.BadRequest(c, err.Error())
 					return
 				}
-				if err.Error() == "任务不存在" {
+				if errors.Is(err, service.ErrTaskNotFound) {
 					response.NotFound(c, err.Error())
 					return
 				}
@@ -129,11 +130,11 @@ func (h *PointsHandler) RedeemCourse(c *gin.Context) {
 					response.BadRequest(c, err.Error())
 					return
 				}
-				if err.Error() == "已兑换" {
+				if errors.Is(err, service.ErrAlreadyRedeemed) {
 					response.BadRequest(c, err.Error())
 					return
 				}
-				if err.Error() == "课程不存在" || err.Error() == "该课程无需兑换" {
+				if errors.Is(err, service.ErrCourseNotFound) || errors.Is(err, service.ErrCourseNotRedeemable) {
 					response.BadRequest(c, err.Error())
 					return
 				}
@@ -158,7 +159,7 @@ func (h *PointsHandler) RedeemShop(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *service.RedeemResult, err error) {
 			if err != nil {
-				if errors.Is(err, service.ErrInsufficientPoints) || err.Error() == "已兑换" {
+				if errors.Is(err, service.ErrInsufficientPoints) || errors.Is(err, service.ErrAlreadyRedeemed) {
 					response.BadRequest(c, err.Error())
 					return
 				}
