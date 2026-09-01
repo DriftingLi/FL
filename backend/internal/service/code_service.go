@@ -258,14 +258,21 @@ type EmailChannel struct {
 
 // NewEmailChannel 构造邮箱通道。
 // 未配置 SMTP 时：开发环境降级为日志发送验证码，生产环境发送接口返回明确错误。
-func NewEmailChannel(smtpCfg config.SMTPConfig, isProd bool, logger *zap.Logger) *EmailChannel {
-	var mailer MailSender = LogMailSender{logger: logger}
+// NewMailSender 邮件发送器工厂（spec #449 决定 15 的单点）：
+// 生产配置了 SMTP → SMTP 实现；未配置且是生产 → nil（调用方降级日志）；
+// 开发/测试 → 日志降级实现。验证码通道与招聘域（联系方式交换/投递通知）共用此单点。
+func NewMailSender(smtpCfg config.SMTPConfig, isProd bool, logger *zap.Logger) MailSender {
 	if smtpCfg.Host != "" && smtpCfg.From != "" {
-		mailer = SMTPMailSender{cfg: smtpCfg}
-	} else if isProd {
-		mailer = nil
+		return SMTPMailSender{cfg: smtpCfg}
 	}
-	return &EmailChannel{mailer: mailer, logger: logger}
+	if isProd {
+		return nil
+	}
+	return LogMailSender{logger: logger}
+}
+
+func NewEmailChannel(smtpCfg config.SMTPConfig, isProd bool, logger *zap.Logger) *EmailChannel {
+	return &EmailChannel{mailer: NewMailSender(smtpCfg, isProd, logger), logger: logger}
 }
 
 // SenderReady 邮件服务未配置时报错。

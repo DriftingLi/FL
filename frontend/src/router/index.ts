@@ -134,6 +134,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/student/JobDetail.vue')
       },
       {
+        path: 'applications',
+        name: 'MyApplications',
+        component: () => import('@/pages/student/MyApplications.vue')
+      },
+      {
         path: 'onboarding/credential',
         name: 'CredentialOnboarding',
         component: () => import('@/pages/onboarding/CredentialOnboarding.vue'),

@@ -90,6 +90,8 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	codeSvc := service.NewVerifyCodeService(db, authSvc, cfg.EmailCodeTTL, &service.RedisAuthCodeStore{}, logger)
 	captchaSvc := captcha.NewService(captcha.RedisStore{})
 	emailCh := service.NewEmailChannel(cfg.SMTP, cfg.IsProd(), logger)
+	// 邮件发送器单点（spec #449 决定 15）：联系方式交换与投递通知共用，不再注入 nil 只写日志。
+	mailSender := service.NewMailSender(cfg.SMTP, cfg.IsProd(), logger)
 	phoneCh := service.NewSmsChannel(cfg.SMS, cfg.IsProd(), logger)
 	wechatAuthSvc := service.NewWechatAuthService(cfg.Wechat.MiniProgram, db, authSvc, logger)
 	fileSvc := service.NewFileStore(cfg.LibreOfficeSidecarURL, st, logger)
@@ -148,10 +150,14 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		PointsSvc:            pointsSvc,
 		JobCardSvc:           service.NewJobCardService(db, fileSvc, logger),
 		RecruitSvc:           service.NewRecruitService(db, logger),
-		ContactSvc:           service.NewContactService(db, logger, notificationSvc, nil),
+		ContactSvc:           service.NewContactService(db, logger, notificationSvc, mailSender),
 		JobPostingSvc:        service.NewJobPostingService(db, logger),
 		JobApplicationSvc:    service.NewJobApplicationService(db, logger, notificationSvc),
 		JobReportSvc:         service.NewJobReportService(db, logger),
+	}
+	// 投递通知与联系方式交换共用邮件单点（spec #449 决定 15）
+	if d.JobApplicationSvc != nil && mailSender != nil {
+		d.JobApplicationSvc.SetMailer(mailSender)
 	}
 	d.AuthH = NewAuthHandler(d.Session, authSvc, fileSvc, st, reviewSvc, logger)
 	return d

@@ -157,7 +157,8 @@ const studentNav: NavItem[] = [
         routeName: 'JobPlaza',
         activeRouteNames: ['JobDetail'],
         icon: OfficeBuilding
-      }
+      },
+      { key: 'applications', label: '我的投递', routeName: 'MyApplications', icon: Document }
     ]
   }
 ]

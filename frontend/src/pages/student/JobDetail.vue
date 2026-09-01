@@ -31,20 +31,41 @@
       </div>
 
       <div class="mt-4 text-sm text-ink-2 whitespace-pre-wrap">{{ data.description || '-' }}</div>
+
+      <div class="mt-6">
+        <UiButton variant="primary" :loading="applying" @click="showApplyDialog = true">投递</UiButton>
+        <p v-if="applyError" class="mt-2 text-xs text-red-500">{{ applyError }}</p>
+      </div>
     </div>
+
+    <!-- 投递确认弹窗（spec #449 决定 1 的 UI 落点）：明确告知「投递即授权…与简历是否公开无关」 -->
+    <el-dialog v-model="showApplyDialog" title="确认投递" width="440px">
+      <div class="text-sm text-ink">
+        投递即授权该企业查看你的联系方式，与简历是否公开无关。投递后企业可直接与你联系。
+      </div>
+      <template #footer>
+        <UiButton @click="showApplyDialog = false">取消</UiButton>
+        <UiButton variant="primary" :loading="applying" @click="confirmApply">确认投递</UiButton>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { jobApi, type JobPosting } from '@/api/job'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
 const route = useRoute()
 const data = ref<JobPosting | null>(null)
+const showApplyDialog = ref(false)
+const applying = ref(false)
+const applyError = ref('')
 
 const {
   loading,
@@ -57,6 +78,22 @@ const {
   const res = await jobApi.getPublicJob(id)
   data.value = (res as any) || null
 })
+
+
+async function confirmApply() {
+  if (!data.value) return
+  applying.value = true
+  applyError.value = ''
+  try {
+    await jobApi.applyJob(data.value.id)
+    ElMessage.success('投递成功，企业已可查看你的联系方式')
+    showApplyDialog.value = false
+  } catch (e: any) {
+    applyError.value = e?.message || '投递失败'
+  } finally {
+    applying.value = false
+  }
+}
 
 onMounted(load)
 </script>
