@@ -249,6 +249,10 @@ type JobListParams struct {
 	Experience  string
 	// MineOnly 只看自己的职位（企业管理侧）。
 	MineOnly bool
+	// RecruiterID 按企业过滤（管理端巡检用；>0 时生效）。
+	RecruiterID int
+	// All 管理端巡检：不过滤状态（含 closed/强制下架），仅按需企业筛。
+	All bool
 	// IncludeHidden 是否包含 closed/强制下架（企业侧看历史；学员侧恒 false）。
 	IncludeHidden bool
 }
@@ -271,6 +275,13 @@ func (s *JobPostingService) List(recruiterID int, p JobListParams) (*JobListResu
 	q := s.db.Model(&model.JobPosting{})
 	if p.MineOnly {
 		q = q.Where("recruiter_id = ?", recruiterID)
+	} else if p.All {
+		// 管理端巡检：全量（含 closed/强制下架），可按企业筛
+		if p.RecruiterID > 0 {
+			q = q.Where("recruiter_id = ?", p.RecruiterID)
+		}
+	} else if p.RecruiterID > 0 {
+		q = q.Where("recruiter_id = ?", p.RecruiterID)
 	} else {
 		q = q.Where("status = ? AND forced_offline = ?", "open", false)
 	}
