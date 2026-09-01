@@ -1,0 +1,44 @@
+<template>
+    <view v-if="count > 0 || dot" class="app-badge" :class="{ 'app-badge--dot': dot }">
+        <text v-if="!dot" class="app-badge-text">{{ count > 99 ? '99+' : count.toString() }}</text>
+    </view>
+</template>
+
+<script setup lang="uts">
+    const props = withDefaults(defineProps<{
+        count ?: number
+        dot ?: boolean
+    }>(), {
+        count: 0,
+        dot: false
+    })
+</script>
+
+<style>
+    .app-badge {
+        background-color: $danger-color;
+        border-radius: $radius-pill;
+        min-width: 32rpx;
+        height: 32rpx;
+        padding: 0 8rpx;
+        align-items: center;
+        justify-content: center;
+        position: absolute;
+        top: -4rpx;
+        right: -4rpx;
+    }
+
+    .app-badge--dot {
+        width: 16rpx;
+        height: 16rpx;
+        min-width: 16rpx;
+        padding: 0;
+        border-radius: 8rpx;
+    }
+
+    .app-badge-text {
+        font-size: $font-size-xs;
+        color: $text-inverse;
+        font-weight: 600;
+    }
+</style>

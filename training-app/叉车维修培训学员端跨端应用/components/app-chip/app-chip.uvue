@@ -1,0 +1,47 @@
+<template>
+    <view class="app-chip" :class="{ 'app-chip--active': active }" @click="onClick">
+        <text class="app-chip-text" :class="{ 'app-chip-text--active': active }">{{ text }}</text>
+    </view>
+</template>
+
+<script setup lang="uts">
+    const props = withDefaults(defineProps<{
+        text ?: string
+        active ?: boolean
+    }>(), {
+        text: '',
+        active: false
+    })
+
+    const emit = defineEmits(['click'])
+
+    function onClick() : void {
+        emit('click')
+    }
+</script>
+
+<style>
+    .app-chip {
+        padding: 8rpx 24rpx;
+        border-radius: $radius-sm;
+        border-width: 1rpx;
+        border-style: solid;
+        border-color: $border-color;
+        background-color: $card-bg;
+    }
+
+    .app-chip--active {
+        background-color: #EBF5FF;
+        border-color: $primary-color;
+    }
+
+    .app-chip-text {
+        font-size: $font-size-sm;
+        color: $text-secondary;
+    }
+
+    .app-chip-text--active {
+        color: $primary-color;
+        font-weight: 600;
+    }
+</style>

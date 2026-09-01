@@ -1,0 +1,60 @@
+<template>
+    <view class="app-empty">
+        <text v-if="icon.length > 0" class="app-empty-icon">{{ icon }}</text>
+        <text v-if="text.length > 0" class="app-empty-text">{{ text }}</text>
+        <view v-if="actionText.length > 0" class="app-empty-action" @click="onAction">
+            <text class="app-empty-action-text">{{ actionText }}</text>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    const props = withDefaults(defineProps<{
+        icon ?: string
+        text ?: string
+        actionText ?: string
+    }>(), {
+        icon: '📭',
+        text: '暂无数据',
+        actionText: ''
+    })
+
+    const emit = defineEmits(['action'])
+
+    function onAction() : void {
+        emit('action')
+    }
+</script>
+
+<style>
+    .app-empty {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 80rpx 0;
+    }
+
+    .app-empty-icon {
+        font-size: 80rpx;
+        margin-bottom: $spacing-md;
+    }
+
+    .app-empty-text {
+        font-size: $font-size-md;
+        color: $text-placeholder;
+    }
+
+    .app-empty-action {
+        margin-top: $spacing-lg;
+        padding: 12rpx 48rpx;
+        border-radius: $radius-pill;
+        border-width: 2rpx;
+        border-style: solid;
+        border-color: $primary-color;
+    }
+
+    .app-empty-action-text {
+        font-size: $font-size-md;
+        color: $primary-color;
+    }
+</style>
