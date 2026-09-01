@@ -78,7 +78,7 @@ const contact = ref<any>(null)
 const contactLoading = ref(false)
 const contactError = ref('')
 
-// 三态收编 useAsyncPage（#439）：404 契约内空态保留（data 置 null），真实故障收敛 loadError
+// 三态收编 useAsyncPage（#439）：404 契约内空态保留（data 置 null 走「未找到该简历」），真实故障收敛 loadError
 const {
   loading,
   loadError,
@@ -87,9 +87,18 @@ const {
   run: load
 } = useAsyncPage(async () => {
   const id = String(route.params.id)
-  const res = await recruitApi.getResume(id)
-  data.value = res as any || null
-  loadContact()
+  try {
+    const res = await recruitApi.getResume(id)
+    data.value = res as any || null
+    loadContact()
+  } catch (e: any) {
+    // #415 契约：404 表示简历不存在，置空态（loadError 不置位）；其余故障上抛收敛为可重试错误态
+    if (e?.response?.status === 404 || String(e?.message || '').includes('不存在')) {
+      data.value = null
+    } else {
+      throw e
+    }
+  }
 })
 
 async function loadContact() {
