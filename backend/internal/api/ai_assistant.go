@@ -78,13 +78,6 @@ func (h *AIAssistantHandler) ListPublicModels(c *gin.Context) {
 			}
 			return &models, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.ModelOption, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 
@@ -103,13 +96,6 @@ func (h *AIAssistantHandler) ListAssistantModes(c *gin.Context) {
 				return nil, err
 			}
 			return &modes, nil
-		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.AIAssistantModeModels, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
 		},
 	}.Handle(c)
 }
@@ -139,13 +125,6 @@ func (h *AIAssistantHandler) ListUserModels(c *gin.Context) {
 				return nil, err
 			}
 			return &models, nil
-		},
-		Render: func(c *gin.Context, _ *aiUserIDReq, resp *[]service.UserModelDTO, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
 		},
 	}.Handle(c)
 }
@@ -265,13 +244,6 @@ func (h *AIAssistantHandler) ListSessions(c *gin.Context) {
 			}
 			return &sessions, nil
 		},
-		Render: func(c *gin.Context, _ *aiUserIDReq, resp *[]service.AIChatSessionDTO, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 
@@ -303,13 +275,6 @@ func (h *AIAssistantHandler) CreateSession(c *gin.Context) {
 		},
 		Invoke: func(ctx context.Context, req *aiSessionCreateReq) (*service.AIChatSessionDTO, error) {
 			return h.svc.CreateSession(c.Request.Context(), req.UserID, req.Title, req.ModelName, req.FeatureKey)
-		},
-		Render: func(c *gin.Context, _ *aiSessionCreateReq, resp *service.AIChatSessionDTO, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
 		},
 	}.Handle(c)
 }

@@ -38,13 +38,6 @@ func (h *PointsHandler) GetBalance(c *gin.Context) {
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.PointsBalanceResult, error) {
 			return h.svc.GetBalance(middleware.CurrentUserID(c))
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.PointsBalanceResult, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 
@@ -57,13 +50,6 @@ func (h *PointsHandler) GetLedger(c *gin.Context) {
 			pageSize := atoiDefault(c.Query("page_size"), 20)
 			return h.svc.GetLedger(middleware.CurrentUserID(c), page, pageSize, "")
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.PointsLedgerResult, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 
@@ -72,13 +58,6 @@ func (h *PointsHandler) GetTasks(c *gin.Context) {
 	Endpoint[struct{}, service.PointsTasksResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.PointsTasksResult, error) {
 			return h.svc.GetTasks(middleware.CurrentUserID(c))
-		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.PointsTasksResult, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
 		},
 	}.Handle(c)
 }
