@@ -161,6 +161,8 @@ definitions:
         type: integer
       name:
         type: string
+      points_price:
+        type: integer
       practice_hours:
         type: integer
       prerequisite_course_ids:
@@ -271,6 +273,8 @@ definitions:
         items:
           type: string
         type: array
+      is_accepted:
+        type: boolean
       liked_by_me:
         type: boolean
       likes_count:
@@ -285,10 +289,15 @@ definitions:
     type: object
   service.ForumTopicDTO:
     properties:
+      accepted_reply_id:
+        type: integer
       author:
         $ref: '#/definitions/service.ForumAuthor'
       can_delete:
         type: boolean
+      category:
+        description: discussion | question（#364）
+        type: string
       chapter_id:
         type: integer
       chapter_title:
@@ -311,6 +320,10 @@ definitions:
         type: integer
       reply_count:
         type: integer
+      reward_issued:
+        type: boolean
+      solved_at:
+        type: string
       title:
         type: string
       view_count:
@@ -360,6 +373,27 @@ definitions:
         type: array
       total:
         type: integer
+    type: object
+  service.JobCardInput:
+    type: object
+  service.JobPostingInput:
+    properties:
+      description:
+        type: string
+      experience_req:
+        type: string
+      region:
+        type: string
+      salary_max:
+        type: integer
+      salary_min:
+        type: integer
+      salary_text:
+        type: string
+      specialty_id:
+        type: integer
+      title:
+        type: string
     type: object
   service.LevelBriefDTO:
     properties:
@@ -419,6 +453,11 @@ definitions:
       duration:
         type: integer
       id:
+        type: integer
+      paper_id:
+        description: |-
+          PaperID 真题卷来源（#386）：按卷开考时写入 mock_exam.paper_id，随机模考为 nil
+          （omitempty——既有消费者对随机模考的响应零差异，向后兼容）。
         type: integer
       question_ids: {}
       remaining_time:
@@ -561,6 +600,11 @@ definitions:
         type: integer
       current_index:
         type: integer
+      pool_total:
+        description: |-
+          PoolTotal 实时题库池总数（#413）：当前证件分区口径，与开始练习返回的题目数一致；
+          Total 语义退回「上次会话数组长度」，仅供断点续练游标使用（字段名不变，新增字段零 diff）。
+        type: integer
       total:
         type: integer
     type: object
@@ -577,6 +621,9 @@ definitions:
         type: integer
       created_by_type:
         type: string
+      credential_id:
+        description: CredentialID 题目归属的目标证件（#412）：讲师端题库管理用证件列区分分区，学员侧形状不变。
+        type: integer
       explanation:
         type: string
       id:
@@ -599,6 +646,41 @@ definitions:
       type:
         type: string
       updated_at:
+        type: string
+    type: object
+  service.RealExamPaperDTO:
+    properties:
+      duration_minutes:
+        type: integer
+      entitled:
+        type: boolean
+      paper_id:
+        type: integer
+      price:
+        type: integer
+      question_count:
+        type: integer
+      source:
+        type: string
+      title:
+        type: string
+      year:
+        type: integer
+    type: object
+  service.RedeemResult:
+    properties:
+      balance:
+        type: integer
+      ref_id:
+        type: string
+      sku:
+        type: string
+      total_earned:
+        type: integer
+    type: object
+  service.ReportInput:
+    properties:
+      reason:
         type: string
     type: object
   service.SpecialtyBriefDTO:
@@ -848,6 +930,262 @@ info:
   title: 叉车维修培训系统-学员端 API
   version: "1.0"
 paths:
+  /admin/forum/replies/{id}:
+    delete:
+      description: 管理端删除任意回复（若为被采纳回答则按 rollback 对冲回收，封底 0，幂等）
+      parameters:
+      - description: 回复 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已删除
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 删除失败
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 管理员删除回复
+      tags:
+      - 管理端-论坛
+  /admin/forum/reports/{id}:
+    put:
+      consumes:
+      - application/json
+      description: '管理端处理论坛举报（status: 1 标记已处理）'
+      parameters:
+      - description: 举报 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: '处理状态 {status: int16}'
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已更新
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 处理论坛举报
+      tags:
+      - 管理端-论坛
+  /admin/forum/topics/{id}:
+    delete:
+      description: 管理端删除帖子（若曾发分则按 rollback 对冲扣减，封底 0，幂等）
+      parameters:
+      - description: 主题 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已删除
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 删除失败
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 管理员删除帖子
+      tags:
+      - 管理端-论坛
+    get:
+      description: 管理端只读查看帖子详情（含回复）
+      parameters:
+      - description: 主题 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 详情
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 主题不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 管理员查看帖子
+      tags:
+      - 管理端-论坛
+  /admin/job-reports:
+    get:
+      description: 管理端查看待处理举报队列
+      parameters:
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 列表
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 举报队列
+      tags:
+      - 招聘域-内容治理
+  /admin/job-reports/{id}/handle:
+    post:
+      description: 管理端把举报标记为已处理（处理后不再出现在待处理队列）
+      parameters:
+      - description: 举报 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已处理
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 举报不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 标记举报已处理
+      tags:
+      - 招聘域-内容治理
+  /admin/jobs:
+    get:
+      description: 管理端只读巡检职位（全量含 closed/强制下架，可按企业筛）
+      parameters:
+      - description: 企业 ID
+        in: query
+        name: recruiter_id
+        type: integer
+      - description: 专业方向 ID
+        in: query
+        name: specialty_id
+        type: integer
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 列表
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 职位巡检
+      tags:
+      - 招聘域-内容治理
+  /admin/jobs/{id}/force-offline:
+    post:
+      consumes:
+      - application/json
+      description: 管理端带原因强制下架职位（学员侧立即不可见；企业不能自行重新上架；处置入审计日志、邮件通知企业）
+      parameters:
+      - description: 职位 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: '下架原因 {reason: string}'
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已强制下架
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 原因不能为空
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 职位不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 强制下架职位
+      tags:
+      - 招聘域-内容治理
   /ai-assistant/chat:
     post:
       consumes:
@@ -2078,6 +2416,36 @@ paths:
       summary: 课程列表
       tags:
       - 学员端-课程
+  /credentials:
+    get:
+      description: 学员端公开证件列表（目标证件，仅启用项）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 证件列表
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 证件列表
+      tags:
+      - 学员端-目录
+  /credentials/grouped:
+    get:
+      description: 学员端公开证件列表（按类别分组）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 分组列表
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 证件分组列表
+      tags:
+      - 学员端-目录
   /favorites:
     get:
       consumes:
@@ -2585,12 +2953,16 @@ paths:
     get:
       consumes:
       - application/json
-      description: 支持 scope=all|general|chapter，按 chapter_id/keyword/sort=latest|hot
+      description: 支持 scope=all|general|chapter，按 category=all|discussion|question、chapter_id/keyword/sort=latest|hot
         过滤
       parameters:
       - description: 范围 all|general|chapter
         in: query
         name: scope
+        type: string
+      - description: 类别 discussion|question，省略表示不过滤（向后兼容）
+        in: query
+        name: category
         type: string
       - description: 章节ID
         in: query
@@ -2630,6 +3002,10 @@ paths:
                 data:
                   $ref: '#/definitions/service.ForumTopicPageResult'
               type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
@@ -2642,7 +3018,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: chapter_id 为空表示综合讨论区；images 最多 9 张 URL
+      description: chapter_id 为空表示综合讨论区；category=question 时不得带 chapter_id；images 最多
+        9 张 URL
       parameters:
       - description: 帖子
         in: body
@@ -2663,7 +3040,7 @@ paths:
                   $ref: '#/definitions/service.ForumTopicDTO'
               type: object
         "400":
-          description: 参数错误
+          description: 参数错误（含类别非法、问答帖带章节）
           schema:
             $ref: '#/definitions/response.R'
         "401":
@@ -2742,6 +3119,77 @@ paths:
       security:
       - BearerAuth: []
       summary: 帖子详情
+      tags:
+      - 学员端-论坛
+  /forum/topics/{id}/accept:
+    delete:
+      consumes:
+      - application/json
+      description: 仅楼主可取消；状态回到未解决，已发分不回滚
+      parameters:
+      - description: 主题ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 无权限
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 取消采纳
+      tags:
+      - 学员端-论坛
+    post:
+      consumes:
+      - application/json
+      description: 仅楼主可采纳；首次采纳给答主+40/楼主+5（每帖只发一次分），更换不发分，楼主采纳自己零分
+      parameters:
+      - description: 主题ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 采纳
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 无权限
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 采纳回答
       tags:
       - 学员端-论坛
   /forum/topics/{id}/like:
@@ -2915,6 +3363,158 @@ paths:
       summary: 上传论坛图片
       tags:
       - 学员端-论坛
+  /jobs:
+    get:
+      description: 学员浏览职位广场（仅 open 且未强制下架，按新鲜度排序；支持专业方向/地区/薪资/经验筛选）
+      parameters:
+      - description: 专业方向 ID
+        in: query
+        name: specialty_id
+        type: integer
+      - description: 地区
+        in: query
+        name: region
+        type: string
+      - description: 最低薪资
+        in: query
+        name: salary_min
+        type: integer
+      - description: 最高薪资
+        in: query
+        name: salary_max
+        type: integer
+      - description: 经验要求
+        in: query
+        name: experience
+        type: string
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 列表
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证（L1 不公开）
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 职位广场
+      tags:
+      - 招聘域-职位
+  /jobs/{id}:
+    get:
+      description: 学员查看职位详情（含企业名/主营/联系人；不含电话/邮箱/信用代码）
+      parameters:
+      - description: 职位 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 详情
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 不存在或已下架
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 职位详情
+      tags:
+      - 招聘域-职位
+  /jobs/{id}/apply:
+    post:
+      description: 投递即授权：同事务写投递记录 + 写/复活 approved 联系方式授权（source=application），企业当场可取得明文联系方式。hidden
+        简历可投递；缺真实姓名/电话 400；applied 唯一；30 天冷却；日限 10。
+      parameters:
+      - description: 职位 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 投递成功
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 重复投递/冷却/日限/简历不完整
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 职位不可投递
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 投递职位（投递即授权）
+      tags:
+      - 招聘域-投递
+  /jobs/{id}/report:
+    post:
+      consumes:
+      - application/json
+      description: 学员举报可疑职位（同一学员对同一职位唯一，重复举报合并；不挂论坛举报表）
+      parameters:
+      - description: 职位 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 举报原因
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/service.ReportInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 举报已提交
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 原因不能为空
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 职位不存在或已下架
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 举报职位
+      tags:
+      - 招聘域-内容治理
   /levels:
     get:
       description: 仅启用项
@@ -3026,6 +3626,56 @@ paths:
       summary: 资料下载地址
       tags:
       - 学员端-资料
+  /me/credential:
+    get:
+      description: 查询当前目标证件（hrwai_user/admin/tutor 均可查询）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 当前证件
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 当前证件
+      tags:
+      - 学员端-目录
+    patch:
+      consumes:
+      - application/json
+      description: 学员切换当前目标证件（仅 hrwai_user；切换即全局过滤器）
+      parameters:
+      - description: '证件 ID {credential_id: int}'
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已切换
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 证件不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 切换当前证件
+      tags:
+      - 学员端-目录
   /mock-exam/{mock_exam_id}/result:
     get:
       consumes:
@@ -3349,6 +3999,159 @@ paths:
       summary: 未读通知数
       tags:
       - 学员端-通知
+  /points/balance:
+    get:
+      description: 学员查看自己的积分余额
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 余额
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 积分余额
+      tags:
+      - 学员端-积分
+  /points/ledger:
+    get:
+      description: 学员查看自己的积分流水（分页）
+      parameters:
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 流水
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 积分流水
+      tags:
+      - 学员端-积分
+  /points/shop/{sku}/redeem:
+    post:
+      description: 学员用积分兑换商城商品（锁 + 已拥有校验 + 幂等）
+      parameters:
+      - description: 商品 SKU
+        in: path
+        name: sku
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 兑换成功
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 余额不足/已拥有
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 兑换商城商品
+      tags:
+      - 学员端-积分
+  /points/shop/course/{courseId}/redeem:
+    post:
+      description: 学员用积分兑换课程（锁 + 已拥有校验 + 幂等）
+      parameters:
+      - description: 课程 ID
+        in: path
+        name: courseId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 兑换成功
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 余额不足/已拥有
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 兑换课程
+      tags:
+      - 学员端-积分
+  /points/tasks:
+    get:
+      description: 学员查看积分任务列表（todo/claimable/claimed 三态）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 任务列表
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 积分任务中心
+      tags:
+      - 学员端-积分
+  /points/tasks/{code}/claim:
+    post:
+      description: 学员领取积分任务奖励（防双领 + 幂等）
+      parameters:
+      - description: 任务编码
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已领取
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 已领取/额度不足
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 领取任务积分
+      tags:
+      - 学员端-积分
   /practice-mode/free:
     get:
       consumes:
@@ -3473,7 +4276,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: 按 mode 查询断点续练进度；mode 为空默认为 sequential
+      description: 按 mode 查询断点续练进度；mode 为空默认为 sequential，未知 mode 返回 400（#386）
       parameters:
       - default: sequential
         description: 练习模式
@@ -3492,6 +4295,10 @@ paths:
                 data:
                   $ref: '#/definitions/service.ProgressResultDTO'
               type: object
+        "400":
+          description: 参数错误（含未知练习模式）
+          schema:
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
@@ -3504,7 +4311,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: 支持顺序/标签等练习的断点续练
+      description: 支持顺序/标签/按卷练习的断点续练；未知 practice_mode 返回 400（#386）
       parameters:
       - description: 进度
         in: body
@@ -3520,7 +4327,7 @@ paths:
           schema:
             $ref: '#/definitions/response.R'
         "400":
-          description: 参数错误
+          description: 参数错误（含未知练习模式）
           schema:
             $ref: '#/definitions/response.R'
         "401":
@@ -3848,6 +4655,840 @@ paths:
       summary: 删除评论
       tags:
       - 学员端-题目互动
+  /real-exam/papers:
+    get:
+      description: 按当前证件返回上架套卷，附兑换状态与单价
+      parameters:
+      - description: 目标证件ID
+        in: query
+        name: credential_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/service.RealExamPaperDTO'
+                  type: array
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 真题套卷列表
+      tags:
+      - 学员端-真题
+  /real-exam/papers/{paper_id}/exam:
+    post:
+      description: 固定题集+卷时长建 mock_exam 记录；之后的保存/交卷/结果复用 /mock-exam 端点
+      parameters:
+      - description: 真题卷ID
+        in: path
+        name: paper_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.MockExamStartDTO'
+              type: object
+        "400":
+          description: 参数错误或未兑换
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 按卷开考
+      tags:
+      - 学员端-真题
+  /real-exam/papers/{paper_id}/practice:
+    get:
+      description: 返回卷内题目（固定卷序）与断点游标；未兑换拒绝
+      parameters:
+      - description: 真题卷ID
+        in: path
+        name: paper_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.PracticeStartResultDTO'
+              type: object
+        "400":
+          description: 参数错误或未兑换
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 按卷练习
+      tags:
+      - 学员端-真题
+  /real-exam/papers/{paper_id}/redeem:
+    post:
+      description: 按套扣积分并写入权益，重复兑换报"已兑换"
+      parameters:
+      - description: 真题卷ID
+        in: path
+        name: paper_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.RedeemResult'
+              type: object
+        "400":
+          description: 参数错误或积分不足
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 兑换真题卷
+      tags:
+      - 学员端-真题
+  /recruit/applications/{id}:
+    get:
+      description: 企业查看投递详情（打开即记录已读 employer_viewed_at；回显投递时刻简历更新时间，内容读最新不落快照；脱敏候选人）
+      parameters:
+      - description: 投递 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 详情
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 越权
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 投递详情
+      tags:
+      - 招聘域-投递处理
+  /recruit/applications/{id}/reject:
+    post:
+      description: 企业把投递标记为不合适 → 终态 rejected（仅 applied 可拒；同一学员 30 天内不能再投）
+      parameters:
+      - description: 投递 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已标记
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 状态不允许
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 越权
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 标记不合适
+      tags:
+      - 招聘域-投递处理
+  /recruit/contact-requests:
+    get:
+      description: 企业招聘者查看自己发出的交换申请（pending/approved/rejected/expired/revoked）
+      parameters:
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 列表
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 我的申请
+      tags:
+      - 招聘域-联系方式交换
+    post:
+      consumes:
+      - application/json
+      description: 企业招聘者带附言向学员发起联系方式交换申请（pending 唯一、30 天冷却、日限 20）
+      parameters:
+      - description: 申请 {student_user_id, message(1-200)}
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 申请已提交
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误/唯一/冷却/日限
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 发起交换申请
+      tags:
+      - 招聘域-联系方式交换
+  /recruit/jobs:
+    get:
+      description: 企业查看自己的职位（含 closed/强制下架历史，按新鲜度排序）
+      parameters:
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 列表
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 我的职位列表
+      tags:
+      - 招聘域-职位
+    post:
+      consumes:
+      - application/json
+      description: 企业发布职位（职位名 + 必填专业方向 + 地区/薪资/经验要求/描述）
+      parameters:
+      - description: 职位信息
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/service.JobPostingInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 发布成功
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 发布职位
+      tags:
+      - 招聘域-职位
+  /recruit/jobs/{id}:
+    get:
+      description: 企业查看自己的职位详情（closed/强制下架历史仍可见）
+      parameters:
+      - description: 职位 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 详情
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 无权操作
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 我的职位详情
+      tags:
+      - 招聘域-职位
+    put:
+      consumes:
+      - application/json
+      description: 企业编辑自己的职位（改别人的 403）
+      parameters:
+      - description: 职位 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 职位信息
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/service.JobPostingInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 无权操作
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 编辑职位
+      tags:
+      - 招聘域-职位
+  /recruit/jobs/{id}/applications:
+    get:
+      description: 企业按职位分页查看投递（只能看自己的职位，越权 403；含未读投递数；候选人脱敏——姓名打码、无手机/微信/PDF/证书原图）
+      parameters:
+      - description: 职位 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 列表（含 unread_count）
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 越权
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 按职位查看投递
+      tags:
+      - 招聘域-投递处理
+  /recruit/jobs/{id}/toggle-status:
+    post:
+      description: 企业上架/下架自己的职位（open↔closed；被强制下架的职位不能自行重新上架）
+      parameters:
+      - description: 职位 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 操作成功
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 被强制下架或超上限
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 无权操作
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 上架/下架职位
+      tags:
+      - 招聘域-职位
+  /recruit/resumes/{id}/contact:
+    get:
+      description: 企业读取学员明文联系方式与 PDF（仅 approved 授权有效时可用；投递产生的授权同样放行；实时校验无缓存）
+      parameters:
+      - description: 学员 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 明文 {real_name, contact_phone, wechat, resume_file_url}
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 无有效授权
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 明文联系方式
+      tags:
+      - 招聘域-联系方式交换
+  /resume:
+    get:
+      description: 学员查看自己的简历卡（未建时 404，契约内空态）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 简历
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 简历不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 我的简历
+      tags:
+      - 学员端-简历卡
+    put:
+      consumes:
+      - application/json
+      description: 学员整页保存简历卡（real_name/contact_phone/wechat/region/expected_specialty_id/expected_regions/salary/experience
+        等）
+      parameters:
+      - description: 简历内容
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/service.JobCardInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已保存
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 保存简历
+      tags:
+      - 学员端-简历卡
+  /resume/applications:
+    get:
+      description: 学员查看自己的投递（applied/rejected/withdrawn 三态 + 企业是否已查看）
+      parameters:
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 列表
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 我的投递
+      tags:
+      - 招聘域-投递
+  /resume/applications/{id}/withdraw:
+    post:
+      consumes:
+      - application/json
+      description: 撤回投递；revoke_contact 默认 false 不连带收回联系方式授权，true 则授权置 revoked（明文端点
+        403）。撤回后可立即重新投递。
+      parameters:
+      - description: 投递 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: '撤回选项 {revoke_contact?: boolean}'
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已撤回
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 状态不允许
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 无权操作
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 撤回投递
+      tags:
+      - 招聘域-投递
+  /resume/contact-requests:
+    get:
+      description: 学员查看收到的交换申请（含企业名/联系人/附言，不含企业电话）
+      parameters:
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 列表
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 收到的申请
+      tags:
+      - 学员端-联系方式交换
+  /resume/contact-requests/{id}/approve:
+    post:
+      description: 学员同意交换申请（status → approved，招聘方收邮件通知）
+      parameters:
+      - description: 申请 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已同意
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 状态不允许/已过期
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 同意申请
+      tags:
+      - 学员端-联系方式交换
+  /resume/contact-requests/{id}/reject:
+    post:
+      description: 学员拒绝交换申请（status → rejected，30 天冷却）
+      parameters:
+      - description: 申请 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已拒绝
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 状态不允许
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 拒绝申请
+      tags:
+      - 学员端-联系方式交换
+  /resume/contact-requests/{id}/revoke:
+    post:
+      description: 学员撤回已同意的授权（status → revoked，实时生效，明文端点随即 403）
+      parameters:
+      - description: 申请 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已撤回
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 状态不允许
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 撤回授权
+      tags:
+      - 学员端-联系方式交换
+  /resume/image:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 上传工作照（file，图片 ≤20MB，≤6 张）
+      parameters:
+      - description: 工作照
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 上传成功 {url}
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 文件错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 上传工作照
+      tags:
+      - 学员端-简历卡
+  /resume/pdf:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 上传简历 PDF（file，仅 PDF ≤50MB）
+      parameters:
+      - description: PDF 简历
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 上传成功 {url}
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 文件错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 上传简历 PDF
+      tags:
+      - 学员端-简历卡
+  /resume/view-stats:
+    get:
+      description: 学员查看近 7 天查看过自己简历的企业数（按企业去重，仅聚合数，不含企业名）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 聚合数 {count}
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 简历查看留痕
+      tags:
+      - 学员端-简历卡
+  /resume/visibility:
+    put:
+      consumes:
+      - application/json
+      description: 学员切换简历 visibility（hidden/open）；visibility 仅管控 L2 被动浏览面，不影响投递
+      parameters:
+      - description: '可见性 {visibility: hidden|open}'
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已切换
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 切换简历公开
+      tags:
+      - 学员端-简历卡
   /search:
     get:
       consumes:
@@ -3949,6 +5590,42 @@ paths:
       summary: 单课程学习详情
       tags:
       - 学员端-学习中心
+  /student/materials:
+    get:
+      consumes:
+      - application/json
+      description: 基于 chapter_file 的聚合视图，支持按 course_id 过滤；与 /student/materials 同数据
+      parameters:
+      - description: 课程ID
+        in: query
+        name: course_id
+        type: integer
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 学习资料列表
+      tags:
+      - 学员端-资料
   /student/profile:
     get:
       consumes:
@@ -4105,6 +5782,10 @@ paths:
         in: query
         name: sort
         type: string
+      - description: 目标证件ID（按题目所属证件分区）
+        in: query
+        name: credential_id
+        type: integer
       produces:
       - application/json
       responses:

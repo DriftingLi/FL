@@ -47,6 +47,17 @@ func RegisterJobRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobPosti
 }
 
 // Create 企业发布职位 POST /api/recruit/jobs
+// @Summary 发布职位
+// @Description 企业发布职位（职位名 + 必填专业方向 + 地区/薪资/经验要求/描述）
+// @Tags 招聘域-职位
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body service.JobPostingInput true "职位信息"
+// @Success 201 {object} response.R "发布成功"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /recruit/jobs [post]
 func (h *JobHandler) Create(c *gin.Context) {
 	Endpoint[service.JobPostingInput, service.JobPostingDTO]{
 		Parse: func(c *gin.Context) (*service.JobPostingInput, error) {
@@ -66,6 +77,19 @@ func (h *JobHandler) Create(c *gin.Context) {
 }
 
 // Update 企业编辑职位 PUT /api/recruit/jobs/:id
+// @Summary 编辑职位
+// @Description 企业编辑自己的职位（改别人的 403）
+// @Tags 招聘域-职位
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "职位 ID"
+// @Param body body service.JobPostingInput true "职位信息"
+// @Success 200 {object} response.R "更新成功"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 403 {object} response.R "无权操作"
+// @Failure 401 {object} response.R "未认证"
+// @Router /recruit/jobs/{id} [put]
 func (h *JobHandler) Update(c *gin.Context) {
 	Endpoint[service.JobPostingInput, service.JobPostingDTO]{
 		Parse: func(c *gin.Context) (*service.JobPostingInput, error) {
@@ -93,6 +117,17 @@ func (h *JobHandler) Update(c *gin.Context) {
 }
 
 // ToggleStatus 企业上架/下架职位 POST /api/recruit/jobs/:id/toggle-status
+// @Summary 上架/下架职位
+// @Description 企业上架/下架自己的职位（open↔closed；被强制下架的职位不能自行重新上架）
+// @Tags 招聘域-职位
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "职位 ID"
+// @Success 200 {object} response.R "操作成功"
+// @Failure 400 {object} response.R "被强制下架或超上限"
+// @Failure 403 {object} response.R "无权操作"
+// @Failure 401 {object} response.R "未认证"
+// @Router /recruit/jobs/{id}/toggle-status [post]
 func (h *JobHandler) ToggleStatus(c *gin.Context) {
 	Endpoint[struct{}, service.JobPostingDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobPostingDTO, error) {
@@ -117,6 +152,16 @@ func (h *JobHandler) ToggleStatus(c *gin.Context) {
 }
 
 // ListMine 我的职位列表 GET /api/recruit/jobs（含 closed/强制下架历史）
+// @Summary 我的职位列表
+// @Description 企业查看自己的职位（含 closed/强制下架历史，按新鲜度排序）
+// @Tags 招聘域-职位
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码"
+// @Param page_size query int false "每页数量"
+// @Success 200 {object} response.R "列表"
+// @Failure 401 {object} response.R "未认证"
+// @Router /recruit/jobs [get]
 func (h *JobHandler) ListMine(c *gin.Context) {
 	Endpoint[struct{}, service.JobListResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobListResult, error) {
@@ -135,6 +180,16 @@ func (h *JobHandler) ListMine(c *gin.Context) {
 }
 
 // GetMine 我的职位详情 GET /api/recruit/jobs/:id（企业侧可看历史）
+// @Summary 我的职位详情
+// @Description 企业查看自己的职位详情（closed/强制下架历史仍可见）
+// @Tags 招聘域-职位
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "职位 ID"
+// @Success 200 {object} response.R "详情"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "无权操作"
+// @Router /recruit/jobs/{id} [get]
 func (h *JobHandler) GetMine(c *gin.Context) {
 	Endpoint[struct{}, service.JobPostingDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobPostingDTO, error) {
@@ -155,6 +210,21 @@ func (h *JobHandler) GetMine(c *gin.Context) {
 }
 
 // ListPublic 学员职位广场 GET /api/jobs（只 open 且未强制下架，按新鲜度）
+// @Summary 职位广场
+// @Description 学员浏览职位广场（仅 open 且未强制下架，按新鲜度排序；支持专业方向/地区/薪资/经验筛选）
+// @Tags 招聘域-职位
+// @Produce json
+// @Security BearerAuth
+// @Param specialty_id query int false "专业方向 ID"
+// @Param region query string false "地区"
+// @Param salary_min query int false "最低薪资"
+// @Param salary_max query int false "最高薪资"
+// @Param experience query string false "经验要求"
+// @Param page query int false "页码"
+// @Param page_size query int false "每页数量"
+// @Success 200 {object} response.R "列表"
+// @Failure 401 {object} response.R "未认证（L1 不公开）"
+// @Router /jobs [get]
 func (h *JobHandler) ListPublic(c *gin.Context) {
 	Endpoint[struct{}, service.JobListResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobListResult, error) {
@@ -179,6 +249,16 @@ func (h *JobHandler) ListPublic(c *gin.Context) {
 }
 
 // GetPublic 学员职位详情 GET /api/jobs/:id
+// @Summary 职位详情
+// @Description 学员查看职位详情（含企业名/主营/联系人；不含电话/邮箱/信用代码）
+// @Tags 招聘域-职位
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "职位 ID"
+// @Success 200 {object} response.R "详情"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "不存在或已下架"
+// @Router /jobs/{id} [get]
 func (h *JobHandler) GetPublic(c *gin.Context) {
 	Endpoint[struct{}, service.JobPostingDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobPostingDTO, error) {
