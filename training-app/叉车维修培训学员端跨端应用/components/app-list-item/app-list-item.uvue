@@ -1,0 +1,85 @@
+<template>
+    <view class="app-list-item" :class="{ 'app-list-item--danger': danger }" @click="onClick">
+        <view class="app-list-item-left">
+            <text v-if="label.length > 0" class="app-list-item-label">{{ label }}</text>
+        </view>
+        <view class="app-list-item-right">
+            <text v-if="value.length > 0" class="app-list-item-value">{{ value }}</text>
+            <image v-if="avatar.length > 0" class="app-list-item-avatar" :src="avatar" mode="aspectFill" />
+            <text v-if="showArrow" class="app-list-item-arrow">›</text>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    const props = withDefaults(defineProps<{
+        label ?: string
+        value ?: string
+        avatar ?: string
+        showArrow ?: boolean
+        danger ?: boolean
+    }>(), {
+        label: '',
+        value: '',
+        avatar: '',
+        showArrow: true,
+        danger: false
+    })
+
+    const emit = defineEmits(['click'])
+
+    function onClick() : void {
+        emit('click')
+    }
+</script>
+
+<style>
+    .app-list-item {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        min-height: 96rpx;
+        padding: 0 $spacing-md;
+        background-color: $card-bg;
+        border-bottom-width: 1rpx;
+        border-bottom-style: solid;
+        border-bottom-color: $border-color;
+    }
+
+    .app-list-item-left {
+        flex-direction: row;
+        align-items: center;
+        flex: 1;
+    }
+
+    .app-list-item-right {
+        flex-direction: row;
+        align-items: center;
+        gap: 8rpx;
+    }
+
+    .app-list-item-label {
+        font-size: $font-size-md;
+        color: $text-color;
+    }
+
+    .app-list-item--danger .app-list-item-label {
+        color: $danger-color;
+    }
+
+    .app-list-item-value {
+        font-size: $font-size-sm;
+        color: $text-placeholder;
+    }
+
+    .app-list-item-avatar {
+        width: 64rpx;
+        height: 64rpx;
+        border-radius: $radius-pill;
+    }
+
+    .app-list-item-arrow {
+        font-size: 32rpx;
+        color: $text-placeholder;
+    }
+</style>

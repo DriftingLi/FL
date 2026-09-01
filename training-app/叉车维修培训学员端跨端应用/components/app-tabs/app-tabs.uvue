@@ -1,0 +1,58 @@
+<template>
+    <view class="app-tabs">
+        <view v-for="(tab, idx) in tabs" :key="idx" class="app-tab-item"
+            :class="{ 'app-tab-item--active': activeIndex == idx }" @click="onChange(idx)">
+            <text class="app-tab-text" :class="{ 'app-tab-text--active': activeIndex == idx }">{{ tab }}</text>
+            <view v-if="activeIndex == idx && style == 'underline'" class="app-tab-underline"></view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    const props = withDefaults(defineProps<{
+        tabs ?: string[]
+        activeIndex ?: number
+        style ?: string
+    }>(), {
+        tabs: () => [],
+        activeIndex: 0,
+        style: 'underline'
+    })
+
+    const emit = defineEmits(['change'])
+
+    function onChange(idx : number) : void {
+        emit('change', idx)
+    }
+</script>
+
+<style>
+    .app-tabs {
+        flex-direction: row;
+        gap: 16rpx;
+    }
+
+    .app-tab-item {
+        flex-direction: column;
+        align-items: center;
+        padding: 12rpx 0;
+    }
+
+    .app-tab-text {
+        font-size: $font-size-md;
+        color: $text-secondary;
+    }
+
+    .app-tab-text--active {
+        color: $primary-color;
+        font-weight: 600;
+    }
+
+    .app-tab-underline {
+        width: 40rpx;
+        height: 4rpx;
+        background-color: $primary-color;
+        border-radius: 2rpx;
+        margin-top: 8rpx;
+    }
+</style>

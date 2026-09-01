@@ -1,0 +1,547 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+        <!-- 顶部导航栏 -->
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">职位详情</text>
+            <view class="header-right">
+                <text v-if="!hasReported" class="report-btn" @click="onOpenReport">举报</text>
+                <text v-else class="report-btn-disabled">已举报</text>
+            </view>
+        </view>
+
+        <!-- 加载中 -->
+        <view v-if="loading" class="loading-wrap">
+            <text class="loading-text">加载中...</text>
+        </view>
+
+        <!-- 职位详情 -->
+        <scroll-view v-else-if="job != null" class="content-scroll" scroll-y="true">
+            <!-- 职位基本信息 -->
+            <view class="job-section">
+                <text class="job-title">{{ job!.title }}</text>
+                <text class="job-company">{{ job!.company_name }}</text>
+            </view>
+
+            <!-- 薪资与信息 -->
+            <view class="info-section">
+                <view class="info-row">
+                    <text class="info-icon">💰</text>
+                    <text class="info-value info-salary">{{ formatSalary() }}</text>
+                </view>
+                <view class="info-row">
+                    <text class="info-icon">📍</text>
+                    <text class="info-value">{{ job!.region.length > 0 ? job!.region : '未填写' }}</text>
+                </view>
+                <view class="info-row">
+                    <text class="info-icon">📋</text>
+                    <text class="info-value">{{ job!.experience_req.length > 0 ? job!.experience_req : '不限' }}</text>
+                </view>
+                <view class="info-row">
+                    <text class="info-icon">🕐</text>
+                    <text class="info-value">{{ formatDate(job!.published_at) }}</text>
+                </view>
+            </view>
+
+            <!-- 职位描述 -->
+            <view class="desc-section">
+                <text class="desc-title">职位描述</text>
+                <text class="desc-content">{{ job!.description.length > 0 ? job!.description : '暂无描述' }}</text>
+            </view>
+        </scroll-view>
+
+        <!-- 底部投递按钮 -->
+        <view v-if="job != null && !loading" class="bottom-bar">
+            <view v-if="!hasApplied" class="apply-btn" @click="onApply">
+                <text class="apply-btn-text">立即投递</text>
+            </view>
+            <view v-else class="apply-btn-disabled">
+                <text class="apply-btn-text-disabled">已投递</text>
+            </view>
+        </view>
+
+        <!-- 举报弹窗 -->
+        <view v-if="showReportModal" class="report-modal-mask" @click="onCloseReport">
+            <view class="report-modal" @click.stop>
+                <text class="report-modal-title">举报职位</text>
+
+                <!-- 预设原因选项 -->
+                <view class="report-options">
+                    <view v-for="(option, idx) in reportReasons" :key="idx" class="report-option"
+                        @click="onSelectReason(option.key)">
+                        <view class="report-radio" :class="{ 'report-radio-active': selectedReason === option.key }">
+                            <view v-if="selectedReason === option.key" class="report-radio-dot"></view>
+                        </view>
+                        <text class="report-option-text">{{ option.label }}</text>
+                    </view>
+                </view>
+
+                <!-- 自定义原因输入（选择「其他」时显示） -->
+                <view v-if="selectedReason === 'other'" class="report-custom-wrap">
+                    <textarea class="report-textarea" placeholder="请输入举报原因（1-500字）" maxlength="500"
+                        v-model="customReason" />
+                    <text class="report-counter">{{ customReason.length }}/500</text>
+                </view>
+
+                <!-- 操作按钮 -->
+                <view class="report-actions">
+                    <view class="report-cancel" @click="onCloseReport">
+                        <text class="report-cancel-text">取消</text>
+                    </view>
+                    <view class="report-confirm"
+                        :class="{ disabled: !canSubmitReport || submittingReport }" @click="onSubmitReport">
+                        <text class="report-confirm-text">{{ submittingReport ? '提交中...' : '提交' }}</text>
+                    </view>
+                </view>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { getJobDetailApi, reportJobApi, applyJobApi, REPORT_REASONS } from '../../api/job'
+    import type { JobPosting, ReportReason } from '../../api/job'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    // ---- 职位数据 ----
+    const job = ref<JobPosting | null>(null)
+    const loading = ref<boolean>(true)
+    const jobId = ref<number>(0)
+
+    // ---- 举报相关 ----
+    const showReportModal = ref<boolean>(false)
+    const reportReasons = REPORT_REASONS
+    const selectedReason = ref<string>('')
+    const customReason = ref<string>('')
+    const submittingReport = ref<boolean>(false)
+    const hasReported = ref<boolean>(false)
+
+    // ---- 投递相关 ----
+    const hasApplied = ref<boolean>(false)
+
+    // ---- 页面加载 ----
+    onLoad((options) => {
+        const id = options?.['id']
+        if (id != null && id.length > 0) {
+            jobId.value = parseInt(id)
+            loadJobDetail()
+        } else {
+            uni.showToast({ title: '职位不存在', icon: 'none' })
+            setTimeout(() => { uni.navigateBack() }, 1500)
+        }
+    })
+
+    async function loadJobDetail() : Promise<void> {
+        loading.value = true
+        try {
+            const detail = await getJobDetailApi(jobId.value)
+            job.value = detail
+        } catch (e) {
+            console.error('[job-detail] load failed:', e)
+            uni.showToast({ title: '加载失败', icon: 'none' })
+            setTimeout(() => { uni.navigateBack() }, 1500)
+        } finally {
+            loading.value = false
+        }
+    }
+
+    // ---- 薪资格式化 ----
+    function formatSalary() : string {
+        if (job.value == null) return ''
+        const j = job.value!
+        if (j.salary_text.length > 0) return j.salary_text
+        if (j.salary_min != null && j.salary_max != null) {
+            return j.salary_min!.toString() + '-' + j.salary_max!.toString() + ' 元/月'
+        }
+        if (j.salary_min != null) return j.salary_min!.toString() + ' 元/月起'
+        return '面议'
+    }
+
+    // ---- 日期格式化 ----
+    function formatDate(dateStr : string) : string {
+        if (dateStr.length == 0) return ''
+        try {
+            const d = new Date(dateStr)
+            const y = d.getFullYear()
+            const m = (d.getMonth() + 1).toString().padStart(2, '0')
+            const day = d.getDate().toString().padStart(2, '0')
+            return y + '-' + m + '-' + day + ' 发布'
+        } catch (e) {
+            return dateStr
+        }
+    }
+
+    // ---- 返回 ----
+    function onBack() : void {
+        uni.navigateBack()
+    }
+
+    // ---- 举报弹窗 ----
+    function onOpenReport() : void {
+        selectedReason.value = ''
+        customReason.value = ''
+        showReportModal.value = true
+    }
+
+    function onCloseReport() : void {
+        showReportModal.value = false
+        selectedReason.value = ''
+        customReason.value = ''
+    }
+
+    function onSelectReason(key : string) : void {
+        selectedReason.value = key
+    }
+
+    const canSubmitReport = computed<boolean>(() : boolean => {
+        if (selectedReason.value.length == 0) return false
+        if (selectedReason.value == 'other') return customReason.value.trim().length > 0
+        return true
+    })
+
+    async function onSubmitReport() : Promise<void> {
+        if (!canSubmitReport.value || submittingReport.value) return
+        submittingReport.value = true
+        try {
+            const reason = selectedReason.value === 'other'
+                ? customReason.value.trim()
+                : reportReasons.find((r : ReportReason) => r.key === selectedReason.value)?.label ?? selectedReason.value
+            await reportJobApi(jobId.value, reason)
+            uni.showToast({ title: '举报已提交，感谢你的反馈', icon: 'none' })
+            hasReported.value = true
+            showReportModal.value = false
+        } catch (e) {
+            console.error('[job-detail] report failed:', e)
+            uni.showToast({ title: '举报失败，请稍后重试', icon: 'none' })
+        } finally {
+            submittingReport.value = false
+        }
+    }
+
+    // ---- 投递 ----
+    async function onApply() : Promise<void> {
+        if (hasApplied.value) return
+        try {
+            await applyJobApi(jobId.value)
+            uni.showToast({ title: '投递成功', icon: 'none' })
+            hasApplied.value = true
+        } catch (e) {
+            console.error('[job-detail] apply failed:', e)
+            // 错误信息已由 request 层 toast
+        }
+    }
+</script>
+
+<style>
+    .container {
+        flex: 1;
+        background-color: #f8f8f8;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: transparent;
+    }
+
+    .content-scroll {
+        flex: 1;
+    }
+
+    /* 顶部导航栏 */
+    .header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        height: 88rpx;
+        padding: 0 24rpx;
+        background-color: #ffffff;
+        border-bottom: 1rpx solid #f0f0f0;
+    }
+
+    .header-left {
+        width: 64rpx;
+        height: 64rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .back-icon {
+        font-size: 44rpx;
+        color: #333333;
+    }
+
+    .header-title {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .header-right {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .report-btn {
+        font-size: 28rpx;
+        color: #ff3b30;
+    }
+
+    .report-btn-disabled {
+        font-size: 28rpx;
+        color: #cccccc;
+    }
+
+    /* 加载中 */
+    .loading-wrap {
+        flex: 1;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .loading-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    /* 职位基本信息 */
+    .job-section {
+        background-color: #ffffff;
+        padding: 32rpx 24rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .job-title {
+        font-size: 40rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 12rpx;
+    }
+
+    .job-company {
+        font-size: 28rpx;
+        color: #666666;
+    }
+
+    /* 信息行 */
+    .info-section {
+        background-color: #ffffff;
+        padding: 24rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .info-row {
+        flex-direction: row;
+        align-items: center;
+        padding: 16rpx 0;
+    }
+
+    .info-icon {
+        font-size: 32rpx;
+        margin-right: 16rpx;
+        width: 48rpx;
+    }
+
+    .info-value {
+        font-size: 28rpx;
+        color: #333333;
+        flex: 1;
+    }
+
+    .info-salary {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #ff6b35;
+    }
+
+    /* 职位描述 */
+    .desc-section {
+        background-color: #ffffff;
+        padding: 24rpx;
+    }
+
+    .desc-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 16rpx;
+    }
+
+    .desc-content {
+        font-size: 28rpx;
+        color: #666666;
+        line-height: 1.6;
+    }
+
+    /* 底部投递按钮 */
+    .bottom-bar {
+        padding: 16rpx 24rpx;
+        padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
+        background-color: #ffffff;
+        border-top: 1rpx solid #f0f0f0;
+    }
+
+    .apply-btn {
+        height: 88rpx;
+        background-color: #2979ff;
+        border-radius: 44rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .apply-btn-text {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .apply-btn-disabled {
+        height: 88rpx;
+        background-color: #f5f5f5;
+        border-radius: 44rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .apply-btn-text-disabled {
+        font-size: 32rpx;
+        color: #999999;
+    }
+
+    /* 举报弹窗 */
+    .report-modal-mask {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        align-items: center;
+        justify-content: center;
+        z-index: 999;
+    }
+
+    .report-modal {
+        width: 600rpx;
+        background-color: #ffffff;
+        border-radius: 24rpx;
+        padding: 40rpx;
+        flex-direction: column;
+    }
+
+    .report-modal-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+        text-align: center;
+        margin-bottom: 32rpx;
+    }
+
+    /* 预设选项 */
+    .report-options {
+        flex-direction: column;
+        margin-bottom: 24rpx;
+    }
+
+    .report-option {
+        flex-direction: row;
+        align-items: center;
+        padding: 20rpx 0;
+    }
+
+    .report-radio {
+        width: 40rpx;
+        height: 40rpx;
+        border-radius: 20rpx;
+        border: 2rpx solid #cccccc;
+        align-items: center;
+        justify-content: center;
+        margin-right: 16rpx;
+    }
+
+    .report-radio-active {
+        border-color: #2979ff;
+    }
+
+    .report-radio-dot {
+        width: 20rpx;
+        height: 20rpx;
+        border-radius: 10rpx;
+        background-color: #2979ff;
+    }
+
+    .report-option-text {
+        font-size: 28rpx;
+        color: #333333;
+    }
+
+    /* 自定义原因 */
+    .report-custom-wrap {
+        margin-bottom: 16rpx;
+    }
+
+    .report-textarea {
+        width: 100%;
+        height: 200rpx;
+        background-color: #f5f5f5;
+        border-radius: 12rpx;
+        padding: 20rpx;
+        font-size: 28rpx;
+        color: #333333;
+        margin-bottom: 8rpx;
+    }
+
+    .report-counter {
+        font-size: 22rpx;
+        color: #999999;
+        text-align: right;
+    }
+
+    /* 操作按钮 */
+    .report-actions {
+        flex-direction: row;
+        justify-content: space-between;
+    }
+
+    .report-cancel {
+        flex: 1;
+        height: 80rpx;
+        border-radius: 40rpx;
+        background-color: #f5f5f5;
+        align-items: center;
+        justify-content: center;
+        margin-right: 16rpx;
+    }
+
+    .report-cancel-text {
+        font-size: 28rpx;
+        color: #666666;
+    }
+
+    .report-confirm {
+        flex: 1;
+        height: 80rpx;
+        border-radius: 40rpx;
+        background-color: #2979ff;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .report-confirm.disabled {
+        background-color: #cccccc;
+    }
+
+    .report-confirm-text {
+        font-size: 28rpx;
+        color: #ffffff;
+        font-weight: 500;
+    }
+</style>
