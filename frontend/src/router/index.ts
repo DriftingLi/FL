@@ -124,6 +124,16 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/student/ResumePage.vue')
       },
       {
+        path: 'jobs',
+        name: 'JobPlaza',
+        component: () => import('@/pages/student/JobPlaza.vue')
+      },
+      {
+        path: 'jobs/:id',
+        name: 'JobDetail',
+        component: () => import('@/pages/student/JobDetail.vue')
+      },
+      {
         path: 'onboarding/credential',
         name: 'CredentialOnboarding',
         component: () => import('@/pages/onboarding/CredentialOnboarding.vue'),
@@ -386,6 +396,11 @@ const routes: RouteRecordRaw[] = [
         path: 'requests',
         name: 'RecruitRequests',
         component: () => import('@/pages/recruit/MyRequests.vue')
+      },
+      {
+        path: 'jobs',
+        name: 'RecruitJobManage',
+        component: () => import('@/pages/recruit/JobManage.vue')
       }
     ]
   },

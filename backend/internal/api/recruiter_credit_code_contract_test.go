@@ -29,7 +29,8 @@ func assertRecruiterCreditCodeUnique(t *testing.T, db *gorm.DB) {
 	pwd, _ := service.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "adminCCU", pwd)
 
-	cfg := &config.Config{JWTSecretKey: "credit-code-unique-secret"}
+	cfg := &config.Config{JWTSecretKey: "credit-code-unique-secret",
+		JWTExpiresHours: 2}
 	r := NewRouter(newContractDeps(t, db, cfg))
 	adminSess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{})
 	adminToken, err := adminSess.Issue(admin.AdminID, admin.Username, "admin")

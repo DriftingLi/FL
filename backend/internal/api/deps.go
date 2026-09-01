@@ -73,6 +73,9 @@ type Deps struct {
 	JobCardSvc           *service.JobCardService
 	RecruitSvc           *service.RecruitService
 	ContactSvc           *service.ContactService
+	JobPostingSvc        *service.JobPostingService
+	JobApplicationSvc    *service.JobApplicationService
+	JobReportSvc         *service.JobReportService
 }
 
 // NewDeps 构建全部 service 单实例。进程启动早期由 main 调用一次。
@@ -146,6 +149,9 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		JobCardSvc:           service.NewJobCardService(db, fileSvc, logger),
 		RecruitSvc:           service.NewRecruitService(db, logger),
 		ContactSvc:           service.NewContactService(db, logger, notificationSvc, nil),
+		JobPostingSvc:        service.NewJobPostingService(db, logger),
+		JobApplicationSvc:    service.NewJobApplicationService(db, logger, notificationSvc),
+		JobReportSvc:         service.NewJobReportService(db, logger),
 	}
 	d.AuthH = NewAuthHandler(d.Session, authSvc, fileSvc, st, reviewSvc, logger)
 	return d

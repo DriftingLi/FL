@@ -884,15 +884,78 @@ func (RecruitResumeView) TableName() string { return "recruit_resume_views" }
 
 // ===== 29.2 联系方式交换申请（L3 闭环，#375）
 type ContactRequest struct {
-	ID            int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	RecruiterID   int        `gorm:"column:recruiter_id;index" json:"recruiter_id"`
-	StudentUserID int        `gorm:"column:student_user_id;index" json:"student_user_id"`
-	Message       string     `gorm:"column:message" json:"message"`
-	Status        string     `gorm:"column:status;default:pending" json:"status"` // pending/approved/rejected/expired/revoked
-	CreatedAt     time.Time  `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt     time.Time  `gorm:"column:updated_at" json:"updated_at"`
-	DecidedAt     *time.Time `gorm:"column:decided_at" json:"decided_at,omitempty"`
-	ExpiresAt     time.Time  `gorm:"column:expires_at" json:"expires_at"`
+	ID            int64  `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	RecruiterID   int    `gorm:"column:recruiter_id;index" json:"recruiter_id"`
+	StudentUserID int    `gorm:"column:student_user_id;index" json:"student_user_id"`
+	Message       string `gorm:"column:message" json:"message"`
+	Status        string `gorm:"column:status;default:pending" json:"status"` // pending/approved/rejected/expired/revoked
+	// Source 授权来源（spec #449 决定 1）：recruiter 企业发起 / application 投递产生。
+	// 明文载体仍然只有联系方式交换一个；投递产生的授权同样经 GetContact 判定。
+	Source    string     `gorm:"column:source;default:recruiter" json:"source"` // recruiter/application
+	CreatedAt time.Time  `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt time.Time  `gorm:"column:updated_at" json:"updated_at"`
+	DecidedAt *time.Time `gorm:"column:decided_at" json:"decided_at,omitempty"`
+	ExpiresAt time.Time  `gorm:"column:expires_at" json:"expires_at"`
 }
 
 func (ContactRequest) TableName() string { return "contact_requests" }
+
+// ===== 招聘域：职位（job posting，spec #449）=====
+
+// JobPosting 企业发布的职位（先发后审：open/closed 二态，可被管理员强制下架）。
+// 职位名不叫「岗位」——本系统「岗位」已是专业方向的历史别名（术语登记见 CONTEXT.md）。
+type JobPosting struct {
+	ID            int    `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	RecruiterID   int    `gorm:"column:recruiter_id;index" json:"recruiter_id"`
+	Title         string `gorm:"column:title" json:"title"`
+	SpecialtyID   *int   `gorm:"column:specialty_id" json:"specialty_id,omitempty"` // 业务层必填；库层可空（字典项删除置空不级联）
+	Region        string `gorm:"column:region;default:''" json:"region"`
+	SalaryMin     *int   `gorm:"column:salary_min" json:"salary_min,omitempty"`
+	SalaryMax     *int   `gorm:"column:salary_max" json:"salary_max,omitempty"`
+	SalaryText    string `gorm:"column:salary_text;default:''" json:"salary_text"` // 薪资自由文本（面议等）
+	ExperienceReq string `gorm:"column:experience_req;default:''" json:"experience_req"`
+	Description   string `gorm:"column:description;default:''" json:"description"`
+	Status        string `gorm:"column:status;default:open" json:"status"` // open/closed
+	// ForcedOffline 被管理员强制下架（原因见 OfflineReason）：学员侧不可见，企业不能自行重新上架。
+	ForcedOffline bool      `gorm:"column:forced_offline;default:false" json:"forced_offline"`
+	OfflineReason string    `gorm:"column:offline_reason;default:''" json:"offline_reason,omitempty"`
+	PublishedAt   time.Time `gorm:"column:published_at" json:"published_at"` // 首次发布时间（新鲜度排序）
+	CreatedAt     time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt     time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (JobPosting) TableName() string { return "job_postings" }
+
+// JobApplication 学员对职位的投递（三态 applied/rejected/withdrawn）。
+// 冗余 recruiter_id（授权落地与企业维度查询都需要它，避免每次 join 职位）。
+type JobApplication struct {
+	ID            int64  `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	JobPostingID  int    `gorm:"column:job_posting_id;index" json:"job_posting_id"`
+	RecruiterID   int    `gorm:"column:recruiter_id;index" json:"recruiter_id"`
+	StudentUserID int    `gorm:"column:student_user_id;index" json:"student_user_id"`
+	Status        string `gorm:"column:status;default:applied" json:"status"` // applied/rejected/withdrawn
+	// ResumeUpdatedAt 投递那一刻的简历更新时间（版本指针，不落快照；内容永远读最新）。
+	ResumeUpdatedAt time.Time  `gorm:"column:resume_updated_at" json:"resume_updated_at"`
+	EmployerViewAt  *time.Time `gorm:"column:employer_viewed_at" json:"employer_viewed_at,omitempty"` // 企业打开投递详情即记录已读
+	RejectedAt      *time.Time `gorm:"column:rejected_at" json:"rejected_at,omitempty"`
+	WithdrawnAt     *time.Time `gorm:"column:withdrawn_at" json:"withdrawn_at,omitempty"`
+	CreatedAt       time.Time  `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt       time.Time  `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (JobApplication) TableName() string { return "job_applications" }
+
+// JobReport 学员对职位的举报（招聘域自有存储，不挂论坛举报表）。
+// 同一学员对同一职位唯一；重复举报被合并而非堆叠。
+type JobReport struct {
+	ID            int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	JobPostingID  int        `gorm:"column:job_posting_id;index" json:"job_posting_id"`
+	StudentUserID int        `gorm:"column:student_user_id;index" json:"student_user_id"`
+	Reason        string     `gorm:"column:reason;default:''" json:"reason"`
+	Status        string     `gorm:"column:status;default:pending" json:"status"` // pending/handled
+	HandledAt     *time.Time `gorm:"column:handled_at" json:"handled_at,omitempty"`
+	CreatedAt     time.Time  `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt     time.Time  `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (JobReport) TableName() string { return "job_reports" }
